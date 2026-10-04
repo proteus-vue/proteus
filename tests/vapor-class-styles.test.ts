@@ -265,6 +265,22 @@ describe('★C1 最小切片 · SFC <style> 单类规则 → class→节点样�
     expect(d.some((x) => x.includes('letter-spacing')), 'em 有诊断').toBe(true)
   })
 
+  it('★⑦i rpx 折 px（批次 21 · 多端一致）：1rpx = 0.5px（rpxRatio:2 逆）', () => {
+    // 【为什么（以 web 为基准）】rpx 是小程序 750 设计单位；Web 端由浏览器/平台处理；
+    //   App 折叠此前**丢弃 rpx** ⇒ 真项目（125 处）失样式（尺寸/圆角/字号全丢）。
+    //   折为 px（×0.5）＝ 与 rpxRatio:2（px→rpx）互为逆，跨端一致。
+    const s1 = parseStaticStyle('width: 100rpx', () => {})
+    expect((s1 as { width?: number }).width, '100rpx ⇒ 50px').toBe(50)
+    const s2 = parseStaticStyle('font-size: 32rpx', () => {})
+    expect((s2 as { fontSize?: number }).fontSize, '32rpx ⇒ 16px').toBe(16)
+    const s3 = parseStaticStyle('padding: 16rpx 8rpx', () => {})
+    expect((s3 as { padding?: Record<string, number> }).padding, '简写混 rpx').toEqual({ top: 8, right: 4, bottom: 8, left: 4 })
+    const s4 = parseStaticStyle('border-radius: 12rpx', () => {})
+    expect((s4 as { borderRadius?: number }).borderRadius, '圆角 rpx').toBe(6)
+    const s5 = parseStaticStyle('line-height: 40rpx', () => {})
+    expect((s5 as { lineHeight?: string }).lineHeight, 'line-height rpx ⇒ px token').toBe('20px')
+  })
+
   it('★⑧ 元素/类型选择器 + @keyframes 跳过（C1 收尾）', () => {
     // 【真项目形态】examples 有 9 处元素选择器（h3/code…）+ 6 处 @keyframes 关键帧被误当选择器
     const sfc = `<template>

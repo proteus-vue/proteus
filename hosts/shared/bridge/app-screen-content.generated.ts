@@ -2174,13 +2174,21 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
+        "padding": {
+          "top": 20,
+          "right": 16,
+          "bottom": 20,
+          "left": 16
+        },
         "semantic": "view"
       },
       {
         "id": 1,
         "parentId": 0,
         "padding": {
+          "top": 12,
           "right": 0,
+          "bottom": 12,
           "left": 0
         },
         "semantic": "view"
@@ -2188,6 +2196,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 2,
         "parentId": 1,
+        "fontSize": 20,
         "fontWeight": 700,
         "text": "文档引擎",
         "semantic": "text"
@@ -2195,6 +2204,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 3,
         "parentId": 1,
+        "fontSize": 12,
         "color": "#666a73",
         "text": "本页内容由 Markdown 经 @proteus-vue/docs 编译渲染——文档也是编译产物",
         "semantic": "text"
@@ -2203,29 +2213,47 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 4,
         "parentId": 0,
         "margin": {
+          "top": 8,
           "right": 0,
+          "bottom": 8,
           "left": 0
+        },
+        "padding": {
+          "top": 8,
+          "right": 8,
+          "bottom": 8,
+          "left": 8
         },
         "borderWidth": 1,
         "borderColor": "#e3e6eb",
+        "borderRadius": 6,
         "semantic": "view"
       },
       {
         "id": 5,
         "parentId": 4,
+        "fontSize": 14,
         "semantic": "input"
       },
       {
         "id": 6,
         "parentId": 4,
+        "fontSize": 11,
         "color": "#9aa0aa",
         "semantic": "text"
       },
       {
         "id": 7,
         "parentId": 0,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
         "borderWidth": 1,
         "borderColor": "#e3e6eb",
+        "borderRadius": 6,
         "semantic": "view"
       },
       {
@@ -2236,12 +2264,17 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 9,
         "parentId": 8,
+        "fontSize": 18,
         "fontWeight": 700,
+        "margin": {
+          "bottom": 8
+        },
         "semantic": "text"
       },
       {
         "id": 10,
         "parentId": 8,
+        "fontSize": 14,
         "lineHeight": "1.7",
         "semantic": "view"
       },
@@ -2254,7 +2287,9 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 12,
         "parentId": 11,
         "padding": {
+          "top": 6,
           "right": 0,
+          "bottom": 6,
           "left": 0
         },
         "semantic": "view"
@@ -2262,30 +2297,44 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 13,
         "parentId": 12,
+        "fontSize": 14,
         "fontWeight": 600,
         "semantic": "text"
       },
       {
         "id": 14,
         "parentId": 12,
+        "fontSize": 11,
         "color": "#9aa0aa",
         "semantic": "text"
       },
       {
         "id": 15,
         "parentId": 0,
+        "margin": {
+          "top": 12
+        },
+        "padding": {
+          "top": 8,
+          "right": 12,
+          "bottom": 8,
+          "left": 12
+        },
         "backgroundColor": "#f5f6f8",
+        "borderRadius": 6,
         "semantic": "view"
       },
       {
         "id": 16,
         "parentId": 15,
+        "fontSize": 11,
         "color": "#666a73",
         "semantic": "text"
       },
       {
         "id": 17,
         "parentId": 15,
+        "fontSize": 11,
         "color": "#666a73",
         "semantic": "text"
       }
@@ -4407,19 +4456,33 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": null,
         "display": "flex",
         "flexDirection": "column",
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
         "semantic": "view"
       },
       {
         "id": 1,
         "parentId": 0,
+        "fontSize": 16,
         "fontWeight": 700,
+        "margin": {
+          "bottom": 4
+        },
         "text": "GP3-b1 · Global 层（每页注入 + 状态共享）",
         "semantic": "text"
       },
       {
         "id": 2,
         "parentId": 0,
+        "fontSize": 12,
         "color": "#666",
+        "margin": {
+          "bottom": 12
+        },
         "text": "全局状态条声明在 App.mp.vue（唯一声明处），本页不引入任何全局内容",
         "semantic": "text"
       },
@@ -4428,17 +4491,26 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 0,
         "display": "flex",
         "flexDirection": "column",
+        "margin": {
+          "bottom": 16
+        },
         "semantic": "view"
       },
       {
         "id": 4,
         "parentId": 3,
+        "margin": {
+          "bottom": 8
+        },
         "text": " 切换全局状态条（调用注入的壳方法） ",
         "semantic": "button"
       },
       {
         "id": 5,
         "parentId": 3,
+        "margin": {
+          "bottom": 8
+        },
         "backgroundColor": "#f2f3f5",
         "color": "#333",
         "semantic": "button"
@@ -4448,26 +4520,41 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 0,
         "display": "flex",
         "flexDirection": "column",
+        "margin": {
+          "bottom": 16
+        },
         "semantic": "view"
       },
       {
         "id": 7,
         "parentId": 6,
+        "fontSize": 12,
         "color": "#999",
+        "margin": {
+          "bottom": 6
+        },
         "text": "跨页验证：开启后跳「首页 / 组件演示」，状态条应仍在（共享状态）",
         "semantic": "text"
       },
       {
         "id": 8,
         "parentId": 6,
+        "fontSize": 14,
         "color": "#1a7af8",
+        "margin": {
+          "bottom": 6
+        },
         "text": "去首页",
         "semantic": "navigator"
       },
       {
         "id": 9,
         "parentId": 6,
+        "fontSize": 14,
         "color": "#1a7af8",
+        "margin": {
+          "bottom": 6
+        },
         "text": "去组件演示",
         "semantic": "navigator"
       }
@@ -5361,6 +5448,27 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "fontSize": 14,
         "textAlign": "center",
         "text": "LETTER SPACING 字距",
+        "semantic": "div"
+      },
+      {
+        "id": 60,
+        "parentId": 0,
+        "width": 120,
+        "height": 24,
+        "margin": {
+          "top": 16,
+          "bottom": 16
+        },
+        "marginAuto": {
+          "right": true,
+          "left": true
+        },
+        "backgroundColor": "#e3e6eb",
+        "borderRadius": 4,
+        "color": "#666",
+        "fontSize": 12,
+        "textAlign": "center",
+        "text": "rpx 240 → 120px",
         "semantic": "div"
       }
     ]
@@ -12953,19 +13061,33 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
         "semantic": "view"
       },
       {
         "id": 1,
         "parentId": 0,
+        "fontSize": 18,
         "fontWeight": 700,
+        "margin": {
+          "bottom": 4
+        },
         "text": "★G12 v-model MP 复测（Skyline）",
         "semantic": "text"
       },
       {
         "id": 2,
         "parentId": 0,
+        "fontSize": 12,
         "color": "#888",
+        "margin": {
+          "bottom": 12
+        },
         "text": "p-* 组件 v-model 双绑回传——单段事件 bind:update-*（G12 候选 B）在 Skyline/WebView 是否工作",
         "semantic": "text"
       },
@@ -12973,12 +13095,26 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 3,
         "parentId": 0,
         "backgroundColor": "#fff",
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "margin": {
+          "bottom": 12
+        },
         "semantic": "view"
       },
       {
         "id": 4,
         "parentId": 3,
+        "fontSize": 14,
         "fontWeight": 600,
+        "margin": {
+          "bottom": 8
+        },
         "text": "① p-modal v-model:visible（update-visible 单段事件契约）",
         "semantic": "text"
       },
@@ -12997,7 +13133,9 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 7,
         "parentId": 6,
         "padding": {
+          "top": 12,
           "right": 0,
+          "bottom": 12,
           "left": 0
         },
         "semantic": "view"
@@ -13011,6 +13149,10 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 9,
         "parentId": 3,
+        "fontSize": 13,
+        "margin": {
+          "top": 6
+        },
         "color": "#07c160",
         "semantic": "text"
       },
@@ -13018,12 +13160,26 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 10,
         "parentId": 0,
         "backgroundColor": "#fff",
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "margin": {
+          "bottom": 12
+        },
         "semantic": "view"
       },
       {
         "id": 11,
         "parentId": 10,
+        "fontSize": 14,
         "fontWeight": 600,
+        "margin": {
+          "bottom": 8
+        },
         "text": "② p-switch v-model（update-modelValue 契约）",
         "semantic": "text"
       },
@@ -13043,6 +13199,10 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 14,
         "parentId": 12,
+        "fontSize": 13,
+        "margin": {
+          "top": 6
+        },
         "color": "#07c160",
         "semantic": "text"
       },
@@ -13050,12 +13210,26 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 15,
         "parentId": 0,
         "backgroundColor": "#fff",
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "margin": {
+          "bottom": 12
+        },
         "semantic": "view"
       },
       {
         "id": 16,
         "parentId": 15,
+        "fontSize": 14,
         "fontWeight": 600,
+        "margin": {
+          "bottom": 8
+        },
         "text": "③ p-slider v-model（update-modelValue 契约——MP 映射已落地：原生 slider 双端）",
         "semantic": "text"
       },
@@ -13067,13 +13241,21 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 18,
         "parentId": 15,
+        "fontSize": 13,
+        "margin": {
+          "top": 6
+        },
         "color": "#07c160",
         "semantic": "text"
       },
       {
         "id": 19,
         "parentId": 15,
+        "fontSize": 12,
         "color": "#888",
+        "margin": {
+          "bottom": 12
+        },
         "text": "注：p-slider 模板已换原生 slider 标签（Web = proteus-slider 模拟 / MP = 微信原生）——拖动测回传",
         "semantic": "text"
       },
@@ -13081,12 +13263,26 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 20,
         "parentId": 0,
         "backgroundColor": "#fff",
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "margin": {
+          "bottom": 12
+        },
         "semantic": "view"
       },
       {
         "id": 21,
         "parentId": 20,
+        "fontSize": 14,
         "fontWeight": 600,
+        "margin": {
+          "bottom": 8
+        },
         "text": "④ p-input（受控组件：:value + @input，非 v-model）",
         "semantic": "text"
       },
@@ -13098,6 +13294,10 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 23,
         "parentId": 20,
+        "fontSize": 13,
+        "margin": {
+          "top": 6
+        },
         "color": "#07c160",
         "semantic": "text"
       }
@@ -13108,19 +13308,33 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
         "semantic": "view"
       },
       {
         "id": 1,
         "parentId": 0,
+        "fontSize": 18,
         "fontWeight": 700,
+        "margin": {
+          "bottom": 4
+        },
         "text": "Vue 能力对齐",
         "semantic": "text"
       },
       {
         "id": 2,
         "parentId": 0,
+        "fontSize": 12,
         "color": "#888",
+        "margin": {
+          "bottom": 12
+        },
         "text": "逐能力真机验收（ref/computed/watch/v-model/指令/transition/provide·inject/defineModel）",
         "semantic": "text"
       },
@@ -13128,12 +13342,26 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 3,
         "parentId": 0,
         "backgroundColor": "#fff",
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "margin": {
+          "bottom": 12
+        },
         "semantic": "view"
       },
       {
         "id": 4,
         "parentId": 3,
+        "fontSize": 14,
         "fontWeight": 600,
+        "margin": {
+          "bottom": 8
+        },
         "text": "① ref / computed / watch",
         "semantic": "text"
       },
@@ -13148,13 +13376,27 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 6,
         "parentId": 5,
+        "padding": {
+          "top": 4,
+          "right": 8,
+          "bottom": 4,
+          "left": 8
+        },
         "backgroundColor": "#eef",
+        "borderRadius": 4,
+        "margin": {
+          "right": 6
+        },
         "text": "bump 一次（count++ → double 重算 + watch 记录）",
         "semantic": "view"
       },
       {
         "id": 7,
         "parentId": 3,
+        "fontSize": 13,
+        "margin": {
+          "top": 6
+        },
         "color": "#07c160",
         "semantic": "text"
       },
@@ -13162,12 +13404,26 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 8,
         "parentId": 0,
         "backgroundColor": "#fff",
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "margin": {
+          "bottom": 12
+        },
         "semantic": "view"
       },
       {
         "id": 9,
         "parentId": 8,
+        "fontSize": 14,
         "fontWeight": 600,
+        "margin": {
+          "bottom": 8
+        },
         "text": "② v-model（input 双绑）",
         "semantic": "text"
       },
@@ -13191,6 +13447,10 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 11,
         "parentId": 8,
+        "fontSize": 13,
+        "margin": {
+          "top": 6
+        },
         "color": "#07c160",
         "semantic": "text"
       },
@@ -13198,12 +13458,26 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 12,
         "parentId": 0,
         "backgroundColor": "#fff",
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "margin": {
+          "bottom": 12
+        },
         "semantic": "view"
       },
       {
         "id": 13,
         "parentId": 12,
+        "fontSize": 14,
         "fontWeight": 600,
+        "margin": {
+          "bottom": 8
+        },
         "text": "③ v-if 条件链 / v-show",
         "semantic": "text"
       },
@@ -13218,13 +13492,27 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 15,
         "parentId": 14,
+        "padding": {
+          "top": 4,
+          "right": 8,
+          "bottom": 4,
+          "left": 8
+        },
         "backgroundColor": "#eef",
+        "borderRadius": 4,
+        "margin": {
+          "right": 6
+        },
         "text": "切换 agree",
         "semantic": "view"
       },
       {
         "id": 16,
         "parentId": 12,
+        "fontSize": 13,
+        "margin": {
+          "top": 6
+        },
         "color": "#07c160",
         "text": "agree=true → 显示本行（v-if）",
         "semantic": "text"
@@ -13232,6 +13520,10 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 17,
         "parentId": 12,
+        "fontSize": 13,
+        "margin": {
+          "top": 6
+        },
         "color": "#07c160",
         "text": "agree=false → 显示本行（v-else）",
         "semantic": "text"
@@ -13239,6 +13531,10 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 18,
         "parentId": 12,
+        "fontSize": 13,
+        "margin": {
+          "top": 6
+        },
         "color": "#07c160",
         "text": "v-show：agree 为真才显示（hidden 切换）",
         "semantic": "text"
@@ -13246,6 +13542,10 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 19,
         "parentId": 12,
+        "fontSize": 13,
+        "margin": {
+          "top": 6
+        },
         "color": "#07c160",
         "semantic": "text"
       },
@@ -13253,18 +13553,36 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 20,
         "parentId": 0,
         "backgroundColor": "#fff",
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "margin": {
+          "bottom": 12
+        },
         "semantic": "view"
       },
       {
         "id": 21,
         "parentId": 20,
+        "fontSize": 14,
         "fontWeight": 600,
+        "margin": {
+          "bottom": 8
+        },
         "text": "④ v-for",
         "semantic": "text"
       },
       {
         "id": 22,
         "parentId": 20,
+        "fontSize": 13,
+        "margin": {
+          "top": 6
+        },
         "color": "#07c160",
         "semantic": "text"
       },
@@ -13272,36 +13590,77 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 23,
         "parentId": 0,
         "backgroundColor": "#fff",
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "margin": {
+          "bottom": 12
+        },
         "semantic": "view"
       },
       {
         "id": 24,
         "parentId": 23,
+        "fontSize": 14,
         "fontWeight": 600,
+        "margin": {
+          "bottom": 8
+        },
         "text": "⑤ v-html / :class / :style",
         "semantic": "text"
       },
       {
         "id": 25,
         "parentId": 23,
+        "margin": {
+          "bottom": 4
+        },
         "semantic": "view"
       },
       {
         "id": 26,
         "parentId": 23,
+        "padding": {
+          "top": 4,
+          "right": 8,
+          "bottom": 4,
+          "left": 8
+        },
         "backgroundColor": "#eef",
+        "borderRadius": 4,
+        "margin": {
+          "right": 6
+        },
         "semantic": "view"
       },
       {
         "id": 27,
         "parentId": 0,
         "backgroundColor": "#fff",
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "margin": {
+          "bottom": 12
+        },
         "semantic": "view"
       },
       {
         "id": 28,
         "parentId": 27,
+        "fontSize": 14,
         "fontWeight": 600,
+        "margin": {
+          "bottom": 8
+        },
         "text": "⑥ transition（离开动画状态机）",
         "semantic": "text"
       },
@@ -13316,13 +13675,30 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 30,
         "parentId": 29,
+        "padding": {
+          "top": 4,
+          "right": 8,
+          "bottom": 4,
+          "left": 8
+        },
         "backgroundColor": "#eef",
+        "borderRadius": 4,
+        "margin": {
+          "right": 6
+        },
         "semantic": "view"
       },
       {
         "id": 31,
         "parentId": 27,
+        "padding": {
+          "top": 8,
+          "right": 8,
+          "bottom": 8,
+          "left": 8
+        },
         "backgroundColor": "#f0f7ff",
+        "borderRadius": 4,
         "text": "过渡卡片：先播 fade 再移除",
         "semantic": "view"
       },
@@ -13330,12 +13706,26 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 32,
         "parentId": 0,
         "backgroundColor": "#fff",
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "margin": {
+          "bottom": 12
+        },
         "semantic": "view"
       },
       {
         "id": 33,
         "parentId": 32,
+        "fontSize": 14,
         "fontWeight": 600,
+        "margin": {
+          "bottom": 8
+        },
         "text": "⑦ provide / inject",
         "semantic": "text"
       },
@@ -13355,13 +13745,27 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 36,
         "parentId": 35,
+        "padding": {
+          "top": 4,
+          "right": 8,
+          "bottom": 4,
+          "left": 8
+        },
         "backgroundColor": "#eef",
+        "borderRadius": 4,
+        "margin": {
+          "right": 6
+        },
         "text": "切换 user（裸 ref 联动 → inject 组件自动刷新）",
         "semantic": "view"
       },
       {
         "id": 37,
         "parentId": 32,
+        "fontSize": 13,
+        "margin": {
+          "top": 6
+        },
         "color": "#07c160",
         "semantic": "text"
       },
@@ -13369,12 +13773,26 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 38,
         "parentId": 0,
         "backgroundColor": "#fff",
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "margin": {
+          "bottom": 12
+        },
         "semantic": "view"
       },
       {
         "id": 39,
         "parentId": 38,
+        "fontSize": 14,
         "fontWeight": 600,
+        "margin": {
+          "bottom": 8
+        },
         "text": "⑧ defineModel（v-model 组件契约）",
         "semantic": "text"
       },
@@ -13386,6 +13804,10 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 41,
         "parentId": 38,
+        "fontSize": 13,
+        "margin": {
+          "top": 6
+        },
         "color": "#07c160",
         "semantic": "text"
       },
@@ -13393,12 +13815,26 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 42,
         "parentId": 0,
         "backgroundColor": "#fff",
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "margin": {
+          "bottom": 12
+        },
         "semantic": "view"
       },
       {
         "id": 43,
         "parentId": 42,
+        "fontSize": 14,
         "fontWeight": 600,
+        "margin": {
+          "bottom": 8
+        },
         "text": "⑨ reactivity-runtime（reactive / readonly 真 Proxy）",
         "semantic": "text"
       },
@@ -13413,13 +13849,27 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 45,
         "parentId": 44,
+        "padding": {
+          "top": 4,
+          "right": 8,
+          "bottom": 4,
+          "left": 8
+        },
         "backgroundColor": "#eef",
+        "borderRadius": 4,
+        "margin": {
+          "right": 6
+        },
         "text": "bump reactive.count（变更 → setData 桥刷新）",
         "semantic": "view"
       },
       {
         "id": 46,
         "parentId": 42,
+        "fontSize": 13,
+        "margin": {
+          "top": 6
+        },
         "color": "#07c160",
         "semantic": "text"
       },
@@ -13427,12 +13877,26 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 47,
         "parentId": 0,
         "backgroundColor": "#fff",
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "margin": {
+          "bottom": 12
+        },
         "semantic": "view"
       },
       {
         "id": 48,
         "parentId": 47,
+        "fontSize": 14,
         "fontWeight": 600,
+        "margin": {
+          "bottom": 8
+        },
         "text": "⑩ toRef / toRefs（运行时真 ref）",
         "semantic": "text"
       },
@@ -13447,13 +13911,27 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 50,
         "parentId": 49,
+        "padding": {
+          "top": 4,
+          "right": 8,
+          "bottom": 4,
+          "left": 8
+        },
         "backgroundColor": "#eef",
+        "borderRadius": 4,
+        "margin": {
+          "right": 6
+        },
         "text": "bump xRef.value（逻辑层 toRef 读写）",
         "semantic": "view"
       },
       {
         "id": 51,
         "parentId": 47,
+        "fontSize": 13,
+        "margin": {
+          "top": 6
+        },
         "color": "#07c160",
         "semantic": "text"
       },
@@ -13461,12 +13939,26 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 52,
         "parentId": 0,
         "backgroundColor": "#fff",
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "margin": {
+          "bottom": 12
+        },
         "semantic": "view"
       },
       {
         "id": 53,
         "parentId": 52,
+        "fontSize": 14,
         "fontWeight": 600,
+        "margin": {
+          "bottom": 8
+        },
         "text": "⑪ markRaw / customRef（运行时真语义）",
         "semantic": "text"
       },
@@ -13481,13 +13973,27 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 55,
         "parentId": 54,
+        "padding": {
+          "top": 4,
+          "right": 8,
+          "bottom": 4,
+          "left": 8
+        },
         "backgroundColor": "#eef",
+        "borderRadius": 4,
+        "margin": {
+          "right": 6
+        },
         "text": "bump customR.value（customRef 工厂 set→trigger）",
         "semantic": "view"
       },
       {
         "id": 56,
         "parentId": 52,
+        "fontSize": 13,
+        "margin": {
+          "top": 6
+        },
         "color": "#07c160",
         "semantic": "text"
       },
@@ -13495,12 +14001,26 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 57,
         "parentId": 0,
         "backgroundColor": "#fff",
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "margin": {
+          "bottom": 12
+        },
         "semantic": "view"
       },
       {
         "id": 58,
         "parentId": 57,
+        "fontSize": 14,
         "fontWeight": 600,
+        "margin": {
+          "bottom": 8
+        },
         "text": "⑫ teleport → root-portal（弹层层叠）",
         "semantic": "text"
       },
@@ -13515,12 +14035,26 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 60,
         "parentId": 59,
+        "padding": {
+          "top": 4,
+          "right": 8,
+          "bottom": 4,
+          "left": 8
+        },
         "backgroundColor": "#eef",
+        "borderRadius": 4,
+        "margin": {
+          "right": 6
+        },
         "semantic": "view"
       },
       {
         "id": 61,
         "parentId": 57,
+        "fontSize": 13,
+        "margin": {
+          "top": 6
+        },
         "color": "#07c160",
         "semantic": "text"
       },
@@ -13587,19 +14121,33 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": null,
         "display": "flex",
         "flexDirection": "column",
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
         "semantic": "view"
       },
       {
         "id": 1,
         "parentId": 0,
+        "fontSize": 16,
         "fontWeight": 700,
+        "margin": {
+          "bottom": 4
+        },
         "text": "GP4-c · 登录失效拦截（不可取消模态）",
         "semantic": "text"
       },
       {
         "id": 2,
         "parentId": 0,
+        "fontSize": 12,
         "color": "#666",
+        "margin": {
+          "bottom": 12
+        },
         "text": "模拟\"页面内请求返回 401\"：弹窗出现且不可取消，唯一出口是登录态恢复",
         "semantic": "text"
       },
@@ -13608,24 +14156,37 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 0,
         "display": "flex",
         "flexDirection": "column",
+        "margin": {
+          "bottom": 14
+        },
         "semantic": "view"
       },
       {
         "id": 4,
         "parentId": 3,
+        "fontSize": 12,
         "color": "#999",
+        "margin": {
+          "bottom": 5
+        },
         "text": "① 触发（模拟请求拦截器里的 401 上报）",
         "semantic": "text"
       },
       {
         "id": 5,
         "parentId": 3,
+        "margin": {
+          "bottom": 6
+        },
         "text": "模拟 401（弹窗出现）",
         "semantic": "button"
       },
       {
         "id": 6,
         "parentId": 3,
+        "margin": {
+          "bottom": 6
+        },
         "backgroundColor": "#f2f3f5",
         "color": "#333",
         "text": "模拟登录成功（弹窗消失）",
@@ -13636,18 +14197,28 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 0,
         "display": "flex",
         "flexDirection": "column",
+        "margin": {
+          "bottom": 14
+        },
         "semantic": "view"
       },
       {
         "id": 8,
         "parentId": 7,
+        "fontSize": 12,
         "color": "#999",
+        "margin": {
+          "bottom": 5
+        },
         "text": "② 证明\"不可取消\"：下面的按钮在弹窗出现时应**点不动**",
         "semantic": "text"
       },
       {
         "id": 9,
         "parentId": 7,
+        "margin": {
+          "bottom": 6
+        },
         "backgroundColor": "#f2f3f5",
         "color": "#333",
         "semantic": "button"
@@ -13662,18 +14233,26 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 0,
         "display": "flex",
         "flexDirection": "column",
+        "margin": {
+          "bottom": 14
+        },
         "semantic": "view"
       },
       {
         "id": 12,
         "parentId": 11,
+        "fontSize": 12,
         "color": "#999",
+        "margin": {
+          "bottom": 5
+        },
         "text": "读数（e2e 断言面）",
         "semantic": "text"
       },
       {
         "id": 13,
         "parentId": 11,
+        "fontSize": 12,
         "color": "#07c160",
         "semantic": "text"
       }
@@ -13686,19 +14265,33 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": null,
         "display": "flex",
         "flexDirection": "column",
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
         "semantic": "view"
       },
       {
         "id": 1,
         "parentId": 0,
+        "fontSize": 16,
         "fontWeight": 700,
+        "margin": {
+          "bottom": 4
+        },
         "text": "GP4-b · Loading 多实例与遮罩范围",
         "semantic": "text"
       },
       {
         "id": 2,
         "parentId": 0,
+        "fontSize": 12,
         "color": "#666",
+        "margin": {
+          "bottom": 12
+        },
         "text": "对照 uni.showLoading（全局单例）：可多实例共存 / 三种遮罩范围 / 范围外不受影响",
         "semantic": "text"
       },
@@ -13707,24 +14300,37 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 0,
         "display": "flex",
         "flexDirection": "column",
+        "margin": {
+          "bottom": 14
+        },
         "semantic": "view"
       },
       {
         "id": 4,
         "parentId": 3,
+        "fontSize": 12,
         "color": "#999",
+        "margin": {
+          "bottom": 5
+        },
         "text": "① 多实例（两个不同 id 同时存在）",
         "semantic": "text"
       },
       {
         "id": 5,
         "parentId": 3,
+        "margin": {
+          "bottom": 6
+        },
         "text": "显示 A + B",
         "semantic": "button"
       },
       {
         "id": 6,
         "parentId": 3,
+        "margin": {
+          "bottom": 6
+        },
         "backgroundColor": "#f2f3f5",
         "color": "#333",
         "text": "结束 A",
@@ -13733,6 +14339,9 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 7,
         "parentId": 3,
+        "margin": {
+          "bottom": 6
+        },
         "backgroundColor": "#f2f3f5",
         "color": "#333",
         "text": "结束 B",
@@ -13741,6 +14350,9 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 8,
         "parentId": 3,
+        "margin": {
+          "bottom": 6
+        },
         "backgroundColor": "#f2f3f5",
         "color": "#333",
         "text": "同名替换（A 换文案）",
@@ -13751,24 +14363,37 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 0,
         "display": "flex",
         "flexDirection": "column",
+        "margin": {
+          "bottom": 14
+        },
         "semantic": "view"
       },
       {
         "id": 10,
         "parentId": 9,
+        "fontSize": 12,
         "color": "#999",
+        "margin": {
+          "bottom": 5
+        },
         "text": "② 全局范围（跨页存活）",
         "semantic": "text"
       },
       {
         "id": 11,
         "parentId": 9,
+        "margin": {
+          "bottom": 6
+        },
         "text": "网络忙（global）",
         "semantic": "button"
       },
       {
         "id": 12,
         "parentId": 9,
+        "margin": {
+          "bottom": 6
+        },
         "backgroundColor": "#f2f3f5",
         "color": "#333",
         "text": "结束 global",
@@ -13777,7 +14402,11 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 13,
         "parentId": 9,
+        "fontSize": 13,
         "color": "#1a7af8",
+        "margin": {
+          "top": 4
+        },
         "text": "去首页（global 应仍在；page 级的应已清理）",
         "semantic": "navigator"
       },
@@ -13786,18 +14415,28 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 0,
         "display": "flex",
         "flexDirection": "column",
+        "margin": {
+          "bottom": 14
+        },
         "semantic": "view"
       },
       {
         "id": 15,
         "parentId": 14,
+        "fontSize": 12,
         "color": "#999",
+        "margin": {
+          "bottom": 5
+        },
         "text": "③ 区域范围（就地包裹；拦内不拦外）",
         "semantic": "text"
       },
       {
         "id": 16,
         "parentId": 14,
+        "margin": {
+          "bottom": 6
+        },
         "text": "区域加载（region）",
         "semantic": "button"
       },
@@ -13805,12 +14444,18 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 17,
         "parentId": 14,
         "position": "relative",
+        "height": 100,
         "backgroundColor": "#f7f8fa",
+        "borderWidth": 0.5,
         "borderColor": "#e5e6eb",
+        "borderRadius": 6,
         "display": "flex",
         "flexDirection": "column",
         "alignItems": "center",
         "justifyContent": "center",
+        "margin": {
+          "bottom": 6
+        },
         "semantic": "view"
       },
       {
@@ -13821,6 +14466,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 19,
         "parentId": 17,
+        "fontSize": 13,
         "color": "#666",
         "text": "区域内容（active 时点这里不应有反应）",
         "semantic": "text"
@@ -13828,12 +14474,19 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 20,
         "parentId": 17,
+        "fontSize": 12,
         "color": "#07c160",
+        "margin": {
+          "top": 4
+        },
         "semantic": "text"
       },
       {
         "id": 21,
         "parentId": 14,
+        "margin": {
+          "bottom": 6
+        },
         "backgroundColor": "#f2f3f5",
         "color": "#333",
         "semantic": "button"
@@ -13843,11 +14496,17 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 0,
         "display": "flex",
         "flexDirection": "column",
+        "margin": {
+          "bottom": 14
+        },
         "semantic": "view"
       },
       {
         "id": 23,
         "parentId": 22,
+        "margin": {
+          "bottom": 6
+        },
         "backgroundColor": "#f2f3f5",
         "color": "#333",
         "text": "全部结束",
@@ -13856,6 +14515,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 24,
         "parentId": 22,
+        "fontSize": 12,
         "color": "#07c160",
         "semantic": "text"
       }
@@ -13868,19 +14528,33 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": null,
         "display": "flex",
         "flexDirection": "column",
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
         "semantic": "view"
       },
       {
         "id": 1,
         "parentId": 0,
+        "fontSize": 16,
         "fontWeight": 700,
+        "margin": {
+          "bottom": 4
+        },
         "text": "GP4-a · Toast 队列",
         "semantic": "text"
       },
       {
         "id": 2,
         "parentId": 0,
+        "fontSize": 12,
         "color": "#666",
+        "margin": {
+          "bottom": 12
+        },
         "text": "对照 uni.showToast：可排队 / 可自定义位置与色彩 / 可手动关闭 / 有上限与丢弃策略",
         "semantic": "text"
       },
@@ -13889,24 +14563,37 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 0,
         "display": "flex",
         "flexDirection": "column",
+        "margin": {
+          "bottom": 14
+        },
         "semantic": "view"
       },
       {
         "id": 4,
         "parentId": 3,
+        "fontSize": 12,
         "color": "#999",
+        "margin": {
+          "bottom": 5
+        },
         "text": "① 排队（核心判据）",
         "semantic": "text"
       },
       {
         "id": 5,
         "parentId": 3,
+        "margin": {
+          "bottom": 6
+        },
         "text": "连续触发 10 条（按序显示）",
         "semantic": "button"
       },
       {
         "id": 6,
         "parentId": 3,
+        "margin": {
+          "bottom": 6
+        },
         "backgroundColor": "#f2f3f5",
         "color": "#333",
         "text": "单条（默认）",
@@ -13917,18 +14604,28 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 0,
         "display": "flex",
         "flexDirection": "column",
+        "margin": {
+          "bottom": 14
+        },
         "semantic": "view"
       },
       {
         "id": 8,
         "parentId": 7,
+        "fontSize": 12,
         "color": "#999",
+        "margin": {
+          "bottom": 5
+        },
         "text": "② 位置（Overlay 层内锚点）",
         "semantic": "text"
       },
       {
         "id": 9,
         "parentId": 7,
+        "margin": {
+          "bottom": 6
+        },
         "backgroundColor": "#f2f3f5",
         "color": "#333",
         "text": "顶部",
@@ -13937,6 +14634,9 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 10,
         "parentId": 7,
+        "margin": {
+          "bottom": 6
+        },
         "backgroundColor": "#f2f3f5",
         "color": "#333",
         "text": "底部",
@@ -13947,18 +14647,28 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 0,
         "display": "flex",
         "flexDirection": "column",
+        "margin": {
+          "bottom": 14
+        },
         "semantic": "view"
       },
       {
         "id": 12,
         "parentId": 11,
+        "fontSize": 12,
         "color": "#999",
+        "margin": {
+          "bottom": 5
+        },
         "text": "③ 色彩语义（可经 CSS 变量换色）",
         "semantic": "text"
       },
       {
         "id": 13,
         "parentId": 11,
+        "margin": {
+          "bottom": 6
+        },
         "backgroundColor": "#f2f3f5",
         "color": "#333",
         "text": "success / warn / error",
@@ -13969,18 +14679,28 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 0,
         "display": "flex",
         "flexDirection": "column",
+        "margin": {
+          "bottom": 14
+        },
         "semantic": "view"
       },
       {
         "id": 15,
         "parentId": 14,
+        "fontSize": 12,
         "color": "#999",
+        "margin": {
+          "bottom": 5
+        },
         "text": "④ 常驻与手动关闭（duration=0）",
         "semantic": "text"
       },
       {
         "id": 16,
         "parentId": 14,
+        "margin": {
+          "bottom": 6
+        },
         "backgroundColor": "#f2f3f5",
         "color": "#333",
         "text": "常驻提示",
@@ -13989,6 +14709,9 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 17,
         "parentId": 14,
+        "margin": {
+          "bottom": 6
+        },
         "backgroundColor": "#f2f3f5",
         "color": "#333",
         "text": "关闭最后一条",
@@ -13997,6 +14720,9 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 18,
         "parentId": 14,
+        "margin": {
+          "bottom": 6
+        },
         "backgroundColor": "#f2f3f5",
         "color": "#333",
         "text": "全部清空",
@@ -14007,18 +14733,28 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 0,
         "display": "flex",
         "flexDirection": "column",
+        "margin": {
+          "bottom": 14
+        },
         "semantic": "view"
       },
       {
         "id": 20,
         "parentId": 19,
+        "fontSize": 12,
         "color": "#999",
+        "margin": {
+          "bottom": 5
+        },
         "text": "⑤ 上限与丢弃策略（防刷屏）",
         "semantic": "text"
       },
       {
         "id": 21,
         "parentId": 19,
+        "margin": {
+          "bottom": 6
+        },
         "backgroundColor": "#f2f3f5",
         "color": "#333",
         "text": "先清空再连发 8 条（上限 3）",
@@ -14027,6 +14763,9 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 22,
         "parentId": 19,
+        "margin": {
+          "bottom": 6
+        },
         "backgroundColor": "#f2f3f5",
         "color": "#333",
         "text": "恢复配置",
@@ -14037,24 +14776,33 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 0,
         "display": "flex",
         "flexDirection": "column",
+        "margin": {
+          "bottom": 14
+        },
         "semantic": "view"
       },
       {
         "id": 24,
         "parentId": 23,
+        "fontSize": 12,
         "color": "#999",
+        "margin": {
+          "bottom": 5
+        },
         "text": "读数（e2e 断言面）",
         "semantic": "text"
       },
       {
         "id": 25,
         "parentId": 23,
+        "fontSize": 12,
         "color": "#07c160",
         "semantic": "text"
       },
       {
         "id": 26,
         "parentId": 23,
+        "fontSize": 12,
         "color": "#07c160",
         "semantic": "text"
       }
@@ -14067,19 +14815,33 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": null,
         "display": "flex",
         "flexDirection": "column",
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
         "semantic": "view"
       },
       {
         "id": 1,
         "parentId": 0,
+        "fontSize": 16,
         "fontWeight": 700,
+        "margin": {
+          "bottom": 4
+        },
         "text": "GP5 · 八条超级应用场景",
         "semantic": "text"
       },
       {
         "id": 2,
         "parentId": 0,
+        "fontSize": 12,
         "color": "#666",
+        "margin": {
+          "bottom": 12
+        },
         "text": "本页源码零全局声明——悬浮球/音乐条/主题/角标全部来自 App 壳 Global 层（声明一次）",
         "semantic": "text"
       },
@@ -14088,35 +14850,53 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 0,
         "display": "flex",
         "flexDirection": "column",
+        "margin": {
+          "bottom": 12
+        },
         "semantic": "view"
       },
       {
         "id": 4,
         "parentId": 3,
+        "margin": {
+          "bottom": 8
+        },
         "text": "切换全局悬浮球",
         "semantic": "button"
       },
       {
         "id": 5,
         "parentId": 3,
+        "margin": {
+          "bottom": 8
+        },
         "text": "切换全局音乐条",
         "semantic": "button"
       },
       {
         "id": 6,
         "parentId": 3,
+        "margin": {
+          "bottom": 8
+        },
         "text": "切换全局主题（暗 / 亮）",
         "semantic": "button"
       },
       {
         "id": 7,
         "parentId": 3,
+        "margin": {
+          "bottom": 8
+        },
         "text": "IM 未读 +1",
         "semantic": "button"
       },
       {
         "id": 8,
         "parentId": 3,
+        "margin": {
+          "bottom": 8
+        },
         "backgroundColor": "#f2f3f5",
         "color": "#1f2328",
         "text": "IM 未读清零",
@@ -14125,6 +14905,9 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 9,
         "parentId": 3,
+        "margin": {
+          "bottom": 8
+        },
         "backgroundColor": "#f2f3f5",
         "color": "#1f2328",
         "text": "刷新读数",
@@ -14133,8 +14916,15 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 10,
         "parentId": 3,
+        "fontSize": 11,
         "color": "#8a6d3b",
         "backgroundColor": "#fff7e6",
+        "padding": {
+          "top": 6,
+          "right": 6,
+          "bottom": 6,
+          "left": 6
+        },
         "semantic": "text"
       },
       {
@@ -14142,18 +14932,26 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 0,
         "display": "flex",
         "flexDirection": "column",
+        "margin": {
+          "bottom": 12
+        },
         "semantic": "view"
       },
       {
         "id": 12,
         "parentId": 11,
+        "fontSize": 11,
         "color": "#999",
+        "margin": {
+          "bottom": 6
+        },
         "text": "跨页验证：开启后跳其它页，全局内容仍在（共享状态）",
         "semantic": "text"
       },
       {
         "id": 13,
         "parentId": 11,
+        "fontSize": 13,
         "color": "#3355aa",
         "text": "去首页",
         "semantic": "navigator"
@@ -14346,36 +15144,61 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": null,
         "display": "flex",
         "flexDirection": "column",
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
         "semantic": "view"
       },
       {
         "id": 1,
         "parentId": 0,
+        "fontSize": 15,
         "fontWeight": 600,
+        "margin": {
+          "bottom": 6
+        },
         "text": "外部模块导入验证（B1：npm 包构建期打包）",
         "semantic": "text"
       },
       {
         "id": 2,
         "parentId": 0,
+        "fontSize": 12,
         "color": "#666",
+        "margin": {
+          "bottom": 12
+        },
         "text": "点按钮调用 ms 格式化时长——MP 端由 _proteus/npm/ms.js 提供（require 缓存单例）",
         "semantic": "text"
       },
       {
         "id": 3,
         "parentId": 0,
+        "margin": {
+          "bottom": 12
+        },
         "text": "格式化时长",
         "semantic": "button"
       },
       {
         "id": 4,
         "parentId": 0,
+        "fontSize": 13,
+        "margin": {
+          "bottom": 4
+        },
         "semantic": "text"
       },
       {
         "id": 5,
         "parentId": 0,
+        "fontSize": 13,
+        "margin": {
+          "bottom": 4
+        },
         "semantic": "text"
       }
     ]

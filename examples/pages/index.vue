@@ -101,6 +101,9 @@ function go(name: 'forms' | 'config-demo' | 'user') {
 
     <!-- ★letter-spacing 演示（批次 20）：字距 4px（Web 基准，三端一致） -->
     <div class="spacing-demo">LETTER SPACING 字距</div>
+
+    <!-- ★rpx 演示（批次 21）：240rpx = 120px（小程序 750 设计单位，跨端一致） -->
+    <div class="rpx-demo">rpx 240 → 120px</div>
   </div>
 </template>
 
@@ -224,6 +227,17 @@ function go(name: 'forms' | 'config-demo' | 'user') {
   letter-spacing: 4px;
   color: #1a7af8;
   font-size: 14px;
+  text-align: center;
+}
+/* ★rpx 演示（批次 21）——240rpx→120px / 48rpx→24px / 24rpx→12px */
+.rpx-demo {
+  width: 240rpx;
+  height: 48rpx;
+  margin: 16px auto;
+  background-color: #e3e6eb;
+  border-radius: 8rpx;
+  color: #666;
+  font-size: 24rpx;
   text-align: center;
 }
 </style>

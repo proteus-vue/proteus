@@ -5640,13 +5640,21 @@
         {
           "id": 0,
           "parentId": null,
+          "padding": {
+            "top": 20,
+            "right": 16,
+            "bottom": 20,
+            "left": 16
+          },
           "semantic": "view"
         },
         {
           "id": 1,
           "parentId": 0,
           "padding": {
+            "top": 12,
             "right": 0,
+            "bottom": 12,
             "left": 0
           },
           "semantic": "view"
@@ -5654,6 +5662,7 @@
         {
           "id": 2,
           "parentId": 1,
+          "fontSize": 20,
           "fontWeight": 700,
           "text": "\u6587\u6863\u5F15\u64CE",
           "semantic": "text"
@@ -5661,6 +5670,7 @@
         {
           "id": 3,
           "parentId": 1,
+          "fontSize": 12,
           "color": "#666a73",
           "text": "\u672C\u9875\u5185\u5BB9\u7531 Markdown \u7ECF @proteus-vue/docs \u7F16\u8BD1\u6E32\u67D3\u2014\u2014\u6587\u6863\u4E5F\u662F\u7F16\u8BD1\u4EA7\u7269",
           "semantic": "text"
@@ -5669,29 +5679,47 @@
           "id": 4,
           "parentId": 0,
           "margin": {
+            "top": 8,
             "right": 0,
+            "bottom": 8,
             "left": 0
+          },
+          "padding": {
+            "top": 8,
+            "right": 8,
+            "bottom": 8,
+            "left": 8
           },
           "borderWidth": 1,
           "borderColor": "#e3e6eb",
+          "borderRadius": 6,
           "semantic": "view"
         },
         {
           "id": 5,
           "parentId": 4,
+          "fontSize": 14,
           "semantic": "input"
         },
         {
           "id": 6,
           "parentId": 4,
+          "fontSize": 11,
           "color": "#9aa0aa",
           "semantic": "text"
         },
         {
           "id": 7,
           "parentId": 0,
+          "padding": {
+            "top": 12,
+            "right": 12,
+            "bottom": 12,
+            "left": 12
+          },
           "borderWidth": 1,
           "borderColor": "#e3e6eb",
+          "borderRadius": 6,
           "semantic": "view"
         },
         {
@@ -5702,12 +5730,17 @@
         {
           "id": 9,
           "parentId": 8,
+          "fontSize": 18,
           "fontWeight": 700,
+          "margin": {
+            "bottom": 8
+          },
           "semantic": "text"
         },
         {
           "id": 10,
           "parentId": 8,
+          "fontSize": 14,
           "lineHeight": "1.7",
           "semantic": "view"
         },
@@ -5720,7 +5753,9 @@
           "id": 12,
           "parentId": 11,
           "padding": {
+            "top": 6,
             "right": 0,
+            "bottom": 6,
             "left": 0
           },
           "semantic": "view"
@@ -5728,30 +5763,44 @@
         {
           "id": 13,
           "parentId": 12,
+          "fontSize": 14,
           "fontWeight": 600,
           "semantic": "text"
         },
         {
           "id": 14,
           "parentId": 12,
+          "fontSize": 11,
           "color": "#9aa0aa",
           "semantic": "text"
         },
         {
           "id": 15,
           "parentId": 0,
+          "margin": {
+            "top": 12
+          },
+          "padding": {
+            "top": 8,
+            "right": 12,
+            "bottom": 8,
+            "left": 12
+          },
           "backgroundColor": "#f5f6f8",
+          "borderRadius": 6,
           "semantic": "view"
         },
         {
           "id": 16,
           "parentId": 15,
+          "fontSize": 11,
           "color": "#666a73",
           "semantic": "text"
         },
         {
           "id": 17,
           "parentId": 15,
+          "fontSize": 11,
           "color": "#666a73",
           "semantic": "text"
         }
@@ -7873,19 +7922,33 @@
           "parentId": null,
           "display": "flex",
           "flexDirection": "column",
+          "padding": {
+            "top": 12,
+            "right": 12,
+            "bottom": 12,
+            "left": 12
+          },
           "semantic": "view"
         },
         {
           "id": 1,
           "parentId": 0,
+          "fontSize": 16,
           "fontWeight": 700,
+          "margin": {
+            "bottom": 4
+          },
           "text": "GP3-b1 \xB7 Global \u5C42\uFF08\u6BCF\u9875\u6CE8\u5165 + \u72B6\u6001\u5171\u4EAB\uFF09",
           "semantic": "text"
         },
         {
           "id": 2,
           "parentId": 0,
+          "fontSize": 12,
           "color": "#666",
+          "margin": {
+            "bottom": 12
+          },
           "text": "\u5168\u5C40\u72B6\u6001\u6761\u58F0\u660E\u5728 App.mp.vue\uFF08\u552F\u4E00\u58F0\u660E\u5904\uFF09\uFF0C\u672C\u9875\u4E0D\u5F15\u5165\u4EFB\u4F55\u5168\u5C40\u5185\u5BB9",
           "semantic": "text"
         },
@@ -7894,17 +7957,26 @@
           "parentId": 0,
           "display": "flex",
           "flexDirection": "column",
+          "margin": {
+            "bottom": 16
+          },
           "semantic": "view"
         },
         {
           "id": 4,
           "parentId": 3,
+          "margin": {
+            "bottom": 8
+          },
           "text": " \u5207\u6362\u5168\u5C40\u72B6\u6001\u6761\uFF08\u8C03\u7528\u6CE8\u5165\u7684\u58F3\u65B9\u6CD5\uFF09 ",
           "semantic": "button"
         },
         {
           "id": 5,
           "parentId": 3,
+          "margin": {
+            "bottom": 8
+          },
           "backgroundColor": "#f2f3f5",
           "color": "#333",
           "semantic": "button"
@@ -7914,26 +7986,41 @@
           "parentId": 0,
           "display": "flex",
           "flexDirection": "column",
+          "margin": {
+            "bottom": 16
+          },
           "semantic": "view"
         },
         {
           "id": 7,
           "parentId": 6,
+          "fontSize": 12,
           "color": "#999",
+          "margin": {
+            "bottom": 6
+          },
           "text": "\u8DE8\u9875\u9A8C\u8BC1\uFF1A\u5F00\u542F\u540E\u8DF3\u300C\u9996\u9875 / \u7EC4\u4EF6\u6F14\u793A\u300D\uFF0C\u72B6\u6001\u6761\u5E94\u4ECD\u5728\uFF08\u5171\u4EAB\u72B6\u6001\uFF09",
           "semantic": "text"
         },
         {
           "id": 8,
           "parentId": 6,
+          "fontSize": 14,
           "color": "#1a7af8",
+          "margin": {
+            "bottom": 6
+          },
           "text": "\u53BB\u9996\u9875",
           "semantic": "navigator"
         },
         {
           "id": 9,
           "parentId": 6,
+          "fontSize": 14,
           "color": "#1a7af8",
+          "margin": {
+            "bottom": 6
+          },
           "text": "\u53BB\u7EC4\u4EF6\u6F14\u793A",
           "semantic": "navigator"
         }
@@ -8827,6 +8914,27 @@
           "fontSize": 14,
           "textAlign": "center",
           "text": "LETTER SPACING \u5B57\u8DDD",
+          "semantic": "div"
+        },
+        {
+          "id": 60,
+          "parentId": 0,
+          "width": 120,
+          "height": 24,
+          "margin": {
+            "top": 16,
+            "bottom": 16
+          },
+          "marginAuto": {
+            "right": true,
+            "left": true
+          },
+          "backgroundColor": "#e3e6eb",
+          "borderRadius": 4,
+          "color": "#666",
+          "fontSize": 12,
+          "textAlign": "center",
+          "text": "rpx 240 \u2192 120px",
           "semantic": "div"
         }
       ]
@@ -16419,19 +16527,33 @@
         {
           "id": 0,
           "parentId": null,
+          "padding": {
+            "top": 12,
+            "right": 12,
+            "bottom": 12,
+            "left": 12
+          },
           "semantic": "view"
         },
         {
           "id": 1,
           "parentId": 0,
+          "fontSize": 18,
           "fontWeight": 700,
+          "margin": {
+            "bottom": 4
+          },
           "text": "\u2605G12 v-model MP \u590D\u6D4B\uFF08Skyline\uFF09",
           "semantic": "text"
         },
         {
           "id": 2,
           "parentId": 0,
+          "fontSize": 12,
           "color": "#888",
+          "margin": {
+            "bottom": 12
+          },
           "text": "p-* \u7EC4\u4EF6 v-model \u53CC\u7ED1\u56DE\u4F20\u2014\u2014\u5355\u6BB5\u4E8B\u4EF6 bind:update-*\uFF08G12 \u5019\u9009 B\uFF09\u5728 Skyline/WebView \u662F\u5426\u5DE5\u4F5C",
           "semantic": "text"
         },
@@ -16439,12 +16561,26 @@
           "id": 3,
           "parentId": 0,
           "backgroundColor": "#fff",
+          "borderRadius": 8,
+          "padding": {
+            "top": 12,
+            "right": 12,
+            "bottom": 12,
+            "left": 12
+          },
+          "margin": {
+            "bottom": 12
+          },
           "semantic": "view"
         },
         {
           "id": 4,
           "parentId": 3,
+          "fontSize": 14,
           "fontWeight": 600,
+          "margin": {
+            "bottom": 8
+          },
           "text": "\u2460 p-modal v-model:visible\uFF08update-visible \u5355\u6BB5\u4E8B\u4EF6\u5951\u7EA6\uFF09",
           "semantic": "text"
         },
@@ -16463,7 +16599,9 @@
           "id": 7,
           "parentId": 6,
           "padding": {
+            "top": 12,
             "right": 0,
+            "bottom": 12,
             "left": 0
           },
           "semantic": "view"
@@ -16477,6 +16615,10 @@
         {
           "id": 9,
           "parentId": 3,
+          "fontSize": 13,
+          "margin": {
+            "top": 6
+          },
           "color": "#07c160",
           "semantic": "text"
         },
@@ -16484,12 +16626,26 @@
           "id": 10,
           "parentId": 0,
           "backgroundColor": "#fff",
+          "borderRadius": 8,
+          "padding": {
+            "top": 12,
+            "right": 12,
+            "bottom": 12,
+            "left": 12
+          },
+          "margin": {
+            "bottom": 12
+          },
           "semantic": "view"
         },
         {
           "id": 11,
           "parentId": 10,
+          "fontSize": 14,
           "fontWeight": 600,
+          "margin": {
+            "bottom": 8
+          },
           "text": "\u2461 p-switch v-model\uFF08update-modelValue \u5951\u7EA6\uFF09",
           "semantic": "text"
         },
@@ -16509,6 +16665,10 @@
         {
           "id": 14,
           "parentId": 12,
+          "fontSize": 13,
+          "margin": {
+            "top": 6
+          },
           "color": "#07c160",
           "semantic": "text"
         },
@@ -16516,12 +16676,26 @@
           "id": 15,
           "parentId": 0,
           "backgroundColor": "#fff",
+          "borderRadius": 8,
+          "padding": {
+            "top": 12,
+            "right": 12,
+            "bottom": 12,
+            "left": 12
+          },
+          "margin": {
+            "bottom": 12
+          },
           "semantic": "view"
         },
         {
           "id": 16,
           "parentId": 15,
+          "fontSize": 14,
           "fontWeight": 600,
+          "margin": {
+            "bottom": 8
+          },
           "text": "\u2462 p-slider v-model\uFF08update-modelValue \u5951\u7EA6\u2014\u2014MP \u6620\u5C04\u5DF2\u843D\u5730\uFF1A\u539F\u751F slider \u53CC\u7AEF\uFF09",
           "semantic": "text"
         },
@@ -16533,13 +16707,21 @@
         {
           "id": 18,
           "parentId": 15,
+          "fontSize": 13,
+          "margin": {
+            "top": 6
+          },
           "color": "#07c160",
           "semantic": "text"
         },
         {
           "id": 19,
           "parentId": 15,
+          "fontSize": 12,
           "color": "#888",
+          "margin": {
+            "bottom": 12
+          },
           "text": "\u6CE8\uFF1Ap-slider \u6A21\u677F\u5DF2\u6362\u539F\u751F slider \u6807\u7B7E\uFF08Web = proteus-slider \u6A21\u62DF / MP = \u5FAE\u4FE1\u539F\u751F\uFF09\u2014\u2014\u62D6\u52A8\u6D4B\u56DE\u4F20",
           "semantic": "text"
         },
@@ -16547,12 +16729,26 @@
           "id": 20,
           "parentId": 0,
           "backgroundColor": "#fff",
+          "borderRadius": 8,
+          "padding": {
+            "top": 12,
+            "right": 12,
+            "bottom": 12,
+            "left": 12
+          },
+          "margin": {
+            "bottom": 12
+          },
           "semantic": "view"
         },
         {
           "id": 21,
           "parentId": 20,
+          "fontSize": 14,
           "fontWeight": 600,
+          "margin": {
+            "bottom": 8
+          },
           "text": "\u2463 p-input\uFF08\u53D7\u63A7\u7EC4\u4EF6\uFF1A:value + @input\uFF0C\u975E v-model\uFF09",
           "semantic": "text"
         },
@@ -16564,6 +16760,10 @@
         {
           "id": 23,
           "parentId": 20,
+          "fontSize": 13,
+          "margin": {
+            "top": 6
+          },
           "color": "#07c160",
           "semantic": "text"
         }
@@ -16574,19 +16774,33 @@
         {
           "id": 0,
           "parentId": null,
+          "padding": {
+            "top": 12,
+            "right": 12,
+            "bottom": 12,
+            "left": 12
+          },
           "semantic": "view"
         },
         {
           "id": 1,
           "parentId": 0,
+          "fontSize": 18,
           "fontWeight": 700,
+          "margin": {
+            "bottom": 4
+          },
           "text": "Vue \u80FD\u529B\u5BF9\u9F50",
           "semantic": "text"
         },
         {
           "id": 2,
           "parentId": 0,
+          "fontSize": 12,
           "color": "#888",
+          "margin": {
+            "bottom": 12
+          },
           "text": "\u9010\u80FD\u529B\u771F\u673A\u9A8C\u6536\uFF08ref/computed/watch/v-model/\u6307\u4EE4/transition/provide\xB7inject/defineModel\uFF09",
           "semantic": "text"
         },
@@ -16594,12 +16808,26 @@
           "id": 3,
           "parentId": 0,
           "backgroundColor": "#fff",
+          "borderRadius": 8,
+          "padding": {
+            "top": 12,
+            "right": 12,
+            "bottom": 12,
+            "left": 12
+          },
+          "margin": {
+            "bottom": 12
+          },
           "semantic": "view"
         },
         {
           "id": 4,
           "parentId": 3,
+          "fontSize": 14,
           "fontWeight": 600,
+          "margin": {
+            "bottom": 8
+          },
           "text": "\u2460 ref / computed / watch",
           "semantic": "text"
         },
@@ -16614,13 +16842,27 @@
         {
           "id": 6,
           "parentId": 5,
+          "padding": {
+            "top": 4,
+            "right": 8,
+            "bottom": 4,
+            "left": 8
+          },
           "backgroundColor": "#eef",
+          "borderRadius": 4,
+          "margin": {
+            "right": 6
+          },
           "text": "bump \u4E00\u6B21\uFF08count++ \u2192 double \u91CD\u7B97 + watch \u8BB0\u5F55\uFF09",
           "semantic": "view"
         },
         {
           "id": 7,
           "parentId": 3,
+          "fontSize": 13,
+          "margin": {
+            "top": 6
+          },
           "color": "#07c160",
           "semantic": "text"
         },
@@ -16628,12 +16870,26 @@
           "id": 8,
           "parentId": 0,
           "backgroundColor": "#fff",
+          "borderRadius": 8,
+          "padding": {
+            "top": 12,
+            "right": 12,
+            "bottom": 12,
+            "left": 12
+          },
+          "margin": {
+            "bottom": 12
+          },
           "semantic": "view"
         },
         {
           "id": 9,
           "parentId": 8,
+          "fontSize": 14,
           "fontWeight": 600,
+          "margin": {
+            "bottom": 8
+          },
           "text": "\u2461 v-model\uFF08input \u53CC\u7ED1\uFF09",
           "semantic": "text"
         },
@@ -16657,6 +16913,10 @@
         {
           "id": 11,
           "parentId": 8,
+          "fontSize": 13,
+          "margin": {
+            "top": 6
+          },
           "color": "#07c160",
           "semantic": "text"
         },
@@ -16664,12 +16924,26 @@
           "id": 12,
           "parentId": 0,
           "backgroundColor": "#fff",
+          "borderRadius": 8,
+          "padding": {
+            "top": 12,
+            "right": 12,
+            "bottom": 12,
+            "left": 12
+          },
+          "margin": {
+            "bottom": 12
+          },
           "semantic": "view"
         },
         {
           "id": 13,
           "parentId": 12,
+          "fontSize": 14,
           "fontWeight": 600,
+          "margin": {
+            "bottom": 8
+          },
           "text": "\u2462 v-if \u6761\u4EF6\u94FE / v-show",
           "semantic": "text"
         },
@@ -16684,13 +16958,27 @@
         {
           "id": 15,
           "parentId": 14,
+          "padding": {
+            "top": 4,
+            "right": 8,
+            "bottom": 4,
+            "left": 8
+          },
           "backgroundColor": "#eef",
+          "borderRadius": 4,
+          "margin": {
+            "right": 6
+          },
           "text": "\u5207\u6362 agree",
           "semantic": "view"
         },
         {
           "id": 16,
           "parentId": 12,
+          "fontSize": 13,
+          "margin": {
+            "top": 6
+          },
           "color": "#07c160",
           "text": "agree=true \u2192 \u663E\u793A\u672C\u884C\uFF08v-if\uFF09",
           "semantic": "text"
@@ -16698,6 +16986,10 @@
         {
           "id": 17,
           "parentId": 12,
+          "fontSize": 13,
+          "margin": {
+            "top": 6
+          },
           "color": "#07c160",
           "text": "agree=false \u2192 \u663E\u793A\u672C\u884C\uFF08v-else\uFF09",
           "semantic": "text"
@@ -16705,6 +16997,10 @@
         {
           "id": 18,
           "parentId": 12,
+          "fontSize": 13,
+          "margin": {
+            "top": 6
+          },
           "color": "#07c160",
           "text": "v-show\uFF1Aagree \u4E3A\u771F\u624D\u663E\u793A\uFF08hidden \u5207\u6362\uFF09",
           "semantic": "text"
@@ -16712,6 +17008,10 @@
         {
           "id": 19,
           "parentId": 12,
+          "fontSize": 13,
+          "margin": {
+            "top": 6
+          },
           "color": "#07c160",
           "semantic": "text"
         },
@@ -16719,18 +17019,36 @@
           "id": 20,
           "parentId": 0,
           "backgroundColor": "#fff",
+          "borderRadius": 8,
+          "padding": {
+            "top": 12,
+            "right": 12,
+            "bottom": 12,
+            "left": 12
+          },
+          "margin": {
+            "bottom": 12
+          },
           "semantic": "view"
         },
         {
           "id": 21,
           "parentId": 20,
+          "fontSize": 14,
           "fontWeight": 600,
+          "margin": {
+            "bottom": 8
+          },
           "text": "\u2463 v-for",
           "semantic": "text"
         },
         {
           "id": 22,
           "parentId": 20,
+          "fontSize": 13,
+          "margin": {
+            "top": 6
+          },
           "color": "#07c160",
           "semantic": "text"
         },
@@ -16738,36 +17056,77 @@
           "id": 23,
           "parentId": 0,
           "backgroundColor": "#fff",
+          "borderRadius": 8,
+          "padding": {
+            "top": 12,
+            "right": 12,
+            "bottom": 12,
+            "left": 12
+          },
+          "margin": {
+            "bottom": 12
+          },
           "semantic": "view"
         },
         {
           "id": 24,
           "parentId": 23,
+          "fontSize": 14,
           "fontWeight": 600,
+          "margin": {
+            "bottom": 8
+          },
           "text": "\u2464 v-html / :class / :style",
           "semantic": "text"
         },
         {
           "id": 25,
           "parentId": 23,
+          "margin": {
+            "bottom": 4
+          },
           "semantic": "view"
         },
         {
           "id": 26,
           "parentId": 23,
+          "padding": {
+            "top": 4,
+            "right": 8,
+            "bottom": 4,
+            "left": 8
+          },
           "backgroundColor": "#eef",
+          "borderRadius": 4,
+          "margin": {
+            "right": 6
+          },
           "semantic": "view"
         },
         {
           "id": 27,
           "parentId": 0,
           "backgroundColor": "#fff",
+          "borderRadius": 8,
+          "padding": {
+            "top": 12,
+            "right": 12,
+            "bottom": 12,
+            "left": 12
+          },
+          "margin": {
+            "bottom": 12
+          },
           "semantic": "view"
         },
         {
           "id": 28,
           "parentId": 27,
+          "fontSize": 14,
           "fontWeight": 600,
+          "margin": {
+            "bottom": 8
+          },
           "text": "\u2465 transition\uFF08\u79BB\u5F00\u52A8\u753B\u72B6\u6001\u673A\uFF09",
           "semantic": "text"
         },
@@ -16782,13 +17141,30 @@
         {
           "id": 30,
           "parentId": 29,
+          "padding": {
+            "top": 4,
+            "right": 8,
+            "bottom": 4,
+            "left": 8
+          },
           "backgroundColor": "#eef",
+          "borderRadius": 4,
+          "margin": {
+            "right": 6
+          },
           "semantic": "view"
         },
         {
           "id": 31,
           "parentId": 27,
+          "padding": {
+            "top": 8,
+            "right": 8,
+            "bottom": 8,
+            "left": 8
+          },
           "backgroundColor": "#f0f7ff",
+          "borderRadius": 4,
           "text": "\u8FC7\u6E21\u5361\u7247\uFF1A\u5148\u64AD fade \u518D\u79FB\u9664",
           "semantic": "view"
         },
@@ -16796,12 +17172,26 @@
           "id": 32,
           "parentId": 0,
           "backgroundColor": "#fff",
+          "borderRadius": 8,
+          "padding": {
+            "top": 12,
+            "right": 12,
+            "bottom": 12,
+            "left": 12
+          },
+          "margin": {
+            "bottom": 12
+          },
           "semantic": "view"
         },
         {
           "id": 33,
           "parentId": 32,
+          "fontSize": 14,
           "fontWeight": 600,
+          "margin": {
+            "bottom": 8
+          },
           "text": "\u2466 provide / inject",
           "semantic": "text"
         },
@@ -16821,13 +17211,27 @@
         {
           "id": 36,
           "parentId": 35,
+          "padding": {
+            "top": 4,
+            "right": 8,
+            "bottom": 4,
+            "left": 8
+          },
           "backgroundColor": "#eef",
+          "borderRadius": 4,
+          "margin": {
+            "right": 6
+          },
           "text": "\u5207\u6362 user\uFF08\u88F8 ref \u8054\u52A8 \u2192 inject \u7EC4\u4EF6\u81EA\u52A8\u5237\u65B0\uFF09",
           "semantic": "view"
         },
         {
           "id": 37,
           "parentId": 32,
+          "fontSize": 13,
+          "margin": {
+            "top": 6
+          },
           "color": "#07c160",
           "semantic": "text"
         },
@@ -16835,12 +17239,26 @@
           "id": 38,
           "parentId": 0,
           "backgroundColor": "#fff",
+          "borderRadius": 8,
+          "padding": {
+            "top": 12,
+            "right": 12,
+            "bottom": 12,
+            "left": 12
+          },
+          "margin": {
+            "bottom": 12
+          },
           "semantic": "view"
         },
         {
           "id": 39,
           "parentId": 38,
+          "fontSize": 14,
           "fontWeight": 600,
+          "margin": {
+            "bottom": 8
+          },
           "text": "\u2467 defineModel\uFF08v-model \u7EC4\u4EF6\u5951\u7EA6\uFF09",
           "semantic": "text"
         },
@@ -16852,6 +17270,10 @@
         {
           "id": 41,
           "parentId": 38,
+          "fontSize": 13,
+          "margin": {
+            "top": 6
+          },
           "color": "#07c160",
           "semantic": "text"
         },
@@ -16859,12 +17281,26 @@
           "id": 42,
           "parentId": 0,
           "backgroundColor": "#fff",
+          "borderRadius": 8,
+          "padding": {
+            "top": 12,
+            "right": 12,
+            "bottom": 12,
+            "left": 12
+          },
+          "margin": {
+            "bottom": 12
+          },
           "semantic": "view"
         },
         {
           "id": 43,
           "parentId": 42,
+          "fontSize": 14,
           "fontWeight": 600,
+          "margin": {
+            "bottom": 8
+          },
           "text": "\u2468 reactivity-runtime\uFF08reactive / readonly \u771F Proxy\uFF09",
           "semantic": "text"
         },
@@ -16879,13 +17315,27 @@
         {
           "id": 45,
           "parentId": 44,
+          "padding": {
+            "top": 4,
+            "right": 8,
+            "bottom": 4,
+            "left": 8
+          },
           "backgroundColor": "#eef",
+          "borderRadius": 4,
+          "margin": {
+            "right": 6
+          },
           "text": "bump reactive.count\uFF08\u53D8\u66F4 \u2192 setData \u6865\u5237\u65B0\uFF09",
           "semantic": "view"
         },
         {
           "id": 46,
           "parentId": 42,
+          "fontSize": 13,
+          "margin": {
+            "top": 6
+          },
           "color": "#07c160",
           "semantic": "text"
         },
@@ -16893,12 +17343,26 @@
           "id": 47,
           "parentId": 0,
           "backgroundColor": "#fff",
+          "borderRadius": 8,
+          "padding": {
+            "top": 12,
+            "right": 12,
+            "bottom": 12,
+            "left": 12
+          },
+          "margin": {
+            "bottom": 12
+          },
           "semantic": "view"
         },
         {
           "id": 48,
           "parentId": 47,
+          "fontSize": 14,
           "fontWeight": 600,
+          "margin": {
+            "bottom": 8
+          },
           "text": "\u2469 toRef / toRefs\uFF08\u8FD0\u884C\u65F6\u771F ref\uFF09",
           "semantic": "text"
         },
@@ -16913,13 +17377,27 @@
         {
           "id": 50,
           "parentId": 49,
+          "padding": {
+            "top": 4,
+            "right": 8,
+            "bottom": 4,
+            "left": 8
+          },
           "backgroundColor": "#eef",
+          "borderRadius": 4,
+          "margin": {
+            "right": 6
+          },
           "text": "bump xRef.value\uFF08\u903B\u8F91\u5C42 toRef \u8BFB\u5199\uFF09",
           "semantic": "view"
         },
         {
           "id": 51,
           "parentId": 47,
+          "fontSize": 13,
+          "margin": {
+            "top": 6
+          },
           "color": "#07c160",
           "semantic": "text"
         },
@@ -16927,12 +17405,26 @@
           "id": 52,
           "parentId": 0,
           "backgroundColor": "#fff",
+          "borderRadius": 8,
+          "padding": {
+            "top": 12,
+            "right": 12,
+            "bottom": 12,
+            "left": 12
+          },
+          "margin": {
+            "bottom": 12
+          },
           "semantic": "view"
         },
         {
           "id": 53,
           "parentId": 52,
+          "fontSize": 14,
           "fontWeight": 600,
+          "margin": {
+            "bottom": 8
+          },
           "text": "\u246A markRaw / customRef\uFF08\u8FD0\u884C\u65F6\u771F\u8BED\u4E49\uFF09",
           "semantic": "text"
         },
@@ -16947,13 +17439,27 @@
         {
           "id": 55,
           "parentId": 54,
+          "padding": {
+            "top": 4,
+            "right": 8,
+            "bottom": 4,
+            "left": 8
+          },
           "backgroundColor": "#eef",
+          "borderRadius": 4,
+          "margin": {
+            "right": 6
+          },
           "text": "bump customR.value\uFF08customRef \u5DE5\u5382 set\u2192trigger\uFF09",
           "semantic": "view"
         },
         {
           "id": 56,
           "parentId": 52,
+          "fontSize": 13,
+          "margin": {
+            "top": 6
+          },
           "color": "#07c160",
           "semantic": "text"
         },
@@ -16961,12 +17467,26 @@
           "id": 57,
           "parentId": 0,
           "backgroundColor": "#fff",
+          "borderRadius": 8,
+          "padding": {
+            "top": 12,
+            "right": 12,
+            "bottom": 12,
+            "left": 12
+          },
+          "margin": {
+            "bottom": 12
+          },
           "semantic": "view"
         },
         {
           "id": 58,
           "parentId": 57,
+          "fontSize": 14,
           "fontWeight": 600,
+          "margin": {
+            "bottom": 8
+          },
           "text": "\u246B teleport \u2192 root-portal\uFF08\u5F39\u5C42\u5C42\u53E0\uFF09",
           "semantic": "text"
         },
@@ -16981,12 +17501,26 @@
         {
           "id": 60,
           "parentId": 59,
+          "padding": {
+            "top": 4,
+            "right": 8,
+            "bottom": 4,
+            "left": 8
+          },
           "backgroundColor": "#eef",
+          "borderRadius": 4,
+          "margin": {
+            "right": 6
+          },
           "semantic": "view"
         },
         {
           "id": 61,
           "parentId": 57,
+          "fontSize": 13,
+          "margin": {
+            "top": 6
+          },
           "color": "#07c160",
           "semantic": "text"
         },
@@ -17053,19 +17587,33 @@
           "parentId": null,
           "display": "flex",
           "flexDirection": "column",
+          "padding": {
+            "top": 12,
+            "right": 12,
+            "bottom": 12,
+            "left": 12
+          },
           "semantic": "view"
         },
         {
           "id": 1,
           "parentId": 0,
+          "fontSize": 16,
           "fontWeight": 700,
+          "margin": {
+            "bottom": 4
+          },
           "text": "GP4-c \xB7 \u767B\u5F55\u5931\u6548\u62E6\u622A\uFF08\u4E0D\u53EF\u53D6\u6D88\u6A21\u6001\uFF09",
           "semantic": "text"
         },
         {
           "id": 2,
           "parentId": 0,
+          "fontSize": 12,
           "color": "#666",
+          "margin": {
+            "bottom": 12
+          },
           "text": '\u6A21\u62DF"\u9875\u9762\u5185\u8BF7\u6C42\u8FD4\u56DE 401"\uFF1A\u5F39\u7A97\u51FA\u73B0\u4E14\u4E0D\u53EF\u53D6\u6D88\uFF0C\u552F\u4E00\u51FA\u53E3\u662F\u767B\u5F55\u6001\u6062\u590D',
           "semantic": "text"
         },
@@ -17074,24 +17622,37 @@
           "parentId": 0,
           "display": "flex",
           "flexDirection": "column",
+          "margin": {
+            "bottom": 14
+          },
           "semantic": "view"
         },
         {
           "id": 4,
           "parentId": 3,
+          "fontSize": 12,
           "color": "#999",
+          "margin": {
+            "bottom": 5
+          },
           "text": "\u2460 \u89E6\u53D1\uFF08\u6A21\u62DF\u8BF7\u6C42\u62E6\u622A\u5668\u91CC\u7684 401 \u4E0A\u62A5\uFF09",
           "semantic": "text"
         },
         {
           "id": 5,
           "parentId": 3,
+          "margin": {
+            "bottom": 6
+          },
           "text": "\u6A21\u62DF 401\uFF08\u5F39\u7A97\u51FA\u73B0\uFF09",
           "semantic": "button"
         },
         {
           "id": 6,
           "parentId": 3,
+          "margin": {
+            "bottom": 6
+          },
           "backgroundColor": "#f2f3f5",
           "color": "#333",
           "text": "\u6A21\u62DF\u767B\u5F55\u6210\u529F\uFF08\u5F39\u7A97\u6D88\u5931\uFF09",
@@ -17102,18 +17663,28 @@
           "parentId": 0,
           "display": "flex",
           "flexDirection": "column",
+          "margin": {
+            "bottom": 14
+          },
           "semantic": "view"
         },
         {
           "id": 8,
           "parentId": 7,
+          "fontSize": 12,
           "color": "#999",
+          "margin": {
+            "bottom": 5
+          },
           "text": '\u2461 \u8BC1\u660E"\u4E0D\u53EF\u53D6\u6D88"\uFF1A\u4E0B\u9762\u7684\u6309\u94AE\u5728\u5F39\u7A97\u51FA\u73B0\u65F6\u5E94**\u70B9\u4E0D\u52A8**',
           "semantic": "text"
         },
         {
           "id": 9,
           "parentId": 7,
+          "margin": {
+            "bottom": 6
+          },
           "backgroundColor": "#f2f3f5",
           "color": "#333",
           "semantic": "button"
@@ -17128,18 +17699,26 @@
           "parentId": 0,
           "display": "flex",
           "flexDirection": "column",
+          "margin": {
+            "bottom": 14
+          },
           "semantic": "view"
         },
         {
           "id": 12,
           "parentId": 11,
+          "fontSize": 12,
           "color": "#999",
+          "margin": {
+            "bottom": 5
+          },
           "text": "\u8BFB\u6570\uFF08e2e \u65AD\u8A00\u9762\uFF09",
           "semantic": "text"
         },
         {
           "id": 13,
           "parentId": 11,
+          "fontSize": 12,
           "color": "#07c160",
           "semantic": "text"
         }
@@ -17152,19 +17731,33 @@
           "parentId": null,
           "display": "flex",
           "flexDirection": "column",
+          "padding": {
+            "top": 12,
+            "right": 12,
+            "bottom": 12,
+            "left": 12
+          },
           "semantic": "view"
         },
         {
           "id": 1,
           "parentId": 0,
+          "fontSize": 16,
           "fontWeight": 700,
+          "margin": {
+            "bottom": 4
+          },
           "text": "GP4-b \xB7 Loading \u591A\u5B9E\u4F8B\u4E0E\u906E\u7F69\u8303\u56F4",
           "semantic": "text"
         },
         {
           "id": 2,
           "parentId": 0,
+          "fontSize": 12,
           "color": "#666",
+          "margin": {
+            "bottom": 12
+          },
           "text": "\u5BF9\u7167 uni.showLoading\uFF08\u5168\u5C40\u5355\u4F8B\uFF09\uFF1A\u53EF\u591A\u5B9E\u4F8B\u5171\u5B58 / \u4E09\u79CD\u906E\u7F69\u8303\u56F4 / \u8303\u56F4\u5916\u4E0D\u53D7\u5F71\u54CD",
           "semantic": "text"
         },
@@ -17173,24 +17766,37 @@
           "parentId": 0,
           "display": "flex",
           "flexDirection": "column",
+          "margin": {
+            "bottom": 14
+          },
           "semantic": "view"
         },
         {
           "id": 4,
           "parentId": 3,
+          "fontSize": 12,
           "color": "#999",
+          "margin": {
+            "bottom": 5
+          },
           "text": "\u2460 \u591A\u5B9E\u4F8B\uFF08\u4E24\u4E2A\u4E0D\u540C id \u540C\u65F6\u5B58\u5728\uFF09",
           "semantic": "text"
         },
         {
           "id": 5,
           "parentId": 3,
+          "margin": {
+            "bottom": 6
+          },
           "text": "\u663E\u793A A + B",
           "semantic": "button"
         },
         {
           "id": 6,
           "parentId": 3,
+          "margin": {
+            "bottom": 6
+          },
           "backgroundColor": "#f2f3f5",
           "color": "#333",
           "text": "\u7ED3\u675F A",
@@ -17199,6 +17805,9 @@
         {
           "id": 7,
           "parentId": 3,
+          "margin": {
+            "bottom": 6
+          },
           "backgroundColor": "#f2f3f5",
           "color": "#333",
           "text": "\u7ED3\u675F B",
@@ -17207,6 +17816,9 @@
         {
           "id": 8,
           "parentId": 3,
+          "margin": {
+            "bottom": 6
+          },
           "backgroundColor": "#f2f3f5",
           "color": "#333",
           "text": "\u540C\u540D\u66FF\u6362\uFF08A \u6362\u6587\u6848\uFF09",
@@ -17217,24 +17829,37 @@
           "parentId": 0,
           "display": "flex",
           "flexDirection": "column",
+          "margin": {
+            "bottom": 14
+          },
           "semantic": "view"
         },
         {
           "id": 10,
           "parentId": 9,
+          "fontSize": 12,
           "color": "#999",
+          "margin": {
+            "bottom": 5
+          },
           "text": "\u2461 \u5168\u5C40\u8303\u56F4\uFF08\u8DE8\u9875\u5B58\u6D3B\uFF09",
           "semantic": "text"
         },
         {
           "id": 11,
           "parentId": 9,
+          "margin": {
+            "bottom": 6
+          },
           "text": "\u7F51\u7EDC\u5FD9\uFF08global\uFF09",
           "semantic": "button"
         },
         {
           "id": 12,
           "parentId": 9,
+          "margin": {
+            "bottom": 6
+          },
           "backgroundColor": "#f2f3f5",
           "color": "#333",
           "text": "\u7ED3\u675F global",
@@ -17243,7 +17868,11 @@
         {
           "id": 13,
           "parentId": 9,
+          "fontSize": 13,
           "color": "#1a7af8",
+          "margin": {
+            "top": 4
+          },
           "text": "\u53BB\u9996\u9875\uFF08global \u5E94\u4ECD\u5728\uFF1Bpage \u7EA7\u7684\u5E94\u5DF2\u6E05\u7406\uFF09",
           "semantic": "navigator"
         },
@@ -17252,18 +17881,28 @@
           "parentId": 0,
           "display": "flex",
           "flexDirection": "column",
+          "margin": {
+            "bottom": 14
+          },
           "semantic": "view"
         },
         {
           "id": 15,
           "parentId": 14,
+          "fontSize": 12,
           "color": "#999",
+          "margin": {
+            "bottom": 5
+          },
           "text": "\u2462 \u533A\u57DF\u8303\u56F4\uFF08\u5C31\u5730\u5305\u88F9\uFF1B\u62E6\u5185\u4E0D\u62E6\u5916\uFF09",
           "semantic": "text"
         },
         {
           "id": 16,
           "parentId": 14,
+          "margin": {
+            "bottom": 6
+          },
           "text": "\u533A\u57DF\u52A0\u8F7D\uFF08region\uFF09",
           "semantic": "button"
         },
@@ -17271,12 +17910,18 @@
           "id": 17,
           "parentId": 14,
           "position": "relative",
+          "height": 100,
           "backgroundColor": "#f7f8fa",
+          "borderWidth": 0.5,
           "borderColor": "#e5e6eb",
+          "borderRadius": 6,
           "display": "flex",
           "flexDirection": "column",
           "alignItems": "center",
           "justifyContent": "center",
+          "margin": {
+            "bottom": 6
+          },
           "semantic": "view"
         },
         {
@@ -17287,6 +17932,7 @@
         {
           "id": 19,
           "parentId": 17,
+          "fontSize": 13,
           "color": "#666",
           "text": "\u533A\u57DF\u5185\u5BB9\uFF08active \u65F6\u70B9\u8FD9\u91CC\u4E0D\u5E94\u6709\u53CD\u5E94\uFF09",
           "semantic": "text"
@@ -17294,12 +17940,19 @@
         {
           "id": 20,
           "parentId": 17,
+          "fontSize": 12,
           "color": "#07c160",
+          "margin": {
+            "top": 4
+          },
           "semantic": "text"
         },
         {
           "id": 21,
           "parentId": 14,
+          "margin": {
+            "bottom": 6
+          },
           "backgroundColor": "#f2f3f5",
           "color": "#333",
           "semantic": "button"
@@ -17309,11 +17962,17 @@
           "parentId": 0,
           "display": "flex",
           "flexDirection": "column",
+          "margin": {
+            "bottom": 14
+          },
           "semantic": "view"
         },
         {
           "id": 23,
           "parentId": 22,
+          "margin": {
+            "bottom": 6
+          },
           "backgroundColor": "#f2f3f5",
           "color": "#333",
           "text": "\u5168\u90E8\u7ED3\u675F",
@@ -17322,6 +17981,7 @@
         {
           "id": 24,
           "parentId": 22,
+          "fontSize": 12,
           "color": "#07c160",
           "semantic": "text"
         }
@@ -17334,19 +17994,33 @@
           "parentId": null,
           "display": "flex",
           "flexDirection": "column",
+          "padding": {
+            "top": 12,
+            "right": 12,
+            "bottom": 12,
+            "left": 12
+          },
           "semantic": "view"
         },
         {
           "id": 1,
           "parentId": 0,
+          "fontSize": 16,
           "fontWeight": 700,
+          "margin": {
+            "bottom": 4
+          },
           "text": "GP4-a \xB7 Toast \u961F\u5217",
           "semantic": "text"
         },
         {
           "id": 2,
           "parentId": 0,
+          "fontSize": 12,
           "color": "#666",
+          "margin": {
+            "bottom": 12
+          },
           "text": "\u5BF9\u7167 uni.showToast\uFF1A\u53EF\u6392\u961F / \u53EF\u81EA\u5B9A\u4E49\u4F4D\u7F6E\u4E0E\u8272\u5F69 / \u53EF\u624B\u52A8\u5173\u95ED / \u6709\u4E0A\u9650\u4E0E\u4E22\u5F03\u7B56\u7565",
           "semantic": "text"
         },
@@ -17355,24 +18029,37 @@
           "parentId": 0,
           "display": "flex",
           "flexDirection": "column",
+          "margin": {
+            "bottom": 14
+          },
           "semantic": "view"
         },
         {
           "id": 4,
           "parentId": 3,
+          "fontSize": 12,
           "color": "#999",
+          "margin": {
+            "bottom": 5
+          },
           "text": "\u2460 \u6392\u961F\uFF08\u6838\u5FC3\u5224\u636E\uFF09",
           "semantic": "text"
         },
         {
           "id": 5,
           "parentId": 3,
+          "margin": {
+            "bottom": 6
+          },
           "text": "\u8FDE\u7EED\u89E6\u53D1 10 \u6761\uFF08\u6309\u5E8F\u663E\u793A\uFF09",
           "semantic": "button"
         },
         {
           "id": 6,
           "parentId": 3,
+          "margin": {
+            "bottom": 6
+          },
           "backgroundColor": "#f2f3f5",
           "color": "#333",
           "text": "\u5355\u6761\uFF08\u9ED8\u8BA4\uFF09",
@@ -17383,18 +18070,28 @@
           "parentId": 0,
           "display": "flex",
           "flexDirection": "column",
+          "margin": {
+            "bottom": 14
+          },
           "semantic": "view"
         },
         {
           "id": 8,
           "parentId": 7,
+          "fontSize": 12,
           "color": "#999",
+          "margin": {
+            "bottom": 5
+          },
           "text": "\u2461 \u4F4D\u7F6E\uFF08Overlay \u5C42\u5185\u951A\u70B9\uFF09",
           "semantic": "text"
         },
         {
           "id": 9,
           "parentId": 7,
+          "margin": {
+            "bottom": 6
+          },
           "backgroundColor": "#f2f3f5",
           "color": "#333",
           "text": "\u9876\u90E8",
@@ -17403,6 +18100,9 @@
         {
           "id": 10,
           "parentId": 7,
+          "margin": {
+            "bottom": 6
+          },
           "backgroundColor": "#f2f3f5",
           "color": "#333",
           "text": "\u5E95\u90E8",
@@ -17413,18 +18113,28 @@
           "parentId": 0,
           "display": "flex",
           "flexDirection": "column",
+          "margin": {
+            "bottom": 14
+          },
           "semantic": "view"
         },
         {
           "id": 12,
           "parentId": 11,
+          "fontSize": 12,
           "color": "#999",
+          "margin": {
+            "bottom": 5
+          },
           "text": "\u2462 \u8272\u5F69\u8BED\u4E49\uFF08\u53EF\u7ECF CSS \u53D8\u91CF\u6362\u8272\uFF09",
           "semantic": "text"
         },
         {
           "id": 13,
           "parentId": 11,
+          "margin": {
+            "bottom": 6
+          },
           "backgroundColor": "#f2f3f5",
           "color": "#333",
           "text": "success / warn / error",
@@ -17435,18 +18145,28 @@
           "parentId": 0,
           "display": "flex",
           "flexDirection": "column",
+          "margin": {
+            "bottom": 14
+          },
           "semantic": "view"
         },
         {
           "id": 15,
           "parentId": 14,
+          "fontSize": 12,
           "color": "#999",
+          "margin": {
+            "bottom": 5
+          },
           "text": "\u2463 \u5E38\u9A7B\u4E0E\u624B\u52A8\u5173\u95ED\uFF08duration=0\uFF09",
           "semantic": "text"
         },
         {
           "id": 16,
           "parentId": 14,
+          "margin": {
+            "bottom": 6
+          },
           "backgroundColor": "#f2f3f5",
           "color": "#333",
           "text": "\u5E38\u9A7B\u63D0\u793A",
@@ -17455,6 +18175,9 @@
         {
           "id": 17,
           "parentId": 14,
+          "margin": {
+            "bottom": 6
+          },
           "backgroundColor": "#f2f3f5",
           "color": "#333",
           "text": "\u5173\u95ED\u6700\u540E\u4E00\u6761",
@@ -17463,6 +18186,9 @@
         {
           "id": 18,
           "parentId": 14,
+          "margin": {
+            "bottom": 6
+          },
           "backgroundColor": "#f2f3f5",
           "color": "#333",
           "text": "\u5168\u90E8\u6E05\u7A7A",
@@ -17473,18 +18199,28 @@
           "parentId": 0,
           "display": "flex",
           "flexDirection": "column",
+          "margin": {
+            "bottom": 14
+          },
           "semantic": "view"
         },
         {
           "id": 20,
           "parentId": 19,
+          "fontSize": 12,
           "color": "#999",
+          "margin": {
+            "bottom": 5
+          },
           "text": "\u2464 \u4E0A\u9650\u4E0E\u4E22\u5F03\u7B56\u7565\uFF08\u9632\u5237\u5C4F\uFF09",
           "semantic": "text"
         },
         {
           "id": 21,
           "parentId": 19,
+          "margin": {
+            "bottom": 6
+          },
           "backgroundColor": "#f2f3f5",
           "color": "#333",
           "text": "\u5148\u6E05\u7A7A\u518D\u8FDE\u53D1 8 \u6761\uFF08\u4E0A\u9650 3\uFF09",
@@ -17493,6 +18229,9 @@
         {
           "id": 22,
           "parentId": 19,
+          "margin": {
+            "bottom": 6
+          },
           "backgroundColor": "#f2f3f5",
           "color": "#333",
           "text": "\u6062\u590D\u914D\u7F6E",
@@ -17503,24 +18242,33 @@
           "parentId": 0,
           "display": "flex",
           "flexDirection": "column",
+          "margin": {
+            "bottom": 14
+          },
           "semantic": "view"
         },
         {
           "id": 24,
           "parentId": 23,
+          "fontSize": 12,
           "color": "#999",
+          "margin": {
+            "bottom": 5
+          },
           "text": "\u8BFB\u6570\uFF08e2e \u65AD\u8A00\u9762\uFF09",
           "semantic": "text"
         },
         {
           "id": 25,
           "parentId": 23,
+          "fontSize": 12,
           "color": "#07c160",
           "semantic": "text"
         },
         {
           "id": 26,
           "parentId": 23,
+          "fontSize": 12,
           "color": "#07c160",
           "semantic": "text"
         }
@@ -17533,19 +18281,33 @@
           "parentId": null,
           "display": "flex",
           "flexDirection": "column",
+          "padding": {
+            "top": 12,
+            "right": 12,
+            "bottom": 12,
+            "left": 12
+          },
           "semantic": "view"
         },
         {
           "id": 1,
           "parentId": 0,
+          "fontSize": 16,
           "fontWeight": 700,
+          "margin": {
+            "bottom": 4
+          },
           "text": "GP5 \xB7 \u516B\u6761\u8D85\u7EA7\u5E94\u7528\u573A\u666F",
           "semantic": "text"
         },
         {
           "id": 2,
           "parentId": 0,
+          "fontSize": 12,
           "color": "#666",
+          "margin": {
+            "bottom": 12
+          },
           "text": "\u672C\u9875\u6E90\u7801\u96F6\u5168\u5C40\u58F0\u660E\u2014\u2014\u60AC\u6D6E\u7403/\u97F3\u4E50\u6761/\u4E3B\u9898/\u89D2\u6807\u5168\u90E8\u6765\u81EA App \u58F3 Global \u5C42\uFF08\u58F0\u660E\u4E00\u6B21\uFF09",
           "semantic": "text"
         },
@@ -17554,35 +18316,53 @@
           "parentId": 0,
           "display": "flex",
           "flexDirection": "column",
+          "margin": {
+            "bottom": 12
+          },
           "semantic": "view"
         },
         {
           "id": 4,
           "parentId": 3,
+          "margin": {
+            "bottom": 8
+          },
           "text": "\u5207\u6362\u5168\u5C40\u60AC\u6D6E\u7403",
           "semantic": "button"
         },
         {
           "id": 5,
           "parentId": 3,
+          "margin": {
+            "bottom": 8
+          },
           "text": "\u5207\u6362\u5168\u5C40\u97F3\u4E50\u6761",
           "semantic": "button"
         },
         {
           "id": 6,
           "parentId": 3,
+          "margin": {
+            "bottom": 8
+          },
           "text": "\u5207\u6362\u5168\u5C40\u4E3B\u9898\uFF08\u6697 / \u4EAE\uFF09",
           "semantic": "button"
         },
         {
           "id": 7,
           "parentId": 3,
+          "margin": {
+            "bottom": 8
+          },
           "text": "IM \u672A\u8BFB +1",
           "semantic": "button"
         },
         {
           "id": 8,
           "parentId": 3,
+          "margin": {
+            "bottom": 8
+          },
           "backgroundColor": "#f2f3f5",
           "color": "#1f2328",
           "text": "IM \u672A\u8BFB\u6E05\u96F6",
@@ -17591,6 +18371,9 @@
         {
           "id": 9,
           "parentId": 3,
+          "margin": {
+            "bottom": 8
+          },
           "backgroundColor": "#f2f3f5",
           "color": "#1f2328",
           "text": "\u5237\u65B0\u8BFB\u6570",
@@ -17599,8 +18382,15 @@
         {
           "id": 10,
           "parentId": 3,
+          "fontSize": 11,
           "color": "#8a6d3b",
           "backgroundColor": "#fff7e6",
+          "padding": {
+            "top": 6,
+            "right": 6,
+            "bottom": 6,
+            "left": 6
+          },
           "semantic": "text"
         },
         {
@@ -17608,18 +18398,26 @@
           "parentId": 0,
           "display": "flex",
           "flexDirection": "column",
+          "margin": {
+            "bottom": 12
+          },
           "semantic": "view"
         },
         {
           "id": 12,
           "parentId": 11,
+          "fontSize": 11,
           "color": "#999",
+          "margin": {
+            "bottom": 6
+          },
           "text": "\u8DE8\u9875\u9A8C\u8BC1\uFF1A\u5F00\u542F\u540E\u8DF3\u5176\u5B83\u9875\uFF0C\u5168\u5C40\u5185\u5BB9\u4ECD\u5728\uFF08\u5171\u4EAB\u72B6\u6001\uFF09",
           "semantic": "text"
         },
         {
           "id": 13,
           "parentId": 11,
+          "fontSize": 13,
           "color": "#3355aa",
           "text": "\u53BB\u9996\u9875",
           "semantic": "navigator"
@@ -17812,36 +18610,61 @@
           "parentId": null,
           "display": "flex",
           "flexDirection": "column",
+          "padding": {
+            "top": 12,
+            "right": 12,
+            "bottom": 12,
+            "left": 12
+          },
           "semantic": "view"
         },
         {
           "id": 1,
           "parentId": 0,
+          "fontSize": 15,
           "fontWeight": 600,
+          "margin": {
+            "bottom": 6
+          },
           "text": "\u5916\u90E8\u6A21\u5757\u5BFC\u5165\u9A8C\u8BC1\uFF08B1\uFF1Anpm \u5305\u6784\u5EFA\u671F\u6253\u5305\uFF09",
           "semantic": "text"
         },
         {
           "id": 2,
           "parentId": 0,
+          "fontSize": 12,
           "color": "#666",
+          "margin": {
+            "bottom": 12
+          },
           "text": "\u70B9\u6309\u94AE\u8C03\u7528 ms \u683C\u5F0F\u5316\u65F6\u957F\u2014\u2014MP \u7AEF\u7531 _proteus/npm/ms.js \u63D0\u4F9B\uFF08require \u7F13\u5B58\u5355\u4F8B\uFF09",
           "semantic": "text"
         },
         {
           "id": 3,
           "parentId": 0,
+          "margin": {
+            "bottom": 12
+          },
           "text": "\u683C\u5F0F\u5316\u65F6\u957F",
           "semantic": "button"
         },
         {
           "id": 4,
           "parentId": 0,
+          "fontSize": 13,
+          "margin": {
+            "bottom": 4
+          },
           "semantic": "text"
         },
         {
           "id": 5,
           "parentId": 0,
+          "fontSize": 13,
+          "margin": {
+            "bottom": 4
+          },
           "semantic": "text"
         }
       ]

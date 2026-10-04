@@ -322,6 +322,8 @@ function parseLineHeight(raw: string): string | null {
   const pct = /^(\d+(?:\.\d+)?)%$/.exec(v)
   if (pct) return String(Number(pct[1]) / 100)
   if (/^\d*\.?\d+px$/.test(v)) return v
+  // ★批次 21：rpx ⇒ px（×0.5），折为绝对 px token（宿主按 px 处理）
+  { const r = /^(\d*\.?\d+)rpx$/.exec(v); if (r) return String(Number(r[1]) * 0.5) + 'px' }
   if (/^\d*\.?\d+$/.test(v)) return v
   return null
 }
@@ -1226,7 +1228,15 @@ export function stripScopeSuffix(name: string): string {
 
 /** `56px` / `56` / `0.5` → 数值；`50%` / `auto` → undefined（百分比**宽高**在调用处另行映射为 widthRatio/heightRatio；其余属性的百分比仍不支持，见诊断） */
 function numOf(v: string): number | undefined {
-  const t = v.trim().replace(/px$/i, '')
+  const s = v.trim()
+  // ★批次 21（多端一致 · 以 MP 为基准）：`rpx`（小程序 750 设计单位）⇒ px。
+  //   比例 0.5（1rpx = 0.5px）＝ 与 `rpxRatio:2`（px→rpx）互为逆——本仓 UA 基础样式即按此书写
+  //   （`h1: font-size:64rpx` = 32px）。此前 App 折叠**丢弃 rpx** ⇒ 真实项目（125 处）失样式。
+  if (/rpx$/i.test(s)) {
+    const n = Number(s.slice(0, -3))
+    return Number.isFinite(n) ? n * 0.5 : undefined
+  }
+  const t = s.replace(/px$/i, '')
   const n = Number(t)
   return Number.isFinite(n) ? n : undefined
 }
