@@ -27,14 +27,14 @@
     "tierRule": "universal = web∧skyline∧app 现状全 supported；unsupported = 三端皆不可用；其余 = conditional",
     "partialSupport": [
       {
-        "css": "margin/padding 1–4 值简写 + background 纯色简写",
+        "css": "margin/padding 1–4 值简写 + background 纯色简写 + flex 简写",
         "id": "value-shorthand",
         "ends": {
           "web": "—",
           "skyline": "—",
           "app": "supported"
         },
-        "why": "★批次 2（2026-10-04）：`margin: 8px 0` / `padding: 8px 12px` 按 CSS 标准展开为 {top,right,bottom,left}（auto 的边忽略）；`background: #fff`/`rgba(...)` 归一折进 backgroundColor。取证：真项目多值简写高频（此前整体丢弃）。渐变/图片简写诊断跳过"
+        "why": "★批次 2/7（2026-10-04）：a) `margin: 8px 0` / `padding: 8px 12px` 按 CSS 标准展开为 {top,right,bottom,left}（auto 的边忽略）；b) `background: #fff`/`rgba(...)` 归一折进 backgroundColor；c) `flex: <g> [<s> [<b>]]` / `none` / `auto` 展开到 flexGrow/flexShrink/flexBasis（CSS 语义：省略 shrink=1、省略 basis=0）。取证：真项目这些简写高频。渐变/图片简写诊断跳过"
       },
       {
         "css": "width/height 百分比",
@@ -696,7 +696,7 @@
     },
     {
       "id": "value-shorthand",
-      "css": "margin/padding 1–4 值简写 + background 纯色简写",
+      "css": "margin/padding 1–4 值简写 + background 纯色简写 + flex 简写",
       "category": "value",
       "compilerFields": [],
       "web": "—",
@@ -704,7 +704,7 @@
       "app": "supported",
       "tier": "L1",
       "strategy": "编译期折叠",
-      "note": "★批次 2（2026-10-04）：`margin: 8px 0` / `padding: 8px 12px` 按 CSS 标准展开为 {top,right,bottom,left}（auto 的边忽略）；`background: #fff`/`rgba(...)` 归一折进 backgroundColor。取证：真项目多值简写高频（此前整体丢弃）。渐变/图片简写诊断跳过",
+      "note": "★批次 2/7（2026-10-04）：a) `margin: 8px 0` / `padding: 8px 12px` 按 CSS 标准展开为 {top,right,bottom,left}（auto 的边忽略）；b) `background: #fff`/`rgba(...)` 归一折进 backgroundColor；c) `flex: <g> [<s> [<b>]]` / `none` / `auto` 展开到 flexGrow/flexShrink/flexBasis（CSS 语义：省略 shrink=1、省略 basis=0）。取证：真项目这些简写高频。渐变/图片简写诊断跳过",
       "supportTier": "conditional"
     },
     {

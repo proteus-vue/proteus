@@ -55,7 +55,7 @@
 | layout | `position: static / relative / absolute` | supported | supported | supported | L2 | 直映射 | universal | 引擎封闭集；sticky/fixed ⇒ 诊断跳过 |
 | layout | `top / left` | supported | supported | supported | L2 | 直映射 | universal | 配合 absolute；引擎无 right/bottom（见候选） |
 | layout | `overflow: visible / hidden / scroll / auto` | supported | supported | supported | L2 | 直映射 | universal | 引擎封闭集；auto 折叠为 taffy Scroll |
-| value | `margin/padding 1–4 值简写 + background 纯色简写` | — | — | supported | L1 | 编译期折叠 | conditional | ★批次 2（2026-10-04）：`margin: 8px 0` / `padding: 8px 12px` 按 CSS 标准展开为 {top,right,bottom,left}（auto 的边忽略）；`background: #fff`/`rgba(...)` 归一折进 backgroundColor。取证：真项目多值简写高频（此前整体丢弃）。渐变/图片简写诊断跳过 |
+| value | `margin/padding 1–4 值简写 + background 纯色简写 + flex 简写` | — | — | supported | L1 | 编译期折叠 | conditional | ★批次 2/7（2026-10-04）：a) `margin: 8px 0` / `padding: 8px 12px` 按 CSS 标准展开为 {top,right,bottom,left}（auto 的边忽略）；b) `background: #fff`/`rgba(...)` 归一折进 backgroundColor；c) `flex: <g> [<s> [<b>]]` / `none` / `auto` 展开到 flexGrow/flexShrink/flexBasis（CSS 语义：省略 shrink=1、省略 basis=0）。取证：真项目这些简写高频。渐变/图片简写诊断跳过 |
 | unit | `width/height 百分比` | — | — | supported | L1 | 编译期折叠 | conditional | → widthRatio/heightRatio（比例字段） |
 | paint | `background-color（+ background 纯色简写）` | supported | supported | supported | L1 | 编译期折叠 | universal | 颜色编译期归一为 hex（rgb/rgba/transparent → hex；命名色/hsl/var ⇒ 诊断跳过）；★`background` 纯色简写折进 backgroundColor（渐变/图片诊断跳过，走引擎 fill-gradient 通道） |
 | paint | `color` | supported | supported | supported | L1 | 编译期折叠 | universal | 同上颜色归一 |
@@ -96,7 +96,7 @@
 
 | CSS | Web | Skyline | App | 受限原因 |
 |---|---|---|---|---|
-| `margin/padding 1–4 值简写 + background 纯色简写` | — | — | supported | ★批次 2（2026-10-04）：`margin: 8px 0` / `padding: 8px 12px` 按 CSS 标准展开为 {top,right,bottom,left |
+| `margin/padding 1–4 值简写 + background 纯色简写 + flex 简写` | — | — | supported | ★批次 2/7（2026-10-04）：a) `margin: 8px 0` / `padding: 8px 12px` 按 CSS 标准展开为 {top,right,bottom |
 | `width/height 百分比` | — | — | supported | → widthRatio/heightRatio（比例字段） |
 | `transform（translate/scale/rotate/skew/perspective）` | supported | supported | engine-only | ★引擎/宿主已支持（LStyle 的绘制通道 paint-only + 宿主动画桥），但编译期折叠面（parseStaticStyle）**未接 transform** ⇒ 「可扩 |
 | `transform-origin` | supported | supported | engine-only | 引擎有 transform_origin_x/y（paint-only），编译面未接 |
