@@ -3840,6 +3840,171 @@ static napi_value ScreenContentProbe(napi_env env, napi_callback_info info) {
     return r;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════
+ * ★★★App 三端对齐 · 鸿蒙 executor 宿主（screen.* 协议，2026-10-04）——与 Android ScreenHost
+ *   / iOS screen-host 同契约：执行器（JS）把建屏/隐藏/销毁/转场翻译成 screen.* 请求，
+ *   本处是真实现（真内核树 create/update/destroy）。
+ *
+ * 【诚实边界】**anim 即时**（started:0/immediate:true）——鸿蒙宿主帧驱动在 ArkTS（postFrameCallback），
+ *   C++ 侧无逐帧插值通道 ⇒ 本片如实不做动画（转场瞬时完成）。screen.rect/shared 未实现（e4 诚实跳过）。
+ *   本片证明的是「执行器的建/隐/销编排 + 真实页面内容 → 鸿蒙内核树」这条链（与 Android/iOS 同 bundle）。
+ * ═══════════════════════════════════════════════════════════════════════ */
+static std::unordered_map<std::string, uint64_t> g_scHandle;
+static std::unordered_map<std::string, int> g_scNodeCount;
+static int g_scMounts = 0, g_scVisible = 0, g_scDestroy = 0, g_scContentTotal = 0, g_scSeq = 0;
+
+/** screen.* 分发（返回 JSON 串，与 Android ScreenHost.invoke 同形：多数包 {ok,data}） */
+static std::string screenInvokeDispatch(const std::string& method, const std::string& argsJson) {
+    if (method == "screen.mount") {
+        std::string sid;
+        jstr(argsJson.c_str(), argsJson.size(), "screenId", &sid);
+        // content.nodes → 内核请求（内容 id 空间与屏根/层不冲突：屏根取高位基址）
+        std::string contentObj = extractValueAfterKey(argsJson, "content", '{', '}');
+        std::string nodesArr = extractNodesArray(contentObj);
+        if (nodesArr.empty()) return "{\"ok\":false,\"reason\":\"screen.mount: 无 content.nodes\"}";
+        int count = 0;
+        { size_t p = 0; while ((p = nodesArr.find("\"id\":", p)) != std::string::npos) { count++; p += 5; } }
+        int rootId = 100000 + (g_scSeq++) * 10000;
+        std::string req = "{\"viewport\":{\"width\":1080,\"height\":2400},\"nodes\":" + nodesArr + "}";
+        uint64_t h = proteus_layout_create(req.c_str());
+        if (h == 0) return "{\"ok\":false,\"reason\":\"screen.mount: create 失败\"}";
+        g_scHandle[sid] = h; g_scNodeCount[sid] = count;
+        g_scMounts++; g_scContentTotal += count;
+        char b[220];
+        snprintf(b, sizeof(b), "{\"ok\":true,\"data\":{\"rootNodeId\":%d,\"nodes\":%d,\"contentNodes\":%d}}", rootId, count, count);
+        return b;
+    }
+    if (method == "screen.visible") {
+        g_scVisible++;
+        return "{\"ok\":true,\"data\":{\"visible\":true,\"rects\":0}}";
+    }
+    if (method == "screen.destroy") {
+        std::string sid; jstr(argsJson.c_str(), argsJson.size(), "screenId", &sid);
+        int rem = 0;
+        auto it = g_scHandle.find(sid);
+        if (it != g_scHandle.end()) { proteus_layout_destroy(it->second); rem = g_scNodeCount[sid]; g_scHandle.erase(it); g_scNodeCount.erase(sid); }
+        g_scDestroy++;
+        char b[160]; snprintf(b, sizeof(b), "{\"ok\":true,\"data\":{\"removed\":%d,\"destroyed\":true}}", rem);
+        return b;
+    }
+    if (method == "screen.anim") {
+        return "{\"ok\":true,\"data\":{\"started\":0,\"immediate\":true,\"note\":\"鸿蒙 executor 片：anim 即时（无帧循环）\"}}";
+    }
+    if (method == "screen.rect" || method == "screen.shared") {
+        return "{\"ok\":false,\"missing\":true,\"reason\":\"未实现（e4 诚实跳过）\"}";
+    }
+    if (method == "screen.stats") {
+        char b[320];
+        snprintf(b, sizeof(b), "{\"ok\":true,\"data\":{\"mount_calls\":%d,\"visible_calls\":%d,\"destroy_calls\":%d,\"content_node_total\":%d,\"live_screens\":%d}}",
+                 g_scMounts, g_scVisible, g_scDestroy, g_scContentTotal, (int)g_scHandle.size());
+        return b;
+    }
+    return "{\"ok\":false,\"reason\":\"未实现的 screen 方法\"}";
+}
+
+/** JSVM 回调：proteusHost.invoke(method, argsJson) → JSON 串 */
+static JSVM_Value InvokeCb(JSVM_Env env, JSVM_CallbackInfo info) {
+    size_t argc = 2; JSVM_Value args[2] = {nullptr, nullptr};
+    OH_JSVM_GetCbInfo(env, info, &argc, args, nullptr, nullptr);
+    std::string method, aj;
+    if (argc > 0) jsvmStr(env, args[0], &method);
+    if (argc > 1) jsvmStr(env, args[1], &aj);
+    std::string out = screenInvokeDispatch(method, aj);
+    JSVM_Value r = nullptr; OH_JSVM_CreateStringUtf8(env, out.c_str(), out.size(), &r); return r;
+}
+
+/** napi：鸿蒙 executor 探针——eval 同一份 bundle-app-stack.js + 注入 invoke + 两相泵 job（与 Android 同驱动） */
+static napi_value AppStackExecutorProbe(napi_env env, napi_callback_info info) {
+    size_t argc = 1; napi_value args[1] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    std::string argsJson;
+    if (argc >= 1 && args[0] != nullptr) {
+        size_t len = 0; napi_get_value_string_utf8(env, args[0], nullptr, 0, &len);
+        argsJson.resize(len + 1); napi_get_value_string_utf8(env, args[0], &argsJson[0], len + 1, &len); argsJson.resize(len);
+    }
+    std::string bundle, filesDir; jstr(argsJson.c_str(), argsJson.size(), "bundle", &bundle); jstr(argsJson.c_str(), argsJson.size(), "filesDir", &filesDir);
+    std::string err; std::string readValue; int rounds = 0;
+    g_scHandle.clear(); g_scNodeCount.clear(); g_scMounts = g_scVisible = g_scDestroy = g_scContentTotal = g_scSeq = 0;
+    if (bundle.empty()) err = "缺 bundle";
+    JSVM_VM vm = nullptr; JSVM_Env jenv = nullptr; JSVM_HandleScope scope = nullptr; JSVM_VMScope vmScope = nullptr;
+    JSVM_InitOptions io; memset(&io, 0, sizeof(io)); OH_JSVM_Init(&io);
+    JSVM_CreateVMOptions vo; memset(&vo, 0, sizeof(vo));
+    bool policyOk = false;
+    if (err.empty()) {
+        if (OH_JSVM_CreateVM(&vo, &vm) != JSVM_OK || vm == nullptr) err = "CreateVM 失败";
+        else if (OH_JSVM_OpenVMScope(vm, &vmScope) != JSVM_OK) err = "OpenVMScope 失败";
+        else if (OH_JSVM_CreateEnv(vm, 0, nullptr, &jenv) != JSVM_OK || jenv == nullptr) err = "CreateEnv 失败";
+        else if (OH_JSVM_OpenHandleScope(jenv, &scope) != JSVM_OK) err = "OpenHandleScope 失败";
+        else policyOk = (OH_JSVM_SetMicrotaskPolicy(vm, JSVM_MICROTASK_EXPLICIT) == JSVM_OK);
+    }
+    if (err.empty()) {
+        JSVM_Value sg = nullptr;
+        OH_JSVM_CreateStringUtf8(jenv, "globalThis.__PROTEUS_HOST_ID__ = 'harmony';", JSVM_AUTO_LENGTH, &sg);
+        JSVM_Script sgs = nullptr; bool cr = false;
+        if (OH_JSVM_CompileScript(jenv, sg, nullptr, 0, false, &cr, &sgs) == JSVM_OK) { JSVM_Value rr = nullptr; OH_JSVM_RunScript(jenv, sgs, &rr); }
+        JSVM_Value host = nullptr; OH_JSVM_CreateObject(jenv, &host);
+        struct NamedFn { const char* name; JSVM_CallbackStruct cb; };
+        NamedFn fns[] = {{"invoke", {InvokeCb, nullptr}}};
+        for (auto& f : fns) { JSVM_Value fn = nullptr; OH_JSVM_CreateFunction(jenv, f.name, JSVM_AUTO_LENGTH, &f.cb, &fn); OH_JSVM_SetNamedProperty(jenv, host, f.name, fn); }
+        JSVM_Value global = nullptr; OH_JSVM_GetGlobal(jenv, &global);
+        OH_JSVM_SetNamedProperty(jenv, global, "proteusHost", host);
+        JSVM_Value src = nullptr; OH_JSVM_CreateStringUtf8(jenv, bundle.c_str(), bundle.size(), &src);
+        JSVM_Script script = nullptr;
+        if (OH_JSVM_CompileScript(jenv, src, nullptr, 0, false, &cr, &script) != JSVM_OK) err = "bundle 编译失败";
+        else { JSVM_Value rr = nullptr; if (OH_JSVM_RunScript(jenv, script, &rr) != JSVM_OK) err = "bundle 执行失败"; }
+    }
+    // 两相：kick → 泵 job（有界多次：动画完成回推后 JS 续体才继续）→ read
+    if (err.empty()) {
+        JSVM_Value global = nullptr; OH_JSVM_GetGlobal(jenv, &global);
+        JSVM_Value undef = nullptr; OH_JSVM_GetUndefined(jenv, &undef);
+        JSVM_Value fnK = nullptr;
+        if (OH_JSVM_GetNamedProperty(jenv, global, "__proteusAppStackExecutorKick", &fnK) != JSVM_OK) {
+            err = "缺 __proteusAppStackExecutorKick";
+        } else {
+            JSVM_Value rr = nullptr;
+            if (OH_JSVM_CallFunction(jenv, undef, fnK, 0, nullptr, &rr) != JSVM_OK) err = "kick 失败";
+        }
+    }
+    if (err.empty()) {
+        // 有界泵（上限 4096 轮）：每轮 checkpoint + read；读到终态即停（零盲等——由 isTerminal 判据退出）
+        JSVM_Value global = nullptr; OH_JSVM_GetGlobal(jenv, &global);
+        JSVM_Value undef = nullptr; OH_JSVM_GetUndefined(jenv, &undef);
+        JSVM_Value fnR = nullptr;
+        if (OH_JSVM_GetNamedProperty(jenv, global, "__proteusAppStackExecutorRead", &fnR) == JSVM_OK) {
+            for (int i = 0; i < 4096; i++) {
+                if (policyOk) OH_JSVM_PerformMicrotaskCheckpoint(vm);
+                rounds++;
+                JSVM_Value rr = nullptr;
+                if (OH_JSVM_CallFunction(jenv, undef, fnR, 0, nullptr, &rr) != JSVM_OK) { err = "read 失败"; break; }
+                std::string v; jsvmStr(jenv, rr, &v);
+                readValue = v;
+                // 终态：非 pending（fatal 亦为终态——读到即停）
+                if (v.find("\"pending\":true") == std::string::npos) break;
+            }
+        } else {
+            err = "缺 __proteusAppStackExecutorRead";
+        }
+    }
+    if (jenv != nullptr && scope != nullptr) OH_JSVM_CloseHandleScope(jenv, scope);
+    if (jenv != nullptr) OH_JSVM_DestroyEnv(jenv);
+    if (vm != nullptr && vmScope != nullptr) OH_JSVM_CloseVMScope(vm, vmScope);
+    if (vm != nullptr) OH_JSVM_DestroyVM(vm);
+    char head[200];
+    snprintf(head, sizeof(head), "{\"ok\":%s,\"engine_available\":true,\"host\":\"harmony\",\"exec_content_nodes\":%d,\"exec_mounts\":%d,\"exec_visible\":%d,\"exec_destroy\":%d",
+             err.empty() ? "true" : "false", g_scContentTotal, g_scMounts, g_scVisible, g_scDestroy);
+    std::string out = head;
+    if (readValue.size() > 2) { out += ",\"exec_read\":" + readValue; }
+    out += ",\"exec_rounds\":" + std::to_string(rounds);
+    if (!err.empty()) out += ",\"error\":\"" + jsonEscape(err) + "\"";
+    out += "}";
+    if (!filesDir.empty()) {
+        std::string path = filesDir + "/app-stack-executor.json";
+        FILE* f = fopen(path.c_str(), "w");
+        if (f) { fwrite(out.c_str(), 1, out.size(), f); fclose(f); }
+    }
+    napi_value r; napi_create_string_utf8(env, out.c_str(), out.size(), &r); return r;
+}
+
 static napi_value BenchInit(napi_env env, napi_value exports) {
     napi_property_descriptor desc[] = {
         {"bench4050", nullptr, Bench4050, nullptr, nullptr, nullptr, napi_default, nullptr},
@@ -3854,6 +4019,7 @@ static napi_value BenchInit(napi_env env, napi_value exports) {
         {"jsvmProbe", nullptr, JsvmProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"vaporProbe", nullptr, VaporProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"screenContentProbe", nullptr, ScreenContentProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"appStackExecutorProbe", nullptr, AppStackExecutorProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"animCurveBezier", nullptr, AnimCurveBezier, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"hostRuntimeProbe", nullptr, HostRuntimeProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"hostRtShellInstall", nullptr, HostRtShellInstall, nullptr, nullptr, nullptr, napi_default, nullptr},

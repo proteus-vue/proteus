@@ -93,6 +93,14 @@ function copy4050() {
  *   ★与 Android/iOS 同一份产物的**harmony 平台投影**（同源编译，三端一致）。
  */
 function copyAppScreenContent() {
+  // ★executor 片（2026-10-04）：同一份 bundle-app-stack.js（Android/iOS 同源 → rawfile）
+  const bundleAs = path.join(ROOT, 'hosts/android/bridge/dist/bundle-app-stack.js')
+  if (fs.existsSync(bundleAs)) {
+    fs.copyFileSync(bundleAs, path.join(RAWFILE, 'bundle-app-stack.js'))
+    console.log(`  ✓ bundle-app-stack.js：与 Android 同源复制（${fs.statSync(bundleAs).size}B）`)
+  } else {
+    console.log('  ⚠ 缺 bundle-app-stack.js——跳过（先跑 node hosts/android/bridge/build-batch.mjs）')
+  }
   const src = path.join(ROOT, 'examples/dist/app/harmony/screen-content.json')
   const name = 'app-screen-content.json'
   if (!fs.existsSync(src)) {
