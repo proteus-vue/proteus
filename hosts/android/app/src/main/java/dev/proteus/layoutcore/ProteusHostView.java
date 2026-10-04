@@ -2437,13 +2437,14 @@ public class ProteusHostView extends ViewGroup {
                 // ★批次 4：绘制 x 按对齐换算（LEFT:CENTER:RIGHT 的 x 语义不同——见 Paint.Align）
                 final float tx = c.textAlign == 1 ? c.x + c.w * 0.5f
                         : c.textAlign == 2 ? c.x + c.w - 1f : c.x + 1f;
-                // ★批次 13（line-height）：声明行高时字形**顶对齐**于更大的行盒（基线 = 盒顶 + ascent）；
-                //   未声明 ⇒ 沿用旧 0.8h（既有路径零行为变化）。★三端一致：iOS(CATextLayer)/鸿蒙(typography)
-                //   本就顶对齐 ⇒ 行高只改变行盒高，字形位置在所有端保持顶对齐（诚实边界：非 CSS 半行距居中）。
+                // ★批次 13（line-height，CSS 标准语义）：**半行距居中**——行盒高 = lineHeight 时，
+                //   字形内容区在行盒内**垂直居中**（上下各分一半行距）＝ Web/Skyline 的真 CSS 行为。
+                //   未声明行高 ⇒ 沿用旧 0.8h（既有路径零行为变化）。
                 final float baseY;
                 if (c.lineHeight > 0f) {
                     android.graphics.Paint.FontMetrics fm = textPaint.getFontMetrics();
-                    baseY = c.y - fm.ascent;   // 字形顶落在盒顶
+                    final float contentH = fm.descent - fm.ascent;
+                    baseY = c.y + (c.lineHeight - contentH) * 0.5f - fm.ascent;
                 } else {
                     baseY = c.y + c.h * 0.8f;
                 }

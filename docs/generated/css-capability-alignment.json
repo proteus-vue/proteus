@@ -1183,7 +1183,7 @@
       "app": "supported",
       "tier": "L1",
       "strategy": "编译期折叠",
-      "note": "★批次 13（2026-10-04）：无单位倍数 / 百分比（→倍数）/ 绝对 px 归一为 token；作为**文本可继承**字段沿树继承。三端宿主用于**行盒高**（覆盖字形度量高；字形顶对齐——三端一致）：iOS measureText（CATextLayer 顶对齐）· Android buildMeasures + drawCmds 基线 = 盒顶+ascent · 鸿蒙 measureTextTypoPx 覆盖。诚实边界：行盒高顶对齐（非 CSS 半行距居中）；letter-spacing 未支持",
+      "note": "★批次 13（2026-10-04，含真机修正确标准）：无单位倍数 / 百分比（→倍数）/ 绝对 px 归一为 token；作为**文本可继承**字段沿树继承。三端宿主实现 **CSS 语义**（非仅行盒高）：行盒变高、字形内容区在行盒内**垂直居中**（半行距）——与 Web/Skyline 真 CSS 一致：iOS measureText 行盒高 + 文本层**可视 frame 居中收缩**（层中心不变 ⇒ 不影响锚点动画）· Android buildMeasures 行盒高 + drawCmds 基线 `盒心 − (ascent+descent)/2` · 鸿蒙 measureTextTypoPx 行盒高 + TypographyPaint `offsetY = (盒高−字形高)/2`。★真机实测 CATextLayer 是顶对齐（故必须显式居中收缩才对齐 Web）。诚实边界：letter-spacing 未支持",
       "supportTier": "universal"
     },
     {

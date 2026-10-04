@@ -814,9 +814,10 @@ final class SelfDrawView: UIView {
                 parentOrigin = .zero
             }
             absOriginByNodeId[item.id] = item.rect.origin
-            layer.frame = CGRect(x: item.rect.minX - parentOrigin.x,
+            // ★批次 13：文本层若声明 lineHeight ⇒ 可视 frame 居中收缩（CSS 半行距居中）
+            layer.frame = lineBoxFrame(CGRect(x: item.rect.minX - parentOrigin.x,
                                  y: item.rect.minY - parentOrigin.y,
-                                 width: item.rect.width, height: item.rect.height)
+                                 width: item.rect.width, height: item.rect.height), style: item.style)
             builtFrames[item.id] = layer.frame
             builtParents[item.id] = item.parentId ?? -1
             layersById[item.id] = layer
@@ -2095,8 +2096,9 @@ final class SelfDrawView: UIView {
         absOriginByNodeId[id] = abs.origin
         let f = CGRect(x: abs.minX - parentOrigin.x, y: abs.minY - parentOrigin.y,
                        width: abs.width, height: abs.height)
-        layer.frame = f
-        builtFrames[id] = f
+        // ★批次 13：文本层声明 lineHeight ⇒ 可视 frame 居中收缩（从 meta 取样式，与建层同源）
+        layer.frame = metaByNodeId[id].map { lineBoxFrame(f, style: $0) } ?? f
+        builtFrames[id] = layer.frame
         rectsByNodeId[id] = abs
     }
 
@@ -2747,7 +2749,7 @@ final class SelfDrawView: UIView {
             let parentOrigin = pid >= 0 ? (nodeRects[pid]?.origin ?? .zero) : .zero
             let f = CGRect(x: abs.minX - parentOrigin.x, y: abs.minY - parentOrigin.y,
                            width: abs.width, height: abs.height)
-            layer.frame = f
+            layer.frame = lineBoxFrame(f, style: style)
             if let pidAny = spec["parentId"] as? Int, pidAny >= 0 {
                 if id == row.root {
                     insertRowLayer(layer, rowIndex: rowIndex, parentId: pidAny)
@@ -2957,6 +2959,24 @@ final class SelfDrawView: UIView {
         layer.opacity = 1
     }
 
+    /// ★批次 13（line-height，CSS **半行距居中**）：CATextLayer 是**顶对齐**绘制的
+    ///   （实测：层高 100/200、字号 20 ⇒ 墨迹都固定 [5,23]，不随层高居中）——
+    ///   要实现 Web/Skyline 的真 CSS 语义（行盒变高 ⇒ 字形内容区垂直居中），
+    ///   需把**文本层的可视 frame 居中收缩**：可视高 = 字形内容高，中心与行盒一致
+    ///   （中心不变 ⇒ 以**层中心为锚**的 transform 动画不受影响；rects 探针仍报原始行盒）。
+    ///   `lineHeight<=0`（未声明）⇒ 原样返回（既有路径零行为变化）。
+    private func lineBoxFrame(_ f: CGRect, style: [String: Any]) -> CGRect {
+        guard let lhTok = style["lineHeight"] as? String,
+              let boxH = ProteusTextAdapter.lineHeightPx(lhTok, fontSize: (style["fontSize"] as? CGFloat) ?? 14),
+              boxH > 0 else { return f }
+        let fw = (style["fontWeight"] as? CGFloat) ?? 400
+        let fam = (style["fontFamily"] as? String) ?? "system"
+        let contentH = ProteusTextAdapter.font(size: (style["fontSize"] as? CGFloat) ?? 14, weight: fw, family: fam).lineHeight
+        guard contentH > 0 else { return f }
+        let cy = f.origin.y + boxH * 0.5   // 行盒中心（= rect.minY + boxH/2）
+        return CGRect(x: f.origin.x, y: cy - contentH * 0.5, width: f.width, height: contentH)
+    }
+
     /// ★批次 5（CSS 兼容对齐 · 边框）：uniform 边框 → `CALayer.borderWidth/borderColor`。
     ///   `borderWidth<=0` 或缺颜色 ⇒ 清零（缺省无边框，与既有路径零行为变化）。
     private func applyBorder(_ layer: CALayer, style: [String: Any]) {
@@ -3081,7 +3101,7 @@ final class SelfDrawView: UIView {
             let parentOrigin = pid >= 0 ? (nodeRects[pid]?.origin ?? .zero) : .zero
             let f = CGRect(x: abs.minX - parentOrigin.x, y: abs.minY - parentOrigin.y,
                            width: abs.width, height: abs.height)
-            layer.frame = f
+            layer.frame = lineBoxFrame(f, style: style)
             if pid >= 0 {
                 (layersById[pid] ?? self.layer).addSublayer(layer)
                 childrenById[pid, default: []].append(id)
@@ -3139,8 +3159,9 @@ final class SelfDrawView: UIView {
             let parentOrigin = pid >= 0 ? (nodeRects[pid]?.origin ?? .zero) : .zero
             let f = CGRect(x: abs.minX - parentOrigin.x, y: abs.minY - parentOrigin.y,
                            width: abs.width, height: abs.height)
-            layer.frame = f
-            builtFrames[id] = f
+            // ★批次 13：文本层声明 lineHeight ⇒ 可视 frame 居中收缩（从 meta 取样式，与建层同源）
+            layer.frame = metaByNodeId[id].map { lineBoxFrame(f, style: $0) } ?? f
+            builtFrames[id] = layer.frame
             rectsByNodeId[id] = abs
             if let spec = nodesById[id] {
                 let style = SelfDrawView.styleOf(spec)
