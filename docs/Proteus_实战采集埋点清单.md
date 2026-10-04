@@ -330,8 +330,8 @@ honor10 因 SELinux 不可用）· 热控读数 · 进程隔离冷启动 · PSS 
 ## 端支持度矩阵（单一事实源 · VC1/VC2-d）
 
 > **本节的判定不在此文档复制**——属性 × Web / Skyline / WebView 三端的支持度矩阵是**生成的**
-> （`docs/generated/end-support-matrix.json` + 同名 `.md`），由 `scripts/gen-end-support-matrix.mjs`
-> 从三个源工件（官方文档解析 / Playwright 实测 / 设备实测）产出，并有 `pnpm check:end-support`
+> （`docs/generated/css-capability-alignment.json` + 同名 `.md`），由 `scripts/gen-css-capability-alignment.mjs`
+> 从三个源工件（官方文档解析 / Playwright 实测 / 设备实测）产出，并有 `pnpm check:css-capability-alignment`
 > 漂移门禁（接 CI + verify）。
 >
 > 本文档对该矩阵的用法：**编译期漏点统计的对照基准**。

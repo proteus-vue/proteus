@@ -85,6 +85,11 @@ Web 端是**零转换直跑标准 SPA**，用的就是浏览器原生 CSS。因�
 | 单位 | px/em/rem/%/vw/vh/… | px/rpx/%，**vw/vh 通常被忽略或解析为 0** | 编译期折叠为逻辑像素或比例系数 |
 
 > ⚠️ Skyline 端的具体支持矩阵需以真机实测为准，本文不预设细节。Profile 落地前必须补齐 Skyline 实测表。
+>
+> **★端模型（2026-10-04 明确）**：本 Profile 的"三端" = **Web / Skyline / App**。其中 **App 端是自研
+> 自绘 Rust 引擎（一套，覆盖 iOS/Android/鸿蒙 三具体平台）——CSS 面由我们定义、可扩展**；Skyline 是
+> **唯一刚性外部约束**（微信容器）。旧的 iOS/Android/鸿蒙 三列是"非自绘时代的原生组件映射"，已合并为
+> **App**。「平台适配」（密度单位 / 原生组件 / 安全区 / 导航）是**另一条轴**（仍是具体平台维度），不属本 Profile。
 
 ---
 
@@ -453,18 +458,21 @@ Web 端由浏览器原生渲染，天然支持完整 CSS——但开发者写出
 
 ---
 
-## 端支持度矩阵（单一事实源 · VC1/VC2-d）
+## CSS 能力对齐清单（单一事实源 · VC1/VC2-d）
 
-> **本节的判定不在此文档复制**——属性 × Web / Skyline / WebView 三端的支持度矩阵是**生成的**
-> （`docs/generated/end-support-matrix.json` + 同名 `.md`），由 `scripts/gen-end-support-matrix.mjs`
-> 从三个源工件（官方文档解析 / Playwright 实测 / 设备实测）产出，并有 `pnpm check:end-support`
-> 漂移门禁（接 CI + verify）。
+> **本节的判定不在此文档复制**——CSS 能力 × **Web / Skyline / App 三端** 的清单是**生成的**
+> （`docs/generated/css-capability-alignment.json` + 同名 `.md`），由 `scripts/gen-css-capability-alignment.mjs`
+> 从源工件（官方文档解析 = Skyline / Playwright 实测 = Web / 人工维护的 app-profile-features.json = App）产出，
+> 并有 `pnpm check:css-capability-alignment` 漂移门禁（接 CI + verify）。
 >
-> 本文档对该矩阵的用法：**L3 / L5 分级依据**。
+> 本清单的 **App 列**回答两件事：① 现状（supported / folded-only / engine-only / absent——代码事实）；
+> ② **可扩展档位**（tier L0–L5 = 加该能力多大成本，即"自研引擎可扩展 CSS 支持度"）。
 >
-> 与本文件的关系：**本文件的规则口径引用该矩阵**——矩阵里 `supportTier=conditional` 的属性
+> 本文档对该清单的用法：**L3 / L5 分级依据**。
+>
+> 与本文件的关系：**本文件的规则口径引用该清单**——清单里 `supportTier=conditional` 的能力
 > 对应本文的 L3"有条件可用"（需显式 opt-in）；`supportTier=unsupported` 对应 L5（编译期报错）。
-> 矩阵更新（官方文档/实测变化）⇒ 重新生成即可，**不需要改本文件**。
+> 清单更新（官方文档/实测/App 能力变化）⇒ 重新生成即可，**不需要改本文件**。
 >
 > 边界校验（VC2-b）的实现与豁免（`proteus-allow-profile`）见 `packages/css-compat/src/profile-boundary.ts`。
 

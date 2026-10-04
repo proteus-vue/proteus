@@ -42,7 +42,7 @@
 **② 引用的既有设施均已存在（核对通过，非虚构）**
 · `VC5-d 允许差异清单` = `docs/allow-differences.json`（**6 条** A-1~A-6，schema 门禁随
   `check:consistency-metrics`）⇒ §6.4 的四条应**追加**为 A-7~A-10（沿用既有 schema，不另起）
-· `L1 编译期静态校验` = `docs/generated/end-support-matrix.json` + `check:end-support`
+· `L1 编译期静态校验` = `docs/generated/css-capability-alignment.json` + `check:css-capability-alignment`
   （28 字段 × 3 端实测登记 + 防漂移）⇒ §6.1 的 `@support` 矩阵应**并入**该体系（不另起 schema）
 · 《可停靠滚动容器与滚动编排能力方案》存在（SC 引用有效）
 · `Janus` 方案（原生资产复用）已入库（决策 #466）——本方案 §3.3 的分工表与之一致

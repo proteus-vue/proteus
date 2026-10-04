@@ -1,0 +1,1056 @@
+{
+  "version": 2,
+  "profile": {
+    "model": "three-end",
+    "ends": [
+      "web",
+      "skyline",
+      "app"
+    ],
+    "endsNote": "App = 自研自绘 Rust 引擎（一套，覆盖 iOS/Android/鸿蒙 三具体平台）——CSS 面由我们定义、可扩展；Skyline = 微信容器（唯一刚性外部约束）。旧「iOS/Android/鸿蒙」三列是**非自绘时代的原生组件映射**，在自绘模型下已失效 ⇒ 合并为一个 App。",
+    "todayValues": {
+      "supported": "编译期折叠 + 引擎 + 宿主自绘**全通**（真上屏）",
+      "folded-only": "编译期**折叠透传**进内核树，但宿主**未真渲染**（如实标注，勿读成 supported）",
+      "engine-only": "引擎/宿主**已能绘制**，但编译期折叠面（parseStaticStyle）**尚未接**（= 「可扩展」的现成落点）",
+      "absent": "当前无（候选特性，见 tier/strategy）"
+    },
+    "tiers": {
+      "L0": "零运行时成本（编译期可完全折叠：选择器/层叠/继承/特异性/单位换算）",
+      "L1": "低运行时成本（纯绘制/直接映射；如 backgroundColor / border-radius / opacity）",
+      "L2": "中等成本（按需支持；flex/position/overflow/grid——需布局与包含块判定）",
+      "L3": "高成本（默认关闭；z-index/fixed·sticky/3D/filter/shadow/will-change——关联合成层与内存）",
+      "L4": "不自研（复用平台能力：字体/BiDi/emoji/复杂富文本）",
+      "L5": "禁止（编译期报错：运行时动态选择器/无法折叠的层叠/运行时插样式表/超 Profile）"
+    },
+    "noteOnTier": "tier 是**加入该能力的成本档位**（人工按 Profile §3 标注，非实测毫秒）；supported 项的 tier = 它落地时所处档位；absent 候选的 tier = 若实现将归入的档位。",
+    "relationNote": "支持度维度（web/skyline/app 现状）与成本分级（L0–L5）是**正交**维度：成本分级决定\"怎么实现/贵不贵\"，支持度决定\"哪端能不能用、App 加它多贵\"。App 端为自研引擎 ⇒ 候选特性带 tier 即为\"可扩展档位\"。",
+    "tierRule": "universal = web∧skyline∧app 现状全 supported；unsupported = 三端皆不可用；其余 = conditional",
+    "partialSupport": [
+      {
+        "css": "width/height 百分比",
+        "id": "width-ratio",
+        "ends": {
+          "web": "—",
+          "skyline": "—",
+          "app": "supported"
+        },
+        "why": "→ widthRatio/heightRatio（比例字段）"
+      },
+      {
+        "css": "border-color / border-width",
+        "id": "border-color-width",
+        "ends": {
+          "web": "supported",
+          "skyline": "supported",
+          "app": "folded-only"
+        },
+        "why": "★诚实修正：在 APP_PAINT_FIELDS 折叠透传，但**三端宿主均未真画边框**（VaporRenderHost/selfdraw/proteus_render 的绘制通道无 border）⇒ 只到内核树，未上屏"
+      },
+      {
+        "css": "transform（translate/scale/rotate/skew/perspective）",
+        "id": "transform",
+        "ends": {
+          "web": "supported",
+          "skyline": "supported",
+          "app": "engine-only"
+        },
+        "why": "★引擎/宿主已支持（LStyle 的绘制通道 paint-only + 宿主动画桥），但编译期折叠面（parseStaticStyle）**未接 transform** ⇒ 「可扩展」现成落点：加进 APP_PAINT_FIELDS 即可"
+      },
+      {
+        "css": "transform-origin",
+        "id": "transform-origin",
+        "ends": {
+          "web": "supported",
+          "skyline": "supported",
+          "app": "engine-only"
+        },
+        "why": "引擎有 transform_origin_x/y（paint-only），编译面未接"
+      },
+      {
+        "css": "类选择器 .a / .a.b",
+        "id": "selector-class",
+        "ends": {
+          "web": "—",
+          "skyline": "—",
+          "app": "supported"
+        },
+        "why": "C1：<style> 类规则编译期匹配合并（按源序；无特异性权重）"
+      },
+      {
+        "css": "元素/类型选择器 h3 / p.foo",
+        "id": "selector-type",
+        "ends": {
+          "web": "—",
+          "skyline": "—",
+          "app": "supported"
+        },
+        "why": "C1：按节点原始 tag 匹配（含祖先链）"
+      },
+      {
+        "css": "后代 / 子组合 .a .b / .a > .b",
+        "id": "selector-combinator",
+        "ends": {
+          "web": "—",
+          "skyline": "—",
+          "app": "supported"
+        },
+        "why": "C1：祖先类链匹配"
+      },
+      {
+        "css": "display: grid / grid-template-*",
+        "id": "grid",
+        "ends": {
+          "web": "supported",
+          "skyline": "not-listed",
+          "app": "absent"
+        },
+        "why": "★引擎未接：taffy 有完整 Grid 能力但 Rust `Display` 枚举无 Grid、to_taffy 未设置（Profile §3 已定案开放 L2）——加 = 引擎+DTO+taffy 三处；Skyline 端实测退化为 block ⇒ 有条件可用"
+      },
+      {
+        "css": "flex-wrap / align-content",
+        "id": "flex-wrap",
+        "ends": {
+          "web": "supported",
+          "skyline": "supported",
+          "app": "absent"
+        },
+        "why": "引擎无字段（Yoga 亦排除）——多处改动"
+      },
+      {
+        "css": "right / bottom",
+        "id": "right-bottom",
+        "ends": {
+          "web": "supported",
+          "skyline": "supported",
+          "app": "absent"
+        },
+        "why": "引擎 LStyle 无 right/bottom（恒 auto）——加 = 引擎+DTO+taffy"
+      },
+      {
+        "css": "order",
+        "id": "order",
+        "ends": {
+          "web": "supported",
+          "skyline": "supported",
+          "app": "absent"
+        },
+        "why": "引擎无字段"
+      },
+      {
+        "css": "z-index",
+        "id": "z-index",
+        "ends": {
+          "web": "supported",
+          "skyline": "supported",
+          "app": "absent"
+        },
+        "why": "本仓已定案**语义化**（layer=\"content|navigation|mask|popout\"，见 contracts/layers.ts）——数值禁止（跨端无意义 + 推高合成层内存）"
+      },
+      {
+        "css": "box-shadow",
+        "id": "box-shadow",
+        "ends": {
+          "web": "supported",
+          "skyline": "supported",
+          "app": "absent"
+        },
+        "why": "离屏渲染；走 <p-shadow> 语义组件（各端原生阴影）"
+      },
+      {
+        "css": "filter / backdrop-filter",
+        "id": "filter-backdrop",
+        "ends": {
+          "web": "supported",
+          "skyline": "supported",
+          "app": "absent"
+        },
+        "why": "离屏/额外缓冲；走 <p-glass> / <p-filter> 语义组件"
+      },
+      {
+        "css": "line-height / letter-spacing / text-align / font-weight / white-space",
+        "id": "text-attrs",
+        "ends": {
+          "web": "supported",
+          "skyline": "supported",
+          "app": "absent"
+        },
+        "why": "文本度量与排版走平台文本引擎（不自研）；当前 App 折叠面仅 fontSize/color（Web 探针取三代表）"
+      },
+      {
+        "css": "visibility",
+        "id": "visibility",
+        "ends": {
+          "web": "supported",
+          "skyline": "supported",
+          "app": "absent"
+        },
+        "why": "引擎无 visibility 字段（可用 display:none 或 opacity 近似）"
+      }
+    ],
+    "skylineAlignSwitches": [
+      {
+        "section": "开启默认Block布局",
+        "versions": [
+          [
+            "平台",
+            "最低版本"
+          ],
+          [
+            "Android",
+            "8.0.34"
+          ],
+          [
+            "iOS",
+            "8.0.36"
+          ],
+          [
+            "开发者工具",
+            "Nightly Build (1.06.2304262)"
+          ],
+          [
+            "基础库",
+            "2.31.1"
+          ]
+        ]
+      },
+      {
+        "section": "开启默认 ContentBox 盒模型",
+        "versions": [
+          [
+            "平台",
+            "最低版本"
+          ],
+          [
+            "Android",
+            "8.0.42"
+          ],
+          [
+            "iOS",
+            "8.0.42"
+          ],
+          [
+            "开发者工具",
+            "Nightly Build (1.06.2310092)"
+          ],
+          [
+            "基础库",
+            "3.1.0"
+          ]
+        ]
+      },
+      {
+        "section": "开启 tag 选择器全局匹配",
+        "versions": [
+          [
+            "平台",
+            "最低版本"
+          ],
+          [
+            "Android",
+            "8.0.51"
+          ],
+          [
+            "iOS",
+            "8.0.51"
+          ],
+          [
+            "开发者工具",
+            "Nightly Build (1.06.2409032)"
+          ],
+          [
+            "基础库",
+            "3.6.0"
+          ]
+        ]
+      },
+      {
+        "section": "开启 scroll-view 自动撑开",
+        "versions": [
+          [
+            "平台",
+            "最低版本"
+          ],
+          [
+            "Android",
+            "8.0.54"
+          ],
+          [
+            "iOS",
+            "8.0.54"
+          ],
+          [
+            "基础库",
+            "3.7.2"
+          ]
+        ]
+      },
+      {
+        "section": "开启 keyframe 样式全局共享",
+        "versions": [
+          [
+            "平台",
+            "最低版本"
+          ],
+          [
+            "Android",
+            "8.0.57"
+          ],
+          [
+            "iOS",
+            "8.0.57"
+          ],
+          [
+            "基础库",
+            "3.8.0"
+          ]
+        ]
+      }
+    ]
+  },
+  "generatedNote": "自动生成，勿手改——见 scripts/gen-css-capability-alignment.mjs（--check 为漂移门禁）",
+  "sources": {
+    "web": {
+      "kind": "playwright-css-supports",
+      "engine": "chromium",
+      "collectedAt": "2026-10-02",
+      "browserVersion": "151.0.7922.34"
+    },
+    "skyline": {
+      "kind": "official-doc",
+      "url": "https://developers.weixin.qq.com/miniprogram/dev/framework/runtime/skyline/wxss.html",
+      "fetchedAt": "2026-10-02",
+      "htmlSha": "f7f4d7ebaef41608"
+    },
+    "appProfile": {
+      "kind": "curated",
+      "collectedAt": "2026-10-04",
+      "owner": "proteus-core",
+      "note": "App 端（自绘 Rust 引擎）CSS 能力的**人工维护事实源**——现状由代码事实核对（编译器 packages/compiler/src/vapor/template.ts 的 APP_* 折叠面 + 引擎 packages/layout-core-rust 的 LStyle 结构 + 宿主自绘），可扩展档位按《Proteus CSS Profile 规格》§3 的 L0–L5 成本分级人工标注。改这一个文件 ⇒ 生成物更新（勿手改生成物）。",
+      "reviewedAgainst": [
+        "packages/compiler/src/vapor/template.ts (APP_LAYOUT_FIELDS / APP_PAINT_FIELDS / APP_ENUM_VALUES / APP_EDGE_FIELDS / APP_DERIVED_FIELDS / APP_SPECIAL_FIELDS / PAINT_DECL_ATTRS)",
+        "packages/layout-core-rust/src/style.rs (LStyle) + src/ffi.rs (NodeDto)",
+        "hosts/android · hosts/ios · hosts/harmony 自绘宿主（paint 通道）"
+      ]
+    }
+  },
+  "compilerProps": {
+    "layout": [
+      "width",
+      "height",
+      "minWidth",
+      "maxWidth",
+      "minHeight",
+      "maxHeight",
+      "margin",
+      "padding",
+      "flexDirection",
+      "justifyContent",
+      "alignItems",
+      "alignSelf",
+      "flexGrow",
+      "flexShrink",
+      "flexBasis",
+      "gap",
+      "display",
+      "position",
+      "top",
+      "left",
+      "overflow"
+    ],
+    "paint": [
+      "backgroundColor",
+      "color",
+      "fontSize",
+      "borderRadius",
+      "borderColor",
+      "borderWidth",
+      "opacity"
+    ],
+    "declAttrs": [
+      "fill-gradient",
+      "fill-gradient-to",
+      "clip-path",
+      "glow",
+      "mask",
+      "svg-path",
+      "svg-path-to"
+    ]
+  },
+  "structural": {
+    "skylineComputedStyle": {
+      "value": "unsupported",
+      "evidence": "spike/vc0-skyline-geom 实测：fields({computedStyle}) 在 Skyline 下返回 {}（静默丢弃）；WebView 同装置可用"
+    },
+    "skylineSelectorIdClass": {
+      "value": "supported",
+      "evidence": "VC0 实测：#id ✓ / .class ✓"
+    },
+    "skylineSelectorAttrTag": {
+      "value": "unsupported",
+      "evidence": "VC0 实测：属性选择器 [data-*] 与 tag 选择器恒返 null（官方选择器表亦标 ×）"
+    },
+    "skylineInlineStyleOnly": {
+      "value": "note",
+      "evidence": "装置事实：小程序不能 JS 写节点内联样式——样式变更须经 setData/绑定"
+    },
+    "skylineDefaults": {
+      "value": "differ",
+      "evidence": "官方表：display 默认 flex、flex-direction 默认 column、box-sizing 默认 border-box（可经配置改 block/content-box）；与 Web/App 均不同"
+    },
+    "webviewRenderingContrast": {
+      "value": "note",
+      "evidence": "WebView 渲染模式对照实测 37 条（源：spike/vc0-skyline-geom/results/computed-webview.txt）——WebView 是 Skyline 的渲染模式对照，非独立端，不再单列"
+    },
+    "appSelfDrawnEngine": {
+      "value": "note",
+      "evidence": "App = 自研自绘 Rust 引擎（一套覆盖 iOS/Android/鸿蒙）；CSS 面由项目定义、可扩展（见 app-profile-features.json 的 tier/strategy）"
+    }
+  },
+  "engineChannels": [
+    {
+      "field": "fill-gradient",
+      "attr": "fill-gradient",
+      "note": "引擎扩展通道（JSON 属性载体，非 CSS 属性）——App 宿主真源探针已验证（A/B 批次 probeChannels）；Web/小程序端由编译器映射"
+    },
+    {
+      "field": "fill-gradient-to",
+      "attr": "fill-gradient-to",
+      "note": "引擎扩展通道（JSON 属性载体，非 CSS 属性）——App 宿主真源探针已验证（A/B 批次 probeChannels）；Web/小程序端由编译器映射"
+    },
+    {
+      "field": "clip-path",
+      "attr": "clip-path",
+      "note": "引擎扩展通道（JSON 属性载体，非 CSS 属性）——App 宿主真源探针已验证（A/B 批次 probeChannels）；Web/小程序端由编译器映射"
+    },
+    {
+      "field": "glow",
+      "attr": "glow",
+      "note": "引擎扩展通道（JSON 属性载体，非 CSS 属性）——App 宿主真源探针已验证（A/B 批次 probeChannels）；Web/小程序端由编译器映射"
+    },
+    {
+      "field": "mask",
+      "attr": "mask",
+      "note": "引擎扩展通道（JSON 属性载体，非 CSS 属性）——App 宿主真源探针已验证（A/B 批次 probeChannels）；Web/小程序端由编译器映射"
+    },
+    {
+      "field": "svg-path",
+      "attr": "svg-path",
+      "note": "引擎扩展通道（JSON 属性载体，非 CSS 属性）——App 宿主真源探针已验证（A/B 批次 probeChannels）；Web/小程序端由编译器映射"
+    },
+    {
+      "field": "svg-path-to",
+      "attr": "svg-path-to",
+      "note": "引擎扩展通道（JSON 属性载体，非 CSS 属性）——App 宿主真源探针已验证（A/B 批次 probeChannels）；Web/小程序端由编译器映射"
+    }
+  ],
+  "rows": [
+    {
+      "id": "width",
+      "css": "width",
+      "category": "layout",
+      "compilerFields": [
+        "width"
+      ],
+      "web": "supported",
+      "skyline": "supported",
+      "app": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "note": "px/数字 → 长度；百分比 → widthRatio（比例字段，非长度）",
+      "supportTier": "universal"
+    },
+    {
+      "id": "height",
+      "css": "height",
+      "category": "layout",
+      "compilerFields": [
+        "height"
+      ],
+      "web": "supported",
+      "skyline": "supported",
+      "app": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "note": "px/数字 → 长度；百分比 → heightRatio",
+      "supportTier": "universal"
+    },
+    {
+      "id": "min-max-wh",
+      "css": "min-width / max-width / min-height / max-height",
+      "category": "layout",
+      "compilerFields": [
+        "minWidth",
+        "maxWidth",
+        "minHeight",
+        "maxHeight"
+      ],
+      "web": "supported",
+      "skyline": "supported",
+      "app": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "note": "px/数字",
+      "supportTier": "universal"
+    },
+    {
+      "id": "margin",
+      "css": "margin（+ 四边简写）",
+      "category": "layout",
+      "compilerFields": [
+        "margin"
+      ],
+      "web": "supported",
+      "skyline": "supported",
+      "app": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "note": "px/数字 → {top,right,bottom,left}（Web 探针取 margin-top 代表）",
+      "supportTier": "universal"
+    },
+    {
+      "id": "padding",
+      "css": "padding（+ 四边简写）",
+      "category": "layout",
+      "compilerFields": [
+        "padding"
+      ],
+      "web": "supported",
+      "skyline": "supported",
+      "app": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "note": "px/数字 → {top,right,bottom,left}（Web 探针取 padding-top 代表）",
+      "supportTier": "universal"
+    },
+    {
+      "id": "display",
+      "css": "display: flex / none",
+      "category": "layout",
+      "compilerFields": [
+        "display"
+      ],
+      "web": "supported",
+      "skyline": "supported",
+      "app": "supported",
+      "tier": "L2",
+      "strategy": "直映射",
+      "note": "引擎封闭集仅 flex/none（block/inline-block/inline-flex/grid ⇒ 诊断跳过）",
+      "supportTier": "universal"
+    },
+    {
+      "id": "flex-direction",
+      "css": "flex-direction",
+      "category": "layout",
+      "compilerFields": [
+        "flexDirection"
+      ],
+      "web": "supported",
+      "skyline": "supported",
+      "app": "supported",
+      "tier": "L2",
+      "strategy": "直映射",
+      "note": "封闭集 row/column/row-reverse/column-reverse",
+      "supportTier": "universal"
+    },
+    {
+      "id": "justify-content",
+      "css": "justify-content",
+      "category": "layout",
+      "compilerFields": [
+        "justifyContent"
+      ],
+      "web": "supported",
+      "skyline": "supported",
+      "app": "supported",
+      "tier": "L2",
+      "strategy": "直映射",
+      "note": "引擎为**开放字符串**（未知值静默落默认，不崩）",
+      "supportTier": "universal"
+    },
+    {
+      "id": "align-items-self",
+      "css": "align-items / align-self",
+      "category": "layout",
+      "compilerFields": [
+        "alignItems",
+        "alignSelf"
+      ],
+      "web": "supported",
+      "skyline": "supported",
+      "app": "supported",
+      "tier": "L2",
+      "strategy": "直映射",
+      "note": "开放字符串（未知值静默落默认）",
+      "supportTier": "universal"
+    },
+    {
+      "id": "flex-grow-shrink-basis",
+      "css": "flex-grow / flex-shrink / flex-basis",
+      "category": "layout",
+      "compilerFields": [
+        "flexGrow",
+        "flexShrink",
+        "flexBasis"
+      ],
+      "web": "supported",
+      "skyline": "supported",
+      "app": "supported",
+      "tier": "L2",
+      "strategy": "直映射",
+      "note": "flex-basis 为长度",
+      "supportTier": "universal"
+    },
+    {
+      "id": "gap",
+      "css": "gap",
+      "category": "layout",
+      "compilerFields": [
+        "gap"
+      ],
+      "web": "supported",
+      "skyline": "supported",
+      "app": "supported",
+      "tier": "L2",
+      "strategy": "直映射",
+      "note": "px/数字（无 row-gap/column-gap 分开形态）",
+      "supportTier": "universal"
+    },
+    {
+      "id": "position",
+      "css": "position: static / relative / absolute",
+      "category": "layout",
+      "compilerFields": [
+        "position"
+      ],
+      "web": "supported",
+      "skyline": "supported",
+      "app": "supported",
+      "tier": "L2",
+      "strategy": "直映射",
+      "note": "引擎封闭集；sticky/fixed ⇒ 诊断跳过",
+      "supportTier": "universal"
+    },
+    {
+      "id": "top-left",
+      "css": "top / left",
+      "category": "layout",
+      "compilerFields": [
+        "top",
+        "left"
+      ],
+      "web": "supported",
+      "skyline": "supported",
+      "app": "supported",
+      "tier": "L2",
+      "strategy": "直映射",
+      "note": "配合 absolute；引擎无 right/bottom（见候选）",
+      "supportTier": "universal"
+    },
+    {
+      "id": "overflow",
+      "css": "overflow: visible / hidden / scroll / auto",
+      "category": "layout",
+      "compilerFields": [
+        "overflow"
+      ],
+      "web": "supported",
+      "skyline": "supported",
+      "app": "supported",
+      "tier": "L2",
+      "strategy": "直映射",
+      "note": "引擎封闭集；auto 折叠为 taffy Scroll",
+      "supportTier": "universal"
+    },
+    {
+      "id": "width-ratio",
+      "css": "width/height 百分比",
+      "category": "unit",
+      "compilerFields": [],
+      "web": "—",
+      "skyline": "—",
+      "app": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "note": "→ widthRatio/heightRatio（比例字段）",
+      "supportTier": "conditional"
+    },
+    {
+      "id": "background-color",
+      "css": "background-color",
+      "category": "paint",
+      "compilerFields": [
+        "backgroundColor"
+      ],
+      "web": "supported",
+      "skyline": "supported",
+      "app": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "note": "颜色编译期归一为 hex（rgb/rgba/transparent → hex；命名色/hsl/var ⇒ 诊断跳过）",
+      "supportTier": "universal"
+    },
+    {
+      "id": "color",
+      "css": "color",
+      "category": "paint",
+      "compilerFields": [
+        "color"
+      ],
+      "web": "supported",
+      "skyline": "supported",
+      "app": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "note": "同上颜色归一",
+      "supportTier": "universal"
+    },
+    {
+      "id": "font-size",
+      "css": "font-size",
+      "category": "paint",
+      "compilerFields": [
+        "fontSize"
+      ],
+      "web": "supported",
+      "skyline": "supported",
+      "app": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "note": "px/数字（不支持百分比/keyword）",
+      "supportTier": "universal"
+    },
+    {
+      "id": "border-radius",
+      "css": "border-radius",
+      "category": "paint",
+      "compilerFields": [
+        "borderRadius"
+      ],
+      "web": "supported",
+      "skyline": "supported",
+      "app": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "note": "px/数字（宿主圆角绘制）",
+      "supportTier": "universal"
+    },
+    {
+      "id": "opacity",
+      "css": "opacity",
+      "category": "paint",
+      "compilerFields": [
+        "opacity"
+      ],
+      "web": "supported",
+      "skyline": "supported",
+      "app": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "note": "0–1",
+      "supportTier": "universal"
+    },
+    {
+      "id": "box-sizing",
+      "css": "box-sizing",
+      "category": "special",
+      "compilerFields": [],
+      "web": "supported",
+      "skyline": "supported",
+      "app": "supported",
+      "tier": "L1",
+      "strategy": "直映射",
+      "note": "两内核恒 border-box ⇒ 只作忠实记录、无副作用",
+      "supportTier": "universal"
+    },
+    {
+      "id": "border-color-width",
+      "css": "border-color / border-width",
+      "category": "paint",
+      "compilerFields": [
+        "borderColor",
+        "borderWidth"
+      ],
+      "web": "supported",
+      "skyline": "supported",
+      "app": "folded-only",
+      "tier": "L1",
+      "strategy": "语义组件",
+      "note": "★诚实修正：在 APP_PAINT_FIELDS 折叠透传，但**三端宿主均未真画边框**（VaporRenderHost/selfdraw/proteus_render 的绘制通道无 border）⇒ 只到内核树，未上屏",
+      "supportTier": "conditional"
+    },
+    {
+      "id": "transform",
+      "css": "transform（translate/scale/rotate/skew/perspective）",
+      "category": "motion",
+      "compilerFields": [],
+      "web": "supported",
+      "skyline": "supported",
+      "app": "engine-only",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "note": "★引擎/宿主已支持（LStyle 的绘制通道 paint-only + 宿主动画桥），但编译期折叠面（parseStaticStyle）**未接 transform** ⇒ 「可扩展」现成落点：加进 APP_PAINT_FIELDS 即可",
+      "supportTier": "conditional"
+    },
+    {
+      "id": "transform-origin",
+      "css": "transform-origin",
+      "category": "motion",
+      "compilerFields": [],
+      "web": "supported",
+      "skyline": "supported",
+      "app": "engine-only",
+      "tier": "L2",
+      "strategy": "编译期折叠",
+      "note": "引擎有 transform_origin_x/y（paint-only），编译面未接",
+      "supportTier": "conditional"
+    },
+    {
+      "id": "selector-class",
+      "css": "类选择器 .a / .a.b",
+      "category": "selector",
+      "compilerFields": [],
+      "web": "—",
+      "skyline": "—",
+      "app": "supported",
+      "tier": "L0",
+      "strategy": "编译期折叠",
+      "note": "C1：<style> 类规则编译期匹配合并（按源序；无特异性权重）",
+      "supportTier": "conditional"
+    },
+    {
+      "id": "selector-type",
+      "css": "元素/类型选择器 h3 / p.foo",
+      "category": "selector",
+      "compilerFields": [],
+      "web": "—",
+      "skyline": "—",
+      "app": "supported",
+      "tier": "L0",
+      "strategy": "编译期折叠",
+      "note": "C1：按节点原始 tag 匹配（含祖先链）",
+      "supportTier": "conditional"
+    },
+    {
+      "id": "selector-combinator",
+      "css": "后代 / 子组合 .a .b / .a > .b",
+      "category": "selector",
+      "compilerFields": [],
+      "web": "—",
+      "skyline": "—",
+      "app": "supported",
+      "tier": "L0",
+      "strategy": "编译期折叠",
+      "note": "C1：祖先类链匹配",
+      "supportTier": "conditional"
+    },
+    {
+      "id": "selector-pseudo",
+      "css": "伪类 :hover / :active / :first-child / :nth-child",
+      "category": "selector",
+      "compilerFields": [],
+      "web": "—",
+      "skyline": "—",
+      "app": "absent",
+      "tier": "L0",
+      "strategy": "编译期折叠",
+      "note": "静态部分可编译期折叠（Profile L0）；动态交互态需运行时状态通道（成本更高）",
+      "supportTier": "unsupported"
+    },
+    {
+      "id": "selector-attr",
+      "css": "属性选择器 [data-x]",
+      "category": "selector",
+      "compilerFields": [],
+      "web": "—",
+      "skyline": "—",
+      "app": "absent",
+      "tier": "L0",
+      "strategy": "编译期折叠",
+      "note": "编译期可判（属性在模板里静态可枚举）",
+      "supportTier": "unsupported"
+    },
+    {
+      "id": "selector-sibling-wildcard",
+      "css": "兄弟组合 +~ / 通配 *",
+      "category": "selector",
+      "compilerFields": [],
+      "web": "—",
+      "skyline": "—",
+      "app": "absent",
+      "tier": "L5",
+      "strategy": "禁止",
+      "note": "语义弱、跨端难统一（Skyline 亦不支持）——建议改写为类选择器",
+      "supportTier": "unsupported"
+    },
+    {
+      "id": "specificity-inheritance",
+      "css": "特异性 / 继承",
+      "category": "cascade",
+      "compilerFields": [],
+      "web": "—",
+      "skyline": "—",
+      "app": "absent",
+      "tier": "L0",
+      "strategy": "编译期折叠",
+      "note": "当前仅按源序层叠、无特异性/继承（Profile L0 要求完整实现）",
+      "supportTier": "unsupported"
+    },
+    {
+      "id": "at-media",
+      "css": "@media（响应式）",
+      "category": "at-rule",
+      "compilerFields": [],
+      "web": "—",
+      "skyline": "—",
+      "app": "absent",
+      "tier": "L3",
+      "strategy": "降级",
+      "note": "编译期无法唯一确定断点；跨端建议走 flex/比例布局 + 框架流体能力",
+      "supportTier": "unsupported"
+    },
+    {
+      "id": "keyframes",
+      "css": "@keyframes（动画）",
+      "category": "at-rule",
+      "compilerFields": [],
+      "web": "—",
+      "skyline": "—",
+      "app": "absent",
+      "tier": "L3",
+      "strategy": "降级",
+      "note": "块整体剔除（旧实现误当元素选择器）；动画走引擎动画桥（animStart/animTick）",
+      "supportTier": "unsupported"
+    },
+    {
+      "id": "unit-relative",
+      "css": "em / rem / vw / vh / calc / clamp / var()",
+      "category": "unit",
+      "compilerFields": [],
+      "web": "—",
+      "skyline": "—",
+      "app": "absent",
+      "tier": "L0",
+      "strategy": "编译期折叠",
+      "note": "仅收 px/数字（宽高另支持 %）；其余单位编译期无法在无上下文时求值 ⇒ 诊断跳过",
+      "supportTier": "unsupported"
+    },
+    {
+      "id": "grid",
+      "css": "display: grid / grid-template-*",
+      "category": "layout",
+      "compilerFields": [],
+      "web": "supported",
+      "skyline": "not-listed",
+      "app": "absent",
+      "tier": "L2",
+      "strategy": "直映射",
+      "note": "★引擎未接：taffy 有完整 Grid 能力但 Rust `Display` 枚举无 Grid、to_taffy 未设置（Profile §3 已定案开放 L2）——加 = 引擎+DTO+taffy 三处；Skyline 端实测退化为 block ⇒ 有条件可用",
+      "supportTier": "conditional"
+    },
+    {
+      "id": "flex-wrap",
+      "css": "flex-wrap / align-content",
+      "category": "layout",
+      "compilerFields": [],
+      "web": "supported",
+      "skyline": "supported",
+      "app": "absent",
+      "tier": "L2",
+      "strategy": "直映射",
+      "note": "引擎无字段（Yoga 亦排除）——多处改动",
+      "supportTier": "conditional"
+    },
+    {
+      "id": "right-bottom",
+      "css": "right / bottom",
+      "category": "layout",
+      "compilerFields": [],
+      "web": "supported",
+      "skyline": "supported",
+      "app": "absent",
+      "tier": "L2",
+      "strategy": "直映射",
+      "note": "引擎 LStyle 无 right/bottom（恒 auto）——加 = 引擎+DTO+taffy",
+      "supportTier": "conditional"
+    },
+    {
+      "id": "order",
+      "css": "order",
+      "category": "layout",
+      "compilerFields": [],
+      "web": "supported",
+      "skyline": "supported",
+      "app": "absent",
+      "tier": "L2",
+      "strategy": "直映射",
+      "note": "引擎无字段",
+      "supportTier": "conditional"
+    },
+    {
+      "id": "z-index",
+      "css": "z-index",
+      "category": "layer",
+      "compilerFields": [],
+      "web": "supported",
+      "skyline": "supported",
+      "app": "absent",
+      "tier": "L3",
+      "strategy": "语义组件",
+      "note": "本仓已定案**语义化**（layer=\"content|navigation|mask|popout\"，见 contracts/layers.ts）——数值禁止（跨端无意义 + 推高合成层内存）",
+      "supportTier": "conditional"
+    },
+    {
+      "id": "box-shadow",
+      "css": "box-shadow",
+      "category": "paint",
+      "compilerFields": [],
+      "web": "supported",
+      "skyline": "supported",
+      "app": "absent",
+      "tier": "L3",
+      "strategy": "语义组件",
+      "note": "离屏渲染；走 <p-shadow> 语义组件（各端原生阴影）",
+      "supportTier": "conditional"
+    },
+    {
+      "id": "filter-backdrop",
+      "css": "filter / backdrop-filter",
+      "category": "paint",
+      "compilerFields": [],
+      "web": "supported",
+      "skyline": "supported",
+      "app": "absent",
+      "tier": "L3",
+      "strategy": "语义组件",
+      "note": "离屏/额外缓冲；走 <p-glass> / <p-filter> 语义组件",
+      "supportTier": "conditional"
+    },
+    {
+      "id": "text-attrs",
+      "css": "line-height / letter-spacing / text-align / font-weight / white-space",
+      "category": "text",
+      "compilerFields": [],
+      "web": "supported",
+      "skyline": "supported",
+      "app": "absent",
+      "tier": "L4",
+      "strategy": "降级",
+      "note": "文本度量与排版走平台文本引擎（不自研）；当前 App 折叠面仅 fontSize/color（Web 探针取三代表）",
+      "supportTier": "conditional"
+    },
+    {
+      "id": "visibility",
+      "css": "visibility",
+      "category": "paint",
+      "compilerFields": [],
+      "web": "supported",
+      "skyline": "supported",
+      "app": "absent",
+      "tier": "L1",
+      "strategy": "直映射",
+      "note": "引擎无 visibility 字段（可用 display:none 或 opacity 近似）",
+      "supportTier": "conditional"
+    }
+  ],
+  "_missingCompilerCoverage": []
+}

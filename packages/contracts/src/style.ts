@@ -22,7 +22,7 @@ export type StylePropLevel =
 
 /** 属性白名单（03 §1 全量；compiler 编译期校验 + runtime 运行时校验共用） */
 export const STYLE_PROP_LEVELS = {
-  // ── ✅ 直映射：五端原生都有对应，值经类型守卫后放行 ──
+  // ── ✅ 直映射：三端（Web / Skyline / App）原生都有对应，值经类型守卫后放行 ──
   width: 'Length',
   height: 'Length',
   minWidth: 'Length',

@@ -13,13 +13,13 @@ generated: true
 
 | code | Rule | Severity | Checked dimension | Auto-fixable | Description |
 |---|---|---|---|---|---|
-| CSS001 | float forbidden | error | declaration | — | float has no equivalent on Skyline/native renderers — cannot unify across all five targets |
+| CSS001 | float forbidden | error | declaration | — | float has no equivalent on Skyline / the self-drawn App engine — cannot unify across the three targets |
 | CSS002 | display: inline forbidden | error | declaration | — | inline/inline-block is Web-only semantics (except nesting inside text) |
-| CSS003 | Universal selector forbidden | error | selector | — | No selector concept for * on Skyline/native renderers |
-| CSS004 | Attribute selector forbidden | error | selector | — | No equivalent for [attr] on Skyline/native renderers |
-| CSS005 | Element selector forbidden | error | selector | — | Element selectors such as div{} / span{} rely on UA styles, which native renderers lack |
+| CSS003 | Universal selector forbidden | error | selector | — | No selector concept for * on Skyline / the App engine |
+| CSS004 | Attribute selector forbidden | error | selector | — | No equivalent for [attr] on Skyline / the App engine |
+| CSS005 | Element selector forbidden | error | selector | — | Element selectors such as div{} / span{} rely on UA styles, which the App engine lacks |
 | CSS006 | Deep descendant combinator forbidden | error | selector | — | More than 2 levels of descendant/child combinators (.a .b .c) |
-| CSS007 | z-index depends on stacking context | warn | declaration | — | Cross-parent stacking contexts cannot be unified across all five targets (B1 conservative hint — precise judgement needs IR context) |
+| CSS007 | z-index depends on stacking context | warn | declaration | — | Cross-parent stacking contexts cannot be unified across the three targets (B1 conservative hint — precise judgement needs IR context) |
 | CSS008 | calc()/vh/vw need compile-time rewriting | error | declaration | ✅ | Early ArkUI lacks calc() support; vh/vw do not shrink when the keyboard pops up |
 | CSS009 | Bare backdrop-filter forbidden | error | declaration | ✅ | Must go through the <p-glass> semantic component |
 | CSS010 | Complex :nth-child expressions | warn | selector | — | Only the :first/:last forms are cross-platform (B2 expansion) |
@@ -32,7 +32,7 @@ generated: true
 
 - **Severity**: error (blocks in strict mode / warns otherwise)
 - **Auto-fixable**: No
-- **Description**: float has no equivalent on Skyline/native renderers — cannot unify across all five targets
+- **Description**: float has no equivalent on Skyline / the self-drawn App engine — cannot unify across the three targets
 
 ### CSS002 display: inline forbidden
 
@@ -44,19 +44,19 @@ generated: true
 
 - **Severity**: error (blocks in strict mode / warns otherwise)
 - **Auto-fixable**: No
-- **Description**: No selector concept for * on Skyline/native renderers
+- **Description**: No selector concept for * on Skyline / the App engine
 
 ### CSS004 Attribute selector forbidden
 
 - **Severity**: error (blocks in strict mode / warns otherwise)
 - **Auto-fixable**: No
-- **Description**: No equivalent for [attr] on Skyline/native renderers
+- **Description**: No equivalent for [attr] on Skyline / the App engine
 
 ### CSS005 Element selector forbidden
 
 - **Severity**: error (blocks in strict mode / warns otherwise)
 - **Auto-fixable**: No
-- **Description**: Element selectors such as div{} / span{} rely on UA styles, which native renderers lack
+- **Description**: Element selectors such as div{} / span{} rely on UA styles, which the App engine lacks
 
 ### CSS006 Deep descendant combinator forbidden
 
@@ -68,7 +68,7 @@ generated: true
 
 - **Severity**: warn (blocks in strict mode / warns otherwise)
 - **Auto-fixable**: No
-- **Description**: Cross-parent stacking contexts cannot be unified across all five targets (B1 conservative hint — precise judgement needs IR context)
+- **Description**: Cross-parent stacking contexts cannot be unified across the three targets (B1 conservative hint — precise judgement needs IR context)
 
 ### CSS008 calc()/vh/vw need compile-time rewriting
 

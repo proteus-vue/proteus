@@ -236,7 +236,7 @@ export function explainTarget(target: string, opts: ExplainTargetOptions = {}): 
       `替代方案：${pb.suggestion}`,
       `事实来源：${pb.source}`,
       `豁免方式：样式块内注释 \`proteus-allow-profile: <理由>\`（理由非空才生效，豁免计入构建统计）`,
-      `全部边界规则：node scripts/gen-end-support-matrix.mjs --check 查看矩阵，或 grep CSS-PB 于 docs/generated/end-support-matrix.json`,
+      `全部边界规则：node scripts/gen-css-capability-alignment.mjs --check 查看矩阵，或 grep CSS-PB 于 docs/generated/css-capability-alignment.json`,
     ].join('\n')
   }
   throw new Error(`无法识别目标「${target}」：既不是存在的 .vue 文件，也不是注册的规则 ID（用 proteus rules 查看全部规则）`)

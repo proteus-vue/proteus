@@ -1,0 +1,78 @@
+{
+  "provenance": {
+    "kind": "curated",
+    "collectedAt": "2026-10-04",
+    "owner": "proteus-core",
+    "note": "App 端（自绘 Rust 引擎）CSS 能力的**人工维护事实源**——现状由代码事实核对（编译器 packages/compiler/src/vapor/template.ts 的 APP_* 折叠面 + 引擎 packages/layout-core-rust 的 LStyle 结构 + 宿主自绘），可扩展档位按《Proteus CSS Profile 规格》§3 的 L0–L5 成本分级人工标注。改这一个文件 ⇒ 生成物更新（勿手改生成物）。",
+    "reviewedAgainst": [
+      "packages/compiler/src/vapor/template.ts (APP_LAYOUT_FIELDS / APP_PAINT_FIELDS / APP_ENUM_VALUES / APP_EDGE_FIELDS / APP_DERIVED_FIELDS / APP_SPECIAL_FIELDS / PAINT_DECL_ATTRS)",
+      "packages/layout-core-rust/src/style.rs (LStyle) + src/ffi.rs (NodeDto)",
+      "hosts/android · hosts/ios · hosts/harmony 自绘宿主（paint 通道）"
+    ]
+  },
+  "model": {
+    "ends": ["web", "skyline", "app"],
+    "note": "App = 自研自绘 Rust 引擎（一套，覆盖 iOS/Android/鸿蒙 三具体平台）——CSS 面由我们定义、可扩展；Skyline = 微信容器（唯一刚性外部约束）。旧「iOS/Android/鸿蒙」三列是**非自绘时代的原生组件映射**，在自绘模型下已失效 ⇒ 合并为一个 App。",
+    "todayValues": {
+      "supported": "编译期折叠 + 引擎 + 宿主自绘**全通**（真上屏）",
+      "folded-only": "编译期**折叠透传**进内核树，但宿主**未真渲染**（如实标注，勿读成 supported）",
+      "engine-only": "引擎/宿主**已能绘制**，但编译期折叠面（parseStaticStyle）**尚未接**（= 「可扩展」的现成落点）",
+      "absent": "当前无（候选特性，见 tier/strategy）"
+    },
+    "tiers": {
+      "L0": "零运行时成本（编译期可完全折叠：选择器/层叠/继承/特异性/单位换算）",
+      "L1": "低运行时成本（纯绘制/直接映射；如 backgroundColor / border-radius / opacity）",
+      "L2": "中等成本（按需支持；flex/position/overflow/grid——需布局与包含块判定）",
+      "L3": "高成本（默认关闭；z-index/fixed·sticky/3D/filter/shadow/will-change——关联合成层与内存）",
+      "L4": "不自研（复用平台能力：字体/BiDi/emoji/复杂富文本）",
+      "L5": "禁止（编译期报错：运行时动态选择器/无法折叠的层叠/运行时插样式表/超 Profile）"
+    },
+    "noteOnTier": "tier 是**加入该能力的成本档位**（人工按 Profile §3 标注，非实测毫秒）；supported 项的 tier = 它落地时所处档位；absent 候选的 tier = 若实现将归入的档位。"
+  },
+  "features": [
+    { "id": "width", "css": "width", "category": "layout", "today": "supported", "tier": "L1", "strategy": "编译期折叠", "probe": ["width"], "note": "px/数字 → 长度；百分比 → widthRatio（比例字段，非长度）" },
+    { "id": "height", "css": "height", "category": "layout", "today": "supported", "tier": "L1", "strategy": "编译期折叠", "probe": ["height"], "note": "px/数字 → 长度；百分比 → heightRatio" },
+    { "id": "min-max-wh", "css": "min-width / max-width / min-height / max-height", "category": "layout", "today": "supported", "tier": "L1", "strategy": "编译期折叠", "probe": ["min-width", "max-width", "min-height", "max-height"], "note": "px/数字" },
+    { "id": "margin", "css": "margin（+ 四边简写）", "category": "layout", "today": "supported", "tier": "L1", "strategy": "编译期折叠", "probe": ["margin-top"], "note": "px/数字 → {top,right,bottom,left}（Web 探针取 margin-top 代表）" },
+    { "id": "padding", "css": "padding（+ 四边简写）", "category": "layout", "today": "supported", "tier": "L1", "strategy": "编译期折叠", "probe": ["padding-top"], "note": "px/数字 → {top,right,bottom,left}（Web 探针取 padding-top 代表）" },
+    { "id": "display", "css": "display: flex / none", "category": "layout", "today": "supported", "tier": "L2", "strategy": "直映射", "probe": ["display"], "note": "引擎封闭集仅 flex/none（block/inline-block/inline-flex/grid ⇒ 诊断跳过）" },
+    { "id": "flex-direction", "css": "flex-direction", "category": "layout", "today": "supported", "tier": "L2", "strategy": "直映射", "probe": ["flex-direction"], "note": "封闭集 row/column/row-reverse/column-reverse" },
+    { "id": "justify-content", "css": "justify-content", "category": "layout", "today": "supported", "tier": "L2", "strategy": "直映射", "probe": ["justify-content"], "note": "引擎为**开放字符串**（未知值静默落默认，不崩）" },
+    { "id": "align-items-self", "css": "align-items / align-self", "category": "layout", "today": "supported", "tier": "L2", "strategy": "直映射", "probe": ["align-items", "align-self"], "note": "开放字符串（未知值静默落默认）" },
+    { "id": "flex-grow-shrink-basis", "css": "flex-grow / flex-shrink / flex-basis", "category": "layout", "today": "supported", "tier": "L2", "strategy": "直映射", "probe": ["flex-grow", "flex-shrink", "flex-basis"], "note": "flex-basis 为长度" },
+    { "id": "gap", "css": "gap", "category": "layout", "today": "supported", "tier": "L2", "strategy": "直映射", "probe": ["gap"], "note": "px/数字（无 row-gap/column-gap 分开形态）" },
+    { "id": "position", "css": "position: static / relative / absolute", "category": "layout", "today": "supported", "tier": "L2", "strategy": "直映射", "probe": ["position"], "note": "引擎封闭集；sticky/fixed ⇒ 诊断跳过" },
+    { "id": "top-left", "css": "top / left", "category": "layout", "today": "supported", "tier": "L2", "strategy": "直映射", "probe": ["top", "left"], "note": "配合 absolute；引擎无 right/bottom（见候选）" },
+    { "id": "overflow", "css": "overflow: visible / hidden / scroll / auto", "category": "layout", "today": "supported", "tier": "L2", "strategy": "直映射", "probe": ["overflow"], "note": "引擎封闭集；auto 折叠为 taffy Scroll" },
+    { "id": "width-ratio", "css": "width/height 百分比", "category": "unit", "today": "supported", "tier": "L1", "strategy": "编译期折叠", "probe": [], "note": "→ widthRatio/heightRatio（比例字段）" },
+    { "id": "background-color", "css": "background-color", "category": "paint", "today": "supported", "tier": "L1", "strategy": "编译期折叠", "probe": ["background-color"], "note": "颜色编译期归一为 hex（rgb/rgba/transparent → hex；命名色/hsl/var ⇒ 诊断跳过）" },
+    { "id": "color", "css": "color", "category": "paint", "today": "supported", "tier": "L1", "strategy": "编译期折叠", "probe": ["color"], "note": "同上颜色归一" },
+    { "id": "font-size", "css": "font-size", "category": "paint", "today": "supported", "tier": "L1", "strategy": "编译期折叠", "probe": ["font-size"], "note": "px/数字（不支持百分比/keyword）" },
+    { "id": "border-radius", "css": "border-radius", "category": "paint", "today": "supported", "tier": "L1", "strategy": "编译期折叠", "probe": ["border-radius"], "note": "px/数字（宿主圆角绘制）" },
+    { "id": "opacity", "css": "opacity", "category": "paint", "today": "supported", "tier": "L1", "strategy": "编译期折叠", "probe": ["opacity"], "note": "0–1" },
+    { "id": "box-sizing", "css": "box-sizing", "category": "special", "today": "supported", "tier": "L1", "strategy": "直映射", "probe": ["box-sizing"], "note": "两内核恒 border-box ⇒ 只作忠实记录、无副作用" },
+    { "id": "border-color-width", "css": "border-color / border-width", "category": "paint", "today": "folded-only", "tier": "L1", "strategy": "语义组件", "probe": ["border-color", "border-width"], "note": "★诚实修正：在 APP_PAINT_FIELDS 折叠透传，但**三端宿主均未真画边框**（VaporRenderHost/selfdraw/proteus_render 的绘制通道无 border）⇒ 只到内核树，未上屏" },
+    { "id": "transform", "css": "transform（translate/scale/rotate/skew/perspective）", "category": "motion", "today": "engine-only", "tier": "L1", "strategy": "编译期折叠", "probe": ["transform"], "note": "★引擎/宿主已支持（LStyle 的绘制通道 paint-only + 宿主动画桥），但编译期折叠面（parseStaticStyle）**未接 transform** ⇒ 「可扩展」现成落点：加进 APP_PAINT_FIELDS 即可" },
+    { "id": "transform-origin", "css": "transform-origin", "category": "motion", "today": "engine-only", "tier": "L2", "strategy": "编译期折叠", "probe": ["transform-origin"], "note": "引擎有 transform_origin_x/y（paint-only），编译面未接" },
+
+    { "id": "selector-class", "css": "类选择器 .a / .a.b", "category": "selector", "today": "supported", "tier": "L0", "strategy": "编译期折叠", "probe": [], "note": "C1：<style> 类规则编译期匹配合并（按源序；无特异性权重）" },
+    { "id": "selector-type", "css": "元素/类型选择器 h3 / p.foo", "category": "selector", "today": "supported", "tier": "L0", "strategy": "编译期折叠", "probe": [], "note": "C1：按节点原始 tag 匹配（含祖先链）" },
+    { "id": "selector-combinator", "css": "后代 / 子组合 .a .b / .a > .b", "category": "selector", "today": "supported", "tier": "L0", "strategy": "编译期折叠", "probe": [], "note": "C1：祖先类链匹配" },
+    { "id": "selector-pseudo", "css": "伪类 :hover / :active / :first-child / :nth-child", "category": "selector", "today": "absent", "tier": "L0", "strategy": "编译期折叠", "probe": [], "note": "静态部分可编译期折叠（Profile L0）；动态交互态需运行时状态通道（成本更高）" },
+    { "id": "selector-attr", "css": "属性选择器 [data-x]", "category": "selector", "today": "absent", "tier": "L0", "strategy": "编译期折叠", "probe": [], "note": "编译期可判（属性在模板里静态可枚举）" },
+    { "id": "selector-sibling-wildcard", "css": "兄弟组合 +~ / 通配 *", "category": "selector", "today": "absent", "tier": "L5", "strategy": "禁止", "probe": [], "note": "语义弱、跨端难统一（Skyline 亦不支持）——建议改写为类选择器" },
+    { "id": "specificity-inheritance", "css": "特异性 / 继承", "category": "cascade", "today": "absent", "tier": "L0", "strategy": "编译期折叠", "probe": [], "note": "当前仅按源序层叠、无特异性/继承（Profile L0 要求完整实现）" },
+    { "id": "at-media", "css": "@media（响应式）", "category": "at-rule", "today": "absent", "tier": "L3", "strategy": "降级", "probe": [], "note": "编译期无法唯一确定断点；跨端建议走 flex/比例布局 + 框架流体能力" },
+    { "id": "keyframes", "css": "@keyframes（动画）", "category": "at-rule", "today": "absent", "tier": "L3", "strategy": "降级", "probe": [], "note": "块整体剔除（旧实现误当元素选择器）；动画走引擎动画桥（animStart/animTick）" },
+    { "id": "unit-relative", "css": "em / rem / vw / vh / calc / clamp / var()", "category": "unit", "today": "absent", "tier": "L0", "strategy": "编译期折叠", "probe": [], "note": "仅收 px/数字（宽高另支持 %）；其余单位编译期无法在无上下文时求值 ⇒ 诊断跳过" },
+    { "id": "grid", "css": "display: grid / grid-template-*", "category": "layout", "today": "absent", "tier": "L2", "strategy": "直映射", "probe": ["grid-template-columns"], "note": "★引擎未接：taffy 有完整 Grid 能力但 Rust `Display` 枚举无 Grid、to_taffy 未设置（Profile §3 已定案开放 L2）——加 = 引擎+DTO+taffy 三处；Skyline 端实测退化为 block ⇒ 有条件可用" },
+    { "id": "flex-wrap", "css": "flex-wrap / align-content", "category": "layout", "today": "absent", "tier": "L2", "strategy": "直映射", "probe": ["flex-wrap", "align-content"], "note": "引擎无字段（Yoga 亦排除）——多处改动" },
+    { "id": "right-bottom", "css": "right / bottom", "category": "layout", "today": "absent", "tier": "L2", "strategy": "直映射", "probe": ["right", "bottom"], "note": "引擎 LStyle 无 right/bottom（恒 auto）——加 = 引擎+DTO+taffy" },
+    { "id": "order", "css": "order", "category": "layout", "today": "absent", "tier": "L2", "strategy": "直映射", "probe": ["order"], "note": "引擎无字段" },
+    { "id": "z-index", "css": "z-index", "category": "layer", "today": "absent", "tier": "L3", "strategy": "语义组件", "probe": ["z-index"], "note": "本仓已定案**语义化**（layer=\"content|navigation|mask|popout\"，见 contracts/layers.ts）——数值禁止（跨端无意义 + 推高合成层内存）" },
+    { "id": "box-shadow", "css": "box-shadow", "category": "paint", "today": "absent", "tier": "L3", "strategy": "语义组件", "probe": ["box-shadow"], "note": "离屏渲染；走 <p-shadow> 语义组件（各端原生阴影）" },
+    { "id": "filter-backdrop", "css": "filter / backdrop-filter", "category": "paint", "today": "absent", "tier": "L3", "strategy": "语义组件", "probe": ["filter", "backdrop-filter"], "note": "离屏/额外缓冲；走 <p-glass> / <p-filter> 语义组件" },
+    { "id": "text-attrs", "css": "line-height / letter-spacing / text-align / font-weight / white-space", "category": "text", "today": "absent", "tier": "L4", "strategy": "降级", "probe": ["line-height", "letter-spacing", "white-space"], "note": "文本度量与排版走平台文本引擎（不自研）；当前 App 折叠面仅 fontSize/color（Web 探针取三代表）" },
+    { "id": "visibility", "css": "visibility", "category": "paint", "today": "absent", "tier": "L1", "strategy": "直映射", "probe": ["visibility"], "note": "引擎无 visibility 字段（可用 display:none 或 opacity 近似）" }
+  ]
+}

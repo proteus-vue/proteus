@@ -1,5 +1,5 @@
 // packages/css-compat/src/layout-semantics/index.ts
-// @proteus-vue/css-compat/layout-semantics —— Style IR → 五端 Renderer 映射数据（css-compat B2 数据层）
+// @proteus-vue/css-compat/layout-semantics —— Style IR → 三端 Renderer 映射数据（css-compat B2 数据层 · Web / Skyline / App）
 // 04 语义组件清单 + 05 布局/视觉映射表 + Skyline 子集矩阵；G-22 App Renderer 消费入口
 export {
   CSS_PLATFORMS,

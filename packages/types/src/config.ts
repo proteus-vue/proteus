@@ -57,7 +57,7 @@ export interface ProteusConfig {
   skyline: boolean
   /**
    * ★Skyline 布局对齐（VC2-c：消费官方《Skyline WXSS 样式支持与差异》的 5 个对齐开关
-   *   ——版本要求见 docs/generated/end-support-matrix.json 的 profile.skylineAlignSwitches）。
+   *   ——版本要求见 docs/generated/css-capability-alignment.json 的 profile.skylineAlignSwitches）。
    *
    * 各开关语义与最低版本（Android/iOS/基础库）：
    *   · defaultDisplayBlock      默认 block 布局，对齐 WebView      8.0.34/8.0.36/2.31.1（**默认 true**）
