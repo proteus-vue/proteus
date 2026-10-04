@@ -58,6 +58,9 @@ export const animStop: (json: string) => string;
  *  argsJson = { nodes: string, page?: string, filesDir?: string, vpW?: number, vpH?: number }；
  *  返回 {ok, page, content_nodes, mount_ok}；给 filesDir 时落盘 app-screen-content.json。 */
 export const screenContentProbe: (argsJson: string) => string;
+/** ★★★视觉合成（2026-10-04）：App 屏内容 → 内核树 → 渲染指令数组（物理 px，renderCommands 输入）。
+ *  argsJson = { nodes, density, vpW, vpH, page?, filesDir? }；返回 JSON 数组串。 */
+export const appScreenCommands: (argsJson: string) => string;
 /** ★★★App 三端对齐（2026-10-04）：鸿蒙 executor 探针——eval 同一份 bundle-app-stack.js + 注入
  *  proteusHost.invoke（screen.* 真内核树）+ 两相泵 job。argsJson = { bundle }；返回 {ok, exec_* , exec_read}。 */
 export const appStackExecutorProbe: (argsJson: string) => string;
