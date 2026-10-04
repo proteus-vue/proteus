@@ -1,7 +1,7 @@
 ---
 title: p-switch
 group: 内容与表单
-order: 1027
+order: 1029
 ---
 
 # p-switch

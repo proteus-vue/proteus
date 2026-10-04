@@ -6,7 +6,7 @@ order: 0
 
 # 组件总览
 
-> 74 个语义组件（6 域）——props/events 由源码 SSOT 生成（`website/scripts/gen-content.mjs`），与框架实现实时一致。
+> 78 个语义组件（6 域）——props/events 由源码 SSOT 生成（`website/scripts/gen-content.mjs`），与框架实现实时一致。
 
 ## 布局（18）
 
@@ -31,7 +31,7 @@ order: 0
 | [p-virtual-list](/docs/component/p-virtual-list) | 3 | 0 |
 | [p-zone](/docs/component/p-zone) | 1 | 0 |
 
-## 内容与表单（29）
+## 内容与表单（31）
 
 | 组件 | Props | Events |
 |---|---|---|
@@ -48,6 +48,8 @@ order: 0
 | [p-label](/docs/component/p-label) | 2 | 1 |
 | [p-list-view](/docs/component/p-list-view) | 10 | 0 |
 | [p-loading](/docs/component/p-loading) | 5 | 0 |
+| [p-loading-host](/docs/component/p-loading-host) | 1 | 0 |
+| [p-loading-region](/docs/component/p-loading-region) | 4 | 1 |
 | [p-map](/docs/component/p-map) | 31 | 10 |
 | [p-media](/docs/component/p-media) | 50 | 10 |
 | [p-nav-bar](/docs/component/p-nav-bar) | 11 | 1 |
@@ -65,12 +67,13 @@ order: 0
 | [p-text](/docs/component/p-text) | 10 | 0 |
 | [p-textarea](/docs/component/p-textarea) | 22 | 4 |
 
-## 页面外壳（17）
+## 页面外壳（19）
 
 | 组件 | Props | Events |
 |---|---|---|
 | [p-action-sheet](/docs/component/p-action-sheet) | 3 | 3 |
 | [p-ad](/docs/component/p-ad) | 6 | 3 |
+| [p-auth-gate](/docs/component/p-auth-gate) | 3 | 0 |
 | [p-drawer](/docs/component/p-drawer) | 4 | 1 |
 | [p-keyboard-accessory](/docs/component/p-keyboard-accessory) | 3 | 0 |
 | [p-mask](/docs/component/p-mask) | 6 | 1 |
@@ -84,6 +87,7 @@ order: 0
 | [p-split](/docs/component/p-split) | 3 | 0 |
 | [p-tabbar](/docs/component/p-tabbar) | 2 | 2 |
 | [p-toast](/docs/component/p-toast) | 7 | 1 |
+| [p-toast-host](/docs/component/p-toast-host) | 1 | 0 |
 | [p-toolbar](/docs/component/p-toolbar) | 4 | 1 |
 | [p-webview](/docs/component/p-webview) | 4 | 3 |
 

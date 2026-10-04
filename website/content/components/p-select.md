@@ -1,7 +1,7 @@
 ---
 title: p-select
 group: 内容与表单
-order: 1022
+order: 1024
 ---
 
 # p-select

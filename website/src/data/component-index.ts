@@ -5,7 +5,7 @@ export interface ComponentIndexDomain { key: string; en: string; components: Com
 export interface ComponentIndex { total: number; domains: ComponentIndexDomain[] }
 
 export const componentIndex: ComponentIndex = {
-  "total": 74,
+  "total": 78,
   "domains": [
     {
       "key": "布局",
@@ -173,6 +173,16 @@ export const componentIndex: ComponentIndex = {
           "emits": 0
         },
         {
+          "dir": "p-loading-host",
+          "props": 1,
+          "emits": 0
+        },
+        {
+          "dir": "p-loading-region",
+          "props": 4,
+          "emits": 1
+        },
+        {
           "dir": "p-map",
           "props": 31,
           "emits": 10
@@ -269,6 +279,11 @@ export const componentIndex: ComponentIndex = {
           "emits": 3
         },
         {
+          "dir": "p-auth-gate",
+          "props": 3,
+          "emits": 0
+        },
+        {
           "dir": "p-drawer",
           "props": 4,
           "emits": 1
@@ -332,6 +347,11 @@ export const componentIndex: ComponentIndex = {
           "dir": "p-toast",
           "props": 7,
           "emits": 1
+        },
+        {
+          "dir": "p-toast-host",
+          "props": 1,
+          "emits": 0
         },
         {
           "dir": "p-toolbar",

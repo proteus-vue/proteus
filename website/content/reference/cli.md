@@ -14,14 +14,14 @@ generated: true
 ### `proteus build`
 
 ```bash
-proteus build <dir> [--out <dir>] [--debug] [--no-px2rpx] [--rpx-ratio <n>] [--rules <json>] [--compiler <node|rust>] [--target <web|skyline|all>]
+proteus build <dir> [--out <dir>] [--debug] [--no-px2rpx] [--rpx-ratio <n>] [--rules <json>] [--compiler <node|rust>] [--target <web|skyline|ios|android|harmony|all>]
 ```
 
 扫描 <dir> 下所有 .vue，编译为小程序四件套（.wxml / .js / .wxss）到 <out>
       --debug    产物注入源码行号注释 + 决策 trace 落盘（.transform-debug/）
       --rules    JSON 规则覆盖文件（disabled / mapping / customTags）
       --compiler 编译器后端（G-29）：node（缺省）/ rust（每页 Node/Rust 双编译语义等价校验，G-29.1）
-      --target   工程构建（G-33 M2）：spawn 项目 build:web / build:mp 脚本（复用 Vite 管线）；缺省 = 独立编译
+      --target   工程构建（G-33 M2）：web/skyline（复用 Vite 管线）· ios/android/harmony（App 屏内容：路由 → SFC → 编译器）· all（逐端全构建）；缺省 = 独立编译
 
 ### `proteus dev`
 

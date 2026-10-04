@@ -1,9 +1,15 @@
-// packages/cli/src/app-content.ts —— ★★★App 三端对齐 · 阶段 1b-A（A1）：
-//   **App 屏内容构建**（`proteus build --target app`）——项目路由 → 真实 SFC → 编译器 → 屏内容（2026-10-04）
+// packages/cli/src/app-content.ts —— ★★★App 端屏内容构建（`proteus build --target ios|android|harmony`）
+//   项目路由 → 真实 SFC → 编译器 → 屏内容（2026-10-04）
 //
 // 【它做什么】把项目里每个路由指向的 SFC 编译成 **App 端屏内容**（`ScreenContent`：
-//   内核节点描述），产出 `<root>/dist/app/screen-content.json`（键 = 屏名）。
+//   内核节点描述），产出 `<root>/dist/app/<platform>/screen-content.json`（键 = 屏名）。
 //   宿主（Android/iOS 的 ScreenHost）按屏名取内容建真实页面子树。
+//
+// 【★标准目标（不自造笼统的 `app`）】平台命名与全仓一致（`CONCRETE_PLATFORMS`：
+//   web/mp/ios/android/harmony）——App 端**按具体平台**构建（`ios`/`android`/`harmony`），
+//   产物分目录 `dist/app/<platform>/`。当前三端内容由**同一编译器**产出（结构一致），
+//   但按平台分目录是**标准做法**：平台专属编译（条件编译/平台变体）就绪后，各端产物自然分叉，
+//   且宿主按自己的平台取自己的产物（不共享一份隐含默认）。
 //
 // 【为什么在构建期】`buildLayoutTemplate` 依赖 `@vue/compiler-sfc`（Node API）⇒ 端上（QuickJS/JSC）
 //   跑不了。构建期编译、产物下发（与 MP 产 wxml、Vapor 产 layout template 同一形态）。
@@ -18,10 +24,16 @@ import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { buildLayoutTemplate } from '@proteus-vue/compiler'
 import { screenContentFromLayoutTemplate } from '@proteus-vue/render-backend'
+import { APP_PLATFORMS, type AppPlatform } from './targets'
+
+// ★目标/平台名 SSOT 在 ./targets（三处一致，不漂）。此处再导出供既有消费方（hosts 生成器等）。
+export { APP_PLATFORMS, type AppPlatform, isAppPlatform } from './targets'
 
 export interface AppScreenContentResult {
   ok: boolean
-  /** 产物文件（`<root>/dist/app/screen-content.json`） */
+  /** 平台（产物落在 `<root>/dist/app/<platform>/`） */
+  platform: AppPlatform
+  /** 产物文件（`<root>/dist/app/<platform>/screen-content.json`） */
   outFile: string
   /** 编译成功页数 */
   compiled: number
@@ -32,10 +44,11 @@ export interface AppScreenContentResult {
 }
 
 /**
- * 生成 App 屏内容产物。
+ * 生成 App 屏内容产物（**按平台**）。
  * @param root 项目根（含 `router/auto-routes.ts`——由 gen-routes 产出；调用方负责先跑 gen-routes）
+ * @param platform 具体平台（ios/android/harmony；产物落 `dist/app/<platform>/`）
  */
-export async function buildAppScreenContent(root: string): Promise<AppScreenContentResult> {
+export async function buildAppScreenContent(root: string, platform: AppPlatform = 'android'): Promise<AppScreenContentResult> {
   const autoRoutes = path.join(root, 'router', 'auto-routes.ts')
   if (!fs.existsSync(autoRoutes)) {
     throw new Error(`缺 ${path.relative(root, autoRoutes)}——先运行 gen-routes（proteus build --target skyline/web 会产出）`)
@@ -76,10 +89,10 @@ export async function buildAppScreenContent(root: string): Promise<AppScreenCont
     for (const d of res.diagnostics) diagnostics.push(`${r.name}: ${d.code} ${d.message}`)
   }
 
-  const outDir = path.join(root, 'dist', 'app')
+  const outDir = path.join(root, 'dist', 'app', platform)
   fs.mkdirSync(outDir, { recursive: true })
   const outFile = path.join(outDir, 'screen-content.json')
   fs.writeFileSync(outFile, JSON.stringify(out, null, 2))
   if (compiled === 0) throw new Error('零页面编译成功——App 屏内容产物为空（路由格式/编译器有问题？）')
-  return { ok: true, outFile, compiled, skipped, diagnostics }
+  return { ok: true, platform, outFile, compiled, skipped, diagnostics }
 }

@@ -4,6 +4,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import type { TransformRuleOverrides } from '@proteus-vue/compiler'
 import type { ProteusConfig } from '@proteus-vue/plugin-vite'
+import { BUILD_TARGETS, type BuildTarget } from './targets'
 
 export interface BuildArgs {
   /** 输入目录（扫描 .vue） */
@@ -16,8 +17,9 @@ export interface BuildArgs {
   debug: boolean
   /** 规则覆盖（--rules <json-file>） */
   rules?: TransformRuleOverrides
-  /** ★cli-plus M2：工程构建目标（--target web|skyline|app|all；缺省 = 独立编译） */
-  target?: 'web' | 'skyline' | 'app' | 'all'
+  /** ★cli-plus M2：工程构建目标（标准集：web|skyline|ios|android|harmony|all；缺省 = 独立编译）
+   *  ★2026-10-04：`app` 拆成三端具体平台（与全仓 CONCRETE_PLATFORMS 一致）——不自造笼统名。 */
+  target?: BuildTarget
   /** ★G-29 编译器后端插拔：--compiler node|rust（缺省 node；rust → 双编译语义等价校验） */
   compiler?: 'node' | 'rust'
 }
@@ -38,8 +40,10 @@ export function parseBuildArgs(argv: string[]): BuildArgs {
       args.debug = true
     } else if (a === '--target') {
       const t = argv[++i]
-      if (t !== 'web' && t !== 'skyline' && t !== 'app' && t !== 'all') throw new Error(`--target 需为 web/skyline/app/all（${t ?? '空'}）`)
-      args.target = t
+      if (!BUILD_TARGETS.includes(t as BuildTarget)) {
+        throw new Error(`--target 需为 ${BUILD_TARGETS.join('/')}（${t ?? '空'}）`)
+      }
+      args.target = t as BuildTarget
     } else if (a === '--no-px2rpx') {
       args.px2rpx = false
     } else if (a === '--rpx-ratio') {
@@ -422,8 +426,8 @@ export const HELP_GROUPS: HelpGroup[] = [
     titleEn: 'Build & development',
     entries: [
       {
-        usage: 'proteus build <dir> [--out <dir>] [--debug] [--no-px2rpx] [--rpx-ratio <n>] [--rules <json>] [--compiler <node|rust>] [--target <web|skyline|all>]',
-        desc: '扫描 <dir> 下所有 .vue，编译为小程序四件套（.wxml / .js / .wxss）到 <out>\n      --debug    产物注入源码行号注释 + 决策 trace 落盘（.transform-debug/）\n      --rules    JSON 规则覆盖文件（disabled / mapping / customTags）\n      --compiler 编译器后端（G-29）：node（缺省）/ rust（每页 Node/Rust 双编译语义等价校验，G-29.1）\n      --target   工程构建（G-33 M2）：spawn 项目 build:web / build:mp 脚本（复用 Vite 管线）；缺省 = 独立编译',
+        usage: 'proteus build <dir> [--out <dir>] [--debug] [--no-px2rpx] [--rpx-ratio <n>] [--rules <json>] [--compiler <node|rust>] [--target <web|skyline|ios|android|harmony|all>]',
+        desc: '扫描 <dir> 下所有 .vue，编译为小程序四件套（.wxml / .js / .wxss）到 <out>\n      --debug    产物注入源码行号注释 + 决策 trace 落盘（.transform-debug/）\n      --rules    JSON 规则覆盖文件（disabled / mapping / customTags）\n      --compiler 编译器后端（G-29）：node（缺省）/ rust（每页 Node/Rust 双编译语义等价校验，G-29.1）\n      --target   工程构建（G-33 M2）：web/skyline（复用 Vite 管线）· ios/android/harmony（App 屏内容：路由 → SFC → 编译器）· all（逐端全构建）；缺省 = 独立编译',
         descEn: 'Scan all .vue files under <dir> and compile them into the mini-program four-file set (.wxml / .js / .wxss) to <out>\n      --debug    inject source line-number comments into the artifacts + write the decision trace to disk (.transform-debug/)\n      --rules    JSON rule override file (disabled / mapping / customTags)\n      --compiler compiler backend (G-29): node (default) / rust (per-page Node/Rust dual-compile semantic equivalence check, G-29.1)\n      --target   project build (G-33 M2): spawn the project build:web / build:mp scripts (reusing the Vite pipeline); default = standalone compilation',
       },
       {
