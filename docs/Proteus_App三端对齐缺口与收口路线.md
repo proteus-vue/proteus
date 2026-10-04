@@ -47,9 +47,9 @@
 
 | ID | 缺口 | 证据 | 影响端 | 规模 |
 |---|---|---|---|---|
-| **D1** | **App 应用级门禁单端化**：`check:app-stack` 只跑 Android 单端；判据脚本本身三端通用 | `package.json`（`check:app-stack => python3 hosts/android/check-app-stack.py hosts/android/results/app-stack.json`）· `hosts/android/check-app-stack.py:23-46`（判据按 `host` 分档，三端通用） | 三端 | **小** |
-| **D2** | **鸿蒙无任何 `check:*` 接入**：鸿蒙只有 `sync-core.sh` + `run-*.sh` 手工入口 | `node -e` 过滤 `/harmony/` 为空 | 鸿蒙 | **小** |
-| **D3** | **`check:host-rounding` 不含鸿蒙**：静态扫描只覆盖 `hosts/android/**` + `hosts/ios/**` | `scripts/check-host-rounding.mjs:31-36` | 鸿蒙 | **小** |
+| **D1** | ~~App 应用级门禁单端化~~ **✅ 已收口（2026-10-04）**：`check:app-stack` 扩为三端（android/ios/harmony 各自结果文件） | `package.json`（三端串联） | 三端 | ✅ |
+| **D2** | ~~鸿蒙无任何 `check:*` 接入~~ **✅ 已收口（2026-10-04）**：鸿蒙接入 `check:app-stack` + `check:host-runtime`（`hosts/harmony/results/*.json`；判据如实跳过未接组、不假绿） | `package.json` | 鸿蒙 | ✅ |
+| **D3** | ~~`check:host-rounding` 不含鸿蒙~~ **✅ 已收口（2026-10-04）**：扫描面加 `hosts/harmony/.../ets`（含 .ets/.ts）——当场抓到并登记 1 处（`app-stack-probe.ts` 的栈深度取半，非几何、已 `I2-ALLOW`） | `scripts/check-host-rounding.mjs` | 鸿蒙 | ✅ |
 | **D4** | **唯一真三端门禁只覆盖 Vapor 夹具**：`check:vapor-three-end`（三端指纹逐值比对）是真正三端门禁，但输入是 Vapor 夹具、非项目页面 | `scripts/check-vapor-three-end.mjs` | 三端 | — |
 
 ### E 层 · 文档/状态（非代码，但会误导后续排期）
@@ -97,3 +97,18 @@ A1/A2（构建目标 + 产物契约）
 4. 它能立即暴露 C3（两处白名单不一致）这类真缺陷。
 
 （后续阶段各自作为独立收口单元推进。）
+
+---
+
+## 5. 收口进度
+
+| 阶段 | 缺口 | 状态 | 说明 |
+|---|---|---|---|
+| 阶段 0 | C2+C4（App CSS 支持面对照 + 门禁） | ✅ 已完成（2026-10-04） | APP_*_FIELDS SSOT + `check:app-css-surface`（生成 docs/generated/app-css-surface.md + 分层棘轮）+ `tests/app-css-surface.test.ts` 10 组 |
+| 阶段 0 | D1（app-stack 三端化） | ✅ 已完成（2026-10-04） | `check:app-stack` 跑 android/ios/harmony 三端结果 |
+| 阶段 0 | D2（鸿蒙接入 check:*） | ✅ 已完成（2026-10-04） | 鸿蒙接入 app-stack + host-runtime |
+| 阶段 0 | D3（host-rounding 加鸿蒙） | ✅ 已完成（2026-10-04） | 扫描面加鸿蒙 ets；当场抓到并登记 1 处（非几何） |
+| 阶段 1 | A1/B1/B2/B5（构建目标 + 路由页面落地，Android 先行） | ⏳ 待办 | **真正的生存关** |
+| 阶段 2 | B3/B4（三端接入同一产物/链） | ⏳ 待办 |  |
+| 阶段 3 | C1/C3（CSS 折叠面扩展 + 矩阵级别决策） | ⏳ 待办 | 阶段 0 已铺度量前置 |
+| 阶段 4 | E1（文档回填） | ⏳ 待办 |  |
