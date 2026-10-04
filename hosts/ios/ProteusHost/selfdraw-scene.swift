@@ -4423,6 +4423,39 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     ///
     /// 【为什么"批量"很重要】转场经常一次启动几十~几百条（每行一个元素）；逐条跨边界调用
     ///   会把"每帧 1 次"的收益又还回去。
+    /// ★批次 42：上一棵树里带 CSS animation 的节点数（读数）
+    var cssAnimNodes = 0
+
+    /// ★批次 42（动效）：启动编译期折叠的 **CSS animation**（与 Android 同一报文形态）。
+    @discardableResult
+    func startCssAnimations(flat: [(id: Int, parentId: Int?, rect: CGRect, style: [String: Any])]) -> Int {
+        var anims: [[String: Any]] = []
+        var nodes = 0
+        for item in flat {
+            guard let chans = item.style["animation"] as? [[String: Any]] else { continue }
+            var any = false
+            for ch in chans {
+                guard let kf = ch["keyframes"] as? [[String: Any]], !kf.isEmpty else { continue }
+                var total = 0.0
+                var lastTo = (ch["from"] as? NSNumber)?.doubleValue ?? 0
+                for seg in kf {
+                    total += (seg["durMs"] as? NSNumber)?.doubleValue ?? 0
+                    if let t = seg["to"] as? NSNumber { lastTo = t.doubleValue }
+                }
+                anims.append(["nodeId": item.id, "kind": (ch["kind"] as? NSNumber)?.intValue ?? 0,
+                              "from": (ch["from"] as? NSNumber)?.doubleValue ?? 0, "to": lastTo,
+                              "durMs": total, "keyframes": kf])
+                any = true
+            }
+            if any { nodes += 1 }
+        }
+        guard !anims.isEmpty, let data = try? JSONSerialization.data(withJSONObject: ["anims": anims]),
+              let json = String(data: data, encoding: .utf8) else { return 0 }
+        _ = animStart(json)
+        _ = animStartFrameLoop()
+        return nodes
+    }
+
     func animStart(_ json: String) -> String {
         guard handle != 0 else { return "{\"ok\":false,\"error\":\"未接入核心\"}" }
         let out = json.withCString { takeCString(proteus_layout_anim_start(handle, $0)) }
@@ -6064,6 +6097,8 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         }
         view.clearLayers()
         view.buildLayers(flat: flat)
+        // ★批次 42（动效 · 对齐 Web）：**CSS animation**（编译期折叠）——建层后启动（各节点 style["animation"] → anims → 内核 anim_start + 帧循环）
+        cssAnimNodes = startCssAnimations(flat: flat)
         // ★★C2：全量挂载后，按**内核解析好的段列表**补建 SVG 描边子层（见 attachSvgStroke 注释）
         let svgJson = handle != 0 ? takeCString(proteus_layout_svg_nodes(handle)) : "{}"
         view.attachSvgStroke(fromKernelPaths: svgJson)

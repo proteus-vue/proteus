@@ -6054,6 +6054,40 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         },
         "text": "C 跨列(1 / -1)",
         "semantic": "div"
+      },
+      {
+        "id": 92,
+        "parentId": 0,
+        "width": 220,
+        "height": 36,
+        "margin": {
+          "top": 16,
+          "bottom": 16
+        },
+        "marginAuto": {
+          "right": true,
+          "left": true
+        },
+        "backgroundColor": "#7048e8",
+        "color": "#ffffff",
+        "fontSize": 12,
+        "textAlign": "center",
+        "borderRadius": 8,
+        "animation": [
+          {
+            "kind": 4,
+            "from": 0.1,
+            "keyframes": [
+              {
+                "to": 1,
+                "durMs": 300,
+                "curve": 3
+              }
+            ]
+          }
+        ],
+        "text": "CSS animation: fade-in",
+        "semantic": "div"
       }
     ]
   },
@@ -11681,6 +11715,52 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 23,
         "parentId": 5,
+        "animation": [
+          {
+            "kind": 0,
+            "from": 0,
+            "keyframes": [
+              {
+                "to": 0,
+                "durMs": 18000,
+                "curve": 0
+              }
+            ]
+          },
+          {
+            "kind": 1,
+            "from": 0,
+            "keyframes": [
+              {
+                "to": 0,
+                "durMs": 18000,
+                "curve": 0
+              }
+            ]
+          },
+          {
+            "kind": 2,
+            "from": 1,
+            "keyframes": [
+              {
+                "to": 1,
+                "durMs": 18000,
+                "curve": 0
+              }
+            ]
+          },
+          {
+            "kind": 3,
+            "from": 0,
+            "keyframes": [
+              {
+                "to": 360,
+                "durMs": 18000,
+                "curve": 0
+              }
+            ]
+          }
+        ],
         "semantic": "g"
       },
       {
@@ -11691,6 +11771,52 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 25,
         "parentId": 5,
+        "animation": [
+          {
+            "kind": 0,
+            "from": 0,
+            "keyframes": [
+              {
+                "to": 0,
+                "durMs": 12000,
+                "curve": 0
+              }
+            ]
+          },
+          {
+            "kind": 1,
+            "from": 0,
+            "keyframes": [
+              {
+                "to": 0,
+                "durMs": 12000,
+                "curve": 0
+              }
+            ]
+          },
+          {
+            "kind": 2,
+            "from": 1,
+            "keyframes": [
+              {
+                "to": 1,
+                "durMs": 12000,
+                "curve": 0
+              }
+            ]
+          },
+          {
+            "kind": 3,
+            "from": 360,
+            "keyframes": [
+              {
+                "to": 0,
+                "durMs": 12000,
+                "curve": 0
+              }
+            ]
+          }
+        ],
         "semantic": "g"
       },
       {
@@ -12124,6 +12250,52 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 91,
         "parentId": 90,
+        "animation": [
+          {
+            "kind": 0,
+            "from": 0,
+            "keyframes": [
+              {
+                "to": 0,
+                "durMs": 6000,
+                "curve": 0
+              }
+            ]
+          },
+          {
+            "kind": 1,
+            "from": 0,
+            "keyframes": [
+              {
+                "to": 0,
+                "durMs": 6000,
+                "curve": 0
+              }
+            ]
+          },
+          {
+            "kind": 2,
+            "from": 1,
+            "keyframes": [
+              {
+                "to": 1,
+                "durMs": 6000,
+                "curve": 0
+              }
+            ]
+          },
+          {
+            "kind": 3,
+            "from": 0,
+            "keyframes": [
+              {
+                "to": 360,
+                "durMs": 6000,
+                "curve": 0
+              }
+            ]
+          }
+        ],
         "semantic": "g"
       },
       {

@@ -173,6 +173,26 @@
         "why": "★批次 1（2026-10-04）：规则按 (!important, 特异性 (id,class,tag), 源序) 层叠；color/fontSize 沿树继承（CSS 可继承子集；编译期一次性算进 computed style，运行时零匹配）"
       },
       {
+        "css": "@keyframes（关键帧动画）",
+        "id": "keyframes",
+        "ends": {
+          "web": "—",
+          "skyline": "—",
+          "app": "supported"
+        },
+        "why": "★批次 42（2026-10-04 · 动效 · 对齐 Web）：@keyframes 停靠点（from/to/%）解析 → 逐通道 keyframe 规格（opacity + px 位移/等比缩放/旋转）→ 内核 anim_start（Keyframes 模式）；挂载后由宿主启动。@keyframes 块不再被误当选择器"
+      },
+      {
+        "css": "animation（简写：name duration timing delay …）",
+        "id": "animation",
+        "ends": {
+          "web": "—",
+          "skyline": "—",
+          "app": "supported"
+        },
+        "why": "★批次 42（对齐 Web）：animation 简写 → 命中同文件 @keyframes → 逐通道 keyframe 动画（内核 anim_start）；单次播放、终态保持（iters/delay/direction/fill 暂忽略，诊断）。可动画通道限 opacity / px 位移 / 等比缩放 / 旋转"
+      },
+      {
         "css": "CSS 自定义属性（design tokens）var(--x)",
         "id": "css-vars",
         "ends": {
@@ -1084,16 +1104,29 @@
     },
     {
       "id": "keyframes",
-      "css": "@keyframes（动画）",
+      "css": "@keyframes（关键帧动画）",
       "category": "at-rule",
       "compilerFields": [],
       "web": "—",
       "skyline": "—",
-      "app": "absent",
-      "tier": "L3",
-      "strategy": "降级",
-      "note": "块整体剔除（旧实现误当元素选择器）；动画走引擎动画桥（animStart/animTick）",
-      "supportTier": "unsupported"
+      "app": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "note": "★批次 42（2026-10-04 · 动效 · 对齐 Web）：@keyframes 停靠点（from/to/%）解析 → 逐通道 keyframe 规格（opacity + px 位移/等比缩放/旋转）→ 内核 anim_start（Keyframes 模式）；挂载后由宿主启动。@keyframes 块不再被误当选择器",
+      "supportTier": "conditional"
+    },
+    {
+      "id": "animation",
+      "css": "animation（简写：name duration timing delay …）",
+      "category": "at-rule",
+      "compilerFields": [],
+      "web": "—",
+      "skyline": "—",
+      "app": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "note": "★批次 42（对齐 Web）：animation 简写 → 命中同文件 @keyframes → 逐通道 keyframe 动画（内核 anim_start）；单次播放、终态保持（iters/delay/direction/fill 暂忽略，诊断）。可动画通道限 opacity / px 位移 / 等比缩放 / 旋转",
+      "supportTier": "conditional"
     },
     {
       "id": "css-vars",

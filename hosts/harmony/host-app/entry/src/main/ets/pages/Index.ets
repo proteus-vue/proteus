@@ -24,6 +24,7 @@ import { runAppStackProbe } from '../core/app-stack-probe';
 import { attach, renderCommands, stats, ProteusRenderStats, platformAnimBegin, platformAnimStep, platformAnimEnd, platformAnimSave, clearRoot, scrollRoot, gestureInstall, gestureSample } from 'libproteus_render.so';
 // ★P3-3：宿主动画入口（`<Transition>` 桥的鸿蒙腿——与 Android/iOS 同形）
 import { animTick, animActive } from 'libproteus_bench.so';
+import { appScreenAnimTick } from 'libproteus_bench.so';   // ★批次 42：app-screen 树的 CSS animation tick
 import { bench4050, hitProbe, recycleProbe, spliceProbe, textProbe, kernelAnimProbe, memProbe, sfcStressProbe, sfcStressCommands, jsvmProbe, vaporProbe, animCurveBezier, hostRuntimeProbe, hostRtShellInstall, mountVirtualProbe, gestureHitPrepare, gestureHitAt, fontFamilyProbe, nodeRect, screenContentProbe, appStackExecutorProbe, appScreenCommands, appScreenHitAt, version as rustVersion } from 'libproteus_bench.so';
 
 const DOMAIN = 0x0002;
@@ -124,6 +125,33 @@ class TransitionFrameCallback extends FrameCallback {
       hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_VAPOR_ANIM_LOOP_ERROR %{public}s', JSON.stringify(e) ?? '');
       return;
     }
+    this.uiCtx.postFrameCallback(this);
+  }
+}
+
+/**
+ * ★批次 42（动效）：**app-screen 树的 CSS animation 帧循环**——每 vsync tick 合成树（g_appTouchTree），
+ *   到内核自报 active=0 停（硬上限 3s 兜底）。与 TransitionFrameCallback 同形，但对象是 app-screen 树。
+ */
+class AppScreenAnimFrameCallback extends FrameCallback {
+  private uiCtx: UIContext;
+  private frames: number = 0;
+  private readonly maxFrames: number = 25;   // 帧上限（≈0.42s）——避免长时占用 UI 线程（影响真触摸注入）
+  constructor(uiCtx: UIContext) { super(); this.uiCtx = uiCtx; }
+  onFrame(_frameTimeInNano: number): void {
+    this.frames++;
+    try {
+      let active: number = -1;
+      try {
+        const a: string = appScreenAnimTick('{"dtMs":16.7}');
+        const o = JSON.parse(a) as Record<string, number>;
+        if (o && typeof o.active === 'number') active = o.active;
+      } catch (ignored) { /* 读数失败 ⇒ 帧上限兜底 */ }
+      if (active === 0 || this.frames >= this.maxFrames) {
+        hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_APP_SCREEN_ANIM_LOOP_DONE frames=%{public}d', this.frames);
+        return;
+      }
+    } catch (e) { return; }
     this.uiCtx.postFrameCallback(this);
   }
 }

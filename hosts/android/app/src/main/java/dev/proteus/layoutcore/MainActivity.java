@@ -1078,6 +1078,7 @@ public class MainActivity extends Activity {
                 }
                 cor.put("cmds_live", mo.optInt("cmds_live", -1));
                 cor.put("painted_samples", mo.optInt("painted_samples", -1));
+                cor.put("css_anim_nodes", mo.optInt("css_anim_nodes", -1));   // ★批次 42：CSS animation 节点数
                 if (comp.view() != null) comp.view().invalidate();
                 // ★★最强证据：把合成结果渲染成 PNG 落盘（真机截图级证据）。
                 try {

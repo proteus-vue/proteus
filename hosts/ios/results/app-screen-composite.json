@@ -1,13 +1,14 @@
 {
-  "content_nodes" : 92,
+  "content_nodes" : 93,
+  "css_anim_nodes" : 1,
   "hit_first_target" : 0,
   "hit_points_hit" : 20,
-  "layer_count" : 92,
+  "layer_count" : 93,
   "ok" : true,
   "page" : "index",
   "real_touch" : true,
   "snapshot" : true,
-  "snapshot_path" : "{\"path\":\"\\\/var\\\/mobile\\\/Containers\\\/Data\\\/Application\\\/1F6CA0FD-1433-4942-962E-974A16E682C0\\\/Documents\\\/app-screen-composite.png\",\"ok\":true}",
+  "snapshot_path" : "{\"ok\":true,\"path\":\"\\\/var\\\/mobile\\\/Containers\\\/Data\\\/Application\\\/69CE190C-DD8D-4A36-BD2A-94C24CF787D9\\\/Documents\\\/app-screen-composite.png\"}",
   "taps_recognized" : 20,
   "transform_origin_nodes" : 1,
   "transformed_nodes" : 2
