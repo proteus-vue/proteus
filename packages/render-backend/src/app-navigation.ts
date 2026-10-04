@@ -24,7 +24,7 @@ import type { AppScreenSpec, AppStack, AppStackPolicy } from '@proteus-vue/route
 import { createAppStack } from '@proteus-vue/router/app-stack'
 import { createAppNavigationAdapter, screensFromRoutes } from '@proteus-vue/router/app-route'
 import type { RouteRecord } from '@proteus-vue/router/types'
-import { createScreenExecutor, type ScreenExecutor } from './screen-executor'
+import { createScreenExecutor, type ScreenExecutor, type ScreenContentProvider } from './screen-executor'
 import { createHostScreenPorts, type HostInvokeChannel } from './screen-executor-host'
 import { routeTransitionBatches } from '@proteus-vue/animation'
 
@@ -41,6 +41,8 @@ export interface AppNavigationOptions {
   routes?: RouteRecord[]
   /** 内存治理策略（传给 `createAppStack`） */
   policy?: AppStackPolicy
+  /** ★批次 43：**屏内容提供者**（页面真实内容；缺省 ⇒ 空壳）——真实应用入口据此装页面 */
+  contentOf?: ScreenContentProvider
   /** 建屏完成通知（默认接 `stack.markRebuilt`——契约要求执行器建完调它） */
   onScreenMounted?: (screenId: string, rebuild: boolean) => void
   /** 诊断事件（端口调用序——判据/测试读它） */
@@ -89,6 +91,7 @@ export function createAppNavigation(opts: AppNavigationOptions): AppNavigation {
   const executor = createScreenExecutor({
     host: ports.tree,
     anim: ports.anim,
+    ...(opts.contentOf ? { contentOf: opts.contentOf } : {}),
     plan: (t, targets, o) => routeTransitionBatches(t, targets, o ?? {}),
     onScreenMounted: opts.onScreenMounted ?? ((id) => stack.markRebuilt(id)),
     ...(opts.onEvent ? { onEvent: opts.onEvent } : {}),

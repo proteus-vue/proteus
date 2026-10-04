@@ -1,0 +1,14 @@
+{
+  "engine_available": true,
+  "bundle_chars": 192706,
+  "bundle_load_ok": true,
+  "boot_ok": true,
+  "boot_error": "null",
+  "boot_value": "{\"ok\":true,\"index\":\"index\",\"tabs\":[\"index\",\"messages\",\"mine\"],\"tabLabels\":{\"index\":\"Proteus 超级应用\",\"messages\":\"消息\",\"mine\":\"我的\",\"verify\":\"验收控制台\"},\"screens\":[\"index\",\"messages\",\"mine\",\"verify\"],\"depth\":0,\"current\":\"\"}",
+  "boot_state": "{\"depth\":1,\"current\":\"index\",\"stack\":[\"index\"],\"tabs\":[\"index\",\"messages\",\"mine\"],\"tabLabels\":{\"index\":\"Proteus 超级应用\",\"messages\":\"消息\",\"mine\":\"我的\",\"verify\":\"验收控制台\"}}",
+  "after_push_verify": "{\"depth\":2,\"current\":\"verify\",\"stack\":[\"index\",\"verify\"],\"tabs\":[\"index\",\"messages\",\"mine\"],\"tabLabels\":{\"index\":\"Proteus 超级应用\",\"messages\":\"消息\",\"mine\":\"我的\",\"verify\":\"验收控制台\"}}",
+  "after_switch_messages": "{\"depth\":1,\"current\":\"messages\",\"stack\":[\"messages\"],\"tabs\":[\"index\",\"messages\",\"mine\"],\"tabLabels\":{\"index\":\"Proteus 超级应用\",\"messages\":\"消息\",\"mine\":\"我的\",\"verify\":\"验收控制台\"}}",
+  "after_back": "{\"depth\":1,\"current\":\"messages\",\"stack\":[\"messages\"],\"tabs\":[\"index\",\"messages\",\"mine\"],\"tabLabels\":{\"index\":\"Proteus 超级应用\",\"messages\":\"消息\",\"mine\":\"我的\",\"verify\":\"验收控制台\"}}",
+  "host_stats": "{\"ok\":true,\"data\":{\"mount_calls\":3,\"visible_calls\":4,\"destroy_calls\":2,\"anim_calls\":0,\"anim_completed\":0,\"anim_hook_missing\":0,\"rect_calls\":0,\"shared_calls\":0,\"content_node_total\":172,\"live_screens\":1,\"calls\":[\"screen.mount\",\"screen.visible\",\"screen.mount\",\"screen.visible\",\"screen.visible\",\"screen.destroy\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.stats\"],\"screens\":[{\"screenId\":\"messages#3\",\"visible\":true,\"rootNodeId\":100}],\"handle_count\":1}}",
+  "ok": true
+}

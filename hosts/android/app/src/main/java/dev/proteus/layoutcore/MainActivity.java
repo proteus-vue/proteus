@@ -423,7 +423,16 @@ public class MainActivity extends Activity {
             String as = appStackRun();
             sb.append(as).append('\n');
             writeReport("app-stack.json", as);
+        } else if ("superapp".equals(testPath)) {
+            // ★★★批次 43（用户「不要装置级别了，要真实的独立应用了」）：
+            //   **真实 superapp 运行**——读 bundle-superapp.js，启动（路由栈 + 宿主真建树），
+            //   并导航（switchTab / push / back）——证明「真实应用在端上跑」。
+            sb.append("【superapp 真实应用（路由栈 + 宿主真建树 + 导航）】\n");
+            String sa = superappRun();
+            sb.append(sa).append('\n');
+            writeReport("superapp.json", sa);
         } else if ("host-runtime".equals(testPath)) {
+
             // ★★G-39：**宿主运行时**（真实 quickjs-host.ts + 宿主壳生命周期转发 + 引擎内存账本）
             sb.append("【G-39 宿主运行时（QuickJS 单线程宿主：生命周期/事件循环/职责边界/内存账本）】\n");
             String hr = appHostRun();
@@ -1160,6 +1169,64 @@ public class MainActivity extends Activity {
             return out.toString(2);
         } catch (Exception e) {
             return "{\"ok\":false,\"error\":\"报告序列化失败\"}";
+        }
+    }
+
+    /**
+     * ★★★批次 43：**真实 superapp 运行**（App 端）——一次启动 + 导航序列，读数进报告。
+     *
+     * 路径：eval bundle-superapp.js（注入 HostBridge：caps + ScreenHost）→
+     *   `__proteusSuperappBootJson()`（路由栈 + createRouter → 进入入口 tab）→ 泵 job（await 续体）→
+     *   逐步导航（navigate verify / switchTab messages / back）。每步后读 `__proteusSuperappState()`。
+     */
+    private String superappRun() {
+        org.json.JSONObject out = new org.json.JSONObject();
+        try {
+            out.put("engine_available", QuickJsEngine.isAvailable());
+            if (!QuickJsEngine.isAvailable()) {
+                out.put("ok", false); out.put("error", "引擎未加载：" + QuickJsEngine.getLoadError());
+                return out.toString(2);
+            }
+            String bundle;
+            try (java.io.InputStream is = getAssets().open("bundle-superapp.js")) {
+                java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+                byte[] buf = new byte[8192]; int n;
+                while ((n = is.read(buf)) > 0) bos.write(buf, 0, n);
+                bundle = new String(bos.toByteArray(), "UTF-8");
+            }
+            out.put("bundle_chars", bundle.length());
+            final HostCapabilities caps = new HostCapabilities(this);
+            this.hostCaps = caps;
+            final ScreenHost sh = new ScreenHost(root);
+            this.screenHost = sh;
+            QuickJsEngine.EvalResult load = QuickJsEngine.evalWithHost(bundle, new HostBridge(caps, sh));
+            out.put("bundle_load_ok", load.ok);
+            if (!load.ok) { out.put("ok", false); out.put("error", "bundle eval 失败：" + load.error); return out.toString(2); }
+            // 启动：路由栈 + 宿主真建树（进入入口 tab）
+            QuickJsEngine.EvalResult boot = QuickJsEngine.eval("__proteusSuperappBootJson()");
+            out.put("boot_ok", boot.ok);
+            out.put("boot_error", boot.error == null ? "null" : boot.error);
+            out.put("boot_value", boot.value == null ? "null" : boot.value);
+            QuickJsEngine.nativeRunPendingJobs();   // 泵 await 续体（路由异步）
+            out.put("boot_state", QuickJsEngine.eval("__proteusSuperappState()").value);
+            // 导航序列：navigate('verify')（push）→ switchTab('messages') → back()
+            QuickJsEngine.eval("__proteusSuperappNav('verify')");
+            QuickJsEngine.nativeRunPendingJobs();
+            out.put("after_push_verify", QuickJsEngine.eval("__proteusSuperappState()").value);
+            QuickJsEngine.eval("__proteusSuperappNav('messages')");
+            QuickJsEngine.nativeRunPendingJobs();
+            out.put("after_switch_messages", QuickJsEngine.eval("__proteusSuperappState()").value);
+            QuickJsEngine.eval("__proteusSuperappBack()");
+            QuickJsEngine.nativeRunPendingJobs();
+            out.put("after_back", QuickJsEngine.eval("__proteusSuperappState()").value);
+            // 宿主记账（screen.stats）—— 证「真建树」
+            try {
+                out.put("host_stats", sh.invoke("screen.stats", new org.json.JSONObject()));
+            } catch (Throwable st) { out.put("host_stats_error", String.valueOf(st)); }
+            out.put("ok", true);
+            return out.toString(2);
+        } catch (Throwable t) {
+            return "{\"ok\":false,\"error\":\"" + (t.getClass().getSimpleName() + ": " + t.getMessage()).replace("\"", "'") + "\"}";
         }
     }
 
