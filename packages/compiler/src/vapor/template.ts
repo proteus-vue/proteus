@@ -391,40 +391,55 @@ export function parseStaticStyle(
 }
 
 /**
- * ★★★C1（2026-10-04 · App 三端对齐缺口 C1）：**SFC `<style>` 类规则 → 可匹配的规则表**。
+ * ★★★C1（2026-10-04 · App 三端对齐缺口 C1）：**SFC `<style>` 选择器规则 → 可匹配的规则表**。
  *
  * 【为什么需要】App 路径**没有 CSS 引擎**——`buildLayoutTemplate` 只吃节点上的 **inline `style`**；
  *   真实项目的样式多在 **`<style>` + `class`** 里 ⇒ App 端页面「有结构、无样式」。本族函数把 `<style>`
- *   里**可静态解析的类选择器**规则抽成结构，供模板节点按 `class`（+ 祖先链）匹配合并。
+ *   里**可静态解析的选择器**规则抽成结构，供模板节点按 `class` / `tag`（+ 祖先链）匹配合并。
  *
  * 【支持的选择器子集（如实，不假装全支持）】
- *   · 单一/复合类选择器：`.a` · `.a.b`（同元素须同时有这些类）；
- *   · 后代/子组合：`.a .b`（后代）· `.a > .b`（直接子）——用**祖先类链**匹配；
- *   · 其余（伪类 `:` / 属性 `[x]` / 元素/`*` / `,` 分组 / `+`~` 兄弟 / `@media` 等）⇒ **整条跳过 + 诊断**。
+ *   · 类型（元素）选择器：`h3` / `code`（按节点原始 tag 匹配）；可与类复合：`p.foo`；
+ *   · 类选择器：`.a` · 复合 `.a.b`（同元素须同时有这些类）；
+ *   · 后代/子组合：`.a .b`（后代）· `.a > .b`（直接子）——用**祖先链**（tag+class）匹配；
+ *   · **跳过**：伪类 `:` / 伪元素 `::` / 属性 `[x]` / `*` / `+`~` 兄弟 / `@media`——
+ *     `@keyframes` 块整体**不算选择器**（其 `from/to/0%` 不是选择器——旧实现会误当元素选择器，已修）。
  *   ★scoped：规则里的类名带后缀（`.a-data-v-x`）⇒ 抽出时**去后缀**（`stripScopeSuffix`），与元素原始类名对齐。
  * 【层叠】规则**按源序**依次 Object.assign（同属性后声明胜）——★修正了"按 class 属性序"的错误层叠。
  * 【诚实边界】无**特异性**权重（只按源序）· 无继承 · 只静态类（动态 `:class` 值形态不可展开）。
  */
+export interface ClassStyleSegment {
+  /** 该段要求的类名集合（复合 `.a.b` ⇒ `['a','b']`；可空） */
+  classes: string[]
+  /** 该段要求的类型（元素）名（`h3` / `code`；可空） */
+  tag?: string
+}
+
 export interface ClassStyleRule {
-  /** 每段 = 该段要求的类名集合（复合 `.a.b` ⇒ `['a','b']`） */
-  segments: string[][]
+  /** 选择器链（每段 = tag 和/或类集） */
+  segments: ClassStyleSegment[]
   /** 段间组合符（长度 = segments.length - 1；空格 = 后代、`>` = 直接子）——用 string[] 避免泛型嵌套歧义 */
   combinators: string[]
   /** 该规则折叠出的引擎字段声明（源序） */
   decls: Record<string, unknown>
 }
 
-/** 解析 `<style>` 文本 → 类规则表（源序）；不支持的整条跳过并计数（调用方决定是否诊断） */
+/** 解析 `<style>` 文本 → 选择器规则表（源序）；不支持的整条跳过并计数（调用方决定是否诊断） */
 export function parseClassRules(css: string): { rules: ClassStyleRule[]; skipped: number } {
   const rules: ClassStyleRule[] = []
   let skipped = 0
-  const body = css.replace(/\/\*[\s\S]*?\*\//g, '')
+  // ★先剔除 `@keyframes` 块（含嵌套 `{}`）——其 `from/to/0%` 不是选择器（旧实现误当元素选择器 ⇒ 噪音）。
+  const noKf = stripAtRuleBlocks(css.replace(/\/\*[\s\S]*?\*\//g, ''), 'keyframes')
   const ruleRe = /([^{}]+)\{([^{}]*)\}/g
   let m: RegExpExecArray | null
-  while ((m = ruleRe.exec(body))) {
+  while ((m = ruleRe.exec(noKf))) {
     const selector = m[1]!.trim()
     const decls = m[2]!.trim()
     if (!decls || !selector) continue
+    if (selector.startsWith('@')) {
+      // 其余 at-rule（@media/@supports/@font-face…）——整条跳过（诚实计数）
+      skipped++
+      continue
+    }
     // 分组选择器 `a, b`：逐条拆（只保留可解析的）
     for (const one of selector.split(',')) {
       const parsed = parseSelectorChain(one.trim())
@@ -440,15 +455,41 @@ export function parseClassRules(css: string): { rules: ClassStyleRule[]; skipped
   return { rules, skipped }
 }
 
-/** 解析单条选择器为「段 + 组合符」链；不支持的形态返回 null（伪类/属性/元素/`*`/兄弟等） */
-function parseSelectorChain(sel: string): { segments: string[][]; combinators: Array<' ' | '>'> } | null {
+/** 剔除 `@<name> … { … }` 块（含嵌套大括号——`@keyframes` 的关键帧块是嵌套的） */
+function stripAtRuleBlocks(css: string, name: string): string {
+  const re = new RegExp(`@${name}[^{}]*\\{`, 'i')
+  let out = css
+  let m: RegExpExecArray | null
+  while ((m = re.exec(out))) {
+    const start = m.index
+    // 从 `{` 起做深度匹配找配对 `}`
+    let depth = 0
+    let end = -1
+    for (let i = out.indexOf('{', start); i < out.length; i++) {
+      if (out[i] === '{') depth++
+      else if (out[i] === '}') {
+        depth--
+        if (depth === 0) {
+          end = i
+          break
+        }
+      }
+    }
+    if (end < 0) break
+    out = out.slice(0, start) + out.slice(end + 1)
+  }
+  return out
+}
+
+/** 解析单条选择器为「段 + 组合符」链；不支持的形态返回 null（伪类/属性/`*`/兄弟等） */
+function parseSelectorChain(sel: string): { segments: ClassStyleSegment[]; combinators: Array<' ' | '>'> } | null {
   if (!sel) return null
   // 不支持：伪类/伪元素、属性选择器、兄弟组合、插值、通配
   if (/[:[\]*]|\+~/.test(sel)) return null
   // 按 `>`（子）与空白（后代）切段；先统一 `A>B` → `A > B`
   const normalized = sel.replace(/\s*>\s*/g, ' > ')
   const parts = normalized.split(/\s+/).filter(Boolean)
-  const segments: string[][] = []
+  const segments: ClassStyleSegment[] = []
   const combinators: Array<' ' | '>'> = []
   for (const part of parts) {
     if (part === '>') {
@@ -456,34 +497,42 @@ function parseSelectorChain(sel: string): { segments: string[][]; combinators: A
       combinators[segments.length - 1] = '>'
       continue
     }
-    // 段必须是类（可复合）：`.a.b` ⇒ ['a','b']；含元素/其它 ⇒ 不支持
+    // 段：可选**类型名** + 零或多类（`.a.b` ⇒ classes=['a','b']；`h3` ⇒ tag='h3'；`p.foo` ⇒ tag='p' + ['foo']）
     const classes = [...part.matchAll(/\.([A-Za-z_][\w-]*)/g)].map((x) => stripScopeSuffix(x[1]!))
-    if (classes.length === 0) return null // 元素选择器 / 裸标签 —— 不支持
-    // 段内除了类名不该有别的东西（如 `a.foo`：`a` 是元素 ⇒ 不支持，保守跳过）
-    const residual = part.replace(/\.[A-Za-z_][\w-]*/g, '')
-    if (residual.length > 0) return null
+    const tagPart = part.replace(/\.[A-Za-z_][\w-]*/g, '')
+    // 类型名合法形态：单个标识符（字母开头）；其余（含 `#id`、残留符号）⇒ 不支持
+    if (tagPart && !/^[A-Za-z][\w-]*$/.test(tagPart)) return null
+    if (!tagPart && classes.length === 0) return null // 空段
     if (segments.length > 0 && combinators[segments.length - 1] === undefined) combinators[segments.length - 1] = ' '
-    segments.push(classes)
+    segments.push(tagPart ? { classes, tag: tagPart } : { classes })
   }
   if (segments.length === 0) return null
   return { segments, combinators }
 }
 
-/** 该类名集是否满足某段要求（段要求的每个类都在集合里） */
-function segmentMatches(seg: string[], classes: Set<string>): boolean {
-  return seg.every((c) => classes.has(c))
+/** 节点匹配上下文：类集合 + 类型名（tag） */
+export interface StyleMatchNode {
+  classes: Set<string>
+  /** 节点原始 tag（如 `h3`/`code`/`div`/`p-button`）；用于类型选择器匹配 */
+  tag?: string
+}
+
+/** 该节点是否满足某段要求（段的每个类都在集合里 + tag 相符） */
+function segmentMatches(seg: ClassStyleSegment, node: StyleMatchNode): boolean {
+  if (seg.tag && seg.tag !== node.tag) return false
+  return seg.classes.every((c) => node.classes.has(c))
 }
 
 /**
- * 按**祖先类链 + 自身类**匹配规则表，返回合并后的声明（源序叠加：后声明胜）。
+ * 按**祖先链 + 自身**（tag+class）匹配规则表，返回合并后的声明（源序叠加：后声明胜）。
  * @param rules parseClassRules 产物
- * @param ancestors 祖先类链（根 → 父；每项是该祖先的类集合）
- * @param self 本节点的类集合
+ * @param ancestors 祖先链（根 → 父）
+ * @param self 本节点
  */
 export function resolveClassStyles(
   rules: ClassStyleRule[],
-  ancestors: Array<Set<string>>,
-  self: Set<string>,
+  ancestors: StyleMatchNode[],
+  self: StyleMatchNode,
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   for (const rule of rules) {
@@ -494,7 +543,7 @@ export function resolveClassStyles(
 }
 
 /** 选择器链匹配（从右往左：自身匹配末段，再按组合符回溯祖先） */
-function matchChain(rule: ClassStyleRule, ancestors: Array<Set<string>>, self: Set<string>): boolean {
+function matchChain(rule: ClassStyleRule, ancestors: StyleMatchNode[], self: StyleMatchNode): boolean {
   const { segments, combinators } = rule
   const last = segments.length - 1
   if (!segmentMatches(segments[last]!, self)) return false
@@ -533,15 +582,17 @@ export function parseClassStyles(
   const { rules, skipped } = parseClassRules(css)
   const out: Record<string, Record<string, unknown>> = {}
   for (const r of rules) {
-    if (r.segments.length === 1 && r.segments[0]!.length === 1) {
-      const name = r.segments[0]![0]!
+    // 兼容旧形态：只收「单段、纯类」规则（`segments[0]` 无 tag 且恰一个类）
+    const seg0 = r.segments[0]
+    if (r.segments.length === 1 && seg0 && !seg0.tag && seg0.classes.length === 1) {
+      const name = seg0.classes[0]!
       out[name] = { ...(out[name] ?? {}), ...r.decls }
     }
   }
   if (skipped > 0 && pushDiag) {
     pushDiag(
-      `<style> 中有 ${skipped} 条**不支持的选择器**规则被跳过（支持：类选择器 + 后代/子组合）`,
-      'App 端无 CSS 引擎：伪类/属性/元素选择器等暂不支持；把关键样式改为类选择器或 inline style，或保留 Web 端渲染',
+      `<style> 中有 ${skipped} 条**不支持的选择器**规则被跳过（支持：类/元素选择器 + 后代/子组合）`,
+      'App 端无 CSS 引擎：伪类/属性/兄弟/`@media` 等暂不支持；把关键样式改为类/元素选择器或 inline style，或保留 Web 端渲染',
     )
   }
   return out
@@ -800,7 +851,7 @@ export function buildLayoutTemplate(
      * ★C1（2026-10-04）：**祖先类链**（根 → 父；每项是那个祖先的类集合）——用于选择器组合匹配
      *   （`.a .b` / `.a > .b`）。递归时把当前元素的类追加进来。
      */
-    ancestorClasses: Array<Set<string>> = [],
+    ancestorClasses: StyleMatchNode[] = [],
   ): void => {
     // ★★★**混排归一化**（2026-10-03 · 三处遍历的唯一入口）：`<p>文字 <b>x</b></p>` 这类
     //   元素+文本混排 ⇒ 每段连续文本合成一个 `p-text` 叶（自绘树里文本是元素属性，
@@ -921,18 +972,22 @@ export function buildLayoutTemplate(
       //   支持单类/复合/后代/子组合；层叠按样式表**源序**（修正"按 class 属性序"的错误层叠）。
       //   ★只处理**静态** class（ATTRIBUTE）；动态 `:class` 的值形态不可静态展开（既有诊断覆盖）。
       const selfClasses = new Set<string>()
+      /** ★C1：本节点的匹配上下文（tag + 类）——供选择器（含元素/类型）匹配与祖先链 */
+      let selfMatch: StyleMatchNode | undefined
       {
         const clsAttr = (n.props ?? []).find(
           (p) => p.type === 6 /* ATTRIBUTE */ && p.name === 'class' && p.value?.content,
         ) as { value?: { content?: string } } | undefined
         const clsStr = clsAttr?.value?.content?.trim()
         if (clsStr) for (const cn of clsStr.split(/\s+/).filter(Boolean)) selfClasses.add(cn)
-        if (selfClasses.size && classRules.length) {
-          Object.assign(style, resolveClassStyles(classRules, ancestorClasses, selfClasses))
+        // ★C1：元素/类型选择器按**节点原始 tag** 匹配（`tag` 已是 normalize 后的形态：`h3`/`code`/`p-button`）
+        selfMatch = { classes: selfClasses, tag }
+        if ((selfClasses.size || tag) && classRules.length) {
+          Object.assign(style, resolveClassStyles(classRules, ancestorClasses, selfMatch))
         }
       }
-      // 本元素的类并入祖先链，供子节点组合匹配（`.a .b` / `.a > .b`）
-      const childAncestors = selfClasses.size ? [...ancestorClasses, selfClasses] : ancestorClasses
+      // 本元素并入祖先链（tag+classes），供子节点组合匹配（`.a .b` / `h3 .x` / `.a > .b`）
+      const childAncestors = selfMatch ? [...ancestorClasses, selfMatch] : ancestorClasses
       let hasDynamicStyle = false
       // ★P3-5 宿主指令收集器（声明在 props 扫描**之前**——扫描循环里 push；挂在节点上见下）
       let hostDirectives: NonNullable<LayoutNode['directives']> | undefined
