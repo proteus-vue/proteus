@@ -75,7 +75,7 @@ export const APP_ENUM_VALUES: Record<string, readonly string[]> = {
 }
 
 /** 绘制字段（宿主自绘读这些键；模板照样要带上，否则挂载后无底色/无字色） */
-export const APP_PAINT_FIELDS = ['backgroundColor', 'color', 'fontSize', 'fontWeight', 'textAlign', 'lineHeight', 'textOverflow', 'letterSpacing', 'borderRadius', 'borderColor', 'borderWidth', 'opacity', 'boxShadow'] as const
+export const APP_PAINT_FIELDS = ['backgroundColor', 'color', 'fontSize', 'fontWeight', 'textAlign', 'lineHeight', 'textOverflow', 'letterSpacing', 'visibility', 'borderRadius', 'borderColor', 'borderWidth', 'opacity', 'boxShadow'] as const
 const PAINT_FIELDS = new Set<string>(APP_PAINT_FIELDS)
 /**
  * ★批次 4（CSS 兼容对齐）：`text-align` 的**封闭集**（App 自绘文本在盒内的水平对齐）。
@@ -670,6 +670,16 @@ export function parseStaticStyle(
         const n = numOf(rawVal)
         if (n === undefined) { pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 未解析（支持 normal / px / 数字）——已跳过`); continue }
         out[key] = n
+        markImportant(key)
+        continue
+      }
+      if (key === 'visibility') {
+        // ★批次 25（CSS 兼容对齐 · 以 Web 为基准）：`visibility`（visible/hidden）。
+        //   与 `display:none` 不同：盒子**仍占位**（保留布局），只是不绘制 ⇒ 宿主跳过绘制该节点及其子。
+        //   CSS 语义**可继承**（父 hidden ⇒ 子默认 hidden，子显式 visible 可覆盖）——见下方继承 walk。
+        const v = rawVal.trim().toLowerCase()
+        if (v !== 'visible' && v !== 'hidden') { pushDiag(`\`${rawKey}: ${rawVal}\` 不是合法值（仅 visible / hidden）——已跳过`); continue }
+        out[key] = v
         markImportant(key)
         continue
       }
@@ -2052,7 +2062,7 @@ export function buildLayoutTemplate(
                 `${tag}(id=${id}) \`:style\` 的键 \`${e.key}\` 不支持**动态**更新` +
                   `（内核通道为数值几何；字符串类布局值/未知绘制字段不可动态）`,
                 `请把 \`${e.key}\` 放静态 \`style\`（值固定时），或改用受支持的键` +
-                  `（布局数值键 + 绘制键 backgroundColor/color/fontSize/fontWeight/textAlign/lineHeight/textOverflow/letterSpacing/borderRadius/borderColor/borderWidth/opacity）`,
+                  `（布局数值键 + 绘制键 backgroundColor/color/fontSize/fontWeight/textAlign/lineHeight/textOverflow/letterSpacing/visibility/borderRadius/borderColor/borderWidth/opacity）`,
                 'VAPOR_STYLE_KEY_UNSUPPORTED',
               )
             }
@@ -2212,6 +2222,10 @@ export function buildLayoutTemplate(
         if (style[f] === undefined && inherited[f] !== undefined) style[f] = inherited[f]
         if (style[f] !== undefined) childInherited[f] = style[f]
       }
+      // ★批次 25（visibility 继承 —— 语义与文本字段略异）：父 hidden ⇒ 子默认 hidden；
+      //   子**显式** visible 可**覆盖**为可见（CSS 规定）。⇒ 单独处理，不并入 APP_INHERITABLE_FIELDS。
+      if (style.visibility === undefined && inherited.visibility !== undefined) style.visibility = inherited.visibility
+      if (style.visibility !== undefined) childInherited.visibility = style.visibility
       const node: LayoutNode = { id, parentId, tag, style }
       if (nodeListId !== undefined) node.listId = nodeListId
       if (isComponentTag) node.component = tag

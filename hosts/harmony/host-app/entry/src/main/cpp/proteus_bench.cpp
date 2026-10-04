@@ -4267,6 +4267,9 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
         double id = -1; jnum(it.c_str(), it.size(), "id", &id);
         auto ri = rectMap.find((int)id); if (ri == rectMap.end()) continue;
         const Rect& r = ri->second;
+        // ★批次 25（CSS 兼容对齐 · 以 Web 为基准）：visibility:hidden ⇒ 仍占位、不绘制
+        std::string visv; jstr(it.c_str(), it.size(), "visibility", &visv);
+        const bool isHidden = (visv == "hidden");
         uint32_t bg = 0; std::string bgCss; if (jstr(it.c_str(), it.size(), "backgroundColor", &bgCss)) bg = hexToArgb(bgCss);
         double radius = 0; jnum(it.c_str(), it.size(), "borderRadius", &radius);
         { double rp = 0; jnum(it.c_str(), it.size(), "borderRadiusPct", &rp); if (rp > 0) radius = rp * (r.w < r.h ? r.w : r.h); } // ★批次 18
@@ -4277,6 +4280,7 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
         uint32_t tc = 0xFFFFFFFFu; std::string tcCss; if (jstr(it.c_str(), it.size(), "color", &tcCss)) tc = hexToArgb(tcCss);
         // ★批次 5：uniform 边框（宽度 + 颜色）
         double bw = 0; jnum(it.c_str(), it.size(), "borderWidth", &bw);
+        if (isHidden) { bg = 0; radius = 0; text.clear(); bw = 0; }   // ★批次 25：hidden ⇒ 不绘制
         uint32_t bc = 0; std::string bcCss; if (jstr(it.c_str(), it.size(), "borderColor", &bcCss)) bc = hexToArgb(bcCss);
         char head[320];
         snprintf(head, sizeof(head), "%s{\"kind\":\"background\",\"x\":%.2f,\"y\":%.2f,\"w\":%.2f,\"h\":%.2f,\"color\":%u,\"radius\":%.2f",

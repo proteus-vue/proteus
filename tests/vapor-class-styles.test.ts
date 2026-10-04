@@ -333,6 +333,29 @@ describe('★C1 最小切片 · SFC <style> 单类规则 → class→节点样�
     expect(d.length > 0, '非法值诊断').toBe(true)
   })
 
+  it('★⑦m visibility（批次 25 · ★基准 = Web）：hidden/visible + 继承 + 覆盖', () => {
+    // 【为什么（以 web 为基准）】visibility:hidden 保留布局（≠display:none）；且可继承、子 visible 可覆盖。
+    const s1 = parseStaticStyle('visibility: hidden', () => {})
+    expect((s1 as { visibility?: string }).visibility, 'hidden').toBe('hidden')
+    const d: string[] = []
+    parseStaticStyle('visibility: collapse', (m: string) => d.push(m))
+    expect(d.length > 0, 'collapse 诊断').toBe(true)
+    // 继承 + 覆盖：父 hidden ⇒ 子继承；子显式 visible 覆盖
+    const sfc = `<template>
+      <view class="gone"><text>父隐藏</text><text class="show">子覆盖</text></view>
+    </template>
+    <style>
+      .gone { visibility: hidden }
+      .show { visibility: visible }
+    </style>`
+    const r = buildLayoutTemplate(sfc, 'vis-inherit.vue')
+    const textNodes = r.template.nodes.filter((n) => (n as { text?: string }).text)
+    const inherited = textNodes.find((n) => (n as { text?: string }).text === '父隐藏')
+    const overridden = textNodes.find((n) => (n as { text?: string }).text === '子覆盖')
+    expect((inherited?.style as { visibility?: string })?.visibility, '子继承父 hidden').toBe('hidden')
+    expect((overridden?.style as { visibility?: string })?.visibility, '子 visible 覆盖').toBe('visible')
+  })
+
   it('★⑧ 元素/类型选择器 + @keyframes 跳过（C1 收尾）', () => {
     // 【真项目形态】examples 有 9 处元素选择器（h3/code…）+ 6 处 @keyframes 关键帧被误当选择器
     const sfc = `<template>

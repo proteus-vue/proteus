@@ -9001,6 +9001,41 @@
           "textAlign": "center",
           "text": "aspect-ratio 16/9",
           "semantic": "div"
+        },
+        {
+          "id": 64,
+          "parentId": 0,
+          "margin": {
+            "top": 16,
+            "bottom": 16
+          },
+          "marginAuto": {
+            "right": true,
+            "left": true
+          },
+          "textAlign": "center",
+          "semantic": "div"
+        },
+        {
+          "id": 65,
+          "parentId": 64,
+          "height": 24,
+          "backgroundColor": "#ff6b9d",
+          "visibility": "hidden",
+          "fontSize": 12,
+          "textAlign": "center",
+          "text": "visibility:hidden\uFF08\u5360\u4F4D\u4E0D\u663E\u793A\uFF09",
+          "semantic": "div"
+        },
+        {
+          "id": 66,
+          "parentId": 64,
+          "height": 24,
+          "color": "#888",
+          "fontSize": 12,
+          "textAlign": "center",
+          "text": "\u7236hidden",
+          "semantic": "div"
         }
       ]
     },

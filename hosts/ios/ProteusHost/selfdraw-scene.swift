@@ -638,6 +638,7 @@ final class SelfDrawView: UIView {
             applyBorder(tl, style: style)
             applyShadow(tl, style: style)
             SelfDrawBridge.applyPaintHint(tl, style: style)
+            applyVisibility(tl, style: style)
             return tl
         }
         let layer = CALayer()
@@ -786,6 +787,7 @@ final class SelfDrawView: UIView {
                 applyClip(nodeId: nodeId, layer: layer, params: base)
             }
         }
+        applyVisibility(layer, style: style)
         return layer
     }
 
@@ -3010,6 +3012,12 @@ final class SelfDrawView: UIView {
         return NSAttributedString(string: text, attributes: [
             .kern: ls, .font: font, .foregroundColor: UIColor(cgColor: color),
         ])
+    }
+
+    /// ★批次 25（CSS 兼容对齐 · 以 Web 为基准）：`visibility:hidden` ⇒ 层**仍占位、不显示**。
+    ///   编译器已按继承把 hidden 传到全部后代 ⇒ 只需看本节点自身；CALayer 子层随父隐藏。
+    private func applyVisibility(_ layer: CALayer, style: [String: Any]) {
+        layer.isHidden = (style["visibility"] as? String) == "hidden"
     }
 
     /// ★批次 5（CSS 兼容对齐 · 边框）：uniform 边框 → `CALayer.borderWidth/borderColor`。
