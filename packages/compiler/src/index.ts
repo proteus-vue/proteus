@@ -96,6 +96,12 @@ export {
   parsePaintDeclAttr,
   isPaintDeclAttr,
   compileEvents,
+  // ★App 端 CSS 支持面 SSOT（2026-10-04：对照矩阵 / check:app-css-surface 消费）
+  APP_LAYOUT_FIELDS,
+  APP_PAINT_FIELDS,
+  APP_EDGE_FIELDS,
+  APP_DERIVED_FIELDS,
+  APP_SPECIAL_FIELDS,
 } from './vapor'
 export type {
   ReactiveSource,

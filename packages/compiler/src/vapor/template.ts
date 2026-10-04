@@ -42,14 +42,30 @@ import { stylePropKeyFromExpr } from './deps'
 //   这里 re-export 便于 `proteus explain` 等工具从编译器侧一并取用。
 export type { LayoutTemplate, LayoutNode, ListTemplate, TextSegment } from '@proteus-vue/slot-runtime'
 
-/** 静态样式里**引擎认的**字段（其余（如 paint.*）由宿主绘制读，不进核心） */
-const LAYOUT_FIELDS = new Set([
+/**
+ * 静态样式里**引擎认的**字段（其余（如 paint.*）由宿主绘制读，不进核心）。
+ * ★★App 端 CSS 支持面 SSOT（2026-10-04）：数组形态**导出**（供三门禁对照矩阵消费）——
+ *   Set 由数组构造 ⇒ 单一来源（不会出现"表改了、Set 没改"的分叉）。
+ *   ★诚实边界：这是 **App（Vapor/selfdraw）编译期折叠面**——比 Web/MP 的 CSS 引擎面小得多
+ *   （无选择器/层叠/伪类/媒体查询/grid/box-shadow）。App 折叠面的属性名**与 CSS 同名**，
+ *   值仅收 px/数字（宽高另支持百分比 → 比例字段）。对照矩阵见
+ *   `docs/generated/app-css-surface.md`（`pnpm check:app-css-surface` 生成 + 门禁）。
+ */
+export const APP_LAYOUT_FIELDS = [
   'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight',
   'margin', 'padding', 'flexDirection', 'justifyContent', 'alignItems', 'alignSelf',
   'flexGrow', 'flexShrink', 'flexBasis', 'gap', 'display', 'position', 'top', 'left', 'overflow',
-])
+] as const
+const LAYOUT_FIELDS = new Set<string>(APP_LAYOUT_FIELDS)
 /** 绘制字段（宿主自绘读这些键；模板照样要带上，否则挂载后无底色/无字色） */
-const PAINT_FIELDS = new Set(['backgroundColor', 'color', 'fontSize', 'borderRadius', 'borderColor', 'borderWidth', 'opacity'])
+export const APP_PAINT_FIELDS = ['backgroundColor', 'color', 'fontSize', 'borderRadius', 'borderColor', 'borderWidth', 'opacity'] as const
+const PAINT_FIELDS = new Set<string>(APP_PAINT_FIELDS)
+/** 四边简写字段（`margin`/`padding` → 结构化 `{top,right,bottom,left}`） */
+export const APP_EDGE_FIELDS = ['margin', 'padding'] as const
+/** 百分比宽高折叠出的**比例字段**（App 端原生支持 `widthRatio`/`heightRatio`；非长度、不乘密度） */
+export const APP_DERIVED_FIELDS = ['widthRatio', 'heightRatio'] as const
+/** 特殊透传键（App 两内核恒 border-box ⇒ `box-sizing` 只作忠实记录、无副作用） */
+export const APP_SPECIAL_FIELDS = ['boxSizing'] as const
 
 /**
  * ★★**结构化绘制声明**（2026-10-01 · 绘制通道补齐）——`style="{...}"` 装不下的那些通道，
@@ -243,7 +259,7 @@ const PAINT_DECL_KEY: Record<string, string> = {
   'svg-path-to': 'svgPathTo',
 }
 /** 四边缩写属性（`margin-left` ⇒ `margin.left`） */
-const EDGE_FIELDS = new Set(['margin', 'padding'])
+const EDGE_FIELDS = new Set<string>(APP_EDGE_FIELDS)
 
 const kebabToCamel = (s: string): string => s.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase())
 
