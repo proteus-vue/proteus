@@ -152,6 +152,24 @@ if [ -n "$READY_LINE" ]; then
     echo "  ⚠ 未见 PROTEUS_APP_SCREEN_COMPOSITE 读数——跳过"
   fi
 
+  # ── 6.48 ★★★App 三端对齐 · 鸿蒙真实触摸（2026-10-04）：`uitest uiInput` 系统输入栈真注入 ──
+  #   链路：uitest uiInput click（物理 px）→ ArkTS `.onTouch`（vp 坐标 + 真时间戳）→ `appScreenHitAt`
+  #   （保留的合成内核树 hitTest）→ 累计进 app-screen-composite.json。与 Android 真 MotionEvent、
+  #   iOS `classifyAndEmit` 同族（真事件驱动交互，非装置内直调命中）。
+  if [ -f "$RESULTS/app-screen-composite.json" ]; then
+    HDC shell "uitest uiInput click 660 700" >/dev/null 2>&1
+    HDC shell "uitest uiInput click 400 1200" >/dev/null 2>&1
+    HDC shell "uitest uiInput click 900 1800" >/dev/null 2>&1
+    if bash "$WAIT_SH" --cmd "bash '$HERE/hdc.sh' shell 'hilog -x | grep -q PROTEUS_APP_TOUCH '" --timeout 15 --interval 2; then
+      TOUCH_DEV="/data/app/el2/100/base/dev.proteus.host/haps/entry/files/app-screen-composite.json"
+      if HDC file recv "$TOUCH_DEV" "$RESULTS/app-screen-composite.json" >/dev/null 2>&1; then
+        echo "  ✓ 鸿蒙 App 真触摸注入（uitest uiInput）→ 合成树读数：$(sed -n 's/.*\"real_touch_hits\":\([0-9]*\).*/real_touch_hits=\1/p' "$RESULTS/app-screen-composite.json")"
+      fi
+    else
+      echo "  ⚠ 真触摸未上报（PROTEUS_APP_TOUCH 未见）——查看：bash hosts/harmony/hdc.sh shell 'hilog -x | grep PROTEUS_APP_TOUCH'"
+    fi
+  fi
+
   # ── 6.5 ★探针集（命中 / 复用池 / 结构变更 / 文本通道 / SFC 压力）——与 Android 能力域对齐 ──
   PROBE_LOG="$(HDC shell "hilog -x | grep -E 'PROTEUS_HIT_PROBE \{|PROTEUS_RECYCLE \{|PROTEUS_SPLICE \{|PROTEUS_TEXT \{|PROTEUS_SCROLL_DONE|PROTEUS_KERNELANIM \{|PROTEUS_MEM \{|PROTEUS_SFCSTRESS \{|PROTEUS_JSVM \{|PROTEUS_VAPOR \{|PROTEUS_PLATFORMANIM_END \{|PROTEUS_MOUNTVIRT \{|PROTEUS_HOSTRT_DONE \{|PROTEUS_SHELLINSTALL \{|PROTEUS_SHELLEVENT \{|PROTEUS_SCROLL_CORE \{|PROTEUS_PLATFORMANIM \{|PROTEUS_GESTURE_INSTALL_JS \{|PROTEUS_FONTFAMILY_PROBE \{' | tail -23" 2>/dev/null)"
   echo

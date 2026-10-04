@@ -21,9 +21,14 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createRequire } from 'node:module'
+import { COMPOSITE_OK, REAL_TOUCH_OK, realTouchMissingField } from './lib/app-composite-verdict.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const requireFromRepo = createRequire(import.meta.url)
+
+/** 违规收集（★必须先于下方设备腿块声明——设备腿会 push；此前声明在文件后段，
+ *   靠"所有腿都过 ⇒ 不 push"侥幸不炸，一旦某腿红了就 `Cannot access before initialization`）。 */
+const problems = []
 
 // 契约 SSOT（编译器导出）——避免在门禁里写第二份枚举清单（本仓"同一事实一处"纪律）
 let APP_ENUM_VALUES
@@ -89,28 +94,35 @@ const HEX_COLOR_RE = /^#[0-9a-f]{3}$|^#[0-9a-f]{6}$|^#[0-9a-f]{8}$/i
   }
 }
 
-/* ── ★★★设备腿（视觉合成）：把 App 屏内容真画到屏上 ──
+/* ── ★★★设备腿（视觉合成 + 真实触摸）：把 App 屏内容真画到屏上，并由**真实触摸事件**驱动命中 ──
  *   Android：hosts/android/results/app-screen-composite.json（复用 VaporRenderHost 树→指令→自绘；
- *            判据 painted_samples>0 + content_nodes>0）
+ *            真触摸 = 进程内注入真 MotionEvent 序列 → `dispatchTouchEvent` → GestureDetector → report）
  *   iOS：hosts/ios/results/app-screen-composite.json（proteusSelfDraw.mount → CALayer + snapshot；
- *        判据 ok + content_nodes>0 + layer_count>0 + snapshot）── */
-for (const [label, rel, ok] of [
-  ['Android', 'hosts/android/results/app-screen-composite.json', (d) => d.ok && Number(d.painted_samples ?? 0) > 0 && Number(d.content_nodes ?? 0) > 0 && Number(d.hit_points_hit ?? 0) > 0],
-  ['iOS', 'hosts/ios/results/app-screen-composite.json', (d) => d.ok && Number(d.content_nodes ?? 0) > 0 && Number(d.layer_count ?? 0) > 0 && d.snapshot === true && Number(d.hit_points_hit ?? 0) > 0],
-  ['鸿蒙', 'hosts/harmony/results/app-screen-composite.json', (d) => d.ok && Number(d.content_nodes ?? 0) > 0 && Number(d.render_nodes ?? d.cmds ?? 0) > 0 && Number(d.hit_points_hit ?? 0) > 0],
+ *        真触摸 = 宿主喂 down→held→up → `classifyAndEmit` 分流器）
+ *   鸿蒙：`uitest uiInput` 系统输入栈真注入 → ArkTS `.onTouch` → `appScreenHitAt`（保留的合成内核树）
+ *   ★判据 SSOT 在 scripts/lib/app-composite-verdict.mjs（门禁与单测共用一份）。── */
+for (const [label, rel] of [
+  ['Android', 'hosts/android/results/app-screen-composite.json'],
+  ['iOS', 'hosts/ios/results/app-screen-composite.json'],
+  ['鸿蒙', 'hosts/harmony/results/app-screen-composite.json'],
 ]) {
   const cf = path.join(ROOT, rel)
   if (!fs.existsSync(cf)) continue
   try {
     const d = JSON.parse(fs.readFileSync(cf, 'utf-8'))
-    if (!ok(d)) {
+    if (!COMPOSITE_OK[label](d)) {
       problems.push(`[${rel}] ${label} 视觉合成未真上屏（${JSON.stringify(d)}）`)
-    } else {
-      const extra = label === 'Android'
-        ? `${Number(d.painted_samples)} 采样像素 · 命中 ${Number(d.hit_points_hit)} 点`
-        : label === 'iOS' ? `${Number(d.layer_count)} 层 + 命中 ${Number(d.hit_points_hit)} 点` : `${Number(d.cmds ?? d.render_nodes)} 渲染节点 + 命中 ${Number(d.hit_points_hit)} 点`
-      console.log(`  ✅ ${label} 视觉合成设备腿：真画屏（${Number(d.content_nodes)} 内容节点 → ${extra}）`)
+      continue
     }
+    if (!REAL_TOUCH_OK[label](d)) {
+      problems.push(`[${rel}] ${label} 未由真实触摸事件驱动（装置内直调不算；real_touch/${realTouchMissingField(label)} 缺失或为 0：${JSON.stringify(d)}）`)
+      continue
+    }
+    const extra = label === 'Android'
+      ? `${Number(d.painted_samples)} 采样像素 · 真触摸事件 ${Number(d.touch_events)} · 识别 tap ${Number(d.taps_recognized)} 次`
+      : label === 'iOS' ? `${Number(d.layer_count)} 层 · 真触摸 tap ${Number(d.taps_recognized)} 次`
+        : `${Number(d.cmds ?? d.render_nodes)} 渲染节点 · 真触摸命中 ${Number(d.real_touch_hits)} 次`
+    console.log(`  ✅ ${label} 视觉合成设备腿：真画屏 + 真触摸（${Number(d.content_nodes)} 内容节点 → ${extra}）`)
   } catch (e) {
     problems.push(`[${rel}] 读取失败：${e.message}`)
   }
@@ -134,7 +146,6 @@ if (targets.length === 0) {
   process.exit(0)
 }
 
-const problems = []
 let checkedPages = 0
 let checkedNodes = 0
 

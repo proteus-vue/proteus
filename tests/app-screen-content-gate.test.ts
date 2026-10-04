@@ -15,6 +15,7 @@ import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { COMPOSITE_OK, REAL_TOUCH_OK, realTouchMissingField } from '../scripts/lib/app-composite-verdict.mjs'
 
 const ROOT = path.resolve(__dirname, '..')
 const GATE = path.join(ROOT, 'scripts', 'check-app-screen-content.mjs')
@@ -101,5 +102,47 @@ describe('★App 屏内容产物门禁（内核契约静态校验）', () => {
     } finally {
       fs.rmSync(tmp, { recursive: true, force: true })
     }
+  })
+})
+
+// ★★★App 三端对齐 · 真实触摸判据（2026-10-04）——门禁与门禁单测**共用同一份判据**
+//   （scripts/lib/app-composite-verdict.mjs）。本组锁「装置内直调不算真实触摸」这条——
+//   上一轮合成页的"可命中"正是 dispatchHit/tapAt/hit_test 直调（绕过平台事件通道）。
+describe('★App 视觉合成 / 真实触摸判据（与门禁共用 SSOT）', () => {
+  it('真上屏：三端各自的合成读数齐备 ⇒ 过；缺一项 ⇒ 红', () => {
+    expect(COMPOSITE_OK.Android({ ok: true, painted_samples: 284, content_nodes: 51, hit_points_hit: 20 })).toBe(true)
+    expect(COMPOSITE_OK.Android({ ok: true, painted_samples: 0, content_nodes: 51, hit_points_hit: 20 })).toBe(false)
+    expect(COMPOSITE_OK.iOS({ ok: true, content_nodes: 51, layer_count: 51, snapshot: true, hit_points_hit: 20 })).toBe(true)
+    expect(COMPOSITE_OK.iOS({ ok: true, content_nodes: 51, layer_count: 51, snapshot: false, hit_points_hit: 20 })).toBe(false)
+    expect(COMPOSITE_OK['鸿蒙']({ ok: true, content_nodes: 51, cmds: 51, hit_points_hit: 20 })).toBe(true)
+    expect(COMPOSITE_OK['鸿蒙']({ ok: true, content_nodes: 51, cmds: 0, hit_points_hit: 20 })).toBe(false)
+  })
+
+  it('真实触摸：real_touch=true 且真事件读数 > 0 ⇒ 过', () => {
+    // Android：真 MotionEvent 序列（touch_events>0 + 识别 tap>0）
+    expect(REAL_TOUCH_OK.Android({ real_touch: true, touch_events: 60, taps_recognized: 20 })).toBe(true)
+    // iOS：真触摸序列经分流器（taps_recognized>0）
+    expect(REAL_TOUCH_OK.iOS({ real_touch: true, taps_recognized: 20 })).toBe(true)
+    // 鸿蒙：uitest uiInput 真注入（real_touch_hits>0）
+    expect(REAL_TOUCH_OK['鸿蒙']({ real_touch: true, real_touch_hits: 6 })).toBe(true)
+  })
+
+  it('装置内直调（real_touch 缺失 / 读数 0 / false）⇒ 判红——本轮新判据的破坏性验证', () => {
+    // real_touch 字段缺失（旧合成报告 = 装置内 dispatchHit 直调）
+    expect(REAL_TOUCH_OK.Android({ hit_points_hit: 20 })).toBe(false)
+    expect(REAL_TOUCH_OK.iOS({ hit_points_hit: 20 })).toBe(false)
+    expect(REAL_TOUCH_OK['鸿蒙']({ hit_points_hit: 20 })).toBe(false)
+    // 显式 real_touch=false（冒充：有装置内命中但无真事件）
+    expect(REAL_TOUCH_OK.Android({ real_touch: false, touch_events: 60, taps_recognized: 20 })).toBe(false)
+    expect(REAL_TOUCH_OK['鸿蒙']({ real_touch: false, real_touch_hits: 6 })).toBe(false)
+    // real_touch=true 但真事件读数为 0（事件没真进平台通道）
+    expect(REAL_TOUCH_OK.Android({ real_touch: true, touch_events: 0, taps_recognized: 0 })).toBe(false)
+    expect(REAL_TOUCH_OK['鸿蒙']({ real_touch: true, real_touch_hits: 0 })).toBe(false)
+  })
+
+  it('报错字段名随端不同（便于定位是哪端缺真事件读数）', () => {
+    expect(realTouchMissingField('鸿蒙')).toBe('real_touch_hits')
+    expect(realTouchMissingField('Android')).toContain('touch_events')
+    expect(realTouchMissingField('iOS')).toBe('taps_recognized')
   })
 })

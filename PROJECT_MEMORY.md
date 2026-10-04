@@ -15,9 +15,9 @@
 - **包规模**：**45 个 @proteus-vue/* npm 包**（+ `packages/layout-core-rust` = **cargo crate，非 npm 包**，故不计数）（★2026-09-29 layout-core = App 排版核心）（check:pkg 0 error · `pnpm check:stats` 校验 ✓；31→38 修正 → G-07 glass 39 → Skyline 收口 worklet 40 → ★2026-09-14 组件库拆包 `@proteus-vue/components` 41 → ★Vapor 线新增 `@proteus-vue/slot-runtime` 42 + `@proteus-vue/layout-core` 43 → ★2026-09-30 MA1 新增 `@proteus-vue/animation` 44；版本统一 0.3.0-beta.8，见「当前状态速览」）
 - **文档**：`docs/proteus-architecture.md`（L0 规约·真理来源）→ `docs/board-inventory.md`（全景索引）→ `docs/roadmap.md`（版本线）→ `roadmap-2-plan`（里程碑线）→ 各 plan
 
+## 当前状态速览（最近一次更新：**2026-10-04·（一四六）· **App 三端对齐 — 真实触摸事件对齐（B7，三端真事件驱动交互）**（决策 #492）——用户「感觉现在需要补齐真实触摸事件对齐了」。★**缺口**：合成页此前"可命中"是**装置内直调**（`dispatchHit`/`tapAt`/`hit_test`，绕过平台事件通道）⇒ 只证"内核能命中"，不证"真实触摸驱动交互"。★**实现（一条命中链）**：**Android** 注真 `MotionEvent`（DOWN+MOVE+UP）→ `dispatchTouchEvent` → 平台 `GestureDetector`；**iOS** 抽 `classifyAndEmit` 分流器 + `simulateTouch` 喂 down→held→up **按真实时长判型**；**鸿蒙** `uitest uiInput` 系统栈真注入 → ArkTS `.onTouch` → 保留的合成树 `appScreenHitAt`。★**真机证据**：Android 60 事件/20 tap · iOS 20 tap · 鸿蒙 6 命中。判据 SSOT `scripts/lib/app-composite-verdict.mjs`（门禁+单测共用），缺 `real_touch` ⇒ 红。★**顺带剪两真 bug**：门禁 `problems` TDZ（设备腿红了才炸）+ iOS 合成报告取回误放 launch 前（取旧件）。★全量 **5079/5079** 绿。★**App 全链（三端齐）**：路由→SFC→编译器→屏内容→executor→内核树→真画屏→转场逐帧→**真实触摸驱动交互**）★新会话以此为准
 ## 当前状态速览（最近一次更新：**2026-10-04·（一四五）· **App 三端对齐 — C1 收尾（元素选择器 + `@keyframes` 修正）**（决策 #491）——用户「继续」（回到最初点名的「CSS 全兼容」）。★**实现**：`parseClassRules` 段模型升级「**tag + classes**」——支持**元素/类型选择器**（`h3`/`code`/`p.foo`，按节点原始 tag 匹配，含祖先链）；**`@keyframes` 块整体剔除**（其 `from/to/0%` 不是选择器——旧实现会误当元素选择器）。★真项目 42/44 页有样式（元素选择器如 `.doc code`/`h3` 现生效）。测试 8 组（+元素/`@keyframes`）。★**仍未覆盖**（诚实）：伪类 `:hover`/属性/兄弟/`@media` · 继承/特异性不完备 · 动态 `:class`。★全量 **5075/5075** 绿。★**你最初点名的两类拦截条件（CSS 全兼容对齐 / 路由页面真正落地）至此完整收口**：App 三端全链（路由→SFC 含样式→编译器→屏内容→executor→内核树→真画屏→转场逐帧→可命中交互）**）★新会话以此为准
 ## 当前状态速览（最近一次更新：**2026-10-04·（一四四）· **App 三端对齐 — iOS/鸿蒙 交互上屏（三端渲染页全可命中）**（决策 #490）——用户「继续」。★承接 Android 命中：**iOS/鸿蒙 也接上"渲染页真机命中"**（三端齐 **20/20 命中**）。★iOS：`proteusSelfDraw.tapAt(x,y)`（内核 `proteus_layout_hit_test`）⇒ 20/20 · target=0。★鸿蒙：踩过一个真坑——**C++ 建树必须注入 `textMeasures`**（文本节点无高度 ⇒ 布局塌缩 ⇒ 命中全 miss），注入后 20/20 · target=9。门禁三端均加命中断言（破坏性验证过）。★**里程碑：App 三端「渲染页可命中交互」全对齐**（同一条内核 hitTest 路径）。★诚实边界：装置内点按（非真实触摸事件注入）。★全量 **5074/5074** 绿。★**全链现状（三端齐）**：路由→SFC（含类样式）→编译器→屏内容→executor→内核树→真画屏→转场逐帧→可命中交互**）★新会话以此为准
-## 当前状态速览（最近一次更新：**2026-10-04·（一四三）· **App 三端对齐 — Android 交互上屏（渲染页真机可命中交互）**（决策 #489）——用户「继续」。★承接三端视觉合成/anim：**给渲染出的页面加"真机点按命中"**——复用 `ProteusHostView.dispatchHit`（内核 `hitTest`，与真实触摸**同一条路径**）：合成探针在渲染页纵扫 20 点 ⇒ 真机 **20/20 命中 · target=0 · 冒泡链=3**（证明"渲染的页面可命中交互"，非只画不动）。门禁加命中断言（破坏性验证过）。★诚实边界：仅 Android 接了命中（iOS/鸿蒙 ⏳）；且是**装置内点按**（非真实触摸事件注入）。★全量 **5074/5074** 绿。★**App 三端全链现状**：项目路由→SFC（含类样式）→编译器→屏内容→executor→内核树→**真画屏**→**转场逐帧**→（Android）**可命中交互**。下一步：iOS/鸿蒙命中，或 C1 收尾**）★新会话以此为准
 
 
 
@@ -53,11 +53,11 @@
 |---|---|
 | `docs/project-memory-archive/2026-10.md` | 里程碑详细叙事（三十九～一四五）+ 状态速览历史栈（约 4.5k 行） |
 | `docs/project-memory-archive/2026-09.md` | 09 月全部叙事 + 柔性系统重组历史 + 2026-08 进度快照 + 已落地文件 + 09-19 验证状态（约 6.5k 行） |
-| `docs/project-memory-archive/decisions.md` | 决策链全文 #1–#491——按号检索 |
+| `docs/project-memory-archive/decisions.md` | 决策链全文 #1–#492——按号检索 |
 
 检索示例：`grep -n "2026-09-29\|判据建错靶" docs/project-memory-archive/2026-09.md`
 
-## 关键决策与文档偏差（#1–#491 → 归档速查）
+## 关键决策与文档偏差（#1–#492 → 归档速查）
 
 **全文在 `docs/project-memory-archive/decisions.md`**（按号检索：`grep -n "^290\." docs/project-memory-archive/decisions.md`）。
 决策号**只增不改号**（外部文档按号引用）；新决策追加到该文件末尾（号 +1）。

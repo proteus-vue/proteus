@@ -4067,6 +4067,70 @@ static napi_value AppStackExecutorProbe(napi_env env, napi_callback_info info) {
     napi_value r; napi_create_string_utf8(env, out.c_str(), out.size(), &r); return r;
 }
 
+/* ══════════════ App 三端对齐 · 鸿蒙视觉合成 + 真实触摸（2026-10-04） ══════════════
+ *
+ * 【要证明什么】App 屏内容（项目路由→真实 SFC→编译器）→ 内核树 → RenderCmd 真上屏；
+ *   且**真实触摸**（`uitest uiInput` 系统输入栈真注入 → ArkTS `.onTouch`）能驱动内核 hitTest。
+ * 【与上一版的分界】此前合成页的"可命中"是**装置内直调** `proteus_layout_hit_test`（绕过平台
+ *   事件通道）——只能证明内核能命中。本版保留内核树并暴露 `appScreenHitAt`，由**真触摸**喂坐标
+ *   ⇒ 与 Android 真 `MotionEvent`、iOS `classifyAndEmit` 真触摸序列同族（三端一致：真事件驱动交互）。
+ * 【落地形态】`AppScreenCommands` 建树后**保留句柄**（g_appTouchTree）供真实触摸复用（不再 destroy）；
+ *   ArkTS 默认场景 `attach + renderCommands` 真上屏；`.onTouch` 每个 DOWN → `appScreenHitAt(vp坐标)`。
+ */
+
+/** App 合成页的持久内核树（真实触摸命中用；`AppScreenCommands` 建、`AppScreenHitAt` 打） */
+static uint64_t g_appTouchTree = 0;
+static std::string g_appTouchPage;
+static std::string g_appTouchFilesDir;
+static int g_appTouchContentNodes = 0;
+static int g_appTouchCmdCount = 0;
+static int g_appTouchHitCount = 0;      // 装置内命中（合成时 20 点，向后兼容旧读数）
+static int g_appTouchHitFirst = -1;
+static int g_appTouchRealCount = 0;     // ★真实触摸事件数（.onTouch → appScreenHitAt）
+static int g_appTouchRealHits = 0;      // ★真实触摸命中数
+static int g_appTouchRealFirst = -1;    // ★首个真实命中目标
+
+/** 写 app-screen-composite.json（含装置内命中 + 真实触摸两套读数） */
+static void writeAppScreenComposite() {
+    if (g_appTouchFilesDir.empty()) return;
+    char sum[440];
+    snprintf(sum, sizeof(sum),
+             "{\"ok\":%s,\"page\":\"%s\",\"content_nodes\":%d,\"cmds\":%d,\"render_nodes\":%d,"
+             "\"hit_points_hit\":%d,\"hit_first_target\":%d,"
+             "\"real_touch\":true,\"touch_count\":%d,\"real_touch_hits\":%d,\"real_touch_first_target\":%d}",
+             g_appTouchCmdCount > 0 ? "true" : "false", g_appTouchPage.c_str(), g_appTouchContentNodes,
+             g_appTouchCmdCount, g_appTouchCmdCount, g_appTouchHitCount, g_appTouchHitFirst,
+             g_appTouchRealCount, g_appTouchRealHits, g_appTouchRealFirst);
+    std::string path = g_appTouchFilesDir + "/app-screen-composite.json";
+    FILE* f = fopen(path.c_str(), "w"); if (f) { fwrite(sum, 1, strlen(sum), f); fclose(f); }
+}
+
+/**
+ * ★★★真实触摸命中（ArkTS `.onTouch` 真注入坐标 → 内核 hitTest）——与 Android/iOS 同一条命中链。
+ * 入参 x/y 为 ArkTS 的 vp 坐标（与建树的 viewport 同空间）。出参：内核 hitTest 原样 JSON。
+ */
+static napi_value AppScreenHitAt(napi_env env, napi_callback_info info) {
+    size_t argc = 2; napi_value args[2] = {nullptr, nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    double x = 0, y = 0;
+    if (argc >= 2) { napi_get_value_double(env, args[0], &x); napi_get_value_double(env, args[1], &y); }
+    std::string rj = "{\"ok\":false,\"error\":\"未建树（先 AppScreenCommands）\"}";
+    if (g_appTouchTree != 0) {
+        char* raw = proteus_layout_hit_test(g_appTouchTree, (float)x, (float)y);
+        if (raw != nullptr) { rj = raw; proteus_layout_free_string(raw); }
+        g_appTouchRealCount++;
+        double t = -1;
+        if (jnum(rj.c_str(), rj.size(), "target", &t) && t >= 0) {
+            g_appTouchRealHits++;
+            if (g_appTouchRealFirst < 0) g_appTouchRealFirst = (int)t;
+        }
+        writeAppScreenComposite();
+        OH_LOG_Print(LOG_APP, LOG_INFO, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG,
+                     "PROTEUS_APP_TOUCH x=%{public}.2f y=%{public}.2f %{public}s", x, y, rj.c_str());
+    }
+    napi_value out; napi_create_string_utf8(env, rj.c_str(), rj.size(), &out); return out;
+}
+
 /**
  * ★★★App 三端对齐 · 鸿蒙视觉合成（2026-10-04）：**App 屏内容 → 内核树 → 渲染指令数组**。
  *
@@ -4112,30 +4176,33 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
     std::string req = "{\"viewport\":" + std::string(vpb) + ",\"nodes\":" + nodes + ",\"textMeasures\":" + measures + "}";
     uint64_t handle = proteus_layout_create(req.c_str());
     if (handle == 0) { napi_value o; napi_create_string_utf8(env, "[]", NAPI_AUTO_LENGTH, &o); return o; }
+    // ★★真实触摸（2026-10-04）：**保留句柄**供真实触摸（`.onTouch` → `appScreenHitAt`）复用
+    //   （旧版此处 `proteus_layout_destroy` ⇒ 句柄释放后无法由真触摸驱动命中）。
+    if (g_appTouchTree != 0) proteus_layout_destroy(g_appTouchTree);
+    g_appTouchTree = handle;
+    g_appTouchPage = page;
+    g_appTouchFilesDir = filesDir;
+    g_appTouchContentNodes = (int)nItems.size();
+    g_appTouchRealCount = 0; g_appTouchRealHits = 0; g_appTouchRealFirst = -1;
     char* rp = proteus_layout_rects(handle);
     std::string rects = rp ? rp : "{}";
     if (rp) proteus_layout_free_string(rp);
-    proteus_layout_destroy(handle);
     std::unordered_map<int, Rect> rectMap; parseRects(rects, rectMap);
-    // ★★★交互上屏（2026-10-04）：在渲染页（真内核树）上做真机命中（proteus_layout_hit_test）。
+    // ★装置内命中（20 点，用真实 rects 中心）——保留为**旧读数**（向后兼容）；真实触摸读数另计。
     //   ★命中点用**真实 rects 的中心**（几何真源——不猜坐标空间；本仓"命中必须与核心同源"纪律）。
-    int hitCount = 0, firstTarget = -1;
+    g_appTouchHitCount = 0; g_appTouchHitFirst = -1;
     {
-        uint64_t h2 = proteus_layout_create(req.c_str());
-        if (h2 != 0) {
-            int n = 0;
-            for (const auto& kv : rectMap) {
-                if (n >= 20) break;
-                float cx = kv.second.x + kv.second.w * 0.5f;
-                float cy = kv.second.y + kv.second.h * 0.5f;
-                char* hRaw = proteus_layout_hit_test(h2, cx, cy);
-                if (hRaw) {
-                    std::string hs = hRaw; proteus_layout_free_string(hRaw);
-                    double t = -1; if (jnum(hs.c_str(), hs.size(), "target", &t) && t >= 0) { hitCount++; if (firstTarget < 0) firstTarget = (int)t; }
-                }
-                n++;
+        int n = 0;
+        for (const auto& kv : rectMap) {
+            if (n >= 20) break;
+            float cx = kv.second.x + kv.second.w * 0.5f;
+            float cy = kv.second.y + kv.second.h * 0.5f;
+            char* hRaw = proteus_layout_hit_test(handle, cx, cy);
+            if (hRaw) {
+                std::string hs = hRaw; proteus_layout_free_string(hRaw);
+                double t = -1; if (jnum(hs.c_str(), hs.size(), "target", &t) && t >= 0) { g_appTouchHitCount++; if (g_appTouchHitFirst < 0) g_appTouchHitFirst = (int)t; }
             }
-            proteus_layout_destroy(h2);
+            n++;
         }
     }
     std::vector<std::string> items = splitJsonObjects(nodes);
@@ -4160,14 +4227,10 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
         arr += "}"; emitted++;
     }
     arr += "]";
+    g_appTouchCmdCount = emitted;
     char lb[128]; snprintf(lb, sizeof(lb), "PROTEUS_APP_SCREEN_CMDS page=%s nodes=%d", page.c_str(), emitted);
     OH_LOG_Print(LOG_APP, LOG_INFO, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG, "%{public}s", lb);
-    if (!filesDir.empty()) {
-        char sum[300]; snprintf(sum, sizeof(sum), "{\"ok\":%s,\"page\":\"%s\",\"content_nodes\":%d,\"cmds\":%d,\"hit_points_hit\":%d,\"hit_first_target\":%d}",
-                 emitted > 0 ? "true" : "false", page.c_str(), (int)items.size(), emitted, hitCount, firstTarget);
-        std::string path = filesDir + "/app-screen-composite.json";
-        FILE* f = fopen(path.c_str(), "w"); if (f) { fwrite(sum, 1, strlen(sum), f); fclose(f); }
-    }
+    writeAppScreenComposite();
     napi_value out; napi_create_string_utf8(env, arr.c_str(), arr.size(), &out); return out;
 }
 
@@ -4186,6 +4249,7 @@ static napi_value BenchInit(napi_env env, napi_value exports) {
         {"vaporProbe", nullptr, VaporProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"screenContentProbe", nullptr, ScreenContentProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"appScreenCommands", nullptr, AppScreenCommands, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"appScreenHitAt", nullptr, AppScreenHitAt, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"appStackExecutorProbe", nullptr, AppStackExecutorProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"animCurveBezier", nullptr, AnimCurveBezier, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"hostRuntimeProbe", nullptr, HostRuntimeProbe, nullptr, nullptr, nullptr, napi_default, nullptr},

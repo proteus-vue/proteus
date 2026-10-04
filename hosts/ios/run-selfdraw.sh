@@ -315,20 +315,9 @@ if [ "$MODE" = "native-mix" ]; then REPORT_FILE="native-mix.json"; SNAP_FILE="na
 if [ "$MODE" = "vapor-ab" ]; then REPORT_FILE="vapor-ab.json"; SNAP_FILE="vapor-ab.png"; fi
 if [ "$MODE" = "vapor" ]; then REPORT_FILE="vapor.json"; SNAP_FILE="vapor.png"; fi
 # ★G-39：宿主运行时模式写独立报告（不污染既有产物命名）
-# ★★★App 三端对齐 · 视觉合成（2026-10-04）：取回合成报告 + PNG（真机真画屏证据）
-if [ "$MODE" = "app-stack" ]; then
-  xcrun devicectl device copy from --device "$UDID" --domain-type appDataContainer \
-    --domain-identifier "$BUNDLE_ID" --source "Documents/app-screen-composite.json" \
-    --destination "$HERE/results/app-screen-composite.json" >/dev/null 2>&1 || echo "  ⚠ 合成报告未取到"
-  # 快照名：优先 app-screen-composite.png，回退 selfdraw-final.png（JS 桥快照名可能被静态默认覆盖）
-  if ! xcrun devicectl device copy from --device "$UDID" --domain-type appDataContainer \
-      --domain-identifier "$BUNDLE_ID" --source "Documents/app-screen-composite.png" \
-      --destination "$HERE/results/app-screen-composite.png" >/dev/null 2>&1; then
-    xcrun devicectl device copy from --device "$UDID" --domain-type appDataContainer \
-      --domain-identifier "$BUNDLE_ID" --source "Documents/selfdraw-final.png" \
-      --destination "$HERE/results/app-screen-composite.png" >/dev/null 2>&1 || echo "  ⚠ 合成 PNG 未取到"
-  fi
-fi
+# ★★★App 三端对齐 · 视觉合成（2026-10-04）：合成报告（真画屏 + 真触摸）在 launch 之后的 ⑧ 段取回——
+#   ★此前误放在此处（launch **之前**）⇒ 取回的是**设备上上一轮**的报告（陈旧读数冒充新证据）。
+#     与"提交≠交付"同族：位置错了就没人报错。移到 ⑧（App 已退出 = 本轮报告已落盘）后取回。
 
 if [ "$MODE" = "host-runtime" ]; then REPORT_FILE="host-runtime.json"; SNAP_FILE="host-shell.json"; fi
 # ★M5：执行器场景两份报告（主 + 执行器；判据合并读）
@@ -530,6 +519,22 @@ if ! xcrun devicectl device copy from --device "$UDID" --domain-type appDataCont
   exit 7
 fi
 rm -f "$FETCH_ERR"
+# ★★★App 三端对齐 · 视觉合成 + 真触摸（2026-10-04）：取回合成报告 + PNG（真画屏 + 真触摸证据）。
+#   ★必须在 launch **之后**（App 已退出 = 本轮报告已落盘）取回——放 launch 之前会取到上一轮的旧件。
+if [ "$MODE" = "app-stack" ]; then
+  rm -f "$HERE/results/app-screen-composite.json"
+  xcrun devicectl device copy from --device "$UDID" --domain-type appDataContainer \
+    --domain-identifier "$BUNDLE_ID" --source "Documents/app-screen-composite.json" \
+    --destination "$HERE/results/app-screen-composite.json" >/dev/null 2>&1 || echo "  ⚠ 合成报告未取到"
+  # 快照名：优先 app-screen-composite.png，回退 selfdraw-final.png（JS 桥快照名可能被静态默认覆盖）
+  if ! xcrun devicectl device copy from --device "$UDID" --domain-type appDataContainer \
+      --domain-identifier "$BUNDLE_ID" --source "Documents/app-screen-composite.png" \
+      --destination "$HERE/results/app-screen-composite.png" >/dev/null 2>&1; then
+    xcrun devicectl device copy from --device "$UDID" --domain-type appDataContainer \
+      --domain-identifier "$BUNDLE_ID" --source "Documents/selfdraw-final.png" \
+      --destination "$HERE/results/app-screen-composite.png" >/dev/null 2>&1 || echo "  ⚠ 合成 PNG 未取到"
+  fi
+fi
 if [ "$MODE" = "app-stack" ]; then
   # ★M5：app-stack 报告是 `__proteusAppStackRun` 的**原样输出**（无 run_ts/build_id 字段）。
   #   新鲜度改由**退出口径**保证：`launch --console` 阻塞返回 = App 本进程已退出

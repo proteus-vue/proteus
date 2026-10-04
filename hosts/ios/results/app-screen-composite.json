@@ -5,6 +5,8 @@
   "layer_count" : 51,
   "ok" : true,
   "page" : "index",
+  "real_touch" : true,
   "snapshot" : true,
-  "snapshot_path" : "{\"path\":\"\\\/var\\\/mobile\\\/Containers\\\/Data\\\/Application\\\/F93AEF33-0389-46DC-BC1B-81B38C99E748\\\/Documents\\\/app-screen-composite.png\",\"ok\":true}"
+  "snapshot_path" : "{\"ok\":true,\"path\":\"\\\/var\\\/mobile\\\/Containers\\\/Data\\\/Application\\\/F2838F77-EB23-43EB-AEC7-6057860C6FD0\\\/Documents\\\/app-screen-composite.png\"}",
+  "taps_recognized" : 20
 }

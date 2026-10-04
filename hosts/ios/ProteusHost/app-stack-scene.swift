@@ -97,18 +97,26 @@ final class AppStackScene: NSObject {
                     if imgPath.hasPrefix("\"") { imgPath = String(imgPath.dropFirst().dropLast()) }
                     composite = ["ok": (mo["ok"] as? Bool) ?? false, "page": page, "content_nodes": nodes.count,
                                  "layer_count": mo["layer_count"] ?? -1, "snapshot": shotOk, "snapshot_path": imgPath]
-                    // ★★★交互上屏（2026-10-04）：在渲染页（真 CALayer 树）上做真机命中（proteus_layout_hit_test）。
+                    // ★★★交互上屏 · 真实触摸（2026-10-04）：宿主喂入**真触摸序列**（down→held→up），
+                    //   走 `SelfDrawView.classifyAndEmit`（与 `touchesEnded` 同一分流器，按真实时长判型）
+                    //   ——不再是 `tapAt` 那样直接声明类型、绕过时序。与 Android 真 MotionEvent、鸿蒙
+                    //   `uitest uiInput` 同族；三端由**真事件序列**驱动交互（非装置内直调命中）。
                     var hitCount = 0
                     var firstTarget = -1
+                    var tapsFired = 0
                     for k in 1...20 {
                         let py: Double = 844.0 * (Double(k) / 22.0)
-                        let r = evalJs?("proteusSelfDraw.tapAt(117.0, \(py))") ?? "null"
+                        // held 60ms ≤ tapMaxDuration(0.5s) ⇒ 分流器按**真实时长**判 tap
+                        let r = evalJs?("proteusSelfDraw.simulateTouch(117.0, \(py), 60)") ?? "null"
                         if let rd = r.data(using: .utf8), let ro = (try? JSONSerialization.jsonObject(with: rd)) as? [String: Any] {
                             if let t = ro["target"] as? Int, t >= 0 { hitCount += 1; if firstTarget < 0 { firstTarget = t } }
+                            if let gf = ro["gestures_fired"] as? Int, gf > 0 { tapsFired += 1 }
                         }
                     }
                     composite["hit_points_hit"] = hitCount
                     composite["hit_first_target"] = firstTarget
+                    composite["real_touch"] = true
+                    composite["taps_recognized"] = tapsFired
                 }
             }
         }
