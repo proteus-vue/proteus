@@ -64,6 +64,8 @@ if (!APP_ENUM_VALUES) {
 /** 已知的数值键（内核读顶层数值） */
 const NUMERIC_KEYS = ['width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight', 'top', 'left', 'gap', 'flexGrow', 'flexShrink', 'flexBasis', 'fontSize', 'borderRadius', 'borderWidth', 'opacity', 'widthRatio', 'heightRatio']
 const EDGE_KEYS = ['margin', 'padding']
+/** ★批次 17：margin 的逐边 auto 标记（对象；值为布尔） */
+const MARGIN_AUTO_KEY = 'marginAuto'
 /** 颜色键（内核 parse_css_color 只认 #RGB/#RRGGBB/#RRGGBBAA——rgb()/rgba() 会致整树建不起来） */
 const COLOR_KEYS = ['color', 'backgroundColor', 'borderColor']
 const HEX_COLOR_RE = /^#[0-9a-f]{3}$|^#[0-9a-f]{6}$|^#[0-9a-f]{8}$/i
@@ -266,6 +268,19 @@ for (const f of targets) {
               if (side in n[k] && !(typeof n[k][side] === 'number' && Number.isFinite(n[k][side]))) {
                 problems.push(`[${rel}] ${page}: 节点 ${n.id} ${k}.${side} 非有限数`)
               }
+            }
+          }
+        }
+      }
+      // ⑤c ★批次 17：marginAuto 必须为对象、逐边为布尔（内核映射 taffy auto）
+      if (MARGIN_AUTO_KEY in n && n[MARGIN_AUTO_KEY] !== undefined) {
+        const ma = n[MARGIN_AUTO_KEY]
+        if (typeof ma !== 'object' || ma === null) {
+          problems.push(`[${rel}] ${page}: 节点 ${n.id} ${MARGIN_AUTO_KEY} 非对象`)
+        } else {
+          for (const side of ['top', 'right', 'bottom', 'left']) {
+            if (side in ma && typeof ma[side] !== 'boolean') {
+              problems.push(`[${rel}] ${page}: 节点 ${n.id} ${MARGIN_AUTO_KEY}.${side} 非布尔`)
             }
           }
         }

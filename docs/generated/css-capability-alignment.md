@@ -63,7 +63,7 @@
 | layout | `width` | supported | supported | supported | L1 | 编译期折叠 | universal | px/数字 → 长度；百分比 → widthRatio（比例字段，非长度） |
 | layout | `height` | supported | supported | supported | L1 | 编译期折叠 | universal | px/数字 → 长度；百分比 → heightRatio |
 | layout | `min-width / max-width / min-height / max-height` | supported | supported | supported | L1 | 编译期折叠 | universal | px/数字 |
-| layout | `margin（+ 四边简写 + 1–4 值 shorthand）` | supported | supported | supported | L1 | 编译期折叠 | universal | px/数字 → {top,right,bottom,left}；1–4 值简写按 CSS 标准展开（`margin: 8px 0`；auto 的边忽略）；Web 探针取 margin-top 代表 |
+| layout | `margin（+ 四边简写 + 1–4 值 shorthand）` | supported | supported | supported | L1 | 编译期折叠 | universal | px/数字 → {top,right,bottom,left}；1–4 值简写按 CSS 标准展开（`margin: 8px 0`）；★批次 17：`auto`（`margin: 0 auto` 水平居中）折为逐边 `marginAuto` 标记 → 内核映射 taffy auto（此前静默丢弃 = Web 偏差）；Web 探针取 margin-top 代表 |
 | layout | `padding（+ 四边简写 + 1–4 值 shorthand）` | supported | supported | supported | L1 | 编译期折叠 | universal | px/数字 → {top,right,bottom,left}；1–4 值简写按 CSS 标准展开（`padding: 8px 12px`）；Web 探针取 padding-top 代表 |
 | layout | `display: flex / none` | supported | supported | supported | L2 | 直映射 | universal | 引擎封闭集仅 flex/none（block/inline-block/inline-flex/grid ⇒ 诊断跳过） |
 | layout | `flex-direction` | supported | supported | supported | L2 | 直映射 | universal | 封闭集 row/column/row-reverse/column-reverse |

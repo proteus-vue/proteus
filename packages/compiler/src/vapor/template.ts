@@ -93,7 +93,7 @@ export const APP_TEXT_OVERFLOW_VALUES = ['clip', 'ellipsis'] as const
 /** 四边简写字段（`margin`/`padding` → 结构化 `{top,right,bottom,left}`） */
 export const APP_EDGE_FIELDS = ['margin', 'padding'] as const
 /** 百分比宽高折叠出的**比例字段**（App 端原生支持 `widthRatio`/`heightRatio`；非长度、不乘密度） */
-export const APP_DERIVED_FIELDS = ['widthRatio', 'heightRatio'] as const
+export const APP_DERIVED_FIELDS = ['widthRatio', 'heightRatio', 'marginAuto'] as const
 /** 特殊透传键（App 两内核恒 border-box ⇒ `box-sizing` 只作忠实记录、无副作用） */
 export const APP_SPECIAL_FIELDS = ['boxSizing'] as const
 
@@ -487,6 +487,14 @@ export function parseStaticStyle(
     if (edge) {
       const f = edge[1]!
       const side = edge[2]!.toLowerCase()
+      // ★批次 17（CSS 兼容对齐 · 以 Web 为基准）：`margin-<side>: auto` ⇒ 记入 marginAuto（此前静默丢弃）。
+      if (f === 'margin' && rawVal.trim().toLowerCase() === 'auto') {
+        const ma = (out.marginAuto as Record<string, boolean> | undefined) ?? {}
+        ma[side] = true
+        out.marginAuto = ma
+        markImportant('marginAuto')
+        continue
+      }
       const num = numOf(rawVal)
       if (num === undefined) { pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 不是纯数值（本版只支持 px/数字）`); continue }
       const cur = (out[f] as Record<string, number> | undefined) ?? {}
@@ -499,6 +507,15 @@ export function parseStaticStyle(
       // ★批次 2（值归一化）：四值简写 `margin/padding: a [b [c [d]]]`（CSS 标准展开）——
       //   真项目高频（`margin: 8px 0`、`padding: 8px 12px`），此前**整体丢弃 + 诊断**。
       //   `auto` 无内核对等 ⇒ 该边不设（其余边照设），不拖垮整条规则。
+      // ★批次 17（CSS 兼容对齐 · 以 Web 为基准）：`margin` 简写支持 auto（`margin: 0 auto` 水平居中；
+      //   `padding` 无 auto 语义，走下方通用路径）。此前 auto 被**静默丢弃** ⇒ App 不居中、Web 居中。
+      if (key === 'margin') {
+        const m = expandMarginShorthand(rawVal, numOf)
+        if (!m) { pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 无法解析为四值简写（支持 1–4 个 px/数字/auto）`); continue }
+        if (Object.keys(m.box).length > 0) { out.margin = m.box; markImportant('margin') }
+        if (Object.keys(m.auto).length > 0) { out.marginAuto = m.auto; markImportant('marginAuto') }
+        continue
+      }
       const box = expandBoxShorthand(rawVal, numOf)
       if (!box) { pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 无法解析为四值简写（支持 1–4 个 px/数字；auto 忽略）`); continue }
       out[key] = box
@@ -1214,6 +1231,41 @@ function normalizeFontWeight(raw: string): number | undefined {
   const n = Number(v)
   if (Number.isFinite(n) && n >= 1 && n <= 1000) return Math.round(n)
   return undefined
+}
+
+/**
+ * ★批次 17（CSS 兼容对齐 · 以 Web 为基准）：`margin` 简写 → `{ box, auto }`。
+ *   与 `expandBoxShorthand` 同形，但把 `auto` token 记进 `auto`（true = 该边 auto 外距）。
+ *   CSS 语义：`margin: 0 auto` ⇒ top/bottom=0、left/right=auto（水平居中）。
+ *   返回 null ⇔ 既无有效数值边、也无 auto 边（调用方诊断）。
+ */
+function expandMarginShorthand(rawVal: string, toNum: (v: string) => number | undefined): {
+  box: Record<string, number>; auto: Record<string, boolean>
+} | null {
+  const toks = rawVal.trim().split(/\s+/).filter(Boolean)
+  if (toks.length === 0 || toks.length > 4) return null
+  const sides = ['top', 'right', 'bottom', 'left'] as const
+  // 1–4 值 → 四边展开（CSS 标准）
+  const per: Array<{ n?: number; auto: boolean }> = toks.map((t) => {
+    if (t.toLowerCase() === 'auto') return { auto: true }
+    const n = toNum(t)
+    return n === undefined ? { auto: false } : { n, auto: false }
+  })
+  const idx = (side: string): number => {
+    if (toks.length === 1) return 0
+    if (toks.length === 2) return side === 'top' || side === 'bottom' ? 0 : 1
+    if (toks.length === 3) return side === 'top' ? 0 : side === 'bottom' ? 2 : 1
+    return { top: 0, right: 1, bottom: 2, left: 3 }[side]!
+  }
+  const box: Record<string, number> = {}
+  const auto: Record<string, boolean> = {}
+  for (const s of sides) {
+    const p = per[idx(s)]!
+    if (p.auto) auto[s] = true
+    else if (p.n !== undefined) box[s] = p.n
+  }
+  if (Object.keys(box).length === 0 && Object.keys(auto).length === 0) return null
+  return { box, auto }
 }
 
 /**

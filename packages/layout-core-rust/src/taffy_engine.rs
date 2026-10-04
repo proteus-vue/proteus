@@ -225,11 +225,14 @@ impl TaffyEngine {
             top: length(style.padding.top),
             bottom: length(style.padding.bottom),
         };
+        // ★批次 17（CSS 兼容对齐 · 以 Web 为基准）：margin 的 auto（`margin: 0 auto` 水平居中）——
+        //   margin_auto 标记的边映射为 taffy 的 `auto()`（吸收剩余空间）；其余边用 f32 length。
+        let m_auto = |is_auto: bool, v: f32| -> LengthPercentageAuto { if is_auto { auto() } else { length(v) } };
         out.margin = taffy::Rect {
-            left: length(style.margin.left),
-            right: length(style.margin.right),
-            top: length(style.margin.top),
-            bottom: length(style.margin.bottom),
+            left: m_auto(style.margin_auto.left, style.margin.left),
+            right: m_auto(style.margin_auto.right, style.margin.right),
+            top: m_auto(style.margin_auto.top, style.margin.top),
+            bottom: m_auto(style.margin_auto.bottom, style.margin.bottom),
         };
 
         // ⑥ 定位：absolute 的 inset 相对**父 padding 盒**

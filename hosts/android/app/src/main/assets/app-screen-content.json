@@ -1657,6 +1657,10 @@
           "top": 0,
           "bottom": 0
         },
+        "marginAuto": {
+          "right": true,
+          "left": true
+        },
         "padding": {
           "top": 24,
           "right": 16,
@@ -2290,6 +2294,10 @@
           "top": 0,
           "bottom": 0
         },
+        "marginAuto": {
+          "right": true,
+          "left": true
+        },
         "padding": {
           "top": 24,
           "right": 16,
@@ -2476,6 +2484,10 @@
         "margin": {
           "top": 0,
           "bottom": 0
+        },
+        "marginAuto": {
+          "right": true,
+          "left": true
         },
         "padding": {
           "top": 24,
@@ -5108,6 +5120,10 @@
           "top": 20,
           "bottom": 20
         },
+        "marginAuto": {
+          "right": true,
+          "left": true
+        },
         "maxWidth": 360,
         "padding": {
           "top": 12,
@@ -5198,6 +5214,10 @@
           "top": 20,
           "bottom": 20
         },
+        "marginAuto": {
+          "right": true,
+          "left": true
+        },
         "maxWidth": 300,
         "padding": {
           "top": 12,
@@ -5228,6 +5248,7 @@
         "parentId": 51,
         "widthRatio": 1,
         "overflow": "hidden",
+        "textOverflow": "ellipsis",
         "textAlign": "left",
         "color": "#666",
         "fontSize": 13,

@@ -1,7 +1,7 @@
-installed_at=2026-10-04T10:14:20Z
+installed_at=2026-10-04T10:34:07Z
 hap=/Volumes/data1/work/office/debug/proteus/hosts/harmony/host-app/entry/build/default/outputs/default/entry-default-signed.hap
-ready_line=10-04 18:14:13.039 46804 46804 I A00001/dev.proteus.host/ProteusHost: PROTEUS_HOST_READY model=KLE-AL00U os=OpenHarmony-7.0.0.105 api=26 display=KLE-AL00 7.0.0.109(SP6C00E105R3P3)
-render_line=10-04 18:14:14.632 46804 46804 I A00002/dev.proteus.host/ProteusRender: PROTEUS_RENDER_DONE nodes=12 parsed=12 texts=8
-bench_line=10-04 18:14:15.350 46804 46804 I A00002/dev.proteus.host/ProteusBench: PROTEUS_BENCH_RESULT limit=4050 wall_ms=82 {"ok":true,"engine":"proteus-layout-core 0.1.0 · engine=taffy-0.14 · taffy 锁定 0.14（0.13 有 measure 指数退化）","node_count":4051,"rect_count":4051,"bg_node_count":4000,"built_render_nodes":4000,"scope_ms":71.48,"layout_ms":12.03,"emit_ms":59.45,"note":"鸿蒙腿：Rust 核（aarch64-unknown-linux-ohos）+ RenderNode 直绘树构建；文本绘制未实现（只建带背景色节点）"}
+ready_line=10-04 18:34:00.192 54268 54268 I A00001/dev.proteus.host/ProteusHost: PROTEUS_HOST_READY model=KLE-AL00U os=OpenHarmony-7.0.0.105 api=26 display=KLE-AL00 7.0.0.109(SP6C00E105R3P3)
+render_line=10-04 18:34:01.615 54268 54268 I A00002/dev.proteus.host/ProteusRender: PROTEUS_RENDER_DONE nodes=4 parsed=4 texts=3
+bench_line=10-04 18:34:02.534 54268 54268 I A00002/dev.proteus.host/ProteusBench: PROTEUS_BENCH_RESULT limit=4050 wall_ms=70 {"ok":true,"engine":"proteus-layout-core 0.1.0 · engine=taffy-0.14 · taffy 锁定 0.14（0.13 有 measure 指数退化）","node_count":4051,"rect_count":4051,"bg_node_count":4000,"built_render_nodes":4000,"scope_ms":60.62,"layout_ms":13.20,"emit_ms":47.42,"note":"鸿蒙腿：Rust 核（aarch64-unknown-linux-ohos）+ RenderNode 直绘树构建；文本绘制未实现（只建带背景色节点）"}
 native_line=none
 native_warm_line=none
