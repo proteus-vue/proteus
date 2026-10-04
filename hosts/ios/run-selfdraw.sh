@@ -174,6 +174,8 @@ cp "$HERE/bridge/dist/bundle-bench.js" "$APP/bundle-bench.js"
 cp "$HERE/bridge/dist/bundle-host-runtime.js" "$APP/bundle-host-runtime.js"
 # ★M5：执行器场景 bundle（`--app-stack` 模式用）
 cp "$HERE/bridge/dist/bundle-app-stack.js" "$APP/bundle-app-stack.js"
+# ★批次 43（superapp 真实应用）：superapp 应用入口 bundle → .app
+[ -f "$HERE/bridge/dist/bundle-superapp.js" ] && cp "$HERE/bridge/dist/bundle-superapp.js" "$APP/bundle-superapp.js"
 # ★★★App 三端对齐 · 视觉合成（2026-10-04）：App 屏内容产物 → .app（真机真画屏用）
 APP_SC="$ROOT/${PROTEUS_APP_PROJECT:-superapp}/dist/app/ios/screen-content.json"
 if [ -f "$APP_SC" ]; then
@@ -522,6 +524,11 @@ rm -f "$FETCH_ERR"
 # ★★★App 三端对齐 · 视觉合成 + 真触摸（2026-10-04）：取回合成报告 + PNG（真画屏 + 真触摸证据）。
 #   ★必须在 launch **之后**（App 已退出 = 本轮报告已落盘）取回——放 launch 之前会取到上一轮的旧件。
 if [ "$MODE" = "app-stack" ]; then
+  # ★批次 43：取回真实 superapp 运行报告
+  rm -f "$HERE/results/superapp.json"
+  xcrun devicectl device copy from --device "$UDID" --domain-type appDataContainer \
+    --domain-identifier "$BUNDLE_ID" --source "Documents/superapp.json" \
+    --destination "$HERE/results/superapp.json" >/dev/null 2>&1 || echo "  ⚠ superapp 报告未取到"
   rm -f "$HERE/results/app-screen-composite.json"
   xcrun devicectl device copy from --device "$UDID" --domain-type appDataContainer \
     --domain-identifier "$BUNDLE_ID" --source "Documents/app-screen-composite.json" \

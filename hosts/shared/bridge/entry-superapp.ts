@@ -63,7 +63,8 @@ export function bootSuperapp(host?: SuperappHost): BootResult {
   }
   try {
     const nav = createAppNavigation({
-      invoke: h.invoke,
+      // ★保持接收者绑定（iOS JSC JSExport 拆离调用会丢 this ⇒ screen.* 全失败；Android 无此问题）
+      invoke: (m, a) => h.invoke!(m, a),
       screens: reg.screens,
       contentOf: (s) => APP_SCREEN_CONTENT[s.name] ?? APP_SCREEN_CONTENT[reg.indexName],
     })

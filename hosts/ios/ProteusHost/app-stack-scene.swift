@@ -45,6 +45,43 @@ final class AppStackScene: NSObject {
         }
         _ = ctx.evaluateScript(src, withSourceURL: bundleURL)
 
+
+        // ★★★批次 43（用户「要真实的独立应用了」）：**真实 superapp 运行**（同目录 bundle-superapp.js）。
+        //   ★为什么用**分步 asyncAfter 链**（而非一段同步 eval）：JSC 的微任务（路由/执行器的 await 续体）
+        //     在**主 runloop 轮转**时才排空——同步连续 eval 不排空（实测：路由深度前进但宿主未 mount）。
+        //     分步链每步让出一个 runloop turn ⇒ 微任务排空（与场景 E 的轮询同法）。
+        do {
+            let saURL = bundleURL.deletingLastPathComponent().appendingPathComponent("bundle-superapp.js")
+            if let saSrc = try? String(contentsOf: saURL, encoding: .utf8) {
+                _ = ctx.evaluateScript(saSrc, withSourceURL: saURL)
+                var sa: [String: Any] = ["bundle_chars": saSrc.count]
+                func writeSA() {
+                    sa["ok"] = true
+                    if let d = try? JSONSerialization.data(withJSONObject: sa, options: [.prettyPrinted]) {
+                        try? d.write(to: reportDir.appendingPathComponent("superapp.json"))
+                    }
+                    NSLog("[proteus] SUPERAPP_REPORT_READY")
+                }
+                sa["boot"] = evalJs?("__proteusSuperappBootJson()") ?? "null"
+                let steps: [(Double, () -> Void)] = [
+                    (0.05, { sa["boot_state"] = evalJs?("__proteusSuperappState()") ?? "null"
+                             // ★基线：此时场景 E 已跑完（同一 ScreenHost）⇒ superapp 仅有 = final - baseline
+                             sa["host_stats_baseline"] = evalJs?("proteusHost.invoke('screen.stats', '{}')") ?? "null"
+                             _ = evalJs?("__proteusSuperappNav('verify')") }),
+                    (0.10, { sa["after_push_verify"] = evalJs?("__proteusSuperappState()") ?? "null"
+                             _ = evalJs?("__proteusSuperappNav('messages')") }),
+                    (0.15, { sa["after_switch_messages"] = evalJs?("__proteusSuperappState()") ?? "null"
+                             _ = evalJs?("__proteusSuperappBack()") }),
+                    (0.20, { sa["after_back"] = evalJs?("__proteusSuperappState()") ?? "null"
+                             sa["host_stats"] = evalJs?("proteusHost.invoke('screen.stats', '{}')") ?? "null"
+                             writeSA() }),
+                ]
+                for (delay, step) in steps { DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: step) }
+            } else {
+                NSLog("[proteus] 未见 bundle-superapp.js（%s）——跳过 superapp 运行", saURL.path)
+            }
+        }
+
         // ④ 主场景（同步：栈读数 A–D）
         let mainOut = evalJs?("__proteusAppStackRun('{\"depth\":20000,\"fans\":32,\"budget\":1000}')") ?? "null"
         // ★★★（2026-10-02 · 项目驱动落地）第二入口：**从项目路由配置跑 App 导航**（非夹具）
