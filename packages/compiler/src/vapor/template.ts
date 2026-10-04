@@ -55,7 +55,7 @@ export const APP_LAYOUT_FIELDS = [
   'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight',
   'margin', 'padding', 'flexDirection', 'flexWrap', 'justifyContent', 'alignItems', 'alignContent', 'alignSelf',
   'flexGrow', 'flexShrink', 'flexBasis', 'gap', 'rowGap', 'columnGap', 'display', 'position', 'top', 'left', 'right', 'bottom', 'overflow',
-  'gridTemplateColumns', 'gridTemplateRows', 'aspectRatio', 'pointerEvents',
+  'gridTemplateColumns', 'gridTemplateRows', 'gridColumn', 'gridRow', 'aspectRatio', 'pointerEvents',
 ] as const
 const LAYOUT_FIELDS = new Set<string>(APP_LAYOUT_FIELDS)
 /**
@@ -331,6 +331,27 @@ function parseLineHeight(raw: string): string | null {
 }
 
 /**
+ * ★批次 41（CSS Grid 补全）：\`grid-column\`/\`grid-row\` 的**线号放置** → \`{start, end?}\`。
+ *   支持：\`<line>\`（单值 ⇒ end 缺省 auto）· \`<start> / <end>\`（线号可为负，-1 = 最后一条线）。
+ *   \`span\`/\`auto\`/命名线 ⇒ null（未支持，调用方诊断）。
+ */
+function parseGridLine(val: string): { start: number; end?: number } | null {
+  const parts = val.split('/').map((s) => s.trim())
+  if (parts.length === 0 || parts.length > 2) return null
+  const lineOf = (t: string): number | undefined => {
+    if (!/^-?\d+$/.test(t)) return undefined
+    const n = Number(t)
+    return n === 0 ? undefined : n   // 0 非法线号
+  }
+  const start = lineOf(parts[0]!)
+  if (start === undefined) return null
+  if (parts.length === 1) return { start }
+  const end = lineOf(parts[1]!)
+  if (end === undefined) return null
+  return { start, end }
+}
+
+/**
  * ★批次 12（CSS Grid）：显式轨迹串 → 归一化的空格分隔串（内核再解析）。
  *   · `<n>fr` / `<n>px` / 纯数字 保留；`repeat(N, X)` 展开为 N 个 X（`repeat(3, 1fr)` → `1fr 1fr 1fr`）；
  *   · `auto`/`minmax`/`fit-content`/命名线 等**未支持** ⇒ 返回 null（调用方诊断——不猜）。
@@ -593,6 +614,19 @@ export function parseStaticStyle(
           continue
         }
         out[key] = tracks
+        markImportant(key)
+        continue
+      }
+      if (key === 'gridColumn' || key === 'gridRow') {
+        // ★批次 41（CSS Grid 补全 · 批 12 续）：`grid-column`/`grid-row` **线号放置**——
+        //   item 跨列/跨行（仪表盘 KPI 卡、全宽行）刚需。支持 `<line>` 与 `<start> / <end>`（线号可为负）；
+        //   `span`/`auto`/命名线 未支持 ⇒ 诊断跳过（不猜）。
+        const g = parseGridLine(rawVal)
+        if (g === null) {
+          pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 未支持（仅线号 \`<n>\` 或 \`<start> / <end>\`；span/auto/命名线 暂不支持）——已跳过`)
+          continue
+        }
+        out[key] = g
         markImportant(key)
         continue
       }

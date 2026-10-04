@@ -1333,3 +1333,37 @@ describe('★批次 40 · transform-origin（变换锚点，对齐 Web）', () =
     expect((tip?.style as { transform?: Record<string, number> })?.transform).toMatchObject({ rotate: 10 })
   })
 })
+
+// ★批次 41（CSS Grid 补全 · 批 12 续）：`grid-column` / `grid-row` **线号放置**（对齐 Web）——2026-10-04
+//   真项目 36 处（`1`/`2`、`1 / -1` 全宽——仪表盘 KPI 卡）；内核 taffy `Line<GridPlacement>`。
+describe('★批次 41 · grid-column / grid-row 线号放置（补齐 CSS Grid）', () => {
+  const gc = (css: string) => (parseStaticStyle(css, () => {}) as { gridColumn?: { start: number; end?: number } }).gridColumn
+  const gr = (css: string) => (parseStaticStyle(css, () => {}) as { gridRow?: { start: number; end?: number } }).gridRow
+
+  it('① 单值线号 / start-end / 负线号', () => {
+    expect(gc('grid-column: 1')).toEqual({ start: 1 })
+    expect(gc('grid-column: 1 / 3')).toEqual({ start: 1, end: 3 })
+    expect(gc('grid-column: 1 / -1')).toEqual({ start: 1, end: -1 })
+    expect(gr('grid-row: 2')).toEqual({ start: 2 })
+    expect(gr('grid-row: 1 / 3')).toEqual({ start: 1, end: 3 })
+  })
+
+  it('② span / auto / 命名线 ⇒ 如实诊断跳过', () => {
+    for (const bad of ['grid-column: span 2', 'grid-column: auto', 'grid-column: foo-start']) {
+      const d: string[] = []
+      expect((parseStaticStyle(bad, (m) => d.push(m)) as { gridColumn?: unknown }).gridColumn, bad).toBeUndefined()
+      expect(d.length, `${bad} 应诊断`).toBeGreaterThan(0)
+    }
+  })
+
+  it('③ 端到端：class 里的 grid-column: 1 / -1 → 节点 style', () => {
+    const sfc = `<template><view class="grid"><view class="full">x</view></view></template>
+<style>
+.grid { display: grid; grid-template-columns: 1fr 1fr; width: 300px }
+.full { grid-column: 1 / -1; height: 40px; background-color: #12b886 }
+</style>`
+    const r = buildLayoutTemplate(sfc, 'grid.vue')
+    const full = r.template.nodes.find((n) => (n.style as { backgroundColor?: string }).backgroundColor === '#12b886')
+    expect((full?.style as { gridColumn?: { start: number; end?: number } })?.gridColumn).toEqual({ start: 1, end: -1 })
+  })
+})

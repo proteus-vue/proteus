@@ -165,6 +165,13 @@ function go(name: 'forms' | 'config-demo' | 'user') {
 
     <!-- ★transform-origin 演示（批次 40）：绕底部锚点旋转 -->
     <div class="to-demo">transform-origin: bottom + rotate(8deg)</div>
+
+    <!-- ★grid-column 放置演示（批次 41）：第 3 项 grid-column: 1 / -1 跨全宽 -->
+    <div class="grid-demo">
+      <div class="gi">A</div>
+      <div class="gi">B</div>
+      <div class="gi gi-full">C 跨列(1 / -1)</div>
+    </div>
   </div>
 </template>
 
@@ -486,6 +493,27 @@ function go(name: 'forms' | 'config-demo' | 'user') {
   font-size: 12px;
   text-align: center;
   border-radius: 8px;
+}
+/* ★grid-column 放置演示（批次 41）——2 列网格 + 第 3 项跨全宽 */
+.grid-demo {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  width: 220px;
+  margin: 16px auto;
+}
+.gi {
+  height: 24px;
+  background-color: #f0f0f0;
+  color: #666666;
+  font-size: 11px;
+  text-align: center;
+  border-radius: 4px;
+}
+.gi-full {
+  grid-column: 1 / -1;
+  background-color: #12b886;
+  color: #ffffff;
 }
 /* ★transform-origin 演示（批次 40）——绕「底部中点」旋转 */
 .to-demo {
