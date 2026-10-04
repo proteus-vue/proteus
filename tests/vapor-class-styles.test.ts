@@ -302,6 +302,22 @@ describe('★C1 最小切片 · SFC <style> 单类规则 → class→节点样�
     expect(d2.length > 0, 'em 含入 ⇒ 诊断').toBe(true)
   })
 
+  it('★⑦k color-mix(in srgb, …)（批次 23 · ★基准 = Web）：常量折叠（设计令牌着色）', () => {
+    // 【为什么（以 web 为基准）】组件库 16 处 color-mix 着色/淡化；var() 已置换 ⇒ 两色已知 ⇒ 编译期混合。
+    // 色 + 透明（alpha 缩放）：20% 黑 + 80% 透 ⇒ alpha 0.2、色黑
+    expect(normalizeCssColor('color-mix(in srgb, #000 20%, transparent)'), '20% 黑 + 透').toBe('#00000033')
+    expect(normalizeCssColor('color-mix(in srgb, #ffb13d 18%, transparent)'), '18% 橙').toBe('#ffb13d2e')
+    // 两不透明色按权混：10% 黑 + 90% 白 ⇒ #e6e6e6
+    expect(normalizeCssColor('color-mix(in srgb, #000000 10%, #ffffff 90%)'), '黑白混').toBe('#e6e6e6')
+    // 缺省权重 50/50 + 命名色
+    expect(normalizeCssColor('color-mix(in srgb, red, blue)'), 'red/blue 50/50').toBe('#800080')
+    // 非 srgb 色彩空间 ⇒ 未支持（诊断）
+    expect(normalizeCssColor('color-mix(in oklab, #000 10%, #fff)'), 'oklab 未支持').toBeUndefined()
+    // 端到端：border 简写里的 color-mix（括号感知切分）
+    const s = parseStaticStyle('border: 1px solid color-mix(in srgb, #000 12%, transparent)', () => {})
+    expect((s as { borderColor?: string }).borderColor, 'border 内 color-mix').toBe('#0000001f')
+  })
+
   it('★⑧ 元素/类型选择器 + @keyframes 跳过（C1 收尾）', () => {
     // 【真项目形态】examples 有 9 处元素选择器（h3/code…）+ 6 处 @keyframes 关键帧被误当选择器
     const sfc = `<template>

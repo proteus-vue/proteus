@@ -77,7 +77,7 @@
 | value | `margin/padding 1–4 值简写 + background 纯色简写 + flex 简写` | — | — | supported | L1 | 编译期折叠 | conditional | ★批次 2/7（2026-10-04）：a) `margin: 8px 0` / `padding: 8px 12px` 按 CSS 标准展开为 {top,right,bottom,left}（auto 的边忽略）；b) `background: #fff`/`rgba(...)` 归一折进 backgroundColor；c) `flex: <g> [<s> [<b>]]` / `none` / `auto` 展开到 flexGrow/flexShrink/flexBasis（CSS 语义：省略 shrink=1、省略 basis=0）。取证：真项目这些简写高频。渐变/图片简写诊断跳过 |
 | unit | `width/height 百分比` | — | — | supported | L1 | 编译期折叠 | conditional | → widthRatio/heightRatio（比例字段） |
 | paint | `background-color（+ background 纯色简写）` | supported | supported | supported | L1 | 编译期折叠 | universal | 颜色编译期归一为 hex：hex / rgb() / rgba() / **命名色（148 个标准色，批 14）** / transparent；hsl/var ⇒ 诊断跳过。★`background` 纯色简写折进 backgroundColor（渐变/图片诊断跳过）。★批 14 多端一致性审计修：命名色此前丢弃（Web 生效）⇒ 现查表归一（核心只认 hex） |
-| paint | `color` | supported | supported | supported | L1 | 编译期折叠 | universal | 同上颜色归一 |
+| paint | `color` | supported | supported | supported | L1 | 编译期折叠 | universal | 颜色归一（hex/rgb/rgba/hsl/命名色/4 位 hex/transparent）；★批次 23：`color-mix(in srgb, A [pa%], B [pb%])` **常量折叠**（var() 已置换 ⇒ 两色已知 ⇒ sRGB 预乘 alpha 混合）——组件库 16 处令牌着色；非 srgb 色彩空间（oklab/lab…）诊断 |
 | paint | `font-size` | supported | supported | supported | L1 | 编译期折叠 | universal | px/数字（不支持百分比/keyword） |
 | paint | `border-radius` | supported | supported | supported | L1 | 编译期折叠 | universal | px/数字（宿主圆角绘制）；★批次 18：**百分比**（`border-radius: 50%` = 内切圆/椭圆，头像/圆点刚需）折为 `borderRadiusPct`（0..1）⇒ 宿主按 `pct × min(w,h)` 算半径（正方盒 = 精确圆，Web 一致；非正方盒为统一圆角，Web 为椭圆——如实近似）。逐角多值（8px 4px）未支持（诊断） |
 | paint | `opacity` | supported | supported | supported | L1 | 编译期折叠 | universal | 0–1 |

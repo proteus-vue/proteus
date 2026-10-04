@@ -107,6 +107,9 @@ function go(name: 'forms' | 'config-demo' | 'user') {
 
     <!-- ★calc 常量折叠演示（批次 22）：calc(20px * 1.5) = 30px 间距（设计令牌算术） -->
     <div class="calc-demo">calc(20×1.5) → 30px</div>
+
+    <!-- ★color-mix 常量折叠演示（批次 23）：品牌色 20% + 透明 = 淡色底（令牌着色） -->
+    <div class="mix-demo">color-mix 20% 品牌色</div>
   </div>
 </template>
 
@@ -250,6 +253,18 @@ function go(name: 'forms' | 'config-demo' | 'user') {
   margin: 16px auto;
   background-color: #e8f0ff;
   border-radius: calc(3px * 2);
+  color: #1a7af8;
+  font-size: 12px;
+  text-align: center;
+}
+/* ★color-mix 常量折叠演示（批次 23）——品牌色 20% + 透明 */
+.mix-demo {
+  width: 200px;
+  height: 24px;
+  margin: 16px auto;
+  background-color: color-mix(in srgb, #1a7af8 20%, transparent);
+  border: 1px solid color-mix(in srgb, #1a7af8 40%, transparent);
+  border-radius: 6px;
   color: #1a7af8;
   font-size: 12px;
   text-align: center;
