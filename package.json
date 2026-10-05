@@ -94,6 +94,8 @@
     "check:style-coverage": "node scripts/check-style-coverage.mjs",
     "check:cse-lint-baseline": "node scripts/gen-cse-lint-baseline.mjs --check",
     "check:baseline-write-guard": "node scripts/check-baseline-write-guard.mjs",
+    "check:app-ir-shadow": "node scripts/check-app-ir-shadow.mjs",
+    "gen:app-ir-shadow": "node scripts/check-app-ir-shadow.mjs --write",
     "check:baseline-approval": "node scripts/check-baseline-approval.mjs",
     "check:baseline-approval:strict": "node scripts/check-baseline-approval.mjs --require",
     "check:baseline-freshness": "node scripts/check-baseline-freshness.mjs",
