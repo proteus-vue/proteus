@@ -1,9 +1,9 @@
 # CSS Web 全量能力清单（自动生成——勿手改；生成器 scripts/gen-css-feature-inventory.mjs）
 
 > 总 949 项（property 651 · selector 144 · at-rule 19 · function 105 · unit 30）
-> 实现：**not-started** 645 · **excluded** 210 · **implemented** 88 · **partial** 6
-> 优先级：P2 119 · excluded 210 · P0 34 · done 88 · P1 498
-> ★**可推项（非已实现/非排除）**：651（其中 **P0 34**）
+> 实现：**not-started** 630 · **excluded** 210 · **implemented** 103 · **partial** 6
+> 优先级：P2 119 · excluded 210 · P0 29 · done 103 · P1 488
+> ★**可推项（非已实现/非排除）**：636（其中 **P0 29**）
 
 ## P0 —— 语料在用但未实现（真实需求，最优先）
 
@@ -13,11 +13,6 @@
 | `background-image` | standard | CSS Backgrounds and Borders | 2 | partial | 有结构化属性通道（非 CSS 属性形态）——CSS 写法待接 |
 | `background-position` | standard | CSS Backgrounds and Borders | 4 | not-started | 未接：位置需背景图/渐变定位语义（证据：未接（待评）） |
 | `background-size` | standard | CSS Backgrounds and Borders | 2 | not-started | 未接：尺寸需背景图语义（证据：未接（待评）） |
-| `border-bottom` | standard | CSS Backgrounds and Borders | 13 | not-started | — |
-| `border-bottom-color` | standard | CSS Backgrounds and Borders | 2 | not-started | — |
-| `border-left` | standard | CSS Backgrounds and Borders | 1 | not-started | — |
-| `border-right` | standard | CSS Backgrounds and Borders | 2 | not-started | — |
-| `border-top` | standard | CSS Backgrounds and Borders | 8 | not-started | — |
 | `container-type` | standard | CSS Conditional Rules | 1 | not-started | — |
 | `grid-auto-columns` | standard | CSS Grid Layout | 1 | not-started | — |
 | `grid-auto-flow` | standard | CSS Grid Layout | 3 | not-started | 未接：自动流（证据：未接） |
@@ -69,8 +64,6 @@
 | `border-block-width` | CSS Logical Properties and Values | not-started |
 | `border-bottom-left-radius` | CSS Backgrounds and Borders | not-started |
 | `border-bottom-right-radius` | CSS Backgrounds and Borders | not-started |
-| `border-bottom-style` | CSS Backgrounds and Borders | not-started |
-| `border-bottom-width` | CSS Backgrounds and Borders | not-started |
 | `border-end-end-radius` | CSS Logical Properties and Values | not-started |
 | `border-end-start-radius` | CSS Logical Properties and Values | not-started |
 | `border-image` | CSS Backgrounds and Borders | not-started |
@@ -91,19 +84,11 @@
 | `border-inline-start-width` | CSS Logical Properties and Values | not-started |
 | `border-inline-style` | CSS Logical Properties and Values | not-started |
 | `border-inline-width` | CSS Logical Properties and Values | not-started |
-| `border-left-color` | CSS Backgrounds and Borders | not-started |
-| `border-left-style` | CSS Backgrounds and Borders | not-started |
-| `border-left-width` | CSS Backgrounds and Borders | not-started |
-| `border-right-color` | CSS Backgrounds and Borders | not-started |
-| `border-right-style` | CSS Backgrounds and Borders | not-started |
-| `border-right-width` | CSS Backgrounds and Borders | not-started |
 | `border-start-end-radius` | CSS Logical Properties and Values | not-started |
 | `border-start-start-radius` | CSS Logical Properties and Values | not-started |
 | `border-style` | CSS Backgrounds and Borders | not-started |
-| `border-top-color` | CSS Backgrounds and Borders | not-started |
 | `border-top-left-radius` | CSS Backgrounds and Borders | not-started |
 | `border-top-right-radius` | CSS Backgrounds and Borders | not-started |
-| `border-top-style` | CSS Backgrounds and Borders | not-started |
 | `caret` | CSS Basic User Interface | not-started |
 | `caret-animation` | CSS Basic User Interface | not-started |
 | `caret-shape` | CSS Basic User Interface | not-started |
@@ -121,5 +106,15 @@
 | `corner-shape` | CSS Backgrounds and Borders | not-started |
 | `corner-start-start-shape` | CSS Backgrounds and Borders | not-started |
 | `corner-start-end-shape` | CSS Backgrounds and Borders | not-started |
+| `corner-top-shape` | CSS Backgrounds and Borders | not-started |
+| `corner-top-left-shape` | CSS Backgrounds and Borders | not-started |
+| `corner-top-right-shape` | CSS Backgrounds and Borders | not-started |
+| `font` | CSS Fonts | not-started |
+| `font-language-override` | CSS Fonts | not-started |
+| `font-optical-sizing` | CSS Fonts | not-started |
+| `font-palette` | CSS Fonts | not-started |
+| `font-size-adjust` | CSS Fonts | not-started |
+| `font-style` | CSS Fonts | not-started |
+| `font-synthesis` | CSS Fonts | not-started |
 
 （P2 与 excluded 全量见 JSON；本 MD 只列推进面）

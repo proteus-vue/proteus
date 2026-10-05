@@ -80,7 +80,9 @@ export const APP_ENUM_VALUES: Record<string, readonly string[]> = {
 }
 
 /** 绘制字段（宿主自绘读这些键；模板照样要带上，否则挂载后无底色/无字色） */
-export const APP_PAINT_FIELDS = ['backgroundColor', 'color', 'fontSize', 'fontWeight', 'fontFamily', 'textAlign', 'lineHeight', 'textOverflow', 'letterSpacing', 'textDecoration', 'visibility', 'borderRadius', 'borderColor', 'borderWidth', 'opacity', 'boxShadow', 'transform'] as const
+// ★★★逐边 border 批（2026-10-05 · border-bottom 等 4 个 P0 项）：追加**逐边** width/color（宿主逐边绘制；
+//   uniform borderWidth/borderColor 保留 = 四边缺省值）。语料 21 处 `border-<side>: <w> <style> <color>`。
+export const APP_PAINT_FIELDS = ['backgroundColor', 'color', 'fontSize', 'fontWeight', 'fontFamily', 'textAlign', 'lineHeight', 'textOverflow', 'letterSpacing', 'textDecoration', 'visibility', 'borderRadius', 'borderColor', 'borderWidth', 'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth', 'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor', 'opacity', 'boxShadow', 'transform'] as const
 const PAINT_FIELDS = new Set<string>(APP_PAINT_FIELDS)
 /**
  * ★批次 4（CSS 兼容对齐）：`text-align` 的**封闭集**（App 自绘文本在盒内的水平对齐）。
@@ -954,7 +956,9 @@ export function parseStaticStyle(
         markImportant('boxShadow')
         continue
       }
-      if (key === 'backgroundColor' || key === 'color' || key === 'borderColor') {
+      // ★★★逐边 border 批：逐边颜色同走**归一化**通道（`border-top-color` 等）
+      if (key === 'backgroundColor' || key === 'color' || key === 'borderColor'
+          || key === 'borderTopColor' || key === 'borderRightColor' || key === 'borderBottomColor' || key === 'borderLeftColor') {
         // ★★★颜色**归一化**（2026-10-04 修：真机 RustLayout.create 失败暴露）——内核 `parse_css_color`
         //   只认 `#RGB/#RRGGBB/#RRGGBBAA` 十六进制；CSS 常见的 `rgb()/rgba()/transparent` 原样透传
         //   ⇒ create 拒绝 ⇒ **整棵树建不起来**（页面全崩）。⇒ 编译期把常见形态归一为 hex。
@@ -1059,14 +1063,58 @@ export function parseStaticStyle(
       if (f.basis !== undefined) { out.flexBasis = f.basis; markImportant('flexBasis') }
       continue
     }
-    // 逐边边框（`border-bottom` 等）：引擎/宿主只支持**统一**边框 ⇒ 如实诊断（不静默丢弃）
-    if (/^border(Top|Right|Bottom|Left)(Width|Color|Style)?$/.test(key) || /^border(Top|Right|Bottom|Left)$/.test(key)) {
-      pushDiag(
-        `\`${rawKey}\` 逐边边框未支持（App 端仅统一 \`border\`）——已跳过`,
-        '改用统一 `border: 1px solid #ccc`；或该边用独立元素/背景色近似',
-      )
+    // ★★★逐边 border 批（2026-10-05 · 用户「全端对齐不留缺陷」）：**逐边简写** `border-<side>`——
+    //   语料 21 处（列表分隔线 / 卡片顶线 / 侧边强调）。宽度/颜色折为 per-side 字段（宿主逐边绘制）。
+    //   · `border-bottom: 1px solid #ccc` ⇒ borderBottomWidth=1 + borderBottomColor=#ccc
+    //   · `border-bottom: none` ⇒ borderBottomWidth=0（**重置**：级联可覆盖低优先级的旧值）
+    //   · 非实线（dashed/dotted…）⇒ 诊断 + 跳过（App 端边框仅实线；与 uniform `border` 同口径，
+    //     不静默画成实线冒充——该能力面属独立项 `border-*-style`）
+    //   ★宽度/颜色**长手**（`border-bottom-width` 等）走上方 PAINT 分支（字段已在 APP_PAINT_FIELDS）。
+    const sideShort = /^border(Top|Right|Bottom|Left)$/.exec(key)
+    if (sideShort) {
+      const side = sideShort[1]!
+      const W = `border${side}Width`
+      const C = `border${side}Color`
+      const b = parseBorderShorthand(rawVal)
+      if (b.style !== undefined && b.style !== 'solid' && b.style !== 'none') {
+        pushDiag(
+          `border-${side.toLowerCase()}: ${rawVal} 的线型 \`${b.style}\` 未支持（App 端边框仅实线 solid）——已跳过`
+            + '（不画成实线冒充）',
+          '虚线/点线请改用背景图或语义组件；或保留 Web/MP 端渲染（该两端原生支持）',
+        )
+        continue
+      }
+      if (b.style === 'none' || (b.width === undefined && b.color === undefined)) {
+        // `border-<side>: none`（或未解析出宽度/颜色）⇒ 该边**清零**（重置语义）
+        out[W] = 0
+        markImportant(W)
+        continue
+      }
+      if (b.width !== undefined) { out[W] = b.width; markImportant(W) }
+      if (b.color !== undefined) { out[C] = b.color; markImportant(C) }
+      else if (b.width !== undefined) {
+        pushDiag(
+          `border-${side.toLowerCase()}: ${rawVal} 的颜色未解析`
+            + (/\bvar\(/.test(rawVal) ? '（var() 编译期不可解析）' : '（非 hex/rgb/rgba 颜色）')
+            + '——该边不会绘制',
+          '把颜色写为 hex（如 #e3e6eb）；var() 令牌色当前不在 App 折叠面内',
+        )
+      }
       continue
     }
+    // 逐边 **线型长手**（`border-<side>-style`）：solid = 默认（无操作）；none ⇒ 该边清零；其余诊断+跳过
+    const sideStyle = /^border(Top|Right|Bottom|Left)Style$/.exec(key)
+    if (sideStyle) {
+      const side = sideStyle[1]!
+      const v = rawVal.trim().toLowerCase()
+      if (v === 'none') { out[`border${side}Width`] = 0; markImportant(`border${side}Width`) }
+      else if (v !== 'solid') {
+        pushDiag(`border-${side.toLowerCase()}-style: ${rawVal} 未支持（App 端边框仅实线 solid）——已跳过（不画成实线冒充）`)
+      }
+      continue
+    }
+    // 逐边宽度/颜色**长手**（`border-bottom-width` 等）由上方 PAINT 分支消费（字段已登记）；
+    // 此处仅兜未登记形态（防静默丢：清单外键落到文件末尾的通用诊断）。
     // 认不出的键：诊断（可能是指令/伪类等不需要的键——故用 hint 说明而非 error）
     pushDiag(`style 里 \`${rawKey}\` 不在引擎字段表内（已忽略）`, '引擎字段见 packages/compiler/src/vapor/template.ts 的 LAYOUT_FIELDS/PAINT_FIELDS')
   }

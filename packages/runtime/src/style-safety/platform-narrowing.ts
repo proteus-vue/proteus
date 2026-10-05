@@ -116,6 +116,8 @@ export function narrowValue(prop: string, value: unknown, platform: StylePlatfor
     // ★★★G-61 后批（2026-10-05）：white-space 平台无关（关键字枚举）——
     //   不加这条会落 default ⇒ 动态值被误判"属性不可用"（新级别引入的真缺口）。
     case 'TextWrap':
+    // ★★★逐边 border 批（2026-10-05）：边框线型（solid/dashed/dotted/none）平台无关。
+    case 'BorderStyle':
     case 'Color':
       return { valid: true, value }
     case 'Transform':

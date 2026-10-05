@@ -59,7 +59,16 @@ export const SEMANTIC_FIELD_SNAPSHOT_KEYS: Readonly<Record<string, readonly stri
   color: ['color'],
   borderRadius: ['borderTopLeftRadius', 'borderTopRightRadius', 'borderBottomRightRadius', 'borderBottomLeftRadius'],
   borderWidth: ['borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth'],
-  borderColor: ['borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor'],
+
+  // ★★★逐边 border 批（2026-10-05）：逐边字段各自独立读数（读数键复用 STYLE_KEYS 里既有的四边键）
+  borderTopWidth: ['borderTopWidth'],
+  borderRightWidth: ['borderRightWidth'],
+  borderBottomWidth: ['borderBottomWidth'],
+  borderLeftWidth: ['borderLeftWidth'],
+  borderTopColor: ['borderTopColor'],
+  borderRightColor: ['borderRightColor'],
+  borderBottomColor: ['borderBottomColor'],
+  borderLeftColor: ['borderLeftColor'],  borderColor: ['borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor'],
   opacity: ['opacity'],
   boxShadow: ['boxShadow'],
   transform: ['transform'],
@@ -74,6 +83,8 @@ export const SEMANTIC_FIELD_SNAPSHOT_KEYS: Readonly<Record<string, readonly stri
   textDecoration: ['textDecoration'],
   /* ── 其余 ── */
   visibility: ['visibility'],
+  // ★★补齐（2026-10-05 · check:style-coverage 抓出的上一轮债务）：whiteSpace 进 semantic 后缺快照读数
+  whiteSpace: ['whiteSpace'],
 }
 
 /** 反向索引：快照读数键 → IR 字段（一个键只属一个字段——多对一由表保证） */

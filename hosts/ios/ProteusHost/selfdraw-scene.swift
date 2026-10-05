@@ -864,6 +864,8 @@ final class SelfDrawView: UIView {
         // ★V4：建层后清延迟更新簿记（新树 ⇒ 旧簿记失效）
         pendingOffscreen.removeAll(keepingCapacity: true)
         CATransaction.commit()
+        // ★★★逐边 border 批（2026-10-05）：建层后按父 bounds 同步边框子层 frame（iOS 无自动布局）
+        syncAllSideBorders()
     }
 
     /* ────────────────────────── ★V7：结构变更的层维护 ────────────────────────── */
@@ -2259,6 +2261,8 @@ final class SelfDrawView: UIView {
         lastLayerTiming["total_ms"] = (CFAbsoluteTimeGetCurrent() - tSortStart) * 1000
         lastLayerTiming["count"] = Double(updated)
         lastDeferredCount = offscreen.count
+        // ★★★逐边 border 批：增量更新后同样同步边框子层（父 frame 变了 ⇒ 边框跟着走）
+        syncAllSideBorders()
         return updated
     }
 
@@ -2939,6 +2943,15 @@ final class SelfDrawView: UIView {
         if let fw = n["fontWeight"] as? CGFloat { style["fontWeight"] = fw }
         if let br = n["borderRadius"] as? Double { style["borderRadius"] = CGFloat(br) }
         if let br = n["borderRadius"] as? CGFloat { style["borderRadius"] = br }
+        // ★★★逐边 border 批（2026-10-05）：**逐边字段必须透传**（本函数是建层必经之路；
+        //   漏透传 ⇒ 声明在树里而宿主读不到 ⇒ 静默不渲染——clipPath/glow/mask 的同款教训）。
+        for k in ["borderTopColor", "borderRightColor", "borderBottomColor", "borderLeftColor"] {
+            if let v = n[k] as? String { style[k] = v }
+        }
+        for k in ["borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth"] {
+            if let v = n[k] as? Double { style[k] = CGFloat(v) }
+            if let v = n[k] as? CGFloat { style[k] = v }
+        }
         // ★批次 10（CSS 兼容对齐 · 超级应用视觉）：盒阴影（结构化对象）透传——本函数是建层必经之路
         if let bs = n["boxShadow"] as? [String: Any] { style["boxShadow"] = bs }
         // ★★C1/B（2026-10-01）：两个**内核动画的静态基态**必须透传（本函数是建层必经之路）——
@@ -2971,6 +2984,14 @@ final class SelfDrawView: UIView {
     /// ★取某节点建层时记录的 **fontFamily**（文本补丁的度量要用它——与绘制同源）
     func fontFamilyOf(id: Int) -> String? {
         metaByNodeId[id]?["fontFamily"] as? String
+    }
+
+    /// ★★★逐边 border 批：同步**全部**已物化层的边框子层（render 出口调用一次；O(层数)，只碰有子层的）。
+    func syncAllSideBorders() {
+        for (_, layer) in layersById {
+            guard layer.sublayers != nil else { continue }
+            SelfDrawView.syncSideBorderFrames(layer)
+        }
     }
 
     /// 全部已物化节点 id（探针缺省作用域）
@@ -3131,12 +3152,90 @@ final class SelfDrawView: UIView {
     /// ★批次 5（CSS 兼容对齐 · 边框）：uniform 边框 → `CALayer.borderWidth/borderColor`。
     ///   `borderWidth<=0` 或缺颜色 ⇒ 清零（缺省无边框，与既有路径零行为变化）。
     private func applyBorder(_ layer: CALayer, style: [String: Any]) {
+        // ★★★逐边 border 批（2026-10-05）：有逐边声明 ⇒ 走**四子层**通道（CALayer 原生只有 uniform）。
+        //   子层用 `autoresizingMask` 随父 bounds 变化自适配（建造时父 bounds 可能为 0——
+        //   初始 frame 只给"固定边界"（厚度），flexible 维度由 autoresizing 撑开）。
+        let sides = SelfDrawView.sideBordersOf(style)
+        if sides != nil {
+            layer.borderWidth = 0 // 逐边时关闭 uniform（避免双画）
+            applySideBorderSublayers(layer, sides: sides!)
+            return
+        }
+        removeSideBorderSublayers(layer)
         let bw = (style["borderWidth"] as? CGFloat) ?? 0
         if bw > 0, let bc = (style["borderColor"] as? String).flatMap(parseHexColor) {
             layer.borderWidth = bw
             layer.borderColor = bc.cgColor
         } else {
             layer.borderWidth = 0
+        }
+    }
+
+    /// ★★★逐边 border 批：读逐边字段 → 四元组（nil = 无逐边声明）。
+    ///   值 = (width, colorHex?)；width ≤ 0 或颜色缺 ⇒ 该边不画。
+    static func sideBordersOf(_ style: [String: Any]) -> [(CGFloat, CGColor?)]? {
+        let keys: [(String, String)] = [
+            ("borderTopWidth", "borderTopColor"), ("borderRightWidth", "borderRightColor"),
+            ("borderBottomWidth", "borderBottomColor"), ("borderLeftWidth", "borderLeftColor"),
+        ]
+        var any = false
+        for (wk, _) in keys where style[wk] != nil { any = true; break }
+        if !any { for (_, ck) in keys where style[ck] != nil { any = true; break } }
+        guard any else { return nil }
+        return keys.map { (wk, ck) in
+            let w = (style[wk] as? CGFloat) ?? ((style[wk] as? Double).map { CGFloat($0) } ?? 0)
+            let col = (style[ck] as? String).flatMap(parseHexColor)?.cgColor
+            return (w, col)
+        }
+    }
+
+    /// ★★★逐边 border 批：更新四个边框子层（幂等：先移除旧的再建）。
+    ///   【为什么不用 `autoresizingMask`（首版编译红：iOS 上该 API **不可用**——那是 macOS 的）】
+    ///   iOS 的 CALayer 没有自动布局 ⇒ 子层 frame 由 `syncSideBorderFrames` **集中同步**：
+    ///   厚度存进 `sub.bounds`（与方向无关的立方体），frame 由父 bounds 每次重算。
+    private func applySideBorderSublayers(_ layer: CALayer, sides: [(CGFloat, CGColor?)]) {
+        removeSideBorderSublayers(layer)
+        // 顺序：0=top 1=right 2=bottom 3=left；用 name 前缀标记（层复用/重建时清理）
+        for i in 0..<4 {
+            let (w, col) = sides[i]
+            if w <= 0 || col == nil { continue }
+            let sub = CALayer()
+            // 【为什么厚度编码进 name（首版真机缺陷：上下边不显示）】首版把厚度存 `sub.bounds.width`，
+            //   而 `sub.frame = …` **会覆写 bounds** ⇒ 二次 sync 时把「厚度」读成「盒宽」
+            //   （上下边 frame 高变成整个盒宽、位置错乱 ⇒ 不可见；左右边的 frame 宽恰=厚度才侥幸正确）。
+            sub.name = "proteus-side-border-\(i)-\(w)"
+            sub.backgroundColor = col
+            layer.addSublayer(sub)
+        }
+        Self.syncSideBorderFrames(layer)
+    }
+
+    /// ★★★逐边 border 批：按父 bounds 重算边框子层 frame（i=0..3 ⇒ top/right/bottom/left）。
+    ///   【为什么必须有】iOS CALayer 无自动布局（见上）⇒ 父层 frame 变化后由宿主**集中调用**
+    ///   （`render` 的两个出口：增量回包前 / 全量建层后——覆盖全部 frame 变更路径）。
+    static func syncSideBorderFrames(_ layer: CALayer) {
+        guard let subs = layer.sublayers else { return }
+        let b = layer.bounds
+        for sub in subs {
+            guard let nm = sub.name, nm.hasPrefix("proteus-side-border-") else { continue }
+            // 名字形态：`proteus-side-border-<idx>-<thickness>`（厚度编码进名字——见创建处注释）
+            let parts = nm.split(separator: "-")
+            guard parts.count >= 5, let idx = Int(parts[3]), let tv = Double(parts[4]) else { continue }
+            let t = CGFloat(tv)
+            switch idx {
+            case 0: sub.frame = CGRect(x: 0, y: 0, width: b.width, height: t)
+            case 1: sub.frame = CGRect(x: b.width - t, y: 0, width: t, height: b.height)
+            case 2: sub.frame = CGRect(x: 0, y: b.height - t, width: b.width, height: t)
+            default: sub.frame = CGRect(x: 0, y: 0, width: t, height: b.height)
+            }
+        }
+    }
+
+    /// ★★★逐边 border 批：移除全部边框子层（幂等清理；uniform 路径与复用路径都调）。
+    private func removeSideBorderSublayers(_ layer: CALayer) {
+        guard let subs = layer.sublayers else { return }
+        for sub in subs where (sub.name ?? "").hasPrefix("proteus-side-border-") {
+            sub.removeFromSuperlayer()
         }
     }
 

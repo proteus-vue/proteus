@@ -17,20 +17,20 @@
       "unit": 30
     },
     "byImpl": {
-      "not-started": 645,
+      "not-started": 630,
       "excluded": 210,
-      "implemented": 88,
+      "implemented": 103,
       "partial": 6
     },
     "byPriority": {
       "P2": 119,
       "excluded": 210,
-      "P0": 34,
-      "done": 88,
-      "P1": 498
+      "P0": 29,
+      "done": 103,
+      "P1": 488
     },
-    "actionable": 651,
-    "actionableP0": 34
+    "actionable": 636,
+    "actionableP0": 29
   },
   "entries": [
     {
@@ -3714,8 +3714,8 @@
         "border-bottom-color"
       ],
       "syntax": "<line-width> || <line-style> || <color>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "implemented",
+      "implNote": "**简写展开**：borderBottomWidth + borderBottomColor——逐边简写（证据：同上）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3724,8 +3724,8 @@
         "webSupport": null
       },
       "usage": 13,
-      "priority": "P0",
-      "acceptance": "none"
+      "priority": "done",
+      "acceptance": "pending"
     },
     {
       "id": "border-bottom-color",
@@ -3737,18 +3737,18 @@
       "inherited": false,
       "initial": "currentcolor",
       "syntax": "<'border-top-color'>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "implemented",
+      "implNote": "IR 注册表在册（scope=semantic · 矩阵 Color）",
       "evidencedBy": {
-        "inIrRegistry": false,
-        "irScope": null,
-        "inCompilerFold": false,
-        "matrixLevel": null,
+        "inIrRegistry": true,
+        "irScope": "semantic",
+        "inCompilerFold": true,
+        "matrixLevel": "Color",
         "webSupport": null
       },
       "usage": 2,
-      "priority": "P0",
-      "acceptance": "none"
+      "priority": "done",
+      "acceptance": "pending"
     },
     {
       "id": "border-bottom-left-radius",
@@ -3806,18 +3806,18 @@
       "inherited": false,
       "initial": "none",
       "syntax": "<line-style>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "implemented",
+      "implNote": "IR 注册表在册（scope=engine-only · 矩阵 BorderStyle）",
       "evidencedBy": {
-        "inIrRegistry": false,
-        "irScope": null,
+        "inIrRegistry": true,
+        "irScope": "engine-only",
         "inCompilerFold": false,
-        "matrixLevel": null,
+        "matrixLevel": "BorderStyle",
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
-      "acceptance": "none"
+      "priority": "done",
+      "acceptance": "pending"
     },
     {
       "id": "border-bottom-width",
@@ -3829,18 +3829,18 @@
       "inherited": false,
       "initial": "medium",
       "syntax": "<line-width>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "implemented",
+      "implNote": "IR 注册表在册（scope=semantic · 矩阵 Length）",
       "evidencedBy": {
-        "inIrRegistry": false,
-        "irScope": null,
-        "inCompilerFold": false,
-        "matrixLevel": null,
+        "inIrRegistry": true,
+        "irScope": "semantic",
+        "inCompilerFold": true,
+        "matrixLevel": "Length",
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
-      "acceptance": "none"
+      "priority": "done",
+      "acceptance": "pending"
     },
     {
       "id": "border-collapse",
@@ -4385,8 +4385,8 @@
         "border-left-color"
       ],
       "syntax": "<line-width> || <line-style> || <color>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "implemented",
+      "implNote": "**简写展开**：borderLeftWidth + borderLeftColor——逐边简写（证据：同上）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4395,8 +4395,8 @@
         "webSupport": null
       },
       "usage": 1,
-      "priority": "P0",
-      "acceptance": "none"
+      "priority": "done",
+      "acceptance": "pending"
     },
     {
       "id": "border-left-color",
@@ -4408,18 +4408,18 @@
       "inherited": false,
       "initial": "currentcolor",
       "syntax": "<color>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "implemented",
+      "implNote": "IR 注册表在册（scope=semantic · 矩阵 Color）",
       "evidencedBy": {
-        "inIrRegistry": false,
-        "irScope": null,
-        "inCompilerFold": false,
-        "matrixLevel": null,
+        "inIrRegistry": true,
+        "irScope": "semantic",
+        "inCompilerFold": true,
+        "matrixLevel": "Color",
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
-      "acceptance": "none"
+      "priority": "done",
+      "acceptance": "pending"
     },
     {
       "id": "border-left-style",
@@ -4431,18 +4431,18 @@
       "inherited": false,
       "initial": "none",
       "syntax": "<line-style>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "implemented",
+      "implNote": "IR 注册表在册（scope=engine-only · 矩阵 BorderStyle）",
       "evidencedBy": {
-        "inIrRegistry": false,
-        "irScope": null,
+        "inIrRegistry": true,
+        "irScope": "engine-only",
         "inCompilerFold": false,
-        "matrixLevel": null,
+        "matrixLevel": "BorderStyle",
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
-      "acceptance": "none"
+      "priority": "done",
+      "acceptance": "pending"
     },
     {
       "id": "border-left-width",
@@ -4454,18 +4454,18 @@
       "inherited": false,
       "initial": "medium",
       "syntax": "<line-width>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "implemented",
+      "implNote": "IR 注册表在册（scope=semantic · 矩阵 Length）",
       "evidencedBy": {
-        "inIrRegistry": false,
-        "irScope": null,
-        "inCompilerFold": false,
-        "matrixLevel": null,
+        "inIrRegistry": true,
+        "irScope": "semantic",
+        "inCompilerFold": true,
+        "matrixLevel": "Length",
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
-      "acceptance": "none"
+      "priority": "done",
+      "acceptance": "pending"
     },
     {
       "id": "border-radius",
@@ -4509,8 +4509,8 @@
         "border-right-color"
       ],
       "syntax": "<line-width> || <line-style> || <color>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "implemented",
+      "implNote": "**简写展开**：borderRightWidth + borderRightColor——逐边简写（证据：同上）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4519,8 +4519,8 @@
         "webSupport": null
       },
       "usage": 2,
-      "priority": "P0",
-      "acceptance": "none"
+      "priority": "done",
+      "acceptance": "pending"
     },
     {
       "id": "border-right-color",
@@ -4532,18 +4532,18 @@
       "inherited": false,
       "initial": "currentcolor",
       "syntax": "<color>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "implemented",
+      "implNote": "IR 注册表在册（scope=semantic · 矩阵 Color）",
       "evidencedBy": {
-        "inIrRegistry": false,
-        "irScope": null,
-        "inCompilerFold": false,
-        "matrixLevel": null,
+        "inIrRegistry": true,
+        "irScope": "semantic",
+        "inCompilerFold": true,
+        "matrixLevel": "Color",
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
-      "acceptance": "none"
+      "priority": "done",
+      "acceptance": "pending"
     },
     {
       "id": "border-right-style",
@@ -4555,18 +4555,18 @@
       "inherited": false,
       "initial": "none",
       "syntax": "<line-style>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "implemented",
+      "implNote": "IR 注册表在册（scope=engine-only · 矩阵 BorderStyle）",
       "evidencedBy": {
-        "inIrRegistry": false,
-        "irScope": null,
+        "inIrRegistry": true,
+        "irScope": "engine-only",
         "inCompilerFold": false,
-        "matrixLevel": null,
+        "matrixLevel": "BorderStyle",
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
-      "acceptance": "none"
+      "priority": "done",
+      "acceptance": "pending"
     },
     {
       "id": "border-right-width",
@@ -4578,18 +4578,18 @@
       "inherited": false,
       "initial": "medium",
       "syntax": "<line-width>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "implemented",
+      "implNote": "IR 注册表在册（scope=semantic · 矩阵 Length）",
       "evidencedBy": {
-        "inIrRegistry": false,
-        "irScope": null,
-        "inCompilerFold": false,
-        "matrixLevel": null,
+        "inIrRegistry": true,
+        "irScope": "semantic",
+        "inCompilerFold": true,
+        "matrixLevel": "Length",
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
-      "acceptance": "none"
+      "priority": "done",
+      "acceptance": "pending"
     },
     {
       "id": "border-spacing",
@@ -4702,8 +4702,8 @@
         "border-top-color"
       ],
       "syntax": "<line-width> || <line-style> || <color>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "implemented",
+      "implNote": "**简写展开**：borderTopWidth + borderTopColor——逐边简写（证据：同上（逐边分支））",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4712,8 +4712,8 @@
         "webSupport": null
       },
       "usage": 8,
-      "priority": "P0",
-      "acceptance": "none"
+      "priority": "done",
+      "acceptance": "pending"
     },
     {
       "id": "border-top-color",
@@ -4725,18 +4725,18 @@
       "inherited": false,
       "initial": "currentcolor",
       "syntax": "<color>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "implemented",
+      "implNote": "IR 注册表在册（scope=semantic · 矩阵 Color）",
       "evidencedBy": {
-        "inIrRegistry": false,
-        "irScope": null,
-        "inCompilerFold": false,
-        "matrixLevel": null,
+        "inIrRegistry": true,
+        "irScope": "semantic",
+        "inCompilerFold": true,
+        "matrixLevel": "Color",
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
-      "acceptance": "none"
+      "priority": "done",
+      "acceptance": "pending"
     },
     {
       "id": "border-top-left-radius",
@@ -4794,18 +4794,18 @@
       "inherited": false,
       "initial": "none",
       "syntax": "<line-style>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "implemented",
+      "implNote": "IR 注册表在册（scope=engine-only · 矩阵 BorderStyle）",
       "evidencedBy": {
-        "inIrRegistry": false,
-        "irScope": null,
+        "inIrRegistry": true,
+        "irScope": "engine-only",
         "inCompilerFold": false,
-        "matrixLevel": null,
+        "matrixLevel": "BorderStyle",
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
-      "acceptance": "none"
+      "priority": "done",
+      "acceptance": "pending"
     },
     {
       "id": "border-top-width",
@@ -4818,11 +4818,11 @@
       "initial": "medium",
       "syntax": "<line-width>",
       "impl": "implemented",
-      "implNote": "IR 注册表在册（scope=engine-only · 矩阵 Length）",
+      "implNote": "IR 注册表在册（scope=semantic · 矩阵 Length）",
       "evidencedBy": {
         "inIrRegistry": true,
-        "irScope": "engine-only",
-        "inCompilerFold": false,
+        "irScope": "semantic",
+        "inCompilerFold": true,
         "matrixLevel": "Length",
         "webSupport": null
       },
@@ -15118,11 +15118,11 @@
       "initial": "normal",
       "syntax": "normal | pre | pre-wrap | pre-line | <'white-space-collapse'> || <'text-wrap-mode'>",
       "impl": "implemented",
-      "implNote": "IR 注册表在册（scope=engine-only · 矩阵 TextWrap）",
+      "implNote": "IR 注册表在册（scope=semantic · 矩阵 TextWrap）",
       "evidencedBy": {
         "inIrRegistry": true,
-        "irScope": "engine-only",
-        "inCompilerFold": false,
+        "irScope": "semantic",
+        "inCompilerFold": true,
         "matrixLevel": "TextWrap",
         "webSupport": true
       },

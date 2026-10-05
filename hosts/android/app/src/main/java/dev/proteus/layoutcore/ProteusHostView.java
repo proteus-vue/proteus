@@ -95,6 +95,14 @@ public class ProteusHostView extends ViewGroup {
         /** ★★nowrap 且文本超出盒宽且无省略号 ⇒ 绘制裁到盒（= Web overflow 裁切语义）。 */
         final boolean clipText;
         /**
+         * ★★★逐边 border 批（2026-10-05）：**逐边边框规格**——`float[12]`：
+         *   [0..3] = 四边宽度（top/right/bottom/left；**NaN = 该边未声明 ⇒ 回落到 uniform borderWidth**）·
+         *   [4..7] = 四边颜色（ARGB int as float；0 = 未声明 ⇒ 回落 borderColor）·
+         *   [8..11] = 四边线型（0=solid/1=dashed/2=dotted）。
+         *   null = 无逐边声明（纯 uniform 路径——零行为变化）。
+         */
+        final float[] sideBorder;
+        /**
          * ★★圆角半径（px；0 = 直角）——纯绘制属性（内核不收，只影响观感）。
          *
          * 【为什么加（2026-10-01 · 灯光秀）】灯光秀的 800 颗灯珠用 4px 圆角（圆点观感）；
@@ -166,6 +174,11 @@ public class ProteusHostView extends ViewGroup {
         /** ★★全端对齐批：完整构造器（含 white-space 绘制模式）。 */
         Cmd(float x, float y, float w, float h, int color, String text, float fontSize, int textColor, float radius,
             GradSpec gradient, float[] glow, float[] mask, int fontWeight, int textAlign, float borderWidth, int borderColor, float[] boxShadow, float lineHeight, float letterSpacing, int textDecoration, int whiteSpace, boolean multiLine, boolean clipText) {
+            this(x, y, w, h, color, text, fontSize, textColor, radius, gradient, glow, mask, fontWeight, textAlign, borderWidth, borderColor, boxShadow, lineHeight, letterSpacing, textDecoration, whiteSpace, multiLine, clipText, null);
+        }
+        /** ★★★逐边 border 批：最全构造器（含逐边规格）。 */
+        Cmd(float x, float y, float w, float h, int color, String text, float fontSize, int textColor, float radius,
+            GradSpec gradient, float[] glow, float[] mask, int fontWeight, int textAlign, float borderWidth, int borderColor, float[] boxShadow, float lineHeight, float letterSpacing, int textDecoration, int whiteSpace, boolean multiLine, boolean clipText, float[] sideBorder) {
             this.x = x; this.y = y; this.w = w; this.h = h; this.color = color; this.text = text;
             this.fontSize = fontSize;
             this.textColor = textColor;
@@ -184,6 +197,7 @@ public class ProteusHostView extends ViewGroup {
             this.whiteSpace = whiteSpace;
             this.multiLine = multiLine;
             this.clipText = clipText;
+            this.sideBorder = sideBorder;
         }
     }
 
@@ -2583,8 +2597,37 @@ public class ProteusHostView extends ViewGroup {
                     canvas.drawText(c.text, tx, baseY, textPaint);
                 }
             }
-            // ★批次 5（CSS 兼容对齐 · 边框）：uniform 边框（stroke 半内缩：strokeWidth/2 居中于边线）。
-            if (c.borderWidth > 0 && c.borderColor != 0) {
+            // ★★★逐边 border 批（2026-10-05）：含逐边声明 ⇒ **逐边绘制**（每边一条线；线型 solid/dashed/dotted）。
+            //   逐边未声明的边回落 uniform（borderWidth/borderColor）——与 Web 的 border 简写语义一致。
+            if (c.sideBorder != null) {
+                final double opD = op;
+                final float[] sb = c.sideBorder;
+                for (int si = 0; si < 4; si++) {
+                    float sw = Float.isNaN(sb[si]) ? c.borderWidth : sb[si];
+                    if (sw <= 0f) continue;
+                    int scol = (int) sb[4 + si];
+                    if (scol == 0) scol = c.borderColor;
+                    if (scol == 0) continue;
+                    borderPaint.setColor(scol);
+                    borderPaint.setStrokeWidth(sw);
+                    borderPaint.setAlpha(opD < 1.0 ? Math.max(0, Math.min(255, (int) (Color.alpha(scol) * opD))) : Color.alpha(scol));
+                    final int st = (int) sb[8 + si];
+                    if (st == 0) borderPaint.setStyle(android.graphics.Paint.Style.STROKE);
+                    else { borderPaint.setStyle(android.graphics.Paint.Style.STROKE); borderPaint.setPathEffect(new android.graphics.DashPathEffect(st == 1 ? new float[]{sw * 3f, sw * 2f} : new float[]{sw, sw * 1.5f}, 0f)); }
+                    final float half = sw * 0.5f;
+                    // 线沿该边内缘（CSS border 在 padding-box 外沿盒内——本仓按内缘绘制，与既有 uniform 同口径）
+                    final float l = c.x + half, t = c.y + half, rr = c.x + c.w - half, bb = c.y + c.h - half;
+                    switch (si) {
+                        case 0: canvas.drawLine(l, t, rr, t, borderPaint); break;
+                        case 1: canvas.drawLine(rr, t, rr, bb, borderPaint); break;
+                        case 2: canvas.drawLine(l, bb, rr, bb, borderPaint); break;
+                    
+                        default: canvas.drawLine(l, t, l, bb, borderPaint); break;
+                    }
+                    borderPaint.setPathEffect(null);
+                }
+            } else if (c.borderWidth > 0 && c.borderColor != 0) {
+                // ★批次 5（CSS 兼容对齐 · 边框）：uniform 边框（stroke 半内缩：strokeWidth/2 居中于边线）。
                 borderPaint.setColor(c.borderColor);
                 borderPaint.setStrokeWidth(c.borderWidth);
                 borderPaint.setAlpha(op < 1f ? Math.max(0, Math.min(255, (int) (Color.alpha(c.borderColor) * op))) : Color.alpha(c.borderColor));
@@ -2882,6 +2925,8 @@ public class ProteusHostView extends ViewGroup {
             if (c.gradient != null || c.glow != null || c.mask != null || c.radius > 0f) return false;
             // ★★全端对齐批：需要折行/裁切的文本 ⇒ 不合快路径（快路径是单行 drawText 重放）
             if (c.text != null && (c.multiLine || c.clipText)) return false;
+            // ★★★逐边 border 批：逐边线型（dashed 的 PathEffect）不在快路径实现内 ⇒ 排除
+            if (c.sideBorder != null) return false;
         }
         return true;
     }

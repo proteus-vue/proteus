@@ -390,7 +390,10 @@ function analyzeEnd(png, end) {
   const strips = {
     left: stripStats(readRgb(png, 0, topY, S, botY - topY)),
     right: stripStats(readRgb(png, w - S, topY, S, botY - topY)),
-    top: stripStats(readRgb(png, 20, topY, w - 40, 4)),
+    // ★修正（2026-10-05 · 破坏性验证抓出探针削弱）：采样带**加高到 40px**——首版 4px 只在 chrome 下缘
+    //   蹭一条，注入的「顶部黑条」（50px 高、y=70 起）落在带外 ⇒ 漏报。40px 覆盖该类缺陷典型高度。
+    //   配合分层阈值（top 0.15）：标题笔画（~3%）不误报、色条（≥50%）照抓。
+    top: stripStats(readRgb(png, 20, topY, w - 40, 40)),
     bottom: stripStats(readRgb(png, 20, botY, w - 40, 4)),
   }
   const seam = stripStats(readRgb(png, w - 2, topY, 2, botY - topY))
@@ -433,11 +436,19 @@ function probe(end) {
       if (!fs.existsSync(png)) { rows.push({ end: e, pass: false, note: '缺截图（先跑该端）' }); allPass = false; missing++; continue }
       const a = analyzeEnd(png, e)
       const darkMax = Math.max(a.strips.left.darkRatio, a.strips.right.darkRatio, a.strips.top.darkRatio)
+      // ★修正（2026-10-05 · border 项 MP 误报 3.1%）：**top 带阈值分层**——
+      //   top 采样带（页面区上缘）必然切过**页面标题文字**（黑字占比 ~3%，各端皆有）；
+      //   而「顶部深色条」类真缺陷（系统栏遮挡/黑块）是**宽幅均匀深色**（≥50%）。
+      //   ⇒ top 用 0.15 阈值（文字不误报、色条照抓）；left/right 是页边距带（无文字）保持 0.03。
+      const darkLR = Math.max(a.strips.left.darkRatio, a.strips.right.darkRatio)
       const dL = dc(a.strips.left.mode, web.strips.left.mode)
       const dR = dc(a.strips.right.mode, web.strips.right.mode)
       const dB = dc(a.strips.bottom.mode, web.strips.bottom.mode)
       const checks = {
-        darkEdges: { pass: darkMax < 0.03 && a.strips.bottom.darkRatio < 0.05, detail: 'L/R/T ' + (darkMax * 100).toFixed(1) + '% B ' + (a.strips.bottom.darkRatio * 100).toFixed(1) + '%' },
+        darkEdges: {
+          pass: darkLR < 0.03 && a.strips.top.darkRatio < 0.15 && a.strips.bottom.darkRatio < 0.05,
+          detail: 'L/R ' + (darkLR * 100).toFixed(1) + '% T ' + (a.strips.top.darkRatio * 100).toFixed(1) + '% B ' + (a.strips.bottom.darkRatio * 100).toFixed(1) + '%',
+        },
         edgeColor: { pass: dL <= 24 && dR <= 24 && dB <= 24, detail: 'ΔL' + dL + ' ΔR' + dR + ' ΔB' + dB },
         seam: { pass: a.seam.darkRatio < 0.25, detail: '右缘深色 ' + (a.seam.darkRatio * 100).toFixed(1) + '%' },
         cardMargins: a.card

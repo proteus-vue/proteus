@@ -1,0 +1,142 @@
+{
+  "_note": "★CSS 能力逐项验收包（用户指定流程：实现一个 → 全端对齐视觉验收一个）。gates：implemented（IR 在册）/ parity（真 Chromium 同构样本与 CSE 值一致）/ endsMapped（三端可表达）。★视觉验收（像素级）仍由独立子代理按 Web 基准并排做——本包只归档**机器可判**的三段；pass=true 表示\"可以进入视觉验收\"，不等于\"视觉已验收\"。",
+  "id": "border-right",
+  "kind": "property",
+  "verifiedAt": "2026-10-05T12:12:47.302Z",
+  "implEvidence": {
+    "impl": "implemented",
+    "implNote": "**简写展开**：borderRightWidth + borderRightColor——逐边简写（证据：同上）",
+    "inIrRegistry": false,
+    "irScope": null,
+    "inCompilerFold": false,
+    "matrixLevel": null,
+    "webSupport": null,
+    "usage": 2,
+    "priority": "done"
+  },
+  "parity": {
+    "ran": true,
+    "pass": true,
+    "detail": [
+      "IR `borderRightWidth` = 3（与浏览器样本 border-right: 3px solid #3355aa 一致）"
+    ],
+    "css": "border-right: 3px solid #3355aa",
+    "irField": "borderRightWidth",
+    "irValue": 3,
+    "computedProbe": {
+      "align-items": "normal",
+      "background-color": "rgba(0, 0, 0, 0)",
+      "border-bottom-color": "rgb(0, 0, 0)",
+      "border-bottom-width": "0px",
+      "border-left-color": "rgb(0, 0, 0)",
+      "border-left-width": "0px",
+      "border-right-color": "rgb(51, 85, 170)",
+      "border-right-width": "3px",
+      "border-top-color": "rgb(0, 0, 0)",
+      "border-top-width": "0px",
+      "bottom": "auto",
+      "color": "rgb(0, 0, 0)",
+      "flex-direction": "row",
+      "font-size": "16px",
+      "justify-content": "normal",
+      "justify-self": "auto",
+      "left": "auto",
+      "letter-spacing": "normal",
+      "line-height": "normal",
+      "opacity": "1",
+      "overflow-x": "visible",
+      "overflow-y": "visible",
+      "right": "auto",
+      "text-align": "start",
+      "top": "auto",
+      "word-break": "normal"
+    }
+  },
+  "endExpressibility": {
+    "web": "基准端（浏览器原生——A 档）",
+    "skyline": "可表达（border-right-width）",
+    "app": "可表达（dto: borderRightWidth）",
+    "skylineUnsupported": [],
+    "appUnsupported": []
+  },
+  "gates": {
+    "implemented": true,
+    "parity": true,
+    "endsMapped": true
+  },
+  "pass": true,
+  "nextStep": "机器判据三段已过 → 进入**视觉验收**：生成并排产物（node scripts/gen-baseline-side-by-side.mjs）+ 独立子代理按 Web 基准评审",
+  "visual": {
+    "_note": "★视觉验收结论（独立子代理按 Web 基准并排图评审；来源 = css-conformance/results/side-by-side/）。verdict: pass（与 Web 基准无可归因差异）/ fail（有实差异——见 caseIssues）/ unclear（图不足以判）。纪律：左半恒为 Web 基准（D1）；不看不清不编（unclear）。",
+    "reviewedAt": "2026-10-05T12:51:01.579Z",
+    "reviewedBy": "independent-visual-subagent",
+    "sideBySideDir": "css-conformance/results/side-by-side/",
+    "summary": {
+      "fails": 0,
+      "ends": "web:pass · mp:pass · android:pass · ios:pass · harmony:pass"
+    },
+    "verdicts": [
+      {
+        "end": "web",
+        "verdict": "pass",
+        "caseIssues": [],
+        "evidence": "基准端。5 案例（底部 1px 分隔线×2 / 顶部 2px 紫 / 左侧 3px 红 / 右侧 1px 灰 / 四边 2:3:4:1）逐像素测量与规格一致。"
+      },
+      {
+        "end": "mp",
+        "verdict": "pass",
+        "caseIssues": [],
+        "evidence": "8/8 线厚 ≈ CSS×1.5（本端 DPR）；色/位/有无与基准一致；四边比例 2:3:4:1 正确。"
+      },
+      {
+        "end": "android",
+        "verdict": "pass",
+        "caseIssues": [
+          {
+            "case": "all",
+            "issue": "首轮终评：边框宽度未乘 DPR（1 设备px/CSS px ⇒ 比基准细 3 倍）",
+            "severity": "major",
+            "status": "fixed",
+            "fix": "LEN_SCALARS 补登记 4 个逐边宽度字段（物理化清单漏项——本表注释原文即'新增长度字段必须登记'）"
+          }
+        ],
+        "evidence": "复评 8/8 线厚精确 = CSS×3（1/2/3/1/2/3/4/1 CSS → 3/6/9/3/6/9/12/3 设备px，无 AA）；色/位/四边比例正确。"
+      },
+      {
+        "end": "ios",
+        "verdict": "pass",
+        "caseIssues": [
+          {
+            "case": "case-all-sides",
+            "issue": "首轮：上下边不显示（厚度存 bounds.width 被 frame 赋值覆盖 ⇒ 二次 sync 读错）",
+            "severity": "blocker",
+            "status": "fixed",
+            "fix": "厚度编码进子层 name（`proteus-side-border-<idx>-<thickness>`），sync 从 name 解析"
+          }
+        ],
+        "evidence": "复评：5 案例线厚/色/侧别与 Web 基准一致（6/9/12/3 设备px 精确）；四边齐全。"
+      },
+      {
+        "end": "harmony",
+        "verdict": "pass",
+        "caseIssues": [
+          {
+            "case": "all",
+            "issue": "首轮：边框全部不显示（ArkUI 需 border-style 才绘制——width/color 的 Set 均 rc=0 但无样式不画）",
+            "severity": "blocker",
+            "status": "fixed",
+            "fix": "补 SetBorderStyle(SOLID)（逐边 + uniform 两分支）"
+          },
+          {
+            "case": "all",
+            "issue": "次轮：线厚 ~1/3（我的'单位修正'误按 vp 除以 density——实测该通道按物理 px 解释）",
+            "severity": "major",
+            "status": "fixed",
+            "fix": "撤销 vp 换算，直传物理 px（与 Android/iOS 同口径）"
+          }
+        ],
+        "evidence": "复评 8/8 项归一后 ≈1.0× 基准（0.86~1.16，含 DPR 3.5 半像素 AA）；色/位/四边比例正确。"
+      }
+    ]
+  }
+}

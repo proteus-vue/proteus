@@ -168,6 +168,12 @@ export function mapStyleIRToApp(fields: Record<string, unknown>): AppMappingResu
         put(field, value, value)
         continue
       }
+      // ★★★逐边 border 批（2026-10-05 · 真 bug：此分支原在下方「字符串族」之后 ⇒ 逐边宽度永远到不了
+      //   ——数值先被「数值（本字段未登记映射）」拦掉）。三端宿主已支持逐边 ⇒ 直传。
+      if (/^border(Top|Right|Bottom|Left)Width$/.test(field)) {
+        put(field, value, value)
+        continue
+      }
       drop(field, value, '数值（本字段未登记映射）')
       continue
     }
@@ -222,19 +228,6 @@ export function mapStyleIRToApp(fields: Record<string, unknown>): AppMappingResu
       ops[`layout.${field}`] = JSON.stringify(value)
       continue
     }
-    if (/^border(Top|Right|Bottom|Left)Width$/.test(field)) {
-      // ★B3 收敛（内核只有**统一**宽度）：四边同值 ⇒ 写 `borderWidth`（等价；不记 unsupported）；
-      //   四边不同 ⇒ 取**最大值**写统一宽度 + **如实记差异**（不静默取首个——那会让边框视觉偏差不可见）
-      if (typeof value === 'number') {
-        const widthsSeen = (dto['__borderWidths'] as Record<string, number>) ?? {}
-        widthsSeen[field] = value
-        dto['__borderWidths'] = widthsSeen
-        continue
-      }
-      drop(field, value, '非数值')
-      continue
-    }
-
     /* ── v1 明确不支持（不猜不近似） ── */
     if (field === 'transform' || field === 'transformOrigin' || field === 'boxShadow') {
       drop(field, value, 'v1 未接（宿主变换/阴影通道独立批次）')
@@ -245,26 +238,6 @@ export function mapStyleIRToApp(fields: Record<string, unknown>): AppMappingResu
       continue
     }
     drop(field, value, '未分类（映射表未覆盖——应补映射或显式登记 unsupported）')
-  }
-  // ★逐边宽度收敛（见循环内注释）
-  {
-    const widths = dto['__borderWidths'] as Record<string, number> | undefined
-    if (widths) {
-      delete dto['__borderWidths']
-      const vals = Object.values(widths)
-      const uniq = [...new Set(vals)]
-      if (uniq.length === 1) {
-        put('borderWidth', uniq[0]!, uniq[0]!)
-      } else {
-        const maxW = Math.max(...vals)
-        put('borderWidth', maxW, maxW)
-        unsupported.push({
-          field: 'borderWidth(逐边)',
-          value: widths,
-          reason: `内核只有统一宽度 ⟹ 取最大值 ${maxW}（逐边不同：${JSON.stringify(widths)}——如实记差异，不静默取首个）`,
-        })
-      }
-    }
   }
   return { dto, ops, unsupported }
 }

@@ -34,6 +34,8 @@ const TEXT_ALIGN = ['left', 'center', 'right']
  *   其余值由 Applier/折叠器如实降级（诊断）——本层按 Web 标准收口，端侧收窄不在这层。
  */
 const TEXT_WRAP = ['normal', 'nowrap', 'pre', 'pre-wrap', 'pre-line', 'break-spaces']
+/** ★★★逐边 border 批（2026-10-05）：边框线型封闭集（per-side style；'' 缺省=solid）。 */
+const BORDER_STYLE = ['solid', 'dashed', 'dotted', 'none']
 
 export const PROP_TYPES = {
   Length: isLength,
@@ -45,6 +47,7 @@ export const PROP_TYPES = {
   FlexJustify: isEnum(FLEX_JUSTIFY),
   TextAlign: isEnum(TEXT_ALIGN),
   TextWrap: isEnum(TEXT_WRAP),
+  BorderStyle: isEnum(BORDER_STYLE),
   Transform: (v: unknown): boolean => typeof v === 'string' && /^(translate|scale|rotate|skew)/i.test(v.trim()),
   TransformOrigin: (v: unknown): boolean => typeof v === 'string' && /^(left|right|top|bottom|center|\d+)/i.test(v.trim()),
 } as const

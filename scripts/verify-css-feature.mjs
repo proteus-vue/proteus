@@ -77,6 +77,11 @@ const implEvidence = {
 const PROBE_VALUES = {
   // 属性 → [css 声明, 期望字段（IR 键）, 期望形态]
   inset: ['inset: 4px 8px', 'top', { kind: 'absolute', dp: 4 }],
+  // ★★★逐边 border 批（2026-10-05）：逐边宽度样本（CSE 产出 border<Side>Width 数值）
+  'border-bottom': ['border-bottom: 2px solid #3355aa', 'borderBottomWidth', 2],
+  'border-top': ['border-top: 2px solid #3355aa', 'borderTopWidth', 2],
+  'border-left': ['border-left: 3px solid #3355aa', 'borderLeftWidth', 3],
+  'border-right': ['border-right: 3px solid #3355aa', 'borderRightWidth', 3],
   'overflow-x': ['overflow-x: hidden', 'overflow', 'hidden'],
   'overflow-y': ['overflow-y: hidden', 'overflow', 'hidden'],
   'white-space': ['white-space: nowrap', 'whiteSpace', 'nowrap'],
@@ -126,7 +131,7 @@ if (!probe) {
     parity.irField = irField
     parity.irValue = irVal
     parity.computedProbe = Object.fromEntries(
-      Object.entries(computed).filter(([k]) => ['inset', 'top', 'right', 'bottom', 'left', 'overflow-x', 'overflow-y', 'white-space', 'word-break', 'justify-self', 'grid-area', 'background-color', 'color', 'border-radius', 'text-align', 'opacity', 'font-size', 'letter-spacing', 'line-height', 'flex-direction', 'justify-content', 'align-items', 'gap'].includes(k)),
+      Object.entries(computed).filter(([k]) => ['inset', 'top', 'right', 'bottom', 'left', 'overflow-x', 'overflow-y', 'white-space', 'word-break', 'justify-self', 'grid-area', 'background-color', 'color', 'border-radius', 'text-align', 'opacity', 'font-size', 'letter-spacing', 'line-height', 'flex-direction', 'justify-content', 'align-items', 'gap', 'border-bottom-width', 'border-top-width', 'border-left-width', 'border-right-width', 'border-bottom-color', 'border-top-color', 'border-left-color', 'border-right-color'].includes(k)),
     )
     // 判据：IR 出值且与浏览器 resolved 语义一致（按形态）
     if (irVal === undefined) {

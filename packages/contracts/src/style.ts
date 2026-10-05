@@ -19,6 +19,11 @@ export type StylePropLevel =
   // ★★★G-61 后批（2026-10-05）：文本换行/空白语义（white-space）——CSE 与旧折叠器都已支持，
   //   但注册表/矩阵/runtime 三处漏登记（**四同步缺口**，清单审计抓出）⇒ 补齐（INV-CE-07）。
   | 'TextWrap'
+  // ★★★逐边 border 批（2026-10-05 · border-bottom 等 4 个 P0 项）：边框线型（per-side style）。
+  //   理由：语料 `border-bottom: 1px dashed #999` 等——线型是独立维度（solid/dashed/dotted/none），
+  //   与宽度/颜色不同轴。新级别四同步（INV-CE-07）：本表 + runtime PROP_TYPES/narrowing
+  //   + compiler 静态校验 + 注册表 VALUE_TYPE_BY_LEVEL（照 TextWrap 先例）。
+  | 'BorderStyle'
   | 'Transform'
   | 'TransformOrigin'
   | 'SEMANTIC_ONLY'
@@ -52,8 +57,21 @@ export const STYLE_PROP_LEVELS = {
   whiteSpace: 'TextWrap',
   borderRadius: 'Length',
   borderWidth: 'Length',
+  // ★★★逐边 border 批（2026-10-05）：四边各自独立（width/color/style）——语料 21 处
+  //   `border-<side>: <w> <style> <color>`（列表分隔线/卡片顶线/侧边强调）。
+  //   App 端折叠为 per-side 字段（宿主逐边绘制；uniform `borderWidth` 保留为四边缺省值）。
   borderTopWidth: 'Length',
-  transform: 'Transform',
+  borderRightWidth: 'Length',
+  borderBottomWidth: 'Length',
+  borderLeftWidth: 'Length',
+  borderTopColor: 'Color',
+  borderRightColor: 'Color',
+  borderBottomColor: 'Color',
+  borderLeftColor: 'Color',
+  borderTopStyle: 'BorderStyle',
+  borderRightStyle: 'BorderStyle',
+  borderBottomStyle: 'BorderStyle',
+  borderLeftStyle: 'BorderStyle',  transform: 'Transform',
   transformOrigin: 'TransformOrigin',
   flex: 'FlexNumber',
   flexGrow: 'FlexNumber',
