@@ -277,6 +277,10 @@ struct TextDrawSpec {
     int textDecoration = 0;
     /** ★批次 20（CSS 兼容对齐 · 以 Web 为基准）：字距（物理 px；0 = 默认）。由指令扁平键 `letterSpacing` 折出。 */
     double letterSpacing = 0;
+    /** ★★全端对齐批（2026-10-05 · white-space 五端对齐）：换行模式（原样字符串：normal/nowrap/pre/pre-wrap/pre-line；空=未声明）。 */
+    std::string whiteSpace;
+    /** ★★全端对齐批：溢出裁切（overflow:hidden 且非 ellipsis）——nowrap 文本超盒宽时裁到盒。 */
+    int clipText = 0;
     /** ★批次 16（CSS 兼容对齐 · 以 Web 为基准）：`text-overflow` 是否 ellipsis（单行溢出以 … 截断）。
      *   1 ⇒ 设 typography maxLines=1 + 尾部省略号 + 按盒宽 Layout（Web 语义）。 */
     int textOverflowEllipsis = 0;
@@ -431,11 +435,25 @@ static void drawChannelsAndText(OH_Drawing_Canvas* canvas, const TextDrawSpec* s
             if (spec->letterSpacing != 0) OH_Drawing_SetTextStyleLetterSpacing(tstyle, spec->letterSpacing);
             // ★批次 16（CSS 兼容对齐 · 以 Web 为基准）：`text-overflow:ellipsis` ⇒ 单行尾部省略号。
             //   maxLines=1 + 尾部 modal + “…” 省略串；Layout 宽度按盒宽（否则不截断）。
-            const bool ellipsis = spec->textOverflowEllipsis != 0 && spec->w > 1.0;
+            // ★★全端对齐批（2026-10-05 · white-space 五端对齐）：
+            //   wrap（normal/pre-wrap/pre-line）⇒ 盒宽折行（多行）；nowrap ⇒ maxLines=1 单行截断/溢出。
+            // ★★第三轮复评修复：**缺省 = CSS `normal`（可折行）**——只有显式 nowrap/pre 才单行
+            //   （复评抓出：未声明 white-space 的副标题在鸿蒙被裁成单行，Web 折 2 行）。
+            const bool wsSingle = spec->whiteSpace == "nowrap" || spec->whiteSpace == "pre";
+            const bool wsWrap = !wsSingle;
+            const bool ellipsis = !wsWrap && spec->textOverflowEllipsis != 0 && spec->w > 1.0;
             if (ellipsis) {
                 OH_Drawing_SetTypographyTextMaxLines(ts, 1);
                 OH_Drawing_SetTypographyTextEllipsisModal(ts, 2); // ELLIPSIS_MODAL_TAIL
                 OH_Drawing_SetTypographyTextEllipsis(ts, "\u2026");
+            } else if (!wsWrap && spec->w > 1.0) {
+                OH_Drawing_SetTypographyTextMaxLines(ts, 1);   // nowrap（含 clip）⇒ 单行
+            }
+            // ★批次 13 扩展（全端对齐批）：**多行行高**——OH_Drawing_SetTextStyleFontHeight 是
+            //   font-size 的倍数（CSS line-height 同语义：行盒高 = 字形在行盒内居中）。
+            //   单行路径保持既有 offY 半行距逻辑（零行为变化）。
+            if (wsWrap && spec->lineHeightPx > 0 && spec->fontSizePx > 0) {
+                OH_Drawing_SetTextStyleFontHeight(tstyle, spec->lineHeightPx / spec->fontSizePx);
             }
             OH_Drawing_TypographyCreate* handler = OH_Drawing_CreateTypographyHandler(ts, fc);
             if (handler != nullptr) {
@@ -457,7 +475,18 @@ static void drawChannelsAndText(OH_Drawing_Canvas* canvas, const TextDrawSpec* s
                         offY = (spec->h - typoH) * 0.5;
                         if (offY < 0) offY = 0;
                     }
-                    OH_Drawing_TypographyPaint(typo, canvas, 0.0, offY);
+                    // ★★全端对齐批：nowrap 溢出裁切（overflow:hidden）⇒ 裁到盒（Web 裁切语义）
+                    if (spec->clipText && spec->w > 1.0) {
+                        OH_Drawing_CanvasSave(canvas);
+                        OH_Drawing_Rect* cr = OH_Drawing_RectCreate(0.0f, 0.0f,
+                                static_cast<float>(spec->w), static_cast<float>(spec->h > 1.0 ? spec->h : spec->fontSizePx * 1.4));
+                        OH_Drawing_CanvasClipRect(canvas, cr, INTERSECT, false);
+                        OH_Drawing_TypographyPaint(typo, canvas, 0.0, offY);
+                        OH_Drawing_CanvasRestore(canvas);
+                        OH_Drawing_RectDestroy(cr);
+                    } else {
+                        OH_Drawing_TypographyPaint(typo, canvas, 0.0, offY);
+                    }
                     OH_Drawing_DestroyTypography(typo);
                 }
                 OH_Drawing_DestroyTypographyHandler(handler);
@@ -566,8 +595,12 @@ static napi_value Attach(napi_env env, napi_callback_info info) {
             probeApi->setAttribute(g_rootHost, NODE_HEIGHT, &hi);
             g_rootNode = OH_ArkUI_RenderNodeUtils_CreateNode();
             if (g_rootNode != nullptr) {
+                // ★★第三轮复评修复（第四轮续）：画布尺寸**向上取整**（`ceil`）——
+                //   四舍五入对 1319.4 仍会取 1319（露 1px 底，第四轮复评实测确认）；
+                //   宁可多 1px（超出被窗口裁掉）也绝不少于内容所需。
+                //   ★同时 ArkTS 侧视口已补 +1px（Superapp.ets renderCurrent）——两处相同取向。
                 OH_ArkUI_RenderNodeUtils_SetSize(g_rootNode,
-                    (int32_t)(screenWvp * g_density), (int32_t)(screenHvp * g_density));
+                    (int32_t)std::ceil(screenWvp * g_density), (int32_t)std::ceil(screenHvp * g_density));
                 int32_t rc = OH_ArkUI_RenderNodeUtils_AddRenderNode(g_rootHost, g_rootNode);
                 if (rc == ARKUI_ERROR_CODE_NO_ERROR) {
                     OH_ArkUI_NodeContent_AddNode(g_content, g_rootHost);
@@ -579,8 +612,8 @@ static napi_value Attach(napi_env env, napi_callback_info info) {
         }
     }
     OH_LOG_Print(LOG_APP, LOG_INFO, LOG_DOMAIN, LOG_TAG,
-                 "PROTEUS_RENDER_ATTACHED ok capi=%{public}d root=%{public}d",
-                 probeApi != nullptr ? 1 : 0, g_rootNode != nullptr ? 1 : 0);
+                 "PROTEUS_RENDER_ATTACHED ok capi=%{public}d root=%{public}d swvp=%.2f shvp=%.2f density=%.3f",
+                 probeApi != nullptr ? 1 : 0, g_rootNode != nullptr ? 1 : 0, screenWvp, screenHvp, g_density);
     napi_value ok;
     napi_create_int32(env, 0, &ok);
     return ok;
@@ -782,6 +815,9 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
             spec->lineHeightPx = lhPx;
             { double lsg = 0; jsonNumber(it, "letterSpacing", &lsg); spec->letterSpacing = lsg; }
             { double toe = 0; jsonNumber(it, "textOverflowEllipsis", &toe); spec->textOverflowEllipsis = toe > 0 ? 1 : 0; }
+            // ★★全端对齐批（2026-10-05 · white-space 五端对齐）：换行模式 + 裁切标记（渲染分流靠它）
+            { std::string wsV; jsonString(it, "whiteSpace", &wsV); spec->whiteSpace = wsV; }
+            { double ct = 0; jsonNumber(it, "clipText", &ct); spec->clipText = ct > 0 ? 1 : 0; }
             spec->w = w;
             spec->h = h;
             spec->radius = radius;

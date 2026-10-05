@@ -176,6 +176,11 @@ public class SuperappActivity extends android.app.Activity {
             android.util.Log.w(TAG, "读 tab 注册表失败：" + e.getMessage());
         }
         tabBar.removeAllViews();
+        // ★★全端对齐批（2026-10-05 · css-conformance 视觉验收抓出）：**无 tab 的应用不显示 tab 栏**——
+        //   此前无条件留 56dp 白底条（tabs=[] 时循环 0 次但容器仍在）⇒ 底部白带与 Web 基准不符。
+        //   空 tab 语义 = 无 tabBar（与 MP「未声明 tabBar 就无 tabBar」同源）。
+        if (tabNames.length == 0) { tabBar.setVisibility(android.view.View.GONE); return; }
+        tabBar.setVisibility(android.view.View.VISIBLE);
         // ★★样式取自 **Web 真值**（App.vue `.sa-tabbar` + global.css token）：surface #ffffff · 顶边框 #dcdfe5 ·
         //   选中 brand #5b5bd6 · 未选中 text-3 #5f6673 · 角标 rec #d64545（minW 16 / h 16 / 圆角 8）。
         final int onColor = 0xFF5B5BD6, offColor = 0xFF5F6673, recColor = 0xFFD64545, lineColor = 0xFFDCDFE5;

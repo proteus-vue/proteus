@@ -251,6 +251,37 @@ final class ProteusTextAdapter {
         return rounded
     }
 
+    /// ★★全端对齐批（2026-10-05 · white-space 五端对齐）：**按盒宽折行测量**（wrap 模式专用）。
+    ///   与 Web 语义对齐：折行后高度 = 行数 × lineHeight（声明行高时）；未声明 ⇒ CoreText 自然高。
+    ///   盒宽来自内核解析后的盒（调用方传入）——宿主不自己推布局（纪律：几何唯一来源 = 内核）。
+    static func measureTextWrapped(_ text: String, fontSize: CGFloat, fontWeight: CGFloat = 400,
+                                    fontFamily: String = "system", lineWidth: CGFloat,
+                                    lineHeight: String? = nil, letterSpacing: CGFloat = 0) -> CGSize {
+        if text.isEmpty || lineWidth <= 0 { return .zero }
+        // 缓存键含 lineWidth（同文本不同盒宽折行结果不同；前缀 W 与单行键空间区分）
+        let key = "W\u{1}\(fontSize)\u{1}\(fontWeight)\u{1}\(fontFamily)\u{1}\(lineWidth)\u{1}\(lineHeight ?? "")\u{1}\(letterSpacing)\u{1}\(text)"
+        if let hit = measureCache[key] { measureCacheHits += 1; return hit }
+        measureCacheMisses += 1
+        let font = ProteusTextAdapter.font(size: fontSize, weight: fontWeight, family: fontFamily)
+        var attrs: [NSAttributedString.Key: Any] = [.font: font]
+        if letterSpacing != 0 { attrs[.kern] = letterSpacing as NSNumber }
+        let rect = (text as NSString).boundingRect(
+            with: CGSize(width: lineWidth, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: attrs, context: nil)
+        var height = rect.height
+        if let lh = lineHeight, let h = ProteusTextAdapter.lineHeightPx(lh, fontSize: fontSize), h > 0 {
+            // 行数 = 自然折行高 / 自然行高（UIFont.lineHeight）；行盒高 = 行数 × 声明行高
+            let natural = max(1, font.lineHeight)
+            let lines = max(1, Int((rect.height / natural).rounded()))
+            height = CGFloat(lines) * h
+        }
+        // I2-ALLOW: 文本**测量**结果的取整（测量子系统——与单行 measureText 同口径）
+        let rounded = CGSize(width: ceil(rect.width), height: ceil(height))
+        measureCache[key] = rounded
+        return rounded
+    }
+
     /// ★批次 13：`line-height` token → 行盒高 px（无单位倍数×fontSize / 绝对 px；解析失败 ⇒ nil）
     static func lineHeightPx(_ token: String, fontSize: CGFloat) -> CGFloat? {
         if token.hasSuffix("px") {

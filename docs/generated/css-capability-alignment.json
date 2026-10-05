@@ -483,7 +483,8 @@
       "gridColumn",
       "gridRow",
       "aspectRatio",
-      "pointerEvents"
+      "pointerEvents",
+      "whiteSpace"
     ],
     "paint": [
       "backgroundColor",
@@ -1409,7 +1410,9 @@
       "id": "text-attrs",
       "css": "white-space",
       "category": "text",
-      "compilerFields": [],
+      "compilerFields": [
+        "whiteSpace"
+      ],
       "web": "supported",
       "skyline": "supported",
       "app": "absent",

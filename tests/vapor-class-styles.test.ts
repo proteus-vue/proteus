@@ -375,16 +375,37 @@ describe('★C1 最小切片 · SFC <style> 单类规则 → class→节点样�
     expect((parseStaticStyle('border: none', () => {}) as { borderWidth?: number }).borderWidth, 'border:none ⇒ borderWidth 0').toBe(0)
     expect((parseStaticStyle('background: none', () => {}) as { backgroundColor?: string }).backgroundColor, 'background:none ⇒ 透明').toBe('#00000000')
     expect((parseStaticStyle('display: block', () => {}) as { display?: string }).display, 'display:block ⇒ 空记录（App 默认 block-like）').toBeUndefined()
-    // ★批次 29：white-space:nowrap（App 单行模型 = 默认）/ overflow-x|y:visible（默认）⇒ no-op 不诊断
-    for (const css of ['white-space: nowrap', 'overflow-x: visible', 'overflow-y: visible']) {
+    // ★批次 29：overflow-x|y:visible（默认）⇒ no-op 不诊断
+    for (const css of ['overflow-x: visible', 'overflow-y: visible']) {
       const d: string[] = []
       parseStaticStyle(css, (m: string) => d.push(m))
       expect(d.length, css + ' 不应诊断').toBe(0)
     }
-    // white-space:pre / overflow-y:hidden 仍是真缺口 ⇒ 诊断
+    // ★★全端对齐批（2026-10-05 · white-space 五端对齐）：现为**真字段**（透传宿主）——
+    //   合法关键字落键不诊断；break-spaces 归一 pre-wrap；非法值诊断。
+    for (const [css, expectVal] of [
+      ['white-space: nowrap', 'nowrap'],
+      ['white-space: pre', 'pre'],
+      ['white-space: pre-wrap', 'pre-wrap'],
+      ['white-space: pre-line', 'pre-line'],
+      ['white-space: normal', 'normal'],
+      ['white-space: break-spaces', 'pre-wrap'],
+    ] as const) {
+      const d: string[] = []
+      const out = parseStaticStyle(css, (m: string) => d.push(m))
+      expect(d.length, css + ' 不应诊断').toBe(0)
+      expect((out as { whiteSpace?: string }).whiteSpace, css + ' 值应落键').toBe(expectVal)
+    }
     const dw: string[] = []
-    parseStaticStyle('white-space: pre', (m: string) => dw.push(m))
-    expect(dw.length > 0, 'white-space:pre 仍诊断').toBe(true)
+    parseStaticStyle('white-space: balance', (m: string) => dw.push(m))
+    expect(dw.length > 0, 'white-space:balance（非法值）仍诊断').toBe(true)
+    // ★★全端对齐批：min-height:100vh ⇒ minHeightPct（页面铺满——此前落诊断被丢）
+    const vhOut = parseStaticStyle('min-height: 100vh', () => {}) as { minHeightPct?: number }
+    expect(vhOut.minHeightPct, 'min-height:100vh ⇒ minHeightPct=1').toBe(1)
+    // overflow-y:hidden 仍是真缺口 ⇒ 诊断
+    const dy: string[] = []
+    parseStaticStyle('overflow-y: hidden', (m: string) => dy.push(m))
+    expect(dy.length > 0, 'overflow-y:hidden 仍诊断（单轴未接）').toBe(true)
     // 真缺口仍诊断（inline 才是不支持；block 是默认）
     const d2: string[] = []
     parseStaticStyle('display: inline', (m: string) => d2.push(m))

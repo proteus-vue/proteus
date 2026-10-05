@@ -631,10 +631,14 @@ final class SelfDrawView: UIView {
             // ★记文字色快照（复位目标；见 `layerOriginalTextColor` 注释）
             layerOriginalTextColor[nodeId] = textCg
             tl.alignmentMode = alignmentMode(style["textAlign"] as? String)
-            tl.truncationMode = ((style["textOverflow"] as? String) == "ellipsis") ? .end : .none  // ★批次 16：text-overflow（仅 ellipsis 截断，其余 clip 不省略）
+            // ★★全端对齐批（2026-10-05 · white-space 五端对齐）：wrap ⇒ 换行不截断；
+            //   nowrap ⇒ 单行（ellipsis 截断 / overflow:hidden 裁切 / 其余原样溢出）。
+            let wrapMode = SelfDrawView.isWrapStyle(style)
+            tl.truncationMode = (!wrapMode && (style["textOverflow"] as? String) == "ellipsis") ? .end : .none
+            tl.masksToBounds = isClipTextStyle(style)   // nowrap 溢出的裁切（Web overflow:hidden 语义）
             // ★contentsScale 必须显式设置：否则 Retina 上文本模糊（CATextLayer 不继承自动缩放）
             tl.contentsScale = UIScreen.main.scale
-            tl.isWrapped = false
+            tl.isWrapped = wrapMode
             applyBorder(tl, style: style)
             applyShadow(tl, style: style)
             SelfDrawBridge.applyPaintHint(tl, style: style)
@@ -2900,10 +2904,28 @@ final class SelfDrawView: UIView {
         }
     }
 
+    /// ★★全端对齐批（2026-10-05 · white-space 五端对齐）：该 style 是否为 wrap 模式
+    ///   （normal/pre-wrap/pre-line/pre ⇒ 盒宽折行；nowrap ⇒ 单行）。
+    static func isWrapStyle(_ style: [String: Any]) -> Bool {
+        // ★★第三轮复评修复（2026-10-05）：**缺省 = CSS `normal`（可折行）**——
+        //   此前"缺省=单行"让未声明 white-space 的文本不折行（与 Web 缺省语义相反）。
+        //   只有显式 `nowrap`/`pre` 才是单行。
+        let ws = (style["whiteSpace"] as? String) ?? "normal"
+        return ws == "normal" || ws == "pre-wrap" || ws == "pre-line" || ws == "pre"
+    }
+
+    /// ★★全端对齐批：nowrap 且溢出裁切（overflow:hidden 且非 ellipsis）——Web 裁切语义。
+    private func isClipTextStyle(_ style: [String: Any]) -> Bool {
+        guard (style["text"] as? String)?.isEmpty == false else { return false }
+        if SelfDrawView.isWrapStyle(style) { return false }
+        if (style["textOverflow"] as? String) == "ellipsis" { return false }
+        return (style["overflow"] as? String) == "hidden"
+    }
     /// 把节点规格里的绘制字段取出来（与全量路径同款；单一实现避免分叉）
     static func styleOf(_ n: [String: Any]) -> [String: Any] {
         var style: [String: Any] = [:]
-        for k in ["backgroundColor", "color", "text", "fontFamily", "textAlign", "borderColor", "lineHeight"] {
+        // ★★全端对齐批（2026-10-05）：whiteSpace/overflow 也必须透传——层配置按其分流（折行/截断/裁切）
+        for k in ["backgroundColor", "color", "text", "fontFamily", "textAlign", "borderColor", "lineHeight", "whiteSpace", "overflow", "textOverflow"] {
             if let v = n[k] as? String { style[k] = v }
         }
         if let bw = n["borderWidth"] as? Double { style["borderWidth"] = CGFloat(bw) }
@@ -2985,8 +3007,10 @@ final class SelfDrawView: UIView {
                     ?? UIColor.white.cgColor
                 tl.string = textLayerString(text, style: style, font: ProteusTextAdapter.font(size: fs, weight: fw, family: (style["fontFamily"] as? String) ?? "system"), color: (style["color"] as? String).flatMap(parseHexColor)?.cgColor ?? UIColor.white.cgColor)
                 tl.alignmentMode = alignmentMode(style["textAlign"] as? String)
-                tl.truncationMode = ((style["textOverflow"] as? String) == "ellipsis") ? .end : .none  // ★批次 16：text-overflow（仅 ellipsis 截断，其余 clip 不省略）
-                tl.isWrapped = false
+                // ★★全端对齐批（2026-10-05 · white-space 五端对齐）：复用路径同配（复用 = 完全重配）
+                let wrapMode2 = SelfDrawView.isWrapStyle(style)
+                tl.truncationMode = (!wrapMode2 && (style["textOverflow"] as? String) == "ellipsis") ? .end : .none
+                tl.isWrapped = wrapMode2
                 tl.contentsScale = UIScreen.main.scale
             }
             // ★★复用路径**必须同样重配**（纪律：复用 = 完全重配）——否则池里取出的层会
@@ -3002,7 +3026,8 @@ final class SelfDrawView: UIView {
         applyShadow(layer, style: style)
         let r = (style["borderRadius"] as? CGFloat) ?? 0
         layer.cornerRadius = r
-        layer.masksToBounds = r > 0 && !hasShadow2
+        // ★★全端对齐批：nowrap 溢出裁切也开 masksToBounds（与圆角同属性——合并判定，防相互覆盖）
+        layer.masksToBounds = (r > 0 && !hasShadow2) || isClipTextStyle(style)
         applyRadiusCorners(layer, style: style)   // ★批次 34：逐角圆角
         layer.opacity = 1
     }
@@ -3014,6 +3039,21 @@ final class SelfDrawView: UIView {
     ///   （中心不变 ⇒ 以**层中心为锚**的 transform 动画不受影响；rects 探针仍报原始行盒）。
     ///   `lineHeight<=0`（未声明）⇒ 原样返回（既有路径零行为变化）。
     private func lineBoxFrame(_ f: CGRect, style: [String: Any]) -> CGRect {
+        // ★★第三轮复评修复（2026-10-05）：半行距居中收缩**只对实际单行**生效——
+        //   判据不看声明（缺省=normal 后大多数文本都算 wrap），而是**量**：单行文本宽 ≤ 盒宽
+        //   ⇒ 收缩居中（与既有 batch 13 行为一致）；超宽的（真的会折行）⇒ 保持整盒
+        //   （多行行距由段落样式控，收缩会裁掉后续行）。
+        if let text = style["text"] as? String, !text.isEmpty {
+            if text.contains("\n") { return f }
+            let fs2 = (style["fontSize"] as? CGFloat) ?? 14
+            let fw2 = (style["fontWeight"] as? CGFloat) ?? 400
+            let fam2 = (style["fontFamily"] as? String) ?? "system"
+            let kern2 = (style["letterSpacing"] as? Double).map({ CGFloat($0) }) ?? (style["letterSpacing"] as? CGFloat) ?? 0
+            var attrs2: [NSAttributedString.Key: Any] = [.font: ProteusTextAdapter.font(size: fs2, weight: fw2, family: fam2)]
+            if kern2 != 0 { attrs2[.kern] = kern2 }
+            let single = (text as NSString).size(withAttributes: attrs2).width
+            if single > f.width + 0.5 { return f }
+        }
         guard let lhTok = style["lineHeight"] as? String,
               let boxH = ProteusTextAdapter.lineHeightPx(lhTok, fontSize: (style["fontSize"] as? CGFloat) ?? 14),
               boxH > 0 else { return f }
@@ -3054,9 +3094,29 @@ final class SelfDrawView: UIView {
         // ★批次 35：文本装饰（underline / line-through）也走富文本属性
         let deco = style["textDecoration"] as? String
         let kern = (style["letterSpacing"] as? Double).map({ CGFloat($0) }) ?? (style["letterSpacing"] as? CGFloat) ?? 0
-        if kern == 0 && (deco == nil || deco == "none") { return text }
+        // ★★全端对齐批（2026-10-05 · white-space 五端对齐）：wrap + line-height ⇒ **段落样式**
+        //   行盒高 = lineHeight（CoreText 的 minimum/maximumLineHeight 即 CSS line-height 语义：
+        //   字形在行盒内居中）；同时把对齐写进段落（多行的对齐由段落样式决定）。
+        let wrapMode = SelfDrawView.isWrapStyle(style)
+        var para: NSMutableParagraphStyle? = nil
+        if wrapMode {
+            let ps = NSMutableParagraphStyle()
+            let fs = (style["fontSize"] as? CGFloat) ?? font.pointSize
+            if let lhTok = style["lineHeight"] as? String,
+               let boxH = ProteusTextAdapter.lineHeightPx(lhTok, fontSize: fs), boxH > 0 {
+                ps.minimumLineHeight = boxH
+                ps.maximumLineHeight = boxH
+            }
+            let am = alignmentMode(style["textAlign"] as? String)
+            if am == .center { ps.alignment = .center }
+            else if am == .right { ps.alignment = .right }
+            else { ps.alignment = .left }
+            para = ps
+        }
+        if kern == 0 && (deco == nil || deco == "none") && para == nil { return text }
         var attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: UIColor(cgColor: color)]
         if kern != 0 { attrs[.kern] = kern }
+        if let para = para { attrs[.paragraphStyle] = para }
         if deco == "underline" { attrs[.underlineStyle] = NSUnderlineStyle.single.rawValue }
         else if deco == "line-through" { attrs[.strikethroughStyle] = NSUnderlineStyle.single.rawValue }
         return NSAttributedString(string: text, attributes: attrs)
@@ -5873,6 +5933,39 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         return jsonString(res)
     }
 
+    /// ★★全端对齐批（2026-10-05 · white-space 五端对齐）：**wrap 文本的第二遍测量**。
+    ///   返回**新请求 JSON**（有 wrap 文本且折行后尺寸变化时）；无需重建 ⇒ nil。
+    private func wrapRemeasure(handle: UInt64, req: [String: Any], nodes: [[String: Any]]) -> String? {
+        let rectsStr = takeCString(proteus_layout_rects(handle))
+        guard let rd = rectsStr.data(using: .utf8),
+              let ro = (try? JSONSerialization.jsonObject(with: rd)) as? [String: Any],
+              let rects = ro["rects"] as? [String: [String: Double]] else { return nil }
+        guard var measures = req["textMeasures"] as? [String: [String: Double]] else { return nil }
+        var changed = false
+        for n in nodes {
+            guard let text = n["text"] as? String, !text.isEmpty, let id = n["id"] as? Int else { continue }
+            guard SelfDrawView.isWrapStyle(n) else { continue }
+            guard let r = rects["\(id)"], let boxW = r["width"], boxW > 1 else { continue }
+            let fs = (n["fontSize"] as? Double).map { CGFloat($0) } ?? 14
+            let fw = (n["fontWeight"] as? Double).map { CGFloat($0) } ?? 400
+            let fam = (n["fontFamily"] as? String) ?? "system"
+            let lh = n["lineHeight"] as? String
+            let ls = (n["letterSpacing"] as? Double).map { CGFloat($0) } ?? 0
+            let sz = ProteusTextAdapter.measureTextWrapped(text, fontSize: fs, fontWeight: fw, fontFamily: fam,
+                                                             lineWidth: CGFloat(boxW), lineHeight: lh, letterSpacing: ls)
+            let prevH = measures["\(id)"]?["height"] ?? 0
+            if Double(sz.height) > prevH + 0.5 {
+                measures["\(id)"] = ["width": Double(min(boxW, Double(sz.width))), "height": Double(sz.height)]
+                changed = true
+            }
+        }
+        guard changed else { return nil }
+        var req2 = req
+        req2["textMeasures"] = measures
+        guard let d = try? JSONSerialization.data(withJSONObject: req2) else { return nil }
+        return String(data: d, encoding: .utf8)
+    }
+
     /// 核心：渲染树 → (CoreText 度量) → Rust 核心 → CALayer 树
     private func render(treeJson: String, phase: String) -> String {
         guard let view = view else { return "{\"ok\":false,\"error\":\"view 未设置\"}" }
@@ -6051,7 +6144,18 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             guard h > 0 else {
                 return "{\"ok\":false,\"error\":\"proteus_layout_create 失败（节点数 \(nodes.count)）\"}"
             }
-            rectsJsonStr = takeCString(proteus_layout_rects(h))
+            // ★★全端对齐批（2026-10-05 · white-space 五端对齐）：**第二遍测量**——
+            //   wrap 类文本在解析后的盒宽下折行 ⇒ 高度=多行高（首遍只有单行度量 ⇒ 盒高偏小）。
+            //   流程：首遍 create → 读 rects 得盒宽 → 按盒宽重测 wrap 文本 → 有变化则 destroy+重建。
+            if let req2 = wrapRemeasure(handle: h, req: req, nodes: nodes) {
+                _ = proteus_layout_destroy(h)
+                handle = 0
+                handle = req2.withCString { proteus_layout_create($0) }
+                guard handle > 0 else {
+                    return "{\"ok\":false,\"error\":\"核心重建树失败（wrap 第二遍测量后）\"}"
+                }
+            }
+            rectsJsonStr = takeCString(proteus_layout_rects(handle))
             layoutMs = (CFAbsoluteTimeGetCurrent() - tLayout0) * 1000
         }
         lastNodes = nodes

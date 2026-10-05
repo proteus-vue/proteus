@@ -77,6 +77,14 @@ struct Superapp {
       //   取到真值再覆盖（不同机型/横竖屏）。与 Web `--sa-safe-bottom` 同义。
       this.safeBottom = 16;
       window.getLastWindow(ctx).then((win: window.Window) => {
+        // ★★全端对齐批（2026-10-05 · css-conformance 独立复评抓出）：**隐藏系统状态栏**——
+        //   与 Android `hide(statusBars())` / iOS 全屏同口径（Web 基准无系统栏）。
+        //   此前状态栏图标（时钟等）叠印在页面标题上（复评 major：标题被遮挡），
+        //   且状态栏区使内容画布从 y≈35px 才开始（顶部露一条宿主深色底）。
+        //   `['navigation']` = 只隐藏状态栏、保留底部导航栏（与 Android 只隐 statusBars 一致）。
+        win.setWindowSystemBarEnable(['navigation']).catch((e: Error) => {
+          hilog.error(DOMAIN, TAG, 'SUPERAPP_STATUSBAR_HIDE_ERR %{public}s', String(e?.message ?? e));
+        });
         const avoid: window.AvoidArea = win.getWindowAvoidArea(window.AvoidAreaType.TYPE_SYSTEM);
         const h: number = px2vp(avoid.bottomRect.height);
         if (h > 0) this.safeBottom = h;
@@ -165,14 +173,20 @@ struct Superapp {
     const nodes: string | undefined = this.nodesByPage.get(page);
     if (!nodes) return;
     const disp = display.getDefaultDisplaySync();
-    const vpW: number = px2vp(disp.width);
-    const vpH: number = px2vp(disp.height);
+    // ★★第五轮修复（2026-10-05）：**vp 值用精确除法**（此前 `px2vp()` 把结果截断成整数 vp：
+    //   1320px / 3.5 = 377.14vp 被截成 377 ⇒ 内核视口 377vp ⇒ 页根 cmd 宽 377×3.5 = 1319.5px
+    //   ⇒ 最右 1px 列露宿主深色底（第四轮复评实测 x=1319 全高 #0f1018）。
+    //   `vp2px(1)` 即 density（精确 3.5）⇒ `disp.width / density` 得精确 vp（377.14）⇒ 页根宽
+    //   = 1320px 恰好铺满（先证后改：渲染日志实测页根 cmd w=1319.5，右缘差 0.5px）。
+    const vpDensity: number = vp2px(1);
+    const vpW: number = disp.width / vpDensity;
+    const vpH: number = disp.height / vpDensity;
     // ★★★视口 = **全屏**（不缩 Tab 栏）——与 Web 一致：Web 的 Tab 栏是 overlay（浮在页面之上、
     //   fixed 不占流），页面让位靠**自身下内边距**（编译器已给页面根 padding-bottom:120dp）。
     //   此前缩到"屏高−56" ⇒ 视口少 56dp ⇒ 依赖 bottom 定位的元素（客服球）偏高/偏大（独立验收抓出）。
     const contentH: number = vpH;
     try {
-      attach(this.content, vp2px(1), vpW, contentH);
+      attach(this.content, vpDensity, vpW, contentH);
       const cmds: string = appScreenCommands(JSON.stringify({
         'nodes': nodes, 'density': vp2px(1), 'vpW': vpW, 'vpH': contentH,
         'page': page, 'filesDir': this.filesDir,
@@ -228,6 +242,9 @@ struct Superapp {
       .width('100%')
       .layoutWeight(1)
 
+      // ★★全端对齐批（2026-10-05 · css-conformance 视觉验收抓出）：**无 tab 的应用不渲染 tab 栏**——
+      //   此前无条件留白底柱（tabs=[] 时 ForEach 空转但容器仍在）⇒ 底部白带与 Web 基准不符。
+      if (this.tabKeys.length > 0) {
       // 底部 Tab 栏（原生 chrome）——★样式取自 **Web 真值**（App.vue `.sa-tabbar` + global.css token）：
       //   白底 #ffffff · 顶边框 #dcdfe5 · 选中 brand #5b5bd6 · 未选中 text-3 #5f6673 · 角标 rec #d64545。
       //   图标加 U+FE0E（变体选择符）强制**文本呈现**——否则 ☺/✉ 会被渲染成彩色 emoji（与 Web 线稿不符）。
@@ -269,6 +286,7 @@ struct Superapp {
       // ★高度 = 视觉高 + 底部安全区（内容仍居中于 TAB_H 内；白底延伸到屏底）
       .height(TAB_H + this.safeBottom)
       .backgroundColor('#FFFFFF')
+      }
     }
     .width('100%')
     .height('100%')
