@@ -53,6 +53,16 @@ const valOf = (f) => {
  * ★表不追求完备（见头注"诚实边界"）：命中越准越好；未命中的内核改动走宽面提示，不静默。
  */
 const COUPLING = [
+  // ★★★G-61 B1（2026-10-05）：**CSE 编译期 CSS 引擎**（L-A 唯一实现——收集/长手展开/索引/
+  //   右→左匹配/五级层叠/继承/计算值/IR 映射）。全模块统一配对：
+  //   · cse-core：内核单测（34 条——逐级层叠/长手竞争/继承/计算值/IR 映射/trace）
+  //   · cse-parity-web：**判据①-b**（113 用例 / 153 项 vs 真 Chromium getComputedStyle）
+  //   · cse-explain：explain --style 的 trace 端到端
+  {
+    match: /^packages\/compiler\/src\/cse\//,
+    tests: ['tests/cse-core.test.ts', 'tests/e2e-cse-parity.test.ts', 'tests/cse-explain.test.ts'],
+    why: 'CSE 编译期 CSS 引擎（五级层叠/长手竞争/继承/计算值/IR 映射）——判据①-b 逐属性比对 + trace',
+  },
   {
     match: /^packages\/compiler\/src\/template\.ts$/,
     tests: [

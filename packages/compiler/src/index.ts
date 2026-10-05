@@ -140,6 +140,10 @@ export type {
 export type { ClassStyleRule } from './vapor'
 export type { SfcMacros, MacroModelRef } from './sfc-macros'
 
+// ★★★G-61 B1：**CSE 编译期 CSS 引擎**（L-A 唯一实现——收集/索引/右→左匹配/五级层叠/继承/计算值）
+//   与 vapor/template.ts 的旧折叠通路**并行存在**（过渡期纪律，plan §2.2）；出口见 cse/index.ts
+export * from './cse'
+
 // 阶段二：决策 trace（explainTransform 输出源码触发的全部转换规则）
 export { explainTransform, formatTransformTrace } from './explain'
 export type { ExplainOptions, ExplainResult } from './explain'
