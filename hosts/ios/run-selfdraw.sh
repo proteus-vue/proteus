@@ -489,13 +489,32 @@ elif [ "$MODE" = "vapor" ]; then
     --environment-variables '{"PROTEUS_EXIT_AFTER_REPORT":"1"}' \
     --device "$UDID" "$BUNDLE_ID" --vapor > "$LAUNCH_LOG" 2>&1 || LAUNCH_RC=$?
 elif [ "$MODE" = "superapp" ]; then
-  # ★★★批次 44：superapp 真实应用——`--drive` 时脚本驱动切 tab + 落 superapp.json 后自退（可自动化）；
-  #   不带 `--drive` 时**常驻**（真·桌面点开形态——launch 会一直阻塞，仅人工/前台使用）。
+  # ★★★批次 44/49：superapp 真实应用，两种启动语义——
+  #   · `--drive`（自动化验证）：脚本驱动切 tab + 落 superapp.json 后**自退** ⇒ 用 `--console` 阻塞到退出；
+  #   · 不带 `--drive`（**常驻给人看**）：App 不退出 ⇒ **绝不能加 `--console`**（本仓实测：加了会一直挂到
+  #     App 退出为止 ⇒ 脚本永不返回、AI 侧看不到任何"结果"，而 App 其实早已在设备上跑起来）。
+  #     ⇒ 无 `--console` 启动（launch 输出 PID 后**立即返回**），App 留在设备上常驻。
   SA_ARGS=(--superapp)
-  [ "$DRIVE" = "1" ] && SA_ARGS+=(--drive)
-  xcrun devicectl device process launch --console --terminate-existing \
-    --environment-variables '{"PROTEUS_EXIT_AFTER_REPORT":"1"}' \
-    --device "$UDID" "$BUNDLE_ID" "${SA_ARGS[@]}" > "$LAUNCH_LOG" 2>&1 || LAUNCH_RC=$?
+  if [ "$DRIVE" = "1" ]; then
+    SA_ARGS+=(--drive)
+    xcrun devicectl device process launch --console --terminate-existing \
+      --environment-variables '{"PROTEUS_EXIT_AFTER_REPORT":"1"}' \
+      --device "$UDID" "$BUNDLE_ID" "${SA_ARGS[@]}" > "$LAUNCH_LOG" 2>&1 || LAUNCH_RC=$?
+  else
+    xcrun devicectl device process launch --terminate-existing \
+      --device "$UDID" "$BUNDLE_ID" "${SA_ARGS[@]}" > "$LAUNCH_LOG" 2>&1 || LAUNCH_RC=$?
+    # 常驻模式没有报告可取——取回启动快照（App 启动时自落 Documents/superapp.png）后收工
+    if [ "$LAUNCH_RC" = "0" ]; then
+      echo "    ✓ superapp 已常驻启动（App 留在设备上；脚本不再阻塞——日志：devicectl --console 才可见）"
+      rm -f "$HERE/results/superapp.png"
+      xcrun devicectl device copy from --device "$UDID" --domain-type appDataContainer \
+        --domain-identifier "$BUNDLE_ID" --source "Documents/superapp.png" \
+        --destination "$HERE/results/superapp.png" >/dev/null 2>&1 \
+        && echo "    ✓ 启动快照 superapp.png（视觉证据）" || echo "    ⚠ 启动快照未取到"
+      rm -f "$LAUNCH_LOG"
+      exit 0
+    fi
+  fi
 elif [ "$MODE" = "native-mix" ]; then
   # ★★矩阵 #10：原生组件混用（自绘 + 原生 UIView 共存）——一次挂载 + 建原生视图 + 采样 + 截图 → 自退。
   xcrun devicectl device process launch --console --terminate-existing \
