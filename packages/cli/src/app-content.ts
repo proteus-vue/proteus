@@ -22,7 +22,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { buildLayoutTemplate, parseCssVarTokens } from '@proteus-vue/compiler'
+import { buildLayoutTemplate, parseCssVarTokens, extractFromSfc, computeTree, overlayIrValues, SWITCH_BATCHES, APP_ENUM_VALUES } from '@proteus-vue/compiler'
+import type { AlignNode } from '@proteus-vue/compiler'
 import { screenContentFromLayoutTemplate } from '@proteus-vue/render-backend'
 import { APP_PLATFORMS, type AppPlatform } from './targets'
 
@@ -48,6 +49,19 @@ export interface AppScreenContentResult {
  * @param root 项目根（含 `router/auto-routes.ts`——由 gen-routes 产出；调用方负责先跑 gen-routes）
  * @param platform 具体平台（ios/android/harmony；产物落 `dist/app/<platform>/`）
  */
+/**
+ * ★★★G-61 后批：**IR 切换白名单**（plan §2.2 逐字段批次）。
+ *   `PROTEUS_APP_IR_SWITCH`：批次名（默认 `paint-values`）或 `off`（关闭覆盖 ⇒ 纯旧通路）。
+ *   ★永久排除项见 `SWITCH_BATCHES['app-adaptation-excluded']`（App 适配——须搬到 applier，不走本通道）。
+ *   ★★函数内求值（**不是模块常量**——本仓实测：模块级常量在 ESM 里只求值一次，
+ *     测试/工具里"改 env 再调用"会拿到**首次**的白名单 ⇒ off/on 对比恒同，**静默失效**）。
+ */
+function irSwitchFields(): readonly string[] {
+  const v = process.env.PROTEUS_APP_IR_SWITCH ?? 'paint-values'
+  if (v === 'off') return []
+  return SWITCH_BATCHES[v] ?? SWITCH_BATCHES['paint-values']!
+}
+
 export async function buildAppScreenContent(root: string, platform: AppPlatform = 'android'): Promise<AppScreenContentResult> {
   const autoRoutes = path.join(root, 'router', 'auto-routes.ts')
   if (!fs.existsSync(autoRoutes)) {
@@ -108,6 +122,8 @@ export async function buildAppScreenContent(root: string, platform: AppPlatform 
       skipped++
       continue
     }
+    // ★★★G-61 后批：**IR 覆盖**（切换执行——见 applyIrOverlay；白名单来自 SWITCH_BATCHES）
+    applyIrOverlay(sfcSrc, path.relative(root, abs), pageStatics, tokens, globalCss, res.template, irSwitchFields(), diagnostics, r.name)
     out[r.name] = screenContentFromLayoutTemplate(res.template)
     compiled++
     for (const d of res.diagnostics) diagnostics.push(`${r.name}: ${d.code} ${d.message}`)
@@ -126,6 +142,18 @@ export async function buildAppScreenContent(root: string, platform: AppPlatform 
       const statics = shellMod.statics ?? {}
       const shellRes = buildLayoutTemplate(fs.readFileSync(appVue, 'utf-8'), path.relative(root, appVue), undefined, tokens, statics, globalCss)
       if (shellRes.ok) {
+        // ★★★G-61 后批：壳（App.vue）同样走 IR 覆盖（与页面同判据——global/overlay 层也有样式）
+        applyIrOverlay(
+          fs.readFileSync(appVue, 'utf-8'),
+          path.relative(root, appVue),
+          statics,
+          tokens,
+          globalCss,
+          shellRes.template,
+          irSwitchFields(),
+          diagnostics,
+          'app-shell',
+        )
         const shellNodes = (screenContentFromLayoutTemplate(shellRes.template).nodes ?? []) as ShellNode[]
         const globalSub = subtreeOf(shellNodes, 'global-layer')
         const overlaySub = subtreeOf(shellNodes, 'overlay-layer')
@@ -236,6 +264,71 @@ function extractRefLiterals(sfcSrc: string): Record<string, unknown> {
     } catch { /* 非字面量 ⇒ 跳过 */ }
   }
   return out
+}
+
+/**
+ * ★★★G-61 后批：**IR 值覆盖**（切换执行——plan §2.2 逐字段批次）。
+ *   在旧折叠产物上，把 **CSE 算出的白名单字段值**写回（旧通路继续负责结构转换与 App 适配）。
+ *   ★对齐前提：给 extract 传**与旧通路相同的 statics**（否则两树不同源——覆盖会整体拒绝，
+ *     绝不部分错配）。★值域护栏：枚举字段过 `APP_ENUM_VALUES`（内核封闭集）。
+ *   @returns 覆盖统计（供 diagnostics 如实透出）
+ */
+function applyIrOverlay(
+  sfcSrc: string,
+  filename: string,
+  statics: Record<string, unknown> | undefined,
+  tokens: Record<string, string> | undefined,
+  globalCss: string | undefined,
+  template: { nodes: Array<{ id: number; parentId: number | null; style?: Record<string, unknown> }> },
+  fields: readonly string[],
+  diagnostics: string[],
+  label: string,
+): { applied: number; unaligned: number; reason?: string } {
+  let ex
+  let computed
+  try {
+    ex = extractFromSfc(sfcSrc, {
+      ...(statics ? { statics } : {}),
+      ...(globalCss ? { globalCss } : {}),
+    })
+    computed = computeTree(ex.roots, ex.sheet, { inlineStyles: ex.inlineStyles })
+  } catch (e) {
+    diagnostics.push(`${label}: IR 覆盖跳过（CSE 提取/计算失败：${(e as Error).message.slice(0, 100)}）`)
+    return { applied: 0, unaligned: 0, reason: 'cse-failed' }
+  }
+  // 旧树：扁平 nodes（含合成 p-text 叶——对齐器会跳过）按 parentId 构树
+  const kidsOf = new Map<number | null, typeof template.nodes>()
+  const byId = new Map<number, (typeof template.nodes)[number]>()
+  for (const n of template.nodes) {
+    byId.set(n.id, n)
+    const pid = n.parentId ?? null
+    const arr = kidsOf.get(pid)
+    if (arr) arr.push(n)
+    else kidsOf.set(pid, [n])
+  }
+  const toAlign = (n: (typeof template.nodes)[number]): AlignNode => ({
+    id: n.id,
+    tag: (n as { tag?: string }).tag ?? '',
+    children: (kidsOf.get(n.id) ?? []).map(toAlign),
+  })
+  const oldRoots = (kidsOf.get(null) ?? []).map(toAlign)
+  const r = overlayIrValues(
+    oldRoots,
+    (id: number | string) => (byId.get(id as number)?.style ?? {}) as Record<string, unknown>,
+    ex.roots,
+    computed.byKey as never,
+    { fields, enumValues: APP_ENUM_VALUES as unknown as Record<string, readonly string[]> },
+  )
+  if (r.reason) {
+    diagnostics.push(`${label}: IR 覆盖整体拒绝（${r.reason}）——保留旧通路值`)
+    return { applied: 0, unaligned: r.unaligned, reason: r.reason }
+  }
+  if (r.unaligned > 0) diagnostics.push(`${label}: IR 覆盖未对齐 ${r.unaligned} 节点（对齐不完整——已应用 ${r.applied} 字段，请复核）`)
+  for (const op of r.ops) {
+    if (op.skipped) diagnostics.push(`${label}: 节点 ${op.nodeId} 字段 ${op.field} 跳过（${op.skipped}）`)
+  }
+  void tokens
+  return { applied: r.applied, unaligned: r.unaligned }
 }
 
 /** 屏内容节点（`screenContentFromLayoutTemplate` 的形状——只声明本文件用到的字段） */
