@@ -87,6 +87,9 @@ export function bootSuperapp(host?: SuperappHost): BootResult {
           stack: nav.stack.stack.map((s) => s.name),
           tabs: reg.tabNames,
           tabLabels: reg.tabLabels,
+          // ★★★逐屏截图装置（2026-10-05 · 拆页后每页需独立截图）：**全部屏名**——
+          //   验收项目常无 tab ⇒ 宿主靠它遍历全部屏（iOS drive / Android --es screen / 鸿蒙同源）。
+          screens: screenNames,
         }
       },
     }

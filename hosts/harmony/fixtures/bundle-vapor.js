@@ -10176,6 +10176,43 @@
     return out;
   }
 
+  // packages/slot-runtime/src/dynamic-class.ts
+  function bitmapOfDynamicClasses(active, classes) {
+    let b = 0;
+    for (let i = 0; i < classes.length; i++) if (active.has(classes[i])) b |= 1 << i;
+    return b >>> 0;
+  }
+  function groupStateOf(bitmap, groupBits) {
+    for (let i = 0; i < groupBits.length; i++) if ((bitmap & 1 << groupBits[i]) !== 0) return i + 1;
+    return 0;
+  }
+  function applyDynamicClassPlan(classValue, plan, out) {
+    const tables = plan.tables;
+    const fields = Object.keys(tables);
+    if (fields.length === 0) return 0;
+    const active = collectActiveClasses(classValue);
+    const bitmap = bitmapOfDynamicClasses(active, plan.classes);
+    const groups = plan.mutexGroups;
+    let groupStates = null;
+    if (groups && groups.length > 0) {
+      groupStates = groups.map((bits) => groupStateOf(bitmap, bits));
+    }
+    let written = 0;
+    for (const field of fields) {
+      const t = tables[field];
+      let v;
+      if (t.kind === "bits") {
+        const masked = (bitmap & (t.mask ?? 0)) >>> 0;
+        v = t.values[t.map[masked]];
+      } else {
+        v = t.values[groupStates ? groupStates[t.group ?? 0] : 0];
+      }
+      out[field] = v;
+      written++;
+    }
+    return written;
+  }
+
   // packages/slot-runtime/src/expr.ts
   var PURE_CALLS = {
     // —— Math（纯计算）——
@@ -10628,7 +10665,14 @@
             const implC = this.evaluators.get(spec.evaluatorId);
             if (implC) {
               const cv = implC(ctx);
-              const fields = resolveDynamicClasses(cv, this.table.classRules ?? []);
+              const plan = this.table.classPlans?.[String(spec.nodeId)];
+              let fields;
+              if (plan) {
+                fields = {};
+                applyDynamicClassPlan(cv, plan, fields);
+              } else {
+                fields = resolveDynamicClasses(cv, this.table.classRules ?? []);
+              }
               const nid = spec.nodeId + this.nodeIdOffset;
               const nextKeys = new Set(Object.keys(fields));
               const prev = this.lastClassFields.get(nid);
@@ -10930,9 +10974,15 @@
   }
 
   // packages/slot-runtime/src/instantiate.ts
-  function applyStyleField(target, propKey, key, v, classRules) {
+  function applyStyleField(target, propKey, key, v, classRules, classPlan) {
     if (propKey === "paint.class") {
-      const fields = resolveDynamicClasses(v, classRules ?? []);
+      let fields;
+      if (classPlan) {
+        fields = {};
+        applyDynamicClassPlan(v, classPlan, fields);
+      } else {
+        fields = resolveDynamicClasses(v, classRules ?? []);
+      }
       for (const [k, val] of Object.entries(fields)) target[k] = val;
       return;
     }
@@ -11108,7 +11158,7 @@
             if (f.kind === "text") {
               target.text = v === void 0 || v === null ? "" : String(v);
             } else {
-              applyStyleField(target, sl.propKey, f.key, v, opts.table?.classRules);
+              applyStyleField(target, sl.propKey, f.key, v, opts.table?.classRules, opts.table?.classPlans?.[String(sl.nodeId)]);
             }
             valuesFilled++;
           }
@@ -11153,7 +11203,7 @@
         if (f.kind === "text") {
           target.text = v === void 0 || v === null ? "" : String(v);
         } else {
-          applyStyleField(target, sl.propKey, f.key, v, opts.table?.classRules);
+          applyStyleField(target, sl.propKey, f.key, v, opts.table?.classRules, opts.table?.classPlans?.[String(sl.nodeId)]);
         }
         valuesFilled++;
       }
@@ -11175,7 +11225,7 @@
           if (f.kind === "text") {
             target.text = v === void 0 || v === null ? "" : String(v);
           } else {
-            applyStyleField(target, sl.propKey, f.key, v, opts.table?.classRules);
+            applyStyleField(target, sl.propKey, f.key, v, opts.table?.classRules, opts.table?.classPlans?.[String(sl.nodeId)]);
           }
           valuesFilled++;
         }
@@ -11418,7 +11468,7 @@
               if (f.kind === "text") {
                 target.text = v === void 0 || v === null ? "" : String(v);
               } else {
-                applyStyleField(target, sc.propKey, f.key, v, opts.table?.classRules);
+                applyStyleField(target, sc.propKey, f.key, v, opts.table?.classRules, opts.table?.classPlans?.[String(sc.nodeId)]);
               }
               appliedScoped++;
               valuesFilled++;

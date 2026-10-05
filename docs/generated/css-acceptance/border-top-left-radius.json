@@ -1,0 +1,73 @@
+{
+  "_note": "★CSS 能力逐项验收包（用户指定流程：实现一个 → 全端对齐视觉验收一个）。gates：implemented（IR 在册）/ parity（真 Chromium 同构样本与 CSE 值一致）/ endsMapped（三端可表达）。★视觉验收（像素级）仍由独立子代理按 Web 基准并排做——本包只归档**机器可判**的三段；pass=true 表示\"可以进入视觉验收\"，不等于\"视觉已验收\"。",
+  "id": "border-top-left-radius",
+  "kind": "property",
+  "verifiedAt": "2026-10-05T15:27:56.216Z",
+  "implEvidence": {
+    "impl": "implemented",
+    "implNote": "**简写展开**：borderRadius（附：borderRadiusCorners 部分支持）——逐角长手（语义 = border-radius 四值；缺省 0——与简写同一输出形态：统一半径 + 掩码）（证据：vapor/template.ts（★边框族收口批：逐角就地累积 + 合成））",
+    "inIrRegistry": false,
+    "irScope": null,
+    "inCompilerFold": false,
+    "matrixLevel": null,
+    "webSupport": null,
+    "usage": 0,
+    "priority": "done"
+  },
+  "parity": {
+    "ran": true,
+    "pass": true,
+    "detail": [
+      "IR `borderRadius` = 8（与浏览器样本 border-top-left-radius: 8px 一致）"
+    ],
+    "css": "border-top-left-radius: 8px",
+    "irField": "borderRadius",
+    "irValue": 8,
+    "computedProbe": {
+      "align-items": "normal",
+      "background-color": "rgba(0, 0, 0, 0)",
+      "border-bottom-color": "rgb(0, 0, 0)",
+      "border-bottom-right-radius": "0px",
+      "border-bottom-style": "none",
+      "border-bottom-width": "0px",
+      "border-left-color": "rgb(0, 0, 0)",
+      "border-left-width": "0px",
+      "border-right-color": "rgb(0, 0, 0)",
+      "border-right-width": "0px",
+      "border-top-color": "rgb(0, 0, 0)",
+      "border-top-left-radius": "8px",
+      "border-top-style": "none",
+      "border-top-width": "0px",
+      "bottom": "auto",
+      "color": "rgb(0, 0, 0)",
+      "flex-direction": "row",
+      "font-size": "16px",
+      "justify-content": "normal",
+      "justify-self": "auto",
+      "left": "auto",
+      "letter-spacing": "normal",
+      "line-height": "normal",
+      "opacity": "1",
+      "overflow-x": "visible",
+      "overflow-y": "visible",
+      "right": "auto",
+      "text-align": "start",
+      "top": "auto",
+      "word-break": "normal"
+    }
+  },
+  "endExpressibility": {
+    "web": "基准端（浏览器原生——A 档）",
+    "skyline": "可表达（border-radius）",
+    "app": "可表达（dto: borderRadius · ops: paint.borderRadius）",
+    "skylineUnsupported": [],
+    "appUnsupported": []
+  },
+  "gates": {
+    "implemented": true,
+    "parity": true,
+    "endsMapped": true
+  },
+  "pass": true,
+  "nextStep": "机器判据三段已过 → 进入**视觉验收**：生成并排产物（node scripts/gen-baseline-side-by-side.mjs）+ 独立子代理按 Web 基准评审"
+}

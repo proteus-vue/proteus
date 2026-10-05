@@ -2,10 +2,10 @@
   "_note": "★CSS 能力逐项验收包（用户指定流程：实现一个 → 全端对齐视觉验收一个）。gates：implemented（IR 在册）/ parity（真 Chromium 同构样本与 CSE 值一致）/ endsMapped（三端可表达）。★视觉验收（像素级）仍由独立子代理按 Web 基准并排做——本包只归档**机器可判**的三段；pass=true 表示\"可以进入视觉验收\"，不等于\"视觉已验收\"。",
   "id": "border-bottom",
   "kind": "property",
-  "verifiedAt": "2026-10-05T12:12:44.340Z",
+  "verifiedAt": "2026-10-05T14:07:09.886Z",
   "implEvidence": {
     "impl": "implemented",
-    "implNote": "**简写展开**：borderBottomWidth + borderBottomColor——逐边简写（证据：同上）",
+    "implNote": "**简写展开**：borderBottomWidth + borderBottomColor（附：borderBottomStyle 部分支持）——逐边简写（width/color/style 三件套；★线型批：dashed/dotted 支持）（证据：vapor/template.ts（逐边分支））",
     "inIrRegistry": false,
     "irScope": null,
     "inCompilerFold": false,

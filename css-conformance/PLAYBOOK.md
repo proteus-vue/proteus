@@ -94,6 +94,14 @@ node scripts/css-acceptance-record.mjs <feature-id> <verdicts.json>
 - **模块级常量会静默失效**：ESM 只求值一次 ⇒ 按环境/参数变化的白名单要**函数内求值**。
 - **两处消费同一语义必须同步**：如「wrap 判据」在 `mkCmd`（绘制）与 `remeasure`（测量）各一份 ⇒
   改一处必漏另一处——优先抽成单函数。
+- **★宿主侧样式字段的完整消费链是「三处」，缺一处即静默偏差**：① **白名单透传**（iOS `styleOf`
+  是建层必经之路——漏透传则该字段根本到不了宿主）② **注入/存储**（`injectRadiusCorners` → map）
+  ③ **每个绘制分支各自消费**——★同一个字段可能有**多条绘制路径**（如圆角：**填充**走
+  `drawPathCorners`、**边框描边**走 uniform 分支，是两条！）。实证（2026-10-05，子代理逐角剖面
+  拟合抓出）：`borderRadiusCorners` 在 iOS 连①都没有（机制建了 3 个月**从未生效**）；Android
+  ②③只接了填充、描边没接 ⇒ 声明「仅 TL/BR 圆」的盒描边画成**四角全圆**。
+  ★同源：`LEN_SCALARS`（DPR 换算登记表）与 `styleOf` 白名单都是"**新字段必须来登记**"的表——
+  加字段时顺着「透传 → 存储 → **每条绘制分支**」走一遍，别只看主路径。
 
 **流程**
 - 一条命令内**不并行**跑两件写同一产物的事（构建 APK vs 验证）。
@@ -124,6 +132,21 @@ node scripts/css-acceptance-record.mjs <feature-id> <verdicts.json>
 **子代理（一次；文本语义级）**：折行点数/断点、省略号有无、裁切形态、缩进保留、字面转义、
 文字内容完整性。要求其输出结构化 JSON（`verdict` + `caseIssues[severity,status]`），
 可直接喂 `css-acceptance-record.mjs`。
+
+### ★★交子代理前的两道硬门（2026-10-05 用户点名「子代理成本昂贵，不能随便启用」后固化）
+
+1. **`node scripts/css-conformance.mjs fresh`（新鲜度门禁）**：逐张断言"截图 mtime ≥
+   页面源 / 该端宿主源 / 该端构建产物"。**stale（旧图）≠ 可评审**——实测踩过两次：
+   ① 鸿蒙图不是 css-conformance 应用的产物；② Android/iOS 图含已删除的案例段（只重截了鸿蒙）。
+   旧图交子代理 = 白烧一整轮（≥10 分钟）。`side-by-side` 已内置该门禁（stale 直接拒绝生成）。
+2. **AI 自检画面**（看一眼每端新图：版本正确、无残留段、案例齐全）——机器判门后仍要做，
+   这是"人对图"的最后一眼，不是审美判断。
+3. **判据边界——UA-defined 项不判 fail**：dashed/dotted 的**节距与点形**不受 CSS 规范控制
+   （CSS Backgrounds 3 原文："There is no control over the spacing of the dots and dashes,
+   nor over the length of the dashes."；Chrome 节距不是跨实现真值）。语义（线型正确出现 /
+   颜色宽度 / 角部行为 / square-ended 与 round 语义）对齐即 pass，纹理差异**具名登记**
+   （写进验收包 visual 段），不静默、也不判 fail。★同源纪律：评任何"多端差异"前，先归因
+   **这是不是规范未定义的自由区**——是则具名，否则对着 Web 真值修。
 
 ---
 

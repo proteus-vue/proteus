@@ -31,6 +31,8 @@ final class SuperappScene: NSObject {
     private static weak var bridgeRef: SelfDrawBridge?
     private static var container: UIView?
     private static var tabNames: [String] = []
+    /** ★★★逐屏截图：全部屏名（boot 回包 / registry.screens 的键——验收项目无 tab 时用）。 */
+    private static var allScreenNames: [String] = []
     private static var tabLabels: [String: String] = [:]
     private static var switchLog: [[String: Any]] = []
     private static var driveLog: [[String: Any]] = []
@@ -73,12 +75,19 @@ final class SuperappScene: NSObject {
         // ⑦ 分步 asyncAfter 链（JSC 微任务需主 runloop 轮转才排空——同步连续 eval 会让路由/执行器
         //    的 await 续体停住，见 AppStackScene 同款踩坑）。drive 模式逐 tab 切换 + 重绘 + 落证据。
         let drive = ProcessInfo.processInfo.arguments.contains("--drive")
+        // ★★★逐屏截图装置（2026-10-05 · 拆页后每页需独立截图与 Web 基准可比）：
+        //   drive 模式遍历**全部屏**（不只 tab——验收项目无 tab）→ 每屏截图落 Documents/shot-<name>.png。
+        //   屏列表来自 bundle 状态（`__proteusSuperappState().tabs` 或 registry.screens 的键）；
+        //   无 tab 时用 superapp 启动时的全部屏名（由 boot 回包 screens 提供，见 readTabRegistry 扩展）。
+        let driveScreens: [String] = tabNames.isEmpty ? allScreenNames : tabNames
         let steps: [(Double, () -> Void)] = drive
-            ? (0..<tabNames.count).map { i in
-                (0.15 * Double(i + 1), { driveTab(index: i) })
+            ? (0..<driveScreens.count).map { i in
+                (0.15 * Double(i + 1), { driveToScreen(driveScreens[i], index: i, total: driveScreens.count) })
               }
             : []
-        let finishAt = 0.15 * Double(tabNames.count + 1)
+        // ★★★修（2026-10-05 · 逐屏截图）：按 **driveScreens**（全部屏）计时——
+        //   首版用 `tabNames.count`：验收项目无 tab ⇒ 恒 1×0.15s ⇒ **报告在其余屏截图前落盘**。
+        let finishAt = 0.15 * Double((driveScreens.isEmpty ? 1 : driveScreens.count) + 1)
         for (delay, step) in steps { DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: step) }
         DispatchQueue.main.asyncAfter(deadline: .now() + max(finishAt, 0.2)) { finish() }
         NSLog("[proteus] SUPERAPP_LAUNCHER_READY")
@@ -92,6 +101,10 @@ final class SuperappScene: NSObject {
               let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] else { return }
         tabNames = (o["tabs"] as? [String]) ?? []
         tabLabels = (o["tabLabels"] as? [String: String]) ?? [:]
+        // ★★★逐屏截图：全部屏名（boot 回包 `screens`——验收项目无 tab 时用）
+        if let scr = o["screens"] as? [String], !scr.isEmpty {
+            Self.allScreenNames = scr
+        }
     }
 
     private static func currentName() -> String {
@@ -215,6 +228,21 @@ final class SuperappScene: NSObject {
 
     // ── drive（验证脚本用：host 驱动切 tab） ──
 
+    /** ★★★逐屏截图：导航到指定屏 → 渲染 → 截图（落 Documents/shot-<name>.png）。 */
+    private static func driveToScreen(_ name: String, index: Int, total: Int) {
+        _ = evalJs?("__proteusSuperappNav(\(jsonQuote(name)))")
+        DispatchQueue.main.async {
+            let cur = currentName()
+            renderCurrent()
+            highlightTab(cur)
+            switchLog.append(["tap": name, "current": cur, "ok": cur == name, "via": "drive"])
+            // 末屏（或每屏）截图——snapshotName 由调用方按屏名设置
+            SelfDrawBridge.snapshotName = "shot-\(name)"
+            takeSnapshot()
+            SelfDrawBridge.snapshotName = "superapp"   // 复位（末态兼容旧消费方）
+        }
+    }
+
     private static func driveTab(index: Int) {
         guard index < tabNames.count else { return }
         let name = tabNames[index]
@@ -274,8 +302,11 @@ final class SuperappScene: NSObject {
             win.drawHierarchy(in: bounds, afterScreenUpdates: true)
         }
         if let png = img.pngData() {
-            try? png.write(to: reportDir.appendingPathComponent("superapp.png"))
-            NSLog("[proteus] SUPERAPP_SNAPSHOT %dx%d", Int(bounds.width), Int(bounds.height))
+            // ★★★逐屏截图（2026-10-05 · 拆页后每页独立留证）：文件名取 `SelfDrawBridge.snapshotName`
+            //   （driveToScreen 逐屏设为 `shot-<name>`；缺省 superapp——兼容既有消费方）。
+            let nm = SelfDrawBridge.snapshotName.isEmpty ? "superapp" : SelfDrawBridge.snapshotName
+            try? png.write(to: reportDir.appendingPathComponent("\(nm).png"))
+            NSLog("[proteus] SUPERAPP_SNAPSHOT %@ %dx%d", nm, Int(bounds.width), Int(bounds.height))
         }
     }
 

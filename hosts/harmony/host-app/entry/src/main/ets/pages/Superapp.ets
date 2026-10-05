@@ -19,8 +19,8 @@ import { NodeContent } from '@kit.ArkUI';
 import { display, window } from '@kit.ArkUI';
 import { util } from '@kit.ArkTS';
 import { fileIo } from '@kit.CoreFileKit';
-import { attach, renderCommands } from 'libproteus_render.so';
-import { appScreenCommands, superappDrive } from 'libproteus_bench.so';
+import { attach, renderCommands, scrollRoot } from 'libproteus_render.so';
+import { appScreenCommands, superappDrive, appScreenContentHeight } from 'libproteus_bench.so';
 
 const DOMAIN = 0x0002;
 const TAG = 'ProteusSuperapp';
@@ -47,6 +47,15 @@ struct Superapp {
   private imUnread: number = 3;
   /** 底部安全区高度（vp；手势条）——并入 Tab 栏高度（见 build），白底铺到屏底 */
   private safeBottom: number = 0;
+  /** ★★★鸿蒙滚动对齐（2026-10-05 · 用户抓出「内容变长后看不到下面」）：滚动状态。
+   *   与 Android `enableContentScrollRange` / iOS `contentScrollRangeEnabled` **同语义**：
+   *   内容装不下才滚、最多滚到内容底（range = max(0, 内容高 − 视口高)）。
+   *   ★真滚动 = `scrollRoot(offset)`（平移根 RenderNode——整幅内容位移，vp 单位）。 */
+  private scrollOffset: number = 0;
+  private maxScroll: number = 0;
+  private touchLastY: number = -1;
+  /** 视口高（vp；renderCurrent 处记录——与 contentH 同源）。 */
+  private static vpH: number = 844;
 
   /** Tab 图标（⌂/✉/☺——与 Web/Android/iOS 同形） */
   private tabIconOf(name: string): string {
@@ -106,7 +115,21 @@ struct Superapp {
       for (const nm of names) {
         this.nodesByPage.set(nm, JSON.stringify(pages[nm]['nodes']));
       }
-      if (this.scene === 'superapp-drive') {
+      // ★★★逐屏截图装置（2026-10-05 · 拆页后每页需独立截图与 Web 基准可比）：
+      //   `scene=superapp-screen-<name>` ⇒ 启动后**导航到该屏**（验收跑器逐页调用 + 截图）。
+      //   与 Android `--es screen <name>` / iOS drive 遍历同法（三端同语义）。
+      if (this.scene.startsWith('superapp-screen-')) {
+        const want: string = this.scene.slice('superapp-screen-'.length);
+        const out2: string = superappDrive(JSON.stringify({ 'bundle': bundle, 'filesDir': this.filesDir, 'tabs': [want] } as Record<string, Object>));
+        hilog.info(DOMAIN, TAG, 'SUPERAPP_SCREEN_DRIVE %{public}s', out2.substring(0, 200));
+        const o2 = JSON.parse(out2) as Record<string, Object>;
+        const dr2 = o2['drive'] as Record<string, Object> | undefined;
+        if (dr2) this.applyState(dr2['state'] as Object);
+        this.renderCurrent();
+        this.scrollToBottom();
+        this.booted = true;
+        this.writeReport();
+      } else if (this.scene === 'superapp-drive') {
         // ★drive：**一次原生调用**完成 boot + 逐 tab 切页（one-kick + 宿主泵——鸿蒙 JSVM 专用形态）。
         //   跨原生调用反复启动新导航会与 V8 微任务排空重入 ⇒ 崩溃（本仓实测）；故合成单条 async 驱动。
         const out: string = superappDrive(JSON.stringify({ 'bundle': bundle, 'filesDir': this.filesDir } as Record<string, Object>));
@@ -119,6 +142,9 @@ struct Superapp {
           if (Array.isArray(lg)) { for (const row of lg as Record<string, Object>[]) { this.switchLog.push(JSON.stringify(row)); } }
         }
         this.renderCurrent();
+        // ★★★滚动对齐（2026-10-05）：drive 模式**滚到底**——让验收截图看到全页
+        //   （内容装不下时首屏只到中段；滚动读数随报告一起落盘供核对）。
+        this.scrollToBottom();
         this.booted = true;
         this.writeReport();
       } else {
@@ -165,6 +191,28 @@ struct Superapp {
     if (typeof cur === 'string') this.current = cur;
   }
 
+  /** ★★★鸿蒙滚动对齐：触摸滚动（与 Android `scrollDragBy` / iOS `driveScrollDrag` 同语义）。
+   *   手指上滑（windowY 减小）⇒ offset 增大 ⇒ 内容上移。 */
+  private onScrollTouch(e: TouchEvent): void {
+    const t: TouchObject = e.touches[0];
+    if (t === undefined) { return; }
+    if (e.type === TouchType.Down) { this.touchLastY = t.windowY; return; }
+    if (e.type === TouchType.Move) {
+      if (this.touchLastY < 0) { this.touchLastY = t.windowY; return; }
+      const dy: number = t.windowY - this.touchLastY;
+      this.touchLastY = t.windowY;
+      let next: number = this.scrollOffset - dy;
+      if (next < 0) { next = 0; }
+      if (next > this.maxScroll) { next = this.maxScroll; }
+      if (next !== this.scrollOffset) {
+        this.scrollOffset = next;
+        scrollRoot(this.scrollOffset);
+      }
+      return;
+    }
+    if (e.type === TouchType.Up || e.type === TouchType.Cancel) { this.touchLastY = -1; }
+  }
+
   /** 把**当前页**内容真画到屏上（复用既有 appScreenCommands + renderCommands 通道） */
   private renderCurrent(): void {
     const page: string = this.current && this.nodesByPage.has(this.current) ? this.current
@@ -184,6 +232,7 @@ struct Superapp {
     // ★★★视口 = **全屏**（不缩 Tab 栏）——与 Web 一致：Web 的 Tab 栏是 overlay（浮在页面之上、
     //   fixed 不占流），页面让位靠**自身下内边距**（编译器已给页面根 padding-bottom:120dp）。
     //   此前缩到"屏高−56" ⇒ 视口少 56dp ⇒ 依赖 bottom 定位的元素（客服球）偏高/偏大（独立验收抓出）。
+    Superapp.vpH = vpH;   // ★滚动对齐：视口高（供范围计算）
     const contentH: number = vpH;
     try {
       attach(this.content, vpDensity, vpW, contentH);
@@ -193,6 +242,14 @@ struct Superapp {
       } as Record<string, Object>));
       const n: number = renderCommands(cmds);
       hilog.info(DOMAIN, TAG, 'SUPERAPP_RENDER page=%{public}s nodes_rendered=%{public}d', page, n);
+      // ★★★鸿蒙滚动对齐：重算滚动范围 + 重放偏移（renderCommands 重建指令后根位置归零）。
+      const chVp: number = appScreenContentHeight();
+      this.maxScroll = Math.max(0, chVp - Superapp.vpH);
+      if (this.scrollOffset > this.maxScroll) { this.scrollOffset = this.maxScroll; }
+      if (this.scrollOffset < 0) { this.scrollOffset = 0; }
+      scrollRoot(this.scrollOffset);
+      hilog.info(DOMAIN, TAG, 'SUPERAPP_SCROLL contentH=%{public}s viewport=%{public}s max=%{public}s offset=%{public}s',
+        chVp.toFixed(1), Superapp.vpH.toFixed(1), this.maxScroll.toFixed(1), this.scrollOffset.toFixed(1));
     } catch (e) {
       hilog.error(DOMAIN, TAG, 'SUPERAPP_RENDER_ERROR %{public}s', JSON.stringify(e) ?? '');
     }
@@ -218,11 +275,20 @@ struct Superapp {
     }
   }
 
+  /** ★★★滚动对齐：驱动滚到底（验收跑器用——让截图看到全页；返回实际偏移）。 */
+  private scrollToBottom(): number {
+    this.scrollOffset = this.maxScroll;
+    scrollRoot(this.scrollOffset);
+    return this.scrollOffset;
+  }
+
   private writeReport(): void {
     try {
       const body: string = '{"ok":true,"host_id":"harmony","tabs":' + JSON.stringify(this.tabKeys)
         + ',"current":"' + this.current + '"'
-        + ',"switch_log":[' + this.switchLog.join(',') + ']}';
+        + ',"switch_log":[' + this.switchLog.join(',') + ']}'
+        // ★★★滚动对齐（2026-10-05）：滚动读数（范围/当前偏移）——与 Android/iOS 的 scroll 读数同语义
+        .replace(/\}$/, ',"scroll":{"max":' + this.maxScroll.toFixed(1) + ',"offset":' + this.scrollOffset.toFixed(1) + '}}');
       const path: string = this.filesDir + '/superapp.json';
       const fd = fileIo.openSync(path, fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE | fileIo.OpenMode.TRUNC);
       fileIo.writeSync(fd.fd, body);
@@ -241,6 +307,8 @@ struct Superapp {
       }
       .width('100%')
       .layoutWeight(1)
+      .clip(true)   // ★★★滚动对齐：越界内容裁剪（与 Android 视图裁剪同语义）
+      .onTouch((e: TouchEvent) => { this.onScrollTouch(e); })
 
       // ★★全端对齐批（2026-10-05 · css-conformance 视觉验收抓出）：**无 tab 的应用不渲染 tab 栏**——
       //   此前无条件留白底柱（tabs=[] 时 ForEach 空转但容器仍在）⇒ 底部白带与 Web 基准不符。

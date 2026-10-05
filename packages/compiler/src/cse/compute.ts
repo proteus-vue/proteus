@@ -782,7 +782,12 @@ function mapToIrField(prop: string, val: CssComputedValue): { field: string; val
     const side = prop.split('-')[1]!
     return { field: `border${side[0]!.toUpperCase()}${side.slice(1)}Width`, value: typeof val === 'number' ? val : null }
   }
-  if (/^border-(top|right|bottom|left)-(style)$/.test(prop)) return null // App 引擎无逐边样式 ⇒ unmapped（v1）
+  // ★★★边框族收口批（2026-10-05）：`border-<side>-style` → `border<Side>Style`（宿主按线型绘制：solid/dashed/dotted）。
+  //   `none` 由调用方转换为该边宽度 0（见上方 width 映射的完成阶段）；此处只透传线型字符串。
+  if (/^border-(top|right|bottom|left)-style$/.test(prop)) {
+    const side = prop.split('-')[1]!
+    return { field: `border${side[0]!.toUpperCase()}${side.slice(1)}Style`, value: typeof val === 'string' ? val : null }
+  }
   // 逐角 radius：由 resolveBorderRadiusFields 统一合并（此处不单独映射）
   if (prop === 'border-top-left-radius' || prop === 'border-top-right-radius' || prop === 'border-bottom-right-radius' || prop === 'border-bottom-left-radius') return null
   if (prop === 'overflow-x' || prop === 'overflow-y') {
@@ -826,7 +831,9 @@ function resolveBorderRadiusFields(computed: Record<string, CssComputedValue>): 
   const corners = ['border-top-left-radius', 'border-top-right-radius', 'border-bottom-right-radius', 'border-bottom-left-radius'] as const
   const vals = corners.map((c) => computed[c])
   if (vals.every((v) => v === undefined)) return null
-  const nums = vals.map((v) => (typeof v === 'number' ? v : null))
+  // ★★★边框族收口批（2026-10-05）：**缺省角视为 0**（CSS：只写某角 = 其余角 0）——
+  //   此前 `undefined` 会走成 null ⇒ 单角写法（`border-top-left-radius: 8px`）**静默丢**。
+  const nums = vals.map((v) => (v === undefined ? 0 : typeof v === 'number' ? v : null))
   if (nums.every((v) => v !== null)) {
     const [tl, tr, br, bl] = nums as number[]
     const all = new Set(nums as number[])

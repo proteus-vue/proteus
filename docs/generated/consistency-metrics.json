@@ -13,27 +13,27 @@
   "M1": {
     "name": "数值一致性覆盖率",
     "definition": "Σ(L1|L2|L3 各层**折算到同一 CSS 字段集**后的覆盖数) / (可表达字段数 × 3)（分层加总 · 折算口径）｜★L2.5/L2.6（交互层）**不计入本比值**：它们校验的不是 CSS 字段（是\"结果态等价\"与\"6 类不变量\"），计入会让分母失去意义——覆盖状态单列在 byLayer，由门禁与 M4 算子承担。",
-    "value": 0.68,
+    "value": 0.6508,
     "union": {
-      "covered": 50,
-      "total": 50,
+      "covered": 63,
+      "total": 63,
       "value": 1
     },
     "byLayer": {
       "L1": {
-        "covered": 50,
-        "total": 50,
+        "covered": 63,
+        "total": 63,
         "note": "支持度矩阵 + 边界门禁 + 棘轮基线（逐字段，已落地）"
       },
       "L2": {
         "covered": 2,
-        "total": 50,
+        "total": 63,
         "note": "★B3（2026-10-05）：几何快照（B-b）→ 只映射 width/height（x/y 是位置不是字段——保守计 2）；其余 semantic 字段的读数归 L3（样式快照 B-a）。判据②（数值等价）= L2 ∪ L3 的**并集**（见 union 口径）"
       },
       "L3": {
-        "covered": 50,
-        "total": 50,
-        "note": "★B3（2026-10-05）：快照面扩到**全部 semantic 字段**（web 探针读数 + 比对引擎分类 + 门禁 check:style-coverage）；覆盖数由 `SEMANTIC_FIELD_SNAPSHOT_KEYS` **机器推导**（不手写清单）。此前口径（27 项）为\"VC6 实测可比键\"——扩面后 = 全部 semantic 字段（`50` 个）"
+        "covered": 58,
+        "total": 63,
+        "note": "★B3（2026-10-05）：快照面扩到**全部 semantic 字段**（web 探针读数 + 比对引擎分类 + 门禁 check:style-coverage）；覆盖数由 `SEMANTIC_FIELD_SNAPSHOT_KEYS` **机器推导**（不手写清单）。此前口径（27 项）为\"VC6 实测可比键\"——扩面后 = 全部 semantic 字段（`58` 个）"
       },
       "L2_5": {
         "covered": 1,
@@ -46,11 +46,11 @@
         "note": "连续交互不变量：6 类全绿（structure/sizes/gaps/order/containment/translation）+ 实测滚动 200/500px + M4 算子 4 个（含\"纯滚动不应报\"对照组）"
       }
     },
-    "covered": 50,
-    "total": 50,
+    "covered": 63,
+    "total": 63,
     "byTier": {
       "universal": 30,
-      "conditional": 6,
+      "conditional": 11,
       "unsupported": 0
     },
     "boundaryRules": 24,

@@ -11,7 +11,11 @@
     ]
   },
   "model": {
-    "ends": ["web", "skyline", "app"],
+    "ends": [
+      "web",
+      "skyline",
+      "app"
+    ],
     "note": "App = 自研自绘 Rust 引擎（一套，覆盖 iOS/Android/鸿蒙 三具体平台）——CSS 面由我们定义、可扩展；Skyline = 微信容器（唯一刚性外部约束）。旧「iOS/Android/鸿蒙」三列是**非自绘时代的原生组件映射**，在自绘模型下已失效 ⇒ 合并为一个 App。",
     "todayValues": {
       "supported": "编译期折叠 + 引擎 + 宿主自绘**全通**（真上屏）",
@@ -32,82 +36,804 @@
     "superappGoal": {
       "note": "★优先口径（用户 2026-10-04 明示）：「我们的目标不仅仅是当前项目使用到的，我们的目标是**承载超级应用**」。⇒ 批次选择**不按 demo 使用频次**，而按「超级应用是否会用到」+ 三端可实现性。下表的 status 用 today 取值（supported/folded-only/engine-only/absent）。",
       "checklist": [
-        { "capability": "定位锚点（absolute + top/left/right/bottom + z 序）", "why": "角标 / FAB / 关闭按钮 / 底部弹层 / 悬浮层", "status": "supported（批 8 补 right/bottom；层序走层容器）" },
-        { "capability": "卡片外观（background / border / border-radius / shadow / 内边距）", "why": "列表项 / 卡片 / 面板", "status": "supported（background/border/border-radius/padding ✅ 批 2/5；**box-shadow ✅ 批 10**；**aspect-ratio ✅ 批 24**——媒体卡/占位图，内核 taffy 原生）" },
-        { "capability": "弹性流式布局（flex + wrap + gap + align/justify/content + 百分比）", "why": "响应式排布 / 标签墙 / 宫格", "status": "supported（批 6 flex-wrap · 批 11 align-content 已补）" },
-        { "capability": "文本呈现（size / weight / align / color / line-height / 截断）", "why": "标题 / 正文 / 单行截断", "status": "font-size/weight/align/color ✅ · **line-height ✅ 批 13** · **text-overflow 单行截断 ✅ 批 16** · **letter-spacing 字距 ✅ 批 20**（诚实边界：仅单行截断 / px 字距）" },
-        { "capability": "栅格 / 复杂排布（grid）", "why": "仪表盘 / 复杂页面", "status": "supported（批 12：引擎 Display::Grid + 显式轨迹 fr/px + repeat 展开；诚实边界：auto/minmax/gr、id-area 定位未支持）" },
-        { "capability": "动效（transition / transform / keyframes）", "why": "转场 / 反馈 / 加载", "status": "引擎 anim 通道 ✅（transition 走 <Transition>/宿主指令）；**transform 静态折叠面 ⏳**" },
-        { "capability": "滚动容器（overflow + 滚动）", "why": "长列表 / 弹层内容", "status": "supported（overflow + 虚拟列表）" },
-        { "capability": "层叠与主题（继承 / 变量令牌 / 特异性）", "why": "主题化 / 组件库", "status": "supported（批 1 继承/特异性/!important；**批 9 CSS 变量 var() 令牌编译期折叠**——从 globalStyle 解析，超级应用承载关键）" }
+        {
+          "capability": "定位锚点（absolute + top/left/right/bottom + z 序）",
+          "why": "角标 / FAB / 关闭按钮 / 底部弹层 / 悬浮层",
+          "status": "supported（批 8 补 right/bottom；层序走层容器）"
+        },
+        {
+          "capability": "卡片外观（background / border / border-radius / shadow / 内边距）",
+          "why": "列表项 / 卡片 / 面板",
+          "status": "supported（background/border/border-radius/padding ✅ 批 2/5；**box-shadow ✅ 批 10**；**aspect-ratio ✅ 批 24**——媒体卡/占位图，内核 taffy 原生）"
+        },
+        {
+          "capability": "弹性流式布局（flex + wrap + gap + align/justify/content + 百分比）",
+          "why": "响应式排布 / 标签墙 / 宫格",
+          "status": "supported（批 6 flex-wrap · 批 11 align-content 已补）"
+        },
+        {
+          "capability": "文本呈现（size / weight / align / color / line-height / 截断）",
+          "why": "标题 / 正文 / 单行截断",
+          "status": "font-size/weight/align/color ✅ · **line-height ✅ 批 13** · **text-overflow 单行截断 ✅ 批 16** · **letter-spacing 字距 ✅ 批 20**（诚实边界：仅单行截断 / px 字距）"
+        },
+        {
+          "capability": "栅格 / 复杂排布（grid）",
+          "why": "仪表盘 / 复杂页面",
+          "status": "supported（批 12：引擎 Display::Grid + 显式轨迹 fr/px + repeat 展开；诚实边界：auto/minmax/gr、id-area 定位未支持）"
+        },
+        {
+          "capability": "动效（transition / transform / keyframes）",
+          "why": "转场 / 反馈 / 加载",
+          "status": "引擎 anim 通道 ✅（transition 走 <Transition>/宿主指令）；**transform 静态折叠面 ⏳**"
+        },
+        {
+          "capability": "滚动容器（overflow + 滚动）",
+          "why": "长列表 / 弹层内容",
+          "status": "supported（overflow + 虚拟列表）"
+        },
+        {
+          "capability": "层叠与主题（继承 / 变量令牌 / 特异性）",
+          "why": "主题化 / 组件库",
+          "status": "supported（批 1 继承/特异性/!important；**批 9 CSS 变量 var() 令牌编译期折叠**——从 globalStyle 解析，超级应用承载关键）"
+        }
       ]
     }
   },
   "features": [
-    { "id": "width", "css": "width", "category": "layout", "today": "supported", "tier": "L1", "strategy": "编译期折叠", "probe": ["width"], "note": "px/数字 → 长度；百分比 → widthRatio（比例字段，非长度）" },
-    { "id": "height", "css": "height", "category": "layout", "today": "supported", "tier": "L1", "strategy": "编译期折叠", "probe": ["height"], "note": "px/数字 → 长度；百分比 → heightRatio" },
-    { "id": "min-max-wh", "css": "min-width / max-width / min-height / max-height", "category": "layout", "today": "supported", "tier": "L1", "strategy": "编译期折叠", "probe": ["min-width", "max-width", "min-height", "max-height"], "note": "px/数字；★批次 19：**百分比**（`max-width:100%` 不溢出 / `min-height:100%` 撑满）折为 `*Pct`（0..1）⇒ 内核 taffy 按父内容盒解析（min 缺省 0 / max 缺省 auto 语义不变）" },
-    { "id": "margin", "css": "margin（+ 四边简写 + 1–4 值 shorthand）", "category": "layout", "today": "supported", "tier": "L1", "strategy": "编译期折叠", "probe": ["margin-top"], "note": "px/数字 → {top,right,bottom,left}；1–4 值简写按 CSS 标准展开（`margin: 8px 0`）；★批次 17：`auto`（`margin: 0 auto` 水平居中）折为逐边 `marginAuto` 标记 → 内核映射 taffy auto（此前静默丢弃 = Web 偏差）；Web 探针取 margin-top 代表" },
-    { "id": "padding", "css": "padding（+ 四边简写 + 1–4 值 shorthand）", "category": "layout", "today": "supported", "tier": "L1", "strategy": "编译期折叠", "probe": ["padding-top"], "note": "px/数字 → {top,right,bottom,left}；1–4 值简写按 CSS 标准展开（`padding: 8px 12px`）；Web 探针取 padding-top 代表" },
-    { "id": "display", "css": "display: flex / none", "category": "layout", "today": "supported", "tier": "L2", "strategy": "直映射", "probe": ["display"], "note": "引擎封闭集仅 flex/none（block/inline-block/inline-flex/grid ⇒ 诊断跳过）" },
-    { "id": "flex-direction", "css": "flex-direction", "category": "layout", "today": "supported", "tier": "L2", "strategy": "直映射", "probe": ["flex-direction"], "note": "封闭集 row/column/row-reverse/column-reverse" },
-    { "id": "justify-content", "css": "justify-content", "category": "layout", "today": "supported", "tier": "L2", "strategy": "直映射", "probe": ["justify-content"], "note": "引擎为**开放字符串**（未知值静默落默认，不崩）" },
-    { "id": "align-items-self", "css": "align-items / align-self", "category": "layout", "today": "supported", "tier": "L2", "strategy": "直映射", "probe": ["align-items", "align-self"], "note": "开放字符串（未知值静默落默认）" },
-    { "id": "flex-grow-shrink-basis", "css": "flex-grow / flex-shrink / flex-basis", "category": "layout", "today": "supported", "tier": "L2", "strategy": "直映射", "probe": ["flex-grow", "flex-shrink", "flex-basis"], "note": "flex-basis 为长度" },
-    { "id": "gap", "css": "gap（+ row-gap / column-gap）", "category": "layout", "today": "supported", "tier": "L2", "strategy": "直映射", "probe": ["gap", "row-gap", "column-gap"], "note": "px/数字；★批次 31：**两值** `gap:<row> <col>` 与 **轴级** `row-gap`/`column-gap`（内核 `LStyle.row_gap/column_gap` → taffy `gap.height/width`）——真项目组件库 15 处两值 gap" },
-    { "id": "position", "css": "position: static / relative / absolute", "category": "layout", "today": "supported", "tier": "L2", "strategy": "直映射", "probe": ["position"], "note": "引擎封闭集；sticky/fixed ⇒ 诊断跳过" },
-    { "id": "top-left", "css": "top / left", "category": "layout", "today": "supported", "tier": "L2", "strategy": "直映射", "probe": ["top", "left"], "note": "配合 absolute；引擎无 right/bottom（见候选）" },
-    { "id": "overflow", "css": "overflow: visible / hidden / scroll / auto", "category": "layout", "today": "supported", "tier": "L2", "strategy": "直映射", "probe": ["overflow"], "note": "引擎封闭集；auto 折叠为 taffy Scroll" },
-    { "id": "value-shorthand", "css": "margin/padding 1–4 值简写 + background 纯色简写 + flex 简写", "category": "value", "today": "supported", "tier": "L1", "strategy": "编译期折叠", "probe": [], "note": "★批次 2/7（2026-10-04）：a) `margin: 8px 0` / `padding: 8px 12px` 按 CSS 标准展开为 {top,right,bottom,left}（auto 的边忽略）；b) `background: #fff`/`rgba(...)` 归一折进 backgroundColor；c) `flex: <g> [<s> [<b>]]` / `none` / `auto` 展开到 flexGrow/flexShrink/flexBasis（CSS 语义：省略 shrink=1、省略 basis=0）。取证：真项目这些简写高频。渐变/图片简写诊断跳过" },
-    { "id": "width-ratio", "css": "width/height 百分比", "category": "unit", "today": "supported", "tier": "L1", "strategy": "编译期折叠", "probe": [], "note": "→ widthRatio/heightRatio（比例字段）" },
-    { "id": "background-color", "css": "background-color（+ background 纯色简写）", "category": "paint", "today": "supported", "tier": "L1", "strategy": "编译期折叠", "probe": ["background-color"], "note": "颜色编译期归一为 hex：hex / rgb() / rgba() / **命名色（148 个标准色，批 14）** / transparent；hsl/var ⇒ 诊断跳过。★`background` 纯色简写折进 backgroundColor；★批次 33：`linear-gradient` / `radial-gradient` 折进引擎 `fillGradient` 通道（`background`/`background-image` 均可）——免去手写 `fill-gradient='{json}'` 的胶水；`url()` 图片仍诊断（走原生组件）。★批 14 多端一致性审计修：命名色此前丢弃（Web 生效）⇒ 现查表归一（核心只认 hex）" },
-    { "id": "color", "css": "color", "category": "paint", "today": "supported", "tier": "L1", "strategy": "编译期折叠", "probe": ["color"], "note": "颜色归一（hex/rgb/rgba/hsl/命名色/4 位 hex/transparent）；★批次 23：`color-mix(in srgb, A [pa%], B [pb%])` **常量折叠**（var() 已置换 ⇒ 两色已知 ⇒ sRGB 预乘 alpha 混合）——组件库 16 处令牌着色；非 srgb 色彩空间（oklab/lab…）诊断" },
-    { "id": "font-size", "css": "font-size", "category": "paint", "today": "supported", "tier": "L1", "strategy": "编译期折叠", "probe": ["font-size"], "note": "px/数字（不支持百分比/keyword）" },
-    { "id": "border-radius", "css": "border-radius", "category": "paint", "today": "supported", "tier": "L1", "strategy": "编译期折叠", "probe": ["border-radius"], "note": "px/数字（宿主圆角绘制）；★批次 18：**百分比**（`border-radius: 50%` = 内切圆/椭圆，头像/圆点刚需）折为 `borderRadiusPct`（0..1）⇒ 宿主按 `pct × min(w,h)` 算半径（正方盒 = 精确圆，Web 一致；非正方盒为统一圆角，Web 为椭圆——如实近似）。★批次 34：**逐角**（`12px 12px 0 0` 等——统一半径 + 部分角掩码 `borderRadiusCorners`，宿主 iOS maskedCorners / Android addRoundRect / 鸿蒙 CornerDirection）；**半径不一致**的逐角（`8px 4px`）诊断（不猜）" },
-    { "id": "opacity", "css": "opacity", "category": "paint", "today": "supported", "tier": "L1", "strategy": "编译期折叠", "probe": ["opacity"], "note": "0–1" },
-    { "id": "box-sizing", "css": "box-sizing", "category": "special", "today": "supported", "tier": "L1", "strategy": "直映射", "probe": ["box-sizing"], "note": "两内核恒 border-box ⇒ 只作忠实记录、无副作用" },
-    { "id": "border-color-width", "css": "border（简写）/ border-color / border-width", "category": "paint", "today": "supported", "tier": "L1", "strategy": "编译期折叠", "probe": ["border-color", "border-width"], "note": "★批次 5（2026-10-04）：`border: <width> <style> <color>` 简写解析为 borderWidth + borderColor（uniform **实线**）；**逐边**已支持（见 border-top/right/bottom/left 四条）· 非 solid 线型（dashed/dotted…）诊断跳过（★批 14 审计修：非 solid 此前**静默画成实线**=与 Web 偏差 ⇒ 现诊断跳过）；var() 令牌色如实诊断。**三端宿主真画**：iOS CALayer.border* · Android borderPaint 描边（含圆角路径）· 鸿蒙 OH_ArkUI_RenderNodeUtils_SetBorderWidth/Color" },
-    { "id": "border-top", "css": "border-top", "category": "paint", "today": "supported", "tier": "L1", "strategy": "编译期折叠", "probe": ["border-top-width", "border-top-color"], "note": "★★★逐边 border 批（2026-10-05 · 用户「全端对齐不留缺陷」）：`border-top: <width> solid <color>` 简写 折为 borderTopWidth/Color（宿主**逐边绘制**）；`none` ⇒ 该边清零（重置语义）；非 solid 线型（dashed/dotted…）诊断跳过（App 端仅实线；不静默画成实线冒充）。Web/MP 端为该族**原生支持**（Skyline 官方 formats 表含 border-<side>-* 全部 12 项）。" },
-    { "id": "border-right", "css": "border-right", "category": "paint", "today": "supported", "tier": "L1", "strategy": "编译期折叠", "probe": ["border-right-width", "border-right-color"], "note": "★★★逐边 border 批（2026-10-05 · 用户「全端对齐不留缺陷」）：`border-right: <width> solid <color>` 简写 折为 borderRightWidth/Color（宿主**逐边绘制**）；`none` ⇒ 该边清零（重置语义）；非 solid 线型（dashed/dotted…）诊断跳过（App 端仅实线；不静默画成实线冒充）。Web/MP 端为该族**原生支持**（Skyline 官方 formats 表含 border-<side>-* 全部 12 项）。" },
-    { "id": "border-bottom", "css": "border-bottom", "category": "paint", "today": "supported", "tier": "L1", "strategy": "编译期折叠", "probe": ["border-bottom-width", "border-bottom-color"], "note": "★★★逐边 border 批（2026-10-05 · 用户「全端对齐不留缺陷」）：`border-bottom: <width> solid <color>` 简写 折为 borderBottomWidth/Color（宿主**逐边绘制**）；`none` ⇒ 该边清零（重置语义）；非 solid 线型（dashed/dotted…）诊断跳过（App 端仅实线；不静默画成实线冒充）。Web/MP 端为该族**原生支持**（Skyline 官方 formats 表含 border-<side>-* 全部 12 项）。" },
-    { "id": "border-left", "css": "border-left", "category": "paint", "today": "supported", "tier": "L1", "strategy": "编译期折叠", "probe": ["border-left-width", "border-left-color"], "note": "★★★逐边 border 批（2026-10-05 · 用户「全端对齐不留缺陷」）：`border-left: <width> solid <color>` 简写 折为 borderLeftWidth/Color（宿主**逐边绘制**）；`none` ⇒ 该边清零（重置语义）；非 solid 线型（dashed/dotted…）诊断跳过（App 端仅实线；不静默画成实线冒充）。Web/MP 端为该族**原生支持**（Skyline 官方 formats 表含 border-<side>-* 全部 12 项）。" },
-    { "id": "transform", "css": "transform（2D：translate / scale / rotate）", "category": "motion", "today": "supported", "tier": "L1", "strategy": "编译期折叠", "probe": ["transform"], "note": "★批次 39（2026-10-04 · 对齐 Web · 削减胶水）：静态 transform 编译期折成数值集（txPx/tyPx + txPct/tyPct 盒比例 + 等比 scale + rotate）⇒ 三端宿主逐节点变换通道应用（复用动画表：静态为基态、动画覆盖之）。支持 2D 子集；3D/skew/matrix/非等比缩放 ⇒ 诊断跳过（如实）" },
-    { "id": "transform-origin", "css": "transform-origin", "category": "motion", "today": "supported", "tier": "L2", "strategy": "编译期折叠", "probe": ["transform-origin"], "note": "★批次 40（2026-10-04 · 补齐批 39）：编译期折成盒分数 {x,y}（关键字 left/center/right/top/bottom 1–2 值 / 百分比 / 0）⇒ 三端宿主变换锚点（Android injectTransformOrigin · iOS 建层快照 + applyTransform · 鸿蒙 SetPivot 规范化坐标）。非零 px 需盒尺寸 ⇒ 诊断跳过；默认中心不发射" },
-
-    { "id": "selector-class", "css": "类选择器 .a / .a.b", "category": "selector", "today": "supported", "tier": "L0", "strategy": "编译期折叠", "probe": [], "note": "C1：<style> 类规则编译期匹配合并（按源序；无特异性权重）" },
-    { "id": "selector-type", "css": "元素/类型选择器 h3 / p.foo", "category": "selector", "today": "supported", "tier": "L0", "strategy": "编译期折叠", "probe": [], "note": "C1：按节点原始 tag 匹配（含祖先链）" },
-    { "id": "selector-combinator", "css": "后代 / 子组合 .a .b / .a > .b", "category": "selector", "today": "supported", "tier": "L0", "strategy": "编译期折叠", "probe": [], "note": "C1：祖先类链匹配" },
-    {"id":"selector-pseudo-structural","css":"静态结构伪类 :first-child / :last-child / :nth-child(An+B|odd|even) / :not(简单选择器)","category":"selector","today":"supported","tier":"L0","strategy":"编译期折叠","probe":[],"note":"★批次 37（对齐 Web）：元素兄弟序在编译期树遍历里已知 ⇒ 结构伪类**编译期算一次**（:first-child/:last-child/:nth-child + :not 单段简单选择器）；节点无祖先 CSS 引擎。"},
-    {"id":"selector-pseudo-state","css":"状态伪类 :hover / :active / :focus / :checked","category":"selector","today":"absent","tier":"L2","strategy":"降级","probe":[],"note":"★批次 37：需**运行时状态通道**（App 自绘手势层无 hover 概念）；状态切换改用动态 :class 或语义组件。"},
-    { "id": "selector-attr", "css": "属性选择器 [data-x]", "category": "selector", "today": "absent", "tier": "L0", "strategy": "编译期折叠", "probe": [], "note": "编译期可判（属性在模板里静态可枚举）" },
-    {"id":"selector-deep","css":"Vue 作用域穿透 :deep() / ::v-deep() / >>>","category":"selector","today":"supported","tier":"L0","strategy":"编译期折叠","probe":[],"note":"★批次 37：编译期展开为普通后代选择器（本仓无 scope 后缀之外的作用域处理）；`>>>` 等价 `:deep()`。"},
-    {"id":"selector-sibling","css":"兄弟组合 + / ~","category":"selector","today":"absent","tier":"L5","strategy":"禁止","probe":[],"note":"语义弱、跨端难统一（Skyline 亦不支持）——建议改写为类选择器。"},
-    {"id":"selector-wildcard","css":"通配 *","category":"selector","today":"supported","tier":"L0","strategy":"编译期折叠","probe":[],"note":"★批次 37（对齐 Web）：`*` 单段匹配任意元素（特异性 0）；`.box > *` 这类\"所有直接子\"常见于设计与重置样式。"},
-    { "id": "specificity-inheritance", "css": "特异性 / 继承 / !important", "category": "cascade", "today": "supported", "tier": "L0", "strategy": "编译期折叠", "probe": [], "note": "★批次 1（2026-10-04）：规则按 (!important, 特异性 (id,class,tag), 源序) 层叠；color/fontSize 沿树继承（CSS 可继承子集；编译期一次性算进 computed style，运行时零匹配）" },
-    { "id": "at-media", "css": "@media（响应式）", "category": "at-rule", "today": "absent", "tier": "L3", "strategy": "降级", "probe": [], "note": "编译期无法唯一确定断点；跨端建议走 flex/比例布局 + 框架流体能力" },
-    { "id": "keyframes", "css": "@keyframes（关键帧动画）", "category": "at-rule", "today": "supported", "tier": "L1", "strategy": "编译期折叠", "probe": [], "note": "★批次 42（2026-10-04 · 动效 · 对齐 Web）：@keyframes 停靠点（from/to/%）解析 → 逐通道 keyframe 规格（opacity + px 位移/等比缩放/旋转）→ 内核 anim_start（Keyframes 模式）；挂载后由宿主启动。@keyframes 块不再被误当选择器" },
-    { "id": "animation", "css": "animation（简写：name duration timing delay …）", "category": "at-rule", "today": "supported", "tier": "L1", "strategy": "编译期折叠", "probe": [], "note": "★批次 42（对齐 Web）：animation 简写 → 命中同文件 @keyframes → 逐通道 keyframe 动画（内核 anim_start）；单次播放、终态保持（iters/delay/direction/fill 暂忽略，诊断）。可动画通道限 opacity / px 位移 / 等比缩放 / 旋转" },
-    { "id": "css-vars", "css": "CSS 自定义属性（design tokens）var(--x)", "category": "cascade", "today": "supported", "tier": "L0", "strategy": "编译期折叠", "probe": [], "note": "★批次 9（2026-10-04）：从项目 `globalStyle`（如 styles/tokens.css，与 Web/MP 同一份）解析 `--name: value`，SFC 内 `var(--x)` **编译期替换为字面值**（递归展开引用令牌；支持 fallback；未知令牌诊断）。★**超级应用承载关键**：组件库/主题化全靠设计令牌（真项目 242 处 var()）。诚实边界：只折**字面值**令牌；calc()/env() 动态令牌值不折" },
-    { "id": "unit-relative", "css": "em / rem / vw / vh / calc / clamp", "category": "unit", "today": "absent", "tier": "L0", "strategy": "编译期折叠", "probe": [], "note": "收 px/数字/rpx（宽高另支持 %）。★批次 21：`rpx`（小程序 750 设计单位，1rpx = 0.5px，与 rpxRatio:2 互为逆）折为 px——真项目 125 处。其余相对单位（em/rem/vw/vh/clamp）编译期无法在无上下文时求值 ⇒ 诊断跳过（`var()` 令牌见 css-vars 行——已支持）。★批次 22：`calc()` **常量折叠**已支持——`calc(8px * 0.6)` → 4.8（`var()` 已在解析前置换 ⇒ `calc(var(--u) * 1.15)` 也折）；含 `%`/相对单位的 calc（`calc(100% - 20px)`）仍诊断（无上下文）。组件库 64 处 `calc(var(--x) * N)` 依赖它" },
-    { "id": "grid", "css": "display: grid + grid-template-columns/rows（显式轨迹）+ grid-column/row 线号放置", "category": "layout", "today": "supported", "tier": "L2", "strategy": "直映射", "probe": ["grid-template-columns", "grid-template-rows", "grid-column", "grid-row"], "note": "★批次 12（2026-10-04）：引擎 `Display::Grid` + `LStyle.grid_template_columns/rows`（字符串轨迹）+ `NodeDto` + taffy grid_template_* 映射（parse_grid_tracks：fr/px/数字）；编译器 display:grid 入封闭集 + `grid-template-columns/rows` 解析（**显式轨迹**，`repeat(N,X)` 编译期展开）。★批次 41（2026-10-04）：`grid-column`/`grid-row` **线号放置**（`<n>` / `<start> / <end>`，线号可负——`1 / -1` 跨全宽）已支持（内核 taffy `Line<GridPlacement>`）。★**诚实边界**：显式轨迹（fr/px/数字）+ 线号放置（非 span/非命名线）——auto/minmax/fit-content/命名线/隐式行（grid-auto-*）/`span`/`grid-area` 定位**未支持**，诊断跳过；Skyline 端实测退化为 block ⇒ 有条件可用" },
-    { "id": "aspect-ratio", "css": "aspect-ratio", "category": "layout", "today": "supported", "tier": "L2", "strategy": "编译期折叠", "probe": ["aspect-ratio"], "note": "★批次 24（2026-10-04 · ★基准 = Web）：宽高比（媒体卡/占位图）。`<n>`（1.5）/`<w>/<h>`（16/9，含空格）→ 比值；`auto` = 默认不发射。内核 `LStyle.aspect_ratio` → taffy `aspect_ratio`（原生；定一轴派生另一轴）" },
-    { "id": "flex-wrap", "css": "flex-wrap", "category": "layout", "today": "supported", "tier": "L2", "strategy": "直映射", "probe": ["flex-wrap"], "note": "★批次 6（2026-10-04）：引擎新增 `FlexWrap`（Rust `LStyle.flex_wrap` + `NodeDto` + taffy `flex_wrap` 映射，闭合集 nowrap/wrap/wrap-reverse）；编译器入 APP_LAYOUT_FIELDS + APP_ENUM_VALUES + Android LAYOUT_KEYS 白名单。引擎行为测试 tests/flex_wrap.rs（wrap 换行/nowrap 不换行）" },
-    { "id": "align-content", "css": "align-content", "category": "layout", "today": "supported", "tier": "L2", "strategy": "直映射", "probe": ["align-content"], "note": "★批次 11（2026-10-04）：引擎 `LStyle.align_content`（open string，与 justify/align-items 同模式）+ `NodeDto` + taffy `align_content` 映射（parse_align_content：center/flex-start/…/space-evenly → AlignContent）；编译器入 APP_LAYOUT_FIELDS + Android LAYOUT_KEYS。多行弹性容器的**行间**对齐（标签墙/宫格）。引擎行为测试 tests/align_content.rs（center 行组居中）" },
-    { "id": "right-bottom", "css": "right / bottom", "category": "layout", "today": "supported", "tier": "L2", "strategy": "直映射", "probe": ["right", "bottom"], "note": "★批次 8（2026-10-04）：引擎 `LStyle.right/bottom` + `NodeDto` + taffy inset 映射（absolute/relative 的右/下边缘锚定）；编译器入 APP_LAYOUT_FIELDS + style-object + Android LEN_SCALARS/LAYOUT_KEYS。★**超级应用刚需**：角标 / FAB / 关闭按钮 / 底部弹层锚点。引擎行为测试 tests/inset_right_bottom.rs（right=10/bottom=5 ⇒ 落父右下角）" },
-    {"id":"inset","css":"inset（top/right/bottom/left 的 1–4 值缩写）","category":"layout","today":"supported","tier":"L2","strategy":"编译期折叠","probe":[],"note":"★批次 38（对齐 Web · 削减胶水）：编译期展开为 top/right/bottom/left（引擎四边已支持）；真项目 15 处（路由层/浮层/scrim 的 position:absolute; inset:0）。auto 边 = 默认偏移（该边不设）。"},
-    { "id": "order", "css": "order", "category": "layout", "today": "absent", "tier": "L2", "strategy": "直映射", "probe": ["order"], "note": "引擎无字段" },
-    { "id": "z-index", "css": "z-index", "category": "layer", "today": "absent", "tier": "L3", "strategy": "语义组件", "probe": ["z-index"], "note": "本仓已定案**语义化**（layer=\"content|navigation|mask|popout\"，见 contracts/layers.ts）——数值禁止（跨端无意义 + 推高合成层内存）" },
-    { "id": "box-shadow", "css": "box-shadow", "category": "paint", "today": "supported", "tier": "L3", "strategy": "编译期折叠", "probe": ["box-shadow"], "note": "★批次 10（2026-10-04）：单层解析为结构化 `boxShadow {dx,dy,blur,spread,color}`（多重取首个；inset 诊断跳过）。**三端绘制**：iOS `CALayer.shadow*`（原生；有阴影时不开 masksToBounds——圆角裁剪会裁掉阴影）· Android **分层圆角矩形近似**（硬件加速下 setShadowLayer 只支持文本）· 鸿蒙 `OH_ArkUI_RenderNodeUtils_SetShadow*`（原生；spread 无原生项）。★超级应用卡片抬升视觉刚需" },
-    { "id": "filter-backdrop", "css": "filter / backdrop-filter", "category": "paint", "today": "absent", "tier": "L3", "strategy": "语义组件", "probe": ["filter", "backdrop-filter"], "note": "离屏/额外缓冲；走 <p-glass> / <p-filter> 语义组件" },
-    { "id": "font-weight", "css": "font-weight", "category": "text", "today": "supported", "tier": "L1", "strategy": "编译期折叠", "probe": ["font-weight"], "note": "★批次 3（2026-10-04）：`normal`→400 / `bold`→700 / 100–900 数值归一；作为**文本可继承**字段沿树继承。三端宿主：iOS 已读 `fontWeight`（≥600 bold 判据）、Android 新接线（Cmd.fontWeight + 绘制/度量同源 typeface）、鸿蒙新接线（OH_Drawing_SetTextStyleFontWeight）" },
-    { "id": "text-decoration", "css": "text-decoration", "category": "text", "today": "supported", "tier": "L1", "strategy": "编译期折叠", "probe": ["text-decoration"], "note": "★批次 35（2026-10-04 · ★基准 = Web）：`underline` / `line-through`（`none` = 默认不发射）；CSS **可继承**（沿树传播）。三端宿主：iOS `NSAttributedString.underlineStyle/strikethroughStyle` · Android `Paint.setUnderlineText/setStrikeThruText` · 鸿蒙 `OH_Drawing_SetTextStyleDecoration`。诚实边界：`overline`/颜色/线型未支持（诊断）" },
-    { "id": "text-align", "css": "text-align", "category": "text", "today": "supported", "tier": "L1", "strategy": "编译期折叠", "probe": ["text-align"], "note": "★批次 4（2026-10-04）：封闭集 left/center/right（justify/st 等诊断跳过）。宿主：iOS CATextLayer.alignmentMode · Android Paint.Align（绘制 x 按对齐换算）· 鸿蒙 OH_Drawing_SetTypographyTextAlign。真项目 28 处（22 center）" },
-    { "id": "line-height", "css": "line-height", "category": "text", "today": "supported", "tier": "L1", "strategy": "编译期折叠", "probe": ["line-height"], "note": "★批次 13（2026-10-04，含真机修正确标准）：无单位倍数 / 百分比（→倍数）/ 绝对 px 归一为 token；作为**文本可继承**字段沿树继承。三端宿主实现 **CSS 语义**（非仅行盒高）：行盒变高、字形内容区在行盒内**垂直居中**（半行距）——与 Web/Skyline 真 CSS 一致：iOS measureText 行盒高 + 文本层**可视 frame 居中收缩**（层中心不变 ⇒ 不影响锚点动画）· Android buildMeasures 行盒高 + drawCmds 基线 `盒心 − (ascent+descent)/2` · 鸿蒙 measureTextTypoPx 行盒高 + TypographyPaint `offsetY = (盒高−字形高)/2`。★真机实测 CATextLayer 是顶对齐（故必须显式居中收缩才对齐 Web）。诚实边界：letter-spacing 未支持" },
-    { "id": "text-overflow", "css": "text-overflow", "category": "text", "today": "supported", "tier": "L1", "strategy": "编译期折叠", "probe": ["text-overflow"], "note": "★批次 16（2026-10-04 · ★基准 = Web）：CSS 默认 clip（截断不省略）；ellipsis ⇒ 自绘文本**单行**行尾以 … 截断（超级应用列表项/标签截断刚需）。封闭集 clip/ellipsis（大小写不敏感；其余诊断跳过）；作为**文本可继承**字段沿树继承。三端宿主：iOS CATextLayer.truncationMode（ellipsis ⇒ .end；其余 ⇒ .none——★此前**恒 .end** 是 Web 偏差）· Android TextUtils.ellipsize(TruncateAt.END)（挂载/更新时算好 = 绘制零开销）· 鸿蒙 OH_Drawing_SetTypographyTextEllipsis（maxLines=1 + 尾部 modal + Layout 按盒宽）。诚实边界：仅**单行**（本仓文本无自动换行）；多行 -webkit-line-clamp、fade（渐隐）未支持" },
-    { "id": "letter-spacing", "css": "letter-spacing", "category": "text", "today": "supported", "tier": "L1", "strategy": "编译期折叠", "probe": ["letter-spacing"], "note": "★批次 20（2026-10-04 · ★基准 = Web）：字距（超级应用排版）；Web 默认 normal（=0，不发射）；`<n>px`/`<n>` → 数值 + 作为**文本可继承**沿树继承（相对单位 em/rem 未支持 ⇒ 诊断）。三端宿主：iOS `NSAttributedString` kern（`textLayerString` helper；度量/绘制同源）· Android `Paint.setLetterSpacing`（em：px/字号；度量+绘制）· 鸿蒙 `OH_Drawing_SetTextStyleLetterSpacing`（物理 px）" },
-    { "id": "font-family", "css": "font-family", "category": "text", "today": "supported", "tier": "L4", "strategy": "编译期折叠", "probe": ["font-family"], "note": "★批次 36（2026-10-04 · ★基准 = Web）：候选清单 → **字体角色**（system/serif/monospace/rounded/condensed；与 renderer-app 的 normalizeFontFamily 同一映射）；未识别具体族名透传 custom:<名>。CSS **可继承**。宿主：iOS ProteusTextAdapter.font(family:)（角色→UIFont）· Android typefaceOf(role)（角色→Typeface）· 鸿蒙 SetTextStyleFontFamilies（**best-effort**：鸿蒙字体集有限，仅 monospace/serif 映射、其余回落默认——如实边界）。★字体名大小写敏感、自定义族需宿主注册（见 CUSTOM_FONT_PREFIX）" },
-    { "id": "text-attrs", "css": "white-space", "category": "text", "today": "absent", "tier": "L4", "strategy": "降级", "probe": ["white-space"], "note": "白空格（多行/保留空白）走平台文本引擎（不自研）——App 仅支持 `nowrap`（= App 单行默认，no-op）；`normal`/`pre`/`pre-wrap`/`pre-line` 未支持（诊断）。★文本维已含 fontSize/color/fontWeight/textAlign/line-height/text-overflow/letter-spacing/**text-decoration**（批 35）" },
-    { "id": "pointer-events", "css": "pointer-events", "category": "layout", "today": "supported", "tier": "L2", "strategy": "编译期折叠", "probe": ["pointer-events"], "note": "★批次 32（2026-10-04 · ★基准 = Web）：`none` / `auto`。`none` ⇒ 该节点**不参与命中测试**（事件穿透到其下——浮层/遮罩刚需），但**仍占位**（有几何）。CSS **可继承**（父 none ⇒ 子默认 none、子 auto 可覆盖）——编译期按树算 computed 值。内核 `hit_path` 逐节点跳过 `pointer_events==false`（绘制/层不动——node 仍绘制）。只有内核 hitTest 消费（三端同一命中实现）。" },
-    { "id": "visibility", "css": "visibility", "category": "paint", "today": "supported", "tier": "L1", "strategy": "编译期折叠", "probe": ["visibility"], "note": "★批次 25（2026-10-04 · ★基准 = Web）：`visible` / `hidden`。与 `display:none` 不同——`hidden` **仍占位**（保留布局），只是**不绘制**（宿主跳过绘制该节点）。CSS **可继承**（父 hidden ⇒ 子默认 hidden；子显式 **visible 可覆盖**）——编译期按树算 computed 值（每节点独立标记）。宿主：iOS `layer.isHidden`（子层随父隐藏）· Android Cmd 跳过（color/text/border 清零）· 鸿蒙指令不绘制。诚实边界：`collapse`（表格行折叠）未支持（诊断）" }
+    {
+      "id": "width",
+      "css": "width",
+      "category": "layout",
+      "today": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "probe": [
+        "width"
+      ],
+      "note": "px/数字 → 长度；百分比 → widthRatio（比例字段，非长度）"
+    },
+    {
+      "id": "height",
+      "css": "height",
+      "category": "layout",
+      "today": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "probe": [
+        "height"
+      ],
+      "note": "px/数字 → 长度；百分比 → heightRatio"
+    },
+    {
+      "id": "min-max-wh",
+      "css": "min-width / max-width / min-height / max-height",
+      "category": "layout",
+      "today": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "probe": [
+        "min-width",
+        "max-width",
+        "min-height",
+        "max-height"
+      ],
+      "note": "px/数字；★批次 19：**百分比**（`max-width:100%` 不溢出 / `min-height:100%` 撑满）折为 `*Pct`（0..1）⇒ 内核 taffy 按父内容盒解析（min 缺省 0 / max 缺省 auto 语义不变）"
+    },
+    {
+      "id": "margin",
+      "css": "margin（+ 四边简写 + 1–4 值 shorthand）",
+      "category": "layout",
+      "today": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "probe": [
+        "margin-top"
+      ],
+      "note": "px/数字 → {top,right,bottom,left}；1–4 值简写按 CSS 标准展开（`margin: 8px 0`）；★批次 17：`auto`（`margin: 0 auto` 水平居中）折为逐边 `marginAuto` 标记 → 内核映射 taffy auto（此前静默丢弃 = Web 偏差）；Web 探针取 margin-top 代表"
+    },
+    {
+      "id": "padding",
+      "css": "padding（+ 四边简写 + 1–4 值 shorthand）",
+      "category": "layout",
+      "today": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "probe": [
+        "padding-top"
+      ],
+      "note": "px/数字 → {top,right,bottom,left}；1–4 值简写按 CSS 标准展开（`padding: 8px 12px`）；Web 探针取 padding-top 代表"
+    },
+    {
+      "id": "display",
+      "css": "display: flex / none",
+      "category": "layout",
+      "today": "supported",
+      "tier": "L2",
+      "strategy": "直映射",
+      "probe": [
+        "display"
+      ],
+      "note": "引擎封闭集仅 flex/none（block/inline-block/inline-flex/grid ⇒ 诊断跳过）"
+    },
+    {
+      "id": "flex-direction",
+      "css": "flex-direction",
+      "category": "layout",
+      "today": "supported",
+      "tier": "L2",
+      "strategy": "直映射",
+      "probe": [
+        "flex-direction"
+      ],
+      "note": "封闭集 row/column/row-reverse/column-reverse"
+    },
+    {
+      "id": "justify-content",
+      "css": "justify-content",
+      "category": "layout",
+      "today": "supported",
+      "tier": "L2",
+      "strategy": "直映射",
+      "probe": [
+        "justify-content"
+      ],
+      "note": "引擎为**开放字符串**（未知值静默落默认，不崩）"
+    },
+    {
+      "id": "align-items-self",
+      "css": "align-items / align-self",
+      "category": "layout",
+      "today": "supported",
+      "tier": "L2",
+      "strategy": "直映射",
+      "probe": [
+        "align-items",
+        "align-self"
+      ],
+      "note": "开放字符串（未知值静默落默认）"
+    },
+    {
+      "id": "flex-grow-shrink-basis",
+      "css": "flex-grow / flex-shrink / flex-basis",
+      "category": "layout",
+      "today": "supported",
+      "tier": "L2",
+      "strategy": "直映射",
+      "probe": [
+        "flex-grow",
+        "flex-shrink",
+        "flex-basis"
+      ],
+      "note": "flex-basis 为长度"
+    },
+    {
+      "id": "gap",
+      "css": "gap（+ row-gap / column-gap）",
+      "category": "layout",
+      "today": "supported",
+      "tier": "L2",
+      "strategy": "直映射",
+      "probe": [
+        "gap",
+        "row-gap",
+        "column-gap"
+      ],
+      "note": "px/数字；★批次 31：**两值** `gap:<row> <col>` 与 **轴级** `row-gap`/`column-gap`（内核 `LStyle.row_gap/column_gap` → taffy `gap.height/width`）——真项目组件库 15 处两值 gap"
+    },
+    {
+      "id": "position",
+      "css": "position: static / relative / absolute",
+      "category": "layout",
+      "today": "supported",
+      "tier": "L2",
+      "strategy": "直映射",
+      "probe": [
+        "position"
+      ],
+      "note": "引擎封闭集；sticky/fixed ⇒ 诊断跳过"
+    },
+    {
+      "id": "top-left",
+      "css": "top / left",
+      "category": "layout",
+      "today": "supported",
+      "tier": "L2",
+      "strategy": "直映射",
+      "probe": [
+        "top",
+        "left"
+      ],
+      "note": "配合 absolute；引擎无 right/bottom（见候选）"
+    },
+    {
+      "id": "overflow",
+      "css": "overflow: visible / hidden / scroll / auto",
+      "category": "layout",
+      "today": "supported",
+      "tier": "L2",
+      "strategy": "直映射",
+      "probe": [
+        "overflow"
+      ],
+      "note": "引擎封闭集；auto 折叠为 taffy Scroll"
+    },
+    {
+      "id": "value-shorthand",
+      "css": "margin/padding 1–4 值简写 + background 纯色简写 + flex 简写",
+      "category": "value",
+      "today": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "probe": [],
+      "note": "★批次 2/7（2026-10-04）：a) `margin: 8px 0` / `padding: 8px 12px` 按 CSS 标准展开为 {top,right,bottom,left}（auto 的边忽略）；b) `background: #fff`/`rgba(...)` 归一折进 backgroundColor；c) `flex: <g> [<s> [<b>]]` / `none` / `auto` 展开到 flexGrow/flexShrink/flexBasis（CSS 语义：省略 shrink=1、省略 basis=0）。取证：真项目这些简写高频。渐变/图片简写诊断跳过"
+    },
+    {
+      "id": "width-ratio",
+      "css": "width/height 百分比",
+      "category": "unit",
+      "today": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "probe": [],
+      "note": "→ widthRatio/heightRatio（比例字段）"
+    },
+    {
+      "id": "background-color",
+      "css": "background-color（+ background 纯色简写）",
+      "category": "paint",
+      "today": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "probe": [
+        "background-color"
+      ],
+      "note": "颜色编译期归一为 hex：hex / rgb() / rgba() / **命名色（148 个标准色，批 14）** / transparent；hsl/var ⇒ 诊断跳过。★`background` 纯色简写折进 backgroundColor；★批次 33：`linear-gradient` / `radial-gradient` 折进引擎 `fillGradient` 通道（`background`/`background-image` 均可）——免去手写 `fill-gradient='{json}'` 的胶水；`url()` 图片仍诊断（走原生组件）。★批 14 多端一致性审计修：命名色此前丢弃（Web 生效）⇒ 现查表归一（核心只认 hex）"
+    },
+    {
+      "id": "color",
+      "css": "color",
+      "category": "paint",
+      "today": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "probe": [
+        "color"
+      ],
+      "note": "颜色归一（hex/rgb/rgba/hsl/命名色/4 位 hex/transparent）；★批次 23：`color-mix(in srgb, A [pa%], B [pb%])` **常量折叠**（var() 已置换 ⇒ 两色已知 ⇒ sRGB 预乘 alpha 混合）——组件库 16 处令牌着色；非 srgb 色彩空间（oklab/lab…）诊断"
+    },
+    {
+      "id": "font-size",
+      "css": "font-size",
+      "category": "paint",
+      "today": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "probe": [
+        "font-size"
+      ],
+      "note": "px/数字（不支持百分比/keyword）"
+    },
+    {
+      "id": "border-radius",
+      "css": "border-radius",
+      "category": "paint",
+      "today": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "probe": [
+        "border-radius"
+      ],
+      "note": "px/数字（宿主圆角绘制）；★批次 18：**百分比**（`border-radius: 50%` = 内切圆/椭圆，头像/圆点刚需）折为 `borderRadiusPct`（0..1）⇒ 宿主按 `pct × min(w,h)` 算半径（正方盒 = 精确圆，Web 一致；非正方盒为统一圆角，Web 为椭圆——如实近似）。★批次 34：**逐角**（`12px 12px 0 0` 等——统一半径 + 部分角掩码 `borderRadiusCorners`，宿主 iOS maskedCorners / Android addRoundRect / 鸿蒙 CornerDirection）；**半径不一致**的逐角（`8px 4px`）诊断（不猜）"
+    },
+    {
+      "id": "opacity",
+      "css": "opacity",
+      "category": "paint",
+      "today": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "probe": [
+        "opacity"
+      ],
+      "note": "0–1"
+    },
+    {
+      "id": "box-sizing",
+      "css": "box-sizing",
+      "category": "special",
+      "today": "supported",
+      "tier": "L1",
+      "strategy": "直映射",
+      "probe": [
+        "box-sizing"
+      ],
+      "note": "两内核恒 border-box ⇒ 只作忠实记录、无副作用"
+    },
+    {
+      "id": "border-color-width",
+      "css": "border（简写）/ border-color / border-width",
+      "category": "paint",
+      "today": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "probe": [
+        "border-color",
+        "border-width"
+      ],
+      "note": "★批次 5（2026-10-04）：`border: <width> <style> <color>` 简写解析为 borderWidth + borderColor（uniform **实线**）；**逐边**已支持（见 border-top/right/bottom/left 四条）· ★★★边框族收口批（2026-10-05）：**dashed/dotted 线型已支持**（简写 1–4 值 + 落逐边 Style；宿主按线型绘制）；double/groove 等仍诊断跳过（不静默画成实线）；var() 令牌色如实诊断。**三端宿主真画**：iOS CALayer.border* · Android borderPaint 描边（含圆角路径）· 鸿蒙 OH_ArkUI_RenderNodeUtils_SetBorderWidth/Color"
+    },
+    {
+      "id": "border-top",
+      "css": "border-top",
+      "category": "paint",
+      "today": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "probe": [
+        "border-top-width",
+        "border-top-color",
+        "border-top-style"
+      ],
+      "note": "★★★逐边 border 批（2026-10-05 · 用户「全端对齐不留缺陷」）：`border-top: <width> solid <color>` 简写 折为 borderTopWidth/Color（宿主**逐边绘制**）；`none` ⇒ 该边清零（重置语义）；★★★边框族收口批（2026-10-05）：**线型支持**——solid/dashed/dotted 落 border<Side>Style（宿主按线型绘制：Android 封角块+DashPathEffect / iOS CAShapeLayer lineDashPattern / 鸿蒙 ArkUI 原生；节距按 Chrome 实测真值 {3w,2w}/{w,w}）；double/groove 等仍诊断跳过。`border: <w> dashed <c>` 简写同步支持（1–4 值）。；不静默画成实线冒充）。Web/MP 端为该族**原生支持**（Skyline 官方 formats 表含 border-<side>-* 全部 12 项）。"
+    },
+    {
+      "id": "border-right",
+      "css": "border-right",
+      "category": "paint",
+      "today": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "probe": [
+        "border-right-width",
+        "border-right-color",
+        "border-right-style"
+      ],
+      "note": "★★★逐边 border 批（2026-10-05 · 用户「全端对齐不留缺陷」）：`border-right: <width> solid <color>` 简写 折为 borderRightWidth/Color（宿主**逐边绘制**）；`none` ⇒ 该边清零（重置语义）；★★★边框族收口批（2026-10-05）：**线型支持**——solid/dashed/dotted 落 border<Side>Style（宿主按线型绘制：Android 封角块+DashPathEffect / iOS CAShapeLayer lineDashPattern / 鸿蒙 ArkUI 原生；节距按 Chrome 实测真值 {3w,2w}/{w,w}）；double/groove 等仍诊断跳过。`border: <w> dashed <c>` 简写同步支持（1–4 值）。；不静默画成实线冒充）。Web/MP 端为该族**原生支持**（Skyline 官方 formats 表含 border-<side>-* 全部 12 项）。"
+    },
+    {
+      "id": "border-bottom",
+      "css": "border-bottom",
+      "category": "paint",
+      "today": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "probe": [
+        "border-bottom-width",
+        "border-bottom-color",
+        "border-bottom-style"
+      ],
+      "note": "★★★逐边 border 批（2026-10-05 · 用户「全端对齐不留缺陷」）：`border-bottom: <width> solid <color>` 简写 折为 borderBottomWidth/Color（宿主**逐边绘制**）；`none` ⇒ 该边清零（重置语义）；★★★边框族收口批（2026-10-05）：**线型支持**——solid/dashed/dotted 落 border<Side>Style（宿主按线型绘制：Android 封角块+DashPathEffect / iOS CAShapeLayer lineDashPattern / 鸿蒙 ArkUI 原生；节距按 Chrome 实测真值 {3w,2w}/{w,w}）；double/groove 等仍诊断跳过。`border: <w> dashed <c>` 简写同步支持（1–4 值）。；不静默画成实线冒充）。Web/MP 端为该族**原生支持**（Skyline 官方 formats 表含 border-<side>-* 全部 12 项）。"
+    },
+    {
+      "id": "border-left",
+      "css": "border-left",
+      "category": "paint",
+      "today": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "probe": [
+        "border-left-width",
+        "border-left-color",
+        "border-left-style"
+      ],
+      "note": "★★★逐边 border 批（2026-10-05 · 用户「全端对齐不留缺陷」）：`border-left: <width> solid <color>` 简写 折为 borderLeftWidth/Color（宿主**逐边绘制**）；`none` ⇒ 该边清零（重置语义）；★★★边框族收口批（2026-10-05）：**线型支持**——solid/dashed/dotted 落 border<Side>Style（宿主按线型绘制：Android 封角块+DashPathEffect / iOS CAShapeLayer lineDashPattern / 鸿蒙 ArkUI 原生；节距按 Chrome 实测真值 {3w,2w}/{w,w}）；double/groove 等仍诊断跳过。`border: <w> dashed <c>` 简写同步支持（1–4 值）。；不静默画成实线冒充）。Web/MP 端为该族**原生支持**（Skyline 官方 formats 表含 border-<side>-* 全部 12 项）。"
+    },
+    {
+      "id": "transform",
+      "css": "transform（2D：translate / scale / rotate）",
+      "category": "motion",
+      "today": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "probe": [
+        "transform"
+      ],
+      "note": "★批次 39（2026-10-04 · 对齐 Web · 削减胶水）：静态 transform 编译期折成数值集（txPx/tyPx + txPct/tyPct 盒比例 + 等比 scale + rotate）⇒ 三端宿主逐节点变换通道应用（复用动画表：静态为基态、动画覆盖之）。支持 2D 子集；3D/skew/matrix/非等比缩放 ⇒ 诊断跳过（如实）"
+    },
+    {
+      "id": "transform-origin",
+      "css": "transform-origin",
+      "category": "motion",
+      "today": "supported",
+      "tier": "L2",
+      "strategy": "编译期折叠",
+      "probe": [
+        "transform-origin"
+      ],
+      "note": "★批次 40（2026-10-04 · 补齐批 39）：编译期折成盒分数 {x,y}（关键字 left/center/right/top/bottom 1–2 值 / 百分比 / 0）⇒ 三端宿主变换锚点（Android injectTransformOrigin · iOS 建层快照 + applyTransform · 鸿蒙 SetPivot 规范化坐标）。非零 px 需盒尺寸 ⇒ 诊断跳过；默认中心不发射"
+    },
+    {
+      "id": "selector-class",
+      "css": "类选择器 .a / .a.b",
+      "category": "selector",
+      "today": "supported",
+      "tier": "L0",
+      "strategy": "编译期折叠",
+      "probe": [],
+      "note": "C1：<style> 类规则编译期匹配合并（按源序；无特异性权重）"
+    },
+    {
+      "id": "selector-type",
+      "css": "元素/类型选择器 h3 / p.foo",
+      "category": "selector",
+      "today": "supported",
+      "tier": "L0",
+      "strategy": "编译期折叠",
+      "probe": [],
+      "note": "C1：按节点原始 tag 匹配（含祖先链）"
+    },
+    {
+      "id": "selector-combinator",
+      "css": "后代 / 子组合 .a .b / .a > .b",
+      "category": "selector",
+      "today": "supported",
+      "tier": "L0",
+      "strategy": "编译期折叠",
+      "probe": [],
+      "note": "C1：祖先类链匹配"
+    },
+    {
+      "id": "selector-pseudo-structural",
+      "css": "静态结构伪类 :first-child / :last-child / :nth-child(An+B|odd|even) / :not(简单选择器)",
+      "category": "selector",
+      "today": "supported",
+      "tier": "L0",
+      "strategy": "编译期折叠",
+      "probe": [],
+      "note": "★批次 37（对齐 Web）：元素兄弟序在编译期树遍历里已知 ⇒ 结构伪类**编译期算一次**（:first-child/:last-child/:nth-child + :not 单段简单选择器）；节点无祖先 CSS 引擎。"
+    },
+    {
+      "id": "selector-pseudo-state",
+      "css": "状态伪类 :hover / :active / :focus / :checked",
+      "category": "selector",
+      "today": "absent",
+      "tier": "L2",
+      "strategy": "降级",
+      "probe": [],
+      "note": "★批次 37：需**运行时状态通道**（App 自绘手势层无 hover 概念）；状态切换改用动态 :class 或语义组件。"
+    },
+    {
+      "id": "selector-attr",
+      "css": "属性选择器 [data-x]",
+      "category": "selector",
+      "today": "absent",
+      "tier": "L0",
+      "strategy": "编译期折叠",
+      "probe": [],
+      "note": "编译期可判（属性在模板里静态可枚举）"
+    },
+    {
+      "id": "selector-deep",
+      "css": "Vue 作用域穿透 :deep() / ::v-deep() / >>>",
+      "category": "selector",
+      "today": "supported",
+      "tier": "L0",
+      "strategy": "编译期折叠",
+      "probe": [],
+      "note": "★批次 37：编译期展开为普通后代选择器（本仓无 scope 后缀之外的作用域处理）；`>>>` 等价 `:deep()`。"
+    },
+    {
+      "id": "selector-sibling",
+      "css": "兄弟组合 + / ~",
+      "category": "selector",
+      "today": "absent",
+      "tier": "L5",
+      "strategy": "禁止",
+      "probe": [],
+      "note": "语义弱、跨端难统一（Skyline 亦不支持）——建议改写为类选择器。"
+    },
+    {
+      "id": "selector-wildcard",
+      "css": "通配 *",
+      "category": "selector",
+      "today": "supported",
+      "tier": "L0",
+      "strategy": "编译期折叠",
+      "probe": [],
+      "note": "★批次 37（对齐 Web）：`*` 单段匹配任意元素（特异性 0）；`.box > *` 这类\"所有直接子\"常见于设计与重置样式。"
+    },
+    {
+      "id": "specificity-inheritance",
+      "css": "特异性 / 继承 / !important",
+      "category": "cascade",
+      "today": "supported",
+      "tier": "L0",
+      "strategy": "编译期折叠",
+      "probe": [],
+      "note": "★批次 1（2026-10-04）：规则按 (!important, 特异性 (id,class,tag), 源序) 层叠；color/fontSize 沿树继承（CSS 可继承子集；编译期一次性算进 computed style，运行时零匹配）"
+    },
+    {
+      "id": "at-media",
+      "css": "@media（响应式）",
+      "category": "at-rule",
+      "today": "absent",
+      "tier": "L3",
+      "strategy": "降级",
+      "probe": [],
+      "note": "编译期无法唯一确定断点；跨端建议走 flex/比例布局 + 框架流体能力"
+    },
+    {
+      "id": "keyframes",
+      "css": "@keyframes（关键帧动画）",
+      "category": "at-rule",
+      "today": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "probe": [],
+      "note": "★批次 42（2026-10-04 · 动效 · 对齐 Web）：@keyframes 停靠点（from/to/%）解析 → 逐通道 keyframe 规格（opacity + px 位移/等比缩放/旋转）→ 内核 anim_start（Keyframes 模式）；挂载后由宿主启动。@keyframes 块不再被误当选择器"
+    },
+    {
+      "id": "animation",
+      "css": "animation（简写：name duration timing delay …）",
+      "category": "at-rule",
+      "today": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "probe": [],
+      "note": "★批次 42（对齐 Web）：animation 简写 → 命中同文件 @keyframes → 逐通道 keyframe 动画（内核 anim_start）；单次播放、终态保持（iters/delay/direction/fill 暂忽略，诊断）。可动画通道限 opacity / px 位移 / 等比缩放 / 旋转"
+    },
+    {
+      "id": "css-vars",
+      "css": "CSS 自定义属性（design tokens）var(--x)",
+      "category": "cascade",
+      "today": "supported",
+      "tier": "L0",
+      "strategy": "编译期折叠",
+      "probe": [],
+      "note": "★批次 9（2026-10-04）：从项目 `globalStyle`（如 styles/tokens.css，与 Web/MP 同一份）解析 `--name: value`，SFC 内 `var(--x)` **编译期替换为字面值**（递归展开引用令牌；支持 fallback；未知令牌诊断）。★**超级应用承载关键**：组件库/主题化全靠设计令牌（真项目 242 处 var()）。诚实边界：只折**字面值**令牌；calc()/env() 动态令牌值不折"
+    },
+    {
+      "id": "unit-relative",
+      "css": "em / rem / vw / vh / calc / clamp",
+      "category": "unit",
+      "today": "absent",
+      "tier": "L0",
+      "strategy": "编译期折叠",
+      "probe": [],
+      "note": "收 px/数字/rpx（宽高另支持 %）。★批次 21：`rpx`（小程序 750 设计单位，1rpx = 0.5px，与 rpxRatio:2 互为逆）折为 px——真项目 125 处。其余相对单位（em/rem/vw/vh/clamp）编译期无法在无上下文时求值 ⇒ 诊断跳过（`var()` 令牌见 css-vars 行——已支持）。★批次 22：`calc()` **常量折叠**已支持——`calc(8px * 0.6)` → 4.8（`var()` 已在解析前置换 ⇒ `calc(var(--u) * 1.15)` 也折）；含 `%`/相对单位的 calc（`calc(100% - 20px)`）仍诊断（无上下文）。组件库 64 处 `calc(var(--x) * N)` 依赖它"
+    },
+    {
+      "id": "grid",
+      "css": "display: grid + grid-template-columns/rows（显式轨迹）+ grid-column/row 线号放置",
+      "category": "layout",
+      "today": "supported",
+      "tier": "L2",
+      "strategy": "直映射",
+      "probe": [
+        "grid-template-columns",
+        "grid-template-rows",
+        "grid-column",
+        "grid-row"
+      ],
+      "note": "★批次 12（2026-10-04）：引擎 `Display::Grid` + `LStyle.grid_template_columns/rows`（字符串轨迹）+ `NodeDto` + taffy grid_template_* 映射（parse_grid_tracks：fr/px/数字）；编译器 display:grid 入封闭集 + `grid-template-columns/rows` 解析（**显式轨迹**，`repeat(N,X)` 编译期展开）。★批次 41（2026-10-04）：`grid-column`/`grid-row` **线号放置**（`<n>` / `<start> / <end>`，线号可负——`1 / -1` 跨全宽）已支持（内核 taffy `Line<GridPlacement>`）。★**诚实边界**：显式轨迹（fr/px/数字）+ 线号放置（非 span/非命名线）——auto/minmax/fit-content/命名线/隐式行（grid-auto-*）/`span`/`grid-area` 定位**未支持**，诊断跳过；Skyline 端实测退化为 block ⇒ 有条件可用"
+    },
+    {
+      "id": "aspect-ratio",
+      "css": "aspect-ratio",
+      "category": "layout",
+      "today": "supported",
+      "tier": "L2",
+      "strategy": "编译期折叠",
+      "probe": [
+        "aspect-ratio"
+      ],
+      "note": "★批次 24（2026-10-04 · ★基准 = Web）：宽高比（媒体卡/占位图）。`<n>`（1.5）/`<w>/<h>`（16/9，含空格）→ 比值；`auto` = 默认不发射。内核 `LStyle.aspect_ratio` → taffy `aspect_ratio`（原生；定一轴派生另一轴）"
+    },
+    {
+      "id": "flex-wrap",
+      "css": "flex-wrap",
+      "category": "layout",
+      "today": "supported",
+      "tier": "L2",
+      "strategy": "直映射",
+      "probe": [
+        "flex-wrap"
+      ],
+      "note": "★批次 6（2026-10-04）：引擎新增 `FlexWrap`（Rust `LStyle.flex_wrap` + `NodeDto` + taffy `flex_wrap` 映射，闭合集 nowrap/wrap/wrap-reverse）；编译器入 APP_LAYOUT_FIELDS + APP_ENUM_VALUES + Android LAYOUT_KEYS 白名单。引擎行为测试 tests/flex_wrap.rs（wrap 换行/nowrap 不换行）"
+    },
+    {
+      "id": "align-content",
+      "css": "align-content",
+      "category": "layout",
+      "today": "supported",
+      "tier": "L2",
+      "strategy": "直映射",
+      "probe": [
+        "align-content"
+      ],
+      "note": "★批次 11（2026-10-04）：引擎 `LStyle.align_content`（open string，与 justify/align-items 同模式）+ `NodeDto` + taffy `align_content` 映射（parse_align_content：center/flex-start/…/space-evenly → AlignContent）；编译器入 APP_LAYOUT_FIELDS + Android LAYOUT_KEYS。多行弹性容器的**行间**对齐（标签墙/宫格）。引擎行为测试 tests/align_content.rs（center 行组居中）"
+    },
+    {
+      "id": "right-bottom",
+      "css": "right / bottom",
+      "category": "layout",
+      "today": "supported",
+      "tier": "L2",
+      "strategy": "直映射",
+      "probe": [
+        "right",
+        "bottom"
+      ],
+      "note": "★批次 8（2026-10-04）：引擎 `LStyle.right/bottom` + `NodeDto` + taffy inset 映射（absolute/relative 的右/下边缘锚定）；编译器入 APP_LAYOUT_FIELDS + style-object + Android LEN_SCALARS/LAYOUT_KEYS。★**超级应用刚需**：角标 / FAB / 关闭按钮 / 底部弹层锚点。引擎行为测试 tests/inset_right_bottom.rs（right=10/bottom=5 ⇒ 落父右下角）"
+    },
+    {
+      "id": "inset",
+      "css": "inset（top/right/bottom/left 的 1–4 值缩写）",
+      "category": "layout",
+      "today": "supported",
+      "tier": "L2",
+      "strategy": "编译期折叠",
+      "probe": [],
+      "note": "★批次 38（对齐 Web · 削减胶水）：编译期展开为 top/right/bottom/left（引擎四边已支持）；真项目 15 处（路由层/浮层/scrim 的 position:absolute; inset:0）。auto 边 = 默认偏移（该边不设）。"
+    },
+    {
+      "id": "order",
+      "css": "order",
+      "category": "layout",
+      "today": "absent",
+      "tier": "L2",
+      "strategy": "直映射",
+      "probe": [
+        "order"
+      ],
+      "note": "引擎无字段"
+    },
+    {
+      "id": "z-index",
+      "css": "z-index",
+      "category": "layer",
+      "today": "absent",
+      "tier": "L3",
+      "strategy": "语义组件",
+      "probe": [
+        "z-index"
+      ],
+      "note": "本仓已定案**语义化**（layer=\"content|navigation|mask|popout\"，见 contracts/layers.ts）——数值禁止（跨端无意义 + 推高合成层内存）"
+    },
+    {
+      "id": "box-shadow",
+      "css": "box-shadow",
+      "category": "paint",
+      "today": "supported",
+      "tier": "L3",
+      "strategy": "编译期折叠",
+      "probe": [
+        "box-shadow"
+      ],
+      "note": "★批次 10（2026-10-04）：单层解析为结构化 `boxShadow {dx,dy,blur,spread,color}`（多重取首个；inset 诊断跳过）。**三端绘制**：iOS `CALayer.shadow*`（原生；有阴影时不开 masksToBounds——圆角裁剪会裁掉阴影）· Android **分层圆角矩形近似**（硬件加速下 setShadowLayer 只支持文本）· 鸿蒙 `OH_ArkUI_RenderNodeUtils_SetShadow*`（原生；spread 无原生项）。★超级应用卡片抬升视觉刚需"
+    },
+    {
+      "id": "filter-backdrop",
+      "css": "filter / backdrop-filter",
+      "category": "paint",
+      "today": "absent",
+      "tier": "L3",
+      "strategy": "语义组件",
+      "probe": [
+        "filter",
+        "backdrop-filter"
+      ],
+      "note": "离屏/额外缓冲；走 <p-glass> / <p-filter> 语义组件"
+    },
+    {
+      "id": "font-weight",
+      "css": "font-weight",
+      "category": "text",
+      "today": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "probe": [
+        "font-weight"
+      ],
+      "note": "★批次 3（2026-10-04）：`normal`→400 / `bold`→700 / 100–900 数值归一；作为**文本可继承**字段沿树继承。三端宿主：iOS 已读 `fontWeight`（≥600 bold 判据）、Android 新接线（Cmd.fontWeight + 绘制/度量同源 typeface）、鸿蒙新接线（OH_Drawing_SetTextStyleFontWeight）"
+    },
+    {
+      "id": "text-decoration",
+      "css": "text-decoration",
+      "category": "text",
+      "today": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "probe": [
+        "text-decoration"
+      ],
+      "note": "★批次 35（2026-10-04 · ★基准 = Web）：`underline` / `line-through`（`none` = 默认不发射）；CSS **可继承**（沿树传播）。三端宿主：iOS `NSAttributedString.underlineStyle/strikethroughStyle` · Android `Paint.setUnderlineText/setStrikeThruText` · 鸿蒙 `OH_Drawing_SetTextStyleDecoration`。诚实边界：`overline`/颜色/线型未支持（诊断）"
+    },
+    {
+      "id": "text-align",
+      "css": "text-align",
+      "category": "text",
+      "today": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "probe": [
+        "text-align"
+      ],
+      "note": "★批次 4（2026-10-04）：封闭集 left/center/right（justify/st 等诊断跳过）。宿主：iOS CATextLayer.alignmentMode · Android Paint.Align（绘制 x 按对齐换算）· 鸿蒙 OH_Drawing_SetTypographyTextAlign。真项目 28 处（22 center）"
+    },
+    {
+      "id": "line-height",
+      "css": "line-height",
+      "category": "text",
+      "today": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "probe": [
+        "line-height"
+      ],
+      "note": "★批次 13（2026-10-04，含真机修正确标准）：无单位倍数 / 百分比（→倍数）/ 绝对 px 归一为 token；作为**文本可继承**字段沿树继承。三端宿主实现 **CSS 语义**（非仅行盒高）：行盒变高、字形内容区在行盒内**垂直居中**（半行距）——与 Web/Skyline 真 CSS 一致：iOS measureText 行盒高 + 文本层**可视 frame 居中收缩**（层中心不变 ⇒ 不影响锚点动画）· Android buildMeasures 行盒高 + drawCmds 基线 `盒心 − (ascent+descent)/2` · 鸿蒙 measureTextTypoPx 行盒高 + TypographyPaint `offsetY = (盒高−字形高)/2`。★真机实测 CATextLayer 是顶对齐（故必须显式居中收缩才对齐 Web）。诚实边界：letter-spacing 未支持"
+    },
+    {
+      "id": "text-overflow",
+      "css": "text-overflow",
+      "category": "text",
+      "today": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "probe": [
+        "text-overflow"
+      ],
+      "note": "★批次 16（2026-10-04 · ★基准 = Web）：CSS 默认 clip（截断不省略）；ellipsis ⇒ 自绘文本**单行**行尾以 … 截断（超级应用列表项/标签截断刚需）。封闭集 clip/ellipsis（大小写不敏感；其余诊断跳过）；作为**文本可继承**字段沿树继承。三端宿主：iOS CATextLayer.truncationMode（ellipsis ⇒ .end；其余 ⇒ .none——★此前**恒 .end** 是 Web 偏差）· Android TextUtils.ellipsize(TruncateAt.END)（挂载/更新时算好 = 绘制零开销）· 鸿蒙 OH_Drawing_SetTypographyTextEllipsis（maxLines=1 + 尾部 modal + Layout 按盒宽）。诚实边界：仅**单行**（本仓文本无自动换行）；多行 -webkit-line-clamp、fade（渐隐）未支持"
+    },
+    {
+      "id": "letter-spacing",
+      "css": "letter-spacing",
+      "category": "text",
+      "today": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "probe": [
+        "letter-spacing"
+      ],
+      "note": "★批次 20（2026-10-04 · ★基准 = Web）：字距（超级应用排版）；Web 默认 normal（=0，不发射）；`<n>px`/`<n>` → 数值 + 作为**文本可继承**沿树继承（相对单位 em/rem 未支持 ⇒ 诊断）。三端宿主：iOS `NSAttributedString` kern（`textLayerString` helper；度量/绘制同源）· Android `Paint.setLetterSpacing`（em：px/字号；度量+绘制）· 鸿蒙 `OH_Drawing_SetTextStyleLetterSpacing`（物理 px）"
+    },
+    {
+      "id": "font-family",
+      "css": "font-family",
+      "category": "text",
+      "today": "supported",
+      "tier": "L4",
+      "strategy": "编译期折叠",
+      "probe": [
+        "font-family"
+      ],
+      "note": "★批次 36（2026-10-04 · ★基准 = Web）：候选清单 → **字体角色**（system/serif/monospace/rounded/condensed；与 renderer-app 的 normalizeFontFamily 同一映射）；未识别具体族名透传 custom:<名>。CSS **可继承**。宿主：iOS ProteusTextAdapter.font(family:)（角色→UIFont）· Android typefaceOf(role)（角色→Typeface）· 鸿蒙 SetTextStyleFontFamilies（**best-effort**：鸿蒙字体集有限，仅 monospace/serif 映射、其余回落默认——如实边界）。★字体名大小写敏感、自定义族需宿主注册（见 CUSTOM_FONT_PREFIX）"
+    },
+    {
+      "id": "text-attrs",
+      "css": "white-space",
+      "category": "text",
+      "today": "absent",
+      "tier": "L4",
+      "strategy": "降级",
+      "probe": [
+        "white-space"
+      ],
+      "note": "白空格（多行/保留空白）走平台文本引擎（不自研）——App 仅支持 `nowrap`（= App 单行默认，no-op）；`normal`/`pre`/`pre-wrap`/`pre-line` 未支持（诊断）。★文本维已含 fontSize/color/fontWeight/textAlign/line-height/text-overflow/letter-spacing/**text-decoration**（批 35）"
+    },
+    {
+      "id": "pointer-events",
+      "css": "pointer-events",
+      "category": "layout",
+      "today": "supported",
+      "tier": "L2",
+      "strategy": "编译期折叠",
+      "probe": [
+        "pointer-events"
+      ],
+      "note": "★批次 32（2026-10-04 · ★基准 = Web）：`none` / `auto`。`none` ⇒ 该节点**不参与命中测试**（事件穿透到其下——浮层/遮罩刚需），但**仍占位**（有几何）。CSS **可继承**（父 none ⇒ 子默认 none、子 auto 可覆盖）——编译期按树算 computed 值。内核 `hit_path` 逐节点跳过 `pointer_events==false`（绘制/层不动——node 仍绘制）。只有内核 hitTest 消费（三端同一命中实现）。"
+    },
+    {
+      "id": "visibility",
+      "css": "visibility",
+      "category": "paint",
+      "today": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "probe": [
+        "visibility"
+      ],
+      "note": "★批次 25（2026-10-04 · ★基准 = Web）：`visible` / `hidden`。与 `display:none` 不同——`hidden` **仍占位**（保留布局），只是**不绘制**（宿主跳过绘制该节点）。CSS **可继承**（父 hidden ⇒ 子默认 hidden；子显式 **visible 可覆盖**）——编译期按树算 computed 值（每节点独立标记）。宿主：iOS `layer.isHidden`（子层随父隐藏）· Android Cmd 跳过（color/text/border 清零）· 鸿蒙指令不绘制。诚实边界：`collapse`（表格行折叠）未支持（诊断）"
+    }
   ]
 }

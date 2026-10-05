@@ -759,13 +759,18 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
             bool anySide = false;
             double swArr[4]; uint32_t scArr[4];
             for (int si = 0; si < 4; si++) {
-                char wk[32], ck[32];
+                char wk[32], ck[32], stk[40];
                 snprintf(wk, sizeof(wk), "bw%s", sn[si]);
                 snprintf(ck, sizeof(ck), "bc%s", sn[si]);
+                snprintf(stk, sizeof(stk), "bws%s", sn[si]);
                 double sw = -1; jsonNumber(it, wk, &sw);
                 double sc = 0; jsonNumber(it, ck, &sc);
                 swArr[si] = sw; scArr[si] = (uint32_t)sc;
-                if (sw >= 0 || sc > 0) anySide = true;
+                // ★★★修（2026-10-05 · 真机抓到「线型画成实线」）：**anySide 必须含线型键**——
+                //   `border: 2px dashed` 只落 uniform 宽/色 + 逐边 **Style**（无逐边宽/色）⇒
+                //   旧判据 anySide=false ⇒ 走 uniform 分支 ⇒ 只 SOLID 样式（虚线丢失）。
+                std::string stvChk; jsonString(it, stk, &stvChk);
+                if (sw >= 0 || sc > 0 || !stvChk.empty()) anySide = true;
             }
             if (anySide) {
                 ArkUI_EdgeDirection dir[4] = {ARKUI_EDGE_DIRECTION_TOP, ARKUI_EDGE_DIRECTION_RIGHT,
@@ -791,8 +796,14 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
                     //   （实测：width/color 的 Set 均 rc=0 但画面上无边框——加 SOLID 后出现）。
                     ArkUI_NodeBorderStyleOption* sso = OH_ArkUI_RenderNodeUtils_CreateNodeBorderStyleOption();
                     if (sso != nullptr) {
+                        // ★★★边框族收口批（2026-10-05）：**逐边线型**（solid/dashed/dotted）
                         for (int si = 0; si < 4; si++) {
-                            OH_ArkUI_RenderNodeUtils_SetNodeBorderStyleOptionEdgeStyle(sso, ARKUI_BORDER_STYLE_SOLID, dir[si]);
+                            char sk[32]; snprintf(sk, sizeof(sk), "bws%s", sn[si]);
+                            std::string stv2; jsonString(it, sk, &stv2);
+                            ArkUI_BorderStyle bstyle = ARKUI_BORDER_STYLE_SOLID;
+                            if (stv2 == "dashed") bstyle = ARKUI_BORDER_STYLE_DASHED;
+                            else if (stv2 == "dotted") bstyle = ARKUI_BORDER_STYLE_DOTTED;
+                            OH_ArkUI_RenderNodeUtils_SetNodeBorderStyleOptionEdgeStyle(sso, bstyle, dir[si]);
                         }
                         OH_ArkUI_RenderNodeUtils_SetBorderStyle(node, sso);
                         OH_ArkUI_RenderNodeUtils_DisposeNodeBorderStyleOption(sso);

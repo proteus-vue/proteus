@@ -1,9 +1,9 @@
 # CSS Web 全量能力清单（自动生成——勿手改；生成器 scripts/gen-css-feature-inventory.mjs）
 
 > 总 949 项（property 651 · selector 144 · at-rule 19 · function 105 · unit 30）
-> 实现：**not-started** 630 · **excluded** 210 · **implemented** 103 · **partial** 6
-> 优先级：P2 119 · excluded 210 · P0 29 · done 103 · P1 488
-> ★**可推项（非已实现/非排除）**：636（其中 **P0 29**）
+> 实现：**not-started** 555 · **excluded** 280 · **implemented** 108 · **partial** 6
+> 优先级：P2 115 · excluded 280 · P0 29 · done 108 · P1 417
+> ★**可推项（非已实现/非排除）**：561（其中 **P0 29**）
 
 ## P0 —— 语料在用但未实现（真实需求，最优先）
 
@@ -49,21 +49,6 @@
 | `background-position-x` | CSS Backgrounds and Borders | not-started |
 | `background-position-y` | CSS Backgrounds and Borders | not-started |
 | `background-repeat` | CSS Backgrounds and Borders | not-started |
-| `block-size` | CSS Logical Properties and Values | not-started |
-| `border-block` | CSS Logical Properties and Values | not-started |
-| `border-block-color` | CSS Logical Properties and Values | not-started |
-| `border-block-end` | CSS Logical Properties and Values | not-started |
-| `border-block-end-color` | CSS Logical Properties and Values | not-started |
-| `border-block-end-style` | CSS Logical Properties and Values | not-started |
-| `border-block-end-width` | CSS Logical Properties and Values | not-started |
-| `border-block-start` | CSS Logical Properties and Values | not-started |
-| `border-block-start-color` | CSS Logical Properties and Values | not-started |
-| `border-block-start-style` | CSS Logical Properties and Values | not-started |
-| `border-block-start-width` | CSS Logical Properties and Values | not-started |
-| `border-block-style` | CSS Logical Properties and Values | not-started |
-| `border-block-width` | CSS Logical Properties and Values | not-started |
-| `border-bottom-left-radius` | CSS Backgrounds and Borders | not-started |
-| `border-bottom-right-radius` | CSS Backgrounds and Borders | not-started |
 | `border-end-end-radius` | CSS Logical Properties and Values | not-started |
 | `border-end-start-radius` | CSS Logical Properties and Values | not-started |
 | `border-image` | CSS Backgrounds and Borders | not-started |
@@ -72,35 +57,16 @@
 | `border-image-slice` | CSS Backgrounds and Borders | not-started |
 | `border-image-source` | CSS Backgrounds and Borders | not-started |
 | `border-image-width` | CSS Backgrounds and Borders | not-started |
-| `border-inline` | CSS Logical Properties and Values | not-started |
-| `border-inline-color` | CSS Logical Properties and Values | not-started |
-| `border-inline-end` | CSS Logical Properties and Values | not-started |
-| `border-inline-end-color` | CSS Logical Properties and Values | not-started |
-| `border-inline-end-style` | CSS Logical Properties and Values | not-started |
-| `border-inline-end-width` | CSS Logical Properties and Values | not-started |
-| `border-inline-start` | CSS Logical Properties and Values | not-started |
-| `border-inline-start-color` | CSS Logical Properties and Values | not-started |
-| `border-inline-start-style` | CSS Logical Properties and Values | not-started |
-| `border-inline-start-width` | CSS Logical Properties and Values | not-started |
-| `border-inline-style` | CSS Logical Properties and Values | not-started |
-| `border-inline-width` | CSS Logical Properties and Values | not-started |
 | `border-start-end-radius` | CSS Logical Properties and Values | not-started |
 | `border-start-start-radius` | CSS Logical Properties and Values | not-started |
-| `border-style` | CSS Backgrounds and Borders | not-started |
-| `border-top-left-radius` | CSS Backgrounds and Borders | not-started |
-| `border-top-right-radius` | CSS Backgrounds and Borders | not-started |
 | `caret` | CSS Basic User Interface | not-started |
 | `caret-animation` | CSS Basic User Interface | not-started |
 | `caret-shape` | CSS Basic User Interface | not-started |
-| `corner-block-end-shape` | CSS Backgrounds and Borders | not-started |
-| `corner-block-start-shape` | CSS Backgrounds and Borders | not-started |
 | `corner-bottom-shape` | CSS Backgrounds and Borders | not-started |
 | `corner-bottom-left-shape` | CSS Backgrounds and Borders | not-started |
 | `corner-bottom-right-shape` | CSS Backgrounds and Borders | not-started |
 | `corner-end-end-shape` | CSS Backgrounds and Borders | not-started |
 | `corner-end-start-shape` | CSS Backgrounds and Borders | not-started |
-| `corner-inline-end-shape` | CSS Backgrounds and Borders | not-started |
-| `corner-inline-start-shape` | CSS Backgrounds and Borders | not-started |
 | `corner-left-shape` | CSS Backgrounds and Borders | not-started |
 | `corner-right-shape` | CSS Backgrounds and Borders | not-started |
 | `corner-shape` | CSS Backgrounds and Borders | not-started |
@@ -116,5 +82,39 @@
 | `font-size-adjust` | CSS Fonts | not-started |
 | `font-style` | CSS Fonts | not-started |
 | `font-synthesis` | CSS Fonts | not-started |
+| `font-synthesis-small-caps` | CSS Fonts | not-started |
+| `font-synthesis-style` | CSS Fonts | not-started |
+| `font-synthesis-weight` | CSS Fonts | not-started |
+| `font-variant` | CSS Fonts | not-started |
+| `font-variant-alternates` | CSS Fonts | not-started |
+| `font-variant-caps` | CSS Fonts | not-started |
+| `font-variant-east-asian` | CSS Fonts | not-started |
+| `font-variant-numeric` | CSS Fonts | not-started |
+| `font-variant-position` | CSS Fonts | not-started |
+| `font-variation-settings` | CSS Fonts | not-started |
+| `grid` | CSS Grid Layout | not-started |
+| `grid-column-end` | CSS Grid Layout | not-started |
+| `grid-column-start` | CSS Grid Layout | not-started |
+| `grid-row-end` | CSS Grid Layout | not-started |
+| `grid-row-start` | CSS Grid Layout | not-started |
+| `grid-template` | CSS Grid Layout | not-started |
+| `hanging-punctuation` | CSS Text | not-started |
+| `hyphenate-character` | CSS Text | not-started |
+| `hyphenate-limit-chars` | CSS Text | not-started |
+| `image-orientation` | CSS Images | not-started |
+| `interactivity` | CSS Basic User Interface | not-started |
+| `interest-delay` | CSS Basic User Interface | not-started |
+| `interest-delay-end` | CSS Basic User Interface | not-started |
+| `interest-delay-start` | CSS Basic User Interface | not-started |
+| `justify-items` | CSS Box Alignment | not-started |
+| `line-break` | CSS Text | not-started |
+| `line-clamp` | CSS Overflow | not-started |
+| `object-position` | CSS Images | not-started |
+| `order` | CSS Display | not-started |
+| `outline-color` | CSS Basic User Interface | not-started |
+| `outline-style` | CSS Basic User Interface | not-started |
+| `outline-width` | CSS Basic User Interface | not-started |
+| `overflow-clip-margin` | CSS Overflow | not-started |
+| `overflow-wrap` | CSS Text | not-started |
 
 （P2 与 excluded 全量见 JSON；本 MD 只列推进面）

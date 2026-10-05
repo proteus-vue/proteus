@@ -61,6 +61,9 @@ export const screenContentProbe: (argsJson: string) => string;
 /** ★★★视觉合成（2026-10-04）：App 屏内容 → 内核树 → 渲染指令数组（物理 px，renderCommands 输入）。
  *  argsJson = { nodes, density, vpW, vpH, page?, filesDir? }；返回 JSON 数组串。 */
 export const appScreenCommands: (argsJson: string) => string;
+/** ★★★鸿蒙滚动对齐（2026-10-05 · 用户抓出「内容变长后看不到下面」）：**内容高（vp）**——
+ *  AppScreenCommands 建树后从内核 rects 的 maxBottom 算出；ArkTS 侧钳制滚动范围（range = max(0, 内容高 − 视口高)）。 */
+export const appScreenContentHeight: () => number;
 /** ★★★真实触摸（2026-10-04）：`.onTouch` 真注入的 vp 坐标 → 内核 hitTest（保留的合成树）。
  *  返回 {ok,target,path,chain}；每调用一次计入 app-screen-composite.json 的真实触摸读数。 */
 export const appScreenHitAt: (x: number, y: number) => string;

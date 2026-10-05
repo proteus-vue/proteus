@@ -4168,6 +4168,9 @@ static uint64_t g_appTouchTree = 0;
 static std::string g_appTouchPage;
 static std::string g_appTouchFilesDir;
 static int g_appTouchContentNodes = 0;
+/// ★★★鸿蒙滚动对齐（2026-10-05 · 用户抓出「内容变长后看不到下面」）：**内容高（vp）**——
+///   由 AppScreenCommands 建树后从内核 rects 的 maxBottom 算出；供 ArkTS 侧钳制滚动范围。
+static double g_appContentHeightVp = 0;
 static int g_appTouchCmdCount = 0;
 static int g_appTouchHitCount = 0;      // 装置内命中（合成时 20 点，向后兼容旧读数）
 static int g_appTouchTransformCount = 0; // ★批次 39：带静态变换的节点数（编译期 CSS transform）
@@ -4416,6 +4419,15 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
     std::string rects = rp ? rp : "{}";
     if (rp) proteus_layout_free_string(rp);
     std::unordered_map<int, Rect> rectMap; parseRects(rects, rectMap);
+    // ★★★鸿蒙滚动对齐：内容高 = 内核 rects 的 maxBottom（设计单位；与 Android applyContentScrollRange 同口径）
+    {
+        double maxBottom = 0;
+        for (const auto& kv : rectMap) {
+            const double b = kv.second.y + kv.second.h;
+            if (b > maxBottom) maxBottom = b;
+        }
+        g_appContentHeightVp = maxBottom;
+    }
     // ★装置内命中（20 点，用真实 rects 中心）——保留为**旧读数**（向后兼容）；真实触摸读数另计。
     //   ★命中点用**真实 rects 的中心**（几何真源——不猜坐标空间；本仓"命中必须与核心同源"纪律）。
     g_appTouchHitCount = 0; g_appTouchHitFirst = -1;
@@ -4504,16 +4516,20 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
             const char* sn[4] = {"Top", "Right", "Bottom", "Left"};
             const char* wk[4] = {"borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth"};
             const char* ck[4] = {"borderTopColor", "borderRightColor", "borderBottomColor", "borderLeftColor"};
+            const char* stk[4] = {"borderTopStyle", "borderRightStyle", "borderBottomStyle", "borderLeftStyle"};
             bool anySide = false;
-            for (int si = 0; si < 4; si++) { if (it.find(std::string("\"") + wk[si] + "\"") != std::string::npos || it.find(std::string("\"") + ck[si] + "\"") != std::string::npos) { anySide = true; break; } }
+            for (int si = 0; si < 4; si++) { if (it.find(std::string("\"") + wk[si] + "\"") != std::string::npos || it.find(std::string("\"") + ck[si] + "\"") != std::string::npos || it.find(std::string("\"") + stk[si] + "\"") != std::string::npos) { anySide = true; break; } }
             if (anySide) {
                 for (int si = 0; si < 4; si++) {
                     double sw = -1; jnum(it.c_str(), it.size(), wk[si], &sw);
                     uint32_t sc = 0; std::string scCss; if (jstr(it.c_str(), it.size(), ck[si], &scCss)) sc = hexToArgb(scCss);
-                    if (sw < 0 && sc == 0) continue;
-                    char sb2[96];
+                    std::string stv; jstr(it.c_str(), it.size(), stk[si], &stv);
+                    if (sw < 0 && sc == 0 && stv.empty()) continue;
+                    char sb2[160];
                     snprintf(sb2, sizeof(sb2), ",\"bw%s\":%.2f,\"bc%s\":%u", sn[si], sw < 0 ? -1.0 : sw * density, sn[si], sc);
                     arr += sb2;
+                    // ★★★边框族收口批（2026-10-05）：线型（solid/dashed/dotted 原样字符串）
+                    if (!stv.empty()) arr += std::string(",\"bws") + sn[si] + "\":\"" + jsonEscape(stv) + "\"";
                 }
             }
         }
@@ -4590,6 +4606,13 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
     OH_LOG_Print(LOG_APP, LOG_INFO, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG, "%{public}s", lb);
     writeAppScreenComposite();
     napi_value out; napi_create_string_utf8(env, arr.c_str(), arr.size(), &out); return out;
+}
+
+/** ★★★鸿蒙滚动对齐（2026-10-05）：内容高（vp）——ArkTS 侧钳制滚动范围用。 */
+static napi_value AppScreenContentHeight(napi_env env, napi_callback_info info) {
+    napi_value out;
+    napi_create_double(env, g_appContentHeightVp, &out);
+    return out;
 }
 
 /* ══════════════ ★★★批次 44：superapp 真实应用 · 鸿蒙持久 VM（2026-10-05） ══════════════
@@ -4813,6 +4836,7 @@ static napi_value BenchInit(napi_env env, napi_value exports) {
         {"vaporProbe", nullptr, VaporProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"screenContentProbe", nullptr, ScreenContentProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"appScreenCommands", nullptr, AppScreenCommands, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"appScreenContentHeight", nullptr, AppScreenContentHeight, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"appScreenHitAt", nullptr, AppScreenHitAt, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"appScreenAnimTick", nullptr, AppScreenAnimTick, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"appStackExecutorProbe", nullptr, AppStackExecutorProbe, nullptr, nullptr, nullptr, napi_default, nullptr},

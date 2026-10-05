@@ -116,7 +116,15 @@ async function collectWeb() {
       await page.goto(url, { waitUntil: 'networkidle' })
       await page.waitForSelector('.cc-page', { timeout: 15_000 })
       // 整屏截图（与各端真截图同幅）
+      // ★修正（2026-10-05 · 回退 fullPage）：**视口截图**——真机截图恒为视口大小，两者须同坐标系可比。
+      //   （页面应装进视口：案例过多时拆页/压缩，而不是长截图。）
       await page.screenshot({ path: path.join(outDir, `${p.name}.png`), type: 'png' })
+      // ★★孤儿清理（2026-10-05 · 子代理评审发现）：页面**删案例**后重采不删旧裁剪图
+      //   ⇒ `<page>.case-<已删id>.png` 残留（易被误引为"本轮证据"）。
+      //   纪律与"旧图门禁"同源：**证据集必须与页面案例清单一致**——重采前按前缀清掉。
+      for (const f of fs.readdirSync(outDir)) {
+        if (f.startsWith(`${p.name}.case-`) && f.endsWith('.png')) fs.unlinkSync(path.join(outDir, f))
+      }
       const cases = casesOf(p)
       const reads = {}
       for (const id of cases) {
@@ -125,12 +133,14 @@ async function collectWeb() {
           console.error(`✗ 案例元素缺失：#${id}（${p.name}）——页面与清单不一致`)
           process.exit(1)
         }
+        // ★修正（同①）：scrollIntoView 后按**视口坐标**裁剪（页面应装进视口）
+        await el.scrollIntoViewIfNeeded()
         const box = await el.boundingBox()
-        if (box) {
+        if (box && box.width > 0 && box.height > 0) {
           await page.screenshot({
             path: path.join(outDir, `${p.name}.${id}.png`),
             type: 'png',
-            clip: { x: Math.max(0, box.x - 4), y: Math.max(0, box.y - 4), width: box.width + 8, height: box.height + 8 },
+            clip: { x: Math.max(0, box.x - 4), y: Math.max(0, box.y - 4), width: Math.min(box.width + 8, VIEWPORT.width), height: Math.min(box.height + 8, VIEWPORT.height) },
           })
         }
         reads[id] = await page.evaluate(
@@ -239,6 +249,13 @@ function shotApp(end) {
 
 /* ══════════════════ side-by-side：Web 基准 | 该端（逐页一行） ══════════════════ */
 function sideBySide(end) {
+  // ★★旧图门禁（2026-10-05）：stale 截图会误导视觉评审（子代理成本昂贵）——默认拒绝生成并排图
+  const { stale } = freshCheck()
+  if (stale.length && process.env.PROTEUS_ALLOW_STALE !== '1') {
+    console.error(`✗ 拒绝生成并排图：${stale.length} 张截图 stale（${stale.join(' / ')}）——先重截`)
+    console.error('  查看明细：node scripts/css-conformance.mjs fresh（显式绕过：PROTEUS_ALLOW_STALE=1）')
+    process.exit(2)
+  }
   const ends = end ? [end] : ['mp', 'android', 'ios', 'harmony']
   const webDir = path.join(RESULTS, 'web')
   if (!fs.existsSync(webDir)) {
@@ -296,6 +313,88 @@ function synthesize(leftPng, rightPng, outPng, targetH) {
   return `ffmpeg 拼接失败（${tail}）`
 }
 
+/** 递归取目录/文件的最新 mtime（ms） */
+function maxMtimeOf(p) {
+  const st = fs.statSync(p)
+  if (!st.isDirectory()) return st.mtimeMs
+  let max = st.mtimeMs
+  for (const f of fs.readdirSync(p)) max = Math.max(max, maxMtimeOf(path.join(p, f)))
+  return max
+}
+
+/* ══════════════ fresh：截图新鲜度门禁（★防「旧图当证据」——用户 2026-10-05 点名） ══════════════
+ * 【为什么有这一条】
+ *   子代理视觉验收成本 ≥10 分钟/轮（昂贵）——把**旧版截图**交给它 = 白烧一整轮。
+ *   实测踩过两次：① 鸿蒙图不是 css-conformance 应用的（产物未重建）；② Android/iOS 图含已删除的
+ *   F 段（只重截了鸿蒙）。⇒ 交图前**机器先判新旧**，不靠人记得：
+ *   判据 = 截图 mtime ≥ max(页面 SFC, styles/global.css, RouterView.vue, 该端宿主源, 该端构建产物)。
+ *   ★注意：mtime 判据是**保守**的（源改了就要求重截，哪怕视觉无变化）——这是刻意的：
+ *   漏报的代价（旧图烧子代理一轮）远高于误报的代价（重截一次 ~2 分钟）。
+ */
+const END_SRC = {
+  web: [],
+  mp: [],
+  android: ['hosts/android/app/src/main/java/dev/proteus/layoutcore'],
+  ios: ['hosts/ios/ProteusHost'],
+  // ★只扫宿主源码（cpp/ets）；不含 resources/rawfile——那是**项目产物**（把 app-screen-content/
+  //   bundle 拷进 HAP），其新鲜度已由 HAP 产物 mtime 覆盖；仓库侧恢复 superapp 产物不应误报。
+  harmony: ['hosts/harmony/host-app/entry/src/main/cpp', 'hosts/harmony/host-app/entry/src/main/ets'],
+  // ★不放 hosts/shared/bridge：构建期 build-id 注入（inject-build-id）会改其 mtime ⇒ 每次构建
+  //   都把所有图误判 stale。其真实影响已由「该端构建产物」覆盖（产物 mtime 恒为最后一次构建）。
+}
+const END_ARTIFACT = {
+  web: 'css-conformance/dist/web/index.html',
+  mp: 'css-conformance/dist/mp-weixin/app.js',
+  android: 'hosts/android/build/proteus-layoutcore.apk',
+  ios: 'hosts/ios/build-selfdraw/ProteusSelfDraw.app/bundle-superapp.js',
+  harmony: 'hosts/harmony/host-app/entry/build/default/outputs/default/entry-default-signed.hap',
+}
+
+function freshCheck() {
+  const stale = []
+  const rows = []
+  for (const p of pageList()) {
+    for (const e of ['web', 'mp', 'android', 'ios', 'harmony']) {
+      const shot = path.join(RESULTS, e, `${p.name}.png`)
+      if (!fs.existsSync(shot)) continue // 缺证据由 status 管
+      const srcs = [
+        path.join(PROJ, 'pages', `${p.name}.vue`),
+        path.join(PROJ, 'styles/global.css'),
+        path.join(PROJ, 'router/RouterView.vue'),
+        ...END_SRC[e].map((r) => path.join(ROOT, r)),
+        path.join(ROOT, END_ARTIFACT[e]),
+      ].filter((x) => fs.existsSync(x))
+      let newest = 0
+      let newestPath = ''
+      for (const s of srcs) {
+        const m = maxMtimeOf(s)
+        if (m > newest) { newest = m; newestPath = path.relative(ROOT, s) }
+      }
+      const shotM = fs.statSync(shot).mtimeMs
+      const ok = shotM >= newest
+      if (!ok) stale.push(`${e}/${p.name}`)
+      rows.push({ end: e, page: p.name, ok, shotMtime: new Date(shotM).toISOString(), newest: new Date(newest).toISOString(), newestPath })
+    }
+  }
+  return { rows, stale }
+}
+
+function fresh() {
+  const { rows, stale } = freshCheck()
+  if (rows.length === 0) { console.log('（无截图可比——先采集各端）'); process.exit(1) }
+  console.log('CSS 截图新鲜度（判据：截图 mtime ≥ 页面源 / 宿主源 / 构建产物）')
+  for (const r of rows) {
+    const mark = r.ok ? '✅' : '❌ 旧图'
+    console.log(`  ${mark} ${r.end}/${r.page}  截图 ${r.shotMtime.slice(0, 19)} ≥? 最新源 ${r.newest.slice(0, 19)}（${r.newestPath}）`)
+  }
+  if (stale.length) {
+    console.error(`\n✗ ${stale.length} 张截图 stale（源/产物已更新但图未重拍）：${stale.join(' / ')}`)
+    console.error('  ⇒ 先重跑对应端再交子代理——旧图交子代理 = 白烧一轮（≥10 分钟）')
+    process.exit(1)
+  }
+  console.log('✅ 全部截图均新于对应源与产物（可交视觉评审）')
+}
+
 /* ══════════════════ status：证据齐备表 ══════════════════ */
 function status() {
   const pages = pageList()
@@ -337,7 +436,10 @@ const CHROME = {
   mp: { top: 60, bottom: 110 }, // 模拟器：顶部黑刘海区 + 底部手势条/圆角遮罩
   android: { bottom: 64 }, // 系统导航栏
   ios: {},
-  harmony: {}, // 状态栏已隐藏（Superapp.ets setWindowSystemBarEnable）
+  // ★★★补（2026-10-05 · probe 抓出鸿蒙 ΔB28）：**底部导航区**——状态栏已隐藏（Superapp.ets），
+  //   但系统导航条（白色 + 手势横条）仍在截图底部（实测 1320×2856 图的下 ~120px）。
+  //   与 Android `bottom:64` 同源（系统 chrome，不计页面缺陷）。
+  harmony: { bottom: 120 },
 }
 
 function pngSizeOf(p) {
@@ -510,6 +612,7 @@ else if (cmd === 'shot-mp') shotMp()
 else if (cmd === 'shot-app') shotApp(arg)
 else if (cmd === 'side-by-side') sideBySide(arg)
 else if (cmd === 'status') status()
+else if (cmd === 'fresh') fresh()
 else if (cmd === 'probe') probe(arg)
 else {
   console.log('用法：node scripts/css-conformance.mjs <collect-web|shot-mp|shot-app <end>|side-by-side [end]|status|probe [end]>')

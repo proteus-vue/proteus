@@ -427,6 +427,8 @@ public class ProteusHostView extends ViewGroup {
     private final android.graphics.Paint borderPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
     /** ★★★45° 斜接（逐边边框）：复用的 Path（避免每帧分配）。 */
     private final android.graphics.Path sideBorderPath = new android.graphics.Path();
+    /** ★★★线型：角部实心块（dashed/dotted 的封角——Chrome 角部真值）。 */
+    private final android.graphics.Path cornerBlock = new android.graphics.Path();
     /** ★批次 10：盒阴影填充专用（分层近似——与 border/glow 分开避免相互污染）。 */
     private final android.graphics.Paint shadowPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
     /** ★★软边遮罩合成用（mask v1）：`渐变 shader + DST_IN`（见 drawCmds 的遮罩合成段） */
@@ -2635,7 +2637,22 @@ public class ProteusHostView extends ViewGroup {
                     sideBorderPath.moveTo(x0, y0); sideBorderPath.lineTo(x1, y0);
                     sideBorderPath.lineTo(ix1, iy0); sideBorderPath.lineTo(ix0, iy0);
                     sideBorderPath.close();
-                    canvas.drawPath(sideBorderPath, borderPaint);
+                    // ★★★线型（2026-10-05）：solid ⇒ 填充；dashed/dotted ⇒ **封角块 + 中线虚线**（Chrome 角部实心）
+                    if ((int) sb[8 + 0] == 0) {
+                        canvas.drawPath(sideBorderPath, borderPaint);
+                    } else {
+                        cornerBlock.reset();
+                        cornerBlock.addRect(x0, y0, x0 + wt, y0 + wt, android.graphics.Path.Direction.CW);
+                        cornerBlock.addRect(x1 - wt, y0, x1, y0 + wt, android.graphics.Path.Direction.CW);
+                        canvas.drawPath(cornerBlock, borderPaint);
+                        borderPaint.setStyle(android.graphics.Paint.Style.STROKE);
+                        borderPaint.setStrokeWidth(wt);
+                        // 线型节距 = Chrome 实测真值（2026-10-05 取证）：dashed {3w,2w} · dotted {w,w}（方点、等距）
+                        borderPaint.setPathEffect(new android.graphics.DashPathEffect((int) sb[8 + 0] == 1 ? new float[]{wt * 3f, wt * 2f} : new float[]{wt, wt}, 0f));
+                        canvas.drawLine(x0, y0 + wt * 0.5f, x1, y0 + wt * 0.5f, borderPaint);
+                        borderPaint.setPathEffect(null);
+                        borderPaint.setStyle(android.graphics.Paint.Style.FILL);
+                    }
                 }
                 // right：外右上→外右下→右内下→右内上
                 if (wr > 0f && cr != 0) {
@@ -2645,7 +2662,21 @@ public class ProteusHostView extends ViewGroup {
                     sideBorderPath.moveTo(x1, y0); sideBorderPath.lineTo(x1, y1);
                     sideBorderPath.lineTo(ix1, iy1); sideBorderPath.lineTo(ix1, iy0);
                     sideBorderPath.close();
-                    canvas.drawPath(sideBorderPath, borderPaint);
+                    // ★★★线型（2026-10-05）：solid ⇒ 填充；dashed/dotted ⇒ **封角块 + 中线虚线**（Chrome 角部实心）
+                    if ((int) sb[8 + 1] == 0) {
+                        canvas.drawPath(sideBorderPath, borderPaint);
+                    } else {
+                        cornerBlock.reset();
+                        cornerBlock.addRect(x1 - wr, y0, x1, y0 + wr, android.graphics.Path.Direction.CW);
+                        cornerBlock.addRect(x1 - wr, y1 - wr, x1, y1, android.graphics.Path.Direction.CW);
+                        canvas.drawPath(cornerBlock, borderPaint);
+                        borderPaint.setStyle(android.graphics.Paint.Style.STROKE);
+                        borderPaint.setStrokeWidth(wr);
+                        borderPaint.setPathEffect(new android.graphics.DashPathEffect((int) sb[8 + 1] == 1 ? new float[]{wr * 3f, wr * 2f} : new float[]{wr, wr}, 0f));
+                        canvas.drawLine(x1 - wr * 0.5f, y0, x1 - wr * 0.5f, y1, borderPaint);
+                        borderPaint.setPathEffect(null);
+                        borderPaint.setStyle(android.graphics.Paint.Style.FILL);
+                    }
                 }
                 // bottom：外右下→外左下→左内下→右内下
                 if (wb > 0f && cb != 0) {
@@ -2655,7 +2686,21 @@ public class ProteusHostView extends ViewGroup {
                     sideBorderPath.moveTo(x1, y1); sideBorderPath.lineTo(x0, y1);
                     sideBorderPath.lineTo(ix0, iy1); sideBorderPath.lineTo(ix1, iy1);
                     sideBorderPath.close();
-                    canvas.drawPath(sideBorderPath, borderPaint);
+                    // ★★★线型（2026-10-05）：solid ⇒ 填充；dashed/dotted ⇒ **封角块 + 中线虚线**（Chrome 角部实心）
+                    if ((int) sb[8 + 2] == 0) {
+                        canvas.drawPath(sideBorderPath, borderPaint);
+                    } else {
+                        cornerBlock.reset();
+                        cornerBlock.addRect(x0, y1 - wb, x0 + wb, y1, android.graphics.Path.Direction.CW);
+                        cornerBlock.addRect(x1 - wb, y1 - wb, x1, y1, android.graphics.Path.Direction.CW);
+                        canvas.drawPath(cornerBlock, borderPaint);
+                        borderPaint.setStyle(android.graphics.Paint.Style.STROKE);
+                        borderPaint.setStrokeWidth(wb);
+                        borderPaint.setPathEffect(new android.graphics.DashPathEffect((int) sb[8 + 2] == 1 ? new float[]{wb * 3f, wb * 2f} : new float[]{wb, wb}, 0f));
+                        canvas.drawLine(x0, y1 - wb * 0.5f, x1, y1 - wb * 0.5f, borderPaint);
+                        borderPaint.setPathEffect(null);
+                        borderPaint.setStyle(android.graphics.Paint.Style.FILL);
+                    }
                 }
                 // left：外左下→外左上→左内上→左内下
                 if (wl > 0f && cl != 0) {
@@ -2665,7 +2710,21 @@ public class ProteusHostView extends ViewGroup {
                     sideBorderPath.moveTo(x0, y1); sideBorderPath.lineTo(x0, y0);
                     sideBorderPath.lineTo(ix0, iy0); sideBorderPath.lineTo(ix0, iy1);
                     sideBorderPath.close();
-                    canvas.drawPath(sideBorderPath, borderPaint);
+                    // ★★★线型（2026-10-05）：solid ⇒ 填充；dashed/dotted ⇒ **封角块 + 中线虚线**（Chrome 角部实心）
+                    if ((int) sb[8 + 3] == 0) {
+                        canvas.drawPath(sideBorderPath, borderPaint);
+                    } else {
+                        cornerBlock.reset();
+                        cornerBlock.addRect(x0, y0, x0 + wl, y0 + wl, android.graphics.Path.Direction.CW);
+                        cornerBlock.addRect(x0, y1 - wl, x0 + wl, y1, android.graphics.Path.Direction.CW);
+                        canvas.drawPath(cornerBlock, borderPaint);
+                        borderPaint.setStyle(android.graphics.Paint.Style.STROKE);
+                        borderPaint.setStrokeWidth(wl);
+                        borderPaint.setPathEffect(new android.graphics.DashPathEffect((int) sb[8 + 3] == 1 ? new float[]{wl * 3f, wl * 2f} : new float[]{wl, wl}, 0f));
+                        canvas.drawLine(x0 + wl * 0.5f, y0, x0 + wl * 0.5f, y1, borderPaint);
+                        borderPaint.setPathEffect(null);
+                        borderPaint.setStyle(android.graphics.Paint.Style.FILL);
+                    }
                 }
             } else if (c.borderWidth > 0 && c.borderColor != 0) {
                 // ★批次 5（CSS 兼容对齐 · 边框）：uniform 边框（stroke 半内缩：strokeWidth/2 居中于边线）。
@@ -2678,7 +2737,23 @@ public class ProteusHostView extends ViewGroup {
                 borderPaint.setAlpha(op < 1f ? Math.max(0, Math.min(255, (int) (Color.alpha(c.borderColor) * op))) : Color.alpha(c.borderColor));
                 final float inset = c.borderWidth * 0.5f;
                 final float l = c.x + inset, t = c.y + inset, rr = c.x + c.w - inset, bb = c.y + c.h - inset;
-                if (c.radius > 0) canvas.drawRoundRect(l, t, rr, bb, c.radius, c.radius, borderPaint);
+                // ★★★边框族收口批（2026-10-05 · 子代理终评抓出的 major）：**逐角掩码必须作用于边框描边**——
+                //   此前 nodeRadiusCorners 只在**填充**处消费（drawPathCorners）⇒ 声明"仅 TL/BR"的盒：
+                //   填充正确而边框四角全圆（与 Web 不符，独立评审逐角剖面实测抓出）。
+                //   描边与填充共用同一掩码语义（未置位角半径=0 ⇒ 直角）。
+                final Integer rcmB = (ids != null && i < ids.length && ids[i] >= 0) ? nodeRadiusCorners.get(ids[i]) : null;
+                if (rcmB != null) {
+                    final float rb = c.radius;
+                    final float[] radiiB = new float[]{
+                        (rcmB & 1) != 0 ? rb : 0f, (rcmB & 1) != 0 ? rb : 0f,      // 左上
+                        (rcmB & 2) != 0 ? rb : 0f, (rcmB & 2) != 0 ? rb : 0f,      // 右上
+                        (rcmB & 4) != 0 ? rb : 0f, (rcmB & 4) != 0 ? rb : 0f,      // 右下
+                        (rcmB & 8) != 0 ? rb : 0f, (rcmB & 8) != 0 ? rb : 0f,      // 左下
+                    };
+                    final android.graphics.Path bp = new android.graphics.Path();
+                    bp.addRoundRect(new android.graphics.RectF(l, t, rr, bb), radiiB, android.graphics.Path.Direction.CW);
+                    canvas.drawPath(bp, borderPaint);
+                } else if (c.radius > 0) canvas.drawRoundRect(l, t, rr, bb, c.radius, c.radius, borderPaint);
                 else canvas.drawRect(l, t, rr, bb, borderPaint);
             }
             // ★★软边遮罩合成（mask v1）：**在全部内容（含文字/描边/发光）之后**用
@@ -3136,6 +3211,7 @@ public class ProteusHostView extends ViewGroup {
      *   textPaint 状态（字号/字重/字距/颜色/alpha）由调用方已设好（与单行路径同一份 paint 状态机）。
      */
     private void drawTextMultiline(Canvas canvas, Cmd c) {
+        // I2-ALLOW: 文本**测量/位图**宽（StaticLayout 需整型像素宽——canvas 文本排版参数，非绘制几何发射；绘制几何一律走内核吸附指令流）
         int w = Math.max(1, (int) Math.ceil(c.w));
         android.text.Layout.Alignment al = c.textAlign == 1
                 ? android.text.Layout.Alignment.ALIGN_CENTER

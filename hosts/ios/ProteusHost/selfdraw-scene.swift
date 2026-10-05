@@ -2943,8 +2943,18 @@ final class SelfDrawView: UIView {
         if let fw = n["fontWeight"] as? CGFloat { style["fontWeight"] = fw }
         if let br = n["borderRadius"] as? Double { style["borderRadius"] = CGFloat(br) }
         if let br = n["borderRadius"] as? CGFloat { style["borderRadius"] = br }
+        // ★★★边框族收口批（2026-10-05 · 子代理终评抓出的 major）：**逐角掩码必须透传**——
+        //   styleOf 是建层必经之路；漏透传 ⇒ applyRadiusCorners 的 guard 读不到掩码直接 return
+        //   ⇒ maskedCorners 保持缺省（全四角）+ cornerRadius>0 ⇒ 声明"仅 TL/BR"的盒画成**四角全圆**
+        //   （填充与边框皆错，与 Web 不符）。与 clipPath/glow/mask 同款教训第三次：**白名单必须跟新字段走**。
+        if let rc = n["borderRadiusCorners"] as? [String: Any] { style["borderRadiusCorners"] = rc }
         // ★★★逐边 border 批（2026-10-05）：**逐边字段必须透传**（本函数是建层必经之路；
         //   漏透传 ⇒ 声明在树里而宿主读不到 ⇒ 静默不渲染——clipPath/glow/mask 的同款教训）。
+        // ★★★边框族收口批（2026-10-05）：**线型也必须透传**（本函数是建层必经之路；
+        //   漏透传 ⇒ 声明在树里而宿主读不到 ⇒ 静默画实线——与 clipPath/glow/mask 同款教训）。
+        for k in ["borderTopStyle", "borderRightStyle", "borderBottomStyle", "borderLeftStyle"] {
+            if let v = n[k] as? String { style[k] = v }
+        }
         for k in ["borderTopColor", "borderRightColor", "borderBottomColor", "borderLeftColor"] {
             if let v = n[k] as? String { style[k] = v }
         }
@@ -3099,7 +3109,12 @@ final class SelfDrawView: UIView {
     /// ★批次 34（对齐 Web）：逐角圆角——`borderRadiusCorners` 掩码（bit0=TL/1=TR/2=BR/3=BL）→ CALayer.maskedCorners。
     ///   缺省（无掩码）⇒ 保持全部四角（既有行为）；调用方须已设 `cornerRadius`。
     private func applyRadiusCorners(_ layer: CALayer, style: [String: Any]) {
-        guard let m = style["borderRadiusCorners"] as? [String: Any] else { return }
+        guard let m = style["borderRadiusCorners"] as? [String: Any] else {
+            // ★★★边框族收口批（2026-10-05）：**缺省即复位**（"复用 = 完全重配"纪律）——
+            //   此前 guard 直接 return ⇒ 复用的层会残留**上一节点**的 maskedCorners（掩码静默串台）。
+            layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner, .layerMaxXMaxYCorner, .layerMinXMaxYCorner]
+            return
+        }
         var c: CACornerMask = []
         if (m["topLeft"] as? Bool) == true { c.insert(.layerMinXMinYCorner) }
         if (m["topRight"] as? Bool) == true { c.insert(.layerMaxXMinYCorner) }
@@ -3173,19 +3188,27 @@ final class SelfDrawView: UIView {
 
     /// ★★★逐边 border 批：读逐边字段 → 四元组（nil = 无逐边声明）。
     ///   值 = (width, colorHex?)；width ≤ 0 或颜色缺 ⇒ 该边不画。
-    static func sideBordersOf(_ style: [String: Any]) -> [(CGFloat, CGColor?)]? {
-        let keys: [(String, String)] = [
-            ("borderTopWidth", "borderTopColor"), ("borderRightWidth", "borderRightColor"),
-            ("borderBottomWidth", "borderBottomColor"), ("borderLeftWidth", "borderLeftColor"),
+    static func sideBordersOf(_ style: [String: Any]) -> [(CGFloat, CGColor?, String)]? {
+        // ★★★边框族收口批（2026-10-05）：三键（宽/色/线型）
+        let keys: [(String, String, String)] = [
+            ("borderTopWidth", "borderTopColor", "borderTopStyle"), ("borderRightWidth", "borderRightColor", "borderRightStyle"),
+            ("borderBottomWidth", "borderBottomColor", "borderBottomStyle"), ("borderLeftWidth", "borderLeftColor", "borderLeftStyle"),
         ]
         var any = false
-        for (wk, _) in keys where style[wk] != nil { any = true; break }
-        if !any { for (_, ck) in keys where style[ck] != nil { any = true; break } }
+        for (wk, _, _) in keys where style[wk] != nil { any = true; break }
+        if !any { for (_, ck, _) in keys where style[ck] != nil { any = true; break } }
+        if !any { for (_, _, sk) in keys where style[sk] != nil { any = true; break } }
         guard any else { return nil }
-        return keys.map { (wk, ck) in
-            let w = (style[wk] as? CGFloat) ?? ((style[wk] as? Double).map { CGFloat($0) } ?? 0)
-            let col = (style[ck] as? String).flatMap(parseHexColor)?.cgColor
-            return (w, col)
+        // ★★★回落（2026-10-05 · 真机抓到"线型全不显示"）：逐边键缺省 ⇒ **回落 uniform**——
+        //   `border: 2px dashed #5b5bd6` 只落 `borderWidth/borderColor` + 逐边 **Style**，
+        //   逐边 Width/Color 键**不存在** ⇒ 首版把 w 读成 0 ⇒ `continue` 跳过 ⇒ 边框不画。
+        let defW = (style["borderWidth"] as? CGFloat) ?? ((style["borderWidth"] as? Double).map { CGFloat($0) } ?? 0)
+        let defCol = (style["borderColor"] as? String).flatMap(parseHexColor)?.cgColor
+        return keys.map { (wk, ck, sk) in
+            let w = (style[wk] as? CGFloat) ?? ((style[wk] as? Double).map { CGFloat($0) } ?? defW)
+            let col = (style[ck] as? String).flatMap(parseHexColor)?.cgColor ?? defCol
+            let st = (style[sk] as? String) ?? "solid"
+            return (w, col, st)
         }
     }
 
@@ -3193,19 +3216,23 @@ final class SelfDrawView: UIView {
     ///   【为什么不用 `autoresizingMask`（首版编译红：iOS 上该 API **不可用**——那是 macOS 的）】
     ///   iOS 的 CALayer 没有自动布局 ⇒ 子层 frame 由 `syncSideBorderFrames` **集中同步**：
     ///   厚度存进 `sub.bounds`（与方向无关的立方体），frame 由父 bounds 每次重算。
-    private func applySideBorderSublayers(_ layer: CALayer, sides: [(CGFloat, CGColor?)]) {
+    private func applySideBorderSublayers(_ layer: CALayer, sides: [(CGFloat, CGColor?, String)]) {
         removeSideBorderSublayers(layer)
         // 顺序：0=top 1=right 2=bottom 3=left；用 name 前缀标记（层复用/重建时清理）
         for i in 0..<4 {
-            let (w, col) = sides[i]
+            let (w, col, st) = sides[i]
             if w <= 0 || col == nil { continue }
             // ★★★45° 斜接改造 v2（2026-10-05 · 用户抓出「案例E没有封边」）：CAShapeLayer 多边形。
             //   【为什么】前一版用矩形子层（重叠式）⇒ 角上「横线延伸超出竖线」（与 Web 的 45° 斜接不同）；
             //   且 iOS 无自动布局 ⇒ frame/path 都靠 sync 集中更新。厚度编码进 name（见前版注释的教训）。
             let sub = CAShapeLayer()
-            sub.name = "proteus-side-border-\(i)-\(w)"
+            // 名字承载 idx / 厚度 / 线型（1=dashed / 2=dotted）
+            let stCode = st == "dashed" ? 1 : st == "dotted" ? 2 : 0
+            sub.name = "proteus-side-border-\(i)-\(w)-\(stCode)"
             sub.fillColor = col
-            sub.backgroundColor = nil
+            // ★★★边框族收口批：颜色存进 **fillColor（solid 填充）与 strokeColor（dash 描边）**；
+            //   ★不得用 `backgroundColor`（它会**填充整个 bounds** ⇒ E 案例被整块填色——真机抓到）。
+            sub.strokeColor = col
             layer.addSublayer(sub)
         }
         Self.syncSideBorderFrames(layer)
@@ -3220,12 +3247,14 @@ final class SelfDrawView: UIView {
         // ★★★45° 斜接：先收集四边厚度（未声明的边 = 0），再给每块画多边形。
         //   几何与 Android/Web 同一口径：外框 (x0,y0)-(x1,y1)；内角 = (x0+wl, y0+wt) / (x1-wr, y1-wb)。
         var ws: [CGFloat] = [0, 0, 0, 0]
+        var stCodes: [Int] = [0, 0, 0, 0]
         var shapes: [(Int, CAShapeLayer)] = []
         for sub in subs {
             guard let nm = sub.name, nm.hasPrefix("proteus-side-border-") else { continue }
             let parts = nm.split(separator: "-")
             guard parts.count >= 5, let idx = Int(parts[3]), let tv = Double(parts[4]), idx >= 0, idx < 4 else { continue }
             ws[idx] = CGFloat(tv)
+            stCodes[idx] = parts.count >= 6 ? (Int(parts[5]) ?? 0) : 0
             if let sh = sub as? CAShapeLayer { shapes.append((idx, sh)) }
         }
         let (wt, wr, wb, wl) = (ws[0], ws[1], ws[2], ws[3])
@@ -3234,22 +3263,56 @@ final class SelfDrawView: UIView {
         let ix1 = x1 - wr, iy1 = y1 - wb
         for (idx, sh) in shapes {
             sh.frame = b
+            let st = stCodes[idx]
+            let wI = ws[idx]
             let p = UIBezierPath()
-            switch idx {
-            case 0:
-                p.move(to: CGPoint(x: x0, y: y0)); p.addLine(to: CGPoint(x: x1, y: y0))
-                p.addLine(to: CGPoint(x: ix1, y: iy0)); p.addLine(to: CGPoint(x: ix0, y: iy0))
-            case 1:
-                p.move(to: CGPoint(x: x1, y: y0)); p.addLine(to: CGPoint(x: x1, y: y1))
-                p.addLine(to: CGPoint(x: ix1, y: iy1)); p.addLine(to: CGPoint(x: ix1, y: iy0))
-            case 2:
-                p.move(to: CGPoint(x: x1, y: y1)); p.addLine(to: CGPoint(x: x0, y: y1))
-                p.addLine(to: CGPoint(x: ix0, y: iy1)); p.addLine(to: CGPoint(x: ix1, y: iy1))
-            default:
-                p.move(to: CGPoint(x: x0, y: y1)); p.addLine(to: CGPoint(x: x0, y: y0))
-                p.addLine(to: CGPoint(x: ix0, y: iy0)); p.addLine(to: CGPoint(x: ix0, y: iy1))
+            if st == 0 {
+                // solid：梯形填充（45° 斜接——与 Web/Android 同构）
+                switch idx {
+                case 0:
+                    p.move(to: CGPoint(x: x0, y: y0)); p.addLine(to: CGPoint(x: x1, y: y0))
+                    p.addLine(to: CGPoint(x: ix1, y: iy0)); p.addLine(to: CGPoint(x: ix0, y: iy0))
+                case 1:
+                    p.move(to: CGPoint(x: x1, y: y0)); p.addLine(to: CGPoint(x: x1, y: y1))
+                    p.addLine(to: CGPoint(x: ix1, y: iy1)); p.addLine(to: CGPoint(x: ix1, y: iy0))
+                case 2:
+                    p.move(to: CGPoint(x: x1, y: y1)); p.addLine(to: CGPoint(x: x0, y: y1))
+                    p.addLine(to: CGPoint(x: ix0, y: iy1)); p.addLine(to: CGPoint(x: ix1, y: iy1))
+                default:
+                    p.move(to: CGPoint(x: x0, y: y1)); p.addLine(to: CGPoint(x: x0, y: y0))
+                    p.addLine(to: CGPoint(x: ix0, y: iy0)); p.addLine(to: CGPoint(x: ix0, y: iy1))
+                }
+                p.close()
+                // ★★★幂等修复（2026-10-05 · 真机抓到 E 案例四边消失）：**不得清 strokeColor**——
+                //   它是颜色的**唯一存储**（fillColor 从它取）；首版清了 ⇒ 第二次 sync 时
+                //   `fillColor = strokeColor(nil)` ⇒ 边框全消失（紫线只 sync 过一次才幸存）。
+                //   ⇒ strokeColor 保持不变；solid 只把 lineWidth 置 0（不描边、纯填充）。
+                sh.fillColor = sh.strokeColor
+                sh.lineWidth = 0
+                sh.lineDashPattern = nil
+            } else {
+                // ★★★线型（2026-10-05 · Chrome 角部真值=实心起笔）：中线描边 + lineDashPattern（相位 0）
+                switch idx {
+                case 0:
+                    p.move(to: CGPoint(x: x0, y: y0 + wI * 0.5)); p.addLine(to: CGPoint(x: x1, y: y0 + wI * 0.5))
+                case 1:
+                    p.move(to: CGPoint(x: x1 - wI * 0.5, y: y0)); p.addLine(to: CGPoint(x: x1 - wI * 0.5, y: y1))
+                case 2:
+                    p.move(to: CGPoint(x: x0, y: y1 - wI * 0.5)); p.addLine(to: CGPoint(x: x1, y: y1 - wI * 0.5))
+                default:
+                    p.move(to: CGPoint(x: x0 + wI * 0.5, y: y0)); p.addLine(to: CGPoint(x: x0 + wI * 0.5, y: y1))
+                }
+                sh.path = p.cgPath
+                sh.fillColor = nil
+                // （strokeColor 已在创建时设；此处不动）
+                sh.lineWidth = wI
+                // ★★★线型节距（Chrome 实测真值，2026-10-05）：dashed {3w,2w} · dotted {w,w}（方点、等距）
+                sh.lineDashPattern = st == 1
+                    ? [NSNumber(value: Double(wI) * 3), NSNumber(value: Double(wI) * 2)]
+                    : [NSNumber(value: Double(wI)), NSNumber(value: Double(wI))]
+                sh.lineDashPhase = 0
+                continue
             }
-            p.close()
             sh.path = p.cgPath
         }
     }
