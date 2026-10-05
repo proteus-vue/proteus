@@ -80,6 +80,8 @@ struct Superapp {
         const avoid: window.AvoidArea = win.getWindowAvoidArea(window.AvoidAreaType.TYPE_SYSTEM);
         const h: number = px2vp(avoid.bottomRect.height);
         if (h > 0) this.safeBottom = h;
+        // I2-ALLOW: **日志读数**取整（安全区高度写进 hilog 供人核对——不是几何换算；几何值
+        //   this.safeBottom 保持 vp 原值，进 Tab 栏高度 .height(TAB_H + this.safeBottom)）。
         hilog.info(DOMAIN, TAG, 'SUPERAPP_SAFE_BOTTOM %{public}d', Math.round(this.safeBottom));
       }).catch((err: Error) => {
         hilog.error(DOMAIN, TAG, 'SUPERAPP_SAFE_BOTTOM_ERR %{public}s', String(err?.message ?? err));
