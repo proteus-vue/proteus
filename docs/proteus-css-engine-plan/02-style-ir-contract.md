@@ -4,6 +4,8 @@
 > 状态：**草案（v1 draft）**。B0 批次收敛为规范后冻结版本号。
 > 基线来源：`docs/Proteus_CSS_Profile规格.md:234-268`（`ComputedStyle` 草案）+ `packages/component-ir/src/pnode-style.ts`（`resolveLength`）。
 
+> ★**基准声明（2026-10-05 追加，决策 #546）**：**IR 不是独立真值**——真值只有一个，即 **Web 端浏览器的计算样式**（B-a，A 档的直接推论）。IR 的角色是这份基准的**规范化载体**：可序列化、逐字段可比、可版本化，从而能被宿主消费、能被跨端比对。因此凡是「IR 与 Web 计算样式不一致」的场合，**默认判 IR 错**（除非能证明基准样本不合规或基准环境指纹漂移）。详见 `03-consistency-gates.md` §1。
+
 ---
 
 ## 1. StyleIR 的四条设计约束
@@ -14,6 +16,7 @@
 | 2 | **逐字段可比** | 一致性判据①要求「IR vs 浏览器 `getComputedStyle` 逐属性比对」——IR 的字段名/值类型必须能一一映射到 CSS 计算值 |
 | 3 | **可序列化 + 版本化** | 与 `packages/host-abi`（`ABI_VERSION=1`）同构：IR 是跨进程/跨宿主契约，**字段增删即破坏性变更** |
 | 4 | **零运行期解析** | IR 的值必须是**已折叠的数值或比例**，不含 CSS 文本、不含函数表达式（承 `style.rs:5-6`、`pnode-style.ts:4`） |
+| 5 | **与 Web 基准双向可映射** | `semantic` 字段必须能双向映射到浏览器计算值（IR ↔ `getComputedStyle`）——这是判据①（基准等价）成立的前提；`engine-only` 字段不参与该映射 |
 
 ---
 
@@ -88,6 +91,7 @@ type Transform2D =
 | 破坏性变更 | 字段**增删**或**值类型变更** ⇒ major+1；必须**同步**：IR schema + 三 Applier + 三层判据（INV-CE-07）⇒ 否则门禁红 |
 | 兼容性判定 | 与既有「major 相等 + minor 向后兼容」同构（承 `proteus-dev-host-plan` 的 ABI 兼容矩阵） |
 | 序列化格式 | 确定性 key 顺序 + 不含浮点 NaN/Infinity（借用 `host-abi` 的 canonical 思路） |
+| **基准联动** | 修订 IR 语义（如"块级是否默认撑满"）⇒ 必须**同时**解释对 Web 基准的影响：要么 IR 向基准收敛，要么登记为**明确的基准差异**（带理由与期限）。**禁止**通过重采基准来消掉 IR 与 Web 的差异 |
 
 ---
 
@@ -152,7 +156,7 @@ type ApplyPhase = 'mount' | 'update' | 'theme' | 'animate'
 
 | 宿主 | 策略 | 说明 |
 |---|---|---|
-| **Web** | **A 档**：不接管渲染，**IR 作影子真值** | 浏览器原生 CSSOM 继续渲染；IR 用于①与 `getComputedStyle` 比对（判据①）②与 App/Skyline 比对（判据②）。**不新增 Web 样式应用器实现**，实现的是"IR 探针" |
+| **Web** | **A 档**：不接管渲染；**Web 计算样式即基准真值**，IR 是其规范化载体（影子） | 浏览器原生 CSSOM 继续渲染；IR 用于①与 `getComputedStyle` 比对（判据①，**IR 侧为被测**）②与 App/Skyline 比对（判据②，**基准侧为 expected**）。**不新增 Web 样式应用器实现**，实现的是"IR 探针 + 基准采集器" |
 | **Skyline** | IR → wxss 子集 + 编译期降级 | 复用 `skyline-boundary-rules.generated.ts`（24 条边界）；`degradeTo` 配方在此执行 |
 | **App** | IR → `layout-core-rust` 引擎字段 + 绘制属性 | **复用既有 `apply_style_key` / ops 通道**，零新增运行期成本；`paint.*` / `text.*` / `attr.*` 键按 `ops_apply.rs` 既有分流 |
 
@@ -171,3 +175,4 @@ type ApplyPhase = 'mount' | 'update' | 'theme' | 'animate'
 | IR schema 与能力矩阵一致 | 新增 `pnpm check:style-ir-schema` | 0 error |
 | 双后端 IR 等价 | 新 Golden（`tests/style-ir-golden.test.ts`） | Node ≡ Rust，逐字节 |
 | 每个字段都有 `scope` 登记 | 同上 schema 校验 | 未登记即红 |
+| **基准 manifest 就位** | 新增 `pnpm check:baseline-manifest` | Web 基准样本 + 环境指纹（浏览器/DPR/视口/字体/主题）0 error；**无基准即无法进入 B1** |

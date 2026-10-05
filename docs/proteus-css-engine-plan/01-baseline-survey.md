@@ -101,6 +101,7 @@
 | **G3** | **宿主侧无统一样式应用器 SPI**。三端手写读字段，无 conformance | `VaporRenderHost.java:1389+` / `selfdraw-scene.swift:614+` / `proteus_render.cpp` | 新增一个 CSS 字段 = 改三处宿主 + 无验收 |
 | **G4** | **能力协商不闭环**。三张属性表互不同步（已报红） | `check-app-css-surface.mjs:5-23`（违反铁律 #9「两处白名单必须同步」） | 一个属性"某路径允许、另一路径拒绝" |
 | **G5** | **一致性判据不足**。像素非门禁；几何指纹不覆盖光栅化；L2 仅 2/38 | `pixel.ts` `gate:false`；`hosts/shared/check-cross-end-geometry.py` 诚实边界；`consistency-metrics.json` | 「多端视觉一致」无法客观验收（历史上已因此出过"只跑逻辑就宣称通过"，决策 #543） |
+| **G6** | **没有基准资产**。"Web = 基准"只在文档与决策里**说**过（`Proteus_CSS_Profile规格.md:400`、决策 #542/#543/#545），**没有**冻结的基准快照、没有环境指纹、没有变更审批 —— 每次比对都靠"当场再跑一遍 Web" | Web 探针存在（`packages/consistency/src/probes/web.ts`）但无 golden 入仓；三端几何判据是"三端互比"（`hosts/shared/check-cross-end-geometry.py`）而非"各端 vs 基准" | **基准随运行漂移 ⇒ 差异无法归因**；且"三端同时偏且一致"会被判绿（D1 缺陷）。#545 的实践（独立子代理 + Web 基准 + 逐端截图）证明基准有效，但它靠人或代理**临时**执行，未制度化 |
 
 ---
 
@@ -156,3 +157,7 @@
 | 三端真值截图途径 | `hosts/android/run-superapp-launcher.sh`（`adb exec-out screencap`）/ iOS `takeSnapshot()` / 鸿蒙 `snapshot_display -f` |
 | 原则 #10 / #13 | `docs/proteus-architecture.md:25-60` |
 | 铁律 scope / 包注册表门禁实现 | `scripts/check-consistency.js:141-204` |
+| 「Web = 真值基准」既有表述 | `docs/Proteus_CSS_Profile规格.md:400` |
+| 「基准是 Web」既有实践（superapp 三轮修复） | `docs/project-memory-archive/decisions.md` #542（App 与 Web 基准逐屏对比）/ #543（只看一端 ⇒ 验收失效）/ #545（独立子代理 + Web 基准 + 逐端真截图） |
+| 三端几何判据（当前为端间互比） | `hosts/shared/check-cross-end-geometry.py` |
+| Web 探针（基准确认已存在、未冻结） | `packages/consistency/src/probes/web.ts` |
