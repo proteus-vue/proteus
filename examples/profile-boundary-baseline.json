@@ -30,6 +30,7 @@
   "pages/fluid-layout-demo.vue:overflow:auto": "存量待专项评估（VC2-b 首扫，2026-10-02）——修一条从基线删一条（棘轮只减不增）",
   "pages/fluid-layout-demo.vue:white-space:pre-wrap": "存量待专项评估（VC2-b 首扫，2026-10-02）——修一条从基线删一条（棘轮只减不增）",
   "pages/glass-demo.vue:display:grid": "存量待专项评估（VC2-b 首扫，2026-10-02）——修一条从基线删一条（棘轮只减不增）",
+  "pages/index.vue:display:grid": "演示页（批次 41 grid-column/grid-row 线号放置）——**演示对象本身**：Web / App（自研 Rust 引擎支持 grid）可渲染，Skyline 端不支持 grid（该端是本仓唯一刚性外部约束）⇒ 按同类先例（glass-demo / devtools demo 两页）钉住；待专项评估：该演示按端条件渲染或改柔性布局。棘轮只减不增。",
   "pages/platform-api-demo.vue:display:inline-block": "存量待专项评估（VC2-b 首扫，2026-10-02）——修一条从基线删一条（棘轮只减不增）",
   "pages/render-backend-demo.vue:white-space:pre": "存量待专项评估（VC2-b 首扫，2026-10-02）——修一条从基线删一条（棘轮只减不增）",
   "pages/semantic-primitives-demo.vue:display:inline-flex": "存量待专项评估（VC2-b 首扫，2026-10-02）——修一条从基线删一条（棘轮只减不增）",
