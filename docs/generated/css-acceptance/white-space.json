@@ -60,7 +60,7 @@
   "nextStep": "机器判据三段已过 → 进入**视觉验收**：生成并排产物（node scripts/gen-baseline-side-by-side.mjs）+ 独立子代理按 Web 基准评审",
   "visual": {
     "_note": "★视觉验收结论（独立子代理按 Web 基准并排图评审；来源 = css-conformance/results/side-by-side/）。verdict: pass（与 Web 基准无可归因差异）/ fail（有实差异——见 caseIssues）/ unclear（图不足以判）。纪律：左半恒为 Web 基准（D1）；不看不清不编（unclear）。",
-    "reviewedAt": "2026-10-05T09:10:09.143Z",
+    "reviewedAt": "2026-10-05T09:31:52.039Z",
     "reviewedBy": "independent-visual-subagent",
     "sideBySideDir": "css-conformance/results/side-by-side/",
     "summary": {
@@ -169,7 +169,27 @@
             "severity": "major"
           }
         ],
-        "evidence": "A 长标题单行+三点省略号（放大确认三个点）与基准一致；短标题「短标题」完整；B 实测单行、墨迹到屏幕最右缘 x=1319 无折行；C 放大确认两个字面 n（「第一行n」与「第二行n第三行」）且全部内容单行排列、第二行缩进以空隙形式出现在行内；D 实测整句显示到屏幕右缘、未裁切。顶部状态栏图标与副标题文字叠印（放大图清晰可见 16:52 与 App 图标压在「white-space 族 · Web 基准…」行上），标题上沿贴近屏幕最上沿；内容下方黑色宿主区+白带+深色导航栏（页面背景未延伸到底）。"
+        "evidence": "A 长标题单行+三点省略号（放大确认三个点）与基准一致；短标题「短标题」完整；B 实测单行、墨迹到屏幕最右缘 x=1319 无折行；C 放大确认两个字面 n（「第一行n」与「第二行n第三行」）且全部内容单行排列、第二行缩进以空隙形式出现在行内；D 实测整句显示到屏幕右缘、未裁切。顶部状态栏图标与副标题文字叠印（放大图清晰可见 16:52 与 App 图标压在「white-space 族 · Web 基准…」行上），标题上沿贴近屏幕最上沿；内容下方黑色宿主区+白带+深色导航栏（页面背景未延伸到底）。",
+        "postReviewFixes": {
+          "_note": "评审后落码并真机复验的修复（2026-10-05 · commit ca05f818）——本端上述 issue 的**当前状态**以本字段为准",
+          "fixed": [
+            {
+              "issue": "case-pre-wrap 字面「n」（\\n 未被 JSON 解码）",
+              "fix": "proteus_render.cpp jsonString 按 JSON 标准解码转义（含 \\uXXXX）",
+              "verified": "真机复验：三行+缩进正确恢复（子代理确认 fixed）"
+            },
+            {
+              "issue": "case-normal 未折行（非 ellipsis 布局宽硬编码 10000）",
+              "fix": "OH_Drawing_TypographyLayout 改按节点布局盒宽（>1.0 才用）",
+              "verified": "真机复验：与 Web 基准一致 3 行（results/harmony/text.png 与并排图已更新）"
+            }
+          ],
+          "remaining": [
+            "case-nowrap-clip：nowrap 语义未透传宿主（现折 2 行；基准=单行裁切）——nowrap 透传为后续项（跨端同源面）",
+            "case-pre-wrap 行距 ≈15.1px vs 基准 20px（宿主多行路径未接 line-height）",
+            "page：顶部状态栏遮挡（安全区避让）· 页面未铺满（页面底色未延伸到底）"
+          ]
+        }
       }
     ]
   }
