@@ -1087,3 +1087,60 @@
   · **验收纪律闭环**：4 轮独立评审（终评→复评→标准轮→修复轮）后收敛到五端零 open issue；
     本项从首次交子代理到收敛共 4 次调用 ≈ 30 分钟——换来 3 个机器判据永远抓不到的缺陷
     （iOS 静默 3 个月的透传缺口、Android 描边掩码缺口、两端 ROUND-cap 端点外溢）。
+
+560. **★★★CSS 逐项全端对齐 · overflow 族（overflow-x / overflow-y，P0·10×）——**三端宿主首次获得「子内容裁剪」能力** + 五端数值判据全过**：
+**① 用户指令**：「这个不错，质量也非常高，这个链路应该是可以的，继续」（承 #559 圆点标准收口）——按 `css:next` 取下一项 = **overflow-x**（P0 · 用法 10×）。
+**② ★侦察发现（决定方案的三条事实）**：
+  · **Web 真值取证**（真 Chromium `getComputedStyle`，D1 纪律）：**归一规则**——一侧 `visible`、另一侧非 visible 且非 clip ⇒ **visible 归为 auto**（`overflow-x: hidden` ⇒ x=hidden · y=auto；`overflow-x: auto` ⇒ x=auto · y=auto）；`clip` 值参与归一但不含在内核封闭集。**裁剪盒 = padding box**（像素取证：红块被裁到内边距缘，非 border 缘）。
+  · **内核已就绪一半**：`taffy` 的 `Overflow` 本就是 `Point{x,y}`（分轴原生）；但**渲染侧零裁剪发射**（只有 clipPath 自裁 + 滚动容器 scrollViewport）——`hit.rs` 早已按 overflow 裁命中（**命中裁剪、渲染不裁**=既有缺口）。
+  · **★归一后支持集内"单轴组合"坍缩**：任何「非 visible」组合（hidden/scroll/auto 任意混合）在渲染语义上都是**两轴均裁**（auto 在 App 域无滚动交互=静态裁剪）⇒ 契约保持单 `overflow` 字段（折叠器收敛），**真正的缺口 = 三端宿主从未实现过子内容裁剪**——这才是本项要补的能力。
+**③ 交付（全链）**：
+  · **契约四同步**：新级别 `Overflow`（contracts + runtime PROP_TYPES/narrowing + compiler 校验 + 注册表 `VALUE_TYPE_BY_LEVEL`——**五处**，注册表生成器那处是第 5 个消费方）；矩阵/注册表字段 89→**91**（semantic 63→65）。
+  · **CSE**：`resolveOverflowFields`（逐轴 + **Web 归一回放**）——x==y 附发统一 `overflow`（零 churn）；x≠y 逐轴字段；`clip` 无内核对应 ⇒ 如实 unmapped。
+  · **折叠器**：`overflow` **1–2 值简写**（`<x> <y>`）；`overflowX/overflowY` 移出 no-op 表（显式 visible 也记录——级联保真）；**`normalizeOverflowFields`** 挂在**级联后的最终样式**（per-rule 归一会被跨规则级联破坏）；x≠y ⇒ 统一 `overflow='hidden'`（渲染判据）+ 逐轴字段（IR 保真）。
+  · **★内核**：`rects`（全量 + 增量**两通道**）附**有效裁剪矩形**——复用 `hit::geometry`（祖先链 overflow 盒交集；命中测试同一实现，单一事实源）；**扁平键** `clipX/clipY/clipW/clipH`（★**不得用嵌套对象**：serde_json 无 preserve_order（键按字母序）⇒ 嵌套 clip 会排在 x/y 前，把鸿蒙"找 '}' 当段尾"的段落解析器截断 ⇒ 几何全 0）。
+  · **★三端宿主（本轮核心能力）**：**Android** 画布 `clipRect`（进 save/restore 判定——不 restore 泄漏到后续指令；快路径 `canUseFastPath` 排除有裁剪的树）；**iOS** `masksToBounds`（层是真嵌套 ⇒ 天然裁子树）；**鸿蒙** `SetClip(RectShape)`（`OH_ArkUI_RenderNodeUtils_SetClip`；★**edge 语义实测校正**：RectShapeOption 的 edge = **相对节点左上角的绝对偏移**，非"从右/下内缩"——首版按 inset 传 ⇒ 裁到 99×62 而非 160×56）。
+  · **★iOS 与 Web 对齐的真缺陷修复（顺手抓到）**：**圆角不再隐含 `masksToBounds`**——CALayer 的 backgroundColor/border 始终按 cornerRadius 圆角化（无需 mask），而 mask 会裁**子层**（把 `overflow:visible` 的溢出内容也裁掉——本轮实锤：B 案红块被圆角卡片裁到卡缘 66css，内核 rects 的 120 正确）。Web 的 border-radius **不裁内容**（除非 overflow 非 visible）⇒ 裁剪只由 overflow/clipText 决定。代价（诚实边界）：文字本体也不再被圆角裁——需裁走 `overflow:hidden`（与 Web 同语义）。
+  · **MP（Skyline）**：官方支持表原文「**不支持单独设置 overflow-x/y**」⇒ `transformStyleToWxss` 增**单轴归一折叠**（任一块内任一轴非 visible ⇒ 统一 `overflow:hidden`；两轴均 visible ⇒ 移除）——与 App 侧同一套 Web 归一规则。
+  · **快照/探针/appliers**：`SEMANTIC_FIELD_SNAPSHOT_KEYS` + snapshot 接口/闭集/校验器 + web 探针三处补 overflowX/overflowY；App applier 逐轴直传；Skyline applier 折叠为 `overflow`（官方不支持单轴）。
+**④ ★★基建缺陷修复（本轮实锤，三条链都被它坑过）**：
+  · **`gen-app-screen-content.mjs` 的 `--platform` 缺省 android**：iOS 链（build-app-stack）调用时**没传平台** ⇒ 刷的是 android 产物，`dist/app/ios/screen-content.json` **永远陈旧** ⇒ 宿主 `renderCurrent` 找不到新屏时**静默回落渲染别的屏**（截图错页——三端里 Android 正常、iOS 错，极具迷惑性）。修：iOS 链显式 `--platform ios`。
+  · **鸿蒙链**：`gen-fixtures` 只在复制时**不生成** ⇒ 依赖调用方手工跑；且新增生成调用**未显式传 `PROTEUS_APP_PROJECT`**（脚本被未带该变量的 shell 调起时缺省 superapp ⇒ rawfile 被 superapp 产物覆盖 ⇒ 启动显示"早上好"首页）。修：复制前按 harmony 平台生成 + `env` 显式传项目名。
+  · **`build-host-app.sh` 不重编 Rust 核**：核是独立脚本（`build-rust-core.sh`）交叉编译的 ⇒ **本轮的 ffi.rs 改动从未进设备**（设备上 SetClip 数据缺失，排查数轮）。★教训：**链路上的每个产物都要有"谁生成/何时重生成"的明确答案**——"改了源码但产物没重编"这类静默失效，比逻辑 bug 更难查（每层的读数都对，只有最终画面错）。
+**⑤ 判据**：
+  · **五端数值判据全过**（"最大连通域"测色块实芯，A≈160 裁 / B≥200 溢）：web 159/259/159 · android 159/259/159 · ios 159/259/159 · harmony 159/259/159 · mp 159/258/159（css px）；修复前 harmony A=259（未裁）、ios B=67（误裁）——**正是判据抓出的两处真缺陷**。
+  · fresh 全绿（20 张）· probe 四端全绿 · `test:coupled` 绿 · 样式链/一致性链全绿 · 子代理终评（见 ⑥）。
+  · 内核直测（`cargo run --example`，临时验证不入库）：clip 键仅出现在真有裁剪的节点（id 6/14），值与祖先盒交集精确一致。
+**⑥ 独立子代理终评**：五端视觉评审（结论登记进 `docs/generated/css-acceptance/overflow-x.json` / `overflow-y.json` 的 visual 段）。
+
+**⑦ ★子代理终评（1 次）结果 + 两处 minor 修复**：
+  · **web/mp pass**；**android/ios/harmony 各 1 处 minor fail**，两个根因（其余项全过——含它独立复核的
+    "A/C 裁剪域五端一致、残影 0、B 溢出完整、标题叠印红上"）：
+  · **① App 三端 B 案下缘节奏差**：Web/MP 里 B 红块下缘**被下一张卡的白底覆盖**（可见 114）；
+    App 三端红块完整可见 120 且与下卡间露 1.4-3.3 CSS 灰缝。根因 = **App 端相邻 margin 不折叠**
+    （B 卡 margin-bottom 10 + C 标题 margin-top 20 ⇒ App 得 30 / Web 折叠得 20，+7~9px 系统性节奏差，
+    非 overflow 语义）⇒ 修法 = **页面单边 margin 化**（决策 #59 既有纪律）：`cc-card` 去 margin-bottom
+    （Web 折叠语义 max(0,20)=20 不变 ⇒ 基准视觉不变；App 不折叠=20 不再叠加）。
+  · **② 鸿蒙 clip 吃掉节点自身圆角**（它用逐行剖面实锤：A/C 案 TL 直角，而同端 B 案【无 clip】R6 正常）：
+    根因 = ArkUI SetClip(RectShape) 与节点 borderRadius 叠加时前者胜 ⇒ 修法 = **RoundRect clip**——
+    仅对「与节点盒**重合**且该角**有圆角**」的角给 (r,r)，其余角 0（精确复现 Web 形态：TL 为自身圆角、
+    其余锐切）；无"重合+圆角"角则走原 RectShape（零行为变化）。修复后逐行剖面 56→54→52→…→44 圆弧内收。
+  · **复评**（同代理第二轮）：见下（五端确认）。
+  · ★**成本口径**：终评（26 分钟）+ 复评——两处都是**机器判据（探针 4 条）覆盖不到的**：
+    一处是页面级纵向节奏（探针只测卡片边距对称性），一处是宿主 API 叠加语义（探针只看页面几何）。
+
+**⑧ ★复评（两轮）收口——含一次"修复未进包"的二次修复**：
+  · **复评第一轮**：web/mp/**ios/harmony pass**（两处修复被像素确认）；**android fail——修复未进构建件**：
+    我方在 global.css 修复后只跑了 `build-batch`（bundle 更新）而**没跑 `build-and-run.sh`（APK 重打包）**
+    ⇒ 装机的是旧包。子代理用 **md5 实锤**（APK 内嵌 bundle 59577d49… ≠ 新构建 7989b4a7…；APK 内
+    margin-bottom:10 节点 14 vs 新 bundle 0）。★这正是本项 ④ 段"链路产物重生成答案"教训的**自我复现**。
+  · **二次修复**：重跑 `build-and-run.sh` → md5 进包凭据核验（APK 内 = assets = bridge/dist）→ 重装重截。
+  · **复评第二轮**：**android pass**（B 260×113.3 与 Web 114 一致；红底 y1128 与 C 卡上缘**逐像素齐平**、
+    五列采样无过渡带、全宽灰缝像素 0；md5 凭据 + 像素双重核验）⇒ **五端全 pass 收口**。
+  · ★**子代理的流程整改建议（已记入 PLAYBOOK，下一轮实施）**：`fresh` 门禁按 mtime 判定 ⇒
+    **`cp` 重拷旧图可绕过**——应改为「截图时记录源产物 md5 + 图 md5」台账 + 指纹比对。
+  · ★**总成本**：终评 26 分钟 + 复评 12 分钟 + 复评二轮 1 分钟 ≈ 40 分钟子代理 + 真机重跑数轮——
+    换来的是 4 个机器判据永远抓不到的缺陷（iOS 圆角 mask 语义 / 鸿蒙 clip×圆角叠加 / App 三端
+    纵向节奏折叠 / 构建链断点）与**五端零 open issue 的收口**。
+**⑦ 诚实边界**：a) App 端 `auto`/`scroll` 的 `auto` 滚动交互未接（渲染=静态裁剪——与 Web 的"可滚不可滚"差异在验收页具名）；b) `clip` 值无内核对应（编译期诊断跳过——v1 边界）；c) 鸿蒙 RectShape 的 edge 语义按实测校正（SDK 文档未明示该细节）。
+**⑧ 影响**：contracts+1 级别 · cse/折叠器/style.ts(MP)/ffi.rs(内核)/三端宿主/两 applier/快照链；**下一项**：按 `css:next` 取。
