@@ -175,7 +175,7 @@ L5 验证+门面 : blueprint / website / test-framework
 | **G-58** | plugin-api（Proteus Studio 插件 API 与扩展生态：PluginHost + 能力权限模型 + WIT 版本化，WASM 隔离） | G-56、G-55、G-54、G-51 | 扩展来源无关——内置功能走同一 API（INV-EX-01~08）+ CMP187-194 |
 | **G-59** | plugin-ecosystem（插件生态治理与性能契约：激活契约 + 数据敏感度分级 + 信任不可继承 + 破坏率看板） | G-58、G-55、G-37 | 治理形态可替换可度量可验证——首个治理轴（INV-ECO-01~08）+ CMP195-206 |
 | **G-60** | studio-website-landing（Studio 官网落地与插件 API 文档：WIT 生成参考页 + 版本化文档 + 漂移阻断 + 下载分发签名） | G-56、G-58、G-59 | 文档形态不绑定——文档即契约（INV-W1~8 + AP-W1~6 + J1~J7）+ CMP207-227 |
-| **G-61** | css-engine（跨端 CSS 引擎：编译期 CSE 唯一真源 + StyleIR 契约 + 宿主样式应用器 SApp + 能力协商 + 三层一致性判据） | G-08、G-21、G-27、G-37、G-38 | 样式真源唯一——宿主只做应用（INV-CE-01~08）+ CMP228-238 |
+| **G-61** | css-engine（跨端 CSS 引擎：编译期 CSE 唯一真源 + StyleIR 契约 + 宿主样式应用器 SApp + 能力协商 + 三层一致性判据） | G-08、G-21、G-27、G-37、G-38 | 样式真源唯一——宿主只做应用（INV-CE-01~10）+ CMP228-241（含 #546 基准口径：一致性基准=Web 视觉，端间互比只作诊断） |
 
 > **追加说明（v3.2）**：G-21~G-30 为 2026-08 新增 10 份 plan（css-compat / app-renderer / safe-area / memory-plan / memorial-skeleton / app-capabilities / test-framework / types-plus / glass / performance）的全局执行位。其中 test-framework 已并入 G-07、types-plus 已并入 G-01（B1-B2 先行），不再单独占位。各 plan 声称的旧编号（css G-04、renderer G-05、safe-area G-05/G-08、memorial G-11/G-12、app-capabilities G-13~G-15、glass 里程碑 G-04~G-18、performance G-10/G-05）与本表冲突，一律以本表为准（对应关系：css→G-21、renderer→G-22、safe-area→G-22/G-23、memorial→G-25/G-26、theme/fontscale→G-27、cache→G-28、glass→G-29、performance→G-30）。
 
