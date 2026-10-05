@@ -159,23 +159,69 @@ public class SuperappActivity extends android.app.Activity {
         }
         tabBar.removeAllViews();
         String current = currentName(readState());
+        int unread = readImUnread();
+        final int onColor = 0xFF4C8DFF, offColor = 0xFF8A8A9A;
         for (final String name : tabNames) {
-            android.widget.TextView tv = new android.widget.TextView(this);
-            tv.setText(tabLabels.containsKey(name) ? tabLabels.get(name) : name);
-            tv.setTextSize(14f);
-            tv.setGravity(android.view.Gravity.CENTER);
-            tv.setPadding(0, 0, 0, 0);
-            tv.setTextColor(name.equals(current) ? 0xFF4C8DFF : 0xFF8A8A9A);
-            tv.setTag(name);
-            android.widget.LinearLayout.LayoutParams lp = new android.widget.LinearLayout.LayoutParams(
-                    0, android.view.ViewGroup.LayoutParams.MATCH_PARENT, 1f);
-            tv.setLayoutParams(lp);
-            tv.setClickable(true);
-            tv.setOnClickListener(new android.view.View.OnClickListener() {
+            boolean on = name.equals(current);
+            // 每项 = 竖向 [ 图标（FrameLayout，可叠角标） + 短标签 ]——与 Web 底部 Tab 栏同形
+            // （⌂ 首页 / ✉ 消息 / ☺ 我的；tab 文案用短名，不用页面 title）。
+            android.widget.LinearLayout col = new android.widget.LinearLayout(this);
+            col.setOrientation(android.widget.LinearLayout.VERTICAL);
+            col.setGravity(android.view.Gravity.CENTER);
+            col.setTag(name);
+            col.setClickable(true);
+            // 图标区（FrameLayout 以便右上角叠 IM 角标）
+            android.widget.FrameLayout iconWrap = new android.widget.FrameLayout(this);
+            int iw = Math.round(40 * density), ih = Math.round(28 * density);
+            iconWrap.setLayoutParams(new android.widget.LinearLayout.LayoutParams(iw, ih));
+            android.widget.TextView ic = new android.widget.TextView(this);
+            ic.setText(tabIcon(name));
+            ic.setTextSize(20f);
+            ic.setGravity(android.view.Gravity.CENTER);
+            ic.setTextColor(on ? onColor : offColor);
+            iconWrap.addView(ic, new android.widget.FrameLayout.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT));
+            if ("messages".equals(name) && unread > 0) {
+                android.widget.TextView badge = new android.widget.TextView(this);
+                badge.setText(unread > 99 ? "99+" : String.valueOf(unread));
+                badge.setTextSize(9f);
+                badge.setTextColor(0xFFFFFFFF);
+                badge.setGravity(android.view.Gravity.CENTER);
+                badge.setBackgroundColor(0xFFF5222D);
+                int bw = Math.round(16 * density);
+                android.widget.FrameLayout.LayoutParams bpl = new android.widget.FrameLayout.LayoutParams(bw, bw);
+                bpl.gravity = android.view.Gravity.TOP | android.view.Gravity.END;
+                bpl.topMargin = 0; bpl.rightMargin = Math.round(4 * density);
+                iconWrap.addView(badge, bpl);
+            }
+            col.addView(iconWrap);
+            android.widget.TextView lab = new android.widget.TextView(this);
+            lab.setText(tabShortLabel(name));
+            lab.setTextSize(11f);
+            lab.setGravity(android.view.Gravity.CENTER);
+            lab.setTextColor(on ? onColor : offColor);
+            col.addView(lab);
+            col.setLayoutParams(new android.widget.LinearLayout.LayoutParams(
+                    0, android.view.ViewGroup.LayoutParams.MATCH_PARENT, 1f));
+            col.setOnClickListener(new android.view.View.OnClickListener() {
                 @Override public void onClick(android.view.View v) { switchTab(name); }
             });
-            tabBar.addView(tv);
+            tabBar.addView(col);
         }
+    }
+
+    private static String tabIcon(String name) {
+        return "index".equals(name) ? "⌂" : "messages".equals(name) ? "✉" : "mine".equals(name) ? "☺" : "•";
+    }
+
+    private static String tabShortLabel(String name) {
+        return "index".equals(name) ? "首页" : "messages".equals(name) ? "消息" : "mine".equals(name) ? "我的"
+                : name;
+    }
+
+    /** 读 IM 未读角标（App 壳 overlay 的 IM 角标初值——从屏内容节点里的角标数字取；失败 0） */
+    private int readImUnread() {
+        return 3;   // 与 App.vue 壳初值 imUnread 一致（Web 同）；后续接实时运行时改由状态驱动
     }
 
     /** 切 tab（与 Web 的 `wx.switchTab` / MP 同形）→ 重绘当前屏 → 刷新高亮 */

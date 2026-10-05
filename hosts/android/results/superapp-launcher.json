@@ -61,7 +61,7 @@
       "anim_hook_missing": 0,
       "rect_calls": 0,
       "shared_calls": 0,
-      "content_node_total": 216,
+      "content_node_total": 253,
       "live_screens": 1,
       "calls": [
         "screen.mount",

@@ -43,6 +43,18 @@ struct Superapp {
   @State booted: boolean = false;
   /** drive 记账（脚本判据读 switch_log） */
   private switchLog: string[] = [];
+  /** IM 未读角标初值（与 App.vue 壳同源；后续接实时运行时改由状态驱动） */
+  private imUnread: number = 3;
+
+  /** Tab 图标（⌂/✉/☺——与 Web/Android/iOS 同形） */
+  private tabIconOf(name: string): string {
+    return name === 'index' ? '⌂' : name === 'messages' ? '✉' : name === 'mine' ? '☺' : '•';
+  }
+
+  /** Tab 短标签（首页/消息/我的） */
+  private tabShortLabelOf(name: string): string {
+    return name === 'index' ? '首页' : name === 'messages' ? '消息' : name === 'mine' ? '我的' : name;
+  }
 
   aboutToAppear(): void {
     hilog.info(DOMAIN, TAG, 'SUPERAPP_PAGE_APPEAR scene=%{public}s', this.scene);
@@ -205,16 +217,25 @@ struct Superapp {
       .width('100%')
       .layoutWeight(1)
 
-      // 底部 Tab 栏（原生 chrome）
+      // 底部 Tab 栏（原生 chrome；★图标 + 短标签，与 Web/Android/iOS 同形：⌂ 首页 / ✉ 消息 / ☺ 我的）
       Row() {
         ForEach(this.tabKeys, (k: string, i: number) => {
-          Text(this.tabItems[i])
-            .fontSize(14)
-            .fontColor(this.current === k ? '#4C8DFF' : '#8A8A9A')
-            .textAlign(TextAlign.Center)
-            .layoutWeight(1)
-            .height('100%')
-            .onClick(() => { this.switchTab(k); })
+          Column() {
+            Stack() {
+              Text(this.tabIconOf(k)).fontSize(20).fontColor(this.current === k ? '#4C8DFF' : '#8A8A9A')
+              if (k === 'messages' && this.imUnread > 0) {
+                Text(this.imUnread > 99 ? '99+' : String(this.imUnread))
+                  .fontSize(9).fontColor('#FFFFFF').textAlign(TextAlign.Center)
+                  .width(16).height(16).borderRadius(8).backgroundColor('#F5222D')
+                  .position({ x: 24, y: 0 })
+              }
+            }
+            Text(this.tabShortLabelOf(k)).fontSize(11).fontColor(this.current === k ? '#4C8DFF' : '#8A8A9A')
+          }
+          .layoutWeight(1)
+          .height('100%')
+          .justifyContent(FlexAlign.Center)
+          .onClick(() => { this.switchTab(k); })
         }, (k: string) => k)
       }
       .width('100%')
