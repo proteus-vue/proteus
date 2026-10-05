@@ -1,10 +1,22 @@
 {
-  "generatedAt": "2026-10-05T11:39:28.508Z",
+  "generatedAt": "2026-10-05T12:40:05.637Z",
   "rows": [
+    {
+      "end": "mp",
+      "page": "border.png",
+      "out": "css-conformance/results/side-by-side/border.mp-vs-web.png",
+      "status": "ok"
+    },
     {
       "end": "mp",
       "page": "text.png",
       "out": "css-conformance/results/side-by-side/text.mp-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "android",
+      "page": "border.png",
+      "out": "css-conformance/results/side-by-side/border.android-vs-web.png",
       "status": "ok"
     },
     {
@@ -15,8 +27,20 @@
     },
     {
       "end": "ios",
+      "page": "border.png",
+      "out": "css-conformance/results/side-by-side/border.ios-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "ios",
       "page": "text.png",
       "out": "css-conformance/results/side-by-side/text.ios-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "harmony",
+      "page": "border.png",
+      "out": "css-conformance/results/side-by-side/border.harmony-vs-web.png",
       "status": "ok"
     },
     {

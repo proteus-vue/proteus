@@ -208,6 +208,9 @@ function isStaticValueValid(level: string, value: unknown): boolean {
     // ★★★G-61 后批（2026-10-05）：white-space（Web 标准关键字封闭集；与 runtime PROP_TYPES 同语义）
     case 'TextWrap':
       return ['normal', 'nowrap', 'pre', 'pre-wrap', 'pre-line', 'break-spaces'].indexOf(String(value)) >= 0
+    // ★★★逐边 border 批（2026-10-05）：边框线型（与 runtime PROP_TYPES.BorderStyle 同语义）
+    case 'BorderStyle':
+      return ['solid', 'dashed', 'dotted', 'none'].indexOf(String(value)) >= 0
     case 'Transform':
       return typeof value === 'string' && /^(translate|scale|rotate|skew)/i.test(value)
     case 'TransformOrigin':

@@ -194,6 +194,7 @@ function styleOf(el: Element, win: Window): NormalizedStyle {
     ['text-align', 'textAlign'], ['text-overflow', 'textOverflow'],
     ['text-decoration-line', 'textDecoration'], ['pointer-events', 'pointerEvents'],
     ['flex-wrap', 'flexWrap'], ['align-content', 'alignContent'],
+    ['white-space', 'whiteSpace'],   // ★★补齐（2026-10-05 · whiteSpace 进 semantic 时的四同步债务）
   ] as const) {
     const v = cs.getPropertyValue(prop)
     if (v) (styles as Record<string, unknown>)[key] = v.trim()

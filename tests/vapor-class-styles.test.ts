@@ -813,10 +813,19 @@ describe('★批次 5 · border 简写（uniform 实线）', () => {
     expect(parseStaticStyle('border: solid 2px rgba(0,0,0,0.35)', () => {})).toEqual({ borderWidth: 2, borderColor: '#00000059' })
   })
 
-  it('② 逐边边框（border-bottom 等）⇒ 诊断跳过（仅支持统一边框）', () => {
+  it('② 逐边边框（border-bottom 等）⇒ **逐边字段**（2026-10-05 全端对齐批：不再是缺口）', () => {
     const d: string[] = []
-    expect(parseStaticStyle('border-bottom: 1px solid #eee', (m) => d.push(m))).toEqual({})
-    expect(d.some((m) => m.includes('逐边边框'))).toBe(true)
+    expect(parseStaticStyle('border-bottom: 1px solid #eee', (m) => d.push(m))).toEqual({
+      borderBottomWidth: 1,
+      borderBottomColor: '#eee',
+    })
+    expect(d.length, '不诊断').toBe(0)
+    // `none` ⇒ 该边清零（重置语义）
+    expect(parseStaticStyle('border-left: none', () => {})).toEqual({ borderLeftWidth: 0 })
+    // 非 solid 线型仍是缺口 ⇒ 诊断 + 跳过（不画成实线冒充）
+    const d2: string[] = []
+    expect(parseStaticStyle('border-top: 1px dashed #ddd', (m) => d2.push(m))).toEqual({})
+    expect(d2.some((m) => m.includes('solid'))).toBe(true)
   })
 
   it('③ border-style 非 solid ⇒ 诊断（不静默当实线）；solid/none 无操作', () => {

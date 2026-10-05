@@ -103,6 +103,46 @@
         "why": "→ widthRatio/heightRatio（比例字段）"
       },
       {
+        "css": "border-top",
+        "id": "border-top",
+        "ends": {
+          "web": "not-measured",
+          "skyline": "supported",
+          "app": "supported"
+        },
+        "why": "★★★逐边 border 批（2026-10-05 · 用户「全端对齐不留缺陷」）：`border-top: <width> solid <color>` 简写 折为 borderTopWidth/Color（宿主**逐边绘制**）；`none` ⇒ 该边清零（重置语义）；非 solid 线型（dashed/dotted…）诊断跳过（App 端仅实线；不静默画成实线冒充）。Web/MP 端为该族**原生支持**（Skyline 官方 formats 表含 border-<side>-* 全部 12 项）。"
+      },
+      {
+        "css": "border-right",
+        "id": "border-right",
+        "ends": {
+          "web": "not-measured",
+          "skyline": "supported",
+          "app": "supported"
+        },
+        "why": "★★★逐边 border 批（2026-10-05 · 用户「全端对齐不留缺陷」）：`border-right: <width> solid <color>` 简写 折为 borderRightWidth/Color（宿主**逐边绘制**）；`none` ⇒ 该边清零（重置语义）；非 solid 线型（dashed/dotted…）诊断跳过（App 端仅实线；不静默画成实线冒充）。Web/MP 端为该族**原生支持**（Skyline 官方 formats 表含 border-<side>-* 全部 12 项）。"
+      },
+      {
+        "css": "border-bottom",
+        "id": "border-bottom",
+        "ends": {
+          "web": "not-measured",
+          "skyline": "supported",
+          "app": "supported"
+        },
+        "why": "★★★逐边 border 批（2026-10-05 · 用户「全端对齐不留缺陷」）：`border-bottom: <width> solid <color>` 简写 折为 borderBottomWidth/Color（宿主**逐边绘制**）；`none` ⇒ 该边清零（重置语义）；非 solid 线型（dashed/dotted…）诊断跳过（App 端仅实线；不静默画成实线冒充）。Web/MP 端为该族**原生支持**（Skyline 官方 formats 表含 border-<side>-* 全部 12 项）。"
+      },
+      {
+        "css": "border-left",
+        "id": "border-left",
+        "ends": {
+          "web": "not-measured",
+          "skyline": "supported",
+          "app": "supported"
+        },
+        "why": "★★★逐边 border 批（2026-10-05 · 用户「全端对齐不留缺陷」）：`border-left: <width> solid <color>` 简写 折为 borderLeftWidth/Color（宿主**逐边绘制**）；`none` ⇒ 该边清零（重置语义）；非 solid 线型（dashed/dotted…）诊断跳过（App 端仅实线；不静默画成实线冒充）。Web/MP 端为该族**原生支持**（Skyline 官方 formats 表含 border-<side>-* 全部 12 项）。"
+      },
+      {
         "css": "类选择器 .a / .a.b",
         "id": "selector-class",
         "ends": {
@@ -501,6 +541,14 @@
       "borderRadius",
       "borderColor",
       "borderWidth",
+      "borderTopWidth",
+      "borderRightWidth",
+      "borderBottomWidth",
+      "borderLeftWidth",
+      "borderTopColor",
+      "borderRightColor",
+      "borderBottomColor",
+      "borderLeftColor",
       "opacity",
       "boxShadow",
       "transform"
@@ -929,8 +977,72 @@
       "app": "supported",
       "tier": "L1",
       "strategy": "编译期折叠",
-      "note": "★批次 5（2026-10-04）：`border: <width> <style> <color>` 简写解析为 borderWidth + borderColor（uniform **实线**）；**逐边**/非 solid 线型（dashed/dotted…）诊断跳过（★批 14 审计修：非 solid 此前**静默画成实线**=与 Web 偏差 ⇒ 现诊断跳过）；var() 令牌色如实诊断。**三端宿主真画**：iOS CALayer.border* · Android borderPaint 描边（含圆角路径）· 鸿蒙 OH_ArkUI_RenderNodeUtils_SetBorderWidth/Color",
+      "note": "★批次 5（2026-10-04）：`border: <width> <style> <color>` 简写解析为 borderWidth + borderColor（uniform **实线**）；**逐边**已支持（见 border-top/right/bottom/left 四条）· 非 solid 线型（dashed/dotted…）诊断跳过（★批 14 审计修：非 solid 此前**静默画成实线**=与 Web 偏差 ⇒ 现诊断跳过）；var() 令牌色如实诊断。**三端宿主真画**：iOS CALayer.border* · Android borderPaint 描边（含圆角路径）· 鸿蒙 OH_ArkUI_RenderNodeUtils_SetBorderWidth/Color",
       "supportTier": "universal"
+    },
+    {
+      "id": "border-top",
+      "css": "border-top",
+      "category": "paint",
+      "compilerFields": [
+        "borderTopWidth",
+        "borderTopColor"
+      ],
+      "web": "not-measured",
+      "skyline": "supported",
+      "app": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "note": "★★★逐边 border 批（2026-10-05 · 用户「全端对齐不留缺陷」）：`border-top: <width> solid <color>` 简写 折为 borderTopWidth/Color（宿主**逐边绘制**）；`none` ⇒ 该边清零（重置语义）；非 solid 线型（dashed/dotted…）诊断跳过（App 端仅实线；不静默画成实线冒充）。Web/MP 端为该族**原生支持**（Skyline 官方 formats 表含 border-<side>-* 全部 12 项）。",
+      "supportTier": "conditional"
+    },
+    {
+      "id": "border-right",
+      "css": "border-right",
+      "category": "paint",
+      "compilerFields": [
+        "borderRightWidth",
+        "borderRightColor"
+      ],
+      "web": "not-measured",
+      "skyline": "supported",
+      "app": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "note": "★★★逐边 border 批（2026-10-05 · 用户「全端对齐不留缺陷」）：`border-right: <width> solid <color>` 简写 折为 borderRightWidth/Color（宿主**逐边绘制**）；`none` ⇒ 该边清零（重置语义）；非 solid 线型（dashed/dotted…）诊断跳过（App 端仅实线；不静默画成实线冒充）。Web/MP 端为该族**原生支持**（Skyline 官方 formats 表含 border-<side>-* 全部 12 项）。",
+      "supportTier": "conditional"
+    },
+    {
+      "id": "border-bottom",
+      "css": "border-bottom",
+      "category": "paint",
+      "compilerFields": [
+        "borderBottomWidth",
+        "borderBottomColor"
+      ],
+      "web": "not-measured",
+      "skyline": "supported",
+      "app": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "note": "★★★逐边 border 批（2026-10-05 · 用户「全端对齐不留缺陷」）：`border-bottom: <width> solid <color>` 简写 折为 borderBottomWidth/Color（宿主**逐边绘制**）；`none` ⇒ 该边清零（重置语义）；非 solid 线型（dashed/dotted…）诊断跳过（App 端仅实线；不静默画成实线冒充）。Web/MP 端为该族**原生支持**（Skyline 官方 formats 表含 border-<side>-* 全部 12 项）。",
+      "supportTier": "conditional"
+    },
+    {
+      "id": "border-left",
+      "css": "border-left",
+      "category": "paint",
+      "compilerFields": [
+        "borderLeftWidth",
+        "borderLeftColor"
+      ],
+      "web": "not-measured",
+      "skyline": "supported",
+      "app": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "note": "★★★逐边 border 批（2026-10-05 · 用户「全端对齐不留缺陷」）：`border-left: <width> solid <color>` 简写 折为 borderLeftWidth/Color（宿主**逐边绘制**）；`none` ⇒ 该边清零（重置语义）；非 solid 线型（dashed/dotted…）诊断跳过（App 端仅实线；不静默画成实线冒充）。Web/MP 端为该族**原生支持**（Skyline 官方 formats 表含 border-<side>-* 全部 12 项）。",
+      "supportTier": "conditional"
     },
     {
       "id": "transform",

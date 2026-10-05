@@ -1,0 +1,63 @@
+[
+  {
+    "end": "web",
+    "verdict": "pass",
+    "caseIssues": [],
+    "evidence": "基准端。5 案例（底部 1px 分隔线×2 / 顶部 2px 紫 / 左侧 3px 红 / 右侧 1px 灰 / 四边 2:3:4:1）逐像素测量与规格一致。"
+  },
+  {
+    "end": "mp",
+    "verdict": "pass",
+    "caseIssues": [],
+    "evidence": "8/8 线厚 ≈ CSS×1.5（本端 DPR）；色/位/有无与基准一致；四边比例 2:3:4:1 正确。"
+  },
+  {
+    "end": "android",
+    "verdict": "pass",
+    "caseIssues": [
+      {
+        "case": "all",
+        "issue": "首轮终评：边框宽度未乘 DPR（1 设备px/CSS px ⇒ 比基准细 3 倍）",
+        "severity": "major",
+        "status": "fixed",
+        "fix": "LEN_SCALARS 补登记 4 个逐边宽度字段（物理化清单漏项——本表注释原文即'新增长度字段必须登记'）"
+      }
+    ],
+    "evidence": "复评 8/8 线厚精确 = CSS×3（1/2/3/1/2/3/4/1 CSS → 3/6/9/3/6/9/12/3 设备px，无 AA）；色/位/四边比例正确。"
+  },
+  {
+    "end": "ios",
+    "verdict": "pass",
+    "caseIssues": [
+      {
+        "case": "case-all-sides",
+        "issue": "首轮：上下边不显示（厚度存 bounds.width 被 frame 赋值覆盖 ⇒ 二次 sync 读错）",
+        "severity": "blocker",
+        "status": "fixed",
+        "fix": "厚度编码进子层 name（`proteus-side-border-<idx>-<thickness>`），sync 从 name 解析"
+      }
+    ],
+    "evidence": "复评：5 案例线厚/色/侧别与 Web 基准一致（6/9/12/3 设备px 精确）；四边齐全。"
+  },
+  {
+    "end": "harmony",
+    "verdict": "pass",
+    "caseIssues": [
+      {
+        "case": "all",
+        "issue": "首轮：边框全部不显示（ArkUI 需 border-style 才绘制——width/color 的 Set 均 rc=0 但无样式不画）",
+        "severity": "blocker",
+        "status": "fixed",
+        "fix": "补 SetBorderStyle(SOLID)（逐边 + uniform 两分支）"
+      },
+      {
+        "case": "all",
+        "issue": "次轮：线厚 ~1/3（我的'单位修正'误按 vp 除以 density——实测该通道按物理 px 解释）",
+        "severity": "major",
+        "status": "fixed",
+        "fix": "撤销 vp 换算，直传物理 px（与 Android/iOS 同口径）"
+      }
+    ],
+    "evidence": "复评 8/8 项归一后 ≈1.0× 基准（0.86~1.16，含 DPR 3.5 半像素 AA）；色/位/四边比例正确。"
+  }
+]

@@ -76,6 +76,9 @@ describe('★App CSS 支持面 · ② SSOT 与折叠实现同源（真折叠，�
       if (f === 'position') return 'absolute'
       if (f === 'overflow') return 'hidden'
       if (['backgroundColor', 'color', 'borderColor'].includes(f)) return '#123456'
+      // ★★★逐边 border 批（2026-10-05）：逐边颜色/宽度样例（真折叠验证面覆盖新字段）
+      if (/^border(Top|Right|Bottom|Left)Color$/.test(f)) return '#123456'
+      if (/^border(Top|Right|Bottom|Left)Width$/.test(f)) return '1'
       if (f === 'boxSizing') return 'border-box'
       if (f === 'fontWeight') return 'bold'
       if (f === 'textAlign') return 'center'

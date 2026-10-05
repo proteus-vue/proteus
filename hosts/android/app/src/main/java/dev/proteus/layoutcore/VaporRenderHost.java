@@ -1238,6 +1238,10 @@ final class VaporRenderHost {
         "borderTopLeftRadius", "borderTopRightRadius", "borderBottomLeftRadius", "borderBottomRightRadius",
         "marginTop", "marginRight", "marginBottom", "marginLeft",
         "paddingTop", "paddingRight", "paddingBottom", "paddingLeft",
+        // ★★★逐边 border 批（2026-10-05 · 独立终评抓出的 major）：逐边宽度必须登记 ——
+        //   漏登记 ⇒ 未乘 DPR ⇒ 边框比 Web 基准**细 3 倍**（真机实测 2/3/4/1 设备px vs 应 6/9/12/3）。
+        //   （本表注释原文就写着「新增长度字段必须登记」——这次是我自己漏了。）
+        "borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth",
     };
 
     /** 物理化一个 spec/样式对象（原地改写；同时被 mount/updatePatches 复用——同一清单一处实现） */
@@ -1447,6 +1451,29 @@ final class VaporRenderHost {
      * （那些通道的宿主实现已在 `ProteusHostView.drawCmds` 里就绪，本入口先打通"编译产物驱动"
      * 这条链的骨架——诚实边界写在这里，不假装已覆盖全部绘制通道）。
      */
+    /**
+     * ★★★逐边 border 批（2026-10-05）：读节点的逐边边框字段 → `float[12]` 规格（宿主逐边绘制）。
+     *   返回 null = 无任何逐边声明（纯 uniform 路径——零行为变化）。
+     *   `[0..3]` 宽度（NaN=未声明 ⇒ 回落 uniform）· `[4..7]` 颜色（0=未声明）· `[8..11]` 线型（0=solid）。
+     *   ★线型不在折叠面（App 端仅 solid；非 solid 已在编译期诊断跳过）⇒ 全 0。
+     */
+    private static float[] sideBorderOf(JSONObject spec) {
+        final String[] W = {"borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth"};
+        final String[] C = {"borderTopColor", "borderRightColor", "borderBottomColor", "borderLeftColor"};
+        boolean any = false;
+        for (String k : W) { if (spec.has(k)) { any = true; break; } }
+        if (!any) for (String k : C) { if (spec.has(k)) { any = true; break; } }
+        if (!any) return null;
+        final float[] sb = new float[12];
+        for (int i = 0; i < 4; i++) {
+            sb[i] = spec.has(W[i]) ? (float) spec.optDouble(W[i], 0) : Float.NaN;
+            final String col = spec.optString(C[i], null);
+            sb[4 + i] = col != null ? parseColor(col) : 0f;
+            sb[8 + i] = 0f; // solid（App 端仅实线）
+        }
+        return sb;
+    }
+
     private ProteusHostView.Cmd mkCmd(JSONObject spec, JSONObject r) throws Exception {
         float x = (float) r.optDouble("x");
         float y = (float) r.optDouble("y");
@@ -1548,9 +1575,9 @@ final class VaporRenderHost {
             final boolean clipText = !wsWrap && w > 1f
                     && "hidden".equals(spec.optString("overflow", null))
                     && !("ellipsis".equals(spec.optString("textOverflow", null)));
-            return new ProteusHostView.Cmd(x, y, w, h, color, t, fs, textColor, radius, grad, glowSpec, maskSpec, fw, ta, bw, bc, shadowSpec, lh, ls, decor, wsWrap ? 0 : 1, multiLine, clipText);
+            return new ProteusHostView.Cmd(x, y, w, h, color, t, fs, textColor, radius, grad, glowSpec, maskSpec, fw, ta, bw, bc, shadowSpec, lh, ls, decor, wsWrap ? 0 : 1, multiLine, clipText, sideBorderOf(spec));
         }
-        return new ProteusHostView.Cmd(x, y, w, h, color, null, 0f, 0, radius, grad, glowSpec, maskSpec, 400, 0, bw, bc, shadowSpec);
+        return new ProteusHostView.Cmd(x, y, w, h, color, null, 0f, 0, radius, grad, glowSpec, maskSpec, 400, 0, bw, bc, shadowSpec, 0f, 0f, 0, 0, false, false, sideBorderOf(spec));
     }
 
     /** ★批次 4：`text-align` 字符串 → 码（0=left / 1=center / 2=right；未知 ⇒ 0） */

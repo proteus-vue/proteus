@@ -751,19 +751,77 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
                 OH_ArkUI_RenderNodeUtils_DisposeNodeBorderRadiusOption(br);
             }
         }
-        // ★批次 5（CSS 兼容对齐 · 边框）：uniform 边框（宽度 + 颜色，四边 ALL）
-        if (borderWidth > 0 && borderColor > 0) {
-            ArkUI_NodeBorderWidthOption* bwo = OH_ArkUI_RenderNodeUtils_CreateNodeBorderWidthOption();
-            if (bwo != nullptr) {
-                OH_ArkUI_RenderNodeUtils_SetNodeBorderWidthOptionEdgeWidth(bwo, static_cast<float>(borderWidth), ARKUI_EDGE_DIRECTION_ALL);
-                OH_ArkUI_RenderNodeUtils_SetBorderWidth(node, bwo);
-                OH_ArkUI_RenderNodeUtils_DisposeNodeBorderWidthOption(bwo);
+        // ★★★逐边 border 批（2026-10-05 · 用户「全端对齐不留缺陷」）：**原生逐边**绘制——
+        //   ArkUI 的 BorderWidth/BorderColor 选项支持逐方向（TOP/RIGHT/BOTTOM/LEFT）。
+        //   逐边未声明的边（-1/0）回落 uniform 值——与 Web 的 border 简写缺省语义一致。
+        {
+            const char* sn[4] = {"Top", "Right", "Bottom", "Left"};
+            bool anySide = false;
+            double swArr[4]; uint32_t scArr[4];
+            for (int si = 0; si < 4; si++) {
+                char wk[32], ck[32];
+                snprintf(wk, sizeof(wk), "bw%s", sn[si]);
+                snprintf(ck, sizeof(ck), "bc%s", sn[si]);
+                double sw = -1; jsonNumber(it, wk, &sw);
+                double sc = 0; jsonNumber(it, ck, &sc);
+                swArr[si] = sw; scArr[si] = (uint32_t)sc;
+                if (sw >= 0 || sc > 0) anySide = true;
             }
-            ArkUI_NodeBorderColorOption* bco = OH_ArkUI_RenderNodeUtils_CreateNodeBorderColorOption();
-            if (bco != nullptr) {
-                OH_ArkUI_RenderNodeUtils_SetNodeBorderColorOptionEdgeColor(bco, static_cast<uint32_t>(borderColor), ARKUI_EDGE_DIRECTION_ALL);
-                OH_ArkUI_RenderNodeUtils_SetBorderColor(node, bco);
-                OH_ArkUI_RenderNodeUtils_DisposeNodeBorderColorOption(bco);
+            if (anySide) {
+                ArkUI_EdgeDirection dir[4] = {ARKUI_EDGE_DIRECTION_TOP, ARKUI_EDGE_DIRECTION_RIGHT,
+                                              ARKUI_EDGE_DIRECTION_BOTTOM, ARKUI_EDGE_DIRECTION_LEFT};
+                ArkUI_NodeBorderWidthOption* swo = OH_ArkUI_RenderNodeUtils_CreateNodeBorderWidthOption();
+                ArkUI_NodeBorderColorOption* sco = OH_ArkUI_RenderNodeUtils_CreateNodeBorderColorOption();
+                if (swo != nullptr && sco != nullptr) {
+                    for (int si = 0; si < 4; si++) {
+                        // ★★★单位修正 v2（2026-10-05 · 独立终评实测：边框比基准细 ~3 倍）：
+                        //   实测证明 ArkUI 该通道按**物理 px**解释（除以 density 后 1px 边框只画出 0.3 CSS px）；
+                        //   ⇒ 直传物理 px（bench 侧已 ×density），**不做 vp 换算**。
+                        float sw = swArr[si] >= 0 ? (float)swArr[si] : (float)borderWidth;
+                        uint32_t sc = scArr[si] > 0 ? scArr[si] : (uint32_t)borderColor;
+                        if (sw > 0 && sc > 0) {
+                            OH_ArkUI_RenderNodeUtils_SetNodeBorderWidthOptionEdgeWidth(swo, sw, dir[si]);
+                            OH_ArkUI_RenderNodeUtils_SetNodeBorderColorOptionEdgeColor(sco, sc, dir[si]);
+                        }
+                    }
+                    OH_ArkUI_RenderNodeUtils_SetBorderWidth(node, swo);
+                    OH_ArkUI_RenderNodeUtils_SetBorderColor(node, sco);
+                    // ★★★逐边 border 批（2026-10-05 · 真机诊断链的最后一环）：**必须设样式**——
+                    //   ArkUI 的 border 是 width+color+style 三件套，缺样式 ⇒ **不绘制**
+                    //   （实测：width/color 的 Set 均 rc=0 但画面上无边框——加 SOLID 后出现）。
+                    ArkUI_NodeBorderStyleOption* sso = OH_ArkUI_RenderNodeUtils_CreateNodeBorderStyleOption();
+                    if (sso != nullptr) {
+                        for (int si = 0; si < 4; si++) {
+                            OH_ArkUI_RenderNodeUtils_SetNodeBorderStyleOptionEdgeStyle(sso, ARKUI_BORDER_STYLE_SOLID, dir[si]);
+                        }
+                        OH_ArkUI_RenderNodeUtils_SetBorderStyle(node, sso);
+                        OH_ArkUI_RenderNodeUtils_DisposeNodeBorderStyleOption(sso);
+                    }
+                }
+                if (swo != nullptr) OH_ArkUI_RenderNodeUtils_DisposeNodeBorderWidthOption(swo);
+                if (sco != nullptr) OH_ArkUI_RenderNodeUtils_DisposeNodeBorderColorOption(sco);
+            } else if (borderWidth > 0 && borderColor > 0) {
+                // ★批次 5（CSS 兼容对齐 · 边框）：uniform 边框（宽度 + 颜色，四边 ALL）
+                ArkUI_NodeBorderWidthOption* bwo = OH_ArkUI_RenderNodeUtils_CreateNodeBorderWidthOption();
+                if (bwo != nullptr) {
+                    // ★单位修正 v2（同逐边）：直传物理 px（见逐边分支注释）
+                    OH_ArkUI_RenderNodeUtils_SetNodeBorderWidthOptionEdgeWidth(bwo, static_cast<float>(borderWidth), ARKUI_EDGE_DIRECTION_ALL);
+                    OH_ArkUI_RenderNodeUtils_SetBorderWidth(node, bwo);
+                    OH_ArkUI_RenderNodeUtils_DisposeNodeBorderWidthOption(bwo);
+                }
+                ArkUI_NodeBorderColorOption* bco = OH_ArkUI_RenderNodeUtils_CreateNodeBorderColorOption();
+                if (bco != nullptr) {
+                    OH_ArkUI_RenderNodeUtils_SetNodeBorderColorOptionEdgeColor(bco, static_cast<uint32_t>(borderColor), ARKUI_EDGE_DIRECTION_ALL);
+                    OH_ArkUI_RenderNodeUtils_SetBorderColor(node, bco);
+                    OH_ArkUI_RenderNodeUtils_DisposeNodeBorderColorOption(bco);
+                // ★样式补（同逐边）：ArkUI 需 border-style 才绘制
+                ArkUI_NodeBorderStyleOption* sso2 = OH_ArkUI_RenderNodeUtils_CreateNodeBorderStyleOption();
+                if (sso2 != nullptr) {
+                    OH_ArkUI_RenderNodeUtils_SetNodeBorderStyleOptionEdgeStyle(sso2, ARKUI_BORDER_STYLE_SOLID, ARKUI_EDGE_DIRECTION_ALL);
+                    OH_ArkUI_RenderNodeUtils_SetBorderStyle(node, sso2);
+                    OH_ArkUI_RenderNodeUtils_DisposeNodeBorderStyleOption(sso2);
+                }
+                }
             }
         }
         // ★批次 10（CSS 兼容对齐 · 超级应用视觉）：盒阴影 → RenderNode 原生 shadow API

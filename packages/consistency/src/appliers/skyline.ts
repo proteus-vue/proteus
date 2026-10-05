@@ -111,6 +111,11 @@ export function mapStyleIRToSkyline(fields: Record<string, unknown>, opts: Skyli
         put(field, kebab(field), String(value))
         continue
       }
+      // ★★★逐边 border 批（2026-10-05）：逐边宽度 → 同名 wxss 属性（Skyline 官方 formats 表原生支持）
+      if (/^border(Top|Right|Bottom|Left)Width$/.test(field)) {
+        put(field, kebab(field), `${toRpx(value, viewport)}rpx`)
+        continue
+      }
       if (field === 'fontSize' || field === 'letterSpacing' || field === 'lineHeight' || field === 'borderWidth' || field === 'borderRadius') {
         // 字号/字距/行高/边框/圆角：px 量 → rpx
         put(field, kebab(field), `${toRpx(value, viewport)}rpx`)

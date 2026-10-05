@@ -150,6 +150,7 @@ export interface NormalizedStyle {
   rowGap?: number
   columnGap?: number
   textAlign?: string
+  whiteSpace?: string
   textOverflow?: string
   textDecoration?: string
   pointerEvents?: string
@@ -428,6 +429,8 @@ const STYLE_KEYS = new Set([
   'right', 'bottom',
   'letterSpacing', 'lineHeight', 'rowGap', 'columnGap',
   'textAlign', 'textOverflow', 'textDecoration', 'pointerEvents', 'flexWrap', 'alignContent',
+  // ★★补齐（2026-10-05 · check:style-coverage 抓出的上一轮债务）：whiteSpace 进 semantic 后缺闭集登记
+  'whiteSpace',
   'aspectRatio', 'flexBasis', 'transform', 'boxShadow',
   'gridTemplateColumns', 'gridTemplateRows', 'gridColumn', 'gridRow',
 ])
@@ -478,6 +481,7 @@ export function validateStyleSnapshot(snap: unknown): ValidationResult {
         || k === 'flexDirection' || k === 'justifyContent' || k === 'alignItems' || k === 'alignSelf' || k === 'overflow'
         // ★★★G-61 B3：新增字符串族（与接口/STYLE_KEYS 同步——三处同改）
         || k === 'textAlign' || k === 'textOverflow' || k === 'textDecoration' || k === 'pointerEvents'
+        || k === 'whiteSpace'   // ★★补齐（同 ②）
         || k === 'flexWrap' || k === 'alignContent'
         || k === 'aspectRatio' || k === 'flexBasis' || k === 'transform' || k === 'boxShadow'
         || k === 'gridTemplateColumns' || k === 'gridTemplateRows' || k === 'gridColumn' || k === 'gridRow'

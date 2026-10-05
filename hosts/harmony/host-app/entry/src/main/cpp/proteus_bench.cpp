@@ -4498,6 +4498,25 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
             char bb[96]; snprintf(bb, sizeof(bb), ",\"borderWidth\":%.2f,\"borderColor\":%u", bw * density, bc);
             arr += bb;
         }
+        // ★★★逐边 border 批（2026-10-05）：逐边宽度/颜色透传（扁平键 `bwTop`/`bcTop`…；-1 = 未声明 ⇒ 回落 uniform）。
+        //   宿主用 ArkUI 原生 `ARKUI_EDGE_DIRECTION_{TOP,RIGHT,BOTTOM,LEFT}` 逐边绘制。
+        {
+            const char* sn[4] = {"Top", "Right", "Bottom", "Left"};
+            const char* wk[4] = {"borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth"};
+            const char* ck[4] = {"borderTopColor", "borderRightColor", "borderBottomColor", "borderLeftColor"};
+            bool anySide = false;
+            for (int si = 0; si < 4; si++) { if (it.find(std::string("\"") + wk[si] + "\"") != std::string::npos || it.find(std::string("\"") + ck[si] + "\"") != std::string::npos) { anySide = true; break; } }
+            if (anySide) {
+                for (int si = 0; si < 4; si++) {
+                    double sw = -1; jnum(it.c_str(), it.size(), wk[si], &sw);
+                    uint32_t sc = 0; std::string scCss; if (jstr(it.c_str(), it.size(), ck[si], &scCss)) sc = hexToArgb(scCss);
+                    if (sw < 0 && sc == 0) continue;
+                    char sb2[96];
+                    snprintf(sb2, sizeof(sb2), ",\"bw%s\":%.2f,\"bc%s\":%u", sn[si], sw < 0 ? -1.0 : sw * density, sn[si], sc);
+                    arr += sb2;
+                }
+            }
+        }
         if (rcMask > 0 && rcMask != 15) { char rcb[48]; snprintf(rcb, sizeof(rcb), ",\"radiusCorners\":%d", rcMask); arr += rcb; }
         // ★批次 39：静态变换（编译期 CSS transform）——位移分 px 与盒比例（% 按盒尺寸换算），等比缩放 + 旋转。
         {
