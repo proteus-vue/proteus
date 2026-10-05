@@ -18,6 +18,8 @@ import {
 import type { VariantPlatform } from '@proteus-vue/compiler'
 import mpTransform, { MP_ONLY_TAGS, pFluidLayoutPlugin } from './plugin'
 import { profileBoundaryPlugin } from './profile-boundary-plugin'
+// ★★★G-61 B4：CSE lint（E-CSS/W-CSS 族——语义级，与 VC2-b 的字符串级互补）
+import { cseLintPlugin } from './cse-lint-plugin'
 
 export interface ProteusViteContext {
   /** 工程根（proteus.config.ts 所在目录） */
@@ -177,10 +179,19 @@ export async function resolveProteusViteConfig(
   /** ★VC2-b 存量基线路径（棘轮：只减不增）——**项目根下、入库**（`.proteus/` 是 gitignore 的本地目录，
    *  放那里 CI 上会失效 ⇒ 基线空 ⇒ 存量违规全红）。生成/检查：scripts/gen-profile-baseline.mjs */
   const boundaryBaselinePath = path.join(root, 'profile-boundary-baseline.json')
+  /** ★G-61 B4：CSE lint 存量基线（棘轮：只减不增）——与 profile-boundary 同款纪律
+   *  生成/检查：`node scripts/gen-cse-lint-baseline.mjs` + 门禁 `check:cse-lint-baseline` */
+  const cseLintBaselinePath = path.join(root, 'cse-lint-baseline.json')
   let plugins: Plugin[]
   if (isMp) {
     // ★组件库已拆包（2026-09-14）：不再传 frameworkComponentsDir——mpTransform 自行从 node_modules 解析包根
-    plugins = [profileBoundaryPlugin({ level: config.profileBoundary?.level, baselinePath: boundaryBaselinePath }), virtualMpEntryPlugin(), mpTransform({ config })]
+    plugins = [
+      profileBoundaryPlugin({ level: config.profileBoundary?.level, baselinePath: boundaryBaselinePath }),
+      // ★G-61 B4（P6）：CSE lint 在 MP 与 Web 两条链都跑（同判据——防 Web 通过而 App 失败）
+      cseLintPlugin({ target: 'skyline', baselinePath: cseLintBaselinePath }),
+      virtualMpEntryPlugin(),
+      mpTransform({ config }),
+    ]
   } else {
     const vueMod = await importFromRoot<{ default: (opts?: Record<string, unknown>) => Plugin }>(root, '@vitejs/plugin-vue')
     // ★平台宏 Web 通道（enforce:'pre'）：在 @vitejs/plugin-vue 编译 .vue **之前**做源码级宏替换——
@@ -201,6 +212,9 @@ export async function resolveProteusViteConfig(
     plugins = [
       // ★VC2-b：Profile 边界校验（Web 端**同样执行**——卡片硬性要求，防"问题延迟到 App 端暴露"）
       profileBoundaryPlugin({ level: config.profileBoundary?.level, baselinePath: boundaryBaselinePath }),
+      // ★★★G-61 B4（P6）：CSE lint（语义级）——Profile 外写法在 Web 端也报错
+      //   （同判据：E-CSS-004/005/006 + W-CSS-101/102/103；与上面的字符串级校验互补）
+      cseLintPlugin({ target: 'web', baselinePath: cseLintBaselinePath }),
       platformVariantPlugin(root, 'web'),
       vue,
       platformMacroPlugin('web'),

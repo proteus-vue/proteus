@@ -13,6 +13,11 @@ export { expandShorthandDecl, splitTopLevel, UNSUPPORTED_SHORTHANDS } from './sh
 export { extractFromSfc, parseInlineStyleToLonghand } from './extract'
 // ★★★G-61 B2（2026-10-05）：**动态 :class 预计算**（Profile §5——属性维度分解 + 互斥分组 + 爆炸保护）
 export { enumerateDynamicClassCandidates, buildDynamicClassPlans } from './dynamic'
+// ★★★G-61 B4（2026-10-05）：CSS 引擎 lint（E-CSS-001~006 / W-CSS-101~105）+ degradeTo 配方执行器
+export { lintCse, hasCseLintErrors, formatCseLint, CSE_LINT_RULES } from './lint'
+export type { CseLintDiagnostic, CseLintOptions } from './lint'
+export { applyDegradeRecipe, DEGRADE_RECIPES } from './degrade'
+export type { DegradeRecipe, DegradeResult, DegradeContext } from './degrade'
 export type { EnumerateResult, BuildDynamicPlansOptions, BuildDynamicPlansResult, DynamicPlanDiagnostic } from './dynamic'
 export type { CseExtractResult, ExtractOptions } from './extract'
 export { buildIndex, candidatesFor, chainMatches, segmentMatches, contextOf } from './match'
