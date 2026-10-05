@@ -41,6 +41,8 @@ public class SuperappActivity extends android.app.Activity {
     private float logicalW = 390f, logicalH = 844f;
     private float density = 1f;
     private int tabBarHeightPx = 0;
+    /** 物理像素原值（`dm.widthPixels` / `heightPixels`）——视口 fallback 用（无损，不做 dp↔px 往返） */
+    private int physWidthPx = 0, physHeightPx = 0;
 
     /** Tab 栏数据（boot 后从 superapp 注册表读回——与 Web/MP 同一套 tabNames/tabLabels） */
     private String[] tabNames = new String[0];
@@ -67,6 +69,8 @@ public class SuperappActivity extends android.app.Activity {
         density = dm.density;
         logicalW = dm.widthPixels / dm.density;
         logicalH = dm.heightPixels / dm.density;
+        physWidthPx = dm.widthPixels;
+        physHeightPx = dm.heightPixels;
         // I2-ALLOW: 宿主自绘 chrome（底部 Tab 栏）的**像素高度**，非内核几何——不流经排版核心，
         //   与状态栏/工具栏同类；仅用于本 Activity 自建的 chrome 视图排布。
         tabBarHeightPx = Math.round(56f * dm.density);
@@ -180,6 +184,8 @@ public class SuperappActivity extends android.app.Activity {
         //   此前用 `tabBar.getChildCount()==0` 判据恒真（上面刚 removeAllViews）⇒ 每次重建都叠一条。
         if (root.findViewWithTag("sa-top-line") == null) {
             android.view.View top = new android.view.View(this);
+            // I2-ALLOW: 宿主**原生 chrome** 尺寸换算（顶分隔线 1dp→px）——不进内核绘制指令流、
+            //   不来自内核几何（与上方 tabBarHeightPx 同族：本 Activity 自建原生视图的排布）。
             int h1 = Math.max(1, Math.round(density));
             android.widget.FrameLayout.LayoutParams tlp2 = new android.widget.FrameLayout.LayoutParams(
                     android.view.ViewGroup.LayoutParams.MATCH_PARENT, h1);
@@ -203,6 +209,7 @@ public class SuperappActivity extends android.app.Activity {
             col.setClickable(true);
             // 图标行 = FrameLayout（图标居中 + 角标叠右上，与 Web `.sa-im-badge{position:absolute;left:50%;top:-4px}` 同形）
             android.widget.FrameLayout icWrap = new android.widget.FrameLayout(this);
+            // I2-ALLOW: 宿主原生 chrome 尺寸（图标行 44×22dp→px）——同族例外，非内核几何。
             int iw = Math.round(44 * density), ih = Math.round(22 * density);
             icWrap.setLayoutParams(new android.widget.LinearLayout.LayoutParams(iw, ih));
             android.widget.TextView ic = new android.widget.TextView(this);
@@ -225,11 +232,14 @@ public class SuperappActivity extends android.app.Activity {
                     setColor(recColor);
                     setCornerRadius(8 * density);
                 }});
+                // I2-ALLOW: 宿主原生 chrome（角标 16dp 高 / 4dp 内边距 / 10dp 左偏 / 2dp 上偏——
+                //   原生 chrome 视图排布，与 Web `.sa-im-badge` 同形；不进内核绘制指令流）。
                 int bh = Math.round(16 * density);
                 badge.setPadding(Math.round(4 * density), 0, Math.round(4 * density), 0);
                 android.widget.FrameLayout.LayoutParams blp = new android.widget.FrameLayout.LayoutParams(
                         android.view.ViewGroup.LayoutParams.WRAP_CONTENT, bh);
                 blp.gravity = android.view.Gravity.TOP | android.view.Gravity.CENTER_HORIZONTAL;
+                // I2-ALLOW: 宿主原生 chrome 偏移（角标 leftMargin 10dp / topMargin -2dp——同族例外）
                 blp.leftMargin = Math.round(10 * density);   // Web: left:50% + margin-left:4px
                 blp.topMargin = -Math.round(2 * density);
                 icWrap.addView(badge, blp);
@@ -332,8 +342,11 @@ public class SuperappActivity extends android.app.Activity {
             // ★★★视口 = **实测视图尺寸**（不是 DisplayMetrics 估算）：全屏 edge-to-edge 下宿主的
             //   contentHost 高度才是真值——用估算会与实际差一个导航栏高（实测 2236 vs 2440）
             //   ⇒ `bottom` 定位元素整体上移（fab 偏高 2.3×）。布局未就绪时回落估算值。
-            int vwPx = contentHost.getWidth() > 0 ? contentHost.getWidth() : Math.round(logicalW * density);
-            int vhPx = contentHost.getHeight() > 0 ? contentHost.getHeight() : Math.round(logicalH * density) - tabBarHeightPx;
+            //   ★fallback 用 `dm` 的**像素原值**（无损——不再 `logical*density` 往返舍入）且
+            //   **不减 tab 栏**：视口口径 = 全屏（Tab 栏是 overlay 不占流；页面自身 120dp 下内边距让位，
+            //   与 Web 同构——批次 47/48 已定调，此处 fallback 曾残留"屏高−tab 栏"旧口径）。
+            int vwPx = contentHost.getWidth() > 0 ? contentHost.getWidth() : physWidthPx;
+            int vhPx = contentHost.getHeight() > 0 ? contentHost.getHeight() : physHeightPx;
             tree.put("viewport", new org.json.JSONObject()
                     .put("width", vwPx / density).put("height", vhPx / density));
             tree.put("nodes", nodes);
