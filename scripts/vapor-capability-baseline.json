@@ -1,14 +1,16 @@
 {
-  "scannedPages": 27,
+  "scannedPages": 29,
   "counts": {
-    "VAPOR_BUILTIN_PARTIAL": 1,
+    "VAPOR_BUILTIN_PARTIAL": 2,
     "VAPOR_DIRECTIVE_NOT_REGISTERED": 6,
+    "VAPOR_DYNCLASS_LAYOUT_UNSUPPORTED": 28,
     "VAPOR_EXPR_UNSUPPORTED": 1,
     "VAPOR_KEY_IS_ROW_IDENTITY": 22,
     "VAPOR_SCRIPT_LIFECYCLE_NOT_RUN": 8,
     "VAPOR_STYLE_DYNAMIC_OBJECT": 1,
+    "VAPOR_STYLE_SELECTOR_UNSUPPORTED": 3,
     "VAPOR_TEMPLATE_UNSUPPORTED": 5,
     "VAPOR_VMODEL_NO_WRITEBACK": 22
   },
-  "note": "棘轮：只减不增（--update 只允许更小）"
+  "note": "棘轮：只减不增（--update 只允许更小）。★2026-10-05 人工评审后重定（非回归——三类均为**新增的如实诊断**，把此前「静默」的既有限制暴露出来）：① VAPOR_DYNCLASS_LAYOUT_UNSUPPORTED 0→28：批次 30 补（768f273b「动态 :class 设布局字段如实诊断（诚实边界）」）新诊断——App 端动态类当前仅支持绘制字段，28 页命中是**既有真实限制**的如实上报；② VAPOR_STYLE_SELECTOR_UNSUPPORTED 0→3：批次 46（ee5affcc）新诊断——<style> 中被跳过的不支持选择器（此前静默丢弃）；③ VAPOR_BUILTIN_PARTIAL 1→2：Teleport 诚实边界多命中一页（gp0-root-portal——内容渲染在原位置的既有行为如实上报）。scannedPages 27→29：examples/pages 新增 2 页（批次 42/44 等）。三类的**修复方向**：分别对应 G-61 B2（动态 class 预计算）/ B1（CSE 全选择器面）——属本 plan 的落地范围，届时基线随修复下降。"
 }

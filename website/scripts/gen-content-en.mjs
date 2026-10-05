@@ -1100,6 +1100,61 @@ export const COMP_EN = {
     ],
     props: { unitId: "Ad unit id (aligned with unit-id)", adIntervals: "Auto-refresh interval in seconds (min 30)", adType: "Ad type (aligned with ad-type: banner / video / grid)", height: "Placeholder height in px (web)", placeholderText: "Web placeholder text" },
   },
+  // —— ★GP4 覆盖层宿主族（p-toast-host / p-loading-host / p-loading-region / p-auth-gate）——
+  //   ★2026-10-05 补登记：四个组件随批次（GP4-a/b/c，10-03）入库，但 EN overlay 漏登记
+  //     ⇒ `check:en-drift` 报「EN 文件缺失」并阻断 CI（自 10-04 起的既有债务）。
+  //   登记语义：desc = zh 文档的描述行英译；notes = 组件头部注释里的**关键契约**（不是逐句翻译）；
+  //   props = 与 zh 同集合（生成器会按 SSOT 的 prop 清单核对——缺键会在产物里暴露）。
+  'p-toast-host': {
+    desc: "Toast queue host — declarative queue with zero template changes",
+    notes: [
+      "Pairs with p-toast: p-toast renders one declarative toast (a component you place); p-toast-host renders the imperative queue (it subscribes to the runtime toast queue via subscribeToast and decides nothing itself) — business code only calls showToast(...), with zero template edits (on MP the host is injected per page at build time)",
+      "Three hard constraints (all learned on real devices — do not 'tidy them up'): ① Overlay layer via <teleport to=\"body\"> (compiles to root-portal, leaving page stacking); ② the portal root stays mounted and fills the viewport (a v-if directly under teleport locks the page — S47; and on Skyline position:fixed only forms a viewport coordinate system inside a portal that fills all four edges — S42); ③ dynamic class names always use literal keys (string concatenation gets the compile-time scopeId spliced in and matches no CSS — invisible with zero errors)",
+      "★Honest boundary (§1.2-bis): on MP each page gets one host instance (N = page-stack depth) while the queue state is a module singleton — 'N instances, one state' (same pattern as custom-tab-bar)",
+    ],
+    props: {
+      pid: "Component instance identifier (for debugging / observability / test targeting - D-2 dogfooding contract)",
+    },
+  },
+  'p-loading-host': {
+    desc: "Loading multi-instance host — renders every active loading mask",
+    notes: [
+      "Pairs with p-loading: p-loading is the declarative single instance (the parent passes visible/text); p-loading-host is the rendering end of the imperative multi-instance model — it subscribes to the runtime active-loading set (subscribeLoading) and renders N masks at once (each scoped page/global); business code only calls showLoading({...}) with zero template edits (on MP the host is injected per page at build time)",
+      "Same three hard constraints as p-toast-host (Overlay layer via root-portal; portal root permanently mounted and filling the viewport; literal-key dynamic classes) — all three were real-device defects first",
+      "★Difference from the Toast host: multi-instance list — each active instance renders its own mask; page-scope instances show only on that page (filtered by the host on the current route) and are cleaned up on unmount (no 'forgot to hide' leaks); global-scope instances survive across pages. Stacking order = array order = ascending seq (later insert renders later ⇒ higher)",
+    ],
+    props: {
+      pid: "Component instance identifier (for debugging / observability / test targeting - D-2 dogfooding contract)",
+    },
+  },
+  'p-loading-region': {
+    desc: "Region mask — an in-place overlay that matches the box it wraps",
+    notes: [
+      "The third loading scope: page/global are carried by p-loading-host (page-level portal, full-screen mask); region must hug the box of a specific element ('this table is loading') — wrapping it in place is exact by construction: zero measurement, zero scroll syncing, zero resize handling (a page-level host would have to measure the target rect and follow scrolling/resize — brittle and divergent across targets)",
+      "Usage: wrap the target content in the default slot; while active is true the mask covers that box and intercepts interaction (catchtap — does not bubble to the region content). Elements outside the region are unaffected (the mask covers only this component's box). dismissible defaults to false (same as page/global: ending is the business setting active=false)",
+      "★Relation to p-loading: p-loading is the existing declarative mask (fixed, full screen, single instance); this component is an in-region mask (it adapts to the box). They can coexist (different stacking scopes). ★Skyline: the mask uses position:absolute with all four edges at 0 and needs position:relative on the parent (the root provides it); not position:fixed (unsupported on Skyline — S42)",
+    ],
+    props: {
+      pid: "Component instance identifier (for debugging / observability / test targeting - D-2 dogfooding contract)",
+      active: "Whether the region mask is shown (controlled — the business sets false to end it)",
+      text: "Hint text (default: spinner only)",
+      dismissible: "Whether tapping the mask dismisses it (default false — same semantics as page/global)",
+    },
+  },
+  'p-auth-gate': {
+    desc: "Session-expired gate — a non-dismissible modal driven by login state",
+    notes: [
+      "Why it exists (vs p-modal / p-page-container): those are dismissible overlays (close button, tap-the-mask closes) — the right default for most dialogs. This one is the non-dismissible modal: no close button, tapping the mask does not close, closable/maskClosable are deliberately not offered (no way to configure it as closable). Its only exit is auth recovery (markAuthRestored()) — closed by the business fact 'login succeeded', not by a user tap (otherwise users would dismiss an expired session as an ordinary notice and then fail everywhere)",
+      "Relation to route guards (constraint: do not build a separate global interception mechanism): this component is not the mechanism — it is the visible outlet of the existing guard state. expired in packages/runtime/src/auth-gate.ts is the single fact; the guard (on navigation) and this component (on 401) read the same state; recovery goes through the business-injected existing navigation (router.replace in onRestored). The component only shows 'expired' and offers one action (relayed to the business callback)",
+      "Hit-testing and stacking follow the same established conclusions as p-toast-host / p-loading-host: root-portal (Overlay layer — overlays must not mix into the Global layer); the portal root stays mounted and fills all four edges; interception is bound to the root container (on Skyline a mask element itself does not participate in hit testing — proven by p-drawer)",
+      "★Honest boundary (§1.2-bis): on MP each page gets one instance while the expired state is a module singleton — 'N instances, one state'",
+    ],
+    props: {
+      pid: "Component instance identifier (for debugging / observability / test targeting - D-2 dogfooding contract)",
+      actionText: "Label of the 're-login' action (the business may override it)",
+      onAction: "Called when the action button is tapped (the business runs its existing navigation there, e.g. router.replace({ name: 'login' })) — this component never navigates itself",
+    },
+  },
   'p-map': {
     desc: "Map container",
     notes: [
