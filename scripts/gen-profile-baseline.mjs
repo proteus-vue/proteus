@@ -66,6 +66,24 @@ function scan(dir) {
 
 const REASON = '存量待专项评估（VC2-b 首扫，2026-10-02）——修一条从基线删一条（棘轮只减不增）'
 
+/**
+ * ★逐条自定义理由（键 = `<rel>:<prop>:<value>`，按项目分组）——"非首扫"的**显式理解型登记**。
+ * 【为什么需要】首扫之后新出现的违规按纪律应当"修"；确实要保留的（如**演示页有意演示某端不支持
+ *   的能力**）走门禁允许的「显式理解后刷新基线」通道——但默认理由写死"VC2-b 首扫，2026-10-02"，
+ *   对这类条目是**失实**的 ⇒ 用本表给它们写准确理由。表**放生成器里**（= 机器可复算；手改产物
+ *   会被 --check 判漂移）。
+ * 【棘轮】本表的键若不再出现在扫描结果（条目被修掉）⇒ --check 判「陈旧登记」红——逼着删掉，
+ *   不留过期的"已理解"豁免。
+ */
+const REASON_OVERRIDES = {
+  examples: {
+    'pages/index.vue:display:grid':
+      '演示页（批次 41 grid-column/grid-row 线号放置）——**演示对象本身**：Web / App（自研 Rust 引擎支持 grid）可渲染，' +
+      'Skyline 端不支持 grid（该端是本仓唯一刚性外部约束）⇒ 按同类先例（glass-demo / devtools demo 两页）钉住；' +
+      '待专项评估：该演示按端条件渲染或改柔性布局。棘轮只减不增。',
+  },
+}
+
 let drift = 0
 const summary = []
 for (const [proj, dirs] of Object.entries(PROJECTS)) {
@@ -82,7 +100,7 @@ for (const [proj, dirs] of Object.entries(PROJECTS)) {
         for (const v of r.violations) {
           const rel = path.relative(projRoot, file).replace(/\\/g, '/')
           const key = `${rel}:${v.prop}:${v.value}`
-          if (!baseline[key]) baseline[key] = REASON
+          if (!baseline[key]) baseline[key] = REASON_OVERRIDES[proj]?.[key] ?? REASON
         }
       }
     }
@@ -91,6 +109,14 @@ for (const [proj, dirs] of Object.entries(PROJECTS)) {
   const json = JSON.stringify(Object.fromEntries(Object.entries(baseline).sort(([a], [b]) => a.localeCompare(b))), null, 2) + '\n'
   const n = Object.keys(baseline).length
   summary.push(`${proj}: ${n} 条`)
+  // ★棘轮的另一半：**陈旧登记检测**——REASON_OVERRIDES 里的键若已不在扫描结果（违规被修掉），
+  //   登记必须删掉，否则"已理解"的豁免会永久滞留（与"修一条从基线删一条"同源纪律）。
+  const staleOverrides = Object.keys(REASON_OVERRIDES[proj] ?? {}).filter((k) => !(k in baseline))
+  if (staleOverrides.length) {
+    drift++
+    console.error(`  ✗ ${proj} 陈旧登记 ${staleOverrides.length} 条（违规已不在扫描结果——从 REASON_OVERRIDES 删除）：`)
+    for (const k of staleOverrides.slice(0, 5)) console.error(`      - ${k}`)
+  }
   if (CHECK) {
     const prev = fs.existsSync(file) ? fs.readFileSync(file, 'utf-8') : ''
     if (prev !== json) {
