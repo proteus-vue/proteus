@@ -128,19 +128,42 @@ final class SuperappScene: NSObject {
         bar.backgroundColor = UIColor(red: 0x1B/255.0, green: 0x1B/255.0, blue: 0x2A/255.0, alpha: 1)
         bar.tag = 771001
         let current = currentName()
+        let unread = imUnreadValue()
         for (i, name) in tabNames.enumerated() {
             let bw = w / CGFloat(max(1, tabNames.count))
             let btn = UIButton(type: .system)
             btn.frame = CGRect(x: bw * CGFloat(i), y: 0, width: bw, height: h)
-            btn.setTitle(tabLabels[name] ?? name, for: .normal)
+            // ★图标 + 短标签（与 Web/Android 底部 Tab 栏同形：⌂ 首页 / ✉ 消息 / ☺ 我的）
+            btn.setTitle("\(tabIcon(name)) \(tabShortLabel(name))", for: .normal)
             btn.setTitleColor(current == name ? UIColor(red: 0x4C/255.0, green: 0x8D/255.0, blue: 0xFF/255.0, alpha: 1) : UIColor(red: 0x8A/255.0, green: 0x8A/255.0, blue: 0x9A/255.0, alpha: 1), for: .normal)
-            btn.titleLabel?.font = UIFont.systemFont(ofSize: 14)
+            btn.titleLabel?.font = UIFont.systemFont(ofSize: 13)
             btn.accessibilityIdentifier = name
             btn.addTarget(self, action: #selector(onTabTap(_:)), for: .touchUpInside)
+            // IM 角标（messages 且 unread>0）：红色小圆
+            if name == "messages" && unread > 0 {
+                let badge = UILabel(frame: CGRect(x: bw * CGFloat(i) + bw / 2 + 8, y: 6, width: 16, height: 16))
+                badge.text = unread > 99 ? "99+" : "\(unread)"
+                badge.font = UIFont.systemFont(ofSize: 9)
+                badge.textColor = .white
+                badge.textAlignment = .center
+                badge.backgroundColor = UIColor(red: 0xF5/255.0, green: 0x22/255.0, blue: 0x2D/255.0, alpha: 1)
+                badge.layer.cornerRadius = 8
+                badge.layer.masksToBounds = true
+                bar.addSubview(badge)
+            }
             bar.addSubview(btn)
         }
         container.addSubview(bar)
     }
+
+    private static func tabIcon(_ name: String) -> String {
+        name == "index" ? "⌂" : name == "messages" ? "✉" : name == "mine" ? "☺" : "•"
+    }
+    private static func tabShortLabel(_ name: String) -> String {
+        name == "index" ? "首页" : name == "messages" ? "消息" : name == "mine" ? "我的" : name
+    }
+    /** IM 未读角标初值（与 App.vue 壳同源；后续接实时运行时改由状态驱动） */
+    private static func imUnreadValue() -> Int { 3 }
 
     @objc private static func onTabTap(_ sender: UIButton) {
         guard let name = sender.accessibilityIdentifier else { return }

@@ -2392,6 +2392,13 @@ export function buildLayoutTemplate(
    *   `staticInstantiate`（折叠 `v-if` / 展开静态 `v-for` / 折常量插值）。缺省（常态）行为**逐字节不变**。
    */
   statics?: Record<string, unknown>,
+  /**
+   * ★★★批次 46：**全局样式表内容**（项目 `globalStyle`，如 `styles/global.css`）——其 `.class{}` 规则
+   *   一并折进 App 节点样式（与 SFC 内 `<style>` 同等地位，SFC 内规则优先）。
+   *   【为什么必须】App 端无 CSS 引擎，页面大量用**全局类**（`sa-card`/`sa-item`…）——此前只折 SFC 内
+   *   `<style>` ⇒ 全局类全部落空（卡片/列表/文字样式全丢，页面塌）。缺省 ⇒ 零行为变化。
+   */
+  globalCss?: string,
 ): LayoutTemplateResult {
   const diagnostics: VaporDiagnostic[] = []
   const nodes: LayoutNode[] = []
@@ -2448,6 +2455,20 @@ export function buildLayoutTemplate(
       diag(
         `<style> 中有 ${skipped} 条**不支持的选择器**规则被跳过（支持：类/元素/通配选择器 + 后代/子组合 + 静态结构伪类 :first-child / :last-child / :nth-child / :not(...)，以及 Vue :deep()/::v-deep()/>>>）`,
         'App 端无 CSS 引擎：**状态伪类**（:hover/:active/:focus/:checked）与属性/兄弟选择器/伪元素/@media 仍不支持；把关键样式改为类/元素/结构伪类选择器或 inline style，或保留 Web 端渲染',
+        'VAPOR_STYLE_SELECTOR_UNSUPPORTED',
+      )
+    }
+  }
+  // ★★★批次 46：全局样式表（`globalStyle`）的类规则——**追加在后面**（SFC 内规则优先：resolveClassStyles
+  //   按源序做层叠，SFC 规则先入表 ⇒ 同特异性时 SFC 胜）。App 端无 CSS 引擎 ⇒ 全局类也必须在构建期折进来。
+  if (globalCss) {
+    Object.assign(keyframesMap, parseKeyframes(globalCss))
+    const { rules, skipped } = parseClassRules(globalCss, tokens, keyframesMap)
+    classRules.push(...rules)
+    if (skipped > 0) {
+      diag(
+        `全局样式表中有 ${skipped} 条**不支持的选择器**规则被跳过（同上）`,
+        'App 端无 CSS 引擎：状态伪类/属性/兄弟/伪元素/@media 仍不支持',
         'VAPOR_STYLE_SELECTOR_UNSUPPORTED',
       )
     }

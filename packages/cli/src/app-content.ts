@@ -56,13 +56,19 @@ export async function buildAppScreenContent(root: string, platform: AppPlatform 
   // ★批次 9：设计令牌（`globalStyle` 声明的 CSS 变量文件）——SFC 内 `var()` 编译期折叠
   //   （App 端无运行时 CSS 引擎）。与 Web/MP 消费同一份令牌文件（单一事实源）。
   let tokens: Record<string, string> | undefined
+  // ★批次 46：全局样式表内容（`globalStyle`）——App 端无 CSS 引擎 ⇒ 其 `.class{}` 规则也须在
+  //   构建期折进节点（页面大量用全局类 `sa-card`/`sa-item`…，此前只折 SFC 内 `<style>` ⇒ 全落空）。
+  let globalCss: string | undefined
   try {
     const cfgPath = path.join(root, 'proteus.config.ts')
     if (fs.existsSync(cfgPath)) {
       const { loadProjectConfig } = await import('./config-loader')
       const cfg = (await loadProjectConfig(cfgPath)) as { globalStyle?: string }
       const gs = cfg?.globalStyle ? path.resolve(root, cfg.globalStyle) : undefined
-      if (gs && fs.existsSync(gs)) tokens = parseCssVarTokens(fs.readFileSync(gs, 'utf-8'))
+      if (gs && fs.existsSync(gs)) {
+        globalCss = fs.readFileSync(gs, 'utf-8')
+        tokens = parseCssVarTokens(globalCss)
+      }
     }
   } catch {
     /* 无配置/加载失败 ⇒ 不折叠 var()（保持既有行为，不阻断） */
@@ -92,7 +98,11 @@ export async function buildAppScreenContent(root: string, platform: AppPlatform 
       skipped++
       continue
     }
-    const res = buildLayoutTemplate(fs.readFileSync(abs, 'utf-8'), path.relative(root, abs), undefined, tokens)
+    const sfcSrc = fs.readFileSync(abs, 'utf-8')
+    // ★批次 46：页面自身的 `ref(<字面量>)` 初值 → 构建期静态实例化（App 端无运行时，页面数据
+    //   取初值快照）——KPI 卡（`stats`）/状态值（`themeLabel`…）由此在 App 端显示。
+    const pageStatics = { ...extractRefLiterals(sfcSrc) }
+    const res = buildLayoutTemplate(sfcSrc, path.relative(root, abs), undefined, tokens, pageStatics, globalCss)
     if (!res.ok) {
       diagnostics.push(`${r.name}: 模板编译失败`)
       skipped++
@@ -114,7 +124,7 @@ export async function buildAppScreenContent(root: string, platform: AppPlatform 
     if (fs.existsSync(shellPath) && fs.existsSync(appVue)) {
       const shellMod = (await import(pathToFileURL(shellPath).href)) as { statics?: Record<string, unknown> }
       const statics = shellMod.statics ?? {}
-      const shellRes = buildLayoutTemplate(fs.readFileSync(appVue, 'utf-8'), path.relative(root, appVue), undefined, tokens, statics)
+      const shellRes = buildLayoutTemplate(fs.readFileSync(appVue, 'utf-8'), path.relative(root, appVue), undefined, tokens, statics, globalCss)
       if (shellRes.ok) {
         const shellNodes = (screenContentFromLayoutTemplate(shellRes.template).nodes ?? []) as ShellNode[]
         const globalSub = subtreeOf(shellNodes, 'global-layer')
@@ -166,6 +176,45 @@ export async function buildAppScreenContent(root: string, platform: AppPlatform 
   fs.writeFileSync(outFile, JSON.stringify(out, null, 2))
   if (compiled === 0) throw new Error('零页面编译成功——App 屏内容产物为空（路由格式/编译器有问题？）')
   return { ok: true, platform, outFile, compiled, skipped, diagnostics }
+}
+
+/** 从 `openIdx` 处的 `(` 取**括号平衡**的内容（跳过字符串字面量） */
+function parseBalanced(src: string, openIdx: number): string | null {
+  let depth = 0
+  for (let i = openIdx; i < src.length; i++) {
+    const ch = src[i]
+    if (ch === '(') depth++
+    else if (ch === ')') { depth--; if (depth === 0) return src.slice(openIdx + 1, i) }
+    else if (ch === '"' || ch === "'" || ch === '`') {
+      const q = ch
+      for (i++; i < src.length && src[i] !== q; i++) if (src[i] === '\\') i++
+    }
+  }
+  return null
+}
+
+/**
+ * 从 SFC 的 `<script setup>` 抽取 `const X = ref(<字面量>)` 的初值快照（App 端无运行时，页面数据
+ *   取构建期初值）。只认**可 JSON 求值的字面量**（数字/字符串/布尔/数组/对象）；其余（含调用/变量）跳过。
+ */
+function extractRefLiterals(sfcSrc: string): Record<string, unknown> {
+  const m = /<script[^>]*>([\s\S]*?)<\/script>/.exec(sfcSrc)
+  if (!m) return {}
+  const script = m[1]
+  const out: Record<string, unknown> = {}
+  const re = /\bconst\s+([A-Za-z_$][\w$]*)\s*(?::[^=]+)?=\s*ref\s*(?:<[^>]*>)?\s*\(/g
+  let mm: RegExpExecArray | null
+  while ((mm = re.exec(script))) {
+    const name = mm[1]
+    const openIdx = mm.index + mm[0].length - 1   // `m[0]` 末尾即 `(`
+    const lit = parseBalanced(script, openIdx)
+    if (lit == null || !lit.trim()) continue
+    try {
+      // eslint-disable-next-line no-new-func
+      out[name] = new Function(`return (${lit});`)()
+    } catch { /* 非字面量 ⇒ 跳过 */ }
+  }
+  return out
 }
 
 /** 屏内容节点（`screenContentFromLayoutTemplate` 的形状——只声明本文件用到的字段） */

@@ -87,6 +87,28 @@ describe('构建期静态实例化（App 壳）', () => {
   })
 })
 
+describe('全局样式表折入（globalCss）', () => {
+  it('⑩ 全局 `.class{}` 规则折进节点样式（App 端无 CSS 引擎，页面大量用全局类）', () => {
+    const r = buildLayoutTemplate(
+      `<template><app-root><page-layer><view class="sa-card">X</view></page-layer></app-root></template>`,
+      't.vue', undefined, undefined, undefined,
+      '.sa-card { background-color: #ffffff; border-radius: 14px; padding: 16px }',
+    )
+    const card = r.template.nodes.find((n) => (n.style as Record<string, unknown>)?.backgroundColor === '#ffffff')
+    expect(card, '全局类的 background-color 应折进节点样式').toBeTruthy()
+    expect(card?.style?.borderRadius).toBeDefined()
+  })
+
+  it('⑩b 无 globalCss ⇒ 全局类不折（缺省零行为变化）', () => {
+    const r = buildLayoutTemplate(
+      `<template><app-root><view class="sa-card">X</view></app-root></template>`,
+      't.vue',
+    )
+    const card = r.template.nodes.find((n) => n.tag === 'view')
+    expect(card?.style?.borderRadius).toBeUndefined()
+  })
+})
+
 describe('parseCssVarTokens 块感知（主题默认不被覆盖块污染）', () => {
   it('⑨ 基选择器优先：--sa-text 取 :root 浅色，而非 .sa-dark 深色', () => {
     const t = parseCssVarTokens(':root { --sa-text: #1a1c22; --sa-bg: #f4f5f7 } .sa-dark { --sa-text: #eef0f5; --sa-bg: #121418 }')
