@@ -425,6 +425,8 @@ public class ProteusHostView extends ViewGroup {
     private final android.graphics.Paint strokePaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
     /** ★批次 5：边框描边专用（与 SVG/glow 的 strokePaint 分开——避免相互污染 STROKE 样式/宽度）。 */
     private final android.graphics.Paint borderPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+    /** ★★★45° 斜接（逐边边框）：复用的 Path（避免每帧分配）。 */
+    private final android.graphics.Path sideBorderPath = new android.graphics.Path();
     /** ★批次 10：盒阴影填充专用（分层近似——与 border/glow 分开避免相互污染）。 */
     private final android.graphics.Paint shadowPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
     /** ★★软边遮罩合成用（mask v1）：`渐变 shader + DST_IN`（见 drawCmds 的遮罩合成段） */
@@ -2600,34 +2602,77 @@ public class ProteusHostView extends ViewGroup {
             // ★★★逐边 border 批（2026-10-05）：含逐边声明 ⇒ **逐边绘制**（每边一条线；线型 solid/dashed/dotted）。
             //   逐边未声明的边回落 uniform（borderWidth/borderColor）——与 Web 的 border 简写语义一致。
             if (c.sideBorder != null) {
+                // ★★★45° 斜接（2026-10-05 · 用户抓出「案例E没有封边」）：
+                //   【为什么】首版用 `drawLine` 画四条线（端点只到各边中心 `half` 处）⇒ **四角有缺口**
+                //     （右上/左下最明显：顶线右端止于 w-half、右线顶端又只到中心 ⇒ 角上空一小块）。
+                //   【CSS 真值】border 在角上是**斜接**：每条边延伸到外角、内角处以「外角→内角」的
+                //     45° 对角线分割（内角 = (left 宽, top 宽)）。四块多边形正好无缝拼合。
+                //   ⇒ 用 Path 画四个多边形（每边一块），角部与浏览器逐像素同构。
                 final double opD = op;
                 final float[] sb = c.sideBorder;
-                for (int si = 0; si < 4; si++) {
-                    float sw = Float.isNaN(sb[si]) ? c.borderWidth : sb[si];
-                    if (sw <= 0f) continue;
-                    int scol = (int) sb[4 + si];
-                    if (scol == 0) scol = c.borderColor;
-                    if (scol == 0) continue;
-                    borderPaint.setColor(scol);
-                    borderPaint.setStrokeWidth(sw);
-                    borderPaint.setAlpha(opD < 1.0 ? Math.max(0, Math.min(255, (int) (Color.alpha(scol) * opD))) : Color.alpha(scol));
-                    final int st = (int) sb[8 + si];
-                    if (st == 0) borderPaint.setStyle(android.graphics.Paint.Style.STROKE);
-                    else { borderPaint.setStyle(android.graphics.Paint.Style.STROKE); borderPaint.setPathEffect(new android.graphics.DashPathEffect(st == 1 ? new float[]{sw * 3f, sw * 2f} : new float[]{sw, sw * 1.5f}, 0f)); }
-                    final float half = sw * 0.5f;
-                    // 线沿该边内缘（CSS border 在 padding-box 外沿盒内——本仓按内缘绘制，与既有 uniform 同口径）
-                    final float l = c.x + half, t = c.y + half, rr = c.x + c.w - half, bb = c.y + c.h - half;
-                    switch (si) {
-                        case 0: canvas.drawLine(l, t, rr, t, borderPaint); break;
-                        case 1: canvas.drawLine(rr, t, rr, bb, borderPaint); break;
-                        case 2: canvas.drawLine(l, bb, rr, bb, borderPaint); break;
-                    
-                        default: canvas.drawLine(l, t, l, bb, borderPaint); break;
-                    }
-                    borderPaint.setPathEffect(null);
+                float wt = Float.isNaN(sb[0]) ? c.borderWidth : sb[0];
+                float wr = Float.isNaN(sb[1]) ? c.borderWidth : sb[1];
+                float wb = Float.isNaN(sb[2]) ? c.borderWidth : sb[2];
+                float wl = Float.isNaN(sb[3]) ? c.borderWidth : sb[3];
+                if (wt < 0f) wt = 0f;
+                if (wr < 0f) wr = 0f;
+                if (wb < 0f) wb = 0f;
+                if (wl < 0f) wl = 0f;
+                int ct = (int) sb[4]; if (ct == 0) ct = c.borderColor;
+                int cr = (int) sb[5]; if (cr == 0) cr = c.borderColor;
+                int cb = (int) sb[6]; if (cb == 0) cb = c.borderColor;
+                int cl = (int) sb[7]; if (cl == 0) cl = c.borderColor;
+                final float x0 = c.x, y0 = c.y, x1 = c.x + c.w, y1 = c.y + c.h;
+                final float ix0 = x0 + wl, iy0 = y0 + wt; // 左上内角
+                final float ix1 = x1 - wr, iy1 = y1 - wb; // 右下内角
+                borderPaint.setStyle(android.graphics.Paint.Style.FILL);
+                borderPaint.setPathEffect(null);
+                // top：[外左外上]→[外右外上]→[右内上]→[左内上]
+                if (wt > 0f && ct != 0) {
+                    borderPaint.setColor(ct);
+                    borderPaint.setAlpha(opD < 1.0 ? Math.max(0, Math.min(255, (int) (Color.alpha(ct) * opD))) : Color.alpha(ct));
+                    sideBorderPath.reset();
+                    sideBorderPath.moveTo(x0, y0); sideBorderPath.lineTo(x1, y0);
+                    sideBorderPath.lineTo(ix1, iy0); sideBorderPath.lineTo(ix0, iy0);
+                    sideBorderPath.close();
+                    canvas.drawPath(sideBorderPath, borderPaint);
+                }
+                // right：外右上→外右下→右内下→右内上
+                if (wr > 0f && cr != 0) {
+                    borderPaint.setColor(cr);
+                    borderPaint.setAlpha(opD < 1.0 ? Math.max(0, Math.min(255, (int) (Color.alpha(cr) * opD))) : Color.alpha(cr));
+                    sideBorderPath.reset();
+                    sideBorderPath.moveTo(x1, y0); sideBorderPath.lineTo(x1, y1);
+                    sideBorderPath.lineTo(ix1, iy1); sideBorderPath.lineTo(ix1, iy0);
+                    sideBorderPath.close();
+                    canvas.drawPath(sideBorderPath, borderPaint);
+                }
+                // bottom：外右下→外左下→左内下→右内下
+                if (wb > 0f && cb != 0) {
+                    borderPaint.setColor(cb);
+                    borderPaint.setAlpha(opD < 1.0 ? Math.max(0, Math.min(255, (int) (Color.alpha(cb) * opD))) : Color.alpha(cb));
+                    sideBorderPath.reset();
+                    sideBorderPath.moveTo(x1, y1); sideBorderPath.lineTo(x0, y1);
+                    sideBorderPath.lineTo(ix0, iy1); sideBorderPath.lineTo(ix1, iy1);
+                    sideBorderPath.close();
+                    canvas.drawPath(sideBorderPath, borderPaint);
+                }
+                // left：外左下→外左上→左内上→左内下
+                if (wl > 0f && cl != 0) {
+                    borderPaint.setColor(cl);
+                    borderPaint.setAlpha(opD < 1.0 ? Math.max(0, Math.min(255, (int) (Color.alpha(cl) * opD))) : Color.alpha(cl));
+                    sideBorderPath.reset();
+                    sideBorderPath.moveTo(x0, y1); sideBorderPath.lineTo(x0, y0);
+                    sideBorderPath.lineTo(ix0, iy0); sideBorderPath.lineTo(ix0, iy1);
+                    sideBorderPath.close();
+                    canvas.drawPath(sideBorderPath, borderPaint);
                 }
             } else if (c.borderWidth > 0 && c.borderColor != 0) {
                 // ★批次 5（CSS 兼容对齐 · 边框）：uniform 边框（stroke 半内缩：strokeWidth/2 居中于边线）。
+                // ★★★防御（2026-10-05 · 逐边斜接改造的连带风险）：逐边分支用 FILL 画多边形 ⇒
+                //   paint 样式被改过；此处**显式设回 STROKE**（否则 uniform 边框会被填充成实心块）。
+                borderPaint.setStyle(android.graphics.Paint.Style.STROKE);
+                borderPaint.setPathEffect(null);
                 borderPaint.setColor(c.borderColor);
                 borderPaint.setStrokeWidth(c.borderWidth);
                 borderPaint.setAlpha(op < 1f ? Math.max(0, Math.min(255, (int) (Color.alpha(c.borderColor) * op))) : Color.alpha(c.borderColor));

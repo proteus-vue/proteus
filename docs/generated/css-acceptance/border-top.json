@@ -68,7 +68,7 @@
   "nextStep": "机器判据三段已过 → 进入**视觉验收**：生成并排产物（node scripts/gen-baseline-side-by-side.mjs）+ 独立子代理按 Web 基准评审",
   "visual": {
     "_note": "★视觉验收结论（独立子代理按 Web 基准并排图评审；来源 = css-conformance/results/side-by-side/）。verdict: pass（与 Web 基准无可归因差异）/ fail（有实差异——见 caseIssues）/ unclear（图不足以判）。纪律：左半恒为 Web 基准（D1）；不看不清不编（unclear）。",
-    "reviewedAt": "2026-10-05T12:51:01.415Z",
+    "reviewedAt": "2026-10-05T13:23:06.713Z",
     "reviewedBy": "independent-visual-subagent",
     "sideBySideDir": "css-conformance/results/side-by-side/",
     "summary": {
@@ -80,62 +80,47 @@
         "end": "web",
         "verdict": "pass",
         "caseIssues": [],
-        "evidence": "基准端。5 案例（底部 1px 分隔线×2 / 顶部 2px 紫 / 左侧 3px 红 / 右侧 1px 灰 / 四边 2:3:4:1）逐像素测量与规格一致。"
+        "evidence": "基准端。6 案例（A 底部分隔线 / B 顶线 / C 左条 / D 右线 / E 四边 2:3:4:1 / F uniform 2px）；E 四角为 CSS 45° 斜接（外角→内角对角线），F 四角实心直角完好。"
       },
       {
         "end": "mp",
         "verdict": "pass",
         "caseIssues": [],
-        "evidence": "8/8 线厚 ≈ CSS×1.5（本端 DPR）；色/位/有无与基准一致；四边比例 2:3:4:1 正确。"
+        "evidence": "8/8 线厚 ≈ CSS×1.5（本端 DPR）；E 四角两色相接无缺口（1.5x 截图下斜接仅 2-3 设备px，锐度无法逐像素核对——如实登记）；F 四角闭合。"
       },
       {
         "end": "android",
         "verdict": "pass",
         "caseIssues": [
           {
-            "case": "all",
-            "issue": "首轮终评：边框宽度未乘 DPR（1 设备px/CSS px ⇒ 比基准细 3 倍）",
+            "case": "E/F",
+            "issue": "角部未封边（drawLine 端点只到各边中心 ⇒ 四角缺口；用户当场指出「案例E没有封边」）",
             "severity": "major",
             "status": "fixed",
-            "fix": "LEN_SCALARS 补登记 4 个逐边宽度字段（物理化清单漏项——本表注释原文即'新增长度字段必须登记'）"
+            "fix": "改 45° 斜接：四块 Path 多边形（外角→内角对角线分割，与 CSS 逐像素同构）；并给 uniform 分支补 setStyle(STROKE) 防御（FILL 污染的连带风险）"
           }
         ],
-        "evidence": "复评 8/8 线厚精确 = CSS×3（1/2/3/1/2/3/4/1 CSS → 3/6/9/3/6/9/12/3 设备px，无 AA）；色/位/四边比例正确。"
+        "evidence": "五端角部专项复评：E 四角边界逐行单调平移 ≈1px/行（=45° 斜接方向），角区 0 背景像素（无缺口）、无矩形越出；F（uniform 回归防护）四角实心直角完好。"
       },
       {
         "end": "ios",
         "verdict": "pass",
         "caseIssues": [
           {
-            "case": "case-all-sides",
-            "issue": "首轮：上下边不显示（厚度存 bounds.width 被 frame 赋值覆盖 ⇒ 二次 sync 读错）",
-            "severity": "blocker",
+            "case": "E",
+            "issue": "角部为矩形重叠式（横线延伸超出竖线，与 Web 斜接不符）",
+            "severity": "major",
             "status": "fixed",
-            "fix": "厚度编码进子层 name（`proteus-side-border-<idx>-<thickness>`），sync 从 name 解析"
+            "fix": "CAShapeLayer 四块多边形（与 Android/Web 同几何：外框 + 内角 = 各边厚度的交点）"
           }
         ],
-        "evidence": "复评：5 案例线厚/色/侧别与 Web 基准一致（6/9/12/3 设备px 精确）；四边齐全。"
+        "evidence": "E 四角 [7,6,4,3,1,0] 逐行单调 = 45° 斜接；角区 0 背景像素；F 四角实心紫直角闭合。"
       },
       {
         "end": "harmony",
         "verdict": "pass",
-        "caseIssues": [
-          {
-            "case": "all",
-            "issue": "首轮：边框全部不显示（ArkUI 需 border-style 才绘制——width/color 的 Set 均 rc=0 但无样式不画）",
-            "severity": "blocker",
-            "status": "fixed",
-            "fix": "补 SetBorderStyle(SOLID)（逐边 + uniform 两分支）"
-          },
-          {
-            "case": "all",
-            "issue": "次轮：线厚 ~1/3（我的'单位修正'误按 vp 除以 density——实测该通道按物理 px 解释）",
-            "severity": "major",
-            "status": "fixed",
-            "fix": "撤销 vp 换算，直传物理 px（与 Android/iOS 同口径）"
-          }
-        ],
-        "evidence": "复评 8/8 项归一后 ≈1.0× 基准（0.86~1.16，含 DPR 3.5 半像素 AA）；色/位/四边比例正确。"
+        "caseIssues": [],
+        "evidence": "平台原生 border（ArkUI）已是 45° 斜接（无需改造）；E 四角方向正确、无缺口；F 四角完好。残留 low：角部过渡带偏宽（4-8 设备px AA）——如实登记。"
       }
     ]
   }

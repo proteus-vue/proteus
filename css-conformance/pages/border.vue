@@ -56,6 +56,14 @@
         <text class="br-box__t">四边</text>
       </view>
     </view>
+
+    <!-- 案例 F：uniform 边框（回归防护——逐边实现改造后既有 uniform 路径须完好） -->
+    <text class="cc-sec">F · uniform border（回归防护）</text>
+    <view class="cc-card">
+      <view id="case-uniform" class="br-uniform">
+        <text class="br-uniform__t">统一边框</text>
+      </view>
+    </view>
   </view>
 </template>
 
@@ -106,6 +114,16 @@
 .br-cell__t {
   font-size: 13px;
   color: var(--cc-text-2);
+}
+
+/* ── 案例 F：uniform 边框（回归防护） ── */
+.br-uniform {
+  border: 2px solid #5b5bd6;
+  padding: 8px 12px;
+}
+.br-uniform__t {
+  font-size: 13px;
+  color: var(--cc-text);
 }
 
 /* ── 案例 E：四边各异 ── */
