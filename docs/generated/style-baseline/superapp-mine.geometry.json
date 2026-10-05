@@ -12,7 +12,7 @@
     "theme": "light",
     "url": "http://localhost:4181/pages/mine"
   },
-  "collectedAt": "2026-10-05T05:30:02.237Z",
+  "collectedAt": "2026-10-05T07:48:47.837Z",
   "viewport": {
     "width": 390,
     "height": 844
@@ -125,13 +125,43 @@
       }
     },
     "version-value": {
-      "selector": ".sa-list .sa-item:last-child .sa-item__value",
+      "selector": ".sa-item:last-child .sa-item__value",
       "text": "—",
       "rect": {
         "x": 344.90625,
         "y": 349,
         "width": 12.09375,
         "height": 21
+      }
+    },
+    "about-section": {
+      "selector": "text.sa-section:last-of-type, .sa-list:nth-of-type(3)",
+      "text": "◉客服悬浮球常驻入口，关闭后全部页面隐藏♪音乐播放条当前状态：未播放—",
+      "rect": {
+        "x": 16,
+        "y": 261,
+        "width": 358,
+        "height": 132
+      }
+    },
+    "verify-entry-label": {
+      "selector": ".sa-list:last-of-type .sa-item__label",
+      "text": "验收控制台",
+      "rect": {
+        "x": 33,
+        "y": 439,
+        "width": 293.1875,
+        "height": 21
+      }
+    },
+    "about-list": {
+      "selector": ".sa-list:last-of-type",
+      "text": "验收控制台全局能力自检›版本v0.1.0 · Proteus 超级应用",
+      "rect": {
+        "x": 16,
+        "y": 426,
+        "width": 358,
+        "height": 115
       }
     }
   }

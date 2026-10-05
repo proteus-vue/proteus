@@ -30,7 +30,15 @@ import { chromium } from 'playwright'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const APP_ROOT = path.join(ROOT, 'superapp')
-const OUT_DIR = path.join(ROOT, 'docs/generated/style-baseline')
+/**
+ * 输出目录。
+ * ★G-61 B5（基准腐化检测支持）：`PROTEUS_BASELINE_OUT=<dir>` 可重定向到**临时目录**——
+ *   腐化检测（check-baseline-freshness.mjs）**只读**入仓基准、把活体重采写到别处
+ *   （D5「基准不得由被测端自证」的同一纪律：检测不得顺手覆盖被检测对象）。
+ */
+const OUT_DIR = process.env.PROTEUS_BASELINE_OUT
+  ? path.resolve(process.env.PROTEUS_BASELINE_OUT)
+  : path.join(ROOT, 'docs/generated/style-baseline')
 const PORT = 4181
 const BASE = `http://localhost:${PORT}`
 const ROUTE = '/pages/mine'
@@ -55,7 +63,12 @@ const TARGETS = [
   { id: 'section-title', selector: '.sa-section' },
   { id: 'sa-list', selector: '.sa-list' },
   { id: 'sa-item', selector: '.sa-item' },
-  { id: 'version-value', selector: '.sa-list .sa-item:last-child .sa-item__value' },
+  { id: 'version-value', selector: '.sa-item:last-child .sa-item__value' },
+  // ★★★B5（2026-10-05）：锚点覆盖——"关于"区（此前未采 ⇒ D4 的锚点「验收控制台」「版本号」
+  //   在产物文本里找不到——**基准侧假绿防护**强化后当场抓出：声明了锚点却没采到对应节点）
+  { id: 'about-section', selector: 'text.sa-section:last-of-type, .sa-list:nth-of-type(3)' },
+  { id: 'verify-entry-label', selector: '.sa-list:last-of-type .sa-item__label' },
+  { id: 'about-list', selector: '.sa-list:last-of-type' },
 ]
 
 /** 采集的计算样式属性（对齐 StyleIR `semantic` 域的 CSS 属性——判据①/② 的比对面） */
