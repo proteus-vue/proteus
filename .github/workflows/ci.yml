@@ -125,6 +125,10 @@ jobs:
       - name: 数值等价覆盖门禁（G-61 B3：semantic 字段全覆盖）
         run: pnpm run check:style-coverage
 
+      # ★★★G-61 B4（2026-10-05）：CSE lint 存量基线（E-CSS/W-CSS 族棘轮——只减不增）
+      - name: CSE lint 存量基线漂移（G-61 B4）
+        run: pnpm run check:cse-lint-baseline
+
       - name: StyleIR 规范化编码 golden（G-61 B0：跨语言逐字节——TS 编码器 ≡ 冻结期望）
         run: pnpm run check:style-ir-golden
 

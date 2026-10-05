@@ -126,7 +126,7 @@ SFC <style>  ──►  ┌─────────────────�
 | **B1 ✅** | CSE 内核（补 Profile P3）：匹配 / 五级层叠 / 继承 / 计算值 | ✅ **达成（2026-10-05）**：**113 用例 / 153 项逐属性 ≡ 真 Chromium**（`tests/e2e-cse-parity.test.ts`，CI+verify 接线 `pnpm run test:cse-parity`）；`proteus explain --style` 可 trace（选择器/层/特异性/源序/简写来源/继承） |
 | **B2 ✅** | 动态 class 预计算（补 Profile P4）：**属性维度分解**（非 2ⁿ）+ 互斥分组（只在可证明时）+ 爆炸保护（表>16/值>8 警告；候选>32/不可枚举 ⇒ E-CSS-004）+ 位图 **O(1)** + **回退由表保证** | ✅ **达成（2026-10-05）**：**4 用例/13 组合/32 字段项 ≡ 真 Chromium**（逐组合切 DOM 类实测 · `pnpm run test:cse-dynamic`）；**O(1) profile 证据**（Proxy 计次：读次数 == 字段数）；集成 4/4（发射键=nodeId · 校验拒硬配 · 首帧 · 回退）|
 | **B3 ✅** | 三端 Applier（Web A 档 IR 探针 / Skyline wxss / App DTO+ops）+ 同一 conformance | ✅ **达成（2026-10-05）**：conformance **5/5**（App 几何 6 项 ≤0.5dp · Skyline 语义替身 · 降级登记）；**覆盖 2/50 → 50/50（并集 100%）**——新门禁 `check:style-coverage`（映射完备/闭集同源/棘轮/无孤儿键）；M1 **68.0%** |
-| **B4** | 降级编译 + lint 收口（补 P5/P6） | Profile 外写法在 **Web 端也报错**（= 基准自身合法，D4） |
+| **B4 ✅** | 降级编译 + lint 收口（补 P5/P6）：E/W 族全量 + `degradeTo` 配方执行器 + **Web 端 lint 接入** | ✅ **达成（2026-10-05）**：**Web 端也报错**（`cse-lint-plugin` 两链同判据 · 构建链真实拦截 rc=1）· **降级产物过 conformance**（grid→flex 逐节点 ≤0.5dp · 不可降级必须拒绝）· 全仓首扫 **95 条存量**钉基线（棘轮）|
 | **B5** | 一致性门禁升级（三层判据 + 基准守护 + 假绿防护 + 逐端留证） | 三端真截图**与 Web 基准并排**留证；基准腐化检测上线；数字不粉饰 |
 
 **关键路径**：B0 → B1 → B2 →（B3 ∥ B4）→ B5。
