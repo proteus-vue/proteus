@@ -168,6 +168,9 @@ final class VaporRenderHost {
 
     ProteusHostView view() { return view; }
 
+    /** ★诊断：读某节点的内核几何（真源）——判 layout 问题用 */
+    String nodeRectJson(int nodeId) { return handle > 0 ? RustLayout.nodeRect(handle, nodeId) : "{}"; }
+
     /**
      * 首帧建树：`{viewport:{width,height}, nodes:[…]}`。
      *

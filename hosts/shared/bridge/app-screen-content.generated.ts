@@ -11,11 +11,52 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
-        "semantic": "view"
+        "semantic": "app-root",
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "stretch",
+        "position": "relative",
+        "widthRatio": 1,
+        "heightRatio": 1
       },
       {
         "id": 1,
         "parentId": 0,
+        "semantic": "global-layer",
+        "position": "absolute",
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      {
+        "id": 2,
+        "parentId": 1,
+        "position": "absolute",
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "backgroundColor": "#f4f5f7",
+        "pointerEvents": false,
+        "semantic": "div"
+      },
+      {
+        "id": 3,
+        "parentId": 0,
+        "semantic": "view",
+        "position": "absolute",
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "stretch"
+      },
+      {
+        "id": 4,
+        "parentId": 3,
         "padding": {
           "top": 24,
           "right": 0,
@@ -25,34 +66,34 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "semantic": "view"
       },
       {
-        "id": 2,
-        "parentId": 1,
+        "id": 5,
+        "parentId": 4,
         "fontSize": 26,
         "fontWeight": 700,
-        "color": "#eef0f5",
+        "color": "#1a1c22",
         "letterSpacing": -0.3,
         "text": "早上好，运营同学",
         "semantic": "text"
       },
       {
-        "id": 3,
-        "parentId": 1,
+        "id": 6,
+        "parentId": 4,
         "margin": {
           "top": 8
         },
         "fontSize": 14,
-        "color": "#b6bcc9",
+        "color": "#4b5058",
         "text": "今天是 10 月 4 日 · 有 2 项关键任务待跟进",
         "semantic": "text"
       },
       {
-        "id": 4,
-        "parentId": 0,
+        "id": 7,
+        "parentId": 3,
         "semantic": "view"
       },
       {
-        "id": 5,
-        "parentId": 4,
+        "id": 8,
+        "parentId": 7,
         "display": "flex",
         "flexDirection": "row",
         "alignItems": "center",
@@ -60,8 +101,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "semantic": "view"
       },
       {
-        "id": 6,
-        "parentId": 5,
+        "id": 9,
+        "parentId": 8,
         "flexGrow": 1,
         "flexShrink": 1,
         "flexBasis": 0,
@@ -71,282 +112,358 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "semantic": "view"
       },
       {
-        "id": 7,
-        "parentId": 6,
+        "id": 10,
+        "parentId": 9,
         "fontSize": 20,
         "fontWeight": 700,
         "semantic": "text"
       },
       {
-        "id": 8,
-        "parentId": 6,
+        "id": 11,
+        "parentId": 9,
         "margin": {
           "top": 4
         },
         "fontSize": 12,
-        "color": "#9aa1af",
+        "color": "#5f6673",
         "semantic": "text"
       },
       {
-        "id": 9,
-        "parentId": 0,
+        "id": 12,
+        "parentId": 3,
         "text": "全局状态",
         "semantic": "text"
       },
       {
-        "id": 10,
-        "parentId": 0,
-        "semantic": "view"
-      },
-      {
-        "id": 11,
-        "parentId": 10,
-        "semantic": "view"
-      },
-      {
-        "id": 12,
-        "parentId": 11,
-        "semantic": "view"
-      },
-      {
         "id": 13,
-        "parentId": 12,
-        "text": "主题",
-        "semantic": "text"
+        "parentId": 3,
+        "semantic": "view"
       },
       {
         "id": 14,
-        "parentId": 11,
-        "semantic": "text"
+        "parentId": 13,
+        "semantic": "view"
       },
       {
         "id": 15,
-        "parentId": 10,
+        "parentId": 14,
         "semantic": "view"
       },
       {
         "id": 16,
         "parentId": 15,
-        "semantic": "view"
+        "text": "主题",
+        "semantic": "text"
       },
       {
         "id": 17,
-        "parentId": 16,
-        "text": "IM 未读角标",
+        "parentId": 14,
         "semantic": "text"
       },
       {
         "id": 18,
-        "parentId": 15,
-        "semantic": "text"
+        "parentId": 13,
+        "semantic": "view"
       },
       {
         "id": 19,
-        "parentId": 10,
+        "parentId": 18,
         "semantic": "view"
       },
       {
         "id": 20,
         "parentId": 19,
-        "semantic": "view"
+        "text": "IM 未读角标",
+        "semantic": "text"
       },
       {
         "id": 21,
-        "parentId": 20,
-        "text": "音乐播放条",
+        "parentId": 18,
         "semantic": "text"
       },
       {
         "id": 22,
-        "parentId": 19,
-        "semantic": "text"
+        "parentId": 13,
+        "semantic": "view"
       },
       {
         "id": 23,
-        "parentId": 0,
+        "parentId": 22,
+        "semantic": "view"
+      },
+      {
+        "id": 24,
+        "parentId": 23,
+        "text": "音乐播放条",
+        "semantic": "text"
+      },
+      {
+        "id": 25,
+        "parentId": 22,
+        "semantic": "text"
+      },
+      {
+        "id": 26,
+        "parentId": 3,
         "text": "快捷操作",
         "semantic": "text"
       },
       {
-        "id": 24,
-        "parentId": 0,
-        "semantic": "view"
-      },
-      {
-        "id": 25,
-        "parentId": 24,
-        "semantic": "view"
-      },
-      {
-        "id": 26,
-        "parentId": 25,
-        "semantic": "view"
-      },
-      {
         "id": 27,
-        "parentId": 26,
-        "text": "模拟弱网",
-        "semantic": "text"
+        "parentId": 3,
+        "semantic": "view"
       },
       {
         "id": 28,
-        "parentId": 26,
-        "text": "弱网时提醒用户",
-        "semantic": "text"
+        "parentId": 27,
+        "semantic": "view"
       },
       {
         "id": 29,
-        "parentId": 25,
+        "parentId": 28,
         "semantic": "view"
       },
       {
         "id": 30,
-        "parentId": 24,
-        "semantic": "view"
+        "parentId": 29,
+        "text": "模拟弱网",
+        "semantic": "text"
       },
       {
         "id": 31,
-        "parentId": 30,
-        "semantic": "view"
+        "parentId": 29,
+        "text": "弱网时提醒用户",
+        "semantic": "text"
       },
       {
         "id": 32,
-        "parentId": 31,
-        "text": "播放内部播客",
-        "semantic": "text"
+        "parentId": 28,
+        "semantic": "view"
       },
       {
         "id": 33,
-        "parentId": 31,
-        "text": "播放内部播客",
-        "semantic": "text"
+        "parentId": 27,
+        "semantic": "view"
       },
       {
         "id": 34,
-        "parentId": 30,
+        "parentId": 33,
         "semantic": "view"
       },
       {
         "id": 35,
-        "parentId": 24,
-        "semantic": "navigator"
+        "parentId": 34,
+        "text": "播放内部播客",
+        "semantic": "text"
       },
       {
         "id": 36,
-        "parentId": 35,
-        "semantic": "view"
+        "parentId": 34,
+        "text": "播放内部播客",
+        "semantic": "text"
       },
       {
         "id": 37,
-        "parentId": 36,
-        "text": "打开验收控制台",
-        "semantic": "text"
+        "parentId": 33,
+        "semantic": "view"
       },
       {
         "id": 38,
-        "parentId": 36,
-        "text": "全局能力自检",
-        "semantic": "text"
+        "parentId": 27,
+        "semantic": "navigator"
       },
       {
         "id": 39,
-        "parentId": 35,
+        "parentId": 38,
         "semantic": "view"
       },
       {
         "id": 40,
-        "parentId": 0,
-        "text": "今日待办",
+        "parentId": 39,
+        "text": "打开验收控制台",
         "semantic": "text"
       },
       {
         "id": 41,
-        "parentId": 0,
-        "semantic": "view"
+        "parentId": 39,
+        "text": "全局能力自检",
+        "semantic": "text"
       },
       {
         "id": 42,
-        "parentId": 41,
+        "parentId": 38,
         "semantic": "view"
       },
       {
         "id": 43,
-        "parentId": 42,
-        "semantic": "view"
+        "parentId": 3,
+        "text": "今日待办",
+        "semantic": "text"
       },
       {
         "id": 44,
-        "parentId": 43,
+        "parentId": 3,
+        "semantic": "view"
+      },
+      {
+        "id": 45,
+        "parentId": 44,
+        "semantic": "view"
+      },
+      {
+        "id": 46,
+        "parentId": 45,
+        "semantic": "view"
+      },
+      {
+        "id": 47,
+        "parentId": 46,
         "text": "Q4 投放计划复核",
         "semantic": "text"
       },
       {
-        "id": 45,
-        "parentId": 43,
+        "id": 48,
+        "parentId": 46,
         "text": "截止 18:00",
         "semantic": "text"
       },
       {
-        "id": 46,
-        "parentId": 42,
+        "id": 49,
+        "parentId": 45,
         "text": "紧急",
         "semantic": "text"
       },
       {
-        "id": 47,
-        "parentId": 41,
+        "id": 50,
+        "parentId": 44,
         "semantic": "view"
       },
       {
-        "id": 48,
-        "parentId": 47,
+        "id": 51,
+        "parentId": 50,
         "semantic": "view"
       },
       {
-        "id": 49,
-        "parentId": 48,
+        "id": 52,
+        "parentId": 51,
         "text": "渠道月报数据校对",
         "semantic": "text"
       },
       {
-        "id": 50,
-        "parentId": 48,
+        "id": 53,
+        "parentId": 51,
         "text": "截止明日",
         "semantic": "text"
       },
       {
-        "id": 51,
-        "parentId": 47,
+        "id": 54,
+        "parentId": 50,
         "text": "进行中",
         "semantic": "text"
       },
       {
-        "id": 52,
-        "parentId": 41,
+        "id": 55,
+        "parentId": 44,
         "semantic": "view"
       },
       {
-        "id": 53,
-        "parentId": 52,
+        "id": 56,
+        "parentId": 55,
         "semantic": "view"
       },
       {
-        "id": 54,
-        "parentId": 53,
+        "id": 57,
+        "parentId": 56,
         "text": "新客回访名单确认",
         "semantic": "text"
       },
       {
-        "id": 55,
-        "parentId": 53,
+        "id": 58,
+        "parentId": 56,
         "text": "截止本周五",
         "semantic": "text"
       },
       {
-        "id": 56,
-        "parentId": 52,
+        "id": 59,
+        "parentId": 55,
         "text": "待开始",
         "semantic": "text"
+      },
+      {
+        "id": 60,
+        "parentId": 0,
+        "semantic": "overlay-layer",
+        "position": "absolute",
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "pointerEvents": false
+      },
+      {
+        "id": 61,
+        "parentId": 60,
+        "position": "absolute",
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0,
+        "pointerEvents": false,
+        "semantic": "div"
+      },
+      {
+        "id": 62,
+        "parentId": 61,
+        "pointerEvents": true,
+        "position": "absolute",
+        "right": 14,
+        "width": 56,
+        "height": 56,
+        "borderRadius": 28,
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "center",
+        "justifyContent": "center",
+        "backgroundColor": "#5b5bd6",
+        "boxShadow": {
+          "dx": 0,
+          "dy": 3,
+          "blur": 10,
+          "spread": 0,
+          "color": "#5b5bd659"
+        },
+        "semantic": "div"
+      },
+      {
+        "id": 63,
+        "parentId": 62,
+        "fontSize": 17,
+        "fontWeight": 700,
+        "color": "#ffffff",
+        "lineHeight": "1.1",
+        "pointerEvents": true,
+        "text": "聊",
+        "semantic": "span"
+      },
+      {
+        "id": 64,
+        "parentId": 62,
+        "fontSize": 10,
+        "color": "#ffffff",
+        "opacity": 0.92,
+        "pointerEvents": true,
+        "text": "客服",
+        "semantic": "span"
+      },
+      {
+        "id": 65,
+        "parentId": 60,
+        "semantic": "p-toast-host"
+      },
+      {
+        "id": 66,
+        "parentId": 60,
+        "semantic": "p-loading-host"
       }
     ]
   },
@@ -355,11 +472,52 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
-        "semantic": "view"
+        "semantic": "app-root",
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "stretch",
+        "position": "relative",
+        "widthRatio": 1,
+        "heightRatio": 1
       },
       {
         "id": 1,
         "parentId": 0,
+        "semantic": "global-layer",
+        "position": "absolute",
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      {
+        "id": 2,
+        "parentId": 1,
+        "position": "absolute",
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "backgroundColor": "#f4f5f7",
+        "pointerEvents": false,
+        "semantic": "div"
+      },
+      {
+        "id": 3,
+        "parentId": 0,
+        "semantic": "view",
+        "position": "absolute",
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "stretch"
+      },
+      {
+        "id": 4,
+        "parentId": 3,
         "display": "flex",
         "flexDirection": "row",
         "alignItems": "baseline",
@@ -373,25 +531,25 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "semantic": "view"
       },
       {
-        "id": 2,
-        "parentId": 1,
+        "id": 5,
+        "parentId": 4,
         "fontSize": 26,
         "fontWeight": 700,
-        "color": "#eef0f5",
+        "color": "#1a1c22",
         "letterSpacing": -0.3,
         "text": "消息",
         "semantic": "text"
       },
       {
-        "id": 3,
-        "parentId": 1,
+        "id": 6,
+        "parentId": 4,
         "fontSize": 12,
-        "color": "#9aa1af",
+        "color": "#5f6673",
         "semantic": "text"
       },
       {
-        "id": 4,
-        "parentId": 0,
+        "id": 7,
+        "parentId": 3,
         "display": "flex",
         "flexDirection": "row",
         "padding": {
@@ -403,8 +561,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "semantic": "view"
       },
       {
-        "id": 5,
-        "parentId": 4,
+        "id": 8,
+        "parentId": 7,
         "margin": {
           "right": 12
         },
@@ -415,17 +573,17 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 12
         },
         "borderRadius": 10,
-        "backgroundColor": "#1c1f26",
+        "backgroundColor": "#ffffff",
         "borderWidth": 1,
-        "borderColor": "#2e3340",
+        "borderColor": "#dcdfe5",
         "fontSize": 12,
-        "color": "#b6bcc9",
+        "color": "#4b5058",
         "text": "标记一条未读",
         "semantic": "view"
       },
       {
-        "id": 6,
-        "parentId": 4,
+        "id": 9,
+        "parentId": 7,
         "margin": {
           "right": 12
         },
@@ -436,27 +594,27 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 12
         },
         "borderRadius": 10,
-        "backgroundColor": "#1c1f26",
+        "backgroundColor": "#ffffff",
         "borderWidth": 1,
-        "borderColor": "#2e3340",
+        "borderColor": "#dcdfe5",
         "fontSize": 12,
-        "color": "#b6bcc9",
+        "color": "#4b5058",
         "text": "全部已读",
         "semantic": "view"
       },
       {
-        "id": 7,
-        "parentId": 0,
+        "id": 10,
+        "parentId": 3,
         "semantic": "view"
       },
       {
-        "id": 8,
-        "parentId": 7,
+        "id": 11,
+        "parentId": 10,
         "semantic": "view"
       },
       {
-        "id": 9,
-        "parentId": 8,
+        "id": 12,
+        "parentId": 11,
         "flexShrink": 0,
         "width": 40,
         "height": 40,
@@ -464,38 +622,38 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "justifyContent": "center",
-        "backgroundColor": "#7b7bef29",
+        "backgroundColor": "#5b5bd61a",
         "margin": {
           "right": 12
         },
         "semantic": "view"
       },
       {
-        "id": 10,
-        "parentId": 9,
+        "id": 13,
+        "parentId": 12,
         "fontSize": 14,
         "fontWeight": 600,
-        "color": "#9393f5",
-        "semantic": "text"
-      },
-      {
-        "id": 11,
-        "parentId": 8,
-        "semantic": "view"
-      },
-      {
-        "id": 12,
-        "parentId": 11,
-        "semantic": "text"
-      },
-      {
-        "id": 13,
-        "parentId": 11,
+        "color": "#4a4ab8",
         "semantic": "text"
       },
       {
         "id": 14,
-        "parentId": 8,
+        "parentId": 11,
+        "semantic": "view"
+      },
+      {
+        "id": 15,
+        "parentId": 14,
+        "semantic": "text"
+      },
+      {
+        "id": 16,
+        "parentId": 14,
+        "semantic": "text"
+      },
+      {
+        "id": 17,
+        "parentId": 11,
         "flexShrink": 0,
         "display": "flex",
         "flexDirection": "column",
@@ -503,19 +661,95 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "semantic": "view"
       },
       {
-        "id": 15,
-        "parentId": 14,
+        "id": 18,
+        "parentId": 17,
         "fontSize": 11,
-        "color": "#9aa1af",
+        "color": "#5f6673",
         "margin": {
           "bottom": 4
         },
         "semantic": "text"
       },
       {
-        "id": 16,
-        "parentId": 14,
+        "id": 19,
+        "parentId": 17,
         "semantic": "text"
+      },
+      {
+        "id": 20,
+        "parentId": 0,
+        "semantic": "overlay-layer",
+        "position": "absolute",
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "pointerEvents": false
+      },
+      {
+        "id": 21,
+        "parentId": 20,
+        "position": "absolute",
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0,
+        "pointerEvents": false,
+        "semantic": "div"
+      },
+      {
+        "id": 22,
+        "parentId": 21,
+        "pointerEvents": true,
+        "position": "absolute",
+        "right": 14,
+        "width": 56,
+        "height": 56,
+        "borderRadius": 28,
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "center",
+        "justifyContent": "center",
+        "backgroundColor": "#5b5bd6",
+        "boxShadow": {
+          "dx": 0,
+          "dy": 3,
+          "blur": 10,
+          "spread": 0,
+          "color": "#5b5bd659"
+        },
+        "semantic": "div"
+      },
+      {
+        "id": 23,
+        "parentId": 22,
+        "fontSize": 17,
+        "fontWeight": 700,
+        "color": "#ffffff",
+        "lineHeight": "1.1",
+        "pointerEvents": true,
+        "text": "聊",
+        "semantic": "span"
+      },
+      {
+        "id": 24,
+        "parentId": 22,
+        "fontSize": 10,
+        "color": "#ffffff",
+        "opacity": 0.92,
+        "pointerEvents": true,
+        "text": "客服",
+        "semantic": "span"
+      },
+      {
+        "id": 25,
+        "parentId": 20,
+        "semantic": "p-toast-host"
+      },
+      {
+        "id": 26,
+        "parentId": 20,
+        "semantic": "p-loading-host"
       }
     ]
   },
@@ -524,11 +758,52 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
-        "semantic": "view"
+        "semantic": "app-root",
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "stretch",
+        "position": "relative",
+        "widthRatio": 1,
+        "heightRatio": 1
       },
       {
         "id": 1,
         "parentId": 0,
+        "semantic": "global-layer",
+        "position": "absolute",
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      {
+        "id": 2,
+        "parentId": 1,
+        "position": "absolute",
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "backgroundColor": "#f4f5f7",
+        "pointerEvents": false,
+        "semantic": "div"
+      },
+      {
+        "id": 3,
+        "parentId": 0,
+        "semantic": "view",
+        "position": "absolute",
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "stretch"
+      },
+      {
+        "id": 4,
+        "parentId": 3,
         "display": "flex",
         "flexDirection": "row",
         "alignItems": "center",
@@ -541,220 +816,122 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "semantic": "view"
       },
       {
-        "id": 2,
-        "parentId": 1,
+        "id": 5,
+        "parentId": 4,
         "width": 56,
         "height": 56,
         "borderRadius": 28,
         "display": "flex",
         "alignItems": "center",
         "justifyContent": "center",
-        "backgroundColor": "#7b7bef42",
+        "backgroundColor": "#5b5bd62e",
         "margin": {
           "right": 12
         },
         "semantic": "view"
       },
       {
-        "id": 3,
-        "parentId": 2,
+        "id": 6,
+        "parentId": 5,
         "fontSize": 20,
         "fontWeight": 700,
-        "color": "#9393f5",
+        "color": "#4a4ab8",
         "text": "运",
         "semantic": "text"
       },
       {
-        "id": 4,
-        "parentId": 1,
+        "id": 7,
+        "parentId": 4,
         "semantic": "view"
       },
       {
-        "id": 5,
-        "parentId": 4,
+        "id": 8,
+        "parentId": 7,
         "fontSize": 16,
         "fontWeight": 600,
-        "color": "#eef0f5",
+        "color": "#1a1c22",
         "text": "运营同学",
         "semantic": "text"
       },
       {
-        "id": 6,
-        "parentId": 4,
+        "id": 9,
+        "parentId": 7,
         "margin": {
           "top": 2
         },
         "fontSize": 12,
-        "color": "#9aa1af",
+        "color": "#5f6673",
         "text": "华东大区 · 渠道运营",
         "semantic": "text"
       },
       {
-        "id": 7,
-        "parentId": 0,
+        "id": 10,
+        "parentId": 3,
         "text": "外观",
         "semantic": "text"
       },
       {
-        "id": 8,
-        "parentId": 0,
-        "semantic": "view"
-      },
-      {
-        "id": 9,
-        "parentId": 8,
-        "semantic": "view"
-      },
-      {
-        "id": 10,
-        "parentId": 9,
-        "flexShrink": 0,
-        "width": 28,
-        "height": 28,
-        "borderRadius": 8,
-        "display": "flex",
-        "alignItems": "center",
-        "justifyContent": "center",
-        "backgroundColor": "#7b7bef29",
-        "margin": {
-          "right": 12
-        },
-        "semantic": "view"
-      },
-      {
         "id": 11,
-        "parentId": 10,
-        "fontSize": 15,
-        "color": "#9393f5",
-        "text": "◐",
-        "semantic": "text"
+        "parentId": 3,
+        "semantic": "view"
       },
       {
         "id": 12,
-        "parentId": 9,
-        "padding": {
-          "right": 12
-        },
+        "parentId": 11,
         "semantic": "view"
       },
       {
         "id": 13,
         "parentId": 12,
-        "text": "深色模式",
-        "semantic": "text"
+        "flexShrink": 0,
+        "width": 28,
+        "height": 28,
+        "borderRadius": 8,
+        "display": "flex",
+        "alignItems": "center",
+        "justifyContent": "center",
+        "backgroundColor": "#5b5bd61a",
+        "margin": {
+          "right": 12
+        },
+        "semantic": "view"
       },
       {
         "id": 14,
-        "parentId": 12,
-        "text": "全应用即时生效（无需刷新）",
+        "parentId": 13,
+        "fontSize": 15,
+        "color": "#4a4ab8",
+        "text": "◐",
         "semantic": "text"
       },
       {
         "id": 15,
-        "parentId": 9,
-        "flexShrink": 0,
-        "width": 44,
-        "height": 26,
-        "borderRadius": 13,
-        "backgroundColor": "#2e3340",
+        "parentId": 12,
         "padding": {
-          "top": 2,
-          "right": 2,
-          "bottom": 2,
-          "left": 2
+          "right": 12
         },
-        "boxSizing": "border-box",
-        "display": "flex",
-        "flexDirection": "row",
-        "alignItems": "center",
         "semantic": "view"
       },
       {
         "id": 16,
         "parentId": 15,
-        "pointerEvents": false,
-        "flexShrink": 0,
-        "width": 22,
-        "height": 22,
-        "borderRadius": 11,
-        "backgroundColor": "#ffffff",
-        "boxShadow": {
-          "dx": 0,
-          "dy": 1,
-          "blur": 2,
-          "spread": 0,
-          "color": "#00000059"
-        },
-        "semantic": "view"
+        "text": "深色模式",
+        "semantic": "text"
       },
       {
         "id": 17,
-        "parentId": 0,
-        "text": "全局能力",
+        "parentId": 15,
+        "text": "全应用即时生效（无需刷新）",
         "semantic": "text"
       },
       {
         "id": 18,
-        "parentId": 0,
-        "semantic": "view"
-      },
-      {
-        "id": 19,
-        "parentId": 18,
-        "semantic": "view"
-      },
-      {
-        "id": 20,
-        "parentId": 19,
-        "flexShrink": 0,
-        "width": 28,
-        "height": 28,
-        "borderRadius": 8,
-        "display": "flex",
-        "alignItems": "center",
-        "justifyContent": "center",
-        "backgroundColor": "#7b7bef29",
-        "margin": {
-          "right": 12
-        },
-        "semantic": "view"
-      },
-      {
-        "id": 21,
-        "parentId": 20,
-        "fontSize": 15,
-        "color": "#9393f5",
-        "text": "◉",
-        "semantic": "text"
-      },
-      {
-        "id": 22,
-        "parentId": 19,
-        "padding": {
-          "right": 12
-        },
-        "semantic": "view"
-      },
-      {
-        "id": 23,
-        "parentId": 22,
-        "text": "客服悬浮球",
-        "semantic": "text"
-      },
-      {
-        "id": 24,
-        "parentId": 22,
-        "text": "常驻入口，关闭后全部页面隐藏",
-        "semantic": "text"
-      },
-      {
-        "id": 25,
-        "parentId": 19,
+        "parentId": 12,
         "flexShrink": 0,
         "width": 44,
         "height": 26,
         "borderRadius": 13,
-        "backgroundColor": "#2e3340",
+        "backgroundColor": "#dcdfe5",
         "padding": {
           "top": 2,
           "right": 2,
@@ -768,8 +945,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "semantic": "view"
       },
       {
-        "id": 26,
-        "parentId": 25,
+        "id": 19,
+        "parentId": 18,
         "pointerEvents": false,
         "flexShrink": 0,
         "width": 22,
@@ -781,18 +958,29 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "dy": 1,
           "blur": 2,
           "spread": 0,
-          "color": "#00000059"
+          "color": "#1a1c220d"
         },
         "semantic": "view"
       },
       {
-        "id": 27,
-        "parentId": 18,
+        "id": 20,
+        "parentId": 3,
+        "text": "全局能力",
+        "semantic": "text"
+      },
+      {
+        "id": 21,
+        "parentId": 3,
         "semantic": "view"
       },
       {
-        "id": 28,
-        "parentId": 27,
+        "id": 22,
+        "parentId": 21,
+        "semantic": "view"
+      },
+      {
+        "id": 23,
+        "parentId": 22,
         "flexShrink": 0,
         "width": 28,
         "height": 28,
@@ -800,108 +988,271 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "justifyContent": "center",
-        "backgroundColor": "#7b7bef29",
+        "backgroundColor": "#5b5bd61a",
         "margin": {
           "right": 12
         },
         "semantic": "view"
       },
       {
-        "id": 29,
-        "parentId": 28,
+        "id": 24,
+        "parentId": 23,
         "fontSize": 15,
-        "color": "#9393f5",
-        "text": "♪",
+        "color": "#4a4ab8",
+        "text": "◉",
         "semantic": "text"
       },
       {
-        "id": 30,
-        "parentId": 27,
+        "id": 25,
+        "parentId": 22,
         "padding": {
           "right": 12
         },
+        "semantic": "view"
+      },
+      {
+        "id": 26,
+        "parentId": 25,
+        "text": "客服悬浮球",
+        "semantic": "text"
+      },
+      {
+        "id": 27,
+        "parentId": 25,
+        "text": "常驻入口，关闭后全部页面隐藏",
+        "semantic": "text"
+      },
+      {
+        "id": 28,
+        "parentId": 22,
+        "flexShrink": 0,
+        "width": 44,
+        "height": 26,
+        "borderRadius": 13,
+        "backgroundColor": "#dcdfe5",
+        "padding": {
+          "top": 2,
+          "right": 2,
+          "bottom": 2,
+          "left": 2
+        },
+        "boxSizing": "border-box",
+        "display": "flex",
+        "flexDirection": "row",
+        "alignItems": "center",
+        "semantic": "view"
+      },
+      {
+        "id": 29,
+        "parentId": 28,
+        "pointerEvents": false,
+        "flexShrink": 0,
+        "width": 22,
+        "height": 22,
+        "borderRadius": 11,
+        "backgroundColor": "#ffffff",
+        "boxShadow": {
+          "dx": 0,
+          "dy": 1,
+          "blur": 2,
+          "spread": 0,
+          "color": "#1a1c220d"
+        },
+        "semantic": "view"
+      },
+      {
+        "id": 30,
+        "parentId": 21,
         "semantic": "view"
       },
       {
         "id": 31,
         "parentId": 30,
-        "text": "音乐播放条",
-        "semantic": "text"
+        "flexShrink": 0,
+        "width": 28,
+        "height": 28,
+        "borderRadius": 8,
+        "display": "flex",
+        "alignItems": "center",
+        "justifyContent": "center",
+        "backgroundColor": "#5b5bd61a",
+        "margin": {
+          "right": 12
+        },
+        "semantic": "view"
       },
       {
         "id": 32,
-        "parentId": 30,
+        "parentId": 31,
+        "fontSize": 15,
+        "color": "#4a4ab8",
+        "text": "♪",
         "semantic": "text"
       },
       {
         "id": 33,
-        "parentId": 27,
-        "semantic": "text"
+        "parentId": 30,
+        "padding": {
+          "right": 12
+        },
+        "semantic": "view"
       },
       {
         "id": 34,
-        "parentId": 0,
-        "text": "关于",
+        "parentId": 33,
+        "text": "音乐播放条",
         "semantic": "text"
       },
       {
         "id": 35,
-        "parentId": 0,
-        "semantic": "view"
+        "parentId": 33,
+        "semantic": "text"
       },
       {
         "id": 36,
-        "parentId": 35,
-        "semantic": "navigator"
+        "parentId": 30,
+        "semantic": "text"
       },
       {
         "id": 37,
-        "parentId": 36,
-        "padding": {
-          "right": 12
-        },
-        "semantic": "view"
+        "parentId": 3,
+        "text": "关于",
+        "semantic": "text"
       },
       {
         "id": 38,
-        "parentId": 37,
-        "text": "验收控制台",
-        "semantic": "text"
+        "parentId": 3,
+        "semantic": "view"
       },
       {
         "id": 39,
-        "parentId": 37,
-        "text": "全局能力自检",
-        "semantic": "text"
+        "parentId": 38,
+        "semantic": "navigator"
       },
       {
         "id": 40,
-        "parentId": 36,
+        "parentId": 39,
+        "padding": {
+          "right": 12
+        },
         "semantic": "view"
       },
       {
         "id": 41,
-        "parentId": 35,
-        "semantic": "view"
+        "parentId": 40,
+        "text": "验收控制台",
+        "semantic": "text"
       },
       {
         "id": 42,
-        "parentId": 41,
+        "parentId": 40,
+        "text": "全局能力自检",
+        "semantic": "text"
+      },
+      {
+        "id": 43,
+        "parentId": 39,
+        "semantic": "view"
+      },
+      {
+        "id": 44,
+        "parentId": 38,
+        "semantic": "view"
+      },
+      {
+        "id": 45,
+        "parentId": 44,
         "padding": {
           "right": 12
         },
         "semantic": "view"
       },
       {
-        "id": 43,
-        "parentId": 42,
+        "id": 46,
+        "parentId": 45,
         "text": "版本",
         "semantic": "text"
       },
       {
-        "id": 44,
-        "parentId": 41,
+        "id": 47,
+        "parentId": 44,
         "semantic": "text"
+      },
+      {
+        "id": 48,
+        "parentId": 0,
+        "semantic": "overlay-layer",
+        "position": "absolute",
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "pointerEvents": false
+      },
+      {
+        "id": 49,
+        "parentId": 48,
+        "position": "absolute",
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0,
+        "pointerEvents": false,
+        "semantic": "div"
+      },
+      {
+        "id": 50,
+        "parentId": 49,
+        "pointerEvents": true,
+        "position": "absolute",
+        "right": 14,
+        "width": 56,
+        "height": 56,
+        "borderRadius": 28,
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "center",
+        "justifyContent": "center",
+        "backgroundColor": "#5b5bd6",
+        "boxShadow": {
+          "dx": 0,
+          "dy": 3,
+          "blur": 10,
+          "spread": 0,
+          "color": "#5b5bd659"
+        },
+        "semantic": "div"
+      },
+      {
+        "id": 51,
+        "parentId": 50,
+        "fontSize": 17,
+        "fontWeight": 700,
+        "color": "#ffffff",
+        "lineHeight": "1.1",
+        "pointerEvents": true,
+        "text": "聊",
+        "semantic": "span"
+      },
+      {
+        "id": 52,
+        "parentId": 50,
+        "fontSize": 10,
+        "color": "#ffffff",
+        "opacity": 0.92,
+        "pointerEvents": true,
+        "text": "客服",
+        "semantic": "span"
+      },
+      {
+        "id": 53,
+        "parentId": 48,
+        "semantic": "p-toast-host"
+      },
+      {
+        "id": 54,
+        "parentId": 48,
+        "semantic": "p-loading-host"
       }
     ]
   },
@@ -910,42 +1261,53 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
-        "semantic": "view"
+        "semantic": "app-root",
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "stretch",
+        "position": "relative",
+        "widthRatio": 1,
+        "heightRatio": 1
       },
       {
         "id": 1,
         "parentId": 0,
-        "padding": {
-          "left": 0,
-          "right": 0
-        },
-        "semantic": "view"
+        "semantic": "global-layer",
+        "position": "absolute",
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
       },
       {
         "id": 2,
         "parentId": 1,
-        "fontSize": 26,
-        "fontWeight": 700,
-        "color": "#eef0f5",
-        "letterSpacing": -0.3,
-        "text": "验收控制台",
-        "semantic": "text"
+        "position": "absolute",
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "backgroundColor": "#f4f5f7",
+        "pointerEvents": false,
+        "semantic": "div"
       },
       {
         "id": 3,
-        "parentId": 1,
-        "margin": {
-          "top": 8
-        },
-        "fontSize": 12,
-        "color": "#b6bcc9",
-        "text": "八条超级应用场景 · 逐条触发并读回状态（本页 = 验收入口）",
-        "semantic": "text"
+        "parentId": 0,
+        "semantic": "view",
+        "position": "absolute",
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "stretch"
       },
       {
         "id": 4,
-        "parentId": 0,
-        "margin": {
+        "parentId": 3,
+        "padding": {
           "left": 0,
           "right": 0
         },
@@ -954,62 +1316,92 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 5,
         "parentId": 4,
-        "semantic": "view"
+        "fontSize": 26,
+        "fontWeight": 700,
+        "color": "#1a1c22",
+        "letterSpacing": -0.3,
+        "text": "验收控制台",
+        "semantic": "text"
       },
       {
         "id": 6,
-        "parentId": 5,
-        "display": "flex",
-        "flexDirection": "row",
-        "alignItems": "flex-start",
-        "justifyContent": "space-between",
-        "semantic": "view"
+        "parentId": 4,
+        "margin": {
+          "top": 8
+        },
+        "fontSize": 12,
+        "color": "#4b5058",
+        "text": "八条超级应用场景 · 逐条触发并读回状态（本页 = 验收入口）",
+        "semantic": "text"
       },
       {
         "id": 7,
-        "parentId": 6,
-        "flexGrow": 1,
-        "flexShrink": 1,
-        "flexBasis": 0,
-        "minWidth": 0,
+        "parentId": 3,
         "margin": {
-          "right": 12
+          "left": 0,
+          "right": 0
         },
         "semantic": "view"
       },
       {
         "id": 8,
         "parentId": 7,
+        "semantic": "view"
+      },
+      {
+        "id": 9,
+        "parentId": 8,
+        "display": "flex",
+        "flexDirection": "row",
+        "alignItems": "flex-start",
+        "justifyContent": "space-between",
+        "semantic": "view"
+      },
+      {
+        "id": 10,
+        "parentId": 9,
+        "flexGrow": 1,
+        "flexShrink": 1,
+        "flexBasis": 0,
+        "minWidth": 0,
+        "margin": {
+          "right": 12
+        },
+        "semantic": "view"
+      },
+      {
+        "id": 11,
+        "parentId": 10,
         "fontSize": 14,
         "fontWeight": 600,
-        "color": "#eef0f5",
+        "color": "#1a1c22",
         "text": "① 全局 Toast",
         "semantic": "text"
       },
       {
-        "id": 9,
-        "parentId": 7,
+        "id": 12,
+        "parentId": 10,
         "margin": {
           "top": 2
         },
         "fontSize": 11,
-        "color": "#9aa1af",
+        "color": "#5f6673",
         "text": "Overlay 层 · 队列语义（构建期按需注入宿主）",
         "semantic": "text"
       },
       {
-        "id": 10,
-        "parentId": 7,
+        "id": 13,
+        "parentId": 10,
         "margin": {
           "top": 8
         },
         "fontSize": 12,
-        "color": "#9393f5",
+        "color": "#4a4ab8",
         "semantic": "text"
       },
       {
-        "id": 11,
-        "parentId": 6,
+        "id": 14,
+        "parentId": 9,
         "flexShrink": 0,
         "display": "flex",
         "flexDirection": "row",
@@ -1019,8 +1411,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "semantic": "view"
       },
       {
-        "id": 12,
-        "parentId": 11,
+        "id": 15,
+        "parentId": 14,
         "margin": {
           "top": 0,
           "right": 0,
@@ -1034,15 +1426,15 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 12
         },
         "borderRadius": 10,
-        "backgroundColor": "#7b7bef",
+        "backgroundColor": "#5b5bd6",
         "color": "#ffffff",
         "fontSize": 12,
         "text": "单条",
         "semantic": "view"
       },
       {
-        "id": 13,
-        "parentId": 11,
+        "id": 16,
+        "parentId": 14,
         "margin": {
           "top": 0,
           "right": 0,
@@ -1056,82 +1448,82 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 12
         },
         "borderRadius": 10,
-        "backgroundColor": "#1c1f26",
-        "color": "#b6bcc9",
+        "backgroundColor": "#ffffff",
+        "color": "#4b5058",
         "fontSize": 12,
         "borderWidth": 1,
-        "borderColor": "#2e3340",
+        "borderColor": "#dcdfe5",
         "text": "排队 3 条",
         "semantic": "view"
       },
       {
-        "id": 14,
-        "parentId": 0,
+        "id": 17,
+        "parentId": 3,
         "margin": {
           "left": 0,
           "right": 0
-        },
-        "semantic": "view"
-      },
-      {
-        "id": 15,
-        "parentId": 14,
-        "semantic": "view"
-      },
-      {
-        "id": 16,
-        "parentId": 15,
-        "display": "flex",
-        "flexDirection": "row",
-        "alignItems": "flex-start",
-        "justifyContent": "space-between",
-        "semantic": "view"
-      },
-      {
-        "id": 17,
-        "parentId": 16,
-        "flexGrow": 1,
-        "flexShrink": 1,
-        "flexBasis": 0,
-        "minWidth": 0,
-        "margin": {
-          "right": 12
         },
         "semantic": "view"
       },
       {
         "id": 18,
         "parentId": 17,
+        "semantic": "view"
+      },
+      {
+        "id": 19,
+        "parentId": 18,
+        "display": "flex",
+        "flexDirection": "row",
+        "alignItems": "flex-start",
+        "justifyContent": "space-between",
+        "semantic": "view"
+      },
+      {
+        "id": 20,
+        "parentId": 19,
+        "flexGrow": 1,
+        "flexShrink": 1,
+        "flexBasis": 0,
+        "minWidth": 0,
+        "margin": {
+          "right": 12
+        },
+        "semantic": "view"
+      },
+      {
+        "id": 21,
+        "parentId": 20,
         "fontSize": 14,
         "fontWeight": 600,
-        "color": "#eef0f5",
+        "color": "#1a1c22",
         "text": "② 全局 Loading",
         "semantic": "text"
       },
       {
-        "id": 19,
-        "parentId": 17,
+        "id": 22,
+        "parentId": 20,
         "margin": {
           "top": 2
         },
         "fontSize": 11,
-        "color": "#9aa1af",
+        "color": "#5f6673",
         "text": "Overlay 层 · 多实例 + 遮罩范围",
         "semantic": "text"
       },
       {
-        "id": 20,
-        "parentId": 17,
+        "id": 23,
+        "parentId": 20,
         "margin": {
           "top": 8
         },
         "fontSize": 12,
-        "color": "#9393f5",
+        "color": "#4a4ab8",
         "semantic": "text"
       },
       {
-        "id": 21,
-        "parentId": 16,
+        "id": 24,
+        "parentId": 19,
         "flexShrink": 0,
         "display": "flex",
         "flexDirection": "row",
@@ -1141,8 +1533,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "semantic": "view"
       },
       {
-        "id": 22,
-        "parentId": 21,
+        "id": 25,
+        "parentId": 24,
         "margin": {
           "top": 0,
           "right": 0,
@@ -1156,15 +1548,15 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 12
         },
         "borderRadius": 10,
-        "backgroundColor": "#7b7bef",
+        "backgroundColor": "#5b5bd6",
         "color": "#ffffff",
         "fontSize": 12,
         "text": "一个",
         "semantic": "view"
       },
       {
-        "id": 23,
-        "parentId": 21,
+        "id": 26,
+        "parentId": 24,
         "margin": {
           "top": 0,
           "right": 0,
@@ -1178,17 +1570,17 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 12
         },
         "borderRadius": 10,
-        "backgroundColor": "#1c1f26",
-        "color": "#b6bcc9",
+        "backgroundColor": "#ffffff",
+        "color": "#4b5058",
         "fontSize": 12,
         "borderWidth": 1,
-        "borderColor": "#2e3340",
+        "borderColor": "#dcdfe5",
         "text": "两个共存",
         "semantic": "view"
       },
       {
-        "id": 24,
-        "parentId": 21,
+        "id": 27,
+        "parentId": 24,
         "margin": {
           "top": 0,
           "right": 0,
@@ -1202,82 +1594,82 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 12
         },
         "borderRadius": 10,
-        "backgroundColor": "#1c1f26",
-        "color": "#b6bcc9",
+        "backgroundColor": "#ffffff",
+        "color": "#4b5058",
         "fontSize": 12,
         "borderWidth": 1,
-        "borderColor": "#2e3340",
+        "borderColor": "#dcdfe5",
         "text": "关闭",
         "semantic": "view"
       },
       {
-        "id": 25,
-        "parentId": 0,
+        "id": 28,
+        "parentId": 3,
         "margin": {
           "left": 0,
           "right": 0
-        },
-        "semantic": "view"
-      },
-      {
-        "id": 26,
-        "parentId": 25,
-        "semantic": "view"
-      },
-      {
-        "id": 27,
-        "parentId": 26,
-        "display": "flex",
-        "flexDirection": "row",
-        "alignItems": "flex-start",
-        "justifyContent": "space-between",
-        "semantic": "view"
-      },
-      {
-        "id": 28,
-        "parentId": 27,
-        "flexGrow": 1,
-        "flexShrink": 1,
-        "flexBasis": 0,
-        "minWidth": 0,
-        "margin": {
-          "right": 12
         },
         "semantic": "view"
       },
       {
         "id": 29,
         "parentId": 28,
+        "semantic": "view"
+      },
+      {
+        "id": 30,
+        "parentId": 29,
+        "display": "flex",
+        "flexDirection": "row",
+        "alignItems": "flex-start",
+        "justifyContent": "space-between",
+        "semantic": "view"
+      },
+      {
+        "id": 31,
+        "parentId": 30,
+        "flexGrow": 1,
+        "flexShrink": 1,
+        "flexBasis": 0,
+        "minWidth": 0,
+        "margin": {
+          "right": 12
+        },
+        "semantic": "view"
+      },
+      {
+        "id": 32,
+        "parentId": 31,
         "fontSize": 14,
         "fontWeight": 600,
-        "color": "#eef0f5",
+        "color": "#1a1c22",
         "text": "③ 登录失效拦截",
         "semantic": "text"
       },
       {
-        "id": 30,
-        "parentId": 28,
+        "id": 33,
+        "parentId": 31,
         "margin": {
           "top": 2
         },
         "fontSize": 11,
-        "color": "#9aa1af",
+        "color": "#5f6673",
         "text": "Overlay 层 · 不可取消（★手写宿主——需绑 onAction）",
         "semantic": "text"
       },
       {
-        "id": 31,
-        "parentId": 28,
+        "id": 34,
+        "parentId": 31,
         "margin": {
           "top": 8
         },
         "fontSize": 12,
-        "color": "#9393f5",
+        "color": "#4a4ab8",
         "semantic": "text"
       },
       {
-        "id": 32,
-        "parentId": 27,
+        "id": 35,
+        "parentId": 30,
         "flexShrink": 0,
         "display": "flex",
         "flexDirection": "row",
@@ -1287,8 +1679,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "semantic": "view"
       },
       {
-        "id": 33,
-        "parentId": 32,
+        "id": 36,
+        "parentId": 35,
         "margin": {
           "top": 0,
           "right": 0,
@@ -1302,15 +1694,15 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 12
         },
         "borderRadius": 10,
-        "backgroundColor": "#7b7bef",
+        "backgroundColor": "#5b5bd6",
         "color": "#ffffff",
         "fontSize": 12,
         "text": "模拟 401",
         "semantic": "view"
       },
       {
-        "id": 34,
-        "parentId": 32,
+        "id": 37,
+        "parentId": 35,
         "margin": {
           "top": 0,
           "right": 0,
@@ -1324,82 +1716,82 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 12
         },
         "borderRadius": 10,
-        "backgroundColor": "#1c1f26",
-        "color": "#b6bcc9",
+        "backgroundColor": "#ffffff",
+        "color": "#4b5058",
         "fontSize": 12,
         "borderWidth": 1,
-        "borderColor": "#2e3340",
+        "borderColor": "#dcdfe5",
         "text": "模拟登录成功",
         "semantic": "view"
       },
       {
-        "id": 35,
-        "parentId": 0,
+        "id": 38,
+        "parentId": 3,
         "margin": {
           "left": 0,
           "right": 0
-        },
-        "semantic": "view"
-      },
-      {
-        "id": 36,
-        "parentId": 35,
-        "semantic": "view"
-      },
-      {
-        "id": 37,
-        "parentId": 36,
-        "display": "flex",
-        "flexDirection": "row",
-        "alignItems": "flex-start",
-        "justifyContent": "space-between",
-        "semantic": "view"
-      },
-      {
-        "id": 38,
-        "parentId": 37,
-        "flexGrow": 1,
-        "flexShrink": 1,
-        "flexBasis": 0,
-        "minWidth": 0,
-        "margin": {
-          "right": 12
         },
         "semantic": "view"
       },
       {
         "id": 39,
         "parentId": 38,
+        "semantic": "view"
+      },
+      {
+        "id": 40,
+        "parentId": 39,
+        "display": "flex",
+        "flexDirection": "row",
+        "alignItems": "flex-start",
+        "justifyContent": "space-between",
+        "semantic": "view"
+      },
+      {
+        "id": 41,
+        "parentId": 40,
+        "flexGrow": 1,
+        "flexShrink": 1,
+        "flexBasis": 0,
+        "minWidth": 0,
+        "margin": {
+          "right": 12
+        },
+        "semantic": "view"
+      },
+      {
+        "id": 42,
+        "parentId": 41,
         "fontSize": 14,
         "fontWeight": 600,
-        "color": "#eef0f5",
+        "color": "#1a1c22",
         "text": "④ 客服悬浮球",
         "semantic": "text"
       },
       {
-        "id": 40,
-        "parentId": 38,
+        "id": 43,
+        "parentId": 41,
         "margin": {
           "top": 2
         },
         "fontSize": 11,
-        "color": "#9aa1af",
+        "color": "#5f6673",
         "text": "Global 层 · App 壳声明一次",
         "semantic": "text"
       },
       {
-        "id": 41,
-        "parentId": 38,
+        "id": 44,
+        "parentId": 41,
         "margin": {
           "top": 8
         },
         "fontSize": 12,
-        "color": "#9393f5",
+        "color": "#4a4ab8",
         "semantic": "text"
       },
       {
-        "id": 42,
-        "parentId": 37,
+        "id": 45,
+        "parentId": 40,
         "flexShrink": 0,
         "display": "flex",
         "flexDirection": "row",
@@ -1409,8 +1801,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "semantic": "view"
       },
       {
-        "id": 43,
-        "parentId": 42,
+        "id": 46,
+        "parentId": 45,
         "margin": {
           "top": 0,
           "right": 0,
@@ -1424,80 +1816,80 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 12
         },
         "borderRadius": 10,
-        "backgroundColor": "#7b7bef",
+        "backgroundColor": "#5b5bd6",
         "color": "#ffffff",
         "fontSize": 12,
         "text": "切换显隐",
         "semantic": "view"
       },
       {
-        "id": 44,
-        "parentId": 0,
+        "id": 47,
+        "parentId": 3,
         "margin": {
           "left": 0,
           "right": 0
-        },
-        "semantic": "view"
-      },
-      {
-        "id": 45,
-        "parentId": 44,
-        "semantic": "view"
-      },
-      {
-        "id": 46,
-        "parentId": 45,
-        "display": "flex",
-        "flexDirection": "row",
-        "alignItems": "flex-start",
-        "justifyContent": "space-between",
-        "semantic": "view"
-      },
-      {
-        "id": 47,
-        "parentId": 46,
-        "flexGrow": 1,
-        "flexShrink": 1,
-        "flexBasis": 0,
-        "minWidth": 0,
-        "margin": {
-          "right": 12
         },
         "semantic": "view"
       },
       {
         "id": 48,
         "parentId": 47,
+        "semantic": "view"
+      },
+      {
+        "id": 49,
+        "parentId": 48,
+        "display": "flex",
+        "flexDirection": "row",
+        "alignItems": "flex-start",
+        "justifyContent": "space-between",
+        "semantic": "view"
+      },
+      {
+        "id": 50,
+        "parentId": 49,
+        "flexGrow": 1,
+        "flexShrink": 1,
+        "flexBasis": 0,
+        "minWidth": 0,
+        "margin": {
+          "right": 12
+        },
+        "semantic": "view"
+      },
+      {
+        "id": 51,
+        "parentId": 50,
         "fontSize": 14,
         "fontWeight": 600,
-        "color": "#eef0f5",
+        "color": "#1a1c22",
         "text": "⑤ 音乐播放条",
         "semantic": "text"
       },
       {
-        "id": 49,
-        "parentId": 47,
+        "id": 52,
+        "parentId": 50,
         "margin": {
           "top": 2
         },
         "fontSize": 11,
-        "color": "#9aa1af",
+        "color": "#5f6673",
         "text": "Global 层 · 播放控制",
         "semantic": "text"
       },
       {
-        "id": 50,
-        "parentId": 47,
+        "id": 53,
+        "parentId": 50,
         "margin": {
           "top": 8
         },
         "fontSize": 12,
-        "color": "#9393f5",
+        "color": "#4a4ab8",
         "semantic": "text"
       },
       {
-        "id": 51,
-        "parentId": 46,
+        "id": 54,
+        "parentId": 49,
         "flexShrink": 0,
         "display": "flex",
         "flexDirection": "row",
@@ -1507,8 +1899,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "semantic": "view"
       },
       {
-        "id": 52,
-        "parentId": 51,
+        "id": 55,
+        "parentId": 54,
         "margin": {
           "top": 0,
           "right": 0,
@@ -1522,15 +1914,15 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 12
         },
         "borderRadius": 10,
-        "backgroundColor": "#7b7bef",
+        "backgroundColor": "#5b5bd6",
         "color": "#ffffff",
         "fontSize": 12,
         "text": "播放",
         "semantic": "view"
       },
       {
-        "id": 53,
-        "parentId": 51,
+        "id": 56,
+        "parentId": 54,
         "margin": {
           "top": 0,
           "right": 0,
@@ -1544,82 +1936,82 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 12
         },
         "borderRadius": 10,
-        "backgroundColor": "#1c1f26",
-        "color": "#b6bcc9",
+        "backgroundColor": "#ffffff",
+        "color": "#4b5058",
         "fontSize": 12,
         "borderWidth": 1,
-        "borderColor": "#2e3340",
+        "borderColor": "#dcdfe5",
         "text": "关闭",
         "semantic": "view"
       },
       {
-        "id": 54,
-        "parentId": 0,
+        "id": 57,
+        "parentId": 3,
         "margin": {
           "left": 0,
           "right": 0
-        },
-        "semantic": "view"
-      },
-      {
-        "id": 55,
-        "parentId": 54,
-        "semantic": "view"
-      },
-      {
-        "id": 56,
-        "parentId": 55,
-        "display": "flex",
-        "flexDirection": "row",
-        "alignItems": "flex-start",
-        "justifyContent": "space-between",
-        "semantic": "view"
-      },
-      {
-        "id": 57,
-        "parentId": 56,
-        "flexGrow": 1,
-        "flexShrink": 1,
-        "flexBasis": 0,
-        "minWidth": 0,
-        "margin": {
-          "right": 12
         },
         "semantic": "view"
       },
       {
         "id": 58,
         "parentId": 57,
+        "semantic": "view"
+      },
+      {
+        "id": 59,
+        "parentId": 58,
+        "display": "flex",
+        "flexDirection": "row",
+        "alignItems": "flex-start",
+        "justifyContent": "space-between",
+        "semantic": "view"
+      },
+      {
+        "id": 60,
+        "parentId": 59,
+        "flexGrow": 1,
+        "flexShrink": 1,
+        "flexBasis": 0,
+        "minWidth": 0,
+        "margin": {
+          "right": 12
+        },
+        "semantic": "view"
+      },
+      {
+        "id": 61,
+        "parentId": 60,
         "fontSize": 14,
         "fontWeight": 600,
-        "color": "#eef0f5",
+        "color": "#1a1c22",
         "text": "⑥ 网络状态条",
         "semantic": "text"
       },
       {
-        "id": 59,
-        "parentId": 57,
+        "id": 62,
+        "parentId": 60,
         "margin": {
           "top": 2
         },
         "fontSize": 11,
-        "color": "#9aa1af",
+        "color": "#5f6673",
         "text": "Global 层 · 弱网提示（可忽略）",
         "semantic": "text"
       },
       {
-        "id": 60,
-        "parentId": 57,
+        "id": 63,
+        "parentId": 60,
         "margin": {
           "top": 8
         },
         "fontSize": 12,
-        "color": "#9393f5",
+        "color": "#4a4ab8",
         "semantic": "text"
       },
       {
-        "id": 61,
-        "parentId": 56,
+        "id": 64,
+        "parentId": 59,
         "flexShrink": 0,
         "display": "flex",
         "flexDirection": "row",
@@ -1629,8 +2021,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "semantic": "view"
       },
       {
-        "id": 62,
-        "parentId": 61,
+        "id": 65,
+        "parentId": 64,
         "margin": {
           "top": 0,
           "right": 0,
@@ -1644,15 +2036,15 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 12
         },
         "borderRadius": 10,
-        "backgroundColor": "#7b7bef",
+        "backgroundColor": "#5b5bd6",
         "color": "#ffffff",
         "fontSize": 12,
         "text": "触发",
         "semantic": "view"
       },
       {
-        "id": 63,
-        "parentId": 61,
+        "id": 66,
+        "parentId": 64,
         "margin": {
           "top": 0,
           "right": 0,
@@ -1666,82 +2058,82 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 12
         },
         "borderRadius": 10,
-        "backgroundColor": "#1c1f26",
-        "color": "#b6bcc9",
+        "backgroundColor": "#ffffff",
+        "color": "#4b5058",
         "fontSize": 12,
         "borderWidth": 1,
-        "borderColor": "#2e3340",
+        "borderColor": "#dcdfe5",
         "text": "收起",
         "semantic": "view"
       },
       {
-        "id": 64,
-        "parentId": 0,
+        "id": 67,
+        "parentId": 3,
         "margin": {
           "left": 0,
           "right": 0
-        },
-        "semantic": "view"
-      },
-      {
-        "id": 65,
-        "parentId": 64,
-        "semantic": "view"
-      },
-      {
-        "id": 66,
-        "parentId": 65,
-        "display": "flex",
-        "flexDirection": "row",
-        "alignItems": "flex-start",
-        "justifyContent": "space-between",
-        "semantic": "view"
-      },
-      {
-        "id": 67,
-        "parentId": 66,
-        "flexGrow": 1,
-        "flexShrink": 1,
-        "flexBasis": 0,
-        "minWidth": 0,
-        "margin": {
-          "right": 12
         },
         "semantic": "view"
       },
       {
         "id": 68,
         "parentId": 67,
+        "semantic": "view"
+      },
+      {
+        "id": 69,
+        "parentId": 68,
+        "display": "flex",
+        "flexDirection": "row",
+        "alignItems": "flex-start",
+        "justifyContent": "space-between",
+        "semantic": "view"
+      },
+      {
+        "id": 70,
+        "parentId": 69,
+        "flexGrow": 1,
+        "flexShrink": 1,
+        "flexBasis": 0,
+        "minWidth": 0,
+        "margin": {
+          "right": 12
+        },
+        "semantic": "view"
+      },
+      {
+        "id": 71,
+        "parentId": 70,
         "fontSize": 14,
         "fontWeight": 600,
-        "color": "#eef0f5",
+        "color": "#1a1c22",
         "text": "⑦ 主题容器",
         "semantic": "text"
       },
       {
-        "id": 69,
-        "parentId": 67,
+        "id": 72,
+        "parentId": 70,
         "margin": {
           "top": 2
         },
         "fontSize": 11,
-        "color": "#9aa1af",
+        "color": "#5f6673",
         "text": "Global 层 · 深/浅切换（无需刷新）",
         "semantic": "text"
       },
       {
-        "id": 70,
-        "parentId": 67,
+        "id": 73,
+        "parentId": 70,
         "margin": {
           "top": 8
         },
         "fontSize": 12,
-        "color": "#9393f5",
+        "color": "#4a4ab8",
         "semantic": "text"
       },
       {
-        "id": 71,
-        "parentId": 66,
+        "id": 74,
+        "parentId": 69,
         "flexShrink": 0,
         "display": "flex",
         "flexDirection": "row",
@@ -1751,8 +2143,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "semantic": "view"
       },
       {
-        "id": 72,
-        "parentId": 71,
+        "id": 75,
+        "parentId": 74,
         "margin": {
           "top": 0,
           "right": 0,
@@ -1766,151 +2158,29 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 12
         },
         "borderRadius": 10,
-        "backgroundColor": "#7b7bef",
+        "backgroundColor": "#5b5bd6",
         "color": "#ffffff",
         "fontSize": 12,
         "text": "切换主题",
         "semantic": "view"
       },
       {
-        "id": 73,
-        "parentId": 0,
+        "id": 76,
+        "parentId": 3,
         "margin": {
           "left": 0,
           "right": 0
-        },
-        "semantic": "view"
-      },
-      {
-        "id": 74,
-        "parentId": 73,
-        "semantic": "view"
-      },
-      {
-        "id": 75,
-        "parentId": 74,
-        "display": "flex",
-        "flexDirection": "row",
-        "alignItems": "flex-start",
-        "justifyContent": "space-between",
-        "semantic": "view"
-      },
-      {
-        "id": 76,
-        "parentId": 75,
-        "flexGrow": 1,
-        "flexShrink": 1,
-        "flexBasis": 0,
-        "minWidth": 0,
-        "margin": {
-          "right": 12
         },
         "semantic": "view"
       },
       {
         "id": 77,
         "parentId": 76,
-        "fontSize": 14,
-        "fontWeight": 600,
-        "color": "#eef0f5",
-        "text": "⑧ IM 未读角标",
-        "semantic": "text"
+        "semantic": "view"
       },
       {
         "id": 78,
-        "parentId": 76,
-        "margin": {
-          "top": 2
-        },
-        "fontSize": 11,
-        "color": "#9aa1af",
-        "text": "Global + 状态 · 跨页同步",
-        "semantic": "text"
-      },
-      {
-        "id": 79,
-        "parentId": 76,
-        "margin": {
-          "top": 8
-        },
-        "fontSize": 12,
-        "color": "#9393f5",
-        "semantic": "text"
-      },
-      {
-        "id": 80,
-        "parentId": 75,
-        "flexShrink": 0,
-        "display": "flex",
-        "flexDirection": "row",
-        "flexWrap": "wrap",
-        "justifyContent": "flex-end",
-        "maxWidth": 200,
-        "semantic": "view"
-      },
-      {
-        "id": 81,
-        "parentId": 80,
-        "margin": {
-          "top": 0,
-          "right": 0,
-          "bottom": 8,
-          "left": 8
-        },
-        "padding": {
-          "top": 8,
-          "right": 12,
-          "bottom": 8,
-          "left": 12
-        },
-        "borderRadius": 10,
-        "backgroundColor": "#7b7bef",
-        "color": "#ffffff",
-        "fontSize": 12,
-        "text": "+1",
-        "semantic": "view"
-      },
-      {
-        "id": 82,
-        "parentId": 80,
-        "margin": {
-          "top": 0,
-          "right": 0,
-          "bottom": 8,
-          "left": 8
-        },
-        "padding": {
-          "top": 8,
-          "right": 12,
-          "bottom": 8,
-          "left": 12
-        },
-        "borderRadius": 10,
-        "backgroundColor": "#1c1f26",
-        "color": "#b6bcc9",
-        "fontSize": 12,
-        "borderWidth": 1,
-        "borderColor": "#2e3340",
-        "text": "清零",
-        "semantic": "view"
-      },
-      {
-        "id": 83,
-        "parentId": 0,
-        "margin": {
-          "left": 0,
-          "right": 0
-        },
-        "semantic": "view"
-      },
-      {
-        "id": 84,
-        "parentId": 83,
-        "semantic": "view"
-      },
-      {
-        "id": 85,
-        "parentId": 84,
+        "parentId": 77,
         "display": "flex",
         "flexDirection": "row",
         "alignItems": "flex-start",
@@ -1918,8 +2188,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "semantic": "view"
       },
       {
-        "id": 86,
-        "parentId": 85,
+        "id": 79,
+        "parentId": 78,
         "flexGrow": 1,
         "flexShrink": 1,
         "flexBasis": 0,
@@ -1930,38 +2200,38 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "semantic": "view"
       },
       {
-        "id": 87,
-        "parentId": 86,
+        "id": 80,
+        "parentId": 79,
         "fontSize": 14,
         "fontWeight": 600,
-        "color": "#eef0f5",
-        "text": "⑨ Global 层内存（GP7）",
+        "color": "#1a1c22",
+        "text": "⑧ IM 未读角标",
         "semantic": "text"
       },
       {
-        "id": 88,
-        "parentId": 86,
+        "id": 81,
+        "parentId": 79,
         "margin": {
           "top": 2
         },
         "fontSize": 11,
-        "color": "#9aa1af",
-        "text": "常驻监控 · 分端口径（MP：状态一份 + 每页初值 × 页面栈）",
+        "color": "#5f6673",
+        "text": "Global + 状态 · 跨页同步",
         "semantic": "text"
       },
       {
-        "id": 89,
-        "parentId": 86,
+        "id": 82,
+        "parentId": 79,
         "margin": {
           "top": 8
         },
         "fontSize": 12,
-        "color": "#9393f5",
+        "color": "#4a4ab8",
         "semantic": "text"
       },
       {
-        "id": 90,
-        "parentId": 85,
+        "id": 83,
+        "parentId": 78,
         "flexShrink": 0,
         "display": "flex",
         "flexDirection": "row",
@@ -1971,8 +2241,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "semantic": "view"
       },
       {
-        "id": 91,
-        "parentId": 90,
+        "id": 84,
+        "parentId": 83,
         "margin": {
           "top": 0,
           "right": 0,
@@ -1986,21 +2256,39 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 12
         },
         "borderRadius": 10,
-        "backgroundColor": "#7b7bef",
+        "backgroundColor": "#5b5bd6",
         "color": "#ffffff",
         "fontSize": 12,
-        "text": "读内存",
+        "text": "+1",
         "semantic": "view"
       },
       {
-        "id": 92,
-        "parentId": 0,
-        "text": "操作日志",
-        "semantic": "text"
+        "id": 85,
+        "parentId": 83,
+        "margin": {
+          "top": 0,
+          "right": 0,
+          "bottom": 8,
+          "left": 8
+        },
+        "padding": {
+          "top": 8,
+          "right": 12,
+          "bottom": 8,
+          "left": 12
+        },
+        "borderRadius": 10,
+        "backgroundColor": "#ffffff",
+        "color": "#4b5058",
+        "fontSize": 12,
+        "borderWidth": 1,
+        "borderColor": "#dcdfe5",
+        "text": "清零",
+        "semantic": "view"
       },
       {
-        "id": 93,
-        "parentId": 0,
+        "id": 86,
+        "parentId": 3,
         "margin": {
           "left": 0,
           "right": 0
@@ -2008,33 +2296,213 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "semantic": "view"
       },
       {
+        "id": 87,
+        "parentId": 86,
+        "semantic": "view"
+      },
+      {
+        "id": 88,
+        "parentId": 87,
+        "display": "flex",
+        "flexDirection": "row",
+        "alignItems": "flex-start",
+        "justifyContent": "space-between",
+        "semantic": "view"
+      },
+      {
+        "id": 89,
+        "parentId": 88,
+        "flexGrow": 1,
+        "flexShrink": 1,
+        "flexBasis": 0,
+        "minWidth": 0,
+        "margin": {
+          "right": 12
+        },
+        "semantic": "view"
+      },
+      {
+        "id": 90,
+        "parentId": 89,
+        "fontSize": 14,
+        "fontWeight": 600,
+        "color": "#1a1c22",
+        "text": "⑨ Global 层内存（GP7）",
+        "semantic": "text"
+      },
+      {
+        "id": 91,
+        "parentId": 89,
+        "margin": {
+          "top": 2
+        },
+        "fontSize": 11,
+        "color": "#5f6673",
+        "text": "常驻监控 · 分端口径（MP：状态一份 + 每页初值 × 页面栈）",
+        "semantic": "text"
+      },
+      {
+        "id": 92,
+        "parentId": 89,
+        "margin": {
+          "top": 8
+        },
+        "fontSize": 12,
+        "color": "#4a4ab8",
+        "semantic": "text"
+      },
+      {
+        "id": 93,
+        "parentId": 88,
+        "flexShrink": 0,
+        "display": "flex",
+        "flexDirection": "row",
+        "flexWrap": "wrap",
+        "justifyContent": "flex-end",
+        "maxWidth": 200,
+        "semantic": "view"
+      },
+      {
         "id": 94,
         "parentId": 93,
+        "margin": {
+          "top": 0,
+          "right": 0,
+          "bottom": 8,
+          "left": 8
+        },
+        "padding": {
+          "top": 8,
+          "right": 12,
+          "bottom": 8,
+          "left": 12
+        },
+        "borderRadius": 10,
+        "backgroundColor": "#5b5bd6",
+        "color": "#ffffff",
+        "fontSize": 12,
+        "text": "读内存",
         "semantic": "view"
       },
       {
         "id": 95,
-        "parentId": 94,
-        "fontFamily": "monospace",
-        "fontSize": 11,
-        "color": "#b6bcc9",
-        "lineHeight": "1.7",
+        "parentId": 3,
+        "text": "操作日志",
         "semantic": "text"
       },
       {
         "id": 96,
-        "parentId": 94,
+        "parentId": 3,
+        "margin": {
+          "left": 0,
+          "right": 0
+        },
+        "semantic": "view"
+      },
+      {
+        "id": 97,
+        "parentId": 96,
+        "semantic": "view"
+      },
+      {
+        "id": 98,
+        "parentId": 97,
         "fontFamily": "monospace",
         "fontSize": 11,
-        "color": "#9aa1af",
+        "color": "#4b5058",
+        "lineHeight": "1.7",
+        "semantic": "text"
+      },
+      {
+        "id": 99,
+        "parentId": 97,
+        "fontFamily": "monospace",
+        "fontSize": 11,
+        "color": "#5f6673",
         "lineHeight": "1.7",
         "text": "（操作后在此留痕）",
         "semantic": "text"
       },
       {
-        "id": 97,
-        "parentId": 0,
+        "id": 100,
+        "parentId": 3,
         "semantic": "p-auth-gate"
+      },
+      {
+        "id": 101,
+        "parentId": 0,
+        "semantic": "overlay-layer",
+        "position": "absolute",
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "pointerEvents": false
+      },
+      {
+        "id": 102,
+        "parentId": 101,
+        "position": "absolute",
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0,
+        "pointerEvents": false,
+        "semantic": "div"
+      },
+      {
+        "id": 103,
+        "parentId": 102,
+        "pointerEvents": true,
+        "position": "absolute",
+        "right": 14,
+        "width": 56,
+        "height": 56,
+        "borderRadius": 28,
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "center",
+        "justifyContent": "center",
+        "backgroundColor": "#5b5bd6",
+        "boxShadow": {
+          "dx": 0,
+          "dy": 3,
+          "blur": 10,
+          "spread": 0,
+          "color": "#5b5bd659"
+        },
+        "semantic": "div"
+      },
+      {
+        "id": 104,
+        "parentId": 103,
+        "fontSize": 17,
+        "fontWeight": 700,
+        "color": "#ffffff",
+        "lineHeight": "1.1",
+        "pointerEvents": true,
+        "text": "聊",
+        "semantic": "span"
+      },
+      {
+        "id": 105,
+        "parentId": 103,
+        "fontSize": 10,
+        "color": "#ffffff",
+        "opacity": 0.92,
+        "pointerEvents": true,
+        "text": "客服",
+        "semantic": "span"
+      },
+      {
+        "id": 106,
+        "parentId": 101,
+        "semantic": "p-toast-host"
+      },
+      {
+        "id": 107,
+        "parentId": 101,
+        "semantic": "p-loading-host"
       }
     ]
   }

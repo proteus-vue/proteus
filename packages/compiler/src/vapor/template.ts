@@ -28,6 +28,8 @@ import type { LayoutNode, LayoutTemplate, ListTemplate, TextSegment } from '@pro
 import { HOST_DIRECTIVE_NAMES, HOST_DIRECTIVE_SPECS, isHostDirective } from '@proteus-vue/slot-runtime'
 // ★混合文本（P2-2）里的插值段要编成表达式程序——复用**同一套**编译器（能力边界一处收敛）
 import { compileExpr } from './expr'
+// ★★★批次 45：构建期静态实例化（App 壳 v-if/v-for 折叠）
+import { staticInstantiate } from './static-instantiate'
 // ★★★元素/文本**混排**归一化（2026-10-03）——三处遍历（template/deps/events）的**唯一**输入
 import { normalizedChildSequence } from './text-runs'
 // ★作用域插槽的变量形态解析（单名 / 对象解构——唯一入口；2026-10-03）
@@ -457,11 +459,32 @@ function parseBoxShadow(raw: string, toNum: (v: string) => number | undefined): 
  *   取声明值——与"取任一值"的保守一致）。
  */
 export function parseCssVarTokens(css: string): Record<string, string> {
-  const out: Record<string, string> = {}
   const body = css.replace(/\/\*[\s\S]*?\*\//g, '')
-  const re = /(--[A-Za-z0-9_-]+)\s*:\s*([^;{}]+)/g
-  let m: RegExpExecArray | null
-  while ((m = re.exec(body))) out[m[1]!.trim()] = m[2]!.trim()
+  const declRe = /(--[A-Za-z0-9_-]+)\s*:\s*([^;{}]+)/g
+  /** 收集声明；**first-wins**（已存在的令牌不覆盖——基块优先，主题覆盖块只补缺） */
+  const collect = (s: string, into: Record<string, string>): void => {
+    let m: RegExpExecArray | null
+    declRe.lastIndex = 0
+    while ((m = declRe.exec(s))) {
+      const k = m[1]!.trim()
+      if (!(k in into)) into[k] = m[2]!.trim()
+    }
+  }
+  // ★★批次 45 修复（App 端主题取错）：令牌表原**全文件按最后出现**取值 ⇒ 主题覆盖块（`.sa-dark` / `[data-theme]`）
+  //   会**污染默认值**（实测：superapp 的 `--sa-text` 被取成深色 `#eef0f5`，而默认应为浅色 `#1a1c22`
+  //   ⇒ App 端页面文字/背景与 Web 分叉）。
+  //   ⇒ 改为**块感知**：先取**基选择器**块（`:root`/`html`/`body`/`page` 或无选择器的裸声明）的值（默认主题），
+  //     仅对基块**未定义**的令牌，再从其余块（主题覆盖）补齐（first-wins）。
+  //   ★向后兼容：无花括号的裸声明串（既有测试用法）整体视为**一个基块**。
+  const blocks = [...body.matchAll(/([^{}]*)\{([^{}]*)\}/g)]
+  const out: Record<string, string> = {}
+  if (blocks.length === 0) {
+    collect(body, out)
+    return out
+  }
+  const isBase = (selector: string): boolean => !/[.#[]/.test(selector)   // 无类/属性选择器 ⇒ 基块
+  for (const b of blocks) if (isBase(b[1]!)) collect(b[2]!, out)          // 默认主题
+  for (const b of blocks) if (!isBase(b[1]!)) collect(b[2]!, out)         // 主题覆盖只补缺
   return out
 }
 
@@ -679,7 +702,12 @@ export function parseStaticStyle(
         //   否则原样透传会让**整棵树建不起来**（App/小程序端页面全崩）。
         //   ★批次 14（多端一致性审计修）：CSS 关键字**大小写不敏感**（`display: FLEX` Web 生效）——
         //     此前大小写敏感 ⇒ `FLEX` 被丢弃 = 与 Web 偏差。⇒ 比较与存储均用小写。
-        const enumVal = rawVal.trim().toLowerCase()
+        let enumVal = rawVal.trim().toLowerCase()
+        // ★★★批次 45：`position: fixed` → `absolute`。App 端**单全屏视口**（无滚动视口/无窗口）——
+        //   此处两者等价（都相对视口定位）；内核 position 枚举只有 static/relative/absolute。
+        //   实测来源：App.vue 的 `.sa-chrome`（固定浮层，Web 真值 `position:fixed;inset:0`）此前被
+        //   诊断跳过 ⇒ chrome 浮层丢失定位 ⇒ 被压进普通流（页面布局塌）。
+        if (key === 'position' && enumVal === 'fixed') enumVal = 'absolute'
         const allowed = APP_ENUM_VALUES[key]
         if (allowed && !allowed.includes(enumVal)) {
           pushDiag(
@@ -1154,7 +1182,7 @@ function stripAtRuleBlocks(css: string, name: string): string {
 function parseSelectorChain(sel: string): { segments: ClassStyleSegment[]; combinators: Array<' ' | '>'> } | null {
   if (!sel) return null
   // ★批次 37：先展开 Vue **作用域穿透选择器**（`:deep()`/`::v-deep()`/`>>>`）——展开后按普通选择器解析。
-  let work = sel.replace(/\s*>>>\s*/g, ' ')
+  let work: string | null = sel.replace(/\s*>>>\s*/g, ' ')
   work = unwrapDeep(work)
   if (work === null) return null
   // 不支持：属性选择器、兄弟组合、插值、花括号
@@ -2359,6 +2387,11 @@ export function buildLayoutTemplate(
   compat?: Pick<VueCompatDeps, 'sfcParse' | 'domParse'>,
   /** ★批次 9：设计令牌表（`--name`→值，来自项目 `globalStyle`）——SFC 内 `var()` 编译期折叠 */
   tokens?: Record<string, string>,
+  /**
+   * ★★★批次 45：**构建期已知初值**（`App 壳静态实例化`）——给了它就在序列化前对 AST 做一次
+   *   `staticInstantiate`（折叠 `v-if` / 展开静态 `v-for` / 折常量插值）。缺省（常态）行为**逐字节不变**。
+   */
+  statics?: Record<string, unknown>,
 ): LayoutTemplateResult {
   const diagnostics: VaporDiagnostic[] = []
   const nodes: LayoutNode[] = []
@@ -2389,7 +2422,13 @@ export function buildLayoutTemplate(
     })
     return { template: { nodes: [], lists: [], roots: [], ok: false }, diagnostics, ok: false }
   }
-  const ast = dom(desc.template.content, { comments: false }) as unknown as { children: unknown[] }
+  let ast = dom(desc.template.content, { comments: false }) as unknown as { children: unknown[] }
+  // ★★★批次 45：构建期静态实例化（给了 `statics` 才做——缺省零行为变化）。
+  if (statics) {
+    const si = staticInstantiate(ast as unknown as { type: number; children: unknown[] }, statics)
+    ast = si.ast as unknown as { children: unknown[] }
+    for (const d of si.diagnostics) diag(d, undefined, 'VAPOR_STATIC_IF_DROPPED')
+  }
 
   // ★★★C1（2026-10-04）：把 SFC `<style>` 的**类规则**抽成规则表——
   //   供模板节点按 `class`（+ 祖先类链）匹配合并（App 路径无 CSS 引擎；真实项目样式多在 `<style>`+class）。

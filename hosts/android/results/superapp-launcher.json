@@ -61,7 +61,7 @@
       "anim_hook_missing": 0,
       "rect_calls": 0,
       "shared_calls": 0,
-      "content_node_total": 176,
+      "content_node_total": 216,
       "live_screens": 1,
       "calls": [
         "screen.mount",
@@ -86,5 +86,6 @@
       ],
       "handle_count": 2
     }
-  }
+  },
+  "png": "superapp-launcher.png"
 }

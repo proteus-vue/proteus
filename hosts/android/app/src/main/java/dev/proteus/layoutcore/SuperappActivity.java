@@ -226,7 +226,10 @@ public class SuperappActivity extends android.app.Activity {
             if (!all.has(page)) page = all.has("index") ? "index" : all.keys().next();
             org.json.JSONArray nodes = all.getJSONObject(page).getJSONArray("nodes");
             org.json.JSONObject tree = new org.json.JSONObject();
-            tree.put("viewport", new org.json.JSONObject().put("width", logicalW).put("height", logicalH));
+            // viewport 高 = **内容区**（屏高 − 底部 Tab 栏）——App 壳按此布局（绝对层填满内容区），
+            //   与宿主 tab 栏各占其位（不重叠、不裁切）
+            float contentH = logicalH - tabBarHeightPx / density;
+            tree.put("viewport", new org.json.JSONObject().put("width", logicalW).put("height", contentH));
             tree.put("nodes", nodes);
             draw.mount(tree.toString());
             if (draw.view() != null) draw.view().invalidate();
@@ -323,6 +326,21 @@ public class SuperappActivity extends android.app.Activity {
                 o.put("host_stats", new org.json.JSONObject(
                         screenHost != null ? screenHost.invoke("screen.stats", new org.json.JSONObject()) : "{}"));
             } catch (Throwable t) { o.put("host_stats_error", String.valueOf(t)); }
+            // ★★★批次 45：视觉证据（把整窗真画到 PNG——App 壳上屏的机器可读证据）。
+            try {
+                android.graphics.Bitmap bmp = android.graphics.Bitmap.createBitmap(
+                        root.getWidth() > 0 ? root.getWidth() : 1080,
+                        root.getHeight() > 0 ? root.getHeight() : 2400,
+                        android.graphics.Bitmap.Config.ARGB_8888);
+                root.draw(new android.graphics.Canvas(bmp));
+                java.io.File dir = getExternalFilesDir(null);
+                if (dir == null) dir = getFilesDir();
+                java.io.File png = new java.io.File(dir, "superapp-launcher.png");
+                java.io.FileOutputStream pf = new java.io.FileOutputStream(png);
+                bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, pf);
+                pf.close(); bmp.recycle();
+                o.put("png", png.getName());
+            } catch (Throwable pe) { o.put("png_error", pe.getClass().getSimpleName()); }
             MainActivity.writeReportStatic(this, "superapp-launcher.json", o.toString(2));
             android.util.Log.i(TAG, "SUPERAPP_LAUNCHER_REPORT_READY");
         } catch (Exception e) {
