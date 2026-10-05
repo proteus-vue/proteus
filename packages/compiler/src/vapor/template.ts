@@ -82,7 +82,7 @@ export const APP_ENUM_VALUES: Record<string, readonly string[]> = {
 /** 绘制字段（宿主自绘读这些键；模板照样要带上，否则挂载后无底色/无字色） */
 // ★★★逐边 border 批（2026-10-05 · border-bottom 等 4 个 P0 项）：追加**逐边** width/color（宿主逐边绘制；
 //   uniform borderWidth/borderColor 保留 = 四边缺省值）。语料 21 处 `border-<side>: <w> <style> <color>`。
-export const APP_PAINT_FIELDS = ['backgroundColor', 'color', 'fontSize', 'fontWeight', 'fontFamily', 'textAlign', 'lineHeight', 'textOverflow', 'letterSpacing', 'textDecoration', 'visibility', 'borderRadius', 'borderColor', 'borderWidth', 'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth', 'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor', 'opacity', 'boxShadow', 'transform'] as const
+export const APP_PAINT_FIELDS = ['backgroundColor', 'color', 'fontSize', 'fontWeight', 'fontFamily', 'textAlign', 'lineHeight', 'textOverflow', 'letterSpacing', 'textDecoration', 'visibility', 'borderRadius', 'borderColor', 'borderWidth', 'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth', 'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor', 'borderTopStyle', 'borderRightStyle', 'borderBottomStyle', 'borderLeftStyle', 'opacity', 'boxShadow', 'transform'] as const
 const PAINT_FIELDS = new Set<string>(APP_PAINT_FIELDS)
 /**
  * ★批次 4（CSS 兼容对齐）：`text-align` 的**封闭集**（App 自绘文本在盒内的水平对齐）。
@@ -521,6 +521,9 @@ export function parseStaticStyle(
   keyframes?: KeyframesMap,
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {}
+
+  /** ★★★边框族收口批：逐角 radius 长手账（同块内累积、就地合成——见循环内消费点）。 */
+  const cornerAcc: Record<string, number> = {}
   for (const part of css.split(';')) {
     const t = part.trim()
     if (!t) continue
@@ -805,6 +808,72 @@ export function parseStaticStyle(
       markImportant(key)
       continue
     }
+    // ★★★边框族收口批（2026-10-05 · 用户「把边框后续未收口的也收到边框里面，比如边框样式等等」）：
+    //   `border-<corner>-radius`（逐角长手）——语义 = `border-radius: <tl> <tr> <br> <bl>`（缺省 0）；
+    //   就地累积 + 合成（同块内多个逐角声明依次走到这里），与简写同一输出形态：
+    //   全等 ⇒ 只写 borderRadius；否则统一值 = max + 逐角掩码。
+    const cornerRadius = /^border(TopLeft|TopRight|BottomRight|BottomLeft)Radius$/.exec(key)
+    if (cornerRadius) {
+      const n = numOf(rawVal)
+      if (n === undefined) { pushDiag(`\`${rawKey}: ${rawVal}\` 不是合法长度（支持 px/数字）——已跳过`); continue }
+      cornerAcc[cornerRadius[1]!] = n
+      const quad: Record<string, number> = {
+        topLeft: cornerAcc.TopLeft ?? 0, topRight: cornerAcc.TopRight ?? 0,
+        bottomRight: cornerAcc.BottomRight ?? 0, bottomLeft: cornerAcc.BottomLeft ?? 0,
+      }
+      const vals = [quad.topLeft!, quad.topRight!, quad.bottomRight!, quad.bottomLeft!]
+      if (vals.every((v) => v === vals[0])) {
+        out.borderRadius = vals[0]!
+        markImportant('borderRadius')
+      } else {
+        out.borderRadius = Math.max(...vals)
+        out.borderRadiusCorners = { topLeft: vals[0]! > 0, topRight: vals[1]! > 0, bottomRight: vals[2]! > 0, bottomLeft: vals[3]! > 0 }
+        markImportant('borderRadius'); markImportant('borderRadiusCorners')
+      }
+      continue
+    }
+    // ★★★边框族收口批（2026-10-05 · 用户「把边框后续未收口的也收到边框里面，比如边框样式等等」）：
+    //   `border-style` / `border-width` / `border-color` 的 **1–4 值简写**——CSS 语法：
+    //   1 值=四边同 / 2 值=上下·左右 / 3 值=上·左右·下 / 4 值=上·右·下·左。
+    //   ★单值形态**放行到既有分支**（统一字段，零行为变化）；多值展开为逐边字段。
+    if (key === 'borderWidth' || key === 'borderColor' || key === 'borderStyle') {
+      const toks = splitTopLevelSpaces(rawVal)
+      if (toks.length >= 2 && toks.length <= 4) {
+        const sides4 = ['Top', 'Right', 'Bottom', 'Left'] as const
+        const map = toks.length === 2 ? [toks[0]!, toks[1]!, toks[0]!, toks[1]!]
+          : toks.length === 3 ? [toks[0]!, toks[1]!, toks[2]!, toks[1]!]
+          : [toks[0]!, toks[1]!, toks[2]!, toks[3]!]
+        let ok = true
+        const parsed: (number | string)[] = []
+        for (const t of map) {
+          if (key === 'borderWidth') {
+            const n = numOf(t)
+            if (n === undefined) { ok = false; break }
+            parsed.push(n)
+          } else if (key === 'borderColor') {
+            const c = normalizeCssColor(t)
+            if (!c) { ok = false; break }
+            parsed.push(c)
+          } else {
+            const v = t.toLowerCase()
+            if (v === 'none') parsed.push(0)   // none ⇒ 该边清零标记（负值语义由消费方处理）
+            else if (v === 'solid' || v === 'dashed' || v === 'dotted') parsed.push(v)
+            else { ok = false; break }
+          }
+        }
+        if (!ok) {
+          pushDiag(`\`${rawKey}: ${rawVal}\` 的 1–4 值简写含未支持取值——已跳过`,
+            key === 'borderStyle' ? 'App 端线型支持 solid/dashed/dotted/none' : '宽度为 px/数字；颜色为 hex/rgb()/命名色')
+          continue
+        }
+        for (let i = 0; i < 4; i++) {
+          const f = `border${sides4[i]}${key === 'borderWidth' ? 'Width' : key === 'borderColor' ? 'Color' : 'Style'}`
+          if (key === 'borderStyle' && parsed[i] === 0) { out[`border${sides4[i]}Width`] = 0; markImportant(`border${sides4[i]}Width`) }
+          else { out[f] = parsed[i]!; markImportant(f) }
+        }
+        continue
+      }
+    }
     if (PAINT_FIELDS.has(key)) {
       if (key === 'transform') {
         // ★批次 38（对齐 Web · 削减胶水）：**静态 `transform`** —— 位移/缩放/旋转一次性折成数值（**不可继承**）。
@@ -1014,12 +1083,11 @@ export function parseStaticStyle(
     // ★批次 5（CSS 兼容对齐 · 边框）：`border` 简写 → borderWidth + borderColor（uniform）。
     if (key === 'border') {
       const b = parseBorderShorthand(rawVal)
-      // ★★多端一致性（批次 14 审计修）：非 solid 线型（dashed/dotted/double 等）宿主只画**实线** ⇒
-      //   静默画成实线 = 与 Web 偏差。**如实诊断 + 跳过**（不用错误的实线冒充）。
-      if (b.style !== undefined && b.style !== 'solid' && b.style !== 'none') {
+      // ★★★边框族收口批（2026-10-05）：非 solid 线型**已支持**（dashed/dotted——宿主按线型绘制）。
+      if (b.style !== undefined && b.style !== 'solid' && b.style !== 'none' && b.style !== 'dashed' && b.style !== 'dotted') {
         pushDiag(
-          `border 简写 \`${rawVal}\` 的线型 \`${b.style}\` 未支持（App 端边框仅实线 solid）——已跳过（不画成实线冒充）`,
-          'App 端边框仅实线：`border: 1px solid #ccc`；虚线/点线请改用背景图或语义组件，或保留 Web 端渲染',
+          `border 简写 \`${rawVal}\` 的线型 \`${b.style}\` 未支持（App 端线型支持 solid/dashed/dotted/none）——已跳过（不画成实线冒充）`,
+          'double/groove/ridge/inset/outset 无对应；dashed/dotted 已支持（用 solid/dashed/dotted/none）',
         )
         continue
       }
@@ -1032,6 +1100,10 @@ export function parseStaticStyle(
       }
       if (b.width !== undefined) { out.borderWidth = b.width; markImportant('borderWidth') }
       if (b.color !== undefined) { out.borderColor = b.color; markImportant('borderColor') }
+      // ★★★边框族收口批：线型落四边 Style（solid 不落——是缺省零行为变化；dashed/dotted 落）
+      if (b.style === 'dashed' || b.style === 'dotted') {
+        for (const S of ['Top', 'Right', 'Bottom', 'Left'] as const) { out[`border${S}Style`] = b.style; markImportant(`border${S}Style`) }
+      }
       else {
         // 宽度有、颜色没解析出（多为 var() 令牌色）⇒ 边框不可见，如实诊断（不静默当已支持）
         pushDiag(
@@ -1043,11 +1115,15 @@ export function parseStaticStyle(
       }
       continue
     }
-    // `border-style`：宿主只画**实线**——solid 视为无操作，其余如实诊断（不静默当实线）
+    // `border-style`（单值）：solid ⇒ 四边 Style 同值（宿主按线型绘制）；none ⇒ 四边清零；其余诊断
     if (key === 'borderStyle') {
-      const s = rawVal.trim().toLowerCase()
-      if (s !== 'solid' && s !== 'none') {
-        pushDiag(`\`border-style: ${rawVal}\` 未支持（App 端边框仅实线 solid）——已按无边框处理`)
+      const v = rawVal.trim().toLowerCase()
+      if (v === 'solid' || v === 'dashed' || v === 'dotted') {
+        for (const S of ['Top', 'Right', 'Bottom', 'Left'] as const) { out[`border${S}Style`] = v; markImportant(`border${S}Style`) }
+      } else if (v === 'none') {
+        for (const S of ['Top', 'Right', 'Bottom', 'Left'] as const) { out[`border${S}Width`] = 0; markImportant(`border${S}Width`) }
+      } else {
+        pushDiag(`\`border-style: ${rawVal}\` 未支持（App 端线型支持 solid/dashed/dotted/none）——已跳过`, 'double/groove/ridge/inset/outset/hidden 无对应；solid/dashed/dotted/none 可用')
       }
       continue
     }
@@ -1076,14 +1152,17 @@ export function parseStaticStyle(
       const W = `border${side}Width`
       const C = `border${side}Color`
       const b = parseBorderShorthand(rawVal)
-      if (b.style !== undefined && b.style !== 'solid' && b.style !== 'none') {
+      // ★★★边框族收口批（2026-10-05）：非 solid 已支持（dashed/dotted）
+      if (b.style !== undefined && b.style !== 'solid' && b.style !== 'none' && b.style !== 'dashed' && b.style !== 'dotted') {
         pushDiag(
-          `border-${side.toLowerCase()}: ${rawVal} 的线型 \`${b.style}\` 未支持（App 端边框仅实线 solid）——已跳过`
+          `border-${side.toLowerCase()}: ${rawVal} 的线型 \`${b.style}\` 未支持（App 端线型支持 solid/dashed/dotted/none）——已跳过`
             + '（不画成实线冒充）',
-          '虚线/点线请改用背景图或语义组件；或保留 Web/MP 端渲染（该两端原生支持）',
+          'double/groove/ridge/inset/outset 无对应',
         )
         continue
       }
+      // ★线型落该边 Style（solid 不落——缺省；dashed/dotted 落）
+      if (b.style === 'dashed' || b.style === 'dotted') { out[`border${side}Style`] = b.style; markImportant(`border${side}Style`) }
       if (b.style === 'none' || (b.width === undefined && b.color === undefined)) {
         // `border-<side>: none`（或未解析出宽度/颜色）⇒ 该边**清零**（重置语义）
         out[W] = 0
@@ -1108,8 +1187,9 @@ export function parseStaticStyle(
       const side = sideStyle[1]!
       const v = rawVal.trim().toLowerCase()
       if (v === 'none') { out[`border${side}Width`] = 0; markImportant(`border${side}Width`) }
+      else if (v === 'dashed' || v === 'dotted') { out[`border${side}Style`] = v; markImportant(`border${side}Style`) }
       else if (v !== 'solid') {
-        pushDiag(`border-${side.toLowerCase()}-style: ${rawVal} 未支持（App 端边框仅实线 solid）——已跳过（不画成实线冒充）`)
+        pushDiag(`border-${side.toLowerCase()}-style: ${rawVal} 未支持（App 端线型支持 solid/dashed/dotted/none）——已跳过`)
       }
       continue
     }

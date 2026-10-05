@@ -17,19 +17,19 @@
       "unit": 30
     },
     "byImpl": {
-      "not-started": 630,
-      "excluded": 210,
-      "implemented": 103,
+      "not-started": 555,
+      "excluded": 280,
+      "implemented": 108,
       "partial": 6
     },
     "byPriority": {
-      "P2": 119,
-      "excluded": 210,
+      "P2": 115,
+      "excluded": 280,
       "P0": 29,
-      "done": 103,
-      "P1": 488
+      "done": 108,
+      "P1": 417
     },
-    "actionable": 636,
+    "actionable": 561,
     "actionableP0": 29
   },
   "entries": [
@@ -3372,8 +3372,8 @@
       "inherited": false,
       "initial": "auto",
       "syntax": "<'width'>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3382,7 +3382,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -3400,7 +3400,7 @@
       ],
       "syntax": "<line-width> || <line-style> || <color>",
       "impl": "implemented",
-      "implNote": "**简写展开**：borderWidth + borderColor——border 简写 → 统一 width + color（线型非 solid ⇒ 诊断，宿主只画实线）（证据：vapor/template.ts:971-990（parseBorderShorthand））",
+      "implNote": "**简写展开**：borderWidth + borderColor（附：borderTopStyle/borderRightStyle/borderBottomStyle/borderLeftStyle 部分支持）——border 简写 → 统一 width + color + 四边线型（★边框族收口批：dashed/dotted 已支持，宿主按线型绘制；double/groove 等仍诊断）（证据：vapor/template.ts（parseBorderShorthand））",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3426,8 +3426,8 @@
         "border-block-color"
       ],
       "syntax": "<'border-block-start'>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3436,7 +3436,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -3449,8 +3449,8 @@
       "inherited": false,
       "initial": "currentcolor",
       "syntax": "<'border-top-color'>{1,2}",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3459,7 +3459,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -3476,8 +3476,8 @@
         "border-top-color"
       ],
       "syntax": "<'border-top-width'> || <'border-top-style'> || <color>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3486,7 +3486,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -3499,8 +3499,8 @@
       "inherited": false,
       "initial": "currentcolor",
       "syntax": "<'border-top-color'>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3509,7 +3509,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -3522,8 +3522,8 @@
       "inherited": false,
       "initial": "none",
       "syntax": "<'border-top-style'>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3532,7 +3532,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -3545,8 +3545,8 @@
       "inherited": false,
       "initial": "medium",
       "syntax": "<'border-top-width'>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3555,7 +3555,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -3572,8 +3572,8 @@
         "color"
       ],
       "syntax": "<'border-top-width'> || <'border-top-style'> || <color>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3582,7 +3582,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -3595,8 +3595,8 @@
       "inherited": false,
       "initial": "currentcolor",
       "syntax": "<'border-top-color'>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3605,7 +3605,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -3618,8 +3618,8 @@
       "inherited": false,
       "initial": "none",
       "syntax": "<'border-top-style'>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3628,7 +3628,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -3641,8 +3641,8 @@
       "inherited": false,
       "initial": "medium",
       "syntax": "<'border-top-width'>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3651,7 +3651,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -3664,8 +3664,8 @@
       "inherited": false,
       "initial": "none",
       "syntax": "<'border-top-style'>{1,2}",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3674,7 +3674,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -3687,8 +3687,8 @@
       "inherited": false,
       "initial": "medium",
       "syntax": "<'border-top-width'>{1,2}",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3697,7 +3697,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -3715,7 +3715,7 @@
       ],
       "syntax": "<line-width> || <line-style> || <color>",
       "impl": "implemented",
-      "implNote": "**简写展开**：borderBottomWidth + borderBottomColor——逐边简写（证据：同上）",
+      "implNote": "**简写展开**：borderBottomWidth + borderBottomColor（附：borderBottomStyle 部分支持）——逐边简写（width/color/style 三件套；★线型批：dashed/dotted 支持）（证据：vapor/template.ts（逐边分支））",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3760,8 +3760,8 @@
       "inherited": false,
       "initial": "0",
       "syntax": "<length-percentage [0,∞]>{1,2}",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "implemented",
+      "implNote": "**简写展开**：borderRadius（附：borderRadiusCorners 部分支持）——逐角长手（语义 = border-radius 四值；缺省 0——与简写同一输出形态：统一半径 + 掩码）（证据：vapor/template.ts（★边框族收口批：逐角就地累积 + 合成））",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3770,8 +3770,8 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
-      "acceptance": "none"
+      "priority": "done",
+      "acceptance": "pending"
     },
     {
       "id": "border-bottom-right-radius",
@@ -3783,8 +3783,8 @@
       "inherited": false,
       "initial": "0",
       "syntax": "<length-percentage [0,∞]>{1,2}",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "implemented",
+      "implNote": "**简写展开**：borderRadius（附：borderRadiusCorners 部分支持）——逐角长手（语义 = border-radius 四值；缺省 0——与简写同一输出形态：统一半径 + 掩码）（证据：vapor/template.ts（★边框族收口批：逐角就地累积 + 合成））",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3793,8 +3793,8 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
-      "acceptance": "none"
+      "priority": "done",
+      "acceptance": "pending"
     },
     {
       "id": "border-bottom-style",
@@ -4097,8 +4097,8 @@
         "border-inline-color"
       ],
       "syntax": "<'border-block-start'>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4107,7 +4107,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -4120,8 +4120,8 @@
       "inherited": false,
       "initial": "currentcolor",
       "syntax": "<'border-top-color'>{1,2}",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4130,7 +4130,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -4147,8 +4147,8 @@
         "color"
       ],
       "syntax": "<'border-top-width'> || <'border-top-style'> || <color>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4157,7 +4157,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -4170,8 +4170,8 @@
       "inherited": false,
       "initial": "currentcolor",
       "syntax": "<'border-top-color'>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4180,7 +4180,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -4193,8 +4193,8 @@
       "inherited": false,
       "initial": "none",
       "syntax": "<'border-top-style'>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4203,7 +4203,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -4216,8 +4216,8 @@
       "inherited": false,
       "initial": "medium",
       "syntax": "<'border-top-width'>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4226,7 +4226,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -4243,8 +4243,8 @@
         "color"
       ],
       "syntax": "<'border-top-width'> || <'border-top-style'> || <color>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4253,7 +4253,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -4266,8 +4266,8 @@
       "inherited": false,
       "initial": "currentcolor",
       "syntax": "<'border-top-color'>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4276,7 +4276,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -4289,8 +4289,8 @@
       "inherited": false,
       "initial": "none",
       "syntax": "<'border-top-style'>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4299,7 +4299,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -4312,8 +4312,8 @@
       "inherited": false,
       "initial": "medium",
       "syntax": "<'border-top-width'>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4322,7 +4322,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -4335,8 +4335,8 @@
       "inherited": false,
       "initial": "none",
       "syntax": "<'border-top-style'>{1,2}",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4345,7 +4345,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -4358,8 +4358,8 @@
       "inherited": false,
       "initial": "medium",
       "syntax": "<'border-top-width'>{1,2}",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4368,7 +4368,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -4386,7 +4386,7 @@
       ],
       "syntax": "<line-width> || <line-style> || <color>",
       "impl": "implemented",
-      "implNote": "**简写展开**：borderLeftWidth + borderLeftColor——逐边简写（证据：同上）",
+      "implNote": "**简写展开**：borderLeftWidth + borderLeftColor（附：borderLeftStyle 部分支持）——逐边简写（width/color/style 三件套；★线型批：dashed/dotted 支持）（证据：vapor/template.ts（逐边分支））",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4510,7 +4510,7 @@
       ],
       "syntax": "<line-width> || <line-style> || <color>",
       "impl": "implemented",
-      "implNote": "**简写展开**：borderRightWidth + borderRightColor——逐边简写（证据：同上）",
+      "implNote": "**简写展开**：borderRightWidth + borderRightColor（附：borderRightStyle 部分支持）——逐边简写（width/color/style 三件套；★线型批：dashed/dotted 支持）（证据：vapor/template.ts（逐边分支））",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4675,8 +4675,8 @@
         "border-left-style"
       ],
       "syntax": "<line-style>{1,4}",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "implemented",
+      "implNote": "**简写展开**：borderTopStyle + borderRightStyle + borderBottomStyle + borderLeftStyle（附： 部分支持）——线型简写（solid/dashed/dotted；none ⇒ 四边清零；double/groove 等诊断）（证据：vapor/template.ts（★边框族收口批：1–4 值简写 + 单值四边 Style））",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4685,8 +4685,8 @@
         "webSupport": true
       },
       "usage": 0,
-      "priority": "P1",
-      "acceptance": "none"
+      "priority": "done",
+      "acceptance": "pending"
     },
     {
       "id": "border-top",
@@ -4703,7 +4703,7 @@
       ],
       "syntax": "<line-width> || <line-style> || <color>",
       "impl": "implemented",
-      "implNote": "**简写展开**：borderTopWidth + borderTopColor——逐边简写（证据：同上（逐边分支））",
+      "implNote": "**简写展开**：borderTopWidth + borderTopColor（附：borderTopStyle 部分支持）——逐边简写（width/color/style 三件套；★线型批：dashed/dotted 支持）（证据：vapor/template.ts（逐边分支））",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4748,8 +4748,8 @@
       "inherited": false,
       "initial": "0",
       "syntax": "<length-percentage [0,∞]>{1,2}",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "implemented",
+      "implNote": "**简写展开**：borderRadius（附：borderRadiusCorners 部分支持）——逐角长手（语义 = border-radius 四值；缺省 0——与简写同一输出形态：统一半径 + 掩码）（证据：vapor/template.ts（★边框族收口批：逐角就地累积 + 合成））",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4758,8 +4758,8 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
-      "acceptance": "none"
+      "priority": "done",
+      "acceptance": "pending"
     },
     {
       "id": "border-top-right-radius",
@@ -4771,8 +4771,8 @@
       "inherited": false,
       "initial": "0",
       "syntax": "<length-percentage [0,∞]>{1,2}",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "implemented",
+      "implNote": "**简写展开**：borderRadius（附：borderRadiusCorners 部分支持）——逐角长手（语义 = border-radius 四值；缺省 0——与简写同一输出形态：统一半径 + 掩码）（证据：vapor/template.ts（★边框族收口批：逐角就地累积 + 合成））",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4781,8 +4781,8 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
-      "acceptance": "none"
+      "priority": "done",
+      "acceptance": "pending"
     },
     {
       "id": "border-top-style",
@@ -5813,8 +5813,8 @@
       "inherited": false,
       "initial": "none",
       "syntax": "auto? [ none | <length> ]",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -5823,7 +5823,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P2",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -5859,8 +5859,8 @@
       "inherited": false,
       "initial": "none",
       "syntax": "auto? [ none | <length> ]",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -5869,7 +5869,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P2",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -6052,8 +6052,8 @@
         "corner-end-end-shape"
       ],
       "syntax": "<corner-shape-value>{1,2}",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -6062,7 +6062,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -6078,8 +6078,8 @@
         "corner-start-end-shape"
       ],
       "syntax": "<corner-shape-value>{1,2}",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -6088,7 +6088,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -6222,8 +6222,8 @@
         "corner-end-end-shape"
       ],
       "syntax": "<corner-shape-value>{1,2}",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -6232,7 +6232,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -6248,8 +6248,8 @@
         "corner-start-end-shape"
       ],
       "syntax": "<corner-shape-value>{1,2}",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -6258,7 +6258,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -8495,8 +8495,8 @@
       "inherited": false,
       "initial": "auto",
       "syntax": "<'width'>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -8505,7 +8505,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -8551,8 +8551,8 @@
         "inset-block-end"
       ],
       "syntax": "<'top'>{1,2}",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -8561,7 +8561,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -8575,8 +8575,8 @@
       "inherited": false,
       "initial": "auto",
       "syntax": "<'top'>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -8585,7 +8585,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -8599,8 +8599,8 @@
       "inherited": false,
       "initial": "auto",
       "syntax": "<'top'>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -8609,7 +8609,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -8626,8 +8626,8 @@
         "inset-inline-end"
       ],
       "syntax": "<'top'>{1,2}",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -8636,7 +8636,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -8650,8 +8650,8 @@
       "inherited": false,
       "initial": "auto",
       "syntax": "<'top'>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -8660,7 +8660,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -8674,8 +8674,8 @@
       "inherited": false,
       "initial": "auto",
       "syntax": "<'top'>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -8684,7 +8684,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -9220,8 +9220,8 @@
         "margin-block-end"
       ],
       "syntax": "<'margin-top'>{1,2}",
-      "impl": "not-started",
-      "implNote": "未接：逻辑属性族（证据：逻辑属性（未接——P1 待评））",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -9230,7 +9230,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -9243,8 +9243,8 @@
       "inherited": false,
       "initial": "0",
       "syntax": "<'margin-top'>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -9253,7 +9253,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -9266,8 +9266,8 @@
       "inherited": false,
       "initial": "0",
       "syntax": "<'margin-top'>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -9276,7 +9276,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -9316,8 +9316,8 @@
         "margin-inline-end"
       ],
       "syntax": "<'margin-top'>{1,2}",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -9326,7 +9326,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -9339,8 +9339,8 @@
       "inherited": false,
       "initial": "0",
       "syntax": "<'margin-top'>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -9349,7 +9349,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -9362,8 +9362,8 @@
       "inherited": false,
       "initial": "0",
       "syntax": "<'margin-top'>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -9372,7 +9372,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -10075,8 +10075,8 @@
       "inherited": false,
       "initial": "none",
       "syntax": "<'max-width'>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -10085,7 +10085,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -10121,8 +10121,8 @@
       "inherited": false,
       "initial": "none",
       "syntax": "<'max-width'>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -10131,7 +10131,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -10190,8 +10190,8 @@
       "inherited": false,
       "initial": "0",
       "syntax": "<'min-width'>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -10200,7 +10200,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -10236,8 +10236,8 @@
       "inherited": false,
       "initial": "0",
       "syntax": "<'min-width'>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -10246,7 +10246,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -10752,8 +10752,8 @@
       "inherited": false,
       "initial": "auto",
       "syntax": "visible | hidden | clip | scroll | auto",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -10762,7 +10762,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -10821,8 +10821,8 @@
       "inherited": false,
       "initial": "auto",
       "syntax": "visible | hidden | clip | scroll | auto",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -10831,7 +10831,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -10959,8 +10959,8 @@
       "inherited": false,
       "initial": "auto",
       "syntax": "contain | none | auto",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -10969,7 +10969,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P2",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -10982,8 +10982,8 @@
       "inherited": false,
       "initial": "auto",
       "syntax": "contain | none | auto",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -10992,7 +10992,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P2",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -11082,8 +11082,8 @@
         "padding-block-end"
       ],
       "syntax": "<'padding-top'>{1,2}",
-      "impl": "not-started",
-      "implNote": "未接：逻辑属性族（证据：同上）",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -11092,7 +11092,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -11105,8 +11105,8 @@
       "inherited": false,
       "initial": "0",
       "syntax": "<'padding-top'>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -11115,7 +11115,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -11128,8 +11128,8 @@
       "inherited": false,
       "initial": "0",
       "syntax": "<'padding-top'>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -11138,7 +11138,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -11177,8 +11177,8 @@
         "padding-inline-end"
       ],
       "syntax": "<'padding-top'>{1,2}",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -11187,7 +11187,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -11200,8 +11200,8 @@
       "inherited": false,
       "initial": "0",
       "syntax": "<'padding-top'>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -11210,7 +11210,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -11223,8 +11223,8 @@
       "inherited": false,
       "initial": "0",
       "syntax": "<'padding-top'>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -11233,7 +11233,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -12187,8 +12187,8 @@
         "scroll-margin-block-end"
       ],
       "syntax": "<length>{1,2}",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12197,7 +12197,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -12210,8 +12210,8 @@
       "inherited": false,
       "initial": "0",
       "syntax": "<length>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12220,7 +12220,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -12233,8 +12233,8 @@
       "inherited": false,
       "initial": "0",
       "syntax": "<length>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12243,7 +12243,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -12282,8 +12282,8 @@
         "scroll-margin-inline-end"
       ],
       "syntax": "<length>{1,2}",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12292,7 +12292,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -12305,8 +12305,8 @@
       "inherited": false,
       "initial": "0",
       "syntax": "<length>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12315,7 +12315,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -12328,8 +12328,8 @@
       "inherited": false,
       "initial": "0",
       "syntax": "<length>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12338,7 +12338,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -12474,8 +12474,8 @@
         "scroll-padding-block-end"
       ],
       "syntax": "[ auto | <length-percentage> ]{1,2}",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12484,7 +12484,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -12497,8 +12497,8 @@
       "inherited": false,
       "initial": "auto",
       "syntax": "auto | <length-percentage>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12507,7 +12507,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -12520,8 +12520,8 @@
       "inherited": false,
       "initial": "auto",
       "syntax": "auto | <length-percentage>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12530,7 +12530,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -12569,8 +12569,8 @@
         "scroll-padding-inline-end"
       ],
       "syntax": "[ auto | <length-percentage> ]{1,2}",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12579,7 +12579,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -12592,8 +12592,8 @@
       "inherited": false,
       "initial": "auto",
       "syntax": "auto | <length-percentage>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12602,7 +12602,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {
@@ -12615,8 +12615,8 @@
       "inherited": false,
       "initial": "auto",
       "syntax": "auto | <length-percentage>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "excluded",
+      "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12625,7 +12625,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
+      "priority": "excluded",
       "acceptance": "none"
     },
     {

@@ -127,14 +127,19 @@ const webSupports = (() => {
  */
 const SHORTHAND_EXPANSION = {
   background: { to: ['backgroundColor'], partial: ['fillGradient'], evidence: 'vapor/template.ts:958-970（parseCssGradient + extractBackgroundColor）', note: '简写 → 纯色折 background-color；渐变折 fillGradient（引擎绘制通道）' },
-  border: { to: ['borderWidth', 'borderColor'], evidence: 'vapor/template.ts:971-990（parseBorderShorthand）', note: 'border 简写 → 统一 width + color（线型非 solid ⇒ 诊断，宿主只画实线）' },
-  'border-top': { to: ['borderTopWidth', 'borderTopColor'], evidence: '同上（逐边分支）', note: '逐边简写' },
-  'border-right': { to: ['borderRightWidth', 'borderRightColor'], evidence: '同上', note: '逐边简写' },
-  'border-bottom': { to: ['borderBottomWidth', 'borderBottomColor'], evidence: '同上', note: '逐边简写' },
-  'border-left': { to: ['borderLeftWidth', 'borderLeftColor'], evidence: '同上', note: '逐边简写' },
+  border: { to: ['borderWidth', 'borderColor'], partial: ['borderTopStyle', 'borderRightStyle', 'borderBottomStyle', 'borderLeftStyle'], evidence: 'vapor/template.ts（parseBorderShorthand）', note: 'border 简写 → 统一 width + color + 四边线型（★边框族收口批：dashed/dotted 已支持，宿主按线型绘制；double/groove 等仍诊断）' },
+  'border-top': { to: ['borderTopWidth', 'borderTopColor'], partial: ['borderTopStyle'], evidence: 'vapor/template.ts（逐边分支）', note: '逐边简写（width/color/style 三件套；★线型批：dashed/dotted 支持）' },
+  'border-right': { to: ['borderRightWidth', 'borderRightColor'], partial: ['borderRightStyle'], evidence: 'vapor/template.ts（逐边分支）', note: '逐边简写（width/color/style 三件套；★线型批：dashed/dotted 支持）' },
+  'border-bottom': { to: ['borderBottomWidth', 'borderBottomColor'], partial: ['borderBottomStyle'], evidence: 'vapor/template.ts（逐边分支）', note: '逐边简写（width/color/style 三件套；★线型批：dashed/dotted 支持）' },
+  'border-left': { to: ['borderLeftWidth', 'borderLeftColor'], partial: ['borderLeftStyle'], evidence: 'vapor/template.ts（逐边分支）', note: '逐边简写（width/color/style 三件套；★线型批：dashed/dotted 支持）' },
   'border-color': { to: ['borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor'], evidence: 'parser：四值展开', note: '四值简写' },
   'border-width': { to: ['borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth'], evidence: 'parser：四值展开', note: '四值简写' },
+  'border-style': { to: ['borderTopStyle', 'borderRightStyle', 'borderBottomStyle', 'borderLeftStyle'], evidence: 'vapor/template.ts（★边框族收口批：1–4 值简写 + 单值四边 Style）', note: '线型简写（solid/dashed/dotted；none ⇒ 四边清零；double/groove 等诊断）', partial: [] },
   'border-radius': { to: ['borderRadius'], partial: ['borderRadiusCorners', 'borderRadiusPct'], evidence: 'vapor/template.ts:900-910', note: '统一半径 + 逐角掩码/百分比' },
+  'border-top-left-radius': { to: ['borderRadius'], partial: ['borderRadiusCorners'], evidence: 'vapor/template.ts（★边框族收口批：逐角就地累积 + 合成）', note: '逐角长手（语义 = border-radius 四值；缺省 0——与简写同一输出形态：统一半径 + 掩码）' },
+  'border-top-right-radius': { to: ['borderRadius'], partial: ['borderRadiusCorners'], evidence: 'vapor/template.ts（★边框族收口批：逐角就地累积 + 合成）', note: '逐角长手（语义 = border-radius 四值；缺省 0——与简写同一输出形态：统一半径 + 掩码）' },
+  'border-bottom-right-radius': { to: ['borderRadius'], partial: ['borderRadiusCorners'], evidence: 'vapor/template.ts（★边框族收口批：逐角就地累积 + 合成）', note: '逐角长手（语义 = border-radius 四值；缺省 0——与简写同一输出形态：统一半径 + 掩码）' },
+  'border-bottom-left-radius': { to: ['borderRadius'], partial: ['borderRadiusCorners'], evidence: 'vapor/template.ts（★边框族收口批：逐角就地累积 + 合成）', note: '逐角长手（语义 = border-radius 四值；缺省 0——与简写同一输出形态：统一半径 + 掩码）' },
   inset: { to: ['top', 'right', 'bottom', 'left'], evidence: 'CSE shorthand.ts（inset 分支）', note: 'inset 简写 → 四边' },
   'overflow-x': { to: ['overflow'], evidence: 'CSE shorthand.ts（overflow 分支）', note: '单轴 overflow（x/y 同值才可表达为 overflow——CSE 合并）', conditional: true },
   'overflow-y': { to: ['overflow'], evidence: '同上', note: '同上', conditional: true },
@@ -279,6 +284,24 @@ for (const k of ['column-gap', 'pointer-events', 'cursor']) {
 }
 delete EXCLUDED_REASONS.cursor // cursor 保持 excluded（上面循环不删它——显式再删一次以澄清）
 EXCLUDED_REASONS.cursor = '指针光标（触屏无光标；Web 端保留浏览器默认即可）'
+
+// ★★逻辑属性族具名排除（2026-10-05 · 边框族收口批清单审计）：border-inline-* / border-block-* /
+//   margin-block-* / inset-inline-* / padding-inline-* / inline-size / block-size / overflow-block 等
+//   **70 条**（匹配 = /(^|-)(inline|block)(-|$)/，-ms- 前缀除外）。
+//   【为什么排除】逻辑属性的一切语义都由**书写模式**决定——writing-mode / direction 均已具名 excluded
+//   （竖排不做、BiDi 复用平台默认）；在横排 LTR（唯一开放形态）下逻辑属性 ≡ 对应物理属性
+//   （inline-start→left / block-start→top），没有独立语义面可对齐。
+//   【为什么不留 not-started】无理由的 not-started 会以 P1 进入"可推项"排序 ⇒ 误导下一项选择
+//   （与"不静默"纪律同源：状态本身就是信息）。
+//   【出路】待书写模式进目标面时移除本循环——编译器侧一行映射（逻辑→物理）即可落地。
+for (const kebab of Object.keys(mdnProps)) {
+  if (kebab.startsWith('-ms-')) continue
+  if (!/^(inline|block)-size$/.test(kebab) && !/-(inline|block)(-|$)/.test(kebab)) continue
+  if (!(kebab in EXCLUDED_REASONS)) {
+    EXCLUDED_REASONS[kebab] =
+      '逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）'
+  }
+}
 
 /* ── ⑤ 实现状态判定（按证据——不拍脑袋）── */
 const KNOWN_ENGINE_CHANNELS = new Set([

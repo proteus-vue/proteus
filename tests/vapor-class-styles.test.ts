@@ -822,19 +822,34 @@ describe('★批次 5 · border 简写（uniform 实线）', () => {
     expect(d.length, '不诊断').toBe(0)
     // `none` ⇒ 该边清零（重置语义）
     expect(parseStaticStyle('border-left: none', () => {})).toEqual({ borderLeftWidth: 0 })
-    // 非 solid 线型仍是缺口 ⇒ 诊断 + 跳过（不画成实线冒充）
+    // ★★★边框族收口批（2026-10-05）：非 solid 线型**已支持**（dashed/dotted 落逐边 Style，宿主按线型绘制）
     const d2: string[] = []
-    expect(parseStaticStyle('border-top: 1px dashed #ddd', (m) => d2.push(m))).toEqual({})
-    expect(d2.some((m) => m.includes('solid'))).toBe(true)
+    expect(parseStaticStyle('border-top: 1px dashed #ddd', (m) => d2.push(m))).toEqual({
+      borderTopWidth: 1, borderTopColor: '#ddd', borderTopStyle: 'dashed',
+    })
+    expect(d2.length, '不诊断').toBe(0)
+    // 不支持线型（double/groove…）仍诊断 + 跳过
+    const d3: string[] = []
+    expect(parseStaticStyle('border-top: 1px double #ddd', (m) => d3.push(m))).toEqual({})
+    expect(d3.some((m) => m.includes('double') || m.includes('线型'))).toBe(true)
   })
 
-  it('③ border-style 非 solid ⇒ 诊断（不静默当实线）；solid/none 无操作', () => {
+  it('③ border-style：dashed/dotted ⇒ 落四边 Style；none ⇒ 四边清零；solid 无操作（2026-10-05 线型批）', () => {
     const d: string[] = []
-    parseStaticStyle('border-style: dashed', (m) => d.push(m))
-    expect(d.some((m) => m.includes('border-style'))).toBe(true)
+    expect(parseStaticStyle('border-style: dashed', (m) => d.push(m))).toEqual({
+      borderTopStyle: 'dashed', borderRightStyle: 'dashed', borderBottomStyle: 'dashed', borderLeftStyle: 'dashed',
+    })
+    expect(d.length, '不诊断').toBe(0)
+    expect(parseStaticStyle('border-style: none', () => {})).toEqual({
+      borderTopWidth: 0, borderRightWidth: 0, borderBottomWidth: 0, borderLeftWidth: 0,
+    })
     const d2: string[] = []
     parseStaticStyle('border-style: solid', (m) => d2.push(m))
-    expect(d2.length).toBe(0)
+    expect(d2.length, 'solid = 缺省（无操作）').toBe(0)
+    // 不支持线型仍诊断
+    const d4: string[] = []
+    parseStaticStyle('border-style: double', (m) => d4.push(m))
+    expect(d4.length > 0).toBe(true)
   })
 
   it('④ var() 令牌色的边框 ⇒ 宽度保留、颜色诊断（诚实反映不可解析）', () => {
@@ -1100,10 +1115,13 @@ describe('★批次 14 · 多端一致性审计修（对齐 CSS 标准）', () =
     expect(parseStaticStyle('background-color: white', () => {}).backgroundColor).toBe('#ffffff')
   })
 
-  it('② 非 solid 边框线型 ⇒ **诊断跳过**（不静默画成实线冒充 Web 虚线）', () => {
+  it('② 非 solid 边框线型 ⇒ **已支持**（dashed/dotted 落四边 Style——2026-10-05 线型批）', () => {
     const d: string[] = []
-    expect(parseStaticStyle('border: 1px dashed #ccc', (m) => d.push(m))).toEqual({})
-    expect(d.some((m) => m.includes('dashed'))).toBe(true)
+    expect(parseStaticStyle('border: 1px dashed #ccc', (m) => d.push(m))).toEqual({
+      borderWidth: 1, borderColor: '#ccc',
+      borderTopStyle: 'dashed', borderRightStyle: 'dashed', borderBottomStyle: 'dashed', borderLeftStyle: 'dashed',
+    })
+    expect(d.length, '不诊断').toBe(0)
     // solid 仍正常
     expect(parseStaticStyle('border: 1px solid #ccc', () => {})).toEqual({ borderWidth: 1, borderColor: '#ccc' })
   })

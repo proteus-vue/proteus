@@ -146,6 +146,15 @@ function styleOf(el: Element, win: Window): NormalizedStyle {
     const c = color(prop)
     if (c) (styles as Record<string, unknown>)[key] = c
   }
+
+  // ★★★边框族收口批（2026-10-05）：逐边线型读数（枚举字符串原样小写——与 IR 值同形）
+  for (const [prop, key] of [
+    ['border-top-style', 'borderTopStyle'], ['border-right-style', 'borderRightStyle'],
+    ['border-bottom-style', 'borderBottomStyle'], ['border-left-style', 'borderLeftStyle'],
+  ] as const) {
+    const v = cs.getPropertyValue(prop)
+    if (v) (styles as Record<string, unknown>)[key] = v.trim()
+  }
   const op = len('opacity')
   if (op !== undefined) styles.opacity = op
   // ★★覆盖扩展（2026-10-02·二批）：布局族（数值项 `auto`/`none`/`normal` ⇒ 不产出——

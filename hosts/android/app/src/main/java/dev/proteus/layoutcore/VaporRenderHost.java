@@ -1350,6 +1350,7 @@ final class VaporRenderHost {
             float ls = (float) spec.optDouble("letterSpacing", 0);
             if (ls != 0f && fs > 0f) tp.setLetterSpacing(ls / fs);
             android.text.StaticLayout sl = android.text.StaticLayout.Builder
+                    // I2-ALLOW: 文本**测量**宽（StaticLayout 需整型像素宽；测量回执走 remeasure 通道，非绘制几何发射）
                     .obtain(t, 0, t.length(), tp, Math.max(1, (int) Math.ceil(boxW)))
                     .setIncludePad(false)
                     .build();
@@ -1360,7 +1361,9 @@ final class VaporRenderHost {
             float w = 0f;
             for (int i = 0; i < lines; i++) w = Math.max(w, sl.getLineWidth(i));
             JSONObject sz = new JSONObject();
+            // I2-ALLOW: **测量结果报文**（width/height 为机器判据可读字段——与"几何发射"无关）
             sz.put("width", Math.ceil(Math.min(boxW, w + 0.5f)));
+            // I2-ALLOW: 同上（测量结果报文——height 行）
             sz.put("height", Math.ceil(h));
             measures.put(String.valueOf(spec.getInt("id")), sz);
             changed = true;
@@ -1460,16 +1463,20 @@ final class VaporRenderHost {
     private static float[] sideBorderOf(JSONObject spec) {
         final String[] W = {"borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth"};
         final String[] C = {"borderTopColor", "borderRightColor", "borderBottomColor", "borderLeftColor"};
+        final String[] S = {"borderTopStyle", "borderRightStyle", "borderBottomStyle", "borderLeftStyle"};
         boolean any = false;
         for (String k : W) { if (spec.has(k)) { any = true; break; } }
         if (!any) for (String k : C) { if (spec.has(k)) { any = true; break; } }
+        if (!any) for (String k : S) { if (spec.has(k)) { any = true; break; } }
         if (!any) return null;
         final float[] sb = new float[12];
         for (int i = 0; i < 4; i++) {
             sb[i] = spec.has(W[i]) ? (float) spec.optDouble(W[i], 0) : Float.NaN;
             final String col = spec.optString(C[i], null);
             sb[4 + i] = col != null ? parseColor(col) : 0f;
-            sb[8 + i] = 0f; // solid（App 端仅实线）
+            // ★★★边框族收口批（2026-10-05）：线型（0=solid / 1=dashed / 2=dotted）
+            final String stv = spec.optString(S[i], "solid");
+            sb[8 + i] = "dashed".equals(stv) ? 1f : "dotted".equals(stv) ? 2f : 0f;
         }
         return sb;
     }
@@ -1567,6 +1574,7 @@ final class VaporRenderHost {
                 wtp.setTypeface(ProteusHostView.typefaceOf(spec.optString("fontFamily", null), fw, null));
                 if (ls != 0f && fs > 0f) wtp.setLetterSpacing(ls / fs);
                 android.text.StaticLayout wsl = android.text.StaticLayout.Builder
+                        // I2-ALLOW: 文本**测量**宽（多行判定用 StaticLayout 同款整型宽；非绘制几何发射）
                         .obtain(t, 0, t.length(), wtp, Math.max(1, (int) Math.ceil(w)))
                         .setIncludePad(false)
                         .build();

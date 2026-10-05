@@ -1,0 +1,163 @@
+{
+  "_note": "★CSS 能力逐项验收包（用户指定流程：实现一个 → 全端对齐视觉验收一个）。gates：implemented（IR 在册）/ parity（真 Chromium 同构样本与 CSE 值一致）/ endsMapped（三端可表达）。★视觉验收（像素级）仍由独立子代理按 Web 基准并排做——本包只归档**机器可判**的三段；pass=true 表示\"可以进入视觉验收\"，不等于\"视觉已验收\"。",
+  "id": "border-style",
+  "kind": "property",
+  "verifiedAt": "2026-10-05T15:38:55.398Z",
+  "implEvidence": {
+    "impl": "implemented",
+    "implNote": "**简写展开**：borderTopStyle + borderRightStyle + borderBottomStyle + borderLeftStyle（附： 部分支持）——线型简写（solid/dashed/dotted；none ⇒ 四边清零；double/groove 等诊断）（证据：vapor/template.ts（★边框族收口批：1–4 值简写 + 单值四边 Style））",
+    "inIrRegistry": false,
+    "irScope": null,
+    "inCompilerFold": false,
+    "matrixLevel": null,
+    "webSupport": true,
+    "usage": 0,
+    "priority": "done"
+  },
+  "parity": {
+    "ran": true,
+    "pass": true,
+    "detail": [
+      "IR `borderTopStyle` = \"dashed\"（与浏览器样本 border-style: dashed 一致）"
+    ],
+    "css": "border-style: dashed",
+    "irField": "borderTopStyle",
+    "irValue": "dashed",
+    "computedProbe": {
+      "align-items": "normal",
+      "background-color": "rgba(0, 0, 0, 0)",
+      "border-bottom-color": "rgb(0, 0, 0)",
+      "border-bottom-right-radius": "0px",
+      "border-bottom-style": "dashed",
+      "border-bottom-width": "3px",
+      "border-left-color": "rgb(0, 0, 0)",
+      "border-left-width": "3px",
+      "border-right-color": "rgb(0, 0, 0)",
+      "border-right-width": "3px",
+      "border-top-color": "rgb(0, 0, 0)",
+      "border-top-left-radius": "0px",
+      "border-top-style": "dashed",
+      "border-top-width": "3px",
+      "bottom": "auto",
+      "color": "rgb(0, 0, 0)",
+      "flex-direction": "row",
+      "font-size": "16px",
+      "justify-content": "normal",
+      "justify-self": "auto",
+      "left": "auto",
+      "letter-spacing": "normal",
+      "line-height": "normal",
+      "opacity": "1",
+      "overflow-x": "visible",
+      "overflow-y": "visible",
+      "right": "auto",
+      "text-align": "start",
+      "top": "auto",
+      "word-break": "normal"
+    }
+  },
+  "endExpressibility": {
+    "web": "基准端（浏览器原生——A 档）",
+    "skyline": "可表达（border-top-style）",
+    "app": "可表达（dto: borderTopStyle）",
+    "skylineUnsupported": [],
+    "appUnsupported": []
+  },
+  "gates": {
+    "implemented": true,
+    "parity": true,
+    "endsMapped": true
+  },
+  "pass": true,
+  "nextStep": "机器判据三段已过 → 进入**视觉验收**：生成并排产物（node scripts/gen-baseline-side-by-side.mjs）+ 独立子代理按 Web 基准评审",
+  "visual": {
+    "_note": "★视觉验收结论（独立子代理按 Web 基准并排图评审；来源 = css-conformance/results/side-by-side/）。verdict: pass（与 Web 基准无可归因差异）/ fail（有实差异——见 caseIssues）/ unclear（图不足以判）。纪律：左半恒为 Web 基准（D1）；不看不清不编（unclear）。",
+    "reviewedAt": "2026-10-05T15:39:08.417Z",
+    "reviewedBy": "independent-visual-subagent",
+    "sideBySideDir": "css-conformance/results/side-by-side/",
+    "summary": {
+      "fails": 0,
+      "ends": "web:pass · mp:pass · android:pass · ios:pass · harmony:pass"
+    },
+    "verdicts": [
+      {
+        "end": "web",
+        "verdict": "pass",
+        "caseIssues": [],
+        "evidence": "基准端。复评（2026-10-05 23:38，同法子代理）确认：web 图 23:12 重采后与上轮逐项相同（dotted 3/3、dashed 6/4、H 案四角拟合 11.5/11.5、TR/BL 剖面全 0）⇒ 基准未漂移。页面仅 G/H 两节（无 F 残留）。"
+      },
+      {
+        "end": "mp",
+        "verdict": "pass",
+        "caseIssues": [
+          {
+            "case": "case-dashed",
+            "issue": "节距差异（UA-defined）：dash/gap≈3.8/1.9 CSS（Web 6.0/4.0）；Skyline 内建纹理，方端语义正确。具名登记",
+            "severity": "minor",
+            "status": "named"
+          },
+          {
+            "case": "case-dotted",
+            "issue": "点形/节距差异（UA-defined）：小方点≈3.2px、周期≈6.3（Web 6.0）。具名登记",
+            "severity": "minor",
+            "status": "named"
+          },
+          {
+            "case": "page",
+            "issue": "标题后段上半被模拟器顶部灵动岛 chrome 覆盖（chrome 区；G/H 案例内容零遮挡）",
+            "severity": "minor",
+            "status": "named"
+          }
+        ],
+        "evidence": "复测一致：dashed≈3.8/1.9 CSS、dotted≈3.2/3.2、H 案 TL/BR 拟合 10.95/10.79 且 TR/BL 剖面全 0（直角，与 Web 逐角模式一致）。线型语义/颜色 hue/宽度均过；具名差异按 UA-defined（CSS Backgrounds 3：节距不受规范控制）不判 fail。"
+      },
+      {
+        "end": "android",
+        "verdict": "pass",
+        "caseIssues": [
+          {
+            "case": "case-corner-radius",
+            "issue": "逐角圆角语义错误：右上/左下本应为直角却被绘成圆角（根因：uniform 边框描边路径未消费 borderRadiusCorners 掩码——掩码只作用于填充）",
+            "severity": "major",
+            "status": "fixed",
+            "fix": "ProteusHostView uniform 边框分支补掩码消费（与填充共用同一掩码语义；未置位角半径=0）"
+          }
+        ],
+        "evidence": "复评（新图 23:34 / 并排 23:35 重建）：H 案 TR/BL 最外缘 14 采样列剖面全 0（=直角），TL/BR 圆弧拟合 12.17/12.17 CSS ≈ 标称 12（Web 同法 11.5）；目视为 90° 直角 + 弧。G 案与上轮逐项一致（dashed 6.0/4.0、dotted 3.0/3.0 方点、线宽 2.0/3.0）⇒ 修复作用域精确、不外溢。颜色 (198,80,75) 为 sRGB 红的 Display-P3 截图编码，非色差。"
+      },
+      {
+        "end": "ios",
+        "verdict": "pass",
+        "caseIssues": [
+          {
+            "case": "case-corner-radius",
+            "issue": "逐角圆角语义错误：右上/左下本应为直角却被绘成圆角（根因：styleOf 白名单未透传 borderRadiusCorners ⇒ applyRadiusCorners guard 从未生效——机制建了 3 个月从未生效）",
+            "severity": "major",
+            "status": "fixed",
+            "fix": "styleOf 补透传 borderRadiusCorners + applyRadiusCorners 缺省即复位（防复用层残留上一节点掩码）"
+          }
+        ],
+        "evidence": "复评（新图 23:34）：TR/BL 剖面全 0（直角），TL/BR 拟合 11.67/11.58 CSS ≈ 标称 12（Web 同法 11.5）。G 案不变（dashed 6.0/4.0、dotted 3.0/3.0 方点、线宽 2.0/3.0）；颜色精确命中规范色。"
+      },
+      {
+        "end": "harmony",
+        "verdict": "pass",
+        "caseIssues": [
+          {
+            "case": "case-dashed",
+            "issue": "dash 间隙偏紧（UA-defined）：≈6.0/2.0 CSS（Web 6.0/4.0）。具名登记",
+            "severity": "minor",
+            "status": "named"
+          },
+          {
+            "case": "case-dotted",
+            "issue": "圆点 vs Chrome 方点（规范文字为 round dots）；尺寸/周期≈2.8-3.1/6.0 ≈ Web。UA-defined，具名登记",
+            "severity": "minor",
+            "status": "named"
+          }
+        ],
+        "evidence": "复测一致：dashed 5.97/1.99 CSS、线宽 1.99=标称 2、H 案 TL/BR 拟合 11.51/11.58、TR/BL 剖面全 0（直角）。截图管线软化/色值伪影不作为缺陷判定（目视无可见色差）。"
+      }
+    ]
+  }
+}

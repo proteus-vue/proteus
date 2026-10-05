@@ -79,6 +79,10 @@ const PROBE_VALUES = {
   inset: ['inset: 4px 8px', 'top', { kind: 'absolute', dp: 4 }],
   // ★★★逐边 border 批（2026-10-05）：逐边宽度样本（CSE 产出 border<Side>Width 数值）
   'border-bottom': ['border-bottom: 2px solid #3355aa', 'borderBottomWidth', 2],
+  // ★★★边框族收口批（2026-10-05）：线型 + 逐角样本
+  'border-style': ['border-style: dashed', 'borderTopStyle', 'dashed'],
+  'border-top-left-radius': ['border-top-left-radius: 8px', 'borderRadius', 8],
+  'border-bottom-right-radius': ['border-bottom-right-radius: 8px', 'borderRadius', 8],
   'border-top': ['border-top: 2px solid #3355aa', 'borderTopWidth', 2],
   'border-left': ['border-left: 3px solid #3355aa', 'borderLeftWidth', 3],
   'border-right': ['border-right: 3px solid #3355aa', 'borderRightWidth', 3],
@@ -131,7 +135,7 @@ if (!probe) {
     parity.irField = irField
     parity.irValue = irVal
     parity.computedProbe = Object.fromEntries(
-      Object.entries(computed).filter(([k]) => ['inset', 'top', 'right', 'bottom', 'left', 'overflow-x', 'overflow-y', 'white-space', 'word-break', 'justify-self', 'grid-area', 'background-color', 'color', 'border-radius', 'text-align', 'opacity', 'font-size', 'letter-spacing', 'line-height', 'flex-direction', 'justify-content', 'align-items', 'gap', 'border-bottom-width', 'border-top-width', 'border-left-width', 'border-right-width', 'border-bottom-color', 'border-top-color', 'border-left-color', 'border-right-color'].includes(k)),
+      Object.entries(computed).filter(([k]) => ['inset', 'top', 'right', 'bottom', 'left', 'overflow-x', 'overflow-y', 'white-space', 'word-break', 'justify-self', 'grid-area', 'background-color', 'color', 'border-radius', 'text-align', 'opacity', 'font-size', 'letter-spacing', 'line-height', 'flex-direction', 'justify-content', 'align-items', 'gap', 'border-bottom-width', 'border-top-width', 'border-left-width', 'border-right-width', 'border-bottom-color', 'border-top-color', 'border-left-color', 'border-right-color', 'border-style', 'border-top-style', 'border-bottom-style', 'border-top-left-radius', 'border-bottom-right-radius'].includes(k)),
     )
     // 判据：IR 出值且与浏览器 resolved 语义一致（按形态）
     if (irVal === undefined) {

@@ -144,6 +144,13 @@ public class SuperappActivity extends android.app.Activity {
         // ⑤ 把**当前屏**真画到屏上——★**布局完成后再渲**（视口要用实测视图尺寸；见 renderCurrent 注释）
         contentHost.post(new Runnable() {
             @Override public void run() {
+                // ★★★逐页截图装置（2026-10-05 · 拆页后每页需独立截图与 Web 基准可比）：
+                //   `--es screen <name>` ⇒ 启动后**导航到该屏**（验收跑器逐页调用 + 截图）。
+                String wantScreen = getIntent() != null ? getIntent().getStringExtra("screen") : null;
+                if (wantScreen != null && !wantScreen.isEmpty() && !wantScreen.equals(currentName(readState()))) {
+                    switchTab(wantScreen);   // 内部 = __proteusSuperappNav(name) + 重绘 + 高亮（通用导航）
+                    android.util.Log.i(TAG, "SUPERAPP_SCREEN_NAV screen=" + wantScreen);
+                }
                 renderCurrent(readState());
                 android.util.Log.i(TAG, "SUPERAPP_LAUNCHER_READY screen=" + currentName(readState()));
                 // ⑥ drive 模式（验证脚本用）：用**真 MotionEvent** 逐个点 Tab → 重绘 → 落证据

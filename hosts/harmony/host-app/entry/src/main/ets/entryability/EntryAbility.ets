@@ -27,7 +27,8 @@ export default class EntryAbility extends UIAbility {
     //   「手机主屏图标点开 App 就能测完整体验」）；脚本要跑装置/探针 ⇒ 显式传 `--ps scene <名>`
     //   （含 `bench` = 原缺省的全套装置路径）⇒ 落 pages/Index。
     //   ★语义同 iOS（Info.plist 缺省场景 = superapp；脚本显式 `--selfdraw/--app-stack/…`）。
-    if (sceneStr === '' || sceneStr === 'superapp' || sceneStr === 'superapp-drive') {
+    // ★★★逐屏截图装置（2026-10-05）：`superapp-screen-<name>` 也落 pages/Superapp（启动后导航到该屏）。
+    if (sceneStr === '' || sceneStr === 'superapp' || sceneStr === 'superapp-drive' || sceneStr.startsWith('superapp-screen-')) {
       this.pageToLoad = 'pages/Superapp';
     } else {
       this.pageToLoad = 'pages/Index';

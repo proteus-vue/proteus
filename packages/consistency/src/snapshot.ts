@@ -101,6 +101,11 @@ export interface NormalizedStyle {
   borderRightColor?: Rgba
   borderBottomColor?: Rgba
   borderLeftColor?: Rgba
+  // ★★★边框族收口批（2026-10-05）：逐边线型（字符串枚举——'solid'/'dashed'/'dotted'）
+  borderTopStyle?: string
+  borderRightStyle?: string
+  borderBottomStyle?: string
+  borderLeftStyle?: string
   borderTopLeftRadius?: number
   borderTopRightRadius?: number
   borderBottomRightRadius?: number
@@ -418,6 +423,8 @@ const STYLE_KEYS = new Set([
   'marginTop', 'marginRight', 'marginBottom', 'marginLeft',
   'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth',
   'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor',
+  // ★★★边框族收口批（2026-10-05）：逐边线型（与接口/覆盖表同批——闭集纪律）
+  'borderTopStyle', 'borderRightStyle', 'borderBottomStyle', 'borderLeftStyle',
   'borderTopLeftRadius', 'borderTopRightRadius', 'borderBottomRightRadius', 'borderBottomLeftRadius',
   'opacity', 'display', 'position', 'visibility',
   // ★★覆盖扩展（2026-10-02·二批）：布局族字段（与接口同步——闭集纪律：要么登记要么别产出）
@@ -482,6 +489,7 @@ export function validateStyleSnapshot(snap: unknown): ValidationResult {
         // ★★★G-61 B3：新增字符串族（与接口/STYLE_KEYS 同步——三处同改）
         || k === 'textAlign' || k === 'textOverflow' || k === 'textDecoration' || k === 'pointerEvents'
         || k === 'whiteSpace'   // ★★补齐（同 ②）
+        || k === 'borderTopStyle' || k === 'borderRightStyle' || k === 'borderBottomStyle' || k === 'borderLeftStyle'   // ★★★边框族收口批
         || k === 'flexWrap' || k === 'alignContent'
         || k === 'aspectRatio' || k === 'flexBasis' || k === 'transform' || k === 'boxShadow'
         || k === 'gridTemplateColumns' || k === 'gridTemplateRows' || k === 'gridColumn' || k === 'gridRow'

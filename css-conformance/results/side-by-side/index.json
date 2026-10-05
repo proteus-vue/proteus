@@ -1,6 +1,12 @@
 {
-  "generatedAt": "2026-10-05T13:13:21.392Z",
+  "generatedAt": "2026-10-05T15:35:39.776Z",
   "rows": [
+    {
+      "end": "mp",
+      "page": "border-style.png",
+      "out": "css-conformance/results/side-by-side/border-style.mp-vs-web.png",
+      "status": "ok"
+    },
     {
       "end": "mp",
       "page": "border.png",
@@ -11,6 +17,12 @@
       "end": "mp",
       "page": "text.png",
       "out": "css-conformance/results/side-by-side/text.mp-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "android",
+      "page": "border-style.png",
+      "out": "css-conformance/results/side-by-side/border-style.android-vs-web.png",
       "status": "ok"
     },
     {
@@ -27,6 +39,12 @@
     },
     {
       "end": "ios",
+      "page": "border-style.png",
+      "out": "css-conformance/results/side-by-side/border-style.ios-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "ios",
       "page": "border.png",
       "out": "css-conformance/results/side-by-side/border.ios-vs-web.png",
       "status": "ok"
@@ -35,6 +53,12 @@
       "end": "ios",
       "page": "text.png",
       "out": "css-conformance/results/side-by-side/text.ios-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "harmony",
+      "page": "border-style.png",
+      "out": "css-conformance/results/side-by-side/border-style.harmony-vs-web.png",
       "status": "ok"
     },
     {

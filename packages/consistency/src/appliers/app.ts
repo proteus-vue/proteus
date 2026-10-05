@@ -179,6 +179,12 @@ export function mapStyleIRToApp(fields: Record<string, unknown>): AppMappingResu
     }
 
     /* ── 字符串族：枚举 / 颜色 / 字体 / grid 串 ── */
+    // ★★★边框族收口批（2026-10-05）：逐边线型（solid/dashed/dotted）直传——宿主按线型绘制
+    if (/^border(Top|Right|Bottom|Left)Style$/.test(field)) {
+      if (typeof value === 'string') { put(field, value, value); continue }
+      drop(field, value, '非字符串（线型须为 solid/dashed/dotted）')
+      continue
+    }
     if (typeof value === 'string') {
       if (field === 'fontFamily') {
         const v = value.toLowerCase()
