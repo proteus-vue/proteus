@@ -72,7 +72,7 @@
   "nextStep": "机器判据三段已过 → 进入**视觉验收**：生成并排产物（node scripts/gen-baseline-side-by-side.mjs）+ 独立子代理按 Web 基准评审",
   "visual": {
     "_note": "★视觉验收结论（独立子代理按 Web 基准并排图评审；来源 = css-conformance/results/side-by-side/）。verdict: pass（与 Web 基准无可归因差异）/ fail（有实差异——见 caseIssues）/ unclear（图不足以判）。纪律：左半恒为 Web 基准（D1）；不看不清不编（unclear）。",
-    "reviewedAt": "2026-10-05T15:39:08.417Z",
+    "reviewedAt": "2026-10-05T16:06:28.599Z",
     "reviewedBy": "independent-visual-subagent",
     "sideBySideDir": "css-conformance/results/side-by-side/",
     "summary": {
@@ -83,8 +83,15 @@
       {
         "end": "web",
         "verdict": "pass",
-        "caseIssues": [],
-        "evidence": "基准端。复评（2026-10-05 23:38，同法子代理）确认：web 图 23:12 重采后与上轮逐项相同（dotted 3/3、dashed 6/4、H 案四角拟合 11.5/11.5、TR/BL 剖面全 0）⇒ 基准未漂移。页面仅 G/H 两节（无 F 残留）。"
+        "caseIssues": [
+          {
+            "case": "case-dotted",
+            "issue": "方点（fill=1.0）——按决策 #559 属浏览器自由区（W3C 原文 round dots；项目自定标准=圆点），不判 fail；保留为历史基准",
+            "severity": "minor",
+            "status": "named"
+          }
+        ],
+        "evidence": "web 图 23:12 未动（多轮同法复核未漂移）。dotted 方点、四角贴边封角（bbox=盒）；dashed 6/4、厚 2 不变。web 仍是非自由区（宽度/颜色/盒内几何）的基准。"
       },
       {
         "end": "mp",
@@ -98,7 +105,7 @@
           },
           {
             "case": "case-dotted",
-            "issue": "点形/节距差异（UA-defined）：小方点≈3.2px、周期≈6.3（Web 6.0）。具名登记",
+            "issue": "圆点（填率≈0.75-0.88、直径≈3.2、中心距≈6.0=2w），软边/周期差属 UA-defined。具名登记",
             "severity": "minor",
             "status": "named"
           },
@@ -109,7 +116,7 @@
             "status": "named"
           }
         ],
-        "evidence": "复测一致：dashed≈3.8/1.9 CSS、dotted≈3.2/3.2、H 案 TL/BR 拟合 10.95/10.79 且 TR/BL 剖面全 0（直角，与 Web 逐角模式一致）。线型语义/颜色 hue/宽度均过；具名差异按 UA-defined（CSS Backgrounds 3：节距不受规范控制）不判 fail。"
+        "evidence": "截图未变（22:33）。复测：dotted 单圆点、四角贴边（spill 全 0、角部为单点或分离小点，无斑块、无外溢）；dashed 3.81/1.9；H 案 TL/BR 拟合 10.95/10.79、TR/BL 全 0。mp 为本轮圆点标准的蓝本实现之一。"
       },
       {
         "end": "android",
@@ -117,13 +124,18 @@
         "caseIssues": [
           {
             "case": "case-corner-radius",
-            "issue": "逐角圆角语义错误：右上/左下本应为直角却被绘成圆角（根因：uniform 边框描边路径未消费 borderRadiusCorners 掩码——掩码只作用于填充）",
+            "issue": "（首轮）逐角圆角语义错误（四角全圆）——已修复（描边补掩码消费）并经两轮复评确认未回退",
             "severity": "major",
-            "status": "fixed",
-            "fix": "ProteusHostView uniform 边框分支补掩码消费（与填充共用同一掩码语义；未置位角半径=0）"
+            "status": "fixed"
+          },
+          {
+            "case": "case-dotted",
+            "issue": "（二轮）端点圆点外溢出盒（bbox +1.33/+1.67 CSS）+ 四角合并双点斑块——已改显式圆点网格（首末点圆心距端 w/2、不画封角块）",
+            "severity": "major",
+            "status": "fixed"
           }
         ],
-        "evidence": "复评（新图 23:34 / 并排 23:35 重建）：H 案 TR/BL 最外缘 14 采样列剖面全 0（=直角），TL/BR 圆弧拟合 12.17/12.17 CSS ≈ 标称 12（Web 同法 11.5）；目视为 90° 直角 + 弧。G 案与上轮逐项一致（dashed 6.0/4.0、dotted 3.0/3.0 方点、线宽 2.0/3.0）⇒ 修复作用域精确、不外溢。颜色 (198,80,75) 为 sRGB 红的 Display-P3 截图编码，非色差。"
+        "evidence": "第四轮复评（新图 00:01，含污染自检）：① bbox=348.00×33.33 CSS=布局盒，spill L/T/R/B 全 0.00（修复前 +1.33/+1.67）；② 四角均 9×9dev 单点（n=69、fill 0.852、圆心 (1.5,1.5)css 贴边），相邻点 6.0css 处独立分离 ⇒ 无合并斑块，对齐 mp/鸿蒙贴边单圆点标准；③ 中段点链直径 3.0=线宽、节距 6.0=2w；④ dashed 6.0/4.0、厚 2.0 与 H 案（TL/BR 拟合 12.17、TR/BL 直角）零回归。"
       },
       {
         "end": "ios",
@@ -131,13 +143,18 @@
         "caseIssues": [
           {
             "case": "case-corner-radius",
-            "issue": "逐角圆角语义错误：右上/左下本应为直角却被绘成圆角（根因：styleOf 白名单未透传 borderRadiusCorners ⇒ applyRadiusCorners guard 从未生效——机制建了 3 个月从未生效）",
+            "issue": "（首轮）逐角圆角语义错误（styleOf 未透传 borderRadiusCorners，机制静默 3 个月）——已修复并经两轮复评确认未回退",
             "severity": "major",
-            "status": "fixed",
-            "fix": "styleOf 补透传 borderRadiusCorners + applyRadiusCorners 缺省即复位（防复用层残留上一节点掩码）"
+            "status": "fixed"
+          },
+          {
+            "case": "case-dotted",
+            "issue": "（二轮）端点圆点外溢（bbox +1.67/+1.67 CSS）+ 角部合并斑块——已改显式圆点网格（单层多圆 path、首末贴边、无封角块）",
+            "severity": "major",
+            "status": "fixed"
           }
         ],
-        "evidence": "复评（新图 23:34）：TR/BL 剖面全 0（直角），TL/BR 拟合 11.67/11.58 CSS ≈ 标称 12（Web 同法 11.5）。G 案不变（dashed 6.0/4.0、dotted 3.0/3.0 方点、线宽 2.0/3.0）；颜色精确命中规范色。"
+        "evidence": "第四轮复评（新图 00:03）：① bbox=338.00×32.00 CSS=布局盒，spill 全 0.00（修复前 +1.67/+1.67）；② 四角均 9×9dev 单点（n=69、fill 0.852、贴角无外溢），与相邻点为分离组件 ⇒ 无合并斑块；③ 中段 53 点、直径 3.0、节距 6.0=2w；④ dashed 6.0/4.0、H 案（TL/BR 11.67/11.58、TR/BL 直角）零回归。"
       },
       {
         "end": "harmony",
@@ -151,12 +168,12 @@
           },
           {
             "case": "case-dotted",
-            "issue": "圆点 vs Chrome 方点（规范文字为 round dots）；尺寸/周期≈2.8-3.1/6.0 ≈ Web。UA-defined，具名登记",
+            "issue": "圆点（填率 0.78-0.82、直径≈2.8、中心距≈6.1），与新标准一致；截图管线软化/色值伪影不判缺陷。具名登记",
             "severity": "minor",
             "status": "named"
           }
         ],
-        "evidence": "复测一致：dashed 5.97/1.99 CSS、线宽 1.99=标称 2、H 案 TL/BR 拟合 11.51/11.58、TR/BL 剖面全 0（直角）。截图管线软化/色值伪影不作为缺陷判定（目视无可见色差）。"
+        "evidence": "截图未变（22:32）。复测：四角贴边单点（spill 全 0）、dashed 5.97/1.99、H 案 TL/BR 拟合 11.51/11.58、TR/BL 全 0。新标准的来源实现之一。"
       }
     ]
   }
