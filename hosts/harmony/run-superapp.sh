@@ -62,6 +62,18 @@ if ! HDC file recv "$REPORT_DEV" "$RESULTS/superapp.json" >/dev/null 2>&1; then
 fi
 [ -s "$RESULTS/superapp.json" ] || { echo "✗ 报告为空"; exit 1; }
 echo "    superapp.json $(wc -c < "$RESULTS/superapp.json" | tr -d ' ') 字节"
+# ★★★视觉证据：设备截屏（「我的」末态高亮 = 切 tab 高亮的机器可读证据）
+rm -f "$RESULTS/superapp.png"
+if HDC shell "snapshot_display -f /data/local/tmp/superapp.jpeg" >/dev/null 2>&1 \
+   && HDC file recv /data/local/tmp/superapp.jpeg "$RESULTS/superapp.jpeg" >/dev/null 2>&1; then
+  # 转 PNG（便于统一查看；无 sips 时保留 jpeg）
+  if command -v sips >/dev/null 2>&1; then
+    sips -s format png "$RESULTS/superapp.jpeg" --out "$RESULTS/superapp.png" >/dev/null 2>&1 && rm -f "$RESULTS/superapp.jpeg"
+  fi
+  echo "    ✓ 视觉证据 $( [ -f "$RESULTS/superapp.png" ] && echo superapp.png || echo superapp.jpeg )"
+else
+  echo "    ⚠ 截图未取到"
+fi
 python3 - "$RESULTS/superapp.json" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1]))

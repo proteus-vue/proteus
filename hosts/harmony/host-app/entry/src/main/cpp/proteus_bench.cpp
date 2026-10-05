@@ -4508,7 +4508,7 @@ static napi_value SuperappBoot(napi_env env, napi_callback_info info) {
     std::string bundle, filesDir;
     jstr(argsJson.c_str(), argsJson.size(), "bundle", &bundle);
     jstr(argsJson.c_str(), argsJson.size(), "filesDir", &filesDir);
-    if (!filesDir.empty()) g_saFilesDir = filesDir;
+    (void)filesDir;   // filesDir 未用（一次性 VM，不持久）
 
     std::string err, boot = "null", state = "null";
     // ★★形态 = 既有 `AppStackExecutorProbe`（**一次性 VM**：create → eval → boot → 泵 → 读 → destroy）。
@@ -4591,7 +4591,7 @@ static napi_value SuperappDrive(napi_env env, napi_callback_info info) {
     jstr(argsJson.c_str(), argsJson.size(), "bundle", &bundle);
     jstr(argsJson.c_str(), argsJson.size(), "filesDir", &filesDir);
     tabsJson = extractValueAfterKey(argsJson, "tabs", '[', ']');   // ["index","messages","mine"]
-    if (!filesDir.empty()) g_saFilesDir = filesDir;
+    (void)filesDir;   // filesDir 未用（一次性 VM，不持久）
 
     std::string err, boot = "null", readValue = "null";
     int rounds = 0;

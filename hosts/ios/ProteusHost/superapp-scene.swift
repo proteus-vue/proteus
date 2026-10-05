@@ -204,12 +204,30 @@ final class SuperappScene: NSObject {
     // ── 收工 / 报告 ──
 
     private static func finish() {
+        // ★真正画一帧再截图（常驻/drive 都要——视觉验收的证据；此前 iOS 缺视觉证据，只跑逻辑）
+        takeSnapshot()
         if ProcessInfo.processInfo.arguments.contains("--drive") {
             writeReport(reportBody())
             NSLog("[proteus] SUPERAPP_LAUNCHER_REPORT_READY")
             if ProcessInfo.processInfo.environment["PROTEUS_EXIT_AFTER_REPORT"] == "1" { exit(0) }
         } else {
             NSLog("[proteus] SUPERAPP_LAUNCHER_PERSISTENT（常驻——桌面点开形态）")
+        }
+    }
+
+    /// 把**整个窗口**渲染成 PNG 落 Documents（含自绘内容 + 原生 Tab 栏）——真机视觉证据。
+    private static func takeSnapshot() {
+        guard let win = container?.window ?? container else { return }
+        let bounds = win.bounds
+        guard bounds.width > 0, bounds.height > 0 else { return }
+        let fmt = UIGraphicsImageRendererFormat.default()
+        fmt.scale = UIScreen.main.scale
+        let img = UIGraphicsImageRenderer(bounds: bounds, format: fmt).image { _ in
+            win.drawHierarchy(in: bounds, afterScreenUpdates: true)
+        }
+        if let png = img.pngData() {
+            try? png.write(to: reportDir.appendingPathComponent("superapp.png"))
+            NSLog("[proteus] SUPERAPP_SNAPSHOT %dx%d", Int(bounds.width), Int(bounds.height))
         }
     }
 

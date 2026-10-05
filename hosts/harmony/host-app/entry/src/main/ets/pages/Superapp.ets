@@ -20,7 +20,7 @@ import { display } from '@kit.ArkUI';
 import { util } from '@kit.ArkTS';
 import { fileIo } from '@kit.CoreFileKit';
 import { attach, renderCommands } from 'libproteus_render.so';
-import { appScreenCommands, superappBoot, superappDrive } from 'libproteus_bench.so';
+import { appScreenCommands, superappDrive } from 'libproteus_bench.so';
 
 const DOMAIN = 0x0002;
 const TAG = 'ProteusSuperapp';
@@ -89,11 +89,14 @@ struct Superapp {
         this.booted = true;
         this.writeReport();
       } else {
-        // 常驻：boot（单次调用）→ 入口页上屏 → 底部 Tab 栏
-        const out: string = superappBoot(JSON.stringify({ 'bundle': bundle, 'filesDir': this.filesDir } as Record<string, Object>));
+        // 常驻：**复用 superappDrive**（tabs=['index'] ⇒ boot 后跳过 index ⇒ 等价"仅启动"）。
+        //   ★为什么不用 superappBoot：其原生泵是**无条件 400 轮** checkpoint，boot 落定后再泵
+        //   会崩（SIGSEGV，实测）；superappDrive 有终态提前退出，是本机**唯一稳定**路径。
+        const out: string = superappDrive(JSON.stringify({ 'bundle': bundle, 'filesDir': this.filesDir, 'tabs': ['index'] } as Record<string, Object>));
         hilog.info(DOMAIN, TAG, 'SUPERAPP_BOOT %{public}s', out.substring(0, 240));
         const o = JSON.parse(out) as Record<string, Object>;
-        this.applyState(o['state']);
+        const dr = o['drive'] as Record<string, Object> | undefined;
+        if (dr) this.applyState(dr['state'] as Object);
         this.renderCurrent();
         this.booted = true;
         hilog.info(DOMAIN, TAG, 'SUPERAPP_LAUNCHER_READY current=%{public}s', this.current);
@@ -171,26 +174,6 @@ struct Superapp {
     } catch (e) {
       hilog.error(DOMAIN, TAG, 'SUPERAPP_SWITCH_ERROR %{public}s', JSON.stringify(e) ?? '');
     }
-  }
-
-  /** drive：链式切遍所有 tab（每次一次 native 调用；跳过当前页）→ 落报告 */
-  private driveFrom(i: number): void {
-    if (i >= this.tabKeys.length) { this.writeReport(); return; }
-    const name: string = this.tabKeys[i];
-    if (name === this.current) { this.driveFrom(i + 1); return; }
-    setTimeout(() => {
-      try {
-        const r: string = superappNav(name);
-        const parts: string[] = r.split('|STATE|');
-        if (parts.length > 1) this.applyState(parts[1]);
-        this.renderCurrent();
-        this.switchLog.push(`{"tap":"${name}","current":"${this.current}","ok":${this.current === name}}`);
-        hilog.info(DOMAIN, TAG, 'SUPERAPP_SWITCH tap=%{public}s current=%{public}s', name, this.current);
-      } catch (e) {
-        hilog.error(DOMAIN, TAG, 'SUPERAPP_SWITCH_ERROR %{public}s', JSON.stringify(e) ?? '');
-      }
-      setTimeout(() => { this.driveFrom(i + 1); }, 30);
-    }, 30);
   }
 
   private writeReport(): void {

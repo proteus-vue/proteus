@@ -704,8 +704,16 @@ if [ "$MODE" = "app-stack" ]; then
   exit $?
 fi
 
-# ★★★批次 44：superapp 桌面入口——打印摘要（切 tab 记账 + 宿主建树），不套用自绘/bench 的字段
+# ★★★批次 44/47：superapp 桌面入口——取回**视觉证据 PNG** + 打印摘要（切 tab 记账 + 宿主建树）
 if [ "$MODE" = "superapp" ]; then
+  rm -f "$HERE/results/superapp.png"
+  if xcrun devicectl device copy from --device "$UDID" --domain-type appDataContainer \
+      --domain-identifier "$BUNDLE_ID" --source "Documents/superapp.png" \
+      --destination "$HERE/results/superapp.png" >/dev/null 2>&1; then
+    echo "    ✓ 截图 superapp.png"
+  else
+    echo "    ⚠ 截图未取到（superapp.png）"
+  fi
   python3 -c "
 import json
 d=json.load(open('$HERE/results/$REPORT_FILE'))
