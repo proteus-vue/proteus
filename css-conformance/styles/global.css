@@ -1,0 +1,59 @@
+/* css-conformance/styles/global.css —— 全局样式（设计 token + 页面骨架）
+   ═══════════════════════════════════════════════════════════════════════════════
+   【两端消费】MP：proteus.config 的 globalStyle（→ app.wxss）；
+     Web：main.ts `import './styles/global.css'`（★单一事实源）。
+   【定位】只放**与验收无关的骨架**（背景/字号/间距 token、页面标题、案例卡）；
+     被验收的 CSS 特性一律写在**页面 SFC 自己的 `<style>`** 里（贴近真实业务写法，
+     也让 App 端编译期折叠走 SFC 通道——与页面样式在真实项目里的位置一致）。
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --cc-bg: #f4f5f7;
+  --cc-surface: #ffffff;
+  --cc-line: #dcdfe5;
+  --cc-line-soft: #e8eaee;
+  --cc-text: #1a1c22;
+  --cc-text-2: #4b5058;
+  --cc-text-3: #5f6673;
+  --cc-brand: #5b5bd6;
+  --cc-brand-soft: rgba(91, 91, 214, 0.1);
+}
+
+.cc-page {
+  background-color: var(--cc-bg);
+  min-height: 100vh;
+  padding: 16px 12px 32px;
+  box-sizing: border-box;
+}
+
+.cc-page__title {
+  display: block;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--cc-text);
+  margin-bottom: 4px;
+}
+
+.cc-page__sub {
+  display: block;
+  font-size: 13px;
+  color: var(--cc-text-3);
+  margin-bottom: 16px;
+}
+
+/* 案例分区标题（区与区之间的分隔） */
+.cc-sec {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cc-brand);
+  margin: 20px 0 8px;
+}
+
+/* 案例卡：真实业务形态的容器（列表/卡片） */
+.cc-card {
+  background-color: var(--cc-surface);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}

@@ -28,6 +28,12 @@ const FLEX_ALIGN = ['flex-start', 'flex-end', 'center', 'stretch', 'baseline', '
 const FLEX_JUSTIFY = ['flex-start', 'flex-end', 'center', 'space-between', 'space-around', 'space-evenly']
 /** ★批次 4：`text-align` 封闭集（App 自绘文本水平对齐） */
 const TEXT_ALIGN = ['left', 'center', 'right']
+/**
+ * ★★★G-61 后批（2026-10-05）：`white-space` 封闭集（Web 标准关键字）。
+ *   与"各端可表达值"是两个轴：App 单行文本模型把 `nowrap` 当默认（no-op），
+ *   其余值由 Applier/折叠器如实降级（诊断）——本层按 Web 标准收口，端侧收窄不在这层。
+ */
+const TEXT_WRAP = ['normal', 'nowrap', 'pre', 'pre-wrap', 'pre-line', 'break-spaces']
 
 export const PROP_TYPES = {
   Length: isLength,
@@ -38,6 +44,7 @@ export const PROP_TYPES = {
   FlexAlign: isEnum(FLEX_ALIGN),
   FlexJustify: isEnum(FLEX_JUSTIFY),
   TextAlign: isEnum(TEXT_ALIGN),
+  TextWrap: isEnum(TEXT_WRAP),
   Transform: (v: unknown): boolean => typeof v === 'string' && /^(translate|scale|rotate|skew)/i.test(v.trim()),
   TransformOrigin: (v: unknown): boolean => typeof v === 'string' && /^(left|right|top|bottom|center|\d+)/i.test(v.trim()),
 } as const

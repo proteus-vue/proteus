@@ -27,11 +27,14 @@ const CHECK = process.argv.includes('--check')
 const compiler = await import(pathToFileURL(path.join(ROOT, 'packages/compiler/dist/index.js')).href)
 const { extractFromSfc, buildDynamicClassPlans, lintCse } = compiler
 
-/** 扫描面（与 profile-boundary 同款：examples/showcase/website 三工程 + 组件库） */
+/** 扫描面（与 profile-boundary 同款：examples/showcase/website/css-conformance 四工程 + 组件库） */
 const PROJECTS = {
   examples: ['examples/pages', 'examples/components', 'examples/subpackages', 'packages/components'],
   showcase: ['showcase/pages', 'showcase/components', 'showcase/subpackages', 'packages/components'],
   website: ['website/src', 'packages/components'],
+  // ★css-conformance（CSS 一致性验收项目）：页面以静态类为主（零动态类绑定是设计约束——
+  //   验收对象是 CSS 而非 JS）；组件库存量与其它工程同源。
+  'css-conformance': ['css-conformance/pages', 'css-conformance/components', 'packages/components'],
 }
 
 /** ★存量理由（逐条人工确认的登记；键 = `<rel>:<code>`，按项目分组）

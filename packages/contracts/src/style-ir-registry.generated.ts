@@ -1002,6 +1002,19 @@ export const STYLE_IR_FIELDS: Record<string, StyleFieldSpec> = {
       inheritable: false,
     },
   },
+  "whiteSpace": {
+    scope: "engine-only",
+    domain: "text",
+    valueType: "enum",
+    sources: {
+      compiler: null,
+      matrixLevel: "TextWrap",
+      runtimeWhitelist: false,
+      runtimeForbidden: false,
+      consistencyMatrix: false,
+      inheritable: false,
+    },
+  },
   "width": {
     scope: "semantic",
     domain: "layout",
@@ -1045,9 +1058,9 @@ export const STYLE_IR_FIELDS: Record<string, StyleFieldSpec> = {
 
 /** 摘要（判据与官网数字读它——机器推导，非手写） */
 export const STYLE_IR_SUMMARY = {
-  total: 77,
+  total: 78,
   semantic: 50,
-  engineOnly: 27,
+  engineOnly: 28,
   byDomain: {
     "derived": 10,
     "edges": 9,
@@ -1055,5 +1068,6 @@ export const STYLE_IR_SUMMARY = {
     "matrix-only": 4,
     "paint": 17,
     "special": 1,
+    "text": 1,
   },
 } as const
