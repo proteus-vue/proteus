@@ -17,6 +17,12 @@ export { enumerateDynamicClassCandidates, buildDynamicClassPlans } from './dynam
 export { lintCse, hasCseLintErrors, formatCseLint, CSE_LINT_RULES } from './lint'
 export type { CseLintDiagnostic, CseLintOptions } from './lint'
 export { applyDegradeRecipe, DEGRADE_RECIPES } from './degrade'
+// ★★★后批：树对齐（CSE ⇄ 旧折叠通路——切换/对账共用，唯一实现）
+export { alignTrees } from './align'
+// ★★★后批：IR 值覆盖（切换执行 · 逐字段批次白名单）
+export { overlayIrValues, SWITCH_BATCHES } from './overlay'
+export type { OverlayOptions, OverlayResult, OverlayFieldOp } from './overlay'
+export type { AlignNode, AlignResult } from './align'
 export type { DegradeRecipe, DegradeResult, DegradeContext } from './degrade'
 export type { EnumerateResult, BuildDynamicPlansOptions, BuildDynamicPlansResult, DynamicPlanDiagnostic } from './dynamic'
 export type { CseExtractResult, ExtractOptions } from './extract'

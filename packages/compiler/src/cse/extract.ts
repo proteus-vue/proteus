@@ -16,6 +16,9 @@
 //   按模板序取**首个**（与旧通路同款静态近似，差异由 B2/运行期通道处理）；`v-if` 分支全保留。
 
 import { parse as sfcParse } from '@vue/compiler-sfc'
+import { parse as domParse } from '@vue/compiler-dom'
+// ★★★后批：与旧通路**同源**的构建期静态实例化（statics ⇒ 两树同口径）
+import { staticInstantiate } from '../vapor/static-instantiate'
 import type { CseDeclaration, CseNode, CseStyleSheet } from './types'
 import { parseStyleSheet } from './parse'
 import { expandShorthandDecl } from './shorthand'
@@ -39,6 +42,13 @@ export interface ExtractOptions {
   globalCss?: string
   /** 节点 key 前缀（多文件合并时防撞） */
   keyPrefix?: string
+  /**
+   * ★★★后批（切换前提）：**构建期已知初值**（与 `buildLayoutTemplate` 的第 5 参**同口径**）。
+   *   给了它 ⇒ 走**同一条管线**（@vue/compiler-dom 解析 + `staticInstantiate`）——
+   *   v-if 折叠 / 静态 v-for 展开 / :class 折入 与旧通路**逐节点一致** ⇒ 两树可对齐（切换/对账的前提）。
+   *   缺省 ⇒ 走原有的轻量扫描（零行为变化）。
+   */
+  statics?: Record<string, unknown>
 }
 
 /** 简易 HTML 模板扫描（与 compiler-backend-rust 的 template.rs 同族思路；只取结构+class/id/style） */
@@ -219,7 +229,10 @@ export function extractFromSfc(source: string, opts: ExtractOptions = {}): CseEx
   const { descriptor } = sfcParse(source, { filename: 'extract.vue' })
   const tpl = descriptor.template?.content ?? extractTemplate(source)
   const notes: CseExtractResult['notes'] = []
-  const rawRoots = scanElements(tpl, notes)
+  // ★★★后批：带 statics ⇒ **AST 管线**（与旧通路同源）；缺省 ⇒ 轻量扫描（零行为变化）
+  const rawRoots = opts.statics
+    ? scanElementsFromAst(tpl, opts.statics, notes)
+    : scanElements(tpl, notes)
   const inlineStyles: CseExtractResult['inlineStyles'] = {}
   const classBindings: CseExtractResult['classBindings'] = {}
   const keyPrefix = opts.keyPrefix ?? ''
@@ -250,4 +263,83 @@ export function extractFromSfc(source: string, opts: ExtractOptions = {}): CseEx
   }
   void order
   return { roots, sheet, inlineStyles, classBindings, notes }
+}
+
+/* ────────────────────────── ★后批：AST 管线（与旧通路同源——见 ExtractOptions.statics） ────────────────────────── */
+
+/** AST 元素节点（vue compiler-dom 的 ElementNode 面——只取本层需要的字段） */
+interface AstEl {
+  type: number
+  tag: string
+  props?: Array<{
+    type: number
+    name?: string
+    value?: { content?: string }
+    exp?: { content?: string } | string | null
+    arg?: { content?: string } | string | null
+  }>
+  children?: AstEl[]
+}
+
+/** tag → 属性文本按需拼（与轻量扫描的 parseClassAttr 同口径） */
+function propsOfAst(el: AstEl): { classes: string[]; id?: string; style?: string; classBinding?: string } {
+  const classes: string[] = []
+  let id: string | undefined
+  let style: string | undefined
+  let classBinding: string | undefined
+  for (const p of el.props ?? []) {
+    const name = p.name ?? ''
+    if (name === 'class' && p.type === 6) {
+      for (const c of (p.value?.content ?? '').split(/\s+/).filter(Boolean)) classes.push(c)
+      continue
+    }
+    if (name === 'class' && p.type === 7) {
+      // :class="expr"
+      const e = typeof p.exp === 'object' && p.exp !== null ? (p.exp as { content?: string }).content : typeof p.exp === 'string' ? p.exp : undefined
+      if (e) classBinding = e.trim()
+      continue
+    }
+    if (name === 'id' && p.type === 6) {
+      id = p.value?.content
+      continue
+    }
+    if (name === 'style' && p.type === 6) {
+      style = p.value?.content
+      continue
+    }
+  }
+  return { classes, id, style, classBinding }
+}
+
+/**
+ * 从 AST 扫描元素树（**与旧通路同源**：同一 compiler-dom 解析 + 同一 staticInstantiate）。
+ * ★合成叶（p-text，混合文本的文本段）此处**不产生**——旧侧的合成发生在**其** walk 里
+ *   （text-runs.ts）；对齐器（align.ts）把旧侧合成叶识别为"不参与配对"。
+ */
+function scanElementsFromAst(html: string, statics: Record<string, unknown>, notes: CseExtractResult['notes']): RawEl[] {
+  let ast = domParse(html, { comments: false }) as unknown as { children: unknown[] }
+  const si = staticInstantiate(ast as unknown as { type: number; children: unknown[] }, statics)
+  ast = si.ast as unknown as { children: unknown[] }
+  for (const d of si.diagnostics) notes.push({ kind: 'v-for', detail: `staticInstantiate: ${String(d).slice(0, 120)}` })
+
+  const walk = (kids: unknown[]): RawEl[] => {
+    const out: RawEl[] = []
+    for (const raw of kids) {
+      const el = raw as AstEl
+      if (el.type !== 1 || !el.tag) continue
+      if (el.tag === 'template') {
+        // <template v-if/#slot> 容器：透传子节点（与轻量扫描同口径）
+        out.push(...walk((el.children ?? []) as unknown[]))
+        continue
+      }
+      const { classes, id, style, classBinding } = propsOfAst(el)
+      const node: RawEl = { tag: el.tag, classes, children: walk((el.children ?? []) as unknown[]) }
+      if (id !== undefined) node.id = id
+      if (style !== undefined) node.style = style
+      if (classBinding !== undefined) node.classBinding = classBinding
+      out.push(node)
+    }
+    return out
+  }
+  return walk((ast as { children: unknown[] }).children)
 }
