@@ -79,6 +79,9 @@ CASE_FILTER=""
 # ★PROTEUS_SHOWCASE_SOAK_MS=<ms>：炫技场**长跑压力测量**（内存泄漏 + 热节流；默认 0 = 不跑）。
 #   开启时报告本地另存 `results/showcase-soak.json`（canonical `showcase.json` 保持不变）。
 RECORD=0
+# ★★批次 44：superapp 模式是否"驱动"（`--drive`）——驱动 = 脚本切 tab + 落报告后自退（可自动化）；
+#   不带 = 常驻（真·桌面点开形态）。
+DRIVE=0
 for a in "$@"; do
   case "$a" in
     --record) RECORD=1 ;;
@@ -87,6 +90,10 @@ for a in "$@"; do
     --host-runtime) MODE="host-runtime" ;;
     --app-stack) MODE="app-stack" ;;
     --showcase) MODE="showcase" ;;
+    # ★★★批次 44（2026-10-05）：superapp 真实应用（桌面点开形态）——`--drive` = 验证模式（脚本
+    #   驱动切 tab + 落 superapp.json 后自退）；不带 `--drive` = 常驻（真·桌面点开形态，不退出）。
+    --superapp) MODE="superapp" ;;
+    --drive) DRIVE=1 ;;
     --native-mix) MODE="native-mix" ;;
     --vapor-ab) MODE="vapor-ab" ;;
     # ★★★Vapor 设备端链（2026-10-03 · 三端对齐）：与 Android/鸿蒙**同一份**判据（①–⑫）
@@ -161,7 +168,7 @@ xcrun --sdk iphoneos swiftc -O -target arm64-apple-ios15.0 \
   -framework UIKit -framework CoreText -framework JavaScriptCore -framework AVFoundation -parse-as-library \
   -o "$APP/ProteusSelfDraw" $PLATFORM_SRC "$HERE/ProteusHost/selfdraw-scene.swift" \
   "$HERE/ProteusHost/host-runtime-scene.swift" "$HERE/ProteusHost/host-capabilities.swift" \
-  "$HERE/ProteusHost/host-lifecycle-events.swift" "$HERE/ProteusHost/screen-host.swift" "$HERE/ProteusHost/app-stack-scene.swift" "$HERE/ProteusHost/showcase-scene.swift" "$ABI_LIB" "$LIB"
+  "$HERE/ProteusHost/host-lifecycle-events.swift" "$HERE/ProteusHost/screen-host.swift" "$HERE/ProteusHost/app-stack-scene.swift" "$HERE/ProteusHost/showcase-scene.swift" "$HERE/ProteusHost/superapp-scene.swift" "$ABI_LIB" "$LIB"
 
 echo "==> ⑤ 组装 .app"
 # ★★两个 bundle **都装**（本仓实测踩到：只装当前模式那个 ⇒ 从桌面点开时
@@ -212,9 +219,10 @@ cat > "$APP/Info.plist" <<PLIST
   <key>CFBundleIdentifier</key><string>$BUNDLE_ID</string>
   <key>CFBundleName</key><string>ProteusSelfDraw</string>
   <key>CFBundleDisplayName</key><string>Morpheus</string>
-  <!-- ★缺省场景（无参数启动 = 从桌面点开）：showcase ⇒ 点图标即演示（用户要求"随时点开给团队看"）。
-       脚本各模式用显式参数覆盖（--selfdraw/--bench/--host-runtime/--app-stack/--showcase）。 -->
-  <key>ProteusDefaultScene</key><string>showcase</string>
+  <!-- ★缺省场景（无参数启动 = 从桌面点开）：★批次 44（2026-10-05）改为 **superapp**——点图标即进
+       superapp 真实应用（可切 tab）；用户原话「手机主屏图标点开 App 就能测完整体验」。
+       脚本各模式用显式参数覆盖（--selfdraw/--bench/--host-runtime/--app-stack/--showcase/--superapp）。 -->
+  <key>ProteusDefaultScene</key><string>superapp</string>
   <key>CFBundleVersion</key><string>1</string>
   <key>CFBundleShortVersionString</key><string>0.1.0</string>
   <key>CFBundlePackageType</key><string>APPL</string>
@@ -324,6 +332,8 @@ if [ "$MODE" = "vapor" ]; then REPORT_FILE="vapor.json"; SNAP_FILE="vapor.png"; 
 if [ "$MODE" = "host-runtime" ]; then REPORT_FILE="host-runtime.json"; SNAP_FILE="host-shell.json"; fi
 # ★M5：执行器场景两份报告（主 + 执行器；判据合并读）
 if [ "$MODE" = "app-stack" ]; then REPORT_FILE="app-stack.json"; SNAP_FILE="app-stack-executor.json"; fi
+# ★★★批次 44：superapp 真实应用——驱动模式落 `superapp.json`（与 Android SuperappActivity 同名）
+if [ "$MODE" = "superapp" ]; then REPORT_FILE="superapp.json"; SNAP_FILE="superapp.json"; fi
 # ★Morpheus 炫技场（一份报告 + 一张收尾截图）
 if [ "$MODE" = "showcase" ]; then
   REPORT_FILE="showcase.json"; SNAP_FILE="showcase-final.png"
@@ -478,6 +488,14 @@ elif [ "$MODE" = "vapor" ]; then
   xcrun devicectl device process launch --console --terminate-existing \
     --environment-variables '{"PROTEUS_EXIT_AFTER_REPORT":"1"}' \
     --device "$UDID" "$BUNDLE_ID" --vapor > "$LAUNCH_LOG" 2>&1 || LAUNCH_RC=$?
+elif [ "$MODE" = "superapp" ]; then
+  # ★★★批次 44：superapp 真实应用——`--drive` 时脚本驱动切 tab + 落 superapp.json 后自退（可自动化）；
+  #   不带 `--drive` 时**常驻**（真·桌面点开形态——launch 会一直阻塞，仅人工/前台使用）。
+  SA_ARGS=(--superapp)
+  [ "$DRIVE" = "1" ] && SA_ARGS+=(--drive)
+  xcrun devicectl device process launch --console --terminate-existing \
+    --environment-variables '{"PROTEUS_EXIT_AFTER_REPORT":"1"}' \
+    --device "$UDID" "$BUNDLE_ID" "${SA_ARGS[@]}" > "$LAUNCH_LOG" 2>&1 || LAUNCH_RC=$?
 elif [ "$MODE" = "native-mix" ]; then
   # ★★矩阵 #10：原生组件混用（自绘 + 原生 UIView 共存）——一次挂载 + 建原生视图 + 采样 + 截图 → 自退。
   xcrun devicectl device process launch --console --terminate-existing \
@@ -576,7 +594,7 @@ print('ok' if d.get('build_id')=='$BUILD_ID' else 'build_id 不符：报告=%r �
     echo "✗ ${BID_OK}——设备上跑的不是本次构建；不等待，直接失败"
     exit 7
   fi
-elif [ "$MODE" = "app-stack" ] || [ "$MODE" = "native-mix" ] || [ "$MODE" = "vapor-ab" ] || [ "$MODE" = "vapor" ]; then
+elif [ "$MODE" = "app-stack" ] || [ "$MODE" = "native-mix" ] || [ "$MODE" = "vapor-ab" ] || [ "$MODE" = "vapor" ] || [ "$MODE" = "superapp" ]; then
   # ★M5：app-stack 报告是 `__proteusAppStackRun` 的**原样输出**（无 build_id 字段——它不是
   #   编译期注入的 bundle，而是纯逻辑读数）⇒ build_id 断言不适用；新鲜度由 run_ts 断言兜底。
   # ★矩阵 #10：native-mix 报告由 Swift 侧组装（含 run_ts；无 bundle 注入的 build_id）——同处理。
@@ -684,6 +702,20 @@ if [ "$MODE" = "app-stack" ]; then
   echo "==> ⑨ 判据（与 Android 同一脚本 hosts/android/check-app-stack.py）"
   python3 "$ROOT/hosts/android/check-app-stack.py" "$HERE/results/$REPORT_FILE"
   exit $?
+fi
+
+# ★★★批次 44：superapp 桌面入口——打印摘要（切 tab 记账 + 宿主建树），不套用自绘/bench 的字段
+if [ "$MODE" = "superapp" ]; then
+  python3 -c "
+import json
+d=json.load(open('$HERE/results/$REPORT_FILE'))
+print('    报告：$HERE/results/$REPORT_FILE')
+print('    ok=%s host=%s rendered=%s' % (d.get('ok'), d.get('host_id'), d.get('rendered_page')))
+for row in (d.get('switch_log') or []):
+    print('      %s tap=%s → current=%s (via %s)' % ('✓' if row.get('ok') else '✗', row.get('tap'), row.get('current'), row.get('via','-')))
+print('    host_stats=%s' % (d.get('host_stats'),))
+" 2>/dev/null || echo "    （报告未取到——检查设备日志）"
+  exit 0
 fi
 
 # ★截图 = 软信号（bench 模式本就不产 PNG；报告已在上面硬断言过）

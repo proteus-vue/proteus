@@ -41,6 +41,8 @@ interface SuperappApp {
   navigate(name: string): Promise<void>
   back(): void
   state(): { depth: number; current: string; stack: string[]; tabs: string[]; tabLabels: Record<string, string> }
+  /** ★批次 44：启动（进入入口 tab）的 promise——驱动链先 await 它，避免与后续导航重入 */
+  booted?: Promise<void>
 }
 
 /** 启动 superapp（真实应用）：装配导航 → 进入入口 tab。返回首屏读数。 */
@@ -89,8 +91,9 @@ export function bootSuperapp(host?: SuperappHost): BootResult {
       },
     }
     g.__SUPERAPP__ = app
-    // 启动入口 tab（index 是 isTab ⇒ router.push 内部走 switchTab）
-    void app.navigate(reg.indexName)
+    // 启动入口 tab（index 是 isTab ⇒ router.push 内部走 switchTab）——把 promise 存下来，
+    //   供驱动链（鸿蒙 one-kick）先 await（否则驱动会与启动导航重入）
+    app.booted = app.navigate(reg.indexName)
     return { ok: true, ...base, depth: nav.stack.depth, current: nav.stack.current()?.name ?? '' }
   } catch (e) {
     return { ok: false, ...base, depth: 0, current: '', error: String((e as Error)?.message ?? e) }
@@ -130,3 +133,61 @@ export function bootSuperapp(host?: SuperappHost): BootResult {
   g.__SUPERAPP__!.back()
   return JSON.stringify({ ok: true })
 }
+
+/* ═══════════ ★★★批次 44：**驱动链**（one-kick + 宿主泵，鸿蒙 JSVM 专用形态）═══════════
+ * 【为什么需要它（鸿蒙实测）】鸿蒙宿主的微任务泵是"**一次 kick + 有界泵 + 读 getter**"形态
+ *   （见 `AppStackExecutorProbe`）：**不能**在泵循环里反复调新的导航入口——
+ *   跨"启动新导航"的调用会与 V8 微任务排空重入 ⇒ SIGSEGV/HandleScope 溢出（本仓实测）。
+ *   ⇒ 本入口把 boot + 逐 tab 切页编成**一条 async 驱动**（`await navigate` 串起来），
+ *     宿主只 kick 一次，然后反复读 `__proteusSuperappDriveReadJson()` 直到 `pending=false`。
+ *   ★与 Android/iOS 的差别：那边宿主用自己的 job 泵逐条驱动（无此限制）；本入口是鸿蒙的等价解。
+ */
+export interface SuperappDriveState {
+  pending: boolean
+  log: Array<{ tap: string; current: string; ok: boolean }>
+  state: ReturnType<SuperappApp['state']> | { error: string }
+}
+;(globalThis as unknown as { __proteusSuperappDrive?: (tabsJson: string) => string }).__proteusSuperappDrive = (
+  tabsJson: string,
+) => {
+  const g = globalThis as unknown as {
+    __SUPERAPP__?: SuperappApp
+    __SUPERAPP_DRIVE__?: SuperappDriveState
+  }
+  if (!g.__SUPERAPP__) return JSON.stringify({ ok: false, error: '未启动' })
+  let tabs: string[] = []
+  try {
+    tabs = JSON.parse(tabsJson) as string[]
+  } catch {
+    tabs = []
+  }
+  // ★缺省 ⇒ 从应用自己的注册表取（宿主只 kick，不猜；tabs 与 Web/MP 同源）
+  if (!Array.isArray(tabs) || tabs.length === 0) tabs = g.__SUPERAPP__!.state().tabs
+  const drive: SuperappDriveState = { pending: true, log: [], state: { error: '进行中' } }
+  g.__SUPERAPP_DRIVE__ = drive
+  const app = g.__SUPERAPP__!
+  void (async () => {
+    try {
+      await (app.booted ?? Promise.resolve())   // 先等启动导航落定（避免与它重入）
+      for (const t of tabs) {
+        const before = app.state().current
+        if (t === before) continue   // ★跳过当前页：鸿蒙上同页重复导航会栈溢出（已实测）
+        await app.navigate(t)
+        drive.log.push({ tap: t, current: app.state().current, ok: app.state().current === t })
+      }
+    } catch (e) {
+      drive.log.push({ tap: '', current: String((e as Error)?.message ?? e), ok: false })
+    } finally {
+      drive.pending = false
+      drive.state = app.state()
+    }
+  })()
+  return JSON.stringify({ ok: true, kicked: tabs.length })
+}
+
+/** ★宿主调（泵循环内）：读驱动状态（纯 getter——不启动新工作，零重入） */
+;(globalThis as unknown as { __proteusSuperappDriveReadJson?: () => string })
+  .__proteusSuperappDriveReadJson = () => {
+    const g = globalThis as unknown as { __SUPERAPP_DRIVE__?: SuperappDriveState }
+    return JSON.stringify(g.__SUPERAPP_DRIVE__ ?? { pending: false, log: [], state: { error: '未驱动' } })
+  }

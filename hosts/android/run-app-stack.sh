@@ -41,7 +41,7 @@ echo "==> ② 清旧报告 + 重启 + 等就绪 + 触发 app-stack"
 # ★两份报告都清（场景 E 的异步报告；残留会让判据读上一轮——本仓已有此教训）
 "$ADB" shell "rm -f $REPORT $EXEC_REPORT" >/dev/null 2>&1 || true
 "$ADB" shell "am force-stop $PKG" >/dev/null 2>&1 || true
-"$ADB" shell "monkey -p $PKG -c android.intent.category.LAUNCHER 1" >/dev/null 2>&1
+"$ADB" shell "am start -n $PKG/.MainActivity" >/dev/null 2>&1
 # ★条件等待（替代原 `sleep 3`）：等 Activity 上报 "run-receiver-ready"（见 MainActivity.onCreate）
 WAIT_SH="$ROOT/.agents/skills/ai-efficiency-rules/scripts/wait_for.sh"
 [ -x "$WAIT_SH" ] || { echo "✗ 缺 wait_for.sh（${WAIT_SH}）——本脚本禁止盲等"; exit 2; }

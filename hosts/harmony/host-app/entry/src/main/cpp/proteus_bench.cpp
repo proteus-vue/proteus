@@ -4467,6 +4467,212 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
     napi_value out; napi_create_string_utf8(env, arr.c_str(), arr.size(), &out); return out;
 }
 
+/* ══════════════ ★★★批次 44：superapp 真实应用 · 鸿蒙持久 VM（2026-10-05） ══════════════
+ *
+ * 【要证明什么】superapp 在鸿蒙上以**真实应用**形态启动：路由栈装配 + 宿主真建树（screen.*）+
+ *   进入入口 tab，且**常驻**（跨多次导航存活）——与 Android SuperappActivity / iOS SuperappScene 同形。
+ * 【与 AppStackExecutorProbe 的区别】那个是**一次性探针**（跑完销毁 VM）；本片是**持久 VM**——
+ *   因为真实应用要多次导航/切 tab（每次新建 VM 会丢状态）。形态参照 `hostRtShellInstall` 的持久 VM。
+ * 【诚实边界】页面内容 = 编译产物静态结构（上屏由 ArkTS 复用既有 appScreenCommands + renderCommands）；
+ *   转场动画为即时（C++ 侧无逐帧通道——见 screenInvokeDispatch 注释）。
+ * ═══════════════════════════════════════════════════════════════════════════════ */
+/*
+ * ★★批次 44 · 鸿蒙 superapp 的 VM 形态（2026-10-05 实测收敛）：**一次性 VM**。
+ *
+ * 【为什么不用持久 VM】沿用 `hostRtShellInstall` 的持久 VM 形态时，**第二次** napi 调用
+ *   （在 boot 之后再启动一次导航/驱动）的 V8 微任务排空阶段必然崩溃：
+ *   ① EXPLICIT 策略 + 手动 `OH_JSVM_PerformMicrotaskCheckpoint` ⇒ 微任务栈 SIGSEGV；
+ *   ② 默认策略 + 跨调用复用 ⇒ `HandleScope::Extend` 溢出（v8::base::OS::Abort）。
+ *   ⇒ 与**既有可用的 `AppStackExecutorProbe` 对齐**：每次调用**新建 VM → eval → boot/驱动 → 泵 →
+ *     读 → 销毁**。宿主只需两类调用：`superappBoot`（启动 + 读状态）与 `superappDrive`
+ *     （一条 async 驱动跑完 boot + 逐 tab 切页，宿主只 kick 一次 + 读 getter）。
+ *
+ * 【诚实边界】一次性 VM ⇒ 跨交互的应用状态不保留（每次交互从入口重新装配）。
+ *   对「点开即见 + 切 tab」这一批足够；持久应用（响应式/v-model 回写）属下一阶段（App 壳）。
+ */
+
+/**
+ * superappBoot(argsJson {bundle, filesDir}): string(JSON)
+ *   懒建**持久** VM/Env（EXPLICIT 微任务）→ 注入 proteusHost{invoke} + 平台全局 → eval bundle-superapp.js
+ *   → `__proteusSuperappBootJson()`（路由栈 + 宿主真建树 → 进入入口 tab）→ 泵 job → 返回 boot + state。
+ *   ★已建则跳过（幂等——重复启动不重建 VM，保状态）。
+ */
+static napi_value SuperappBoot(napi_env env, napi_callback_info info) {
+    size_t argc = 1; napi_value args[1] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    std::string argsJson;
+    if (argc >= 1 && args[0] != nullptr) {
+        size_t len = 0; napi_get_value_string_utf8(env, args[0], nullptr, 0, &len);
+        argsJson.resize(len + 1); napi_get_value_string_utf8(env, args[0], &argsJson[0], len + 1, &len); argsJson.resize(len);
+    }
+    std::string bundle, filesDir;
+    jstr(argsJson.c_str(), argsJson.size(), "bundle", &bundle);
+    jstr(argsJson.c_str(), argsJson.size(), "filesDir", &filesDir);
+    if (!filesDir.empty()) g_saFilesDir = filesDir;
+
+    std::string err, boot = "null", state = "null";
+    // ★★形态 = 既有 `AppStackExecutorProbe`（**一次性 VM**：create → eval → boot → 泵 → 读 → destroy）。
+    //   【为什么一次性而非持久】跨 napi 调用复用同一 VM 时，V8 微任务排空会 HandleScope 溢出/SIGSEGV
+    //   （本仓实测多次）；一次性 VM 是本机唯一稳定的形态。宿主只需要"启动 + 读状态"这**一次**调用。
+    JSVM_VM vm = nullptr; JSVM_Env jenv = nullptr; JSVM_HandleScope scope = nullptr; JSVM_VMScope vmScope = nullptr;
+    bool policyOk = false; bool cr = false;
+    if (bundle.empty()) err = "缺 bundle";
+    OH_JSVM_Init(nullptr);
+    JSVM_CreateVMOptions vo; memset(&vo, 0, sizeof(vo));
+    if (err.empty()) {
+        if (OH_JSVM_CreateVM(&vo, &vm) != JSVM_OK || vm == nullptr) err = "CreateVM 失败";
+        else if (OH_JSVM_OpenVMScope(vm, &vmScope) != JSVM_OK) err = "OpenVMScope 失败";
+        else if (OH_JSVM_CreateEnv(vm, 0, nullptr, &jenv) != JSVM_OK || jenv == nullptr) err = "CreateEnv 失败";
+        else if (OH_JSVM_OpenHandleScope(jenv, &scope) != JSVM_OK) err = "OpenHandleScope 失败";
+        else policyOk = (OH_JSVM_SetMicrotaskPolicy(vm, JSVM_MICROTASK_EXPLICIT) == JSVM_OK);
+    }
+    if (err.empty()) {
+        jsvmEvalStr(jenv, "globalThis.__PROTEUS_HOST_ID__ = 'harmony';"
+                          "globalThis.__PROTEUS_HOST_FRAME_DRIVER__ = 'postFrameCallback';", nullptr);
+        JSVM_Value host = nullptr; OH_JSVM_CreateObject(jenv, &host);
+        JSVM_CallbackStruct cb; cb.callback = InvokeCb; cb.data = nullptr;
+        JSVM_Value fn = nullptr; OH_JSVM_CreateFunction(jenv, "invoke", JSVM_AUTO_LENGTH, &cb, &fn);
+        OH_JSVM_SetNamedProperty(jenv, host, "invoke", fn);
+        JSVM_Value global = nullptr; OH_JSVM_GetGlobal(jenv, &global);
+        OH_JSVM_SetNamedProperty(jenv, global, "proteusHost", host);
+        JSVM_Value src = nullptr; OH_JSVM_CreateStringUtf8(jenv, bundle.c_str(), bundle.size(), &src);
+        JSVM_Script script = nullptr;
+        if (OH_JSVM_CompileScript(jenv, src, nullptr, 0, false, &cr, &script) != JSVM_OK) err = "bundle 编译失败";
+        else { JSVM_Value rr = nullptr; if (OH_JSVM_RunScript(jenv, script, &rr) != JSVM_OK) err = "bundle 执行失败"; }
+    }
+    if (err.empty()) {
+        jsvmEvalStr(jenv, "String(__proteusSuperappBootJson())", &boot);
+        // 有界泵：排空 boot 的导航续体（进入入口 tab）
+        for (int i = 0; i < 400; i++) {
+            if (g_scAnimRemainMs > 0) {
+                for (uint64_t h : g_scAnimHandles) { char* rp = proteus_layout_anim_tick(h, 16.7f); if (rp) proteus_layout_free_string(rp); }
+                g_scAnimRemainMs -= 16.7;
+                if (g_scAnimRemainMs <= 0) {
+                    std::string dexpr = "typeof __proteusHostScreenAnimDone === 'function' ? String(__proteusHostScreenAnimDone(\""
+                        + jsonEscape(g_scAnimToken) + "\", '{}')) : 'no-hook'";
+                    jsvmEvalStr(jenv, dexpr.c_str(), nullptr);
+                    JSVM_Value exc = nullptr; OH_JSVM_GetAndClearLastException(jenv, &exc);
+                }
+            }
+            if (policyOk) OH_JSVM_PerformMicrotaskCheckpoint(vm);
+        }
+        jsvmEvalStr(jenv, "String(__proteusSuperappState())", &state);
+    }
+    if (jenv != nullptr && scope != nullptr) OH_JSVM_CloseHandleScope(jenv, scope);
+    if (jenv != nullptr) OH_JSVM_DestroyEnv(jenv);
+    if (vm != nullptr && vmScope != nullptr) OH_JSVM_CloseVMScope(vm, vmScope);
+    if (vm != nullptr) OH_JSVM_DestroyVM(vm);
+    std::string out = "{\"ok\":" + std::string(err.empty() ? "true" : "false")
+        + ",\"boot\":" + boot + ",\"state\":" + state;
+    if (!err.empty()) out += ",\"error\":\"" + jsonEscape(err) + "\"";
+    out += "}";
+    napi_value r; napi_create_string_utf8(env, out.c_str(), out.size(), &r); return r;
+}
+
+/**
+ * ★★★批次 44：superapp **驱动链**（boot + 逐 tab 切页）——**单次 napi 调用内完成**。
+ * argsJson = { bundle, filesDir, tabs?: string[] }；tabs 缺省 ⇒ JS 侧从应用注册表取。
+ *
+ * 【形态】一次性 VM（见上方"VM 形态"注释）：eval bundle → boot → kick 一条 async 驱动（JS 侧
+ *   `__proteusSuperappDrive`，内部 `await app.booted` 后逐 tab `await navigate`）→ 有界泵
+ *   （推进转场动画 + checkpoint + 读 `__proteusSuperappDriveReadJson` 直到 pending=false）→ 销毁。
+ *   ⇒ 与**既有可用的 `AppStackExecutorProbe` 同形**（one-kick + 有界泵 + read getter）。
+ *   返回 { ok, boot, switch_log, state }。
+ */
+static napi_value SuperappDrive(napi_env env, napi_callback_info info) {
+    size_t argc = 1; napi_value args[1] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    std::string argsJson;
+    if (argc >= 1 && args[0] != nullptr) {
+        size_t len = 0; napi_get_value_string_utf8(env, args[0], nullptr, 0, &len);
+        argsJson.resize(len + 1); napi_get_value_string_utf8(env, args[0], &argsJson[0], len + 1, &len); argsJson.resize(len);
+    }
+    std::string bundle, filesDir, tabsJson;
+    jstr(argsJson.c_str(), argsJson.size(), "bundle", &bundle);
+    jstr(argsJson.c_str(), argsJson.size(), "filesDir", &filesDir);
+    tabsJson = extractValueAfterKey(argsJson, "tabs", '[', ']');   // ["index","messages","mine"]
+    if (!filesDir.empty()) g_saFilesDir = filesDir;
+
+    std::string err, boot = "null", readValue = "null";
+    int rounds = 0;
+    if (bundle.empty()) err = "缺 bundle";
+    // ★★形态 = 既有 `AppStackExecutorProbe`（**一次性 VM** + kick + 有界泵 + read getter + destroy）。
+    //   【为什么不用持久 VM】跨 napi 调用复用同一 VM 时，V8 微任务排空阶段会 HandleScope 溢出/
+    //   SIGSEGV（本仓实测，见 SuperappBoot 注释的取舍）。一次调用内跑完整条驱动链最稳。
+    JSVM_VM vm = nullptr; JSVM_Env jenv = nullptr; JSVM_HandleScope scope = nullptr; JSVM_VMScope vmScope = nullptr;
+    bool policyOk = false; bool cr = false;
+    OH_JSVM_Init(nullptr);
+    JSVM_CreateVMOptions vo; memset(&vo, 0, sizeof(vo));
+    if (err.empty()) {
+        if (OH_JSVM_CreateVM(&vo, &vm) != JSVM_OK || vm == nullptr) err = "CreateVM 失败";
+        else if (OH_JSVM_OpenVMScope(vm, &vmScope) != JSVM_OK) err = "OpenVMScope 失败";
+        else if (OH_JSVM_CreateEnv(vm, 0, nullptr, &jenv) != JSVM_OK || jenv == nullptr) err = "CreateEnv 失败";
+        else if (OH_JSVM_OpenHandleScope(jenv, &scope) != JSVM_OK) err = "OpenHandleScope 失败";
+        else policyOk = (OH_JSVM_SetMicrotaskPolicy(vm, JSVM_MICROTASK_EXPLICIT) == JSVM_OK);
+    }
+    if (err.empty()) {
+        jsvmEvalStr(jenv, "globalThis.__PROTEUS_HOST_ID__ = 'harmony';"
+                          "globalThis.__PROTEUS_HOST_FRAME_DRIVER__ = 'postFrameCallback';", nullptr);
+        JSVM_Value host = nullptr; OH_JSVM_CreateObject(jenv, &host);
+        JSVM_CallbackStruct cb; cb.callback = InvokeCb; cb.data = nullptr;
+        JSVM_Value fn = nullptr; OH_JSVM_CreateFunction(jenv, "invoke", JSVM_AUTO_LENGTH, &cb, &fn);
+        OH_JSVM_SetNamedProperty(jenv, host, "invoke", fn);
+        JSVM_Value global = nullptr; OH_JSVM_GetGlobal(jenv, &global);
+        OH_JSVM_SetNamedProperty(jenv, global, "proteusHost", host);
+        JSVM_Value src = nullptr; OH_JSVM_CreateStringUtf8(jenv, bundle.c_str(), bundle.size(), &src);
+        JSVM_Script script = nullptr;
+        if (OH_JSVM_CompileScript(jenv, src, nullptr, 0, false, &cr, &script) != JSVM_OK) err = "bundle 编译失败";
+        else { JSVM_Value rr = nullptr; if (OH_JSVM_RunScript(jenv, script, &rr) != JSVM_OK) err = "bundle 执行失败"; }
+    }
+    if (err.empty()) {
+        // ① kick：boot（进入入口 tab）
+        jsvmEvalStr(jenv, "String(__proteusSuperappBootJson())", &boot);
+        // ② kick：一条 async 驱动（boot 后逐 tab await navigate——由宿主泵推它前进）
+        //    tabs JSON 用**单引号**包裹为 JS 字符串字面量（JSON 数组内容无单引号，安全）
+        std::string tabsArg = tabsJson.empty() ? "[]" : tabsJson;
+        std::string expr = "String(__proteusSuperappDrive('" + tabsArg + "'))";
+        jsvmEvalStr(jenv, expr.c_str(), nullptr);
+        // ③ 有界泵：每轮 推进内核动画（若有转场）+ checkpoint + 读 getter；pending=false 即停
+        JSVM_Value global = nullptr; OH_JSVM_GetGlobal(jenv, &global);
+        JSVM_Value undef = nullptr; OH_JSVM_GetUndefined(jenv, &undef);
+        JSVM_Value fnR = nullptr;
+        OH_JSVM_GetNamedProperty(jenv, global, "__proteusSuperappDriveReadJson", &fnR);
+        for (int i = 0; i < 4096; i++) {
+            if (g_scAnimRemainMs > 0) {
+                for (uint64_t h : g_scAnimHandles) {
+                    char* rp = proteus_layout_anim_tick(h, 16.7f);
+                    if (rp) proteus_layout_free_string(rp);
+                }
+                g_scAnimRemainMs -= 16.7;
+                if (g_scAnimRemainMs <= 0) {
+                    std::string dexpr = "typeof __proteusHostScreenAnimDone === 'function' ? String(__proteusHostScreenAnimDone(\""
+                        + jsonEscape(g_scAnimToken) + "\", '{}')) : 'no-hook'";
+                    jsvmEvalStr(jenv, dexpr.c_str(), nullptr);
+                    JSVM_Value exc = nullptr; OH_JSVM_GetAndClearLastException(jenv, &exc);
+                }
+            }
+            if (policyOk) OH_JSVM_PerformMicrotaskCheckpoint(vm);
+            rounds++;
+            if (fnR != nullptr) {
+                JSVM_Value rr = nullptr;
+                if (OH_JSVM_CallFunction(jenv, undef, fnR, 0, nullptr, &rr) == JSVM_OK) {
+                    jsvmStr(jenv, rr, &readValue);
+                    if (readValue.find("\"pending\":true") == std::string::npos) break;
+                } else break;
+            } else break;
+        }
+    }
+    if (jenv != nullptr && scope != nullptr) OH_JSVM_CloseHandleScope(jenv, scope);
+    if (jenv != nullptr) OH_JSVM_DestroyEnv(jenv);
+    if (vm != nullptr && vmScope != nullptr) OH_JSVM_CloseVMScope(vm, vmScope);
+    if (vm != nullptr) OH_JSVM_DestroyVM(vm);
+    std::string out = "{\"ok\":" + std::string(err.empty() ? "true" : "false")
+        + ",\"boot\":" + boot + ",\"drive\":" + readValue + ",\"rounds\":" + std::to_string(rounds);
+    if (!err.empty()) out += ",\"error\":\"" + jsonEscape(err) + "\"";
+    out += "}";
+    napi_value r; napi_create_string_utf8(env, out.c_str(), out.size(), &r); return r;
+}
+
 static napi_value BenchInit(napi_env env, napi_value exports) {
     napi_property_descriptor desc[] = {
         {"bench4050", nullptr, Bench4050, nullptr, nullptr, nullptr, napi_default, nullptr},
@@ -4485,6 +4691,9 @@ static napi_value BenchInit(napi_env env, napi_value exports) {
         {"appScreenHitAt", nullptr, AppScreenHitAt, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"appScreenAnimTick", nullptr, AppScreenAnimTick, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"appStackExecutorProbe", nullptr, AppStackExecutorProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
+        // ★★★批次 44：superapp 真实应用（持久 VM——桌面点开形态）
+        {"superappBoot", nullptr, SuperappBoot, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"superappDrive", nullptr, SuperappDrive, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"animCurveBezier", nullptr, AnimCurveBezier, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"hostRuntimeProbe", nullptr, HostRuntimeProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"hostRtShellInstall", nullptr, HostRtShellInstall, nullptr, nullptr, nullptr, napi_default, nullptr},

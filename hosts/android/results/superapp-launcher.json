@@ -1,0 +1,90 @@
+{
+  "ok": true,
+  "mode": "drive",
+  "host_id": "android",
+  "state": {
+    "depth": 1,
+    "current": "mine",
+    "stack": [
+      "mine"
+    ],
+    "tabs": [
+      "index",
+      "messages",
+      "mine"
+    ],
+    "tabLabels": {
+      "index": "Proteus 超级应用",
+      "messages": "消息",
+      "mine": "我的",
+      "verify": "验收控制台"
+    }
+  },
+  "tabs": [
+    "index",
+    "messages",
+    "mine"
+  ],
+  "switch_log": [
+    {
+      "tap": "index",
+      "current": "index",
+      "ok": true,
+      "via": "motion-root",
+      "motion_consumed": true
+    },
+    {
+      "tap": "messages",
+      "current": "messages",
+      "ok": true,
+      "via": "motion-root",
+      "motion_consumed": true
+    },
+    {
+      "tap": "mine",
+      "current": "mine",
+      "ok": true,
+      "via": "motion-root",
+      "motion_consumed": true
+    }
+  ],
+  "rendered_page": "mine",
+  "on_draw": 12,
+  "host_stats": {
+    "ok": true,
+    "data": {
+      "mount_calls": 4,
+      "visible_calls": 4,
+      "destroy_calls": 3,
+      "anim_calls": 0,
+      "anim_completed": 0,
+      "anim_hook_missing": 0,
+      "rect_calls": 0,
+      "shared_calls": 0,
+      "content_node_total": 176,
+      "live_screens": 1,
+      "calls": [
+        "screen.mount",
+        "screen.visible",
+        "screen.destroy",
+        "screen.mount",
+        "screen.visible",
+        "screen.destroy",
+        "screen.mount",
+        "screen.visible",
+        "screen.destroy",
+        "screen.mount",
+        "screen.visible",
+        "screen.stats"
+      ],
+      "screens": [
+        {
+          "screenId": "mine#4",
+          "visible": true,
+          "rootNodeId": 100
+        }
+      ],
+      "handle_count": 2
+    }
+  }
+}

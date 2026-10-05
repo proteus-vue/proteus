@@ -66,7 +66,7 @@ echo "==> ② 清旧产物 + 清 logcat + 重启 + 等就绪 + 触发 host-runti
 # ★logcat 必须清：wait_log 是"缓冲区里出现过该标记即就绪"，不清会把上一轮的标记当成本轮证据
 "$ADB" logcat -c >/dev/null 2>&1 || true
 "$ADB" shell "am force-stop $PKG" >/dev/null 2>&1 || true
-"$ADB" shell "monkey -p $PKG -c android.intent.category.LAUNCHER 1" >/dev/null 2>&1
+"$ADB" shell "am start -n $ACTIVITY" >/dev/null 2>&1
 # ★条件等待（替代原 `sleep 3`）：等 Activity 自己上报 "run-receiver-ready"（广播接收器已注册）
 wait_log "run-receiver-ready" 30 proteus || echo "  ⚠ 未见 run-receiver-ready（30s）——广播可能丢，判据会如实红"
 "$ADB" shell "am broadcast -a dev.proteus.RUN --es path host-runtime -p $PKG" >/dev/null 2>&1

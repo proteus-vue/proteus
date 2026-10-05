@@ -1,17 +1,12 @@
 "use strict";
 (() => {
   // packages/router/src/app-stack.ts
-  var KEEP_ALIVE_TIERS = {
-    none: true,
-    active: true,
-    all: true
-  };
   function paramKey(params) {
     if (!params) return "";
     return Object.keys(params).sort().filter((k) => params[k] !== void 0).map((k) => `${k}=${String(params[k])}`).join("&");
   }
   function createAppStack(opts) {
-    const screens2 = opts.screens;
+    const screens = opts.screens;
     const policy = {
       nodeBudget: null,
       keepWindow: 3,
@@ -31,9 +26,9 @@
       for (const h of handlers) h(e);
     };
     function specOf2(name) {
-      const s = screens2[name];
+      const s = screens[name];
       if (!s) {
-        throw new Error(`[app-stack] \u672A\u6CE8\u518C\u7684\u5C4F "${name}"\uFF08\u53EF\u7528\uFF1A${Object.keys(screens2).join(", ") || "\uFF08\u7A7A\u6CE8\u518C\u8868\uFF09"}\uFF09`);
+        throw new Error(`[app-stack] \u672A\u6CE8\u518C\u7684\u5C4F "${name}"\uFF08\u53EF\u7528\uFF1A${Object.keys(screens).join(", ") || "\uFF08\u7A7A\u6CE8\u518C\u8868\uFF09"}\uFF09`);
       }
       return s;
     }
@@ -454,15 +449,15 @@
   }
 
   // packages/router/src/router-core.ts
-  function currentFrom(routeMap2, pages) {
+  function currentFrom(routeMap, pages) {
     if (pages.length === 0) return null;
     const path = pages[pages.length - 1].route;
-    return routeMap2[path] || Object.values(routeMap2).find((r) => r.path === path) || null;
+    return routeMap[path] || Object.values(routeMap).find((r) => r.path === path) || null;
   }
   var Router = class {
-    constructor(routeMap2, adapter, options = {}) {
-      this.routeMap = routeMap2;
-      this.adapter = adapter;
+    constructor(routeMap, adapter2, options = {}) {
+      this.routeMap = routeMap;
+      this.adapter = adapter2;
       this.options = options;
       /** 导航 traceId 自增（start/end 配对） */
       this.traceSeq = 0;
@@ -470,10 +465,10 @@
       this.tracePending = false;
       /** 当前路由（onPageLoad 维护——非 push 导航的 from 基准） */
       this.lastRoute = "?";
-      if (!adapter.isMP && typeof adapter.onPageLoad === "function") {
-        const pages = adapter.getCurrentPages();
+      if (!adapter2.isMP && typeof adapter2.onPageLoad === "function") {
+        const pages = adapter2.getCurrentPages();
         this.lastRoute = (pages.length ? pages[pages.length - 1].route ?? "?" : "?") || "index";
-        adapter.onPageLoad((route2, _query, _routeType, _nav) => {
+        adapter2.onPageLoad((route2, _query, _routeType, _nav) => {
           const normalized = route2 || "index";
           if (this.tracePending) {
             this.tracePending = false;
@@ -633,13 +628,13 @@
       return qs ? `/${path}?${qs}` : `/${path}`;
     }
   };
-  function createRouterCore(routes2, options) {
-    const { adapter, ...rest } = options;
-    const routeMap2 = routes2.reduce((m, r) => {
+  function createRouterCore(routes, options) {
+    const { adapter: adapter2, ...rest } = options;
+    const routeMap = routes.reduce((m, r) => {
       m[r.name] = r;
       return m;
     }, {});
-    return new Router(routeMap2, adapter, rest);
+    return new Router(routeMap, adapter2, rest);
   }
 
   // packages/router/src/app-adapter.ts
@@ -661,9 +656,9 @@
     return { path: rawPath ?? "", params };
   }
   function createAppNavigationAdapter(opts) {
-    const { stack, pump, screens: screens2 } = opts;
+    const { stack, pump, screens } = opts;
     const byPath = /* @__PURE__ */ new Map();
-    for (const spec of Object.values(screens2)) byPath.set(normPath(spec.path), spec.name);
+    for (const spec of Object.values(screens)) byPath.set(normPath(spec.path), spec.name);
     if (byPath.size === 0) {
       throw new Error("[app-adapter] \u5C4F\u6CE8\u518C\u8868\u4E3A\u7A7A\u2014\u2014App \u7AEF\u5BFC\u822A\u9700\u8981 screens\uFF08\u4E0E createAppStack \u540C\u6E90\uFF09");
     }
@@ -738,9 +733,9 @@
       flush
     };
   }
-  function screensFromRoutes(routes2) {
+  function screensFromRoutes(routes) {
     const out = {};
-    for (const r of routes2) {
+    for (const r of routes) {
       if (!r.name) {
         throw new Error(`[app-adapter] \u8DEF\u7531\u8868\u6761\u76EE\u7F3A name\uFF08path="${r.path}"\uFF09\u2014\u2014\u68C0\u67E5 gen-routes \u4EA7\u7269`);
       }
@@ -754,207 +749,6 @@
       out[r.name] = spec;
     }
     return out;
-  }
-
-  // packages/router/src/branch-navigator.ts
-  var OUTER_BRANCH = "#outer";
-  function createBranchNavigator(opts) {
-    const { screens: screens2, policy } = opts;
-    const declared = opts.branches;
-    const tabNames2 = opts.tabNames;
-    if (!declared && !tabNames2) {
-      throw new Error(
-        "[branch-navigator] \u9700\u8981 tabNames \u6216 branches \u4E4B\u4E00\uFF08\u5206\u652F\u6E05\u5355\u7684\u6765\u6E90\u2014\u2014\u4E0D\u731C\uFF1BtabNames \u6765\u81EA auto-routes.ts \u4E0E screens \u540C\u6E90\u7684\u771F\u5B9E\u6295\u5F71\uFF09"
-      );
-    }
-    const specList = [];
-    const byName = /* @__PURE__ */ new Map();
-    const materialize = (name, over) => {
-      const spec = screens2[name];
-      if (!spec) {
-        throw new Error(
-          `[branch-navigator] \u5206\u652F "${name}" \u4E0D\u5728\u5C4F\u6CE8\u518C\u8868\u4E2D\uFF08\u53EF\u7528\uFF1A${Object.keys(screens2).slice(0, 8).join(", ")}${Object.keys(screens2).length > 8 ? " \u2026" : ""}\uFF09`
-        );
-      }
-      const tier = over?.keepAlive ?? spec.keepAlive ?? "active";
-      if (!KEEP_ALIVE_TIERS[tier]) {
-        throw new Error(`[branch-navigator] \u5206\u652F "${name}" \u7684 keepAlive="${String(tier)}" \u975E\u6CD5\uFF08\u5408\u6CD5\uFF1Anone / active / all\uFF09`);
-      }
-      const s = { name, root: over?.root || spec.path, keepAlive: tier };
-      const t = over?.transition ?? spec.transition;
-      if (t) s.transition = t;
-      return s;
-    };
-    for (const b of declared ?? []) {
-      if (byName.has(b.name)) continue;
-      const s = materialize(b.name, b);
-      byName.set(s.name, s);
-      specList.push(s);
-    }
-    for (const name of tabNames2 ?? []) {
-      if (byName.has(name)) continue;
-      const s = materialize(name);
-      byName.set(s.name, s);
-      specList.push(s);
-    }
-    if (specList.length === 0) {
-      throw new Error("[branch-navigator] \u5206\u652F\u6E05\u5355\u4E3A\u7A7A\u2014\u2014tabNames \u4E0E branches \u90FD\u672A\u63D0\u4F9B\u6709\u6548\u5206\u652F\uFF08\u68C0\u67E5 isTab \u9875\u9762\uFF09");
-    }
-    const initial = opts.initial ?? specList[0].name;
-    if (!byName.has(initial)) {
-      throw new Error(
-        `[branch-navigator] initial="${initial}" \u4E0D\u5728\u5206\u652F\u6E05\u5355\u4E2D\uFF08\u53EF\u7528\uFF1A${specList.map((s) => s.name).join(", ")}\uFF09`
-      );
-    }
-    const records = /* @__PURE__ */ new Map();
-    const handlers = [];
-    const commands = [];
-    let activeName = initial;
-    let clockSeq = 0;
-    let lastFrom = initial;
-    const emit = (e) => {
-      for (const h of handlers) h(e);
-    };
-    function recordOf(name) {
-      const r = records.get(name);
-      if (!r) {
-        throw new Error(`[branch-navigator] \u672A\u77E5\u5206\u652F "${name}"\uFF08\u53EF\u7528\uFF1A${specList.map((s) => s.name).join(", ")}\uFF09`);
-      }
-      return r;
-    }
-    for (const spec of specList) {
-      records.set(spec.name, { spec, stack: createAppStack({ screens: screens2, ...policy ? { policy } : {} }) });
-    }
-    const parent = opts.parent ?? null;
-    function flushInto(branch, stack) {
-      for (const c of stack.drainCommands()) commands.push({ ...c, branch });
-    }
-    function ensureRoot(r) {
-      if (r.stack.depth === 0) r.stack.push(r.spec.name);
-    }
-    function activateBranch(target, from) {
-      const t = target.spec.transition;
-      if (from) {
-        from.stack.suspend(t ? { transition: t } : void 0);
-        flushInto(from.spec.name, from.stack);
-      }
-      if (target.stack.depth === 0) ensureRoot(target);
-      target.stack.resume();
-      flushInto(target.spec.name, target.stack);
-      for (const d of keepAlivePolicy()) {
-        if (d.keep) continue;
-        const r = recordOf(d.branch);
-        if (r.stack.depth === 0) continue;
-        const released = r.stack.releaseTrees();
-        if (released > 0) {
-          emit({ type: "release", branch: d.branch, screens: released });
-          flushInto(d.branch, r.stack);
-        }
-      }
-    }
-    function branchOrder() {
-      return specList.map((s) => s.name);
-    }
-    function switchTo(name) {
-      const target = recordOf(name);
-      const from = recordOf(activeName);
-      if (from === target) {
-        emit({ type: "switch-noop", branch: name });
-        return;
-      }
-      lastFrom = from.spec.name;
-      activeName = name;
-      activateBranch(target, from);
-      clockSeq++;
-      emit({ type: "switch", from: lastFrom, to: name, seq: clockSeq });
-    }
-    function navigate(branch, frames) {
-      const r = recordOf(branch);
-      const f = frames.length > 0 ? [...frames] : [{ name: r.spec.name }];
-      if (f[0].name !== r.spec.name) f.unshift({ name: r.spec.name });
-      const before = JSON.stringify(r.stack.frames());
-      r.stack.navigate(f);
-      flushInto(r.spec.name, r.stack);
-      const rebuilt = JSON.stringify(r.stack.frames()) !== before;
-      emit({ type: "navigate", branch, depth: r.stack.depth, rebuilt });
-      return r.stack;
-    }
-    function handToOuter(branch) {
-      emit({ type: "back-outer", branch });
-      if (parent && parent.depth > 1) {
-        parent.pop(1);
-        flushInto(OUTER_BRANCH, parent);
-        return { action: "outer", branch };
-      }
-      emit({ type: "back-system" });
-      return { action: "system" };
-    }
-    function back(delta = 1) {
-      const r = recordOf(activeName);
-      if (r.stack.depth > 1) {
-        const top = r.stack.current();
-        r.stack.pop(delta);
-        flushInto(r.spec.name, r.stack);
-        const depth = r.stack.depth;
-        emit({ type: "back", branch: activeName, popped: top.name, depth });
-        return { action: "pop", branch: activeName, popped: top.name, depth };
-      }
-      return handToOuter(activeName);
-    }
-    function keepAlivePolicy() {
-      const idx = specList.findIndex((s) => s.name === activeName);
-      return specList.map((s, i) => {
-        if (s.name === activeName) return { branch: s.name, keep: true };
-        if (s.keepAlive === "all") return { branch: s.name, keep: true };
-        if (s.keepAlive === "none") return { branch: s.name, keep: false };
-        const adjacent = idx >= 0 && (i === idx - 1 || i === idx + 1);
-        return { branch: s.name, keep: adjacent };
-      });
-    }
-    function drainCommands() {
-      for (const name of branchOrder()) {
-        const r = recordOf(name);
-        flushInto(name, r.stack);
-      }
-      if (parent) flushInto(OUTER_BRANCH, parent);
-      const out = commands.slice();
-      commands.length = 0;
-      return out;
-    }
-    ensureRoot(recordOf(initial));
-    return {
-      branches: specList.map((s) => ({ ...s })),
-      active: () => activeName,
-      switchTo,
-      stackOf(name) {
-        return recordOf(name).stack;
-      },
-      activeStack() {
-        return recordOf(activeName).stack;
-      },
-      navigate,
-      back,
-      keepAlivePolicy,
-      drainCommands,
-      snapshot() {
-        return { active: activeName, frames: recordOf(activeName).stack.frames() };
-      },
-      clock() {
-        return { seq: clockSeq, from: lastFrom, to: activeName };
-      },
-      on(handler) {
-        handlers.push(handler);
-        return () => {
-          const i = handlers.indexOf(handler);
-          if (i >= 0) handlers.splice(i, 1);
-        };
-      }
-    };
-  }
-
-  // packages/router/src/app-route.ts
-  function createRouter(routes2, options) {
-    return createRouterCore(routes2, options);
   }
 
   // packages/contracts/src/layers.ts
@@ -3435,11 +3229,11 @@
     if (!opts.screens && !opts.routes) {
       throw new Error("[app-navigation] \u9700\u8981 screens \u6216 routes \u4E4B\u4E00\uFF08\u5C4F\u6CE8\u518C\u8868\u7684\u6765\u6E90\u2014\u2014\u4E0D\u731C\uFF09");
     }
-    const screens2 = opts.screens ?? screensFromRoutes(opts.routes);
-    if (Object.keys(screens2).length === 0) {
+    const screens = opts.screens ?? screensFromRoutes(opts.routes);
+    if (Object.keys(screens).length === 0) {
       throw new Error("[app-navigation] \u5C4F\u6CE8\u518C\u8868\u4E3A\u7A7A\u2014\u2014\u68C0\u67E5 routes/screens \u662F\u5426\u4E3A\u7A7A");
     }
-    const stack = createAppStack({ screens: screens2, ...opts.policy ? { policy: opts.policy } : {} });
+    const stack = createAppStack({ screens, ...opts.policy ? { policy: opts.policy } : {} });
     const ports = createHostScreenPorts({ invoke: opts.invoke });
     const executor = createScreenExecutor({
       host: ports.tree,
@@ -3450,17 +3244,17 @@
       ...opts.onEvent ? { onEvent: opts.onEvent } : {}
     });
     const autoPump = opts.autoPump !== false;
-    const adapter = createAppNavigationAdapter({
+    const adapter2 = createAppNavigationAdapter({
       stack,
-      screens: screens2,
+      screens,
       pump: autoPump ? () => executor.applyCommands(stack.drainCommands()) : async () => {
       }
     });
     return {
       stack,
       executor,
-      adapter,
-      flush: () => adapter.flush(),
+      adapter: adapter2,
+      flush: () => adapter2.flush(),
       hostStats: () => {
         try {
           return JSON.parse(opts.invoke("screen.stats", "null"));
@@ -3469,6 +3263,185 @@
         }
       }
     };
+  }
+
+  // packages/shared/src/platform/mp-adapter.ts
+  function norm(p) {
+    return { route: p.route || p.__route__ || "", setData: p.setData?.bind(p) };
+  }
+  function normalizeRect(rect) {
+    if (!rect || typeof rect.left !== "number" || typeof rect.top !== "number") return null;
+    return {
+      top: rect.top,
+      left: rect.left,
+      right: typeof rect.right === "number" ? rect.right : rect.left,
+      bottom: typeof rect.bottom === "number" ? rect.bottom : rect.top,
+      width: typeof rect.width === "number" ? rect.width : rect.right - rect.left,
+      height: typeof rect.height === "number" ? rect.height : rect.bottom - rect.top
+    };
+  }
+  function createMpAdapter() {
+    return {
+      isMP: true,
+      getCurrentPages: () => {
+        if (typeof wx === "undefined" || typeof getCurrentPages !== "function") return [];
+        return getCurrentPages().map(norm);
+      },
+      navigateTo: (opts) => new Promise((resolve) => {
+        wx.navigateTo({ url: opts.url, success: () => resolve(), fail: () => resolve() });
+      }),
+      redirectTo: (opts) => new Promise((resolve) => {
+        wx.redirectTo({ url: opts.url, success: () => resolve(), fail: () => resolve() });
+      }),
+      reLaunch: (opts) => new Promise((resolve) => {
+        wx.reLaunch({ url: opts.url, success: () => resolve(), fail: () => resolve() });
+      }),
+      switchTab: (opts) => new Promise((resolve) => {
+        wx.switchTab({ url: opts.url, success: () => resolve(), fail: () => resolve() });
+      }),
+      navigateBack: ({ delta }) => {
+        wx.navigateBack({ delta });
+      },
+      measureRect: (selector, scope) => (
+        // ★平台层许可直接碰 wx.*（no-platform-api 审计 allow: platforms/**/packages/api/**）；组件经此 L2 抽象消费
+        new Promise((resolve) => {
+          if (typeof wx === "undefined" || typeof wx.createSelectorQuery !== "function") return resolve(null);
+          const scopeQ = scope;
+          const inQuery = scopeQ && typeof scopeQ.createSelectorQuery === "function" ? scopeQ.createSelectorQuery() : wx.createSelectorQuery();
+          inQuery.select(selector).boundingClientRect((rect) => resolve(normalizeRect(rect))).exec();
+        })
+      )
+    };
+  }
+
+  // packages/shared/src/platform/web-adapter.ts
+  var import_meta = {};
+  function parseQuery(url) {
+    const q = url.split("?")[1] || "";
+    const out = {};
+    for (const seg of q.split("&").filter(Boolean)) {
+      const [k, v] = seg.split("=");
+      if (k) out[decodeURIComponent(k)] = decodeURIComponent(v || "");
+    }
+    return out;
+  }
+  function createWebAdapter() {
+    const listeners = [];
+    const hasBrowserEnv = typeof location !== "undefined" && typeof history !== "undefined";
+    const BASE = import_meta.env?.BASE_URL ?? "/";
+    const stripBase = (p) => {
+      const stripped = BASE !== "/" && p.startsWith(BASE) ? p.slice(BASE.length - 1) || "/" : p;
+      return stripped.length > 1 ? stripped.replace(/\/+$/, "") : stripped;
+    };
+    const withBase = (p) => {
+      const path = p.startsWith("/") ? p : `/${p}`;
+      return BASE !== "/" ? `${BASE.replace(/\/$/, "")}${path}` : path;
+    };
+    let current = {
+      route: hasBrowserEnv ? stripBase(location.pathname).replace(/^\//, "") : ""
+    };
+    let historyIndex = hasBrowserEnv ? history.state?.proteusIndex ?? 0 : 0;
+    const emit = (url, routeType, nav = "forward") => {
+      current = { route: stripBase(url.split("?")[0]).replace(/^\//, ""), routeType, query: parseQuery(url) };
+      listeners.forEach((l) => l(current.route, parseQuery(url), routeType, nav));
+    };
+    if (hasBrowserEnv) {
+      window.addEventListener("popstate", (e) => {
+        const stateIndex = e.state?.proteusIndex;
+        let nav = "forward";
+        if (typeof stateIndex === "number") {
+          nav = stateIndex < historyIndex ? "back" : "forward";
+          historyIndex = stateIndex;
+        }
+        emit(stripBase(location.pathname) + location.search, void 0, nav);
+      });
+      document.addEventListener("click", (e) => {
+        if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+        const target = e.target;
+        const anchor = target?.closest?.("a[href]");
+        if (!anchor) return;
+        const href = anchor.getAttribute("href") || "";
+        if (anchor.target === "_blank" || !href.startsWith("/")) return;
+        e.preventDefault();
+        const routeType = anchor.getAttribute("route-type") || void 0;
+        historyIndex += 1;
+        history.pushState({ proteusIndex: historyIndex }, "", withBase(href));
+        emit(href, routeType, "forward");
+      });
+    }
+    return {
+      isMP: false,
+      getCurrentPages: () => [current],
+      navigateTo: async ({ url, routeType }) => {
+        historyIndex += 1;
+        history.pushState({ proteusIndex: historyIndex }, "", withBase(url));
+        emit(url, routeType, "forward");
+      },
+      redirectTo: async ({ url }) => {
+        history.replaceState({ proteusIndex: historyIndex }, "", withBase(url));
+        emit(url, void 0, "replace");
+      },
+      reLaunch: async ({ url }) => {
+        history.replaceState({ proteusIndex: historyIndex }, "", withBase(url));
+        emit(url, void 0, "reLaunch");
+      },
+      switchTab: async ({ url }) => {
+        history.replaceState({ proteusIndex: historyIndex }, "", withBase(url));
+        emit(url, void 0, "switchTab");
+      },
+      navigateBack: ({ delta }) => {
+        history.go(-delta);
+      },
+      measureRect: (selector, scope) => new Promise((resolve) => {
+        if (typeof document === "undefined" || typeof document.querySelector !== "function") return resolve(null);
+        const root = scope && typeof scope.querySelector === "function" ? scope : document;
+        const el = root.querySelector(selector);
+        if (!el || typeof el.getBoundingClientRect !== "function") return resolve(null);
+        const r = el.getBoundingClientRect();
+        resolve({
+          top: r.top,
+          left: r.left,
+          right: r.right,
+          bottom: r.bottom,
+          width: r.width,
+          height: r.height
+        });
+      }),
+      onPageLoad: (cb) => {
+        listeners.push(cb);
+      }
+    };
+  }
+
+  // packages/shared/src/platform/index.ts
+  var import_meta2 = {};
+  function detectMPRuntime() {
+    if (typeof window !== "undefined") return false;
+    try {
+      return typeof wx !== "undefined" && (typeof wx.getSystemInfoSync === "function" || typeof wx.getWindowInfo === "function");
+    } catch (e) {
+      return false;
+    }
+  }
+  var modeMP = import_meta2.env?.MODE === "mp-weixin";
+  var isMP = modeMP || detectMPRuntime();
+  var ADAPTER_GLOBAL_KEY_WEB = "__PROTEUS_ADAPTER_WEB__";
+  var ADAPTER_GLOBAL_KEY_MP = "__PROTEUS_ADAPTER_MP__";
+  function resolveAdapter() {
+    const g = globalThis;
+    const key = isMP ? ADAPTER_GLOBAL_KEY_MP : ADAPTER_GLOBAL_KEY_WEB;
+    const existing = g[key];
+    if (existing) return existing;
+    const created = isMP ? createMpAdapter() : createWebAdapter();
+    g[key] = created;
+    return created;
+  }
+  var adapter = resolveAdapter();
+
+  // packages/router/src/index.ts
+  function createRouter(routes, options = {}) {
+    const adapter2 = options.adapter ?? adapter;
+    return createRouterCore(routes, { ...options, adapter: adapter2 });
   }
 
   // hosts/shared/bridge/app-screen-content.generated.ts
@@ -5506,806 +5479,183 @@
       ]
     }
   };
-
-  // packages/router/src/codegen/app.ts
-  function toScreenEntry(node) {
-    const name = node.name ?? node.path.replace(/^\//, "").replace(/\//g, "-");
-    const entry = {
-      name,
-      path: node.path,
-      componentPath: node.componentPath,
-      children: node.children.map((c) => c.name ?? c.path.replace(/^\//, "").replace(/\//g, "-")),
-      isTab: node.meta.isTab === true
-    };
-    if (node.meta.transition) entry.transition = node.meta.transition;
-    const budget = node.meta.budgetNodes;
-    if (typeof budget === "number" && budget > 0) entry.budgetNodes = budget;
-    const ka = node.meta.branch?.keepAlive;
-    if (ka === "none" || ka === "active" || ka === "all") entry.keepAlive = ka;
-    return entry;
-  }
-  function flattenScreenEntries(nodes) {
-    const out = [];
-    for (const n of nodes) {
-      out.push(toScreenEntry(n));
-      out.push(...flattenScreenEntries(n.children));
-    }
-    return out;
-  }
-
-  // examples/router/auto-routes.ts
-  var routes = [
-    { name: "builtin-components-demo", path: "pages/builtin-components-demo", component: "../pages/builtin-components-demo.vue", parent: "index", meta: { "title": "\u5185\u7F6E\u7EC4\u4EF6" } },
-    { name: "components-demo", path: "pages/components-demo", component: "../pages/components-demo.vue", parent: "index", meta: { "title": "\u7EC4\u4EF6\u6F14\u793A" } },
-    { name: "config-demo", path: "pages/config-demo", component: "../pages/config-demo.vue", parent: "index", meta: { "title": "\u914D\u7F6E\u6F14\u793A" } },
-    { name: "consistency-stress", path: "pages/consistency-stress", component: "../pages/consistency-stress.vue", parent: "index" },
-    { name: "dev-host-demo", path: "pages/dev-host-demo", component: "../pages/dev-host-demo.vue", parent: "index" },
-    { name: "devtools-open-api-demo", path: "pages/devtools-open-api-demo", component: "../pages/devtools-open-api-demo.vue", parent: "index", meta: { "title": "\u5F00\u653E API \u6F14\u793A" } },
-    { name: "docs-engine-demo", path: "pages/docs-engine-demo", component: "../pages/docs-engine-demo.vue", parent: "index" },
-    { name: "fluid-layout-demo", path: "pages/fluid-layout-demo", component: "../pages/fluid-layout-demo.vue", parent: "index", meta: { "title": "\u67D4\u6027\u5E03\u5C40" } },
-    { name: "fluid-system-demo", path: "pages/fluid-system-demo", component: "../pages/fluid-system-demo.vue", parent: "index", meta: { "title": "Fluid System" } },
-    { name: "forms", path: "pages/forms", component: "../pages/forms.vue", parent: "index", meta: { "title": "\u8868\u5355\u4E0E\u6307\u4EE4" } },
-    { name: "glass-demo", path: "pages/glass-demo", component: "../pages/glass-demo.vue", parent: "index", meta: { "title": "\u6DB2\u6001\u73BB\u7483\uFF08G-07\uFF09" } },
-    { name: "gp0-root-portal", path: "pages/gp0-root-portal", component: "../pages/gp0-root-portal.vue", parent: "index" },
-    { name: "gp3-global-layer-demo", path: "pages/gp3-global-layer-demo", component: "../pages/gp3-global-layer-demo.vue", parent: "index" },
-    { name: "i18n-demo", path: "pages/i18n-demo", component: "../pages/i18n-demo.vue", parent: "index", meta: { "title": "\u56FD\u9645\u5316" } },
-    { name: "index", path: "pages/index", component: "../pages/index.vue", meta: { "title": "\u9996\u9875", "isTab": true } },
-    { name: "mine", path: "pages/mine", component: "../pages/mine.vue", parent: "index", meta: { "title": "\u6211\u7684", "isTab": true, "branch": { "keepAlive": "none" } } },
-    { name: "mp-semantics-demo", path: "pages/mp-semantics-demo", component: "../pages/mp-semantics-demo.vue", parent: "index" },
-    { name: "native-components-demo", path: "pages/native-components-demo", component: "../pages/native-components-demo.vue", parent: "index", meta: { "title": "\u539F\u751F\u80FD\u529B\u7EC4\u4EF6" } },
-    { name: "pinia-demo", path: "pages/pinia-demo", component: "../pages/pinia-demo.vue", parent: "index", meta: { "title": "\u72B6\u6001\u7BA1\u7406" } },
-    { name: "platform-api-demo", path: "pages/platform-api-demo", component: "../pages/platform-api-demo.vue", parent: "index", meta: { "title": "PlatformAPI \u6536\u53E3" } },
-    { name: "provide-inject-demo", path: "pages/provide-inject-demo", component: "../pages/provide-inject-demo.vue", parent: "index", meta: { "title": "\u6CE8\u5165\u6F14\u793A" } },
-    { name: "render-backend-demo", path: "pages/render-backend-demo", component: "../pages/render-backend-demo.vue", parent: "index" },
-    { name: "semantic-primitives-demo", path: "pages/semantic-primitives-demo", component: "../pages/semantic-primitives-demo.vue", parent: "index" },
-    { name: "showcase", path: "pages/showcase", component: "../pages/showcase.vue", parent: "index", meta: { "title": "\u8F6C\u573A\u6F14\u793A" } },
-    { name: "svg-showcase-demo", path: "pages/svg-showcase-demo", component: "../pages/svg-showcase-demo.vue", parent: "index" },
-    { name: "svg-skeleton-demo", path: "pages/svg-skeleton-demo", component: "../pages/svg-skeleton-demo.vue", parent: "index" },
-    { name: "user", path: "pages/user/index", component: "../pages/user/index.vue", parent: "index", meta: { "requiresAuth": true, "transition": "slideUp", "title": "\u7528\u6237\u4E2D\u5FC3" } },
-    { name: "user-profile", path: "pages/user/profile", component: "../pages/user/profile.vue", parent: "user", meta: { "requiresAuth": true, "transition": "slideUp", "title": "\u4E2A\u4EBA\u8D44\u6599" } },
-    { name: "virtual-list-demo", path: "pages/virtual-list-demo", component: "../pages/virtual-list-demo.vue", parent: "index", meta: { "title": "\u865A\u62DF\u5217\u8868" } },
-    { name: "vmodel-mp-test", path: "pages/vmodel-mp-test", component: "../pages/vmodel-mp-test.vue", parent: "index" },
-    { name: "vue-compat-demo", path: "pages/vue-compat-demo", component: "../pages/vue-compat-demo.vue", parent: "index" },
-    { name: "order-pages-list", path: "subpackages/order/pages/list", component: "../subpackages/order/pages/list.vue", subPackage: "order", meta: { "title": "\u8BA2\u5355\u5217\u8868" } },
-    { name: "svg-lab-pages-gp4-auth-gate-demo", path: "subpackages/svg-lab/pages/gp4-auth-gate-demo", component: "../subpackages/svg-lab/pages/gp4-auth-gate-demo.vue", subPackage: "svg-lab" },
-    { name: "svg-lab-pages-gp4-loading-demo", path: "subpackages/svg-lab/pages/gp4-loading-demo", component: "../subpackages/svg-lab/pages/gp4-loading-demo.vue", subPackage: "svg-lab" },
-    { name: "svg-lab-pages-gp4-toast-queue-demo", path: "subpackages/svg-lab/pages/gp4-toast-queue-demo", component: "../subpackages/svg-lab/pages/gp4-toast-queue-demo.vue", subPackage: "svg-lab" },
-    { name: "svg-lab-pages-gp5-scenarios-demo", path: "subpackages/svg-lab/pages/gp5-scenarios-demo", component: "../subpackages/svg-lab/pages/gp5-scenarios-demo.vue", subPackage: "svg-lab" },
-    { name: "svg-lab-pages-image-spike", path: "subpackages/svg-lab/pages/image-spike", component: "../subpackages/svg-lab/pages/image-spike.vue", subPackage: "svg-lab" },
-    { name: "svg-lab-pages-module-import-demo", path: "subpackages/svg-lab/pages/module-import-demo", component: "../subpackages/svg-lab/pages/module-import-demo.vue", subPackage: "svg-lab" },
-    { name: "svg-lab-pages-svg-anim-probe", path: "subpackages/svg-lab/pages/svg-anim-probe", component: "../subpackages/svg-lab/pages/svg-anim-probe.vue", subPackage: "svg-lab" },
-    { name: "svg-lab-pages-svg-canvas-probe", path: "subpackages/svg-lab/pages/svg-canvas-probe", component: "../subpackages/svg-lab/pages/svg-canvas-probe.vue", subPackage: "svg-lab" },
-    { name: "svg-lab-pages-svg-canvas-test", path: "subpackages/svg-lab/pages/svg-canvas-test", component: "../subpackages/svg-lab/pages/svg-canvas-test.vue", subPackage: "svg-lab" },
-    { name: "svg-lab-pages-svg-hit-test", path: "subpackages/svg-lab/pages/svg-hit-test", component: "../subpackages/svg-lab/pages/svg-hit-test.vue", subPackage: "svg-lab" },
-    { name: "svg-lab-pages-svg-p2-spike", path: "subpackages/svg-lab/pages/svg-p2-spike", component: "../subpackages/svg-lab/pages/svg-p2-spike.vue", subPackage: "svg-lab" },
-    { name: "svg-lab-pages-svg-spike", path: "subpackages/svg-lab/pages/svg-spike", component: "../subpackages/svg-lab/pages/svg-spike.vue", subPackage: "svg-lab" }
-  ];
-  var tabRoutes = routes.filter((r) => r.meta?.isTab);
-  var routeMap = routes.reduce((m, r) => {
-    m[r.name] = r;
-    return m;
-  }, {});
-  var screens = {
-    "builtin-components-demo": {
-      "name": "builtin-components-demo",
-      "path": "pages/builtin-components-demo"
+  var APP_SCREEN_REGISTRY = {
+    "screens": {
+      "index": {
+        "name": "index",
+        "path": "pages/index"
+      },
+      "messages": {
+        "name": "messages",
+        "path": "pages/messages"
+      },
+      "mine": {
+        "name": "mine",
+        "path": "pages/mine"
+      },
+      "verify": {
+        "name": "verify",
+        "path": "pages/verify"
+      }
     },
-    "components-demo": {
-      "name": "components-demo",
-      "path": "pages/components-demo"
+    "tabNames": [
+      "index",
+      "messages",
+      "mine"
+    ],
+    "tabLabels": {
+      "index": "Proteus \u8D85\u7EA7\u5E94\u7528",
+      "messages": "\u6D88\u606F",
+      "mine": "\u6211\u7684",
+      "verify": "\u9A8C\u6536\u63A7\u5236\u53F0"
     },
-    "config-demo": {
-      "name": "config-demo",
-      "path": "pages/config-demo"
-    },
-    "consistency-stress": {
-      "name": "consistency-stress",
-      "path": "pages/consistency-stress"
-    },
-    "dev-host-demo": {
-      "name": "dev-host-demo",
-      "path": "pages/dev-host-demo"
-    },
-    "devtools-open-api-demo": {
-      "name": "devtools-open-api-demo",
-      "path": "pages/devtools-open-api-demo"
-    },
-    "docs-engine-demo": {
-      "name": "docs-engine-demo",
-      "path": "pages/docs-engine-demo"
-    },
-    "fluid-layout-demo": {
-      "name": "fluid-layout-demo",
-      "path": "pages/fluid-layout-demo"
-    },
-    "fluid-system-demo": {
-      "name": "fluid-system-demo",
-      "path": "pages/fluid-system-demo"
-    },
-    "forms": {
-      "name": "forms",
-      "path": "pages/forms"
-    },
-    "glass-demo": {
-      "name": "glass-demo",
-      "path": "pages/glass-demo"
-    },
-    "gp0-root-portal": {
-      "name": "gp0-root-portal",
-      "path": "pages/gp0-root-portal"
-    },
-    "gp3-global-layer-demo": {
-      "name": "gp3-global-layer-demo",
-      "path": "pages/gp3-global-layer-demo"
-    },
-    "i18n-demo": {
-      "name": "i18n-demo",
-      "path": "pages/i18n-demo"
-    },
-    "index": {
-      "name": "index",
-      "path": "pages/index"
-    },
-    "mine": {
-      "name": "mine",
-      "path": "pages/mine",
-      "keepAlive": "none"
-    },
-    "mp-semantics-demo": {
-      "name": "mp-semantics-demo",
-      "path": "pages/mp-semantics-demo"
-    },
-    "native-components-demo": {
-      "name": "native-components-demo",
-      "path": "pages/native-components-demo"
-    },
-    "pinia-demo": {
-      "name": "pinia-demo",
-      "path": "pages/pinia-demo"
-    },
-    "platform-api-demo": {
-      "name": "platform-api-demo",
-      "path": "pages/platform-api-demo"
-    },
-    "provide-inject-demo": {
-      "name": "provide-inject-demo",
-      "path": "pages/provide-inject-demo"
-    },
-    "render-backend-demo": {
-      "name": "render-backend-demo",
-      "path": "pages/render-backend-demo"
-    },
-    "semantic-primitives-demo": {
-      "name": "semantic-primitives-demo",
-      "path": "pages/semantic-primitives-demo"
-    },
-    "showcase": {
-      "name": "showcase",
-      "path": "pages/showcase"
-    },
-    "svg-showcase-demo": {
-      "name": "svg-showcase-demo",
-      "path": "pages/svg-showcase-demo"
-    },
-    "svg-skeleton-demo": {
-      "name": "svg-skeleton-demo",
-      "path": "pages/svg-skeleton-demo"
-    },
-    "user": {
-      "name": "user",
-      "path": "pages/user/index",
-      "transition": "slideUp"
-    },
-    "user-profile": {
-      "name": "user-profile",
-      "path": "pages/user/profile",
-      "transition": "slideUp"
-    },
-    "virtual-list-demo": {
-      "name": "virtual-list-demo",
-      "path": "pages/virtual-list-demo"
-    },
-    "vmodel-mp-test": {
-      "name": "vmodel-mp-test",
-      "path": "pages/vmodel-mp-test"
-    },
-    "vue-compat-demo": {
-      "name": "vue-compat-demo",
-      "path": "pages/vue-compat-demo"
-    },
-    "order-pages-list": {
-      "name": "order-pages-list",
-      "path": "subpackages/order/pages/list"
-    },
-    "svg-lab-pages-gp4-auth-gate-demo": {
-      "name": "svg-lab-pages-gp4-auth-gate-demo",
-      "path": "subpackages/svg-lab/pages/gp4-auth-gate-demo"
-    },
-    "svg-lab-pages-gp4-loading-demo": {
-      "name": "svg-lab-pages-gp4-loading-demo",
-      "path": "subpackages/svg-lab/pages/gp4-loading-demo"
-    },
-    "svg-lab-pages-gp4-toast-queue-demo": {
-      "name": "svg-lab-pages-gp4-toast-queue-demo",
-      "path": "subpackages/svg-lab/pages/gp4-toast-queue-demo"
-    },
-    "svg-lab-pages-gp5-scenarios-demo": {
-      "name": "svg-lab-pages-gp5-scenarios-demo",
-      "path": "subpackages/svg-lab/pages/gp5-scenarios-demo"
-    },
-    "svg-lab-pages-image-spike": {
-      "name": "svg-lab-pages-image-spike",
-      "path": "subpackages/svg-lab/pages/image-spike"
-    },
-    "svg-lab-pages-module-import-demo": {
-      "name": "svg-lab-pages-module-import-demo",
-      "path": "subpackages/svg-lab/pages/module-import-demo"
-    },
-    "svg-lab-pages-svg-anim-probe": {
-      "name": "svg-lab-pages-svg-anim-probe",
-      "path": "subpackages/svg-lab/pages/svg-anim-probe"
-    },
-    "svg-lab-pages-svg-canvas-probe": {
-      "name": "svg-lab-pages-svg-canvas-probe",
-      "path": "subpackages/svg-lab/pages/svg-canvas-probe"
-    },
-    "svg-lab-pages-svg-canvas-test": {
-      "name": "svg-lab-pages-svg-canvas-test",
-      "path": "subpackages/svg-lab/pages/svg-canvas-test"
-    },
-    "svg-lab-pages-svg-hit-test": {
-      "name": "svg-lab-pages-svg-hit-test",
-      "path": "subpackages/svg-lab/pages/svg-hit-test"
-    },
-    "svg-lab-pages-svg-p2-spike": {
-      "name": "svg-lab-pages-svg-p2-spike",
-      "path": "subpackages/svg-lab/pages/svg-p2-spike"
-    },
-    "svg-lab-pages-svg-spike": {
-      "name": "svg-lab-pages-svg-spike",
-      "path": "subpackages/svg-lab/pages/svg-spike"
-    }
+    "indexName": "index",
+    "routes": [
+      {
+        "name": "index",
+        "path": "pages/index",
+        "component": "../pages/index.vue",
+        "meta": {
+          "title": "Proteus \u8D85\u7EA7\u5E94\u7528",
+          "isTab": true
+        }
+      },
+      {
+        "name": "messages",
+        "path": "pages/messages",
+        "component": "../pages/messages.vue",
+        "parent": "index",
+        "meta": {
+          "title": "\u6D88\u606F",
+          "isTab": true
+        }
+      },
+      {
+        "name": "mine",
+        "path": "pages/mine",
+        "component": "../pages/mine.vue",
+        "parent": "index",
+        "meta": {
+          "title": "\u6211\u7684",
+          "isTab": true
+        }
+      },
+      {
+        "name": "verify",
+        "path": "pages/verify",
+        "component": "../pages/verify.vue",
+        "parent": "index",
+        "meta": {
+          "title": "\u9A8C\u6536\u63A7\u5236\u53F0"
+        }
+      }
+    ]
   };
-  var screenNames = ["builtin-components-demo", "components-demo", "config-demo", "consistency-stress", "dev-host-demo", "devtools-open-api-demo", "docs-engine-demo", "fluid-layout-demo", "fluid-system-demo", "forms", "glass-demo", "gp0-root-portal", "gp3-global-layer-demo", "i18n-demo", "index", "mine", "mp-semantics-demo", "native-components-demo", "pinia-demo", "platform-api-demo", "provide-inject-demo", "render-backend-demo", "semantic-primitives-demo", "showcase", "svg-showcase-demo", "svg-skeleton-demo", "user", "user-profile", "virtual-list-demo", "vmodel-mp-test", "vue-compat-demo", "order-pages-list", "svg-lab-pages-gp4-auth-gate-demo", "svg-lab-pages-gp4-loading-demo", "svg-lab-pages-gp4-toast-queue-demo", "svg-lab-pages-gp5-scenarios-demo", "svg-lab-pages-image-spike", "svg-lab-pages-module-import-demo", "svg-lab-pages-svg-anim-probe", "svg-lab-pages-svg-canvas-probe", "svg-lab-pages-svg-canvas-test", "svg-lab-pages-svg-hit-test", "svg-lab-pages-svg-p2-spike", "svg-lab-pages-svg-spike"];
-  var tabNames = ["index", "mine"];
 
-  // hosts/shared/bridge/entry-app-project.ts
-  function __proteusAppProjectRun(argsJson) {
-    const args = argsJson ? JSON.parse(argsJson) : {};
-    const names = Array.isArray(screenNames) ? screenNames : [];
-    const entry = args.entry ?? (Array.isArray(tabNames) && tabNames.length ? tabNames[0] : names[0]);
-    const steps = Math.max(0, args.steps ?? 3);
+  // hosts/shared/bridge/entry-superapp.ts
+  function bootSuperapp(host) {
+    const g = globalThis;
+    const h = host ?? g.proteusHost;
+    const reg = APP_SCREEN_REGISTRY;
+    const screenNames = Object.keys(reg.screens);
     const base = {
-      ok: true,
-      scene: "app-project",
-      screens: Object.keys(screens).length,
-      name_count: names.length,
-      tab_count: Array.isArray(tabNames) ? tabNames.length : 0,
-      route_count: Array.isArray(routes) ? routes.length : 0,
-      // ★项目声明被携带的证据：多少屏带 transition（来自 router.meta / <route>）
-      transitions_carried: Object.values(screens).filter((s) => !!s.transition).length,
-      entry
+      index: reg.indexName,
+      tabs: reg.tabNames,
+      tabLabels: reg.tabLabels,
+      screens: screenNames
     };
-    if (!entry || !screens[entry]) {
-      return JSON.stringify({ ...base, ok: false, error: `\u5165\u53E3\u5C4F "${entry}" \u4E0D\u5728\u9879\u76EE\u5C4F\u6CE8\u518C\u8868\uFF08\u53EF\u7528\uFF1A${names.slice(0, 6).join(", ")}\u2026\uFF09` });
+    if (!h || typeof h.invoke !== "function") {
+      return { ok: false, ...base, depth: 0, current: "", error: "\u5BBF\u4E3B invoke \u901A\u9053\u7F3A\u5931" };
     }
-    const stack = createAppStack({ screens });
-    stack.push(entry);
-    stack.drainCommands();
-    const afterEntry = { depth: stack.depth, top: stack.current()?.name, transition: stack.current()?.transition };
-    const pushed = [];
-    for (const n of names) {
-      if (pushed.length >= steps) break;
-      if (n === entry) continue;
-      if (!screens[n]) continue;
-      stack.push(n);
-      pushed.push(n);
-    }
-    stack.drainCommands();
-    const afterPush = {
-      depth: stack.depth,
-      top: stack.current()?.name,
-      pushed,
-      // 每个被 push 的屏，其转场声明（来自项目 meta）——空 = 该屏未声明
-      transitions: pushed.map((n) => screens[n]?.transition ?? null)
-    };
-    stack.pop();
-    const cmds = stack.drainCommands();
-    const afterBack = { depth: stack.depth, top: stack.current()?.name };
-    const backOps = cmds.map((c) => c.op);
-    let apiResult;
     try {
       const nav = createAppNavigation({
-        invoke: (m, a) => {
-          const ph = globalThis.proteusHost;
-          if (!ph || typeof ph.invoke !== "function") throw new Error("\u5BBF\u4E3B invoke \u901A\u9053\u7F3A\u5931");
-          return ph.invoke(m, a);
-        },
-        screens
+        // ★保持接收者绑定（iOS JSC JSExport 拆离调用会丢 this ⇒ screen.* 全失败；Android 无此问题）
+        invoke: (m, a) => h.invoke(m, a),
+        screens: reg.screens,
+        contentOf: (s) => APP_SCREEN_CONTENT[s.name] ?? APP_SCREEN_CONTENT[reg.indexName]
       });
-      const router = createRouter(routes, { adapter: nav.adapter });
-      apiResult = { adapter_ready: true, api_stack_depth: nav.stack.depth };
-    } catch (e) {
-      apiResult = { adapter_ready: false, error: String(e) };
-    }
-    const branchResult = (() => {
-      try {
-        const nav = createBranchNavigator({ screens, tabNames });
-        const branches = nav.branches.map((b) => b.name);
-        const branchKeep = nav.branches.map((b) => `${b.name}:${b.keepAlive}`);
-        if (branches.length === 0) {
-          return { g_ok: false, g_error: "\u9879\u76EE\u4EA7\u7269\u65E0\u5206\u652F\uFF08tabNames \u4E3A\u7A7A\u2014\u2014\u68C0\u67E5 router.pages \u7684 isTab\uFF09" };
-        }
-        const first = branches[0];
-        const second = branches[1] ?? branches[0];
-        if (branches.length < 2) {
+      const router = createRouter(reg.routes, { adapter: nav.adapter });
+      const app = {
+        router,
+        nav,
+        async navigate(name) {
+          await router.push({ name });
+        },
+        back() {
+          router.back();
+        },
+        state() {
           return {
-            g_ok: false,
-            g_error: `\u9879\u76EE\u4EA7\u7269\u53EA\u6709 ${branches.length} \u4E2A\u5206\u652F\uFF08\u5224\u636E\u9700\u8981 \u22652\u2014\u2014\u5207\u5206\u652F\u4FDD\u6808\u9700\u8981\u4E24\u4E2A\uFF09`,
-            g_branches: branches
+            depth: nav.stack.depth,
+            current: nav.stack.current()?.name ?? "",
+            stack: nav.stack.stack.map((s) => s.name),
+            tabs: reg.tabNames,
+            tabLabels: reg.tabLabels
           };
         }
-        const subA = names.find((n) => !branches.includes(n) && screens[n]) ?? null;
-        const subB = names.filter((n) => !branches.includes(n) && screens[n] && n !== subA)[0] ?? null;
-        const a = nav.stackOf(first);
-        if (subA) a.push(subA);
-        if (subB) a.push(subB);
-        const depthA0 = a.depth;
-        nav.switchTo(second);
-        const bRoot = nav.stackOf(second).depth;
-        const depthAAfterBack = (nav.switchTo(first), nav.stackOf(first).depth);
-        const kaPolicy = nav.keepAlivePolicy().map((p) => `${p.branch}:${p.keep ? "keep" : "drop"}`);
-        const noneBranch = nav.branches.find((b) => b.keepAlive === "none")?.name ?? null;
-        let noneFrames = [];
-        let noneFrozen = 0;
-        let noneRebuilds = 0;
-        let noneDepth = 0;
-        if (noneBranch && noneBranch !== nav.active()) {
-          nav.switchTo(noneBranch);
-          const ns = nav.stackOf(noneBranch);
-          if (subA && subA !== noneBranch) ns.push(subA);
-          noneDepth = ns.depth;
-          nav.switchTo(branches.find((b) => b !== noneBranch));
-          nav.drainCommands();
-          noneFrames = nav.stackOf(noneBranch).frames().map((f) => f.name);
-          noneFrozen = nav.stackOf(noneBranch).stats().frozen;
-          nav.switchTo(noneBranch);
-          noneRebuilds = nav.stackOf(noneBranch).stats().rebuildCount;
-        }
-        const beforeBack = {
-          active: nav.active(),
-          activeDepth: nav.activeStack().depth,
-          otherDepth: nav.stackOf(branches.find((b) => b !== nav.active())).depth
-        };
-        const back1 = nav.back();
-        const otherAfter = nav.stackOf(branches.find((b) => b !== nav.active())).depth;
-        let backSystem = false;
-        for (let i = 0; i < 8; i++) {
-          const o = nav.back();
-          if (o.action === "pop") continue;
-          if (o.action === "system") backSystem = true;
-          break;
-        }
-        const cmds2 = nav.drainCommands();
-        const cmdBranches = [...new Set(cmds2.map((c) => c.branch))];
-        const g_ok = depthAAfterBack === depthA0 && // 切分支保栈（核心判据）
-        depthA0 >= 2 && // 真的推过屏（>=2 层）
-        bRoot >= 1 && // B 懒建根
-        noneFrozen === noneDepth && noneDepth >= 2 && noneFrames.length === noneDepth && noneRebuilds >= 1 && // none 档：释放 + 状态保留 + 重建
-        back1.action === "pop" && otherAfter === beforeBack.otherDepth && // 返回只作用于活跃分支
-        backSystem;
-        return {
-          g_ok,
-          g_branches: branches,
-          g_keep_alive: branchKeep,
-          g_policy: kaPolicy,
-          g_none_branch: noneBranch,
-          g_none_depth: noneDepth,
-          g_none_frozen: noneFrozen,
-          g_none_frames: noneFrames,
-          g_none_rebuilds: noneRebuilds,
-          g_switch_kept_depth: depthAAfterBack,
-          // = depthA0 时保栈成立
-          g_switch_depth_before: depthA0,
-          g_b_root_depth: bRoot,
-          g_back_action: back1.action,
-          g_back_other_untouched: otherAfter === beforeBack.otherDepth,
-          g_back_system: backSystem,
-          g_cmd_branches: cmdBranches,
-          g_note: "\u5206\u652F\u5BFC\u822A\u5668\uFF08NB1/NB3/NB6\uFF09\u2014\u2014\u5207\u5206\u652F\u4FDD\u6808 + none \u6863\u91CA\u653E\u91CD\u5EFA + \u8FD4\u56DE\u5F52\u5C5E\uFF08\u771F\u673A\uFF09"
-        };
-      } catch (e) {
-        return { g_ok: false, g_error: String(e) };
-      }
-    })();
-    return JSON.stringify({
-      ...base,
-      after_entry: afterEntry,
-      after_push: afterPush,
-      after_back: afterBack,
-      back_ops: backOps,
-      ...apiResult,
-      ...branchResult
-    });
-  }
-  globalThis.__proteusAppProjectRun = __proteusAppProjectRun;
-
-  // hosts/shared/bridge/entry-app-stack.ts
-  function buildNodes(fans) {
-    const nodes = [];
-    for (let i = 0; i < fans; i++) {
-      nodes.push({
-        loc: { file: `page-${i}.vue`, line: 1, column: 1 },
-        path: `/page-${i}`,
-        name: `page-${i}`,
-        meta: { title: `\u9875\u9762 ${i}`, transition: i % 2 === 0 ? "slideUp" : "halfScreen" },
-        lazy: true,
-        componentPath: `/pages/page-${i}.vue`,
-        children: []
-      });
+      };
+      g.__SUPERAPP__ = app;
+      app.booted = app.navigate(reg.indexName);
+      return { ok: true, ...base, depth: nav.stack.depth, current: nav.stack.current()?.name ?? "" };
+    } catch (e) {
+      return { ok: false, ...base, depth: 0, current: "", error: String(e?.message ?? e) };
     }
-    return nodes;
   }
-  function __proteusAppStackRun(argsJson) {
-    const args = argsJson ? JSON.parse(argsJson) : {};
-    const depth = args.depth ?? 2e4;
-    const fans = args.fans ?? 32;
-    const budget = args.budget ?? 1e3;
-    const nodes = buildNodes(fans);
-    const entries = flattenScreenEntries(nodes);
-    const screens2 = {};
-    for (const e of entries) screens2[e.name] = { name: e.name, path: e.path, transition: e.transition, budgetNodes: e.budgetNodes };
-    const names = entries.map((e) => e.name);
-    const deep = createAppStack({ screens: screens2 });
-    const tA0 = Date.now();
-    for (let i = 0; i < depth; i++) deep.push(names[i % fans], { i });
-    const pushMs = Date.now() - tA0;
-    const depthReached = deep.depth;
-    const deepCmds = deep.drainCommands();
-    const count = (arr, op) => arr.filter((c) => c.op === op).length;
-    const aMount = count(deepCmds, "mount");
-    const aEnter = count(deepCmds, "enter");
-    const aExit = count(deepCmds, "exit");
-    const aUnmount = count(deepCmds, "unmount");
-    const tPop0 = Date.now();
-    deep.popToRoot();
-    const popMs = Date.now() - tPop0;
-    const depthAfterRoot = deep.depth;
-    const rootCmds = deep.drainCommands();
-    const rootUnmount = count(rootCmds, "unmount");
-    const frozen = createAppStack({ screens: screens2, policy: { nodeBudget: budget, keepWindow: 3, defaultScreenNodes: 64 } });
-    const tB0 = Date.now();
-    for (let i = 0; i < depth; i++) frozen.push(names[i % fans], { i });
-    const frozenPushMs = Date.now() - tB0;
-    const frozenStats = frozen.stats();
-    const frozenCmds = frozen.drainCommands();
-    const freezeUnmounts = frozenCmds.filter((c) => c.op === "unmount" && c.reason === "freeze").length;
-    const smallScreens = {};
-    for (const n of names) smallScreens[n] = { name: n, path: `/page-${n}`, budgetNodes: 64 };
-    const rebuild = createAppStack({ screens: smallScreens, policy: { nodeBudget: 64, keepWindow: 1, defaultScreenNodes: 64 } });
-    rebuild.push(names[0]);
-    rebuild.push(names[1]);
-    const cFrozen = rebuild.stats().frozen;
-    rebuild.drainCommands();
-    rebuild.pop();
-    const cCmds = rebuild.drainCommands();
-    const cMounts = cCmds.filter((c) => c.op === "mount");
-    const cRebuildMounts = cMounts.filter((c) => c.op === "mount" && c.rebuild).length;
-    const cRebuildStat = rebuild.stats().rebuildCount;
-    const navDepth = Math.min(depth, 5e3);
-    const nav = createAppStack({ screens: screens2 });
-    for (let i = 0; i < navDepth; i++) nav.push(names[i % fans]);
-    nav.drainCommands();
-    const keep = Math.floor(navDepth / 2);
-    const frames = [];
-    for (let i = 0; i < keep; i++) frames.push({ name: names[i % fans] });
-    const tD0 = Date.now();
-    nav.navigate(frames);
-    const navMs = Date.now() - tD0;
-    const navCmds = nav.drainCommands();
-    const dMount = count(navCmds, "mount");
-    const dUnmount = count(navCmds, "unmount");
-    const dEnter = count(navCmds, "enter");
-    const dDepth = nav.depth;
-    const result = {
-      ok: true,
-      scene: "app-stack",
-      // 规模参数（读数可复现）
-      depth,
-      fans,
-      budget,
-      screens: entries.length,
-      // 场景 A（深栈）
-      a_depth_reached: depthReached,
-      a_push_ms: pushMs,
-      a_pop_ms: popMs,
-      a_depth_after_pop_to_root: depthAfterRoot,
-      a_mounts: aMount,
-      a_enters: aEnter,
-      a_exits: aExit,
-      a_unmounts: aUnmount,
-      a_root_unmounts: rootUnmount,
-      // 场景 B（冻结）
-      b_frozen_count: frozenStats.frozen,
-      b_active_nodes: frozenStats.activeNodes,
-      b_over_budget: frozenStats.overBudget,
-      b_freeze_unmounts: freezeUnmounts,
-      b_push_ms: frozenPushMs,
-      b_depth: frozenStats.depth,
-      // 场景 C（重建）
-      c_frozen_before_pop: cFrozen,
-      c_rebuild_mounts: cRebuildMounts,
-      c_rebuild_stat: cRebuildStat,
-      // 场景 D（navigate diff）
-      d_mounts: dMount,
-      d_unmounts: dUnmount,
-      d_enters: dEnter,
-      d_depth: dDepth,
-      d_nav_ms: navMs
-    };
-    return JSON.stringify(result);
-  }
-  globalThis.__proteusAppStackRun = __proteusAppStackRun;
-  function invokeHostRaw(method) {
-    const ph = globalThis.proteusHost;
-    if (!ph || typeof ph.invoke !== "function") throw new Error("\u5BBF\u4E3B invoke \u901A\u9053\u7F3A\u5931");
-    const out = JSON.parse(ph.invoke(method, "null"));
-    return out && out.ok === false ? { error: out } : out.data ?? out;
-  }
-  async function runExecutorScenario() {
-    const eSpecs = {
-      home: { name: "home", path: "/home", transition: "slideUp" },
-      detail: { name: "detail", path: "/detail", transition: "slideUp" },
-      third: { name: "third", path: "/third", transition: "halfScreen" }
-    };
-    const eStack = createAppStack({ screens: eSpecs, policy: { keepWindow: 3 } });
-    const eLog = [];
-    const ePlays = [];
-    const ePorts = createHostScreenPorts({
-      invoke: (m, a) => {
-        const ph = globalThis.proteusHost;
-        if (!ph || typeof ph.invoke !== "function") throw new Error("\u5BBF\u4E3B invoke \u901A\u9053\u7F3A\u5931\uFF08screen.* \u65E0\u6CD5\u9001\u8FBE\u5BBF\u4E3B\uFF09");
-        return ph.invoke(m, a);
-      }
-    });
-    const eTree = {
-      mountScreen(sc) {
-        const node = ePorts.tree.mountScreen(sc);
-        eLog.push(`mount:${sc.name}:rebuild=${sc.rebuild}:node=${node}`);
-        return node;
-      },
-      setScreenVisible(screenId, v, root) {
-        eLog.push(`visible:${screenId}:${v}:node=${root}`);
-        ePorts.tree.setScreenVisible(screenId, v, root);
-      },
-      destroyScreen(screenId, reason, root) {
-        eLog.push(`destroy:${screenId}:${reason}:node=${root}`);
-        ePorts.tree.destroyScreen(screenId, reason, root);
-      }
-    };
-    const eExecutor = createScreenExecutor({
-      host: eTree,
-      anim: {
-        async playRouteTransition(plan, ctx) {
-          const i0 = plan.incoming.anims[0];
-          const o0 = plan.outgoing.anims[0];
-          ePlays.push({
-            direction: ctx.direction,
-            transition: ctx.transition,
-            inAnims: plan.incoming.anims.length,
-            outAnims: plan.outgoing.anims.length,
-            firstInFrom: i0 && typeof i0.from === "number" ? i0.from : null,
-            firstInTo: i0 && typeof i0.to === "number" ? i0.to : null,
-            firstOutFrom: o0 && typeof o0.from === "number" ? o0.from : null,
-            firstOutTo: o0 && typeof o0.to === "number" ? o0.to : null
-          });
-          await ePorts.anim.playRouteTransition(plan, ctx);
-        }
-      },
-      plan: (t, targets, o) => routeTransitionBatches(t, targets, o ?? {}),
-      // ★★★阶段 1b（B5 · 2026-10-04）：**屏内容来自真实 SFC 产物**（构建期生成）——
-      //   `APP_SCREEN_CONTENT[屏名]` 是 `buildLayoutTemplate(SFC) → screenContentFromLayoutTemplate`
-      //   的产物（不是手写节点）。未命中的屏回落 `default`/首个（装置屏名与项目屏名不完全重合时）。
-      contentOf: (s) => {
-        const byName = APP_SCREEN_CONTENT;
-        return byName[s.name] ?? byName.index;
-      },
-      onScreenMounted: (id) => eStack.markRebuilt(id)
-    });
-    const ePump = () => eExecutor.applyCommands(eStack.drainCommands());
-    eStack.push("home");
-    await ePump();
-    const e1 = { log: [...eLog], plays: [...ePlays] };
-    const eHomeId = eStack.stack[0]?.screenId ?? "";
-    let e4Source = { captured: false };
-    try {
-      const homeRoot0 = eExecutor.subtreeNode(eHomeId);
-      if (homeRoot0 === void 0) throw new Error(`subtreeNode \u7F3A home \u5C4F\u6839\uFF08${eHomeId}\uFF09`);
-      const srcRect = await ePorts.shared.rect(eHomeId, homeRoot0 + 2);
-      e4Source = { captured: true, screen: eHomeId, node: homeRoot0 + 2, rect: srcRect };
-    } catch (err) {
-      e4Source = { captured: false, error: String(err) };
-    }
-    eLog.length = 0;
-    ePlays.length = 0;
-    eStack.push("detail");
-    await ePump();
-    const e2 = { log: [...eLog], plays: [...ePlays] };
-    const eDetailId = eStack.stack[1]?.screenId ?? "";
-    let e4 = { ran: false };
-    try {
-      const top = eStack.stack[eStack.stack.length - 1];
-      const prev = eStack.stack[eStack.stack.length - 2];
-      if (!top || !prev) throw new Error(`\u6808\u4E0A\u4E0D\u8DB3\u4E24\u5C4F\uFF08depth=${eStack.depth}\uFF09\u2014\u2014\u65E0\u6CD5\u505A\u8DE8\u9875\u9762\u98DE\u884C`);
-      if (!e4Source.captured) throw new Error(`\u6E90\u77E9\u5F62\u672A\u6355\u83B7\uFF1A${JSON.stringify(e4Source)}`);
-      const targetRoot = eExecutor.subtreeNode(top.screenId);
-      if (targetRoot === void 0) throw new Error(`subtreeNode \u7F3A\u76EE\u6807\u5C4F\u6839\uFF08${top.screenId}\uFF09`);
-      const targetNodeId = targetRoot + 2;
-      const targetRect = await ePorts.shared.rect(top.screenId, targetNodeId);
-      const srcRect = e4Source.rect;
-      const flyOut = await ePorts.shared.fly({
-        targetScreenId: top.screenId,
-        targetNodeId,
-        // ★源矩形**人为错开**（缩略图 → 大图的真实形态）：若两侧装置几何恰好相同
-        //   （本装置两屏同构 ⇒ dx=dy=0/scale=1），判据的"独立复算"会退化成恒等式——
-        //   错开后才真正考验"内核按两个不同矩形算几何"。错开的量进报告（判据核对）。
-        sourceRect: { x: srcRect.x + 60, y: srcRect.y + 30, w: srcRect.w * 0.5, h: srcRect.h * 0.5 },
-        durMs: 200,
-        curve: 1,
-        fadeIn: false
-      });
-      e4 = {
-        ran: true,
-        target_screen: top.screenId,
-        source_screen: e4Source.screen,
-        target_node: targetNodeId,
-        source_node: e4Source.node,
-        source_rect: srcRect,
-        /** ★实际注入的源矩形（错开后的——判据按它复算） */
-        injected_source_rect: { x: srcRect.x + 60, y: srcRect.y + 30, w: srcRect.w * 0.5, h: srcRect.h * 0.5 },
-        target_rect: targetRect,
-        from_rect: flyOut.fromRect ?? null,
-        to_rect: flyOut.toRect ?? null
-      };
-    } catch (err) {
-      e4 = { ran: false, error: String(err), source: e4Source };
-    }
-    eLog.length = 0;
-    ePlays.length = 0;
-    eStack.pop();
-    await ePump();
-    const e3 = { log: [...eLog], plays: [...ePlays] };
-    const eStats = eExecutor.stats();
-    const e2play = e2.plays[0];
-    const e3play = e3.plays[0];
-    const mirrorOk = !!e2play && !!e3play && e2play.firstInFrom === e3play.firstOutTo && e2play.firstInTo === e3play.firstOutFrom;
-    return {
-      e1_log: e1.log,
-      e1_plays: e1.plays,
-      e2_log: e2.log,
-      e2_plays: e2.plays,
-      e3_log: e3.log,
-      e3_plays: e3.plays,
-      e4,
-      e_mirror_ok: mirrorOk,
-      e_home_id: eHomeId,
-      e_detail_id: eDetailId,
-      e_stats: eStats,
-      // ★真实端口读数：宿主侧记账（真建树/真可见性/真动画——判据据此证明"不是壳自述"）
-      e_host_stats: (() => {
-        try {
-          const r = invokeHostRaw("screen.stats");
-          return r;
-        } catch (e) {
-          return { error: String(e) };
-        }
-      })(),
-      e_pending_anims: ePorts.pendingAnimations,
-      e_anim_hook: ePorts.animDoneHookInstalled
-    };
-  }
-  function runRouterApiScenario() {
-    return (async () => {
-      const routes2 = [
-        { name: "r-home", path: "r-home", meta: { title: "\u9996\u9875" }, component: "" },
-        { name: "r-detail", path: "r-detail", meta: { transition: "slideUp" }, component: "" },
-        { name: "r-user", path: "r-user", component: "" }
-      ];
-      const invoke = (m, a) => {
-        const ph = globalThis.proteusHost;
-        if (!ph || typeof ph.invoke !== "function") throw new Error("\u5BBF\u4E3B invoke \u901A\u9053\u7F3A\u5931");
-        return ph.invoke(m, a);
-      };
-      const nav = createAppNavigation({ invoke, routes: routes2 });
-      const router = createRouter(routes2, { adapter: nav.adapter });
-      const push = router.push.bind(router);
-      const replace = router.replace.bind(router);
-      await push({ name: "r-home" });
-      await push({ name: "r-detail", params: { id: "42" } });
-      const afterPush = {
-        depth: nav.stack.depth,
-        top: nav.stack.current()?.name,
-        params: nav.stack.current()?.params
-      };
-      router.back();
-      await nav.flush();
-      const afterBack = { depth: nav.stack.depth, top: nav.stack.current()?.name };
-      await replace({ name: "r-user" });
-      const afterReplace = { depth: nav.stack.depth, top: nav.stack.current()?.name };
-      return {
-        f_ok: afterPush.depth === 2 && afterPush.top === "r-detail" && String(afterPush.params?.id) === "42" && afterBack.depth === 1 && afterBack.top === "r-home" && afterReplace.depth === 1 && afterReplace.top === "r-user",
-        f_after_push: afterPush,
-        f_after_back: afterBack,
-        f_after_replace: afterReplace,
-        // ★f_host_stats：宿主记账读数。★诚实边界：**本字段可能为 null** ——
-        //   F 组自带内联 invoke（`proteusHost.invoke` 的直通形态），而宿主侧的 `screenHost`
-        //   实例由壳在特定路径创建；本场景不保证同一实例可读 ⇒ 读不到时**如实记 null**
-        //   （不伪装成 0）。F 组的**主判据是 `f_ok`**（导航语义全绿），宿主侧的真建树/真动画
-        //   证明由 **E 组**承担（`e_host_stats`，与宿主实例同源）——两者分工明确，不重复声称。
-        f_host_stats: (() => {
-          try {
-            return JSON.parse(invoke("screen.stats", "null"));
-          } catch (e) {
-            return { error: String(e) };
-          }
-        })(),
-        f_note: "\u7EDF\u4E00 API\uFF08createRouter\uFF09\u2192 \u865A\u62DF\u6808 \u2192 \u6267\u884C\u5668 \u2192 \u5BBF\u4E3B \u5168\u94FE\uFF08\u96F6\u80F6\u6C34\u5F62\u6001\uFF09"
-      };
-    })();
-  }
-  function __proteusAppStackExecutorKick() {
+  globalThis.__proteusSuperappBoot = bootSuperapp;
+  globalThis.__proteusSuperappBootJson = () => JSON.stringify(bootSuperapp());
+  globalThis.__proteusSuperappState = () => {
     const g = globalThis;
-    if (g.__proteusAppStackExecutorResult !== void 0) return "already";
+    return JSON.stringify(g.__SUPERAPP__ ? g.__SUPERAPP__.state() : { error: "\u672A\u542F\u52A8" });
+  };
+  globalThis.__proteusSuperappNav = (name) => {
+    const g = globalThis;
+    if (!g.__SUPERAPP__) return JSON.stringify({ ok: false, error: "\u672A\u542F\u52A8" });
+    try {
+      void g.__SUPERAPP__.navigate(name);
+      return JSON.stringify({ ok: true, kicked: name });
+    } catch (e) {
+      return JSON.stringify({ ok: false, error: String(e?.message ?? e) });
+    }
+  };
+  globalThis.__proteusSuperappBack = () => {
+    const g = globalThis;
+    if (!g.__SUPERAPP__) return JSON.stringify({ ok: false, error: "\u672A\u542F\u52A8" });
+    g.__SUPERAPP__.back();
+    return JSON.stringify({ ok: true });
+  };
+  globalThis.__proteusSuperappDrive = (tabsJson) => {
+    const g = globalThis;
+    if (!g.__SUPERAPP__) return JSON.stringify({ ok: false, error: "\u672A\u542F\u52A8" });
+    let tabs = [];
+    try {
+      tabs = JSON.parse(tabsJson);
+    } catch {
+      tabs = [];
+    }
+    if (!Array.isArray(tabs) || tabs.length === 0) tabs = g.__SUPERAPP__.state().tabs;
+    const drive = { pending: true, log: [], state: { error: "\u8FDB\u884C\u4E2D" } };
+    g.__SUPERAPP_DRIVE__ = drive;
+    const app = g.__SUPERAPP__;
     void (async () => {
       try {
-        const [e, f] = await Promise.all([runExecutorScenario(), runRouterApiScenario()]);
-        g.__proteusAppStackExecutorResult = { ...e, ...f };
-      } catch (err) {
-        g.__proteusAppStackExecutorResult = { fatal: String(err) };
-      }
-    })();
-    return "kicked";
-  }
-  function __proteusAppStackExecutorRead() {
-    const g = globalThis;
-    if (g.__proteusAppStackExecutorResult === void 0) return JSON.stringify({ pending: true });
-    return JSON.stringify(g.__proteusAppStackExecutorResult);
-  }
-  globalThis.__proteusAppStackExecutorKick = __proteusAppStackExecutorKick;
-  globalThis.__proteusAppStackExecutorRead = __proteusAppStackExecutorRead;
-  function __proteusRouterApiProbe() {
-    const steps = [];
-    const g = globalThis;
-    void (async () => {
-      try {
-        steps.push("enter");
-        const routes2 = [
-          { name: "r-home", path: "r-home", component: "" },
-          { name: "r-detail", path: "r-detail", meta: { transition: "slideUp" }, component: "" }
-        ];
-        const ph = globalThis.proteusHost;
-        if (!ph || typeof ph.invoke !== "function") throw new Error("\u5BBF\u4E3B invoke \u901A\u9053\u7F3A\u5931");
-        steps.push("host-ok");
-        const nav = createAppNavigation({ invoke: (m, a) => ph.invoke(m, a), routes: routes2 });
-        steps.push("nav-built");
-        const router = createRouter(routes2, { adapter: nav.adapter });
-        steps.push("router-built");
-        await router.push({ name: "r-home" });
-        steps.push("pushed-home depth=" + nav.stack.depth);
-        await router.push({ name: "r-detail" });
-        steps.push("pushed-detail depth=" + nav.stack.depth);
-        g.__proteusRouterProbeResult = { ok: true, steps };
+        await (app.booted ?? Promise.resolve());
+        for (const t of tabs) {
+          const before = app.state().current;
+          if (t === before) continue;
+          await app.navigate(t);
+          drive.log.push({ tap: t, current: app.state().current, ok: app.state().current === t });
+        }
       } catch (e) {
-        g.__proteusRouterProbeResult = { ok: false, steps, error: String(e) };
+        drive.log.push({ tap: "", current: String(e?.message ?? e), ok: false });
+      } finally {
+        drive.pending = false;
+        drive.state = app.state();
       }
     })();
-    return JSON.stringify({ kicked: true, steps });
-  }
-  function __proteusRouterApiProbeRead() {
+    return JSON.stringify({ ok: true, kicked: tabs.length });
+  };
+  globalThis.__proteusSuperappDriveReadJson = () => {
     const g = globalThis;
-    if (g.__proteusRouterProbeResult === void 0) return JSON.stringify({ pending: true });
-    return JSON.stringify(g.__proteusRouterProbeResult);
-  }
-  globalThis.__proteusRouterApiProbe = __proteusRouterApiProbe;
-  globalThis.__proteusRouterApiProbeRead = __proteusRouterApiProbeRead;
+    return JSON.stringify(g.__SUPERAPP_DRIVE__ ?? { pending: false, log: [], state: { error: "\u672A\u9A71\u52A8" } });
+  };
 })();

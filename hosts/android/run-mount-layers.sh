@@ -34,7 +34,7 @@ echo "==> ① 安装"
 echo "==> ② 清旧报告 + 重启 + 等就绪 + 触发 mount-layers"
 "$ADB" shell "rm -f $REPORT" >/dev/null 2>&1 || true
 "$ADB" shell "am force-stop $PKG" >/dev/null 2>&1 || true
-"$ADB" shell "monkey -p $PKG -c android.intent.category.LAUNCHER 1" >/dev/null 2>&1
+"$ADB" shell "am start -n $PKG/.MainActivity" >/dev/null 2>&1
 # ★条件等待（替代 sleep）：等 Activity 上报 run-receiver-ready
 WAIT_SH="$ROOT/.agents/skills/ai-efficiency-rules/scripts/wait_for.sh"
 [ -x "$WAIT_SH" ] || { echo "✗ 缺 wait_for.sh（${WAIT_SH}）——本脚本禁止盲等"; exit 2; }

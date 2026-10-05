@@ -38,7 +38,7 @@ WAIT_SH="$ROOT/.agents/skills/ai-efficiency-rules/scripts/wait_for.sh"
 echo "==> ② 清旧报告 + 重启 + 等就绪 + 触发 superapp"
 "$ADB" shell "rm -f $REPORT" >/dev/null 2>&1 || true
 "$ADB" shell "am force-stop $PKG" >/dev/null 2>&1 || true
-"$ADB" shell "monkey -p $PKG -c android.intent.category.LAUNCHER 1" >/dev/null 2>&1
+"$ADB" shell "am start -n $PKG/.MainActivity" >/dev/null 2>&1
 bash "$WAIT_SH" --cmd "\"$ADB\" logcat -d -s 'proteus:I' | grep -q run-receiver-ready" \
   --timeout 30 --interval 1 --max-interval 3 || echo "  ⚠ 未见 run-receiver-ready（30s）——广播可能丢"
 "$ADB" shell "am broadcast -a dev.proteus.RUN --es path superapp -p $PKG" >/dev/null 2>&1

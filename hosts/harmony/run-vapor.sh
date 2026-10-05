@@ -50,7 +50,7 @@ if HDC shell "test -f $REPORT_DEV && echo STILL_EXISTS" 2>/dev/null | grep -q ST
 fi
 
 echo "==> 2. 启动（探针随页面 onAppear 自动跑）"
-HDC shell "aa start -a EntryAbility -b $BUNDLE" 2>&1 | grep -qi "successfully" || { echo "✗ 启动失败"; exit 1; }
+HDC shell "aa start -a EntryAbility -b $BUNDLE --ps scene bench" 2>&1 | grep -qi "successfully" || { echo "✗ 启动失败"; exit 1; }
 
 echo "==> 3. 等**报告落盘**（完成信号 = 文件存在；探针先落盘、后打 DONE——零盲等）"
 # ★判据为什么从"等 DONE 日志行"改成"等文件"（本仓实测）：DONE 行要**二次 shell 查询**，

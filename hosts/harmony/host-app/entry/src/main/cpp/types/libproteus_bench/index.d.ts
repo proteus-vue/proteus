@@ -69,3 +69,10 @@ export const appScreenAnimTick: (dtMsJson: string) => string;
 /** ★★★App 三端对齐（2026-10-04）：鸿蒙 executor 探针——eval 同一份 bundle-app-stack.js + 注入
  *  proteusHost.invoke（screen.* 真内核树）+ 两相泵 job。argsJson = { bundle }；返回 {ok, exec_* , exec_read}。 */
 export const appStackExecutorProbe: (argsJson: string) => string;
+/** ★★★批次 44（2026-10-05）：superapp 真实应用 · 启动（**一次性 VM**）。
+ *  argsJson = { bundle, filesDir? }；eval bundle-superapp.js → `__proteusSuperappBootJson()`
+ *  返回 { ok, boot, state }。**一次性 VM**（每次调用新建/销毁；跨调用复用会崩溃——见 native 注释）。 */
+export const superappBoot: (argsJson: string) => string;
+/** ★★★批次 44：superapp 驱动链（boot + 逐 tab 切页）——**单次调用内完成**（一次性 VM）。
+ *  argsJson = { bundle, filesDir, tabs?: string[] }；返回 { ok, boot, drive:{ pending, log, state }, rounds }。 */
+export const superappDrive: (argsJson: string) => string;

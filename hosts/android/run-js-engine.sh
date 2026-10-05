@@ -39,7 +39,7 @@ echo "==> ① 安装（增量；release 包，正式验收口径）"
 echo "==> ② 清旧报告 + 重启 app + 触发 js-engine 路径"
 "$ADB" shell "rm -f $REPORT" >/dev/null 2>&1 || true
 "$ADB" shell "am force-stop $PKG" >/dev/null 2>&1 || true
-"$ADB" shell "monkey -p $PKG -c android.intent.category.LAUNCHER 1" >/dev/null 2>&1
+"$ADB" shell "am start -n $PKG/.MainActivity" >/dev/null 2>&1
 sleep 3
 "$ADB" shell "am broadcast -a dev.proteus.RUN --es path js-engine -p $PKG" >/dev/null 2>&1
 
