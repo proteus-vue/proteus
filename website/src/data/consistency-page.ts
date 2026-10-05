@@ -9,26 +9,26 @@ export const CONSISTENCY_PAGE = {
     "docs/allow-differences.json"
   ],
   "m1": {
-    "value": 0.6786,
+    "value": 0.5267,
     "union": {
-      "covered": 28,
-      "total": 28,
+      "covered": 50,
+      "total": 50,
       "value": 1
     },
-    "covered": 28,
-    "total": 28,
+    "covered": 50,
+    "total": 50,
     "byLayer": {
       "L1": {
-        "covered": 28,
-        "total": 28
+        "covered": 50,
+        "total": 50
       },
       "L2": {
         "covered": 2,
-        "total": 28
+        "total": 50
       },
       "L3": {
         "covered": 27,
-        "total": 28
+        "total": 50
       },
       "L2_5": {
         "covered": 1,
