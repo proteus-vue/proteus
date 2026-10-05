@@ -9,8 +9,8 @@
 
 - **框架对外名称**：Proteus
 - **npm scope**：`@proteus-vue`（与 GitHub org `proteus-vue` 对齐，避开被占用的 `@proteus`）
-- **文档版本**：v3.18（本批追加：G-60 studio-website-landing，决策 #397）
-- **规约文档数**：18 份原始 plan（G-01~G-20）+ 15 份新增 plan（G-21~G-35 追加）+ 10 份 SPI/宿主/验证 plan（G-36~G-45 追加）+ 7 份本批 plan（G-46~G-52 追加）+ 2 份验证/工具 plan（G-53/G-54 追加，决策 #391）+ 1 份落地 plan（G-55 追加，决策 #392）+ 1 份宿主 plan（G-56 追加，决策 #393）+ 1 份可观测 plan（G-57 追加，决策 #394）+ 1 份生态 plan（G-58 追加，决策 #395）+ 1 份治理 plan（G-59 追加，决策 #396）+ 1 份官网 plan（G-60 追加，决策 #397）+ 本规约 + 1 份原则补充（design-principle）
+- **文档版本**：v3.19（本批追加：G-61 css-engine，决策 #544）
+- **规约文档数**：18 份原始 plan（G-01~G-20）+ 15 份新增 plan（G-21~G-35 追加）+ 10 份 SPI/宿主/验证 plan（G-36~G-45 追加）+ 7 份本批 plan（G-46~G-52 追加）+ 2 份验证/工具 plan（G-53/G-54 追加，决策 #391）+ 1 份落地 plan（G-55 追加，决策 #392）+ 1 份宿主 plan（G-56 追加，决策 #393）+ 1 份可观测 plan（G-57 追加，决策 #394）+ 1 份生态 plan（G-58 追加，决策 #395）+ 1 份治理 plan（G-59 追加，决策 #396）+ 1 份官网 plan（G-60 追加，决策 #397）+ **1 份样式引擎 plan（G-61 追加，决策 #544）**+ 本规约 + 1 份原则补充（design-principle）
 
 ---
 
@@ -175,6 +175,7 @@ L5 验证+门面 : blueprint / website / test-framework
 | **G-58** | plugin-api（Proteus Studio 插件 API 与扩展生态：PluginHost + 能力权限模型 + WIT 版本化，WASM 隔离） | G-56、G-55、G-54、G-51 | 扩展来源无关——内置功能走同一 API（INV-EX-01~08）+ CMP187-194 |
 | **G-59** | plugin-ecosystem（插件生态治理与性能契约：激活契约 + 数据敏感度分级 + 信任不可继承 + 破坏率看板） | G-58、G-55、G-37 | 治理形态可替换可度量可验证——首个治理轴（INV-ECO-01~08）+ CMP195-206 |
 | **G-60** | studio-website-landing（Studio 官网落地与插件 API 文档：WIT 生成参考页 + 版本化文档 + 漂移阻断 + 下载分发签名） | G-56、G-58、G-59 | 文档形态不绑定——文档即契约（INV-W1~8 + AP-W1~6 + J1~J7）+ CMP207-227 |
+| **G-61** | css-engine（跨端 CSS 引擎：编译期 CSE 唯一真源 + StyleIR 契约 + 宿主样式应用器 SApp + 能力协商 + 三层一致性判据） | G-08、G-21、G-27、G-37、G-38 | 样式真源唯一——宿主只做应用（INV-CE-01~08）+ CMP228-238 |
 
 > **追加说明（v3.2）**：G-21~G-30 为 2026-08 新增 10 份 plan（css-compat / app-renderer / safe-area / memory-plan / memorial-skeleton / app-capabilities / test-framework / types-plus / glass / performance）的全局执行位。其中 test-framework 已并入 G-07、types-plus 已并入 G-01（B1-B2 先行），不再单独占位。各 plan 声称的旧编号（css G-04、renderer G-05、safe-area G-05/G-08、memorial G-11/G-12、app-capabilities G-13~G-15、glass 里程碑 G-04~G-18、performance G-10/G-05）与本表冲突，一律以本表为准（对应关系：css→G-21、renderer→G-22、safe-area→G-22/G-23、memorial→G-25/G-26、theme/fontscale→G-27、cache→G-28、glass→G-29、performance→G-30）。
 
@@ -209,6 +210,8 @@ L5 验证+门面 : blueprint / website / test-framework
 > **追加说明（v3.17）**：G-59 新入库（2026-09，决策 #396）：**G-59**（plugin-ecosystem，插件生态治理与性能契约——**第 22 次泛化：不绑生态治理模式**，首个治理形态轴）：激活时机是契约（禁通配符/超预算拒绝加载）+ **权限建在数据敏感度上不建在 API 危险度上**（有限集合建模收敛，未登记 API 保守按 secrets）+ **信任不可继承**（代码哈希变化即撤销重授权——不检测恶意而是切断信任继承假设）+ 废弃必须提供替代 + 破坏率公开看板 + 去激活对称审计 + 版本并存不跟随 + 内置第三方同构。编号避让：原稿自编 G-60（旧序接续）→ 定案 G-59 + CMP-203~214→195~206 + 原则 #13.60-64→#13.75-79（**第五次撞号**，60-62 撞 G-54、63-64 撞 G-55）+ 泛化"第 19 次"→第 22 次。原则 #13.75-79、铁律 G-59.1-9、规则 CMP195-206 并入 L0 规约；spi-first 映射表登记第 22 次。详见 PROJECT_MEMORY 决策 #396。
 
 > **追加说明（v3.18）**：G-60 新入库（2026-09，决策 #397）：**G-60**（studio-website-landing，Studio 官网落地与插件 API 文档——**第 23 次泛化：不绑文档形态**，API 参考生成/指南手写/共享单一源三形态指向同一事实）：**文档即契约**（API 参考页一律由 WIT 生成，手写在 review 直接拒绝——G-60.1 红线）+ 漂移即阻断不警告 + 未知版本返回 null 禁静默降级 + 版本无关内容单一源（复制 N 份 = 绑定 N 次）+ 废弃元数据驱动 + **数字不粉饰（官网专项铁律）** + **更新私钥不可恢复先备份再生成（全套体系唯一不可逆风险）** + 删除页面等于制造 404。编号避让：原稿自编 G-61（旧序接续）→ 定案 G-60 + CMP-215~235→207~227（三段式：INV/AP/接缝全部入 CMP）+ 原则 #13.60-63→#13.80-83（**第六次撞号**）+ 泛化"第 19 次"→第 23 次。原则 #13.80-83、铁律 G-60.1-9、规则 CMP207-227 并入 L0 规约；spi-first 映射表登记第 23 次。详见 PROJECT_MEMORY 决策 #397。
+
+> **追加说明（v3.19）**：G-61 新入库（2026-10-05，决策 #544）：**G-61**（css-engine，跨端 CSS 引擎 —— 补齐「样式域」这一条从未有过统一层的链路）：**不是"再做一个包"，而是补一条链** —— `CSS 真源（解析→层叠→继承→计算值）` → `统一产物 StyleIR` → `每宿主一个样式应用器 SApp` → `能力协商（降级编译）` → `三层一致性判据`。**立项事实**（只读勘察，证据见 `docs/proteus-css-engine-plan/01-baseline-survey.md`）：① 今天存在**三套互不相干的样式实现**（Web 浏览器 CSSOM / Skyline 微信容器 / App 编译期字段折叠；`docs/generated/app-css-surface.md:6-7` 原文「App 端**无 CSS 引擎**」）；② 编译期是**字段折叠器不是 CSS 引擎**（`template.ts:1048-1063` 自述「无特异性权重 · 无继承 · 只静态类」）；③ **宿主侧无统一样式应用器**（`render-backend/src/spi.ts` 仅 `patchProp`，`css-compat` B2 未做）；④ 量化缺口：一致性 M1 **0.5877**、布局字段层 L2 **2/38**、Profile P4/P6 **未实现**、三张样式属性表**已报红**。**核心架构（四层可插拔）**：L-A `CSE` 编译期 CSS 引擎（唯一实现，运行期零解析）+ L-B **`StyleIR` 契约**（唯一样式通路）+ L-C **`SApp` 宿主样式应用器 SPI**（每端一个，可 conformance）+ L-D `Capability Registry`（三表合一，驱动编译期降级）。**已定调（决策 #544）**：① **Web 端 = A 档**（保浏览器原生 CSS 渲染，IR 只作影子真值基准，不由 IR 生成 Web CSS）；② **App 端 = 新通路并行 + 逐字段切换**（禁一次性替换，每批 IR 等价兜底）。**与其他 plan 的关系**：`SApp` 定位为 **G-27/G-37 RenderBackend SPI 的样式子域**（不造第二套 SPI）；`CSE` 是 **G-38 CompilerBackend SPI** 的消费方（Node/Rust 双后端产同一 IR）；是 `Proteus_CSS_Profile规格.md` **P3–P7 的工程化落地**（不是推翻该规格）。**规约口径澄清（不改立场只改措辞）**：`docs/proteus-css-compat-plan/06-selector-cascade.md:14`「运行期实现完整级联 = 自研迷你 CSSOM 违背原则 #10」——本 plan 引擎在**编译期**，与该条**立场一致**；B0 同步改写该句为「不在任何宿主**运行期**实现选择器匹配/层叠/单位换算；样式真源为编译期 CSS 引擎」。**编号**：G-61 为 **G 表自然接续号**（v3.18 时 G-60 的原稿自编号 G-61 已避让让出，故此号空闲）。原则 #13.84-88、铁律 G-61.1-9、规则 CMP228-238 并入 L0 规约。详见 PROJECT_MEMORY 决策 #544。
 
 ### 执行原则
 - **每批 = 1 PR = LLM 单次 ≤ 3 文件**
