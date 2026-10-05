@@ -1,0 +1,138 @@
+{
+  "_note": "G-61 B0 · Web 基准 B-b（getBoundingClientRect 几何）。与 B-a 同源同批采集（同一 env）。各端 snapshot 的比对对象是**本文件**（D1：不是端间互比）。",
+  "route": "/pages/mine",
+  "env": {
+    "browser": "chromium 151.0.7922.34",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.7922.34 Safari/537.36",
+    "dpr": 2,
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "theme": "light",
+    "url": "http://localhost:4181/pages/mine"
+  },
+  "collectedAt": "2026-10-05T05:30:02.237Z",
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "scroll": {
+    "scrollWidth": 390,
+    "scrollHeight": 1008,
+    "clientWidth": 390,
+    "clientHeight": 844
+  },
+  "nodes": {
+    "page-root": {
+      "selector": ".sa-page",
+      "text": "运运营同学华东大区 · 渠道运营外观◐深色模式全应用即时生效（无需刷新）全局能力◉客服悬浮球常驻入口，关闭后全部页面隐藏",
+      "rect": {
+        "x": 0,
+        "y": 44,
+        "width": 390,
+        "height": 844
+      }
+    },
+    "mine-head": {
+      "selector": ".mine-head",
+      "text": "运运营同学华东大区 · 渠道运营",
+      "rect": {
+        "x": 16,
+        "y": 44,
+        "width": 358,
+        "height": 96
+      }
+    },
+    "mine-avatar": {
+      "selector": ".mine-avatar",
+      "text": "运",
+      "rect": {
+        "x": 16,
+        "y": 68,
+        "width": 56,
+        "height": 56
+      }
+    },
+    "dark-row": {
+      "selector": "#mine-row-dark",
+      "text": "◐深色模式全应用即时生效（无需刷新）",
+      "rect": {
+        "x": 17,
+        "y": 162,
+        "width": 356,
+        "height": 65
+      }
+    },
+    "dark-label": {
+      "selector": "#mine-row-dark .sa-item__label",
+      "text": "深色模式",
+      "rect": {
+        "x": 73,
+        "y": 174,
+        "width": 228,
+        "height": 21
+      }
+    },
+    "dark-desc": {
+      "selector": "#mine-row-dark .sa-item__desc",
+      "text": "全应用即时生效（无需刷新）",
+      "rect": {
+        "x": 73,
+        "y": 197,
+        "width": 228,
+        "height": 18
+      }
+    },
+    "dark-switch": {
+      "selector": "#mine-dark",
+      "text": "",
+      "rect": {
+        "x": 313,
+        "y": 181.5,
+        "width": 44,
+        "height": 26
+      }
+    },
+    "section-title": {
+      "selector": ".sa-section",
+      "text": "外观",
+      "rect": {
+        "x": 16,
+        "y": 128,
+        "width": 24.484375,
+        "height": 39
+      }
+    },
+    "sa-list": {
+      "selector": ".sa-list",
+      "text": "◐深色模式全应用即时生效（无需刷新）",
+      "rect": {
+        "x": 16,
+        "y": 161,
+        "width": 358,
+        "height": 67
+      }
+    },
+    "sa-item": {
+      "selector": ".sa-item",
+      "text": "◐深色模式全应用即时生效（无需刷新）",
+      "rect": {
+        "x": 17,
+        "y": 162,
+        "width": 356,
+        "height": 65
+      }
+    },
+    "version-value": {
+      "selector": ".sa-list .sa-item:last-child .sa-item__value",
+      "text": "—",
+      "rect": {
+        "x": 344.90625,
+        "y": 349,
+        "width": 12.09375,
+        "height": 21
+      }
+    }
+  }
+}

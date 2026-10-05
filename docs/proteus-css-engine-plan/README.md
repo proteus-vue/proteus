@@ -99,7 +99,7 @@ SFC <style>  ──►  ┌─────────────────�
 
 | 批次 | 内容 | 验收 |
 |---|---|---|
-| **B0** | 契约冻结：StyleIR v1 + 能力注册表三表合一 + SApp SPI 签名 + **基准 manifest（Web 基准环境指纹与快照寻址）** | `check:app-css-surface` **由红转绿**；`check:baseline-manifest` 0 error |
+| **B0 ✅** | 契约冻结：StyleIR v1 + 能力注册表三表合一 + SApp SPI 签名 + **基准 manifest（Web 基准环境指纹与快照寻址）** | ✅ **全达成（2026-10-05）**：`check:app-css-surface` 绿 · `check:style-ir-schema` 绿（77 字段：semantic 50/engine-only 27）· IR Golden 绿（编码层逐字节，真二进制对拍 + 破坏性验证）· `check:baseline-manifest` 绿（B-a/B-b/B-c 三样本 + 指纹自产物读取） |
 | **B1** | CSE 内核（补 Profile P3）：匹配 / 五级层叠 / 继承 / 计算值 | IR vs `getComputedStyle` 100 例一致率 100% |
 | **B2** | 动态 class 预计算（补 P4） | 动态组合 IR 与浏览器一致；查表 O(1) 有 profile 证据 |
 | **B3** | 三端 Applier + 同一 conformance | **各端相对 Web 基准**：L2 覆盖 2/38 → 38/38 |

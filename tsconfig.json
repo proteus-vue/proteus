@@ -29,6 +29,11 @@
       "@proteus-vue/contracts/layers": ["packages/contracts/src/layers.ts"],
       // ★SC2：滚动容器契约子路径
       "@proteus-vue/contracts/scroll": ["packages/contracts/src/scroll.ts"],
+      // ★★★G-61 B0：StyleIR 契约子路径（字段注册表 / 值类型 / SApp SPI——叶子包零依赖）
+      "@proteus-vue/contracts/style-ir-registry.generated": ["packages/contracts/src/style-ir-registry.generated.ts"],
+      "@proteus-vue/contracts/style-ir-values": ["packages/contracts/src/style-ir-values.ts"],
+      "@proteus-vue/contracts/style-applier": ["packages/contracts/src/style-applier.ts"],
+      "@proteus-vue/contracts/style-ir-canonical": ["packages/contracts/src/style-ir-canonical.ts"],
       "@proteus-vue/contracts": ["packages/contracts/src/index.ts"],
       "@proteus-vue/runtime": ["packages/runtime/src/index.ts"],
       "@proteus-vue/runtime/style-safety": ["packages/runtime/src/style-safety/index.ts"],

@@ -2,8 +2,13 @@
 //   ——与 NodeBackend（packages/compiler-backend/src/node.ts）产出同一契约（G-29.1：Node/Rust/WASM 语义等价）
 //   流程：读 .vue → 提取 <template> → 轻量扫描元素树 → render 树（p-* 语义链接）+
 //        semantic 树（C-IR）+ bindings（capability 入口 / v-model / @handler）→ JSON 输出
+// ★★★G-61 B0（2026-10-05）新增子命令：`proteus-cc-rust canon-style-ir <ir.json>` →
+//   **StyleIR 规范化编码**（stdout）——跨语言逐字节契约（INV-CE-01）的 Rust 侧出口。
+//   与 TS 侧 `packages/contracts/src/style-ir-canonical.ts` 同一规范；
+//   `tests/style-ir-golden.test.ts` 驱动**本二进制**做双语言对拍（不是 JS 假装 Rust）。
 mod ir;
 mod semantic;
+mod style_ir_canon;
 mod template;
 
 use ir::{BindingsIR, CompilerIR, RenderIR};
@@ -11,6 +16,7 @@ use semantic::{
     collect_capabilities, collect_semantic_forest, count_compat, count_semantic,
     render_to_component_ir, semantic_for_tag,
 };
+use serde_json::Value;
 use std::io::Read;
 use template::TmplElement;
 
@@ -164,8 +170,38 @@ fn collect_bindings(el: &TmplElement) -> (Vec<ir::HandlerBinding>, Vec<ir::Model
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
+    // ★G-61 B0：canon-style-ir 子命令（StyleIR 规范化编码——跨语言逐字节契约的 Rust 出口）
+    if args.len() >= 2 && args[1] == "canon-style-ir" {
+        if args.len() < 3 {
+            eprintln!("用法: proteus-cc-rust canon-style-ir <ir.json>");
+            std::process::exit(2);
+        }
+        let text = match std::fs::read_to_string(&args[2]) {
+            Ok(t) => t,
+            Err(e) => {
+                eprintln!("proteus-cc-rust: 无法读取 {}：{}", args[2], e);
+                std::process::exit(1);
+            }
+        };
+        let value: Value = match serde_json::from_str(&text) {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("proteus-cc-rust: 输入不是合法 JSON：{}", e);
+                std::process::exit(1);
+            }
+        };
+        match style_ir_canon::canonicalize(&value) {
+            Ok(out) => println!("{}", out),
+            Err(e) => {
+                eprintln!("proteus-cc-rust: {}", e);
+                std::process::exit(1);
+            }
+        }
+        return;
+    }
     if args.len() < 3 || args[1] != "compile" {
         eprintln!("用法: proteus-cc-rust compile <file.vue> [--pretty]");
+        eprintln!("     proteus-cc-rust canon-style-ir <ir.json>");
         std::process::exit(2);
     }
     let path = &args[2];

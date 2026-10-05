@@ -24,6 +24,7 @@ export {
   APP_EDGE_FIELDS,
   APP_DERIVED_FIELDS,
   APP_SPECIAL_FIELDS,
+  APP_INHERITABLE_FIELDS,
   APP_ENUM_VALUES,
 } from './template'
 export { compileEvents } from './events'

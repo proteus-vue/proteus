@@ -11,7 +11,11 @@ path = "src/main.rs"
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+# ★★★G-61 B0 取证（2026-10-05）：serde_json 默认的快速浮点解析**非正确舍入**
+#   （实测："123456789012345680000" 解析结果比 JS Number() 低 1 ULP ⇒ Display 出 ...5670000 vs JS ...5680000）
+#   ⇒ StyleIR 规范化编码（style_ir_canon.rs）要求「同文本 + 同语义 ⇒ 同字节」，解析必须正确舍入。
+#   float_roundtrip 只在浮点解析路径增加约 2× 成本（本 CLI 为编译期工具，可接受）。
+serde_json = { version = "1", features = ["float_roundtrip"] }
 
 [profile.release]
 opt-level = 2

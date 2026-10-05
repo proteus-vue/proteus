@@ -54,6 +54,11 @@ export default defineConfig({
       { find: '@proteus-vue/contracts/layers', replacement: fileURLToPath(new URL('./packages/contracts/src/layers.ts', import.meta.url)) },
       // ★SC2：滚动容器契约（compiler/scroll-safety 引用）
       { find: '@proteus-vue/contracts/scroll', replacement: fileURLToPath(new URL('./packages/contracts/src/scroll.ts', import.meta.url)) },
+      // ★★★G-61 B0：StyleIR 契约子路径（注册表 / 值类型 / SApp SPI / 规范化编码——叶子包零依赖）
+      { find: '@proteus-vue/contracts/style-ir-registry.generated', replacement: fileURLToPath(new URL('./packages/contracts/src/style-ir-registry.generated.ts', import.meta.url)) },
+      { find: '@proteus-vue/contracts/style-ir-values', replacement: fileURLToPath(new URL('./packages/contracts/src/style-ir-values.ts', import.meta.url)) },
+      { find: '@proteus-vue/contracts/style-applier', replacement: fileURLToPath(new URL('./packages/contracts/src/style-applier.ts', import.meta.url)) },
+      { find: '@proteus-vue/contracts/style-ir-canonical', replacement: fileURLToPath(new URL('./packages/contracts/src/style-ir-canonical.ts', import.meta.url)) },
       { find: '@proteus-vue/contracts', replacement: fileURLToPath(new URL('./packages/contracts/src/index.ts', import.meta.url)) },
       // ★子路径 alias 必须在父路径之前（vite alias 前缀匹配：@proteus-vue/runtime 会吞掉 /style-safety 后缀）
       { find: '@proteus-vue/runtime/style-safety', replacement: fileURLToPath(new URL('./packages/runtime/src/style-safety/index.ts', import.meta.url)) },

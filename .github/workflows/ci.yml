@@ -113,6 +113,19 @@ jobs:
       - name: 坐标吸附跨语言 golden（卡 I2：TS ⇄ Rust 同输入同输出——三端差 1px 的机器判据）
         run: pnpm run check:pixel-snap
 
+      # ★★★G-61 B0（2026-10-05）：跨端 CSS 引擎（PCE）契约冻结的三道门禁——
+      #   ① StyleIR 契约（字段闭集/scope/值类型/棘轮/SPI 对齐 + 源 SSOT 与产物不漂移）
+      #   ② StyleIR 规范化编码 golden（INV-CE-01 编码层；Rust 侧对拍在 pnpm test 的 style-ir-golden.test.ts）
+      #   ③ Web 基准 manifest（D2 冻结 / D3 环境指纹 / D4 锚点；基准守护的清单载体）
+      - name: StyleIR 契约门禁（G-61 B0：三表合一的字段闭集 + 棘轮 + SPI 对齐）
+        run: pnpm run check:style-ir-schema
+
+      - name: StyleIR 规范化编码 golden（G-61 B0：跨语言逐字节——TS 编码器 ≡ 冻结期望）
+        run: pnpm run check:style-ir-golden
+
+      - name: Web 基准 manifest（G-61 B0：基准三件套寻址 + 环境指纹 + 锚点合法性）
+        run: pnpm run check:baseline-manifest
+
       - name: CSS 能力对齐清单漂移（三端 Web/Skyline/App：编译器属性集 ⇄ 清单 ⇄ 源工件；防清单落后于编译器/源）
         run: pnpm run check:css-capability-alignment
 
