@@ -124,7 +124,7 @@ SFC <style>  ──►  ┌─────────────────�
 |---|---|---|
 | **B0 ✅** | 契约冻结：StyleIR v1 + 能力注册表三表合一 + SApp SPI 签名 + **基准 manifest（Web 基准环境指纹与快照寻址）** | ✅ **全达成（2026-10-05）**：`check:app-css-surface` 绿 · `check:style-ir-schema` 绿（77 字段：semantic 50/engine-only 27）· IR Golden 绿（编码层逐字节，真二进制对拍 + 破坏性验证）· `check:baseline-manifest` 绿（B-a/B-b/B-c 三样本 + 指纹自产物读取） |
 | **B1 ✅** | CSE 内核（补 Profile P3）：匹配 / 五级层叠 / 继承 / 计算值 | ✅ **达成（2026-10-05）**：**113 用例 / 153 项逐属性 ≡ 真 Chromium**（`tests/e2e-cse-parity.test.ts`，CI+verify 接线 `pnpm run test:cse-parity`）；`proteus explain --style` 可 trace（选择器/层/特异性/源序/简写来源/继承） |
-| **B2** | 动态 class 预计算（补 P4） | 动态组合 IR 与浏览器一致；查表 O(1) 有 profile 证据 |
+| **B2 ✅** | 动态 class 预计算（补 Profile P4）：**属性维度分解**（非 2ⁿ）+ 互斥分组（只在可证明时）+ 爆炸保护（表>16/值>8 警告；候选>32/不可枚举 ⇒ E-CSS-004）+ 位图 **O(1)** + **回退由表保证** | ✅ **达成（2026-10-05）**：**4 用例/13 组合/32 字段项 ≡ 真 Chromium**（逐组合切 DOM 类实测 · `pnpm run test:cse-dynamic`）；**O(1) profile 证据**（Proxy 计次：读次数 == 字段数）；集成 4/4（发射键=nodeId · 校验拒硬配 · 首帧 · 回退）|
 | **B3** | 三端 Applier + 同一 conformance | **各端相对 Web 基准**：L2 覆盖 2/38 → 38/38 |
 | **B4** | 降级编译 + lint 收口（补 P5/P6） | Profile 外写法在 **Web 端也报错**（= 基准自身合法，D4） |
 | **B5** | 一致性门禁升级（三层判据 + 基准守护 + 假绿防护 + 逐端留证） | 三端真截图**与 Web 基准并排**留证；基准腐化检测上线；数字不粉饰 |

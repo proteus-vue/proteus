@@ -32,6 +32,9 @@ import { analyzeExprDeps, collectTemplateBindings } from './deps'
 import type { ExprDeps, TemplateBindingRef } from './deps'
 // ★混合文本合成绑定（P2-2）：段表来自**模板产物**（唯一实现）——不在此处重算切分
 import { buildLayoutTemplate, APP_LAYOUT_FIELDS } from './template'
+// ★★★G-61 B2（2026-10-05）：动态 :class 预计算（属性维度分解 + 位图查表）
+import { buildDynamicClassPlans, mapPlansToTemplateNodes } from '../cse/dynamic'
+import { extractFromSfc } from '../cse/extract'
 import type { TextSegment } from '@proteus-vue/slot-runtime'
 // ★P1-3 生命周期：脚本级钩子诊断要读 `<script setup>` 源码（复用唯一的 SFC 解析入口）
 import { parse as sfcParse } from '@vue/compiler-sfc'
@@ -204,12 +207,33 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
   //     **同一语义一处实现**：合成的表达式文本为此后唯一入口，独立绑定不再各发一条。
   //   ★单段插值（`{{ x }}`，无静态段）**不合成**——产物与既有逐字节一致（既有回归锁）。
   const textSegsByNode = new Map<number, TextSegment[]>()
+  /** ★G-61 B2：动态 :class 计划（键 = 运行期 nodeId 的字符串形态） */
+  let tplClassPlans: Record<string, import('@proteus-vue/slot-runtime').DynamicClassPlan> | undefined
   {
     const tplRes = buildLayoutTemplate(source, filename, opts.compat, opts.tokens)
     // ★批次 30：捕获动态类规则（同一次模板产物，零额外开销）
     tplDynamicClassRules = tplRes.dynamicClassRules
     for (const n of tplRes.template.nodes) {
       if (n.textSegments && n.textSegments.length > 0) textSegsByNode.set(n.id, n.textSegments)
+    }
+    // ★★★G-61 B2：预计算计划（仅在存在动态 :class 时做——既有产物逐字节不变）
+    if (hasDynamicClass) {
+      try {
+        // ★v1：只用 SFC 内 <style>；全局样式表的类（globalStyle）并入留待接线方传（见 extract 的 globalCss 选项）
+        const ex = extractFromSfc(source)
+        const built = buildDynamicClassPlans(ex.roots, ex.sheet, ex.classBindings)
+        for (const d of built.diagnostics) {
+          diagnostics.push({ severity: d.level === 'error' ? 'error' : 'warn', code: d.code, message: d.message, ...(d.hint ? { hint: d.hint } : {}) })
+        }
+        const mapped = mapPlansToTemplateNodes(ex.roots, built.plans, tplRes.template.nodes)
+        if (mapped.reason) {
+          diagnostics.push({ severity: 'warn', code: 'VAPOR_DYNCLASS_PLAN_UNMAPPED', message: `动态 :class 计划未映射到运行期节点：${mapped.reason}`, hint: '两树形态不同源（如组件标签展开差异）——本节点动态类回退旧通路（线性匹配）' })
+        } else if (Object.keys(mapped.byNodeId).length > 0) {
+          tplClassPlans = mapped.byNodeId
+        }
+      } catch (e) {
+        diagnostics.push({ severity: 'warn', code: 'VAPOR_DYNCLASS_PLAN_FAILED', message: `动态 :class 计划生成失败（回退旧通路）：${(e as Error).message.slice(0, 120)}` })
+      }
     }
   }
   /** 节点 id → 各插值绑定（按出现序）——按元素聚组后决定"合成"还是"原样" */
@@ -657,19 +681,30 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
   const l0 = slotRecords.length - l1
   void SlotRuntime // 类型引用（产物与运行时同源）
 
-  // 批次 30（诚实边界）：动态 :class 目前只解析**绘制字段**（颜色/字号/圆角/透明度…）；
-  //   若自匹配类里含**布局字段**（width/height/margin/padding/gap/flex…），运行期无法经绘制通道下发
-  //   ⇒ 如实诊断（不静默丢弃——否则「类改宽度不生效」又是一处静默失效）。
+  // ★★★B2 更新（2026-10-05）：动态 :class 的**布局字段**此前"不支持"（见下方历史注释）；
+  //   B2 预计算计划（`classPlans`）已能对**任意 IR 字段**建表并下发——但**宿主通道**决定实际可及性：
+  //   · `paint.*` 字段：`onPaintProp` 已接通（三端宿主都实现了绘制通道）⇒ 生效
+  //   · `layout.*` 字段：需宿主**布局重建**通道（B3 的 applier 范围）⇒ **当前仍未端到端可及**
+  //   ⇒ 诊断改为"仅在计划未覆盖 / 或含布局字段时提示通道边界"，措辞如实（不夸大也不掩盖）。
   {
     const layoutKeys = new Set<string>(APP_LAYOUT_FIELDS as readonly string[])
     const bad = new Set<string>()
     for (const r of tplDynamicClassRules ?? []) for (const k of Object.keys(r.decls)) if (layoutKeys.has(k)) bad.add(k)
+    // 计划已生成 ⇒ 布局字段已**编译期可算**，缺的是宿主通道 ⇒ 提示语区分两件事
+    const planned = tplClassPlans !== undefined
     if (bad.size > 0) {
       diagnostics.push({
         severity: 'warn',
         code: 'VAPOR_DYNCLASS_LAYOUT_UNSUPPORTED',
-        message: '动态 :class 的自匹配类含**布局字段**（' + [...bad].join(' / ') + '）——App 端动态类当前仅支持绘制字段（颜色/字号/圆角/透明度…）',
-        hint: '把这些布局样式放静态 style 或静态 class；动态类用于状态色/字体/圆角等**绘制**属性',
+        message:
+          '动态 :class 的自匹配类含**布局字段**（' +
+          [...bad].join(' / ') +
+          '）——' +
+          (planned
+            ? 'B2 预计算计划已含这些字段（编译期可算），但宿主**布局重建通道**尚未接线（B3 applier 范围）⇒ 端上暂不生效'
+            : '本节点计划未产出（见其他诊断）⇒ 端上不生效'),
+        hint:
+          '布局类动态不可用的这段时间：把布局样式放静态 style / 静态 class；动态类用于状态色/字体/圆角等**绘制**属性（该通道已端到端可用）',
       })
     }
   }
@@ -691,6 +726,8 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
       ...(componentIs.length > 0 ? { componentIs } : {}),
       // ★批次 30：动态 `:class` 自匹配类规则（**仅在存在动态 :class 且规则非空时**发射——既有产物逐字节不变）
       ...(hasDynamicClass && (tplDynamicClassRules?.length ?? 0) > 0 ? { classRules: tplDynamicClassRules } : {}),
+      // ★★★G-61 B2：动态 :class 预计算计划（仅在场时发射——既有产物逐字节不变）
+      ...(tplClassPlans ? { classPlans: tplClassPlans } : {}),
       stats: { l1, l0, l1Rate: l1 + l0 === 0 ? 0 : Math.round((l1 / (l1 + l0)) * 10000) / 10000 },
     },
     sources: srcScan.sources,

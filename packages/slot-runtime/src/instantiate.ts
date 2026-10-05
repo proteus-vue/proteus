@@ -14,6 +14,8 @@
 //     这是行内槽位能发出**普通 SET_STYLE/SET_TEXT** 的前提（否则退回 LIST_UPDATE）
 import { ListRegistry } from './list-registry'
 import type { SubscriptionTable } from './table'
+// ★★★G-61 B2：预计算计划（位图 O(1) 查表 + 基线回退）
+import { applyDynamicClassPlan } from './dynamic-class'
 import { resolveDynamicClasses } from './table'
 import type { ComponentDef, InstantiatedNode, LayoutNode, LayoutTemplate, ListTemplate } from './layout-template'
 // ★★初值回填复用**运行时同一套实现**（求值器重建 + 行作用域读取）——见下方注释：
@@ -191,9 +193,17 @@ function applyStyleField(
   key: string,
   v: unknown,
   classRules: readonly import('./table').DynamicClassRule[] | undefined,
+  // ★★★G-61 B2：预计算计划（在场 ⇒ **优先**——O(1) 查表且**含基线回退**；缺省走旧线性匹配）
+  classPlan?: import('./dynamic-class').DynamicClassPlan,
 ): void {
   if (propKey === 'paint.class') {
-    const fields = resolveDynamicClasses(v, classRules ?? [])
+    let fields: Record<string, unknown>
+    if (classPlan) {
+      fields = {}
+      applyDynamicClassPlan(v, classPlan, fields)
+    } else {
+      fields = resolveDynamicClasses(v, classRules ?? [])
+    }
     for (const [k, val] of Object.entries(fields)) (target as Record<string, unknown>)[k] = val
     return
   }
@@ -502,7 +512,7 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
             target.text = v === undefined || v === null ? '' : String(v)
           } else {
             // ★回填也写**顶层**（与 emit 的摊平一致——否则回填的键核心看不到）
-            applyStyleField(target, sl.propKey, f.key, v, opts.table?.classRules)
+            applyStyleField(target, sl.propKey, f.key, v, opts.table?.classRules, opts.table?.classPlans?.[String(sl.nodeId)])
           }
           valuesFilled++
         }
@@ -577,7 +587,7 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
       if (f.kind === 'text') {
         target.text = v === undefined || v === null ? '' : String(v)
       } else {
-        applyStyleField(target, sl.propKey, f.key, v, opts.table?.classRules)
+        applyStyleField(target, sl.propKey, f.key, v, opts.table?.classRules, opts.table?.classPlans?.[String(sl.nodeId)])
       }
       valuesFilled++
     }
@@ -605,7 +615,7 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
           // ★P2-9：空值 ⇒ 空串（同 cloneRow 的口径）
           target.text = v === undefined || v === null ? '' : String(v)
         } else {
-          applyStyleField(target, sl.propKey, f.key, v, opts.table?.classRules)
+          applyStyleField(target, sl.propKey, f.key, v, opts.table?.classRules, opts.table?.classPlans?.[String(sl.nodeId)])
         }
         valuesFilled++
       }
@@ -956,7 +966,7 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
             if (f.kind === 'text') {
               target.text = v === undefined || v === null ? '' : String(v)
             } else {
-              applyStyleField(target, sc.propKey, f.key, v, opts.table?.classRules)
+              applyStyleField(target, sc.propKey, f.key, v, opts.table?.classRules, opts.table?.classPlans?.[String(sc.nodeId)])
             }
             appliedScoped++
             valuesFilled++

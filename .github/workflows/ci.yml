@@ -414,6 +414,10 @@ jobs:
       - name: CSE ⇄ 浏览器逐属性一致性（G-61 B1 · 判据①-b）
         run: pnpm run test:cse-parity
 
+      # ★★★G-61 B2（2026-10-05）：动态 :class 预计算 ⇄ 浏览器**逐组合**实测（判据①-B2）
+      - name: 动态 :class 计划 ⇄ 浏览器逐组合（G-61 B2）
+        run: pnpm run test:cse-dynamic
+
       - name: Web E2E（SPA 跳转 / 转场 / tap 计数）
         run: pnpm run test:e2e:web
 
