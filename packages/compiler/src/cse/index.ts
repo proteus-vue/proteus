@@ -11,6 +11,9 @@
 export { parseStyleSheet, parseChain, parseSegment, specificityOf, stripScopeSuffix } from './parse'
 export { expandShorthandDecl, splitTopLevel, UNSUPPORTED_SHORTHANDS } from './shorthand'
 export { extractFromSfc, parseInlineStyleToLonghand } from './extract'
+// ★★★G-61 B2（2026-10-05）：**动态 :class 预计算**（Profile §5——属性维度分解 + 互斥分组 + 爆炸保护）
+export { enumerateDynamicClassCandidates, buildDynamicClassPlans } from './dynamic'
+export type { EnumerateResult, BuildDynamicPlansOptions, BuildDynamicPlansResult, DynamicPlanDiagnostic } from './dynamic'
 export type { CseExtractResult, ExtractOptions } from './extract'
 export { buildIndex, candidatesFor, chainMatches, segmentMatches, contextOf } from './match'
 export type { MatchContext, AncestorChain, RuleIndex } from './match'

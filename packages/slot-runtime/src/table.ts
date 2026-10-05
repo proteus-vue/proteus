@@ -220,6 +220,13 @@ export interface SubscriptionTable {
    *   动态情境无祖先上下文；含 tag/组合的规则如实**不投影**（由静态路径处理其静态情形）。
    */
   classRules?: DynamicClassRule[]
+  /**
+   * ★★★G-61 B2（2026-10-05）：**动态 :class 预计算计划**（节点 → 位图查表）。
+   *   与 `classRules`（批次 30，逐规则线性匹配）**并存**；两者都在场时**本表优先**
+   *   （B3 切换完成后 classRules 下线——plan §2.2「新通路并行、逐字段切换」）。
+   *   收益：① O(1)/字段（旧通路 O(规则数) 匹配）② **回退语义由表保证**（旧通路需手动清旧字段）。
+   */
+  classPlans?: Record<string, import('./dynamic-class').DynamicClassPlan>
   /** 未走 L1 的槽位（诊断：解释"为什么这个绑定没有加速"） */
   l0Slots: Array<{ slotId: number; nodeId: number; propKey: string; reason: string }>
   /** 统计（棘轮 / 覆盖率度量用） */

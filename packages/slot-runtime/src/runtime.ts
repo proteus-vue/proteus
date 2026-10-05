@@ -23,6 +23,8 @@ import { SlotRuntime, createSlot } from './slot'
 import type { Slot } from './slot'
 import type { EvaluatorSpec, SubscriptionTable } from './table'
 import { resolveDynamicClasses } from './table'
+// ★★★G-61 B2：动态 :class 预计算计划（位图 O(1) 查表）
+import { applyDynamicClassPlan } from './dynamic-class'
 
 /** 源订阅钩子：源值变化时回调（由宿主注入；Vue 场景 = watch / effect） */
 export type SourceSubscriber = (sourceName: string, onChange: () => void) => void
@@ -375,7 +377,15 @@ export class VaporRuntime {
           const implC = this.evaluators.get(spec.evaluatorId)
           if (implC) {
             const cv = implC(ctx)
-            const fields = resolveDynamicClasses(cv, this.table.classRules ?? [])
+            // ★★★G-61 B2：预计算计划优先（O(1)/字段 + 回退由表保证；无计划 ⇒ 旧线性匹配通路）
+            const plan = this.table.classPlans?.[String(spec.nodeId)]
+            let fields: Record<string, unknown>
+            if (plan) {
+              fields = {}
+              applyDynamicClassPlan(cv, plan, fields)
+            } else {
+              fields = resolveDynamicClasses(cv, this.table.classRules ?? [])
+            }
             const nid = spec.nodeId + this.nodeIdOffset
             const nextKeys = new Set(Object.keys(fields))
             // ★批次 30：**关掉的类的字段要清除**（否则切走仍残留旧样式——Vue 语义：类移除 ⇒ 样式移除）

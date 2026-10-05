@@ -28,6 +28,8 @@ export interface CseExtractResult {
   sheet: CseStyleSheet
   /** inline style：节点 key → 长手声明 */
   inlineStyles: Record<string, Array<{ prop: string; value: string }>>
+  /** ★G-61 B2：节点 key → `:class` 绑定表达式原文（无绑定 ⇒ 不在表内） */
+  classBindings: Record<string, string>
   /** 提取期的如实记录（动态 class/style 等） */
   notes: Array<{ kind: 'dynamic-class' | 'dynamic-style' | 'v-for' | 'slot' | 'component'; detail: string }>
 }
@@ -45,6 +47,8 @@ interface RawEl {
   classes: string[]
   id?: string
   style?: string
+  /** ★G-61 B2：`:class` 绑定表达式原文（可静态枚举时由 cse/dynamic.ts 展开成查找表） */
+  classBinding?: string
   children: RawEl[]
 }
 
@@ -74,8 +78,12 @@ function extractTemplate(source: string): string {
   return ''
 }
 
-/** 解析类属性（静态 class：`class="a b"`；`:class` 动态 ⇒ note） */
-function parseClassAttr(attrs: string, notes: CseExtractResult['notes'], where: string): { classes: string[]; id?: string; style?: string } {
+/** 解析类属性（静态 class：`class="a b"`；`:class` 动态 ⇒ 记 note + 返回**绑定表达式原文**供 B2 枚举） */
+function parseClassAttr(
+  attrs: string,
+  notes: CseExtractResult['notes'],
+  where: string,
+): { classes: string[]; id?: string; style?: string; classBinding?: string } {
   const classes: string[] = []
   let id: string | undefined
   let style: string | undefined
@@ -85,13 +93,23 @@ function parseClassAttr(attrs: string, notes: CseExtractResult['notes'], where: 
   while ((m = cm.exec(attrs))) {
     for (const c of (m[1] ?? m[2] ?? '').split(/\s+/).filter(Boolean)) classes.push(c)
   }
-  if (/[:@]class\s*=/.test(attrs)) notes.push({ kind: 'dynamic-class', detail: where })
+  let classBinding: string | undefined
+  {
+    // `:class="expr"` / `v-bind:class="expr"`——表达式原文（B2 静态枚举的输入）
+    const vm = /\s(?::class|v-bind:class)\s*=\s*"([^"]*)"|\s(?::class|v-bind:class)\s*=\s*'([^']*)'/.exec(attrs)
+    if (vm) classBinding = (vm[1] ?? vm[2] ?? '').trim()
+    if (/[:@]class\s*=/.test(attrs)) notes.push({ kind: 'dynamic-class', detail: where })
+  }
   const im = /\sid\s*=\s*"([^"]*)"|\sid\s*=\s*'([^']*)'/.exec(attrs)
   if (im) id = im[1] ?? im[2]
   const sm = /\sstyle\s*=\s*"([^"]*)"|\sstyle\s*=\s*'([^']*)'/.exec(attrs)
   if (sm) style = sm[1] ?? sm[2]
   if (/[:@]style\s*=/.test(attrs)) notes.push({ kind: 'dynamic-style', detail: where })
-  return { classes, id, style }
+  const ret: { classes: string[]; id?: string; style?: string; classBinding?: string } = { classes }
+  if (id !== undefined) ret.id = id
+  if (style !== undefined) ret.style = style
+  if (classBinding !== undefined) ret.classBinding = classBinding
+  return ret
 }
 
 /** 模板文本 → 元素树（轻量扫描：标签/属性/嵌套；文本节点忽略（CSE 只算元素）） */
@@ -142,10 +160,11 @@ function scanElements(html: string, notes: CseExtractResult['notes']): RawEl[] {
     if (/^v-for|[\s]v-for/.test(attrs)) notes.push({ kind: 'v-for', detail: `<${tag}>` })
     if (tag.includes('-') && !tag.startsWith('view') && !tag.startsWith('text')) notes.push({ kind: 'component', detail: `<${tag}>` })
     if (/[\s]slot([\s=]|$)/.test(attrs)) notes.push({ kind: 'slot', detail: `<${tag}>` })
-    const { classes, id, style } = parseClassAttr(attrs, notes, `<${tag}>`)
+    const { classes, id, style, classBinding } = parseClassAttr(attrs, notes, `<${tag}>`)
     const el: RawEl = { tag, classes, children: [] }
     if (id !== undefined) el.id = id
     if (style !== undefined) el.style = style
+    if (classBinding !== undefined) el.classBinding = classBinding
     const parent = stack[stack.length - 1]?.el
     if (parent) parent.children.push(el)
     else roots.push(el)
@@ -156,12 +175,19 @@ function scanElements(html: string, notes: CseExtractResult['notes']): RawEl[] {
 }
 
 /** RawEl → CseNode（赋 key：`<prefix><DFS 序>`；兄弟序由 computeTree 重算，这里给初值） */
-function toCseNode(raw: RawEl, path: string, keyPrefix: string, inline: CseExtractResult['inlineStyles']): CseNode {
+function toCseNode(
+  raw: RawEl,
+  path: string,
+  keyPrefix: string,
+  inline: CseExtractResult['inlineStyles'],
+  classBindings: Record<string, string>,
+): CseNode {
   const key = `${keyPrefix}${path}`
   const node: CseNode = { key, tag: raw.tag, classes: raw.classes, index: 0, count: 1, children: [] }
   if (raw.id !== undefined) node.id = raw.id
   if (raw.style !== undefined) inline[key] = parseInlineStyleToLonghand(raw.style)
-  node.children = raw.children.map((c, i) => toCseNode(c, `${path}.${i}`, keyPrefix, inline))
+  if (raw.classBinding !== undefined) classBindings[key] = raw.classBinding
+  node.children = raw.children.map((c, i) => toCseNode(c, `${path}.${i}`, keyPrefix, inline, classBindings))
   return node
 }
 
@@ -195,8 +221,9 @@ export function extractFromSfc(source: string, opts: ExtractOptions = {}): CseEx
   const notes: CseExtractResult['notes'] = []
   const rawRoots = scanElements(tpl, notes)
   const inlineStyles: CseExtractResult['inlineStyles'] = {}
+  const classBindings: CseExtractResult['classBindings'] = {}
   const keyPrefix = opts.keyPrefix ?? ''
-  const roots = rawRoots.map((r, i) => toCseNode(r, String(i), keyPrefix, inlineStyles))
+  const roots = rawRoots.map((r, i) => toCseNode(r, String(i), keyPrefix, inlineStyles, classBindings))
 
   // 样式表：SFC `<style>` 块（逐块）+ globalCss 追加（同 order 序列递增）
   let sheet: CseStyleSheet = { rules: [], layerOrder: [], skipped: [] }
@@ -222,5 +249,5 @@ export function extractFromSfc(source: string, opts: ExtractOptions = {}): CseEx
     }
   }
   void order
-  return { roots, sheet, inlineStyles, notes }
+  return { roots, sheet, inlineStyles, classBindings, notes }
 }

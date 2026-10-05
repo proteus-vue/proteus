@@ -60,7 +60,7 @@ const COUPLING = [
   //   · cse-explain：explain --style 的 trace 端到端
   {
     match: /^packages\/compiler\/src\/cse\//,
-    tests: ['tests/cse-core.test.ts', 'tests/e2e-cse-parity.test.ts', 'tests/cse-explain.test.ts'],
+    tests: ['tests/cse-core.test.ts', 'tests/e2e-cse-parity.test.ts', 'tests/cse-explain.test.ts', 'tests/cse-dynamic.test.ts', 'tests/e2e-cse-dynamic.test.ts', 'tests/cse-dynamic-integration.test.ts'],
     why: 'CSE 编译期 CSS 引擎（五级层叠/长手竞争/继承/计算值/IR 映射）——判据①-b 逐属性比对 + trace',
   },
   {
