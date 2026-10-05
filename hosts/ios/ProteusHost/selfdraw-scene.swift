@@ -659,12 +659,24 @@ final class SelfDrawView: UIView {
         applyShadow(layer, style: style)
         if let r = style["borderRadius"] as? CGFloat, r > 0 {
             layer.cornerRadius = r
-            // ★批次 10：有阴影 ⇒ 不开 masksToBounds（否则 CALayer 圆角裁剪会裁掉阴影——
-            //   二者在 CoreAnimation 里互斥）。自绘节点是**叶子层**（无子层可裁）⇒ 安全。
-            layer.masksToBounds = !hasShadow
         }
+        // ★★★overflow-x 项（2026-10-06 · 与 Web 对齐的真缺陷修复）：**圆角不再隐含 masksToBounds**——
+        //   CALayer 的 backgroundColor/border 始终按 cornerRadius 圆角化（无需 mask）；而 mask 会裁
+        //   **子层**（把 overflow:visible 的溢出内容也裁掉——本轮实锤：B 案红块被圆角卡片裁到卡缘，
+        //   内核 rects 给的 120 是正确的）。Web 的 border-radius **不裁内容**（除非 overflow 非 visible）
+        //   ⇒ 裁剪只由 overflow/clipText 决定。★代价（诚实边界）：CATextLayer 的**文字本体**也不再被
+        //   圆角裁——需裁走 overflow: hidden（与 Web 同语义）。
+        layer.masksToBounds = Self.isOverflowClipped(style) || isClipTextStyle(style)
         // ★批次 34：逐角圆角（非统一时用 maskedCorners；会覆盖上面的 masksToBounds）
         applyRadiusCorners(layer, style: style)
+        // ★（阴影互斥）：圆角不再开 mask ⇒ 与 boxShadow 天然共存（旧注释的互斥已不适用）
+        // ★★★overflow-x 项（2026-10-06）：overflow 裁剪子内容（CSS Overflow 3——裁剪盒 = padding box）。
+        //   本端层是**真嵌套**（parent.addSublayer）⇒ masksToBounds 天然裁整棵子树（无需内核算 clip 矩形）。
+        //   ★放在 applyRadiusCorners **之后**：圆角路径会设 masksToBounds=true（圆角需裁），此处只做"开"，
+        //     不做"关"（避免与圆角/阴影合并判定打架——三处都是"要裁就开"的单调操作）。
+        //   ★诚实边界：maskedCorners（有圆角时）限定裁剪形状为圆角矩形；纯矩形 overflow 裁剪与之一致
+        //     （圆角盒的裁剪本就是圆角矩形——Web 同语义）。
+        if Self.isOverflowClipped(style) { layer.masksToBounds = true }
         // ★B 批 3D：透视快照（建层时读一次——动画期 applyTransform 只查表，不回读树样式）
         if let d = style["perspective"] as? CGFloat, d > 0 {
             layerPerspective[nodeId] = d
@@ -2925,11 +2937,20 @@ final class SelfDrawView: UIView {
         if (style["textOverflow"] as? String) == "ellipsis" { return false }
         return (style["overflow"] as? String) == "hidden"
     }
+    /// ★★★overflow-x 项（2026-10-06）：该 style 是否触发**子内容裁剪**（CSS Overflow 3。
+    ///   折叠器已把 Web 归一+形态收敛做完（x==y ⇒ 统一 \`overflow\`；x≠y ⇒ 仍写统一 hidden + 逐轴保真）
+    ///   ⇒ 本判据读统一 \`overflow\`（与内核/其他端同一口径）；visible/缺省 ⇒ 不裁。
+    static func isOverflowClipped(_ style: [String: Any]) -> Bool {
+        guard let ov = style["overflow"] as? String else { return false }
+        return ov == "hidden" || ov == "scroll" || ov == "auto"
+    }
+
     /// 把节点规格里的绘制字段取出来（与全量路径同款；单一实现避免分叉）
     static func styleOf(_ n: [String: Any]) -> [String: Any] {
         var style: [String: Any] = [:]
         // ★★全端对齐批（2026-10-05）：whiteSpace/overflow 也必须透传——层配置按其分流（折行/截断/裁切）
-        for k in ["backgroundColor", "color", "text", "fontFamily", "textAlign", "borderColor", "lineHeight", "whiteSpace", "overflow", "textOverflow"] {
+        // ★★★overflow-x 项（2026-10-06）：overflowX/overflowY 也透传（层配置按其开裁剪）
+        for k in ["backgroundColor", "color", "text", "fontFamily", "textAlign", "borderColor", "lineHeight", "whiteSpace", "overflow", "textOverflow", "overflowX", "overflowY"] {
             if let v = n[k] as? String { style[k] = v }
         }
         if let bw = n["borderWidth"] as? Double { style["borderWidth"] = CGFloat(bw) }
@@ -3057,9 +3078,10 @@ final class SelfDrawView: UIView {
         applyShadow(layer, style: style)
         let r = (style["borderRadius"] as? CGFloat) ?? 0
         layer.cornerRadius = r
-        // ★★全端对齐批：nowrap 溢出裁切也开 masksToBounds（与圆角同属性——合并判定，防相互覆盖）
-        layer.masksToBounds = (r > 0 && !hasShadow2) || isClipTextStyle(style)
-        applyRadiusCorners(layer, style: style)   // ★批次 34：逐角圆角
+        // ★★★overflow-x 项（2026-10-06）：裁剪判据 = overflow/clipText（**圆角不隐含 mask**——见
+        //   makeLayer 的同款注释：圆角 mask 会误裁 overflow:visible 的溢出子层，与 Web 不符）
+        layer.masksToBounds = Self.isOverflowClipped(style) || isClipTextStyle(style)
+        applyRadiusCorners(layer, style: style)   // ★批次 34：逐角圆角（部分角需 mask——内部处理）
         layer.opacity = 1
     }
 
@@ -3103,7 +3125,9 @@ final class SelfDrawView: UIView {
         guard let pct = style["borderRadiusPct"] as? CGFloat, pct > 0 else { return }
         let r = pct * min(size.width, size.height)
         layer.cornerRadius = r
-        layer.masksToBounds = (style["boxShadow"] as? [String: Any]) == nil
+        // ★★★overflow-x 项（2026-10-06）：不再隐含 mask（同 borderRadius——圆角只作用于背景/边框；
+        //   裁剪由 overflow/clipText 决定，与 Web 对齐）
+        layer.masksToBounds = Self.isOverflowClipped(style) || isClipTextStyle(style)
     }
 
     /// ★批次 34（对齐 Web）：逐角圆角——`borderRadiusCorners` 掩码（bit0=TL/1=TR/2=BR/3=BL）→ CALayer.maskedCorners。

@@ -7,7 +7,7 @@ generated: true
 
 # 编译规则目录
 
-> 117 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
+> 118 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
 
 ## 模板转换（65）
 
@@ -1412,7 +1412,7 @@ after:  每页产物：wxml 前缀 + `netText: __proteusGlobal.get("netText")` +
 
 > why: 小程序里 App 是逻辑容器（渲染层无对应物）⇒ "App.vue 写模板、全局组件声明一次全应用生效" 架构上无处安放（uni-app 官方不支持）。注入是编译期行为（可枚举）——运行时 insertGlobal 会让 conformance 与 AI 可校验同时失效且静默（C1）
 
-## 样式转换（9）
+## 样式转换（10）
 
 ### `style/px-to-rpx`
 
@@ -1426,6 +1426,19 @@ after:  padding: 96rpx;
 ```
 
 > why: 小程序 rpx 是屏幕等比单位（750 设计稿），跨端 CSS 一致性的编译期吸收（决策 #9：MP 端 px→rpx，Web 端保持标准 CSS）
+
+### `style/overflow-collapse`
+
+**单轴 overflow 归一折叠（MP 端）**
+
+overflow-x / overflow-y / 两值 overflow 简写 ⇒ 统一 overflow（任一块内任一轴非 visible（Web 归一回放后）⇒ overflow: hidden；两轴均 visible ⇒ 移除）
+
+```
+before: overflow-x: hidden;
+after:  overflow: hidden;
+```
+
+> why: Skyline 官方支持表原文「不支持单独设置 overflow-x/y」；且 Web 归一规则（一侧 visible、另一侧非 visible ⇒ visible→auto）使单轴组合在渲染语义上等价两轴裁剪（决策 #560）；与 App 侧 normalizeOverflowFields 同一套规则
 
 ### `style/selector-tag`
 

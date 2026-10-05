@@ -1314,6 +1314,24 @@ describe('transformStyleToWxss（style → wxss）', () => {
     expect(css).not.toContain('48px')
   })
 
+  it('★★★overflow 单轴归一折叠（决策 #560）：overflow-x/y 与两值简写 ⇒ 统一 overflow（Skyline 官方不支持单轴）', () => {
+    // 单轴 hidden（Web 归一回放：另一轴 visible→auto ⇒ 两轴均裁）⇒ 统一 overflow: hidden
+    const a = transformStyleToWxss('.a { overflow-x: hidden; }', opts)
+    expect(a).toContain('overflow: hidden')
+    expect(a).not.toContain('overflow-x')
+    // 两值简写（hidden auto）⇒ 统一 hidden
+    const b = transformStyleToWxss('.b { overflow: hidden auto; }', opts)
+    expect(b).toContain('overflow: hidden')
+    // 两轴均 visible ⇒ 移除（默认零声明）
+    const c = transformStyleToWxss('.c { overflow-x: visible; overflow-y: visible; }', opts)
+    expect(c).not.toContain('overflow-x')
+    expect(c).not.toContain('overflow-y')
+    // 其它声明保留（折叠不吞邻居）
+    const d = transformStyleToWxss('.d { padding: 8px; overflow-y: auto; }', opts)
+    expect(d).toContain('padding: 16rpx')
+    expect(d).toContain('overflow: hidden')
+  })
+
   it('标签选择器映射：语义标签 → 基础类（.links a → .links .proteus-a / h1 → .proteus-h1），div → view', () => {
     const css = transformStyleToWxss('.links a { color: #1a7af8; }\nh1 { font-size: 32px; }\np { margin: 0; }\ndiv > p { padding: 4px; }', opts)
     expect(css).toContain('.links .proteus-a { color: #1a7af8; }')

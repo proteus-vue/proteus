@@ -24,6 +24,10 @@ export type StylePropLevel =
   //   与宽度/颜色不同轴。新级别四同步（INV-CE-07）：本表 + runtime PROP_TYPES/narrowing
   //   + compiler 静态校验 + 注册表 VALUE_TYPE_BY_LEVEL（照 TextWrap 先例）。
   | 'BorderStyle'
+  // ★★★overflow-x 项（2026-10-06 · css:next P0·10×）：单轴溢出（overflow-x/y 长手 + overflow 1–2 值简写）。
+  //   值集与内核封闭集对齐（visible/hidden/scroll/auto）——Web 的 clip 命中无内核对应 ⇒ 编译期诊断跳过（v1 边界）。
+  //   四同步（INV-CE-07）：本表 + runtime PROP_TYPES/narrowing + compiler 静态校验 + 注册表 VALUE_TYPE_BY_LEVEL。
+  | 'Overflow'
   | 'Transform'
   | 'TransformOrigin'
   | 'SEMANTIC_ONLY'
@@ -71,7 +75,11 @@ export const STYLE_PROP_LEVELS = {
   borderTopStyle: 'BorderStyle',
   borderRightStyle: 'BorderStyle',
   borderBottomStyle: 'BorderStyle',
-  borderLeftStyle: 'BorderStyle',  transform: 'Transform',
+  borderLeftStyle: 'BorderStyle',
+  // ★★★overflow-x 项：单轴溢出（'visible'/'hidden'/'scroll'/'auto'；编译期完成 Web 归一）
+  overflowX: 'Overflow',
+  overflowY: 'Overflow',
+  transform: 'Transform',
   transformOrigin: 'TransformOrigin',
   flex: 'FlexNumber',
   flexGrow: 'FlexNumber',

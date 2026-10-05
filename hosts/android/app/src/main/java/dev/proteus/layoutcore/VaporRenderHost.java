@@ -1776,8 +1776,31 @@ final class VaporRenderHost {
     }
 
     /** 全量：几何 → 指令（矩形 + 文本 + 底色） */
+    /** ★★★overflow-x 项（2026-10-06）：把内核 rects 里的 `clip` 字段注入视图的裁剪表。
+     *   · 有 clip ⇒ setNodeClipRect（绘制时 clipRect）；无 ⇒ clearNodeClipRect（**必须清**——
+     *     同 id 复用时残留 = 幽灵裁剪，与 clipPath 的同款缺陷同源）。
+     *   · 增量通道与全量通道**同法**（apply_ops 的 rects 也带 clip——内核两通道同源）。 */
+    private void applyClipRects(JSONObject rects) throws Exception {
+        java.util.Iterator<String> it = rects.keys();
+        while (it.hasNext()) {
+            String key = it.next();
+            int id;
+            try { id = Integer.parseInt(key); } catch (NumberFormatException e) { continue; }
+            JSONObject r = rects.optJSONObject(key);
+            // ★★扁平键（clipX/clipY/clipW/clipH）——内核侧选择扁平形态：serde_json 键按字母序，
+            //   嵌套对象会把鸿蒙"找 '}'"段落解析器截断（跨端同形纪律）。
+            if (r != null && r.has("clipX") && view != null) {
+                view.setNodeClipRect(id, (float) r.optDouble("clipX"), (float) r.optDouble("clipY"),
+                        (float) r.optDouble("clipW"), (float) r.optDouble("clipH"));
+            } else if (view != null) {
+                view.clearNodeClipRect(id);
+            }
+        }
+    }
+
     private void emitAll() throws Exception {
         JSONObject rects = new JSONObject(RustLayout.readRects(handle)).getJSONObject("rects");
+        applyClipRects(rects);   // ★★★overflow-x 项（2026-10-06）：内核下发的有效裁剪矩形 → 视图表
         cmds.clear();
         cmdIdsOf.clear();
         cmdIndexById.clear();
@@ -1797,6 +1820,8 @@ final class VaporRenderHost {
     /** 增量：只重建变化集里的**那几条指令**（Cmd 不可变 ⇒ 整条替换） */
     private void patchedCmdsFor(JSONObject changed) throws Exception {
         if (changed == null || changed.length() == 0) return;
+        // ★★★overflow-x 项（2026-10-06）：变化集也带 clip（内核两通道同源）⇒ 裁剪表同批刷新
+        applyClipRects(changed);
         int replaced = 0;
         for (java.util.Iterator<String> it = changed.keys(); it.hasNext(); ) {
             String k = it.next();

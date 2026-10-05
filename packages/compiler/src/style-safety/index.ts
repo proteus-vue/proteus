@@ -211,6 +211,9 @@ function isStaticValueValid(level: string, value: unknown): boolean {
     // ★★★逐边 border 批（2026-10-05）：边框线型（与 runtime PROP_TYPES.BorderStyle 同语义）
     case 'BorderStyle':
       return ['solid', 'dashed', 'dotted', 'none'].indexOf(String(value)) >= 0
+    // ★★★overflow-x 项（2026-10-06）：溢出封闭集（与 runtime PROP_TYPES.Overflow 同语义）
+    case 'Overflow':
+      return ['visible', 'hidden', 'scroll', 'auto'].indexOf(String(value)) >= 0
     case 'Transform':
       return typeof value === 'string' && /^(translate|scale|rotate|skew)/i.test(value)
     case 'TransformOrigin':

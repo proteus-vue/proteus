@@ -161,6 +161,20 @@ node scripts/css-acceptance-record.mjs <feature-id> <verdicts.json>
 | dotted 实现纪律 | ★**不得用 ROUND-cap 虚线**（cap 圆头以线段端点为圆心外伸 w/2 ⇒ 端点外溢盒外 + 与封角块叠成合并斑块——实测 bbox 超盒 1.3-1.7 CSS px）| 第 3 次独立复评逐像素 profile 抓出（决策 #559 ⑧） |
 | dashed 节距 | {3w, 2w}（封角块 + 中线虚线，BUTT cap） | Chrome 实测真值（有真值可对 ⇒ 照 Web） |
 
+**★截图链路的"构建断点"纪律（2026-10-06 overflow 项实锤，独立复评用 md5 抓出）**
+- 现象：global.css 修好后只跑了 `build-batch`（bundle 更新），**没跑 `build-and-run.sh --no-install`**
+  （APK 未重打包）⇒ 装的还是旧包 ⇒ 截图与修复前逐像素一致。**`cp` 刷新 mtime 还能骗过 `fresh`**。
+- 操作（每次重截前按其核一遍——三端各有断点）：
+  · Android：`build-batch`（bundle）→ **`build-and-run.sh --no-install`（APK）** → install → 截图；
+    进包凭据 = `unzip -p <apk> assets/bundle-superapp.js | md5` == `assets/bundle-superapp.js` md5。
+  · iOS：`build-app-stack`（bundle）→ **`run-selfdraw.sh` 会重编译 .app**（含 bundle 拷贝）→ drive；
+    凭据 = `.app/bundle-superapp.js` mtime ≥ 构建时刻。
+  · 鸿蒙：**`build-rust-core.sh`（Rust 核——独立脚本！）→ `build-host-app.sh`（HAP）** → install；
+    凭据 = HAP mtime ≥ 核 .a mtime；★`gen-fixtures` 的生成调用**必须显式传 `PROTEUS_APP_PROJECT`**
+    （继承不可靠——缺省 superapp 会覆盖 rawfile）。
+- ★**fresh 门禁的已知弱点**（独立复评指出，待整改）：按 mtime 判定 ⇒ `cp` 重拷旧图可绕过。
+  下一轮实施：截图时记录「源产物 md5 + 图文件 md5」台账，fresh 改为比对台账指纹。
+
 ---
 
 ## 5. 收尾（每项做完）

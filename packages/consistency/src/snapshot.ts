@@ -131,6 +131,9 @@ export interface NormalizedStyle {
   flexShrink?: number
   gap?: number
   overflow?: string
+  // ★★★overflow-x 项（2026-10-06）：逐轴溢出（Web 计算值；visible↔非visible 归一已由探针/CSE 同口径处理）
+  overflowX?: string
+  overflowY?: string
   /* ★★覆盖收官（2026-10-02·三批）：**偏移定位**（`top`/`left`）——
    *   条件可见：仅当 `position` 非 `static` 时浏览器/宿主才给出数值（static 下是 `auto`）。
    *   ⇒ 采集端只在拿到 px 数值时产出（auto/none ⇒ 不产出——与 width 等"无值不判"同口径）。 */
@@ -431,6 +434,8 @@ const STYLE_KEYS = new Set([
   'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight',
   'flexDirection', 'justifyContent', 'alignItems', 'alignSelf',
   'flexGrow', 'flexShrink', 'gap', 'overflow',
+  // ★★★overflow-x 项（2026-10-06）：逐轴溢出（与接口/覆盖表同批——闭集纪律）
+  'overflowX', 'overflowY',
   'top', 'left',   // ★覆盖收官：偏移定位（条件可见——见接口注释）
   // ★★★G-61 B3：L2 全覆盖新增键（与接口同批——闭集纪律：要么登记要么别产出）
   'right', 'bottom',
@@ -486,6 +491,7 @@ export function validateStyleSnapshot(snap: unknown): ValidationResult {
         //   校验器把新枚举键当数值项要求。这正是"两处必须同源"的教训——本仓纪律：闭集与校验同改。）
         k === 'display' || k === 'position' || k === 'visibility' || k === 'fontFamily'
         || k === 'flexDirection' || k === 'justifyContent' || k === 'alignItems' || k === 'alignSelf' || k === 'overflow'
+        || k === 'overflowX' || k === 'overflowY'   // ★★★overflow-x 项（2026-10-06）
         // ★★★G-61 B3：新增字符串族（与接口/STYLE_KEYS 同步——三处同改）
         || k === 'textAlign' || k === 'textOverflow' || k === 'textDecoration' || k === 'pointerEvents'
         || k === 'whiteSpace'   // ★★补齐（同 ②）

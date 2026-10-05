@@ -334,14 +334,29 @@ describe('★★★G-61 B1 · CSE 字段映射与 trace', () => {
     expect(r4.byKey[n4.key]!.unmapped.length).toBeGreaterThan(0)
   })
 
-  it('overflow x/y 相同 ⇒ overflow 字段；不同 ⇒ unmapped', () => {
+  it('★★★overflow-x 项：逐轴字段 + Web 归一回放（x==y 附发 overflow）', () => {
+    // 两侧同值 ⇒ 逐轴字段 + 附发统一 overflow（引擎面语义兼容；零 churn）
     const n1 = node('div', ['a'])
     const r1 = compute('.a { overflow: hidden }', n1)
     expect(r1.byKey[n1.key]!.fields['overflow']).toBe('hidden')
+    expect(r1.byKey[n1.key]!.fields['overflowX']).toBe('hidden')
+    expect(r1.byKey[n1.key]!.fields['overflowY']).toBe('hidden')
+    // x≠y ⇒ 逐轴字段（无 unmapped——已实现）；不再发统一 overflow
     const n2 = node('div', ['b'])
     const r2 = compute('.b { overflow-x: hidden; overflow-y: auto }', n2)
     expect(r2.byKey[n2.key]!.fields['overflow']).toBeUndefined()
-    expect(r2.byKey[n2.key]!.unmapped.some((u) => u.prop.startsWith('overflow'))).toBe(true)
+    expect(r2.byKey[n2.key]!.fields['overflowX']).toBe('hidden')
+    expect(r2.byKey[n2.key]!.fields['overflowY']).toBe('auto')
+    expect(r2.byKey[n2.key]!.unmapped.some((u) => u.prop.startsWith('overflow'))).toBe(false)
+    // ★Web 归一回放（真 Chromium 实测）：单轴 hidden ⇒ 另一轴 visible→auto
+    const n3 = node('div', ['c'])
+    const r3 = compute('.c { overflow-x: hidden }', n3)
+    expect(r3.byKey[n3.key]!.fields['overflowX']).toBe('hidden')
+    expect(r3.byKey[n3.key]!.fields['overflowY']).toBe('auto')
+    // \`clip\` 无内核对应 ⇒ 如实记 unmapped（不静默取近似值）
+    const n4 = node('div', ['d'])
+    const r4 = compute('.d { overflow-x: clip; overflow-y: hidden }', n4)
+    expect(r4.byKey[n4.key]!.unmapped.some((u) => u.prop.startsWith('overflow'))).toBe(true)
   })
 
   it('trace：逐字段可溯源（选择器 + 层 + 特异性 + 源序 + 简写来源）', () => {

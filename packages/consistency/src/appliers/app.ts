@@ -34,6 +34,8 @@ export const APP_LAYOUT_FIELDS: readonly string[] = [
   'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight',
   'flexGrow', 'flexShrink', 'flexBasis', 'gap', 'rowGap', 'columnGap',
   'display', 'position', 'top', 'left', 'right', 'bottom', 'overflow',
+  // ★★★overflow-x 项（2026-10-06）：逐轴溢出（内核/宿主按轴裁剪子内容）
+  'overflowX', 'overflowY',
   'gridTemplateColumns', 'gridTemplateRows', 'gridColumn', 'gridRow', 'aspectRatio', 'pointerEvents',
   'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
   'marginTop', 'marginRight', 'marginBottom', 'marginLeft',
@@ -201,6 +203,8 @@ export function mapStyleIRToApp(fields: Record<string, unknown>): AppMappingResu
       }
       const enumFields = new Set([
         'color', 'backgroundColor', 'display', 'position', 'overflow', 'visibility', 'pointerEvents',
+        // ★★★overflow-x 项（2026-10-06）：逐轴溢出（字符串枚举）
+        'overflowX', 'overflowY',
         'textAlign', 'textOverflow', 'textDecoration', 'flexDirection', 'flexWrap', 'justifyContent',
         'alignItems', 'alignContent', 'alignSelf', 'boxSizing', 'whiteSpace',
         'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor',

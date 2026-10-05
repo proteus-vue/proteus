@@ -182,6 +182,42 @@ export function transformStyleToWxss(
     if (pxCount > 0) trace?.add('style/px-to-rpx', { before: `${pxCount} 处 px`, after: `${pxCount} 处 rpx（rpxRatio=${opts.rpxRatio}）` })
   }
 
+  // ★★★overflow-x 项（2026-10-06）：**单轴 overflow 归一折叠**（Skyline 官方不支持单独设置
+  //   overflow-x/y——支持表原文）⇒ 任一块内任一轴非 visible（Web 归一后）⇒ 统一 overflow: hidden；
+  //   两轴均 visible ⇒ 移除（默认零声明）。与 App 侧 normalizeOverflowFields **同一套 Web 归一规则**。
+  {
+    let n = 0
+    css = css.replace(/([^{}]+)\{([^{}]*)\}/g, (m, sel: string, decls: string) => {
+      if (!/overflow(-[xy])?\s*:/.test(decls)) return m
+      let x: string | null = null
+      let y: string | null = null
+      let imp = false
+      const kept: string[] = []
+      for (const p of decls.split(';')) {
+        const t = p.trim()
+        if (!t) continue
+        const mx = /^overflow-x\s*:\s*([a-z-]+)(\s*!important)?$/i.exec(t)
+        const my = /^overflow-y\s*:\s*([a-z-]+)(\s*!important)?$/i.exec(t)
+        if (mx) { x = mx[1]!.toLowerCase(); if (mx[2]) imp = true; continue }
+        if (my) { y = my[1]!.toLowerCase(); if (my[2]) imp = true; continue }
+        const mo = /^overflow\s*:\s*([a-z-]+)\s+([a-z-]+)(\s*!important)?$/i.exec(t)
+        if (mo) {
+          x = mo[1]!.toLowerCase(); y = mo[2]!.toLowerCase(); if (mo[3]) imp = true
+          continue
+        }
+        kept.push(p)
+      }
+      if (x === null && y === null) return m
+      const vx = x ?? 'visible'
+      const vy = y ?? 'visible'
+      const clipped = vx !== 'visible' || vy !== 'visible'
+      kept.push(clipped ? `overflow: hidden${imp ? ' !important' : ''}` : '')
+      n++
+      return `${sel}{${kept.filter(Boolean).join('; ')}}`
+    })
+    if (n > 0) trace?.add('style/overflow-collapse', { before: `${n} 处单轴/两值 overflow 声明`, after: '归一折叠为统一 overflow（Skyline 不支持单轴）' })
+  }
+
   // ★注释已在函数入口屏蔽（见上方），此处及后续第 4 步正则均安全。
 
   // ★平台化薄接缝：Skyline 特有降级/警告仅 Skyline 产物需要；webview 渲染引擎亦存在（微信 WebView 组件），

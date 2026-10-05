@@ -34,6 +34,9 @@ export const SEMANTIC_FIELD_SNAPSHOT_KEYS: Readonly<Record<string, readonly stri
   right: ['right'],
   bottom: ['bottom'],
   overflow: ['overflow'],
+  // ★★★overflow-x 项（2026-10-06）：逐轴溢出进 semantic——读数键 = Web 计算值（含 visible→auto 归一）
+  overflowX: ['overflowX'],
+  overflowY: ['overflowY'],
   aspectRatio: ['aspectRatio'],
   pointerEvents: ['pointerEvents'],
   /* ── flex ── */

@@ -600,12 +600,20 @@ export function computeTree(roots: CseNode[], sheet: CseStyleSheet, opts: Comput
     // ⑥ StyleIR 字段映射
     const fields: Record<string, unknown> = {}
     const unmapped: Array<{ prop: string; value: string }> = []
-    // ★overflow 合并（x/y 相同 ⇒ overflow 字段；不同 ⇒ v1 **记 unmapped**——不静默取一边）
-    const ov = resolveOverflowField(computed)
-    if (ov !== null) {
-      fields['overflow'] = ov
-      const t = trace['overflow-x'] ?? trace['overflow-y']
-      if (t) trace['overflow'] = t
+    // ★★★overflow-x 项（2026-10-06 · css:next P0·10×）：**逐轴字段 + Web 归一回放**（CSS Overflow 3）。
+    //   · 归一（真 Chromium getComputedStyle 实测）：一侧 visible、另一侧非 visible 且非 clip ⇒ visible→auto；
+    //   · 逐轴恒发 overflowX/overflowY（IR 保真）；x==y 时**附发** overflow（兼容既有引擎面语义）；
+    //   · 值集 = 内核封闭集（visible/hidden/scroll/auto）——`clip` 无内核对应 ⇒ 如实记 unmapped。
+    const ovf = resolveOverflowFields(computed)
+    if (ovf !== null) {
+      fields['overflowX'] = ovf.x
+      fields['overflowY'] = ovf.y
+      if (ovf.x === ovf.y) fields['overflow'] = ovf.x
+      const tx = trace['overflow-x']
+      const ty = trace['overflow-y']
+      if (tx) trace['overflowX'] = tx
+      if (ty) trace['overflowY'] = ty
+      if (ovf.x === ovf.y && (tx ?? ty)) trace['overflow'] = (tx ?? ty)!
     } else {
       for (const p of ['overflow-x', 'overflow-y'] as const) {
         const w = winnersByProp.get(p)
@@ -810,14 +818,26 @@ function normalizeGridTrack(v: string): string {
   return v.trim().replace(/\s+/g, ' ')
 }
 
-export { resolveOverflowField, resolveBorderRadiusFields }
+export { resolveOverflowFields, resolveBorderRadiusFields }
 
-/** overflow-x/y 合并（两侧相同 ⇒ overflow 字段；不同 ⇒ null + unmapped） */
-function resolveOverflowField(computed: Record<string, CssComputedValue>): string | null {
-  const x = computed['overflow-x']
-  const y = computed['overflow-y']
-  if (typeof x !== 'string' || typeof y !== 'string') return null
-  return x === y ? x : null
+/**
+ * overflow-x/y → **归一后的逐轴值**（Web 真值，CSS Overflow 3）。
+ *   · 两侧均未声明 ⇒ null（不发字段——零 churn）；
+ *   · 值集 = 内核封闭集（visible/hidden/scroll/auto）：命中 `clip`/未知值 ⇒ null（调用方记 unmapped）；
+ *   · **归一**（真 Chromium getComputedStyle 实测）：一侧 visible、另一侧非 visible 且非 clip ⇒ visible→auto
+ *     （`overflow-x: hidden` ⇒ x=hidden · y=auto；`overflow-x: auto` ⇒ x=auto · y=auto）。
+ */
+function resolveOverflowFields(computed: Record<string, CssComputedValue>): { x: string; y: string } | null {
+  const rawX = computed['overflow-x']
+  const rawY = computed['overflow-y']
+  if (typeof rawX !== 'string' && typeof rawY !== 'string') return null
+  let x = typeof rawX === 'string' ? rawX : 'visible'
+  let y = typeof rawY === 'string' ? rawY : 'visible'
+  const supported = (v: string): boolean => v === 'visible' || v === 'hidden' || v === 'scroll' || v === 'auto'
+  if (!supported(x) || !supported(y)) return null
+  if (x === 'visible' && y !== 'visible') x = 'auto'
+  if (y === 'visible' && x !== 'visible') y = 'auto'
+  return { x, y }
 }
 
 /**

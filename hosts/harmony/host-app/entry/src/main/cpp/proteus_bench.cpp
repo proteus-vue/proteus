@@ -134,7 +134,10 @@ static void parseIntArray(const std::string& s, const char* key, std::vector<int
 }
 
 /** 几何记录 */
-struct Rect { float x, y, w, h; };
+struct Rect { float x, y, w, h;
+    // ★★★overflow-x 项（2026-10-06）：**有效裁剪矩形**（祖先链交集；内核 rects 的 clipX/clipY/clipW/clipH）。
+    //   hasClip=false ⇒ 不裁剪（宿主端零行为变化）。
+    bool hasClip = false; float cx = 0, cy = 0, cw = 0, ch = 0; };
 
 /**
  * ★★提取 `"nodes":[…]` 子串（**容忍任意空白**）。
@@ -596,7 +599,17 @@ static void parseRects(const std::string& s, std::unordered_map<int, Rect>& out)
         jnum(s.c_str() + q, segEnd - q, "y", &y);
         jnum(s.c_str() + q, segEnd - q, "width", &w);
         jnum(s.c_str() + q, segEnd - q, "height", &h);
-        out[id] = Rect{(float)x, (float)y, (float)w, (float)h};
+        Rect r{(float)x, (float)y, (float)w, (float)h};
+        // ★★★overflow-x 项（2026-10-06）：有效裁剪矩形（**扁平键**——内核刻意不用嵌套对象：
+        //   嵌套会把本函数的"找 '}' 当段尾"截断 ⇒ 几何全 0）
+        double cxx = 0, cyy = 0, cww = 0, chh = 0;
+        if (jnum(s.c_str() + q, segEnd - q, "clipX", &cxx)) {
+            jnum(s.c_str() + q, segEnd - q, "clipY", &cyy);
+            jnum(s.c_str() + q, segEnd - q, "clipW", &cww);
+            jnum(s.c_str() + q, segEnd - q, "clipH", &chh);
+            r.hasClip = true; r.cx = (float)cxx; r.cy = (float)cyy; r.cw = (float)cww; r.ch = (float)chh;
+        }
+        out[id] = r;
         p = segEnd + 1;
     }
 }
@@ -4490,6 +4503,13 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
         snprintf(head, sizeof(head), "%s{\"kind\":\"background\",\"x\":%.2f,\"y\":%.2f,\"w\":%.2f,\"h\":%.2f,\"color\":%u,\"radius\":%.2f",
                  emitted > 0 ? "," : "", r.x * density, r.y * density, r.w * density, r.h * density, bg, radius * density);
         arr += head;
+        // ★★★overflow-x 项（2026-10-06）：有效裁剪矩形（物理 px——与几何同乘 density；render 侧 SetClip）
+        if (ri->second.hasClip) {
+            char cb[128];
+            snprintf(cb, sizeof(cb), ",\"clipX\":%.2f,\"clipY\":%.2f,\"clipW\":%.2f,\"clipH\":%.2f",
+                     ri->second.cx * density, ri->second.cy * density, ri->second.cw * density, ri->second.ch * density);
+            arr += cb;
+        }
         // ★批次 10：盒阴影（扁平数值键）
         {
             std::string shSub = extractValueAfterKey(it, "boxShadow", '{', '}');

@@ -12,6 +12,7 @@
 //      → {viewport, nodes}（**视口为占位**：真视口由鸿蒙侧运行时按真实屏幕传入，排版时解析 widthRatio）
 //   ② app-4050-tree.json —— 与 Android **同一份夹具**（直接从 android assets 复制，字节级同源）
 import fs from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { instantiateTemplate } from '../../packages/slot-runtime/src/index.ts'
@@ -112,6 +113,22 @@ function copyAppScreenContent() {
   const proj = process.env.PROTEUS_APP_PROJECT || 'superapp'
   const src = path.join(ROOT, `${proj}/dist/app/harmony/screen-content.json`)
   const name = 'app-screen-content.json'
+  // ★★★修（2026-10-06 实锤坑）：**复制前先按 harmony 平台生成**——此前依赖调用方手工跑
+  //   build:harmony；产物一陈旧就静默复制**旧页集**（本轮实锤：新增 overflow 屏缺失 ⇒ 宿主
+  //   renderCurrent 回落渲染别的屏、截图错页；三端里 Android 正常、iOS/鸿蒙错——极具迷惑性）。
+  //   gen-app-screen-content 的 --platform 缺省是 android（装置默认）——此处必须显式 harmony。
+  try {
+    // ★★env 必须显式传（2026-10-06 实锤：脚本被未带 PROTEUS_APP_PROJECT 的 shell 调起时，
+    //   gen 缺省 superapp ⇒ rawfile 的 screen-content/bundle 双双被覆盖成 superapp ⇒ App 显示首页）
+    execFileSync('npx', ['tsx', path.join(ROOT, 'hosts/shared/bridge/gen-app-screen-content.mjs'), '--platform', 'harmony'], {
+      cwd: ROOT,
+      stdio: 'pipe',
+      env: { ...process.env, PROTEUS_APP_PROJECT: proj },
+    })
+    console.log('  ✓ app-screen-content（harmony 平台）已按当前路由重新生成')
+  } catch (e) {
+    console.log('  ⚠ harmony 平台屏内容生成失败（沿用既有产物）：' + String(e).slice(0, 160))
+  }
   if (!fs.existsSync(src)) {
     console.log(`  ⚠ 缺 ${path.relative(ROOT, src)}——跳过（先跑 ${proj} 的 build:harmony）`)
     return

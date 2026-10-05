@@ -57,6 +57,10 @@ export const APP_LAYOUT_FIELDS = [
   'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight',
   'margin', 'padding', 'flexDirection', 'flexWrap', 'justifyContent', 'alignItems', 'alignContent', 'alignSelf',
   'flexGrow', 'flexShrink', 'flexBasis', 'gap', 'rowGap', 'columnGap', 'display', 'position', 'top', 'left', 'right', 'bottom', 'overflow',
+  // ★★★overflow-x 项（2026-10-06 · css:next P0·10×）：**逐轴溢出**（长手 overflow-x/y + overflow 1–2 值）。
+  //   内核/宿主按轴裁剪子内容；归一化（visible↔非visible ⇒ visible→auto）在**级联后的最终样式**上执行
+  //   （见 normalizeOverflowFields——per-rule 归一会被跨规则级联破坏）。
+  'overflowX', 'overflowY',
   'gridTemplateColumns', 'gridTemplateRows', 'gridColumn', 'gridRow', 'aspectRatio', 'pointerEvents',
   // ★★全端对齐批（2026-10-05 · white-space）：文本换行/空白语义（值透传宿主消费；内核忽略该键）——
   //   此前 App 端只有单行模型是历史缺口；现五端实现（Android/iOS/鸿蒙/MP 对齐 Web 基准）。
@@ -75,6 +79,9 @@ export const APP_ENUM_VALUES: Record<string, readonly string[]> = {
   display: ['flex', 'grid', 'none'],
   position: ['static', 'relative', 'absolute'],
   overflow: ['visible', 'hidden', 'scroll', 'auto'],
+  // ★★★overflow-x 项（同上）：逐轴同集（归一化后出现 auto）
+  overflowX: ['visible', 'hidden', 'scroll', 'auto'],
+  overflowY: ['visible', 'hidden', 'scroll', 'auto'],
   flexDirection: ['row', 'column', 'row-reverse', 'column-reverse'],
   flexWrap: ['nowrap', 'wrap', 'wrap-reverse'],
 }
@@ -719,7 +726,25 @@ export function parseStaticStyle(
         pushDiag(`\`${rawKey}: ${rawVal}\` 未解析（支持 <n> 或 <w>/<h> 或 auto）——已跳过`)
         continue
       }
-      if (key === 'flexDirection' || key === 'flexWrap' || key === 'justifyContent' || key === 'alignItems' || key === 'alignContent' || key === 'alignSelf' || key === 'position' || key === 'display' || key === 'overflow') {
+      if (key === 'flexDirection' || key === 'flexWrap' || key === 'justifyContent' || key === 'alignItems' || key === 'alignContent' || key === 'alignSelf' || key === 'position' || key === 'display' || key === 'overflow' || key === 'overflowX' || key === 'overflowY') {
+        // ★★★overflow-x 项（2026-10-06）：`overflow` **两值简写**（<x> <y>，CSS 语法）⇒ 逐轴字段
+        if (key === 'overflow') {
+          const toks = splitTopLevelSpaces(rawVal)
+          if (toks.length === 2) {
+            const ox = toks[0]!.trim().toLowerCase()
+            const oy = toks[1]!.trim().toLowerCase()
+            const allow = APP_ENUM_VALUES.overflow
+            if (allow.includes(ox) && allow.includes(oy)) {
+              out.overflowX = ox
+              out.overflowY = oy
+              delete out.overflow
+              markImportant('overflowX'); markImportant('overflowY')
+              continue
+            }
+            pushDiag(`\`overflow: ${rawVal}\` 含非法值（仅认 ${allow.join(' / ')}）——已跳过（用引擎默认）`)
+            continue
+          }
+        }
         // ★★★枚举值**校验**（2026-10-04 修：真机 RustLayout.create 失败暴露）——内核只认封闭集；
         //   不支持的值（如 `display: block/grid`、`position: sticky`）⇒ **诊断 + 跳过**（用内核默认），
         //   否则原样透传会让**整棵树建不起来**（App/小程序端页面全崩）。
@@ -1202,6 +1227,38 @@ export function parseStaticStyle(
 }
 
 /**
+ * ★★★overflow-x 项（2026-10-06）：**Web 归一 + 形态收敛**（必须挂在**级联后的最终样式**上调用——
+ *   per-rule 归一会被跨规则级联破坏，如 `.a{overflow-x:hidden}` + `.b{overflow-y:scroll}`）。
+ *   · **归一**（CSS Overflow 3 计算值规则，真 Chromium getComputedStyle 实测）：一侧 visible、
+ *     另一侧非 visible ⇒ visible 归为 auto（`overflow-x: hidden` ⇒ x=hidden · y=auto）；
+ *   · **收敛**：x==y ⇒ 统一 `overflow`（既有引擎面语义、零 churn）；x≠y ⇒ 逐轴字段；全 visible ⇒ 删除。
+ */
+export function normalizeOverflowFields(style: Record<string, unknown>): void {
+  const rawX = typeof style.overflowX === 'string' ? (style.overflowX as string) : undefined
+  const rawY = typeof style.overflowY === 'string' ? (style.overflowY as string) : undefined
+  const uniform = typeof style.overflow === 'string' ? (style.overflow as string) : undefined
+  if (rawX === undefined && rawY === undefined && uniform === undefined) return
+  let x = rawX ?? uniform ?? 'visible'
+  let y = rawY ?? uniform ?? 'visible'
+  const ok = (v: string): boolean => v === 'visible' || v === 'hidden' || v === 'scroll' || v === 'auto'
+  if (!ok(x) || !ok(y)) return // 非法值在解析期已诊断（此处不动——不静默猜测）
+  if (x === 'visible' && y !== 'visible') x = 'auto'
+  if (y === 'visible' && x !== 'visible') y = 'auto'
+  delete style.overflowX
+  delete style.overflowY
+  if (x === 'visible' && y === 'visible') delete style.overflow
+  else if (x === y) style.overflow = x
+  else {
+    // x≠y（归一后两轴均非 visible）⇒ **折叠单字段** 'hidden' 保留：
+    //   · 内核/宿主判"裁不裁"用单字段（App 域内 auto/scroll 无滚动交互、渲染 = 静态裁剪 ⇒ 折叠无损）；
+    //   · 逐轴字段同步保留（IR/快照保真、跨端可表达性；宿主渲染不用逐轴）。
+    style.overflow = 'hidden'
+    style.overflowX = x
+    style.overflowY = y
+  }
+}
+
+/**
  * ★★★C1（2026-10-04 · App 三端对齐缺口 C1）：**SFC `<style>` 选择器规则 → 可匹配的规则表**。
  *
  * 【为什么需要】App 路径**没有 CSS 引擎**——`buildLayoutTemplate` 只吃节点上的 **inline `style`**；
@@ -1662,10 +1719,8 @@ function noOpResetValue(key: string, val: string): Record<string, unknown> | nul
       return v === 'block' ? {} : null
     // ★★全端对齐批（2026-10-05）：`white-space` 移出 no-op 表——现为**真字段**（宿主消费：
     //   折行/保留空白/单行截断/裁切），处理见下方 LAYOUT_FIELDS 分支。
-    case 'overflowX':
-    case 'overflowY':
-      // ★批次 29：单轴 `overflow-*: visible` = 默认（no-op）；`hidden`/`auto` 等需分轴支持（诊断）。
-      return v === 'visible' ? {} : null
+    // ★★★overflow-x 项（2026-10-06）：overflowX/overflowY **移出 no-op 表**——显式 `visible` 也记录
+    //   （级联保真：`.b{overflow-x:visible}` 可覆盖 `.a{overflow-x:hidden}`；归一化在最终样式上做）。
     default:
       return null
   }
@@ -3219,6 +3274,8 @@ export function buildLayoutTemplate(
       if (style.pointerEvents === undefined && inherited.pointerEvents !== undefined) style.pointerEvents = inherited.pointerEvents
       if (style.pointerEvents !== undefined) childInherited.pointerEvents = style.pointerEvents
       if (style.visibility !== undefined) childInherited.visibility = style.visibility
+      // ★★★overflow-x 项（2026-10-06）：**Web 归一 + 形态收敛**（级联与 inline 均已合并完毕）
+      normalizeOverflowFields(style)
       const node: LayoutNode = { id, parentId, tag, style }
       if (nodeListId !== undefined) node.listId = nodeListId
       if (isComponentTag) node.component = tag

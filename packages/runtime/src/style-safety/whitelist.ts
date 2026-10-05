@@ -36,6 +36,8 @@ const TEXT_ALIGN = ['left', 'center', 'right']
 const TEXT_WRAP = ['normal', 'nowrap', 'pre', 'pre-wrap', 'pre-line', 'break-spaces']
 /** ★★★逐边 border 批（2026-10-05）：边框线型封闭集（per-side style；'' 缺省=solid）。 */
 const BORDER_STYLE = ['solid', 'dashed', 'dotted', 'none']
+/** ★★★overflow-x 项（2026-10-06）：溢出封闭集（与内核 Overflow 枚举同集；Web 的 clip 不支持⇒诊断）。 */
+const OVERFLOW = ['visible', 'hidden', 'scroll', 'auto']
 
 export const PROP_TYPES = {
   Length: isLength,
@@ -48,6 +50,7 @@ export const PROP_TYPES = {
   TextAlign: isEnum(TEXT_ALIGN),
   TextWrap: isEnum(TEXT_WRAP),
   BorderStyle: isEnum(BORDER_STYLE),
+  Overflow: isEnum(OVERFLOW),
   Transform: (v: unknown): boolean => typeof v === 'string' && /^(translate|scale|rotate|skew)/i.test(v.trim()),
   TransformOrigin: (v: unknown): boolean => typeof v === 'string' && /^(left|right|top|bottom|center|\d+)/i.test(v.trim()),
 } as const

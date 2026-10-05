@@ -271,6 +271,19 @@ public class ProteusHostView extends ViewGroup {
 
     /** ★批次 34：节点 id → **逐角圆角掩码**（bit0=TL/1=TR/2=BR/3=BL；15=统一，缺省不存） */
     private final Map<Integer, Integer> nodeRadiusCorners = new HashMap<>();
+
+    /** ★★★overflow-x 项（2026-10-06）：逐节点**有效裁剪矩形**（祖先链 overflow 非 visible 盒的交集；
+     *   内核 `rects` 的 clip 字段下发）。null = 不裁剪。
+     *   【为什么必须由内核下发】裁剪区 = 所有祖先盒交集（含**定位/平移/滚动**后的真实几何）——
+     *   宿主自己算会与内核的第二份布局数学分叉（本仓"单一实现"纪律）。 */
+    private final Map<Integer, float[]> nodeClipRects = new HashMap<>();
+
+    public void setNodeClipRect(int nodeId, float x, float y, float w, float h) {
+        nodeClipRects.put(nodeId, new float[]{x, y, w, h});
+    }
+
+    public void clearNodeClipRect(int nodeId) { nodeClipRects.remove(nodeId); }
+
     /** 场景注入某节点的逐角圆角掩码（仅**非统一**时注入——统一走 Cmd.radius） */
     public void setNodeRadiusCorners(int nodeId, int mask) {
         if (mask == 15) { nodeRadiusCorners.remove(nodeId); return; }
@@ -1189,6 +1202,7 @@ public class ProteusHostView extends ViewGroup {
         nodeTransformOrigin.clear();
         nodeStaticTx.clear();
         nodeRadiusCorners.clear();
+        nodeClipRects.clear();   // ★★★overflow-x 项：逐树状态（id 每树重分配——防幽灵裁剪）
         nodeFontRole.clear();
         animTx.clear();
         animColor.clear();
@@ -2278,9 +2292,14 @@ public class ProteusHostView extends ViewGroup {
             // ★C1：有裁剪也必须 save/restore（clipPath 是画布状态，不 restore 会**泄漏到后面所有指令**）
             // ★C1：有裁剪声明就必须 save/restore（**含静态裁剪**——首版只认动画中的 ⇒ 静态漏 restore）
             final boolean hasClip = ids != null && i < ids.length && clipKindOf(ids[i]) > 0;
+            // ★★★overflow-x 项（2026-10-06）：**overflow 裁剪**（祖先链交集，内核下发）——
+            //   与 clipPath（节点自身形状）天然可叠加：先 overflow 裁（子树约束）、后 clipPath（形状）。
+            //   ★进入 save/restore 判定（不 restore 会泄漏到后面所有指令——与 clipPath 同款纪律）。
+            final float[] ovfClip = (ids != null && i < ids.length && ids[i] >= 0) ? nodeClipRects.get(ids[i]) : null;
             final boolean xf = (tf != null && (tfTx != 0f || tfTy != 0f || tf[2] != 1f || tf[3] != 0f || has3d))
-                    || hasClip;
+                    || hasClip || ovfClip != null;
             final int save = xf ? canvas.save() : -1;
+            if (ovfClip != null) canvas.clipRect(ovfClip[0], ovfClip[1], ovfClip[0] + ovfClip[2], ovfClip[1] + ovfClip[3]);
             // ★★软边遮罩（mask v1）：**saveLayer 包裹**（开层 → 画内容 → 用 DST_IN 叠渐变 → 还原）。
             //   揭示色标来自 `animMask`（内核已算好）或建树静态声明——宿主零揭示数学。
             //   ★与 clipPath 的差异：clip 是"硬边裁剪"（直接改画布状态），遮罩是"软边合成"
@@ -3086,7 +3105,9 @@ public class ProteusHostView extends ViewGroup {
         // ① 无逐帧/逐节点覆盖（动画全静）+ 无 svg/clip 静态表
         if (!animTx.isEmpty() || !animColor.isEmpty() || !animGrad.isEmpty() || !animMask.isEmpty()
                 || !animStroke.isEmpty() || !animClip.isEmpty() || !animGlow.isEmpty()
-                || !animTextColor.isEmpty() || !nodeSvgStroke.isEmpty() || !nodeClipKindAndBase.isEmpty()) {
+                || !animTextColor.isEmpty() || !nodeSvgStroke.isEmpty() || !nodeClipKindAndBase.isEmpty()
+                // ★★★overflow-x 项（2026-10-06）：有 overflow 裁剪节点 ⇒ 排除（快路径零查表，看不到 clip 表）
+                || !nodeClipRects.isEmpty()) {
             return false;
         }
         if (skipCmdIndices != null && !skipCmdIndices.isEmpty()) return false;

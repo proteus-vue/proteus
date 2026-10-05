@@ -63,10 +63,12 @@ body {
   margin: 20px 0 8px;
 }
 
-/* 案例卡：真实业务形态的容器（列表/卡片） */
+/* 案例卡：真实业务形态的容器（列表/卡片）
+   ★单边 margin（决策 #59 纪律）：**不设 margin-bottom**——相邻间距由下一段 `.cc-sec` 的
+   margin-top 承担（Web 折叠 = max(卡 mb, 标题 mt)；App/Skyline 不折叠 = 两者之和）。
+   双边会引入"App 端比 Web 多一份间距"的系统性节奏差（子代理终评实锤：B 案下缘与 C 卡关系分叉）。 */
 .cc-card {
   background-color: var(--cc-surface);
   border-radius: 10px;
   padding: 12px 14px;
-  margin-bottom: 10px;
 }

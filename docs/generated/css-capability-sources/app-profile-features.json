@@ -253,9 +253,11 @@
       "tier": "L2",
       "strategy": "直映射",
       "probe": [
-        "overflow"
+        "overflow",
+        "overflow-x",
+        "overflow-y"
       ],
-      "note": "引擎封闭集；auto 折叠为 taffy Scroll"
+      "note": "引擎封闭集；auto 折叠为 taffy Scroll；★★★overflow-x 项（2026-10-06）：**单轴 overflow-x/y 已支持**（长手 + overflow 1–2 值简写；Web 归一回放：visible↔非visible ⇒ visible→auto；逐轴字段 overflowX/overflowY）+ 三端宿主**子内容裁剪**（Android 画布 clipRect / iOS masksToBounds / 鸿蒙 SetClip——内核 rects 下发有效裁剪矩形）"
     },
     {
       "id": "value-shorthand",

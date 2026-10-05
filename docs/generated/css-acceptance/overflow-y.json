@@ -1,0 +1,160 @@
+{
+  "_note": "★CSS 能力逐项验收包（用户指定流程：实现一个 → 全端对齐视觉验收一个）。gates：implemented（IR 在册）/ parity（真 Chromium 同构样本与 CSE 值一致）/ endsMapped（三端可表达）。★视觉验收（像素级）仍由独立子代理按 Web 基准并排做——本包只归档**机器可判**的三段；pass=true 表示\"可以进入视觉验收\"，不等于\"视觉已验收\"。",
+  "id": "overflow-y",
+  "kind": "property",
+  "verifiedAt": "2026-10-05T17:41:07.621Z",
+  "implEvidence": {
+    "impl": "implemented",
+    "implNote": "IR 注册表在册（scope=semantic · 矩阵 Overflow）",
+    "inIrRegistry": true,
+    "irScope": "semantic",
+    "inCompilerFold": true,
+    "matrixLevel": "Overflow",
+    "webSupport": null,
+    "usage": 10,
+    "priority": "done"
+  },
+  "parity": {
+    "ran": true,
+    "pass": true,
+    "detail": [
+      "IR `overflowY` = \"hidden\"（与浏览器样本 overflow-y: hidden 一致）"
+    ],
+    "css": "overflow-y: hidden",
+    "irField": "overflowY",
+    "irValue": "hidden",
+    "computedProbe": {
+      "align-items": "normal",
+      "background-color": "rgba(0, 0, 0, 0)",
+      "border-bottom-color": "rgb(0, 0, 0)",
+      "border-bottom-right-radius": "0px",
+      "border-bottom-style": "none",
+      "border-bottom-width": "0px",
+      "border-left-color": "rgb(0, 0, 0)",
+      "border-left-width": "0px",
+      "border-right-color": "rgb(0, 0, 0)",
+      "border-right-width": "0px",
+      "border-top-color": "rgb(0, 0, 0)",
+      "border-top-left-radius": "0px",
+      "border-top-style": "none",
+      "border-top-width": "0px",
+      "bottom": "auto",
+      "color": "rgb(0, 0, 0)",
+      "flex-direction": "row",
+      "font-size": "16px",
+      "justify-content": "normal",
+      "justify-self": "auto",
+      "left": "auto",
+      "letter-spacing": "normal",
+      "line-height": "normal",
+      "opacity": "1",
+      "overflow-x": "auto",
+      "overflow-y": "hidden",
+      "right": "auto",
+      "text-align": "start",
+      "top": "auto",
+      "word-break": "normal"
+    }
+  },
+  "endExpressibility": {
+    "web": "基准端（浏览器原生——A 档）",
+    "skyline": "可表达（overflow）",
+    "app": "可表达（dto: overflowY · ops: layout.overflowY）",
+    "skylineUnsupported": [],
+    "appUnsupported": []
+  },
+  "gates": {
+    "implemented": true,
+    "parity": true,
+    "endsMapped": true
+  },
+  "pass": true,
+  "nextStep": "机器判据三段已过 → 进入**视觉验收**：生成并排产物（node scripts/gen-baseline-side-by-side.mjs）+ 独立子代理按 Web 基准评审",
+  "visual": {
+    "_note": "★视觉验收结论（独立子代理按 Web 基准并排图评审；来源 = css-conformance/results/side-by-side/）。verdict: pass（与 Web 基准无可归因差异）/ fail（有实差异——见 caseIssues）/ unclear（图不足以判）。纪律：左半恒为 Web 基准（D1）；不看不清不编（unclear）。",
+    "reviewedAt": "2026-10-05T18:19:53.885Z",
+    "reviewedBy": "independent-visual-subagent",
+    "sideBySideDir": "css-conformance/results/side-by-side/",
+    "summary": {
+      "fails": 0,
+      "ends": "web:pass · mp:pass · android:pass · ios:pass · harmony:pass"
+    },
+    "verdicts": [
+      {
+        "end": "web",
+        "verdict": "pass",
+        "caseIssues": [],
+        "evidence": "基准端（Chromium 390×844@2x，重采 01:56）。A/C 裁剪域 160×56 恰停盒缘（右缘 x=371 恒定、边界外残影 0）；B 260×114（红底 727→728 纯白贴 C 卡上缘、下缘方切），标题叠印红上；三案 bbox 两轮逐值一致（基准未漂移）。"
+      },
+      {
+        "end": "mp",
+        "verdict": "pass",
+        "caseIssues": [],
+        "evidence": "A/C 160×55（裁、残影 0、TL R6 在）；B 可见≈261×114（红底 575→576 起白、无 #f4f5f7 灰缝、下缘方切）；标题叠印红上。节奏修复对本端无副作用。"
+      },
+      {
+        "end": "android",
+        "verdict": "pass",
+        "caseIssues": [
+          {
+            "case": "case-visible",
+            "issue": "（终评）B 子块全高 120 + 3.3 CSS 灰缝 + R6 下圆角（App 相邻 margin 不折叠的系统性节奏差）——已修复（页面单边 margin 化 #59 纪律）",
+            "severity": "minor",
+            "status": "fixed"
+          },
+          {
+            "case": "page",
+            "issue": "（复评第一轮）修复未进 APK（只跑 build-batch 未跑 build-and-run——bundle 更新但 APK 未重打包，cp 刷新 mtime 绕过 fresh）——已按 md5 进包凭据重打重装",
+            "severity": "minor",
+            "status": "fixed"
+          }
+        ],
+        "evidence": "复验（02:18 截图 ≥ 02:17 APK ≥ 01:55 修复）：① md5 凭据：APK 内嵌 bundle = 7989b4a7… = assets = bridge/dist，APK 内 margin-bottom:10 节点数 0（修复前 14）；② 像素：B 260×113.3（与 Web 114 一致）、红底 y1128 与 C 卡上缘逐像素齐平、五列采样全 #c6504b→#ffffff 无过渡带、全宽灰缝像素 0；③ A/C 160×56、右缘直、残影 0、TL R6 无回退；机器探针四页全 PASS。"
+      },
+      {
+        "end": "ios",
+        "verdict": "pass",
+        "caseIssues": [
+          {
+            "case": "case-visible",
+            "issue": "（终评）同 android（节奏差）——已修复生效",
+            "severity": "minor",
+            "status": "fixed"
+          },
+          {
+            "case": "case-hidden",
+            "issue": "（终评观察）覆盖量 8 CSS vs web 6——标题行盒（16 vs 18 CSS）跨端文本度量差，非 overflow 语义（同页各节间距同为 ±2 CSS）",
+            "severity": "minor",
+            "status": "named"
+          }
+        ],
+        "evidence": "B 可见 260×112（红底 1103→1104 即纯白 C 卡上缘；无灰缝、下缘方切）；B 标题 237.7→227.7 / C 标题 371.8→351.7（节奏修复正向收敛，与 Web 中心差 +1~+6.7 CSS）；A/C 160×56、残影 0；卡 R10 圆角在且未隐含裁剪（本轮修复核验通过）。"
+      },
+      {
+        "end": "harmony",
+        "verdict": "pass",
+        "caseIssues": [
+          {
+            "case": "case-hidden",
+            "issue": "（终评）clip 吃掉节点自身圆角（A/C 子块 TL 直角）——已修复（RoundRect clip：只圆「与节点盒重合且有圆角」的角）",
+            "severity": "minor",
+            "status": "fixed"
+          },
+          {
+            "case": "case-single-axis",
+            "issue": "（终评）同 case-hidden——已修复",
+            "severity": "minor",
+            "status": "fixed"
+          },
+          {
+            "case": "case-visible",
+            "issue": "（终评）同 android（节奏差）——已修复生效",
+            "severity": "minor",
+            "status": "fixed"
+          }
+        ],
+        "evidence": "A 子块 TL R6 圆角恢复（逐行剖面 27,15,12,10,…→0；修复前近直角）· C 同（24,16,12,…）；B 可见 259.7×110.6（红底 1272→1274 白、无灰缝、下缘方切）；TR 保持方角（x650 直边）、B（无 clip）圆角未受影响；A/C 159.7×55.7、残影 0、卡 R10 在。"
+      }
+    ]
+  }
+}

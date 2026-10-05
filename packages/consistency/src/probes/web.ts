@@ -177,6 +177,8 @@ function styleOf(el: Element, win: Window): NormalizedStyle {
   for (const [prop, key] of [
     ['flex-direction', 'flexDirection'], ['justify-content', 'justifyContent'],
     ['align-items', 'alignItems'], ['align-self', 'alignSelf'], ['overflow', 'overflow'],
+    // ★★★overflow-x 项（2026-10-06）：逐轴计算值（真 Chromium 已归一：visible↔非visible ⇒ visible→auto）
+    ['overflow-x', 'overflowX'], ['overflow-y', 'overflowY'],
   ] as const) {
     const v = cs.getPropertyValue(prop)
     if (v) (styles as Record<string, unknown>)[key] = v

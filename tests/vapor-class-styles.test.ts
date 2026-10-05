@@ -402,10 +402,12 @@ describe('★C1 最小切片 · SFC <style> 单类规则 → class→节点样�
     // ★★全端对齐批：min-height:100vh ⇒ minHeightPct（页面铺满——此前落诊断被丢）
     const vhOut = parseStaticStyle('min-height: 100vh', () => {}) as { minHeightPct?: number }
     expect(vhOut.minHeightPct, 'min-height:100vh ⇒ minHeightPct=1').toBe(1)
-    // overflow-y:hidden 仍是真缺口 ⇒ 诊断
+    // ★★★overflow-x 项（2026-10-06）：overflow-y:hidden **已实现**（逐轴字段直传）——不再是缺口；
+    //   级联后的形态收敛由 normalizeOverflowFields 处理（归一 visible→auto）。
     const dy: string[] = []
-    parseStaticStyle('overflow-y: hidden', (m: string) => dy.push(m))
-    expect(dy.length > 0, 'overflow-y:hidden 仍诊断（单轴未接）').toBe(true)
+    const oy = parseStaticStyle('overflow-y: hidden', (m: string) => dy.push(m)) as { overflowY?: string }
+    expect(dy.length, 'overflow-y:hidden 不应诊断（已实现）').toBe(0)
+    expect(oy.overflowY, 'overflow-y:hidden 直传逐轴字段').toBe('hidden')
     // 真缺口仍诊断（inline 才是不支持；block 是默认）
     const d2: string[] = []
     parseStaticStyle('display: inline', (m: string) => d2.push(m))
