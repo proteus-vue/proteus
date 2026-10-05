@@ -7,8 +7,18 @@
         android:debuggable="true"
         android:allowBackup="false"
         android:hasCode="true">
+        <!-- ★★MainActivity = 验收装置（承载全部既有脚本：`am start -n .MainActivity` + `path` extra）。
+             ★★2026-10-05（批次 44）：**launcher 入口移到 .SuperappActivity**（图标点开即 superapp 真实
+             应用，不再是"运行 4050 测试"按钮页）。MainActivity 保留 exported=true（脚本走显式组件
+             启动，不依赖 launcher 归属）——既有脚本零改动（仅 launcher 触发从 monkey 换成显式 start）。 -->
         <activity
             android:name=".MainActivity"
+            android:exported="true"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|uiMode" />
+        <!-- ★★★批次 44：**superapp 真实应用**桌面图标入口（点开即见 superapp，可切 tab）。
+             取景/全屏由运行时设置（FLAG_FULLSCREEN + setDecorFitsSystemWindows(false)），与 L4/StressSfc 同款。 -->
+        <activity
+            android:name=".SuperappActivity"
             android:exported="true"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|uiMode">
             <intent-filter>

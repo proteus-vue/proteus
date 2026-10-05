@@ -3444,6 +3444,7 @@
     const executor = createScreenExecutor({
       host: ports.tree,
       anim: ports.anim,
+      ...opts.contentOf ? { contentOf: opts.contentOf } : {},
       plan: (t, targets, o) => routeTransitionBatches(t, targets, o ?? {}),
       onScreenMounted: opts.onScreenMounted ?? ((id) => stack.markRebuilt(id)),
       ...opts.onEvent ? { onEvent: opts.onEvent } : {}

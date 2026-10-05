@@ -59,7 +59,7 @@ echo "$INSTALL_OUT" | head -2
 # ── 2. 清旧日志 + 启动（日志清空要用 hdc shell；hdc 无 logcat -c 等价物 → 用 hilog 的 -r 或直接按时间过滤）──
 echo "==> 2. 启动（aa start）"
 HDC shell "aa force-stop $BUNDLE" >/dev/null 2>&1 || true
-START_OUT="$(HDC shell "aa start -a EntryAbility -b $BUNDLE" 2>&1)"
+START_OUT="$(HDC shell "aa start -a EntryAbility -b $BUNDLE --ps scene bench" 2>&1)"
 echo "$START_OUT" | head -3
 echo "$START_OUT" | grep -qiE "start ability successfully|successfully" || {
   echo "✗ 启动命令失败"; exit 1; }

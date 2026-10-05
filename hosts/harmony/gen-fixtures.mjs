@@ -101,6 +101,14 @@ function copyAppScreenContent() {
   } else {
     console.log('  ⚠ 缺 bundle-app-stack.js——跳过（先跑 node hosts/android/bridge/build-batch.mjs）')
   }
+  // ★★★批次 44（2026-10-05）：superapp 真实应用入口 bundle（桌面点开形态）——与 Android 同源复制
+  const bundleSa = path.join(ROOT, 'hosts/android/bridge/dist/bundle-superapp.js')
+  if (fs.existsSync(bundleSa)) {
+    fs.copyFileSync(bundleSa, path.join(RAWFILE, 'bundle-superapp.js'))
+    console.log(`  ✓ bundle-superapp.js：与 Android 同源复制（${fs.statSync(bundleSa).size}B）`)
+  } else {
+    console.log('  ⚠ 缺 bundle-superapp.js——跳过（先跑 node hosts/android/bridge/build-batch.mjs）')
+  }
   const proj = process.env.PROTEUS_APP_PROJECT || 'superapp'
   const src = path.join(ROOT, `${proj}/dist/app/harmony/screen-content.json`)
   const name = 'app-screen-content.json'

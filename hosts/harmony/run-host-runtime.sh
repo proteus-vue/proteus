@@ -34,7 +34,7 @@ echo "==> ① 安装 + 清场 + 启动"
 HDC install "$HAP" 2>&1 | grep -qiE "successfully|Success" || { echo "✗ 安装失败"; exit 1; }
 HDC shell "aa force-stop $BUNDLE" >/dev/null 2>&1 || true
 HDC shell "rm -f $FILES_DEV/host-runtime.json $FILES_DEV/host-shell.json" >/dev/null 2>&1 || true
-HDC shell "aa start -a EntryAbility -b $BUNDLE" >/dev/null 2>&1 | head -1
+HDC shell "aa start -a EntryAbility -b $BUNDLE --ps scene bench" >/dev/null 2>&1 | head -1
 
 echo "==> ② 等主报告（探针主动上报 ≤90s——零盲等）"
 if ! bash "$WAIT" --cmd "bash '$HERE/hdc.sh' shell 'hilog -x | grep -q PROTEUS_HOSTRT_DONE'" --timeout 90 --interval 3; then
@@ -49,7 +49,7 @@ bash "$WAIT" --cmd "bash '$HERE/hdc.sh' shell 'hilog -x | grep -q \"SHELL_EVENT 
   || { echo "✗ pause 未转发（键码 1 不对？）" >&2; exit 1; }
 
 echo "==> ④ 回前台 → onForeground → resume 转发"
-HDC shell "aa start -a EntryAbility -b $BUNDLE" >/dev/null 2>&1
+HDC shell "aa start -a EntryAbility -b $BUNDLE --ps scene bench" >/dev/null 2>&1
 bash "$WAIT" --cmd "bash '$HERE/hdc.sh' shell 'hilog -x | grep -q \"SHELL_EVENT resume\"'" --timeout 20 --interval 2 \
   || { echo "✗ resume 未转发" >&2; exit 1; }
 

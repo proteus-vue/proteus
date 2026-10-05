@@ -15,12 +15,24 @@ const DOMAIN = 0x0001;
 const TAG = 'ProteusHost';
 
 export default class EntryAbility extends UIAbility {
+  /** 本 Ability 要加载的页面（onCreate 决定，onWindowStageCreate 读取） */
+  private pageToLoad: string = 'pages/Superapp';
+
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
-    // ★场景参数（`aa start ... --ps scene stress`）→ AppStorage（页面读取后走压力场景分支）
+    // ★场景参数（`aa start ... --ps scene stress`）→ AppStorage（页面读取后走对应场景分支）
     const scene = want?.parameters?.['scene'];
     const sceneStr: string = typeof scene === 'string' ? scene : '';
     AppStorage.setOrCreate('proteusScene', sceneStr);
-    hilog.info(DOMAIN, TAG, 'PROTEUS_HOST_ONCREATE bundle=dev.proteus.host scene=%{public}s', sceneStr);
+    // ★★★批次 44（2026-10-05）：**桌面点开（无 scene）= superapp 真实应用**（用户原话
+    //   「手机主屏图标点开 App 就能测完整体验」）；脚本要跑装置/探针 ⇒ 显式传 `--ps scene <名>`
+    //   （含 `bench` = 原缺省的全套装置路径）⇒ 落 pages/Index。
+    //   ★语义同 iOS（Info.plist 缺省场景 = superapp；脚本显式 `--selfdraw/--app-stack/…`）。
+    if (sceneStr === '' || sceneStr === 'superapp' || sceneStr === 'superapp-drive') {
+      this.pageToLoad = 'pages/Superapp';
+    } else {
+      this.pageToLoad = 'pages/Index';
+    }
+    hilog.info(DOMAIN, TAG, 'PROTEUS_HOST_ONCREATE bundle=dev.proteus.host scene=%{public}s page=%{public}s', sceneStr, this.pageToLoad);
   }
 
   onWindowStageCreate(windowStage: window.WindowStage): void {
@@ -29,12 +41,12 @@ export default class EntryAbility extends UIAbility {
       'PROTEUS_HOST_READY model=%{public}s os=%{public}s api=%{public}d display=%{public}s',
       deviceInfo.productModel, deviceInfo.osFullName, deviceInfo.sdkApiVersion, deviceInfo.displayVersion);
 
-    windowStage.loadContent('pages/Index', (err) => {
+    windowStage.loadContent(this.pageToLoad, (err) => {
       if (err.code) {
         hilog.error(DOMAIN, TAG, 'PROTEUS_HOST_ERROR loadContent failed: %{public}s', JSON.stringify(err) ?? '');
         return;
       }
-      hilog.info(DOMAIN, TAG, 'PROTEUS_HOST_LOADED page=pages/Index');
+      hilog.info(DOMAIN, TAG, 'PROTEUS_HOST_LOADED page=%{public}s', this.pageToLoad);
     });
   }
 

@@ -1,11 +1,50 @@
 {
-  "after_back" : "{\"depth\":1,\"current\":\"messages\",\"stack\":[\"messages\"],\"tabs\":[\"index\",\"messages\",\"mine\"],\"tabLabels\":{\"index\":\"Proteus 超级应用\",\"messages\":\"消息\",\"mine\":\"我的\",\"verify\":\"验收控制台\"}}",
+  "host_id" : "ios",
+  "host_stats" : "{\"data\":{\"anim_calls\":0,\"shared_calls\":0,\"visible_calls\":4,\"content_node_total\":176,\"destroy_calls\":3,\"calls\":[\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.stats\"],\"mount_calls\":4,\"anim_completed\":0,\"live_screens\":1,\"screens\":[{\"visible\":true,\"screenId\":\"mine#4\",\"rootNodeId\":100}],\"anim_hook_missing\":0,\"rect_calls\":0},\"ok\":true}",
   "ok" : true,
-  "boot" : "{\"ok\":true,\"index\":\"index\",\"tabs\":[\"index\",\"messages\",\"mine\"],\"tabLabels\":{\"index\":\"Proteus 超级应用\",\"messages\":\"消息\",\"mine\":\"我的\",\"verify\":\"验收控制台\"},\"screens\":[\"index\",\"messages\",\"mine\",\"verify\"],\"depth\":0,\"current\":\"\"}",
-  "host_stats_baseline" : "{\"ok\":true,\"data\":{\"anim_completed\":0,\"anim_calls\":2,\"anim_hook_missing\":0,\"rect_calls\":0,\"calls\":[\"screen.mount\",\"screen.visible\",\"screen.mount\",\"screen.visible\",\"screen.anim\",\"screen.mount\",\"screen.visible\",\"screen.mount\",\"screen.visible\",\"screen.anim\",\"screen.stats\"],\"visible_calls\":4,\"screens\":[{\"visible\":true,\"rootNodeId\":120,\"screenId\":\"r-home#1\"},{\"screenId\":\"r-detail#2\",\"visible\":true,\"rootNodeId\":130},{\"screenId\":\"index#1\",\"visible\":true,\"rootNodeId\":100},{\"screenId\":\"home#1\",\"visible\":true,\"rootNodeId\":110}],\"mount_calls\":4,\"content_node_total\":114,\"shared_calls\":0,\"live_screens\":4,\"destroy_calls\":0}}",
-  "host_stats" : "{\"ok\":true,\"data\":{\"rect_calls\":0,\"calls\":[\"screen.mount\",\"screen.visible\",\"screen.mount\",\"screen.visible\",\"screen.anim\",\"screen.mount\",\"screen.visible\",\"screen.mount\",\"screen.visible\",\"screen.anim\",\"screen.stats\",\"screen.mount\",\"screen.visible\",\"screen.visible\",\"screen.destroy\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.stats\"],\"visible_calls\":7,\"content_node_total\":229,\"anim_hook_missing\":0,\"anim_completed\":0,\"anim_calls\":2,\"shared_calls\":0,\"destroy_calls\":2,\"live_screens\":4,\"screens\":[{\"screenId\":\"r-home#1\",\"visible\":true,\"rootNodeId\":120},{\"visible\":true,\"screenId\":\"r-detail#2\",\"rootNodeId\":130},{\"rootNodeId\":130,\"screenId\":\"messages#3\",\"visible\":true},{\"visible\":true,\"screenId\":\"home#1\",\"rootNodeId\":110}],\"mount_calls\":6}}",
-  "after_switch_messages" : "{\"depth\":1,\"current\":\"messages\",\"stack\":[\"messages\"],\"tabs\":[\"index\",\"messages\",\"mine\"],\"tabLabels\":{\"index\":\"Proteus 超级应用\",\"messages\":\"消息\",\"mine\":\"我的\",\"verify\":\"验收控制台\"}}",
-  "after_push_verify" : "{\"depth\":2,\"current\":\"verify\",\"stack\":[\"index\",\"verify\"],\"tabs\":[\"index\",\"messages\",\"mine\"],\"tabLabels\":{\"index\":\"Proteus 超级应用\",\"messages\":\"消息\",\"mine\":\"我的\",\"verify\":\"验收控制台\"}}",
-  "bundle_chars" : 192800,
-  "boot_state" : "{\"depth\":1,\"current\":\"index\",\"stack\":[\"index\"],\"tabs\":[\"index\",\"messages\",\"mine\"],\"tabLabels\":{\"index\":\"Proteus 超级应用\",\"messages\":\"消息\",\"mine\":\"我的\",\"verify\":\"验收控制台\"}}"
+  "rendered_page" : "mine",
+  "run_ts" : 1791163039.3897009,
+  "state" : {
+    "current" : "mine",
+    "depth" : 1,
+    "stack" : [
+      "mine"
+    ],
+    "tabLabels" : {
+      "index" : "Proteus 超级应用",
+      "messages" : "消息",
+      "mine" : "我的",
+      "verify" : "验收控制台"
+    },
+    "tabs" : [
+      "index",
+      "messages",
+      "mine"
+    ]
+  },
+  "switch_log" : [
+    {
+      "current" : "index",
+      "ok" : true,
+      "tap" : "index",
+      "via" : "drive"
+    },
+    {
+      "current" : "messages",
+      "ok" : true,
+      "tap" : "messages",
+      "via" : "drive"
+    },
+    {
+      "current" : "mine",
+      "ok" : true,
+      "tap" : "mine",
+      "via" : "drive"
+    }
+  ],
+  "tabs" : [
+    "index",
+    "messages",
+    "mine"
+  ]
 }

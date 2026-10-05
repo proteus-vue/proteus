@@ -30,7 +30,7 @@ echo "==> hap=${HAP##*/}  设备=$STATE"
 HDC install "$HAP" 2>&1 | grep -qiE "successfully|Success" || { echo "✗ 安装失败"; exit 1; }
 HDC shell "aa force-stop $BUNDLE" >/dev/null 2>&1 || true
 HDC shell "rm -f $REPORT_DEV" >/dev/null 2>&1 || true
-HDC shell "aa start -a EntryAbility -b $BUNDLE" >/dev/null 2>&1 | head -1
+HDC shell "aa start -a EntryAbility -b $BUNDLE --ps scene bench" >/dev/null 2>&1 | head -1
 
 echo "==> 等报告落盘（条件等待 ≤60s——零盲等）"
 # ★★等待判据必须是**字符串回显**（2026-10-03）：`hdc shell` **不回传远端退出码**

@@ -6490,6 +6490,9 @@ final class SelfDrawViewController: UIViewController {
         let explicit = argv.contains { $0.hasPrefix("--") && !$0.hasPrefix("--cases=") }
         let plistScene = (Bundle.main.object(forInfoDictionaryKey: "ProteusDefaultScene") as? String) ?? "showcase"
         let isShowcase = argv.contains("--showcase") || (!explicit && plistScene == "showcase")
+        // ★★★批次 44（2026-10-05）：**superapp 真实应用**（桌面图标点开 = superapp 应用，可切 tab）。
+        //   与 isShowcase 同一判定规则：显式 `--superapp` 或 Info.plist 缺省场景 = superapp。
+        let isSuperapp = argv.contains("--superapp") || (!explicit && plistScene == "superapp")
         // ★★用例过滤（`--cases=S5,V4`）：只跑指定前缀的用例
         //
         // 【为什么需要（效率纪律：定向验证不得跑全量）】bench 有 46 个用例、全套数分钟；
@@ -6569,6 +6572,12 @@ final class SelfDrawViewController: UIViewController {
         if isShowcase {
             NSLog("[proteus] Morpheus 炫技场启动")
             ShowcaseScene.run(ctx: ctx, bundleURL: url)
+            return
+        }
+        // ★★★批次 44（2026-10-05）：**superapp 真实应用**（桌面图标点开形态）——常驻可切 tab。
+        if isSuperapp {
+            NSLog("[proteus] superapp 真实应用启动")
+            SuperappScene.run(ctx: ctx, bundleURL: url, bridge: bridge, containerView: host)
             return
         }
         let vp = jsonString(["width": w, "height": h])

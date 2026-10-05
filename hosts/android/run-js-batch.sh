@@ -50,7 +50,7 @@ echo "==> ① 安装（release 包）"
 echo "==> ② 清旧报告 + 重启 + 触发 js-batch"
 "$ADB" shell "rm -f $REPORT" >/dev/null 2>&1 || true
 "$ADB" shell "am force-stop $PKG" >/dev/null 2>&1 || true
-"$ADB" shell "monkey -p $PKG -c android.intent.category.LAUNCHER 1" >/dev/null 2>&1
+"$ADB" shell "am start -n $PKG/.MainActivity" >/dev/null 2>&1
 sleep 3
 "$ADB" shell "am broadcast -a dev.proteus.RUN --es path js-batch -p $PKG" >/dev/null 2>&1
 
