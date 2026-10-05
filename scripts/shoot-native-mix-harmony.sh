@@ -24,7 +24,7 @@ mkdir -p "$OUT"
 HAP="$(ls -t "$HAP_DIR"/*-signed.hap 2>/dev/null | head -1)"
 [ -n "$HAP" ] || { echo "✗ 缺签名 hap——先跑 bash hosts/harmony/build-host-app.sh"; exit 2; }
 STATE="$(HDC list targets -v 2>/dev/null | head -1)"
-case "$STATE" in *Connected*) ;; *) echo "✗ 无设备/未授权（$STATE）"; exit 2 ;; esac
+case "$STATE" in *Connected*) ;; *) echo "✗ 无设备/未授权（${STATE}）"; exit 2 ;; esac
 echo "==> hap=${HAP##*/}  设备=$STATE"
 
 echo "==> ① 安装 + 清日志 + 启动原生混用场景"
