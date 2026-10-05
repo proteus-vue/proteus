@@ -89,6 +89,8 @@ describe('★App CSS 支持面 · ② SSOT 与折叠实现同源（真折叠，�
       // ★★全端对齐批（2026-10-05 · white-space 五端对齐）：真字段（透传宿主）
       if (f === 'whiteSpace') return 'pre-wrap'
       if (f === 'visibility') return 'hidden'
+      // ★★★overflow-x 项（2026-10-06）：单轴溢出的枚举样例（折叠器直传逐轴字段）
+      if (f === 'overflowX' || f === 'overflowY') return 'hidden'
       if (f === 'aspectRatio') return '1.5'
       if (f === 'pointerEvents') return 'none'
       if (f === 'textDecoration') return 'underline'

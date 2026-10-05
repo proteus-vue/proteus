@@ -692,6 +692,14 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
         double borderWidth = 0, borderColor = 0;
         jsonNumber(it, "borderWidth", &borderWidth);
         jsonNumber(it, "borderColor", &borderColor);
+        // ★★★overflow-x 项（2026-10-06）：**有效裁剪矩形**（扁平键；物理 px）——SetClip(RectShape)。
+        bool hasClipRect = false;
+        double clipX = 0, clipY = 0, clipW = 0, clipH = 0;
+        { double cx0 = 0, cy0 = 0, cw0 = 0, ch0 = 0;
+          if (jsonNumber(it, "clipX", &cx0)) {
+              jsonNumber(it, "clipY", &cy0); jsonNumber(it, "clipW", &cw0); jsonNumber(it, "clipH", &ch0);
+              hasClipRect = true; clipX = cx0; clipY = cy0; clipW = cw0; clipH = ch0;
+          } }
         // ★批次 10：盒阴影（扁平数值键——与 borderWidth/borderColor 同形态；由指令生成方折出）
         double shadowDx = 0, shadowDy = 0, shadowRadius = -1, shadowColor = 0;
         jsonNumber(it, "shadowDx", &shadowDx);
@@ -733,6 +741,75 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
                          "PROTEUS_RENDER_NODE %{public}s", gbuf);
         }
         OH_ArkUI_RenderNodeUtils_SetBackgroundColor(node, static_cast<uint32_t>(color));
+        // ★★★overflow-x 项（2026-10-06）：**有效裁剪矩形** → SetClip（RectShape，inset 模型）——
+        //   裁**子内容**（元素几何由内核绝对定位；裁剪区 = 祖先链交集——内核已算好，宿主不算第二份）。
+        //   参照系：节点**局部坐标**（与 SetSize/SetPosition 的绝对定位不同——见 native_render.h 的
+        //   clip 语义）；换算 = 裁剪矩形相对元素盒（x/y/w/h 物理 px）的四向 inset（负值 = 裁到盒外，允许）。
+        //   ★缺省（hasClipRect=false）⇒ 不调用（零行为变化）。
+        if (hasClipRect) {
+            // ★★★修（2026-10-06 · 子代理终评抓出）：**clip 会把节点自身圆角画没**（A/C 案 TL 圆角
+            //   丢失、B 案【无 clip】正常）——ArkUI 的 SetClip 与节点 borderRadius 叠加时前者胜。
+            //   ⇒ 裁剪形状用 **RoundRect**：仅对「与节点盒**重合**且该角**有圆角**」的角给 (r,r)，
+            //   其余角 0（精确复现 Web 形态：TL 为自身圆角、TR/BR/BL 锐切）。
+            //   无任何"重合+圆角"角 ⇒ 走原 RectShape（零行为变化）。
+            const double lIn = clipX - x;
+            const double tIn = clipY - y;
+            const double rIn = (clipX + clipW) - x;
+            const double bIn = (clipY + clipH) - y;
+            const auto cornerOn = [&](int bit) -> bool {
+                if (radius <= 0) return false;
+                if (radiusMask == 0 || radiusMask == 15) return true;   // 统一半径作用于四角
+                return (radiusMask & bit) != 0;
+            };
+            const bool tlSame = std::abs(lIn) <= 0.5 && std::abs(tIn) <= 0.5;
+            const bool trSame = std::abs(rIn - w) <= 0.5 && std::abs(tIn) <= 0.5;
+            const bool brSame = std::abs(rIn - w) <= 0.5 && std::abs(bIn - h) <= 0.5;
+            const bool blSame = std::abs(lIn) <= 0.5 && std::abs(bIn - h) <= 0.5;
+            const bool tlRR = tlSame && cornerOn(1);
+            const bool trRR = trSame && cornerOn(2);
+            const bool brRR = brSame && cornerOn(4);
+            const bool blRR = blSame && cornerOn(8);
+            const bool anyRR = tlRR || trRR || brRR || blRR;
+            ArkUI_RenderNodeClipOption* clipOpt = nullptr;
+            if (anyRR) {
+                ArkUI_RoundRectShapeOption* rrShape = OH_ArkUI_RenderNodeUtils_CreateRoundRectShapeOption();
+                if (rrShape != nullptr) {
+                    OH_ArkUI_RenderNodeUtils_SetRoundRectShapeOptionEdgeValue(rrShape, (float)lIn, ARKUI_EDGE_DIRECTION_LEFT);
+                    OH_ArkUI_RenderNodeUtils_SetRoundRectShapeOptionEdgeValue(rrShape, (float)tIn, ARKUI_EDGE_DIRECTION_TOP);
+                    OH_ArkUI_RenderNodeUtils_SetRoundRectShapeOptionEdgeValue(rrShape, (float)rIn, ARKUI_EDGE_DIRECTION_RIGHT);
+                    OH_ArkUI_RenderNodeUtils_SetRoundRectShapeOptionEdgeValue(rrShape, (float)bIn, ARKUI_EDGE_DIRECTION_BOTTOM);
+                    const float rC = (float)radius;
+                    OH_ArkUI_RenderNodeUtils_SetRoundRectShapeOptionCornerXY(rrShape, tlRR ? rC : 0.0f, tlRR ? rC : 0.0f, ARKUI_CORNER_DIRECTION_TOP_LEFT);
+                    OH_ArkUI_RenderNodeUtils_SetRoundRectShapeOptionCornerXY(rrShape, trRR ? rC : 0.0f, trRR ? rC : 0.0f, ARKUI_CORNER_DIRECTION_TOP_RIGHT);
+                    OH_ArkUI_RenderNodeUtils_SetRoundRectShapeOptionCornerXY(rrShape, brRR ? rC : 0.0f, brRR ? rC : 0.0f, ARKUI_CORNER_DIRECTION_BOTTOM_RIGHT);
+                    OH_ArkUI_RenderNodeUtils_SetRoundRectShapeOptionCornerXY(rrShape, blRR ? rC : 0.0f, blRR ? rC : 0.0f, ARKUI_CORNER_DIRECTION_BOTTOM_LEFT);
+                    clipOpt = OH_ArkUI_RenderNodeUtils_CreateRenderNodeClipOptionFromRoundRectShape(rrShape);
+                    OH_ArkUI_RenderNodeUtils_DisposeRoundRectShapeOption(rrShape);
+                }
+            } else {
+                ArkUI_RectShapeOption* rectShape = OH_ArkUI_RenderNodeUtils_CreateRectShapeOption();
+                if (rectShape != nullptr) {
+                    // ★★edge = **相对节点左上角的绝对偏移**（实测校正：首版按"从右/下内缩"传
+                    //   ⇒ RIGHT=100 被解释成"右缘=节点左起 100px" ⇒ 裁到 99×62 而非 160×56）
+                    OH_ArkUI_RenderNodeUtils_SetRectShapeOptionEdgeValue(rectShape, (float)lIn, ARKUI_EDGE_DIRECTION_LEFT);
+                    OH_ArkUI_RenderNodeUtils_SetRectShapeOptionEdgeValue(rectShape, (float)tIn, ARKUI_EDGE_DIRECTION_TOP);
+                    OH_ArkUI_RenderNodeUtils_SetRectShapeOptionEdgeValue(rectShape, (float)rIn, ARKUI_EDGE_DIRECTION_RIGHT);
+                    OH_ArkUI_RenderNodeUtils_SetRectShapeOptionEdgeValue(rectShape, (float)bIn, ARKUI_EDGE_DIRECTION_BOTTOM);
+                    clipOpt = OH_ArkUI_RenderNodeUtils_CreateRenderNodeClipOptionFromRectShape(rectShape);
+                    OH_ArkUI_RenderNodeUtils_DisposeRectShapeOption(rectShape);
+                }
+            }
+            if (clipOpt != nullptr) {
+                int32_t rcClip = OH_ArkUI_RenderNodeUtils_SetClip(node, clipOpt);
+                // ★取证日志（与 PROTEUS_RENDER_NODE 同例）：SetClip 的接受码（API 20+ availability；失败即静默——此日志是唯一机器可读证据）
+                char clbuf[200];
+                snprintf(clbuf, sizeof(clbuf), "clip=%.1f,%.1f,%.1f,%.1f rr=%d%d%d%d rc=%d", clipX, clipY, clipW, clipH, tlRR ? 1 : 0, trRR ? 1 : 0, brRR ? 1 : 0, blRR ? 1 : 0, rcClip);
+                OH_LOG_Print(LOG_APP, LOG_INFO, LOG_DOMAIN, LOG_TAG, "PROTEUS_RENDER_CLIP %{public}s", clbuf);
+                OH_ArkUI_RenderNodeUtils_DisposeRenderNodeClipOption(clipOpt);
+            } else {
+                OH_LOG_Print(LOG_APP, LOG_ERROR, LOG_DOMAIN, LOG_TAG, "PROTEUS_RENDER_CLIP create-option-null");
+            }
+        }
         if (radius > 0) {
             ArkUI_NodeBorderRadiusOption* br = OH_ArkUI_RenderNodeUtils_CreateNodeBorderRadiusOption();
             if (br != nullptr) {

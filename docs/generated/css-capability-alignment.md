@@ -73,7 +73,7 @@
 | layout | `gap（+ row-gap / column-gap）` | partial | partial | supported | L2 | 直映射 | conditional | px/数字；★批次 31：**两值** `gap:<row> <col>` 与 **轴级** `row-gap`/`column-gap`（内核 `LStyle.row_gap/column_gap` → taffy `gap.height/width`）——真项目组件库 15 处两值 gap |
 | layout | `position: static / relative / absolute` | supported | supported | supported | L2 | 直映射 | universal | 引擎封闭集；sticky/fixed ⇒ 诊断跳过 |
 | layout | `top / left` | supported | supported | supported | L2 | 直映射 | universal | 配合 absolute；引擎无 right/bottom（见候选） |
-| layout | `overflow: visible / hidden / scroll / auto` | supported | supported | supported | L2 | 直映射 | universal | 引擎封闭集；auto 折叠为 taffy Scroll |
+| layout | `overflow: visible / hidden / scroll / auto` | partial | partial | supported | L2 | 直映射 | conditional | 引擎封闭集；auto 折叠为 taffy Scroll；★★★overflow-x 项（2026-10-06）：**单轴 overflow-x/y 已支持**（长手 + overflow 1–2 值简写；Web 归一回放：visible↔非visible ⇒ visible→auto；逐轴字段 overflowX/overflowY）+ 三端宿主**子内容裁剪**（Android 画布 clipRect / iOS masksToBounds / 鸿蒙 SetClip——内核 rects 下发有效裁剪矩形） |
 | value | `margin/padding 1–4 值简写 + background 纯色简写 + flex 简写` | — | — | supported | L1 | 编译期折叠 | conditional | ★批次 2/7（2026-10-04）：a) `margin: 8px 0` / `padding: 8px 12px` 按 CSS 标准展开为 {top,right,bottom,left}（auto 的边忽略）；b) `background: #fff`/`rgba(...)` 归一折进 backgroundColor；c) `flex: <g> [<s> [<b>]]` / `none` / `auto` 展开到 flexGrow/flexShrink/flexBasis（CSS 语义：省略 shrink=1、省略 basis=0）。取证：真项目这些简写高频。渐变/图片简写诊断跳过 |
 | unit | `width/height 百分比` | — | — | supported | L1 | 编译期折叠 | conditional | → widthRatio/heightRatio（比例字段） |
 | paint | `background-color（+ background 纯色简写）` | supported | supported | supported | L1 | 编译期折叠 | universal | 颜色编译期归一为 hex：hex / rgb() / rgba() / **命名色（148 个标准色，批 14）** / transparent；hsl/var ⇒ 诊断跳过。★`background` 纯色简写折进 backgroundColor；★批次 33：`linear-gradient` / `radial-gradient` 折进引擎 `fillGradient` 通道（`background`/`background-image` 均可）——免去手写 `fill-gradient='{json}'` 的胶水；`url()` 图片仍诊断（走原生组件）。★批 14 多端一致性审计修：命名色此前丢弃（Web 生效）⇒ 现查表归一（核心只认 hex） |
@@ -133,6 +133,7 @@
 | CSS | Web | Skyline | App | 受限原因 |
 |---|---|---|---|---|
 | `gap（+ row-gap / column-gap）` | partial | partial | supported | px/数字；★批次 31：**两值** `gap:<row> <col>` 与 **轴级** `row-gap`/`column-gap`（内核 `LStyle.row_gap/c |
+| `overflow: visible / hidden / scroll / auto` | partial | partial | supported | 引擎封闭集；auto 折叠为 taffy Scroll；★★★overflow-x 项（2026-10-06）：**单轴 overflow-x/y 已支持**（长手 + overf |
 | `margin/padding 1–4 值简写 + background 纯色简写 + flex 简写` | — | — | supported | ★批次 2/7（2026-10-04）：a) `margin: 8px 0` / `padding: 8px 12px` 按 CSS 标准展开为 {top,right,bottom |
 | `width/height 百分比` | — | — | supported | → widthRatio/heightRatio（比例字段） |
 | `border-top` | not-measured | supported | supported | ★★★逐边 border 批（2026-10-05 · 用户「全端对齐不留缺陷」）：`border-top: <width> solid <color>` 简写 折为 border |

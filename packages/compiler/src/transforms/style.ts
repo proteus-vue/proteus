@@ -28,6 +28,25 @@ export const STYLE_RULES: TransformRule[] = [
     },
   },
   {
+    id: 'style/overflow-collapse',
+    phase: 'style',
+    status: 'implemented',
+    title: '单轴 overflow 归一折叠（MP 端）',
+    titleEn: 'Single-axis overflow normalization collapse (MP-side)',
+    description:
+      'overflow-x / overflow-y / 两值 overflow 简写 ⇒ 统一 overflow（任一块内任一轴非 visible（Web 归一回放后）⇒ overflow: hidden；两轴均 visible ⇒ 移除）',
+    descriptionEn:
+      'overflow-x / overflow-y / two-value overflow shorthand ⇒ unified overflow (any axis non-visible after Web normalization ⇒ overflow: hidden; both visible ⇒ removed)',
+    why: 'Skyline 官方支持表原文「不支持单独设置 overflow-x/y」；且 Web 归一规则（一侧 visible、另一侧非 visible ⇒ visible→auto）使单轴组合在渲染语义上等价两轴裁剪（决策 #560）；与 App 侧 normalizeOverflowFields 同一套规则',
+    whyEn:
+      "Skyline's official support table states single-axis overflow-x/y is unsupported; the Web normalization rule (one side visible, the other non-visible ⇒ visible→auto) makes single-axis combinations render equivalently to two-axis clipping (decision #560); same rule set as App-side normalizeOverflowFields",
+    when: 'style 块内出现 overflow-x / overflow-y / 两值 overflow 声明时（transformStyleToWxss）',
+    example: { before: 'overflow-x: hidden;', after: 'overflow: hidden;' },
+    verify: 'tests/mp-transform.test.ts（overflow-collapse 单轴归一折叠用例）',
+    source: 'src/compiler/style.ts → transformStyleToWxss（overflow-collapse 段）',
+    decision: '#560',
+  },
+  {
     id: 'style/selector-tag',
     phase: 'style',
     status: 'implemented',

@@ -27,7 +27,9 @@ if (!fs.existsSync(ENTRY)) {
 {
   const { execFileSync } = await import('node:child_process')
   try {
-    execFileSync('npx', ['tsx', path.join(ROOT, 'hosts/shared/bridge/gen-app-screen-content.mjs')], { cwd: ROOT, stdio: 'inherit' })
+    // ★★平台必须显式（2026-10-06 实锤坑：缺省 android ⇒ iOS 链刷的是 android 产物，
+    //   dist/app/ios/screen-content.json 永远陈旧 ⇒ 宿主 renderCurrent 回落渲染别的屏）
+    execFileSync('npx', ['tsx', path.join(ROOT, 'hosts/shared/bridge/gen-app-screen-content.mjs'), '--platform', 'ios'], { cwd: ROOT, stdio: 'inherit' })
   } catch (e) {
     console.error(`✗ 生成 app-screen-content 失败（B5）：${String(e)}`)
     process.exit(3)

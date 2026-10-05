@@ -7,7 +7,7 @@ generated: true
 
 # Compile rule catalog
 
-> 117 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
+> 118 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
 
 ## Template transforms (65)
 
@@ -1412,7 +1412,7 @@ after:  每页产物：wxml 前缀 + `netText: __proteusGlobal.get("netText")` +
 
 > why: In mini programs App is a logic-only container (no render-layer counterpart), so "declare once in App.vue, active app-wide" has no architectural home (uni-app does not support it officially). Injection is a compile-time, enumerable act — a runtime insertGlobal would defeat conformance and AI-checkability silently (C1)
 
-## Style transforms (9)
+## Style transforms (10)
 
 ### `style/px-to-rpx`
 
@@ -1426,6 +1426,19 @@ after:  padding: 96rpx;
 ```
 
 > why: Mini Program rpx is a screen-proportional unit (750 design draft); this is a compile-time absorption for cross-end CSS consistency (decision #9: px→rpx on the MP side while the Web side keeps standard CSS)
+
+### `style/overflow-collapse`
+
+**Single-axis overflow normalization collapse (MP-side)**
+
+overflow-x / overflow-y / two-value overflow shorthand ⇒ unified overflow (any axis non-visible after Web normalization ⇒ overflow: hidden; both visible ⇒ removed)
+
+```
+before: overflow-x: hidden;
+after:  overflow: hidden;
+```
+
+> why: Skyline's official support table states single-axis overflow-x/y is unsupported; the Web normalization rule (one side visible, the other non-visible ⇒ visible→auto) makes single-axis combinations render equivalently to two-axis clipping (decision #560); same rule set as App-side normalizeOverflowFields
 
 ### `style/selector-tag`
 

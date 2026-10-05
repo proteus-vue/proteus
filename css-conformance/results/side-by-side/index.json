@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-05T16:06:48.278Z",
+  "generatedAt": "2026-10-05T18:18:22.732Z",
   "rows": [
     {
       "end": "mp",
@@ -11,6 +11,12 @@
       "end": "mp",
       "page": "border.png",
       "out": "css-conformance/results/side-by-side/border.mp-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "mp",
+      "page": "overflow.png",
+      "out": "css-conformance/results/side-by-side/overflow.mp-vs-web.png",
       "status": "ok"
     },
     {
@@ -33,6 +39,12 @@
     },
     {
       "end": "android",
+      "page": "overflow.png",
+      "out": "css-conformance/results/side-by-side/overflow.android-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "android",
       "page": "text.png",
       "out": "css-conformance/results/side-by-side/text.android-vs-web.png",
       "status": "ok"
@@ -51,6 +63,12 @@
     },
     {
       "end": "ios",
+      "page": "overflow.png",
+      "out": "css-conformance/results/side-by-side/overflow.ios-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "ios",
       "page": "text.png",
       "out": "css-conformance/results/side-by-side/text.ios-vs-web.png",
       "status": "ok"
@@ -65,6 +83,12 @@
       "end": "harmony",
       "page": "border.png",
       "out": "css-conformance/results/side-by-side/border.harmony-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "harmony",
+      "page": "overflow.png",
+      "out": "css-conformance/results/side-by-side/overflow.harmony-vs-web.png",
       "status": "ok"
     },
     {

@@ -1545,13 +1545,29 @@ pub unsafe extern "C" fn proteus_layout_rects(handle: u64) -> *mut c_char {
         let reg = registry().lock().map_err(|_| "注册表锁失败".to_string())?;
         let tree = &reg.get(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?.tree;
         let abs = tree.absolute_rects();
+        // ★★★overflow-x 项（2026-10-06）：**有效裁剪矩形**（祖先链 overflow 非 visible 盒的交集）——
+        //   复用 hit::geometry（命中测试的同一实现，单一事实源）；宿主按它裁子内容。
+        //   ★卡 I2：与内容**同一把尺子**（导出边界吸附）——不吸附会切掉半个像素
+        //     （见 pixel-snap.ts「裁剪区与内容对齐」）。
+        let geo = crate::hit::geometry(tree);
         let mut rects = serde_json::Map::new();
         for (i, r) in abs.iter().enumerate() {
             if let Some(r) = r {
-                rects.insert(
-                    tree.nodes[i].id.to_string(),
-                    serde_json::json!({"x": r.x, "y": r.y, "width": r.width, "height": r.height}),
-                );
+                let mut obj = serde_json::json!({"x": r.x, "y": r.y, "width": r.width, "height": r.height});
+                if let Some(c) = geo[i].clip {
+                    let sc = crate::snap::snap_rect(c);
+                    // ★★扁平键（clipX/clipY/clipW/clipH）——**不得用嵌套对象**：
+                    //   serde_json 无 preserve_order（键按字母序）⇒ 嵌套 clip 会排到 x/y 之前，
+                    //   把"找 '}' 当段尾"的段落解析器（鸿蒙 bench parseRects）截断 ⇒ 几何全 0。
+                    //   扁平键无嵌套括号，既有解析器零改动兼容。
+                    if let Some(m) = obj.as_object_mut() {
+                        m.insert("clipX".into(), serde_json::json!(sc.x));
+                        m.insert("clipY".into(), serde_json::json!(sc.y));
+                        m.insert("clipW".into(), serde_json::json!(sc.width));
+                        m.insert("clipH".into(), serde_json::json!(sc.height));
+                    }
+                }
+                rects.insert(tree.nodes[i].id.to_string(), obj);
             }
         }
         // ★回传 native-host 节点清单：宿主据此决定「哪些节点创建原生 View」
@@ -1771,6 +1787,21 @@ pub(crate) fn collect_abs_subtree(
     parent_oy: f32,
     out: &mut serde_json::Map<String, serde_json::Value>,
 ) {
+    // ★★★overflow-x 项（2026-10-06）：增量通道也附**有效裁剪矩形**——按节点 index 查全树
+    //   geometry（O(n) 一次算好，调用方传入；见 apply_ops 的 clip_geo 参数）。
+    collect_abs_subtree_clipped(tree, idx, parent_ox, parent_oy, None, out);
+}
+
+/// 带裁剪图的收集（`clip_geo` = 全树 geometry——裁剪矩形按**节点 index** 查表；
+///   None ⇒ 不附 clip（旧调用方/单测——零行为变化））
+pub(crate) fn collect_abs_subtree_clipped(
+    tree: &LayoutTree,
+    idx: u32,
+    parent_ox: f32,
+    parent_oy: f32,
+    clip_geo: Option<&[crate::hit::NodeGeometry]>,
+    out: &mut serde_json::Map<String, serde_json::Value>,
+) {
     let node = tree.get(idx);
     if node.style.display == crate::style::Display::None {
         return;      // 无盒：不下钻（与 absolute_rects 同规则）
@@ -1782,12 +1813,24 @@ pub(crate) fn collect_abs_subtree(
     //   （否则「变化集」与「全量集」会在同一条边上差 ≤0.5px ⇒ 宿主更新出 1px 抖）
     //   ★下钻仍用**未吸附**的 abs_x/abs_y 累加：吸附只作用于导出值，不改变遍历语义
     let s = crate::snap::snap_rect(crate::style::Rect { x: abs_x, y: abs_y, width: r.width, height: r.height });
-    out.insert(
-        node.id.to_string(),
-        serde_json::json!({"x": s.x, "y": s.y, "width": s.width, "height": s.height}),
-    );
+    let mut obj = serde_json::json!({"x": s.x, "y": s.y, "width": s.width, "height": s.height});
+    if let Some(geo) = clip_geo {
+        if let Some(g) = geo.get(idx as usize) {
+            if let Some(c) = g.clip {
+                let sc = crate::snap::snap_rect(c);
+                if let Some(m) = obj.as_object_mut() {
+                    // ★★扁平键（同全量通道——见上注释：嵌套对象会截断段落解析器）
+                    m.insert("clipX".into(), serde_json::json!(sc.x));
+                    m.insert("clipY".into(), serde_json::json!(sc.y));
+                    m.insert("clipW".into(), serde_json::json!(sc.width));
+                    m.insert("clipH".into(), serde_json::json!(sc.height));
+                }
+            }
+        }
+    }
+    out.insert(node.id.to_string(), obj);
     for &c in &node.children {
-        collect_abs_subtree(tree, c, abs_x, abs_y, out);
+        collect_abs_subtree_clipped(tree, c, abs_x, abs_y, clip_geo, out);
     }
 }
 
@@ -2818,12 +2861,17 @@ fn apply_ops_impl(handle: u64, ptr: *const u8, len: u32, with_rects: bool) -> Re
     if with_rects {
         let t_col0 = std::time::Instant::now();
         let mut changed = serde_json::Map::new();
+        // ★★★overflow-x 项（2026-10-06）：变化集也附**有效裁剪矩形**（全树 geometry 一次算好，
+        //   收集时按节点 index 查表）。O(n) 单遍——与本次收集同量级。
+        //   ★为什么必须随增量更新：overflow 变更（如 hidden→visible）是**paint-only** 域内的事，
+        //     宿主靠这次返回刷新裁剪状态；不带则裁剪要等下一次全量才生效（静默滞后）。
+        let clip_geo = crate::hit::geometry(&entry.tree);
         // ★★收集用**变化根**：平移传播时它 = 脏子树 + 被平移的兄弟（不能用 scope——
         //   否则被平移的兄弟不被收集 ⇒ 宿主不更新 ⇒ 画面停在旧位置）
         let roots: &[u32] = if multi.changed_roots.is_empty() { &multi.scopes } else { &multi.changed_roots };
         for &sc in roots {
             let (pox, poy) = parent_origin_of(&entry.tree, sc);
-            collect_abs_subtree(&entry.tree, sc, pox, poy, &mut changed);
+            collect_abs_subtree_clipped(&entry.tree, sc, pox, poy, Some(&clip_geo), &mut changed);
         }
         let t_col = t_col0.elapsed().as_secs_f64() * 1000.0;
         out["rects"] = serde_json::Value::Object(changed);

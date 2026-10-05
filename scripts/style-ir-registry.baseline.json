@@ -1,9 +1,9 @@
 {
-  "total": 89,
-  "semantic": 63,
+  "total": 91,
+  "semantic": 65,
   "engineOnly": 26,
   "byDomain": {
-    "layout": 37,
+    "layout": 39,
     "matrix-only": 4,
     "paint": 29,
     "derived": 10,

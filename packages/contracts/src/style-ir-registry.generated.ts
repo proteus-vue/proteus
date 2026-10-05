@@ -924,6 +924,32 @@ export const STYLE_IR_FIELDS: Record<string, StyleFieldSpec> = {
       inheritable: false,
     },
   },
+  "overflowX": {
+    scope: "semantic",
+    domain: "layout",
+    valueType: "enum",
+    sources: {
+      compiler: "APP_LAYOUT_FIELDS",
+      matrixLevel: "Overflow",
+      runtimeWhitelist: false,
+      runtimeForbidden: false,
+      consistencyMatrix: true,
+      inheritable: false,
+    },
+  },
+  "overflowY": {
+    scope: "semantic",
+    domain: "layout",
+    valueType: "enum",
+    sources: {
+      compiler: "APP_LAYOUT_FIELDS",
+      matrixLevel: "Overflow",
+      runtimeWhitelist: false,
+      runtimeForbidden: false,
+      consistencyMatrix: true,
+      inheritable: false,
+    },
+  },
   "padding": {
     scope: "semantic",
     domain: "layout",
@@ -1201,13 +1227,13 @@ export const STYLE_IR_FIELDS: Record<string, StyleFieldSpec> = {
 
 /** 摘要（判据与官网数字读它——机器推导，非手写） */
 export const STYLE_IR_SUMMARY = {
-  total: 89,
-  semantic: 63,
+  total: 91,
+  semantic: 65,
   engineOnly: 26,
   byDomain: {
     "derived": 10,
     "edges": 8,
-    "layout": 37,
+    "layout": 39,
     "matrix-only": 4,
     "paint": 29,
     "special": 1,

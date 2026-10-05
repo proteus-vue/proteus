@@ -138,6 +138,14 @@ export function mapStyleIRToSkyline(fields: Record<string, unknown>, opts: Skyli
         drop(field, value, '逐角掩码（Skyline 侧只表达统一 radius——unified 已映射）')
         continue
       }
+      // ★★★overflow-x 项（2026-10-06）：Skyline **不支持单独设置 overflow-x/y**（官方支持表原文）
+      //   ⇒ 折叠为统一 `overflow`：归一化后（CSE/折叠器同口径）任一轴非 visible ⇒ 两轴均裁剪；
+      //   Skyline 只认 hidden/visible（auto/scroll 无滚动能力 ⇒ 静态裁剪语义等价 hidden）。
+      if (field === 'overflowX' || field === 'overflowY') {
+        if (value === 'visible') continue // 可视 = 不裁剪（默认零声明）
+        if (put('overflow', 'overflow', 'hidden')) continue
+        continue
+      }
       put(field, kebab(field), value)
       continue
     }

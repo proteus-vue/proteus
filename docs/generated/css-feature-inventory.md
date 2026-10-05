@@ -1,9 +1,9 @@
 # CSS Web 全量能力清单（自动生成——勿手改；生成器 scripts/gen-css-feature-inventory.mjs）
 
 > 总 949 项（property 651 · selector 144 · at-rule 19 · function 105 · unit 30）
-> 实现：**not-started** 555 · **excluded** 280 · **implemented** 108 · **partial** 6
-> 优先级：P2 115 · excluded 280 · P0 29 · done 108 · P1 417
-> ★**可推项（非已实现/非排除）**：561（其中 **P0 29**）
+> 实现：**not-started** 555 · **excluded** 280 · **implemented** 110 · **partial** 4
+> 优先级：P2 115 · excluded 280 · P0 27 · done 110 · P1 417
+> ★**可推项（非已实现/非排除）**：559（其中 **P0 27**）
 
 ## P0 —— 语料在用但未实现（真实需求，最优先）
 
@@ -22,8 +22,6 @@
 | `object-fit` | standard | CSS Images | 3 | not-started | 未接：图片填充方式（证据：未接（图片组件通道）） |
 | `outline` | standard | CSS Basic User Interface | 2 | not-started | — |
 | `outline-offset` | standard | CSS Basic User Interface | 3 | not-started | 未接：轮廓（证据：未接） |
-| `overflow-x` | standard | CSS Overflow | 10 | partial | **简写展开**：overflow——单轴 overflow（x/y 同值才可表达为 overflow——CSE 合并）（证据：CSE shorthand.ts（overflow 分支）） |
-| `overflow-y` | standard | CSS Overflow | 10 | partial | **简写展开**：overflow——同上（证据：同上） |
 | `overscroll-behavior-y` | standard | CSS Overscroll Behavior | 1 | not-started | — |
 | `place-items` | standard | CSS Box Alignment | 1 | not-started | — |
 | `text-shadow` | standard | CSS Text Decoration | 2 | not-started | 未接：文本阴影（证据：未接） |

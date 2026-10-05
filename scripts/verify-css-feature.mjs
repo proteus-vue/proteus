@@ -86,8 +86,9 @@ const PROBE_VALUES = {
   'border-top': ['border-top: 2px solid #3355aa', 'borderTopWidth', 2],
   'border-left': ['border-left: 3px solid #3355aa', 'borderLeftWidth', 3],
   'border-right': ['border-right: 3px solid #3355aa', 'borderRightWidth', 3],
-  'overflow-x': ['overflow-x: hidden', 'overflow', 'hidden'],
-  'overflow-y': ['overflow-y: hidden', 'overflow', 'hidden'],
+  // ★★★overflow-x 项（2026-10-06）：单轴探针（逐轴字段；Web 归一回放：单轴 hidden ⇒ 另一轴 auto）
+  'overflow-x': ['overflow-x: hidden', 'overflowX', 'hidden'],
+  'overflow-y': ['overflow-y: hidden', 'overflowY', 'hidden'],
   'white-space': ['white-space: nowrap', 'whiteSpace', 'nowrap'],
   'word-break': ['word-break: break-all', 'wordBreak', 'break-all'],
   'justify-self': ['justify-self: center', 'justifySelf', 'center'],

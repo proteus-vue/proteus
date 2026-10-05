@@ -83,6 +83,16 @@
         "why": "px/数字；★批次 31：**两值** `gap:<row> <col>` 与 **轴级** `row-gap`/`column-gap`（内核 `LStyle.row_gap/column_gap` → taffy `gap.height/width`）——真项目组件库 15 处两值 gap"
       },
       {
+        "css": "overflow: visible / hidden / scroll / auto",
+        "id": "overflow",
+        "ends": {
+          "web": "partial",
+          "skyline": "partial",
+          "app": "supported"
+        },
+        "why": "引擎封闭集；auto 折叠为 taffy Scroll；★★★overflow-x 项（2026-10-06）：**单轴 overflow-x/y 已支持**（长手 + overflow 1–2 值简写；Web 归一回放：visible↔非visible ⇒ visible→auto；逐轴字段 overflowX/overflowY）+ 三端宿主**子内容裁剪**（Android 画布 clipRect / iOS masksToBounds / 鸿蒙 SetClip——内核 rects 下发有效裁剪矩形）"
+      },
+      {
         "css": "margin/padding 1–4 值简写 + background 纯色简写 + flex 简写",
         "id": "value-shorthand",
         "ends": {
@@ -518,6 +528,8 @@
       "right",
       "bottom",
       "overflow",
+      "overflowX",
+      "overflowY",
       "gridTemplateColumns",
       "gridTemplateRows",
       "gridColumn",
@@ -844,15 +856,17 @@
       "css": "overflow: visible / hidden / scroll / auto",
       "category": "layout",
       "compilerFields": [
-        "overflow"
+        "overflow",
+        "overflowX",
+        "overflowY"
       ],
-      "web": "supported",
-      "skyline": "supported",
+      "web": "partial",
+      "skyline": "partial",
       "app": "supported",
       "tier": "L2",
       "strategy": "直映射",
-      "note": "引擎封闭集；auto 折叠为 taffy Scroll",
-      "supportTier": "universal"
+      "note": "引擎封闭集；auto 折叠为 taffy Scroll；★★★overflow-x 项（2026-10-06）：**单轴 overflow-x/y 已支持**（长手 + overflow 1–2 值简写；Web 归一回放：visible↔非visible ⇒ visible→auto；逐轴字段 overflowX/overflowY）+ 三端宿主**子内容裁剪**（Android 画布 clipRect / iOS masksToBounds / 鸿蒙 SetClip——内核 rects 下发有效裁剪矩形）",
+      "supportTier": "conditional"
     },
     {
       "id": "value-shorthand",

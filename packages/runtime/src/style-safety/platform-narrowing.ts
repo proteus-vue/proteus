@@ -118,6 +118,8 @@ export function narrowValue(prop: string, value: unknown, platform: StylePlatfor
     case 'TextWrap':
     // ★★★逐边 border 批（2026-10-05）：边框线型（solid/dashed/dotted/none）平台无关。
     case 'BorderStyle':
+    // ★★★overflow-x 项（2026-10-06）：溢出关键字枚举平台无关（单轴归一在编译期/内核完成）。
+    case 'Overflow':
     case 'Color':
       return { valid: true, value }
     case 'Transform':

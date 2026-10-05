@@ -81,6 +81,8 @@ const VALUE_TYPE_BY_LEVEL = {
   TextAlign: 'enum',
   TextWrap: 'enum',
   BorderStyle: 'enum',
+  // ★★★overflow-x 项（2026-10-06）：单轴溢出的值类型（与 runtime PROP_TYPES.Overflow 同集）
+  Overflow: 'enum',
   Transform: 'transform',
   TransformOrigin: 'transform-origin',
   SEMANTIC_ONLY: 'semantic-only',
