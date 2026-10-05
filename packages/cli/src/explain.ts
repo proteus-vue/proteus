@@ -11,6 +11,8 @@ import { buildPTree, analyzePTree, formatPTrace, rawFromComponentIR, toComponent
 // ★★Vapor IR V2 出口条件（方案 §5.5：「proteus explain 必须能输出每个槽位的分层判定与理由」
 //   ——「没有这个能力，L0/L1 混跑将完全无法调试。这是硬性要求」）
 import { buildVaporSubscriptions, buildLayoutTemplate } from '@proteus-vue/compiler'
+// ★★★G-61 B1：CSE（编译期 CSS 引擎）——`explain --style` 的 trace 来源
+import { extractFromSfc, computeTree } from '@proteus-vue/compiler'
 // ★VC2-b：`proteus explain <CSS-PB-*>` ——边界规则的说明（卡片验收："可 trace 为什么该属性被拦截"）
 import { SKYLINE_BOUNDARY_RULES } from '@proteus-vue/css-compat'
 // ★VC8-b：`proteus explain <一致性报告.json>` ——失败报告的解释（卡片验收："可被 proteus explain 消费"）
@@ -26,6 +28,8 @@ export interface ExplainTargetOptions {
   maxNodes?: number
   /** ★额外输出「Vapor 槽位分层判定」（方案 §5.5 硬性要求：L0/L1 混跑的可观测性） */
   withVapor?: boolean
+  /** ★★★G-61 B1：额外输出「样式计算 trace」——CSE 逐节点 computed + 来源链（plan §3.3 硬性要求） */
+  withStyle?: boolean
   /** ★★P4 能力视图（2026-10-03）：与 `withVapor` 合用 ⇒ 输出**机器可读**的能力缺口（CI/门禁消费） */
   json?: boolean
 }
@@ -197,6 +201,79 @@ export function explainIR(source: string, opts: ExplainTargetOptions = {}): stri
   return formatPTrace(tree, analysis, { onlyBlocked: opts.onlyBlocked, maxNodes: opts.maxNodes })
 }
 
+/**
+ * ★★★G-61 B1（2026-10-05）：**样式计算 trace**（`explain --style`）——某节点某属性的最终值
+ *   来自哪条规则、经过哪几步层叠判定（plan `03-consistency-gates.md` §3.3 的硬性要求：
+ *   **这是"引擎"与"字段折叠器"的分界线**；`Proteus_CSS_Profile规格.md:226` 同源）。
+ *
+ * 【它展示什么】CSE（编译期 CSS 引擎）逐节点的 computed 字段与来源链：
+ *   `字段 ← 选择器（层 / 特异性 / 源序 / !important / 简写来源）`；继承来的标 `inherited`；
+ *   并把**未映射到 IR 的长手**（引擎不消费的，如 z-index/white-space 的部分值）单列——
+ *   诚实边界可见（不静默丢）。
+ */
+export function explainStyle(source: string, opts: ExplainTargetOptions = {}): string {
+  const { roots, sheet, inlineStyles, notes } = extractFromSfc(source, { keyPrefix: '' })
+  const result = computeTree(roots, sheet, { inlineStyles })
+  const lines: string[] = []
+  lines.push('── 样式计算（G-61 CSE 编译期 CSS 引擎 · L-A） ──')
+  lines.push(`  规则 ${sheet.rules.length} 条 · 层 ${sheet.layerOrder.length ? sheet.layerOrder.join(' → ') : '(无)'} · 节点 ${result.nodes.length}`)
+  if (sheet.skipped.length) {
+    lines.push(`  ⚠ 未处理 ${sheet.skipped.length} 条（v1 支持面外——不静默）：`)
+    const byKind = new Map<string, number>()
+    for (const s of sheet.skipped) byKind.set(`${s.kind}:${s.detail.slice(0, 40)}`, (byKind.get(`${s.kind}:${s.detail.slice(0, 40)}`) ?? 0) + 1)
+    for (const [k, n] of byKind) lines.push(`      × ${n}  ${k}`)
+  }
+  // 提取期记录（动态 class/style 等——v1 不展开，如实列出）
+  if (notes.length) {
+    const byKind = new Map<string, number>()
+    for (const n of notes) byKind.set(n.kind, (byKind.get(n.kind) ?? 0) + 1)
+    lines.push(`  ⓘ 提取期未展开：${[...byKind].map(([k, v]) => `${k}×${v}`).join(' · ')}（动态形态需运行期——plan B2）`)
+  }
+  if (result.diagnostics.length) {
+    lines.push(`  ⚠ 计算期诊断 ${result.diagnostics.length} 条：`)
+    for (const d of result.diagnostics.slice(0, 12)) lines.push(`      [${d.code}] ${d.message}`)
+    if (result.diagnostics.length > 12) lines.push(`      …（其余 ${result.diagnostics.length - 12} 条略）`)
+  }
+  const max = opts.maxNodes ?? 60
+  lines.push('')
+  for (const node of result.nodes.slice(0, max)) {
+    lines.push(`  ● ${node.key}`)
+    const fields = Object.entries(node.fields)
+    if (!fields.length) lines.push('      （无 IR 字段——本节点没有命中任何规则）')
+    for (const [field, value] of fields.slice(0, 30)) {
+      const t = node.trace[field]
+      const v = typeof value === 'object' ? JSON.stringify(value) : String(value)
+      if (!t) {
+        lines.push(`      ${field} = ${v}`)
+        continue
+      }
+      if (t.via === 'inherited') {
+        lines.push(`      ${field} = ${v}   ← 继承（无本节点规则）`)
+      } else if (t.via === 'default') {
+        lines.push(`      ${field} = ${v}   ← 默认值`)
+      } else if (t.from) {
+        const f = t.from
+        const flags = [
+          f.layer ? `@layer ${f.layer}` : '无层',
+          `特异性(${f.specificity.join(',')})`,
+          `源序#${f.order}`,
+          f.important ? '!important' : '',
+          f.fromShorthand ? `简写 ${f.fromShorthand}` : '',
+        ].filter(Boolean)
+        const varNote = t.varSubstituted ? ` · var→${t.varSubstituted}` : ''
+        lines.push(`      ${field} = ${v}   ← ${f.selector}  [${flags.join(' · ')}]${varNote}`)
+      } else {
+        lines.push(`      ${field} = ${v}`)
+      }
+    }
+    if (node.unmapped.length) {
+      lines.push(`      ⓘ 未映射到 IR（引擎不消费）：${node.unmapped.map((u: { prop: string; value: string }) => `${u.prop}: ${u.value}`).join(' · ')}`)
+    }
+  }
+  if (result.nodes.length > max) lines.push(`  …（其余 ${result.nodes.length - max} 个节点略——用 --max-nodes 调）`)
+  return lines.join('\n')
+}
+
 /** 智能识别目标：文件存在 → vue 决策 trace；否则 → 规则 ID 的 AI 说明书（纯函数，可单测） */
 export function explainTarget(target: string, opts: ExplainTargetOptions = {}): string {
   if (fs.existsSync(target)) {
@@ -218,6 +295,8 @@ export function explainTarget(target: string, opts: ExplainTargetOptions = {}): 
     // ★★P4 能力视图（2026-10-03）：`--json` 输出**机器可读**的能力缺口总账（CI/门禁消费）。
     //   放在最前：这是"这份页面用了哪些未支持特性"的**机器判据**（supported 字段可 gate）。
     if (opts.withVapor && opts.json) return explainVaporJson(source)
+    // ★★★G-61 B1：--style 样式计算 trace（CSE）
+    if (opts.withStyle) return `${base}\n\n${explainStyle(source, opts)}`
     // ★--ir：追加渲染 IR 决策 trace（M0 出口条件）
     if (opts.withIR) return `${base}\n\n${explainIR(source, opts)}`
     // ★--vapor：追加槽位分层判定（V2 出口条件，方案 §5.5 硬性要求）

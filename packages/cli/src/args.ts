@@ -77,6 +77,8 @@ export interface ExplainArgs {
   withIR?: boolean
   /** ★--vapor：追加 Vapor 槽位分层判定（方案 §5.5 硬性要求） */
   withVapor?: boolean
+  /** ★★★G-61 B1：追加「样式计算 trace」（CSE 逐节点 computed + 来源链） */
+  withStyle?: boolean
   /** ★M0：只显示受阻（不可拍平）节点——排查「为什么这个不能拍平」 */
   onlyBlocked?: boolean
   /** ★M0：节点显示上限（防输出爆炸） */
@@ -100,6 +102,7 @@ export function parseExplainArgs(argv: string[]): ExplainArgs {
     target,
     ...(flags.has('--ir') ? { withIR: true } : {}),
     ...(flags.has('--vapor') ? { withVapor: true } : {}),
+    ...(flags.has('--style') ? { withStyle: true } : {}),
     ...(flags.has('--only-blocked') ? { onlyBlocked: true } : {}),
     ...(Number.isFinite(maxNodes) ? { maxNodes: maxNodes as number } : {}),
     ...(flags.has('--json') ? { json: true } : {}),

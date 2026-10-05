@@ -409,6 +409,11 @@ jobs:
         run: node scripts/build-packages.mjs
       - name: 安装 Chromium
         run: npx playwright install --with-deps chromium
+      # ★★★G-61 B1（2026-10-05）：CSE ≡ 真浏览器 getComputedStyle（判据①-b · 113 用例 / 153 项）
+      #   ——"IR 是真值基准的规范化载体"的机器判据：CSE 是被测方，浏览器是真值（D1）
+      - name: CSE ⇄ 浏览器逐属性一致性（G-61 B1 · 判据①-b）
+        run: pnpm run test:cse-parity
+
       - name: Web E2E（SPA 跳转 / 转场 / tap 计数）
         run: pnpm run test:e2e:web
 

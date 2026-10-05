@@ -72,6 +72,16 @@
 某节点某属性的最终值 ← 哪条规则 ← 经过哪几步层叠判定。
 **这是"引擎"与"字段折叠器"的分界线**（承 `Proteus_CSS_Profile规格.md:226`）。
 
+### 3.5 B1 落地现状（2026-10-05 · 判据①-b 首次达成）
+
+- **比对器**：`tests/e2e-cse-parity.test.ts`（装置：真 Chromium + data: URL 单页批量；CSE 与浏览器**同源**跑同一 CSS + DOM）
+- **用例表**：`tests/fixtures/cse-parity-cases.ts`（**113 用例 / 153 项**，覆盖值形态 / 层叠 / 继承 / 计算值 / 简写竞争）
+- **结果**：**100% 一致**（A/B 类全过）。★**C 类（ratio/auto）不进本判据**——resolved 是布局结果（归判据②几何）。
+- **门禁**：`pnpm run test:cse-parity`（CI + verify 接线）。
+- **执行栈**：`packages/compiler/src/cse/{parse,match,cascade,compute,shorthand,extract,colors-named}.ts`（L-A 唯一实现；
+  与 `vapor/template.ts` 旧折叠通路**并行**——B3 按端/字段切换后旧件下线，plan §2.2）。
+- **trace**：`proteus explain --style`（逐字段 ← 选择器 [层 · 特异性 · 源序 · !important · 简写来源]；继承标 `inherited`）。
+
 ### 3.4 比对阶段口径（★防 E1 假触发——2026-10-05 追加，随决策 #548）
 
 CSS 的值有阶段：声明值 → **计算值（computed）** → **使用值（used，经布局）** → 实际值（actual）。

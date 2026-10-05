@@ -112,8 +112,8 @@ async function main(): Promise<void> {
       break
     }
     case 'explain': {
-      const { target, withIR, withVapor, onlyBlocked, maxNodes, json } = parseExplainArgs(rest)
-      console.log(explainTarget(target, { withIR, withVapor, onlyBlocked, maxNodes, json }))
+      const { target, withIR, withVapor, withStyle, onlyBlocked, maxNodes, json } = parseExplainArgs(rest)
+      console.log(explainTarget(target, { withIR, withVapor, withStyle, onlyBlocked, maxNodes, json }))
       break
     }
     case 'rules': {
