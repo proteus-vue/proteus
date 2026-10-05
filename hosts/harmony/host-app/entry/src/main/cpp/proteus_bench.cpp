@@ -479,6 +479,36 @@ static void measureTextTypoPx(const std::string& text, double fontPx, double* ou
     OH_Drawing_DestroyFontCollection(fc);
 }
 
+/** ★★第三轮（2026-10-05 · white-space 全端对齐）：wrap 文本按**盒宽**折行测量——
+ *   与 Android（StaticLayout）/ iOS（boundingRect）同源；返回折行后的宽高（物理 px）。 */
+static void measureTextWrappedTypoPx(const std::string& text, double fontPx, double lineWidthPx,
+                                     double* outW, double* outH, double letterSpacingPx = 0) {
+    *outW = 0; *outH = 0;
+    if (text.empty() || fontPx <= 0 || lineWidthPx <= 1.0) return;
+    OH_Drawing_FontCollection* fc = OH_Drawing_CreateFontCollection();
+    if (fc == nullptr) return;
+    OH_Drawing_TypographyStyle* ts = OH_Drawing_CreateTypographyStyle();
+    OH_Drawing_TextStyle* tstyle = OH_Drawing_CreateTextStyle();
+    OH_Drawing_SetTextStyleFontSize(tstyle, fontPx);
+    if (letterSpacingPx != 0) OH_Drawing_SetTextStyleLetterSpacing(tstyle, letterSpacingPx);
+    OH_Drawing_TypographyCreate* handler = OH_Drawing_CreateTypographyHandler(ts, fc);
+    if (handler != nullptr) {
+        OH_Drawing_TypographyHandlerPushTextStyle(handler, tstyle);
+        OH_Drawing_TypographyHandlerAddText(handler, text.c_str());
+        OH_Drawing_Typography* typo = OH_Drawing_CreateTypography(handler);
+        if (typo != nullptr) {
+            OH_Drawing_TypographyLayout(typo, lineWidthPx);
+            *outW = OH_Drawing_TypographyGetLongestLine(typo);
+            *outH = OH_Drawing_TypographyGetHeight(typo);
+            OH_Drawing_DestroyTypography(typo);
+        }
+        OH_Drawing_DestroyTypographyHandler(handler);
+    }
+    OH_Drawing_DestroyTextStyle(tstyle);
+    OH_Drawing_DestroyTypographyStyle(ts);
+    OH_Drawing_DestroyFontCollection(fc);
+}
+
 /** 夹具排版（视口 = 调用方传入的**逻辑 vp 尺寸**——夹具 device-independent，视口运行时给）：
  *   返回 layout handle（0 = 失败）；rects 输出 id→几何（逻辑单位）。 */
 static uint64_t layoutSfcFixture(const std::string& fixture, double vpW, double vpH,
@@ -4288,11 +4318,19 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
     jnum(argsJson.c_str(), argsJson.size(), "vpW", &vpW);
     jnum(argsJson.c_str(), argsJson.size(), "vpH", &vpH);
     if (density <= 0) density = 1.0;
+    // ★★第五轮修复（2026-10-05 · 右缘 1px 缝的**唯一收敛修法**）：**视口向上取整到整物理像素**——
+    //   ArkTS 侧 vp↔px 往返会丢小数（实测页根 cmd 宽 1319.5px vs 屏 1320px ⇒ 最右 1px 列
+    //   露宿主深色底，第四轮复评实测 x=1319 全高 #0f1018）。
+    //   在**此处**（所有 cmd 几何的唯一出口）把 vpW 上调到 ceil(vpW×density)/density：
+    //   无论上游给 377 还是 377.14vp，页根宽都恰为 1320px（超出部分被窗口裁掉，不足才会露底）。
+    vpW = std::ceil(vpW * density) / density;
     if (nodes.empty()) { napi_value o; napi_create_string_utf8(env, "[]", NAPI_AUTO_LENGTH, &o); return o; }
     // 建树（内容节点扁平键与内核 create 契约同源——直接透传）。★必须注入 textMeasures
     //   （与 Android/iOS 同）：否则文本节点 0 高 ⇒ 布局塌缩 ⇒ 命中落空（本仓实测：无测量 hit 全 miss）。
     std::vector<std::string> nItems = splitJsonObjects(nodes);
     std::string measures = "{"; int mc = 0;
+    // ★★第三轮（2026-10-05）：首遍（单行）高度记账——二遍（折行）比较用
+    std::unordered_map<int, double> firstHpx;
     for (const auto& it : nItems) {
         std::string tx; if (!jstr(it.c_str(), it.size(), "text", &tx) || tx.empty()) continue;
         double id = -1, fs = 14;
@@ -4305,6 +4343,7 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
         std::string lhTok; jstr(it.c_str(), it.size(), "lineHeight", &lhTok);
         double lhDesign = lineHeightDesignPx(lhTok, fs);
         if (lhDesign > 0) hpx = lhDesign * density;
+        firstHpx[(int)id] = hpx;
         char mb[160]; snprintf(mb, sizeof(mb), "%s\"%d\":{\"width\":%.2f,\"height\":%.2f}", mc > 0 ? "," : "", (int)id, wpx / density, hpx / density);
         measures += mb; mc++;
     }
@@ -4313,6 +4352,56 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
     std::string req = "{\"viewport\":" + std::string(vpb) + ",\"nodes\":" + nodes + ",\"textMeasures\":" + measures + "}";
     uint64_t handle = proteus_layout_create(req.c_str());
     if (handle == 0) { napi_value o; napi_create_string_utf8(env, "[]", NAPI_AUTO_LENGTH, &o); return o; }
+    // ★★第三轮复评修复（2026-10-05）：**wrap 文本二遍测量**——首遍只有单行度量 ⇒ 折行文本
+    //   盒高偏小（副标题尾部丢失/与 Web 不等高）。流程：读首遍盒宽 → 按盒宽折行重测 →
+    //   有变化则重建（与 Android/iOS 宿主同源）。
+    {
+        char* rp0 = proteus_layout_rects(handle);
+        std::unordered_map<int, Rect> rect0; parseRects(rp0 ? rp0 : "{}", rect0);
+        if (rp0) proteus_layout_free_string(rp0);
+        std::string measures2 = "{"; int mc2 = 0; bool changed = false;
+        for (const auto& it : nItems) {
+            std::string tx; if (!jstr(it.c_str(), it.size(), "text", &tx) || tx.empty()) continue;
+            double id = -1, fs = 14;
+            jnum(it.c_str(), it.size(), "id", &id);
+            jnum(it.c_str(), it.size(), "fontSize", &fs);
+            double lsDesign = 0; jnum(it.c_str(), it.size(), "letterSpacing", &lsDesign);
+            std::string ws; jstr(it.c_str(), it.size(), "whiteSpace", &ws);
+            const bool single = (ws == "nowrap" || ws == "pre");
+            std::string lhTok; jstr(it.c_str(), it.size(), "lineHeight", &lhTok);
+            double lhDesign = lineHeightDesignPx(lhTok, fs);
+            double wpx = 0, hpx = 0;
+            auto rit = rect0.find((int)id);
+            const double boxWpx = rit != rect0.end() ? rit->second.w * density : 0.0;
+            if (!single && boxWpx > 1.0) {
+                measureTextWrappedTypoPx(tx, fs * density, boxWpx, &wpx, &hpx, lsDesign * density);
+                if (lhDesign > 0) {
+                    double nW = 0, nH = 0;
+                    measureTextTypoPx(tx, fs * density, &nW, &nH, lsDesign * density);
+                    if (nH > 0.5) {
+                        int lines = (int)((hpx / nH) + 0.5);
+                        if (lines < 1) lines = 1;
+                        hpx = lines * lhDesign * density;
+                    }
+                }
+            } else {
+                measureTextTypoPx(tx, fs * density, &wpx, &hpx, lsDesign * density);
+                if (lhDesign > 0) hpx = lhDesign * density;
+            }
+            double fH = 0;
+            { auto fit = firstHpx.find((int)id); if (fit != firstHpx.end()) fH = fit->second; }
+            if (hpx > fH + 0.5) changed = true;
+            char mb[160]; snprintf(mb, sizeof(mb), "%s\"%d\":{\"width\":%.2f,\"height\":%.2f}", mc2 > 0 ? "," : "", (int)id, wpx / density, hpx / density);
+            measures2 += mb; mc2++;
+        }
+        measures2 += "}";
+        if (changed) {
+            std::string req2 = "{\"viewport\":" + std::string(vpb) + ",\"nodes\":" + nodes + ",\"textMeasures\":" + measures2 + "}";
+            proteus_layout_destroy(handle);
+            handle = proteus_layout_create(req2.c_str());
+            if (handle == 0) { napi_value o; napi_create_string_utf8(env, "[]", NAPI_AUTO_LENGTH, &o); return o; }
+        }
+    }
     // ★★真实触摸（2026-10-04）：**保留句柄**供真实触摸（`.onTouch` → `appScreenHitAt`）复用
     //   （旧版此处 `proteus_layout_destroy` ⇒ 句柄释放后无法由真触摸驱动命中）。
     if (g_appTouchTree != 0) proteus_layout_destroy(g_appTouchTree);
@@ -4349,7 +4438,16 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
     for (const auto& it : items) {
         double id = -1; jnum(it.c_str(), it.size(), "id", &id);
         auto ri = rectMap.find((int)id); if (ri == rectMap.end()) continue;
-        const Rect& r = ri->second;
+        // ★★第五轮修复（2026-10-05 · 右缘 0.5px 缝的**根因修法**）：内核 rects 按整数 dp 吸附
+        //   （377.14dp → 377dp ⇒ ×3.5 = 1319.5px vs 屏 1320px，右缘 0.5px 露宿主底）。
+        //   铺满视口的节点 = **页面画布**：其几何按定义就是视口 ⇒ 钳到视口精确值
+        //   （其余节点**分毫不动**——布局语义零变化，只修画布铺满）。
+        Rect rClamped = ri->second;
+        if (rClamped.x <= 0.5 && rClamped.y <= 0.5 && rClamped.w >= vpW - 2.0 && rClamped.h >= vpH - 2.0) {
+            if (rClamped.w < vpW) rClamped.w = vpW;
+            if (rClamped.h < vpH) rClamped.h = vpH;
+        }
+        const Rect& r = rClamped;
         // ★批次 25（CSS 兼容对齐 · 以 Web 为基准）：visibility:hidden ⇒ 仍占位、不绘制
         std::string visv; jstr(it.c_str(), it.size(), "visibility", &visv);
         const bool isHidden = (visv == "hidden");
@@ -4442,6 +4540,10 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
             if (!ta.empty()) arr += ",\"textAlign\":\"" + jsonEscape(ta) + "\"";
             // ★批次 16：text-overflow:ellipsis ⇒ 扁平键（渲染侧据此设 maxLines=1 + 尾部省略号）
             { std::string to; if (jstr(it.c_str(), it.size(), "textOverflow", &to) && to == "ellipsis") arr += ",\"textOverflowEllipsis\":1"; }
+            // ★★全端对齐批（2026-10-05 · white-space 五端对齐）：换行模式 + overflow 透传渲染侧——
+            //   wrap（normal/pre-wrap/pre-line）⇒ 盒宽折行；nowrap ⇒ 单行（省略号/裁切/溢出）。
+            { std::string ws; if (jstr(it.c_str(), it.size(), "whiteSpace", &ws) && !ws.empty()) arr += ",\"whiteSpace\":\"" + jsonEscape(ws) + "\""; }
+            { std::string ov; if (jstr(it.c_str(), it.size(), "overflow", &ov) && ov == "hidden") arr += ",\"clipText\":1"; }
             // ★批次 35：文本装饰（underline / line-through）
             { std::string td; if (jstr(it.c_str(), it.size(), "textDecoration", &td) && td != "none") arr += ",\"textDecoration\":\"" + jsonEscape(td) + "\""; }
             // ★批次 36：字体角色（font-family → role；鸿蒙按可用字族映射，缺则回落默认）

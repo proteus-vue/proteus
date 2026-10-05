@@ -7,7 +7,7 @@
     },
     "dpr": 2,
     "theme": "light",
-    "collectedAt": "2026-10-05T08:45:46.776Z"
+    "collectedAt": "2026-10-05T10:43:45.116Z"
   },
   "pages": {
     "text": {
@@ -17,15 +17,15 @@
           "tag": "div",
           "text": "这是一条非常长的标题文本用于验证单行截断与省略号显示效果",
           "rect": {
-            "x": 34,
-            "y": 150,
-            "width": 322,
+            "x": 26,
+            "y": 142,
+            "width": 338,
             "height": 26
           },
           "computed": {
             "display": "flex",
             "position": "static",
-            "width": "322px",
+            "width": "338px",
             "height": "26px",
             "overflow-x": "hidden",
             "overflow-y": "hidden",
@@ -144,15 +144,15 @@
           "tag": "div",
           "text": "短标题",
           "rect": {
-            "x": 34,
-            "y": 176,
-            "width": 322,
+            "x": 26,
+            "y": 168,
+            "width": 338,
             "height": 26
           },
           "computed": {
             "display": "flex",
             "position": "static",
-            "width": "322px",
+            "width": "338px",
             "height": "26px",
             "overflow-x": "hidden",
             "overflow-y": "hidden",
@@ -271,8 +271,8 @@
           "tag": "div",
           "text": "这是一段足够长的正文用于验证自动换行行为文字超过容器宽度时应该折行显示并在下一行继续排版",
           "rect": {
-            "x": 34,
-            "y": 272,
+            "x": 26,
+            "y": 264,
             "width": 240,
             "height": 60
           },
@@ -398,8 +398,8 @@
           "tag": "div",
           "text": "第一行\n    缩进四格第二行\n第三行",
           "rect": {
-            "x": 34,
-            "y": 402,
+            "x": 26,
+            "y": 394,
             "width": 240,
             "height": 60
           },
@@ -525,15 +525,15 @@
           "tag": "div",
           "text": "这是一条非常长的标题文本用于验证溢出裁切无省略号的效果",
           "rect": {
-            "x": 34,
-            "y": 532,
-            "width": 322,
+            "x": 26,
+            "y": 524,
+            "width": 338,
             "height": 26
           },
           "computed": {
             "display": "flex",
             "position": "static",
-            "width": "322px",
+            "width": "338px",
             "height": "26px",
             "overflow-x": "hidden",
             "overflow-y": "hidden",

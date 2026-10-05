@@ -201,6 +201,8 @@ final class VaporRenderHost {
             //   id 每棵树重新分配，旧表的裁剪/描边/变换原会被新树"同 id 节点"继承
             //   ⇒ 幽灵裁剪 / 幽灵描边（详见 `ProteusHostView.resetPerTreeState` 注释）。
             if (view != null) view.resetPerTreeState();
+            // ★★全端对齐批（2026-10-05 · white-space 五端对齐）：记下本树 viewport（第二遍测量重建树用）
+            lastVw = vw; lastVh = vh;
             specs.clear();
             indexById.clear();
             int textCount = 0;
@@ -229,6 +231,17 @@ final class VaporRenderHost {
             handle = RustLayout.create(request.toString());
             double layoutMs = (System.nanoTime() - tc) / 1e6;
             if (handle <= 0) return err(out, "核心建树失败（handle=0）").toString();
+            // ★★全端对齐批（2026-10-05 · white-space 五端对齐）：**第二遍测量**——
+            //   wrap 类（normal/pre-wrap/pre-line）文本在**解析后的盒宽**下折行 ⇒ 高度=多行高。
+            //   首遍（buildMeasures）只有单行度量 ⇒ 文本盒高偏小、容器不随内容增高（与 Web 不一致）。
+            //   流程：首遍 create → readRects 得盒宽 → 按盒宽重测 wrap 文本 → 有变化则 destroy + 重建。
+            //   ★诚实边界：`pre`（保留空白且**不**折行）在本渲染器按 wrap 近似（受盒宽折行）；
+            //     该值在验收语料未使用——列为已知近似，后续按需精化。
+            {
+                byte[] tmp = applyWrapRemeasure(vw, vh);
+                if (tmp != null) handle = RustLayout.create(new String(tmp, java.nio.charset.StandardCharsets.UTF_8));
+                if (handle <= 0) return err(out, "核心重建树失败（handle=0）").toString();
+            }
             // ★★**把句柄接给视图**（2026-10-01 交互闭环实测抓出）：
             //   视图的命中测试（`dispatchHit`）走 `RustLayout.hitTest(coreHandle, …)`——
             //   而 **`coreHandle` 是视图自持的字段**，只有 `attachCore(handle)` 才会设上。
@@ -1300,6 +1313,62 @@ final class VaporRenderHost {
         return arr;
     }
 
+    /** ★★全端对齐批：本树 viewport（第二遍测量重建树用） */
+    private float lastVw = 1080f, lastVh = 2400f;
+
+    /**
+     * ★★全端对齐批（2026-10-05）：**wrap 文本的第二遍测量**（按解析盒宽折行）。
+     *   返回**新请求体的 UTF-8 字节**（有 wrap 文本且尺寸变化时）；无需重建 ⇒ null。
+     */
+    private byte[] applyWrapRemeasure(float vw, float vh) throws Exception {
+        if (handle == 0L) return null;
+        org.json.JSONObject rectsAll = new org.json.JSONObject(RustLayout.readRects(handle));
+        org.json.JSONObject rects = rectsAll.optJSONObject("rects");
+        if (rects == null) return null;
+        JSONObject measures = buildMeasures();   // 首遍表（单行）
+        boolean changed = false;
+        for (JSONObject spec : specs) {
+            String t = spec.optString("text", null);
+            if (t == null || t.isEmpty()) continue;
+            String ws = spec.optString("whiteSpace", null);
+            // ★★第三轮复评：缺省 = normal（可折行）——与 mkCmd 同判据（一处语义两处消费，必须同步）
+            boolean wrapMode = !("nowrap".equals(ws) || "pre".equals(ws));
+            if (!wrapMode) continue;
+            org.json.JSONObject r = rects.optJSONObject(String.valueOf(spec.getInt("id")));
+            if (r == null) continue;
+            float boxW = (float) r.optDouble("width");
+            if (boxW <= 1f) continue;
+            float fs = (float) spec.optDouble("fontSize", 14);
+            android.text.TextPaint tp = new android.text.TextPaint();
+            tp.setTextSize(fs);
+            int mw = (int) spec.optDouble("fontWeight", 400);
+            tp.setTypeface(ProteusHostView.typefaceOf(spec.optString("fontFamily", null), mw, null));
+            float ls = (float) spec.optDouble("letterSpacing", 0);
+            if (ls != 0f && fs > 0f) tp.setLetterSpacing(ls / fs);
+            android.text.StaticLayout sl = android.text.StaticLayout.Builder
+                    .obtain(t, 0, t.length(), tp, Math.max(1, (int) Math.ceil(boxW)))
+                    .setIncludePad(false)
+                    .build();
+            int lines = sl.getLineCount();
+            if (lines <= 1) continue;   // 单行 ⇒ 与首遍等价（零操作）
+            float lh = lineHeightPxOf(spec, fs);
+            float h = lh > 0f ? lines * lh : sl.getHeight();
+            float w = 0f;
+            for (int i = 0; i < lines; i++) w = Math.max(w, sl.getLineWidth(i));
+            JSONObject sz = new JSONObject();
+            sz.put("width", Math.ceil(Math.min(boxW, w + 0.5f)));
+            sz.put("height", Math.ceil(h));
+            measures.put(String.valueOf(spec.getInt("id")), sz);
+            changed = true;
+        }
+        if (!changed) return null;
+        JSONObject request = new JSONObject();
+        request.put("viewport", new JSONObject().put("width", vw).put("height", vh));
+        request.put("nodes", coreNodes());
+        request.put("textMeasures", measures);
+        return request.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    }
+
     /**
      * 文本度量（宿主注入——内核不自研文本）。
      *
@@ -1433,12 +1502,26 @@ final class VaporRenderHost {
             // ★批次 16（CSS 兼容对齐 · 以 Web 为基准）：`text-overflow: ellipsis` —— **单行**溢出以 … 截断。
             //   ★在 mkCmd（挂载/更新各一次）算好并替换文本 ⇒ **绘制路径零额外开销**（与 StaticLayout
             //     缓存同理）；`clip`/未声明 ⇒ 原样（既有零行为变化）。Web 语义：本仓文本无自动换行。
-            if ("ellipsis".equals(spec.optString("textOverflow", null)) && w > 1f) {
+            // ★★全端对齐批（2026-10-05 · white-space 五端对齐）：读换行模式——
+            //   wrap 类（normal/pre-wrap/pre-line/pre）⇒ 折行绘制；nowrap ⇒ 单行（省略号或裁切）。
+            final String wsRaw = spec.optString("whiteSpace", null);
+            // ★★第三轮复评修复（2026-10-05）：**缺省 = CSS `normal`（可折行）**——
+            //   此前"缺省=单行"让未声明 white-space 的文本不折行（复评抓出：副标题尾部
+            //   「寻址」在 App 端被裁而 Web 折 2 行）。CSS 缺省即 normal；只有显式
+            //   `nowrap`/`pre` 才是单行。
+            final boolean wsWrap = !("nowrap".equals(wsRaw) || "pre".equals(wsRaw));
+            if (!wsWrap && "ellipsis".equals(spec.optString("textOverflow", null)) && w > 1f) {
                 android.text.TextPaint etp = new android.text.TextPaint(); // 度量与绘制同源（字号 + 字重）
                 etp.setTextSize(fs);
                 etp.setTypeface(ProteusHostView.typefaceOf(null, fw, null));
-                t = android.text.TextUtils.ellipsize(t, etp, Math.max(1f, w - 2f),
-                        android.text.TextUtils.TruncateAt.END).toString();
+                // ★★全端对齐批（2026-10-05）：**仅在真溢出时**截断——短文本（盒宽 == 文本宽，
+                //   如「短标题」）此前被 `w - 2` 的固定余量误判为溢出 ⇒ 恒截成「短...」
+                //   （独立视觉验收抓出的 Android blocker）。判据用完整文宽 > 盒宽 + 0.5 容差。
+                final float fullW = etp.measureText(t);
+                if (fullW > w + 0.5f) {
+                    t = android.text.TextUtils.ellipsize(t, etp, Math.max(1f, w - 2f),
+                            android.text.TextUtils.TruncateAt.END).toString();
+                }
             }
             // ★批次 4：文本水平对齐（text-align → 0/1/2）
             int ta = alignOf(spec.optString("textAlign", null));
@@ -1449,7 +1532,23 @@ final class VaporRenderHost {
             // ★批次 35：文本装饰（0=none/1=underline/2=line-through）
             String td = spec.optString("textDecoration", null);
             int decor = "underline".equals(td) ? 1 : "line-through".equals(td) ? 2 : 0;
-            return new ProteusHostView.Cmd(x, y, w, h, color, t, fs, textColor, radius, grad, glowSpec, maskSpec, fw, ta, bw, bc, shadowSpec, lh, ls, decor);
+            // ★★全端对齐批：绘制模式标记——multiLine=wrap 且该盒宽确需多行；clipText=nowrap 溢出裁切。
+            boolean multiLine = false;
+            if (wsWrap && !t.isEmpty() && w > 1f) {
+                android.text.TextPaint wtp = new android.text.TextPaint();
+                wtp.setTextSize(fs);
+                wtp.setTypeface(ProteusHostView.typefaceOf(spec.optString("fontFamily", null), fw, null));
+                if (ls != 0f && fs > 0f) wtp.setLetterSpacing(ls / fs);
+                android.text.StaticLayout wsl = android.text.StaticLayout.Builder
+                        .obtain(t, 0, t.length(), wtp, Math.max(1, (int) Math.ceil(w)))
+                        .setIncludePad(false)
+                        .build();
+                multiLine = wsl.getLineCount() > 1;
+            }
+            final boolean clipText = !wsWrap && w > 1f
+                    && "hidden".equals(spec.optString("overflow", null))
+                    && !("ellipsis".equals(spec.optString("textOverflow", null)));
+            return new ProteusHostView.Cmd(x, y, w, h, color, t, fs, textColor, radius, grad, glowSpec, maskSpec, fw, ta, bw, bc, shadowSpec, lh, ls, decor, wsWrap ? 0 : 1, multiLine, clipText);
         }
         return new ProteusHostView.Cmd(x, y, w, h, color, null, 0f, 0, radius, grad, glowSpec, maskSpec, 400, 0, bw, bc, shadowSpec);
     }

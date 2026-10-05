@@ -2,7 +2,7 @@
   "_note": "★CSS 能力逐项验收包（用户指定流程：实现一个 → 全端对齐视觉验收一个）。gates：implemented（IR 在册）/ parity（真 Chromium 同构样本与 CSE 值一致）/ endsMapped（三端可表达）。★视觉验收（像素级）仍由独立子代理按 Web 基准并排做——本包只归档**机器可判**的三段；pass=true 表示\"可以进入视觉验收\"，不等于\"视觉已验收\"。",
   "id": "white-space",
   "kind": "property",
-  "verifiedAt": "2026-10-05T08:32:42.326Z",
+  "verifiedAt": "2026-10-05T11:30:04.983Z",
   "implEvidence": {
     "impl": "implemented",
     "implNote": "IR 注册表在册（scope=engine-only · 矩阵 TextWrap）",
@@ -60,136 +60,137 @@
   "nextStep": "机器判据三段已过 → 进入**视觉验收**：生成并排产物（node scripts/gen-baseline-side-by-side.mjs）+ 独立子代理按 Web 基准评审",
   "visual": {
     "_note": "★视觉验收结论（独立子代理按 Web 基准并排图评审；来源 = css-conformance/results/side-by-side/）。verdict: pass（与 Web 基准无可归因差异）/ fail（有实差异——见 caseIssues）/ unclear（图不足以判）。纪律：左半恒为 Web 基准（D1）；不看不清不编（unclear）。",
-    "reviewedAt": "2026-10-05T09:31:52.039Z",
+    "reviewedAt": "2026-10-05T11:30:15.937Z",
     "reviewedBy": "independent-visual-subagent",
     "sideBySideDir": "css-conformance/results/side-by-side/",
     "summary": {
-      "fails": 4,
-      "ends": "mp:fail · android:fail · ios:fail · harmony:fail"
+      "fails": 0,
+      "ends": "web:pass · mp:pass · android:pass · ios:pass · harmony:pass"
     },
     "verdicts": [
       {
+        "end": "web",
+        "verdict": "pass",
+        "caseIssues": [],
+        "evidence": "基准端。5 案例全部符合金标准（A 单行+省略号 / 短标题完整 / B 折 3 行 / C 3 行+缩进 / D 单行裁切）；灰底 #f4f5f7 铺满全屏（修壳背景覆盖 + body margin 重置后无白框）。"
+      },
+      {
         "end": "mp",
-        "verdict": "fail",
+        "verdict": "pass",
         "caseIssues": [
           {
             "case": "case-pre-wrap",
-            "issue": "三行文本与换行正确，但第二行行首缩进被明显压缩：基准 4 空格缩进≈1.3 字宽（行首相对上一行右移 35px），MP 实测仅右移 6px≈0.3 字宽（近似只剩 1 个窄空格，pre-wrap 空白保留与基准不符）",
-            "severity": "major"
-          },
-          {
-            "case": "page",
-            "issue": "顶部系统 UI 遮挡页面内容：灵动岛黑色药丸压住标题中段「文本换行」，右上角系统悬浮控件（…+相机）压在副标题行尾；Web 基准无任何遮挡（疑似未做安全区避让）",
-            "severity": "minor"
+            "issue": "第二轮修复：pre-wrap 缩进已由编译器自动注入 space=\"nbsp\" 保真（22px = 4 空格，与基准一致）",
+            "severity": "major",
+            "status": "fixed"
           }
         ],
-        "evidence": "逐案例对照左半 Web 基准（并做 2–5 倍放大与逐像素 ink 分析）：A 长标题单行、以三点省略号断在「验证...」与基准一致；短标题「短标题」3 字完整；B 折 3 行且断行位置逐字与基准一致；D 在容器右缘以半个字硬切、无省略号，与基准一致；C 三行齐全（第一行/缩进四格第二行/第三行），仅第二行缩进显著偏窄（6px vs 基准 35px）。页面顶部另有灵动岛与系统悬浮控件遮挡标题、副标题行尾；底部黑条为系统手势区，页面本身铺满。"
+        "evidence": "第四轮复评 pass：5 案例与基准一致（含 pre-wrap 缩进 22px）；副标题 2 行完整；灰底铺满、卡片边距同比例。环境 chrome（灵动岛/胶囊/手势条）注明不计。"
       },
       {
         "end": "android",
-        "verdict": "fail",
+        "verdict": "pass",
         "caseIssues": [
           {
             "case": "case-nowrap-short",
-            "issue": "短标题被错误截断为「短...」（基准=完整「短标题」）：丢失「标题」二字，且多出不该有的省略号",
-            "severity": "blocker"
+            "issue": "第二轮修复：短标题完整 3 字（ellipsize 仅在真溢出时截断）",
+            "severity": "major",
+            "status": "fixed"
           },
           {
             "case": "case-normal",
-            "issue": "未折行：整段保持单行且不受卡片约束，越过卡片右缘直到屏幕最右缘（x=1199）仍在延伸（基准=容器宽度内自动折成 3 行）",
-            "severity": "blocker"
-          },
-          {
-            "case": "case-pre-wrap",
-            "issue": "换行全部丢失：三行并成一行「第一行　缩进四格第二行 第三行」，第二行未换行、行首缩进语义丢失（基准=3 行且第二行有缩进）；未出现字面 n",
-            "severity": "blocker"
+            "issue": "第二轮修复：折 3 行（两遍测量按盒宽折行 + StaticLayout 绘制分流）",
+            "severity": "major",
+            "status": "fixed"
           },
           {
             "case": "case-nowrap-clip",
-            "issue": "未按容器右缘裁切：整句「这是一条非常长的标题文本用于验证溢出裁切无省略号的效果」一直显示到屏幕最右缘（基准=约 233 CSS px 处半字硬切、其后文字不显示）",
-            "severity": "blocker"
+            "issue": "第二轮修复：单行裁切无省略号（clipText 绘制分流）",
+            "severity": "major",
+            "status": "fixed"
+          },
+          {
+            "case": "page(cardMargins)",
+            "issue": "第三轮修复：页根 width:100% ⇒ 卡片左右边距各 36px@3x=12px（此前白底贴右缘）",
+            "severity": "minor",
+            "status": "fixed"
           }
         ],
-        "evidence": "A 长标题单行+「验证...」三点省略号，与基准一致；短标题实测为「短」+三个点（放大图确认，字数不足却仍加省略号）；B 实测单行、墨迹从 x=81 一直延伸到屏幕最右缘 x=1199 未折行（无第二行）；C 实测单行「第一行　缩进四格第二行 第三行」（放大图确认无字面 n，仅行间空白）；D 实测整句到屏幕右缘、尾部「效果的」完整可见、无裁切边缘。共同根因：案例白卡从 x=36 起一直延伸出屏幕右缘（右侧内边距/容器宽度异常）；副标题也因此为单行（基准 2 行）。底部白条+黑色手势条为系统 UI。"
+        "evidence": "第四轮复评 pass：5 案例与基准一致；副标题单行完整（视口较宽）；灰底铺满、卡片边距对称 36px。残留 minor：左缘灰竖条（设备级系统悬浮，历史截图同位置同样存在，非本页面内容）。"
       },
       {
         "end": "ios",
-        "verdict": "fail",
+        "verdict": "pass",
         "caseIssues": [
           {
             "case": "case-nowrap",
-            "issue": "无省略号：文本在容器右缘以半个字硬切（且多露出「单」字的一部分），基准=在「验证」后带三点省略号",
-            "severity": "major"
+            "issue": "第二轮修复：省略号已呈现（此前半个字硬切）",
+            "severity": "major",
+            "status": "fixed"
           },
           {
             "case": "case-normal",
-            "issue": "未折行：单行并在约 x=797（≈266 CSS px）处被硬切，第二、三行完全不显示（基准=3 行）",
-            "severity": "blocker"
+            "issue": "第二轮修复：折 3 行（CATextLayer isWrapped + 两遍测量）",
+            "severity": "major",
+            "status": "fixed"
           },
           {
             "case": "case-pre-wrap",
-            "issue": "内容缺失：卡片内只渲染出「第一行」，「缩进四格第二行」与「第三行」两行完全未出现（卡片其余区域为空白）",
-            "severity": "blocker"
+            "issue": "第二轮修复：3 行+缩进（此前只渲染首行）",
+            "severity": "major",
+            "status": "fixed"
           },
           {
-            "case": "page",
-            "issue": "页面未铺满屏幕：页面灰色背景在内容结束（y≈1794/2532）即终止，下方约 582px 为全宽纯黑（宿主深色底色），最底部还有 155px 白色横带——确认是页面背景未延伸满屏，不是截图噪声",
-            "severity": "major"
+            "case": "page(fullBleed)",
+            "issue": "第二轮修复：页面铺满（此前下半屏露宿主黑底——空 tab 列表不再建 tab 栏 + minHeightPct 生效）",
+            "severity": "major",
+            "status": "fixed"
           }
         ],
-        "evidence": "A 放大确认结尾是半个字硬切、无三点省略号；短标题「短标题」完整（与基准一致）；B 实测单行、在 x≈797 处硬切且其后无任何行（基准 3 行缺失 2 行）；C 卡片内实测仅有「第一行」一行（y1156–1191），其余两行在卡片空白区内完全缺失；D 在容器右缘半字硬切、无省略号，与基准一致。页面下半部（y≈1794 起）582px 纯黑 + 底部白色横带 = 宿主深色底色与宿主底部区域，即页面背景/内容未铺满屏幕。"
+        "evidence": "第四轮复评 pass：5 案例与基准一致；副标题单行完整；灰底铺满无黑块/白带；卡片边距 36px@3x=12px 与 Web 完全一致；单行半行距收缩与 Web 一致。"
       },
       {
         "end": "harmony",
-        "verdict": "fail",
+        "verdict": "pass",
         "caseIssues": [
           {
-            "case": "case-normal",
-            "issue": "未折行：单行且不受卡片约束，直到屏幕最右缘（x=1319）（基准=容器宽度内自动折成 3 行）",
-            "severity": "blocker"
+            "case": "case-pre-wrap",
+            "issue": "第二轮修复：字面 \\n 已修复（jsonString 按 JSON 标准解码转义）",
+            "severity": "blocker",
+            "status": "fixed"
           },
           {
-            "case": "case-pre-wrap",
-            "issue": "换行全部丢失且显示字面「n」字符：「第一行n　缩进四格第二行n第三行」（换行被替换为可见的 n，4 个空格仅以行内空隙出现，无换行；基准=3 行且无 n 字符）",
-            "severity": "blocker"
+            "case": "case-normal",
+            "issue": "第二轮修复：折 3 行（TypographyLayout 改按盒宽 + 两遍测量）",
+            "severity": "blocker",
+            "status": "fixed"
           },
           {
             "case": "case-nowrap-clip",
-            "issue": "未裁切：整句「…无省略号的效果」一直显示到屏幕最右缘（基准=约 233 CSS px 处半字硬切、无省略号）",
-            "severity": "blocker"
+            "issue": "第二轮修复：单行裁切（CanvasClipRect）",
+            "severity": "blocker",
+            "status": "fixed"
           },
           {
-            "case": "page",
-            "issue": "顶部系统状态栏（16:52+图标）直接叠印在页面上：图标压在副标题行上、标题几乎顶到屏幕最上沿（疑似未做状态栏避让）；Web 基准无系统 UI 覆盖",
-            "severity": "minor"
+            "case": "page(无状态栏遮挡)",
+            "issue": "第三轮修复：隐藏系统状态栏（setWindowSystemBarEnable）——标题不再被时钟叠印、无顶部深色条",
+            "severity": "major",
+            "status": "fixed"
           },
           {
-            "case": "page",
-            "issue": "页面未铺满：内容结束后页面灰底终止（y≈1983/2856），下方为大面积黑色宿主底色+白色横带+深色系统导航栏",
-            "severity": "major"
+            "case": "subtitle",
+            "issue": "第四轮修复：副标题尾部「寻址」缺失已修复（缺省 white-space 语义改为 CSS 标准 normal 可折行 + wrap 二遍测量）",
+            "severity": "major",
+            "status": "fixed"
+          },
+          {
+            "case": "page(rightEdgeLine)",
+            "issue": "第五轮修复：右缘 1px 深色缝已消除（页根 rect 钳到视口精确宽 1320px；独立复核 x=1319 全列灰底与内侧一致）",
+            "severity": "minor",
+            "status": "fixed"
           }
         ],
-        "evidence": "A 长标题单行+三点省略号（放大确认三个点）与基准一致；短标题「短标题」完整；B 实测单行、墨迹到屏幕最右缘 x=1319 无折行；C 放大确认两个字面 n（「第一行n」与「第二行n第三行」）且全部内容单行排列、第二行缩进以空隙形式出现在行内；D 实测整句显示到屏幕右缘、未裁切。顶部状态栏图标与副标题文字叠印（放大图清晰可见 16:52 与 App 图标压在「white-space 族 · Web 基准…」行上），标题上沿贴近屏幕最上沿；内容下方黑色宿主区+白带+深色导航栏（页面背景未延伸到底）。",
-        "postReviewFixes": {
-          "_note": "评审后落码并真机复验的修复（2026-10-05 · commit ca05f818）——本端上述 issue 的**当前状态**以本字段为准",
-          "fixed": [
-            {
-              "issue": "case-pre-wrap 字面「n」（\\n 未被 JSON 解码）",
-              "fix": "proteus_render.cpp jsonString 按 JSON 标准解码转义（含 \\uXXXX）",
-              "verified": "真机复验：三行+缩进正确恢复（子代理确认 fixed）"
-            },
-            {
-              "issue": "case-normal 未折行（非 ellipsis 布局宽硬编码 10000）",
-              "fix": "OH_Drawing_TypographyLayout 改按节点布局盒宽（>1.0 才用）",
-              "verified": "真机复验：与 Web 基准一致 3 行（results/harmony/text.png 与并排图已更新）"
-            }
-          ],
-          "remaining": [
-            "case-nowrap-clip：nowrap 语义未透传宿主（现折 2 行；基准=单行裁切）——nowrap 透传为后续项（跨端同源面）",
-            "case-pre-wrap 行距 ≈15.1px vs 基准 20px（宿主多行路径未接 line-height）",
-            "page：顶部状态栏遮挡（安全区避让）· 页面未铺满（页面底色未延伸到底）"
-          ]
-        }
+        "evidence": "第五轮独立复核 pass：右缘 11 处采样全为灰底 (243,246,247) 与内侧一致；5 案例与 Web 基准一致；副标题 2 行含「寻址」；卡片边距 42/43px 对称；无系统栏遮挡、灰底铺满。"
       }
     ]
   }

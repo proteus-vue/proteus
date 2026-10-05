@@ -42,8 +42,13 @@ const view = computed<Component | null>(() => {
 </template>
 
 <style scoped>
+/* ★★css-conformance 实测（2026-10-05 · 页面铺满对齐）：壳容器**不得声明任何背景**——
+ *   首版照搬 superapp 的 `background: transparent`，而它带 scopeId（特异性 0,2,0）高于
+ *   页面自身的 `.cc-page`（0,1,0）⇒ 把页面底色**覆盖成透明** ⇒ Web 基准页底变白，
+ *   与 App 端（折进节点 backgroundColor=#f4f5f7）分叉。superapp 无此问题是因为它的页底
+ *   由 Global 层壳（#sa-theme-bg）提供，不在页面类上。
+ *   ⇒ 本壳只保留布局职责（min-height）；**底色完全归页面**（层次单一事实源）。 */
 .page {
-  background: transparent;
   min-height: 100vh;
 }
 </style>

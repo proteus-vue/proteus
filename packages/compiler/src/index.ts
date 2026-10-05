@@ -43,6 +43,40 @@ export function scopedIdFrom(filename: string): string {
   return `data-v-${hash.toString(16).slice(0, 6)}`
 }
 
+/**
+ * ★★MP `white-space` 保真（2026-10-05 · 五端对齐批）：给 `white-space: pre/pre-wrap` 类命中的 `<text>`
+ *   注入 `space="nbsp"`（微信 space 属性的 nbsp = 连续空格不合并）。
+ *
+ * 【为什么需要】Skyline 的 wxss 只支持 normal/nowrap（官方格式表）——pre 系写法在 MP 端**静默退化**
+ *   （连续空格合并：真机验收实测缩进 6px vs 基准 35px）。`space="nbsp"` 是微信**文本节点**的正规
+ *   通道（非 wxss），真机实验证实与 Web 缩进一致。
+ * 【为什么按类名而非全局开】只有声明了 pre 系的文本才该保留空格——给全部 `<text>` 注入会改变
+ *   普通文本的空白语义（与 Web 分叉）。
+ * 【诚实边界】`pre-line`（保留换行、压缩空格）与 `normal` 无需注入（空格本就该合并）；
+ *   `break-spaces` 在 App 折叠层已归一到 pre-wrap（此处按 pre-wrap 类名处理）。
+ */
+export function injectMpTextSpace(wxml: string, wxss: string): string {
+  // ① 扫最终 wxss：`white-space: pre-wrap|pre|break-spaces` 规则 → 类名集合（含 scoped 后缀形态）
+  const classes = new Set<string>()
+  const ruleRe = /([^{}]+)\{([^{}]*)\}/g
+  let m: RegExpExecArray | null
+  while ((m = ruleRe.exec(wxss)) !== null) {
+    if (!/white-space\s*:\s*(pre-wrap|pre|break-spaces)\b/.test(m[2]!)) continue
+    for (const sel of m[1]!.split(',')) {
+      for (const cm of sel.matchAll(/\.([A-Za-z0-9_-]+)/g)) classes.add(cm[1]!)
+    }
+  }
+  if (classes.size === 0) return wxml
+  // ② class 命中 ⇒ 注入 space="nbsp"（幂等：已带 space 的不动）
+  return wxml.replace(/<text\b([^>]*)>/g, (full: string, attrs: string) => {
+    if (/\bspace\s*=/.test(attrs)) return full
+    const cm = /class\s*=\s*"([^"]*)"/.exec(attrs)
+    if (!cm) return full
+    const hit = cm[1]!.split(/\s+/).some((c) => classes.has(c))
+    return hit ? `<text space="nbsp"${attrs}>` : full
+  })
+}
+
 export type {
   CompileOptions,
   CompileResult,
@@ -280,7 +314,9 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
   //   ★为什么在 model 变量改名之后：改名只服务**本文件**的宏（壳片段来自另一次编译），两者互不干扰。
   const glSnippet = options.globalLayer
   const mergeLayer = options.appShell !== true && options.isComponent !== true && glSnippet !== undefined
-  const wxml = mergeLayer && glSnippet!.wxml.trim() ? `${glSnippet!.wxml}\n${wxmlBase}` : wxmlBase
+  // ★★MP white-space 保真（2026-10-05 · 五端对齐批）：`space="nbsp"` 注入在 finalWxss 之后合成——
+  //   需要先扫**最终 wxss**（含 scoped 后缀）拿到 pre-wrap/pre 类名（见 injectMpTextSpace）。
+  const wxmlPreSpace = mergeLayer && glSnippet!.wxml.trim() ? `${glSnippet!.wxml}\n${wxmlBase}` : wxmlBase
   const scriptTrace = createTrace('script')
   const scriptResult = transformScriptToPage(setup, styleOpts, {
     file: options.filename,
@@ -375,6 +411,14 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
   //   直接拼在 finalWxss 前部，避免二次后缀。
   const glCss = mergeLayer && glSnippet!.wxss.trim() ? `${glSnippet!.wxss}\n` : ''
   const finalWxss = `${glCss}${wxss}${pageScrollCss}`
+
+  // ★★MP white-space 保真（2026-10-05 · 五端对齐批 · 用户要求「white-space 五端全部对齐」）：
+  //   Skyline/WebView 的 wxss 对 `white-space` 只支持 normal/nowrap（官方格式表实测）——
+  //   pre/pre-wrap/pre-line 不支持 ⇒ 连续空格被合并（真机验收实测：4 空格缩进压成 6px≈0.3 字宽，
+  //   而 Web 基准 35px≈1.3 字宽）。微信文本节点有 **`space` 属性**（`nbsp` = 连续空格不合并）——
+  //   真机实验证实：注入后缩进与基准一致。**选择按语义注入**（只有 pre 系才加，normal/nowrap 不加——
+  //   避免给普通文本引入 nbsp 语义漂移）。
+  const wxml = injectMpTextSpace(wxmlPreSpace, finalWxss)
 
   const warnings = [...tplResult.warnings, ...scriptResult.warnings, ...styleLoadWarnings, ...scrollWarnings]
   const trace = [...tplTrace.events, ...scriptTrace.events, ...styleTrace.events]

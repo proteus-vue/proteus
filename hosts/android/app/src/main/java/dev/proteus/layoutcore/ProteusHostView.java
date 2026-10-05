@@ -85,6 +85,16 @@ public class ProteusHostView extends ViewGroup {
         /** ★批次 35：文本装饰（0=none / 1=underline / 2=line-through）。 */
         final int textDecoration;
         /**
+         * ★★全端对齐批（2026-10-05 · white-space 五端对齐）：文本换行模式。
+         *   0=normal（默认：按盒宽自动折行）· 1=nowrap · 2=pre · 3=pre-wrap · 4=pre-line。
+         *   既有构造器缺省 1（nowrap）——旧调用方零行为变化。
+         */
+        final int whiteSpace;
+        /** ★★wrap 模式且该盒宽下确需多行 ⇒ 绘制走 StaticLayout 折行（false=单行 drawText 旧路径）。 */
+        final boolean multiLine;
+        /** ★★nowrap 且文本超出盒宽且无省略号 ⇒ 绘制裁到盒（= Web overflow 裁切语义）。 */
+        final boolean clipText;
+        /**
          * ★★圆角半径（px；0 = 直角）——纯绘制属性（内核不收，只影响观感）。
          *
          * 【为什么加（2026-10-01 · 灯光秀）】灯光秀的 800 颗灯珠用 4px 圆角（圆点观感）；
@@ -151,6 +161,11 @@ public class ProteusHostView extends ViewGroup {
         }
         Cmd(float x, float y, float w, float h, int color, String text, float fontSize, int textColor, float radius,
             GradSpec gradient, float[] glow, float[] mask, int fontWeight, int textAlign, float borderWidth, int borderColor, float[] boxShadow, float lineHeight, float letterSpacing, int textDecoration) {
+            this(x, y, w, h, color, text, fontSize, textColor, radius, gradient, glow, mask, fontWeight, textAlign, borderWidth, borderColor, boxShadow, lineHeight, letterSpacing, textDecoration, 1, false, false);
+        }
+        /** ★★全端对齐批：完整构造器（含 white-space 绘制模式）。 */
+        Cmd(float x, float y, float w, float h, int color, String text, float fontSize, int textColor, float radius,
+            GradSpec gradient, float[] glow, float[] mask, int fontWeight, int textAlign, float borderWidth, int borderColor, float[] boxShadow, float lineHeight, float letterSpacing, int textDecoration, int whiteSpace, boolean multiLine, boolean clipText) {
             this.x = x; this.y = y; this.w = w; this.h = h; this.color = color; this.text = text;
             this.fontSize = fontSize;
             this.textColor = textColor;
@@ -166,6 +181,9 @@ public class ProteusHostView extends ViewGroup {
             this.lineHeight = lineHeight;
             this.letterSpacing = letterSpacing;
             this.textDecoration = textDecoration;
+            this.whiteSpace = whiteSpace;
+            this.multiLine = multiLine;
+            this.clipText = clipText;
         }
     }
 
@@ -2550,7 +2568,20 @@ public class ProteusHostView extends ViewGroup {
                 } else {
                     baseY = c.y + c.h * 0.8f;
                 }
-                canvas.drawText(c.text, tx, baseY, textPaint);
+                // ★★全端对齐批（2026-10-05 · white-space 五端对齐）：按模式分流绘制——
+                //   multiLine ⇒ StaticLayout 折行（盒宽约束 + line-height 行距）；
+                //   clipText ⇒ 裁到盒（nowrap 溢出的裁切语义，= Web overflow 裁切）；
+                //   其余 ⇒ 既有单行 drawText（零行为变化）。
+                if (c.multiLine) {
+                    drawTextMultiline(canvas, c);
+                } else if (c.clipText) {
+                    int ssave = canvas.save();
+                    canvas.clipRect(c.x, c.y, c.x + c.w, c.y + c.h);
+                    canvas.drawText(c.text, tx, baseY, textPaint);
+                    canvas.restoreToCount(ssave);
+                } else {
+                    canvas.drawText(c.text, tx, baseY, textPaint);
+                }
             }
             // ★批次 5（CSS 兼容对齐 · 边框）：uniform 边框（stroke 半内缩：strokeWidth/2 居中于边线）。
             if (c.borderWidth > 0 && c.borderColor != 0) {
@@ -2849,6 +2880,8 @@ public class ProteusHostView extends ViewGroup {
         for (int i = 0; i < cmds.size(); i++) {
             final Cmd c = cmds.get(i);
             if (c.gradient != null || c.glow != null || c.mask != null || c.radius > 0f) return false;
+            // ★★全端对齐批：需要折行/裁切的文本 ⇒ 不合快路径（快路径是单行 drawText 重放）
+            if (c.text != null && (c.multiLine || c.clipText)) return false;
         }
         return true;
     }
@@ -3005,6 +3038,36 @@ public class ProteusHostView extends ViewGroup {
      *   ⇒ 按长度分流：短文本走 drawText，长文本走 StaticLayout。
      */
     private static final int STATIC_LAYOUT_MIN_CHARS = 48;
+
+    /**
+     * ★★全端对齐批（2026-10-05 · white-space 五端对齐）：**多行文本绘制**。
+     *   与 Web CSS 对齐：盒宽约束折行 · text-align 的水平对齐 · line-height 的行距（半行距近似：
+     *   行距差分摊（半距上移首行）——与 `drawCmds` 单行的半行距口径同源）。
+     *   textPaint 状态（字号/字重/字距/颜色/alpha）由调用方已设好（与单行路径同一份 paint 状态机）。
+     */
+    private void drawTextMultiline(Canvas canvas, Cmd c) {
+        int w = Math.max(1, (int) Math.ceil(c.w));
+        android.text.Layout.Alignment al = c.textAlign == 1
+                ? android.text.Layout.Alignment.ALIGN_CENTER
+                : c.textAlign == 2 ? android.text.Layout.Alignment.ALIGN_OPPOSITE
+                : android.text.Layout.Alignment.ALIGN_NORMAL;
+        android.text.StaticLayout.Builder b = android.text.StaticLayout.Builder
+                .obtain(c.text, 0, c.text.length(), textPaint, w)
+                .setIncludePad(false)
+                .setAlignment(al);
+        float extra = 0f;
+        if (c.lineHeight > 0f) {
+            android.graphics.Paint.FontMetrics fm = textPaint.getFontMetrics();
+            float natural = fm.descent - fm.ascent;
+            extra = c.lineHeight - natural;
+            if (extra > 0.5f) b.setLineSpacing(extra, 1f);
+        }
+        android.text.StaticLayout layout = b.build();
+        int save = canvas.save();
+        canvas.translate(c.x, c.y + (extra > 0.5f ? extra * 0.5f : 0f));
+        layout.draw(canvas);
+        canvas.restoreToCount(save);
+    }
 
     /** 取（或构建）文本的 StaticLayout */
     private android.text.StaticLayout layoutFor(String text, float maxWidth) {

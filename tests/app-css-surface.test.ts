@@ -83,6 +83,8 @@ describe('★App CSS 支持面 · ② SSOT 与折叠实现同源（真折叠，�
       if (f === 'gridTemplateColumns' || f === 'gridTemplateRows') return '1fr 1fr'
       if (f === 'lineHeight') return '1.5'
       if (f === 'textOverflow') return 'ellipsis'
+      // ★★全端对齐批（2026-10-05 · white-space 五端对齐）：真字段（透传宿主）
+      if (f === 'whiteSpace') return 'pre-wrap'
       if (f === 'visibility') return 'hidden'
       if (f === 'aspectRatio') return '1.5'
       if (f === 'pointerEvents') return 'none'

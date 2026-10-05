@@ -135,6 +135,10 @@ final class SuperappScene: NSObject {
 
     private static func buildTabBar() {
         guard let parent = tabBarParent() else { return }
+        // ★★全端对齐批（2026-10-05 · css-conformance 视觉验收抓出）：**无 tab 的应用不建 tab 栏**——
+        //   此前无条件建 52pt 白底条 ⇒ 验收项目（tabs=[]）底部出现一条与 Web 基准不符的白带
+        //   （"页面未铺满"的真相）。空 tab 语义 = 无 tabBar（与 MP 端"未声明 tabBar 就无 tabBar"同源）。
+        guard !tabNames.isEmpty else { return }
         let h: CGFloat = 52
         let w = parent.bounds.width
         let barY = parent.bounds.height - h

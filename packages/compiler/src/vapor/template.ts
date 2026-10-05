@@ -58,6 +58,9 @@ export const APP_LAYOUT_FIELDS = [
   'margin', 'padding', 'flexDirection', 'flexWrap', 'justifyContent', 'alignItems', 'alignContent', 'alignSelf',
   'flexGrow', 'flexShrink', 'flexBasis', 'gap', 'rowGap', 'columnGap', 'display', 'position', 'top', 'left', 'right', 'bottom', 'overflow',
   'gridTemplateColumns', 'gridTemplateRows', 'gridColumn', 'gridRow', 'aspectRatio', 'pointerEvents',
+  // ★★全端对齐批（2026-10-05 · white-space）：文本换行/空白语义（值透传宿主消费；内核忽略该键）——
+  //   此前 App 端只有单行模型是历史缺口；现五端实现（Android/iOS/鸿蒙/MP 对齐 Web 基准）。
+  'whiteSpace',
 ] as const
 const LAYOUT_FIELDS = new Set<string>(APP_LAYOUT_FIELDS)
 /**
@@ -672,6 +675,21 @@ export function parseStaticStyle(
         markImportant(key)
         continue
       }
+      if (key === 'whiteSpace') {
+        // ★★全端对齐批（2026-10-05 · 用户要求「white-space 五端全部对齐、不留缺陷」）：
+        //   `white-space` 值**透传宿主**——App 端文本引擎按此分流：
+        //   normal/pre-wrap/pre-line ⇒ 自动折行；nowrap/pre ⇒ 不折行（配合 text-overflow / overflow 截断或裁切）。
+        //   `break-spaces` 归一 `pre-wrap`（本仓四端无独立语义）。
+        const v = rawVal.trim().toLowerCase()
+        const norm = v === 'break-spaces' ? 'pre-wrap' : v
+        if (norm === 'normal' || norm === 'nowrap' || norm === 'pre' || norm === 'pre-wrap' || norm === 'pre-line') {
+          out.whiteSpace = norm
+          markImportant('whiteSpace')
+          continue
+        }
+        pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 未支持（仅 normal/nowrap/pre/pre-wrap/pre-line）——已跳过`)
+        continue
+      }
       if (key === 'pointerEvents') {
         // ★批次 32（CSS 兼容对齐 · 以 Web 为基准）：pointer-events（none ⇒ 不参与命中，事件穿透）。
         //   折成布尔（none ⇒ false / auto ⇒ true）；缺省 = auto ⇒ 不发射（零行为变化）。
@@ -765,6 +783,16 @@ export function parseStaticStyle(
         if (pct) {
           const pctKey = key + 'Pct'
           out[pctKey] = Number(pct[1]) / 100
+          markImportant(pctKey)
+          continue
+        }
+        // ★★全端对齐批（2026-10-05）：`vh` 单位（真实项目最常见：`min-height: 100vh` 页面铺满）——
+        //   此前直接落 不是纯数值 诊断被丢 ⇒ App 端页面底色不铺满。映射 `*Pct`（内核 percent，基=父）。
+        //   页面根/全屏容器的父即视口 ⇒ 等价 vh；其余场景为**近似**（如实注释，不静默）。
+        const vh = /^(\d+(?:\.\d+)?)vh$/.exec(rawVal)
+        if (vh) {
+          const pctKey = key + 'Pct'
+          out[pctKey] = Number(vh[1]) / 100
           markImportant(pctKey)
           continue
         }
@@ -1504,10 +1532,8 @@ function noOpResetValue(key: string, val: string): Record<string, unknown> | nul
       // App 默认 display = flex 且 flex-direction = column（= block-like）⇒ `display:block` **无行为差异** ⇒
       //   空记录（不落键；避免给每个 block 元素平白加 display:flex 的 churn）。`inline*` 才是真缺口。
       return v === 'block' ? {} : null
-    case 'whiteSpace':
-      // ★批次 29：App 文本模型是**单行**（不自动换行）⇒ `nowrap` = App 默认行为（no-op）。
-      //   `normal`（Web 默认=自动换行）/ `pre` / `pre-wrap` 等需要**多行/保留空白**支持（真缺口 ⇒ 诊断）。
-      return v === 'nowrap' ? {} : null
+    // ★★全端对齐批（2026-10-05）：`white-space` 移出 no-op 表——现为**真字段**（宿主消费：
+    //   折行/保留空白/单行截断/裁切），处理见下方 LAYOUT_FIELDS 分支。
     case 'overflowX':
     case 'overflowY':
       // ★批次 29：单轴 `overflow-*: visible` = 默认（no-op）；`hidden`/`auto` 等需分轴支持（诊断）。
