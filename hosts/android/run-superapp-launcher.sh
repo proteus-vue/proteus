@@ -62,6 +62,10 @@ echo "==> ⑤ 取回报告 + 断言"
 mkdir -p "$HERE/results"
 rm -f "$HERE/results/superapp-launcher.json"
 "$ADB" pull "$REPORT" "$HERE/results/superapp-launcher.json" >/dev/null 2>&1 || { echo "✗ adb pull 失败"; exit 1; }
+# ★批次 45：视觉证据 PNG —— **设备截屏**（真值，反映实际渲染；in-app root.draw 会早于布局 ⇒ 不可靠）
+rm -f "$HERE/results/superapp-launcher.png"
+"$ADB" exec-out screencap -p > "$HERE/results/superapp-launcher.png" 2>/dev/null \
+  && echo "    ✓ 截图 superapp-launcher.png（设备截屏）" || echo "    ⚠ 截图未取到"
 python3 - "$HERE/results/superapp-launcher.json" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1]))

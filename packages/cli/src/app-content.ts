@@ -103,10 +103,159 @@ export async function buildAppScreenContent(root: string, platform: AppPlatform 
     for (const d of res.diagnostics) diagnostics.push(`${r.name}: ${d.code} ${d.message}`)
   }
 
+  // ★★★批次 45：**App 壳合并**（App.vue 的 global/overlay 层 → 每页单树）。
+  //   提供 `<root>/app-shell.ts`（导出 `statics`）⇒ 构建期静态实例化 App.vue，取其 **global 层**
+  //   （主题底，置底）+ **overlay 层**（chrome/tab 栏，置顶，`position:absolute` 浮于页面）与页面内容
+  //   合成**一棵树**（先 global、后页面、末 overlay）——后画者在顶层 ⇒ 零宿主/内核改动即得 App 壳。
+  //   缺 `app-shell.ts` ⇒ **零行为变化**（不合并）。
+  try {
+    const shellPath = path.join(root, 'app-shell.ts')
+    const appVue = path.join(root, 'App.vue')
+    if (fs.existsSync(shellPath) && fs.existsSync(appVue)) {
+      const shellMod = (await import(pathToFileURL(shellPath).href)) as { statics?: Record<string, unknown> }
+      const statics = shellMod.statics ?? {}
+      const shellRes = buildLayoutTemplate(fs.readFileSync(appVue, 'utf-8'), path.relative(root, appVue), undefined, tokens, statics)
+      if (shellRes.ok) {
+        const shellNodes = (screenContentFromLayoutTemplate(shellRes.template).nodes ?? []) as ShellNode[]
+        const globalSub = subtreeOf(shellNodes, 'global-layer')
+        const overlaySub = subtreeOf(shellNodes, 'overlay-layer')
+        // ★壳自带 tab 栏（overlay-layer 的**最后一个直接子节点**）在合并时**剔除**——它由**宿主原生
+        //   tab 栏**替代（后者能反映当前页高亮并驱动切页；静态壳 tab 栏无法回写 activeTab）。
+        //   剔除后避免"双 Tab 栏"；底部导航由宿主提供（与 MP 原生 tabBar 同语义）。
+        {
+          const ov = shellNodes.find((n) => n.semantic === 'overlay-layer')
+          if (ov) {
+            const kids = shellNodes.filter((n) => n.parentId === ov.id)
+            const tabbarRoot = kids.length ? kids[kids.length - 1] : undefined
+            if (tabbarRoot) {
+              // 闭包该子树并移出 overlaySub
+              const drop = new Set<number>([tabbarRoot.id])
+              let grew = true
+              while (grew) {
+                grew = false
+                for (const n of shellNodes) {
+                  if (n.parentId != null && drop.has(n.parentId) && !drop.has(n.id)) {
+                    drop.add(n.id)
+                    grew = true
+                  }
+                }
+              }
+              for (const id of drop) overlaySub.delete(id)
+            }
+          }
+        }
+        if (globalSub.size || overlaySub.size) {
+          for (const r of routes) {
+            const page = out[r.name] as { nodes?: ShellNode[] } | undefined
+            if (!page?.nodes) continue
+            page.nodes = mergeShell(page.nodes, shellNodes, globalSub, overlaySub)
+          }
+          for (const d of shellRes.diagnostics) diagnostics.push(`App.vue(壳): ${d.code} ${d.message}`)
+        }
+      } else {
+        diagnostics.push('App.vue(壳): 模板编译失败——未合并（页面照常构建）')
+      }
+    }
+  } catch (e) {
+    diagnostics.push(`App.vue(壳) 合并失败（页面照常构建）：${String((e as Error)?.message ?? e)}`)
+  }
+
   const outDir = path.join(root, 'dist', 'app', platform)
   fs.mkdirSync(outDir, { recursive: true })
   const outFile = path.join(outDir, 'screen-content.json')
   fs.writeFileSync(outFile, JSON.stringify(out, null, 2))
   if (compiled === 0) throw new Error('零页面编译成功——App 屏内容产物为空（路由格式/编译器有问题？）')
   return { ok: true, platform, outFile, compiled, skipped, diagnostics }
+}
+
+/** 屏内容节点（`screenContentFromLayoutTemplate` 的形状——只声明本文件用到的字段） */
+interface ShellNode {
+  id: number
+  parentId: number | null
+  semantic?: string
+  [k: string]: unknown
+}
+
+/** 某语义容器（`global-layer`/`overlay-layer`）的**子树 id 集合**（含根；按 parentId 链闭包） */
+function subtreeOf(nodes: ShellNode[], semantic: string): Set<number> {
+  const root = nodes.find((n) => n.semantic === semantic)
+  if (!root) return new Set()
+  const set = new Set<number>([root.id])
+  let grew = true
+  while (grew) {
+    grew = false
+    for (const n of nodes) {
+      if (n.parentId != null && set.has(n.parentId) && !set.has(n.id)) {
+        set.add(n.id)
+        grew = true
+      }
+    }
+  }
+  return set
+}
+
+/**
+ * 把 App 壳的 global 层（置底）+ overlay 层（置顶）与页面内容合成**一棵树**。
+ * 顺序 = [新根] → global 子树 → 页面子树 → overlay 子树（后画者在顶层；overlay 用 absolute 浮于页面）。
+ * 全部 id 重排到新空间（避免壳/页面 id 冲突），parentId 同步改写（容器根挂新根、其余按映射）。
+ */
+function mergeShell(
+  pageNodes: ShellNode[],
+  shellNodes: ShellNode[],
+  globalSub: Set<number>,
+  overlaySub: Set<number>,
+): ShellNode[] {
+  const out: ShellNode[] = [{ id: 0, parentId: null, semantic: 'app-root' }]
+  const shellById = new Map(shellNodes.map((n) => [n.id, n]))
+  let cursor = 1
+  const emit = (nodes: ShellNode[], ids: Set<number>, reparentRootTo: number | null): void => {
+    const map = new Map<number, number>()
+    // 先分配 id（按原数组序 ⇒ pre-order 稳定）
+    for (const n of nodes) if (ids.has(n.id)) map.set(n.id, cursor++)
+    for (const n of nodes) {
+      if (!ids.has(n.id)) continue
+      const newId = map.get(n.id)!
+      const pid = n.parentId
+      const newParent = pid != null && ids.has(pid) ? map.get(pid)! : reparentRootTo
+      out.push({ ...n, id: newId, parentId: newParent })
+    }
+  }
+  // ① global 层（置底）
+  const globalOrder = shellNodes.filter((n) => globalSub.has(n.id))
+  emit(globalOrder, globalSub, 0)
+  // ② 页面（其根 parentId=null → 挂新根）
+  const pageIds = new Set(pageNodes.map((n) => n.id))
+  emit(pageNodes, pageIds, 0)
+  // ③ overlay 层（置顶；absolute 浮于页面）
+  const overlayOrder = shellNodes.filter((n) => overlaySub.has(n.id))
+  emit(overlayOrder, overlaySub, 0)
+  void shellById
+  // ★布局：新根 = **纵向流**（页面在上、层用绝对定位浮出）；global/overlay 层容器**绝对铺满**
+  //   （不占流、不挤压页面）。App 端无 CSS 引擎 ⇒ 显式写清（与 Web 视口语义一致）。
+  const insetFull = { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0 }
+  //   ★屏内容节点是**扁平**结构（样式键在**顶层**，`style:{}` 是空壳）⇒ 顶层合并。
+  for (const n of out) {
+    if (n.semantic === 'app-root') {
+      // 根：纵向流 + 全宽（`widthRatio:1` = 100%，内核的百分比字段）+ `relative`（绝对子层以此为定位父）
+      n.display = 'flex'
+      n.flexDirection = 'column'
+      n.alignItems = 'stretch'   // 子项（页面/层）横向撑满（与 Web 块级默认一致）
+      n.position = 'relative'
+      n.widthRatio = 1
+      n.heightRatio = 1
+    } else if (n.semantic === 'global-layer') {
+      Object.assign(n, insetFull)
+    } else if (n.semantic === 'overlay-layer') {
+      Object.assign(n, insetFull, { pointerEvents: false })
+    } else if (n.parentId === 0 && n.position !== 'absolute') {
+      // app-root 的**普通流直接子节点**（= 页面根）：App 端块级元素无默认撑满（引擎按内容收缩）
+      //   ⇒ 直接给**绝对铺满**（与 global/overlay 层同法，实测可靠铺满）+ 纵向流 + stretch，
+      //   复现 CSS 块级流（页面内容横向撑满），否则内容挤在左上窄条。
+      Object.assign(n, insetFull)
+      if (n.display == null) n.display = 'flex'
+      if (n.flexDirection == null) n.flexDirection = 'column'
+      if (n.alignItems == null) n.alignItems = 'stretch'
+    }
+  }
+  return out
 }

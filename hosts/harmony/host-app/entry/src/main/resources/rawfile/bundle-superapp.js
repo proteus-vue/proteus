@@ -3451,11 +3451,33 @@
         {
           "id": 0,
           "parentId": null,
-          "semantic": "view"
+          "semantic": "app-root"
         },
         {
           "id": 1,
           "parentId": 0,
+          "semantic": "global-layer"
+        },
+        {
+          "id": 2,
+          "parentId": 1,
+          "position": "absolute",
+          "left": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "backgroundColor": "#f4f5f7",
+          "pointerEvents": false,
+          "semantic": "div"
+        },
+        {
+          "id": 3,
+          "parentId": 0,
+          "semantic": "view"
+        },
+        {
+          "id": 4,
+          "parentId": 3,
           "padding": {
             "top": 24,
             "right": 0,
@@ -3465,34 +3487,34 @@
           "semantic": "view"
         },
         {
-          "id": 2,
-          "parentId": 1,
+          "id": 5,
+          "parentId": 4,
           "fontSize": 26,
           "fontWeight": 700,
-          "color": "#eef0f5",
+          "color": "#1a1c22",
           "letterSpacing": -0.3,
           "text": "\u65E9\u4E0A\u597D\uFF0C\u8FD0\u8425\u540C\u5B66",
           "semantic": "text"
         },
         {
-          "id": 3,
-          "parentId": 1,
+          "id": 6,
+          "parentId": 4,
           "margin": {
             "top": 8
           },
           "fontSize": 14,
-          "color": "#b6bcc9",
+          "color": "#4b5058",
           "text": "\u4ECA\u5929\u662F 10 \u6708 4 \u65E5 \xB7 \u6709 2 \u9879\u5173\u952E\u4EFB\u52A1\u5F85\u8DDF\u8FDB",
           "semantic": "text"
         },
         {
-          "id": 4,
-          "parentId": 0,
+          "id": 7,
+          "parentId": 3,
           "semantic": "view"
         },
         {
-          "id": 5,
-          "parentId": 4,
+          "id": 8,
+          "parentId": 7,
           "display": "flex",
           "flexDirection": "row",
           "alignItems": "center",
@@ -3500,8 +3522,8 @@
           "semantic": "view"
         },
         {
-          "id": 6,
-          "parentId": 5,
+          "id": 9,
+          "parentId": 8,
           "flexGrow": 1,
           "flexShrink": 1,
           "flexBasis": 0,
@@ -3511,282 +3533,351 @@
           "semantic": "view"
         },
         {
-          "id": 7,
-          "parentId": 6,
+          "id": 10,
+          "parentId": 9,
           "fontSize": 20,
           "fontWeight": 700,
           "semantic": "text"
         },
         {
-          "id": 8,
-          "parentId": 6,
+          "id": 11,
+          "parentId": 9,
           "margin": {
             "top": 4
           },
           "fontSize": 12,
-          "color": "#9aa1af",
+          "color": "#5f6673",
           "semantic": "text"
         },
         {
-          "id": 9,
-          "parentId": 0,
+          "id": 12,
+          "parentId": 3,
           "text": "\u5168\u5C40\u72B6\u6001",
           "semantic": "text"
         },
         {
-          "id": 10,
-          "parentId": 0,
-          "semantic": "view"
-        },
-        {
-          "id": 11,
-          "parentId": 10,
-          "semantic": "view"
-        },
-        {
-          "id": 12,
-          "parentId": 11,
-          "semantic": "view"
-        },
-        {
           "id": 13,
-          "parentId": 12,
-          "text": "\u4E3B\u9898",
-          "semantic": "text"
+          "parentId": 3,
+          "semantic": "view"
         },
         {
           "id": 14,
-          "parentId": 11,
-          "semantic": "text"
+          "parentId": 13,
+          "semantic": "view"
         },
         {
           "id": 15,
-          "parentId": 10,
+          "parentId": 14,
           "semantic": "view"
         },
         {
           "id": 16,
           "parentId": 15,
-          "semantic": "view"
+          "text": "\u4E3B\u9898",
+          "semantic": "text"
         },
         {
           "id": 17,
-          "parentId": 16,
-          "text": "IM \u672A\u8BFB\u89D2\u6807",
+          "parentId": 14,
           "semantic": "text"
         },
         {
           "id": 18,
-          "parentId": 15,
-          "semantic": "text"
+          "parentId": 13,
+          "semantic": "view"
         },
         {
           "id": 19,
-          "parentId": 10,
+          "parentId": 18,
           "semantic": "view"
         },
         {
           "id": 20,
           "parentId": 19,
-          "semantic": "view"
+          "text": "IM \u672A\u8BFB\u89D2\u6807",
+          "semantic": "text"
         },
         {
           "id": 21,
-          "parentId": 20,
-          "text": "\u97F3\u4E50\u64AD\u653E\u6761",
+          "parentId": 18,
           "semantic": "text"
         },
         {
           "id": 22,
-          "parentId": 19,
-          "semantic": "text"
+          "parentId": 13,
+          "semantic": "view"
         },
         {
           "id": 23,
-          "parentId": 0,
+          "parentId": 22,
+          "semantic": "view"
+        },
+        {
+          "id": 24,
+          "parentId": 23,
+          "text": "\u97F3\u4E50\u64AD\u653E\u6761",
+          "semantic": "text"
+        },
+        {
+          "id": 25,
+          "parentId": 22,
+          "semantic": "text"
+        },
+        {
+          "id": 26,
+          "parentId": 3,
           "text": "\u5FEB\u6377\u64CD\u4F5C",
           "semantic": "text"
         },
         {
-          "id": 24,
-          "parentId": 0,
-          "semantic": "view"
-        },
-        {
-          "id": 25,
-          "parentId": 24,
-          "semantic": "view"
-        },
-        {
-          "id": 26,
-          "parentId": 25,
-          "semantic": "view"
-        },
-        {
           "id": 27,
-          "parentId": 26,
-          "text": "\u6A21\u62DF\u5F31\u7F51",
-          "semantic": "text"
+          "parentId": 3,
+          "semantic": "view"
         },
         {
           "id": 28,
-          "parentId": 26,
-          "text": "\u5F31\u7F51\u65F6\u63D0\u9192\u7528\u6237",
-          "semantic": "text"
+          "parentId": 27,
+          "semantic": "view"
         },
         {
           "id": 29,
-          "parentId": 25,
+          "parentId": 28,
           "semantic": "view"
         },
         {
           "id": 30,
-          "parentId": 24,
-          "semantic": "view"
+          "parentId": 29,
+          "text": "\u6A21\u62DF\u5F31\u7F51",
+          "semantic": "text"
         },
         {
           "id": 31,
-          "parentId": 30,
-          "semantic": "view"
+          "parentId": 29,
+          "text": "\u5F31\u7F51\u65F6\u63D0\u9192\u7528\u6237",
+          "semantic": "text"
         },
         {
           "id": 32,
-          "parentId": 31,
-          "text": "\u64AD\u653E\u5185\u90E8\u64AD\u5BA2",
-          "semantic": "text"
+          "parentId": 28,
+          "semantic": "view"
         },
         {
           "id": 33,
-          "parentId": 31,
-          "text": "\u64AD\u653E\u5185\u90E8\u64AD\u5BA2",
-          "semantic": "text"
+          "parentId": 27,
+          "semantic": "view"
         },
         {
           "id": 34,
-          "parentId": 30,
+          "parentId": 33,
           "semantic": "view"
         },
         {
           "id": 35,
-          "parentId": 24,
-          "semantic": "navigator"
+          "parentId": 34,
+          "text": "\u64AD\u653E\u5185\u90E8\u64AD\u5BA2",
+          "semantic": "text"
         },
         {
           "id": 36,
-          "parentId": 35,
-          "semantic": "view"
+          "parentId": 34,
+          "text": "\u64AD\u653E\u5185\u90E8\u64AD\u5BA2",
+          "semantic": "text"
         },
         {
           "id": 37,
-          "parentId": 36,
-          "text": "\u6253\u5F00\u9A8C\u6536\u63A7\u5236\u53F0",
-          "semantic": "text"
+          "parentId": 33,
+          "semantic": "view"
         },
         {
           "id": 38,
-          "parentId": 36,
-          "text": "\u5168\u5C40\u80FD\u529B\u81EA\u68C0",
-          "semantic": "text"
+          "parentId": 27,
+          "semantic": "navigator"
         },
         {
           "id": 39,
-          "parentId": 35,
+          "parentId": 38,
           "semantic": "view"
         },
         {
           "id": 40,
-          "parentId": 0,
-          "text": "\u4ECA\u65E5\u5F85\u529E",
+          "parentId": 39,
+          "text": "\u6253\u5F00\u9A8C\u6536\u63A7\u5236\u53F0",
           "semantic": "text"
         },
         {
           "id": 41,
-          "parentId": 0,
-          "semantic": "view"
+          "parentId": 39,
+          "text": "\u5168\u5C40\u80FD\u529B\u81EA\u68C0",
+          "semantic": "text"
         },
         {
           "id": 42,
-          "parentId": 41,
+          "parentId": 38,
           "semantic": "view"
         },
         {
           "id": 43,
-          "parentId": 42,
-          "semantic": "view"
+          "parentId": 3,
+          "text": "\u4ECA\u65E5\u5F85\u529E",
+          "semantic": "text"
         },
         {
           "id": 44,
-          "parentId": 43,
+          "parentId": 3,
+          "semantic": "view"
+        },
+        {
+          "id": 45,
+          "parentId": 44,
+          "semantic": "view"
+        },
+        {
+          "id": 46,
+          "parentId": 45,
+          "semantic": "view"
+        },
+        {
+          "id": 47,
+          "parentId": 46,
           "text": "Q4 \u6295\u653E\u8BA1\u5212\u590D\u6838",
           "semantic": "text"
         },
         {
-          "id": 45,
-          "parentId": 43,
+          "id": 48,
+          "parentId": 46,
           "text": "\u622A\u6B62 18:00",
           "semantic": "text"
         },
         {
-          "id": 46,
-          "parentId": 42,
+          "id": 49,
+          "parentId": 45,
           "text": "\u7D27\u6025",
           "semantic": "text"
         },
         {
-          "id": 47,
-          "parentId": 41,
+          "id": 50,
+          "parentId": 44,
           "semantic": "view"
         },
         {
-          "id": 48,
-          "parentId": 47,
+          "id": 51,
+          "parentId": 50,
           "semantic": "view"
         },
         {
-          "id": 49,
-          "parentId": 48,
+          "id": 52,
+          "parentId": 51,
           "text": "\u6E20\u9053\u6708\u62A5\u6570\u636E\u6821\u5BF9",
           "semantic": "text"
         },
         {
-          "id": 50,
-          "parentId": 48,
+          "id": 53,
+          "parentId": 51,
           "text": "\u622A\u6B62\u660E\u65E5",
           "semantic": "text"
         },
         {
-          "id": 51,
-          "parentId": 47,
+          "id": 54,
+          "parentId": 50,
           "text": "\u8FDB\u884C\u4E2D",
           "semantic": "text"
         },
         {
-          "id": 52,
-          "parentId": 41,
+          "id": 55,
+          "parentId": 44,
           "semantic": "view"
         },
         {
-          "id": 53,
-          "parentId": 52,
+          "id": 56,
+          "parentId": 55,
           "semantic": "view"
         },
         {
-          "id": 54,
-          "parentId": 53,
+          "id": 57,
+          "parentId": 56,
           "text": "\u65B0\u5BA2\u56DE\u8BBF\u540D\u5355\u786E\u8BA4",
           "semantic": "text"
         },
         {
-          "id": 55,
-          "parentId": 53,
+          "id": 58,
+          "parentId": 56,
           "text": "\u622A\u6B62\u672C\u5468\u4E94",
           "semantic": "text"
         },
         {
-          "id": 56,
-          "parentId": 52,
+          "id": 59,
+          "parentId": 55,
           "text": "\u5F85\u5F00\u59CB",
           "semantic": "text"
+        },
+        {
+          "id": 60,
+          "parentId": 0,
+          "semantic": "overlay-layer"
+        },
+        {
+          "id": 61,
+          "parentId": 60,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0,
+          "pointerEvents": false,
+          "semantic": "div"
+        },
+        {
+          "id": 62,
+          "parentId": 61,
+          "pointerEvents": true,
+          "position": "absolute",
+          "right": 14,
+          "width": 56,
+          "height": 56,
+          "borderRadius": 28,
+          "display": "flex",
+          "flexDirection": "column",
+          "alignItems": "center",
+          "justifyContent": "center",
+          "backgroundColor": "#5b5bd6",
+          "boxShadow": {
+            "dx": 0,
+            "dy": 3,
+            "blur": 10,
+            "spread": 0,
+            "color": "#5b5bd659"
+          },
+          "semantic": "div"
+        },
+        {
+          "id": 63,
+          "parentId": 62,
+          "fontSize": 17,
+          "fontWeight": 700,
+          "color": "#ffffff",
+          "lineHeight": "1.1",
+          "pointerEvents": true,
+          "text": "\u804A",
+          "semantic": "span"
+        },
+        {
+          "id": 64,
+          "parentId": 62,
+          "fontSize": 10,
+          "color": "#ffffff",
+          "opacity": 0.92,
+          "pointerEvents": true,
+          "text": "\u5BA2\u670D",
+          "semantic": "span"
+        },
+        {
+          "id": 65,
+          "parentId": 60,
+          "semantic": "p-toast-host"
+        },
+        {
+          "id": 66,
+          "parentId": 60,
+          "semantic": "p-loading-host"
         }
       ]
     },
@@ -3795,11 +3886,33 @@
         {
           "id": 0,
           "parentId": null,
-          "semantic": "view"
+          "semantic": "app-root"
         },
         {
           "id": 1,
           "parentId": 0,
+          "semantic": "global-layer"
+        },
+        {
+          "id": 2,
+          "parentId": 1,
+          "position": "absolute",
+          "left": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "backgroundColor": "#f4f5f7",
+          "pointerEvents": false,
+          "semantic": "div"
+        },
+        {
+          "id": 3,
+          "parentId": 0,
+          "semantic": "view"
+        },
+        {
+          "id": 4,
+          "parentId": 3,
           "display": "flex",
           "flexDirection": "row",
           "alignItems": "baseline",
@@ -3813,25 +3926,25 @@
           "semantic": "view"
         },
         {
-          "id": 2,
-          "parentId": 1,
+          "id": 5,
+          "parentId": 4,
           "fontSize": 26,
           "fontWeight": 700,
-          "color": "#eef0f5",
+          "color": "#1a1c22",
           "letterSpacing": -0.3,
           "text": "\u6D88\u606F",
           "semantic": "text"
         },
         {
-          "id": 3,
-          "parentId": 1,
+          "id": 6,
+          "parentId": 4,
           "fontSize": 12,
-          "color": "#9aa1af",
+          "color": "#5f6673",
           "semantic": "text"
         },
         {
-          "id": 4,
-          "parentId": 0,
+          "id": 7,
+          "parentId": 3,
           "display": "flex",
           "flexDirection": "row",
           "padding": {
@@ -3843,8 +3956,8 @@
           "semantic": "view"
         },
         {
-          "id": 5,
-          "parentId": 4,
+          "id": 8,
+          "parentId": 7,
           "margin": {
             "right": 12
           },
@@ -3855,17 +3968,17 @@
             "left": 12
           },
           "borderRadius": 10,
-          "backgroundColor": "#1c1f26",
+          "backgroundColor": "#ffffff",
           "borderWidth": 1,
-          "borderColor": "#2e3340",
+          "borderColor": "#dcdfe5",
           "fontSize": 12,
-          "color": "#b6bcc9",
+          "color": "#4b5058",
           "text": "\u6807\u8BB0\u4E00\u6761\u672A\u8BFB",
           "semantic": "view"
         },
         {
-          "id": 6,
-          "parentId": 4,
+          "id": 9,
+          "parentId": 7,
           "margin": {
             "right": 12
           },
@@ -3876,27 +3989,27 @@
             "left": 12
           },
           "borderRadius": 10,
-          "backgroundColor": "#1c1f26",
+          "backgroundColor": "#ffffff",
           "borderWidth": 1,
-          "borderColor": "#2e3340",
+          "borderColor": "#dcdfe5",
           "fontSize": 12,
-          "color": "#b6bcc9",
+          "color": "#4b5058",
           "text": "\u5168\u90E8\u5DF2\u8BFB",
           "semantic": "view"
         },
         {
-          "id": 7,
-          "parentId": 0,
+          "id": 10,
+          "parentId": 3,
           "semantic": "view"
         },
         {
-          "id": 8,
-          "parentId": 7,
+          "id": 11,
+          "parentId": 10,
           "semantic": "view"
         },
         {
-          "id": 9,
-          "parentId": 8,
+          "id": 12,
+          "parentId": 11,
           "flexShrink": 0,
           "width": 40,
           "height": 40,
@@ -3904,38 +4017,38 @@
           "display": "flex",
           "alignItems": "center",
           "justifyContent": "center",
-          "backgroundColor": "#7b7bef29",
+          "backgroundColor": "#5b5bd61a",
           "margin": {
             "right": 12
           },
           "semantic": "view"
         },
         {
-          "id": 10,
-          "parentId": 9,
+          "id": 13,
+          "parentId": 12,
           "fontSize": 14,
           "fontWeight": 600,
-          "color": "#9393f5",
-          "semantic": "text"
-        },
-        {
-          "id": 11,
-          "parentId": 8,
-          "semantic": "view"
-        },
-        {
-          "id": 12,
-          "parentId": 11,
-          "semantic": "text"
-        },
-        {
-          "id": 13,
-          "parentId": 11,
+          "color": "#4a4ab8",
           "semantic": "text"
         },
         {
           "id": 14,
-          "parentId": 8,
+          "parentId": 11,
+          "semantic": "view"
+        },
+        {
+          "id": 15,
+          "parentId": 14,
+          "semantic": "text"
+        },
+        {
+          "id": 16,
+          "parentId": 14,
+          "semantic": "text"
+        },
+        {
+          "id": 17,
+          "parentId": 11,
           "flexShrink": 0,
           "display": "flex",
           "flexDirection": "column",
@@ -3943,19 +4056,88 @@
           "semantic": "view"
         },
         {
-          "id": 15,
-          "parentId": 14,
+          "id": 18,
+          "parentId": 17,
           "fontSize": 11,
-          "color": "#9aa1af",
+          "color": "#5f6673",
           "margin": {
             "bottom": 4
           },
           "semantic": "text"
         },
         {
-          "id": 16,
-          "parentId": 14,
+          "id": 19,
+          "parentId": 17,
           "semantic": "text"
+        },
+        {
+          "id": 20,
+          "parentId": 0,
+          "semantic": "overlay-layer"
+        },
+        {
+          "id": 21,
+          "parentId": 20,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0,
+          "pointerEvents": false,
+          "semantic": "div"
+        },
+        {
+          "id": 22,
+          "parentId": 21,
+          "pointerEvents": true,
+          "position": "absolute",
+          "right": 14,
+          "width": 56,
+          "height": 56,
+          "borderRadius": 28,
+          "display": "flex",
+          "flexDirection": "column",
+          "alignItems": "center",
+          "justifyContent": "center",
+          "backgroundColor": "#5b5bd6",
+          "boxShadow": {
+            "dx": 0,
+            "dy": 3,
+            "blur": 10,
+            "spread": 0,
+            "color": "#5b5bd659"
+          },
+          "semantic": "div"
+        },
+        {
+          "id": 23,
+          "parentId": 22,
+          "fontSize": 17,
+          "fontWeight": 700,
+          "color": "#ffffff",
+          "lineHeight": "1.1",
+          "pointerEvents": true,
+          "text": "\u804A",
+          "semantic": "span"
+        },
+        {
+          "id": 24,
+          "parentId": 22,
+          "fontSize": 10,
+          "color": "#ffffff",
+          "opacity": 0.92,
+          "pointerEvents": true,
+          "text": "\u5BA2\u670D",
+          "semantic": "span"
+        },
+        {
+          "id": 25,
+          "parentId": 20,
+          "semantic": "p-toast-host"
+        },
+        {
+          "id": 26,
+          "parentId": 20,
+          "semantic": "p-loading-host"
         }
       ]
     },
@@ -3964,11 +4146,33 @@
         {
           "id": 0,
           "parentId": null,
-          "semantic": "view"
+          "semantic": "app-root"
         },
         {
           "id": 1,
           "parentId": 0,
+          "semantic": "global-layer"
+        },
+        {
+          "id": 2,
+          "parentId": 1,
+          "position": "absolute",
+          "left": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "backgroundColor": "#f4f5f7",
+          "pointerEvents": false,
+          "semantic": "div"
+        },
+        {
+          "id": 3,
+          "parentId": 0,
+          "semantic": "view"
+        },
+        {
+          "id": 4,
+          "parentId": 3,
           "display": "flex",
           "flexDirection": "row",
           "alignItems": "center",
@@ -3981,220 +4185,122 @@
           "semantic": "view"
         },
         {
-          "id": 2,
-          "parentId": 1,
+          "id": 5,
+          "parentId": 4,
           "width": 56,
           "height": 56,
           "borderRadius": 28,
           "display": "flex",
           "alignItems": "center",
           "justifyContent": "center",
-          "backgroundColor": "#7b7bef42",
+          "backgroundColor": "#5b5bd62e",
           "margin": {
             "right": 12
           },
           "semantic": "view"
         },
         {
-          "id": 3,
-          "parentId": 2,
+          "id": 6,
+          "parentId": 5,
           "fontSize": 20,
           "fontWeight": 700,
-          "color": "#9393f5",
+          "color": "#4a4ab8",
           "text": "\u8FD0",
           "semantic": "text"
         },
         {
-          "id": 4,
-          "parentId": 1,
+          "id": 7,
+          "parentId": 4,
           "semantic": "view"
         },
         {
-          "id": 5,
-          "parentId": 4,
+          "id": 8,
+          "parentId": 7,
           "fontSize": 16,
           "fontWeight": 600,
-          "color": "#eef0f5",
+          "color": "#1a1c22",
           "text": "\u8FD0\u8425\u540C\u5B66",
           "semantic": "text"
         },
         {
-          "id": 6,
-          "parentId": 4,
+          "id": 9,
+          "parentId": 7,
           "margin": {
             "top": 2
           },
           "fontSize": 12,
-          "color": "#9aa1af",
+          "color": "#5f6673",
           "text": "\u534E\u4E1C\u5927\u533A \xB7 \u6E20\u9053\u8FD0\u8425",
           "semantic": "text"
         },
         {
-          "id": 7,
-          "parentId": 0,
+          "id": 10,
+          "parentId": 3,
           "text": "\u5916\u89C2",
           "semantic": "text"
         },
         {
-          "id": 8,
-          "parentId": 0,
-          "semantic": "view"
-        },
-        {
-          "id": 9,
-          "parentId": 8,
-          "semantic": "view"
-        },
-        {
-          "id": 10,
-          "parentId": 9,
-          "flexShrink": 0,
-          "width": 28,
-          "height": 28,
-          "borderRadius": 8,
-          "display": "flex",
-          "alignItems": "center",
-          "justifyContent": "center",
-          "backgroundColor": "#7b7bef29",
-          "margin": {
-            "right": 12
-          },
-          "semantic": "view"
-        },
-        {
           "id": 11,
-          "parentId": 10,
-          "fontSize": 15,
-          "color": "#9393f5",
-          "text": "\u25D0",
-          "semantic": "text"
+          "parentId": 3,
+          "semantic": "view"
         },
         {
           "id": 12,
-          "parentId": 9,
-          "padding": {
-            "right": 12
-          },
+          "parentId": 11,
           "semantic": "view"
         },
         {
           "id": 13,
           "parentId": 12,
-          "text": "\u6DF1\u8272\u6A21\u5F0F",
-          "semantic": "text"
+          "flexShrink": 0,
+          "width": 28,
+          "height": 28,
+          "borderRadius": 8,
+          "display": "flex",
+          "alignItems": "center",
+          "justifyContent": "center",
+          "backgroundColor": "#5b5bd61a",
+          "margin": {
+            "right": 12
+          },
+          "semantic": "view"
         },
         {
           "id": 14,
-          "parentId": 12,
-          "text": "\u5168\u5E94\u7528\u5373\u65F6\u751F\u6548\uFF08\u65E0\u9700\u5237\u65B0\uFF09",
+          "parentId": 13,
+          "fontSize": 15,
+          "color": "#4a4ab8",
+          "text": "\u25D0",
           "semantic": "text"
         },
         {
           "id": 15,
-          "parentId": 9,
-          "flexShrink": 0,
-          "width": 44,
-          "height": 26,
-          "borderRadius": 13,
-          "backgroundColor": "#2e3340",
+          "parentId": 12,
           "padding": {
-            "top": 2,
-            "right": 2,
-            "bottom": 2,
-            "left": 2
+            "right": 12
           },
-          "boxSizing": "border-box",
-          "display": "flex",
-          "flexDirection": "row",
-          "alignItems": "center",
           "semantic": "view"
         },
         {
           "id": 16,
           "parentId": 15,
-          "pointerEvents": false,
-          "flexShrink": 0,
-          "width": 22,
-          "height": 22,
-          "borderRadius": 11,
-          "backgroundColor": "#ffffff",
-          "boxShadow": {
-            "dx": 0,
-            "dy": 1,
-            "blur": 2,
-            "spread": 0,
-            "color": "#00000059"
-          },
-          "semantic": "view"
+          "text": "\u6DF1\u8272\u6A21\u5F0F",
+          "semantic": "text"
         },
         {
           "id": 17,
-          "parentId": 0,
-          "text": "\u5168\u5C40\u80FD\u529B",
+          "parentId": 15,
+          "text": "\u5168\u5E94\u7528\u5373\u65F6\u751F\u6548\uFF08\u65E0\u9700\u5237\u65B0\uFF09",
           "semantic": "text"
         },
         {
           "id": 18,
-          "parentId": 0,
-          "semantic": "view"
-        },
-        {
-          "id": 19,
-          "parentId": 18,
-          "semantic": "view"
-        },
-        {
-          "id": 20,
-          "parentId": 19,
-          "flexShrink": 0,
-          "width": 28,
-          "height": 28,
-          "borderRadius": 8,
-          "display": "flex",
-          "alignItems": "center",
-          "justifyContent": "center",
-          "backgroundColor": "#7b7bef29",
-          "margin": {
-            "right": 12
-          },
-          "semantic": "view"
-        },
-        {
-          "id": 21,
-          "parentId": 20,
-          "fontSize": 15,
-          "color": "#9393f5",
-          "text": "\u25C9",
-          "semantic": "text"
-        },
-        {
-          "id": 22,
-          "parentId": 19,
-          "padding": {
-            "right": 12
-          },
-          "semantic": "view"
-        },
-        {
-          "id": 23,
-          "parentId": 22,
-          "text": "\u5BA2\u670D\u60AC\u6D6E\u7403",
-          "semantic": "text"
-        },
-        {
-          "id": 24,
-          "parentId": 22,
-          "text": "\u5E38\u9A7B\u5165\u53E3\uFF0C\u5173\u95ED\u540E\u5168\u90E8\u9875\u9762\u9690\u85CF",
-          "semantic": "text"
-        },
-        {
-          "id": 25,
-          "parentId": 19,
+          "parentId": 12,
           "flexShrink": 0,
           "width": 44,
           "height": 26,
           "borderRadius": 13,
-          "backgroundColor": "#2e3340",
+          "backgroundColor": "#dcdfe5",
           "padding": {
             "top": 2,
             "right": 2,
@@ -4208,8 +4314,8 @@
           "semantic": "view"
         },
         {
-          "id": 26,
-          "parentId": 25,
+          "id": 19,
+          "parentId": 18,
           "pointerEvents": false,
           "flexShrink": 0,
           "width": 22,
@@ -4221,18 +4327,29 @@
             "dy": 1,
             "blur": 2,
             "spread": 0,
-            "color": "#00000059"
+            "color": "#1a1c220d"
           },
           "semantic": "view"
         },
         {
-          "id": 27,
-          "parentId": 18,
+          "id": 20,
+          "parentId": 3,
+          "text": "\u5168\u5C40\u80FD\u529B",
+          "semantic": "text"
+        },
+        {
+          "id": 21,
+          "parentId": 3,
           "semantic": "view"
         },
         {
-          "id": 28,
-          "parentId": 27,
+          "id": 22,
+          "parentId": 21,
+          "semantic": "view"
+        },
+        {
+          "id": 23,
+          "parentId": 22,
           "flexShrink": 0,
           "width": 28,
           "height": 28,
@@ -4240,108 +4357,264 @@
           "display": "flex",
           "alignItems": "center",
           "justifyContent": "center",
-          "backgroundColor": "#7b7bef29",
+          "backgroundColor": "#5b5bd61a",
           "margin": {
             "right": 12
           },
           "semantic": "view"
         },
         {
-          "id": 29,
-          "parentId": 28,
+          "id": 24,
+          "parentId": 23,
           "fontSize": 15,
-          "color": "#9393f5",
-          "text": "\u266A",
+          "color": "#4a4ab8",
+          "text": "\u25C9",
           "semantic": "text"
         },
         {
-          "id": 30,
-          "parentId": 27,
+          "id": 25,
+          "parentId": 22,
           "padding": {
             "right": 12
           },
+          "semantic": "view"
+        },
+        {
+          "id": 26,
+          "parentId": 25,
+          "text": "\u5BA2\u670D\u60AC\u6D6E\u7403",
+          "semantic": "text"
+        },
+        {
+          "id": 27,
+          "parentId": 25,
+          "text": "\u5E38\u9A7B\u5165\u53E3\uFF0C\u5173\u95ED\u540E\u5168\u90E8\u9875\u9762\u9690\u85CF",
+          "semantic": "text"
+        },
+        {
+          "id": 28,
+          "parentId": 22,
+          "flexShrink": 0,
+          "width": 44,
+          "height": 26,
+          "borderRadius": 13,
+          "backgroundColor": "#dcdfe5",
+          "padding": {
+            "top": 2,
+            "right": 2,
+            "bottom": 2,
+            "left": 2
+          },
+          "boxSizing": "border-box",
+          "display": "flex",
+          "flexDirection": "row",
+          "alignItems": "center",
+          "semantic": "view"
+        },
+        {
+          "id": 29,
+          "parentId": 28,
+          "pointerEvents": false,
+          "flexShrink": 0,
+          "width": 22,
+          "height": 22,
+          "borderRadius": 11,
+          "backgroundColor": "#ffffff",
+          "boxShadow": {
+            "dx": 0,
+            "dy": 1,
+            "blur": 2,
+            "spread": 0,
+            "color": "#1a1c220d"
+          },
+          "semantic": "view"
+        },
+        {
+          "id": 30,
+          "parentId": 21,
           "semantic": "view"
         },
         {
           "id": 31,
           "parentId": 30,
-          "text": "\u97F3\u4E50\u64AD\u653E\u6761",
-          "semantic": "text"
+          "flexShrink": 0,
+          "width": 28,
+          "height": 28,
+          "borderRadius": 8,
+          "display": "flex",
+          "alignItems": "center",
+          "justifyContent": "center",
+          "backgroundColor": "#5b5bd61a",
+          "margin": {
+            "right": 12
+          },
+          "semantic": "view"
         },
         {
           "id": 32,
-          "parentId": 30,
+          "parentId": 31,
+          "fontSize": 15,
+          "color": "#4a4ab8",
+          "text": "\u266A",
           "semantic": "text"
         },
         {
           "id": 33,
-          "parentId": 27,
-          "semantic": "text"
+          "parentId": 30,
+          "padding": {
+            "right": 12
+          },
+          "semantic": "view"
         },
         {
           "id": 34,
-          "parentId": 0,
-          "text": "\u5173\u4E8E",
+          "parentId": 33,
+          "text": "\u97F3\u4E50\u64AD\u653E\u6761",
           "semantic": "text"
         },
         {
           "id": 35,
-          "parentId": 0,
-          "semantic": "view"
+          "parentId": 33,
+          "semantic": "text"
         },
         {
           "id": 36,
-          "parentId": 35,
-          "semantic": "navigator"
+          "parentId": 30,
+          "semantic": "text"
         },
         {
           "id": 37,
-          "parentId": 36,
-          "padding": {
-            "right": 12
-          },
-          "semantic": "view"
+          "parentId": 3,
+          "text": "\u5173\u4E8E",
+          "semantic": "text"
         },
         {
           "id": 38,
-          "parentId": 37,
-          "text": "\u9A8C\u6536\u63A7\u5236\u53F0",
-          "semantic": "text"
+          "parentId": 3,
+          "semantic": "view"
         },
         {
           "id": 39,
-          "parentId": 37,
-          "text": "\u5168\u5C40\u80FD\u529B\u81EA\u68C0",
-          "semantic": "text"
+          "parentId": 38,
+          "semantic": "navigator"
         },
         {
           "id": 40,
-          "parentId": 36,
+          "parentId": 39,
+          "padding": {
+            "right": 12
+          },
           "semantic": "view"
         },
         {
           "id": 41,
-          "parentId": 35,
-          "semantic": "view"
+          "parentId": 40,
+          "text": "\u9A8C\u6536\u63A7\u5236\u53F0",
+          "semantic": "text"
         },
         {
           "id": 42,
-          "parentId": 41,
+          "parentId": 40,
+          "text": "\u5168\u5C40\u80FD\u529B\u81EA\u68C0",
+          "semantic": "text"
+        },
+        {
+          "id": 43,
+          "parentId": 39,
+          "semantic": "view"
+        },
+        {
+          "id": 44,
+          "parentId": 38,
+          "semantic": "view"
+        },
+        {
+          "id": 45,
+          "parentId": 44,
           "padding": {
             "right": 12
           },
           "semantic": "view"
         },
         {
-          "id": 43,
-          "parentId": 42,
+          "id": 46,
+          "parentId": 45,
           "text": "\u7248\u672C",
           "semantic": "text"
         },
         {
-          "id": 44,
-          "parentId": 41,
+          "id": 47,
+          "parentId": 44,
           "semantic": "text"
+        },
+        {
+          "id": 48,
+          "parentId": 0,
+          "semantic": "overlay-layer"
+        },
+        {
+          "id": 49,
+          "parentId": 48,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0,
+          "pointerEvents": false,
+          "semantic": "div"
+        },
+        {
+          "id": 50,
+          "parentId": 49,
+          "pointerEvents": true,
+          "position": "absolute",
+          "right": 14,
+          "width": 56,
+          "height": 56,
+          "borderRadius": 28,
+          "display": "flex",
+          "flexDirection": "column",
+          "alignItems": "center",
+          "justifyContent": "center",
+          "backgroundColor": "#5b5bd6",
+          "boxShadow": {
+            "dx": 0,
+            "dy": 3,
+            "blur": 10,
+            "spread": 0,
+            "color": "#5b5bd659"
+          },
+          "semantic": "div"
+        },
+        {
+          "id": 51,
+          "parentId": 50,
+          "fontSize": 17,
+          "fontWeight": 700,
+          "color": "#ffffff",
+          "lineHeight": "1.1",
+          "pointerEvents": true,
+          "text": "\u804A",
+          "semantic": "span"
+        },
+        {
+          "id": 52,
+          "parentId": 50,
+          "fontSize": 10,
+          "color": "#ffffff",
+          "opacity": 0.92,
+          "pointerEvents": true,
+          "text": "\u5BA2\u670D",
+          "semantic": "span"
+        },
+        {
+          "id": 53,
+          "parentId": 48,
+          "semantic": "p-toast-host"
+        },
+        {
+          "id": 54,
+          "parentId": 48,
+          "semantic": "p-loading-host"
         }
       ]
     },
@@ -4350,42 +4623,34 @@
         {
           "id": 0,
           "parentId": null,
-          "semantic": "view"
+          "semantic": "app-root"
         },
         {
           "id": 1,
           "parentId": 0,
-          "padding": {
-            "left": 0,
-            "right": 0
-          },
-          "semantic": "view"
+          "semantic": "global-layer"
         },
         {
           "id": 2,
           "parentId": 1,
-          "fontSize": 26,
-          "fontWeight": 700,
-          "color": "#eef0f5",
-          "letterSpacing": -0.3,
-          "text": "\u9A8C\u6536\u63A7\u5236\u53F0",
-          "semantic": "text"
+          "position": "absolute",
+          "left": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "backgroundColor": "#f4f5f7",
+          "pointerEvents": false,
+          "semantic": "div"
         },
         {
           "id": 3,
-          "parentId": 1,
-          "margin": {
-            "top": 8
-          },
-          "fontSize": 12,
-          "color": "#b6bcc9",
-          "text": "\u516B\u6761\u8D85\u7EA7\u5E94\u7528\u573A\u666F \xB7 \u9010\u6761\u89E6\u53D1\u5E76\u8BFB\u56DE\u72B6\u6001\uFF08\u672C\u9875 = \u9A8C\u6536\u5165\u53E3\uFF09",
-          "semantic": "text"
+          "parentId": 0,
+          "semantic": "view"
         },
         {
           "id": 4,
-          "parentId": 0,
-          "margin": {
+          "parentId": 3,
+          "padding": {
             "left": 0,
             "right": 0
           },
@@ -4394,62 +4659,92 @@
         {
           "id": 5,
           "parentId": 4,
-          "semantic": "view"
+          "fontSize": 26,
+          "fontWeight": 700,
+          "color": "#1a1c22",
+          "letterSpacing": -0.3,
+          "text": "\u9A8C\u6536\u63A7\u5236\u53F0",
+          "semantic": "text"
         },
         {
           "id": 6,
-          "parentId": 5,
-          "display": "flex",
-          "flexDirection": "row",
-          "alignItems": "flex-start",
-          "justifyContent": "space-between",
-          "semantic": "view"
+          "parentId": 4,
+          "margin": {
+            "top": 8
+          },
+          "fontSize": 12,
+          "color": "#4b5058",
+          "text": "\u516B\u6761\u8D85\u7EA7\u5E94\u7528\u573A\u666F \xB7 \u9010\u6761\u89E6\u53D1\u5E76\u8BFB\u56DE\u72B6\u6001\uFF08\u672C\u9875 = \u9A8C\u6536\u5165\u53E3\uFF09",
+          "semantic": "text"
         },
         {
           "id": 7,
-          "parentId": 6,
-          "flexGrow": 1,
-          "flexShrink": 1,
-          "flexBasis": 0,
-          "minWidth": 0,
+          "parentId": 3,
           "margin": {
-            "right": 12
+            "left": 0,
+            "right": 0
           },
           "semantic": "view"
         },
         {
           "id": 8,
           "parentId": 7,
+          "semantic": "view"
+        },
+        {
+          "id": 9,
+          "parentId": 8,
+          "display": "flex",
+          "flexDirection": "row",
+          "alignItems": "flex-start",
+          "justifyContent": "space-between",
+          "semantic": "view"
+        },
+        {
+          "id": 10,
+          "parentId": 9,
+          "flexGrow": 1,
+          "flexShrink": 1,
+          "flexBasis": 0,
+          "minWidth": 0,
+          "margin": {
+            "right": 12
+          },
+          "semantic": "view"
+        },
+        {
+          "id": 11,
+          "parentId": 10,
           "fontSize": 14,
           "fontWeight": 600,
-          "color": "#eef0f5",
+          "color": "#1a1c22",
           "text": "\u2460 \u5168\u5C40 Toast",
           "semantic": "text"
         },
         {
-          "id": 9,
-          "parentId": 7,
+          "id": 12,
+          "parentId": 10,
           "margin": {
             "top": 2
           },
           "fontSize": 11,
-          "color": "#9aa1af",
+          "color": "#5f6673",
           "text": "Overlay \u5C42 \xB7 \u961F\u5217\u8BED\u4E49\uFF08\u6784\u5EFA\u671F\u6309\u9700\u6CE8\u5165\u5BBF\u4E3B\uFF09",
           "semantic": "text"
         },
         {
-          "id": 10,
-          "parentId": 7,
+          "id": 13,
+          "parentId": 10,
           "margin": {
             "top": 8
           },
           "fontSize": 12,
-          "color": "#9393f5",
+          "color": "#4a4ab8",
           "semantic": "text"
         },
         {
-          "id": 11,
-          "parentId": 6,
+          "id": 14,
+          "parentId": 9,
           "flexShrink": 0,
           "display": "flex",
           "flexDirection": "row",
@@ -4459,8 +4754,8 @@
           "semantic": "view"
         },
         {
-          "id": 12,
-          "parentId": 11,
+          "id": 15,
+          "parentId": 14,
           "margin": {
             "top": 0,
             "right": 0,
@@ -4474,15 +4769,15 @@
             "left": 12
           },
           "borderRadius": 10,
-          "backgroundColor": "#7b7bef",
+          "backgroundColor": "#5b5bd6",
           "color": "#ffffff",
           "fontSize": 12,
           "text": "\u5355\u6761",
           "semantic": "view"
         },
         {
-          "id": 13,
-          "parentId": 11,
+          "id": 16,
+          "parentId": 14,
           "margin": {
             "top": 0,
             "right": 0,
@@ -4496,82 +4791,82 @@
             "left": 12
           },
           "borderRadius": 10,
-          "backgroundColor": "#1c1f26",
-          "color": "#b6bcc9",
+          "backgroundColor": "#ffffff",
+          "color": "#4b5058",
           "fontSize": 12,
           "borderWidth": 1,
-          "borderColor": "#2e3340",
+          "borderColor": "#dcdfe5",
           "text": "\u6392\u961F 3 \u6761",
           "semantic": "view"
         },
         {
-          "id": 14,
-          "parentId": 0,
+          "id": 17,
+          "parentId": 3,
           "margin": {
             "left": 0,
             "right": 0
-          },
-          "semantic": "view"
-        },
-        {
-          "id": 15,
-          "parentId": 14,
-          "semantic": "view"
-        },
-        {
-          "id": 16,
-          "parentId": 15,
-          "display": "flex",
-          "flexDirection": "row",
-          "alignItems": "flex-start",
-          "justifyContent": "space-between",
-          "semantic": "view"
-        },
-        {
-          "id": 17,
-          "parentId": 16,
-          "flexGrow": 1,
-          "flexShrink": 1,
-          "flexBasis": 0,
-          "minWidth": 0,
-          "margin": {
-            "right": 12
           },
           "semantic": "view"
         },
         {
           "id": 18,
           "parentId": 17,
+          "semantic": "view"
+        },
+        {
+          "id": 19,
+          "parentId": 18,
+          "display": "flex",
+          "flexDirection": "row",
+          "alignItems": "flex-start",
+          "justifyContent": "space-between",
+          "semantic": "view"
+        },
+        {
+          "id": 20,
+          "parentId": 19,
+          "flexGrow": 1,
+          "flexShrink": 1,
+          "flexBasis": 0,
+          "minWidth": 0,
+          "margin": {
+            "right": 12
+          },
+          "semantic": "view"
+        },
+        {
+          "id": 21,
+          "parentId": 20,
           "fontSize": 14,
           "fontWeight": 600,
-          "color": "#eef0f5",
+          "color": "#1a1c22",
           "text": "\u2461 \u5168\u5C40 Loading",
           "semantic": "text"
         },
         {
-          "id": 19,
-          "parentId": 17,
+          "id": 22,
+          "parentId": 20,
           "margin": {
             "top": 2
           },
           "fontSize": 11,
-          "color": "#9aa1af",
+          "color": "#5f6673",
           "text": "Overlay \u5C42 \xB7 \u591A\u5B9E\u4F8B + \u906E\u7F69\u8303\u56F4",
           "semantic": "text"
         },
         {
-          "id": 20,
-          "parentId": 17,
+          "id": 23,
+          "parentId": 20,
           "margin": {
             "top": 8
           },
           "fontSize": 12,
-          "color": "#9393f5",
+          "color": "#4a4ab8",
           "semantic": "text"
         },
         {
-          "id": 21,
-          "parentId": 16,
+          "id": 24,
+          "parentId": 19,
           "flexShrink": 0,
           "display": "flex",
           "flexDirection": "row",
@@ -4581,8 +4876,8 @@
           "semantic": "view"
         },
         {
-          "id": 22,
-          "parentId": 21,
+          "id": 25,
+          "parentId": 24,
           "margin": {
             "top": 0,
             "right": 0,
@@ -4596,15 +4891,15 @@
             "left": 12
           },
           "borderRadius": 10,
-          "backgroundColor": "#7b7bef",
+          "backgroundColor": "#5b5bd6",
           "color": "#ffffff",
           "fontSize": 12,
           "text": "\u4E00\u4E2A",
           "semantic": "view"
         },
         {
-          "id": 23,
-          "parentId": 21,
+          "id": 26,
+          "parentId": 24,
           "margin": {
             "top": 0,
             "right": 0,
@@ -4618,17 +4913,17 @@
             "left": 12
           },
           "borderRadius": 10,
-          "backgroundColor": "#1c1f26",
-          "color": "#b6bcc9",
+          "backgroundColor": "#ffffff",
+          "color": "#4b5058",
           "fontSize": 12,
           "borderWidth": 1,
-          "borderColor": "#2e3340",
+          "borderColor": "#dcdfe5",
           "text": "\u4E24\u4E2A\u5171\u5B58",
           "semantic": "view"
         },
         {
-          "id": 24,
-          "parentId": 21,
+          "id": 27,
+          "parentId": 24,
           "margin": {
             "top": 0,
             "right": 0,
@@ -4642,82 +4937,82 @@
             "left": 12
           },
           "borderRadius": 10,
-          "backgroundColor": "#1c1f26",
-          "color": "#b6bcc9",
+          "backgroundColor": "#ffffff",
+          "color": "#4b5058",
           "fontSize": 12,
           "borderWidth": 1,
-          "borderColor": "#2e3340",
+          "borderColor": "#dcdfe5",
           "text": "\u5173\u95ED",
           "semantic": "view"
         },
         {
-          "id": 25,
-          "parentId": 0,
+          "id": 28,
+          "parentId": 3,
           "margin": {
             "left": 0,
             "right": 0
-          },
-          "semantic": "view"
-        },
-        {
-          "id": 26,
-          "parentId": 25,
-          "semantic": "view"
-        },
-        {
-          "id": 27,
-          "parentId": 26,
-          "display": "flex",
-          "flexDirection": "row",
-          "alignItems": "flex-start",
-          "justifyContent": "space-between",
-          "semantic": "view"
-        },
-        {
-          "id": 28,
-          "parentId": 27,
-          "flexGrow": 1,
-          "flexShrink": 1,
-          "flexBasis": 0,
-          "minWidth": 0,
-          "margin": {
-            "right": 12
           },
           "semantic": "view"
         },
         {
           "id": 29,
           "parentId": 28,
+          "semantic": "view"
+        },
+        {
+          "id": 30,
+          "parentId": 29,
+          "display": "flex",
+          "flexDirection": "row",
+          "alignItems": "flex-start",
+          "justifyContent": "space-between",
+          "semantic": "view"
+        },
+        {
+          "id": 31,
+          "parentId": 30,
+          "flexGrow": 1,
+          "flexShrink": 1,
+          "flexBasis": 0,
+          "minWidth": 0,
+          "margin": {
+            "right": 12
+          },
+          "semantic": "view"
+        },
+        {
+          "id": 32,
+          "parentId": 31,
           "fontSize": 14,
           "fontWeight": 600,
-          "color": "#eef0f5",
+          "color": "#1a1c22",
           "text": "\u2462 \u767B\u5F55\u5931\u6548\u62E6\u622A",
           "semantic": "text"
         },
         {
-          "id": 30,
-          "parentId": 28,
+          "id": 33,
+          "parentId": 31,
           "margin": {
             "top": 2
           },
           "fontSize": 11,
-          "color": "#9aa1af",
+          "color": "#5f6673",
           "text": "Overlay \u5C42 \xB7 \u4E0D\u53EF\u53D6\u6D88\uFF08\u2605\u624B\u5199\u5BBF\u4E3B\u2014\u2014\u9700\u7ED1 onAction\uFF09",
           "semantic": "text"
         },
         {
-          "id": 31,
-          "parentId": 28,
+          "id": 34,
+          "parentId": 31,
           "margin": {
             "top": 8
           },
           "fontSize": 12,
-          "color": "#9393f5",
+          "color": "#4a4ab8",
           "semantic": "text"
         },
         {
-          "id": 32,
-          "parentId": 27,
+          "id": 35,
+          "parentId": 30,
           "flexShrink": 0,
           "display": "flex",
           "flexDirection": "row",
@@ -4727,8 +5022,8 @@
           "semantic": "view"
         },
         {
-          "id": 33,
-          "parentId": 32,
+          "id": 36,
+          "parentId": 35,
           "margin": {
             "top": 0,
             "right": 0,
@@ -4742,15 +5037,15 @@
             "left": 12
           },
           "borderRadius": 10,
-          "backgroundColor": "#7b7bef",
+          "backgroundColor": "#5b5bd6",
           "color": "#ffffff",
           "fontSize": 12,
           "text": "\u6A21\u62DF 401",
           "semantic": "view"
         },
         {
-          "id": 34,
-          "parentId": 32,
+          "id": 37,
+          "parentId": 35,
           "margin": {
             "top": 0,
             "right": 0,
@@ -4764,82 +5059,82 @@
             "left": 12
           },
           "borderRadius": 10,
-          "backgroundColor": "#1c1f26",
-          "color": "#b6bcc9",
+          "backgroundColor": "#ffffff",
+          "color": "#4b5058",
           "fontSize": 12,
           "borderWidth": 1,
-          "borderColor": "#2e3340",
+          "borderColor": "#dcdfe5",
           "text": "\u6A21\u62DF\u767B\u5F55\u6210\u529F",
           "semantic": "view"
         },
         {
-          "id": 35,
-          "parentId": 0,
+          "id": 38,
+          "parentId": 3,
           "margin": {
             "left": 0,
             "right": 0
-          },
-          "semantic": "view"
-        },
-        {
-          "id": 36,
-          "parentId": 35,
-          "semantic": "view"
-        },
-        {
-          "id": 37,
-          "parentId": 36,
-          "display": "flex",
-          "flexDirection": "row",
-          "alignItems": "flex-start",
-          "justifyContent": "space-between",
-          "semantic": "view"
-        },
-        {
-          "id": 38,
-          "parentId": 37,
-          "flexGrow": 1,
-          "flexShrink": 1,
-          "flexBasis": 0,
-          "minWidth": 0,
-          "margin": {
-            "right": 12
           },
           "semantic": "view"
         },
         {
           "id": 39,
           "parentId": 38,
+          "semantic": "view"
+        },
+        {
+          "id": 40,
+          "parentId": 39,
+          "display": "flex",
+          "flexDirection": "row",
+          "alignItems": "flex-start",
+          "justifyContent": "space-between",
+          "semantic": "view"
+        },
+        {
+          "id": 41,
+          "parentId": 40,
+          "flexGrow": 1,
+          "flexShrink": 1,
+          "flexBasis": 0,
+          "minWidth": 0,
+          "margin": {
+            "right": 12
+          },
+          "semantic": "view"
+        },
+        {
+          "id": 42,
+          "parentId": 41,
           "fontSize": 14,
           "fontWeight": 600,
-          "color": "#eef0f5",
+          "color": "#1a1c22",
           "text": "\u2463 \u5BA2\u670D\u60AC\u6D6E\u7403",
           "semantic": "text"
         },
         {
-          "id": 40,
-          "parentId": 38,
+          "id": 43,
+          "parentId": 41,
           "margin": {
             "top": 2
           },
           "fontSize": 11,
-          "color": "#9aa1af",
+          "color": "#5f6673",
           "text": "Global \u5C42 \xB7 App \u58F3\u58F0\u660E\u4E00\u6B21",
           "semantic": "text"
         },
         {
-          "id": 41,
-          "parentId": 38,
+          "id": 44,
+          "parentId": 41,
           "margin": {
             "top": 8
           },
           "fontSize": 12,
-          "color": "#9393f5",
+          "color": "#4a4ab8",
           "semantic": "text"
         },
         {
-          "id": 42,
-          "parentId": 37,
+          "id": 45,
+          "parentId": 40,
           "flexShrink": 0,
           "display": "flex",
           "flexDirection": "row",
@@ -4849,8 +5144,8 @@
           "semantic": "view"
         },
         {
-          "id": 43,
-          "parentId": 42,
+          "id": 46,
+          "parentId": 45,
           "margin": {
             "top": 0,
             "right": 0,
@@ -4864,80 +5159,80 @@
             "left": 12
           },
           "borderRadius": 10,
-          "backgroundColor": "#7b7bef",
+          "backgroundColor": "#5b5bd6",
           "color": "#ffffff",
           "fontSize": 12,
           "text": "\u5207\u6362\u663E\u9690",
           "semantic": "view"
         },
         {
-          "id": 44,
-          "parentId": 0,
+          "id": 47,
+          "parentId": 3,
           "margin": {
             "left": 0,
             "right": 0
-          },
-          "semantic": "view"
-        },
-        {
-          "id": 45,
-          "parentId": 44,
-          "semantic": "view"
-        },
-        {
-          "id": 46,
-          "parentId": 45,
-          "display": "flex",
-          "flexDirection": "row",
-          "alignItems": "flex-start",
-          "justifyContent": "space-between",
-          "semantic": "view"
-        },
-        {
-          "id": 47,
-          "parentId": 46,
-          "flexGrow": 1,
-          "flexShrink": 1,
-          "flexBasis": 0,
-          "minWidth": 0,
-          "margin": {
-            "right": 12
           },
           "semantic": "view"
         },
         {
           "id": 48,
           "parentId": 47,
+          "semantic": "view"
+        },
+        {
+          "id": 49,
+          "parentId": 48,
+          "display": "flex",
+          "flexDirection": "row",
+          "alignItems": "flex-start",
+          "justifyContent": "space-between",
+          "semantic": "view"
+        },
+        {
+          "id": 50,
+          "parentId": 49,
+          "flexGrow": 1,
+          "flexShrink": 1,
+          "flexBasis": 0,
+          "minWidth": 0,
+          "margin": {
+            "right": 12
+          },
+          "semantic": "view"
+        },
+        {
+          "id": 51,
+          "parentId": 50,
           "fontSize": 14,
           "fontWeight": 600,
-          "color": "#eef0f5",
+          "color": "#1a1c22",
           "text": "\u2464 \u97F3\u4E50\u64AD\u653E\u6761",
           "semantic": "text"
         },
         {
-          "id": 49,
-          "parentId": 47,
+          "id": 52,
+          "parentId": 50,
           "margin": {
             "top": 2
           },
           "fontSize": 11,
-          "color": "#9aa1af",
+          "color": "#5f6673",
           "text": "Global \u5C42 \xB7 \u64AD\u653E\u63A7\u5236",
           "semantic": "text"
         },
         {
-          "id": 50,
-          "parentId": 47,
+          "id": 53,
+          "parentId": 50,
           "margin": {
             "top": 8
           },
           "fontSize": 12,
-          "color": "#9393f5",
+          "color": "#4a4ab8",
           "semantic": "text"
         },
         {
-          "id": 51,
-          "parentId": 46,
+          "id": 54,
+          "parentId": 49,
           "flexShrink": 0,
           "display": "flex",
           "flexDirection": "row",
@@ -4947,8 +5242,8 @@
           "semantic": "view"
         },
         {
-          "id": 52,
-          "parentId": 51,
+          "id": 55,
+          "parentId": 54,
           "margin": {
             "top": 0,
             "right": 0,
@@ -4962,15 +5257,15 @@
             "left": 12
           },
           "borderRadius": 10,
-          "backgroundColor": "#7b7bef",
+          "backgroundColor": "#5b5bd6",
           "color": "#ffffff",
           "fontSize": 12,
           "text": "\u64AD\u653E",
           "semantic": "view"
         },
         {
-          "id": 53,
-          "parentId": 51,
+          "id": 56,
+          "parentId": 54,
           "margin": {
             "top": 0,
             "right": 0,
@@ -4984,82 +5279,82 @@
             "left": 12
           },
           "borderRadius": 10,
-          "backgroundColor": "#1c1f26",
-          "color": "#b6bcc9",
+          "backgroundColor": "#ffffff",
+          "color": "#4b5058",
           "fontSize": 12,
           "borderWidth": 1,
-          "borderColor": "#2e3340",
+          "borderColor": "#dcdfe5",
           "text": "\u5173\u95ED",
           "semantic": "view"
         },
         {
-          "id": 54,
-          "parentId": 0,
+          "id": 57,
+          "parentId": 3,
           "margin": {
             "left": 0,
             "right": 0
-          },
-          "semantic": "view"
-        },
-        {
-          "id": 55,
-          "parentId": 54,
-          "semantic": "view"
-        },
-        {
-          "id": 56,
-          "parentId": 55,
-          "display": "flex",
-          "flexDirection": "row",
-          "alignItems": "flex-start",
-          "justifyContent": "space-between",
-          "semantic": "view"
-        },
-        {
-          "id": 57,
-          "parentId": 56,
-          "flexGrow": 1,
-          "flexShrink": 1,
-          "flexBasis": 0,
-          "minWidth": 0,
-          "margin": {
-            "right": 12
           },
           "semantic": "view"
         },
         {
           "id": 58,
           "parentId": 57,
+          "semantic": "view"
+        },
+        {
+          "id": 59,
+          "parentId": 58,
+          "display": "flex",
+          "flexDirection": "row",
+          "alignItems": "flex-start",
+          "justifyContent": "space-between",
+          "semantic": "view"
+        },
+        {
+          "id": 60,
+          "parentId": 59,
+          "flexGrow": 1,
+          "flexShrink": 1,
+          "flexBasis": 0,
+          "minWidth": 0,
+          "margin": {
+            "right": 12
+          },
+          "semantic": "view"
+        },
+        {
+          "id": 61,
+          "parentId": 60,
           "fontSize": 14,
           "fontWeight": 600,
-          "color": "#eef0f5",
+          "color": "#1a1c22",
           "text": "\u2465 \u7F51\u7EDC\u72B6\u6001\u6761",
           "semantic": "text"
         },
         {
-          "id": 59,
-          "parentId": 57,
+          "id": 62,
+          "parentId": 60,
           "margin": {
             "top": 2
           },
           "fontSize": 11,
-          "color": "#9aa1af",
+          "color": "#5f6673",
           "text": "Global \u5C42 \xB7 \u5F31\u7F51\u63D0\u793A\uFF08\u53EF\u5FFD\u7565\uFF09",
           "semantic": "text"
         },
         {
-          "id": 60,
-          "parentId": 57,
+          "id": 63,
+          "parentId": 60,
           "margin": {
             "top": 8
           },
           "fontSize": 12,
-          "color": "#9393f5",
+          "color": "#4a4ab8",
           "semantic": "text"
         },
         {
-          "id": 61,
-          "parentId": 56,
+          "id": 64,
+          "parentId": 59,
           "flexShrink": 0,
           "display": "flex",
           "flexDirection": "row",
@@ -5069,8 +5364,8 @@
           "semantic": "view"
         },
         {
-          "id": 62,
-          "parentId": 61,
+          "id": 65,
+          "parentId": 64,
           "margin": {
             "top": 0,
             "right": 0,
@@ -5084,15 +5379,15 @@
             "left": 12
           },
           "borderRadius": 10,
-          "backgroundColor": "#7b7bef",
+          "backgroundColor": "#5b5bd6",
           "color": "#ffffff",
           "fontSize": 12,
           "text": "\u89E6\u53D1",
           "semantic": "view"
         },
         {
-          "id": 63,
-          "parentId": 61,
+          "id": 66,
+          "parentId": 64,
           "margin": {
             "top": 0,
             "right": 0,
@@ -5106,82 +5401,82 @@
             "left": 12
           },
           "borderRadius": 10,
-          "backgroundColor": "#1c1f26",
-          "color": "#b6bcc9",
+          "backgroundColor": "#ffffff",
+          "color": "#4b5058",
           "fontSize": 12,
           "borderWidth": 1,
-          "borderColor": "#2e3340",
+          "borderColor": "#dcdfe5",
           "text": "\u6536\u8D77",
           "semantic": "view"
         },
         {
-          "id": 64,
-          "parentId": 0,
+          "id": 67,
+          "parentId": 3,
           "margin": {
             "left": 0,
             "right": 0
-          },
-          "semantic": "view"
-        },
-        {
-          "id": 65,
-          "parentId": 64,
-          "semantic": "view"
-        },
-        {
-          "id": 66,
-          "parentId": 65,
-          "display": "flex",
-          "flexDirection": "row",
-          "alignItems": "flex-start",
-          "justifyContent": "space-between",
-          "semantic": "view"
-        },
-        {
-          "id": 67,
-          "parentId": 66,
-          "flexGrow": 1,
-          "flexShrink": 1,
-          "flexBasis": 0,
-          "minWidth": 0,
-          "margin": {
-            "right": 12
           },
           "semantic": "view"
         },
         {
           "id": 68,
           "parentId": 67,
+          "semantic": "view"
+        },
+        {
+          "id": 69,
+          "parentId": 68,
+          "display": "flex",
+          "flexDirection": "row",
+          "alignItems": "flex-start",
+          "justifyContent": "space-between",
+          "semantic": "view"
+        },
+        {
+          "id": 70,
+          "parentId": 69,
+          "flexGrow": 1,
+          "flexShrink": 1,
+          "flexBasis": 0,
+          "minWidth": 0,
+          "margin": {
+            "right": 12
+          },
+          "semantic": "view"
+        },
+        {
+          "id": 71,
+          "parentId": 70,
           "fontSize": 14,
           "fontWeight": 600,
-          "color": "#eef0f5",
+          "color": "#1a1c22",
           "text": "\u2466 \u4E3B\u9898\u5BB9\u5668",
           "semantic": "text"
         },
         {
-          "id": 69,
-          "parentId": 67,
+          "id": 72,
+          "parentId": 70,
           "margin": {
             "top": 2
           },
           "fontSize": 11,
-          "color": "#9aa1af",
+          "color": "#5f6673",
           "text": "Global \u5C42 \xB7 \u6DF1/\u6D45\u5207\u6362\uFF08\u65E0\u9700\u5237\u65B0\uFF09",
           "semantic": "text"
         },
         {
-          "id": 70,
-          "parentId": 67,
+          "id": 73,
+          "parentId": 70,
           "margin": {
             "top": 8
           },
           "fontSize": 12,
-          "color": "#9393f5",
+          "color": "#4a4ab8",
           "semantic": "text"
         },
         {
-          "id": 71,
-          "parentId": 66,
+          "id": 74,
+          "parentId": 69,
           "flexShrink": 0,
           "display": "flex",
           "flexDirection": "row",
@@ -5191,8 +5486,8 @@
           "semantic": "view"
         },
         {
-          "id": 72,
-          "parentId": 71,
+          "id": 75,
+          "parentId": 74,
           "margin": {
             "top": 0,
             "right": 0,
@@ -5206,151 +5501,29 @@
             "left": 12
           },
           "borderRadius": 10,
-          "backgroundColor": "#7b7bef",
+          "backgroundColor": "#5b5bd6",
           "color": "#ffffff",
           "fontSize": 12,
           "text": "\u5207\u6362\u4E3B\u9898",
           "semantic": "view"
         },
         {
-          "id": 73,
-          "parentId": 0,
+          "id": 76,
+          "parentId": 3,
           "margin": {
             "left": 0,
             "right": 0
-          },
-          "semantic": "view"
-        },
-        {
-          "id": 74,
-          "parentId": 73,
-          "semantic": "view"
-        },
-        {
-          "id": 75,
-          "parentId": 74,
-          "display": "flex",
-          "flexDirection": "row",
-          "alignItems": "flex-start",
-          "justifyContent": "space-between",
-          "semantic": "view"
-        },
-        {
-          "id": 76,
-          "parentId": 75,
-          "flexGrow": 1,
-          "flexShrink": 1,
-          "flexBasis": 0,
-          "minWidth": 0,
-          "margin": {
-            "right": 12
           },
           "semantic": "view"
         },
         {
           "id": 77,
           "parentId": 76,
-          "fontSize": 14,
-          "fontWeight": 600,
-          "color": "#eef0f5",
-          "text": "\u2467 IM \u672A\u8BFB\u89D2\u6807",
-          "semantic": "text"
+          "semantic": "view"
         },
         {
           "id": 78,
-          "parentId": 76,
-          "margin": {
-            "top": 2
-          },
-          "fontSize": 11,
-          "color": "#9aa1af",
-          "text": "Global + \u72B6\u6001 \xB7 \u8DE8\u9875\u540C\u6B65",
-          "semantic": "text"
-        },
-        {
-          "id": 79,
-          "parentId": 76,
-          "margin": {
-            "top": 8
-          },
-          "fontSize": 12,
-          "color": "#9393f5",
-          "semantic": "text"
-        },
-        {
-          "id": 80,
-          "parentId": 75,
-          "flexShrink": 0,
-          "display": "flex",
-          "flexDirection": "row",
-          "flexWrap": "wrap",
-          "justifyContent": "flex-end",
-          "maxWidth": 200,
-          "semantic": "view"
-        },
-        {
-          "id": 81,
-          "parentId": 80,
-          "margin": {
-            "top": 0,
-            "right": 0,
-            "bottom": 8,
-            "left": 8
-          },
-          "padding": {
-            "top": 8,
-            "right": 12,
-            "bottom": 8,
-            "left": 12
-          },
-          "borderRadius": 10,
-          "backgroundColor": "#7b7bef",
-          "color": "#ffffff",
-          "fontSize": 12,
-          "text": "+1",
-          "semantic": "view"
-        },
-        {
-          "id": 82,
-          "parentId": 80,
-          "margin": {
-            "top": 0,
-            "right": 0,
-            "bottom": 8,
-            "left": 8
-          },
-          "padding": {
-            "top": 8,
-            "right": 12,
-            "bottom": 8,
-            "left": 12
-          },
-          "borderRadius": 10,
-          "backgroundColor": "#1c1f26",
-          "color": "#b6bcc9",
-          "fontSize": 12,
-          "borderWidth": 1,
-          "borderColor": "#2e3340",
-          "text": "\u6E05\u96F6",
-          "semantic": "view"
-        },
-        {
-          "id": 83,
-          "parentId": 0,
-          "margin": {
-            "left": 0,
-            "right": 0
-          },
-          "semantic": "view"
-        },
-        {
-          "id": 84,
-          "parentId": 83,
-          "semantic": "view"
-        },
-        {
-          "id": 85,
-          "parentId": 84,
+          "parentId": 77,
           "display": "flex",
           "flexDirection": "row",
           "alignItems": "flex-start",
@@ -5358,8 +5531,8 @@
           "semantic": "view"
         },
         {
-          "id": 86,
-          "parentId": 85,
+          "id": 79,
+          "parentId": 78,
           "flexGrow": 1,
           "flexShrink": 1,
           "flexBasis": 0,
@@ -5370,38 +5543,38 @@
           "semantic": "view"
         },
         {
-          "id": 87,
-          "parentId": 86,
+          "id": 80,
+          "parentId": 79,
           "fontSize": 14,
           "fontWeight": 600,
-          "color": "#eef0f5",
-          "text": "\u2468 Global \u5C42\u5185\u5B58\uFF08GP7\uFF09",
+          "color": "#1a1c22",
+          "text": "\u2467 IM \u672A\u8BFB\u89D2\u6807",
           "semantic": "text"
         },
         {
-          "id": 88,
-          "parentId": 86,
+          "id": 81,
+          "parentId": 79,
           "margin": {
             "top": 2
           },
           "fontSize": 11,
-          "color": "#9aa1af",
-          "text": "\u5E38\u9A7B\u76D1\u63A7 \xB7 \u5206\u7AEF\u53E3\u5F84\uFF08MP\uFF1A\u72B6\u6001\u4E00\u4EFD + \u6BCF\u9875\u521D\u503C \xD7 \u9875\u9762\u6808\uFF09",
+          "color": "#5f6673",
+          "text": "Global + \u72B6\u6001 \xB7 \u8DE8\u9875\u540C\u6B65",
           "semantic": "text"
         },
         {
-          "id": 89,
-          "parentId": 86,
+          "id": 82,
+          "parentId": 79,
           "margin": {
             "top": 8
           },
           "fontSize": 12,
-          "color": "#9393f5",
+          "color": "#4a4ab8",
           "semantic": "text"
         },
         {
-          "id": 90,
-          "parentId": 85,
+          "id": 83,
+          "parentId": 78,
           "flexShrink": 0,
           "display": "flex",
           "flexDirection": "row",
@@ -5411,8 +5584,8 @@
           "semantic": "view"
         },
         {
-          "id": 91,
-          "parentId": 90,
+          "id": 84,
+          "parentId": 83,
           "margin": {
             "top": 0,
             "right": 0,
@@ -5426,21 +5599,39 @@
             "left": 12
           },
           "borderRadius": 10,
-          "backgroundColor": "#7b7bef",
+          "backgroundColor": "#5b5bd6",
           "color": "#ffffff",
           "fontSize": 12,
-          "text": "\u8BFB\u5185\u5B58",
+          "text": "+1",
           "semantic": "view"
         },
         {
-          "id": 92,
-          "parentId": 0,
-          "text": "\u64CD\u4F5C\u65E5\u5FD7",
-          "semantic": "text"
+          "id": 85,
+          "parentId": 83,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 8,
+            "left": 8
+          },
+          "padding": {
+            "top": 8,
+            "right": 12,
+            "bottom": 8,
+            "left": 12
+          },
+          "borderRadius": 10,
+          "backgroundColor": "#ffffff",
+          "color": "#4b5058",
+          "fontSize": 12,
+          "borderWidth": 1,
+          "borderColor": "#dcdfe5",
+          "text": "\u6E05\u96F6",
+          "semantic": "view"
         },
         {
-          "id": 93,
-          "parentId": 0,
+          "id": 86,
+          "parentId": 3,
           "margin": {
             "left": 0,
             "right": 0
@@ -5448,33 +5639,206 @@
           "semantic": "view"
         },
         {
+          "id": 87,
+          "parentId": 86,
+          "semantic": "view"
+        },
+        {
+          "id": 88,
+          "parentId": 87,
+          "display": "flex",
+          "flexDirection": "row",
+          "alignItems": "flex-start",
+          "justifyContent": "space-between",
+          "semantic": "view"
+        },
+        {
+          "id": 89,
+          "parentId": 88,
+          "flexGrow": 1,
+          "flexShrink": 1,
+          "flexBasis": 0,
+          "minWidth": 0,
+          "margin": {
+            "right": 12
+          },
+          "semantic": "view"
+        },
+        {
+          "id": 90,
+          "parentId": 89,
+          "fontSize": 14,
+          "fontWeight": 600,
+          "color": "#1a1c22",
+          "text": "\u2468 Global \u5C42\u5185\u5B58\uFF08GP7\uFF09",
+          "semantic": "text"
+        },
+        {
+          "id": 91,
+          "parentId": 89,
+          "margin": {
+            "top": 2
+          },
+          "fontSize": 11,
+          "color": "#5f6673",
+          "text": "\u5E38\u9A7B\u76D1\u63A7 \xB7 \u5206\u7AEF\u53E3\u5F84\uFF08MP\uFF1A\u72B6\u6001\u4E00\u4EFD + \u6BCF\u9875\u521D\u503C \xD7 \u9875\u9762\u6808\uFF09",
+          "semantic": "text"
+        },
+        {
+          "id": 92,
+          "parentId": 89,
+          "margin": {
+            "top": 8
+          },
+          "fontSize": 12,
+          "color": "#4a4ab8",
+          "semantic": "text"
+        },
+        {
+          "id": 93,
+          "parentId": 88,
+          "flexShrink": 0,
+          "display": "flex",
+          "flexDirection": "row",
+          "flexWrap": "wrap",
+          "justifyContent": "flex-end",
+          "maxWidth": 200,
+          "semantic": "view"
+        },
+        {
           "id": 94,
           "parentId": 93,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 8,
+            "left": 8
+          },
+          "padding": {
+            "top": 8,
+            "right": 12,
+            "bottom": 8,
+            "left": 12
+          },
+          "borderRadius": 10,
+          "backgroundColor": "#5b5bd6",
+          "color": "#ffffff",
+          "fontSize": 12,
+          "text": "\u8BFB\u5185\u5B58",
           "semantic": "view"
         },
         {
           "id": 95,
-          "parentId": 94,
-          "fontFamily": "monospace",
-          "fontSize": 11,
-          "color": "#b6bcc9",
-          "lineHeight": "1.7",
+          "parentId": 3,
+          "text": "\u64CD\u4F5C\u65E5\u5FD7",
           "semantic": "text"
         },
         {
           "id": 96,
-          "parentId": 94,
+          "parentId": 3,
+          "margin": {
+            "left": 0,
+            "right": 0
+          },
+          "semantic": "view"
+        },
+        {
+          "id": 97,
+          "parentId": 96,
+          "semantic": "view"
+        },
+        {
+          "id": 98,
+          "parentId": 97,
           "fontFamily": "monospace",
           "fontSize": 11,
-          "color": "#9aa1af",
+          "color": "#4b5058",
+          "lineHeight": "1.7",
+          "semantic": "text"
+        },
+        {
+          "id": 99,
+          "parentId": 97,
+          "fontFamily": "monospace",
+          "fontSize": 11,
+          "color": "#5f6673",
           "lineHeight": "1.7",
           "text": "\uFF08\u64CD\u4F5C\u540E\u5728\u6B64\u7559\u75D5\uFF09",
           "semantic": "text"
         },
         {
-          "id": 97,
-          "parentId": 0,
+          "id": 100,
+          "parentId": 3,
           "semantic": "p-auth-gate"
+        },
+        {
+          "id": 101,
+          "parentId": 0,
+          "semantic": "overlay-layer"
+        },
+        {
+          "id": 102,
+          "parentId": 101,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0,
+          "pointerEvents": false,
+          "semantic": "div"
+        },
+        {
+          "id": 103,
+          "parentId": 102,
+          "pointerEvents": true,
+          "position": "absolute",
+          "right": 14,
+          "width": 56,
+          "height": 56,
+          "borderRadius": 28,
+          "display": "flex",
+          "flexDirection": "column",
+          "alignItems": "center",
+          "justifyContent": "center",
+          "backgroundColor": "#5b5bd6",
+          "boxShadow": {
+            "dx": 0,
+            "dy": 3,
+            "blur": 10,
+            "spread": 0,
+            "color": "#5b5bd659"
+          },
+          "semantic": "div"
+        },
+        {
+          "id": 104,
+          "parentId": 103,
+          "fontSize": 17,
+          "fontWeight": 700,
+          "color": "#ffffff",
+          "lineHeight": "1.1",
+          "pointerEvents": true,
+          "text": "\u804A",
+          "semantic": "span"
+        },
+        {
+          "id": 105,
+          "parentId": 103,
+          "fontSize": 10,
+          "color": "#ffffff",
+          "opacity": 0.92,
+          "pointerEvents": true,
+          "text": "\u5BA2\u670D",
+          "semantic": "span"
+        },
+        {
+          "id": 106,
+          "parentId": 101,
+          "semantic": "p-toast-host"
+        },
+        {
+          "id": 107,
+          "parentId": 101,
+          "semantic": "p-loading-host"
         }
       ]
     }
