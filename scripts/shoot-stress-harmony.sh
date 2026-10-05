@@ -27,7 +27,7 @@ HAP="$(ls -t "$HAP_DIR"/*-signed.hap 2>/dev/null | head -1)"
 STATE="$(HDC list targets -v 2>/dev/null | head -1)"
 case "$STATE" in
   *Connected*) ;;
-  *) echo "FAIL: 无设备/未授权（$STATE）——先跑 bash hosts/harmony/hdc.sh check"; exit 2 ;;
+  *) echo "FAIL: 无设备/未授权（${STATE}）——先跑 bash hosts/harmony/hdc.sh check"; exit 2 ;;
 esac
 echo "    hap=${HAP##*/}  设备=$STATE"
 
@@ -59,7 +59,7 @@ P_OK="$(printf '%s' "$PROBE_JSON" | python3 -c 'import json,sys; print(json.load
 P_NODES="$(printf '%s' "$PROBE_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("nodes"))' 2>/dev/null)"
 P_ANCHOR="$(printf '%s' "$PROBE_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("anchor"))' 2>/dev/null)"
 P_ROWS="$(printf '%s' "$PROBE_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("first_row"))' 2>/dev/null)"
-if [ "$P_OK" != "True" ]; then echo "FAIL: 探针 ok=$P_OK（$PROBE_JSON）" >&2; exit 1; fi
+if [ "$P_OK" != "True" ]; then echo "FAIL: 探针 ok=${P_OK}（${PROBE_JSON}）" >&2; exit 1; fi
 if [ "${P_NODES:-0}" -lt 44 ]; then echo "FAIL: 探针节点数 $P_NODES ≠ 44" >&2; exit 1; fi
 if [ -z "$RENDERED" ] || [ "$RENDERED" -lt 40 ]; then
   echo "FAIL: 上屏节点数 ${RENDERED:-无}（应 ≥40）" >&2; exit 1; fi

@@ -32,7 +32,7 @@ HAP="$(ls -t "$HAP_DIR"/*-signed.hap 2>/dev/null | head -1)"
 STATE="$(HDC list targets -v 2>/dev/null | head -1)"
 case "$STATE" in
   *Connected*) ;;
-  *) echo "✗ 无设备/未授权（$STATE）"; exit 2 ;;
+  *) echo "✗ 无设备/未授权（${STATE}）"; exit 2 ;;
 esac
 echo "    hap=${HAP##*/}  设备=$STATE"
 
@@ -46,7 +46,7 @@ HDC shell "hilog -r" >/dev/null 2>&1 || true
 HDC shell "rm -f $REPORT_DEV" >/dev/null 2>&1 || true
 # ★删不掉就报错（否则下一步"等文件"会立刻命中**旧报告** ⇒ 假通过）
 if HDC shell "test -f $REPORT_DEV && echo STILL_EXISTS" 2>/dev/null | grep -q STILL_EXISTS; then
-  echo "✗ 旧报告删不掉（$REPORT_DEV）——等待信号会命中陈旧文件，拒绝继续"; exit 1
+  echo "✗ 旧报告删不掉（${REPORT_DEV}）——等待信号会命中陈旧文件，拒绝继续"; exit 1
 fi
 
 echo "==> 2. 启动（探针随页面 onAppear 自动跑）"
@@ -60,7 +60,7 @@ echo "==> 3. 等**报告落盘**（完成信号 = 文件存在；探针先落盘
 #   不传远端退出码**（实测：远端 `test -f /nonexistent-xyz` ⇒ hdc 仍返回 0）⇒ 按退出码等待
 #   会"waited 0s 立刻通过"，随后 `file recv` 报 ENOENT（症状离根因极远）。
 if ! bash "$WAIT" --cmd "bash '$HERE/hdc.sh' shell 'test -f $REPORT_DEV && echo PROTEUS_REPORT_READY' | grep -q PROTEUS_REPORT_READY" --timeout 90 --interval 3; then
-  echo "✗ 90s 内未见报告落盘（$REPORT_DEV）" >&2
+  echo "✗ 90s 内未见报告落盘（${REPORT_DEV}）" >&2
   HDC shell "hilog -x | grep -E 'VAPOR|cppcrash' | tail -8" 2>&1 | sed 's/^/  /' >&2
   exit 1
 fi
