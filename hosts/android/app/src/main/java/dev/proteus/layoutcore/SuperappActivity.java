@@ -159,54 +159,27 @@ public class SuperappActivity extends android.app.Activity {
         }
         tabBar.removeAllViews();
         String current = currentName(readState());
-        int unread = readImUnread();
         final int onColor = 0xFF4C8DFF, offColor = 0xFF8A8A9A;
+        // 每项 = **单个 TextView**（两行：图标 + 短标签）——与 Web 底部 Tab 栏同形；
+        //   用单控件两行最稳（此前用 竖向 LinearLayout[图标盒+标签]，标签不显示）。
         for (final String name : tabNames) {
-            boolean on = name.equals(current);
-            // 每项 = 竖向 [ 图标（FrameLayout，可叠角标） + 短标签 ]——与 Web 底部 Tab 栏同形
-            // （⌂ 首页 / ✉ 消息 / ☺ 我的；tab 文案用短名，不用页面 title）。
-            android.widget.LinearLayout col = new android.widget.LinearLayout(this);
-            col.setOrientation(android.widget.LinearLayout.VERTICAL);
-            col.setGravity(android.view.Gravity.CENTER);
-            col.setTag(name);
-            col.setClickable(true);
-            // 图标区（FrameLayout 以便右上角叠 IM 角标）
-            android.widget.FrameLayout iconWrap = new android.widget.FrameLayout(this);
-            int iw = Math.round(40 * density), ih = Math.round(28 * density);
-            iconWrap.setLayoutParams(new android.widget.LinearLayout.LayoutParams(iw, ih));
-            android.widget.TextView ic = new android.widget.TextView(this);
-            ic.setText(tabIcon(name));
-            ic.setTextSize(20f);
-            ic.setGravity(android.view.Gravity.CENTER);
-            ic.setTextColor(on ? onColor : offColor);
-            iconWrap.addView(ic, new android.widget.FrameLayout.LayoutParams(
-                    android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT));
-            if ("messages".equals(name) && unread > 0) {
-                android.widget.TextView badge = new android.widget.TextView(this);
-                badge.setText(unread > 99 ? "99+" : String.valueOf(unread));
-                badge.setTextSize(9f);
-                badge.setTextColor(0xFFFFFFFF);
-                badge.setGravity(android.view.Gravity.CENTER);
-                badge.setBackgroundColor(0xFFF5222D);
-                int bw = Math.round(16 * density);
-                android.widget.FrameLayout.LayoutParams bpl = new android.widget.FrameLayout.LayoutParams(bw, bw);
-                bpl.gravity = android.view.Gravity.TOP | android.view.Gravity.END;
-                bpl.topMargin = 0; bpl.rightMargin = Math.round(4 * density);
-                iconWrap.addView(badge, bpl);
-            }
-            col.addView(iconWrap);
-            android.widget.TextView lab = new android.widget.TextView(this);
-            lab.setText(tabShortLabel(name));
-            lab.setTextSize(11f);
-            lab.setGravity(android.view.Gravity.CENTER);
-            lab.setTextColor(on ? onColor : offColor);
-            col.addView(lab);
-            col.setLayoutParams(new android.widget.LinearLayout.LayoutParams(
-                    0, android.view.ViewGroup.LayoutParams.MATCH_PARENT, 1f));
-            col.setOnClickListener(new android.view.View.OnClickListener() {
+            final boolean on = name.equals(current);
+            android.widget.TextView tv = new android.widget.TextView(this);
+            int unread = readImUnread();
+            String extra = "messages".equals(name) && unread > 0 ? " " + unread : "";
+            tv.setText(tabIcon(name) + "\n" + tabShortLabel(name) + extra);
+            tv.setTextSize(12f);
+            tv.setGravity(android.view.Gravity.CENTER);
+            tv.setTextColor(on ? onColor : offColor);
+            tv.setTag(name);
+            tv.setClickable(true);
+            tv.setOnClickListener(new android.view.View.OnClickListener() {
                 @Override public void onClick(android.view.View v) { switchTab(name); }
             });
-            tabBar.addView(col);
+            android.widget.LinearLayout.LayoutParams lp = new android.widget.LinearLayout.LayoutParams(
+                    0, android.view.ViewGroup.LayoutParams.MATCH_PARENT, 1f);
+            tv.setLayoutParams(lp);
+            tabBar.addView(tv);
         }
     }
 
@@ -420,6 +393,13 @@ public class SuperappActivity extends android.app.Activity {
         if (hasFocus && android.os.Build.VERSION.SDK_INT >= 30) {
             android.view.WindowInsetsController wic = getWindow().getInsetsController();
             if (wic != null) wic.hide(android.view.WindowInsets.Type.statusBars());
+            // ★底部 Tab 栏让开**系统导航条**（全屏 edge-to-edge ⇒ 手势条会压住 tab 文字）：取导航栏 inset，
+            //   给 tabBar 加底部内边距（内容上移）。
+            android.view.WindowInsets wi = getWindow().getDecorView().getRootWindowInsets();
+            if (wi != null && tabBar != null) {
+                int nav = wi.getInsets(android.view.WindowInsets.Type.navigationBars()).bottom;
+                tabBar.setPadding(0, 0, 0, nav);
+            }
         }
     }
 

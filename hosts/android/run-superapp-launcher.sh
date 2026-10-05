@@ -49,6 +49,10 @@ echo "==> ③ 清旧报告 + 重启 + 驱动切 tab"
 "$ADB" shell "am start -n $ACTIVITY --es drive 1" >/dev/null 2>&1
 bash "$WAIT_SH" --cmd "\"$ADB\" logcat -d -s 'proteus:I' | grep -q SUPERAPP_LAUNCHER_REPORT_READY" \
   --timeout 40 --interval 1 --max-interval 3 || echo "  ⚠ 未见 SUPERAPP_LAUNCHER_REPORT_READY（40s）"
+# ★★★视觉证据：drive 结束停在最后一个 tab（mine）⇒ 设备截屏应显示「我的」高亮（高亮切换的机器可读证据）
+mkdir -p "$HERE/results"
+"$ADB" exec-out screencap -p > "$HERE/results/superapp-launcher.png" 2>/dev/null \
+  && echo "  ✓ 视觉证据 superapp-launcher.png（drive 末态：我的 tab）"
 
 echo "==> ④ 等报告（条件等待）"
 bash "$WAIT_SH" --cmd "\"$ADB\" shell test -f $REPORT" --timeout 30 --interval 2 || true
@@ -62,10 +66,6 @@ echo "==> ⑤ 取回报告 + 断言"
 mkdir -p "$HERE/results"
 rm -f "$HERE/results/superapp-launcher.json"
 "$ADB" pull "$REPORT" "$HERE/results/superapp-launcher.json" >/dev/null 2>&1 || { echo "✗ adb pull 失败"; exit 1; }
-# ★批次 45：视觉证据 PNG —— **设备截屏**（真值，反映实际渲染；in-app root.draw 会早于布局 ⇒ 不可靠）
-rm -f "$HERE/results/superapp-launcher.png"
-"$ADB" exec-out screencap -p > "$HERE/results/superapp-launcher.png" 2>/dev/null \
-  && echo "    ✓ 截图 superapp-launcher.png（设备截屏）" || echo "    ⚠ 截图未取到"
 python3 - "$HERE/results/superapp-launcher.json" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1]))
