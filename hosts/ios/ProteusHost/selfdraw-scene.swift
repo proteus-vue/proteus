@@ -3199,12 +3199,13 @@ final class SelfDrawView: UIView {
         for i in 0..<4 {
             let (w, col) = sides[i]
             if w <= 0 || col == nil { continue }
-            let sub = CALayer()
-            // 【为什么厚度编码进 name（首版真机缺陷：上下边不显示）】首版把厚度存 `sub.bounds.width`，
-            //   而 `sub.frame = …` **会覆写 bounds** ⇒ 二次 sync 时把「厚度」读成「盒宽」
-            //   （上下边 frame 高变成整个盒宽、位置错乱 ⇒ 不可见；左右边的 frame 宽恰=厚度才侥幸正确）。
+            // ★★★45° 斜接改造 v2（2026-10-05 · 用户抓出「案例E没有封边」）：CAShapeLayer 多边形。
+            //   【为什么】前一版用矩形子层（重叠式）⇒ 角上「横线延伸超出竖线」（与 Web 的 45° 斜接不同）；
+            //   且 iOS 无自动布局 ⇒ frame/path 都靠 sync 集中更新。厚度编码进 name（见前版注释的教训）。
+            let sub = CAShapeLayer()
             sub.name = "proteus-side-border-\(i)-\(w)"
-            sub.backgroundColor = col
+            sub.fillColor = col
+            sub.backgroundColor = nil
             layer.addSublayer(sub)
         }
         Self.syncSideBorderFrames(layer)
@@ -3216,18 +3217,40 @@ final class SelfDrawView: UIView {
     static func syncSideBorderFrames(_ layer: CALayer) {
         guard let subs = layer.sublayers else { return }
         let b = layer.bounds
+        // ★★★45° 斜接：先收集四边厚度（未声明的边 = 0），再给每块画多边形。
+        //   几何与 Android/Web 同一口径：外框 (x0,y0)-(x1,y1)；内角 = (x0+wl, y0+wt) / (x1-wr, y1-wb)。
+        var ws: [CGFloat] = [0, 0, 0, 0]
+        var shapes: [(Int, CAShapeLayer)] = []
         for sub in subs {
             guard let nm = sub.name, nm.hasPrefix("proteus-side-border-") else { continue }
-            // 名字形态：`proteus-side-border-<idx>-<thickness>`（厚度编码进名字——见创建处注释）
             let parts = nm.split(separator: "-")
-            guard parts.count >= 5, let idx = Int(parts[3]), let tv = Double(parts[4]) else { continue }
-            let t = CGFloat(tv)
+            guard parts.count >= 5, let idx = Int(parts[3]), let tv = Double(parts[4]), idx >= 0, idx < 4 else { continue }
+            ws[idx] = CGFloat(tv)
+            if let sh = sub as? CAShapeLayer { shapes.append((idx, sh)) }
+        }
+        let (wt, wr, wb, wl) = (ws[0], ws[1], ws[2], ws[3])
+        let x0 = b.minX, y0 = b.minY, x1 = b.maxX, y1 = b.maxY
+        let ix0 = x0 + wl, iy0 = y0 + wt
+        let ix1 = x1 - wr, iy1 = y1 - wb
+        for (idx, sh) in shapes {
+            sh.frame = b
+            let p = UIBezierPath()
             switch idx {
-            case 0: sub.frame = CGRect(x: 0, y: 0, width: b.width, height: t)
-            case 1: sub.frame = CGRect(x: b.width - t, y: 0, width: t, height: b.height)
-            case 2: sub.frame = CGRect(x: 0, y: b.height - t, width: b.width, height: t)
-            default: sub.frame = CGRect(x: 0, y: 0, width: t, height: b.height)
+            case 0:
+                p.move(to: CGPoint(x: x0, y: y0)); p.addLine(to: CGPoint(x: x1, y: y0))
+                p.addLine(to: CGPoint(x: ix1, y: iy0)); p.addLine(to: CGPoint(x: ix0, y: iy0))
+            case 1:
+                p.move(to: CGPoint(x: x1, y: y0)); p.addLine(to: CGPoint(x: x1, y: y1))
+                p.addLine(to: CGPoint(x: ix1, y: iy1)); p.addLine(to: CGPoint(x: ix1, y: iy0))
+            case 2:
+                p.move(to: CGPoint(x: x1, y: y1)); p.addLine(to: CGPoint(x: x0, y: y1))
+                p.addLine(to: CGPoint(x: ix0, y: iy1)); p.addLine(to: CGPoint(x: ix1, y: iy1))
+            default:
+                p.move(to: CGPoint(x: x0, y: y1)); p.addLine(to: CGPoint(x: x0, y: y0))
+                p.addLine(to: CGPoint(x: ix0, y: iy0)); p.addLine(to: CGPoint(x: ix0, y: iy1))
             }
+            p.close()
+            sh.path = p.cgPath
         }
     }
 
