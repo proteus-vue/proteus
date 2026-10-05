@@ -95,8 +95,19 @@ public class SuperappActivity extends android.app.Activity {
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT,
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT);
         // 给底部 Tab 栏留位（内容不被 chrome 压住）
-        clp.bottomMargin = tabBarHeightPx;
+        // ★★★内容区 = **全屏**（不缩 tab 栏）——与 Web 一致：Web 的 Tab 栏是 overlay（浮在页面之上、
+        //   fixed 不占流），页面的让位靠**页面自身下内边距**（`.proteus-mount-layer--page` padding-bottom:120）；
+        //   此前内容区缩到"屏高−tab 栏" ⇒ 视口高度少 56dp ⇒ 依赖 bottom 定位的元素（客服球）整体偏高
+        //   （独立验收：fab 球底距 tab 栏为 Web 的 1.6 倍）。现在视口 = 全屏，fab 与 Web 逐像素同。
+        clp.bottomMargin = 0;
         contentHost.setLayoutParams(clp);
+        // ★★★页面底色 = 灰底（与 Web 一致）：root 是深色 #101020（启动瞬间/异常时的底），
+        //   而页面内容是**浅色主题**——若不给 contentHost 上浅色底，切 tab 重绘的间隙/未覆盖区
+        //   会露出 root 的深色（独立验收实测：tab 栏上方出现一整条 #10101f 深色块）。
+        contentHost.setBackgroundColor(0xFFF4F5F7);
+        // ★禁用滚动条（独立验收抓出左缘灰色圆角竖条 = 本视图的 scrollbar；Web 无此物）
+        contentHost.setVerticalScrollBarEnabled(false);
+        contentHost.setHorizontalScrollBarEnabled(false);
         root.addView(contentHost);
 
         draw = new VaporRenderHost(this, contentHost);
@@ -126,16 +137,19 @@ public class SuperappActivity extends android.app.Activity {
         }
         // 注册表 → Tab 栏
         buildTabBar();
-        // ⑤ 把**当前屏**真画到屏上
-        renderCurrent(readState());
-        android.util.Log.i(TAG, "SUPERAPP_LAUNCHER_READY screen=" + currentName(readState()));
-
-        // ⑥ drive 模式（验证脚本用）：用**真 MotionEvent** 逐个点 Tab → 重绘 → 落证据
-        if ("1".equals(getIntent() != null ? getIntent().getStringExtra("drive") : null)) {
-            contentHost.post(new Runnable() {
-                @Override public void run() { driveTabs(0); }
-            });
-        }
+        // ⑤ 把**当前屏**真画到屏上——★**布局完成后再渲**（视口要用实测视图尺寸；见 renderCurrent 注释）
+        contentHost.post(new Runnable() {
+            @Override public void run() {
+                renderCurrent(readState());
+                android.util.Log.i(TAG, "SUPERAPP_LAUNCHER_READY screen=" + currentName(readState()));
+                // ⑥ drive 模式（验证脚本用）：用**真 MotionEvent** 逐个点 Tab → 重绘 → 落证据
+                if ("1".equals(getIntent() != null ? getIntent().getStringExtra("drive") : null)) {
+                    contentHost.post(new Runnable() {
+                        @Override public void run() { driveTabs(0); }
+                    });
+                }
+            }
+        });
     }
 
     // ────────────────────────── Tab 栏 ──────────────────────────
@@ -158,28 +172,81 @@ public class SuperappActivity extends android.app.Activity {
             android.util.Log.w(TAG, "读 tab 注册表失败：" + e.getMessage());
         }
         tabBar.removeAllViews();
+        // ★★样式取自 **Web 真值**（App.vue `.sa-tabbar` + global.css token）：surface #ffffff · 顶边框 #dcdfe5 ·
+        //   选中 brand #5b5bd6 · 未选中 text-3 #5f6673 · 角标 rec #d64545（minW 16 / h 16 / 圆角 8）。
+        final int onColor = 0xFF5B5BD6, offColor = 0xFF5F6673, recColor = 0xFFD64545, lineColor = 0xFFDCDFE5;
+        tabBar.setBackgroundColor(0xFFFFFFFF);
+        // 顶部分隔线（Web: `border-top: 1px solid --sa-line`）——★只加一次（幂等：查 tag），
+        //   此前用 `tabBar.getChildCount()==0` 判据恒真（上面刚 removeAllViews）⇒ 每次重建都叠一条。
+        if (root.findViewWithTag("sa-top-line") == null) {
+            android.view.View top = new android.view.View(this);
+            int h1 = Math.max(1, Math.round(density));
+            android.widget.FrameLayout.LayoutParams tlp2 = new android.widget.FrameLayout.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT, h1);
+            tlp2.gravity = android.view.Gravity.BOTTOM;
+            tlp2.bottomMargin = tabBarHeightPx;   // 贴在 tab 栏顶边（tab 栏在底部）
+            top.setLayoutParams(tlp2);
+            top.setBackgroundColor(lineColor);
+            top.setTag("sa-top-line");
+            root.addView(top);
+        }
         String current = currentName(readState());
-        final int onColor = 0xFF4C8DFF, offColor = 0xFF8A8A9A;
-        // 每项 = **单个 TextView**（两行：图标 + 短标签）——与 Web 底部 Tab 栏同形；
-        //   用单控件两行最稳（此前用 竖向 LinearLayout[图标盒+标签]，标签不显示）。
         for (final String name : tabNames) {
             final boolean on = name.equals(current);
-            android.widget.TextView tv = new android.widget.TextView(this);
             int unread = readImUnread();
-            String extra = "messages".equals(name) && unread > 0 ? " " + unread : "";
-            tv.setText(tabIcon(name) + "\n" + tabShortLabel(name) + extra);
-            tv.setTextSize(12f);
-            tv.setGravity(android.view.Gravity.CENTER);
-            tv.setTextColor(on ? onColor : offColor);
-            tv.setTag(name);
-            tv.setClickable(true);
-            tv.setOnClickListener(new android.view.View.OnClickListener() {
+            // 每项 = 竖向 [图标 19px + 标签 10px]（与 Web 同：图标行 + 文字行）——
+            //   ★图标加 U+FE0E 变体选择符：强制**文本呈现**（否则 ☺ 会被渲染成彩色 emoji，与 Web 线稿不符）。
+            android.widget.LinearLayout col = new android.widget.LinearLayout(this);
+            col.setOrientation(android.widget.LinearLayout.VERTICAL);
+            col.setGravity(android.view.Gravity.CENTER);
+            col.setTag(name);
+            col.setClickable(true);
+            // 图标行 = FrameLayout（图标居中 + 角标叠右上，与 Web `.sa-im-badge{position:absolute;left:50%;top:-4px}` 同形）
+            android.widget.FrameLayout icWrap = new android.widget.FrameLayout(this);
+            int iw = Math.round(44 * density), ih = Math.round(22 * density);
+            icWrap.setLayoutParams(new android.widget.LinearLayout.LayoutParams(iw, ih));
+            android.widget.TextView ic = new android.widget.TextView(this);
+            ic.setText(tabIcon(name) + "\uFE0E");
+            ic.setTextSize(19f);
+            ic.setGravity(android.view.Gravity.CENTER);
+            ic.setTextColor(on ? onColor : offColor);
+            icWrap.addView(ic, new android.widget.FrameLayout.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT));
+            if ("messages".equals(name) && unread > 0) {
+                android.widget.TextView badge = new android.widget.TextView(this);
+                badge.setTag("sa-badge");   // ★标记：highlightTab 必须**跳过角标**（否则白字被改成灰色）
+                badge.setText(unread > 99 ? "99+" : String.valueOf(unread));
+                badge.setTextSize(11f);
+                badge.setTextColor(0xFFFFFFFF);
+                badge.setGravity(android.view.Gravity.CENTER);
+                badge.setBackgroundColor(recColor);
+                // ★圆角胶囊（Web `.sa-im-badge{border-radius:8}`；此前直角方块，独立验收抓出）
+                badge.setBackground(new android.graphics.drawable.GradientDrawable() {{
+                    setColor(recColor);
+                    setCornerRadius(8 * density);
+                }});
+                int bh = Math.round(16 * density);
+                badge.setPadding(Math.round(4 * density), 0, Math.round(4 * density), 0);
+                android.widget.FrameLayout.LayoutParams blp = new android.widget.FrameLayout.LayoutParams(
+                        android.view.ViewGroup.LayoutParams.WRAP_CONTENT, bh);
+                blp.gravity = android.view.Gravity.TOP | android.view.Gravity.CENTER_HORIZONTAL;
+                blp.leftMargin = Math.round(10 * density);   // Web: left:50% + margin-left:4px
+                blp.topMargin = -Math.round(2 * density);
+                icWrap.addView(badge, blp);
+            }
+            col.addView(icWrap);
+            android.widget.TextView lab = new android.widget.TextView(this);
+            lab.setText(tabShortLabel(name));
+            lab.setTextSize(10f);
+            lab.setGravity(android.view.Gravity.CENTER);
+            lab.setTextColor(on ? onColor : offColor);
+            col.addView(lab);
+            col.setLayoutParams(new android.widget.LinearLayout.LayoutParams(
+                    0, android.view.ViewGroup.LayoutParams.MATCH_PARENT, 1f));
+            col.setOnClickListener(new android.view.View.OnClickListener() {
                 @Override public void onClick(android.view.View v) { switchTab(name); }
             });
-            android.widget.LinearLayout.LayoutParams lp = new android.widget.LinearLayout.LayoutParams(
-                    0, android.view.ViewGroup.LayoutParams.MATCH_PARENT, 1f);
-            tv.setLayoutParams(lp);
-            tabBar.addView(tv);
+            tabBar.addView(col);
         }
     }
 
@@ -211,11 +278,28 @@ public class SuperappActivity extends android.app.Activity {
     }
 
     private void highlightTab(String current) {
+        final int onColor = 0xFF5B5BD6, offColor = 0xFF5F6673;
         for (int i = 0; i < tabBar.getChildCount(); i++) {
-            android.view.View v = tabBar.getChildAt(i);
-            if (v instanceof android.widget.TextView) {
-                boolean on = current.equals(v.getTag());
-                ((android.widget.TextView) v).setTextColor(on ? 0xFF4C8DFF : 0xFF8A8A9A);
+            android.view.View col = tabBar.getChildAt(i);
+            boolean on = current.equals(col.getTag());
+            int c = on ? onColor : offColor;
+            // ★每项是竖向 LinearLayout[图标 FrameLayout[图标/角标] + 标签]——逐层下钻改色
+            //   （此前只认直接 TextView ⇒ 换成嵌套布局后高亮**静默失效**，实测：停在「我的」却高亮「首页」）
+            if (col instanceof android.view.ViewGroup) {
+                android.view.ViewGroup g = (android.view.ViewGroup) col;
+                for (int j = 0; j < g.getChildCount(); j++) {
+                    android.view.View ch = g.getChildAt(j);
+                    if (ch instanceof android.widget.TextView) ((android.widget.TextView) ch).setTextColor(c);
+                    else if (ch instanceof android.view.ViewGroup) {
+                        android.view.ViewGroup gg = (android.view.ViewGroup) ch;
+                        for (int k = 0; k < gg.getChildCount(); k++) {
+                            android.view.View gch = gg.getChildAt(k);
+                            // ★角标跳过（它的白字/红底是固定语义色，不随 tab 选中态变）
+                            if ("sa-badge".equals(gch.getTag())) continue;
+                            if (gch instanceof android.widget.TextView) ((android.widget.TextView) gch).setTextColor(c);
+                        }
+                    }
+                }
             }
         }
     }
@@ -245,14 +329,18 @@ public class SuperappActivity extends android.app.Activity {
             if (!all.has(page)) page = all.has("index") ? "index" : all.keys().next();
             org.json.JSONArray nodes = all.getJSONObject(page).getJSONArray("nodes");
             org.json.JSONObject tree = new org.json.JSONObject();
-            // viewport 高 = **内容区**（屏高 − 底部 Tab 栏）——App 壳按此布局（绝对层填满内容区），
-            //   与宿主 tab 栏各占其位（不重叠、不裁切）
-            float contentH = logicalH - tabBarHeightPx / density;
-            tree.put("viewport", new org.json.JSONObject().put("width", logicalW).put("height", contentH));
+            // ★★★视口 = **实测视图尺寸**（不是 DisplayMetrics 估算）：全屏 edge-to-edge 下宿主的
+            //   contentHost 高度才是真值——用估算会与实际差一个导航栏高（实测 2236 vs 2440）
+            //   ⇒ `bottom` 定位元素整体上移（fab 偏高 2.3×）。布局未就绪时回落估算值。
+            int vwPx = contentHost.getWidth() > 0 ? contentHost.getWidth() : Math.round(logicalW * density);
+            int vhPx = contentHost.getHeight() > 0 ? contentHost.getHeight() : Math.round(logicalH * density) - tabBarHeightPx;
+            tree.put("viewport", new org.json.JSONObject()
+                    .put("width", vwPx / density).put("height", vhPx / density));
             tree.put("nodes", nodes);
             draw.mount(tree.toString());
             if (draw.view() != null) draw.view().invalidate();
-            android.util.Log.i(TAG, "SUPERAPP_RENDER page=" + page + " nodes=" + nodes.length());
+            android.util.Log.i(TAG, "SUPERAPP_RENDER page=" + page + " nodes=" + nodes.length()
+                    + " viewport=" + (vwPx / density) + "x" + (vhPx / density));
         } catch (Throwable t) {
             android.util.Log.w(TAG, "renderCurrent 失败：" + t.getMessage());
         }
@@ -267,7 +355,12 @@ public class SuperappActivity extends android.app.Activity {
      */
     private void driveTabs(final int idx) {
         if (idx >= tabNames.length) {
-            writeLauncherReport("drive");
+            // ★★★报告**等最后一帧画完**再写（本仓实测的证据竞态）：写报告与截屏都在脚本侧紧接着做，
+            //   若此时末屏的绘制帧还没上（`postOnAnimation` 已排队但未执行）⇒ 截到**上一屏**的旧帧，
+            //   报告却说 current=mine（独立视觉验收抓出"证据自相矛盾：图是首页、JSON 说 mine"）。
+            root.postOnAnimation(new Runnable() {
+                @Override public void run() { writeLauncherReport("drive"); }
+            });
             return;
         }
         final String name = tabNames[idx];

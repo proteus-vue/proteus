@@ -3518,7 +3518,9 @@
           "color": "#1a1c22",
           "padding": {
             "left": 16,
-            "right": 16
+            "right": 16,
+            "bottom": 120,
+            "top": 44
           },
           "semantic": "view",
           "position": "absolute",
@@ -3994,22 +3996,17 @@
           "id": 38,
           "parentId": 34,
           "flexShrink": 0,
-          "width": 8,
-          "height": 8,
           "margin": {
             "left": 12
           },
-          "transform": {
-            "txPx": 0,
-            "tyPx": 0,
-            "txPct": 0,
-            "tyPct": 0,
-            "sx": 1,
-            "sy": 1,
-            "rotate": 45
-          },
-          "color": "#1a1c22",
-          "semantic": "view"
+          "display": "flex",
+          "alignItems": "center",
+          "justifyContent": "flex-end",
+          "fontSize": 16,
+          "lineHeight": "1",
+          "color": "#5f6673",
+          "text": "\u203A",
+          "semantic": "text"
         },
         {
           "id": 39,
@@ -4070,22 +4067,17 @@
           "id": 43,
           "parentId": 39,
           "flexShrink": 0,
-          "width": 8,
-          "height": 8,
           "margin": {
             "left": 12
           },
-          "transform": {
-            "txPx": 0,
-            "tyPx": 0,
-            "txPct": 0,
-            "tyPct": 0,
-            "sx": 1,
-            "sy": 1,
-            "rotate": 45
-          },
-          "color": "#1a1c22",
-          "semantic": "view"
+          "display": "flex",
+          "alignItems": "center",
+          "justifyContent": "flex-end",
+          "fontSize": 16,
+          "lineHeight": "1",
+          "color": "#5f6673",
+          "text": "\u203A",
+          "semantic": "text"
         },
         {
           "id": 44,
@@ -4146,22 +4138,17 @@
           "id": 48,
           "parentId": 44,
           "flexShrink": 0,
-          "width": 8,
-          "height": 8,
           "margin": {
             "left": 12
           },
-          "transform": {
-            "txPx": 0,
-            "tyPx": 0,
-            "txPct": 0,
-            "tyPct": 0,
-            "sx": 1,
-            "sy": 1,
-            "rotate": 45
-          },
-          "color": "#1a1c22",
-          "semantic": "view"
+          "display": "flex",
+          "alignItems": "center",
+          "justifyContent": "flex-end",
+          "fontSize": 16,
+          "lineHeight": "1",
+          "color": "#5f6673",
+          "text": "\u203A",
+          "semantic": "text"
         },
         {
           "id": 49,
@@ -4432,6 +4419,7 @@
           "pointerEvents": true,
           "position": "absolute",
           "right": 14,
+          "bottom": 136,
           "width": 56,
           "height": 56,
           "borderRadius": 28,
@@ -4527,7 +4515,9 @@
           "color": "#1a1c22",
           "padding": {
             "left": 16,
-            "right": 16
+            "right": 16,
+            "bottom": 120,
+            "top": 44
           },
           "semantic": "view",
           "position": "absolute",
@@ -5126,6 +5116,7 @@
           "pointerEvents": true,
           "position": "absolute",
           "right": 14,
+          "bottom": 136,
           "width": 56,
           "height": 56,
           "borderRadius": 28,
@@ -5221,7 +5212,9 @@
           "color": "#1a1c22",
           "padding": {
             "left": 16,
-            "right": 16
+            "right": 16,
+            "bottom": 120,
+            "top": 44
           },
           "semantic": "view",
           "position": "absolute",
@@ -5786,22 +5779,17 @@
           "id": 43,
           "parentId": 39,
           "flexShrink": 0,
-          "width": 8,
-          "height": 8,
           "margin": {
             "left": 12
           },
-          "transform": {
-            "txPx": 0,
-            "tyPx": 0,
-            "txPct": 0,
-            "tyPct": 0,
-            "sx": 1,
-            "sy": 1,
-            "rotate": 45
-          },
-          "color": "#1a1c22",
-          "semantic": "view"
+          "display": "flex",
+          "alignItems": "center",
+          "justifyContent": "flex-end",
+          "fontSize": 16,
+          "lineHeight": "1",
+          "color": "#5f6673",
+          "text": "\u203A",
+          "semantic": "text"
         },
         {
           "id": 44,
@@ -5853,6 +5841,7 @@
           },
           "fontSize": 14,
           "color": "#4b5058",
+          "text": "v0.1.0 \xB7 Proteus \u8D85\u7EA7\u5E94\u7528",
           "semantic": "text"
         },
         {
@@ -5883,6 +5872,7 @@
           "pointerEvents": true,
           "position": "absolute",
           "right": 14,
+          "bottom": 136,
           "width": 56,
           "height": 56,
           "borderRadius": 28,
@@ -5978,7 +5968,9 @@
           "color": "#1a1c22",
           "padding": {
             "left": 16,
-            "right": 16
+            "right": 16,
+            "bottom": 120,
+            "top": 44
           },
           "semantic": "view",
           "position": "absolute",
@@ -7411,6 +7403,7 @@
           "pointerEvents": true,
           "position": "absolute",
           "right": 14,
+          "bottom": 136,
           "width": 56,
           "height": 56,
           "borderRadius": 28,

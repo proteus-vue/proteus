@@ -262,7 +262,7 @@ proteus/
 │   ├── agent/ mcp/ docs/ test-ir/ test-core/      # Agent Kit / MCP Server / 文档引擎 / 测试 IR / 测试核心
 │   ├── dev-host/                   #   调试基座即宿主（G-45：Install-Once Host + 动态后端装载 + pending 回放）
 │   └── cli/ create-proteus/        #   CLI（build/explain/audit/conformance/migrate）/ 一键工程
-├── docs/                           # 85 份 plan 文档（G-01~G-60 连续 + 规约/方法论/白皮书）+ board-inventory
+├── docs/                           # 86 份 plan 文档（G-01~G-61 连续 + 规约/方法论/白皮书）+ board-inventory
 ├── examples/                       # 示例应用（20 页能力矩阵活文档 + 文档引擎 demo）
 ├── tests/                          # 4152 单测 / 337 文件（+ Web e2e 专用入口）
 ├── .github/workflows/              # CI：test / vue-tsc / 双端构建 / 独立包构建 / e2e / consistency
@@ -286,7 +286,7 @@ npm run proteus -- conformance --repo .             # 严禁 fork 仓库治理�
 |---|---|
 | [PROTEUS-METHODOLOGY](docs/proteus-methodology-plan/PROTEUS-METHODOLOGY.md) | 方法论哲学：统一语义收敛、五支柱、Tier 模型（onboarding 第一课） |
 | [定位 v3](docs/proteus-positioning-v3.md) | 对外定位：一句话定位 + 杀手特性详解 + 对标矩阵 + 对外话术 |
-| [架构全景](docs/board-inventory.md) | 六层分层 + 双路线 + 85 份 plan 文档状态总表（单一权威索引） |
+| [架构全景](docs/board-inventory.md) | 六层分层 + 双路线 + 86 份 plan 文档状态总表（单一权威索引） |
 | [Vapor 诚实边界](docs/proteus-vapor-honest-boundaries.md) | Vapor 更新编译器的**已知边界与 38 条实测纪律**（读它比读方案更接近真相） |
 | [Skyline 踩坑总账](docs/skyline-pitfalls.md) | 微信 Skyline 适配全部坑（S1-S49：症状/根因/处置/实测依据 + 已落成防护） |
 | [weui 组件规范参考](docs/weui-spec-reference.md) | 自绘 `p-*` 组件的视觉基准（从基础库 app.asar 提取的权威规格：checkbox/radio/switch/button） |

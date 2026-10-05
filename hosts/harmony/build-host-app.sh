@@ -83,7 +83,8 @@ HV_OUT="$("$HVIGORW" assembleHap --mode module -p product=default --no-daemon 2>
 HV_RC=$?
 printf '%s\n' "$HV_OUT" | grep -vE "^\> hvigor .*Finished|UP-TO-DATE" | tail -15
 if [ "$HV_RC" != "0" ]; then
-  echo "✗ 构建失败（hvigor 退出码 $HV_RC）——修正后再构建（勿用旧 hap 验证）"
+  # ★变量必须用 ${} 包裹：紧跟全角 `）`（U+FF09）时 bash 会把它并入变量名 ⇒ unbound variable
+  echo "✗ 构建失败（hvigor 退出码 ${HV_RC}）——修正后再构建（勿用旧 hap 验证）"
   exit 1
 fi
 

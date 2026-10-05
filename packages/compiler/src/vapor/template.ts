@@ -2037,7 +2037,16 @@ function numOf(v: string): number | undefined {
 function foldCalc(v: string): number | undefined {
   const m = /^calc\(([\s\S]*)\)$/i.exec(v.trim())
   if (!m) return undefined
-  const inner = m[1]!.replace(/px/gi, '')
+  // ★★★批次 48：`env(safe-area-inset-*, <fallback>)` → 其 **fallback**（或 0）——App 端无浏览器
+  //   安全区概念（宿主自管），取 fallback 是与 Web 最接近的确定值。实测来源：App.vue `.sa-fab`
+  //   的 `bottom: calc(136px + env(safe-area-inset-bottom, 0px))` 此前**整条丢弃** ⇒ 悬浮球
+  //   跑到顶部（Web 在底部）——独立视觉验收抓出「悬浮球位置 Web 右下 / 三端右上」的根因。
+  //   ★只认 `safe-area-inset-*`（其它 env 变量无确定值 ⇒ 不猜，返回 undefined 由调用方诊断）。
+  let inner = m[1]!.replace(
+    /env\(\s*safe-area-inset-(?:top|right|bottom|left)\s*(?:,\s*([^()]*?)\s*)?\)/gi,
+    (_all, fb?: string) => (fb && fb.trim() ? fb.trim() : '0px'),
+  )
+  inner = inner.replace(/px/gi, '')
   // 去 px 后仍含字母（em/vh/rem…）或 `%` ⇒ 不可折叠
   if (/[a-zA-Z%]/.test(inner)) return undefined
   return evalArith(inner)

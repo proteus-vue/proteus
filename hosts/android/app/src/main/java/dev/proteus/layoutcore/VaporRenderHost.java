@@ -1593,7 +1593,16 @@ final class VaporRenderHost {
                 (float) bs.optDouble("dy", 0),
                 (float) bs.optDouble("blur", 0),
                 (float) bs.optDouble("spread", 0),
-                (float) col};
+                (float) col,                    // 兼容旧消费方（丢低位；新绘制走 [5]/[6] 无损版）
+                // ★★★批次 48：阴影色 32 位无损传递（float 尾数 24 位会丢低位 ⇒ 颜色偏移，见 Cmd 注释）
+                (float) ((col >>> 16) & 0xFFFF),
+                (float) (col & 0xFFFF)};
+    }
+
+    /** 从 `Cmd.boxShadow` 取回无损阴影色（`[5]`=高16 / `[6]`=低16；旧形态回退 `[4]`） */
+    static int shadowColorOf(float[] bs) {
+        if (bs.length >= 7) return ((int) bs[5] << 16) | (int) bs[6];
+        return (int) bs[4];
     }
 
     /** 遮罩声明 → `[kind, angle, cx, cy, r, softness, progress]`（与 LightsHost 同口径） */

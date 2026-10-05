@@ -44,6 +44,11 @@ final class SuperappScene: NSObject {
         // ① 平台参数（TS 侧自报标识——三端同契约）
         _ = ctx.evaluateScript("var __PROTEUS_HOST_ID__ = 'ios';")
         _ = ctx.evaluateScript("var __PROTEUS_HOST_FRAME_DRIVER__ = 'CADisplayLink';")
+        // ★★★批次 48（用户：iOS 页面内容能一直拖着来回动）：**开启内容滚动范围钳制**——
+        //   内容页语义 = 装不下才滚、最多滚到内容底（与 Web 一致）。此前只有 stress 场景开了它，
+        //   superapp 没开 ⇒ `applyContentOffset` 无界拖拽（iOS 特有，Android 已 enable）。范围由
+        //   渲染路径从内核 rects 的 maxBottom − 视口高推导（见 selfdraw-scene 的 rects 块）。
+        SelfDrawBridge.contentScrollRangeEnabled = true
         // ② 宿主桥（screen.* + 能力）——与 AppStackScene 同一份
         ctx.setObject(HostRuntimeBridge(), forKeyedSubscript: "proteusHost" as NSString)
         // ③ proteusSelfDraw 由 SelfDrawViewController 注入（本场景复用同一 bridge）
@@ -115,45 +120,79 @@ final class SuperappScene: NSObject {
               let treeJson = String(data: td, encoding: .utf8) else { return }
         let out = bridgeRef?.mount(treeJson) ?? "{\"ok\":false}"
         NSLog("[proteus] SUPERAPP_RENDER page=%@ nodes=%d → %@", usePage, nodes.count, String(out.prefix(160)))
+        // ★重绘后把 tab 栏提到最上层（自绘每次重建层树，可能压住它——见 buildTabBar 层级注释）
+        if let p = tabBarParent(), let bar = p.viewWithTag(771001) { p.bringSubviewToFront(bar) }
     }
 
     // ── Tab 栏（真实 UIButton · iOS 原生 chrome） ──
 
+    /// ★★样式取自 **Web 真值**（App.vue `.sa-tabbar` + global.css token）：surface #ffffff · 顶边框 #dcdfe5 ·
+    ///   选中 brand #5b5bd6 · 未选中 text-3 #5f6673 · 角标 rec #d64545（16 高、圆角 8）。
+    ///   ★★**加到 `container.superview`**（不是 container）：自绘层都加在 SelfDrawView.layer 上，任何
+    ///     后续重绘（切 tab → renderCurrent → buildLayers）都会把新层加到最上 ⇒ 会盖住加在 container 上的
+    ///     tab 栏（实测：iOS 截图完全无 tab 栏）。加到 superview ⇒ 层级永远在自绘层之上。
+    private static func tabBarParent() -> UIView? { container?.superview ?? container }
+
     private static func buildTabBar() {
-        guard let container = container else { return }
-        let h: CGFloat = 56
-        let w = container.bounds.width
-        let barY = container.bounds.height - h
+        guard let parent = tabBarParent() else { return }
+        let h: CGFloat = 52
+        let w = parent.bounds.width
+        let barY = parent.bounds.height - h
         let bar = UIView(frame: CGRect(x: 0, y: barY, width: w, height: h))
-        bar.backgroundColor = UIColor(red: 0x1B/255.0, green: 0x1B/255.0, blue: 0x2A/255.0, alpha: 1)
+        bar.backgroundColor = UIColor(red: 0xFF/255.0, green: 0xFF/255.0, blue: 0xFF/255.0, alpha: 1)
         bar.tag = 771001
+        // 顶边框（Web: border-top 1px --sa-line）
+        let line = UIView(frame: CGRect(x: 0, y: 0, width: w, height: 1.0 / UIScreen.main.scale))
+        line.backgroundColor = UIColor(red: 0xDC/255.0, green: 0xDF/255.0, blue: 0xE5/255.0, alpha: 1)
+        bar.addSubview(line)
         let current = currentName()
         let unread = imUnreadValue()
         for (i, name) in tabNames.enumerated() {
             let bw = w / CGFloat(max(1, tabNames.count))
-            let btn = UIButton(type: .system)
-            btn.frame = CGRect(x: bw * CGFloat(i), y: 0, width: bw, height: h)
-            // ★图标 + 短标签（与 Web/Android 底部 Tab 栏同形：⌂ 首页 / ✉ 消息 / ☺ 我的）
-            btn.setTitle("\(tabIcon(name)) \(tabShortLabel(name))", for: .normal)
-            btn.setTitleColor(current == name ? UIColor(red: 0x4C/255.0, green: 0x8D/255.0, blue: 0xFF/255.0, alpha: 1) : UIColor(red: 0x8A/255.0, green: 0x8A/255.0, blue: 0x9A/255.0, alpha: 1), for: .normal)
-            btn.titleLabel?.font = UIFont.systemFont(ofSize: 13)
-            btn.accessibilityIdentifier = name
-            btn.addTarget(self, action: #selector(onTabTap(_:)), for: .touchUpInside)
-            // IM 角标（messages 且 unread>0）：红色小圆
+            let item = UIView(frame: CGRect(x: bw * CGFloat(i), y: 0, width: bw, height: h))
+            item.tag = 771000 + i
+            let on = (current == name)
+            let tint = on ? UIColor(red: 0x5B/255.0, green: 0x5B/255.0, blue: 0xD6/255.0, alpha: 1)
+                          : UIColor(red: 0x5F/255.0, green: 0x66/255.0, blue: 0x73/255.0, alpha: 1)
+            // 图标（19px，文本呈现——加 U+FE0E 变体选择符，避免渲染成彩色 emoji）
+            let ic = UILabel(frame: CGRect(x: 0, y: 8, width: bw, height: 22))
+            ic.text = tabIcon(name) + "\u{FE0E}"
+            ic.font = UIFont.systemFont(ofSize: 19)
+            ic.textColor = tint
+            ic.textAlignment = .center
+            item.addSubview(ic)
+            // 文字（10px）
+            let tx = UILabel(frame: CGRect(x: 0, y: 30, width: bw, height: 14))
+            tx.text = tabShortLabel(name)
+            tx.font = UIFont.systemFont(ofSize: 10)
+            tx.textColor = tint
+            tx.textAlignment = .center
+            item.addSubview(tx)
+            // IM 角标（Web: rec #d64545，min-width 16、高 16、圆角 8、白字 11）
             if name == "messages" && unread > 0 {
-                let badge = UILabel(frame: CGRect(x: bw * CGFloat(i) + bw / 2 + 8, y: 6, width: 16, height: 16))
+                let badge = UILabel(frame: CGRect(x: bw / 2 + 4, y: 4, width: 16, height: 16))
                 badge.text = unread > 99 ? "99+" : "\(unread)"
-                badge.font = UIFont.systemFont(ofSize: 9)
+                badge.font = UIFont.systemFont(ofSize: 11, weight: .semibold)
                 badge.textColor = .white
                 badge.textAlignment = .center
-                badge.backgroundColor = UIColor(red: 0xF5/255.0, green: 0x22/255.0, blue: 0x2D/255.0, alpha: 1)
+                badge.backgroundColor = UIColor(red: 0xD6/255.0, green: 0x45/255.0, blue: 0x45/255.0, alpha: 1)
                 badge.layer.cornerRadius = 8
                 badge.layer.masksToBounds = true
-                bar.addSubview(badge)
+                item.addSubview(badge)
             }
-            bar.addSubview(btn)
+            let tap = UITapGestureRecognizer(target: self, action: #selector(onTabItemTap(_:)))
+            item.addGestureRecognizer(tap)
+            item.isUserInteractionEnabled = true
+            bar.addSubview(item)
         }
-        container.addSubview(bar)
+        parent.addSubview(bar)
+    }
+
+    @objc private static func onTabItemTap(_ g: UITapGestureRecognizer) {
+        guard let item = g.view else { return }
+        let idx = item.tag - 771000
+        guard idx >= 0, idx < tabNames.count else { return }
+        switchTab(tabNames[idx], via: "user-tap")
     }
 
     private static func tabIcon(_ name: String) -> String {
@@ -190,10 +229,15 @@ final class SuperappScene: NSObject {
     }
 
     private static func highlightTab(_ current: String) {
-        guard let bar = container?.viewWithTag(771001) else { return }
-        for sub in bar.subviews {
-            guard let btn = sub as? UIButton, let id = btn.accessibilityIdentifier else { continue }
-            btn.setTitleColor(id == current ? UIColor(red: 0x4C/255.0, green: 0x8D/255.0, blue: 0xFF/255.0, alpha: 1) : UIColor(red: 0x8A/255.0, green: 0x8A/255.0, blue: 0x9A/255.0, alpha: 1), for: .normal)
+        guard let bar = tabBarParent()?.viewWithTag(771001) else { return }
+        let onC = UIColor(red: 0x5B/255.0, green: 0x5B/255.0, blue: 0xD6/255.0, alpha: 1)
+        let offC = UIColor(red: 0x5F/255.0, green: 0x66/255.0, blue: 0x73/255.0, alpha: 1)
+        for (i, name) in tabNames.enumerated() {
+            guard let item = bar.viewWithTag(771000 + i) else { continue }
+            let c = (name == current) ? onC : offC
+            for sub in item.subviews {
+                if let l = sub as? UILabel, sub.tag != 771002 { l.textColor = c }
+            }
         }
     }
 
@@ -231,8 +275,33 @@ final class SuperappScene: NSObject {
         }
     }
 
+    /// ★★★批次 48：**滚动钳制探针**——大幅拖拽后读 contentOffset，证明不会无限滚动。
+    ///   内容页语义 = 装不下才滚、最多滚到内容底（与 Web 一致）。返回读数进报告（机器判据）。
+    private static func scrollProbe() -> [String: Any] {
+        guard let v = bridgeRef?.view else { return ["error": "view 未建立"] }
+        var out: [String: Any] = ["range": v.verticalRange, "range_set": v.verticalRangeSet]
+        // 1) 向上拖很多（内容应下滚，若装得下则恒 0；装不下则钳到 range）
+        _ = v.driveScrollDrag(dx: 0, dy: -100000)   // 手指上移 100000 → 内容上滚
+        out["after_drag_up_100k"] = Double(v.contentOffset.y)
+        // 2) 向下拖很多（应回钳到 0，不得为负）
+        _ = v.driveScrollDrag(dx: 0, dy: 100000)
+        out["after_drag_down_100k"] = Double(v.contentOffset.y)
+        // 3) ★横拖（用户实测「能一直拖着来回动」——横轴此前从不钳制）：应恒 0
+        _ = v.driveScrollDrag(dx: -100000, dy: 0)
+        out["after_drag_left_100k_x"] = Double(v.contentOffset.x)
+        _ = v.driveScrollDrag(dx: 100000, dy: 0)
+        out["after_drag_right_100k_x"] = Double(v.contentOffset.x)
+        out["ok"] = (out["after_drag_up_100k"] as? Double ?? -1) >= 0
+            && (out["after_drag_up_100k"] as? Double ?? 1e9) <= Double(v.verticalRange)
+            && (out["after_drag_down_100k"] as? Double) == 0
+            && (out["after_drag_left_100k_x"] as? Double) == 0
+            && (out["after_drag_right_100k_x"] as? Double) == 0
+        return out
+    }
+
     private static func reportBody() -> [String: Any] {
         var o: [String: Any] = ["ok": true, "host_id": "ios", "tabs": tabNames, "switch_log": switchLog,
+                                "scroll_probe": scrollProbe(),
                                 "run_ts": Date().timeIntervalSince1970]
         if let st = evalJs?("__proteusSuperappState()"),
            let d = st.data(using: .utf8),

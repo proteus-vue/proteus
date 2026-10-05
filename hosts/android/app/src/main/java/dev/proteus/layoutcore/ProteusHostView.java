@@ -72,7 +72,10 @@ public class ProteusHostView extends ViewGroup {
         final float borderWidth;
         /** ★批次 5：uniform 边框颜色（ARGB；borderWidth>0 时生效）。 */
         final int borderColor;
-        /** ★批次 10（CSS 兼容对齐 · 超级应用视觉）：盒阴影规格 `{dx,dy,blur,spread,color}`；null=无阴影（零行为变化）。 */
+        /** ★批次 10（CSS 兼容对齐 · 超级应用视觉）：盒阴影规格 `{dx,dy,blur,spread,color}`；null=无阴影（零行为变化）。
+         *  ★★★批次 48：`[5]`/`[6]` = 阴影色的**高/低 16 位**——阴影色是 32 位 ARGB，而 `float` 只有
+         *    24 位尾数 ⇒ 直接存 `[4]` 会**丢低位**（实测：`0x595b5bd6` 的蓝通道被舍入破坏 ⇒
+         *    客服球光晕呈暖米色，与 Web 的淡紫不符——独立视觉验收抓出）。高低拆分可无损往返。 */
         final float[] boxShadow;
         /** ★批次 13（line-height）：行盒高（px；0 = 用字形度量高，字形基线沿用旧 0.8h——零行为变化）。 */
         final float lineHeight;
@@ -1540,6 +1543,12 @@ public class ProteusHostView extends ViewGroup {
         //     而屏幕截图整屏背景色、`onDrawCount() == 0`。
         //   ★纪律：**离屏判据不能替代上屏判据**——"我发出的指令"与"屏幕真的画了一帧"是两件事。
         setWillNotDraw(false);
+        // ★★★禁用**系统滚动条**（独立视觉验收抓出「左缘灰色圆角竖胶囊」= 本视图的 scrollbar）：
+        //   内容滚动由**自绘**（`sublayerTransform`/画布平移）实现，与 View 的 scrollX/scrollY 无关
+        //   ⇒ 系统滚动条是「无来源的异物」（Web/MP 均无）。Android 的 scrollbar 由 `View` 自动管理，
+        //   只要 View 有 scrollRange 就会画 —— 显式关掉。
+        setVerticalScrollBarEnabled(false);
+        setHorizontalScrollBarEnabled(false);
         textPaint.setColor(Color.BLACK);
         textPaint.setTextSize(12f);
         // ★C2：描边笔样式（STROKE + 圆头圆角——与 iOS `.round` 一致）
@@ -2371,7 +2380,7 @@ public class ProteusHostView extends ViewGroup {
                 final float sdx = c.boxShadow[0];
                 final float sdy = c.boxShadow[1];
                 final float sblur = c.boxShadow[2];
-                final int scol = (int) c.boxShadow[4];
+                final int scol = VaporRenderHost.shadowColorOf(c.boxShadow);   // ★无损取色（见 Cmd.boxShadow 注释）
                 final float scAlpha = Color.alpha(scol) / 255f;
                 final int scRgb = scol & 0x00FFFFFF;
                 final int SHADOW_LAYERS = 6;

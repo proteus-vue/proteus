@@ -189,21 +189,21 @@ const stats = ref([
           <text class="sa-item__label">模拟弱网</text>
           <text class="sa-item__desc">弱网时提醒用户</text>
         </view>
-        <view class="sa-item__arrow" />
+        <text class="sa-item__arrow">›</text>
       </view>
       <view id="idx-play" class="sa-item sa-item--tap" @click="playDemoTrack">
         <view class="sa-item__main">
           <text class="sa-item__label">播放内部播客</text>
           <text class="sa-item__desc">播放内部播客</text>
         </view>
-        <view class="sa-item__arrow" />
+        <text class="sa-item__arrow">›</text>
       </view>
       <navigator url="/pages/verify" class="sa-item sa-item--tap">
         <view class="sa-item__main">
           <text class="sa-item__label">打开验收控制台</text>
           <text class="sa-item__desc">全局能力自检</text>
         </view>
-        <view class="sa-item__arrow" />
+        <text class="sa-item__arrow">›</text>
       </navigator>
     </view>
 

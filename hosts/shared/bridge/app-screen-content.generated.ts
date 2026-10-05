@@ -51,7 +51,9 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "color": "#1a1c22",
         "padding": {
           "left": 16,
-          "right": 16
+          "right": 16,
+          "bottom": 120,
+          "top": 44
         },
         "semantic": "view",
         "position": "absolute",
@@ -527,22 +529,17 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 38,
         "parentId": 34,
         "flexShrink": 0,
-        "width": 8,
-        "height": 8,
         "margin": {
           "left": 12
         },
-        "transform": {
-          "txPx": 0,
-          "tyPx": 0,
-          "txPct": 0,
-          "tyPct": 0,
-          "sx": 1,
-          "sy": 1,
-          "rotate": 45
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
+        "display": "flex",
+        "alignItems": "center",
+        "justifyContent": "flex-end",
+        "fontSize": 16,
+        "lineHeight": "1",
+        "color": "#5f6673",
+        "text": "›",
+        "semantic": "text"
       },
       {
         "id": 39,
@@ -603,22 +600,17 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 43,
         "parentId": 39,
         "flexShrink": 0,
-        "width": 8,
-        "height": 8,
         "margin": {
           "left": 12
         },
-        "transform": {
-          "txPx": 0,
-          "tyPx": 0,
-          "txPct": 0,
-          "tyPct": 0,
-          "sx": 1,
-          "sy": 1,
-          "rotate": 45
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
+        "display": "flex",
+        "alignItems": "center",
+        "justifyContent": "flex-end",
+        "fontSize": 16,
+        "lineHeight": "1",
+        "color": "#5f6673",
+        "text": "›",
+        "semantic": "text"
       },
       {
         "id": 44,
@@ -679,22 +671,17 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 48,
         "parentId": 44,
         "flexShrink": 0,
-        "width": 8,
-        "height": 8,
         "margin": {
           "left": 12
         },
-        "transform": {
-          "txPx": 0,
-          "tyPx": 0,
-          "txPct": 0,
-          "tyPct": 0,
-          "sx": 1,
-          "sy": 1,
-          "rotate": 45
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
+        "display": "flex",
+        "alignItems": "center",
+        "justifyContent": "flex-end",
+        "fontSize": 16,
+        "lineHeight": "1",
+        "color": "#5f6673",
+        "text": "›",
+        "semantic": "text"
       },
       {
         "id": 49,
@@ -965,6 +952,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "pointerEvents": true,
         "position": "absolute",
         "right": 14,
+        "bottom": 136,
         "width": 56,
         "height": 56,
         "borderRadius": 28,
@@ -1060,7 +1048,9 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "color": "#1a1c22",
         "padding": {
           "left": 16,
-          "right": 16
+          "right": 16,
+          "bottom": 120,
+          "top": 44
         },
         "semantic": "view",
         "position": "absolute",
@@ -1659,6 +1649,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "pointerEvents": true,
         "position": "absolute",
         "right": 14,
+        "bottom": 136,
         "width": 56,
         "height": 56,
         "borderRadius": 28,
@@ -1754,7 +1745,9 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "color": "#1a1c22",
         "padding": {
           "left": 16,
-          "right": 16
+          "right": 16,
+          "bottom": 120,
+          "top": 44
         },
         "semantic": "view",
         "position": "absolute",
@@ -2319,22 +2312,17 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 43,
         "parentId": 39,
         "flexShrink": 0,
-        "width": 8,
-        "height": 8,
         "margin": {
           "left": 12
         },
-        "transform": {
-          "txPx": 0,
-          "tyPx": 0,
-          "txPct": 0,
-          "tyPct": 0,
-          "sx": 1,
-          "sy": 1,
-          "rotate": 45
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
+        "display": "flex",
+        "alignItems": "center",
+        "justifyContent": "flex-end",
+        "fontSize": 16,
+        "lineHeight": "1",
+        "color": "#5f6673",
+        "text": "›",
+        "semantic": "text"
       },
       {
         "id": 44,
@@ -2386,6 +2374,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         },
         "fontSize": 14,
         "color": "#4b5058",
+        "text": "v0.1.0 · Proteus 超级应用",
         "semantic": "text"
       },
       {
@@ -2416,6 +2405,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "pointerEvents": true,
         "position": "absolute",
         "right": 14,
+        "bottom": 136,
         "width": 56,
         "height": 56,
         "borderRadius": 28,
@@ -2511,7 +2501,9 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "color": "#1a1c22",
         "padding": {
           "left": 16,
-          "right": 16
+          "right": 16,
+          "bottom": 120,
+          "top": 44
         },
         "semantic": "view",
         "position": "absolute",
@@ -3944,6 +3936,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "pointerEvents": true,
         "position": "absolute",
         "right": 14,
+        "bottom": 136,
         "width": 56,
         "height": 56,
         "borderRadius": 28,

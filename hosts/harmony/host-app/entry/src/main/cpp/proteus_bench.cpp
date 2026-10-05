@@ -204,14 +204,18 @@ static bool jstr(const char* s, size_t segLen, const char* key, std::string* out
     return true;
 }
 
-/** CSS 十六进制色（#RRGGBB / #AARRGGBB）→ ARGB；非法给 0（= 透明，不静默画错色） */
+/** CSS 十六进制色（#RRGGBB / #RRGGBBAA）→ ARGB；非法给 0（= 透明，不静默画错色） */
 static uint32_t hexToArgb(const std::string& css) {
     std::string h = css;
     if (!h.empty() && h[0] == '#') h = h.substr(1);
     if (h.size() != 6 && h.size() != 8) return 0;
     uint32_t v = (uint32_t)strtoul(h.c_str(), nullptr, 16);
-    if (h.size() == 6) v |= 0xFF000000u;
-    return v;
+    // ★★★批次 48 修复（与 iOS 同源的字节序错位，独立子代理视觉验收抓出）：8 位 hex 是
+    //   **CSS4 序 `#RRGGBBAA`**（低 8 位 = alpha；与编译器产物 / 内核 ffi.rs / Web 一致）。
+    //   此前直接当 ARGB 用 ⇒ `#5b5bd61a` 读成 A=0x5b R=0x5b G=0xd6 B=0x1a ⇒ 混白底渲染出**绿色**
+    //   （同源编译三端异色）。现与 Android `VaporRenderHost` 同式转换。
+    if (h.size() == 6) return v | 0xFF000000u;
+    return ((v & 0xFFu) << 24) | (v >> 8);   // #RRGGBBAA → AARRGGBB
 }
 
 /** 顶层数组切分为对象子串（大括号计数；字符串感知）——与 proteus_render.cpp 的切分同款 */
