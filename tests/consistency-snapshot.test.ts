@@ -152,7 +152,9 @@ describe('VC3 · 样式快照 schema 校验器（VC3-b 验收）', () => {
 
   it('⑬ 未登记的样式键**报错**（闭集纪律——要么登记要么别产出）', () => {
     const bad = goodStyle()
-    ;(bad.nodes[0]!.styles as Record<string, unknown>).transform = 'translateX(10px)'
+    // ★B3 更新：`transform` 已登记（L2 全覆盖扩集）；改用**真正未登记**的键验闭集纪律
+    //   （用 CSS 里存在但快照闭集**故意不收**的：`animation`——它归动画通道/判据外）
+    ;(bad.nodes[0]!.styles as Record<string, unknown>).animation = 'fade 1s'
     const r = validateStyleSnapshot(bad)
     expect(r.ok).toBe(false)
     expect(r.issues.some((i) => i.code === 'unknown-style-key')).toBe(true)

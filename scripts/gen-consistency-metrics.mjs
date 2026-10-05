@@ -269,6 +269,8 @@ async function runMutationTests() {
 
 /* ── ③ 指标组装 ── */
 async function build() {
+  // ★B3：L3 覆盖由映射表推导 ⇒ 需要 consistency 的导出（同一份 dist，动态 import 与 runMutationTests 同款）
+  const consistencyMod = await import(pathToFileURL(path.join(ROOT, 'packages', 'consistency', 'dist', 'index.js')).href)
   const { errs, items } = validateAllowList()
   const matrix = JSON.parse(fs.readFileSync(MATRIX, 'utf-8'))
   // ★CSS 能力对齐清单（三端模型）：M1 只统计**编译器属性字段**（rows[].compilerFields）——
@@ -283,24 +285,13 @@ async function build() {
   const m4Rate = mutation.injected > 0 ? mutation.captured / mutation.injected : 0
 
   // ★M1 折算表（同源口径——见 M1 的注释）：样式键 → CSS 字段（四角/四边归并）
-  const L3_FIELD_MAP = {
-    backgroundColor: 'backgroundColor', color: 'color', display: 'display', fontSize: 'fontSize',
-    opacity: 'opacity', position: 'position',
-    borderTopLeftRadius: 'borderRadius', borderTopRightRadius: 'borderRadius',
-    borderBottomRightRadius: 'borderRadius', borderBottomLeftRadius: 'borderRadius',
-    borderTopWidth: 'borderWidth', borderRightWidth: 'borderWidth', borderBottomWidth: 'borderWidth', borderLeftWidth: 'borderWidth',
-    borderTopColor: 'borderColor', borderRightColor: 'borderColor', borderBottomColor: 'borderColor', borderLeftColor: 'borderColor',
-    marginTop: 'margin', marginRight: 'margin', marginBottom: 'margin', marginLeft: 'margin',
-    paddingTop: 'padding', paddingRight: 'padding', paddingBottom: 'padding', paddingLeft: 'padding',
-    // ★★覆盖扩展（2026-10-02·二批）：布局族 14 字段（与 TS 闭集同步）
-    width: 'width', height: 'height',
-    minWidth: 'minWidth', maxWidth: 'maxWidth', minHeight: 'minHeight', maxHeight: 'maxHeight',
-    flexDirection: 'flexDirection', justifyContent: 'justifyContent',
-    alignItems: 'alignItems', alignSelf: 'alignSelf',
-    flexGrow: 'flexGrow', flexShrink: 'flexShrink', gap: 'gap', overflow: 'overflow',
-    // ★覆盖收官（2026-10-02·三批）：偏移定位（条件可见——position 非 static 时实测有值）
-    top: 'top', left: 'left',
-    // fontFamily / fontWeight / visibility：不在 28 字段集内 ⇒ 不计（宁少算）
+  // ★★★G-61 B3（2026-10-05）：L3（样式比对层）覆盖**由映射表推导**（单一事实源——
+  //   `packages/consistency` 的 `SEMANTIC_FIELD_SNAPSHOT_KEYS`；门禁 `check:style-coverage`
+  //   断言它覆盖注册表全部 semantic 字段）。此前是**手写清单**（27 项）——与快照闭集两处维护，
+  //   实测漂移过（"扩了闭集却没人消费/覆盖数纹丝不动"）⇒ 改为机器推导（数字不粉饰）。
+  const L3_FIELD_MAP = {}
+  for (const [field, keys] of Object.entries(consistencyMod.SEMANTIC_FIELD_SNAPSHOT_KEYS ?? {})) {
+    for (const k of keys) L3_FIELD_MAP[k] = field
   }
   const l3Fields = new Set(Object.values(L3_FIELD_MAP))
   /** 几何四量 → 字段（x/y 是位置，不是 CSS 字段——保守只算 width/height） */
@@ -345,12 +336,15 @@ async function build() {
         L2: {
           covered: L2_FIELDS.size,
           total: m1Total,
-          note: '比对引擎已落地 + 三端实测通过；**折算口径**：几何 w/h → 字段 width/height（x/y 是位置不是字段——保守计 2）',
+          note: '★B3（2026-10-05）：几何快照（B-b）→ 只映射 width/height（x/y 是位置不是字段——保守计 2）；' +
+        '其余 semantic 字段的读数归 L3（样式快照 B-a）。判据②（数值等价）= L2 ∪ L3 的**并集**（见 union 口径）',
         },
         L3: {
           covered: l3Fields.size,
           total: m1Total,
-          note: `实测比对已落地（VC6：Web ⇄ WebView，硬门禁 + A-6 豁免）；**折算口径**：可比样式键 → ${l3Fields.size} 个字段（四角/四边归并；集外键不计）`,
+          note: '★B3（2026-10-05）：快照面扩到**全部 semantic 字段**（web 探针读数 + 比对引擎分类 + 门禁 check:style-coverage）；' +
+        '覆盖数由 \`SEMANTIC_FIELD_SNAPSHOT_KEYS\` **机器推导**（不手写清单）。' +
+        '此前口径（27 项）为"VC6 实测可比键"——扩面后 = 全部 semantic 字段（\`' + l3Fields.size + '\` 个）',
         },
         // ★★L2.5 / L2.6 布点（2026-10-02·四批）：**交互层的覆盖口径随层定义**（不是 CSS 字段）——
         //   L2.5 覆盖"交互结果态"（事件→几何，判据是结果态逐节点一致 + 两端都真的动了）；

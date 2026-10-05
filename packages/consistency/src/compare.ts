@@ -301,6 +301,11 @@ export function classifyStyleKey(key: string, cfg: ToleranceConfig = DEFAULT_TOL
       || key === 'minHeight' || key === 'maxHeight' || key === 'gap'
       || key === 'top' || key === 'left') return 'numericLength'
   if (key === 'opacity' || key === 'flexGrow' || key === 'flexShrink') return 'scalar'
+  // ★★★G-61 B3（2026-10-05）：L2 全覆盖新增键的分类（与 coverage.ts 的表逐项对应）
+  if (key === 'letterSpacing' || key === 'lineHeight' || key === 'rowGap' || key === 'columnGap'
+      || key === 'right' || key === 'bottom') return 'numericLength'
+  // 其余（textAlign/textOverflow/textDecoration/pointerEvents/flexWrap/alignContent/aspectRatio/
+  //   flexBasis/transform/boxShadow/gridTemplate*/gridColumn/gridRow/visibility）⇒ 'enum'（严格相等）
   return 'enum'
 }
 

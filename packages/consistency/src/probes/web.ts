@@ -178,6 +178,88 @@ function styleOf(el: Element, win: Window): NormalizedStyle {
   if (position) styles.position = position
   const visibility = cs.getPropertyValue('visibility')
   if (visibility) styles.visibility = visibility
+
+  /* ══ ★★★G-61 B3（2026-10-05）：L2 全覆盖新增读数（20 键）——形态按 snapshot.ts 的 canonical 约定 ══ */
+  // ① 布局无关 px 长度（pct/normal/auto ⇒ 不产出——与既有"无值不判"同口径）
+  for (const [prop, key] of [
+    ['letter-spacing', 'letterSpacing'], ['line-height', 'lineHeight'],
+    ['row-gap', 'rowGap'], ['column-gap', 'columnGap'],
+    ['right', 'right'], ['bottom', 'bottom'],
+  ] as const) {
+    const n = len(prop)
+    if (n !== undefined) (styles as Record<string, unknown>)[key] = n
+  }
+  // ② 布局无关枚举（字符串原样小写）
+  for (const [prop, key] of [
+    ['text-align', 'textAlign'], ['text-overflow', 'textOverflow'],
+    ['text-decoration-line', 'textDecoration'], ['pointer-events', 'pointerEvents'],
+    ['flex-wrap', 'flexWrap'], ['align-content', 'alignContent'],
+  ] as const) {
+    const v = cs.getPropertyValue(prop)
+    if (v) (styles as Record<string, unknown>)[key] = v.trim()
+  }
+  // ③ canonical 串族
+  const aspect = cs.getPropertyValue('aspect-ratio')
+  if (aspect && aspect !== 'auto') (styles as Record<string, unknown>).aspectRatio = aspect.trim().replace(/\s*/g, ' ').replace(/\s*\/\s*/g, ' / ').trim()
+  {
+    // flex-basis：px → `<n>px`；百分比保留文本；auto/content 直通
+    const fb = cs.getPropertyValue('flex-basis').trim()
+    if (fb && fb !== 'auto' && fb !== 'content' && fb !== '0%') {
+      const n = /^(-?[\d.]+)px$/.exec(fb)
+      ;(styles as Record<string, unknown>).flexBasis = n ? round3(Number(n[1])) + 'px' : fb.replace(/\s+/g, ' ')
+    } else if (fb === 'auto') {
+      // auto 是默认值 ⇒ 不产出（与"无值不判"同口径）
+    }
+  }
+  {
+    // transform：matrix(a,b,c,d,e,f) 规范串（去掉空格；round3）；none ⇒ 不产出
+    const tf = cs.getPropertyValue('transform').trim()
+    if (tf && tf !== 'none') {
+      const m = /^matrix\(([^)]+)\)$/.exec(tf)
+      if (m) {
+        const nums = m[1]!.split(',').map((s) => round3(Number(s.trim())))
+        ;(styles as Record<string, unknown>).transform = 'matrix(' + nums.join(',') + ')'
+      } else {
+        ;(styles as Record<string, unknown>).transform = tf.replace(/\s+/g, ' ') // 3D 等形态原样（比对层 strict）
+      }
+    }
+  }
+  {
+    // box-shadow：浏览器给 `rgba(...) dx dy blur spread`（color 在前）⇒ canonical：`dx dy blur spread #rrggbb[aa]`
+    const bs = cs.getPropertyValue('box-shadow').trim()
+    if (bs && bs !== 'none') {
+      const c = (() => {
+        try {
+          const rgba = normalizeColor((/^(rgba?\([^)]*\))/.exec(bs)?.[1] ?? '#000').trim())
+          const hx = (n: number): string => Math.max(0, Math.min(255, n)).toString(16).padStart(2, '0')
+          const base = '#' + hx(rgba.r) + hx(rgba.g) + hx(rgba.b)
+          return rgba.a >= 1 ? base : base + hx(Math.round(rgba.a * 255))
+        } catch {
+          return null
+        }
+      })()
+      const lens = [...bs.matchAll(/(-?[\d.]+)px/g)].map((x) => round3(Number(x[1])))
+      if (c !== null && lens.length >= 2) {
+        const [dx = 0, dy = 0, blur = 0, spread = 0] = lens
+        ;(styles as Record<string, unknown>).boxShadow = `${dx} ${dy} ${blur} ${spread} ${c}`
+      }
+    }
+  }
+  for (const [prop, key] of [['grid-template-columns', 'gridTemplateColumns'], ['grid-template-rows', 'gridTemplateRows']] as const) {
+    const v = cs.getPropertyValue(prop).trim()
+    if (v && v !== 'none') {
+      // resolved 已是 px 列表（repeat 已展开）⇒ 规范：单空格分隔 + round3
+      const norm = v
+        .replace(/(-?[\d.]+)px/g, (_m, n: string) => round3(Number(n)) + 'px')
+        .replace(/\s+/g, ' ')
+        .trim()
+      ;(styles as Record<string, unknown>)[key] = norm
+    }
+  }
+  for (const [prop, key] of [['grid-column', 'gridColumn'], ['grid-row', 'gridRow']] as const) {
+    const v = cs.getPropertyValue(prop).trim()
+    if (v && v !== 'auto') (styles as Record<string, unknown>)[key] = v.replace(/\s+/g, ' ')
+  }
   return styles
 }
 

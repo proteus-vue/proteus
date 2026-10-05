@@ -120,6 +120,11 @@ jobs:
       - name: StyleIR 契约门禁（G-61 B0：三表合一的字段闭集 + 棘轮 + SPI 对齐）
         run: pnpm run check:style-ir-schema
 
+      # ★★★G-61 B3（2026-10-05）：数值等价覆盖门禁——每个 semantic 字段 ↔ 快照读数
+      #   （B3 验收"L2 覆盖 → 全覆盖"的机器判据；映射表单一事实源 + 闭集同源 + 棘轮 + 无孤儿键）
+      - name: 数值等价覆盖门禁（G-61 B3：semantic 字段全覆盖）
+        run: pnpm run check:style-coverage
+
       - name: StyleIR 规范化编码 golden（G-61 B0：跨语言逐字节——TS 编码器 ≡ 冻结期望）
         run: pnpm run check:style-ir-golden
 

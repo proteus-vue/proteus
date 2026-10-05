@@ -9,7 +9,7 @@ export const CONSISTENCY_PAGE = {
     "docs/allow-differences.json"
   ],
   "m1": {
-    "value": 0.5267,
+    "value": 0.68,
     "union": {
       "covered": 50,
       "total": 50,
@@ -27,7 +27,7 @@ export const CONSISTENCY_PAGE = {
         "total": 50
       },
       "L3": {
-        "covered": 27,
+        "covered": 50,
         "total": 50
       },
       "L2_5": {
@@ -1360,7 +1360,7 @@ export const CONSISTENCY_PAGE = {
   "debt": [
     {
       "file": "examples/profile-boundary-baseline.json",
-      "count": 36
+      "count": 37
     },
     {
       "file": "showcase/profile-boundary-baseline.json",

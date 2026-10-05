@@ -790,7 +790,19 @@ function mapToIrField(prop: string, val: CssComputedValue): { field: string; val
     return null // 由调用方在完成后处理（见下 resolveOverflow）
   }
   if (prop === 'aspect-ratio') return { field: 'aspectRatio', value: typeof val === 'number' ? val : null }
+  // ★★★B3 补齐（2026-10-05——conformance 抓出 B1 遗漏）：grid 族与 z-index 此前**完全未映射**
+  //   （探针实测：`grid-template-columns` 等算出来了却没进 IR ⇒ App/Skyline 静默丢 Grid）。
+  if (prop === 'grid-template-columns') return { field: 'gridTemplateColumns', value: typeof val === 'string' ? normalizeGridTrack(val) : null }
+  if (prop === 'grid-template-rows') return { field: 'gridTemplateRows', value: typeof val === 'string' ? normalizeGridTrack(val) : null }
+  if (prop === 'grid-column') return { field: 'gridColumn', value: val }
+  if (prop === 'grid-row') return { field: 'gridRow', value: val }
+  if (prop === 'z-index') return { field: 'zIndex', value: typeof val === 'number' ? val : null }
   return null
+}
+
+/** grid 轨迹串归一（空格/斜杠规范化——浏览器 computed 会把 `1fr 1fr` 原样返回，但多余空白要归一） */
+function normalizeGridTrack(v: string): string {
+  return v.trim().replace(/\s+/g, ' ')
 }
 
 export { resolveOverflowField, resolveBorderRadiusFields }
