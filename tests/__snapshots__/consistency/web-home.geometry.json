@@ -78,7 +78,13 @@
           "overflow": "visible",
           "display": "flex",
           "position": "static",
-          "visibility": "visible"
+          "visibility": "visible",
+          "textAlign": "start",
+          "textOverflow": "clip",
+          "textDecoration": "none",
+          "pointerEvents": "auto",
+          "flexWrap": "nowrap",
+          "alignContent": "normal"
         }
       },
       {
@@ -152,7 +158,13 @@
           "overflow": "hidden",
           "display": "block",
           "position": "static",
-          "visibility": "visible"
+          "visibility": "visible",
+          "textAlign": "start",
+          "textOverflow": "clip",
+          "textDecoration": "none",
+          "pointerEvents": "auto",
+          "flexWrap": "nowrap",
+          "alignContent": "normal"
         }
       },
       {
@@ -220,7 +232,13 @@
           "overflow": "hidden",
           "display": "block",
           "position": "static",
-          "visibility": "visible"
+          "visibility": "visible",
+          "textAlign": "start",
+          "textOverflow": "clip",
+          "textDecoration": "none",
+          "pointerEvents": "auto",
+          "flexWrap": "nowrap",
+          "alignContent": "normal"
         }
       },
       {
@@ -294,7 +312,13 @@
           "overflow": "hidden",
           "display": "block",
           "position": "static",
-          "visibility": "visible"
+          "visibility": "visible",
+          "textAlign": "start",
+          "textOverflow": "clip",
+          "textDecoration": "none",
+          "pointerEvents": "auto",
+          "flexWrap": "nowrap",
+          "alignContent": "normal"
         }
       },
       {
@@ -370,7 +394,13 @@
           "overflow": "visible",
           "display": "block",
           "position": "static",
-          "visibility": "visible"
+          "visibility": "visible",
+          "textAlign": "start",
+          "textOverflow": "clip",
+          "textDecoration": "none",
+          "pointerEvents": "auto",
+          "flexWrap": "nowrap",
+          "alignContent": "normal"
         }
       },
       {
@@ -446,7 +476,15 @@
           "overflow": "visible",
           "display": "block",
           "position": "relative",
-          "visibility": "visible"
+          "visibility": "visible",
+          "right": -7,
+          "bottom": -5,
+          "textAlign": "start",
+          "textOverflow": "clip",
+          "textDecoration": "none",
+          "pointerEvents": "auto",
+          "flexWrap": "nowrap",
+          "alignContent": "normal"
         }
       }
     ],

@@ -131,6 +131,38 @@ export interface NormalizedStyle {
    *   ⇒ 采集端只在拿到 px 数值时产出（auto/none ⇒ 不产出——与 width 等"无值不判"同口径）。 */
   top?: number
   left?: number
+  right?: number
+  bottom?: number
+  /* ══ ★★★G-61 B3（2026-10-05）：**L2 全覆盖**（每个 IR semantic 字段都有读数）——新增 20 键 ══
+   *   分组（形态相似的处理同族）：
+   *   · 布局无关 px 长度：letterSpacing / lineHeight / rowGap / columnGap
+   *   · 布局无关枚举：textAlign / textOverflow / textDecoration / pointerEvents / flexWrap / alignContent
+   *   · 规范串（canonical string）：
+   *     - aspectRatio：浏览器给 `16 / 9`（保持原样，空白归一）
+   *     - flexBasis：px 数 或 `40%`（百分比保留文本——C 类，判据②几何承担折算）
+   *     - transform：**matrix(a,b,c,d,e,f)** 规范串（各端从"应用后的变换"算出同样的串；round3）
+   *     - boxShadow：**颜色 偏移x 偏移y 模糊 扩散** 规范串（浏览器 computed 已有此序；各端同法归一）
+   *     - gridTemplateColumns/Rows：**逐轨 px** 或原串（浏览器已 resolved 成 px 列表；空白归一）
+   *     - gridColumn/gridRow：**`start / end`** 规范串（auto 侧保留 `auto`）
+   */
+  letterSpacing?: number
+  lineHeight?: number
+  rowGap?: number
+  columnGap?: number
+  textAlign?: string
+  textOverflow?: string
+  textDecoration?: string
+  pointerEvents?: string
+  flexWrap?: string
+  alignContent?: string
+  aspectRatio?: string
+  flexBasis?: string
+  transform?: string
+  boxShadow?: string
+  gridTemplateColumns?: string
+  gridTemplateRows?: string
+  gridColumn?: string
+  gridRow?: string
 }
 
 export interface StyleNode {
@@ -392,6 +424,12 @@ const STYLE_KEYS = new Set([
   'flexDirection', 'justifyContent', 'alignItems', 'alignSelf',
   'flexGrow', 'flexShrink', 'gap', 'overflow',
   'top', 'left',   // ★覆盖收官：偏移定位（条件可见——见接口注释）
+  // ★★★G-61 B3：L2 全覆盖新增键（与接口同批——闭集纪律：要么登记要么别产出）
+  'right', 'bottom',
+  'letterSpacing', 'lineHeight', 'rowGap', 'columnGap',
+  'textAlign', 'textOverflow', 'textDecoration', 'pointerEvents', 'flexWrap', 'alignContent',
+  'aspectRatio', 'flexBasis', 'transform', 'boxShadow',
+  'gridTemplateColumns', 'gridTemplateRows', 'gridColumn', 'gridRow',
 ])
 
 /** 校验样式快照（VC3-b：归一化规则完整且无歧义——未登记的样式键**报错**，不静默丢弃） */
@@ -438,6 +476,11 @@ export function validateStyleSnapshot(snap: unknown): ValidationResult {
         //   校验器把新枚举键当数值项要求。这正是"两处必须同源"的教训——本仓纪律：闭集与校验同改。）
         k === 'display' || k === 'position' || k === 'visibility' || k === 'fontFamily'
         || k === 'flexDirection' || k === 'justifyContent' || k === 'alignItems' || k === 'alignSelf' || k === 'overflow'
+        // ★★★G-61 B3：新增字符串族（与接口/STYLE_KEYS 同步——三处同改）
+        || k === 'textAlign' || k === 'textOverflow' || k === 'textDecoration' || k === 'pointerEvents'
+        || k === 'flexWrap' || k === 'alignContent'
+        || k === 'aspectRatio' || k === 'flexBasis' || k === 'transform' || k === 'boxShadow'
+        || k === 'gridTemplateColumns' || k === 'gridTemplateRows' || k === 'gridColumn' || k === 'gridRow'
       ) {
         if (typeof v !== 'string') push('wrong-type', `${where}.styles.${k}`, `${k} 应为字符串`)
       } else if (typeof v === 'number') {
