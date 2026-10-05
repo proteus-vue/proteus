@@ -79,6 +79,7 @@ const VALUE_TYPE_BY_LEVEL = {
   FlexAlign: 'enum',
   FlexJustify: 'enum',
   TextAlign: 'enum',
+  TextWrap: 'enum',
   Transform: 'transform',
   TransformOrigin: 'transform-origin',
   SEMANTIC_ONLY: 'semantic-only',

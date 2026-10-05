@@ -1,0 +1,11 @@
+{
+  "generatedAt": "2026-10-05T09:30:36.251Z",
+  "rows": [
+    {
+      "end": "harmony",
+      "page": "text.png",
+      "out": "css-conformance/results/side-by-side/text.harmony-vs-web.png",
+      "status": "ok"
+    }
+  ]
+}

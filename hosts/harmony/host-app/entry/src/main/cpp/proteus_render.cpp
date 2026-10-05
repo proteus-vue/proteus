@@ -200,7 +200,19 @@ static std::string extractObjectField(const std::string& s, const char* key) {
     return "";
 }
 
-/** 极简 JSON 字符串取值（`"key":"value"`）；未找到返回 false */
+/** UTF-8 编码追加（`\uXXXX` 解码用） */
+static void appendUtf8(std::string* out, unsigned int cp) {
+    if (cp <= 0x7F) { out->push_back((char)cp); }
+    else if (cp <= 0x7FF) { out->push_back((char)(0xC0 | (cp >> 6))); out->push_back((char)(0x80 | (cp & 0x3F))); }
+    else if (cp <= 0xFFFF) { out->push_back((char)(0xE0 | (cp >> 12))); out->push_back((char)(0x80 | ((cp >> 6) & 0x3F))); out->push_back((char)(0x80 | (cp & 0x3F))); }
+    else { out->push_back((char)(0xF0 | (cp >> 18))); out->push_back((char)(0x80 | ((cp >> 12) & 0x3F))); out->push_back((char)(0x80 | ((cp >> 6) & 0x3F))); out->push_back((char)(0x80 | (cp & 0x3F))); }
+}
+
+/** 极简 JSON 字符串取值（`"key":"value"`）；未找到返回 false
+ *  ★★★修复（2026-10-05 · css-conformance 真机验收抓出「字面 n」）：转义必须**解码**——
+ *    首版 `acc.push_back(s[i+1])` 把 `\n` 当普通字符 ⇒ 取到字面 "n"
+ *    （验收现场：pre-wrap「第一行\n 缩进…」在鸿蒙端显示「第一行n 缩进…」）。
+ *    支持 \" \\ \/ \b \f \n \r \t \uXXXX（\u 按 UTF-8 拼回；代理对按独立码点——本仓文本源为 CJK，够用）。 */
 static bool jsonString(const std::string& s, const char* key, std::string* out) {
     std::string needle = std::string("\"") + key + "\":\"";
     size_t p = s.find(needle);
@@ -208,7 +220,37 @@ static bool jsonString(const std::string& s, const char* key, std::string* out) 
     p += needle.size();
     std::string acc;
     for (size_t i = p; i < s.size(); i++) {
-        if (s[i] == '\\' && i + 1 < s.size()) { acc.push_back(s[i + 1]); i++; continue; }
+        if (s[i] == '\\' && i + 1 < s.size()) {
+            char n = s[i + 1];
+            switch (n) {
+                case 'n': acc.push_back('\n'); i++; break;
+                case 't': acc.push_back('\t'); i++; break;
+                case 'r': acc.push_back('\r'); i++; break;
+                case 'b': acc.push_back('\b'); i++; break;
+                case 'f': acc.push_back('\f'); i++; break;
+                case '"': acc.push_back('"'); i++; break;
+                case '\\': acc.push_back('\\'); i++; break;
+                case '/': acc.push_back('/'); i++; break;
+                case 'u': {
+                    if (i + 5 < s.size()) {
+                        unsigned int cp = 0; bool ok = true;
+                        for (int k = 0; k < 4; k++) {
+                            char h = s[i + 2 + k];
+                            unsigned int d;
+                            if (h >= '0' && h <= '9') d = (unsigned int)(h - '0');
+                            else if (h >= 'a' && h <= 'f') d = (unsigned int)(h - 'a' + 10);
+                            else if (h >= 'A' && h <= 'F') d = (unsigned int)(h - 'A' + 10);
+                            else { ok = false; break; }
+                            cp = (cp << 4) | d;
+                        }
+                        if (ok) { appendUtf8(&acc, cp); i += 5; break; }
+                    }
+                    acc.push_back(n); i++; break;
+                }
+                default: acc.push_back(n); i++; break;
+            }
+            continue;
+        }
         if (s[i] == '"') { *out = acc; return true; }
         acc.push_back(s[i]);
     }
@@ -401,7 +443,12 @@ static void drawChannelsAndText(OH_Drawing_Canvas* canvas, const TextDrawSpec* s
                 OH_Drawing_TypographyHandlerAddText(handler, spec->text.c_str());
                 OH_Drawing_Typography* typo = OH_Drawing_CreateTypography(handler);
                 if (typo != nullptr) {
-                    OH_Drawing_TypographyLayout(typo, ellipsis ? spec->w : 10000.0);
+                    // ★★★修复（2026-10-05 · css-conformance 抓出「文本不折行、冲出容器」）：
+                    //   非 ellipsis 分支此前硬编码 10000 ⇒ typography **永不折行**（B 案例正文
+                    //   单行冲到屏右缘、D 案例溢出无裁切）。改为节点**布局盒宽**（>1.0 才用——
+                    //   无宽信息时保留兜底大宽，行为与既有不变）。nowrap 语义的产物透传为后续项。
+                    const double layoutW = spec->w > 1.0 ? spec->w : 10000.0;
+                    OH_Drawing_TypographyLayout(typo, layoutW);
                     // ★批次 13（CSS 半行距居中）：声明行高 ⇒ 字形内容区在行盒内垂直居中
                     //   （typoH 为字形内容高；offset = (盒高 − 字形高)/2）；未声明 ⇒ 顶对齐（既有）。
                     double offY = 0.0;

@@ -41,6 +41,9 @@ const PROJECTS = {
   //     `../packages/components/...`（构建报错实测的形态）。
   //   官网是 dogfooding 验证场：语义组件 + 柔性布局本应零违规——存量按棘轮钉住待专项清理。
   website: ['website/src', 'packages/components'],
+  // ★css-conformance（CSS 一致性验收项目）：页面**有意**使用待验收/边界值（如 pre-wrap 保留空白）——
+  //   存量按棘轮钉住；新增违规同样当场红（该项目的价值恰是"如实暴露边界"）。
+  'css-conformance': ['css-conformance/pages', 'css-conformance/components', 'packages/components'],
 }
 
 const { checkProfileBoundary } = await import(

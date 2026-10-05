@@ -16,6 +16,9 @@ export type StylePropLevel =
   | 'FlexAlign'
   | 'FlexJustify'
   | 'TextAlign'
+  // ★★★G-61 后批（2026-10-05）：文本换行/空白语义（white-space）——CSE 与旧折叠器都已支持，
+  //   但注册表/矩阵/runtime 三处漏登记（**四同步缺口**，清单审计抓出）⇒ 补齐（INV-CE-07）。
+  | 'TextWrap'
   | 'Transform'
   | 'TransformOrigin'
   | 'SEMANTIC_ONLY'
@@ -46,6 +49,7 @@ export const STYLE_PROP_LEVELS = {
   opacity: 'Opacity',
   fontWeight: 'Integer',
   textAlign: 'TextAlign',
+  whiteSpace: 'TextWrap',
   borderRadius: 'Length',
   borderWidth: 'Length',
   borderTopWidth: 'Length',

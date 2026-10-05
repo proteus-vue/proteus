@@ -205,6 +205,9 @@ function isStaticValueValid(level: string, value: unknown): boolean {
       return ['flex-start', 'flex-end', 'center', 'stretch', 'baseline', 'auto'].indexOf(String(value)) >= 0
     case 'FlexJustify':
       return ['flex-start', 'flex-end', 'center', 'space-between', 'space-around', 'space-evenly'].indexOf(String(value)) >= 0
+    // ★★★G-61 后批（2026-10-05）：white-space（Web 标准关键字封闭集；与 runtime PROP_TYPES 同语义）
+    case 'TextWrap':
+      return ['normal', 'nowrap', 'pre', 'pre-wrap', 'pre-line', 'break-spaces'].indexOf(String(value)) >= 0
     case 'Transform':
       return typeof value === 'string' && /^(translate|scale|rotate|skew)/i.test(value)
     case 'TransformOrigin':
