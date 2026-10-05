@@ -10,7 +10,7 @@
     "viewport": "390x844",
     "theme": "light",
     "fontStack": "system-ui（采集机默认栈；文本度量样本须标 baseline-sensitive: text）",
-    "artifactCollectedAt": "2026-10-05T05:30:02.237Z"
+    "artifactCollectedAt": "2026-10-05T07:48:47.837Z"
   },
   "samples": [
     {
@@ -37,7 +37,7 @@
         "viewport": "390x844",
         "theme": "light",
         "fontStack": "system-ui（采集机默认栈；文本度量样本须标 baseline-sensitive: text）",
-        "artifactCollectedAt": "2026-10-05T05:30:02.237Z"
+        "artifactCollectedAt": "2026-10-05T07:48:47.837Z"
       }
     },
     {
@@ -61,7 +61,7 @@
         "viewport": "390x844",
         "theme": "light",
         "fontStack": "system-ui（采集机默认栈；文本度量样本须标 baseline-sensitive: text）",
-        "artifactCollectedAt": "2026-10-05T05:30:02.237Z"
+        "artifactCollectedAt": "2026-10-05T07:48:47.837Z"
       }
     },
     {
@@ -86,7 +86,7 @@
         "viewport": "390x844",
         "theme": "light",
         "fontStack": "system-ui（采集机默认栈；文本度量样本须标 baseline-sensitive: text）",
-        "artifactCollectedAt": "2026-10-05T05:30:02.237Z"
+        "artifactCollectedAt": "2026-10-05T07:48:47.837Z"
       }
     }
   ]

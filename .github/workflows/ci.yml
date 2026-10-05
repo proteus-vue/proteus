@@ -129,6 +129,14 @@ jobs:
       - name: CSE lint 存量基线漂移（G-61 B4）
         run: pnpm run check:cse-lint-baseline
 
+      # ★★★G-61 B5（2026-10-05）：基准守护三件（写入守卫 / 变更审批 / 清单已在上方）
+      #   ——腐化检测（check:baseline-freshness）**非门禁**（需活体重采+浏览器版本易变），不入 CI
+      - name: 基准写入守卫（G-61 B5 · D5：基准不得由被测端自证）
+        run: pnpm run check:baseline-write-guard
+
+      - name: 基准变更审批（G-61 B5 · D2/D3：[baseline-bump] + 批准人 + 原因）
+        run: pnpm run check:baseline-approval
+
       - name: StyleIR 规范化编码 golden（G-61 B0：跨语言逐字节——TS 编码器 ≡ 冻结期望）
         run: pnpm run check:style-ir-golden
 

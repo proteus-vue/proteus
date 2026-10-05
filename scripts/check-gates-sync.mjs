@@ -52,6 +52,9 @@ const LOCAL_ONLY = {
   //   它的作用域是**开发机收尾**：`pnpm verify` 末尾提醒；发布收尾用 strict 强制。
   'check:deploy-pending': '面向开发机收尾（本地 git 历史中 [deploy] 之后 website/** 是否仍有改动）；CI 视角天然自洽 ⇒ 假门禁',
   'check:deploy-pending:strict': '同上（strict 只是把提醒改为 exit 1，供发布收尾显式调用）',
+  // ★★★G-61 B5 基准守护（2026-10-05）：`:strict` 变体是**收尾显式调用**（与 check:pushed:strict 同族）——
+  //   CI 侧跑的是**非 strict** 版（有 diff 才判审批留痕）；strict 供发布收尾强制。
+  'check:baseline-approval:strict': '同上（strict 只是把提醒改为 --require，供收尾显式调用）',
   // ★卡 I2「平台层零舍入」静态门禁（2026-09-29 新增）。扫描面是 **hosts/**（Android/iOS 宿主源码）——
   //   那部分不参与 CI 的 TS 构建（真机宿主需 NDK/Xcode），CI 上跑它只会扫到空集 ⇒ 假门禁。
   //   它的作用域是**开发机**：改宿主代码后立刻拦下"平台侧再舍入一次"。

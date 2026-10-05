@@ -147,7 +147,11 @@ for (const s of SAMPLES) {
   }
 }
 
-/* ④ 产物非空（防"采到空对象当基准"——最危险的空绿形态） */
+/* ④ 合法（D4）——两级：产物非空 + **产物真含锚点文本**
+ *   ★★B5 强化（2026-10-05）：此前只校验 `expect.anchors` **声明**非空——那挡不住
+ *   "采集器把错误页/空态也采下来"（声明里有锚点、产物里没有 ⇒ **基准侧假绿**，
+ *   各端对着一份错误基准"全都一致"）。现改为**在产物文本里真验锚点**（逐条包含即可——
+ *   产物文本是整块拼接的，不要求逐字相等）。 */
 try {
   const m = JSON.parse(fs.readFileSync(path.join(BASE, 'superapp-mine.computed.json'), 'utf-8'))
   const ids = Object.keys(m.nodes ?? {})
@@ -157,6 +161,21 @@ try {
   for (const id of ids) {
     const c = m.nodes[id]?.computed ?? {}
     if (Object.keys(c).length === 0) problems.push(`④ B-a 节点 ${id} 无 computed 读数`)
+  }
+  // ★锚点真验（基准侧假绿防护）：把产物里所有节点文本拼起来，逐条查声明的锚点
+  const allText = Object.values(m.nodes ?? {})
+    .map((n) => (typeof n?.text === 'string' ? n.text : ''))
+    .join('\n')
+  if (allText.trim().length === 0) {
+    problems.push('④ B-a 产物**无任何节点文本**——锚点无法验证（基准可能是空态/错误页）')
+  } else {
+    for (const sample of SAMPLES) {
+      for (const anchor of sample.expect?.anchors ?? []) {
+        if (!allText.includes(anchor)) {
+          problems.push(`④ 样本 ${sample.id} 的锚点「${anchor}」**不在产物文本里**——基准可能是错误页/空态（基准侧假绿防护）`)
+        }
+      }
+    }
   }
 } catch (e) {
   problems.push(`④ B-a 产物不可解析：${String(e?.message ?? e).slice(0, 120)}`)
