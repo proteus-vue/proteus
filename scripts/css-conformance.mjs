@@ -25,7 +25,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { spawnSync } from 'node:child_process'
+import { spawnSync, execFileSync } from 'node:child_process'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const PROJ = path.join(ROOT, 'css-conformance')
@@ -316,14 +316,191 @@ function status() {
   else console.log('  ✅ 五端证据齐备')
 }
 
+/* ══════════════════ probe：程序化像素探针（页面级缺陷的机器判据） ══════════════════ */
+//
+// 【为什么有它（2026-10-05 · white-space 五轮复评复盘）】上一项跑了 **5 轮**独立视觉评审；
+//   第 3–5 轮抓到的全是**页面级几何/底色**缺陷（黑块/白带/白框/右缘 1px 缝/系统栏遮挡/卡片贴边）——
+//   这些**不需要人看**：本探针把它们变成 4 条机器判据（秒级）。子代理只保留**文本语义级**评审
+//   （折行点/省略号/裁切/缩进/字面转义）。预期：复评轮次 5 → 2（详见 PLAYBOOK.md）。
+//
+// 判据（每端 vs Web 基准，逐页面）：
+//   ① darkEdges   页面区四边条带深色占比（黑块 / 深色线 / 系统栏遮挡）
+//   ② edgeColor   边缘主色 ≈ Web 边缘主色（白带/白框：ΔRGB 和 > 24 即红）
+//   ③ seam        页面区最右 2 列深色占比（右缘 1px 缝——全高特征 ≈50%）
+//   ④ cardMargins 卡片行左右边距存在且对称（贴边 / 宽窄失衡）
+// 依赖：macOS `sips`（读尺寸）+ `ffmpeg`（取像素）；均为本机既有工具。
+// 用法：node scripts/css-conformance.mjs probe [end] [--json]（不带 end = 四端全跑；退出码 0=全过 / 1=有红 / 2=缺基准）
+
+/** 各端**已知 chrome 区**（系统/模拟器装饰——探针跳过并在输出中注明；不计页面缺陷） */
+const CHROME = {
+  web: {},
+  mp: { top: 60, bottom: 110 }, // 模拟器：顶部黑刘海区 + 底部手势条/圆角遮罩
+  android: { bottom: 64 }, // 系统导航栏
+  ios: {},
+  harmony: {}, // 状态栏已隐藏（Superapp.ets setWindowSystemBarEnable）
+}
+
+function pngSizeOf(p) {
+  const out = execFileSync('sips', ['-g', 'pixelWidth', '-g', 'pixelHeight', p], { encoding: 'utf-8' })
+  const mw = /pixelWidth:\s*(\d+)/.exec(out)
+  const mh = /pixelHeight:\s*(\d+)/.exec(out)
+  return { w: mw ? Number(mw[1]) : 0, h: mh ? Number(mh[1]) : 0 }
+}
+
+/** 取一块区域的原生像素（RGB24 字节流；尺寸非法 ⇒ 空） */
+function readRgb(png, x, y, w, h) {
+  if (w <= 0 || h <= 0 || x < 0 || y < 0) return Buffer.alloc(0)
+  return execFileSync(
+    'ffmpeg',
+    ['-v', 'error', '-i', png, '-vf', 'crop=' + w + ':' + h + ':' + x + ':' + y, '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'],
+    { maxBuffer: 1 << 28 },
+  )
+}
+
+/** 条带统计：深色占比（亮度 <120）+ 量化主色（众数桶中心，抗噪） */
+function stripStats(buf) {
+  const n = Math.floor(buf.length / 3)
+  let dark = 0
+  const buckets = new Map()
+  for (let i = 0; i < n * 3; i += 3) {
+    const r = buf[i]
+    const g = buf[i + 1]
+    const b = buf[i + 2]
+    if (0.299 * r + 0.587 * g + 0.114 * b < 120) dark++
+    // ★★破坏性验证修正（2026-10-05）：量化从 >>3（桶中心 ±4）改 >>1（±1）——
+    //   首版把「白带 255」与「页底 244」都量化成相邻桶（252 / 244）⇒ Δ=24 **恰好**撞上
+    //   阈值 24 ⇒ 注入白带仍判绿（破坏性验证当场抓出的**探针自身假绿**）。
+    //   >>1 后：白→254 / 灰→244（Δ30 > 24 ⇒ 红），且仍抗 JPEG 噪声（±1 抖动落同桶）。
+    const k = (r >> 1) + ',' + (g >> 1) + ',' + (b >> 1)
+    buckets.set(k, (buckets.get(k) || 0) + 1)
+  }
+  let mode = [0, 0, 0]
+  let max = -1
+  for (const kv of buckets) { if (kv[1] > max) { max = kv[1]; mode = kv[0].split(',').map(Number) } }
+  return { count: n, darkRatio: n ? dark / n : 0, mode: [mode[0] * 2 + 1, mode[1] * 2 + 1, mode[2] * 2 + 1] }
+}
+
+/** 单端单页采集：四条带 + 右缘缝 + 卡片行 */
+function analyzeEnd(png, end) {
+  const { w, h } = pngSizeOf(png)
+  const ch = CHROME[end] || {}
+  const topY = (ch.top || 0) + 2
+  const botY = h - (ch.bottom || 0) - 6
+  const S = 4
+  const strips = {
+    left: stripStats(readRgb(png, 0, topY, S, botY - topY)),
+    right: stripStats(readRgb(png, w - S, topY, S, botY - topY)),
+    top: stripStats(readRgb(png, 20, topY, w - 40, 4)),
+    bottom: stripStats(readRgb(png, 20, botY, w - 40, 4)),
+  }
+  const seam = stripStats(readRgb(png, w - 2, topY, 2, botY - topY))
+  // 卡片行探测：页面区自上而下找「中间为白」的行（= 卡片带），量左右边距
+  let card = null
+  for (let f = 0.15; f <= 0.7501; f += 0.05) {
+    const y = Math.round(topY + (botY - topY) * f)
+    if (y >= h - 2) break
+    // ★实测：ffmpeg `crop=w:1` 在部分尺寸下 "Error reinitializing filters" ⇒ 取 2 行（取首行像素）
+    const row = readRgb(png, 0, y, w, 2)
+    const mi = (w >> 1) * 3
+    if (row[mi] < 250 || row[mi + 1] < 250 || row[mi + 2] < 250) continue
+    let lm = 0
+    let rm = 0
+    for (let x = 0; x < w; x++) { const i = x * 3; if (row[i] >= 250 && row[i + 1] >= 250 && row[i + 2] >= 250) { lm = x; break } }
+    for (let x = w - 1; x >= 0; x--) { const i = x * 3; if (row[i] >= 250 && row[i + 1] >= 250 && row[i + 2] >= 250) { rm = w - 1 - x; break } }
+    card = { y, leftMargin: lm, rightMargin: rm, yFraction: f }
+    break
+  }
+  return { end, file: path.relative(ROOT, png), size: { w, h }, chrome: ch, strips, seam, card }
+}
+
+function probe(end) {
+  const ends = end ? [end] : ['android', 'ios', 'harmony', 'mp']
+  const webDir = path.join(RESULTS, 'web')
+  const out = { baseline: 'web', generatedAt: new Date().toISOString(), pages: {} }
+  const lines = []
+  let allPass = true
+  let missing = 0
+  lines.push('CSS 像素探针（机器判据 · 秒级）——页面级缺陷先机器判；子代理只补文本语义（折行/省略号/裁切/缩进）')
+  for (const p of pageList()) {
+    const webPng = path.join(webDir, p.name + '.png')
+    if (!fs.existsSync(webPng)) { console.error('✗ 缺 Web 基准 ' + path.relative(ROOT, webPng) + '——先跑 collect-web'); process.exit(2) }
+    const web = analyzeEnd(webPng, 'web')
+    lines.push('  ◆ 页面 ' + p.name + '（基准 Web ' + web.size.w + 'x' + web.size.h + '：边缘主色 ' + web.strips.left.mode.join(',') + ' · 卡片 L' + (web.card ? web.card.leftMargin : '-') + '/R' + (web.card ? web.card.rightMargin : '-') + '）')
+    const rows = []
+    const dc = (m1, m2) => Math.abs(m1[0] - m2[0]) + Math.abs(m1[1] - m2[1]) + Math.abs(m1[2] - m2[2])
+    for (const e of ends) {
+      const png = path.join(RESULTS, e, p.name + '.png')
+      if (!fs.existsSync(png)) { rows.push({ end: e, pass: false, note: '缺截图（先跑该端）' }); allPass = false; missing++; continue }
+      const a = analyzeEnd(png, e)
+      const darkMax = Math.max(a.strips.left.darkRatio, a.strips.right.darkRatio, a.strips.top.darkRatio)
+      const dL = dc(a.strips.left.mode, web.strips.left.mode)
+      const dR = dc(a.strips.right.mode, web.strips.right.mode)
+      const dB = dc(a.strips.bottom.mode, web.strips.bottom.mode)
+      const checks = {
+        darkEdges: { pass: darkMax < 0.03 && a.strips.bottom.darkRatio < 0.05, detail: 'L/R/T ' + (darkMax * 100).toFixed(1) + '% B ' + (a.strips.bottom.darkRatio * 100).toFixed(1) + '%' },
+        edgeColor: { pass: dL <= 24 && dR <= 24 && dB <= 24, detail: 'ΔL' + dL + ' ΔR' + dR + ' ΔB' + dB },
+        seam: { pass: a.seam.darkRatio < 0.25, detail: '右缘深色 ' + (a.seam.darkRatio * 100).toFixed(1) + '%' },
+        cardMargins: a.card
+          ? { pass: a.card.leftMargin >= 2 && a.card.rightMargin >= 2 && Math.abs(a.card.leftMargin - a.card.rightMargin) <= Math.max(6, a.size.w * 0.02), detail: 'L' + a.card.leftMargin + '/R' + a.card.rightMargin + 'px' }
+          : { pass: true, detail: '无卡片行（跳过）' },
+      }
+      const pass = Object.keys(checks).every((k) => checks[k].pass)
+      if (!pass) allPass = false
+      rows.push({ end: e, pass, size: a.size, chrome: a.chrome, checks })
+    }
+    out.pages[p.name] = rows
+    for (const r of rows) {
+      if (r.note) { lines.push('    ' + r.end.padEnd(8) + ' ⚠ ' + r.note); continue }
+      const c = r.checks
+      const fmt = (ck) => (ck.pass ? '✅' : '❌') + ck.detail
+      lines.push('    ' + r.end.padEnd(8) + ' ' + fmt(c.darkEdges).padEnd(22) + ' ' + fmt(c.edgeColor).padEnd(22) + ' ' + fmt(c.seam).padEnd(24) + ' ' + fmt(c.cardMargins).padEnd(18) + (r.pass ? ' ⇒ PASS' : ' ⇒ FAIL'))
+    }
+  }
+  lines.push('  ★ chrome 跳过区（系统/模拟器装饰，不计页面缺陷）：' + ends.map((e) => e + '=' + (Object.keys(CHROME[e] || {}).length ? JSON.stringify(CHROME[e]) : '无')).join(' · '))
+  if (process.argv.includes("--json")) {
+    console.log(JSON.stringify(out, null, 2))
+  } else {
+    for (const l of lines) console.log(l)
+    console.log(
+      allPass
+        ? '✅ 页面级判据全过（darkEdges/edgeColor/seam/cardMargins）——文本语义级交子代理一次终评'
+        : '❌ 有页面级判据未过' + (missing ? '（' + missing + ' 端缺证据）' : '') + '——先修，**不要**交子代理（省一轮往返）',
+    )
+  }
+  process.exit(allPass ? 0 : 1)
+}
+/** ★★耗时台账（2026-10-05 · 复盘效率方案）：每次运行追加一行到 `results/timings.jsonl`——
+ *   【为什么】white-space 五轮复评共 ~100 分钟，但当时**没有分段耗时数据**（只能事后估）。
+ *   有了台账，下一项可直接回答「哪一步最贵、该优化谁」，也让 PLAYBOOK 的耗时表可被实测校准。 */
+function recordTiming(cmd, ms, extra) {
+  try {
+    ensureDir(RESULTS)
+    const row = JSON.stringify({ cmd, ms: Math.round(ms), at: new Date().toISOString(), ...(extra || {}) })
+    fs.appendFileSync(path.join(RESULTS, 'timings.jsonl'), row + '\n')
+  } catch { /* 台账失败不阻断主流程 */ }
+}
+
+const T0 = Date.now()
+
 /* ══════════════════ CLI ══════════════════ */
-const [cmd, arg] = process.argv.slice(2)
+const [cmd] = process.argv.slice(2)
+// ★耗时台账：**所有退出路径**都记档（含自然结束与失败——失败同样要归因）
+//   `process.exit` 包装漏「自然结束」（status/side-by-side/shot-* 不显式 exit）⇒ 用 `exit` 事件。
+let __recorded = false
+process.on('exit', (code) => {
+  if (__recorded) return
+  __recorded = true
+  recordTiming(cmd || '(none)', Date.now() - T0, { rc: code })
+})
+// 子命令的首个非选项参数（跳过 cmd 自身；`--json` 等选项不计）
+const arg = process.argv.slice(3).find((a) => !a.startsWith('--'))
 if (cmd === 'collect-web') await collectWeb()
 else if (cmd === 'shot-mp') shotMp()
 else if (cmd === 'shot-app') shotApp(arg)
 else if (cmd === 'side-by-side') sideBySide(arg)
 else if (cmd === 'status') status()
+else if (cmd === 'probe') probe(arg)
 else {
-  console.log('用法：node scripts/css-conformance.mjs <collect-web|shot-mp|shot-app <end>|side-by-side [end]|status>')
+  console.log('用法：node scripts/css-conformance.mjs <collect-web|shot-mp|shot-app <end>|side-by-side [end]|status|probe [end]>')
   process.exit(2)
 }

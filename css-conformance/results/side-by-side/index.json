@@ -1,6 +1,24 @@
 {
-  "generatedAt": "2026-10-05T11:28:14.685Z",
+  "generatedAt": "2026-10-05T11:39:28.508Z",
   "rows": [
+    {
+      "end": "mp",
+      "page": "text.png",
+      "out": "css-conformance/results/side-by-side/text.mp-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "android",
+      "page": "text.png",
+      "out": "css-conformance/results/side-by-side/text.android-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "ios",
+      "page": "text.png",
+      "out": "css-conformance/results/side-by-side/text.ios-vs-web.png",
+      "status": "ok"
+    },
     {
       "end": "harmony",
       "page": "text.png",
