@@ -2219,6 +2219,31 @@ public class ProteusHostView extends ViewGroup {
         canvas.drawPath(path, p);
     }
 
+    /** ★★★dotted 圆点网格（决策 #559 修复轮）：沿线段均匀布点——**首末点贴边**（圆心距端 w/2，
+     *   圆缘恰在盒边 ⇒ 无外溢）、中段等距（step ≈ 2w；段数取整使首末对称）。
+     *   【为什么不用 ROUND-cap 虚线】cap 圆头以**线段端点**为圆心向外伸 w/2 ⇒ 端点圆溢出盒外，
+     *   且与封角块叠加成"合并斑块"（独立评审逐像素 profile 抓出：bbox 超盒 1.3–1.7 CSS px）。
+     *   本形态对齐 mp/鸿蒙引擎的"贴边单圆点"（用户选定的标准蓝本，决策 #559）。 */
+    private void drawDotRow(Canvas canvas, float xa, float ya, float xb, float yb, float w, android.graphics.Paint p) {
+        final float dx = xb - xa, dy = yb - ya;
+        final float len = (float) Math.hypot(dx, dy);
+        final float r = w * 0.5f;
+        p.setStyle(android.graphics.Paint.Style.FILL);
+        p.setPathEffect(null);
+        p.setStrokeCap(android.graphics.Paint.Cap.BUTT);
+        if (len <= w) { canvas.drawCircle(xa + dx * 0.5f, ya + dy * 0.5f, r, p); return; }
+        // I2-ALLOW: **装饰纹理离散计数**（非几何换算）——dotted 点数取整是 UA 未定义区的自定标准
+        //   （决策 #559 圆点网格）；几何坐标 x0/y0/x1/y1/w 均来自内核且**未再舍入**，此处仅决定
+        //   纹理的离散分布（点位置 = r + k×step，无坐标吸附）。
+        final int nSeg = Math.max(1, Math.round((len - w) / (w * 2f)));
+        final float step = (len - w) / nSeg;
+        final float ux = dx / len, uy = dy / len;
+        for (int k = 0; k <= nSeg; k++) {
+            final float d = r + k * step;
+            canvas.drawCircle(xa + ux * d, ya + uy * d, r, p);
+        }
+    }
+
     public void drawCmds(Canvas canvas) {
         // ★单次遍历下发全部指令（无 View 树、无递归 measure/layout）
         final List<Cmd> list = cmds;
@@ -2637,9 +2662,16 @@ public class ProteusHostView extends ViewGroup {
                     sideBorderPath.moveTo(x0, y0); sideBorderPath.lineTo(x1, y0);
                     sideBorderPath.lineTo(ix1, iy0); sideBorderPath.lineTo(ix0, iy0);
                     sideBorderPath.close();
-                    // ★★★线型（2026-10-05）：solid ⇒ 填充；dashed/dotted ⇒ **封角块 + 中线虚线**（Chrome 角部实心）
+                    // ★★★线型（2026-10-05）：solid ⇒ 填充；dashed ⇒ 封角块 + 中线虚线（Chrome 角部真值）；
+                    //   dotted ⇒ 圆点网格（决策 #559：首末贴边、中段等距、无封角块——对齐 mp/鸿蒙标准蓝本）
                     if ((int) sb[8 + 0] == 0) {
                         canvas.drawPath(sideBorderPath, borderPaint);
+                    } else if ((int) sb[8 + 0] == 2) {
+                        // ★★★dotted ⇒ **圆点网格**（决策 #559 修复轮——ROUND-cap 虚线端点外溢 w/2 且与封角块
+                        //   叠成合并斑块，独立评审逐像素 profile 抓出）：首末点**贴边**、中段等距（≈2w）；
+                        //   不画封角块（对齐 mp/鸿蒙"贴边单圆点"形态——用户选定的标准蓝本）。
+                        drawDotRow(canvas, x0, y0 + wt * 0.5f, x1, y0 + wt * 0.5f, wt, borderPaint);
+                        borderPaint.setStyle(android.graphics.Paint.Style.FILL);
                     } else {
                         cornerBlock.reset();
                         cornerBlock.addRect(x0, y0, x0 + wt, y0 + wt, android.graphics.Path.Direction.CW);
@@ -2647,8 +2679,7 @@ public class ProteusHostView extends ViewGroup {
                         canvas.drawPath(cornerBlock, borderPaint);
                         borderPaint.setStyle(android.graphics.Paint.Style.STROKE);
                         borderPaint.setStrokeWidth(wt);
-                        // 线型节距 = Chrome 实测真值（2026-10-05 取证）：dashed {3w,2w} · dotted {w,w}（方点、等距）
-                        borderPaint.setPathEffect(new android.graphics.DashPathEffect((int) sb[8 + 0] == 1 ? new float[]{wt * 3f, wt * 2f} : new float[]{wt, wt}, 0f));
+                        borderPaint.setPathEffect(new android.graphics.DashPathEffect(new float[]{wt * 3f, wt * 2f}, 0f));
                         canvas.drawLine(x0, y0 + wt * 0.5f, x1, y0 + wt * 0.5f, borderPaint);
                         borderPaint.setPathEffect(null);
                         borderPaint.setStyle(android.graphics.Paint.Style.FILL);
@@ -2662,9 +2693,16 @@ public class ProteusHostView extends ViewGroup {
                     sideBorderPath.moveTo(x1, y0); sideBorderPath.lineTo(x1, y1);
                     sideBorderPath.lineTo(ix1, iy1); sideBorderPath.lineTo(ix1, iy0);
                     sideBorderPath.close();
-                    // ★★★线型（2026-10-05）：solid ⇒ 填充；dashed/dotted ⇒ **封角块 + 中线虚线**（Chrome 角部实心）
+                    // ★★★线型（2026-10-05）：solid ⇒ 填充；dashed ⇒ 封角块 + 中线虚线（Chrome 角部真值）；
+                    //   dotted ⇒ 圆点网格（决策 #559：首末贴边、中段等距、无封角块——对齐 mp/鸿蒙标准蓝本）
                     if ((int) sb[8 + 1] == 0) {
                         canvas.drawPath(sideBorderPath, borderPaint);
+                    } else if ((int) sb[8 + 1] == 2) {
+                        // ★★★dotted ⇒ **圆点网格**（决策 #559 修复轮——ROUND-cap 虚线端点外溢 w/2 且与封角块
+                        //   叠成合并斑块，独立评审逐像素 profile 抓出）：首末点**贴边**、中段等距（≈2w）；
+                        //   不画封角块（对齐 mp/鸿蒙"贴边单圆点"形态——用户选定的标准蓝本）。
+                        drawDotRow(canvas, x1 - wr * 0.5f, y0, x1 - wr * 0.5f, y1, wr, borderPaint);
+                        borderPaint.setStyle(android.graphics.Paint.Style.FILL);
                     } else {
                         cornerBlock.reset();
                         cornerBlock.addRect(x1 - wr, y0, x1, y0 + wr, android.graphics.Path.Direction.CW);
@@ -2672,7 +2710,7 @@ public class ProteusHostView extends ViewGroup {
                         canvas.drawPath(cornerBlock, borderPaint);
                         borderPaint.setStyle(android.graphics.Paint.Style.STROKE);
                         borderPaint.setStrokeWidth(wr);
-                        borderPaint.setPathEffect(new android.graphics.DashPathEffect((int) sb[8 + 1] == 1 ? new float[]{wr * 3f, wr * 2f} : new float[]{wr, wr}, 0f));
+                        borderPaint.setPathEffect(new android.graphics.DashPathEffect(new float[]{wr * 3f, wr * 2f}, 0f));
                         canvas.drawLine(x1 - wr * 0.5f, y0, x1 - wr * 0.5f, y1, borderPaint);
                         borderPaint.setPathEffect(null);
                         borderPaint.setStyle(android.graphics.Paint.Style.FILL);
@@ -2686,9 +2724,16 @@ public class ProteusHostView extends ViewGroup {
                     sideBorderPath.moveTo(x1, y1); sideBorderPath.lineTo(x0, y1);
                     sideBorderPath.lineTo(ix0, iy1); sideBorderPath.lineTo(ix1, iy1);
                     sideBorderPath.close();
-                    // ★★★线型（2026-10-05）：solid ⇒ 填充；dashed/dotted ⇒ **封角块 + 中线虚线**（Chrome 角部实心）
+                    // ★★★线型（2026-10-05）：solid ⇒ 填充；dashed ⇒ 封角块 + 中线虚线（Chrome 角部真值）；
+                    //   dotted ⇒ 圆点网格（决策 #559：首末贴边、中段等距、无封角块——对齐 mp/鸿蒙标准蓝本）
                     if ((int) sb[8 + 2] == 0) {
                         canvas.drawPath(sideBorderPath, borderPaint);
+                    } else if ((int) sb[8 + 2] == 2) {
+                        // ★★★dotted ⇒ **圆点网格**（决策 #559 修复轮——ROUND-cap 虚线端点外溢 w/2 且与封角块
+                        //   叠成合并斑块，独立评审逐像素 profile 抓出）：首末点**贴边**、中段等距（≈2w）；
+                        //   不画封角块（对齐 mp/鸿蒙"贴边单圆点"形态——用户选定的标准蓝本）。
+                        drawDotRow(canvas, x0, y1 - wb * 0.5f, x1, y1 - wb * 0.5f, wb, borderPaint);
+                        borderPaint.setStyle(android.graphics.Paint.Style.FILL);
                     } else {
                         cornerBlock.reset();
                         cornerBlock.addRect(x0, y1 - wb, x0 + wb, y1, android.graphics.Path.Direction.CW);
@@ -2696,7 +2741,7 @@ public class ProteusHostView extends ViewGroup {
                         canvas.drawPath(cornerBlock, borderPaint);
                         borderPaint.setStyle(android.graphics.Paint.Style.STROKE);
                         borderPaint.setStrokeWidth(wb);
-                        borderPaint.setPathEffect(new android.graphics.DashPathEffect((int) sb[8 + 2] == 1 ? new float[]{wb * 3f, wb * 2f} : new float[]{wb, wb}, 0f));
+                        borderPaint.setPathEffect(new android.graphics.DashPathEffect(new float[]{wb * 3f, wb * 2f}, 0f));
                         canvas.drawLine(x0, y1 - wb * 0.5f, x1, y1 - wb * 0.5f, borderPaint);
                         borderPaint.setPathEffect(null);
                         borderPaint.setStyle(android.graphics.Paint.Style.FILL);
@@ -2710,9 +2755,16 @@ public class ProteusHostView extends ViewGroup {
                     sideBorderPath.moveTo(x0, y1); sideBorderPath.lineTo(x0, y0);
                     sideBorderPath.lineTo(ix0, iy0); sideBorderPath.lineTo(ix0, iy1);
                     sideBorderPath.close();
-                    // ★★★线型（2026-10-05）：solid ⇒ 填充；dashed/dotted ⇒ **封角块 + 中线虚线**（Chrome 角部实心）
+                    // ★★★线型（2026-10-05）：solid ⇒ 填充；dashed ⇒ 封角块 + 中线虚线（Chrome 角部真值）；
+                    //   dotted ⇒ 圆点网格（决策 #559：首末贴边、中段等距、无封角块——对齐 mp/鸿蒙标准蓝本）
                     if ((int) sb[8 + 3] == 0) {
                         canvas.drawPath(sideBorderPath, borderPaint);
+                    } else if ((int) sb[8 + 3] == 2) {
+                        // ★★★dotted ⇒ **圆点网格**（决策 #559 修复轮——ROUND-cap 虚线端点外溢 w/2 且与封角块
+                        //   叠成合并斑块，独立评审逐像素 profile 抓出）：首末点**贴边**、中段等距（≈2w）；
+                        //   不画封角块（对齐 mp/鸿蒙"贴边单圆点"形态——用户选定的标准蓝本）。
+                        drawDotRow(canvas, x0 + wl * 0.5f, y0, x0 + wl * 0.5f, y1, wl, borderPaint);
+                        borderPaint.setStyle(android.graphics.Paint.Style.FILL);
                     } else {
                         cornerBlock.reset();
                         cornerBlock.addRect(x0, y0, x0 + wl, y0 + wl, android.graphics.Path.Direction.CW);
@@ -2720,7 +2772,7 @@ public class ProteusHostView extends ViewGroup {
                         canvas.drawPath(cornerBlock, borderPaint);
                         borderPaint.setStyle(android.graphics.Paint.Style.STROKE);
                         borderPaint.setStrokeWidth(wl);
-                        borderPaint.setPathEffect(new android.graphics.DashPathEffect((int) sb[8 + 3] == 1 ? new float[]{wl * 3f, wl * 2f} : new float[]{wl, wl}, 0f));
+                        borderPaint.setPathEffect(new android.graphics.DashPathEffect(new float[]{wl * 3f, wl * 2f}, 0f));
                         canvas.drawLine(x0 + wl * 0.5f, y0, x0 + wl * 0.5f, y1, borderPaint);
                         borderPaint.setPathEffect(null);
                         borderPaint.setStyle(android.graphics.Paint.Style.FILL);

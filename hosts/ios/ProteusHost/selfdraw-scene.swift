@@ -3290,8 +3290,42 @@ final class SelfDrawView: UIView {
                 sh.fillColor = sh.strokeColor
                 sh.lineWidth = 0
                 sh.lineDashPattern = nil
+            } else if st == 2 {
+                // ★★★dotted ⇒ **圆点网格**（决策 #559 修复轮——ROUND-cap 虚线端点外溢 w/2 且与封角块
+                //   叠成合并斑块，独立评审逐像素 profile 抓出）：首末点**贴边**（圆心距端 w/2）、
+                //   中段等距（step ≈ 2w）；单层多圆 path 填充（颜色仍存 strokeColor，幂等纪律）。
+                //   对齐 mp/鸿蒙"贴边单圆点"形态（用户选定的标准蓝本）。
+                var ax = x0, ay = y0 + wI * 0.5, bx = x1, by = y0 + wI * 0.5
+                switch idx {
+                case 1: ax = x1 - wI * 0.5; ay = y0; bx = x1 - wI * 0.5; by = y1
+                case 2: ax = x0; ay = y1 - wI * 0.5; bx = x1; by = y1 - wI * 0.5
+                case 3: ax = x0 + wI * 0.5; ay = y0; bx = x0 + wI * 0.5; by = y1
+                default: break
+                }
+                let ddx = bx - ax, ddy = by - ay
+                let len = (ddx * ddx + ddy * ddy).squareRoot()
+                var r = wI * 0.5
+                var dots = UIBezierPath()
+                if len <= wI {
+                    dots.append(UIBezierPath(ovalIn: CGRect(x: ax + ddx * 0.5 - r, y: ay + ddy * 0.5 - r, width: wI, height: wI)))
+                } else {
+                    // I2-ALLOW: **装饰纹理离散计数**（非几何换算）——dotted 点数取整（决策 #559 圆点网格）；
+                    //   几何坐标均来自内核未再舍入，此处仅决定纹理离散分布。
+                    let nSeg = max(1, Int(((len - wI) / (wI * 2)).rounded()))
+                    let step = (len - wI) / CGFloat(nSeg)
+                    let ux = ddx / len, uy = ddy / len
+                    for k in 0...nSeg {
+                        let d = r + CGFloat(k) * step
+                        dots.append(UIBezierPath(ovalIn: CGRect(x: ax + ux * d - r, y: ay + uy * d - r, width: wI, height: wI)))
+                    }
+                }
+                sh.path = dots.cgPath
+                sh.fillColor = sh.strokeColor
+                sh.lineWidth = 0
+                sh.lineDashPattern = nil
+                continue
             } else {
-                // ★★★线型（2026-10-05 · Chrome 角部真值=实心起笔）：中线描边 + lineDashPattern（相位 0）
+                // ★★★dashed（Chrome 角部真值=实心起笔）：中线描边 + lineDashPattern（相位 0，BUTT cap）
                 switch idx {
                 case 0:
                     p.move(to: CGPoint(x: x0, y: y0 + wI * 0.5)); p.addLine(to: CGPoint(x: x1, y: y0 + wI * 0.5))
@@ -3306,10 +3340,8 @@ final class SelfDrawView: UIView {
                 sh.fillColor = nil
                 // （strokeColor 已在创建时设；此处不动）
                 sh.lineWidth = wI
-                // ★★★线型节距（Chrome 实测真值，2026-10-05）：dashed {3w,2w} · dotted {w,w}（方点、等距）
-                sh.lineDashPattern = st == 1
-                    ? [NSNumber(value: Double(wI) * 3), NSNumber(value: Double(wI) * 2)]
-                    : [NSNumber(value: Double(wI)), NSNumber(value: Double(wI))]
+                sh.lineCap = .butt
+                sh.lineDashPattern = [NSNumber(value: Double(wI) * 3), NSNumber(value: Double(wI) * 2)]
                 sh.lineDashPhase = 0
                 continue
             }

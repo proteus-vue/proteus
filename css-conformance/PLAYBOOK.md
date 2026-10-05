@@ -141,12 +141,25 @@ node scripts/css-acceptance-record.mjs <feature-id> <verdicts.json>
    旧图交子代理 = 白烧一整轮（≥10 分钟）。`side-by-side` 已内置该门禁（stale 直接拒绝生成）。
 2. **AI 自检画面**（看一眼每端新图：版本正确、无残留段、案例齐全）——机器判门后仍要做，
    这是"人对图"的最后一眼，不是审美判断。
-3. **判据边界——UA-defined 项不判 fail**：dashed/dotted 的**节距与点形**不受 CSS 规范控制
-   （CSS Backgrounds 3 原文："There is no control over the spacing of the dots and dashes,
-   nor over the length of the dashes."；Chrome 节距不是跨实现真值）。语义（线型正确出现 /
-   颜色宽度 / 角部行为 / square-ended 与 round 语义）对齐即 pass，纹理差异**具名登记**
-   （写进验收包 visual 段），不静默、也不判 fail。★同源纪律：评任何"多端差异"前，先归因
-   **这是不是规范未定义的自由区**——是则具名，否则对着 Web 真值修。
+3. **判据边界——UA-defined 项不判 fail，但★要升级成"自定标准"**：dashed/dotted 的**节距与点形**
+   不受 CSS 规范控制（CSS Backgrounds 3 原文："There is no control over the spacing of the dots
+   and dashes, nor over the length of the dashes."；Chrome 节距不是跨实现真值）。
+   ★★**用户 2026-10-05 立的标准**（决策 #559）：「如果 CSS 标准里面没有规定的我们可以自己定标准，
+   点状边框就统一为圆点吧」——**UA 自由区不是"各端随便"**，而是：
+   · 有 Web 真值可对的（如 dashed {3w,2w} 取 Chrome 实测）⇒ 照 Web 对齐；
+   · **规范文字/主流端都指向同一实现的（如 dotted = W3C 原文 "round dots"、MP/鸿蒙均圆点）
+     ⇒ 定为项目标准，自研宿主照改**（Android ROUND cap + 零长段 / iOS lineCap .round）；
+   · 唯有"被引擎锁死改不动"的（MP Skyline 内建节距）才具名登记。
+   ★纪律：碰到未定义项，**先问"主流端怎么做"再拍板**（别停在"具名"就收工）；定下来的标准
+   写进本条（PLAYBOOK）与决策，作为后续项的统一判据。语义层（线型出现 / 颜色宽度 / 角部行为）
+   永远对齐 Web；差异项按上述三级处理。**
+
+**★已定项目标准清单（未定义区的自定取值）**
+| 项 | 标准 | 依据 |
+|---|---|---|
+| dotted 点形/落点 | **圆点（直径 = 线宽）+ 圆点网格**：首末点圆心距端 **w/2（贴边，圆缘=盒边）**、中段等距 step=(len−w)/round((len−w)/2w)；**不画封角块** | W3C 原文 "round dots"；mp/鸿蒙引擎均贴边单圆点（决策 #559 + 修复轮） |
+| dotted 实现纪律 | ★**不得用 ROUND-cap 虚线**（cap 圆头以线段端点为圆心外伸 w/2 ⇒ 端点外溢盒外 + 与封角块叠成合并斑块——实测 bbox 超盒 1.3-1.7 CSS px）| 第 3 次独立复评逐像素 profile 抓出（决策 #559 ⑧） |
+| dashed 节距 | {3w, 2w}（封角块 + 中线虚线，BUTT cap） | Chrome 实测真值（有真值可对 ⇒ 照 Web） |
 
 ---
 
