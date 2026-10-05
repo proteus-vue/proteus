@@ -72,6 +72,21 @@
 某节点某属性的最终值 ← 哪条规则 ← 经过哪几步层叠判定。
 **这是"引擎"与"字段折叠器"的分界线**（承 `Proteus_CSS_Profile规格.md:226`）。
 
+### 3.4 比对阶段口径（★防 E1 假触发——2026-10-05 追加，随决策 #548）
+
+CSS 的值有阶段：声明值 → **计算值（computed）** → **使用值（used，经布局）** → 实际值（actual）。
+浏览器 `getComputedStyle` 返回 **resolved value**：多数属性 = computed；但**布局相关的长度**（`width`/`height`/`margin`/`padding`/`top`/`left`…）在元素**已布局**时返回**使用值（px）**。
+⇒ 判据①的比对必须按阶段分流——否则会把"阶段差异"误判成"引擎不可收敛"，**假触发 E1**：
+
+| 类 | 字段形态（例） | 比对方式 |
+|---|---|---|
+| **A. 布局无关的计算值** | color / backgroundColor / fontSize / fontWeight / opacity / display / textAlign / letterSpacing / flexGrow / zIndex / visibility… | **字面比对**（配规范化表：颜色 `#RRGGBBAA`、`fontWeight: normal→400`、`font-family` 去引号、`0px≡0`；`lineHeight` 的 `normal`/数值/px 三形态 resolved 行为需**实测登记**） |
+| **B. 绝对长度** | IR `{kind:'absolute', dp}`（如 `width:320px`） | **字面比对**（resolved 亦为 px，不受布局影响）；容差走 `tolerance.ts` 档 |
+| **C. 比例 / auto / 依赖布局** | IR `{kind:'ratio'}`、`{kind:'auto'}`（`width:50%` / `margin:auto` / `%` 基准） | **不进判据①**——resolved 值是布局结果（used px）⇒ **归判据②**（几何 snapshot：`0.5 × 父 used 宽 == 子 rect 宽`）；判据①对此类只核**折叠形态正确**（ratio 与 base 写对） |
+
+- **逐字段对照表**（字段 → A/B/C 类 + 规范化规则）是 **B1 交付物**；**未分类字段不得计入①的"通过"**（未覆盖就报未覆盖——承 G-55.7/G-60.7 数字口径）。
+- ★本节同时是 **E1 的判定前提**：E1 =「分类完成后仍无法收敛」，**不是**「还没分类就对不齐」。
+
 ---
 
 ## 4. 判据② · 数值等价（运行期 · 硬 · expected = Web）
