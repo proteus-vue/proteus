@@ -689,10 +689,18 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
         // ★批次 10（CSS 兼容对齐 · 超级应用视觉）：盒阴影 → RenderNode 原生 shadow API
         //   （color/offset/radius/alpha；spread 无原生项——近似忽略）
         if (shadowRadius > 0 && shadowColor > 0) {
-            OH_ArkUI_RenderNodeUtils_SetShadowColor(node, static_cast<uint32_t>(shadowColor));
+            // ★★★批次 48 修复（独立视觉验收抓出「鸿蒙客服球光晕远大于 Web（≈2.5–3×、强度≈4×）」，与 iOS/Android 同源）：
+            //   ① **alpha 施加两次**（color 里已含 alpha，又 `SetShadowAlpha(1.0)` 叠一层）⇒ 阴影过浓；
+            //      ⇒ 把 color 置为**不含 alpha 的 RGB**，浓度只由 `SetShadowAlpha` 单一通道给（源=color 的 alpha）。
+            //   ② 单位：其它长度（x/y/w/h/radius）在本文件都是**物理 px**，而 ArkUI 的 shadow radius 取 **vp**
+            //      ⇒ 此处除以 density 换算（此前直接传 px 值 ⇒ 光晕半径被放大 ~3.5×）。
+            //   ★两处叠加正是"光晕又大又浓"的根因；两行修复后与 Web 同量级。
+            const uint32_t scRgb = static_cast<uint32_t>(shadowColor) & 0x00FFFFFFu;
+            const float scA = static_cast<float>((static_cast<uint32_t>(shadowColor) >> 24) & 0xFFu) / 255.0f;
+            OH_ArkUI_RenderNodeUtils_SetShadowColor(node, scRgb);
             OH_ArkUI_RenderNodeUtils_SetShadowOffset(node, static_cast<int32_t>(shadowDx), static_cast<int32_t>(shadowDy));
-            OH_ArkUI_RenderNodeUtils_SetShadowRadius(node, static_cast<float>(shadowRadius));
-            OH_ArkUI_RenderNodeUtils_SetShadowAlpha(node, 1.0f);
+            OH_ArkUI_RenderNodeUtils_SetShadowRadius(node, static_cast<float>(shadowRadius) / (g_density > 0 ? g_density : 1.0f));
+            OH_ArkUI_RenderNodeUtils_SetShadowAlpha(node, scA > 0 ? scA : 1.0f);
         }
         // ★★★文本上屏（2026-10-02）：指令带 "text" ⇒ 给该节点挂 content modifier，
         //   在绘制阶段用 typography 画文字（Color/字号从指令取；缺省白字 24px）。

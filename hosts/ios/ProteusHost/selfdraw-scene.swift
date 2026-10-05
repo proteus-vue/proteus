@@ -2004,6 +2004,11 @@ final class SelfDrawView: UIView {
         if verticalRangeSet {
             let clamped = max(0, min(CGFloat(verticalRange), contentOffset.y))
             contentOffset.y = clamped
+            // ★★★批次 48 修复（用户：「iOS 页面内容能一直拖着来回动」——一直存在的现象）：
+            //   **横向 x 从不钳制** ⇒ 横拖可无限位移（内容跑出屏幕）。内容滚动模式下页面不横滚
+            //   （与 Web `overflow-x` 同义）⇒ x 恒钳到 0。★门禁与 y 同源（`verticalRangeSet`）：
+            //   未开内容滚动的既有场景（手卷 offsetScroll 等）保持"无界拖拽"（零行为变化）。
+            contentOffset.x = 0
         }
         // ★用 sublayerTransform 平移（不动各层 frame ⇒ 不破坏「内容坐标」语义）
         var t = CATransform3DIdentity
@@ -3261,14 +3266,27 @@ final class SelfDrawView: UIView {
     }
 }
 
-/// `#RRGGBB` / `#AARRGGBB` → UIColor
+/// `#RGB` / `#RRGGBB` / `#RRGGBBAA` → UIColor
+///
+/// ★★★批次 48 修复（iOS 整屏偏色，由独立子代理视觉验收抓出）：
+///   8 位 hex 原按 **AARRGGBB** 解析（`alpha = v>>24`），而**编译器产物 / 内核 / Web 都是 CSS4 序
+///   `#RRGGBBAA`**（低 8 位 = alpha；见 layout-core-rust ffi.rs 的 `8 => ((v & 0xFF) << 24) | ...`）。
+///   ⇒ 字节序错位：实测 `#5b5bd61a`（紫 10%）被读成 A=0x5b/R=0x5b/G=0xd6/B=0x1a ⇒ 混白底渲染出
+///   **(196,240,174) 绿色**——同源编译却三端异色（Android/鸿蒙按 CSS 序 ⇒ 紫）。现改为 CSS 序。
 func parseHexColor(_ s: String) -> UIColor? {
     var hex = s.trimmingCharacters(in: .whitespaces)
     if hex.hasPrefix("#") { hex.removeFirst() }
     guard let v = UInt32(hex, radix: 16) else { return nil }
+    if hex.count == 3 {
+        // #RGB：各通道重复一位（#f0a → #ff00aa，alpha = FF）——与内核/Web 同
+        let r = (v >> 8) & 0xF, g = (v >> 4) & 0xF, b = v & 0xF
+        return UIColor(red: CGFloat(r * 17) / 255, green: CGFloat(g * 17) / 255,
+                       blue: CGFloat(b * 17) / 255, alpha: 1)
+    }
     if hex.count == 8 {
-        return UIColor(red: CGFloat((v >> 16) & 0xFF) / 255, green: CGFloat((v >> 8) & 0xFF) / 255,
-                       blue: CGFloat(v & 0xFF) / 255, alpha: CGFloat((v >> 24) & 0xFF) / 255)
+        // ★CSS4 序 #RRGGBBAA（低 8 位 = alpha）——与内核/Web 同源
+        return UIColor(red: CGFloat((v >> 24) & 0xFF) / 255, green: CGFloat((v >> 16) & 0xFF) / 255,
+                       blue: CGFloat((v >> 8) & 0xFF) / 255, alpha: CGFloat(v & 0xFF) / 255)
     }
     if hex.count == 6 {
         return UIColor(red: CGFloat((v >> 16) & 0xFF) / 255, green: CGFloat((v >> 8) & 0xFF) / 255,

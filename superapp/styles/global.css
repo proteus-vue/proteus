@@ -307,15 +307,17 @@ body:has(.sa-dark) {
   color: var(--sa-text-2);
 }
 
-/* 右箭头（纯 CSS 画——不依赖字体/图片） */
+/* 右箭头（★批次 48：改用**文本字形** `›`——原 `border-top/right + rotate(45deg)` 画法在
+   App 端无 CSS 引擎支持（内核无逐边边框）⇒ 三端均不显示；文本字形六端一致，视觉等义） */
 .sa-item__arrow {
   flex-shrink: 0;
-  width: 8px;
-  height: 8px;
   margin-left: var(--sa-3);
-  border-top: 1.5px solid var(--sa-text-3);
-  border-right: 1.5px solid var(--sa-text-3);
-  transform: rotate(45deg);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--sa-text-3);
 }
 
 /* ── 徽标 / 角标 ───────────────────────────────────────────────────────────── */

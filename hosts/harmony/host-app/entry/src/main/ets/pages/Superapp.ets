@@ -16,7 +16,7 @@
 //   本页证明「真实应用壳 + 导航 + 真机渲染 + 切 tab」。
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { NodeContent } from '@kit.ArkUI';
-import { display } from '@kit.ArkUI';
+import { display, window } from '@kit.ArkUI';
 import { util } from '@kit.ArkTS';
 import { fileIo } from '@kit.CoreFileKit';
 import { attach, renderCommands } from 'libproteus_render.so';
@@ -45,10 +45,19 @@ struct Superapp {
   private switchLog: string[] = [];
   /** IM 未读角标初值（与 App.vue 壳同源；后续接实时运行时改由状态驱动） */
   private imUnread: number = 3;
+  /** 底部安全区高度（vp；手势条）——并入 Tab 栏高度（见 build），白底铺到屏底 */
+  private safeBottom: number = 0;
 
   /** Tab 图标（⌂/✉/☺——与 Web/Android/iOS 同形） */
   private tabIconOf(name: string): string {
     return name === 'index' ? '⌂' : name === 'messages' ? '✉' : name === 'mine' ? '☺' : '•';
+  }
+
+  /** Tab 图标（鸿蒙系统符号资源；三端语义同：首页/消息/我的） */
+  private tabSymbol(name: string): Resource {
+    if (name === 'index') return $r('sys.symbol.house')
+    if (name === 'messages') return $r('sys.symbol.message')
+    return $r('sys.symbol.person')
   }
 
   /** Tab 短标签（首页/消息/我的） */
@@ -61,6 +70,20 @@ struct Superapp {
     try {
       const ctx = getContext(this);
       this.filesDir = ctx.filesDir;
+      // ★底部安全区（手势条）→ 并入 Tab 栏高度：白底铺到屏底（Web `.sa-tabbar{padding-bottom:safe}`
+      //   同义；此前 Tab 栏下方露出一条灰带——独立视觉验收抓出）。
+      // ★先给**保守默认 16vp**（手势条标准高）——本机实测 `TYPE_SYSTEM` 避让区返回 0（见日志
+      //   `SUPERAPP_SAFE_BOTTOM 0`），若照用会在 Tab 栏下露一条灰带（独立验收抓出）。
+      //   取到真值再覆盖（不同机型/横竖屏）。与 Web `--sa-safe-bottom` 同义。
+      this.safeBottom = 16;
+      window.getLastWindow(ctx).then((win: window.Window) => {
+        const avoid: window.AvoidArea = win.getWindowAvoidArea(window.AvoidAreaType.TYPE_SYSTEM);
+        const h: number = px2vp(avoid.bottomRect.height);
+        if (h > 0) this.safeBottom = h;
+        hilog.info(DOMAIN, TAG, 'SUPERAPP_SAFE_BOTTOM %{public}d', Math.round(this.safeBottom));
+      }).catch((err: Error) => {
+        hilog.error(DOMAIN, TAG, 'SUPERAPP_SAFE_BOTTOM_ERR %{public}s', String(err?.message ?? err));
+      });
       // ① bundle-superapp.js
       const bb: Uint8Array = ctx.resourceManager.getRawFileContentSync('bundle-superapp.js');
       const bundle: string = util.TextDecoder.create('utf-8').decodeToString(bb);
@@ -142,7 +165,10 @@ struct Superapp {
     const disp = display.getDefaultDisplaySync();
     const vpW: number = px2vp(disp.width);
     const vpH: number = px2vp(disp.height);
-    const contentH: number = vpH - TAB_H;
+    // ★★★视口 = **全屏**（不缩 Tab 栏）——与 Web 一致：Web 的 Tab 栏是 overlay（浮在页面之上、
+    //   fixed 不占流），页面让位靠**自身下内边距**（编译器已给页面根 padding-bottom:120dp）。
+    //   此前缩到"屏高−56" ⇒ 视口少 56dp ⇒ 依赖 bottom 定位的元素（客服球）偏高/偏大（独立验收抓出）。
+    const contentH: number = vpH;
     try {
       attach(this.content, vp2px(1), vpW, contentH);
       const cmds: string = appScreenCommands(JSON.stringify({
@@ -200,33 +226,55 @@ struct Superapp {
       .width('100%')
       .layoutWeight(1)
 
-      // 底部 Tab 栏（原生 chrome；★图标 + 短标签，与 Web/Android/iOS 同形：⌂ 首页 / ✉ 消息 / ☺ 我的）
-      Row() {
-        ForEach(this.tabKeys, (k: string, i: number) => {
-          Column() {
-            Stack() {
-              Text(this.tabIconOf(k)).fontSize(20).fontColor(this.current === k ? '#4C8DFF' : '#8A8A9A')
-              if (k === 'messages' && this.imUnread > 0) {
-                Text(this.imUnread > 99 ? '99+' : String(this.imUnread))
-                  .fontSize(9).fontColor('#FFFFFF').textAlign(TextAlign.Center)
-                  .width(16).height(16).borderRadius(8).backgroundColor('#F5222D')
-                  .position({ x: 24, y: 0 })
+      // 底部 Tab 栏（原生 chrome）——★样式取自 **Web 真值**（App.vue `.sa-tabbar` + global.css token）：
+      //   白底 #ffffff · 顶边框 #dcdfe5 · 选中 brand #5b5bd6 · 未选中 text-3 #5f6673 · 角标 rec #d64545。
+      //   图标加 U+FE0E（变体选择符）强制**文本呈现**——否则 ☺/✉ 会被渲染成彩色 emoji（与 Web 线稿不符）。
+      Column() {
+        Divider().strokeWidth(1).color('#DCDFE5')
+        Row() {
+          ForEach(this.tabKeys, (k: string, i: number) => {
+            Column() {
+              Stack() {
+                // ★★图标用鸿蒙 **SymbolGlyph 系统矢量符号**（单色、可着色、尺寸可控）：
+                //   · 彩色 emoji（U+2709/U+263A 默认 emoji 呈现；FE0E/字体族都压不住——实测）
+                //   · Shape+Path 实测被渲染成**实心**且不随 viewPort 缩放
+                //   ⇒ 两者都不满足「与 Web 线稿一致」。系统符号是本机唯一的**原生单色矢量**通道。
+                // ★尺寸对齐 Web（图标墨高 ≈11.5dp；系统符号字号 20 时墨高约 20dp=1.7×，独立验收抓出）⇒ 13
+                SymbolGlyph(this.tabSymbol(k))
+                  .fontSize(13)
+                  .fontColor([this.current === k ? '#5B5BD6' : '#5F6673'])
+                if (k === 'messages' && this.imUnread > 0) {
+                  Text(this.imUnread > 99 ? '99+' : String(this.imUnread))
+                    .fontSize(11).fontWeight(FontWeight.Bold).fontColor('#FFFFFF').textAlign(TextAlign.Center)
+                    .constraintSize({ minWidth: 16 }).height(16).padding({ left: 4, right: 4 })
+                    .borderRadius(8).backgroundColor('#D64545')
+                    .position({ x: 24, y: -2 })
+                }
               }
+              Text(this.tabShortLabelOf(k)).fontSize(10)
+                .fontColor(this.current === k ? '#5B5BD6' : '#5F6673')
             }
-            Text(this.tabShortLabelOf(k)).fontSize(11).fontColor(this.current === k ? '#4C8DFF' : '#8A8A9A')
-          }
-          .layoutWeight(1)
-          .height('100%')
-          .justifyContent(FlexAlign.Center)
-          .onClick(() => { this.switchTab(k); })
-        }, (k: string) => k)
+            .layoutWeight(1)
+            .height('100%')
+            .justifyContent(FlexAlign.Center)
+            .onClick(() => { this.switchTab(k); })
+          }, (k: string) => k)
+        }
+        .width('100%')
+        .layoutWeight(1)
       }
       .width('100%')
-      .height(TAB_H)
-      .backgroundColor('#1B1B2A')
+      // ★高度 = 视觉高 + 底部安全区（内容仍居中于 TAB_H 内；白底延伸到屏底）
+      .height(TAB_H + this.safeBottom)
+      .backgroundColor('#FFFFFF')
     }
     .width('100%')
     .height('100%')
     .backgroundColor('#101020')
+    // ★★★内容铺满**全屏**（含状态栏与手势区）——与 Web viewport（390×844 全屏）同口径。
+    //   此前默认避让系统安全区 ⇒ 内容区止于 y≈2795/2856（差 61px ≈ 17dp）：
+    //   ① 客服球（bottom 定位）整体偏高 17dp；② 页头被状态栏压住。独立视觉验收抓出。
+    //   ★页面自身已由编译器给下内边距（120dp）⇒ Tab 栏不遮内容（与 Web overlay Tab 同理）。
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
   }
 }

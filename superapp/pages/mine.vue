@@ -178,7 +178,7 @@ function closeMusic(): void {
           <text class="sa-item__label">验收控制台</text>
           <text class="sa-item__desc">全局能力自检</text>
         </view>
-        <view class="sa-item__arrow" />
+        <text class="sa-item__arrow">›</text>
       </navigator>
       <view class="sa-item">
         <view class="sa-item__main"><text class="sa-item__label">版本</text></view>

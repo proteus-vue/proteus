@@ -202,6 +202,7 @@ function extractRefLiterals(sfcSrc: string): Record<string, unknown> {
   if (!m) return {}
   const script = m[1]
   const out: Record<string, unknown> = {}
+  // ① `const X = ref(<字面量>)`
   const re = /\bconst\s+([A-Za-z_$][\w$]*)\s*(?::[^=]+)?=\s*ref\s*(?:<[^>]*>)?\s*\(/g
   let mm: RegExpExecArray | null
   while ((mm = re.exec(script))) {
@@ -212,6 +213,26 @@ function extractRefLiterals(sfcSrc: string): Record<string, unknown> {
     try {
       // eslint-disable-next-line no-new-func
       out[name] = new Function(`return (${lit});`)()
+    } catch { /* 非字面量 ⇒ 跳过 */ }
+  }
+  // ② `const X = <字面量>`（**非 ref 的普通常量**——真实项目大量用，如 `const versionText = 'v0.1.0 …'`；
+  //   模板里 `{{ versionText }}` 此前因无值而空着，独立视觉验收抓出「关于卡片缺版本值」）。
+  const re2 = /\bconst\s+([A-Za-z_$][\w$]*)\s*(?::[^=]+)?=\s*([\s\S]*?)(?=\n\s*(?:const|let|var|function|async|class|export|\/\/|\/\*|$)|\n\s*\n)/g
+  let m2: RegExpExecArray | null
+  while ((m2 = re2.exec(script))) {
+    const name = m2[1]
+    if (name in out) continue
+    let lit = (m2[2] ?? '').trim()
+    // 去掉尾部分号/行尾注释
+    lit = lit.replace(/;\s*$/, '').replace(/\/\/[^\n]*$/, '').trim()
+    if (!lit) continue
+    // 只看**纯字面量**形态（字符串/数字/布尔/数组/对象/模板串无插值）——含标识符/调用一律跳过（不猜）
+    if (!/^(\{|\[|'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|`[^`$]*`|-?\d|\btrue\b|\bfalse\b|\bnull\b)/.test(lit)) continue
+    try {
+      // eslint-disable-next-line no-new-func
+      const v = new Function(`return (${lit});`)()
+      if (v === undefined || typeof v === 'function') continue
+      out[name] = v
     } catch { /* 非字面量 ⇒ 跳过 */ }
   }
   return out
@@ -304,6 +325,19 @@ function mergeShell(
       if (n.display == null) n.display = 'flex'
       if (n.flexDirection == null) n.flexDirection = 'column'
       if (n.alignItems == null) n.alignItems = 'stretch'
+      // ★★★底部让位 = 页面**自身内边距**（与 Web `.proteus-mount-layer--page` 的
+      //   `padding-bottom: calc(120px + safe)` 同义）：Tab 栏是 overlay（浮在页面之上、不占流）
+      //   ⇒ 页面必须自己留出底部空间，否则最后一屏内容被 Tab 栏压住。此前用"视口缩小 56dp"代替，
+      //   会让依赖 bottom 定位的元素整体偏移（fab 偏高 1.6×，独立验收抓出）。取 120dp（= Web 值）。
+      {
+        const pad = { ...((n.padding as Record<string, number> | undefined) ?? {}) }
+        // ★下让位 = Tab 栏 + 音乐条（与 Web `.proteus-mount-layer--page` 的 120px 同）
+        pad.bottom = Math.max(Number(pad.bottom ?? 0) || 0, 120)
+        // ★上让位 = 状态栏（与 Web 同款：`padding-top: calc(44px + safe-top)`）——App 端 edge-to-edge
+        //   会顶到状态栏下（实测鸿蒙「运营同学」被时钟盖住）；44dp 是 Web 的安全值。
+        pad.top = Math.max(Number(pad.top ?? 0) || 0, 44)
+        n.padding = pad
+      }
     }
   }
   return out
