@@ -1,0 +1,189 @@
+{
+  "_note": "★★★G-61 B0 · StyleIR 规范化编码 golden（INV-CE-01 编码层）。编码规范：①对象键 UTF-8 字节序升序 ②数组保序 ③数值定点十进制（最短往返、去尾零、-0→0、拒 NaN/Inf）。TS 侧 packages/contracts/src/style-ir-canonical.ts ⇄ Rust 侧 packages/compiler-backend-rust/src/style_ir_canon.rs。本 golden 由 tests/style-ir-golden.test.ts 双侧消费（Rust 侧驱动**真二进制** canon-style-ir 对拍）。★含边界数值样本（1e21 指数分歧 / 123456789012345680000 解析舍入分歧）——谁回退谁红。",
+  "version": 1,
+  "samples": [
+    {
+      "id": "empty-declarations",
+      "why": "空 declarations + version：最小合法 IR（键序：declarations 在 version 前——UTF-8 字节序）",
+      "ir": {
+        "version": 1,
+        "declarations": {}
+      },
+      "canonical": "{\"declarations\":{},\"version\":1}"
+    },
+    {
+      "id": "key-order-utf8",
+      "why": "键序按 UTF-8 字节序（大写先于小写；嵌套对象同规则）",
+      "ir": {
+        "version": 1,
+        "declarations": {
+          "zIndex": 3,
+          "alignContent": "center",
+          "opacity": 0.8,
+          "background": null,
+          "width": {
+            "kind": "absolute",
+            "dp": 100
+          }
+        }
+      },
+      "canonical": "{\"declarations\":{\"alignContent\":\"center\",\"background\":null,\"opacity\":0.8,\"width\":{\"dp\":100,\"kind\":\"absolute\"},\"zIndex\":3},\"version\":1}"
+    },
+    {
+      "id": "arrays-keep-order",
+      "why": "数组保序（trace 步骤链——顺序承载语义，排序即失真）",
+      "ir": {
+        "version": 1,
+        "declarations": {
+          "color": "#112233"
+        },
+        "trace": {
+          "color": [
+            {
+              "rule": ".a",
+              "step": "match"
+            },
+            {
+              "rule": ".a",
+              "step": "cascade"
+            },
+            {
+              "rule": ".b",
+              "step": "override"
+            }
+          ]
+        }
+      },
+      "canonical": "{\"declarations\":{\"color\":\"#112233\"},\"trace\":{\"color\":[{\"rule\":\".a\",\"step\":\"match\"},{\"rule\":\".a\",\"step\":\"cascade\"},{\"rule\":\".b\",\"step\":\"override\"}]},\"version\":1}"
+    },
+    {
+      "id": "numbers-boundary",
+      "why": "★数值边界全谱（JS 指数记法 vs Rust 定点、-0 规范化、去尾零、f64 极值）",
+      "ir": {
+        "version": 1,
+        "declarations": {
+          "a": 0,
+          "b": 0,
+          "c": 1,
+          "d": 1.5,
+          "e": 1e+21,
+          "f": 1e-7,
+          "g": 0.000001,
+          "h": 5e-324,
+          "i": 1.7976931348623157e+308,
+          "j": 123456789012345680000,
+          "k": 0.1,
+          "l": 0.3333333333333333,
+          "m": 3.141592653589793,
+          "n": 100000000000000000000,
+          "o": 9000000000000000,
+          "p": 9007199254740992,
+          "q": 2.5,
+          "r": -2.25,
+          "s": 0.4999999,
+          "t": 0.5000001,
+          "u": 1e-300
+        }
+      },
+      "canonical": "{\"declarations\":{\"a\":0,\"b\":0,\"c\":1,\"d\":1.5,\"e\":1000000000000000000000,\"f\":0.0000001,\"g\":0.000001,\"h\":0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000005,\"i\":179769313486231570000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000,\"j\":123456789012345680000,\"k\":0.1,\"l\":0.3333333333333333,\"m\":3.141592653589793,\"n\":100000000000000000000,\"o\":9000000000000000,\"p\":9007199254740992,\"q\":2.5,\"r\":-2.25,\"s\":0.4999999,\"t\":0.5000001,\"u\":0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001},\"version\":1}"
+    },
+    {
+      "id": "value-types-closed-set",
+      "why": "StyleValue 闭集形态：string(色/枚举) · number · boolean · ResolvedLength 四态 · null",
+      "ir": {
+        "version": 1,
+        "declarations": {
+          "backgroundColor": "#11223344",
+          "color": "rgb(255, 0, 0)",
+          "display": "flex",
+          "opacity": 0.5,
+          "pointerEvents": false,
+          "width": {
+            "kind": "absolute",
+            "dp": 320
+          },
+          "height": {
+            "kind": "ratio",
+            "ratio": 0.4,
+            "base": "parentHeight"
+          },
+          "marginTop": {
+            "kind": "auto"
+          },
+          "padding": null
+        }
+      },
+      "canonical": "{\"declarations\":{\"backgroundColor\":\"#11223344\",\"color\":\"rgb(255, 0, 0)\",\"display\":\"flex\",\"height\":{\"base\":\"parentHeight\",\"kind\":\"ratio\",\"ratio\":0.4},\"marginTop\":{\"kind\":\"auto\"},\"opacity\":0.5,\"padding\":null,\"pointerEvents\":false,\"width\":{\"dp\":320,\"kind\":\"absolute\"}},\"version\":1}"
+    },
+    {
+      "id": "real-fold-surface",
+      "why": "真实折叠面产物形态（buildLayoutTemplate 的 style 子集——锁\"真产物可编码\"）：含四边对象/阴影/变换/比例派生",
+      "ir": {
+        "version": 1,
+        "declarations": {
+          "rowGap": 8,
+          "columnGap": 12,
+          "widthRatio": 0.5,
+          "heightRatio": 0.4,
+          "marginAuto": {
+            "right": true,
+            "left": true
+          },
+          "margin": {
+            "top": 4,
+            "right": 8,
+            "bottom": 4,
+            "left": 8
+          },
+          "padding": {
+            "top": 12,
+            "right": 16,
+            "bottom": 12,
+            "left": 16
+          },
+          "boxShadow": {
+            "dx": 0,
+            "dy": 2,
+            "blur": 8,
+            "spread": 0,
+            "color": "#0000001a"
+          },
+          "transform": {
+            "txPx": 10,
+            "tyPx": 0,
+            "txPct": 0,
+            "tyPct": 0,
+            "sx": 1.2,
+            "sy": 1.2,
+            "rotate": 45
+          },
+          "transformOrigin": {
+            "x": 0.5,
+            "y": 1
+          },
+          "gridColumn": {
+            "start": 1,
+            "end": 3
+          },
+          "borderRadiusPct": 0.5,
+          "fontFamily": "system",
+          "lineHeight": "1.4",
+          "flexGrow": 1,
+          "flexShrink": 1
+        }
+      },
+      "canonical": "{\"declarations\":{\"borderRadiusPct\":0.5,\"boxShadow\":{\"blur\":8,\"color\":\"#0000001a\",\"dx\":0,\"dy\":2,\"spread\":0},\"columnGap\":12,\"flexGrow\":1,\"flexShrink\":1,\"fontFamily\":\"system\",\"gridColumn\":{\"end\":3,\"start\":1},\"heightRatio\":0.4,\"lineHeight\":\"1.4\",\"margin\":{\"bottom\":4,\"left\":8,\"right\":8,\"top\":4},\"marginAuto\":{\"left\":true,\"right\":true},\"padding\":{\"bottom\":12,\"left\":16,\"right\":16,\"top\":12},\"rowGap\":8,\"transform\":{\"rotate\":45,\"sx\":1.2,\"sy\":1.2,\"txPct\":0,\"txPx\":10,\"tyPct\":0,\"tyPx\":0},\"transformOrigin\":{\"x\":0.5,\"y\":1},\"widthRatio\":0.5},\"version\":1}"
+    },
+    {
+      "id": "string-escaping",
+      "why": "JSON 字符串必转义集（引号/反斜杠/换行/控制字符；非 ASCII 输出原始 UTF-8）",
+      "ir": {
+        "version": 1,
+        "declarations": {
+          "content": "你好 \"引号\" \\反斜杠\n\t制表\u0001控制"
+        }
+      },
+      "canonical": "{\"declarations\":{\"content\":\"你好 \\\"引号\\\" \\\\反斜杠\\n\\t制表\\u0001控制\"},\"version\":1}"
+    }
+  ]
+}

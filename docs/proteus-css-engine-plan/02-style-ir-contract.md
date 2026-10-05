@@ -1,8 +1,14 @@
 # 02 · StyleIR v1 契约（B0 交付物）
 
 > 本文件定义 **L-B StyleIR**——G-61 的**核心交付物**，"可以落地到每一个宿主"的那个东西。
-> 状态：**草案（v1 draft）**。B0 批次收敛为规范后冻结版本号。
+> 状态：**✅ v1 已冻结（2026-10-05 · B0 批次落地）**。版本号 `STYLE_IR_VERSION = 1`（字段增删 / 值类型变更 ⇒ major+1）。
 > 基线来源：`docs/Proteus_CSS_Profile规格.md:234-268`（`ComputedStyle` 草案）+ `packages/component-ir/src/pnode-style.ts`（`resolveLength`）。
+>
+> **B0 落地物（可 grep 证据）**：
+> · 字段注册表 `packages/contracts/src/style-ir-registry.generated.ts`（**77 字段**：semantic 50 / engine-only 27；生成器 `scripts/gen-style-ir-registry.mjs`；门禁 `pnpm check:style-ir-schema`）
+> · 值类型 `packages/contracts/src/style-ir-values.ts` · SApp SPI `packages/contracts/src/style-applier.ts` · **规范化编码** `packages/contracts/src/style-ir-canonical.ts`（Rust 侧 `packages/compiler-backend-rust/src/style_ir_canon.rs`）
+> · 跨语言 golden `tests/golden/style-ir-canonical.json` + `tests/style-ir-golden.test.ts`（真二进制对拍）
+> · 基准 manifest `docs/generated/style-baseline/manifest.json`（采集器 `scripts/collect-style-baseline.mjs`；门禁 `pnpm check:baseline-manifest`）
 
 > ★**基准声明（2026-10-05 追加，决策 #546）**：**IR 不是独立真值**——真值只有一个，即 **Web 端浏览器的计算样式**（B-a，A 档的直接推论）。IR 的角色是这份基准的**规范化载体**：可序列化、逐字段可比、可版本化，从而能被宿主消费、能被跨端比对。因此凡是「IR 与 Web 计算样式不一致」的场合，**默认判 IR 错**（除非能证明基准样本不合规或基准环境指纹漂移）。详见 `03-consistency-gates.md` §1。
 
@@ -90,8 +96,22 @@ type Transform2D =
 | 版本号 | `STYLE_IR_VERSION`，与 `packages/host-abi` 的 `ABI_VERSION` **独立编号、独立演进** |
 | 破坏性变更 | 字段**增删**或**值类型变更** ⇒ major+1；必须**同步**：IR schema + 三 Applier + 三层判据（INV-CE-07）⇒ 否则门禁红 |
 | 兼容性判定 | 与既有「major 相等 + minor 向后兼容」同构（承 `proteus-dev-host-plan` 的 ABI 兼容矩阵） |
-| 序列化格式 | 确定性 key 顺序 + 不含浮点 NaN/Infinity（借用 `host-abi` 的 canonical 思路） |
+| 序列化格式 | 确定性 key 顺序 + 不含浮点 NaN/Infinity（借用 `host-abi` 的 canonical 思路）。**v1 已冻结为三条显式规则**（判别式见下）|
 | **基准联动** | 修订 IR 语义（如"块级是否默认撑满"）⇒ 必须**同时**解释对 Web 基准的影响：要么 IR 向基准收敛，要么登记为**明确的基准差异**（带理由与期限）。**禁止**通过重采基准来消掉 IR 与 Web 的差异 |
+
+### 5.1 规范化编码（v1 冻结 · INV-CE-01 的编码层）
+
+「Node 后端与 Rust 后端产出的 IR **逐字节相同**」不能靠语言默认行为（实测两处真分歧：`1e21` 的 JS 指数记法 vs Rust 定点记法；serde_json 默认快速浮点解析对 `123456789012345680000` 非正确舍入、比 JS 低 1 ULP）。⇒ 编码规则**显式写死三条**：
+
+| # | 规则 | 实现 |
+|---|---|---|
+| ① | **对象键按 UTF-8 字节序升序**（UTF-8 保序 ≡ 码点序；嵌套对象同规则） | TS `utf8Compare` / Rust `sort_unstable`（`String` Ord 原生即字节序） |
+| ② | **数组保序**（trace 步骤链等有序语义，排序即失真） | 两侧直通 |
+| ③ | **数值 = 定点十进制**：语言原生**最短往返**表示 → 展开为无指数记法 → 去小数尾零；`-0`→`0`；**拒绝 NaN / ±Infinity / undefined** | TS `canonicalNumber` / Rust `canon_number` |
+
+- **为何是"最短往返"而非"固定精度四舍五入"**：后者让不同 IR **碰撞**成同一编码（`0.4999999` 与 `0.5000001` 都变 `0.5`）——规范化必须先**保真**再谈确定性。
+- **SSOT**：`packages/contracts/src/style-ir-canonical.ts`（TS）⇄ `packages/compiler-backend-rust/src/style_ir_canon.rs`（Rust）。
+- **判据**：`tests/golden/style-ir-canonical.json`（7 样本含边界数值）+ `tests/style-ir-golden.test.ts`（**驱动真二进制** `canon-style-ir` 对拍）+ `pnpm check:style-ir-golden`。破坏性验证已过：注入键序反转 ⇒ 7 条红；注入精度坍缩 ⇒ 3 条红。
 
 ---
 
@@ -132,7 +152,9 @@ type Support = { support: 'native' | 'rewritten' | 'degraded' | 'absent'; note?:
 
 ---
 
-## 7. SApp · 宿主样式应用器 SPI（草案）
+## 7. SApp · 宿主样式应用器 SPI（✅ v1 已冻结 · B0）
+
+> 冻结实现：`packages/contracts/src/style-applier.ts`（`ProteusStyleApplier` / `StyleIR` / `StylePatch` / `ApplyPhase` / `FieldSupport` / `HostStyleCapabilities` / `ApplyResult` / `ApplierConformanceCase`）。
 
 ```ts
 interface ProteusStyleApplier {
@@ -167,12 +189,14 @@ type ApplyPhase = 'mount' | 'update' | 'theme' | 'animate'
 
 ---
 
-## 8. B0 验收判据
+## 8. B0 验收判据（✅ 全部达成 · 2026-10-05）
 
-| 判据 | 命令 | 期望 |
-|---|---|---|
-| 三表合一后无半开状态 | `pnpm check:app-css-surface` | **由红转绿** |
-| IR schema 与能力矩阵一致 | 新增 `pnpm check:style-ir-schema` | 0 error |
-| 双后端 IR 等价 | 新 Golden（`tests/style-ir-golden.test.ts`） | Node ≡ Rust，逐字节 |
-| 每个字段都有 `scope` 登记 | 同上 schema 校验 | 未登记即红 |
-| **基准 manifest 就位** | 新增 `pnpm check:baseline-manifest` | Web 基准样本 + 环境指纹（浏览器/DPR/视口/字体/主题）0 error；**无基准即无法进入 B1** |
+| 判据 | 命令 | 期望 | 实测 |
+|---|---|---|---|
+| 三表合一后无半开状态 | `pnpm check:app-css-surface` | **由红转绿** | ✅ 绿（未登记分歧 0） |
+| IR schema 与能力矩阵一致 | `pnpm check:style-ir-schema` | 0 error | ✅ 绿（77 字段 · 棘轮 77/50） |
+| 双后端 IR 等价 | `tests/style-ir-golden.test.ts` + `pnpm check:style-ir-golden` | Node ≡ Rust，逐字节 | ✅ 14 条全绿（真二进制对拍；破坏性验证过） |
+| 每个字段都有 `scope` 登记 | 同上 schema 校验 | 未登记即红 | ✅ 绿（含生成器重算交叉判据 ⑦） |
+| **基准 manifest 就位** | `pnpm check:baseline-manifest` | Web 基准样本 + 环境指纹 0 error；**无基准即无法进入 B1** | ✅ 绿（3 样本就位 · 指纹自产物读取 · chromium 151 / DPR 2 / 390×844 / light） |
+
+★**判据范围说明（诚实边界）**：「双后端 IR 等价」在 B0 冻结的是**编码层**（同一份逻辑 IR ⇒ 两侧逐字节相同）；SFC 级「两后端各自从 CSS 产出 StyleIR」属 B1（CSE 内核）——届时本 golden 与编码器即为其共同出口。

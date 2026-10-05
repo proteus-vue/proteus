@@ -1,0 +1,93 @@
+{
+  "_note": "★★★G-61 B0 · **Web 基准 manifest**（基准守护载体）。基准 = Web 视觉三件套（B-a 计算样式 / B-b 几何 / B-c 截图）；expected 唯一来源是 Web（决策 #546）。纪律：D1 单一（端间互比只作诊断）· D2 冻结（golden 入仓，不靠当场重跑）· D3 可复现（环境指纹**从采集产物机器读取**，任一变化即基准变更须审批）· D4 合法（锚点校验：基准不得是错误页）。★门禁 check:baseline-manifest：schema / 寻址 / 指纹同源 / 锚点与产物非空 / 幂等。★写入守卫（D5）：基准只由 scripts/collect-style-baseline.mjs 产出——被测端脚本只读，不得写入。",
+  "baseline": "web",
+  "styleIrVersion": 1,
+  "collector": "scripts/collect-style-baseline.mjs",
+  "fingerprint": {
+    "browser": "chromium 151.0.7922.34",
+    "browserUserAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.7922.34 Safari/537.36",
+    "dpr": 2,
+    "viewport": "390x844",
+    "theme": "light",
+    "fontStack": "system-ui（采集机默认栈；文本度量样本须标 baseline-sensitive: text）",
+    "artifactCollectedAt": "2026-10-05T05:30:02.237Z"
+  },
+  "samples": [
+    {
+      "id": "superapp-mine-computed-style",
+      "kind": "computed-style",
+      "page": "superapp/pages/mine.vue",
+      "route": "/pages/mine",
+      "path": "docs/generated/style-baseline/superapp-mine.computed.json",
+      "baselineSensitive": null,
+      "expect": {
+        "anchors": [
+          "验收控制台",
+          "v0.1.0 · Proteus 超级应用",
+          "深色模式",
+          "客服悬浮球"
+        ]
+      },
+      "recordedAt": "2026-10-05",
+      "recordedBy": "G-61 B0（采集器 scripts/collect-style-baseline.mjs · 真 Playwright chromium）",
+      "fingerprint": {
+        "browser": "chromium 151.0.7922.34",
+        "browserUserAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.7922.34 Safari/537.36",
+        "dpr": 2,
+        "viewport": "390x844",
+        "theme": "light",
+        "fontStack": "system-ui（采集机默认栈；文本度量样本须标 baseline-sensitive: text）",
+        "artifactCollectedAt": "2026-10-05T05:30:02.237Z"
+      }
+    },
+    {
+      "id": "superapp-mine-geometry",
+      "kind": "geometry",
+      "page": "superapp/pages/mine.vue",
+      "route": "/pages/mine",
+      "path": "docs/generated/style-baseline/superapp-mine.geometry.json",
+      "baselineSensitive": null,
+      "expect": {
+        "anchors": [
+          "验收控制台"
+        ]
+      },
+      "recordedAt": "2026-10-05",
+      "recordedBy": "G-61 B0（同批采集——与 B-a 同一 env）",
+      "fingerprint": {
+        "browser": "chromium 151.0.7922.34",
+        "browserUserAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.7922.34 Safari/537.36",
+        "dpr": 2,
+        "viewport": "390x844",
+        "theme": "light",
+        "fontStack": "system-ui（采集机默认栈；文本度量样本须标 baseline-sensitive: text）",
+        "artifactCollectedAt": "2026-10-05T05:30:02.237Z"
+      }
+    },
+    {
+      "id": "superapp-mine-screenshot",
+      "kind": "screenshot",
+      "page": "superapp/pages/mine.vue",
+      "route": "/pages/mine",
+      "path": "docs/generated/style-baseline/superapp-mine.png",
+      "baselineSensitive": null,
+      "expect": {
+        "anchors": [
+          "验收控制台",
+          "深色模式"
+        ]
+      },
+      "recordedAt": "2026-10-05",
+      "recordedBy": "G-61 B0（视口幅截图——与 B-a/B-b 同一 env）",
+      "fingerprint": {
+        "browser": "chromium 151.0.7922.34",
+        "browserUserAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.7922.34 Safari/537.36",
+        "dpr": 2,
+        "viewport": "390x844",
+        "theme": "light",
+        "fontStack": "system-ui（采集机默认栈；文本度量样本须标 baseline-sensitive: text）",
+        "artifactCollectedAt": "2026-10-05T05:30:02.237Z"
+      }
+    }
+  ]
+}

@@ -6,7 +6,7 @@
 
 | 批次 | 内容 | 依赖 | 验收判据 |
 |---|---|---|---|
-| **B0 契约冻结** | ① `StyleIR v1` 规范（字段闭集 + 值类型 + 版本规则，见 `02-style-ir-contract.md`）② **Capability Registry 三表合一** ③ `SApp` SPI 签名冻结 ④ **基准 manifest**（Web 基准样本 + 环境指纹 + 快照寻址，承决策 #546） | 无 | `pnpm check:app-css-surface` **由红转绿**；新增 `check:style-ir-schema` 0 error；IR Golden（Node≡Rust）绿；新增 `check:baseline-manifest` 0 error |
+| **B0 契约冻结 ✅**（2026-10-05 达成） | ① `StyleIR v1` 规范（字段闭集 + 值类型 + 版本规则，见 `02-style-ir-contract.md`）② **Capability Registry 三表合一** ③ `SApp` SPI 签名冻结 ④ **基准 manifest**（Web 基准样本 + 环境指纹 + 快照寻址，承决策 #546） | 无 | ✅ 全达成：`pnpm check:app-css-surface` **绿**；`check:style-ir-schema` **0 error**（77 字段）；IR Golden（Node≡Rust **编码层**逐字节）**绿**；`check:baseline-manifest` **0 error**（B-a/B-b/B-c 三样本就位）|
 | **B1 CSE 内核**（把 Profile **P3** 做完） | 收集 `@import` / 按 key selector 分桶索引 / 右→左匹配 / **完整五级层叠**（origin&importance → `@layer` → specificity (a,b,c) → source order）/ 继承传播 / 计算值（em/rem/%/vw/vh/rpx）；Node 与 Rust 双后端产同一 IR | B0 | 100+ 真实组件样本：IR vs `getComputedStyle`（**Web 基准 B-a**）逐属性一致率 **100%**（Profile 内）；`proteus explain` 能 trace 到规则与层叠步 |
 | **B2 动态 class 预计算**（Profile **P4**） | **属性维度分解**（非 2ⁿ 枚举）+ 互斥分组 + 爆炸保护（表数 >16 / 取值数 >8 警告；不可枚举即 E-CSS-004 报错）+ 运行时位图查表 | B1 | 动态组合 IR 与浏览器该组合实测一致；查表 O(1) 有 profile 证据 |
 | **B3 三端 Applier** | Web（**A 档：IR 探针 + 基准采集器**）/ Skyline（wxss 子集 + 降级）/ App（复用 `apply_style_key` 通道）各一，走**同一 conformance** | B1 | 同一 IR → 三端 snapshot **相对 Web 基准（B-a+B-b）** ≤0.5dp；**L2 覆盖 2/38 → 38/38** |

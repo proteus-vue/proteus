@@ -1,0 +1,14 @@
+{
+  "total": 77,
+  "semantic": 50,
+  "engineOnly": 27,
+  "byDomain": {
+    "layout": 36,
+    "matrix-only": 4,
+    "paint": 17,
+    "derived": 10,
+    "edges": 9,
+    "special": 1
+  },
+  "note": "G-61 B0 棘轮基线（只增不减）"
+}
