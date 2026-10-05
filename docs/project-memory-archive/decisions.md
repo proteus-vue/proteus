@@ -1027,3 +1027,28 @@
 **⑤ 诚实边界**：a) `case-right` 竖线位置比基准偏左 9px——属**既知 `box-sizing` 类议题**（决策 #508 已登记，非本项引入）；b) Android 截图饱和色整体 gamut 偏移（采集链路色彩配置）；c) 虚线线型属独立项（编译期诊断跳过，未冒充实线）。
 **⑥ PLAYBOOK 校准**：首项 5 轮复评 → 本项 **机器 1.5s + 子代理 2 次**（终评+复评）；且复评的两处 major 恰是**机器判不出的单位/绘制语义**——与 PLAYBOOK 判据分工一致（probe 管页面级几何/底色；子代理管渲染语义）。
 **⑦ 影响**：contracts+1 级别 12 键 · compiler 折叠扩展 · 三端宿主绘制 · applier 直传 · curated 源 4 条 · 4 验收包；**下一项**：按 `css:next` 取（P0 29 项）。
+
+558. **★★★CSS 逐项全端对齐 · 边框族收口批（线型 dashed/dotted + 逐角圆角）——「旧图交子代理」事故固化为 `fresh` 门禁（判据机器化）**：
+**① 用户指令**：a) 「不错，继续把边框后续未收口的也收到边框里面，比如边框样式等等」（承 #557）；b) **mid-turn 批评**（本轮最重的一条）：「我真是服了啊，你截图都不看是不是旧版的就直接扔给子代理了吗？子代理是最后一关，使用成本是非常昂贵的，你这个玩法不是白白耽误那么长时间了吗？不能随便启用子代理，因为子代理每次使用都是至少 10 分钟起步，成本非常昂贵的啊！！！！！！！！！！！！」
+**② 事故复盘（为什么该挨批）**：上轮删 F 段 + 重建产物后**只重截了鸿蒙**，Android/iOS 旧图（含已删 F 段）被交子代理 ⇒ 一整轮（≥10 分钟）白烧。根因与「提交 ≠ 交付」同族：**没有任何机制会提醒"图是旧的"** ⇒ 修复方向不是"下次记得"，而是**把判据机器化**。
+**③ ★★★交付的装置——`fresh` 子命令（本轮最重要产出）**：`node scripts/css-conformance.mjs fresh` 逐张断言「截图 mtime ≥ max(页面 SFC / 全局样式 / 壳 / 该端宿主源 / 该端构建产物)」；stale 即红（点名哪张 + 时间对比 + 最新源路径）。`side-by-side` 前置该门禁（stale ⇒ **拒绝生成**，`PROTEUS_ALLOW_STALE=1` 可显式绕过）。**破坏性验证两轮**：① touch 图变旧 ⇒ 红；还原 ⇒ 绿；② stale 时 side-by-side rc=2 拒生成。判据修过两次（**都是"判据自己先错"**）：a) 去掉 `hosts/shared/bridge`（构建期 build-id 注入改 mtime ⇒ 永久误报）；b) 鸿蒙源排除 `resources/rawfile`（项目产物，HAP 产物 mtime 已覆盖）。**事故再捕获**：本门禁上线当天即第二次拦住事故——Android 重截图被 **MIUI 安全中心悬浮窗**（`com.miui.securitycenter/.FloatingWindow`）污染（一红色高跟鞋浮窗覆盖页面），靠**内容区逐像素比对**（与评审图差异=0 才接受）+ 有界重试捕获并重截干净。
+**④ 代码交付**：**契约读数链路补全**（`border<Side>Style` 进 semantic：`SEMANTIC_FIELD_SNAPSHOT_KEYS` + `snapshot.ts` 接口/闭集/校验器 + `probes/web.ts` 四边读数——注册表 59→**63** semantic · 快照键 66→**70**）；**折叠面**（`border-width/color/style` **1–4 值简写展开**；`border-style` 单值⇒四边 · `none`⇒清零；**逐角 radius 就地累积 + 合成**（`cornerAcc`：全等⇒统一 / 否则 max+掩码）；非 solid 放开）；**宿主三端**（Android 封角块+DashPathEffect / iOS CAShapeLayer lineDashPattern / 鸿蒙 ArkUI `ARKUI_BORDER_STYLE_DASHED|DOTTED`）；**点线节距对齐 Chrome 实测真值**：dashed **{3w,2w}** · dotted **{w,w}**（此前 1.5w——Android/iOS 同修，重测两端节距 ≡ Web：dashed 6/4px · dotted 3/3px）；**鸿蒙滚动接线**（`scrollRoot` + 范围钳制 + `scrollToBottom`——上轮用户抓出「内容长后看不到下面」）。
+**⑤ ★UA-defined 判据（规范依据，写进 PLAYBOOK）**：CSS Backgrounds 3 原文「There is no control over the spacing of the dots and dashes, nor over the length of the dashes.」⇒ dashed/dotted 的**节距/点形**属 UA 自由区；**语义对齐**（线型出现/颜色宽度/角部行为）即 pass，纹理差异**具名登记**不判 fail。★纪律：**自己宿主可控时（Android/iOS）不拿 UA-defined 当免修牌**（对齐 Chrome 真值）；引擎内建（MP Skyline / 鸿蒙 ArkUI）⇒ 具名。
+**⑥ 清单修正（顺手清债）**：a) **逻辑属性族 70 条具名 excluded**（`border-inline-*`/`margin-block-*`/`inset-inline-*` 等：书写模式已 excluded，横排 LTR 下 ≡ 物理属性；不留无理由 P1 误导推进排序）；b) curated 源补 4 个 style 字段（`check:css-capability-alignment` 抓出）+ 重生成对齐产物；c) I2 门禁补登记 5 处（上批 white-space 文本测量路径遗留——非本轮引入，顺手清）；d) `consistency-metrics` M1 65.1%（分母 50→63 + L3 反向映射键碰撞 5——**数字变难看但更诚实**，HEAD 上该产物本已漂移）。
+**⑦ 判据**：fresh 全绿（15 张）· probe 四端全绿（3 页）· 并排 12 张重建 · `test:coupled` 311 项绿 · 样式链 5 门禁 + 一致性链 4 门禁 + 台账 2 + 桩测 + 两端零设备编译 + vue-tsc + script-compile 全绿。
+**⑧ 诚实边界**：a) MP/鸿蒙线型纹理（节距比例/点形）按 UA-defined 具名；b) 子代理终评一轮（结论登记进验收包 visual 段）；c) M1 数字下降已归因（非漏接）。
+
+**⑨ ★★子代理终评（1 次，独立评审）+ 复评（1 次，同代理带上下文续跑）——抓到 2 处机器判不出的 major**：
+**终评抓出**：**android/iOS 的 H 案（逐角圆角）四角全圆**（IR 掩码正确：仅 TL/BR true）——两端宿主
+**边框描边路径未消费 `borderRadiusCorners` 掩码**。根因链（两种形态）：Android = 掩码只作用于**填充**
+（`drawPathCorners`），uniform 边框描边走四角统一的 `drawRoundRect`；iOS 更在上游——建层必经之路
+`styleOf` **白名单从没透传 `borderRadiusCorners`** ⇒ `applyRadiusCorners` 的 guard 直接 return
+⇒ **机制建了 3 个月从未生效**（"白名单必须跟新字段走"第三次实锤）。web/mp/harmony 通过（纹理差异按 UA-defined 具名）。
+**修复**：Android uniform 分支补掩码消费（与填充共用同一掩码语义）；iOS 补透传 + 缺省即复位（防复用层残留）。
+**机器验证（比目视更严）**：四角剖面法（逐行测边框最外缘 x 内收量）——Android TL/BR 内收 32devpx(≈10.7css)
+单调曲线、TR/BL 恒 0；iOS TL/BR 36/35devpx(≈12.0/11.7)、TR/BL 恒 0；**Web 基准同法同模式**（TL/BR 19devpx、TR/BL 0）。
+另：border/text 两页重拍后 content-diff **零差异**（修复不外溢）。
+**复评（同代理）**：五端全 pass（android/iOS major→fixed；并提示基准图 23:12 被重采故它对 web 也重测了一遍——
+逐项相同 ⇒ 基准未漂移）；验收包 `border-style.json` visual 段已登记（web/mp/android/ios/harmony 全 pass）。
+**★叙事纪律**：终评+复评共 2 次子代理调用（约 20 分钟）把缺陷收敛到零——**成本换来的是两个"静默了
+3 个月的机制缺口"**（若只靠 probe/全量测试，二者都永远是绿的）。
