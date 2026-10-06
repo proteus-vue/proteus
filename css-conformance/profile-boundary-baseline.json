@@ -24,6 +24,7 @@
   "../packages/components/p-switch/index.vue:display:inline-block": "存量待专项评估（VC2-b 首扫，2026-10-02）——修一条从基线删一条（棘轮只减不增）",
   "../packages/components/p-transition/index.vue:transition-property:opacity, transform": "存量待专项评估（VC2-b 首扫，2026-10-02）——修一条从基线删一条（棘轮只减不增）",
   "pages/grid-auto-flow.vue:display:grid": "验收页（grid-auto-flow 项）——**验收对象本身要求 grid 容器**：Web / App（自研 Rust 引擎 taffy GridAutoFlow 原生）可渲染，Skyline 端无 Grid 容器（官方属性表无 grid 族）⇒ 按 justify-self.vue 先例显式理解后钉住；Skyline 差异在验收页顶部具名（引擎锁死边界，不作缺陷）。棘轮只减不增。",
+  "pages/grid-auto.vue:display:grid": "验收页（grid-auto-columns/-rows 项）——**验收对象本身要求 grid 容器**：Web / App（自研 Rust 引擎 taffy grid-auto-columns/rows 原生）可渲染，Skyline 端无 Grid 容器（官方属性表无 grid 族）⇒ 按 grid-template-areas.vue 先例显式理解后钉住；Skyline 差异在验收页顶部具名（引擎锁死边界，不作缺陷）。棘轮只减不增。",
   "pages/grid-template-areas.vue:display:grid": "验收页（grid-template-areas 项）——**验收对象本身要求 grid 容器**：Web / App（自研 Rust 引擎 taffy GridTemplateAreas/NamedLine 原生）可渲染，Skyline 端无 Grid 容器（官方属性表无 grid 族）⇒ 按 grid-auto-flow.vue 先例显式理解后钉住；Skyline 差异在验收页顶部具名（引擎锁死边界，不作缺陷）。棘轮只减不增。",
   "pages/justify-self.vue:display:grid": "验收页（justify-self 项）——**验收对象本身要求 grid 上下文**（justify-self 仅对 grid 项生效，flex 下被忽略）：Web / App（自研 Rust 引擎：taffy grid + justify_self 原生）可渲染，Skyline 端无 Grid 容器（官方属性表无 grid/justify-self）⇒ 按 examples/index.vue:display:grid 先例显式理解后钉住；Skyline 差异在验收页顶部具名（引擎锁死边界，不作缺陷）。棘轮只减不增。",
   "pages/text.vue:white-space:pre-wrap": "存量待专项评估（VC2-b 首扫，2026-10-02）——修一条从基线删一条（棘轮只减不增）"

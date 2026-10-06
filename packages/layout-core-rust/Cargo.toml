@@ -16,7 +16,7 @@ license = "Apache-2.0"
 #   呈 3×2^d−2 指数爆炸（深度 12 达 12286 次），0.14 为有界常数 13。
 #   该退化无法用工程手段绕过（flex_basis 仍指数、min_size 无效），复跑见 spike 的 run.sh。
 [dependencies]
-taffy = { version = "0.14.0", default-features = false, features = ["std", "flexbox", "grid", "taffy_tree"] }
+taffy = { version = "0.14.0", default-features = false, features = ["std", "flexbox", "grid", "taffy_tree", "parse"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 

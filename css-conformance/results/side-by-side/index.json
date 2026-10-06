@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-06T11:01:52.547Z",
+  "generatedAt": "2026-10-06T11:40:43.075Z",
   "rows": [
     {
       "end": "mp",
@@ -23,6 +23,12 @@
       "end": "mp",
       "page": "grid-auto-flow.png",
       "out": "css-conformance/results/side-by-side/grid-auto-flow.mp-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "mp",
+      "page": "grid-auto.png",
+      "out": "css-conformance/results/side-by-side/grid-auto.mp-vs-web.png",
       "status": "ok"
     },
     {
@@ -99,6 +105,12 @@
     },
     {
       "end": "android",
+      "page": "grid-auto.png",
+      "out": "css-conformance/results/side-by-side/grid-auto.android-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "android",
       "page": "grid-template-areas.png",
       "out": "css-conformance/results/side-by-side/grid-template-areas.android-vs-web.png",
       "status": "ok"
@@ -171,6 +183,12 @@
     },
     {
       "end": "ios",
+      "page": "grid-auto.png",
+      "out": "css-conformance/results/side-by-side/grid-auto.ios-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "ios",
       "page": "grid-template-areas.png",
       "out": "css-conformance/results/side-by-side/grid-template-areas.ios-vs-web.png",
       "status": "ok"
@@ -239,6 +257,12 @@
       "end": "harmony",
       "page": "grid-auto-flow.png",
       "out": "css-conformance/results/side-by-side/grid-auto-flow.harmony-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "harmony",
+      "page": "grid-auto.png",
+      "out": "css-conformance/results/side-by-side/grid-auto.harmony-vs-web.png",
       "status": "ok"
     },
     {

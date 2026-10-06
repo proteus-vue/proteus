@@ -106,7 +106,9 @@
           "wordBreak": "normal",
           "backgroundSize": "auto",
           "backgroundPosition": "0% 0%",
-          "backgroundRepeat": "repeat"
+          "backgroundRepeat": "repeat",
+          "gridAutoColumns": "auto",
+          "gridAutoRows": "auto"
         }
       },
       {
@@ -208,7 +210,9 @@
           "wordBreak": "normal",
           "backgroundSize": "auto",
           "backgroundPosition": "0% 0%",
-          "backgroundRepeat": "repeat"
+          "backgroundRepeat": "repeat",
+          "gridAutoColumns": "auto",
+          "gridAutoRows": "auto"
         }
       },
       {
@@ -304,7 +308,9 @@
           "wordBreak": "normal",
           "backgroundSize": "auto",
           "backgroundPosition": "0% 0%",
-          "backgroundRepeat": "repeat"
+          "backgroundRepeat": "repeat",
+          "gridAutoColumns": "auto",
+          "gridAutoRows": "auto"
         }
       },
       {
@@ -406,7 +412,9 @@
           "wordBreak": "normal",
           "backgroundSize": "auto",
           "backgroundPosition": "0% 0%",
-          "backgroundRepeat": "repeat"
+          "backgroundRepeat": "repeat",
+          "gridAutoColumns": "auto",
+          "gridAutoRows": "auto"
         }
       },
       {
@@ -510,7 +518,9 @@
           "wordBreak": "normal",
           "backgroundSize": "auto",
           "backgroundPosition": "0% 0%",
-          "backgroundRepeat": "repeat"
+          "backgroundRepeat": "repeat",
+          "gridAutoColumns": "auto",
+          "gridAutoRows": "auto"
         }
       },
       {
@@ -616,7 +626,9 @@
           "wordBreak": "normal",
           "backgroundSize": "auto",
           "backgroundPosition": "0% 0%",
-          "backgroundRepeat": "repeat"
+          "backgroundRepeat": "repeat",
+          "gridAutoColumns": "auto",
+          "gridAutoRows": "auto"
         }
       }
     ],

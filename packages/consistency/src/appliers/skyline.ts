@@ -143,7 +143,7 @@ export function mapStyleIRToSkyline(fields: Record<string, unknown>, opts: Skyli
       //   justify-self（#570）同款：用户 CSS 里的 grid-template-areas 本就逐字进 wxss。
       //   ▲ 诚实边界：Skyline 官方属性表**无** grid 族（该端无 Grid 容器）；本项以 App（自研内核 taffy 原生
       //     GridTemplateAreas/NamedLine）为主承载端，Skyline 侧透传不保证引擎语义（与 #570/#571 同口径）。
-      if (field === 'gridTemplateAreas' || field === 'gridArea') {
+      if (field === 'gridTemplateAreas' || field === 'gridArea' || field === 'gridAutoColumns' || field === 'gridAutoRows') {
         put(field, kebab(field), value)
         continue
       }

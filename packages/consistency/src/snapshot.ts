@@ -187,6 +187,9 @@ export interface NormalizedStyle {
   textShadow?: string
   gridTemplateColumns?: string
   gridTemplateRows?: string
+  // ★★★grid-auto-columns/rows 项（2026-10-08）：隐式轨道尺寸（规范串）
+  gridAutoColumns?: string
+  gridAutoRows?: string
   gridColumn?: string
   gridRow?: string
   // ★★★grid-template-areas 项（2026-10-08）：命名区域模板（浏览器形态 "a b" "c c"）+ 命名区引用（item 名）
@@ -476,7 +479,7 @@ const STYLE_KEYS = new Set([
   'aspectRatio', 'flexBasis', 'transform', 'boxShadow',
   // ★★★text-shadow 项（2026-10-08）：文本阴影（与 boxShadow 同族字符串键）
   'textShadow',
-  'gridTemplateColumns', 'gridTemplateRows', 'gridColumn', 'gridRow',
+  'gridTemplateColumns', 'gridTemplateRows', 'gridAutoColumns', 'gridAutoRows', 'gridColumn', 'gridRow',
   // ★★★grid-template-areas 项（2026-10-08）：命名区域模板 + 命名区引用
   'gridTemplateAreas', 'gridArea',
 ])
@@ -538,7 +541,7 @@ export function validateStyleSnapshot(snap: unknown): ValidationResult {
         || k === 'flexWrap' || k === 'alignContent'
         || k === 'aspectRatio' || k === 'flexBasis' || k === 'transform' || k === 'boxShadow'
         || k === 'textShadow'   // ★★★text-shadow 项（2026-10-08）
-        || k === 'gridTemplateColumns' || k === 'gridTemplateRows' || k === 'gridColumn' || k === 'gridRow'
+        || k === 'gridTemplateColumns' || k === 'gridTemplateRows' || k === 'gridAutoColumns' || k === 'gridAutoRows' || k === 'gridColumn' || k === 'gridRow'
         || k === 'gridTemplateAreas' || k === 'gridArea'   // ★★★grid-template-areas 项（2026-10-08）
       ) {
         if (typeof v !== 'string') push('wrong-type', `${where}.styles.${k}`, `${k} 应为字符串`)

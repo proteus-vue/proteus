@@ -238,3 +238,51 @@ fn grid_template_areas_named_placement() {
     assert!((rr.x - 100.0).abs() < 0.5 && (rr.y - 100.0).abs() < 0.5, "rec (100,100)，实际 ({},{})", rr.x, rr.y);
     assert!((rr.width - 200.0).abs() < 0.5 && (rr.height - 100.0).abs() < 0.5, "rec 200×100，实际 {}×{}", rr.width, rr.height);
 }
+
+
+// ★★★grid 轨迹解析升级（2026-10-08）：minmax / 裸 0 → 0px / auto 隐式轨道。
+//   证明 taffy 官方解析路径可用：`minmax(0, 1fr)`（语料最高频）等。
+#[test]
+fn grid_minmax_and_auto_tracks() {
+    // 两列 minmax(0, 1fr)：容器 300 ⇒ 各 150
+    let mut tree = LayoutTree::new();
+    let mut root_style = LStyle { width: Some(300.0), height: Some(100.0), ..Default::default() };
+    root_style.display = Display::Grid;
+    root_style.grid_template_columns = Some("minmax(0, 1fr) minmax(0, 1fr)".to_string());
+    let root = tree.push(LNode::new(1, root_style));
+    let mut ids = vec![];
+    for i in 0..2u32 {
+        let leaf = LStyle { height: Some(100.0), ..Default::default() };
+        let idx = tree.push(LNode::new(2 + i, leaf));
+        tree.add_child(root, idx);
+        ids.push(idx);
+    }
+    tree.roots.push(root);
+    let mut engine = TaffyEngine::new();
+    let out = engine.layout(&mut tree, RootConstraint::definite(300.0, 100.0));
+    let w0 = out.rect_of(ids[0]).unwrap().width;
+    let x1 = out.rect_of(ids[1]).unwrap().x;
+    assert!((w0 - 150.0).abs() < 0.5, "minmax(0,1fr) 两列各 150，实际 {}", w0);
+    assert!((x1 - 150.0).abs() < 0.5, "第二列 x≈150，实际 {}", x1);
+
+    // grid-auto-columns：1 列模板 + column 流 ⇒ 隐式第 2 列按 auto 轨道（minmax(0,1fr)）尺寸
+    let mut tree2 = LayoutTree::new();
+    let mut s2 = LStyle { width: Some(300.0), height: Some(60.0), ..Default::default() };
+    s2.display = Display::Grid;
+    s2.grid_template_columns = Some("minmax(0, 1fr)".to_string());
+    s2.grid_auto_columns = Some("minmax(0, 1fr)".to_string());
+    s2.grid_auto_flow = Some("column".to_string());
+    let r2 = tree2.push(LNode::new(1, s2));
+    let mut ids2 = vec![];
+    for i in 0..2u32 {
+        let leaf = LStyle { height: Some(60.0), ..Default::default() };
+        let idx = tree2.push(LNode::new(2 + i, leaf));
+        tree2.add_child(r2, idx);
+        ids2.push(idx);
+    }
+    tree2.roots.push(r2);
+    let mut eng2 = TaffyEngine::new();
+    let out2 = eng2.layout(&mut tree2, RootConstraint::definite(300.0, 60.0));
+    let x2b = out2.rect_of(ids2[1]).unwrap().x;
+    assert!(x2b > 1.0, "grid-auto-columns 隐式第 2 列应右移（x>0），实际 {}", x2b);
+}

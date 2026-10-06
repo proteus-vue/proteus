@@ -177,6 +177,13 @@ impl TaffyEngine {
             if let Some(rows) = style.grid_template_rows.as_deref() {
                 out.grid_template_rows = parse_grid_tracks(rows);
             }
+            // ★★★grid-auto-columns/rows 项（2026-10-08）：**隐式轨道尺寸**（taffy GridTrackVec<TrackSizingFunction>）
+            if let Some(ac) = style.grid_auto_columns.as_deref() {
+                out.grid_auto_columns = parse_auto_tracks(ac);
+            }
+            if let Some(ar) = style.grid_auto_rows.as_deref() {
+                out.grid_auto_rows = parse_auto_tracks(ar);
+            }
             if let Some(gaf) = style.grid_auto_flow.as_deref() {
                 out.grid_auto_flow = parse_grid_auto_flow(gaf);
             }
@@ -1344,26 +1351,79 @@ fn parse_grid_auto_flow(s: &str) -> taffy::GridAutoFlow {
     }
 }
 
+/// ★★★grid 轨迹串解析升级（2026-10-08）——**用 taffy 官方 FromStr**（不再手写 fr/px）：
+///   · 组件级（含 `repeat(...)` / 命名线）：`GridTemplateComponent::from_str`；
+///   · 单条轨道尺寸（`minmax(..)` / `fr` / `px` / `%` / `auto` / `min-content`）：`TrackSizingFunction::from_str`。
+///   · **裸 `0` → `0px`**（taffy 只认带单位的 0——CSS `minmax(0, 1fr)` 是语料最高频写法）。
+///   · 无法解析的 token ⇒ 跳过（不猜）。
 fn parse_grid_tracks(s: &str) -> Vec<taffy::GridTemplateComponent<String>> {
+    use std::str::FromStr;
     let mut out: Vec<taffy::GridTemplateComponent<String>> = Vec::new();
-    for tok in s.split_whitespace() {
-        let t = tok.trim();
-        if let Some(fr_str) = t.strip_suffix("fr") {
-            if let Ok(v) = fr_str.trim().parse::<f32>() {
-                out.push(taffy::GridTemplateComponent::Single(fr(v)));
-                continue;
+    for comp in split_track_components(&fix_unitless_zero(s)) {
+        let t = comp.trim();
+        if t.is_empty() { continue; }
+        // 先试整组件（repeat(...) / 命名线 / 单轨道）
+        if let Ok(gc) = taffy::GridTemplateComponent::<String>::from_str(t) {
+            out.push(gc);
+            continue;
+        }
+        // 再试单条轨道尺寸（minmax / fr / px / % / auto / min-content…）
+        if let Ok(ts) = taffy::TrackSizingFunction::from_str(t) {
+            out.push(taffy::GridTemplateComponent::Single(ts));
+            continue;
+        }
+        // 未知 ⇒ 跳过（不猜）
+    }
+    out
+}
+
+/// ★★★隐式轨道尺寸（grid-auto-columns / grid-auto-rows）：`GridTrackVec<TrackSizingFunction>`（无 repeat/命名线）。
+///   每个 token 走 `TrackSizingFunction::from_str`（裸 0 → 0px）；不可解析 ⇒ 跳过。
+fn parse_auto_tracks(s: &str) -> Vec<taffy::TrackSizingFunction> {
+    use std::str::FromStr;
+    let mut out: Vec<taffy::TrackSizingFunction> = Vec::new();
+    for comp in split_track_components(&fix_unitless_zero(s)) {
+        if let Ok(ts) = taffy::TrackSizingFunction::from_str(comp.trim()) {
+            out.push(ts);
+        }
+    }
+    out
+}
+
+/// 按**括号/方括号深度 0** 处的空白切分轨迹组件（`minmax(0, 1fr)` / `repeat(2, 1fr)` 内的空格不算）。
+fn split_track_components(s: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let mut depth: i32 = 0;
+    let mut cur = String::new();
+    for ch in s.chars() {
+        match ch {
+            '(' | '[' => { depth += 1; cur.push(ch); }
+            ')' | ']' => { depth -= 1; cur.push(ch); }
+            c if c.is_whitespace() && depth == 0 => {
+                if !cur.is_empty() { out.push(std::mem::take(&mut cur)); }
             }
+            c => cur.push(c),
         }
-        if let Some(px_str) = t.strip_suffix("px") {
-            if let Ok(v) = px_str.trim().parse::<f32>() {
-                out.push(taffy::GridTemplateComponent::Single(length(v)));
-                continue;
-            }
+    }
+    if !cur.is_empty() { out.push(cur); }
+    out
+}
+
+/// ★taffy 只认**带单位的 0**（`0px`）——CSS `0` 是合法轨迹尺寸 ⇒ 把**独立数值 0**（前/后为
+///   起始/ `(` / `)` / `,` / 空白）改写为 `0px`。`10px`/`0.5fr`/`0px` 不受影响（0 非独立 token）。
+fn fix_unitless_zero(s: &str) -> String {
+    let chars: Vec<char> = s.chars().collect();
+    let sep = |c: char| c == '(' || c == ')' || c == ',' || c.is_whitespace();
+    let mut out = String::new();
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i] == '0' {
+            let prev_ok = i == 0 || sep(chars[i - 1]);
+            let next_ok = i + 1 >= chars.len() || sep(chars[i + 1]);
+            if prev_ok && next_ok { out.push_str("0px"); i += 1; continue; }
         }
-        if let Ok(v) = t.parse::<f32>() {
-            out.push(taffy::GridTemplateComponent::Single(length(v)));
-        }
-        // 其余（auto/minmax/…）⇒ 跳过（不猜）
+        out.push(chars[i]);
+        i += 1;
     }
     out
 }

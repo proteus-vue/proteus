@@ -287,7 +287,7 @@ function styleOf(el: Element, win: Window): NormalizedStyle {
     const v = cs.getPropertyValue('grid-area').trim()
     if (v && v !== 'auto' && /^[A-Za-z_]/.test(v)) (styles as Record<string, unknown>).gridArea = v
   }
-  for (const [prop, key] of [['grid-template-columns', 'gridTemplateColumns'], ['grid-template-rows', 'gridTemplateRows']] as const) {
+  for (const [prop, key] of [['grid-template-columns', 'gridTemplateColumns'], ['grid-template-rows', 'gridTemplateRows'], ['grid-auto-columns', 'gridAutoColumns'], ['grid-auto-rows', 'gridAutoRows']] as const) {
     const v = cs.getPropertyValue(prop).trim()
     if (v && v !== 'none') {
       // resolved 已是 px 列表（repeat 已展开）⇒ 规范：单空格分隔 + round3
