@@ -1432,3 +1432,14 @@
 **⑤ 判据**：四端重新采集 + 独立子代理复核 **3/3 PASS**（grid-auto 案例 C：`1fr`/`2fr` 单行 + 垂直居中；word-break/text 页无回退）· probe 任务页四端 PASS（唯一红 = 既有 background-position）· `check:message` 等门禁全绿。
 **⑥ ★附带改进**：`word-break: normal` 的长串在鸿蒙由「折行」变为「**单行溢出**」（= 与 Web 一致）——原 word-break 验收把鸿蒙折行记为「具名边界」，本修复反而**消除了该边界**（更贴近 Web 基准）。
 **⑦ 影响**：`hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_render.cpp`（绘制断词）+ `.../proteus_host_helpers.h`（测量断词）· PLAYBOOK；**性质**：宿主文本引擎对齐修复（非 grid 特性本身）。
+583. **★★CSS 逐项 · overscroll-behavior-x/-y —— 按架构归类为「滚动行为（组件通道）」+ 收口**（用户裁定，同 #572/#580 族）：
+**① 用户指令**：「继续」（css:next 取 `overscroll-behavior-y`，P0 · 1× · CSS Overscroll Behavior）。
+**② 侦察（先取证）**：`overscroll-behavior` 语义 = **滚动到边界时是否把滚动链传播给父/页面**（contain=不传播 / none=不滚且不传播 / auto=默认传播）：
+  · 语料 1×：`p-scrollable` 组件（下拉刷新用 `overscroll-behavior-y: contain` 阻止滚动链到页面）；
+  · **App 端无作用对象**：App 只有**单一页面级滚动**（整树滚动，决策 #570），且 `overflow:auto/scroll` 在 App 域是**静态裁剪、非滚动交互**（决策 #560）⇒ **无嵌套滚动容器 ⇒ 无滚动链**；过滚动动量由内核/平台控制（该属性在 App 无适用面）；
+  · **Skyline 官方属性表未收录** `overscroll-behavior`（引擎锁死）；Web 原生支持（基准）。
+  · ⇒ 单独折进 App 内核 = **no-op**（无滚动链可阻断）= 假绿 ⇒ 不折。
+**③ 归类决策（用户裁定「按架构归类 + 收口」）**：`overscroll-behavior-y`（+ 同族 `-x`）由 `not-started` 改为 **`separate: true, channel: 'component'`**（同 `object-fit`——语义载体是**组件**）——`css:verify` 对 channel 项判 parity/endsMapped = **n/a**、三段通过。**注**：简写 `overscroll-behavior` 此前已在 `EXCLUDED_REASONS`（「过滚动行为（App 端滚动动量由内核控制）」）；本项只归类两个 P0 长手，不改简写。
+**④ 判据**：`css:verify overscroll-behavior-y`/`-x` 三段通过（implemented + parity/ends n/a）· 视觉结论**登记**（引用 p-scrollable 组件消费先例）· 清单再生成一致（`--check` 绿）· `check:css-capability-alignment`/`stats`/`content` 全绿。
+**⑤ 诚实边界**：a) **App 无嵌套滚动**（单一页面滚动，滚动行为属性无适用面；若未来做「独立可滚动子容器 + 滚动链」则需重新评估）；b) **Skyline 官方表未收录**（引擎锁死）；c) 本项**不引入编译器字段**、不新写渲染代码。
+**⑥ 影响**：`scripts/gen-css-feature-inventory.mjs`（override + 归类注释）· `docs/generated/css-feature-inventory.{json,md}`（重生成）· `docs/generated/css-acceptance/overscroll-behavior-{x,y}.json`（visual 登记）；**下一项**：按 css:next 取。

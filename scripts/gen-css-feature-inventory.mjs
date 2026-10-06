@@ -180,6 +180,14 @@ const SHORTHAND_EXPANSION = {
   //     ResizeObserver 观察容器尺寸 + 容器级断点）——已被 p-formfactor/p-modal/p-sidebar/p-zone/p-split/p-toolbar 消费；
   //   · 单独把 `container-type` 折进 App 内核 = **no-op**（taffy 无 contain 模型）= 假绿 ⇒ 不折。
   'container-type': { to: [], separate: true, channel: 'independent', evidence: '@proteus-vue/fluid 的 createContainerQuery/createSizeAwareObserver（容器尺寸观察 + 容器级断点）+ capabilities.ts 的 containerQuery 能力检测；消费先例 = p-formfactor（@container 规则的组件）等 6 个组件', note: '**容器查询通道（使能器）**：`container-type` 是 `@container` 的**使能器**——其真实能力（按容器宽度的条件样式）由 `@proteus-vue/fluid` 的容器查询通道交付（已落地，组件已接入）；**CSS `@container` / `@media` 条件块在 App 端跳过**（无 CSS 引擎，具名边界）；单独折叠 `container-type` = no-op（不折）。' },
+  // ★★★overscroll-behavior-x/-y 项（2026-10-08 · css:next P0·1× · CSS Overscroll Behavior）：**滚动行为（组件通道）**。
+  //   语义 = 滚动到边界时**是否把滚动链传播给父/页面**（contain=不传播 / none=不滚且不传播 / auto=默认传播）。
+  //   · 语料 1×：p-scrollable 下拉刷新（Web 端用 `overscroll-behavior-y:contain` 阻止链到页面）；
+  //   · **App 端无作用对象**：App 只有**单一页面级滚动**（整树滚动，决策 #570），`overflow:auto/scroll` 在 App 域是**静态裁剪非滚动交互**（决策 #560）⇒ **无嵌套滚动容器 ⇒ 无滚动链**；过滚动动量由内核/平台控制；
+  //   · **Skyline 官方属性表未收录** `overscroll-behavior`（引擎锁死）——Web 原生支持（基准）。
+  //   ⇒ 语义载体 = **p-scrollable 组件**（组件通道）；单独折进 App 内核 = no-op（无滚动链可阻断）= 假绿 ⇒ 不折。
+  'overscroll-behavior-y': { to: [], separate: true, channel: 'component', evidence: 'p-scrollable 组件（下拉刷新 scrollStyle.overscrollBehaviorY + 样式 .p-scrollable-bounce）；Web 原生支持', note: "**滚动行为（组件通道）**：语义 = 边界处**阻止滚动链传播**（contain/none/auto）。语义载体 = `p-scrollable` 组件；**App 端无作用对象**（单一页面滚动 + overflow 仅静态裁剪 ⇒ 无嵌套滚动链，过滚动由内核控制）；**Skyline 官方表未收录**（引擎锁死）。" },
+  'overscroll-behavior-x': { to: [], separate: true, channel: 'component', evidence: '同 -y（同族）；Web 原生支持；App 无嵌套横向滚动链；Skyline 未收录', note: "**滚动行为（组件通道）**：同 `overscroll-behavior-y`（横向轴）。App 无嵌套横向滚动链（无作用对象）；Skyline 未收录（引擎锁死）。" },
 }
 /* ── ④-c 独立通道（动画/过渡/绘制声明——非 CSS 字段但真已实现）──
  *   ★这些能力**不走 IR 字段**（它们是"通道"：transition/animation 走 packages/animation 的

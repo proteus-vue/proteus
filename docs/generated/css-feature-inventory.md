@@ -1,16 +1,15 @@
 # CSS Web 全量能力清单（自动生成——勿手改；生成器 scripts/gen-css-feature-inventory.mjs）
 
 > 总 949 项（property 651 · selector 144 · at-rule 19 · function 105 · unit 30）
-> 实现：**not-started** 538 · **excluded** 280 · **implemented** 128 · **partial** 3
-> 优先级：P2 115 · excluded 280 · P0 13 · done 128 · P1 413
-> ★**可推项（非已实现/非排除）**：541（其中 **P0 13**）
+> 实现：**not-started** 536 · **excluded** 280 · **implemented** 130 · **partial** 3
+> 优先级：P2 114 · excluded 280 · P0 12 · done 130 · P1 413
+> ★**可推项（非已实现/非排除）**：539（其中 **P0 12**）
 
 ## P0 —— 语料在用但未实现（真实需求，最优先）
 
 | 属性 | MDN 状态 | 分组 | 语料用量 | 实现 | 说明 |
 |---|---|---|---|---|---|
 | `-webkit-line-clamp` | standard | WebKit Extensions, CSS Overflow | 4 | not-started | — |
-| `overscroll-behavior-y` | standard | CSS Overscroll Behavior | 1 | not-started | — |
 | `place-items` | standard | CSS Box Alignment | 1 | not-started | — |
 | `transition-property` | standard | CSS Transitions | 1 | not-started | — |
 | `transition-timing-function` | standard | CSS Transitions | 1 | not-started | — |
