@@ -1452,6 +1452,20 @@ export function normalizeOverflowFields(style: Record<string, unknown>): void {
 }
 
 /**
+ * ★★★flex-direction 初值归一（2026-10-08 · 用户抓出 Web 分歧）：
+ *   CSS 里 `flex-direction` 的**初值是 `row`**——但只对 **`display:flex` 的容器**有意义。
+ *   而 App 内核只有 flex（无 block 流）：未声明 display 的节点被内核当 **column**（block-like 近似，决策 #518/#542）。
+ *   ⇒ 凡**声明了 `display:flex` 且未显式写 `flex-direction`** ⇒ 补 `row`（= Web 初值）：
+ *     让开发者按 **Web 标准**写（`display:flex; justify-content:center` 期望**水平**居中）在 App 上直接成立，
+ *     无需再补 `flex-direction:row` 的**胶水对齐代码**（用户原则：开发者不感知多端差异、严格以 Web 为基准）。
+ *   ★只补 `display==='flex'`：未声明 display 的 block 近似保持 column（否则块级纵向堆叠语义被破坏）；grid 不用主轴。
+ *   ★级联后归一（class+inline 合并完毕才调用）——per-rule 补会把"后声明的 flex-direction"覆盖掉。
+ */
+export function normalizeFlexDirection(style: Record<string, unknown>): void {
+  if (style.display === 'flex' && style.flexDirection === undefined) style.flexDirection = 'row'
+}
+
+/**
  * ★★★C1（2026-10-04 · App 三端对齐缺口 C1）：**SFC `<style>` 选择器规则 → 可匹配的规则表**。
  *
  * 【为什么需要】App 路径**没有 CSS 引擎**——`buildLayoutTemplate` 只吃节点上的 **inline `style`**；
@@ -3473,6 +3487,8 @@ export function buildLayoutTemplate(
       if (style.visibility !== undefined) childInherited.visibility = style.visibility
       // ★★★overflow-x 项（2026-10-06）：**Web 归一 + 形态收敛**（级联与 inline 均已合并完毕）
       normalizeOverflowFields(style)
+      // ★★★flex-direction 项（2026-10-08）：display:flex 容器补 flex-direction 初值 row（级联后归一）
+      normalizeFlexDirection(style)
       const node: LayoutNode = { id, parentId, tag, style }
       if (nodeListId !== undefined) node.listId = nodeListId
       if (isComponentTag) node.component = tag

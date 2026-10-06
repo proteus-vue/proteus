@@ -108,6 +108,13 @@ node scripts/css-acceptance-record.mjs <feature-id> <verdicts.json>
   而 App/Skyline 的 `<view>` 默认 **flex**（两键生效 ⇒ 居中）⇒ 不声明会让五端「容器内对齐」不一致。
   ★同源纪律（与"缺省值必须查 Web 标准"一致）：**凡依赖非缺省 `display` 的布局，先确认各端默认 display 是否一致**——
   `<view>`/`div` 的 block↔flex 默认分歧是本仓跨端差异的一个常见源。
+- **★★★`flex-direction` 的初值 = `row`（2026-10-08 · 框架级归一，决策 #579）**：CSS 里 flex 容器的 `flex-direction` **初值是 `row`**；
+  而 App 内核只有 flex、无 block 流 ⇒ 未声明 `display` 的节点被当 **`column`**（block-like 近似）。
+  ⇒ 开发者按 **Web 标准**写 `display:flex; justify-content:center`（期望**水平**居中），若引擎不补 row 就会**竖直**居中——
+  必须在 App 补 `flex-direction:row`（=**胶水对齐代码**，违背"开发者不感知多端差异"原则）。
+  ★**已修**：编译器**级联后归一**——`display===flex` 且未显式写 `flex-direction` ⇒ 补 `row`（两路径：`vapor/template.ts`
+  的 `normalizeFlexDirection` + CSE `compute.ts`）；未声明 display 的保持 column（不破坏块级堆叠）；grid 不补。
+  ★同源纪律：**规则里声明了 flex 布局能力（display:flex）却没写方向时，必须按 CSS 初值补 row**——这是"缺省值必须查 Web 标准"在 flex 轴上的实例。
 - **★★App/MP 文本引擎「长词默认断开」——Web `word-break: normal` 的"任其溢出"不可表达**（2026-10-06 word-break 项实锤）：
   Android `StaticLayout` / iOS CoreText / 鸿蒙 Typography / Skyline 的**自然行为**都是"长不可断词按盒宽折断"
   （= 相当于 `break-all`）；而 Web `normal` 是"词边界断、超长词整体溢出"。
