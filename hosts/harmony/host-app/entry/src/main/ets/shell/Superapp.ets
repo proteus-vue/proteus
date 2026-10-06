@@ -85,11 +85,6 @@ struct Superapp {
   private static vpH: number = 844;
   private static vpW: number = 390;
 
-  /** Tab 图标（⌂/✉/☺——与 Web/Android/iOS 同形） */
-  private tabIconOf(name: string): string {
-    return name === 'index' ? '⌂' : name === 'messages' ? '✉' : name === 'mine' ? '☺' : '•';
-  }
-
   /** Tab 图标（鸿蒙系统符号资源；三端语义同：首页/消息/我的） */
   private tabSymbol(name: string): Resource {
     if (name === 'index') return $r('sys.symbol.house')
