@@ -107,7 +107,9 @@ static struct {
   jmethodID probe_gesture;
   jmethodID tap_at;
   /* ★B1：新屏挂载前重置滚动偏移（void 无参） */
-  jmethodID reset_scroll;
+  /* ★B1：每屏滚动进度记忆（getScroll 无参返 double；setScroll 一参 void） */
+  jmethodID get_scroll;
+  jmethodID set_scroll;
 } g_host_methods = { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL };
 
 /* ★前向声明：eval_impl 之后要泵 job（定义在下方；C 里调用点必须先可见） */
@@ -318,12 +320,37 @@ static JSValue js_host_gc(JSContext *ctx, JSValueConst this_val, int argc, JSVal
   return host_call_noarg_impl(ctx, g_host_methods.gc, 0);
 }
 
-/** `proteusHost.resetScroll()` —— 新屏挂载前重置滚动偏移（void 无参；B1 跨屏状态泄漏防护） */
-static JSValue js_host_reset_scroll(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+/** `proteusHost.getScroll()` —— 读当前滚动偏移（返 double）；运行期用于"返回时恢复"。 */
+static JSValue js_host_get_scroll(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+  (void)this_val; (void)argc; (void)argv;
+  jmethodID mid = g_host_methods.get_scroll;
+  if (mid == NULL || g_host_obj == NULL || g_vm == NULL) return JS_NewFloat64(ctx, 0);
+  JNIEnv *env = NULL; int attached = 0;
+  if ((*g_vm)->GetEnv(g_vm, (void **)&env, JNI_VERSION_1_6) != JNI_OK) {
+    if ((*g_vm)->AttachCurrentThread(g_vm, (void **)&env, NULL) == JNI_OK) attached = 1;
+    else return JS_NewFloat64(ctx, 0);
+  }
+  double v = (*env)->CallDoubleMethod(env, g_host_obj, mid);
+  if ((*env)->ExceptionCheck(env)) { (*env)->ExceptionClear(env); v = 0; }
+  if (attached) (*g_vm)->DetachCurrentThread(g_vm);
+  return JS_NewFloat64(ctx, v);
+}
+
+/** `proteusHost.setScroll(offset)` —— 设滚动偏移（前进=0 / 返回=该页上次的值）。 */
+static JSValue js_host_set_scroll(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
   (void)this_val;
-  (void)argc;
-  (void)argv;
-  return host_call_noarg_impl(ctx, g_host_methods.reset_scroll, 0);
+  jmethodID mid = g_host_methods.set_scroll;
+  if (mid == NULL || g_host_obj == NULL || g_vm == NULL || argc < 1) return JS_UNDEFINED;
+  double off = 0; JS_ToFloat64(ctx, &off, argv[0]);
+  JNIEnv *env = NULL; int attached = 0;
+  if ((*g_vm)->GetEnv(g_vm, (void **)&env, JNI_VERSION_1_6) != JNI_OK) {
+    if ((*g_vm)->AttachCurrentThread(g_vm, (void **)&env, NULL) == JNI_OK) attached = 1;
+    else return JS_UNDEFINED;
+  }
+  (*env)->CallVoidMethod(env, g_host_obj, mid, off);
+  if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+  if (attached) (*g_vm)->DetachCurrentThread(g_vm);
+  return JS_UNDEFINED;
 }
 
 /** `proteusHost.mount(treeJson)` —— 首帧建树（**有返回**：Java 侧回执 JSON） */
@@ -547,8 +574,10 @@ static jstring eval_impl(JNIEnv *env, jstring source, jboolean with_host) {
     }
     if (g_host_methods.tap_at != NULL) {
       JS_SetPropertyStr(g_ctx, host, "tapAt", JS_NewCFunction(g_ctx, js_host_tap_at, "tapAt", 1));
-      if (g_host_methods.reset_scroll != NULL)
-        JS_SetPropertyStr(g_ctx, host, "resetScroll", JS_NewCFunction(g_ctx, js_host_reset_scroll, "resetScroll", 0));
+      if (g_host_methods.get_scroll != NULL)
+        JS_SetPropertyStr(g_ctx, host, "getScroll", JS_NewCFunction(g_ctx, js_host_get_scroll, "getScroll", 0));
+      if (g_host_methods.set_scroll != NULL)
+        JS_SetPropertyStr(g_ctx, host, "setScroll", JS_NewCFunction(g_ctx, js_host_set_scroll, "setScroll", 1));
       LOGI("宿主已实现 tapAt ⇒ JS 侧可在进程内注入真触摸（交互闭环判据）");
     }
     // ★★★反向通道注册端（交互闭环）：无条件注入（它只写一个全局名，不需要宿主实现什么）
@@ -709,8 +738,10 @@ Java_dev_proteus_layoutcore_QuickJsEngine_nativeSetHostCallback(JNIEnv *env, jcl
     if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
     g_host_methods.tap_at = (*env)->GetMethodID(env, c, "tapAt", "(Ljava/lang/String;)Ljava/lang/String;");
     if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
-    /* ★B1：resetScroll（void 无参）——运行期宿主桥暴露时才有 */
-    g_host_methods.reset_scroll = (*env)->GetMethodID(env, c, "resetScroll", "()V");
+    /* ★B1：每屏滚动进度记忆（getScroll/setScroll）——运行期宿主桥暴露时才有 */
+    g_host_methods.get_scroll = (*env)->GetMethodID(env, c, "getScroll", "()D");
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+    g_host_methods.set_scroll = (*env)->GetMethodID(env, c, "setScroll", "(D)V");
     if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
     if (g_host_methods.post == NULL) {
       LOGE("宿主回调缺少 post(String) 方法（其余入口仍按各自实现条件注入）");

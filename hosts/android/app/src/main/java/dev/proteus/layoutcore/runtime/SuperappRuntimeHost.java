@@ -45,14 +45,20 @@ public final class SuperappRuntimeHost {
     }
 
     /**
-     * ★★★新屏挂载前**重置滚动偏移**（用户抓出「网格页打开顶部超出状态栏，下滑就正常」）：
-     *   `scrollY/scrollX` 是**视图状态**（非树状态）⇒ 上一屏滚动后偏移残留 ⇒ 新屏内容整体上移。
-     *   统一运行期在 mountScreen 前调本方法（`proteusHost.resetScroll()`）。
+     * ★★★**每屏滚动进度记忆**（用户：「返回去的页面滚动进度应保留，前进的才重置」——系统 App 语义）。
+     *   `scrollY/scrollX` 是**视图状态**（非树状态）；统一运行期用导航历史判断方向：
+     *   返回（pop）⇒ `getScroll` 读旧值 → `setScroll` 恢复；前进（push）⇒ `setScroll(0)`。
      */
     @SuppressWarnings("unused")
-    public void resetScroll() {
+    public double getScroll() {
+        return draw.view() != null ? draw.view().getContentScrollY() : 0;
+    }
+
+    /** 设置滚动偏移（逻辑像素；前进=0 / 返回=该页上次的值）。 */
+    @SuppressWarnings("unused")
+    public void setScroll(double offset) {
         if (draw.view() != null) {
-            draw.view().setContentScrollY(0);
+            draw.view().setContentScrollY((int) Math.max(0, offset));
             draw.view().setContentScrollX(0);
         }
     }

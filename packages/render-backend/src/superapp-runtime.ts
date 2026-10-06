@@ -21,14 +21,16 @@ export interface SuperappHostPorts {
   /** 注册手势反向回调名（宿主在"语义手势 + 命中节点 + 冒泡链"时回调该全局函数） */
   onGesture?(cbName: string): void
   /**
-   * ★★★**新屏挂载前重置滚动偏移**（用户抓出「网格流/网格区域打开默认顶部超出状态栏，下滑就正常」）。
+   * ★★★**每屏滚动进度记忆**（用户：「返回去的页面滚动进度应该保留，前进的页面才重置」——与手机系统 App 一致）。
    *
-   * 【为什么必须】滚动偏移（Android scrollY/scrollX / iOS contentOffset）是**视图属性**、不是树属性
-   *   ⇒ 上一屏滚动后挂载新屏时偏移**仍在** ⇒ 新屏内容整体上移（顶部被顶出/压过状态栏）；
-   *   一旦用户下滑，偏移被重新钳制 ⇒ "又正常了"（现象迷惑，根因就是跨屏状态泄漏）。
-   *   iOS SelfDrawView.resetContentOffset() 注释早写明"建新树时必须调用"——统一运行期补上这一步。
+   * 【为什么需要这对原语（而非单一 resetScroll）】滚动偏移是**视图属性**、不是树属性 —— 跨屏会泄漏。
+   *   但**正确语义不是"每次挂载都归零"**：浏览器/系统 App 的返回（pop）**保留**上一页滚动位置，
+   *   只有**前进**（push 到新页）才从顶部开始。⇒ 运行期需要"读当前偏移 / 写目标偏移"两个原语，
+   *   由运行期用**导航历史栈**判断 前进（重置）vs 返回（恢复）。
    */
-  resetScroll?(): void
+  getScroll?(): number
+  /** 设置滚动偏移（逻辑像素；前进=0 / 返回=该页上次的值）。 */
+  setScroll?(offset: number): void
 }
 
 export interface SuperappRuntimeOptions {
@@ -103,13 +105,38 @@ export function createSuperappRuntime(opts: SuperappRuntimeOptions): SuperappRun
     return rt.instance(cur).dispatch(type, chain)
   }
 
+  // ★★★导航历史 + 每屏滚动进度（用于判断"前进（重置）/ 返回（恢复）"——见 getScroll/setScroll 注释）。
+  const scrollByScreen = new Map<string, number>()
+  const history: string[] = []
+  let curIdx = -1
+
   return {
     mountScreen(name: string): boolean {
       if (!rt.has(name)) { note(`[superapp-runtime] 无该屏运行期产物：${name}`); return false }
+      if (name === cur) return true   // 同屏重渲（如数据更新）——不动滚动
+
+      // 离开当前屏前：记住它的滚动进度（返回时恢复）
+      if (cur && typeof opts.host.getScroll === 'function') {
+        scrollByScreen.set(cur, opts.host.getScroll())
+      }
+      // 判断方向：目标在历史里且在当前之前 ⇒ **返回（pop）**；否则 ⇒ **前进（push）**。
+      const existing = history.indexOf(name)
+      let restore = 0
+      if (existing >= 0 && existing < curIdx) {
+        history.length = existing + 1      // 截断"前进目标"的残留
+        curIdx = existing
+        restore = scrollByScreen.get(name) ?? 0   // ★返回：恢复到该页上次的滚动进度
+      } else {
+        history.length = curIdx + 1
+        history.push(name)
+        curIdx = history.length - 1
+        scrollByScreen.set(name, 0)        // 新页从顶部
+        restore = 0                        // ★前进：重置
+      }
       const inst = rt.instance(name)
-      // ★新屏挂载前重置滚动偏移（跨屏状态泄漏防护——见 SuperappHostPorts.resetScroll 注释）
-      if (typeof opts.host.resetScroll === 'function') opts.host.resetScroll()
       opts.host.mount(JSON.stringify({ viewport: inst.content().viewport, nodes: inst.content().nodes }))
+      // 挂载后再设滚动（树已重建；宿主按此值定位）
+      if (typeof opts.host.setScroll === 'function') opts.host.setScroll(restore)
       cur = name
       return true
     },
