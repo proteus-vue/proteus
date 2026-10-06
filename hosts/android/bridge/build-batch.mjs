@@ -31,6 +31,21 @@ if (!fs.existsSync(path.join(RB_DIST, 'index.js'))) {
 
 fs.mkdirSync(path.dirname(OUT), { recursive: true })
 
+// ★★★（2026-10-07 分层重构）：**生成必须先于类型检查**——`app-screen-content.generated.ts`
+//   是构建期产物（可能不在库），而类型检查会 import 它（entry-app-stack / entry-superapp / entry-app-project）
+//   ⇒ 先跑生成，再 tsc；否则干净克隆后类型检查找不到生成物而假红。
+// ★★★阶段 1b（B5 · 2026-10-04）：**先把 SFC 产物 → 屏内容**（app-stack 入口 import 它）。
+//   生成脚本用编译器 buildLayoutTemplate + 转换器（构建期做，端上跑不了 @vue/compiler-sfc）。
+{
+  const { execFileSync } = await import('node:child_process')
+  try {
+    execFileSync('npx', ['tsx', path.join(ROOT, 'hosts/shared/bridge/gen-app-screen-content.mjs')], { cwd: ROOT, stdio: 'inherit' })
+  } catch (e) {
+    console.error(`✗ 生成 app-screen-content 失败（B5：SFC 产物 → 屏内容）：${String(e)}`)
+    process.exit(3)
+  }
+}
+
 // ★★类型检查（**esbuild 不做类型检查**——本仓实测踩到，2026-09-29）
 //
 // 【为什么必须放在构建路径上（一次真实的漏网）】esbuild 只**擦除**类型，不校验：
@@ -77,17 +92,6 @@ if (result.warnings.length) {
   for (const w of result.warnings) console.warn(`  ⚠ ${w.text}`)
 }
 
-// ★★★阶段 1b（B5 · 2026-10-04）：**先把 SFC 产物 → 屏内容**（app-stack 入口 import 它）。
-//   生成脚本用编译器 buildLayoutTemplate + 转换器（构建期做，端上跑不了 @vue/compiler-sfc）。
-{
-  const { execFileSync } = await import('node:child_process')
-  try {
-    execFileSync('npx', ['tsx', path.join(ROOT, 'hosts/shared/bridge/gen-app-screen-content.mjs')], { cwd: ROOT, stdio: 'inherit' })
-  } catch (e) {
-    console.error(`✗ 生成 app-screen-content 失败（B5：SFC 产物 → 屏内容）：${String(e)}`)
-    process.exit(3)
-  }
-}
 
 // ══════════════════════════════════════════════════════════════════
 // ★★M5：第二个 entry —— 路由虚拟栈（app-stack）

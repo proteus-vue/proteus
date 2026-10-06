@@ -1,0 +1,1034 @@
+package dev.proteus.layoutcore;
+import android.graphics.Paint;
+import android.os.SystemClock;
+import android.view.Choreographer;
+import android.view.ViewGroup;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * ★★★Morpheus 炫技场 · **第二个节目（灯光秀）的 Android 宿主**（2026-10-01）。
+ *
+ * 【它是什么】把「节目单（`hosts/shared/bridge/showcase-lights.ts`，800 灯颜色编舞）」
+ *   在 Android 上驱动起来的宿主：JS 侧只交指令（每幕一批 `animStart`），
+ *   本类**拥有帧循环**（Choreographer = Android 的 CADisplayLink）并逐帧推进内核动画。
+ *
+ * 【与 iOS 的对应（同一套分工，不自行发明）】
+ *   · iOS：`showcase-scene.swift`（CADisplayLink + ReplayKit + 报告）；
+ *   · 本类：Choreographer 帧循环 + `adb screencap` 截图 + `lights.json` 报告。
+ *   幕边界判据两端一致：**内核报 active=0**（弹簧时长由物理决定，按名义时间切幕会早切/多等）。
+ *
+ * 【★为什么帧驱动唯一来源是宿主（本仓血泪教训）】iOS 侧曾因 JS 也启动一条帧驱动 ⇒
+ *   两条驱动各推进一个 dt ⇒ 动画以 2× 实速播放（真机录屏取证）。⇒ 本类**是唯一驱动**，
+ *   JS 侧（entry-lights.ts）不注册任何帧回调。勿再加第二条（判据查 anim_end_ms）。
+ *
+ * 【★诚实边界】本类不做颜色求值、不做几何——颜色/曲线全部在内核（`anim.rs`），
+ *   几何全部由内核算（本类只把 rects 变成绘制指令）。它做的是"驱动 + 计量 + 取证"。
+ *
+ * 【JNI 注入】方法名/签名与 `hosts/android/js-engine/quickjs_jni.c` 的条件注入表一一对应：
+ *   `mount(String)->String`（必需）· `animStart/animTick/animStop(String)->String` ·
+ *   `animActive()->String` · `rects()->String` · `nowUs()->String` · `report(String)->void` ·
+ *   `post(String)->void`（JS 上报计数）。
+ */
+final class LightsHost {
+
+    private final android.content.Context ctx;
+    private final ViewGroup root;
+    private final float density;
+
+    private ProteusHostView view;
+    private long handle = 0L;
+
+    /** 树种 spec（顺序 = 绘制顺序）与 id → 下标 */
+    private final List<JSONObject> specs = new ArrayList<>();
+    private final Map<Integer, Integer> indexById = new HashMap<>();
+
+    /* ────────────────────────── 读数（报告用） ────────────────────────── */
+
+    int mountCalls = 0;
+    int postCount = 0;
+    String lastError = null;
+
+    /** 全场帧数（Choreographer） */
+    private int totalFrames = 0;
+    /** ★★滚动模式：记录 seen 的最大/最小滚动位置（判据断言"手势真的驱动了"） */
+    private int scrollMinSeen = Integer.MAX_VALUE;
+    private int scrollMaxSeen = Integer.MIN_VALUE;
+
+    /** 滚动模式：外部每推进一步就喂这里（判据从报告读 min/max） */
+    void noteScrollPosition(int scroll) {
+        if (scroll < scrollMinSeen) scrollMinSeen = scroll;
+        if (scroll > scrollMaxSeen) scrollMaxSeen = scroll;
+    }
+    /** 逐帧工作耗时（ms）——全场 */
+    private final List<Double> allWork = new ArrayList<>();
+    /** vsync 间隔（ms，frameTimeNanos 差分）——全场 */
+    private final List<Double> allVsync = new ArrayList<>();
+
+    /* ────────────────────────── 当前幕状态 ────────────────────────── */
+
+    /** 当前幕（来自 JS `__proteusLightsNext()` 的回执） */
+    private JSONObject act = null;
+    private double actElapsed = 0;
+    private int actFrames = 0;
+    private double actAnimEndMs = -1;
+    private final List<Double> actWork = new ArrayList<>();
+    private final List<Double> actVsync = new ArrayList<>();
+    private boolean forced = false;
+
+    /** 逐幕读数（进报告） */
+    private final List<JSONObject> actsPerf = new ArrayList<>();
+    /** 幕名清单（JS plan 的抄本——判据比对"演出的"与"计划的"） */
+    private JSONArray plan = new JSONArray();
+
+    private boolean running = false;
+    private boolean finished = false;
+    private long lastFrameNs = 0;
+    /**
+     * ★报告名（缺省 lights.json）；翻牌剧场用 flip.json——同一驱动、两个节目
+     *   （2026-10-01：第二个节目把"节目单驱动"做成了可复用宿主，第三个节目直接复用）。
+     */
+    private String reportName = "lights.json";
+
+    void setReportName(String name) { this.reportName = name; }
+    /**
+     * ★★**循环演出**（独立 APK 演示模式，2026-10-01）：true ⇒ 演完不 finalize，
+     *   调 `__proteusLightsRestart` 重建节目单并从头再演（"点开就一直演"）。
+     *   判据模式（广播触发）保持 false ⇒ 演完出报告。
+     */
+    private boolean loopMode = false;
+    /**
+     * ★★**滚动模式**（长卷探索 · 2026-10-01）：幕**不按时间结束**——等外部手势（`seek_scroll`）
+     *   驱动；宿主在此模式下不切幕、不 finalize（由 `finishScrollShow()` 显式收尾）。
+     *   ★为什么必须单列：正常节目的幕边界是"名义时间到 + 内核静止"，而滚动驱动的幕
+     *   **永远静止**（值由 seek 给、不由 tick 推）⇒ 会被安全上限强切。
+     */
+    private boolean scrollMode = false;
+
+    void setScrollMode(boolean v) { this.scrollMode = v; }
+
+    /**
+     * ★★**视觉签名**（手卷浏览的"画面真的随滚动变化"证据 · 2026-10-01）：
+     *   在滚动起点采一次；收尾时再采一次并算差异百分比 ⇒ 进报告 `scroll_visual_diff`。
+     *   ★为什么需要（本仓两次实证）：纯数值判据读过"全黑画面"当绿（首版长卷把画推出屏幕，
+     *     而判据只读 `root.tx`）——**像素级证据才能证明"用户看到的东西真的变了"**。
+     */
+    private int[] scrollSigStart = null;
+
+    void captureScrollStartSignature() {
+        if (view == null) return;
+        scrollSigStart = view.renderSignature();
+        android.util.Log.i("proteus", "手卷：起点视觉签名已采（" + scrollSigStart.length + " 点）");
+    }
+
+    /**
+     * 滚动模式收尾（判据/测试显式调用：记录末态 + 截屏 + 统计 + 写报告）。
+     * ★必须**先记录末态**（`recordAct`）——滚动模式下幕永不结束（这是设计），
+     *   若不记录 ⇒ 报告里 `acts` 为空 ⇒ 探针（root.tx / 江水 clip）全部丢失。
+     */
+    void finishScrollShow() {
+        if (act != null) recordAct(activeCount());
+        finishShow();
+    }
+
+    /**
+     * ★★**等惯性停稳再收尾**（条件等待：每 16ms 检查 `flingActive()`，非盲等；上限防死等）。
+     *
+     * 【为什么必须等（2026-10-01 反射到判据设计）】自驱动时序是"横挥 → 收尾"，
+     *   而抛滑是**异步的**（OverScroller 的时间线由帧循环推进）——若横挥后立刻收尾，
+     *   惯性一帧都没跑，读到的 `scroll_max` 只是拖动终点、"惯性真的推动了画布"无证据。
+     *   ⇒ 收尾条件 = 惯性自然结束（或 10s 上限兜底，防 OverScroller 极端情形卡住）。
+     */
+    void finishScrollShowWhenSettled(final int attempt) {
+        final boolean active = view != null && view.flingActive();
+        if (active && attempt < 600) {
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new Runnable() {
+                public void run() { finishScrollShowWhenSettled(attempt + 1); }
+            }, 16);
+            return;
+        }
+        android.util.Log.i("proteus", "长卷收尾：惯性停稳（探测 " + attempt + " 次 · 仍在滑=" + active + "）");
+        finishScrollShow();
+    }
+
+    /**
+     * ★★**进程内驱动真手势**（长卷探索 · 2026-10-01）——横挥 N 步（与 M6b 同一先例）。
+     *
+     * 【为什么不用 `adb shell input swipe`】本仓血泪纪律（AGENTS.md 已记）：
+     *   Android 新版对 `input` 注入要求 INJECT_EVENTS 权限 ⇒ 真机 **SecurityException**、
+     *   静默失败（实测：报告 `scroll_min/max = -1`——手势一条都没到）。
+     *   ⇒ 进程内 `dispatchTouchEvent` 注入**真 MotionEvent**（走完整 GestureDetector →
+     *     生产通路链），与 M6b 的"真手势滚动"同一形态（本仓已接受该先例为验收级）。
+     *
+     * @param steps 横挥步数（每步从右往左 780px）——★2026-10-01 自驱动取 **3 步**
+     *   （2340px）而非拖满：留余量给末次 UP 的**抛滑**吃满，"惯性真的推动画布"才有证据。
+     */
+    void driveHorizontalGestures(int steps) {
+        if (view == null) return;
+        final float y = 1200f;
+        long t0 = android.os.SystemClock.uptimeMillis();
+        for (int s = 0; s < steps; s++) {
+            float startX = 900f, endX = 120f;
+            android.view.MotionEvent down = android.view.MotionEvent.obtain(
+                    t0, t0, android.view.MotionEvent.ACTION_DOWN, startX, y, 0);
+            view.dispatchTouchEvent(down);
+            down.recycle();
+            for (int i = 1; i <= 6; i++) {
+                float x = startX + (endX - startX) * i / 6f;
+                android.view.MotionEvent mv = android.view.MotionEvent.obtain(
+                        t0, t0 + i * 16L, android.view.MotionEvent.ACTION_MOVE, x, y, 0);
+                view.dispatchTouchEvent(mv);
+                mv.recycle();
+            }
+            android.view.MotionEvent up = android.view.MotionEvent.obtain(
+                    t0, t0 + 120L, android.view.MotionEvent.ACTION_UP, endX, y, 0);
+            view.dispatchTouchEvent(up);
+            up.recycle();
+            t0 += 200L;
+        }
+        android.util.Log.i("proteus", "长卷手势驱动完成：" + steps + " 步（每步 780px）");
+    }
+
+    void setLoopMode(boolean v) { loopMode = v; }
+
+    /**
+     * ★★**中途颜色采样**（2026-10-01 用户语义修正后加）：终帧是"熄灯"（全暗盘）⇒
+     *   终帧的色数不能代表"颜色在流动"。在 rainbow 幕结束时采一次（色带最盛），
+     *   报告里 `mid_colors`/`mid_painted` 就是它——判据用它判"颜色真的在屏上"。
+     */
+    private int midPainted = -1;
+    private int midColors = -1;
+    /** ★★幕中探针（墨绘节目 C1/C2 的"进行中"证据）：幕 45% 处按节目声明的样本 id 采一次 */
+    private String midProbe = null;
+    private String midProbeAct = null;
+
+    /** 节目声明的探针样本 id（JS `__proteusLightsRun` 回执里的 `sample_ids`；
+     *  缺省 [1000,1001] = 既有两节目（灯珠/牌面）的行为不变） */
+    private int[] sampleIds = new int[]{1000, 1001};
+
+    /** ★★长卷探索模式（`program='inkScroll'`：单幕滚动驱动 + 横向手势） */
+    void enableHorizontalScroll() {
+        if (view != null) view.setHorizontalScroll(true);
+    }
+
+    void setSampleIds(int[] ids) {
+        if (ids != null && ids.length > 0) sampleIds = ids;
+    }
+
+    private String sampleIdsJson() {
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < sampleIds.length; i++) {
+            if (i > 0) sb.append(',');
+            sb.append(sampleIds[i]);
+        }
+        return sb.append(']').toString();
+    }
+
+    LightsHost(android.content.Context ctx, ViewGroup root, float density) {
+        this.ctx = ctx;
+        this.root = root;
+        this.density = density > 0 ? density : 1f;
+    }
+
+    ProteusHostView hostView() { return view; }
+
+    /** MainActivity 在 `__proteusLightsRun` 之后把 plan 转交进来（报告里"计划 vs 实际"对账用） */
+    void notePlan(String planJson) {
+        try {
+            plan = new JSONArray(planJson);
+        } catch (Throwable ignored) { /* 坏 plan 不进报告——判据会按缺失判红，如实暴露 */ }
+    }
+
+    /** 供 JS 侧 `nowUs()` 计时之用（单调时钟；`System.nanoTime` 微秒） */
+    public String nowUs() {
+        return String.valueOf(System.nanoTime() / 1000);
+    }
+
+    /**
+     * ★★**长卷模式开关**（JS `proteusHost.horizontalScroll(true)`——长卷探索节目用）：
+     *   宿主据此把 `GestureDetector.onScroll` 接到 **X 轴**（横移整幅长卷）。
+     */
+    public String horizontalScroll(String onJson) {
+        boolean on = onJson == null || onJson.trim().isEmpty() || !onJson.trim().startsWith("f");
+        horizontalScrollOn = on;
+        if (view != null) view.setHorizontalScroll(on);
+        return "{\"ok\":true,\"horizontal\":" + on + "}";
+    }
+
+    /**
+     * ★★**横向偏移模式**（手卷浏览：画布 3.2 屏宽——`proteusHost.offsetScroll(true)`）：
+     *   与 `horizontalScroll`（手势轴）配套：前者选轴、本条选语义（**平移画布** vs 进度）。
+     */
+    public String offsetScroll(String onJson) {
+        boolean on = onJson == null || onJson.trim().isEmpty() || !onJson.trim().startsWith("f");
+        offsetScrollOn = on;
+        if (view != null) view.setOffsetScroll(on);
+        return "{\"ok\":true,\"offset\":" + on + "}";
+    }
+
+    private boolean horizontalScrollOn = false;
+    private boolean offsetScrollOn = false;
+
+    /** JS 侧上报（计数；不作为消费证据——与 JsRenderHost.post 同口径） */
+    @SuppressWarnings("unused")
+    public void post(String json) {
+        postCount++;
+    }
+
+    /* ══════════════════ 宿主入口（JS ↔ 本类 的跨边界） ══════════════════ */
+
+    /**
+     * 建树：`{viewport:{width,height}, nodes:[spec]}`——spec 由 JS 产出（**不含几何**）。
+     * 本类：度量文本 → 内核建树 → rects → 绘制指令。
+     */
+    public String mount(String treeJson) {
+        mountCalls++;
+        JSONObject out = new JSONObject();
+        try {
+            JSONObject tree = new JSONObject(treeJson);
+            JSONArray nodes = tree.optJSONArray("nodes");
+            if (nodes == null || nodes.length() == 0) return err(out, "批次里没有节点").toString();
+            JSONObject vp = tree.optJSONObject("viewport");
+            float vw = vp != null ? (float) vp.optDouble("width", 1080) : 1080f;
+            float vh = vp != null ? (float) vp.optDouble("height", 2400) : 2400f;
+
+            specs.clear();
+            indexById.clear();
+            int textCount = 0;
+            for (int i = 0; i < nodes.length(); i++) {
+                JSONObject n = nodes.getJSONObject(i);
+                specs.add(n);
+                indexById.put(n.getInt("id"), i);
+                String t = n.optString("text", null);
+                if (t != null && !t.isEmpty()) textCount++;
+            }
+
+            // ① 文本度量（标题节点）——随建树请求一起给核心（顺序不可反：核心的度量器是快照）
+            JSONObject measures = buildMeasures();
+
+            // ② 建树请求：布局键 + **颜色键**（backgroundColor/color 是内核动画的基色——必须进核心）
+            JSONObject request = new JSONObject();
+            JSONObject viewport = new JSONObject();
+            viewport.put("width", vw);
+            viewport.put("height", vh);
+            request.put("viewport", viewport);
+            request.put("nodes", coreNodes());
+            request.put("textMeasures", measures);
+            handle = RustLayout.create(request.toString());
+            if (handle <= 0) return err(out, "核心建树失败（handle=0）").toString();
+
+            // ③ 几何 → 绘制指令
+            int cmds = emitCmds();
+            // ★★C2：按**内核解析好的段列表**补建 SVG 描边（解析在内核；宿主只翻译——
+            //   与 iOS `attachSvgStroke` 同款设计与顺序纪律：必须在建树之后）
+            attachSvgStrokes();
+
+            out.put("ok", true);
+            out.put("nodes", specs.size());
+            out.put("text_nodes", textCount);
+            out.put("cmds", cmds);
+            out.put("viewport", vw + "x" + vh);
+            return out.toString();
+        } catch (Throwable t) {
+            return err(out, t.getClass().getSimpleName() + ": " + t.getMessage()).toString();
+        }
+    }
+
+    /** 动画起幕（透传内核 + 返回内核回执；首帧值由下一次 tick 落地——与 iOS 同语义） */
+    public String animStart(String json) {
+        if (handle == 0L) return "{\"ok\":false,\"error\":\"未接入核心\"}";
+        return RustLayout.animStart(handle, json);
+    }
+
+    /** 停动画（含清值——见 ProteusHostView.kernelAnimStop 注释） */
+    public String animStop(String json) {
+        if (view == null) return "{\"ok\":false,\"error\":\"未接入视图\"}";
+        return view.kernelAnimStop(json == null ? "{\"all\":true}" : json);
+    }
+
+    /** 仍在推进的动画条数（0 = 全结束）——幕切换的权威判据 */
+    public String animActive() {
+        if (handle == 0L) return "{\"ok\":false,\"error\":\"未接入核心\"}";
+        return RustLayout.animActive(handle);
+    }
+
+    /**
+     * 手动推进一帧（`dtMs` 以字符串过桥——JNI 统一按字符串转）。
+     * ★帧循环**不经这里**（宿主直接调 `view.kernelAnimTick`，省一次 JS 往返）；
+     *   本入口给 JS 侧做确定性步进/探针用（与 iOS `animTick` 对称）。
+     */
+    public String animTick(String dtMs) {
+        if (view == null) return "{\"ok\":false,\"error\":\"未接入视图\"}";
+        double dt;
+        try {
+            dt = Double.parseDouble(dtMs);
+        } catch (NumberFormatException e) {
+            return "{\"ok\":false,\"error\":\"dtMs 非法：" + dtMs + "\"}";
+        }
+        int applied = view.kernelAnimTick((float) dt);
+        return "{\"ok\":true,\"applied\":" + applied + ",\"active\":" + activeCount() + "}";
+    }
+
+    /** 内核几何（编排的"当前中心"来源；节目单的 centers() 用它） */
+    public String rects() {
+        if (handle == 0L) return "{\"ok\":false,\"error\":\"未接入核心\"}";
+        return RustLayout.readRects(handle);
+    }
+
+    /**
+     * ★★A3 播放控制（2026-10-01 · 第三节目）：`{"timeScale":0.25,"paused":false}` → 回显生效值。
+     * 透传内核 FFI（全局时间因子只影响时间推进——seek/滚动不走全局时钟）。
+     */
+    public String animControl(String json) {
+        if (handle == 0L) return "{\"ok\":false,\"error\":\"未接入核心\"}";
+        return RustLayout.animControl(handle, json == null ? "{}" : json);
+    }
+
+    /** 探针（判据"真读宿主真源"）：`[id,…]` → 变换 + 底色 + 文字色（ProteusHostView.animTxProbe） */
+    public String probe(String idsJson) {
+        if (view == null) return "{\"ok\":false,\"error\":\"未接入视图\"}";
+        return view.animTxProbe(idsJson);
+    }
+
+    /** 报告落盘（`lights.json` / `flip.json`）——由 JS `__proteusLightsFinalize` 调 */
+    public void report(String json) {
+        writeReport(reportName, json);
+    }
+
+    private void writeReport(String name, String content) {
+        try {
+            java.io.File f = new java.io.File(reportDir(), name);
+            java.io.FileOutputStream fos = new java.io.FileOutputStream(f);
+            fos.write(content.getBytes("UTF-8"));
+            fos.close();
+            android.util.Log.i("proteus", "报告已写入 " + f.getAbsolutePath());
+        } catch (Exception e) {
+            android.util.Log.e("proteus", "写报告失败 " + name, e);
+        }
+    }
+
+    private java.io.File reportDir() {
+        java.io.File d = ctx.getExternalFilesDir(null);
+        return d != null ? d : ctx.getFilesDir();
+    }
+
+    /* ══════════════════ 帧循环（本类 = 唯一驱动）══════════════════ */
+
+    /** 开演：预取第一幕 + 启动 Choreographer（主线程调用） */
+    boolean startShow() {
+        if (running) return true;
+        running = true;
+        finished = false;
+        lastFrameNs = 0;
+        Choreographer.getInstance().postFrameCallback(frameCb);
+        return true;
+    }
+
+    private final Choreographer.FrameCallback frameCb = new Choreographer.FrameCallback() {
+        @Override
+        public void doFrame(long frameTimeNanos) {
+            if (!running) return;
+            double dtMs = lastFrameNs == 0 ? 0 : (frameTimeNanos - lastFrameNs) / 1e6;
+            lastFrameNs = frameTimeNanos;
+            totalFrames++;
+            if (actFrames > 0) actVsync.add(dtMs);
+            allVsync.add(dtMs);
+
+            // ① 没有在演的幕 ⇒ 取下一幕（JS 发令；JS 内部会调 proteusHost.animStart）
+            if (act == null && !finished) {
+                String nextOut;
+                try {
+                    QuickJsEngine.EvalResult r = QuickJsEngine.eval("__proteusLightsNext()");
+                    if (!r.ok) {
+                        failShow("取幕失败：" + r.error);
+                        return;
+                    }
+                    nextOut = r.value;
+                } catch (Throwable t) {
+                    failShow("取幕异常：" + t);
+                    return;
+                }
+                if (nextOut == null) {
+                    failShow("取幕回执为空");
+                    return;
+                }
+                try {
+                    JSONObject o = new JSONObject(nextOut);
+                    if (o.optBoolean("done")) {
+                        // ★循环模式（独立 APK）：重建节目单从头再演（"点开就一直演"）；
+                        //   判据模式：finalize 出报告。
+                        if (loopMode) {
+                            QuickJsEngine.EvalResult rst = QuickJsEngine.eval("__proteusLightsRestart()");
+                            if (!rst.ok) {
+                                failShow("重播失败：" + rst.error);
+                                return;
+                            }
+                            finishActTotals();
+                            Choreographer.getInstance().postFrameCallback(this);
+                            return;
+                        }
+                        finishShow();
+                        return;
+                    }
+                    if (!o.optBoolean("ok")) {
+                        // ★★内核拒绝原因**必须带上**（2026-10-01 手卷浏览实测）：
+                        //   发令失败的形态是 `{ok:false, error:"幕「x」发令失败", detail:{error:"节点 N 的 …"}}`
+                        //   ——detail 里才是**内核的精确原因**（"repeat 非法 / 节点不在树上"）。
+                        //   只读 error ⇒ 失败报告只有一句"发令失败"，真因丢失，排查得重放内核一轮。
+                        //   （与"不静默"同源：错误必须写在它发生的地方，且要带到人能看到的地方。）
+                        String detail = "";
+                        try {
+                            org.json.JSONObject d = o.optJSONObject("detail");
+                            if (d != null && d.optString("error", "").length() > 0) {
+                                detail = " ▸ " + d.optString("error");
+                            }
+                        } catch (Throwable ignored) { /* detail 非对象 ⇒ 维持原消息 */ }
+                        failShow("取幕回执非 ok："
+                                + o.optString("error", nextOut.substring(0, Math.min(160, nextOut.length())))
+                                + detail);
+                        return;
+                    }
+                    act = o;
+                    // ★★展卷行程（长卷模式）：交给视图钳制手势累计（见 setHorizontalScrollRange）
+                    int srange = o.optInt("scroll_range", 0);
+                    if (srange > 0 && view != null) view.setHorizontalScrollRange(srange);
+                    actElapsed = 0;
+                    actFrames = 0;
+                    actAnimEndMs = -1;
+                    forced = false;
+                    actWork.clear();
+                    actVsync.clear();
+                } catch (Throwable t) {
+                    failShow("取幕回执解析失败：" + nextOut.substring(0, Math.min(160, nextOut.length())));
+                    return;
+                }
+            }
+
+            // ② 逐帧推进（计时只包"内核 tick + 写层"这一段——与 iOS 同口径）
+            long t0 = System.nanoTime();
+            // ★★惯性推进（手卷浏览的抛滑——与内核 tick 同一帧驱动，不新增第二条帧源）
+            if (view != null) view.stepInertia();
+            if (view != null) view.kernelAnimTick((float) dtMs);
+            double work = (System.nanoTime() - t0) / 1e6;
+            actWork.add(work);
+            allWork.add(work);
+
+            actElapsed += dtMs;
+            actFrames++;
+
+            // ②b ★中途颜色采样（rainbow 幕**进行中** 45% 处——色带最盛；
+            //   若放在幕尾，色带已回归基线色 ⇒ 色数偏低，证据变弱）
+            if (act != null && midColors < 0 && act.optBoolean("mid_sample")) {
+                double span = act.optDouble("spanMs", 0);
+                if (span > 0 && actElapsed >= span * 0.45) {
+                    int[] s2 = samplePaintedOnly();
+                    midPainted = s2[0];
+                    midColors = s2[1];
+                    // ★★C1/C2（墨绘节目）：同时采一次**探针**（描边进度 / 裁剪参数在幕中段的值）——
+                    //   判据据此断言"真的在画"（0<p<1），而不是只看终值（终值 1 不能区分
+                    //   "逐笔画出"与"瞬间出现"——那正是用户对前作提出的问题）。
+                    try {
+                        midProbe = view != null ? view.animTxProbe(sampleIdsJson()) : null;
+                        midProbeAct = act.optString("name", null);
+                    } catch (Throwable ignored) { /* 探针失败不阻断演出 */ }
+                }
+            }
+
+            // ③ 幕边界：内核报 active=0（首次）→ 再等 holdMs 定型 ⇒ 切幕
+            int active = activeCount();
+            if (actAnimEndMs < 0 && active == 0 && actFrames > 1) actAnimEndMs = actElapsed;
+            // ★★滚动模式：不切幕（等外部手势驱动——见 `scrollMode` 注释）
+            boolean natural = !scrollMode && actAnimEndMs >= 0
+                    && actElapsed >= actAnimEndMs + act.optDouble("holdMs", 0);
+            // ★★安全上限**必须感知 timeScale**（2026-10-01 真机抓出）：慢动作幕（timeScale 0.25）
+            //   的墙钟时长是名义的 4×——固定 +3000ms 的窗口会把慢动作幕**强制切走**
+            //   （真机实测：slowmo 被 forced，anim_end 永远到不了）。⇒ 兜底窗口按 1/timeScale 放大。
+            double ts = 1.0;
+            if (act != null && act.optJSONObject("control") != null) {
+                ts = act.optJSONObject("control").optDouble("timeScale", 1.0);
+            }
+            double wallBudget = (act.optDouble("spanMs", 0) + act.optDouble("holdMs", 0)) / Math.max(0.05, ts) + 3000;
+            boolean cap = !scrollMode && actElapsed > wallBudget;
+            if (natural || cap) {
+                if (cap && !natural) forced = true;
+                recordAct(active);
+                act = null;
+            }
+
+            Choreographer.getInstance().postFrameCallback(this);
+        }
+    };
+
+    private int activeCount() {
+        if (handle == 0L) return -1;
+        try {
+            String a = RustLayout.animActive(handle);
+            JSONObject o = new JSONObject(a);
+            return o.optInt("active", -1);
+        } catch (Throwable t) {
+            return -1;
+        }
+    }
+
+    /** 本幕读数入册（时长/帧数/工作时长分布/vsync/动画结束时刻） */
+    private void recordAct(int activeAtCut) {        try {
+            JSONObject r = new JSONObject();
+            r.put("name", act.optString("name", "?"));
+            r.put("anims", act.optInt("anims", 0));
+            r.put("color_anims", act.optInt("color_anims", 0));
+            r.put("span_ms", act.optDouble("spanMs", 0));
+            r.put("hold_ms", act.optDouble("holdMs", 0));
+            r.put("frames", actFrames);
+            r.put("elapsed_ms", round1(actElapsed));
+            r.put("anim_end_ms", round1(actAnimEndMs));
+            r.put("forced", forced);
+            r.put("active_at_cut", activeAtCut);
+            r.put("work_p50", round3(pct(actWork, 50)));
+            r.put("work_p95", round3(pct(actWork, 95)));
+            r.put("work_p99", round3(pct(actWork, 99)));
+            r.put("work_max", round3(maxOf(actWork)));
+            r.put("vsync_p50", round3(pct(actVsync, 50)));
+            // ★逐幕末态探针（2026-10-01 · 第三节目）：把样本节点的变换记进幕读数——
+            //   判据据此断言"翻面终值 180° / 展开终值 -120° / 谢幕回暗"（真读宿主真源）。
+            //   ★样本 id 由**节目自己声明**（灯火两节目缺省 [1000,1001]；墨绘节目声明关键节点）——
+            //   盲取固定 id 会把探针打到不存在的节点上（探针会以恒等值返回，看似正常实则无功）。
+            try {
+                final org.json.JSONObject probe =
+                        new org.json.JSONObject(view != null ? view.animTxProbe(sampleIdsJson()) : "{}");
+                final org.json.JSONArray ls = probe.optJSONArray("layers");
+                if (ls != null && ls.length() > 0) {
+                    r.put("probe", ls.optJSONObject(0));
+                    // ★墨绘节目要**多个**样本的逐幕末态（幕布/月亮/题字/山/印/云）——
+                    //   首个进 `probe`（两节目兼容），全量进 `probe_all`（新节目判据用）。
+                    r.put("probe_all", ls);
+                }
+            } catch (Throwable ignored) { /* 探针失败不阻断演出 */ }
+            actsPerf.add(r);
+            // ★中途颜色采样（**节目单显式声明的 midSample 幕**——不再按幕名硬编码；
+            //   翻牌剧场用 reveal 幕、灯光秀用 rainbow 幕，各自都是"颜色最丰富"的一帧）
+            //   ★兜底：若 45% 处没赶上（幕被强切），这里补一次（探针同样补）
+            if (act != null && act.optBoolean("mid_sample") && midColors < 0) {
+                int[] sample = samplePaintedOnly();
+                midPainted = sample[0];
+                midColors = sample[1];
+                try {
+                    midProbe = view != null ? view.animTxProbe(sampleIdsJson()) : midProbe;
+                    midProbeAct = act.optString("name", midProbeAct);
+                } catch (Throwable ignored) { /* 探针失败不阻断演出 */ }
+            }
+        } catch (Throwable t) {
+            /* JSONObject.put 不会失败；保底不中断演出 */
+        }
+    }
+
+    /**
+     * 循环模式：一轮演完的**轻量收尾**（不写报告）——清本幕状态、留总计，
+     * 由随后的 `__proteusLightsRestart` 重建节目单继续演。
+     * ★读数处理：`actsPerf` 保留（诊断仍可看**最近一轮**的逐幕读数）；
+     *   `allWork/allVsync` 不清（累计分布——"演了 N 轮"的总体帧成本）。
+     */
+    private void finishActTotals() {
+        act = null;
+        actElapsed = 0;
+        actAnimEndMs = -1;
+        forced = false;
+        android.util.Log.i("proteus", "灯光秀一轮演完（loop）· 累计帧=" + totalFrames
+                + " · 本轮幕数=" + actsPerf.size());
+        actsPerf.clear();
+    }
+
+    /** 收尾：截屏 + JS finalize（由 JS 组装报告并调 report()） */
+    private void finishShow() {
+        finished = true;
+        running = false;
+        // 定格截图（谢幕语 hold 期间可再来一张；这里在幕序末尾拍）
+        JSONObject stats = new JSONObject();
+        try {
+            stats.put("frames", totalFrames);
+            stats.put("work_p50", round3(pct(allWork, 50)));
+            stats.put("work_p95", round3(pct(allWork, 95)));
+            stats.put("work_p99", round3(pct(allWork, 99)));
+            stats.put("vsync_p50", round3(pct(allVsync, 50)));
+            // ★acts 必须转成**真 JSONArray**（2026-10-01 真机抓出的序列化缺陷）：
+            //   直接 put(List<JSONObject>) 时 org.json 把 List 当未知类型**字符串化**
+            //   ⇒ JS 侧 `stats.acts.map(...)` 拿到字符串 ⇒ "TypeError: not a function"
+            //   （演出本身没事——是收尾报告这一步炸的；首跑 11 幕全部演完的读数因此丢了收尾）。
+            JSONArray actsArr = new JSONArray();
+            for (JSONObject a : actsPerf) actsArr.put(a);
+            stats.put("acts", actsArr);
+            stats.put("plan", plan);
+            stats.put("post_count", postCount);
+            stats.put("view_draws", view != null ? view.onDrawCount() : -1);
+            int[] painted = samplePainted();
+            stats.put("painted_samples", painted[0]);
+            stats.put("painted_colors", painted[1]);
+            stats.put("mid_painted", midPainted);
+            stats.put("mid_colors", midColors);
+            // ★★滚动模式读数（长卷探索判据用）：手势驱动到的范围
+            stats.put("scroll_min", scrollMinSeen == Integer.MAX_VALUE ? -1 : scrollMinSeen);
+            stats.put("scroll_max", scrollMaxSeen == Integer.MIN_VALUE ? -1 : scrollMaxSeen);
+            // ★★视觉差异（"画面真的随滚动变了"——像素级证据，堵"全黑也判绿"的洞）
+            if (view != null && scrollSigStart != null) {
+                int[] end = view.renderSignature();
+                int diff = 0;
+                final int n = Math.min(scrollSigStart.length, end.length);
+                for (int i = 0; i < n; i++) {
+                    if (scrollSigStart[i] != end[i]) diff++;
+                }
+                stats.put("scroll_visual_diff", round1(100.0 * diff / Math.max(1, n)));
+                android.util.Log.i("proteus", "手卷：视觉差异 " + round1(100.0 * diff / Math.max(1, n)) + "%");
+            }
+            // ★★抛滑证据（2026-10-01）：本仓刚抓到"`startFlingX` 声明了但 `onFling` 里没人调用
+            //   ⇒ 惯性静默不存在"——同族缺陷只有计数能现形（判据据此判 ③d）
+            stats.put("fling_drives", view != null ? view.flingDrives() : -1);
+            stats.put("inertia_frames", view != null ? view.inertiaFrames() : -1);
+            stats.put("inertia_moved", view != null ? view.inertiaMovedFrames() : -1);
+            // ★幕中探针（C1/C2 的"进行中"证据——幕 45% 处采的真实宿主表读数）
+            if (midProbe != null) stats.put("mid_probe", new JSONObject(midProbe));
+            if (midProbeAct != null) stats.put("mid_probe_act", midProbeAct);
+            stats.put("finished_at_ms", System.currentTimeMillis());
+        } catch (Throwable t) {
+            try { stats.put("stats_error", String.valueOf(t)); } catch (Throwable ignored) {}
+        }
+        // JS 组装报告（escapes 等在 JS 侧）→ 再回调本类 report() 落盘
+        QuickJsEngine.EvalResult r = QuickJsEngine.eval(
+                "__proteusLightsFinalize(" + JSONObject.quote(stats.toString()) + ")");
+        if (!r.ok) {
+            // 不静默：finalize 失败时写一个最小报告（判据会因缺字段判红——如实暴露）
+            writeReport("lights.json", "{\"ok\":false,\"error\":" + JSONObject.quote(String.valueOf(r.error))
+                    + ",\"host_stats\":" + stats + "}");
+        }
+    }
+
+    private void failShow(String msg) {
+        lastError = msg;
+        running = false;
+        finished = true;
+        try {
+            JSONObject out = new JSONObject();
+            out.put("ok", false);
+            out.put("error", msg);
+            out.put("host_stats", new JSONObject().put("frames", totalFrames).put("acts", actsPerf));
+            writeReport("lights.json", out.toString());
+        } catch (Throwable ignored) { /* 保底：写不出就只剩 logcat */ }
+        android.util.Log.e("proteus", "灯光秀失败：" + msg);
+    }
+
+    /** 供 MainActivity 读（诊断） */
+    boolean isRunning() { return running; }
+
+    /**
+     * ★★**停帧循环**（演示壳旋转重挂用 · 2026-10-01）：`running=false` ⇒ 下一帧回调自然退出
+     *   （帧循环唯一驱动，无第二条定时源要清）。不写报告（旋转不是"演完"）。
+     */
+    void markStop() {
+        running = false;
+        finished = true;
+    }
+
+    // ── 统计工具 ──
+
+    private static double pct(List<Double> xs, int p) {
+        if (xs.isEmpty()) return -1;
+        List<Double> cp = new ArrayList<>(xs);
+        java.util.Collections.sort(cp);
+        int i = Math.min(cp.size() - 1, Math.max(0, cp.size() * p / 100));
+        return cp.get(i);
+    }
+
+    private static double maxOf(List<Double> xs) {
+        double m = 0;
+        for (double x : xs) if (x > m) m = x;
+        return m;
+    }
+
+    private static double round1(double v) { return Math.round(v * 10.0) / 10.0; }
+    private static double round3(double v) { return Math.round(v * 1000.0) / 1000.0; }
+
+    /* ══════════════════ 树 → 核心 / 绘制 ══════════════════ */
+
+    /** 布局键白名单（★含颜色键：backgroundColor/color 是内核动画的基色，必须进核心） */
+    private static final java.util.Set<String> CORE_KEYS = new java.util.HashSet<>(java.util.Arrays.asList(
+            "width", "height", "widthRatio", "heightRatio", "minWidth", "maxWidth", "minHeight", "maxHeight",
+            "margin", "padding", "flexDirection", "justifyContent", "alignItems", "alignSelf",
+            "flexGrow", "flexShrink", "flexBasis", "gap", "display", "position", "top", "left",
+            "overflow", "isText", "textStyleKey",
+            // ★★颜色（灯光秀的命脉）：底色 = 颜色动画的起点与复位目标；color = 文字色基色
+            "backgroundColor", "color",
+            // ★★C1/C2（2026-10-01 · 墨绘节目）：裁剪形状与 SVG 路径是内核动画的**静态基态声明**——
+            //   不在白名单 ⇒ 请求不带声明 ⇒ 内核拒绝 clip/stroke 动画且**静默**
+            //   （与适配器白名单漏键同款教训；真机判据会以"拒绝消息"暴露，但那时已白跑一轮）。
+            "clipPath", "svgPath", "perspective",
+            // ★★渐变（v1 静态 paint——2026-10-01）：与 borderRadius 同层的绘制属性；
+            //   不在白名单 ⇒ 请求树不带声明 ⇒ 宿主读不到 ⇒ **静默不渲染**。
+            "fillGradient",
+            // ★★渐变 v2：B 态（两态混合的终点）——同"必须在白名单"纪律
+            "fillGradientTo",
+            // ★★路径变形 v1：B 态（变形终点）——同款纪律（漏 ⇒ 内核拒绝变形动画）
+            "svgPathTo",
+            // ★★发光 v1（glow）：静态规格（色/半径/强度）——漏 ⇒ 宿主不发光（内核照常收）
+            "glow",
+            // ★★软边遮罩 v1（mask）：静态规格（类型/几何/柔度/基态）——漏 ⇒ 宿主无遮罩
+            "mask",
+            // ★★变换原点 v1（transformOrigin）：漏 ⇒ 所有旋转绕中心（"绕错点转"是最难查的一类）
+            "transformOrigin"));
+
+    /** 缺省字号（**布局单位** = px，与本场景 viewport 同坐标系） */
+    private static final double DEFAULT_FONT_UNITS = 14.0;
+
+    private JSONArray coreNodes() throws Exception {
+        JSONArray arr = new JSONArray();
+        for (JSONObject spec : specs) {
+            JSONObject n = new JSONObject();
+            n.put("id", spec.getInt("id"));
+            if (spec.has("parentId") && !spec.isNull("parentId")) n.put("parentId", spec.getInt("parentId"));
+            for (String k : CORE_KEYS) {
+                if (spec.has(k) && !spec.isNull(k)) n.put(k, spec.get(k));
+            }
+            String t = spec.optString("text", null);
+            if (t != null && !t.isEmpty()) {
+                n.put("text", t);
+                // I2-ALLOW: **非几何**——把 fontSize 编码成整数缓存键（×100 定点表示），
+                //   不是坐标/尺寸换算（几何一律由内核产出并经 snap 吸附，平台层零舍入）
+                n.put("textStyleKey", (int) Math.round(spec.optDouble("fontSize", DEFAULT_FONT_UNITS) * 100));
+            }
+            arr.put(n);
+        }
+        return arr;
+    }
+
+    /** 文本度量（标题节点）→ `textMeasures` JSON（id 字符串键） */
+    private JSONObject buildMeasures() throws Exception {
+        JSONObject measures = new JSONObject();
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        for (JSONObject spec : specs) {
+            int id = spec.getInt("id");
+            String text = spec.optString("text", null);
+            if (text == null || text.isEmpty()) continue;
+            double fs = spec.optDouble("fontSize", DEFAULT_FONT_UNITS);
+            paint.setTextSize((float) fs);
+            // I2-ALLOW: 文本**测量**结果的取整（测量子系统；度量值交给内核后由内核统一吸附）
+            int w = (int) Math.ceil(paint.measureText(text));
+            Paint.FontMetrics fm = paint.getFontMetrics();
+            int h = (int) Math.ceil(fm.descent - fm.ascent);
+            JSONObject size = new JSONObject();
+            size.put("width", w);
+            size.put("height", h);
+            measures.put(String.valueOf(id), size);
+            spec.put("fontSize", fs);
+        }
+        return measures;
+    }
+
+    /**
+     * ★★**按内核段列表补建 SVG 描边**（C2）——`svgNodes()` 回带解析好的段列表；
+     *   宿主只做"段 → android.graphics.Path"翻译（不做第二份解析器）。
+     */
+    private void attachSvgStrokes() {
+        if (handle == 0L || view == null) return;
+        try {
+            org.json.JSONObject o = new org.json.JSONObject(RustLayout.svgNodes(handle));
+            org.json.JSONObject paths = o.optJSONObject("paths");
+            if (paths == null) return;
+            java.util.Iterator<String> it = paths.keys();
+            while (it.hasNext()) {
+                String idS = it.next();
+                org.json.JSONObject info = paths.optJSONObject(idS);
+                if (info == null) continue;
+                org.json.JSONArray segs = info.optJSONArray("segs");
+                if (segs == null) continue;
+                // ★stroke 色是 u32 打包（0xFFFFFFFF = 未声明 ⇒ 白）
+                long packed = (long) info.optDouble("strokeColor", 4294967295.0);
+                int col = packed >= 0 && packed < 4294967295L ? (int) packed : 0xFFFFFFFF;
+                float sw = (float) info.optDouble("strokeWidth", 2);
+                // ★声明基态（2026-10-01）：`svgPath.progress`（缺省 0 = 未画；浏览模式 = 1 已画成）
+                float pb = (float) info.optDouble("progressBase", 0);
+                view.setNodeSvgStroke(Integer.parseInt(idS), segs, col, sw, pb);
+            }
+        } catch (Throwable t) {
+            android.util.Log.w("proteus", "SVG 描边建层失败（不阻断）：" + t);
+        }
+    }
+
+    /** 几何 → 绘制指令（★几何只来自内核；本方法不含任何布局计算） */
+    private int emitCmds() throws Exception {
+        // ★★**先备好视图再注入节点级状态**（2026-10-01 真机抓出的顺序缺陷）：
+        //   `setNodeClipPath`/`setNodeSvgStroke` 是**实例方法**（节点表在 view 上）——
+        //   而首版把 `ensureView()` 放在方法**末尾**（只因老节目没有 clip/svg 声明，
+        //   注入代码是新加的 ⇒ 新路径一上真机就 NullPointerException 建树失败）。
+        //   ⇒ 视图创建前置到方法入口（幂等，老路径零行为变化）。
+        ensureView();
+        JSONObject rects = new JSONObject(RustLayout.readRects(handle)).getJSONObject("rects");
+        List<ProteusHostView.Cmd> cmds = new ArrayList<>(specs.size());
+        List<Integer> cmdIds = new ArrayList<>(specs.size());
+        for (JSONObject spec : specs) {
+            int id = spec.getInt("id");
+            JSONObject r = rects.optJSONObject(String.valueOf(id));
+            if (r == null) continue;
+            String bg = spec.optString("backgroundColor", null);
+            String text = spec.optString("text", null);
+            boolean isText = text != null && !text.isEmpty();
+            int color = bg == null || bg.isEmpty() ? 0 : HostJson.parseHex(bg);
+            // ★★C1/C2（墨绘节目）：**纯描边节点**（无底色/无文字但有 svgPath）也必须进指令表——
+            //   它的 svg 路径画在 `drawCmds` 里（按 cmd 节点 id 查 `nodeSvgStroke`）；
+            //   首版 `color==0 && !isText ⇒ continue` 会把它整个丢掉 ⇒ 描边永远不画（静默）。
+            boolean hasSvg = spec.optJSONObject("svgPath") != null;
+            // ★★渐变节点同理（v1）：有 fillGradient 但**无 backgroundColor** 的节点也必须进
+            //   指令表——否则渐变填充被整个丢掉（本仓"纯描边节点被丢"的同款缺陷，预防性覆盖）。
+            boolean hasGrad = spec.optJSONObject("fillGradient") != null;
+            if (!isText && color == 0 && !hasSvg && !hasGrad) continue;
+            float fs = isText ? (float) spec.optDouble("fontSize", DEFAULT_FONT_UNITS) : 0f;
+            // 文字静态色（探针回落 + 绘制兜底都与它同源）
+            String tc = spec.optString("color", null);
+            int textColor = tc == null || tc.isEmpty() ? 0 : HostJson.parseHex(tc);
+            // 圆角（纯绘制；灯光秀的灯珠 4px）
+            float radius = (float) spec.optDouble("borderRadius", 0);
+            // ★★C1：裁剪形状注入（静态声明也必须渲染——与 iOS makeLayer 的应用同义务）
+            org.json.JSONObject cpo = spec.optJSONObject("clipPath");
+            if (cpo != null) {
+                String k = cpo.optString("kind", "");
+                org.json.JSONArray pa = cpo.optJSONArray("params");
+                int kind = "inset".equals(k) ? 1 : "circle".equals(k) ? 2 : "polygon".equals(k) ? 3 : 0;
+                if (kind != 0 && pa != null) {
+                    float[] ps = new float[pa.length()];
+                    for (int kk = 0; kk < pa.length(); kk++) ps[kk] = (float) pa.optDouble(kk, 0);
+                    view.setNodeClipPath(id, kind, ps);
+                }
+            }
+            // ★★渐变（v1 · 2026-10-01）：解析进 Cmd（`GradSpec.parse` 非法返回 null ⇒ 退回纯色）
+            ProteusHostView.GradSpec grad = ProteusHostView.GradSpec.parse(spec.optJSONObject("fillGradient"));
+            // ★★发光 v1：静态规格 → `[color(int), radius, alpha]`（缺省 null = 不发光）
+            float[] glow = null;
+            org.json.JSONObject glo = spec.optJSONObject("glow");
+            if (glo != null) {
+                String gcolS = glo.optString("color", "");
+                if (gcolS.startsWith("#") && gcolS.length() == 7) {
+                    try {
+                        int gcol = (int) (0xFF000000L | Long.parseLong(gcolS.substring(1), 16));
+                        glow = new float[]{
+                                gcol, (float) glo.optDouble("radius", 0), (float) glo.optDouble("alpha", 0.5)};
+                    } catch (NumberFormatException ignored) { /* 坏色 ⇒ 不发光（不静默画错色） */ }
+                }
+            }
+            // ★★软边遮罩 v1：静态规格 → `[kind, angle, cx, cy, r, softness]`（缺省 null = 无遮罩）
+            float[] maskSpec = null;
+            org.json.JSONObject mo = spec.optJSONObject("mask");
+            if (mo != null) {
+                String mkindS = mo.optString("kind", "");
+                int mkind = "linear".equals(mkindS) ? 1 : "radial".equals(mkindS) ? 2 : 0;
+                if (mkind != 0) {
+                    // 契约键名（与 TS `GRADIENT_CONTRACT_KEYS` 同表）：`mask`/`softness`/`progress`
+                    //   ——`progress` 是声明的**基态进度**（帧通道 `maskProgress` 由内核下发）。
+                    //   ★基态：本端不参与揭示数学（内核算好逐帧下发）——但**必须读进来**：
+                    //     建树初值与 stop 复位时宿主需要它（否则帧循环启动前的一瞬是"全显"）。
+                    maskSpec = new float[]{
+                            mkind,
+                            (float) mo.optDouble("angle", 180),
+                            (float) mo.optDouble("cx", 0.5),
+                            (float) mo.optDouble("cy", 0.5),
+                            (float) mo.optDouble("r", 0.75),
+                            (float) mo.optDouble("softness", 0.25),
+                            (float) mo.optDouble("progress", 1.0)};
+                }
+            }
+            // ★★变换原点 v1：注入宿主（盒分数；缺省不注入 = 中心——既有行为零变化）
+            org.json.JSONObject torig = spec.optJSONObject("transformOrigin");
+            if (torig != null) {
+                view.setNodeTransformOrigin(id,
+                        (float) torig.optDouble("x", 0.5), (float) torig.optDouble("y", 0.5));
+            }
+            cmds.add(new ProteusHostView.Cmd(
+                    (float) r.getDouble("x"), (float) r.getDouble("y"),
+                    (float) r.getDouble("width"), (float) r.getDouble("height"),
+                    color, isText ? text : null, fs, textColor, radius, grad, glow, maskSpec));
+            cmdIds.add(id);
+        }
+        int[] ids = new int[cmdIds.size()];
+        for (int i = 0; i < ids.length; i++) ids[i] = cmdIds.get(i);
+        view.setCmds(cmds);
+        view.setCmdNodeIds(ids);
+        view.invalidate();
+        return cmds.size();
+    }
+
+    private void ensureView() {
+        if (view != null) return;
+        view = new ProteusHostView(ctx);
+        // ★长卷模式：建视图时即接上横向手势/偏移语义（JS 的调用可能在视图建立前发生）
+        if (horizontalScrollOn) view.setHorizontalScroll(true);
+        if (offsetScrollOn) view.setOffsetScroll(true);
+        android.widget.FrameLayout.LayoutParams lp = new android.widget.FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+        view.setLayoutParams(lp);
+        root.addView(view);
+        view.attachCore(handle);
+    }
+
+    /**
+     * 离屏像素自检（"颜色真的画出来了"的机器判据）：
+     * 数非透明采样点 + **不同颜色数**（灯光秀的核心主张 = 颜色在流动，单色会露馅）。
+     */
+    private int[] samplePainted() {
+        return samplePaintedImpl(true);
+    }
+
+    /** 中途采样（不写 PNG——定格截图留给终帧） */
+    private int[] samplePaintedOnly() {
+        return samplePaintedImpl(false);
+    }
+
+    private int[] samplePaintedImpl(boolean writePng) {
+        if (view == null) return new int[]{-1, -1};
+        int W = 1080, H = 2400;
+        android.graphics.Bitmap bmp = null;
+        try {
+            int vw = view.getWidth() > 0 ? view.getWidth() : W;
+            int vh = view.getHeight() > 0 ? view.getHeight() : H;
+            bmp = android.graphics.Bitmap.createBitmap(vw, vh, android.graphics.Bitmap.Config.ARGB_8888);
+            view.measure(android.view.View.MeasureSpec.makeMeasureSpec(vw, android.view.View.MeasureSpec.EXACTLY),
+                    android.view.View.MeasureSpec.makeMeasureSpec(vh, android.view.View.MeasureSpec.EXACTLY));
+            view.layout(0, 0, vw, vh);
+            view.draw(new android.graphics.Canvas(bmp));
+            int painted = 0;
+            java.util.HashSet<Integer> colors = new java.util.HashSet<>();
+            for (int y = 0; y < vh; y += 12) {
+                for (int x = 0; x < vw; x += 12) {
+                    int px = bmp.getPixel(x, y);
+                    if ((px >>> 24) != 0) {
+                        painted++;
+                        if (colors.size() < 4096) colors.add(px);
+                    }
+                }
+            }
+            // ★顺带把定格帧存成 PNG（官网配图 + 目视证据）——失败不影响判定
+            if (writePng) {
+                try {
+                    java.io.File png = new java.io.File(reportDir(), reportName.replace(".json", "-final.png"));
+                    java.io.FileOutputStream fos = new java.io.FileOutputStream(png);
+                    bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, fos);
+                    fos.close();
+                } catch (Throwable ignored) { /* 截图失败不是判据前提 */ }
+            }
+            return new int[]{painted, colors.size()};
+        } catch (Throwable t) {
+            return new int[]{-1, -1};
+        } finally {
+            if (bmp != null) bmp.recycle();
+        }
+    }
+
+    private JSONObject err(JSONObject out, String msg) {
+        lastError = msg;
+        try {
+            out.put("ok", false);
+            out.put("error", msg);
+        } catch (Exception ignored) { /* JSONObject.put 不会失败 */ }
+        return out;
+    }
+}

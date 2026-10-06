@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # hosts/harmony/sync-core.sh —— ★核心移植副本的**字节级同步检查**（防漂移）
 #
-# 【为什么需要】鸿蒙工程里的 `entry/src/main/ets/core/app-stack.ts` 是
+# 【为什么需要】鸿蒙工程里的 `entry/src/main/ets/dev/app-stack.ts` 是
 #   `packages/router/src/app-stack.ts` 的**移植副本**（ArkTS 工程与 pnpm workspace
 #   是两套构建；本文件零运行时依赖 ⇒ 副本是成本最低的落地形态）。
 #   ★副本会漂移——上游改了而副本没跟上，两端行为分歧且**静默**。本脚本把这件事变成机器判据。
@@ -15,7 +15,7 @@ set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 UPSTREAM="$ROOT/packages/router/src/app-stack.ts"
-PORTED="$HERE/host-app/entry/src/main/ets/core/app-stack.ts"
+PORTED="$HERE/host-app/entry/src/main/ets/dev/app-stack.ts"
 
 [ -f "$UPSTREAM" ] || { echo "✗ 缺上游文件：$UPSTREAM"; exit 2; }
 [ -f "$PORTED" ] || { echo "✗ 缺移植副本：$PORTED"; exit 2; }

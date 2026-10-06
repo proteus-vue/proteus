@@ -21,10 +21,21 @@ import { createAppStack } from '@proteus-vue/router/app-stack'
 import { createRouter, createBranchNavigator } from '@proteus-vue/router/app-route'
 import { createAppNavigation } from '@proteus-vue/render-backend/app-navigation'
 
-// ★项目产物（gen-routes 生成）：**一个文件承载三份投影**（2026-10-02 统一后）
-//   —— `routes`（Web/MP）· `screens`/`screenNames`/`tabNames`（App）· `RouteParamsByName` 类型表
-//   全部来自 `auto-routes.ts`（同一棵路由树、同一次产出）——不再有第二份导航注册表。
-import { routes as projectRoutes, screens as projectScreens, screenNames, tabNames } from '../../../examples/router/auto-routes'
+// ★★关注点分层（见 hosts/README-LAYERS.md）：本入口属 dev（验证装置）。
+// ★★★（2026-10-07 分层重构 · 去项目硬编码）：此前 **写死** `import ... from '../../../examples/router/auto-routes'`
+//   ⇒ 换 `PROTEUS_APP_PROJECT`（superapp / css-conformance / 用户工程）时本入口仍读 examples，与参数化不一致。
+//   ⇒ 改为消费**构建期生成产物** `app-screen-content.generated.ts`（由 `gen-app-screen-content.mjs` 按
+//     当前 `PROTEUS_APP_PROJECT` 生成，含 routes/screens/tabNames 三投影——同一棵路由树）。
+import {
+  APP_SCREEN_REGISTRY,
+} from './app-screen-content.generated'
+import type { AppScreenSpec } from '@proteus-vue/router/app-stack'
+
+const projectRoutes = APP_SCREEN_REGISTRY.routes
+// generated 是字面量产物 ⇒ 断言为契约类型（字段集同源：registry.screens 即项目 auto-routes 的 screens）
+const projectScreens = APP_SCREEN_REGISTRY.screens as unknown as Record<string, AppScreenSpec>
+const screenNames = Object.keys(projectScreens)
+const tabNames = APP_SCREEN_REGISTRY.tabNames as readonly string[]
 
 // ★诚实边界：这两个产物由 `gen-routes` 生成（`proteus build` 时）。
 //   若仓库是**干净克隆且未构建过 examples**，本文件不存在 ⇒ 构建期报错（**不静默**）——

@@ -41,6 +41,39 @@ hosts/android/app/src/main/assets/bundle-host-runtime.js
 hosts/android/app/src/main/assets/bundle-lights.js
 # ★批次 43（superapp 真实应用）bundle 的拷贝（源 hosts/android/bridge/dist/bundle-superapp.js；同款规则同款理由）
 hosts/android/app/src/main/assets/bundle-superapp.js
+# ★鸿蒙签名配置（**机器本地**：含本机绝对路径 + keyPassword/storePassword）——入库形态是
+#   `build-profile.template.json5`（占位、签名空）；真实文件由 build-host-app.sh 首次构建自模板生成，不入库。
+hosts/harmony/host-app/build-profile.json5
+
+# ★★★关注点分层（2026-10-07，见 hosts/README-LAYERS.md §2 规则③）：**宿主构建产物一律不入库**。
+#   它们都由构建路径上的生成器再生（gen-app-screen-content / gen-*-fixture / gen-fixtures / build-batch），
+#   提交它们只会造成"两份副本漂移"（本仓已实锤：assets 里的 golden 副本停在旧版导致双端判据假红）。
+#   ★豁免（刻意入库，理由见 README-LAYERS）：OpsFixture.java（供克隆免生成即编译）。
+# Android assets：bundle-*.js（上面已列）之外的项目屏内容与夹具
+hosts/android/app/src/main/assets/bundle-vapor.js
+hosts/android/app/src/main/assets/app-screen-content.json
+hosts/android/app/src/main/assets/app-4050-tree.json
+hosts/android/app/src/main/assets/vapor-tree.json
+hosts/android/app/src/main/assets/vapor-artifacts.json
+hosts/android/app/src/main/assets/vapor-list-artifacts.json
+hosts/android/app/src/main/assets/vapor-stress-artifacts.json
+# ★browser-layout.json **不忽略**：它是 canonical（packages/layout-core-rust/tests/golden/）的同步副本，
+#   `check:cross-end-golden` 门禁需在**非构建期**读它（读 canonical 亦可，但保留副本让"单一来源"可判）。
+# ★vapor-ab-render.generated.ts **不忽略**：它是 `entry-vapor.ts` 的**类型检查输入**，而类型检查
+#   （build-batch 的 tsc）**先于**其生成器（build-and-run）⇒ 干净克隆需它入库（与 OpsFixture 同类理由）。
+hosts/shared/bridge/app-screen-content.generated.ts
+# 鸿蒙：rawfile 全部为 gen-fixtures.mjs 从 Android 同源复制/生成的项目产物与夹具
+hosts/harmony/host-app/entry/src/main/resources/rawfile/app-screen-content.json
+hosts/harmony/host-app/entry/src/main/resources/rawfile/bundle-app-stack.js
+hosts/harmony/host-app/entry/src/main/resources/rawfile/bundle-host-runtime.js
+hosts/harmony/host-app/entry/src/main/resources/rawfile/bundle-superapp.js
+hosts/harmony/host-app/entry/src/main/resources/rawfile/bundle-vapor.js
+hosts/harmony/host-app/entry/src/main/resources/rawfile/stress-44.json
+hosts/harmony/host-app/entry/src/main/resources/rawfile/app-4050-tree.json
+hosts/harmony/host-app/entry/src/main/resources/rawfile/vapor-tree.json
+hosts/harmony/host-app/entry/src/main/resources/rawfile/vapor-artifacts.json
+hosts/harmony/host-app/entry/src/main/resources/rawfile/vapor-list-artifacts.json
+hosts/harmony/fixtures/
 # ★灯光秀录屏原片（43MB）——与 iOS showcase.mp4 同款：网页交付物是正片
 #   website/public/morpheus-lights.mp4（6.6MB，已在库）；原片留本机复跑用
 hosts/android/results/lights-demo.mp4

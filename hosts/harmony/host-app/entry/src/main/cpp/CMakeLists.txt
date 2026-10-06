@@ -19,14 +19,16 @@ else()
 endif()
 
 # 渲染模块（直绘）
-add_library(proteus_render SHARED proteus_render.cpp)
+# ★关注点分层（见 hosts/README-LAYERS.md）：render 属 runtime（项目无关）、bench 属 dev（验证装置）；
+#   源文件各在 cpp/{runtime,dev}/ 子目录，库名（NAPI 模块名 proteus_render / proteus_bench）不变。
+add_library(proteus_render SHARED runtime/proteus_render.cpp)
 target_link_libraries(proteus_render PUBLIC libace_napi.z.so libace_ndk.z.so libhilog_ndk.z.so)
 # ★文本上屏：ArkGraphics2D typography（content modifier 回调里绘制）
 target_link_libraries(proteus_render PUBLIC libnative_drawing.so)
 
 # 4050 基准模块（Rust 核 + RenderNode）
 if(HAVE_RUST_CORE)
-  add_library(proteus_bench SHARED proteus_bench.cpp)
+  add_library(proteus_bench SHARED dev/proteus_bench.cpp)
   target_link_libraries(proteus_bench PUBLIC libace_napi.z.so libace_ndk.z.so libhilog_ndk.z.so)
   # ★★绘制通道真源（2026-10-03 · 三端打通绘制通道）：四通道在**渲染层**（proteus_render）建出来，
   #   而 probeChannels 的宿主实现在 proteus_bench —— 两个 .so 之间用 C 导出（`proteus_channel_state_of`）

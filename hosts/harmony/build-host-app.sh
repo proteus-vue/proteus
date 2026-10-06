@@ -40,6 +40,14 @@ DEVECO="$(find_deveco)" || {
 
 [ -d "$APP_DIR" ] || { echo "✗ 缺工程目录：$APP_DIR"; exit 2; }
 
+# ── build-profile.json5：**本地签名配置**（模板 → 本地，首次构建自动生成）──
+#   ★为什么不入库：signingConfigs 含**本机绝对路径 + keyPassword/storePassword**（机器本地状态）。
+#   入库形态是 `build-profile.template.json5`（占位、签名空）；真实文件由本行生成 + .gitignore 忽略。
+if [ ! -f "$APP_DIR/build-profile.json5" ]; then
+  cp "$APP_DIR/build-profile.template.json5" "$APP_DIR/build-profile.json5"
+  echo "  ℹ 已从 build-profile.template.json5 生成 build-profile.json5（未配置签名 ⇒ 产出 unsigned hap）"
+fi
+
 export NODE_HOME="$DEVECO/tools/node"
 export PATH="$NODE_HOME/bin:$PATH"
 export DEVECO_SDK_HOME="$DEVECO/sdk"
