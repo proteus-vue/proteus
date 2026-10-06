@@ -1294,3 +1294,14 @@
 **⑥ 教训**：#568 把「鸿蒙 app-content 不产 grad」当 pre-existing、把「iOS 无 tile」当具名边界——**都是"本端能实现、只差接线/实现"**，按新铁律**必须本项补齐**（正是用户点名要纠正的）。
 **⑦ 影响**：`hosts/harmony/.../proteus_host.cpp`（grad 通路）+ `hosts/harmony/.../proteus_render.cpp`（gradEndpoints 几何）· `hosts/ios/ProteusHost/runtime/selfdraw-scene.swift`（tile 栅格化）· `AGENTS.md`（新铁律）· `css-conformance/PLAYBOOK.md`（§0）· 验收页 + 四端截图。
 **⑧ 追赶修（用户「鸿蒙的页面好像偏下了」）**：鸿蒙 `superapp-screen-*` 逐屏截图路径原**滚到底**（`scrollToBottom`）⇒ 内容高于视口的页（本页 contentH 857 > 视口 816）**切掉页头/标题**，与 Web 基准（**视口截图=页顶锚定**）坐标系不符。改为**不滚到底**（保持 offset=0）⇒ 页顶对齐（Android/iOS 逐屏路径本就 top-anchor，鸿蒙补齐一致）。
+570. **★★★CSS overflow 族补收 · **页面级滚动锁定**（用户 2026-10-08 点名「昨天 overflow 族没验证长页面设置 overflow-y:hidden 是否真不能滚动」）——★三端真缺陷修复**：
+**① 用户指令**：「对了突然想起来了昨天的 overflow 族，当时没验证长页面设置 overflow-y: hidden 时页面是否真的不能滚动」。
+**② 侦察（先取证）**：Web 真值（真 Chromium 逐值实测）——overflow-y:hidden 的**效果取决于溢出声明落在哪个元素**：
+  · **固定高根**（height:100vh）+ hidden ⇒ **不滚**（scrollY 恒 0）；· **内容高根**（min-height:100vh）+ hidden ⇒ **照样滚**。
+  ⇒ 无歧义「锁滚」形态 = **固定高根 + overflow:hidden**。**App 端真缺陷实锤**：三端宿主算页面滚动范围**只看内容高、忽略页根 overflow** ⇒ 声明 hidden 的长页面**照样能滚**（真机：页根加 hidden 仍 range=20）。#560 overflow 批的诚实边界 a 项（「App 端 auto/scroll 滚动交互未接」）正是此缺口的预告。
+**③ 修复（三端）**：**页根 overflowY:hidden ⇒ 页面滚动范围置 0**（App「页面滚动」=整树滚动 ⇒ 页根 overflow 即页面滚动开关）：
+  · Android VaporRenderHost.applyContentScrollRange（读 specs.get(0).overflowY）；· iOS selfdraw setVerticalScrollRange 前判 nodes.first[overflowY]；· 鸿蒙 Superapp.renderCurrent（pageNodes[0].overflowY）。
+**④ 验收（四端全过 · 决策 #569 铁律）**：新增验收页 css-conformance/pages/overflow-page.vue（静态高块 2000px + 页根 overflow-y:hidden）；
+  · **Web**：overflow-page scrollY=0（锁）· background-position scrollY=22（可滚）；· **Android**：range=0（锁，rootOvf=hidden）/ range=20（可滚）；· **iOS**：range=0（锁）/ range=20（可滚）；· **鸿蒙**：max=0（锁，contentH 2125>816）/ max=41（可滚）。四端**锁/不锁行为一致**。
+**⑤ ★验收纪律（新坑）**：这类「**页面级行为**」页，内容**必须用静态高块**（非 v-for）——App 屏内容是**静态结构**，v-for 不展开（实测 40 行只折 1 行 ⇒ 无真溢出、测不出锁滚）。写进 PLAYBOOK。
+**⑥ 影响**：三端宿主（VaporRenderHost.java / selfdraw-scene.swift / Superapp.ets）· 验收页 overflow-page.vue · PLAYBOOK（页面滚动锁定真值 + 静态高块纪律）；实测无既有页受影响（无页声明页根 overflow-y:hidden ⇒ 纯 opt-in）。

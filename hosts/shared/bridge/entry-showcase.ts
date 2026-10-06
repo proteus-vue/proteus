@@ -23,7 +23,7 @@ import type { ShowcaseAct, ShowcaseProgram } from './showcase-program'
 
 // ★构建标识（由 hosts/ios/bridge/inject-build-id.mjs **编译期替换**——与 entry-bench/entry-selfdraw
 //   同一机制；报告据此断言"设备上跑的是本次构建"）
-const BUILD_ID = '6d3f1873-132710'
+const BUILD_ID = '2f526f56-140617'
 
 /** 帧内视图参数（建树时定，后续幕复用） */
 interface ViewGeom {
