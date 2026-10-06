@@ -16,6 +16,15 @@
 <script setup lang="ts">
 // ★R3 验证：响应式数据回写（点击 count++ → 订阅 → 增量 applyOps → 文本刷新）
 import { ref } from 'vue'
+// ★★★四端统一导航（2026-10-08 修复「Web/MP 点击无反应」）：`$nav('页名')` 是 App 运行期的
+//   导航一等动作；Web/MP 需要同名实现——本函数提供之：
+//     · Web：script setup 顶层绑定 → 模板 n.$nav 解析到它；
+//     · MP：`script/function-to-methods` 把顶层函数编成页方法 → this.$nav 解析到它；
+//     · App：编译器把 @tap="$nav('x')" 编译成 nav 动作（**不看函数体**）→ 本函数对 App 无害。
+import { router } from '../router'
+function $nav(name: string): void {
+  router.push({ name } as never)
+}
 const count = ref(0)
 </script>
 
