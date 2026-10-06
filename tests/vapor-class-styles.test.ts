@@ -1478,3 +1478,35 @@ describe('★批次 42 · CSS @keyframes + animation（对齐 Web 动效）', ()
     expect((f!.style as { animation: Array<{ kind: number }> }).animation[0]!.kind).toBe(4)
   })
 })
+
+// ★★★flex-direction 项（2026-10-08 · 用户抓出 Web 分歧）：display:flex 容器补初值 row（CSS 初值）——
+//   内核只有 flex（未声明 display 的 block 近似走 column）；显式 display:flex + 未写 flex-direction
+//   ⇒ 补 row（让 Web 标准写法在 App 直接成立，无需胶水补 flex-direction:row）。
+describe('★flex-direction 初值归一（display:flex 缺省补 row · 对齐 Web）', () => {
+  const nodeStyle = (sfc: string, n = 0) => buildLayoutTemplate(sfc, 'fd.vue').template.nodes[n]!.style as Record<string, unknown>
+
+  it('① display:flex 未声明 flex-direction ⇒ 补 row（Web 初值）', () => {
+    const st = nodeStyle('<template><view class="b"></view></template><style>.b{display:flex;justify-content:center}</style>')
+    expect(st.flexDirection, 'display:flex 缺省补 row').toBe('row')
+  })
+
+  it('② 显式 flex-direction:column ⇒ 保留（不被覆盖）', () => {
+    const st = nodeStyle('<template><view class="b"></view></template><style>.b{display:flex;flex-direction:column}</style>')
+    expect(st.flexDirection).toBe('column')
+  })
+
+  it('③ 未声明 display（block 近似）⇒ 不补（内核默认 column 不变）', () => {
+    const st = nodeStyle('<template><view class="b"></view></template><style>.b{justify-content:center}</style>')
+    expect(st.flexDirection, '未声明 display 不补 flexDirection').toBeUndefined()
+  })
+
+  it('④ 跨规则级联：父规则 display:flex + 子规则 flex-direction:column ⇒ column（级联后归一，非 per-rule）', () => {
+    const st = nodeStyle('<template><view class="b bcol"></view></template><style>.b{display:flex}.bcol{flex-direction:column}</style>')
+    expect(st.flexDirection, '显式声明胜出（级联后补初值）').toBe('column')
+  })
+
+  it('⑤ display:grid ⇒ 不补（网格不用主轴 flex-direction）', () => {
+    const st = nodeStyle('<template><view class="b"></view></template><style>.b{display:grid;grid-template-columns:1fr 1fr}</style>')
+    expect(st.flexDirection).toBeUndefined()
+  })
+})

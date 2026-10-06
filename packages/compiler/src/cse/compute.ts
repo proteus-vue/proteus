@@ -714,6 +714,12 @@ export function computeTree(roots: CseNode[], sheet: CseStyleSheet, opts: Comput
         if (w) unmapped.push({ prop: p, value: w.value })
       }
     }
+    // ★★★flex-direction 项（2026-10-08）：**display:flex 容器补初值 row**（CSS 初值；与浏览器 computed 一致）——
+    //   内核只有 flex（未声明 display 的 block 近似走 column），此处对**显式 display:flex** 补 row，
+    //   让 Web 标准写法（`display:flex;justify-content:center` 期望水平居中）在 App 上直接成立。
+    if (computed['display'] === 'flex' && computed['flex-direction'] === undefined) {
+      fields['flexDirection'] = 'row'
+    }
     // ★border-radius 逐角合并（引擎形态：统一半径 + 逐角掩码；合并失败 ⇒ 记 unmapped）
     const radius = resolveBorderRadiusFields(computed)
     if (radius) {
