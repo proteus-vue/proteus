@@ -55,7 +55,7 @@
 | HA1 | 现有 App 宿主改造（双路几何逐字节一致） | 已落地 | `file:platform/ios/ProteusPlatform/ProteusTextAdapter.swift` | — |
 | HA2 | 能力注入重构（度量 trait ✅ · 内核零平台分支 ✅ · **图像解码 trait 无消费点**） | 范围外 | `file:packages/host-abi/src/lib.rs`（decode_image 声明） | **内核不处理图像**（图像由各宿主各自解码——见 HostABI 文档；`decode_image` 无内核消费点）⇒ 该 trait 为 ABI 契约声明（保留），**登记终止态**（非"待实现"）。 |
 | HA3 | 能力插件（注册/调用/清单校验） | 已落地 | `file:packages/capabilities/src` | — |
-| HA4 | 原生组件宿主（引擎驱动生命周期；**C-ABI `native_view_*` 回调未绑**） | 范围外 | `file:packages/host-abi/include/proteus_host_abi.h` | Android **宿主内原生视图机制可用**（`ProteusHostView` native-host，真机三判据 PASS）。★澄清（取证）：**C-ABI vtable 三回调（`native_view_create/update/destroy`）在生产宿主端均未绑**——Android `platform/android/proteus-jni/src/host.rs` = `None`、iOS `selfdraw-scene.swift` = `nil`；**仅测试绑**（`host-abi` 单测 + `headless_host.c`）。Rust 核心在"缺 create ⇒ 显式报错"（不静默）。⇒ 属**残余实现批次**（非"新增宿主重实现"），**登记件 `docs/proteus-host-separation-b5-plan.md`**。 |
+| HA4 | 原生组件宿主（引擎驱动生命周期；**C-ABI `native_view_*` 回调**） | 范围外 | `file:packages/host-abi/include/proteus_host_abi.h` | Rust 核心（引擎驱动生命周期）+ 单测已落地。**Android C-ABI 绑定：B5-2（`docs/proteus-host-separation-b5-plan.md`）已落地（2026-10-07）**——`ProteusHost` 加三回调（opt-in default）、`proteus-jni/src/host.rs` 三蹦床 + GlobalRef 句柄注册表、embed-demo **真机**建真 Android View（`native_view_created=1 · frame=24,221,342,140`）。**余**：**iOS ABI 探针路径**（`selfdraw-scene.swift`）仍传 `nil`——iOS 无生产原生组件消费者（selfdraw 是 ABI 探针）⇒ 具名边界。 |
 | HA5 | 存量 App 嵌入（AAR + demo + 文档） | 已落地 | `file:platform/android/build-aar.sh` | — |
 | HA6 | Playground 壳统一走 ABI | 范围外 | `doc:docs/Proteus_Playground设计方案.md` | 依赖 Playground（规划态·零实现）；独立特性线 |
 

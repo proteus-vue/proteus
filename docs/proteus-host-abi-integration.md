@@ -83,6 +83,26 @@ return (Float.floatToRawIntBits(w) & 0xFFFFFFFFL) | (((long) Float.floatToRawInt
 **线程契约**（方案 §5.2）：所有引擎调用必须在**同一线程**（你的主线程）；
 这两个回调也由引擎在**同一线程内同步调用**——不会从别的线程打回来。
 
+### 2.1 原生组件（可选 · 引擎驱动生命周期）
+
+树里 `nativeHost: true` 的节点（地图 / 视频 / web-view / 第三方 SDK）需要**真原生 View**。
+你只需实现三个**可选**回调，**引擎会替你编排生命周期**（你不必维护"IR ↔ 原生对象"的对应）：
+
+```java
+// 默认实现返回 null / 空操作 ⇒ 不实现就是"不支持原生组件"（引擎在树里遇到 nativeHost **明确报错**，不静默）
+@Override public Object nativeViewCreate(String kind, float x, float y, float w, float h) { … }
+@Override public void   nativeViewUpdate(Object handle, float x, float y, float w, float h) { … }  // 仅几何真变时调
+@Override public void   nativeViewDestroy(Object handle) { … }
+```
+
+- 三个方法都有**缺省实现**（opt-in）：不支持某个 `kind` ⇒ `nativeViewCreate` **返回 null**，
+  引擎记为"宿主拒绝创建"（`stats().native_view_create_failed` + `last_error`）——业务侧应走降级，**不要假设可用**。
+- 引擎负责：`loadTree` 建新树 ⇒ 调 `create`；`submitFrame`（布局变了）⇒ 调 `update`；
+  节点消失 / 换树 / `close()` ⇒ 调 `destroy`。**滚动 / 动画帧**后调一次 `engine.syncNativeViews()`。
+- **z-order 由你决定**：原生 View 与自绘内容的层序是平台成本（Android 后加的 View 在上；
+  iOS 子视图天然在上）——内核只给几何，不抽象层序。
+- 几何单位与 `measureText` 的 `fontSize` 一致（v1 = 逻辑像素/px）。
+
 ## 3. 驱动一帧（批处理红线）
 
 ```java

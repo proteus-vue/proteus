@@ -11,6 +11,7 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.os.Bundle;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.TextView;
 
@@ -83,6 +84,7 @@ public class MainActivity extends Activity implements ProteusHost {
     private static final class Box {
         float x, y, w, h;
         float tx = 0, ty = 0, scale = 1, rotate = 0, opacity = 1;
+        int tint = -1;   // ★动画文字色（帧更新末字段；-1 = 未消费，保留静态色）
     }
 
     private final Map<Integer, Box> boxes = new HashMap<>();
@@ -124,6 +126,11 @@ public class MainActivity extends Activity implements ProteusHost {
     /* ── 引擎与 run ── */
 
     private ProteusEngine engine;
+    /** ★HA4：C-ABI 原生组件回调（引擎驱动）建出的真 Android View（demo 可见证据） */
+    private View nativeDemoView;
+    private String nativeKindSeen = null;
+    private int nativeFrameCreates = 0;
+    private int nativeFrameUpdates = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -197,7 +204,9 @@ public class MainActivity extends Activity implements ProteusHost {
                     + "{\"id\":1,\"width\":390,\"height\":844,\"flexDirection\":\"column\",\"padding\":{\"top\":80,\"left\":24,\"right\":24}},"
                     + "{\"id\":2,\"parentId\":1,\"width\":342,\"height\":120,\"margin\":{\"bottom\":16}},"
                     + "{\"id\":3,\"parentId\":1,\"text\":\"Hello from AAR\",\"isText\":true,\"fontSize\":22},"
-                    + "{\"id\":4,\"parentId\":1,\"width\":342,\"height\":80,\"margin\":{\"top\":16}}"
+                    + "{\"id\":4,\"parentId\":1,\"width\":342,\"height\":80,\"margin\":{\"top\":16}},"
+                    // ★HA4：nativeHost 节点（引擎驱动原生组件生命周期 → 调宿主的 nativeViewCreate）
+                    + "{\"id\":5,\"parentId\":1,\"nativeHost\":true,\"semantic\":\"shell.demo\",\"width\":342,\"height\":140,\"margin\":{\"top\":16}}"
                     + "]}";
             int rc = engine.loadTree(tree);
             out.put("load_tree_rc", rc);
@@ -243,6 +252,22 @@ public class MainActivity extends Activity implements ProteusHost {
 
             // 诊断读数（客户排查入口）
             org.json.JSONObject st = new org.json.JSONObject(engine.stats());
+            // ★HA4 原生组件证据：引擎驱动的 create/update + 真 Android View 已挂载
+            out.put("native_view_created", st.optInt("native_view_created"));
+            out.put("native_view_updated", st.optInt("native_view_updated"));
+            out.put("native_view_create_failed", st.optInt("native_view_create_failed"));
+            out.put("native_kind_seen", nativeKindSeen);
+            out.put("native_frame_creates", nativeFrameCreates);
+            out.put("native_frame_updates", nativeFrameUpdates);
+            out.put("native_attached", nativeDemoView != null && nativeDemoView.getParent() == root);
+            // ★读 LayoutParams（宿主**依回调矩形**设置的值）——getLeft/getWidth 需 layout 过后才生效，
+            //   同步 runDemo 里恒 0 ⇒ 会误导；这里给的是"引擎给的几何 → 宿主落到的参数"同源证据。
+            if (nativeDemoView != null && nativeDemoView.getLayoutParams() instanceof FrameLayout.LayoutParams) {
+                FrameLayout.LayoutParams fp = (FrameLayout.LayoutParams) nativeDemoView.getLayoutParams();
+                out.put("native_frame", (int) fp.leftMargin + "," + (int) fp.topMargin + "," + fp.width + "," + fp.height);
+            } else {
+                out.put("native_frame", null);
+            }
             out.put("stats_submit_frame_calls", st.optInt("submit_frame_calls"));
             out.put("stats_measure_calls", st.optInt("measure_calls"));
             out.put("last_error", st.opt("last_error"));
@@ -256,6 +281,49 @@ public class MainActivity extends Activity implements ProteusHost {
             if (engine != null) { engine.close(); engine = null; }
         }
         writeReport(out.toString());
+    }
+
+    /* ══ ★HA4：原生组件宿主回调（C-ABI 驱动；引擎在 loadTree/submitFrame 自动调）══
+     *   证明：**Java 宿主经 C-ABI 收到原生组件生命周期**并建出真 Android View（不是自绘近似）。 */
+    @Override
+    public Object nativeViewCreate(String kind, float x, float y, float width, float height) {
+        nativeKindSeen = kind;
+        nativeFrameCreates++;
+        // 把 kind 变成一个**真 Android View**（demo 用带底色的 TextView 代表"原生组件"：map/webview/…）
+        TextView v = new TextView(this);
+        v.setText("native:" + kind);
+        v.setTextColor(0xFFFFFFFF);
+        v.setBackgroundColor(0xFF2E7D5B);
+        v.setGravity(android.view.Gravity.CENTER);
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams((int) width, (int) height);
+        lp.leftMargin = (int) x;
+        lp.topMargin = (int) y;
+        v.setLayoutParams(lp);
+        nativeDemoView = v;
+        root.addView(v);   // ★真加进视图树（后加在上 ⇒ 覆盖自绘内容——Android 固有 z-order）
+        return v;
+    }
+
+    @Override
+    public void nativeViewUpdate(Object handle, float x, float y, float width, float height) {
+        nativeFrameUpdates++;
+        if (handle instanceof View) {
+            View v = (View) handle;
+            ViewGroup.LayoutParams lp = v.getLayoutParams();
+            if (lp instanceof FrameLayout.LayoutParams) {
+                FrameLayout.LayoutParams f = (FrameLayout.LayoutParams) lp;
+                f.leftMargin = (int) x;
+                f.topMargin = (int) y;
+                f.width = (int) width;
+                f.height = (int) height;
+                v.setLayoutParams(f);
+            }
+        }
+    }
+
+    @Override
+    public void nativeViewDestroy(Object handle) {
+        if (handle instanceof View && root != null) root.removeView((View) handle);
     }
 
     private int statsField(String key) {

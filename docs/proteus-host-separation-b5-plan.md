@@ -30,6 +30,7 @@
 | **交付** | ① `platform/android/proteus-jni/src/host.rs` 实现三回调（映射到 Android `View` 的 add/update/remove）；② iOS C-ABI 路径（若消费）同办；③ `proteus_sync_native_views` 在**滚动/动画后**调用接线（几何变了要跟着动）；④ 文档更新（`proteus-host-abi-integration.md` 补"原生组件"接入说明）。 |
 | **验收判据（可机器判定）** | ① 设备/集成测试：含 `nativeHost` 节点的树经 **C-ABI** 产出真原生视图（非 nil 路径）；② **z-order 判据**（宿主所有——重叠区原生在上）与**滚动跟随**（`sync_native_views` 生效）；③ "未提供回调 ⇒ 引擎显式报错"仍保留（**不静默**）；④ 与 `ProteusHostView`（宿主内机制）**行为对拍一致**（位置/渲染/z-order 三判据，沿用既有口径）。 |
 | **依赖** | 可独立于 B5-1；若同批做，先 B5-1（platform 分层）再 B5-2（回调接线）。 |
+| **✅ 进展（B5-2 · Android 已落地 · 2026-10-07）** | **Android C-ABI `native_view_*` 绑定完成**：① SDK 门脸 `ProteusHost` 加三方法（`nativeViewCreate/Update/Destroy`，**opt-in default**——不实现则 create 返回 null，引擎记为"宿主拒绝"并报错，不静默）；② `platform/android/proteus-jni/src/host.rs` 实现三**蹦床**（引擎→Java；句柄 = **GlobalRef 注册表索引**，因 Java 对象不能当裸指针传）+ 接线 vtable；③ 消费方 `hosts/android/embed-demo` 实现三回调（**真 Android View** 挂进视图树）。验收：`check:host-abi-aar` ✅（`.so` 含 native_view 符号）· `host-abi` Rust 测试 16/16 ✅ · **embed-demo **真机**** ⇒ 判据 ⑧ `native_view_created=1 · kind=shell.demo · 真 View 已挂载 · frame=24,221,342,140`（**C-ABI 驱动 + 引擎几何应用到真 View**）✅ · 截图见绿块（原生在上）。**余**：iOS ABI 探针路径（`selfdraw-scene.swift` 的 `proteus_engine_*` 消费者）仍传 `nil`——**iOS 无生产原生组件消费者**（selfdraw 是 ABI 探针）⇒ 具名边界（如需可另立）。 |
 | **风险 / 纪律** | z-order 与滚动同步是**平台成本**（既定"不抽象"）；AAR SDK（`platform/android/proteus-sdk`）是 C-ABI 消费主入口，其宿主回调需一并走通。 |
 | **诚实边界** | 门禁**无法机器判定"回调已绑"**（vtable 运行时装配）⇒ 判据落到 device test；iOS 是否也走 C-ABI 消费面，实施前**先取证**（当前 selfdraw 传 nil）。 |
 

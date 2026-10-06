@@ -46,4 +46,30 @@ public interface ProteusHost {
      * 【语义】这不是"必须立刻画"，而是"有事要做"——宿主可以合并到自己的帧节奏里。
      */
     void requestFrame();
+
+    /* ────────────────────────── ⑦ 原生组件（**可选**，HA4） ──────────────────────────
+     * 【引擎驱动生命周期（宿主不必维护 IR↔原生对象对应）】树里 `nativeHost:true` 的节点，
+     *   引擎会在 `loadTree`/`submitFrame` 时**自动**回调本三方法（创建 / 几何真变了才 update /
+     *   节点消失或换树 ⇒ destroy）。宿主只负责"把 kind 变成一个真 View 并摆到给的矩形"。
+     *
+     * 【三个方法都有**缺省实现**（opt-in）】不实现 ⇒ 引擎在树里遇到 nativeHost 时会**明确报错**
+     *   （`stats().last_error` + `native_view_create_failed`），**不静默跳过**——"界面缺一块"必须可见。
+     *
+     * 【几何单位】与 `measureText` 的 `fontSize` 同单位（当前 SDK 契约 = 逻辑像素/px）。
+     * 【线程】与其余回调一致：由引擎在**同一线程**同步调用。
+     */
+
+    /**
+     * 创建一个原生 View（map/video/web-view/…），返回一个**不透明句柄**（Java 对象；引擎只透传）。
+     * 不支持该 kind ⇒ **返回 null**（引擎记为"宿主拒绝创建"并如实报错；业务侧应走降级）。
+     */
+    default Object nativeViewCreate(String kind, float x, float y, float width, float height) {
+        return null;
+    }
+
+    /** 更新原生 View 的几何（**仅当矩形真变了**才被调；句柄 = create 的返回）。 */
+    default void nativeViewUpdate(Object handle, float x, float y, float width, float height) {}
+
+    /** 销毁原生 View（节点消失 / 换树 / 引擎销毁时调）。 */
+    default void nativeViewDestroy(Object handle) {}
 }
