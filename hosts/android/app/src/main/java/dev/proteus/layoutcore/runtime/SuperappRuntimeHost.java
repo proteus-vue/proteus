@@ -44,6 +44,29 @@ public final class SuperappRuntimeHost {
         return draw.applyOps(opsJson);
     }
 
+    /**
+     * ★★★新屏挂载前**重置滚动偏移**（用户抓出「网格页打开顶部超出状态栏，下滑就正常」）：
+     *   `scrollY/scrollX` 是**视图状态**（非树状态）⇒ 上一屏滚动后偏移残留 ⇒ 新屏内容整体上移。
+     *   统一运行期在 mountScreen 前调本方法（`proteusHost.resetScroll()`）。
+     */
+    @SuppressWarnings("unused")
+    public void resetScroll() {
+        if (draw.view() != null) {
+            draw.view().setContentScrollY(0);
+            draw.view().setContentScrollX(0);
+        }
+    }
+
+    /** ★判据用：滚动一步 `{dx,dy}`（物理像素）——与真手指同一条 `scrollDragBy` 链。 */
+    @SuppressWarnings("unused")
+    public String scrollBy(String argsJson) {
+        try {
+            org.json.JSONObject a = new org.json.JSONObject(argsJson);
+            if (draw.view() == null) return "{}";
+            return draw.view().scrollDragBy((float) a.optDouble("dx", 0), (float) a.optDouble("dy", 0));
+        } catch (Exception e) { return "{\"error\":\"" + e.getMessage() + "\"}"; }
+    }
+
     /** 读内核几何（诊断/探针）。 */
     @SuppressWarnings("unused")
     public String readRects() {

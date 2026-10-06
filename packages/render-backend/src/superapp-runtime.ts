@@ -20,6 +20,15 @@ export interface SuperappHostPorts {
   applyOps(opsJson: string): string
   /** 注册手势反向回调名（宿主在"语义手势 + 命中节点 + 冒泡链"时回调该全局函数） */
   onGesture?(cbName: string): void
+  /**
+   * ★★★**新屏挂载前重置滚动偏移**（用户抓出「网格流/网格区域打开默认顶部超出状态栏，下滑就正常」）。
+   *
+   * 【为什么必须】滚动偏移（Android scrollY/scrollX / iOS contentOffset）是**视图属性**、不是树属性
+   *   ⇒ 上一屏滚动后挂载新屏时偏移**仍在** ⇒ 新屏内容整体上移（顶部被顶出/压过状态栏）；
+   *   一旦用户下滑，偏移被重新钳制 ⇒ "又正常了"（现象迷惑，根因就是跨屏状态泄漏）。
+   *   iOS SelfDrawView.resetContentOffset() 注释早写明"建新树时必须调用"——统一运行期补上这一步。
+   */
+  resetScroll?(): void
 }
 
 export interface SuperappRuntimeOptions {
@@ -98,6 +107,8 @@ export function createSuperappRuntime(opts: SuperappRuntimeOptions): SuperappRun
     mountScreen(name: string): boolean {
       if (!rt.has(name)) { note(`[superapp-runtime] 无该屏运行期产物：${name}`); return false }
       const inst = rt.instance(name)
+      // ★新屏挂载前重置滚动偏移（跨屏状态泄漏防护——见 SuperappHostPorts.resetScroll 注释）
+      if (typeof opts.host.resetScroll === 'function') opts.host.resetScroll()
       opts.host.mount(JSON.stringify({ viewport: inst.content().viewport, nodes: inst.content().nodes }))
       cur = name
       return true

@@ -24,6 +24,8 @@ import JavaScriptCore
     func readRects() -> String
     /// 注册手势反向回调名（native 层**截获**：`SelfDrawView.emitGesture` 命中后调该 JS 全局函数）
     func onGesture(_ cbName: String)
+    /// ★新屏挂载前重置滚动偏移（contentOffset 是视图状态，非树状态——见 SuperappRuntimeHost 注释）
+    func resetScroll()
     /// 能力通道（与 HostRuntimeBridge 同契约）
     func invoke(_ method: String, _ argsJson: String) -> String
     func memUsage() -> String
@@ -50,6 +52,8 @@ final class SuperappRuntimeHost: NSObject, SuperappRuntimeExports {
     func applyOps(_ opsBytesJson: String) -> String { draw.applyOps(opsBytesJson) }
     func readRects() -> String { draw.readRects() }
     func onGesture(_ cbName: String) { gestureCb = cbName }
+    /// ★新屏挂载前重置滚动偏移（用户抓出「网格页打开顶部超出状态栏，下滑就正常」）。
+    func resetScroll() { draw.view?.resetContentOffset() }
 
     /* ── 能力 / 引擎（转 HostRuntimeBridge）── */
     func invoke(_ method: String, _ argsJson: String) -> String { caps.invoke(method, argsJson) }

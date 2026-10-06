@@ -168,6 +168,13 @@ public class SuperappActivity extends android.app.Activity {
                 }
                 renderCurrent(readState());
                 android.util.Log.i(TAG, "SUPERAPP_LAUNCHER_READY screen=" + currentName(readState()));
+                // ★判据用：`--es scroll "dx,dy"`（物理像素）——**先滚动**（验证"滚动后导航"的跨屏偏移重置）。
+                String scroll = getIntent() != null ? getIntent().getStringExtra("scroll") : null;
+                if (scroll != null && scroll.contains(",") && draw.view() != null) {
+                    String[] sd = scroll.split(",");
+                    draw.view().scrollDragBy(Float.parseFloat(sd[0].trim()), Float.parseFloat(sd[1].trim()));
+                    android.util.Log.i(TAG, "SUPERAPP_SCROLL_TEST " + scroll + " → scrollY=" + draw.view().getContentScrollY());
+                }
                 // ★★★B1 判据用：`--es tap "x,y"`（**物理像素**）——注入合成 tap 走
                 //   hitTest → 手势 sink → JS 共享运行期派发（与真触摸同一条链）。
                 String tap = getIntent() != null ? getIntent().getStringExtra("tap") : null;
@@ -178,7 +185,8 @@ public class SuperappActivity extends android.app.Activity {
                     QuickJsEngine.EvalResult tr = QuickJsEngine.eval("proteusHost.tapAt(" + org.json.JSONObject.quote(json) + ")");
                     QuickJsEngine.nativeRunPendingJobs();   // 泵微任务（$nav → router.push 的续体）
                     android.util.Log.i(TAG, "SUPERAPP_TAP " + json + " => " + (tr != null ? tr.value : "?")
-                            + " cur=" + currentName(readState()));
+                            + " cur=" + currentName(readState())
+                            + " scrollY=" + (draw.view() != null ? draw.view().getContentScrollY() : -1));
                     QuickJsEngine.EvalResult dbg = QuickJsEngine.eval("__proteusSuperappDebug()");
                     android.util.Log.i(TAG, "SUPERAPP_DEBUG " + (dbg != null ? dbg.value : "?"));
                 }

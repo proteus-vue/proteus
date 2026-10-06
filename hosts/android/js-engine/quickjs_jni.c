@@ -106,7 +106,9 @@ static struct {
   /* ★★交互闭环（2026-10-01）：手势探针 + 进程内注入 tap（判据驱动；真机 input tap 无权限） */
   jmethodID probe_gesture;
   jmethodID tap_at;
-} g_host_methods = { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL };
+  /* ★B1：新屏挂载前重置滚动偏移（void 无参） */
+  jmethodID reset_scroll;
+} g_host_methods = { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL };
 
 /* ★前向声明：eval_impl 之后要泵 job（定义在下方；C 里调用点必须先可见） */
 static int pump_jobs_bounded(void);
@@ -314,6 +316,14 @@ static JSValue js_host_gc(JSContext *ctx, JSValueConst this_val, int argc, JSVal
   (void)argc;
   (void)argv;
   return host_call_noarg_impl(ctx, g_host_methods.gc, 0);
+}
+
+/** `proteusHost.resetScroll()` —— 新屏挂载前重置滚动偏移（void 无参；B1 跨屏状态泄漏防护） */
+static JSValue js_host_reset_scroll(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+  (void)this_val;
+  (void)argc;
+  (void)argv;
+  return host_call_noarg_impl(ctx, g_host_methods.reset_scroll, 0);
 }
 
 /** `proteusHost.mount(treeJson)` —— 首帧建树（**有返回**：Java 侧回执 JSON） */
@@ -537,6 +547,8 @@ static jstring eval_impl(JNIEnv *env, jstring source, jboolean with_host) {
     }
     if (g_host_methods.tap_at != NULL) {
       JS_SetPropertyStr(g_ctx, host, "tapAt", JS_NewCFunction(g_ctx, js_host_tap_at, "tapAt", 1));
+      if (g_host_methods.reset_scroll != NULL)
+        JS_SetPropertyStr(g_ctx, host, "resetScroll", JS_NewCFunction(g_ctx, js_host_reset_scroll, "resetScroll", 0));
       LOGI("宿主已实现 tapAt ⇒ JS 侧可在进程内注入真触摸（交互闭环判据）");
     }
     // ★★★反向通道注册端（交互闭环）：无条件注入（它只写一个全局名，不需要宿主实现什么）
@@ -696,6 +708,9 @@ Java_dev_proteus_layoutcore_QuickJsEngine_nativeSetHostCallback(JNIEnv *env, jcl
     g_host_methods.probe_gesture = (*env)->GetMethodID(env, c, "probeGesture", "()Ljava/lang/String;");
     if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
     g_host_methods.tap_at = (*env)->GetMethodID(env, c, "tapAt", "(Ljava/lang/String;)Ljava/lang/String;");
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+    /* ★B1：resetScroll（void 无参）——运行期宿主桥暴露时才有 */
+    g_host_methods.reset_scroll = (*env)->GetMethodID(env, c, "resetScroll", "()V");
     if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
     if (g_host_methods.post == NULL) {
       LOGE("宿主回调缺少 post(String) 方法（其余入口仍按各自实现条件注入）");
