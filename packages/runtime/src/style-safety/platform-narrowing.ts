@@ -120,6 +120,8 @@ export function narrowValue(prop: string, value: unknown, platform: StylePlatfor
     case 'BorderStyle':
     // ★★★overflow-x 项（2026-10-06）：溢出关键字枚举平台无关（单轴归一在编译期/内核完成）。
     case 'Overflow':
+    // ★★★justify-self 项（2026-10-06）：网格项行内轴自对齐（关键字枚举，平台无关——布局语义在内核）。
+    case 'JustifySelf':
     case 'Color':
       return { valid: true, value }
     case 'Transform':

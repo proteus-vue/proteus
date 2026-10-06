@@ -85,6 +85,8 @@ pub const E_ALIGN_SELF: u8 = 1 << 3;
 pub const E_DISPLAY: u8 = 1 << 4;
 pub const E_POSITION: u8 = 1 << 5;
 pub const E_OVERFLOW: u8 = 1 << 6;
+/// ★★★justify-self 项（2026-10-06）：网格项行内轴自对齐（u8 位图的最后一格）
+pub const E_JUSTIFY_SELF: u8 = 1 << 7;
 
 /* ── flags ── */
 pub const FLAG_IS_TEXT: u8 = 1 << 0;
@@ -100,6 +102,8 @@ const ALIGN_VALUES: [&str; 5] = ["stretch", "flex-start", "center", "flex-end", 
 const DISPLAY_VALUES: [&str; 3] = ["flex", "none", "grid"];
 const POSITION_VALUES: [&str; 3] = ["static", "relative", "absolute"];
 const OVERFLOW_VALUES: [&str; 4] = ["visible", "hidden", "scroll", "auto"];
+/// ★★★justify-self 项（2026-10-06）：网格项行内轴自对齐取值表（`auto` ⇒ Option::None，不入表）
+const JUSTIFY_SELF_VALUES: [&str; 9] = ["normal", "start", "end", "flex-start", "flex-end", "self-start", "self-end", "center", "stretch"];
 
 fn encode_enum(values: &[&str], s: &str) -> Option<u8> {
     values.iter().position(|v| *v == s).map(|i| i as u8)
@@ -267,6 +271,10 @@ pub fn encode(req: &LayoutRequest) -> Vec<u8> {
         if n.overflow.is_some() {
             em |= E_OVERFLOW;
         }
+        // ★★★justify-self 项（2026-10-06）：网格项行内轴自对齐（`auto` ⇒ 不设，回落父 justify-items）
+        if n.justify_self.is_some() {
+            em |= E_JUSTIFY_SELF;
+        }
 
         let mut flags: u8 = 0;
         // ★批次 17：margin auto 逐边（flags 高位 4 位——低 4 位已被 TEXT/NATIVE/STYLE_KEY 占用）
@@ -345,6 +353,7 @@ pub fn encode(req: &LayoutRequest) -> Vec<u8> {
         put_e!(E_DISPLAY, n.display, &DISPLAY_VALUES);
         put_e!(E_POSITION, n.position, &POSITION_VALUES);
         put_e!(E_OVERFLOW, n.overflow, &OVERFLOW_VALUES);
+        put_e!(E_JUSTIFY_SELF, n.justify_self, &JUSTIFY_SELF_VALUES);
 
         // ★文本字面量：**内联**在节点变长区（而非池引用）——
         //   理由：池需要一个「池起点」基址，而该基址要么写进 header（多 4 字节）、
@@ -487,6 +496,7 @@ pub fn decode(buf: &[u8]) -> Result<LayoutRequest> {
         n.display = get_e!(E_DISPLAY, &DISPLAY_VALUES);
         n.position = get_e!(E_POSITION, &POSITION_VALUES);
         n.overflow = get_e!(E_OVERFLOW, &OVERFLOW_VALUES);
+        n.justify_self = get_e!(E_JUSTIFY_SELF, &JUSTIFY_SELF_VALUES);
 
         if flags & FLAG_HAS_TEXT_LITERAL != 0 {
             let len = r.u32()? as usize;

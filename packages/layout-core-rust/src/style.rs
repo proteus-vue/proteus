@@ -385,6 +385,11 @@ pub struct LStyle {
     pub align_content: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub align_self: Option<String>,
+    /// ★★★justify-self 项（2026-10-06）：网格项**行内轴自对齐**（CSS Box Alignment 3；仅 grid 容器消费——
+    ///   与 Web「flex 容器下被忽略」同语义）。开放字符串；缺省 `auto` = 回落父 justify-items（CSS 语义）。
+    ///   ★诚实边界：`baseline` 在 taffy 的 grid 路径按 start 近似处理（与 Web 不符）⇒ 未列封闭集（编译期诊断）。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub justify_self: Option<String>,
 
     #[serde(default)]
     pub flex_grow: f32,
@@ -642,6 +647,7 @@ impl Default for LStyle {
             align_items: default_align(),
             align_content: default_align_content(),
             align_self: None,
+            justify_self: None,
             flex_grow: 0.0,
             flex_shrink: 1.0,
             flex_basis: None,

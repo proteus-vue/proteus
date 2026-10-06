@@ -610,6 +610,18 @@
       "note": "★批次 12（2026-10-04）：引擎 `Display::Grid` + `LStyle.grid_template_columns/rows`（字符串轨迹）+ `NodeDto` + taffy grid_template_* 映射（parse_grid_tracks：fr/px/数字）；编译器 display:grid 入封闭集 + `grid-template-columns/rows` 解析（**显式轨迹**，`repeat(N,X)` 编译期展开）。★批次 41（2026-10-04）：`grid-column`/`grid-row` **线号放置**（`<n>` / `<start> / <end>`，线号可负——`1 / -1` 跨全宽）已支持（内核 taffy `Line<GridPlacement>`）。★**诚实边界**：显式轨迹（fr/px/数字）+ 线号放置（非 span/非命名线）——auto/minmax/fit-content/命名线/隐式行（grid-auto-*）/`span`/`grid-area` 定位**未支持**，诊断跳过；Skyline 端实测退化为 block ⇒ 有条件可用"
     },
     {
+      "id": "justify-self",
+      "css": "justify-self（网格项行内轴自对齐）",
+      "category": "layout",
+      "today": "supported",
+      "tier": "L2",
+      "strategy": "直映射",
+      "probe": [
+        "justify-self"
+      ],
+      "note": "★★★justify-self 项（2026-10-06 · css:next P0·9× · CSS Box Alignment 3）：网格项**行内轴自对齐**。语料 9 处全在 grid 上下文（p-formfactor 仪表盘 justify-self: start/stretch）。契约：新级别 JustifySelf（四同步）；编译器 APP_LAYOUT_FIELDS + 封闭集（auto/normal/start/end/flex-start/flex-end/self-start/self-end/center/stretch）；内核 LStyle.justify_self → taffy Style.justify_self（grid 计算路径原生消费——flex 容器下 taffy 与 Web 同为「忽略」）；blob 枚举位图 E_JUSTIFY_SELF。★诚实边界：baseline/left/right 未列（taffy 的 grid baseline 按 start 近似=与 Web 不符 ⇒ 诊断跳过，不静默近似）；仅 grid 容器生效（taffy 原生语义=Web 语义：flex 下被忽略）；宿主零改动（纯内核布局）。★Skyline 官方属性表无 justify-self（该端无 Grid 容器）——主承载端为 App（自研内核）"
+    },
+    {
       "id": "aspect-ratio",
       "css": "aspect-ratio",
       "category": "layout",

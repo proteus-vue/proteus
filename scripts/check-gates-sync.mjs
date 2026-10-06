@@ -66,6 +66,10 @@ const LOCAL_ONLY = {
   //   那部分不参与 CI 的 TS 构建（真机宿主需 NDK/Xcode），CI 上跑它只会扫到空集 ⇒ 假门禁。
   //   它的作用域是**开发机**：改宿主代码后立刻拦下"平台侧再舍入一次"。
   'check:host-rounding': '扫描 hosts/（Android/iOS 宿主源码）——CI 不构建宿主，扫不到任何文件 ⇒ 假门禁',
+  // ★★★宿主内核键门禁（2026-10-06 · css:next justify-self 项配套）：从内核 style_from_dto 推出消费键，
+  //   断言 Android 宿主白名单覆盖（漏登记 = 请求树不带 = 内核静默用默认——本仓已三次踩同款）。
+  //   与 check:host-rounding 同族：宿主侧门禁，开发机跑（CI 无宿主构建语境）。
+  'check:host-kernel-keys': '宿主侧键契约门禁（内核 ffi.rs ↔ Android 宿主白名单）——与 check:host-rounding 同族（开发机跑）',
   // ★C3 编译期基线：绝对毫秒跨机不可比（本仓既有认识：异构 CI 同机可达 1.6×），
   //   判据虽以比值为主（体积膨胀比），但全量/增量仍带宽松绝对上界 ⇒
   //   在 CI 共享 runner 上会因机器差异产生噪声红。⇒ 归**开发机**：改编译器后本地跑。

@@ -146,6 +146,14 @@ export function mapStyleIRToSkyline(fields: Record<string, unknown>, opts: Skyli
         if (put('overflow', 'overflow', 'hidden')) continue
         continue
       }
+      // ★★★justify-self 项（2026-10-06）：**原样透传**——与真实构建路径（transformStyleToWxss 的
+      //   文本级转换）一致：用户 CSS 里的 `justify-self: center` 本就逐字进 wxss（px2rpx 不碰关键字）。
+      //   ▲ 诚实边界：Skyline 官方属性表**无** justify-self（该端无 Grid 容器——grid 族已在别处登记），
+      //     引擎侧无保证；本项以 App（自研内核，taffy 原生支持）为主承载端。
+      if (field === 'justifySelf') {
+        put(field, 'justify-self', value)
+        continue
+      }
       put(field, kebab(field), value)
       continue
     }

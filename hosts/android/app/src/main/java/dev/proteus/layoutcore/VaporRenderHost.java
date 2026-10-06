@@ -1185,6 +1185,12 @@ final class VaporRenderHost {
             "margin", "padding", "flexDirection", "flexWrap", "justifyContent", "alignItems", "alignContent", "alignSelf",
             "flexGrow", "flexShrink", "flexBasis", "gap", "rowGap", "columnGap", "display", "position", "top", "left", "right", "bottom",
             "gridTemplateColumns", "gridTemplateRows", "aspectRatio", "pointerEvents", "fontFamily",
+            // ★★★justify-self 项（2026-10-06）：**网格项行内轴自对齐** —— 内核（taffy Style.justify_self）已消费，
+            //   漏登记 ⇒ 请求树不带 ⇒ 内核静默用默认（真机实测：center/end 案全落 start——白名单漏项的老款缺陷）。
+            "justifySelf",
+            // ★★批次 41 补登记（同款漏项，本轮审计顺带抓出）：grid-column/grid-row 线号放置——
+            //   内核（taffy Line<GridPlacement>）已消费但本白名单一直没登记 ⇒ 端上放置失效（静默）。
+            "gridColumn", "gridRow",
             "widthRatio", "heightRatio", "marginAuto", "minWidthPct", "maxWidthPct", "minHeightPct", "maxHeightPct", "overflow",
             // ★静态基态声明（内核要解析）：裁剪形状 + 路径本体（+ 描边色/宽随 svgPath 一起进）
             "clipPath", "svgPath", "svgPathTo", "perspective"));
@@ -1265,6 +1271,16 @@ final class VaporRenderHost {
         if (glow != null && glow.has("radius") && glow.get("radius") instanceof Number) {
             glow.put("radius", glow.getDouble("radius") * lengthScale);
         }
+        // ★★★justify-self 项（2026-10-06 · 真机实测抓出）：**网格轨迹串里的 px 长度**也必须按密度缩放。
+        //   gridTemplateColumns/Rows 是**字符串**（如 "240px"），不在 LEN_SCALARS（那是数值字段）⇒
+        //   此前只缩了容器 width/padding（×density），轨迹串原样 ⇒ track 比物理空间小 density 倍
+        //   ⇒ 子项（宽已 ×density）恰好**填满 track** ⇒ justify-self 无对齐空间（真机 center/end 全落 start）。
+        //   ⇒ 与 width 同轴：把串里每个 <n>px 乘 lengthScale（fr/auto/% 等无量纲/相对单位不动）。
+        for (String gk : new String[]{"gridTemplateColumns", "gridTemplateRows"}) {
+            String graw = spec.optString(gk, null);
+            if (graw == null || graw.isEmpty()) continue;
+            spec.put(gk, scalePxInCssLengths(graw));
+        }
         // ★批次 39：静态变换（transform）的 **px 位移**按密度缩放（txPct/tyPct 是盒比例、scale/rotate 无量纲——不动）
         JSONObject tf = spec.optJSONObject("transform");
         if (tf != null) {
@@ -1279,6 +1295,25 @@ final class VaporRenderHost {
                 if (shadow.has(k) && shadow.get(k) instanceof Number) shadow.put(k, shadow.getDouble(k) * lengthScale);
             }
         }
+    }
+
+    /** 缩放 CSS 长度串里的 px 数值（gridTemplateColumns/Rows 用）——fr/auto/%/em 等不动 */
+    private String scalePxInCssLengths(String s) {
+        if (lengthScale == 1f || s == null || s.isEmpty()) return s;
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(-?\\d+(?:\\.\\d+)?)px").matcher(s);
+        StringBuffer sb = new StringBuffer();
+        while (m.find()) {
+            double v = Double.parseDouble(m.group(1)) * lengthScale;
+            m.appendReplacement(sb, formatNum(v) + "px");
+        }
+        m.appendTail(sb);
+        return sb.toString();
+    }
+
+    /** 数值格式化（去尾零；避免 240.0 这类脏形态） */
+    private static String formatNum(double v) {
+        if (v == Math.rint(v) && !Double.isInfinite(v)) return String.valueOf((long) v);
+        return String.valueOf(v);
     }
 
     /** 物理化整棵树（viewport + 全部 nodes）——mount / mountVirtual 的入口各调一次 */

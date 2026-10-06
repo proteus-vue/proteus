@@ -71,3 +71,93 @@ fn grid_line_placement_and_span() {
     assert!((rb.width - 300.0).abs() < 0.5, "B 跨 3 列宽≈300，实际 {}", rb.width);
     assert!((rb.y - 100.0).abs() < 0.5, "B 在 grid-row:2 ⇒ y≈100，实际 {}", rb.y);
 }
+
+// ★★★justify-self 项（2026-10-06 · css:next P0·9×）：网格项**行内轴自对齐**的引擎行为。
+//   容器 300 宽单列（300px 轨道），子项定宽 80 ⇒ 按 justify-self 落在轨内不同 x：
+//   start ⇒ x=0 · center ⇒ x=110 · end ⇒ x=220；`auto`（缺省）⇒ 回落父 justify-items（stretch ⇒ 撑满）。
+#[test]
+fn justify_self_aligns_item_within_grid_area() {
+    let mut tree = LayoutTree::new();
+    let mut root_style = LStyle { width: Some(300.0), height: Some(100.0), ..Default::default() };
+    root_style.display = Display::Grid;
+    root_style.grid_template_columns = Some("300px".to_string());
+    root_style.grid_template_rows = Some("100px".to_string());
+    let root = tree.push(LNode::new(1, root_style));
+
+    let mk = |id: u32, js: Option<&str>, tree: &mut LayoutTree, root: u32| {
+        let mut s = LStyle { width: Some(80.0), height: Some(40.0), ..Default::default() };
+        s.justify_self = js.map(|v| v.to_string());
+        let idx = tree.push(LNode::new(id, s));
+        tree.add_child(root, idx);
+        idx
+    };
+    let i_start = mk(2, Some("start"), &mut tree, root);
+    let i_center = mk(3, Some("center"), &mut tree, root);
+    let i_end = mk(4, Some("end"), &mut tree, root);
+    // `auto`/`normal` ⇒ 回落父 justify-items（taffy 缺省 STRETCH）——
+    // ★Web 真值（真 Chromium 实测，2026-10-06）：**stretch 不覆盖显式 width**（stretch 仅对 auto 尺寸生效）
+    //   ⇒ 显式宽 80 时 stretch 与 start 同形（x=0 宽 80）——taffy 同语义（stretch 在 or_else 分支）。
+    let i_auto = mk(5, Some("auto"), &mut tree, root);
+    let i_normal = mk(6, Some("normal"), &mut tree, root);
+    tree.roots.push(root);
+
+    let mut engine = TaffyEngine::new();
+    let out = engine.layout(&mut tree, RootConstraint::definite(300.0, 100.0));
+    let r = |i: u32| out.rect_of(i).expect("有几何");
+    assert!(r(i_start).x.abs() < 0.5, "start ⇒ x≈0，实际 {}", r(i_start).x);
+    assert!((r(i_center).x - 110.0).abs() < 0.5, "center ⇒ x≈110（(300-80)/2），实际 {}", r(i_center).x);
+    assert!((r(i_end).x - 220.0).abs() < 0.5, "end ⇒ x≈220（300-80），实际 {}", r(i_end).x);
+    assert!(r(i_auto).x.abs() < 0.5 && (r(i_auto).width - 80.0).abs() < 0.5, "auto ⇒ 回落父 justify-items（stretch 不覆盖显式宽）⇒ x≈0 宽≈80，实际 x={} w={}", r(i_auto).x, r(i_auto).width);
+    assert!(r(i_normal).x.abs() < 0.5 && (r(i_normal).width - 80.0).abs() < 0.5, "normal ⇒ stretch 同形，实际 x={} w={}", r(i_normal).x, r(i_normal).width);
+}
+
+// ★★★justify-self 项（同上）：**flex 容器下被忽略**（Web 语义：justify-self 不适用于 flex 项）。
+//   证据：taffy flex 计算路径不读 `justify_self`（仅 grid 路径读）——与 Web 真值一致（实测：
+//   真 Chromium flex 容器里 `justify-self: center` 的子项仍在 x=0）。
+#[test]
+fn justify_self_ignored_in_flex() {
+    let mut tree = LayoutTree::new();
+    let root_style = LStyle { width: Some(300.0), height: Some(100.0), ..Default::default() };
+    let root = tree.push(LNode::new(1, root_style));
+
+    let mut s = LStyle { width: Some(80.0), height: Some(40.0), ..Default::default() };
+    s.justify_self = Some("center".to_string());
+    let child = tree.push(LNode::new(2, s));
+    tree.add_child(root, child);
+    tree.roots.push(root);
+
+    let mut engine = TaffyEngine::new();
+    let out = engine.layout(&mut tree, RootConstraint::definite(300.0, 100.0));
+    let rc = out.rect_of(child).expect("有几何");
+    assert!(rc.x.abs() < 0.5, "flex 下 justify-self 被忽略（x≈0），实际 {}", rc.x);
+}
+
+// ★★★justify-self 项 · 复现真机形态（2026-10-06）：grid 240 + padding 6 + 子项 80 justify-self 三值。
+#[test]
+fn justify_self_with_padding_real_shape() {
+    let mut tree = LayoutTree::new();
+    let mut root_style = LStyle { width: Some(240.0), ..Default::default() };
+    root_style.display = Display::Grid;
+    root_style.grid_template_columns = Some("240px".to_string());
+    root_style.padding = proteus_layout_core::Edges { top: 6.0, right: 6.0, bottom: 6.0, left: 6.0 };
+    let root = tree.push(LNode::new(1, root_style));
+
+    let mk = |id: u32, js: &str, tree: &mut LayoutTree, root: u32| {
+        let mut s = LStyle { width: Some(80.0), height: Some(32.0), ..Default::default() };
+        s.justify_self = Some(js.to_string());
+        let idx = tree.push(LNode::new(id, s));
+        tree.add_child(root, idx);
+        idx
+    };
+    let i_start = mk(2, "start", &mut tree, root);
+    let i_center = mk(3, "center", &mut tree, root);
+    let i_end = mk(4, "end", &mut tree, root);
+    tree.roots.push(root);
+
+    let mut engine = TaffyEngine::new();
+    let out = engine.layout(&mut tree, RootConstraint::definite(240.0, 60.0));
+    let r = |i: u32| out.rect_of(i).expect("有几何");
+    eprintln!("REAL-SHAPE start.x={} center.x={} end.x={}", r(i_start).x, r(i_center).x, r(i_end).x);
+    assert!(r(i_center).x > r(i_start).x, "center 应比 start 右移（center={} start={}）", r(i_center).x, r(i_start).x);
+    assert!(r(i_end).x > r(i_center).x, "end 应最右（end={} center={}）", r(i_end).x, r(i_center).x);
+}

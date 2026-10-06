@@ -62,6 +62,11 @@ export const APP_LAYOUT_FIELDS = [
   //   （见 normalizeOverflowFields——per-rule 归一会被跨规则级联破坏）。
   'overflowX', 'overflowY',
   'gridTemplateColumns', 'gridTemplateRows', 'gridColumn', 'gridRow', 'aspectRatio', 'pointerEvents',
+  // ★★★justify-self 项（2026-10-06 · css:next P0·9×）：网格项**行内轴自对齐**（CSS Box Alignment 3）。
+  //   语料 9 处全在 grid 上下文（p-formfactor 仪表盘——`justify-self: start/stretch`）；
+  //   内核 taffy `Style.justify_self` 原生支持（仅 grid 容器消费——与 Web「flex 下被忽略」同语义）
+  //   ⇒ 宿主零改动（纯内核布局，宿主按算出的 rect 绘制）。
+  'justifySelf',
   // ★★全端对齐批（2026-10-05 · white-space）：文本换行/空白语义（值透传宿主消费；内核忽略该键）——
   //   此前 App 端只有单行模型是历史缺口；现五端实现（Android/iOS/鸿蒙/MP 对齐 Web 基准）。
   'whiteSpace',
@@ -82,6 +87,10 @@ export const APP_ENUM_VALUES: Record<string, readonly string[]> = {
   // ★★★overflow-x 项（同上）：逐轴同集（归一化后出现 auto）
   overflowX: ['visible', 'hidden', 'scroll', 'auto'],
   overflowY: ['visible', 'hidden', 'scroll', 'auto'],
+  // ★★★justify-self 项（2026-10-06）：网格项行内轴自对齐封闭集（与 runtime PROP_TYPES.JustifySelf 同集）。
+  //   内核映射：auto ⇒ 不设（回落父 justify-items——CSS 语义）；normal ⇒ stretch（Web 对 grid 项的语义）；
+  //   baseline/left/right 未列 ⇒ 诊断跳过（内核无对应/会按 start 近似——不静默近似）。
+  justifySelf: ['auto', 'normal', 'start', 'end', 'flex-start', 'flex-end', 'self-start', 'self-end', 'center', 'stretch'],
   flexDirection: ['row', 'column', 'row-reverse', 'column-reverse'],
   flexWrap: ['nowrap', 'wrap', 'wrap-reverse'],
 }
@@ -726,7 +735,7 @@ export function parseStaticStyle(
         pushDiag(`\`${rawKey}: ${rawVal}\` 未解析（支持 <n> 或 <w>/<h> 或 auto）——已跳过`)
         continue
       }
-      if (key === 'flexDirection' || key === 'flexWrap' || key === 'justifyContent' || key === 'alignItems' || key === 'alignContent' || key === 'alignSelf' || key === 'position' || key === 'display' || key === 'overflow' || key === 'overflowX' || key === 'overflowY') {
+      if (key === 'flexDirection' || key === 'flexWrap' || key === 'justifyContent' || key === 'alignItems' || key === 'alignContent' || key === 'alignSelf' || key === 'justifySelf' || key === 'position' || key === 'display' || key === 'overflow' || key === 'overflowX' || key === 'overflowY') {
         // ★★★overflow-x 项（2026-10-06）：`overflow` **两值简写**（<x> <y>，CSS 语法）⇒ 逐轴字段
         if (key === 'overflow') {
           const toks = splitTopLevelSpaces(rawVal)

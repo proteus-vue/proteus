@@ -50,6 +50,8 @@ const COMPUTED_PROPS = [
   'border-top-left-radius', 'border-top-right-radius', 'border-bottom-right-radius', 'border-bottom-left-radius',
   'flex-direction', 'justify-content', 'align-items', 'flex-grow', 'flex-shrink', 'gap', 'row-gap', 'column-gap',
   'max-width', 'min-width', 'box-sizing', 'opacity', 'visibility', 'transform', 'box-shadow',
+  // ★★★justify-self 项（2026-10-06）：网格项行内轴自对齐 + 网格证据键（Web 基准读数——逐案例证据）
+  'justify-self', 'grid-template-columns', 'grid-column',
 ]
 
 /** 页面清单（机器来源：router/auto-routes.ts 的 routes 表） */

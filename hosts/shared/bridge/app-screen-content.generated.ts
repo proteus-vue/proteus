@@ -47,6 +47,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "widthRatio": 1,
         "maxWidthPct": 1,
         "boxSizing": "border-box",
+        "minHeightPct": 1,
         "backgroundColor": "#f4f5f7",
         "color": "#1a1c22",
         "padding": {
@@ -55,6 +56,9 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 120,
           "top": 44
         },
+        "overflow": "hidden",
+        "overflowX": "hidden",
+        "overflowY": "auto",
         "semantic": "view",
         "position": "absolute",
         "left": 0,
@@ -1044,6 +1048,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "widthRatio": 1,
         "maxWidthPct": 1,
         "boxSizing": "border-box",
+        "minHeightPct": 1,
         "backgroundColor": "#f4f5f7",
         "color": "#1a1c22",
         "padding": {
@@ -1052,6 +1057,9 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 120,
           "top": 44
         },
+        "overflow": "hidden",
+        "overflowX": "hidden",
+        "overflowY": "auto",
         "semantic": "view",
         "position": "absolute",
         "left": 0,
@@ -1741,6 +1749,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "widthRatio": 1,
         "maxWidthPct": 1,
         "boxSizing": "border-box",
+        "minHeightPct": 1,
         "backgroundColor": "#f4f5f7",
         "color": "#1a1c22",
         "padding": {
@@ -1749,6 +1758,9 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 120,
           "top": 44
         },
+        "overflow": "hidden",
+        "overflowX": "hidden",
+        "overflowY": "auto",
         "semantic": "view",
         "position": "absolute",
         "left": 0,
@@ -2497,6 +2509,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "widthRatio": 1,
         "maxWidthPct": 1,
         "boxSizing": "border-box",
+        "minHeightPct": 1,
         "backgroundColor": "#f4f5f7",
         "color": "#1a1c22",
         "padding": {
@@ -2505,6 +2518,9 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 120,
           "top": 44
         },
+        "overflow": "hidden",
+        "overflowX": "hidden",
+        "overflowY": "auto",
         "semantic": "view",
         "position": "absolute",
         "left": 0,

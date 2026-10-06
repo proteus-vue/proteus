@@ -19,7 +19,7 @@ use std::collections::HashMap;
 
 // ★刻意**不用** `taffy::prelude::*`（它导出的 `Rect`/`Size`/`Point` 与本 crate 的
 //   `style::Rect`/`style::Size` 撞名，glob 下解析结果不直观）——只按需导入具体符号。
-use taffy::prelude::{auto, fr, length, percent, AlignContent, AlignItems, BoxSizing, Dimension, JustifyContent, LengthPercentageAuto};
+use taffy::prelude::{auto, fr, length, percent, AlignContent, AlignItems, AlignSelf, BoxSizing, Dimension, JustifyContent, LengthPercentageAuto};
 // ★批次 41：grid item 放置（GridPlacement::from_line_index）
 use taffy::style_helpers::TaffyGridLine;
 use taffy::{AvailableSpace as TaffyAvailableSpace, NodeId, Style, TaffyTree};
@@ -213,6 +213,13 @@ impl TaffyEngine {
         out.align_content = Some(parse_align_content(&style.align_content));
         if let Some(a) = style.align_self.as_deref() {
             out.align_self = Some(parse_align_items(a));
+        }
+        // ★★★justify-self 项（2026-10-06）：网格项行内轴自对齐（taffy 原生字段；仅 grid 计算路径消费——
+        //   与 Web「flex 容器下被忽略」同语义）。`auto`/缺省 ⇒ 不设（回落父 justify-items）。
+        if let Some(j) = style.justify_self.as_deref() {
+            if j != "auto" {
+                out.justify_self = Some(parse_justify_self(j));
+            }
         }
         out.flex_grow = style.flex_grow;
         out.flex_shrink = style.flex_shrink;
@@ -1278,6 +1285,25 @@ fn parse_align_items(s: &str) -> AlignItems {
         "flex-end" | "end" => AlignItems::FLEX_END,
         "baseline" => AlignItems::BASELINE,
         _ => AlignItems::STRETCH,
+    }
+}
+
+/// ★★★justify-self 项（2026-10-06）：`justify-self` 关键字 → taffy `AlignSelf`（网格项行内轴自对齐）。
+///   与 `parse_align_items` 的差异：含 CSS Box Alignment 的 `start`/`end` 与 `self-start`/`self-end`
+///   （`self-*` 由 taffy 按**项自身**的 direction 解析——本仓恒 LTR ⇒ 等价 start/end，保留语义）；
+///   `normal` ⇒ stretch（Web 对 grid 项的 computed 语义）。
+///   ▲ 未列值不在此猜测（编译器/注册表已收封闭集——不静默近似）。
+fn parse_justify_self(s: &str) -> AlignSelf {
+    match s {
+        "normal" | "stretch" => AlignSelf::STRETCH,
+        "start" => AlignSelf::START,
+        "end" => AlignSelf::END,
+        "self-start" => AlignSelf::SELF_START,
+        "self-end" => AlignSelf::SELF_END,
+        "center" => AlignSelf::CENTER,
+        "flex-start" => AlignSelf::FLEX_START,
+        "flex-end" => AlignSelf::FLEX_END,
+        _ => AlignSelf::START,
     }
 }
 

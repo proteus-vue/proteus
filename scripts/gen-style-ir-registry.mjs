@@ -83,6 +83,8 @@ const VALUE_TYPE_BY_LEVEL = {
   BorderStyle: 'enum',
   // ★★★overflow-x 项（2026-10-06）：单轴溢出的值类型（与 runtime PROP_TYPES.Overflow 同集）
   Overflow: 'enum',
+  // ★★★justify-self 项（2026-10-06）：网格项行内轴自对齐值类型（与 runtime PROP_TYPES.JustifySelf 同集）
+  JustifySelf: 'enum',
   Transform: 'transform',
   TransformOrigin: 'transform-origin',
   SEMANTIC_ONLY: 'semantic-only',

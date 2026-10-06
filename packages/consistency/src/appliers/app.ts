@@ -207,6 +207,8 @@ export function mapStyleIRToApp(fields: Record<string, unknown>): AppMappingResu
         'overflowX', 'overflowY',
         'textAlign', 'textOverflow', 'textDecoration', 'flexDirection', 'flexWrap', 'justifyContent',
         'alignItems', 'alignContent', 'alignSelf', 'boxSizing', 'whiteSpace',
+        // ★★★justify-self 项（2026-10-06）：网格项行内轴自对齐（字符串枚举，内核 DTO 通道）
+        'justifySelf',
         'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor',
       ])
       if (enumFields.has(field)) {

@@ -1144,3 +1144,25 @@
     纵向节奏折叠 / 构建链断点）与**五端零 open issue 的收口**。
 **⑦ 诚实边界**：a) App 端 `auto`/`scroll` 的 `auto` 滚动交互未接（渲染=静态裁剪——与 Web 的"可滚不可滚"差异在验收页具名）；b) `clip` 值无内核对应（编译期诊断跳过——v1 边界）；c) 鸿蒙 RectShape 的 edge 语义按实测校正（SDK 文档未明示该细节）。
 **⑧ 影响**：contracts+1 级别 · cse/折叠器/style.ts(MP)/ffi.rs(内核)/三端宿主/两 applier/快照链；**下一项**：按 `css:next` 取。
+
+561. **★★★CSS 逐项全端对齐 · justify-self（网格项行内轴自对齐，P0·9×，五端 pass）——★顺带固化成「宿主键白名单」门禁（第三次同款缺陷）**：
+**① 用户指令**：「怎么一直卡在这里不动了？」（本轮中途排查真机缺陷时用户询问进度——我在**逐层定位宿主侧缺陷**，非空转；随后据实汇报并修完收口）。承上轮「继续」按 `css:next` 取下一项 = **justify-self**（P0 · 用法 9×）。
+**② 侦察三事实**：
+  · **Web 真值（真 Chromium 取证）**：`justify-self` **仅对 grid 项生效**（对齐到 grid 区域内的行内轴位置）；**flex 容器下被忽略**（CSS 规范：不适用于 flex 项）；`stretch` **不覆盖显式 width**；初值 `auto`（回落父 `justify-items`）。
+  · **内核就绪**：taffy `Style.justify_self` 原生（**仅 grid 计算路径**消费——与 Web「flex 忽略」同语义）；语料 9 处全在 grid 上下文（p-formfactor 仪表盘 KPI 卡 `justify-self: start/stretch`）。
+  · **Skyline 无该属性**：官方属性表**无** justify-self，且该端**无 Grid 容器** ⇒ 具名边界（不作缺陷）。
+**③ 交付（全链）**：
+  · **契约四同步**：新级别 `JustifySelf`（值集 = CSS `<self-position>` 全集，含 start/end/self-*）——contracts + runtime PROP_TYPES/narrowing + compiler 静态校验 + 注册表 `VALUE_TYPE_BY_LEVEL`；注册表 91→**92**（semantic 65→**66**）。
+  · **CSE**：`justify-self`→`justifySelf`（ENUM_PROPS + ENUM_IR + dynamic 候选表）。
+  · **编译器折叠面**：入 `APP_LAYOUT_FIELDS` + `APP_ENUM_VALUES.justifySelf`（封闭集）+ `parseStaticStyle` 枚举分支（baseline/left/right 诊断跳过——taffy grid baseline 按 start 近似=与 Web 不符，不静默近似）。
+  · **内核 Rust**：`LStyle.justify_self` + `NodeDto.justifySelf` + `taffy_engine::parse_justify_self`（auto⇒不设回落父；normal⇒stretch）+ **blob 枚举位图 `E_JUSTIFY_SELF`**。
+  · **三端宿主**：**iOS/鸿蒙零改动**（纯内核布局——nodes 原样转发）；**Android 两处修复**（见 ④）。
+  · **consistency 链路**：applier(app/skyline) + snapshot 接口/闭集/校验器 + probes/web 读数 + coverage 映射 + compare 分类；M1 65.1%→65.2%。
+**④ ★★真机两处宿主侧真缺陷（逐像素量测才抓到；内核/Web 都正确）**：
+  · **a) 宿主键白名单漏项 = 内核静默用默认**：Android `VaporRenderHost.LAYOUT_KEYS` 是**白名单**（刻意：新内核字段不得把绘制属性静默塞进去）；但**漏登记**某内核消费键 ⇒ 请求树不带它 ⇒ 内核静默用默认（**无报错、无日志**）。本轮 `justifySelf` 漏登记 ⇒ 真机 center/end **全落 start**（而内核单测/Web 都正确）。★顺带抓出**批次 41 的 gridColumn/gridRow 从未登记**（同款——端上放置一直失效，静默）。
+  · **b) 宿主物理化的「字符串长度」漏缩**：Android 把数值长度 ×density，但 `gridTemplateColumns:"240px"` 是**字符串**（不在数值白名单）⇒ track 未缩 ⇒ 子项（宽已缩）**恰好填满 track** ⇒ justify-self 无对齐空间（Web 端逻辑单位无此问题）。修：物理化时把 grid 轨迹串里的 `<n>px` 也乘密度。
+  · ★**排查心法（本轮有效顺序）**：真机现象与预期不符时**先用宿主探针读内核返回值**（本轮在 `mount` 后打 `readRects` 的 x）——一步就把"内核 bug"与"宿主转发/物理化 bug"分开（实测内核返回三值相同 ⇒ 锁定宿主侧）。**别从现象直接猜内核**。
+**⑤ ★门禁固化（第三次同款 ⇒ 不再靠注释）**：新增 `pnpm check:host-kernel-keys`——从内核 `style_from_dto` **推出**消费键（唯一事实源），断言 Android 宿主白名单覆盖（或 `EXCUSED` 显式豁免 + 陈旧豁免检测）；**破坏性验证过**（移除 justifySelf ⇒ rc=1 点名）；接进 `verify` 链 + `check:gates-sync` LOCAL_ONLY 声明。历史同类：clipPath/glow/mask（2026-10-01/03）· borderRadiusCorners（iOS styleOf）· 本轮 justifySelf/gridColumn。
+**⑥ 判据**：`css:verify` 三段过（implemented/parity/endsMapped）· **probe 四端全绿** · fresh 20 张全绿 · **独立子代理终评四端全 pass**（含 mp 具名边界核实）· cargo 全绿（新增 3 条 justify-self 单测 + JSON DTO 路径 + 物理化复现）· 全量 5306/**5306**（golden 刷新）· coupled 311 绿 · 定向门禁全绿。
+**⑦ 诚实边界**：a) **MP/Skyline 具名边界**：官方属性表无 justify-self + 该端无 Grid 容器 ⇒ B(center)/C(end) 案在 MP 呈现靠左（引擎锁死，页面已具名）；b) `baseline`/`left`/`right` 值诊断跳过（taffy grid baseline 按 start 近似=与 Web 不符）；c) iOS/鸿蒙纯内核布局（无白名单/物理化问题）。
+**⑧ 影响**：contracts+1 级别 · cse/折叠器/内核 Rust(ffi/style/taffy_engine/blob)/Android 宿主(白名单+物理化)/consistency 链/**新增门禁 1 个**；**下一项**：按 `css:next` 取。
