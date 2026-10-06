@@ -1465,3 +1465,10 @@
 **④ 判据**：`css:verify transition-property`/`transition-timing-function` 三段通过 · 视觉结论**登记**（引用 packages/animation 通道 + #536 诚实边界）· 清单再生成一致（`--check` 绿）· `check:css-capability-alignment`/`stats`/`content` 全绿。**不引入编译器字段/渲染代码**。
 **⑤ 诚实边界**：a) **App 端 CSS 属性变化过渡未实现**（#536 具名独立课题——需"属性变化即动画"的触发机制）；b) 框架转场/动画走 `packages/animation`（与 Web 原生 CSS transition 是**两条不同路径**）；c) 本项只做**家族归类收口**，不改行为。
 **⑥ 影响**：`scripts/gen-css-feature-inventory.mjs`（override + SEPARATE_CHANNELS）· `docs/generated/css-feature-inventory.{json,md}`（重生成）· `docs/generated/css-acceptance/transition-{property,timing-function}.json`（visual 登记）；**下一项**：按 css:next 取。
+586. **★★CSS 逐项 · will-change —— 按架构归类为「非视觉（合成/性能提示，无渲染输出）」+ 新增 non-visual 通道类别**（用户裁定「归类 + 收口」族）：
+**① 用户指令**：「继续」（css:next 取 `will-change`，P0 · 1× · CSS Will Change）。
+**② 侦察（先取证）**：`will-change` 是**纯性能提示**——只告知渲染器「哪些属性即将变化」以便**提前提升合成层**，**不改变任何渲染像素**（规范语义：提示性；渲染输出与不声明完全一致）。语料 1×（p-progress `.p-progress__bar { will-change: width }`——动画前的层提升提示）。⇒ 四端**视觉对齐框架对它没有可对齐的视觉输出**。三端：Web 原生（提示）；MP/Skyline 官方表仅接受 `auto`/`contents`（其余值丢弃，亦无视觉后果）；App 无合成层提示面（自绘引擎自行决定层）⇒ no-op。
+**③ 归类决策（用户裁定「归类 + 收口」）**：引入**新通道类别 `non-visual`**（无渲染输出 = 视觉对齐框架无可对齐项；与 `component`/`independent` 并列）——`will-change` 登记为 `separate: true, channel: 'non-visual'`；`css:verify` 的 `channelBased` 判据纳入 `non-visual`（parity/endsMapped = **n/a**）⇒ 三段通过。★**为什么用 non-visual 而非 independent**：`independent` 暗示存在一条**交付通道**（如 animation/mask/fluid）；`will-change` **没有任何通道实现它**——它是"无视觉语义"本身，单列类别才诚实。
+**④ 判据**：`css:verify will-change` 三段通过 · 视觉结论**登记**（四端像素一致 = 无视觉输出）· 清单再生成一致（`--check` 绿）· `check:css-capability-alignment`/`stats`/`content`/`script-compile` 全绿。**不引入编译器字段/渲染代码**。
+**⑤ 诚实边界**：a) **was 未做 App 的"层提升"**——但这是**性能优化非视觉语义**，本框架**无合成层提示面**（自绘引擎自行决定），静默无害且 pnode-style 已把 `willChange` 归 **L3 opt-in（warn 诊断）**（不静默丢弃、如实登记）；b) 视觉对齐框架只承诺**像素一致**——`will-change` 四端像素天然一致。
+**⑥ 影响**：`scripts/gen-css-feature-inventory.mjs`（override + SEPARATE_CHANNELS + channel 文档）+ `scripts/verify-css-feature.mjs`（channelBased 纳入 non-visual）· `docs/generated/css-feature-inventory.{json,md}`（重生成）· `docs/generated/css-acceptance/will-change.json`（visual 登记）；**下一项**：按 css:next 取。

@@ -213,7 +213,7 @@ const END_CHECK = (() => {
 // ★★★投递通道（component / independent）：非编译器折叠的 CSS 能力（如 object-fit → 图片组件通道、
 //   animation → 动画包）——parity（CSE IR 比对）与 endsMapped（IR 字段映射）**不适用** ⇒ 判 n/a；
 //   实现态由组件/独立通道承接（本包只如实标注通道，通道内交付由对应包的门禁守）。
-const channelBased = entry.channel === 'component' || entry.channel === 'independent'
+const channelBased = entry.channel === 'component' || entry.channel === 'independent' || entry.channel === 'non-visual'
 // ★★★简写展开项（border/background/outline…）：交付 = 展开为长手（长手各自验）⇒ parity/ends 不适用
 const shorthandBased = /简写展开/.test(entry.implNote || '')
 const nA = channelBased || shorthandBased

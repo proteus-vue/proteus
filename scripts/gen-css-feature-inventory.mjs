@@ -172,6 +172,12 @@ const SHORTHAND_EXPANSION = {
   //     本框架的转场/动画由 packages/animation（路由/元素转场预设 + @keyframes 折叠）承接，非 CSS transition 属性语义。
   'transition-property': { to: [], evidence: 'packages/animation（独立通道：转场/动画规格 → 内核动画；CSS transition 属性变化过渡未做——#536）', separate: true, channel: 'independent', note: '**独立通道（CSS Transitions）**：transition 家族登记为独立通道（同 transition/transition-duration）。Web 原生 / MP 原生支持；**App 端 CSS 属性变化过渡未实现**（#536「无显式触发点，属独立课题」）——框架转场走 packages/animation。' },
   'transition-timing-function': { to: [], evidence: '同 transition-property（缓存曲线由内核 curve；见 packages/animation easing）', separate: true, channel: 'independent', note: '**独立通道（CSS Transitions）**：同 transition-property；缓动曲线概念由 packages/animation 的 easing 承接。' },
+  // ★★★will-change 项（2026-10-08 · css:next P0·1× · CSS Will Change）：**合成/性能提示 —— 无视觉输出**。
+  //   will-change 只提示「哪些属性即将变化」以便渲染器**提前提升合成层**——**不改变任何渲染像素**
+  //   （规范：纯提示；渲染输出与不声明完全一致）。⇒ 四端视觉对齐框架对它**没有可对齐的视觉输出**。
+  //   · Web：原生（提示；App/MP 无需等价物，像素一致）；· MP/Skyline：官方表仅接受 auto/contents（其余值丢弃，亦无视觉后果）；
+  //   · App：无合成层提示面（自绘引擎自行决定层）⇒ **no-op**（静默丢弃无视觉代价，但仍**如实登记、不静默跳过**）。
+  'will-change': { to: [], separate: true, channel: 'non-visual', evidence: 'CSS 规范（纯性能提示，无渲染输出）；p-progress 用法 will-change:width 为动画前的层提升提示', note: '**非视觉（合成/性能提示）——无渲染输出**：will-change 仅提示渲染器提前提升合成层，**不改变任何像素**（Web/MP/App 渲染输出与不声明一致）⇒ 视觉对齐框架**无可对齐项**；Web 原生提示 / MP 官方表仅接受 auto·contents / App 无合成提示面（no-op，如实登记不静默丢弃）。' },
   // ★★★background-image 项（2026-10-08 · 同 object-fit 归类）：**通道属性**——两种子集走两条通道（非编译器折叠的普通 IR 字段）。
   //   ① 渐变子集（linear-/radial-gradient）→ 引擎 `fillGradient` 通道（结构化属性 `fill-gradient` 的 CSS 语法糖，批次 33）；四端已交付并验证（#568：background-position 页 A–E 用例即 `background-image: linear-gradient(...)`）。
   //   ② url()/image-set() 图片子集 → **组件通道**（`<image>` 组件）——Web 原生 / MP 组件已交付，App 图片渲染另立项（#572）。
@@ -203,7 +209,7 @@ const SHORTHAND_EXPANSION = {
  *   ★这些能力**不走 IR 字段**（它们是"通道"：transition/animation 走 packages/animation 的
  *     规格→内核动画；mask 走结构化属性通道）——清单须如实标 implemented（否则又是假阴性）。
  */
-const SEPARATE_CHANNELS = new Set(['transition', 'animation', 'animation-name', 'animation-duration', 'animation-delay', 'animation-iteration-count', 'animation-timing-function', 'transition-duration', 'transition-property', 'transition-timing-function', 'mask'])
+const SEPARATE_CHANNELS = new Set(['transition', 'animation', 'animation-name', 'animation-duration', 'animation-delay', 'animation-iteration-count', 'animation-timing-function', 'transition-duration', 'transition-property', 'transition-timing-function', 'will-change', 'mask'])
 
 
 const EXCLUDED_REASONS = {
@@ -417,7 +423,7 @@ const toEntry = (kebab, kind) => {
     syntax: meta?.syntax ?? null,
     impl: implInfo.impl,
     implNote: implInfo.note,
-    channel: implInfo.channel ?? null, // ★非编译器折叠的投递通道（component / independent）——verify 据此把 parity/ends 判 n/a
+    channel: implInfo.channel ?? null, // ★非编译器折叠的投递通道（component / independent / non-visual〔无视觉输出——合成/性能提示〕）——verify 据此把 parity/ends 判 n/a
     evidencedBy: {
       inIrRegistry: implInfo.inIr,
       irScope: implInfo.irScope ?? null,
