@@ -1676,3 +1676,10 @@
 **⑨ 判据**：`check:vapor-capability` 绿（0 error · 棘轮不增长 105=105）· `npx vue-tsc --noEmit` rc=0 · `screen-runtime`/`superapp-runtime` 测试 8 绿（新增 seedData 回灌 + refresh 两条）· 鸿蒙真机 count 0→1→2 + nav · 鸿蒙构建绿。
 **⑩ 诚实边界**：鸿蒙**跨交互实例态仍不保留**（一次性 VM 本质；count 靠宿主 snapshot 往返而非真持 VM）；Web/MP 不经此路径；App CSS 仍限类/元素/通配/结构伪类子集。
 
+606. **★★★鸿蒙「二级页滑动返回退出应用」回归修复——导航入栈基准错（★用户 2026-10-07「之前的滑动返回怎么又回归了呢？现在二级页面滑动直接退出应用了」）**：
+**① 真因（时序依赖 · 我 #605 改动引入）**：`onTapAt` 里 **`applyState(st)` 先执行**、把 `this.current` 改成 `state.current`（**路由态**）；随即 `if (target !== this.current) { navStack.push(this.current) }`。而 `target = rt['current']` 也是路由态 ⇒ **当路由在 applyState 前的读取中已 settle 到目标屏时，`target === this.current` ⇒ 判定"未导航" ⇒ 不入栈**；二级页返回时 `navStack` 为空 ⇒ `onBackPress`/`goBack` 返回 `false` ⇒ **交系统 ⇒ 退出应用**。★"有时能用有时退出"= 路由 settle 与状态读取的**竞态**（本仓实测：`prev=index current=text depth=2` 出现时是好路径；settle 快时坏）。
+**② 修法**：**导航入栈基准改为"进入前的屏"**——`const prev = this.current` 在 `applyState` **之前**捕获；判据 `if (target !== prev) navStack.push(prev)`；并**始终** `this.current = target`（以实际渲染屏为准，防 applyState 的滞后值）。⇒ 与路由 settle 时序无关，确定性入栈。
+**③ 真机（鸿蒙）**：nav → `SUPERAPP_TAP chain=[7,3,0] prev=index current=text depth=2`（确定性）→ **系统返回键** `SUPERAPP_BACK current=index depth=1` → **左缘右滑（系统 back 手势）** `SUPERAPP_BACK current=index depth=1` → 均在 index（**不退出**）；app 存活。data-tap（count 0→3）仍正常。
+**④ ★教训（可执行）**：a) **"比较两侧同源"陷阱**——`target` 与 `this.current` 都来自**路由态**（同一来源），在 settle 后恒等 ⇒ 用它们判"是否导航"**不可靠**；应拿"**进入前的本屏**"（`prev`，来自实际渲染态）当基准；b) **共享可变状态（this.current）+ 多来源写入（applyState / nav / render）** ⇒ 判据必须**先快照基准再改状态**（否则读到被污染的值）；c) 回归定位靠**日志证据**（`depth=2` 说明栈曾成功 push、`SUPERAPP_BACK` 缺失说明没走到 goBack ⇒ 二者交叉定位到"栈空"）。
+**⑤ 判据**：鸿蒙真机 back（键 + 手势）→ index · count 仍 0→3 · 鸿蒙构建绿。
+

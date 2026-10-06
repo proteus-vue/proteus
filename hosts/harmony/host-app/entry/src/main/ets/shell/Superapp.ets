@@ -356,21 +356,28 @@ struct Superapp {
       const hit = JSON.parse(hitJson) as Record<string, Object>;
       const chain = hit['chain'] as number[] | undefined;
       if (!chain || chain.length === 0) { return; }
+      // ★★★进入前的屏（**导航入栈的基准**）：applyState 会把 this.current 改成 state.current（滞后的
+      //   路由值）——若以改后的 this.current 与 target 比较，会在"路由已 settle"时判成"未变化"⇒ 不入栈
+      //   ⇒ 二级页返回时无栈可弹 ⇒ **直接退出应用**（用户抓出「二级页滑动返回退出应用」的真因）。
+      const prev: string = this.current;
       const rtOut: string = superappScreen(Superapp.rtArgsJson(this.current, this.bundle, this.filesDir, Superapp.vpW, Superapp.vpH, chain, this.runtimeState));
       const rt = JSON.parse(rtOut) as Record<string, Object>;
       const st = rt['state'] as Record<string, Object> | undefined;
       if (st) { this.applyState(st); }
       this.saveSnapshot(rt);   // ★存回跨调用状态（下次新 VM 回灌）——数据变更类 tap（count++）靠它持久
       const target = rt['current'] as string;
-      if (target !== undefined && target.length > 0 && target !== this.current) {
-        // ★前进（push）：记当前屏滚动进度 + 入栈；新屏从顶部
-        this.scrollByScreen.set(this.current, this.scrollOffset);
-        this.navStack.push(this.current);
+      if (target !== undefined && target.length > 0) {
+        if (target !== prev) {
+          // ★前进（push）：以 **prev**（进入前的屏）入栈；记其滚动进度；新屏从顶部
+          this.scrollByScreen.set(prev, this.scrollOffset);
+          this.navStack.push(prev);
+          this.scrollOffset = 0;
+          hilog.info(DOMAIN, TAG, 'SUPERAPP_TAP chain=%{public}s prev=%{public}s current=%{public}s depth=%{public}d',
+            JSON.stringify(chain), prev, target, this.navStack.length + 1);
+          this.switchLog.push(JSON.stringify({ tap: 'nav', current: target, scroll: this.scrollOffset, via: 'tap' }));
+        }
+        // ★以**实际渲染屏**为准（防 applyState 把 current 设成滞后的路由值）
         this.current = target;
-        this.scrollOffset = 0;
-        hilog.info(DOMAIN, TAG, 'SUPERAPP_TAP chain=%{public}s current=%{public}s depth=%{public}d',
-          JSON.stringify(chain), this.current, this.navStack.length + 1);
-        this.switchLog.push(JSON.stringify({ tap: 'nav', current: this.current, scroll: this.scrollOffset, via: 'tap' }));
       }
       // ★★★统一上屏（2026-10-07）：**每次 tap 都重绘**——导航 tap 画目标屏；**数据 tap（count++）也画同屏**
       //   新树（此前只在导航分支重绘 ⇒ 点计数没反应）。用 superappScreen 返回的 tree **直接上屏**，省一次
