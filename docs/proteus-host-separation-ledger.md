@@ -17,12 +17,12 @@
 
 | ID | 项 | 状态 | 判据（命令 / 文件 / 文档） | 范围 |
 |---|---|---|---|---|
-| R1 | App 壳的**页面内容**走运行期实例化（`instantiateTemplate`），而非构建期拍平的静态 `nodes` | 未做 | `cmd:pnpm check:host-separation-ledger`（B1 完成后回填真判据） | 本轮 · 关键路径 |
-| R2 | **交互事件**经共享 `slot-runtime` 派发（`dispatchGesture` + `onGesture`）在三端生效 | 未做 | `cmd:pnpm check:host-separation-ledger` | 本轮 |
-| R3 | **响应式/数据驱动**（订阅 → 增量 `applyOps`）在三端生效 | 未做 | `cmd:pnpm check:host-separation-ledger` | 本轮 |
-| R4 | **导航**（`@tap` → handler → `router.push`）走共享 router（`createAppNavigation`） | 未做 | `cmd:pnpm check:host-separation-ledger` | 本轮 |
-| R5 | 真实**首页**（列全部页 + 可点跳转）：Web/MP 原生可点 + App 三端经统一运行期可点 | 未做 | `cmd:pnpm check:host-separation-ledger` | 本轮 |
-| R6 | 手势 **content-local id 与 screen-mount 重映射**的对应关系可反查（跨屏点击定节点） | 未做 | `cmd:pnpm check:host-separation-ledger`（配破坏性验证） | 本轮 · 最大风险 |
+| R1 | App 壳的**页面内容**走运行期实例化（`instantiateTemplate`），而非构建期拍平的静态 `nodes` | 进行 | `file:packages/cli/src/app-runtime-content.ts`（产物已就绪）· 待 App 壳入口消费 | 本轮 · 关键路径 |
+| R2 | **交互事件**经共享 `slot-runtime` 派发（`dispatchGesture` + `onGesture`）在三端生效 | 进行 | `file:packages/render-backend/src/screen-runtime.ts`（派发已就绪）· 待壳入口接线 + 三端真机 | 本轮 |
+| R3 | **响应式/数据驱动**（订阅 → 增量 `applyOps`）在三端生效 | 进行 | `file:packages/render-backend/src/screen-runtime.ts`（relink 已就绪）· 待壳入口接线 | 本轮 |
+| R4 | **导航**（`@tap` → handler → `router.push`）走共享 router（`createAppNavigation`） | 进行 | `file:packages/compiler/src/vapor/events.ts`（`$nav` 已编出）· 待壳入口接线 | 本轮 |
+| R5 | 真实**首页**（列全部页 + 可点跳转）：Web/MP 原生可点 + App 三端经统一运行期可点 | 进行 | `file:css-conformance/pages/index.vue`（已落地，Web/MP 已为落地页）· App 三端可点待接线 | 本轮 |
+| R6 | 手势 **content-local id 与 screen-mount 重映射**的对应关系可反查（跨屏点击定节点） | 已落地 | `cmd:npx vitest run tests/screen-runtime.test.ts`（恒等 + base 双模式 + 破坏性） | 本轮 · 最大风险 |
 
 ## 二、三端宿主胶水收敛（各端只做平台原语）
 

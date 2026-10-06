@@ -1599,3 +1599,17 @@
 **⑥ 教训（★用户点名的"打地鼠"根源）**：**「引擎边界」具名要么本轮穷尽所有端，要么在别端可表达时必须同批补齐**——#562 具名了边界却未记录"鸿蒙后来能表达"⇒ 半年后成回退。★**"能力边界"是有时效的**：一旦某端引擎/实现变了，"边界"就可能只剩一端，**必须复核**（同 #569）。
 **⑦ 影响**：`hosts/android/.../VaporRenderHost.java` · `hosts/ios/.../selfdraw-scene.swift` · `css-conformance/pages/word-break.vue` · capability 源 · 四端验收截图。★**下一项**：Stage 2 余项（`--pf-dpr`/`--pf-orientation` + 主题/无障碍）或内核 env 表迁移。
 
+598. **★★★宿主关注点分离「完全打通」启动：B0 立账 + B1 统一 App 运行期（地基：产物/运行期/导航/首页）**：
+**① 用户指令**：「这么办不行，先把宿主关注点分离完全打通，不留任务遗留项，别又是做一半留一半」+「为什么这么久了 App 宿主连最基本的交互事件通道都没打通？vapor 实现的那不是有吗？」+「(分层)应该是解决所有新增宿主都要实现一遍的所有相关抽象」。裁定（AskUserQuestion）：范围 = **B（A + Host ABI 技术债收尾）**；验收 = **首页四端可点 + 三端真机交互 + 独立复评**。
+**② 根因（三份 Explore 调研）**：App 有**两条通路**——`entry-vapor`（有 events/handlers/instantiate，只喂引擎演示）vs `entry-superapp`（静态 nodes，喂真实壳、**无交互**）。`slot-runtime`/`compiler/vapor` 已平台无关；`createAppNavigation`/`screen.mount` 契约已共享。三端各写一遍：tab 栏 / insets→`--pf-*` / 手势分类 / 能力桥清单 / mountPage。Host ABI 遗留：HA0.5 Android `platform/` 未抽、HA4 原生组件 Java 回调未绑、HA2 图像 trait 无消费点；**无单一事实源**。决策 #539/#541 已把"全实时 slot/Vapor 运行时"列为"下一大阶段"。
+**③ B0（立账）已落地**：新增 `docs/proteus-host-separation-ledger.md`（唯一事实源，31 项 = R/G/L/HA/X 全量，逐项 {状态·判据·范围}）+ 门禁 `scripts/check-host-separation-ledger.mjs`（接 verify + gates-sync LOCAL_ONLY：已落地项判据须真实存在 · 进行/未做写范围 · 范围外给理由 · REQUIRED_IDS 防删行）+ 修两处文档漂移（board-inventory 的 HostABI "规划态"；README-LAYERS "只做鸿蒙样板"）。
+**④ B1（统一 App 运行期）地基已落地（后续 step 继续）**：
+  · **产物**：`packages/cli/src/app-runtime-content.ts` 为每屏产 `{tpl,table,events,handlers,data}`（复用 buildLayoutTemplate/buildVaporSubscriptions/compileEvents；与静态 app-content 同源同 tokens 口径）。
+  · **运行期**：`packages/render-backend/src/screen-runtime.ts` 的 `createScreenRuntime`——实例化 + 订阅（SlotRuntime/VaporRuntime）+ 手势派发（dispatchGesture）；★R6：content-local id ↔ 内核 id **可反查**（缺省恒等 = VaporRenderHost 直用节点 id；显式 base = ScreenHost 数组序重映射）。
+  · **导航**：`compiler/vapor/events.ts` 增 `$nav(target)` 一等动作（编译 + 运行期 navigate 出口；动态目标诊断）。
+  · **首页**：`css-conformance/pages/index.vue`（全特性索引，`@tap="$nav('<页名>')"`）；routes[0]/MP pages[0] = index（落地页）。
+  · **判据**：`tests/app-runtime-content.test.ts`（事件/源/初值真编出）· `tests/screen-runtime.test.ts`（实例化+派发+id 反查+破坏性）· `tests/vapor-events.test.ts` +2（`$nav`）全绿；`pnpm test:coupled` 绿。
+**⑤ 待续（本史诗后续 step，台账 R1-R5 标"进行"）**：App 壳入口（entry-superapp）消费运行期产物 + 手势接线（含鸿蒙缺的 applyOps/updateGesture/updatePatches/invoke）→ 三端真机首页可点 + 独立复评；B2 三端胶水收敛；B3 Host ABI 技术债；B4 收尾。
+**⑥ 范围外（显式登记，非本轮）**：G-39 Flutter/鸿蒙宿主 · G-41 五宿主真机接入 · G-42 生产验证 · G-45 dev-host B4-B6 · runtime 三端独立发布包（官方登记"未来需求非当前瓶颈"）。
+**⑦ 教训**：**「引擎边界/能力边界」具名有时效**（#597 同源）；**"做完了吗"必须机器可判定**（无单一事实源 = "看起来做了一半"的根因）；**先立账再动手**。
+
