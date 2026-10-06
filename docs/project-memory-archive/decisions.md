@@ -1627,3 +1627,10 @@
 **④ 判据**：真机 scroll→scrollY=740 → tap 进网格页 → scrollY=0 + 截图标题回安全区。
 **⑤ 教训**：**跨屏共享的视图状态（滚动偏移）必须在新屏挂载时显式归零**（一处：统一运行期 mountScreen）。
 
+601. **★★★鸿蒙接入统一运行期（一次性 VM 内跑完整链）—— 三端 App 全打通**：
+**① 用户指令**：「继续打通鸿蒙吧」。**② 约束**：鸿蒙 superapp 用**一次性 JSVM**（持久 VM 跨 napi 调用崩，决策 #540）；且此前渲染静态 nodes、无交互。
+**③ 处置（约束转设计）**：napi `superappScreen` 在**一次调用内**完成：一次性 VM → 注入 `proteusHost`（mount **捕获** tree / applyOps / resetScroll / onGesture / invoke）→ boot → `__proteusSuperappRender`（JS 共享运行期实例化）→ 可选 chain 派发 tap→导航 → 返回 `{ok,current,tree}`；ArkTS 用 tree 走既有 appScreenCommands 上屏；触摸 tap（几乎没动）→ `appScreenHitAt` 命中链 → `superappScreen(chain)`。★修正：返回**实际渲染 current**（boot 后路由 current 恒为 index）。
+**④ 判据（鸿蒙真机）**：RUNTIME page=index nodes=58 → uitest click → TAP chain=[7,3,0] current=word-break → RENDER page=word-break nodes_rendered=11；截图确认跳页。
+**⑤ 诚实边界**：一次性 VM ⇒ 跨交互**实例态不保留**（计数不累加）；**导航可用**。持久交互态需先解持久 VM 崩溃（登记）。
+**⑥ 教训**：受平台约束时"约束"可转成设计（"一次调用跑完整链"让一次性 VM 够用）；napi 返回值须与**实际状态**一致（路由 current ≠ 实际渲染屏）。
+
