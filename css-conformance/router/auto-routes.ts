@@ -14,6 +14,7 @@ export const routes: RouteRecord[] = [
   { name: "grid-template-areas", path: "pages/grid-template-areas", component: "../pages/grid-template-areas.vue" },
   { name: "justify-self", path: "pages/justify-self", component: "../pages/justify-self.vue", meta: {"title":"CSS 验收 · 网格自对齐"} },
   { name: "line-clamp", path: "pages/line-clamp", component: "../pages/line-clamp.vue" },
+  { name: "math-functions", path: "pages/math-functions", component: "../pages/math-functions.vue" },
   { name: "outline", path: "pages/outline", component: "../pages/outline.vue" },
   { name: "overflow-page", path: "pages/overflow-page", component: "../pages/overflow-page.vue" },
   { name: "overflow", path: "pages/overflow", component: "../pages/overflow.vue" },
@@ -61,6 +62,10 @@ export const screens: Record<string, AppScreenSpec> = {
     "name": "line-clamp",
     "path": "pages/line-clamp"
   },
+  "math-functions": {
+    "name": "math-functions",
+    "path": "pages/math-functions"
+  },
   "outline": {
     "name": "outline",
     "path": "pages/outline"
@@ -92,7 +97,7 @@ export const screens: Record<string, AppScreenSpec> = {
 }
 
 /** 路由名数组（App 深栈/压测按它循环取屏——顺序与 routes 一致） */
-export const screenNames: string[] = ["background-position","border-style","border","grid-auto-flow","grid-auto","grid-template-areas","justify-self","line-clamp","outline","overflow-page","overflow","place-items","text-shadow","text","word-break"]
+export const screenNames: string[] = ["background-position","border-style","border","grid-auto-flow","grid-auto","grid-template-areas","justify-self","line-clamp","math-functions","outline","overflow-page","overflow","place-items","text-shadow","text","word-break"]
 
 /** tab 根屏（meta.isTab）—— App 端 tab 语义（switchTab/reset）的合法目标 */
 export const tabNames: string[] = []
@@ -108,6 +113,7 @@ declare module '@proteus-vue/router/types' {
     'grid-template-areas': {  },
     'justify-self': {  },
     'line-clamp': {  },
+    'math-functions': {  },
     'outline': {  },
     'overflow-page': {  },
     'overflow': {  },

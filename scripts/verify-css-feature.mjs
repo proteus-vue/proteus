@@ -127,6 +127,10 @@ const PROBE_VALUES = {
   gap: ['gap: 8px', 'rowGap', { kind: 'absolute', dp: 8 }],
   // ★★★line-clamp 项（2026-10-08）：多行截断行数（浏览器 computed 为 `2` 字符串 ⇒ CSE 折成数值 2）
   '-webkit-line-clamp': ['-webkit-line-clamp: 2', 'lineClamp', 2],
+  // ★★★数学函数项（2026-10-08）：全参数绝对化 ⇒ CSE 折单 px
+  'min()': ['width: min(160px, 240px)', 'width', { kind: 'absolute', dp: 160 }],
+  'max()': ['width: max(120px, 200px)', 'width', { kind: 'absolute', dp: 200 }],
+  'clamp()': ['width: clamp(120px, 160px, 200px)', 'width', { kind: 'absolute', dp: 160 }],
 }
 
 const probe = PROBE_VALUES[id]
