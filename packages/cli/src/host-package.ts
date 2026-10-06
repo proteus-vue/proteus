@@ -307,3 +307,191 @@ function signApp(appDir: string, bundleId: string, log: string[]): boolean {
     fs.rmSync(tmp, { recursive: true, force: true })
   }
 }
+
+/* ================= Android（第四刀样板） ================= */
+// `proteus build --target android --package` —— 编译项目内容后**调平台工具链打包 .apk**
+//   · runtime = **AAR**（libs/proteus-runtime.aar，保持同包 dev.proteus.layoutcore）；
+//   · 链路（无 Gradle，与 hosts/android/build-and-run.sh 同款）：javac 壳（-cp android.jar:classes.jar）
+//     → d8（--lib android.jar，含 AAR classes）→ aapt2 link（manifest+assets）→ zip(dex + jni .so)
+//     → zipalign -f 16384 → apksigner（自生成 debug.keystore）→ .apk。
+//   ★只"壳一层调平台工具链"，不自研工具链；签名用**调试 keystore**（自动生成，机器本地）。
+
+export interface PackageAndroidOptions {
+  hostDir: string
+  /** 项目根（含 dist/app/android/screen-content.json）；缺省 = 不拷产物 */
+  projectRoot?: string
+}
+
+export interface PackageAndroidResult {
+  ok: boolean
+  hostDir: string
+  apk: string | null
+  screenContentCopied: boolean
+  log: string[]
+}
+
+function androidSdk(): { sdk: string; platform: string; buildTools: string } | null {
+  const sdk = process.env.ANDROID_HOME ?? path.join(os.homedir(), 'Library', 'Android', 'sdk')
+  if (!fs.existsSync(path.join(sdk, 'platforms'))) return null
+  const platforms = fs.readdirSync(path.join(sdk, 'platforms')).filter((d) => d.startsWith('android-')).sort((a, b) => Number(a.slice(8)) - Number(b.slice(8)))
+  const bt = fs.existsSync(path.join(sdk, 'build-tools')) ? fs.readdirSync(path.join(sdk, 'build-tools')).sort() : []
+  if (!platforms.length || !bt.length) return null
+  return {
+    sdk,
+    platform: path.join(sdk, 'platforms', platforms[platforms.length - 1], 'android.jar'),
+    buildTools: path.join(sdk, 'build-tools', bt[bt.length - 1]),
+  }
+}
+
+function findJdk(): string | null {
+  const cands = [process.env.JAVA_HOME, path.join(process.cwd(), '.tools', 'jdk17'), path.join(process.cwd(), '.tools', 'jdk-17.0.20.1+1', 'Contents', 'Home')]
+  for (const c of cands) if (c && fs.existsSync(path.join(c, 'bin', 'javac'))) return c
+  return null
+}
+
+/** 打包 Android 最小宿主为 .apk：产物拷入 → javac → d8 → aapt2 → zip → zipalign → apksigner */
+export function packageAndroidHost(opts: PackageAndroidOptions): PackageAndroidResult {
+  const hostDir = path.resolve(opts.hostDir)
+  const log: string[] = []
+  const manifest = path.join(hostDir, 'AndroidManifest.xml')
+  if (!fs.existsSync(manifest)) return { ok: false, hostDir, apk: null, screenContentCopied: false, log: [`✗ 不是 Android 宿主工程（缺 AndroidManifest.xml）：${hostDir}`] }
+  const assetsDir = path.join(hostDir, 'app/src/main/assets')
+  const srcDir = path.join(hostDir, 'src')
+  if (!fs.existsSync(srcDir)) return { ok: false, hostDir, apk: null, screenContentCopied: false, log: ['✗ 缺 src/'] }
+
+  // ① runtime AAR（libs/proteus-runtime.aar）——缺则尝试框架仓构建
+  const aarPath = path.join(hostDir, 'libs', 'proteus-runtime.aar')
+  if (!fs.existsSync(aarPath)) return { ok: false, hostDir, apk: null, screenContentCopied: false, log: [`✗ 缺 runtime AAR：${path.relative(hostDir, aarPath)}（先跑 hosts/android/build-runtime-aar.sh 并用 create host 拷入）`] }
+
+  // ② 编译产物 → assets/app-screen-content.json
+  let screenContentCopied = false
+  if (opts.projectRoot) {
+    const sc = path.join(opts.projectRoot, 'dist', 'app', 'android', 'screen-content.json')
+    if (fs.existsSync(sc)) {
+      fs.mkdirSync(assetsDir, { recursive: true })
+      fs.copyFileSync(sc, path.join(assetsDir, 'app-screen-content.json'))
+      screenContentCopied = true
+      log.push('✓ 编译产物 app-screen-content.json 已就位')
+    } else {
+      log.push(`⚠ 未见 ${path.relative(opts.projectRoot, sc)}——沿用宿主既有产物`)
+    }
+  }
+
+  // ③ 工具链
+  const sdkInfo = androidSdk()
+  if (!sdkInfo) return { ok: false, hostDir, apk: null, screenContentCopied, log: [...log, '✗ 找不到 Android SDK（设 ANDROID_HOME）'] }
+  const jdk = findJdk()
+  if (!jdk) return { ok: false, hostDir, apk: null, screenContentCopied, log: [...log, '✗ 找不到 javac（设 JAVA_HOME 或 .tools/jdk17）'] }
+  const { platform, buildTools } = sdkInfo
+  // ★d8/apksigner 是 Java 启动脚本：需 JAVA_HOME（javac 用全路径不受影响，但子工具读 JAVA_HOME）
+  const env = { ...process.env, JAVA_HOME: jdk }
+
+  // ④ AAR → classes.jar（unzip）
+  const build = path.join(hostDir, 'build')
+  fs.rmSync(build, { recursive: true, force: true })
+  const extract = path.join(build, 'aar')
+  fs.mkdirSync(extract, { recursive: true })
+  try {
+    execFileSync('unzip', ['-o', '-q', aarPath, '-d', extract], { encoding: 'utf-8' })
+  } catch (e) {
+    return { ok: false, hostDir, apk: null, screenContentCopied, log: [...log, '✗ 解压 AAR 失败：' + String((e as Error).message).slice(-400)] }
+  }
+  const classesJar = path.join(extract, 'classes.jar')
+  if (!fs.existsSync(classesJar)) return { ok: false, hostDir, apk: null, screenContentCopied, log: [...log, '✗ AAR 内缺 classes.jar'] }
+  const jniSo = path.join(extract, 'jni/arm64-v8a/libproteus_jni.so')
+  if (!fs.existsSync(jniSo)) return { ok: false, hostDir, apk: null, screenContentCopied, log: [...log, '✗ AAR 内缺 jni/arm64-v8a/libproteus_jni.so'] }
+
+  // ⑤ javac 壳（-cp android.jar:classes.jar）
+  const classesDir = path.join(build, 'classes')
+  fs.mkdirSync(classesDir, { recursive: true })
+  const javaSrcs = listFiles(srcDir, '.java')
+  if (!javaSrcs.length) return { ok: false, hostDir, apk: null, screenContentCopied, log: [...log, '✗ src/ 无 .java'] }
+  log.push(`→ javac（壳 ${javaSrcs.length} 个源；-cp android.jar:classes.jar）`)
+  try {
+    execFileSync(path.join(jdk, 'bin', 'javac'), ['-nowarn', '-encoding', 'UTF-8', '--release', '17', '-cp', `${platform}:${classesJar}`, '-d', classesDir, ...javaSrcs], { encoding: 'utf-8', maxBuffer: 32 * 1024 * 1024 })
+  } catch (e) {
+    const msg = String((e as { stderr?: string }).stderr ?? (e as Error).message)
+    return { ok: false, hostDir, apk: null, screenContentCopied, log: [...log, '✗ javac 失败：', msg.slice(-1200)] }
+  }
+  log.push('✓ javac 通过')
+
+  // ⑥ d8（真源 = 壳 classes + AAR classes.jar）
+  const dexDir = path.join(build, 'dex')
+  fs.mkdirSync(dexDir, { recursive: true })
+  const classFiles = listFiles(classesDir, '.class')
+  log.push('→ d8（壳 classes + AAR classes.jar）')
+  try {
+    execFileSync(path.join(buildTools, 'd8'), ['--release', '--min-api', '24', '--lib', platform, '--output', dexDir, ...classFiles, classesJar], { encoding: 'utf-8', maxBuffer: 64 * 1024 * 1024, env })
+  } catch (e) {
+    const msg = String((e as { stderr?: string }).stderr ?? (e as Error).message)
+    return { ok: false, hostDir, apk: null, screenContentCopied, log: [...log, '✗ d8 失败：', msg.slice(-1200)] }
+  }
+  if (!fs.existsSync(path.join(dexDir, 'classes.dex'))) return { ok: false, hostDir, apk: null, screenContentCopied, log: [...log, '✗ d8 未产出 classes.dex'] }
+  log.push('✓ d8 通过（classes.dex）')
+
+  // ⑦ aapt2 link → 基础 APK（manifest + assets）
+  const apk = path.join(build, 'proteus-host.apk')
+  const genDir = path.join(build, 'gen')
+  fs.mkdirSync(genDir, { recursive: true })
+  log.push('→ aapt2 link')
+  try {
+    execFileSync(path.join(buildTools, 'aapt2'), ['link', '-o', apk, '-I', platform, '--manifest', manifest,
+      '--min-sdk-version', '24', '--target-sdk-version', '34', '--version-code', '1', '--version-name', '0.1.0',
+      '-A', assetsDir, '--java', genDir], { encoding: 'utf-8', maxBuffer: 32 * 1024 * 1024, env })
+  } catch (e) {
+    const msg = String((e as { stderr?: string }).stderr ?? (e as Error).message)
+    return { ok: false, hostDir, apk: null, screenContentCopied, log: [...log, '✗ aapt2 link 失败：', msg.slice(-1200)] }
+  }
+
+  // ⑧ zip：classes.dex（root）+ jni libs（stored）
+  const libDir = path.join(build, 'lib', 'arm64-v8a')
+  fs.mkdirSync(libDir, { recursive: true })
+  for (const so of fs.readdirSync(path.join(extract, 'jni/arm64-v8a'))) {
+    fs.copyFileSync(path.join(extract, 'jni/arm64-v8a', so), path.join(libDir, so))
+  }
+  try {
+    execFileSync('zip', ['-q', '-j', apk, path.join(dexDir, 'classes.dex')], { cwd: build, encoding: 'utf-8' })
+    for (const so of fs.readdirSync(libDir)) {
+      execFileSync('zip', ['-q', '-0', apk, `lib/arm64-v8a/${so}`], { cwd: build, encoding: 'utf-8' })
+    }
+  } catch (e) {
+    return { ok: false, hostDir, apk: null, screenContentCopied, log: [...log, '✗ 组装 APK 失败：' + String((e as Error).message).slice(-400)] }
+  }
+  log.push('✓ 组装 APK（classes.dex + jni .so）')
+
+  // ⑨ zipalign -f 16384
+  const aligned = path.join(build, 'proteus-host-aligned.apk')
+  try {
+    execFileSync(path.join(buildTools, 'zipalign'), ['-f', '16384', apk, aligned], { encoding: 'utf-8' })
+    fs.renameSync(aligned, apk)
+  } catch (e) {
+    return { ok: false, hostDir, apk: null, screenContentCopied, log: [...log, '✗ zipalign 失败：' + String((e as Error).message).slice(-400)] }
+  }
+
+  // ⑩ apksigner（自生成 debug.keystore）
+  const ks = path.join(build, 'debug.keystore')
+  try {
+    execFileSync(path.join(jdk, 'bin', 'keytool'), ['-genkeypair', '-keystore', ks, '-storepass', 'android', '-keypass', 'android', '-alias', 'androiddebugkey', '-dname', 'CN=Android Debug,O=Android,C=US', '-keyalg', 'RSA', '-keysize', '2048', '-validity', '10000'], { encoding: 'utf-8', env })
+    execFileSync(path.join(buildTools, 'apksigner'), ['sign', '--ks', ks, '--ks-pass', 'pass:android', '--key-pass', 'pass:android', '--v1-signing-enabled', 'true', '--v2-signing-enabled', 'true', apk], { encoding: 'utf-8', maxBuffer: 32 * 1024 * 1024, env })
+    execFileSync(path.join(buildTools, 'apksigner'), ['verify', '--print-certs', apk], { encoding: 'utf-8', env })
+  } catch (e) {
+    return { ok: false, hostDir, apk: null, screenContentCopied, log: [...log, '✗ 签名失败：' + String((e as Error).message).slice(-600)] }
+  }
+  log.push(`✓ 产出：${path.relative(hostDir, apk)}（已签名 v1+v2，可 adb install）`)
+  return { ok: true, hostDir, apk, screenContentCopied, log }
+}
+
+/** 递归列出目录下某扩展名的文件 */
+function listFiles(dir: string, ext: string): string[] {
+  const out: string[] = []
+  const walk = (d: string) => {
+    if (!fs.existsSync(d)) return
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const p = path.join(d, e.name)
+      if (e.isDirectory()) walk(p)
+      else if (e.name.endsWith(ext)) out.push(p)
+    }
+  }
+  walk(dir)
+  return out.sort()
+}

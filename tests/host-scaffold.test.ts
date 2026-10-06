@@ -16,6 +16,7 @@ import { createHost, parseCreateHostArgs, deriveBundleName } from '../packages/c
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-host-'))
 const TPL_HARMONY = path.resolve('packages/cli/templates-host/harmony')
 const TPL_IOS = path.resolve('packages/cli/templates-host/ios')
+const TPL_ANDROID = path.resolve('packages/cli/templates-host/android')
 
 afterAll(() => {
   fs.rmSync(TMP, { recursive: true, force: true })
@@ -45,9 +46,16 @@ function makeFakeIosRuntime(runtimeDir: string, platformDir: string): void {
 }
 
 /** 造一个假项目根（含 harmony 或 ios 屏内容产物） */
-function makeFakeProject(dir: string, platform: 'harmony' | 'ios'): string {
+function makeFakeProject(dir: string, platform: 'harmony' | 'ios' | 'android'): string {
   fs.mkdirSync(path.join(dir, `dist/app/${platform}`), { recursive: true })
   fs.writeFileSync(path.join(dir, `dist/app/${platform}/screen-content.json`), JSON.stringify({ index: { nodes: [{ id: 1, tag: 'view' }] } }))
+  return dir
+}
+
+/** 造一个假的 android runtime 产物目录（含 proteus-runtime.aar） */
+function makeFakeAndroidRuntime(dir: string): string {
+  fs.mkdirSync(dir, { recursive: true })
+  fs.writeFileSync(path.join(dir, 'proteus-runtime.aar'), 'PK\x03\x04fake-aar')
   return dir
 }
 
@@ -163,6 +171,54 @@ describe('createHost · ios（第三刀样板）', () => {
   })
 })
 
+describe('createHost · android（第四刀样板）', () => {
+  it('复制模板 + 替换 {{appName}}（Manifest）', () => {
+    const r = createHost({
+      platform: 'android',
+      targetDir: path.join(TMP, 'a1'),
+      appName: 'MyApp',
+      bundleName: 'dev.proteus.layoutcore',
+      templatesDir: TPL_ANDROID,
+      runtimeDirs: [makeFakeAndroidRuntime(path.join(TMP, 'rt-a1'))],
+    })
+    const mf = fs.readFileSync(path.join(r.targetDir, 'AndroidManifest.xml'), 'utf-8')
+    expect(mf).toContain('MyApp')
+    expect(mf).toContain('dev.proteus.layoutcore')       // 同包
+    expect(mf).not.toContain('{{')
+  })
+
+  it('结构完整 + runtime AAR 落 libs/ + 壳不依赖 dev', () => {
+    const r = createHost({
+      platform: 'android',
+      targetDir: path.join(TMP, 'a2'),
+      appName: 'X',
+      bundleName: 'dev.proteus.layoutcore',
+      templatesDir: TPL_ANDROID,
+      runtimeDirs: [makeFakeAndroidRuntime(path.join(TMP, 'rt-a2'))],
+    })
+    const rel = new Set(r.files)
+    for (const f of ['AndroidManifest.xml', 'src/dev/proteus/layoutcore/AppActivity.java']) expect(rel.has(f), f).toBe(true)
+    expect(fs.existsSync(path.join(r.targetDir, 'libs/proteus-runtime.aar'))).toBe(true)
+    const app = fs.readFileSync(path.join(r.targetDir, 'src/dev/proteus/layoutcore/AppActivity.java'), 'utf-8')
+    expect(app).toContain('VaporRenderHost')
+    expect(app).not.toMatch(/superapp|MainActivity|LightsHost|showcase|morpheus/i)
+  })
+
+  it('编译产物拷入 assets', () => {
+    const r = createHost({
+      platform: 'android',
+      targetDir: path.join(TMP, 'a3'),
+      appName: 'X',
+      bundleName: 'dev.proteus.layoutcore',
+      templatesDir: TPL_ANDROID,
+      runtimeDirs: [makeFakeAndroidRuntime(path.join(TMP, 'rt-a3'))],
+      projectRoot: makeFakeProject(path.join(TMP, 'proj-a3'), 'android'),
+    })
+    expect(r.screenContentCopied).toBe(true)
+    expect(fs.existsSync(path.join(r.targetDir, 'app/src/main/assets/app-screen-content.json'))).toBe(true)
+  })
+})
+
 describe('createHost · 通用', () => {
   it('目标目录非空 ⇒ 报错（不覆盖）', () => {
     const rt = path.join(TMP, 'rt-g'); const pf = path.join(TMP, 'pf-g')
@@ -177,12 +233,13 @@ describe('createHost · 通用', () => {
 describe('parseCreateHostArgs / deriveBundleName', () => {
   it('解析平台 + 目录 + 选项（harmony / ios 都合法）', () => {
     expect(parseCreateHostArgs(['harmony', 'host/harmony', '--name', 'Foo']).platform).toBe('harmony')
+    expect(parseCreateHostArgs(['android', 'host/android']).platform).toBe('android')
     const a = parseCreateHostArgs(['ios', 'host/ios', '--name', 'Bar', '--bundle', 'dev.acme.bar'])
     expect(a.platform).toBe('ios')
     expect(a.bundleName).toBe('dev.acme.bar')
   })
   it('未知平台报错', () => {
-    expect(() => parseCreateHostArgs(['android', 'x'])).toThrow(/支持/)
+    expect(() => parseCreateHostArgs(['harmony2', 'x'])).toThrow(/支持/)
   })
   it('包名派生（slug + reverse-DNS）', () => {
     expect(deriveBundleName('My Cool App')).toBe('com.example.my.cool.app')
