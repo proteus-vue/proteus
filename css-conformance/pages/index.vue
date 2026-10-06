@@ -44,6 +44,17 @@ const count = ref(0)
       <view class="ix-item" @tap="$nav('background-position')"><text class="ix-item__t">背景定位</text><text class="ix-item__d">background size/position</text></view>
       <view class="ix-item" @tap="$nav('safe-area')"><text class="ix-item__t">安全区</text><text class="ix-item__d">--pf-inset-*</text></view>
       <view class="ix-item" @tap="$nav('vw-vh')"><text class="ix-item__t">视口单位</text><text class="ix-item__d">vw / vh</text></view>
+      <view class="ix-item" @tap="$nav('flex')"><text class="ix-item__t">弹性布局</text><text class="ix-item__d">flex 族</text></view>
+      <view class="ix-item" @tap="$nav('box-model')"><text class="ix-item__t">盒模型</text><text class="ix-item__d">宽高 / margin / padding / box-sizing</text></view>
+      <view class="ix-item" @tap="$nav('position')"><text class="ix-item__t">定位</text><text class="ix-item__d">position / inset / z-index</text></view>
+      <view class="ix-item" @tap="$nav('background')"><text class="ix-item__t">背景</text><text class="ix-item__d">color / image / size / repeat</text></view>
+      <view class="ix-item" @tap="$nav('font')"><text class="ix-item__t">文本样式</text><text class="ix-item__d">字号 / 字重 / 行高 / 对齐</text></view>
+      <view class="ix-item" @tap="$nav('effects')"><text class="ix-item__t">视觉效果</text><text class="ix-item__d">shadow / transform / aspect-ratio</text></view>
+      <view class="ix-item" @tap="$nav('animation')"><text class="ix-item__t">动画 / 过渡</text><text class="ix-item__d">@keyframes / transition</text></view>
+      <view class="ix-item" @tap="$nav('grid-tracks')"><text class="ix-item__t">网格轨道</text><text class="ix-item__d">template-columns / span</text></view>
+      <view class="ix-item" @tap="$nav('at-rules')"><text class="ix-item__t">条件规则</text><text class="ix-item__d">@media / @supports / @layer</text></view>
+      <view class="ix-item" @tap="$nav('units')"><text class="ix-item__t">单位</text><text class="ix-item__d">px / em / rem / pt</text></view>
+      <view class="ix-item" @tap="$nav('misc')"><text class="ix-item__t">杂项</text><text class="ix-item__d">pointer-events / mask / filter</text></view>
     </view>
   </view>
 </template>
