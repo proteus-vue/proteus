@@ -1724,3 +1724,11 @@
 **⑤ ★教训 / 可执行**：a) **"绑了回调"要有真机端到端证据**（本次：第三方 App 经 C-ABI 建出真 View + 引擎几何应用到它）；b) **pre-existing 编译失败会长期潜伏**（demo 只被"没跑的门禁"引用 ⇒ 没人发现）——**门禁要真跑**（本次把 embed-demo 真机跑通才暴露）；c) **脚本调工具链要 export `JAVA_HOME`**（`d8`/`aapt2`/`apksigner` 是脚本，不是二进制）——与"构建脚本必须失败即停"同族的工具链接线纪律。
 **⑥ 诚实边界**：**iOS ABI 探针路径仍 `nil`**（iOS 无生产原生组件消费者，selfdraw 是 ABI 探针）⇒ 具名；**z-order/滚动同步仍属宿主**（平台成本，不抽象）。**台账 HA4 仍 `范围外`**（iOS 未绑 ⇒ 整行未收口，但 Android 侧已实现 + 真机验证）。**B5（HA0.5 + HA4）Android 侧全部完成**；余 = 鸿蒙平台层（未开始）+ iOS 原生组件消费者（未存在）。
 
+612. **★宿主关注点分离 B5-1 鸿蒙腿——文本度量/字体抽 `platform/harmony`（**HA0.5 三端收口**）（★用户 2026-10-07「继续」）**：
+**① 取证**：鸿蒙文本度量/字体在 `hosts/harmony/.../proteus_host_helpers.h`（`measureTextTypoPx`/`measureTextWrappedTypoPx`/`applyTextFont`/`lineHeightDesignPx`，OH_Drawing Typography）——**自包含**（只依赖 `native_drawing/*`）；该头已被 `proteus_host.cpp` + `proteus_bench.cpp` 两处 include。**绘制执行**在 `proteus_render.cpp`（RenderNode 上屏——宿主，与 iOS/Android 同构）。
+**② 交付**：新增 `platform/harmony/proteus-platform/src/main/cpp/proteus_text_platform.h`（4 函数，与 iOS `ProteusTextAdapter` / Android `ProteusTextPlatform` 对称）；`proteus_host_helpers.h` **移除这 4 函数、改 `#include "proteus_text_platform.h"`**（宿主经 helpers 传递引入 ⇒ **调用方零改动**）；两端 CMakeLists 加平台 include 路径；`check:platform-layering` 的 harmony 签名补 `OH_Drawing` + `PLATFORM_ADAPTATION` 加 harmony 段；结构契约测试扩到三端。
+**③ ★验收（行为中性 = 逐字证明）**：鸿蒙构建 ✅ · **函数体逐字一致**——`git show HEAD:` 取抽取前 helpers 与平台头对比，**OLD vs NEW 仅多 2 行注释、函数体完全相同** ⇒ 可证明的行为中性 · 真机渲染无回归 · `check:platform-layering`（+破坏性：删平台头 ⇒ 退出码 1）✅ · 结构契约 4 绿。
+**④ ★HA0.5 三端就此收口**：iOS（早已抽）· Android（前两步）· 鸿蒙（本步）。台账 **HA0.5 → `已落地`**（`已落地 19 / 范围外 12`）。门禁 C 判据现覆盖**三端**。
+**⑤ 教训（复述强化）**：a) **抽取的"零行为变化"要能证明**——鸿蒙这次用**逐字 diff**（比 Android 的逐像素更直接）；**能证明就别只声称**；b) **"能独立抽的层"逐端抽**（三端都是"文本度量/字体"，绘制留宿主）；c) **门禁/契约测试跟着覆盖面走**（加一节端，判据/测试同步加一节）。
+**⑥ 诚实边界**：**绘制执行三端都在宿主**（载体是平台 View/layer，具名）· **HA4 iOS 侧仍 `nil`**（无生产原生组件消费者）⇒ HA4 整行仍 `范围外`；**HA0.5（平台分层）已三端收口**。
+
