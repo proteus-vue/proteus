@@ -129,6 +129,11 @@ export function mapStyleIRToSkyline(fields: Record<string, unknown>, opts: Skyli
       continue
     }
     // 字符串族
+    if (field === 'textShadow') {
+      // ★★★text-shadow 项（2026-10-08）：结构化对象——Skyline 官方表支持 text-shadow，原样透传。
+      put(field, 'text-shadow', typeof value === 'string' ? value : JSON.stringify(value))
+      continue
+    }
     if (typeof value === 'string') {
       if (field === 'gridTemplateColumns' || field === 'gridTemplateRows' || field === 'gridColumn' || field === 'gridRow') {
         drop(field, value, 'Skyline 无 Grid（B4 的 degradeTo 配方：grid→嵌套 flex）')

@@ -108,6 +108,12 @@ public class ProteusHostView extends ViewGroup {
          */
         float[] outline;
         /**
+         * ★★★text-shadow 项（2026-10-08）：文本阴影 `[dx, dy, blur, colorHi16, colorLo16]`；null = 无（零行为变化）。
+         *   宿主在文本绘制时用 `setShadowLayer`（**硬件加速下只对文本生效**——正是文本阴影所需；
+         *   与 box-shadow 恰相反：那里对 Path/Rect 无效故走分层近似）。colorHi/Lo16 = 32 位色无损传递。非 final（同 outline）。
+         */
+        float[] textShadow;
+        /**
          * ★★圆角半径（px；0 = 直角）——纯绘制属性（内核不收，只影响观感）。
          *
          * 【为什么加（2026-10-01 · 灯光秀）】灯光秀的 800 颗灯珠用 4px 圆角（圆点观感）；
@@ -2335,6 +2341,7 @@ public class ProteusHostView extends ViewGroup {
         int lastDecor = -1;   // ★批次 35：装饰变化才设下划线/删除线
         String lastFamRole = null;   // ★批次 36：字体角色变化才重设 typeface
         int lastAlign = -1;    // ★批次 4：文本对齐变化才设 Paint.Align
+        boolean lastShadow = false;   // ★★★text-shadow 项（2026-10-08）：阴影状态变化才设/清 setShadowLayer
         final java.util.Set<Integer> skip = skipCmdIndices;   // ★被载体提升的指令：跳过（否则重影）
         final int[] ids = cmdNodeIds;
         for (int i = 0; i < list.size(); i++) {
@@ -2707,6 +2714,19 @@ public class ProteusHostView extends ViewGroup {
                 final int alphaBase = (animTc != null || c.textColor != 0)
                         ? Color.alpha(animTc != null ? animTc : c.textColor) : 255;
                 textPaint.setAlpha(op < 1f ? Math.max(0, Math.min(255, (int) (alphaBase * op))) : alphaBase);
+                // ★★★text-shadow 项（2026-10-08）：文本投影——**硬件加速下 setShadowLayer 只对文本生效**
+                //   （正是文本阴影所需；与 box-shadow「对 Path/Rect 无效」恰相反）。仅在变化时设/清（连排零开销）。
+                //   ★blur>0 ⇒ setShadowLayer（高斯模糊）；blur==0（**硬边投影**）⇒ setShadowLayer 的 radius=0
+                //     在 Android 上**不绘制**（API 要求 radius>0）⇒ 改**手动偏移重绘**（见下方各绘制分支）。
+                final boolean hardShadow = c.textShadow != null && c.textShadow[2] < 0.5f;
+                if (c.textShadow != null && c.textShadow[2] >= 0.5f) {
+                    textPaint.setShadowLayer(c.textShadow[2], c.textShadow[0], c.textShadow[1],
+                            VaporRenderHost.textShadowColorOf(c.textShadow));
+                    lastShadow = true;
+                } else if (lastShadow) {
+                    textPaint.clearShadowLayer();
+                    lastShadow = false;
+                }
                 // ★批次 4：绘制 x 按对齐换算（LEFT:CENTER:RIGHT 的 x 语义不同——见 Paint.Align）
                 final float tx = c.textAlign == 1 ? c.x + c.w * 0.5f
                         : c.textAlign == 2 ? c.x + c.w - 1f : c.x + 1f;
@@ -2726,13 +2746,16 @@ public class ProteusHostView extends ViewGroup {
                 //   clipText ⇒ 裁到盒（nowrap 溢出的裁切语义，= Web overflow 裁切）；
                 //   其余 ⇒ 既有单行 drawText（零行为变化）。
                 if (c.multiLine) {
+                    if (hardShadow) drawShadowCopy(canvas, c, textPaint, tx, baseY, true);
                     drawTextMultiline(canvas, c);
                 } else if (c.clipText) {
                     int ssave = canvas.save();
                     canvas.clipRect(c.x, c.y, c.x + c.w, c.y + c.h);
+                    if (hardShadow) drawShadowCopy(canvas, c, textPaint, tx, baseY, false);
                     canvas.drawText(c.text, tx, baseY, textPaint);
                     canvas.restoreToCount(ssave);
                 } else {
+                    if (hardShadow) drawShadowCopy(canvas, c, textPaint, tx, baseY, false);
                     canvas.drawText(c.text, tx, baseY, textPaint);
                 }
             }
@@ -3353,6 +3376,16 @@ public class ProteusHostView extends ViewGroup {
 
     /** 指令变更后重建显示列表（脏时调用一次） */
     public void rebuildPicture(int width, int height) {
+        // ★★★text-shadow 项（2026-10-08 · 真机实测抓出）：**显示列表（Picture）录制会丢 `setShadowLayer`**——
+        //   Android 的 Picture 回放（录进 DisplayList）**不保留 Paint 的文本阴影**（硬件加速下 setShadowLayer
+        //   只对**实时**文本绘制生效，录制成显示列表则阴影丢失）⇒ 真机 Case B「8px 光晕」完全不显示。
+        //   ⇒ 指令流里**任一** Cmd 带 textShadow 时，**放弃显示列表优化**，走 onDraw 的 `drawCmds` 直绘到
+        //   硬件 canvas（那里 setShadowLayer 生效）。代价：该帧每帧全量 drawCmds（有阴影的帧本就少见）。
+        if (cmds != null) {
+            for (int i = 0; i < cmds.size(); i++) {
+                if (cmds.get(i).textShadow != null) { framePicture = null; return; }
+            }
+        }
         android.graphics.Picture pic = new android.graphics.Picture();
         android.graphics.Canvas c = pic.beginRecording(width, height);
         drawCmds(c);
@@ -3460,6 +3493,50 @@ public class ProteusHostView extends ViewGroup {
         android.text.StaticLayout layout = b.build();
         int save = canvas.save();
         canvas.translate(c.x, c.y + (extra > 0.5f ? extra * 0.5f : 0f));
+        layout.draw(canvas);
+        canvas.restoreToCount(save);
+    }
+
+    /**
+     * ★★★text-shadow 项（2026-10-08）：**硬边投影**（blur==0）的偏移重绘副本。
+     *   Android setShadowLayer 的 radius=0 不绘制 ⇒ 用"影子色 + 偏移"先画一遍文本，再画本体。
+     *   单行：canvas.drawText（tx+dx, baseY+dy）；多行：StaticLayout 平移 (dx,dy)。
+     */
+    private void drawShadowCopy(Canvas canvas, Cmd c, android.text.TextPaint tp, float tx, float baseY, boolean multiLine) {
+        final int sCol = tp.getColor();
+        final int sAlpha = tp.getAlpha();
+        tp.setColor(VaporRenderHost.textShadowColorOf(c.textShadow));
+        if (multiLine) {
+            drawTextMultilineOffset(canvas, c, tp, c.textShadow[0], c.textShadow[1]);
+        } else {
+            canvas.drawText(c.text, tx + c.textShadow[0], baseY + c.textShadow[1], tp);
+        }
+        tp.setColor(sCol);
+        tp.setAlpha(sAlpha);
+    }
+
+    /** 多行硬边投影：与 drawTextMultiline 同构（平移 dx/dy） */
+    private void drawTextMultilineOffset(Canvas canvas, Cmd c, android.text.TextPaint tp, float dx, float dy) {
+        // I2-ALLOW: 文本**测量/位图**宽（StaticLayout 需整型像素宽——canvas 文本排版参数，非绘制几何发射）
+        int w = Math.max(1, (int) Math.ceil(c.w));
+        android.text.Layout.Alignment al = c.textAlign == 1
+                ? android.text.Layout.Alignment.ALIGN_CENTER
+                : c.textAlign == 2 ? android.text.Layout.Alignment.ALIGN_OPPOSITE
+                : android.text.Layout.Alignment.ALIGN_NORMAL;
+        android.text.StaticLayout.Builder b = android.text.StaticLayout.Builder
+                .obtain(c.text, 0, c.text.length(), tp, w)
+                .setIncludePad(false)
+                .setAlignment(al);
+        float extra = 0f;
+        if (c.lineHeight > 0f) {
+            android.graphics.Paint.FontMetrics fm = tp.getFontMetrics();
+            float natural = fm.descent - fm.ascent;
+            extra = c.lineHeight - natural;
+            if (extra > 0.5f) b.setLineSpacing(extra, 1f);
+        }
+        android.text.StaticLayout layout = b.build();
+        int save = canvas.save();
+        canvas.translate(c.x + dx, c.y + dy + (extra > 0.5f ? extra * 0.5f : 0f));
         layout.draw(canvas);
         canvas.restoreToCount(save);
     }

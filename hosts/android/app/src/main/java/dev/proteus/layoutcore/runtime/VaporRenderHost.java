@@ -1664,9 +1664,9 @@ public final class VaporRenderHost {
             final boolean clipText = !wsWrap && w > 1f
                     && "hidden".equals(spec.optString("overflow", null))
                     && !("ellipsis".equals(spec.optString("textOverflow", null)));
-            { ProteusHostView.Cmd _c = new ProteusHostView.Cmd(x, y, w, h, color, t, fs, textColor, radius, grad, glowSpec, maskSpec, fw, ta, bw, bc, shadowSpec, lh, ls, decor, wsWrap ? 0 : 1, multiLine, clipText, sideBorderOf(spec)); _c.outline = parseOutline(spec); return _c; }
+            { ProteusHostView.Cmd _c = new ProteusHostView.Cmd(x, y, w, h, color, t, fs, textColor, radius, grad, glowSpec, maskSpec, fw, ta, bw, bc, shadowSpec, lh, ls, decor, wsWrap ? 0 : 1, multiLine, clipText, sideBorderOf(spec)); _c.outline = parseOutline(spec); _c.textShadow = parseTextShadow(spec.optJSONObject("textShadow")); return _c; }
         }
-        { ProteusHostView.Cmd _c = new ProteusHostView.Cmd(x, y, w, h, color, null, 0f, 0, radius, grad, glowSpec, maskSpec, 400, 0, bw, bc, shadowSpec, 0f, 0f, 0, 0, false, false, sideBorderOf(spec)); _c.outline = parseOutline(spec); return _c; }
+        { ProteusHostView.Cmd _c = new ProteusHostView.Cmd(x, y, w, h, color, null, 0f, 0, radius, grad, glowSpec, maskSpec, 400, 0, bw, bc, shadowSpec, 0f, 0f, 0, 0, false, false, sideBorderOf(spec)); _c.outline = parseOutline(spec); _c.textShadow = parseTextShadow(spec.optJSONObject("textShadow")); return _c; }
     }
 
     /** ★批次 4：`text-align` 字符串 → 码（0=left / 1=center / 2=right；未知 ⇒ 0） */
@@ -1793,6 +1793,26 @@ public final class VaporRenderHost {
         float off = (float) spec.optDouble("outlineOffset", 0);
         int style = "dashed".equals(osV) ? 1 : "dotted".equals(osV) ? 2 : 0;
         return new float[]{ (float) ow, off, oc, style };
+    }
+
+    /** ★★★text-shadow 项（2026-10-08）：`{dx,dy,blur,color}` → `[dx,dy,blur,colorHi16,colorLo16]`（坏色 ⇒ null） */
+    private float[] parseTextShadow(JSONObject ts) {
+        if (ts == null) return null;
+        String colS = ts.optString("color", "");
+        int col = colS.startsWith("#") ? parseColor(colS) : 0;
+        if (col == 0) return null;
+        return new float[]{
+                (float) ts.optDouble("dx", 0),
+                (float) ts.optDouble("dy", 0),
+                (float) ts.optDouble("blur", 0),
+                (float) ((col >>> 16) & 0xFFFF),
+                (float) (col & 0xFFFF)};
+    }
+
+    /** 从 `Cmd.textShadow` 取回无损阴影色（`[3]`=高16 / `[4]`=低16） */
+    static int textShadowColorOf(float[] ts) {
+        if (ts.length >= 5) return ((int) ts[3] << 16) | (int) ts[4];
+        return ts.length >= 4 ? (int) ts[3] : 0;
     }
 
     private ProteusHostView.GradSpec parseGrad(JSONObject spec) {

@@ -52,6 +52,8 @@ export const APP_PAINT_FIELDS: readonly string[] = [
   'outlineWidth', 'outlineColor', 'outlineStyle', 'outlineOffset',
   // ★★★背景定位家族（2026-10-07）：背景图层图像盒的 size/position/repeat（字符串，透传宿主几何）
   'backgroundSize', 'backgroundPosition', 'backgroundRepeat',
+  // ★★★text-shadow 项（2026-10-08）：文本阴影（宿主绘制——host-only paint）
+  'textShadow',
 ]
 const LAYOUT_SET = new Set(APP_LAYOUT_FIELDS)
 const PAINT_SET = new Set(APP_PAINT_FIELDS)
@@ -228,6 +230,8 @@ export function mapStyleIRToApp(fields: Record<string, unknown>): AppMappingResu
         'backgroundSize', 'backgroundPosition', 'backgroundRepeat',
         // ★★★outline 族项（2026-10-08）：线型（枚举字符串）
         'outlineStyle',
+        // ★★★text-shadow 项（2026-10-08）：CSE 产出浏览器 computed 规范串——直传（宿主文本投影）
+        'textShadow',
         'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor',
       ])
       if (enumFields.has(field)) {
@@ -257,6 +261,10 @@ export function mapStyleIRToApp(fields: Record<string, unknown>): AppMappingResu
     if (field === 'gridColumn' || field === 'gridRow') {
       dto[field] = value
       ops[`layout.${field}`] = JSON.stringify(value)
+      continue
+    }
+    if (field === 'textShadow') {
+      dto['textShadow'] = value // 宿主文本绘制投影（结构化 {dx,dy,blur,color}）
       continue
     }
     /* ── v1 明确不支持（不猜不近似） ── */

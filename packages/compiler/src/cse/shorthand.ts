@@ -59,7 +59,7 @@ const CORNER_SUFFIX: Array<'top-left' | 'top-right' | 'bottom-right' | 'bottom-l
 /** 已知不支持简写（调用方据此记 skipped/诊断——列在这里防"悄悄当长手收下"） */
 export const UNSUPPORTED_SHORTHANDS = new Set([
   'font', 'transition', 'animation', 'border-image', 'background-image', 'list-style', 'outline',
-  'box-shadow', 'text-shadow', 'filter', 'backdrop-filter',
+  'box-shadow', 'filter', 'backdrop-filter',
 ])
 
 /**

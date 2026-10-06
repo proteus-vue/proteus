@@ -91,6 +91,8 @@ export const SEMANTIC_FIELD_SNAPSHOT_KEYS: Readonly<Record<string, readonly stri
   borderLeftStyle: ['borderLeftStyle'],
   opacity: ['opacity'],
   boxShadow: ['boxShadow'],
+  // ★★★text-shadow 项（2026-10-08）：文本阴影（读数键 = 同名串）
+  textShadow: ['textShadow'],
   transform: ['transform'],
   /* ── 文本 ── */
   fontSize: ['fontSize'],

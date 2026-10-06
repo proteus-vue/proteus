@@ -566,6 +566,22 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
             char bb[96]; snprintf(bb, sizeof(bb), ",\"borderWidth\":%.2f,\"borderColor\":%u", bw * density, bc);
             arr += bb;
         }
+        // ★★★text-shadow 项（2026-10-08）：文本阴影扁平键（dx/dy/blur ×density 物理 px；color ARGB）
+        {
+            std::string tsSub = extractValueAfterKey(it, "textShadow", '{', '}');
+            if (!tsSub.empty()) {
+                double tsdx = 0, tsdy = 0, tsblur = 0, tscolor = 0; std::string tscc;
+                jnum(tsSub.c_str(), tsSub.size(), "dx", &tsdx);
+                jnum(tsSub.c_str(), tsSub.size(), "dy", &tsdy);
+                jnum(tsSub.c_str(), tsSub.size(), "blur", &tsblur);
+                if (jstr(tsSub.c_str(), tsSub.size(), "color", &tscc)) tscolor = hexToArgb(tscc);
+                if (tscolor > 0) {
+                    char tb[160]; snprintf(tb, sizeof(tb), ",\"textShadowDx\":%.2f,\"textShadowDy\":%.2f,\"textShadowBlur\":%.2f,\"textShadowColor\":%u",
+                             tsdx * density, tsdy * density, tsblur * density, (uint32_t)tscolor);
+                    arr += tb;
+                }
+            }
+        }
         // ★★★outline 族项（2026-10-08）：轮廓宽/色/线型/偏移（px ×density；offset 可负）
         {
             double ow = 0, ooff = 0; jnum(it.c_str(), it.size(), "outlineWidth", &ow); jnum(it.c_str(), it.size(), "outlineOffset", &ooff);

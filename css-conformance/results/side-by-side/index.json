@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-06T09:28:21.525Z",
+  "generatedAt": "2026-10-06T10:12:13.288Z",
   "rows": [
     {
       "end": "mp",
@@ -53,6 +53,12 @@
       "end": "mp",
       "page": "overflow.png",
       "out": "css-conformance/results/side-by-side/overflow.mp-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "mp",
+      "page": "text-shadow.png",
+      "out": "css-conformance/results/side-by-side/text-shadow.mp-vs-web.png",
       "status": "ok"
     },
     {
@@ -123,6 +129,12 @@
     },
     {
       "end": "android",
+      "page": "text-shadow.png",
+      "out": "css-conformance/results/side-by-side/text-shadow.android-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "android",
       "page": "text.png",
       "out": "css-conformance/results/side-by-side/text.android-vs-web.png",
       "status": "ok"
@@ -189,6 +201,12 @@
     },
     {
       "end": "ios",
+      "page": "text-shadow.png",
+      "out": "css-conformance/results/side-by-side/text-shadow.ios-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "ios",
       "page": "text.png",
       "out": "css-conformance/results/side-by-side/text.ios-vs-web.png",
       "status": "ok"
@@ -251,6 +269,12 @@
       "end": "harmony",
       "page": "overflow.png",
       "out": "css-conformance/results/side-by-side/overflow.harmony-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "harmony",
+      "page": "text-shadow.png",
+      "out": "css-conformance/results/side-by-side/text-shadow.harmony-vs-web.png",
       "status": "ok"
     },
     {

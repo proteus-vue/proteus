@@ -1249,6 +1249,19 @@ export const STYLE_IR_FIELDS: Record<string, StyleFieldSpec> = {
       inheritable: true,
     },
   },
+  "textShadow": {
+    scope: "semantic",
+    domain: "paint",
+    valueType: "engine-field",
+    sources: {
+      compiler: "APP_PAINT_FIELDS",
+      matrixLevel: null,
+      runtimeWhitelist: false,
+      runtimeForbidden: true,
+      consistencyMatrix: true,
+      inheritable: false,
+    },
+  },
   "top": {
     scope: "semantic",
     domain: "layout",
@@ -1383,15 +1396,15 @@ export const STYLE_IR_FIELDS: Record<string, StyleFieldSpec> = {
 
 /** 摘要（判据与官网数字读它——机器推导，非手写） */
 export const STYLE_IR_SUMMARY = {
-  total: 103,
-  semantic: 77,
+  total: 104,
+  semantic: 78,
   engineOnly: 26,
   byDomain: {
     "derived": 10,
     "edges": 8,
     "layout": 44,
     "matrix-only": 4,
-    "paint": 36,
+    "paint": 37,
     "special": 1,
   },
 } as const

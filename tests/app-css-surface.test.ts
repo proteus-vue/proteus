@@ -35,7 +35,7 @@ const APP_FIELDS = [...APP_LAYOUT_FIELDS, ...APP_PAINT_FIELDS, ...APP_EDGE_FIELD
 const FORBIDDEN = new Set<string>(FORBIDDEN_PROPS)
 const MATRIX_KEYS = new Set<string>(Object.keys(STYLE_PROP_LEVELS))
 /** ★已登记的分层差异（引擎字段层需要 FORBIDDEN 名的属性）——与 check-app-css-surface.mjs 同源维护 */
-const APP_ENGINE_LEVEL_FIELDS = new Set(['display', 'position', 'overflow', 'boxShadow'])
+const APP_ENGINE_LEVEL_FIELDS = new Set(['display', 'position', 'overflow', 'boxShadow', 'textShadow'])
 
 describe('★App CSS 支持面 · ① SSOT 完备性', () => {
   it('五组常量各自非空、各自无重复（防导出/生成器腐化）', () => {
@@ -83,6 +83,8 @@ describe('★App CSS 支持面 · ② SSOT 与折叠实现同源（真折叠，�
       if (f === 'fontWeight') return 'bold'
       if (f === 'textAlign') return 'center'
       if (f === 'boxShadow') return '0 1px 2px #000000'
+      // ★★★text-shadow 项（2026-10-08）：文本阴影（结构化折叠）
+      if (f === 'textShadow') return '0 1px 2px #000000'
       if (f === 'gridTemplateColumns' || f === 'gridTemplateRows') return '1fr 1fr'
       if (f === 'lineHeight') return '1.5'
       if (f === 'textOverflow') return 'ellipsis'

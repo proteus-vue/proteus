@@ -306,6 +306,10 @@ struct TextDrawSpec {
     double outlineWidth = 0, outlineOffset = 0;
     uint32_t outlineColor = 0;
     bool outlineDotted = false, outlineDashed = false;
+    // ★★★text-shadow 项（2026-10-08）：文本阴影（dx/dy/blur 物理 px + 色）→ Typography TextShadow
+    bool hasTextShadow = false;
+    double textShadowDx = 0, textShadowDy = 0, textShadowBlur = 0;
+    uint32_t textShadowColor = 0;
     /** ★★★uniform dotted border（2026-10-08 用户抓出「dotted 四角重叠」）：四边同宽/同色/均 dotted 时
      *   不走 ArkUI 原生 DOTTED（逐边绘制 ⇒ 四角重叠），改为在画布上沿**单条圆角周界**画点（与 outline/Web 一致）。 */
     bool hasDotBorder = false;
@@ -558,6 +562,15 @@ static void drawChannelsAndText(OH_Drawing_Canvas* canvas, const TextDrawSpec* s
             else if (spec->textAlign == "right") OH_Drawing_SetTypographyTextAlign(ts, 1);
             else OH_Drawing_SetTypographyTextAlign(ts, 0);
             OH_Drawing_SetTextStyleColor(tstyle, spec->color);
+            // ★★★text-shadow 项（2026-10-08）：Typography 原生文本阴影（OH_Drawing_TextShadow）
+            if (spec->hasTextShadow) {
+                OH_Drawing_TextShadow* sh = OH_Drawing_CreateTextShadow();
+                OH_Drawing_Point* shOff = OH_Drawing_PointCreate((float)spec->textShadowDx, (float)spec->textShadowDy);
+                OH_Drawing_SetTextShadow(sh, spec->textShadowColor, shOff, spec->textShadowBlur);
+                OH_Drawing_TextStyleAddShadow(tstyle, sh);
+                OH_Drawing_DestroyTextShadow(sh);
+                OH_Drawing_PointDestroy(shOff);
+            }
             OH_Drawing_SetTextStyleFontSize(tstyle, spec->fontSizePx);
             // ★批次 3：字重（`OH_Drawing_FontWeight` = FONT_WEIGHT_100..900 ⇒ 索引 (w/100)-1，钳 [0,8]）
             {
@@ -660,7 +673,7 @@ static void DrawTextCallback(ArkUI_DrawContext* context, void* userData) {
     // ★★早退条件放宽（2026-10-03）：**有通道**（渐变/发光/裁剪/描边）也要进回调
     //   —— 此前只判 `text.empty()` ⇒ 纯通道节点（无文本）永远不画（四通道全丢）。
     if (spec == nullptr) return;
-    if (spec->text.empty() && !spec->hasGrad && !spec->hasGlow && !spec->hasClip && !spec->hasStroke && !spec->hasOutline && !spec->hasDotBorder) return;
+    if (spec->text.empty() && !spec->hasGrad && !spec->hasGlow && !spec->hasClip && !spec->hasStroke && !spec->hasOutline && !spec->hasDotBorder && !spec->hasTextShadow) return;
     void* canvasRaw = OH_ArkUI_DrawContext_GetCanvas(context);
     if (canvasRaw == nullptr) return;
     auto* canvas = static_cast<OH_Drawing_Canvas*>(canvasRaw);
@@ -1180,6 +1193,20 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
                     spec->hasOutline = true; spec->outlineWidth = ow; spec->outlineOffset = oo; spec->outlineColor = (uint32_t)oc;
                     spec->outlineDotted = (osV == "dotted"); spec->outlineDashed = (osV == "dashed");
                     ch.outline = "1"; hasAnyChannel = true;
+                }
+            }
+            // ★★★text-shadow 项（2026-10-08）：文本阴影（扁平键 textShadowDx/Dy/Blur/Color，物理 px）
+            if (it.find("\"textShadowBlur\":") != std::string::npos) {
+                double tsdx = 0, tsdy = 0, tsblur = 0, tscol = 0;
+                jsonNumber(it, "textShadowDx", &tsdx);
+                jsonNumber(it, "textShadowDy", &tsdy);
+                jsonNumber(it, "textShadowBlur", &tsblur);
+                jsonNumber(it, "textShadowColor", &tscol);
+                if (tscol != 0) {
+                    spec->hasTextShadow = true;
+                    spec->textShadowDx = tsdx; spec->textShadowDy = tsdy; spec->textShadowBlur = tsblur;
+                    spec->textShadowColor = (uint32_t)tscol;
+                    hasAnyChannel = true;
                 }
             }
             // ★★★uniform dotted border（2026-10-08）：四边同宽/同色/均 dotted ⇒ 画布单圆角周界画点

@@ -17,20 +17,20 @@
       "unit": 30
     },
     "byImpl": {
-      "not-started": 542,
+      "not-started": 541,
       "excluded": 280,
-      "implemented": 124,
+      "implemented": 125,
       "partial": 3
     },
     "byPriority": {
       "P2": 115,
       "excluded": 280,
-      "P0": 17,
-      "done": 124,
+      "P0": 16,
+      "done": 125,
       "P1": 413
     },
-    "actionable": 545,
-    "actionableP0": 17
+    "actionable": 544,
+    "actionableP0": 16
   },
   "entries": [
     {
@@ -8168,11 +8168,11 @@
       ],
       "syntax": "<grid-line> [ / <grid-line> ]{0,3}",
       "impl": "implemented",
-      "implNote": "IR 注册表在册（scope=engine-only）",
+      "implNote": "IR 注册表在册（scope=semantic）",
       "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
-        "irScope": "engine-only",
+        "irScope": "semantic",
         "inCompilerFold": true,
         "matrixLevel": null,
         "webSupport": null
@@ -14676,19 +14676,19 @@
       "inherited": true,
       "initial": "none",
       "syntax": "none | <shadow-t>#",
-      "impl": "not-started",
-      "implNote": "未接：文本阴影（证据：未接）",
+      "impl": "implemented",
+      "implNote": "IR 注册表在册（scope=semantic）",
       "channel": null,
       "evidencedBy": {
-        "inIrRegistry": false,
-        "irScope": null,
-        "inCompilerFold": false,
+        "inIrRegistry": true,
+        "irScope": "semantic",
+        "inCompilerFold": true,
         "matrixLevel": null,
         "webSupport": null
       },
       "usage": 2,
-      "priority": "P0",
-      "acceptance": "none"
+      "priority": "done",
+      "acceptance": "pending"
     },
     {
       "id": "text-size-adjust",

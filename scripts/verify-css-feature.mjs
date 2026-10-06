@@ -96,6 +96,8 @@ const PROBE_VALUES = {
   'grid-template-areas': ['grid-template-areas: "a b" "a c"', 'gridTemplateAreas', '"a b" "a c"'],
   // ★★★grid-area 项（2026-10-08）：命名区引用（单标识符 ⇒ gridArea）
   'grid-area': ['grid-area: a', 'gridArea', 'a'],
+  // ★★★text-shadow 项（2026-10-08）：文本阴影（浏览器 computed 规范形态 `color dxpx dypx blurpx`）
+  'text-shadow': ['text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3)', 'textShadow', 'rgba(0, 0, 0, 0.3) 0px 1px 2px'],
   // ★★★grid-auto-flow 项（2026-10-08）：自动放置（Web computed 归一：row dense → dense）
   'grid-auto-flow': ['grid-auto-flow: column', 'gridAutoFlow', 'column'],
   // ★★★outline 族项（2026-10-08）：轮廓偏移（Web computed 为 px）
@@ -147,7 +149,7 @@ if (!probe) {
     parity.irField = irField
     parity.irValue = irVal
     parity.computedProbe = Object.fromEntries(
-      Object.entries(computed).filter(([k]) => ['inset', 'top', 'right', 'bottom', 'left', 'overflow-x', 'overflow-y', 'white-space', 'word-break', 'justify-self', 'grid-area', 'background-color', 'color', 'border-radius', 'text-align', 'opacity', 'font-size', 'letter-spacing', 'line-height', 'flex-direction', 'justify-content', 'align-items', 'gap', 'border-bottom-width', 'border-top-width', 'border-left-width', 'border-right-width', 'border-bottom-color', 'border-top-color', 'border-left-color', 'border-right-color', 'border-style', 'border-top-style', 'border-bottom-style', 'border-top-left-radius', 'border-bottom-right-radius', 'background-size', 'background-position', 'background-repeat', 'grid-auto-flow', 'grid-template-areas', 'grid-area', 'outline-width', 'outline-offset', 'outline-style'].includes(k)),
+      Object.entries(computed).filter(([k]) => ['inset', 'top', 'right', 'bottom', 'left', 'overflow-x', 'overflow-y', 'white-space', 'word-break', 'justify-self', 'grid-area', 'background-color', 'color', 'border-radius', 'text-align', 'opacity', 'font-size', 'letter-spacing', 'line-height', 'flex-direction', 'justify-content', 'align-items', 'gap', 'border-bottom-width', 'border-top-width', 'border-left-width', 'border-right-width', 'border-bottom-color', 'border-top-color', 'border-left-color', 'border-right-color', 'border-style', 'border-top-style', 'border-bottom-style', 'border-top-left-radius', 'border-bottom-right-radius', 'background-size', 'background-position', 'background-repeat', 'grid-auto-flow', 'grid-template-areas', 'grid-area', 'text-shadow', 'outline-width', 'outline-offset', 'outline-style'].includes(k)),
     )
     // 判据：IR 出值且与浏览器 resolved 语义一致（按形态）
     if (irVal === undefined) {

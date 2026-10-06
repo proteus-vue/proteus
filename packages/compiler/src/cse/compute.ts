@@ -191,6 +191,80 @@ export function computeColor(raw: string): string | null {
   return a >= 1 ? base : base + hex2(a * 255)
 }
 
+/**
+ * ★★★text-shadow 项（2026-10-08）：CSS `text-shadow` → **浏览器 computed 规范形态**
+ *   `<color> <dx>px <dy>px <blur>px`（如 `rgba(0, 0, 0, 0.3) 0px 1px 2px`）。
+ *   单层（多重取首个）；token 序任意（颜色/长度混排）。无法解析 ⇒ null（调用方记 unmapped，不猜）。
+ *   ★与 probes/web（读真 Chromium 的 text-shadow computed）**同一口径**——parity 真值 = 浏览器。
+ */
+export function cssTextShadowCanonical(raw: string): string | null {
+  // 多重阴影取首段（逗号在括号深度 0 处切）
+  let depth = 0
+  let cut = raw.length
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw[i]
+    if (ch === '(') depth++
+    else if (ch === ')') depth--
+    else if (ch === ',' && depth === 0) { cut = i; break }
+  }
+  const first = raw.slice(0, cut).trim()
+  if (!first || /^none$/i.test(first)) return null
+  // 括号深度 0 处按空白切 token
+  const toks: string[] = []
+  {
+    let d = 0
+    let cur = ''
+    for (const ch of first) {
+      if (ch === '(') d++
+      else if (ch === ')') d--
+      if (/\s/.test(ch) && d === 0) { if (cur) { toks.push(cur); cur = '' } continue }
+      cur += ch
+    }
+    if (cur) toks.push(cur)
+  }
+  let colorHex = ''
+  let alpha = 1
+  const nums: number[] = []
+  for (const tok of toks) {
+    // 长度：px / 裸数字（0）——浏览器 computed 把所有长度归一为 px
+    const pxm = /^(-?[\d.]+)(px)?$/.exec(tok)
+    if (pxm && !/^[a-z]+$/i.test(tok)) { nums.push(Number(pxm[1])); continue }
+    const c = computeColor(tok)
+    if (c !== null) {
+      colorHex = c.length === 9 ? c.slice(0, 7) : c
+      // ★alpha 直接从源 token 取（**不经 hex8 量化**——与浏览器 computed 逐字一致：0.3 不得变 0.302）
+      if (c.length === 9) alpha = parseColorAlpha(tok)
+      continue
+    }
+    return null
+  }
+  if (colorHex === '' || nums.length < 2) return null
+  const dx = nums[0] ?? 0
+  const dy = nums[1] ?? 0
+  const blur = nums[2] ?? 0
+  const r = parseInt(colorHex.slice(1, 3), 16)
+  const g = parseInt(colorHex.slice(3, 5), 16)
+  const b = parseInt(colorHex.slice(5, 7), 16)
+  const rgbStr = alpha >= 1 ? `rgb(${r}, ${g}, ${b})` : `rgba(${r}, ${g}, ${b}, ${alpha})`
+  return `${rgbStr} ${dx}px ${dy}px ${blur}px`
+}
+
+/** 从颜色 token 取 alpha（4 参 rgb()/hsl() 或 `rgb(a b c / x)`；缺省 1）——**不经 hex8 量化** */
+function parseColorAlpha(tok: string): number {
+  const m = /^(?:rgba?|hsla?)\(([^)]*)\)$/.exec(tok.trim())
+  if (!m) return 1
+  const parts = m[1]!.split(/[\s,/]+/).filter(Boolean)
+  if (parts.length < 4) return 1
+  const t = parts[3]!
+  const a = t.endsWith('%') ? Number(t.slice(0, -1)) / 100 : Number(t)
+  return Number.isFinite(a) ? a : 1
+}
+
+/** 三位小数（浏览器 computed 的小数位口径） */
+function round3(n: number): number {
+  return Math.round(n * 1000) / 1000
+}
+
 /* ────────────────────────── var() / calc 支持判定 ────────────────────────── */
 
 /** var() 替换（含 fallback `var(--x, fb)`；未定义且无 fallback ⇒ null = 不可用） */
@@ -834,6 +908,12 @@ function mapToIrField(prop: string, val: CssComputedValue): { field: string; val
   if (prop === 'overflow-x' || prop === 'overflow-y') {
     // 契约只有一个 overflow 字段：两侧相同时写它；不同 ⇒ v1 记 unmapped（不静默取一边）
     return null // 由调用方在完成后处理（见下 resolveOverflow）
+  }
+  // ★★★text-shadow 项（2026-10-08 · css:next P0·2×）：**文本阴影**——归一到浏览器 computed 形态
+  //   `<color> <dx>px <dy>px <blur>px`（与 probes/web 同口径；parity 真值 = 浏览器）。
+  if (prop === 'text-shadow') {
+    const v = typeof val === 'string' ? cssTextShadowCanonical(val) : null
+    return v === null ? { field: 'textShadow', value: null } : { field: 'textShadow', value: v }
   }
   if (prop === 'aspect-ratio') return { field: 'aspectRatio', value: typeof val === 'number' ? val : null }
   // ★★★B3 补齐（2026-10-05——conformance 抓出 B1 遗漏）：grid 族与 z-index 此前**完全未映射**

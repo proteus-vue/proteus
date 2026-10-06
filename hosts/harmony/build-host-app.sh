@@ -20,6 +20,7 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="$HERE/host-app"
+ROOT="$(cd "$HERE/../.." && pwd)"
 
 # ── DevEco 工具链解析（与 hdc.sh 同策略：显式覆盖 > 常见安装位）──
 find_deveco() {
