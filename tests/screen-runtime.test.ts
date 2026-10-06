@@ -74,6 +74,18 @@ describe('★B1 · 统一运行期（createScreenRuntime）', () => {
     expect(inst.data()['count'], 'count 应 +1').toBe(Number(before) + 1)
   })
 
+  it('①b 缺省 = 恒等（VaporRenderHost 路径）：kernelId === localId 直接派发', async () => {
+    const dir = makeTempProject()
+    const build = await buildAppRuntimeContent(dir, 'android')
+    const artifacts = JSON.parse(fs.readFileSync(build.outFile, 'utf-8')) as Record<string, ScreenRuntimeArtifact>
+    const rt = createScreenRuntime({ artifacts, applyOps: () => {}, viewport: { width: 390, height: 844 } })
+    const inst = rt.instance('idx')
+    const ev = artifacts['idx']!.events[0]!
+    const r = inst.dispatch('tap', [ev.nodeId])   // 直接用 local id（恒等）
+    expect(r.handled, '恒等模式应命中').toBe(true)
+    expect(Number(inst.data()['count'])).toBe(1)
+  })
+
   it('② R6 破坏性：contentIdBase 错位 ⇒ 反查失败、不误跑别人 handler', async () => {
     const dir = makeTempProject()
     const build = await buildAppRuntimeContent(dir, 'android')
