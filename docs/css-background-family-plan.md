@@ -11,7 +11,8 @@
 > ③ **iOS 渐变子层建层时父 bounds=0** ⇒ frame 恒为 0 ⇒ 不可见——改由**布局后统一 `syncGradientFrames()`** 设帧（多条建层路径同享一次）。
 > ④ **图像盒可超出元素**（如 size 400%）⇒ 必须裁到元素盒（Web 背景绘制区）——Android/iOS/鸿蒙三端均补裁剪。
 > ★**取图口径教训（probe 报 mp/鸿蒙边缘差）**：5 案例高于视口 ⇒ 设备截图为**视口裁剪**，而 probe 拿**整页** Web 基准比对 ⇒ 假红；粘性截图需按页面视口裁剪基准。
-> ★**pre-existing 缺口（非本批引入）**：鸿蒙对**应用内容**（`appScreenCommands`）的 cmd 流**不产出 `grad` 键**（该键目前仅 dev `proteus_bench.cpp` 产）⇒ 鸿蒙 app 内容不渲染渐变；本批鸿蒙几何已就位，待该路径接线后生效。
+> ★**（#569 已补）鸿蒙 grad 通路**：已在本项内接通（`appScreenCommands` 产 `grad` 键 + px×density + `gradEndpoints` 几何改 CSS 同式）；**iOS repeat** 亦本项内解决（栅格化 tile + `draw(byTiling:)`）。
+> ★**（#569 修）鸿蒙逐屏截图锚点**：`superapp-screen-*` 路径原**滚到底**（`scrollToBottom`）⇒ 内容高于视口的页（如本页 contentH 857 > 视口 816）**切掉页头/标题**、与 Web 基准（**视口截图=页顶锚定**）坐标系不符（用户抓出「鸿蒙页面偏下」）。改为**不滚到底**（保持 offset=0，页顶对齐）。
 
 > **来源**：`css:next` 指向 `background-position`（P0 · 用法 4×）。侦察发现它**不可独立交付**——
 > 三端宿主把渐变**硬编码为「填满整个盒」**（无 size/position/repeat 概念），且语料 4× 全部与

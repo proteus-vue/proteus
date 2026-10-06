@@ -126,7 +126,10 @@ struct Superapp {
         const dr2 = o2['drive'] as Record<string, Object> | undefined;
         if (dr2) this.applyState(dr2['state'] as Object);
         this.renderCurrent();
-        this.scrollToBottom();
+        // ★★★不滚到底（2026-10-07 修）：逐屏截图必须**页顶锚定**——与 Web 基准（视口截图从页顶裁剪）
+        //   同坐标系。此前滚到底 ⇒ 内容高于视口的页（如 background-position contentH=857>816）
+        //   会把**页头/标题**切出屏外（真机抓出：鸿蒙页比 Web 少标题、整体上移）。
+        //   保持 offset=0（renderCurrent 已 scrollRoot(0)）⇒ 页顶对齐。
         this.booted = true;
         this.writeReport();
       } else if (this.scene === 'superapp-drive') {

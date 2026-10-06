@@ -1293,3 +1293,4 @@
 **⑤ 判据（四端全过）**：`css:verify` 三项三段全绿 · **真机重跑**：Android ✅ / **iOS ✅（案例 C 平铺已验：子代理逐像素确认 ~3-4 段砖、相位 10,10）** / **鸿蒙 ✅（子代理逐像素确认 A–E 全对：D 全跨单调 ramp、E 紫→蓝切片；旧式几何缺陷已修）** / MP ✅ · 全量 5319/5319 · 三端零设备编译全绿 · 门禁全绿。
 **⑥ 教训**：#568 把「鸿蒙 app-content 不产 grad」当 pre-existing、把「iOS 无 tile」当具名边界——**都是"本端能实现、只差接线/实现"**，按新铁律**必须本项补齐**（正是用户点名要纠正的）。
 **⑦ 影响**：`hosts/harmony/.../proteus_host.cpp`（grad 通路）+ `hosts/harmony/.../proteus_render.cpp`（gradEndpoints 几何）· `hosts/ios/ProteusHost/runtime/selfdraw-scene.swift`（tile 栅格化）· `AGENTS.md`（新铁律）· `css-conformance/PLAYBOOK.md`（§0）· 验收页 + 四端截图。
+**⑧ 追赶修（用户「鸿蒙的页面好像偏下了」）**：鸿蒙 `superapp-screen-*` 逐屏截图路径原**滚到底**（`scrollToBottom`）⇒ 内容高于视口的页（本页 contentH 857 > 视口 816）**切掉页头/标题**，与 Web 基准（**视口截图=页顶锚定**）坐标系不符。改为**不滚到底**（保持 offset=0）⇒ 页顶对齐（Android/iOS 逐屏路径本就 top-anchor，鸿蒙补齐一致）。
