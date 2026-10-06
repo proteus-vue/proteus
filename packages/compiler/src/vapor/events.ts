@@ -98,6 +98,16 @@ export type HandlerAction =
    *   后续批次，编译期诊断）。
    */
   | { op: 'emit'; event: string; program?: ExprProgram }
+  /**
+   * ★★★**导航动作 `$nav('目标屏')`**（B1 · 2026-10-09）——运行期把「导航」当一等动作。
+   *
+   * 【为什么需要（App 壳统一运行期）】Vapor 动作集原只有 set/add/emit（数据变更），
+   *   而「点首页某条 → 跳某屏」是**导航**、不是数据变更 ⇒ 无对等动作时模板里点不动。
+   *   ⇒ 增 `nav`：handler 跑它时由**运行期/宿主**执行导航（App = `router.push(target)`；
+   *     Web/MP = 原生路由）——与 `<navigator>` 同语义（本动作是其运行期形态）。
+   * 【目标形态】静态字符串（屏名/路由名）——动态目标（`$nav(expr)`）为后续批次（编译期诊断）。
+   */
+  | { op: 'nav'; target: string }
 
 /** handler 名 → 动作列表（按序执行 ⇒ "先算后写"的顺序语义保留） */
 export interface EventHandlers {
@@ -246,6 +256,19 @@ function compileStatement(code: string, diag: (m: string, h?: string) => void): 
     }
     const program: ExprProgram = sign === 1 ? e.program : { k: 'bin', op: '*', l: { k: 'lit', v: -1 }, r: e.program }
     return [{ op: 'add', source: name, program }]
+  }
+
+  // ②.4 ★★★**导航动作 `$nav('目标')` / `$navigate('目标')`**（B1，2026-10-09）——
+  //   运行期一等动作（与 `<navigator>` 同语义）：handler 跑它时由运行期/宿主执行导航。
+  //   目标须为**静态字符串字面量**（屏名/路由名）——动态目标为后续批次（明确诊断）。
+  {
+    const nm = /^\$(?:nav|navigate)\(\s*(['"])([\w:/.$-]+)\1\s*\)$/.exec(src)
+    if (nm) return [{ op: 'nav', target: nm[2]! }]
+    const wrong = /^\$(?:nav|navigate)\s*\(/.exec(src)
+    if (wrong) {
+      diag(`$nav 的目标须为静态字符串字面量：\`${src.slice(0, 40)}\``, "例：@tap=\"$nav('detail')\"（动态目标/表达式为后续批次）")
+      return []
+    }
   }
 
   // ②.5 ★★★**`$emit('name', payload?)`**（P1-3 emits，2026-10-03）——子组件 → 父级组件事件。

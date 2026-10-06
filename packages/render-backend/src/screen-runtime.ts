@@ -60,6 +60,11 @@ export interface CreateScreenRuntimeOptions {
   contentIdBase?: number
   /** 诊断出口（不静默） */
   onNote?: (note: string) => void
+  /**
+   * ★导航出口（B1）：handler 里的 `$nav('目标')` 动作 → 交给宿主/装配层执行导航
+   *   （App 壳 = `router.push(target)`；与 `<navigator>` 同语义）。缺省 ⇒ 只记 note（不静默）。
+   */
+  navigate?: (target: string) => void
 }
 
 /** 一屏的运行期实例（挂载 + 事件 + 增量） */
@@ -138,6 +143,12 @@ export function createScreenRuntime(opts: CreateScreenRuntimeOptions): ScreenRun
       if (!acts) return false
       for (const a of acts) {
         if (a.op === 'emit') { note(`[screen-runtime] ${name}: handler「${handlerName}」含 $emit——本版无去处（已忽略）`); continue }
+        if (a.op === 'nav') {
+          const tgt = (a as { target?: string }).target
+          if (tgt && opts.navigate) opts.navigate(tgt)
+          else note(`[screen-runtime] ${name}: $nav('${tgt ?? ''}') 无 navigate 出口（未装配）`)
+          continue
+        }
         const ctx2: EvalContext = { read: (n: string) => (n === '$event' ? payload : data[n]) }
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const v = evalExpr(a.program as any, ctx2 as any)
