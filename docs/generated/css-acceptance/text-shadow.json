@@ -81,7 +81,7 @@
   "nextStep": "机器判据三段已过 → 进入**视觉验收**：生成并排产物（node scripts/gen-baseline-side-by-side.mjs）+ 独立子代理按 Web 基准评审",
   "visual": {
     "_note": "★视觉验收结论（独立子代理按 Web 基准并排图评审；来源 = css-conformance/results/side-by-side/）。verdict: pass（与 Web 基准无可归因差异）/ fail（有实差异——见 caseIssues）/ unclear（图不足以判）。纪律：左半恒为 Web 基准（D1）；不看不清不编（unclear）。",
-    "reviewedAt": "2026-10-06T10:15:57.080Z",
+    "reviewedAt": "2026-10-06T10:37:56.033Z",
     "reviewedBy": "independent-visual-subagent",
     "sideBySideDir": "css-conformance/results/side-by-side/",
     "summary": {
@@ -93,31 +93,31 @@
         "end": "web",
         "verdict": "pass",
         "caseIssues": [],
-        "evidence": "基准端（真 Chromium）——A 可读性投影 / B 紫色光晕 / C 硬边斜向投影"
+        "evidence": "基准端（真 Chromium）——A 可读性投影 / B 紫色光晕 / C 硬边斜向投影；文字居中"
       },
       {
         "end": "mp",
         "verdict": "pass",
         "caseIssues": [],
-        "evidence": "独立子代理 round2：C 硬边灰影 down-right（bottom 39/39）+ B 紫光晕；与 Web 同"
+        "evidence": "独立子代理 round3：A/B/C 与 Web 同（B 光晕略紧但不构成可见弱差）；文字居中"
       },
       {
         "end": "android",
         "verdict": "pass",
         "caseIssues": [],
-        "evidence": "round1 抓出 C 硬边缺失（setShadowLayer radius=0 不绘制）→ 改手动偏移重绘；round2 复核 C down-right 硬影（右 2/2·下 29/31·上 0/2）+ B 紫光晕"
+        "evidence": "round3：**密度物理化修复后** B 光晕半径/强度与 Web 可比（round2 曾漏判「投影太轻/光晕太小」——真因 textShadow 的 dx/dy/blur 未 ×density）；C 硬边灰影 2px down-right；A 投影；文字居中"
       },
       {
         "end": "ios",
         "verdict": "pass",
         "caseIssues": [],
-        "evidence": "独立子代理 round2：C 硬边灰影 down-right + B 紫光晕；与 Web 同"
+        "evidence": "round3：A/B/C 与 Web 同；文字居中"
       },
       {
         "end": "harmony",
         "verdict": "pass",
         "caseIssues": [],
-        "evidence": "独立子代理 round2：C 硬边灰影 + B 紫光晕；与 Web 同"
+        "evidence": "round3：A/B/C 与 Web 同；文字居中"
       }
     ]
   }

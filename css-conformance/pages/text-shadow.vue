@@ -48,8 +48,8 @@
 <style scoped>
 .cc-page { background: #f4f5f7; }
 .cc-card { background: #ffffff; }
-.ts-dark { background: #2a2d3a; border-radius: 10px; padding: 18px 14px; display: flex; justify-content: center; }
-.ts-light { background: #eef1f6; border-radius: 10px; padding: 18px 14px; display: flex; justify-content: center; }
+.ts-dark { background: #2a2d3a; border-radius: 10px; padding: 18px 14px; display: flex; flex-direction: row; align-items: center; justify-content: center; }
+.ts-light { background: #eef1f6; border-radius: 10px; padding: 18px 14px; display: flex; flex-direction: row; align-items: center; justify-content: center; }
 .ts-h { font-size: 22px; font-weight: 700; color: #ffffff; }
 /* A：字形后 1px 下、2px 模糊的黑投影（提升深底可读性） */
 .ts-a { text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); }

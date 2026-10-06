@@ -7,7 +7,7 @@
     },
     "dpr": 2,
     "theme": "light",
-    "collectedAt": "2026-10-06T09:44:29.062Z"
+    "collectedAt": "2026-10-06T10:21:44.256Z"
   },
   "pages": {
     "background-position": {
@@ -4253,7 +4253,7 @@
             "border-bottom-left-radius": "10px",
             "flex-direction": "row",
             "justify-content": "center",
-            "align-items": "normal",
+            "align-items": "center",
             "flex-grow": "0",
             "flex-shrink": "1",
             "gap": "normal",
@@ -4400,7 +4400,7 @@
             "border-bottom-left-radius": "10px",
             "flex-direction": "row",
             "justify-content": "center",
-            "align-items": "normal",
+            "align-items": "center",
             "flex-grow": "0",
             "flex-shrink": "1",
             "gap": "normal",
@@ -4547,7 +4547,7 @@
             "border-bottom-left-radius": "10px",
             "flex-direction": "row",
             "justify-content": "center",
-            "align-items": "normal",
+            "align-items": "center",
             "flex-grow": "0",
             "flex-shrink": "1",
             "gap": "normal",
