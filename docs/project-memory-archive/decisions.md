@@ -1401,3 +1401,14 @@
 **⑥ 诚实边界**：只补**显式 `display:flex`** 的缺省——未声明 display 的节点仍是 block-like column（内核近似，非真 block 流）；`display:block/inline-block` 等 App 无对等值已在编译期诊断跳过（#481）。
 **⑦ 影响**：`packages/compiler/src/vapor/template.ts`（normalizeFlexDirection）· `packages/compiler/src/cse/compute.ts`（CSE 补初值）· `tests/vapor-class-styles.test.ts`（+5 组）；**下一项**：css:next。
 **⑧ 同轮澄清（用户第二问）**：安卓文字"更精细"**不是 DPR**（安 3.0 / iOS 3.0 / 鸿蒙 3.5——安卓反非最高），而是**各端字体光栅器 + 默认字体不同**（Android Skia+Roboto/Noto · iOS CoreText+SF/PingFang · 鸿蒙 OH_Drawing+HarmonyOS Sans）；**语义规格（font-size/weight/line-height/letter-spacing 映射）三端同源，像素级光栅化各端原生**（固有边界，同"同一字 Chrome vs Safari 也不同"）。
+580. **★★CSS 逐项 · container-type —— 按架构归类为「容器查询通道（使能器）」+ 收口**（用户裁定，同 #572/#575 族）：
+**① 用户指令**：「继续下一项」（css:next 取 `container-type`，P0 · 用法 1× · CSS Conditional Rules）。
+**② 侦察（先取证）**：`container-type` **不是独立可渲染属性**，而是 **`@container` 条件规则的使能器**（真实用途 = 按**容器**宽度做条件样式，非视口）：
+  · 语料 1×（p-formfactor `.p-formfactor{container-type:inline-size}` + `@container (max-width:559px){…}`——车机形态按帧宽收描述/瘦身海报卡）；
+  · **CSS `@container`/`@media` 条件块在 App 端跳过**（`cse/parse.ts` 明确跳过 at-rule；App **无 CSS 引擎**——与既有 @media 处置同款，具名边界）；
+  · 本框架的**容器响应式**由**独立通道** `@proteus-vue/fluid` 交付（`createContainerQuery`/`createSizeAwareObserver`：ResizeObserver 观察容器尺寸 + 容器级断点），已被 p-formfactor/p-modal/p-sidebar/p-zone/p-split/p-toolbar **6 个组件消费**；`capabilities.ts` 亦有 `containerQuery` 能力检测；
+  · ⇒ 单独把 `container-type` 折进 App 内核 = **no-op**（taffy 无 contain 模型）= 假绿 ⇒ **不折**。
+**③ 归类决策（用户裁定「按架构归类 + 收口」）**：`container-type` 在清单里由 `not-started` 改为 **`separate: true, channel: 'independent'`**（同 `mask`/`object-fit`/`background-image` 通道项）——`css:verify` 对 channel 项判 parity/endsMapped = **n/a**；实现态由 fluid 通道承接。
+**④ 判据**：`css:verify container-type` 三段通过（implemented + parity/ends n/a）· 视觉结论**登记**（引用真实消费先例 p-formfactor 容器查询）· 清单再生成一致（`--check` 绿）· `check:css-capability-alignment`/`stats`/`content` 全绿。**注意**：本项**不引入编译器字段** ⇒ `css-capability-alignment` 的 compiler 字段覆盖判据不受影响（无新字段需覆盖）。
+**⑤ 诚实边界**：a) **CSS `@container`/`@media` 条件块在 App/MP 端跳过**（无 CSS 引擎，具名边界）；b) 容器响应式的 App 交付 = **JS 通道**（ResizeObserver/`createContainerQuery`，组件层），**非 CSS 条件规则**——与 Web 的 `@container` 是**两条实现不同的路径**（Web 原生 CSS vs 框架 fluid 通道），本项不新写渲染代码。
+**⑥ 影响**：`scripts/gen-css-feature-inventory.mjs`（override）· `docs/generated/css-feature-inventory.{json,md}`（重生成）· `docs/generated/css-acceptance/container-type.json`（visual 登记）；**下一项**：按 css:next 取。
