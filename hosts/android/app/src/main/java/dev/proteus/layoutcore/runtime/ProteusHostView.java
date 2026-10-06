@@ -8,6 +8,7 @@ import android.graphics.RectF;
 import android.view.View;
 import android.view.ViewGroup;
 import org.json.JSONObject;
+import dev.proteus.platform.ProteusTextPlatform;
 
 import java.util.HashMap;
 import java.util.List;
@@ -415,75 +416,30 @@ public class ProteusHostView extends ViewGroup {
      *     （那是平台字体库的固有差异，能力对齐 ≠ 像素一致）。
      */
     public static android.graphics.Typeface typefaceOf(String role, int weight, int[] fallbackCounter) {
-        boolean bold = weight >= 600;
-        // ★★自定义字体（`custom:<族名>`）——**先查注册表**（2026-09-29）
-        //   契约见适配器 `CUSTOM_FONT_PREFIX`。未注册 ⇒ **回退 system + 计数**（不静默：
-        //   "未识别"与"识别为默认"必须可区分）。
-        if (role != null && role.startsWith(CUSTOM_FONT_PREFIX)) {
-            String name = role.substring(CUSTOM_FONT_PREFIX.length());
-            android.graphics.Typeface tf = customFonts.get(name);
-            if (tf != null) return tf;
-            customFontMisses++;
-            lastMissingCustomFont = name;
-            return android.graphics.Typeface.create("sans-serif",
-                    bold ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
-        }
-        String fam;
-        switch (role == null ? "system" : role) {
-            case "serif": fam = "serif"; break;
-            case "monospace": fam = "monospace"; break;
-            case "rounded": fam = "sans-serif-rounded"; break;
-            case "condensed": fam = "sans-serif-condensed"; break;
-            case "system": fam = "sans-serif"; break;
-            default:
-                // ★未知角色：**显式回退 + 计数**（不静默——两端契约不一致时必须可见）
-                if (fallbackCounter != null) fallbackCounter[0]++;
-                fam = "sans-serif";
-                break;
-        }
-        return android.graphics.Typeface.create(fam, bold ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
+        // ★HA0.5：实现已抽到**平台适配层**（`platform/android/.../ProteusTextPlatform.java`，换壳不改）
+        //   —— 本方法保留为**委托**（既有调用方零改动，行为不变）。
+        return ProteusTextPlatform.typefaceOf(role, weight, fallbackCounter);
     }
 
-    /* ══════════ ★★自定义字体注册通道（@font-face / 打包字体）══════════════ */
-
-    /** 与适配器 `CUSTOM_FONT_PREFIX` **同一常量**（两端契约；不一致则自定义族永远命中不了） */
-    public static final String CUSTOM_FONT_PREFIX = "custom:";
-
-    /** 族名 → 字体（注册表） */
-    private static final java.util.Map<String, android.graphics.Typeface> customFonts = new java.util.HashMap<>();
-
-    /** 未注册的自定义族名命中次数（诊断：>0 ⇒ 宿主缺字体资源，**不是**静默回退） */
-    public static int customFontMisses = 0;
-    /** 最近一个未注册的族名（诊断用：报告里可读出到底缺哪个字体） */
-    public static String lastMissingCustomFont = null;
+    /* ══════════ ★★自定义字体注册通道（@font-face / 打包字体）══════════════
+     * ★HA0.5：注册表与映射的**实现**已抽到平台适配层（`platform/android/.../ProteusTextPlatform.java`）；
+     *   本类保留以下**委托**（既有调用方零改动，行为不变）。 */
 
     /**
-     * 注册自定义字体（**族名 → 字体文件路径**）。
-     *
-     * 【为什么需要显式注册】平台无法从族名"猜"出字体文件：`Typeface.create(name,…)` 只在
-     *   **系统已安装字体**里查找，打包进 assets 或外部路径的字体必须先 `createFromFile` 加载。
-     *   ⇒ 注册是应用（宿主）的责任；框架提供通道 + 未注册时的**显式可见降级**。
+     * 注册自定义字体（**族名 → 字体文件路径**）。★委托到平台适配层。
      *
      * @return true = 注册成功（字体文件可解析）；false = 失败（调用方应记日志，**不静默**）
      */
     public static boolean registerFont(String family, String filePath) {
-        try {
-            android.graphics.Typeface tf = android.graphics.Typeface.createFromFile(filePath);
-            customFonts.put(family, tf);
-            return true;
-        } catch (Exception e) {
-            return false;
-        }
+        return ProteusTextPlatform.registerFont(family, filePath);
     }
 
-    /** 注册表规模（验收判据用） */
-    public static int registeredFontCount() { return customFonts.size(); }
+    /** 注册表规模（验收判据用）。★委托到平台适配层。 */
+    public static int registeredFontCount() { return ProteusTextPlatform.registeredFontCount(); }
 
-    /** 清空注册表（测试隔离用——跨用例共享状态必须可归零，本仓纪律 #10） */
+    /** 清空注册表（测试隔离用——跨用例共享状态必须可归零，本仓纪律 #10）。★委托到平台适配层。 */
     public static void clearFonts() {
-        customFonts.clear();
-        customFontMisses = 0;
-        lastMissingCustomFont = null;
+        ProteusTextPlatform.clearFonts();
     }
 
     /** 字体族回退计数（诊断：>0 ⇒ 两端词汇表不一致） */

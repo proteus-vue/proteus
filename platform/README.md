@@ -26,8 +26,7 @@ platform/*   ──→  Host ABI        ❌ 禁止（平台层不感知宿主契
 | 端 | 目录 | 内容 | 状态 |
 |---|---|---|---|
 | iOS | `platform/ios/ProteusPlatform/` | `ProteusTextAdapter`（文本度量 CoreText + 字体角色映射 + 自定义字体注册） | ✅ 已抽取（HA0.5） |
-| Android | `platform/android/` | — | 待抽（Java 侧度量/绘制仍在 `hosts/android`） |
+| Android | `platform/android/proteus-platform/src/dev/proteus/platform/` | `ProteusTextPlatform`（字体角色映射 Typeface + 自定义字体注册） | 🟡 **部分抽取（B5-1 · 2026-10-07）**：**字形层**已抽（换壳不改）；**文本度量/绘制执行**仍在 `hosts/android/.../runtime/` 待续 |
 | 鸿蒙 | — | — | 未开始 |
 
-★**诚实边界**：本轮只抽了 iOS 侧（Android 的度量/绘制与宿主耦合更深，需先做 JNI 侧解耦，属后续批次）；
-门禁的 C 判据要求"每个端目录必须有实质平台代码"，**不建空目录充数**。
+★**诚实边界**：HA0.5 分两步——① iOS 侧已全抽（度量 + 字体）；② Android 侧本轮（B5-1）**先抽字形层**（`ProteusTextPlatform`，与 iOS `ProteusTextAdapter` 的字体段对称），**度量/绘制执行待续**（与宿主耦合更深，逐文件迁）。门禁 C 判据已收紧为"**必须是 `dev/proteus/platform/` 包**"（防把 SDK/AAR 当"抽取完成"），见 `check-platform-layering`。

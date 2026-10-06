@@ -66,6 +66,18 @@ const PLATFORM_SIGNATURE = {
   harmony: /@ohos\.|ArkUI|ArkTS/,
 }
 
+/**
+ * ★HA0.5 · B5-1（2026-10-07）：各端**平台适配层**（"换壳不改"的实质代码）**必须存在**。
+ *   ——判据 C 原形态只要求"端目录里有**该端特征 API**"，而 Android 的 `platform/android/` 里
+ *     存在的却是 **SDK/AAR（HA5 存量嵌入 = 绑定层，用了 android.* 特征）** ⇒ 旧判据会**误绿**：
+ *     即使没有真正抽出的"平台适配"（字体/度量/绘制），C 也过。本清单堵住这个盲区——
+ *     Android 的字体/度量实现必须落在 `dev/proteus/platform/` 包（与 iOS 的 `ProteusPlatform` 对称）。
+ */
+const PLATFORM_ADAPTATION = {
+  ios: /ProteusTextAdapter/,
+  android: /dev\/proteus\/platform\//,
+}
+
 function main() {
   if (!fs.existsSync(PLATFORM)) {
     console.log('[platform-layering] ⚠ `platform/` 不存在 ⇒ 诚实跳过（HA0.5 未开始或已回退）')
@@ -130,6 +142,19 @@ function main() {
           text: `未发现该平台特征 API（${sig}）—— 疑似空壳/占位（"建个目录"不等于完成 HA0.5）`,
         })
       }
+    }
+    // ★HA0.5 · B5-1：平台适配层（换壳不改的实质代码）必须存在——见 PLATFORM_ADAPTATION 注释
+    const adapt = PLATFORM_ADAPTATION[end]
+    if (adapt && !endFiles.some((f) => adapt.test(path.relative(ROOT, f)))) {
+      const hostImpl = end === 'android' ? 'hosts/android/.../runtime/ProteusHostView.java' : 'hosts/'
+      violations.push({
+        rel: `platform/${end}/`,
+        line: 0,
+        rule: 'C',
+        text:
+          `未发现平台适配层（期望路径匹配 ${adapt}）—— 别把 SDK/AAR（HA5 绑定层，用了 ${sig}）` +
+          `当成"抽取完成"；字体/度量等**换壳不改**的实现必须从 ${hostImpl} 抽出到 platform/`,
+      })
     }
   }
 

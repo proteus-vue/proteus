@@ -134,6 +134,8 @@ tail -1 "$BUILD/gen-vapor.log" | sed 's/^/    /'
 echo "==> ② 编译 Java 宿主（javac → .class）"
 CLASSES="$BUILD/classes"; rm -rf "$CLASSES"; mkdir -p "$CLASSES"
 find "$APP/src/main/java" -name '*.java' > "$BUILD/java-sources.txt"
+# ★HA0.5：平台适配层（`platform/android`：字体/度量——换壳不改）与宿主源码**一起编译**
+find "$ROOT/platform/android/proteus-platform/src" -name '*.java' >> "$BUILD/java-sources.txt" 2>/dev/null
 [ -s "$BUILD/java-sources.txt" ] || { echo "✗ 没找到 Java 源文件"; exit 3; }
 # ★JDK 17 起 `-bootclasspath` 只允许配合 `--release`（实测报「目标 17 不允许选项 --boot-class-path」）
 #   → 用 `--release 17` 并只给 `-classpath`；android.jar 提供 android.*/org.json.* 等符号
