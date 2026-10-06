@@ -675,7 +675,7 @@
       "tier": "L0",
       "strategy": "编译期折叠",
       "probe": [],
-      "note": "收 px/数字/rpx（宽高另支持 %）。★批次 21：`rpx`（小程序 750 设计单位，1rpx = 0.5px，与 rpxRatio:2 互为逆）折为 px——真项目 125 处。其余相对单位（em/rem/vw/vh）编译期无法无上下文求值 ⇒ 诊断跳过（`var()` 令牌见 css-vars 行；`clamp()/min()/max()` 的**可绝对化**形态见 math-functions 行——已支持）。★批次 22：`calc()` **常量折叠**已支持——`calc(8px * 0.6)` → 4.8（`var()` 已在解析前置换 ⇒ `calc(var(--u) * 1.15)` 也折）；含 `%`/相对单位的 calc（`calc(100% - 20px)`）仍诊断（无上下文）。组件库 64 处 `calc(var(--x) * N)` 依赖它"
+      "note": "收 px/数字/rpx（宽高另支持 %）。★批次 21：`rpx`（小程序 750 设计单位，1rpx = 0.5px，与 rpxRatio:2 互为逆）折为 px——真项目 125 处。其余相对单位（em/rem/vw/vh）编译期无法无上下文求值 ⇒ 诊断跳过（`var()` 令牌见 css-vars 行；`clamp()/min()/max()` 的**可绝对化**形态见 math-functions 行——已支持）。★批次 22 + calc 收口（2026-10-08）：`calc()` **完整算术常量折叠**——`+ - * /` 与括号、`env(safe-area-inset-*)` fallback（`var()` 已在解析前置换 ⇒ `calc(var(--u) * 1.15)` 也折）；**CSE 与 App 折叠面共享唯一实现 `calc-fold.ts`（同口径）**——此前 CSE 仅支持单层同单位加减（`calc(8px * 0.6)` 等在 CSE 被丢、App 却折得出 ⇒ 两路径分叉）。含 `%`/相对单位的 calc（`calc(100% - 20px)`）仍诊断（无上下文）。组件库 64 处 `calc(var(--x) * N)` 依赖它"
     },
     {
       "id": "grid",

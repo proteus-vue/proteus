@@ -32,6 +32,7 @@
 //   ★自定义属性（`--x`）继承（CSS 规则）。
 
 import type { CseNode, CseRule, CseStyleSheet, CseTraceStep, CseWinner, CseComputeResult, CseComputedNode } from './types'
+import { foldCalcArithmetic } from '../calc-fold'
 import { buildIndex, candidatesFor, chainMatches, contextOf, type MatchContext, type RuleIndex } from './match'
 import { cascade, layerContextOf, type CascadeCandidate, type LayerContext } from './cascade'
 import { CSS_NAMED_COLORS } from './colors-named'
@@ -326,21 +327,15 @@ export function substituteVars(value: string, vars: Map<string, string>, depth =
   return out
 }
 
-/** calc() 单层常量化：`calc(N op M)`（数或 px 参与；含 var 已前置替换）。不支持 ⇒ null（v1 诚实） */
+/** ★★★calc() 常量化（2026-10-08 · css:next）：**委托共享实现** `calc-fold.ts`（与 App 折叠面同口径）——
+ *   完整算术（`+ - * /` 与括号）+ `env(safe-area-inset-*)` fallback；px/无单位参与。
+ *   ★此前只支持**单层** `N op M`（同单位）⇒ `calc(8px * 0.6)` 等在 CSE 被丢弃（App 却折得出）⇒ 两路径分叉；
+ *     抽 `calc-fold.ts` 为**唯一实现**后消除（决策 #591）。不可折 ⇒ null。 */
 export function foldCalc(value: string): string | null {
-  const m = /^calc\((.+)\)$/i.exec(value.trim())
+  const m = /^calc\(([\s\S]*)\)$/i.exec(value.trim())
   if (!m) return value.includes('calc(') ? null : value
-  const expr = m[1]!.trim()
-  // 只支持 "长度 op 长度" 的 + - （乘除含单位语义复杂，v1 不做）
-  const mm = /^(-?[\d.]+)(px)?\s*([+-])\s*(-?[\d.]+)(px)?$/.exec(expr)
-  if (!mm) return null
-  const a = Number(mm[1]!)
-  const b = Number(mm[4]!)
-  const unitA = mm[2] ?? ''
-  const unitB = mm[5] ?? ''
-  if (unitA !== unitB) return null
-  const v = mm[3] === '+' ? a + b : a - b
-  return `${v}px`
+  const n = foldCalcArithmetic(m[1]!)
+  return n === undefined ? null : `${n}px`
 }
 
 /* ────────────────────────── 长度求解 ────────────────────────── */

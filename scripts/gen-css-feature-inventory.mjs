@@ -488,14 +488,15 @@ const functions = Object.keys(mdnFunctions).map((k) => ({
   kind: 'function',
   mdnStatus: mdnFunctions[k].status ?? 'standard',
   syntax: mdnFunctions[k].syntax ?? null,
-  // ★★★数学函数项（2026-10-08 · css:next P0）：min()/max()/clamp() 已实现（CSE + 折叠面**px-only** 常量化）
-  impl: MATH_FNS.includes(k) ? 'implemented' : ['var()', 'calc()'].includes(k) ? 'partial' : 'not-started',
+  // ★★★数学/计算函数项（2026-10-08 · css:next）：min()/max()/clamp() + calc() 已实现（CSE + 折叠面同口径）
+  impl: MATH_FNS.includes(k) || k === 'calc()' ? 'implemented' : k === 'var()' ? 'partial' : 'not-started',
   implNote: MATH_FNS.includes(k)
     ? 'CSE + App 折叠面**px-only** 常量化（全参数绝对化 ⇒ 折单 px；含 %/vw ⇒ 诊断不静默丢）'
-    : k === 'var()' ? 'CSE 支持（含 fallback/嵌套）' : k === 'calc()' ? 'CSE 仅单层同单位加减（v1）' : '',
-  evidencedBy: { inIrRegistry: false, irScope: null, inCompilerFold: MATH_FNS.includes(k), matrixLevel: null, webSupport: null },
+    : k === 'calc()' ? 'CSE + App 折叠面**同口径**（共享 calc-fold.ts）：完整算术（+ - * / 与括号）+ env(safe-area-*) fallback；含 %/相对单位 ⇒ 诊断不静默丢'
+    : k === 'var()' ? 'CSE 支持（含 fallback/嵌套；编译期字面替换）' : '',
+  evidencedBy: { inIrRegistry: false, irScope: null, inCompilerFold: MATH_FNS.includes(k) || k === 'calc()', matrixLevel: null, webSupport: null },
   usage: 0,
-  priority: MATH_FNS.includes(k) ? 'done' : ['calc()', 'var()'].includes(k) ? 'P0' : 'P1',
+  priority: MATH_FNS.includes(k) || k === 'calc()' ? 'done' : k === 'var()' ? 'P0' : 'P1',
   acceptance: 'none',
 }))
 const units = Object.keys(mdnUnits).map((k) => ({

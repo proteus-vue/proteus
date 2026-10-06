@@ -131,6 +131,8 @@ const PROBE_VALUES = {
   'min()': ['width: min(160px, 240px)', 'width', { kind: 'absolute', dp: 160 }],
   'max()': ['width: max(120px, 200px)', 'width', { kind: 'absolute', dp: 200 }],
   'clamp()': ['width: clamp(120px, 160px, 200px)', 'width', { kind: 'absolute', dp: 160 }],
+  // ★★★calc() 项（2026-10-08）：完整算术（乘法样例——此前 CSE 只支持单层加减）
+  'calc()': ['width: calc(8px * 0.6)', 'width', { kind: 'absolute', dp: 4.8 }],
 }
 
 const probe = PROBE_VALUES[id]
