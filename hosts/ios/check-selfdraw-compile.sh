@@ -31,6 +31,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HOST_SRCS=(
   "$HERE/ProteusHost/runtime/selfdraw-scene.swift"
   "$HERE/ProteusHost/runtime/host-runtime-bridge.swift"
+  "$HERE/ProteusHost/runtime/superapp-runtime-host.swift"
   "$HERE/ProteusHost/runtime/proteus-host-controller.swift"
   "$HERE/ProteusHost/runtime/host-capabilities.swift"
   "$HERE/ProteusHost/runtime/host-lifecycle-events.swift"

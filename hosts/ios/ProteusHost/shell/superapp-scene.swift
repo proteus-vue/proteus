@@ -54,7 +54,15 @@ final class SuperappScene: NSObject {
         // ② 宿主桥（screen.* + 能力）——与 AppStackScene 同一份
         let hostBridge = HostRuntimeBridge()
         hostBridge.jsContextRef = ctx.jsGlobalContextRef
-        ctx.setObject(hostBridge, forKeyedSubscript: "proteusHost" as NSString)
+        // ★★★B1：壳走**统一运行期**——proteusHost = SuperappRuntimeHost（mount/applyOps/readRects/onGesture
+        //   原语，交互/响应式/导航全在共享 JS 层）；旧静态屏内容改由 JS 侧 __proteusSuperappRender 实例化。
+        let rtHost = SuperappRuntimeHost(draw: bridge, caps: hostBridge)
+        rtHost.jsContext = ctx
+        ctx.setObject(rtHost, forKeyedSubscript: "proteusHost" as NSString)
+        // ★手势命中链 → JS 运行期（SelfDrawBridge 命中后反向调 JS 注册的 `__proteusRuntimeGesture`）。
+        bridge.onDispatchToJS = { target, chain, type, _, _ in
+            rtHost.dispatchGestureToJS(type: type, target: target, chain: chain)
+        }
         // ③ proteusSelfDraw 由 SelfDrawViewController 注入（本场景复用同一 bridge）
 
         // ④ 载入 superapp bundle（同目录 bundle-superapp.js）
@@ -128,13 +136,19 @@ final class SuperappScene: NSObject {
             return
         }
         let usePage = scAll[page] != nil ? page : (scAll["index"] != nil ? "index" : (scAll.keys.first ?? "index"))
-        guard let sc = scAll[usePage] as? [String: Any], let nodes = sc["nodes"] as? [[String: Any]] else { return }
+        // ★★★B1：内容由 JS **共享运行期**实例化（交互/响应式/导航）；宿主只提供 mount/applyOps 原语。
+        //   （app-screen-content.json 仍读入做屏名合法性校验 + 降级兜底。）
+        guard scAll[usePage] != nil else { return }
         let vp = UIScreen.main.bounds
-        let tree: [String: Any] = ["viewport": ["width": Double(vp.width), "height": Double(vp.height)], "nodes": nodes]
-        guard let td = try? JSONSerialization.data(withJSONObject: tree),
-              let treeJson = String(data: td, encoding: .utf8) else { return }
-        let out = bridgeRef?.mount(treeJson) ?? "{\"ok\":false}"
-        NSLog("[proteus] SUPERAPP_RENDER page=%@ nodes=%d → %@", usePage, nodes.count, String(out.prefix(160)))
+        // 用 JSON 序列化 args 并安全转义为 JS 字符串字面量（避免手拼引号）
+        let args: [String: Any] = ["name": usePage, "viewport": ["width": Double(vp.width), "height": Double(vp.height)]]
+        guard let ad = try? JSONSerialization.data(withJSONObject: args),
+              let argsStr = String(data: ad, encoding: .utf8),
+              let qd = try? JSONSerialization.data(withJSONObject: [argsStr], options: [.fragmentsAllowed]),
+              let qArr = String(data: qd, encoding: .utf8) else { return }
+        let argLiteral = String(qArr.dropFirst().dropLast())   // 去掉外层 [ ]
+        let out = evalJs?("__proteusSuperappRender(\(argLiteral))") ?? "{\"ok\":false}"
+        NSLog("[proteus] SUPERAPP_RENDER page=%@ runtime=%@", usePage, String(out.prefix(160)))
         // ★重绘后把 tab 栏提到最上层（自绘每次重建层树，可能压住它——见 buildTabBar 层级注释）
         if let p = tabBarParent(), let bar = p.viewWithTag(771001) { p.bringSubviewToFront(bar) }
     }
