@@ -11,8 +11,8 @@
 |---|---|---|---|---|---|
 | `-webkit-line-clamp` | standard | WebKit Extensions, CSS Overflow | 4 | not-started | — |
 | `background-image` | standard | CSS Backgrounds and Borders | 2 | partial | 有结构化属性通道（非 CSS 属性形态）——CSS 写法待接 |
-| `background-position` | standard | CSS Backgrounds and Borders | 4 | not-started | 未接：位置需背景图/渐变定位语义（证据：未接（待评）） |
-| `background-size` | standard | CSS Backgrounds and Borders | 2 | not-started | 未接：尺寸需背景图语义（证据：未接（待评）） |
+| `background-position` | standard | CSS Backgrounds and Borders | 4 | not-started | 未接：背景定位家族（与 background-size 耦合）（证据：未接——**属「背景定位」家族**（需 background-size + 三端宿主渐变几何重写，本批=静态单层；动画/多层为具名边界）：见 docs/css-background-family-plan.md） |
+| `background-size` | standard | CSS Backgrounds and Borders | 2 | not-started | 未接：背景定位家族（与 background-position 耦合）（证据：未接——**属「背景定位」家族**（见 docs/css-background-family-plan.md）） |
 | `container-type` | standard | CSS Conditional Rules | 1 | not-started | — |
 | `grid-auto-columns` | standard | CSS Grid Layout | 1 | not-started | — |
 | `grid-auto-flow` | standard | CSS Grid Layout | 3 | not-started | 未接：自动流（证据：未接） |

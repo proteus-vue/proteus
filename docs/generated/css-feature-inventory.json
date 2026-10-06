@@ -3212,7 +3212,7 @@
       "initial": "0% 0%",
       "syntax": "<bg-position>#",
       "impl": "not-started",
-      "implNote": "未接：位置需背景图/渐变定位语义（证据：未接（待评））",
+      "implNote": "未接：背景定位家族（与 background-size 耦合）（证据：未接——**属「背景定位」家族**（需 background-size + 三端宿主渐变几何重写，本批=静态单层；动画/多层为具名边界）：见 docs/css-background-family-plan.md）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3304,7 +3304,7 @@
       "initial": "auto auto",
       "syntax": "<bg-size>#",
       "impl": "not-started",
-      "implNote": "未接：尺寸需背景图语义（证据：未接（待评））",
+      "implNote": "未接：背景定位家族（与 background-position 耦合）（证据：未接——**属「背景定位」家族**（见 docs/css-background-family-plan.md））",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -15233,10 +15233,10 @@
       "initial": "normal",
       "syntax": "normal | break-all | keep-all | break-word | auto-phrase",
       "impl": "implemented",
-      "implNote": "IR 注册表在册（scope=engine-only · 矩阵 WordBreak）",
+      "implNote": "IR 注册表在册（scope=semantic · 矩阵 WordBreak）",
       "evidencedBy": {
         "inIrRegistry": true,
-        "irScope": "engine-only",
+        "irScope": "semantic",
         "inCompilerFold": true,
         "matrixLevel": "WordBreak",
         "webSupport": true
