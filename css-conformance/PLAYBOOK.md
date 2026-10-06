@@ -115,6 +115,13 @@ node scripts/css-acceptance-record.mjs <feature-id> <verdicts.json>
   ★**已修**：编译器**级联后归一**——`display===flex` 且未显式写 `flex-direction` ⇒ 补 `row`（两路径：`vapor/template.ts`
   的 `normalizeFlexDirection` + CSE `compute.ts`）；未声明 display 的保持 column（不破坏块级堆叠）；grid 不补。
   ★同源纪律：**规则里声明了 flex 布局能力（display:flex）却没写方向时，必须按 CSS 初值补 row**——这是"缺省值必须查 Web 标准"在 flex 轴上的实例。
+- **★★★文本「测量」与「绘制」必须用同一断词/换行策略（2026-10-08 鸿蒙真机抓出）**：
+  鸿蒙 `OH_Drawing` 的**默认断词类型**会在**数字/字母边界**断开（`"1fr"` → `"1"`/`"fr"`），
+  即便整词放得进盒也折行。**测量侧**（`measureTextWrappedTypoPx`）与**绘制侧**（`drawChannelsAndText`）各有自己的 typography 配置 ⇒
+  两处都按默认断词 ⇒ 文本节点被算成**2 行高（98px）**而字形只占 1 行（49px）⇒ 表现为**顶对齐（不垂直居中）**。
+  修：**两处都显式设** `WORD_BREAK_TYPE_NORMAL`（非 break-all 分支）。★同源纪律：**一行文本的"量"与"画"必须同源**
+  ——测量与绘制若各自配置（字号/字距/断词/行高/对齐），任一处不同步 ⇒ 盒高错 ⇒ 对齐/裁切/命中全偏。
+  ★**同一纪律的通用形态**：本仓 Android `mkCmd`（绘制）vs `remeasure`（测量）也是"两处消费同一语义"——改一处必核另一处。
 - **★★★解析 CSS 值优先用**引擎官方解析器**，别手写（2026-10-08 grid 轨迹升级）**：`layout-core-rust` 早期手写 `parse_grid_tracks`（只认 `fr`/`px`）——
   结果语料 22 处 `minmax()` / `repeat(auto-fill,…)` **整条被丢弃**（真实 grid 在 App 端消失）。
   ⇒ 启用 taffy 的 `parse` feature（仅引 cssparser），改用 **官方 `GridTemplateComponent::from_str` / `TrackSizingFunction::from_str`**

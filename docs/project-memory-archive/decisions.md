@@ -1421,3 +1421,14 @@
 **⑥ 判据（四端全过 · #569 铁律）**：`css:verify grid-auto-columns`/`grid-auto-rows` 三段全绿（parity 与浏览器 computed 一致：`minmax(0px, 1fr)`）· 视觉登记 · **四端真机**：Android/iOS/鸿蒙 独立子代理逐案例复核 **4/4 PASS**（A 三列 60px 并排 / B 5 项 3 行 2+2+1 / C 两列 1:2）· MP ◐（Skyline 无 Grid 容器，具名边界）· probe 新页四端 PASS · 全量 **5325/5325**（+1 内核测）· 内核 `tests/grid.rs` **8/8** · coupled 绿 · 门禁全绿（style-ir-schema/coverage/css-capability-alignment/profile-baseline/host-kernel-keys/android-host-compile/stats/content/script-compile）。
 **⑦ 诚实边界**：命名线（`[name]`）/ `span` 文字未支持（诊断跳过）；Skyline 无 Grid 容器（退化 block，具名边界）。
 **⑧ 影响**：`packages/layout-core-rust`（Cargo.toml parse feature + style/ffi/taffy_engine + tests/grid）· `packages/compiler`（vapor/template + cse/compute）· `packages/consistency`（snapshot/coverage/appliers/probes）· `hosts/android`（LAYOUT_KEYS + physicalizeSpec）· 能力源 · 验收页 `grid-auto.vue` · golden；**下一项**：按 css:next 取。
+582. **★★★鸿蒙文本缺陷修复 —— 「案例C文字换行 + 不垂直居中」（用户在 #581 grid-auto 验收中抓出）**：
+**① 用户指令**：「为什么鸿蒙的案例 C 文字是换行了呢」→「现在有新的问题，案例 C 的第一个块里面的文字水平居中，但是没有垂直居中」。
+**② 根因（实测定位 · 鸿蒙 Typography 默认断词）**：鸿蒙 `OH_Drawing` 文本的**默认断词类型**会在**数字/字母边界**断开——`"1fr"` 被断成 `"1"`/`"fr"`，即便整词（实测单行 34px）**放得进盒**（38.5px）也折行。**且两处都受影响**：
+  · **测量侧**（`measureTextWrappedTypoPx`）：把 `"1fr"` 算成 **2 行** ⇒ 文本节点**盒高 98px**（字形仅 49px）；
+  · **绘制侧**（`drawChannelsAndText`）：也按默认断词画；加上节点被撑到 98px 而字形只占 ~49px ⇒ 表现为**顶对齐（topGap 11 / botGap 61）**，而非垂直居中。
+  真机日志实证（`PROTEUS_VPOS`）：修复前 `1fr boxH=98 typoH=49`；修复后 `boxH=49 typoH=49`，字形位 `topGap 35 / botGap 37`（居中，与 Web 23/20、Android 32/31、iOS 32/32 同）。
+**③ 修法**：**测量与绘制两处都显式设** `OH_Drawing_SetTypographyTextWordBreakType(ts, WORD_BREAK_TYPE_NORMAL=0)`（非 break-all 分支）——「词边界断、超长词才断」，与 Web `word-break: normal` 一致；`break-all` 分支仍设 `BREAK_ALL=1`。
+**④ ★纪律（写进 PLAYBOOK）**：**文本"测量"与"绘制"必须用同一断词/换行策略**——否则行数不一致 ⇒ 盒高错（虚高/塌缩）⇒ 对齐/裁切/命中全偏。本仓同源教训：Android 侧 `mkCmd`（绘制）与 `remeasure`（测量）本就"两处消费同一语义"，鸿蒙这次测量/绘制各有自己的 typography 配置，**改一处必漏另一处**。
+**⑤ 判据**：四端重新采集 + 独立子代理复核 **3/3 PASS**（grid-auto 案例 C：`1fr`/`2fr` 单行 + 垂直居中；word-break/text 页无回退）· probe 任务页四端 PASS（唯一红 = 既有 background-position）· `check:message` 等门禁全绿。
+**⑥ ★附带改进**：`word-break: normal` 的长串在鸿蒙由「折行」变为「**单行溢出**」（= 与 Web 一致）——原 word-break 验收把鸿蒙折行记为「具名边界」，本修复反而**消除了该边界**（更贴近 Web 基准）。
+**⑦ 影响**：`hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_render.cpp`（绘制断词）+ `.../proteus_host_helpers.h`（测量断词）· PLAYBOOK；**性质**：宿主文本引擎对齐修复（非 grid 特性本身）。

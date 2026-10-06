@@ -617,6 +617,12 @@ static void drawChannelsAndText(OH_Drawing_Canvas* canvas, const TextDrawSpec* s
             //   break-all ⇒ BREAK_ALL（任意字符断）；normal/缺省 ⇒ 不设（引擎默认 = 词边界断）。
             if (spec->wordBreak == "break-all") {
                 OH_Drawing_SetTypographyTextWordBreakType(ts, 1); // WORD_BREAK_TYPE_BREAK_ALL
+            } else {
+                // ★★★修（2026-10-08 · 用户抓出「鸿蒙案例C文字换行」）：**显式 NORMAL 断词**——
+                //   鸿蒙 Typography **默认**断词类型会在**数字/字母边界**（如 "1fr" → "1"/"fr"）断开，
+                //   即便整词（34px）放得进盒（38.5px）也折行 ⇒ 与 Web/Android/iOS（整词不折）不符。
+                //   显式设 NORMAL（= 词边界断，超长词才断）⇒ 与 Web 一致。break-all 分支仍设 BREAK_ALL。
+                OH_Drawing_SetTypographyTextWordBreakType(ts, 0); // WORD_BREAK_TYPE_NORMAL
             }
             OH_Drawing_TypographyCreate* handler = OH_Drawing_CreateTypographyHandler(ts, fc);
             if (handler != nullptr) {
