@@ -1,9 +1,9 @@
 # CSS Web 全量能力清单（自动生成——勿手改；生成器 scripts/gen-css-feature-inventory.mjs）
 
 > 总 949 项（property 651 · selector 144 · at-rule 19 · function 105 · unit 30）
-> 实现：**not-started** 549 · **excluded** 280 · **implemented** 116 · **partial** 4
-> 优先级：P2 115 · excluded 280 · P0 22 · done 116 · P1 416
-> ★**可推项（非已实现/非排除）**：553（其中 **P0 22**）
+> 实现：**not-started** 548 · **excluded** 280 · **implemented** 117 · **partial** 4
+> 优先级：P2 115 · excluded 280 · P0 21 · done 117 · P1 416
+> ★**可推项（非已实现/非排除）**：552（其中 **P0 21**）
 
 ## P0 —— 语料在用但未实现（真实需求，最优先）
 
@@ -15,7 +15,6 @@
 | `grid-auto-columns` | standard | CSS Grid Layout | 1 | not-started | — |
 | `grid-auto-rows` | standard | CSS Grid Layout | 1 | not-started | — |
 | `grid-template-areas` | standard | CSS Grid Layout | 2 | not-started | 未接：命名区域（证据：未接（CSE 支持 template-columns/rows；areas 未接）） |
-| `object-fit` | standard | CSS Images | 3 | not-started | 未接：图片填充方式（证据：未接（图片组件通道）） |
 | `outline` | standard | CSS Basic User Interface | 2 | not-started | — |
 | `outline-offset` | standard | CSS Basic User Interface | 3 | not-started | 未接：轮廓（证据：未接） |
 | `overscroll-behavior-y` | standard | CSS Overscroll Behavior | 1 | not-started | — |

@@ -164,7 +164,7 @@ const SHORTHAND_EXPANSION = {
   'background-image': { to: ['fillGradient'], evidence: 'vapor/template.ts:976-980（渐变→fillGradient）', note: '渐变走 fillGradient 通道（url() 图片另有原生组件）', conditional: true },
   'grid-template-areas': { to: [], evidence: '未接（CSE 支持 template-columns/rows；areas 未接）', note: '命名区域', notYet: true },
   'aspect-ratio': { to: ['aspectRatio'], evidence: 'IR 在册（engine-field）', note: '宽高比' },
-  'object-fit': { to: [], evidence: '未接（图片组件通道）', notYet: true, note: '图片填充方式' },
+  'object-fit': { to: [], separate: true, channel: 'component', evidence: '图片组件通道：Web `<image>` 模拟层 `mode`→CSS objectFit（packages/web/src/components/image.ts）+ MP 原生 `<image mode>`（built-in-components/image.ts）；主流端（微信/Skyline）同以 `<image mode>` 表达而非 CSS 属性', note: '**组件通道**（图片填充）：`object-fit` 作用于**替换内容**（图片/视频），本框架语义载体 = `<image mode>` / `p-image.fit`（Web objectFit · MP mode——已交付）；★App 自绘**暂无图片渲染**（无作用对象）⇒「App 图片渲染」独立立项' },
   'word-break': { to: [], evidence: '未接', notYet: true, note: '断词' },
   'outline-offset': { to: [], evidence: '未接', notYet: true, note: '轮廓' },
   'text-shadow': { to: [], evidence: '未接', notYet: true, note: '文本阴影' },
@@ -333,7 +333,7 @@ function implOf(kebab, camel) {
   const exp = SHORTHAND_EXPANSION[kebab]
   if (exp) {
     if (exp.separate) {
-      return { impl: 'implemented', note: `**独立通道**：${exp.note}（证据：${exp.evidence}）`, inIr, inMatrix, inCompilerFold: false, irScope: undefined, expansion: { to: [], evidence: exp.evidence, note: exp.note, separate: true } }
+      return { impl: 'implemented', channel: exp.channel ?? 'independent', note: `**独立通道**：${exp.note}（证据：${exp.evidence}）`, inIr, inMatrix, inCompilerFold: false, irScope: undefined, expansion: { to: [], evidence: exp.evidence, note: exp.note, separate: true } }
     }
     if (exp.notYet) {
       return { impl: 'not-started', note: `未接：${exp.note}（证据：${exp.evidence}）`, inIr, inMatrix, inCompilerFold: false, irScope: undefined, expansion: { to: [], evidence: exp.evidence, note: exp.note, notYet: true } }
@@ -388,6 +388,7 @@ const toEntry = (kebab, kind) => {
     syntax: meta?.syntax ?? null,
     impl: implInfo.impl,
     implNote: implInfo.note,
+    channel: implInfo.channel ?? null, // ★非编译器折叠的投递通道（component / independent）——verify 据此把 parity/ends 判 n/a
     evidencedBy: {
       inIrRegistry: implInfo.inIr,
       irScope: implInfo.irScope ?? null,
