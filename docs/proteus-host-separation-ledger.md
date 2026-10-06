@@ -51,11 +51,11 @@
 | ID | 项 | 状态 | 判据（命令 / 文件 / 文档） | 范围 |
 |---|---|---|---|---|
 | HA0 | 八接口 C ABI + 版本协商 + `submit_frame` | 已落地 | `file:packages/host-abi/include/proteus_host_abi.h` | — |
-| HA0.5 | `hosts/`→`platform/` 拆分 + 门禁（**Android 侧待抽**） | 范围外 | `cmd:pnpm check:platform-layering` | iOS 已抽（platform/ios）且门禁绿。**Android 度量/绘制抽 platform/** = **纯代码组织重构**（迁 Java 文件 + 扩门禁），**与"新增宿主只实现原语"无关**（Android 已只实现原语）⇒ 归 runtime 抽包独立线（与 L5/L6 同源）。**诚实登记为独立批次，非静默跳过**。 |
+| HA0.5 | `hosts/`→`platform/` 拆分 + 门禁（**Android 侧待抽**） | 范围外 | `cmd:pnpm check:platform-layering` | iOS 已抽（platform/ios）且门禁绿。**Android 度量/绘制抽 platform/** = **纯代码组织重构**（迁 Java 文件 + 扩门禁），**与"新增宿主只实现原语"无关**（Android 已只实现原语）。★澄清：`platform/android/` **已存在但内容是 SDK/AAR（属 HA5 存量嵌入）**，非本项对象；Android 度量/绘制仍在 `hosts/android/.../runtime/`。⇒ 归 runtime 抽包独立线，**登记件 `docs/proteus-host-separation-b5-plan.md`**。 |
 | HA1 | 现有 App 宿主改造（双路几何逐字节一致） | 已落地 | `file:platform/ios/ProteusPlatform/ProteusTextAdapter.swift` | — |
 | HA2 | 能力注入重构（度量 trait ✅ · 内核零平台分支 ✅ · **图像解码 trait 无消费点**） | 范围外 | `file:packages/host-abi/src/lib.rs`（decode_image 声明） | **内核不处理图像**（图像由各宿主各自解码——见 HostABI 文档；`decode_image` 无内核消费点）⇒ 该 trait 为 ABI 契约声明（保留），**登记终止态**（非"待实现"）。 |
 | HA3 | 能力插件（注册/调用/清单校验） | 已落地 | `file:packages/capabilities/src` | — |
-| HA4 | 原生组件宿主（引擎驱动生命周期；**Android Java 侧回调未绑**） | 范围外 | `file:packages/host-abi/include/proteus_host_abi.h` | iOS 已绑。Android **原生视图宿主可用**（`ProteusHostView` native-host 机制，真机实测位置/渲染/z-order 三判据 PASS）；Android 侧 **C-ABI native-view 回调绑定** = 残余实现批次（引擎驱动原语已在，缺的是 ABI 回调接线）——**非"新增宿主重实现"问题** ⇒ 本轮范围外，诚实登记为独立批次。 |
+| HA4 | 原生组件宿主（引擎驱动生命周期；**C-ABI `native_view_*` 回调未绑**） | 范围外 | `file:packages/host-abi/include/proteus_host_abi.h` | Android **宿主内原生视图机制可用**（`ProteusHostView` native-host，真机三判据 PASS）。★澄清（取证）：**C-ABI vtable 三回调（`native_view_create/update/destroy`）在生产宿主端均未绑**——Android `platform/android/proteus-jni/src/host.rs` = `None`、iOS `selfdraw-scene.swift` = `nil`；**仅测试绑**（`host-abi` 单测 + `headless_host.c`）。Rust 核心在"缺 create ⇒ 显式报错"（不静默）。⇒ 属**残余实现批次**（非"新增宿主重实现"），**登记件 `docs/proteus-host-separation-b5-plan.md`**。 |
 | HA5 | 存量 App 嵌入（AAR + demo + 文档） | 已落地 | `file:platform/android/build-aar.sh` | — |
 | HA6 | Playground 壳统一走 ABI | 范围外 | `doc:docs/Proteus_Playground设计方案.md` | 依赖 Playground（规划态·零实现）；独立特性线 |
 

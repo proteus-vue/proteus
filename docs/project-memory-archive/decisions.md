@@ -1692,3 +1692,12 @@
 **⑥ 判据**：`check:docs-stats`/`check:docs`/`check:content`/`check:memory` 全绿；5 份 + 修正 + board-inventory 入库。
 **⑦ 诚实边界 / 待办**：命名（Themis/Charites/Keryx/Koine）**均为候选定名**，三份自述「定名前须做正式商标与包名检索」——正式启用前该步不可省；「79 个组件」按 p-* 口径（`ls -d packages/components/p-*` = 79），与 `check:docs-stats` 的「组件 81」（含 pg-glass/virtual-list 两个非 p-* 目录）为**不同口径**，文档已按 p-* 显式限定；四份为**规划态**（P0 起，未开工）。
 
+608. **★宿主关注点分离「下一批（B5）」任务卡立项——把台账 `范围外` 的两项实现类遗留正式立单（HA0.5-android / HA4-android）（★用户 2026-10-07「宿主关注点分离这个闭环了吧？」→「把范围外里那几项正式立成下一批工单」）**：
+**① 背景**：主闭环（B0–B4）已收口（台账 `已落地 18 / 进行 0 / 未做 0 / 范围外 13`）。但台账 §六.3 要求「`范围外` 全部有**独立登记件**」——**HA0.5/HA4 此前只写了理由、没有落点文件** ⇒ 本轮补立单（`docs/proteus-host-separation-b5-plan.md`）。
+**② 立单前**先取证**（不靠台账旧措辞）**，修正两处不精确：a) **HA4「iOS 已绑」= 不准确**——取证发现 **C-ABI vtable 三回调在生产宿主端均未绑**（Android `platform/android/proteus-jni/src/host.rs:174` = `None`；iOS `selfdraw-scene.swift:6236` = `nil`；**仅测试绑** `host-abi` 单测 + `headless_host.c`）；Android「原生视图宿主可用」指的是**宿主内 Java 机制** `ProteusHostView` native-host（**不经** C-ABI）——两者不同源。b) **HA0.5「platform/android 待抽」需澄清**——`platform/android/` **已存在但内容是 SDK/AAR**（属 **HA5**），HA0.5 的对象（Android 度量/绘制）仍在 `hosts/android/.../runtime/`。
+**③ 两张工单（`docs/proteus-host-separation-b5-plan.md`）**：**B5-1 HA0.5-android**（Android 文本度量/绘制抽 `platform/android/`，与 iOS `ProteusTextAdapter` 对称；交付 + `check:platform-layering` 扩到 Android 特征 API + 渲染无回归；禁一次性替换）· **B5-2 HA4-android**（C-ABI `native_view_*` 三回调绑定 + `proteus_sync_native_views` 滚动/动画接线；判据 z-order + 滚动跟随 + "缺回调显式报错"保留 + 与 `ProteusHostView` 行为对拍）。两卡各含**现状取证 / 交付 / 验收判据（可机器判定）/ 依赖 / 风险纪律 / 诚实边界**；并列出**非本批**（G3/G5/HA2 已在主闭环内判为"平台原语/终止态"，X1–X5 各有归属文档）以免重复建设。
+**④ 台账接线**：HA0.5/HA4 两行的 `范围` 列加**登记件指向**（`docs/proteus-host-separation-b5-plan.md`），满足 §六.3；HA4 判据列同步修正为"C-ABI 回调未绑（取证）"。
+**⑤ ★教训**：**"已绑/待抽"这类结论文档写完会漂**——登记为独立批次前**必须重新取证**（本次两处措辞与源码不符：iOS 也传 nil、platform/android 已是别的东西）。**文档措辞 ≠ 源码事实**（与 #607「文档数字门禁抓不到任意错误值」同族）。
+**⑥ 判据**：`check:host-separation-ledger` / `check:layers` / `check:docs-stats` / `check:docs` 全绿；b5-plan 引用的全部 `docs/*`/`packages/*`/`hosts/*`/`platform/*` 路径逐个 `ls` 存在（含行号抽查）。
+**⑦ 诚实边界**：本批为**工单立项**（未开工）；主闭环**不因立单回退**（分离本身已打通，这批是"分离判定后的独立实现/重构"）。
+
