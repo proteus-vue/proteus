@@ -1318,6 +1318,15 @@ public final class VaporRenderHost {
                 if (shadow.has(k) && shadow.get(k) instanceof Number) shadow.put(k, shadow.getDouble(k) * lengthScale);
             }
         }
+        // ★★★text-shadow 项（2026-10-08 · 真机用户抓出「安卓投影太轻/光晕太小」）：**文本阴影长度也必须 ×密度**——
+        //   与 boxShadow 同轴（结构化对象的 dx/dy/blur 是长度；color 不动）。漏登记 ⇒ 安卓上 dx/dy/blur 停留在
+        //   CSS 逻辑 px（约物理的 1/density）⇒ 相对字号(已 ×density)的投影/光晕小 ~3 倍（Web/iOS/鸿蒙正确）。
+        JSONObject tshadow = spec.optJSONObject("textShadow");
+        if (tshadow != null) {
+            for (String k : new String[]{"dx", "dy", "blur"}) {
+                if (tshadow.has(k) && tshadow.get(k) instanceof Number) tshadow.put(k, tshadow.getDouble(k) * lengthScale);
+            }
+        }
     }
 
     /** 缩放 CSS 长度串里的 px 数值（gridTemplateColumns/Rows 用）——fr/auto/%/em 等不动 */
