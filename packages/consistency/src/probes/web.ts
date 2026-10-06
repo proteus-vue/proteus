@@ -272,6 +272,11 @@ function styleOf(el: Element, win: Window): NormalizedStyle {
       }
     }
   }
+  // ★★★text-shadow 项（2026-10-08）：浏览器 computed 原样规范串（如 `rgba(0, 0, 0, 0.3) 0px 1px 2px`）
+  {
+    const tsv = cs.getPropertyValue('text-shadow').trim()
+    if (tsv && tsv !== 'none') (styles as Record<string, unknown>).textShadow = tsv
+  }
   // ★★★grid-template-areas 项（2026-10-08）：命名区域模板（浏览器形态 "a b" "c c"——原样 trim 空白归一）
   {
     const v = cs.getPropertyValue('grid-template-areas').trim()

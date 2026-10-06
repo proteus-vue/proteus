@@ -15,6 +15,7 @@ export const routes: RouteRecord[] = [
   { name: "outline", path: "pages/outline", component: "../pages/outline.vue" },
   { name: "overflow-page", path: "pages/overflow-page", component: "../pages/overflow-page.vue" },
   { name: "overflow", path: "pages/overflow", component: "../pages/overflow.vue" },
+  { name: "text-shadow", path: "pages/text-shadow", component: "../pages/text-shadow.vue" },
   { name: "text", path: "pages/text", component: "../pages/text.vue", meta: {"title":"CSS 验收 · 文本"} },
   { name: "word-break", path: "pages/word-break", component: "../pages/word-break.vue", meta: {"title":"CSS 验收 · 断词"} },
 ]
@@ -61,6 +62,10 @@ export const screens: Record<string, AppScreenSpec> = {
     "name": "overflow",
     "path": "pages/overflow"
   },
+  "text-shadow": {
+    "name": "text-shadow",
+    "path": "pages/text-shadow"
+  },
   "text": {
     "name": "text",
     "path": "pages/text"
@@ -72,7 +77,7 @@ export const screens: Record<string, AppScreenSpec> = {
 }
 
 /** 路由名数组（App 深栈/压测按它循环取屏——顺序与 routes 一致） */
-export const screenNames: string[] = ["background-position","border-style","border","grid-auto-flow","grid-template-areas","justify-self","outline","overflow-page","overflow","text","word-break"]
+export const screenNames: string[] = ["background-position","border-style","border","grid-auto-flow","grid-template-areas","justify-self","outline","overflow-page","overflow","text-shadow","text","word-break"]
 
 /** tab 根屏（meta.isTab）—— App 端 tab 语义（switchTab/reset）的合法目标 */
 export const tabNames: string[] = []
@@ -89,6 +94,7 @@ declare module '@proteus-vue/router/types' {
     'outline': {  },
     'overflow-page': {  },
     'overflow': {  },
+    'text-shadow': {  },
     'text': {  },
     'word-break': {  },
   }

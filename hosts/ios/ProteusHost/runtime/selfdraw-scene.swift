@@ -648,6 +648,8 @@ final class SelfDrawView: UIView {
             applyBorder(tl, style: style)
             applyOutline(tl, style: style)
             applyShadow(tl, style: style)
+            // ★★★text-shadow 项（2026-10-08）：文本投影（CATextLayer.shadow* 作用于**文本内容**= 字形阴影）
+            applyTextShadow(tl, style: style)
             SelfDrawBridge.applyPaintHint(tl, style: style)
             applyVisibility(tl, style: style)
             return tl
@@ -3054,6 +3056,8 @@ final class SelfDrawView: UIView {
         }
         // ★批次 10（CSS 兼容对齐 · 超级应用视觉）：盒阴影（结构化对象）透传——本函数是建层必经之路
         if let bs = n["boxShadow"] as? [String: Any] { style["boxShadow"] = bs }
+        // ★★★text-shadow 项（2026-10-08）：文本阴影（结构化对象）透传——本函数是建层必经之路
+        if let ts = n["textShadow"] as? [String: Any] { style["textShadow"] = ts }
         // ★★C1/B（2026-10-01）：两个**内核动画的静态基态**必须透传（本函数是建层必经之路）——
         //   `clipPath`（裁剪形状：类型 + 基态参数，mask 的来源）/ `perspective`（3D 透视距离）。
         //   ★漏透传的后果（真机实测抓到）：内核里动画被受理（started=4）但宿主读不到声明 ⇒
@@ -3685,6 +3689,21 @@ final class SelfDrawView: UIView {
         let dy = (sh["dy"] as? CGFloat) ?? ((sh["dy"] as? Double).map { CGFloat($0) } ?? 0)
         let blur = (sh["blur"] as? CGFloat) ?? ((sh["blur"] as? Double).map { CGFloat($0) } ?? 0)
         // CALayer.shadowRadius ≈ blur/2（Core Animation 半径 ≈ 视觉模糊半径的一半）
+        layer.shadowColor = color.cgColor
+        layer.shadowOffset = CGSize(width: dx, height: dy)
+        layer.shadowRadius = max(0, blur / 2)
+        layer.shadowOpacity = 1
+    }
+
+    /// ★★★text-shadow 项（2026-10-08）：文本阴影 → `CATextLayer.shadow*`（作用于文本内容 = 字形投影）。
+    ///   `{dx,dy,blur,color}`；无声明 ⇒ 不设（零行为变化）。
+    private func applyTextShadow(_ layer: CALayer, style: [String: Any]) {
+        guard let sh = style["textShadow"] as? [String: Any],
+              let color = (sh["color"] as? String).flatMap(parseHexColor) else { return }
+        let dx = (sh["dx"] as? CGFloat) ?? ((sh["dx"] as? Double).map { CGFloat($0) } ?? 0)
+        let dy = (sh["dy"] as? CGFloat) ?? ((sh["dy"] as? Double).map { CGFloat($0) } ?? 0)
+        let blur = (sh["blur"] as? CGFloat) ?? ((sh["blur"] as? Double).map { CGFloat($0) } ?? 0)
+        // CALayer.shadowRadius ≈ blur/2（与 applyShadow 同口径）
         layer.shadowColor = color.cgColor
         layer.shadowOffset = CGSize(width: dx, height: dy)
         layer.shadowRadius = max(0, blur / 2)

@@ -106,7 +106,7 @@ export const APP_ENUM_VALUES: Record<string, readonly string[]> = {
 /** 绘制字段（宿主自绘读这些键；模板照样要带上，否则挂载后无底色/无字色） */
 // ★★★逐边 border 批（2026-10-05 · border-bottom 等 4 个 P0 项）：追加**逐边** width/color（宿主逐边绘制；
 //   uniform borderWidth/borderColor 保留 = 四边缺省值）。语料 21 处 `border-<side>: <w> <style> <color>`。
-export const APP_PAINT_FIELDS = ['backgroundColor', 'color', 'fontSize', 'fontWeight', 'fontFamily', 'textAlign', 'lineHeight', 'textOverflow', 'letterSpacing', 'textDecoration', 'visibility', 'borderRadius', 'borderColor', 'borderWidth', 'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth', 'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor', 'borderTopStyle', 'borderRightStyle', 'borderBottomStyle', 'borderLeftStyle', 'opacity', 'boxShadow', 'transform', 'backgroundSize', 'backgroundPosition', 'backgroundRepeat', 'outlineWidth', 'outlineColor', 'outlineStyle', 'outlineOffset'] as const
+export const APP_PAINT_FIELDS = ['backgroundColor', 'color', 'fontSize', 'fontWeight', 'fontFamily', 'textAlign', 'lineHeight', 'textOverflow', 'letterSpacing', 'textDecoration', 'visibility', 'borderRadius', 'borderColor', 'borderWidth', 'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth', 'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor', 'borderTopStyle', 'borderRightStyle', 'borderBottomStyle', 'borderLeftStyle', 'opacity', 'boxShadow', 'textShadow', 'transform', 'backgroundSize', 'backgroundPosition', 'backgroundRepeat', 'outlineWidth', 'outlineColor', 'outlineStyle', 'outlineOffset'] as const
 const PAINT_FIELDS = new Set<string>(APP_PAINT_FIELDS)
 /**
  * ★批次 4（CSS 兼容对齐）：`text-align` 的**封闭集**（App 自绘文本在盒内的水平对齐）。
@@ -1172,6 +1172,22 @@ export function parseStaticStyle(
         markImportant('boxShadow')
         continue
       }
+      // ★★★text-shadow 项（2026-10-08 · css:next P0·2× · CSS Text Decoration）：**文本阴影**。
+      //   单层 <dx> <dy> [blur] <color>（无 spread；与 box-shadow 同法折叠为结构化 textShadow）——
+      //   宿主在文本绘制时投影（Android setShadowLayer 仅支持文本 / iOS CATextLayer shadow / 鸿蒙 SetTextShadow）。
+      if (key === 'textShadow') {
+        const sh = parseBoxShadow(rawVal, numOf)
+        if (!sh) {
+          pushDiag(
+            `text-shadow 未解析（支持 dx dy [blur] color；多重阴影取首个）——已跳过`,
+            'App 端文本阴影为单层：' + `text-shadow: 0 1px 2px rgba(0,0,0,0.3)` + '；多重暂不支持',
+          )
+          continue
+        }
+        out.textShadow = { dx: sh.dx, dy: sh.dy, blur: sh.blur, color: sh.color }
+        markImportant('textShadow')
+        continue
+      }
       // ★★★背景定位家族（2026-10-07 · css:next background-position · 静态单层）：
       //   size/position/repeat 是**背景图层的图像盒**几何（作用于渐变/背景图；值原样下发宿主解析——
       //   与 textAlign/transform 同类：字符串形态，宿主按 Web 几何算端点/平铺）。
@@ -1888,6 +1904,8 @@ function noOpResetValue(key: string, val: string): Record<string, unknown> | nul
     // 有 App 字段 ⇒ 记录**默认值**（保证级联覆盖生效）
     case 'boxShadow':
       return v === 'none' ? { boxShadow: null } : null
+    case 'textShadow':
+      return v === 'none' ? { textShadow: null } : null
     case 'border':
       return (v === 'none' || v === '0' || v === '0px') ? { borderWidth: 0 } : null
     case 'background':

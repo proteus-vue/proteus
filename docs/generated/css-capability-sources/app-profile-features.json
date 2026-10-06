@@ -792,6 +792,18 @@
       "note": "★批次 10（2026-10-04）：单层解析为结构化 `boxShadow {dx,dy,blur,spread,color}`（多重取首个；inset 诊断跳过）。**三端绘制**：iOS `CALayer.shadow*`（原生；有阴影时不开 masksToBounds——圆角裁剪会裁掉阴影）· Android **分层圆角矩形近似**（硬件加速下 setShadowLayer 只支持文本）· 鸿蒙 `OH_ArkUI_RenderNodeUtils_SetShadow*`（原生；spread 无原生项）。★超级应用卡片抬升视觉刚需"
     },
     {
+      "id": "text-shadow",
+      "css": "text-shadow",
+      "category": "paint",
+      "today": "supported",
+      "tier": "L3",
+      "strategy": "编译期折叠",
+      "probe": [
+        "text-shadow"
+      ],
+      "note": "★★★text-shadow 项（2026-10-08 · css:next P0·2× · CSS Text Decoration）：**文本阴影**（单层 dx dy [blur] color；无 spread）。契约：引擎字段 textShadow（同 boxShadow 先例）；编译器折叠（parseBoxShadow 复用）+ CSE 归一到**浏览器 computed 形态**（rgba(...) dxpx dypx blurpx）；**三端宿主文本绘制投影**：Android `TextPaint.setShadowLayer`（硬件加速下**只对文本生效**——正是文本阴影所需）· iOS `CATextLayer.shadow*` · 鸿蒙 `OH_Drawing_SetTextShadow + OH_Drawing_TextStyleAddShadow`（Typography 原生）。★语料 2×（glass-demo / p-formfactor 封面标题）。★诚实边界：多重阴影取首个；spread 无（CSS text-shadow 本无 spread）。"
+    },
+    {
       "id": "filter-backdrop",
       "css": "filter / backdrop-filter",
       "category": "paint",

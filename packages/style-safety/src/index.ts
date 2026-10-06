@@ -29,7 +29,7 @@ export const TRANSFORM_PROPS = ['transform'] as const
 //   理由（规范 §3.1）：数值无跨端意义 + 任意数值是收敛模型的逃生口 + 语义才可编译期校验。
 //   ★两处白名单必须同步（本包与 contracts/style.ts 的 STYLE_PROP_LEVELS）——
 //     分叉会造成"同一属性编译期允许、运行时拒绝"的半开状态（本仓铁律 #9 同源）。
-export const FORBIDDEN_PROPS = ['display', 'float', 'position', 'backdropFilter', 'boxShadow', 'filter', 'overflow', 'zIndex'] as const
+export const FORBIDDEN_PROPS = ['display', 'float', 'position', 'backdropFilter', 'boxShadow', 'textShadow', 'filter', 'overflow', 'zIndex'] as const
 
 export type StyleGuardMode = 'strict' | 'loose' | 'off'
 

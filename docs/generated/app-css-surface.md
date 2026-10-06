@@ -43,9 +43,12 @@
 | `gridTemplateRows` | 布局 | — | ⚠ 无 | px/数字 |
 | `gridColumn` | 布局 | — | ⚠ 无 | px/数字 |
 | `gridRow` | 布局 | — | ⚠ 无 | px/数字 |
+| `gridTemplateAreas` | 布局 | — | ⚠ 无 | px/数字 |
+| `gridArea` | 布局 | — | ⚠ 无 | px/数字 |
 | `aspectRatio` | 布局 | — | ⚠ 无 | px/数字 |
 | `pointerEvents` | 布局 | — | ⚠ 无 | px/数字 |
 | `justifySelf` | 布局 | JustifySelf | ◐ 矩阵已声明 | px/数字 |
+| `gridAutoFlow` | 布局 | GridAutoFlow | ◐ 矩阵已声明 | px/数字 |
 | `whiteSpace` | 布局 | TextWrap | ◐ 矩阵已声明 | px/数字 |
 | `wordBreak` | 布局 | WordBreak | ◐ 矩阵已声明 | px/数字 |
 | `backgroundColor` | 绘制 | Color | ✅ 白名单 | 颜色字符串 |
@@ -76,7 +79,15 @@
 | `borderLeftStyle` | 绘制 | BorderStyle | ◐ 矩阵已声明 | px/数字 |
 | `opacity` | 绘制 | Opacity | ✅ 白名单 | px/数字 |
 | `boxShadow` | 绘制 | — | ❌ 禁止 | px/数字 |
+| `textShadow` | 绘制 | — | ❌ 禁止 | px/数字 |
 | `transform` | 绘制 | Transform | ✅ 白名单 | px/数字 |
+| `backgroundSize` | 绘制 | BackgroundSize | ◐ 矩阵已声明 | px/数字 |
+| `backgroundPosition` | 绘制 | BackgroundPosition | ◐ 矩阵已声明 | px/数字 |
+| `backgroundRepeat` | 绘制 | BackgroundRepeat | ◐ 矩阵已声明 | px/数字 |
+| `outlineWidth` | 绘制 | OutlineWidth | ◐ 矩阵已声明 | px/数字 |
+| `outlineColor` | 绘制 | Color | ◐ 矩阵已声明 | px/数字 |
+| `outlineStyle` | 绘制 | BorderStyle | ◐ 矩阵已声明 | px/数字 |
+| `outlineOffset` | 绘制 | OutlineOffset | ◐ 矩阵已声明 | px/数字 |
 | `widthRatio` | 派生（比例） | — | ⚠ 无 | 宽高百分比 → 比例字段 |
 | `heightRatio` | 派生（比例） | — | ⚠ 无 | 宽高百分比 → 比例字段 |
 | `marginAuto` | 派生（比例） | — | ⚠ 无 | 宽高百分比 → 比例字段 |
@@ -95,11 +106,11 @@
 > 本页的 App 折叠字段是**引擎字段层**（Layer-3：静态 CSS 折叠 + 框架 `p-*` 语义组件产出的目标字段）。两层职责不同，
 > 交集**不构成缺陷**；但**未登记的新交集** = "开发者能在 App 写一个语义层禁止的属性" = 收敛模型逃生口 ⇒ 棘轮判红。
 
-- **① CSS 矩阵级别声明**（信息）：App 引擎接受面未在 CSS 矩阵声明的字段：`flexDirection` `flexWrap` `alignContent` `flexBasis` `gap` `rowGap` `columnGap` `position` `top` `left` `right` `bottom` `overflow` `gridTemplateColumns` `gridTemplateRows` `gridColumn` `gridRow` `aspectRatio` `pointerEvents` `fontSize` `fontFamily` `lineHeight` `textOverflow` `letterSpacing` `textDecoration` `visibility` `boxShadow`（矩阵是**语义子集**，引擎面更宽属正常）
-- **② 已登记的分层差异**（棘轮硬判据）：App 接受面 ∩ FORBIDDEN = `display` `position` `overflow` `boxShadow`
-  - 已登记（引擎字段层需要）：`display` `position` `overflow` `boxShadow`
+- **① CSS 矩阵级别声明**（信息）：App 引擎接受面未在 CSS 矩阵声明的字段：`flexDirection` `flexWrap` `alignContent` `flexBasis` `gap` `rowGap` `columnGap` `position` `top` `left` `right` `bottom` `overflow` `gridTemplateColumns` `gridTemplateRows` `gridColumn` `gridRow` `gridTemplateAreas` `gridArea` `aspectRatio` `pointerEvents` `fontSize` `fontFamily` `lineHeight` `textOverflow` `letterSpacing` `textDecoration` `visibility` `boxShadow` `textShadow`（矩阵是**语义子集**，引擎面更宽属正常）
+- **② 已登记的分层差异**（棘轮硬判据）：App 接受面 ∩ FORBIDDEN = `display` `position` `overflow` `boxShadow` `textShadow`
+  - 已登记（引擎字段层需要）：`display` `position` `overflow` `boxShadow` `textShadow`
   - **未登记（新增即红）**：∅ ✅
-- **③ runtime 白名单**（信息）：不在 runtime 白名单且矩阵未声明：`flexDirection` `flexWrap` `alignContent` `flexBasis` `rowGap` `columnGap` `position` `overflow` `gridTemplateColumns` `gridTemplateRows` `gridColumn` `gridRow` `aspectRatio` `pointerEvents` `fontFamily` `textOverflow` `textDecoration` `visibility` `boxShadow`（同步属分层差异）
+- **③ runtime 白名单**（信息）：不在 runtime 白名单且矩阵未声明：`flexDirection` `flexWrap` `alignContent` `flexBasis` `rowGap` `columnGap` `position` `overflow` `gridTemplateColumns` `gridTemplateRows` `gridColumn` `gridRow` `gridTemplateAreas` `gridArea` `aspectRatio` `pointerEvents` `fontFamily` `textOverflow` `textDecoration` `visibility` `boxShadow` `textShadow`（同步属分层差异）
 
 ## 3. 与 Web/MP 的差异（诚实边界）
 

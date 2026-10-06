@@ -1,9 +1,9 @@
 # CSS Web 全量能力清单（自动生成——勿手改；生成器 scripts/gen-css-feature-inventory.mjs）
 
 > 总 949 项（property 651 · selector 144 · at-rule 19 · function 105 · unit 30）
-> 实现：**not-started** 542 · **excluded** 280 · **implemented** 124 · **partial** 3
-> 优先级：P2 115 · excluded 280 · P0 17 · done 124 · P1 413
-> ★**可推项（非已实现/非排除）**：545（其中 **P0 17**）
+> 实现：**not-started** 541 · **excluded** 280 · **implemented** 125 · **partial** 3
+> 优先级：P2 115 · excluded 280 · P0 16 · done 125 · P1 413
+> ★**可推项（非已实现/非排除）**：544（其中 **P0 16**）
 
 ## P0 —— 语料在用但未实现（真实需求，最优先）
 
@@ -15,7 +15,6 @@
 | `grid-auto-rows` | standard | CSS Grid Layout | 1 | not-started | — |
 | `overscroll-behavior-y` | standard | CSS Overscroll Behavior | 1 | not-started | — |
 | `place-items` | standard | CSS Box Alignment | 1 | not-started | — |
-| `text-shadow` | standard | CSS Text Decoration | 2 | not-started | 未接：文本阴影（证据：未接） |
 | `transition-property` | standard | CSS Transitions | 1 | not-started | — |
 | `transition-timing-function` | standard | CSS Transitions | 1 | not-started | — |
 | `will-change` | standard | CSS Will Change | 1 | not-started | — |

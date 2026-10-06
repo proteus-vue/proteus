@@ -183,6 +183,8 @@ export interface NormalizedStyle {
   flexBasis?: string
   transform?: string
   boxShadow?: string
+  // ★★★text-shadow 项（2026-10-08）：文本阴影（浏览器 computed 规范串 `color dxpx dypx blurpx`）
+  textShadow?: string
   gridTemplateColumns?: string
   gridTemplateRows?: string
   gridColumn?: string
@@ -472,6 +474,8 @@ const STYLE_KEYS = new Set([
   // ★★★背景定位家族（2026-10-07）：size/position/repeat（与接口/覆盖表同批——闭集纪律）
   'backgroundSize', 'backgroundPosition', 'backgroundRepeat',
   'aspectRatio', 'flexBasis', 'transform', 'boxShadow',
+  // ★★★text-shadow 项（2026-10-08）：文本阴影（与 boxShadow 同族字符串键）
+  'textShadow',
   'gridTemplateColumns', 'gridTemplateRows', 'gridColumn', 'gridRow',
   // ★★★grid-template-areas 项（2026-10-08）：命名区域模板 + 命名区引用
   'gridTemplateAreas', 'gridArea',
@@ -533,6 +537,7 @@ export function validateStyleSnapshot(snap: unknown): ValidationResult {
         || k === 'outlineStyle'   // ★★★outline 族项（2026-10-08）：轮廓线型（字符串键）
         || k === 'flexWrap' || k === 'alignContent'
         || k === 'aspectRatio' || k === 'flexBasis' || k === 'transform' || k === 'boxShadow'
+        || k === 'textShadow'   // ★★★text-shadow 项（2026-10-08）
         || k === 'gridTemplateColumns' || k === 'gridTemplateRows' || k === 'gridColumn' || k === 'gridRow'
         || k === 'gridTemplateAreas' || k === 'gridArea'   // ★★★grid-template-areas 项（2026-10-08）
       ) {
