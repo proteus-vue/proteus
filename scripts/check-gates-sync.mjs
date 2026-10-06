@@ -80,6 +80,9 @@ const LOCAL_ONLY = {
   //   校验 docs/proteus-host-separation-ledger.md 自洽（已落地项判据真实存在 · 进行/未做写明范围 · 范围外给理由 · 必需行在场）。
   //   与 check:host-layering 同族（宿主侧门禁，开发机跑——CI 无宿主源码/台账语境差异）。
   'check:host-separation-ledger': '宿主关注点分离完成度台账自洽门禁——与 check:host-layering 同族（开发机跑）',
+  // ★★★宿主 invoke 方法契约（B2·G4）：各端声明 ⊆ 契约 + screen.* 三端一致 + 覆盖率如实。
+  //   与 check:host-layering 同族（宿主侧门禁，开发机跑）。
+  'check:host-invoke-contract': '宿主 invoke 方法契约门禁（screen.* 一致 + 能力 ⊆ 契约）——与 check:host-layering 同族（开发机跑）',
   // ★C3 编译期基线：绝对毫秒跨机不可比（本仓既有认识：异构 CI 同机可达 1.6×），
   //   判据虽以比值为主（体积膨胀比），但全量/增量仍带宽松绝对上界 ⇒
   //   在 CI 共享 runner 上会因机器差异产生噪声红。⇒ 归**开发机**：改编译器后本地跑。

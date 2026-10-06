@@ -44,6 +44,6 @@
     "README.md"
   ],
   "scripts": {
-    "build": "rm -rf dist && tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/app-navigation.ts src/screen-executor.ts src/screen-executor-host.ts --bundle --format=esm --platform=neutral --outdir=dist --external:@vue/runtime-core"
+    "build": "rm -rf dist && tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/app-navigation.ts src/screen-executor.ts src/screen-executor-host.ts src/tab-bar-spec.ts src/host-invoke-contract.ts --bundle --format=esm --platform=neutral --outdir=dist --external:@vue/runtime-core"
   }
 }
