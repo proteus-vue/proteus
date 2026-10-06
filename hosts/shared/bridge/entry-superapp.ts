@@ -13,7 +13,9 @@ import { createAppNavigation } from '@proteus-vue/render-backend/app-navigation'
 import type { AppNavigation } from '@proteus-vue/render-backend/app-navigation'
 import { createRouter, type RouterInstance } from '@proteus-vue/router'
 import type { RouteRecord } from '@proteus-vue/router/types'
-import { APP_SCREEN_CONTENT, APP_SCREEN_REGISTRY } from './app-screen-content.generated'
+import { APP_SCREEN_CONTENT, APP_SCREEN_REGISTRY, APP_RUNTIME_CONTENT } from './app-screen-content.generated'
+import { createSuperappRuntime } from '@proteus-vue/render-backend'
+import type { SuperappRuntime } from '@proteus-vue/render-backend'
 
 type HostInvoke = (method: string, argsJson: string) => string
 
@@ -194,3 +196,85 @@ export interface SuperappDriveState {
     const g = globalThis as unknown as { __SUPERAPP_DRIVE__?: SuperappDriveState }
     return JSON.stringify(g.__SUPERAPP_DRIVE__ ?? { pending: false, log: [], state: { error: '未驱动' } })
   }
+
+/* ═══════════ ★★★B1：**统一运行期渲染入口**（App 壳 = 运行期实例化 + 手势 + 导航）═══════════
+ * 【它替代什么】此前 App 壳渲染走**静态屏内容**（宿主读 app-screen-content.json → VaporRenderHost.mount），
+ *   无事件/响应式/导航。现在：宿主（`SuperappActivity.renderCurrent`）改为调本函数，由
+ *   `createSuperappRuntime`（共享运行期）**实例化当前屏**并交 `proteusHost.mount` 上屏；
+ *   手势经 `proteusHost.onGesture` 反向回调 → 共享 `dispatchGesture` 派发 → handler 改数据 → `applyOps`。
+ * 【与导航的关系】`$nav('目标')` 动作 → 本入口的 `navigate` → 共享 `router.push`（与 Web/MP 同形）。
+ * 【为什么懒创建 runtime】屏实例态（计数/列表）要跨导航保留 ⇒ 只建一次；视口变化（旋转）暂不重建（诚实边界）。
+ */
+interface SuperappRuntimeHostShape {
+  mount(treeJson: string): string
+  applyOps(opsJson: string): string
+  onGesture?(cbName: string): void
+}
+;(globalThis as unknown as { __proteusSuperappRender?: (argsJson: string) => string })
+  .__proteusSuperappRender = (argsJson: string) => {
+    const g = globalThis as unknown as {
+      __SUPERAPP__?: SuperappApp
+      __SUPERAPP_RUNTIME__?: SuperappRuntime
+      proteusHost?: SuperappRuntimeHostShape
+    }
+    const app = g.__SUPERAPP__
+    if (!app) return JSON.stringify({ ok: false, error: '未启动（先 __proteusSuperappBootJson）' })
+    if (!g.proteusHost || typeof g.proteusHost.mount !== 'function') {
+      return JSON.stringify({ ok: false, error: '宿主缺少运行期原语（mount/applyOps）——需 SuperappRuntimeHost' })
+    }
+    let args: { name: string; viewport: { width: number; height: number } }
+    try {
+      args = JSON.parse(argsJson) as typeof args
+    } catch (e) {
+      return JSON.stringify({ ok: false, error: 'render 入参非法：' + String((e as Error)?.message ?? e) })
+    }
+    let runtime = g.__SUPERAPP_RUNTIME__
+    if (!runtime) {
+      // ★$nav → ① 共享 router.push（更新路由栈；与 Web/MP 同形）+ ② **同步挂载目标屏**
+      //   （`mountScreen` 直调 `host.mount` ⇒ 视觉即时切换；router 的异步续体由宿主泵驱动）。
+      //   ★为什么同步挂载：宿主 eval 是同步的，异步 nav 续体要等宿主泵 ⇒ 先挂上，栈由 push 兜底。
+      const navHandler = (t: string) => {
+        ;(globalThis as unknown as { __SUPERAPP_NAVLOG__?: string[] }).__SUPERAPP_NAVLOG__ =
+          ((globalThis as unknown as { __SUPERAPP_NAVLOG__?: string[] }).__SUPERAPP_NAVLOG__ ?? []).concat(t)
+        void app.router.push({ name: t } as never)
+        try { g.__SUPERAPP_RUNTIME__!.mountScreen(t) } catch { /* 目标屏无产物 ⇒ 保持当前（诚实） */ }
+      }
+      runtime = createSuperappRuntime({
+        artifacts: APP_RUNTIME_CONTENT as never,
+        host: g.proteusHost as never,
+        viewport: args.viewport,
+        navigate: navHandler,
+      })
+      g.__SUPERAPP_RUNTIME__ = runtime
+    }
+    const ok = runtime.mountScreen(args.name)
+    return JSON.stringify({ ok, current: runtime.current() })
+  }
+
+/** ★宿主调（可选）：派发一次语义手势（宿主也可走 onGesture 反向回调；此入口供探针/驱动）。 */
+;(globalThis as unknown as { __proteusSuperappGesture?: (argsJson: string) => string })
+  .__proteusSuperappGesture = (argsJson: string) => {
+    const g = globalThis as unknown as { __SUPERAPP_RUNTIME__?: SuperappRuntime }
+    if (!g.__SUPERAPP_RUNTIME__) return JSON.stringify({ ok: false, handled: false, error: '运行期未启动' })
+    try {
+      const a = JSON.parse(argsJson) as { type: string; chain: number[] }
+      const r = g.__SUPERAPP_RUNTIME__.dispatchGesture(a.type, a.chain ?? [])
+      return JSON.stringify({ ok: true, ...r })
+    } catch (e) {
+      return JSON.stringify({ ok: false, error: String((e as Error)?.message ?? e) })
+    }
+  }
+
+/** ★B1 判据用：读运行期调试读数（当前屏 / nav 日志 / notes）。 */
+;(globalThis as unknown as { __proteusSuperappDebug?: () => string }).__proteusSuperappDebug = () => {
+  const g = globalThis as unknown as {
+    __SUPERAPP_RUNTIME__?: SuperappRuntime
+    __SUPERAPP_NAVLOG__?: string[]
+    __SUPERAPP_NOTES__?: string[]
+  }
+  return JSON.stringify({
+    current: g.__SUPERAPP_RUNTIME__?.current() ?? '',
+    navlog: g.__SUPERAPP_NAVLOG__ ?? [],
+    notes: g.__SUPERAPP_NOTES__ ?? [],
+  })
+}

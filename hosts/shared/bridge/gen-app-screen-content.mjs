@@ -52,7 +52,10 @@ try {
   for (const rr of (arMod.routes ?? [])) {
     if (rr.meta && rr.meta.title) tabLabels[rr.name] = rr.meta.title
   }
-  const indexName = Object.keys(screens)[0] ?? ((arMod.routes && arMod.routes[0] && arMod.routes[0].name) || '')
+  // ★★优先 `index`（与 Web RouterView 缺省回退 / MP pages[0]=index 同口径）——
+  //   否则 App 落地页会随 routes 字母序漂移（实测：landed on background-position）。
+  const indexName = (screens && screens['index']) ? 'index'
+    : (Object.keys(screens)[0] ?? ((arMod.routes && arMod.routes[0] && arMod.routes[0].name) || ''))
   // ★真实应用入口用 createRouter(routes, { adapter })（与 Web/MP 同形）⇒ 共带 routes
   registry = { screens, tabNames, tabLabels, indexName, routes: arMod.routes ?? [] }
 } catch (e) {
