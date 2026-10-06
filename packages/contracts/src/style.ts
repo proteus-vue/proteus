@@ -36,6 +36,10 @@ export type StylePropLevel =
   //   值集 = 四端可表达子集（row / column / dense / column dense）；内核 taffy `GridAutoFlow` 原生（row/column/rowDense/columnDense）。
   //   四同步（INV-CE-07）：本表 + runtime PROP_TYPES + compiler 静态校验 + 注册表 VALUE_TYPE_BY_LEVEL。
   | 'GridAutoFlow'
+  // ★★★outline 族项（2026-10-08 · css:next P0·3× · Basic UI）：**轮廓**（盒外/内偏移的环，不占布局）。
+  //   `outline` 简写折为 width+style+color；`outline-offset` 单独（可为负）。App 宿主绘制（host-only paint，同 border/box-shadow，**内核零改动**）。
+  | 'OutlineWidth'
+  | 'OutlineOffset'
   // ★★★word-break 项（2026-10-06 · css:next P0·7× · CSS Text）：**行内断词策略**（继承属性）。
   //   值集 = 四端可表达子集（normal / break-all——Skyline 官方表即此二值）；keep-all（CJK 专用，Skyline 无）
   //   / break-word（Skyline 无，仅 Web+App 可表达）/ auto-phrase（实验）⇒ 编译期诊断跳过（v1 边界）。
@@ -105,6 +109,11 @@ export const STYLE_PROP_LEVELS = {
   justifySelf: 'JustifySelf',
   // ★★★grid-auto-flow 项（2026-10-08）：类 grid 容器的自动放置（row/column/dense/column dense）
   gridAutoFlow: 'GridAutoFlow',
+  // ★★★outline 族项（2026-10-08）：轮廓（环）+ 偏移（盒外/内）
+  outlineWidth: 'OutlineWidth',
+  outlineColor: 'Color',
+  outlineStyle: 'BorderStyle',
+  outlineOffset: 'OutlineOffset',
   // ★★★word-break 项（2026-10-06）：行内断词策略（normal/break-all/break-word；keep-all 等诊断跳过）
   wordBreak: 'WordBreak',
   // ★★★背景定位家族（2026-10-07）：背景图/渐变的尺寸/位置/平铺（作用对象 = 背景图层的图像盒）

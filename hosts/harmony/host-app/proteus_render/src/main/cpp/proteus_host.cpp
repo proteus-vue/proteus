@@ -566,6 +566,16 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
             char bb[96]; snprintf(bb, sizeof(bb), ",\"borderWidth\":%.2f,\"borderColor\":%u", bw * density, bc);
             arr += bb;
         }
+        // ★★★outline 族项（2026-10-08）：轮廓宽/色/线型/偏移（px ×density；offset 可负）
+        {
+            double ow = 0, ooff = 0; jnum(it.c_str(), it.size(), "outlineWidth", &ow); jnum(it.c_str(), it.size(), "outlineOffset", &ooff);
+            std::string ocCss, osV; jstr(it.c_str(), it.size(), "outlineColor", &ocCss); jstr(it.c_str(), it.size(), "outlineStyle", &osV);
+            if (ow > 0 && !ocCss.empty() && osV != "none") {
+                uint32_t oc = hexToArgb(ocCss);
+                char ob[160]; snprintf(ob, sizeof(ob), ",\"outlineWidth\":%.2f,\"outlineOffset\":%.2f,\"outlineColor\":%u,\"outlineStyle\":\"%s\"", ow * density, ooff * density, oc, osV.c_str());
+                arr += ob;
+            }
+        }
         // ★★★逐边 border 批（2026-10-05）：逐边宽度/颜色透传（扁平键 `bwTop`/`bcTop`…；-1 = 未声明 ⇒ 回落 uniform）。
         //   宿主用 ArkUI 原生 `ARKUI_EDGE_DIRECTION_{TOP,RIGHT,BOTTOM,LEFT}` 逐边绘制。
         {

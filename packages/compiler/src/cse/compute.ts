@@ -47,6 +47,8 @@ export type CssComputedValue =
 const COLOR_PROPS = new Set([
   'color', 'background-color',
   'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color',
+  // ★★★outline 族项（2026-10-08）：轮廓色
+  'outline-color',
 ])
 const NUMBER_PROPS = new Set(['opacity', 'flex-grow', 'flex-shrink', 'z-index', 'order', 'aspect-ratio'])
 const ENUM_PROPS = new Set([
@@ -54,6 +56,8 @@ const ENUM_PROPS = new Set([
   'white-space', 'text-decoration-line', 'flex-direction', 'flex-wrap', 'justify-content',
   'align-items', 'align-content', 'align-self', 'box-sizing', 'pointer-events',
   'border-top-style', 'border-right-style', 'border-bottom-style', 'border-left-style',
+  // ★★★outline 族项（2026-10-08）：轮廓线型
+  'outline-style',
   // ★★★justify-self 项（2026-10-06）：网格项行内轴自对齐（关键字枚举，小写归一）
   'justify-self',
   // ★★★grid-auto-flow 项（2026-10-08）：类 grid 容器的自动放置（关键字枚举）
@@ -68,6 +72,8 @@ const ENUM_PROPS = new Set([
 /** px-only 长度（CSS 不接受 %：border-width / 字距） */
 const PX_LENGTH_PROPS = new Set([
   'border-top-width', 'border-right-width', 'border-bottom-width', 'border-left-width', 'letter-spacing',
+  // ★★★outline 族项（2026-10-08）：轮廓宽 + 偏移（偏移可为负）
+  'outline-width', 'outline-offset',
   // font-size 单独处理（em/%/rem 均可绝对化）
 ])
 /** 可百分比的长度 + 其 % 的基准（不可绝对化 ⇒ ratio；top/left 系列按含块，margin/padding 按父宽） */
@@ -755,6 +761,7 @@ function mapToIrField(prop: string, val: CssComputedValue): { field: string; val
     'background-position': 'backgroundPosition',
     'background-repeat': 'backgroundRepeat',
     'box-sizing': 'boxSizing',
+    'outline-style': 'outlineStyle',
     'pointer-events': 'pointerEvents',
     // ★white-space：App 端由引擎消费（`nowrap` 是常见排版约束——批次 29 已加 no-op 支持）；
     //   与 APP_ENUM_VALUES 的封闭集扩展保持一致（App 引擎侧未列值时由 applier 决定，不静默丢）
@@ -768,12 +775,14 @@ function mapToIrField(prop: string, val: CssComputedValue): { field: string; val
     'padding-top': 'paddingTop', 'padding-right': 'paddingRight', 'padding-bottom': 'paddingBottom', 'padding-left': 'paddingLeft',
     top: 'top', right: 'right', bottom: 'bottom', left: 'left',
     'row-gap': 'rowGap', 'column-gap': 'columnGap',
+    'outline-width': 'outlineWidth', 'outline-offset': 'outlineOffset',
   }
   const COLOR_IR: Record<string, string> = {
     color: 'color',
     'background-color': 'backgroundColor',
     'border-top-color': 'borderTopColor', 'border-right-color': 'borderRightColor',
     'border-bottom-color': 'borderBottomColor', 'border-left-color': 'borderLeftColor',
+    'outline-color': 'outlineColor',
   }
   if (prop in NUMERIC_IR) return { field: NUMERIC_IR[prop]!, value: val }
   if (prop in ENUM_IR) return { field: ENUM_IR[prop]!, value: val }

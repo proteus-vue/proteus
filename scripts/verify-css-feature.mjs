@@ -94,6 +94,8 @@ const PROBE_VALUES = {
   'justify-self': ['justify-self: center', 'justifySelf', 'center'],
   // ★★★grid-auto-flow 项（2026-10-08）：自动放置（Web computed 归一：row dense → dense）
   'grid-auto-flow': ['grid-auto-flow: column', 'gridAutoFlow', 'column'],
+  // ★★★outline 族项（2026-10-08）：轮廓偏移（Web computed 为 px）
+  'outline-offset': ['outline-offset: 2px', 'outlineOffset', { kind: 'absolute', dp: 2 }],
   // ★★★背景定位家族（2026-10-07）：size/position/repeat 探针（字符串原样透传——CSE 归一空白小写）
   'background-size': ['background-size: 50px 50px', 'backgroundSize', '50px 50px'],
   'background-position': ['background-position: 25px 10px', 'backgroundPosition', '25px 10px'],
@@ -142,7 +144,7 @@ if (!probe) {
     parity.irField = irField
     parity.irValue = irVal
     parity.computedProbe = Object.fromEntries(
-      Object.entries(computed).filter(([k]) => ['inset', 'top', 'right', 'bottom', 'left', 'overflow-x', 'overflow-y', 'white-space', 'word-break', 'justify-self', 'grid-area', 'background-color', 'color', 'border-radius', 'text-align', 'opacity', 'font-size', 'letter-spacing', 'line-height', 'flex-direction', 'justify-content', 'align-items', 'gap', 'border-bottom-width', 'border-top-width', 'border-left-width', 'border-right-width', 'border-bottom-color', 'border-top-color', 'border-left-color', 'border-right-color', 'border-style', 'border-top-style', 'border-bottom-style', 'border-top-left-radius', 'border-bottom-right-radius', 'background-size', 'background-position', 'background-repeat', 'grid-auto-flow'].includes(k)),
+      Object.entries(computed).filter(([k]) => ['inset', 'top', 'right', 'bottom', 'left', 'overflow-x', 'overflow-y', 'white-space', 'word-break', 'justify-self', 'grid-area', 'background-color', 'color', 'border-radius', 'text-align', 'opacity', 'font-size', 'letter-spacing', 'line-height', 'flex-direction', 'justify-content', 'align-items', 'gap', 'border-bottom-width', 'border-top-width', 'border-left-width', 'border-right-width', 'border-bottom-color', 'border-top-color', 'border-left-color', 'border-right-color', 'border-style', 'border-top-style', 'border-bottom-style', 'border-top-left-radius', 'border-bottom-right-radius', 'background-size', 'background-position', 'background-repeat', 'grid-auto-flow', 'outline-width', 'outline-offset', 'outline-style'].includes(k)),
     )
     // 判据：IR 出值且与浏览器 resolved 语义一致（按形态）
     if (irVal === undefined) {
@@ -202,10 +204,13 @@ const END_CHECK = (() => {
 //   animation → 动画包）——parity（CSE IR 比对）与 endsMapped（IR 字段映射）**不适用** ⇒ 判 n/a；
 //   实现态由组件/独立通道承接（本包只如实标注通道，通道内交付由对应包的门禁守）。
 const channelBased = entry.channel === 'component' || entry.channel === 'independent'
+// ★★★简写展开项（border/background/outline…）：交付 = 展开为长手（长手各自验）⇒ parity/ends 不适用
+const shorthandBased = /简写展开/.test(entry.implNote || '')
+const nA = channelBased || shorthandBased
 const gates = {
   implemented: entry.impl === 'implemented',
-  parity: channelBased ? null : parity.pass === true,
-  endsMapped: channelBased
+  parity: nA ? null : parity.pass === true,
+  endsMapped: nA
     ? null
     : entry.kind !== 'property' ? null : END_CHECK.skyline.startsWith('可表达') && END_CHECK.app.startsWith('可表达'),
 }

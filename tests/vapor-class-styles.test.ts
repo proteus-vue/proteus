@@ -362,12 +362,19 @@ describe('★C1 最小切片 · SFC <style> 单类规则 → class→节点样�
   it('★⑦n Web 默认值/重置声明（批次 26/27）：不诊断；有 App 字段的记默认值', () => {
     // 【为什么（以 web 为基准）】这些是「无视觉变化」或「= App 默认」的写法；报成缺口是假阳性。
     //   ★批次 27：有 App 字段的**必须记录默认值**（否则 `.b{border:none}` 覆盖不了 `.a{border:1px}`）。
-    // 无 App 字段 ⇒ 空记录（不落键）：text-decoration / outline / background-image
-    for (const css of ['text-decoration: none', 'outline: none', 'background-image: none']) {
+    // 无 App 字段 ⇒ 空记录（不落键）：text-decoration / background-image
+    for (const css of ['text-decoration: none', 'background-image: none']) {
       const d: string[] = []
       const out = parseStaticStyle(css, (m: string) => d.push(m))
       expect(d.length, css + ' 不应诊断').toBe(0)
       expect(Object.keys(out).length, css + ' 不应落键').toBe(0)
+    }
+    // ★★★outline 族项（2026-10-08）：outline 已成真字段 ⇒ `outline:none` 记**重置**（轮廓宽=0，级联覆盖生效）
+    {
+      const d: string[] = []
+      const out = parseStaticStyle('outline: none', (m: string) => d.push(m))
+      expect(d.length, 'outline: none 不应诊断').toBe(0)
+      expect(out.outlineWidth, 'outline: none → outlineWidth=0（重置，可级联覆盖）').toBe(0)
     }
     // ★批次 39：transform 已成真字段 ⇒ `transform:none` 记录重置（null），级联能覆盖低优先级的 translate/scale/rotate
     expect((parseStaticStyle('transform: none', () => {}) as { transform?: unknown }).transform, 'transform:none ⇒ 重置 null').toBeNull()

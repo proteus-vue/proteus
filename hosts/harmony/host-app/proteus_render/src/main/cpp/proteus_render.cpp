@@ -44,6 +44,7 @@
 //   —— 与文本同一条 content modifier 画布路径（该路径已在真机验证可用）
 #include <native_drawing/drawing_brush.h>
 #include <native_drawing/drawing_pen.h>
+#include <native_drawing/drawing_path_effect.h>
 #include <native_drawing/drawing_path.h>
 #include <native_drawing/drawing_rect.h>
 #include <native_drawing/drawing_round_rect.h>
@@ -154,6 +155,7 @@ static ArkUI_RenderNodeHandle g_rootNode = nullptr;
 struct VaporChannelState {
     double radius = 0;
     std::string grad;      // "1:N"（1=linear；N=色标数）
+    std::string outline;   // ★★★outline 族项（2026-10-08）："1" = 有轮廓
     std::string glow;      // "N:alpha"
     int clip = 0;          // 0=无；1=inset…
     double strokeLen = 0;
@@ -298,6 +300,11 @@ struct TextDrawSpec {
     std::vector<float> gradPos;
     // ★★★背景定位家族（2026-10-07）：图像盒 size/position/repeat（空=未声明 ⇒ 恒填满）
     std::string bgSize, bgPos, bgRepeat;
+    // ★★★outline 族项（2026-10-08）：轮廓宽/偏移(可负)/色/线型
+    bool hasOutline = false;
+    double outlineWidth = 0, outlineOffset = 0;
+    uint32_t outlineColor = 0;
+    bool outlineDotted = false, outlineDashed = false;
     bool hasGlow = false;
     uint32_t glowColor = 0;
     double glowRadius = 0, glowAlpha = 1;
@@ -421,6 +428,21 @@ static void drawChannelsAndText(OH_Drawing_Canvas* canvas, const TextDrawSpec* s
         }
         OH_Drawing_PointDestroy(p0);
         OH_Drawing_PointDestroy(p1);
+    }
+    // ★★★outline 族项（2026-10-08）：轮廓环（画在盒 ± offset；正=外扩 / 负=内缩；不占布局）
+    if (spec->hasOutline && spec->outlineWidth > 0 && spec->outlineColor != 0) {
+        const double ow = spec->outlineWidth, ooff = spec->outlineOffset;
+        OH_Drawing_Pen* op = OH_Drawing_PenCreate();
+        OH_Drawing_PenSetAntiAlias(op, true);
+        OH_Drawing_PenSetColor(op, spec->outlineColor);
+        OH_Drawing_PenSetWidth(op, (float)ow);
+        if (spec->outlineDotted) { float dv[2] = {0.01f, (float)ow * 2.0f}; OH_Drawing_PenSetPathEffect(op, OH_Drawing_CreateDashPathEffect(dv, 2, 0)); OH_Drawing_PenSetCap(op, LINE_ROUND_CAP); }
+        else if (spec->outlineDashed) { float iv[2] = {(float)ow * 3.0f, (float)ow * 2.0f}; OH_Drawing_PenSetPathEffect(op, OH_Drawing_CreateDashPathEffect(iv, 2, 0)); }
+        OH_Drawing_CanvasAttachPen(canvas, op);
+        OH_Drawing_Rect* orr = OH_Drawing_RectCreate((float)(-ooff + ow/2.0), (float)(-ooff + ow/2.0), (float)(w + ooff - ow/2.0), (float)(h + ooff - ow/2.0));
+        if (orr != nullptr) { OH_Drawing_CanvasDrawRect(canvas, orr); OH_Drawing_RectDestroy(orr); }
+        OH_Drawing_CanvasDetachPen(canvas);
+        OH_Drawing_PenDestroy(op);
     }
     // ③ 发光（分层同心描边：由外向内 alpha 递减——与 Android `glow → 分层同心描边` 同构）
     if (spec->hasGlow && spec->glowLayers > 0) {
@@ -576,7 +598,7 @@ static void DrawTextCallback(ArkUI_DrawContext* context, void* userData) {
     // ★★早退条件放宽（2026-10-03）：**有通道**（渐变/发光/裁剪/描边）也要进回调
     //   —— 此前只判 `text.empty()` ⇒ 纯通道节点（无文本）永远不画（四通道全丢）。
     if (spec == nullptr) return;
-    if (spec->text.empty() && !spec->hasGrad && !spec->hasGlow && !spec->hasClip && !spec->hasStroke) return;
+    if (spec->text.empty() && !spec->hasGrad && !spec->hasGlow && !spec->hasClip && !spec->hasStroke && !spec->hasOutline) return;
     void* canvasRaw = OH_ArkUI_DrawContext_GetCanvas(context);
     if (canvasRaw == nullptr) return;
     auto* canvas = static_cast<OH_Drawing_Canvas*>(canvasRaw);
@@ -1066,6 +1088,17 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
                 if (spec->hasGrad) {
                     ch.grad = std::string(spec->gradLinear ? "1" : "2") + ":" + std::to_string(spec->gradColors.size());
                     hasAnyChannel = true;
+                }
+            }
+            // ★★★outline 族项（2026-10-08）：轮廓宽/偏移(可负)/色/线型（独立块——非 grad 专属）
+            if (it.find("\"outlineWidth\":") != std::string::npos) {
+                double ow = 0, oo = 0; jsonNumber(it, "outlineWidth", &ow); jsonNumber(it, "outlineOffset", &oo);
+                std::string osV; jsonString(it, "outlineStyle", &osV);
+                double oc = 0; jsonNumber(it, "outlineColor", &oc);
+                if (ow > 0 && oc != 0 && osV != "none") {
+                    spec->hasOutline = true; spec->outlineWidth = ow; spec->outlineOffset = oo; spec->outlineColor = (uint32_t)oc;
+                    spec->outlineDotted = (osV == "dotted"); spec->outlineDashed = (osV == "dashed");
+                    ch.outline = "1"; hasAnyChannel = true;
                 }
             }
             // 发光：{"color":N,"radius":N,"alpha":N} → 分层同心描边

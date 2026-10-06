@@ -87,6 +87,9 @@ const VALUE_TYPE_BY_LEVEL = {
   JustifySelf: 'enum',
   // ★★★grid-auto-flow 项（2026-10-08）：自动放置枚举（与 runtime PROP_TYPES.GridAutoFlow 同集）
   GridAutoFlow: 'enum',
+  // ★★★outline 族项（2026-10-08）：轮廓宽度/偏移（长度）
+  OutlineWidth: 'length',
+  OutlineOffset: 'length',
   // ★★★word-break 项（2026-10-06）：行内断词策略值类型（与 runtime PROP_TYPES.WordBreak 同集）
   WordBreak: 'enum',  // ★★★背景定位家族（2026-10-07）：size/position/repeat 值类型（与 runtime PROP_TYPES 同集）
   BackgroundSize: 'enum',

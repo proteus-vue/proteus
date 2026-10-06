@@ -976,6 +976,58 @@ export const STYLE_IR_FIELDS: Record<string, StyleFieldSpec> = {
       inheritable: false,
     },
   },
+  "outlineColor": {
+    scope: "semantic",
+    domain: "paint",
+    valueType: "color",
+    sources: {
+      compiler: "APP_PAINT_FIELDS",
+      matrixLevel: "Color",
+      runtimeWhitelist: false,
+      runtimeForbidden: false,
+      consistencyMatrix: true,
+      inheritable: false,
+    },
+  },
+  "outlineOffset": {
+    scope: "semantic",
+    domain: "paint",
+    valueType: "length",
+    sources: {
+      compiler: "APP_PAINT_FIELDS",
+      matrixLevel: "OutlineOffset",
+      runtimeWhitelist: false,
+      runtimeForbidden: false,
+      consistencyMatrix: true,
+      inheritable: false,
+    },
+  },
+  "outlineStyle": {
+    scope: "semantic",
+    domain: "paint",
+    valueType: "enum",
+    sources: {
+      compiler: "APP_PAINT_FIELDS",
+      matrixLevel: "BorderStyle",
+      runtimeWhitelist: false,
+      runtimeForbidden: false,
+      consistencyMatrix: true,
+      inheritable: false,
+    },
+  },
+  "outlineWidth": {
+    scope: "semantic",
+    domain: "paint",
+    valueType: "length",
+    sources: {
+      compiler: "APP_PAINT_FIELDS",
+      matrixLevel: "OutlineWidth",
+      runtimeWhitelist: false,
+      runtimeForbidden: false,
+      consistencyMatrix: true,
+      inheritable: false,
+    },
+  },
   "overflow": {
     scope: "semantic",
     domain: "layout",
@@ -1305,15 +1357,15 @@ export const STYLE_IR_FIELDS: Record<string, StyleFieldSpec> = {
 
 /** 摘要（判据与官网数字读它——机器推导，非手写） */
 export const STYLE_IR_SUMMARY = {
-  total: 97,
-  semantic: 71,
+  total: 101,
+  semantic: 75,
   engineOnly: 26,
   byDomain: {
     "derived": 10,
     "edges": 8,
     "layout": 42,
     "matrix-only": 4,
-    "paint": 32,
+    "paint": 36,
     "special": 1,
   },
 } as const

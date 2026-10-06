@@ -60,6 +60,8 @@
 
 | 类别 | CSS | Web | Skyline | App 现状 | App 可扩展 | 策略 | 对齐 | 说明 |
 |---|---|---|---|---|---|---|---|---|
+| paint | `outline-offset` | not-measured | not-listed | supported | L2 | 宿主绘制 | conditional | ★★★outline 族项（2026-10-08）：轮廓与盒边的**偏移**（正=盒外 / 负=盒内；不影响布局）。Web 真值（真 Chromium）：`outline-offset: 2px` / `-2px` computed 即 px。App 宿主按偏移把环画在盒外/内（同 outline 通道）。 |
+| paint | `outline（+ outline-width/-color/-style 长手）` | not-measured | not-listed | supported | L2 | 宿主绘制 | conditional | ★★★outline 族项（2026-10-08 · css:next P0·3× · Basic User Interface）：**轮廓**（盒外/内偏移的环，**不占布局**，与 border 不同）。契约：新级别 OutlineWidth/OutlineOffset（+ outlineColor 复用 Color / outlineStyle 复用 BorderStyle）；编译器 APP_PAINT_FIELDS + 折叠（简写 `<width> <style> <color>` 序任意 + 长手 + offset 可负）；CSE 直通 outlineWidth/outlineColor/outlineStyle/outlineOffset；**宿主绘制**（host-only paint，同 border/box-shadow——**内核零改动**）；consistency 链。★诚实边界：① **Skyline 官方属性表（110 项）无 outline**（引擎锁死）；② 语料 3× 全在 `:focus-visible` 下（焦点环）——App **不支持状态伪类** ⇒ 语料到不了 App（**具名依赖**：焦点态需独立能力）；本项验**静态** outline。 |
 | layout | `width` | supported | supported | supported | L1 | 编译期折叠 | universal | px/数字 → 长度；百分比 → widthRatio（比例字段，非长度） |
 | layout | `height` | supported | supported | supported | L1 | 编译期折叠 | universal | px/数字 → 长度；百分比 → heightRatio |
 | layout | `min-width / max-width / min-height / max-height` | supported | supported | supported | L1 | 编译期折叠 | universal | px/数字；★批次 19：**百分比**（`max-width:100%` 不溢出 / `min-height:100%` 撑满）折为 `*Pct`（0..1）⇒ 内核 taffy 按父内容盒解析（min 缺省 0 / max 缺省 auto 语义不变） |
@@ -138,6 +140,8 @@
 
 | CSS | Web | Skyline | App | 受限原因 |
 |---|---|---|---|---|
+| `outline-offset` | not-measured | not-listed | supported | ★★★outline 族项（2026-10-08）：轮廓与盒边的**偏移**（正=盒外 / 负=盒内；不影响布局）。Web 真值（真 Chromium）：`outline-offs |
+| `outline（+ outline-width/-color/-style 长手）` | not-measured | not-listed | supported | ★★★outline 族项（2026-10-08 · css:next P0·3× · Basic User Interface）：**轮廓**（盒外/内偏移的环，**不占布局** |
 | `gap（+ row-gap / column-gap）` | partial | partial | supported | px/数字；★批次 31：**两值** `gap:<row> <col>` 与 **轴级** `row-gap`/`column-gap`（内核 `LStyle.row_gap/c |
 | `overflow: visible / hidden / scroll / auto` | partial | partial | supported | 引擎封闭集；auto 折叠为 taffy Scroll；★★★overflow-x 项（2026-10-06）：**单轴 overflow-x/y 已支持**（长手 + overf |
 | `margin/padding 1–4 值简写 + background 纯色简写 + flex 简写` | — | — | supported | ★批次 2/7（2026-10-04）：a) `margin: 8px 0` / `padding: 8px 12px` 按 CSS 标准展开为 {top,right,bottom |

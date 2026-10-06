@@ -36,6 +36,8 @@
           "borderRightWidth": 0,
           "borderBottomWidth": 0,
           "borderLeftWidth": 0,
+          "outlineWidth": 3,
+          "outlineOffset": 0,
           "borderTopLeftRadius": 0,
           "borderTopRightRadius": 0,
           "borderBottomRightRadius": 0,
@@ -64,8 +66,15 @@
             "b": 0,
             "a": 1
           },
+          "outlineColor": {
+            "r": 0,
+            "g": 0,
+            "b": 0,
+            "a": 1
+          },
           "borderTopStyle": "none",
           "borderRightStyle": "none",
+          "outlineStyle": "none",
           "borderBottomStyle": "none",
           "borderLeftStyle": "none",
           "opacity": 1,
@@ -131,6 +140,8 @@
           "borderRightWidth": 0,
           "borderBottomWidth": 0,
           "borderLeftWidth": 0,
+          "outlineWidth": 3,
+          "outlineOffset": 0,
           "borderTopLeftRadius": 18,
           "borderTopRightRadius": 18,
           "borderBottomRightRadius": 18,
@@ -159,8 +170,15 @@
             "b": 0,
             "a": 1
           },
+          "outlineColor": {
+            "r": 0,
+            "g": 0,
+            "b": 0,
+            "a": 1
+          },
           "borderTopStyle": "none",
           "borderRightStyle": "none",
+          "outlineStyle": "none",
           "borderBottomStyle": "none",
           "borderLeftStyle": "none",
           "opacity": 1,
@@ -218,6 +236,8 @@
           "borderRightWidth": 0,
           "borderBottomWidth": 0,
           "borderLeftWidth": 0,
+          "outlineWidth": 3,
+          "outlineOffset": 0,
           "borderTopLeftRadius": 0,
           "borderTopRightRadius": 0,
           "borderBottomRightRadius": 0,
@@ -246,8 +266,15 @@
             "b": 255,
             "a": 1
           },
+          "outlineColor": {
+            "r": 255,
+            "g": 255,
+            "b": 255,
+            "a": 1
+          },
           "borderTopStyle": "none",
           "borderRightStyle": "none",
+          "outlineStyle": "none",
           "borderBottomStyle": "none",
           "borderLeftStyle": "none",
           "opacity": 1,
@@ -311,6 +338,8 @@
           "borderRightWidth": 0,
           "borderBottomWidth": 0,
           "borderLeftWidth": 0,
+          "outlineWidth": 3,
+          "outlineOffset": 0,
           "borderTopLeftRadius": 0,
           "borderTopRightRadius": 0,
           "borderBottomRightRadius": 0,
@@ -339,8 +368,15 @@
             "b": 0,
             "a": 1
           },
+          "outlineColor": {
+            "r": 0,
+            "g": 0,
+            "b": 0,
+            "a": 1
+          },
           "borderTopStyle": "none",
           "borderRightStyle": "none",
+          "outlineStyle": "none",
           "borderBottomStyle": "none",
           "borderLeftStyle": "none",
           "opacity": 1,
@@ -404,6 +440,8 @@
           "borderRightWidth": 0,
           "borderBottomWidth": 0,
           "borderLeftWidth": 0,
+          "outlineWidth": 3,
+          "outlineOffset": 0,
           "borderTopLeftRadius": 4,
           "borderTopRightRadius": 4,
           "borderBottomRightRadius": 4,
@@ -432,8 +470,15 @@
             "b": 0,
             "a": 1
           },
+          "outlineColor": {
+            "r": 0,
+            "g": 0,
+            "b": 0,
+            "a": 1
+          },
           "borderTopStyle": "none",
           "borderRightStyle": "none",
+          "outlineStyle": "none",
           "borderBottomStyle": "none",
           "borderLeftStyle": "none",
           "opacity": 1,
@@ -499,6 +544,8 @@
           "borderRightWidth": 0,
           "borderBottomWidth": 0,
           "borderLeftWidth": 0,
+          "outlineWidth": 3,
+          "outlineOffset": 0,
           "borderTopLeftRadius": 0,
           "borderTopRightRadius": 0,
           "borderBottomRightRadius": 0,
@@ -527,8 +574,15 @@
             "b": 0,
             "a": 1
           },
+          "outlineColor": {
+            "r": 0,
+            "g": 0,
+            "b": 0,
+            "a": 1
+          },
           "borderTopStyle": "none",
           "borderRightStyle": "none",
+          "outlineStyle": "none",
           "borderBottomStyle": "none",
           "borderLeftStyle": "none",
           "opacity": 1,

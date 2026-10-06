@@ -17,20 +17,20 @@
       "unit": 30
     },
     "byImpl": {
-      "not-started": 548,
+      "not-started": 543,
       "excluded": 280,
-      "implemented": 117,
+      "implemented": 122,
       "partial": 4
     },
     "byPriority": {
       "P2": 115,
       "excluded": 280,
-      "P0": 21,
-      "done": 117,
-      "P1": 416
+      "P0": 19,
+      "done": 122,
+      "P1": 413
     },
-    "actionable": 552,
-    "actionableP0": 21
+    "actionable": 547,
+    "actionableP0": 19
   },
   "entries": [
     {
@@ -11036,8 +11036,8 @@
         "outline-color"
       ],
       "syntax": "<'outline-width'> || <'outline-style'> || <'outline-color'>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "implemented",
+      "implNote": "**简写展开**：outlineWidth + outlineColor（附：outlineStyle/outlineOffset 部分支持）——outline 简写 → width + color + style（★可按 outline-offset 偏移；宿主绘制，内核零改动）（证据：vapor/template.ts（outline 分支：parseBorderShorthand））",
       "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
@@ -11047,8 +11047,8 @@
         "webSupport": null
       },
       "usage": 2,
-      "priority": "P0",
-      "acceptance": "none"
+      "priority": "done",
+      "acceptance": "pending"
     },
     {
       "id": "outline-color",
@@ -11060,19 +11060,19 @@
       "inherited": false,
       "initial": "auto",
       "syntax": "auto | <color>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "implemented",
+      "implNote": "IR 注册表在册（scope=semantic · 矩阵 Color）",
       "channel": null,
       "evidencedBy": {
-        "inIrRegistry": false,
-        "irScope": null,
-        "inCompilerFold": false,
-        "matrixLevel": null,
+        "inIrRegistry": true,
+        "irScope": "semantic",
+        "inCompilerFold": true,
+        "matrixLevel": "Color",
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
-      "acceptance": "none"
+      "priority": "done",
+      "acceptance": "pending"
     },
     {
       "id": "outline-offset",
@@ -11084,19 +11084,19 @@
       "inherited": false,
       "initial": "0",
       "syntax": "<length>",
-      "impl": "not-started",
-      "implNote": "未接：轮廓（证据：未接）",
+      "impl": "implemented",
+      "implNote": "IR 注册表在册（scope=semantic · 矩阵 OutlineOffset）",
       "channel": null,
       "evidencedBy": {
-        "inIrRegistry": false,
-        "irScope": null,
-        "inCompilerFold": false,
-        "matrixLevel": null,
+        "inIrRegistry": true,
+        "irScope": "semantic",
+        "inCompilerFold": true,
+        "matrixLevel": "OutlineOffset",
         "webSupport": null
       },
       "usage": 3,
-      "priority": "P0",
-      "acceptance": "none"
+      "priority": "done",
+      "acceptance": "pending"
     },
     {
       "id": "outline-style",
@@ -11108,19 +11108,19 @@
       "inherited": false,
       "initial": "none",
       "syntax": "auto | <outline-line-style>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "implemented",
+      "implNote": "IR 注册表在册（scope=semantic · 矩阵 BorderStyle）",
       "channel": null,
       "evidencedBy": {
-        "inIrRegistry": false,
-        "irScope": null,
-        "inCompilerFold": false,
-        "matrixLevel": null,
+        "inIrRegistry": true,
+        "irScope": "semantic",
+        "inCompilerFold": true,
+        "matrixLevel": "BorderStyle",
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
-      "acceptance": "none"
+      "priority": "done",
+      "acceptance": "pending"
     },
     {
       "id": "outline-width",
@@ -11132,19 +11132,19 @@
       "inherited": false,
       "initial": "medium",
       "syntax": "<line-width>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "implemented",
+      "implNote": "IR 注册表在册（scope=semantic · 矩阵 OutlineWidth）",
       "channel": null,
       "evidencedBy": {
-        "inIrRegistry": false,
-        "irScope": null,
-        "inCompilerFold": false,
-        "matrixLevel": null,
+        "inIrRegistry": true,
+        "irScope": "semantic",
+        "inCompilerFold": true,
+        "matrixLevel": "OutlineWidth",
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
-      "acceptance": "none"
+      "priority": "done",
+      "acceptance": "pending"
     },
     {
       "id": "overflow",

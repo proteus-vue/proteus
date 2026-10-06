@@ -646,6 +646,7 @@ final class SelfDrawView: UIView {
             tl.contentsScale = UIScreen.main.scale
             tl.isWrapped = wrapMode
             applyBorder(tl, style: style)
+            applyOutline(tl, style: style)
             applyShadow(tl, style: style)
             SelfDrawBridge.applyPaintHint(tl, style: style)
             applyVisibility(tl, style: style)
@@ -660,6 +661,7 @@ final class SelfDrawView: UIView {
         }
         // ★批次 5（CSS 兼容对齐 · 边框）：uniform 边框（borderWidth + borderColor）——CALayer 原生边框。
         applyBorder(layer, style: style)
+        applyOutline(layer, style: style)
         // ★批次 10：盒阴影（在 masksToBounds 之前——CORNER 圆角裁剪会裁掉阴影，见下方）
         let hasShadow = (style["boxShadow"] as? [String: Any]) != nil
         applyShadow(layer, style: style)
@@ -3064,6 +3066,14 @@ final class SelfDrawView: UIView {
         if let fg = n["fillGradient"] as? [String: Any] { style["fillGradient"] = fg }
         // ★★★背景定位家族（2026-10-07）：size/position/repeat 必须透传（本函数=建层必经之路；
         //   漏透传 ⇒ 渐变层 frame 拿不到图像盒 ⇒ 静默按元素盒（clipPath/fillGradient 同款教训）。
+        // ★★★outline 族项（2026-10-08）：轮廓四键必须透传（建层必经之路；漏 ⇒ 静默不画）
+        for k in ["outlineWidth", "outlineColor", "outlineStyle"] {
+            if let v = n[k] as? String { style[k] = v }
+        }
+        if let ow = n["outlineWidth"] as? Double { style["outlineWidth"] = CGFloat(ow) }
+        if let ow = n["outlineWidth"] as? CGFloat { style["outlineWidth"] = ow }
+        if let oo = n["outlineOffset"] as? Double { style["outlineOffset"] = CGFloat(oo) }
+        if let oo = n["outlineOffset"] as? CGFloat { style["outlineOffset"] = oo }
         for k in ["backgroundSize", "backgroundPosition", "backgroundRepeat"] {
             if let v = n[k] as? String { style[k] = v }
         }
@@ -3177,6 +3187,13 @@ final class SelfDrawView: UIView {
         for (_, layer) in layersById {
             guard layer.sublayers != nil else { continue }
             SelfDrawView.syncSideBorderFrames(layer)
+            // ★★★outline 族项（2026-10-08）：轮廓环随父 bounds 重算（同逐边 border 的集中同步机制）
+            let b = layer.bounds
+            for sub in layer.sublayers ?? [] {
+                if let sh = sub as? CAShapeLayer, (sh.name?.hasPrefix("proteus-outline-") ?? false) {
+                    SelfDrawView.syncOutlineFrame(sh, bounds: b)
+                }
+            }
         }
     }
 
@@ -3228,6 +3245,7 @@ final class SelfDrawView: UIView {
         layer.backgroundColor = (style["backgroundColor"] as? String).flatMap(parseHexColor)?.cgColor
         // ★批次 5：边框复用路径同样重配（缺省清零）
         applyBorder(layer, style: style)
+        applyOutline(layer, style: style)
         // ★批次 10：盒阴影复用路径同样重配（缺省清零）
         let hasShadow2 = (style["boxShadow"] as? [String: Any]) != nil
         applyShadow(layer, style: style)
@@ -3349,6 +3367,36 @@ final class SelfDrawView: UIView {
 
     /// ★批次 5（CSS 兼容对齐 · 边框）：uniform 边框 → `CALayer.borderWidth/borderColor`。
     ///   `borderWidth<=0` 或缺颜色 ⇒ 清零（缺省无边框，与既有路径零行为变化）。
+    /// ★★★outline 族项（2026-10-08）：轮廓环 → 独立 CAShapeLayer 子层（画在盒 ± offset，可外扩/内缩）。
+    ///   CALayer.border 是内缩边框，装不下 outline 的「盒外偏移」⇒ 单独子层 + 集中 sync（同逐边 border 机制）。
+    private func applyOutline(_ layer: CALayer, style: [String: Any]) {
+        removeOutline(layer)
+        let ow = (style["outlineWidth"] as? CGFloat) ?? ((style["outlineWidth"] as? Double).map { CGFloat($0) } ?? 0)
+        let oc = (style["outlineColor"] as? String).flatMap(parseHexColor)
+        let os = (style["outlineStyle"] as? String) ?? "solid"
+        guard ow > 0, let col = oc, os != "none" else { return }
+        let sub = CAShapeLayer()
+        sub.name = "proteus-outline-\(ow)-\(os == "dashed" ? 1 : os == "dotted" ? 2 : 0)-\((style["outlineOffset"] as? CGFloat) ?? ((style["outlineOffset"] as? Double).map { CGFloat($0) } ?? 0))"
+        sub.strokeColor = col.cgColor
+        sub.fillColor = nil
+        sub.lineWidth = ow
+        if os == "dashed" { sub.lineDashPattern = [NSNumber(value: Double(ow) * 3), NSNumber(value: Double(ow) * 2)] }
+        else if os == "dotted" { sub.lineDashPattern = [NSNumber(value: 0), NSNumber(value: Double(ow) * 2)]; sub.lineCap = .round }
+        layer.addSublayer(sub)
+        Self.syncOutlineFrame(sub, bounds: layer.bounds)
+    }
+    private func removeOutline(_ layer: CALayer) {
+        layer.sublayers?.filter { ($0.name?.hasPrefix("proteus-outline-") ?? false) }.forEach { $0.removeFromSuperlayer() }
+    }
+    /// 按父 bounds 重算轮廓环路径（frame 变化后由 render 出口集中调用）。
+    static func syncOutlineFrame(_ sub: CAShapeLayer, bounds: CGRect) {
+        let parts = (sub.name ?? "").split(separator: "-")
+        let off = parts.count >= 4 ? (CGFloat(Double(parts[3]) ?? 0)) : 0
+        sub.frame = bounds
+        let r = CGRect(x: -off, y: -off, width: bounds.width + off * 2, height: bounds.height + off * 2)
+        sub.path = CGPath(rect: r, transform: nil)
+    }
+
     private func applyBorder(_ layer: CALayer, style: [String: Any]) {
         // ★★★逐边 border 批（2026-10-05）：有逐边声明 ⇒ 走**四子层**通道（CALayer 原生只有 uniform）。
         //   子层用 `autoresizingMask` 随父 bounds 变化自适配（建造时父 bounds 可能为 0——

@@ -127,6 +127,7 @@ const webSupports = (() => {
  */
 const SHORTHAND_EXPANSION = {
   background: { to: ['backgroundColor'], partial: ['fillGradient'], evidence: 'vapor/template.ts:958-970（parseCssGradient + extractBackgroundColor）', note: '简写 → 纯色折 background-color；渐变折 fillGradient（引擎绘制通道）' },
+  outline: { to: ['outlineWidth', 'outlineColor'], partial: ['outlineStyle', 'outlineOffset'], evidence: 'vapor/template.ts（outline 分支：parseBorderShorthand）', note: 'outline 简写 → width + color + style（★可按 outline-offset 偏移；宿主绘制，内核零改动）' },
   border: { to: ['borderWidth', 'borderColor'], partial: ['borderTopStyle', 'borderRightStyle', 'borderBottomStyle', 'borderLeftStyle'], evidence: 'vapor/template.ts（parseBorderShorthand）', note: 'border 简写 → 统一 width + color + 四边线型（★边框族收口批：dashed/dotted 已支持，宿主按线型绘制；double/groove 等仍诊断）' },
   'border-top': { to: ['borderTopWidth', 'borderTopColor'], partial: ['borderTopStyle'], evidence: 'vapor/template.ts（逐边分支）', note: '逐边简写（width/color/style 三件套；★线型批：dashed/dotted 支持）' },
   'border-right': { to: ['borderRightWidth', 'borderRightColor'], partial: ['borderRightStyle'], evidence: 'vapor/template.ts（逐边分支）', note: '逐边简写（width/color/style 三件套；★线型批：dashed/dotted 支持）' },
@@ -166,7 +167,6 @@ const SHORTHAND_EXPANSION = {
   'aspect-ratio': { to: ['aspectRatio'], evidence: 'IR 在册（engine-field）', note: '宽高比' },
   'object-fit': { to: [], separate: true, channel: 'component', evidence: '图片组件通道：Web `<image>` 模拟层 `mode`→CSS objectFit（packages/web/src/components/image.ts）+ MP 原生 `<image mode>`（built-in-components/image.ts）；主流端（微信/Skyline）同以 `<image mode>` 表达而非 CSS 属性', note: '**组件通道**（图片填充）：`object-fit` 作用于**替换内容**（图片/视频），本框架语义载体 = `<image mode>` / `p-image.fit`（Web objectFit · MP mode——已交付）；★App 自绘**暂无图片渲染**（无作用对象）⇒「App 图片渲染」独立立项' },
   'word-break': { to: [], evidence: '未接', notYet: true, note: '断词' },
-  'outline-offset': { to: [], evidence: '未接', notYet: true, note: '轮廓' },
   'text-shadow': { to: [], evidence: '未接', notYet: true, note: '文本阴影' },
   'mask': { to: [], evidence: '结构化属性通道（mask= 属性）', separate: true, note: 'CSS mask 写法待接（属性通道已通）' },
 }

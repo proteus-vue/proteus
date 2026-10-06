@@ -73,6 +73,26 @@
     "tierRule": "universal = web∧skyline∧app 现状全 supported；unsupported = 三端皆不可用；其余 = conditional",
     "partialSupport": [
       {
+        "css": "outline-offset",
+        "id": "outline-offset",
+        "ends": {
+          "web": "not-measured",
+          "skyline": "not-listed",
+          "app": "supported"
+        },
+        "why": "★★★outline 族项（2026-10-08）：轮廓与盒边的**偏移**（正=盒外 / 负=盒内；不影响布局）。Web 真值（真 Chromium）：`outline-offset: 2px` / `-2px` computed 即 px。App 宿主按偏移把环画在盒外/内（同 outline 通道）。"
+      },
+      {
+        "css": "outline（+ outline-width/-color/-style 长手）",
+        "id": "outline",
+        "ends": {
+          "web": "not-measured",
+          "skyline": "not-listed",
+          "app": "supported"
+        },
+        "why": "★★★outline 族项（2026-10-08 · css:next P0·3× · Basic User Interface）：**轮廓**（盒外/内偏移的环，**不占布局**，与 border 不同）。契约：新级别 OutlineWidth/OutlineOffset（+ outlineColor 复用 Color / outlineStyle 复用 BorderStyle）；编译器 APP_PAINT_FIELDS + 折叠（简写 `<width> <style> <color>` 序任意 + 长手 + offset 可负）；CSE 直通 outlineWidth/outlineColor/outlineStyle/outlineOffset；**宿主绘制**（host-only paint，同 border/box-shadow——**内核零改动**）；consistency 链。★诚实边界：① **Skyline 官方属性表（110 项）无 outline**（引擎锁死）；② 语料 3× 全在 `:focus-visible` 下（焦点环）——App **不支持状态伪类** ⇒ 语料到不了 App（**具名依赖**：焦点态需独立能力）；本项验**静态** outline。"
+      },
+      {
         "css": "gap（+ row-gap / column-gap）",
         "id": "gap",
         "ends": {
@@ -623,7 +643,11 @@
       "transform",
       "backgroundSize",
       "backgroundPosition",
-      "backgroundRepeat"
+      "backgroundRepeat",
+      "outlineWidth",
+      "outlineColor",
+      "outlineStyle",
+      "outlineOffset"
     ],
     "declAttrs": [
       "fill-gradient",
@@ -703,6 +727,38 @@
     }
   ],
   "rows": [
+    {
+      "id": "outline-offset",
+      "css": "outline-offset",
+      "category": "paint",
+      "compilerFields": [
+        "outlineOffset"
+      ],
+      "web": "not-measured",
+      "skyline": "not-listed",
+      "app": "supported",
+      "tier": "L2",
+      "strategy": "宿主绘制",
+      "note": "★★★outline 族项（2026-10-08）：轮廓与盒边的**偏移**（正=盒外 / 负=盒内；不影响布局）。Web 真值（真 Chromium）：`outline-offset: 2px` / `-2px` computed 即 px。App 宿主按偏移把环画在盒外/内（同 outline 通道）。",
+      "supportTier": "conditional"
+    },
+    {
+      "id": "outline",
+      "css": "outline（+ outline-width/-color/-style 长手）",
+      "category": "paint",
+      "compilerFields": [
+        "outlineWidth",
+        "outlineColor",
+        "outlineStyle"
+      ],
+      "web": "not-measured",
+      "skyline": "not-listed",
+      "app": "supported",
+      "tier": "L2",
+      "strategy": "宿主绘制",
+      "note": "★★★outline 族项（2026-10-08 · css:next P0·3× · Basic User Interface）：**轮廓**（盒外/内偏移的环，**不占布局**，与 border 不同）。契约：新级别 OutlineWidth/OutlineOffset（+ outlineColor 复用 Color / outlineStyle 复用 BorderStyle）；编译器 APP_PAINT_FIELDS + 折叠（简写 `<width> <style> <color>` 序任意 + 长手 + offset 可负）；CSE 直通 outlineWidth/outlineColor/outlineStyle/outlineOffset；**宿主绘制**（host-only paint，同 border/box-shadow——**内核零改动**）；consistency 链。★诚实边界：① **Skyline 官方属性表（110 项）无 outline**（引擎锁死）；② 语料 3× 全在 `:focus-visible` 下（焦点环）——App **不支持状态伪类** ⇒ 语料到不了 App（**具名依赖**：焦点态需独立能力）；本项验**静态** outline。",
+      "supportTier": "conditional"
+    },
     {
       "id": "width",
       "css": "width",
