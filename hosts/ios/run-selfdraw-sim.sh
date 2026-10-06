@@ -68,7 +68,7 @@ echo "==> ④ 编译 Swift 宿主（模拟器 SDK）"
 rm -rf "$APP"; mkdir -p "$APP"
 xcrun --sdk iphonesimulator swiftc -O -target arm64-apple-ios15.0-simulator \
   -framework UIKit -framework CoreText -framework JavaScriptCore -parse-as-library \
-  -o "$APP/ProteusSelfDraw" "$HERE/ProteusHost/runtime/selfdraw-scene.swift" "$LIB" 2>&1 | grep -E "error:" | head -5
+  -o "$APP/ProteusSelfDraw" "$HERE/ProteusHost/runtime/selfdraw-scene.swift" "$HERE/ProteusHost/runtime/host-runtime-bridge.swift" "$HERE/ProteusHost/runtime/proteus-host-controller.swift" "$HERE/ProteusHost/runtime/host-capabilities.swift" "$HERE/ProteusHost/runtime/host-lifecycle-events.swift" "$HERE/ProteusHost/runtime/screen-host.swift" "$HERE/ProteusHost/dev/host-runtime-scene.swift" "$HERE/ProteusHost/dev/app-stack-scene.swift" "$HERE/ProteusHost/dev/showcase-scene.swift" "$HERE/ProteusHost/shell/superapp-scene.swift" "$HERE/ProteusHost/shell/selfdraw-app.swift" "$LIB" 2>&1 | grep -E "error:" | head -5
 [ -f "$APP/ProteusSelfDraw" ] || { echo "✗ Swift 编译未产出可执行文件"; exit 3; }
 
 echo "==> ⑤ 组装 .app（★无需签名/描述文件——模拟器不校验）"

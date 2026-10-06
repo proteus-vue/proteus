@@ -35,7 +35,9 @@ final class AppStackScene: NSObject {
 
         // ② 宿主桥（含 ScreenHost——屏幕树操作 + 帧循环动画）
         ScreenHost.evalJs = { expr in evalJs?(expr) ?? "null" }
-        ctx.setObject(HostRuntimeBridge(), forKeyedSubscript: "proteusHost" as NSString)
+        let hostBridge = HostRuntimeBridge()
+        hostBridge.jsContextRef = ctx.jsGlobalContextRef
+        ctx.setObject(hostBridge, forKeyedSubscript: "proteusHost" as NSString)
 
         // ③ 加载 bundle（JSC 无模块系统——IIFE 整份 evaluate）
         guard let src = try? String(contentsOf: bundleURL, encoding: .utf8) else {

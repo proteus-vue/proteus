@@ -13,7 +13,7 @@ import { buildDir, planTargetedBuild, runTargetedBuildProgrammatic } from './bui
 import { parseConformanceArgs, runConformance, runConformanceDemo } from './conformance'
 import { parseHostArgs, runHostPush } from './host'
 import { parseCreateHostArgs, runCreateHost } from './host-scaffold'
-import { packageHarmonyHost } from './host-package'
+import { packageHarmonyHost, packageIosHost } from './host-package'
 import { scanRepoDirectory, formatRepoReport } from './repo-conformance'
 import { explainTarget } from './explain'
 import { listRules } from './rules'
@@ -68,14 +68,16 @@ async function main(): Promise<void> {
           if (!hasLegacyViteConfig(process.cwd()) || !isViteT) {
             const r = await runTargetedBuildProgrammatic(args.target)
             if (!r.ok) process.exitCode = 1
-            // ★hosts 第二刀 Stage 2：--package → 调平台工具链把宿主工程打成 .hap（仅 harmony 样板）
-            if (args.package && (args.target === 'harmony' || args.target === 'all')) {
+            // ★hosts 第二/三刀：--package → 调平台工具链把宿主工程打成安装包（harmony→.hap / ios→.app）
+            if (args.package && (args.target === 'harmony' || args.target === 'ios' || args.target === 'all')) {
               const hostDir = args.hostDir ?? process.env.PROTEUS_HOST_DIR
               if (!hostDir) {
                 console.error('[proteus] --package 需要宿主工程目录：--host-dir <dir>（或 PROTEUS_HOST_DIR）')
                 process.exitCode = 1
               } else {
-                const pk = packageHarmonyHost({ hostDir, projectRoot: process.cwd(), platform: 'harmony' })
+                const pk = args.target === 'ios'
+                  ? packageIosHost({ hostDir, projectRoot: process.cwd() })
+                  : packageHarmonyHost({ hostDir, projectRoot: process.cwd(), platform: 'harmony' })
                 for (const l of pk.log) console.log(`[proteus] ${l}`)
                 if (!pk.ok) process.exitCode = 1
               }

@@ -95,4 +95,27 @@ L1 框架主仓（本仓）发独立包 → L2 宿主 App 仓**只依赖不 fork
   ★**只做鸿蒙样板**：Android（AAR）/ iOS（SwiftPM）抽包按同一套复制，**留下一轮**（Android 93 处可见性 +
   iOS 混装文件拆分各是一摊）。★runtime 的**发布形态**仍是"从框架 checkout 同源复制"（可注入
   `PROTEUS_HOST_RUNTIME_DIR`）；拆成独立发布包（`@proteus-vue/host-runtime-harmony`）列为后续。
+
+- **第三刀 · iOS 样板（2026-10-07 打通）**：把同一模式在 **iOS** 跑通并真机验证。
+  · **runtime 抽为"源集单元"**：iOS 宿主是 **pure swiftc 直出**（无 Xcode 工程/SPM）——故 runtime 不是
+    独立包，而是 **源集**（`hosts/ios/ProteusHost/runtime/*.swift` + `platform/ios/ProteusPlatform/*.swift`），
+    与内核两 `.a`（layout-core-rust + host-abi，cargo 交叉编译）一起**由消费方 swiftc 编译进同一模块**
+    （= 鸿蒙 HAR"携带源、消费方编译"的 iOS 同形）。★**为何不用 SwiftPM**：独立模块会逼 runtime 全部 API
+    `public` 化（引擎与壳共用大量 internal 符号）——与 #563 记录的 Android 93 处可见性同款代价；源集零改动。
+  · **混装拆分（必需，非可选）**：原 `runtime/selfdraw-scene.swift` 尾部（`SelfDrawViewController` + `@main`
+    delegate + 场景分发引 `ShowcaseScene/SuperappScene/HostRuntimeScene/AppStackScene`）迁到
+    `shell/selfdraw-app.swift`；`HostRuntimeBridge`（runtime 形状聚合器）从 dev 迁入 `runtime/host-runtime-bridge.swift`。
+    新增运行时门面 `runtime/proteus-host-controller.swift`（起视图/JSContext/桥 → `mountPage` 挂载屏内容）。
+    `RUNTIME_MIXED_FILES` 的 selfdraw-scene 登记**已移除**（runtime 现零反向依赖）。
+  · **最小壳** `packages/cli/templates-host/ios`：`shell/ProteusApp.swift`（`@main` + `ProteusHostController`
+    → 读 `app-screen-content.json` 挂首页 → 上报 `PROTEUS_HOST_READY`/`HOST_PAGE_RENDER`）+ `Info.plist` 模板。
+  · **CLI**：`proteus create host ios <dir>`（模板 + runtime 源集复制 + 拷产物）·
+    `proteus build --target ios --package --host-dir <dir>`（cargo 建核 → swiftc 编译 → 组装 .app → 签名）。
+  · **真机判据**：生成的独立工程 zero-device 构建出签名 `.app` → 装机 → 启动 → **渲染项目真实内容**
+    （`HOST_PAGE_RENDER page=index ok=true`，73 节点，截图核对）。
+  ★**诚实边界**：a) iOS runtime **发布形态**仍是"从框架 checkout 同源复制"（`PROTEUS_HOST_RUNTIME_DIR` 可注入）；
+  b) **签名（provisioning profile / identity）属机器本地**（模板占位；打包时从本机 profile 取 entitlements）；
+  c) 参考宿主壳仍分发到 dev 装置场景（`SHELL_MIXED_FILES` 具名棘轮），**最小壳不含**。
+  ★**下一刀**：Android（AAR·**保持同包** `dev.proteus.layoutcore` ⇒ Java 包访问按包名跨 artifact 仍有效 ⇒
+  零可见性改动，避开 #563 的 93 处 public 化）。
 - 分层**不改任何运行期行为**：只搬文件 + 改编译源清单，三端零设备编译 + 一次真实构建截图黑盒验证。

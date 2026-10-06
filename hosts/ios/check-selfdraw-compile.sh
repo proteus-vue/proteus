@@ -30,13 +30,16 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 #   ★判据：列表里每个文件都必须存在（缺一个即红——不静默跳过）。
 HOST_SRCS=(
   "$HERE/ProteusHost/runtime/selfdraw-scene.swift"
-  "$HERE/ProteusHost/dev/host-runtime-scene.swift"
+  "$HERE/ProteusHost/runtime/host-runtime-bridge.swift"
+  "$HERE/ProteusHost/runtime/proteus-host-controller.swift"
   "$HERE/ProteusHost/runtime/host-capabilities.swift"
   "$HERE/ProteusHost/runtime/host-lifecycle-events.swift"
   "$HERE/ProteusHost/runtime/screen-host.swift"
+  "$HERE/ProteusHost/dev/host-runtime-scene.swift"
   "$HERE/ProteusHost/dev/app-stack-scene.swift"
   "$HERE/ProteusHost/dev/showcase-scene.swift"
   "$HERE/ProteusHost/shell/superapp-scene.swift"
+  "$HERE/ProteusHost/shell/selfdraw-app.swift"
 )
 for f in "${HOST_SRCS[@]}"; do
   [ -f "$f" ] || { echo "✗ 找不到宿主源码：$f"; exit 2; }

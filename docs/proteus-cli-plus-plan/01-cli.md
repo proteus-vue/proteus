@@ -180,7 +180,7 @@ src/ (SFC + <route> + p-*) + proteus.config.ts
 
 ---
 
-## 10. 宿主生成 / 打包（hosts 第二刀 Stage 2，2026-10-07）
+## 10. 宿主生成 / 打包（hosts 第二/三刀，2026-10-07：harmony 样板 + ios 样板）
 
 > **背景**：此前 hosts/* 把「项目无关的引擎/运行时」与「项目身份 + 验证装置」混在一起（见 hosts/README-LAYERS.md），
 > 对 CLI 生成宿主、正式打包、安全维护都不利。分层落地（第一刀）+ runtime 抽为可依赖单元（第二刀）后，
@@ -189,11 +189,14 @@ src/ (SFC + <route> + p-*) + proteus.config.ts
 **命令**
 ```bash
 proteus create host harmony <dir> [--name <应用名>] [--bundle <包名>] [--project <项目根>]
+proteus create host ios <dir>     [--name <应用名>] [--bundle <Bundle ID>] [--project <项目根>]
 proteus build --target harmony --package --host-dir <dir>   # 编译项目内容 + 调 hvigorw 打包 .hap
+proteus build --target ios     --package --host-dir <dir>   # 编译项目内容 + 调 swiftc 打包 .app（第三刀）
 ```
 
 **生成形态**（`packages/cli/templates-host/harmony`）：`AppScope/` + `entry/`（最小壳：EntryAbility + MainPage）
 + `proteus_render/`（runtime HAR，从框架同源复制）+ `proteus.host.json` + `build-profile.template.json5`。
+**生成形态（ios）**（`packages/cli/templates-host/ios`）：`shell/ProteusApp.swift`（最小壳，`@main`）+ `runtime/`+`platform/`（runtime 源集）+ `Info.plist` + `proteus.host.json`；打包 = cargo 建核 → swiftc → 组装 `.app` → 签名。
 **壳零项目身份**：EntryAbility 只交生命周期给 runtime + 上报 READY；MainPage 只渲染 rawfile 编译产物。
 **打包**：`--package` 只「壳调 hvigorw」（不自研工具链）；先 `ohpm install`（file: 依赖 → 跨模块 native 聚合）。
 

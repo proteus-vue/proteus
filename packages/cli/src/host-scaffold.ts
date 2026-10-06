@@ -1,23 +1,20 @@
 // packages/cli/src/host-scaffold.ts
-// ★★★hosts 第二刀 · Stage 2：`proteus create host <platform> <dir>` —— 生成**独立可编译的最小宿主工程**
+// ★★★hosts 第二/三刀：`proteus create host <platform> <dir>` —— 生成**独立可编译的最小宿主工程**
 //
 // 【为什么要它（用户 2026-10-05）】此前"宿主"与"项目/验证装置"混在一份 hosts/* 工程里——
 //   对 cli 创建宿主、正式打包、安全维护都不利。分层落地后（见 hosts/README-LAYERS.md），
-//   runtime 成了可依赖单元（HAR），于是**最小壳 = 壳模板 + 依赖 runtime** ⇒ 可由 CLI 生成。
+//   runtime 成了可依赖单元，于是**最小壳 = 壳模板 + 依赖 runtime** ⇒ 可由 CLI 生成。
 //
-// 【生成的工程形态（鸿蒙样板）】
-//   <dir>/
-//     AppScope/ · oh-package.json5 · hvigorfile.ts · hvigor/ · build-profile.template.json5 · .gitignore
-//     entry/            ← 最小壳（EntryAbility 交生命周期给 runtime；MainPage 渲染编译产物）
-//     proteus_render/   ← runtime（HAR：C++ 源 + CMake + Rust 核；从框架仓复制，**与框架同源**）
-//     proteus.host.json ← 宿主元信息（平台/包名/产物路径；供 build --package 定位）
+// 【支持的端】harmony（第二刀样板）· ios（第三刀样板）。两者"可依赖单元"的**载体不同**：
+//   · harmony：runtime 抽为 **HAR 模块**（`proteus_render/`，携带 C++ 源 + CMake + Rust 核）。
+//   · ios：runtime 是 **源集单元**（`runtime/` + `platform/` 的 .swift，与内核 .a 一起被消费方 swiftc 编译；
+//     本仓 iOS 无 Xcode 工程/SPM，且引擎 API 未 public 化 ⇒ 独立模块会逼千行 public 化）。
+//   ⇒ 用一张**平台描述表**统一：每个端声明「runtime 源→目标目录」若干个 + 产物落点 + 排除项。
 //
 // 【诚实边界】
-//   · 运行时 HAR 目前**从框架 checkout 复制**（`hosts/harmony/host-app/proteus_render`）——
-//     发布路径应拆成独立的 host-runtime 包（`@proteus-vue/host-runtime-harmony`），属**后续**；
-//     本命令支持 PROTEUS_HOST_RUNTIME_DIR 环境变量覆盖（也便于在缺 checkout 时指向缓存副本）。
-//   · 生成的工程**不含项目身份/业务装置**（superapp 等留 dev）——页面内容由 rawfile 编译产物驱动。
-//   · 华为 CA 签名仍属机器本地：模板只给 `signingConfigs: []`（unsigned 可构建；装机见 README）。
+//   · runtime 源**从框架 checkout 复制**（`PROTEUS_HOST_RUNTIME_DIR` 可覆盖）——发布形态应拆成独立包，属后续。
+//   · 生成的工程**不含项目身份/业务装置**（superapp 等留 dev）——页面内容由编译产物驱动。
+//   · 签名（鸿蒙华为 CA / iOS provisioning）仍属机器本地：模板只给占位。
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -26,13 +23,37 @@ const HERE = path.dirname(fileURLToPath(import.meta.url))
 /** CLI 包根（src/ 或 dist/ 的上一级）——模板随包发布，位于 <pkgRoot>/templates-host */
 const CLI_PKG_ROOT = path.resolve(HERE, '..')
 
-export const HOST_PLATFORMS = ['harmony'] as const
+export const HOST_PLATFORMS = ['harmony', 'ios'] as const
 export type HostPlatform = (typeof HOST_PLATFORMS)[number]
 
-/** 复制 runtime 时排除的目录名（构建期产物，不入生成工程） */
-const RUNTIME_EXCLUDE_DIRS = new Set(['build', 'oh_modules', 'node_modules', '.hvigor', '.cxx', '.idea', '.preview'])
-/** 复制 runtime 时排除的文件（DevEco 构建期自动生成的类型桥） */
-const RUNTIME_EXCLUDE_FILES = new Set(['BuildProfile.ets', 'oh-package-lock.json5'])
+/** 每个端：runtime 源→目标目录（可多个）+ 编译产物落点 + 复制排除项 */
+interface PlatformSpec {
+  /** runtime 源目录 → 生成工程内的相对目录（框架仓内路径用 {repo} 占位）；marker = 校验该源"确实存在"的标记文件 */
+  runtimeUnits: Array<{ src: string; dest: string; marker: string }>
+  /** 编译产物 screen-content.json 在生成工程内的落点（相对 targetDir） */
+  resourceDest: string
+  /** 复制时排除的目录段 / 文件名（构建期产物） */
+  excludeDirs: string[]
+  excludeFiles: string[]
+}
+
+const PLATFORM_SPECS: Record<HostPlatform, PlatformSpec> = {
+  harmony: {
+    runtimeUnits: [{ src: '{repo}/hosts/harmony/host-app/proteus_render', dest: 'proteus_render', marker: 'src/main/cpp/CMakeLists.txt' }],
+    resourceDest: 'entry/src/main/resources/rawfile/app-screen-content.json',
+    excludeDirs: ['build', 'oh_modules', 'node_modules', '.hvigor', '.cxx', '.idea', '.preview'],
+    excludeFiles: ['BuildProfile.ets', 'oh-package-lock.json5'],
+  },
+  ios: {
+    runtimeUnits: [
+      { src: '{repo}/hosts/ios/ProteusHost/runtime', dest: 'runtime', marker: 'selfdraw-scene.swift' },
+      { src: '{repo}/platform/ios/ProteusPlatform', dest: 'platform', marker: 'ProteusTextAdapter.swift' },
+    ],
+    resourceDest: 'app-screen-content.json',
+    excludeDirs: ['build', 'dev', '.build'],
+    excludeFiles: [],
+  },
+}
 
 export interface CreateHostOptions {
   platform: HostPlatform
@@ -41,9 +62,11 @@ export interface CreateHostOptions {
   bundleName: string
   /** 模板根（缺省解析：<cliPkgRoot>/templates-host/<platform>）——测试注入 */
   templatesDir?: string
-  /** runtime HAR 源目录（缺省解析：框架仓 hosts/harmony/host-app/proteus_render）——测试注入 */
+  /** runtime 源根（缺省解析：框架仓；测试注入时为**单个**目录，用于 harmony）——见 runtimeDirs */
   runtimeDir?: string
-  /** 编译产物项目根（含 dist/app/<platform>/screen-content.json）；给了就拷进 rawfile */
+  /** runtime 源根映射（多目录端；测试注入）——覆盖 spec.runtimeUnits 的 src */
+  runtimeDirs?: string[]
+  /** 编译产物项目根（含 dist/app/<platform>/screen-content.json）；给了就拷进产物落点 */
   projectRoot?: string
 }
 
@@ -52,7 +75,7 @@ export interface CreateHostResult {
   platform: HostPlatform
   targetDir: string
   files: string[]
-  runtimeDir: string | null
+  runtimeDirs: string[]
   screenContentCopied: boolean
   notes: string[]
 }
@@ -85,16 +108,24 @@ export function resolveTemplatesDir(platform: HostPlatform, override?: string): 
   )
 }
 
-export function resolveRuntimeDir(platform: HostPlatform, override?: string): string | null {
+/** 解析某端的 runtime 源目录（存在且带 marker 才算） */
+export function resolveRuntimeDirs(platform: HostPlatform, override?: string[]): string[] {
+  const spec = PLATFORM_SPECS[platform]
   const repoRoot = findRepoRoot()
-  const candidates = [
-    override,
-    process.env.PROTEUS_HOST_RUNTIME_DIR,
-    repoRoot ? path.join(repoRoot, 'hosts', platform, 'host-app', 'proteus_render') : undefined,
-    path.join(CLI_PKG_ROOT, 'templates-host', platform, 'proteus_render'),
-  ].filter((c): c is string => !!c)
-  for (const c of candidates) if (fs.existsSync(path.join(c, 'src', 'main', 'cpp', 'CMakeLists.txt'))) return c
-  return null
+  const out: string[] = []
+  for (let i = 0; i < spec.runtimeUnits.length; i++) {
+    const unit = spec.runtimeUnits[i]
+    const expanded = unit.src.replace('{repo}', repoRoot ?? '')
+    const candidates = [
+      override?.[i],
+      process.env.PROTEUS_HOST_RUNTIME_DIR && spec.runtimeUnits.length === 1 ? process.env.PROTEUS_HOST_RUNTIME_DIR : undefined,
+      expanded,
+      path.join(CLI_PKG_ROOT, 'templates-host', platform, unit.dest),
+    ].filter((c): c is string => !!c)
+    const hit = candidates.find((c) => fs.existsSync(path.join(c, unit.marker)))
+    if (hit) out.push(hit)
+  }
+  return out
 }
 
 /* ================= 复制工具 ================= */
@@ -109,27 +140,26 @@ function walk(dir: string, visit: (full: string, rel: string) => void, base = ''
   }
 }
 
-/** 复制目录，排除构建期产物（相对路径任一段命中排除集即跳过） */
-function copyDirFiltered(src: string, dest: string, files: string[]): void {
+/** 复制目录，排除构建期产物（相对路径任一段命中排除集 / 文件名命中即跳过） */
+function copyDirFiltered(src: string, dest: string, excludeDirs: Set<string>, excludeFiles: Set<string>, files: string[]): void {
   walk(src, (full, rel) => {
     const segs = rel.split('/')
-    if (segs.some((s) => RUNTIME_EXCLUDE_DIRS.has(s))) return
-    const base = segs[segs.length - 1]
-    if (RUNTIME_EXCLUDE_FILES.has(base)) return
+    if (segs.some((s) => excludeDirs.has(s))) return
+    if (excludeFiles.has(segs[segs.length - 1])) return
     const to = path.join(dest, rel)
     fs.mkdirSync(path.dirname(to), { recursive: true })
     fs.copyFileSync(full, to)
-    files.push(path.relative(dest, to))
+    files.push(path.relative(path.dirname(dest), to))
   })
 }
 
 /* ================= 生成 ================= */
 
-/** 纯函数式核心：渲染模板（{{var}} 替换）+ 复制 runtime + 拷编译产物 → 目标目录 */
 export function createHost(opts: CreateHostOptions): CreateHostResult {
   const { platform, targetDir } = opts
+  const spec = PLATFORM_SPECS[platform]
   const templatesDir = resolveTemplatesDir(platform, opts.templatesDir)
-  const runtimeDir = opts.runtimeDir !== undefined ? opts.runtimeDir : resolveRuntimeDir(platform)
+  const runtimeDirs = opts.runtimeDirs ?? (opts.runtimeDir ? [opts.runtimeDir] : resolveRuntimeDirs(platform))
   const notes: string[] = []
   const files: string[] = []
 
@@ -137,7 +167,7 @@ export function createHost(opts: CreateHostOptions): CreateHostResult {
     throw new Error(`目标目录已存在且非空：${targetDir}（请选一个空/不存在的目录）`)
   }
 
-  const vars: Record<string, string> = { appName: opts.appName, bundleName: opts.bundleName }
+  const vars: Record<string, string> = { appName: opts.appName, bundleName: opts.bundleName, bundleId: opts.bundleName }
   // ① 模板文件（含 {{var}} 替换）
   walk(templatesDir, (full, rel) => {
     const to = path.join(targetDir, rel)
@@ -146,33 +176,39 @@ export function createHost(opts: CreateHostOptions): CreateHostResult {
     fs.writeFileSync(to, content)
     files.push(rel)
   })
-  // ② runtime（HAR）——与框架同源复制
-  if (runtimeDir) {
-    copyDirFiltered(runtimeDir, path.join(targetDir, 'proteus_render'), files)
-    notes.push(`runtime（HAR）已复制 ← ${runtimeDir}`)
-    if (!fs.existsSync(path.join(targetDir, 'proteus_render', 'src', 'main', 'cpp', 'thirdparty', 'libproteus_layout_core.a'))) {
-      notes.push('⚠ 未随附 Rust 核（libproteus_layout_core.a，32MB 构建产物）；构建前请在框架仓跑 hosts/harmony/build-rust-core.sh 再复制该文件到 proteus_render/src/main/cpp/thirdparty/')
+  // ② runtime 单元（源集）——与框架同源复制
+  if (runtimeDirs.length === spec.runtimeUnits.length) {
+    for (let i = 0; i < spec.runtimeUnits.length; i++) {
+      const dest = path.join(targetDir, spec.runtimeUnits[i].dest)
+      copyDirFiltered(runtimeDirs[i], dest, new Set(spec.excludeDirs), new Set(spec.excludeFiles), files)
+    }
+    notes.push(`runtime（${runtimeDirs.length} 个源集）已复制 ← ${runtimeDirs.map((d) => path.relative(process.cwd(), d)).join(', ')}`)
+    if (platform === 'harmony' && !fs.existsSync(path.join(targetDir, 'proteus_render/src/main/cpp/thirdparty/libproteus_layout_core.a'))) {
+      notes.push('⚠ 未随附 Rust 核（libproteus_layout_core.a，构建产物）；构建前请在框架仓跑 hosts/harmony/build-rust-core.sh 再复制该文件到 proteus_render/src/main/cpp/thirdparty/')
+    }
+    if (platform === 'ios') {
+      notes.push('ℹ iOS runtime 为**源集单元**：与内核 .a 一起由 `build --package` 用 swiftc 编译（内核由 cargo 交叉编译：packages/layout-core-rust + packages/host-abi）')
     }
   } else {
-    notes.push('⚠ 未找到 runtime（HAR）源目录——生成工程缺 proteus_render/；用 PROTEUS_HOST_RUNTIME_DIR 指定后重生成')
+    notes.push(`⚠ 未找齐 runtime 源集（需 ${spec.runtimeUnits.length} 个，实得 ${runtimeDirs.length}）——生成工程可能不完整；用 PROTEUS_HOST_RUNTIME_DIR 指定后重生成`)
   }
-  // ③ 编译产物（屏内容）→ rawfile（若项目根已有）
+  // ③ 编译产物（屏内容）→ 落点（若项目根已有）
   let screenContentCopied = false
   if (opts.projectRoot) {
     const sc = path.join(opts.projectRoot, 'dist', 'app', platform, 'screen-content.json')
     if (fs.existsSync(sc)) {
-      const rf = path.join(targetDir, 'entry', 'src', 'main', 'resources', 'rawfile')
-      fs.mkdirSync(rf, { recursive: true })
-      fs.copyFileSync(sc, path.join(rf, 'app-screen-content.json'))
-      const gk = path.join(rf, '.gitkeep')
+      const dest = path.join(targetDir, spec.resourceDest)
+      fs.mkdirSync(path.dirname(dest), { recursive: true })
+      fs.copyFileSync(sc, dest)
+      const gk = path.join(path.dirname(dest), '.gitkeep')
       if (fs.existsSync(gk)) fs.rmSync(gk)
       screenContentCopied = true
-      notes.push(`编译产物已拷入 rawfile ← ${path.relative(opts.projectRoot, sc)}`)
+      notes.push(`编译产物已拷入 ${spec.resourceDest} ← ${path.relative(opts.projectRoot, sc)}`)
     } else {
       notes.push(`⚠ 未见编译产物 ${path.relative(opts.projectRoot, sc)}——先跑 \`proteus build --target ${platform}\`，或用 build --package 自动拷入`)
     }
   }
-  return { ok: true, platform, targetDir, files, runtimeDir, screenContentCopied, notes }
+  return { ok: true, platform, targetDir, files, runtimeDirs, screenContentCopied, notes }
 }
 
 /* ================= 参数解析 + CLI 运行器 ================= */
@@ -202,10 +238,10 @@ export function parseCreateHostArgs(rest: string[]): CreateHostArgs {
   return args
 }
 
-/** 由应用名派生一个合法的鸿蒙包名（reverse-DNS；用户可用 --bundle 覆盖） */
-export function deriveBundleName(appName: string): string {
+/** 由应用名派生一个合法的 reverse-DNS 包名/Bundle ID（用户可用 --bundle 覆盖） */
+export function deriveBundleName(appName: string, tld = 'com'): string {
   const slug = appName.toLowerCase().replace(/[^a-z0-9]+/g, '.').replace(/^\.+|\.+$/g, '').replace(/\.{2,}/g, '.')
-  return `com.example.${slug || 'app'}`
+  return `${tld}.example.${slug || 'app'}`
 }
 
 /** CLI 运行器：解析 → 生成 → 打印报告；返回退出码（0 成功） */
@@ -215,13 +251,7 @@ export function runCreateHost(args: CreateHostArgs): number {
   const bundleName = args.bundleName ?? deriveBundleName(appName)
   let r: CreateHostResult
   try {
-    r = createHost({
-      platform: args.platform,
-      targetDir: args.targetDir,
-      appName,
-      bundleName,
-      projectRoot: args.projectRoot,
-    })
+    r = createHost({ platform: args.platform, targetDir: args.targetDir, appName, bundleName, projectRoot: args.projectRoot })
   } catch (e) {
     console.error(`[proteus create host] ${(e as Error).message}`)
     return 1
@@ -234,8 +264,12 @@ export function runCreateHost(args: CreateHostArgs): number {
   for (const n of r.notes) console.log(`  · ${n}`)
   console.log('')
   console.log('下一步：')
-  console.log(`  proteus build --target ${r.platform} --package --host-dir ${args.targetDir}   # 编译项目内容 + 调 hvigor 打包 .hap`)
-  console.log(`  或手动：cd ${args.targetDir} && <DevEco>/tools/hvigor/bin/hvigorw assembleHap --mode module -p product=default`)
-  console.log('  装机签名（本机首次）：DevEco Studio → Project Structure → Signing Configs → Automatically generate signature')
+  console.log(`  proteus build --target ${r.platform} --package --host-dir ${args.targetDir}   # 编译项目内容 + 打平台安装包`)
+  if (r.platform === 'harmony') {
+    console.log(`  或手动：cd ${args.targetDir} && <DevEco>/tools/hvigor/bin/hvigorw assembleHap --mode module -p product=default`)
+    console.log('  装机签名（本机首次）：DevEco Studio → Project Structure → Signing Configs → Automatically generate signature')
+  } else {
+    console.log('  装机签名：需本机有可用 provisioning profile（run-selfdraw.sh 的签名流程同源）')
+  }
   return 0
 }

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>CFBundleExecutable</key><string>ProteusHost</string>
+  <key>CFBundleIdentifier</key><string>{{bundleId}}</string>
+  <key>CFBundleName</key><string>{{appName}}</string>
+  <key>CFBundleDisplayName</key><string>{{appName}}</string>
+  <!-- 起始页（编译产物 app-screen-content.json 的键名；换项目改这里） -->
+  <key>ProteusHomePage</key><string>index</string>
+  <key>CFBundleVersion</key><string>1</string>
+  <key>CFBundleShortVersionString</key><string>0.1.0</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>MinimumOSVersion</key><string>15.0</string>
+  <key>UIDeviceFamily</key><array><integer>1</integer></array>
+  <!-- 空 UILaunchScreen + 强制深色：启动屏与首帧连续（不留白闪） -->
+  <key>UILaunchScreen</key><dict/>
+  <key>UIUserInterfaceStyle</key><string>Dark</string>
+  <key>UIApplicationSceneManifest</key><dict>
+    <key>UIApplicationSupportsMultipleScenes</key><false/>
+  </dict>
+  <key>UISupportedInterfaceOrientations</key><array><string>UIInterfaceOrientationPortrait</string></array>
+</dict></plist>
