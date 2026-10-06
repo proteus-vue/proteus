@@ -82,6 +82,7 @@ RECORD=0
 # ★★批次 44：superapp 模式是否"驱动"（`--drive`）——驱动 = 脚本切 tab + 落报告后自退（可自动化）；
 #   不带 = 常驻（真·桌面点开形态）。
 DRIVE=0
+TAP=""
 for a in "$@"; do
   case "$a" in
     --record) RECORD=1 ;;
@@ -94,6 +95,8 @@ for a in "$@"; do
     #   驱动切 tab + 落 superapp.json 后自退）；不带 `--drive` = 常驻（真·桌面点开形态，不退出）。
     --superapp) MODE="superapp" ;;
     --drive) DRIVE=1 ;;
+    # ★B1 交互判据（2026-10-07）：`--tap=x,y`（内容坐标 vp）——注入合成 tap 走与真触摸同链 → 落报告自退
+    --tap=*) TAP="${a#--tap=}" ;;
     --native-mix) MODE="native-mix" ;;
     --vapor-ab) MODE="vapor-ab" ;;
     # ★★★Vapor 设备端链（2026-10-03 · 三端对齐）：与 Android/鸿蒙**同一份**判据（①–⑫）
@@ -502,8 +505,11 @@ elif [ "$MODE" = "superapp" ]; then
   #     App 退出为止 ⇒ 脚本永不返回、AI 侧看不到任何"结果"，而 App 其实早已在设备上跑起来）。
   #     ⇒ 无 `--console` 启动（launch 输出 PID 后**立即返回**），App 留在设备上常驻。
   SA_ARGS=(--superapp)
-  if [ "$DRIVE" = "1" ]; then
-    SA_ARGS+=(--drive)
+  if [ "$DRIVE" = "1" ]; then SA_ARGS+=(--drive); fi
+  if [ -n "$TAP" ]; then SA_ARGS+=("--tap=$TAP"); fi
+  # ★B1：`--drive` 或 `--tap` 都是**自动化验证**（落报告后自退）⇒ 用 `--console` 阻塞到退出；
+  #   两者皆无 = 常驻给人看（App 不退 ⇒ 绝不能加 `--console`，见上注释）。
+  if [ "$DRIVE" = "1" ] || [ -n "$TAP" ]; then
     xcrun devicectl device process launch --console --terminate-existing \
       --environment-variables '{"PROTEUS_EXIT_AFTER_REPORT":"1"}' \
       --device "$UDID" "$BUNDLE_ID" "${SA_ARGS[@]}" > "$LAUNCH_LOG" 2>&1 || LAUNCH_RC=$?
