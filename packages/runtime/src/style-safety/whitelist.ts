@@ -49,6 +49,14 @@ const JUSTIFY_SELF = ['auto', 'normal', 'start', 'end', 'flex-start', 'flex-end'
  *   `keep-all`（CJK 专用，Skyline 无）/ `break-word`（Skyline 无）/ `auto-phrase`（实验）未列 ⇒ 诊断跳过（不静默近似）。
  */
 const WORD_BREAK = ['normal', 'break-all']
+/**
+ * ★★★背景定位家族（2026-10-07 · css:next background-position · 静态单层）：**背景图层的图像盒**尺寸/位置/平铺。
+ *   值集为**声明形态**（长度/百分比/关键字）——真正的几何解析（pos% 减图尺寸、repeat 平铺相位）在宿主/snapshot 侧。
+ *   size：单/双值（长度或百分比；auto）；position：1-2 个（关键字/长度/百分比）；repeat：关键字枚举。
+ */
+const BACKGROUND_REPEAT = ['repeat', 'no-repeat']
+const isBgSize = (v: unknown): boolean => typeof v === 'string' && v.trim().length > 0 && /^(auto|\d*\.?\d+(px|%)?)(\s+(auto|\d*\.?\d+(px|%)?))?$/.test(v.trim())
+const isBgPosition = (v: unknown): boolean => typeof v === 'string' && v.trim().length > 0 && /^(left|center|right|top|bottom|\d*\.?\d+(px|%)?)(\s+(left|center|right|top|bottom|\d*\.?\d+(px|%)?)){0,2}$/.test(v.trim())
 
 export const PROP_TYPES = {
   Length: isLength,
@@ -64,6 +72,9 @@ export const PROP_TYPES = {
   Overflow: isEnum(OVERFLOW),
   JustifySelf: isEnum(JUSTIFY_SELF),
   WordBreak: isEnum(WORD_BREAK),
+  BackgroundSize: isBgSize,
+  BackgroundPosition: isBgPosition,
+  BackgroundRepeat: isEnum(BACKGROUND_REPEAT),
   Transform: (v: unknown): boolean => typeof v === 'string' && /^(translate|scale|rotate|skew)/i.test(v.trim()),
   TransformOrigin: (v: unknown): boolean => typeof v === 'string' && /^(left|right|top|bottom|center|\d+)/i.test(v.trim()),
 } as const

@@ -86,7 +86,10 @@ const VALUE_TYPE_BY_LEVEL = {
   // ★★★justify-self 项（2026-10-06）：网格项行内轴自对齐值类型（与 runtime PROP_TYPES.JustifySelf 同集）
   JustifySelf: 'enum',
   // ★★★word-break 项（2026-10-06）：行内断词策略值类型（与 runtime PROP_TYPES.WordBreak 同集）
-  WordBreak: 'enum',
+  WordBreak: 'enum',  // ★★★背景定位家族（2026-10-07）：size/position/repeat 值类型（与 runtime PROP_TYPES 同集）
+  BackgroundSize: 'enum',
+  BackgroundPosition: 'enum',
+  BackgroundRepeat: 'enum',
   Transform: 'transform',
   TransformOrigin: 'transform-origin',
   SEMANTIC_ONLY: 'semantic-only',

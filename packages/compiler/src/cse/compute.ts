@@ -58,6 +58,10 @@ const ENUM_PROPS = new Set([
   'justify-self',
   // ★★★word-break 项（2026-10-06）：行内断词策略（关键字枚举，小写归一）
   'word-break',
+  // ★★★背景定位家族（2026-10-07）：size/position/repeat（关键字/长度/百分比——字符串原样透传，仅归一空白）
+  'background-size',
+  'background-position',
+  'background-repeat',
 ])
 /** px-only 长度（CSS 不接受 %：border-width / 字距） */
 const PX_LENGTH_PROPS = new Set([
@@ -742,6 +746,10 @@ function mapToIrField(prop: string, val: CssComputedValue): { field: string; val
     'justify-self': 'justifySelf',
     // ★★★word-break 项（2026-10-06 · css:next P0·7× · CSS Text）：行内断词策略（继承属性；CSE 直通同名 IR 字段）
     'word-break': 'wordBreak',
+    // ★★★背景定位家族（2026-10-07）：CSE 直通同名 IR 字段（字符串）
+    'background-size': 'backgroundSize',
+    'background-position': 'backgroundPosition',
+    'background-repeat': 'backgroundRepeat',
     'box-sizing': 'boxSizing',
     'pointer-events': 'pointerEvents',
     // ★white-space：App 端由引擎消费（`nowrap` 是常见排版约束——批次 29 已加 no-op 支持）；

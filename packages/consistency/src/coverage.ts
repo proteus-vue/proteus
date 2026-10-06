@@ -97,6 +97,10 @@ export const SEMANTIC_FIELD_SNAPSHOT_KEYS: Readonly<Record<string, readonly stri
   whiteSpace: ['whiteSpace'],
   // ★★★word-break 项（2026-10-06）：行内断词策略（读数键 = 同名字符串）
   wordBreak: ['wordBreak'],
+  // ★★★背景定位家族（2026-10-07）：size/position/repeat（读数键 = 同名字符串）
+  backgroundSize: ['backgroundSize'],
+  backgroundPosition: ['backgroundPosition'],
+  backgroundRepeat: ['backgroundRepeat'],
 }
 
 /** 反向索引：快照读数键 → IR 字段（一个键只属一个字段——多对一由表保证） */

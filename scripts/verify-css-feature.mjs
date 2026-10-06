@@ -92,6 +92,10 @@ const PROBE_VALUES = {
   'white-space': ['white-space: nowrap', 'whiteSpace', 'nowrap'],
   'word-break': ['word-break: break-all', 'wordBreak', 'break-all'],
   'justify-self': ['justify-self: center', 'justifySelf', 'center'],
+  // ★★★背景定位家族（2026-10-07）：size/position/repeat 探针（字符串原样透传——CSE 归一空白小写）
+  'background-size': ['background-size: 50px 50px', 'backgroundSize', '50px 50px'],
+  'background-position': ['background-position: 25px 10px', 'backgroundPosition', '25px 10px'],
+  'background-repeat': ['background-repeat: no-repeat', 'backgroundRepeat', 'no-repeat'],
   'grid-area': ['grid-area: 1 / 2 / 3 / 4', 'gridArea', { start: 1, end: 3 }],
   'background-color': ['background-color: #112233', 'backgroundColor', '#112233'],
   color: ['color: #445566', 'color', '#445566'],
@@ -136,7 +140,7 @@ if (!probe) {
     parity.irField = irField
     parity.irValue = irVal
     parity.computedProbe = Object.fromEntries(
-      Object.entries(computed).filter(([k]) => ['inset', 'top', 'right', 'bottom', 'left', 'overflow-x', 'overflow-y', 'white-space', 'word-break', 'justify-self', 'grid-area', 'background-color', 'color', 'border-radius', 'text-align', 'opacity', 'font-size', 'letter-spacing', 'line-height', 'flex-direction', 'justify-content', 'align-items', 'gap', 'border-bottom-width', 'border-top-width', 'border-left-width', 'border-right-width', 'border-bottom-color', 'border-top-color', 'border-left-color', 'border-right-color', 'border-style', 'border-top-style', 'border-bottom-style', 'border-top-left-radius', 'border-bottom-right-radius'].includes(k)),
+      Object.entries(computed).filter(([k]) => ['inset', 'top', 'right', 'bottom', 'left', 'overflow-x', 'overflow-y', 'white-space', 'word-break', 'justify-self', 'grid-area', 'background-color', 'color', 'border-radius', 'text-align', 'opacity', 'font-size', 'letter-spacing', 'line-height', 'flex-direction', 'justify-content', 'align-items', 'gap', 'border-bottom-width', 'border-top-width', 'border-left-width', 'border-right-width', 'border-bottom-color', 'border-top-color', 'border-left-color', 'border-right-color', 'border-style', 'border-top-style', 'border-bottom-style', 'border-top-left-radius', 'border-bottom-right-radius', 'background-size', 'background-position', 'background-repeat'].includes(k)),
     )
     // 判据：IR 出值且与浏览器 resolved 语义一致（按形态）
     if (irVal === undefined) {

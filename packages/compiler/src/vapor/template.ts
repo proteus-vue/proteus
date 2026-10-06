@@ -101,7 +101,7 @@ export const APP_ENUM_VALUES: Record<string, readonly string[]> = {
 /** 绘制字段（宿主自绘读这些键；模板照样要带上，否则挂载后无底色/无字色） */
 // ★★★逐边 border 批（2026-10-05 · border-bottom 等 4 个 P0 项）：追加**逐边** width/color（宿主逐边绘制；
 //   uniform borderWidth/borderColor 保留 = 四边缺省值）。语料 21 处 `border-<side>: <w> <style> <color>`。
-export const APP_PAINT_FIELDS = ['backgroundColor', 'color', 'fontSize', 'fontWeight', 'fontFamily', 'textAlign', 'lineHeight', 'textOverflow', 'letterSpacing', 'textDecoration', 'visibility', 'borderRadius', 'borderColor', 'borderWidth', 'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth', 'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor', 'borderTopStyle', 'borderRightStyle', 'borderBottomStyle', 'borderLeftStyle', 'opacity', 'boxShadow', 'transform'] as const
+export const APP_PAINT_FIELDS = ['backgroundColor', 'color', 'fontSize', 'fontWeight', 'fontFamily', 'textAlign', 'lineHeight', 'textOverflow', 'letterSpacing', 'textDecoration', 'visibility', 'borderRadius', 'borderColor', 'borderWidth', 'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth', 'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor', 'borderTopStyle', 'borderRightStyle', 'borderBottomStyle', 'borderLeftStyle', 'opacity', 'boxShadow', 'transform', 'backgroundSize', 'backgroundPosition', 'backgroundRepeat'] as const
 const PAINT_FIELDS = new Set<string>(APP_PAINT_FIELDS)
 /**
  * ★批次 4（CSS 兼容对齐）：`text-align` 的**封闭集**（App 自绘文本在盒内的水平对齐）。
@@ -1084,6 +1084,28 @@ export function parseStaticStyle(
         }
         out.boxShadow = sh
         markImportant('boxShadow')
+        continue
+      }
+      // ★★★背景定位家族（2026-10-07 · css:next background-position · 静态单层）：
+      //   size/position/repeat 是**背景图层的图像盒**几何（作用于渐变/背景图；值原样下发宿主解析——
+      //   与 textAlign/transform 同类：字符串形态，宿主按 Web 几何算端点/平铺）。
+      //   支持形态（Web 子集）：size = 长度/百分比/auto（1–2 值）；position = 关键字/长度/百分比（1–2 值）；
+      //   repeat = repeat / no-repeat。多值/三值等复杂形态 ⇒ 诊断跳过（不静默近似）。
+      if (key === 'backgroundSize' || key === 'backgroundPosition' || key === 'backgroundRepeat') {
+        const v = rawVal.trim().toLowerCase()
+        const toks = splitTopLevelSpaces(v).filter(Boolean)
+        const isLenPct = (t: string): boolean => t === 'auto' || /^[+-]?(?:\d+\.?\d*|\.\d+)(px|rpx|%)$/.test(t) || /^[+-]?(?:\d+\.?\d*|\.\d+)$/.test(t)
+        const isPosKw = (t: string): boolean => t === 'left' || t === 'center' || t === 'right' || t === 'top' || t === 'bottom'
+        let ok = false
+        if (key === 'backgroundRepeat') ok = v === 'repeat' || v === 'no-repeat'
+        else if (key === 'backgroundSize') ok = toks.length >= 1 && toks.length <= 2 && toks.every(isLenPct)
+        else ok = toks.length >= 1 && toks.length <= 2 && toks.every((t) => isLenPct(t) || isPosKw(t))
+        if (!ok) {
+          pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 未解析（背景定位家族仅支持 size/position 的 1–2 值 [长度/百分比/auto/关键字]、repeat 的 repeat/no-repeat）——已跳过`)
+          continue
+        }
+        out[key] = v
+        markImportant(key)
         continue
       }
       // ★★★逐边 border 批：逐边颜色同走**归一化**通道（`border-top-color` 等）

@@ -1,9 +1,9 @@
 # CSS Web 全量能力清单（自动生成——勿手改；生成器 scripts/gen-css-feature-inventory.mjs）
 
 > 总 949 项（property 651 · selector 144 · at-rule 19 · function 105 · unit 30）
-> 实现：**not-started** 553 · **excluded** 280 · **implemented** 112 · **partial** 4
-> 优先级：P2 115 · excluded 280 · P0 25 · done 112 · P1 417
-> ★**可推项（非已实现/非排除）**：557（其中 **P0 25**）
+> 实现：**not-started** 550 · **excluded** 280 · **implemented** 115 · **partial** 4
+> 优先级：P2 115 · excluded 280 · P0 23 · done 115 · P1 416
+> ★**可推项（非已实现/非排除）**：554（其中 **P0 23**）
 
 ## P0 —— 语料在用但未实现（真实需求，最优先）
 
@@ -11,8 +11,6 @@
 |---|---|---|---|---|---|
 | `-webkit-line-clamp` | standard | WebKit Extensions, CSS Overflow | 4 | not-started | — |
 | `background-image` | standard | CSS Backgrounds and Borders | 2 | partial | 有结构化属性通道（非 CSS 属性形态）——CSS 写法待接 |
-| `background-position` | standard | CSS Backgrounds and Borders | 4 | not-started | 未接：背景定位家族（与 background-size 耦合）（证据：未接——**属「背景定位」家族**（需 background-size + 三端宿主渐变几何重写，本批=静态单层；动画/多层为具名边界）：见 docs/css-background-family-plan.md） |
-| `background-size` | standard | CSS Backgrounds and Borders | 2 | not-started | 未接：背景定位家族（与 background-position 耦合）（证据：未接——**属「背景定位」家族**（见 docs/css-background-family-plan.md）） |
 | `container-type` | standard | CSS Conditional Rules | 1 | not-started | — |
 | `grid-auto-columns` | standard | CSS Grid Layout | 1 | not-started | — |
 | `grid-auto-flow` | standard | CSS Grid Layout | 3 | not-started | 未接：自动流（证据：未接） |
@@ -44,7 +42,6 @@
 | `background-origin` | CSS Backgrounds and Borders | not-started |
 | `background-position-x` | CSS Backgrounds and Borders | not-started |
 | `background-position-y` | CSS Backgrounds and Borders | not-started |
-| `background-repeat` | CSS Backgrounds and Borders | not-started |
 | `border-end-end-radius` | CSS Logical Properties and Values | not-started |
 | `border-end-start-radius` | CSS Logical Properties and Values | not-started |
 | `border-image` | CSS Backgrounds and Borders | not-started |
@@ -112,5 +109,6 @@
 | `outline-width` | CSS Basic User Interface | not-started |
 | `overflow-clip-margin` | CSS Overflow | not-started |
 | `overflow-wrap` | CSS Text | not-started |
+| `perspective` | CSS Transforms | not-started |
 
 （P2 与 excluded 全量见 JSON；本 MD 只列推进面）
