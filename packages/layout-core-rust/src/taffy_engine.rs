@@ -177,6 +177,9 @@ impl TaffyEngine {
             if let Some(rows) = style.grid_template_rows.as_deref() {
                 out.grid_template_rows = parse_grid_tracks(rows);
             }
+            if let Some(gaf) = style.grid_auto_flow.as_deref() {
+                out.grid_auto_flow = parse_grid_auto_flow(gaf);
+            }
         }
 
         // ★批次 41：grid item 放置（grid-column / grid-row 线号 → taffy Line<GridPlacement>）——
@@ -1310,6 +1313,19 @@ fn parse_justify_self(s: &str) -> AlignSelf {
 /// ★批次 12：显式网格轨迹串 `1fr 1fr 200px` → taffy `GridTemplateComponent` 列表。
 ///   支持 `<n>fr`（弹性）与 `<n>px`/纯数字（定长）；`auto`/`minmax`/`repeat` **未支持**（编译器已展开
 ///   repeat，其余 token 保守跳过——宁漏勿误，不猜）。
+/** ★★★grid-auto-flow 项（2026-10-08）：字符串 → taffy `GridAutoFlow`。
+ *   值集（编译器已归一 row dense → dense）：row / column / dense / column dense。
+ *   未知值 ⇒ 回落 Row（taffy 默认；编译器已诊断跳过非法值）。 */
+fn parse_grid_auto_flow(s: &str) -> taffy::GridAutoFlow {
+    match s.trim() {
+        "row" => taffy::GridAutoFlow::Row,
+        "column" => taffy::GridAutoFlow::Column,
+        "dense" | "row dense" => taffy::GridAutoFlow::RowDense,
+        "column dense" => taffy::GridAutoFlow::ColumnDense,
+        _ => taffy::GridAutoFlow::Row,
+    }
+}
+
 fn parse_grid_tracks(s: &str) -> Vec<taffy::GridTemplateComponent<String>> {
     let mut out: Vec<taffy::GridTemplateComponent<String>> = Vec::new();
     for tok in s.split_whitespace() {

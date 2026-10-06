@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-06T06:14:14.667Z",
+  "generatedAt": "2026-10-06T06:35:13.798Z",
   "rows": [
     {
       "end": "mp",
@@ -17,6 +17,12 @@
       "end": "mp",
       "page": "border.png",
       "out": "css-conformance/results/side-by-side/border.mp-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "mp",
+      "page": "grid-auto-flow.png",
+      "out": "css-conformance/results/side-by-side/grid-auto-flow.mp-vs-web.png",
       "status": "ok"
     },
     {
@@ -69,6 +75,12 @@
     },
     {
       "end": "android",
+      "page": "grid-auto-flow.png",
+      "out": "css-conformance/results/side-by-side/grid-auto-flow.android-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "android",
       "page": "justify-self.png",
       "out": "css-conformance/results/side-by-side/justify-self.android-vs-web.png",
       "status": "ok"
@@ -117,6 +129,12 @@
     },
     {
       "end": "ios",
+      "page": "grid-auto-flow.png",
+      "out": "css-conformance/results/side-by-side/grid-auto-flow.ios-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "ios",
       "page": "justify-self.png",
       "out": "css-conformance/results/side-by-side/justify-self.ios-vs-web.png",
       "status": "ok"
@@ -161,6 +179,12 @@
       "end": "harmony",
       "page": "border.png",
       "out": "css-conformance/results/side-by-side/border.harmony-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "harmony",
+      "page": "grid-auto-flow.png",
+      "out": "css-conformance/results/side-by-side/grid-auto-flow.harmony-vs-web.png",
       "status": "ok"
     },
     {

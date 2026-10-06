@@ -1199,6 +1199,9 @@ public final class VaporRenderHost {
             // ★★批次 41 补登记（同款漏项，本轮审计顺带抓出）：grid-column/grid-row 线号放置——
             //   内核（taffy Line<GridPlacement>）已消费但本白名单一直没登记 ⇒ 端上放置失效（静默）。
             "gridColumn", "gridRow",
+            // ★★★grid-auto-flow 项（2026-10-08）：自动放置——内核（taffy GridAutoFlow）已消费，
+            //   漏登记 ⇒ 请求树不带 ⇒ 内核静默用默认（与 justifySelf/gridColumn 同款漏项），门禁 check:host-kernel-keys 抓出。
+            "gridAutoFlow",
             "widthRatio", "heightRatio", "marginAuto", "minWidthPct", "maxWidthPct", "minHeightPct", "maxHeightPct", "overflow",
             // ★静态基态声明（内核要解析）：裁剪形状 + 路径本体（+ 描边色/宽随 svgPath 一起进）
             "clipPath", "svgPath", "svgPathTo", "perspective"));

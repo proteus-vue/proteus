@@ -59,6 +59,8 @@ export const SEMANTIC_FIELD_SNAPSHOT_KEYS: Readonly<Record<string, readonly stri
   gridRow: ['gridRow'],
   // ★★★justify-self 项（2026-10-06）：网格项行内轴自对齐（读数键 = 同名字符串）
   justifySelf: ['justifySelf'],
+  // ★★★grid-auto-flow 项（2026-10-08）：自动放置（读数键 = 同名字符串）
+  gridAutoFlow: ['gridAutoFlow'],
   /* ── 绘制 ── */
   backgroundColor: ['backgroundColor'],
   color: ['color'],

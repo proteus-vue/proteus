@@ -129,6 +129,7 @@
 | text | `white-space` | supported | supported | absent | L4 | 降级 | conditional | 白空格（多行/保留空白）走平台文本引擎（不自研）——App 仅支持 `nowrap`（= App 单行默认，no-op）；`normal`/`pre`/`pre-wrap`/`pre-line` 未支持（诊断）。★文本维已含 fontSize/color/fontWeight/textAlign/line-height/text-overflow/letter-spacing/**text-decoration**（批 35） |
 | layout | `pointer-events` | not-measured | supported | supported | L2 | 编译期折叠 | conditional | ★批次 32（2026-10-04 · ★基准 = Web）：`none` / `auto`。`none` ⇒ 该节点**不参与命中测试**（事件穿透到其下——浮层/遮罩刚需），但**仍占位**（有几何）。CSS **可继承**（父 none ⇒ 子默认 none、子 auto 可覆盖）——编译期按树算 computed 值。内核 `hit_path` 逐节点跳过 `pointer_events==false`（绘制/层不动——node 仍绘制）。只有内核 hitTest 消费（三端同一命中实现）。 |
 | paint | `visibility` | supported | supported | supported | L1 | 编译期折叠 | universal | ★批次 25（2026-10-04 · ★基准 = Web）：`visible` / `hidden`。与 `display:none` 不同——`hidden` **仍占位**（保留布局），只是**不绘制**（宿主跳过绘制该节点）。CSS **可继承**（父 hidden ⇒ 子默认 hidden；子显式 **visible 可覆盖**）——编译期按树算 computed 值（每节点独立标记）。宿主：iOS `layer.isHidden`（子层随父隐藏）· Android Cmd 跳过（color/text/border 清零）· 鸿蒙指令不绘制。诚实边界：`collapse`（表格行折叠）未支持（诊断） |
+| layout | `grid-auto-flow` | not-measured | not-listed | supported | L2 | 直映射 | conditional | ★★★grid-auto-flow 项（2026-10-08 · css:next P0·3× · CSS Grid）：类 grid 容器的**自动放置方向/密度**。契约：新级别 GridAutoFlow（四同步）；值集 = 四端可表达子集（row / column / dense / column dense；Web `row dense` 归一为 `dense`）；编译器 APP_LAYOUT_FIELDS + 封闭集 + 折叠分支；CSE 直通 IR 字段 gridAutoFlow；内核 LStyle.grid_auto_flow → taffy `Style.grid_auto_flow`（GridAutoFlow 原生，仅 grid 容器消费——item 上被忽略，与 Web 同）；consistency 链（applier/snapshot/probes/coverage）。★诚实边界：Skyline 官方属性表无 grid 族（该端无 Grid 容器，grid→嵌套 flex degrade）——主承载端为 App（自研内核）。 |
 
 > 表中**带编译器字段**的行（对应 `packages/compiler/src/vapor/template.ts` 的 LAYOUT/PAINT_FIELDS）是
 > 「编译器属性」口径（M1 一致性覆盖率的分母来源）；其余行是选择器 / @rule / 引擎通道等**非属性字段**能力。
@@ -169,6 +170,7 @@
 | `text-align` | not-measured | supported | supported | ★批次 4（2026-10-04）：封闭集 left/center/right（justify/st 等诊断跳过）。宿主：iOS CATextLayer.alignmentMode |
 | `white-space` | supported | supported | absent | 白空格（多行/保留空白）走平台文本引擎（不自研）——App 仅支持 `nowrap`（= App 单行默认，no-op）；`normal`/`pre`/`pre-wrap`/`pr |
 | `pointer-events` | not-measured | supported | supported | ★批次 32（2026-10-04 · ★基准 = Web）：`none` / `auto`。`none` ⇒ 该节点**不参与命中测试**（事件穿透到其下——浮层/遮罩刚需），但 |
+| `grid-auto-flow` | not-measured | not-listed | supported | ★★★grid-auto-flow 项（2026-10-08 · css:next P0·3× · CSS Grid）：类 grid 容器的**自动放置方向/密度**。契约：新级别 |
 
 ## 官方 Skyline 对齐开关
 

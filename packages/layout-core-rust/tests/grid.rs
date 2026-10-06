@@ -161,3 +161,35 @@ fn justify_self_with_padding_real_shape() {
     assert!(r(i_center).x > r(i_start).x, "center 应比 start 右移（center={} start={}）", r(i_center).x, r(i_start).x);
     assert!(r(i_end).x > r(i_center).x, "end 应最右（end={} center={}）", r(i_end).x, r(i_center).x);
 }
+
+// ★★★grid-auto-flow 项（2026-10-08 · css:next P0·3×）：**自动放置方向**的引擎行为。
+//   容器 2 显式列（各 100）+ 3 个子项（3 个落格）：`row` ⇒ 第 3 个折到第 2 行（x=0,y=100）；
+//   `column` ⇒ 第 3 个进隐式第 3 列（x=200,y=0）。与 Web 真值同（真 Chromium 实测）。
+#[test]
+fn grid_auto_flow_row_vs_column() {
+    let layout = |flow: &str| -> Vec<(f32, f32)> {
+        let mut tree = LayoutTree::new();
+        let mut root_style = LStyle { width: Some(300.0), height: Some(200.0), ..Default::default() };
+        root_style.display = Display::Grid;
+        root_style.grid_template_columns = Some("100px 100px".to_string());
+        root_style.grid_auto_flow = Some(flow.to_string());
+        let root = tree.push(LNode::new(1, root_style));
+        let mut ids = vec![];
+        for i in 0..3u32 {
+            let leaf = LStyle { width: Some(100.0), height: Some(100.0), ..Default::default() };
+            let idx = tree.push(LNode::new(2 + i, leaf));
+            tree.add_child(root, idx);
+            ids.push(idx);
+        }
+        tree.roots.push(root);
+        let mut engine = TaffyEngine::new();
+        let out = engine.layout(&mut tree, RootConstraint::definite(300.0, 200.0));
+        ids.iter().map(|i| { let r = out.rect_of(*i).expect("有几何"); (r.x, r.y) }).collect()
+    };
+    let row = layout("row");
+    assert!(row[0].0.abs() < 0.5 && row[0].1.abs() < 0.5, "row: 项0 (0,0)，实际 {:?}", row[0]);
+    assert!((row[1].0 - 100.0).abs() < 0.5 && row[1].1.abs() < 0.5, "row: 项1 (100,0)，实际 {:?}", row[1]);
+    assert!(row[2].0.abs() < 0.5 && (row[2].1 - 100.0).abs() < 0.5, "row: 项2 折第2行 (0,100)，实际 {:?}", row[2]);
+    let col = layout("column");
+    assert!((col[2].0 - 200.0).abs() < 0.5 && col[2].1.abs() < 0.5, "column: 项2 进第3列 (200,0)，实际 {:?}", col[2]);
+}

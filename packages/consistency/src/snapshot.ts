@@ -129,6 +129,8 @@ export interface NormalizedStyle {
   alignSelf?: string
   // ★★★justify-self 项（2026-10-06）：网格项行内轴自对齐（字符串枚举——Web 计算值原样收录）
   justifySelf?: string
+  // ★★★grid-auto-flow 项（2026-10-08）：自动放置方向/密度（字符串枚举——Web computed 原样收录）
+  gridAutoFlow?: string
   flexGrow?: number
   flexShrink?: number
   gap?: number
@@ -443,6 +445,8 @@ const STYLE_KEYS = new Set([
   'flexDirection', 'justifyContent', 'alignItems', 'alignSelf',
   // ★★★justify-self 项（2026-10-06）：网格项行内轴自对齐（与接口/覆盖表同批——闭集纪律）
   'justifySelf',
+  // ★★★grid-auto-flow 项（2026-10-08）：自动放置（与接口/覆盖表同批——闭集纪律）
+  'gridAutoFlow',
   'flexGrow', 'flexShrink', 'gap', 'overflow',
   // ★★★overflow-x 项（2026-10-06）：逐轴溢出（与接口/覆盖表同批——闭集纪律）
   'overflowX', 'overflowY',
@@ -506,6 +510,7 @@ export function validateStyleSnapshot(snap: unknown): ValidationResult {
         k === 'display' || k === 'position' || k === 'visibility' || k === 'fontFamily'
         || k === 'flexDirection' || k === 'justifyContent' || k === 'alignItems' || k === 'alignSelf' || k === 'overflow'
         || k === 'justifySelf'   // ★★★justify-self 项（2026-10-06）
+        || k === 'gridAutoFlow'  // ★★★grid-auto-flow 项（2026-10-08）
         || k === 'overflowX' || k === 'overflowY'   // ★★★overflow-x 项（2026-10-06）
         // ★★★G-61 B3：新增字符串族（与接口/STYLE_KEYS 同步——三处同改）
         || k === 'textAlign' || k === 'textOverflow' || k === 'textDecoration' || k === 'pointerEvents'

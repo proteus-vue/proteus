@@ -163,7 +163,6 @@ const SHORTHAND_EXPANSION = {
   'transition-duration': { to: [], evidence: '同上', separate: true, note: '**独立通道**' },
   'background-image': { to: ['fillGradient'], evidence: 'vapor/template.ts:976-980（渐变→fillGradient）', note: '渐变走 fillGradient 通道（url() 图片另有原生组件）', conditional: true },
   'grid-template-areas': { to: [], evidence: '未接（CSE 支持 template-columns/rows；areas 未接）', note: '命名区域', notYet: true },
-  'grid-auto-flow': { to: [], evidence: '未接', notYet: true, note: '自动流' },
   'aspect-ratio': { to: ['aspectRatio'], evidence: 'IR 在册（engine-field）', note: '宽高比' },
   'object-fit': { to: [], evidence: '未接（图片组件通道）', notYet: true, note: '图片填充方式' },
   'word-break': { to: [], evidence: '未接', notYet: true, note: '断词' },

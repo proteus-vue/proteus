@@ -17,20 +17,20 @@
       "unit": 30
     },
     "byImpl": {
-      "not-started": 550,
+      "not-started": 549,
       "excluded": 280,
-      "implemented": 115,
+      "implemented": 116,
       "partial": 4
     },
     "byPriority": {
       "P2": 115,
       "excluded": 280,
-      "P0": 23,
-      "done": 115,
+      "P0": 22,
+      "done": 116,
       "P1": 416
     },
-    "actionable": 554,
-    "actionableP0": 23
+    "actionable": 553,
+    "actionableP0": 22
   },
   "entries": [
     {
@@ -3212,11 +3212,11 @@
       "initial": "0% 0%",
       "syntax": "<bg-position>#",
       "impl": "implemented",
-      "implNote": "IR 注册表在册（scope=engine-only · 矩阵 BackgroundPosition）",
+      "implNote": "IR 注册表在册（scope=semantic · 矩阵 BackgroundPosition）",
       "evidencedBy": {
         "inIrRegistry": true,
-        "irScope": "engine-only",
-        "inCompilerFold": false,
+        "irScope": "semantic",
+        "inCompilerFold": true,
         "matrixLevel": "BackgroundPosition",
         "webSupport": null
       },
@@ -3281,11 +3281,11 @@
       "initial": "repeat",
       "syntax": "<repeat-style>#",
       "impl": "implemented",
-      "implNote": "IR 注册表在册（scope=engine-only · 矩阵 BackgroundRepeat）",
+      "implNote": "IR 注册表在册（scope=semantic · 矩阵 BackgroundRepeat）",
       "evidencedBy": {
         "inIrRegistry": true,
-        "irScope": "engine-only",
-        "inCompilerFold": false,
+        "irScope": "semantic",
+        "inCompilerFold": true,
         "matrixLevel": "BackgroundRepeat",
         "webSupport": null
       },
@@ -3304,11 +3304,11 @@
       "initial": "auto auto",
       "syntax": "<bg-size>#",
       "impl": "implemented",
-      "implNote": "IR 注册表在册（scope=engine-only · 矩阵 BackgroundSize）",
+      "implNote": "IR 注册表在册（scope=semantic · 矩阵 BackgroundSize）",
       "evidencedBy": {
         "inIrRegistry": true,
-        "irScope": "engine-only",
-        "inCompilerFold": false,
+        "irScope": "semantic",
+        "inCompilerFold": true,
         "matrixLevel": "BackgroundSize",
         "webSupport": null
       },
@@ -7884,18 +7884,18 @@
       "inherited": false,
       "initial": "row",
       "syntax": "[ row | column ] || dense",
-      "impl": "not-started",
-      "implNote": "未接：自动流（证据：未接）",
+      "impl": "implemented",
+      "implNote": "IR 注册表在册（scope=semantic · 矩阵 GridAutoFlow）",
       "evidencedBy": {
-        "inIrRegistry": false,
-        "irScope": null,
-        "inCompilerFold": false,
-        "matrixLevel": null,
+        "inIrRegistry": true,
+        "irScope": "semantic",
+        "inCompilerFold": true,
+        "matrixLevel": "GridAutoFlow",
         "webSupport": null
       },
       "usage": 3,
-      "priority": "P0",
-      "acceptance": "none"
+      "priority": "done",
+      "acceptance": "pending"
     },
     {
       "id": "grid-auto-rows",
