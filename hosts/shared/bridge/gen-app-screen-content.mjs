@@ -30,9 +30,15 @@ const PLATFORM = platIdx >= 0 ? argv[platIdx + 1] : 'android'
 // ★唯一实现：CLI 的 App 屏内容构建器（`proteus build --target <ios|android|harmony>` 同一函数）
 const cliMod = await import(pathToFileURL(path.join(ROOT, 'packages/cli/src/app-content.ts')).href)
 const { buildAppScreenContent } = cliMod
+// ★★★B1：运行期屏内容产物（tpl/table/events/handlers/data）——App 壳走统一运行期（交互/响应式/导航）
+const rtMod = await import(pathToFileURL(path.join(ROOT, 'packages/cli/src/app-runtime-content.ts')).href)
+const { buildAppRuntimeContent } = rtMod
 
 const r = await buildAppScreenContent(PROJECT, PLATFORM)
 const content = JSON.parse(fs.readFileSync(r.outFile, 'utf-8'))
+
+const rt = await buildAppRuntimeContent(PROJECT, PLATFORM)
+const runtimeContent = JSON.parse(fs.readFileSync(rt.outFile, 'utf-8'))
 
 // 批次 43（superapp 独立应用）：从项目统一导航产物提取**屏注册表**（screens/tabNames + tab 标题）——
 //   供 App 端**真实应用入口**（路由栈 + tab）消费。共一份路由树（与 Web/MP 同源）。
@@ -65,10 +71,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = ${JSON.stringif
 // 批次 43：**屏注册表**（来源项目 router/auto-routes.ts；screens/tabNames/tab 标题）——
 //   App 端真实应用入口据此装配路由栈与 tab。与 Web/MP 同一棵路由树。
 export const APP_SCREEN_REGISTRY = ${JSON.stringify(registry, null, 2)}
+
+// ★★★B1：**运行期屏内容**（每屏 tpl/table/events/handlers/data）——App 壳经统一运行期
+//   （createScreenRuntime：实例化 + 订阅 + 手势派发）驱动；交互/响应式/导航全在此产物里。
+export const APP_RUNTIME_CONTENT = ${JSON.stringify(runtimeContent, null, 2)}
 `
 fs.writeFileSync(OUT, header)
 console.log(
-  `[gen-app-screen-content] ✅ ${path.relative(ROOT, OUT)}（编译 ${r.compiled} 页 / 跳过 ${r.skipped}）`,
+  `[gen-app-screen-content] ✅ ${path.relative(ROOT, OUT)}（编译 ${r.compiled} 页 / 跳过 ${r.skipped}；运行期 ${rt.compiled} 页）`,
 )
 const uniq = [...new Set(r.diagnostics)]
 if (uniq.length) {
