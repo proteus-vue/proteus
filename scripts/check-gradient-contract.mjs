@@ -37,12 +37,12 @@ try {
 //   LightsHost 读（写进 Cmd），子键在 ProteusHostView.GradSpec.parse 读）——
 //   合并源码后检查，避免"文件选错 ⇒ 假红/假绿"。
 const CONSUMERS = [
-  { label: 'iOS 宿主（applyGradient）', files: ['hosts/ios/ProteusHost/selfdraw-scene.swift'] },
+  { label: 'iOS 宿主（applyGradient）', files: ['hosts/ios/ProteusHost/runtime/selfdraw-scene.swift'] },
   {
     label: 'Android 宿主（LightsHost 取键 + GradSpec 解析）',
     files: [
-      'hosts/android/app/src/main/java/dev/proteus/layoutcore/LightsHost.java',
-      'hosts/android/app/src/main/java/dev/proteus/layoutcore/ProteusHostView.java',
+      'hosts/android/app/src/main/java/dev/proteus/layoutcore/dev/LightsHost.java',
+      'hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/ProteusHostView.java',
     ],
   },
   // ★适配器只需透传**顶层键**（子键由宿主解析）——否则请求树不带声明（与 clipPath 漏键同款静默）

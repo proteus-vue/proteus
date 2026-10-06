@@ -39,7 +39,7 @@ echo "    $UDID"
 
 echo "==> ② 零设备类型检查（改 Swift 先过这一步）"
 if ! xcrun --sdk iphoneos swiftc -typecheck -target arm64-apple-ios15.0 \
-      -framework UIKit -parse-as-library "$HERE/ProteusHost/l4-scene.swift" 2>&1 | head -8; then
+      -framework UIKit -parse-as-library "$HERE/ProteusHost/dev/l4-scene.swift" 2>&1 | head -8; then
   echo "✗ 类型检查失败"; exit 2
 fi
 
@@ -47,7 +47,7 @@ echo "==> ③ 编译（设备 SDK）"
 rm -rf "$APP"; mkdir -p "$APP"
 xcrun --sdk iphoneos swiftc -O -target arm64-apple-ios15.0 \
   -framework UIKit -parse-as-library \
-  -o "$APP/L4SceneDevice" "$HERE/ProteusHost/l4-scene.swift" 2>&1 | grep -E "error:" | head -5
+  -o "$APP/L4SceneDevice" "$HERE/ProteusHost/dev/l4-scene.swift" 2>&1 | grep -E "error:" | head -5
 [ -f "$APP/L4SceneDevice" ] || { echo "✗ Swift 编译未产出可执行文件"; exit 3; }
 
 echo "==> ④ 组装 .app + 签名"

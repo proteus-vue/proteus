@@ -11,7 +11,7 @@
 //   把**字节**冻进 Java 源码；设备上由**核心解码**并断言几何 == TS 侧声明的期望值。
 //   ⇒ 契约被真正跨语言验证：TS 编码（桌面）→ Rust 解码（真机 arm64 + JNI 编组）。
 //
-// 【产物】`app/src/main/java/dev/proteus/layoutcore/OpsFixture.java`（生成物，勿手改）
+// 【产物】`app/src/main/java/dev/proteus/layoutcore/dev/OpsFixture.java`（生成物，勿手改）
 //
 // 用法：node hosts/android/gen-ops-fixture.mjs
 import fs from 'node:fs'
@@ -22,7 +22,7 @@ import { createRequire } from 'node:module'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(HERE, '../..')
-const OUT = path.join(HERE, 'app/src/main/java/dev/proteus/layoutcore/OpsFixture.java')
+const OUT = path.join(HERE, 'app/src/main/java/dev/proteus/layoutcore/dev/OpsFixture.java')
 
 // ── 场景（必须在 TS 侧与设备侧**同源**：树由本脚本产出，设备照发） ──
 //

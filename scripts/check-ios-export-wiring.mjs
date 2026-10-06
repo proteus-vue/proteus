@@ -24,12 +24,12 @@ import { fileURLToPath } from 'node:url'
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(HERE, '..')
 const TS_FILE = path.join(ROOT, 'hosts/ios/bridge/entry-selfdraw.ts')
-const SWIFT_FILE = path.join(ROOT, 'hosts/ios/ProteusHost/selfdraw-scene.swift')
+const SWIFT_FILE = path.join(ROOT, 'hosts/ios/ProteusHost/runtime/selfdraw-scene.swift')
 // ★★第二条腿（2026-09-30 续，iOS 对齐轮）：**宿主运行时桥**也是一对（JS↔JSExport），
 //   同受"接线不靠记忆"纪律管——本轮加 `invoke` 若漏进协议，现象同样是运行时 TypeError
 //   且被 catch 吞成静默（与自绘桥同类形态）。⇒ 第二对：
 const HR_TS_FILE = path.join(ROOT, 'hosts/shared/bridge/entry-host-runtime.ts')
-const HR_SWIFT_FILE = path.join(ROOT, 'hosts/ios/ProteusHost/host-runtime-scene.swift')
+const HR_SWIFT_FILE = path.join(ROOT, 'hosts/ios/ProteusHost/dev/host-runtime-scene.swift')
 const VERBOSE = process.argv.includes('--verbose')
 
 /** 从 TS 的 `interface SelfDrawNative { ... }` 抽方法名 */
@@ -109,12 +109,12 @@ function main() {
   const ts = fs.readFileSync(TS_FILE, 'utf-8')
   const swift = fs.readFileSync(SWIFT_FILE, 'utf-8')
   errs.push(...checkPair('自绘桥', jsMethods(ts), protoMethods(swift), bridgeMethods(swift),
-    'hosts/ios/ProteusHost/selfdraw-scene.swift', 'SelfDrawExports'))
+    'hosts/ios/ProteusHost/runtime/selfdraw-scene.swift', 'SelfDrawExports'))
   // ② 宿主运行时桥（2026-09-30 续）
   const hrTs = fs.readFileSync(HR_TS_FILE, 'utf-8')
   const hrSwift = fs.readFileSync(HR_SWIFT_FILE, 'utf-8')
   errs.push(...checkPair('宿主运行时桥', hrJsMethods(hrTs), hrProtoMethods(hrSwift), hrImplMethods(hrSwift),
-    'hosts/ios/ProteusHost/host-runtime-scene.swift', 'HostRuntimeExports'))
+    'hosts/ios/ProteusHost/dev/host-runtime-scene.swift', 'HostRuntimeExports'))
 
   if (errs.length > 0) {
     for (const e of errs) console.error(e)

@@ -29,7 +29,7 @@ xcrun --sdk iphonesimulator swiftc \
   -framework UIKit -framework JavaScriptCore \
   -parse-as-library \
   -o "$BUILD/ProteusHost" \
-  "$HERE/ProteusHost/main.swift"
+  "$HERE/ProteusHost/shell/main.swift"
 
 echo "==> ③ 组装 .app 包"
 rm -rf "$APP"

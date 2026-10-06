@@ -27,7 +27,7 @@ mkdir -p "$BUILD" "$OUT"
 
 echo "==> ① 零设备类型检查（改 Swift 先过这一步）"
 if ! xcrun --sdk iphonesimulator swiftc -typecheck -target arm64-apple-ios15.0-simulator \
-      -framework UIKit -parse-as-library "$HERE/ProteusHost/l4-scene.swift" 2>&1 | head -8; then
+      -framework UIKit -parse-as-library "$HERE/ProteusHost/dev/l4-scene.swift" 2>&1 | head -8; then
   echo "✗ 类型检查失败"; exit 2
 fi
 
@@ -35,7 +35,7 @@ echo "==> ② 编译（模拟器 SDK）"
 rm -rf "$APP"; mkdir -p "$APP"
 xcrun --sdk iphonesimulator swiftc -O -target arm64-apple-ios15.0-simulator \
   -framework UIKit -parse-as-library \
-  -o "$APP/L4Scene" "$HERE/ProteusHost/l4-scene.swift" 2>&1 | grep -E "error:" | head -5
+  -o "$APP/L4Scene" "$HERE/ProteusHost/dev/l4-scene.swift" 2>&1 | grep -E "error:" | head -5
 [ -f "$APP/L4Scene" ] || { echo "✗ Swift 编译未产出可执行文件"; exit 3; }
 
 echo "==> ③ 组装 .app"

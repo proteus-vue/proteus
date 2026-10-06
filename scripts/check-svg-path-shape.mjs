@@ -33,16 +33,16 @@ const MORPH_KEY = 'svgPathTo'
 const CONSUMERS = [
   {
     label: 'iOS 宿主（cgPathFromSegs + styleOf 透传）',
-    file: 'hosts/ios/ProteusHost/selfdraw-scene.swift',
+    file: 'hosts/ios/ProteusHost/runtime/selfdraw-scene.swift',
   },
   {
     label: 'Android 宿主（setNodeSvgStroke + CORE_KEYS）',
-    file: 'hosts/android/app/src/main/java/dev/proteus/layoutcore/ProteusHostView.java',
+    file: 'hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/ProteusHostView.java',
   },
   // 适配器只透传顶层键（子键由宿主解析）
   { label: '自绘适配器（LAYOUT_KEYS）', file: 'packages/renderer-app/src/adapters/selfdraw.ts', onlyMorph: true },
   // Android 节目宿主的 CORE_KEYS 也要带（否则请求树不带 B 态）
-  { label: 'Android 节目宿主（CORE_KEYS）', file: 'hosts/android/app/src/main/java/dev/proteus/layoutcore/LightsHost.java', onlyMorph: true },
+  { label: 'Android 节目宿主（CORE_KEYS）', file: 'hosts/android/app/src/main/java/dev/proteus/layoutcore/dev/LightsHost.java', onlyMorph: true },
 ]
 
 const { names, error } = variantNames()

@@ -44,7 +44,7 @@ xcrun --sdk iphoneos swiftc -O \
   -framework UIKit -framework CoreText \
   -parse-as-library \
   -o "$APP/ProteusCALayer" \
-  "$HERE/ProteusHost/calayer-scene.swift" \
+  "$HERE/ProteusHost/dev/calayer-scene.swift" \
   "$LIB"
 
 echo "==> ④ 组装 .app"

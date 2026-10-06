@@ -30,7 +30,7 @@ echo "==> ② 编译 Swift 宿主"
 rm -rf "$APP"; mkdir -p "$APP"
 xcrun --sdk iphoneos swiftc -O -target arm64-apple-ios15.0 \
   -framework UIKit -framework CoreText -parse-as-library \
-  -o "$APP/ProteusBench" "$HERE/ProteusHost/layout-core-bench.swift" "$LIB"
+  -o "$APP/ProteusBench" "$HERE/ProteusHost/dev/layout-core-bench.swift" "$LIB"
 
 echo "==> ③ 组装 .app"
 cat > "$APP/Info.plist" <<PLIST

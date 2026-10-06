@@ -110,12 +110,12 @@ function kernelRecordBytes() {
 const CONSUMERS = [
   {
     label: 'iOS 宿主（animUpdateRecordBytes）',
-    file: 'hosts/ios/ProteusHost/selfdraw-scene.swift',
+    file: 'hosts/ios/ProteusHost/runtime/selfdraw-scene.swift',
     re: /animUpdateRecordBytes\s*=\s*(\d+)/,
   },
   {
     label: 'Android 宿主（ANIM_RECORD_BYTES）',
-    file: 'hosts/android/app/src/main/java/dev/proteus/layoutcore/ProteusHostView.java',
+    file: 'hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/ProteusHostView.java',
     re: /ANIM_RECORD_BYTES\s*=\s*(\d+)\s*;/,
   },
   {
@@ -224,8 +224,8 @@ console.log(`\n✅ 每帧动画记录线格式一致：${k.width}B/条（内核 
     },
   ]
   const CONSUMERS = [
-    { label: 'iOS', file: 'hosts/ios/ProteusHost/selfdraw-scene.swift' },
-    { label: 'Android', file: 'hosts/android/app/src/main/java/dev/proteus/layoutcore/ProteusHostView.java' },
+    { label: 'iOS', file: 'hosts/ios/ProteusHost/runtime/selfdraw-scene.swift' },
+    { label: 'Android', file: 'hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/ProteusHostView.java' },
   ]
   let bad = 0
   for (const c of CONSUMERS) {

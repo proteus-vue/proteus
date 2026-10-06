@@ -1,0 +1,55 @@
+// Proteus 鸿蒙宿主 —— 构建与签名配置【模板】
+//
+// ★★★ 这个文件是**模板**，不是真正生效的配置。
+//   真正生效的是同目录的 `build-profile.json5`（**已被 .gitignore 忽略，不得入库**）——
+//   由 `build-host-app.sh` 在首次构建时从本模板自动复制生成。
+//
+// ★★★ 为什么拆成"模板 + 本地文件"（2026-10-07）：
+//   签名配置（signingConfigs）含**本机绝对路径 + keyPassword/storePassword**，
+//   属**机器本地状态**，绝不能入库。此前它被误提交入库（含明文口令）——
+//   本文件取代它作为入库形态，真实配置改由本地生成 + 签名。
+//
+// 【如何拿到可装机的签名（本机首次必做）】
+//   本设备（华为商业版 HarmonyOS）只信任**华为 CA** 签发的调试证书；社区 OpenHarmony
+//   调试材料签出的 hap 被设备拒装（`fail to verify pkcs7 file`）。⇒ 用 DevEco Studio 生成：
+//     1) 打开 DevEco Studio → File → Project Structure → Signing Configs
+//     2) 勾选 "Automatically generate signature"（需登录华为账号）
+//     3) DevEco 自动注册本机设备 UDID 并生成 p12/cer/p7b，路径写入 `build-profile.json5`
+//   完成后本目录的 `build-profile.json5` 会出现 signingConfigs 内容（本地状态，勿提交）。
+//   ★只跑 unsigned 构建链（不装机）时无需任何配置——`signingConfigs: []` 即可产出 unsigned hap。
+{
+  "app": {
+    "signingConfigs": [],
+    "products": [
+      {
+        "name": "default",
+        "signingConfig": "default",
+        "compatibleSdkVersion": "5.0.5(17)",
+        "targetSdkVersion": "5.0.5(17)",
+        "runtimeOS": "HarmonyOS"
+      }
+    ],
+    "buildModeSet": [
+      {
+        "name": "debug"
+      },
+      {
+        "name": "release"
+      }
+    ]
+  },
+  "modules": [
+    {
+      "name": "entry",
+      "srcPath": "./entry",
+      "targets": [
+        {
+          "name": "default",
+          "applyToProducts": [
+            "default"
+          ]
+        }
+      ]
+    }
+  ]
+}

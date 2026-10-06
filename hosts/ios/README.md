@@ -31,7 +31,7 @@ hosts/ios/
 ├── bridge/entry.ts        # JS 入口：适配器（ProteusNative adapter）+ 业务 render 函数（零平台判断）
 ├── bridge/build.mjs       # esbuild → 单文件 IIFE（JSC 无模块加载器，必须预打包）
 ├── bridge/dist/bundle.js  # 产物（约 452 KB：Vue 运行时 + render-backend + 入口）
-├── ProteusHost/main.swift # Swift 宿主：JSExport 桥 + UIView 注册表 + 快照落盘（@main，无 storyboard）
+├── ProteusHost/shell/main.swift # Swift 宿主：JSExport 桥 + UIView 注册表 + 快照落盘（@main，无 storyboard）
 ├── build.sh               # ①bundle ②swiftc ③组装 .app（无 .xcodeproj——纯文本，CI 可跑）
 ├── verify-jsc.swift       # JSC 宿主桩：跑同一份 bundle，输出 CALL/SUMMARY/SNAPSHOT
 └── verify.mjs             # 验收脚本（编译 + 运行 + 三层断言）

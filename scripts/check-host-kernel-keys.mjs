@@ -26,7 +26,7 @@ import { fileURLToPath } from 'node:url'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const FFI = path.join(ROOT, 'packages/layout-core-rust/src/ffi.rs')
-const HOST = path.join(ROOT, 'hosts/android/app/src/main/java/dev/proteus/layoutcore/VaporRenderHost.java')
+const HOST = path.join(ROOT, 'hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/VaporRenderHost.java')
 
 /**
  * 显式豁免（内核消费但宿主**刻意不转发**的键——每条必须带理由）。
