@@ -14,6 +14,9 @@
      （编译期会诊断）；故此处逐条平铺（列表写法保持直白、可静态校验）。
 -->
 <script setup lang="ts">
+// ★R3 验证：响应式数据回写（点击 count++ → 订阅 → 增量 applyOps → 文本刷新）
+import { ref } from 'vue'
+const count = ref(0)
 </script>
 
 <template>
@@ -22,6 +25,7 @@
     <text class="cc-page__sub">逐特性页 · 点进任意页复审（Web/MP/App 一致）</text>
 
     <view class="ix-list">
+      <view id="case-count" class="ix-item ix-item--count" @tap="count++"><text class="ix-item__t">点击计数（响应式）</text><text class="ix-item__d">{{ count }}</text></view>
       <view class="ix-item" @tap="$nav('text')"><text class="ix-item__t">文本换行</text><text class="ix-item__d">white-space 族</text></view>
       <view class="ix-item" @tap="$nav('word-break')"><text class="ix-item__t">断词</text><text class="ix-item__d">word-break</text></view>
       <view class="ix-item" @tap="$nav('line-clamp')"><text class="ix-item__t">多行截断</text><text class="ix-item__d">-webkit-line-clamp</text></view>
@@ -56,6 +60,7 @@
   padding: 12px 14px;
   margin-bottom: 8px;
 }
+.ix-item--count { background: var(--cc-brand-soft); }
 .ix-item__t { font-size: 15px; font-weight: 600; color: var(--cc-text); }
 .ix-item__d { font-size: 12px; color: var(--cc-text-3); }
 </style>
