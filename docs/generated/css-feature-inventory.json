@@ -17,20 +17,20 @@
       "unit": 30
     },
     "byImpl": {
-      "not-started": 541,
+      "not-started": 540,
       "excluded": 280,
-      "implemented": 125,
+      "implemented": 126,
       "partial": 3
     },
     "byPriority": {
       "P2": 115,
       "excluded": 280,
-      "P0": 16,
-      "done": 125,
+      "P0": 15,
+      "done": 126,
       "P1": 413
     },
-    "actionable": 544,
-    "actionableP0": 16
+    "actionable": 543,
+    "actionableP0": 15
   },
   "entries": [
     {
@@ -6231,9 +6231,9 @@
       "inherited": false,
       "initial": "normal",
       "syntax": "normal | [ [ size | inline-size ] || scroll-state ]",
-      "impl": "not-started",
-      "implNote": "",
-      "channel": null,
+      "impl": "implemented",
+      "implNote": "**独立通道**：**容器查询通道（使能器）**：`container-type` 是 `@container` 的**使能器**——其真实能力（按容器宽度的条件样式）由 `@proteus-vue/fluid` 的容器查询通道交付（已落地，组件已接入）；**CSS `@container` / `@media` 条件块在 App 端跳过**（无 CSS 引擎，具名边界）；单独折叠 `container-type` = no-op（不折）。（证据：@proteus-vue/fluid 的 createContainerQuery/createSizeAwareObserver（容器尺寸观察 + 容器级断点）+ capabilities.ts 的 containerQuery 能力检测；消费先例 = p-formfactor（@container 规则的组件）等 6 个组件）",
+      "channel": "independent",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -6242,8 +6242,8 @@
         "webSupport": null
       },
       "usage": 1,
-      "priority": "P0",
-      "acceptance": "none"
+      "priority": "done",
+      "acceptance": "pending"
     },
     {
       "id": "content",

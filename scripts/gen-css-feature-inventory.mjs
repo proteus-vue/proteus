@@ -173,6 +173,13 @@ const SHORTHAND_EXPANSION = {
   'word-break': { to: [], evidence: '未接', notYet: true, note: '断词' },
   'text-shadow': { to: [], evidence: '未接', notYet: true, note: '文本阴影' },
   'mask': { to: [], evidence: '结构化属性通道（mask= 属性）', separate: true, note: 'CSS mask 写法待接（属性通道已通）' },
+  // ★★★container-type 项（2026-10-08 · css:next P0·1× · CSS Conditional Rules）：**容器查询的使能器**——
+  //   它的真实用途是开启 `@container` 条件规则（按**容器**宽度而非视口做条件样式）。
+  //   · CSS `@container` / `@media` 条件块：App 端**无 CSS 引擎** ⇒ 编译期跳过（具名边界，同既有 @media 处置）；
+  //   · 本框架的容器响应式由**独立通道** `@proteus-vue/fluid` 交付（`createContainerQuery`/`createSizeAwareObserver`，
+  //     ResizeObserver 观察容器尺寸 + 容器级断点）——已被 p-formfactor/p-modal/p-sidebar/p-zone/p-split/p-toolbar 消费；
+  //   · 单独把 `container-type` 折进 App 内核 = **no-op**（taffy 无 contain 模型）= 假绿 ⇒ 不折。
+  'container-type': { to: [], separate: true, channel: 'independent', evidence: '@proteus-vue/fluid 的 createContainerQuery/createSizeAwareObserver（容器尺寸观察 + 容器级断点）+ capabilities.ts 的 containerQuery 能力检测；消费先例 = p-formfactor（@container 规则的组件）等 6 个组件', note: '**容器查询通道（使能器）**：`container-type` 是 `@container` 的**使能器**——其真实能力（按容器宽度的条件样式）由 `@proteus-vue/fluid` 的容器查询通道交付（已落地，组件已接入）；**CSS `@container` / `@media` 条件块在 App 端跳过**（无 CSS 引擎，具名边界）；单独折叠 `container-type` = no-op（不折）。' },
 }
 /* ── ④-c 独立通道（动画/过渡/绘制声明——非 CSS 字段但真已实现）──
  *   ★这些能力**不走 IR 字段**（它们是"通道"：transition/animation 走 packages/animation 的

@@ -1,16 +1,15 @@
 # CSS Web 全量能力清单（自动生成——勿手改；生成器 scripts/gen-css-feature-inventory.mjs）
 
 > 总 949 项（property 651 · selector 144 · at-rule 19 · function 105 · unit 30）
-> 实现：**not-started** 541 · **excluded** 280 · **implemented** 125 · **partial** 3
-> 优先级：P2 115 · excluded 280 · P0 16 · done 125 · P1 413
-> ★**可推项（非已实现/非排除）**：544（其中 **P0 16**）
+> 实现：**not-started** 540 · **excluded** 280 · **implemented** 126 · **partial** 3
+> 优先级：P2 115 · excluded 280 · P0 15 · done 126 · P1 413
+> ★**可推项（非已实现/非排除）**：543（其中 **P0 15**）
 
 ## P0 —— 语料在用但未实现（真实需求，最优先）
 
 | 属性 | MDN 状态 | 分组 | 语料用量 | 实现 | 说明 |
 |---|---|---|---|---|---|
 | `-webkit-line-clamp` | standard | WebKit Extensions, CSS Overflow | 4 | not-started | — |
-| `container-type` | standard | CSS Conditional Rules | 1 | not-started | — |
 | `grid-auto-columns` | standard | CSS Grid Layout | 1 | not-started | — |
 | `grid-auto-rows` | standard | CSS Grid Layout | 1 | not-started | — |
 | `overscroll-behavior-y` | standard | CSS Overscroll Behavior | 1 | not-started | — |
