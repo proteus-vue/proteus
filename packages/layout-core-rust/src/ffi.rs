@@ -126,6 +126,9 @@ pub(crate) struct NodeDto {
     pub(crate) align_content: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) align_self: Option<String>,
+    /// ★★★justify-self 项（2026-10-06）：网格项行内轴自对齐（仅 grid 容器消费；CSS Box Alignment 3）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) justify_self: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) flex_grow: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -300,6 +303,7 @@ impl NodeDto {
             align_items: None,
             align_content: None,
             align_self: None,
+            justify_self: None,
             flex_grow: None,
             flex_shrink: None,
             flex_basis: None,
@@ -746,6 +750,8 @@ pub(crate) fn style_from_dto(dto: &NodeDto) -> Result<LStyle, String> {
         style.align_content = ac;
     }
     style.align_self = dto.align_self.clone();
+    // ★★★justify-self 项（2026-10-06）：网格项行内轴自对齐（仅 grid 容器消费）
+    style.justify_self = dto.justify_self.clone();
     if let Some(g) = dto.flex_grow {
         style.flex_grow = g;
     }
@@ -6347,5 +6353,62 @@ mod tests {
             proteus_layout_free_string(p2);
             assert!(s2.contains("\"ok\":false"));
         }
+    }
+    /// ★★★justify-self 项（2026-10-06）：**完整 JSON 路径**（JSON → NodeDto → style_from_dto → taffy）
+    ///   ——复现真机形态：grid 240 + border-box + padding 6 + 子项 80 三值。
+    ///   本测试专门覆盖"宿主转发 JSON 键 → 内核应用"这一环（单元测试若只测 LStyle 直建会漏 serde 映射）。
+    #[test]
+    fn justify_self_via_json_dto_path() {
+        let tree = serde_json::json!({
+            "viewport": {"width": 240.0, "height": 200.0},
+            "nodes": [
+                {"id": 1, "parentId": null, "display": "grid", "gridTemplateColumns": "240px",
+                 "width": 240.0, "padding": {"top": 6.0, "right": 6.0, "bottom": 6.0, "left": 6.0}},
+                {"id": 2, "parentId": 1, "width": 80.0, "height": 32.0, "justifySelf": "start"},
+                {"id": 3, "parentId": 1, "width": 80.0, "height": 32.0, "justifySelf": "center"},
+                {"id": 4, "parentId": 1, "width": 80.0, "height": 32.0, "justifySelf": "end"}
+            ]
+        });
+        let h = unsafe { proteus_layout_create(std::ffi::CString::new(tree.to_string()).unwrap().as_ptr()) };
+        assert!(h > 0, "建树应成功（justifySelf 键应被 NodeDto 接受）");
+        let raw = unsafe { proteus_layout_rects(h) };
+        let s = unsafe { std::ffi::CStr::from_ptr(raw).to_str().unwrap().to_string() };
+        unsafe { proteus_layout_free_string(raw) };
+        let v: serde_json::Value = serde_json::from_str(&s).expect("rects 应为合法 JSON");
+        let rects = &v["rects"];
+        let xs = |id: &str| rects[id]["x"].as_f64().unwrap();
+        eprintln!("JSON-PATH start.x={} center.x={} end.x={}", xs("2"), xs("3"), xs("4"));
+        assert!(xs("3") > xs("2"), "center 应比 start 右移（center={} start={}）", xs("3"), xs("2"));
+        assert!(xs("4") > xs("3"), "end 应最右（end={} center={}）", xs("4"), xs("3"));
+    }
+
+    /// ★★★justify-self 项 · 复现「宿主物理化但 track 串未缩放」形态（2026-10-06）：
+    ///   Android 宿主把 width/padding 乘密度（x3），但 gridTemplateColumns="240px" 是**字符串**未缩放
+    ///   ⇒ track=240 物理，而 item 宽=80x3=240 物理 ⇒ **item 恰好填满 track**（无对齐空间）
+    ///   ⇒ justify-self 无从体现（Web 端 track=240 逻辑、item=80 逻辑 ⇒ 有空间可对齐）。
+    ///   ★本测试**钉住该根因**：item 满轨时 start/center/end 的 x 相同（无空间）；宿主必须缩放 track 串。
+    #[test]
+    fn justify_self_physical_track_not_scaled() {
+        let tree = serde_json::json!({
+            "viewport": {"width": 720.0, "height": 600.0},
+            "nodes": [
+                {"id": 1, "parentId": null, "display": "grid", "gridTemplateColumns": "240px",
+                 "width": 720.0, "padding": {"top": 18.0, "right": 18.0, "bottom": 18.0, "left": 18.0}},
+                {"id": 2, "parentId": 1, "width": 240.0, "height": 96.0, "justifySelf": "start"},
+                {"id": 3, "parentId": 1, "width": 240.0, "height": 96.0, "justifySelf": "center"},
+                {"id": 4, "parentId": 1, "width": 240.0, "height": 96.0, "justifySelf": "end"}
+            ]
+        });
+        let h = unsafe { proteus_layout_create(std::ffi::CString::new(tree.to_string()).unwrap().as_ptr()) };
+        assert!(h > 0, "建树应成功");
+        let raw = unsafe { proteus_layout_rects(h) };
+        let s = unsafe { std::ffi::CStr::from_ptr(raw).to_str().unwrap().to_string() };
+        unsafe { proteus_layout_free_string(raw) };
+        let v: serde_json::Value = serde_json::from_str(&s).unwrap();
+        let rects = &v["rects"];
+        let xs = |id: &str| rects[id]["x"].as_f64().unwrap();
+        // item 宽 = track 宽 ⇒ 无对齐空间 ⇒ 三值同 x（这正是宿主必须缩放轨迹串的原因）
+        assert!((xs("2") - xs("3")).abs() < 0.5 && (xs("3") - xs("4")).abs() < 0.5,
+            "item 满轨时 start/center/end 同 x（无空间）：start={} center={} end={}", xs("2"), xs("3"), xs("4"));
     }
 }

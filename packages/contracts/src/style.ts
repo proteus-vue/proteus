@@ -28,6 +28,10 @@ export type StylePropLevel =
   //   值集与内核封闭集对齐（visible/hidden/scroll/auto）——Web 的 clip 命中无内核对应 ⇒ 编译期诊断跳过（v1 边界）。
   //   四同步（INV-CE-07）：本表 + runtime PROP_TYPES/narrowing + compiler 静态校验 + 注册表 VALUE_TYPE_BY_LEVEL。
   | 'Overflow'
+  // ★★★justify-self 项（2026-10-06 · css:next P0·9×）：网格项**行内轴自对齐**（CSS Box Alignment 3）。
+  //   与 FlexAlign 不同轴：值集含 start/end/self-*（CSS `<self-position>` 全集）。语料 9 处全在 grid 上下文。
+  //   四同步（INV-CE-07）：本表 + runtime PROP_TYPES/narrowing + compiler 静态校验 + 注册表 VALUE_TYPE_BY_LEVEL。
+  | 'JustifySelf'
   | 'Transform'
   | 'TransformOrigin'
   | 'SEMANTIC_ONLY'
@@ -79,6 +83,9 @@ export const STYLE_PROP_LEVELS = {
   // ★★★overflow-x 项：单轴溢出（'visible'/'hidden'/'scroll'/'auto'；编译期完成 Web 归一）
   overflowX: 'Overflow',
   overflowY: 'Overflow',
+  // ★★★justify-self 项（2026-10-06）：网格项行内轴自对齐（CSS Box Alignment 3 `<self-position>` 集；
+  //   仅在 grid 容器内生效——flex 容器下按 Web 标准本就不生效，内核 taffy 同语义）
+  justifySelf: 'JustifySelf',
   transform: 'Transform',
   transformOrigin: 'TransformOrigin',
   flex: 'FlexNumber',

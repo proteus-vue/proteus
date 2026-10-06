@@ -127,6 +127,8 @@ export interface NormalizedStyle {
   justifyContent?: string
   alignItems?: string
   alignSelf?: string
+  // ★★★justify-self 项（2026-10-06）：网格项行内轴自对齐（字符串枚举——Web 计算值原样收录）
+  justifySelf?: string
   flexGrow?: number
   flexShrink?: number
   gap?: number
@@ -433,6 +435,8 @@ const STYLE_KEYS = new Set([
   // ★★覆盖扩展（2026-10-02·二批）：布局族字段（与接口同步——闭集纪律：要么登记要么别产出）
   'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight',
   'flexDirection', 'justifyContent', 'alignItems', 'alignSelf',
+  // ★★★justify-self 项（2026-10-06）：网格项行内轴自对齐（与接口/覆盖表同批——闭集纪律）
+  'justifySelf',
   'flexGrow', 'flexShrink', 'gap', 'overflow',
   // ★★★overflow-x 项（2026-10-06）：逐轴溢出（与接口/覆盖表同批——闭集纪律）
   'overflowX', 'overflowY',
@@ -491,6 +495,7 @@ export function validateStyleSnapshot(snap: unknown): ValidationResult {
         //   校验器把新枚举键当数值项要求。这正是"两处必须同源"的教训——本仓纪律：闭集与校验同改。）
         k === 'display' || k === 'position' || k === 'visibility' || k === 'fontFamily'
         || k === 'flexDirection' || k === 'justifyContent' || k === 'alignItems' || k === 'alignSelf' || k === 'overflow'
+        || k === 'justifySelf'   // ★★★justify-self 项（2026-10-06）
         || k === 'overflowX' || k === 'overflowY'   // ★★★overflow-x 项（2026-10-06）
         // ★★★G-61 B3：新增字符串族（与接口/STYLE_KEYS 同步——三处同改）
         || k === 'textAlign' || k === 'textOverflow' || k === 'textDecoration' || k === 'pointerEvents'

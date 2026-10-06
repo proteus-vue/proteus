@@ -175,6 +175,24 @@ node scripts/css-acceptance-record.mjs <feature-id> <verdicts.json>
 - ★**fresh 门禁的已知弱点**（独立复评指出，待整改）：按 mtime 判定 ⇒ `cp` 重拷旧图可绕过。
   下一轮实施：截图时记录「源产物 md5 + 图文件 md5」台账，fresh 改为比对台账指纹。
 
+**★宿主侧的「静默漏登记」两处实锤（2026-10-06 justify-self 项，逐像素量测才抓到）**
+- **a) 宿主键白名单漏项 = 内核静默用默认**：Android 自绘宿主 `VaporRenderHost.LAYOUT_KEYS` 是
+  **白名单**（新内核字段不得把绘制属性静默塞进去）；但**漏登记**某个内核消费键 ⇒ 请求树不带它 ⇒
+  内核静默用默认值（无报错、无日志）。本轮 `justifySelf` 就是漏登记 ⇒ 真机 center/end 全落 start
+  （而内核/Web 都正确）。
+  ★★**纪律升级（不再靠注释）**：新增门禁 `pnpm check:host-kernel-keys`——从内核 `style_from_dto`
+  **推出**消费键，断言宿主白名单覆盖（或 `EXCUSED` 显式豁免）；**改内核字段/宿主白名单后必跑**。
+  历史同类（都栽在白名单）：clipPath/glow/mask（2026-10-01/03）· borderRadiusCorners（iOS styleOf）·
+  本轮 justifySelf（+ 顺带抓出批次 41 的 gridColumn/gridRow 从未登记）。
+- **b) 宿主物理化的「长度」必须连字符串里的 px 一起缩**：Android 宿主把数值长度乘密度（×density），
+  但 `gridTemplateColumns: "240px"` 是**字符串**（不在数值白名单）⇒ track 未缩 ⇒ 子项（宽已缩）
+  **恰好填满 track** ⇒ `justify-self` 无对齐空间（Web 端逻辑单位无此问题）。修法：物理化时把
+  grid 轨迹串里的 `<n>px` 也乘密度。
+  ★**判据**：`justify-self` 类**依赖"项 < 轨道"有空间**的特性，在密度≠1 的端必须确认 track 也缩放了。
+- ★**排查心法（本轮有效顺序）**：真机现象与预期不符时，**先用宿主探针读内核返回值**（本轮在
+  `mount` 后打 `readRects` 的 x）——一步就把"内核 bug"与"宿主转发/物理化 bug"分开
+  （实测：内核返回三值相同 ⇒ 锁定宿主侧，而非 taffy）。别从现象直接猜内核。
+
 ---
 
 ## 5. 收尾（每项做完）

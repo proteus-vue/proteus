@@ -17,20 +17,20 @@
       "unit": 30
     },
     "byImpl": {
-      "not-started": 555,
+      "not-started": 554,
       "excluded": 280,
-      "implemented": 110,
+      "implemented": 111,
       "partial": 4
     },
     "byPriority": {
       "P2": 115,
       "excluded": 280,
-      "P0": 27,
-      "done": 110,
+      "P0": 26,
+      "done": 111,
       "P1": 417
     },
-    "actionable": 559,
-    "actionableP0": 27
+    "actionable": 558,
+    "actionableP0": 26
   },
   "entries": [
     {
@@ -8885,18 +8885,18 @@
       "inherited": false,
       "initial": "auto",
       "syntax": "auto | normal | stretch | <baseline-position> | <overflow-position>? [ <self-position> | left | right ] | anchor-center",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "implemented",
+      "implNote": "IR 注册表在册（scope=semantic · 矩阵 JustifySelf）",
       "evidencedBy": {
-        "inIrRegistry": false,
-        "irScope": null,
-        "inCompilerFold": false,
-        "matrixLevel": null,
+        "inIrRegistry": true,
+        "irScope": "semantic",
+        "inCompilerFold": true,
+        "matrixLevel": "JustifySelf",
         "webSupport": null
       },
       "usage": 9,
-      "priority": "P0",
-      "acceptance": "none"
+      "priority": "done",
+      "acceptance": "pending"
     },
     {
       "id": "justify-tracks",

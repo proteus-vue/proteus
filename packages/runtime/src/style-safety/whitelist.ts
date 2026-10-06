@@ -38,6 +38,12 @@ const TEXT_WRAP = ['normal', 'nowrap', 'pre', 'pre-wrap', 'pre-line', 'break-spa
 const BORDER_STYLE = ['solid', 'dashed', 'dotted', 'none']
 /** ★★★overflow-x 项（2026-10-06）：溢出封闭集（与内核 Overflow 枚举同集；Web 的 clip 不支持⇒诊断）。 */
 const OVERFLOW = ['visible', 'hidden', 'scroll', 'auto']
+/**
+ * ★★★justify-self 项（2026-10-06）：网格项行内轴自对齐封闭集（CSS Box Alignment 3 `<self-position>` 全集）。
+ *   `auto`/`normal` 为 CSS 初值/标准关键字（内核映射：auto ⇒ 未设置、normal ⇒ stretch——按 Web 对 grid 项的语义）；
+ *   `baseline`/`left`/`right` 未列 ⇒ 诊断跳过（taffy 在 grid 里把 baseline 按 start 处理 = 与 Web 不符，不静默近似）。
+ */
+const JUSTIFY_SELF = ['auto', 'normal', 'start', 'end', 'flex-start', 'flex-end', 'self-start', 'self-end', 'center', 'stretch']
 
 export const PROP_TYPES = {
   Length: isLength,
@@ -51,6 +57,7 @@ export const PROP_TYPES = {
   TextWrap: isEnum(TEXT_WRAP),
   BorderStyle: isEnum(BORDER_STYLE),
   Overflow: isEnum(OVERFLOW),
+  JustifySelf: isEnum(JUSTIFY_SELF),
   Transform: (v: unknown): boolean => typeof v === 'string' && /^(translate|scale|rotate|skew)/i.test(v.trim()),
   TransformOrigin: (v: unknown): boolean => typeof v === 'string' && /^(left|right|top|bottom|center|\d+)/i.test(v.trim()),
 } as const

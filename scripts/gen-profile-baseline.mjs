@@ -85,6 +85,16 @@ const REASON_OVERRIDES = {
       'Skyline 端不支持 grid（该端是本仓唯一刚性外部约束）⇒ 按同类先例（glass-demo / devtools demo 两页）钉住；' +
       '待专项评估：该演示按端条件渲染或改柔性布局。棘轮只减不增。',
   },
+  'css-conformance': {
+    // ★★★justify-self 项（2026-10-06）：验收页**有意**使用 grid（justify-self 仅对 grid 项生效）——
+    //   与 examples/index.vue:display:grid 同类：App 端（自研内核 taffy 原生支持 grid+justify_self）可承载，
+    //   Skyline 无 Grid 容器（官方属性表无 grid/justify-self）。该页价值恰是**如实暴露该边界**（页面顶部已具名）。
+    'pages/justify-self.vue:display:grid':
+      '验收页（justify-self 项）——**验收对象本身要求 grid 上下文**（justify-self 仅对 grid 项生效，flex 下被忽略）：' +
+      'Web / App（自研 Rust 引擎：taffy grid + justify_self 原生）可渲染，Skyline 端无 Grid 容器' +
+      '（官方属性表无 grid/justify-self）⇒ 按 examples/index.vue:display:grid 先例显式理解后钉住；' +
+      'Skyline 差异在验收页顶部具名（引擎锁死边界，不作缺陷）。棘轮只减不增。',
+  },
 }
 
 let drift = 0

@@ -177,6 +177,9 @@ function styleOf(el: Element, win: Window): NormalizedStyle {
   for (const [prop, key] of [
     ['flex-direction', 'flexDirection'], ['justify-content', 'justifyContent'],
     ['align-items', 'alignItems'], ['align-self', 'alignSelf'], ['overflow', 'overflow'],
+    // ★★★justify-self 项（2026-10-06）：网格项行内轴自对齐（与 align-self 同口径——原样收录；
+    //   Web 计算值保关键字原形：self-start/normal/flex-start 等不折算）
+    ['justify-self', 'justifySelf'],
     // ★★★overflow-x 项（2026-10-06）：逐轴计算值（真 Chromium 已归一：visible↔非visible ⇒ visible→auto）
     ['overflow-x', 'overflowX'], ['overflow-y', 'overflowY'],
   ] as const) {

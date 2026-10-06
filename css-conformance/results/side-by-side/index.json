@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-05T18:18:22.732Z",
+  "generatedAt": "2026-10-06T01:11:30.079Z",
   "rows": [
     {
       "end": "mp",
@@ -11,6 +11,12 @@
       "end": "mp",
       "page": "border.png",
       "out": "css-conformance/results/side-by-side/border.mp-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "mp",
+      "page": "justify-self.png",
+      "out": "css-conformance/results/side-by-side/justify-self.mp-vs-web.png",
       "status": "ok"
     },
     {
@@ -39,6 +45,12 @@
     },
     {
       "end": "android",
+      "page": "justify-self.png",
+      "out": "css-conformance/results/side-by-side/justify-self.android-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "android",
       "page": "overflow.png",
       "out": "css-conformance/results/side-by-side/overflow.android-vs-web.png",
       "status": "ok"
@@ -63,6 +75,12 @@
     },
     {
       "end": "ios",
+      "page": "justify-self.png",
+      "out": "css-conformance/results/side-by-side/justify-self.ios-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "ios",
       "page": "overflow.png",
       "out": "css-conformance/results/side-by-side/overflow.ios-vs-web.png",
       "status": "ok"
@@ -83,6 +101,12 @@
       "end": "harmony",
       "page": "border.png",
       "out": "css-conformance/results/side-by-side/border.harmony-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "harmony",
+      "page": "justify-self.png",
+      "out": "css-conformance/results/side-by-side/justify-self.harmony-vs-web.png",
       "status": "ok"
     },
     {

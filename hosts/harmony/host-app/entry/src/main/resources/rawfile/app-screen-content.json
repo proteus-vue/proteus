@@ -1,2729 +1,1291 @@
 {
-  "index": {
+  "border-style": {
     "nodes": [
       {
         "id": 0,
         "parentId": null,
-        "semantic": "app-root",
-        "display": "flex",
-        "flexDirection": "column",
-        "alignItems": "stretch",
-        "position": "relative",
+        "backgroundColor": "#f4f5f7",
         "widthRatio": 1,
-        "heightRatio": 1
+        "minHeightPct": 1,
+        "padding": {
+          "top": 16,
+          "right": 12,
+          "bottom": 32,
+          "left": 12
+        },
+        "boxSizing": "border-box",
+        "semantic": "view"
       },
       {
         "id": 1,
         "parentId": 0,
-        "semantic": "global-layer",
-        "position": "absolute",
-        "left": 0,
-        "top": 0,
-        "right": 0,
-        "bottom": 0
+        "fontSize": 20,
+        "fontWeight": 700,
+        "color": "#1a1c22",
+        "margin": {
+          "bottom": 4
+        },
+        "text": "CSS 验收 · 边框样式",
+        "semantic": "text"
       },
       {
         "id": 2,
-        "parentId": 1,
-        "position": "absolute",
-        "left": 0,
-        "top": 0,
-        "right": 0,
-        "bottom": 0,
-        "backgroundColor": "#f4f5f7",
-        "pointerEvents": false,
-        "semantic": "div"
+        "parentId": 0,
+        "fontSize": 13,
+        "color": "#5f6673",
+        "margin": {
+          "bottom": 16
+        },
+        "text": "线型 / 逐角圆角 · 稳定 id 供逐端寻址",
+        "semantic": "text"
       },
       {
         "id": 3,
         "parentId": 0,
-        "widthRatio": 1,
-        "maxWidthPct": 1,
-        "boxSizing": "border-box",
-        "backgroundColor": "#f4f5f7",
-        "color": "#1a1c22",
-        "padding": {
-          "left": 16,
-          "right": 16,
-          "bottom": 120,
-          "top": 44
+        "fontSize": 13,
+        "fontWeight": 600,
+        "color": "#5b5bd6",
+        "margin": {
+          "top": 20,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
         },
-        "semantic": "view",
-        "position": "absolute",
-        "left": 0,
-        "top": 0,
-        "right": 0,
-        "bottom": 0,
-        "display": "flex",
-        "flexDirection": "column",
-        "alignItems": "stretch"
+        "text": "G · border-style 线型",
+        "semantic": "text"
       },
       {
         "id": 4,
-        "parentId": 3,
+        "parentId": 0,
+        "backgroundColor": "#ffffff",
+        "borderRadius": 10,
         "padding": {
-          "top": 24,
-          "right": 0,
-          "bottom": 16,
-          "left": 0
+          "top": 12,
+          "right": 14,
+          "bottom": 12,
+          "left": 14
         },
-        "color": "#1a1c22",
         "semantic": "view"
       },
       {
         "id": 5,
         "parentId": 4,
-        "fontSize": 26,
-        "fontWeight": 700,
-        "color": "#1a1c22",
-        "letterSpacing": -0.3,
-        "text": "早上好，运营同学",
-        "semantic": "text"
-      },
-      {
-        "id": 6,
-        "parentId": 4,
-        "margin": {
-          "top": 8
-        },
-        "fontSize": 14,
-        "color": "#4b5058",
-        "text": "今天是 10 月 4 日 · 有 2 项关键任务待跟进",
-        "semantic": "text"
-      },
-      {
-        "id": 7,
-        "parentId": 3,
-        "widthRatio": 1,
-        "boxSizing": "border-box",
-        "backgroundColor": "#ffffff",
-        "borderWidth": 1,
-        "borderColor": "#e8eaee",
-        "borderRadius": 14,
-        "margin": {
-          "top": 0,
-          "right": 0,
-          "bottom": 12,
-          "left": 0
-        },
-        "boxShadow": {
-          "dx": 0,
-          "dy": 1,
-          "blur": 2,
-          "spread": 0,
-          "color": "#1a1c220d"
-        },
-        "overflow": "hidden",
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 8,
-        "parentId": 7,
-        "display": "flex",
-        "flexDirection": "row",
-        "alignItems": "center",
-        "justifyContent": "space-between",
-        "padding": {
-          "top": 16,
-          "right": 16,
-          "bottom": 16,
-          "left": 16
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 9,
-        "parentId": 8,
-        "flexGrow": 1,
-        "flexShrink": 1,
-        "flexBasis": 0,
-        "display": "flex",
-        "flexDirection": "column",
-        "alignItems": "center",
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 10,
-        "parentId": 9,
-        "fontSize": 20,
-        "fontWeight": 700,
-        "color": "#1a1c22",
-        "text": "6",
-        "semantic": "text"
-      },
-      {
-        "id": 11,
-        "parentId": 9,
-        "margin": {
-          "top": 4
-        },
-        "fontSize": 12,
-        "color": "#5f6673",
-        "text": "待办",
-        "semantic": "text"
-      },
-      {
-        "id": 12,
-        "parentId": 8,
-        "flexGrow": 1,
-        "flexShrink": 1,
-        "flexBasis": 0,
-        "display": "flex",
-        "flexDirection": "column",
-        "alignItems": "center",
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 13,
-        "parentId": 12,
-        "fontSize": 20,
-        "fontWeight": 700,
-        "color": "#d64545",
-        "text": "3",
-        "semantic": "text"
-      },
-      {
-        "id": 14,
-        "parentId": 12,
-        "margin": {
-          "top": 4
-        },
-        "fontSize": 12,
-        "color": "#5f6673",
-        "text": "未读",
-        "semantic": "text"
-      },
-      {
-        "id": 15,
-        "parentId": 8,
-        "flexGrow": 1,
-        "flexShrink": 1,
-        "flexBasis": 0,
-        "display": "flex",
-        "flexDirection": "column",
-        "alignItems": "center",
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 16,
-        "parentId": 15,
-        "fontSize": 20,
-        "fontWeight": 700,
-        "color": "#1f9d5f",
-        "text": "92%",
-        "semantic": "text"
-      },
-      {
-        "id": 17,
-        "parentId": 15,
-        "margin": {
-          "top": 4
-        },
-        "fontSize": 12,
-        "color": "#5f6673",
-        "text": "完成率",
-        "semantic": "text"
-      },
-      {
-        "id": 18,
-        "parentId": 3,
-        "padding": {
-          "top": 16,
-          "right": 0,
-          "bottom": 8,
-          "left": 0
-        },
-        "fontSize": 12,
-        "color": "#5f6673",
-        "text": "全局状态",
-        "semantic": "text"
-      },
-      {
-        "id": 19,
-        "parentId": 3,
-        "widthRatio": 1,
-        "boxSizing": "border-box",
-        "backgroundColor": "#ffffff",
-        "borderWidth": 1,
-        "borderColor": "#e8eaee",
-        "borderRadius": 14,
-        "margin": {
-          "top": 0,
-          "right": 0,
-          "bottom": 12,
-          "left": 0
-        },
-        "overflow": "hidden",
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 20,
-        "parentId": 19,
-        "display": "flex",
-        "flexDirection": "row",
-        "alignItems": "center",
-        "minHeight": 48,
-        "padding": {
-          "top": 0,
-          "right": 16,
-          "bottom": 0,
-          "left": 16
-        },
-        "boxSizing": "border-box",
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 21,
-        "parentId": 20,
-        "flexGrow": 1,
-        "flexShrink": 1,
-        "flexBasis": 0,
-        "minWidth": 0,
-        "display": "flex",
-        "flexDirection": "column",
-        "justifyContent": "center",
-        "padding": {
-          "top": 12,
-          "right": 0,
-          "bottom": 12,
-          "left": 0
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 22,
-        "parentId": 21,
-        "fontSize": 14,
-        "color": "#1a1c22",
-        "text": "主题",
-        "semantic": "text"
-      },
-      {
-        "id": 23,
-        "parentId": 20,
-        "flexShrink": 0,
-        "margin": {
-          "left": 12
-        },
-        "fontSize": 14,
-        "color": "#4b5058",
-        "text": "浅色",
-        "semantic": "text"
-      },
-      {
-        "id": 24,
-        "parentId": 19,
-        "display": "flex",
-        "flexDirection": "row",
-        "alignItems": "center",
-        "minHeight": 48,
-        "padding": {
-          "top": 0,
-          "right": 16,
-          "bottom": 0,
-          "left": 16
-        },
-        "boxSizing": "border-box",
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 25,
-        "parentId": 24,
-        "flexGrow": 1,
-        "flexShrink": 1,
-        "flexBasis": 0,
-        "minWidth": 0,
-        "display": "flex",
-        "flexDirection": "column",
-        "justifyContent": "center",
-        "padding": {
-          "top": 12,
-          "right": 0,
-          "bottom": 12,
-          "left": 0
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 26,
-        "parentId": 25,
-        "fontSize": 14,
-        "color": "#1a1c22",
-        "text": "IM 未读角标",
-        "semantic": "text"
-      },
-      {
-        "id": 27,
-        "parentId": 24,
-        "flexShrink": 0,
-        "margin": {
-          "left": 12
-        },
-        "fontSize": 14,
-        "color": "#4b5058",
-        "text": "0",
-        "semantic": "text"
-      },
-      {
-        "id": 28,
-        "parentId": 19,
-        "display": "flex",
-        "flexDirection": "row",
-        "alignItems": "center",
-        "minHeight": 48,
-        "padding": {
-          "top": 0,
-          "right": 16,
-          "bottom": 0,
-          "left": 16
-        },
-        "boxSizing": "border-box",
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 29,
-        "parentId": 28,
-        "flexGrow": 1,
-        "flexShrink": 1,
-        "flexBasis": 0,
-        "minWidth": 0,
-        "display": "flex",
-        "flexDirection": "column",
-        "justifyContent": "center",
-        "padding": {
-          "top": 12,
-          "right": 0,
-          "bottom": 12,
-          "left": 0
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 30,
-        "parentId": 29,
-        "fontSize": 14,
-        "color": "#1a1c22",
-        "text": "音乐播放条",
-        "semantic": "text"
-      },
-      {
-        "id": 31,
-        "parentId": 28,
-        "flexShrink": 0,
-        "margin": {
-          "left": 12
-        },
-        "fontSize": 14,
-        "color": "#4b5058",
-        "text": "未播放",
-        "semantic": "text"
-      },
-      {
-        "id": 32,
-        "parentId": 3,
-        "padding": {
-          "top": 16,
-          "right": 0,
-          "bottom": 8,
-          "left": 0
-        },
-        "fontSize": 12,
-        "color": "#5f6673",
-        "text": "快捷操作",
-        "semantic": "text"
-      },
-      {
-        "id": 33,
-        "parentId": 3,
-        "widthRatio": 1,
-        "boxSizing": "border-box",
-        "backgroundColor": "#ffffff",
-        "borderWidth": 1,
-        "borderColor": "#e8eaee",
-        "borderRadius": 14,
-        "margin": {
-          "top": 0,
-          "right": 0,
-          "bottom": 12,
-          "left": 0
-        },
-        "overflow": "hidden",
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 34,
-        "parentId": 33,
-        "display": "flex",
-        "flexDirection": "row",
-        "alignItems": "center",
-        "minHeight": 48,
-        "padding": {
-          "top": 0,
-          "right": 16,
-          "bottom": 0,
-          "left": 16
-        },
-        "boxSizing": "border-box",
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 35,
-        "parentId": 34,
-        "flexGrow": 1,
-        "flexShrink": 1,
-        "flexBasis": 0,
-        "minWidth": 0,
-        "display": "flex",
-        "flexDirection": "column",
-        "justifyContent": "center",
-        "padding": {
-          "top": 12,
-          "right": 0,
-          "bottom": 12,
-          "left": 0
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 36,
-        "parentId": 35,
-        "fontSize": 14,
-        "color": "#1a1c22",
-        "text": "模拟弱网",
-        "semantic": "text"
-      },
-      {
-        "id": 37,
-        "parentId": 35,
-        "margin": {
-          "top": 2
-        },
-        "fontSize": 12,
-        "color": "#5f6673",
-        "text": "弱网时提醒用户",
-        "semantic": "text"
-      },
-      {
-        "id": 38,
-        "parentId": 34,
-        "flexShrink": 0,
-        "margin": {
-          "left": 12
-        },
-        "display": "flex",
-        "alignItems": "center",
-        "justifyContent": "flex-end",
-        "fontSize": 16,
-        "lineHeight": "1",
-        "color": "#5f6673",
-        "text": "›",
-        "semantic": "text"
-      },
-      {
-        "id": 39,
-        "parentId": 33,
-        "display": "flex",
-        "flexDirection": "row",
-        "alignItems": "center",
-        "minHeight": 48,
-        "padding": {
-          "top": 0,
-          "right": 16,
-          "bottom": 0,
-          "left": 16
-        },
-        "boxSizing": "border-box",
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 40,
-        "parentId": 39,
-        "flexGrow": 1,
-        "flexShrink": 1,
-        "flexBasis": 0,
-        "minWidth": 0,
-        "display": "flex",
-        "flexDirection": "column",
-        "justifyContent": "center",
-        "padding": {
-          "top": 12,
-          "right": 0,
-          "bottom": 12,
-          "left": 0
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 41,
-        "parentId": 40,
-        "fontSize": 14,
-        "color": "#1a1c22",
-        "text": "播放内部播客",
-        "semantic": "text"
-      },
-      {
-        "id": 42,
-        "parentId": 40,
-        "margin": {
-          "top": 2
-        },
-        "fontSize": 12,
-        "color": "#5f6673",
-        "text": "播放内部播客",
-        "semantic": "text"
-      },
-      {
-        "id": 43,
-        "parentId": 39,
-        "flexShrink": 0,
-        "margin": {
-          "left": 12
-        },
-        "display": "flex",
-        "alignItems": "center",
-        "justifyContent": "flex-end",
-        "fontSize": 16,
-        "lineHeight": "1",
-        "color": "#5f6673",
-        "text": "›",
-        "semantic": "text"
-      },
-      {
-        "id": 44,
-        "parentId": 33,
-        "display": "flex",
-        "flexDirection": "row",
-        "alignItems": "center",
-        "minHeight": 48,
-        "padding": {
-          "top": 0,
-          "right": 16,
-          "bottom": 0,
-          "left": 16
-        },
-        "boxSizing": "border-box",
-        "color": "#1a1c22",
-        "semantic": "navigator"
-      },
-      {
-        "id": 45,
-        "parentId": 44,
-        "flexGrow": 1,
-        "flexShrink": 1,
-        "flexBasis": 0,
-        "minWidth": 0,
-        "display": "flex",
-        "flexDirection": "column",
-        "justifyContent": "center",
-        "padding": {
-          "top": 12,
-          "right": 0,
-          "bottom": 12,
-          "left": 0
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 46,
-        "parentId": 45,
-        "fontSize": 14,
-        "color": "#1a1c22",
-        "text": "打开验收控制台",
-        "semantic": "text"
-      },
-      {
-        "id": 47,
-        "parentId": 45,
-        "margin": {
-          "top": 2
-        },
-        "fontSize": 12,
-        "color": "#5f6673",
-        "text": "全局能力自检",
-        "semantic": "text"
-      },
-      {
-        "id": 48,
-        "parentId": 44,
-        "flexShrink": 0,
-        "margin": {
-          "left": 12
-        },
-        "display": "flex",
-        "alignItems": "center",
-        "justifyContent": "flex-end",
-        "fontSize": 16,
-        "lineHeight": "1",
-        "color": "#5f6673",
-        "text": "›",
-        "semantic": "text"
-      },
-      {
-        "id": 49,
-        "parentId": 3,
-        "padding": {
-          "top": 16,
-          "right": 0,
-          "bottom": 8,
-          "left": 0
-        },
-        "fontSize": 12,
-        "color": "#5f6673",
-        "text": "今日待办",
-        "semantic": "text"
-      },
-      {
-        "id": 50,
-        "parentId": 3,
-        "widthRatio": 1,
-        "boxSizing": "border-box",
-        "backgroundColor": "#ffffff",
-        "borderWidth": 1,
-        "borderColor": "#e8eaee",
-        "borderRadius": 14,
-        "margin": {
-          "top": 0,
-          "right": 0,
-          "bottom": 12,
-          "left": 0
-        },
-        "overflow": "hidden",
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 51,
-        "parentId": 50,
-        "display": "flex",
-        "flexDirection": "row",
-        "alignItems": "center",
-        "minHeight": 48,
-        "padding": {
-          "top": 0,
-          "right": 16,
-          "bottom": 0,
-          "left": 16
-        },
-        "boxSizing": "border-box",
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 52,
-        "parentId": 51,
-        "flexGrow": 1,
-        "flexShrink": 1,
-        "flexBasis": 0,
-        "minWidth": 0,
-        "display": "flex",
-        "flexDirection": "column",
-        "justifyContent": "center",
-        "padding": {
-          "top": 12,
-          "right": 0,
-          "bottom": 12,
-          "left": 0
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 53,
-        "parentId": 52,
-        "fontSize": 14,
-        "color": "#1a1c22",
-        "text": "Q4 投放计划复核",
-        "semantic": "text"
-      },
-      {
-        "id": 54,
-        "parentId": 52,
-        "margin": {
-          "top": 2
-        },
-        "fontSize": 12,
-        "color": "#5f6673",
-        "text": "截止 18:00",
-        "semantic": "text"
-      },
-      {
-        "id": 55,
-        "parentId": 51,
-        "alignItems": "center",
-        "height": 20,
-        "padding": {
-          "top": 0,
-          "right": 8,
-          "bottom": 0,
-          "left": 8
-        },
-        "borderRadius": 6,
-        "backgroundColor": "#5b5bd61a",
-        "color": "#4a4ab8",
-        "fontSize": 11,
-        "fontWeight": 500,
-        "text": "紧急",
-        "semantic": "text"
-      },
-      {
-        "id": 56,
-        "parentId": 50,
-        "display": "flex",
-        "flexDirection": "row",
-        "alignItems": "center",
-        "minHeight": 48,
-        "padding": {
-          "top": 0,
-          "right": 16,
-          "bottom": 0,
-          "left": 16
-        },
-        "boxSizing": "border-box",
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 57,
-        "parentId": 56,
-        "flexGrow": 1,
-        "flexShrink": 1,
-        "flexBasis": 0,
-        "minWidth": 0,
-        "display": "flex",
-        "flexDirection": "column",
-        "justifyContent": "center",
-        "padding": {
-          "top": 12,
-          "right": 0,
-          "bottom": 12,
-          "left": 0
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 58,
-        "parentId": 57,
-        "fontSize": 14,
-        "color": "#1a1c22",
-        "text": "渠道月报数据校对",
-        "semantic": "text"
-      },
-      {
-        "id": 59,
-        "parentId": 57,
-        "margin": {
-          "top": 2
-        },
-        "fontSize": 12,
-        "color": "#5f6673",
-        "text": "截止明日",
-        "semantic": "text"
-      },
-      {
-        "id": 60,
-        "parentId": 56,
-        "flexShrink": 0,
-        "margin": {
-          "left": 12
-        },
-        "fontSize": 14,
-        "color": "#4b5058",
-        "text": "进行中",
-        "semantic": "text"
-      },
-      {
-        "id": 61,
-        "parentId": 50,
-        "display": "flex",
-        "flexDirection": "row",
-        "alignItems": "center",
-        "minHeight": 48,
-        "padding": {
-          "top": 0,
-          "right": 16,
-          "bottom": 0,
-          "left": 16
-        },
-        "boxSizing": "border-box",
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 62,
-        "parentId": 61,
-        "flexGrow": 1,
-        "flexShrink": 1,
-        "flexBasis": 0,
-        "minWidth": 0,
-        "display": "flex",
-        "flexDirection": "column",
-        "justifyContent": "center",
-        "padding": {
-          "top": 12,
-          "right": 0,
-          "bottom": 12,
-          "left": 0
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 63,
-        "parentId": 62,
-        "fontSize": 14,
-        "color": "#1a1c22",
-        "text": "新客回访名单确认",
-        "semantic": "text"
-      },
-      {
-        "id": 64,
-        "parentId": 62,
-        "margin": {
-          "top": 2
-        },
-        "fontSize": 12,
-        "color": "#5f6673",
-        "text": "截止本周五",
-        "semantic": "text"
-      },
-      {
-        "id": 65,
-        "parentId": 61,
-        "flexShrink": 0,
-        "margin": {
-          "left": 12
-        },
-        "fontSize": 14,
-        "color": "#4b5058",
-        "text": "待开始",
-        "semantic": "text"
-      },
-      {
-        "id": 66,
-        "parentId": 0,
-        "semantic": "overlay-layer",
-        "position": "absolute",
-        "left": 0,
-        "top": 0,
-        "right": 0,
-        "bottom": 0,
-        "pointerEvents": false
-      },
-      {
-        "id": 67,
-        "parentId": 66,
-        "position": "absolute",
-        "top": 0,
-        "right": 0,
-        "bottom": 0,
-        "left": 0,
-        "pointerEvents": false,
-        "semantic": "div"
-      },
-      {
-        "id": 68,
-        "parentId": 67,
-        "pointerEvents": true,
-        "position": "absolute",
-        "right": 14,
-        "bottom": 136,
-        "width": 56,
-        "height": 56,
-        "borderRadius": 28,
-        "display": "flex",
-        "flexDirection": "column",
-        "alignItems": "center",
-        "justifyContent": "center",
-        "backgroundColor": "#5b5bd6",
-        "boxShadow": {
-          "dx": 0,
-          "dy": 3,
-          "blur": 10,
-          "spread": 0,
-          "color": "#5b5bd659"
-        },
-        "semantic": "div"
-      },
-      {
-        "id": 69,
-        "parentId": 68,
-        "fontSize": 17,
-        "fontWeight": 700,
-        "color": "#ffffff",
-        "lineHeight": "1.1",
-        "pointerEvents": true,
-        "text": "聊",
-        "semantic": "span"
-      },
-      {
-        "id": 70,
-        "parentId": 68,
-        "fontSize": 10,
-        "color": "#ffffff",
-        "opacity": 0.92,
-        "pointerEvents": true,
-        "text": "客服",
-        "semantic": "span"
-      },
-      {
-        "id": 71,
-        "parentId": 66,
-        "semantic": "p-toast-host"
-      },
-      {
-        "id": 72,
-        "parentId": 66,
-        "semantic": "p-loading-host"
-      }
-    ]
-  },
-  "messages": {
-    "nodes": [
-      {
-        "id": 0,
-        "parentId": null,
-        "semantic": "app-root",
-        "display": "flex",
-        "flexDirection": "column",
-        "alignItems": "stretch",
-        "position": "relative",
-        "widthRatio": 1,
-        "heightRatio": 1
-      },
-      {
-        "id": 1,
-        "parentId": 0,
-        "semantic": "global-layer",
-        "position": "absolute",
-        "left": 0,
-        "top": 0,
-        "right": 0,
-        "bottom": 0
-      },
-      {
-        "id": 2,
-        "parentId": 1,
-        "position": "absolute",
-        "left": 0,
-        "top": 0,
-        "right": 0,
-        "bottom": 0,
-        "backgroundColor": "#f4f5f7",
-        "pointerEvents": false,
-        "semantic": "div"
-      },
-      {
-        "id": 3,
-        "parentId": 0,
-        "widthRatio": 1,
-        "maxWidthPct": 1,
-        "boxSizing": "border-box",
-        "backgroundColor": "#f4f5f7",
-        "color": "#1a1c22",
-        "padding": {
-          "left": 16,
-          "right": 16,
-          "bottom": 120,
-          "top": 44
-        },
-        "semantic": "view",
-        "position": "absolute",
-        "left": 0,
-        "top": 0,
-        "right": 0,
-        "bottom": 0,
-        "display": "flex",
-        "flexDirection": "column",
-        "alignItems": "stretch"
-      },
-      {
-        "id": 4,
-        "parentId": 3,
-        "display": "flex",
-        "flexDirection": "row",
-        "alignItems": "baseline",
-        "justifyContent": "space-between",
-        "padding": {
-          "top": 24,
-          "right": 16,
-          "bottom": 12,
-          "left": 16
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 5,
-        "parentId": 4,
-        "fontSize": 26,
-        "fontWeight": 700,
-        "color": "#1a1c22",
-        "letterSpacing": -0.3,
-        "text": "消息",
-        "semantic": "text"
-      },
-      {
-        "id": 6,
-        "parentId": 4,
-        "fontSize": 12,
-        "color": "#5f6673",
-        "text": "未读 0",
-        "semantic": "text"
-      },
-      {
-        "id": 7,
-        "parentId": 3,
-        "display": "flex",
-        "flexDirection": "row",
-        "padding": {
-          "top": 0,
-          "right": 0,
-          "bottom": 12,
-          "left": 0
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 8,
-        "parentId": 7,
-        "margin": {
-          "right": 12
-        },
+        "borderWidth": 2,
+        "borderColor": "#5b5bd6",
+        "borderTopStyle": "dashed",
+        "borderRightStyle": "dashed",
+        "borderBottomStyle": "dashed",
+        "borderLeftStyle": "dashed",
         "padding": {
           "top": 8,
           "right": 12,
           "bottom": 8,
           "left": 12
         },
-        "borderRadius": 10,
-        "backgroundColor": "#ffffff",
-        "borderWidth": 1,
-        "borderColor": "#dcdfe5",
-        "fontSize": 12,
-        "color": "#4b5058",
-        "text": "标记一条未读",
-        "semantic": "view"
-      },
-      {
-        "id": 9,
-        "parentId": 7,
         "margin": {
-          "right": 12
+          "bottom": 8
         },
-        "padding": {
-          "top": 8,
-          "right": 12,
-          "bottom": 8,
-          "left": 12
-        },
-        "borderRadius": 10,
-        "backgroundColor": "#ffffff",
-        "borderWidth": 1,
-        "borderColor": "#dcdfe5",
-        "fontSize": 12,
-        "color": "#4b5058",
-        "text": "全部已读",
-        "semantic": "view"
-      },
-      {
-        "id": 10,
-        "parentId": 3,
-        "widthRatio": 1,
-        "boxSizing": "border-box",
-        "backgroundColor": "#ffffff",
-        "borderWidth": 1,
-        "borderColor": "#e8eaee",
-        "borderRadius": 14,
-        "margin": {
-          "top": 0,
-          "right": 0,
-          "bottom": 12,
-          "left": 0
-        },
-        "overflow": "hidden",
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 11,
-        "parentId": 10,
-        "display": "flex",
-        "flexDirection": "row",
-        "alignItems": "center",
-        "minHeight": 48,
-        "padding": {
-          "top": 0,
-          "right": 16,
-          "bottom": 0,
-          "left": 16
-        },
-        "boxSizing": "border-box",
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 12,
-        "parentId": 11,
-        "flexShrink": 0,
-        "width": 40,
-        "height": 40,
-        "borderRadius": 20,
-        "display": "flex",
-        "alignItems": "center",
-        "justifyContent": "center",
-        "backgroundColor": "#5b5bd61a",
-        "margin": {
-          "right": 12
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 13,
-        "parentId": 12,
-        "fontSize": 14,
-        "fontWeight": 600,
-        "color": "#4a4ab8",
-        "text": "产",
-        "semantic": "text"
-      },
-      {
-        "id": 14,
-        "parentId": 11,
-        "flexGrow": 1,
-        "flexShrink": 1,
-        "flexBasis": 0,
-        "minWidth": 0,
-        "display": "flex",
-        "flexDirection": "column",
-        "justifyContent": "center",
-        "padding": {
-          "top": 12,
-          "right": 0,
-          "bottom": 12,
-          "left": 0
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 15,
-        "parentId": 14,
-        "fontSize": 14,
-        "color": "#1a1c22",
-        "text": "产品评审群",
-        "semantic": "text"
-      },
-      {
-        "id": 16,
-        "parentId": 14,
-        "margin": {
-          "top": 2
-        },
-        "fontSize": 12,
-        "color": "#5f6673",
-        "text": "张工：新版原型已上传，请过目",
-        "semantic": "text"
-      },
-      {
-        "id": 17,
-        "parentId": 11,
-        "flexShrink": 0,
-        "display": "flex",
-        "flexDirection": "column",
-        "alignItems": "flex-end",
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 18,
-        "parentId": 17,
-        "fontSize": 11,
-        "color": "#5f6673",
-        "margin": {
-          "bottom": 4
-        },
-        "text": "10:24",
-        "semantic": "text"
-      },
-      {
-        "id": 19,
-        "parentId": 17,
-        "alignItems": "center",
-        "justifyContent": "center",
-        "minWidth": 18,
-        "height": 18,
-        "padding": {
-          "top": 0,
-          "right": 5,
-          "bottom": 0,
-          "left": 5
-        },
-        "borderRadius": 999,
-        "backgroundColor": "#d64545",
-        "color": "#ffffff",
-        "fontSize": 11,
-        "fontWeight": 600,
-        "text": "2",
-        "semantic": "text"
-      },
-      {
-        "id": 20,
-        "parentId": 10,
-        "display": "flex",
-        "flexDirection": "row",
-        "alignItems": "center",
-        "minHeight": 48,
-        "padding": {
-          "top": 0,
-          "right": 16,
-          "bottom": 0,
-          "left": 16
-        },
-        "boxSizing": "border-box",
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 21,
-        "parentId": 20,
-        "flexShrink": 0,
-        "width": 40,
-        "height": 40,
-        "borderRadius": 20,
-        "display": "flex",
-        "alignItems": "center",
-        "justifyContent": "center",
-        "backgroundColor": "#5b5bd61a",
-        "margin": {
-          "right": 12
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 22,
-        "parentId": 21,
-        "fontSize": 14,
-        "fontWeight": 600,
-        "color": "#4a4ab8",
-        "text": "客",
-        "semantic": "text"
-      },
-      {
-        "id": 23,
-        "parentId": 20,
-        "flexGrow": 1,
-        "flexShrink": 1,
-        "flexBasis": 0,
-        "minWidth": 0,
-        "display": "flex",
-        "flexDirection": "column",
-        "justifyContent": "center",
-        "padding": {
-          "top": 12,
-          "right": 0,
-          "bottom": 12,
-          "left": 0
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 24,
-        "parentId": 23,
-        "fontSize": 14,
-        "color": "#1a1c22",
-        "text": "客服工作台",
-        "semantic": "text"
-      },
-      {
-        "id": 25,
-        "parentId": 23,
-        "margin": {
-          "top": 2
-        },
-        "fontSize": 12,
-        "color": "#5f6673",
-        "text": "系统：有 1 位用户正在等待接入",
-        "semantic": "text"
-      },
-      {
-        "id": 26,
-        "parentId": 20,
-        "flexShrink": 0,
-        "display": "flex",
-        "flexDirection": "column",
-        "alignItems": "flex-end",
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 27,
-        "parentId": 26,
-        "fontSize": 11,
-        "color": "#5f6673",
-        "margin": {
-          "bottom": 4
-        },
-        "text": "09:58",
-        "semantic": "text"
-      },
-      {
-        "id": 28,
-        "parentId": 26,
-        "alignItems": "center",
-        "justifyContent": "center",
-        "minWidth": 18,
-        "height": 18,
-        "padding": {
-          "top": 0,
-          "right": 5,
-          "bottom": 0,
-          "left": 5
-        },
-        "borderRadius": 999,
-        "backgroundColor": "#d64545",
-        "color": "#ffffff",
-        "fontSize": 11,
-        "fontWeight": 600,
-        "text": "1",
-        "semantic": "text"
-      },
-      {
-        "id": 29,
-        "parentId": 10,
-        "display": "flex",
-        "flexDirection": "row",
-        "alignItems": "center",
-        "minHeight": 48,
-        "padding": {
-          "top": 0,
-          "right": 16,
-          "bottom": 0,
-          "left": 16
-        },
-        "boxSizing": "border-box",
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 30,
-        "parentId": 29,
-        "flexShrink": 0,
-        "width": 40,
-        "height": 40,
-        "borderRadius": 20,
-        "display": "flex",
-        "alignItems": "center",
-        "justifyContent": "center",
-        "backgroundColor": "#5b5bd61a",
-        "margin": {
-          "right": 12
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 31,
-        "parentId": 30,
-        "fontSize": 14,
-        "fontWeight": 600,
-        "color": "#4a4ab8",
-        "text": "投",
-        "semantic": "text"
-      },
-      {
-        "id": 32,
-        "parentId": 29,
-        "flexGrow": 1,
-        "flexShrink": 1,
-        "flexBasis": 0,
-        "minWidth": 0,
-        "display": "flex",
-        "flexDirection": "column",
-        "justifyContent": "center",
-        "padding": {
-          "top": 12,
-          "right": 0,
-          "bottom": 12,
-          "left": 0
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 33,
-        "parentId": 32,
-        "fontSize": 14,
-        "color": "#1a1c22",
-        "text": "投放数据机器人",
-        "semantic": "text"
-      },
-      {
-        "id": 34,
-        "parentId": 32,
-        "margin": {
-          "top": 2
-        },
-        "fontSize": 12,
-        "color": "#5f6673",
-        "text": "昨日 ROI 1.86，环比 +12%",
-        "semantic": "text"
-      },
-      {
-        "id": 35,
-        "parentId": 29,
-        "flexShrink": 0,
-        "display": "flex",
-        "flexDirection": "column",
-        "alignItems": "flex-end",
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 36,
-        "parentId": 35,
-        "fontSize": 11,
-        "color": "#5f6673",
-        "margin": {
-          "bottom": 4
-        },
-        "text": "08:30",
-        "semantic": "text"
-      },
-      {
-        "id": 37,
-        "parentId": 10,
-        "display": "flex",
-        "flexDirection": "row",
-        "alignItems": "center",
-        "minHeight": 48,
-        "padding": {
-          "top": 0,
-          "right": 16,
-          "bottom": 0,
-          "left": 16
-        },
-        "boxSizing": "border-box",
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 38,
-        "parentId": 37,
-        "flexShrink": 0,
-        "width": 40,
-        "height": 40,
-        "borderRadius": 20,
-        "display": "flex",
-        "alignItems": "center",
-        "justifyContent": "center",
-        "backgroundColor": "#5b5bd61a",
-        "margin": {
-          "right": 12
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 39,
-        "parentId": 38,
-        "fontSize": 14,
-        "fontWeight": 600,
-        "color": "#4a4ab8",
-        "text": "合",
-        "semantic": "text"
-      },
-      {
-        "id": 40,
-        "parentId": 37,
-        "flexGrow": 1,
-        "flexShrink": 1,
-        "flexBasis": 0,
-        "minWidth": 0,
-        "display": "flex",
-        "flexDirection": "column",
-        "justifyContent": "center",
-        "padding": {
-          "top": 12,
-          "right": 0,
-          "bottom": 12,
-          "left": 0
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 41,
-        "parentId": 40,
-        "fontSize": 14,
-        "color": "#1a1c22",
-        "text": "合规提醒",
-        "semantic": "text"
-      },
-      {
-        "id": 42,
-        "parentId": 40,
-        "margin": {
-          "top": 2
-        },
-        "fontSize": 12,
-        "color": "#5f6673",
-        "text": "素材复审截止今日 18:00",
-        "semantic": "text"
-      },
-      {
-        "id": 43,
-        "parentId": 37,
-        "flexShrink": 0,
-        "display": "flex",
-        "flexDirection": "column",
-        "alignItems": "flex-end",
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 44,
-        "parentId": 43,
-        "fontSize": 11,
-        "color": "#5f6673",
-        "margin": {
-          "bottom": 4
-        },
-        "text": "昨天",
-        "semantic": "text"
-      },
-      {
-        "id": 45,
-        "parentId": 0,
-        "semantic": "overlay-layer",
-        "position": "absolute",
-        "left": 0,
-        "top": 0,
-        "right": 0,
-        "bottom": 0,
-        "pointerEvents": false
-      },
-      {
-        "id": 46,
-        "parentId": 45,
-        "position": "absolute",
-        "top": 0,
-        "right": 0,
-        "bottom": 0,
-        "left": 0,
-        "pointerEvents": false,
-        "semantic": "div"
-      },
-      {
-        "id": 47,
-        "parentId": 46,
-        "pointerEvents": true,
-        "position": "absolute",
-        "right": 14,
-        "bottom": 136,
-        "width": 56,
-        "height": 56,
-        "borderRadius": 28,
-        "display": "flex",
-        "flexDirection": "column",
-        "alignItems": "center",
-        "justifyContent": "center",
-        "backgroundColor": "#5b5bd6",
-        "boxShadow": {
-          "dx": 0,
-          "dy": 3,
-          "blur": 10,
-          "spread": 0,
-          "color": "#5b5bd659"
-        },
-        "semantic": "div"
-      },
-      {
-        "id": 48,
-        "parentId": 47,
-        "fontSize": 17,
-        "fontWeight": 700,
-        "color": "#ffffff",
-        "lineHeight": "1.1",
-        "pointerEvents": true,
-        "text": "聊",
-        "semantic": "span"
-      },
-      {
-        "id": 49,
-        "parentId": 47,
-        "fontSize": 10,
-        "color": "#ffffff",
-        "opacity": 0.92,
-        "pointerEvents": true,
-        "text": "客服",
-        "semantic": "span"
-      },
-      {
-        "id": 50,
-        "parentId": 45,
-        "semantic": "p-toast-host"
-      },
-      {
-        "id": 51,
-        "parentId": 45,
-        "semantic": "p-loading-host"
-      }
-    ]
-  },
-  "mine": {
-    "nodes": [
-      {
-        "id": 0,
-        "parentId": null,
-        "semantic": "app-root",
-        "display": "flex",
-        "flexDirection": "column",
-        "alignItems": "stretch",
-        "position": "relative",
-        "widthRatio": 1,
-        "heightRatio": 1
-      },
-      {
-        "id": 1,
-        "parentId": 0,
-        "semantic": "global-layer",
-        "position": "absolute",
-        "left": 0,
-        "top": 0,
-        "right": 0,
-        "bottom": 0
-      },
-      {
-        "id": 2,
-        "parentId": 1,
-        "position": "absolute",
-        "left": 0,
-        "top": 0,
-        "right": 0,
-        "bottom": 0,
-        "backgroundColor": "#f4f5f7",
-        "pointerEvents": false,
-        "semantic": "div"
-      },
-      {
-        "id": 3,
-        "parentId": 0,
-        "widthRatio": 1,
-        "maxWidthPct": 1,
-        "boxSizing": "border-box",
-        "backgroundColor": "#f4f5f7",
-        "color": "#1a1c22",
-        "padding": {
-          "left": 16,
-          "right": 16,
-          "bottom": 120,
-          "top": 44
-        },
-        "semantic": "view",
-        "position": "absolute",
-        "left": 0,
-        "top": 0,
-        "right": 0,
-        "bottom": 0,
-        "display": "flex",
-        "flexDirection": "column",
-        "alignItems": "stretch"
-      },
-      {
-        "id": 4,
-        "parentId": 3,
-        "display": "flex",
-        "flexDirection": "row",
-        "alignItems": "center",
-        "padding": {
-          "top": 24,
-          "right": 0,
-          "bottom": 16,
-          "left": 0
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 5,
-        "parentId": 4,
-        "width": 56,
-        "height": 56,
-        "borderRadius": 28,
-        "display": "flex",
-        "alignItems": "center",
-        "justifyContent": "center",
-        "backgroundColor": "#5b5bd62e",
-        "margin": {
-          "right": 12
-        },
-        "color": "#1a1c22",
         "semantic": "view"
       },
       {
         "id": 6,
         "parentId": 5,
-        "fontSize": 20,
-        "fontWeight": 700,
-        "color": "#4a4ab8",
-        "text": "运",
+        "fontSize": 13,
+        "color": "#1a1c22",
+        "text": "虚线边框",
         "semantic": "text"
       },
       {
         "id": 7,
         "parentId": 4,
-        "color": "#1a1c22",
+        "borderWidth": 3,
+        "borderColor": "#d64545",
+        "borderTopStyle": "dotted",
+        "borderRightStyle": "dotted",
+        "borderBottomStyle": "dotted",
+        "borderLeftStyle": "dotted",
+        "padding": {
+          "top": 8,
+          "right": 12,
+          "bottom": 8,
+          "left": 12
+        },
         "semantic": "view"
       },
       {
         "id": 8,
         "parentId": 7,
-        "fontSize": 16,
-        "fontWeight": 600,
+        "fontSize": 13,
         "color": "#1a1c22",
-        "text": "运营同学",
+        "text": "点线边框",
         "semantic": "text"
       },
       {
         "id": 9,
-        "parentId": 7,
+        "parentId": 0,
+        "fontSize": 13,
+        "fontWeight": 600,
+        "color": "#5b5bd6",
         "margin": {
-          "top": 2
-        },
-        "fontSize": 12,
-        "color": "#5f6673",
-        "text": "华东大区 · 渠道运营",
-        "semantic": "text"
-      },
-      {
-        "id": 10,
-        "parentId": 3,
-        "padding": {
-          "top": 16,
+          "top": 20,
           "right": 0,
           "bottom": 8,
           "left": 0
         },
-        "fontSize": 12,
-        "color": "#5f6673",
-        "text": "外观",
+        "text": "H · 逐角圆角",
         "semantic": "text"
       },
       {
-        "id": 11,
-        "parentId": 3,
-        "widthRatio": 1,
-        "boxSizing": "border-box",
+        "id": 10,
+        "parentId": 0,
         "backgroundColor": "#ffffff",
-        "borderWidth": 1,
-        "borderColor": "#e8eaee",
-        "borderRadius": 14,
-        "margin": {
-          "top": 0,
-          "right": 0,
+        "borderRadius": 10,
+        "padding": {
+          "top": 12,
+          "right": 14,
           "bottom": 12,
-          "left": 0
+          "left": 14
         },
-        "overflow": "hidden",
-        "color": "#1a1c22",
+        "semantic": "view"
+      },
+      {
+        "id": 11,
+        "parentId": 10,
+        "borderRadius": 12,
+        "borderRadiusCorners": {
+          "topLeft": true,
+          "topRight": false,
+          "bottomRight": true,
+          "bottomLeft": false
+        },
+        "borderWidth": 1,
+        "borderColor": "#dcdfe5",
+        "padding": {
+          "top": 8,
+          "right": 12,
+          "bottom": 8,
+          "left": 12
+        },
         "semantic": "view"
       },
       {
         "id": 12,
         "parentId": 11,
-        "display": "flex",
-        "flexDirection": "row",
-        "alignItems": "center",
-        "minHeight": 48,
-        "padding": {
-          "top": 0,
-          "right": 16,
-          "bottom": 0,
-          "left": 16
-        },
-        "boxSizing": "border-box",
+        "fontSize": 13,
         "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 13,
-        "parentId": 12,
-        "flexShrink": 0,
-        "width": 28,
-        "height": 28,
-        "borderRadius": 8,
-        "display": "flex",
-        "alignItems": "center",
-        "justifyContent": "center",
-        "backgroundColor": "#5b5bd61a",
-        "margin": {
-          "right": 12
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 14,
-        "parentId": 13,
-        "fontSize": 15,
-        "color": "#4a4ab8",
-        "text": "◐",
+        "text": "左上右下圆角",
         "semantic": "text"
-      },
-      {
-        "id": 15,
-        "parentId": 12,
-        "flexGrow": 1,
-        "flexShrink": 1,
-        "flexBasis": 0,
-        "minWidth": 0,
-        "display": "flex",
-        "flexDirection": "column",
-        "justifyContent": "center",
-        "padding": {
-          "right": 12
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 16,
-        "parentId": 15,
-        "fontSize": 14,
-        "color": "#1a1c22",
-        "text": "深色模式",
-        "semantic": "text"
-      },
-      {
-        "id": 17,
-        "parentId": 15,
-        "margin": {
-          "top": 2
-        },
-        "fontSize": 12,
-        "color": "#5f6673",
-        "text": "全应用即时生效（无需刷新）",
-        "semantic": "text"
-      },
-      {
-        "id": 18,
-        "parentId": 12,
-        "flexShrink": 0,
-        "width": 44,
-        "height": 26,
-        "borderRadius": 13,
-        "backgroundColor": "#dcdfe5",
-        "padding": {
-          "top": 2,
-          "right": 2,
-          "bottom": 2,
-          "left": 2
-        },
-        "boxSizing": "border-box",
-        "display": "flex",
-        "flexDirection": "row",
-        "alignItems": "center",
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 19,
-        "parentId": 18,
-        "pointerEvents": false,
-        "flexShrink": 0,
-        "width": 22,
-        "height": 22,
-        "borderRadius": 11,
-        "backgroundColor": "#ffffff",
-        "boxShadow": {
-          "dx": 0,
-          "dy": 1,
-          "blur": 2,
-          "spread": 0,
-          "color": "#1a1c220d"
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 20,
-        "parentId": 3,
-        "padding": {
-          "top": 16,
-          "right": 0,
-          "bottom": 8,
-          "left": 0
-        },
-        "fontSize": 12,
-        "color": "#5f6673",
-        "text": "全局能力",
-        "semantic": "text"
-      },
-      {
-        "id": 21,
-        "parentId": 3,
-        "widthRatio": 1,
-        "boxSizing": "border-box",
-        "backgroundColor": "#ffffff",
-        "borderWidth": 1,
-        "borderColor": "#e8eaee",
-        "borderRadius": 14,
-        "margin": {
-          "top": 0,
-          "right": 0,
-          "bottom": 12,
-          "left": 0
-        },
-        "overflow": "hidden",
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 22,
-        "parentId": 21,
-        "display": "flex",
-        "flexDirection": "row",
-        "alignItems": "center",
-        "minHeight": 48,
-        "padding": {
-          "top": 0,
-          "right": 16,
-          "bottom": 0,
-          "left": 16
-        },
-        "boxSizing": "border-box",
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 23,
-        "parentId": 22,
-        "flexShrink": 0,
-        "width": 28,
-        "height": 28,
-        "borderRadius": 8,
-        "display": "flex",
-        "alignItems": "center",
-        "justifyContent": "center",
-        "backgroundColor": "#5b5bd61a",
-        "margin": {
-          "right": 12
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 24,
-        "parentId": 23,
-        "fontSize": 15,
-        "color": "#4a4ab8",
-        "text": "◉",
-        "semantic": "text"
-      },
-      {
-        "id": 25,
-        "parentId": 22,
-        "flexGrow": 1,
-        "flexShrink": 1,
-        "flexBasis": 0,
-        "minWidth": 0,
-        "display": "flex",
-        "flexDirection": "column",
-        "justifyContent": "center",
-        "padding": {
-          "right": 12
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 26,
-        "parentId": 25,
-        "fontSize": 14,
-        "color": "#1a1c22",
-        "text": "客服悬浮球",
-        "semantic": "text"
-      },
-      {
-        "id": 27,
-        "parentId": 25,
-        "margin": {
-          "top": 2
-        },
-        "fontSize": 12,
-        "color": "#5f6673",
-        "text": "常驻入口，关闭后全部页面隐藏",
-        "semantic": "text"
-      },
-      {
-        "id": 28,
-        "parentId": 22,
-        "flexShrink": 0,
-        "width": 44,
-        "height": 26,
-        "borderRadius": 13,
-        "backgroundColor": "#5b5bd6",
-        "padding": {
-          "top": 2,
-          "right": 2,
-          "bottom": 2,
-          "left": 2
-        },
-        "boxSizing": "border-box",
-        "display": "flex",
-        "flexDirection": "row",
-        "alignItems": "center",
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 29,
-        "parentId": 28,
-        "pointerEvents": false,
-        "flexShrink": 0,
-        "width": 22,
-        "height": 22,
-        "borderRadius": 11,
-        "backgroundColor": "#ffffff",
-        "boxShadow": {
-          "dx": 0,
-          "dy": 1,
-          "blur": 2,
-          "spread": 0,
-          "color": "#1a1c220d"
-        },
-        "transform": {
-          "txPx": 18,
-          "tyPx": 0,
-          "txPct": 0,
-          "tyPct": 0,
-          "sx": 1,
-          "sy": 1,
-          "rotate": 0
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 30,
-        "parentId": 21,
-        "display": "flex",
-        "flexDirection": "row",
-        "alignItems": "center",
-        "minHeight": 48,
-        "padding": {
-          "top": 0,
-          "right": 16,
-          "bottom": 0,
-          "left": 16
-        },
-        "boxSizing": "border-box",
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 31,
-        "parentId": 30,
-        "flexShrink": 0,
-        "width": 28,
-        "height": 28,
-        "borderRadius": 8,
-        "display": "flex",
-        "alignItems": "center",
-        "justifyContent": "center",
-        "backgroundColor": "#5b5bd61a",
-        "margin": {
-          "right": 12
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 32,
-        "parentId": 31,
-        "fontSize": 15,
-        "color": "#4a4ab8",
-        "text": "♪",
-        "semantic": "text"
-      },
-      {
-        "id": 33,
-        "parentId": 30,
-        "flexGrow": 1,
-        "flexShrink": 1,
-        "flexBasis": 0,
-        "minWidth": 0,
-        "display": "flex",
-        "flexDirection": "column",
-        "justifyContent": "center",
-        "padding": {
-          "right": 12
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 34,
-        "parentId": 33,
-        "fontSize": 14,
-        "color": "#1a1c22",
-        "text": "音乐播放条",
-        "semantic": "text"
-      },
-      {
-        "id": 35,
-        "parentId": 33,
-        "margin": {
-          "top": 2
-        },
-        "fontSize": 12,
-        "color": "#5f6673",
-        "text": "当前状态：未播放",
-        "semantic": "text"
-      },
-      {
-        "id": 36,
-        "parentId": 30,
-        "flexShrink": 0,
-        "margin": {
-          "left": 12
-        },
-        "fontSize": 14,
-        "color": "#4b5058",
-        "text": "—",
-        "semantic": "text"
-      },
-      {
-        "id": 37,
-        "parentId": 3,
-        "padding": {
-          "top": 16,
-          "right": 0,
-          "bottom": 8,
-          "left": 0
-        },
-        "fontSize": 12,
-        "color": "#5f6673",
-        "text": "关于",
-        "semantic": "text"
-      },
-      {
-        "id": 38,
-        "parentId": 3,
-        "widthRatio": 1,
-        "boxSizing": "border-box",
-        "backgroundColor": "#ffffff",
-        "borderWidth": 1,
-        "borderColor": "#e8eaee",
-        "borderRadius": 14,
-        "margin": {
-          "top": 0,
-          "right": 0,
-          "bottom": 12,
-          "left": 0
-        },
-        "overflow": "hidden",
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 39,
-        "parentId": 38,
-        "display": "flex",
-        "flexDirection": "row",
-        "alignItems": "center",
-        "minHeight": 48,
-        "padding": {
-          "top": 0,
-          "right": 16,
-          "bottom": 0,
-          "left": 16
-        },
-        "boxSizing": "border-box",
-        "color": "#1a1c22",
-        "semantic": "navigator"
-      },
-      {
-        "id": 40,
-        "parentId": 39,
-        "flexGrow": 1,
-        "flexShrink": 1,
-        "flexBasis": 0,
-        "minWidth": 0,
-        "display": "flex",
-        "flexDirection": "column",
-        "justifyContent": "center",
-        "padding": {
-          "right": 12
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 41,
-        "parentId": 40,
-        "fontSize": 14,
-        "color": "#1a1c22",
-        "text": "验收控制台",
-        "semantic": "text"
-      },
-      {
-        "id": 42,
-        "parentId": 40,
-        "margin": {
-          "top": 2
-        },
-        "fontSize": 12,
-        "color": "#5f6673",
-        "text": "全局能力自检",
-        "semantic": "text"
-      },
-      {
-        "id": 43,
-        "parentId": 39,
-        "flexShrink": 0,
-        "margin": {
-          "left": 12
-        },
-        "display": "flex",
-        "alignItems": "center",
-        "justifyContent": "flex-end",
-        "fontSize": 16,
-        "lineHeight": "1",
-        "color": "#5f6673",
-        "text": "›",
-        "semantic": "text"
-      },
-      {
-        "id": 44,
-        "parentId": 38,
-        "display": "flex",
-        "flexDirection": "row",
-        "alignItems": "center",
-        "minHeight": 48,
-        "padding": {
-          "top": 0,
-          "right": 16,
-          "bottom": 0,
-          "left": 16
-        },
-        "boxSizing": "border-box",
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 45,
-        "parentId": 44,
-        "flexGrow": 1,
-        "flexShrink": 1,
-        "flexBasis": 0,
-        "minWidth": 0,
-        "display": "flex",
-        "flexDirection": "column",
-        "justifyContent": "center",
-        "padding": {
-          "right": 12
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 46,
-        "parentId": 45,
-        "fontSize": 14,
-        "color": "#1a1c22",
-        "text": "版本",
-        "semantic": "text"
-      },
-      {
-        "id": 47,
-        "parentId": 44,
-        "flexShrink": 0,
-        "margin": {
-          "left": 12
-        },
-        "fontSize": 14,
-        "color": "#4b5058",
-        "text": "v0.1.0 · Proteus 超级应用",
-        "semantic": "text"
-      },
-      {
-        "id": 48,
-        "parentId": 0,
-        "semantic": "overlay-layer",
-        "position": "absolute",
-        "left": 0,
-        "top": 0,
-        "right": 0,
-        "bottom": 0,
-        "pointerEvents": false
-      },
-      {
-        "id": 49,
-        "parentId": 48,
-        "position": "absolute",
-        "top": 0,
-        "right": 0,
-        "bottom": 0,
-        "left": 0,
-        "pointerEvents": false,
-        "semantic": "div"
-      },
-      {
-        "id": 50,
-        "parentId": 49,
-        "pointerEvents": true,
-        "position": "absolute",
-        "right": 14,
-        "bottom": 136,
-        "width": 56,
-        "height": 56,
-        "borderRadius": 28,
-        "display": "flex",
-        "flexDirection": "column",
-        "alignItems": "center",
-        "justifyContent": "center",
-        "backgroundColor": "#5b5bd6",
-        "boxShadow": {
-          "dx": 0,
-          "dy": 3,
-          "blur": 10,
-          "spread": 0,
-          "color": "#5b5bd659"
-        },
-        "semantic": "div"
-      },
-      {
-        "id": 51,
-        "parentId": 50,
-        "fontSize": 17,
-        "fontWeight": 700,
-        "color": "#ffffff",
-        "lineHeight": "1.1",
-        "pointerEvents": true,
-        "text": "聊",
-        "semantic": "span"
-      },
-      {
-        "id": 52,
-        "parentId": 50,
-        "fontSize": 10,
-        "color": "#ffffff",
-        "opacity": 0.92,
-        "pointerEvents": true,
-        "text": "客服",
-        "semantic": "span"
-      },
-      {
-        "id": 53,
-        "parentId": 48,
-        "semantic": "p-toast-host"
-      },
-      {
-        "id": 54,
-        "parentId": 48,
-        "semantic": "p-loading-host"
       }
     ]
   },
-  "verify": {
+  "border": {
     "nodes": [
       {
         "id": 0,
         "parentId": null,
-        "semantic": "app-root",
-        "display": "flex",
-        "flexDirection": "column",
-        "alignItems": "stretch",
-        "position": "relative",
+        "backgroundColor": "#f4f5f7",
         "widthRatio": 1,
-        "heightRatio": 1
+        "minHeightPct": 1,
+        "padding": {
+          "top": 16,
+          "right": 12,
+          "bottom": 32,
+          "left": 12
+        },
+        "boxSizing": "border-box",
+        "semantic": "view"
       },
       {
         "id": 1,
         "parentId": 0,
-        "semantic": "global-layer",
-        "position": "absolute",
-        "left": 0,
-        "top": 0,
-        "right": 0,
-        "bottom": 0
+        "fontSize": 20,
+        "fontWeight": 700,
+        "color": "#1a1c22",
+        "margin": {
+          "bottom": 4
+        },
+        "text": "CSS 验收 · 边框",
+        "semantic": "text"
       },
       {
         "id": 2,
-        "parentId": 1,
-        "position": "absolute",
-        "left": 0,
-        "top": 0,
-        "right": 0,
-        "bottom": 0,
-        "backgroundColor": "#f4f5f7",
-        "pointerEvents": false,
-        "semantic": "div"
+        "parentId": 0,
+        "fontSize": 13,
+        "color": "#5f6673",
+        "margin": {
+          "bottom": 16
+        },
+        "text": "border-<side> 族 · Web 基准 · 稳定 id 供逐端寻址",
+        "semantic": "text"
       },
       {
         "id": 3,
         "parentId": 0,
-        "widthRatio": 1,
-        "maxWidthPct": 1,
-        "boxSizing": "border-box",
-        "backgroundColor": "#f4f5f7",
-        "color": "#1a1c22",
-        "padding": {
-          "left": 16,
-          "right": 16,
-          "bottom": 120,
-          "top": 44
+        "fontSize": 13,
+        "fontWeight": 600,
+        "color": "#5b5bd6",
+        "margin": {
+          "top": 20,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
         },
-        "semantic": "view",
-        "position": "absolute",
-        "left": 0,
-        "top": 0,
-        "right": 0,
-        "bottom": 0,
-        "display": "flex",
-        "flexDirection": "column",
-        "alignItems": "stretch"
+        "text": "A · border-bottom（列表分隔线）",
+        "semantic": "text"
       },
       {
         "id": 4,
-        "parentId": 3,
+        "parentId": 0,
+        "backgroundColor": "#ffffff",
+        "borderRadius": 10,
         "padding": {
-          "left": 0,
-          "right": 0
+          "top": 12,
+          "right": 14,
+          "bottom": 12,
+          "left": 14
         },
-        "color": "#1a1c22",
         "semantic": "view"
       },
       {
         "id": 5,
         "parentId": 4,
-        "fontSize": 26,
-        "fontWeight": 700,
-        "color": "#1a1c22",
-        "letterSpacing": -0.3,
-        "text": "验收控制台",
-        "semantic": "text"
-      },
-      {
-        "id": 6,
-        "parentId": 4,
-        "margin": {
-          "top": 8
-        },
-        "fontSize": 12,
-        "color": "#4b5058",
-        "text": "八条超级应用场景 · 逐条触发并读回状态（本页 = 验收入口）",
-        "semantic": "text"
-      },
-      {
-        "id": 7,
-        "parentId": 3,
-        "margin": {
-          "top": 0,
-          "right": 0,
-          "bottom": 12,
-          "left": 0
-        },
         "widthRatio": 1,
-        "boxSizing": "border-box",
-        "backgroundColor": "#ffffff",
-        "borderWidth": 1,
-        "borderColor": "#e8eaee",
-        "borderRadius": 14,
-        "boxShadow": {
-          "dx": 0,
-          "dy": 1,
-          "blur": 2,
-          "spread": 0,
-          "color": "#1a1c220d"
-        },
-        "overflow": "hidden",
-        "color": "#1a1c22",
         "semantic": "view"
       },
       {
-        "id": 8,
-        "parentId": 7,
+        "id": 6,
+        "parentId": 5,
+        "borderBottomWidth": 1,
+        "borderBottomColor": "#e8eaee",
         "padding": {
-          "top": 16,
-          "right": 16,
-          "bottom": 16,
-          "left": 16
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
         },
+        "semantic": "view"
+      },
+      {
+        "id": 7,
+        "parentId": 6,
+        "fontSize": 14,
         "color": "#1a1c22",
+        "text": "第一行",
+        "semantic": "text"
+      },
+      {
+        "id": 8,
+        "parentId": 5,
+        "borderBottomWidth": 1,
+        "borderBottomColor": "#e8eaee",
+        "padding": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "semantic": "view"
       },
       {
         "id": 9,
         "parentId": 8,
-        "display": "flex",
-        "flexDirection": "row",
-        "alignItems": "flex-start",
-        "justifyContent": "space-between",
+        "fontSize": 14,
         "color": "#1a1c22",
-        "semantic": "view"
+        "text": "第二行",
+        "semantic": "text"
       },
       {
         "id": 10,
-        "parentId": 9,
-        "flexGrow": 1,
-        "flexShrink": 1,
-        "flexBasis": 0,
-        "minWidth": 0,
-        "margin": {
-          "right": 12
+        "parentId": 5,
+        "borderBottomWidth": 0,
+        "borderBottomColor": "#e8eaee",
+        "padding": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
         },
-        "color": "#1a1c22",
         "semantic": "view"
       },
       {
         "id": 11,
         "parentId": 10,
         "fontSize": 14,
-        "fontWeight": 600,
         "color": "#1a1c22",
-        "text": "① 全局 Toast",
+        "text": "末行（无分隔线）",
         "semantic": "text"
       },
       {
         "id": 12,
-        "parentId": 10,
+        "parentId": 0,
+        "fontSize": 13,
+        "fontWeight": 600,
+        "color": "#5b5bd6",
         "margin": {
-          "top": 2
+          "top": 20,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
         },
-        "fontSize": 11,
-        "color": "#5f6673",
-        "text": "Overlay 层 · 队列语义（构建期按需注入宿主）",
+        "text": "B · border-top（分区顶线）",
         "semantic": "text"
       },
       {
         "id": 13,
-        "parentId": 10,
-        "margin": {
-          "top": 8
+        "parentId": 0,
+        "backgroundColor": "#ffffff",
+        "borderRadius": 10,
+        "padding": {
+          "top": 12,
+          "right": 14,
+          "bottom": 12,
+          "left": 14
         },
-        "fontSize": 12,
-        "color": "#4a4ab8",
-        "semantic": "text"
+        "semantic": "view"
       },
       {
         "id": 14,
-        "parentId": 9,
-        "flexShrink": 0,
-        "display": "flex",
-        "flexDirection": "row",
-        "flexWrap": "wrap",
-        "justifyContent": "flex-end",
-        "maxWidth": 200,
-        "color": "#1a1c22",
+        "parentId": 13,
+        "borderTopWidth": 2,
+        "borderTopColor": "#5b5bd6",
+        "padding": {
+          "top": 6
+        },
         "semantic": "view"
       },
       {
         "id": 15,
         "parentId": 14,
-        "margin": {
-          "top": 0,
-          "right": 0,
-          "bottom": 8,
-          "left": 8
-        },
-        "padding": {
-          "top": 8,
-          "right": 12,
-          "bottom": 8,
-          "left": 12
-        },
-        "borderRadius": 10,
-        "backgroundColor": "#5b5bd6",
-        "color": "#ffffff",
-        "fontSize": 12,
-        "text": "单条",
-        "semantic": "view"
+        "fontSize": 14,
+        "fontWeight": 600,
+        "color": "#1a1c22",
+        "text": "分区标题",
+        "semantic": "text"
       },
       {
         "id": 16,
-        "parentId": 14,
+        "parentId": 0,
+        "fontSize": 13,
+        "fontWeight": 600,
+        "color": "#5b5bd6",
         "margin": {
-          "top": 0,
+          "top": 20,
           "right": 0,
           "bottom": 8,
-          "left": 8
+          "left": 0
         },
-        "padding": {
-          "top": 8,
-          "right": 12,
-          "bottom": 8,
-          "left": 12
-        },
-        "borderRadius": 10,
-        "backgroundColor": "#ffffff",
-        "color": "#4b5058",
-        "fontSize": 12,
-        "borderWidth": 1,
-        "borderColor": "#dcdfe5",
-        "text": "排队 3 条",
-        "semantic": "view"
+        "text": "C · border-left（强调条）",
+        "semantic": "text"
       },
       {
         "id": 17,
-        "parentId": 3,
-        "margin": {
-          "top": 0,
-          "right": 0,
-          "bottom": 12,
-          "left": 0
-        },
-        "widthRatio": 1,
-        "boxSizing": "border-box",
+        "parentId": 0,
         "backgroundColor": "#ffffff",
-        "borderWidth": 1,
-        "borderColor": "#e8eaee",
-        "borderRadius": 14,
-        "boxShadow": {
-          "dx": 0,
-          "dy": 1,
-          "blur": 2,
-          "spread": 0,
-          "color": "#1a1c220d"
+        "borderRadius": 10,
+        "padding": {
+          "top": 12,
+          "right": 14,
+          "bottom": 12,
+          "left": 14
         },
-        "overflow": "hidden",
-        "color": "#1a1c22",
         "semantic": "view"
       },
       {
         "id": 18,
         "parentId": 17,
+        "borderLeftWidth": 3,
+        "borderLeftColor": "#d64545",
+        "padding": {
+          "left": 10
+        },
+        "semantic": "view"
+      },
+      {
+        "id": 19,
+        "parentId": 18,
+        "fontSize": 13,
+        "color": "#4b5058",
+        "text": "重点提示文本",
+        "semantic": "text"
+      },
+      {
+        "id": 20,
+        "parentId": 0,
+        "fontSize": 13,
+        "fontWeight": 600,
+        "color": "#5b5bd6",
+        "margin": {
+          "top": 20,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
+        "text": "D · border-right（表格竖线）",
+        "semantic": "text"
+      },
+      {
+        "id": 21,
+        "parentId": 0,
+        "backgroundColor": "#ffffff",
+        "borderRadius": 10,
+        "padding": {
+          "top": 12,
+          "right": 14,
+          "bottom": 12,
+          "left": 14
+        },
+        "semantic": "view"
+      },
+      {
+        "id": 22,
+        "parentId": 21,
+        "width": 120,
+        "borderRightWidth": 1,
+        "borderRightColor": "#dcdfe5",
+        "padding": {
+          "right": 8
+        },
+        "semantic": "view"
+      },
+      {
+        "id": 23,
+        "parentId": 22,
+        "fontSize": 13,
+        "color": "#4b5058",
+        "text": "单元格",
+        "semantic": "text"
+      },
+      {
+        "id": 24,
+        "parentId": 0,
+        "fontSize": 13,
+        "fontWeight": 600,
+        "color": "#5b5bd6",
+        "margin": {
+          "top": 20,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
+        "text": "E · 四边各异（独立性）",
+        "semantic": "text"
+      },
+      {
+        "id": 25,
+        "parentId": 0,
+        "backgroundColor": "#ffffff",
+        "borderRadius": 10,
+        "padding": {
+          "top": 12,
+          "right": 14,
+          "bottom": 12,
+          "left": 14
+        },
+        "semantic": "view"
+      },
+      {
+        "id": 26,
+        "parentId": 25,
+        "borderTopWidth": 2,
+        "borderTopColor": "#5b5bd6",
+        "borderRightWidth": 3,
+        "borderRightColor": "#2f9e44",
+        "borderBottomWidth": 4,
+        "borderBottomColor": "#d64545",
+        "borderLeftWidth": 1,
+        "borderLeftColor": "#f08c00",
+        "padding": {
+          "top": 8,
+          "right": 12,
+          "bottom": 8,
+          "left": 12
+        },
+        "semantic": "view"
+      },
+      {
+        "id": 27,
+        "parentId": 26,
+        "fontSize": 13,
+        "color": "#1a1c22",
+        "text": "四边",
+        "semantic": "text"
+      }
+    ]
+  },
+  "justify-self": {
+    "nodes": [
+      {
+        "id": 0,
+        "parentId": null,
+        "backgroundColor": "#f4f5f7",
+        "widthRatio": 1,
+        "minHeightPct": 1,
         "padding": {
           "top": 16,
-          "right": 16,
-          "bottom": 16,
-          "left": 16
+          "right": 12,
+          "bottom": 32,
+          "left": 12
         },
+        "boxSizing": "border-box",
+        "semantic": "view"
+      },
+      {
+        "id": 1,
+        "parentId": 0,
+        "fontSize": 20,
+        "fontWeight": 700,
         "color": "#1a1c22",
+        "margin": {
+          "bottom": 4
+        },
+        "text": "CSS 验收 · 网格自对齐",
+        "semantic": "text"
+      },
+      {
+        "id": 2,
+        "parentId": 0,
+        "fontSize": 13,
+        "color": "#5f6673",
+        "margin": {
+          "bottom": 16
+        },
+        "text": "justify-self · Web 基准（浏览器真值）· 稳定 id 供逐端寻址",
+        "semantic": "text"
+      },
+      {
+        "id": 3,
+        "parentId": 0,
+        "fontSize": 13,
+        "fontWeight": 600,
+        "color": "#5b5bd6",
+        "margin": {
+          "top": 20,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
+        "text": "A · justify-self: start（靠左）",
+        "semantic": "text"
+      },
+      {
+        "id": 4,
+        "parentId": 0,
+        "backgroundColor": "#ffffff",
+        "borderRadius": 10,
+        "padding": {
+          "top": 12,
+          "right": 14,
+          "bottom": 12,
+          "left": 14
+        },
+        "semantic": "view"
+      },
+      {
+        "id": 5,
+        "parentId": 4,
+        "display": "grid",
+        "gridTemplateColumns": "240px",
+        "width": 240,
+        "backgroundColor": "#eef1f6",
+        "padding": {
+          "top": 6,
+          "right": 6,
+          "bottom": 6,
+          "left": 6
+        },
+        "boxSizing": "border-box",
+        "semantic": "view"
+      },
+      {
+        "id": 6,
+        "parentId": 5,
+        "width": 80,
+        "height": 32,
+        "borderRadius": 6,
+        "alignItems": "center",
+        "justifyContent": "center",
+        "backgroundColor": "#5b5bd6",
+        "justifySelf": "start",
+        "semantic": "view"
+      },
+      {
+        "id": 7,
+        "parentId": 6,
+        "fontSize": 13,
+        "color": "#ffffff",
+        "text": "已绑",
+        "semantic": "text"
+      },
+      {
+        "id": 8,
+        "parentId": 0,
+        "fontSize": 13,
+        "fontWeight": 600,
+        "color": "#5b5bd6",
+        "margin": {
+          "top": 20,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
+        "text": "B · justify-self: center（居中）",
+        "semantic": "text"
+      },
+      {
+        "id": 9,
+        "parentId": 0,
+        "backgroundColor": "#ffffff",
+        "borderRadius": 10,
+        "padding": {
+          "top": 12,
+          "right": 14,
+          "bottom": 12,
+          "left": 14
+        },
+        "semantic": "view"
+      },
+      {
+        "id": 10,
+        "parentId": 9,
+        "display": "grid",
+        "gridTemplateColumns": "240px",
+        "width": 240,
+        "backgroundColor": "#eef1f6",
+        "padding": {
+          "top": 6,
+          "right": 6,
+          "bottom": 6,
+          "left": 6
+        },
+        "boxSizing": "border-box",
+        "semantic": "view"
+      },
+      {
+        "id": 11,
+        "parentId": 10,
+        "width": 80,
+        "height": 32,
+        "borderRadius": 6,
+        "alignItems": "center",
+        "justifyContent": "center",
+        "backgroundColor": "#d64545",
+        "justifySelf": "center",
+        "semantic": "view"
+      },
+      {
+        "id": 12,
+        "parentId": 11,
+        "fontSize": 13,
+        "color": "#ffffff",
+        "text": "进行中",
+        "semantic": "text"
+      },
+      {
+        "id": 13,
+        "parentId": 0,
+        "fontSize": 13,
+        "fontWeight": 600,
+        "color": "#5b5bd6",
+        "margin": {
+          "top": 20,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
+        "text": "C · justify-self: end（靠右）",
+        "semantic": "text"
+      },
+      {
+        "id": 14,
+        "parentId": 0,
+        "backgroundColor": "#ffffff",
+        "borderRadius": 10,
+        "padding": {
+          "top": 12,
+          "right": 14,
+          "bottom": 12,
+          "left": 14
+        },
+        "semantic": "view"
+      },
+      {
+        "id": 15,
+        "parentId": 14,
+        "display": "grid",
+        "gridTemplateColumns": "240px",
+        "width": 240,
+        "backgroundColor": "#eef1f6",
+        "padding": {
+          "top": 6,
+          "right": 6,
+          "bottom": 6,
+          "left": 6
+        },
+        "boxSizing": "border-box",
+        "semantic": "view"
+      },
+      {
+        "id": 16,
+        "parentId": 15,
+        "width": 80,
+        "height": 32,
+        "borderRadius": 6,
+        "alignItems": "center",
+        "justifyContent": "center",
+        "backgroundColor": "#2e9e6b",
+        "justifySelf": "end",
+        "semantic": "view"
+      },
+      {
+        "id": 17,
+        "parentId": 16,
+        "fontSize": 13,
+        "color": "#ffffff",
+        "text": "失败",
+        "semantic": "text"
+      },
+      {
+        "id": 18,
+        "parentId": 0,
+        "fontSize": 13,
+        "fontWeight": 600,
+        "color": "#5b5bd6",
+        "margin": {
+          "top": 20,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
+        "text": "D · flex 容器（对照：该属性被忽略）",
+        "semantic": "text"
+      },
+      {
+        "id": 19,
+        "parentId": 0,
+        "backgroundColor": "#ffffff",
+        "borderRadius": 10,
+        "padding": {
+          "top": 12,
+          "right": 14,
+          "bottom": 12,
+          "left": 14
+        },
+        "semantic": "view"
+      },
+      {
+        "id": 20,
+        "parentId": 19,
+        "display": "flex",
+        "flexDirection": "row",
+        "width": 240,
+        "backgroundColor": "#eef1f6",
+        "padding": {
+          "top": 6,
+          "right": 6,
+          "bottom": 6,
+          "left": 6
+        },
+        "boxSizing": "border-box",
+        "semantic": "view"
+      },
+      {
+        "id": 21,
+        "parentId": 20,
+        "width": 80,
+        "height": 32,
+        "borderRadius": 6,
+        "alignItems": "center",
+        "justifyContent": "center",
+        "backgroundColor": "#b06a17",
+        "justifySelf": "center",
+        "semantic": "view"
+      },
+      {
+        "id": 22,
+        "parentId": 21,
+        "fontSize": 13,
+        "color": "#ffffff",
+        "text": "待审",
+        "semantic": "text"
+      },
+      {
+        "id": 23,
+        "parentId": 0,
+        "fontSize": 13,
+        "fontWeight": 600,
+        "color": "#5b5bd6",
+        "margin": {
+          "top": 20,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
+        "text": "E · auto（回落父 justify-items）",
+        "semantic": "text"
+      },
+      {
+        "id": 24,
+        "parentId": 0,
+        "backgroundColor": "#ffffff",
+        "borderRadius": 10,
+        "padding": {
+          "top": 12,
+          "right": 14,
+          "bottom": 12,
+          "left": 14
+        },
+        "semantic": "view"
+      },
+      {
+        "id": 25,
+        "parentId": 24,
+        "display": "grid",
+        "gridTemplateColumns": "240px",
+        "width": 240,
+        "backgroundColor": "#eef1f6",
+        "padding": {
+          "top": 6,
+          "right": 6,
+          "bottom": 6,
+          "left": 6
+        },
+        "boxSizing": "border-box",
+        "semantic": "view"
+      },
+      {
+        "id": 26,
+        "parentId": 25,
+        "width": 80,
+        "height": 32,
+        "borderRadius": 6,
+        "alignItems": "center",
+        "justifyContent": "center",
+        "backgroundColor": "#6b4fa8",
+        "justifySelf": "auto",
+        "semantic": "view"
+      },
+      {
+        "id": 27,
+        "parentId": 26,
+        "fontSize": 13,
+        "color": "#ffffff",
+        "text": "归档",
+        "semantic": "text"
+      }
+    ]
+  },
+  "overflow": {
+    "nodes": [
+      {
+        "id": 0,
+        "parentId": null,
+        "backgroundColor": "#f4f5f7",
+        "widthRatio": 1,
+        "minHeightPct": 1,
+        "padding": {
+          "top": 16,
+          "right": 12,
+          "bottom": 32,
+          "left": 12
+        },
+        "boxSizing": "border-box",
+        "semantic": "view"
+      },
+      {
+        "id": 1,
+        "parentId": 0,
+        "fontSize": 20,
+        "fontWeight": 700,
+        "color": "#1a1c22",
+        "margin": {
+          "bottom": 4
+        },
+        "text": "CSS 验收 · 溢出裁剪",
+        "semantic": "text"
+      },
+      {
+        "id": 2,
+        "parentId": 0,
+        "fontSize": 13,
+        "color": "#5f6673",
+        "margin": {
+          "bottom": 16
+        },
+        "text": "overflow 族 · Web 基准（浏览器真值）· 稳定 id 供逐端寻址",
+        "semantic": "text"
+      },
+      {
+        "id": 3,
+        "parentId": 0,
+        "fontSize": 13,
+        "fontWeight": 600,
+        "color": "#5b5bd6",
+        "margin": {
+          "top": 20,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
+        "text": "A · overflow: hidden（卡片裁切）",
+        "semantic": "text"
+      },
+      {
+        "id": 4,
+        "parentId": 0,
+        "backgroundColor": "#ffffff",
+        "borderRadius": 10,
+        "padding": {
+          "top": 12,
+          "right": 14,
+          "bottom": 12,
+          "left": 14
+        },
+        "semantic": "view"
+      },
+      {
+        "id": 5,
+        "parentId": 4,
+        "width": 160,
+        "height": 56,
+        "backgroundColor": "#eef1f6",
+        "overflow": "hidden",
+        "semantic": "view"
+      },
+      {
+        "id": 6,
+        "parentId": 5,
+        "width": 260,
+        "height": 120,
+        "flexShrink": 0,
+        "borderRadius": 6,
+        "backgroundColor": "#5b5bd6",
+        "semantic": "view"
+      },
+      {
+        "id": 7,
+        "parentId": 0,
+        "fontSize": 13,
+        "fontWeight": 600,
+        "color": "#5b5bd6",
+        "margin": {
+          "top": 20,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
+        "text": "B · overflow: visible（对照：溢出可见）",
+        "semantic": "text"
+      },
+      {
+        "id": 8,
+        "parentId": 0,
+        "backgroundColor": "#ffffff",
+        "borderRadius": 10,
+        "padding": {
+          "top": 12,
+          "right": 14,
+          "bottom": 12,
+          "left": 14
+        },
+        "semantic": "view"
+      },
+      {
+        "id": 9,
+        "parentId": 8,
+        "width": 160,
+        "height": 56,
+        "backgroundColor": "#eef1f6",
+        "semantic": "view"
+      },
+      {
+        "id": 10,
+        "parentId": 9,
+        "width": 260,
+        "height": 120,
+        "flexShrink": 0,
+        "borderRadius": 6,
+        "backgroundColor": "#d64545",
+        "semantic": "view"
+      },
+      {
+        "id": 11,
+        "parentId": 0,
+        "fontSize": 13,
+        "fontWeight": 600,
+        "color": "#5b5bd6",
+        "margin": {
+          "top": 20,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
+        "text": "C · overflow-x: hidden · overflow-y: auto（单轴声明）",
+        "semantic": "text"
+      },
+      {
+        "id": 12,
+        "parentId": 0,
+        "backgroundColor": "#ffffff",
+        "borderRadius": 10,
+        "padding": {
+          "top": 12,
+          "right": 14,
+          "bottom": 12,
+          "left": 14
+        },
+        "semantic": "view"
+      },
+      {
+        "id": 13,
+        "parentId": 12,
+        "width": 160,
+        "height": 56,
+        "backgroundColor": "#eef1f6",
+        "overflow": "hidden",
+        "overflowX": "hidden",
+        "overflowY": "auto",
+        "semantic": "view"
+      },
+      {
+        "id": 14,
+        "parentId": 13,
+        "width": 260,
+        "height": 120,
+        "flexShrink": 0,
+        "borderRadius": 6,
+        "backgroundColor": "#2e9e6b",
+        "semantic": "view"
+      }
+    ]
+  },
+  "text": {
+    "nodes": [
+      {
+        "id": 0,
+        "parentId": null,
+        "backgroundColor": "#f4f5f7",
+        "widthRatio": 1,
+        "minHeightPct": 1,
+        "padding": {
+          "top": 16,
+          "right": 12,
+          "bottom": 32,
+          "left": 12
+        },
+        "boxSizing": "border-box",
+        "semantic": "view"
+      },
+      {
+        "id": 1,
+        "parentId": 0,
+        "fontSize": 20,
+        "fontWeight": 700,
+        "color": "#1a1c22",
+        "margin": {
+          "bottom": 4
+        },
+        "text": "CSS 验收 · 文本换行",
+        "semantic": "text"
+      },
+      {
+        "id": 2,
+        "parentId": 0,
+        "fontSize": 13,
+        "color": "#5f6673",
+        "margin": {
+          "bottom": 16
+        },
+        "text": "white-space 族 · Web 基准（浏览器真值）· 稳定 id 供逐端寻址",
+        "semantic": "text"
+      },
+      {
+        "id": 3,
+        "parentId": 0,
+        "fontSize": 13,
+        "fontWeight": 600,
+        "color": "#5b5bd6",
+        "margin": {
+          "top": 20,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
+        "text": "A · nowrap + ellipsis（列表标题截断）",
+        "semantic": "text"
+      },
+      {
+        "id": 4,
+        "parentId": 0,
+        "backgroundColor": "#ffffff",
+        "borderRadius": 10,
+        "padding": {
+          "top": 12,
+          "right": 14,
+          "bottom": 12,
+          "left": 14
+        },
+        "semantic": "view"
+      },
+      {
+        "id": 5,
+        "parentId": 4,
+        "display": "flex",
+        "flexDirection": "row",
+        "alignItems": "center",
+        "overflow": "hidden",
+        "height": 26,
+        "semantic": "view"
+      },
+      {
+        "id": 6,
+        "parentId": 5,
+        "fontSize": 14,
+        "color": "#1a1c22",
+        "overflow": "hidden",
+        "whiteSpace": "nowrap",
+        "textOverflow": "ellipsis",
+        "maxWidth": 240,
+        "text": "这是一条非常长的标题文本用于验证单行截断与省略号显示效果",
+        "semantic": "text"
+      },
+      {
+        "id": 7,
+        "parentId": 4,
+        "display": "flex",
+        "flexDirection": "row",
+        "alignItems": "center",
+        "overflow": "hidden",
+        "height": 26,
+        "semantic": "view"
+      },
+      {
+        "id": 8,
+        "parentId": 7,
+        "fontSize": 14,
+        "color": "#1a1c22",
+        "overflow": "hidden",
+        "whiteSpace": "nowrap",
+        "textOverflow": "ellipsis",
+        "maxWidth": 240,
+        "text": "短标题",
+        "semantic": "text"
+      },
+      {
+        "id": 9,
+        "parentId": 0,
+        "fontSize": 13,
+        "fontWeight": 600,
+        "color": "#5b5bd6",
+        "margin": {
+          "top": 20,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
+        "text": "B · normal（自动换行）",
+        "semantic": "text"
+      },
+      {
+        "id": 10,
+        "parentId": 0,
+        "backgroundColor": "#ffffff",
+        "borderRadius": 10,
+        "padding": {
+          "top": 12,
+          "right": 14,
+          "bottom": 12,
+          "left": 14
+        },
+        "semantic": "view"
+      },
+      {
+        "id": 11,
+        "parentId": 10,
+        "width": 240,
+        "minHeight": 40,
+        "semantic": "view"
+      },
+      {
+        "id": 12,
+        "parentId": 11,
+        "fontSize": 14,
+        "lineHeight": "20px",
+        "color": "#1a1c22",
+        "whiteSpace": "normal",
+        "text": "这是一段足够长的正文用于验证自动换行行为文字超过容器宽度时应该折行显示并在下一行继续排版",
+        "semantic": "text"
+      },
+      {
+        "id": 13,
+        "parentId": 0,
+        "fontSize": 13,
+        "fontWeight": 600,
+        "color": "#5b5bd6",
+        "margin": {
+          "top": 20,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
+        "text": "C · pre-wrap（保留空白与缩进）",
+        "semantic": "text"
+      },
+      {
+        "id": 14,
+        "parentId": 0,
+        "backgroundColor": "#ffffff",
+        "borderRadius": 10,
+        "padding": {
+          "top": 12,
+          "right": 14,
+          "bottom": 12,
+          "left": 14
+        },
+        "semantic": "view"
+      },
+      {
+        "id": 15,
+        "parentId": 14,
+        "width": 240,
+        "minHeight": 60,
+        "semantic": "view"
+      },
+      {
+        "id": 16,
+        "parentId": 15,
+        "fontSize": 13,
+        "lineHeight": "20px",
+        "color": "#4b5058",
+        "whiteSpace": "pre-wrap",
+        "text": "第一行\n    缩进四格第二行\n第三行",
+        "semantic": "text"
+      },
+      {
+        "id": 17,
+        "parentId": 0,
+        "fontSize": 13,
+        "fontWeight": 600,
+        "color": "#5b5bd6",
+        "margin": {
+          "top": 20,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
+        "text": "D · nowrap + clip（溢出裁切，无省略号）",
+        "semantic": "text"
+      },
+      {
+        "id": 18,
+        "parentId": 0,
+        "backgroundColor": "#ffffff",
+        "borderRadius": 10,
+        "padding": {
+          "top": 12,
+          "right": 14,
+          "bottom": 12,
+          "left": 14
+        },
         "semantic": "view"
       },
       {
@@ -2731,1252 +1293,21 @@
         "parentId": 18,
         "display": "flex",
         "flexDirection": "row",
-        "alignItems": "flex-start",
-        "justifyContent": "space-between",
-        "color": "#1a1c22",
+        "alignItems": "center",
+        "overflow": "hidden",
+        "height": 26,
         "semantic": "view"
       },
       {
         "id": 20,
         "parentId": 19,
-        "flexGrow": 1,
-        "flexShrink": 1,
-        "flexBasis": 0,
-        "minWidth": 0,
-        "margin": {
-          "right": 12
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 21,
-        "parentId": 20,
         "fontSize": 14,
-        "fontWeight": 600,
         "color": "#1a1c22",
-        "text": "② 全局 Loading",
-        "semantic": "text"
-      },
-      {
-        "id": 22,
-        "parentId": 20,
-        "margin": {
-          "top": 2
-        },
-        "fontSize": 11,
-        "color": "#5f6673",
-        "text": "Overlay 层 · 多实例 + 遮罩范围",
-        "semantic": "text"
-      },
-      {
-        "id": 23,
-        "parentId": 20,
-        "margin": {
-          "top": 8
-        },
-        "fontSize": 12,
-        "color": "#4a4ab8",
-        "semantic": "text"
-      },
-      {
-        "id": 24,
-        "parentId": 19,
-        "flexShrink": 0,
-        "display": "flex",
-        "flexDirection": "row",
-        "flexWrap": "wrap",
-        "justifyContent": "flex-end",
-        "maxWidth": 200,
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 25,
-        "parentId": 24,
-        "margin": {
-          "top": 0,
-          "right": 0,
-          "bottom": 8,
-          "left": 8
-        },
-        "padding": {
-          "top": 8,
-          "right": 12,
-          "bottom": 8,
-          "left": 12
-        },
-        "borderRadius": 10,
-        "backgroundColor": "#5b5bd6",
-        "color": "#ffffff",
-        "fontSize": 12,
-        "text": "一个",
-        "semantic": "view"
-      },
-      {
-        "id": 26,
-        "parentId": 24,
-        "margin": {
-          "top": 0,
-          "right": 0,
-          "bottom": 8,
-          "left": 8
-        },
-        "padding": {
-          "top": 8,
-          "right": 12,
-          "bottom": 8,
-          "left": 12
-        },
-        "borderRadius": 10,
-        "backgroundColor": "#ffffff",
-        "color": "#4b5058",
-        "fontSize": 12,
-        "borderWidth": 1,
-        "borderColor": "#dcdfe5",
-        "text": "两个共存",
-        "semantic": "view"
-      },
-      {
-        "id": 27,
-        "parentId": 24,
-        "margin": {
-          "top": 0,
-          "right": 0,
-          "bottom": 8,
-          "left": 8
-        },
-        "padding": {
-          "top": 8,
-          "right": 12,
-          "bottom": 8,
-          "left": 12
-        },
-        "borderRadius": 10,
-        "backgroundColor": "#ffffff",
-        "color": "#4b5058",
-        "fontSize": 12,
-        "borderWidth": 1,
-        "borderColor": "#dcdfe5",
-        "text": "关闭",
-        "semantic": "view"
-      },
-      {
-        "id": 28,
-        "parentId": 3,
-        "margin": {
-          "top": 0,
-          "right": 0,
-          "bottom": 12,
-          "left": 0
-        },
-        "widthRatio": 1,
-        "boxSizing": "border-box",
-        "backgroundColor": "#ffffff",
-        "borderWidth": 1,
-        "borderColor": "#e8eaee",
-        "borderRadius": 14,
-        "boxShadow": {
-          "dx": 0,
-          "dy": 1,
-          "blur": 2,
-          "spread": 0,
-          "color": "#1a1c220d"
-        },
         "overflow": "hidden",
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 29,
-        "parentId": 28,
-        "padding": {
-          "top": 16,
-          "right": 16,
-          "bottom": 16,
-          "left": 16
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 30,
-        "parentId": 29,
-        "display": "flex",
-        "flexDirection": "row",
-        "alignItems": "flex-start",
-        "justifyContent": "space-between",
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 31,
-        "parentId": 30,
-        "flexGrow": 1,
-        "flexShrink": 1,
-        "flexBasis": 0,
-        "minWidth": 0,
-        "margin": {
-          "right": 12
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 32,
-        "parentId": 31,
-        "fontSize": 14,
-        "fontWeight": 600,
-        "color": "#1a1c22",
-        "text": "③ 登录失效拦截",
-        "semantic": "text"
-      },
-      {
-        "id": 33,
-        "parentId": 31,
-        "margin": {
-          "top": 2
-        },
-        "fontSize": 11,
-        "color": "#5f6673",
-        "text": "Overlay 层 · 不可取消（★手写宿主——需绑 onAction）",
-        "semantic": "text"
-      },
-      {
-        "id": 34,
-        "parentId": 31,
-        "margin": {
-          "top": 8
-        },
-        "fontSize": 12,
-        "color": "#4a4ab8",
-        "semantic": "text"
-      },
-      {
-        "id": 35,
-        "parentId": 30,
-        "flexShrink": 0,
-        "display": "flex",
-        "flexDirection": "row",
-        "flexWrap": "wrap",
-        "justifyContent": "flex-end",
+        "whiteSpace": "nowrap",
         "maxWidth": 200,
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 36,
-        "parentId": 35,
-        "margin": {
-          "top": 0,
-          "right": 0,
-          "bottom": 8,
-          "left": 8
-        },
-        "padding": {
-          "top": 8,
-          "right": 12,
-          "bottom": 8,
-          "left": 12
-        },
-        "borderRadius": 10,
-        "backgroundColor": "#5b5bd6",
-        "color": "#ffffff",
-        "fontSize": 12,
-        "text": "模拟 401",
-        "semantic": "view"
-      },
-      {
-        "id": 37,
-        "parentId": 35,
-        "margin": {
-          "top": 0,
-          "right": 0,
-          "bottom": 8,
-          "left": 8
-        },
-        "padding": {
-          "top": 8,
-          "right": 12,
-          "bottom": 8,
-          "left": 12
-        },
-        "borderRadius": 10,
-        "backgroundColor": "#ffffff",
-        "color": "#4b5058",
-        "fontSize": 12,
-        "borderWidth": 1,
-        "borderColor": "#dcdfe5",
-        "text": "模拟登录成功",
-        "semantic": "view"
-      },
-      {
-        "id": 38,
-        "parentId": 3,
-        "margin": {
-          "top": 0,
-          "right": 0,
-          "bottom": 12,
-          "left": 0
-        },
-        "widthRatio": 1,
-        "boxSizing": "border-box",
-        "backgroundColor": "#ffffff",
-        "borderWidth": 1,
-        "borderColor": "#e8eaee",
-        "borderRadius": 14,
-        "boxShadow": {
-          "dx": 0,
-          "dy": 1,
-          "blur": 2,
-          "spread": 0,
-          "color": "#1a1c220d"
-        },
-        "overflow": "hidden",
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 39,
-        "parentId": 38,
-        "padding": {
-          "top": 16,
-          "right": 16,
-          "bottom": 16,
-          "left": 16
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 40,
-        "parentId": 39,
-        "display": "flex",
-        "flexDirection": "row",
-        "alignItems": "flex-start",
-        "justifyContent": "space-between",
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 41,
-        "parentId": 40,
-        "flexGrow": 1,
-        "flexShrink": 1,
-        "flexBasis": 0,
-        "minWidth": 0,
-        "margin": {
-          "right": 12
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 42,
-        "parentId": 41,
-        "fontSize": 14,
-        "fontWeight": 600,
-        "color": "#1a1c22",
-        "text": "④ 客服悬浮球",
+        "text": "这是一条非常长的标题文本用于验证溢出裁切无省略号的效果",
         "semantic": "text"
-      },
-      {
-        "id": 43,
-        "parentId": 41,
-        "margin": {
-          "top": 2
-        },
-        "fontSize": 11,
-        "color": "#5f6673",
-        "text": "Global 层 · App 壳声明一次",
-        "semantic": "text"
-      },
-      {
-        "id": 44,
-        "parentId": 41,
-        "margin": {
-          "top": 8
-        },
-        "fontSize": 12,
-        "color": "#4a4ab8",
-        "semantic": "text"
-      },
-      {
-        "id": 45,
-        "parentId": 40,
-        "flexShrink": 0,
-        "display": "flex",
-        "flexDirection": "row",
-        "flexWrap": "wrap",
-        "justifyContent": "flex-end",
-        "maxWidth": 200,
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 46,
-        "parentId": 45,
-        "margin": {
-          "top": 0,
-          "right": 0,
-          "bottom": 8,
-          "left": 8
-        },
-        "padding": {
-          "top": 8,
-          "right": 12,
-          "bottom": 8,
-          "left": 12
-        },
-        "borderRadius": 10,
-        "backgroundColor": "#5b5bd6",
-        "color": "#ffffff",
-        "fontSize": 12,
-        "text": "切换显隐",
-        "semantic": "view"
-      },
-      {
-        "id": 47,
-        "parentId": 3,
-        "margin": {
-          "top": 0,
-          "right": 0,
-          "bottom": 12,
-          "left": 0
-        },
-        "widthRatio": 1,
-        "boxSizing": "border-box",
-        "backgroundColor": "#ffffff",
-        "borderWidth": 1,
-        "borderColor": "#e8eaee",
-        "borderRadius": 14,
-        "boxShadow": {
-          "dx": 0,
-          "dy": 1,
-          "blur": 2,
-          "spread": 0,
-          "color": "#1a1c220d"
-        },
-        "overflow": "hidden",
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 48,
-        "parentId": 47,
-        "padding": {
-          "top": 16,
-          "right": 16,
-          "bottom": 16,
-          "left": 16
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 49,
-        "parentId": 48,
-        "display": "flex",
-        "flexDirection": "row",
-        "alignItems": "flex-start",
-        "justifyContent": "space-between",
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 50,
-        "parentId": 49,
-        "flexGrow": 1,
-        "flexShrink": 1,
-        "flexBasis": 0,
-        "minWidth": 0,
-        "margin": {
-          "right": 12
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 51,
-        "parentId": 50,
-        "fontSize": 14,
-        "fontWeight": 600,
-        "color": "#1a1c22",
-        "text": "⑤ 音乐播放条",
-        "semantic": "text"
-      },
-      {
-        "id": 52,
-        "parentId": 50,
-        "margin": {
-          "top": 2
-        },
-        "fontSize": 11,
-        "color": "#5f6673",
-        "text": "Global 层 · 播放控制",
-        "semantic": "text"
-      },
-      {
-        "id": 53,
-        "parentId": 50,
-        "margin": {
-          "top": 8
-        },
-        "fontSize": 12,
-        "color": "#4a4ab8",
-        "semantic": "text"
-      },
-      {
-        "id": 54,
-        "parentId": 49,
-        "flexShrink": 0,
-        "display": "flex",
-        "flexDirection": "row",
-        "flexWrap": "wrap",
-        "justifyContent": "flex-end",
-        "maxWidth": 200,
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 55,
-        "parentId": 54,
-        "margin": {
-          "top": 0,
-          "right": 0,
-          "bottom": 8,
-          "left": 8
-        },
-        "padding": {
-          "top": 8,
-          "right": 12,
-          "bottom": 8,
-          "left": 12
-        },
-        "borderRadius": 10,
-        "backgroundColor": "#5b5bd6",
-        "color": "#ffffff",
-        "fontSize": 12,
-        "text": "播放",
-        "semantic": "view"
-      },
-      {
-        "id": 56,
-        "parentId": 54,
-        "margin": {
-          "top": 0,
-          "right": 0,
-          "bottom": 8,
-          "left": 8
-        },
-        "padding": {
-          "top": 8,
-          "right": 12,
-          "bottom": 8,
-          "left": 12
-        },
-        "borderRadius": 10,
-        "backgroundColor": "#ffffff",
-        "color": "#4b5058",
-        "fontSize": 12,
-        "borderWidth": 1,
-        "borderColor": "#dcdfe5",
-        "text": "关闭",
-        "semantic": "view"
-      },
-      {
-        "id": 57,
-        "parentId": 3,
-        "margin": {
-          "top": 0,
-          "right": 0,
-          "bottom": 12,
-          "left": 0
-        },
-        "widthRatio": 1,
-        "boxSizing": "border-box",
-        "backgroundColor": "#ffffff",
-        "borderWidth": 1,
-        "borderColor": "#e8eaee",
-        "borderRadius": 14,
-        "boxShadow": {
-          "dx": 0,
-          "dy": 1,
-          "blur": 2,
-          "spread": 0,
-          "color": "#1a1c220d"
-        },
-        "overflow": "hidden",
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 58,
-        "parentId": 57,
-        "padding": {
-          "top": 16,
-          "right": 16,
-          "bottom": 16,
-          "left": 16
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 59,
-        "parentId": 58,
-        "display": "flex",
-        "flexDirection": "row",
-        "alignItems": "flex-start",
-        "justifyContent": "space-between",
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 60,
-        "parentId": 59,
-        "flexGrow": 1,
-        "flexShrink": 1,
-        "flexBasis": 0,
-        "minWidth": 0,
-        "margin": {
-          "right": 12
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 61,
-        "parentId": 60,
-        "fontSize": 14,
-        "fontWeight": 600,
-        "color": "#1a1c22",
-        "text": "⑥ 网络状态条",
-        "semantic": "text"
-      },
-      {
-        "id": 62,
-        "parentId": 60,
-        "margin": {
-          "top": 2
-        },
-        "fontSize": 11,
-        "color": "#5f6673",
-        "text": "Global 层 · 弱网提示（可忽略）",
-        "semantic": "text"
-      },
-      {
-        "id": 63,
-        "parentId": 60,
-        "margin": {
-          "top": 8
-        },
-        "fontSize": 12,
-        "color": "#4a4ab8",
-        "semantic": "text"
-      },
-      {
-        "id": 64,
-        "parentId": 59,
-        "flexShrink": 0,
-        "display": "flex",
-        "flexDirection": "row",
-        "flexWrap": "wrap",
-        "justifyContent": "flex-end",
-        "maxWidth": 200,
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 65,
-        "parentId": 64,
-        "margin": {
-          "top": 0,
-          "right": 0,
-          "bottom": 8,
-          "left": 8
-        },
-        "padding": {
-          "top": 8,
-          "right": 12,
-          "bottom": 8,
-          "left": 12
-        },
-        "borderRadius": 10,
-        "backgroundColor": "#5b5bd6",
-        "color": "#ffffff",
-        "fontSize": 12,
-        "text": "触发",
-        "semantic": "view"
-      },
-      {
-        "id": 66,
-        "parentId": 64,
-        "margin": {
-          "top": 0,
-          "right": 0,
-          "bottom": 8,
-          "left": 8
-        },
-        "padding": {
-          "top": 8,
-          "right": 12,
-          "bottom": 8,
-          "left": 12
-        },
-        "borderRadius": 10,
-        "backgroundColor": "#ffffff",
-        "color": "#4b5058",
-        "fontSize": 12,
-        "borderWidth": 1,
-        "borderColor": "#dcdfe5",
-        "text": "收起",
-        "semantic": "view"
-      },
-      {
-        "id": 67,
-        "parentId": 3,
-        "margin": {
-          "top": 0,
-          "right": 0,
-          "bottom": 12,
-          "left": 0
-        },
-        "widthRatio": 1,
-        "boxSizing": "border-box",
-        "backgroundColor": "#ffffff",
-        "borderWidth": 1,
-        "borderColor": "#e8eaee",
-        "borderRadius": 14,
-        "boxShadow": {
-          "dx": 0,
-          "dy": 1,
-          "blur": 2,
-          "spread": 0,
-          "color": "#1a1c220d"
-        },
-        "overflow": "hidden",
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 68,
-        "parentId": 67,
-        "padding": {
-          "top": 16,
-          "right": 16,
-          "bottom": 16,
-          "left": 16
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 69,
-        "parentId": 68,
-        "display": "flex",
-        "flexDirection": "row",
-        "alignItems": "flex-start",
-        "justifyContent": "space-between",
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 70,
-        "parentId": 69,
-        "flexGrow": 1,
-        "flexShrink": 1,
-        "flexBasis": 0,
-        "minWidth": 0,
-        "margin": {
-          "right": 12
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 71,
-        "parentId": 70,
-        "fontSize": 14,
-        "fontWeight": 600,
-        "color": "#1a1c22",
-        "text": "⑦ 主题容器",
-        "semantic": "text"
-      },
-      {
-        "id": 72,
-        "parentId": 70,
-        "margin": {
-          "top": 2
-        },
-        "fontSize": 11,
-        "color": "#5f6673",
-        "text": "Global 层 · 深/浅切换（无需刷新）",
-        "semantic": "text"
-      },
-      {
-        "id": 73,
-        "parentId": 70,
-        "margin": {
-          "top": 8
-        },
-        "fontSize": 12,
-        "color": "#4a4ab8",
-        "semantic": "text"
-      },
-      {
-        "id": 74,
-        "parentId": 69,
-        "flexShrink": 0,
-        "display": "flex",
-        "flexDirection": "row",
-        "flexWrap": "wrap",
-        "justifyContent": "flex-end",
-        "maxWidth": 200,
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 75,
-        "parentId": 74,
-        "margin": {
-          "top": 0,
-          "right": 0,
-          "bottom": 8,
-          "left": 8
-        },
-        "padding": {
-          "top": 8,
-          "right": 12,
-          "bottom": 8,
-          "left": 12
-        },
-        "borderRadius": 10,
-        "backgroundColor": "#5b5bd6",
-        "color": "#ffffff",
-        "fontSize": 12,
-        "text": "切换主题",
-        "semantic": "view"
-      },
-      {
-        "id": 76,
-        "parentId": 3,
-        "margin": {
-          "top": 0,
-          "right": 0,
-          "bottom": 12,
-          "left": 0
-        },
-        "widthRatio": 1,
-        "boxSizing": "border-box",
-        "backgroundColor": "#ffffff",
-        "borderWidth": 1,
-        "borderColor": "#e8eaee",
-        "borderRadius": 14,
-        "boxShadow": {
-          "dx": 0,
-          "dy": 1,
-          "blur": 2,
-          "spread": 0,
-          "color": "#1a1c220d"
-        },
-        "overflow": "hidden",
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 77,
-        "parentId": 76,
-        "padding": {
-          "top": 16,
-          "right": 16,
-          "bottom": 16,
-          "left": 16
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 78,
-        "parentId": 77,
-        "display": "flex",
-        "flexDirection": "row",
-        "alignItems": "flex-start",
-        "justifyContent": "space-between",
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 79,
-        "parentId": 78,
-        "flexGrow": 1,
-        "flexShrink": 1,
-        "flexBasis": 0,
-        "minWidth": 0,
-        "margin": {
-          "right": 12
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 80,
-        "parentId": 79,
-        "fontSize": 14,
-        "fontWeight": 600,
-        "color": "#1a1c22",
-        "text": "⑧ IM 未读角标",
-        "semantic": "text"
-      },
-      {
-        "id": 81,
-        "parentId": 79,
-        "margin": {
-          "top": 2
-        },
-        "fontSize": 11,
-        "color": "#5f6673",
-        "text": "Global + 状态 · 跨页同步",
-        "semantic": "text"
-      },
-      {
-        "id": 82,
-        "parentId": 79,
-        "margin": {
-          "top": 8
-        },
-        "fontSize": 12,
-        "color": "#4a4ab8",
-        "semantic": "text"
-      },
-      {
-        "id": 83,
-        "parentId": 78,
-        "flexShrink": 0,
-        "display": "flex",
-        "flexDirection": "row",
-        "flexWrap": "wrap",
-        "justifyContent": "flex-end",
-        "maxWidth": 200,
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 84,
-        "parentId": 83,
-        "margin": {
-          "top": 0,
-          "right": 0,
-          "bottom": 8,
-          "left": 8
-        },
-        "padding": {
-          "top": 8,
-          "right": 12,
-          "bottom": 8,
-          "left": 12
-        },
-        "borderRadius": 10,
-        "backgroundColor": "#5b5bd6",
-        "color": "#ffffff",
-        "fontSize": 12,
-        "text": "+1",
-        "semantic": "view"
-      },
-      {
-        "id": 85,
-        "parentId": 83,
-        "margin": {
-          "top": 0,
-          "right": 0,
-          "bottom": 8,
-          "left": 8
-        },
-        "padding": {
-          "top": 8,
-          "right": 12,
-          "bottom": 8,
-          "left": 12
-        },
-        "borderRadius": 10,
-        "backgroundColor": "#ffffff",
-        "color": "#4b5058",
-        "fontSize": 12,
-        "borderWidth": 1,
-        "borderColor": "#dcdfe5",
-        "text": "清零",
-        "semantic": "view"
-      },
-      {
-        "id": 86,
-        "parentId": 3,
-        "margin": {
-          "top": 0,
-          "right": 0,
-          "bottom": 12,
-          "left": 0
-        },
-        "widthRatio": 1,
-        "boxSizing": "border-box",
-        "backgroundColor": "#ffffff",
-        "borderWidth": 1,
-        "borderColor": "#e8eaee",
-        "borderRadius": 14,
-        "boxShadow": {
-          "dx": 0,
-          "dy": 1,
-          "blur": 2,
-          "spread": 0,
-          "color": "#1a1c220d"
-        },
-        "overflow": "hidden",
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 87,
-        "parentId": 86,
-        "padding": {
-          "top": 16,
-          "right": 16,
-          "bottom": 16,
-          "left": 16
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 88,
-        "parentId": 87,
-        "display": "flex",
-        "flexDirection": "row",
-        "alignItems": "flex-start",
-        "justifyContent": "space-between",
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 89,
-        "parentId": 88,
-        "flexGrow": 1,
-        "flexShrink": 1,
-        "flexBasis": 0,
-        "minWidth": 0,
-        "margin": {
-          "right": 12
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 90,
-        "parentId": 89,
-        "fontSize": 14,
-        "fontWeight": 600,
-        "color": "#1a1c22",
-        "text": "⑨ Global 层内存（GP7）",
-        "semantic": "text"
-      },
-      {
-        "id": 91,
-        "parentId": 89,
-        "margin": {
-          "top": 2
-        },
-        "fontSize": 11,
-        "color": "#5f6673",
-        "text": "常驻监控 · 分端口径（MP：状态一份 + 每页初值 × 页面栈）",
-        "semantic": "text"
-      },
-      {
-        "id": 92,
-        "parentId": 89,
-        "margin": {
-          "top": 8
-        },
-        "fontSize": 12,
-        "color": "#4a4ab8",
-        "text": "—",
-        "semantic": "text"
-      },
-      {
-        "id": 93,
-        "parentId": 88,
-        "flexShrink": 0,
-        "display": "flex",
-        "flexDirection": "row",
-        "flexWrap": "wrap",
-        "justifyContent": "flex-end",
-        "maxWidth": 200,
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 94,
-        "parentId": 93,
-        "margin": {
-          "top": 0,
-          "right": 0,
-          "bottom": 8,
-          "left": 8
-        },
-        "padding": {
-          "top": 8,
-          "right": 12,
-          "bottom": 8,
-          "left": 12
-        },
-        "borderRadius": 10,
-        "backgroundColor": "#5b5bd6",
-        "color": "#ffffff",
-        "fontSize": 12,
-        "text": "读内存",
-        "semantic": "view"
-      },
-      {
-        "id": 95,
-        "parentId": 3,
-        "padding": {
-          "top": 16,
-          "right": 0,
-          "bottom": 8,
-          "left": 0
-        },
-        "fontSize": 12,
-        "color": "#5f6673",
-        "text": "操作日志",
-        "semantic": "text"
-      },
-      {
-        "id": 96,
-        "parentId": 3,
-        "margin": {
-          "top": 0,
-          "right": 0,
-          "bottom": 12,
-          "left": 0
-        },
-        "widthRatio": 1,
-        "boxSizing": "border-box",
-        "backgroundColor": "#ffffff",
-        "borderWidth": 1,
-        "borderColor": "#e8eaee",
-        "borderRadius": 14,
-        "boxShadow": {
-          "dx": 0,
-          "dy": 1,
-          "blur": 2,
-          "spread": 0,
-          "color": "#1a1c220d"
-        },
-        "overflow": "hidden",
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 97,
-        "parentId": 96,
-        "padding": {
-          "top": 16,
-          "right": 16,
-          "bottom": 16,
-          "left": 16
-        },
-        "color": "#1a1c22",
-        "semantic": "view"
-      },
-      {
-        "id": 98,
-        "parentId": 97,
-        "fontFamily": "monospace",
-        "fontSize": 11,
-        "color": "#5f6673",
-        "lineHeight": "1.7",
-        "text": "（操作后在此留痕）",
-        "semantic": "text"
-      },
-      {
-        "id": 99,
-        "parentId": 3,
-        "color": "#1a1c22",
-        "semantic": "p-auth-gate"
-      },
-      {
-        "id": 100,
-        "parentId": 0,
-        "semantic": "overlay-layer",
-        "position": "absolute",
-        "left": 0,
-        "top": 0,
-        "right": 0,
-        "bottom": 0,
-        "pointerEvents": false
-      },
-      {
-        "id": 101,
-        "parentId": 100,
-        "position": "absolute",
-        "top": 0,
-        "right": 0,
-        "bottom": 0,
-        "left": 0,
-        "pointerEvents": false,
-        "semantic": "div"
-      },
-      {
-        "id": 102,
-        "parentId": 101,
-        "pointerEvents": true,
-        "position": "absolute",
-        "right": 14,
-        "bottom": 136,
-        "width": 56,
-        "height": 56,
-        "borderRadius": 28,
-        "display": "flex",
-        "flexDirection": "column",
-        "alignItems": "center",
-        "justifyContent": "center",
-        "backgroundColor": "#5b5bd6",
-        "boxShadow": {
-          "dx": 0,
-          "dy": 3,
-          "blur": 10,
-          "spread": 0,
-          "color": "#5b5bd659"
-        },
-        "semantic": "div"
-      },
-      {
-        "id": 103,
-        "parentId": 102,
-        "fontSize": 17,
-        "fontWeight": 700,
-        "color": "#ffffff",
-        "lineHeight": "1.1",
-        "pointerEvents": true,
-        "text": "聊",
-        "semantic": "span"
-      },
-      {
-        "id": 104,
-        "parentId": 102,
-        "fontSize": 10,
-        "color": "#ffffff",
-        "opacity": 0.92,
-        "pointerEvents": true,
-        "text": "客服",
-        "semantic": "span"
-      },
-      {
-        "id": 105,
-        "parentId": 100,
-        "semantic": "p-toast-host"
-      },
-      {
-        "id": 106,
-        "parentId": 100,
-        "semantic": "p-loading-host"
       }
     ]
   }

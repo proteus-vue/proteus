@@ -214,6 +214,9 @@ function isStaticValueValid(level: string, value: unknown): boolean {
     // ★★★overflow-x 项（2026-10-06）：溢出封闭集（与 runtime PROP_TYPES.Overflow 同语义）
     case 'Overflow':
       return ['visible', 'hidden', 'scroll', 'auto'].indexOf(String(value)) >= 0
+    // ★★★justify-self 项（2026-10-06）：网格项行内轴自对齐封闭集（与 runtime PROP_TYPES.JustifySelf 同语义）
+    case 'JustifySelf':
+      return ['auto', 'normal', 'start', 'end', 'flex-start', 'flex-end', 'self-start', 'self-end', 'center', 'stretch'].indexOf(String(value)) >= 0
     case 'Transform':
       return typeof value === 'string' && /^(translate|scale|rotate|skew)/i.test(value)
     case 'TransformOrigin':
