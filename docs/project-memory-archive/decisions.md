@@ -1743,3 +1743,11 @@
 **⑤ ★教训（可执行）**：a) **"验收红"要逐条归因**——三种成因（缺探针 / 真缺陷 / 陈旧记录）处置不同，别一律当"未实现"；b) **一个字段在多个类型分支里时，顺序决定可达性**（字符串值必须先于结构化分支被处理——否则分支成死代码而**编译不报错**）；c) **口径迁移（B3→#570/#571）要连测试断言一起迁移**，否则旧断言靠"另一个未迁移字段"继续假绿；d) **P0 清零 ≠ 无事可做**——剩余是"点名项 + 未登记探针的项"。
 **⑥ 诚实边界**：Skyline 无 Grid 容器（透传为"逐字进 wxss"，不保证该端引擎语义——App 为主承载端）；grid 族真机像素验收仍待独立子代理（本包只归档机器判据三段）；再往后的 CSE 推进需用户点名或补更多探针。
 
+614. **★CSE 「P0 为何这么少」澄清 —— 基础能力（字体族/宽高/flex/背景族）**已实现**（P0 是"待办"不是"支持清单"），并把它们补进逐项验收（★用户 2026-10-08「CSE的P0为什么这么少的能力支持？我看最基本的字体族，宽高，flex布局族，背景族等等都没有纳入进来」）**：
+**① 根因澄清（P0 的定义）**：`scripts/gen-css-feature-inventory.mjs` 的 `priorityOf`——**`P0 = 语料在用但**未实现**的能力`（真实需求缺口）；`implemented ⇒ done`**。⇒ **P0 少 = 基本面已覆盖（好信号），不是"没纳入"**。基础能力（`width/height/margin/padding/display/font-family/font-size/font-weight/flex-direction/justify-content/align-items/flex/flex-wrap/background*/color/opacity/line-height/text-align/border/…`）**都已实现**（G-61 B0–B5）⇒ 归 `done`。
+**② 覆盖度实测（回答"到底覆盖了多少"）**：属性总数 651（含排除 280）· **已实现 129** · **语料在用 109 项：98 实现 + 11 具名排除**（`-webkit-*` 3·nonstandard；`cursor`·`scrollbar-width/color`·`content`·`user-select`·`color-scheme`·`break-inside`·`scroll-snap-align`——均"App/触屏无该语义或走别的通道"）⇒ **真实需求 100% 覆盖（实现或具名排除）⇒ actionableP0 = 0**。
+**③ ★真缺口（本次发现并补齐）**：**"已实现 ≠ 已纳入逐项验收"**——这些基础项**缺 parity 探针样本** ⇒ 逐项验收装置判红/无记录（缺口在"**验收样本登记**"不在"实现"）。**给 11 项补探针**（CSE 实测折对：`width:100px→{absolute,100}`·`fontWeight:700`·`flexWrap:"wrap"`·`alignContent:"center"`·`display:"flex"`·`margin/padding` 逐边…）⇒ **`css-acceptance` 65/65 pass**（此前 48 项里 3 红）。
+**④ 未纳入 1 项（诚实边界）**：`transform` —— 由 **Vapor 折叠面**（`APP_PAINT_FIELDS` + 宿主 `setNodeTransform`）承接，**CSE `computeTree` 不产出**；而验收装置 parity 走 CSE computeTree ⇒ **装置不覆盖**（非未实现）⇒ 不落 FAIL 记录。后续可让装置覆盖 Vapor 折叠面。
+**⑤ ★★仍存在的 52 项"常用分组未实现"（诚实列清——按真需求判，**全部 usage=0**）**：`background-attachment/clip/origin/position-x/y`（简写/主项已实现，这些是子项）· **`border-image` 家族 6 项** · **`text-decoration-*` 长手 9 项**（简写 `text-decoration` 已实现）· `text-transform`·`text-indent`·`overflow-wrap`·`line-break`·`hyphenate-*`·`tab-size`·`text-underline-*`… —— **P1（标准+常用分组）但真项目零使用** ⇒ 不做（做了也是无人用的面积）。**用户如点名某项（如 `text-transform`/`border-image`）即升为 P0 实现**。
+**⑥ ★教训**：a) **"支持清单"与"待办清单"是两回事**——P0=0 不表示"能用的少"，而是"缺口=0"；b) **"已实现"≠"已验收"**——实现进 IR/编译器 ≠ 进逐项验收装置（缺探针就判红）；本次真缺口在后者；c) **覆盖度要用"真需求（语料）"衡量**——649 项里绝大多数是长手/子项/非标准，按 MDN 全量追会做大量无人用的面积。
+
