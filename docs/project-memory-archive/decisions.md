@@ -1759,3 +1759,11 @@
 **⑤ ★待续（后续批次）**：**四端真机逐页截图 + 独立子代理终评**（30 页 × 4 端 = 重装置批，属"逐项全端验收"的量产化）；**官网 CSS 文档重做**（页 b，独立大工程，需单独立线）。
 **⑥ ★教训/口径**：a) **"演示覆盖"要以"已实现清单"为基准**（129 属性 + 4 at-rule + 5 function + 6 unit 全数有页或有具名边界）；b) **演示页也要过 `profile-boundary`/`E-CSS-002`**（跨端可落性——grid 验收页/滤镜 L3 各自具名或钉基线）；c) **`display:grid` 类"验收对象本身要求"的越界要同族钉基线**（grid-auto/justify-self/grid-tracks 同一先例）。
 
+616. **★★修复 Web/MP 首页导航点击无反应 + 定性「App 专属能力混进共享页面写法」这一**架构缺口**（★用户 2026-10-08「发现问题了，web和小程序上面点击导航没任何反应」）**：
+**① 现象**：css-conformance 首页 30 个导航项，**Web 与小程序点击无任何反应**（App 三端正常）。
+**② 根因（取证）**：`@tap="$nav('x')"` 的 `$nav` 是 **App 运行期独有的**导航一等动作（`createSuperappRuntime` 提供）。编译器把它编成 `bind:tap="proteusInline$navX"`（MP，方法体 `this.$nav('x')`）/ `onTap: () => n.$nav('x')`（Web，`n`=setup ctx），但 **`$nav` 在 Web/MP 从未注册** ⇒ 运行期 `$nav 未定义` ⇒ **静默失败**（无报错、无反应）。
+**③ 本轮修复（demo 侧）**：`index.vue` 的 script 定义 `$nav`——三端同一写法：Web（`<script setup>` 顶层绑定 → 模板 `n.$nav`）/ MP（`script/function-to-methods` 建**页方法** → `this.$nav`）/ App（编译器把 `$nav(...)` 编成 nav 动作、**不看函数体**）。验证：**Web playwright 功能测**（点「文本换行」→ 标题变 + url `/pages/text`）✅ · MP 产物含 `$nav(name){router.push(...)}` + `require('../router/index.js')` ✅ · App 仍 `SUPERAPP_TAP target=7 → cur=text` ✅ · 11 个新页 click-through 全渲染（cases 3–9）✅。
+**④ ★★架构缺口（登记，框架侧后续）**：`$nav` 被当作"共享页面写法"，实为 **App 专属**——**App 专属能力混进共享层写法 ⇒ 别的端静默失效**。正解 = 把 `$nav` 做成 **Web/MP 的平台级导航全局**（router 单例 + `name→path` 解析 + `adapter.navigateTo`），使"一份页面、四端都能点"。相关：`$nav` 与 Web/MP 惯用的 `router.push({name})` 是**两套导航 API**——需收敛为一套（`$nav` 优先，因它已进 App 编译器）。**本轮只解 demo，未动框架**（避免仓促铺开）。
+**⑤ ★教训（可执行）**：a) **"模板能渲染" ≠ "事件能触发"**——App 靠编译成动作、Web/MP 靠运行期函数，**同一写法的落地机制不同**，只验一端会漏（本轮 Web/MP 静默失败、App 正常）；b) **"跨端一致"要含交互**（不只视觉）；c) **`$`-前缀全局属性在 MP（原生 `Page`）没有 Vue 的 `globalProperties` 机制**——注入点与 Web 完全不同（这是框架侧要解决的）。
+**⑥ 验证**：Web playwright NAV_OK · MP 产物核对 · App 真机 target 命中 · 四端重建/安装 · build green。
+
