@@ -2,6 +2,7 @@ package dev.proteus.layoutcore;
 
 import android.content.Context;
 import android.view.ViewGroup;
+import dev.proteus.platform.ProteusTextPlatform;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -1475,45 +1476,22 @@ public final class VaporRenderHost {
             // ★★第三轮复评：缺省 = normal（可折行）——与 mkCmd 同判据（一处语义两处消费，必须同步）
             boolean wrapMode = !("nowrap".equals(ws) || "pre".equals(ws));
             if (!wrapMode) continue;
-            // ★★★word-break 项（2026-10-06）：`break-all` ⇒ 测量用注入 ZWSP 的文本（同源纪律：与 mkCmd 一致）
-            final String mt = applyWordBreak(t, spec.optString("wordBreak", null));
             org.json.JSONObject r = rects.optJSONObject(String.valueOf(spec.getInt("id")));
             if (r == null) continue;
             float boxW = (float) r.optDouble("width");
             if (boxW <= 1f) continue;
             float fs = (float) spec.optDouble("fontSize", 14);
-            android.text.TextPaint tp = new android.text.TextPaint();
-            tp.setTextSize(fs);
             int mw = (int) spec.optDouble("fontWeight", 400);
-            tp.setTypeface(ProteusHostView.typefaceOf(spec.optString("fontFamily", null), mw, null));
             float ls = (float) spec.optDouble("letterSpacing", 0);
-            if (ls != 0f && fs > 0f) tp.setLetterSpacing(ls / fs);
-            // ★★★word-break:normal（2026-10-09）：无断点长串且溢出盒宽 ⇒ 单行溢出（不增长——与 mkCmd 同步）
-            if (!"break-all".equals(spec.optString("wordBreak", null)) && isUnbreakableToken(t)
-                    && tp.measureText(t) > boxW + 0.5f) continue;
             final int clamp = (int) spec.optDouble("lineClamp", 0);
-            android.text.StaticLayout.Builder slb = android.text.StaticLayout.Builder
-                    // I2-ALLOW: 文本**测量**宽（StaticLayout 需整型像素宽；测量回执走 remeasure 通道，非绘制几何发射）
-                    .obtain(mt, 0, mt.length(), tp, Math.max(1, (int) Math.ceil(boxW)))
-                    .setIncludePad(false);
-            // ★★★line-clamp 项（2026-10-08）：测量封顶——盒高 = min(自然行数, clamp) × 行盒高
-            //   （与绘制同源：mkCmd 也用 maxLines+尾部省略号——度量/绘制必须一致，否则盒高与墨迹打架）。
-            if (clamp > 0) {
-                slb.setEllipsize(android.text.TextUtils.TruncateAt.END);
-                slb.setMaxLines(clamp);
-            }
-            android.text.StaticLayout sl = slb.build();
-            int lines = sl.getLineCount();
-            if (lines <= 1 && clamp <= 0) continue;   // 单行（无 clamp）⇒ 与首遍等价（零操作）
-            float lh = lineHeightPxOf(spec, fs);
-            float h = lh > 0f ? lines * lh : sl.getHeight();
-            float w = 0f;
-            for (int i = 0; i < lines; i++) w = Math.max(w, sl.getLineWidth(i));
+            // ★HA0.5：折行度量抽到**平台适配层**（`ProteusTextPlatform.measureWrapped`，与 iOS `measureTextWrapped` 对称）；
+            //   返回 null = 单行且无 clamp（与首遍等价，零操作）。断词/长串溢出/行高封顶都在平台层。
+            float[] m2 = ProteusTextPlatform.measureWrapped(t, fs, mw, spec.optString("fontFamily", null), ls,
+                    spec.optString("wordBreak", null), clamp, boxW, lineHeightPxOf(spec, fs));
+            if (m2 == null) continue;
             JSONObject sz = new JSONObject();
-            // I2-ALLOW: **测量结果报文**（width/height 为机器判据可读字段——与"几何发射"无关）
-            sz.put("width", Math.ceil(Math.min(boxW, w + 0.5f)));
-            // I2-ALLOW: 同上（测量结果报文——height 行）
-            sz.put("height", Math.ceil(h));
+            sz.put("width", m2[0]);
+            sz.put("height", m2[1]);
             measures.put(String.valueOf(spec.getInt("id")), sz);
             changed = true;
         }
@@ -1535,12 +1513,8 @@ public final class VaporRenderHost {
      *   `normal`/`break-word`/缺省 ⇒ 不改（Android 默认已按词断 + 超长词自然断 = 接近 Web break-word）。
      */
     static String applyWordBreak(String t, String wb) {
-        if (t == null || t.isEmpty() || !"break-all".equals(wb)) return t;
-        StringBuilder sb = new StringBuilder(t.length() * 2);
-        for (int i = 0; i < t.length(); i++) {
-            sb.append(t.charAt(i)).append('\u200B');
-        }
-        return sb.toString();
+        // ★HA0.5：实现抽到平台层（度量与绘制同源共用）——本方法保留签名供 mkCmd 等既有调用方。
+        return ProteusTextPlatform.applyWordBreak(t, wb);
     }
 
     /** ★★★word-break 项（2026-10-09 · 全端一致）：**无断点长串**判据——不含空格/制表/换行且不含 CJK。
@@ -1548,18 +1522,8 @@ public final class VaporRenderHost {
      *   会**硬折**超宽行（无"禁止折长词"开关）⇒ 须显式判定为「单行溢出」（见 mkCmd / applyWrapRemeasure）。
      *   ★与鸿蒙 `WORD_BREAK_TYPE_NORMAL` 同语义（该端引擎原生即"词边界断、长词溢出"）。 */
     static boolean isUnbreakableToken(String t) {
-        for (int i = 0; i < t.length(); i++) {
-            char c = t.charAt(i);
-            if (c == ' ' || c == '\t' || c == '\n' || c == '\r') return false;
-            Character.UnicodeBlock b = Character.UnicodeBlock.of(c);
-            if (b == Character.UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS
-                    || b == Character.UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS_EXTENSION_A
-                    || b == Character.UnicodeBlock.CJK_SYMBOLS_AND_PUNCTUATION
-                    || b == Character.UnicodeBlock.HIRAGANA
-                    || b == Character.UnicodeBlock.KATAKANA
-                    || b == Character.UnicodeBlock.HANGUL_SYLLABLES) return false;
-        }
-        return true;
+        // ★HA0.5：实现抽到平台层（度量与绘制同源共用）——本方法保留签名供 mkCmd 等既有调用方。
+        return ProteusTextPlatform.isUnbreakableToken(t);
     }
 
     /**
@@ -1581,27 +1545,19 @@ public final class VaporRenderHost {
             String t = spec.optString("text", null);
             if (t == null || t.isEmpty()) continue;
             // ★字号**不在这里缩放**：spec 已在入口物理化（physicalizeTree）⇒ 此处即物理字号
-            //   （首版在这里乘了一次，同时 mkCmd 的绘制侧未乘 ⇒ "度量 3×、绘制 1×"两边打架）
             float fs = (float) spec.optDouble("fontSize", 14);
-            android.text.TextPaint tp = new android.text.TextPaint();
-            tp.setTextSize(fs);
-            // ★批次 3：度量与绘制**同源**（bold 字形更宽 —— 度量不带字重会与绘制不一致，本仓已踩过
-            //   "度量用一支字体/绘制用另一支"的坑）。缺省 400 = normal ⇒ 既有路径零变化。
             int mw = (int) spec.optDouble("fontWeight", 400);
-            // ★批次 36：字体角色（font-family → role）+ 字重（度量与绘制同源）
-            tp.setTypeface(ProteusHostView.typefaceOf(spec.optString("fontFamily", null), mw, null));
-            // ★批次 20：字距（px ⇒ em；与绘制同源，否则度量窄、绘制宽）
             float ls = (float) spec.optDouble("letterSpacing", 0);
-            if (ls != 0f && fs > 0f) tp.setLetterSpacing(ls / fs);
-            float w = tp.measureText(t);
-            android.graphics.Paint.FontMetrics fm = tp.getFontMetrics();
-            float glyphH = fm.descent - fm.ascent;   // ★真实字体度量（原 fs×1.4 近似已删）
+            // ★HA0.5：单行度量抽到**平台适配层**（`ProteusTextPlatform.measureSingle`，与 iOS `measureText` 对称）
+            //   —— 度量与绘制同源（共用 typefaceOf + 字号/字重/字距），此处零行为变化。
+            float[] m2 = ProteusTextPlatform.measureSingle(fs, mw, spec.optString("fontFamily", null), ls, t);
+            float w = m2[0];
+            float glyphH = m2[1];   // ★真实字体度量（descent−ascent）
             // ★批次 13（line-height）：行盒高 = 行高（倍数×fs 或绝对 px）；缺省 = 字形度量高
             float lh = lineHeightPxOf(spec, fs);
             float h = lh > 0 ? lh : glyphH;
             JSONObject sz = new JSONObject();
-            // I2-ALLOW: 文本**测量**结果的取整（测量子系统，非几何换算——度量值交给内核后
-            //   由内核统一 `snap` 吸附；平台层对**几何**零舍入，与 JsRenderHost 同款）
+            // I2-ALLOW: 文本**测量**结果的取整（测量子系统，非几何换算——度量值交给内核后由内核统一 `snap`）
             sz.put("width", Math.ceil(w));
             sz.put("height", Math.ceil(h));
             m.put(String.valueOf(spec.getInt("id")), sz);
@@ -1614,14 +1570,8 @@ public final class VaporRenderHost {
      *   无单位倍数（`1.6`）⇒ `1.6 × fontSize`；绝对（`24px`）⇒ 24。
      */
     static float lineHeightPxOf(JSONObject spec, float fontSizePx) {
-        String lh = spec.optString("lineHeight", null);
-        if (lh == null || lh.isEmpty()) return 0f;
-        try {
-            if (lh.endsWith("px")) return Float.parseFloat(lh.substring(0, lh.length() - 2));
-            return Float.parseFloat(lh) * fontSizePx;   // 无单位倍数
-        } catch (NumberFormatException e) {
-            return 0f;
-        }
+        // ★HA0.5：token 解析抽到平台层（`ProteusTextPlatform.lineHeightPx`）——本方法保留签名供既有调用方。
+        return ProteusTextPlatform.lineHeightPx(spec.optString("lineHeight", null), fontSizePx);
     }
 
     /** 变化节点的文本重度量（文本更新 ⇒ 需注入新度量再重排；先度量后重排的纪律不变） */

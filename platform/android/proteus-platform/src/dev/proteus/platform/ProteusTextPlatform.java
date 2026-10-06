@@ -115,4 +115,105 @@ public final class ProteusTextPlatform {
         customFontMisses = 0;
         lastMissingCustomFont = null;
     }
+
+    /* ══════════ 文本度量（Vapor 通路；HA0.5 从 VaporRenderHost 抽出）══════════
+     * ★对称 iOS `ProteusTextAdapter.measureText` / `measureTextWrapped`。
+     *   【与宿主的分工】平台层**只度量**（给定文本+字体参数 → {w,h}）；**绘制执行**仍在宿主
+     *   （Android View 的 Canvas / iOS CATextLayer——两端同构，绘制都不在平台层）。
+     *   【度量与绘制同源纪律】度量与绘制共用 `typefaceOf`（同一支字体），否则"度量用 A、绘制用 B"会分叉。 */
+
+    /** 行高 token → 行盒高 px（0 = 未声明；无单位倍数×fontSize / 绝对 px）。与 iOS `lineHeightPx` 同义。 */
+    public static float lineHeightPx(String token, float fontSizePx) {
+        if (token == null || token.isEmpty()) return 0f;
+        try {
+            if (token.endsWith("px")) return Float.parseFloat(token.substring(0, token.length() - 2));
+            return Float.parseFloat(token) * fontSizePx;   // 无单位倍数
+        } catch (NumberFormatException e) {
+            return 0f;
+        }
+    }
+
+    /**
+     * ★★★word-break 项：`break-all` 的 Android 实现——**零宽空格（U+200B）注入**。
+     *   【为什么不能用原生 API】Android `Layout` 只有 `BREAK_STRATEGY_*`（断行**质量**策略），
+     *   **没有**"任意字符处可断"的原生开关 ⇒ `break-all` 无原生对应。
+     *   【做法】每个字符后插 U+200B（ZWSP）：StaticLayout 视其为合法断点、且**不占宽度**。
+     *   ★度量（本类 measureWrapped）与绘制（宿主 mkCmd）**同源**——都调本方法。
+     */
+    public static String applyWordBreak(String t, String wb) {
+        if (t == null || t.isEmpty() || !"break-all".equals(wb)) return t;
+        StringBuilder sb = new StringBuilder(t.length() * 2);
+        for (int i = 0; i < t.length(); i++) {
+            sb.append(t.charAt(i)).append('\u200B');
+        }
+        return sb.toString();
+    }
+
+    /** ★★★word-break 项：**无断点长串**判据——不含空白且不含 CJK。`normal` 下 Web 上"整串溢出、不折行"；
+     *   安卓 StaticLayout 会硬折 ⇒ 须显式判为「单行溢出」（见 measureWrapped / 宿主 mkCmd）。 */
+    public static boolean isUnbreakableToken(String t) {
+        for (int i = 0; i < t.length(); i++) {
+            char c = t.charAt(i);
+            if (c == ' ' || c == '\t' || c == '\n' || c == '\r') return false;
+            Character.UnicodeBlock b = Character.UnicodeBlock.of(c);
+            if (b == Character.UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS
+                    || b == Character.UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS_EXTENSION_A
+                    || b == Character.UnicodeBlock.CJK_SYMBOLS_AND_PUNCTUATION
+                    || b == Character.UnicodeBlock.HIRAGANA
+                    || b == Character.UnicodeBlock.KATAKANA
+                    || b == Character.UnicodeBlock.HANGUL_SYLLABLES) return false;
+        }
+        return true;
+    }
+
+    /** 配一支与绘制同源的度量用 `TextPaint`（字号/字重/字体角色/字距）。 */
+    public static android.text.TextPaint paintFor(float sizePx, int weight, String familyRole, float letterSpacingPx) {
+        android.text.TextPaint tp = new android.text.TextPaint();
+        tp.setTextSize(sizePx);
+        tp.setTypeface(typefaceOf(familyRole, weight, null));
+        if (letterSpacingPx != 0f && sizePx > 0f) tp.setLetterSpacing(letterSpacingPx / sizePx);
+        return tp;
+    }
+
+    /** 单行度量：`{width, glyphHeight}`（**未取整**；glyphHeight = 字体度量 descent−ascent）。
+     *  调用方按测量子系统口径取整（`Math.ceil`）。 */
+    public static float[] measureSingle(float sizePx, int weight, String familyRole, float letterSpacingPx, String text) {
+        android.text.TextPaint tp = paintFor(sizePx, weight, familyRole, letterSpacingPx);
+        float w = tp.measureText(text);
+        android.graphics.Paint.FontMetrics fm = tp.getFontMetrics();
+        return new float[]{ w, fm.descent - fm.ascent };
+    }
+
+    /**
+     * 折行度量：`{width, height}`；**null = 单行且无 clamp**（与首遍等价，调用方可跳过——零操作）。
+     *   与 iOS `measureTextWrapped` 同语义：折行高度 = 行数 × 行盒高（声明行高时）/ StaticLayout 自然高；
+     *   `lineClamp` 封顶（min(自然行数, clamp)）；`wordBreak=break-all` ⇒ ZWSP 注入断行；
+     *   无断点长串（normal）溢出盒宽 ⇒ 单行溢出（返回 null，不增长）。
+     */
+    public static float[] measureWrapped(String text, float sizePx, int weight, String familyRole,
+                                         float letterSpacingPx, String wordBreak, int lineClamp,
+                                         float boxW, float lineHeightPx) {
+        String mt = applyWordBreak(text, wordBreak);
+        android.text.TextPaint tp = paintFor(sizePx, weight, familyRole, letterSpacingPx);
+        // ★无断点长串 + 溢出盒宽（normal）⇒ 单行溢出（不增长——与宿主 mkCmd 同步）
+        if (!"break-all".equals(wordBreak) && isUnbreakableToken(text) && tp.measureText(text) > boxW + 0.5f) {
+            return null;
+        }
+        android.text.StaticLayout.Builder slb = android.text.StaticLayout.Builder
+                // I2-ALLOW: 文本**测量**宽（StaticLayout 需整型像素宽；测量回执走 remeasure 通道，非绘制几何发射）
+                .obtain(mt, 0, mt.length(), tp, Math.max(1, (int) Math.ceil(boxW)))
+                .setIncludePad(false);
+        if (lineClamp > 0) {
+            slb.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            slb.setMaxLines(lineClamp);
+        }
+        android.text.StaticLayout sl = slb.build();
+        int lines = sl.getLineCount();
+        if (lines <= 1 && lineClamp <= 0) return null;   // 单行（无 clamp）⇒ 与首遍等价
+        float h = lineHeightPx > 0f ? lines * lineHeightPx : sl.getHeight();
+        float w = 0f;
+        for (int i = 0; i < lines; i++) w = Math.max(w, sl.getLineWidth(i));
+        // I2-ALLOW: 测量结果报文取整（width/height 为机器判据可读字段——与"几何发射"无关）
+        return new float[]{ (float) Math.ceil(Math.min(boxW, w + 0.5f)), (float) Math.ceil(h) };
+    }
 }

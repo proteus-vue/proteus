@@ -51,7 +51,7 @@
 | ID | 项 | 状态 | 判据（命令 / 文件 / 文档） | 范围 |
 |---|---|---|---|---|
 | HA0 | 八接口 C ABI + 版本协商 + `submit_frame` | 已落地 | `file:packages/host-abi/include/proteus_host_abi.h` | — |
-| HA0.5 | `hosts/`→`platform/` 拆分 + 门禁（**Android 侧待抽**） | 范围外 | `cmd:pnpm check:platform-layering` | iOS 已抽（platform/ios）且门禁绿。**Android**：B5-1（`docs/proteus-host-separation-b5-plan.md`）**第 1 步已落地（2026-10-07）**——**字形层**（`ProteusTextPlatform`：字体角色映射 + 自定义字体注册）已抽、宿主委托、真机无回归；**文本度量/绘制执行待续**（与宿主耦合更深）。门禁 C 判据已收紧为"必须是 `dev/proteus/platform/` 包"（防 SDK/AAR 冒充 + 破坏性验证）。★`platform/android/proteus-sdk`（SDK/AAR）= **HA5 存量嵌入**，非本项对象。 |
+| HA0.5 | `hosts/`→`platform/` 拆分 + 门禁（**Android 侧待抽**） | 范围外 | `cmd:pnpm check:platform-layering` | iOS 已抽（platform/ios）且门禁绿。**Android**：B5-1（`docs/proteus-host-separation-b5-plan.md`）**已落地（2026-10-07）**——**字形（字体角色映射 + 自定义字体注册）+ 文本度量（单行/折行/断词/行高）** 已抽到 `platform/android/.../ProteusTextPlatform.java`，宿主改为**委托**（真机渲染**逐像素一致**）；**绘制执行**（`mkCmd` 的 StaticLayout/Canvas，绘制载体=平台 View）**留在宿主**（与 iOS 同构：两端绘制都不在平台层）。门禁 C 判据已收紧为"必须是 `dev/proteus/platform/` 包"（防 SDK/AAR 冒充 + 破坏性验证）+ 新增结构契约测试 `tests/host-platform-extraction.test.ts`。★`platform/android/proteus-sdk`（SDK/AAR）= **HA5 存量嵌入**，非本项对象。 |
 | HA1 | 现有 App 宿主改造（双路几何逐字节一致） | 已落地 | `file:platform/ios/ProteusPlatform/ProteusTextAdapter.swift` | — |
 | HA2 | 能力注入重构（度量 trait ✅ · 内核零平台分支 ✅ · **图像解码 trait 无消费点**） | 范围外 | `file:packages/host-abi/src/lib.rs`（decode_image 声明） | **内核不处理图像**（图像由各宿主各自解码——见 HostABI 文档；`decode_image` 无内核消费点）⇒ 该 trait 为 ABI 契约声明（保留），**登记终止态**（非"待实现"）。 |
 | HA3 | 能力插件（注册/调用/清单校验） | 已落地 | `file:packages/capabilities/src` | — |
