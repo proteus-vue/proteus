@@ -56,14 +56,16 @@ LIGHTS=0
 FLIP=0
 INK=0
 INKSCROLL=0
+CSSCONF=0
 for arg in "$@"; do
   [ "$arg" = "--release" ] && MODE="release"
   [ "$arg" = "--lights" ] && LIGHTS=1
   [ "$arg" = "--flip" ] && FLIP=1
   [ "$arg" = "--ink" ] && INK=1
   [ "$arg" = "--inkscroll" ] && INKSCROLL=1
+  [ "$arg" = "--css" ] && CSSCONF=1
 done
-echo "    构建模式：$MODE$([ "$MODE" = "release" ] && echo "（§9.2 正式验收口径）" || echo "（冒烟用；debug 数据不可作验收）")$([ "$LIGHTS" = "1" ] && echo " · 灯光秀独立应用（dev.proteus.lights）")$([ "$FLIP" = "1" ] && echo " · 翻牌剧场独立应用（dev.proteus.flip）")$([ "$INK" = "1" ] && echo " · 墨绘山水卷独立应用（dev.proteus.ink）")$([ "$INKSCROLL" = "1" ] && echo " · 手卷探索独立应用（dev.proteus.inkscroll）")"
+echo "    构建模式：$MODE$([ "$MODE" = "release" ] && echo "（§9.2 正式验收口径）" || echo "（冒烟用；debug 数据不可作验收）")$([ "$LIGHTS" = "1" ] && echo " · 灯光秀独立应用（dev.proteus.lights）")$([ "$FLIP" = "1" ] && echo " · 翻牌剧场独立应用（dev.proteus.flip）")$([ "$INK" = "1" ] && echo " · 墨绘山水卷独立应用（dev.proteus.ink）")$([ "$INKSCROLL" = "1" ] && echo " · 手卷探索独立应用（dev.proteus.inkscroll）")$([ "$CSSCONF" = "1" ] && echo " · CSS 验收独立应用（dev.proteus.cssconf）")"
 
 mkdir -p "$BUILD"
 
@@ -384,6 +386,15 @@ if [ "$INK" = "1" ]; then
   grep -q 'InkDemoActivity' "$MANIFEST" || { echo "✗ ink 清单生成失败（Activity 没换）"; exit 3; }
   if grep -q 'SuperappActivity' "$MANIFEST"; then echo "✗ ink 清单里 SuperappActivity 未替换（launcher 归属错）"; exit 3; fi
 fi
+if [ "$CSSCONF" = "1" ]; then
+  # ★★★（用户：「安卓没有固定的桌面软件打开 CSS 验收」）：**CSS 验收独立应用**——同 sed 生成法，
+  #   只换包名 + 标签；★launcher **仍是 .SuperappActivity**（它就是这个应用的入口，区别于 lights/flip 换 demo Activity）
+  #   ⇒ 用 **FQN**（包名换了，相对名 .SuperappActivity 会解析到 dev.proteus.cssconf.SuperappActivity ⇒ 不存在）。
+  MANIFEST="$BUILD/AndroidManifest.cssconf.xml"
+  sed -e 's/package="dev.proteus.layoutcore"/package="dev.proteus.cssconf"/'   -e 's/android:label="Proteus LayoutCore"/android:label="CSS 验收"/'   -e 's/android:name="\.SuperappActivity"/android:name="dev.proteus.layoutcore.SuperappActivity"/'   "$APP/src/main/AndroidManifest.xml" > "$MANIFEST"
+  grep -q 'dev.proteus.cssconf' "$MANIFEST" || { echo "✗ css 清单生成失败（包名没换）"; exit 3; }
+  grep -q 'dev.proteus.layoutcore.SuperappActivity' "$MANIFEST" || { echo "✗ css 清单生成失败（launcher FQN 未设）"; exit 3; }
+fi
 if [ "$MODE" = "release" ]; then
   # ★release：从清单里去掉 android:debuggable（debug 包数据 §9.2 明确作废）
   if [ "$LIGHTS" = "1" ]; then
@@ -416,6 +427,8 @@ elif [ "$INKSCROLL" = "1" ]; then
   APK="$BUILD/proteus-ink-scroll.apk"
 elif [ "$INK" = "1" ]; then
   APK="$BUILD/proteus-ink.apk"
+elif [ "$CSSCONF" = "1" ]; then
+  APK="$BUILD/proteus-cssconf.apk"
 else
   APK="$BUILD/proteus-layoutcore.apk"
 fi
