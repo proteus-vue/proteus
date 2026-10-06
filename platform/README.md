@@ -26,7 +26,7 @@ platform/*   ──→  Host ABI        ❌ 禁止（平台层不感知宿主契
 | 端 | 目录 | 内容 | 状态 |
 |---|---|---|---|
 | iOS | `platform/ios/ProteusPlatform/` | `ProteusTextAdapter`（文本度量 CoreText + 字体角色映射 + 自定义字体注册） | ✅ 已抽取（HA0.5） |
-| Android | `platform/android/proteus-platform/src/dev/proteus/platform/` | `ProteusTextPlatform`（字体角色映射 Typeface + 自定义字体注册） | 🟡 **部分抽取（B5-1 · 2026-10-07）**：**字形层**已抽（换壳不改）；**文本度量/绘制执行**仍在 `hosts/android/.../runtime/` 待续 |
+| Android | `platform/android/proteus-platform/src/dev/proteus/platform/` | `ProteusTextPlatform`（字体角色映射 Typeface + 自定义字体注册 + 文本度量：单行/折行/断词/行高） | ✅ **已抽取（B5-1 · 2026-10-07）**：字形 + **度量**均抽；宿主委托、真机渲染**逐像素一致** |
 | 鸿蒙 | — | — | 未开始 |
 
-★**诚实边界**：HA0.5 分两步——① iOS 侧已全抽（度量 + 字体）；② Android 侧本轮（B5-1）**先抽字形层**（`ProteusTextPlatform`，与 iOS `ProteusTextAdapter` 的字体段对称），**度量/绘制执行待续**（与宿主耦合更深，逐文件迁）。门禁 C 判据已收紧为"**必须是 `dev/proteus/platform/` 包**"（防把 SDK/AAR 当"抽取完成"），见 `check-platform-layering`。
+★**诚实边界**：① **绘制执行**（`mkCmd` 的 StaticLayout/Canvas 上屏）**仍在宿主**——与 iOS 同构（两端绘制载体都是平台 View/layer，抽取收益低）；② **度量**已抽（`measureSingle`/`measureWrapped`/`applyWordBreak`/`isUnbreakableToken`/`lineHeightPx`），宿主 `VaporRenderHost` 委托。门禁 C 判据已收紧为"**必须是 `dev/proteus/platform/` 包**"（防把 SDK/AAR 当"抽取完成"）+ 结构契约测试 `tests/host-platform-extraction.test.ts`（钉住"平台层拥有实现、宿主只委托"）。
