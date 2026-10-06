@@ -37,6 +37,11 @@ export type StylePropLevel =
   //   值集 = `<self-position>`（**无 `auto`**——justify-items 不接受 auto，故独立级别）。
   //   四同步（INV-CE-07）：本表 + runtime PROP_TYPES + compiler 静态校验 + 注册表 VALUE_TYPE_BY_LEVEL。
   | 'JustifyItems'
+  // ★★★line-clamp 项（2026-10-08 · css:next P0·4× · CSS Overflow）：**多行截断**（最多显示 N 行、末行尾省略号）。
+  //   语义载体 = WebKit 三件套 `display:-webkit-box` + `-webkit-box-orient:vertical` + `-webkit-line-clamp:N`
+  //   （事实标准；Web/MP/Skyline 原生支持）。App 端宿主文本绘制（host-only，同 text-overflow）。
+  //   值 = 正整数（行数；0/负 = 无截断）。四同步（INV-CE-07）：本表 + runtime PROP_TYPES + compiler 静态校验 + 注册表。
+  | 'LineClamp'
   // ★★★grid-auto-flow 项（2026-10-08 · css:next P0·3× · CSS Grid）：**自动放置方向/密度**。
   //   值集 = 四端可表达子集（row / column / dense / column dense）；内核 taffy `GridAutoFlow` 原生（row/column/rowDense/columnDense）。
   //   四同步（INV-CE-07）：本表 + runtime PROP_TYPES + compiler 静态校验 + 注册表 VALUE_TYPE_BY_LEVEL。
@@ -114,6 +119,8 @@ export const STYLE_PROP_LEVELS = {
   justifySelf: 'JustifySelf',
   // ★★★place-items/justify-items 项（2026-10-08）：网格容器内子项行内轴对齐（值集 = JustifySelf 去 auto）
   justifyItems: 'JustifyItems',
+  // ★★★line-clamp 项（2026-10-08）：多行截断行数（正整数）
+  lineClamp: 'LineClamp',
   // ★★★grid-auto-flow 项（2026-10-08）：类 grid 容器的自动放置（row/column/dense/column dense）
   gridAutoFlow: 'GridAutoFlow',
   // ★★★outline 族项（2026-10-08）：轮廓（环）+ 偏移（盒外/内）

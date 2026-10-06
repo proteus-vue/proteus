@@ -102,6 +102,8 @@ describe('★App CSS 支持面 · ② SSOT 与折叠实现同源（真折叠，�
       // ★★★grid-template-areas 项（2026-10-08）：命名区域模板（折叠为浏览器形态串）
       if (f === 'gridTemplateAreas') return '"a b" "c c"'
       if (f === 'gridArea') return 'a'
+      // ★★★line-clamp 项（2026-10-08）：多行截断行数（正整数样例——折叠器折 lineClamp）
+      if (f === 'lineClamp') return '2'
       // ★★★outline 族项（2026-10-08）
       if (f === 'outlineWidth' || f === 'outlineOffset') return '3'
       if (f === 'outlineColor') return '#123456'

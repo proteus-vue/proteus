@@ -292,6 +292,9 @@ struct TextDrawSpec {
     /** ★批次 16（CSS 兼容对齐 · 以 Web 为基准）：`text-overflow` 是否 ellipsis（单行溢出以 … 截断）。
      *   1 ⇒ 设 typography maxLines=1 + 尾部省略号 + 按盒宽 Layout（Web 语义）。 */
     int textOverflowEllipsis = 0;
+    /** ★★★line-clamp 项（2026-10-08 · CSS Overflow）：多行截断行数（0 = 无截断）。
+     *   >0 ⇒ 设 typography maxLines=lineClamp + 尾部省略号（Web `-webkit-line-clamp<n>` 同语义）。 */
+    int lineClamp = 0;
     /* ── ★★四通道（2026-10-03）——在 content modifier 的 canvas 上画（RenderNode 无这些属性 API）── */
     double w = 0, h = 0, radius = 0;          // 物理 px（与 canvas 同坐标系）
     bool hasGrad = false;
@@ -599,7 +602,14 @@ static void drawChannelsAndText(OH_Drawing_Canvas* canvas, const TextDrawSpec* s
             const bool wsSingle = spec->whiteSpace == "nowrap" || spec->whiteSpace == "pre";
             const bool wsWrap = !wsSingle;
             const bool ellipsis = !wsWrap && spec->textOverflowEllipsis != 0 && spec->w > 1.0;
-            if (ellipsis) {
+            // ★★★line-clamp 项（2026-10-08 · CSS Overflow）：多行截断——maxLines=lineClamp + 尾部省略号。
+            //   （Web `-webkit-line-clamp<n>` 真语义：只保留前 n 行、末行尾加 …；Layout 按盒宽折行。）
+            const bool clampOn = spec->lineClamp > 0 && wsWrap && spec->w > 1.0;
+            if (clampOn) {
+                OH_Drawing_SetTypographyTextMaxLines(ts, spec->lineClamp);
+                OH_Drawing_SetTypographyTextEllipsisModal(ts, 2); // ELLIPSIS_MODAL_TAIL
+                OH_Drawing_SetTypographyTextEllipsis(ts, "\u2026");
+            } else if (ellipsis) {
                 OH_Drawing_SetTypographyTextMaxLines(ts, 1);
                 OH_Drawing_SetTypographyTextEllipsisModal(ts, 2); // ELLIPSIS_MODAL_TAIL
                 OH_Drawing_SetTypographyTextEllipsis(ts, "\u2026");
@@ -1149,6 +1159,8 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
             spec->lineHeightPx = lhPx;
             { double lsg = 0; jsonNumber(it, "letterSpacing", &lsg); spec->letterSpacing = lsg; }
             { double toe = 0; jsonNumber(it, "textOverflowEllipsis", &toe); spec->textOverflowEllipsis = toe > 0 ? 1 : 0; }
+            // ★★★line-clamp 项（2026-10-08）：多行截断行数（渲染侧据此设 maxLines + 尾部省略号）
+            { double lc = 0; jsonNumber(it, "lineClamp", &lc); spec->lineClamp = (int)(lc + 0.5); }
             // ★★全端对齐批（2026-10-05 · white-space 五端对齐）：换行模式 + 裁切标记（渲染分流靠它）
             { std::string wsV; jsonString(it, "whiteSpace", &wsV); spec->whiteSpace = wsV; }
             // ★★★word-break 项（2026-10-06）：断词策略（渲染侧据此设 TypographyTextWordBreakType）

@@ -63,6 +63,9 @@ const { STYLE_PROP_LEVELS } = await import(pathToFileURL(path.join(ROOT, 'packag
 /** kebab↔camel（语料里两种写法都有：CSS 用 kebab、Vue `:style` 用 camel） */
 const toKebab = (s) => s.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase())
 const toCamel = (s) => s.replace(/-([a-z])/g, (_m, c) => c.toUpperCase())
+/** ★★★line-clamp 项（2026-10-08）：CSS 名 → IR 字段名别名表（个别能力折叠到**不同名**字段，
+ *   名字对不上 ⇒ 实现态被判 not-started 的假阴性）。-webkit-line-clamp → lineClamp。 */
+const FIELD_ALIAS = { '\u002dwebkit-line-clamp': 'lineClamp' }
 
 function walkFiles(dir, exts, acc = []) {
   if (!fs.existsSync(dir)) return acc
@@ -341,7 +344,9 @@ const KNOWN_ENGINE_CHANNELS = new Set([
   'clip-path', 'mask', 'background-image', // fill-gradient 通道 = background-image 的渐变子集
 ])
 
-function implOf(kebab, camel) {
+function implOf(kebab, camelRaw) {
+  // ★别名：CSS 名 → IR 字段（-webkit-line-clamp → lineClamp）
+  const camel = FIELD_ALIAS[kebab] ?? camelRaw
   const inIr = camel in STYLE_IR_FIELDS
   const irSpec = inIr ? STYLE_IR_FIELDS[camel] : undefined
   // ★★矩阵表是 **camelCase 键**（`textAlign`/`whiteSpace`…）——首版只查 kebab ⇒ 所有多词属性

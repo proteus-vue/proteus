@@ -386,21 +386,27 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
             double lsDesign = 0; jnum(it.c_str(), it.size(), "letterSpacing", &lsDesign);
             std::string ws; jstr(it.c_str(), it.size(), "whiteSpace", &ws);
             const bool single = (ws == "nowrap" || ws == "pre");
+            int clampLines = 0;   // ★★★line-clamp 项（2026-10-08）：多行截断行数
             std::string wbM; jstr(it.c_str(), it.size(), "wordBreak", &wbM);
             std::string lhTok; jstr(it.c_str(), it.size(), "lineHeight", &lhTok);
             double lhDesign = lineHeightDesignPx(lhTok, fs);
             double wpx = 0, hpx = 0;
             auto rit = rect0.find((int)id);
             const double boxWpx = rit != rect0.end() ? rit->second.w * density : 0.0;
+            // ★★★line-clamp 项（2026-10-08）：多行截断行数（测量封顶用）
+            { double lcD = 0; jnum(it.c_str(), it.size(), "lineClamp", &lcD); clampLines = (int)(lcD + 0.5); }
             if (!single && boxWpx > 1.0) {
                 measureTextWrappedTypoPx(tx, fs * density, boxWpx, &wpx, &hpx, lsDesign * density, wbM);
-                if (lhDesign > 0) {
+                if (lhDesign > 0 || clampLines > 0) {
                     double nW = 0, nH = 0;
                     measureTextTypoPx(tx, fs * density, &nW, &nH, lsDesign * density);
                     if (nH > 0.5) {
                         int lines = (int)((hpx / nH) + 0.5);
                         if (lines < 1) lines = 1;
-                        hpx = lines * lhDesign * density;
+                        // ★★★line-clamp 项（2026-10-08）：测量封顶——行数 = min(自然行数, clamp)。
+                        //   与绘制同源（渲染侧 maxLines + 尾部省略号），否则盒高与墨迹打架。
+                        if (clampLines > 0 && lines > clampLines) lines = clampLines;
+                        hpx = (lhDesign > 0) ? (lines * lhDesign * density) : (lines * nH);
                     }
                 }
             } else {
@@ -662,6 +668,8 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
             { std::string ws; if (jstr(it.c_str(), it.size(), "whiteSpace", &ws) && !ws.empty()) arr += ",\"whiteSpace\":\"" + jsonEscape(ws) + "\""; }
             // ★★★word-break 项（2026-10-06）：断词策略（渲染侧据此设 TypographyTextWordBreakType）
             { std::string wb; if (jstr(it.c_str(), it.size(), "wordBreak", &wb) && !wb.empty()) arr += ",\"wordBreak\":\"" + jsonEscape(wb) + "\""; }
+            // ★★★line-clamp 项（2026-10-08）：多行截断行数（渲染侧据此设 maxLines + 尾部省略号）
+            { double lc = 0; if (jnum(it.c_str(), it.size(), "lineClamp", &lc) && lc > 0) { char lb2[48]; snprintf(lb2, sizeof(lb2), ",\"lineClamp\":%d", (int)(lc + 0.5)); arr += lb2; } }
             { std::string ov; if (jstr(it.c_str(), it.size(), "overflow", &ov) && ov == "hidden") arr += ",\"clipText\":1"; }
             // ★批次 35：文本装饰（underline / line-through）
             { std::string td; if (jstr(it.c_str(), it.size(), "textDecoration", &td) && td != "none") arr += ",\"textDecoration\":\"" + jsonEscape(td) + "\""; }

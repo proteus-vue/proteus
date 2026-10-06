@@ -134,6 +134,20 @@ node scripts/css-acceptance-record.mjs <feature-id> <verdicts.json>
   ⇒ 长串在五端：`break-all`（= 语料 7× 的值）**一致折行**；`normal` 则 **App/MP 折行、Web 溢出**（具名引擎边界）。
   ★同源纪律：**凡涉及"文本是否折断/溢出"的特性（word-break / overflow-wrap / hyphens），
   先假设 App/MP 默认即断词，再逐端核对**——Web 的"不折断"类语义在这些端往往不可表达。
+- **★★★`-webkit-line-clamp` 的宿主多行截断：测量与绘制两处必须**同源封顶**，且验收页不能用 `align-items:flex-start`（2026-10-08 line-clamp 项）**：
+  `-webkit-line-clamp` 在 Web/MP 由浏览器/Skyline 原生消费（三件套使能），**App 端是新能力**——三端宿主各自实现：
+  Android `StaticLayout.setMaxLines(N)+setEllipsize(END)`（**绘制** `drawTextMultiline[Offset]` 与**测量** `applyWrapRemeasure` 两处同款）·
+  iOS 适配器 `truncateToLines`（CTFramesetter 找可见行 → 自建截断串；CATextLayer **无 numberOfLines**）+ `measureTextWrapped(maxLines)` ·
+  鸿蒙 `OH_Drawing_SetTypographyTextMaxLines + EllipsisModal(TAIL)`（测量侧同样 `min(自然行数, clamp)` 封顶）。
+  ★★同源纪律第二次实例（与 word-break 同）：**测量封顶必须 = 绘制截断**，否则盒高（N 行）与墨迹（全段）打架。
+  ★★**验收页布局坑**：截断宿主盒用 `display:flex; flex-direction:column` 时**不可写** `align-items:flex-start`——
+  那会让文本子项取 **max-content 宽**（= 单行不折行，Android 端实测：整段冲出盒外，与 Web 的"块级子项按容器宽折行"不符）；
+  应**用缺省 align-items（stretch）** ⇒ 文本子项宽 = 容器内宽 ⇒ 正确折行（与 Web flex 同名同义）。
+  ★同源纪律：**列向 flex 容器里要"按容器宽折行"的文本块，交叉轴必须 stretch**（flex-start 会退化成 max-content）。
+
+- **★MP 截图到达判据：`automation_runtime_info` 现须显式 `--action`（2026-10-08 修）**：
+  缺 `--action` 时该工具返 `INPUT_ERROR`（此前可无参调用）⇒ 旧探针 `grep "currentPage 名"` **永不命中** ⇒ 每页白等 30s 超时后才截图。
+  改 `--action currentPage` 并按 **`"route": "/pages/<name>"`** 判到达。★同源：**外部 CLI 的参数契约会演进**——探针命中不了先查工具自身用法（`-h`），别默认页面没到。
 - **★★★闭合路径上的周期图案（dotted/dashed）必须让周期整除周长（2026-10-08 outline/border 圆角跟随批）**：
   dash 间距固定为 `2·线宽` 时，若它不整除环的周长，起点/终点处会**多出一个间距过近的点**
   （三端独立评审逐像素都抓到：Android/鸿蒙 = 两个点间距 0.55× 正常值（"双点"）；iOS = 两圆**融合成一个

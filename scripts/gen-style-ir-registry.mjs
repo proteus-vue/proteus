@@ -89,6 +89,8 @@ const VALUE_TYPE_BY_LEVEL = {
   GridAutoFlow: 'enum',
   // ★★★place-items/justify-items 项（2026-10-08）：网格容器内子项行内轴对齐（枚举，与 runtime PROP_TYPES.JustifyItems 同集）
   JustifyItems: 'enum',
+  // ★★★line-clamp 项（2026-10-08）：多行截断行数（整数）
+  LineClamp: 'number',
   // ★★★outline 族项（2026-10-08）：轮廓宽度/偏移（长度）
   OutlineWidth: 'length',
   OutlineOffset: 'length',

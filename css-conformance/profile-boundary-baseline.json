@@ -27,6 +27,7 @@
   "pages/grid-auto.vue:display:grid": "验收页（grid-auto-columns/-rows 项）——**验收对象本身要求 grid 容器**：Web / App（自研 Rust 引擎 taffy grid-auto-columns/rows 原生）可渲染，Skyline 端无 Grid 容器（官方属性表无 grid 族）⇒ 按 grid-template-areas.vue 先例显式理解后钉住；Skyline 差异在验收页顶部具名（引擎锁死边界，不作缺陷）。棘轮只减不增。",
   "pages/grid-template-areas.vue:display:grid": "验收页（grid-template-areas 项）——**验收对象本身要求 grid 容器**：Web / App（自研 Rust 引擎 taffy GridTemplateAreas/NamedLine 原生）可渲染，Skyline 端无 Grid 容器（官方属性表无 grid 族）⇒ 按 grid-auto-flow.vue 先例显式理解后钉住；Skyline 差异在验收页顶部具名（引擎锁死边界，不作缺陷）。棘轮只减不增。",
   "pages/justify-self.vue:display:grid": "验收页（justify-self 项）——**验收对象本身要求 grid 上下文**（justify-self 仅对 grid 项生效，flex 下被忽略）：Web / App（自研 Rust 引擎：taffy grid + justify_self 原生）可渲染，Skyline 端无 Grid 容器（官方属性表无 grid/justify-self）⇒ 按 examples/index.vue:display:grid 先例显式理解后钉住；Skyline 差异在验收页顶部具名（引擎锁死边界，不作缺陷）。棘轮只减不增。",
+  "pages/line-clamp.vue:display:-webkit-box": "验收页（-webkit-line-clamp 项）——**验收对象本身要求 WebKit 三件套**（display:-webkit-box 是 -webkit-line-clamp 的惯用使能器）：Web（浏览器原生）/ App（自研 Rust 引擎编译期**静默容忍** -webkit-box［无对等值、不落 display］+ 折叠 lineClamp，宿主多行截断）可渲染，Skyline 端官方属性表未收录 -webkit-box / -webkit-line-clamp（引擎锁死）⇒ 按 grid-* 族先例显式理解后钉住；Skyline 差异在验收页顶部具名（引擎锁死边界，不作缺陷）。棘轮只减不增。",
   "pages/place-items.vue:display:grid": "验收页（place-items/justify-items 项）——**验收对象本身要求 grid 容器**：Web / App（自研 Rust 引擎 taffy justify_items 原生）可渲染，Skyline 端无 Grid 容器（官方属性表无 grid 族）⇒ 按 grid-auto.vue 先例显式理解后钉住；Skyline 差异在验收页顶部具名（引擎锁死边界，不作缺陷）。棘轮只减不增。",
   "pages/text.vue:white-space:pre-wrap": "存量待专项评估（VC2-b 首扫，2026-10-02）——修一条从基线删一条（棘轮只减不增）"
 }

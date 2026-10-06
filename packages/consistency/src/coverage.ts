@@ -106,6 +106,8 @@ export const SEMANTIC_FIELD_SNAPSHOT_KEYS: Readonly<Record<string, readonly stri
   lineHeight: ['lineHeight'],
   textAlign: ['textAlign'],
   textOverflow: ['textOverflow'],
+  // ★★★line-clamp 项（2026-10-08）：多行截断行数（读数键 = 同名数值）
+  lineClamp: ['lineClamp'],
   letterSpacing: ['letterSpacing'],
   textDecoration: ['textDecoration'],
   /* ── 其余 ── */
