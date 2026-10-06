@@ -1,0 +1,20 @@
+/node_modules
+/local.properties
+/.idea
+**/build
+/.clangd
+/.clang-format
+/.clang-tidy
+**/.test
+/.appanalyzer
+
+# ★★★机器本地签名配置（**含明文口令**）——绝不入库；由 build --package 或 DevEco 从
+#   build-profile.template.json5 生成（模板形态 signingConfigs: []）。
+/build-profile.json5
+**/oh_modules
+**/.hvigor
+**/.cxx
+# DevEco 构建期自动生成的类型桥（非手写源）
+**/BuildProfile.ets
+# Rust 核交叉编译产物（32MB；由 Proteus 框架的 hosts/<platform>/build-rust-core.* 生成）
+proteus_render/src/main/cpp/thirdparty/*.a

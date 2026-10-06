@@ -9,7 +9,7 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window } from '@kit.ArkUI';
 import { deviceInfo } from '@kit.BasicServicesKit';
 // ★矩阵 #18 C 组：真生命周期 → JS 运行时转发（G-39"壳把生命周期交给 runtime"的端上证据）
-import { hostRtShellEvent } from 'libproteus_bench.so';
+import { hostRtShellEvent } from 'proteus_render';
 
 const DOMAIN = 0x0001;
 const TAG = 'ProteusHost';

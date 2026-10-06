@@ -22,6 +22,10 @@ export interface BuildArgs {
   target?: BuildTarget
   /** ★G-29 编译器后端插拔：--compiler node|rust（缺省 node；rust → 双编译语义等价校验） */
   compiler?: 'node' | 'rust'
+  /** ★hosts 第二刀 Stage 2：--package → 编译后调平台工具链把宿主工程打成 .hap（仅 harmony 样板） */
+  package?: boolean
+  /** --package 的宿主工程目录（缺省读 PROTEUS_HOST_DIR） */
+  hostDir?: string
 }
 
 export function parseBuildArgs(argv: string[]): BuildArgs {
@@ -44,6 +48,11 @@ export function parseBuildArgs(argv: string[]): BuildArgs {
         throw new Error(`--target 需为 ${BUILD_TARGETS.join('/')}（${t ?? '空'}）`)
       }
       args.target = t as BuildTarget
+    } else if (a === '--package') {
+      args.package = true
+    } else if (a === '--host-dir') {
+      args.hostDir = argv[++i]
+      if (!args.hostDir) throw new Error('--host-dir 需要目录参数')
     } else if (a === '--no-px2rpx') {
       args.px2rpx = false
     } else if (a === '--rpx-ratio') {
@@ -429,14 +438,19 @@ export const HELP_GROUPS: HelpGroup[] = [
     titleEn: 'Build & development',
     entries: [
       {
-        usage: 'proteus build <dir> [--out <dir>] [--debug] [--no-px2rpx] [--rpx-ratio <n>] [--rules <json>] [--compiler <node|rust>] [--target <web|skyline|ios|android|harmony|all>]',
-        desc: '扫描 <dir> 下所有 .vue，编译为小程序四件套（.wxml / .js / .wxss）到 <out>\n      --debug    产物注入源码行号注释 + 决策 trace 落盘（.transform-debug/）\n      --rules    JSON 规则覆盖文件（disabled / mapping / customTags）\n      --compiler 编译器后端（G-29）：node（缺省）/ rust（每页 Node/Rust 双编译语义等价校验，G-29.1）\n      --target   工程构建（G-33 M2）：web/skyline（复用 Vite 管线）· ios/android/harmony（App 屏内容：路由 → SFC → 编译器）· all（逐端全构建）；缺省 = 独立编译',
+        usage: 'proteus build <dir> [--out <dir>] [--debug] [--no-px2rpx] [--rpx-ratio <n>] [--rules <json>] [--compiler <node|rust>] [--target <web|skyline|ios|android|harmony|all>] [--package --host-dir <dir>]',
+        desc: '扫描 <dir> 下所有 .vue，编译为小程序四件套（.wxml / .js / .wxss）到 <out>\n      --debug    产物注入源码行号注释 + 决策 trace 落盘（.transform-debug/）\n      --rules    JSON 规则覆盖文件（disabled / mapping / customTags）\n      --compiler 编译器后端（G-29）：node（缺省）/ rust（每页 Node/Rust 双编译语义等价校验，G-29.1）\n      --target   工程构建（G-33 M2）：web/skyline（复用 Vite 管线）· ios/android/harmony（App 屏内容：路由 → SFC → 编译器）· all（逐端全构建）；缺省 = 独立编译\n      --package  （hosts 第二刀）harmony：编译后拷产物进宿主工程并调 hvigorw 打成 .hap（--host-dir 指定宿主工程，缺省读 PROTEUS_HOST_DIR）',
         descEn: 'Scan all .vue files under <dir> and compile them into the mini-program four-file set (.wxml / .js / .wxss) to <out>\n      --debug    inject source line-number comments into the artifacts + write the decision trace to disk (.transform-debug/)\n      --rules    JSON rule override file (disabled / mapping / customTags)\n      --compiler compiler backend (G-29): node (default) / rust (per-page Node/Rust dual-compile semantic equivalence check, G-29.1)\n      --target   project build (G-33 M2): spawn the project build:web / build:mp scripts (reusing the Vite pipeline); default = standalone compilation',
       },
       {
         usage: 'proteus dev [--target <web|skyline>]',
         desc: '开发服务器（G-33 M1）：web → vite --mode web；skyline → dev-mp watch 构建（app 端待 M3 原生同步）',
         descEn: 'Development server (G-33 M1): web → vite --mode web; skyline → dev-mp watch build (the app side awaits M3 native sync)',
+      },
+      {
+        usage: 'proteus create host <platform> <dir> [--name <应用名>] [--bundle <包名>] [--project <项目根>]',
+        desc: '★hosts 第二刀 Stage 2（宿主/项目分离）：生成**独立可编译的最小宿主工程**（壳 + runtime HAR 依赖）\n      platform 目前支持 harmony；生成含 AppScope / entry（最小壳）/ proteus_render（runtime HAR）/ proteus.host.json\n      --name 应用名 · --bundle 包名（缺省 com.example.<slug>）· --project 项目根（有 dist/app/<platform>/ 则拷编译产物进 rawfile）',
+        descEn: '★hosts cut-2 Stage 2 (host/project separation): generate a standalone compilable minimal host project (shell + runtime HAR dependency). platform currently: harmony.',
       },
     ],
   },

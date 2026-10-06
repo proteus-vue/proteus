@@ -1,0 +1,7 @@
+{
+  "module": {
+    "name": "proteus_render",
+    "type": "har",
+    "deviceTypes": ["phone", "tablet", "2in1"]
+  }
+}

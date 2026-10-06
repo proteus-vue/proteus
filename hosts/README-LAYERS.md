@@ -24,8 +24,9 @@ hosts/android/app/src/main/java/dev/proteus/layoutcore/
   runtime/   shell/   dev/        ← ★同 Java 包（dev.proteus.layoutcore），仅**源码分目录**
 hosts/ios/ProteusHost/
   runtime/   shell/   dev/        ← Swift 纯目录（无包约束）
-hosts/harmony/host-app/entry/src/main/
-  ets/{shell,dev}/  cpp/{runtime,dev}/   ← ArkTS / C++ 子目录
+hosts/harmony/host-app/
+  proteus_render/   ← ★runtime 已抽为 **HAR 模块**（可依赖单元；含 C++ 源 + CMake + Rust 核）
+  entry/src/main/ets/{shell,dev}/  entry/src/main/cpp/{runtime,dev}/   ← ArkTS / C++ 子目录
 hosts/shared/bridge/            ← 跨端共享的**运行时入口**（entry-host-runtime 等，属 runtime）
 ```
 
@@ -78,7 +79,20 @@ L1 框架主仓（本仓）发独立包 → L2 宿主 App 仓**只依赖不 fork
   第二刀拆分时移出该表。
 - **鸿蒙 `ets/dev/app-stack*.ts` 是上游 `packages/router/src/app-stack.ts` 的移植副本**（`sync-core.sh` 逐字节
   防漂移）——本轮归入 `dev/` 并登记，**去 vendoring**（改为依赖发布包）列为后续专项。
-- **「CLI 生成宿主 / runtime 抽包」（第二刀）**：把 `runtime/` 抽成可发布单元（`packages/host-<platform>` 或
-  `platform/<端>/runtime`）、`shell/` 收敛为最小壳 + CLI 脚手架（`proteus create host`）——本刀只做**目录分层 +
-  门禁 + 止血**，为第二刀铺地基，**不抽包**。
+- **「CLI 生成宿主 / runtime 抽包」（第二刀 · 2026-10-07 鸿蒙样板已打通）**：
+  **第一刀**（目录分层 + 门禁 + 止血）见 §1–§3；**第二刀**在**鸿蒙**身上把整条模式跑通并真机验证：
+  · **runtime 抽为可依赖单元**：`hosts/harmony/host-app/proteus_render/` 是一个 **HAR** 模块
+    （`harTasks` + `module.json5 type har` + `src/main/cpp/CMakeLists.txt` 携带 C++ 源 + Rust 核）。
+    消费者经 ohpm `file:` 依赖引入，hvigor 跨模块 native 聚合（`PACKAGE_FIND_FILE` → `find_package`）
+    编译/链接并打进自己的 HAP（**本仓首次实测 HAR-native 跨模块编译**）。
+  · **最小壳**：`templates-host/harmony`——`EntryAbility` 只做"加载页 + 把真实 Ability 生命周期交给 runtime
+    （`hostRtShellEvent`）+ 上报 `PROTEUS_HOST_READY`"；`MainPage` 只做"读 rawfile 编译产物 →
+    `appScreenCommands` → `renderCommands`"。**壳里零项目身份**（无 superapp / dev 装置）。
+  · **CLI**：`proteus create host harmony <dir>`（生成最小宿主工程：模板 + runtime HAR 同源复制 + 拷产物）·
+    `proteus build --target harmony --package --host-dir <dir>`（编译产物 → hvigorw 打包 .hap）。
+  · **真机判据**：生成的独立工程 zero-device 构建出 `.hap`（`ohpm install` + `hvigorw assembleHap`），
+    装机（复用本机华为 CA 签名）→ 启动 → 渲染项目真实内容（`HOST_PAGE_RENDER page=index nodes_rendered=73`）。
+  ★**只做鸿蒙样板**：Android（AAR）/ iOS（SwiftPM）抽包按同一套复制，**留下一轮**（Android 93 处可见性 +
+  iOS 混装文件拆分各是一摊）。★runtime 的**发布形态**仍是"从框架 checkout 同源复制"（可注入
+  `PROTEUS_HOST_RUNTIME_DIR`）；拆成独立发布包（`@proteus-vue/host-runtime-harmony`）列为后续。
 - 分层**不改任何运行期行为**：只搬文件 + 改编译源清单，三端零设备编译 + 一次真实构建截图黑盒验证。

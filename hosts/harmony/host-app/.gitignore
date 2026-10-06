@@ -1,12 +1,18 @@
 /node_modules
-/oh_modules
 /local.properties
 /.idea
 **/build
-/.hvigor
-/.cxx
 /.clangd
 /.clang-format
 /.clang-tidy
 **/.test
 /.appanalyzer
+
+# ★★关注点分层（2026-10-07）：撤掉**锚定 `/`**（只匹配本目录根）——那会让**子模块**（HAR `proteus_render/`）
+#   的同类产物漏忽略。改为**任意层级**匹配（`**/`），覆盖 host-app 与各子模块。
+#   （本项目现有模块：entry（HAP）+ proteus_render（HAR）——新增模块无需再改本文件。）
+**/oh_modules
+**/.hvigor
+**/.cxx
+# DevEco 构建期自动生成的类型桥（非手写源）
+**/BuildProfile.ets

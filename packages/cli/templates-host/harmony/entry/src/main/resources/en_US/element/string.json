@@ -1,0 +1,7 @@
+{
+  "string": [
+    { "name": "module_desc", "value": "{{appName}} (Proteus minimal host entry)" },
+    { "name": "EntryAbility_desc", "value": "{{appName}} host entry ability" },
+    { "name": "EntryAbility_label", "value": "{{appName}}" }
+  ]
+}

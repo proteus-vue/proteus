@@ -14,7 +14,7 @@ generated: true
 ### `proteus build`
 
 ```bash
-proteus build <dir> [--out <dir>] [--debug] [--no-px2rpx] [--rpx-ratio <n>] [--rules <json>] [--compiler <node|rust>] [--target <web|skyline|ios|android|harmony|all>]
+proteus build <dir> [--out <dir>] [--debug] [--no-px2rpx] [--rpx-ratio <n>] [--rules <json>] [--compiler <node|rust>] [--target <web|skyline|ios|android|harmony|all>] [--package --host-dir <dir>]
 ```
 
 扫描 <dir> 下所有 .vue，编译为小程序四件套（.wxml / .js / .wxss）到 <out>
@@ -22,6 +22,7 @@ proteus build <dir> [--out <dir>] [--debug] [--no-px2rpx] [--rpx-ratio <n>] [--r
       --rules    JSON 规则覆盖文件（disabled / mapping / customTags）
       --compiler 编译器后端（G-29）：node（缺省）/ rust（每页 Node/Rust 双编译语义等价校验，G-29.1）
       --target   工程构建（G-33 M2）：web/skyline（复用 Vite 管线）· ios/android/harmony（App 屏内容：路由 → SFC → 编译器）· all（逐端全构建）；缺省 = 独立编译
+      --package  （hosts 第二刀）harmony：编译后拷产物进宿主工程并调 hvigorw 打成 .hap（--host-dir 指定宿主工程，缺省读 PROTEUS_HOST_DIR）
 
 ### `proteus dev`
 
@@ -30,6 +31,16 @@ proteus dev [--target <web|skyline>]
 ```
 
 开发服务器（G-33 M1）：web → vite --mode web；skyline → dev-mp watch 构建（app 端待 M3 原生同步）
+
+### `proteus create`
+
+```bash
+proteus create host <platform> <dir> [--name <应用名>] [--bundle <包名>] [--project <项目根>]
+```
+
+★hosts 第二刀 Stage 2（宿主/项目分离）：生成**独立可编译的最小宿主工程**（壳 + runtime HAR 依赖）
+      platform 目前支持 harmony；生成含 AppScope / entry（最小壳）/ proteus_render（runtime HAR）/ proteus.host.json
+      --name 应用名 · --bundle 包名（缺省 com.example.<slug>）· --project 项目根（有 dist/app/<platform>/ 则拷编译产物进 rawfile）
 
 ## 检查与门禁
 

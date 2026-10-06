@@ -1,0 +1,6 @@
+{
+  "platform": "harmony",
+  "bundleName": "{{bundleName}}",
+  "entryModule": "entry",
+  "screenContentRawfile": "entry/src/main/resources/rawfile/app-screen-content.json"
+}

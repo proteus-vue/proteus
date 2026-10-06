@@ -1,0 +1,6 @@
+{
+  "modelVersion": "5.0.0",
+  "description": "{{appName}} —— Proteus 最小鸿蒙宿主（仅依赖 proteus_render runtime）",
+  "dependencies": {},
+  "devDependencies": {}
+}
