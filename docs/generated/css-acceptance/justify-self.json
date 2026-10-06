@@ -2,7 +2,7 @@
   "_note": "★CSS 能力逐项验收包（用户指定流程：实现一个 → 全端对齐视觉验收一个）。gates：implemented（IR 在册）/ parity（真 Chromium 同构样本与 CSE 值一致）/ endsMapped（三端可表达）。★视觉验收（像素级）仍由独立子代理按 Web 基准并排做——本包只归档**机器可判**的三段；pass=true 表示\"可以进入视觉验收\"，不等于\"视觉已验收\"。",
   "id": "justify-self",
   "kind": "property",
-  "verifiedAt": "2026-10-06T01:12:07.913Z",
+  "verifiedAt": "2026-10-06T01:23:41.093Z",
   "implEvidence": {
     "impl": "implemented",
     "implNote": "IR 注册表在册（scope=semantic · 矩阵 JustifySelf）",
@@ -72,7 +72,7 @@
   "nextStep": "机器判据三段已过 → 进入**视觉验收**：生成并排产物（node scripts/gen-baseline-side-by-side.mjs）+ 独立子代理按 Web 基准评审",
   "visual": {
     "_note": "★视觉验收结论（独立子代理按 Web 基准并排图评审；来源 = css-conformance/results/side-by-side/）。verdict: pass（与 Web 基准无可归因差异）/ fail（有实差异——见 caseIssues）/ unclear（图不足以判）。纪律：左半恒为 Web 基准（D1）；不看不清不编（unclear）。",
-    "reviewedAt": "2026-10-06T01:12:04.046Z",
+    "reviewedAt": "2026-10-06T01:23:39.803Z",
     "reviewedBy": "independent-visual-subagent",
     "sideBySideDir": "css-conformance/results/side-by-side/",
     "summary": {
@@ -84,25 +84,25 @@
         "end": "mp",
         "verdict": "pass",
         "caseIssues": [],
-        "evidence": "右半(mp)五案徽章均靠轨道左缘：A「已绑」左、B「进行中」左、C「失败」左、D「待审」左、E「归档」左。A/D/E 与 Web 一致(本就靠左)；B(center)/C(end) 呈靠左，属已知具名边界——Skyline 微信容器无 Grid 容器/justify-self 属性，引擎锁死，非缺陷。除该具名边界外无其他差异。"
+        "evidence": "Web 基准：A 左 / B 居中 / C 右缘 / D flex 左 / E auto 左。MP 右图：A 靠轨道左缘（=Web）；D『待审』靠左（=Web，flex 忽略）；E『归档』靠左（=Web）。B『进行中』与 C『失败』呈现靠左，与 Web 的居中/靠右不同——此为已具名引擎锁死边界：Skyline 无 Grid 容器（官方表无 grid/justify-self），非缺陷。所有徽章内文字水平+垂直居中，无溢出/错位/缺失。"
       },
       {
         "end": "android",
         "verdict": "pass",
         "caseIssues": [],
-        "evidence": "右半(android)与左半 Web 逐案位置一致：A「已绑」靠左、B「进行中」居中、C「失败」靠右、D「待审」靠左、E「归档」靠左。无溢出/错位/缺失。"
+        "evidence": "Web 基准：A 左 / B 居中 / C 右缘 / D flex 左 / E auto 左。Android 逐案一致：A 靠左缘；B 水平居中；C 靠右缘；D 靠左（flex 忽略）；E 靠左（auto）。徽章文字居中，无溢出/错位/缺失。B/C 正确 ⇒ justify-self 生效。"
       },
       {
         "end": "ios",
         "verdict": "pass",
         "caseIssues": [],
-        "evidence": "右半(ios)与左半 Web 逐案位置一致：A「已绑」靠左、B「进行中」居中、C「失败」靠右、D「待审」靠左、E「归档」靠左。D(flex 忽略)与 E(auto 回落)均正确靠左，无溢出/错位/缺失。"
+        "evidence": "Web 基准：A 左 / B 居中 / C 右缘 / D flex 左 / E auto 左。iOS 逐案一致：A 靠左缘；B 水平居中；C 靠右缘；D 靠左（flex 忽略）；E 靠左（auto）。徽章文字居中，无溢出/错位/缺失。B/C 正确 ⇒ justify-self 生效。"
       },
       {
         "end": "harmony",
         "verdict": "pass",
         "caseIssues": [],
-        "evidence": "右半(harmony)与左半 Web 逐案位置一致：A「已绑」靠左、B「进行中」居中、C「失败」靠右、D「待审」靠左、E「归档」靠左。无溢出/错位/缺失。"
+        "evidence": "Web 基准：A 左 / B 居中 / C 右缘 / D flex 左 / E auto 左。Harmony 逐案一致：A 靠左缘；B 水平居中；C 靠右缘；D 靠左（flex 忽略）；E 靠左（auto）。徽章文字居中，无溢出/错位/缺失。B/C 正确 ⇒ justify-self 生效。"
       }
     ]
   }

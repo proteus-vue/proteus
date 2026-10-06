@@ -90,6 +90,11 @@ node scripts/css-acceptance-record.mjs <feature-id> <verdicts.json>
 - **壳容器不得声明页面观感属性**（背景/前景）：scoped 规则特异性高于页面类 ⇒ 会覆盖页面底色
   （本轮 Web 基准 `.page{background:transparent}` 压掉 `.cc-page` 的 bg 的根因）。
 - **页根要显式 `width:100%`**：App 内核按 fit-content 解析无宽度声明的块 ⇒ 卡片右边界错位。
+- **★靠 flex 两轴对齐的容器必须显式 `display:flex`**（2026-10-06 justify-self 项用户抓出）：
+  `<view>` 在 Web 侧默认 **block**（`align-items`/`justify-content` 对 block 无效 ⇒ 子内容贴左上），
+  而 App/Skyline 的 `<view>` 默认 **flex**（两键生效 ⇒ 居中）⇒ 不声明会让五端「容器内对齐」不一致。
+  ★同源纪律（与"缺省值必须查 Web 标准"一致）：**凡依赖非缺省 `display` 的布局，先确认各端默认 display 是否一致**——
+  `<view>`/`div` 的 block↔flex 默认分歧是本仓跨端差异的一个常见源。
 - **整像素取整宁多勿少**：`(int32_t)` 截断丢 1px（鸿蒙右缘缝）；画布 `ceil`、视口钳到精确宽。
 - **模块级常量会静默失效**：ESM 只求值一次 ⇒ 按环境/参数变化的白名单要**函数内求值**。
 - **两处消费同一语义必须同步**：如「wrap 判据」在 `mkCmd`（绘制）与 `remeasure`（测量）各一份 ⇒

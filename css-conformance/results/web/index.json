@@ -7,7 +7,7 @@
     },
     "dpr": 2,
     "theme": "light",
-    "collectedAt": "2026-10-06T00:38:59.589Z"
+    "collectedAt": "2026-10-06T01:18:55.296Z"
   },
   "pages": {
     "border-style": {
@@ -1159,7 +1159,7 @@
           "child": {
             "tag": "div",
             "computed": {
-              "display": "block",
+              "display": "flex",
               "position": "static",
               "width": "80px",
               "height": "32px",
@@ -1292,7 +1292,7 @@
           "child": {
             "tag": "div",
             "computed": {
-              "display": "block",
+              "display": "flex",
               "position": "static",
               "width": "80px",
               "height": "32px",
@@ -1425,7 +1425,7 @@
           "child": {
             "tag": "div",
             "computed": {
-              "display": "block",
+              "display": "flex",
               "position": "static",
               "width": "80px",
               "height": "32px",
@@ -1558,7 +1558,7 @@
           "child": {
             "tag": "div",
             "computed": {
-              "display": "block",
+              "display": "flex",
               "position": "static",
               "width": "80px",
               "height": "32px",
@@ -1691,7 +1691,7 @@
           "child": {
             "tag": "div",
             "computed": {
-              "display": "block",
+              "display": "flex",
               "position": "static",
               "width": "80px",
               "height": "32px",
