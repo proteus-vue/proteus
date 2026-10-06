@@ -15,6 +15,8 @@ if(DEFINED PACKAGE_FIND_FILE)
 endif()
 
 include_directories(${NATIVERENDER_ROOT_PATH})
+# ★HA0.5：平台适配层（文本度量/字体——换壳不改；platform/harmony/proteus_text_platform.h）
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../../../../../../platform/harmony/proteus-platform/src/main/cpp)
 
 # ★Rust 排版核（runtime 属性——宿主桥用它建树/动画；由 hosts/harmony/build-rust-core.sh 交叉编译到此目录）
 set(RUST_LIB ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/libproteus_layout_core.a)
