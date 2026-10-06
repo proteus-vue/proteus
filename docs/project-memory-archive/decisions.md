@@ -1732,3 +1732,14 @@
 **⑤ 教训（复述强化）**：a) **抽取的"零行为变化"要能证明**——鸿蒙这次用**逐字 diff**（比 Android 的逐像素更直接）；**能证明就别只声称**；b) **"能独立抽的层"逐端抽**（三端都是"文本度量/字体"，绘制留宿主）；c) **门禁/契约测试跟着覆盖面走**（加一节端，判据/测试同步加一节）。
 **⑥ 诚实边界**：**绘制执行三端都在宿主**（载体是平台 View/layer，具名）· **HA4 iOS 侧仍 `nil`**（无生产原生组件消费者）⇒ HA4 整行仍 `范围外`；**HA0.5（平台分层）已三端收口**。
 
+613. **★CSE 主线收口——vw/vh 验收补探针 + grid 放置/轨道补齐三端映射（挖出两个 applier 真缺陷）（★用户 2026-10-08「继续 cse主线吧，上次那个 vw-vh 其实是测试没问题了」）**：
+**① 背景**：CSE 主线（G-61）B0–B5 全 ✅，持续推进 = **逐项 4 端对齐**（装置 `verify-css-feature.mjs`，例：`css:next` = 取下一项；记录落 `docs/generated/css-acceptance/*.json`）。★注意：`--next`/inventory 的 **P0 已清零**（actionableP0=0）——推进是"被点名的项"驱动（非自动取下一个），本项即用户点名的 **vw/vh**。
+**② 逐项复评 48 项 ⇒ 3 项红，逐条定位**：
+- **vw / vh**（verdict: parity=false）：**实现（#595 Stage 2：编译期折 `--pf-vw`/`--pf-vh`）在，但验收缺 parity 探针** ⇒ blocked。补探针：给定 viewport 390×844，CSE 折 `10vw=39` / `100vh=844`（与浏览器 used-value 同值）⇒ **两项验收通过**。★用户直觉正确——"功能没问题"，是**测试装置没登记样本**。
+- **grid-column / grid-template-columns**：parity 过、**endsMapped 失败** ⇒ 挖出**两个 applier 真缺陷**：a) **App applier**：`gridColumn`/`gridRow` 的映射分支在"结构化族"，但它们的值是**字符串** ⇒ 先被**字符串区**（未登记 ⇒ drop）捕获 ⇒ **该分支不可达、静默丢弃**（`grid-area` 因在同区的字符串分支而幸免——正是它们能过而 grid-column 不能过的原因）⇒ 移到字符串区（`dto` + `ops layout.*`）；b) **Skyline applier**：`grid-area`/`grid-template-areas`/`grid-auto-*`（#570/#571）已**透传**，而 line-based 的 `grid-template-columns/rows`、`grid-column/row` **仍 drop**（#570/#571 未收全）⇒ 统一为透传（Skyline 无 Grid 容器，透传=逐字进 wxss，语义由 App 内核承担；诚实边界同 #570/#571）。
+- **background**：陈旧记录（inventory 已改"简写展开"）⇒ 重跑即过，**非缺陷**。
+**③ ★测试口径同步**：`appliers-conformance.test.ts ④` 断言"Skyline 应拒 grid"是 **B3（2026-10-05）口径**，已被 #570/#571 的方向取代——该测试此前**靠 `grid-template-columns` 仍被 drop 而"蒙过"**（断言用 startsWith('grid') 命中它）⇒ 补透传后暴露 ⇒ 更新为"grid 族透传"。★**教训**：**测试的通过可能是"另一个被 drop 的字段"在顶**（断言过宽 ⇒ 掩盖口径漂移）。
+**④ 验收**：css-acceptance **48/48 pass**（此前 45/48）· vue-tsc 0 · 一致性 62 测试绿 · `check:style-coverage`/`css-capability-alignment`/`style-ir-schema`/`app-css-surface` ✅ · test:coupled 绿。
+**⑤ ★教训（可执行）**：a) **"验收红"要逐条归因**——三种成因（缺探针 / 真缺陷 / 陈旧记录）处置不同，别一律当"未实现"；b) **一个字段在多个类型分支里时，顺序决定可达性**（字符串值必须先于结构化分支被处理——否则分支成死代码而**编译不报错**）；c) **口径迁移（B3→#570/#571）要连测试断言一起迁移**，否则旧断言靠"另一个未迁移字段"继续假绿；d) **P0 清零 ≠ 无事可做**——剩余是"点名项 + 未登记探针的项"。
+**⑥ 诚实边界**：Skyline 无 Grid 容器（透传为"逐字进 wxss"，不保证该端引擎语义——App 为主承载端）；grid 族真机像素验收仍待独立子代理（本包只归档机器判据三段）；再往后的 CSE 推进需用户点名或补更多探针。
+
