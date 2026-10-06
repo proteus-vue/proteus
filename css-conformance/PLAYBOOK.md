@@ -148,6 +148,12 @@ node scripts/css-acceptance-record.mjs <feature-id> <verdicts.json>
 - **★MP 截图到达判据：`automation_runtime_info` 现须显式 `--action`（2026-10-08 修）**：
   缺 `--action` 时该工具返 `INPUT_ERROR`（此前可无参调用）⇒ 旧探针 `grep "currentPage 名"` **永不命中** ⇒ 每页白等 30s 超时后才截图。
   改 `--action currentPage` 并按 **`"route": "/pages/<name>"`** 判到达。★同源：**外部 CLI 的参数契约会演进**——探针命中不了先查工具自身用法（`-h`），别默认页面没到。
+- **★★★CSS 数学函数 `min()/max()/clamp()` 常量化只在「全参数可绝对化」时成立（2026-10-08 数学函数项）**：
+  `clamp(MIN,VAL,MAX) = max(MIN, min(VAL, MAX))`。全参数为**编译期绝对长度**（`<n>px`/裸 0/`calc(...)`/嵌套数学）⇒ 可折单 px；
+  含 `%`/`vw`/`vh`/`em`/unitless ⇒ 浏览器在 **used-value 阶段**按容器/视口求解，编译期**无上下文**（本仓 App/MP 的相对长度模型是**运行时 ratio**）⇒ **不折**（诊断，不静默近似）。
+  ★**两路径必须同口径**：CSE（`computeLength`/`resolveWinner`）与 App 折叠面（`numOf`/`parseLineHeight`）若一处折、一处不折 ⇒ App/Web 分叉。
+  ★★踩坑：`resolveWinner` 里**先做了 `foldCalc`**（`calc(N op M)` 常量化）——`min(calc(...),X)` 含 `calc(` 但非纯 calc ⇒ 被判 UNSUPPORTED。**数学函数必须在校验前拦截**（先折数学，再折 calc）。
+  ★同源纪律：**"编译期可求"的判据是"有没有上下文"**——`calc`/`min`/`max`/`clamp` 同阶段；相对单位（%/vw/em）一律留运行时（本仓 ratio 通道）。
 - **★★★宿主长度字段的"物理化"必须覆盖**字符串 token**（不止数值字段）——`lineHeight` 曾漏（2026-10-08 用户抓出「安卓 view 不随内容自动增高」）**：
   Android `VaporRenderHost.physicalizeSpec` 有 `LEN_SCALARS`（数值长度字段清单，×density）——但 **`lineHeight` 是字符串 token**（``"20px"`` / 无单位 ``"1.5"``），
   不在该清单 ⇒ 字号已 ×density（42）而行高仍留在**逻辑**空间（20）⇒ 文本节点**测量高度只有真实的 1/density** ⇒ 内核盒被算小、`<view>` 不随内容增高、文字溢出盒外。

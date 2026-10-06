@@ -469,16 +469,20 @@ const atRules = Object.keys(mdnAtRules).map((k) => ({
   priority: ['@layer', '@keyframes'].includes(k) ? 'done' : ['@supports', '@media'].includes(k) ? 'P0' : 'P1',
   acceptance: 'none',
 }))
+const MATH_FNS = ['min()', 'max()', 'clamp()']
 const functions = Object.keys(mdnFunctions).map((k) => ({
   id: k,
   kind: 'function',
   mdnStatus: mdnFunctions[k].status ?? 'standard',
   syntax: mdnFunctions[k].syntax ?? null,
-  impl: ['var()', 'calc()'].includes(k) ? 'partial' : 'not-started',
-  implNote: k === 'var()' ? 'CSE 支持（含 fallback/嵌套）' : k === 'calc()' ? 'CSE 仅单层同单位加减（v1）' : '',
-  evidencedBy: { inIrRegistry: false, irScope: null, inCompilerFold: false, matrixLevel: null, webSupport: null },
+  // ★★★数学函数项（2026-10-08 · css:next P0）：min()/max()/clamp() 已实现（CSE + 折叠面**px-only** 常量化）
+  impl: MATH_FNS.includes(k) ? 'implemented' : ['var()', 'calc()'].includes(k) ? 'partial' : 'not-started',
+  implNote: MATH_FNS.includes(k)
+    ? 'CSE + App 折叠面**px-only** 常量化（全参数绝对化 ⇒ 折单 px；含 %/vw ⇒ 诊断不静默丢）'
+    : k === 'var()' ? 'CSE 支持（含 fallback/嵌套）' : k === 'calc()' ? 'CSE 仅单层同单位加减（v1）' : '',
+  evidencedBy: { inIrRegistry: false, irScope: null, inCompilerFold: MATH_FNS.includes(k), matrixLevel: null, webSupport: null },
   usage: 0,
-  priority: ['calc()', 'var()', 'min()', 'max()', 'clamp()'].includes(k) ? 'P0' : 'P1',
+  priority: MATH_FNS.includes(k) ? 'done' : ['calc()', 'var()'].includes(k) ? 'P0' : 'P1',
   acceptance: 'none',
 }))
 const units = Object.keys(mdnUnits).map((k) => ({

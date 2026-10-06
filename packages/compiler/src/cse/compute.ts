@@ -362,6 +362,56 @@ export type LengthResult =
   | { ratio: number; base: 'parentWidth' | 'parentHeight' | 'viewportWidth' | 'viewportHeight' | 'fontSize' | 'rootFontSize' }
   | { keyword: string }
 
+/** 顶层逗号切分（括号感知；`min(a, b)` / `clamp(a, b, c)` 用） */
+function splitTopLevelCommas(s: string): string[] {
+  const out: string[] = []
+  let d = 0
+  let cur = ''
+  for (const ch of s) {
+    if (ch === '(') d++
+    else if (ch === ')') d--
+    if (ch === ',' && d === 0) { out.push(cur); cur = ''; continue }
+    cur += ch
+  }
+  out.push(cur)
+  return out
+}
+
+/** ★min()/max()/clamp() 单值求值（**px-only**）：参数须全为 `<n>px`（裸 `0` / `calc(...)` → px / 嵌套数学）；
+ *   否则 undefined（不猜——`%`/`vw`/unitless 不可编译期绝对化）。与 vapor 折叠面 numOf 同口径。 */
+function evalMathPx(t: string): number | undefined {
+  const s = t.trim()
+  const px = /^(-?\d*\.?\d+)px$/i.exec(s)
+  if (px) return Number(px[1])
+  if (/^-?0(\.0+)?$/.test(s)) return 0
+  if (/^calc\(/i.test(s)) {
+    const c = foldCalc(s)
+    if (c === null) return undefined
+    const cm = /^(-?\d*\.?\d+)px$/.exec(c)
+    return cm ? Number(cm[1]) : undefined
+  }
+  const fm = /^(min|max|clamp)\(([\s\S]*)\)$/i.exec(s)
+  if (fm) {
+    const args = splitTopLevelCommas(fm[2]!).map((x) => evalMathPx(x))
+    if (args.some((x) => x === undefined)) return undefined
+    const n = args as number[]
+    const fn = fm[1]!.toLowerCase()
+    if (fn === 'clamp' && n.length !== 3) return undefined
+    if (fn === 'min') return Math.min(...n)
+    if (fn === 'max') return Math.max(...n)
+    return Math.max(n[0]!, Math.min(n[1]!, n[2]!)) // clamp(min, val, max)
+  }
+  return undefined
+}
+
+/** ★★★min()/max()/clamp() → `<n>px` token（2026-10-08 · css:next P0）；非数学函数 ⇒ undefined；
+ *   数学函数但参数不可绝对化 ⇒ null（调用方记 UNSUPPORTED，诚实不猜）。 */
+export function foldMathPx(v: string): string | undefined | null {
+  if (!/^(min|max|clamp)\(/i.test(v.trim())) return undefined
+  const n = evalMathPx(v)
+  return n === undefined ? null : `${n}px`
+}
+
 /** 长度 token → 绝对 px（可绝对化时）或 ratio（不可绝对化时）或关键字；不认识 ⇒ null */
 export function computeLength(prop: string, raw: string, ctx: LengthResolveCtx): LengthResult | null {
   const v = raw.trim().toLowerCase()
@@ -369,6 +419,8 @@ export function computeLength(prop: string, raw: string, ctx: LengthResolveCtx):
   if (v === 'auto') return { keyword: 'auto' }
   if (v === 'content') return { keyword: 'content' }
   if (['none', 'normal', 'max-content', 'min-content', 'fit-content', 'stretch'].includes(v)) return { keyword: v }
+  // ★★★min()/max()/clamp()（2026-10-08 · css:next P0）：px-only 常量化（否则不猜、走原逻辑判定为无效）
+  { const mt = foldMathPx(v); if (typeof mt === 'string') return { px: Number(mt.slice(0, -2)) } }
   const m = /^(-?\d*\.?\d+)([a-z%]*)$/.exec(v)
   if (!m) return null
   const n = Number(m[1]!)
@@ -500,9 +552,19 @@ export function computeTree(roots: CseNode[], sheet: CseStyleSheet, opts: Comput
     const resolveWinner = (prop: string, w: CseWinner): CssComputedValue | 'UNSUPPORTED' | 'INVALID' | null => {
       let raw = substituteVars(w.value, vars)
       if (raw === null) return 'INVALID'
-      const calc = foldCalc(raw)
-      if (calc === null) return 'UNSUPPORTED'
-      raw = calc
+      // ★★★min()/max()/clamp()（2026-10-08）：先于 foldCalc 常量化——否则 `min(calc(...), X)` 被 foldCalc
+      //   判「含 calc 但非纯 calc」⇒ UNSUPPORTED（实测盲区）。px-only 折为 token；含相对单位 ⇒ UNSUPPORTED。
+      {
+        const mt = foldMathPx(raw)
+        if (mt === null) return 'UNSUPPORTED'
+        if (typeof mt === 'string') {
+          raw = mt
+        } else {
+          const calc = foldCalc(raw)
+          if (calc === null) return 'UNSUPPORTED'
+          raw = calc
+        }
+      }
       const low = raw.trim().toLowerCase()
       // CSS 宽关键字
       if (low === 'inherit') {

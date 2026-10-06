@@ -287,6 +287,23 @@ describe('★★★G-61 B1 · CSE 计算值', () => {
     expect(r.diagnostics.some((d) => d.code === 'CSE_VALUE_UNSUPPORTED')).toBe(true)
   })
 
+  it('★★★min()/max()/clamp() 常量化（2026-10-08 · css:next P0）——全参数绝对化 ⇒ 折 px；含相对单位 ⇒ 诊断（不静默丢）', () => {
+    const n = node('div', ['a'])
+    const r = compute(
+      '.a { width: clamp(100px, 150px, 200px); min-height: min(80px, 120px); padding-top: max(4px, 8px) }',
+      n,
+    )
+    const f = r.byKey[n.key]!.fields
+    expect(f['width']).toEqual({ kind: 'absolute', dp: 150 })   // clamp(100,150,200) = 150
+    expect(f['minHeight']).toEqual({ kind: 'absolute', dp: 80 })  // min(80,120) = 80
+    expect(f['paddingTop']).toEqual({ kind: 'absolute', dp: 8 }) // max(4,8) = 8
+    // 嵌套 calc / 嵌套 min 亦可折
+    const r2 = compute('.a { width: min(calc(10px + 5px), 40px) }', node('div', ['a']))
+    expect(Object.values(r2.byKey)[0]!.fields['width']).toEqual({ kind: 'absolute', dp: 15 })
+    // 含相对单位（% / vw）⇒ UNSUPPORTED（诚实不猜——与浏览器 used-value 不同阶段）
+    const r3 = compute('.a { width: clamp(64px, 22%, 132px) }', n)
+    expect(r3.diagnostics.some((d) => d.code === 'CSE_VALUE_UNSUPPORTED')).toBe(true)
+  })
   it('var 替换函数独立语义（含 fallback 与嵌套）', () => {
     const vars = new Map([['--a', '#fff'], ['--b', 'var(--a)']])
     expect(substituteVars('var(--a)', vars)).toBe('#fff')

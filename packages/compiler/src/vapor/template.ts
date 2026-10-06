@@ -362,6 +362,11 @@ const kebabToCamel = (s: string): string => s.replace(/-([a-z])/g, (_, c: string
 function parseLineHeight(raw: string): string | null {
   const v = raw.trim().toLowerCase()
   if (v === 'normal' || v === '') return null
+  // ★★★min()/max()/clamp()（2026-10-08）：先折为 `<n>px` 再走既有 token 归一（px-only）
+  if (/^(min|max|clamp)\(/i.test(v)) {
+    const n = numOfMathFn(v)
+    return n === undefined ? null : `${n}px`
+  }
   const pct = /^(\d+(?:\.\d+)?)%$/.exec(v)
   if (pct) return String(Number(pct[1]) / 100)
   if (/^\d*\.?\d+px$/.test(v)) return v
@@ -2509,6 +2514,49 @@ export function stripScopeSuffix(name: string): string {
   return name.replace(/-data-v-[A-Za-z0-9]+$/, '')
 }
 
+/** 顶层逗号切分（括号感知；`min(a, b)` / `clamp(a, b, c)` 用） */
+function splitTopLevelCommas(s: string): string[] {
+  const out: string[] = []
+  let d = 0
+  let cur = ''
+  for (const ch of s) {
+    if (ch === '(') d++
+    else if (ch === ')') d--
+    if (ch === ',' && d === 0) { out.push(cur); cur = ''; continue }
+    cur += ch
+  }
+  out.push(cur)
+  return out
+}
+
+/** ★min()/max()/clamp() 单值求值（**px-only**，与 CSE 折叠面 evalMathPx 同口径）：参数须全为 `<n>px`
+ *   （裸 0 / calc(...)→px / 嵌套数学）；否则 undefined（不猜——`%`/`vw`/unitless 不可编译期绝对化）。 */
+function evalMathPx(t: string): number | undefined {
+  const s2 = t.trim()
+  const px = /^(-?\d*\.?\d+)px$/i.exec(s2)
+  if (px) return Number(px[1])
+  if (/^-?0(\.0+)?$/.test(s2)) return 0
+  if (/^calc\(/i.test(s2)) return foldCalc(s2)
+  const m = /^(min|max|clamp)\(([\s\S]*)\)$/i.exec(s2)
+  if (m) {
+    const args = splitTopLevelCommas(m[2]!).map((x) => evalMathPx(x))
+    if (args.some((x) => x === undefined)) return undefined
+    const n = args as number[]
+    const fn = m[1]!.toLowerCase()
+    if (fn === 'clamp' && n.length !== 3) return undefined
+    if (fn === 'min') return Math.min(...n)
+    if (fn === 'max') return Math.max(...n)
+    return Math.max(n[0]!, Math.min(n[1]!, n[2]!)) // clamp(min, val, max)
+  }
+  return undefined
+}
+
+/** ★★★min()/max()/clamp() → 数值（2026-10-08 · css:next P0）；非数学函数 ⇒ undefined。px-only（与 CSE 同口径）。 */
+function numOfMathFn(s: string): number | undefined {
+  if (!/^(min|max|clamp)\(/i.test(s.trim())) return undefined
+  return evalMathPx(s)
+}
+
 /** `56px` / `56` / `0.5` → 数值；`50%` / `auto` → undefined（百分比**宽高**在调用处另行映射为 widthRatio/heightRatio；其余属性的百分比仍不支持，见诊断） */
 function numOf(v: string): number | undefined {
   const s = v.trim()
@@ -2516,6 +2564,8 @@ function numOf(v: string): number | undefined {
   //   `calc(var(--u) * 1.15)` 的 var() 已在解析前置换 ⇒ 此处对已知常量的算术求值（无 % / 相对单位时）。
   //   组件库 64 处 `calc(var(--x) * N)` 依赖它（间距/字号刻度）。
   if (/^calc\(/i.test(s)) return foldCalc(s)
+  // ★★★min()/max()/clamp()（2026-10-08）：数学函数常量化（全参数可折 ⇒ 数值；含 %/vw ⇒ undefined 诊断跳过）
+  if (/^(min|max|clamp)\(/i.test(s)) return numOfMathFn(s)
   // ★批次 21（多端一致 · 以 MP 为基准）：`rpx`（小程序 750 设计单位）⇒ px。
   //   比例 0.5（1rpx = 0.5px）＝ 与 `rpxRatio:2`（px→rpx）互为逆——本仓 UA 基础样式即按此书写
   //   （`h1: font-size:64rpx` = 32px）。此前 App 折叠**丢弃 rpx** ⇒ 真实项目（125 处）失样式。
