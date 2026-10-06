@@ -58,6 +58,8 @@ export default defineConfig({
       { find: '@proteus-vue/contracts/style-ir-registry.generated', replacement: fileURLToPath(new URL('./packages/contracts/src/style-ir-registry.generated.ts', import.meta.url)) },
       { find: '@proteus-vue/contracts/style-ir-values', replacement: fileURLToPath(new URL('./packages/contracts/src/style-ir-values.ts', import.meta.url)) },
       { find: '@proteus-vue/contracts/style-applier', replacement: fileURLToPath(new URL('./packages/contracts/src/style-applier.ts', import.meta.url)) },
+      // ★★★内置环境变量契约（2026-10-08 · 决策 #593）
+      { find: '@proteus-vue/contracts/env-vars', replacement: fileURLToPath(new URL('./packages/contracts/src/env-vars.ts', import.meta.url)) },
       { find: '@proteus-vue/contracts/style-ir-canonical', replacement: fileURLToPath(new URL('./packages/contracts/src/style-ir-canonical.ts', import.meta.url)) },
       { find: '@proteus-vue/contracts', replacement: fileURLToPath(new URL('./packages/contracts/src/index.ts', import.meta.url)) },
       // ★子路径 alias 必须在父路径之前（vite alias 前缀匹配：@proteus-vue/runtime 会吞掉 /style-safety 后缀）

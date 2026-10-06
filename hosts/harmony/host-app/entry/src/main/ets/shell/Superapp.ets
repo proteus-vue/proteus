@@ -47,6 +47,8 @@ struct Superapp {
   private imUnread: number = 3;
   /** 底部安全区高度（vp；手势条）——并入 Tab 栏高度（见 build），白底铺到屏底 */
   private safeBottom: number = 0;
+  /** ★★★内置环境变量表（2026-10-08 · 决策 #593）：--pf-* → vp（逻辑像素），由 avoidArea 采集。 */
+  private envVars: Record<string, number> = {};
   /** ★★★鸿蒙滚动对齐（2026-10-05 · 用户抓出「内容变长后看不到下面」）：滚动状态。
    *   与 Android `enableContentScrollRange` / iOS `contentScrollRangeEnabled` **同语义**：
    *   内容装不下才滚、最多滚到内容底（range = max(0, 内容高 − 视口高)）。
@@ -97,6 +99,43 @@ struct Superapp {
         const avoid: window.AvoidArea = win.getWindowAvoidArea(window.AvoidAreaType.TYPE_SYSTEM);
         const h: number = px2vp(avoid.bottomRect.height);
         if (h > 0) this.safeBottom = h;
+        // ★★★内置环境变量采集（决策 #593 · 文档坑 P1/P2）：TYPE_SYSTEM 沉浸式下底部可能为 0 ⇒
+        //   底部总避让 = TYPE_SYSTEM.bottomRect + TYPE_NAVIGATION_INDICATOR.bottomRect（**加而非取其一**）；
+        //   返回值为 **px 物理像素** ⇒ 必须 px2vp（否则高密度机上大 3 倍）。
+        let indicB = 0;
+        try {
+          const ind: window.AvoidArea = win.getWindowAvoidArea(window.AvoidAreaType.TYPE_NAVIGATION_INDICATOR);
+          indicB = px2vp(ind.bottomRect.height);
+        } catch (e) { /* 旧版本无该 type ⇒ 0 */ }
+        let cutT = 0, cutL = 0, cutR = 0;
+        try {
+          const co: window.AvoidArea = win.getWindowAvoidArea(window.AvoidAreaType.TYPE_CUTOUT);
+          cutT = px2vp(co.topRect.height); cutL = px2vp(co.leftRect.width); cutR = px2vp(co.rightRect.width);
+        } catch (e) { /* 未声明 metadata ⇒ 0 */ }
+        const sysTop = px2vp(avoid.topRect.height);
+        const sysB = px2vp(avoid.bottomRect.height);
+        const navB = sysB;                       // 三键导航（TYPE_SYSTEM.bottom）
+        const totalB = sysB + indicB;            // 底部总避让（含手势条）
+        const gesture = indicB > 0 && sysB === 0;
+        this.envVars = {
+          '--pf-inset-top': Math.max(sysTop, cutT),
+          '--pf-inset-bottom': totalB,
+          '--pf-inset-left': cutL,
+          '--pf-inset-right': cutR,
+          '--pf-status-bar-height': sysTop,
+          '--pf-nav-bar-height': gesture ? 0 : navB,
+          '--pf-indicator-height': gesture ? indicB : 0,
+          '--pf-nav-bar-total': totalB,
+          '--pf-cutout-top': cutT,
+          '--pf-cutout-left': cutL,
+          '--pf-cutout-right': cutR,
+          '--pf-keyboard-height': 0,
+        };
+        // I2-ALLOW: **日志读数**取整（安全区写进 hilog 供人核对——非几何换算；几何值 envVars 保留 vp 原值）
+        hilog.info(DOMAIN, TAG, 'ENV_VARS top=%{public}d bottom=%{public}d', Math.round(this.envVars['--pf-inset-top']), Math.round(totalB));
+        // ★env 采集是**异步**（getLastWindow promise）⇒ 首次 renderCurrent 时 envVars 尚空（真机实测
+        //   C++ 收到空 env 表 ⇒ env token 替换为 fallback 0）。取到后**重渲染一次**（env 生效）。
+        this.renderCurrent();
         // I2-ALLOW: **日志读数**取整（安全区高度写进 hilog 供人核对——不是几何换算；几何值
         //   this.safeBottom 保持 vp 原值，进 Tab 栏高度 .height(TAB_H + this.safeBottom)）。
         hilog.info(DOMAIN, TAG, 'SUPERAPP_SAFE_BOTTOM %{public}d', Math.round(this.safeBottom));
@@ -242,6 +281,7 @@ struct Superapp {
       const cmds: string = appScreenCommands(JSON.stringify({
         'nodes': nodes, 'density': vp2px(1), 'vpW': vpW, 'vpH': contentH,
         'page': page, 'filesDir': this.filesDir,
+        'env': this.envVars,   // ★内置环境变量（决策 #593）——宿主采集的 vp 值，C++ 侧解析 env token
       } as Record<string, Object>));
       const n: number = renderCommands(cmds);
       hilog.info(DOMAIN, TAG, 'SUPERAPP_RENDER page=%{public}s nodes_rendered=%{public}d', page, n);

@@ -1247,6 +1247,50 @@ public final class VaporRenderHost {
     /** 设置长度缩放（缺省 1 = 既有场景零行为变化） */
     public void setLengthScale(float s) { if (s > 0) lengthScale = s; }
 
+    /* ───────── ★★★内置环境变量表（2026-10-08 · 决策 #593）：`--pf-*` → 逻辑像素（dp）─────────
+     * 宿主采集平台 insets（WindowInsets）→ 归一为 dp → 本表；`physicalizeSpec` 把编译期发射的
+     * `env:<name>` token 解析成 dp（再 ×density），Stage 1 宿主侧解析（Stage 2 迁内核 env 表）。 */
+    private final java.util.Map<String, Double> envVars = new java.util.HashMap<>();
+    /** 注入环境变量表（dp 值；键 = `--pf-*`）。可在每次 mount 前调用（旋转/折叠则重排）。 */
+    public void setEnvVars(JSONObject vars) {
+        envVars.clear();
+        if (vars == null) return;
+        java.util.Iterator<String> it = vars.keys();
+        while (it.hasNext()) { String k = it.next(); envVars.put(k, vars.optDouble(k, 0)); }
+    }
+    /** 解析 `env:<name>[+N|-N][~F]` token → dp；未知名/无表项 ⇒ fallback（缺省 0）。非 token ⇒ null。 */
+    private Double resolveEnvToken(String tok) {
+        if (tok == null || !tok.startsWith("env:")) return null;
+        String rest = tok.substring(4);
+        double fallback = 0; int tilde = rest.indexOf('~');
+        if (tilde >= 0) { try { fallback = Double.parseDouble(rest.substring(tilde + 1)); } catch (Exception e) { fallback = 0; } rest = rest.substring(0, tilde); }
+        int off = 0; int end = rest.length();
+        // ★偏移符号 = 后随**数字**的 +/-（变量名自带连字符 '-'——不能见 '-' 就当分隔符）
+        for (int i = 1; i + 1 < rest.length(); i++) { char c = rest.charAt(i); if ((c == '+' || c == '-') && rest.charAt(i + 1) >= '0' && rest.charAt(i + 1) <= '9') { end = i; try { off = (c == '-' ? -1 : 1) * (int) Double.parseDouble(rest.substring(i + 1)); } catch (Exception e) { off = 0; } break; } }
+        String name = rest.substring(0, end);
+        Double base = envVars.get(name);
+        double v = (base != null ? base : fallback) + off;
+        return v;
+    }
+    /** 字符串值若是 env token ⇒ 就地替换为 dp 数值（shape-agnostic：只碰 `env:` 前缀的字符串）。 */
+    private void resolveEnvInSpec(JSONObject spec) throws Exception {
+        java.util.Iterator<String> it = spec.keys();
+        java.util.List<String> toSet = new java.util.ArrayList<>();
+        while (it.hasNext()) {
+            String k = it.next(); Object v = spec.get(k);
+            if (v instanceof String) { Double d = resolveEnvToken((String) v); if (d != null) toSet.add(k + '\u0000' + d); }
+        }
+        for (String kv : toSet) { int z = kv.indexOf('\u0000'); spec.put(kv.substring(0, z), Double.parseDouble(kv.substring(z + 1))); }
+        // 四边对象（margin/padding {top,right,bottom,left}）
+        for (String e : new String[]{"margin", "padding"}) {
+            JSONObject o = spec.optJSONObject(e); if (o == null) continue;
+            for (String side : new String[]{"top", "right", "bottom", "left"}) {
+                Object sv = o.opt(side);
+                if (sv instanceof String) { Double d = resolveEnvToken((String) sv); if (d != null) o.put(side, d); }
+            }
+        }
+    }
+
     /**
      * 标量长度字段白名单（**唯一清单**）。
      * ★比例/枚举/分数**不得入内**：flexGrow/flexShrink（比例）· widthRatio/heightRatio（比例）·
@@ -1271,7 +1315,10 @@ public final class VaporRenderHost {
 
     /** 物理化一个 spec/样式对象（原地改写；同时被 mount/updatePatches 复用——同一清单一处实现） */
     private void physicalizeSpec(JSONObject spec) throws Exception {
-        if (lengthScale == 1f || spec == null) return;
+        if (spec == null) return;
+        // ★★env token 解析**先于** lengthScale 早退（env 与密度无关；解析为 dp 后由下方 ×lengthScale 归一）
+        if (!envVars.isEmpty()) resolveEnvInSpec(spec);
+        if (lengthScale == 1f) return;
         for (String k : LEN_SCALARS) {
             if (!spec.has(k) || spec.isNull(k)) continue;
             Object v = spec.get(k);

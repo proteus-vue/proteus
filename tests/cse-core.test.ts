@@ -315,6 +315,16 @@ describe('★★★G-61 B1 · CSE 计算值', () => {
     const r3 = compute('.a { width: clamp(64px, 22%, 132px) }', n)
     expect(r3.diagnostics.some((d) => d.code === 'CSE_VALUE_UNSUPPORTED')).toBe(true)
   })
+  it('★★★内置环境变量 --pf-*（2026-10-08 · 决策 #593）：var(--pf-X)/env()/calc(env±N) → env 变体（运行期查表）', () => {
+    const n = node('div', ['a'])
+    const r = compute('.a { padding-top: var(--pf-inset-top); padding-bottom: calc(var(--pf-inset-bottom) + 12px); gap: env(safe-area-inset-left) }', n)
+    expect(r.byKey[n.key]!.fields['paddingTop']).toEqual({ kind: 'env', name: '--pf-inset-top' })
+    expect(r.byKey[n.key]!.fields['paddingBottom']).toEqual({ kind: 'env', name: '--pf-inset-bottom', offset: 12 })
+    expect(r.byKey[n.key]!.fields['rowGap']).toEqual({ kind: 'env', name: '--pf-inset-left' })
+    // 未登记 --pf-* 名 ⇒ 不发射（拼写漂移不静默为 0）
+    const r2 = compute('.a { padding-top: var(--pf-inset-tp) }', n)
+    expect(r2.byKey[n.key]!.fields['paddingTop']).toBeUndefined()
+  })
   it('★★★var() 简写展开（2026-10-08 · css:next）：值含 var() 的简写在 compute 期替换后展开（与 App 折叠面同口径）', () => {
     const n = node('div', ['a'])
     // 单值令牌 ⇒ 四边同值

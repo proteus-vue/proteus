@@ -33,6 +33,7 @@
 
 import type { CseNode, CseRule, CseStyleSheet, CseTraceStep, CseWinner, CseComputeResult, CseComputedNode } from './types'
 import { foldCalcArithmetic } from '../calc-fold'
+import { isEnvVarName, type EnvVarName } from '@proteus-vue/contracts/env-vars'
 import { expandShorthandDecl } from './shorthand'
 import { buildIndex, candidatesFor, chainMatches, contextOf, type MatchContext, type RuleIndex } from './match'
 import { cascade, layerContextOf, type CascadeCandidate, type LayerContext } from './cascade'
@@ -45,6 +46,8 @@ export type CssComputedValue =
   | number // px 长度 / 无单位数（opacity/flex-grow/z-index/line-height 因子）
   | string // 颜色 #rrggbb[aa] / 关键字 / 剩余无法归一的值
   | { ratio: number; base: 'parentWidth' | 'parentHeight' | 'viewportWidth' | 'viewportHeight' | 'fontSize' | 'rootFontSize' }
+  // ★★★内置环境变量引用（2026-10-08 · 决策 #593）：运行期从环境表求值（逻辑像素 + offset）
+  | { env: EnvVarName; offset?: number; fallback?: number }
 
 const COLOR_PROPS = new Set([
   'color', 'background-color',
@@ -310,6 +313,9 @@ export function substituteVars(value: string, vars: Map<string, string>, depth =
     })()
     const name = (comma >= 0 ? inner.slice(0, comma) : inner).trim()
     if (!name.startsWith('--')) return null
+    // ★★★内置环境变量（2026-10-08 · 决策 #593）：`--pf-*` 是**运行期环境引用**（非设计令牌）——
+    //   保留 `var(--pf-X[, fb])` 原文（不折成令牌值、不判无效），交 computeLength 发射 env 变体。
+    if (name.startsWith('--pf-')) { out += value.slice(at, close + 1); i = close + 1; continue }
     const found = vars.get(name)
     if (found !== undefined) {
       const sub = substituteVars(found, vars, depth + 1)
@@ -326,6 +332,27 @@ export function substituteVars(value: string, vars: Map<string, string>, depth =
     i = close + 1
   }
   return out
+}
+
+/** ★内置环境变量引用识别（2026-10-08 · 决策 #593）：`var(--pf-X[, fb])` / `env(safe-area-inset-X[, fb])` /
+ *   `calc(<env> ± Npx)` → { name, offset?, fallback? }；非 env / 未登记 --pf 名 ⇒ undefined。 */
+function envRefOf(raw: string): { name: EnvVarName; offset?: number; fallback?: number } | undefined {
+  const s = raw.trim()
+  const v = /^var\(\s*(--pf-[a-z0-9-]+)\s*(?:,\s*(-?\d*\.?\d+)px\s*)?\)$/i.exec(s)
+  if (v && isEnvVarName(v[1]!)) return { name: v[1] as EnvVarName, ...(v[2] !== undefined ? { fallback: Number(v[2]) } : {}) }
+  const e = /^env\(\s*safe-area-inset-(top|right|bottom|left)\s*(?:,\s*(-?\d*\.?\d+)px\s*)?\)$/i.exec(s)
+  if (e) return { name: ('--pf-inset-' + e[1]!) as EnvVarName, ...(e[2] !== undefined ? { fallback: Number(e[2]) } : {}) }
+  const c = /^calc\(\s*([\s\S]+?)\s*\)$/i.exec(s)
+  if (!c) return undefined
+  const inner = c[1]!
+  const fwd = /^([\s\S]+?)\s*([+-])\s*(-?\d*\.?\d+)px$/i.exec(inner)
+  const rev = /^(-?\d*\.?\d+)px\s*([+-])\s*([\s\S]+)$/i.exec(inner)
+  let b: { name: EnvVarName; fallback?: number } | undefined
+  let off = 0
+  if (fwd) { const b0 = envRefOf(fwd[1]!); if (b0) { b = b0; off = (fwd[2] === '-' ? -1 : 1) * Number(fwd[3]) } }
+  else if (rev) { const b0 = envRefOf(rev[3]!); if (b0) { b = b0; off = (rev[2] === '-' ? -1 : 1) * Number(rev[1]) } }
+  if (!b) return undefined
+  return { name: b.name, ...(off ? { offset: off } : {}), ...(b.fallback !== undefined ? { fallback: b.fallback } : {}) }
 }
 
 /** ★★★calc() 常量化（2026-10-08 · css:next）：**委托共享实现** `calc-fold.ts`（与 App 折叠面同口径）——
@@ -356,6 +383,8 @@ export interface LengthResolveCtx {
 export type LengthResult =
   | { px: number }
   | { ratio: number; base: 'parentWidth' | 'parentHeight' | 'viewportWidth' | 'viewportHeight' | 'fontSize' | 'rootFontSize' }
+  // ★★★内置环境变量引用（2026-10-08 · 决策 #593）：运行期从环境表求值（逻辑像素 + offset）
+  | { env: EnvVarName; offset?: number; fallback?: number }
   | { keyword: string }
 
 /** 顶层逗号切分（括号感知；`min(a, b)` / `clamp(a, b, c)` 用） */
@@ -412,6 +441,8 @@ export function foldMathPx(v: string): string | undefined | null {
 export function computeLength(prop: string, raw: string, ctx: LengthResolveCtx): LengthResult | null {
   const v = raw.trim().toLowerCase()
   if (!v) return null
+  // ★★★内置环境变量（2026-10-08 · 决策 #593）：var(--pf-X) / env(safe-area-inset-X) / calc(<env> ± Npx)
+  { const er = envRefOf(raw); if (er) return { env: er.name, ...(er.offset ? { offset: er.offset } : {}), ...(er.fallback !== undefined ? { fallback: er.fallback } : {}) } }
   if (v === 'auto') return { keyword: 'auto' }
   if (v === 'content') return { keyword: 'content' }
   if (['none', 'normal', 'max-content', 'min-content', 'fit-content', 'stretch'].includes(v)) return { keyword: v }
@@ -566,6 +597,9 @@ export function computeTree(roots: CseNode[], sheet: CseStyleSheet, opts: Comput
     const resolveWinner = (prop: string, w: CseWinner): CssComputedValue | 'UNSUPPORTED' | 'INVALID' | null => {
       let raw = substituteVars(w.value, vars)
       if (raw === null) return 'INVALID'
+      // ★★★内置环境变量（2026-10-08 · 决策 #593）：`var(--pf-X)` / `env(safe-area-inset-X)` / `calc(<env> ± Npx)`
+      //   ⇒ 发射 env 引用（**先于** math/calc 折叠——否则 calc(env) 会被 foldCalc 判 UNSUPPORTED）。
+      { const er = envRefOf(raw); if (er) return { env: er.name, ...(er.offset !== undefined ? { offset: er.offset } : {}), ...(er.fallback !== undefined ? { fallback: er.fallback } : {}) } }
       // ★★★min()/max()/clamp()（2026-10-08）：先于 foldCalc 常量化——否则 `min(calc(...), X)` 被 foldCalc
       //   判「含 calc 但非纯 calc」⇒ UNSUPPORTED（实测盲区）。px-only 折为 token；含相对单位 ⇒ UNSUPPORTED。
       {
@@ -887,7 +921,7 @@ function stepOf(value: unknown, via: CseTraceStep['via'], w: CseWinner, vars: Ma
 /* ────────────────────────── CSS 长手 → StyleIR 字段 ────────────────────────── */
 
 /** ResolvedLength（契约形态） */
-type RL = { kind: 'absolute'; dp: number } | { kind: 'ratio'; ratio: number; base: string } | { kind: 'auto' } | null
+type RL = { kind: 'absolute'; dp: number } | { kind: 'ratio'; ratio: number; base: string } | { kind: 'env'; name: EnvVarName; offset?: number; fallback?: number } | { kind: 'auto' } | null
 const absolute = (dp: number): RL => ({ kind: 'absolute', dp })
 
 /** 单个长手 → IR 字段（null = 无对应字段（记 unmapped）） */
@@ -964,6 +998,8 @@ function mapToIrField(prop: string, val: CssComputedValue): { field: string; val
       return null
     }
     if (typeof val === 'object' && 'ratio' in val) return { field, value: { kind: 'ratio', ratio: val.ratio, base: val.base } satisfies RL }
+    // ★★★内置环境变量（2026-10-08 · 决策 #593）：发射 env 变体（运行期查表求值）
+    if (typeof val === 'object' && 'env' in val) return { field, value: { kind: 'env', name: val.env, ...(val.offset !== undefined ? { offset: val.offset } : {}), ...(val.fallback !== undefined ? { fallback: val.fallback } : {}) } satisfies RL }
     return null
   }
   if (prop === 'font-size') {

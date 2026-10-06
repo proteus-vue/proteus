@@ -18,6 +18,8 @@ export { styleToString } from './style'
 export { createSizeAwareObserver } from './layout'
 export type { SizeAwareObserver, SizeAwareState, SizeAwareOptions, ResizeTargetLike } from './layout'
 // ★S2 + G-09 SafeArea：安全区避让样式纯逻辑（Web env() 映射 + 折叠屏 hinge）
+export { readEnvVars } from './env-vars'
+export type { EnvVarMap } from './env-vars'
 export { resolveSafeAreaStyle } from './safe-area'
 export type { SafeAreaStyleOptions } from './safe-area'
 // ★S3 车机/导航：动效门 + 工具栏溢出折叠纯逻辑

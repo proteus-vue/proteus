@@ -62,10 +62,20 @@ const PAINT_SET = new Set(APP_PAINT_FIELDS)
 /** 已知字体角色（App 端编译期字体角色的闭集——批次 36 与宿主 setFontRole） */
 const FONT_ROLES = new Set(['system', 'serif', 'sans-serif', 'monospace'])
 
+/** ★内置环境变量 → DTO token（`env:<name>[+N][~F]`；与编译器 App 折叠同一形态——宿主单一解析器）。 */
+function envToken(name: string, offset?: number, fallback?: number): string {
+  let t = 'env:' + name
+  if (offset) t += (offset > 0 ? '+' : '') + offset
+  if (fallback !== undefined) t += '~' + fallback
+  return t
+}
+
 /** 长度形态（与 B0 `style-ir-values.ts` 的 ResolvedLength 结构同构——按结构判定，不 import） */
 type LengthLike =
   | { kind: 'absolute'; dp: number }
   | { kind: 'ratio'; ratio: number; base: string }
+  // ★★★内置环境变量（2026-10-08 · 决策 #593）：运行期查表求值（Stage 1：宿主侧解析）
+  | { kind: 'env'; name: string; offset?: number; fallback?: number }
   | { kind: 'auto' }
 
 function isLength(v: unknown): v is LengthLike {
@@ -73,6 +83,7 @@ function isLength(v: unknown): v is LengthLike {
   const k = (v as { kind?: unknown }).kind
   if (k === 'absolute') return typeof (v as { dp?: unknown }).dp === 'number'
   if (k === 'ratio') return typeof (v as { ratio?: unknown }).ratio === 'number' && typeof (v as { base?: unknown }).base === 'string'
+  if (k === 'env') return typeof (v as { name?: unknown }).name === 'string'
   return k === 'auto'
 }
 function absoluteOf(v: unknown): number | undefined {
@@ -113,6 +124,12 @@ export function mapStyleIRToApp(fields: Record<string, unknown>): AppMappingResu
       const abs = absoluteOf(value)
       if (abs !== undefined) {
         put(field, abs, abs)
+        continue
+      }
+      // ★★★内置环境变量（2026-10-08 · 决策 #593）：发射 env 引用 token（宿主构建内核请求前解析为逻辑像素）
+      if (value.kind === 'env') {
+        const tok = envToken(value.name, value.offset, value.fallback)
+        put(field, tok, tok)
         continue
       }
       if (value.kind === 'auto') {

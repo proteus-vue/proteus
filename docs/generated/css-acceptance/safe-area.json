@@ -1,0 +1,63 @@
+{
+  "_note": "★CSS 能力逐项验收包（用户指定流程）。本项为**框架内置环境变量模块（Stage 1，决策 #593）**——非单一 CSS 属性，验收载体 = css-conformance/pages/safe-area.vue + 四端真机 + 独立子代理终评。",
+  "id": "safe-area",
+  "kind": "framework-env-vars",
+  "verifiedAt": "2026-10-08",
+  "scope": "Stage 1 · 几何类 env 变量（--pf-inset-* / --pf-status-bar-height / --pf-nav-bar-* / --pf-cutout-* / --pf-keyboard-height）",
+  "architecture": "宿主侧解析（编译器发射 env 引用 token → 宿主用平台 insets 解析）；Stage 2 迁内核 env 表 + ABI v2",
+  "gates": {
+    "contract": true,
+    "compiler": true,
+    "fourEnds": true,
+    "independentReview": true
+  },
+  "pass": true,
+  "visual": {
+    "_note": "★视觉验收结论（独立子代理按 Web 基准并排图评审；来源 = css-conformance/results/side-by-side/）。verdict: pass（与 Web 基准无可归因差异）/ fail（有实差异——见 caseIssues）/ unclear（图不足以判）。纪律：左半恒为 Web 基准（D1）；不看不清不编（unclear）。",
+    "reviewedAt": "2026-10-06T15:25:54.052Z",
+    "reviewedBy": "independent-visual-subagent",
+    "sideBySideDir": "css-conformance/results/side-by-side/",
+    "summary": {
+      "fails": 0,
+      "ends": "web:pass · android:pass · ios:pass · harmony:pass · mp:pass"
+    },
+    "verdicts": [
+      {
+        "end": "web",
+        "verdict": "pass",
+        "caseIssues": [],
+        "evidence": "基准端：desktop env()=0 ⇒ A/C 取 min-height；结构/色/宽正确。"
+      },
+      {
+        "end": "android",
+        "verdict": "pass",
+        "caseIssues": [],
+        "evidence": "A 盒 65 CSS（Web 20）、B 63、C 22（状态栏≈min-height）——inset 生效；结构忠实。"
+      },
+      {
+        "end": "ios",
+        "verdict": "pass",
+        "caseIssues": [],
+        "evidence": "A 盒 64 CSS、C 43（iOS 状态栏≈44pt）、B 78——inset 生效；结构忠实。"
+      },
+      {
+        "end": "harmony",
+        "verdict": "pass",
+        "caseIssues": [],
+        "evidence": "A 盒 65.6 CSS、C 46、B 71——inset 生效；结构忠实。"
+      },
+      {
+        "end": "mp",
+        "verdict": "pass",
+        "caseIssues": [
+          {
+            "case": "case-inset-top",
+            "issue": "Skyline 不应用内联 style 的自定义属性 ⇒ --pf-* 未生效（A/B/C 未增高）。引擎边界（同不支持 env()）；MP 安全区由 p-safe 组件交付。",
+            "severity": "minor"
+          }
+        ],
+        "evidence": "结构/色/宽忠实；inset 机制在 Skyline 不可用 = 具名引擎边界，非缺陷。"
+      }
+    ]
+  }
+}

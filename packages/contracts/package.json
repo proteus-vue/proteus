@@ -42,6 +42,11 @@
       "types": "./dist/capability.d.ts",
       "import": "./dist/capability.js"
     },
+    "./env-vars": {
+      "types": "./dist/env-vars.d.ts",
+      "import": "./dist/env-vars.js",
+      "default": "./dist/env-vars.js"
+    },
     "./style-ir-values": {
       "types": "./dist/style-ir-values.d.ts",
       "import": "./dist/style-ir-values.js",
@@ -64,7 +69,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/route.ts src/api.ts src/store.ts src/capability.ts src/style.ts src/layers.ts src/scroll.ts src/style-ir-values.ts src/style-applier.ts src/style-ir-registry.generated.ts src/style-ir-canonical.ts --bundle --format=esm --platform=node --outdir=dist"
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/route.ts src/api.ts src/store.ts src/capability.ts src/style.ts src/layers.ts src/scroll.ts src/env-vars.ts src/style-ir-values.ts src/style-applier.ts src/style-ir-registry.generated.ts src/style-ir-canonical.ts --bundle --format=esm --platform=node --outdir=dist"
   },
   "devDependencies": {
     "@types/node": "^20.0.0"
