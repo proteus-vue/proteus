@@ -83,7 +83,7 @@
   "nextStep": "机器判据三段已过 → 进入**视觉验收**：生成并排产物（node scripts/gen-baseline-side-by-side.mjs）+ 独立子代理按 Web 基准评审",
   "visual": {
     "_note": "★视觉验收结论（独立子代理按 Web 基准并排图评审；来源 = css-conformance/results/side-by-side/）。verdict: pass（与 Web 基准无可归因差异）/ fail（有实差异——见 caseIssues）/ unclear（图不足以判）。纪律：左半恒为 Web 基准（D1）；不看不清不编（unclear）。",
-    "reviewedAt": "2026-10-06T11:41:02.674Z",
+    "reviewedAt": "2026-10-06T12:01:07.742Z",
     "reviewedBy": "independent-visual-subagent",
     "sideBySideDir": "css-conformance/results/side-by-side/",
     "summary": {
@@ -101,13 +101,13 @@
         "end": "mp",
         "verdict": "pass",
         "caseIssues": [],
-        "evidence": "Skyline 无 Grid 容器（display:grid 退化）——A/B/C 单列堆叠；具名边界（引擎锁死），不作缺陷"
+        "evidence": "Skyline 无 Grid 容器（display:grid 退化）——单列堆叠；具名边界"
       },
       {
         "end": "android",
         "verdict": "pass",
         "caseIssues": [],
-        "evidence": "独立子代理复核：A 三列 60px 并排 / B 3 行 2+2+1@30px / C 1:2——与 Web 同"
+        "evidence": "A 三列 60px 并排 / B 3 行 2+2+1@30px / C 1:2——与 Web 同"
       },
       {
         "end": "ios",
@@ -119,7 +119,7 @@
         "end": "harmony",
         "verdict": "pass",
         "caseIssues": [],
-        "evidence": "同上——单元数/尺寸/比例与 Web 同（C 的 '1fr/2fr' 标签因字体略大换行，属字体固有差异，非布局缺陷）"
+        "evidence": "修复后复核（round2）：C 的 '1fr'/'2fr' **单行 + 垂直居中**（此前鸿蒙默认按数字/字母边界断词 ⇒ 测量误算 2 行 ⇒ 节点虚高 98px ⇒ 顶对齐）；A/B 与 Web 同"
       }
     ]
   }

@@ -236,7 +236,11 @@ static inline void measureTextWrappedTypoPx(const std::string& text, double font
     if (fc == nullptr) return;
     OH_Drawing_TypographyStyle* ts = OH_Drawing_CreateTypographyStyle();
     // ★★★word-break 项（2026-10-06）：测量须与绘制同断词策略（否则折行数不一致 ⇒ 盒高错）。
+    // ★★★修（2026-10-08 · 用户抓出「鸿蒙案例C文字换行/不垂直居中」）：**绘制已显式 NORMAL，测量也必须 NORMAL**——
+    //   否则测量按鸿蒙默认断词在**数字/字母边界**（"1fr"→"1"/"fr"）断开 ⇒ 文本节点被算成 2 行高（98px）
+    //   ⇒ 与绘制（1 行）不一致 ⇒ 节点虚高 + 顶对齐（不垂直居中）。两处断词策略必须一致。
     if (wordBreak == "break-all") OH_Drawing_SetTypographyTextWordBreakType(ts, 1);
+    else OH_Drawing_SetTypographyTextWordBreakType(ts, 0); // WORD_BREAK_TYPE_NORMAL
     OH_Drawing_TextStyle* tstyle = OH_Drawing_CreateTextStyle();
     OH_Drawing_SetTextStyleFontSize(tstyle, fontPx);
     if (letterSpacingPx != 0) OH_Drawing_SetTextStyleLetterSpacing(tstyle, letterSpacingPx);
