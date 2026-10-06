@@ -185,6 +185,8 @@ export { createHostScreenPorts, SCREEN_ANIM_DONE_KEY } from './screen-executor-h
 // ★★★B1：App 壳统一运行期（实例化 + 订阅 + 手势派发 + content-local↔内核 id 反查）
 export { createScreenRuntime } from './screen-runtime'
 export type { ScreenRuntime, ScreenRuntimeInstance, ScreenRuntimeArtifact, CreateScreenRuntimeOptions } from './screen-runtime'
+export { TAB_BAR_SPEC } from './tab-bar-spec'
+export type { TabBarSpec } from './tab-bar-spec'
 export { createSuperappRuntime } from './superapp-runtime'
 export type { SuperappRuntime, SuperappRuntimeOptions, SuperappHostPorts } from './superapp-runtime'
 export type { HostInvokeChannel, HostScreenPorts, HostScreenPortsOptions } from './screen-executor-host'

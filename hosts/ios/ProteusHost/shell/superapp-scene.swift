@@ -48,6 +48,11 @@ final class SuperappScene: NSObject {
     private static weak var bridgeRef: SelfDrawBridge?
     private static var container: UIView?
     private static var tabNames: [String] = []
+    // ★★B2（G1）：tab 栏视觉规格（共享，state.tabSpec）——宿主只读规格建视图（不再硬编码）。
+    //   缺省值与 render-backend 的 TAB_BAR_SPEC 同（基准 = superapp/App.vue .sa-tabbar + token）。
+    private static var tb: [String: Any] = [:]
+    private static var tbIcons: [String: String] = [:]
+    private static var tbLabels: [String: String] = [:]
     /** ★★★逐屏截图：全部屏名（boot 回包 / registry.screens 的键——验收项目无 tab 时用）。 */
     private static var allScreenNames: [String] = []
     private static var tabLabels: [String: String] = [:]
@@ -140,6 +145,11 @@ final class SuperappScene: NSObject {
               let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] else { return }
         tabNames = (o["tabs"] as? [String]) ?? []
         tabLabels = (o["tabLabels"] as? [String: String]) ?? [:]
+        if let sp = o["tabSpec"] as? [String: Any] {
+            tb = sp
+            tbIcons = (sp["icons"] as? [String: String]) ?? [:]
+            tbLabels = (sp["labels"] as? [String: String]) ?? [:]
+        }
         // ★★★逐屏截图：全部屏名（boot 回包 `screens`——验收项目无 tab 时用）
         if let scr = o["screens"] as? [String], !scr.isEmpty {
             Self.allScreenNames = scr
@@ -197,15 +207,15 @@ final class SuperappScene: NSObject {
         //   此前无条件建 52pt 白底条 ⇒ 验收项目（tabs=[]）底部出现一条与 Web 基准不符的白带
         //   （"页面未铺满"的真相）。空 tab 语义 = 无 tabBar（与 MP 端"未声明 tabBar 就无 tabBar"同源）。
         guard !tabNames.isEmpty else { return }
-        let h: CGFloat = 52
+        let h = CGFloat((tb["height"] as? NSNumber)?.doubleValue ?? 56)
         let w = parent.bounds.width
         let barY = parent.bounds.height - h
         let bar = UIView(frame: CGRect(x: 0, y: barY, width: w, height: h))
-        bar.backgroundColor = UIColor(red: 0xFF/255.0, green: 0xFF/255.0, blue: 0xFF/255.0, alpha: 1)
+        bar.backgroundColor = specColor("surface", 0xFFFFFF)
         bar.tag = 771001
         // 顶边框（Web: border-top 1px --sa-line）
         let line = UIView(frame: CGRect(x: 0, y: 0, width: w, height: 1.0 / UIScreen.main.scale))
-        line.backgroundColor = UIColor(red: 0xDC/255.0, green: 0xDF/255.0, blue: 0xE5/255.0, alpha: 1)
+        line.backgroundColor = specColor("line", 0xDCDFE5)
         bar.addSubview(line)
         let current = currentName()
         let unread = imUnreadValue()
@@ -214,19 +224,18 @@ final class SuperappScene: NSObject {
             let item = UIView(frame: CGRect(x: bw * CGFloat(i), y: 0, width: bw, height: h))
             item.tag = 771000 + i
             let on = (current == name)
-            let tint = on ? UIColor(red: 0x5B/255.0, green: 0x5B/255.0, blue: 0xD6/255.0, alpha: 1)
-                          : UIColor(red: 0x5F/255.0, green: 0x66/255.0, blue: 0x73/255.0, alpha: 1)
+            let tint = on ? specColor("brand", 0x5B5BD6) : specColor("text3", 0x5F6673)
             // 图标（19px，文本呈现——加 U+FE0E 变体选择符，避免渲染成彩色 emoji）
             let ic = UILabel(frame: CGRect(x: 0, y: 8, width: bw, height: 22))
             ic.text = tabIcon(name) + "\u{FE0E}"
-            ic.font = UIFont.systemFont(ofSize: 19)
+            ic.font = UIFont.systemFont(ofSize: CGFloat((tb["iconSize"] as? NSNumber)?.doubleValue ?? 19))
             ic.textColor = tint
             ic.textAlignment = .center
             item.addSubview(ic)
             // 文字（10px）
             let tx = UILabel(frame: CGRect(x: 0, y: 30, width: bw, height: 14))
             tx.text = tabShortLabel(name)
-            tx.font = UIFont.systemFont(ofSize: 10)
+            tx.font = UIFont.systemFont(ofSize: CGFloat((tb["labelSize"] as? NSNumber)?.doubleValue ?? 10))
             tx.textColor = tint
             tx.textAlignment = .center
             item.addSubview(tx)
@@ -237,8 +246,8 @@ final class SuperappScene: NSObject {
                 badge.font = UIFont.systemFont(ofSize: 11, weight: .semibold)
                 badge.textColor = .white
                 badge.textAlignment = .center
-                badge.backgroundColor = UIColor(red: 0xD6/255.0, green: 0x45/255.0, blue: 0x45/255.0, alpha: 1)
-                badge.layer.cornerRadius = 8
+                badge.backgroundColor = specColor("badgeBg", 0xD64545)
+                badge.layer.cornerRadius = CGFloat(badgeSpecNum("radius", 8))
                 badge.layer.masksToBounds = true
                 item.addSubview(badge)
             }
@@ -257,10 +266,32 @@ final class SuperappScene: NSObject {
         switchTab(tabNames[idx], via: "user-tap")
     }
 
+    // ★B2（G1）：图标字形来自共享规格（state.tabSpec.icons），缺省回退。
     private static func tabIcon(_ name: String) -> String {
+        let v = tbIcons[name]
+        return (v?.isEmpty == false) ? v! : "•"
+    }
+    // 规格色（#rrggbb → UIColor）；缺省 = fallback。
+    private static func specColor(_ key: String, _ fallback: UInt32) -> UIColor {
+        if let hex = tb[key] as? String, let c = parseHexColor(hex) { return c }
+        return UIColor(red: CGFloat((fallback >> 16) & 0xFF) / 255.0,
+                       green: CGFloat((fallback >> 8) & 0xFF) / 255.0,
+                       blue: CGFloat(fallback & 0xFF) / 255.0, alpha: 1)
+    }
+    // 规格数（badge 子对象）；缺省 fallback。
+    private static func badgeSpecNum(_ key: String, _ fallback: Double) -> Double {
+        guard let bd = tb["badge"] as? [String: Any] else { return fallback }
+        return (bd[key] as? NSNumber)?.doubleValue ?? fallback
+    }
+    private static func tabIconLegacy(_ name: String) -> String {
         name == "index" ? "⌂" : name == "messages" ? "✉" : name == "mine" ? "☺" : "•"
     }
     private static func tabShortLabel(_ name: String) -> String {
+        if let v = tbLabels[name], !v.isEmpty { return v }
+        if let v = tabLabels[name], !v.isEmpty { return v }
+        return name
+    }
+    private static func tabShortLabelLegacy(_ name: String) -> String {
         name == "index" ? "首页" : name == "messages" ? "消息" : name == "mine" ? "我的" : name
     }
     /** IM 未读角标初值（与 App.vue 壳同源；后续接实时运行时改由状态驱动） */

@@ -45,6 +45,13 @@ public class SuperappActivity extends android.app.Activity {
 
     /** Tab 栏数据（boot 后从 superapp 注册表读回——与 Web/MP 同一套 tabNames/tabLabels） */
     private String[] tabNames = new String[0];
+    // ★★B2（G1）：tab 栏**视觉规格**（共享，来自 state.tabSpec）——宿主只"读规格建视图"（不再硬编码）。
+    //   缺省值与 render-backend 的 TAB_BAR_SPEC 同（基准 = superapp/App.vue .sa-tabbar + global.css token）。
+    private int tbOn = 0xFF5B5BD6, tbOff = 0xFF5F6673, tbRec = 0xFFD64545, tbLine = 0xFFDCDFE5, tbSurface = 0xFFFFFFFF;
+    private float tbIcon = 19f, tbLabel = 10f;
+    private int tbBadgeRadius = 8, tbBadgeFont = 11, tbBadgePadX = 4, tbBadgeOffX = 10, tbBadgeOffY = 2;
+    private java.util.Map<String, String> tbIcons = new java.util.HashMap<>();
+    private java.util.Map<String, String> tbLabels = new java.util.HashMap<>();
     private java.util.Map<String, String> tabLabels = new java.util.HashMap<>();
 
     /** drive 模式证据：每次 tab 切换后的当前屏 */
@@ -225,6 +232,29 @@ public class SuperappActivity extends android.app.Activity {
                 java.util.Iterator<String> it = labels.keys();
                 while (it.hasNext()) { String k = it.next(); tabLabels.put(k, labels.optString(k, k)); }
             }
+            // ★★B2（G1）：读**共享 tab 栏视觉规格**（state.tabSpec）——三端同源，不再各写一遍
+            org.json.JSONObject sp = o.optJSONObject("tabSpec");
+            if (sp != null) {
+                tbSurface = parseHex(sp.optString("surface", "#ffffff"));
+                tbLine = parseHex(sp.optString("line", "#dcdfe5"));
+                tbOn = parseHex(sp.optString("brand", "#5b5bd6"));
+                tbOff = parseHex(sp.optString("text3", "#5f6673"));
+                tbRec = parseHex(sp.optString("badgeBg", "#d64545"));
+                tbIcon = (float) sp.optDouble("iconSize", 19);
+                tbLabel = (float) sp.optDouble("labelSize", 10);
+                org.json.JSONObject bd = sp.optJSONObject("badge");
+                if (bd != null) {
+                    tbBadgeRadius = bd.optInt("radius", 8);
+                    tbBadgeFont = bd.optInt("fontSize", 11);
+                    tbBadgePadX = bd.optInt("padX", 4);
+                    tbBadgeOffY = bd.optInt("offsetY", 2);
+                    tbBadgeOffX = bd.optInt("offsetX", 4) + 6;   // 规格 offsetX 是相对中心，宿主左偏 = 中心 + 半宽 ≈ +6
+                }
+                org.json.JSONObject ic = sp.optJSONObject("icons");
+                if (ic != null) { java.util.Iterator<String> it = ic.keys(); while (it.hasNext()) { String k = it.next(); tbIcons.put(k, ic.optString(k, "")); } }
+                org.json.JSONObject lb = sp.optJSONObject("labels");
+                if (lb != null) { java.util.Iterator<String> it = lb.keys(); while (it.hasNext()) { String k = it.next(); tbLabels.put(k, lb.optString(k, "")); } }
+            }
         } catch (Exception e) {
             android.util.Log.w(TAG, "读 tab 注册表失败：" + e.getMessage());
         }
@@ -234,10 +264,10 @@ public class SuperappActivity extends android.app.Activity {
         //   空 tab 语义 = 无 tabBar（与 MP「未声明 tabBar 就无 tabBar」同源）。
         if (tabNames.length == 0) { tabBar.setVisibility(android.view.View.GONE); return; }
         tabBar.setVisibility(android.view.View.VISIBLE);
-        // ★★样式取自 **Web 真值**（App.vue `.sa-tabbar` + global.css token）：surface #ffffff · 顶边框 #dcdfe5 ·
-        //   选中 brand #5b5bd6 · 未选中 text-3 #5f6673 · 角标 rec #d64545（minW 16 / h 16 / 圆角 8）。
-        final int onColor = 0xFF5B5BD6, offColor = 0xFF5F6673, recColor = 0xFFD64545, lineColor = 0xFFDCDFE5;
-        tabBar.setBackgroundColor(0xFFFFFFFF);
+        // ★★样式来自 **共享 tab 栏视觉规格**（state.tabSpec；基准 = Web 真值 App.vue .sa-tabbar+token）——
+        //   宿主只读规格，不硬编码（B2·G1）。
+        final int onColor = tbOn, offColor = tbOff, recColor = tbRec, lineColor = tbLine;
+        tabBar.setBackgroundColor(tbSurface);
         // 顶部分隔线（Web: `border-top: 1px solid --sa-line`）——★只加一次（幂等：查 tag），
         //   此前用 `tabBar.getChildCount()==0` 判据恒真（上面刚 removeAllViews）⇒ 每次重建都叠一条。
         if (root.findViewWithTag("sa-top-line") == null) {
@@ -272,7 +302,7 @@ public class SuperappActivity extends android.app.Activity {
             icWrap.setLayoutParams(new android.widget.LinearLayout.LayoutParams(iw, ih));
             android.widget.TextView ic = new android.widget.TextView(this);
             ic.setText(tabIcon(name) + "\uFE0E");
-            ic.setTextSize(19f);
+            ic.setTextSize(tbIcon);
             ic.setGravity(android.view.Gravity.CENTER);
             ic.setTextColor(on ? onColor : offColor);
             icWrap.addView(ic, new android.widget.FrameLayout.LayoutParams(
@@ -281,31 +311,31 @@ public class SuperappActivity extends android.app.Activity {
                 android.widget.TextView badge = new android.widget.TextView(this);
                 badge.setTag("sa-badge");   // ★标记：highlightTab 必须**跳过角标**（否则白字被改成灰色）
                 badge.setText(unread > 99 ? "99+" : String.valueOf(unread));
-                badge.setTextSize(11f);
+                badge.setTextSize(tbBadgeFont);
                 badge.setTextColor(0xFFFFFFFF);
                 badge.setGravity(android.view.Gravity.CENTER);
                 badge.setBackgroundColor(recColor);
                 // ★圆角胶囊（Web `.sa-im-badge{border-radius:8}`；此前直角方块，独立验收抓出）
                 badge.setBackground(new android.graphics.drawable.GradientDrawable() {{
                     setColor(recColor);
-                    setCornerRadius(8 * density);
+                    setCornerRadius(tbBadgeRadius * density);
                 }});
                 // I2-ALLOW: 宿主原生 chrome（角标 16dp 高 / 4dp 内边距 / 10dp 左偏 / 2dp 上偏——
                 //   原生 chrome 视图排布，与 Web `.sa-im-badge` 同形；不进内核绘制指令流）。
                 int bh = Math.round(16 * density);
-                badge.setPadding(Math.round(4 * density), 0, Math.round(4 * density), 0);
+                badge.setPadding(Math.round(tbBadgePadX * density), 0, Math.round(tbBadgePadX * density), 0);
                 android.widget.FrameLayout.LayoutParams blp = new android.widget.FrameLayout.LayoutParams(
                         android.view.ViewGroup.LayoutParams.WRAP_CONTENT, bh);
                 blp.gravity = android.view.Gravity.TOP | android.view.Gravity.CENTER_HORIZONTAL;
                 // I2-ALLOW: 宿主原生 chrome 偏移（角标 leftMargin 10dp / topMargin -2dp——同族例外）
-                blp.leftMargin = Math.round(10 * density);   // Web: left:50% + margin-left:4px
-                blp.topMargin = -Math.round(2 * density);
+                blp.leftMargin = Math.round(tbBadgeOffX * density);   // Web: left:50% + margin-left:4px
+                blp.topMargin = -Math.round(tbBadgeOffY * density);
                 icWrap.addView(badge, blp);
             }
             col.addView(icWrap);
             android.widget.TextView lab = new android.widget.TextView(this);
             lab.setText(tabShortLabel(name));
-            lab.setTextSize(10f);
+            lab.setTextSize(tbLabel);
             lab.setGravity(android.view.Gravity.CENTER);
             lab.setTextColor(on ? onColor : offColor);
             col.addView(lab);
@@ -318,13 +348,30 @@ public class SuperappActivity extends android.app.Activity {
         }
     }
 
-    private static String tabIcon(String name) {
-        return "index".equals(name) ? "⌂" : "messages".equals(name) ? "✉" : "mine".equals(name) ? "☺" : "•";
+    /** ★B2（G1）：图标字形来自**共享规格**（state.tabSpec.icons），缺省回退。 */
+    private String tabIcon(String name) {
+        String v = tbIcons.get(name);
+        return (v != null && !v.isEmpty()) ? v : "•";
     }
 
-    private static String tabShortLabel(String name) {
-        return "index".equals(name) ? "首页" : "messages".equals(name) ? "消息" : "mine".equals(name) ? "我的"
-                : name;
+    /** ★B2（G1）：标签文案来自**共享规格**（state.tabSpec.labels）→ 项目 tabLabels → 键名。 */
+    private String tabShortLabel(String name) {
+        String v = tbLabels.get(name);
+        if (v != null && !v.isEmpty()) return v;
+        String t = tabLabels.get(name);
+        return (t != null && !t.isEmpty()) ? t : name;
+    }
+
+    /** #rgb/#rrggbb/#rrggbbaa → ARGB int（缺省黑）。 */
+    private static int parseHex(String css) {
+        try {
+            String h = css.startsWith("#") ? css.substring(1) : css;
+            if (h.length() == 3) h = "" + h.charAt(0) + h.charAt(0) + h.charAt(1) + h.charAt(1) + h.charAt(2) + h.charAt(2) + "ff";
+            if (h.length() == 6) h = h + "ff";
+            long v = Long.parseLong(h, 16);   // #rrggbbaa → 低 8 位 alpha
+            long a = v & 0xFF, rgb = v >>> 8;
+            return (int) ((a << 24) | rgb);
+        } catch (Exception e) { return 0xFF000000; }
     }
 
     /** 读 IM 未读角标（App 壳 overlay 的 IM 角标初值——从屏内容节点里的角标数字取；失败 0） */
@@ -346,7 +393,7 @@ public class SuperappActivity extends android.app.Activity {
     }
 
     private void highlightTab(String current) {
-        final int onColor = 0xFF5B5BD6, offColor = 0xFF5F6673;
+        final int onColor = tbOn, offColor = tbOff;   // ★B2（G1）：来自共享规格
         for (int i = 0; i < tabBar.getChildCount(); i++) {
             android.view.View col = tabBar.getChildAt(i);
             boolean on = current.equals(col.getTag());

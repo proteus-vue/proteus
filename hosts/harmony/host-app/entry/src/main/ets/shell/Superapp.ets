@@ -42,6 +42,19 @@ struct Superapp {
   /** 场景：'superapp'（常驻，桌面点开）/ 'superapp-drive'（脚本驱动切 tab + 落报告） */
   private scene: string = AppStorage.get<string>('proteusScene') ?? '';
   @State tabKeys: string[] = [];
+  // ★★B2（G1）：tab 栏视觉规格（共享 state.tabSpec）——宿主读规格建视图（不再硬编码）。
+  //   缺省值与 render-backend 的 TAB_BAR_SPEC 同（基准 = superapp/App.vue .sa-tabbar + token）。
+  private tbBrand: string = '#5B5BD6';
+  private tbText3: string = '#5F6673';
+  private tbSurface: string = '#FFFFFF';
+  private tbLine: string = '#DCDFE5';
+  private tbBadge: string = '#D64545';
+  private tbIconSize: number = 13;
+  private tbLabelSize: number = 10;
+  private tbBadgeFont: number = 11;
+  private tbBadgeRadius: number = 8;
+  private tbIconsMap: Map<string, string> = new Map<string, string>();
+  private tbLabelsMap: Map<string, string> = new Map<string, string>();
   @State tabItems: string[] = [];
   @State current: string = '';
   @State booted: boolean = false;
@@ -86,7 +99,9 @@ struct Superapp {
 
   /** Tab 短标签（首页/消息/我的） */
   private tabShortLabelOf(name: string): string {
-    return name === 'index' ? '首页' : name === 'messages' ? '消息' : name === 'mine' ? '我的' : name;
+    const v = this.tbLabelsMap.get(name);
+    if (v !== undefined && v.length > 0) return v;
+    return name;   // 缺规格 ⇒ 用键名（与 iOS/Android 一致：规格 → tabLabels → 键名）
   }
 
   aboutToAppear(): void {
@@ -269,6 +284,25 @@ struct Superapp {
     }
     const cur = st['current'];
     if (typeof cur === 'string') this.current = cur;
+    const sp = st['tabSpec'] as Record<string, Object> | undefined;
+    if (sp) {
+      if (typeof sp['brand'] === 'string') this.tbBrand = sp['brand'] as string;
+      if (typeof sp['text3'] === 'string') this.tbText3 = sp['text3'] as string;
+      if (typeof sp['surface'] === 'string') this.tbSurface = sp['surface'] as string;
+      if (typeof sp['line'] === 'string') this.tbLine = sp['line'] as string;
+      if (typeof sp['badgeBg'] === 'string') this.tbBadge = sp['badgeBg'] as string;
+      if (typeof sp['iconSize'] === 'number') this.tbIconSize = sp['iconSize'] as number;
+      if (typeof sp['labelSize'] === 'number') this.tbLabelSize = sp['labelSize'] as number;
+      const bd = sp['badge'] as Record<string, Object> | undefined;
+      if (bd) {
+        if (typeof bd['fontSize'] === 'number') this.tbBadgeFont = bd['fontSize'] as number;
+        if (typeof bd['radius'] === 'number') this.tbBadgeRadius = bd['radius'] as number;
+      }
+      const ic = sp['icons'] as Record<string, Object> | undefined;
+      if (ic) { for (const k of Object.keys(ic)) this.tbIconsMap.set(k, String(ic[k])); }
+      const lb = sp['labels'] as Record<string, Object> | undefined;
+      if (lb) { for (const k of Object.keys(lb)) this.tbLabelsMap.set(k, String(lb[k])); }
+    }
   }
 
   /** ★B1：统一运行期渲染入参 → JSON（用接口声明，避 ArkTS 未型字面量） */
@@ -500,7 +534,7 @@ struct Superapp {
       //   白底 #ffffff · 顶边框 #dcdfe5 · 选中 brand #5b5bd6 · 未选中 text-3 #5f6673 · 角标 rec #d64545。
       //   图标加 U+FE0E（变体选择符）强制**文本呈现**——否则 ☺/✉ 会被渲染成彩色 emoji（与 Web 线稿不符）。
       Column() {
-        Divider().strokeWidth(1).color('#DCDFE5')
+        Divider().strokeWidth(1).color(this.tbLine)
         Row() {
           ForEach(this.tabKeys, (k: string, i: number) => {
             Column() {
@@ -512,17 +546,17 @@ struct Superapp {
                 // ★尺寸对齐 Web（图标墨高 ≈11.5dp；系统符号字号 20 时墨高约 20dp=1.7×，独立验收抓出）⇒ 13
                 SymbolGlyph(this.tabSymbol(k))
                   .fontSize(13)
-                  .fontColor([this.current === k ? '#5B5BD6' : '#5F6673'])
+                  .fontColor([this.current === k ? this.tbBrand : this.tbText3])
                 if (k === 'messages' && this.imUnread > 0) {
                   Text(this.imUnread > 99 ? '99+' : String(this.imUnread))
-                    .fontSize(11).fontWeight(FontWeight.Bold).fontColor('#FFFFFF').textAlign(TextAlign.Center)
+                    .fontSize(this.tbBadgeFont).fontWeight(FontWeight.Bold).fontColor('#FFFFFF').textAlign(TextAlign.Center)
                     .constraintSize({ minWidth: 16 }).height(16).padding({ left: 4, right: 4 })
-                    .borderRadius(8).backgroundColor('#D64545')
+                    .borderRadius(this.tbBadgeRadius).backgroundColor(this.tbBadge)
                     .position({ x: 24, y: -2 })
                 }
               }
-              Text(this.tabShortLabelOf(k)).fontSize(10)
-                .fontColor(this.current === k ? '#5B5BD6' : '#5F6673')
+              Text(this.tabShortLabelOf(k)).fontSize(this.tbLabelSize)
+                .fontColor(this.current === k ? this.tbBrand : this.tbText3)
             }
             .layoutWeight(1)
             .height('100%')
