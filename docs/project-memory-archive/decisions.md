@@ -1709,3 +1709,10 @@
 **⑤ ★教训 / 可执行**：a) **"抽取完成"要有实质判据**——端目录里"有该端特征 API"是不够的（SDK/AAR 也有），要判"**实质平台适配是否真的离开宿主**"（本次 C 判据因此收紧，且配破坏性验证）；b) **低风险优先**：Android 度量/绘制与 `ProteusHostView`（单体）耦合深，先抽**独立可抽**的字形层拿到端到端绿（含真机），再谈度量/绘制——**"剥离术"逐层来，不求一把梭**。
 **⑥ 诚实边界**：本轮只落 **B5-1 第 1 步**（字形层）；**文本度量/绘制执行仍在 `hosts/android`**（B5-1 余步）· B5-2（HA4 C-ABI 回调绑定）未开工 · 鸿蒙平台层未开始。
 
+610. **★宿主关注点分离 B5-1 收口——Android 文本**度量**抽 `platform/` + 结构契约测试（HA0.5 Android 完成）（★用户 2026-10-07「继续」）**：
+**① 交付**：承接第 1 步（字形层），把 Android **文本度量**也抽到 `platform/android/.../ProteusTextPlatform.java`——新增 `measureSingle`（单行）/ `measureWrapped`（折行：断词·长串溢出·行高封顶，`null`=单行无 clamp 等价首遍）/ `applyWordBreak`（ZWSP 注入）/ `isUnbreakableToken`（无断点长串，CJK/空白感知）/ `lineHeightPx`（token→行盒高）/ `paintFor`（度量与绘制同源共用 TextPaint）。`VaporRenderHost` 的 `buildMeasures`/`applyWrapRemeasure`/`lineHeightPxOf`/`applyWordBreak`/`isUnbreakableToken` 改**委托**（调用方零改动）。**绘制执行**（`mkCmd` 的 StaticLayout/Canvas 上屏）**留在宿主**——与 iOS 同构（两端绘制载体都是平台 View/layer，抽象收益低）。
+**② ★新增结构契约测试（补门禁盲区）**：`tests/host-platform-extraction.test.ts`（无设备）——断言平台层**拥有**字形+度量实现、宿主**代码**（剥注释后）只做委托（不再 `Typeface.create`/`customFonts`）。**为什么需要**：`check:platform-layering` 只查**依赖方向**（import），查不到"实现被搬回宿主"——分层会**静默塌**。与"接线不靠记忆"同源。
+**③ ★验收（关键：证明行为中性）**：`check:android-host-compile` ✅ · `check:platform-layering`（+破坏性：移除平台文件 ⇒ 红）✅ · 真 APK 构建 ✅ · **Android 真机渲染逐像素一致**——用 git stash 造出"step-2 前"的 APK，同机同滚动位对比 **IM 行区域 MD5 完全相同**（`315259b5d69e92631756b14d712b5030`）⇒ 抽取**零行为变化** ✅ · 结构契约测试 3 绿 · acceptance 桩测 ✅ · host-rounding/host-layering/android-bundle/docs ✅。
+**④ ★教训 / 可执行**：a) **行为中性的重构要用"逐像素/逐字段等值"证**（本仓纪律"改对了 ≠ 没改坏"）——真机同状态对比 MD5 是最硬的证据（比"看起来一样"强）；b) **难点重构先拆"能独立抽的层"**（本次先字形后度量，逐层拿端到端绿）；c) **重构要配"结构契约"测试**——依赖方向门禁（import）拦不住"实现搬回"，源码结构断言才拦得住；d) **发现疑似回归先"对比实验"再下结论**（本次观察到 superapp「IM 未读角标」行叠字，git stash 造前后两版对比 ⇒ 证明**前后一致 = pre-existing**，非本次引入）。
+**⑤ 诚实边界**：**绘制执行未抽**（留在宿主，与 iOS 同构——如需"全对称"可另立）；**superapp「IM 未读角标」行叠字 = pre-existing**（前后两版逐像素一致，非本次引入，另案）；鸿蒙平台层未开始；B5-2（HA4）未开工。**HA0.5 台账仍 `范围外`**（Android 已完成，但鸿蒙未开始 ⇒ 该行整体未收口）。
+
