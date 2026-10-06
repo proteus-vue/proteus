@@ -8,7 +8,8 @@
     "@proteus-vue/animation": "0.3.0-beta.22",
     "@proteus-vue/component-ir": "0.3.0-beta.21",
     "@proteus-vue/contracts": "0.3.0-beta.11",
-    "@proteus-vue/router": "0.3.0-beta.21"
+    "@proteus-vue/router": "0.3.0-beta.21",
+    "@proteus-vue/slot-runtime": "workspace:*"
   },
   "peerDependencies": {
     "@vue/runtime-core": "^3.4.0"
