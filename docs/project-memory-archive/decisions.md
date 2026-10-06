@@ -1166,3 +1166,25 @@
 **⑥ 判据**：`css:verify` 三段过（implemented/parity/endsMapped）· **probe 四端全绿** · fresh 20 张全绿 · **独立子代理终评四端全 pass**（含 mp 具名边界核实）· cargo 全绿（新增 3 条 justify-self 单测 + JSON DTO 路径 + 物理化复现）· 全量 5306/**5306**（golden 刷新）· coupled 311 绿 · 定向门禁全绿。
 **⑦ 诚实边界**：a) **MP/Skyline 具名边界**：官方属性表无 justify-self + 该端无 Grid 容器 ⇒ B(center)/C(end) 案在 MP 呈现靠左（引擎锁死，页面已具名）；b) `baseline`/`left`/`right` 值诊断跳过（taffy grid baseline 按 start 近似=与 Web 不符）；c) iOS/鸿蒙纯内核布局（无白名单/物理化问题）。
 **⑧ 影响**：contracts+1 级别 · cse/折叠器/内核 Rust(ffi/style/taffy_engine/blob)/Android 宿主(白名单+物理化)/consistency 链/**新增门禁 1 个**；**下一项**：按 `css:next` 取。
+
+562. **★★★CSS 逐项全端对齐 · word-break（行内断词策略，P0·7×，五端 pass）——★首次触及「App 文本引擎默认断长词」的跨端语义边界**：
+**① 用户指令**：「不错不错，继续下一项」（承 #561 justify-self）——按 `css:next` 取下一项 = **word-break**。
+**② 侦察**：
+  · **Web 真值（真 Chromium 取证）**：盒宽定时——`normal` ⇒ 词边界断（长不可断串**整串溢出盒宽**，不折行）；`break-all` ⇒ **任意字符处折行**（收在盒内）。
+  · 语料 7× **全 `break-all`**（长串/代码块）+ p-rich-text `break-word`。**Skyline 官方表**：word-break 仅 **normal / break-all**。
+  · **历史**：批 41 曾把 word-break 判为「需多行文本模型（大）」而推迟——**多行模型已由 white-space 批建好**，前置条件满足。
+  · 三端断词 API：Android **无**原生任意断（仅 `BREAK_STRATEGY_*` 质量策略）；iOS `NSMutableParagraphStyle.lineBreakMode`；鸿蒙 `OH_Drawing_SetTypographyTextWordBreakType`。
+**③ 交付（全链）**：
+  · **契约四同步**：新级别 `WordBreak`，**值集 = 四端可表达子集 = normal / break-all**（keep-all/break-word/auto-phrase 诊断跳过——与 justify-self 同纪律「值集取各端交集」）；注册表 **93**（semantic 67）。
+  · **CSE**：`word-break`→`wordBreak`；★**进 `CSE_INHERITED_PROPS`**（CSS 继承属性）+ **顺带补 `white-space` 同族继承**（上批 white-space 未纳入继承集=潜在缺口：容器设、文本子节点应继承）。
+  · **编译器折叠面**：入 `APP_LAYOUT_FIELDS` + `APP_INHERITABLE_FIELDS`（App 编译期继承传播）+ 折叠分支（值透传宿主文本引擎，内核忽略该键）+ no-op 表处理。
+  · **三端宿主文本断行**：Android **ZWSP（U+200B）注入**（无原生任意断 API ⇒ 每字符后插零宽空格；**测量与绘制同源**）；iOS `lineBreakMode`（`byCharWrapping`/`byWordWrapping`；**measureTextWrapped + textLayerString 两处同源**）；鸿蒙 `SetTypographyTextWordBreakType`（**测量 + 绘制同源**）；MP wxss 原样透传（官方支持 normal/break-all）。
+  · **consistency 链路**：applier + snapshot 接口/闭集/校验器 + probes/web 读数 + coverage 映射。
+**④ ★★实证边界（子代理四端复核）**：
+  · `break-all`（= 语料唯一用到的值）在**五端一致折行**——本项核心能力达成。
+  · `normal` 则 **Web 整串溢出、App/MP 折行**——App/MP 文本引擎（`StaticLayout`/CoreText/Typography/Skyline）**默认即「长词折断」**（相当于 break-all）⇒「Web normal 的『不折断长词、任其溢出』」在 App/MP 文本模型里**不可表达**（具名引擎边界；验收页 + PLAYBOOK 记）。
+  · ★**这是首个"文本引擎语义边界"**（非几何/绘制类差异）——属引擎文本模型的固有差异，与「UA 未定义」（#559）同级但成因不同。
+  · ★**纪律推广（写进 PLAYBOOK）**：凡涉及"文本是否折断/溢出"的特性（word-break / overflow-wrap / hyphens），**先假设 App/MP 默认即断词**，再逐端核对。
+**⑤ 判据**：`css:verify` 三段过（implemented/parity/endsMapped）· probe 四端绿 · fresh 全绿（6 页）· 全量 **5306/5306**（golden 刷新）· **独立子代理终评四端全 pass**（含 normal 边界核实）· `test:coupled` 绿（app-css-surface 补 wordBreak 样例）· 定向门禁全绿（style-ir-schema 93/67 · style-coverage 67/67 · capability-alignment · app-css-surface · host-kernel-keys · profile-baseline · cse-lint · stats/docs/content/memory）· Android/iOS 零设备编译绿。
+**⑥ 诚实边界**：a) 值集 = normal/break-all（keep-all/break-word/auto-phrase 诊断跳过——四端可表达交集）；b) `normal` 的"不折断长词"在 App/MP **不可表达**（引擎默认断长词，具名）；c) ZWSP 注入对 CJK（本就可断）无害、对 `break-all` 目标场景（长 ASCII 串）有效。
+**⑦ 影响**：contracts+1 级别 · cse(继承)/折叠器/三端宿主(Android ZWSP · iOS paragraphStyle · 鸿蒙 WordBreakType)/consistency 链；**下一项**：按 `css:next` 取。
