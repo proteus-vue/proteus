@@ -315,6 +315,26 @@ describe('★★★G-61 B1 · CSE 计算值', () => {
     const r3 = compute('.a { width: clamp(64px, 22%, 132px) }', n)
     expect(r3.diagnostics.some((d) => d.code === 'CSE_VALUE_UNSUPPORTED')).toBe(true)
   })
+  it('★★★var() 简写展开（2026-10-08 · css:next）：值含 var() 的简写在 compute 期替换后展开（与 App 折叠面同口径）', () => {
+    const n = node('div', ['a'])
+    // 单值令牌 ⇒ 四边同值
+    const r1 = compute(':root{--m:4px} .a{margin:var(--m)}', n)
+    for (const k of ['marginTop', 'marginRight', 'marginBottom', 'marginLeft']) {
+      expect(r1.byKey[n.key]!.fields[k]).toEqual({ kind: 'absolute', dp: 4 })
+    }
+    // 多值令牌 ⇒ 1–4 值简写展开（此前 parse 期误当单值 ⇒ 对单边非法 ⇒ 丢弃；现 compute 期展开）
+    const r2 = compute(':root{--m:4px 8px} .a{margin:var(--m)}', n)
+    expect(r2.byKey[n.key]!.fields['marginTop']).toEqual({ kind: 'absolute', dp: 4 })
+    expect(r2.byKey[n.key]!.fields['marginRight']).toEqual({ kind: 'absolute', dp: 8 })
+    // 整体简写令牌（如 p-button 的 border: var(--p-button-border, none)）
+    const r3 = compute(':root{--b:1px solid #ccc} .a{border:var(--b)}', n)
+    expect(r3.byKey[n.key]!.fields['borderTopWidth']).toBe(1)
+    expect(r3.byKey[n.key]!.fields['borderTopColor']).toBe('#cccccc')
+    expect(r3.byKey[n.key]!.fields['borderTopStyle']).toBe('solid')
+    // 显式长手优先于简写展开（不覆盖）
+    const r4 = compute(':root{--m:4px} .a{margin-top:9px; margin:var(--m)}', n)
+    expect(r4.byKey[n.key]!.fields['marginTop']).toEqual({ kind: 'absolute', dp: 9 })
+  })
   it('var 替换函数独立语义（含 fallback 与嵌套）', () => {
     const vars = new Map([['--a', '#fff'], ['--b', 'var(--a)']])
     expect(substituteVars('var(--a)', vars)).toBe('#fff')

@@ -49,6 +49,7 @@ type ClassArrayExpression = AstNode
 type ClassLogicalExpression = AstNode
 type ClassConditionalExpression = AstNode
 type ClassMemberExpression = AstNode
+import { expandShorthandDecl } from './shorthand'
 import { computeTree } from './compute'
 import type { DynamicClassLookup, DynamicClassPlan } from '@proteus-vue/slot-runtime'
 
@@ -328,7 +329,16 @@ export function buildDynamicClassPlans(
   for (const rule of sheet.rules) {
     const cls = selfClassRuleOf(rule)
     if (!cls) continue
-    selfRules.push({ classes: cls.classes, props: rule.decls.map((d) => d.prop) })
+    // ★★★var() 简写（2026-10-08 · css:next）：值含 var() 的简写在 parse 期**不展开**（值未知，见 parse.ts）
+    //   ⇒ rule.decls 里是简写名（如 `border`）；此处用 expandShorthandDecl **复现 parse 原展开**，
+    //   否则动态类计划漏字段（运行期切换类不更新这些字段 = 真回归）。
+    const props: string[] = []
+    for (const d of rule.decls) {
+      const ex = d.prop.startsWith('--') ? null : expandShorthandDecl(d.prop, d.value, d.important)
+      if (ex) for (const e of ex) props.push(e.prop)
+      else props.push(d.prop)
+    }
+    selfRules.push({ classes: cls.classes, props })
   }
 
   const computeOpts = {

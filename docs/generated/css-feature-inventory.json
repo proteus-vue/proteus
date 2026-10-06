@@ -19,18 +19,17 @@
     "byImpl": {
       "not-started": 524,
       "excluded": 280,
-      "implemented": 143,
-      "partial": 2
+      "implemented": 144,
+      "partial": 1
     },
     "byPriority": {
       "P2": 114,
       "excluded": 280,
-      "done": 143,
-      "P1": 411,
-      "P0": 1
+      "done": 144,
+      "P1": 411
     },
-    "actionable": 526,
-    "actionableP0": 1
+    "actionable": 525,
+    "actionableP0": 0
   },
   "entries": [
     {
@@ -21286,8 +21285,8 @@
       "kind": "function",
       "mdnStatus": "standard",
       "syntax": "var( <custom-property-name> , <declaration-value>? )",
-      "impl": "partial",
-      "implNote": "CSE 支持（含 fallback/嵌套；编译期字面替换）",
+      "impl": "implemented",
+      "implNote": "CSE 支持（含 fallback/嵌套；编译期字面替换 + **值含 var() 的简写在 compute 期替换后展开**——此前 parse 期误当单值展开 ⇒ 多值令牌对单边非法丢弃）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -21296,7 +21295,7 @@
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P0",
+      "priority": "done",
       "acceptance": "none"
     },
     {

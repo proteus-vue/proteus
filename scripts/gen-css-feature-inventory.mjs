@@ -489,14 +489,15 @@ const functions = Object.keys(mdnFunctions).map((k) => ({
   mdnStatus: mdnFunctions[k].status ?? 'standard',
   syntax: mdnFunctions[k].syntax ?? null,
   // ★★★数学/计算函数项（2026-10-08 · css:next）：min()/max()/clamp() + calc() 已实现（CSE + 折叠面同口径）
-  impl: MATH_FNS.includes(k) || k === 'calc()' ? 'implemented' : k === 'var()' ? 'partial' : 'not-started',
+  // ★★★var() 项（2026-10-08 · css:next）：收口为 implemented（含 fallback/嵌套 + **var 简写展开**：值含 var() 的简写在 compute 期替换后展开）
+  impl: MATH_FNS.includes(k) || k === 'calc()' || k === 'var()' ? 'implemented' : 'not-started',
   implNote: MATH_FNS.includes(k)
     ? 'CSE + App 折叠面**px-only** 常量化（全参数绝对化 ⇒ 折单 px；含 %/vw ⇒ 诊断不静默丢）'
     : k === 'calc()' ? 'CSE + App 折叠面**同口径**（共享 calc-fold.ts）：完整算术（+ - * / 与括号）+ env(safe-area-*) fallback；含 %/相对单位 ⇒ 诊断不静默丢'
-    : k === 'var()' ? 'CSE 支持（含 fallback/嵌套；编译期字面替换）' : '',
+    : k === 'var()' ? 'CSE 支持（含 fallback/嵌套；编译期字面替换 + **值含 var() 的简写在 compute 期替换后展开**——此前 parse 期误当单值展开 ⇒ 多值令牌对单边非法丢弃）' : '',
   evidencedBy: { inIrRegistry: false, irScope: null, inCompilerFold: MATH_FNS.includes(k) || k === 'calc()', matrixLevel: null, webSupport: null },
   usage: 0,
-  priority: MATH_FNS.includes(k) || k === 'calc()' ? 'done' : k === 'var()' ? 'P0' : 'P1',
+  priority: MATH_FNS.includes(k) || k === 'calc()' || k === 'var()' ? 'done' : 'P1',
   acceptance: 'none',
 }))
 const units = Object.keys(mdnUnits).map((k) => ({
