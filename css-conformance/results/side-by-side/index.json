@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-06T12:35:14.007Z",
+  "generatedAt": "2026-10-06T13:45:15.762Z",
   "rows": [
     {
       "end": "mp",
@@ -41,6 +41,12 @@
       "end": "mp",
       "page": "justify-self.png",
       "out": "css-conformance/results/side-by-side/justify-self.mp-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "mp",
+      "page": "line-clamp.png",
+      "out": "css-conformance/results/side-by-side/line-clamp.mp-vs-web.png",
       "status": "ok"
     },
     {
@@ -129,6 +135,12 @@
     },
     {
       "end": "android",
+      "page": "line-clamp.png",
+      "out": "css-conformance/results/side-by-side/line-clamp.android-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "android",
       "page": "outline.png",
       "out": "css-conformance/results/side-by-side/outline.android-vs-web.png",
       "status": "ok"
@@ -213,6 +225,12 @@
     },
     {
       "end": "ios",
+      "page": "line-clamp.png",
+      "out": "css-conformance/results/side-by-side/line-clamp.ios-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "ios",
       "page": "outline.png",
       "out": "css-conformance/results/side-by-side/outline.ios-vs-web.png",
       "status": "ok"
@@ -293,6 +311,12 @@
       "end": "harmony",
       "page": "justify-self.png",
       "out": "css-conformance/results/side-by-side/justify-self.harmony-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "harmony",
+      "page": "line-clamp.png",
+      "out": "css-conformance/results/side-by-side/line-clamp.harmony-vs-web.png",
       "status": "ok"
     },
     {

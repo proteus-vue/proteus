@@ -17,6 +17,7 @@
 //   那个是「手写 12 行 JSON → CALayer」，验证的是几何通道；
 //   本文件是「真实 Vue 应用 → CALayer」，验证的是**整条 App 链路**（含 Vue 运行时与 diff）。
 import UIKit
+import CoreText
 import JavaScriptCore
 // ★mach_absolute_time（高分辨率单调时钟）——测量用，见 SelfDrawBridge.nowUs()
 import Darwin
@@ -517,6 +518,30 @@ enum ProteusLaunchDiag {
     static var data: [String: Any] = [:]
 }
 
+/// ★★★行高修复（2026-10-08 · 用户抓出「iOS 行高比其他端矮」）：CATextLayer 对**多行文本**完全忽略段落
+///   的 `minimumLineHeight/maximumLineHeight`（实测：显式 `\n`、CTParagraphStyle 都不行，恒用字体自然行高）
+///   ⇒ 声明 `line-height` 的多行文本行距偏小（与 Web/Android/鸿蒙不一致）。
+///   修：声明行高的多行文本改用本子类——`draw(in:)` 用 CoreText `CTFrameDraw` 渲染（**遵守** NSPS 行高，
+///   本机实测 pitch 精确 = 声明值）；其余情形仍走 CATextLayer 原生路径（零行为变化）。
+final class ProteusTextLayer: CATextLayer {
+    /// true ⇒ 用 CoreText 绘制（`string` 须为 NSAttributedString）；false ⇒ 原生 CATextLayer 绘制。
+    var useCoreText = false
+    override func draw(in ctx: CGContext) {
+        guard useCoreText, let attributed = string as? NSAttributedString else { super.draw(in: ctx); return }
+        let framesetter = CTFramesetterCreateWithAttributedString(attributed)
+        let path = CGPath(rect: CGRect(origin: .zero, size: bounds.size), transform: nil)
+        let frame = CTFramesetterCreateFrame(framesetter, CFRangeMake(0, 0), path, nil)
+        ctx.saveGState()
+        ctx.textMatrix = .identity
+        // ★★CALayer 的 `draw(in:)` 上下文是 **y 向下**（CA 坐标系）⇒ CoreText（y 向上）必须翻转，
+        //   否则文本上下颠倒（真机实测：A/B/C 三段全镜像——独立 CGContext 上恰好相反，不能照搬）。
+        ctx.translateBy(x: 0, y: bounds.height)
+        ctx.scaleBy(x: 1, y: -1)
+        CTFrameDraw(frame, ctx)
+        ctx.restoreGState()
+    }
+}
+
 final class SelfDrawView: UIView {
 
     /// 当前 CALayer 树（★自绘：每节点一个 CALayer，**不创建 UIView**）
@@ -621,8 +646,9 @@ final class SelfDrawView: UIView {
         let text = style["text"] as? String
         let fontSize = style["fontSize"] as? CGFloat
         if let text = text, !text.isEmpty {
-            // 文本叶子 → CATextLayer（GPU 加速；不创建 UIView，也不自栅格化）
-            let tl = CATextLayer()
+            // 文本叶子 → CATextLayer（GPU 加速；不创建 UIView，也不自栅格化）。
+            // ★★★行高修复（2026-10-08）：用子类 ProteusTextLayer——声明 line-height 的多行文本走 CoreText 绘制
+            let tl = ProteusTextLayer()
             // ★★★line-clamp 项（2026-10-08）：多行截断——按盒宽预截断（尾省略号）后再绘制
             let clamped = SelfDrawView.clampedText(text, style: style, boxWidth: boxWidth)
             tl.string = clamped
@@ -642,6 +668,8 @@ final class SelfDrawView: UIView {
             // ★★全端对齐批（2026-10-05 · white-space 五端对齐）：wrap ⇒ 换行不截断；
             //   nowrap ⇒ 单行（ellipsis 截断 / overflow:hidden 裁切 / 其余原样溢出）。
             let wrapMode = SelfDrawView.isWrapStyle(style)
+            // ★★★行高修复（2026-10-08）：声明行高的**多行**文本 ⇒ CoreText 绘制（CATextLayer 忽略段落行高）
+            tl.useCoreText = SelfDrawView.needsCoreText(style)
             tl.truncationMode = (!wrapMode && (style["textOverflow"] as? String) == "ellipsis") ? .end : .none
             tl.masksToBounds = isClipTextStyle(style)   // nowrap 溢出的裁切（Web overflow:hidden 语义）
             // ★contentsScale 必须显式设置：否则 Retina 上文本模糊（CATextLayer 不继承自动缩放）
@@ -3002,6 +3030,14 @@ final class SelfDrawView: UIView {
         return ws == "normal" || ws == "pre-wrap" || ws == "pre-line" || ws == "pre"
     }
 
+    /// ★★★行高修复（2026-10-08）：该 style 是否需 CoreText 绘制——**多行（wrap）且声明了 line-height**。
+    ///   （CATextLayer 忽略段落行高 ⇒ 只有这种形态才需要；单行/未声明行高仍走原生路径，零行为变化。）
+    static func needsCoreText(_ style: [String: Any]) -> Bool {
+        guard isWrapStyle(style) else { return false }
+        guard let lh = style["lineHeight"] as? String, !lh.isEmpty else { return false }
+        return true
+    }
+
     /// ★★★line-clamp 项（2026-10-08 · CSS Overflow）：按 `lineClamp` 预截断文本（尾省略号）。
     ///   无 clamp / 无需截断 ⇒ 原串（零行为变化）。度量（wrapRemeasure）与绘制（makeLayer/configureLayer）
     ///   **同源**调适配器 `truncateToLines`。
@@ -3267,6 +3303,8 @@ final class SelfDrawView: UIView {
                 let wrapMode2 = SelfDrawView.isWrapStyle(style)
                 tl.truncationMode = (!wrapMode2 && (style["textOverflow"] as? String) == "ellipsis") ? .end : .none
                 tl.isWrapped = wrapMode2
+                // ★★★行高修复（复用 = 完全重配：useCoreText 也必须重配，否则复用层残留上一节点的绘制方式）
+                (tl as? ProteusTextLayer)?.useCoreText = SelfDrawView.needsCoreText(style)
                 tl.contentsScale = UIScreen.main.scale
             }
             // ★★复用路径**必须同样重配**（纪律：复用 = 完全重配）——否则池里取出的层会
