@@ -14,7 +14,7 @@ import type { AppNavigation } from '@proteus-vue/render-backend/app-navigation'
 import { createRouter, type RouterInstance } from '@proteus-vue/router'
 import type { RouteRecord } from '@proteus-vue/router/types'
 import { APP_SCREEN_CONTENT, APP_SCREEN_REGISTRY, APP_RUNTIME_CONTENT } from './app-screen-content.generated'
-import { createSuperappRuntime } from '@proteus-vue/render-backend'
+import { createSuperappRuntime, TAB_BAR_SPEC } from '@proteus-vue/render-backend'
 import type { SuperappRuntime } from '@proteus-vue/render-backend'
 
 type HostInvoke = (method: string, argsJson: string) => string
@@ -89,6 +89,8 @@ export function bootSuperapp(host?: SuperappHost): BootResult {
           stack: nav.stack.stack.map((s) => s.name),
           tabs: reg.tabNames,
           tabLabels: reg.tabLabels,
+          // ★B2（G1）：tab 栏视觉规格（共享）——宿主读它建原生 tab（不再各写一遍）
+          tabSpec: TAB_BAR_SPEC,
           // ★★★逐屏截图装置（2026-10-05 · 拆页后每页需独立截图）：**全部屏名**——
           //   验收项目常无 tab ⇒ 宿主靠它遍历全部屏（iOS drive / Android --es screen / 鸿蒙同源）。
           screens: screenNames,
