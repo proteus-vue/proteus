@@ -6,23 +6,34 @@ import type { AppScreenSpec } from '@proteus-vue/router/app-stack'
 
 // ─── ① 全端页面清单（Web/MP：createRouter(routes)）───
 export const routes: RouteRecord[] = [
+  { name: "animation", path: "pages/animation", component: "../pages/animation.vue", parent: "index" },
+  { name: "at-rules", path: "pages/at-rules", component: "../pages/at-rules.vue", parent: "index" },
   { name: "background-position", path: "pages/background-position", component: "../pages/background-position.vue", parent: "index" },
+  { name: "background", path: "pages/background", component: "../pages/background.vue", parent: "index" },
   { name: "border-style", path: "pages/border-style", component: "../pages/border-style.vue", parent: "index" },
   { name: "border", path: "pages/border", component: "../pages/border.vue", parent: "index", meta: {"title":"CSS 验收 · 边框"} },
+  { name: "box-model", path: "pages/box-model", component: "../pages/box-model.vue", parent: "index" },
+  { name: "effects", path: "pages/effects", component: "../pages/effects.vue", parent: "index" },
+  { name: "flex", path: "pages/flex", component: "../pages/flex.vue", parent: "index" },
+  { name: "font", path: "pages/font", component: "../pages/font.vue", parent: "index" },
   { name: "grid-auto-flow", path: "pages/grid-auto-flow", component: "../pages/grid-auto-flow.vue", parent: "index" },
   { name: "grid-auto", path: "pages/grid-auto", component: "../pages/grid-auto.vue", parent: "index" },
   { name: "grid-template-areas", path: "pages/grid-template-areas", component: "../pages/grid-template-areas.vue", parent: "index" },
+  { name: "grid-tracks", path: "pages/grid-tracks", component: "../pages/grid-tracks.vue", parent: "index" },
   { name: "index", path: "pages/index", component: "../pages/index.vue" },
   { name: "justify-self", path: "pages/justify-self", component: "../pages/justify-self.vue", parent: "index", meta: {"title":"CSS 验收 · 网格自对齐"} },
   { name: "line-clamp", path: "pages/line-clamp", component: "../pages/line-clamp.vue", parent: "index" },
   { name: "math-functions", path: "pages/math-functions", component: "../pages/math-functions.vue", parent: "index" },
+  { name: "misc", path: "pages/misc", component: "../pages/misc.vue", parent: "index" },
   { name: "outline", path: "pages/outline", component: "../pages/outline.vue", parent: "index" },
   { name: "overflow-page", path: "pages/overflow-page", component: "../pages/overflow-page.vue", parent: "index" },
   { name: "overflow", path: "pages/overflow", component: "../pages/overflow.vue", parent: "index" },
   { name: "place-items", path: "pages/place-items", component: "../pages/place-items.vue", parent: "index" },
+  { name: "position", path: "pages/position", component: "../pages/position.vue", parent: "index" },
   { name: "safe-area", path: "pages/safe-area", component: "../pages/safe-area.vue", parent: "index" },
   { name: "text-shadow", path: "pages/text-shadow", component: "../pages/text-shadow.vue", parent: "index" },
   { name: "text", path: "pages/text", component: "../pages/text.vue", parent: "index", meta: {"title":"CSS 验收 · 文本"} },
+  { name: "units", path: "pages/units", component: "../pages/units.vue", parent: "index" },
   { name: "vw-vh", path: "pages/vw-vh", component: "../pages/vw-vh.vue", parent: "index" },
   { name: "word-break", path: "pages/word-break", component: "../pages/word-break.vue", parent: "index", meta: {"title":"CSS 验收 · 断词"} },
 ]
@@ -33,9 +44,21 @@ export const routeMap: Record<string, RouteRecord> = routes.reduce((m, r) => { m
 // ─── ② App 端投影（App：createAppStack({ screens }) / createAppNavigation）───
 //     与 ① 同源；平台门控已应用（webOnly / platforms 不含 native 的页面已剔除）
 export const screens: Record<string, AppScreenSpec> = {
+  "animation": {
+    "name": "animation",
+    "path": "pages/animation"
+  },
+  "at-rules": {
+    "name": "at-rules",
+    "path": "pages/at-rules"
+  },
   "background-position": {
     "name": "background-position",
     "path": "pages/background-position"
+  },
+  "background": {
+    "name": "background",
+    "path": "pages/background"
   },
   "border-style": {
     "name": "border-style",
@@ -44,6 +67,22 @@ export const screens: Record<string, AppScreenSpec> = {
   "border": {
     "name": "border",
     "path": "pages/border"
+  },
+  "box-model": {
+    "name": "box-model",
+    "path": "pages/box-model"
+  },
+  "effects": {
+    "name": "effects",
+    "path": "pages/effects"
+  },
+  "flex": {
+    "name": "flex",
+    "path": "pages/flex"
+  },
+  "font": {
+    "name": "font",
+    "path": "pages/font"
   },
   "grid-auto-flow": {
     "name": "grid-auto-flow",
@@ -56,6 +95,10 @@ export const screens: Record<string, AppScreenSpec> = {
   "grid-template-areas": {
     "name": "grid-template-areas",
     "path": "pages/grid-template-areas"
+  },
+  "grid-tracks": {
+    "name": "grid-tracks",
+    "path": "pages/grid-tracks"
   },
   "index": {
     "name": "index",
@@ -73,6 +116,10 @@ export const screens: Record<string, AppScreenSpec> = {
     "name": "math-functions",
     "path": "pages/math-functions"
   },
+  "misc": {
+    "name": "misc",
+    "path": "pages/misc"
+  },
   "outline": {
     "name": "outline",
     "path": "pages/outline"
@@ -89,6 +136,10 @@ export const screens: Record<string, AppScreenSpec> = {
     "name": "place-items",
     "path": "pages/place-items"
   },
+  "position": {
+    "name": "position",
+    "path": "pages/position"
+  },
   "safe-area": {
     "name": "safe-area",
     "path": "pages/safe-area"
@@ -101,6 +152,10 @@ export const screens: Record<string, AppScreenSpec> = {
     "name": "text",
     "path": "pages/text"
   },
+  "units": {
+    "name": "units",
+    "path": "pages/units"
+  },
   "vw-vh": {
     "name": "vw-vh",
     "path": "pages/vw-vh"
@@ -112,7 +167,7 @@ export const screens: Record<string, AppScreenSpec> = {
 }
 
 /** 路由名数组（App 深栈/压测按它循环取屏——顺序与 routes 一致） */
-export const screenNames: string[] = ["background-position","border-style","border","grid-auto-flow","grid-auto","grid-template-areas","index","justify-self","line-clamp","math-functions","outline","overflow-page","overflow","place-items","safe-area","text-shadow","text","vw-vh","word-break"]
+export const screenNames: string[] = ["animation","at-rules","background-position","background","border-style","border","box-model","effects","flex","font","grid-auto-flow","grid-auto","grid-template-areas","grid-tracks","index","justify-self","line-clamp","math-functions","misc","outline","overflow-page","overflow","place-items","position","safe-area","text-shadow","text","units","vw-vh","word-break"]
 
 /** tab 根屏（meta.isTab）—— App 端 tab 语义（switchTab/reset）的合法目标 */
 export const tabNames: string[] = []
@@ -120,23 +175,34 @@ export const tabNames: string[] = []
 // ─── ③ 类型提示：按路由名索引的参数类型表（来源：<route> 块 params 声明）───
 declare module '@proteus-vue/router/types' {
   interface RouteParamsByName {
+    'animation': {  },
+    'at-rules': {  },
     'background-position': {  },
+    'background': {  },
     'border-style': {  },
     'border': {  },
+    'box-model': {  },
+    'effects': {  },
+    'flex': {  },
+    'font': {  },
     'grid-auto-flow': {  },
     'grid-auto': {  },
     'grid-template-areas': {  },
+    'grid-tracks': {  },
     'index': {  },
     'justify-self': {  },
     'line-clamp': {  },
     'math-functions': {  },
+    'misc': {  },
     'outline': {  },
     'overflow-page': {  },
     'overflow': {  },
     'place-items': {  },
+    'position': {  },
     'safe-area': {  },
     'text-shadow': {  },
     'text': {  },
+    'units': {  },
     'vw-vh': {  },
     'word-break': {  },
   }
