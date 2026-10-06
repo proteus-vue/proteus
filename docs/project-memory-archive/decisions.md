@@ -1620,3 +1620,10 @@
 **④ Android 独立应用**：`build-and-run.sh` 加 `--css`（照 `--lights`/`--flip` 的 sed 清单生成）——包名 `dev.proteus.cssconf`、标签「CSS 验收」、launcher **FQN** `dev.proteus.layoutcore.SuperappActivity`（换包名后相对名会错）。真机判据：`dev.proteus.cssconf` 与 `layoutcore` 并存、`resolve-activity` 指向 SuperappActivity、`monkey -c LAUNCHER` 启动 → `page=index` + 截图。
 **⑤ 教训**：壳**首帧渲染时机**决定安全区是否解析（跨端同语义须一致）；iOS 手势 target 须强引用；换包名清单的 launcher 须 FQN。
 
+600. **★★★用户抓出「网格页打开顶部超出状态栏、下滑就正常」——跨屏滚动偏移残留**：
+**① 用户指令**：「测试安卓比如网格流、网格区域打开页面默认顶部超出了状态栏，下滑下就正常了，很神奇」。
+**② 根因（取证）**：滚动偏移（Android scrollY/scrollX、iOS contentOffset）是**视图状态**非**树状态** ⇒ 长首页滚动后挂载新屏时偏移仍在 ⇒ 新屏整体上移（顶部顶出/压过状态栏）；一下滑被重新钳制 ⇒ "又正常了"。★iOS `resetContentOffset()` 注释早写"建新树时必须调用"，统一运行期漏调。
+**③ 修**：共享运行期 `mountScreen` 挂载前调 `proteusHost.resetScroll()`；Android `SuperappRuntimeHost.resetScroll`（setContentScrollY/X(0)）+ **quickjs_jni.c C 绑定**（native proteusHost 是固定方法表，Java 方法不自动暴露）；iOS `resetContentOffset()`。
+**④ 判据**：真机 scroll→scrollY=740 → tap 进网格页 → scrollY=0 + 截图标题回安全区。
+**⑤ 教训**：**跨屏共享的视图状态（滚动偏移）必须在新屏挂载时显式归零**（一处：统一运行期 mountScreen）。
+
