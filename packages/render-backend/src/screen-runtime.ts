@@ -54,8 +54,11 @@ export interface CreateScreenRuntimeOptions {
   /** 视口（实例化用；宿主在挂载时给真实尺寸） */
   viewport: { width: number; height: number }
   /**
-   * 宿主把内容 local id 重映射到内核 id 的**基址**（`screen.mount` 回报）。
-   * 缺省 1000（与 Android `ScreenHost` 既有基址一致；宿主可覆盖）。
+   * 手势命中的**内核 id → 内容 local id** 的映射基址。两条宿主路径口径不同：
+   *   · **不传（缺省）** = 恒等：`VaporRenderHost.mount` **直接用节点 id** 建树（App 壳走这条）⇒
+   *     `kernelId === localId`，无需重映射；
+   *   · **传数字** = `kernelId = base + 数组序`：`ScreenHost.screen.mount` 按**数组序**重映射内容
+   *     节点（Android 基址 1000）⇒ 反查 `index = kernelId − base`、`localId = 节点序[index]`。
    */
   contentIdBase?: number
   /** 诊断出口（不静默） */
@@ -98,7 +101,7 @@ export interface ScreenRuntime {
  * ```
  */
 export function createScreenRuntime(opts: CreateScreenRuntimeOptions): ScreenRuntime {
-  const base = opts.contentIdBase ?? 1000
+  const base = opts.contentIdBase // undefined ⇒ 恒等（VaporRenderHost 直用节点 id）
   const instances = new Map<string, ScreenRuntimeInstance>()
   const note = opts.onNote ?? (() => {})
 
@@ -165,6 +168,7 @@ export function createScreenRuntime(opts: CreateScreenRuntimeOptions): ScreenRun
 
     /** R6 反查：内核 id → 内容局部 id（宿主重映射 = 基址 + 数组序） */
     function localIdOf(kernelId: number): number {
+      if (typeof base !== 'number') return kernelId // 恒等（VaporRenderHost 直用节点 id）
       const idx = kernelId - base
       return idx >= 0 && idx < localIdsOrdered.length ? localIdsOrdered[idx]! : kernelId
     }
