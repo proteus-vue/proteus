@@ -79,3 +79,5 @@ export const superappBoot: (argsJson: string) => string;
 /** ★★★批次 44：superapp 驱动链（boot + 逐 tab 切页）——**单次调用内完成**（一次性 VM）。
  *  argsJson = { bundle, filesDir, tabs?: string[] }；返回 { ok, boot, drive:{ pending, log, state }, rounds }。 */
 export const superappDrive: (argsJson: string) => string;
+/** ★★B1：App 壳统一运行期渲染（一次性 VM）——argsJson = { bundle, filesDir, page, viewport:{width,height}, chain? }；返回 { ok, state, tree } */
+export const superappScreen: (argsJson: string) => string;

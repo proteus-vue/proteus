@@ -19,11 +19,15 @@ import { NodeContent } from '@kit.ArkUI';
 import { display, window } from '@kit.ArkUI';
 import { util } from '@kit.ArkTS';
 import { fileIo } from '@kit.CoreFileKit';
-import { attach, renderCommands, scrollRoot, appScreenCommands, appScreenContentHeight, hostRtShellInstall, hostRtShellEvent } from 'proteus_render';
-import { superappDrive } from 'libproteus_bench.so';
+import { attach, renderCommands, scrollRoot, appScreenCommands, appScreenContentHeight, appScreenHitAt, hostRtShellInstall, hostRtShellEvent } from 'proteus_render';
+import { superappDrive, superappScreen } from 'libproteus_bench.so';
 
 const DOMAIN = 0x0002;
 const TAG = 'ProteusSuperapp';
+
+/** ★B1：统一运行期渲染入参（ArkTS 禁未型字面量 ⇒ 用接口声明） */
+interface RtViewport { width: number; height: number }
+interface RtArgs { bundle: string; filesDir: string; page: string; viewport: RtViewport; chain?: number[] }
 const TAB_H = 56;   // 底部 Tab 栏高度（vp）
 
 @Entry
@@ -56,8 +60,13 @@ struct Superapp {
   private scrollOffset: number = 0;
   private maxScroll: number = 0;
   private touchLastY: number = -1;
-  /** 视口高（vp；renderCurrent 处记录——与 contentH 同源）。 */
+  /** ★B1：触摸起点 + 是否移动（tap 判定：几乎没动 = tap → 命中 → 导航）。 */
+  private touchStartX: number = -1;
+  private touchStartY: number = -1;
+  private touchMoved: boolean = false;
+  /** 视口高/宽（vp；renderCurrent 处记录——与 contentH 同源）。 */
   private static vpH: number = 844;
+  private static vpW: number = 390;
 
   /** Tab 图标（⌂/✉/☺——与 Web/Android/iOS 同形） */
   private tabIconOf(name: string): string {
@@ -258,16 +267,51 @@ struct Superapp {
     if (typeof cur === 'string') this.current = cur;
   }
 
+  /** ★B1：统一运行期渲染入参 → JSON（用接口声明，避 ArkTS 未型字面量） */
+  private static rtArgsJson(page: string, bundle: string, filesDir: string, vpW: number, vpH: number, chain?: number[]): string {
+    const vp: RtViewport = { width: vpW, height: vpH };
+    const a: RtArgs = { bundle: bundle, filesDir: filesDir, page: page, viewport: vp };
+    if (chain && chain.length > 0) { a.chain = chain; }
+    return JSON.stringify(a);
+  }
+
+  /**
+   * ★★★B1：**点击命中 → 导航**（鸿蒙腿）。appScreenHitAt(内容坐标) → 冒泡链 → superappScreen(chain)
+   *   （JS 共享运行期派发 tap → $nav 动作 → 导航 → 挂载目标屏）→ applyState + 重绘。
+   *   ★内容坐标 = 视口坐标 + scrollOffset（命中树在内容坐标系）。
+   */
+  private onTapAt(vpX: number, vpY: number): void {
+    try {
+      const contentY: number = vpY + this.scrollOffset;
+      const hitJson: string = appScreenHitAt(vpX, contentY);
+      const hit = JSON.parse(hitJson) as Record<string, Object>;
+      const chain = hit['chain'] as number[] | undefined;
+      if (!chain || chain.length === 0) { return; }
+      const rtOut: string = superappScreen(Superapp.rtArgsJson(this.current, this.bundle, this.filesDir, Superapp.vpW, Superapp.vpH, chain));
+      const rt = JSON.parse(rtOut) as Record<string, Object>;
+      const st = rt['state'] as Record<string, Object> | undefined;
+      if (st) { this.applyState(st); }
+      const cur = rt['current'] as string;
+      if (cur !== undefined && cur.length > 0) { this.current = cur; }
+      this.scrollOffset = 0;
+      hilog.info(DOMAIN, TAG, 'SUPERAPP_TAP chain=%{public}s current=%{public}s', JSON.stringify(chain), this.current);
+      this.renderCurrent();
+    } catch (e) {
+      hilog.error(DOMAIN, TAG, 'SUPERAPP_TAP_ERROR %{public}s', JSON.stringify(e) ?? '');
+    }
+  }
+
   /** ★★★鸿蒙滚动对齐：触摸滚动（与 Android `scrollDragBy` / iOS `driveScrollDrag` 同语义）。
    *   手指上滑（windowY 减小）⇒ offset 增大 ⇒ 内容上移。 */
   private onScrollTouch(e: TouchEvent): void {
     const t: TouchObject = e.touches[0];
     if (t === undefined) { return; }
-    if (e.type === TouchType.Down) { this.touchLastY = t.windowY; return; }
+    if (e.type === TouchType.Down) { this.touchLastY = t.windowY; this.touchStartX = t.windowX; this.touchStartY = t.windowY; this.touchMoved = false; return; }
     if (e.type === TouchType.Move) {
       if (this.touchLastY < 0) { this.touchLastY = t.windowY; return; }
       const dy: number = t.windowY - this.touchLastY;
       this.touchLastY = t.windowY;
+      if (Math.abs(t.windowY - this.touchStartY) > 8 || Math.abs(t.windowX - this.touchStartX) > 8) { this.touchMoved = true; }
       let next: number = this.scrollOffset - dy;
       if (next < 0) { next = 0; }
       if (next > this.maxScroll) { next = this.maxScroll; }
@@ -277,7 +321,13 @@ struct Superapp {
       }
       return;
     }
-    if (e.type === TouchType.Up || e.type === TouchType.Cancel) { this.touchLastY = -1; }
+    if (e.type === TouchType.Up) {
+      // ★B1：几乎没动 ⇒ tap → 命中 → 导航（与 Android hitTest→gesture→JS 同语义）
+      if (!this.touchMoved && this.touchStartX >= 0) { this.onTapAt(this.touchStartX, this.touchStartY); }
+      this.touchLastY = -1; this.touchMoved = false;
+      return;
+    }
+    if (e.type === TouchType.Cancel) { this.touchLastY = -1; this.touchMoved = false; }
   }
 
   /** 把**当前页**内容真画到屏上（复用既有 appScreenCommands + renderCommands 通道） */
@@ -285,8 +335,7 @@ struct Superapp {
     const page: string = this.current && this.nodesByPage.has(this.current) ? this.current
       : (this.nodesByPage.has('index') ? 'index' : '');
     if (!page) return;
-    const nodes: string | undefined = this.nodesByPage.get(page);
-    if (!nodes) return;
+    let nodes: string = this.nodesByPage.get(page) ?? '[]';
     const disp = display.getDefaultDisplaySync();
     // ★★第五轮修复（2026-10-05）：**vp 值用精确除法**（此前 `px2vp()` 把结果截断成整数 vp：
     //   1320px / 3.5 = 377.14vp 被截成 377 ⇒ 内核视口 377vp ⇒ 页根 cmd 宽 377×3.5 = 1319.5px
@@ -303,6 +352,25 @@ struct Superapp {
     const contentH: number = vpH;
     try {
       attach(this.content, vpDensity, vpW, contentH);
+      // ★★★B1（统一运行期）：内容由 JS **共享运行期**实例化（superappScreen：boot → createSuperappRuntime
+      //   → 实例化该屏 → host.mount 捕获 tree）；拿不到则回退静态 nodesByPage（诚实降级）。
+      Superapp.vpW = vpW;
+      try {
+        const rtOut: string = superappScreen(Superapp.rtArgsJson(page, this.bundle, this.filesDir, vpW, vpH));
+        const rt = JSON.parse(rtOut) as Record<string, Object>;
+        const tree = rt['tree'] as Record<string, Object> | undefined;
+        if (tree && Array.isArray(tree['nodes'])) {
+          nodes = JSON.stringify(tree['nodes']);
+          hilog.info(DOMAIN, TAG, 'SUPERAPP_RUNTIME page=%{public}s nodes=%{public}d', page, (tree['nodes'] as Object[]).length);
+        }
+        const st = rt['state'] as Record<string, Object> | undefined;
+        if (st) { this.applyState(st); }
+        // ★修：屏名以**实际渲染的 current** 为准（boot 后路由 current 恒为 index，会盖掉真实当前屏）
+        const cur = rt['current'] as string;
+        if (cur !== undefined && cur.length > 0) { this.current = cur; }
+      } catch (re) {
+        hilog.error(DOMAIN, TAG, 'SUPERAPP_RUNTIME_ERROR %{public}s', JSON.stringify(re) ?? '');
+      }
       const cmds: string = appScreenCommands(JSON.stringify({
         'nodes': nodes, 'density': vp2px(1), 'vpW': vpW, 'vpH': contentH,
         'page': page, 'filesDir': this.filesDir,
