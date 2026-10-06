@@ -74,6 +74,9 @@ export const PROP_TYPES = {
   Overflow: isEnum(OVERFLOW),
   JustifySelf: isEnum(JUSTIFY_SELF),
   GridAutoFlow: isEnum(GRID_AUTO_FLOW),
+  // ★★★outline 族项（2026-10-08）：轮廓宽度/偏移（长度，可负——偏移允许负值）
+  OutlineWidth: isLength,
+  OutlineOffset: (v: unknown): boolean => typeof v === 'number' || (typeof v === 'string' && /^-?\d*\.?\d+(px|rpx|%)?$/.test(v.trim())),
   WordBreak: isEnum(WORD_BREAK),
   BackgroundSize: isBgSize,
   BackgroundPosition: isBgPosition,

@@ -133,6 +133,8 @@ function styleOf(el: Element, win: Window): NormalizedStyle {
     ['margin-bottom', 'marginBottom'], ['margin-left', 'marginLeft'],
     ['border-top-width', 'borderTopWidth'], ['border-right-width', 'borderRightWidth'],
     ['border-bottom-width', 'borderBottomWidth'], ['border-left-width', 'borderLeftWidth'],
+    // ★★★outline 族项（2026-10-08）：轮廓宽 + 偏移（px；偏移可负）
+    ['outline-width', 'outlineWidth'], ['outline-offset', 'outlineOffset'],
     ['border-top-left-radius', 'borderTopLeftRadius'], ['border-top-right-radius', 'borderTopRightRadius'],
     ['border-bottom-right-radius', 'borderBottomRightRadius'], ['border-bottom-left-radius', 'borderBottomLeftRadius'],
   ] as const) {
@@ -142,6 +144,8 @@ function styleOf(el: Element, win: Window): NormalizedStyle {
   for (const [prop, key] of [
     ['border-top-color', 'borderTopColor'], ['border-right-color', 'borderRightColor'],
     ['border-bottom-color', 'borderBottomColor'], ['border-left-color', 'borderLeftColor'],
+    // ★★★outline 族项（2026-10-08）：轮廓色
+    ['outline-color', 'outlineColor'],
   ] as const) {
     const c = color(prop)
     if (c) (styles as Record<string, unknown>)[key] = c
@@ -150,6 +154,8 @@ function styleOf(el: Element, win: Window): NormalizedStyle {
   // ★★★边框族收口批（2026-10-05）：逐边线型读数（枚举字符串原样小写——与 IR 值同形）
   for (const [prop, key] of [
     ['border-top-style', 'borderTopStyle'], ['border-right-style', 'borderRightStyle'],
+    // ★★★outline 族项（2026-10-08）：轮廓线型（原样收录）
+    ['outline-style', 'outlineStyle'],
     ['border-bottom-style', 'borderBottomStyle'], ['border-left-style', 'borderLeftStyle'],
   ] as const) {
     const v = cs.getPropertyValue(prop)

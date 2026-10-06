@@ -106,7 +106,7 @@ export const APP_ENUM_VALUES: Record<string, readonly string[]> = {
 /** 绘制字段（宿主自绘读这些键；模板照样要带上，否则挂载后无底色/无字色） */
 // ★★★逐边 border 批（2026-10-05 · border-bottom 等 4 个 P0 项）：追加**逐边** width/color（宿主逐边绘制；
 //   uniform borderWidth/borderColor 保留 = 四边缺省值）。语料 21 处 `border-<side>: <w> <style> <color>`。
-export const APP_PAINT_FIELDS = ['backgroundColor', 'color', 'fontSize', 'fontWeight', 'fontFamily', 'textAlign', 'lineHeight', 'textOverflow', 'letterSpacing', 'textDecoration', 'visibility', 'borderRadius', 'borderColor', 'borderWidth', 'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth', 'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor', 'borderTopStyle', 'borderRightStyle', 'borderBottomStyle', 'borderLeftStyle', 'opacity', 'boxShadow', 'transform', 'backgroundSize', 'backgroundPosition', 'backgroundRepeat'] as const
+export const APP_PAINT_FIELDS = ['backgroundColor', 'color', 'fontSize', 'fontWeight', 'fontFamily', 'textAlign', 'lineHeight', 'textOverflow', 'letterSpacing', 'textDecoration', 'visibility', 'borderRadius', 'borderColor', 'borderWidth', 'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth', 'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor', 'borderTopStyle', 'borderRightStyle', 'borderBottomStyle', 'borderLeftStyle', 'opacity', 'boxShadow', 'transform', 'backgroundSize', 'backgroundPosition', 'backgroundRepeat', 'outlineWidth', 'outlineColor', 'outlineStyle', 'outlineOffset'] as const
 const PAINT_FIELDS = new Set<string>(APP_PAINT_FIELDS)
 /**
  * ★批次 4（CSS 兼容对齐）：`text-align` 的**封闭集**（App 自绘文本在盒内的水平对齐）。
@@ -1143,6 +1143,21 @@ export function parseStaticStyle(
           continue
         }
         out[key] = norm
+      } else if (key === 'outlineWidth' || key === 'outlineColor' || key === 'outlineStyle' || key === 'outlineOffset') {
+        // ★★★outline 族项（2026-10-08）：轮廓宽/色/线型 + 偏移（偏移可负）
+        if (key === 'outlineOffset' || key === 'outlineWidth') {
+          const n = numOf(rawVal)
+          if (n === undefined) { pushDiag(`\`${rawKey}: ${rawVal}\` 不是纯数值`); continue }
+          out[key] = n; markImportant(key); continue
+        }
+        if (key === 'outlineColor') {
+          const c = normalizeCssColor(rawVal)
+          if (!c) { pushDiag(`outline-color \`${rawVal}\` 无法归一为十六进制——已跳过`); continue }
+          out.outlineColor = c; markImportant('outlineColor'); continue
+        }
+        const sv = rawVal.trim().toLowerCase()
+        if (!['solid', 'dashed', 'dotted', 'none'].includes(sv)) { pushDiag(`outline-style \`${rawVal}\` 未支持（solid/dashed/dotted/none）——已跳过`); continue }
+        out.outlineStyle = sv; markImportant('outlineStyle'); continue
       } else if (key === 'opacity') {
         // ★批次 15（以 Web 为基准）：Web 对 `opacity` 越界值一律 clamp 到 0..1（含 `%`）
         //   ⇒ App 同语义（此前原样透传 1.5 等，与 Web 不符）。
@@ -1181,6 +1196,24 @@ export function parseStaticStyle(
       const grad = parseCssGradient(rawVal)
       if (grad) { out.fillGradient = grad; markImportant('fillGradient'); continue }
       pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 未解析（仅支持 linear-gradient / radial-gradient；图片 url() 请用原生组件）——已跳过`)
+      continue
+    }
+    // ★★★outline 族项（2026-10-08 · css:next P0·3× · Basic UI）：**轮廓**（盒外/内偏移的环，不占布局）。
+    //   `outline` 简写（<width> <style> <color>，序任意）→ outlineWidth/outlineStyle/outlineColor；
+    //   `outline-offset`（可为负：正=盒外 / 负=盒内）→ outlineOffset。宿主绘制（host-only，内核零改动）。
+    if (key === 'outline') {
+      const b = parseBorderShorthand(rawVal)
+      if (b.style !== undefined && b.style !== 'solid' && b.style !== 'dashed' && b.style !== 'dotted' && b.style !== 'none') {
+        pushDiag(`outline 简写 \`${rawVal}\` 的线型 \`${b.style}\` 未支持（App 端线型支持 solid/dashed/dotted/none）——已跳过`)
+        continue
+      }
+      if (b.width === undefined && b.color === undefined && b.style === undefined) {
+        pushDiag(`outline 简写 \`${rawVal}\` 未解析出宽度/颜色（仅支持 \`<width> <style> <color>\`）——已跳过`)
+        continue
+      }
+      if (b.width !== undefined) { out.outlineWidth = b.width; markImportant('outlineWidth') }
+      if (b.color !== undefined) { out.outlineColor = b.color; markImportant('outlineColor') }
+      if (b.style !== undefined && b.style !== 'solid') { out.outlineStyle = b.style; markImportant('outlineStyle') }
       continue
     }
     // ★批次 5（CSS 兼容对齐 · 边框）：`border` 简写 → borderWidth + borderColor（uniform）。
@@ -1778,9 +1811,11 @@ function noOpResetValue(key: string, val: string): Record<string, unknown> | nul
   switch (key) {
     // 无 App 对应字段 ⇒ 空记录（级联无关，直接跳过）
     case 'textDecoration':
-    case 'outline':
     case 'backgroundImage':
       return v === 'none' ? {} : null
+    // ★★★outline 族项（2026-10-08）：outline 成真字段 ⇒ `outline:none` 记重置（级联覆盖生效）
+    case 'outline':
+      return v === 'none' ? { outlineWidth: 0 } : null
     // ★批次 38：transform 已成真字段 ⇒ 记录重置（级联须能覆盖低优先级的 translate/scale/rotate）
     case 'transform':
       return v === 'none' ? { transform: null } : null

@@ -78,6 +78,11 @@ export const SEMANTIC_FIELD_SNAPSHOT_KEYS: Readonly<Record<string, readonly stri
   borderLeftColor: ['borderLeftColor'],  borderColor: ['borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor'],
   // ★★★边框族收口批（2026-10-05）：逐边线型进 semantic——读数键为同名字符串（'solid'/'dashed'/'dotted'）
   borderTopStyle: ['borderTopStyle'],
+  // ★★★outline 族项（2026-10-08）：轮廓（读数键 = 同名）
+  outlineWidth: ['outlineWidth'],
+  outlineColor: ['outlineColor'],
+  outlineStyle: ['outlineStyle'],
+  outlineOffset: ['outlineOffset'],
   borderRightStyle: ['borderRightStyle'],
   borderBottomStyle: ['borderBottomStyle'],
   borderLeftStyle: ['borderLeftStyle'],

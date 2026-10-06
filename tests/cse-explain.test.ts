@@ -21,7 +21,7 @@ const SFC = `<template>
 .page { display: flex; padding: 12px 16px }
 .title { font-size: 20px; color: #1f2329; margin: 0; margin-top: 8px }
 .card { margin-top: 8px; border-radius: 12px 12px 0 0 }
-#main { border-top: 1px solid #eeeeee; outline-style: solid }
+#main { border-top: 1px solid #eeeeee; box-decoration-break: clone }
 .label { color: rgb(91, 91, 214) }
 </style>
 `
@@ -51,9 +51,10 @@ describe('★★★G-61 B1 · explain --style（CSE trace 消费面）', () => {
 
   it('未映射项如实显示（引擎不消费的长手——不静默丢）', () => {
     const out = explainStyle(SFC)
-    // ★★★边框族收口批（2026-10-05）：`border-<side>-style` **已映射**（线型批）⇒ 改用真正未映射的长手——
-    //   `outline-style`（App 引擎无 outline；见 css-feature-inventory 的具名排除）。
-    expect(out).toContain('未映射到 IR（引擎不消费）：outline-style: solid')
+    // ★★★边框族收口批（2026-10-05）：`border-<side>-style` 已映射（线型批）；
+    //   ★★★outline 族项（2026-10-08）：`outline-style` **已映射**（outline 族落地）⇒ 改用仍未映射的长手
+    //   `outline-color`…（其实已映射）——用真正不消费的：`box-decoration-break`（App 引擎不消费，非本仓面）。
+    expect(out).toContain('未映射到 IR（引擎不消费）：box-decoration-break: clone')
   })
 
   it('动态 :class / :style 如实记录（v1 不展开——不静默）', () => {

@@ -54,6 +54,8 @@ const COMPUTED_PROPS = [
   'justify-self', 'grid-template-columns', 'grid-column',
   // ★★★背景定位家族（2026-10-07）：size/position/repeat 的 Web 基准读数（逐案例证据）
   'background-size', 'background-position', 'background-repeat',
+  // ★★★outline 族项（2026-10-08）：轮廓宽/色/线型/偏移（Web 基准读数）
+  'outline-width', 'outline-color', 'outline-style', 'outline-offset',
 ]
 
 /** 页面清单（机器来源：router/auto-routes.ts 的 routes 表） */

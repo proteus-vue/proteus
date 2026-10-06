@@ -1,9 +1,9 @@
 # CSS Web 全量能力清单（自动生成——勿手改；生成器 scripts/gen-css-feature-inventory.mjs）
 
 > 总 949 项（property 651 · selector 144 · at-rule 19 · function 105 · unit 30）
-> 实现：**not-started** 548 · **excluded** 280 · **implemented** 117 · **partial** 4
-> 优先级：P2 115 · excluded 280 · P0 21 · done 117 · P1 416
-> ★**可推项（非已实现/非排除）**：552（其中 **P0 21**）
+> 实现：**not-started** 543 · **excluded** 280 · **implemented** 122 · **partial** 4
+> 优先级：P2 115 · excluded 280 · P0 19 · done 122 · P1 413
+> ★**可推项（非已实现/非排除）**：547（其中 **P0 19**）
 
 ## P0 —— 语料在用但未实现（真实需求，最优先）
 
@@ -15,8 +15,6 @@
 | `grid-auto-columns` | standard | CSS Grid Layout | 1 | not-started | — |
 | `grid-auto-rows` | standard | CSS Grid Layout | 1 | not-started | — |
 | `grid-template-areas` | standard | CSS Grid Layout | 2 | not-started | 未接：命名区域（证据：未接（CSE 支持 template-columns/rows；areas 未接）） |
-| `outline` | standard | CSS Basic User Interface | 2 | not-started | — |
-| `outline-offset` | standard | CSS Basic User Interface | 3 | not-started | 未接：轮廓（证据：未接） |
 | `overscroll-behavior-y` | standard | CSS Overscroll Behavior | 1 | not-started | — |
 | `place-items` | standard | CSS Box Alignment | 1 | not-started | — |
 | `text-shadow` | standard | CSS Text Decoration | 2 | not-started | 未接：文本阴影（证据：未接） |
@@ -102,11 +100,11 @@
 | `line-clamp` | CSS Overflow | not-started |
 | `object-position` | CSS Images | not-started |
 | `order` | CSS Display | not-started |
-| `outline-color` | CSS Basic User Interface | not-started |
-| `outline-style` | CSS Basic User Interface | not-started |
-| `outline-width` | CSS Basic User Interface | not-started |
 | `overflow-clip-margin` | CSS Overflow | not-started |
 | `overflow-wrap` | CSS Text | not-started |
 | `perspective` | CSS Transforms | not-started |
+| `perspective-origin` | CSS Transforms | not-started |
+| `place-content` | CSS Box Alignment | not-started |
+| `place-self` | CSS Box Alignment | not-started |
 
 （P2 与 excluded 全量见 JSON；本 MD 只列推进面）

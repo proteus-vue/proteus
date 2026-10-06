@@ -103,6 +103,11 @@ export interface NormalizedStyle {
   borderLeftColor?: Rgba
   // ★★★边框族收口批（2026-10-05）：逐边线型（字符串枚举——'solid'/'dashed'/'dotted'）
   borderTopStyle?: string
+  // ★★★outline 族项（2026-10-08）：轮廓宽/色/线型 + 偏移
+  outlineWidth?: number
+  outlineColor?: Rgba
+  outlineStyle?: string
+  outlineOffset?: number
   borderRightStyle?: string
   borderBottomStyle?: string
   borderLeftStyle?: string
@@ -438,6 +443,8 @@ const STYLE_KEYS = new Set([
   'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor',
   // ★★★边框族收口批（2026-10-05）：逐边线型（与接口/覆盖表同批——闭集纪律）
   'borderTopStyle', 'borderRightStyle', 'borderBottomStyle', 'borderLeftStyle',
+  // ★★★outline 族项（2026-10-08）
+  'outlineWidth', 'outlineColor', 'outlineStyle', 'outlineOffset',
   'borderTopLeftRadius', 'borderTopRightRadius', 'borderBottomRightRadius', 'borderBottomLeftRadius',
   'opacity', 'display', 'position', 'visibility',
   // ★★覆盖扩展（2026-10-02·二批）：布局族字段（与接口同步——闭集纪律：要么登记要么别产出）
@@ -497,7 +504,7 @@ export function validateStyleSnapshot(snap: unknown): ValidationResult {
         continue
       }
       if (v === undefined) continue
-      if (k === 'color' || k === 'backgroundColor' || k.startsWith('border') && k.endsWith('Color')) {
+      if (k === 'color' || k === 'backgroundColor' || k === 'outlineColor' || k.startsWith('border') && k.endsWith('Color')) {
         const c = v as Partial<Rgba>
         if (typeof c?.r !== 'number' || typeof c?.g !== 'number' || typeof c?.b !== 'number' || typeof c?.a !== 'number') {
           push('wrong-type', `${where}.styles.${k}`, '颜色必须是 {r,g,b,a} 数值')
@@ -518,6 +525,7 @@ export function validateStyleSnapshot(snap: unknown): ValidationResult {
         || k === 'wordBreak'    // ★★★word-break 项（2026-10-06）
         || k === 'backgroundSize' || k === 'backgroundPosition' || k === 'backgroundRepeat'   // ★★★背景定位家族（2026-10-07）
         || k === 'borderTopStyle' || k === 'borderRightStyle' || k === 'borderBottomStyle' || k === 'borderLeftStyle'   // ★★★边框族收口批
+        || k === 'outlineStyle'   // ★★★outline 族项（2026-10-08）：轮廓线型（字符串键）
         || k === 'flexWrap' || k === 'alignContent'
         || k === 'aspectRatio' || k === 'flexBasis' || k === 'transform' || k === 'boxShadow'
         || k === 'gridTemplateColumns' || k === 'gridTemplateRows' || k === 'gridColumn' || k === 'gridRow'

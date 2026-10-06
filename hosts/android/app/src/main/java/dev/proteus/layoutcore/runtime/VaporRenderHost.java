@@ -1252,6 +1252,8 @@ public final class VaporRenderHost {
         "width", "height", "minWidth", "maxWidth", "minHeight", "maxHeight",
         "top", "left", "right", "bottom", "gap", "flexBasis",
         "fontSize", "letterSpacing", "borderRadius", "borderWidth", "perspective",
+        // ★★★outline 族项（2026-10-08）：轮廓宽/偏移必须 ×密度（漏则环尺寸/偏移 1/3——子代理终评抓出）
+        "outlineWidth", "outlineOffset",
         "borderTopLeftRadius", "borderTopRightRadius", "borderBottomLeftRadius", "borderBottomRightRadius",
         "marginTop", "marginRight", "marginBottom", "marginLeft",
         "paddingTop", "paddingRight", "paddingBottom", "paddingLeft",
@@ -1658,9 +1660,9 @@ public final class VaporRenderHost {
             final boolean clipText = !wsWrap && w > 1f
                     && "hidden".equals(spec.optString("overflow", null))
                     && !("ellipsis".equals(spec.optString("textOverflow", null)));
-            return new ProteusHostView.Cmd(x, y, w, h, color, t, fs, textColor, radius, grad, glowSpec, maskSpec, fw, ta, bw, bc, shadowSpec, lh, ls, decor, wsWrap ? 0 : 1, multiLine, clipText, sideBorderOf(spec));
+            { ProteusHostView.Cmd _c = new ProteusHostView.Cmd(x, y, w, h, color, t, fs, textColor, radius, grad, glowSpec, maskSpec, fw, ta, bw, bc, shadowSpec, lh, ls, decor, wsWrap ? 0 : 1, multiLine, clipText, sideBorderOf(spec)); _c.outline = parseOutline(spec); return _c; }
         }
-        return new ProteusHostView.Cmd(x, y, w, h, color, null, 0f, 0, radius, grad, glowSpec, maskSpec, 400, 0, bw, bc, shadowSpec, 0f, 0f, 0, 0, false, false, sideBorderOf(spec));
+        { ProteusHostView.Cmd _c = new ProteusHostView.Cmd(x, y, w, h, color, null, 0f, 0, radius, grad, glowSpec, maskSpec, 400, 0, bw, bc, shadowSpec, 0f, 0f, 0, 0, false, false, sideBorderOf(spec)); _c.outline = parseOutline(spec); return _c; }
     }
 
     /** ★批次 4：`text-align` 字符串 → 码（0=left / 1=center / 2=right；未知 ⇒ 0） */
@@ -1775,6 +1777,20 @@ public final class VaporRenderHost {
 
     /** 渐变声明 → `GradSpec`（`GradSpec.parse` 对非法返回 null ⇒ 退回纯色——与 LightsHost 同口径） */
     /** fillGradient + 背景定位家族（2026-10-07）三个键（backgroundSize/Position/Repeat，spec 级）→ GradSpec */
+    /** ★★★outline 族项（2026-10-08）：轮廓规格 `[widthPx, offsetPx, colorARGB, styleInt]`（invalid ⇒ null）。 */
+    private static float[] parseOutline(JSONObject spec) {
+        if (spec == null) return null;
+        double ow = spec.optDouble("outlineWidth", 0);
+        String ocS = spec.optString("outlineColor", "");
+        String osV = spec.optString("outlineStyle", "solid");
+        if (ow <= 0 || ocS.isEmpty() || "none".equals(osV)) return null;
+        int oc;
+        try { oc = (int) (0xFF000000L | Long.parseLong(ocS.startsWith("#") ? ocS.substring(1) : ocS, 16)); } catch (NumberFormatException e) { return null; }
+        float off = (float) spec.optDouble("outlineOffset", 0);
+        int style = "dashed".equals(osV) ? 1 : "dotted".equals(osV) ? 2 : 0;
+        return new float[]{ (float) ow, off, oc, style };
+    }
+
     private ProteusHostView.GradSpec parseGrad(JSONObject spec) {
         return ProteusHostView.GradSpec.parse(spec.optJSONObject("fillGradient"),
                 spec.optString("backgroundSize", null), spec.optString("backgroundPosition", null), spec.optString("backgroundRepeat", null));

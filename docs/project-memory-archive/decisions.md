@@ -1329,3 +1329,16 @@
   · **立项**：新登记件 `docs/app-image-rendering-plan.md`（现状三端表 / 为什么是独立能力 / 范围 5 步 / 依赖 / 触发条件 / 关联）+ `board-inventory` 登记。
 **⑤ 诚实边界**：**App 图片渲染未做**（本项只做归类 + 立项）；object-fit 在 **App 端仍未交付**（因无图片渲染）；Web/MP 组件通道**已交付**（`<image mode>`）；App 图片渲染是**原生元素能力**（decode + 缓存 + fit），非样式折叠，依赖 Mnemosyne（内存）/ Hephaestus（高频原生能力）线。
 **⑥ 影响**：`scripts/gen-css-feature-inventory.mjs`（object-fit override + channel 字段）· `scripts/verify-css-feature.mjs`（channel→n/a）· `docs/generated/css-feature-inventory.{json,md}`（重生成）· `docs/app-image-rendering-plan.md`（新）· `docs/board-inventory.md`（登记）；**下一项**：css:next 取下一个可折叠 CSS 属性。
+573. **★★★CSS 逐项 · outline 族（outline / outline-width / -color / -style / -offset，P0·3×）——宿主绘制（host-only paint）+ ★具名「焦点态依赖」**（用户裁定）**：
+**① 用户指令**：「继续下一项」⇒ css:next 取 outline-offset。
+**② 侦察（先取证）**：**属性本身可交付**——`outline`（环）+ `outline-offset`（环与盒边的间距，正=盒外/负=盒内，**不占布局**）：Web 原生；App 宿主可画（host-only paint，同 border/box-shadow ⇒ **内核零改动**）；**Skyline 官方属性表 110 项无 outline**（引擎锁死）。**但语料 3× 全在 `:focus-visible` 下**（p-formfactor 焦点环），而 App **不支持状态伪类** ⇒ 那些规则到不了 App（与属性是否实现无关）。
+**③ 踩到 #569 铁律**：属性可实现，但唯一语料依赖更大能力（交互状态伪类/focus 通道）⇒ 向用户澄清并裁定「**实现 outline 族（静态）+ 具名 focus 依赖**」。
+**④ 交付（全链）**：
+  · **契约四同步**：新级别 OutlineWidth/OutlineOffset（+ outlineColor 复用 Color / outlineStyle 复用 BorderStyle）；runtime PROP_TYPES；注册表（semantic 71→75）。
+  · **编译器折叠**：`outline` 简写（`<width> <style> <color>` 序任意 → outlineWidth/outlineStyle/outlineColor）+ 长手 + `outline-offset`（可负）；CSE 直通（COLOR/ENUM/PX_LENGTH 三集 + mapToIrField）；`outline:none` 记重置（级联覆盖生效）。
+  · **宿主绘制**（三端，host-only，内核零改动）：Android `Cmd.outline[4]`（宽/偏移/色/线型）+ drawCmds 画盒 ± offset 的环（实线/虚线/DashPathEffect；点线 drawDotRow）；iOS 独立 `CAShapeLayer` 子层（`applyOutline` + `syncOutlineFrame`，画在盒 ± offset）+ styleOf 透传；鸿蒙 TextDrawSpec 字段 + 内容画布 `Oh_Drawing_Pen` 环（`appScreenCommands` 发四键）。
+  · **一致性链**：snapshot（outlineWidth/Color/Style/Offset + 校验：Color=Rgba/others）/coverage/applier/probes/web/能力源（两条 feature）/`verify-css-feature`（简写→parity/ends n/a）。
+**⑤ 判据**：`css:verify outline`（简写）+ `outline-offset` 三段全绿 · 验收页 `css-conformance/pages/outline.vue`（4 案例：solid/dashed/dotted 外扩 + solid 内缩）· **四端真机**：Android/iOS/鸿蒙 四案与 Web 同（**独立子代理逐案例复核**）· MP ◐（Skyline 无 outline，引擎锁死具名边界）· probe 四端 PASS · 全量 5319/5319（web-probe golden 刷新 + 3 条 coupled 配套断言同步）· coupled 311 绿 · 门禁全绿。
+**⑥ ★子代理终评抓出的两处真缺陷（已修）**：a) **鸿蒙 dotted 渲染成划线**（段长=线宽 ⇒ 与 B 案同形）⇒ 改**近零段长 + 圆头**（= 圆点）；b) **Android 轮廓宽/偏移未 ×密度**（`LEN_SCALARS` 漏登记 outlineWidth/outlineOffset ⇒ 环尺寸/偏移 1/3）⇒ 补登记（第 N 次"白名单必须跟新字段走"——本轮两处同款）。
+**⑦ 诚实边界**：a) **Skyline 无 outline**（引擎锁死，页面具名）；b) **语料 3× 全在 `:focus-visible`**——App 不支持状态伪类 ⇒ **语料到不了 App**（**具名依赖**：焦点态/交互状态伪类需独立能力）；本项验**静态** outline；c) iOS 环用独立子层（CALayer.border 装不下盒外偏移）。
+**⑧ 影响**：contracts/runtime/compiler/cse/consistency 链/三端宿主/验收页/能力源；**下一项**：按 css:next 取。

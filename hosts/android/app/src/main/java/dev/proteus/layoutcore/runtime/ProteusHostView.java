@@ -103,6 +103,11 @@ public class ProteusHostView extends ViewGroup {
          */
         final float[] sideBorder;
         /**
+         * ★★★outline 族项（2026-10-08）：轮廓 `[widthPx, offsetPx, colorARGB, styleInt(0=solid/1=dashed/2=dotted)]`；
+         *   null = 无轮廓（零行为变化）。**非 final**（构造器重载链长，轮廓是静态 per-node paint ⇒ 构造后赋值）。
+         */
+        float[] outline;
+        /**
          * ★★圆角半径（px；0 = 直角）——纯绘制属性（内核不收，只影响观感）。
          *
          * 【为什么加（2026-10-01 · 灯光秀）】灯光秀的 800 颗灯珠用 4px 圆角（圆点观感）；
@@ -2898,6 +2903,36 @@ public class ProteusHostView extends ViewGroup {
                     canvas.drawPath(bp, borderPaint);
                 } else if (c.radius > 0) canvas.drawRoundRect(l, t, rr, bb, c.radius, c.radius, borderPaint);
                 else canvas.drawRect(l, t, rr, bb, borderPaint);
+            }
+            // ★★★outline 族项（2026-10-08）：轮廓环——画在**盒 ± offset**（正=外扩 / 负=内缩），**不占布局**。
+            //   与 border 不同：outline 在盒外（offset>0）或盒内（offset<0）；线型 solid/dashed/dotted（同 border 线型）。
+            if (c.outline != null) {
+                final float ow = c.outline[0];
+                final float ooff = c.outline[1];
+                final int ocol = (int) c.outline[2];
+                final int ostyle = (int) c.outline[3];
+                if (ow > 0f && ocol != 0) {
+                    borderPaint.setStyle(android.graphics.Paint.Style.STROKE);
+                    borderPaint.setPathEffect(null);
+                    borderPaint.setStrokeWidth(ow);
+                    borderPaint.setColor(ocol);
+                    borderPaint.setAlpha(op < 1f ? Math.max(0, Math.min(255, (int) (Color.alpha(ocol) * op))) : Color.alpha(ocol));
+                    // 环的描边中线 = 盒边 + offset（Web: outline 位于距离盒边 offset 处；stroke 居中于该线）
+                    final float ocx = c.x - ooff, ocy = c.y - ooff, ocw = c.w + ooff * 2f, och = c.h + ooff * 2f;
+                    if (ostyle == 2) {
+                        // dotted ⇒ 圆点网格（与 border dotted 同标准：决策 #559）——四边逐点
+                        drawDotRow(canvas, ocx, ocy, ocx + ocw, ocy, ow, borderPaint);
+                        drawDotRow(canvas, ocx, ocy + och, ocx + ocw, ocy + och, ow, borderPaint);
+                        drawDotRow(canvas, ocx, ocy, ocx, ocy + och, ow, borderPaint);
+                        drawDotRow(canvas, ocx + ocw, ocy, ocx + ocw, ocy + och, ow, borderPaint);
+                    } else {
+                        if (ostyle == 1) borderPaint.setPathEffect(new android.graphics.DashPathEffect(new float[]{ow * 3f, ow * 2f}, 0f));
+                        final float oinset = ow * 0.5f;
+                        canvas.drawRect(ocx + oinset, ocy + oinset, ocx + ocw - oinset, ocy + och - oinset, borderPaint);
+                        borderPaint.setPathEffect(null);
+                    }
+                    borderPaint.setStyle(android.graphics.Paint.Style.FILL);
+                }
             }
             // ★★软边遮罩合成（mask v1）：**在全部内容（含文字/描边/发光）之后**用
             //   `渐变 shader + DST_IN` 把本层按揭示色标"擦"出来——
