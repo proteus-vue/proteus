@@ -1,28 +1,31 @@
 {
   "_note": "★CSS 能力逐项验收包（用户指定流程：实现一个 → 全端对齐视觉验收一个）。gates：implemented（IR 在册）/ parity（真 Chromium 同构样本与 CSE 值一致）/ endsMapped（三端可表达）。★视觉验收（像素级）仍由独立子代理按 Web 基准并排做——本包只归档**机器可判**的三段；pass=true 表示\"可以进入视觉验收\"，不等于\"视觉已验收\"。",
-  "id": "grid-template-columns",
-  "kind": "property",
-  "verifiedAt": "2026-10-06T21:57:51.926Z",
+  "id": "vw",
+  "kind": "unit",
+  "verifiedAt": "2026-10-06T21:55:40.249Z",
   "implEvidence": {
     "impl": "implemented",
-    "implNote": "IR 注册表在册（scope=semantic）",
-    "inIrRegistry": true,
-    "irScope": "semantic",
-    "inCompilerFold": true,
+    "implNote": "",
+    "inIrRegistry": false,
+    "irScope": null,
+    "inCompilerFold": false,
     "matrixLevel": null,
-    "webSupport": true,
-    "usage": 15,
+    "webSupport": null,
+    "usage": 0,
     "priority": "done"
   },
   "parity": {
     "ran": true,
     "pass": true,
     "detail": [
-      "IR `gridTemplateColumns` = \"1fr 2fr\"（与浏览器样本 grid-template-columns: 1fr 2fr 一致）"
+      "IR `width` = {\"kind\":\"absolute\",\"dp\":39}（与浏览器样本 width: 10vw 一致）"
     ],
-    "css": "grid-template-columns: 1fr 2fr",
-    "irField": "gridTemplateColumns",
-    "irValue": "1fr 2fr",
+    "css": "width: 10vw",
+    "irField": "width",
+    "irValue": {
+      "kind": "absolute",
+      "dp": 39
+    },
     "computedProbe": {
       "align-items": "normal",
       "background-color": "rgba(0, 0, 0, 0)",
@@ -49,7 +52,6 @@
       "grid-auto-flow": "row",
       "grid-auto-rows": "auto",
       "grid-template-areas": "none",
-      "grid-template-columns": "1fr 2fr",
       "justify-content": "normal",
       "justify-items": "normal",
       "justify-self": "auto",
@@ -71,16 +73,14 @@
     }
   },
   "endExpressibility": {
-    "web": "基准端（浏览器原生——A 档）",
-    "skyline": "可表达（grid-template-columns）",
-    "app": "可表达（dto: gridTemplateColumns · ops: layout.gridTemplateColumns）",
-    "skylineUnsupported": [],
-    "appUnsupported": []
+    "web": "n/a（非属性）",
+    "skyline": "n/a",
+    "app": "n/a"
   },
   "gates": {
     "implemented": true,
     "parity": true,
-    "endsMapped": true
+    "endsMapped": null
   },
   "pass": true,
   "nextStep": "机器判据三段已过 → 进入**视觉验收**：生成并排产物（node scripts/gen-baseline-side-by-side.mjs）+ 独立子代理按 Web 基准评审"

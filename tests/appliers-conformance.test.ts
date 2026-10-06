@@ -272,8 +272,12 @@ describe('★★★G-61 B3 · 三端 Applier conformance（相对 Web 基准）'
     // App：transform / boxShadow / gridTemplateColumns（内核有串但 v1 标记？）——逐条必须有理由
     for (const u of app.unsupported) expect(u.reason.length, `${u.field} 缺理由`).toBeGreaterThan(3)
     for (const u of sky.unsupported) expect(u.reason.length, `${u.field} 缺理由`).toBeGreaterThan(3)
-    // grid 在 Skyline 侧必须被拒（该端无 Grid——B4 的 degradeTo 负责降级）
-    expect(sky.unsupported.some((u) => u.field.startsWith('grid')), 'Skyline 应拒 grid').toBe(true)
+    // ★★★grid 族 Skyline 侧**透传**（2026-10-07 补齐 #570/#571 未收全的 line-based grid）：
+    //   透传 = 逐字进 wxss（Skyline 官方无 Grid 族、无 Grid 容器 ⇒ 不保证引擎语义；App 为主承载端，
+    //   语义由内核 taffy 承担）。此前 grid-template-columns/rows·grid-column/row 仍被 drop 属未收全，
+    //   本项补齐；故**不再**计 unsupported（同理的 grid-area/template-areas/auto-* 早已透传）。
+    expect(sky.wxss['grid-template-columns'], 'Skyline 应透传 grid-template-columns').toBe('1fr 1fr')
+    expect(sky.unsupported.some((u) => u.field.startsWith('grid')), 'grid 族已透传，不应再计 unsupported').toBe(false)
     // z-index 在 App 侧必须被拒（无层叠上下文）
     expect(app.unsupported.some((u) => u.field === 'zIndex'), 'App 应拒 zIndex').toBe(true)
   })

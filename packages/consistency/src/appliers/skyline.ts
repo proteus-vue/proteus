@@ -148,15 +148,13 @@ export function mapStyleIRToSkyline(fields: Record<string, unknown>, opts: Skyli
       continue
     }
     if (typeof value === 'string') {
-      if (field === 'gridTemplateColumns' || field === 'gridTemplateRows' || field === 'gridColumn' || field === 'gridRow') {
-        drop(field, value, 'Skyline 无 Grid（B4 的 degradeTo 配方：grid→嵌套 flex）')
-        continue
-      }
+
       // ★★★grid-template-areas / grid-area 项（2026-10-08）：**原样透传**——与 grid-auto-flow（#571）/
       //   justify-self（#570）同款：用户 CSS 里的 grid-template-areas 本就逐字进 wxss。
       //   ▲ 诚实边界：Skyline 官方属性表**无** grid 族（该端无 Grid 容器）；本项以 App（自研内核 taffy 原生
       //     GridTemplateAreas/NamedLine）为主承载端，Skyline 侧透传不保证引擎语义（与 #570/#571 同口径）。
-      if (field === 'gridTemplateAreas' || field === 'gridArea' || field === 'gridAutoColumns' || field === 'gridAutoRows') {
+      if (field === 'gridTemplateAreas' || field === 'gridArea' || field === 'gridAutoColumns' || field === 'gridAutoRows'
+          || field === 'gridTemplateColumns' || field === 'gridTemplateRows' || field === 'gridColumn' || field === 'gridRow') {
         put(field, kebab(field), value)
         continue
       }

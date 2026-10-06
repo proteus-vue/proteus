@@ -2,17 +2,17 @@
   "_note": "★CSS 能力逐项验收包（用户指定流程：实现一个 → 全端对齐视觉验收一个）。gates：implemented（IR 在册）/ parity（真 Chromium 同构样本与 CSE 值一致）/ endsMapped（三端可表达）。★视觉验收（像素级）仍由独立子代理按 Web 基准并排做——本包只归档**机器可判**的三段；pass=true 表示\"可以进入视觉验收\"，不等于\"视觉已验收\"。",
   "id": "background",
   "kind": "property",
-  "verifiedAt": "2026-10-05T08:22:49.911Z",
+  "verifiedAt": "2026-10-06T21:56:00.195Z",
   "implEvidence": {
-    "impl": "not-started",
-    "implNote": "",
+    "impl": "implemented",
+    "implNote": "**简写展开**：backgroundColor（附：fillGradient 部分支持）——简写 → 纯色折 background-color；渐变折 fillGradient（引擎绘制通道）（证据：vapor/template.ts:958-970（parseCssGradient + extractBackgroundColor））",
     "inIrRegistry": false,
     "irScope": null,
     "inCompilerFold": false,
     "matrixLevel": null,
     "webSupport": null,
     "usage": 218,
-    "priority": "P0"
+    "priority": "done"
   },
   "parity": {
     "ran": false,
@@ -29,10 +29,10 @@
     "appUnsupported": []
   },
   "gates": {
-    "implemented": false,
-    "parity": false,
-    "endsMapped": false
+    "implemented": true,
+    "parity": null,
+    "endsMapped": null
   },
-  "pass": false,
-  "nextStep": "未过：implemented / parity / endsMapped——先补实现或补探针样本"
+  "pass": true,
+  "nextStep": "机器判据三段已过 → 进入**视觉验收**：生成并排产物（node scripts/gen-baseline-side-by-side.mjs）+ 独立子代理按 Web 基准评审"
 }
