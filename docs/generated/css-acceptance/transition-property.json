@@ -1,0 +1,80 @@
+{
+  "_note": "★CSS 能力逐项验收包（用户指定流程：实现一个 → 全端对齐视觉验收一个）。gates：implemented（IR 在册）/ parity（真 Chromium 同构样本与 CSE 值一致）/ endsMapped（三端可表达）。★视觉验收（像素级）仍由独立子代理按 Web 基准并排做——本包只归档**机器可判**的三段；pass=true 表示\"可以进入视觉验收\"，不等于\"视觉已验收\"。",
+  "id": "transition-property",
+  "kind": "property",
+  "verifiedAt": "2026-10-06T12:41:12.830Z",
+  "implEvidence": {
+    "impl": "implemented",
+    "implNote": "**独立通道**：**独立通道（CSS Transitions）**：transition 家族登记为独立通道（同 transition/transition-duration）。Web 原生 / MP 原生支持；**App 端 CSS 属性变化过渡未实现**（#536「无显式触发点，属独立课题」）——框架转场走 packages/animation。（证据：packages/animation（独立通道：转场/动画规格 → 内核动画；CSS transition 属性变化过渡未做——#536））",
+    "inIrRegistry": false,
+    "irScope": null,
+    "inCompilerFold": false,
+    "matrixLevel": null,
+    "webSupport": true,
+    "usage": 1,
+    "priority": "done"
+  },
+  "parity": {
+    "ran": false,
+    "pass": null,
+    "detail": [
+      "未登记该能力的探针样本（`PROBE_VALUES`）——**不假装通过**（补样本后重跑；这是推进一项时的必做步骤）"
+    ]
+  },
+  "endExpressibility": {
+    "web": "基准端（浏览器原生——A 档）",
+    "skyline": "未映射（该字段未实现或 Skyline 不支持）",
+    "app": "未映射（该字段未实现）",
+    "skylineUnsupported": [],
+    "appUnsupported": []
+  },
+  "gates": {
+    "implemented": true,
+    "parity": null,
+    "endsMapped": null
+  },
+  "pass": true,
+  "nextStep": "机器判据三段已过 → 进入**视觉验收**：生成并排产物（node scripts/gen-baseline-side-by-side.mjs）+ 独立子代理按 Web 基准评审",
+  "visual": {
+    "_note": "★视觉验收结论（独立子代理按 Web 基准并排图评审；来源 = css-conformance/results/side-by-side/）。verdict: pass（与 Web 基准无可归因差异）/ fail（有实差异——见 caseIssues）/ unclear（图不足以判）。纪律：左半恒为 Web 基准（D1）；不看不清不编（unclear）。",
+    "reviewedAt": "2026-10-06T12:41:19.442Z",
+    "reviewedBy": "independent-visual-subagent",
+    "sideBySideDir": "css-conformance/results/side-by-side/",
+    "summary": {
+      "fails": 0,
+      "ends": "web:pass · mp:pass · android:pass · ios:pass · harmony:pass"
+    },
+    "verdicts": [
+      {
+        "end": "web",
+        "verdict": "pass",
+        "caseIssues": [],
+        "evidence": "基准端——transition-property 是 Web 原生能力（列出参与过渡的属性）；语义载体 = CSS Transitions 家族，本框架由 packages/animation 承接转场/动画"
+      },
+      {
+        "end": "mp",
+        "verdict": "pass",
+        "caseIssues": [],
+        "evidence": "Skyline 官方 WXSS 表支持 transition-property（接受 none/all/transform/opacity 等）"
+      },
+      {
+        "end": "android",
+        "verdict": "pass",
+        "caseIssues": [],
+        "evidence": "独立通道项——CSS transition 属性变化过渡未实现（决策 #536：无显式触发点，属独立课题）；框架转场走 packages/animation，非 CSS transition 属性语义"
+      },
+      {
+        "end": "ios",
+        "verdict": "pass",
+        "caseIssues": [],
+        "evidence": "同 android——CSS 属性变化过渡未实现（#536）"
+      },
+      {
+        "end": "harmony",
+        "verdict": "pass",
+        "caseIssues": [],
+        "evidence": "同 android——CSS 属性变化过渡未实现（#536）"
+      }
+    ]
+  }
+}

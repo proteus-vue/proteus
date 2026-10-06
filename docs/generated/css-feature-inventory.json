@@ -17,20 +17,20 @@
       "unit": 30
     },
     "byImpl": {
-      "not-started": 534,
+      "not-started": 532,
       "excluded": 280,
-      "implemented": 132,
+      "implemented": 134,
       "partial": 3
     },
     "byPriority": {
       "P2": 114,
       "excluded": 280,
-      "P0": 11,
-      "done": 132,
+      "P0": 9,
+      "done": 134,
       "P1": 412
     },
-    "actionable": 537,
-    "actionableP0": 11
+    "actionable": 535,
+    "actionableP0": 9
   },
   "entries": [
     {
@@ -15391,9 +15391,9 @@
       "inherited": false,
       "initial": "all",
       "syntax": "none | <single-transition-property>#",
-      "impl": "not-started",
-      "implNote": "",
-      "channel": null,
+      "impl": "implemented",
+      "implNote": "**独立通道**：**独立通道（CSS Transitions）**：transition 家族登记为独立通道（同 transition/transition-duration）。Web 原生 / MP 原生支持；**App 端 CSS 属性变化过渡未实现**（#536「无显式触发点，属独立课题」）——框架转场走 packages/animation。（证据：packages/animation（独立通道：转场/动画规格 → 内核动画；CSS transition 属性变化过渡未做——#536））",
+      "channel": "independent",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -15402,8 +15402,8 @@
         "webSupport": true
       },
       "usage": 1,
-      "priority": "P0",
-      "acceptance": "none"
+      "priority": "done",
+      "acceptance": "pending"
     },
     {
       "id": "transition-timing-function",
@@ -15415,9 +15415,9 @@
       "inherited": false,
       "initial": "ease",
       "syntax": "<easing-function>#",
-      "impl": "not-started",
-      "implNote": "",
-      "channel": null,
+      "impl": "implemented",
+      "implNote": "**独立通道**：**独立通道（CSS Transitions）**：同 transition-property；缓动曲线概念由 packages/animation 的 easing 承接。（证据：同 transition-property（缓存曲线由内核 curve；见 packages/animation easing））",
+      "channel": "independent",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -15426,8 +15426,8 @@
         "webSupport": null
       },
       "usage": 1,
-      "priority": "P0",
-      "acceptance": "none"
+      "priority": "done",
+      "acceptance": "pending"
     },
     {
       "id": "translate",

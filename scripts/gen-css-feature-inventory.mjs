@@ -164,6 +164,14 @@ const SHORTHAND_EXPANSION = {
   'animation-iteration-count': { to: [], evidence: '同上', separate: true, note: '**独立通道**' },
   'animation-timing-function': { to: [], evidence: '同上', separate: true, note: '**独立通道**' },
   'transition-duration': { to: [], evidence: '同上', separate: true, note: '**独立通道**' },
+  // ★★★transition-property/-timing-function 项（2026-10-08 · 同族收口）：CSS Transitions 家族的剩余长手——
+  //   登记为**独立通道**（同兄弟 transition / transition-duration，指向 packages/animation）。
+  //   · Web：原生基准（transition-property 列出参与过渡的属性）；
+  //   · MP/Skyline：官方 WXSS 表**支持**（transition-property 接受 none/all/transform/opacity 等）；
+  //   · App：**CSS 属性变化过渡机制未实现**（决策 #536 明记「CSS transition（属性变化触发）未做——无显式触发点，属独立课题」）；
+  //     本框架的转场/动画由 packages/animation（路由/元素转场预设 + @keyframes 折叠）承接，非 CSS transition 属性语义。
+  'transition-property': { to: [], evidence: 'packages/animation（独立通道：转场/动画规格 → 内核动画；CSS transition 属性变化过渡未做——#536）', separate: true, channel: 'independent', note: '**独立通道（CSS Transitions）**：transition 家族登记为独立通道（同 transition/transition-duration）。Web 原生 / MP 原生支持；**App 端 CSS 属性变化过渡未实现**（#536「无显式触发点，属独立课题」）——框架转场走 packages/animation。' },
+  'transition-timing-function': { to: [], evidence: '同 transition-property（缓存曲线由内核 curve；见 packages/animation easing）', separate: true, channel: 'independent', note: '**独立通道（CSS Transitions）**：同 transition-property；缓动曲线概念由 packages/animation 的 easing 承接。' },
   // ★★★background-image 项（2026-10-08 · 同 object-fit 归类）：**通道属性**——两种子集走两条通道（非编译器折叠的普通 IR 字段）。
   //   ① 渐变子集（linear-/radial-gradient）→ 引擎 `fillGradient` 通道（结构化属性 `fill-gradient` 的 CSS 语法糖，批次 33）；四端已交付并验证（#568：background-position 页 A–E 用例即 `background-image: linear-gradient(...)`）。
   //   ② url()/image-set() 图片子集 → **组件通道**（`<image>` 组件）——Web 原生 / MP 组件已交付，App 图片渲染另立项（#572）。
@@ -195,7 +203,7 @@ const SHORTHAND_EXPANSION = {
  *   ★这些能力**不走 IR 字段**（它们是"通道"：transition/animation 走 packages/animation 的
  *     规格→内核动画；mask 走结构化属性通道）——清单须如实标 implemented（否则又是假阴性）。
  */
-const SEPARATE_CHANNELS = new Set(['transition', 'animation', 'animation-name', 'animation-duration', 'animation-delay', 'animation-iteration-count', 'animation-timing-function', 'transition-duration', 'mask'])
+const SEPARATE_CHANNELS = new Set(['transition', 'animation', 'animation-name', 'animation-duration', 'animation-delay', 'animation-iteration-count', 'animation-timing-function', 'transition-duration', 'transition-property', 'transition-timing-function', 'mask'])
 
 
 const EXCLUDED_REASONS = {
