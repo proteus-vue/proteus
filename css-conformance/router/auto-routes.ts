@@ -6,24 +6,25 @@ import type { AppScreenSpec } from '@proteus-vue/router/app-stack'
 
 // ─── ① 全端页面清单（Web/MP：createRouter(routes)）───
 export const routes: RouteRecord[] = [
-  { name: "background-position", path: "pages/background-position", component: "../pages/background-position.vue" },
-  { name: "border-style", path: "pages/border-style", component: "../pages/border-style.vue" },
-  { name: "border", path: "pages/border", component: "../pages/border.vue", meta: {"title":"CSS 验收 · 边框"} },
-  { name: "grid-auto-flow", path: "pages/grid-auto-flow", component: "../pages/grid-auto-flow.vue" },
-  { name: "grid-auto", path: "pages/grid-auto", component: "../pages/grid-auto.vue" },
-  { name: "grid-template-areas", path: "pages/grid-template-areas", component: "../pages/grid-template-areas.vue" },
-  { name: "justify-self", path: "pages/justify-self", component: "../pages/justify-self.vue", meta: {"title":"CSS 验收 · 网格自对齐"} },
-  { name: "line-clamp", path: "pages/line-clamp", component: "../pages/line-clamp.vue" },
-  { name: "math-functions", path: "pages/math-functions", component: "../pages/math-functions.vue" },
-  { name: "outline", path: "pages/outline", component: "../pages/outline.vue" },
-  { name: "overflow-page", path: "pages/overflow-page", component: "../pages/overflow-page.vue" },
-  { name: "overflow", path: "pages/overflow", component: "../pages/overflow.vue" },
-  { name: "place-items", path: "pages/place-items", component: "../pages/place-items.vue" },
-  { name: "safe-area", path: "pages/safe-area", component: "../pages/safe-area.vue" },
-  { name: "text-shadow", path: "pages/text-shadow", component: "../pages/text-shadow.vue" },
-  { name: "text", path: "pages/text", component: "../pages/text.vue", meta: {"title":"CSS 验收 · 文本"} },
-  { name: "vw-vh", path: "pages/vw-vh", component: "../pages/vw-vh.vue" },
-  { name: "word-break", path: "pages/word-break", component: "../pages/word-break.vue", meta: {"title":"CSS 验收 · 断词"} },
+  { name: "background-position", path: "pages/background-position", component: "../pages/background-position.vue", parent: "index" },
+  { name: "border-style", path: "pages/border-style", component: "../pages/border-style.vue", parent: "index" },
+  { name: "border", path: "pages/border", component: "../pages/border.vue", parent: "index", meta: {"title":"CSS 验收 · 边框"} },
+  { name: "grid-auto-flow", path: "pages/grid-auto-flow", component: "../pages/grid-auto-flow.vue", parent: "index" },
+  { name: "grid-auto", path: "pages/grid-auto", component: "../pages/grid-auto.vue", parent: "index" },
+  { name: "grid-template-areas", path: "pages/grid-template-areas", component: "../pages/grid-template-areas.vue", parent: "index" },
+  { name: "index", path: "pages/index", component: "../pages/index.vue" },
+  { name: "justify-self", path: "pages/justify-self", component: "../pages/justify-self.vue", parent: "index", meta: {"title":"CSS 验收 · 网格自对齐"} },
+  { name: "line-clamp", path: "pages/line-clamp", component: "../pages/line-clamp.vue", parent: "index" },
+  { name: "math-functions", path: "pages/math-functions", component: "../pages/math-functions.vue", parent: "index" },
+  { name: "outline", path: "pages/outline", component: "../pages/outline.vue", parent: "index" },
+  { name: "overflow-page", path: "pages/overflow-page", component: "../pages/overflow-page.vue", parent: "index" },
+  { name: "overflow", path: "pages/overflow", component: "../pages/overflow.vue", parent: "index" },
+  { name: "place-items", path: "pages/place-items", component: "../pages/place-items.vue", parent: "index" },
+  { name: "safe-area", path: "pages/safe-area", component: "../pages/safe-area.vue", parent: "index" },
+  { name: "text-shadow", path: "pages/text-shadow", component: "../pages/text-shadow.vue", parent: "index" },
+  { name: "text", path: "pages/text", component: "../pages/text.vue", parent: "index", meta: {"title":"CSS 验收 · 文本"} },
+  { name: "vw-vh", path: "pages/vw-vh", component: "../pages/vw-vh.vue", parent: "index" },
+  { name: "word-break", path: "pages/word-break", component: "../pages/word-break.vue", parent: "index", meta: {"title":"CSS 验收 · 断词"} },
 ]
 
 export const tabRoutes: RouteRecord[] = routes.filter(r => r.meta?.isTab)
@@ -55,6 +56,10 @@ export const screens: Record<string, AppScreenSpec> = {
   "grid-template-areas": {
     "name": "grid-template-areas",
     "path": "pages/grid-template-areas"
+  },
+  "index": {
+    "name": "index",
+    "path": "pages/index"
   },
   "justify-self": {
     "name": "justify-self",
@@ -107,7 +112,7 @@ export const screens: Record<string, AppScreenSpec> = {
 }
 
 /** 路由名数组（App 深栈/压测按它循环取屏——顺序与 routes 一致） */
-export const screenNames: string[] = ["background-position","border-style","border","grid-auto-flow","grid-auto","grid-template-areas","justify-self","line-clamp","math-functions","outline","overflow-page","overflow","place-items","safe-area","text-shadow","text","vw-vh","word-break"]
+export const screenNames: string[] = ["background-position","border-style","border","grid-auto-flow","grid-auto","grid-template-areas","index","justify-self","line-clamp","math-functions","outline","overflow-page","overflow","place-items","safe-area","text-shadow","text","vw-vh","word-break"]
 
 /** tab 根屏（meta.isTab）—— App 端 tab 语义（switchTab/reset）的合法目标 */
 export const tabNames: string[] = []
@@ -121,6 +126,7 @@ declare module '@proteus-vue/router/types' {
     'grid-auto-flow': {  },
     'grid-auto': {  },
     'grid-template-areas': {  },
+    'index': {  },
     'justify-self': {  },
     'line-clamp': {  },
     'math-functions': {  },
