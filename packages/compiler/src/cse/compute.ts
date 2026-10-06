@@ -33,6 +33,7 @@
 
 import type { CseNode, CseRule, CseStyleSheet, CseTraceStep, CseWinner, CseComputeResult, CseComputedNode } from './types'
 import { foldCalcArithmetic } from '../calc-fold'
+import { expandShorthandDecl } from './shorthand'
 import { buildIndex, candidatesFor, chainMatches, contextOf, type MatchContext, type RuleIndex } from './match'
 import { cascade, layerContextOf, type CascadeCandidate, type LayerContext } from './cascade'
 import { CSS_NAMED_COLORS } from './colors-named'
@@ -533,6 +534,24 @@ export function computeTree(roots: CseNode[], sheet: CseStyleSheet, opts: Comput
       if (prop.startsWith('--')) {
         const sub = substituteVars(w.value, vars)
         if (sub !== null) vars.set(prop, sub)
+      }
+    }
+
+    // ★★★var() 简写（2026-10-08 · css:next）：值含 var() 的简写在 **parse 期无法展开**（值未知）——
+    //   如 p-button 的 `border: var(--p-button-border, none)`（`--p-button-border: 1px solid #7c5cff`）。
+    //   parse 期 expandShorthandDecl 拿到 `var(...)` ⇒ 判非数值 ⇒ 不展开 ⇒ 留作简写名 ⇒ 替换后 mapToIrField 无映射 ⇒ **丢弃**
+    //   （App 折叠面却能展开 ⇒ CSE ↔ App 分叉）。此处 vars 已知 ⇒ 对**仍是简写名**的胜出声明做「替换 → 展开 → 并入 winners」；
+    //   仅注入**尚无独立声明**的长手（不覆盖更高优先级的显式长手）。
+    for (const [prop, w] of Object.entries(winners)) {
+      if (prop.startsWith('--')) continue
+      const resolved = substituteVars(w.value, vars)
+      if (resolved === null) continue
+      const expanded = expandShorthandDecl(prop, resolved, w.important)
+      if (!expanded) continue
+      delete winners[prop]
+      for (const d of expanded) {
+        if (d.prop in winners) continue
+        winners[d.prop] = { ...w, prop: d.prop, value: d.value, fromShorthand: prop }
       }
     }
 

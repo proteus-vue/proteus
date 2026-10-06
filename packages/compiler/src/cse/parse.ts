@@ -356,7 +356,9 @@ export function parseStyleSheet(css: string, opts: ParseSheetOptions = {}): CseS
             decls.push({ prop: d.prop, value: d.value, important: d.important })
             continue
           }
-          const expanded = expandShorthandDecl(d.prop, d.value, d.important)
+          // ★★★var() 简写（2026-10-08 · css:next）：值含 var( 的简写**不在 parse 期展开**（值未知；
+          //   单 token 会被误当单值展开 ⇒ 多值令牌替换后对单边非法）。留给 compute 期 vars 已知后展开。
+          const expanded = d.value.includes('var(') ? null : expandShorthandDecl(d.prop, d.value, d.important)
           if (expanded) {
             decls.push(...expanded)
             continue
@@ -419,7 +421,8 @@ export function parseStyleSheet(css: string, opts: ParseSheetOptions = {}): CseS
           decls.push({ prop: d.prop, value: d.value, important: d.important })
           continue
         }
-        const expanded = expandShorthandDecl(d.prop, d.value, d.important)
+        // ★★★var() 简写（同上）：值含 var( 的简写不在 parse 期展开（留给 compute 期替换后展开）。
+        const expanded = d.value.includes('var(') ? null : expandShorthandDecl(d.prop, d.value, d.important)
         if (expanded) {
           decls.push(...expanded)
           continue

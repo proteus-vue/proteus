@@ -133,6 +133,8 @@ const PROBE_VALUES = {
   'clamp()': ['width: clamp(120px, 160px, 200px)', 'width', { kind: 'absolute', dp: 160 }],
   // ★★★calc() 项（2026-10-08）：完整算术（乘法样例——此前 CSE 只支持单层加减）
   'calc()': ['width: calc(8px * 0.6)', 'width', { kind: 'absolute', dp: 4.8 }],
+  // ★★★var() 项（2026-10-08）：自定义属性替换（含 fallback）——浏览器 var 在 getComputedStyle 已解为字面
+  'var()': ['color: var(--x, #445566)', 'color', '#445566'],
 }
 
 const probe = PROBE_VALUES[id]
