@@ -6,6 +6,7 @@ import type { AppScreenSpec } from '@proteus-vue/router/app-stack'
 
 // ─── ① 全端页面清单（Web/MP：createRouter(routes)）───
 export const routes: RouteRecord[] = [
+  { name: "background-position", path: "pages/background-position", component: "../pages/background-position.vue" },
   { name: "border-style", path: "pages/border-style", component: "../pages/border-style.vue" },
   { name: "border", path: "pages/border", component: "../pages/border.vue", meta: {"title":"CSS 验收 · 边框"} },
   { name: "justify-self", path: "pages/justify-self", component: "../pages/justify-self.vue", meta: {"title":"CSS 验收 · 网格自对齐"} },
@@ -20,6 +21,10 @@ export const routeMap: Record<string, RouteRecord> = routes.reduce((m, r) => { m
 // ─── ② App 端投影（App：createAppStack({ screens }) / createAppNavigation）───
 //     与 ① 同源；平台门控已应用（webOnly / platforms 不含 native 的页面已剔除）
 export const screens: Record<string, AppScreenSpec> = {
+  "background-position": {
+    "name": "background-position",
+    "path": "pages/background-position"
+  },
   "border-style": {
     "name": "border-style",
     "path": "pages/border-style"
@@ -47,7 +52,7 @@ export const screens: Record<string, AppScreenSpec> = {
 }
 
 /** 路由名数组（App 深栈/压测按它循环取屏——顺序与 routes 一致） */
-export const screenNames: string[] = ["border-style","border","justify-self","overflow","text","word-break"]
+export const screenNames: string[] = ["background-position","border-style","border","justify-self","overflow","text","word-break"]
 
 /** tab 根屏（meta.isTab）—— App 端 tab 语义（switchTab/reset）的合法目标 */
 export const tabNames: string[] = []
@@ -55,6 +60,7 @@ export const tabNames: string[] = []
 // ─── ③ 类型提示：按路由名索引的参数类型表（来源：<route> 块 params 声明）───
 declare module '@proteus-vue/router/types' {
   interface RouteParamsByName {
+    'background-position': {  },
     'border-style': {  },
     'border': {  },
     'justify-self': {  },

@@ -704,7 +704,18 @@ final class SelfDrawView: UIView {
         if let fg = style["fillGradient"] as? [String: Any] {
             let g = CAGradientLayer()
             g.contentsScale = UIScreen.main.scale
-            if Self.applyGradient(g, spec: fg, bounds: layer.bounds) {
+            // ★★★背景定位家族（2026-10-07）：size/position ⇒ 渐变层 frame = **图像盒**（否则元素盒）；
+            //   `applyGradient` 的端点/径向在**单位空间**（映射到本层 frame）⇒ 自动落在图像盒内。
+            //   ★诚实边界：`background-repeat: repeat` 在 CAGradientLayer **无法平铺**（无 tile 模式）
+            //     ⇒ iOS 侧按 no-repeat 渲染（具名边界；Android 已用 TileMode.REPEAT / 鸿蒙绘循环）。
+            let bgSize = style["backgroundSize"] as? String
+            let bgPos = style["backgroundPosition"] as? String
+            if let iframe = Self.bgImageFrame(size: bgSize, pos: bgPos, bounds: layer.bounds) {
+                g.frame = iframe
+            } else {
+                g.frame = CGRect(origin: .zero, size: layer.bounds.size)
+            }
+            if Self.applyGradient(g, spec: fg, bounds: g.bounds) {
                 layer.addSublayer(g)
                 layerGradients[nodeId] = g
             }
@@ -1603,6 +1614,46 @@ final class SelfDrawView: UIView {
      *
      * @returns 是否成功应用（false = 规格非法/零点 ⇒ 不挂层；★不静默挂一个空渐变）
      */
+    /** ★★★背景定位家族（2026-10-07）：背景**图像盒**（相对元素 bounds）——nil = 未声明（恒填满）。
+     *   size：长度/百分比/auto（1–2 值；%=相对盒）；position：关键字/长度/百分比（%= pct×(盒−图)，★减图尺寸）。
+     *    与 Android `GradSpec.imageBox` / Web 几何同式。 */
+    static func bgImageFrame(size: String?, pos: String?, bounds: CGRect) -> CGRect? {
+        guard size != nil || pos != nil else { return nil }
+        var iw = bounds.width, ih = bounds.height
+        if let sz = size {
+            let st = sz.split(separator: " ").map(String.init)
+            if st.count >= 1 { iw = bgLen(st[0], base: bounds.width, auto: bounds.width) }
+            if st.count >= 2 { ih = bgLen(st[1], base: bounds.height, auto: bounds.height) }
+        }
+        if !(iw > 0) { iw = bounds.width }
+        if !(ih > 0) { ih = bounds.height }
+        var ix: CGFloat = 0, iy: CGFloat = 0
+        if let ps = pos {
+            let pt = ps.split(separator: " ").map(String.init)
+            if pt.count == 1 {
+                if pt[0] == "top" || pt[0] == "bottom" { ix = bgPos1("center", box: bounds.width, img: iw); iy = bgPos1(pt[0], box: bounds.height, img: ih) }
+                else { ix = bgPos1(pt[0], box: bounds.width, img: iw); iy = bgPos1("center", box: bounds.height, img: ih) }
+            } else if pt.count >= 2 {
+                ix = bgPos1(pt[0], box: bounds.width, img: iw); iy = bgPos1(pt[1], box: bounds.height, img: ih)
+            }
+        }
+        return CGRect(x: bounds.minX + ix, y: bounds.minY + iy, width: iw, height: ih)
+    }
+    private static func bgLen(_ t: String, base: CGFloat, auto: CGFloat) -> CGFloat {
+        if t == "auto" { return auto }
+        if t.hasSuffix("%") { return (CGFloat(Double(t.dropLast()) ?? 0) / 100) * base }
+        if t.hasSuffix("px") { return CGFloat(Double(t.dropLast(2)) ?? 0) }
+        return CGFloat(Double(t) ?? 0)
+    }
+    private static func bgPos1(_ t: String, box: CGFloat, img: CGFloat) -> CGFloat {
+        if t == "left" || t == "top" { return 0 }
+        if t == "right" || t == "bottom" { return box - img }
+        if t == "center" { return (box - img) / 2 }
+        if t.hasSuffix("%") { return (CGFloat(Double(t.dropLast()) ?? 0) / 100) * (box - img) }
+        if t.hasSuffix("px") { return CGFloat(Double(t.dropLast(2)) ?? 0) }
+        return CGFloat(Double(t) ?? 0)
+    }
+
     @discardableResult
     static func applyGradient(_ layer: CAGradientLayer, spec: [String: Any], bounds: CGRect) -> Bool {
         guard let kind = spec["kind"] as? String,

@@ -17,6 +17,9 @@
 //   （bits 24-31 alpha / 16-23 R / 8-15 G / 0-7 B）——由 ArkTS 侧把 CSS 色转成这个整数传入
 //   （转换放 JS 侧：一处实现，不散落在 C++）。
 #include <string>
+#include <sstream>
+#include <cstdlib>
+#include <vector>
 #include <cstdint>
 #include <cmath>
 #include <cstdio>
@@ -293,6 +296,8 @@ struct TextDrawSpec {
     double gradAngle = 90;
     std::vector<uint32_t> gradColors;
     std::vector<float> gradPos;
+    // ★★★背景定位家族（2026-10-07）：图像盒 size/position/repeat（空=未声明 ⇒ 恒填满）
+    std::string bgSize, bgPos, bgRepeat;
     bool hasGlow = false;
     uint32_t glowColor = 0;
     double glowRadius = 0, glowAlpha = 1;
@@ -305,6 +310,44 @@ struct TextDrawSpec {
     uint32_t strokeColor = 0;
     double strokeWidth = 0;
 };
+
+/** ★★★背景定位家族（2026-10-07）：背景图像盒（相对节点，返回 [ix,iy,iw,ih]）。
+ *   size：长度/百分比/auto（%=相对盒）；position：关键字/长度/百分比（%= pct×(盒−图)，★减图尺寸）。
+ *    与 Android GradSpec.imageBox / iOS bgImageFrame / Web 几何同式。 */
+static void bgImageBox(const std::string& size, const std::string& pos, double w, double h,
+                       double* ix, double* iy, double* iw, double* ih) {
+    *ix = 0; *iy = 0; *iw = w; *ih = h;
+    auto len = [](const std::string& t, double base) -> double {
+        if (t == "auto") return base;
+        if (!t.empty() && t.back() == '%') return std::atof(t.c_str()) / 100.0 * base;
+        return std::atof(t.c_str());
+    };
+    if (!size.empty()) {
+        std::vector<std::string> st; std::string cur; std::istringstream iss(size);
+        while (iss >> cur) st.push_back(cur);
+        if (st.size() >= 1) *iw = len(st[0], w);
+        if (st.size() >= 2) *ih = len(st[1], h);
+    }
+    if (!(*iw > 0)) *iw = w;
+    if (!(*ih > 0)) *ih = h;
+    auto pos1 = [](const std::string& t, double box, double img) -> double {
+        if (t == "left" || t == "top") return 0;
+        if (t == "right" || t == "bottom") return box - img;
+        if (t == "center") return (box - img) / 2.0;
+        if (!t.empty() && t.back() == '%') return std::atof(t.c_str()) / 100.0 * (box - img);
+        return std::atof(t.c_str());
+    };
+    if (!pos.empty()) {
+        std::vector<std::string> pt; std::string cur; std::istringstream iss(pos);
+        while (iss >> cur) pt.push_back(cur);
+        if (pt.size() == 1) {
+            if (pt[0] == "top" || pt[0] == "bottom") { *ix = pos1("center", w, *iw); *iy = pos1(pt[0], h, *ih); }
+            else { *ix = pos1(pt[0], w, *iw); *iy = pos1("center", h, *ih); }
+        } else if (pt.size() >= 2) {
+            *ix = pos1(pt[0], w, *iw); *iy = pos1(pt[1], h, *ih);
+        }
+    }
+}
 
 /** 把 CSS 角度的线性渐变端点换算为画布坐标（90° = 自上而下，与模板语义一致） */
 static void gradEndpoints(double angleDeg, double w, double h, float* x0, float* y0, float* x1, float* y1) {
@@ -337,19 +380,28 @@ static void drawChannelsAndText(OH_Drawing_Canvas* canvas, const TextDrawSpec* s
     }
     // ② 渐变底（线性；色标 ≥2 才建——与判据同口径）
     if (spec->hasGrad && spec->gradColors.size() >= 2 && w > 0 && h > 0) {
+        // ★★★背景定位家族（2026-10-07）：图像盒（size/position）；repeat ⇒ TileMode.REPEAT 平铺整盒。
+        const bool hasGeom = !spec->bgSize.empty() || !spec->bgPos.empty();
+        double ix = 0, iy = 0, iw = w, ih = h;
+        if (hasGeom) bgImageBox(spec->bgSize, spec->bgPos, w, h, &ix, &iy, &iw, &ih);
+        const bool rep = (spec->bgRepeat == "repeat");
         float x0, y0, x1, y1;
-        gradEndpoints(spec->gradAngle, w, h, &x0, &y0, &x1, &y1);
+        gradEndpoints(spec->gradAngle, iw, ih, &x0, &y0, &x1, &y1);
+        x0 += (float)ix; x1 += (float)ix; y0 += (float)iy; y1 += (float)iy;
         OH_Drawing_Point* p0 = OH_Drawing_PointCreate(x0, y0);
         OH_Drawing_Point* p1 = OH_Drawing_PointCreate(x1, y1);
+        OH_Drawing_TileMode tile = rep ? OH_Drawing_TileMode::REPEAT : OH_Drawing_TileMode::CLAMP;
         OH_Drawing_ShaderEffect* shader = OH_Drawing_ShaderEffectCreateLinearGradient(
             p0, p1, spec->gradColors.data(), spec->gradPos.data(),
-            (uint32_t)spec->gradColors.size(), OH_Drawing_TileMode::CLAMP);
+            (uint32_t)spec->gradColors.size(), tile);
         if (shader != nullptr) {
             OH_Drawing_Brush* br = OH_Drawing_BrushCreate();
             OH_Drawing_BrushSetShaderEffect(br, shader);
             OH_Drawing_CanvasAttachBrush(canvas, br);
-            OH_Drawing_Rect* r = OH_Drawing_RectCreate(0, 0, w, h);
-            if (spec->radius > 0) {
+            // repeat 铺满整盒；否则只画图像盒（盒外露出底色）
+            OH_Drawing_Rect* r = rep ? OH_Drawing_RectCreate(0, 0, w, h)
+                                     : OH_Drawing_RectCreate((float)ix, (float)iy, (float)(ix + iw), (float)(iy + ih));
+            if (spec->radius > 0 && !hasGeom) {
                 OH_Drawing_RoundRect* rr = OH_Drawing_RoundRectCreate(r, (float)spec->radius, (float)spec->radius);
                 OH_Drawing_CanvasDrawRoundRect(canvas, rr);
                 OH_Drawing_RoundRectDestroy(rr);
@@ -1001,6 +1053,10 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
                     sp = e + 1;
                 }
                 spec->hasGrad = spec->gradColors.size() >= 2;
+                // ★★★背景定位家族（2026-10-07）：图像盒 size/position/repeat（字符串，spec 级）
+                jsonString(it, "backgroundSize", &spec->bgSize);
+                jsonString(it, "backgroundPosition", &spec->bgPos);
+                jsonString(it, "backgroundRepeat", &spec->bgRepeat);
                 if (spec->hasGrad) {
                     ch.grad = std::string(spec->gradLinear ? "1" : "2") + ":" + std::to_string(spec->gradColors.size());
                     hasAnyChannel = true;

@@ -1281,6 +1281,12 @@ public final class VaporRenderHost {
             if (graw == null || graw.isEmpty()) continue;
             spec.put(gk, scalePxInCssLengths(graw));
         }
+        // ★★★背景定位家族（2026-10-07）：backgroundSize/Position 里的 **px 长度**按密度缩放
+        //   （与 gridTemplateColumns 同轴：字符串不在 LEN_SCALARS；% / auto / 关键字不含 px ⇒ 不动）。
+        for (String bk : new String[]{"backgroundSize", "backgroundPosition"}) {
+            String braw = spec.optString(bk, null);
+            if (braw != null && !braw.isEmpty()) spec.put(bk, scalePxInCssLengths(braw));
+        }
         // ★批次 39：静态变换（transform）的 **px 位移**按密度缩放（txPct/tyPct 是盒比例、scale/rotate 无量纲——不动）
         JSONObject tf = spec.optJSONObject("transform");
         if (tf != null) {
@@ -1571,7 +1577,7 @@ public final class VaporRenderHost {
         float radius = (float) spec.optDouble("borderRadius", 0);
         final double radiusPct = spec.optDouble("borderRadiusPct", 0);
         if (radiusPct > 0) radius = (float) (radiusPct * Math.min(w, h));
-        final ProteusHostView.GradSpec grad = parseGrad(spec.optJSONObject("fillGradient"));
+        final ProteusHostView.GradSpec grad = parseGrad(spec);
         final float[] glowSpec = parseGlow(spec.optJSONObject("glow"));
         final float[] maskSpec = parseMask(spec.optJSONObject("mask"));
         // ★批次 5：uniform 边框（宽度 + 颜色；颜色缺省 0 ⇒ 不画边框）
@@ -1757,8 +1763,10 @@ public final class VaporRenderHost {
     }
 
     /** 渐变声明 → `GradSpec`（`GradSpec.parse` 对非法返回 null ⇒ 退回纯色——与 LightsHost 同口径） */
-    private ProteusHostView.GradSpec parseGrad(JSONObject g) {
-        return ProteusHostView.GradSpec.parse(g);
+    /** fillGradient + 背景定位家族（2026-10-07）三个键（backgroundSize/Position/Repeat，spec 级）→ GradSpec */
+    private ProteusHostView.GradSpec parseGrad(JSONObject spec) {
+        return ProteusHostView.GradSpec.parse(spec.optJSONObject("fillGradient"),
+                spec.optString("backgroundSize", null), spec.optString("backgroundPosition", null), spec.optString("backgroundRepeat", null));
     }
 
     /** 发光声明 → `[color, radius, alpha]`（坏色 ⇒ null，不静默画错色） */

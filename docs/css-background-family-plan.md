@@ -1,5 +1,10 @@
 # 背景定位家族（background-size / background-position / background-repeat）· 实施计划（登记态 · 2026-10-07）
 
+> **★状态（2026-10-07 更新）**：**编译期 + 一致性链 + 三端宿主几何已落地**（决策 #568）——
+> `css:verify` size/position/repeat 三段全绿 · 验收页 `css-conformance/pages/background-position.vue` 五案例 + Web 基准采毕；
+> **四端真机像素验收（MP/Android/iOS/鸿蒙）+ 子代理终评**为收尾项（见 §3 第 7 步）。
+> **具名边界（留下一批）**：动画定位（@keyframes）· 多层渐变 · iOS `CAGradientLayer` 的 repeat（无 tile 模式）· size 的 cover/contain。
+
 > **来源**：`css:next` 指向 `background-position`（P0 · 用法 4×）。侦察发现它**不可独立交付**——
 > 三端宿主把渐变**硬编码为「填满整个盒」**（无 size/position/repeat 概念），且语料 4× 全部与
 > `background-size` 配对、其中 2 为 `@keyframes` 动画。用户裁定：**做「背景定位」家族 · 静态单层**
