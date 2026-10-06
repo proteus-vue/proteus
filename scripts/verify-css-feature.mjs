@@ -198,12 +198,18 @@ const END_CHECK = (() => {
 })()
 
 /* ── ④ 验收包 ── */
+// ★★★投递通道（component / independent）：非编译器折叠的 CSS 能力（如 object-fit → 图片组件通道、
+//   animation → 动画包）——parity（CSE IR 比对）与 endsMapped（IR 字段映射）**不适用** ⇒ 判 n/a；
+//   实现态由组件/独立通道承接（本包只如实标注通道，通道内交付由对应包的门禁守）。
+const channelBased = entry.channel === 'component' || entry.channel === 'independent'
 const gates = {
   implemented: entry.impl === 'implemented',
-  parity: parity.pass === true,
-  endsMapped: entry.kind !== 'property' ? null : END_CHECK.skyline.startsWith('可表达') && END_CHECK.app.startsWith('可表达'),
+  parity: channelBased ? null : parity.pass === true,
+  endsMapped: channelBased
+    ? null
+    : entry.kind !== 'property' ? null : END_CHECK.skyline.startsWith('可表达') && END_CHECK.app.startsWith('可表达'),
 }
-const pass = gates.implemented && gates.parity && (gates.endsMapped === null || gates.endsMapped)
+const pass = gates.implemented && (gates.parity === null || gates.parity) && (gates.endsMapped === null || gates.endsMapped)
 
 const pkg = {
   _note:

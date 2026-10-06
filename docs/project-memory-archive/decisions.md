@@ -1317,3 +1317,15 @@
 **④ 判据**：`css:verify grid-auto-flow` 三段（implemented/parity/endsMapped）**全绿** · 验收页 `css-conformance/pages/grid-auto-flow.vue`（3 案例）· **四端真机**：Android/iOS/鸿蒙 ✅ 三案与 Web 同（**独立子代理逐案例复核**）· MP ◐（Skyline 无 Grid 容器，堆叠成单列——引擎锁死具名边界，与 justify-self 同款）· probe 四端页面级 PASS · 全量 5319/5319（web-probe golden 刷新）· coupled 311 绿 · 门禁全绿（style-ir-schema/style-coverage/app-css-surface/host-kernel-keys/css-capability-alignment/profile-baseline/content/stats/docs-stats）。
 **⑤ 诚实边界**：a) **MP/Skyline 无 Grid 容器**（官方属性表无 grid 族，`display:grid` 退化）⇒ 三案在该端堆叠成单列（引擎锁死，页面顶部具名）；b) App/Web 对齐（主承载端 = App 自研内核 taffy GridAutoFlow 原生）。
 **⑥ 影响**：contracts/runtime/compiler/cse/内核 Rust(style/ffi/taffy_engine)/consistency 链/Android 宿主(LAYOUT_KEYS)/验收页/能力源/基线；**下一项**：按 css:next 取。
+572. **★★CSS 逐项 · object-fit（P0·3×）——侦察判定为「组件通道」而非编译器折叠的 CSS 属性 + 立项「App 图片渲染」独立能力**（用户裁定）**：
+**① 用户指令**：「继续下一项」⇒ css:next 取 object-fit。
+**② 侦察（子代理 + 直查）**：**object-fit 在本框架里是组件属性，不是编译器折叠的 CSS 属性**——
+  · 语料 3× 全在组件 scoped CSS（p-image ×2 cover/fill · p-avatar ×1 cover）；
+  · 语义载体 = `<image mode>` / `p-image.fit`：Web `mode`→CSS `objectFit`（`packages/web/src/components/image.ts`）+ `object-position`（top/bottom/center…→modeToPosition）；MP/Skyline 原生 `<image mode>`（官方属性表 object-fit 只属 video 族）；**已交付**。
+  · **App 自绘不渲染图片**：`<image>` 未落宿主（iOS `decode_image`/`native_view_*` vtable 挂 `nil`、Android 仅 WebView native-host 无 ImageView、内核 `NodeDto` 无 `src`/无图片内容字段）⇒ **object-fit 在 App 没有作用对象** ⇒ 折叠进 App DTO = **no-op = 假绿**。
+**③ ★踩到 #569 铁律**（「不得以别批次未落地为由跳过端」）：按新铁律，不能自己把它静默归成"具名边界"跳过 ⇒ 向用户澄清（object-fit 是组件属性 + App 无图片渲染，非可折叠 CSS 属性；补齐 App 图片渲染是大工程）⇒ 用户裁定「**按架构归类 + 立项 App 图片渲染**」。
+**④ 交付**：
+  · **object-fit 归类**：清单 override 由 `notYet`（未接）改为 **`separate: true, channel: 'component'`**（组件通道，Web/MP 已交付）；新增 `channel` 字段贯通 JSON + `verify-css-feature.mjs`（channel 项 ⇒ parity/endsMapped 判 **n/a**，与 animation 等独立通道同款）⇒ `css:verify object-fit` **三段通过**。
+  · **立项**：新登记件 `docs/app-image-rendering-plan.md`（现状三端表 / 为什么是独立能力 / 范围 5 步 / 依赖 / 触发条件 / 关联）+ `board-inventory` 登记。
+**⑤ 诚实边界**：**App 图片渲染未做**（本项只做归类 + 立项）；object-fit 在 **App 端仍未交付**（因无图片渲染）；Web/MP 组件通道**已交付**（`<image mode>`）；App 图片渲染是**原生元素能力**（decode + 缓存 + fit），非样式折叠，依赖 Mnemosyne（内存）/ Hephaestus（高频原生能力）线。
+**⑥ 影响**：`scripts/gen-css-feature-inventory.mjs`（object-fit override + channel 字段）· `scripts/verify-css-feature.mjs`（channel→n/a）· `docs/generated/css-feature-inventory.{json,md}`（重生成）· `docs/app-image-rendering-plan.md`（新）· `docs/board-inventory.md`（登记）；**下一项**：css:next 取下一个可折叠 CSS 属性。

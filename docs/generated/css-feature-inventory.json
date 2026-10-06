@@ -17,20 +17,20 @@
       "unit": 30
     },
     "byImpl": {
-      "not-started": 549,
+      "not-started": 548,
       "excluded": 280,
-      "implemented": 116,
+      "implemented": 117,
       "partial": 4
     },
     "byPriority": {
       "P2": 115,
       "excluded": 280,
-      "P0": 22,
-      "done": 116,
+      "P0": 21,
+      "done": 117,
       "P1": 416
     },
-    "actionable": 553,
-    "actionableP0": 22
+    "actionable": 552,
+    "actionableP0": 21
   },
   "entries": [
     {
@@ -45,6 +45,7 @@
       "syntax": "<declaration-value>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -68,6 +69,7 @@
       "syntax": "false | true",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -91,6 +93,7 @@
       "syntax": "tb | rl | bt | lr",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -114,6 +117,7 @@
       "syntax": "none | chained",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -140,6 +144,7 @@
       "syntax": "<'-ms-content-zoom-limit-min'> <'-ms-content-zoom-limit-max'>",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -163,6 +168,7 @@
       "syntax": "<percentage>",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -186,6 +192,7 @@
       "syntax": "<percentage>",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -212,6 +219,7 @@
       "syntax": "<'-ms-content-zoom-snap-type'> || <'-ms-content-zoom-snap-points'>",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -235,6 +243,7 @@
       "syntax": "snapInterval( <percentage>, <percentage> ) | snapList( <percentage># )",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -258,6 +267,7 @@
       "syntax": "none | proximity | mandatory",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -281,6 +291,7 @@
       "syntax": "none | zoom",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -304,6 +315,7 @@
       "syntax": "<string>",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -327,6 +339,7 @@
       "syntax": "[ none | <custom-ident> ]#",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -350,6 +363,7 @@
       "syntax": "[ none | <custom-ident> ]#",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -373,6 +387,7 @@
       "syntax": "none | <track-list> | <auto-track-list>",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -396,6 +411,7 @@
       "syntax": "none | <track-list> | <auto-track-list>",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -419,6 +435,7 @@
       "syntax": "auto | none",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -442,6 +459,7 @@
       "syntax": "auto | <integer>{1,3}",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -465,6 +483,7 @@
       "syntax": "no-limit | <integer>",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -488,6 +507,7 @@
       "syntax": "<percentage> | <length>",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -511,6 +531,7 @@
       "syntax": "auto | after",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -534,6 +555,7 @@
       "syntax": "auto | none | scrollbar | -ms-autohiding-scrollbar",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -557,6 +579,7 @@
       "syntax": "chained | none",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -585,6 +608,7 @@
       "syntax": "<'-ms-scroll-limit-x-min'> <'-ms-scroll-limit-y-min'> <'-ms-scroll-limit-x-max'> <'-ms-scroll-limit-y-max'>",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -608,6 +632,7 @@
       "syntax": "auto | <length>",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -631,6 +656,7 @@
       "syntax": "<length>",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -654,6 +680,7 @@
       "syntax": "auto | <length>",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -677,6 +704,7 @@
       "syntax": "<length>",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -700,6 +728,7 @@
       "syntax": "none | railed",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -723,6 +752,7 @@
       "syntax": "snapInterval( <length-percentage>, <length-percentage> ) | snapList( <length-percentage># )",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -746,6 +776,7 @@
       "syntax": "snapInterval( <length-percentage>, <length-percentage> ) | snapList( <length-percentage># )",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -769,6 +800,7 @@
       "syntax": "none | proximity | mandatory",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -795,6 +827,7 @@
       "syntax": "<'-ms-scroll-snap-type'> <'-ms-scroll-snap-points-x'>",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -821,6 +854,7 @@
       "syntax": "<'-ms-scroll-snap-type'> <'-ms-scroll-snap-points-y'>",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -844,6 +878,7 @@
       "syntax": "none | vertical-to-horizontal",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -867,6 +902,7 @@
       "syntax": "<color>",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -890,6 +926,7 @@
       "syntax": "<color>",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -913,6 +950,7 @@
       "syntax": "<color>",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -936,6 +974,7 @@
       "syntax": "<color>",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -959,6 +998,7 @@
       "syntax": "<color>",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -982,6 +1022,7 @@
       "syntax": "<color>",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -1005,6 +1046,7 @@
       "syntax": "<color>",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -1028,6 +1070,7 @@
       "syntax": "<color>",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -1051,6 +1094,7 @@
       "syntax": "none | ideograph-alpha | ideograph-numeric | ideograph-parenthesis | ideograph-space",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -1074,6 +1118,7 @@
       "syntax": "grippers | none",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -1097,6 +1142,7 @@
       "syntax": "none | element | text",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -1120,6 +1166,7 @@
       "syntax": "auto | both | start | end | maximum | clear",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -1143,6 +1190,7 @@
       "syntax": "<length>",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -1166,6 +1214,7 @@
       "syntax": "wrap | none",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -1190,6 +1239,7 @@
       "syntax": "none | button | button-arrow-down | button-arrow-next | button-arrow-previous | button-arrow-up | button-bevel | button-focus | caret | checkbox | checkbox-container | checkbox-label | checkmenuitem | dualbutton | groupbox | listbox | listitem | menuarrow | menubar | menucheckbox | menuimage | menuitem | menuitemtext | menulist | menulist-button | menulist-text | menulist-textfield | menupopup | menuradio | menuseparator | meterbar | meterchunk | progressbar | progressbar-vertical | progresschunk | progresschunk-vertical | radio | radio-container | radio-label | radiomenuitem | range | range-thumb | resizer | resizerpanel | scale-horizontal | scalethumbend | scalethumb-horizontal | scalethumbstart | scalethumbtick | scalethumb-vertical | scale-vertical | scrollbarbutton-down | scrollbarbutton-left | scrollbarbutton-right | scrollbarbutton-up | scrollbarthumb-horizontal | scrollbarthumb-vertical | scrollbartrack-horizontal | scrollbartrack-vertical | searchfield | separator | sheet | spinner | spinner-downbutton | spinner-textfield | spinner-upbutton | splitter | statusbar | statusbarpanel | tab | tabpanel | tabpanels | tab-scroll-arrow-back | tab-scroll-arrow-forward | textfield | textfield-multiline | toolbar | toolbarbutton | toolbarbutton-dropdown | toolbargripper | toolbox | tooltip | treeheader | treeheadercell | treeheadersortarrow | treeitem | treeline | treetwisty | treetwistyopen | treeview | -moz-mac-unified-toolbar | -moz-win-borderless-glass | -moz-win-browsertabbar-toolbox | -moz-win-communicationstext | -moz-win-communications-toolbox | -moz-win-exclude-glass | -moz-win-glass | -moz-win-mediatext | -moz-win-media-toolbox | -moz-window-button-box | -moz-window-button-box-maximized | -moz-window-button-close | -moz-window-button-maximize | -moz-window-button-minimize | -moz-window-button-restore | -moz-window-frame-bottom | -moz-window-frame-left | -moz-window-frame-right | -moz-window-titlebar | -moz-window-titlebar-maximized",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -1213,6 +1263,7 @@
       "syntax": "<url> | none",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -1236,6 +1287,7 @@
       "syntax": "<color>+ | none",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -1259,6 +1311,7 @@
       "syntax": "<color>+ | none",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -1282,6 +1335,7 @@
       "syntax": "<color>+ | none",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -1305,6 +1359,7 @@
       "syntax": "<color>+ | none",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -1328,6 +1383,7 @@
       "syntax": "none | [ fill | fill-opacity | stroke | stroke-opacity ]#",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -1351,6 +1407,7 @@
       "syntax": "border-box | content-box | margin-box | padding-box",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -1374,6 +1431,7 @@
       "syntax": "0 | 1",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -1397,6 +1455,7 @@
       "syntax": "inline | block | horizontal | vertical",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -1425,6 +1484,7 @@
       "syntax": "<outline-radius>{1,4} [ / <outline-radius>{1,4} ]?",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -1448,6 +1508,7 @@
       "syntax": "<outline-radius>",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -1471,6 +1532,7 @@
       "syntax": "<outline-radius>",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -1494,6 +1556,7 @@
       "syntax": "<outline-radius>",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -1517,6 +1580,7 @@
       "syntax": "<outline-radius>",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -1540,6 +1604,7 @@
       "syntax": "ignore | stretch-to-fit",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -1563,6 +1628,7 @@
       "syntax": "none | blink",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -1586,6 +1652,7 @@
       "syntax": "ignore | normal | select-after | select-before | select-menu | select-same | select-all | none",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -1609,6 +1676,7 @@
       "syntax": "auto | none | enabled | disabled",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -1632,6 +1700,7 @@
       "syntax": "read-only | read-write | write-only",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -1655,6 +1724,7 @@
       "syntax": "drag | no-drag",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -1678,6 +1748,7 @@
       "syntax": "default | menu | tooltip | sheet | none",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -1701,6 +1772,7 @@
       "syntax": "none | button | button-bevel | caret | checkbox | default-button | inner-spin-button | listbox | listitem | media-controls-background | media-controls-fullscreen-background | media-current-time-display | media-enter-fullscreen-button | media-exit-fullscreen-button | media-fullscreen-button | media-mute-button | media-overlay-play-button | media-play-button | media-seek-back-button | media-seek-forward-button | media-slider | media-sliderthumb | media-time-remaining-display | media-toggle-closed-captions-button | media-volume-slider | media-volume-slider-container | media-volume-sliderthumb | menulist | menulist-button | menulist-text | menulist-textfield | meter | progress-bar | progress-bar-value | push-button | radio | searchfield | searchfield-cancel-button | searchfield-decoration | searchfield-results-button | searchfield-results-decoration | slider-horizontal | slider-vertical | sliderthumb-horizontal | sliderthumb-vertical | square-button | textarea | textfield | -apple-pay-button",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -1728,6 +1800,7 @@
       "syntax": "<'border-width'> || <'border-style'> || <color>",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -1751,6 +1824,7 @@
       "syntax": "<color>",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -1774,6 +1848,7 @@
       "syntax": "<'border-style'>",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -1797,6 +1872,7 @@
       "syntax": "<'border-width'>",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -1820,6 +1896,7 @@
       "syntax": "[ above | below | right | left ]? <length>? <image>?",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -1844,6 +1921,7 @@
       "syntax": "none | <integer>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -1874,6 +1952,7 @@
       "syntax": "[ <mask-reference> || <position> [ / <bg-size> ]? || <repeat-style> || [ <visual-box> | border | padding | content | text ] || [ <visual-box> | border | padding | content ] ]#",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -1897,6 +1976,7 @@
       "syntax": "<attachment>#",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -1920,6 +2000,7 @@
       "syntax": "[ <coord-box> | no-clip | border | padding | content | text ]#",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -1943,6 +2024,7 @@
       "syntax": "<composite-style>#",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -1966,6 +2048,7 @@
       "syntax": "<mask-reference>#",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -1989,6 +2072,7 @@
       "syntax": "[ <coord-box> | border | padding | content ]#",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -2012,6 +2096,7 @@
       "syntax": "<position>#",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -2035,6 +2120,7 @@
       "syntax": "[ <length-percentage> | left | center | right ]#",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -2058,6 +2144,7 @@
       "syntax": "[ <length-percentage> | top | center | bottom ]#",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -2081,6 +2168,7 @@
       "syntax": "<repeat-style>#",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -2104,6 +2192,7 @@
       "syntax": "repeat | no-repeat | space | round",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -2127,6 +2216,7 @@
       "syntax": "repeat | no-repeat | space | round",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -2150,6 +2240,7 @@
       "syntax": "<bg-size>#",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -2173,6 +2264,7 @@
       "syntax": "auto | touch",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -2196,6 +2288,7 @@
       "syntax": "<color>",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -2219,6 +2312,7 @@
       "syntax": "<color>",
       "impl": "excluded",
       "implNote": "nonstandard（前缀）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -2245,6 +2339,7 @@
       "syntax": "<length> || <color>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -2268,6 +2363,7 @@
       "syntax": "<color>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -2291,6 +2387,7 @@
       "syntax": "<length>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -2314,6 +2411,7 @@
       "syntax": "default | none",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -2337,6 +2435,7 @@
       "syntax": "read-only | read-write | read-write-plaintext-only",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -2360,6 +2459,7 @@
       "syntax": "auto | text | none | all",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -2383,6 +2483,7 @@
       "syntax": "auto | <color>",
       "impl": "excluded",
       "implNote": "表单控件着色（App 端表单自绘另有通道）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -2407,6 +2508,7 @@
       "syntax": "normal | <baseline-position> | <content-distribution> | <overflow-position>? <content-position>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -2431,6 +2533,7 @@
       "syntax": "normal | stretch | <baseline-position> | [ <overflow-position>? <self-position> ] | anchor-center",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic · 矩阵 FlexAlign）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -2455,6 +2558,7 @@
       "syntax": "auto | normal | stretch | <baseline-position> | <overflow-position>? <self-position> | anchor-center",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic · 矩阵 FlexAlign）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -2478,6 +2582,7 @@
       "syntax": "[ normal | <baseline-position> | <content-distribution> | <overflow-position>? <content-position> ]#",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -2501,6 +2606,7 @@
       "syntax": "baseline | alphabetic | ideographic | middle | central | mathematical | text-before-edge | text-after-edge",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -2524,6 +2630,7 @@
       "syntax": "initial | inherit | unset | revert | revert-layer",
       "impl": "excluded",
       "implNote": "全属性重置简写（引擎面不支持整树重置；用显式声明）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -2547,6 +2654,7 @@
       "syntax": "none | <dashed-ident>#",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -2570,6 +2678,7 @@
       "syntax": "none | all | <dashed-ident>#",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -2603,6 +2712,7 @@
       "syntax": "<single-animation>#",
       "impl": "implemented",
       "implNote": "**独立通道**：**独立通道**（证据：批次 42（@keyframes 折叠 → 内核动画）+ packages/animation）",
+      "channel": "independent",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -2626,6 +2736,7 @@
       "syntax": "<single-animation-composition>#",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -2649,6 +2760,7 @@
       "syntax": "<time>#",
       "impl": "implemented",
       "implNote": "**独立通道**：**独立通道**（证据：同上）",
+      "channel": "independent",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -2672,6 +2784,7 @@
       "syntax": "<single-animation-direction>#",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -2695,6 +2808,7 @@
       "syntax": "[ auto | <time [0s,∞]> ]#",
       "impl": "implemented",
       "implNote": "**独立通道**：**独立通道**（证据：同上）",
+      "channel": "independent",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -2718,6 +2832,7 @@
       "syntax": "<single-animation-fill-mode>#",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -2741,6 +2856,7 @@
       "syntax": "<single-animation-iteration-count>#",
       "impl": "implemented",
       "implNote": "**独立通道**：**独立通道**（证据：同上）",
+      "channel": "independent",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -2764,6 +2880,7 @@
       "syntax": "[ none | <keyframes-name> ]#",
       "impl": "implemented",
       "implNote": "**独立通道**：**独立通道**（证据：同上）",
+      "channel": "independent",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -2787,6 +2904,7 @@
       "syntax": "<single-animation-play-state>#",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -2813,6 +2931,7 @@
       "syntax": "[ <'animation-range-start'> <'animation-range-end'>? ]#",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -2836,6 +2955,7 @@
       "syntax": "[ normal | <length-percentage> | <timeline-range-name> <length-percentage>? ]#",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -2859,6 +2979,7 @@
       "syntax": "[ normal | <length-percentage> | <timeline-range-name> <length-percentage>? ]#",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -2882,6 +3003,7 @@
       "syntax": "<single-animation-timeline>#",
       "impl": "excluded",
       "implNote": "滚动驱动动画（Chrome 新特性——三端语义未定）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -2905,6 +3027,7 @@
       "syntax": "<easing-function>#",
       "impl": "implemented",
       "implNote": "**独立通道**：**独立通道**（证据：同上）",
+      "channel": "independent",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -2928,6 +3051,7 @@
       "syntax": "[ none | [ <dashed-ident> <animation-action>+ ]+ ]#",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -2951,6 +3075,7 @@
       "syntax": "none | auto | <compat-auto> | <compat-special>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -2974,6 +3099,7 @@
       "syntax": "auto || <ratio>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -2997,6 +3123,7 @@
       "syntax": "none | <filter-value-list>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=engine-only · 矩阵 SEMANTIC_ONLY）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "engine-only",
@@ -3020,6 +3147,7 @@
       "syntax": "visible | hidden",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3052,6 +3180,7 @@
       "syntax": "<bg-layer>#? , <final-bg-layer>",
       "impl": "implemented",
       "implNote": "**简写展开**：backgroundColor（附：fillGradient 部分支持）——简写 → 纯色折 background-color；渐变折 fillGradient（引擎绘制通道）（证据：vapor/template.ts:958-970（parseCssGradient + extractBackgroundColor））",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3075,6 +3204,7 @@
       "syntax": "<attachment>#",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3098,6 +3228,7 @@
       "syntax": "<blend-mode>#",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3121,6 +3252,7 @@
       "syntax": "<bg-clip>#",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3144,6 +3276,7 @@
       "syntax": "<color>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic · 矩阵 Color）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -3167,6 +3300,7 @@
       "syntax": "<bg-image>#",
       "impl": "partial",
       "implNote": "有结构化属性通道（非 CSS 属性形态）——CSS 写法待接",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3190,6 +3324,7 @@
       "syntax": "<visual-box>#",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3213,6 +3348,7 @@
       "syntax": "<bg-position>#",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic · 矩阵 BackgroundPosition）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -3236,6 +3372,7 @@
       "syntax": "[ center | [ [ left | right | x-start | x-end ]? <length-percentage>? ]! ]#",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3259,6 +3396,7 @@
       "syntax": "[ center | [ [ top | bottom | y-start | y-end ]? <length-percentage>? ]! ]#",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3282,6 +3420,7 @@
       "syntax": "<repeat-style>#",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic · 矩阵 BackgroundRepeat）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -3305,6 +3444,7 @@
       "syntax": "<bg-size>#",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic · 矩阵 BackgroundSize）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -3328,6 +3468,7 @@
       "syntax": "<length-percentage> | sub | super | baseline",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3351,6 +3492,7 @@
       "syntax": "auto | first | last",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3374,6 +3516,7 @@
       "syntax": "<'width'>",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3401,6 +3544,7 @@
       "syntax": "<line-width> || <line-style> || <color>",
       "impl": "implemented",
       "implNote": "**简写展开**：borderWidth + borderColor（附：borderTopStyle/borderRightStyle/borderBottomStyle/borderLeftStyle 部分支持）——border 简写 → 统一 width + color + 四边线型（★边框族收口批：dashed/dotted 已支持，宿主按线型绘制；double/groove 等仍诊断）（证据：vapor/template.ts（parseBorderShorthand））",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3428,6 +3572,7 @@
       "syntax": "<'border-block-start'>",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3451,6 +3596,7 @@
       "syntax": "<'border-top-color'>{1,2}",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3478,6 +3624,7 @@
       "syntax": "<'border-top-width'> || <'border-top-style'> || <color>",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3501,6 +3648,7 @@
       "syntax": "<'border-top-color'>",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3524,6 +3672,7 @@
       "syntax": "<'border-top-style'>",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3547,6 +3696,7 @@
       "syntax": "<'border-top-width'>",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3574,6 +3724,7 @@
       "syntax": "<'border-top-width'> || <'border-top-style'> || <color>",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3597,6 +3748,7 @@
       "syntax": "<'border-top-color'>",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3620,6 +3772,7 @@
       "syntax": "<'border-top-style'>",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3643,6 +3796,7 @@
       "syntax": "<'border-top-width'>",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3666,6 +3820,7 @@
       "syntax": "<'border-top-style'>{1,2}",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3689,6 +3844,7 @@
       "syntax": "<'border-top-width'>{1,2}",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3716,6 +3872,7 @@
       "syntax": "<line-width> || <line-style> || <color>",
       "impl": "implemented",
       "implNote": "**简写展开**：borderBottomWidth + borderBottomColor（附：borderBottomStyle 部分支持）——逐边简写（width/color/style 三件套；★线型批：dashed/dotted 支持）（证据：vapor/template.ts（逐边分支））",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3739,6 +3896,7 @@
       "syntax": "<'border-top-color'>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic · 矩阵 Color）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -3762,6 +3920,7 @@
       "syntax": "<length-percentage [0,∞]>{1,2}",
       "impl": "implemented",
       "implNote": "**简写展开**：borderRadius（附：borderRadiusCorners 部分支持）——逐角长手（语义 = border-radius 四值；缺省 0——与简写同一输出形态：统一半径 + 掩码）（证据：vapor/template.ts（★边框族收口批：逐角就地累积 + 合成））",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3785,6 +3944,7 @@
       "syntax": "<length-percentage [0,∞]>{1,2}",
       "impl": "implemented",
       "implNote": "**简写展开**：borderRadius（附：borderRadiusCorners 部分支持）——逐角长手（语义 = border-radius 四值；缺省 0——与简写同一输出形态：统一半径 + 掩码）（证据：vapor/template.ts（★边框族收口批：逐角就地累积 + 合成））",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3808,6 +3968,7 @@
       "syntax": "<line-style>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic · 矩阵 BorderStyle）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -3831,6 +3992,7 @@
       "syntax": "<line-width>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic · 矩阵 Length）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -3854,6 +4016,7 @@
       "syntax": "separate | collapse",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3882,6 +4045,7 @@
       "syntax": "<color>{1,4}",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic · 矩阵 Color）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -3905,6 +4069,7 @@
       "syntax": "<'border-top-left-radius'>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3928,6 +4093,7 @@
       "syntax": "<'border-top-left-radius'>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3957,6 +4123,7 @@
       "syntax": "<'border-image-source'> || <'border-image-slice'> [ / <'border-image-width'> | / <'border-image-width'>? / <'border-image-outset'> ]? || <'border-image-repeat'>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3980,6 +4147,7 @@
       "syntax": "[ <length [0,∞]> | <number [0,∞]> ]{1,4}",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4003,6 +4171,7 @@
       "syntax": "[ stretch | repeat | round | space ]{1,2}",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4026,6 +4195,7 @@
       "syntax": "[ <number [0,∞]> | <percentage [0,∞]> ]{1,4} && fill?",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4049,6 +4219,7 @@
       "syntax": "none | <image>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4072,6 +4243,7 @@
       "syntax": "[ <length-percentage [0,∞]> | <number [0,∞]> | auto ]{1,4}",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4099,6 +4271,7 @@
       "syntax": "<'border-block-start'>",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4122,6 +4295,7 @@
       "syntax": "<'border-top-color'>{1,2}",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4149,6 +4323,7 @@
       "syntax": "<'border-top-width'> || <'border-top-style'> || <color>",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4172,6 +4347,7 @@
       "syntax": "<'border-top-color'>",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4195,6 +4371,7 @@
       "syntax": "<'border-top-style'>",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4218,6 +4395,7 @@
       "syntax": "<'border-top-width'>",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4245,6 +4423,7 @@
       "syntax": "<'border-top-width'> || <'border-top-style'> || <color>",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4268,6 +4447,7 @@
       "syntax": "<'border-top-color'>",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4291,6 +4471,7 @@
       "syntax": "<'border-top-style'>",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4314,6 +4495,7 @@
       "syntax": "<'border-top-width'>",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4337,6 +4519,7 @@
       "syntax": "<'border-top-style'>{1,2}",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4360,6 +4543,7 @@
       "syntax": "<'border-top-width'>{1,2}",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4387,6 +4571,7 @@
       "syntax": "<line-width> || <line-style> || <color>",
       "impl": "implemented",
       "implNote": "**简写展开**：borderLeftWidth + borderLeftColor（附：borderLeftStyle 部分支持）——逐边简写（width/color/style 三件套；★线型批：dashed/dotted 支持）（证据：vapor/template.ts（逐边分支））",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4410,6 +4595,7 @@
       "syntax": "<color>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic · 矩阵 Color）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -4433,6 +4619,7 @@
       "syntax": "<line-style>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic · 矩阵 BorderStyle）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -4456,6 +4643,7 @@
       "syntax": "<line-width>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic · 矩阵 Length）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -4484,6 +4672,7 @@
       "syntax": "<length-percentage [0,∞]>{1,4} [ / <length-percentage [0,∞]>{1,4} ]?",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic · 矩阵 Length）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -4511,6 +4700,7 @@
       "syntax": "<line-width> || <line-style> || <color>",
       "impl": "implemented",
       "implNote": "**简写展开**：borderRightWidth + borderRightColor（附：borderRightStyle 部分支持）——逐边简写（width/color/style 三件套；★线型批：dashed/dotted 支持）（证据：vapor/template.ts（逐边分支））",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4534,6 +4724,7 @@
       "syntax": "<color>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic · 矩阵 Color）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -4557,6 +4748,7 @@
       "syntax": "<line-style>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic · 矩阵 BorderStyle）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -4580,6 +4772,7 @@
       "syntax": "<line-width>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic · 矩阵 Length）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -4603,6 +4796,7 @@
       "syntax": "<length>{1,2}",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4626,6 +4820,7 @@
       "syntax": "<'border-top-left-radius'>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4649,6 +4844,7 @@
       "syntax": "<'border-top-left-radius'>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4677,6 +4873,7 @@
       "syntax": "<line-style>{1,4}",
       "impl": "implemented",
       "implNote": "**简写展开**：borderTopStyle + borderRightStyle + borderBottomStyle + borderLeftStyle（附： 部分支持）——线型简写（solid/dashed/dotted；none ⇒ 四边清零；double/groove 等诊断）（证据：vapor/template.ts（★边框族收口批：1–4 值简写 + 单值四边 Style））",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4704,6 +4901,7 @@
       "syntax": "<line-width> || <line-style> || <color>",
       "impl": "implemented",
       "implNote": "**简写展开**：borderTopWidth + borderTopColor（附：borderTopStyle 部分支持）——逐边简写（width/color/style 三件套；★线型批：dashed/dotted 支持）（证据：vapor/template.ts（逐边分支））",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4727,6 +4925,7 @@
       "syntax": "<color>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic · 矩阵 Color）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -4750,6 +4949,7 @@
       "syntax": "<length-percentage [0,∞]>{1,2}",
       "impl": "implemented",
       "implNote": "**简写展开**：borderRadius（附：borderRadiusCorners 部分支持）——逐角长手（语义 = border-radius 四值；缺省 0——与简写同一输出形态：统一半径 + 掩码）（证据：vapor/template.ts（★边框族收口批：逐角就地累积 + 合成））",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4773,6 +4973,7 @@
       "syntax": "<length-percentage [0,∞]>{1,2}",
       "impl": "implemented",
       "implNote": "**简写展开**：borderRadius（附：borderRadiusCorners 部分支持）——逐角长手（语义 = border-radius 四值；缺省 0——与简写同一输出形态：统一半径 + 掩码）（证据：vapor/template.ts（★边框族收口批：逐角就地累积 + 合成））",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4796,6 +4997,7 @@
       "syntax": "<line-style>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic · 矩阵 BorderStyle）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -4819,6 +5021,7 @@
       "syntax": "<line-width>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic · 矩阵 Length）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -4847,6 +5050,7 @@
       "syntax": "<line-width>{1,4}",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic · 矩阵 Length）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -4871,6 +5075,7 @@
       "syntax": "auto | <length-percentage> | <anchor()> | <anchor-size()>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -4895,6 +5100,7 @@
       "syntax": "start | center | end | baseline | stretch",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4918,6 +5124,7 @@
       "syntax": "slice | clone",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4942,6 +5149,7 @@
       "syntax": "normal | reverse | inherit",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4966,6 +5174,7 @@
       "syntax": "<number>",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -4990,6 +5199,7 @@
       "syntax": "<integer>",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -5014,6 +5224,7 @@
       "syntax": "single | multiple",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -5038,6 +5249,7 @@
       "syntax": "<integer>",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -5062,6 +5274,7 @@
       "syntax": "horizontal | vertical | inline-axis | block-axis | inherit",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -5086,6 +5299,7 @@
       "syntax": "start | center | end | justify",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -5109,6 +5323,7 @@
       "syntax": "none | <shadow>#",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -5132,6 +5347,7 @@
       "syntax": "content-box | border-box",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=engine-only）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "engine-only",
@@ -5155,6 +5371,7 @@
       "syntax": "auto | avoid | always | all | avoid-page | page | left | right | recto | verso | avoid-column | column | avoid-region | region",
       "impl": "excluded",
       "implNote": "同上",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -5178,6 +5395,7 @@
       "syntax": "auto | avoid | always | all | avoid-page | page | left | right | recto | verso | avoid-column | column | avoid-region | region",
       "impl": "excluded",
       "implNote": "分页/多列（目标面外）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -5201,6 +5419,7 @@
       "syntax": "auto | avoid | avoid-page | avoid-column | avoid-region",
       "impl": "excluded",
       "implNote": "同上",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -5224,6 +5443,7 @@
       "syntax": "top | bottom",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -5251,6 +5471,7 @@
       "syntax": "<'caret-color'> || <'caret-animation'> || <'caret-shape'>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -5274,6 +5495,7 @@
       "syntax": "auto | manual",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -5297,6 +5519,7 @@
       "syntax": "auto | <color>",
       "impl": "excluded",
       "implNote": "文本插入符颜色（App 自绘输入未接）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -5320,6 +5543,7 @@
       "syntax": "auto | bar | block | underscore",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -5343,6 +5567,7 @@
       "syntax": "none | left | right | both | inline-start | inline-end",
       "impl": "excluded",
       "implNote": "同 float（清除浮动语义不存在）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": null,
@@ -5366,6 +5591,7 @@
       "syntax": "<shape> | auto",
       "impl": "excluded",
       "implNote": "MDN 状态 obsolete（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -5389,6 +5615,7 @@
       "syntax": "<clip-source> | [ <basic-shape> || <geometry-box> ] | none",
       "impl": "partial",
       "implNote": "有结构化属性通道（非 CSS 属性形态）——CSS 写法待接",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -5412,6 +5639,7 @@
       "syntax": "nonzero | evenodd",
       "impl": "excluded",
       "implNote": "SVG 裁剪规则（-out）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -5435,6 +5663,7 @@
       "syntax": "<color>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic · 矩阵 Color）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -5458,6 +5687,7 @@
       "syntax": "auto | sRGB | linearRGB",
       "impl": "excluded",
       "implNote": "同上",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -5481,6 +5711,7 @@
       "syntax": "normal | [ light | dark | <custom-ident> ]+ && only?",
       "impl": "excluded",
       "implNote": "配色方案声明（Web 端浏览器面；App 走主题 token）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -5504,6 +5735,7 @@
       "syntax": "<integer> | auto",
       "impl": "excluded",
       "implNote": "同上",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -5527,6 +5759,7 @@
       "syntax": "auto | balance",
       "impl": "excluded",
       "implNote": "同上",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -5551,6 +5784,7 @@
       "syntax": "normal | <length-percentage>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -5575,6 +5809,7 @@
       "syntax": "auto | <length [0,∞]>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -5602,6 +5837,7 @@
       "syntax": "<'column-rule-width'> || <'column-rule-style'> || <'column-rule-color'>",
       "impl": "excluded",
       "implNote": "多列分隔线（随多列布局）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -5625,6 +5861,7 @@
       "syntax": "<color>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -5648,6 +5885,7 @@
       "syntax": "<'border-style'>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -5671,6 +5909,7 @@
       "syntax": "<'border-width'>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -5694,6 +5933,7 @@
       "syntax": "none | all",
       "impl": "excluded",
       "implNote": "同上",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -5718,6 +5958,7 @@
       "syntax": "auto | <length [0,∞]>",
       "impl": "excluded",
       "implNote": "同上",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -5742,6 +5983,7 @@
       "syntax": "auto | nowrap | wrap",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -5769,6 +6011,7 @@
       "syntax": "[ <'column-width'> || <'column-count'> ] [ / <'column-height'> ]?",
       "impl": "excluded",
       "implNote": "多列布局（三端一致性成本极高、使用率低）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -5792,6 +6035,7 @@
       "syntax": "none | strict | content | [ [ size || inline-size ] || layout || style || paint ]",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -5815,6 +6059,7 @@
       "syntax": "auto? [ none | <length> ]",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -5838,6 +6083,7 @@
       "syntax": "auto? [ none | <length> ]",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -5861,6 +6107,7 @@
       "syntax": "auto? [ none | <length> ]",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -5887,6 +6134,7 @@
       "syntax": "[ auto? [ none | <length> ] ]{1,2}",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -5910,6 +6158,7 @@
       "syntax": "auto? [ none | <length> ]",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -5936,6 +6185,7 @@
       "syntax": "<'container-name'> [ / <'container-type'> ]?",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -5959,6 +6209,7 @@
       "syntax": "none | <custom-ident>+",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -5982,6 +6233,7 @@
       "syntax": "normal | [ [ size | inline-size ] || scroll-state ]",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -6005,6 +6257,7 @@
       "syntax": "normal | none | [ <content-replacement> | <content-list> ] [ / [ <string> | <counter> | <attr()> ]+ ]?",
       "impl": "excluded",
       "implNote": "::before/::after 内容注入（伪元素与内容注入均不在 Profile 内）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -6028,6 +6281,7 @@
       "syntax": "visible | auto | hidden",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -6054,6 +6308,7 @@
       "syntax": "<corner-shape-value>{1,2}",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -6080,6 +6335,7 @@
       "syntax": "<corner-shape-value>{1,2}",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -6106,6 +6362,7 @@
       "syntax": "<corner-shape-value>{1,2}",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -6129,6 +6386,7 @@
       "syntax": "<corner-shape-value>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -6152,6 +6410,7 @@
       "syntax": "<corner-shape-value>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -6175,6 +6434,7 @@
       "syntax": "<corner-shape-value>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -6198,6 +6458,7 @@
       "syntax": "<corner-shape-value>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -6224,6 +6485,7 @@
       "syntax": "<corner-shape-value>{1,2}",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -6250,6 +6512,7 @@
       "syntax": "<corner-shape-value>{1,2}",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -6276,6 +6539,7 @@
       "syntax": "<corner-shape-value>{1,2}",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -6302,6 +6566,7 @@
       "syntax": "<corner-shape-value>{1,2}",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -6330,6 +6595,7 @@
       "syntax": "<corner-shape-value>{1,4}",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -6353,6 +6619,7 @@
       "syntax": "<corner-shape-value>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -6376,6 +6643,7 @@
       "syntax": "<corner-shape-value>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -6402,6 +6670,7 @@
       "syntax": "<corner-shape-value>{1,2}",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -6425,6 +6694,7 @@
       "syntax": "<corner-shape-value>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -6448,6 +6718,7 @@
       "syntax": "<corner-shape-value>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -6471,6 +6742,7 @@
       "syntax": "[ <counter-name> <integer>? ]+ | none",
       "impl": "excluded",
       "implNote": "同上",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -6494,6 +6766,7 @@
       "syntax": "[ <counter-name> <integer>? | <reversed-counter-name> <integer>? ]+ | none",
       "impl": "excluded",
       "implNote": "CSS 计数器（依赖 content 注入）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -6517,6 +6790,7 @@
       "syntax": "[ <counter-name> <integer>? ]+ | none",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -6540,6 +6814,7 @@
       "syntax": "[ [ <url> [ <x> <y> ]? , ]* <cursor-predefined> ]",
       "impl": "excluded",
       "implNote": "指针光标（触屏无光标；Web 端保留浏览器默认即可）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -6563,6 +6838,7 @@
       "syntax": "<length> | <percentage>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -6586,6 +6862,7 @@
       "syntax": "<length> | <percentage>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -6609,6 +6886,7 @@
       "syntax": "none | path(<string>)",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -6632,6 +6910,7 @@
       "syntax": "ltr | rtl",
       "impl": "excluded",
       "implNote": "BiDi 方向（同上；App 端按平台默认）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -6655,6 +6934,7 @@
       "syntax": "[ <display-outside> || <display-inside> ] | <display-listitem> | <display-internal> | <display-box> | <display-legacy>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic · 矩阵 FORBIDDEN）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -6679,6 +6959,7 @@
       "syntax": "auto | text-bottom | alphabetic | ideographic | middle | central | mathematical | hanging | text-top",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -6702,6 +6983,7 @@
       "syntax": "standard | no-limit | constrained | <dynamic-range-limit-mix()>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -6725,6 +7007,7 @@
       "syntax": "show | hide",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -6748,6 +7031,7 @@
       "syntax": "content | fixed",
       "impl": "excluded",
       "implNote": "表单尺寸（实验性）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -6771,6 +7055,7 @@
       "syntax": "<paint>",
       "impl": "excluded",
       "implNote": "同上",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -6794,6 +7079,7 @@
       "syntax": "<'opacity'>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -6817,6 +7103,7 @@
       "syntax": "nonzero | evenodd",
       "impl": "excluded",
       "implNote": "SVG 填充规则（现有通道自管）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -6840,6 +7127,7 @@
       "syntax": "none | <filter-value-list>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=engine-only · 矩阵 SEMANTIC_ONLY）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "engine-only",
@@ -6867,6 +7155,7 @@
       "syntax": "none | [ <'flex-grow'> <'flex-shrink'>? || <'flex-basis'> ]",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=engine-only · 矩阵 FlexNumber）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "engine-only",
@@ -6890,6 +7179,7 @@
       "syntax": "content | <'width'>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -6913,6 +7203,7 @@
       "syntax": "row | row-reverse | column | column-reverse",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -6939,6 +7230,7 @@
       "syntax": "<'flex-direction'> || <'flex-wrap'>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -6962,6 +7254,7 @@
       "syntax": "<number>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic · 矩阵 FlexNumber）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -6985,6 +7278,7 @@
       "syntax": "<number>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic · 矩阵 FlexNumber）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -7008,6 +7302,7 @@
       "syntax": "nowrap | wrap | wrap-reverse",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -7031,6 +7326,7 @@
       "syntax": "left | right | none | inline-start | inline-end",
       "impl": "excluded",
       "implNote": "三端无法统一（Skyline/App 无浮动流）；Profile CSS001 已判 error",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": null,
@@ -7054,6 +7350,7 @@
       "syntax": "<color>",
       "impl": "excluded",
       "implNote": "SVG 滤镜（-out）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -7077,6 +7374,7 @@
       "syntax": "<'opacity'>",
       "impl": "excluded",
       "implNote": "同上",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -7108,6 +7406,7 @@
       "syntax": "[ [ <'font-style'> || <font-variant-css2> || <'font-weight'> || <font-width-css3> ]? <'font-size'> [ / <'line-height'> ]? <'font-family'># ] | <system-family-name>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -7131,6 +7430,7 @@
       "syntax": "[ <family-name> | <generic-family> ]#",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -7154,6 +7454,7 @@
       "syntax": "normal | <feature-tag-value>#",
       "impl": "excluded",
       "implNote": "OpenType 特性（L4）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -7177,6 +7478,7 @@
       "syntax": "auto | normal | none",
       "impl": "excluded",
       "implNote": "字距调整（L4）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -7200,6 +7502,7 @@
       "syntax": "normal | <string>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -7223,6 +7526,7 @@
       "syntax": "auto | none",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -7246,6 +7550,7 @@
       "syntax": "normal | light | dark | <palette-identifier> | <palette-mix()>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -7269,6 +7574,7 @@
       "syntax": "<absolute-size> | <relative-size> | <length-percentage [0,∞]> | math",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -7292,6 +7598,7 @@
       "syntax": "none | [ ex-height | cap-height | ch-width | ic-width | ic-height ]? [ from-font | <number> ]",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -7315,6 +7622,7 @@
       "syntax": "auto | never | always | <absolute-size> | <length>",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -7338,6 +7646,7 @@
       "syntax": "<font-stretch-absolute>",
       "impl": "excluded",
       "implNote": "MDN 状态 obsolete（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -7361,6 +7670,7 @@
       "syntax": "normal | italic | oblique <angle>?",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -7384,6 +7694,7 @@
       "syntax": "none | [ weight || style || small-caps || position]",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -7407,6 +7718,7 @@
       "syntax": "auto | none",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -7430,6 +7742,7 @@
       "syntax": "auto | none",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -7453,6 +7766,7 @@
       "syntax": "auto | none",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -7476,6 +7790,7 @@
       "syntax": "auto | none",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -7499,6 +7814,7 @@
       "syntax": "normal | none | [ <common-lig-values> || <discretionary-lig-values> || <historical-lig-values> || <contextual-alt-values> || stylistic( <feature-value-name> ) || historical-forms || styleset( <feature-value-name># ) || character-variant( <feature-value-name># ) || swash( <feature-value-name> ) || ornaments( <feature-value-name> ) || annotation( <feature-value-name> ) || [ small-caps | all-small-caps | petite-caps | all-petite-caps | unicase | titling-caps ] || <numeric-figure-values> || <numeric-spacing-values> || <numeric-fraction-values> || ordinal || slashed-zero || <east-asian-variant-values> || <east-asian-width-values> || ruby ]",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -7522,6 +7838,7 @@
       "syntax": "normal | [ stylistic( <feature-value-name> ) || historical-forms || styleset( <feature-value-name># ) || character-variant( <feature-value-name># ) || swash( <feature-value-name> ) || ornaments( <feature-value-name> ) || annotation( <feature-value-name> ) ]",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -7545,6 +7862,7 @@
       "syntax": "normal | small-caps | all-small-caps | petite-caps | all-petite-caps | unicase | titling-caps",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -7568,6 +7886,7 @@
       "syntax": "normal | [ <east-asian-variant-values> || <east-asian-width-values> || ruby ]",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -7591,6 +7910,7 @@
       "syntax": "normal | text | emoji | unicode",
       "impl": "excluded",
       "implNote": "emoji 呈现策略（L4）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -7614,6 +7934,7 @@
       "syntax": "normal | none | [ <common-lig-values> || <discretionary-lig-values> || <historical-lig-values> || <contextual-alt-values> ]",
       "impl": "excluded",
       "implNote": "连字（L4）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -7637,6 +7958,7 @@
       "syntax": "normal | [ <numeric-figure-values> || <numeric-spacing-values> || <numeric-fraction-values> || ordinal || slashed-zero ]",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -7660,6 +7982,7 @@
       "syntax": "normal | sub | super",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -7683,6 +8006,7 @@
       "syntax": "normal | [ <string> <number> ]#",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -7706,6 +8030,7 @@
       "syntax": "<font-weight-absolute> | bolder | lighter",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic · 矩阵 Integer）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -7729,6 +8054,7 @@
       "syntax": "normal | <percentage [0,∞]> | ultra-condensed | extra-condensed | condensed | semi-condensed | semi-expanded | expanded | extra-expanded | ultra-expanded",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -7752,6 +8078,7 @@
       "syntax": "auto | none | preserve-parent-color",
       "impl": "excluded",
       "implNote": "强制色模式（目标面外）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -7778,6 +8105,7 @@
       "syntax": "<'row-gap'> <'column-gap'>?",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -7812,6 +8140,7 @@
       "syntax": "<'grid-template'> | <'grid-template-rows'> / [ auto-flow && dense? ] <'grid-auto-columns'>? | [ auto-flow && dense? ] <'grid-auto-rows'>? / <'grid-template-columns'>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -7840,6 +8169,7 @@
       "syntax": "<grid-line> [ / <grid-line> ]{0,3}",
       "impl": "implemented",
       "implNote": "**简写展开**：gridRow + gridColumn——grid-area 简写 → row/column 放置（证据：CSE（grid-* 映射，B3 补））",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -7863,6 +8193,7 @@
       "syntax": "<track-size>+",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -7886,6 +8217,7 @@
       "syntax": "[ row | column ] || dense",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic · 矩阵 GridAutoFlow）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -7909,6 +8241,7 @@
       "syntax": "<track-size>+",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -7935,6 +8268,7 @@
       "syntax": "<grid-line> [ / <grid-line> ]?",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -7958,6 +8292,7 @@
       "syntax": "<grid-line>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -7981,6 +8316,7 @@
       "syntax": "<length-percentage>",
       "impl": "excluded",
       "implNote": "MDN 状态 obsolete（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -8004,6 +8340,7 @@
       "syntax": "<grid-line>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -8030,6 +8367,7 @@
       "syntax": "<'grid-row-gap'> <'grid-column-gap'>?",
       "impl": "excluded",
       "implNote": "MDN 状态 obsolete（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -8056,6 +8394,7 @@
       "syntax": "<grid-line> [ / <grid-line> ]?",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -8079,6 +8418,7 @@
       "syntax": "<grid-line>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -8102,6 +8442,7 @@
       "syntax": "<length-percentage>",
       "impl": "excluded",
       "implNote": "MDN 状态 obsolete（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -8125,6 +8466,7 @@
       "syntax": "<grid-line>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -8152,6 +8494,7 @@
       "syntax": "none | [ <'grid-template-rows'> / <'grid-template-columns'> ] | [ <line-names>? <string> <track-size>? <line-names>? ]+ [ / <explicit-track-list> ]?",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -8175,6 +8518,7 @@
       "syntax": "none | <string>+",
       "impl": "not-started",
       "implNote": "未接：命名区域（证据：未接（CSE 支持 template-columns/rows；areas 未接））",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -8198,6 +8542,7 @@
       "syntax": "none | <track-list> | <auto-track-list> | subgrid <line-name-list>?",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -8221,6 +8566,7 @@
       "syntax": "none | <track-list> | <auto-track-list> | subgrid <line-name-list>?",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -8244,6 +8590,7 @@
       "syntax": "none | [ first || [ force-end | allow-end ] || last ]",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -8267,6 +8614,7 @@
       "syntax": "auto | <length-percentage [0,∞]> | min-content | max-content | fit-content | fit-content(<length-percentage [0,∞]>) | <calc-size()> | <anchor-size()>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic · 矩阵 Length）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -8290,6 +8638,7 @@
       "syntax": "auto | <string>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -8313,6 +8662,7 @@
       "syntax": "[ auto | <integer> ]{1,3}",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -8336,6 +8686,7 @@
       "syntax": "none | manual | auto",
       "impl": "excluded",
       "implNote": "自动断词（需词典——Profile L4 不做文本基础设施）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -8359,6 +8710,7 @@
       "syntax": "from-image | <angle> | [ <angle>? flip ]",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -8382,6 +8734,7 @@
       "syntax": "auto | crisp-edges | pixelated | smooth",
       "impl": "excluded",
       "implNote": "位图缩放算法提示（平台各异——现状登记）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -8405,6 +8758,7 @@
       "syntax": "[ from-image || <resolution> ] && snap?",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -8428,6 +8782,7 @@
       "syntax": "auto | normal | active | inactive | disabled",
       "impl": "excluded",
       "implNote": "MDN 状态 obsolete（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -8451,6 +8806,7 @@
       "syntax": "normal | [ <number> <integer>? ]",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -8474,6 +8830,7 @@
       "syntax": "[ auto | alphabetic | hanging | ideographic ]",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -8497,6 +8854,7 @@
       "syntax": "<'width'>",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -8526,6 +8884,7 @@
       "syntax": "<'top'>{1,4}",
       "impl": "implemented",
       "implNote": "**简写展开**：top + right + bottom + left——inset 简写 → 四边（证据：CSE shorthand.ts（inset 分支））",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -8553,6 +8912,7 @@
       "syntax": "<'top'>{1,2}",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -8577,6 +8937,7 @@
       "syntax": "<'top'>",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -8601,6 +8962,7 @@
       "syntax": "<'top'>",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -8628,6 +8990,7 @@
       "syntax": "<'top'>{1,2}",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -8652,6 +9015,7 @@
       "syntax": "<'top'>",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -8676,6 +9040,7 @@
       "syntax": "<'top'>",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -8699,6 +9064,7 @@
       "syntax": "numeric-only | allow-keywords",
       "impl": "excluded",
       "implNote": "尺寸插值（实验性）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -8722,6 +9088,7 @@
       "syntax": "auto | isolate",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -8745,6 +9112,7 @@
       "syntax": "auto | inert",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -8771,6 +9139,7 @@
       "syntax": "<'interest-delay-start'>{1,2}",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -8794,6 +9163,7 @@
       "syntax": "normal | <time>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -8817,6 +9187,7 @@
       "syntax": "normal | <time>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -8841,6 +9212,7 @@
       "syntax": "normal | <content-distribution> | <overflow-position>? [ <content-position> | left | right ]",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic · 矩阵 FlexJustify）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -8864,6 +9236,7 @@
       "syntax": "normal | stretch | <baseline-position> | <overflow-position>? [ <self-position> | left | right ] | legacy | legacy && [ left | right | center ] | anchor-center",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -8887,6 +9260,7 @@
       "syntax": "auto | normal | stretch | <baseline-position> | <overflow-position>? [ <self-position> | left | right ] | anchor-center",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic · 矩阵 JustifySelf）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -8910,6 +9284,7 @@
       "syntax": "[ normal | <content-distribution> | <overflow-position>? [ <content-position> | left | right ] ]#",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -8934,6 +9309,7 @@
       "syntax": "auto | <length-percentage> | <anchor()> | <anchor-size()>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -8957,6 +9333,7 @@
       "syntax": "normal | <length>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -8980,6 +9357,7 @@
       "syntax": "<color>",
       "impl": "excluded",
       "implNote": "同上",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -9003,6 +9381,7 @@
       "syntax": "auto | loose | normal | strict | anywhere",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -9026,6 +9405,7 @@
       "syntax": "none | <integer>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -9049,6 +9429,7 @@
       "syntax": "normal | <number> | <length> | <percentage>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -9072,6 +9453,7 @@
       "syntax": "<length>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -9099,6 +9481,7 @@
       "syntax": "<'list-style-type'> || <'list-style-position'> || <'list-style-image'>",
       "impl": "excluded",
       "implNote": "同上（简写）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -9122,6 +9505,7 @@
       "syntax": "<image> | none",
       "impl": "excluded",
       "implNote": "同上",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -9145,6 +9529,7 @@
       "syntax": "inside | outside",
       "impl": "excluded",
       "implNote": "同上",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -9168,6 +9553,7 @@
       "syntax": "<counter-style> | <string> | none",
       "impl": "excluded",
       "implNote": "列表标记（App 端无列表标记渲染面——v1）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -9196,6 +9582,7 @@
       "syntax": "<'margin-top'>{1,4}",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic · 矩阵 Length）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -9222,6 +9609,7 @@
       "syntax": "<'margin-top'>{1,2}",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -9245,6 +9633,7 @@
       "syntax": "<'margin-top'>",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -9268,6 +9657,7 @@
       "syntax": "<'margin-top'>",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -9292,6 +9682,7 @@
       "syntax": "<length-percentage> | auto | <anchor-size()>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=engine-only · 矩阵 Length）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "engine-only",
@@ -9318,6 +9709,7 @@
       "syntax": "<'margin-top'>{1,2}",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -9341,6 +9733,7 @@
       "syntax": "<'margin-top'>",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -9364,6 +9757,7 @@
       "syntax": "<'margin-top'>",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -9388,6 +9782,7 @@
       "syntax": "<length-percentage> | auto | <anchor-size()>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=engine-only · 矩阵 Length）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "engine-only",
@@ -9412,6 +9807,7 @@
       "syntax": "<length-percentage> | auto | <anchor-size()>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=engine-only · 矩阵 Length）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "engine-only",
@@ -9436,6 +9832,7 @@
       "syntax": "<length-percentage> | auto | <anchor-size()>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=engine-only · 矩阵 Length）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "engine-only",
@@ -9459,6 +9856,7 @@
       "syntax": "none | in-flow | all",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -9486,6 +9884,7 @@
       "syntax": "none | <url>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -9509,6 +9908,7 @@
       "syntax": "none | <url>",
       "impl": "excluded",
       "implNote": "同上",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -9532,6 +9932,7 @@
       "syntax": "none | <url>",
       "impl": "excluded",
       "implNote": "同上",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -9555,6 +9956,7 @@
       "syntax": "none | <url>",
       "impl": "excluded",
       "implNote": " SVG 标记（out）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -9587,6 +9989,7 @@
       "syntax": "<mask-layer>#",
       "impl": "implemented",
       "implNote": "**独立通道**：CSS mask 写法待接（属性通道已通）（证据：结构化属性通道（mask= 属性））",
+      "channel": "independent",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -9617,6 +10020,7 @@
       "syntax": "<'mask-border-source'> || <'mask-border-slice'> [ / <'mask-border-width'>? [ / <'mask-border-outset'> ]? ]? || <'mask-border-repeat'> || <'mask-border-mode'>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -9640,6 +10044,7 @@
       "syntax": "luminance | alpha",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -9663,6 +10068,7 @@
       "syntax": "[ <length> | <number> ]{1,4}",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -9686,6 +10092,7 @@
       "syntax": "[ stretch | repeat | round | space ]{1,2}",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -9709,6 +10116,7 @@
       "syntax": "<number-percentage>{1,4} fill?",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -9732,6 +10140,7 @@
       "syntax": "none | <image>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -9755,6 +10164,7 @@
       "syntax": "[ <length-percentage> | <number> | auto ]{1,4}",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -9778,6 +10188,7 @@
       "syntax": "[ <coord-box> | no-clip ]#",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -9801,6 +10212,7 @@
       "syntax": "<compositing-operator>#",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -9824,6 +10236,7 @@
       "syntax": "<mask-reference>#",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -9847,6 +10260,7 @@
       "syntax": "<masking-mode>#",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -9870,6 +10284,7 @@
       "syntax": "<coord-box>#",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -9893,6 +10308,7 @@
       "syntax": "<position>#",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -9916,6 +10332,7 @@
       "syntax": "<repeat-style>#",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -9939,6 +10356,7 @@
       "syntax": "<bg-size>#",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -9962,6 +10380,7 @@
       "syntax": "luminance | alpha",
       "impl": "excluded",
       "implNote": "CSS Masking 类型（现有 mask 属性通道自管）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -9985,6 +10404,7 @@
       "syntax": "[ pack | next ] || [ definite-first | ordered ]",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -10008,6 +10428,7 @@
       "syntax": "auto-add | add(<integer>) | <integer>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -10031,6 +10452,7 @@
       "syntax": "normal | compact",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -10054,6 +10476,7 @@
       "syntax": "normal | compact",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -10077,6 +10500,7 @@
       "syntax": "<'max-width'>",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -10100,6 +10524,7 @@
       "syntax": "none | <length-percentage [0,∞]> | min-content | max-content | fit-content | fit-content(<length-percentage [0,∞]>) | <calc-size()> | <anchor-size()>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic · 矩阵 Length）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -10123,6 +10548,7 @@
       "syntax": "<'max-width'>",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -10146,6 +10572,7 @@
       "syntax": "none | <integer>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -10169,6 +10596,7 @@
       "syntax": "none | <length-percentage [0,∞]> | min-content | max-content | fit-content | fit-content(<length-percentage [0,∞]>) | <calc-size()> | <anchor-size()>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic · 矩阵 Length）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -10192,6 +10620,7 @@
       "syntax": "<'min-width'>",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -10215,6 +10644,7 @@
       "syntax": "auto | <length-percentage [0,∞]> | min-content | max-content | fit-content | fit-content(<length-percentage [0,∞]>) | <calc-size()> | <anchor-size()>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic · 矩阵 Length）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -10238,6 +10668,7 @@
       "syntax": "<'min-width'>",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -10261,6 +10692,7 @@
       "syntax": "auto | <length-percentage [0,∞]> | min-content | max-content | fit-content | fit-content(<length-percentage [0,∞]>) | <calc-size()> | <anchor-size()>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic · 矩阵 Length）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -10284,6 +10716,7 @@
       "syntax": "<blend-mode> | plus-darker | plus-lighter",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -10305,8 +10738,9 @@
       "inherited": false,
       "initial": "fill",
       "syntax": "fill | contain | cover | none | scale-down",
-      "impl": "not-started",
-      "implNote": "未接：图片填充方式（证据：未接（图片组件通道））",
+      "impl": "implemented",
+      "implNote": "**独立通道**：**组件通道**（图片填充）：`object-fit` 作用于**替换内容**（图片/视频），本框架语义载体 = `<image mode>` / `p-image.fit`（Web objectFit · MP mode——已交付）；★App 自绘**暂无图片渲染**（无作用对象）⇒「App 图片渲染」独立立项（证据：图片组件通道：Web `<image>` 模拟层 `mode`→CSS objectFit（packages/web/src/components/image.ts）+ MP 原生 `<image mode>`（built-in-components/image.ts）；主流端（微信/Skyline）同以 `<image mode>` 表达而非 CSS 属性）",
+      "channel": "component",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -10315,8 +10749,8 @@
         "webSupport": null
       },
       "usage": 3,
-      "priority": "P0",
-      "acceptance": "none"
+      "priority": "done",
+      "acceptance": "pending"
     },
     {
       "id": "object-position",
@@ -10330,6 +10764,7 @@
       "syntax": "<position>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -10353,6 +10788,7 @@
       "syntax": "none | <basic-shape-rect>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -10382,6 +10818,7 @@
       "syntax": "[ <'offset-position'>? [ <'offset-path'> [ <'offset-distance'> || <'offset-rotate'> ]? ]? ]! [ / <'offset-anchor'> ]?",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -10405,6 +10842,7 @@
       "syntax": "auto | <position>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -10428,6 +10866,7 @@
       "syntax": "<length-percentage>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -10451,6 +10890,7 @@
       "syntax": "none | <offset-path> || <coord-box>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -10474,6 +10914,7 @@
       "syntax": "normal | auto | <position>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -10497,6 +10938,7 @@
       "syntax": "[ auto | reverse ] || <angle>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -10520,6 +10962,7 @@
       "syntax": "<opacity-value>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic · 矩阵 Opacity）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -10543,6 +10986,7 @@
       "syntax": "<integer>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -10566,6 +11010,7 @@
       "syntax": "<integer>",
       "impl": "excluded",
       "implNote": "分页媒体属性",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -10593,6 +11038,7 @@
       "syntax": "<'outline-width'> || <'outline-style'> || <'outline-color'>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -10616,6 +11062,7 @@
       "syntax": "auto | <color>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -10639,6 +11086,7 @@
       "syntax": "<length>",
       "impl": "not-started",
       "implNote": "未接：轮廓（证据：未接）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -10662,6 +11110,7 @@
       "syntax": "auto | <outline-line-style>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -10685,6 +11134,7 @@
       "syntax": "<line-width>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -10708,6 +11158,7 @@
       "syntax": "[ visible | hidden | clip | scroll | auto ]{1,2}",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -10731,6 +11182,7 @@
       "syntax": "auto | none",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -10754,6 +11206,7 @@
       "syntax": "visible | hidden | clip | scroll | auto",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -10777,6 +11230,7 @@
       "syntax": "padding-box | content-box",
       "impl": "excluded",
       "implNote": "MDN 状态 nonstandard（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -10800,6 +11254,7 @@
       "syntax": "<visual-box> || <length [0,∞]>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -10823,6 +11278,7 @@
       "syntax": "visible | hidden | clip | scroll | auto",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -10846,6 +11302,7 @@
       "syntax": "normal | break-word | anywhere",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -10869,6 +11326,7 @@
       "syntax": "visible | hidden | clip | scroll | auto",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic · 矩阵 Overflow）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -10892,6 +11350,7 @@
       "syntax": "visible | hidden | clip | scroll | auto",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic · 矩阵 Overflow）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -10915,6 +11374,7 @@
       "syntax": "none | auto",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -10938,6 +11398,7 @@
       "syntax": "[ contain | none | auto ]{1,2}",
       "impl": "excluded",
       "implNote": "过滚动行为（App 端滚动动量由内核控制）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -10961,6 +11422,7 @@
       "syntax": "contain | none | auto",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -10984,6 +11446,7 @@
       "syntax": "contain | none | auto",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -11007,6 +11470,7 @@
       "syntax": "contain | none | auto",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -11030,6 +11494,7 @@
       "syntax": "contain | none | auto",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -11058,6 +11523,7 @@
       "syntax": "<'padding-top'>{1,4}",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic · 矩阵 Length）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -11084,6 +11550,7 @@
       "syntax": "<'padding-top'>{1,2}",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -11107,6 +11574,7 @@
       "syntax": "<'padding-top'>",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -11130,6 +11598,7 @@
       "syntax": "<'padding-top'>",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -11153,6 +11622,7 @@
       "syntax": "<length-percentage [0,∞]>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=engine-only · 矩阵 Length）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "engine-only",
@@ -11179,6 +11649,7 @@
       "syntax": "<'padding-top'>{1,2}",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -11202,6 +11673,7 @@
       "syntax": "<'padding-top'>",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -11225,6 +11697,7 @@
       "syntax": "<'padding-top'>",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -11248,6 +11721,7 @@
       "syntax": "<length-percentage [0,∞]>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=engine-only · 矩阵 Length）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "engine-only",
@@ -11271,6 +11745,7 @@
       "syntax": "<length-percentage [0,∞]>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=engine-only · 矩阵 Length）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "engine-only",
@@ -11294,6 +11769,7 @@
       "syntax": "<length-percentage [0,∞]>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=engine-only · 矩阵 Length）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "engine-only",
@@ -11317,6 +11793,7 @@
       "syntax": "auto | <custom-ident>",
       "impl": "excluded",
       "implNote": "分页媒体（@page）不在目标面",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -11340,6 +11817,7 @@
       "syntax": "auto | always | avoid | left | right | recto | verso",
       "impl": "excluded",
       "implNote": "MDN 状态 obsolete（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -11363,6 +11841,7 @@
       "syntax": "auto | always | avoid | left | right | recto | verso",
       "impl": "excluded",
       "implNote": "MDN 状态 obsolete（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -11386,6 +11865,7 @@
       "syntax": "auto | avoid",
       "impl": "excluded",
       "implNote": "MDN 状态 obsolete（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -11409,6 +11889,7 @@
       "syntax": "normal | [ fill || stroke || markers ]",
       "impl": "excluded",
       "implNote": "SVG 绘制顺序（现有 svg-path 通道自管）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -11432,6 +11913,7 @@
       "syntax": "none | <length>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -11455,6 +11937,7 @@
       "syntax": "<position>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -11481,6 +11964,7 @@
       "syntax": "<'align-content'> <'justify-content'>?",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -11507,6 +11991,7 @@
       "syntax": "<'align-items'> <'justify-items'>?",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -11533,6 +12018,7 @@
       "syntax": "<'align-self'> <'justify-self'>?",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -11556,6 +12042,7 @@
       "syntax": "auto | none | visiblePainted | visibleFill | visibleStroke | visible | painted | fill | stroke | all | inherit",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -11579,6 +12066,7 @@
       "syntax": "static | relative | absolute | sticky | fixed",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -11602,6 +12090,7 @@
       "syntax": "auto | none | <anchor-name>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -11625,6 +12114,7 @@
       "syntax": "none | <position-area>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -11651,6 +12141,7 @@
       "syntax": "<'position-try-order'>? <'position-try-fallbacks'>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -11674,6 +12165,7 @@
       "syntax": "none | [ [<dashed-ident> || <try-tactic>] | <'position-area'> ]#",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -11697,6 +12189,7 @@
       "syntax": "normal | <try-size>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -11720,6 +12213,7 @@
       "syntax": "always | [ anchors-valid || anchors-visible || no-overflow ]",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -11743,6 +12237,7 @@
       "syntax": "economy | exact",
       "impl": "excluded",
       "implNote": "打印媒体不在目标面（App/Skyline 无打印）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -11766,6 +12261,7 @@
       "syntax": "none | auto | [ <string> <string> ]+",
       "impl": "excluded",
       "implNote": "引号嵌套（依赖 content 注入）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -11789,6 +12285,7 @@
       "syntax": "<length> | <percentage>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -11812,6 +12309,7 @@
       "syntax": "normal | source-order | flex-visual | flex-flow | grid-rows | grid-columns | grid-order",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -11835,6 +12333,7 @@
       "syntax": "<integer>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -11858,6 +12357,7 @@
       "syntax": "none | both | horizontal | vertical | block | inline",
       "impl": "excluded",
       "implNote": "元素手动缩放（App 端无此交互语义）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -11882,6 +12382,7 @@
       "syntax": "auto | <length-percentage> | <anchor()> | <anchor-size()>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -11905,6 +12406,7 @@
       "syntax": "none | <angle> | [ x | y | z | <number>{3} ] && <angle>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -11928,6 +12430,7 @@
       "syntax": "normal | <length-percentage>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -11951,6 +12454,7 @@
       "syntax": "start | center | space-between | space-around",
       "impl": "excluded",
       "implNote": "注音排版（L4）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -11974,6 +12478,7 @@
       "syntax": "separate | collapse | auto",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -11997,6 +12502,7 @@
       "syntax": "auto | none",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12020,6 +12526,7 @@
       "syntax": "[ alternate || [ over | under ] ] | inter-character",
       "impl": "excluded",
       "implNote": "同上",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12043,6 +12550,7 @@
       "syntax": "<length> | <percentage>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12066,6 +12574,7 @@
       "syntax": "<length> | <percentage>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12089,6 +12598,7 @@
       "syntax": "none | [ <number> | <percentage> ]{1,3}",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12112,6 +12622,7 @@
       "syntax": "auto | smooth",
       "impl": "excluded",
       "implNote": "平滑滚动（App 端滚动动画由内核控制）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12135,6 +12646,7 @@
       "syntax": "none | nearest",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12163,6 +12675,7 @@
       "syntax": "<length>{1,4}",
       "impl": "excluded",
       "implNote": "同上（族）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12189,6 +12702,7 @@
       "syntax": "<length>{1,2}",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12212,6 +12726,7 @@
       "syntax": "<length>",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12235,6 +12750,7 @@
       "syntax": "<length>",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12258,6 +12774,7 @@
       "syntax": "<length>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12284,6 +12801,7 @@
       "syntax": "<length>{1,2}",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12307,6 +12825,7 @@
       "syntax": "<length>",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12330,6 +12849,7 @@
       "syntax": "<length>",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12353,6 +12873,7 @@
       "syntax": "<length>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12376,6 +12897,7 @@
       "syntax": "<length>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12399,6 +12921,7 @@
       "syntax": "<length>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12422,6 +12945,7 @@
       "syntax": "none | before | after",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12450,6 +12974,7 @@
       "syntax": "[ auto | <length-percentage> ]{1,4}",
       "impl": "excluded",
       "implNote": "同上（族）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12476,6 +13001,7 @@
       "syntax": "[ auto | <length-percentage> ]{1,2}",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12499,6 +13025,7 @@
       "syntax": "auto | <length-percentage>",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12522,6 +13049,7 @@
       "syntax": "auto | <length-percentage>",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12545,6 +13073,7 @@
       "syntax": "auto | <length-percentage>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12571,6 +13100,7 @@
       "syntax": "[ auto | <length-percentage> ]{1,2}",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12594,6 +13124,7 @@
       "syntax": "auto | <length-percentage>",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12617,6 +13148,7 @@
       "syntax": "auto | <length-percentage>",
       "impl": "excluded",
       "implNote": "逻辑属性（依赖书写模式——横排 LTR 下 ≡ 对应物理属性；与 writing-mode 的 excluded 一致，v1 统一物理写法）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12640,6 +13172,7 @@
       "syntax": "auto | <length-percentage>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12663,6 +13196,7 @@
       "syntax": "auto | <length-percentage>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12686,6 +13220,7 @@
       "syntax": "auto | <length-percentage>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12709,6 +13244,7 @@
       "syntax": "[ none | start | end | center ]{1,2}",
       "impl": "excluded",
       "implNote": "同上",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12732,6 +13268,7 @@
       "syntax": "none | <position>#",
       "impl": "excluded",
       "implNote": "MDN 状态 obsolete（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12755,6 +13292,7 @@
       "syntax": "<position>",
       "impl": "excluded",
       "implNote": "MDN 状态 obsolete（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12778,6 +13316,7 @@
       "syntax": "none | repeat( <length-percentage> )",
       "impl": "excluded",
       "implNote": "MDN 状态 obsolete（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12801,6 +13340,7 @@
       "syntax": "none | repeat( <length-percentage> )",
       "impl": "excluded",
       "implNote": "MDN 状态 obsolete（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12824,6 +13364,7 @@
       "syntax": "normal | always",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12847,6 +13388,7 @@
       "syntax": "none | [ x | y | block | inline | both ] [ mandatory | proximity ]?",
       "impl": "excluded",
       "implNote": "滚动吸附（App 端未接——登记待评估）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12870,6 +13412,7 @@
       "syntax": "none | mandatory | proximity",
       "impl": "excluded",
       "implNote": "MDN 状态 obsolete（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12893,6 +13436,7 @@
       "syntax": "none | mandatory | proximity",
       "impl": "excluded",
       "implNote": "MDN 状态 obsolete（不进目标面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12916,6 +13460,7 @@
       "syntax": "none | auto",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12942,6 +13487,7 @@
       "syntax": "[ <'scroll-timeline-name'> <'scroll-timeline-axis'>? ]#",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12965,6 +13511,7 @@
       "syntax": "[ block | inline | x | y ]#",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -12988,6 +13535,7 @@
       "syntax": "[ none | <dashed-ident> ]#",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -13011,6 +13559,7 @@
       "syntax": "auto | <color>{2}",
       "impl": "excluded",
       "implNote": "滚动条着色（App 滚动条隐藏/自绘）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -13034,6 +13583,7 @@
       "syntax": "auto | stable && both-edges?",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -13057,6 +13607,7 @@
       "syntax": "auto | thin | none",
       "impl": "excluded",
       "implNote": "同上",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -13080,6 +13631,7 @@
       "syntax": "<opacity-value>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -13103,6 +13655,7 @@
       "syntax": "<length-percentage>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -13126,6 +13679,7 @@
       "syntax": "none | [ <shape-box> || <basic-shape> ] | <image>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -13149,6 +13703,7 @@
       "syntax": "auto | optimizeSpeed | crispEdges | geometricPrecision",
       "impl": "excluded",
       "implNote": "SVG 渲染提示（-out）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -13172,6 +13727,7 @@
       "syntax": "normal | spell-out || digits || [ literal-punctuation | no-punctuation ]",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -13195,6 +13751,7 @@
       "syntax": "<'color'>",
       "impl": "excluded",
       "implNote": "SVG 渐变停靠（现有 fill-gradient 通道自管）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -13218,6 +13775,7 @@
       "syntax": "<'opacity'>",
       "impl": "excluded",
       "implNote": "同上",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -13249,6 +13807,7 @@
       "syntax": "<paint>",
       "impl": "excluded",
       "implNote": "SVG 呈现属性（App 走 svg-path/fill 通道，不进 CSS 面）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -13272,6 +13831,7 @@
       "syntax": "<color>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -13295,6 +13855,7 @@
       "syntax": "none | <dasharray>",
       "impl": "excluded",
       "implNote": "同上",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -13318,6 +13879,7 @@
       "syntax": "<length-percentage> | <number>",
       "impl": "excluded",
       "implNote": "同上",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -13341,6 +13903,7 @@
       "syntax": "butt | round | square",
       "impl": "excluded",
       "implNote": "同上",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -13364,6 +13927,7 @@
       "syntax": "miter | miter-clip | round | bevel | arcs",
       "impl": "excluded",
       "implNote": "同上",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -13387,6 +13951,7 @@
       "syntax": "<number>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -13410,6 +13975,7 @@
       "syntax": "<'opacity'>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -13433,6 +13999,7 @@
       "syntax": "<length-percentage> | <number>",
       "impl": "excluded",
       "implNote": "同上",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -13456,6 +14023,7 @@
       "syntax": "<integer> | <length>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -13479,6 +14047,7 @@
       "syntax": "auto | fixed",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -13502,6 +14071,7 @@
       "syntax": "start | end | left | right | center | justify | match-parent",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic · 矩阵 TextAlign）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -13525,6 +14095,7 @@
       "syntax": "auto | start | end | left | right | center | justify",
       "impl": "excluded",
       "implNote": "末行对齐（App 文本排版未接）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -13548,6 +14119,7 @@
       "syntax": "start | middle | end",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -13571,6 +14143,7 @@
       "syntax": "normal | <autospace> | auto",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -13594,6 +14167,7 @@
       "syntax": "normal | <'text-box-trim'> || <'text-box-edge'>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -13617,6 +14191,7 @@
       "syntax": "auto | <text-edge>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -13640,6 +14215,7 @@
       "syntax": "none | trim-start | trim-end | trim-both",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -13663,6 +14239,7 @@
       "syntax": "none | all | [ digits <integer>? ]",
       "impl": "excluded",
       "implNote": "同上",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -13690,6 +14267,7 @@
       "syntax": "<'text-decoration-line'> || <'text-decoration-style'> || <'text-decoration-color'> || <'text-decoration-thickness'>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -13713,6 +14291,7 @@
       "syntax": "<color>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -13736,6 +14315,7 @@
       "syntax": "<length>{1,2} | auto",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -13759,6 +14339,7 @@
       "syntax": "none | [ underline || overline || line-through || blink ] | spelling-error | grammar-error",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -13782,6 +14363,7 @@
       "syntax": "none | [ objects || [ spaces | [ leading-spaces || trailing-spaces ] ] || edges || box-decoration ]",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -13805,6 +14387,7 @@
       "syntax": "auto | all | none",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -13828,6 +14411,7 @@
       "syntax": "solid | double | dotted | dashed | wavy",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -13851,6 +14435,7 @@
       "syntax": "auto | from-font | <length> | <percentage>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -13877,6 +14462,7 @@
       "syntax": "<'text-emphasis-style'> || <'text-emphasis-color'>",
       "impl": "excluded",
       "implNote": "着重号（三端字体绘图成本高、使用率低）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -13900,6 +14486,7 @@
       "syntax": "<color>",
       "impl": "excluded",
       "implNote": "同上",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -13923,6 +14510,7 @@
       "syntax": "auto | [ over | under ] && [ right | left ]?",
       "impl": "excluded",
       "implNote": "同上",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -13946,6 +14534,7 @@
       "syntax": "none | [ [ filled | open ] || [ dot | circle | double-circle | triangle | sesame ] ] | <string>",
       "impl": "excluded",
       "implNote": "同上",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -13969,6 +14558,7 @@
       "syntax": "<length-percentage> && hanging? && each-line?",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -13992,6 +14582,7 @@
       "syntax": "auto | inter-character | inter-word | none",
       "impl": "excluded",
       "implNote": "两端对齐策略细化（同上）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -14015,6 +14606,7 @@
       "syntax": "mixed | upright | sideways",
       "impl": "excluded",
       "implNote": "同上",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -14038,6 +14630,7 @@
       "syntax": "[ clip | ellipsis | <string> ]{1,2}",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -14061,6 +14654,7 @@
       "syntax": "auto | optimizeSpeed | optimizeLegibility | geometricPrecision",
       "impl": "excluded",
       "implNote": "文本渲染提示（-out）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -14084,6 +14678,7 @@
       "syntax": "none | <shadow-t>#",
       "impl": "not-started",
       "implNote": "未接：文本阴影（证据：未接）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -14107,6 +14702,7 @@
       "syntax": "none | auto | <percentage>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -14130,6 +14726,7 @@
       "syntax": "space-all | normal | space-first | trim-start",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -14154,6 +14751,7 @@
       "syntax": "none | [ capitalize | uppercase | lowercase ] || full-width || full-size-kana | math-auto",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -14177,6 +14775,7 @@
       "syntax": "auto | <length> | <percentage>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -14200,6 +14799,7 @@
       "syntax": "auto | from-font | [ under || [ left | right ] ]",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -14223,6 +14823,7 @@
       "syntax": "<'text-wrap-mode'> || <'text-wrap-style'>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -14246,6 +14847,7 @@
       "syntax": "wrap | nowrap",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -14269,6 +14871,7 @@
       "syntax": "auto | balance | stable | pretty",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -14292,6 +14895,7 @@
       "syntax": "none | <dashed-ident>#",
       "impl": "excluded",
       "implNote": "同上",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -14320,6 +14924,7 @@
       "syntax": "none | [ <'timeline-trigger-name'> <'timeline-trigger-source'> <'timeline-trigger-range'> [ '/' <'timeline-trigger-exit-range'> ]? ]#",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -14343,6 +14948,7 @@
       "syntax": "none | <dashed-ident>#",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -14369,6 +14975,7 @@
       "syntax": "[ <'timeline-trigger-exit-range-start'> <'timeline-trigger-exit-range-end'>? ]#",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -14392,6 +14999,7 @@
       "syntax": "[ auto | normal | <length-percentage> | <timeline-range-name> <length-percentage>? ]#",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -14415,6 +15023,7 @@
       "syntax": "[ auto | normal | <length-percentage> | <timeline-range-name> <length-percentage>? ]#",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -14441,6 +15050,7 @@
       "syntax": "[ <'timeline-trigger-range-start'> <'timeline-trigger-range-end'>? ]#",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -14464,6 +15074,7 @@
       "syntax": "[ normal | <length-percentage> | <timeline-range-name> <length-percentage>? ]#",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -14487,6 +15098,7 @@
       "syntax": "[ normal | <length-percentage> | <timeline-range-name> <length-percentage>? ]#",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -14510,6 +15122,7 @@
       "syntax": "<single-animation-timeline>#",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -14534,6 +15147,7 @@
       "syntax": "auto | <length-percentage> | <anchor()> | <anchor-size()>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -14557,6 +15171,7 @@
       "syntax": "auto | none | [ [ pan-x | pan-left | pan-right ] || [ pan-y | pan-up | pan-down ] || pinch-zoom ] | manipulation",
       "impl": "excluded",
       "implNote": "触控手势策略（App 端手势层在图层面统一处理）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -14580,6 +15195,7 @@
       "syntax": "none | <transform-list>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic · 矩阵 Transform）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -14603,6 +15219,7 @@
       "syntax": "content-box | border-box | fill-box | stroke-box | view-box",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -14626,6 +15243,7 @@
       "syntax": "[ <length-percentage> | left | center | right | top | bottom ] | [ [ <length-percentage> | left | center | right ] && [ <length-percentage> | top | center | bottom ] ] <length>?",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=engine-only · 矩阵 TransformOrigin）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "engine-only",
@@ -14649,6 +15267,7 @@
       "syntax": "flat | preserve-3d",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -14678,6 +15297,7 @@
       "syntax": "<single-transition>#",
       "impl": "implemented",
       "implNote": "**独立通道**：**独立通道**（非 CSS 字段）——见 packages/animation（证据：animation 包（独立通道：transition 规格 → 内核动画））",
+      "channel": "independent",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -14701,6 +15321,7 @@
       "syntax": "<transition-behavior-value>#",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -14724,6 +15345,7 @@
       "syntax": "<time>#",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -14747,6 +15369,7 @@
       "syntax": "<time>#",
       "impl": "implemented",
       "implNote": "**独立通道**：**独立通道**（证据：同上）",
+      "channel": "independent",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -14770,6 +15393,7 @@
       "syntax": "none | <single-transition-property>#",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -14793,6 +15417,7 @@
       "syntax": "<easing-function>#",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -14816,6 +15441,7 @@
       "syntax": "none | <length-percentage> [ <length-percentage> <length>? ]?",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -14839,6 +15465,7 @@
       "syntax": "none | all | <dashed-ident>#",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -14862,6 +15489,7 @@
       "syntax": "normal | embed | isolate | bidi-override | isolate-override | plaintext",
       "impl": "excluded",
       "implNote": "BiDi 算法控制（L4——复用平台能力）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -14885,6 +15513,7 @@
       "syntax": "auto | text | none | all",
       "impl": "excluded",
       "implNote": "文本选择（App 端自绘无选区语义——v1 不做）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -14908,6 +15537,7 @@
       "syntax": "none | non-scaling-stroke | non-scaling-size | non-rotation | fixed-position",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -14931,6 +15561,7 @@
       "syntax": "baseline | sub | super | text-top | text-bottom | middle | top | bottom | <percentage> | <length>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=engine-only · 矩阵 FORBIDDEN）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "engine-only",
@@ -14957,6 +15588,7 @@
       "syntax": "[ <'view-timeline-name'> [ <'view-timeline-axis'> || <'view-timeline-inset'> ]? ]#",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -14980,6 +15612,7 @@
       "syntax": "[ block | inline | x | y ]#",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -15003,6 +15636,7 @@
       "syntax": "[ [ auto | <length-percentage> ]{1,2} ]#",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -15026,6 +15660,7 @@
       "syntax": "[ none | <dashed-ident> ]#",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -15049,6 +15684,7 @@
       "syntax": "none | <custom-ident>+",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -15072,6 +15708,7 @@
       "syntax": "none | <custom-ident> | match-element",
       "impl": "excluded",
       "implNote": "视图过渡 API（Web 专有）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -15096,6 +15733,7 @@
       "syntax": "visible | hidden | collapse",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -15119,6 +15757,7 @@
       "syntax": "normal | pre | pre-wrap | pre-line | <'white-space-collapse'> || <'text-wrap-mode'>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic · 矩阵 TextWrap）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -15142,6 +15781,7 @@
       "syntax": "collapse | preserve | preserve-breaks | preserve-spaces | break-spaces",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -15165,6 +15805,7 @@
       "syntax": "<integer>",
       "impl": "excluded",
       "implNote": "分页媒体属性",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -15188,6 +15829,7 @@
       "syntax": "auto | <length-percentage [0,∞]> | min-content | max-content | fit-content | fit-content(<length-percentage [0,∞]>) | <calc-size()> | <anchor-size()>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic · 矩阵 Length）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -15211,6 +15853,7 @@
       "syntax": "auto | <animateable-feature>#",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -15234,6 +15877,7 @@
       "syntax": "normal | break-all | keep-all | break-word | auto-phrase",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=semantic · 矩阵 WordBreak）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "semantic",
@@ -15257,6 +15901,7 @@
       "syntax": "normal | <length>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -15280,6 +15925,7 @@
       "syntax": "normal | break-word",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -15303,6 +15949,7 @@
       "syntax": "horizontal-tb | vertical-rl | vertical-lr | sideways-rl | sideways-lr",
       "impl": "excluded",
       "implNote": "书写模式（竖排等——三端成本高，v1 out）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -15326,6 +15973,7 @@
       "syntax": "<length> | <percentage>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -15349,6 +15997,7 @@
       "syntax": "<length> | <percentage>",
       "impl": "not-started",
       "implNote": "",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -15372,6 +16021,7 @@
       "syntax": "auto | <integer>",
       "impl": "implemented",
       "implNote": "IR 注册表在册（scope=engine-only · 矩阵 FORBIDDEN）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
         "irScope": "engine-only",
@@ -15395,6 +16045,7 @@
       "syntax": "normal | reset | <number [0,∞]> || <percentage [0,∞]>",
       "impl": "excluded",
       "implNote": "非标准缩放（Chromium 专有）",
+      "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
