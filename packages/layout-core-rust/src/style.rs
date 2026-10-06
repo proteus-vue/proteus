@@ -443,6 +443,15 @@ pub struct LStyle {
     /// ★批次 41：`grid-row` 线号放置（同 `grid_column`）
     #[serde(skip_serializing_if = "Option::is_none")]
     pub grid_row: Option<(i16, Option<i16>)>,
+    /// ★★★grid-template-areas 项（2026-10-08 · css:next P0·2× · CSS Grid）：**命名区域模板**。
+    ///   规范串形态：行以 `;` 分隔、每行的区域名以空格分隔（`.` = 空单元）——如 `"media info;rec rec"`。
+    ///   仅对 **grid 容器**生效（taffy `GridTemplateAreas`）；子项以 `grid_area` 引用。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub grid_template_areas: Option<String>,
+    /// ★★★grid-area 项（2026-10-08）：**命名区域引用**（`grid-area: <name>` ⇒ 四边同名的命名线放置）。
+    ///   优先于 `grid_column`/`grid_row`（命名区域是整个放置语义）。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub grid_area: Option<String>,
 
     // ── ★RT0/RT2（2026-09-30）：绘制层变换 + 视觉属性（**不参与布局**）──
     //
@@ -671,6 +680,8 @@ impl Default for LStyle {
             grid_auto_flow: None,
             grid_column: None,
             grid_row: None,
+            grid_template_areas: None,
+            grid_area: None,
             translate_x: 0.0,
             translate_y: 0.0,
             scale: 1.0,

@@ -85,6 +85,8 @@ const kebabOf = (s) => s.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase())
 const CSS_ALIAS = {
   margin: 'margin-top', padding: 'padding-top', backgroundColor: 'background-color', borderRadius: 'border-radius',
   borderColor: 'border-color', borderWidth: 'border-width', fontSize: 'font-size',
+  // ★★★grid-area 项（2026-10-08）：编译器字段 gridArea（命名区/线号放置）对应 CSS 能力 grid-area
+  gridArea: 'grid-area',
 }
 const cssNameOfField = (f) => CSS_ALIAS[f] ?? kebabOf(f)
 

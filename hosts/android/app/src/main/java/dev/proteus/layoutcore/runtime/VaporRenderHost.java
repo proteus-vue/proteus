@@ -1193,6 +1193,10 @@ public final class VaporRenderHost {
             "margin", "padding", "flexDirection", "flexWrap", "justifyContent", "alignItems", "alignContent", "alignSelf",
             "flexGrow", "flexShrink", "flexBasis", "gap", "rowGap", "columnGap", "display", "position", "top", "left", "right", "bottom",
             "gridTemplateColumns", "gridTemplateRows", "aspectRatio", "pointerEvents", "fontFamily",
+            // ★★★grid-template-areas 项（2026-10-08）：命名区域模板 + 子项 grid-area 命名区引用——
+            //   内核（taffy GridTemplateAreas / NamedLine）已消费；漏登记 ⇒ 请求树不带 ⇒ 内核静默用默认
+            //   （由 check:host-kernel-keys 当场抓出——第 5 次"宿主白名单须跟内核新字段走"）。纯字符串，无密度换算。
+            "gridTemplateAreas", "gridArea",
             // ★★★justify-self 项（2026-10-06）：**网格项行内轴自对齐** —— 内核（taffy Style.justify_self）已消费，
             //   漏登记 ⇒ 请求树不带 ⇒ 内核静默用默认（真机实测：center/end 案全落 start——白名单漏项的老款缺陷）。
             "justifySelf",

@@ -193,3 +193,48 @@ fn grid_auto_flow_row_vs_column() {
     let col = layout("column");
     assert!((col[2].0 - 200.0).abs() < 0.5 && col[2].1.abs() < 0.5, "column: 项2 进第3列 (200,0)，实际 {:?}", col[2]);
 }
+
+// ★★★grid-template-areas 项（2026-10-08）：命名区域模板 + 子项 grid-area 命名线放置。
+//   模板 'media info;media rec'（2×2，media 跨 2 行、rec 居右下）⇒ 引擎把区域名解析成命名线，
+//   子项 grid-area: <name> 落进对应区域（跨行 start/end 由 taffy NamedLineResolver 解析）。
+#[test]
+fn grid_template_areas_named_placement() {
+    let mut tree = LayoutTree::new();
+    let mut root_style = LStyle { width: Some(300.0), height: Some(200.0), ..Default::default() };
+    root_style.display = Display::Grid;
+    root_style.grid_template_columns = Some("100px 200px".to_string());
+    root_style.grid_template_rows = Some("100px 100px".to_string());
+    // 行以 ; 分隔：'media info;media rec'（media 跨 2 行 / info 右上 / rec 右下）
+    root_style.grid_template_areas = Some("\"media info\" \"media rec\"".to_string());
+    let root = tree.push(LNode::new(1, root_style));
+
+    let mk = |tree: &mut LayoutTree, name: &str| {
+        let mut st = LStyle { ..Default::default() };
+        st.grid_area = Some(name.to_string());
+        let idx = tree.push(LNode::new(0, st));
+        tree.add_child(root, idx);
+        idx
+    };
+    let im = mk(&mut tree, "media");
+    let ii = mk(&mut tree, "info");
+    let ir = mk(&mut tree, "rec");
+    tree.roots.push(root);
+
+    let mut engine = TaffyEngine::new();
+    let out = engine.layout(&mut tree, RootConstraint::definite(300.0, 200.0));
+    let r = |i| out.rect_of(i).expect("有几何");
+    let rm = r(im);
+    let ri = r(ii);
+    let rr = r(ir);
+    // media：第 1 列 × 跨 2 行 ⇒ (0,0) 100×200
+    assert!(rm.x.abs() < 0.5 && rm.y.abs() < 0.5, "media (0,0)，实际 ({},{})", rm.x, rm.y);
+    assert!((rm.width - 100.0).abs() < 0.5, "media 宽 100，实际 {}", rm.width);
+    assert!((rm.height - 200.0).abs() < 0.5, "media 高 200（跨 2 行），实际 {}", rm.height);
+    // info：第 2 列 × 第 1 行 ⇒ (100,0) 200×100
+    assert!((ri.x - 100.0).abs() < 0.5 && ri.y.abs() < 0.5, "info (100,0)，实际 ({},{})", ri.x, ri.y);
+    assert!((ri.width - 200.0).abs() < 0.5, "info 宽 200，实际 {}", ri.width);
+    assert!((ri.height - 100.0).abs() < 0.5, "info 高 100，实际 {}", ri.height);
+    // rec：第 2 行第 2 列 ⇒ (100,100) 200×100
+    assert!((rr.x - 100.0).abs() < 0.5 && (rr.y - 100.0).abs() < 0.5, "rec (100,100)，实际 ({},{})", rr.x, rr.y);
+    assert!((rr.width - 200.0).abs() < 0.5 && (rr.height - 100.0).abs() < 0.5, "rec 200×100，实际 {}×{}", rr.width, rr.height);
+}

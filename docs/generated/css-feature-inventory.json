@@ -17,20 +17,20 @@
       "unit": 30
     },
     "byImpl": {
-      "not-started": 543,
+      "not-started": 542,
       "excluded": 280,
-      "implemented": 123,
+      "implemented": 124,
       "partial": 3
     },
     "byPriority": {
       "P2": 115,
       "excluded": 280,
-      "P0": 18,
-      "done": 123,
+      "P0": 17,
+      "done": 124,
       "P1": 413
     },
-    "actionable": 546,
-    "actionableP0": 18
+    "actionable": 545,
+    "actionableP0": 17
   },
   "entries": [
     {
@@ -8168,12 +8168,12 @@
       ],
       "syntax": "<grid-line> [ / <grid-line> ]{0,3}",
       "impl": "implemented",
-      "implNote": "**简写展开**：gridRow + gridColumn——grid-area 简写 → row/column 放置（证据：CSE（grid-* 映射，B3 补））",
+      "implNote": "IR 注册表在册（scope=engine-only）",
       "channel": null,
       "evidencedBy": {
-        "inIrRegistry": false,
-        "irScope": null,
-        "inCompilerFold": false,
+        "inIrRegistry": true,
+        "irScope": "engine-only",
+        "inCompilerFold": true,
         "matrixLevel": null,
         "webSupport": null
       },
@@ -8516,19 +8516,19 @@
       "inherited": false,
       "initial": "none",
       "syntax": "none | <string>+",
-      "impl": "not-started",
-      "implNote": "未接：命名区域（证据：未接（CSE 支持 template-columns/rows；areas 未接））",
+      "impl": "implemented",
+      "implNote": "IR 注册表在册（scope=semantic）",
       "channel": null,
       "evidencedBy": {
-        "inIrRegistry": false,
-        "irScope": null,
-        "inCompilerFold": false,
+        "inIrRegistry": true,
+        "irScope": "semantic",
+        "inCompilerFold": true,
         "matrixLevel": null,
         "webSupport": null
       },
       "usage": 2,
-      "priority": "P0",
-      "acceptance": "none"
+      "priority": "done",
+      "acceptance": "pending"
     },
     {
       "id": "grid-template-columns",

@@ -840,6 +840,17 @@ function mapToIrField(prop: string, val: CssComputedValue): { field: string; val
   //   （探针实测：`grid-template-columns` 等算出来了却没进 IR ⇒ App/Skyline 静默丢 Grid）。
   if (prop === 'grid-template-columns') return { field: 'gridTemplateColumns', value: typeof val === 'string' ? normalizeGridTrack(val) : null }
   if (prop === 'grid-template-rows') return { field: 'gridTemplateRows', value: typeof val === 'string' ? normalizeGridTrack(val) : null }
+  // ★★★grid-template-areas 项（2026-10-08 · css:next P0·2×）：命名区域模板——透传（浏览器 computed 形态
+  //   `"a b" "c c"`；编译器折叠面已把 CSS 多引号串归一为此形态，内核两形态都认）。
+  if (prop === 'grid-template-areas') return { field: 'gridTemplateAreas', value: typeof val === 'string' ? val.trim().replace(/\s+/g, ' ') : null }
+  // ★★★grid-area 项（2026-10-08 · css:next P0·2×）：命名区域引用——**单标识符**透传为 gridArea（命名线放置）。
+  //   ★线号形态（`1 / 2 / 3 / 4`）的 row/column 拆分在**编译器折叠面**做（gridRow/gridColumn）；CSE 只认命名形态。
+  if (prop === 'grid-area') {
+    const nm = typeof val === 'string' ? val.trim() : ''
+    return /^[A-Za-z_][\w-]*$/.test(nm) && nm !== 'auto' && nm !== 'span'
+      ? { field: 'gridArea', value: nm }
+      : null
+  }
   if (prop === 'grid-column') return { field: 'gridColumn', value: val }
   if (prop === 'grid-row') return { field: 'gridRow', value: val }
   if (prop === 'z-index') return { field: 'zIndex', value: typeof val === 'number' ? val : null }

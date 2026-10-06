@@ -36,7 +36,7 @@ export const APP_LAYOUT_FIELDS: readonly string[] = [
   'display', 'position', 'top', 'left', 'right', 'bottom', 'overflow',
   // ★★★overflow-x 项（2026-10-06）：逐轴溢出（内核/宿主按轴裁剪子内容）
   'overflowX', 'overflowY',
-  'gridTemplateColumns', 'gridTemplateRows', 'gridColumn', 'gridRow', 'aspectRatio', 'pointerEvents',
+  'gridTemplateColumns', 'gridTemplateRows', 'gridColumn', 'gridRow', 'gridTemplateAreas', 'gridArea', 'aspectRatio', 'pointerEvents',
   // ★★★grid-auto-flow 项（2026-10-08）：自动放置方向/密度（grid 容器布局，内核 taffy）
   'gridAutoFlow',
   'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
@@ -205,6 +205,11 @@ export function mapStyleIRToApp(fields: Record<string, unknown>): AppMappingResu
       }
       if (field === 'gridTemplateColumns' || field === 'gridTemplateRows') {
         put(field, value, value) // 内核解析轨迹串（既有通道）
+        continue
+      }
+      // ★★★grid-template-areas 项（2026-10-08）：命名区域模板串（内核 taffy 解析）+ 命名区引用串（gridArea）
+      if (field === 'gridTemplateAreas' || field === 'gridArea') {
+        put(field, value, value)
         continue
       }
       const enumFields = new Set([

@@ -61,7 +61,7 @@ export const APP_LAYOUT_FIELDS = [
   //   内核/宿主按轴裁剪子内容；归一化（visible↔非visible ⇒ visible→auto）在**级联后的最终样式**上执行
   //   （见 normalizeOverflowFields——per-rule 归一会被跨规则级联破坏）。
   'overflowX', 'overflowY',
-  'gridTemplateColumns', 'gridTemplateRows', 'gridColumn', 'gridRow', 'aspectRatio', 'pointerEvents',
+  'gridTemplateColumns', 'gridTemplateRows', 'gridColumn', 'gridRow', 'gridTemplateAreas', 'gridArea', 'aspectRatio', 'pointerEvents',
   // ★★★justify-self 项（2026-10-06 · css:next P0·9×）：网格项**行内轴自对齐**（CSS Box Alignment 3）。
   //   语料 9 处全在 grid 上下文（p-formfactor 仪表盘——`justify-self: start/stretch`）；
   //   内核 taffy `Style.justify_self` 原生支持（仅 grid 容器消费——与 Web「flex 下被忽略」同语义）
@@ -393,6 +393,41 @@ function parseGridLine(val: string): { start: number; end?: number } | null {
  *   · `<n>fr` / `<n>px` / 纯数字 保留；`repeat(N, X)` 展开为 N 个 X（`repeat(3, 1fr)` → `1fr 1fr 1fr`）；
  *   · `auto`/`minmax`/`fit-content`/命名线 等**未支持** ⇒ 返回 null（调用方诊断——不猜）。
  */
+/**
+ * ★★★grid-template-areas 项（2026-10-08 · css:next P0·2×）：**命名区域模板**（CSS 多引号串）→ 规范化串。
+ *   输入如 `'media info' 'rec rec'`（单/双引号均可）；输出 **浏览器 getComputedStyle 形态**
+ *   `"media info" "rec rec"`（双引号逐行、行内单元空格分隔、`.` 保留空单元）——与 parity 真值对齐；
+ *   内核（taffy）按行/列建命名线供子项 grid-area 引用。
+ *   · `none` ⇒ `none`（无模板——内核忽略）；· 无可识别引号串 ⇒ `undefined`（调用方诊断）。
+ */
+function parseGridTemplateAreas(raw: string): string | undefined {
+  const v = raw.trim()
+  if (v.toLowerCase() === 'none') return 'none'
+  const rows: string[] = []
+  const re = /"([^"]*)"|'([^']*)'/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(v)) !== null) {
+    const cells = (m[1] ?? m[2] ?? '').trim().split(/\s+/).filter(Boolean)
+    if (cells.length > 0) rows.push(cells.join(' '))
+  }
+  return rows.length > 0 ? rows.map((r) => '"' + r + '"').join(' ') : undefined
+}
+
+/**
+ * ★★★grid-area 项（2026-10-08）：**线号形态** `grid-area: <rs> / <cs> / <re> / <ce>`（1–4 值）→ grid-row/grid-column。
+ *   位置语义（CSS 规范）：v0=row-start · v1=column-start · v2=row-end · v3=column-end。仅纯整数线号（0 非法）。
+ *   命名区域形态（单标识符）不走此函数（见折叠分支——直接落 gridArea）。
+ */
+function parseGridAreaLines(val: string): { row?: { start: number; end?: number }; column?: { start: number; end?: number } } | null {
+  const parts = val.split('/').map((x) => x.trim())
+  if (parts.length < 1 || parts.length > 4) return null
+  const nums = parts.map((t) => (/^-?\d+$/.test(t) && Number(t) !== 0 ? Number(t) : undefined))
+  if (nums.some((n) => n === undefined)) return null
+  const out: { row?: { start: number; end?: number }; column?: { start: number; end?: number } } = {}
+  out.row = parts.length >= 3 ? { start: nums[0]!, end: nums[2]! } : { start: nums[0]! }
+  if (parts.length >= 2) out.column = parts.length >= 4 ? { start: nums[1]!, end: nums[3]! } : { start: nums[1]! }
+  return out
+}
 function parseGridTemplate(raw: string): string | null {
   const out: string[] = []
   const toks = splitTopLevelSpaces(raw)
@@ -695,6 +730,37 @@ export function parseStaticStyle(
         }
         out[key] = tracks
         markImportant(key)
+        continue
+      }
+      // ★★★grid-template-areas 项（2026-10-08 · css:next P0·2× · CSS Grid）：**命名区域模板**。
+      //   规范串 = 行以 `;` 分隔、每行区域名空格分隔（`.` = 空单元）——CSS 语法是多引号串
+      //   （`"a b" "c c"`），折成内核规范串 `a b;c c`（内核按行/列建命名线，供子项 grid-area 引用）。
+      if (key === 'gridTemplateAreas') {
+        const norm = parseGridTemplateAreas(rawVal)
+        if (norm === undefined) {
+          pushDiag(`${rawKey}: ${rawVal} 未解析（支持 "a b" "c c" 引号串模板 / none）——已跳过`)
+          continue
+        }
+        out.gridTemplateAreas = norm
+        markImportant('gridTemplateAreas')
+        continue
+      }
+      // ★★★grid-area 项（2026-10-08 · css:next P0·2× · CSS Grid）：**命名区域引用**（grid-area: <name>）。
+      //   单标识符 ⇒ 命名区域放置（内核命名线）；线号形态（grid-area: 1 / 2 / 3 / 4）⇒ 拆成 grid-row/grid-column。
+      if (key === 'gridArea') {
+        const nm = rawVal.trim()
+        if (/^[A-Za-z_][\w-]*$/.test(nm) && nm !== 'auto' && nm !== 'span') {
+          out.gridArea = nm
+          markImportant('gridArea')
+          continue
+        }
+        const decomp = parseGridAreaLines(rawVal)
+        if (decomp) {
+          if (decomp.row) { out.gridRow = decomp.row; markImportant('gridRow') }
+          if (decomp.column) { out.gridColumn = decomp.column; markImportant('gridColumn') }
+          continue
+        }
+        pushDiag(`${rawKey}: ${rawVal} 未支持（命名区域 grid-area: <name> 或线号 1 / 2 / 3 / 4）——已跳过`)
         continue
       }
       if (key === 'gridColumn' || key === 'gridRow') {
