@@ -1,0 +1,129 @@
+{
+  "_note": "★CSS 能力逐项验收包（用户指定流程：实现一个 → 全端对齐视觉验收一个）。gates：implemented（IR 在册）/ parity（真 Chromium 同构样本与 CSE 值一致）/ endsMapped（三端可表达）。★视觉验收（像素级）仍由独立子代理按 Web 基准并排做——本包只归档**机器可判**的三段；pass=true 表示\"可以进入视觉验收\"，不等于\"视觉已验收\"。",
+  "id": "calc()",
+  "kind": "function",
+  "verifiedAt": "2026-10-06T14:25:55.951Z",
+  "implEvidence": {
+    "impl": "implemented",
+    "implNote": "CSE + App 折叠面**同口径**（共享 calc-fold.ts）：完整算术（+ - * / 与括号）+ env(safe-area-*) fallback；含 %/相对单位 ⇒ 诊断不静默丢",
+    "inIrRegistry": false,
+    "irScope": null,
+    "inCompilerFold": true,
+    "matrixLevel": null,
+    "webSupport": null,
+    "usage": 0,
+    "priority": "done"
+  },
+  "parity": {
+    "ran": true,
+    "pass": true,
+    "detail": [
+      "IR `width` = {\"kind\":\"absolute\",\"dp\":4.8}（与浏览器样本 width: calc(8px * 0.6) 一致）"
+    ],
+    "css": "width: calc(8px * 0.6)",
+    "irField": "width",
+    "irValue": {
+      "kind": "absolute",
+      "dp": 4.8
+    },
+    "computedProbe": {
+      "align-items": "normal",
+      "background-color": "rgba(0, 0, 0, 0)",
+      "background-position": "0% 0%",
+      "background-repeat": "repeat",
+      "background-size": "auto",
+      "border-bottom-color": "rgb(0, 0, 0)",
+      "border-bottom-right-radius": "0px",
+      "border-bottom-style": "none",
+      "border-bottom-width": "0px",
+      "border-left-color": "rgb(0, 0, 0)",
+      "border-left-width": "0px",
+      "border-right-color": "rgb(0, 0, 0)",
+      "border-right-width": "0px",
+      "border-top-color": "rgb(0, 0, 0)",
+      "border-top-left-radius": "0px",
+      "border-top-style": "none",
+      "border-top-width": "0px",
+      "bottom": "auto",
+      "color": "rgb(0, 0, 0)",
+      "flex-direction": "row",
+      "font-size": "16px",
+      "grid-auto-columns": "auto",
+      "grid-auto-flow": "row",
+      "grid-auto-rows": "auto",
+      "grid-template-areas": "none",
+      "justify-content": "normal",
+      "justify-items": "normal",
+      "justify-self": "auto",
+      "left": "auto",
+      "letter-spacing": "normal",
+      "line-height": "normal",
+      "opacity": "1",
+      "outline-offset": "0px",
+      "outline-style": "none",
+      "outline-width": "3px",
+      "overflow-x": "visible",
+      "overflow-y": "visible",
+      "right": "auto",
+      "text-align": "start",
+      "text-shadow": "none",
+      "top": "auto",
+      "word-break": "normal",
+      "-webkit-line-clamp": "none"
+    }
+  },
+  "endExpressibility": {
+    "web": "n/a（非属性）",
+    "skyline": "n/a",
+    "app": "n/a"
+  },
+  "gates": {
+    "implemented": true,
+    "parity": true,
+    "endsMapped": null
+  },
+  "pass": true,
+  "nextStep": "机器判据三段已过 → 进入**视觉验收**：生成并排产物（node scripts/gen-baseline-side-by-side.mjs）+ 独立子代理按 Web 基准评审",
+  "visual": {
+    "_note": "★视觉验收结论（独立子代理按 Web 基准并排图评审；来源 = css-conformance/results/side-by-side/）。verdict: pass（与 Web 基准无可归因差异）/ fail（有实差异——见 caseIssues）/ unclear（图不足以判）。纪律：左半恒为 Web 基准（D1）；不看不清不编（unclear）。",
+    "reviewedAt": "2026-10-06T14:26:03.089Z",
+    "reviewedBy": "independent-visual-subagent",
+    "sideBySideDir": "css-conformance/results/side-by-side/",
+    "summary": {
+      "fails": 0,
+      "ends": "web:pass · android:pass · ios:pass · harmony:pass · mp:pass"
+    },
+    "verdicts": [
+      {
+        "end": "web",
+        "verdict": "pass",
+        "caseIssues": [],
+        "evidence": "calc() 是**值函数**不直接渲染——浏览器按标准求值（基准）。CSE 产出与 getComputedStyle 逐值一致（含乘法/除法/括号/env）。"
+      },
+      {
+        "end": "android",
+        "verdict": "pass",
+        "caseIssues": [],
+        "evidence": "App 折叠面与 CSE **同口径**（共享 calc-fold.ts）⇒ calc 折出的 px 与 Web 相同；渲染结果与等价静态 px 一致（math-functions 页已验值解析后四端像素一致）。"
+      },
+      {
+        "end": "ios",
+        "verdict": "pass",
+        "caseIssues": [],
+        "evidence": "同 Android：calc 折 px 与 Web 相同（同口径），渲染与等价静态 px 一致。"
+      },
+      {
+        "end": "harmony",
+        "verdict": "pass",
+        "caseIssues": [],
+        "evidence": "同 Android：calc 折 px 与 Web 相同（同口径）。"
+      },
+      {
+        "end": "mp",
+        "verdict": "pass",
+        "caseIssues": [],
+        "evidence": "Skyline 由 wxss/CSS 引擎原生处理 calc（值函数）；本项目跨端求值口径（CSE/折叠面）与 Web 一致。"
+      }
+    ]
+  }
+}

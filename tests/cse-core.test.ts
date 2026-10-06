@@ -278,6 +278,17 @@ describe('★★★G-61 B1 · CSE 计算值', () => {
     expect(r.byKey[leaf.key]!.fields['opacity']).toBe(1)
   })
 
+  it('★★★calc() 完整算术（2026-10-08 · css:next）：`+ - * /` 与括号 + env(safe-area) fallback——与 App 折叠面同口径（共享 calc-fold.ts）', () => {
+    expect(foldCalc('calc(8px * 0.6)')).toBe('4.8px')
+    expect(foldCalc('calc(2 * 8px)')).toBe('16px')
+    expect(foldCalc('calc(100px / 4)')).toBe('25px')
+    expect(foldCalc('calc((10px + 5px) * 2)')).toBe('30px')
+    expect(foldCalc('calc(136px + env(safe-area-inset-bottom, 0px))')).toBe('136px')
+    expect(foldCalc('calc(100% - 20px)')).toBeNull()   // 含 % ⇒ 不可折
+    const n = node('div', ['a'])
+    const r = compute('.a { width: calc(8px * 0.6) }', n)
+    expect(r.byKey[n.key]!.fields['width']).toEqual({ kind: 'absolute', dp: 4.8 })
+  })
   it('calc 单层常量化；不支持的 calc ⇒ 诊断', () => {
     expect(foldCalc('calc(10px + 5px)')).toBe('15px')
     expect(foldCalc('calc(100% - 20px)')).toBeNull()

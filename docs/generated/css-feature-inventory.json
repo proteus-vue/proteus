@@ -19,18 +19,18 @@
     "byImpl": {
       "not-started": 524,
       "excluded": 280,
-      "implemented": 142,
-      "partial": 3
+      "implemented": 143,
+      "partial": 2
     },
     "byPriority": {
       "P2": 114,
       "excluded": 280,
-      "done": 142,
+      "done": 143,
       "P1": 411,
-      "P0": 2
+      "P0": 1
     },
-    "actionable": 527,
-    "actionableP0": 2
+    "actionable": 526,
+    "actionableP0": 1
   },
   "entries": [
     {
@@ -19630,17 +19630,17 @@
       "kind": "function",
       "mdnStatus": "standard",
       "syntax": "calc( <calc-sum> )",
-      "impl": "partial",
-      "implNote": "CSE 仅单层同单位加减（v1）",
+      "impl": "implemented",
+      "implNote": "CSE + App 折叠面**同口径**（共享 calc-fold.ts）：完整算术（+ - * / 与括号）+ env(safe-area-*) fallback；含 %/相对单位 ⇒ 诊断不静默丢",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
-        "inCompilerFold": false,
+        "inCompilerFold": true,
         "matrixLevel": null,
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P0",
+      "priority": "done",
       "acceptance": "none"
     },
     {
@@ -21287,7 +21287,7 @@
       "mdnStatus": "standard",
       "syntax": "var( <custom-property-name> , <declaration-value>? )",
       "impl": "partial",
-      "implNote": "CSE 支持（含 fallback/嵌套）",
+      "implNote": "CSE 支持（含 fallback/嵌套；编译期字面替换）",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,

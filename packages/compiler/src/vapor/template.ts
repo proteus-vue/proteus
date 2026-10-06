@@ -28,6 +28,7 @@ import type { LayoutNode, LayoutTemplate, ListTemplate, TextSegment } from '@pro
 import { HOST_DIRECTIVE_NAMES, HOST_DIRECTIVE_SPECS, isHostDirective } from '@proteus-vue/slot-runtime'
 // ★混合文本（P2-2）里的插值段要编成表达式程序——复用**同一套**编译器（能力边界一处收敛）
 import { compileExpr } from './expr'
+import { foldCalcArithmetic } from '../calc-fold'
 // ★★★批次 45：构建期静态实例化（App 壳 v-if/v-for 折叠）
 import { staticInstantiate } from './static-instantiate'
 // ★★★元素/文本**混排**归一化（2026-10-03）——三处遍历（template/deps/events）的**唯一**输入
@@ -2579,63 +2580,13 @@ function numOf(v: string): number | undefined {
 }
 
 /**
- * ★批次 22：`calc(<算术>)` 常量折叠 → 数值（px）。
- *   仅当操作数全为 **px / 无单位** 时折叠；含 `%`（如 `calc(100% - 20px)`）或相对单位（em/vh…）
- *     ⇒ 无上下文不可求值，返回 undefined（调用方诊断，不猜）。
+ * ★★★calc() 常量折叠 → 数值（px/无单位参与）。**唯一实现** `calc-fold.ts`（与 CSE 同口径，决策 #591）。
+ *   支持完整算术（`+ - * /` 与括号）+ `env(safe-area-inset-*)` fallback；含 `%`/相对单位 ⇒ undefined（不猜）。
  */
 function foldCalc(v: string): number | undefined {
   const m = /^calc\(([\s\S]*)\)$/i.exec(v.trim())
   if (!m) return undefined
-  // ★★★批次 48：`env(safe-area-inset-*, <fallback>)` → 其 **fallback**（或 0）——App 端无浏览器
-  //   安全区概念（宿主自管），取 fallback 是与 Web 最接近的确定值。实测来源：App.vue `.sa-fab`
-  //   的 `bottom: calc(136px + env(safe-area-inset-bottom, 0px))` 此前**整条丢弃** ⇒ 悬浮球
-  //   跑到顶部（Web 在底部）——独立视觉验收抓出「悬浮球位置 Web 右下 / 三端右上」的根因。
-  //   ★只认 `safe-area-inset-*`（其它 env 变量无确定值 ⇒ 不猜，返回 undefined 由调用方诊断）。
-  let inner = m[1]!.replace(
-    /env\(\s*safe-area-inset-(?:top|right|bottom|left)\s*(?:,\s*([^()]*?)\s*)?\)/gi,
-    (_all, fb?: string) => (fb && fb.trim() ? fb.trim() : '0px'),
-  )
-  inner = inner.replace(/px/gi, '')
-  // 去 px 后仍含字母（em/vh/rem…）或 `%` ⇒ 不可折叠
-  if (/[a-zA-Z%]/.test(inner)) return undefined
-  return evalArith(inner)
-}
-
-/** 受限算术求值（+ - * / 与括号；递归下降）。非法 ⇒ undefined。 */
-function evalArith(src: string): number | undefined {
-  let i = 0
-  const peek = (): string => src[i] ?? ''
-  const skip = (): void => { while (/\s/.test(peek())) i++ }
-  const expr = (): number | undefined => {
-    let v = term(); if (v === undefined) return undefined
-    for (;;) {
-      skip(); const c = peek()
-      if (c === '+' || c === '-') { i++; const r = term(); if (r === undefined) return undefined; v = c === '+' ? v + r : v - r }
-      else return v
-    }
-  }
-  const term = (): number | undefined => {
-    let v = factor(); if (v === undefined) return undefined
-    for (;;) {
-      skip(); const c = peek()
-      if (c === '*' || c === '/') { i++; const r = factor(); if (r === undefined) return undefined; v = c === '*' ? v * r : (r === 0 ? NaN : v / r) }
-      else return v
-    }
-  }
-  const factor = (): number | undefined => {
-    skip()
-    if (peek() === '(') { i++; const v = expr(); skip(); if (peek() !== ')') return undefined; i++; return v }
-    if (peek() === '+' ) { i++; return factor() }
-    if (peek() === '-') { i++; const v = factor(); return v === undefined ? undefined : -v }
-    const start = i
-    while (/[0-9.]/.test(peek())) i++
-    if (i === start) return undefined
-    const n = Number(src.slice(start, i))
-    return Number.isFinite(n) ? n : undefined
-  }
-  const r = expr(); skip()
-  if (i !== src.length || r === undefined || !Number.isFinite(r)) return undefined
-  return r
+  return foldCalcArithmetic(m[1]!)
 }
 
 /**
