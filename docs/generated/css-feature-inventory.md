@@ -1,17 +1,15 @@
 # CSS Web 全量能力清单（自动生成——勿手改；生成器 scripts/gen-css-feature-inventory.mjs）
 
 > 总 949 项（property 651 · selector 144 · at-rule 19 · function 105 · unit 30）
-> 实现：**not-started** 534 · **excluded** 280 · **implemented** 132 · **partial** 3
-> 优先级：P2 114 · excluded 280 · P0 11 · done 132 · P1 412
-> ★**可推项（非已实现/非排除）**：537（其中 **P0 11**）
+> 实现：**not-started** 532 · **excluded** 280 · **implemented** 134 · **partial** 3
+> 优先级：P2 114 · excluded 280 · P0 9 · done 134 · P1 412
+> ★**可推项（非已实现/非排除）**：535（其中 **P0 9**）
 
 ## P0 —— 语料在用但未实现（真实需求，最优先）
 
 | 属性 | MDN 状态 | 分组 | 语料用量 | 实现 | 说明 |
 |---|---|---|---|---|---|
 | `-webkit-line-clamp` | standard | WebKit Extensions, CSS Overflow | 4 | not-started | — |
-| `transition-property` | standard | CSS Transitions | 1 | not-started | — |
-| `transition-timing-function` | standard | CSS Transitions | 1 | not-started | — |
 | `will-change` | standard | CSS Will Change | 1 | not-started | — |
 
 ## P1 —— 标准且常用分组（未实现）

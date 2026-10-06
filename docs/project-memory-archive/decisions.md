@@ -1455,3 +1455,13 @@
 **⑤ 判据（四端全过 · #569 铁律）**：`css:verify place-items` + `justify-items` 三段全绿（简写→parity/ends n/a）· 视觉登记 · **四端真机**：Android/iOS/鸿蒙 独立子代理逐案例复核 **4/4 PASS**（A 右中 / B 居中 / C 左中——三案相异且与 Web 一致）· MP ◐（Skyline 无 Grid 容器）· probe 新页四端 PASS · 全量 **5325/5325** · 内核 9/9 · coupled 绿 · 门禁全绿。
 **⑥ 诚实边界**：`baseline` 按 start 近似（同 justify-self ⇒ 未列封闭集，诊断跳过）；仅 grid 容器生效（flex 下被忽略，taffy=Web 语义）；Skyline 无 grid 族（主承载端 = App）。
 **⑦ 影响**：`packages/layout-core-rust`（style/ffi/taffy_engine + tests/grid）· `packages/compiler`（vapor/template + cse/compute）· `packages/consistency`（snapshot/coverage/appliers/probes）· `packages/contracts`/`packages/runtime` · `hosts/android`（LAYOUT_KEYS）· 能力源 · 验收页 `place-items.vue` · golden；**下一项**：按 css:next 取。
+585. **★★CSS 逐项 · transition-property/-timing-function —— 按架构归类为「独立通道（CSS Transitions 家族）」+ 收口**（用户裁定，同 #572/#583 族）：
+**① 用户指令**：「继续」（css:next 取 `transition-property`，P0 · 1× · CSS Transitions）。
+**② 侦察（先取证）**：CSS Transitions 家族的剩余长手——兄弟 `transition`/`transition-duration` 已在清单登记为**独立通道**（指向 `packages/animation`）：
+  · Web：原生基准；**MP/Skyline 官方 WXSS 表支持** `transition-property`（接受 none/all/transform/opacity 等）；
+  · **App 端 CSS 属性变化过渡机制未实现**——决策 #536 明记：「CSS transition（属性变化触发）**未做**——无显式触发点，属独立课题」；
+  · 框架的转场/动画由 `packages/animation` 承接（**路由转场 `appTransition`/`APP_TRANSITION_MAP` + 元素预设 + @keyframes 折叠**），**非 CSS `transition` 属性语义**（属性变化即过渡）。
+**③ 归类决策（用户裁定「归类独立通道（同兄弟）」）**：`transition-property`/`transition-timing-function` 加入 `SHORTHAND_EXPANSION` 为 `separate: true, channel: 'independent'`（与 `transition`/`transition-duration` 一致）+ 纳入 `SEPARATE_CHANNELS` ⇒ `css:verify` 判 parity/endsMapped = **n/a**、三段通过。
+**④ 判据**：`css:verify transition-property`/`transition-timing-function` 三段通过 · 视觉结论**登记**（引用 packages/animation 通道 + #536 诚实边界）· 清单再生成一致（`--check` 绿）· `check:css-capability-alignment`/`stats`/`content` 全绿。**不引入编译器字段/渲染代码**。
+**⑤ 诚实边界**：a) **App 端 CSS 属性变化过渡未实现**（#536 具名独立课题——需"属性变化即动画"的触发机制）；b) 框架转场/动画走 `packages/animation`（与 Web 原生 CSS transition 是**两条不同路径**）；c) 本项只做**家族归类收口**，不改行为。
+**⑥ 影响**：`scripts/gen-css-feature-inventory.mjs`（override + SEPARATE_CHANNELS）· `docs/generated/css-feature-inventory.{json,md}`（重生成）· `docs/generated/css-acceptance/transition-{property,timing-function}.json`（visual 登记）；**下一项**：按 css:next 取。
