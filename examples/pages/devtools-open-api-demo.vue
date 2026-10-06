@@ -125,7 +125,7 @@ onUnmounted(() => {
       等价包级 API：<code>createDevtoolsWsSource(url)</code> + <code>onEvent / appInfo() / deviceInfo() / sendCommand()</code>。
     </p>
 
-    <div class="status" :class="'status-' + status">
+    <div class="status" :class="{ 'status-connected': status === 'connected', 'status-connecting': status === 'connecting', 'status-closed': status === 'closed' }">
       连接状态：{{ status }}（relay /proteus-panel）
     </div>
 
@@ -144,7 +144,7 @@ onUnmounted(() => {
     </div>
 
     <div class="counters">
-      <span v-for="(n, src) in counters" :key="src" class="counter" :class="'c-' + src">{{ src }} {{ n }}</span>
+      <span v-for="(n, src) in counters" :key="src" class="counter" :class="{ 'c-lifecycle': src === 'lifecycle', 'c-router': src === 'router', 'c-api': src === 'api', 'c-store': src === 'store', 'c-capability': src === 'capability', 'c-compiler': src === 'compiler', 'c-component': src === 'component', 'c-hmr': src === 'hmr' }">{{ src }} {{ n }}</span>
       <span v-if="!hasAnyEvent()" class="hint">暂无事件（页面路由/API 操作后出现）</span>
     </div>
 
@@ -153,8 +153,8 @@ onUnmounted(() => {
         <h3>事件流（自绘迷你时间线 · 最新 60 条）</h3>
         <div class="evlist">
           <div v-for="e in events" :key="e.id" class="ev">
-            <span class="badge" :class="'b-' + e.source">{{ e.source }}</span>
-            <span class="phase" :class="'ph-' + e.phase">{{ e.phase }}</span>
+            <span class="badge" :class="{ 'b-lifecycle': e.source === 'lifecycle', 'b-router': e.source === 'router', 'b-api': e.source === 'api', 'b-store': e.source === 'store', 'b-capability': e.source === 'capability', 'b-compiler': e.source === 'compiler', 'b-component': e.source === 'component', 'b-hmr': e.source === 'hmr' }">{{ e.source }}</span>
+            <span class="phase" :class="{ 'ph-start': e.phase === 'start', 'ph-end': e.phase === 'end', 'ph-error': e.phase === 'error' }">{{ e.phase }}</span>
             <span class="name">{{ e.name }}</span>
             <span class="time">{{ e.timestamp }}ms</span>
           </div>

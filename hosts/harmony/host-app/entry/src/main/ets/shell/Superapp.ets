@@ -27,7 +27,7 @@ const TAG = 'ProteusSuperapp';
 
 /** ★B1：统一运行期渲染入参（ArkTS 禁未型字面量 ⇒ 用接口声明） */
 interface RtViewport { width: number; height: number }
-interface RtArgs { bundle: string; filesDir: string; page: string; viewport: RtViewport; chain?: number[] }
+interface RtArgs { bundle: string; filesDir: string; page: string; viewport: RtViewport; chain?: number[]; state?: Record<string, Object>; remount?: boolean }
 const TAB_H = 56;   // 底部 Tab 栏高度（vp）
 
 @Entry
@@ -81,6 +81,9 @@ struct Superapp {
   private navStack: string[] = [];
   /** ★★B1：每屏滚动进度（返回恢复 / 前进重置）。 */
   private scrollByScreen: Map<string, number> = new Map<string, number>();
+  /** ★★★跨调用状态（2026-10-07 · 鸿蒙一次性 VM）：上次 superappScreen 返回的 `snapshot`
+   *   （`{屏名:{变量:值}}`）——每次新 VM 作 `state` 回灌，恢复 count 等实例态（否则点击计数不动）。 */
+  private runtimeState: Record<string, Object> | null = null;
   /** 视口高/宽（vp；renderCurrent 处记录——与 contentH 同源）。 */
   private static vpH: number = 844;
   private static vpW: number = 390;
@@ -301,11 +304,21 @@ struct Superapp {
   }
 
   /** ★B1：统一运行期渲染入参 → JSON（用接口声明，避 ArkTS 未型字面量） */
-  private static rtArgsJson(page: string, bundle: string, filesDir: string, vpW: number, vpH: number, chain?: number[]): string {
+  private static rtArgsJson(page: string, bundle: string, filesDir: string, vpW: number, vpH: number, chain?: number[], state?: Record<string, Object> | null): string {
     const vp: RtViewport = { width: vpW, height: vpH };
     const a: RtArgs = { bundle: bundle, filesDir: filesDir, page: page, viewport: vp };
     if (chain && chain.length > 0) { a.chain = chain; }
+    // ★跨调用状态回灌（一次性 VM）：非空则带上（C++ 侧转 render 的 seedData）
+    if (state !== undefined && state !== null && Object.keys(state).length > 0) { a.state = state; }
     return JSON.stringify(a);
+  }
+
+  /** ★从 superappScreen 返回里保存 snapshot（供下次回灌）——一次性 VM 的状态持有侧。 */
+  private saveSnapshot(rt: Record<string, Object>): void {
+    const snap = rt['snapshot'];
+    if (snap !== undefined && snap !== null) {
+      try { this.runtimeState = snap as Record<string, Object>; } catch (e) { /* 保持旧态（不静默） */ }
+    }
   }
 
   /**
@@ -343,10 +356,11 @@ struct Superapp {
       const hit = JSON.parse(hitJson) as Record<string, Object>;
       const chain = hit['chain'] as number[] | undefined;
       if (!chain || chain.length === 0) { return; }
-      const rtOut: string = superappScreen(Superapp.rtArgsJson(this.current, this.bundle, this.filesDir, Superapp.vpW, Superapp.vpH, chain));
+      const rtOut: string = superappScreen(Superapp.rtArgsJson(this.current, this.bundle, this.filesDir, Superapp.vpW, Superapp.vpH, chain, this.runtimeState));
       const rt = JSON.parse(rtOut) as Record<string, Object>;
       const st = rt['state'] as Record<string, Object> | undefined;
       if (st) { this.applyState(st); }
+      this.saveSnapshot(rt);   // ★存回跨调用状态（下次新 VM 回灌）——数据变更类 tap（count++）靠它持久
       const target = rt['current'] as string;
       if (target !== undefined && target.length > 0 && target !== this.current) {
         // ★前进（push）：记当前屏滚动进度 + 入栈；新屏从顶部
@@ -357,9 +371,15 @@ struct Superapp {
         hilog.info(DOMAIN, TAG, 'SUPERAPP_TAP chain=%{public}s current=%{public}s depth=%{public}d',
           JSON.stringify(chain), this.current, this.navStack.length + 1);
         this.switchLog.push(JSON.stringify({ tap: 'nav', current: this.current, scroll: this.scrollOffset, via: 'tap' }));
-        this.renderCurrent();
-        this.writeReport();
       }
+      // ★★★统一上屏（2026-10-07）：**每次 tap 都重绘**——导航 tap 画目标屏；**数据 tap（count++）也画同屏**
+      //   新树（此前只在导航分支重绘 ⇒ 点计数没反应）。用 superappScreen 返回的 tree **直接上屏**，省一次
+      //   renderCurrent 的 superappScreen boot（一次性 VM 每次 boot 要 eval 整包 ⇒ 卡顿/"不灵敏"）。
+      let nodes: string = this.nodesByPage.get(this.current) ?? '[]';
+      const tree = rt['tree'] as Record<string, Object> | undefined;
+      if (tree && Array.isArray(tree['nodes'])) { nodes = JSON.stringify(tree['nodes']); }
+      this.paintTree(this.current, nodes);
+      this.writeReport();
     } catch (e) {
       hilog.error(DOMAIN, TAG, 'SUPERAPP_TAP_ERROR %{public}s', JSON.stringify(e) ?? '');
     }
@@ -375,7 +395,7 @@ struct Superapp {
       if (this.touchLastY < 0) { this.touchLastY = t.windowY; return; }
       const dy: number = t.windowY - this.touchLastY;
       this.touchLastY = t.windowY;
-      if (Math.abs(t.windowY - this.touchStartY) > 8 || Math.abs(t.windowX - this.touchStartX) > 8) { this.touchMoved = true; }
+      if (Math.abs(t.windowY - this.touchStartY) > 16 || Math.abs(t.windowX - this.touchStartX) > 16) { this.touchMoved = true; }
       let next: number = this.scrollOffset - dy;
       if (next < 0) { next = 0; }
       if (next > this.maxScroll) { next = this.maxScroll; }
@@ -423,9 +443,10 @@ struct Superapp {
       attach(this.content, vpDensity, vpW, contentH);
       // ★★★B1（统一运行期）：内容由 JS **共享运行期**实例化（superappScreen：boot → createSuperappRuntime
       //   → 实例化该屏 → host.mount 捕获 tree）；拿不到则回退静态 nodesByPage（诚实降级）。
+      //   ★带上次 snapshot（一次性 VM 状态回灌）；返回的 snapshot 存回（下次用）。
       Superapp.vpW = vpW;
       try {
-        const rtOut: string = superappScreen(Superapp.rtArgsJson(page, this.bundle, this.filesDir, vpW, vpH));
+        const rtOut: string = superappScreen(Superapp.rtArgsJson(page, this.bundle, this.filesDir, vpW, vpH, undefined, this.runtimeState));
         const rt = JSON.parse(rtOut) as Record<string, Object>;
         const tree = rt['tree'] as Record<string, Object> | undefined;
         if (tree && Array.isArray(tree['nodes'])) {
@@ -434,14 +455,27 @@ struct Superapp {
         }
         const st = rt['state'] as Record<string, Object> | undefined;
         if (st) { this.applyState(st); }
+        this.saveSnapshot(rt);   // ★存回跨调用状态（下次新 VM 回灌）
         // ★修：屏名以**实际渲染的 current** 为准（boot 后路由 current 恒为 index，会盖掉真实当前屏）
         const cur = rt['current'] as string;
         if (cur !== undefined && cur.length > 0) { this.current = cur; }
       } catch (re) {
         hilog.error(DOMAIN, TAG, 'SUPERAPP_RUNTIME_ERROR %{public}s', JSON.stringify(re) ?? '');
       }
+      this.paintTree(page, nodes);
+    } catch (e) {
+      hilog.error(DOMAIN, TAG, 'SUPERAPP_RENDER_ERROR %{public}s', JSON.stringify(e) ?? '');
+    }
+  }
+
+  /** ★★★把某屏 nodes 画到屏上（appScreenCommands → renderCommands）+ 重算/重放滚动范围。
+   *   renderCurrent 与 onTapAt **共用**——onTapAt 用 superappScreen(chain) 返回的 tree 直接画，
+   *   省掉一次 renderCurrent 的 superappScreen boot（一次性 VM 每次 boot 要 eval 整包 ⇒ 卡顿）。
+   *   视口取 Superapp.vpW/vpH（由 renderCurrent 设定）。 */
+  private paintTree(page: string, nodes: string): void {
+    try {
       const cmds: string = appScreenCommands(JSON.stringify({
-        'nodes': nodes, 'density': vp2px(1), 'vpW': vpW, 'vpH': contentH,
+        'nodes': nodes, 'density': vp2px(1), 'vpW': Superapp.vpW, 'vpH': Superapp.vpH,
         'page': page, 'filesDir': this.filesDir,
         'env': this.envVars,   // ★内置环境变量（决策 #593）——宿主采集的 vp 值，C++ 侧解析 env token
       } as Record<string, Object>));
@@ -451,7 +485,6 @@ struct Superapp {
       const chVp: number = appScreenContentHeight();
       this.maxScroll = Math.max(0, chVp - Superapp.vpH);
       // ★★★页面滚动锁定（2026-10-08）：页根声明 `overflow-y: hidden` ⇒ **整页不滚**（maxScroll=0）。
-      //   App 的「页面滚动」= 整树滚动 ⇒ 页根 overflow 即页面滚动开关。
       try {
         const pageNodes = JSON.parse(nodes) as Record<string, Object>[];
         const r0 = pageNodes.length > 0 ? pageNodes[0] : undefined;
@@ -463,7 +496,7 @@ struct Superapp {
       hilog.info(DOMAIN, TAG, 'SUPERAPP_SCROLL contentH=%{public}s viewport=%{public}s max=%{public}s offset=%{public}s',
         chVp.toFixed(1), Superapp.vpH.toFixed(1), this.maxScroll.toFixed(1), this.scrollOffset.toFixed(1));
     } catch (e) {
-      hilog.error(DOMAIN, TAG, 'SUPERAPP_RENDER_ERROR %{public}s', JSON.stringify(e) ?? '');
+      hilog.error(DOMAIN, TAG, 'SUPERAPP_PAINT_ERROR %{public}s', JSON.stringify(e) ?? '');
     }
   }
 

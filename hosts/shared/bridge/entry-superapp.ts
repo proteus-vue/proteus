@@ -224,7 +224,7 @@ interface SuperappRuntimeHostShape {
     if (!g.proteusHost || typeof g.proteusHost.mount !== 'function') {
       return JSON.stringify({ ok: false, error: '宿主缺少运行期原语（mount/applyOps）——需 SuperappRuntimeHost' })
     }
-    let args: { name: string; viewport: { width: number; height: number } }
+    let args: { name: string; viewport: { width: number; height: number }; seedData?: Record<string, Record<string, unknown>>; remount?: boolean }
     try {
       args = JSON.parse(argsJson) as typeof args
     } catch (e) {
@@ -246,12 +246,22 @@ interface SuperappRuntimeHostShape {
         host: g.proteusHost as never,
         viewport: args.viewport,
         navigate: navHandler,
+        // ★★★鸿蒙一次性 VM：上次 `snapshot()` 回灌为态种子（恢复 count 等实例态）——见 screen-runtime.seedData
+        ...(args.seedData ? { seedData: args.seedData } : {}),
       })
       g.__SUPERAPP_RUNTIME__ = runtime
     }
-    const ok = runtime.mountScreen(args.name)
-    return JSON.stringify({ ok, current: runtime.current() })
+    // ★remount（鸿蒙一次性 VM 判据用）：无条件重挂——拿"反映当前 state"的整树（同屏也重挂）；
+    //   否则走 mountScreen（含导航/滚动语义）。两种都返回 snapshot（一次性 VM 宿主持有）。
+    const ok = args.remount ? runtime.mountScreenInto(args.name) : runtime.mountScreen(args.name)
+    return JSON.stringify({ ok, current: runtime.current(), snapshot: runtime.snapshot() })
   }
+
+/** ★宿主调：读运行期**全量状态快照**（`{屏名:{变量:值}}`）——一次性 VM 宿主持有、下次回灌 `seedData`。 */
+;(globalThis as unknown as { __proteusSuperappSnapshot?: () => string }).__proteusSuperappSnapshot = () => {
+  const g = globalThis as unknown as { __SUPERAPP_RUNTIME__?: SuperappRuntime }
+  return JSON.stringify(g.__SUPERAPP_RUNTIME__ ? g.__SUPERAPP_RUNTIME__.snapshot() : {})
+}
 
 /** ★宿主调：读运行期**当前屏名**（`mountScreen` 记忆——一次性 VM 里用于校正"渲染的是哪页"）。 */
 ;(globalThis as unknown as { __proteusSuperappRuntimeCurrent?: () => string }).__proteusSuperappRuntimeCurrent = () => {

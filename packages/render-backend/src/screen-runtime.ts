@@ -61,6 +61,14 @@ export interface CreateScreenRuntimeOptions {
    *     节点（Android 基址 1000）⇒ 反查 `index = kernelId − base`、`localId = 节点序[index]`。
    */
   contentIdBase?: number
+  /**
+   * ★★★跨调用**状态种子**（2026-10-07 · 鸿蒙一次性 VM）：`{ 屏名: { 变量: 值 } }`。
+   *   【为什么需要】鸿蒙宿主为规避持久 VM 崩溃（决策 #540）**每次交互都新建一次性 VM**
+   *   ⇒ 运行期实例态（如 `count`）随 VM 销毁而丢 ⇒ 「点击计数不累加」「改数据不生效」。
+   *   ⇒ 宿主把上次的 `snapshot()` 回灌为种子，实例化即恢复态——**宿主充当状态持有者**，
+   *     一次性 VM 变"无状态执行器"（本模式的必然形态）。缺省 ⇒ 用构建期 `data`。
+   */
+  seedData?: Record<string, Record<string, unknown>>
   /** 诊断出口（不静默） */
   onNote?: (note: string) => void
   /**
@@ -78,8 +86,16 @@ export interface ScreenRuntimeInstance {
   dispatch(type: string, chain: readonly number[], state?: DispatchState): { handled: boolean; fired: number[] }
   /** 立即把脏槽位编成指令并交给 `applyOps`（确定性驱动入口） */
   flush(): void
+  /**
+   * ★★★**数据变更后重实例化**（2026-10-07）：用当前 `data` 重建节点树 + 重算槽位。
+   *   给"`applyOps` 为 no-op"的宿主（鸿蒙一次性 VM，无驻留内核指令流）用——它们拿不到细粒度
+   *   增量，只能整树重建。`content()` 之后即反映新数据。（有 applyOps 的宿主无需调本方法。）
+   */
+  refresh(): void
   /** 当前数据快照（诊断/判据读） */
   data(): Record<string, unknown>
+  /** ★跨调用状态导出（浅拷贝）——供宿主（一次性 VM）在下次调用回灌为 `seedData`（见 CreateScreenRuntimeOptions.seedData） */
+  snapshot(): Record<string, unknown>
 }
 
 export interface ScreenRuntime {
@@ -87,6 +103,8 @@ export interface ScreenRuntime {
   instance(name: string): ScreenRuntimeInstance
   /** 是否有该屏的运行期产物 */
   has(name: string): boolean
+  /** ★跨调用状态导出（`{屏名: 数据}`）——一次性 VM 宿主回灌用 */
+  snapshot(): Record<string, Record<string, unknown>>
 }
 
 /**
@@ -109,14 +127,20 @@ export function createScreenRuntime(opts: CreateScreenRuntimeOptions): ScreenRun
     const art = opts.artifacts[name]
     if (!art) throw new Error(`[screen-runtime] 无该屏产物：${name}`)
 
-    // ── ① 数据源（端上不执行 script ⇒ 用构建期 `data` 快照）──
-    const data: Record<string, unknown> = { ...art.data }
+    // ── ① 数据源（端上不执行 script ⇒ 用构建期 `data` 快照；★一次性 VM 宿主可回灌 seed 恢复态）──
+    const data: Record<string, unknown> = { ...art.data, ...(opts.seedData?.[name] ?? {}) }
     const read = (n: string): unknown => data[n]
 
-    // ── ② 实例化（模板 + 数据 → 节点树）──
-    const inst = instantiateTemplate(art.tpl, { viewport: opts.viewport, read, table: art.table, registry: new ListRegistry() })
+    // ── ② 实例化（模板 + 数据 → 节点树）——★可重建（`refresh()`：数据变后重实例化，供"applyOps 为 no-op"
+    //   的宿主（鸿蒙一次性 VM）拿到反映新数据的整树）──
+    let inst = instantiateTemplate(art.tpl, { viewport: opts.viewport, read, table: art.table, registry: new ListRegistry() })
     // ★R6：内容局部 id 的**有序表**（index → localId）——手势反查用
-    const localIdsOrdered = inst.nodes.map((n) => n.id)
+    let localIdsOrdered = inst.nodes.map((n) => n.id)
+    /** 用**当前 data** 重实例化（节点 id 由 tpl 的 slot 序决定 ⇒ 与初实例化逐位一致，id 映射稳定） */
+    function rebuild(): void {
+      inst = instantiateTemplate(art.tpl, { viewport: opts.viewport, read, table: art.table, registry: new ListRegistry() })
+      localIdsOrdered = inst.nodes.map((n) => n.id)
+    }
     // 组件未展开 ⇒ 如实记（不静默）
     if (inst.stats.componentNodes === 0 && inst.nodes.some((n) => n.component)) {
       note(`[screen-runtime] ${name}: 模板含组件边界但本版未展开（诚实边界）`)
@@ -173,6 +197,13 @@ export function createScreenRuntime(opts: CreateScreenRuntimeOptions): ScreenRun
       return idx >= 0 && idx < localIdsOrdered.length ? localIdsOrdered[idx]! : kernelId
     }
 
+    /** ★数据变更后的重建：重实例化（节点反映新 data）+ 重算槽位（有 applyOps 的宿主拿到增量） */
+    function refreshData(): void {
+      rebuild()
+      vapor.relink(evalCtx)
+      slotRt.flush()
+    }
+
     return {
       content() {
         return { viewport: inst.viewport, nodes: inst.nodes as unknown[] }
@@ -181,15 +212,14 @@ export function createScreenRuntime(opts: CreateScreenRuntimeOptions): ScreenRun
         // ★把链从内核 id 空间**翻译回内容局部 id 空间**（`events` 索引是 local 空间）
         const localChain = chain.map(localIdOf)
         const r = dispatchGesture(localChain, type, byNodeEvent, dispatchState, (h, id) => runHandler(h, id))
-        // handler 改了数据 ⇒ 重算受影响的槽位（本版：全量 relink——订阅驱动的细粒度由回调在响应式框架下承担）
-        if (r.fired.length > 0) {
-          vapor.relink(evalCtx)
-          slotRt.flush()
-        }
+        // handler 改了数据 ⇒ 重建（无 applyOps 的宿主靠 content() 重挂；有 applyOps 的宿主拿增量——两种都覆盖）
+        if (r.fired.length > 0) refreshData()
         return { handled: r.fired.length > 0, fired: r.fired }
       },
       flush() { slotRt.flush() },
+      refresh() { refreshData() },
       data() { return data },
+      snapshot() { return { ...data } },
     }
   }
 
@@ -199,6 +229,12 @@ export function createScreenRuntime(opts: CreateScreenRuntimeOptions): ScreenRun
       let it = instances.get(name)
       if (!it) { it = make(name); instances.set(name, it) }
       return it
+    },
+    /** ★跨调用状态导出（每屏数据浅拷贝）——一次性 VM 宿主持有、下次回灌（见 seedData） */
+    snapshot() {
+      const out: Record<string, Record<string, unknown>> = {}
+      for (const [name, it] of instances) out[name] = it.snapshot()
+      return out
     },
   }
 }

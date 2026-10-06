@@ -4020,6 +4020,9 @@ static napi_value SuperappScreen(napi_env env, napi_callback_info info) {
     std::string chainArr = extractValueAfterKey(argsJson, "chain", '[', ']');
     std::vector<int> chainD = parseIntArrayBare(chainArr);
     bool hasChain = !chainD.empty();
+    // ★★★跨调用状态回灌（2026-10-07 · 鸿蒙一次性 VM）：宿主把上次 snapshot 回传为 `state`，本处转为
+    //   render 的 seedData（恢复 count 等实例态）；无则用构建期初值。
+    std::string stateJson = extractValueAfterKey(argsJson, "state", '{', '}');
 
     std::string err;
     g_scRuntimeTree.clear();
@@ -4064,19 +4067,31 @@ static napi_value SuperappScreen(napi_env env, napi_callback_info info) {
     if (err.empty()) {
         // ① boot（进入入口 tab）
         jsvmEvalStr(jenv, "String(__proteusSuperappBootJson())", nullptr);
-        // ② 渲染目标屏（JS 共享运行期实例化 → host.mount 捕获 tree）
-        char vpb[128]; snprintf(vpb, sizeof(vpb), "{\"name\":\"%s\",\"viewport\":{\"width\":%.4f,\"height\":%.4f}}",
-                                jsonEscape(page).c_str(), vpW, vpH);
-        std::string renderExpr = "String(__proteusSuperappRender('" + std::string(vpb) + "'))";
+        // ② 渲染目标屏（JS 共享运行期实例化 → host.mount 捕获 tree）——★带 seedData 恢复跨调用实例态
+        std::string seedFrag = stateJson.empty() ? std::string("") : (std::string(",\"seedData\":") + stateJson);
+        char vpHead[256]; snprintf(vpHead, sizeof(vpHead), "{\"name\":\"%s\",\"viewport\":{\"width\":%.4f,\"height\":%.4f}",
+                                    jsonEscape(page).c_str(), vpW, vpH);
+        std::string vpb = std::string(vpHead) + seedFrag + "}";
+        std::string renderExpr = "String(__proteusSuperappRender('" + vpb + "'))";
         jsvmEvalStr(jenv, renderExpr.c_str(), nullptr);
         if (policyOk) OH_JSVM_PerformMicrotaskCheckpoint(vm);
-        // ③ 可选：派发一次 tap（导航）——派发后运行期的 navigate 会挂载目标屏（再次 host.mount 捕获）
+        // ③ 可选：派发一次 tap（导航 / 数据变更）——派发后**重挂**以取"反映新 state"的整树
+        //   · 导航 tap：navigate 已挂目标屏，重挂再确认该屏；
+        //   · 数据 tap（count++ 等）：handler 改了 data，但本宿主无 applyOps，必须**整树重挂**才上屏。
         if (hasChain) {
             std::string ch = "[";
             for (size_t i = 0; i < chainD.size(); i++) { if (i) ch += ","; ch += std::to_string(chainD[i]); }
             ch += "]";
             std::string gexpr = "String(__proteusSuperappGesture('{\"type\":\"tap\",\"chain\":" + ch + "}'))";
             jsvmEvalStr(jenv, gexpr.c_str(), nullptr);
+            if (policyOk) OH_JSVM_PerformMicrotaskCheckpoint(vm);
+            std::string afterPage;
+            jsvmEvalStr(jenv, "String(__proteusSuperappRuntimeCurrent())", &afterPage);
+            if (afterPage.empty() || afterPage == "null") afterPage = page;
+            char vpb2[512]; snprintf(vpb2, sizeof(vpb2), "{\"name\":\"%s\",\"viewport\":{\"width\":%.4f,\"height\":%.4f},\"remount\":true}",
+                                     jsonEscape(afterPage).c_str(), vpW, vpH);
+            std::string reRender = "String(__proteusSuperappRender('" + std::string(vpb2) + "'))";
+            jsvmEvalStr(jenv, reRender.c_str(), nullptr);
             if (policyOk) OH_JSVM_PerformMicrotaskCheckpoint(vm);
         }
     }
@@ -4090,12 +4105,17 @@ static napi_value SuperappScreen(napi_env env, napi_callback_info info) {
         if (got != "null" && !got.empty()) rendered = got;
         jsvmEvalStr(jenv, "String(__proteusSuperappState())", &cur);
     }
+    // ★快照必须在 VM/Env 销毁**之前**取（在已销毁的 env 上 eval ⇒ SIGSEGV；本处曾踩过）
+    std::string snap = "{}";
+    if (err.empty()) jsvmEvalStr(jenv, "String(__proteusSuperappSnapshot())", &snap);
     if (jenv != nullptr && scope != nullptr) OH_JSVM_CloseHandleScope(jenv, scope);
     if (jenv != nullptr) OH_JSVM_DestroyEnv(jenv);
     if (vm != nullptr && vmScope != nullptr) OH_JSVM_CloseVMScope(vm, vmScope);
     if (vm != nullptr) OH_JSVM_DestroyVM(vm);
     std::string out = "{\"ok\":" + std::string(err.empty() ? "true" : "false")
-        + ",\"current\":\"" + jsonEscape(rendered) + "\",\"state\":" + cur + ",\"tree\":" + (g_scRuntimeTree.empty() ? "null" : g_scRuntimeTree);
+        + ",\"current\":\"" + jsonEscape(rendered) + "\",\"state\":" + cur
+        + ",\"snapshot\":" + (snap.empty() ? std::string("{}") : snap)
+        + ",\"tree\":" + (g_scRuntimeTree.empty() ? "null" : g_scRuntimeTree);
     if (!err.empty()) out += ",\"error\":\"" + jsonEscape(err) + "\"";
     out += "}";
     napi_value r; napi_create_string_utf8(env, out.c_str(), out.size(), &r); return r;
