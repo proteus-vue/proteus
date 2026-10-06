@@ -182,6 +182,15 @@ public class SuperappActivity extends android.app.Activity {
                     QuickJsEngine.EvalResult dbg = QuickJsEngine.eval("__proteusSuperappDebug()");
                     android.util.Log.i(TAG, "SUPERAPP_DEBUG " + (dbg != null ? dbg.value : "?"));
                 }
+                // ★★B1 判据用：`--es back 1` —— 渲染后触发一次 `onBackPressed`（路由返回；验证返回链）。
+                if ("1".equals(getIntent() != null ? getIntent().getStringExtra("back") : null)) {
+                    contentHost.post(new Runnable() {
+                        @Override public void run() {
+                            onBackPressed();
+                            android.util.Log.i(TAG, "SUPERAPP_BACK_TEST cur=" + currentName(readState()));
+                        }
+                    });
+                }
                 // ⑥ drive 模式（验证脚本用）：用**真 MotionEvent** 逐个点 Tab → 重绘 → 落证据
                 if ("1".equals(getIntent() != null ? getIntent().getStringExtra("drive") : null)) {
                     contentHost.post(new Runnable() {
@@ -353,6 +362,33 @@ public class SuperappActivity extends android.app.Activity {
                 }
             }
         }
+    }
+
+    // ────────────────────────── 返回（系统返回键 / 边缘滑返） ──────────────────────────
+
+    /**
+     * ★★★B1（用户：「二级页面右滑左滑直接退出应用回桌面」）：**系统返回 → 路由返回**。
+     *   Android 的返回（实体键 / 手势导航的左·右边缘滑）都会触发 `onBackPressed`；
+     *   此前未重写 ⇒ 默认 finish() ⇒ 二级页面一滑就退出回桌面（用户抓出）。
+     *   ⇒ 栈深 > 1（二级页及以上）时走**共享 router 返回**（`__proteusSuperappBack()`）+ 重绘；
+     *     栈深 = 1（入口 tab）时交系统默认（退出应用）——与 iOS 右滑返回 / Web 浏览器返回同语义。
+     */
+    @Override
+    public void onBackPressed() {
+        try {
+            int depth = new org.json.JSONObject(readState()).optInt("depth", 1);
+            if (depth > 1) {
+                QuickJsEngine.eval("__proteusSuperappBack()");
+                QuickJsEngine.nativeRunPendingJobs();   // 泵微任务（router.back 的 await 续体）
+                renderCurrent(readState());
+                highlightTab(currentName(readState()));
+                android.util.Log.i(TAG, "SUPERAPP_BACK depth=" + depth + " → " + currentName(readState()));
+                return;
+            }
+        } catch (Throwable t) {
+            android.util.Log.w(TAG, "onBackPressed 返回失败：" + t.getMessage());
+        }
+        super.onBackPressed();   // 入口页 ⇒ 交系统（退出应用）
     }
 
     // ────────────────────────── 渲染 ──────────────────────────
