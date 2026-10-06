@@ -1,9 +1,9 @@
 {
   "host_id" : "ios",
-  "host_stats" : "{\"data\":{\"live_screens\":1,\"anim_hook_missing\":0,\"destroy_calls\":3,\"anim_calls\":0,\"anim_completed\":0,\"rect_calls\":0,\"mount_calls\":4,\"screens\":[{\"screenId\":\"mine#4\",\"visible\":true,\"rootNodeId\":100}],\"visible_calls\":4,\"content_node_total\":253,\"calls\":[\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.stats\"],\"shared_calls\":0},\"ok\":true}",
+  "host_stats" : "{\"data\":{\"anim_calls\":0,\"anim_hook_missing\":0,\"anim_completed\":0,\"shared_calls\":0,\"rect_calls\":0,\"destroy_calls\":0,\"content_node_total\":152,\"screens\":[{\"rootNodeId\":110,\"visible\":false,\"screenId\":\"background-position#2\"},{\"rootNodeId\":130,\"screenId\":\"border#4\",\"visible\":false},{\"visible\":false,\"rootNodeId\":160,\"screenId\":\"text#7\"},{\"screenId\":\"justify-self#5\",\"visible\":false,\"rootNodeId\":140},{\"screenId\":\"border-style#3\",\"visible\":false,\"rootNodeId\":120},{\"rootNodeId\":150,\"screenId\":\"overflow#6\",\"visible\":false},{\"visible\":true,\"rootNodeId\":170,\"screenId\":\"word-break#8\"},{\"screenId\":\"background-position#1\",\"rootNodeId\":100,\"visible\":false}],\"calls\":[\"screen.mount\",\"screen.visible\",\"screen.mount\",\"screen.visible\",\"screen.visible\",\"screen.mount\",\"screen.visible\",\"screen.visible\",\"screen.mount\",\"screen.visible\",\"screen.visible\",\"screen.mount\",\"screen.visible\",\"screen.visible\",\"screen.mount\",\"screen.visible\",\"screen.visible\",\"screen.mount\",\"screen.visible\",\"screen.visible\",\"screen.mount\",\"screen.visible\",\"screen.visible\",\"screen.stats\"],\"mount_calls\":8,\"live_screens\":8,\"visible_calls\":15},\"ok\":true}",
   "ok" : true,
-  "rendered_page" : "mine",
-  "run_ts" : 1791260082.2419159,
+  "rendered_page" : "word-break",
+  "run_ts" : 1791263643.840991,
   "scroll_probe" : {
     "after_drag_down_100k" : 0,
     "after_drag_left_100k_x" : 0,
@@ -14,52 +14,82 @@
     "range_set" : true
   },
   "state" : {
-    "current" : "mine",
-    "depth" : 1,
+    "current" : "word-break",
+    "depth" : 8,
     "screens" : [
-      "index",
-      "messages",
-      "mine",
-      "verify"
+      "background-position",
+      "border-style",
+      "border",
+      "justify-self",
+      "overflow",
+      "text",
+      "word-break"
     ],
     "stack" : [
-      "mine"
+      "background-position",
+      "background-position",
+      "border-style",
+      "border",
+      "justify-self",
+      "overflow",
+      "text",
+      "word-break"
     ],
     "tabLabels" : {
-      "index" : "Proteus 超级应用",
-      "messages" : "消息",
-      "mine" : "我的",
-      "verify" : "验收控制台"
+      "border" : "CSS 验收 · 边框",
+      "justify-self" : "CSS 验收 · 网格自对齐",
+      "text" : "CSS 验收 · 文本",
+      "word-break" : "CSS 验收 · 断词"
     },
     "tabs" : [
-      "index",
-      "messages",
-      "mine"
+
     ]
   },
   "switch_log" : [
     {
-      "current" : "index",
+      "current" : "background-position",
       "ok" : true,
-      "tap" : "index",
+      "tap" : "background-position",
       "via" : "drive"
     },
     {
-      "current" : "messages",
+      "current" : "border-style",
       "ok" : true,
-      "tap" : "messages",
+      "tap" : "border-style",
       "via" : "drive"
     },
     {
-      "current" : "mine",
+      "current" : "border",
       "ok" : true,
-      "tap" : "mine",
+      "tap" : "border",
+      "via" : "drive"
+    },
+    {
+      "current" : "justify-self",
+      "ok" : true,
+      "tap" : "justify-self",
+      "via" : "drive"
+    },
+    {
+      "current" : "overflow",
+      "ok" : true,
+      "tap" : "overflow",
+      "via" : "drive"
+    },
+    {
+      "current" : "text",
+      "ok" : true,
+      "tap" : "text",
+      "via" : "drive"
+    },
+    {
+      "current" : "word-break",
+      "ok" : true,
+      "tap" : "word-break",
       "via" : "drive"
     }
   ],
   "tabs" : [
-    "index",
-    "messages",
-    "mine"
+
   ]
 }

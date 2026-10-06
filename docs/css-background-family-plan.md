@@ -4,6 +4,14 @@
 > `css:verify` size/position/repeat 三段全绿 · 验收页 `css-conformance/pages/background-position.vue` 五案例 + Web 基准采毕；
 > **四端真机像素验收（MP/Android/iOS/鸿蒙）+ 子代理终评**为收尾项（见 §3 第 7 步）。
 > **具名边界（留下一批）**：动画定位（@keyframes）· 多层渐变 · iOS `CAGradientLayer` 的 repeat（无 tile 模式）· size 的 cover/contain。
+>
+> **★真机验收发现的实质缺陷（本批修复，逐像素/probe 抓出）**：
+> ① **Android `LinearGradient`+CLAMP 恒铺满整个绘制矩形**——只改 shader 端点不生效 ⇒ 必须**把填充本身收进图像盒**（已在 `drawCmds` 修）。
+> ② **iOS `styleOf` 白名单漏登记** size/position/repeat ⇒ 静默丢弃（PLAYBOOK 已记的第 N 次同款）——已补。
+> ③ **iOS 渐变子层建层时父 bounds=0** ⇒ frame 恒为 0 ⇒ 不可见——改由**布局后统一 `syncGradientFrames()`** 设帧（多条建层路径同享一次）。
+> ④ **图像盒可超出元素**（如 size 400%）⇒ 必须裁到元素盒（Web 背景绘制区）——Android/iOS/鸿蒙三端均补裁剪。
+> ★**取图口径教训（probe 报 mp/鸿蒙边缘差）**：5 案例高于视口 ⇒ 设备截图为**视口裁剪**，而 probe 拿**整页** Web 基准比对 ⇒ 假红；粘性截图需按页面视口裁剪基准。
+> ★**pre-existing 缺口（非本批引入）**：鸿蒙对**应用内容**（`appScreenCommands`）的 cmd 流**不产出 `grad` 键**（该键目前仅 dev `proteus_bench.cpp` 产）⇒ 鸿蒙 app 内容不渲染渐变；本批鸿蒙几何已就位，待该路径接线后生效。
 
 > **来源**：`css:next` 指向 `background-position`（P0 · 用法 4×）。侦察发现它**不可独立交付**——
 > 三端宿主把渐变**硬编码为「填满整个盒」**（无 size/position/repeat 概念），且语料 4× 全部与

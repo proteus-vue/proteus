@@ -1,6 +1,12 @@
 {
-  "generatedAt": "2026-10-06T01:54:15.110Z",
+  "generatedAt": "2026-10-06T05:17:32.356Z",
   "rows": [
+    {
+      "end": "mp",
+      "page": "background-position.png",
+      "out": "css-conformance/results/side-by-side/background-position.mp-vs-web.png",
+      "status": "ok"
+    },
     {
       "end": "mp",
       "page": "border-style.png",
@@ -35,6 +41,12 @@
       "end": "mp",
       "page": "word-break.png",
       "out": "css-conformance/results/side-by-side/word-break.mp-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "android",
+      "page": "background-position.png",
+      "out": "css-conformance/results/side-by-side/background-position.android-vs-web.png",
       "status": "ok"
     },
     {
@@ -75,6 +87,12 @@
     },
     {
       "end": "ios",
+      "page": "background-position.png",
+      "out": "css-conformance/results/side-by-side/background-position.ios-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "ios",
       "page": "border-style.png",
       "out": "css-conformance/results/side-by-side/border-style.ios-vs-web.png",
       "status": "ok"
@@ -107,6 +125,12 @@
       "end": "ios",
       "page": "word-break.png",
       "out": "css-conformance/results/side-by-side/word-break.ios-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "harmony",
+      "page": "background-position.png",
+      "out": "css-conformance/results/side-by-side/background-position.harmony-vs-web.png",
       "status": "ok"
     },
     {

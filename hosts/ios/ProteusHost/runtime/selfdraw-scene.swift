@@ -708,15 +708,17 @@ final class SelfDrawView: UIView {
             //   `applyGradient` 的端点/径向在**单位空间**（映射到本层 frame）⇒ 自动落在图像盒内。
             //   ★诚实边界：`background-repeat: repeat` 在 CAGradientLayer **无法平铺**（无 tile 模式）
             //     ⇒ iOS 侧按 no-repeat 渲染（具名边界；Android 已用 TileMode.REPEAT / 鸿蒙绘循环）。
-            let bgSize = style["backgroundSize"] as? String
-            let bgPos = style["backgroundPosition"] as? String
-            if let iframe = Self.bgImageFrame(size: bgSize, pos: bgPos, bounds: layer.bounds) {
-                g.frame = iframe
-            } else {
-                g.frame = CGRect(origin: .zero, size: layer.bounds.size)
-            }
-            if Self.applyGradient(g, spec: fg, bounds: g.bounds) {
-                layer.addSublayer(g)
+            // ★★★背景定位家族（2026-10-07）：渐变放进**裁剪容器**（`clip`）——
+            //   `clip` = 元素盒 + masksToBounds ⇒ 图像盒**超出元素时被裁**（与 Web 背景绘制区一致，
+            //   否则 size 400% 这类会溢出到页面边缘）。`g` 的实际 frame（图像盒）在**布局后**由
+            //   `syncGradientFrames` 统一设（多条建层路径同享一次）。
+            //   ★诚实边界：`background-repeat: repeat` 在 CAGradientLayer **无法平铺**（无 tile 模式）
+            //     ⇒ iOS 侧按 no-repeat 渲染（具名边界；Android 用 TileMode.REPEAT / 鸿蒙用 REPEAT）。
+            let clip = CALayer()
+            clip.masksToBounds = true
+            clip.addSublayer(g)
+            if Self.applyGradient(g, spec: fg, bounds: layer.bounds) {
+                layer.addSublayer(clip)
                 layerGradients[nodeId] = g
             }
         }
@@ -895,6 +897,7 @@ final class SelfDrawView: UIView {
         CATransaction.commit()
         // ★★★逐边 border 批（2026-10-05）：建层后按父 bounds 同步边框子层 frame（iOS 无自动布局）
         syncAllSideBorders()
+        syncGradientFrames()
     }
 
     /* ────────────────────────── ★V7：结构变更的层维护 ────────────────────────── */
@@ -2332,6 +2335,7 @@ final class SelfDrawView: UIView {
         lastDeferredCount = offscreen.count
         // ★★★逐边 border 批：增量更新后同样同步边框子层（父 frame 变了 ⇒ 边框跟着走）
         syncAllSideBorders()
+        syncGradientFrames()
         return updated
     }
 
@@ -3053,6 +3057,11 @@ final class SelfDrawView: UIView {
         // ★★渐变（v1 静态 paint——2026-10-01）：同"必须透传"纪律（本函数是建层必经之路）
         //   ★漏透传的后果与 clipPath 同款：声明在请求树里而宿主读不到 ⇒ **静默不渲染**。
         if let fg = n["fillGradient"] as? [String: Any] { style["fillGradient"] = fg }
+        // ★★★背景定位家族（2026-10-07）：size/position/repeat 必须透传（本函数=建层必经之路；
+        //   漏透传 ⇒ 渐变层 frame 拿不到图像盒 ⇒ 静默按元素盒（clipPath/fillGradient 同款教训）。
+        for k in ["backgroundSize", "backgroundPosition", "backgroundRepeat"] {
+            if let v = n[k] as? String { style[k] = v }
+        }
         // ★v2：B 态（两态混合的终点）——同"必须透传"纪律
         if let fg2 = n["fillGradientTo"] as? [String: Any] { style["fillGradientTo"] = fg2 }
         // ★★C2：SVG 描边三键（路径段列表 / 描边色 / 线宽）——同"必须透传"纪律
@@ -3076,6 +3085,21 @@ final class SelfDrawView: UIView {
     }
 
     /// ★★★逐边 border 批：同步**全部**已物化层的边框子层（render 出口调用一次；O(层数)，只碰有子层的）。
+    /// ★★★背景定位家族（2026-10-07）：把每个渐变子层的 frame 设为**图像盒**（size/position）；
+    ///   未声明 ⇒ 整个节点盒。★这是 iOS 渐变可见性的关键：CAGradientLayer 端点/径向是**单位空间**，
+    ///   只认本层 bounds；建层时父 bounds 尚为 0 ⇒ 必须在**布局后**统一重设（多条建层路径同享一次）。
+    func syncGradientFrames() {
+        for (id, g) in layerGradients {
+            // g.superlayer = 裁剪容器 clip；clip.superlayer = 节点层（元素盒尺寸）
+            guard let clip = g.superlayer, let node = clip.superlayer else { continue }
+            let element = CGRect(origin: .zero, size: node.bounds.size)
+            clip.frame = element
+            let st = metaByNodeId[id]
+            g.frame = Self.bgImageFrame(size: st?["backgroundSize"] as? String,
+                                        pos: st?["backgroundPosition"] as? String, bounds: element) ?? element
+        }
+    }
+
     func syncAllSideBorders() {
         for (_, layer) in layersById {
             guard layer.sublayers != nil else { continue }
