@@ -152,6 +152,8 @@ const SHORTHAND_EXPANSION = {
   'padding-block': { to: ['paddingTop', 'paddingBottom'], evidence: '同上', notYet: true, note: '逻辑属性族' },
   'white-space': { to: ['whiteSpace'], evidence: 'IR 注册表（B3 补映射）', note: '枚举（nowrap 等）' },
   'grid-area': { to: ['gridRow', 'gridColumn'], evidence: 'CSE（grid-* 映射，B3 补）', note: 'grid-area 简写 → row/column 放置' },
+  // ★★★place-items 项（2026-10-08 · CSS Box Alignment 3）：`place-items: <align-items> <justify-items>` 简写展开。
+  'place-items': { to: ['alignItems', 'justifyItems'], evidence: 'vapor/template.ts（place-items 分支）+ 内核 taffy justify_items', note: 'place-items 简写 → align-items + justify-items（单值 ⇒ 两轴同）' },
   'justify-self': { to: ['justifySelf'], evidence: 'CSE（枚举直通）', note: '盒对齐' },
   'align-self': { to: ['alignSelf'], evidence: 'IR 在册', note: '盒对齐' },
   transition: { to: [], evidence: 'animation 包（独立通道：transition 规格 → 内核动画）', note: '**独立通道**（非 CSS 字段）——见 packages/animation', separate: true },

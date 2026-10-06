@@ -781,6 +781,19 @@ export const STYLE_IR_FIELDS: Record<string, StyleFieldSpec> = {
       inheritable: false,
     },
   },
+  "justifyItems": {
+    scope: "semantic",
+    domain: "layout",
+    valueType: "enum",
+    sources: {
+      compiler: "APP_LAYOUT_FIELDS",
+      matrixLevel: "JustifyItems",
+      runtimeWhitelist: false,
+      runtimeForbidden: false,
+      consistencyMatrix: true,
+      inheritable: false,
+    },
+  },
   "justifySelf": {
     scope: "semantic",
     domain: "layout",
@@ -1422,13 +1435,13 @@ export const STYLE_IR_FIELDS: Record<string, StyleFieldSpec> = {
 
 /** 摘要（判据与官网数字读它——机器推导，非手写） */
 export const STYLE_IR_SUMMARY = {
-  total: 106,
-  semantic: 80,
+  total: 107,
+  semantic: 81,
   engineOnly: 26,
   byDomain: {
     "derived": 10,
     "edges": 8,
-    "layout": 46,
+    "layout": 47,
     "matrix-only": 4,
     "paint": 37,
     "special": 1,

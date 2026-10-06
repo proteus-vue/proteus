@@ -323,6 +323,16 @@
         "why": "★★★justify-self 项（2026-10-06 · css:next P0·9× · CSS Box Alignment 3）：网格项**行内轴自对齐**。语料 9 处全在 grid 上下文（p-formfactor 仪表盘 justify-self: start/stretch）。契约：新级别 JustifySelf（四同步）；编译器 APP_LAYOUT_FIELDS + 封闭集（auto/normal/start/end/flex-start/flex-end/self-start/self-end/center/stretch）；内核 LStyle.justify_self → taffy Style.justify_self（grid 计算路径原生消费——flex 容器下 taffy 与 Web 同为「忽略」）；blob 枚举位图 E_JUSTIFY_SELF。★诚实边界：baseline/left/right 未列（taffy 的 grid baseline 按 start 近似=与 Web 不符 ⇒ 诊断跳过，不静默近似）；仅 grid 容器生效（taffy 原生语义=Web 语义：flex 下被忽略）；宿主零改动（纯内核布局）。★Skyline 官方属性表无 justify-self（该端无 Grid 容器）——主承载端为 App（自研内核）"
       },
       {
+        "css": "place-items（+ justify-items 长手）",
+        "id": "place-items",
+        "ends": {
+          "web": "not-measured",
+          "skyline": "not-listed",
+          "app": "supported"
+        },
+        "why": "★★★place-items/justify-items 项（2026-10-08 · css:next P0·1× · CSS Box Alignment 3）：**网格容器内所有子项的「行内轴」对齐**（`place-items: <align-items> <justify-items>` 简写；单值⇒两轴同）。语料 1 处（p-formfactor hero 媒体 `place-items: center end`）。契约：新级别 JustifyItems（四同步，值集 = JustifySelf 去 auto）；编译器 place-items 简写展开为 alignItems + justifyItems（+ justify-items 长手）；内核 LStyle.justify_items → taffy Style.justify_items（grid 容器原生——flex 下 taffy 与 Web 同为「忽略」）。★诚实边界：baseline 按 start 近似（同 justify-self ⇒ 未列封闭集，诊断跳过）；仅 grid 容器生效；宿主零改动（纯内核布局）。★Skyline 官方属性表无 grid 族——主承载端为 App（自研内核）"
+      },
+      {
         "css": "aspect-ratio",
         "id": "aspect-ratio",
         "ends": {
@@ -641,6 +651,7 @@
       "aspectRatio",
       "pointerEvents",
       "justifySelf",
+      "justifyItems",
       "gridAutoFlow",
       "whiteSpace",
       "wordBreak"
@@ -1514,6 +1525,21 @@
       "tier": "L2",
       "strategy": "直映射",
       "note": "★★★justify-self 项（2026-10-06 · css:next P0·9× · CSS Box Alignment 3）：网格项**行内轴自对齐**。语料 9 处全在 grid 上下文（p-formfactor 仪表盘 justify-self: start/stretch）。契约：新级别 JustifySelf（四同步）；编译器 APP_LAYOUT_FIELDS + 封闭集（auto/normal/start/end/flex-start/flex-end/self-start/self-end/center/stretch）；内核 LStyle.justify_self → taffy Style.justify_self（grid 计算路径原生消费——flex 容器下 taffy 与 Web 同为「忽略」）；blob 枚举位图 E_JUSTIFY_SELF。★诚实边界：baseline/left/right 未列（taffy 的 grid baseline 按 start 近似=与 Web 不符 ⇒ 诊断跳过，不静默近似）；仅 grid 容器生效（taffy 原生语义=Web 语义：flex 下被忽略）；宿主零改动（纯内核布局）。★Skyline 官方属性表无 justify-self（该端无 Grid 容器）——主承载端为 App（自研内核）",
+      "supportTier": "conditional"
+    },
+    {
+      "id": "place-items",
+      "css": "place-items（+ justify-items 长手）",
+      "category": "layout",
+      "compilerFields": [
+        "justifyItems"
+      ],
+      "web": "not-measured",
+      "skyline": "not-listed",
+      "app": "supported",
+      "tier": "L2",
+      "strategy": "简写展开",
+      "note": "★★★place-items/justify-items 项（2026-10-08 · css:next P0·1× · CSS Box Alignment 3）：**网格容器内所有子项的「行内轴」对齐**（`place-items: <align-items> <justify-items>` 简写；单值⇒两轴同）。语料 1 处（p-formfactor hero 媒体 `place-items: center end`）。契约：新级别 JustifyItems（四同步，值集 = JustifySelf 去 auto）；编译器 place-items 简写展开为 alignItems + justifyItems（+ justify-items 长手）；内核 LStyle.justify_items → taffy Style.justify_items（grid 容器原生——flex 下 taffy 与 Web 同为「忽略」）。★诚实边界：baseline 按 start 近似（同 justify-self ⇒ 未列封闭集，诊断跳过）；仅 grid 容器生效；宿主零改动（纯内核布局）。★Skyline 官方属性表无 grid 族——主承载端为 App（自研内核）",
       "supportTier": "conditional"
     },
     {

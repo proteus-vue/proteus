@@ -129,6 +129,9 @@ pub(crate) struct NodeDto {
     /// ★★★justify-self 项（2026-10-06）：网格项行内轴自对齐（仅 grid 容器消费；CSS Box Alignment 3）
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) justify_self: Option<String>,
+    /// ★★★place-items/justify-items 项（2026-10-08）：网格容器内子项「行内轴」对齐（grid 容器消费）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) justify_items: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) flex_grow: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -318,6 +321,7 @@ impl NodeDto {
             align_content: None,
             align_self: None,
             justify_self: None,
+            justify_items: None,
             flex_grow: None,
             flex_shrink: None,
             flex_basis: None,
@@ -771,6 +775,7 @@ pub(crate) fn style_from_dto(dto: &NodeDto) -> Result<LStyle, String> {
     style.align_self = dto.align_self.clone();
     // ★★★justify-self 项（2026-10-06）：网格项行内轴自对齐（仅 grid 容器消费）
     style.justify_self = dto.justify_self.clone();
+    style.justify_items = dto.justify_items.clone();
     if let Some(g) = dto.flex_grow {
         style.flex_grow = g;
     }

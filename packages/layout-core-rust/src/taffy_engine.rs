@@ -249,6 +249,10 @@ impl TaffyEngine {
                 out.justify_self = Some(parse_justify_self(j));
             }
         }
+        // ★★★place-items/justify-items 项（2026-10-08）：网格容器内子项「行内轴」对齐（taffy 原生；仅 grid 消费）。
+        if let Some(j) = style.justify_items.as_deref() {
+            out.justify_items = Some(parse_justify_items(j));
+        }
         out.flex_grow = style.flex_grow;
         out.flex_shrink = style.flex_shrink;
         out.flex_basis = match (style.flex_basis, style.flex_basis_ratio) {
@@ -1321,6 +1325,21 @@ fn parse_align_items(s: &str) -> AlignItems {
 ///   （`self-*` 由 taffy 按**项自身**的 direction 解析——本仓恒 LTR ⇒ 等价 start/end，保留语义）；
 ///   `normal` ⇒ stretch（Web 对 grid 项的 computed 语义）。
 ///   ▲ 未列值不在此猜测（编译器/注册表已收封闭集——不静默近似）。
+/// ★★★place-items/justify-items 项（2026-10-08）：`justify-items` 关键字 → taffy `AlignItems`（网格容器内子项行内轴对齐）。
+///   `self-*` 无 AlignItems 变体（容器级对齐在 LTR 下 self-* ≡ start/end）⇒ 归一；`normal` ⇒ stretch（Web computed）。
+fn parse_justify_items(s: &str) -> AlignItems {
+    match s {
+        "normal" | "stretch" => AlignItems::STRETCH,
+        "start" | "self-start" => AlignItems::START,
+        "end" | "self-end" => AlignItems::END,
+        "flex-start" => AlignItems::FLEX_START,
+        "flex-end" => AlignItems::FLEX_END,
+        "center" => AlignItems::CENTER,
+        "baseline" => AlignItems::BASELINE,
+        _ => AlignItems::STRETCH,
+    }
+}
+
 fn parse_justify_self(s: &str) -> AlignSelf {
     match s {
         "normal" | "stretch" => AlignSelf::STRETCH,

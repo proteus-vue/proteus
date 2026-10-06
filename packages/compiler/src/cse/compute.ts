@@ -834,6 +834,8 @@ function mapToIrField(prop: string, val: CssComputedValue): { field: string; val
     'justify-self': 'justifySelf',
     // ★★★grid-auto-flow 项（2026-10-08）：CSE 直通同名 IR 字段
     'grid-auto-flow': 'gridAutoFlow',
+    // ★★★place-items/justify-items 项（2026-10-08）：网格容器内子项行内轴对齐（CSE 直通 IR 字段）
+    'justify-items': 'justifyItems',
     // ★★★word-break 项（2026-10-06 · css:next P0·7× · CSS Text）：行内断词策略（继承属性；CSE 直通同名 IR 字段）
     'word-break': 'wordBreak',
     // ★★★背景定位家族（2026-10-07）：CSE 直通同名 IR 字段（字符串）

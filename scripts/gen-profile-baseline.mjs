@@ -104,6 +104,9 @@ const REASON_OVERRIDES = {
       '验收页（grid-template-areas 项）——**验收对象本身要求 grid 容器**：Web / App（自研 Rust 引擎 taffy GridTemplateAreas/NamedLine 原生）' +
       '可渲染，Skyline 端无 Grid 容器（官方属性表无 grid 族）⇒ 按 grid-auto-flow.vue 先例显式理解后钉住；' +
       'Skyline 差异在验收页顶部具名（引擎锁死边界，不作缺陷）。棘轮只减不增。',
+    // ★★★place-items 项（2026-10-08）：同 grid-* 族——验收页**有意**用 grid（容器级对齐仅对 grid 容器生效）。
+    'pages/place-items.vue:display:grid':
+      '验收页（place-items/justify-items 项）——**验收对象本身要求 grid 容器**：Web / App（自研 Rust 引擎 taffy justify_items 原生）可渲染，Skyline 端无 Grid 容器（官方属性表无 grid 族）⇒ 按 grid-auto.vue 先例显式理解后钉住；Skyline 差异在验收页顶部具名（引擎锁死边界，不作缺陷）。棘轮只减不增。',
     // ★★★grid-auto 项（2026-10-08）：同 grid-template-areas——验收页**有意**用 grid（隐式轨道/minmax 仅对 grid 容器生效）。
     'pages/grid-auto.vue:display:grid':
       '验收页（grid-auto-columns/-rows 项）——**验收对象本身要求 grid 容器**：Web / App（自研 Rust 引擎 taffy grid-auto-columns/rows 原生）' +

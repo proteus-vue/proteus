@@ -66,7 +66,7 @@ export const APP_LAYOUT_FIELDS = [
   //   语料 9 处全在 grid 上下文（p-formfactor 仪表盘——`justify-self: start/stretch`）；
   //   内核 taffy `Style.justify_self` 原生支持（仅 grid 容器消费——与 Web「flex 下被忽略」同语义）
   //   ⇒ 宿主零改动（纯内核布局，宿主按算出的 rect 绘制）。
-  'justifySelf',
+  'justifySelf', 'justifyItems',
   // ★★全端对齐批（2026-10-05 · white-space）：文本换行/空白语义（值透传宿主消费；内核忽略该键）——
   //   此前 App 端只有单行模型是历史缺口；现五端实现（Android/iOS/鸿蒙/MP 对齐 Web 基准）。
   // ★★★grid-auto-flow 项（2026-10-08 · css:next P0·3× · CSS Grid）：类 grid 容器的**自动放置方向/密度**
@@ -97,6 +97,10 @@ export const APP_ENUM_VALUES: Record<string, readonly string[]> = {
   //   内核映射：auto ⇒ 不设（回落父 justify-items——CSS 语义）；normal ⇒ stretch（Web 对 grid 项的语义）；
   //   baseline/left/right 未列 ⇒ 诊断跳过（内核无对应/会按 start 近似——不静默近似）。
   justifySelf: ['auto', 'normal', 'start', 'end', 'flex-start', 'flex-end', 'self-start', 'self-end', 'center', 'stretch'],
+  // place-items 的 align-items 分量（align-items 本体是开放值；此处仅用于 place-items 校验）
+  alignItems: ['normal', 'start', 'end', 'flex-start', 'flex-end', 'self-start', 'self-end', 'center', 'stretch', 'baseline'],
+  // ★★★place-items/justify-items 项（2026-10-08）：网格容器内子项行内轴对齐（值集 = justifySelf 去 auto）
+  justifyItems: ['normal', 'start', 'end', 'flex-start', 'flex-end', 'self-start', 'self-end', 'center', 'stretch'],
   flexDirection: ['row', 'column', 'row-reverse', 'column-reverse'],
   flexWrap: ['nowrap', 'wrap', 'wrap-reverse'],
   // ★★★grid-auto-flow 项（2026-10-08）：自动放置封闭集（与 runtime PROP_TYPES.GridAutoFlow 同集；Web `row dense` 归一为 `dense`）
@@ -448,6 +452,11 @@ function parseGridTemplate(raw: string): string | null {
     out.push(tok)
   }
   return out.length > 0 ? out.join(' ') : null
+}
+
+/** place-items 诊断文案（避免在内嵌模板串里出现反引号/花括号） */
+function placeItemsDiag(raw: string, hint: string): string {
+  return 'place-items: ' + raw + ' 未解析（' + hint + '）——已跳过'
 }
 
 /** 按**括号深度 0** 处的空白切 token（`repeat(3, 1fr)` 内的空格不算） */
@@ -875,7 +884,7 @@ export function parseStaticStyle(
         pushDiag(`\`${rawKey}: ${rawVal}\` 未解析（支持 <n> 或 <w>/<h> 或 auto）——已跳过`)
         continue
       }
-      if (key === 'flexDirection' || key === 'flexWrap' || key === 'justifyContent' || key === 'alignItems' || key === 'alignContent' || key === 'alignSelf' || key === 'justifySelf' || key === 'position' || key === 'display' || key === 'overflow' || key === 'overflowX' || key === 'overflowY') {
+      if (key === 'flexDirection' || key === 'flexWrap' || key === 'justifyContent' || key === 'alignItems' || key === 'alignContent' || key === 'alignSelf' || key === 'justifySelf' || key === 'justifyItems' || key === 'position' || key === 'display' || key === 'overflow' || key === 'overflowX' || key === 'overflowY') {
         // ★★★overflow-x 项（2026-10-06）：`overflow` **两值简写**（<x> <y>，CSS 语法）⇒ 逐轴字段
         if (key === 'overflow') {
           const toks = splitTopLevelSpaces(rawVal)
@@ -1370,6 +1379,26 @@ export function parseStaticStyle(
       } else {
         pushDiag(`\`border-style: ${rawVal}\` 未支持（App 端线型支持 solid/dashed/dotted/none）——已跳过`, 'double/groove/ridge/inset/outset/hidden 无对应；solid/dashed/dotted/none 可用')
       }
+      continue
+    }
+    // ★★★place-items 简写（2026-10-08 · CSS Box Alignment）：align-items 前 justify-items 后（单值 ⇒ 两轴同）。
+    //   展开为 alignItems（已支持）+ justifyItems（本项新增长手）。
+    if (key === 'placeItems') {
+      const toks = splitTopLevelSpaces(rawVal.trim()).map((t) => t.toLowerCase())
+      if (toks.length === 0 || toks.length > 2) {
+        pushDiag(placeItemsDiag(rawVal, '支持 1–2 个值：align-items 前 justify-items 后'))
+        continue
+      }
+      const alignV = toks[0]!
+      const justifyV = toks[1] ?? toks[0]!
+      const alignAllowed = APP_ENUM_VALUES.alignItems!
+      const justifyAllowed = APP_ENUM_VALUES.justifyItems!
+      if (!alignAllowed.includes(alignV) || !justifyAllowed.includes(justifyV)) {
+        pushDiag(placeItemsDiag(rawVal, 'align-items 认 ' + alignAllowed.join('/') + '；justify-items 认 ' + justifyAllowed.join('/')))
+        continue
+      }
+      out.alignItems = alignV; markImportant('alignItems')
+      out.justifyItems = justifyV; markImportant('justifyItems')
       continue
     }
     // ★批次 7（CSS 兼容对齐 · flex 简写）：`flex` → flexGrow/flexShrink/flexBasis（引擎已支持这三者）
