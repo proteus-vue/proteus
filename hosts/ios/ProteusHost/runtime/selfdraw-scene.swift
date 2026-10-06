@@ -702,24 +702,27 @@ final class SelfDrawView: UIView {
         //   `linearGradientEndpoints` / Kotlin 同式：0°=向上，端点 = 中心 ± 半程向量）。
         //   ★静态 paint：不参与动画（v1 边界，见 animation/gradient.ts 文件头）。
         if let fg = style["fillGradient"] as? [String: Any] {
-            let g = CAGradientLayer()
-            g.contentsScale = UIScreen.main.scale
-            // ★★★背景定位家族（2026-10-07）：size/position ⇒ 渐变层 frame = **图像盒**（否则元素盒）；
-            //   `applyGradient` 的端点/径向在**单位空间**（映射到本层 frame）⇒ 自动落在图像盒内。
-            //   ★诚实边界：`background-repeat: repeat` 在 CAGradientLayer **无法平铺**（无 tile 模式）
-            //     ⇒ iOS 侧按 no-repeat 渲染（具名边界；Android 已用 TileMode.REPEAT / 鸿蒙绘循环）。
-            // ★★★背景定位家族（2026-10-07）：渐变放进**裁剪容器**（`clip`）——
-            //   `clip` = 元素盒 + masksToBounds ⇒ 图像盒**超出元素时被裁**（与 Web 背景绘制区一致，
-            //   否则 size 400% 这类会溢出到页面边缘）。`g` 的实际 frame（图像盒）在**布局后**由
+            // ★★★背景定位家族（2026-10-07）：渐变放进**裁剪容器**（`clip` = 元素盒 + masksToBounds
+            //   ⇒ 图像盒超出元素时被裁，与 Web 背景绘制区一致）。实际 frame 在布局后由
             //   `syncGradientFrames` 统一设（多条建层路径同享一次）。
-            //   ★诚实边界：`background-repeat: repeat` 在 CAGradientLayer **无法平铺**（无 tile 模式）
-            //     ⇒ iOS 侧按 no-repeat 渲染（具名边界；Android 用 TileMode.REPEAT / 鸿蒙用 REPEAT）。
+            //   ★★平铺（repeat）：CAGradientLayer **无 tile 模式** ⇒ 用**栅格化 tile**
+            //     （`CGContextDrawTiledImage`，相位 = position 偏移）——与 Android TileMode.REPEAT 等效。
             let clip = CALayer()
             clip.masksToBounds = true
-            clip.addSublayer(g)
-            if Self.applyGradient(g, spec: fg, bounds: layer.bounds) {
+            if (style["backgroundRepeat"] as? String) == "repeat" {
+                let tile = CALayer()
+                tile.contentsScale = UIScreen.main.scale
+                clip.addSublayer(tile)
                 layer.addSublayer(clip)
-                layerGradients[nodeId] = g
+                layerGradientTiles[nodeId] = tile
+            } else {
+                let g = CAGradientLayer()
+                g.contentsScale = UIScreen.main.scale
+                clip.addSublayer(g)
+                if Self.applyGradient(g, spec: fg, bounds: layer.bounds) {
+                    layer.addSublayer(clip)
+                    layerGradients[nodeId] = g
+                }
             }
         }
         // ★★软边遮罩（mask v1）：`CAGradientLayer` 作 `layer.mask`（软边渐隐的通用原语）。
@@ -1245,6 +1248,8 @@ final class SelfDrawView: UIView {
      *   ★探针真读（`gradient` 字段）读的就是这一张表 ⇒ 判据断言"渐变真的建出来了"。
      */
     private var layerGradients: [Int: CAGradientLayer] = [:]
+    /// ★★★背景定位家族（2026-10-07）：repeat 平铺的**栅格化 tile 层**（CAGradientLayer 无 tile）
+    private var layerGradientTiles: [Int: CALayer] = [:]
     /**
      * ★★**发光分层描边子层**（glow v1）：节点 id → N 个 CAShapeLayer（由内到外）。
      *   与 Android 的 `GLOW_LAYERS` / TS `GLOW_LAYERS` **同值**（分层不一致 = 两端光晕形状不同）。
@@ -3089,6 +3094,7 @@ final class SelfDrawView: UIView {
     ///   未声明 ⇒ 整个节点盒。★这是 iOS 渐变可见性的关键：CAGradientLayer 端点/径向是**单位空间**，
     ///   只认本层 bounds；建层时父 bounds 尚为 0 ⇒ 必须在**布局后**统一重设（多条建层路径同享一次）。
     func syncGradientFrames() {
+        // ① 非平铺（CAGradientLayer）：frame = 图像盒
         for (id, g) in layerGradients {
             // g.superlayer = 裁剪容器 clip；clip.superlayer = 节点层（元素盒尺寸）
             guard let clip = g.superlayer, let node = clip.superlayer else { continue }
@@ -3098,6 +3104,73 @@ final class SelfDrawView: UIView {
             g.frame = Self.bgImageFrame(size: st?["backgroundSize"] as? String,
                                         pos: st?["backgroundPosition"] as? String, bounds: element) ?? element
         }
+        // ② 平铺（repeat）：tile 层 = 元素盒；内容 = 栅格化渐变砖按 size/position 平铺
+        for (id, tile) in layerGradientTiles {
+            guard let clip = tile.superlayer, let node = clip.superlayer else { continue }
+            let element = CGRect(origin: .zero, size: node.bounds.size)
+            clip.frame = element
+            tile.frame = CGRect(origin: .zero, size: element.size)
+            let st = metaByNodeId[id]
+            let iw = Self.bgLenOf(st?["backgroundSize"] as? String, axis: 0, base: element.width)
+            let ih = Self.bgLenOf(st?["backgroundSize"] as? String, axis: 1, base: element.height)
+            guard iw > 0, ih > 0 else { continue }
+            let pos = Self.bgOffsetOf(st?["backgroundPosition"] as? String, box: element.size, img: CGSize(width: iw, height: ih))
+            let img = Self.rasterTile(spec: st?["fillGradient"] as? [String: Any] ?? [:], size: CGSize(width: iw, height: ih), scale: UIScreen.main.scale)
+            UIGraphicsBeginImageContextWithOptions(element.size, false, UIScreen.main.scale)
+            if let ctx = UIGraphicsGetCurrentContext(), let tileImg = img, let cg = tileImg.cgImage {
+                // 相位 = position 偏移（CTM 平移后从原点平铺 ⇒ 砖栅格对齐到偏移处，铺满 clip 区）
+                ctx.saveGState()
+                ctx.translateBy(x: pos.x, y: pos.y)
+                ctx.draw(cg, in: CGRect(x: 0, y: 0, width: iw, height: ih), byTiling: true)
+                ctx.restoreGState()
+            }
+            let composed = UIGraphicsGetImageFromCurrentImageContext()
+            UIGraphicsEndImageContext()
+            tile.contents = composed?.cgImage
+        }
+    }
+
+    /// 取 size 的某轴长度（0=w 1=h；% = 相对 base；auto/缺省 = base）
+    static func bgLenOf(_ size: String?, axis: Int, base: CGFloat) -> CGFloat {
+        guard let s = size else { return base }
+        let toks = s.split(separator: " ").map(String.init)
+        let t: String
+        if axis == 0 { t = toks.first ?? "auto" } else { t = toks.count >= 2 ? toks[1] : "auto" }
+        if t == "auto" { return base }
+        if t.hasSuffix("%") { return (CGFloat(Double(t.dropLast()) ?? 0) / 100) * base }
+        if t.hasSuffix("px") { return CGFloat(Double(t.dropLast(2)) ?? 0) }
+        return CGFloat(Double(t) ?? 0)
+    }
+    /// 取 position 偏移（%= pct×(盒−图)；关键字；px）
+    static func bgOffsetOf(_ pos: String?, box: CGSize, img: CGSize) -> CGPoint {
+        guard let p = pos else { return .zero }
+        let toks = p.split(separator: " ").map(String.init)
+        var x = "0", y = "0"
+        if toks.count == 1 {
+            if toks[0] == "top" || toks[0] == "bottom" { x = "center"; y = toks[0] }
+            else { x = toks[0]; y = "center" }
+        } else if toks.count >= 2 { x = toks[0]; y = toks[1] }
+        func one(_ t: String, _ b: CGFloat, _ i: CGFloat) -> CGFloat {
+            if t == "left" || t == "top" { return 0 }
+            if t == "right" || t == "bottom" { return b - i }
+            if t == "center" { return (b - i) / 2 }
+            if t.hasSuffix("%") { return (CGFloat(Double(t.dropLast()) ?? 0) / 100) * (b - i) }
+            if t.hasSuffix("px") { return CGFloat(Double(t.dropLast(2)) ?? 0) }
+            return CGFloat(Double(t) ?? 0)
+        }
+        return CGPoint(x: one(x, box.width, img.width), y: one(y, box.height, img.height))
+    }
+    /// 把渐变栅格化成一张 `size`(pt) 的图（tile 源；applyGradient 复用同一几何公式）
+    static func rasterTile(spec: [String: Any], size: CGSize, scale: CGFloat) -> UIImage? {
+        guard size.width > 0, size.height > 0 else { return nil }
+        UIGraphicsBeginImageContextWithOptions(size, false, scale)
+        defer { UIGraphicsEndImageContext() }
+        let gl = CAGradientLayer()
+        gl.frame = CGRect(origin: .zero, size: size)
+        if applyGradient(gl, spec: spec, bounds: gl.bounds) {
+            gl.render(in: UIGraphicsGetCurrentContext()!)
+        }
+        return UIGraphicsGetImageFromCurrentImageContext()
     }
 
     func syncAllSideBorders() {

@@ -351,12 +351,14 @@ static void bgImageBox(const std::string& size, const std::string& pos, double w
 
 /** 把 CSS 角度的线性渐变端点换算为画布坐标（90° = 自上而下，与模板语义一致） */
 static void gradEndpoints(double angleDeg, double w, double h, float* x0, float* y0, float* x1, float* y1) {
+    // ★★★背景定位家族（2026-10-07）：**改为 CSS/Android/iOS 同式**——端点 = 盒中心 ± 半程**方向向量**
+    //   （x 分量乘盒宽、y 分量乘盒高；CSS 角约定 0=向上 90=向右）。
+    //   ★旧式 `len=(|sin|*h+|cos|*w)/2` 在**非正方盒**上算错（如 2:1 盒的 90° 渐变只跨 h 不跨 w ⇒
+    //     两侧被 CLAMP 成纯色——本页 D/E 案例真机抓出）。改为与 Android `LinearGradient` 端点逐式一致。
     const double rad = angleDeg * 3.14159265358979323846 / 180.0;
-    const double cx = w / 2.0, cy = h / 2.0;
-    const double len = (std::abs(std::sin(rad)) * h + std::abs(std::cos(rad)) * w) / 2.0;
-    const double dx = std::sin(rad) * len, dy = -std::cos(rad) * len;
-    *x0 = (float)(cx - dx); *y0 = (float)(cy - dy);
-    *x1 = (float)(cx + dx); *y1 = (float)(cy + dy);
+    const double dx = std::sin(rad), dy = -std::cos(rad);
+    *x0 = (float)((0.5 - dx / 2.0) * w); *y0 = (float)((0.5 - dy / 2.0) * h);
+    *x1 = (float)((0.5 + dx / 2.0) * w); *y1 = (float)((0.5 + dy / 2.0) * h);
 }
 
 /**

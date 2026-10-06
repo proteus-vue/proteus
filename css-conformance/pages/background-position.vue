@@ -14,11 +14,10 @@
    ① **动画定位**（@keyframes 移动 background-position，语料 p-progress/p-skeleton）留下一批；
       本页只验**静态**声明。
    ② **多层渐变逐层定位**（语料 built-in-components）留下一批。
-   ③ iOS `CAGradientLayer` **无法平铺**（无 tile 模式）⇒ 案例 C（repeat）iOS 端呈 no-repeat（具名边界）。
-   ④ **鸿蒙 app-content 渐变路径未接线（pre-existing 缺口，非本批引入）**：鸿蒙对**应用内容**
-      （`appScreenCommands`）的 cmd 流**不产出 `grad` 键**（该键目前仅 dev 基准 `proteus_bench.cpp` 产）
-      ⇒ 鸿蒙 app 内容**不渲染渐变**（本页鸿蒙端案例全空）。本批的鸿蒙几何实现（`bgImageBox` + 裁剪）
-      就位，待该路径接线后生效。★android/ios 是自绘端（已验）；mp/web 走原生 CSS（已验）。
+   ③ **iOS repeat**：`CAGradientLayer` 无 tile 模式 ⇒ 用**栅格化 tile**（`draw(byTiling:)`，相位居中
+      =position 偏移）实现平铺——案例 C 已与 Web 一致（不再是不支持）。
+   ④ **鸿蒙 app-content 渐变**：已在 `appScreenCommands` 的 cmd 流补 `grad` 键（此前只有 dev 基准产出）
+      ——案例 A–E 与 Web 一致（不再空渲染）。
    ⑤ **机器 probe 对高页面的裁剪**：本页 5 案例高于视口 ⇒ mp/鸿蒙 设备截图为**视口裁剪**（非整页）
       ⇒ probe 的页面边缘比对（对**整页** Web 基准）在 mp/鸿蒙 报边缘差——**是取图口径差异，非页面缺陷**。
 -->
