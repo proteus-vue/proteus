@@ -85,6 +85,8 @@ const VALUE_TYPE_BY_LEVEL = {
   Overflow: 'enum',
   // ★★★justify-self 项（2026-10-06）：网格项行内轴自对齐值类型（与 runtime PROP_TYPES.JustifySelf 同集）
   JustifySelf: 'enum',
+  // ★★★word-break 项（2026-10-06）：行内断词策略值类型（与 runtime PROP_TYPES.WordBreak 同集）
+  WordBreak: 'enum',
   Transform: 'transform',
   TransformOrigin: 'transform-origin',
   SEMANTIC_ONLY: 'semantic-only',

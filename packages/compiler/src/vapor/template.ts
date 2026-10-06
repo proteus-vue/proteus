@@ -70,6 +70,9 @@ export const APP_LAYOUT_FIELDS = [
   // ★★全端对齐批（2026-10-05 · white-space）：文本换行/空白语义（值透传宿主消费；内核忽略该键）——
   //   此前 App 端只有单行模型是历史缺口；现五端实现（Android/iOS/鸿蒙/MP 对齐 Web 基准）。
   'whiteSpace',
+  // ★★★word-break 项（2026-10-06 · css:next P0·7× · CSS Text）：**行内断词策略**（继承属性；
+  //   值透传宿主消费——内核忽略该键，与 whiteSpace 同处置）。语料 7 处（长串/代码块 `break-all`）。
+  'wordBreak',
 ] as const
 const LAYOUT_FIELDS = new Set<string>(APP_LAYOUT_FIELDS)
 /**
@@ -130,7 +133,13 @@ export const APP_SPECIAL_FIELDS = ['boxSizing'] as const
  *   `font-weight`/`line-height`/`text-align`/`text-overflow`（批 16）。
  *   背景/边框/圆角/不透明度在内核语义里**不继承**（见 Profile §3 可继承/不可继承表）⇒ 不得纳入。
  */
-export const APP_INHERITABLE_FIELDS = ['color', 'fontSize', 'fontWeight', 'fontFamily', 'lineHeight', 'textAlign', 'textOverflow', 'letterSpacing', 'textDecoration'] as const
+export const APP_INHERITABLE_FIELDS = ['color', 'fontSize', 'fontWeight', 'fontFamily', 'lineHeight', 'textAlign', 'textOverflow', 'letterSpacing', 'textDecoration',
+  // ★★★word-break 项（2026-10-06 · CSS 继承属性）：`white-space` 与 `word-break` 都是 CSS Text 的**继承**属性
+  //   （规范：父设、子默认继承）——App 折叠面须编译期传播，否则 `word-break: break-all` 设在容器上、
+  //   文本子节点继承不到（Web/Skyline 由 CSS 引擎原生继承 ⇒ 跨端不一致）。★补 `whiteSpace` 同样纳入
+  //   （white-space 批的潜在缺口，本次同族一并修正）。
+  'whiteSpace', 'wordBreak',
+] as const
 /** ★批次 28：支持 `inherit` 关键字的字段集（可继承 + visibility）。 */
 const INHERIT_KEY_SET = new Set<string>([...APP_INHERITABLE_FIELDS, 'visibility'])
 
@@ -709,6 +718,24 @@ export function parseStaticStyle(
           continue
         }
         pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 未支持（仅 normal/nowrap/pre/pre-wrap/pre-line）——已跳过`)
+        continue
+      }
+      if (key === 'wordBreak') {
+        // ★★★word-break 项（2026-10-06 · css:next P0·7× · CSS Text）：`word-break` 值**透传宿主**——
+        //   App 端文本引擎按此分流（与 white-space 同轴，都在换行/断行族）：
+        //   normal ⇒ 词边界换行（长不可断串溢出）；break-all ⇒ 任意字符处可断。
+        //   ★keep-all（CJK 专用，Skyline 无、内核无对应）/ break-word（Skyline 无——仅 Web+App 可表达）
+        //     / auto-phrase（实验）⇒ 诊断跳过（**不静默近似**；值集 = 四端可表达子集，与 justify-self 同纪律）。
+        const v = rawVal.trim().toLowerCase()
+        if (v === 'normal' || v === 'break-all') {
+          out.wordBreak = v
+          markImportant('wordBreak')
+          continue
+        }
+        pushDiag(
+          `style 里 \`${rawKey}: ${rawVal}\` 未支持（仅 normal/break-all）——已跳过`,
+          '词集 = 四端可表达子集（Skyline 官方表仅 normal/break-all）；keep-all（CJK 专用）/ break-word / auto-phrase 暂不支持',
+        )
         continue
       }
       if (key === 'pointerEvents') {

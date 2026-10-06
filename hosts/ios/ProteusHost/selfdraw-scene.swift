@@ -2950,7 +2950,8 @@ final class SelfDrawView: UIView {
         var style: [String: Any] = [:]
         // ★★全端对齐批（2026-10-05）：whiteSpace/overflow 也必须透传——层配置按其分流（折行/截断/裁切）
         // ★★★overflow-x 项（2026-10-06）：overflowX/overflowY 也透传（层配置按其开裁剪）
-        for k in ["backgroundColor", "color", "text", "fontFamily", "textAlign", "borderColor", "lineHeight", "whiteSpace", "overflow", "textOverflow", "overflowX", "overflowY"] {
+        // ★★★word-break 项（2026-10-06）：wordBreak 也透传（段落样式按其设 lineBreakMode）
+        for k in ["backgroundColor", "color", "text", "fontFamily", "textAlign", "borderColor", "lineHeight", "whiteSpace", "wordBreak", "overflow", "textOverflow", "overflowX", "overflowY"] {
             if let v = n[k] as? String { style[k] = v }
         }
         if let bw = n["borderWidth"] as? Double { style["borderWidth"] = CGFloat(bw) }
@@ -3171,6 +3172,10 @@ final class SelfDrawView: UIView {
             if am == .center { ps.alignment = .center }
             else if am == .right { ps.alignment = .right }
             else { ps.alignment = .left }
+            // ★★★word-break 项（2026-10-06）：断词策略 → CoreText 段落 lineBreakMode。
+            //   break-all ⇒ byCharWrapping（任意字符处可断）；其余（normal/break-word/缺省）⇒ byWordWrapping
+            //   （词边界断；超长不可断词由 CoreText 自然溢出——与 Web normal 语义一致）。
+            ps.lineBreakMode = (style["wordBreak"] as? String) == "break-all" ? .byCharWrapping : .byWordWrapping
             para = ps
         }
         if kern == 0 && (deco == nil || deco == "none") && para == nil { return text }
@@ -6192,8 +6197,9 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             let fam = (n["fontFamily"] as? String) ?? "system"
             let lh = n["lineHeight"] as? String
             let ls = (n["letterSpacing"] as? Double).map { CGFloat($0) } ?? 0
+            let wb = n["wordBreak"] as? String
             let sz = ProteusTextAdapter.measureTextWrapped(text, fontSize: fs, fontWeight: fw, fontFamily: fam,
-                                                             lineWidth: CGFloat(boxW), lineHeight: lh, letterSpacing: ls)
+                                                             lineWidth: CGFloat(boxW), lineHeight: lh, letterSpacing: ls, wordBreak: wb)
             let prevH = measures["\(id)"]?["height"] ?? 0
             if Double(sz.height) > prevH + 0.5 {
                 measures["\(id)"] = ["width": Double(min(boxW, Double(sz.width))), "height": Double(sz.height)]

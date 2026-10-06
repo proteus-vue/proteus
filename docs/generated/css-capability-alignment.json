@@ -547,7 +547,8 @@
       "aspectRatio",
       "pointerEvents",
       "justifySelf",
-      "whiteSpace"
+      "whiteSpace",
+      "wordBreak"
     ],
     "paint": [
       "backgroundColor",
@@ -1332,6 +1333,21 @@
       "strategy": "直映射",
       "note": "★★★justify-self 项（2026-10-06 · css:next P0·9× · CSS Box Alignment 3）：网格项**行内轴自对齐**。语料 9 处全在 grid 上下文（p-formfactor 仪表盘 justify-self: start/stretch）。契约：新级别 JustifySelf（四同步）；编译器 APP_LAYOUT_FIELDS + 封闭集（auto/normal/start/end/flex-start/flex-end/self-start/self-end/center/stretch）；内核 LStyle.justify_self → taffy Style.justify_self（grid 计算路径原生消费——flex 容器下 taffy 与 Web 同为「忽略」）；blob 枚举位图 E_JUSTIFY_SELF。★诚实边界：baseline/left/right 未列（taffy 的 grid baseline 按 start 近似=与 Web 不符 ⇒ 诊断跳过，不静默近似）；仅 grid 容器生效（taffy 原生语义=Web 语义：flex 下被忽略）；宿主零改动（纯内核布局）。★Skyline 官方属性表无 justify-self（该端无 Grid 容器）——主承载端为 App（自研内核）",
       "supportTier": "conditional"
+    },
+    {
+      "id": "word-break",
+      "css": "word-break（行内断词策略）",
+      "category": "text",
+      "compilerFields": [
+        "wordBreak"
+      ],
+      "web": "supported",
+      "skyline": "supported",
+      "app": "supported",
+      "tier": "L4",
+      "strategy": "直映射",
+      "note": "★★★word-break 项（2026-10-06 · css:next P0·7× · CSS Text · 继承属性）：行内断词策略。值集 = 四端可表达子集（normal / break-all / break-word；keep-all/auto-phrase 诊断跳过）。语料 7 处（长串/代码块 break-all · p-rich-text break-word）。契约：新级别 WordBreak（四同步）；CSE 继承集（word-break 是继承属性）+ 展开映射；编译器 APP_LAYOUT_FIELDS + APP_INHERITABLE_FIELDS（补 white-space 同族）+ 折叠分支（透传宿主文本引擎，内核忽略该键）；consistency 链条（applier/snapshot/probes/coverage）。★承载端：Android StaticLayout setBreakStrategy / iOS CATextLayer lineBreakMode(byCharWrapping) / 鸿蒙 OH_Drawing_SetTypographyTextWordBreakType / MP wxss（官方表支持 normal/break-all）。★诚实边界：keep-all（CJK 专用，Skyline 无、内核无对应）/ auto-phrase（实验）未支持（诊断跳过）；break-word 归一波 overflow-wrap 语义（主流实现等价）",
+      "supportTier": "universal"
     },
     {
       "id": "aspect-ratio",

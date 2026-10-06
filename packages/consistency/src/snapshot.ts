@@ -161,6 +161,8 @@ export interface NormalizedStyle {
   columnGap?: number
   textAlign?: string
   whiteSpace?: string
+  // ★★★word-break 项（2026-10-06）：行内断词策略（字符串枚举——Web 计算值原样收录）
+  wordBreak?: string
   textOverflow?: string
   textDecoration?: string
   pointerEvents?: string
@@ -447,6 +449,8 @@ const STYLE_KEYS = new Set([
   'textAlign', 'textOverflow', 'textDecoration', 'pointerEvents', 'flexWrap', 'alignContent',
   // ★★补齐（2026-10-05 · check:style-coverage 抓出的上一轮债务）：whiteSpace 进 semantic 后缺闭集登记
   'whiteSpace',
+  // ★★★word-break 项（2026-10-06）：行内断词策略（与接口/覆盖表同批——闭集纪律）
+  'wordBreak',
   'aspectRatio', 'flexBasis', 'transform', 'boxShadow',
   'gridTemplateColumns', 'gridTemplateRows', 'gridColumn', 'gridRow',
 ])
@@ -500,6 +504,7 @@ export function validateStyleSnapshot(snap: unknown): ValidationResult {
         // ★★★G-61 B3：新增字符串族（与接口/STYLE_KEYS 同步——三处同改）
         || k === 'textAlign' || k === 'textOverflow' || k === 'textDecoration' || k === 'pointerEvents'
         || k === 'whiteSpace'   // ★★补齐（同 ②）
+        || k === 'wordBreak'    // ★★★word-break 项（2026-10-06）
         || k === 'borderTopStyle' || k === 'borderRightStyle' || k === 'borderBottomStyle' || k === 'borderLeftStyle'   // ★★★边框族收口批
         || k === 'flexWrap' || k === 'alignContent'
         || k === 'aspectRatio' || k === 'flexBasis' || k === 'transform' || k === 'boxShadow'

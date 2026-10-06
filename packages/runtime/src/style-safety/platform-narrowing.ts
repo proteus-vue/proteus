@@ -122,6 +122,8 @@ export function narrowValue(prop: string, value: unknown, platform: StylePlatfor
     case 'Overflow':
     // ★★★justify-self 项（2026-10-06）：网格项行内轴自对齐（关键字枚举，平台无关——布局语义在内核）。
     case 'JustifySelf':
+    // ★★★word-break 项（2026-10-06）：行内断词策略（关键字枚举，平台无关——文本引擎侧消费）。
+    case 'WordBreak':
     case 'Color':
       return { valid: true, value }
     case 'Transform':

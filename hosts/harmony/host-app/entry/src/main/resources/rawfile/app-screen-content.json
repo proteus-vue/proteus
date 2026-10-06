@@ -599,6 +599,7 @@
       {
         "id": 6,
         "parentId": 5,
+        "display": "flex",
         "width": 80,
         "height": 32,
         "borderRadius": 6,
@@ -663,6 +664,7 @@
       {
         "id": 11,
         "parentId": 10,
+        "display": "flex",
         "width": 80,
         "height": 32,
         "borderRadius": 6,
@@ -727,6 +729,7 @@
       {
         "id": 16,
         "parentId": 15,
+        "display": "flex",
         "width": 80,
         "height": 32,
         "borderRadius": 6,
@@ -791,6 +794,7 @@
       {
         "id": 21,
         "parentId": 20,
+        "display": "flex",
         "width": 80,
         "height": 32,
         "borderRadius": 6,
@@ -855,6 +859,7 @@
       {
         "id": 26,
         "parentId": 25,
+        "display": "flex",
         "width": 80,
         "height": 32,
         "borderRadius": 6,
@@ -1307,6 +1312,160 @@
         "whiteSpace": "nowrap",
         "maxWidth": 200,
         "text": "这是一条非常长的标题文本用于验证溢出裁切无省略号的效果",
+        "semantic": "text"
+      }
+    ]
+  },
+  "word-break": {
+    "nodes": [
+      {
+        "id": 0,
+        "parentId": null,
+        "backgroundColor": "#f4f5f7",
+        "widthRatio": 1,
+        "minHeightPct": 1,
+        "padding": {
+          "top": 16,
+          "right": 12,
+          "bottom": 32,
+          "left": 12
+        },
+        "boxSizing": "border-box",
+        "semantic": "view"
+      },
+      {
+        "id": 1,
+        "parentId": 0,
+        "fontSize": 20,
+        "fontWeight": 700,
+        "color": "#1a1c22",
+        "margin": {
+          "bottom": 4
+        },
+        "text": "CSS 验收 · 断词",
+        "semantic": "text"
+      },
+      {
+        "id": 2,
+        "parentId": 0,
+        "fontSize": 13,
+        "color": "#5f6673",
+        "margin": {
+          "bottom": 16
+        },
+        "text": "word-break · Web 基准（浏览器真值）· 稳定 id 供逐端寻址",
+        "semantic": "text"
+      },
+      {
+        "id": 3,
+        "parentId": 0,
+        "fontSize": 13,
+        "fontWeight": 600,
+        "color": "#5b5bd6",
+        "margin": {
+          "top": 20,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
+        "text": "A · word-break: normal（对照：长串溢出）",
+        "semantic": "text"
+      },
+      {
+        "id": 4,
+        "parentId": 0,
+        "backgroundColor": "#ffffff",
+        "borderRadius": 10,
+        "padding": {
+          "top": 12,
+          "right": 14,
+          "bottom": 12,
+          "left": 14
+        },
+        "semantic": "view"
+      },
+      {
+        "id": 5,
+        "parentId": 4,
+        "width": 200,
+        "height": 56,
+        "backgroundColor": "#eef1f6",
+        "display": "flex",
+        "flexDirection": "row",
+        "alignItems": "flex-start",
+        "padding": {
+          "top": 6,
+          "right": 6,
+          "bottom": 6,
+          "left": 6
+        },
+        "boxSizing": "border-box",
+        "wordBreak": "normal",
+        "semantic": "view"
+      },
+      {
+        "id": 6,
+        "parentId": 5,
+        "fontSize": 14,
+        "color": "#1a1c22",
+        "wordBreak": "normal",
+        "text": "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+        "semantic": "text"
+      },
+      {
+        "id": 7,
+        "parentId": 0,
+        "fontSize": 13,
+        "fontWeight": 600,
+        "color": "#5b5bd6",
+        "margin": {
+          "top": 20,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
+        "text": "B · word-break: break-all（任意字符处断）",
+        "semantic": "text"
+      },
+      {
+        "id": 8,
+        "parentId": 0,
+        "backgroundColor": "#ffffff",
+        "borderRadius": 10,
+        "padding": {
+          "top": 12,
+          "right": 14,
+          "bottom": 12,
+          "left": 14
+        },
+        "semantic": "view"
+      },
+      {
+        "id": 9,
+        "parentId": 8,
+        "width": 200,
+        "height": 56,
+        "backgroundColor": "#eef1f6",
+        "display": "flex",
+        "flexDirection": "row",
+        "alignItems": "flex-start",
+        "padding": {
+          "top": 6,
+          "right": 6,
+          "bottom": 6,
+          "left": 6
+        },
+        "boxSizing": "border-box",
+        "wordBreak": "break-all",
+        "semantic": "view"
+      },
+      {
+        "id": 10,
+        "parentId": 9,
+        "fontSize": 14,
+        "color": "#1a1c22",
+        "wordBreak": "break-all",
+        "text": "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
         "semantic": "text"
       }
     ]
