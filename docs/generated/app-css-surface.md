@@ -47,6 +47,7 @@
 | `pointerEvents` | 布局 | — | ⚠ 无 | px/数字 |
 | `justifySelf` | 布局 | JustifySelf | ◐ 矩阵已声明 | px/数字 |
 | `whiteSpace` | 布局 | TextWrap | ◐ 矩阵已声明 | px/数字 |
+| `wordBreak` | 布局 | WordBreak | ◐ 矩阵已声明 | px/数字 |
 | `backgroundColor` | 绘制 | Color | ✅ 白名单 | 颜色字符串 |
 | `color` | 绘制 | Color | ✅ 白名单 | 颜色字符串 |
 | `fontSize` | 绘制 | — | ✅ 白名单 | px/数字 |

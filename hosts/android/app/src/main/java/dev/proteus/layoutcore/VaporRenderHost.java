@@ -1373,6 +1373,8 @@ final class VaporRenderHost {
             // ★★第三轮复评：缺省 = normal（可折行）——与 mkCmd 同判据（一处语义两处消费，必须同步）
             boolean wrapMode = !("nowrap".equals(ws) || "pre".equals(ws));
             if (!wrapMode) continue;
+            // ★★★word-break 项（2026-10-06）：`break-all` ⇒ 测量用注入 ZWSP 的文本（同源纪律：与 mkCmd 一致）
+            final String mt = applyWordBreak(t, spec.optString("wordBreak", null));
             org.json.JSONObject r = rects.optJSONObject(String.valueOf(spec.getInt("id")));
             if (r == null) continue;
             float boxW = (float) r.optDouble("width");
@@ -1386,7 +1388,7 @@ final class VaporRenderHost {
             if (ls != 0f && fs > 0f) tp.setLetterSpacing(ls / fs);
             android.text.StaticLayout sl = android.text.StaticLayout.Builder
                     // I2-ALLOW: 文本**测量**宽（StaticLayout 需整型像素宽；测量回执走 remeasure 通道，非绘制几何发射）
-                    .obtain(t, 0, t.length(), tp, Math.max(1, (int) Math.ceil(boxW)))
+                    .obtain(mt, 0, mt.length(), tp, Math.max(1, (int) Math.ceil(boxW)))
                     .setIncludePad(false)
                     .build();
             int lines = sl.getLineCount();
@@ -1409,6 +1411,24 @@ final class VaporRenderHost {
         request.put("nodes", coreNodes());
         request.put("textMeasures", measures);
         return request.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    /**
+     * ★★★word-break 项（2026-10-06）：`break-all` 的 Android 实现——**零宽空格（U+200B）注入**。
+     *   【为什么不能用原生 API】Android `Layout` 只有 `BREAK_STRATEGY_*`（断行**质量**策略：贪心/均衡/高质量），
+     *   **没有**"任意字符处可断"的原生开关（`LineBreaker` 同理）⇒ `break-all` 无原生对应。
+     *   【做法】在**每个字符后**插入 U+200B（ZWSP）：StaticLayout 视其为合法断点、且**不占宽度**
+     *   （对中日韩等本就可断的字符无害）；这样长不可断串（`break-all` 的目标场景）能按盒宽折行。
+     *   【★两处必须同源】测量（applyWrapRemeasure）与绘制（mkCmd）**都要**经本函数，否则折行数不一致。
+     *   `normal`/`break-word`/缺省 ⇒ 不改（Android 默认已按词断 + 超长词自然断 = 接近 Web break-word）。
+     */
+    static String applyWordBreak(String t, String wb) {
+        if (t == null || t.isEmpty() || !"break-all".equals(wb)) return t;
+        StringBuilder sb = new StringBuilder(t.length() * 2);
+        for (int i = 0; i < t.length(); i++) {
+            sb.append(t.charAt(i)).append('\u200B');
+        }
+        return sb.toString();
     }
 
     /**
@@ -1592,6 +1612,9 @@ final class VaporRenderHost {
                             android.text.TextUtils.TruncateAt.END).toString();
                 }
             }
+            // ★★★word-break 项（2026-10-06）：`break-all` ⇒ 注入 ZWSP（测量与绘制同源——本函数即绘制侧，
+            //   applyWrapRemeasure 是测量侧，两处都调 applyWordBreak）。此处须在 multiLine 判定**之前**改 t。
+            t = applyWordBreak(t, spec.optString("wordBreak", null));
             // ★批次 4：文本水平对齐（text-align → 0/1/2）
             int ta = alignOf(spec.optString("textAlign", null));
             // ★批次 13：行高（px；0 = 缺省）

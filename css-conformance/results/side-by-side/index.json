@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-06T01:23:12.084Z",
+  "generatedAt": "2026-10-06T01:54:15.110Z",
   "rows": [
     {
       "end": "mp",
@@ -29,6 +29,12 @@
       "end": "mp",
       "page": "text.png",
       "out": "css-conformance/results/side-by-side/text.mp-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "mp",
+      "page": "word-break.png",
+      "out": "css-conformance/results/side-by-side/word-break.mp-vs-web.png",
       "status": "ok"
     },
     {
@@ -62,6 +68,12 @@
       "status": "ok"
     },
     {
+      "end": "android",
+      "page": "word-break.png",
+      "out": "css-conformance/results/side-by-side/word-break.android-vs-web.png",
+      "status": "ok"
+    },
+    {
       "end": "ios",
       "page": "border-style.png",
       "out": "css-conformance/results/side-by-side/border-style.ios-vs-web.png",
@@ -92,6 +104,12 @@
       "status": "ok"
     },
     {
+      "end": "ios",
+      "page": "word-break.png",
+      "out": "css-conformance/results/side-by-side/word-break.ios-vs-web.png",
+      "status": "ok"
+    },
+    {
       "end": "harmony",
       "page": "border-style.png",
       "out": "css-conformance/results/side-by-side/border-style.harmony-vs-web.png",
@@ -119,6 +137,12 @@
       "end": "harmony",
       "page": "text.png",
       "out": "css-conformance/results/side-by-side/text.harmony-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "harmony",
+      "page": "word-break.png",
+      "out": "css-conformance/results/side-by-side/word-break.harmony-vs-web.png",
       "status": "ok"
     }
   ]

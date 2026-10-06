@@ -209,6 +209,7 @@ function styleOf(el: Element, win: Window): NormalizedStyle {
     ['text-decoration-line', 'textDecoration'], ['pointer-events', 'pointerEvents'],
     ['flex-wrap', 'flexWrap'], ['align-content', 'alignContent'],
     ['white-space', 'whiteSpace'],   // ★★补齐（2026-10-05 · whiteSpace 进 semantic 时的四同步债务）
+    ['word-break', 'wordBreak'],     // ★★★word-break 项（2026-10-06）：行内断词策略（原样收录）
   ] as const) {
     const v = cs.getPropertyValue(prop)
     if (v) (styles as Record<string, unknown>)[key] = v.trim()

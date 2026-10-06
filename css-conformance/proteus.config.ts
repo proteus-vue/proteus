@@ -28,6 +28,7 @@ const config: ProteusConfig = {
       text: { title: 'CSS 验收 · 文本' },
       border: { title: 'CSS 验收 · 边框' },
       'justify-self': { title: 'CSS 验收 · 网格自对齐' },
+      'word-break': { title: 'CSS 验收 · 断词' },
       layout: { title: 'CSS 验收 · 布局' },
       paint: { title: 'CSS 验收 · 绘制' },
     },

@@ -56,6 +56,8 @@ const ENUM_PROPS = new Set([
   'border-top-style', 'border-right-style', 'border-bottom-style', 'border-left-style',
   // ★★★justify-self 项（2026-10-06）：网格项行内轴自对齐（关键字枚举，小写归一）
   'justify-self',
+  // ★★★word-break 项（2026-10-06）：行内断词策略（关键字枚举，小写归一）
+  'word-break',
 ])
 /** px-only 长度（CSS 不接受 %：border-width / 字距） */
 const PX_LENGTH_PROPS = new Set([
@@ -82,6 +84,8 @@ const LENGTH_PROPS = new Set([
 export const CSE_INHERITED_PROPS = new Set([
   'color', 'font-size', 'font-weight', 'font-family', 'line-height', 'letter-spacing',
   'text-align', 'text-overflow', 'visibility', 'white-space',
+  // ★★★word-break 项（2026-10-06）：CSS Text 继承属性（子节点默认继承父的断词策略）
+  'word-break',
 ])
 
 /** 各属性 initial 值（`initial`/`unset` 需要；未列 ⇒ initial 不可用（如实记 diagnostic）） */
@@ -96,6 +100,8 @@ const INITIAL_VALUES: Record<string, string> = {
   'text-overflow': 'clip',
   visibility: 'visible',
   'white-space': 'normal',
+  // ★★★word-break 项（2026-10-06）：CSS initial = normal（继承属性）
+  'word-break': 'normal',
   'margin-top': '0px', 'margin-right': '0px', 'margin-bottom': '0px', 'margin-left': '0px',
   'padding-top': '0px', 'padding-right': '0px', 'padding-bottom': '0px', 'padding-left': '0px',
   opacity: '1',
@@ -734,6 +740,8 @@ function mapToIrField(prop: string, val: CssComputedValue): { field: string; val
     'align-self': 'alignSelf',
     // ★★★justify-self 项（2026-10-06 · css:next P0·9×）：网格项行内轴自对齐（CSE 直通同名 IR 字段）
     'justify-self': 'justifySelf',
+    // ★★★word-break 项（2026-10-06 · css:next P0·7× · CSS Text）：行内断词策略（继承属性；CSE 直通同名 IR 字段）
+    'word-break': 'wordBreak',
     'box-sizing': 'boxSizing',
     'pointer-events': 'pointerEvents',
     // ★white-space：App 端由引擎消费（`nowrap` 是常见排版约束——批次 29 已加 no-op 支持）；

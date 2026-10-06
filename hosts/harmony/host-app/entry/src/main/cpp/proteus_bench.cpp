@@ -485,12 +485,15 @@ static void measureTextTypoPx(const std::string& text, double fontPx, double* ou
 /** ★★第三轮（2026-10-05 · white-space 全端对齐）：wrap 文本按**盒宽**折行测量——
  *   与 Android（StaticLayout）/ iOS（boundingRect）同源；返回折行后的宽高（物理 px）。 */
 static void measureTextWrappedTypoPx(const std::string& text, double fontPx, double lineWidthPx,
-                                     double* outW, double* outH, double letterSpacingPx = 0) {
+                                     double* outW, double* outH, double letterSpacingPx = 0,
+                                     const std::string& wordBreak = "") {
     *outW = 0; *outH = 0;
     if (text.empty() || fontPx <= 0 || lineWidthPx <= 1.0) return;
     OH_Drawing_FontCollection* fc = OH_Drawing_CreateFontCollection();
     if (fc == nullptr) return;
     OH_Drawing_TypographyStyle* ts = OH_Drawing_CreateTypographyStyle();
+    // ★★★word-break 项（2026-10-06）：测量须与绘制同断词策略（否则折行数不一致 ⇒ 盒高错）。
+    if (wordBreak == "break-all") OH_Drawing_SetTypographyTextWordBreakType(ts, 1);
     OH_Drawing_TextStyle* tstyle = OH_Drawing_CreateTextStyle();
     OH_Drawing_SetTextStyleFontSize(tstyle, fontPx);
     if (letterSpacingPx != 0) OH_Drawing_SetTextStyleLetterSpacing(tstyle, letterSpacingPx);
@@ -4384,13 +4387,14 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
             double lsDesign = 0; jnum(it.c_str(), it.size(), "letterSpacing", &lsDesign);
             std::string ws; jstr(it.c_str(), it.size(), "whiteSpace", &ws);
             const bool single = (ws == "nowrap" || ws == "pre");
+            std::string wbM; jstr(it.c_str(), it.size(), "wordBreak", &wbM);
             std::string lhTok; jstr(it.c_str(), it.size(), "lineHeight", &lhTok);
             double lhDesign = lineHeightDesignPx(lhTok, fs);
             double wpx = 0, hpx = 0;
             auto rit = rect0.find((int)id);
             const double boxWpx = rit != rect0.end() ? rit->second.w * density : 0.0;
             if (!single && boxWpx > 1.0) {
-                measureTextWrappedTypoPx(tx, fs * density, boxWpx, &wpx, &hpx, lsDesign * density);
+                measureTextWrappedTypoPx(tx, fs * density, boxWpx, &wpx, &hpx, lsDesign * density, wbM);
                 if (lhDesign > 0) {
                     double nW = 0, nH = 0;
                     measureTextTypoPx(tx, fs * density, &nW, &nH, lsDesign * density);
@@ -4598,6 +4602,8 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
             // ★★全端对齐批（2026-10-05 · white-space 五端对齐）：换行模式 + overflow 透传渲染侧——
             //   wrap（normal/pre-wrap/pre-line）⇒ 盒宽折行；nowrap ⇒ 单行（省略号/裁切/溢出）。
             { std::string ws; if (jstr(it.c_str(), it.size(), "whiteSpace", &ws) && !ws.empty()) arr += ",\"whiteSpace\":\"" + jsonEscape(ws) + "\""; }
+            // ★★★word-break 项（2026-10-06）：断词策略（渲染侧据此设 TypographyTextWordBreakType）
+            { std::string wb; if (jstr(it.c_str(), it.size(), "wordBreak", &wb) && !wb.empty()) arr += ",\"wordBreak\":\"" + jsonEscape(wb) + "\""; }
             { std::string ov; if (jstr(it.c_str(), it.size(), "overflow", &ov) && ov == "hidden") arr += ",\"clipText\":1"; }
             // ★批次 35：文本装饰（underline / line-through）
             { std::string td; if (jstr(it.c_str(), it.size(), "textDecoration", &td) && td != "none") arr += ",\"textDecoration\":\"" + jsonEscape(td) + "\""; }

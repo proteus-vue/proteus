@@ -44,6 +44,11 @@ const OVERFLOW = ['visible', 'hidden', 'scroll', 'auto']
  *   `baseline`/`left`/`right` 未列 ⇒ 诊断跳过（taffy 在 grid 里把 baseline 按 start 处理 = 与 Web 不符，不静默近似）。
  */
 const JUSTIFY_SELF = ['auto', 'normal', 'start', 'end', 'flex-start', 'flex-end', 'self-start', 'self-end', 'center', 'stretch']
+/**
+ * ★★★word-break 项（2026-10-06）：行内断词策略封闭集（四端可表达子集：normal / break-all——Skyline 官方表即此二值）。
+ *   `keep-all`（CJK 专用，Skyline 无）/ `break-word`（Skyline 无）/ `auto-phrase`（实验）未列 ⇒ 诊断跳过（不静默近似）。
+ */
+const WORD_BREAK = ['normal', 'break-all']
 
 export const PROP_TYPES = {
   Length: isLength,
@@ -58,6 +63,7 @@ export const PROP_TYPES = {
   BorderStyle: isEnum(BORDER_STYLE),
   Overflow: isEnum(OVERFLOW),
   JustifySelf: isEnum(JUSTIFY_SELF),
+  WordBreak: isEnum(WORD_BREAK),
   Transform: (v: unknown): boolean => typeof v === 'string' && /^(translate|scale|rotate|skew)/i.test(v.trim()),
   TransformOrigin: (v: unknown): boolean => typeof v === 'string' && /^(left|right|top|bottom|center|\d+)/i.test(v.trim()),
 } as const

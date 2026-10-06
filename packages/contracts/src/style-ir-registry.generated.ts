@@ -1194,7 +1194,7 @@ export const STYLE_IR_FIELDS: Record<string, StyleFieldSpec> = {
       runtimeWhitelist: false,
       runtimeForbidden: false,
       consistencyMatrix: true,
-      inheritable: false,
+      inheritable: true,
     },
   },
   "width": {
@@ -1223,6 +1223,19 @@ export const STYLE_IR_FIELDS: Record<string, StyleFieldSpec> = {
       inheritable: false,
     },
   },
+  "wordBreak": {
+    scope: "semantic",
+    domain: "layout",
+    valueType: "enum",
+    sources: {
+      compiler: "APP_LAYOUT_FIELDS",
+      matrixLevel: "WordBreak",
+      runtimeWhitelist: false,
+      runtimeForbidden: false,
+      consistencyMatrix: true,
+      inheritable: true,
+    },
+  },
   "zIndex": {
     scope: "engine-only",
     domain: "layout",
@@ -1240,13 +1253,13 @@ export const STYLE_IR_FIELDS: Record<string, StyleFieldSpec> = {
 
 /** 摘要（判据与官网数字读它——机器推导，非手写） */
 export const STYLE_IR_SUMMARY = {
-  total: 92,
-  semantic: 66,
+  total: 93,
+  semantic: 67,
   engineOnly: 26,
   byDomain: {
     "derived": 10,
     "edges": 8,
-    "layout": 40,
+    "layout": 41,
     "matrix-only": 4,
     "paint": 29,
     "special": 1,

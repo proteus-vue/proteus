@@ -32,6 +32,12 @@ export type StylePropLevel =
   //   与 FlexAlign 不同轴：值集含 start/end/self-*（CSS `<self-position>` 全集）。语料 9 处全在 grid 上下文。
   //   四同步（INV-CE-07）：本表 + runtime PROP_TYPES/narrowing + compiler 静态校验 + 注册表 VALUE_TYPE_BY_LEVEL。
   | 'JustifySelf'
+  // ★★★word-break 项（2026-10-06 · css:next P0·7× · CSS Text）：**行内断词策略**（继承属性）。
+  //   值集 = 四端可表达子集（normal / break-all——Skyline 官方表即此二值）；keep-all（CJK 专用，Skyline 无）
+  //   / break-word（Skyline 无，仅 Web+App 可表达）/ auto-phrase（实验）⇒ 编译期诊断跳过（v1 边界）。
+  //   与 white-space 同轴（同属文本换行族）。四同步（INV-CE-07）：
+  //   本表 + runtime PROP_TYPES/narrowing + compiler 静态校验 + 注册表 VALUE_TYPE_BY_LEVEL。
+  | 'WordBreak'
   | 'Transform'
   | 'TransformOrigin'
   | 'SEMANTIC_ONLY'
@@ -86,6 +92,8 @@ export const STYLE_PROP_LEVELS = {
   // ★★★justify-self 项（2026-10-06）：网格项行内轴自对齐（CSS Box Alignment 3 `<self-position>` 集；
   //   仅在 grid 容器内生效——flex 容器下按 Web 标准本就不生效，内核 taffy 同语义）
   justifySelf: 'JustifySelf',
+  // ★★★word-break 项（2026-10-06）：行内断词策略（normal/break-all/break-word；keep-all 等诊断跳过）
+  wordBreak: 'WordBreak',
   transform: 'Transform',
   transformOrigin: 'TransformOrigin',
   flex: 'FlexNumber',

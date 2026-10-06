@@ -17,20 +17,20 @@
       "unit": 30
     },
     "byImpl": {
-      "not-started": 554,
+      "not-started": 553,
       "excluded": 280,
-      "implemented": 111,
+      "implemented": 112,
       "partial": 4
     },
     "byPriority": {
       "P2": 115,
       "excluded": 280,
-      "P0": 26,
-      "done": 111,
+      "P0": 25,
+      "done": 112,
       "P1": 417
     },
-    "actionable": 558,
-    "actionableP0": 26
+    "actionable": 557,
+    "actionableP0": 25
   },
   "entries": [
     {
@@ -15232,18 +15232,18 @@
       "inherited": true,
       "initial": "normal",
       "syntax": "normal | break-all | keep-all | break-word | auto-phrase",
-      "impl": "not-started",
-      "implNote": "未接：断词（证据：未接）",
+      "impl": "implemented",
+      "implNote": "IR 注册表在册（scope=engine-only · 矩阵 WordBreak）",
       "evidencedBy": {
-        "inIrRegistry": false,
-        "irScope": null,
-        "inCompilerFold": false,
-        "matrixLevel": null,
+        "inIrRegistry": true,
+        "irScope": "engine-only",
+        "inCompilerFold": true,
+        "matrixLevel": "WordBreak",
         "webSupport": true
       },
       "usage": 7,
-      "priority": "P0",
-      "acceptance": "none"
+      "priority": "done",
+      "acceptance": "pending"
     },
     {
       "id": "word-spacing",

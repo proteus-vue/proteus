@@ -1,9 +1,9 @@
 # CSS Web 全量能力清单（自动生成——勿手改；生成器 scripts/gen-css-feature-inventory.mjs）
 
 > 总 949 项（property 651 · selector 144 · at-rule 19 · function 105 · unit 30）
-> 实现：**not-started** 554 · **excluded** 280 · **implemented** 111 · **partial** 4
-> 优先级：P2 115 · excluded 280 · P0 26 · done 111 · P1 417
-> ★**可推项（非已实现/非排除）**：558（其中 **P0 26**）
+> 实现：**not-started** 553 · **excluded** 280 · **implemented** 112 · **partial** 4
+> 优先级：P2 115 · excluded 280 · P0 25 · done 112 · P1 417
+> ★**可推项（非已实现/非排除）**：557（其中 **P0 25**）
 
 ## P0 —— 语料在用但未实现（真实需求，最优先）
 
@@ -27,7 +27,6 @@
 | `transition-property` | standard | CSS Transitions | 1 | not-started | — |
 | `transition-timing-function` | standard | CSS Transitions | 1 | not-started | — |
 | `will-change` | standard | CSS Will Change | 1 | not-started | — |
-| `word-break` | standard | CSS Text | 7 | not-started | 未接：断词（证据：未接） |
 
 ## P1 —— 标准且常用分组（未实现）
 

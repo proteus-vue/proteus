@@ -93,6 +93,8 @@ describe('★App CSS 支持面 · ② SSOT 与折叠实现同源（真折叠，�
       if (f === 'overflowX' || f === 'overflowY') return 'hidden'
       // ★★★justify-self 项（2026-10-06）：网格项行内轴自对齐（枚举样例——折叠器直传内核 DTO）
       if (f === 'justifySelf') return 'center'
+      // ★★★word-break 项（2026-10-06）：行内断词策略（枚举样例——折叠器直传宿主文本引擎）
+      if (f === 'wordBreak') return 'break-all'
       if (f === 'aspectRatio') return '1.5'
       if (f === 'pointerEvents') return 'none'
       if (f === 'textDecoration') return 'underline'

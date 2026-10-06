@@ -11,6 +11,7 @@ export const routes: RouteRecord[] = [
   { name: "justify-self", path: "pages/justify-self", component: "../pages/justify-self.vue", meta: {"title":"CSS 验收 · 网格自对齐"} },
   { name: "overflow", path: "pages/overflow", component: "../pages/overflow.vue" },
   { name: "text", path: "pages/text", component: "../pages/text.vue", meta: {"title":"CSS 验收 · 文本"} },
+  { name: "word-break", path: "pages/word-break", component: "../pages/word-break.vue", meta: {"title":"CSS 验收 · 断词"} },
 ]
 
 export const tabRoutes: RouteRecord[] = routes.filter(r => r.meta?.isTab)
@@ -38,11 +39,15 @@ export const screens: Record<string, AppScreenSpec> = {
   "text": {
     "name": "text",
     "path": "pages/text"
+  },
+  "word-break": {
+    "name": "word-break",
+    "path": "pages/word-break"
   }
 }
 
 /** 路由名数组（App 深栈/压测按它循环取屏——顺序与 routes 一致） */
-export const screenNames: string[] = ["border-style","border","justify-self","overflow","text"]
+export const screenNames: string[] = ["border-style","border","justify-self","overflow","text","word-break"]
 
 /** tab 根屏（meta.isTab）—— App 端 tab 语义（switchTab/reset）的合法目标 */
 export const tabNames: string[] = []
@@ -55,5 +60,6 @@ declare module '@proteus-vue/router/types' {
     'justify-self': {  },
     'overflow': {  },
     'text': {  },
+    'word-break': {  },
   }
 }

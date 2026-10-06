@@ -95,6 +95,12 @@ node scripts/css-acceptance-record.mjs <feature-id> <verdicts.json>
   而 App/Skyline 的 `<view>` 默认 **flex**（两键生效 ⇒ 居中）⇒ 不声明会让五端「容器内对齐」不一致。
   ★同源纪律（与"缺省值必须查 Web 标准"一致）：**凡依赖非缺省 `display` 的布局，先确认各端默认 display 是否一致**——
   `<view>`/`div` 的 block↔flex 默认分歧是本仓跨端差异的一个常见源。
+- **★★App/MP 文本引擎「长词默认断开」——Web `word-break: normal` 的"任其溢出"不可表达**（2026-10-06 word-break 项实锤）：
+  Android `StaticLayout` / iOS CoreText / 鸿蒙 Typography / Skyline 的**自然行为**都是"长不可断词按盒宽折断"
+  （= 相当于 `break-all`）；而 Web `normal` 是"词边界断、超长词整体溢出"。
+  ⇒ 长串在五端：`break-all`（= 语料 7× 的值）**一致折行**；`normal` 则 **App/MP 折行、Web 溢出**（具名引擎边界）。
+  ★同源纪律：**凡涉及"文本是否折断/溢出"的特性（word-break / overflow-wrap / hyphens），
+  先假设 App/MP 默认即断词，再逐端核对**——Web 的"不折断"类语义在这些端往往不可表达。
 - **整像素取整宁多勿少**：`(int32_t)` 截断丢 1px（鸿蒙右缘缝）；画布 `ceil`、视口钳到精确宽。
 - **模块级常量会静默失效**：ESM 只求值一次 ⇒ 按环境/参数变化的白名单要**函数内求值**。
 - **两处消费同一语义必须同步**：如「wrap 判据」在 `mkCmd`（绘制）与 `remeasure`（测量）各一份 ⇒

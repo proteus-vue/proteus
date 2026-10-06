@@ -256,15 +256,23 @@ final class ProteusTextAdapter {
     ///   盒宽来自内核解析后的盒（调用方传入）——宿主不自己推布局（纪律：几何唯一来源 = 内核）。
     static func measureTextWrapped(_ text: String, fontSize: CGFloat, fontWeight: CGFloat = 400,
                                     fontFamily: String = "system", lineWidth: CGFloat,
-                                    lineHeight: String? = nil, letterSpacing: CGFloat = 0) -> CGSize {
+                                    lineHeight: String? = nil, letterSpacing: CGFloat = 0, wordBreak: String? = nil) -> CGSize {
         if text.isEmpty || lineWidth <= 0 { return .zero }
         // 缓存键含 lineWidth（同文本不同盒宽折行结果不同；前缀 W 与单行键空间区分）
-        let key = "W\u{1}\(fontSize)\u{1}\(fontWeight)\u{1}\(fontFamily)\u{1}\(lineWidth)\u{1}\(lineHeight ?? "")\u{1}\(letterSpacing)\u{1}\(text)"
+        // ★★★word-break 项（2026-10-06）：键含 wordBreak（不同断词策略折行结果不同）
+        let key = "W\u{1}\(fontSize)\u{1}\(fontWeight)\u{1}\(fontFamily)\u{1}\(lineWidth)\u{1}\(lineHeight ?? "")\u{1}\(letterSpacing)\u{1}\(wordBreak ?? "")\u{1}\(text)"
         if let hit = measureCache[key] { measureCacheHits += 1; return hit }
         measureCacheMisses += 1
         let font = ProteusTextAdapter.font(size: fontSize, weight: fontWeight, family: fontFamily)
         var attrs: [NSAttributedString.Key: Any] = [.font: font]
         if letterSpacing != 0 { attrs[.kern] = letterSpacing as NSNumber }
+        // ★★★word-break 项（2026-10-06）：断词策略 → 段落 lineBreakMode（与绘制 textLayerString 同源）。
+        //   break-all ⇒ byCharWrapping（任意字符断）；其余 ⇒ byWordWrapping。测量须与绘制同策略，否则折行数不一致。
+        if let wb = wordBreak {
+            let ps = NSMutableParagraphStyle()
+            ps.lineBreakMode = wb == "break-all" ? .byCharWrapping : .byWordWrapping
+            attrs[.paragraphStyle] = ps
+        }
         let rect = (text as NSString).boundingRect(
             with: CGSize(width: lineWidth, height: .greatestFiniteMagnitude),
             options: [.usesLineFragmentOrigin, .usesFontLeading],

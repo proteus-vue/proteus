@@ -279,6 +279,8 @@ struct TextDrawSpec {
     double letterSpacing = 0;
     /** ★★全端对齐批（2026-10-05 · white-space 五端对齐）：换行模式（原样字符串：normal/nowrap/pre/pre-wrap/pre-line；空=未声明）。 */
     std::string whiteSpace;
+    /** ★★★word-break 项（2026-10-06）：行内断词策略（原样字符串：normal/break-all/break-word；空=未声明）。 */
+    std::string wordBreak;
     /** ★★全端对齐批：溢出裁切（overflow:hidden 且非 ellipsis）——nowrap 文本超盒宽时裁到盒。 */
     int clipText = 0;
     /** ★批次 16（CSS 兼容对齐 · 以 Web 为基准）：`text-overflow` 是否 ellipsis（单行溢出以 … 截断）。
@@ -454,6 +456,12 @@ static void drawChannelsAndText(OH_Drawing_Canvas* canvas, const TextDrawSpec* s
             //   单行路径保持既有 offY 半行距逻辑（零行为变化）。
             if (wsWrap && spec->lineHeightPx > 0 && spec->fontSizePx > 0) {
                 OH_Drawing_SetTextStyleFontHeight(tstyle, spec->lineHeightPx / spec->fontSizePx);
+            }
+            // ★★★word-break 项（2026-10-06）：断词策略 → OH_Drawing_SetTypographyTextWordBreakType。
+            //   鸿蒙有**原生**断词枚举（NORMAL=0 / BREAK_ALL=1 / BREAK_WORD=2）——用 BREAK_ALL：
+            //   break-all ⇒ BREAK_ALL（任意字符断）；normal/缺省 ⇒ 不设（引擎默认 = 词边界断）。
+            if (spec->wordBreak == "break-all") {
+                OH_Drawing_SetTypographyTextWordBreakType(ts, 1); // WORD_BREAK_TYPE_BREAK_ALL
             }
             OH_Drawing_TypographyCreate* handler = OH_Drawing_CreateTypographyHandler(ts, fc);
             if (handler != nullptr) {
@@ -963,6 +971,8 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
             { double toe = 0; jsonNumber(it, "textOverflowEllipsis", &toe); spec->textOverflowEllipsis = toe > 0 ? 1 : 0; }
             // ★★全端对齐批（2026-10-05 · white-space 五端对齐）：换行模式 + 裁切标记（渲染分流靠它）
             { std::string wsV; jsonString(it, "whiteSpace", &wsV); spec->whiteSpace = wsV; }
+            // ★★★word-break 项（2026-10-06）：断词策略（渲染侧据此设 TypographyTextWordBreakType）
+            { std::string wbV; jsonString(it, "wordBreak", &wbV); spec->wordBreak = wbV; }
             { double ct = 0; jsonNumber(it, "clipText", &ct); spec->clipText = ct > 0 ? 1 : 0; }
             spec->w = w;
             spec->h = h;
