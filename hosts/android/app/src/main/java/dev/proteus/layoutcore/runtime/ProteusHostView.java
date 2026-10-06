@@ -2528,7 +2528,29 @@ public class ProteusHostView extends ViewGroup {
             }
             // ★圆角（灯光秀的灯珠）：radius > 0 走 drawRoundRect——纯绘制属性，默认 0 零行为变化
             final Integer rcm = (ids != null && i < ids.length) ? nodeRadiusCorners.get(ids[i]) : null;
-            if (rcm != null) { drawPathCorners(canvas, c, rcm, bgPaint); }
+            // ★★★背景定位家族（2026-10-07）：声明了背景图像盒（size/position）且非 repeat ⇒ **只填图像盒**
+            //   （CLAMP 会把渐变铺满整个绘制区 ⇒ 必须把填充本身收进图像盒；盒外露出底色 = 与 Web 一致）。
+            //   repeat ⇒ 铺满整盒（TextMode.REPEAT 已按图像尺寸为砖平铺）。未声明 ⇒ 元素盒（零变化）。
+            final boolean bgBoxed = c.gradient != null && c.gradient.hasBgGeom() && !"repeat".equals(c.gradient.bgRepeat);
+            final float[] fb = bgBoxed ? c.gradient.imageBox(c.x, c.y, c.w, c.h) : new float[]{c.x, c.y, c.w, c.h};
+            if (bgBoxed) {
+                // ★（2026-10-07 视觉评审抓出）节点**底色**先铺整盒——图像盒之外应露出底色
+                //   （Web/ios 均如此；此前 shader 在无背景色时铺满整盒、有背景色时又只画图像盒 ⇒ 盒外透明白）。
+                final int baseColor = animBg != null ? animBg : c.color;
+                if (android.graphics.Color.alpha(baseColor) != 0) {
+                    bgPaint.setShader(null);
+                    bgPaint.setColor(baseColor);
+                    canvas.drawRect(c.x, c.y, c.x + c.w, c.y + c.h, bgPaint);
+                    bgPaint.setShader(gradShader);
+                }
+                // ★图像盒可能**超出元素**（如 size 400%）⇒ 必须裁到元素盒（Web 背景绘制区）——
+                //   否则渐变溢出到页面边缘（本轮真机 probe 抓出）。
+                final int csave = canvas.save();
+                canvas.clipRect(c.x, c.y, c.x + c.w, c.y + c.h);
+                canvas.drawRect(fb[0], fb[1], fb[0] + fb[2], fb[1] + fb[3], bgPaint);
+                canvas.restoreToCount(csave);
+            }
+            else if (rcm != null) { drawPathCorners(canvas, c, rcm, bgPaint); }
             else if (c.radius > 0f) canvas.drawRoundRect(c.x, c.y, c.x + c.w, c.y + c.h, c.radius, c.radius, bgPaint);
             else canvas.drawRect(c.x, c.y, c.x + c.w, c.y + c.h, bgPaint);
             if (gradShader != null) bgPaint.setShader(null); // ★清（paint 复用——漏挂会污染后续指令）

@@ -398,6 +398,10 @@ static void drawChannelsAndText(OH_Drawing_Canvas* canvas, const TextDrawSpec* s
             OH_Drawing_Brush* br = OH_Drawing_BrushCreate();
             OH_Drawing_BrushSetShaderEffect(br, shader);
             OH_Drawing_CanvasAttachBrush(canvas, br);
+            // ★图像盒可能超出元素（如 size 400%）⇒ 裁到元素盒（Web 背景绘制区）——
+            //   否则渐变溢出到页面边缘（与 Android/iOS 同款修复）。
+            OH_Drawing_Rect* clip = OH_Drawing_RectCreate(0, 0, w, h);
+            if (clip != nullptr) { OH_Drawing_CanvasClipRect(canvas, clip, OH_Drawing_CanvasClipOp::INTERSECT, true); OH_Drawing_RectDestroy(clip); }
             // repeat 铺满整盒；否则只画图像盒（盒外露出底色）
             OH_Drawing_Rect* r = rep ? OH_Drawing_RectCreate(0, 0, w, h)
                                      : OH_Drawing_RectCreate((float)ix, (float)iy, (float)(ix + iw), (float)(iy + ih));
