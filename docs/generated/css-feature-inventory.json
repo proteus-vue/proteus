@@ -19,18 +19,18 @@
     "byImpl": {
       "not-started": 543,
       "excluded": 280,
-      "implemented": 122,
-      "partial": 4
+      "implemented": 123,
+      "partial": 3
     },
     "byPriority": {
       "P2": 115,
       "excluded": 280,
-      "P0": 19,
-      "done": 122,
+      "P0": 18,
+      "done": 123,
       "P1": 413
     },
-    "actionable": 547,
-    "actionableP0": 19
+    "actionable": 546,
+    "actionableP0": 18
   },
   "entries": [
     {
@@ -3298,9 +3298,9 @@
       "inherited": false,
       "initial": "none",
       "syntax": "<bg-image>#",
-      "impl": "partial",
-      "implNote": "有结构化属性通道（非 CSS 属性形态）——CSS 写法待接",
-      "channel": null,
+      "impl": "implemented",
+      "implNote": "**独立通道**：**引擎渐变通道**：① 渐变子集（linear-gradient/radial-gradient）→ 引擎 `fillGradient`（结构化属性 `fill-gradient` 的 CSS 语法糖）——**四端已交付并验证（#568）**；② `url()`/`image-set()` 图片子集 → **组件通道**（`<image>` 组件）——Web 原生 / MP 组件已交付，**App 图片渲染另立项（#572）**；③ 多值（多层渐变）与逐层定位属具名边界（同 #568 ②）。（证据：vapor/template.ts（`background-image`/`background` 的渐变 → 引擎 `fillGradient` 通道，批次 33）+ 验收页四端已验（#568 background-position 页 A–E 即 `background-image: linear-gradient`））",
+      "channel": "independent",
       "evidencedBy": {
         "inIrRegistry": false,
         "irScope": null,
@@ -3309,8 +3309,8 @@
         "webSupport": null
       },
       "usage": 2,
-      "priority": "P0",
-      "acceptance": "none"
+      "priority": "done",
+      "acceptance": "pending"
     },
     {
       "id": "background-origin",

@@ -162,7 +162,11 @@ const SHORTHAND_EXPANSION = {
   'animation-iteration-count': { to: [], evidence: '同上', separate: true, note: '**独立通道**' },
   'animation-timing-function': { to: [], evidence: '同上', separate: true, note: '**独立通道**' },
   'transition-duration': { to: [], evidence: '同上', separate: true, note: '**独立通道**' },
-  'background-image': { to: ['fillGradient'], evidence: 'vapor/template.ts:976-980（渐变→fillGradient）', note: '渐变走 fillGradient 通道（url() 图片另有原生组件）', conditional: true },
+  // ★★★background-image 项（2026-10-08 · 同 object-fit 归类）：**通道属性**——两种子集走两条通道（非编译器折叠的普通 IR 字段）。
+  //   ① 渐变子集（linear-/radial-gradient）→ 引擎 `fillGradient` 通道（结构化属性 `fill-gradient` 的 CSS 语法糖，批次 33）；四端已交付并验证（#568：background-position 页 A–E 用例即 `background-image: linear-gradient(...)`）。
+  //   ② url()/image-set() 图片子集 → **组件通道**（`<image>` 组件）——Web 原生 / MP 组件已交付，App 图片渲染另立项（#572）。
+  //   ③ 多值（多层渐变）/逐层定位属具名边界（同 #568 ②）。
+  'background-image': { to: [], separate: true, channel: 'independent', evidence: 'vapor/template.ts（`background-image`/`background` 的渐变 → 引擎 `fillGradient` 通道，批次 33）+ 验收页四端已验（#568 background-position 页 A–E 即 `background-image: linear-gradient`）', note: '**引擎渐变通道**：① 渐变子集（linear-gradient/radial-gradient）→ 引擎 `fillGradient`（结构化属性 `fill-gradient` 的 CSS 语法糖）——**四端已交付并验证（#568）**；② `url()`/`image-set()` 图片子集 → **组件通道**（`<image>` 组件）——Web 原生 / MP 组件已交付，**App 图片渲染另立项（#572）**；③ 多值（多层渐变）与逐层定位属具名边界（同 #568 ②）。' },
   'grid-template-areas': { to: [], evidence: '未接（CSE 支持 template-columns/rows；areas 未接）', note: '命名区域', notYet: true },
   'aspect-ratio': { to: ['aspectRatio'], evidence: 'IR 在册（engine-field）', note: '宽高比' },
   'object-fit': { to: [], separate: true, channel: 'component', evidence: '图片组件通道：Web `<image>` 模拟层 `mode`→CSS objectFit（packages/web/src/components/image.ts）+ MP 原生 `<image mode>`（built-in-components/image.ts）；主流端（微信/Skyline）同以 `<image mode>` 表达而非 CSS 属性', note: '**组件通道**（图片填充）：`object-fit` 作用于**替换内容**（图片/视频），本框架语义载体 = `<image mode>` / `p-image.fit`（Web objectFit · MP mode——已交付）；★App 自绘**暂无图片渲染**（无作用对象）⇒「App 图片渲染」独立立项' },

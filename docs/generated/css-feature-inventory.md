@@ -1,16 +1,15 @@
 # CSS Web 全量能力清单（自动生成——勿手改；生成器 scripts/gen-css-feature-inventory.mjs）
 
 > 总 949 项（property 651 · selector 144 · at-rule 19 · function 105 · unit 30）
-> 实现：**not-started** 543 · **excluded** 280 · **implemented** 122 · **partial** 4
-> 优先级：P2 115 · excluded 280 · P0 19 · done 122 · P1 413
-> ★**可推项（非已实现/非排除）**：547（其中 **P0 19**）
+> 实现：**not-started** 543 · **excluded** 280 · **implemented** 123 · **partial** 3
+> 优先级：P2 115 · excluded 280 · P0 18 · done 123 · P1 413
+> ★**可推项（非已实现/非排除）**：546（其中 **P0 18**）
 
 ## P0 —— 语料在用但未实现（真实需求，最优先）
 
 | 属性 | MDN 状态 | 分组 | 语料用量 | 实现 | 说明 |
 |---|---|---|---|---|---|
 | `-webkit-line-clamp` | standard | WebKit Extensions, CSS Overflow | 4 | not-started | — |
-| `background-image` | standard | CSS Backgrounds and Borders | 2 | partial | 有结构化属性通道（非 CSS 属性形态）——CSS 写法待接 |
 | `container-type` | standard | CSS Conditional Rules | 1 | not-started | — |
 | `grid-auto-columns` | standard | CSS Grid Layout | 1 | not-started | — |
 | `grid-auto-rows` | standard | CSS Grid Layout | 1 | not-started | — |
