@@ -97,6 +97,27 @@ describe('★B1 · 壳级运行期驱动（createSuperappRuntime）', () => {
     expect(r2.handled).toBe(true)
   })
 
+  it('★返回保留滚动 / 前进重置（系统 App 语义）', async () => {
+    const dir = makeTempProject()
+    const build = await buildAppRuntimeContent(dir, 'android')
+    const artifacts = JSON.parse(fs.readFileSync(build.outFile, 'utf-8')) as Record<string, ScreenRuntimeArtifact>
+    let scroll = 0
+    const rt = createSuperappRuntime({
+      artifacts,
+      host: { mount: () => '{"ok":true}', applyOps: () => '{"ok":true}',
+        getScroll: () => scroll, setScroll: (o) => { scroll = o } },
+      viewport: { width: 390, height: 844 },
+    })
+    rt.mountScreen('home')
+    scroll = 300                       // 用户在 home 滚到 300
+    rt.mountScreen('detail')           // 前进 ⇒ 重置
+    expect(scroll, '前进应重置到 0').toBe(0)
+    rt.mountScreen('home')             // 返回 ⇒ 恢复 home 的 300
+    expect(scroll, '返回应恢复 home 的滚动').toBe(300)
+    rt.mountScreen('detail')           // 再前进 ⇒ detail 上次的 0
+    expect(scroll, '再前进 detail 应回到它上次的 0').toBe(0)
+  })
+
   it('缺该屏产物 ⇒ 不挂载、明确 note（不静默）', async () => {
     const dir = makeTempProject()
     const build = await buildAppRuntimeContent(dir, 'android')

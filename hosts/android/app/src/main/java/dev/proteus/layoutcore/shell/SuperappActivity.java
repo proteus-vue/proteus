@@ -390,7 +390,8 @@ public class SuperappActivity extends android.app.Activity {
                 QuickJsEngine.nativeRunPendingJobs();   // 泵微任务（router.back 的 await 续体）
                 renderCurrent(readState());
                 highlightTab(currentName(readState()));
-                android.util.Log.i(TAG, "SUPERAPP_BACK depth=" + depth + " → " + currentName(readState()));
+                android.util.Log.i(TAG, "SUPERAPP_BACK depth=" + depth + " → " + currentName(readState())
+                        + " scrollY=" + (draw.view() != null ? draw.view().getContentScrollY() : -1));
                 return;
             }
         } catch (Throwable t) {

@@ -3966,7 +3966,7 @@ static napi_value SuperappDrive(napi_env env, napi_callback_info info) {
 /* ═══════════════ ★★★B1：App 壳**统一运行期**渲染（鸿蒙腿，一次性 VM）═══════════════
  * superappScreen(argsJson {bundle, filesDir, page, viewport:{width,height}, chain?:[int,...]}): string(JSON)
  *
- * 【它做什么】在**一次性 VM** 内：注入 `proteusHost`（运行期原语：mount/applyOps/resetScroll/onGesture/invoke）
+ * 【它做什么】在**一次性 VM** 内：注入 `proteusHost`（运行期原语：mount/applyOps/getScroll/setScroll/onGesture/invoke）
  *   → eval bundle-superapp.js → boot → `__proteusSuperappRender({name:page, viewport})`
  *   （JS 共享运行期 `createSuperappRuntime` **实例化**该屏 → 调 `host.mount(tree)`，此处**捕获** tree）
  *   → 若给了 `chain`（ArkTS 侧的命中链）→ `__proteusSuperappGesture({type:'tap', chain})`（派发 → 导航）
@@ -3990,10 +3990,16 @@ static JSVM_Value MountCaptureCb(JSVM_Env env, JSVM_CallbackInfo info) {
     JSVM_Value r = nullptr; OH_JSVM_CreateStringUtf8(env, "{\"ok\":true}", JSVM_AUTO_LENGTH, &r); return r;
 }
 
-/** 运行期其余原语的空实现（applyOps/resetScroll/onGesture：本机不上屏增量/滚动由 ArkTS 管）。 */
+/** 运行期其余原语的空实现（applyOps/getScroll/setScroll/onGesture：本机不上屏增量/滚动由 ArkTS 管）。 */
 static JSVM_Value NoopCb(JSVM_Env env, JSVM_CallbackInfo info) {
     (void)info;
     JSVM_Value r = nullptr; OH_JSVM_CreateStringUtf8(env, "{\"ok\":true}", JSVM_AUTO_LENGTH, &r); return r;
+}
+
+/** ★getScroll 返 0（鸿蒙滚动由 ArkTS 管；前进即重置）。 */
+static JSVM_Value GetScroll0Cb(JSVM_Env env, JSVM_CallbackInfo info) {
+    (void)info;
+    JSVM_Value r = nullptr; OH_JSVM_CreateDouble(env, 0.0, &r); return r;
 }
 
 static napi_value SuperappScreen(napi_env env, napi_callback_info info) {
@@ -4039,7 +4045,8 @@ static napi_value SuperappScreen(napi_env env, napi_callback_info info) {
             {"invoke", {InvokeCb, nullptr}},
             {"mount", {MountCaptureCb, nullptr}},
             {"applyOps", {NoopCb, nullptr}},
-            {"resetScroll", {NoopCb, nullptr}},
+            {"getScroll", {GetScroll0Cb, nullptr}},
+            {"setScroll", {NoopCb, nullptr}},
             {"onGesture", {NoopCb, nullptr}},
         };
         for (auto& f : fns) {

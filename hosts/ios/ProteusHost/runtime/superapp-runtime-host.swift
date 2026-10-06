@@ -24,8 +24,9 @@ import JavaScriptCore
     func readRects() -> String
     /// 注册手势反向回调名（native 层**截获**：`SelfDrawView.emitGesture` 命中后调该 JS 全局函数）
     func onGesture(_ cbName: String)
-    /// ★新屏挂载前重置滚动偏移（contentOffset 是视图状态，非树状态——见 SuperappRuntimeHost 注释）
-    func resetScroll()
+    /// ★每屏滚动进度记忆（用户：「返回应保留滚动，前进才重置」——系统 App 语义；contentOffset 是视图状态）
+    func getScroll() -> Double
+    func setScroll(_ offset: Double)
     /// 能力通道（与 HostRuntimeBridge 同契约）
     func invoke(_ method: String, _ argsJson: String) -> String
     func memUsage() -> String
@@ -52,8 +53,13 @@ final class SuperappRuntimeHost: NSObject, SuperappRuntimeExports {
     func applyOps(_ opsBytesJson: String) -> String { draw.applyOps(opsBytesJson) }
     func readRects() -> String { draw.readRects() }
     func onGesture(_ cbName: String) { gestureCb = cbName }
-    /// ★新屏挂载前重置滚动偏移（用户抓出「网格页打开顶部超出状态栏，下滑就正常」）。
-    func resetScroll() { draw.view?.resetContentOffset() }
+    /// ★每屏滚动进度记忆（用户：「返回应保留滚动，前进才重置」——系统 App 语义）。
+    func getScroll() -> Double { Double(draw.view?.contentOffset.y ?? 0) }
+    func setScroll(_ offset: Double) {
+        guard let v = draw.view else { return }
+        // 经 applyContentOffset 的相对位移把 contentOffset.y 设到目标（该方法是 iOS 侧唯一写入口）
+        v.applyContentOffset(dx: 0, dy: CGFloat(offset) - v.contentOffset.y)
+    }
 
     /* ── 能力 / 引擎（转 HostRuntimeBridge）── */
     func invoke(_ method: String, _ argsJson: String) -> String { caps.invoke(method, argsJson) }
