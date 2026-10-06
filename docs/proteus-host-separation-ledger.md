@@ -21,7 +21,7 @@
 | R2 | **交互事件**经共享 `slot-runtime` 派发（`dispatchGesture` + `onGesture`）在三端生效 | 进行 | `file:hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/SuperappRuntimeHost.java`（Android 真机打通）· iOS 已接 | 本轮 · **鸿蒙受阻**：其 superapp 用**一次性 JSVM**（持久 VM 跨 napi 调用崩，决策 #540）——统一运行期需**持久 JS 上下文**（手势回调查回 + 屏实例态），鸿蒙需先解 持久-VM 崩溃（登记为端侧待解，非静默跳过） |
 | R3 | **响应式/数据驱动**（订阅 → 增量 `applyOps`）在三端生效 | 进行 | `file:packages/render-backend/src/screen-runtime.ts`（relink 已就绪）· Android 链路已通 | 本轮 |
 | R4 | **导航**（`@tap` → handler → `router.push`）走共享 router（`createAppNavigation`） | 进行 | `file:hosts/shared/bridge/entry-superapp.ts`（`$nav`→push+mount）· **Android 真机打通**（点首页→跳页） | 本轮 |
-| R5 | 真实**首页**（列全部页 + 可点跳转）：Web/MP 原生可点 + App 三端经统一运行期可点 | 进行 | `file:css-conformance/pages/index.vue`（Web/MP 落地页 + **Android 真机可点**）· iOS/鸿蒙待接 | 本轮 |
+| R5 | 真实**首页**（列全部页 + 可点跳转）：Web/MP 原生可点 + App 三端经统一运行期可点 | 进行 | `file:css-conformance/pages/index.vue`（Web/MP 落地页 + **Android 真机可点** + **Android 独立 App `dev.proteus.cssconf`**：`build-and-run.sh --css`）· iOS 运行期上屏 | 本轮 |
 | R6 | 手势 **content-local id 与 screen-mount 重映射**的对应关系可反查（跨屏点击定节点） | 已落地 | `cmd:npx vitest run tests/screen-runtime.test.ts`（恒等 + base 双模式 + 破坏性） | 本轮 · 最大风险 |
 
 ## 二、三端宿主胶水收敛（各端只做平台原语）
