@@ -1634,3 +1634,11 @@
 **⑤ 诚实边界**：一次性 VM ⇒ 跨交互**实例态不保留**（计数不累加）；**导航可用**。持久交互态需先解持久 VM 崩溃（登记）。
 **⑥ 教训**：受平台约束时"约束"可转成设计（"一次调用跑完整链"让一次性 VM 够用）；napi 返回值须与**实际状态**一致（路由 current ≠ 实际渲染屏）。
 
+602. **★★★滚动语义对齐系统 App（返回保留滚动 / 前进重置）+ 鸿蒙补齐返回**：
+**① 用户指令**：「对，鸿蒙的也补齐，包括滑到返回这个」（承上一条「返回去的页面滚动进度应该保留」）。
+**② 滚动语义（三端）**：之前一律 `resetScroll`（每次挂载归零）过度 ⇒ 改为**系统 App 语义**——共享运行期 `createSuperappRuntime` 用**导航历史栈**判断方向：返回（目标在当前之前）⇒ `setScroll(该页上次值)`；前进 ⇒ `setScroll(0)`。原语 `resetScroll` → `getScroll`/`setScroll`（Android 含 quickjs_jni C 绑定；iOS 经 applyContentOffset）。
+**③ 鸿蒙补齐**：导航栈 + 每屏滚动进度放 **ArkTS 侧**（一次性 VM，JS 路由态不跨调用保留）；`@Entry` 的 `onBackPress` 承载**系统返回**（返回键 / 边缘滑返都触发）⇒ goBack；★撤销自绘边缘滑返（与系统边缘手势冲突——实测调出"最近任务"）。
+**④ 判据**：Android 真机 `scroll→740 → tap(前进 scrollY=0) → back(scrollY=740)`；鸿蒙真机 `tap → RENDER page=text → 系统返回 → RENDER page=index`。
+**⑤ 诚实边界**：鸿蒙**滚动值**未设备验证（uitest swipe 不达 ArkUI onTouch；逻辑同 Android/iOS，Android 已设备验证）。
+**⑥ 教训**：跨屏共享的**视图状态**（滚动偏移）不是"每次归零"，而是"按导航方向 保留/重置"——**语义由平台无关的共享层统一**（各端只提供 get/set 原语）；自绘手势不得与系统手势冲突（先查系统是否已提供）。
+
