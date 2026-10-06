@@ -222,6 +222,8 @@ export function mapStyleIRToApp(fields: Record<string, unknown>): AppMappingResu
         'alignItems', 'alignContent', 'alignSelf', 'boxSizing', 'whiteSpace',
         // ★★★justify-self 项（2026-10-06）：网格项行内轴自对齐（字符串枚举，内核 DTO 通道）
         'justifySelf',
+        // ★★★place-items/justify-items 项（2026-10-08）：网格容器内子项行内轴对齐（字符串枚举，内核 DTO 通道）
+        'justifyItems',
         // ★★★grid-auto-flow 项（2026-10-08）：枚举字符串（内核 DTO 通道）
         'gridAutoFlow',
         // ★★★word-break 项（2026-10-06）：行内断词策略（字符串枚举，透传宿主文本引擎）

@@ -1443,3 +1443,15 @@
 **④ 判据**：`css:verify overscroll-behavior-y`/`-x` 三段通过（implemented + parity/ends n/a）· 视觉结论**登记**（引用 p-scrollable 组件消费先例）· 清单再生成一致（`--check` 绿）· `check:css-capability-alignment`/`stats`/`content` 全绿。
 **⑤ 诚实边界**：a) **App 无嵌套滚动**（单一页面滚动，滚动行为属性无适用面；若未来做「独立可滚动子容器 + 滚动链」则需重新评估）；b) **Skyline 官方表未收录**（引擎锁死）；c) 本项**不引入编译器字段**、不新写渲染代码。
 **⑥ 影响**：`scripts/gen-css-feature-inventory.mjs`（override + 归类注释）· `docs/generated/css-feature-inventory.{json,md}`（重生成）· `docs/generated/css-acceptance/overscroll-behavior-{x,y}.json`（visual 登记）；**下一项**：按 css:next 取。
+584. **★★★CSS 逐项 · place-items（place-items 简写 + justify-items 长手，P0·1× · CSS Box Alignment 3）——纯内核布局（taffy 原生）+ 简写展开**：
+**① 用户指令**：「继续」（css:next 取 `place-items`，P0 · 1×）。
+**② 侦察（先取证）**：`place-items: <align-items> <justify-items>` 是**简写**（align 前、justify 后；单值 ⇒ 两轴同）；语料 1×（p-formfactor hero 媒体 `place-items: center end`——媒体右中构图）。`align-items` 已支持；**`justify-items` 未支持**（内核 LStyle 无该字段，但 taffy `Style.justify_items` 原生存在）⇒ 本项 = 简写展开 + 补 `justify-items` 长手。
+**③ 交付（全链）**：
+  · **契约四同步**：新级别 `JustifyItems`（值集 = `JustifySelf` **去 `auto`**——justify-items 不接受 auto）；contracts + runtime PROP_TYPES（`JUSTIFY_ITEMS` 集）+ compiler 封闭集 + 注册表 `VALUE_TYPE_BY_LEVEL`。
+  · **编译器**：`place-items` 简写展开（splitTopLevelSpaces → alignItems + justifyItems；值校验失败 ⇒ 诊断跳过）+ `justify-items` 长手（加入枚举校验分支）；CSE `ENUM_IR` 直通 `justifyItems`。
+  · **内核 Rust**：`LStyle.justify_items` + `NodeDto` + ffi 绑定 + `taffy_engine::parse_justify_items`（`self-*` 归一为 start/end——AlignItems 无 self 变体；`normal`⇒stretch）→ `out.justify_items`（仅 grid 容器消费）。新增内核单测 `grid_justify_items_end`（单列网格 + justify-items:end ⇒ 子项靠右 x≈240）——**9/9 过**。
+  · **一致性链**：snapshot/coverage/appliers(app 枚举通道)/probes-web(读 computed)/skyline（透传，同 justify-self 口径）；宿主 Android `LAYOUT_KEYS` + 能力源 feature（`place-items` probe = place-items + justify-items）。
+**④ ★配套断言同步（test:coupled 当场抓出）**：新字段 `justifyItems` 未登记 surface 测试样例 ⇒ 补一行样例（返回 center）；web-probe golden 新增 `justifyItems` 探针键（PROTEUS_UPDATE_GOLDEN=1 刷新）。
+**⑤ 判据（四端全过 · #569 铁律）**：`css:verify place-items` + `justify-items` 三段全绿（简写→parity/ends n/a）· 视觉登记 · **四端真机**：Android/iOS/鸿蒙 独立子代理逐案例复核 **4/4 PASS**（A 右中 / B 居中 / C 左中——三案相异且与 Web 一致）· MP ◐（Skyline 无 Grid 容器）· probe 新页四端 PASS · 全量 **5325/5325** · 内核 9/9 · coupled 绿 · 门禁全绿。
+**⑥ 诚实边界**：`baseline` 按 start 近似（同 justify-self ⇒ 未列封闭集，诊断跳过）；仅 grid 容器生效（flex 下被忽略，taffy=Web 语义）；Skyline 无 grid 族（主承载端 = App）。
+**⑦ 影响**：`packages/layout-core-rust`（style/ffi/taffy_engine + tests/grid）· `packages/compiler`（vapor/template + cse/compute）· `packages/consistency`（snapshot/coverage/appliers/probes）· `packages/contracts`/`packages/runtime` · `hosts/android`（LAYOUT_KEYS）· 能力源 · 验收页 `place-items.vue` · golden；**下一项**：按 css:next 取。

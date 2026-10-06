@@ -1200,6 +1200,8 @@ public final class VaporRenderHost {
             // ★★★justify-self 项（2026-10-06）：**网格项行内轴自对齐** —— 内核（taffy Style.justify_self）已消费，
             //   漏登记 ⇒ 请求树不带 ⇒ 内核静默用默认（真机实测：center/end 案全落 start——白名单漏项的老款缺陷）。
             "justifySelf",
+            // ★★★place-items/justify-items 项（2026-10-08）：网格容器内子项行内轴对齐（内核 taffy justify_items 消费）
+            "justifyItems",
             // ★★批次 41 补登记（同款漏项，本轮审计顺带抓出）：grid-column/grid-row 线号放置——
             //   内核（taffy Line<GridPlacement>）已消费但本白名单一直没登记 ⇒ 端上放置失效（静默）。
             "gridColumn", "gridRow",

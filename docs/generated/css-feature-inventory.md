@@ -1,16 +1,15 @@
 # CSS Web 全量能力清单（自动生成——勿手改；生成器 scripts/gen-css-feature-inventory.mjs）
 
 > 总 949 项（property 651 · selector 144 · at-rule 19 · function 105 · unit 30）
-> 实现：**not-started** 536 · **excluded** 280 · **implemented** 130 · **partial** 3
-> 优先级：P2 114 · excluded 280 · P0 12 · done 130 · P1 413
-> ★**可推项（非已实现/非排除）**：539（其中 **P0 12**）
+> 实现：**not-started** 534 · **excluded** 280 · **implemented** 132 · **partial** 3
+> 优先级：P2 114 · excluded 280 · P0 11 · done 132 · P1 412
+> ★**可推项（非已实现/非排除）**：537（其中 **P0 11**）
 
 ## P0 —— 语料在用但未实现（真实需求，最优先）
 
 | 属性 | MDN 状态 | 分组 | 语料用量 | 实现 | 说明 |
 |---|---|---|---|---|---|
 | `-webkit-line-clamp` | standard | WebKit Extensions, CSS Overflow | 4 | not-started | — |
-| `place-items` | standard | CSS Box Alignment | 1 | not-started | — |
 | `transition-property` | standard | CSS Transitions | 1 | not-started | — |
 | `transition-timing-function` | standard | CSS Transitions | 1 | not-started | — |
 | `will-change` | standard | CSS Will Change | 1 | not-started | — |
@@ -88,7 +87,6 @@
 | `interest-delay` | CSS Basic User Interface | not-started |
 | `interest-delay-end` | CSS Basic User Interface | not-started |
 | `interest-delay-start` | CSS Basic User Interface | not-started |
-| `justify-items` | CSS Box Alignment | not-started |
 | `line-break` | CSS Text | not-started |
 | `line-clamp` | CSS Overflow | not-started |
 | `object-position` | CSS Images | not-started |
@@ -99,5 +97,6 @@
 | `perspective-origin` | CSS Transforms | not-started |
 | `place-content` | CSS Box Alignment | not-started |
 | `place-self` | CSS Box Alignment | not-started |
+| `reading-flow` | CSS Display | not-started |
 
 （P2 与 excluded 全量见 JSON；本 MD 只列推进面）

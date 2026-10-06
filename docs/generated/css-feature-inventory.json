@@ -17,20 +17,20 @@
       "unit": 30
     },
     "byImpl": {
-      "not-started": 536,
+      "not-started": 534,
       "excluded": 280,
-      "implemented": 130,
+      "implemented": 132,
       "partial": 3
     },
     "byPriority": {
       "P2": 114,
       "excluded": 280,
-      "P0": 12,
-      "done": 130,
-      "P1": 413
+      "P0": 11,
+      "done": 132,
+      "P1": 412
     },
-    "actionable": 539,
-    "actionableP0": 12
+    "actionable": 537,
+    "actionableP0": 11
   },
   "entries": [
     {
@@ -9234,19 +9234,19 @@
       "inherited": false,
       "initial": "legacy",
       "syntax": "normal | stretch | <baseline-position> | <overflow-position>? [ <self-position> | left | right ] | legacy | legacy && [ left | right | center ] | anchor-center",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "implemented",
+      "implNote": "IR 注册表在册（scope=semantic · 矩阵 JustifyItems）",
       "channel": null,
       "evidencedBy": {
-        "inIrRegistry": false,
-        "irScope": null,
-        "inCompilerFold": false,
-        "matrixLevel": null,
+        "inIrRegistry": true,
+        "irScope": "semantic",
+        "inCompilerFold": true,
+        "matrixLevel": "JustifyItems",
         "webSupport": null
       },
       "usage": 0,
-      "priority": "P1",
-      "acceptance": "none"
+      "priority": "done",
+      "acceptance": "pending"
     },
     {
       "id": "justify-self",
@@ -11989,8 +11989,8 @@
         "justify-items"
       ],
       "syntax": "<'align-items'> <'justify-items'>?",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "implemented",
+      "implNote": "**简写展开**：alignItems + justifyItems——place-items 简写 → align-items + justify-items（单值 ⇒ 两轴同）（证据：vapor/template.ts（place-items 分支）+ 内核 taffy justify_items）",
       "channel": null,
       "evidencedBy": {
         "inIrRegistry": false,
@@ -12000,8 +12000,8 @@
         "webSupport": null
       },
       "usage": 1,
-      "priority": "P0",
-      "acceptance": "none"
+      "priority": "done",
+      "acceptance": "pending"
     },
     {
       "id": "place-self",

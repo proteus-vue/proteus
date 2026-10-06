@@ -32,6 +32,11 @@ export type StylePropLevel =
   //   与 FlexAlign 不同轴：值集含 start/end/self-*（CSS `<self-position>` 全集）。语料 9 处全在 grid 上下文。
   //   四同步（INV-CE-07）：本表 + runtime PROP_TYPES/narrowing + compiler 静态校验 + 注册表 VALUE_TYPE_BY_LEVEL。
   | 'JustifySelf'
+  // ★★★place-items/justify-items 项（2026-10-08 · css:next P0·1× · CSS Box Alignment 3）：**网格容器内所有子项**的
+  //   「行内轴」对齐（= CSS Box Alignment 的 `justify-items`；`place-items: <align-items> <justify-items>` 简写展开）。
+  //   值集 = `<self-position>`（**无 `auto`**——justify-items 不接受 auto，故独立级别）。
+  //   四同步（INV-CE-07）：本表 + runtime PROP_TYPES + compiler 静态校验 + 注册表 VALUE_TYPE_BY_LEVEL。
+  | 'JustifyItems'
   // ★★★grid-auto-flow 项（2026-10-08 · css:next P0·3× · CSS Grid）：**自动放置方向/密度**。
   //   值集 = 四端可表达子集（row / column / dense / column dense）；内核 taffy `GridAutoFlow` 原生（row/column/rowDense/columnDense）。
   //   四同步（INV-CE-07）：本表 + runtime PROP_TYPES + compiler 静态校验 + 注册表 VALUE_TYPE_BY_LEVEL。
@@ -107,6 +112,8 @@ export const STYLE_PROP_LEVELS = {
   // ★★★justify-self 项（2026-10-06）：网格项行内轴自对齐（CSS Box Alignment 3 `<self-position>` 集；
   //   仅在 grid 容器内生效——flex 容器下按 Web 标准本就不生效，内核 taffy 同语义）
   justifySelf: 'JustifySelf',
+  // ★★★place-items/justify-items 项（2026-10-08）：网格容器内子项行内轴对齐（值集 = JustifySelf 去 auto）
+  justifyItems: 'JustifyItems',
   // ★★★grid-auto-flow 项（2026-10-08）：类 grid 容器的自动放置（row/column/dense/column dense）
   gridAutoFlow: 'GridAutoFlow',
   // ★★★outline 族项（2026-10-08）：轮廓（环）+ 偏移（盒外/内）

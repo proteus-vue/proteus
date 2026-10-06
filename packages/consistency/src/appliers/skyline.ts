@@ -167,6 +167,12 @@ export function mapStyleIRToSkyline(fields: Record<string, unknown>, opts: Skyli
         put(field, 'justify-self', value)
         continue
       }
+      // ★★★place-items/justify-items 项（2026-10-08）：**原样透传**（与 justify-self 同口径；Skyline 官方表无 grid 族，
+      //   本项以 App 为主承载端）。
+      if (field === 'justifyItems') {
+        put(field, 'justify-items', value)
+        continue
+      }
       put(field, kebab(field), value)
       continue
     }

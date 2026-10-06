@@ -87,6 +87,8 @@ const VALUE_TYPE_BY_LEVEL = {
   JustifySelf: 'enum',
   // ★★★grid-auto-flow 项（2026-10-08）：自动放置枚举（与 runtime PROP_TYPES.GridAutoFlow 同集）
   GridAutoFlow: 'enum',
+  // ★★★place-items/justify-items 项（2026-10-08）：网格容器内子项行内轴对齐（枚举，与 runtime PROP_TYPES.JustifyItems 同集）
+  JustifyItems: 'enum',
   // ★★★outline 族项（2026-10-08）：轮廓宽度/偏移（长度）
   OutlineWidth: 'length',
   OutlineOffset: 'length',

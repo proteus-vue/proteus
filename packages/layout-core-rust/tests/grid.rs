@@ -286,3 +286,24 @@ fn grid_minmax_and_auto_tracks() {
     let x2b = out2.rect_of(ids2[1]).unwrap().x;
     assert!(x2b > 1.0, "grid-auto-columns 隐式第 2 列应右移（x>0），实际 {}", x2b);
 }
+
+// ★★★place-items/justify-items 项（2026-10-08）：网格容器内子项「行内轴」对齐（justify-items）。
+//   `justify-items: end` ⇒ 单列网格里的子项靠右（与 Web 同）。
+#[test]
+fn grid_justify_items_end() {
+    let mut tree = LayoutTree::new();
+    let mut root_style = LStyle { width: Some(300.0), height: Some(100.0), ..Default::default() };
+    root_style.display = Display::Grid;
+    root_style.grid_template_columns = Some("300px".to_string());
+    root_style.justify_items = Some("end".to_string());
+    let root = tree.push(LNode::new(1, root_style));
+    // 定宽 60 的子项 ⇒ justify-items:end ⇒ 靠右（x = 300-60 = 240）
+    let leaf = LStyle { width: Some(60.0), height: Some(40.0), ..Default::default() };
+    let c = tree.push(LNode::new(2, leaf));
+    tree.add_child(root, c);
+    tree.roots.push(root);
+    let mut engine = TaffyEngine::new();
+    let out = engine.layout(&mut tree, RootConstraint::definite(300.0, 100.0));
+    let x = out.rect_of(c).unwrap().x;
+    assert!((x - 240.0).abs() < 1.0, "justify-items:end ⇒ 子项靠右 x≈240，实际 {}", x);
+}

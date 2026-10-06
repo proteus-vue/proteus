@@ -44,6 +44,8 @@ const OVERFLOW = ['visible', 'hidden', 'scroll', 'auto']
  *   `baseline`/`left`/`right` 未列 ⇒ 诊断跳过（taffy 在 grid 里把 baseline 按 start 处理 = 与 Web 不符，不静默近似）。
  */
 const JUSTIFY_SELF = ['auto', 'normal', 'start', 'end', 'flex-start', 'flex-end', 'self-start', 'self-end', 'center', 'stretch']
+/** ★★★place-items/justify-items 项（2026-10-08）：`justify-items` 值集（= `<self-position>`，**无 `auto`**）——容器级对齐。 */
+const JUSTIFY_ITEMS = ['normal', 'start', 'end', 'flex-start', 'flex-end', 'self-start', 'self-end', 'center', 'stretch']
 /** ★★★grid-auto-flow 项（2026-10-08）：自动放置方向/密度（四端可表达子集；Web `row dense` 归一为 `dense`）。 */
 const GRID_AUTO_FLOW = ['row', 'column', 'dense', 'column dense']
 /**
@@ -73,6 +75,8 @@ export const PROP_TYPES = {
   BorderStyle: isEnum(BORDER_STYLE),
   Overflow: isEnum(OVERFLOW),
   JustifySelf: isEnum(JUSTIFY_SELF),
+  // ★★★place-items/justify-items 项（2026-10-08）：网格容器内子项行内轴对齐（值集 = JustifySelf 去 auto）
+  JustifyItems: isEnum(JUSTIFY_ITEMS),
   GridAutoFlow: isEnum(GRID_AUTO_FLOW),
   // ★★★outline 族项（2026-10-08）：轮廓宽度/偏移（长度，可负——偏移允许负值）
   OutlineWidth: isLength,

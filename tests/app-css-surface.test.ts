@@ -95,6 +95,8 @@ describe('★App CSS 支持面 · ② SSOT 与折叠实现同源（真折叠，�
       if (f === 'overflowX' || f === 'overflowY') return 'hidden'
       // ★★★justify-self 项（2026-10-06）：网格项行内轴自对齐（枚举样例——折叠器直传内核 DTO）
       if (f === 'justifySelf') return 'center'
+      // ★★★place-items/justify-items 项（2026-10-08）：网格容器内子项行内轴对齐
+      if (f === 'justifyItems') return 'center'
       // ★★★grid-auto-flow 项（2026-10-08）：类 grid 容器的自动放置
       if (f === 'gridAutoFlow') return 'column'
       // ★★★grid-template-areas 项（2026-10-08）：命名区域模板（折叠为浏览器形态串）
