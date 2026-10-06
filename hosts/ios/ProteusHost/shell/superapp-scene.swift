@@ -17,16 +17,33 @@
 //   ④ 底部 Tab 栏（真实 UIButton——iOS 的原生 chrome，MP 由原生 tabBar 提供，同语义）
 //   ⑤ drive（验证脚本用）：host 驱动切 tab → 重绘 → 落 `superapp.json` 证据
 //
-// 【诚实边界（与 PROJECT_MEMORY 一致）】页面内容 = 编译产物静态结构（结构/样式/文本）；
-//   全实时 slot/Vapor 运行时（响应式/事件回写）是下一阶段。本场景证明"真实应用壳 + 导航 + 真机渲染 + 切 tab"。
+// 【★B1（2026-10-09）】页面内容已改为 **统一运行期**实例化（`createScreenRuntime`：实例化 + 订阅 +
+//   手势派发 + `$nav` 导航——见 `packages/render-backend/src/screen-runtime.ts`），交互/导航走共享层。
+//   本场景证明"真实应用壳 + 运行期渲染 + 导航（含右滑返回）+ 切 tab"。
 
 import Foundation
 import JavaScriptCore
 import UIKit
 
+/// ★★★B1（用户：「测试不能右滑返回」）：**边缘右滑返回**（iOS 标准返回手势）的目标-动作桥。
+///   `UIScreenEdgePanGestureRecognizer` 需要 `NSObject` target（不能用闭包）⇒ 本类承接收手，
+///   在 `.ended` 且右滑足够位移时触发 `onBack`。
+private final class SwipeBackTarget: NSObject {
+    let onBack: () -> Void
+    init(_ onBack: @escaping () -> Void) { self.onBack = onBack }
+    @objc func handle(_ g: UIScreenEdgePanGestureRecognizer) {
+        if g.state == .ended {
+            let dx = g.translation(in: g.view).x
+            if dx > 60 { onBack() }   // 右滑 ≥60pt ⇒ 返回
+        }
+    }
+}
+
 final class SuperappScene: NSObject {
     private static var evalJs: ((String) -> String)?
     private static var reportDir: URL { FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0] }
+    /** ★保留右滑返回手势 target（weak 语义 ⇒ 必须强引用，否则被回收后手势不触发）。 */
+    private static var swipeBackTarget: SwipeBackTarget?
 
     private static weak var bridgeRef: SelfDrawBridge?
     private static var container: UIView?
@@ -81,6 +98,18 @@ final class SuperappScene: NSObject {
         // ⑥ 上屏入口页 + 建 Tab 栏
         renderCurrent()
         buildTabBar()
+        // ★★★安全区修复（用户抓出 iOS 首页未避开状态栏）：`run` 在**布局前**同步调用 ⇒ 此刻
+        //   `view.safeAreaInsets` 尚未就绪 ⇒ `--pf-inset-top`=0 ⇒ 内容压状态栏。
+        //   ⇒ 下一 runloop（布局完成后）**重渲一次**（与 Android `contentHost.post` 同义；非盲等——
+        //     是"布局后重渲"这一确定性事件）。
+        DispatchQueue.main.async { renderCurrent() }
+        // ★★★右滑返回（用户：「测试不能右滑返回」）：边缘右滑 → `__proteusSuperappBack()` → 重绘。
+        //   （iOS 标准 `UIScreenEdgePanGestureRecognizer`；与系统返回手势同语义。）
+        let backTarget = SwipeBackTarget { goBack() }
+        SuperappScene.swipeBackTarget = backTarget
+        let edgePan = UIScreenEdgePanGestureRecognizer(target: backTarget, action: #selector(SwipeBackTarget.handle(_:)))
+        edgePan.edges = .left
+        containerView.addGestureRecognizer(edgePan)
 
         // ⑦ 分步 asyncAfter 链（JSC 微任务需主 runloop 轮转才排空——同步连续 eval 会让路由/执行器
         //    的 await 续体停住，见 AppStackScene 同款踩坑）。drive 模式逐 tab 切换 + 重绘 + 落证据。
@@ -273,6 +302,16 @@ final class SuperappScene: NSObject {
             renderCurrent()
             highlightTab(cur)
             switchLog.append(["tap": name, "current": cur, "ok": cur == name, "via": via])
+        }
+    }
+
+    /// ★★★B1：**返回上一屏**（右滑返回手势入口）——`__proteusSuperappBack()`（共享 router.back）→ 重绘。
+    private static func goBack() {
+        _ = evalJs?("__proteusSuperappBack()")
+        DispatchQueue.main.async {
+            renderCurrent()
+            highlightTab(currentName())
+            switchLog.append(["tap": "back", "current": currentName(), "ok": true, "via": "swipe-back"])
         }
     }
 

@@ -1613,3 +1613,10 @@
 **⑥ 范围外（显式登记，非本轮）**：G-39 Flutter/鸿蒙宿主 · G-41 五宿主真机接入 · G-42 生产验证 · G-45 dev-host B4-B6 · runtime 三端独立发布包（官方登记"未来需求非当前瓶颈"）。
 **⑦ 教训**：**「引擎边界/能力边界」具名有时效**（#597 同源）；**"做完了吗"必须机器可判定**（无单一事实源 = "看起来做了一半"的根因）；**先立账再动手**。
 
+599. **★★★用户真机三问题修复：iOS 首页安全区（布局前渲染）+ iOS 右滑返回 + Android 独立 CSS 验收应用（--css 变体）**：
+**① 用户指令**：「测试iOS首页顶部没有避开状态栏安全区；而且测试不能右滑返回；安卓的话没有像给动画引擎做演示demo那种固定的桌面软件，现在好像是在 Proteus LayoutCore 装置里面的」。
+**② iOS 安全区根因（取证）**：`SuperappScene.run` 在 `viewDidLoad` 期**同步**渲染 ⇒ `view.safeAreaInsets` 未就绪 ⇒ `--pf-inset-top=0`（Android 同场景用 `contentHost.post` 延到布局后）。⇒ 修：`run()` 尾 `DispatchQueue.main.async { renderCurrent() }`；临时日志实测运行期 `top=47.0/bottom=34.0`，首帧标题顶 67.3pt（>47 安全区）。
+**③ iOS 右滑返回**：加 `UIScreenEdgePanGestureRecognizer(.left)` → 右滑 ≥60pt → `__proteusSuperappBack()` → 重绘；`NSObject` target 强引用（闭包 target 会被回收）。
+**④ Android 独立应用**：`build-and-run.sh` 加 `--css`（照 `--lights`/`--flip` 的 sed 清单生成）——包名 `dev.proteus.cssconf`、标签「CSS 验收」、launcher **FQN** `dev.proteus.layoutcore.SuperappActivity`（换包名后相对名会错）。真机判据：`dev.proteus.cssconf` 与 `layoutcore` 并存、`resolve-activity` 指向 SuperappActivity、`monkey -c LAUNCHER` 启动 → `page=index` + 截图。
+**⑤ 教训**：壳**首帧渲染时机**决定安全区是否解析（跨端同语义须一致）；iOS 手势 target 须强引用；换包名清单的 launcher 须 FQN。
+
