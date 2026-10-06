@@ -180,10 +180,28 @@ impl TaffyEngine {
             if let Some(gaf) = style.grid_auto_flow.as_deref() {
                 out.grid_auto_flow = parse_grid_auto_flow(gaf);
             }
+            // ★★★grid-template-areas 项（2026-10-08）：命名区域模板 → taffy GridTemplateAreas
+            //   （taffy 把每个区域名解析成 `{名}-start`/`{名}-end` 命名线，供子项 NamedLine 引用）
+            if let Some(a) = style.grid_template_areas.as_deref() {
+                if let Some(t) = parse_grid_template_areas(a) {
+                    out.grid_template_areas = Some(t);
+                }
+            }
         }
 
         // ★批次 41：grid item 放置（grid-column / grid-row 线号 → taffy Line<GridPlacement>）——
         //   对**容器里的 item** 生效（taffy 忽略非 grid 子项的该属性，故无需 display 门控）。
+        //   ★★★grid-area 项（2026-10-08）：命名区域引用 `grid-area: <name>` ⇒ 四边同名命名线（taffy
+        //   NamedLineResolver 解析为区域跨列/跨行的 start/end）。★CSS 语义：长手 grid-column/grid-row
+        //   **覆盖** grid-area 的对应轴 ⇒ 先落命名线、再由下面的长手覆盖（顺序即优先级）。
+        if let Some(name) = style.grid_area.as_deref() {
+            let line = taffy::Line {
+                start: taffy::GridPlacement::NamedLine(name.to_string(), 0),
+                end: taffy::GridPlacement::NamedLine(name.to_string(), 0),
+            };
+            out.grid_column = line.clone();
+            out.grid_row = line;
+        }
         if let Some((s, e)) = style.grid_column {
             out.grid_column = taffy::Line {
                 start: taffy::GridPlacement::from_line_index(s),
@@ -1348,6 +1366,69 @@ fn parse_grid_tracks(s: &str) -> Vec<taffy::GridTemplateComponent<String>> {
         // 其余（auto/minmax/…）⇒ 跳过（不猜）
     }
     out
+}
+
+/// ★★★grid-template-areas 项（2026-10-08）：命名区域模板 → taffy `GridTemplateAreas`。
+///   规范串 = 行以 `;` 分隔、每行区域名以空格分隔（`.` = 空单元），如 `"media info;rec rec"`。
+///   线号语义（与 taffy 一致）：区域占单元格 [r0..r1]×[c0..c1] ⇒ 线 = start=(min+1) / end=(max+2)。
+fn parse_grid_template_areas(s: &str) -> Option<taffy::GridTemplateAreas<String>> {
+    // 形态① 浏览器/CSS：双引号逐行 `"a b" "c c"`（也接受单引号）；形态② 内部规范：`;` 分行 `a b;c c`。
+    // 两形态都先切成「行（Vec<单元格名>）」再统一处理。
+    let rows: Vec<Vec<String>> = if s.contains('"') || s.contains('\'') {
+        // 提取所有引号串（单/双），每个引号串 = 一行
+        let mut out: Vec<Vec<String>> = Vec::new();
+        let mut cur = String::new();
+        let mut quote: Option<char> = None;
+        for ch in s.chars() {
+            match quote {
+                Some(q) => {
+                    if ch == q { out.push(cur.split_whitespace().map(|x| x.to_string()).collect()); cur.clear(); quote = None; }
+                    else { cur.push(ch); }
+                }
+                None => { if ch == '"' || ch == '\'' { quote = Some(ch); } }
+            }
+        }
+        out.into_iter().filter(|r| !r.is_empty()).collect()
+    } else if s.trim().eq_ignore_ascii_case("none") || s.trim().is_empty() {
+        return None;
+    } else {
+        s.split(';')
+            .map(|r| r.split_whitespace().map(|x| x.to_string()).collect::<Vec<String>>())
+            .filter(|r| !r.is_empty())
+            .collect()
+    };
+    if rows.is_empty() { return None; }
+    let row_count = rows.len() as u16;
+    let column_count = rows.iter().map(|r| r.len()).max().unwrap_or(0) as u16;
+    let mut names: Vec<String> = Vec::new();
+    let mut bounds: Vec<(u16, u16, u16, u16)> = Vec::new(); // (rmin, rmax, cmin, cmax) 单元格下标
+    for (ri, row) in rows.iter().enumerate() {
+        for (ci, name) in row.iter().enumerate() {
+            if name == "." { continue; }
+            if let Some(idx) = names.iter().position(|n| n == name) {
+                let b = &mut bounds[idx];
+                b.0 = b.0.min(ri as u16);
+                b.1 = b.1.max(ri as u16);
+                b.2 = b.2.min(ci as u16);
+                b.3 = b.3.max(ci as u16);
+            } else {
+                names.push(name.clone());
+                bounds.push((ri as u16, ri as u16, ci as u16, ci as u16));
+            }
+        }
+    }
+    let areas = names
+        .into_iter()
+        .zip(bounds.into_iter())
+        .map(|(n, (rmin, rmax, cmin, cmax))| taffy::GridTemplateArea {
+            name: n,
+            row_start: rmin + 1,
+            row_end: rmax + 2,
+            column_start: cmin + 1,
+            column_end: cmax + 2,
+        })
+        .collect();
+    Some(taffy::GridTemplateAreas { areas, row_count, column_count })
 }
 
 /// ★批次 11：`align-content`（多行容器行间对齐；open string，未知值落默认 stretch）

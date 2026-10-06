@@ -169,6 +169,12 @@ pub(crate) struct NodeDto {
     pub(crate) grid_column: Option<GridLineDto>,
     /// ★批次 41：`grid-row` 线号放置
     pub(crate) grid_row: Option<GridLineDto>,
+    /// ★★★grid-template-areas 项（2026-10-08）：命名区域模板（`"media info;rec rec"`；行 `;` 分隔）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) grid_template_areas: Option<String>,
+    /// ★★★grid-area 项（2026-10-08）：命名区域引用（子项 `grid-area: <name>`）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) grid_area: Option<String>,
     /// ★★**背景色**（2026-10-01，颜色动画的**底色**来源）——接受 CSS 形态：
     ///   `#RGB` / `#RRGGBB` / `#AARRGGBB` / `#RRGGBBAA`（后两者靠长度区分）。
     ///
@@ -324,6 +330,8 @@ impl NodeDto {
             grid_auto_flow: None,
             grid_column: None,
             grid_row: None,
+            grid_template_areas: None,
+            grid_area: None,
             overflow: None,
             // ★颜色：blob 形态暂无这两个字段（按位图解码；未提供 ⇒ 该节点不进颜色轨道）
             background_color: None,
@@ -794,6 +802,8 @@ pub(crate) fn style_from_dto(dto: &NodeDto) -> Result<LStyle, String> {
     style.grid_auto_flow = dto.grid_auto_flow.clone();
     style.grid_column = dto.grid_column.as_ref().map(|g| (g.start, g.end));
     style.grid_row = dto.grid_row.as_ref().map(|g| (g.start, g.end));
+    style.grid_template_areas = dto.grid_template_areas.clone();
+    style.grid_area = dto.grid_area.clone();
     if let Some(o) = dto.overflow.as_deref() {
         style.overflow = match o {
             "visible" => Overflow::Visible,

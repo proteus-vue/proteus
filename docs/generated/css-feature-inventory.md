@@ -1,9 +1,9 @@
 # CSS Web 全量能力清单（自动生成——勿手改；生成器 scripts/gen-css-feature-inventory.mjs）
 
 > 总 949 项（property 651 · selector 144 · at-rule 19 · function 105 · unit 30）
-> 实现：**not-started** 543 · **excluded** 280 · **implemented** 123 · **partial** 3
-> 优先级：P2 115 · excluded 280 · P0 18 · done 123 · P1 413
-> ★**可推项（非已实现/非排除）**：546（其中 **P0 18**）
+> 实现：**not-started** 542 · **excluded** 280 · **implemented** 124 · **partial** 3
+> 优先级：P2 115 · excluded 280 · P0 17 · done 124 · P1 413
+> ★**可推项（非已实现/非排除）**：545（其中 **P0 17**）
 
 ## P0 —— 语料在用但未实现（真实需求，最优先）
 
@@ -13,7 +13,6 @@
 | `container-type` | standard | CSS Conditional Rules | 1 | not-started | — |
 | `grid-auto-columns` | standard | CSS Grid Layout | 1 | not-started | — |
 | `grid-auto-rows` | standard | CSS Grid Layout | 1 | not-started | — |
-| `grid-template-areas` | standard | CSS Grid Layout | 2 | not-started | 未接：命名区域（证据：未接（CSE 支持 template-columns/rows；areas 未接）） |
 | `overscroll-behavior-y` | standard | CSS Overscroll Behavior | 1 | not-started | — |
 | `place-items` | standard | CSS Box Alignment | 1 | not-started | — |
 | `text-shadow` | standard | CSS Text Decoration | 2 | not-started | 未接：文本阴影（证据：未接） |

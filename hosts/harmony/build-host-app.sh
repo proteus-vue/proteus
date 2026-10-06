@@ -69,6 +69,19 @@ if grep -q '"signingConfigs": \[\]' "$APP_DIR/build-profile.json5" 2>/dev/null; 
   echo
 fi
 
+# ── Rust 核静态库自动重建（★★★2026-10-08 · 真机实测抓出）：改 `packages/layout-core-rust` 后只重打 hap
+#   ⇒ 链的是**旧静态库** ⇒ 内核改动在鸿蒙端**静默不生效**（本轮 grid-template-areas：内容 JSON 带了字段，
+#   而核是 14:27 旧版 ⇒ 命名区不生效、退化为自动放置）。判据：**核源码新于静态库 ⇒ 自动重建**
+#   （whitelist/接线不靠记忆——同 check:host-kernel-keys 的纪律）。
+CORE="$APP_DIR/proteus_render/src/main/cpp/thirdparty/libproteus_layout_core.a"
+CORE_SRC="$ROOT/packages/layout-core-rust"
+if [ ! -f "$CORE" ] || [ -n "$(find "$CORE_SRC/src" "$CORE_SRC/Cargo.toml" -newer "$CORE" 2>/dev/null | head -1)" ]; then
+  echo "==> Rust 核静态库缺失或已过期——重建（build-rust-core.sh）"
+  bash "$HERE/build-rust-core.sh" 2>&1 | tail -3 || { echo "✗ Rust 核重建失败——中止（否则链旧核、改动静默失效）"; exit 2; }
+else
+  echo "==> Rust 核静态库是最新（跳过重建）"
+fi
+
 # ── 夹具再生成（★唯一事实源 → rawfile，可复现：SFC/订阅表一变，构建即刷新）──
 #   由 gen-fixtures.mjs 固化：stress-44（SFC 实例化）+ app-4050-tree（与 Android 同源复制）。
 echo "==> 夹具再生成"

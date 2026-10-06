@@ -92,6 +92,10 @@ const PROBE_VALUES = {
   'white-space': ['white-space: nowrap', 'whiteSpace', 'nowrap'],
   'word-break': ['word-break: break-all', 'wordBreak', 'break-all'],
   'justify-self': ['justify-self: center', 'justifySelf', 'center'],
+  // ★★★grid-template-areas 项（2026-10-08）：命名区域模板（浏览器 computed 形态 '"a b" "c c"'）
+  'grid-template-areas': ['grid-template-areas: "a b" "a c"', 'gridTemplateAreas', '"a b" "a c"'],
+  // ★★★grid-area 项（2026-10-08）：命名区引用（单标识符 ⇒ gridArea）
+  'grid-area': ['grid-area: a', 'gridArea', 'a'],
   // ★★★grid-auto-flow 项（2026-10-08）：自动放置（Web computed 归一：row dense → dense）
   'grid-auto-flow': ['grid-auto-flow: column', 'gridAutoFlow', 'column'],
   // ★★★outline 族项（2026-10-08）：轮廓偏移（Web computed 为 px）
@@ -100,7 +104,6 @@ const PROBE_VALUES = {
   'background-size': ['background-size: 50px 50px', 'backgroundSize', '50px 50px'],
   'background-position': ['background-position: 25px 10px', 'backgroundPosition', '25px 10px'],
   'background-repeat': ['background-repeat: no-repeat', 'backgroundRepeat', 'no-repeat'],
-  'grid-area': ['grid-area: 1 / 2 / 3 / 4', 'gridArea', { start: 1, end: 3 }],
   'background-color': ['background-color: #112233', 'backgroundColor', '#112233'],
   color: ['color: #445566', 'color', '#445566'],
   'border-radius': ['border-radius: 10px', 'borderRadius', 10],
@@ -144,7 +147,7 @@ if (!probe) {
     parity.irField = irField
     parity.irValue = irVal
     parity.computedProbe = Object.fromEntries(
-      Object.entries(computed).filter(([k]) => ['inset', 'top', 'right', 'bottom', 'left', 'overflow-x', 'overflow-y', 'white-space', 'word-break', 'justify-self', 'grid-area', 'background-color', 'color', 'border-radius', 'text-align', 'opacity', 'font-size', 'letter-spacing', 'line-height', 'flex-direction', 'justify-content', 'align-items', 'gap', 'border-bottom-width', 'border-top-width', 'border-left-width', 'border-right-width', 'border-bottom-color', 'border-top-color', 'border-left-color', 'border-right-color', 'border-style', 'border-top-style', 'border-bottom-style', 'border-top-left-radius', 'border-bottom-right-radius', 'background-size', 'background-position', 'background-repeat', 'grid-auto-flow', 'outline-width', 'outline-offset', 'outline-style'].includes(k)),
+      Object.entries(computed).filter(([k]) => ['inset', 'top', 'right', 'bottom', 'left', 'overflow-x', 'overflow-y', 'white-space', 'word-break', 'justify-self', 'grid-area', 'background-color', 'color', 'border-radius', 'text-align', 'opacity', 'font-size', 'letter-spacing', 'line-height', 'flex-direction', 'justify-content', 'align-items', 'gap', 'border-bottom-width', 'border-top-width', 'border-left-width', 'border-right-width', 'border-bottom-color', 'border-top-color', 'border-left-color', 'border-right-color', 'border-style', 'border-top-style', 'border-bottom-style', 'border-top-left-radius', 'border-bottom-right-radius', 'background-size', 'background-position', 'background-repeat', 'grid-auto-flow', 'grid-template-areas', 'grid-area', 'outline-width', 'outline-offset', 'outline-style'].includes(k)),
     )
     // 判据：IR 出值且与浏览器 resolved 语义一致（按形态）
     if (irVal === undefined) {

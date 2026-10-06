@@ -10,6 +10,7 @@ export const routes: RouteRecord[] = [
   { name: "border-style", path: "pages/border-style", component: "../pages/border-style.vue" },
   { name: "border", path: "pages/border", component: "../pages/border.vue", meta: {"title":"CSS 验收 · 边框"} },
   { name: "grid-auto-flow", path: "pages/grid-auto-flow", component: "../pages/grid-auto-flow.vue" },
+  { name: "grid-template-areas", path: "pages/grid-template-areas", component: "../pages/grid-template-areas.vue" },
   { name: "justify-self", path: "pages/justify-self", component: "../pages/justify-self.vue", meta: {"title":"CSS 验收 · 网格自对齐"} },
   { name: "outline", path: "pages/outline", component: "../pages/outline.vue" },
   { name: "overflow-page", path: "pages/overflow-page", component: "../pages/overflow-page.vue" },
@@ -40,6 +41,10 @@ export const screens: Record<string, AppScreenSpec> = {
     "name": "grid-auto-flow",
     "path": "pages/grid-auto-flow"
   },
+  "grid-template-areas": {
+    "name": "grid-template-areas",
+    "path": "pages/grid-template-areas"
+  },
   "justify-self": {
     "name": "justify-self",
     "path": "pages/justify-self"
@@ -67,7 +72,7 @@ export const screens: Record<string, AppScreenSpec> = {
 }
 
 /** 路由名数组（App 深栈/压测按它循环取屏——顺序与 routes 一致） */
-export const screenNames: string[] = ["background-position","border-style","border","grid-auto-flow","justify-self","outline","overflow-page","overflow","text","word-break"]
+export const screenNames: string[] = ["background-position","border-style","border","grid-auto-flow","grid-template-areas","justify-self","outline","overflow-page","overflow","text","word-break"]
 
 /** tab 根屏（meta.isTab）—— App 端 tab 语义（switchTab/reset）的合法目标 */
 export const tabNames: string[] = []
@@ -79,6 +84,7 @@ declare module '@proteus-vue/router/types' {
     'border-style': {  },
     'border': {  },
     'grid-auto-flow': {  },
+    'grid-template-areas': {  },
     'justify-self': {  },
     'outline': {  },
     'overflow-page': {  },

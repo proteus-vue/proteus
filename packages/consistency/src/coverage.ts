@@ -57,6 +57,9 @@ export const SEMANTIC_FIELD_SNAPSHOT_KEYS: Readonly<Record<string, readonly stri
   gridTemplateRows: ['gridTemplateRows'],
   gridColumn: ['gridColumn'],
   gridRow: ['gridRow'],
+  // ★★★grid-template-areas 项（2026-10-08）：命名区域模板 + 命名区引用（读数键 = 同名串）
+  gridTemplateAreas: ['gridTemplateAreas'],
+  gridArea: ['gridArea'],
   // ★★★justify-self 项（2026-10-06）：网格项行内轴自对齐（读数键 = 同名字符串）
   justifySelf: ['justifySelf'],
   // ★★★grid-auto-flow 项（2026-10-08）：自动放置（读数键 = 同名字符串）

@@ -95,6 +95,9 @@ describe('★App CSS 支持面 · ② SSOT 与折叠实现同源（真折叠，�
       if (f === 'justifySelf') return 'center'
       // ★★★grid-auto-flow 项（2026-10-08）：类 grid 容器的自动放置
       if (f === 'gridAutoFlow') return 'column'
+      // ★★★grid-template-areas 项（2026-10-08）：命名区域模板（折叠为浏览器形态串）
+      if (f === 'gridTemplateAreas') return '"a b" "c c"'
+      if (f === 'gridArea') return 'a'
       // ★★★outline 族项（2026-10-08）
       if (f === 'outlineWidth' || f === 'outlineOffset') return '3'
       if (f === 'outlineColor') return '#123456'

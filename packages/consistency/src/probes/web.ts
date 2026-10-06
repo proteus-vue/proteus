@@ -272,6 +272,16 @@ function styleOf(el: Element, win: Window): NormalizedStyle {
       }
     }
   }
+  // ★★★grid-template-areas 项（2026-10-08）：命名区域模板（浏览器形态 "a b" "c c"——原样 trim 空白归一）
+  {
+    const v = cs.getPropertyValue('grid-template-areas').trim()
+    if (v && v !== 'none') (styles as Record<string, unknown>).gridTemplateAreas = v.replace(/\s+/g, ' ')
+  }
+  // ★★★grid-area 项（2026-10-08）：命名区域引用（item）——命名形态（非 "auto"/线号）原样
+  {
+    const v = cs.getPropertyValue('grid-area').trim()
+    if (v && v !== 'auto' && /^[A-Za-z_]/.test(v)) (styles as Record<string, unknown>).gridArea = v
+  }
   for (const [prop, key] of [['grid-template-columns', 'gridTemplateColumns'], ['grid-template-rows', 'gridTemplateRows']] as const) {
     const v = cs.getPropertyValue(prop).trim()
     if (v && v !== 'none') {

@@ -625,6 +625,19 @@ export const STYLE_IR_FIELDS: Record<string, StyleFieldSpec> = {
       inheritable: false,
     },
   },
+  "gridArea": {
+    scope: "semantic",
+    domain: "layout",
+    valueType: "engine-field",
+    sources: {
+      compiler: "APP_LAYOUT_FIELDS",
+      matrixLevel: null,
+      runtimeWhitelist: false,
+      runtimeForbidden: false,
+      consistencyMatrix: true,
+      inheritable: false,
+    },
+  },
   "gridAutoFlow": {
     scope: "semantic",
     domain: "layout",
@@ -652,6 +665,19 @@ export const STYLE_IR_FIELDS: Record<string, StyleFieldSpec> = {
     },
   },
   "gridRow": {
+    scope: "semantic",
+    domain: "layout",
+    valueType: "engine-field",
+    sources: {
+      compiler: "APP_LAYOUT_FIELDS",
+      matrixLevel: null,
+      runtimeWhitelist: false,
+      runtimeForbidden: false,
+      consistencyMatrix: true,
+      inheritable: false,
+    },
+  },
+  "gridTemplateAreas": {
     scope: "semantic",
     domain: "layout",
     valueType: "engine-field",
@@ -1357,13 +1383,13 @@ export const STYLE_IR_FIELDS: Record<string, StyleFieldSpec> = {
 
 /** 摘要（判据与官网数字读它——机器推导，非手写） */
 export const STYLE_IR_SUMMARY = {
-  total: 101,
-  semantic: 75,
+  total: 103,
+  semantic: 77,
   engineOnly: 26,
   byDomain: {
     "derived": 10,
     "edges": 8,
-    "layout": 42,
+    "layout": 44,
     "matrix-only": 4,
     "paint": 36,
     "special": 1,

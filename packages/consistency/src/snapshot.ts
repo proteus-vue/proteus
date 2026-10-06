@@ -187,6 +187,9 @@ export interface NormalizedStyle {
   gridTemplateRows?: string
   gridColumn?: string
   gridRow?: string
+  // ★★★grid-template-areas 项（2026-10-08）：命名区域模板（浏览器形态 "a b" "c c"）+ 命名区引用（item 名）
+  gridTemplateAreas?: string
+  gridArea?: string
 }
 
 export interface StyleNode {
@@ -470,6 +473,8 @@ const STYLE_KEYS = new Set([
   'backgroundSize', 'backgroundPosition', 'backgroundRepeat',
   'aspectRatio', 'flexBasis', 'transform', 'boxShadow',
   'gridTemplateColumns', 'gridTemplateRows', 'gridColumn', 'gridRow',
+  // ★★★grid-template-areas 项（2026-10-08）：命名区域模板 + 命名区引用
+  'gridTemplateAreas', 'gridArea',
 ])
 
 /** 校验样式快照（VC3-b：归一化规则完整且无歧义——未登记的样式键**报错**，不静默丢弃） */
@@ -529,6 +534,7 @@ export function validateStyleSnapshot(snap: unknown): ValidationResult {
         || k === 'flexWrap' || k === 'alignContent'
         || k === 'aspectRatio' || k === 'flexBasis' || k === 'transform' || k === 'boxShadow'
         || k === 'gridTemplateColumns' || k === 'gridTemplateRows' || k === 'gridColumn' || k === 'gridRow'
+        || k === 'gridTemplateAreas' || k === 'gridArea'   // ★★★grid-template-areas 项（2026-10-08）
       ) {
         if (typeof v !== 'string') push('wrong-type', `${where}.styles.${k}`, `${k} 应为字符串`)
       } else if (typeof v === 'number') {

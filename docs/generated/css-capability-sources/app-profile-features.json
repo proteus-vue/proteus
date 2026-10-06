@@ -935,6 +935,30 @@
         "grid-auto-flow"
       ],
       "note": "★★★grid-auto-flow 项（2026-10-08 · css:next P0·3× · CSS Grid）：类 grid 容器的**自动放置方向/密度**。契约：新级别 GridAutoFlow（四同步）；值集 = 四端可表达子集（row / column / dense / column dense；Web `row dense` 归一为 `dense`）；编译器 APP_LAYOUT_FIELDS + 封闭集 + 折叠分支；CSE 直通 IR 字段 gridAutoFlow；内核 LStyle.grid_auto_flow → taffy `Style.grid_auto_flow`（GridAutoFlow 原生，仅 grid 容器消费——item 上被忽略，与 Web 同）；consistency 链（applier/snapshot/probes/coverage）。★诚实边界：Skyline 官方属性表无 grid 族（该端无 Grid 容器，grid→嵌套 flex degrade）——主承载端为 App（自研内核）。"
+    },
+    {
+      "id": "grid-template-areas",
+      "css": "grid-template-areas",
+      "category": "layout",
+      "today": "supported",
+      "tier": "L2",
+      "strategy": "直映射",
+      "probe": [
+        "grid-template-areas"
+      ],
+      "note": "★★★grid-template-areas 项（2026-10-08 · css:next P0·2× · CSS Grid）：grid 容器的**命名区域模板**（配合子项 grid-area: <name> 放置）。契约四同步（该能力无独立语义级别——走引擎字段，同 gridTemplateColumns 先例）；编译器 APP_LAYOUT_FIELDS + 折叠分支（CSS 多引号串归一为**浏览器 computed 形态**，与 parity 真值对齐）；CSE 直通 IR 字段 gridTemplateAreas + gridArea（grid-area: <name> 即命名区引用；线号形态 1 / 2 / 3 / 4 拆 grid-row/grid-column）；内核 LStyle.grid_template_areas 走 taffy GridTemplateAreas（区域名解析成 名-start / 名-end 命名线）+ grid_area 走 GridPlacement::NamedLine（NamedLineResolver 解析区域跨行/跨列）；consistency 链（applier/snapshot/probes/coverage）。★诚实边界：Skyline 官方属性表无 grid 族（该端无 Grid 容器，grid→嵌套 flex degrade）——主承载端为 App（自研内核）；空单元（点号）/ 命名线 / span 未支持（诊断）。"
+    },
+    {
+      "id": "grid-area",
+      "css": "grid-area",
+      "category": "layout",
+      "today": "supported",
+      "tier": "L2",
+      "strategy": "直映射",
+      "probe": [
+        "grid-area"
+      ],
+      "note": "★★★grid-area 项（2026-10-08 · css:next P0·2× · CSS Grid）：子项的**网格放置**（命名区引用 / 线号）。命名形态 grid-area: <name> 折为 gridArea（内核走命名线放置）；线号形态 grid-area: 1 / 2 / 3 / 4 拆为 grid-row + grid-column。契约四同步（引擎字段，同 gridColumn 先例）；编译器折叠 + CSE（gridArea 直通）。★诚实边界：span / auto 命名线混合形态未支持（诊断）。"
     }
   ]
 }
