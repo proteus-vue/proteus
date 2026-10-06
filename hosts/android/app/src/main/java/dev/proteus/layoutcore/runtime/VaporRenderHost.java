@@ -1269,12 +1269,16 @@ public final class VaporRenderHost {
         String rest = tok.substring(4);
         double fallback = 0; int tilde = rest.indexOf('~');
         if (tilde >= 0) { try { fallback = Double.parseDouble(rest.substring(tilde + 1)); } catch (Exception e) { fallback = 0; } rest = rest.substring(0, tilde); }
+        // ★★缩放（决策 #595）：`*<scale>`（名/偏移之后）——`19vw` → `env:--pf-vw*0.19`
+        double scale = 1;
+        int star = rest.indexOf('*');
+        if (star >= 0) { try { scale = Double.parseDouble(rest.substring(star + 1)); } catch (Exception e) { scale = 1; } rest = rest.substring(0, star); }
         int off = 0; int end = rest.length();
         // ★偏移符号 = 后随**数字**的 +/-（变量名自带连字符 '-'——不能见 '-' 就当分隔符）
         for (int i = 1; i + 1 < rest.length(); i++) { char c = rest.charAt(i); if ((c == '+' || c == '-') && rest.charAt(i + 1) >= '0' && rest.charAt(i + 1) <= '9') { end = i; try { off = (c == '-' ? -1 : 1) * (int) Double.parseDouble(rest.substring(i + 1)); } catch (Exception e) { off = 0; } break; } }
         String name = rest.substring(0, end);
         Double base = envVars.get(name);
-        double v = (base != null ? base : fallback) + off;
+        double v = (base != null ? base : fallback) * scale + off;
         return v;
     }
     /** 字符串值若是 env token ⇒ 就地替换为 dp 数值（shape-agnostic：只碰 `env:` 前缀的字符串）。 */
@@ -1484,6 +1488,9 @@ public final class VaporRenderHost {
             tp.setTypeface(ProteusHostView.typefaceOf(spec.optString("fontFamily", null), mw, null));
             float ls = (float) spec.optDouble("letterSpacing", 0);
             if (ls != 0f && fs > 0f) tp.setLetterSpacing(ls / fs);
+            // ★★★word-break:normal（2026-10-09）：无断点长串且溢出盒宽 ⇒ 单行溢出（不增长——与 mkCmd 同步）
+            if (!"break-all".equals(spec.optString("wordBreak", null)) && isUnbreakableToken(t)
+                    && tp.measureText(t) > boxW + 0.5f) continue;
             final int clamp = (int) spec.optDouble("lineClamp", 0);
             android.text.StaticLayout.Builder slb = android.text.StaticLayout.Builder
                     // I2-ALLOW: 文本**测量**宽（StaticLayout 需整型像素宽；测量回执走 remeasure 通道，非绘制几何发射）
@@ -1534,6 +1541,25 @@ public final class VaporRenderHost {
             sb.append(t.charAt(i)).append('\u200B');
         }
         return sb.toString();
+    }
+
+    /** ★★★word-break 项（2026-10-09 · 全端一致）：**无断点长串**判据——不含空格/制表/换行且不含 CJK。
+     *   `word-break:normal` 下，无断点长串在 Web 上是「整串溢出、不折行」；而安卓 StaticLayout
+     *   会**硬折**超宽行（无"禁止折长词"开关）⇒ 须显式判定为「单行溢出」（见 mkCmd / applyWrapRemeasure）。
+     *   ★与鸿蒙 `WORD_BREAK_TYPE_NORMAL` 同语义（该端引擎原生即"词边界断、长词溢出"）。 */
+    static boolean isUnbreakableToken(String t) {
+        for (int i = 0; i < t.length(); i++) {
+            char c = t.charAt(i);
+            if (c == ' ' || c == '\t' || c == '\n' || c == '\r') return false;
+            Character.UnicodeBlock b = Character.UnicodeBlock.of(c);
+            if (b == Character.UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS
+                    || b == Character.UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS_EXTENSION_A
+                    || b == Character.UnicodeBlock.CJK_SYMBOLS_AND_PUNCTUATION
+                    || b == Character.UnicodeBlock.HIRAGANA
+                    || b == Character.UnicodeBlock.KATAKANA
+                    || b == Character.UnicodeBlock.HANGUL_SYLLABLES) return false;
+        }
+        return true;
     }
 
     /**
@@ -1739,20 +1765,45 @@ public final class VaporRenderHost {
                 wtp.setTextSize(fs);
                 wtp.setTypeface(ProteusHostView.typefaceOf(spec.optString("fontFamily", null), fw, null));
                 if (ls != 0f && fs > 0f) wtp.setLetterSpacing(ls / fs);
-                android.text.StaticLayout wsl = android.text.StaticLayout.Builder
-                        // I2-ALLOW: 文本**测量**宽（多行判定用 StaticLayout 同款整型宽；非绘制几何发射）
-                        .obtain(t, 0, t.length(), wtp, Math.max(1, (int) Math.ceil(w)))
-                        .setIncludePad(false)
-                        .build();
-                multiLine = wsl.getLineCount() > 1;
+                // ★★★word-break:normal（2026-10-09 · 全端一致）：**无断点长串**且宽 > 内容盒宽
+                //   ⇒ 单行溢出（= Web normal「不折长词」）——否则 Android StaticLayout 会硬折超宽行。
+                JSONObject padW0 = spec.optJSONObject("padding");
+                float cw0 = padW0 != null
+                        ? w - (float) padW0.optDouble("left", 0) - (float) padW0.optDouble("right", 0)
+                        : w;
+                if (cw0 < 1f) cw0 = w;
+                final boolean breakAll0 = "break-all".equals(spec.optString("wordBreak", null));
+                if (!breakAll0 && isUnbreakableToken(t) && wtp.measureText(t) > cw0 + 0.5f) {
+                    multiLine = false;   // 单行溢出（不折行）
+                } else {
+                    android.text.StaticLayout wsl = android.text.StaticLayout.Builder
+                            // I2-ALLOW: 文本**测量**宽（多行判定用 StaticLayout 同款整型宽；非绘制几何发射）
+                            .obtain(t, 0, t.length(), wtp, Math.max(1, (int) Math.ceil(w)))
+                            .setIncludePad(false)
+                            .build();
+                    multiLine = wsl.getLineCount() > 1;
+                }
             }
             if (clamp > 0 && wsWrap) multiLine = true;   // clamp ⇒ StaticLayout（尾部省略号通道）
             final boolean clipText = !wsWrap && w > 1f
                     && "hidden".equals(spec.optString("overflow", null))
                     && !("ellipsis".equals(spec.optString("textOverflow", null)));
-            { ProteusHostView.Cmd _c = new ProteusHostView.Cmd(x, y, w, h, color, t, fs, textColor, radius, grad, glowSpec, maskSpec, fw, ta, bw, bc, shadowSpec, lh, ls, decor, wsWrap ? 0 : 1, multiLine, clipText, sideBorderOf(spec)); _c.lineClamp = clamp; _c.outline = parseOutline(spec); _c.textShadow = parseTextShadow(spec.optJSONObject("textShadow")); return _c; }
+            { ProteusHostView.Cmd _c = new ProteusHostView.Cmd(x, y, w, h, color, t, fs, textColor, radius, grad, glowSpec, maskSpec, fw, ta, bw, bc, shadowSpec, lh, ls, decor, wsWrap ? 0 : 1, multiLine, clipText, sideBorderOf(spec)); _c.lineClamp = clamp; _c.outline = parseOutline(spec); _c.textShadow = parseTextShadow(spec.optJSONObject("textShadow")); applyTextPad(_c, spec); return _c; }
         }
         { ProteusHostView.Cmd _c = new ProteusHostView.Cmd(x, y, w, h, color, null, 0f, 0, radius, grad, glowSpec, maskSpec, 400, 0, bw, bc, shadowSpec, 0f, 0f, 0, 0, false, false, sideBorderOf(spec)); _c.outline = parseOutline(spec); _c.textShadow = parseTextShadow(spec.optJSONObject("textShadow")); return _c; }
+    }
+
+    /**
+     * ★★★text 内间距批（2026-10-09）：把节点的 `padding` 四边写入 Cmd（文本绘制内缩 = 内容盒）。
+     *   spec 已在入口**物理化**（padding ×density）⇒ 此处直读物理 px（绘制侧与盒同单位）。
+     */
+    private static void applyTextPad(ProteusHostView.Cmd c, JSONObject spec) {
+        JSONObject p = spec.optJSONObject("padding");
+        if (p == null) return;
+        c.padL = (float) p.optDouble("left", 0);
+        c.padT = (float) p.optDouble("top", 0);
+        c.padR = (float) p.optDouble("right", 0);
+        c.padB = (float) p.optDouble("bottom", 0);
     }
 
     /** ★批次 4：`text-align` 字符串 → 码（0=left / 1=center / 2=right；未知 ⇒ 0） */

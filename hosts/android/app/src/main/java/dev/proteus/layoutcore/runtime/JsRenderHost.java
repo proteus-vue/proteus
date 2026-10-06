@@ -606,10 +606,20 @@ public final class JsRenderHost {
         int color = bg == null || bg.isEmpty() ? 0 : HostJson.parseHex(bg);
         if (!isText && color == 0) return null;   // 无色无文本 ⇒ 无绘制内容
         float fs = isText ? (float) spec.optDouble("fontSize", DEFAULT_FONT_UNITS) : 0f;
-        return new ProteusHostView.Cmd(
+        ProteusHostView.Cmd c = new ProteusHostView.Cmd(
                 (float) r.getDouble("x"), (float) r.getDouble("y"),
                 (float) r.getDouble("width"), (float) r.getDouble("height"),
                 color, isText ? text : null, fs);
+        // ★★★text 内间距批（2026-10-09 · 与 VaporRenderHost 同语义）：文本绘制内缩 = 盒内 padding。
+        //   与 Vapor 通路同一份"内容盒"口径（避免两条 host 通路漂移——同语义一处实现的纪律）。
+        JSONObject pad = spec.optJSONObject("padding");
+        if (isText && pad != null) {
+            c.padL = (float) pad.optDouble("left", 0);
+            c.padT = (float) pad.optDouble("top", 0);
+            c.padR = (float) pad.optDouble("right", 0);
+            c.padB = (float) pad.optDouble("bottom", 0);
+        }
+        return c;
     }
 
     /**

@@ -420,7 +420,11 @@ public class SuperappActivity extends android.app.Activity {
             tree.put("viewport", new org.json.JSONObject()
                     .put("width", vwPx / density).put("height", vhPx / density));
             tree.put("nodes", nodes);
-            draw.setEnvVars(collectEnvVars());   // ★内置环境变量（决策 #593）：每次渲染刷新（旋转/折叠重排）
+            // ★内置环境变量（决策 #593/#595）：每次渲染刷新（旋转/折叠重排）；--pf-vw/--pf-vh = 视口逻辑尺寸
+            org.json.JSONObject envObj = collectEnvVars();
+            envObj.put("--pf-vw", vwPx / density);
+            envObj.put("--pf-vh", vhPx / density);
+            draw.setEnvVars(envObj);
             draw.mount(tree.toString());
             if (draw.view() != null) draw.view().invalidate();
             android.util.Log.i(TAG, "SUPERAPP_RENDER page=" + page + " nodes=" + nodes.length()

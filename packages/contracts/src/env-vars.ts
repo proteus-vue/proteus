@@ -41,13 +41,16 @@ export type EnvVarName =
   | '--pf-keyboard-height' // ★“不参与布局”——仅供“贴键盘”场景（坑 P9）
   | '--pf-fold-left'
   | '--pf-fold-width'
+  // ── D 组 · 设备几何（视口尺寸；用于 `vw`/`vh` 单位与流式布局）──
+  | '--pf-vw' // 视口宽（逻辑像素）——`Nvw` 编译期折为 `env:--pf-vw*<N/100>`
+  | '--pf-vh' // 视口高（逻辑像素）——`Nvh` 同理
 
 /** 变量元数据（语义 + 分组 + 是否参与布局）。 */
 export interface EnvVarSpec {
   /** 语义说明（开发者可见） */
   desc: string
   /** 分组：A 避让 / B 系统栏本体 / C 环境态 */
-  group: 'A' | 'B' | 'C'
+  group: 'A' | 'B' | 'C' | 'D'
   /** 是否参与布局（false ⇒ 宿主提供但**不触发重排**；如键盘高度） */
   layout: boolean
 }
@@ -68,6 +71,8 @@ export const ENV_VARS: Record<EnvVarName, EnvVarSpec> = {
   '--pf-keyboard-height': { desc: '软键盘高度（不参与布局——仅供“贴键盘”场景）', group: 'C', layout: false },
   '--pf-fold-left': { desc: '折叠铰链左缘（屏左 → 铰链左缘）', group: 'C', layout: true },
   '--pf-fold-width': { desc: '折叠铰链带宽', group: 'C', layout: true },
+  '--pf-vw': { desc: '视口宽（逻辑像素）——`Nvw` 单位 / 流式布局用', group: 'D', layout: true },
+  '--pf-vh': { desc: '视口高（逻辑像素）——`Nvh` 单位用', group: 'D', layout: true },
 }
 
 /** 是否为合法内置环境变量名（`--pf-*` 闭集内）。 */

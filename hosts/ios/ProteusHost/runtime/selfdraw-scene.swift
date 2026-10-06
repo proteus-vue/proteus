@@ -650,6 +650,8 @@ final class SelfDrawView: UIView {
             // ★★★行高修复（2026-10-08）：用子类 ProteusTextLayer——声明 line-height 的多行文本走 CoreText 绘制
             let tl = ProteusTextLayer()
             // ★★★line-clamp 项（2026-10-08）：多行截断——按盒宽预截断（尾省略号）后再绘制
+            // ★★★word-break:normal（2026-10-09）：`effectiveWrap` 在 wrap 判定上叠加「无断点长串溢出 ⇒ 不折行」（须先于 clamped/string）
+            let wrapMode = SelfDrawView.effectiveWrap(style, text: text, boxWidth: boxWidth)
             let clamped = SelfDrawView.clampedText(text, style: style, boxWidth: boxWidth)
             tl.string = clamped
             let fs = fontSize ?? 14
@@ -661,15 +663,16 @@ final class SelfDrawView: UIView {
             tl.fontSize = fs
             let textCg = (style["color"] as? String).flatMap(parseHexColor)?.cgColor ?? UIColor.white.cgColor
             tl.foregroundColor = textCg
-            tl.string = textLayerString(clamped, style: style, font: ufont, color: textCg)
+            tl.string = textLayerString(clamped, style: style, font: ufont, color: textCg,
+                                         wrapOverride: wrapMode)
             // ★记文字色快照（复位目标；见 `layerOriginalTextColor` 注释）
             layerOriginalTextColor[nodeId] = textCg
             tl.alignmentMode = alignmentMode(style["textAlign"] as? String)
             // ★★全端对齐批（2026-10-05 · white-space 五端对齐）：wrap ⇒ 换行不截断；
             //   nowrap ⇒ 单行（ellipsis 截断 / overflow:hidden 裁切 / 其余原样溢出）。
-            let wrapMode = SelfDrawView.isWrapStyle(style)
             // ★★★行高修复（2026-10-08）：声明行高的**多行**文本 ⇒ CoreText 绘制（CATextLayer 忽略段落行高）
-            tl.useCoreText = SelfDrawView.needsCoreText(style)
+            // ★★★word-break:normal（2026-10-09）：CoreText 会**硬折**长词 ⇒ 仅在实际换行(wrapMode)时启用
+            tl.useCoreText = SelfDrawView.needsCoreText(style) && wrapMode
             tl.truncationMode = (!wrapMode && (style["textOverflow"] as? String) == "ellipsis") ? .end : .none
             tl.masksToBounds = isClipTextStyle(style)   // nowrap 溢出的裁切（Web overflow:hidden 语义）
             // ★contentsScale 必须显式设置：否则 Retina 上文本模糊（CATextLayer 不继承自动缩放）
@@ -3030,6 +3033,39 @@ final class SelfDrawView: UIView {
         return ws == "normal" || ws == "pre-wrap" || ws == "pre-line" || ws == "pre"
     }
 
+    /// ★★★word-break:normal（2026-10-09 · 全端一致）：**无断点长串**判据——不含空白且不含 CJK/假名/谚文。
+    ///   与鸿蒙 `WORD_BREAK_TYPE_NORMAL` / Android `isUnbreakableToken` 同语义。
+    static func isUnbreakableToken(_ t: String) -> Bool {
+        if t.isEmpty { return false }
+        for scalar in t.unicodeScalars {
+            let v = scalar.value
+            if v == 0x20 || v == 0x09 || v == 0x0A || v == 0x0D { return false }
+            if (0x3000...0x303F).contains(v) || (0x3040...0x30FF).contains(v)
+                || (0x4E00...0x9FFF).contains(v) || (0xAC00...0xD7A3).contains(v)
+                || (0xFF00...0xFFEF).contains(v) { return false }
+        }
+        return true
+    }
+
+    /// ★★★有效换行判定（2026-10-09）：在 `isWrapStyle` 上叠加 word-break:normal 的
+    ///   「**无断点长串溢出 ⇒ 不折行（单行溢出，与 Web 一致）**」——CoreText `byWordWrapping`
+    ///   会**硬折**超宽行（与 Web normal 不符），须显式抑制。
+    static func effectiveWrap(_ style: [String: Any], text: String, boxWidth: CGFloat) -> Bool {
+        guard isWrapStyle(style) else { return false }
+        if (style["wordBreak"] as? String) == "break-all" { return true }
+        guard boxWidth > 1, isUnbreakableToken(text) else { return true }
+        var cw = boxWidth
+        if let p = style["padding"] as? [String: Any] {
+            func e(_ k: String) -> CGFloat { (p[k] as? Double).map { CGFloat($0) } ?? (p[k] as? CGFloat) ?? 0 }
+            cw = max(1, boxWidth - e("left") - e("right"))
+        }
+        let fs = (style["fontSize"] as? CGFloat) ?? 14
+        let fw = (style["fontWeight"] as? CGFloat) ?? 400
+        let fam = (style["fontFamily"] as? String) ?? "system"
+        let w = ProteusTextAdapter.measureText(text, fontSize: fs, fontWeight: fw, fontFamily: fam).width
+        return w <= cw + 0.5
+    }
+
     /// ★★★行高修复（2026-10-08）：该 style 是否需 CoreText 绘制——**多行（wrap）且声明了 line-height**。
     ///   （CATextLayer 忽略段落行高 ⇒ 只有这种形态才需要；单行/未声明行高仍走原生路径，零行为变化。）
     static func needsCoreText(_ style: [String: Any]) -> Bool {
@@ -3044,12 +3080,17 @@ final class SelfDrawView: UIView {
     static func clampedText(_ text: String, style: [String: Any], boxWidth: CGFloat) -> String {
         let n = (style["lineClamp"] as? CGFloat).map { Int($0) } ?? (style["lineClamp"] as? Double).map { Int($0) } ?? 0
         if n <= 0 || boxWidth <= 1 { return text }
+        // ★★★text 内间距批（2026-10-09）：预截断按**内容盒宽**（与绘制同源）
+        let padW: CGFloat = { guard let p = style["padding"] as? [String: Any] else { return 0 }
+            func e(_ k: String) -> CGFloat { (p[k] as? Double).map { CGFloat($0) } ?? (p[k] as? CGFloat) ?? 0 }
+            return e("left") + e("right") }()
+        let contentW = max(1, boxWidth - padW)
         let fs = (style["fontSize"] as? CGFloat) ?? 14
         let fw = (style["fontWeight"] as? CGFloat) ?? 400
         let fam = (style["fontFamily"] as? String) ?? "system"
         let ls = (style["letterSpacing"] as? Double).map({ CGFloat($0) }) ?? (style["letterSpacing"] as? CGFloat) ?? 0
         return ProteusTextAdapter.truncateToLines(text, fontSize: fs, fontWeight: fw, fontFamily: fam,
-            lineWidth: boxWidth, lineHeight: style["lineHeight"] as? String, letterSpacing: ls,
+            lineWidth: contentW, lineHeight: style["lineHeight"] as? String, letterSpacing: ls,
             wordBreak: style["wordBreak"] as? String, maxLines: n)
     }
 
@@ -3111,6 +3152,9 @@ final class SelfDrawView: UIView {
             if let v = n[k] as? Double { style[k] = CGFloat(v) }
             if let v = n[k] as? CGFloat { style[k] = v }
         }
+        // ★★★text 内间距批（2026-10-09 · 用户抓出「App 端 text 的 padding-left 被丢弃」）：
+        //   `padding` 必须透传——本函数是建层必经之路；漏透传 ⇒ 宿主读不到 ⇒ 文本 padding 静默丢弃。
+        if let pd = n["padding"] as? [String: Any] { style["padding"] = pd }
         // ★批次 10（CSS 兼容对齐 · 超级应用视觉）：盒阴影（结构化对象）透传——本函数是建层必经之路
         if let bs = n["boxShadow"] as? [String: Any] { style["boxShadow"] = bs }
         // ★★★text-shadow 项（2026-10-08）：文本阴影（结构化对象）透传——本函数是建层必经之路
@@ -3288,6 +3332,9 @@ final class SelfDrawView: UIView {
             } else {
                 let fs = (style["fontSize"] as? CGFloat) ?? 14
                 let fw = (style["fontWeight"] as? CGFloat) ?? 400
+                // ★★全端对齐批（2026-10-05 · white-space 五端对齐）：复用路径同配（复用 = 完全重配）
+                // ★★★word-break:normal（2026-10-09）：effectiveWrap 须先于 clamped/string
+                let wrapMode2 = SelfDrawView.effectiveWrap(style, text: text, boxWidth: boxWidth)
                 // ★★★line-clamp 项（2026-10-08）：多行截断——按盒宽预截断（与 makeLayer 同源）
                 let clamped = SelfDrawView.clampedText(text, style: style, boxWidth: boxWidth)
                 tl.string = clamped
@@ -3297,14 +3344,13 @@ final class SelfDrawView: UIView {
                 tl.fontSize = fs
                 tl.foregroundColor = (style["color"] as? String).flatMap(parseHexColor)?.cgColor
                     ?? UIColor.white.cgColor
-                tl.string = textLayerString(clamped, style: style, font: ProteusTextAdapter.font(size: fs, weight: fw, family: (style["fontFamily"] as? String) ?? "system"), color: (style["color"] as? String).flatMap(parseHexColor)?.cgColor ?? UIColor.white.cgColor)
+                tl.string = textLayerString(clamped, style: style, font: ProteusTextAdapter.font(size: fs, weight: fw, family: (style["fontFamily"] as? String) ?? "system"), color: (style["color"] as? String).flatMap(parseHexColor)?.cgColor ?? UIColor.white.cgColor, wrapOverride: wrapMode2)
                 tl.alignmentMode = alignmentMode(style["textAlign"] as? String)
-                // ★★全端对齐批（2026-10-05 · white-space 五端对齐）：复用路径同配（复用 = 完全重配）
-                let wrapMode2 = SelfDrawView.isWrapStyle(style)
                 tl.truncationMode = (!wrapMode2 && (style["textOverflow"] as? String) == "ellipsis") ? .end : .none
                 tl.isWrapped = wrapMode2
                 // ★★★行高修复（复用 = 完全重配：useCoreText 也必须重配，否则复用层残留上一节点的绘制方式）
-                (tl as? ProteusTextLayer)?.useCoreText = SelfDrawView.needsCoreText(style)
+                // ★★★word-break:normal（2026-10-09）：同上——仅在实际换行时用 CoreText
+                (tl as? ProteusTextLayer)?.useCoreText = SelfDrawView.needsCoreText(style) && wrapMode2
                 tl.contentsScale = UIScreen.main.scale
             }
             // ★★复用路径**必须同样重配**（纪律：复用 = 完全重配）——否则池里取出的层会
@@ -3335,12 +3381,37 @@ final class SelfDrawView: UIView {
     ///   （中心不变 ⇒ 以**层中心为锚**的 transform 动画不受影响；rects 探针仍报原始行盒）。
     ///   `lineHeight<=0`（未声明）⇒ 原样返回（既有路径零行为变化）。
     private func lineBoxFrame(_ f: CGRect, style: [String: Any]) -> CGRect {
+        // ★★★text 内间距批（2026-10-09 · 用户抓出「App 端 text 的 padding-left 被丢弃」）：
+        //   文本可视/折行盒 = **内容盒**（border 盒内缩 padding）——文字自 padding 内缘起排、
+        //   折行宽 = 盒宽 − padding-left − padding-right（Web 真值）。此前从**盒原点**绘制
+        //   ⇒ padding 静默丢弃（与 Web 不符）。
+        //   ★**只对文本节点**内缩（非文本节点的 padding 是容器内部布局，不移动其自身 frame——
+        //     否则容器被内缩 ⇒ 透出宿主底/尺寸错，真机抓出）。
+        guard let text = style["text"] as? String, !text.isEmpty else { return f }
+        let cbf = SelfDrawView.contentBox(f, style: style)
+        // ★★★word-break:normal（2026-10-09 · 独立复评抓出 iOS 裁切）：CATextLayer **只在自身 bounds 内绘制**
+        //   ⇒ 单行溢出（normal 长串 / nowrap 无 clip/ellipsis）若不**加宽可视 frame**，溢出部分被裁掉
+        //   （与 Web「溢出不裁」不符；Android/鸿蒙在共享画布上绘制故无此问题）。
+        //   判据：单行渲染（非 effectiveWrap）∧ 非裁切/省略 ∧ 自然宽 > 内容盒宽 ⇒ 加宽到自然宽（按对齐锚点）。
+        if !isClipTextStyle(style), (style["textOverflow"] as? String) != "ellipsis",
+           !SelfDrawView.effectiveWrap(style, text: text, boxWidth: f.width) {
+            let fs0 = (style["fontSize"] as? CGFloat) ?? 14
+            let fw0 = (style["fontWeight"] as? CGFloat) ?? 400
+            let fam0 = (style["fontFamily"] as? String) ?? "system"
+            let kern0 = (style["letterSpacing"] as? Double).map({ CGFloat($0) }) ?? (style["letterSpacing"] as? CGFloat) ?? 0
+            let natW = ProteusTextAdapter.measureText(text, fontSize: fs0, fontWeight: fw0, fontFamily: fam0, letterSpacing: kern0).width
+            if natW > cbf.width + 0.5 {
+                let am = alignmentMode(style["textAlign"] as? String)
+                let ox: CGFloat = am == .center ? cbf.midX - natW / 2 : (am == .right ? cbf.maxX - natW : cbf.minX)
+                return CGRect(x: ox, y: cbf.origin.y, width: natW, height: cbf.height)
+            }
+        }
         // ★★第三轮复评修复（2026-10-05）：半行距居中收缩**只对实际单行**生效——
         //   判据不看声明（缺省=normal 后大多数文本都算 wrap），而是**量**：单行文本宽 ≤ 盒宽
         //   ⇒ 收缩居中（与既有 batch 13 行为一致）；超宽的（真的会折行）⇒ 保持整盒
         //   （多行行距由段落样式控，收缩会裁掉后续行）。
-        if let text = style["text"] as? String, !text.isEmpty {
-            if text.contains("\n") { return f }
+        if !text.isEmpty {
+            if text.contains("\n") { return cbf }
             let fs2 = (style["fontSize"] as? CGFloat) ?? 14
             let fw2 = (style["fontWeight"] as? CGFloat) ?? 400
             let fam2 = (style["fontFamily"] as? String) ?? "system"
@@ -3348,17 +3419,32 @@ final class SelfDrawView: UIView {
             var attrs2: [NSAttributedString.Key: Any] = [.font: ProteusTextAdapter.font(size: fs2, weight: fw2, family: fam2)]
             if kern2 != 0 { attrs2[.kern] = kern2 }
             let single = (text as NSString).size(withAttributes: attrs2).width
-            if single > f.width + 0.5 { return f }
+            if single > cbf.width + 0.5 { return cbf }
         }
         guard let lhTok = style["lineHeight"] as? String,
               let boxH = ProteusTextAdapter.lineHeightPx(lhTok, fontSize: (style["fontSize"] as? CGFloat) ?? 14),
-              boxH > 0 else { return f }
+              boxH > 0 else { return cbf }
         let fw = (style["fontWeight"] as? CGFloat) ?? 400
         let fam = (style["fontFamily"] as? String) ?? "system"
         let contentH = ProteusTextAdapter.font(size: (style["fontSize"] as? CGFloat) ?? 14, weight: fw, family: fam).lineHeight
-        guard contentH > 0 else { return f }
-        let cy = f.origin.y + boxH * 0.5   // 行盒中心（= rect.minY + boxH/2）
-        return CGRect(x: f.origin.x, y: cy - contentH * 0.5, width: f.width, height: contentH)
+        guard contentH > 0 else { return cbf }
+        let cy = cbf.origin.y + boxH * 0.5   // 行盒中心（= 内容盒 minY + boxH/2）
+        return CGRect(x: cbf.origin.x, y: cy - contentH * 0.5, width: cbf.width, height: contentH)
+    }
+
+    /// ★★★text 内间距批（2026-10-09）：**内容盒** = border 盒内缩 `padding`。
+    ///   文本层可视/折行盒据此内缩（padding 为 0/缺省 ⇒ 原样，零行为变化）。
+    static func contentBox(_ f: CGRect, style: [String: Any]) -> CGRect {
+        guard let p = style["padding"] as? [String: Any] else { return f }
+        func edge(_ k: String) -> CGFloat {
+            if let d = p[k] as? Double { return CGFloat(d) }
+            if let c = p[k] as? CGFloat { return c }
+            return 0
+        }
+        let l = edge("left"), t = edge("top"), r = edge("right"), b = edge("bottom")
+        if l == 0 && t == 0 && r == 0 && b == 0 { return f }
+        let w = max(1, f.width - l - r), h = max(1, f.height - t - b)
+        return CGRect(x: f.origin.x + l, y: f.origin.y + t, width: w, height: h)
     }
 
     /// ★批次 18（CSS 兼容对齐 · 以 Web 为基准）：`border-radius` **百分比** → `cornerRadius`。
@@ -3393,14 +3479,15 @@ final class SelfDrawView: UIView {
 
     /// ★批次 20（CSS 兼容对齐 · 以 Web 为基准）：文本层的 `string` 值——声明 `letterSpacing` 时用
     ///   带 `kern` 的 `NSAttributedString`（字距真生效）；未声明 ⇒ 返回原字符串（零行为变化）。
-    private func textLayerString(_ text: String, style: [String: Any], font: UIFont, color: CGColor) -> Any {
+    private func textLayerString(_ text: String, style: [String: Any], font: UIFont, color: CGColor, wrapOverride: Bool? = nil) -> Any {
         // ★批次 35：文本装饰（underline / line-through）也走富文本属性
         let deco = style["textDecoration"] as? String
         let kern = (style["letterSpacing"] as? Double).map({ CGFloat($0) }) ?? (style["letterSpacing"] as? CGFloat) ?? 0
         // ★★全端对齐批（2026-10-05 · white-space 五端对齐）：wrap + line-height ⇒ **段落样式**
         //   行盒高 = lineHeight（CoreText 的 minimum/maximumLineHeight 即 CSS line-height 语义：
         //   字形在行盒内居中）；同时把对齐写进段落（多行的对齐由段落样式决定）。
-        let wrapMode = SelfDrawView.isWrapStyle(style)
+        // ★★★word-break:normal（2026-10-09）：换行判定可由调用方传入（含"无断点长串溢出"抑制）
+        let wrapMode = wrapOverride ?? SelfDrawView.isWrapStyle(style)
         var para: NSMutableParagraphStyle? = nil
         if wrapMode {
             let ps = NSMutableParagraphStyle()
@@ -6556,8 +6643,9 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         var changed = false
         for n in nodes {
             guard let text = n["text"] as? String, !text.isEmpty, let id = n["id"] as? Int else { continue }
-            guard SelfDrawView.isWrapStyle(n) else { continue }
             guard let r = rects["\(id)"], let boxW = r["width"], boxW > 1 else { continue }
+            // ★★★word-break:normal（2026-10-09）：无断点长串溢出 ⇒ 不折行（不增长盒高——与绘制同步）
+            guard SelfDrawView.effectiveWrap(n, text: text, boxWidth: CGFloat(boxW)) else { continue }
             let fs = (n["fontSize"] as? Double).map { CGFloat($0) } ?? 14
             let fw = (n["fontWeight"] as? Double).map { CGFloat($0) } ?? 400
             let fam = (n["fontFamily"] as? String) ?? "system"
@@ -6603,6 +6691,9 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         t["--pf-cutout-left"] = Double(s.left)
         t["--pf-cutout-right"] = Double(s.right)
         t["--pf-keyboard-height"] = 0
+        // ★视口逻辑尺寸（决策 #595）：`vw`/`vh` 单位与流式布局用
+        t["--pf-vw"] = Double(v.bounds.width)
+        t["--pf-vh"] = Double(v.bounds.height)
         return t
     }
 
@@ -6615,6 +6706,12 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             fallback = Double(rest[rest.index(after: ti)...]) ?? 0
             rest = String(rest[..<ti])
         }
+        // ★缩放（决策 #595）：`*<scale>`（名/偏移之后）
+        var scale = 1.0
+        if let si = rest.firstIndex(of: "*") {
+            scale = Double(rest[rest.index(after: si)...]) ?? 1
+            rest = String(rest[..<si])
+        }
         var off = 0.0; var name = rest
         if rest.count > 1 {
             let chars = Array(rest)
@@ -6626,7 +6723,7 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                 break
             }
         }
-        return (table[name] ?? fallback) + off
+        return (table[name] ?? fallback) * scale + off
     }
 
     /// 把 nodes 里所有 `env:` token 字符串就地替换为逻辑点数值（顶层标量 + margin/padding 四边）。

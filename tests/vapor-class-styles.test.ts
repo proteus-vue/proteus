@@ -406,9 +406,10 @@ describe('★C1 最小切片 · SFC <style> 单类规则 → class→节点样�
     const dw: string[] = []
     parseStaticStyle('white-space: balance', (m: string) => dw.push(m))
     expect(dw.length > 0, 'white-space:balance（非法值）仍诊断').toBe(true)
-    // ★★全端对齐批：min-height:100vh ⇒ minHeightPct（页面铺满——此前落诊断被丢）
-    const vhOut = parseStaticStyle('min-height: 100vh', () => {}) as { minHeightPct?: number }
-    expect(vhOut.minHeightPct, 'min-height:100vh ⇒ minHeightPct=1').toBe(1)
+    // ★★★Stage 2（2026-10-09 · 决策 #595）：min-height:100vh **折为内置视口变量** env:--pf-vh
+    //   （宿主用真实视口解析——此前是 minHeightPct=1 近似；改为与 Web 同语义的真视口单位）。
+    const vhOut = parseStaticStyle('min-height: 100vh', () => {}) as { minHeight?: string }
+    expect(vhOut.minHeight, 'min-height:100vh ⇒ env:--pf-vh').toBe('env:--pf-vh')
     // ★★★overflow-x 项（2026-10-06）：overflow-y:hidden **已实现**（逐轴字段直传）——不再是缺口；
     //   级联后的形态收敛由 normalizeOverflowFields 处理（归一 visible→auto）。
     const dy: string[] = []
@@ -1515,6 +1516,14 @@ describe('★flex-direction 初值归一（display:flex 缺省补 row · 对齐 
     expect(st.flexDirection, '显式声明胜出（级联后补初值）').toBe('column')
   })
 
+  it('★★★vw/vh 单位（2026-10-08 · 决策 #595 · Stage 2）：折为内置视口变量 env:--pf-vw/--pf-vh（含缩放）', () => {
+    expect(parseStaticStyle('width: 30vw', () => {})).toEqual({ width: 'env:--pf-vw*0.3' })
+    expect(parseStaticStyle('height: 20vh', () => {})).toEqual({ height: 'env:--pf-vh*0.2' })
+    expect(parseStaticStyle('min-height:100vh', () => {})).toEqual({ minHeight: 'env:--pf-vh' })
+    expect(parseStaticStyle('padding-top:10vh', () => {})).toEqual({ padding: { top: 'env:--pf-vh*0.1' } })
+    // calc 内 env*vw 缩放
+    expect(parseStaticStyle('width:calc(var(--pf-vw) * 0.5)', () => {})).toEqual({ width: 'env:--pf-vw*0.5' })
+  })
   it('⑤ display:grid ⇒ 不补（网格不用主轴 flex-direction）', () => {
     const st = nodeStyle('<template><view class="b"></view></template><style>.b{display:grid;grid-template-columns:1fr 1fr}</style>')
     expect(st.flexDirection).toBeUndefined()

@@ -9,10 +9,13 @@
   【★诚实边界（页面具名）】
    ① 值集 = 四端可表达子集（normal / break-all，Skyline 官方表即此二值）；keep-all / break-word /
       auto-phrase 编译期诊断跳过。本页只验 normal / break-all。
-   ② ★★**App/MP 文本引擎默认即「长词断开」**（Android StaticLayout / iOS CoreText / 鸿蒙 Typography 的
-      自然行为）⇒ 案例 A（normal）在 App/MP 端呈**折行**，而 Web `normal` 呈**整串溢出**（词边界断）。
-      即「Web normal 的『不折断长词、任其溢出』」在 App/MP 的文本模型里**不可表达**（具名引擎边界）。
-      ★而**案例 B（break-all）= 任意字符处断**在五端**一致**（均折行）——这也是语料唯一用到的值（7× 全 break-all）。
+   ② ★★**normal 语义（2026-10-09 补齐）**：Web `normal` = 词边界断、**长不可断串整串溢出（不折行）**。
+      · **App 三端（自绘）已对齐 Web**：宿主对「无断点长串且溢出盒宽」显式判为**单行溢出**
+        （Android `isUnbreakableToken` / iOS `effectiveWrap` / 鸿蒙 `WORD_BREAK_TYPE_NORMAL`）——
+        案例 A 与 Web 一致（单行溢出、不折行）。
+      · **MP/Skyline = 引擎锁死边界**：Skyline 文本引擎**恒软换行**（无「长词溢出」模式）⇒ 案例 A 在 MP 呈**折行**
+        （具名豁免——引擎无对应能力，穷尽官方表后确认）。
+      ★**案例 B（break-all）= 任意字符处断**在五端**一致**（均折行）——语料唯一用到的值（7× 全 break-all）。
 -->
 <script setup lang="ts">
 // ★文本内容用脚本常量插值：Vue 模板会压缩文本节点空白，且长串需精确控制

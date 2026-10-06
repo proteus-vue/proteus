@@ -1,9 +1,9 @@
 {
   "host_id" : "ios",
-  "host_stats" : "{\"ok\":true,\"data\":{\"content_node_total\":288,\"anim_hook_missing\":0,\"visible_calls\":29,\"mount_calls\":15,\"anim_calls\":0,\"rect_calls\":0,\"shared_calls\":0,\"live_screens\":15,\"destroy_calls\":0,\"calls\":[\"screen.visible\",\"screen.mount\",\"screen.visible\",\"screen.visible\",\"screen.mount\",\"screen.visible\",\"screen.visible\",\"screen.mount\",\"screen.visible\",\"screen.visible\",\"screen.mount\",\"screen.visible\",\"screen.visible\",\"screen.mount\",\"screen.visible\",\"screen.visible\",\"screen.mount\",\"screen.visible\",\"screen.visible\",\"screen.mount\",\"screen.visible\",\"screen.visible\",\"screen.mount\",\"screen.visible\",\"screen.visible\",\"screen.mount\",\"screen.visible\",\"screen.visible\",\"screen.mount\",\"screen.visible\",\"screen.visible\",\"screen.stats\"],\"screens\":[{\"rootNodeId\":160,\"visible\":false,\"screenId\":\"grid-template-areas#7\"},{\"rootNodeId\":200,\"visible\":false,\"screenId\":\"overflow#11\"},{\"visible\":false,\"rootNodeId\":210,\"screenId\":\"place-items#12\"},{\"rootNodeId\":130,\"screenId\":\"border#4\",\"visible\":false},{\"rootNodeId\":220,\"screenId\":\"text-shadow#13\",\"visible\":false},{\"visible\":false,\"screenId\":\"text#14\",\"rootNodeId\":230},{\"rootNodeId\":140,\"screenId\":\"grid-auto-flow#5\",\"visible\":false},{\"visible\":true,\"rootNodeId\":240,\"screenId\":\"word-break#15\"},{\"visible\":false,\"screenId\":\"background-position#1\",\"rootNodeId\":100},{\"rootNodeId\":190,\"visible\":false,\"screenId\":\"overflow-page#10\"},{\"rootNodeId\":150,\"screenId\":\"grid-auto#6\",\"visible\":false},{\"screenId\":\"justify-self#8\",\"visible\":false,\"rootNodeId\":170},{\"visible\":false,\"rootNodeId\":120,\"screenId\":\"border-style#3\"},{\"visible\":false,\"rootNodeId\":110,\"screenId\":\"background-position#2\"},{\"rootNodeId\":180,\"visible\":false,\"screenId\":\"outline#9\"}],\"anim_completed\":0}}",
+  "host_stats" : "{\"data\":{\"live_screens\":0,\"calls\":[\"screen.mount\",\"screen.stats\"],\"anim_hook_missing\":0,\"screens\":[],\"anim_completed\":0,\"visible_calls\":0,\"shared_calls\":0,\"destroy_calls\":0,\"rect_calls\":0,\"mount_calls\":0,\"anim_calls\":0,\"content_node_total\":0},\"ok\":true}",
   "ok" : true,
   "rendered_page" : "word-break",
-  "run_ts" : 1791289310.8261461,
+  "run_ts" : 1791307598.8597279,
   "scroll_probe" : {
     "after_drag_down_100k" : 0,
     "after_drag_left_100k_x" : 0,
@@ -15,7 +15,7 @@
   },
   "state" : {
     "current" : "word-break",
-    "depth" : 15,
+    "depth" : 19,
     "screens" : [
       "background-position",
       "border-style",
@@ -24,12 +24,16 @@
       "grid-auto",
       "grid-template-areas",
       "justify-self",
+      "line-clamp",
+      "math-functions",
       "outline",
       "overflow-page",
       "overflow",
       "place-items",
+      "safe-area",
       "text-shadow",
       "text",
+      "vw-vh",
       "word-break"
     ],
     "stack" : [
@@ -41,12 +45,16 @@
       "grid-auto",
       "grid-template-areas",
       "justify-self",
+      "line-clamp",
+      "math-functions",
       "outline",
       "overflow-page",
       "overflow",
       "place-items",
+      "safe-area",
       "text-shadow",
       "text",
+      "vw-vh",
       "word-break"
     ],
     "tabLabels" : {
@@ -103,6 +111,18 @@
       "via" : "drive"
     },
     {
+      "current" : "line-clamp",
+      "ok" : true,
+      "tap" : "line-clamp",
+      "via" : "drive"
+    },
+    {
+      "current" : "math-functions",
+      "ok" : true,
+      "tap" : "math-functions",
+      "via" : "drive"
+    },
+    {
       "current" : "outline",
       "ok" : true,
       "tap" : "outline",
@@ -127,6 +147,12 @@
       "via" : "drive"
     },
     {
+      "current" : "safe-area",
+      "ok" : true,
+      "tap" : "safe-area",
+      "via" : "drive"
+    },
+    {
       "current" : "text-shadow",
       "ok" : true,
       "tap" : "text-shadow",
@@ -136,6 +162,12 @@
       "current" : "text",
       "ok" : true,
       "tap" : "text",
+      "via" : "drive"
+    },
+    {
+      "current" : "vw-vh",
+      "ok" : true,
+      "tap" : "vw-vh",
       "via" : "drive"
     },
     {

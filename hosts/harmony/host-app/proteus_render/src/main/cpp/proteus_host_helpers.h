@@ -103,9 +103,12 @@ static inline void parseEnvObject(const std::string& argsJson, std::map<std::str
 
 /// 解析 `env:<name>[+N|-N][~F]` → vp；未知名/无表项 ⇒ fallback（缺省 0）。
 static inline double evalEnvToken(const std::string& name, const std::map<std::string, double>& env) {
-  std::string nm = name; double fb = 0; int off = 0;
+  std::string nm = name; double fb = 0; int off = 0; double scale = 1;
   size_t tilde = nm.find('~');
   if (tilde != std::string::npos) { fb = strtod(nm.c_str() + tilde + 1, nullptr); nm = nm.substr(0, tilde); }
+  // ★缩放（决策 #595）：`*<scale>`
+  size_t star = nm.find('*');
+  if (star != std::string::npos) { scale = strtod(nm.c_str() + star + 1, nullptr); nm = nm.substr(0, star); }
   // ★偏移符号 = 后随**数字**的 +/-,（变量名自带连字符 '-'，不能见到 '-' 就当分隔符——真机实测会截出 NaN）
   for (size_t i = 1; i + 1 < nm.size(); i++) {
     if ((nm[i] == '+' || nm[i] == '-') && nm[i + 1] >= '0' && nm[i + 1] <= '9') {
@@ -115,7 +118,7 @@ static inline double evalEnvToken(const std::string& name, const std::map<std::s
     }
   }
   auto it = env.find(nm);
-  return (it != env.end() ? it->second : fb) + off;
+  return ((it != env.end() ? it->second : fb)) * scale + off;
 }
 
 /// 就地替换 nodes 串里的 `"env:<token>"`（含引号）→ 数值（vp）。
