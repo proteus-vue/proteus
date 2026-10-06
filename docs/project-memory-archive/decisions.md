@@ -1254,3 +1254,18 @@
 **⑥ 踩坑（如实记录）**：(a) `d8`/`apksigner` 是 Java 启动脚本，**读 `JAVA_HOME`**（而 `javac` 用全路径不受影响）⇒ 首跑 `Unable to locate a Java Runtime` → 给子工具传 `env.JAVA_HOME = jdk`；(b) 最小宿主与**参考宿主同包**（`dev.proteus.layoutcore`）⇒ 装机时签名不匹配（`INSTALL_FAILED_UPDATE_INCOMPATIBLE`）→ 先 `uninstall` 再装（★同包是"零可见性改动"的代价：二者不可共存）。
 **⑦ 诚实边界**：a) Android runtime **发布形态**是"本仓构建期产出 AAR"（可注入预建件）；b) **签名用调试 keystore**（自动生成，机器本地）；c) 无 Gradle——沿用本仓"手工链 + 断言"哲学；d) 生成工程与参考宿主同包 ⇒ 装机互斥（验证时切换）。
 **⑧ 影响**：`hosts/android/build-runtime-aar.sh`（新）· `packages/cli/{src/host-scaffold.ts,src/host-package.ts,templates-host/android/**}`（新模板 + CLI）· `packages/cli/{src/index.ts,src/args.ts}` 接线 · `tests/host-scaffold.test.ts` · 文档两处；★**三端样板收官**（harmony/ios/android 全打通：runtime 可依赖单元 + 最小壳 + CLI 生成/打包 + 真机验证）。
+567. **★★CSS 逐项 · `background-position`（css:next 下一项）**——**侦察发现它不可独立交付**（是「背景定位」家族），登记实施计划 + pins Web 真值（用户裁定：做家族·静态单层）**：
+**① 用户指令**：「继续css:next」⇒ 装置指向下一 P0 = `background-position`（用法 4× · CSS Backgrounds and Borders）。
+**② ★侦察结论（三条，决定它不是一个属性批）**：
+  · **三端宿主渐变恒「填满整盒」**（无 size/position/repeat 概念）：Android `ProteusHostView.java:2423-2452`（线性端点 = 盒中心±半程方向向量；径向半径 = r×盒宽）· iOS `selfdraw-scene.swift:1630-1645`（`CAGradientLayer` 单位空间 = 节点 bounds）· 鸿蒙 `proteus_render.cpp:351`（`OH_Drawing_RectCreate(0,0,w,h)`）。内核 `GradState`（`layout-core-rust/src/style.rs:253-283`）只有 kind/angle/cx/cy/r/stops，**无 bg 字段**；blob 零渐变位（渐变走 JSON DTO）。
+  · **语料 4× 全部与 `background-size` 配对**（也是 not-started）：`built-in-components/style.css:607`（`center top, center bottom` + `size 100% 92px`，**多层**）· `p-progress:156-159` + `p-skeleton:53-54`（**@keyframes 动画**，行进条纹 / shimmer）。
+  · **MP/Web 原生直通**（CSS 透传）⇒ 本批是**纯 App 自绘缺口**，且要改的是**跨语言渐变几何**（本仓最高风险面 `check-gradient-contract`：三端 + TS 端点式必须同式）。
+**③ 用户裁定**：做**「背景定位」家族 · 静态单层**（size + position + repeat；**动画 / 多层渐变为具名边界**，留下一批）。
+**④ ★Web 真值（真 Chromium 实测，供内核 + 三端统一实现）**：
+  · `background-size` → 图像尺寸：`50px 50px`→50×50 · `50% 50%`→半盒 · `400% 100%`→4×盒宽×1×盒高；`auto` = 固有尺寸（渐变无固有尺寸 ⇒ 对渐变 = 整个定位区）。
+  · `background-position` → 偏移：关键字 `center`=`50% 50%`、`right`/`bottom`=`100%`；**px** = 直接偏移；**%** = `X% × (盒宽 − 图宽)`（**★减图尺寸**——实测 `size 50px`+`pos 100%` 于 100px 盒 ⇒ offset 50px）。
+  · `background-repeat`：`no-repeat` 只画一次（偏移处）；`repeat` 以**图像尺寸为砖**平铺，相位 = 偏移。
+  · 渐变方向相对**图像盒**（不是元素盒）。
+**⑤ 交付物**：`docs/css-background-family-plan.md`（登记件 + 实施计划：侦察证据 / Web 真值 / 范围与具名边界 / 实施链 7 步 / 风险纪律）；`gen-css-feature-inventory.mjs` 的两条 `notYet` 描述改为**指向家族 plan**（`css:verify background-position` 输出即如实标注耦合）；`board-inventory` §其他文档登记。
+**⑥ 诚实边界 / 状态**：**实施未开工**——本批需跨 kernel + 三端宿主 + 一致性链 + 验收页 + 四端真机验证（≈2–3 个普通属性批、多会话）；**动画定位与多层渐变**明确留下批；渐变 `auto` 固有尺寸语义待与 Web 逐值核对。
+**⑦ 影响**：`docs/css-background-family-plan.md`（新）· `scripts/gen-css-feature-inventory.mjs`（两条 note/evidence）· `docs/generated/css-feature-inventory.{json,md}`（重生成）· `docs/board-inventory.md`（登记）；**下一动作**：按 plan §3 实施链开工（契约四同步 → 编译器折叠 → 内核 → 三端宿主几何重写 → 一致性链 → 验收）。
