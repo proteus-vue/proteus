@@ -33,7 +33,9 @@
 // 【诚实边界】本文件只绑**引擎侧**入口（宿主 → 引擎）；
 //   反向（引擎 → 宿主）经上文的蹦床；能力插件与原生组件的 Java 回调同法暂未绑（见文件末尾）。
 
+use std::collections::HashMap;
 use std::ffi::{c_char, c_void, CStr, CString};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Mutex, OnceLock};
 
 use jni::objects::{GlobalRef, JClass, JLongArray, JObject, JString, JValue};
@@ -47,6 +49,17 @@ use proteus_host_abi as abi;
 static JAVA_VM: OnceLock<JavaVM> = OnceLock::new();
 /// 宿主的回调对象（**全局引用**——见文件头约束 ①）
 static HOST_OBJ: Mutex<Option<GlobalRef>> = Mutex::new(None);
+
+/// ★HA4：原生 View 句柄注册表——**C handle = 索引**（usize，非 0），对象经 GlobalRef 全局持有。
+///   【为什么需要它】C ABI 的 handle 是 *mut c_void；而 Java 的 View 是 GC 对象，**不能**当裸指针传
+///   （会被 GC 回收/移动）⇒ 用"全局引用 + 索引"做不透明句柄（引擎只透传，不解释）。
+static NATIVE_VIEWS: OnceLock<Mutex<HashMap<usize, GlobalRef>>> = OnceLock::new();
+/// 句柄序号（从 1 起——0/NULL 在 C 侧表示"无/失败"）
+static NATIVE_VIEW_SEQ: AtomicUsize = AtomicUsize::new(1);
+
+fn native_views() -> &'static Mutex<HashMap<usize, GlobalRef>> {
+    NATIVE_VIEWS.get_or_init(|| Mutex::new(HashMap::new()))
+}
 
 /// ★`JNI_OnLoad`：抓住 `JavaVM`（**唯一可靠的获取时机**——回调里现取不可靠，
 ///   因为回调可能由"Java 起源但已被 JNI 包装"的线程触发，那时 `env` 不在手边）。
@@ -144,6 +157,113 @@ unsafe extern "C" fn trampoline_request_frame(_ud: *mut c_void) {
     }));
 }
 
+/// ★HA4 蹦床：引擎要建原生 View ⇒ 调 Java nativeViewCreate，把返回的 View 存成 GlobalRef、
+///   回传**索引**作不透明句柄（见 NATIVE_VIEWS）。返回 NULL ⇒ 宿主**拒绝**（engine 记为拒绝并报错）。
+unsafe extern "C" fn trampoline_native_view_create(
+    kind: *const c_char,
+    frame: *const abi::ProteusRect,
+    _ud: *mut c_void,
+) -> *mut c_void {
+    let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| -> *mut c_void {
+        if frame.is_null() {
+            return std::ptr::null_mut();
+        }
+        let k = if kind.is_null() {
+            String::from("native")
+        } else {
+            unsafe { CStr::from_ptr(kind) }.to_string_lossy().into_owned()
+        };
+        let f = unsafe { &*frame };
+        let Some(host) = host_ref() else { return std::ptr::null_mut() };
+        let obj = with_env(|env| -> Option<GlobalRef> {
+            let jk = env.new_string(&k).ok()?;
+            let v = env
+                .call_method(
+                    host.as_obj(),
+                    "nativeViewCreate",
+                    "(Ljava/lang/String;FFFF)Ljava/lang/Object;",
+                    &[
+                        JValue::Object(jk.as_ref()),
+                        JValue::Float(f.x),
+                        JValue::Float(f.y),
+                        JValue::Float(f.width),
+                        JValue::Float(f.height),
+                    ],
+                )
+                .ok()?;
+            let o = v.l().ok()?;
+            if o.is_null() {
+                return None; // 宿主拒绝（kind 不支持）——engine 记为拒绝并报错
+            }
+            env.new_global_ref(&o).ok()
+        });
+        match obj {
+            Some(g) => {
+                let id = NATIVE_VIEW_SEQ.fetch_add(1, Ordering::SeqCst);
+                if let Ok(mut m) = native_views().lock() {
+                    m.insert(id, g);
+                }
+                id as *mut c_void
+            }
+            None => std::ptr::null_mut(),
+        }
+    }));
+    r.unwrap_or(std::ptr::null_mut())
+}
+
+/// 更新原生 View 几何（句柄 = create 回传的索引）
+unsafe extern "C" fn trampoline_native_view_update(handle: *mut c_void, frame: *const abi::ProteusRect, _ud: *mut c_void) {
+    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        if handle.is_null() || frame.is_null() {
+            return;
+        }
+        let id = handle as usize;
+        let f = unsafe { &*frame };
+        let Some(host) = host_ref() else { return };
+        // 先克隆出 GlobalRef（避免持锁跨 JNI 调用）
+        let g = native_views().lock().ok().and_then(|m| m.get(&id).cloned());
+        let Some(g) = g else { return };
+        let _ = with_env(|env| -> Option<()> {
+            let _ = env.call_method(
+                host.as_obj(),
+                "nativeViewUpdate",
+                "(Ljava/lang/Object;FFFF)V",
+                &[
+                    JValue::Object(g.as_obj()),
+                    JValue::Float(f.x),
+                    JValue::Float(f.y),
+                    JValue::Float(f.width),
+                    JValue::Float(f.height),
+                ],
+            );
+            Some(())
+        });
+    }));
+}
+
+/// 销毁原生 View（移除注册表项 ⇒ GlobalRef 释放；并调 Java nativeViewDestroy）
+unsafe extern "C" fn trampoline_native_view_destroy(handle: *mut c_void, _ud: *mut c_void) {
+    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        if handle.is_null() {
+            return;
+        }
+        let id = handle as usize;
+        let g = native_views().lock().ok().and_then(|mut m| m.remove(&id));
+        let Some(g) = g else { return };
+        if let Some(host) = host_ref() {
+            let _ = with_env(|env| -> Option<()> {
+                let _ = env.call_method(
+                    host.as_obj(),
+                    "nativeViewDestroy",
+                    "(Ljava/lang/Object;)V",
+                    &[JValue::Object(g.as_obj())],
+                );
+                Some(())
+            });
+        }
+    }));
+}
+
 /* ────────────────────────── 引擎入口（Java → 引擎） ────────────────────────── */
 
 /// 建引擎。`host` 为宿主回调对象（实现 `ProteusHost`）；返回引擎句柄（`0` = 失败）。
@@ -177,6 +297,11 @@ pub extern "system" fn Java_dev_proteus_sdk_ProteusEngine_nativeCreate<'local>(
         };
         vt.measure_text = Some(trampoline_measure_text);
         vt.request_frame = Some(trampoline_request_frame);
+        // ★HA4：原生组件三回调（引擎驱动生命周期）；宿主未 override 其 Java 缺省实现 ⇒
+        //   create 返回 null ⇒ engine 记为"宿主拒绝创建"并报错（不静默）。
+        vt.native_view_create = Some(trampoline_native_view_create);
+        vt.native_view_update = Some(trampoline_native_view_update);
+        vt.native_view_destroy = Some(trampoline_native_view_destroy);
         // ③ 版本：用 SDK 自己的（同包发布，必然一致）
         let ver = abi::proteus_abi_version_info();
         let mut hint = [0 as c_char; 256];

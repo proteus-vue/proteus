@@ -61,6 +61,9 @@ for cand in "$ROOT/.tools/jdk17" "$ROOT/.tools/jdk-17.0.20.1+1/Contents/Home"; d
   [ -x "$cand/bin/javac" ] && JDK="$cand" && break
 done
 [ -n "$JDK" ] && [ -x "$JDK/bin/javac" ] || { echo "✗ 找不到 javac"; exit 2; }
+# ★★必须 export JAVA_HOME：d8 / aapt2 / apksigner 都是**脚本**，内部 spawn java 并按 JAVA_HOME（或系统 java）
+#   查找运行时——本机无系统 java ⇒ 不 export 会报 "Unable to locate a Java Runtime"（d8 未产出 classes.dex）。
+export JAVA_HOME="$JDK"
 rm -rf "$BUILD/classes"; mkdir -p "$BUILD/classes"
 "$JDK/bin/javac" -nowarn -encoding UTF-8 \
   -cp "$PLATFORM:$WORK/classes.jar" -d "$BUILD/classes" \

@@ -10,6 +10,7 @@
    ⑤ 几何/更新真的产出了（客户能画出东西）
    ⑥ 输入可用（tap 返回命中 id 或 0）
    ⑦ **界面没崩**（`last_error` 为空）
+   ⑧ ★HA4 **原生组件**：C-ABI 驱动引擎→宿主回调，宿主建出**真 Android View** 并挂进视图树
 
 用法：python3 hosts/android/embed-demo/check-embed-demo.py <embed-demo.json>
 退出码：0 全过 / 1 有失败 / 0（产物缺失时诚实跳过）
@@ -105,6 +106,23 @@ def main() -> int:
         ok = False
     else:
         print(f"  ✓ ⑥ 输入可用：tap 命中节点 {hit}（0 = 未命中，也属正常）")
+
+    # ⑧ ★HA4：原生组件 —— C-ABI 驱动引擎→宿主回调，宿主建出**真 Android View**
+    nv_created = d.get("native_view_created", 0) or 0
+    nv_failed = d.get("native_view_create_failed", 0) or 0
+    nv_attached = d.get("native_attached")
+    nv_kind = d.get("native_kind_seen")
+    if nv_created < 1:
+        fail(f"原生组件未被创建：native_view_created={nv_created}（树里有 nativeHost ⇒ 引擎应回调宿主）")
+        ok = False
+    elif nv_failed != 0:
+        fail(f"原生组件创建失败 {nv_failed} 个（宿主拒绝 / kind 不支持——不静默）")
+        ok = False
+    elif nv_attached is not True:
+        fail(f"原生 View 未挂进视图树（native_attached={nv_attached}）")
+        ok = False
+    else:
+        print(f"  ✓ ⑧ 原生组件：C-ABI 驱动 create（{nv_created}）· kind={nv_kind} · 真 View 已挂载（frame={d.get('native_frame')}）")
 
     print()
     if ok:
