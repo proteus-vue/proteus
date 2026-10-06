@@ -95,6 +95,10 @@ describe('★App CSS 支持面 · ② SSOT 与折叠实现同源（真折叠，�
       if (f === 'justifySelf') return 'center'
       // ★★★word-break 项（2026-10-06）：行内断词策略（枚举样例——折叠器直传宿主文本引擎）
       if (f === 'wordBreak') return 'break-all'
+      // ★★★背景定位家族（2026-10-07）：size/position（长度/关键字）+ repeat（枚举）样例
+      if (f === 'backgroundSize') return '50px 50px'
+      if (f === 'backgroundPosition') return 'center'
+      if (f === 'backgroundRepeat') return 'no-repeat'
       if (f === 'aspectRatio') return '1.5'
       if (f === 'pointerEvents') return 'none'
       if (f === 'textDecoration') return 'underline'

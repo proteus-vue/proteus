@@ -46,6 +46,8 @@ export const APP_PAINT_FIELDS: readonly string[] = [
   'textOverflow', 'letterSpacing', 'textDecoration', 'visibility', 'borderRadius', 'borderRadiusPct',
   'borderColor', 'borderWidth', 'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor',
   'opacity',
+  // ★★★背景定位家族（2026-10-07）：背景图层图像盒的 size/position/repeat（字符串，透传宿主几何）
+  'backgroundSize', 'backgroundPosition', 'backgroundRepeat',
 ]
 const LAYOUT_SET = new Set(APP_LAYOUT_FIELDS)
 const PAINT_SET = new Set(APP_PAINT_FIELDS)
@@ -211,6 +213,8 @@ export function mapStyleIRToApp(fields: Record<string, unknown>): AppMappingResu
         'justifySelf',
         // ★★★word-break 项（2026-10-06）：行内断词策略（字符串枚举，透传宿主文本引擎）
         'wordBreak',
+        // ★★★背景定位家族（2026-10-07）：字符串形态（宿主解析几何）
+        'backgroundSize', 'backgroundPosition', 'backgroundRepeat',
         'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor',
       ])
       if (enumFields.has(field)) {

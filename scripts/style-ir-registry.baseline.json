@@ -1,11 +1,11 @@
 {
-  "total": 93,
-  "semantic": 67,
+  "total": 96,
+  "semantic": 70,
   "engineOnly": 26,
   "byDomain": {
     "layout": 41,
     "matrix-only": 4,
-    "paint": 29,
+    "paint": 32,
     "derived": 10,
     "special": 1,
     "edges": 8

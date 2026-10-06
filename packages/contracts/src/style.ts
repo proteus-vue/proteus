@@ -38,6 +38,13 @@ export type StylePropLevel =
   //   与 white-space 同轴（同属文本换行族）。四同步（INV-CE-07）：
   //   本表 + runtime PROP_TYPES/narrowing + compiler 静态校验 + 注册表 VALUE_TYPE_BY_LEVEL。
   | 'WordBreak'
+  // ★★★背景定位家族（2026-10-07 · css:next background-position · 静态单层）：
+  //   size/position/repeat 是「背景图/渐变定位」三件套（CSS Backgrounds 3）。
+  //   值集 = **四端可表达子集**（MP/Web 原生直通；App 自绘按 Web 几何重写渐变端点/平铺）。
+  //   四同步（INV-CE-07）：本表 + runtime PROP_TYPES/narrowing + compiler 静态校验 + 注册表 VALUE_TYPE_BY_LEVEL。
+  | 'BackgroundSize'
+  | 'BackgroundPosition'
+  | 'BackgroundRepeat'
   | 'Transform'
   | 'TransformOrigin'
   | 'SEMANTIC_ONLY'
@@ -94,6 +101,10 @@ export const STYLE_PROP_LEVELS = {
   justifySelf: 'JustifySelf',
   // ★★★word-break 项（2026-10-06）：行内断词策略（normal/break-all/break-word；keep-all 等诊断跳过）
   wordBreak: 'WordBreak',
+  // ★★★背景定位家族（2026-10-07）：背景图/渐变的尺寸/位置/平铺（作用对象 = 背景图层的图像盒）
+  backgroundSize: 'BackgroundSize',
+  backgroundPosition: 'BackgroundPosition',
+  backgroundRepeat: 'BackgroundRepeat',
   transform: 'Transform',
   transformOrigin: 'TransformOrigin',
   flex: 'FlexNumber',

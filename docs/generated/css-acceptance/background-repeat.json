@@ -1,33 +1,33 @@
 {
   "_note": "★CSS 能力逐项验收包（用户指定流程：实现一个 → 全端对齐视觉验收一个）。gates：implemented（IR 在册）/ parity（真 Chromium 同构样本与 CSE 值一致）/ endsMapped（三端可表达）。★视觉验收（像素级）仍由独立子代理按 Web 基准并排做——本包只归档**机器可判**的三段；pass=true 表示\"可以进入视觉验收\"，不等于\"视觉已验收\"。",
-  "id": "background-position",
+  "id": "background-repeat",
   "kind": "property",
-  "verifiedAt": "2026-10-06T04:46:28.166Z",
+  "verifiedAt": "2026-10-06T04:46:29.086Z",
   "implEvidence": {
     "impl": "implemented",
-    "implNote": "IR 注册表在册（scope=engine-only · 矩阵 BackgroundPosition）",
+    "implNote": "IR 注册表在册（scope=engine-only · 矩阵 BackgroundRepeat）",
     "inIrRegistry": true,
     "irScope": "engine-only",
     "inCompilerFold": false,
-    "matrixLevel": "BackgroundPosition",
+    "matrixLevel": "BackgroundRepeat",
     "webSupport": null,
-    "usage": 4,
+    "usage": 0,
     "priority": "done"
   },
   "parity": {
     "ran": true,
     "pass": true,
     "detail": [
-      "IR `backgroundPosition` = \"25px 10px\"（与浏览器样本 background-position: 25px 10px 一致）"
+      "IR `backgroundRepeat` = \"no-repeat\"（与浏览器样本 background-repeat: no-repeat 一致）"
     ],
-    "css": "background-position: 25px 10px",
-    "irField": "backgroundPosition",
-    "irValue": "25px 10px",
+    "css": "background-repeat: no-repeat",
+    "irField": "backgroundRepeat",
+    "irValue": "no-repeat",
     "computedProbe": {
       "align-items": "normal",
       "background-color": "rgba(0, 0, 0, 0)",
-      "background-position": "25px 10px",
-      "background-repeat": "repeat",
+      "background-position": "0% 0%",
+      "background-repeat": "no-repeat",
       "background-size": "auto",
       "border-bottom-color": "rgb(0, 0, 0)",
       "border-bottom-right-radius": "0px",
@@ -61,8 +61,8 @@
   },
   "endExpressibility": {
     "web": "基准端（浏览器原生——A 档）",
-    "skyline": "可表达（background-position）",
-    "app": "可表达（dto: backgroundPosition · ops: paint.backgroundPosition）",
+    "skyline": "可表达（background-repeat）",
+    "app": "可表达（dto: backgroundRepeat · ops: paint.backgroundRepeat）",
     "skylineUnsupported": [],
     "appUnsupported": []
   },

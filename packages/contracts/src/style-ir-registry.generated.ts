@@ -118,6 +118,45 @@ export const STYLE_IR_FIELDS: Record<string, StyleFieldSpec> = {
       inheritable: false,
     },
   },
+  "backgroundPosition": {
+    scope: "semantic",
+    domain: "paint",
+    valueType: "enum",
+    sources: {
+      compiler: "APP_PAINT_FIELDS",
+      matrixLevel: "BackgroundPosition",
+      runtimeWhitelist: false,
+      runtimeForbidden: false,
+      consistencyMatrix: true,
+      inheritable: false,
+    },
+  },
+  "backgroundRepeat": {
+    scope: "semantic",
+    domain: "paint",
+    valueType: "enum",
+    sources: {
+      compiler: "APP_PAINT_FIELDS",
+      matrixLevel: "BackgroundRepeat",
+      runtimeWhitelist: false,
+      runtimeForbidden: false,
+      consistencyMatrix: true,
+      inheritable: false,
+    },
+  },
+  "backgroundSize": {
+    scope: "semantic",
+    domain: "paint",
+    valueType: "enum",
+    sources: {
+      compiler: "APP_PAINT_FIELDS",
+      matrixLevel: "BackgroundSize",
+      runtimeWhitelist: false,
+      runtimeForbidden: false,
+      consistencyMatrix: true,
+      inheritable: false,
+    },
+  },
   "borderBottomColor": {
     scope: "semantic",
     domain: "paint",
@@ -1253,15 +1292,15 @@ export const STYLE_IR_FIELDS: Record<string, StyleFieldSpec> = {
 
 /** 摘要（判据与官网数字读它——机器推导，非手写） */
 export const STYLE_IR_SUMMARY = {
-  total: 93,
-  semantic: 67,
+  total: 96,
+  semantic: 70,
   engineOnly: 26,
   byDomain: {
     "derived": 10,
     "edges": 8,
     "layout": 41,
     "matrix-only": 4,
-    "paint": 29,
+    "paint": 32,
     "special": 1,
   },
 } as const

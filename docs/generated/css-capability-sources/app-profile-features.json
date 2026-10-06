@@ -292,6 +292,42 @@
       "note": "颜色编译期归一为 hex：hex / rgb() / rgba() / **命名色（148 个标准色，批 14）** / transparent；hsl/var ⇒ 诊断跳过。★`background` 纯色简写折进 backgroundColor；★批次 33：`linear-gradient` / `radial-gradient` 折进引擎 `fillGradient` 通道（`background`/`background-image` 均可）——免去手写 `fill-gradient='{json}'` 的胶水；`url()` 图片仍诊断（走原生组件）。★批 14 多端一致性审计修：命名色此前丢弃（Web 生效）⇒ 现查表归一（核心只认 hex）"
     },
     {
+      "id": "background-size",
+      "css": "background-size",
+      "category": "paint",
+      "today": "supported",
+      "tier": "L2",
+      "strategy": "宿主几何",
+      "probe": [
+        "background-size"
+      ],
+      "note": "★★★背景定位家族（2026-10-07 · css:next background-position · 静态单层）：**背景图层的图像盒尺寸**。契约：新级别 BackgroundSize（四同步）；CSE 直通 IR 字段 backgroundSize；编译器 APP_PAINT_FIELDS + 折叠分支（字符串原样下发）；宿主按 Web 几何（size %= 相对盒、px 直接）把渐变端点/平铺算到图像盒。★诚实边界：多值/关键字 cover/contain 暂诊断（本批不做）；动画/多层渐变留下一批。见 docs/css-background-family-plan.md"
+    },
+    {
+      "id": "background-position",
+      "css": "background-position",
+      "category": "paint",
+      "today": "supported",
+      "tier": "L2",
+      "strategy": "宿主几何",
+      "probe": [
+        "background-position"
+      ],
+      "note": "★★★背景定位家族（2026-10-07 · css:next）：**背景图像盒的偏移**。契约：新级别 BackgroundPosition（四同步）；CSE 直通 backgroundPosition；编译器 APP_PAINT_FIELDS + 折叠分支。★Web 真值（真 Chromium 实测）：关键字 left/top=0、right/bottom=100%、center=50%；px 直接；**% = X%×(盒宽−图宽)**（减图尺寸）。宿主解析该几何。见 docs/css-background-family-plan.md"
+    },
+    {
+      "id": "background-repeat",
+      "css": "background-repeat",
+      "category": "paint",
+      "today": "supported",
+      "tier": "L2",
+      "strategy": "宿主几何",
+      "probe": [
+        "background-repeat"
+      ],
+      "note": "★★★背景定位家族（2026-10-07）：**背景图像盒平铺**（repeat=以图像尺寸为砖平铺，相位=偏移；no-repeat=只画一次）。契约：新级别 BackgroundRepeat（四同步，值集 repeat/no-repeat——Space/Round 暂不做）；CSE 直通 backgroundRepeat；编译器 APP_PAINT_FIELDS + 折叠分支。见 docs/css-background-family-plan.md"
+    },
+    {
       "id": "color",
       "css": "color",
       "category": "paint",
