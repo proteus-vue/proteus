@@ -204,6 +204,6 @@ proteus build --target android --package --host-dir <dir>   # 编译项目内容
 **打包**：`--package` 只「壳调 hvigorw」（不自研工具链）；先 `ohpm install`（file: 依赖 → 跨模块 native 聚合）。
 
 **诚实边界**：① 只做**鸿蒙样板**（Android/iOS 留下一轮）；② runtime 发布形态仍是"框架 checkout 同源复制"
-（可注入 `PROTEUS_HOST_RUNTIME_DIR`；独立发布包列为后续）；③ **华为 CA 签名属机器本地**——模板给
+（可注入 `PROTEUS_HOST_RUNTIME_DIR`；独立发布包**已登记** `docs/proteus-host-runtime-package-plan.md`）；③ **华为 CA 签名属机器本地**——模板给
 `signingConfigs: []`（unsigned 可构建、不能装机），装机需在 DevEco 勾选一次 "Automatically generate signature"。
 **安全**：`check:secret-scan` 门禁扫 git 跟踪面（签名/密钥/明文口令不得入库）。

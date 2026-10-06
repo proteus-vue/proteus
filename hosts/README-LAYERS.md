@@ -94,7 +94,7 @@ L1 框架主仓（本仓）发独立包 → L2 宿主 App 仓**只依赖不 fork
     装机（复用本机华为 CA 签名）→ 启动 → 渲染项目真实内容（`HOST_PAGE_RENDER page=index nodes_rendered=73`）。
   ★**只做鸿蒙样板**：Android（AAR）/ iOS（SwiftPM）抽包按同一套复制，**留下一轮**（Android 93 处可见性 +
   iOS 混装文件拆分各是一摊）。★runtime 的**发布形态**仍是"从框架 checkout 同源复制"（可注入
-  `PROTEUS_HOST_RUNTIME_DIR`）；拆成独立发布包（`@proteus-vue/host-runtime-harmony`）列为后续。
+  `PROTEUS_HOST_RUNTIME_DIR`）；拆成独立发布包列为后续——**已登记** `docs/proteus-host-runtime-package-plan.md`（触发条件：外部 L2 消费者 / API 冻结 / 特性流收敛）。
 
 - **第三刀 · iOS 样板（2026-10-07 打通）**：把同一模式在 **iOS** 跑通并真机验证。
   · **runtime 抽为"源集单元"**：iOS 宿主是 **pure swiftc 直出**（无 Xcode 工程/SPM）——故 runtime 不是
@@ -134,7 +134,7 @@ L1 框架主仓（本仓）发独立包 → L2 宿主 App 仓**只依赖不 fork
     `proteus build --target android --package --host-dir <dir>`（javac → d8 → aapt2 → zip → zipalign → apksigner）。
   · **真机判据**：生成的独立工程 zero-device 构建出签名 `.apk` → `adb install` → 启动 → **渲染项目真实内容**
     （`HOST_PAGE_RENDER page=index ok=true nodes=73`，截图核对）。
-  ★**诚实边界**：a) Android runtime **发布形态**是"本仓构建期产出 AAR"（可注入预建件）；b) **签名用调试
+  ★**诚实边界**：a) Android runtime **发布形态**是"本仓构建期产出 AAR"（可注入预建件）——独立发布包见 `docs/proteus-host-runtime-package-plan.md`；b) **签名用调试
   keystore**（自动生成，机器本地）；c) 无 Gradle——沿用本仓"手工链 + 断言"哲学（见 hosts/android/README.md）。
 
 - 分层**不改任何运行期行为**：只搬文件 + 改编译源清单，三端零设备编译 + 一次真实构建截图黑盒验证。
