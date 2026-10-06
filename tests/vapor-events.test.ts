@@ -34,6 +34,18 @@ describe('Vapor 事件编译 · 支持形态', () => {
     })
   })
 
+  it('★`$nav(\'detail\')` → nav 动作（B1 导航一等动作；静态目标）', () => {
+    const r = compileEvents(sfc(`<p-view @tap="$nav('detail')"></p-view>`))
+    expect(r.diagnostics).toHaveLength(0)
+    expect(r.events).toEqual([{ nodeId: 0, event: 'tap', handler: 'h0' }])
+    expect(r.handlers.h0).toEqual([{ op: 'nav', target: 'detail' }])
+  })
+
+  it('★`$nav(expr)`（动态目标）→ 明确诊断（不静默）', () => {
+    const r = compileEvents(sfc(`<p-view @tap="$nav(target)"></p-view>`))
+    expect(r.diagnostics.length).toBeGreaterThan(0)
+  })
+
   it('`boxW += 30` → add（右侧求值为 30）', () => {
     const r = compileEvents(sfc(`<p-view @click="boxW += 30"></p-view>`))
     expect(r.handlers.h0).toEqual([{ op: 'add', source: 'boxW', program: { k: 'lit', v: 30 } }])
