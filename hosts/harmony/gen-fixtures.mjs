@@ -136,6 +136,12 @@ function copyAppScreenContent() {
   fs.mkdirSync(RAWFILE, { recursive: true })
   fs.copyFileSync(src, path.join(RAWFILE, name))
   console.log(`  ✓ ${name}：App 屏内容产物（${fs.statSync(src).size}B）`)
+  // ★★★运行时表现配置（2026-10-08 · 决策 #594）：宿主据此显隐系统状态栏（缺省 show）
+  const cfgSrc = path.join(ROOT, `${proj}/dist/app/harmony/app-config.json`)
+  if (fs.existsSync(cfgSrc)) {
+    fs.copyFileSync(cfgSrc, path.join(RAWFILE, 'app-config.json'))
+    console.log('  ✓ app-config.json：运行时表现配置')
+  }
 }
 
 console.log('[gen-fixtures] 鸿蒙宿主夹具再生成')

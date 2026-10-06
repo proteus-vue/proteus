@@ -192,6 +192,12 @@ if [ -f "$APP_SC" ]; then
 else
   echo "    ⚠ 未见 $APP_SC —— 缺它只影响视觉合成（先跑 examples 的 build:ios）"
 fi
+# ★★★运行时表现配置 → .app（2026-10-08 · 决策 #594）：宿主据此显隐系统状态栏（缺省 show）
+APP_CFG="$ROOT/${PROTEUS_APP_PROJECT:-superapp}/dist/app/ios/app-config.json"
+if [ -f "$APP_CFG" ]; then
+  cp "$APP_CFG" "$APP/app-config.json"
+  echo "    app-config.json 已入 .app"
+fi
 # ★Morpheus 炫技场 bundle（`--showcase` 模式用）
 cp "$HERE/bridge/dist/bundle-showcase.js" "$APP/bundle-showcase.js"
 # ★★A/B（矩阵 #14 续）：与 Android **同一份** `bundle-vapor.js` + `vapor-artifacts.json`

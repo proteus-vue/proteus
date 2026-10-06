@@ -66,7 +66,10 @@ if (consumed.length < 10) {
 
 /* ── ② 宿主白名单（从 Java 源码提取） ── */
 const hostSrc = fs.readFileSync(HOST, 'utf-8')
-const listMatch = /LAYOUT_KEYS = new java\.util\.HashSet<>\(java\.util\.Arrays\.asList\(([\s\S]*?)\)\)\);/.exec(hostSrc)
+// ★★★修（2026-10-08）：正则原要求 `\)\)\);`（**3** 个右括号）——而真实代码是 `asList(...))`（2 个右括号）
+//   ⇒ 原正则**永不匹配真实收尾**，一路吞到后面代码里的 `)));`，把无关字符串字面量当键（假绿：白名单虚高到 101）。
+//   改为精确匹配 `asList(...));`。
+  const listMatch = /LAYOUT_KEYS = new java\.util\.HashSet<>\(java\.util\.Arrays\.asList\(([\s\S]*?)\)\);/.exec(hostSrc)
 if (!listMatch) {
   console.error('✗ 找不到 VaporRenderHost.LAYOUT_KEYS（被改名/改造？）——门禁失效，先修门禁')
   process.exit(2)

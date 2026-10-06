@@ -61,6 +61,14 @@ export interface AppConfig {
   }
   safeArea: {
     islandGlass: boolean
+    /**
+     * ★★★系统状态栏显示策略（2026-10-08 · 决策 #594）：`'show'`（默认）| `'hide'`。
+     *   · `'show'`：显示系统状态栏——**与 Web 手机端 `viewport-fit=cover` + edge-to-edge 对齐**（内容背景铺到
+     *     状态栏区，内容用 `--pf-inset-top` 让位）；这是框架默认（Web 基准：浏览器视口含状态栏区）。
+     *   · `'hide'`：沉浸式全屏（隐藏状态栏，内容占满顶部）。
+     *   宿主（Android/鸿蒙/iOS）经构建期产出的 `app-config.json` 读取本项；缺省 = `'show'`。
+     */
+    statusBar?: 'show' | 'hide'
   }
   platform?: Partial<Record<Platform, DeepPartial<AppConfig>>>
   remote?: RemoteConfigConfig
