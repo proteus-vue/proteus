@@ -12,7 +12,7 @@
 |---|---|
 | 内置组件层的定位（与 Proteus UI 的区别） | **Koine = 平台词汇层（契约）**：与小程序官方 84 组件对齐、写明每枚的三端通路与降级，追求"完备 + 可对拍"；**Proteus UI = 设计语言层（品质）**：追求美、无障碍、token。Koine 管"说得通"，Proteus UI 管"说得漂亮" |
 | examples 与 css-conformance 为什么"体系不一样" | 两者写的是**同一语义的两种词形**：examples 混用三种（`<text>`×290 + `<div>`×195 + `<p-text>`×92），css-conformance 几乎纯 MP 词形（`<text>`×196 + `<view>`×193 + `<div>`×2）——引擎都支持，但**没有等价性门禁**证明它们同义 |
-| 立法建议 | **一套语义、两套词形**：SSOT = PRIMITIVE_CATALOG（147 条）；HTML 词形 = 业务推荐写法（编译器 `TAG_MAP` 已实现），MP 词形 = 对齐/测试语言；**新增词形等价门禁**——`<div>` 与 `<view>` 必须产出**逐字节相同的 IR** |
+| 立法建议 | **一套语义、两套词形**：SSOT = PRIMITIVE_CATALOG（187 条）；HTML 词形 = 业务推荐写法（编译器 `TAG_MAP` 已实现），MP 词形 = 对齐/测试语言；**新增词形等价门禁**——`<div>` 与 `<view>` 必须产出**逐字节相同的 IR** |
 | 要落地哪些 | 以官方标尺清账：84 组件中 covered 51 确权、planned 6 排期、gap 3 棘轮清零、private 14 收敛宿主桥、na 9 维持；**核心 30 项**立"内置基准集"（§5），每项五列契约（HTML 词形/MP 标签/Web shim/App 引擎通路/对拍） |
 | 最大发现 | 官方规格快照（84 组件 + 495 API）+ 五箱分类 + gap 棘轮**已经存在**（`mp-spec-coverage.ts`，自证反复的教训已修）——本方案不新造标尺，只把"组件词形契约"接到这把已有的尺子上 |
 
@@ -60,7 +60,7 @@
 │  追求：完备 · 等价 · 可对拍 —— "说得通"                  │
 ├─────────────────────────────────────────────────────┤
 │  引擎层（Themis/StyleIR/svg_path/capabilities）        │
-│  PRIMITIVE_CATALOG 147 条 = 全栈 SSOT                  │
+│  PRIMITIVE_CATALOG 187 条 = 全栈 SSOT                  │
 └─────────────────────────────────────────────────────┘
 （能力件 Hephaestus 与三层正交：相机/定位/扫码等原生能力）
 ```
@@ -154,7 +154,7 @@
 | TAG_MAP 全量 HTML→MP 映射 + 逃生舱修复 | `packages/compiler/src/tags.ts` 头注释与映射表 |
 | 13 shim / 1,094 行 / 真机修复沉淀 | `packages/built-in-components/src/components/*.ts` 行数与注释 |
 | 官方标尺 84 组件 + 495 API / 五箱分类 51-6-14-9-3 / gap 棘轮 | `packages/component-ir/src/mp-spec-coverage.ts`、`docs/generated/miniprogram-official-spec.json` |
-| PRIMITIVE_CATALOG 147 条 SSOT | `packages/component-ir/src/primitives.ts` |
+| PRIMITIVE_CATALOG 187 条 SSOT | `packages/component-ir/src/primitives.ts` |
 | examples 风格守卫已存在（K2 扩展点） | `examples/style-guard.ts` |
 | 词形等价机制先例（IR Golden 逐字节对拍） | `docs/proteus-css-engine-plan/README.md` §4 B0 |
 | Charites 分工 / ScrollKernel 对齐面 | `docs/Proteus_OS级组件库方案.md` §3、§5 |

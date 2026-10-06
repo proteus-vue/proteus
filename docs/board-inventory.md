@@ -155,9 +155,17 @@
 > ★**2026-09-30 新增**：`docs/proteus-host-abi-integration.md` —— **客户接入指南**（把 Proteus 嵌进已有
 > Android App：AAR 引入 / 两个回调 / 一帧驱动 / 预热 / 能力校验 / 排查表 / 边界）。
 > 可运行对照：`hosts/android/embed-demo/`（独立包名的第三方 App，只依赖 AAR）。
+>
+> ★★**2026-10-07 新增（CSE 之后的四条主线，均不占 G 序）**：**Themis**（G-61 CSS 引擎的**产品白皮书**）· **Proteus UI**（OS 级组件库，内部代号 **Charites**）· **Keryx**（OS 级图标库）· **Koine**（内置组件体系重评估）。
+> 四者互为正交：Themis = 一致性引擎底座（已交付 G-61 的产品化叙事）· **Proteus UI = 设计语言层（品质·美）** · **Keryx = 图标数据层（Proteus UI 的"方言"）** · **Koine = 平台词汇层（一套语义两套词形，与 Proteus UI 正交）**。
+> 依赖关系：`Koine`（词汇契约）在底 → `Proteus UI`（组件）在其上 → `Keryx`（图标）为组件提供词汇；`Themis` 为三者提供"一致性可证明"的门禁管线。命名体系延续万神殿（Proteus/Morpheus/Themis/Hephaestus/Charites/Keryx/Koine/Mnemosyne/Janus）。
 
 | 文件 | 说明 |
 |------|------|
+| **★`docs/Proteus_Themis多端一致CSS引擎产品白皮书.md`（不占 G 序，2026-10-07 入库）** | ★★**Themis = G-61 CSS 引擎的产品白皮书**（对标商业产品介绍；工程规格见 `docs/proteus-css-engine-plan/`）：把已交付的编译期 CSS 引擎（五级层叠/继承/计算值/动态类/降级）产品化叙事——**三条主张**（算完再上线 = 运行期零 CSS 解析 O(1) 查表 · 真值只有一个 = Web 浏览器渲染为唯一基准 · 失败要响亮 = 不能一致落地的写法构建期报错）· **三层棘轮门禁**（基准等价/数值等价 ≤0.5dp/像素观察）· 横向对比（uni-app x / Taro / RN / Flutter / Kraken 系）· 数字页（113 用例/153 项 ≡ Chromium · 77 IR 字段 · 双后端逐字节）· 命名查重（Themis 推荐 · Argus/Iris/Hermes 排除）· 诚实边界与禁语。★每条数字带可 grep 证据索引（§10） |
+| **★`docs/Proteus_OS级组件库方案.md`（不占 G 序，2026-10-07 入库）+ `docs/Proteus_Charites组件库产品白皮书.md`** | ★★**Proteus UI（OS 级组件库，内部代号 Charites / 备选 Parthenon、Kallos）**：判定"OS 级"的四条（OS-1 设计语言成法 = 裸值即报错 · **OS-2 品质默认项** · **OS-3 一致性可证明** = 每组件过 Themis 三层对拍 · **OS-4 与平台融合**）+ 架构（**一部宪法** token 单一真源 + **四层体系** L1 Token/L2 原语 147/L3 语义组件 p-\* 79/L4 页面骨架 + **两个内核** OverlayKernel 弹层五兄弟收编 / ScrollKernel 滚动三胞胎收编）+ 分期（P0 宪法/P1 家族治理做减法 79→约 65/P2 品质维度/P3 扩编）+ 与 Hephaestus（能力组件）正交 + 不做清单。**现状诊断（可 grep ）**：0 组件接 `--sa-*` 设计 token、0 组件过 A11y 门禁（22 文件有零散 role/aria）、同族分叉（滚动三胞胎/弹层五兄弟/加载三件/导航三件）、动效手写（未接 Morpheus） |
+| **★`docs/Proteus_OS级图标库方案.md`（不占 G 序，2026-10-07 入库）** | ★★**Keryx（OS 级图标库 / 备选 Angelia、Semeion）—— Charites 宪法的"方言层"**：核心决策 **图标即数据（SVG path 单一真源），不是字体**（理由三条：本仓明确不自建字体基础设施 · 内核 `svg_path.rs` 已做单一 path 解析 · MP 端 Path2D 引擎 `p-svg-canvas` 已实证）· 一条构建管线（A/S/T→C/Q 转换 + 24×24 网格 + 去噪）+ 三条渲染通路（Web `<svg><path>` / MP Path2D / App 内核 `svg_path`）· 图标集规范（outline/filled 成对 · stroke 1.5/2px · 着色只许 token 引用 · duotone 双色槽）· 规模分期（P0 24 / P1 96 / P2 200+）· **淘汰关系**：unicode 字形（`p-icon` GLYPHS 表 —— `⌕`/`◷` 可渲染成 tofu）与 Web 手绘仿微信集（`built-in-components/icon.ts` 字面 `#09BB07`）都要被淘汰 |
+| **★`docs/Proteus_内置组件体系重评估方案.md`（不占 G 序，2026-10-07 入库）** | ★★**Koine（平台词汇层 / 破例用语言学名词=共同语）—— 与 Proteus UI 正交**：核心判断「引擎没乱，是**词汇没有立法**」——三种词形（HTML 标签 / 小程序标签 / p-\*）在引擎里各有通路且全部可用，缺的是一张写明"什么场合用哪种词形、是否等价"的契约。**立法建议：一套语义、两套词形**（业务推荐 HTML 词形 `TAG_MAP` 已全量映射 · MP 词形是一等公民 · **新增词形等价门禁**——`<div>` 与 `<view>` 必须产出逐字节相同 IR，接 IR Golden 管线）+ **核心 30 项内置基准集**（每项五列契约：HTML 词形/MP 标签/Web shim/App 引擎通路/对拍）+ 官方标尺清账（84 组件五箱 covered 51/planned 6/gap 3/private 14/na 9，gap 棘轮清零）+ 分期 K0 立法/K1 清账/K2 治理/K3 收编。**不新造规格清单**（`mp-spec-coverage.ts` 已是唯一尺子） |
 | `docs/roadmap.md` | 版本线（v0.1→v2.0，对标 uni-app/Taro）——与本表 §1 双路线对照 |
 | `docs/routing.md` / `compiler.md` / `configuration.md` / `types.md` / `packages.md` / `getting-started.md` | 使用文档 |
 | `docs/vue-compat-plan.md` / `vue-compat-advance.md` | Vue 兼容性文档（能力已落地） |

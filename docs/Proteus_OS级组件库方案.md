@@ -10,8 +10,8 @@
 
 | 问题 | 结论 |
 |---|---|
-| 有没有"天然条件"做 OS 级组件库 | ✅ **有，而且条件是引擎级的**——样式一致性引擎（Themis）、动效引擎（Morpheus）、环境自适应层（Fluid）、原生材质/能力/手势、147 原语目录、设计规范草案，六件资产别人凑不齐 |
-| p-\* 现在到底差在哪 | 不是"组件少"（已有 **79 个 / 约 1.2 万行**），是**没有宪法**：0 个组件消费设计 token、0 个有无障碍标注、动效各写 CSS animation、同族组件三胞胎/五兄弟分叉 |
+| 有没有"天然条件"做 OS 级组件库 | ✅ **有，而且条件是引擎级的**——样式一致性引擎（Themis）、动效引擎（Morpheus）、环境自适应层（Fluid）、原生材质/能力/手势、187 原语目录、设计规范草案，六件资产别人凑不齐 |
+| p-\* 现在到底差在哪 | 不是"组件少"（已有 **79 个 / 约 1.2 万行**），是**没有宪法**：0 个组件接设计 token（`--sa-*`）、0 个过 A11y 门禁（22 个仅零散 role/aria）、动效各写 CSS animation、同族组件三胞胎/五兄弟分叉 |
 | 方案核心 | **先立法，再执法，最后扩编**：P0 立宪法（token 收口 + 内核统一 + lint 门禁）→ P1 家族治理（做减法）→ P2 补品质维度 → P3 扩编 |
 | 与 Hephaestus 的分工 | Hephaestus 管**能力组件**（相机/定位/扫码…），本方案管 **UI 组件**（弹层/滚动/导航/表单/数据展示）——两轴正交，都不重写对方 |
 | 最大风险 | 79 个存量组件的迁移量——靠**棘轮 + 家族收口**消化（每收一个家族减一套实现），不做一次性替换 |
@@ -61,7 +61,7 @@
 | ② | **Morpheus**（动画引擎） | 系统动效：组件只声明 motion token（进出场/微反馈/转场），实现统一走引擎——现状组件各自手写 CSS animation（`p-popup`/`p-loading` 即如此） | `docs/Proteus_声明式动画引擎Morpheus方案.md` |
 | ③ | **Fluid System** | OS 级的"环境自适应"已有框架层：formfactor / breakpoint / safe-area / env-vars / focus-nav / scale / motion——组件的响应式与安全区避让**天然是系统行为**而非组件各自实现 | `packages/fluid/src/`（15 模块） |
 | ④ | **原生材质与能力层** | `glass`（系统玻璃材质与降级）+ `capabilities`（84 Hook）+ `gesture`（识别器）+ Janus（原生资产复用）——OS 级的"材质感"与原生融合有真后端 | `packages/glass/src`、`packages/capabilities/src`、`packages/gesture/src` |
-| ⑤ | **PRIMITIVE_CATALOG（147 原语）+ audit 闭环** | 组件有 **IR 级单一事实源**：每个 p-\* 是原语的语义化封装，目录一致性有审计（`auditCatalogConsistency`）——组件库不会漂成"第二套运行时" | `packages/component-ir/src/primitives.ts`（147 条） |
+| ⑤ | **PRIMITIVE_CATALOG（187 原语）+ audit 闭环** | 组件有 **IR 级单一事实源**：每个 p-\* 是原语的语义化封装，目录一致性有审计（`auditCatalogConsistency`）——组件库不会漂成"第二套运行时" | `packages/component-ir/src/primitives.ts`（187 条） |
 | ⑥ | **《超级应用视觉设计规范》** | 设计语言已起草：L1 token（品牌靛蓝、WCAG AA 语义色、字号/间距/圆角/阴影/动效、深色模式机制）、L2 组件类、L3 六种页面骨架 | `docs/Proteus_超级应用视觉设计规范.md` + `superapp/styles/global.css` |
 
 **结论：Proteus 是目前唯一"引擎层先行、组件层后补"的跨端框架——组件库不是从零造，是把六件底座第一次拧成一个表面。**
@@ -73,7 +73,7 @@
 存量盘点：**79 个 p-\* 组件，约 11,927 行**；最大 `p-formfactor` 1410 行，最小如 `p-mask` 35 行、`p-box` 约 50 行。数量不缺，缺的是三样东西：
 
 ### 根因 A · 视觉无真源（最致命）
-- **0 个组件消费设计 token**：`packages/components/p-*/` 全目录 grep `var(--` **零命中**——《视觉规范》定义了 `--sa-*`，引擎定义了 `--pf-*`，组件却全部字面样式（`p-avatar` 75 行、`p-skeleton` 56 行，无一变量）。
+- **0 个组件接设计 token**：`packages/components/p-*/` 全目录 `grep -rl "var(--sa-"` **零命中**（`var(--` 本身命中 23 处，但**全部是组件级 `--p-*` 局部变量**，如 `var(--p-button-bg, #1a7af8)`）——《视觉规范》定义了 `--sa-*`，引擎定义了 `--pf-*`，组件却无一处接这两套真源（`p-avatar` 75 行、`p-skeleton` 56 行，无一接 token）。
 - **三套 token 命名空间并存互不相通**：`--sa-*`（superapp 视觉）、`--pf-*`（引擎环境变量）、组件内字面值——"换主题/深色模式/品牌定制"对 p-\* 组件**不生效**。
 
 ### 根因 B · 家族分叉（同一职责多套实现）
@@ -85,7 +85,7 @@
 | 导航 | **三件**：p-nav（57）/ p-nav-bar（148）/ p-tabbar（104），安全区避让与返回语义不共享 | 各文件头注释 |
 
 ### 根因 C · 品质缺维度
-- **0 个组件有无障碍标注**：`aria-`/`role=` 在 p-\* 全目录**零命中**——OS 级的第一道门就没过。
+- **0 个组件过 A11y 门禁**：`aria-`/`role=` 在 p-\* 全目录**命中 22 个文件**（如 `p-switch` 有 `role="switch"` + `:aria-checked`、`p-button` 有 `:aria-label`），但**没有任何清单/门禁规定哪些交互组件必填**——OS 级的第一道门（"必备项"）还没过。
 - **动效未接引擎**：转场/微反馈全部 CSS animation 手写，Morpheus 未成为组件动效后端。
 - **触达/键盘/RTL 无系统治理**：44px 触达、焦点环、键盘导航（fluid 的 focus-nav 已有）无一处成为组件默认项。
 - **双组件体系并存**：`built-in-components`（13 个小程序对齐 shim，1094 行）与 `components`（79 个）各自演化。
@@ -113,7 +113,7 @@
            token = CSS 变量 → 编译期经 CSE 折叠 → lint 拦截裸值（棘轮）
 ┌────────────────────────────────────────────────────────┐
 │ L1 Token      色彩/字号/间距/圆角/阴影/动效曲线/触达     │
-│ L2 原语       PRIMITIVE_CATALOG 147 条（已有，不动）      │
+│ L2 原语       PRIMITIVE_CATALOG 187 条（已有，不动）      │
 │ L3 语义组件   p-*：升级面（本方案主战场）                 │
 │ L4 页面骨架   六种标准骨架（视觉规范 L3 收编为组件）       │
 └────────────────────────────────────────────────────────┘
@@ -136,7 +136,7 @@
 | **《超级应用视觉设计规范》**（--sa-\* + global.css） | **升级为宪法真源**：token 从"superapp 工程的样式表"上移为框架包（`@proteus-vue/tokens`），规范文档变为 token 的说明页 |
 | **p-modal 的 p-adaptive 形态声明** | **采纳为 OverlayKernel 的公开 API 形状**（仓内已验证，不自创新形） |
 | **built-in-components（13 shim）** | 保持小程序对齐面不动；p-\* 语义组件是其上层，**不合并**（对齐面是端语义，组件库是设计语言） |
-| **147 条 PRIMITIVE_CATALOG** | SSOT 不动，新组件必须先登记原语再建组件（audit 闭环已有） |
+| **187 条 PRIMITIVE_CATALOG** | SSOT 不动，新组件必须先登记原语再建组件（audit 闭环已有） |
 
 ---
 
@@ -179,11 +179,11 @@
 | 本文表述 | 证据 |
 |---|---|
 | 79 组件 / 11,927 行 / 行数分布 | `ls packages/components/p-*`；逐目录 `wc -l`（2026-10-07 实测） |
-| 组件 0 token 消费 | `grep -r "var(--" packages/components/p-*/` 零命中 |
-| 全组件 0 无障碍 | `grep -r "aria-\|role=" packages/components/p-*/` 零命中 |
+| 组件 0 设计 token 消费 | `grep -rl "var(--sa-" packages/components/p-*/` 零命中（`var(--` 命中 23 处，均为组件级 `--p-*` 局部变量） |
+| 全组件 0 A11y 门禁（22 文件有零散 role/aria） | `grep -rlE "aria-\|role=" packages/components/p-*/` 命中 22 文件（无门禁清单） |
 | 滚动三胞胎/弹层五兄弟/加载三件/导航三件 | `packages/components/{p-scroll,p-scroll-view,p-scrollable}/{p-modal,p-popup,p-popover,p-drawer,p-mask}/{p-loading,p-loading-host,p-loading-region}/{p-nav,p-nav-bar,p-tabbar}` 头注释 |
 | p-modal p-adaptive 形态声明（内核 API 形状） | `packages/components/p-modal/index.vue` 头注释 |
-| 147 原语 + audit 闭环 | `packages/component-ir/src/primitives.ts`、`audit.ts` |
+| 187 原语 + audit 闭环 | `packages/component-ir/src/primitives.ts`、`audit.ts` |
 | Themis 三层门禁 / 动效引擎 / fluid 模块清单 | `docs/proteus-css-engine-plan/README.md`、`docs/Proteus_声明式动画引擎Morpheus方案.md`、`packages/fluid/src/` |
 | 视觉规范 L1/L2/L3 与 --sa-\* | `docs/Proteus_超级应用视觉设计规范.md`、`superapp/styles/global.css` |
 | 超级应用验收口径（真机矩阵/基座列/单测） | `docs/Proteus_高频原生能力组件方案.md` 头部验收标准 |
