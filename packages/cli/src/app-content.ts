@@ -237,7 +237,7 @@ function parseBalanced(src: string, openIdx: number): string | null {
  * 从 SFC 的 `<script setup>` 抽取 `const X = ref(<字面量>)` 的初值快照（App 端无运行时，页面数据
  *   取构建期初值）。只认**可 JSON 求值的字面量**（数字/字符串/布尔/数组/对象）；其余（含调用/变量）跳过。
  */
-function extractRefLiterals(sfcSrc: string): Record<string, unknown> {
+export function extractRefLiterals(sfcSrc: string): Record<string, unknown> {
   const m = /<script[^>]*>([\s\S]*?)<\/script>/.exec(sfcSrc)
   if (!m) return {}
   const script = m[1]
