@@ -9,6 +9,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import dev.proteus.platform.ProteusTextPlatform;
 import android.widget.TextView;
 
 import org.json.JSONObject;
@@ -6019,10 +6020,10 @@ public class MainActivity extends Activity {
         //   ② 注册真实字体文件后 ⇒ **渲染宽度变化** + Typeface 身份变化（不是"参数传到了"）
         //   ③ 反例对照：注册前后同族名 —— 宽度必须不同（否则"注册"是空操作）
         ProteusHostView.clearFonts();
-        int missesBefore = ProteusHostView.customFontMisses;
+        int missesBefore = ProteusTextPlatform.customFontMisses;
         android.graphics.Typeface missFace = ProteusHostView.typefaceOf("custom:NoSuchFontXyz", 400, null);
-        boolean unregisteredFallsBack = ProteusHostView.customFontMisses == missesBefore + 1
-                && "NoSuchFontXyz".equals(ProteusHostView.lastMissingCustomFont);
+        boolean unregisteredFallsBack = ProteusTextPlatform.customFontMisses == missesBefore + 1
+                && "NoSuchFontXyz".equals(ProteusTextPlatform.lastMissingCustomFont);
         android.graphics.Paint missPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
         missPaint.setTypeface(missFace);
         missPaint.setTextSize(size);
@@ -6136,7 +6137,7 @@ public class MainActivity extends Activity {
             o.put("custom_font_typeface_differs", customTypefaceDiffers);
             o.put("custom_font_register_changes_width", registerChangesWidth);
             o.put("unregistered_custom_falls_back", unregisteredFallsBack);
-            o.put("custom_font_misses", ProteusHostView.customFontMisses);
+            o.put("custom_font_misses", ProteusTextPlatform.customFontMisses);
             o.put("second_font_width", Math.round(secondWidth * 100) / 100f);
             o.put("two_fonts_differ", twoFontsDiffer);
             o.put("check_family_affects_measure", familyAffectsMeasure);
