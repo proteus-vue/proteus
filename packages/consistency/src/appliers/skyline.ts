@@ -52,12 +52,15 @@ function kebab(s: string): string {
 type LengthLike =
   | { kind: 'absolute'; dp: number }
   | { kind: 'ratio'; ratio: number; base: string }
+  // ★★★内置环境变量（2026-10-08 · 决策 #593）：wxss `var(--pf-X)` 原样透传（Skyline 由 CSS 引擎解析）
+  | { kind: 'env'; name: string; offset?: number; fallback?: number }
   | { kind: 'auto' }
 function isLength(v: unknown): v is LengthLike {
   if (v === null || typeof v !== 'object') return false
   const k = (v as { kind?: unknown }).kind
   if (k === 'absolute') return typeof (v as { dp?: unknown }).dp === 'number'
   if (k === 'ratio') return typeof (v as { ratio?: unknown }).ratio === 'number'
+  if (k === 'env') return typeof (v as { name?: unknown }).name === 'string'
   return k === 'auto'
 }
 
@@ -65,6 +68,8 @@ function isLength(v: unknown): v is LengthLike {
 function renderLength(v: LengthLike, viewport: number): string | null {
   if (v.kind === 'absolute') return `${toRpx(v.dp, viewport)}rpx`
   if (v.kind === 'auto') return 'auto'
+  // ★★★内置环境变量：wxss `var(--pf-X)`（Skyline 侧由 CSS 引擎解析；框架基础样式定义变量）
+  if (v.kind === 'env') return 'var(' + v.name + ')'
   // ratio：Skyline 支持百分比（基准 = 父容器对应轴——与 CSS 同语义）
   const pct = Math.round(v.ratio * 10000) / 100
   return `${pct}%`

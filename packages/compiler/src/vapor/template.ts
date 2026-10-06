@@ -21,6 +21,7 @@
 //   · 组件标签（`<MyComp>`）⇒ 边界标记 + props 通道（P1 第一批）；内部渲染待后续批次
 import { parse as sfcParse, type SFCDescriptor } from '@vue/compiler-sfc'
 import { parse as domParse } from '@vue/compiler-dom'
+import { isEnvVarName } from '@proteus-vue/contracts/env-vars'
 import type { VaporDiagnostic } from './build'
 import type { VueCompatDeps } from './sources'
 import type { LayoutNode, LayoutTemplate, ListTemplate, TextSegment } from '@proteus-vue/slot-runtime'
@@ -596,6 +597,9 @@ export function substituteCssVars(value: string, tokens: Record<string, string>)
   for (let i = 0; i < 8; i++) {
     let changed = false
     v = v.replace(/var\(\s*(--[A-Za-z0-9_-]+)\s*(?:,\s*([^()]*))?\)/g, (full, name: string, fallback?: string) => {
+      // ★★★内置环境变量（2026-10-08 · 决策 #593）：`--pf-*` 是**运行期环境引用**（非设计令牌）——
+      //   保留 `var(--pf-X[, fb])` 原文（交 envLengthToken 发射 env 引用），**勿折成 fallback**。
+      if (name.startsWith('--pf-')) return full
       const t = tokens[name]
       if (t !== undefined) { changed = true; return t }
       if (fallback !== undefined) { changed = true; return fallback.trim() }
@@ -659,6 +663,14 @@ export function parseStaticStyle(
         ma[side] = true
         out.marginAuto = ma
         markImportant('marginAuto')
+        continue
+      }
+      const envTokEdge = envLengthToken(rawVal)
+      if (envTokEdge !== undefined) {
+        const cur = (out[f] as Record<string, unknown> | undefined) ?? {}
+        cur[side] = envTokEdge
+        out[f] = cur
+        markImportant(f)
         continue
       }
       const num = numOf(rawVal)
@@ -952,8 +964,17 @@ export function parseStaticStyle(
         // ★批次 31（CSS 兼容对齐 · 以 Web 为基准）：两值 gap:<row> <col>（等价 row-gap/column-gap）。
         //   单值 ⇒ gap；两值 ⇒ rowGap + columnGap。
         const toks = splitTopLevelSpaces(rawVal)
-        if (toks.length === 1) { const n = numOf(toks[0]!); if (n === undefined) { pushDiag(`gap 非法值 ${rawVal}——应为 1 个数值，已跳过`); continue } out.gap = n; markImportant('gap'); continue }
+        if (toks.length === 1) {
+          const et = envLengthToken(toks[0]!)
+          if (et !== undefined) { out.gap = et; markImportant('gap'); continue }
+          const n = numOf(toks[0]!); if (n === undefined) { pushDiag(`gap 非法值 ${rawVal}——应为 1 个数值，已跳过`); continue } out.gap = n; markImportant('gap'); continue
+        }
         if (toks.length === 2) {
+          const er = envLengthToken(toks[0]!), ec = envLengthToken(toks[1]!)
+          if (er !== undefined || ec !== undefined) {
+            if (er === undefined || ec === undefined) { pushDiag(`gap 两值含 env 与数值混用 ${rawVal}——已跳过`); continue }
+            out.rowGap = er; out.columnGap = ec; markImportant('rowGap'); markImportant('columnGap'); continue
+          }
           const r = numOf(toks[0]!), c = numOf(toks[1]!)
           if (r === undefined || c === undefined) { pushDiag(`gap 两值非法 ${rawVal}——应为两个数值，已跳过`); continue }
           out.rowGap = r; out.columnGap = c; markImportant('rowGap'); markImportant('columnGap'); continue
@@ -963,6 +984,8 @@ export function parseStaticStyle(
       }
       // ★批次 31：row-gap / column-gap（轴级）
       if (key === 'rowGap' || key === 'columnGap') {
+        const et = envLengthToken(rawVal)
+        if (et !== undefined) { out[key] = et; markImportant(key); continue }
         const n = numOf(rawVal)
         if (n === undefined) { pushDiag(`gap 非法值 ${rawVal}——应为 1 个数值，已跳过`); continue }
         out[key] = n; markImportant(key); continue
@@ -997,8 +1020,10 @@ export function parseStaticStyle(
           continue
         }
       }
+      const envTok = envLengthToken(rawVal)
+      if (envTok !== undefined) { out[key] = envTok; markImportant(key); continue }
       const num = numOf(rawVal)
-      if (num === undefined) { pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 不是纯数值（支持 px/数字/百分比宽高）`); continue }
+      if (num === undefined) { pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 不是纯数值（支持 px/数字/百分比宽高/env）`); continue }
       out[key] = num
       markImportant(key)
       continue
@@ -2556,6 +2581,50 @@ function evalMathPx(t: string): number | undefined {
 function numOfMathFn(s: string): number | undefined {
   if (!/^(min|max|clamp)\(/i.test(s.trim())) return undefined
   return evalMathPx(s)
+}
+
+/* ───────── ★★★内置环境变量引用（2026-10-08 · 决策 #593）─────────
+ * App 折叠面把 var(--pf-X) / env(safe-area-inset-X) / calc(<env> ± Npx) 发射为**引用 token**
+ *   （env:--pf-inset-top / env:--pf-inset-bottom+12），由宿主在构建内核请求前用平台 insets
+ *   （WindowInsets / safeAreaInsets / avoidArea）解析成逻辑像素（Stage 1：宿主侧解析）。
+ *   ★为什么不去内核：Stage 1 先在宿主快速验证整链；验证通过后 Stage 2 迁内核 env 表 + ABI v2。
+ *   ★仅**布局长度字段**支持（绘制字段如 fontSize 不在折叠长度路径，自然不命中）。 */
+
+/** 单个 env 基元（var(--pf-X[, fb]) / env(safe-area-inset-X[, fb])）→ { name, fallback? }。 */
+function envBase(s: string): { name: string; fallback?: number } | undefined {
+  const t = s.trim()
+  const v = /^var\(\s*(--pf-[a-z0-9-]+)\s*(?:,\s*(-?\d*\.?\d+)px\s*)?\)$/i.exec(t)
+  // ★闭集校验：未知 --pf-* 名（拼写漂移）⇒ 不发射引用（落到调用方诊断，不静默为 0）
+  if (v && isEnvVarName(v[1]!)) return { name: v[1]!, ...(v[2] !== undefined ? { fallback: Number(v[2]) } : {}) }
+  const e = /^env\(\s*safe-area-inset-(top|right|bottom|left)\s*(?:,\s*(-?\d*\.?\d+)px\s*)?\)$/i.exec(t)
+  if (e) return { name: '--pf-inset-' + e[1]!, ...(e[2] !== undefined ? { fallback: Number(e[2]) } : {}) }
+  return undefined
+}
+
+/** env 引用 → token 串（env:<name>；偏移 +N/-N；fallback ~F）。 */
+function envTokenOf(name: string, offset: number, fallback?: number): string {
+  let t = 'env:' + name
+  if (offset) t += (offset > 0 ? '+' : '') + offset
+  if (fallback !== undefined) t += '~' + fallback
+  return t
+}
+
+/** 识别 env 长度表达式 → token 串；非 env ⇒ undefined（走原逻辑）。 */
+function envLengthToken(raw: string): string | undefined {
+  const s = raw.trim()
+  const base = envBase(s)
+  if (base) return envTokenOf(base.name, 0, base.fallback)
+  const c = /^calc\(\s*([\s\S]+?)\s*\)$/i.exec(s)
+  if (!c) return undefined
+  const inner = c[1]!
+  const fwd = /^([\s\S]+?)\s*([+-])\s*(-?\d*\.?\d+)px$/i.exec(inner)
+  const rev = /^(-?\d*\.?\d+)px\s*([+-])\s*([\s\S]+)$/i.exec(inner)
+  let b: { name: string; fallback?: number } | undefined
+  let off = 0
+  if (fwd) { b = envBase(fwd[1]!); if (b) off = (fwd[2] === '-' ? -1 : 1) * Number(fwd[3]) }
+  else if (rev) { b = envBase(rev[3]!); if (b) off = (rev[2] === '-' ? -1 : 1) * Number(rev[1]) }
+  if (!b) return undefined
+  return envTokenOf(b.name, off, b.fallback)
 }
 
 /** `56px` / `56` / `0.5` → 数值；`50%` / `auto` → undefined（百分比**宽高**在调用处另行映射为 widthRatio/heightRatio；其余属性的百分比仍不支持，见诊断） */

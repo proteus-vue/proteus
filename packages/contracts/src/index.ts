@@ -16,6 +16,7 @@ export * from './layers'
 export * from './mount-layers'
 // ★SC2（2026-10-02）：可停靠滚动容器契约（声明式封闭集——方案 §6）
 export * from './scroll'
+export * from './env-vars'
 // ★★★G-61 B0（2026-10-05）：**StyleIR 字段注册表**（三表合一的机器推导产物）——
 //   字段闭集 + scope（semantic/engine-only）+ 值类型 + 各表来源；门禁 `check:style-ir-schema`。
 export * from './style-ir-registry.generated'

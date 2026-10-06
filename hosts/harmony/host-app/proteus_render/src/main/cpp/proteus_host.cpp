@@ -336,6 +336,11 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
     jnum(argsJson.c_str(), argsJson.size(), "vpW", &vpW);
     jnum(argsJson.c_str(), argsJson.size(), "vpH", &vpH);
     if (density <= 0) density = 1.0;
+    // ★★★内置环境变量（2026-10-08 · 决策 #593）：解析宿主采集的 env 表（vp），并把 nodes 里的
+    //   `"env:<name>[+N|-N][~F]"` token 就地替换为 **vp 数值**（Stage 1：宿主侧解析）。
+    std::map<std::string, double> envTable;
+    parseEnvObject(argsJson, envTable);
+    substituteEnvTokens(nodes, envTable);
     // ★★第五轮修复（2026-10-05 · 右缘 1px 缝的**唯一收敛修法**）：**视口向上取整到整物理像素**——
     //   ArkTS 侧 vp↔px 往返会丢小数（实测页根 cmd 宽 1319.5px vs 屏 1320px ⇒ 最右 1px 列
     //   露宿主深色底，第四轮复评实测 x=1319 全高 #0f1018）。

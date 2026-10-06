@@ -4,6 +4,7 @@
 //   由 proteus_host.cpp（HAR runtime 桥）与 proteus_bench.cpp（dev 探针）共同 include。
 #pragma once
 #include <string>
+#include <map>
 #include <vector>
 #include <cstdint>
 #include <cstdio>
@@ -76,6 +77,67 @@ static inline bool jnum(const char* s, size_t segLen, const char* key, double* o
     return end != base;
 }
 
+
+/// ★★★内置环境变量（2026-10-08 · 决策 #593）：`--pf-*` → vp（逻辑像素）。Stage 1：宿主侧解析。
+static inline void parseEnvObject(const std::string& argsJson, std::map<std::string, double>& out) {
+  size_t p = argsJson.find("\"env\":");
+  if (p == std::string::npos) return;
+  size_t open = argsJson.find('{', p);
+  if (open == std::string::npos) return;
+  size_t close = argsJson.find('}', open);
+  if (close == std::string::npos) return;
+  std::string body = argsJson.substr(open + 1, close - open - 1);
+  size_t i = 0;
+  while (i < body.size()) {
+    size_t q1 = body.find('"', i);
+    if (q1 == std::string::npos) break;
+    size_t q2 = body.find('"', q1 + 1);
+    if (q2 == std::string::npos) break;
+    std::string key = body.substr(q1 + 1, q2 - q1 - 1);
+    size_t colon = body.find(':', q2);
+    if (colon == std::string::npos) break;
+    out[key] = strtod(body.c_str() + colon + 1, nullptr);
+    i = colon + 1;
+  }
+}
+
+/// 解析 `env:<name>[+N|-N][~F]` → vp；未知名/无表项 ⇒ fallback（缺省 0）。
+static inline double evalEnvToken(const std::string& name, const std::map<std::string, double>& env) {
+  std::string nm = name; double fb = 0; int off = 0;
+  size_t tilde = nm.find('~');
+  if (tilde != std::string::npos) { fb = strtod(nm.c_str() + tilde + 1, nullptr); nm = nm.substr(0, tilde); }
+  // ★偏移符号 = 后随**数字**的 +/-,（变量名自带连字符 '-'，不能见到 '-' 就当分隔符——真机实测会截出 NaN）
+  for (size_t i = 1; i + 1 < nm.size(); i++) {
+    if ((nm[i] == '+' || nm[i] == '-') && nm[i + 1] >= '0' && nm[i + 1] <= '9') {
+      double v = strtod(nm.c_str() + i + 1, nullptr);
+      off = (nm[i] == '-' ? -1 : 1) * (int)v;
+      nm = nm.substr(0, i); break;
+    }
+  }
+  auto it = env.find(nm);
+  return (it != env.end() ? it->second : fb) + off;
+}
+
+/// 就地替换 nodes 串里的 `"env:<token>"`（含引号）→ 数值（vp）。
+static inline void substituteEnvTokens(std::string& nodes, const std::map<std::string, double>& env) {
+  if (env.empty()) return;
+  std::string out; out.reserve(nodes.size());
+  size_t i = 0;
+  while (i < nodes.size()) {
+    if (nodes.compare(i, 5, "\"env:") == 0) {
+      size_t close = nodes.find('"', i + 5);
+      if (close == std::string::npos) { out += nodes[i]; i++; continue; }
+      std::string name = nodes.substr(i + 5, close - (i + 5));
+      double v = evalEnvToken(name, env);
+      char buf[40]; snprintf(buf, sizeof(buf), "%.4f", v);
+      out += buf;
+      i = close + 1;
+      continue;
+    }
+    out += nodes[i]; i++;
+  }
+  nodes = out;
+}
 static inline std::string extractNodesArray(const std::string& json) {
     size_t p = json.find("\"nodes\"");
     if (p == std::string::npos) return "";

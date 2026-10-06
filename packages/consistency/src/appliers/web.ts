@@ -74,10 +74,12 @@ export function normalizeIrValue(value: unknown): NormalizedComputed | undefined
     return /^#/.test(value) ? value.toLowerCase() : value.toLowerCase()
   }
   if (typeof value === 'object' && 'kind' in (value as Record<string, unknown>)) {
-    const l = value as { kind: string; dp?: number; ratio?: number; base?: string }
+    const l = value as { kind: string; dp?: number; ratio?: number; base?: string; name?: string; offset?: number; fallback?: number }
     if (l.kind === 'absolute' && typeof l.dp === 'number') return l.dp
     if (l.kind === 'ratio' && typeof l.ratio === 'number') return { ratio: l.ratio, base: l.base ?? 'unknown' }
     if (l.kind === 'auto') return 'auto'
+    // ★★★内置环境变量（2026-10-08 · 决策 #593）：Web 原生 `var(--pf-X)`（框架基础样式在 :root 定义；浏览器解析）
+    if (l.kind === 'env' && typeof l.name === 'string') { return l.offset ? 'calc(var(' + l.name + ') + ' + l.offset + 'px)' : 'var(' + l.name + ')' }
   }
   return undefined // 结构化值（boxShadow/transform 等）不参与逐属性判等（另表比对）
 }

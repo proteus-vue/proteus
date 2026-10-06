@@ -341,6 +341,51 @@ public class SuperappActivity extends android.app.Activity {
     }
 
     /** 把**当前屏内容**真画到屏上（编译产物 app-screen-content.json → 内核树 → 自绘） */
+    /**
+     * ★★★宿主采集内置环境变量（2026-10-08 · 决策 #593）：平台 insets → 归一为 **dp**（逻辑像素）。
+     * 只用官方 API（`WindowInsets`，API 20+；`displayCutout()` API 28+）——**不用**厂商私有 API。
+     * ★稳定值取 `*IgnoringVisibility`（沉浸式隐藏系统栏时主 inset 会变 0 ⇒ 布局跳动，见文档坑 P5）。
+     * ★厂商私有 API 一律不采用（决策 #593 / 文档 §2.3）；缺 insets 的机型降级 0（不静默错值）。
+     */
+    private org.json.JSONObject collectEnvVars() {
+        org.json.JSONObject o = new org.json.JSONObject();
+        try {
+            if (android.os.Build.VERSION.SDK_INT < 20) return o;
+            android.view.WindowInsets wi = getWindow().getDecorView().getRootWindowInsets();
+            if (wi == null) return o;
+            // ★本宿主 edge-to-edge：状态栏恒隐藏（onWindowFocusChanged 里 hide(statusBars())）⇒
+            //   statusBars().top 的“可见性值”恒为 0（= 期望的顶避让）；导航栏可见 ⇒ 其值即真实。
+            //   （SDK 公共 stub 未暴露 *IgnoringVisibility 变体，故用标准访问器——本场景等价且稳定。）
+            int sb = wi.getInsets(android.view.WindowInsets.Type.statusBars()).top;
+            int nav = wi.getInsets(android.view.WindowInsets.Type.navigationBars()).bottom;
+            int tap = wi.getInsets(android.view.WindowInsets.Type.tappableElement()).bottom;
+            int cutT = 0, cutL = 0, cutR = 0;
+            if (android.os.Build.VERSION.SDK_INT >= 28) {
+                android.view.DisplayCutout dc = wi.getDisplayCutout();
+                if (dc != null) { cutT = dc.getSafeInsetTop(); cutL = dc.getSafeInsetLeft(); cutR = dc.getSafeInsetRight(); }
+            }
+            double d = density;
+            // A 组：避让量（statusBar ∪ cutout / navigationBars）——逻辑像素（dp）
+            o.put("--pf-inset-top", Math.max(sb, cutT) / d);
+            o.put("--pf-inset-bottom", nav / d);
+            o.put("--pf-inset-left", cutL / d);
+            o.put("--pf-inset-right", cutR / d);
+            // B 组：系统栏本体
+            boolean gesture = tap < nav * 0.6;   // 手势机：tappable 显著小于 navigationBars
+            o.put("--pf-status-bar-height", sb / d);
+            o.put("--pf-nav-bar-height", (gesture ? 0 : nav) / d);
+            o.put("--pf-indicator-height", (gesture ? nav : 0) / d);
+            o.put("--pf-nav-bar-total", nav / d);
+            // C 组：挖孔 + 导航模式
+            o.put("--pf-cutout-top", cutT / d);
+            o.put("--pf-cutout-left", cutL / d);
+            o.put("--pf-cutout-right", cutR / d);
+            o.put("--pf-keyboard-height", 0.0);   // State 1：不接键盘（不参与布局）
+            android.util.Log.i(TAG, "ENV_VARS top=" + (Math.max(sb, cutT) / d) + " bottom=" + (nav / d) + " gesture=" + gesture);
+        } catch (Throwable t) { android.util.Log.w(TAG, "collectEnvVars 失败：" + t.getMessage()); }
+        return o;
+    }
+
     private void renderCurrent(String stateJson) {
         String page = currentName(stateJson);
         try {
@@ -361,6 +406,7 @@ public class SuperappActivity extends android.app.Activity {
             tree.put("viewport", new org.json.JSONObject()
                     .put("width", vwPx / density).put("height", vhPx / density));
             tree.put("nodes", nodes);
+            draw.setEnvVars(collectEnvVars());   // ★内置环境变量（决策 #593）：每次渲染刷新（旋转/折叠重排）
             draw.mount(tree.toString());
             if (draw.view() != null) draw.view().invalidate();
             android.util.Log.i(TAG, "SUPERAPP_RENDER page=" + page + " nodes=" + nodes.length()

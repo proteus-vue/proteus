@@ -6582,6 +6582,72 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     }
 
     /// 核心：渲染树 → (CoreText 度量) → Rust 核心 → CALayer 树
+    /**
+     * ★★★内置环境变量表（2026-10-08 · 决策 #593）：`--pf-*` → **逻辑点（pt）**。
+     * iOS 用官方 `view.safeAreaInsets`（含状态栏/刘海/底部 Home Indicator）；无厂商私有 API。
+     * nav-mode 恒 gesture（iOS 无三键导航）；键盘不接（不参与布局）。
+     */
+    private func envVarTable() -> [String: Double] {
+        var t: [String: Double] = [:]
+        guard let v = view else { return t }
+        let s = v.safeAreaInsets
+        t["--pf-inset-top"] = Double(s.top)
+        t["--pf-inset-bottom"] = Double(s.bottom)
+        t["--pf-inset-left"] = Double(s.left)
+        t["--pf-inset-right"] = Double(s.right)
+        t["--pf-status-bar-height"] = Double(s.top)   // iOS：状态栏/刘海含于 safeArea.top
+        t["--pf-nav-bar-height"] = 0                  // iOS 无三键导航
+        t["--pf-indicator-height"] = Double(s.bottom) // 底部 Home Indicator
+        t["--pf-nav-bar-total"] = Double(s.bottom)
+        t["--pf-cutout-top"] = Double(s.top)
+        t["--pf-cutout-left"] = Double(s.left)
+        t["--pf-cutout-right"] = Double(s.right)
+        t["--pf-keyboard-height"] = 0
+        return t
+    }
+
+    /// 解析 `env:<name>[+N|-N][~F]` token → 逻辑点；未知名/无表项 ⇒ fallback（缺省 0）。非 token ⇒ nil。
+    private static func resolveEnvToken(_ tok: String, _ table: [String: Double]) -> Double? {
+        guard tok.hasPrefix("env:") else { return nil }
+        var rest = String(tok.dropFirst(4))
+        var fallback = 0.0
+        if let ti = rest.firstIndex(of: "~") {
+            fallback = Double(rest[rest.index(after: ti)...]) ?? 0
+            rest = String(rest[..<ti])
+        }
+        var off = 0.0; var name = rest
+        if rest.count > 1 {
+            let chars = Array(rest)
+            // ★偏移符号 = 后随**数字**的 +/-（变量名自带连字符 '-'——不能见 '-' 就当分隔符）
+            for i in 1..<(chars.count - 1) where (chars[i] == "+" || chars[i] == "-") && chars[i + 1].isNumber {
+                name = String(chars[0..<i])
+                let sign = chars[i] == "-" ? -1.0 : 1.0
+                off = sign * (Double(String(chars[(i + 1)...])) ?? 0)
+                break
+            }
+        }
+        return (table[name] ?? fallback) + off
+    }
+
+    /// 把 nodes 里所有 `env:` token 字符串就地替换为逻辑点数值（顶层标量 + margin/padding 四边）。
+    private func resolveEnvTokens(in nodes: inout [[String: Any]]) {
+        let table = envVarTable()
+        let sides = ["top", "right", "bottom", "left"]
+        for i in nodes.indices {
+            for (k, v) in nodes[i] {
+                if let s = v as? String, let d = Self.resolveEnvToken(s, table) { nodes[i][k] = d }
+            }
+            for edge in ["margin", "padding"] {
+                if var obj = nodes[i][edge] as? [String: Any] {
+                    for side in sides {
+                        if let s = obj[side] as? String, let d = Self.resolveEnvToken(s, table) { obj[side] = d }
+                    }
+                    nodes[i][edge] = obj
+                }
+            }
+        }
+    }
+
     private func render(treeJson: String, phase: String) -> String {
         guard let view = view else { return "{\"ok\":false,\"error\":\"view 未设置\"}" }
         let t0 = CFAbsoluteTimeGetCurrent()
@@ -6589,9 +6655,11 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         let tParse0 = CFAbsoluteTimeGetCurrent()
         guard let data = treeJson.data(using: .utf8),
               let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let nodes = root["nodes"] as? [[String: Any]] else {
+              var nodes = root["nodes"] as? [[String: Any]] else {
             return "{\"ok\":false,\"error\":\"渲染树 JSON 解析失败\"}"
         }
+        // ★★★内置环境变量（2026-10-08 · 决策 #593）：把编译期发射的 `env:<name>` token 解析为逻辑点（pt）
+        resolveEnvTokens(in: &nodes)
         let parseMs = (CFAbsoluteTimeGetCurrent() - tParse0) * 1000
 
         // ── ① 注入文本度量（平台职责：CoreText；命中内容寻址缓存）──

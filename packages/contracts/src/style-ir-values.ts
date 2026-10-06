@@ -10,6 +10,8 @@
 //   本文件是**跨层契约**（contracts 是所有人的依赖方向终点）。两处语义必须一致：
 //   CSE 的单位折叠真值在 `component-ir/src/pnode-style.ts::resolveLength`（唯一实现，本文件只声明形状）。
 //
+import type { EnvVarName } from './env-vars'
+
 // 【零运行期解析（INV-CE-03）】本文件只有**已折叠形态**：不含 CSS 文本、不含函数表达式。
 
 /** 比例基准（CSS 百分号 / 视口单位 / 字号单位的求值基准——显式写出，消除"宽高百分比基准"分歧） */
@@ -29,6 +31,13 @@ export type LengthBase =
 export type ResolvedLength =
   | { kind: 'absolute'; dp: number }
   | { kind: 'ratio'; ratio: number; base: LengthBase }
+  /**
+   * ★★★环境变量引用（2026-10-08 · 决策 #593）：值来自**运行期环境表**（内置 `--pf-*`）——
+   *   编译期不折字面值，发射“引用”；求值时 = 环境表[name] + offset（逻辑像素）。
+   *   `offset`：`calc(var(--pf-X) + Npx)` 的常量偏移；`fallback`：`var(--pf-X, Npx)` 的第二参数。
+   *   ★合法名 = `EnvVarName` 闭集（`packages/contracts/src/env-vars.ts`）；未知名编译期报错（不静默为 0）。
+   */
+  | { kind: 'env'; name: EnvVarName; offset?: number; fallback?: number }
   | { kind: 'auto' }
   | null
 
