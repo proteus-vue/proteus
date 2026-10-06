@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- {{appName}} —— Proteus 最小 Android 宿主（CLI 生成）
+     ★包名与 runtime AAR 一致（dev.proteus.layoutcore）⇒ 同包访问，零可见性改动。 -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="{{bundleName}}">
+
+    <application
+        android:label="{{appName}}"
+        android:debuggable="true"
+        android:allowBackup="false"
+        android:hasCode="true">
+        <!-- 起始页名（编译产物 app-screen-content.json 的键；换项目改这里） -->
+        <meta-data android:name="ProteusHomePage" android:value="index" />
+        <activity
+            android:name=".AppActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

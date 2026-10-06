@@ -23,13 +23,13 @@ const HERE = path.dirname(fileURLToPath(import.meta.url))
 /** CLI 包根（src/ 或 dist/ 的上一级）——模板随包发布，位于 <pkgRoot>/templates-host */
 const CLI_PKG_ROOT = path.resolve(HERE, '..')
 
-export const HOST_PLATFORMS = ['harmony', 'ios'] as const
+export const HOST_PLATFORMS = ['harmony', 'ios', 'android'] as const
 export type HostPlatform = (typeof HOST_PLATFORMS)[number]
 
 /** 每个端：runtime 源→目标目录（可多个）+ 编译产物落点 + 复制排除项 */
 interface PlatformSpec {
-  /** runtime 源目录 → 生成工程内的相对目录（框架仓内路径用 {repo} 占位）；marker = 校验该源"确实存在"的标记文件 */
-  runtimeUnits: Array<{ src: string; dest: string; marker: string }>
+  /** runtime 单元：目录型（src=目录，marker=校验存在）或产物型（artifact=单文件）——frame 占位 {repo} */
+  runtimeUnits: Array<{ src: string; dest: string; marker: string; artifact?: string }>
   /** 编译产物 screen-content.json 在生成工程内的落点（相对 targetDir） */
   resourceDest: string
   /** 复制时排除的目录段 / 文件名（构建期产物） */
@@ -51,6 +51,14 @@ const PLATFORM_SPECS: Record<HostPlatform, PlatformSpec> = {
     ],
     resourceDest: 'app-screen-content.json',
     excludeDirs: ['build', 'dev', '.build'],
+    excludeFiles: [],
+  },
+  android: {
+    // ★Android 的 runtime 是**构建产物 AAR**（hosts/android/build/proteus-runtime.aar，由
+    //   hosts/android/build-runtime-aar.sh 产出），不是源目录 ⇒ artifact 形态；落 <dir>/libs/。
+    runtimeUnits: [{ src: '{repo}/hosts/android/build', dest: 'libs', marker: 'proteus-runtime.aar', artifact: 'proteus-runtime.aar' }],
+    resourceDest: 'app/src/main/assets/app-screen-content.json',
+    excludeDirs: [],
     excludeFiles: [],
   },
 }
@@ -122,7 +130,7 @@ export function resolveRuntimeDirs(platform: HostPlatform, override?: string[]):
       expanded,
       path.join(CLI_PKG_ROOT, 'templates-host', platform, unit.dest),
     ].filter((c): c is string => !!c)
-    const hit = candidates.find((c) => fs.existsSync(path.join(c, unit.marker)))
+    const hit = candidates.find((c) => fs.existsSync(unit.artifact ? path.join(c, unit.artifact) : path.join(c, unit.marker)))
     if (hit) out.push(hit)
   }
   return out
@@ -179,15 +187,27 @@ export function createHost(opts: CreateHostOptions): CreateHostResult {
   // ② runtime 单元（源集）——与框架同源复制
   if (runtimeDirs.length === spec.runtimeUnits.length) {
     for (let i = 0; i < spec.runtimeUnits.length; i++) {
-      const dest = path.join(targetDir, spec.runtimeUnits[i].dest)
-      copyDirFiltered(runtimeDirs[i], dest, new Set(spec.excludeDirs), new Set(spec.excludeFiles), files)
+      const unit = spec.runtimeUnits[i]
+      const dest = path.join(targetDir, unit.dest)
+      if (unit.artifact) {
+        // 产物型：复制单个文件（如 android 的 proteus-runtime.aar → <dir>/libs/）
+        fs.mkdirSync(dest, { recursive: true })
+        const to = path.join(dest, unit.artifact)
+        fs.copyFileSync(path.join(runtimeDirs[i], unit.artifact), to)
+        files.push(path.relative(targetDir, to))
+      } else {
+        copyDirFiltered(runtimeDirs[i], dest, new Set(spec.excludeDirs), new Set(spec.excludeFiles), files)
+      }
     }
-    notes.push(`runtime（${runtimeDirs.length} 个源集）已复制 ← ${runtimeDirs.map((d) => path.relative(process.cwd(), d)).join(', ')}`)
+    notes.push(`runtime（${runtimeDirs.length} 个单元）已复制 ← ${runtimeDirs.map((d) => path.relative(process.cwd(), d)).join(', ')}`)
     if (platform === 'harmony' && !fs.existsSync(path.join(targetDir, 'proteus_render/src/main/cpp/thirdparty/libproteus_layout_core.a'))) {
       notes.push('⚠ 未随附 Rust 核（libproteus_layout_core.a，构建产物）；构建前请在框架仓跑 hosts/harmony/build-rust-core.sh 再复制该文件到 proteus_render/src/main/cpp/thirdparty/')
     }
     if (platform === 'ios') {
       notes.push('ℹ iOS runtime 为**源集单元**：与内核 .a 一起由 `build --package` 用 swiftc 编译（内核由 cargo 交叉编译：packages/layout-core-rust + packages/host-abi）')
+    }
+    if (platform === 'android') {
+      notes.push('ℹ android runtime 为 **AAR**（libs/proteus-runtime.aar，保持同包 dev.proteus.layoutcore）；缺它时在框架仓跑 hosts/android/build-runtime-aar.sh 生成后重生成')
     }
   } else {
     notes.push(`⚠ 未找齐 runtime 源集（需 ${spec.runtimeUnits.length} 个，实得 ${runtimeDirs.length}）——生成工程可能不完整；用 PROTEUS_HOST_RUNTIME_DIR 指定后重生成`)
@@ -248,7 +268,9 @@ export function deriveBundleName(appName: string, tld = 'com'): string {
 export function runCreateHost(args: CreateHostArgs): number {
   const name = path.basename(path.resolve(args.targetDir)) || 'proteus-host'
   const appName = args.appName ?? name
-  const bundleName = args.bundleName ?? deriveBundleName(appName)
+  // ★android 默认包名 = runtime AAR 的包（dev.proteus.layoutcore）⇒ 壳与 runtime **同包**
+  //   （零可见性改动；见决策 #566）。用户显式 --bundle 可改（用公开 API 时可行，但失去同包访问）。
+  const bundleName = args.bundleName ?? (args.platform === 'android' ? 'dev.proteus.layoutcore' : deriveBundleName(appName))
   let r: CreateHostResult
   try {
     r = createHost({ platform: args.platform, targetDir: args.targetDir, appName, bundleName, projectRoot: args.projectRoot })

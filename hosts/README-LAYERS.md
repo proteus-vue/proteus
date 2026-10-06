@@ -118,4 +118,23 @@ L1 框架主仓（本仓）发独立包 → L2 宿主 App 仓**只依赖不 fork
   c) 参考宿主壳仍分发到 dev 装置场景（`SHELL_MIXED_FILES` 具名棘轮），**最小壳不含**。
   ★**下一刀**：Android（AAR·**保持同包** `dev.proteus.layoutcore` ⇒ Java 包访问按包名跨 artifact 仍有效 ⇒
   零可见性改动，避开 #563 的 93 处 public 化）。
+
+- **第四刀 · Android 样板（2026-10-07 打通）**：同一模式在 **Android** 跑通并真机验证。
+  · **runtime 抽为 AAR（★保持同包）**：`hosts/android/build-runtime-aar.sh` 把 `.../layoutcore/runtime/`（11 类）
+    编成 `classes.jar` + `libproteus_jni.so`（+ 可选的 quickjs/wasm .so），打成 `hosts/android/build/proteus-runtime.aar`。
+    ★**包名仍是 `dev.proteus.layoutcore`**（同包 + 源码分目录，见 §1）⇒ 消费壳（同包名）仍可访问包私有成员，
+    **零可见性改动**（对比：换包名会逼 ~93 处 public 化——#563）。AAR 结构 = `AndroidManifest.xml`(同包) +
+    `classes.jar` + `jni/arm64-v8a/*.so`(16 KB 对齐) + `R.txt`（同 `platform/android/build-aar.sh`）。
+  · **最小壳**：`packages/cli/templates-host/android`——`AndroidManifest.xml`（同包 launcher `.AppActivity`）+
+    `src/dev/proteus/layoutcore/AppActivity.java`（建 FrameLayout → `VaporRenderHost` → 读 asset
+    `app-screen-content.json` → `mount` 上屏 → 报 `PROTEUS_HOST_READY`/`HOST_PAGE_RENDER`）。**零项目身份**
+    （起始页从 Manifest `ProteusHomePage` 读）。★最小静态宿主只需 `VaporRenderHost` + `libproteus_jni.so`
+    （**不需** QuickJS/wasm/HostBridge——那是交互/路由路径）。
+  · **CLI**：`proteus create host android <dir>`（模板 + runtime **AAR** 复制到 `libs/`）·
+    `proteus build --target android --package --host-dir <dir>`（javac → d8 → aapt2 → zip → zipalign → apksigner）。
+  · **真机判据**：生成的独立工程 zero-device 构建出签名 `.apk` → `adb install` → 启动 → **渲染项目真实内容**
+    （`HOST_PAGE_RENDER page=index ok=true nodes=73`，截图核对）。
+  ★**诚实边界**：a) Android runtime **发布形态**是"本仓构建期产出 AAR"（可注入预建件）；b) **签名用调试
+  keystore**（自动生成，机器本地）；c) 无 Gradle——沿用本仓"手工链 + 断言"哲学（见 hosts/android/README.md）。
+
 - 分层**不改任何运行期行为**：只搬文件 + 改编译源清单，三端零设备编译 + 一次真实构建截图黑盒验证。

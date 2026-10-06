@@ -190,12 +190,15 @@ src/ (SFC + <route> + p-*) + proteus.config.ts
 ```bash
 proteus create host harmony <dir> [--name <应用名>] [--bundle <包名>] [--project <项目根>]
 proteus create host ios <dir>     [--name <应用名>] [--bundle <Bundle ID>] [--project <项目根>]
+proteus create host android <dir> [--name <应用名>] [--bundle <包名，默认 dev.proteus.layoutcore>] [--project <项目根>]
 proteus build --target harmony --package --host-dir <dir>   # 编译项目内容 + 调 hvigorw 打包 .hap
 proteus build --target ios     --package --host-dir <dir>   # 编译项目内容 + 调 swiftc 打包 .app（第三刀）
+proteus build --target android --package --host-dir <dir>   # 编译项目内容 + javac/d8/aapt2 打包 .apk（第四刀）
 ```
 
 **生成形态**（`packages/cli/templates-host/harmony`）：`AppScope/` + `entry/`（最小壳：EntryAbility + MainPage）
 + `proteus_render/`（runtime HAR，从框架同源复制）+ `proteus.host.json` + `build-profile.template.json5`。
+**生成形态（android）**（`packages/cli/templates-host/android`）：`AndroidManifest.xml`（同包 `dev.proteus.layoutcore`）+ `src/dev/proteus/layoutcore/AppActivity.java`（最小壳）+ `libs/proteus-runtime.aar`（runtime，保持同包）；打包 = javac → d8 → aapt2 → zip → zipalign → apksigner。
 **生成形态（ios）**（`packages/cli/templates-host/ios`）：`shell/ProteusApp.swift`（最小壳，`@main`）+ `runtime/`+`platform/`（runtime 源集）+ `Info.plist` + `proteus.host.json`；打包 = cargo 建核 → swiftc → 组装 `.app` → 签名。
 **壳零项目身份**：EntryAbility 只交生命周期给 runtime + 上报 READY；MainPage 只渲染 rawfile 编译产物。
 **打包**：`--package` 只「壳调 hvigorw」（不自研工具链）；先 `ohpm install`（file: 依赖 → 跨模块 native 聚合）。

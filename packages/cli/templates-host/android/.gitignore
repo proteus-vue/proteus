@@ -1,0 +1,18 @@
+# {{appName}} —— Proteus 最小 Android 宿主 —— 忽略项
+
+# 构建产物
+build/
+*.apk
+*.dex
+*.class
+classes.jar
+
+# ★签名 keystore（机器本地，由 build --package 自动生成 debug.keystore，不入库）
+*.keystore
+*.jks
+
+# runtime AAR（由 Proteus 框架构建期产出；可重生成，不入库）
+libs/*.aar
+
+# 编译产物（随项目走，可重生成；由 `build --package` 拷入）
+app/src/main/assets/app-screen-content.json

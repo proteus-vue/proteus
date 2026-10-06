@@ -22,7 +22,7 @@ proteus build <dir> [--out <dir>] [--debug] [--no-px2rpx] [--rpx-ratio <n>] [--r
       --rules    JSON 规则覆盖文件（disabled / mapping / customTags）
       --compiler 编译器后端（G-29）：node（缺省）/ rust（每页 Node/Rust 双编译语义等价校验，G-29.1）
       --target   工程构建（G-33 M2）：web/skyline（复用 Vite 管线）· ios/android/harmony（App 屏内容：路由 → SFC → 编译器）· all（逐端全构建）；缺省 = 独立编译
-      --package  （hosts 第二/三刀）harmony→调 hvigorw 打 .hap；ios→调 swiftc 打 .app（--host-dir 指定宿主工程，缺省读 PROTEUS_HOST_DIR）
+      --package  （hosts 第二/三/四刀）harmony→hvigorw 打 .hap；ios→swiftc 打 .app；android→javac/d8/aapt2 打 .apk（--host-dir 指定宿主工程，缺省读 PROTEUS_HOST_DIR）
 
 ### `proteus dev`
 
@@ -39,7 +39,7 @@ proteus create host <platform> <dir> [--name <应用名>] [--bundle <包名>] [-
 ```
 
 ★hosts 第二刀 Stage 2（宿主/项目分离）：生成**独立可编译的最小宿主工程**（壳 + runtime HAR 依赖）
-      platform 支持 harmony / ios；harmony 生成 AppScope+entry（最小壳）+proteus_render（runtime HAR）；ios 生成 runtime 源集+platform+shell（最小壳）
+      platform 支持 harmony / ios / android；harmony→AppScope+entry+proteus_render(HAR)；ios→runtime 源集+platform+shell；android→AndroidManifest+src+libs(runtime AAR)
       --name 应用名 · --bundle 包名（缺省 com.example.<slug>）· --project 项目根（有 dist/app/<platform>/ 则拷编译产物进 rawfile）
 
 ## 检查与门禁
