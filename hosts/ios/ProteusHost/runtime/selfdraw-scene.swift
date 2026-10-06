@@ -6600,7 +6600,11 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                 if bottom > maxBottom { maxBottom = bottom }
             }
             // I2-ALLOW: 滚动**交互约束**取整（钳制上限读数——不进绘制指令流；几何仍走内核吸附值）
-            let range = max(0, Int((maxBottom - view.bounds.height).rounded()))
+            var range = max(0, Int((maxBottom - view.bounds.height).rounded()))
+            // ★★★页面滚动锁定（2026-10-08）：页根声明 `overflow-y: hidden` ⇒ **整页不滚**（range=0）。
+            //   App 的「页面滚动」= 整树滚动 ⇒ 页根 overflow 即页面滚动开关。
+            let locked = (nodes.first?["overflowY"] as? String) == "hidden"
+            if locked { range = 0 }
             view.setVerticalScrollRange(range)
         }
         // 按树序拍平（父在前）——CALayer 树要求先建父

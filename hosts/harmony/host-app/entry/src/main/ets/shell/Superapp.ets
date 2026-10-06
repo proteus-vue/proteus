@@ -248,6 +248,13 @@ struct Superapp {
       // ★★★鸿蒙滚动对齐：重算滚动范围 + 重放偏移（renderCommands 重建指令后根位置归零）。
       const chVp: number = appScreenContentHeight();
       this.maxScroll = Math.max(0, chVp - Superapp.vpH);
+      // ★★★页面滚动锁定（2026-10-08）：页根声明 `overflow-y: hidden` ⇒ **整页不滚**（maxScroll=0）。
+      //   App 的「页面滚动」= 整树滚动 ⇒ 页根 overflow 即页面滚动开关。
+      try {
+        const pageNodes = JSON.parse(nodes) as Record<string, Object>[];
+        const r0 = pageNodes.length > 0 ? pageNodes[0] : undefined;
+        if (r0 && (r0 as Record<string, Object>)['overflowY'] === 'hidden') this.maxScroll = 0;
+      } catch (e) { /* nodes 解析失败 ⇒ 不锁（保持可滚） */ }
       if (this.scrollOffset > this.maxScroll) { this.scrollOffset = this.maxScroll; }
       if (this.scrollOffset < 0) { this.scrollOffset = 0; }
       scrollRoot(this.scrollOffset);

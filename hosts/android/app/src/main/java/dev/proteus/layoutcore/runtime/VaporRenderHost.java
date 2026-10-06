@@ -335,10 +335,18 @@ public final class VaporRenderHost {
             // I2-ALLOW: 滚动**交互约束**取整（像素级钳制上限——不进绘制指令流、非几何换算；
             //   绘制几何仍走内核吸附值）
             int range = Math.max(0, Math.round(maxBottom - vh));
+            // ★★★页面滚动锁定（2026-10-08 用户点名「overflow-y:hidden 长页面是否真能锁滚」）：
+            //   页根声明 `overflow-y: hidden` ⇒ **整页不滚**（range=0）。此前只按内容高算 range
+            //   ⇒ 声明了 hidden 的长页面照样能滚（真机实测：bg-position 根加 overflow-y:hidden 仍 range=20）。
+            //   App 的「页面滚动」= 整树滚动 ⇒ 页根 overflow 即页面滚动开关。
+            final String rootOvf = specs.isEmpty() ? null : specs.get(0).optString("overflowY", null);
+            final boolean scrollLocked = "hidden".equals(rootOvf);
+            if (scrollLocked) range = 0;
             view.setVerticalScrollRange(range);
             // I2-ALLOW: 报告读数（content_height / scroll_range 为机器判据的可读字段）
             out.put("content_height", Math.round(maxBottom));
             out.put("scroll_range", range);
+            if (scrollLocked) out.put("scroll_locked", true);
         } catch (Exception e) {
             // 不静默：报出（判据可据此判红）；视图保持"不钳制"状态
             try { out.put("scroll_range_error", e.getClass().getSimpleName() + ": " + e.getMessage()); } catch (Exception ignored) { /* 报告字段写失败时保持原样 */ }

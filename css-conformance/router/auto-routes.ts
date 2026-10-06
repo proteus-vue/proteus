@@ -10,6 +10,7 @@ export const routes: RouteRecord[] = [
   { name: "border-style", path: "pages/border-style", component: "../pages/border-style.vue" },
   { name: "border", path: "pages/border", component: "../pages/border.vue", meta: {"title":"CSS 验收 · 边框"} },
   { name: "justify-self", path: "pages/justify-self", component: "../pages/justify-self.vue", meta: {"title":"CSS 验收 · 网格自对齐"} },
+  { name: "overflow-page", path: "pages/overflow-page", component: "../pages/overflow-page.vue" },
   { name: "overflow", path: "pages/overflow", component: "../pages/overflow.vue" },
   { name: "text", path: "pages/text", component: "../pages/text.vue", meta: {"title":"CSS 验收 · 文本"} },
   { name: "word-break", path: "pages/word-break", component: "../pages/word-break.vue", meta: {"title":"CSS 验收 · 断词"} },
@@ -37,6 +38,10 @@ export const screens: Record<string, AppScreenSpec> = {
     "name": "justify-self",
     "path": "pages/justify-self"
   },
+  "overflow-page": {
+    "name": "overflow-page",
+    "path": "pages/overflow-page"
+  },
   "overflow": {
     "name": "overflow",
     "path": "pages/overflow"
@@ -52,7 +57,7 @@ export const screens: Record<string, AppScreenSpec> = {
 }
 
 /** 路由名数组（App 深栈/压测按它循环取屏——顺序与 routes 一致） */
-export const screenNames: string[] = ["background-position","border-style","border","justify-self","overflow","text","word-break"]
+export const screenNames: string[] = ["background-position","border-style","border","justify-self","overflow-page","overflow","text","word-break"]
 
 /** tab 根屏（meta.isTab）—— App 端 tab 语义（switchTab/reset）的合法目标 */
 export const tabNames: string[] = []
@@ -64,6 +69,7 @@ declare module '@proteus-vue/router/types' {
     'border-style': {  },
     'border': {  },
     'justify-self': {  },
+    'overflow-page': {  },
     'overflow': {  },
     'text': {  },
     'word-break': {  },

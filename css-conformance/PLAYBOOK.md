@@ -89,6 +89,14 @@ node scripts/css-acceptance-record.mjs <feature-id> <verdicts.json>
 - `wechatide simulator_screenshot` 前必须 `open_project_window`（否则静默 `mcp_business_fail`）
 
 **语义（本轮真缺陷，都会重现）**
+- **★★页面级滚动锁定：页根 `overflow-y: hidden` ⇒ 整页不滚**（2026-10-08 用户点名「昨天 overflow 族没验证长页面 hidden 是否真锁滚」）：
+  · **Web 真值（逐值实测）**：落在**固定高根**（height:100vh）+ `overflow-y:hidden` ⇒ 不滚（scrollY 恒 0）；
+    落在**内容高根**（min-height:100vh）+ hidden ⇒ **照样滚**（根不形成滚动容器）。
+  · **App 端曾真缺陷**：三端宿主算页面滚动范围**只看内容高、忽略页根 overflow** ⇒ 声明了 `overflow-y:hidden`
+    的长页面**照样能滚**（真机实测：页根加 hidden 仍 `range=20`）。修：**页根 `overflowY:hidden` ⇒ 滚动范围置 0**
+    （App「页面滚动」=整树滚动 ⇒ 页根 overflow 即页面滚动开关；三端同改）。
+  · ★**验收纪律**：这类「页面级行为」页**内容必须用静态高块**（非 `v-for`）——App 屏内容是静态结构，
+    `v-for` 不展开（实测只折 1 行 ⇒ 无真溢出、测不出锁滚）。
 - **缺省值必须查 Web 标准**：`white-space` 缺省 = `normal`（可折行），不是 nowrap——
   实现成 nowrap 会让未声明该属性的文本在 App 端被裁（本轮鸿蒙副标题「寻址」丢失的根因）。
   ★同源纪律：**任何 CSS 特性的缺省值/继承性/初始值，动手前先查 Web 真值**。
