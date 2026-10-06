@@ -1642,3 +1642,11 @@
 **⑤ 诚实边界**：鸿蒙**滚动值**未设备验证（uitest swipe 不达 ArkUI onTouch；逻辑同 Android/iOS，Android 已设备验证）。
 **⑥ 教训**：跨屏共享的**视图状态**（滚动偏移）不是"每次归零"，而是"按导航方向 保留/重置"——**语义由平台无关的共享层统一**（各端只提供 get/set 原语）；自绘手势不得与系统手势冲突（先查系统是否已提供）。
 
+603. **★★★宿主关注点分离 · B2 起步（G1 tab 栏视觉规格共享）+ R3 响应式数据回写落地**：
+**① 用户指令**：「不错不错，继续吧」（承 #598 B 计划；B0/B1 已交付）。
+**② R3（响应式数据回写）**：`index.vue` 加「点击计数」项（`@tap="count++"` + `{{ count }}`）。★真机（Android cssconf）：点该卡 → `SUPERAPP_TAP target=4 cur=index`（不导航）→ 截图计数 **0→1**（reactive：count++ → relink → 增量 applyOps → 内核 SET_TEXT → 重绘）。⇒ 台账 R3 → 已落地。
+**③ G1（tab 栏视觉规格共享）**：三端宿主此前各自硬编码同一套 tab 样式（颜色/字号/图标/标签/角标规则）⇒ 漂移。新增 `packages/render-backend/src/tab-bar-spec.ts`：**TAB_BAR_SPEC**（唯一共享规格，基准 = Web 真值 `superapp/App.vue .sa-tabbar` + global.css token）；`entry-superapp` 的 state 下发 `tabSpec`；**三端宿主读规格建视图**（Android `SuperappActivity` / iOS `superapp-scene` / 鸿蒙 `Superapp.ets`）。★真机验证：三端超级应用 tab 栏（首页/消息+badge 3/我的）颜色图标一致。
+**④ 教训（复述「基准 = Web」）**：规格值取自 Web 真源，三端**读规格**而非各写——这正是"新增宿主只实现平台原语、UI 规格共享"的落点。
+**⑤ 待续（B2 余项）**：G2 insets 归一化 · G3 手势分类收敛到 packages/gesture · G4 能力桥契约 · G5 mountPage 门面 · G6 防回归门禁；B3（HA0.5/HA4/HA2）；B4 收尾。
+**⑥ 诚实边界**：Web/MP 不消费 TAB_BAR_SPEC（各自 CSS 引擎渲染 `.sa-tabbar`）；本常量须与 Web 真值一致（G6 门禁将加固）；鸿蒙 superapp 内容层（非 tab）另有存量排版问题（与本项无关，未处理）。
+
