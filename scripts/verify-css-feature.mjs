@@ -33,16 +33,18 @@ const INVENTORY = path.join(ROOT, 'docs/generated/css-feature-inventory.json')
 const inv = JSON.parse(fs.readFileSync(INVENTORY, 'utf-8'))
 
 if (NEXT) {
-  // ★推进顺序（可复核）：P0 里先取**标准且用量最高**的（排除前缀扩展/实验性——它们不该排在最前）
+  // ★推进顺序（可复核）：P0 里先取**标准且用量最高**的。
+  //   ★过滤口径（2026-10-08 修）：按 **MDN 状态**排除（nonstandard / obsolete），**不再按连字符前缀**——
+  //   前缀口径会误伤 -webkit-line-clamp（MDN standard、事实标准、语料 4×），它当时被静默排除。
   const next = inv.entries
-    .filter((e) => e.priority === 'P0' && e.mdnStatus === 'standard' && !e.id.startsWith('-'))
+    .filter((e) => e.priority === 'P0' && e.mdnStatus === 'standard')
     .sort((a, b) => b.usage - a.usage)[0]
     ?? inv.entries.find((e) => e.priority === 'P0')
   if (!next) {
     console.log('✅ 无 P0 待推行（全部已实现或已验收）')
     process.exit(0)
   }
-  console.log(`下一个 P0：\`${next.id}\`（用法 ${next.usage}× · ${next.groups.join(', ')}）`)
+  console.log(`下一个 P0：\`${next.id}\`（${next.kind} · 用法 ${next.usage}×${next.groups ? ' · ' + next.groups.join(', ') : ''}）`)
   console.log(`  跑：node scripts/verify-css-feature.mjs ${next.id}`)
   process.exit(0)
 }
@@ -123,6 +125,8 @@ const PROBE_VALUES = {
   'justify-content': ['justify-content: space-between', 'justifyContent', 'space-between'],
   'align-items': ['align-items: center', 'alignItems', 'center'],
   gap: ['gap: 8px', 'rowGap', { kind: 'absolute', dp: 8 }],
+  // ★★★line-clamp 项（2026-10-08）：多行截断行数（浏览器 computed 为 `2` 字符串 ⇒ CSE 折成数值 2）
+  '-webkit-line-clamp': ['-webkit-line-clamp: 2', 'lineClamp', 2],
 }
 
 const probe = PROBE_VALUES[id]
@@ -154,7 +158,7 @@ if (!probe) {
     parity.irField = irField
     parity.irValue = irVal
     parity.computedProbe = Object.fromEntries(
-      Object.entries(computed).filter(([k]) => ['inset', 'top', 'right', 'bottom', 'left', 'overflow-x', 'overflow-y', 'white-space', 'word-break', 'justify-self', 'grid-area', 'background-color', 'color', 'border-radius', 'text-align', 'opacity', 'font-size', 'letter-spacing', 'line-height', 'flex-direction', 'justify-content', 'align-items', 'gap', 'border-bottom-width', 'border-top-width', 'border-left-width', 'border-right-width', 'border-bottom-color', 'border-top-color', 'border-left-color', 'border-right-color', 'border-style', 'border-top-style', 'border-bottom-style', 'border-top-left-radius', 'border-bottom-right-radius', 'background-size', 'background-position', 'background-repeat', 'grid-auto-flow', 'grid-auto-columns', 'grid-auto-rows', 'grid-template-areas', 'grid-area', 'justify-items', 'text-shadow', 'outline-width', 'outline-offset', 'outline-style'].includes(k)),
+      Object.entries(computed).filter(([k]) => ['inset', 'top', 'right', 'bottom', 'left', 'overflow-x', 'overflow-y', 'white-space', 'word-break', 'justify-self', 'grid-area', 'background-color', 'color', 'border-radius', 'text-align', 'opacity', 'font-size', 'letter-spacing', 'line-height', 'flex-direction', 'justify-content', 'align-items', 'gap', 'border-bottom-width', 'border-top-width', 'border-left-width', 'border-right-width', 'border-bottom-color', 'border-top-color', 'border-left-color', 'border-right-color', 'border-style', 'border-top-style', 'border-bottom-style', 'border-top-left-radius', 'border-bottom-right-radius', 'background-size', 'background-position', 'background-repeat', 'grid-auto-flow', 'grid-auto-columns', 'grid-auto-rows', 'grid-template-areas', 'grid-area', 'justify-items', 'text-shadow', 'outline-width', 'outline-offset', 'outline-style', '-webkit-line-clamp'].includes(k)),
     )
     // 判据：IR 出值且与浏览器 resolved 语义一致（按形态）
     if (irVal === undefined) {

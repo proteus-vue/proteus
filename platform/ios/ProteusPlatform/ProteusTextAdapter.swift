@@ -256,11 +256,13 @@ final class ProteusTextAdapter {
     ///   盒宽来自内核解析后的盒（调用方传入）——宿主不自己推布局（纪律：几何唯一来源 = 内核）。
     static func measureTextWrapped(_ text: String, fontSize: CGFloat, fontWeight: CGFloat = 400,
                                     fontFamily: String = "system", lineWidth: CGFloat,
-                                    lineHeight: String? = nil, letterSpacing: CGFloat = 0, wordBreak: String? = nil) -> CGSize {
+                                    lineHeight: String? = nil, letterSpacing: CGFloat = 0, wordBreak: String? = nil,
+                                    maxLines: Int = 0) -> CGSize {
         if text.isEmpty || lineWidth <= 0 { return .zero }
         // 缓存键含 lineWidth（同文本不同盒宽折行结果不同；前缀 W 与单行键空间区分）
         // ★★★word-break 项（2026-10-06）：键含 wordBreak（不同断词策略折行结果不同）
-        let key = "W\u{1}\(fontSize)\u{1}\(fontWeight)\u{1}\(fontFamily)\u{1}\(lineWidth)\u{1}\(lineHeight ?? "")\u{1}\(letterSpacing)\u{1}\(wordBreak ?? "")\u{1}\(text)"
+        // ★★★line-clamp 项（2026-10-08）：键含 maxLines（不同截断行数折行/高度不同）
+        let key = "W\u{1}\(fontSize)\u{1}\(fontWeight)\u{1}\(fontFamily)\u{1}\(lineWidth)\u{1}\(lineHeight ?? "")\u{1}\(letterSpacing)\u{1}\(wordBreak ?? "")\u{1}\(maxLines)\u{1}\(text)"
         if let hit = measureCache[key] { measureCacheHits += 1; return hit }
         measureCacheMisses += 1
         let font = ProteusTextAdapter.font(size: fontSize, weight: fontWeight, family: fontFamily)
@@ -278,11 +280,15 @@ final class ProteusTextAdapter {
             options: [.usesLineFragmentOrigin, .usesFontLeading],
             attributes: attrs, context: nil)
         var height = rect.height
+        // ★★★line-clamp 项（2026-10-08）：截断封顶——行数 = min(自然行数, maxLines)；
+        //   盒高 = 截断行数 × 行盒高（与绘制同源：宿主按同款截断串绘制）。
+        let natural = max(1, font.lineHeight)
+        var lines = max(1, Int((rect.height / natural).rounded()))
+        if maxLines > 0 && lines > maxLines { lines = maxLines }
         if let lh = lineHeight, let h = ProteusTextAdapter.lineHeightPx(lh, fontSize: fontSize), h > 0 {
-            // 行数 = 自然折行高 / 自然行高（UIFont.lineHeight）；行盒高 = 行数 × 声明行高
-            let natural = max(1, font.lineHeight)
-            let lines = max(1, Int((rect.height / natural).rounded()))
             height = CGFloat(lines) * h
+        } else if maxLines > 0 {
+            height = min(height, CGFloat(lines) * natural)
         }
         // I2-ALLOW: 文本**测量**结果的取整（测量子系统——与单行 measureText 同口径）
         let rounded = CGSize(width: ceil(rect.width), height: ceil(height))
@@ -290,6 +296,50 @@ final class ProteusTextAdapter {
         return rounded
     }
 
+    /// ★★★line-clamp 项（2026-10-08 · CSS Overflow）：把文本**预截断**到最多 `maxLines` 行 + 末行尾 …，
+    ///   返回可直接绘制的截断串（宿主按之设 layer frame = maxLines × 行盒高，无需裁剪近似）。
+    ///   【为什么预截断而非靠 CATextLayer 裁剪】CATextLayer **没有 numberOfLines / 多行尾部省略号**
+    ///   （只有单行 truncationMode）⇒ 只能由本层用 CTFramesetter 找可见行范围后自建截断串。
+    ///   【与 Web 基准一致】Web `-webkit-line-clamp` 保留前 N 行、末行以 … 结尾。
+    static func truncateToLines(_ text: String, fontSize: CGFloat, fontWeight: CGFloat = 400,
+                                fontFamily: String = "system", lineWidth: CGFloat,
+                                lineHeight: String? = nil, letterSpacing: CGFloat = 0, wordBreak: String? = nil,
+                                maxLines: Int) -> String {
+        if maxLines <= 0 || text.isEmpty || lineWidth <= 0 { return text }
+        let font = ProteusTextAdapter.font(size: fontSize, weight: fontWeight, family: fontFamily)
+        var attrs: [NSAttributedString.Key: Any] = [.font: font]
+        if letterSpacing != 0 { attrs[.kern] = letterSpacing as NSNumber }
+        if let wb = wordBreak {
+            let ps = NSMutableParagraphStyle()
+            ps.lineBreakMode = wb == "break-all" ? .byCharWrapping : .byWordWrapping
+            attrs[.paragraphStyle] = ps
+        }
+        let attr = NSAttributedString(string: text, attributes: attrs)
+        // 行盒高（用于给 framesetter 一个 maxLines 行高的路径）
+        let lineH = lineHeight.flatMap { ProteusTextAdapter.lineHeightPx($0, fontSize: fontSize) } ?? font.lineHeight
+        let framesetter = CTFramesetterCreateWithAttributedString(attr)
+        let path = CGPath(rect: CGRect(x: 0, y: 0, width: lineWidth, height: lineH * CGFloat(maxLines) + 0.5), transform: nil)
+        let frame = CTFramesetterCreateFrame(framesetter, CFRangeMake(0, 0), path, nil)
+        let ctLines = CTFrameGetLines(frame) as! [CTLine]
+        // 全部文本都能装进 maxLines ⇒ 原样（零行为变化）
+        if ctLines.count < maxLines { return text }
+        guard let lastLine = ctLines.last else { return text }
+        let lastRange = CTLineGetStringRange(lastLine)
+        let ellipsis = "\u{2026}"
+        // 可见字符数（UTF-16 下标）——从末行结尾起向前收缩，直到「截断串 + …」折行 ≤ maxLines
+        var end = min((text as NSString).length, lastRange.location + lastRange.length)
+        let natural = max(1, font.lineHeight)
+        while end > 0 {
+            let candidate = (text as NSString).substring(to: end) + ellipsis
+            let r = (candidate as NSString).boundingRect(
+                with: CGSize(width: lineWidth, height: .greatestFiniteMagnitude),
+                options: [.usesLineFragmentOrigin, .usesFontLeading], attributes: attrs, context: nil)
+            let candLines = max(1, Int((r.height / natural).rounded()))
+            if candLines <= maxLines { return candidate }
+            end -= 1
+        }
+        return ellipsis
+    }
     /// ★批次 13：`line-height` token → 行盒高 px（无单位倍数×fontSize / 绝对 px；解析失败 ⇒ nil）
     static func lineHeightPx(_ token: String, fontSize: CGFloat) -> CGFloat? {
         if token.hasSuffix("px") {

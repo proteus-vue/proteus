@@ -48,6 +48,8 @@ export const APP_PAINT_FIELDS: readonly string[] = [
   'textOverflow', 'letterSpacing', 'textDecoration', 'visibility', 'borderRadius', 'borderRadiusPct',
   'borderColor', 'borderWidth', 'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor',
   'opacity',
+  // ★★★line-clamp 项（2026-10-08）：多行截断行数（数值，透传宿主）
+  'lineClamp',
   // ★★★outline 族项（2026-10-08）：轮廓宽/色/线型/偏移（宿主绘制——host-only paint）
   'outlineWidth', 'outlineColor', 'outlineStyle', 'outlineOffset',
   // ★★★背景定位家族（2026-10-07）：背景图层图像盒的 size/position/repeat（字符串，透传宿主几何）
@@ -174,7 +176,8 @@ export function mapStyleIRToApp(fields: Record<string, unknown>): AppMappingResu
       }
       if (field === 'opacity' || field === 'flexGrow' || field === 'flexShrink' || field === 'aspectRatio' ||
           field === 'fontWeight' || field === 'fontSize' || field === 'letterSpacing' || field === 'lineHeight' ||
-          field === 'borderWidth' || field === 'borderRadius' || field === 'borderRadiusPct') {
+          field === 'borderWidth' || field === 'borderRadius' || field === 'borderRadiusPct' ||
+          field === 'lineClamp') {
         put(field, value, value)
         continue
       }

@@ -617,13 +617,15 @@ final class SelfDrawView: UIView {
     ///   **结构增量**（`insertLayers`）都要造层——两份实现必然分叉 ⇒
     ///   新插入的行会与全量树**外观不一致**（静默错，且只有像素比对能发现）。
     /// @param nodeId 节点 id（**仅用于记底色快照** `layerOriginalBg`——复位目标，见其注释）
-    private func makeLayer(style: [String: Any], nodeId: Int) -> CALayer {
+    private func makeLayer(style: [String: Any], nodeId: Int, boxWidth: CGFloat = 0) -> CALayer {
         let text = style["text"] as? String
         let fontSize = style["fontSize"] as? CGFloat
         if let text = text, !text.isEmpty {
             // 文本叶子 → CATextLayer（GPU 加速；不创建 UIView，也不自栅格化）
             let tl = CATextLayer()
-            tl.string = text
+            // ★★★line-clamp 项（2026-10-08）：多行截断——按盒宽预截断（尾省略号）后再绘制
+            let clamped = SelfDrawView.clampedText(text, style: style, boxWidth: boxWidth)
+            tl.string = clamped
             let fs = fontSize ?? 14
             let fw = (style["fontWeight"] as? CGFloat) ?? 400
             // ★字体由统一构造器给出（与度量同源——见 `font(size:weight:family:)` 注释）
@@ -633,7 +635,7 @@ final class SelfDrawView: UIView {
             tl.fontSize = fs
             let textCg = (style["color"] as? String).flatMap(parseHexColor)?.cgColor ?? UIColor.white.cgColor
             tl.foregroundColor = textCg
-            tl.string = textLayerString(text, style: style, font: ufont, color: textCg)
+            tl.string = textLayerString(clamped, style: style, font: ufont, color: textCg)
             // ★记文字色快照（复位目标；见 `layerOriginalTextColor` 注释）
             layerOriginalTextColor[nodeId] = textCg
             tl.alignmentMode = alignmentMode(style["textAlign"] as? String)
@@ -845,7 +847,7 @@ final class SelfDrawView: UIView {
         CATransaction.setDisableActions(true)
         var byId: [Int: CALayer] = [:]
         for item in flat {
-            let layer = makeLayer(style: item.style, nodeId: item.id)
+            let layer = makeLayer(style: item.style, nodeId: item.id, boxWidth: item.rect.width)
             // ★几何**完全来自 Rust 核心**（位置/尺寸都不是 UIKit 算的）
             //
             // ★★坐标系换算（本仓实测踩到，是本场景最关键的一处）：
@@ -1965,7 +1967,7 @@ final class SelfDrawView: UIView {
                 let pid = isBlockRoot ? parentId : rawPid!
                 let parentLayer: CALayer = layersById[pid] ?? self.layer
                 let style = spliceStyleOf(n)
-                let layer = makeLayer(style: style, nodeId: id)
+                let layer = makeLayer(style: style, nodeId: id, boxWidth: nodeRects[id]?.width ?? 0)
                 if isBlockRoot && rootSlot >= 0 {
                     // ★★块根按 `index` 插（层序 = 绘制顺序 = 核心 children 序）
                     //
@@ -2876,7 +2878,7 @@ final class SelfDrawView: UIView {
             guard let spec = nodesById[id] else { continue }
             guard layersById[id] == nil else { continue }   // 已物化（防御：重复 acquire）
             let style = SelfDrawView.styleOf(spec)
-            let (layer, reused) = acquireLayer(style: style, nodeId: id)
+            let (layer, reused) = acquireLayer(style: style, nodeId: id, boxWidth: nodeRects[id]?.width ?? 0)
             if !reused { made += 1 }
             // ★帧 = 节点绝对 rect − 父绝对原点（父的 rect 也在核心几何里 ⇒ 与物化顺序无关）
             let abs = nodeRects[id] ?? .zero
@@ -2968,16 +2970,16 @@ final class SelfDrawView: UIView {
     }
 
     /// 取一个层：**同类型**优先从池里复用（类型不匹配不复用——CATextLayer 当容器会残留 string）
-    private func acquireLayer(style: [String: Any], nodeId: Int) -> (CALayer, Bool) {
+    private func acquireLayer(style: [String: Any], nodeId: Int, boxWidth: CGFloat = 0) -> (CALayer, Bool) {
         let wantsText = !((style["text"] as? String) ?? "").isEmpty
         if let i = layerPool.firstIndex(where: { wantsText ? ($0 is CATextLayer) : !($0 is CATextLayer) }) {
             let l = layerPool.remove(at: i)
-            configureLayer(l, style: style)
+            configureLayer(l, style: style, boxWidth: boxWidth)
             layersReused += 1
             return (l, true)
         }
         layersCreated += 1
-        return (makeLayer(style: style, nodeId: nodeId), false)
+        return (makeLayer(style: style, nodeId: nodeId, boxWidth: boxWidth), false)
     }
 
     /// ★批次 4（CSS 兼容对齐）：`text-align` → `CATextLayer.alignmentMode`（left/center/right；缺省 left）。
@@ -2998,6 +3000,21 @@ final class SelfDrawView: UIView {
         //   只有显式 `nowrap`/`pre` 才是单行。
         let ws = (style["whiteSpace"] as? String) ?? "normal"
         return ws == "normal" || ws == "pre-wrap" || ws == "pre-line" || ws == "pre"
+    }
+
+    /// ★★★line-clamp 项（2026-10-08 · CSS Overflow）：按 `lineClamp` 预截断文本（尾省略号）。
+    ///   无 clamp / 无需截断 ⇒ 原串（零行为变化）。度量（wrapRemeasure）与绘制（makeLayer/configureLayer）
+    ///   **同源**调适配器 `truncateToLines`。
+    static func clampedText(_ text: String, style: [String: Any], boxWidth: CGFloat) -> String {
+        let n = (style["lineClamp"] as? CGFloat).map { Int($0) } ?? (style["lineClamp"] as? Double).map { Int($0) } ?? 0
+        if n <= 0 || boxWidth <= 1 { return text }
+        let fs = (style["fontSize"] as? CGFloat) ?? 14
+        let fw = (style["fontWeight"] as? CGFloat) ?? 400
+        let fam = (style["fontFamily"] as? String) ?? "system"
+        let ls = (style["letterSpacing"] as? Double).map({ CGFloat($0) }) ?? (style["letterSpacing"] as? CGFloat) ?? 0
+        return ProteusTextAdapter.truncateToLines(text, fontSize: fs, fontWeight: fw, fontFamily: fam,
+            lineWidth: boxWidth, lineHeight: style["lineHeight"] as? String, letterSpacing: ls,
+            wordBreak: style["wordBreak"] as? String, maxLines: n)
     }
 
     /// ★★全端对齐批：nowrap 且溢出裁切（overflow:hidden 且非 ellipsis）——Web 裁切语义。
@@ -3029,6 +3046,10 @@ final class SelfDrawView: UIView {
         // ★★I3：绘制提示必须**透传**——本函数是 `acquireLayer`/`buildLayers` 的必经之路，
         //   不透传则 `applyPaintHint` 永远读不到 hint（接线断在这里，且**无任何报错**）。
         if let h = n["paintHint"] as? [String: Any] { style["paintHint"] = h }
+        // ★★★line-clamp 项（2026-10-08）：多行截断行数必须透传（本函数是建层必经之路；
+        //   漏透传 ⇒ 宿主读不到 ⇒ 静默不截断——与 clipPath/glow/mask 同款教训）。
+        if let lc = n["lineClamp"] as? Double { style["lineClamp"] = CGFloat(lc) }
+        if let lc = n["lineClamp"] as? CGFloat { style["lineClamp"] = lc }
         if let fs = n["fontSize"] as? Double { style["fontSize"] = CGFloat(fs) }
         if let fs = n["fontSize"] as? CGFloat { style["fontSize"] = fs }
         if let fw = n["fontWeight"] as? Double { style["fontWeight"] = CGFloat(fw) }
@@ -3223,7 +3244,7 @@ final class SelfDrawView: UIView {
     /// 【为什么（复用池最容易出的静默错）】被复用的层带着**上一个节点的外观**：
     ///   容器层若原带 `cornerRadius=18`，而新节点没有 borderRadius ⇒ 若不清零，
     ///   新行会**多出圆角**（几何全对、像素错）——而"多圆角"这种差异只有像素比对能发现。
-    private func configureLayer(_ layer: CALayer, style: [String: Any]) {
+    private func configureLayer(_ layer: CALayer, style: [String: Any], boxWidth: CGFloat = 0) {
         let text = (style["text"] as? String) ?? ""
         if let tl = layer as? CATextLayer {
             if text.isEmpty {
@@ -3231,14 +3252,16 @@ final class SelfDrawView: UIView {
             } else {
                 let fs = (style["fontSize"] as? CGFloat) ?? 14
                 let fw = (style["fontWeight"] as? CGFloat) ?? 400
-                tl.string = text
+                // ★★★line-clamp 项（2026-10-08）：多行截断——按盒宽预截断（与 makeLayer 同源）
+                let clamped = SelfDrawView.clampedText(text, style: style, boxWidth: boxWidth)
+                tl.string = clamped
                 tl.font = ProteusTextAdapter.cgFont(of: ProteusTextAdapter.font(
                     size: fs, weight: fw,
                     family: (style["fontFamily"] as? String) ?? "system"))
                 tl.fontSize = fs
                 tl.foregroundColor = (style["color"] as? String).flatMap(parseHexColor)?.cgColor
                     ?? UIColor.white.cgColor
-                tl.string = textLayerString(text, style: style, font: ProteusTextAdapter.font(size: fs, weight: fw, family: (style["fontFamily"] as? String) ?? "system"), color: (style["color"] as? String).flatMap(parseHexColor)?.cgColor ?? UIColor.white.cgColor)
+                tl.string = textLayerString(clamped, style: style, font: ProteusTextAdapter.font(size: fs, weight: fw, family: (style["fontFamily"] as? String) ?? "system"), color: (style["color"] as? String).flatMap(parseHexColor)?.cgColor ?? UIColor.white.cgColor)
                 tl.alignmentMode = alignmentMode(style["textAlign"] as? String)
                 // ★★全端对齐批（2026-10-05 · white-space 五端对齐）：复用路径同配（复用 = 完全重配）
                 let wrapMode2 = SelfDrawView.isWrapStyle(style)
@@ -3796,7 +3819,7 @@ final class SelfDrawView: UIView {
         for n in nodes {
             guard let id = n["id"] as? Int, rowOfNode[id] == nil, layersById[id] == nil else { continue }
             let style = SelfDrawView.styleOf(n)
-            let (layer, reused) = acquireLayer(style: style, nodeId: id)
+            let (layer, reused) = acquireLayer(style: style, nodeId: id, boxWidth: nodeRects[id]?.width ?? 0)
             if !reused { made += 1 }
             let abs = nodeRects[id] ?? .zero
             let pid = (n["parentId"] as? Int) ?? -1
@@ -3869,7 +3892,7 @@ final class SelfDrawView: UIView {
             rectsByNodeId[id] = abs
             if let spec = nodesById[id] {
                 let style = SelfDrawView.styleOf(spec)
-                configureLayer(layer, style: style)
+                configureLayer(layer, style: style, boxWidth: f.width)
                 metaByNodeId[id] = style
             }
         }
@@ -6503,8 +6526,10 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             let lh = n["lineHeight"] as? String
             let ls = (n["letterSpacing"] as? Double).map { CGFloat($0) } ?? 0
             let wb = n["wordBreak"] as? String
+            // ★★★line-clamp 项（2026-10-08）：测量封顶——盒高 = min(自然行数, clamp) × 行盒高
+            let maxLines = (n["lineClamp"] as? Double).map { Int($0) } ?? (n["lineClamp"] as? Int) ?? 0
             let sz = ProteusTextAdapter.measureTextWrapped(text, fontSize: fs, fontWeight: fw, fontFamily: fam,
-                                                             lineWidth: CGFloat(boxW), lineHeight: lh, letterSpacing: ls, wordBreak: wb)
+                                                             lineWidth: CGFloat(boxW), lineHeight: lh, letterSpacing: ls, wordBreak: wb, maxLines: maxLines)
             let prevH = measures["\(id)"]?["height"] ?? 0
             if Double(sz.height) > prevH + 0.5 {
                 measures["\(id)"] = ["width": Double(min(boxW, Double(sz.width))), "height": Double(sz.height)]

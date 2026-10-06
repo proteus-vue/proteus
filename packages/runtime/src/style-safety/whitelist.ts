@@ -77,6 +77,8 @@ export const PROP_TYPES = {
   JustifySelf: isEnum(JUSTIFY_SELF),
   // ★★★place-items/justify-items 项（2026-10-08）：网格容器内子项行内轴对齐（值集 = JustifySelf 去 auto）
   JustifyItems: isEnum(JUSTIFY_ITEMS),
+  // ★★★line-clamp 项（2026-10-08）：多行截断行数（正整数）
+  LineClamp: (v: unknown): boolean => typeof v === 'number' && Number.isInteger(v) && v > 0,
   GridAutoFlow: isEnum(GRID_AUTO_FLOW),
   // ★★★outline 族项（2026-10-08）：轮廓宽度/偏移（长度，可负——偏移允许负值）
   OutlineWidth: isLength,

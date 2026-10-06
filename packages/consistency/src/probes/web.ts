@@ -163,6 +163,13 @@ function styleOf(el: Element, win: Window): NormalizedStyle {
   }
   const op = len('opacity')
   if (op !== undefined) styles.opacity = op
+  // ★★★line-clamp 项（2026-10-08）：多行截断行数——**数值键**（schema 要求 number）。
+  //   浏览器 computed：已声明 ⇒ `"2"`（可 parseInt）；未声明 ⇒ `"none"`（跳过，与"无值不判"同口径）。
+  {
+    const lc = cs.getPropertyValue('-webkit-line-clamp').trim()
+    const n = /^\d+$/.test(lc) ? Number(lc) : undefined
+    if (n !== undefined && n > 0) styles.lineClamp = n
+  }
   // ★★覆盖扩展（2026-10-02·二批）：布局族（数值项 `auto`/`none`/`normal` ⇒ 不产出——
   //   与 normalizeLength 的口径一致：跳过而非假装 0）
   for (const [prop, key] of [

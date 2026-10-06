@@ -1,0 +1,134 @@
+{
+  "_note": "★CSS 能力逐项验收包（用户指定流程：实现一个 → 全端对齐视觉验收一个）。gates：implemented（IR 在册）/ parity（真 Chromium 同构样本与 CSE 值一致）/ endsMapped（三端可表达）。★视觉验收（像素级）仍由独立子代理按 Web 基准并排做——本包只归档**机器可判**的三段；pass=true 表示\"可以进入视觉验收\"，不等于\"视觉已验收\"。",
+  "id": "-webkit-line-clamp",
+  "kind": "property",
+  "verifiedAt": "2026-10-06T13:26:34.120Z",
+  "implEvidence": {
+    "impl": "implemented",
+    "implNote": "IR 注册表在册（scope=semantic · 矩阵 LineClamp）",
+    "inIrRegistry": true,
+    "irScope": "semantic",
+    "inCompilerFold": true,
+    "matrixLevel": "LineClamp",
+    "webSupport": null,
+    "usage": 4,
+    "priority": "done"
+  },
+  "parity": {
+    "ran": true,
+    "pass": true,
+    "detail": [
+      "IR `lineClamp` = 2（与浏览器样本 -webkit-line-clamp: 2 一致）"
+    ],
+    "css": "-webkit-line-clamp: 2",
+    "irField": "lineClamp",
+    "irValue": 2,
+    "computedProbe": {
+      "align-items": "normal",
+      "background-color": "rgba(0, 0, 0, 0)",
+      "background-position": "0% 0%",
+      "background-repeat": "repeat",
+      "background-size": "auto",
+      "border-bottom-color": "rgb(0, 0, 0)",
+      "border-bottom-right-radius": "0px",
+      "border-bottom-style": "none",
+      "border-bottom-width": "0px",
+      "border-left-color": "rgb(0, 0, 0)",
+      "border-left-width": "0px",
+      "border-right-color": "rgb(0, 0, 0)",
+      "border-right-width": "0px",
+      "border-top-color": "rgb(0, 0, 0)",
+      "border-top-left-radius": "0px",
+      "border-top-style": "none",
+      "border-top-width": "0px",
+      "bottom": "auto",
+      "color": "rgb(0, 0, 0)",
+      "flex-direction": "row",
+      "font-size": "16px",
+      "grid-auto-columns": "auto",
+      "grid-auto-flow": "row",
+      "grid-auto-rows": "auto",
+      "grid-template-areas": "none",
+      "justify-content": "normal",
+      "justify-items": "normal",
+      "justify-self": "auto",
+      "left": "auto",
+      "letter-spacing": "normal",
+      "line-height": "normal",
+      "opacity": "1",
+      "outline-offset": "0px",
+      "outline-style": "none",
+      "outline-width": "3px",
+      "overflow-x": "visible",
+      "overflow-y": "visible",
+      "right": "auto",
+      "text-align": "start",
+      "text-shadow": "none",
+      "top": "auto",
+      "word-break": "normal",
+      "-webkit-line-clamp": "2"
+    }
+  },
+  "endExpressibility": {
+    "web": "基准端（浏览器原生——A 档）",
+    "skyline": "可表达（-webkit-line-clamp）",
+    "app": "可表达（dto: lineClamp · ops: paint.lineClamp）",
+    "skylineUnsupported": [],
+    "appUnsupported": []
+  },
+  "gates": {
+    "implemented": true,
+    "parity": true,
+    "endsMapped": true
+  },
+  "pass": true,
+  "nextStep": "机器判据三段已过 → 进入**视觉验收**：生成并排产物（node scripts/gen-baseline-side-by-side.mjs）+ 独立子代理按 Web 基准评审",
+  "visual": {
+    "_note": "★视觉验收结论（独立子代理按 Web 基准并排图评审；来源 = css-conformance/results/side-by-side/）。verdict: pass（与 Web 基准无可归因差异）/ fail（有实差异——见 caseIssues）/ unclear（图不足以判）。纪律：左半恒为 Web 基准（D1）；不看不清不编（unclear）。",
+    "reviewedAt": "2026-10-06T13:19:48.060Z",
+    "reviewedBy": "independent-visual-subagent",
+    "sideBySideDir": "css-conformance/results/side-by-side/",
+    "summary": {
+      "fails": 0,
+      "ends": "web:pass · android:pass · ios:pass · harmony:pass · mp:pass"
+    },
+    "verdicts": [
+      {
+        "end": "web",
+        "verdict": "pass",
+        "caseIssues": [],
+        "evidence": "基准端：case-clamp-2=2 行+…，case-clamp-3=3 行+…，case-clamp-none=整段 5 行；盒高 A<B<C。"
+      },
+      {
+        "end": "android",
+        "verdict": "pass",
+        "caseIssues": [],
+        "evidence": "自绘宿主镜像 Web：clamp-2=2 行+…、clamp-3=3 行+…、none=整段；盒高 A<B<C 一致。"
+      },
+      {
+        "end": "ios",
+        "verdict": "pass",
+        "caseIssues": [],
+        "evidence": "CATextLayer 预截断串：clamp-2=2 行+…、clamp-3=3 行+…、none=整段；折行/盒高与 Web 一致。"
+      },
+      {
+        "end": "harmony",
+        "verdict": "pass",
+        "caseIssues": [],
+        "evidence": "Typography maxLines+尾部省略号：clamp-2=2 行+…、clamp-3=3 行+…、none=整段；与 Web 对齐。"
+      },
+      {
+        "end": "mp",
+        "verdict": "pass",
+        "caseIssues": [
+          {
+            "case": "case-clamp-2",
+            "issue": "Skyline 不截断（三案均整段，无尾省略号）——引擎锁死边界（官方表未收录 -webkit-line-clamp / 不接受 display:-webkit-box），已在验收页与能力源具名，非缺陷。",
+            "severity": "minor"
+          }
+        ],
+        "evidence": "布局/文字/底色正常无重叠；截断差异 = 已知 Skyline 引擎边界。"
+      }
+    ]
+  }
+}

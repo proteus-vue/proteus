@@ -87,6 +87,8 @@ const CSS_ALIAS = {
   borderColor: 'border-color', borderWidth: 'border-width', fontSize: 'font-size',
   // ★★★grid-area 项（2026-10-08）：编译器字段 gridArea（命名区/线号放置）对应 CSS 能力 grid-area
   gridArea: 'grid-area',
+  // ★★★line-clamp 项（2026-10-08）：编译器字段 lineClamp 由 -webkit-line-clamp 折叠而来（WebKit 事实标准名）
+  lineClamp: '-webkit-line-clamp',
 }
 const cssNameOfField = (f) => CSS_ALIAS[f] ?? kebabOf(f)
 

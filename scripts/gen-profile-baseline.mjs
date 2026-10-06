@@ -112,6 +112,14 @@ const REASON_OVERRIDES = {
       '验收页（grid-auto-columns/-rows 项）——**验收对象本身要求 grid 容器**：Web / App（自研 Rust 引擎 taffy grid-auto-columns/rows 原生）' +
       '可渲染，Skyline 端无 Grid 容器（官方属性表无 grid 族）⇒ 按 grid-template-areas.vue 先例显式理解后钉住；' +
       'Skyline 差异在验收页顶部具名（引擎锁死边界，不作缺陷）。棘轮只减不增。',
+    // ★★★line-clamp 项（2026-10-08）：验收页**有意**用 WebKit 三件套（display:-webkit-box 是 -webkit-line-clamp
+    //   的**惯用使能器**；Web/Skyline 由浏览器原生消费）。Skyline 官方属性表未收录 -webkit-box/-webkit-line-clamp
+    //   （引擎锁死）；App 端编译期**静默容忍** -webkit-box（无对等值、不落 display）+ 折叠 lineClamp ⇒ 三端自绘宿主渲染。
+    'pages/line-clamp.vue:display:-webkit-box':
+      '验收页（-webkit-line-clamp 项）——**验收对象本身要求 WebKit 三件套**（display:-webkit-box 是 -webkit-line-clamp 的惯用使能器）：' +
+      'Web（浏览器原生）/ App（自研 Rust 引擎编译期**静默容忍** -webkit-box［无对等值、不落 display］+ 折叠 lineClamp，宿主多行截断）可渲染，' +
+      'Skyline 端官方属性表未收录 -webkit-box / -webkit-line-clamp（引擎锁死）⇒ 按 grid-* 族先例显式理解后钉住；' +
+      'Skyline 差异在验收页顶部具名（引擎锁死边界，不作缺陷）。棘轮只减不增。',
   },
 }
 

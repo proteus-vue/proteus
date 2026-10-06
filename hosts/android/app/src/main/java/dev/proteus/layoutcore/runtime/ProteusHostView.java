@@ -95,6 +95,12 @@ public class ProteusHostView extends ViewGroup {
         /** ★★nowrap 且文本超出盒宽且无省略号 ⇒ 绘制裁到盒（= Web overflow 裁切语义）。 */
         final boolean clipText;
         /**
+         * ★★★line-clamp 项（2026-10-08 · CSS Overflow）：多行截断行数（0 = 无截断）。
+         *   与 Web `-webkit-line-clamp:<n>` 同语义：文本折行超过 n 行 ⇒ 只画前 n 行、末行尾加 …。
+         *   非 final（构造器链长，同 outline/textShadow——构建后赋值）。
+         */
+        int lineClamp;
+        /**
          * ★★★逐边 border 批（2026-10-05）：**逐边边框规格**——`float[12]`：
          *   [0..3] = 四边宽度（top/right/bottom/left；**NaN = 该边未声明 ⇒ 回落到 uniform borderWidth**）·
          *   [4..7] = 四边颜色（ARGB int as float；0 = 未声明 ⇒ 回落 borderColor）·
@@ -3483,6 +3489,12 @@ public class ProteusHostView extends ViewGroup {
                 .obtain(c.text, 0, c.text.length(), textPaint, w)
                 .setIncludePad(false)
                 .setAlignment(al);
+        // ★★★line-clamp 项（2026-10-08）：多行截断——StaticLayout 原生 maxLines + 尾部省略号
+        //   （Web `-webkit-line-clamp:<n>` 的真语义：只保留前 n 行、末行尾加 …）。
+        if (c.lineClamp > 0) {
+            b.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            b.setMaxLines(c.lineClamp);
+        }
         float extra = 0f;
         if (c.lineHeight > 0f) {
             android.graphics.Paint.FontMetrics fm = textPaint.getFontMetrics();
@@ -3527,6 +3539,11 @@ public class ProteusHostView extends ViewGroup {
                 .obtain(c.text, 0, c.text.length(), tp, w)
                 .setIncludePad(false)
                 .setAlignment(al);
+        // ★★★line-clamp 项（2026-10-08）：阴影副本与本体同款截断（否则投影会多出被截掉的行）
+        if (c.lineClamp > 0) {
+            b.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            b.setMaxLines(c.lineClamp);
+        }
         float extra = 0f;
         if (c.lineHeight > 0f) {
             android.graphics.Paint.FontMetrics fm = tp.getFontMetrics();

@@ -889,7 +889,19 @@
       "probe": [
         "text-overflow"
       ],
-      "note": "★批次 16（2026-10-04 · ★基准 = Web）：CSS 默认 clip（截断不省略）；ellipsis ⇒ 自绘文本**单行**行尾以 … 截断（超级应用列表项/标签截断刚需）。封闭集 clip/ellipsis（大小写不敏感；其余诊断跳过）；作为**文本可继承**字段沿树继承。三端宿主：iOS CATextLayer.truncationMode（ellipsis ⇒ .end；其余 ⇒ .none——★此前**恒 .end** 是 Web 偏差）· Android TextUtils.ellipsize(TruncateAt.END)（挂载/更新时算好 = 绘制零开销）· 鸿蒙 OH_Drawing_SetTypographyTextEllipsis（maxLines=1 + 尾部 modal + Layout 按盒宽）。诚实边界：仅**单行**（本仓文本无自动换行）；多行 -webkit-line-clamp、fade（渐隐）未支持"
+      "note": "★批次 16（2026-10-04 · ★基准 = Web）：CSS 默认 clip（截断不省略）；ellipsis ⇒ 自绘文本**单行**行尾以 … 截断（超级应用列表项/标签截断刚需）。封闭集 clip/ellipsis（大小写不敏感；其余诊断跳过）；作为**文本可继承**字段沿树继承。三端宿主：iOS CATextLayer.truncationMode（ellipsis ⇒ .end；其余 ⇒ .none——★此前**恒 .end** 是 Web 偏差）· Android TextUtils.ellipsize(TruncateAt.END)（挂载/更新时算好 = 绘制零开销）· 鸿蒙 OH_Drawing_SetTypographyTextEllipsis（maxLines=1 + 尾部 modal + Layout 按盒宽）。诚实边界：仅**单行**（本仓文本无自动换行）；多行截断见 `-webkit-line-clamp` 项（已支持）、fade（渐隐）未支持"
+    },
+    {
+      "id": "-webkit-line-clamp",
+      "css": "-webkit-line-clamp: <integer>",
+      "category": "text",
+      "today": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "probe": [
+        "-webkit-line-clamp"
+      ],
+      "note": "★line-clamp 项（2026-10-08 · ★基准 = Web）：**多行截断**——文本折行超过 N 行 ⇒ 只保留前 N 行、末行尾以 … 结尾（WebKit 三件套 `display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:<n>` 的事实标准）。Web 真值（真 Chromium 实测）：盒高恒 = N × lineHeight、末行尾加 …，**与 overflow 声明无关**（computed display 变 flow-root）。编译期：`display: -webkit-box/-webkit-inline-box/box` 静默容忍（无 App 对等、不落 display 字段）、`-webkit-box-orient` 静默丢弃、`-webkit-line-clamp:<正整数>` → lineClamp（0/负 = 无截断，诊断跳过）。作为**文本可继承**？否（line-clamp 非继承属性）。三端宿主（均**测量封顶 = 绘制同源**——否则盒高与墨迹打架）：iOS 适配器 CTFramesetter 预截断（CATextLayer 无 numberOfLines ⇒ 自建截断串）+ measureTextWrapped(maxLines) 封顶 · Android StaticLayout.setMaxLines+setEllipsize(END)（测量/绘制两处同款）· 鸿蒙 OH_Drawing_SetTypographyTextMaxLines + EllipsisModal(TAIL)（测量用 min(自然行数, clamp) 封顶）。诚实边界：① 仅**尾部省略号**（WebKit 事实标准；fade 渐隐未支持）；仅当文本确需折行（white-space 非 nowrap/pre）时生效（与 Web `display:-webkit-box` 的块级折行语义一致）。② **Skyline（本页真机渲染器）引擎锁死边界**：官方属性表未收录 `-webkit-line-clamp`、且不收 `display:-webkit-box`（只认 none/flex/block）⇒ 真机实测**不截断**；该端无 CSS 多行截断等价属性（如需按端条件渲染或组件化，另立项）。主承载端 = Web（浏览器原生）+ App（自研内核）。"
     },
     {
       "id": "letter-spacing",

@@ -7,7 +7,7 @@
     },
     "dpr": 2,
     "theme": "light",
-    "collectedAt": "2026-10-06T12:19:03.483Z"
+    "collectedAt": "2026-10-06T13:17:28.600Z"
   },
   "pages": {
     "background-position": {
@@ -87,7 +87,8 @@
             "outline-width": "3px",
             "outline-color": "rgb(0, 0, 0)",
             "outline-style": "none",
-            "outline-offset": "0px"
+            "outline-offset": "0px",
+            "-webkit-line-clamp": "none"
           },
           "child": null
         },
@@ -165,7 +166,8 @@
             "outline-width": "3px",
             "outline-color": "rgb(0, 0, 0)",
             "outline-style": "none",
-            "outline-offset": "0px"
+            "outline-offset": "0px",
+            "-webkit-line-clamp": "none"
           },
           "child": null
         },
@@ -243,7 +245,8 @@
             "outline-width": "3px",
             "outline-color": "rgb(0, 0, 0)",
             "outline-style": "none",
-            "outline-offset": "0px"
+            "outline-offset": "0px",
+            "-webkit-line-clamp": "none"
           },
           "child": null
         },
@@ -321,7 +324,8 @@
             "outline-width": "3px",
             "outline-color": "rgb(0, 0, 0)",
             "outline-style": "none",
-            "outline-offset": "0px"
+            "outline-offset": "0px",
+            "-webkit-line-clamp": "none"
           },
           "child": null
         },
@@ -399,7 +403,8 @@
             "outline-width": "3px",
             "outline-color": "rgb(0, 0, 0)",
             "outline-style": "none",
-            "outline-offset": "0px"
+            "outline-offset": "0px",
+            "-webkit-line-clamp": "none"
           },
           "child": null
         }
@@ -482,7 +487,8 @@
             "outline-width": "3px",
             "outline-color": "rgb(0, 0, 0)",
             "outline-style": "none",
-            "outline-offset": "0px"
+            "outline-offset": "0px",
+            "-webkit-line-clamp": "none"
           },
           "child": {
             "tag": "span",
@@ -551,7 +557,8 @@
               "outline-width": "3px",
               "outline-color": "rgb(26, 28, 34)",
               "outline-style": "none",
-              "outline-offset": "0px"
+              "outline-offset": "0px",
+              "-webkit-line-clamp": "none"
             }
           }
         },
@@ -629,7 +636,8 @@
             "outline-width": "3px",
             "outline-color": "rgb(0, 0, 0)",
             "outline-style": "none",
-            "outline-offset": "0px"
+            "outline-offset": "0px",
+            "-webkit-line-clamp": "none"
           },
           "child": {
             "tag": "span",
@@ -698,7 +706,8 @@
               "outline-width": "3px",
               "outline-color": "rgb(26, 28, 34)",
               "outline-style": "none",
-              "outline-offset": "0px"
+              "outline-offset": "0px",
+              "-webkit-line-clamp": "none"
             }
           }
         },
@@ -776,7 +785,8 @@
             "outline-width": "3px",
             "outline-color": "rgb(0, 0, 0)",
             "outline-style": "none",
-            "outline-offset": "0px"
+            "outline-offset": "0px",
+            "-webkit-line-clamp": "none"
           },
           "child": {
             "tag": "span",
@@ -845,7 +855,8 @@
               "outline-width": "3px",
               "outline-color": "rgb(26, 28, 34)",
               "outline-style": "none",
-              "outline-offset": "0px"
+              "outline-offset": "0px",
+              "-webkit-line-clamp": "none"
             }
           }
         }
@@ -928,7 +939,8 @@
             "outline-width": "3px",
             "outline-color": "rgb(0, 0, 0)",
             "outline-style": "none",
-            "outline-offset": "0px"
+            "outline-offset": "0px",
+            "-webkit-line-clamp": "none"
           },
           "child": {
             "tag": "div",
@@ -997,7 +1009,8 @@
               "outline-width": "3px",
               "outline-color": "rgb(0, 0, 0)",
               "outline-style": "none",
-              "outline-offset": "0px"
+              "outline-offset": "0px",
+              "-webkit-line-clamp": "none"
             }
           }
         },
@@ -1075,7 +1088,8 @@
             "outline-width": "3px",
             "outline-color": "rgb(0, 0, 0)",
             "outline-style": "none",
-            "outline-offset": "0px"
+            "outline-offset": "0px",
+            "-webkit-line-clamp": "none"
           },
           "child": {
             "tag": "span",
@@ -1144,7 +1158,8 @@
               "outline-width": "3px",
               "outline-color": "rgb(26, 28, 34)",
               "outline-style": "none",
-              "outline-offset": "0px"
+              "outline-offset": "0px",
+              "-webkit-line-clamp": "none"
             }
           }
         },
@@ -1222,7 +1237,8 @@
             "outline-width": "3px",
             "outline-color": "rgb(0, 0, 0)",
             "outline-style": "none",
-            "outline-offset": "0px"
+            "outline-offset": "0px",
+            "-webkit-line-clamp": "none"
           },
           "child": {
             "tag": "span",
@@ -1291,7 +1307,8 @@
               "outline-width": "3px",
               "outline-color": "rgb(75, 80, 88)",
               "outline-style": "none",
-              "outline-offset": "0px"
+              "outline-offset": "0px",
+              "-webkit-line-clamp": "none"
             }
           }
         },
@@ -1369,7 +1386,8 @@
             "outline-width": "3px",
             "outline-color": "rgb(0, 0, 0)",
             "outline-style": "none",
-            "outline-offset": "0px"
+            "outline-offset": "0px",
+            "-webkit-line-clamp": "none"
           },
           "child": {
             "tag": "span",
@@ -1438,7 +1456,8 @@
               "outline-width": "3px",
               "outline-color": "rgb(75, 80, 88)",
               "outline-style": "none",
-              "outline-offset": "0px"
+              "outline-offset": "0px",
+              "-webkit-line-clamp": "none"
             }
           }
         },
@@ -1516,7 +1535,8 @@
             "outline-width": "3px",
             "outline-color": "rgb(0, 0, 0)",
             "outline-style": "none",
-            "outline-offset": "0px"
+            "outline-offset": "0px",
+            "-webkit-line-clamp": "none"
           },
           "child": {
             "tag": "span",
@@ -1585,7 +1605,8 @@
               "outline-width": "3px",
               "outline-color": "rgb(26, 28, 34)",
               "outline-style": "none",
-              "outline-offset": "0px"
+              "outline-offset": "0px",
+              "-webkit-line-clamp": "none"
             }
           }
         }
@@ -1668,7 +1689,8 @@
             "outline-width": "3px",
             "outline-color": "rgb(0, 0, 0)",
             "outline-style": "none",
-            "outline-offset": "0px"
+            "outline-offset": "0px",
+            "-webkit-line-clamp": "none"
           },
           "child": {
             "tag": "div",
@@ -1737,7 +1759,8 @@
               "outline-width": "3px",
               "outline-color": "rgb(0, 0, 0)",
               "outline-style": "none",
-              "outline-offset": "0px"
+              "outline-offset": "0px",
+              "-webkit-line-clamp": "none"
             }
           }
         },
@@ -1815,7 +1838,8 @@
             "outline-width": "3px",
             "outline-color": "rgb(0, 0, 0)",
             "outline-style": "none",
-            "outline-offset": "0px"
+            "outline-offset": "0px",
+            "-webkit-line-clamp": "none"
           },
           "child": {
             "tag": "div",
@@ -1884,7 +1908,8 @@
               "outline-width": "3px",
               "outline-color": "rgb(0, 0, 0)",
               "outline-style": "none",
-              "outline-offset": "0px"
+              "outline-offset": "0px",
+              "-webkit-line-clamp": "none"
             }
           }
         },
@@ -1962,7 +1987,8 @@
             "outline-width": "3px",
             "outline-color": "rgb(0, 0, 0)",
             "outline-style": "none",
-            "outline-offset": "0px"
+            "outline-offset": "0px",
+            "-webkit-line-clamp": "none"
           },
           "child": {
             "tag": "div",
@@ -2031,7 +2057,8 @@
               "outline-width": "3px",
               "outline-color": "rgb(0, 0, 0)",
               "outline-style": "none",
-              "outline-offset": "0px"
+              "outline-offset": "0px",
+              "-webkit-line-clamp": "none"
             }
           }
         }
@@ -2114,7 +2141,8 @@
             "outline-width": "3px",
             "outline-color": "rgb(0, 0, 0)",
             "outline-style": "none",
-            "outline-offset": "0px"
+            "outline-offset": "0px",
+            "-webkit-line-clamp": "none"
           },
           "child": {
             "tag": "div",
@@ -2183,7 +2211,8 @@
               "outline-width": "3px",
               "outline-color": "rgb(0, 0, 0)",
               "outline-style": "none",
-              "outline-offset": "0px"
+              "outline-offset": "0px",
+              "-webkit-line-clamp": "none"
             }
           }
         },
@@ -2261,7 +2290,8 @@
             "outline-width": "3px",
             "outline-color": "rgb(0, 0, 0)",
             "outline-style": "none",
-            "outline-offset": "0px"
+            "outline-offset": "0px",
+            "-webkit-line-clamp": "none"
           },
           "child": {
             "tag": "div",
@@ -2330,7 +2360,8 @@
               "outline-width": "3px",
               "outline-color": "rgb(0, 0, 0)",
               "outline-style": "none",
-              "outline-offset": "0px"
+              "outline-offset": "0px",
+              "-webkit-line-clamp": "none"
             }
           }
         },
@@ -2408,7 +2439,8 @@
             "outline-width": "3px",
             "outline-color": "rgb(0, 0, 0)",
             "outline-style": "none",
-            "outline-offset": "0px"
+            "outline-offset": "0px",
+            "-webkit-line-clamp": "none"
           },
           "child": {
             "tag": "div",
@@ -2477,7 +2509,8 @@
               "outline-width": "3px",
               "outline-color": "rgb(0, 0, 0)",
               "outline-style": "none",
-              "outline-offset": "0px"
+              "outline-offset": "0px",
+              "-webkit-line-clamp": "none"
             }
           }
         }
@@ -2560,7 +2593,8 @@
             "outline-width": "3px",
             "outline-color": "rgb(0, 0, 0)",
             "outline-style": "none",
-            "outline-offset": "0px"
+            "outline-offset": "0px",
+            "-webkit-line-clamp": "none"
           },
           "child": {
             "tag": "div",
@@ -2629,7 +2663,8 @@
               "outline-width": "3px",
               "outline-color": "rgb(0, 0, 0)",
               "outline-style": "none",
-              "outline-offset": "0px"
+              "outline-offset": "0px",
+              "-webkit-line-clamp": "none"
             }
           }
         },
@@ -2707,7 +2742,8 @@
             "outline-width": "3px",
             "outline-color": "rgb(0, 0, 0)",
             "outline-style": "none",
-            "outline-offset": "0px"
+            "outline-offset": "0px",
+            "-webkit-line-clamp": "none"
           },
           "child": {
             "tag": "div",
@@ -2776,7 +2812,8 @@
               "outline-width": "3px",
               "outline-color": "rgb(0, 0, 0)",
               "outline-style": "none",
-              "outline-offset": "0px"
+              "outline-offset": "0px",
+              "-webkit-line-clamp": "none"
             }
           }
         }
@@ -2859,7 +2896,8 @@
             "outline-width": "3px",
             "outline-color": "rgb(0, 0, 0)",
             "outline-style": "none",
-            "outline-offset": "0px"
+            "outline-offset": "0px",
+            "-webkit-line-clamp": "none"
           },
           "child": {
             "tag": "div",
@@ -2928,7 +2966,8 @@
               "outline-width": "3px",
               "outline-color": "rgb(0, 0, 0)",
               "outline-style": "none",
-              "outline-offset": "0px"
+              "outline-offset": "0px",
+              "-webkit-line-clamp": "none"
             }
           }
         },
@@ -3006,7 +3045,8 @@
             "outline-width": "3px",
             "outline-color": "rgb(0, 0, 0)",
             "outline-style": "none",
-            "outline-offset": "0px"
+            "outline-offset": "0px",
+            "-webkit-line-clamp": "none"
           },
           "child": {
             "tag": "div",
@@ -3075,7 +3115,8 @@
               "outline-width": "3px",
               "outline-color": "rgb(0, 0, 0)",
               "outline-style": "none",
-              "outline-offset": "0px"
+              "outline-offset": "0px",
+              "-webkit-line-clamp": "none"
             }
           }
         },
@@ -3153,7 +3194,8 @@
             "outline-width": "3px",
             "outline-color": "rgb(0, 0, 0)",
             "outline-style": "none",
-            "outline-offset": "0px"
+            "outline-offset": "0px",
+            "-webkit-line-clamp": "none"
           },
           "child": {
             "tag": "div",
@@ -3222,7 +3264,8 @@
               "outline-width": "3px",
               "outline-color": "rgb(0, 0, 0)",
               "outline-style": "none",
-              "outline-offset": "0px"
+              "outline-offset": "0px",
+              "-webkit-line-clamp": "none"
             }
           }
         },
@@ -3300,7 +3343,8 @@
             "outline-width": "3px",
             "outline-color": "rgb(0, 0, 0)",
             "outline-style": "none",
-            "outline-offset": "0px"
+            "outline-offset": "0px",
+            "-webkit-line-clamp": "none"
           },
           "child": {
             "tag": "div",
@@ -3369,7 +3413,8 @@
               "outline-width": "3px",
               "outline-color": "rgb(0, 0, 0)",
               "outline-style": "none",
-              "outline-offset": "0px"
+              "outline-offset": "0px",
+              "-webkit-line-clamp": "none"
             }
           }
         },
@@ -3447,7 +3492,8 @@
             "outline-width": "3px",
             "outline-color": "rgb(0, 0, 0)",
             "outline-style": "none",
-            "outline-offset": "0px"
+            "outline-offset": "0px",
+            "-webkit-line-clamp": "none"
           },
           "child": {
             "tag": "div",
@@ -3516,7 +3562,460 @@
               "outline-width": "3px",
               "outline-color": "rgb(0, 0, 0)",
               "outline-style": "none",
-              "outline-offset": "0px"
+              "outline-offset": "0px",
+              "-webkit-line-clamp": "none"
+            }
+          }
+        }
+      }
+    },
+    "line-clamp": {
+      "route": "/pages/line-clamp",
+      "cases": {
+        "case-clamp-2": {
+          "tag": "div",
+          "text": "普罗透斯是一套面向多端的 Vue 框架，把同一份组件代码编译到 Web、微信小程序与原生自绘的三类宿主机上运行，让开发者不必为不同平台改写布局与样式。",
+          "rect": {
+            "x": 26,
+            "y": 142,
+            "width": 220,
+            "height": 56
+          },
+          "computed": {
+            "display": "flex",
+            "position": "static",
+            "width": "220px",
+            "height": "56px",
+            "overflow-x": "visible",
+            "overflow-y": "visible",
+            "white-space": "normal",
+            "text-overflow": "clip",
+            "word-break": "normal",
+            "font-size": "16px",
+            "font-weight": "400",
+            "line-height": "normal",
+            "letter-spacing": "normal",
+            "text-align": "start",
+            "color": "rgb(0, 0, 0)",
+            "background-color": "rgb(238, 241, 246)",
+            "padding-top": "8px",
+            "padding-right": "8px",
+            "padding-bottom": "8px",
+            "padding-left": "8px",
+            "margin-top": "0px",
+            "margin-right": "0px",
+            "margin-bottom": "0px",
+            "margin-left": "0px",
+            "border-top-width": "0px",
+            "border-right-width": "0px",
+            "border-bottom-width": "0px",
+            "border-left-width": "0px",
+            "border-top-color": "rgb(0, 0, 0)",
+            "border-right-color": "rgb(0, 0, 0)",
+            "border-bottom-color": "rgb(0, 0, 0)",
+            "border-left-color": "rgb(0, 0, 0)",
+            "border-top-style": "none",
+            "border-right-style": "none",
+            "border-bottom-style": "none",
+            "border-left-style": "none",
+            "border-top-left-radius": "0px",
+            "border-top-right-radius": "0px",
+            "border-bottom-right-radius": "0px",
+            "border-bottom-left-radius": "0px",
+            "flex-direction": "column",
+            "justify-content": "normal",
+            "align-items": "normal",
+            "flex-grow": "0",
+            "flex-shrink": "1",
+            "gap": "normal",
+            "row-gap": "normal",
+            "column-gap": "normal",
+            "max-width": "none",
+            "min-width": "0px",
+            "box-sizing": "border-box",
+            "opacity": "1",
+            "visibility": "visible",
+            "transform": "none",
+            "box-shadow": "none",
+            "justify-self": "auto",
+            "grid-template-columns": "none",
+            "grid-column": "auto",
+            "background-size": "auto",
+            "background-position": "0% 0%",
+            "background-repeat": "repeat",
+            "outline-width": "3px",
+            "outline-color": "rgb(0, 0, 0)",
+            "outline-style": "none",
+            "outline-offset": "0px",
+            "-webkit-line-clamp": "none"
+          },
+          "child": {
+            "tag": "span",
+            "computed": {
+              "display": "flow-root",
+              "position": "static",
+              "width": "204px",
+              "height": "40px",
+              "overflow-x": "hidden",
+              "overflow-y": "hidden",
+              "white-space": "normal",
+              "text-overflow": "clip",
+              "word-break": "normal",
+              "font-size": "14px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "letter-spacing": "normal",
+              "text-align": "start",
+              "color": "rgb(26, 28, 34)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "padding-top": "0px",
+              "padding-right": "0px",
+              "padding-bottom": "0px",
+              "padding-left": "0px",
+              "margin-top": "0px",
+              "margin-right": "0px",
+              "margin-bottom": "0px",
+              "margin-left": "0px",
+              "border-top-width": "0px",
+              "border-right-width": "0px",
+              "border-bottom-width": "0px",
+              "border-left-width": "0px",
+              "border-top-color": "rgb(26, 28, 34)",
+              "border-right-color": "rgb(26, 28, 34)",
+              "border-bottom-color": "rgb(26, 28, 34)",
+              "border-left-color": "rgb(26, 28, 34)",
+              "border-top-style": "none",
+              "border-right-style": "none",
+              "border-bottom-style": "none",
+              "border-left-style": "none",
+              "border-top-left-radius": "0px",
+              "border-top-right-radius": "0px",
+              "border-bottom-right-radius": "0px",
+              "border-bottom-left-radius": "0px",
+              "flex-direction": "row",
+              "justify-content": "normal",
+              "align-items": "normal",
+              "flex-grow": "0",
+              "flex-shrink": "1",
+              "gap": "normal",
+              "row-gap": "normal",
+              "column-gap": "normal",
+              "max-width": "none",
+              "min-width": "auto",
+              "box-sizing": "content-box",
+              "opacity": "1",
+              "visibility": "visible",
+              "transform": "none",
+              "box-shadow": "none",
+              "justify-self": "auto",
+              "grid-template-columns": "none",
+              "grid-column": "auto",
+              "background-size": "auto",
+              "background-position": "0% 0%",
+              "background-repeat": "repeat",
+              "outline-width": "3px",
+              "outline-color": "rgb(26, 28, 34)",
+              "outline-style": "none",
+              "outline-offset": "0px",
+              "-webkit-line-clamp": "2"
+            }
+          }
+        },
+        "case-clamp-3": {
+          "tag": "div",
+          "text": "普罗透斯是一套面向多端的 Vue 框架，把同一份组件代码编译到 Web、微信小程序与原生自绘的三类宿主机上运行，让开发者不必为不同平台改写布局与样式。",
+          "rect": {
+            "x": 26,
+            "y": 268,
+            "width": 220,
+            "height": 76
+          },
+          "computed": {
+            "display": "flex",
+            "position": "static",
+            "width": "220px",
+            "height": "76px",
+            "overflow-x": "visible",
+            "overflow-y": "visible",
+            "white-space": "normal",
+            "text-overflow": "clip",
+            "word-break": "normal",
+            "font-size": "16px",
+            "font-weight": "400",
+            "line-height": "normal",
+            "letter-spacing": "normal",
+            "text-align": "start",
+            "color": "rgb(0, 0, 0)",
+            "background-color": "rgb(238, 241, 246)",
+            "padding-top": "8px",
+            "padding-right": "8px",
+            "padding-bottom": "8px",
+            "padding-left": "8px",
+            "margin-top": "0px",
+            "margin-right": "0px",
+            "margin-bottom": "0px",
+            "margin-left": "0px",
+            "border-top-width": "0px",
+            "border-right-width": "0px",
+            "border-bottom-width": "0px",
+            "border-left-width": "0px",
+            "border-top-color": "rgb(0, 0, 0)",
+            "border-right-color": "rgb(0, 0, 0)",
+            "border-bottom-color": "rgb(0, 0, 0)",
+            "border-left-color": "rgb(0, 0, 0)",
+            "border-top-style": "none",
+            "border-right-style": "none",
+            "border-bottom-style": "none",
+            "border-left-style": "none",
+            "border-top-left-radius": "0px",
+            "border-top-right-radius": "0px",
+            "border-bottom-right-radius": "0px",
+            "border-bottom-left-radius": "0px",
+            "flex-direction": "column",
+            "justify-content": "normal",
+            "align-items": "normal",
+            "flex-grow": "0",
+            "flex-shrink": "1",
+            "gap": "normal",
+            "row-gap": "normal",
+            "column-gap": "normal",
+            "max-width": "none",
+            "min-width": "0px",
+            "box-sizing": "border-box",
+            "opacity": "1",
+            "visibility": "visible",
+            "transform": "none",
+            "box-shadow": "none",
+            "justify-self": "auto",
+            "grid-template-columns": "none",
+            "grid-column": "auto",
+            "background-size": "auto",
+            "background-position": "0% 0%",
+            "background-repeat": "repeat",
+            "outline-width": "3px",
+            "outline-color": "rgb(0, 0, 0)",
+            "outline-style": "none",
+            "outline-offset": "0px",
+            "-webkit-line-clamp": "none"
+          },
+          "child": {
+            "tag": "span",
+            "computed": {
+              "display": "flow-root",
+              "position": "static",
+              "width": "204px",
+              "height": "60px",
+              "overflow-x": "hidden",
+              "overflow-y": "hidden",
+              "white-space": "normal",
+              "text-overflow": "clip",
+              "word-break": "normal",
+              "font-size": "14px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "letter-spacing": "normal",
+              "text-align": "start",
+              "color": "rgb(26, 28, 34)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "padding-top": "0px",
+              "padding-right": "0px",
+              "padding-bottom": "0px",
+              "padding-left": "0px",
+              "margin-top": "0px",
+              "margin-right": "0px",
+              "margin-bottom": "0px",
+              "margin-left": "0px",
+              "border-top-width": "0px",
+              "border-right-width": "0px",
+              "border-bottom-width": "0px",
+              "border-left-width": "0px",
+              "border-top-color": "rgb(26, 28, 34)",
+              "border-right-color": "rgb(26, 28, 34)",
+              "border-bottom-color": "rgb(26, 28, 34)",
+              "border-left-color": "rgb(26, 28, 34)",
+              "border-top-style": "none",
+              "border-right-style": "none",
+              "border-bottom-style": "none",
+              "border-left-style": "none",
+              "border-top-left-radius": "0px",
+              "border-top-right-radius": "0px",
+              "border-bottom-right-radius": "0px",
+              "border-bottom-left-radius": "0px",
+              "flex-direction": "row",
+              "justify-content": "normal",
+              "align-items": "normal",
+              "flex-grow": "0",
+              "flex-shrink": "1",
+              "gap": "normal",
+              "row-gap": "normal",
+              "column-gap": "normal",
+              "max-width": "none",
+              "min-width": "auto",
+              "box-sizing": "content-box",
+              "opacity": "1",
+              "visibility": "visible",
+              "transform": "none",
+              "box-shadow": "none",
+              "justify-self": "auto",
+              "grid-template-columns": "none",
+              "grid-column": "auto",
+              "background-size": "auto",
+              "background-position": "0% 0%",
+              "background-repeat": "repeat",
+              "outline-width": "3px",
+              "outline-color": "rgb(26, 28, 34)",
+              "outline-style": "none",
+              "outline-offset": "0px",
+              "-webkit-line-clamp": "3"
+            }
+          }
+        },
+        "case-clamp-none": {
+          "tag": "div",
+          "text": "普罗透斯是一套面向多端的 Vue 框架，把同一份组件代码编译到 Web、微信小程序与原生自绘的三类宿主机上运行，让开发者不必为不同平台改写布局与样式。",
+          "rect": {
+            "x": 26,
+            "y": 414,
+            "width": 220,
+            "height": 116
+          },
+          "computed": {
+            "display": "flex",
+            "position": "static",
+            "width": "220px",
+            "height": "116px",
+            "overflow-x": "visible",
+            "overflow-y": "visible",
+            "white-space": "normal",
+            "text-overflow": "clip",
+            "word-break": "normal",
+            "font-size": "16px",
+            "font-weight": "400",
+            "line-height": "normal",
+            "letter-spacing": "normal",
+            "text-align": "start",
+            "color": "rgb(0, 0, 0)",
+            "background-color": "rgb(238, 241, 246)",
+            "padding-top": "8px",
+            "padding-right": "8px",
+            "padding-bottom": "8px",
+            "padding-left": "8px",
+            "margin-top": "0px",
+            "margin-right": "0px",
+            "margin-bottom": "0px",
+            "margin-left": "0px",
+            "border-top-width": "0px",
+            "border-right-width": "0px",
+            "border-bottom-width": "0px",
+            "border-left-width": "0px",
+            "border-top-color": "rgb(0, 0, 0)",
+            "border-right-color": "rgb(0, 0, 0)",
+            "border-bottom-color": "rgb(0, 0, 0)",
+            "border-left-color": "rgb(0, 0, 0)",
+            "border-top-style": "none",
+            "border-right-style": "none",
+            "border-bottom-style": "none",
+            "border-left-style": "none",
+            "border-top-left-radius": "0px",
+            "border-top-right-radius": "0px",
+            "border-bottom-right-radius": "0px",
+            "border-bottom-left-radius": "0px",
+            "flex-direction": "column",
+            "justify-content": "normal",
+            "align-items": "normal",
+            "flex-grow": "0",
+            "flex-shrink": "1",
+            "gap": "normal",
+            "row-gap": "normal",
+            "column-gap": "normal",
+            "max-width": "none",
+            "min-width": "0px",
+            "box-sizing": "border-box",
+            "opacity": "1",
+            "visibility": "visible",
+            "transform": "none",
+            "box-shadow": "none",
+            "justify-self": "auto",
+            "grid-template-columns": "none",
+            "grid-column": "auto",
+            "background-size": "auto",
+            "background-position": "0% 0%",
+            "background-repeat": "repeat",
+            "outline-width": "3px",
+            "outline-color": "rgb(0, 0, 0)",
+            "outline-style": "none",
+            "outline-offset": "0px",
+            "-webkit-line-clamp": "none"
+          },
+          "child": {
+            "tag": "span",
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "width": "204px",
+              "height": "100px",
+              "overflow-x": "visible",
+              "overflow-y": "visible",
+              "white-space": "normal",
+              "text-overflow": "clip",
+              "word-break": "normal",
+              "font-size": "14px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "letter-spacing": "normal",
+              "text-align": "start",
+              "color": "rgb(26, 28, 34)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "padding-top": "0px",
+              "padding-right": "0px",
+              "padding-bottom": "0px",
+              "padding-left": "0px",
+              "margin-top": "0px",
+              "margin-right": "0px",
+              "margin-bottom": "0px",
+              "margin-left": "0px",
+              "border-top-width": "0px",
+              "border-right-width": "0px",
+              "border-bottom-width": "0px",
+              "border-left-width": "0px",
+              "border-top-color": "rgb(26, 28, 34)",
+              "border-right-color": "rgb(26, 28, 34)",
+              "border-bottom-color": "rgb(26, 28, 34)",
+              "border-left-color": "rgb(26, 28, 34)",
+              "border-top-style": "none",
+              "border-right-style": "none",
+              "border-bottom-style": "none",
+              "border-left-style": "none",
+              "border-top-left-radius": "0px",
+              "border-top-right-radius": "0px",
+              "border-bottom-right-radius": "0px",
+              "border-bottom-left-radius": "0px",
+              "flex-direction": "row",
+              "justify-content": "normal",
+              "align-items": "normal",
+              "flex-grow": "0",
+              "flex-shrink": "1",
+              "gap": "normal",
+              "row-gap": "normal",
+              "column-gap": "normal",
+              "max-width": "none",
+              "min-width": "auto",
+              "box-sizing": "content-box",
+              "opacity": "1",
+              "visibility": "visible",
+              "transform": "none",
+              "box-shadow": "none",
+              "justify-self": "auto",
+              "grid-template-columns": "none",
+              "grid-column": "auto",
+              "background-size": "auto",
+              "background-position": "0% 0%",
+              "background-repeat": "repeat",
+              "outline-width": "3px",
+              "outline-color": "rgb(26, 28, 34)",
+              "outline-style": "none",
+              "outline-offset": "0px",
+              "-webkit-line-clamp": "none"
             }
           }
         }
@@ -3599,7 +4098,8 @@
             "outline-width": "3px",
             "outline-color": "rgb(111, 74, 232)",
             "outline-style": "solid",
-            "outline-offset": "2px"
+            "outline-offset": "2px",
+            "-webkit-line-clamp": "none"
           },
           "child": {
             "tag": "span",
@@ -3668,7 +4168,8 @@
               "outline-width": "3px",
               "outline-color": "rgb(58, 64, 82)",
               "outline-style": "none",
-              "outline-offset": "0px"
+              "outline-offset": "0px",
+              "-webkit-line-clamp": "none"
             }
           }
         },
@@ -3746,7 +4247,8 @@
             "outline-width": "3px",
             "outline-color": "rgb(214, 69, 69)",
             "outline-style": "dashed",
-            "outline-offset": "2px"
+            "outline-offset": "2px",
+            "-webkit-line-clamp": "none"
           },
           "child": {
             "tag": "span",
@@ -3815,7 +4317,8 @@
               "outline-width": "3px",
               "outline-color": "rgb(58, 64, 82)",
               "outline-style": "none",
-              "outline-offset": "0px"
+              "outline-offset": "0px",
+              "-webkit-line-clamp": "none"
             }
           }
         },
@@ -3893,7 +4396,8 @@
             "outline-width": "3px",
             "outline-color": "rgb(46, 158, 107)",
             "outline-style": "dotted",
-            "outline-offset": "2px"
+            "outline-offset": "2px",
+            "-webkit-line-clamp": "none"
           },
           "child": {
             "tag": "span",
@@ -3962,7 +4466,8 @@
               "outline-width": "3px",
               "outline-color": "rgb(58, 64, 82)",
               "outline-style": "none",
-              "outline-offset": "0px"
+              "outline-offset": "0px",
+              "-webkit-line-clamp": "none"
             }
           }
         },
@@ -4040,7 +4545,8 @@
             "outline-width": "3px",
             "outline-color": "rgb(255, 177, 61)",
             "outline-style": "solid",
-            "outline-offset": "-3px"
+            "outline-offset": "-3px",
+            "-webkit-line-clamp": "none"
           },
           "child": {
             "tag": "span",
@@ -4109,7 +4615,8 @@
               "outline-width": "3px",
               "outline-color": "rgb(58, 64, 82)",
               "outline-style": "none",
-              "outline-offset": "0px"
+              "outline-offset": "0px",
+              "-webkit-line-clamp": "none"
             }
           }
         }
@@ -4192,7 +4699,8 @@
             "outline-width": "3px",
             "outline-color": "rgb(0, 0, 0)",
             "outline-style": "none",
-            "outline-offset": "0px"
+            "outline-offset": "0px",
+            "-webkit-line-clamp": "none"
           },
           "child": null
         }
@@ -4275,7 +4783,8 @@
             "outline-width": "3px",
             "outline-color": "rgb(0, 0, 0)",
             "outline-style": "none",
-            "outline-offset": "0px"
+            "outline-offset": "0px",
+            "-webkit-line-clamp": "none"
           },
           "child": {
             "tag": "div",
@@ -4344,7 +4853,8 @@
               "outline-width": "3px",
               "outline-color": "rgb(0, 0, 0)",
               "outline-style": "none",
-              "outline-offset": "0px"
+              "outline-offset": "0px",
+              "-webkit-line-clamp": "none"
             }
           }
         },
@@ -4422,7 +4932,8 @@
             "outline-width": "3px",
             "outline-color": "rgb(0, 0, 0)",
             "outline-style": "none",
-            "outline-offset": "0px"
+            "outline-offset": "0px",
+            "-webkit-line-clamp": "none"
           },
           "child": {
             "tag": "div",
@@ -4491,7 +5002,8 @@
               "outline-width": "3px",
               "outline-color": "rgb(0, 0, 0)",
               "outline-style": "none",
-              "outline-offset": "0px"
+              "outline-offset": "0px",
+              "-webkit-line-clamp": "none"
             }
           }
         },
@@ -4569,7 +5081,8 @@
             "outline-width": "3px",
             "outline-color": "rgb(0, 0, 0)",
             "outline-style": "none",
-            "outline-offset": "0px"
+            "outline-offset": "0px",
+            "-webkit-line-clamp": "none"
           },
           "child": {
             "tag": "div",
@@ -4638,7 +5151,8 @@
               "outline-width": "3px",
               "outline-color": "rgb(0, 0, 0)",
               "outline-style": "none",
-              "outline-offset": "0px"
+              "outline-offset": "0px",
+              "-webkit-line-clamp": "none"
             }
           }
         }
@@ -4721,7 +5235,8 @@
             "outline-width": "3px",
             "outline-color": "rgb(0, 0, 0)",
             "outline-style": "none",
-            "outline-offset": "0px"
+            "outline-offset": "0px",
+            "-webkit-line-clamp": "none"
           },
           "child": {
             "tag": "div",
@@ -4790,7 +5305,8 @@
               "outline-width": "3px",
               "outline-color": "rgb(0, 0, 0)",
               "outline-style": "none",
-              "outline-offset": "0px"
+              "outline-offset": "0px",
+              "-webkit-line-clamp": "none"
             }
           }
         },
@@ -4868,7 +5384,8 @@
             "outline-width": "3px",
             "outline-color": "rgb(0, 0, 0)",
             "outline-style": "none",
-            "outline-offset": "0px"
+            "outline-offset": "0px",
+            "-webkit-line-clamp": "none"
           },
           "child": {
             "tag": "div",
@@ -4937,7 +5454,8 @@
               "outline-width": "3px",
               "outline-color": "rgb(0, 0, 0)",
               "outline-style": "none",
-              "outline-offset": "0px"
+              "outline-offset": "0px",
+              "-webkit-line-clamp": "none"
             }
           }
         },
@@ -5015,7 +5533,8 @@
             "outline-width": "3px",
             "outline-color": "rgb(0, 0, 0)",
             "outline-style": "none",
-            "outline-offset": "0px"
+            "outline-offset": "0px",
+            "-webkit-line-clamp": "none"
           },
           "child": {
             "tag": "div",
@@ -5084,7 +5603,8 @@
               "outline-width": "3px",
               "outline-color": "rgb(0, 0, 0)",
               "outline-style": "none",
-              "outline-offset": "0px"
+              "outline-offset": "0px",
+              "-webkit-line-clamp": "none"
             }
           }
         }
@@ -5167,7 +5687,8 @@
             "outline-width": "3px",
             "outline-color": "rgb(0, 0, 0)",
             "outline-style": "none",
-            "outline-offset": "0px"
+            "outline-offset": "0px",
+            "-webkit-line-clamp": "none"
           },
           "child": {
             "tag": "span",
@@ -5236,7 +5757,8 @@
               "outline-width": "3px",
               "outline-color": "rgb(255, 255, 255)",
               "outline-style": "none",
-              "outline-offset": "0px"
+              "outline-offset": "0px",
+              "-webkit-line-clamp": "none"
             }
           }
         },
@@ -5314,7 +5836,8 @@
             "outline-width": "3px",
             "outline-color": "rgb(0, 0, 0)",
             "outline-style": "none",
-            "outline-offset": "0px"
+            "outline-offset": "0px",
+            "-webkit-line-clamp": "none"
           },
           "child": {
             "tag": "span",
@@ -5383,7 +5906,8 @@
               "outline-width": "3px",
               "outline-color": "rgb(207, 212, 255)",
               "outline-style": "none",
-              "outline-offset": "0px"
+              "outline-offset": "0px",
+              "-webkit-line-clamp": "none"
             }
           }
         },
@@ -5461,7 +5985,8 @@
             "outline-width": "3px",
             "outline-color": "rgb(0, 0, 0)",
             "outline-style": "none",
-            "outline-offset": "0px"
+            "outline-offset": "0px",
+            "-webkit-line-clamp": "none"
           },
           "child": {
             "tag": "span",
@@ -5530,7 +6055,8 @@
               "outline-width": "3px",
               "outline-color": "rgb(26, 28, 34)",
               "outline-style": "none",
-              "outline-offset": "0px"
+              "outline-offset": "0px",
+              "-webkit-line-clamp": "none"
             }
           }
         }
@@ -5613,7 +6139,8 @@
             "outline-width": "3px",
             "outline-color": "rgb(0, 0, 0)",
             "outline-style": "none",
-            "outline-offset": "0px"
+            "outline-offset": "0px",
+            "-webkit-line-clamp": "none"
           },
           "child": {
             "tag": "span",
@@ -5682,7 +6209,8 @@
               "outline-width": "3px",
               "outline-color": "rgb(26, 28, 34)",
               "outline-style": "none",
-              "outline-offset": "0px"
+              "outline-offset": "0px",
+              "-webkit-line-clamp": "none"
             }
           }
         },
@@ -5760,7 +6288,8 @@
             "outline-width": "3px",
             "outline-color": "rgb(0, 0, 0)",
             "outline-style": "none",
-            "outline-offset": "0px"
+            "outline-offset": "0px",
+            "-webkit-line-clamp": "none"
           },
           "child": {
             "tag": "span",
@@ -5829,7 +6358,8 @@
               "outline-width": "3px",
               "outline-color": "rgb(26, 28, 34)",
               "outline-style": "none",
-              "outline-offset": "0px"
+              "outline-offset": "0px",
+              "-webkit-line-clamp": "none"
             }
           }
         },
@@ -5907,7 +6437,8 @@
             "outline-width": "3px",
             "outline-color": "rgb(0, 0, 0)",
             "outline-style": "none",
-            "outline-offset": "0px"
+            "outline-offset": "0px",
+            "-webkit-line-clamp": "none"
           },
           "child": {
             "tag": "span",
@@ -5976,7 +6507,8 @@
               "outline-width": "3px",
               "outline-color": "rgb(26, 28, 34)",
               "outline-style": "none",
-              "outline-offset": "0px"
+              "outline-offset": "0px",
+              "-webkit-line-clamp": "none"
             }
           }
         },
@@ -6054,7 +6586,8 @@
             "outline-width": "3px",
             "outline-color": "rgb(0, 0, 0)",
             "outline-style": "none",
-            "outline-offset": "0px"
+            "outline-offset": "0px",
+            "-webkit-line-clamp": "none"
           },
           "child": {
             "tag": "span",
@@ -6123,7 +6656,8 @@
               "outline-width": "3px",
               "outline-color": "rgb(75, 80, 88)",
               "outline-style": "none",
-              "outline-offset": "0px"
+              "outline-offset": "0px",
+              "-webkit-line-clamp": "none"
             }
           }
         },
@@ -6201,7 +6735,8 @@
             "outline-width": "3px",
             "outline-color": "rgb(0, 0, 0)",
             "outline-style": "none",
-            "outline-offset": "0px"
+            "outline-offset": "0px",
+            "-webkit-line-clamp": "none"
           },
           "child": {
             "tag": "span",
@@ -6270,7 +6805,8 @@
               "outline-width": "3px",
               "outline-color": "rgb(26, 28, 34)",
               "outline-style": "none",
-              "outline-offset": "0px"
+              "outline-offset": "0px",
+              "-webkit-line-clamp": "none"
             }
           }
         }
@@ -6353,7 +6889,8 @@
             "outline-width": "3px",
             "outline-color": "rgb(0, 0, 0)",
             "outline-style": "none",
-            "outline-offset": "0px"
+            "outline-offset": "0px",
+            "-webkit-line-clamp": "none"
           },
           "child": {
             "tag": "span",
@@ -6422,7 +6959,8 @@
               "outline-width": "3px",
               "outline-color": "rgb(26, 28, 34)",
               "outline-style": "none",
-              "outline-offset": "0px"
+              "outline-offset": "0px",
+              "-webkit-line-clamp": "none"
             }
           }
         },
@@ -6500,7 +7038,8 @@
             "outline-width": "3px",
             "outline-color": "rgb(0, 0, 0)",
             "outline-style": "none",
-            "outline-offset": "0px"
+            "outline-offset": "0px",
+            "-webkit-line-clamp": "none"
           },
           "child": {
             "tag": "span",
@@ -6569,7 +7108,8 @@
               "outline-width": "3px",
               "outline-color": "rgb(26, 28, 34)",
               "outline-style": "none",
-              "outline-offset": "0px"
+              "outline-offset": "0px",
+              "-webkit-line-clamp": "none"
             }
           }
         }

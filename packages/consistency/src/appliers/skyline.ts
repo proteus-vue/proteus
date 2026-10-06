@@ -111,6 +111,14 @@ export function mapStyleIRToSkyline(fields: Record<string, unknown>, opts: Skyli
         put(field, kebab(field), String(value))
         continue
       }
+      // ★★★line-clamp 项（2026-10-08）：多行截断 → wxss `-webkit-line-clamp`（**原样透传**——与 grid-template-areas/grid-area/justify-self 同口径）。
+      //   ▲ 诚实边界：Skyline 官方属性表**未收录** `-webkit-line-clamp`（且不收 `display:-webkit-box`——只认 none/flex/block）
+      //     ⇒ 真机实测（css-conformance 页）**不截断**（整段折行、无尾省略号）。该端无 CSS 多行截断的等价属性：
+      //     如实登记为「引擎锁死边界」（不静默近似），主承载端 = Web（浏览器原生）/ App（自研内核 lineClamp 折叠 + 三端宿主绘制）。
+      if (field === 'lineClamp') {
+        put(field, '-webkit-line-clamp', String(value))
+        continue
+      }
       // ★★★逐边 border 批（2026-10-05）：逐边宽度 → 同名 wxss 属性（Skyline 官方 formats 表原生支持）
       if (/^border(Top|Right|Bottom|Left)Width$/.test(field)) {
         put(field, kebab(field), `${toRpx(value, viewport)}rpx`)

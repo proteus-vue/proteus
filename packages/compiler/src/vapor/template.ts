@@ -61,7 +61,7 @@ export const APP_LAYOUT_FIELDS = [
   //   内核/宿主按轴裁剪子内容；归一化（visible↔非visible ⇒ visible→auto）在**级联后的最终样式**上执行
   //   （见 normalizeOverflowFields——per-rule 归一会被跨规则级联破坏）。
   'overflowX', 'overflowY',
-  'gridTemplateColumns', 'gridTemplateRows', 'gridAutoColumns', 'gridAutoRows', 'gridColumn', 'gridRow', 'gridTemplateAreas', 'gridArea', 'aspectRatio', 'pointerEvents',
+  'lineClamp', 'gridTemplateColumns', 'gridTemplateRows', 'gridAutoColumns', 'gridAutoRows', 'gridColumn', 'gridRow', 'gridTemplateAreas', 'gridArea', 'aspectRatio', 'pointerEvents',
   // ★★★justify-self 项（2026-10-06 · css:next P0·9×）：网格项**行内轴自对齐**（CSS Box Alignment 3）。
   //   语料 9 处全在 grid 上下文（p-formfactor 仪表盘——`justify-self: start/stretch`）；
   //   内核 taffy `Style.justify_self` 原生支持（仅 grid 容器消费——与 Web「flex 下被忽略」同语义）
@@ -908,6 +908,12 @@ export function parseStaticStyle(
         //   否则原样透传会让**整棵树建不起来**（App/小程序端页面全崩）。
         //   ★批次 14（多端一致性审计修）：CSS 关键字**大小写不敏感**（`display: FLEX` Web 生效）——
         //     此前大小写敏感 ⇒ `FLEX` 被丢弃 = 与 Web 偏差。⇒ 比较与存储均用小写。
+        // ★★★line-clamp 项（2026-10-08）：`display: -webkit-box`（+ -webkit-box-orient:vertical）是多行截断的**惯用标记**，
+        //   无 App 对等值（App 文本天然纵向块级）⇒ 静默接受、不落 display 字段、不诊断（仅作 clamp 惯用）。
+        if (key === 'display') {
+          const dv = rawVal.trim().toLowerCase()
+          if (dv === '-webkit-box' || dv === '-webkit-inline-box' || dv === 'box') continue
+        }
         let enumVal = rawVal.trim().toLowerCase()
         // ★★★批次 45：`position: fixed` → `absolute`。App 端**单全屏视口**（无滚动视口/无窗口）——
         //   此处两者等价（都相对视口定位）；内核 position 枚举只有 static/relative/absolute。
@@ -1379,6 +1385,23 @@ export function parseStaticStyle(
       } else {
         pushDiag(`\`border-style: ${rawVal}\` 未支持（App 端线型支持 solid/dashed/dotted/none）——已跳过`, 'double/groove/ridge/inset/outset/hidden 无对应；solid/dashed/dotted/none 可用')
       }
+      continue
+    }
+    // ★★★line-clamp 项（2026-10-08 · css:next P0·4×）：多行截断（最多 N 行 + 末行尾省略号）。
+    //   WebKit 三件套的 `-webkit-line-clamp:<n>`（key=kebabToCamel=WebkitLineClamp）→ `lineClamp: n`；
+    //   `-webkit-box-orient` 无 App 对等（App 文本天然纵向）⇒ 静默丢弃（clamp 惯用）。宿主据此绘制最多 N 行 + 尾省略号。
+    if (key === 'WebkitLineClamp') {
+      const n = Number.parseInt(rawVal.trim(), 10)
+      if (!Number.isInteger(n) || n <= 0) {
+        pushDiag('style 里 -webkit-line-clamp: ' + rawVal + ' 未解析（需正整数行数；0/负 = 无截断）——已跳过')
+        continue
+      }
+      out.lineClamp = n
+      markImportant('lineClamp')
+      continue
+    }
+    if (key === 'WebkitBoxOrient') {
+      // 无 App 对等（App 文本纵向块级）——仅作 clamp 惯用，静默丢弃
       continue
     }
     // ★★★place-items 简写（2026-10-08 · CSS Box Alignment）：align-items 前 justify-items 后（单值 ⇒ 两轴同）。

@@ -833,6 +833,19 @@ export const STYLE_IR_FIELDS: Record<string, StyleFieldSpec> = {
       inheritable: true,
     },
   },
+  "lineClamp": {
+    scope: "semantic",
+    domain: "layout",
+    valueType: "number",
+    sources: {
+      compiler: "APP_LAYOUT_FIELDS",
+      matrixLevel: "LineClamp",
+      runtimeWhitelist: false,
+      runtimeForbidden: false,
+      consistencyMatrix: true,
+      inheritable: false,
+    },
+  },
   "lineHeight": {
     scope: "semantic",
     domain: "paint",
@@ -1435,13 +1448,13 @@ export const STYLE_IR_FIELDS: Record<string, StyleFieldSpec> = {
 
 /** 摘要（判据与官网数字读它——机器推导，非手写） */
 export const STYLE_IR_SUMMARY = {
-  total: 107,
-  semantic: 81,
+  total: 108,
+  semantic: 82,
   engineOnly: 26,
   byDomain: {
     "derived": 10,
     "edges": 8,
-    "layout": 47,
+    "layout": 48,
     "matrix-only": 4,
     "paint": 37,
     "special": 1,

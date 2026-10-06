@@ -56,6 +56,8 @@ const COMPUTED_PROPS = [
   'background-size', 'background-position', 'background-repeat',
   // ★★★outline 族项（2026-10-08）：轮廓宽/色/线型/偏移（Web 基准读数）
   'outline-width', 'outline-color', 'outline-style', 'outline-offset',
+  // ★★★line-clamp 项（2026-10-08）：多行截断行数（Web 基准读数）
+  '-webkit-line-clamp',
 ]
 
 /** 页面清单（机器来源：router/auto-routes.ts 的 routes 表） */
@@ -222,7 +224,9 @@ function shotMp() {
       timeout: 90_000,
     })
     const name = p.name
-    const probe = `'${CLI}' -c zed automation_runtime_info --project '${mpProj}' | grep -q '"${name}"'`
+    // ★（2026-10-08 修）`automation_runtime_info` 现要求 `--action`（缺省调用返 INPUT_ERROR ⇒
+    //   grep 永不命中 ⇒ 每页白等 30s 超时）。改用 `--action currentPage` 并按**路由**判到达。
+    const probe = `'${CLI}' -c zed automation_runtime_info --project '${mpProj}' --action currentPage | grep -q '"route": "${p.route}"'`
     const w = spawnSync('bash', [waitSh, '--cmd', probe, '--timeout', '30', '--interval', '2'], { encoding: 'utf8' })
     if (w.status !== 0) console.warn(`  ⚠ ${p.route} 未确认到达（30s）——仍截图`)
     const out = path.join(outDir, `${p.name}.png`)

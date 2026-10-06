@@ -1420,13 +1420,20 @@ public final class VaporRenderHost {
             tp.setTypeface(ProteusHostView.typefaceOf(spec.optString("fontFamily", null), mw, null));
             float ls = (float) spec.optDouble("letterSpacing", 0);
             if (ls != 0f && fs > 0f) tp.setLetterSpacing(ls / fs);
-            android.text.StaticLayout sl = android.text.StaticLayout.Builder
+            final int clamp = (int) spec.optDouble("lineClamp", 0);
+            android.text.StaticLayout.Builder slb = android.text.StaticLayout.Builder
                     // I2-ALLOW: 文本**测量**宽（StaticLayout 需整型像素宽；测量回执走 remeasure 通道，非绘制几何发射）
                     .obtain(mt, 0, mt.length(), tp, Math.max(1, (int) Math.ceil(boxW)))
-                    .setIncludePad(false)
-                    .build();
+                    .setIncludePad(false);
+            // ★★★line-clamp 项（2026-10-08）：测量封顶——盒高 = min(自然行数, clamp) × 行盒高
+            //   （与绘制同源：mkCmd 也用 maxLines+尾部省略号——度量/绘制必须一致，否则盒高与墨迹打架）。
+            if (clamp > 0) {
+                slb.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                slb.setMaxLines(clamp);
+            }
+            android.text.StaticLayout sl = slb.build();
             int lines = sl.getLineCount();
-            if (lines <= 1) continue;   // 单行 ⇒ 与首遍等价（零操作）
+            if (lines <= 1 && clamp <= 0) continue;   // 单行（无 clamp）⇒ 与首遍等价（零操作）
             float lh = lineHeightPxOf(spec, fs);
             float h = lh > 0f ? lines * lh : sl.getHeight();
             float w = 0f;
@@ -1658,6 +1665,9 @@ public final class VaporRenderHost {
             // ★批次 35：文本装饰（0=none/1=underline/2=line-through）
             String td = spec.optString("textDecoration", null);
             int decor = "underline".equals(td) ? 1 : "line-through".equals(td) ? 2 : 0;
+            // ★★★line-clamp 项（2026-10-08）：多行截断行数（0 = 无截断；Web `-webkit-line-clamp` 同语义）。
+            //   clamp>0 ⇒ 强制走 StaticLayout 绘制（即便只 1 行——需要尾部省略号通道）。
+            final int clamp = (int) spec.optDouble("lineClamp", 0);
             // ★★全端对齐批：绘制模式标记——multiLine=wrap 且该盒宽确需多行；clipText=nowrap 溢出裁切。
             boolean multiLine = false;
             if (wsWrap && !t.isEmpty() && w > 1f) {
@@ -1672,10 +1682,11 @@ public final class VaporRenderHost {
                         .build();
                 multiLine = wsl.getLineCount() > 1;
             }
+            if (clamp > 0 && wsWrap) multiLine = true;   // clamp ⇒ StaticLayout（尾部省略号通道）
             final boolean clipText = !wsWrap && w > 1f
                     && "hidden".equals(spec.optString("overflow", null))
                     && !("ellipsis".equals(spec.optString("textOverflow", null)));
-            { ProteusHostView.Cmd _c = new ProteusHostView.Cmd(x, y, w, h, color, t, fs, textColor, radius, grad, glowSpec, maskSpec, fw, ta, bw, bc, shadowSpec, lh, ls, decor, wsWrap ? 0 : 1, multiLine, clipText, sideBorderOf(spec)); _c.outline = parseOutline(spec); _c.textShadow = parseTextShadow(spec.optJSONObject("textShadow")); return _c; }
+            { ProteusHostView.Cmd _c = new ProteusHostView.Cmd(x, y, w, h, color, t, fs, textColor, radius, grad, glowSpec, maskSpec, fw, ta, bw, bc, shadowSpec, lh, ls, decor, wsWrap ? 0 : 1, multiLine, clipText, sideBorderOf(spec)); _c.lineClamp = clamp; _c.outline = parseOutline(spec); _c.textShadow = parseTextShadow(spec.optJSONObject("textShadow")); return _c; }
         }
         { ProteusHostView.Cmd _c = new ProteusHostView.Cmd(x, y, w, h, color, null, 0f, 0, radius, grad, glowSpec, maskSpec, 400, 0, bw, bc, shadowSpec, 0f, 0f, 0, 0, false, false, sideBorderOf(spec)); _c.outline = parseOutline(spec); _c.textShadow = parseTextShadow(spec.optJSONObject("textShadow")); return _c; }
     }

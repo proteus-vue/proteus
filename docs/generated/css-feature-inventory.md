@@ -1,15 +1,14 @@
 # CSS Web 全量能力清单（自动生成——勿手改；生成器 scripts/gen-css-feature-inventory.mjs）
 
 > 总 949 项（property 651 · selector 144 · at-rule 19 · function 105 · unit 30）
-> 实现：**not-started** 531 · **excluded** 280 · **implemented** 135 · **partial** 3
-> 优先级：P2 114 · excluded 280 · P0 8 · done 135 · P1 412
-> ★**可推项（非已实现/非排除）**：534（其中 **P0 8**）
+> 实现：**not-started** 529 · **excluded** 280 · **implemented** 137 · **partial** 3
+> 优先级：P2 114 · excluded 280 · done 137 · P1 411 · P0 7
+> ★**可推项（非已实现/非排除）**：532（其中 **P0 7**）
 
 ## P0 —— 语料在用但未实现（真实需求，最优先）
 
 | 属性 | MDN 状态 | 分组 | 语料用量 | 实现 | 说明 |
 |---|---|---|---|---|---|
-| `-webkit-line-clamp` | standard | WebKit Extensions, CSS Overflow | 4 | not-started | — |
 
 ## P1 —— 标准且常用分组（未实现）
 
@@ -85,7 +84,6 @@
 | `interest-delay-end` | CSS Basic User Interface | not-started |
 | `interest-delay-start` | CSS Basic User Interface | not-started |
 | `line-break` | CSS Text | not-started |
-| `line-clamp` | CSS Overflow | not-started |
 | `object-position` | CSS Images | not-started |
 | `order` | CSS Display | not-started |
 | `overflow-clip-margin` | CSS Overflow | not-started |
@@ -95,5 +93,6 @@
 | `place-content` | CSS Box Alignment | not-started |
 | `place-self` | CSS Box Alignment | not-started |
 | `reading-flow` | CSS Display | not-started |
+| `reading-order` | CSS Display | not-started |
 
 （P2 与 excluded 全量见 JSON；本 MD 只列推进面）

@@ -176,6 +176,8 @@ export interface NormalizedStyle {
   backgroundSize?: string
   backgroundPosition?: string
   backgroundRepeat?: string
+  // ★★★line-clamp 项（2026-10-08）：多行截断行数（正整数；0/未声明 = 无截断）
+  lineClamp?: number
   textOverflow?: string
   textDecoration?: string
   pointerEvents?: string
@@ -472,6 +474,8 @@ const STYLE_KEYS = new Set([
   'right', 'bottom',
   'letterSpacing', 'lineHeight', 'rowGap', 'columnGap',
   'textAlign', 'textOverflow', 'textDecoration', 'pointerEvents', 'flexWrap', 'alignContent',
+  // ★★★line-clamp 项（2026-10-08）：多行截断行数（数值键）
+  'lineClamp',
   // ★★补齐（2026-10-05 · check:style-coverage 抓出的上一轮债务）：whiteSpace 进 semantic 后缺闭集登记
   'whiteSpace',
   // ★★★word-break 项（2026-10-06）：行内断词策略（与接口/覆盖表同批——闭集纪律）

@@ -50,7 +50,7 @@ const COLOR_PROPS = new Set([
   // ★★★outline 族项（2026-10-08）：轮廓色
   'outline-color',
 ])
-const NUMBER_PROPS = new Set(['opacity', 'flex-grow', 'flex-shrink', 'z-index', 'order', 'aspect-ratio'])
+const NUMBER_PROPS = new Set(['opacity', 'flex-grow', 'flex-shrink', 'z-index', 'order', 'aspect-ratio', '-webkit-line-clamp'])
 const ENUM_PROPS = new Set([
   'display', 'position', 'overflow-x', 'overflow-y', 'visibility', 'text-align', 'text-overflow',
   'white-space', 'text-decoration-line', 'flex-direction', 'flex-wrap', 'justify-content',
@@ -746,6 +746,13 @@ export function computeTree(roots: CseNode[], sheet: CseStyleSheet, opts: Comput
       if (t) trace[ir.field] = t
     }
 
+    // ★★★line-clamp 项（2026-10-08）：`display: -webkit-box`（+ `-webkit-box-orient:vertical`）是多行截断的**惯用使能器**，
+    //   无 App 对等值（App 文本天然纵向块级）⇒ **不落 display 字段**（与 static 折叠路径 parseStaticStyle 同口径；
+    //   否则 `-webkit-box` 会作为非法 display 传到内核 ⇒ 整棵树建不起来）。lineClamp 已由 NUMERIC_IR 折出。
+    if (fields['display'] === '-webkit-box' || fields['display'] === '-webkit-inline-box' || fields['display'] === 'box') {
+      delete fields['display']
+    }
+
     const nodeResult: CseComputedNode = { key: node.key, fields, trace, unmapped }
     nodes.push(nodeResult)
 
@@ -816,6 +823,8 @@ function mapToIrField(prop: string, val: CssComputedValue): { field: string; val
     'flex-shrink': 'flexShrink',
     'z-index': 'zIndex', // registry: forbidden（semantic-only 域）——v1 直通（App 层消费与否由 applier 决定）
     'letter-spacing': 'letterSpacing',
+    // ★★★line-clamp 项（2026-10-08）：多行截断行数（-webkit-line-clamp → lineClamp）
+    '-webkit-line-clamp': 'lineClamp',
   }
   const ENUM_IR: Record<string, string> = {
     display: 'display',
