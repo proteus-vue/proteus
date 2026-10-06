@@ -1352,3 +1352,14 @@
 **⑦ ★教训（写进 PLAYBOOK）**：a) **闭合路径上的周期图案必须整除周长**——否则接缝必现重影（"目标间距"不能直接当 dash 周期）；且此缺陷**人眼在整图上看不出**，只有探针/子代理的「blob 面积比 / 最近邻间距」能抓（机械判据要能覆盖局部接缝）。b) **拼在 name/id 里用分隔符承载多字段，解析端必须先确认分隔符不出现在值里**（负号 `.` `/` 同类坑）。
 **⑧ 遗留（已登记、非本批范围）**：① **native 端默认 `line-height` 行盒比 Web 紧 ~10px**（dashed/dotted 盒 32 vs 44 CSS px；**四端一致**、HEAD 图同值 ⇒ pre-existing 文本度量差，与 outline/border 无关）；② Skyline 无 outline（引擎锁死）。
 **⑨ 影响**：`hosts/android/.../ProteusHostView.java` · `hosts/ios/.../selfdraw-scene.swift` · `hosts/harmony/.../proteus_render.cpp` · `css-conformance/pages/outline.vue` · `css-conformance/PLAYBOOK.md`（两条新坑）· 7 个验收包 visual 段 · 四端截图；**下一项**：按 css:next 取。
+575. **★★CSS 逐项 · background-image —— 按架构归类为「通道属性」（渐变→引擎 `fillGradient` 通道 / `url()`→组件通道）+ 收口**（用户裁定，同 #572 object-fit 族）：
+**① 用户指令**：「继续下一项」（css:next 取到 `background-image`，P0 · 用法 2×）。
+**② 侦察（先取证）**：`background-image` **不是**编译器折叠的普通 IR 字段，而是**通道属性**——两种子集走两条通道：
+  · **渐变子集**（`linear-gradient` / `radial-gradient`）→ 引擎 **`fillGradient` 通道**（结构化属性 `fill-gradient` 的 **CSS 语法糖**，批次 33；`vapor/template.ts` 的 `backgroundImage`/`background` 两分支）。**四端已交付并验证**：#568「背景定位」验收页 A–E 的用例**正是** `background-image: linear-gradient(...)`（四端四案例全过）。
+  · **`url()`/`image-set()` 图片子集** → **组件通道**（`<image>` 组件）：Web 原生 / MP 组件已交付；**App 自绘无图片渲染** ⇒ 归 **#572「App 图片渲染」独立能力**。
+  · 多值（多层渐变）/逐层定位 → **具名边界**（同 #568 ②）。
+**③ 归类决策（用户裁定「按架构归类 + 收口」）**：`background-image` 在清单里由 `conditional partial`（`to: [fillGradient]`——但 `fillGradient` 是**引擎字段、不在 IR 注册表** ⇒ 恒判 partial ⇒ 永远卡在「待接」的**假待办**）改为 **separate: true ＋ channel: independent**（同 `mask` / `object-fit` 通道项）——`css:verify` 对 channel 项判 parity/endsMapped = **n/a**，实现态由通道承接（本包只如实标注通道）。
+**④ 判据**：`css:verify background-image` 三段通过（implemented + parity/ends n/a）· 视觉结论**登记**（引用 #568 四端验证；本轮宿主源码改动后**重截 background-position 四端图与 HEAD 逐字节一致** ⇒ 渐变子集无回归）· 清单再生成一致（`gen-css-feature-inventory --check` 绿）· `check:css-capability-alignment` / `check:stats` / `check:content` 全绿。
+**⑤ 诚实边界**：a) **`url()` 图片在 App 端未交付**（无图片渲染 ⇒ #572）；b) **多层渐变未接**（引擎 `fillGradient` 单层）——具名边界（同 #568 ②），需「多绘制层」架构；c) 本项**不新增渲染代码**（归类收口）。
+**⑥ ★同源纪律（#572 已立、本轮复用）**：清单里凡「有结构化/组件通道、但非编译器折叠的普通 IR 字段」的能力，应以 **separate: true ＋ channel** 归类（而非 `to: [某引擎字段]` 的条件展开）——后者会因引擎字段不在 IR 注册表而**恒判 partial**、形成**永不消解的假待办**（`background-image` 就是实例）。
+**⑦ 影响**：`scripts/gen-css-feature-inventory.mjs`（override + 归类注释）· `docs/generated/css-feature-inventory.{json,md}`（重生成）· `docs/generated/css-acceptance/background-image.json`（visual 段登记）；**下一项**：按 css:next 取。

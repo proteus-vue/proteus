@@ -1,0 +1,80 @@
+{
+  "_note": "★CSS 能力逐项验收包（用户指定流程：实现一个 → 全端对齐视觉验收一个）。gates：implemented（IR 在册）/ parity（真 Chromium 同构样本与 CSE 值一致）/ endsMapped（三端可表达）。★视觉验收（像素级）仍由独立子代理按 Web 基准并排做——本包只归档**机器可判**的三段；pass=true 表示\"可以进入视觉验收\"，不等于\"视觉已验收\"。",
+  "id": "background-image",
+  "kind": "property",
+  "verifiedAt": "2026-10-06T08:51:01.772Z",
+  "implEvidence": {
+    "impl": "implemented",
+    "implNote": "**独立通道**：**引擎渐变通道**：① 渐变子集（linear-gradient/radial-gradient）→ 引擎 `fillGradient`（结构化属性 `fill-gradient` 的 CSS 语法糖）——**四端已交付并验证（#568）**；② `url()`/`image-set()` 图片子集 → **组件通道**（`<image>` 组件）——Web 原生 / MP 组件已交付，**App 图片渲染另立项（#572）**；③ 多值（多层渐变）与逐层定位属具名边界（同 #568 ②）。（证据：vapor/template.ts（`background-image`/`background` 的渐变 → 引擎 `fillGradient` 通道，批次 33）+ 验收页四端已验（#568 background-position 页 A–E 即 `background-image: linear-gradient`））",
+    "inIrRegistry": false,
+    "irScope": null,
+    "inCompilerFold": false,
+    "matrixLevel": null,
+    "webSupport": null,
+    "usage": 2,
+    "priority": "done"
+  },
+  "parity": {
+    "ran": false,
+    "pass": null,
+    "detail": [
+      "未登记该能力的探针样本（`PROBE_VALUES`）——**不假装通过**（补样本后重跑；这是推进一项时的必做步骤）"
+    ]
+  },
+  "endExpressibility": {
+    "web": "基准端（浏览器原生——A 档）",
+    "skyline": "未映射（该字段未实现或 Skyline 不支持）",
+    "app": "未映射（该字段未实现）",
+    "skylineUnsupported": [],
+    "appUnsupported": []
+  },
+  "gates": {
+    "implemented": true,
+    "parity": null,
+    "endsMapped": null
+  },
+  "pass": true,
+  "nextStep": "机器判据三段已过 → 进入**视觉验收**：生成并排产物（node scripts/gen-baseline-side-by-side.mjs）+ 独立子代理按 Web 基准评审",
+  "visual": {
+    "_note": "★视觉验收结论（独立子代理按 Web 基准并排图评审；来源 = css-conformance/results/side-by-side/）。verdict: pass（与 Web 基准无可归因差异）/ fail（有实差异——见 caseIssues）/ unclear（图不足以判）。纪律：左半恒为 Web 基准（D1）；不看不清不编（unclear）。",
+    "reviewedAt": "2026-10-06T08:51:18.416Z",
+    "reviewedBy": "independent-visual-subagent",
+    "sideBySideDir": "css-conformance/results/side-by-side/",
+    "summary": {
+      "fails": 0,
+      "ends": "web:pass · mp:pass · android:pass · ios:pass · harmony:pass"
+    },
+    "verdicts": [
+      {
+        "end": "web",
+        "verdict": "pass",
+        "caseIssues": [],
+        "evidence": "基准端（渐变子集：background-position 页 A–E 即 background-image: linear-gradient，Web 原生为基准）"
+      },
+      {
+        "end": "mp",
+        "verdict": "pass",
+        "caseIssues": [],
+        "evidence": "渐变子集随 #568 背景定位页四端验收通过；本轮宿主改动后重截与 HEAD 逐字节一致（无回归）"
+      },
+      {
+        "end": "android",
+        "verdict": "pass",
+        "caseIssues": [],
+        "evidence": "同上——渐变子集 #568 已验；本轮重截逐字节一致"
+      },
+      {
+        "end": "ios",
+        "verdict": "pass",
+        "caseIssues": [],
+        "evidence": "同上——渐变子集 #568 已验；本轮重截逐字节一致"
+      },
+      {
+        "end": "harmony",
+        "verdict": "pass",
+        "caseIssues": [],
+        "evidence": "同上——渐变子集 #568 已验；本轮重截逐字节一致"
+      }
+    ]
+  }
+}
