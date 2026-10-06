@@ -64,6 +64,10 @@ struct Superapp {
   private touchStartX: number = -1;
   private touchStartY: number = -1;
   private touchMoved: boolean = false;
+  /** ★★B1：ArkTS 侧导航历史栈（不含当前）——鸿蒙一次性 VM，JS 路由态不跨调用保留 ⇒ 栈由宿主记。 */
+  private navStack: string[] = [];
+  /** ★★B1：每屏滚动进度（返回恢复 / 前进重置）。 */
+  private scrollByScreen: Map<string, number> = new Map<string, number>();
   /** 视口高/宽（vp；renderCurrent 处记录——与 contentH 同源）。 */
   private static vpH: number = 844;
   private static vpW: number = 390;
@@ -276,6 +280,29 @@ struct Superapp {
   }
 
   /**
+   * ★★★B1：**返回上一屏**（系统返回键 / 边缘滑动返回 → 这里）。
+   *   栈非空 ⇒ 出栈 + 恢复目标屏的滚动进度（与系统 App / Android / iOS 同语义）；空 ⇒ 交系统（退出）。
+   */
+  private goBack(): boolean {
+    if (this.navStack.length === 0) { return false; }
+    const prev: string = this.navStack.pop() as string;
+    this.scrollByScreen.set(this.current, this.scrollOffset);   // 记住当前屏（再前进时可回复）
+    this.current = prev;
+    this.scrollOffset = this.scrollByScreen.get(prev) ?? 0;     // ★返回：恢复目标屏上次滚动
+    hilog.info(DOMAIN, TAG, 'SUPERAPP_BACK current=%{public}s scroll=%{public}d depth=%{public}d',
+      this.current, this.scrollOffset, this.navStack.length + 1);
+    this.switchLog.push(JSON.stringify({ tap: 'back', current: this.current, scroll: this.scrollOffset, via: 'back' }));
+    this.renderCurrent();
+    this.writeReport();
+    return true;
+  }
+
+  /** ★★★B1：**系统返回（含手势滑动返回）** —— @Entry Page 生命周期；栈非空则消费（返回上一屏），否则交系统。 */
+  onBackPress(): boolean {
+    return this.goBack();
+  }
+
+  /**
    * ★★★B1：**点击命中 → 导航**（鸿蒙腿）。appScreenHitAt(内容坐标) → 冒泡链 → superappScreen(chain)
    *   （JS 共享运行期派发 tap → $nav 动作 → 导航 → 挂载目标屏）→ applyState + 重绘。
    *   ★内容坐标 = 视口坐标 + scrollOffset（命中树在内容坐标系）。
@@ -291,11 +318,19 @@ struct Superapp {
       const rt = JSON.parse(rtOut) as Record<string, Object>;
       const st = rt['state'] as Record<string, Object> | undefined;
       if (st) { this.applyState(st); }
-      const cur = rt['current'] as string;
-      if (cur !== undefined && cur.length > 0) { this.current = cur; }
-      this.scrollOffset = 0;
-      hilog.info(DOMAIN, TAG, 'SUPERAPP_TAP chain=%{public}s current=%{public}s', JSON.stringify(chain), this.current);
-      this.renderCurrent();
+      const target = rt['current'] as string;
+      if (target !== undefined && target.length > 0 && target !== this.current) {
+        // ★前进（push）：记当前屏滚动进度 + 入栈；新屏从顶部
+        this.scrollByScreen.set(this.current, this.scrollOffset);
+        this.navStack.push(this.current);
+        this.current = target;
+        this.scrollOffset = 0;
+        hilog.info(DOMAIN, TAG, 'SUPERAPP_TAP chain=%{public}s current=%{public}s depth=%{public}d',
+          JSON.stringify(chain), this.current, this.navStack.length + 1);
+        this.switchLog.push(JSON.stringify({ tap: 'nav', current: this.current, scroll: this.scrollOffset, via: 'tap' }));
+        this.renderCurrent();
+        this.writeReport();
+      }
     } catch (e) {
       hilog.error(DOMAIN, TAG, 'SUPERAPP_TAP_ERROR %{public}s', JSON.stringify(e) ?? '');
     }
@@ -322,8 +357,13 @@ struct Superapp {
       return;
     }
     if (e.type === TouchType.Up) {
-      // ★B1：几乎没动 ⇒ tap → 命中 → 导航（与 Android hitTest→gesture→JS 同语义）
-      if (!this.touchMoved && this.touchStartX >= 0) { this.onTapAt(this.touchStartX, this.touchStartY); }
+      if (!this.touchMoved && this.touchStartX >= 0) {
+        // ★B1：几乎没动 ⇒ tap → 命中 → 导航（与 Android hitTest→gesture→JS 同语义）
+        this.onTapAt(this.touchStartX, this.touchStartY);
+      }
+      // ★注意：**不加自定义边缘滑返**——鸿蒙系统边缘手势（返回）会自动走 @Entry 的 `onBackPress`
+      //   （本页已实现）；再叠一层自定义手势会与系统手势**冲突**（实测：左缘自绘滑返把系统"最近任务"
+      //   面板调了出来）。⇒ 返回统一由 `onBackPress` 承载（系统返回键 / 边缘滑返都触发它）。
       this.touchLastY = -1; this.touchMoved = false;
       return;
     }
