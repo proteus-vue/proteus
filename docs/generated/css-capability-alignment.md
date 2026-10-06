@@ -104,7 +104,8 @@
 | selector | `兄弟组合 + / ~` | — | — | absent | L5 | 禁止 | unsupported | 语义弱、跨端难统一（Skyline 亦不支持）——建议改写为类选择器。 |
 | selector | `通配 *` | — | — | supported | L0 | 编译期折叠 | conditional | ★批次 37（对齐 Web）：`*` 单段匹配任意元素（特异性 0）；`.box > *` 这类"所有直接子"常见于设计与重置样式。 |
 | cascade | `特异性 / 继承 / !important` | — | — | supported | L0 | 编译期折叠 | conditional | ★批次 1（2026-10-04）：规则按 (!important, 特异性 (id,class,tag), 源序) 层叠；color/fontSize 沿树继承（CSS 可继承子集；编译期一次性算进 computed style，运行时零匹配） |
-| at-rule | `@media（响应式）` | — | — | absent | L3 | 降级 | unsupported | 编译期无法唯一确定断点；跨端建议走 flex/比例布局 + 框架流体能力 |
+| at-rule | `@media（响应式 / 环境条件）` | — | — | supported | L2 | 独立通道 | conditional | ★条件 at-rule 通道（2026-10-08）：@media 是**跨端控制结构**，其语义由 **@proteus-vue/fluid 独立通道**交付（非编译器折叠面）——视口/容器断点 → createContainerQuery/resolveBreakpoint/createAdaptiveController（以**容器**为基准，车机/多窗口）；prefers-reduced-motion → shouldReduceMotion/createDeviceEnv；orientation/display-mode(折叠) → readDisplayMode；hover/pointer → probePointer。★具名边界（决策 #279 FLD001 / W-6）：手写 @media 在 App 端**无对等**（自绘引擎无 CSS 条件块）⇒ 框架规定响应式走 fluid 容器查询（禁止手写 @media），Web/MP 由各自 CSS 引擎原生处理。原 note：编译期无法唯一确定断点（无容器/视口上下文）。 |
+| at-rule | `@supports（特性检测）` | — | — | supported | L2 | 独立通道 | conditional | ★条件 at-rule 通道（2026-10-08）：@supports 的语义由 **@proteus-vue/fluid 的 detectFluidCapabilities**（probe 式运行时能力检测：clamp/grid/containerQuery/flexGap/aspectRatio）+ formSupports 交付（运行时能力分支）；App 端无 CSS 引擎 ⇒ @supports 条件块跳过（具名边界）；Web/MP 由各自 CSS 引擎原生处理。 |
 | at-rule | `@keyframes（关键帧动画）` | — | — | supported | L1 | 编译期折叠 | conditional | ★批次 42（2026-10-04 · 动效 · 对齐 Web）：@keyframes 停靠点（from/to/%）解析 → 逐通道 keyframe 规格（opacity + px 位移/等比缩放/旋转）→ 内核 anim_start（Keyframes 模式）；挂载后由宿主启动。@keyframes 块不再被误当选择器 |
 | at-rule | `animation（简写：name duration timing delay …）` | — | — | supported | L1 | 编译期折叠 | conditional | ★批次 42（对齐 Web）：animation 简写 → 命中同文件 @keyframes → 逐通道 keyframe 动画（内核 anim_start）；单次播放、终态保持（iters/delay/direction/fill 暂忽略，诊断）。可动画通道限 opacity / px 位移 / 等比缩放 / 旋转 |
 | cascade | `CSS 自定义属性（design tokens）var(--x)` | — | — | supported | L0 | 编译期折叠 | conditional | ★批次 9（2026-10-04）：从项目 `globalStyle`（如 styles/tokens.css，与 Web/MP 同一份）解析 `--name: value`，SFC 内 `var(--x)` **编译期替换为字面值**（递归展开引用令牌；支持 fallback；未知令牌诊断）。★**超级应用承载关键**：组件库/主题化全靠设计令牌（真项目 242 处 var()）。诚实边界：只折**字面值**令牌；calc()/env() 动态令牌值不折 |
@@ -166,6 +167,8 @@
 | `Vue 作用域穿透 :deep() / ::v-deep() / >>>` | — | — | supported | ★批次 37：编译期展开为普通后代选择器（本仓无 scope 后缀之外的作用域处理）；`>>>` 等价 `:deep()`。 |
 | `通配 *` | — | — | supported | ★批次 37（对齐 Web）：`*` 单段匹配任意元素（特异性 0）；`.box > *` 这类"所有直接子"常见于设计与重置样式。 |
 | `特异性 / 继承 / !important` | — | — | supported | ★批次 1（2026-10-04）：规则按 (!important, 特异性 (id,class,tag), 源序) 层叠；color/fontSize 沿树继承（CSS 可继承子 |
+| `@media（响应式 / 环境条件）` | — | — | supported | ★条件 at-rule 通道（2026-10-08）：@media 是**跨端控制结构**，其语义由 **@proteus-vue/fluid 独立通道**交付（非编译器折叠面）— |
+| `@supports（特性检测）` | — | — | supported | ★条件 at-rule 通道（2026-10-08）：@supports 的语义由 **@proteus-vue/fluid 的 detectFluidCapabilities** |
 | `@keyframes（关键帧动画）` | — | — | supported | ★批次 42（2026-10-04 · 动效 · 对齐 Web）：@keyframes 停靠点（from/to/%）解析 → 逐通道 keyframe 规格（opacity + p |
 | `animation（简写：name duration timing delay …）` | — | — | supported | ★批次 42（对齐 Web）：animation 简写 → 命中同文件 @keyframes → 逐通道 keyframe 动画（内核 anim_start）；单次播放、终态保持（ |
 | `CSS 自定义属性（design tokens）var(--x)` | — | — | supported | ★批次 9（2026-10-04）：从项目 `globalStyle`（如 styles/tokens.css，与 Web/MP 同一份）解析 `--name: value`，SF |

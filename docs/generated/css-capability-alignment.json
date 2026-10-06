@@ -273,6 +273,26 @@
         "why": "★批次 1（2026-10-04）：规则按 (!important, 特异性 (id,class,tag), 源序) 层叠；color/fontSize 沿树继承（CSS 可继承子集；编译期一次性算进 computed style，运行时零匹配）"
       },
       {
+        "css": "@media（响应式 / 环境条件）",
+        "id": "at-media",
+        "ends": {
+          "web": "—",
+          "skyline": "—",
+          "app": "supported"
+        },
+        "why": "★条件 at-rule 通道（2026-10-08）：@media 是**跨端控制结构**，其语义由 **@proteus-vue/fluid 独立通道**交付（非编译器折叠面）——视口/容器断点 → createContainerQuery/resolveBreakpoint/createAdaptiveController（以**容器**为基准，车机/多窗口）；prefers-reduced-motion → shouldReduceMotion/createDeviceEnv；orientation/display-mode(折叠) → readDisplayMode；hover/pointer → probePointer。★具名边界（决策 #279 FLD001 / W-6）：手写 @media 在 App 端**无对等**（自绘引擎无 CSS 条件块）⇒ 框架规定响应式走 fluid 容器查询（禁止手写 @media），Web/MP 由各自 CSS 引擎原生处理。原 note：编译期无法唯一确定断点（无容器/视口上下文）。"
+      },
+      {
+        "css": "@supports（特性检测）",
+        "id": "at-supports",
+        "ends": {
+          "web": "—",
+          "skyline": "—",
+          "app": "supported"
+        },
+        "why": "★条件 at-rule 通道（2026-10-08）：@supports 的语义由 **@proteus-vue/fluid 的 detectFluidCapabilities**（probe 式运行时能力检测：clamp/grid/containerQuery/flexGap/aspectRatio）+ formSupports 交付（运行时能力分支）；App 端无 CSS 引擎 ⇒ @supports 条件块跳过（具名边界）；Web/MP 由各自 CSS 引擎原生处理。"
+      },
+      {
         "css": "@keyframes（关键帧动画）",
         "id": "keyframes",
         "ends": {
@@ -1450,16 +1470,29 @@
     },
     {
       "id": "at-media",
-      "css": "@media（响应式）",
+      "css": "@media（响应式 / 环境条件）",
       "category": "at-rule",
       "compilerFields": [],
       "web": "—",
       "skyline": "—",
-      "app": "absent",
-      "tier": "L3",
-      "strategy": "降级",
-      "note": "编译期无法唯一确定断点；跨端建议走 flex/比例布局 + 框架流体能力",
-      "supportTier": "unsupported"
+      "app": "supported",
+      "tier": "L2",
+      "strategy": "独立通道",
+      "note": "★条件 at-rule 通道（2026-10-08）：@media 是**跨端控制结构**，其语义由 **@proteus-vue/fluid 独立通道**交付（非编译器折叠面）——视口/容器断点 → createContainerQuery/resolveBreakpoint/createAdaptiveController（以**容器**为基准，车机/多窗口）；prefers-reduced-motion → shouldReduceMotion/createDeviceEnv；orientation/display-mode(折叠) → readDisplayMode；hover/pointer → probePointer。★具名边界（决策 #279 FLD001 / W-6）：手写 @media 在 App 端**无对等**（自绘引擎无 CSS 条件块）⇒ 框架规定响应式走 fluid 容器查询（禁止手写 @media），Web/MP 由各自 CSS 引擎原生处理。原 note：编译期无法唯一确定断点（无容器/视口上下文）。",
+      "supportTier": "conditional"
+    },
+    {
+      "id": "at-supports",
+      "css": "@supports（特性检测）",
+      "category": "at-rule",
+      "compilerFields": [],
+      "web": "—",
+      "skyline": "—",
+      "app": "supported",
+      "tier": "L2",
+      "strategy": "独立通道",
+      "note": "★条件 at-rule 通道（2026-10-08）：@supports 的语义由 **@proteus-vue/fluid 的 detectFluidCapabilities**（probe 式运行时能力检测：clamp/grid/containerQuery/flexGap/aspectRatio）+ formSupports 交付（运行时能力分支）；App 端无 CSS 引擎 ⇒ @supports 条件块跳过（具名边界）；Web/MP 由各自 CSS 引擎原生处理。",
+      "supportTier": "conditional"
     },
     {
       "id": "keyframes",

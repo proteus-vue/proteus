@@ -456,17 +456,30 @@ const selectors = Object.keys(mdnSelectors).map((k) => ({
   priority: 'P1', // 选择器面（CSE 已支持类/元素/id/通配/后代/子组合/结构伪类/:not/:deep/:root——见 cse/parse.ts）
   acceptance: 'none',
 }))
+// ★★★条件 at-rule 通道（2026-10-08 · css:next）：`@media`（视口/环境条件）与 `@supports`（特性检测）
+//   ——**跨端控制结构**，其语义由 **`@proteus-vue/fluid` 独立通道**交付（与 `container-type` 同族）：
+//   · 视口/容器断点 → createContainerQuery / resolveBreakpoint / createAdaptiveController（**容器**而非视口，车机/多窗口）；
+//   · prefers-reduced-motion → shouldReduceMotion / createDeviceEnv · orientation/display-mode(折叠) → readDisplayMode；
+//   · hover/pointer → probePointer · 特性检测(@supports) → detectFluidCapabilities（probe 式）。
+//   ⇒ 归类为 `channel: 'independent'`（css:verify 判 parity/ends = n/a），**非**编译器折叠面。
+//   ★具名边界（FLD001 / W-6，决策 #279）：手写 `@media` 在 App 端**无对等**（无 CSS 引擎）⇒ 框架规定响应式走 fluid；
+//     `docs/compiler.md` 已记「@container / @media 条件块 App 端跳过」。
+const COND_AT_RULE_CHANNEL = {
+  '@media': '视口/环境条件（responsive + prefers-*）。语义由 @proteus-vue/fluid 独立通道交付——视口/容器断点走 createContainerQuery/resolveBreakpoint/createAdaptiveController（以**容器**为基准）；prefers-reduced-motion 走 shouldReduceMotion/createDeviceEnv；orientation/display-mode(折叠) 走 readDisplayMode；hover/pointer 走 probePointer。★具名边界（决策 #279 FLD001 / W-6）：手写 @media 在 App 端无对等（无 CSS 引擎）⇒ 框架规定响应式用 fluid 容器查询（禁止手写 @media）；Web/MP 由各自 CSS 引擎原生处理。',
+  '@supports': 'CSS 特性检测。语义由 @proteus-vue/fluid 的 detectFluidCapabilities（probe 式运行时能力检测：clamp/grid/containerQuery/flexGap/aspectRatio）与 formSupports 交付（运行时能力分支，非样式表条件块）；App 端无 CSS 引擎 ⇒ @supports 块跳过（具名边界）。Web/MP 由各自 CSS 引擎原生处理。',
+}
 const atRules = Object.keys(mdnAtRules).map((k) => ({
   id: k,
   kind: 'at-rule',
   mdnStatus: mdnAtRules[k].status ?? 'standard',
   syntax: mdnAtRules[k].syntax ?? null,
-  impl: ['@layer', '@keyframes'].includes(k) ? 'implemented' : 'not-started',
-  implNote: k === '@layer' ? 'CSE 五级层叠含 @layer（含 important 反转）' : k === '@keyframes' ? '动画通道（批次 42）' : '',
+  impl: ['@layer', '@keyframes'].includes(k) ? 'implemented' : COND_AT_RULE_CHANNEL[k] ? 'implemented' : 'not-started',
+  implNote: k === '@layer' ? 'CSE 五级层叠含 @layer（含 important 反转）' : k === '@keyframes' ? '动画通道（批次 42）' : COND_AT_RULE_CHANNEL[k] ? `**独立通道（@proteus-vue/fluid）**：${COND_AT_RULE_CHANNEL[k]}` : '',
+  channel: COND_AT_RULE_CHANNEL[k] ? 'independent' : null,
   evidencedBy: { inIrRegistry: false, irScope: null, inCompilerFold: false, matrixLevel: null, webSupport: null },
   usage: 0,
   // ★已实现 ⇒ done（不留在 P0/P1——否则"可推项"计数把已完成的算进去）
-  priority: ['@layer', '@keyframes'].includes(k) ? 'done' : ['@supports', '@media'].includes(k) ? 'P0' : 'P1',
+  priority: ['@layer', '@keyframes'].includes(k) || COND_AT_RULE_CHANNEL[k] ? 'done' : 'P1',
   acceptance: 'none',
 }))
 const MATH_FNS = ['min()', 'max()', 'clamp()']
