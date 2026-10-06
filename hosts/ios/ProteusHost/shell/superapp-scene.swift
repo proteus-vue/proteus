@@ -283,16 +283,10 @@ final class SuperappScene: NSObject {
         guard let bd = tb["badge"] as? [String: Any] else { return fallback }
         return (bd[key] as? NSNumber)?.doubleValue ?? fallback
     }
-    private static func tabIconLegacy(_ name: String) -> String {
-        name == "index" ? "⌂" : name == "messages" ? "✉" : name == "mine" ? "☺" : "•"
-    }
     private static func tabShortLabel(_ name: String) -> String {
         if let v = tbLabels[name], !v.isEmpty { return v }
         if let v = tabLabels[name], !v.isEmpty { return v }
         return name
-    }
-    private static func tabShortLabelLegacy(_ name: String) -> String {
-        name == "index" ? "首页" : name == "messages" ? "消息" : name == "mine" ? "我的" : name
     }
     /** IM 未读角标初值（与 App.vue 壳同源；后续接实时运行时改由状态驱动） */
     private static func imUnreadValue() -> Int { 3 }

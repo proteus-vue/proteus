@@ -33,7 +33,7 @@
 | G3 | **手势分类**收敛到 `packages/gesture`（iOS 停止自研复刻）；各端只喂原始 down/move/up + 时间戳 | 未做 | `cmd:pnpm check:host-separation-ledger` | 本轮 |
 | G4 | **能力桥契约**（方法名清单 + 结果封装）抽成机器可读契约 + 薄分发器；补鸿蒙 `invoke`/能力注册 | 已落地 | `cmd:pnpm check:host-invoke-contract` | 本轮 |
 | G5 | **mountPage 门面**（Android/鸿蒙各加等价门面，照 iOS `ProteusHostController.mountPage`） | 未做 | `cmd:pnpm check:host-separation-ledger` | 本轮 |
-| G6 | **防回归门禁**：tab 样式常量 / `--pf-*` 词表 / 能力方法清单若再现于 `hosts/**` 即红 | 未做 | `cmd:pnpm check:host-separation-ledger` | 本轮 |
+| G6 | **防回归门禁**：`--pf-*` 名闭集 / invoke 方法契约 / tab 规格硬编码，三项均机器守 | 已落地 | `cmd:pnpm check:host-tab-spec`（+ check:env-vars / check:host-invoke-contract） | 本轮 |
 
 ## 三、runtime 抽包 / CLI 生成宿主（"换壳"的前提，四刀已打通）
 

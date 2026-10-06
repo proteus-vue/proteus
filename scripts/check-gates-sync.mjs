@@ -83,6 +83,8 @@ const LOCAL_ONLY = {
   // ★★★宿主 invoke 方法契约（B2·G4）：各端声明 ⊆ 契约 + screen.* 三端一致 + 覆盖率如实。
   //   与 check:host-layering 同族（宿主侧门禁，开发机跑）。
   'check:host-invoke-contract': '宿主 invoke 方法契约门禁（screen.* 一致 + 能力 ⊆ 契约）——与 check:host-layering 同族（开发机跑）',
+  // ★★★tab 栏规格防回归（B2·G6）：三端读共享规格 + 无硬编码图标/标签映射（同族：宿主侧门禁）。
+  'check:host-tab-spec': 'tab 栏规格防回归门禁（三端读共享规格 · 无硬编码图标/标签）——与 check:host-layering 同族（开发机跑）',
   // ★C3 编译期基线：绝对毫秒跨机不可比（本仓既有认识：异构 CI 同机可达 1.6×），
   //   判据虽以比值为主（体积膨胀比），但全量/增量仍带宽松绝对上界 ⇒
   //   在 CI 共享 runner 上会因机器差异产生噪声红。⇒ 归**开发机**：改编译器后本地跑。
