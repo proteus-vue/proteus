@@ -40,6 +40,18 @@
   },
   "modules": [
     {
+      "name": "proteus_render",
+      "srcPath": "./proteus_render",
+      "targets": [
+        {
+          "name": "default",
+          "applyToProducts": [
+            "default"
+          ]
+        }
+      ]
+    },
+    {
       "name": "entry",
       "srcPath": "./entry",
       "targets": [

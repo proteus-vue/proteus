@@ -48,6 +48,9 @@ jobs:
       - name: 安全编辑门禁（★用户纪律：程序化编辑必须走 safe-edit——临时文件 + diff + 校验，禁止直接改源文件）
         run: node scripts/check-safe-edit.mjs
 
+      - name: 凭证入库扫描门禁（★hosts 第二刀 Stage 3：签名/密钥/明文口令不得入库——git 跟踪面）
+        run: node scripts/check-secret-scan.mjs
+
       - name: 内核配套断言覆盖门禁（★用户点名：内核改动总要同步配套断言——映射表须覆盖全部内核文件）
         # ★为什么需要：精化映射表是人工维护的 ⇒ 新增内核文件（packages/compiler/src/*.ts）时若没人补表，
         #   定向工具会静默退化为"宽面提示" ⇒ 配套断言又只能在全量里才发现（用户点名的低效率模式）。

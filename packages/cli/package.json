@@ -9,6 +9,7 @@
   },
   "files": [
     "dist",
+    "templates-host",
     "README.md"
   ],
   "scripts": {

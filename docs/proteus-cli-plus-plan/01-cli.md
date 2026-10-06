@@ -155,7 +155,7 @@ src/ (SFC + <route> + p-*) + proteus.config.ts
 |------|------|------|--------|
 | **M1** | CLI Core：`create`/`dev`/`build` 骨架 + `defineProteus` 类型 | Compiler B1 | ✅ 纯逻辑 |
 | **M2** | Web + Skyline 构建（复用 Vite/Rollup） | Compiler M1 | ✅ |
-| **M3** | 原生工程自动同步（iOS/Android/鸿蒙） | App Renderer M2/M3 | 🔶 |
+| **M3** | 原生工程自动同步（iOS/Android/鸿蒙） | App Renderer M2/M3 | 🔶（★鸿蒙样板已打通：`create host` + `build --package`；见 §10） |
 | **M4** | CI/CD 模板 + 发布流水线 | all | 🔶 |
 
 **M1 零依赖可单测** —— `create` 模板拷贝 + 配置校验，纯 Node.js。
@@ -177,3 +177,27 @@ src/ (SFC + <route> + p-*) + proteus.config.ts
 
 - Compiler（B1 产物）、Router（G-32）、所有横切能力（G-07~G-16）
 - Architecture 原则 #10：配置语义 → 各端构建产物
+
+---
+
+## 10. 宿主生成 / 打包（hosts 第二刀 Stage 2，2026-10-07）
+
+> **背景**：此前 hosts/* 把「项目无关的引擎/运行时」与「项目身份 + 验证装置」混在一起（见 hosts/README-LAYERS.md），
+> 对 CLI 生成宿主、正式打包、安全维护都不利。分层落地（第一刀）+ runtime 抽为可依赖单元（第二刀）后，
+> 「宿主」可由 CLI 生成。
+
+**命令**
+```bash
+proteus create host harmony <dir> [--name <应用名>] [--bundle <包名>] [--project <项目根>]
+proteus build --target harmony --package --host-dir <dir>   # 编译项目内容 + 调 hvigorw 打包 .hap
+```
+
+**生成形态**（`packages/cli/templates-host/harmony`）：`AppScope/` + `entry/`（最小壳：EntryAbility + MainPage）
++ `proteus_render/`（runtime HAR，从框架同源复制）+ `proteus.host.json` + `build-profile.template.json5`。
+**壳零项目身份**：EntryAbility 只交生命周期给 runtime + 上报 READY；MainPage 只渲染 rawfile 编译产物。
+**打包**：`--package` 只「壳调 hvigorw」（不自研工具链）；先 `ohpm install`（file: 依赖 → 跨模块 native 聚合）。
+
+**诚实边界**：① 只做**鸿蒙样板**（Android/iOS 留下一轮）；② runtime 发布形态仍是"框架 checkout 同源复制"
+（可注入 `PROTEUS_HOST_RUNTIME_DIR`；独立发布包列为后续）；③ **华为 CA 签名属机器本地**——模板给
+`signingConfigs: []`（unsigned 可构建、不能装机），装机需在 DevEco 勾选一次 "Automatically generate signature"。
+**安全**：`check:secret-scan` 门禁扫 git 跟踪面（签名/密钥/明文口令不得入库）。

@@ -19,8 +19,8 @@ import { NodeContent } from '@kit.ArkUI';
 import { display, window } from '@kit.ArkUI';
 import { util } from '@kit.ArkTS';
 import { fileIo } from '@kit.CoreFileKit';
-import { attach, renderCommands, scrollRoot } from 'libproteus_render.so';
-import { appScreenCommands, superappDrive, appScreenContentHeight } from 'libproteus_bench.so';
+import { attach, renderCommands, scrollRoot, appScreenCommands, appScreenContentHeight, hostRtShellInstall, hostRtShellEvent } from 'proteus_render';
+import { superappDrive } from 'libproteus_bench.so';
 
 const DOMAIN = 0x0002;
 const TAG = 'ProteusSuperapp';

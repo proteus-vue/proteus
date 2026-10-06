@@ -47,17 +47,35 @@ const ENDS = {
   harmony: {
     label: '鸿蒙 (ArkTS/C++)',
     layers: {
-      runtime: 'hosts/harmony/host-app/entry/src/main/cpp/runtime',
+      // ★★第二刀（2026-10-07）：runtime 已抽为**独立 HAR 模块**（proteus_render/）——
+      //   含 render（直绘）+ host 桥（appScreen/壳生命周期）+ Rust 核；不再挂在 entry 内。
+      runtime: 'hosts/harmony/host-app/proteus_render/src/main/cpp',
       shell: 'hosts/harmony/host-app/entry/src/main/ets/shell',
       dev: 'hosts/harmony/host-app/entry/src/main/ets/dev',
     },
-    ext: ['.ets', '.ts', '.cpp'],
-    // 鸿蒙 runtime 也含 cpp/runtime；shell 也含 ets/shell；dev 含 ets/dev + cpp/dev
+    ext: ['.ets', '.ts', '.cpp', '.h'],
     extra: {
-      runtime: ['hosts/harmony/host-app/entry/src/main/cpp/runtime'],
+      runtime: ['hosts/harmony/host-app/proteus_render/src/main/cpp'],
       shell: ['hosts/harmony/host-app/entry/src/main/ets/shell'],
       dev: ['hosts/harmony/host-app/entry/src/main/ets/dev', 'hosts/harmony/host-app/entry/src/main/cpp/dev'],
     },
+  },
+}
+
+/* ── shell 里禁止反向依赖 dev（2026-10-07 第二刀新增）──
+ *   ★触发：鸿蒙壳（EntryAbility/Superapp）曾 import dev 的 `libproteus_bench.so`（hostRtShellEvent/
+ *     appScreenCommands/superappDrive）——runtime 形状的部分已迁 HAR；剩余 `superappDrive`（应用驱动，
+ *     与 dev 的 screen.* 执行器簇深度耦合）**具名登记**，棘轮守（不得新增）。 */
+const SHELL_FORBIDDEN_DEV = [
+  { re: /libproteus_bench\.so|proteus_bench/, why: 'dev 装置模块（proteus_bench）——shell 不应依赖 dev' },
+  { re: /\bsuperappDrive\b|\bsuperappBoot\b/, why: 'dev 应用驱动（superappBoot/Drive）——待拆分' },
+  { re: /\b(bench4050|hitProbe|recycleProbe|spliceProbe|textProbe|vaporProbe|sfcStressProbe|jsvmProbe|memProbe)\b/, why: 'dev 探针符号' },
+]
+// 壳→dev 的**具名登记**（命中数棘轮；待第二刀后端拆分清零）
+const SHELL_MIXED_FILES = {
+  'hosts/harmony/host-app/entry/src/main/ets/shell/Superapp.ets': {
+    reason: '壳从 dev 取 superappDrive（一次性 VM 驱动项目 bundle）——与 dev screen.* 执行器簇耦合；待拆分',
+    maxHits: 6,   // 2026-10-07 实测：import 行（libproteus_bench.so + superappDrive）+ 4 处调用
   },
 }
 
@@ -153,6 +171,30 @@ for (const [end, cfg] of Object.entries(ENDS)) {
       }
       for (const { why } of hits) {
         problems.push(`② ${rel}: runtime 出现禁止项「${why}」——应移到 shell/ 或 dev/`)
+      }
+    }
+  }
+}
+
+/* ── ②b shell 不得反向依赖 dev（第二刀新增）── */
+for (const [end, cfg] of Object.entries(ENDS)) {
+  const shDirs = [...new Set([cfg.layers.shell, ...(cfg.extra?.shell ?? [])])]
+  for (const d of shDirs) {
+    for (const f of filesUnder(d, cfg.ext)) {
+      const rel = path.relative(ROOT, f)
+      const src = stripComments(fs.readFileSync(f, 'utf-8'), path.extname(f))
+      const hits = SHELL_FORBIDDEN_DEV.filter(({ re }) => re.test(src))
+      if (hits.length === 0) continue
+      const mixed = SHELL_MIXED_FILES[rel]
+      if (mixed) {
+        const total = SHELL_FORBIDDEN_DEV.reduce((n, { re }) => n + ((src.match(new RegExp(re.source, 'gi')) || []).length), 0)
+        if (total > mixed.maxHits) {
+          problems.push(`②b ${rel}: 壳→dev 混装登记已超限（${total} > ${mixed.maxHits}）——新增了 shell→dev 依赖，请拆分而非加登记`)
+        }
+        continue
+      }
+      for (const { why } of hits) {
+        problems.push(`②b ${rel}: shell 出现禁依赖「${why}」——应移到 runtime(HAR) 或壳内自持`)
       }
     }
   }

@@ -1,0 +1,6 @@
+{
+  "name": "libproteus_host.so",
+  "types": "./index.d.ts",
+  "version": "1.0.0",
+  "description": "Proteus 鸿蒙宿主桥（appScreen 桥 + 壳生命周期桥；NAPI）"
+}

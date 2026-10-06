@@ -14,7 +14,7 @@ generated: true
 ### `proteus build`
 
 ```bash
-proteus build <dir> [--out <dir>] [--debug] [--no-px2rpx] [--rpx-ratio <n>] [--rules <json>] [--compiler <node|rust>] [--target <web|skyline|ios|android|harmony|all>]
+proteus build <dir> [--out <dir>] [--debug] [--no-px2rpx] [--rpx-ratio <n>] [--rules <json>] [--compiler <node|rust>] [--target <web|skyline|ios|android|harmony|all>] [--package --host-dir <dir>]
 ```
 
 Scan all .vue files under <dir> and compile them into the mini-program four-file set (.wxml / .js / .wxss) to <out>
@@ -30,6 +30,14 @@ proteus dev [--target <web|skyline>]
 ```
 
 Development server (G-33 M1): web → vite --mode web; skyline → dev-mp watch build (the app side awaits M3 native sync)
+
+### `proteus create`
+
+```bash
+proteus create host <platform> <dir> [--name <应用名>] [--bundle <包名>] [--project <项目根>]
+```
+
+★hosts cut-2 Stage 2 (host/project separation): generate a standalone compilable minimal host project (shell + runtime HAR dependency). platform currently: harmony.
 
 ## Checks & gates
 

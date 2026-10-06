@@ -5,7 +5,7 @@
 #   Android 走 NDK + JNI 绑定；iOS 走 staticlib + @_silgen_name；鸿蒙走
 #   **OHOS NDK clang 交叉编译 + C ABI 直接链接**（无绑定层——C ABI 就是契约）。
 #
-# 【产物】`host-app/entry/src/main/cpp/thirdparty/libproteus_layout_core.a`
+# 【产物】`host-app/proteus_render/src/main/cpp/thirdparty/libproteus_layout_core.a`  (HAR runtime)
 #   （32MB 静态库；gitignore——构建期依赖，由本脚本生成）
 #   ★首次构建 APK 前必须先跑本脚本（CMakeLists 会检测；缺失时只跳过 4050 基准，不阻断构建）。
 #
@@ -17,7 +17,7 @@ set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 CRATE="$ROOT/packages/layout-core-rust"
-OUT="$HERE/host-app/entry/src/main/cpp/thirdparty"
+OUT="$HERE/host-app/proteus_render/src/main/cpp/thirdparty"
 
 # ── DevEco NDK 解析（与 hdc.sh / build-host-app.sh 同策略）──
 find_deveco() {

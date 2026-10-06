@@ -12,6 +12,8 @@ import { parseBuildArgs, parseExplainArgs, parseRulesArgs, parseRouterCheckArgs,
 import { buildDir, planTargetedBuild, runTargetedBuildProgrammatic } from './build'
 import { parseConformanceArgs, runConformance, runConformanceDemo } from './conformance'
 import { parseHostArgs, runHostPush } from './host'
+import { parseCreateHostArgs, runCreateHost } from './host-scaffold'
+import { packageHarmonyHost } from './host-package'
 import { scanRepoDirectory, formatRepoReport } from './repo-conformance'
 import { explainTarget } from './explain'
 import { listRules } from './rules'
@@ -66,6 +68,18 @@ async function main(): Promise<void> {
           if (!hasLegacyViteConfig(process.cwd()) || !isViteT) {
             const r = await runTargetedBuildProgrammatic(args.target)
             if (!r.ok) process.exitCode = 1
+            // ★hosts 第二刀 Stage 2：--package → 调平台工具链把宿主工程打成 .hap（仅 harmony 样板）
+            if (args.package && (args.target === 'harmony' || args.target === 'all')) {
+              const hostDir = args.hostDir ?? process.env.PROTEUS_HOST_DIR
+              if (!hostDir) {
+                console.error('[proteus] --package 需要宿主工程目录：--host-dir <dir>（或 PROTEUS_HOST_DIR）')
+                process.exitCode = 1
+              } else {
+                const pk = packageHarmonyHost({ hostDir, projectRoot: process.cwd(), platform: 'harmony' })
+                for (const l of pk.log) console.log(`[proteus] ${l}`)
+                if (!pk.ok) process.exitCode = 1
+              }
+            }
           } else {
             const plans = planTargetedBuild(process.cwd(), args.target)
             const { spawnSync } = await import('node:child_process')
@@ -578,10 +592,29 @@ async function main(): Promise<void> {
       }
       break
     }
+    case 'create': {
+      // ★hosts 第二刀 Stage 2：proteus create host <platform> <dir> —— 生成独立可编译的最小宿主工程
+      if (rest[0] === 'host') {
+        try {
+          process.exitCode = runCreateHost(parseCreateHostArgs(rest.slice(1)))
+        } catch (e) {
+          console.error(`[proteus] ${e instanceof Error ? e.message : String(e)}`)
+          process.exitCode = 1
+        }
+        break
+      }
+      console.error(`proteus create 支持：host（收到：${rest[0] ?? '(空)'}）`)
+      process.exitCode = 1
+      break
+    }
     case 'host': {
       // ★G-45 B3：调试基座 CLI——host push <module-dir>（插件目录前置校验 CMP084/087 + push 信封生成）
       //   devices/logs/serve 随 B4 transport 适配器落地
       try {
+        if (rest[0] === 'create') {
+          process.exitCode = runCreateHost(parseCreateHostArgs(rest.slice(1)))
+          break
+        }
         const args = parseHostArgs(rest)
         if (args.sub === 'push') {
           process.exitCode = runHostPush(args)

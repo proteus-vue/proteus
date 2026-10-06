@@ -1,0 +1,11 @@
+{
+  "name": "entry",
+  "version": "1.0.0",
+  "description": "{{appName}} —— Proteus 宿主入口模块（最小壳）",
+  "main": "",
+  "author": "",
+  "license": "",
+  "dependencies": {
+    "proteus_render": "file:../proteus_render"
+  }
+}

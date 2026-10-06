@@ -1,0 +1,7 @@
+{
+  "string": [
+    { "name": "module_desc", "value": "{{appName}}（Proteus 最小宿主 entry）" },
+    { "name": "EntryAbility_desc", "value": "{{appName}} 宿主入口 Ability" },
+    { "name": "EntryAbility_label", "value": "{{appName}}" }
+  ]
+}
