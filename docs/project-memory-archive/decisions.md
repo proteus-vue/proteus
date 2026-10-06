@@ -1683,3 +1683,12 @@
 **④ ★教训（可执行）**：a) **"比较两侧同源"陷阱**——`target` 与 `this.current` 都来自**路由态**（同一来源），在 settle 后恒等 ⇒ 用它们判"是否导航"**不可靠**；应拿"**进入前的本屏**"（`prev`，来自实际渲染态）当基准；b) **共享可变状态（this.current）+ 多来源写入（applyState / nav / render）** ⇒ 判据必须**先快照基准再改状态**（否则读到被污染的值）；c) 回归定位靠**日志证据**（`depth=2` 说明栈曾成功 push、`SUPERAPP_BACK` 缺失说明没走到 goBack ⇒ 二者交叉定位到"栈空"）。
 **⑤ 判据**：鸿蒙真机 back（键 + 手势）→ index · count 仍 0→3 · 鸿蒙构建绿。
 
+607. **★★CSE 之后的四条主线方案入库（Themis / Proteus UI(Charites) / Keryx / Koine）+ 事实核对修正 + board-inventory 登记（★用户 2026-10-07「先看下我刚才新增的几个文档，需要入库作为CSE主线后面的主线落地」）**：
+**① 入库五份（不占 G 序）**：`Proteus_Themis多端一致CSS引擎产品白皮书.md`（G-61 CSS 引擎的产品化叙事）· `Proteus_OS级组件库方案.md`（代号 **Charites**）+ `Proteus_Charites组件库产品白皮书.md`（对外品牌 **Proteus UI**）· `Proteus_OS级图标库方案.md`（代号 **Keryx**：图标即数据=SVG path 单一真源，非 icon font）· `Proteus_内置组件体系重评估方案.md`（代号 **Koine**：平台词汇层，与 Proteus UI 正交）。**关系**：Koine（词汇契约）在底 → Proteus UI（组件）在其上 → Keryx（图标）为组件提供词汇；Themis 为三者提供"一致性可证明"门禁管线；四者均构建在 G-61 之上。
+**② 交叉引用核对**：5 份引用的全部 `docs/*.md` / `packages/*` 路径**逐个 ls 存在**（proteus-css-engine-plan / 视觉规范 / Hephaestus 方案 / Morpheus 方案 / Mnemosyne 方案 / allow-differences.json / primitives.ts / svg_path.rs / mp-spec-coverage.ts 等）；关键数字核实：**11,927 行**（精确命中）· **13 shim / 1,094 行** · **84 官方组件** · **113 用例 / 153 项** · 家族分叉文件（滚动三胞胎/弹层五兄弟/加载三件/导航三件）全部在位。
+**③ ★三处事实修正（就地改，保留作者的结论）**：a) **「0 个组件有无障碍」= 假**——`aria-`/`role=` 实**命中 22 个文件**（如 `p-switch` 有 `role="switch"` + `:aria-checked`）⇒ 准确说法是「0 个组件**过 A11y 门禁**（22 个有零散 role/aria，无系统清单/门禁）」；b) **「grep `var(--` 零命中」= 机制错**——`var(--` 实命中 23 处（均为组件级 `--p-*` 局部变量）⇒ 应引 `grep -rl "var(--sa-"`（设计 token 真源，实为 0）；c) **「147 条原语」= 陈旧值**——`PRIMITIVE_CATALOG.length` 实为 **187**（`check:docs-stats` 权威口径；门禁只认字面 "183" ⇒ 147 漏网）⇒ 3 份文档共 14 处 147→187。
+**④ 登记**：`docs/board-inventory.md` §「其他文档（非 plan）」加 4 行（Themis / Proteus UI+Charites / Keryx / Koine，含各自定位、四条 OS 判定、现状诊断可 grep、结论），并按仓内惯例（决策 #177/#315「新 plan/文档入仓须同步本表」）登记依赖关系（Koine→Charites→Keryx，Themis 为门禁底座）。
+**⑤ ★教训（可执行）**：**文档数字门禁只认"被显式枚举的旧值"，抓不到任意错误值**——`check:docs-stats` 的规则是 `re: /183.../`（针对它当时修的那个值），故 "147 原语"（另一个陈旧值）静默通过。⇒ 新文档入库时**必须对每条数字跑一次源码权威口径**（不靠"门禁绿=数字对"）；且**引用的 grep 命令要真跑一遍**（本次两处 grep 命令跑出来非零命中，却写着"零命中"）。
+**⑥ 判据**：`check:docs-stats`/`check:docs`/`check:content`/`check:memory` 全绿；5 份 + 修正 + board-inventory 入库。
+**⑦ 诚实边界 / 待办**：命名（Themis/Charites/Keryx/Koine）**均为候选定名**，三份自述「定名前须做正式商标与包名检索」——正式启用前该步不可省；「79 个组件」按 p-* 口径（`ls -d packages/components/p-*` = 79），与 `check:docs-stats` 的「组件 81」（含 pg-glass/virtual-list 两个非 p-* 目录）为**不同口径**，文档已按 p-* 显式限定；四份为**规划态**（P0 起，未开工）。
+

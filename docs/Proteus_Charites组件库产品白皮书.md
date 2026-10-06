@@ -15,7 +15,7 @@
 | 凭什么敢称 OS 级 | 四条判定缺一不可：设计语言成法（裸值即报错）/ 品质是默认项 / 一致性可证明（每组件过 Themis 三层门禁）/ 与平台融合（安全区·玻璃·形态自适应是系统行为） |
 | 和 Vant / Ant Design Mobile 的区别 | 它们是 Web 组件库换壳，"三端长得一样"靠肉眼；这里**每组件逐属性对拍 Chromium、各端 ≤0.5dp、截图并排**——一致性是门禁不是愿望 |
 | 和 uni-app / Taro 内置组件的区别 | 它们对齐"小程序语义"（兼容面）；Proteus UI 定义"设计语言"（品质面）——两层职责正交，Proteus 两层都有 |
-| 现状到目标的差距 | 存量 **79 个组件**有"数量"没"宪法"：0 组件消费 token、0 组件有无障碍——P0 先立法，P1 做减法，P2 补品质，P3 扩编 |
+| 现状到目标的差距 | 存量 **79 个组件**有"数量"没"宪法"：0 组件接设计 token（`--sa-*`）、0 组件过 A11y 门禁（22 个仅有零散 role/aria）——P0 先立法，P1 做减法，P2 补品质，P3 扩编 |
 
 ---
 
@@ -42,9 +42,9 @@
 - 样式一致性引擎 **Themis** 已上线：组件"三端长得一样"可以逐属性证明（113 用例 / 153 项 ≡ Chromium、各端 ≤0.5dp）；
 - 动效引擎 **Morpheus** 已在：组件动效却还在手写 CSS animation；
 - Fluid 系统已在（formfactor / 安全区 / 焦点导航 / 缩放）：组件却在各自实现避让；
-- 147 条原语目录已在（IR 级单一事实源）：组件却在同族分叉——滚动三胞胎、弹层五兄弟、加载三件，连 `p-loading-host` 的注释都在提醒"它与 p-loading 的分工（别混）"。
+- 187 条原语目录已在（IR 级单一事实源）：组件却在同族分叉——滚动三胞胎、弹层五兄弟、加载三件，连 `p-loading-host` 的注释都在提醒"它与 p-loading 的分工（别混）"。
 
-**存量盘点：79 个组件、约 11,927 行。数量不缺——0 个组件消费设计 token，0 个组件有无障碍标注。缺的不是组件，是一部宪法。**
+**存量盘点：79 个组件、约 11,927 行。数量不缺——0 个组件消费设计 token（`--sa-*`），0 个组件过 A11y 门禁（22 个文件有零散 role/aria，无系统清单）。缺的不是组件，是一部宪法。**
 
 **Proteus UI 就是这部宪法。**
 
@@ -71,7 +71,7 @@
            token = CSS 变量 → 编译期经 CSE 折叠 → lint 拦截裸值（棘轮）
 ┌────────────────────────────────────────────────────────┐
 │ L1 Token      色彩/字号/间距/圆角/阴影/动效曲线/触达      │
-│ L2 原语       PRIMITIVE_CATALOG 147 条（既有 SSOT，不动）  │
+│ L2 原语       PRIMITIVE_CATALOG 187 条（既有 SSOT，不动）  │
 │ L3 语义组件   p-*：79 个存量的升级面                      │
 │ L4 页面骨架   六种标准骨架（视觉规范 L3 收编为组件）        │
 └────────────────────────────────────────────────────────┘
@@ -107,7 +107,7 @@
 安全区避让、系统玻璃（p-glass）、键盘避让是**系统层行为**；84 个能力 Hook 与 Hephaestus 能力组件（相机/定位/扫码/地图）正交互补——UI 组件需要能力时调用现成产物，不重写。支持度矩阵含"是否需原生基座"列。
 
 ### 5.7 原语 SSOT（Primitive Catalog）
-147 条 PRIMITIVE_CATALOG 是组件的 IR 级单一事实源，目录一致性有审计闭环（`auditCatalogConsistency`）——组件库永远不会漂成"第二套运行时"。新组件必须先登记原语再建组件。
+187 条 PRIMITIVE_CATALOG 是组件的 IR 级单一事实源，目录一致性有审计闭环（`auditCatalogConsistency`）——组件库永远不会漂成"第二套运行时"。新组件必须先登记原语再建组件。
 
 ### 5.8 页面骨架（Page Skeletons）
 视觉规范 L3 的六种标准骨架（工作台/列表/设置/表单/详情/控制台）从样式类（`.sa-*`）收编为组件——生产应用最高频的"页级结构"开箱即得，分组间距与安全区留白由骨架默认承担。
@@ -119,16 +119,16 @@
 | 指标 | 数值 | 口径 |
 |---|---|---|
 | **79** 个语义组件 / **11,927** 行 | 现状存量 | `packages/components` 2026-10-07 实测 |
-| **147** 条原语 | 现状 SSOT | PRIMITIVE_CATALOG + audit 闭环 |
+| **187** 条原语 | 现状 SSOT | PRIMITIVE_CATALOG + audit 闭环 |
 | **84** 个能力 Hook | 现状可复用 | Hephaestus / capabilities 体系 |
-| **0** 个组件消费 token / **0** 个有无障碍 | **现状缺口**（P0/P2 收口对象） | 全目录 grep 零命中 |
+| **0** 个组件接设计 token（`--sa-*`）/ **0** 个过 A11y 门禁（22 个仅零散 role/aria） | **现状缺口**（P0/P2 收口对象） | `grep -rl "var(--sa-" packages/components/p-*/` 零命中；`aria-`/`role=` 命中 22 文件但无门禁清单 |
 | **≤0.5 dp** 几何对拍 | **交付门禁**（每组件） | Themis 判据②，容差逐字段 |
 | **逐属性** ≡ Chromium | **交付门禁**（每组件样式） | Themis 判据①管线 |
 | **44 px** 触达 / **AA** 对比度 | **交付门禁** | HIG 基准 / token 语义色 |
 | 79 → **约 65** 组件 | P1 目标（做减法） | 家族收口 + deprecation 棘轮 |
 | **6** 种页面骨架 | P3 收编目标 | 视觉规范 L3 |
 
-> 口径纪律：现状与承诺分列——**79/147/84/0 是今天的实测**；门禁行是组件"交付"的准入线，未过线不标交付（数字不粉饰，沿用 Hephaestus 对外口径铁律）。
+> 口径纪律：现状与承诺分列——**79/187/84/0 是今天的实测**；门禁行是组件"交付"的准入线，未过线不标交付（数字不粉饰，沿用 Hephaestus 对外口径铁律）。
 
 ---
 
@@ -211,10 +211,10 @@ warn DEPRECATION: <p-scroll> 已收编进 ScrollKernel（p-scroll-view）
 | 本文表述 | 证据 |
 |---|---|
 | 79 组件 / 11,927 行 / 家族行数分布 | `ls packages/components/p-*`、逐目录 `wc -l`（2026-10-07 实测） |
-| 0 token 消费 / 0 无障碍 / 动效手写 | `grep -r "var(--\|aria-\|role=" packages/components/p-*/` 零命中 |
+| 0 设计 token 消费 / 0 A11y 门禁（22 文件有零散 role/aria）/ 动效手写 | `grep -rl "var(--sa-" packages/components/p-*/` 零命中（`var(--` 命中 23 处但均为组件级 `--p-*` 局部变量）；`grep -rlE "aria-\|role=" packages/components/p-*/` 命中 22 文件（无门禁清单） |
 | 滚动三胞胎 / 弹层五兄弟 / 加载三件 | `packages/components/p-{scroll,scroll-view,scrollable}` / `p-{modal,popup,popover,drawer,mask}` / `p-{loading,loading-host,loading-region}` 头注释 |
 | p-adaptive 形态声明（内核 API 形状） | `packages/components/p-modal/index.vue` |
-| 147 原语 + audit 闭环 | `packages/component-ir/src/primitives.ts`、`audit.ts` |
+| 187 原语 + audit 闭环 | `packages/component-ir/src/primitives.ts`、`audit.ts` |
 | Themis 三层门禁 / 113 用例 153 项 | `docs/proteus-css-engine-plan/README.md` §3/§4 |
 | 视觉规范 L1/L2/L3、AA 达标、深色机制 | `docs/Proteus_超级应用视觉设计规范.md`、`superapp/styles/global.css` |
 | Fluid 模块清单 / glass / gesture / 84 Hook | `packages/fluid/src`、`packages/glass/src`、`packages/gesture/src`、`packages/capabilities/src` |
