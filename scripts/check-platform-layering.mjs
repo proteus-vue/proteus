@@ -63,7 +63,8 @@ const PLATFORM_SIGNATURE = {
   ios: /UIKit|CoreText|CALayer|UIFont|Foundation/,
   // ★Android 特征（HA2 起也认 Rust 绑定层）：Java 侧 android.*/StaticLayout；Rust 侧 jni crate / JNI 符号名
   android: /android\.|StaticLayout|Canvas|Typeface|use jni::|JNIEnv|Java_dev_proteus_/,
-  harmony: /@ohos\.|ArkUI|ArkTS/,
+  // ★HA0.5（鸿蒙）：补 OH_Drawing（ArkGraphics2D NDK——平台适配层用它度量/绘制文本）
+  harmony: /@ohos\.|ArkUI|ArkTS|OH_Drawing/,
 }
 
 /**
@@ -76,6 +77,7 @@ const PLATFORM_SIGNATURE = {
 const PLATFORM_ADAPTATION = {
   ios: /ProteusTextAdapter/,
   android: /dev\/proteus\/platform\//,
+  harmony: /proteus_text_platform/,
 }
 
 function main() {

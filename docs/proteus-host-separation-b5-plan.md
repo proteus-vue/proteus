@@ -19,7 +19,8 @@
 | **验收判据（可机器判定）** | ① `pnpm check:platform-layering` 绿，且对 `platform/android` 有**实质**校验（非空壳）；② `pnpm check:android-host-compile`（零设备 javac + android.jar）绿；③ 真机渲染**无变化**（重跑 `hosts/android/run-superapp.sh` 截图/golden 与迁移前逐像素一致）；④ `grep` 证明宿主层**不再持有**度量/绘制实现。 |
 | **依赖** | 无（纯代码组织重构）。可与 B5-2 并行。 |
 | **风险 / 纪律** | Java 度量/绘制与宿主**耦合更深**（`platform/README.md` 既有诚实边界：需先做 JNI 侧解耦）⇒ **禁一次性替换**，逐文件迁 + 每步编译绿（沿用 CSE「并行、逐批切换」纪律）。 |
-| **诚实边界** | 鸿蒙侧平台层**未开始**（本批不含）；只抽"同平台通用"部分，"每宿主不同的集成"留在 `hosts/`。 |
+| **诚实边界** | 鸿蒙侧平台层**已同批落地**（见下方"鸿蒙腿"）；只抽"同平台通用"部分，"每宿主不同的集成"留在 `hosts/`。 |
+| **✅ 鸿蒙腿（2026-10-07，同批）** | **鸿蒙文本度量/字体也抽到 `platform/harmony/proteus-platform/src/main/cpp/proteus_text_platform.h`**（`measureTextTypoPx`/`measureTextWrappedTypoPx`/`applyTextFont`/`lineHeightDesignPx`，OH_Drawing Typography）——与 iOS/Android 三端对称。`hosts/.../proteus_host_helpers.h` 移除这 4 函数、改为 `#include "proteus_text_platform.h"`（宿主无改动：`proteus_host.cpp`/`proteus_bench.cpp` 经 helpers 传递引入）；两端 CMakeLists（proteus_render + entry）加平台 include 路径。验收：鸿蒙构建 ✅ · **函数体逐字一致**（`git show HEAD` 对比 OLD vs 平台头，仅多 2 行注释）· 真机渲染无回归 · 门禁 harmony 段（+破坏性）✅ · 结构契约测试含鸿蒙腿 ✅。★**HA0.5 三端（iOS/Android/鸿蒙）就此收口**。 |
 
 ### B5-2 · HA4-android —— C-ABI `native_view_*` 回调绑定
 

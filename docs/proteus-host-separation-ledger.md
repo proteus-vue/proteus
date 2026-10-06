@@ -51,7 +51,7 @@
 | ID | 项 | 状态 | 判据（命令 / 文件 / 文档） | 范围 |
 |---|---|---|---|---|
 | HA0 | 八接口 C ABI + 版本协商 + `submit_frame` | 已落地 | `file:packages/host-abi/include/proteus_host_abi.h` | — |
-| HA0.5 | `hosts/`→`platform/` 拆分 + 门禁（**Android 侧待抽**） | 范围外 | `cmd:pnpm check:platform-layering` | iOS 已抽（platform/ios）且门禁绿。**Android**：B5-1（`docs/proteus-host-separation-b5-plan.md`）**已落地（2026-10-07）**——**字形（字体角色映射 + 自定义字体注册）+ 文本度量（单行/折行/断词/行高）** 已抽到 `platform/android/.../ProteusTextPlatform.java`，宿主改为**委托**（真机渲染**逐像素一致**）；**绘制执行**（`mkCmd` 的 StaticLayout/Canvas，绘制载体=平台 View）**留在宿主**（与 iOS 同构：两端绘制都不在平台层）。门禁 C 判据已收紧为"必须是 `dev/proteus/platform/` 包"（防 SDK/AAR 冒充 + 破坏性验证）+ 新增结构契约测试 `tests/host-platform-extraction.test.ts`。★`platform/android/proteus-sdk`（SDK/AAR）= **HA5 存量嵌入**，非本项对象。 |
+| HA0.5 | `hosts/`→`platform/` 拆分 + 门禁（**三端**） | 已落地 | `cmd:pnpm check:platform-layering` | **三端平台适配层均已抽出**：iOS（`ProteusTextAdapter`，CoreText）· **Android（B5-1 · 2026-10-07）**：`ProteusTextPlatform.java`（字形 + 文本度量）· **鸿蒙（B5-1 · 2026-10-07）**：`proteus_text_platform.h`（OH_Drawing 度量 + 字体）；宿主只做**委托/调用**，真机渲染**无回归**（Android 逐像素一致 · 鸿蒙函数体逐字一致）。门禁 C 判据收紧为"**必须有平台适配层**"（`PLATFORM_ADAPTATION` = ios/android/harmony 三段路径，**破坏性验证**：删文件 ⇒ 红）+ 结构契约测试 `tests/host-platform-extraction.test.ts`（三端）。**绘制执行**（`mkCmd`/Canvas 上屏）**留在宿主**（三端同构：绘制载体=平台 View）。★`platform/android/proteus-sdk`（SDK/AAR）= **HA5 存量嵌入**，非本项对象。登记件 `docs/proteus-host-separation-b5-plan.md`。 |
 | HA1 | 现有 App 宿主改造（双路几何逐字节一致） | 已落地 | `file:platform/ios/ProteusPlatform/ProteusTextAdapter.swift` | — |
 | HA2 | 能力注入重构（度量 trait ✅ · 内核零平台分支 ✅ · **图像解码 trait 无消费点**） | 范围外 | `file:packages/host-abi/src/lib.rs`（decode_image 声明） | **内核不处理图像**（图像由各宿主各自解码——见 HostABI 文档；`decode_image` 无内核消费点）⇒ 该 trait 为 ABI 契约声明（保留），**登记终止态**（非"待实现"）。 |
 | HA3 | 能力插件（注册/调用/清单校验） | 已落地 | `file:packages/capabilities/src` | — |
@@ -74,7 +74,7 @@
 ## 六、完成判据（"完全打通"的机器化定义）
 
 `pnpm check:host-separation-ledger` 必须绿，且：
-1. **本轮范围全部 `已落地`**：R1–R6 · G1/G2/G4/G6 全绿；**HA0.5/HA2/HA4 经复核判为独立批次 / 终止态**（`范围外` + 理由 + 登记指向，非静默跳过）——见 §四各行；
+1. **本轮范围全部 `已落地`**：R1–R6 · G1/G2/G4/G6 全绿；**HA2 判为终止态**、**HA4 的 iOS 侧为具名边界**（`范围外` + 理由 + 登记指向，非静默跳过）；**HA0.5 已 `已落地`**（三端平台适配层均抽出）——见 §四各行；
 2. **每项先有判据再标已落地**：`已落地` 的 `判据` 指向的脚本/文件真实存在且可跑；
 3. **`范围外` 全部有独立登记件**（`doc:` 指向的文件存在）；
 4. **不接受"做一半"**：任何 `进行`/`未做` 项在收尾时必须二选一——做完（→`已落地`）或显式改 `范围外` + 理由 + 独立登记件。

@@ -23,6 +23,10 @@ const code = (src: string): string =>
 const PLATFORM = 'platform/android/proteus-platform/src/dev/proteus/platform/ProteusTextPlatform.java'
 const HOST_VIEW = 'hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/ProteusHostView.java'
 const VAPOR_HOST = 'hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/VaporRenderHost.java'
+// ★HA0.5（鸿蒙腿）
+const H_PLATFORM = 'platform/harmony/proteus-platform/src/main/cpp/proteus_text_platform.h'
+const H_HELPERS = 'hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_host_helpers.h'
+const H_HOST = 'hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_host.cpp'
 
 describe('★HA0.5 · B5-1 · Android 平台适配抽取（结构契约）', () => {
   it('平台层存在且拥有字形 + 度量的实现（android.graphics/android.text）', () => {
@@ -47,6 +51,24 @@ describe('★HA0.5 · B5-1 · Android 平台适配抽取（结构契约）', () 
     // 抽取前宿主直接构造 Typeface；抽取后**代码**里应消失（文档表格里的提及已被剥注释豁免）
     expect(src, '宿主代码不应再直接 Typeface.create（应经平台层）').not.toMatch(/Typeface\.create\(/)
     expect(src, '宿主代码不应再自持字体注册表字段').not.toMatch(/\bcustomFonts\b/)
+  })
+
+  it('鸿蒙：平台层（proteus_text_platform.h）拥有文本度量/字体，helpers 只 include 不重实现', () => {
+    expect(fs.existsSync(path.join(ROOT, H_PLATFORM)), '缺 ' + H_PLATFORM).toBe(true)
+    const plat = read(H_PLATFORM)
+    for (const m of ['measureTextTypoPx', 'measureTextWrappedTypoPx', 'applyTextFont', 'lineHeightDesignPx']) {
+      expect(plat, 'proteus_text_platform.h 缺 ' + m).toContain(m)
+    }
+    expect(plat, '平台层应含鸿蒙特征 API').toMatch(/OH_Drawing_/)
+    // helpers（宿主侧）**不得再定义**这 4 个函数（只 include 平台头）
+    const helpers = code(read(H_HELPERS))
+    expect(helpers, 'helpers 应 include 平台头').toContain('proteus_text_platform.h')
+    for (const m of ['static inline void measureTextTypoPx', 'static inline void measureTextWrappedTypoPx',
+                     'static inline void applyTextFont', 'static inline double lineHeightDesignPx']) {
+      expect(helpers, 'helpers 不应再定义 ' + m).not.toContain(m)
+    }
+    // host 宿主集成仍照常调用平台层的度量（include helpers → 传递平台头）
+    expect(read(H_HOST)).toContain('measureTextTypoPx')
   })
 
   it('度量（VaporRenderHost）走平台层 —— 单行/折行度量都委托', () => {
