@@ -138,6 +138,19 @@ const PROBE_VALUES = {
   // ★★★grid 放置/轨道（2026-10-07）：grid-column 线区间 + grid-template-columns 显式轨道（IR 原样透传串）
   'grid-column': ['grid-column: 1 / 3', 'gridColumn', '1 / 3'],
   'grid-template-columns': ['grid-template-columns: 1fr 2fr', 'gridTemplateColumns', '1fr 2fr'],
+  // ★★★基础族补齐探针（2026-10-08）：宽高 / box model / display / 字体族 / flex 族——**实现在**（CSE 折对），
+  //   此前缺样本 ⇒ 验收判红。补齐后即可验收。（"P0 少"的真因：P0=语料在用但**未实现** ⇒ 基础项已实现故不在 P0。）
+  width: ['width: 100px', 'width', { kind: 'absolute', dp: 100 }],
+  height: ['height: 50px', 'height', { kind: 'absolute', dp: 50 }],
+  'min-width': ['min-width: 40px', 'minWidth', { kind: 'absolute', dp: 40 }],
+  'max-width': ['max-width: 200px', 'maxWidth', { kind: 'absolute', dp: 200 }],
+  margin: ['margin: 8px', 'marginTop', { kind: 'absolute', dp: 8 }],
+  padding: ['padding: 6px', 'paddingTop', { kind: 'absolute', dp: 6 }],
+  display: ['display: flex', 'display', 'flex'],
+  'font-family': ['font-family: monospace', 'fontFamily', 'monospace'],
+  'font-weight': ['font-weight: 700', 'fontWeight', 700],
+  'flex-wrap': ['flex-wrap: wrap', 'flexWrap', 'wrap'],
+  'align-content': ['align-content: center', 'alignContent', 'center'],
   // ★★★视口单位（2026-10-07 · 决策 #595 Stage 2）：vw/vh。给定 viewport（本装置 390×844）时
   //   CSE 把 vw/vh 折为**绝对 dp**（10vw=39 · 100vh=844）——与浏览器 used-value 解析同值。
   //   （App 侧仍以内置视口变量 --pf-vw/--pf-vh 在运行时按真实视口求解；本样本验的是"折对的绝对量"。）
@@ -174,7 +187,7 @@ if (!probe) {
     parity.irField = irField
     parity.irValue = irVal
     parity.computedProbe = Object.fromEntries(
-      Object.entries(computed).filter(([k]) => ['inset', 'top', 'right', 'bottom', 'left', 'overflow-x', 'overflow-y', 'white-space', 'word-break', 'justify-self', 'grid-area', 'background-color', 'color', 'border-radius', 'text-align', 'opacity', 'font-size', 'letter-spacing', 'line-height', 'flex-direction', 'justify-content', 'align-items', 'gap', 'border-bottom-width', 'border-top-width', 'border-left-width', 'border-right-width', 'border-bottom-color', 'border-top-color', 'border-left-color', 'border-right-color', 'border-style', 'border-top-style', 'border-bottom-style', 'border-top-left-radius', 'border-bottom-right-radius', 'background-size', 'background-position', 'background-repeat', 'grid-auto-flow', 'grid-auto-columns', 'grid-auto-rows', 'grid-template-areas', 'grid-area', 'grid-column', 'grid-template-columns', 'justify-items', 'text-shadow', 'outline-width', 'outline-offset', 'outline-style', '-webkit-line-clamp'].includes(k)),
+      Object.entries(computed).filter(([k]) => ['inset', 'top', 'right', 'bottom', 'left', 'overflow-x', 'overflow-y', 'white-space', 'word-break', 'justify-self', 'grid-area', 'background-color', 'color', 'border-radius', 'text-align', 'opacity', 'font-size', 'letter-spacing', 'line-height', 'flex-direction', 'justify-content', 'align-items', 'gap', 'border-bottom-width', 'border-top-width', 'border-left-width', 'border-right-width', 'border-bottom-color', 'border-top-color', 'border-left-color', 'border-right-color', 'border-style', 'border-top-style', 'border-bottom-style', 'border-top-left-radius', 'border-bottom-right-radius', 'background-size', 'background-position', 'background-repeat', 'grid-auto-flow', 'grid-auto-columns', 'grid-auto-rows', 'grid-template-areas', 'grid-area', 'grid-column', 'grid-template-columns', 'justify-items', 'width', 'height', 'min-width', 'max-width', 'display', 'font-family', 'font-weight', 'flex-wrap', 'align-content', 'text-shadow', 'outline-width', 'outline-offset', 'outline-style', '-webkit-line-clamp'].includes(k)),
     )
     // 判据：IR 出值且与浏览器 resolved 语义一致（按形态）
     if (irVal === undefined) {
