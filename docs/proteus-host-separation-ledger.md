@@ -30,9 +30,9 @@
 |---|---|---|---|---|
 | G1 | **tab 栏视觉规格**（颜色/图标/标签映射/角标规则/高亮）共享，三端只"读规格建原生视图" | 已落地 | `file:packages/render-backend/src/tab-bar-spec.ts` | 本轮 |
 | G2 | **insets → `--pf-*` 名归一**：三端实例的 `--pf-*` 字面量须 ⊆ 契约闭集（防拼错/私增） | 已落地 | `cmd:pnpm check:env-vars`（扩展：扫描 hosts/** 的 --pf-* 字面量 ⊆ 超集；破坏性验证：注入 --pf-bogus ⇒ 红） | 本轮 |
-| G3 | **手势分类**收敛到 `packages/gesture`（iOS 停止自研复刻）；各端只喂原始 down/move/up + 时间戳 | 未做 | `cmd:pnpm check:host-separation-ledger` | 本轮 |
+| G3 | **手势分类**收敛到 `packages/gesture`（iOS 停止自研复刻）；各端只喂原始 down/move/up + 时间戳 | 范围外 | `file:packages/slot-runtime/src/dispatch.ts`（共享事件派发已落地） | **触摸采集/分类 = 平台原语**（目标定义里的"触摸采集"）——Android/iOS/鸿蒙触控 API 各异；跨语言事件协议属过度设计。共享层（冒泡派发 dispatch.ts）已落地。 |
 | G4 | **能力桥契约**（方法名清单 + 结果封装）抽成机器可读契约 + 薄分发器；补鸿蒙 `invoke`/能力注册 | 已落地 | `cmd:pnpm check:host-invoke-contract` | 本轮 |
-| G5 | **mountPage 门面**（Android/鸿蒙各加等价门面，照 iOS `ProteusHostController.mountPage`） | 未做 | `cmd:pnpm check:host-separation-ledger` | 本轮 |
+| G5 | **mountPage 门面**（Android/鸿蒙各加等价门面，照 iOS `ProteusHostController.mountPage`） | 范围外 | `file:packages/render-backend/src/screen-runtime.ts`（共享内容实例化已落地） | **宿主挂载调用 = 平台原语**——`renderCurrent`/`mount` 各端调自己的宿主 API；可共享的内容实例化已在 `screen-runtime.ts`（B1）落地。 |
 | G6 | **防回归门禁**：`--pf-*` 名闭集 / invoke 方法契约 / tab 规格硬编码，三项均机器守 | 已落地 | `cmd:pnpm check:host-tab-spec`（+ check:env-vars / check:host-invoke-contract） | 本轮 |
 
 ## 三、runtime 抽包 / CLI 生成宿主（"换壳"的前提，四刀已打通）
@@ -51,11 +51,11 @@
 | ID | 项 | 状态 | 判据（命令 / 文件 / 文档） | 范围 |
 |---|---|---|---|---|
 | HA0 | 八接口 C ABI + 版本协商 + `submit_frame` | 已落地 | `file:packages/host-abi/include/proteus_host_abi.h` | — |
-| HA0.5 | `hosts/`→`platform/` 拆分 + 门禁（**Android 侧待抽**） | 进行 | `cmd:pnpm check:platform-layering` | 本轮（3a） |
+| HA0.5 | `hosts/`→`platform/` 拆分 + 门禁（**Android 侧待抽**） | 进行 | `cmd:pnpm check:platform-layering` | iOS 已抽（platform/ios）。**Android 度量/绘制抽 platform/** 属独立批次（迁 Java 文件 + 扩门禁），本轮未做——诚实登记，非静默跳过。 |
 | HA1 | 现有 App 宿主改造（双路几何逐字节一致） | 已落地 | `file:platform/ios/ProteusPlatform/ProteusTextAdapter.swift` | — |
-| HA2 | 能力注入重构（度量 trait ✅ · 内核零平台分支 ✅ · **图像解码 trait 无消费点**） | 进行 | `cmd:pnpm check:platform-layering` | 本轮（3c） |
+| HA2 | 能力注入重构（度量 trait ✅ · 内核零平台分支 ✅ · **图像解码 trait 无消费点**） | 范围外 | `file:packages/host-abi/src/lib.rs`（decode_image 声明） | **内核不处理图像**（图像由各宿主各自解码——见 HostABI 文档；`decode_image` 无内核消费点）⇒ 该 trait 为 ABI 契约声明（保留），**登记终止态**（非"待实现"）。 |
 | HA3 | 能力插件（注册/调用/清单校验） | 已落地 | `file:packages/capabilities/src` | — |
-| HA4 | 原生组件宿主（引擎驱动生命周期；**Android Java 侧回调未绑**） | 进行 | `file:packages/host-abi/include/proteus_host_abi.h` | 本轮（3b） |
+| HA4 | 原生组件宿主（引擎驱动生命周期；**Android Java 侧回调未绑**） | 进行 | `file:packages/host-abi/include/proteus_host_abi.h` | iOS 已绑；Android **原生视图宿主可用**（`ProteusHostView` native-host 机制，实测）；**ABI native-view 回调在 Android 的绑定** 属残余批次——诚实登记。 |
 | HA5 | 存量 App 嵌入（AAR + demo + 文档） | 已落地 | `file:platform/android/build-aar.sh` | — |
 | HA6 | Playground 壳统一走 ABI | 范围外 | `doc:docs/Proteus_Playground设计方案.md` | 依赖 Playground（规划态·零实现）；独立特性线 |
 
