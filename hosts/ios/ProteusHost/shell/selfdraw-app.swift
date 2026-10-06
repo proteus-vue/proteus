@@ -24,6 +24,18 @@ import Darwin
 final class SelfDrawViewController: UIViewController {
     private let bridge = SelfDrawBridge()
     private var jsContext: JSContext?
+    /// ★系统状态栏是否隐藏（决策 #594）：读 app-config.json 的 safeArea.statusBar（缺省 false = 显示）。
+    private var statusBarHiddenCfg = false
+    /// 状态栏可见性覆盖（iOS 由 view controller 决定）——系统据此显隐状态栏。
+    override var prefersStatusBarHidden: Bool { return statusBarHiddenCfg }
+    /// 读 .app/app-config.json → safeArea.statusBar === 'hide'（缺文件/字段 ⇒ false）。
+    static func readStatusBarHidden() -> Bool {
+        guard let p = Bundle.main.path(forResource: "app-config", ofType: "json"),
+              let d = try? Data(contentsOf: URL(fileURLWithPath: p)),
+              let o = try? JSONSerialization.jsonObject(with: d) as? [String: Any],
+              let sa = o["safeArea"] as? [String: Any] else { return false }
+        return (sa["statusBar"] as? String) == "hide"
+    }
 
     /// ★★**白屏诊断读数**（本仓实测：用户观察到"启动白一下"，需可客观归因）
     ///
@@ -77,6 +89,10 @@ final class SelfDrawViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .black
+        // ★★★状态栏显示策略（2026-10-08 · 决策 #594）：读 .app/app-config.json 的 `safeArea.statusBar`。
+        //   缺省 **显示**（与 Web 手机端 viewport-fit=cover + edge-to-edge 对齐）：内容背景铺到状态栏区、
+        //   页根用 --pf-inset-top 让位。`'hide'` = 沉浸式（隐藏状态栏）。
+        statusBarHiddenCfg = Self.readStatusBarHidden()
 
         // ★★白屏诊断（见 launchDiag 注释）：
         //   · `interface_style`：当前外观模式（浅色 ⇒ 若启动屏背景未设，启动瞬间是**白**）

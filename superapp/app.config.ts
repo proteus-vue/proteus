@@ -24,5 +24,6 @@ export default defineAppConfig({
   },
   theme: { default: 'light', allowUserToggle: true },
   font: { defaultScale: 1.0, allowUserAdjust: true },
-  safeArea: { islandGlass: false },
+  // ★决策 #594：系统状态栏显示策略（'show' 默认 = 与 Web 手机端 viewport-fit=cover 对齐；'hide' = 沉浸式）
+  safeArea: { islandGlass: false, statusBar: 'show' },
 })

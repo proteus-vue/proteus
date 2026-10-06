@@ -93,8 +93,30 @@ struct Superapp {
         //   此前状态栏图标（时钟等）叠印在页面标题上（复评 major：标题被遮挡），
         //   且状态栏区使内容画布从 y≈35px 才开始（顶部露一条宿主深色底）。
         //   `['navigation']` = 只隐藏状态栏、保留底部导航栏（与 Android 只隐 statusBars 一致）。
-        win.setWindowSystemBarEnable(['navigation']).catch((e: Error) => {
-          hilog.error(DOMAIN, TAG, 'SUPERAPP_STATUSBAR_HIDE_ERR %{public}s', String(e?.message ?? e));
+        // ★★★状态栏显示策略（2026-10-08 · 决策 #594）：app-config `safeArea.statusBar`（缺省 **show** ——
+        //   与 Web 手机端 viewport-fit=cover + edge-to-edge 对齐：状态栏显示、内容铺到状态栏区）。
+        //   `hide` = 沉浸式（只留导航栏）。读 rawfile/app-config.json（构建期由 app.config.ts 产出）。
+        //   缺文件/字段 ⇒ **显示**（['status','navigation']）= 框架默认。
+        let barHidden = false;
+        try {
+          const cfgB: Uint8Array = ctx.resourceManager.getRawFileContentSync('app-config.json');
+          const cfgS: string = util.TextDecoder.create('utf-8').decodeToString(cfgB);
+          const cfgO = JSON.parse(cfgS) as Record<string, Object>;
+          const sa = cfgO['safeArea'] as Record<string, Object> | undefined;
+          barHidden = !!sa && sa['statusBar'] === 'hide';
+        } catch (e) { barHidden = false; }
+        // ★★★edge-to-edge（2026-10-08 · 决策 #594）：内容铺满全屏（含状态栏/导航栏区）——
+        //   状态栏**叠加**在内容之上（透明）⇒ 页面背景透上来，与 Web viewport-fit=cover 同观感；
+        //   内容让位由页面 --pf-inset-top/bottom 负责。此前非 full-screen ⇒ 状态栏占位成黑带。
+        win.setWindowLayoutFullScreen(true).catch((e: Error) => {
+          hilog.warn(DOMAIN, TAG, 'SUPERAPP_FULLSCREEN_ERR %{public}s', String(e?.message ?? e));
+        });
+        // ★窗口背景 = 页面浅底（与 Android/Web 一致）：状态栏**透明**处透出窗口背景；若为系统默认
+        //   （浅蓝渐变）⇒ 屏顶露一条非页面色的带（真机实测）。设浅底使其与页面无缝。
+        try { win.setWindowBackgroundColor('#F4F5F7'); } catch (e) { /* 旧版本不支持 ⇒ 保持默认 */ }
+        const barCfg: Array<'status' | 'navigation'> = barHidden ? ['navigation'] : ['status', 'navigation'];
+        win.setWindowSystemBarEnable(barCfg).catch((e: Error) => {
+          hilog.error(DOMAIN, TAG, 'SUPERAPP_STATUSBAR_ERR %{public}s', String(e?.message ?? e));
         });
         const avoid: window.AvoidArea = win.getWindowAvoidArea(window.AvoidAreaType.TYPE_SYSTEM);
         const h: number = px2vp(avoid.bottomRect.height);

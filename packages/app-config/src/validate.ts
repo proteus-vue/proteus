@@ -41,6 +41,8 @@ const RULES: Record<string, Rule> = {
   'theme.default': { required: true, check: (v) => (v === 'light' || v === 'dark' || v === 'system' ? null : 'theme.default 非法（light/dark/system）') },
   'font.defaultScale': { required: true, check: (v) => (typeof v === 'number' && v >= 0.5 && v <= 2 ? null : 'font.defaultScale 需 0.5-2.0') },
   'safeArea.islandGlass': BOOLEAN_RULE('safeArea.islandGlass 需布尔'),
+  // ★系统状态栏策略（2026-10-08 · 决策 #594）：可选（缺省 show）；给了必须是 show|hide
+  'safeArea.statusBar': { required: false, check: (v) => (v === undefined || v === 'show' || v === 'hide' ? null : 'safeArea.statusBar 非法（show/hide）') },
 }
 
 function getByPath(config: Record<string, unknown>, path: string): unknown {

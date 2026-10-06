@@ -444,12 +444,12 @@ function status() {
 const CHROME = {
   web: {},
   mp: { top: 60, bottom: 110 }, // 模拟器：顶部黑刘海区 + 底部手势条/圆角遮罩
-  android: { bottom: 64 }, // 系统导航栏
+  android: { top: 56, bottom: 64 }, // ★顶部系统状态栏（默认显示，实测 inset≈48vp）+ 底部系统导航栏（决策 #594）
   ios: {},
   // ★★★补（2026-10-05 · probe 抓出鸿蒙 ΔB28）：**底部导航区**——状态栏已隐藏（Superapp.ets），
   //   但系统导航条（白色 + 手势横条）仍在截图底部（实测 1320×2856 图的下 ~120px）。
   //   与 Android `bottom:64` 同源（系统 chrome，不计页面缺陷）。
-  harmony: { bottom: 120 },
+  harmony: { top: 60, bottom: 120 }, // ★顶部状态栏（默认显示，实测 inset≈48vp）+ 底部导航区（决策 #594）
 }
 
 function pngSizeOf(p) {

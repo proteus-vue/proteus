@@ -1210,7 +1210,12 @@ public final class VaporRenderHost {
             "gridAutoFlow",
             "widthRatio", "heightRatio", "marginAuto", "minWidthPct", "maxWidthPct", "minHeightPct", "maxHeightPct", "overflow",
             // ★静态基态声明（内核要解析）：裁剪形状 + 路径本体（+ 描边色/宽随 svgPath 一起进）
-            "clipPath", "svgPath", "svgPathTo", "perspective"));
+            "clipPath", "svgPath", "svgPathTo", "perspective",
+            // ★★补登记（2026-10-08 · check:host-kernel-keys 修为精确正则后抓出）：内核 `style_from_dto`
+            //   读 `dto.glow` → `style.glow`（**供 glow 强度动画**：anim.rs `is_glow_intensity` 需该规格
+            //   作基准）；宿主此前不转发 ⇒ 内核 glow 恒 None ⇒ glow 强度动画无声失效。转发非行为变更
+            //   （静态渲染 glow 仍由宿主自绘 Cmd.glow；无 glow 动画的节点 `glow_intensity==1.0` ⇒ 零影响）。
+            "glow"));
 
     /* ══════════════ 物理化（逻辑单位 → 物理像素的**唯一换算点**） ══════════════
      *

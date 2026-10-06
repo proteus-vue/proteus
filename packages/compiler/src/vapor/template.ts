@@ -688,13 +688,13 @@ export function parseStaticStyle(
       // ★批次 17（CSS 兼容对齐 · 以 Web 为基准）：`margin` 简写支持 auto（`margin: 0 auto` 水平居中；
       //   `padding` 无 auto 语义，走下方通用路径）。此前 auto 被**静默丢弃** ⇒ App 不居中、Web 居中。
       if (key === 'margin') {
-        const m = expandMarginShorthand(rawVal, numOf)
+        const m = expandMarginShorthand(rawVal, lenOrEnv)
         if (!m) { pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 无法解析为四值简写（支持 1–4 个 px/数字/auto）`); continue }
         if (Object.keys(m.box).length > 0) { out.margin = m.box; markImportant('margin') }
         if (Object.keys(m.auto).length > 0) { out.marginAuto = m.auto; markImportant('marginAuto') }
         continue
       }
-      const box = expandBoxShorthand(rawVal, numOf)
+      const box = expandBoxShorthand(rawVal, lenOrEnv)
       if (!box) { pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 无法解析为四值简写（支持 1–4 个 px/数字；auto 忽略）`); continue }
       out[key] = box
       markImportant(key)
@@ -721,7 +721,7 @@ export function parseStaticStyle(
       // ★批次 38（对齐 Web · 削减胶水）：`inset` 简写（CSS `top/right/bottom/left` 的 1–4 值缩写）——
       //   覆盖层/遮罩 `position:absolute; inset:0` 刚需（真项目 15 处：路由层/浮层/scrim）。
       //   展开为 top/right/bottom/left 数值（引擎绝对定位已支持四边）；`auto` = 默认偏移（不偏移）⇒ 该边不设（忠实）。
-      const m = expandMarginShorthand(rawVal, numOf)
+      const m = expandMarginShorthand(rawVal, lenOrEnv)
       if (!m) { pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 无法解析为 inset 简写（支持 1–4 个 px/数字/auto）`); continue }
       for (const s of ['top', 'right', 'bottom', 'left'] as const) {
         if (m.box[s] !== undefined) { out[s] = m.box[s]; markImportant(s) }
@@ -2609,6 +2609,13 @@ function envTokenOf(name: string, offset: number, fallback?: number): string {
   return t
 }
 
+/** 长度或 env：env token 优先（返回字符串），否则 numOf（返回数值）。 */
+function lenOrEnv(v: string): number | string | undefined {
+  const e = envLengthToken(v)
+  if (e !== undefined) return e
+  return numOf(v)
+}
+
 /** 识别 env 长度表达式 → token 串；非 env ⇒ undefined（走原逻辑）。 */
 function envLengthToken(raw: string): string | undefined {
   const s = raw.trim()
@@ -2663,19 +2670,19 @@ function foldCalc(v: string): number | undefined {
  *   `auto` / 不可解析的边 ⇒ 该边**不设**（其余边照设）；整条全是非数值 ⇒ 返回 undefined（调用方诊断）。
  *   ★为什么忽略 auto：内核对等无 auto（浏览器才有的"均分剩余空间"）——设一个错误数值反而更糟。
  */
-function expandBoxShorthand(rawVal: string, toNum: (v: string) => number | undefined): Record<string, number> | null {
+function expandBoxShorthand(rawVal: string, toNum: (v: string) => number | string | undefined): Record<string, number | string> | null {
   const toks = splitTopLevelSpaces(rawVal)
   if (toks.length === 0 || toks.length > 4) return null
-  const n = toks.map(toNum) // undefined = 该边忽略（auto 等）
-  let top: number | undefined
-  let right: number | undefined
-  let bottom: number | undefined
-  let left: number | undefined
+  const n = toks.map(toNum) // undefined = 该边忽略（auto 等）；string = env token
+  let top: number | string | undefined
+  let right: number | string | undefined
+  let bottom: number | string | undefined
+  let left: number | string | undefined
   if (n.length === 1) { top = right = bottom = left = n[0] }
   else if (n.length === 2) { top = bottom = n[0]; right = left = n[1] }
   else if (n.length === 3) { top = n[0]; right = left = n[1]; bottom = n[2] }
   else { top = n[0]; right = n[1]; bottom = n[2]; left = n[3] }
-  const box: Record<string, number> = {}
+  const box: Record<string, number | string> = {}
   if (top !== undefined) box.top = top
   if (right !== undefined) box.right = right
   if (bottom !== undefined) box.bottom = bottom
@@ -2702,14 +2709,14 @@ function normalizeFontWeight(raw: string): number | undefined {
  *   CSS 语义：`margin: 0 auto` ⇒ top/bottom=0、left/right=auto（水平居中）。
  *   返回 null ⇔ 既无有效数值边、也无 auto 边（调用方诊断）。
  */
-function expandMarginShorthand(rawVal: string, toNum: (v: string) => number | undefined): {
-  box: Record<string, number>; auto: Record<string, boolean>
+function expandMarginShorthand(rawVal: string, toNum: (v: string) => number | string | undefined): {
+  box: Record<string, number | string>; auto: Record<string, boolean>
 } | null {
   const toks = splitTopLevelSpaces(rawVal)
   if (toks.length === 0 || toks.length > 4) return null
   const sides = ['top', 'right', 'bottom', 'left'] as const
   // 1–4 值 → 四边展开（CSS 标准）
-  const per: Array<{ n?: number; auto: boolean }> = toks.map((t) => {
+  const per: Array<{ n?: number | string; auto: boolean }> = toks.map((t) => {
     if (t.toLowerCase() === 'auto') return { auto: true }
     const n = toNum(t)
     return n === undefined ? { auto: false } : { n, auto: false }
@@ -2720,7 +2727,7 @@ function expandMarginShorthand(rawVal: string, toNum: (v: string) => number | un
     if (toks.length === 3) return side === 'top' ? 0 : side === 'bottom' ? 2 : 1
     return { top: 0, right: 1, bottom: 2, left: 3 }[side]!
   }
-  const box: Record<string, number> = {}
+  const box: Record<string, number | string> = {}
   const auto: Record<string, boolean> = {}
   for (const s of sides) {
     const p = per[idx(s)]!

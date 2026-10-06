@@ -202,6 +202,18 @@ export async function buildAppScreenContent(root: string, platform: AppPlatform 
   fs.mkdirSync(outDir, { recursive: true })
   const outFile = path.join(outDir, 'screen-content.json')
   fs.writeFileSync(outFile, JSON.stringify(out, null, 2))
+  // ★★★运行时表现配置 → app-config.json（2026-10-08 · 决策 #594）：宿主据此显隐系统状态栏等。
+  //   源自应用根 `app.config.ts`（`safeArea.statusBar` 等）——与 Web/MP 同一份（单一事实源）。
+  //   缺文件/加载失败 ⇒ 不写（宿主用默认 show）。
+  try {
+    const appCfgPath = path.join(root, 'app.config.ts')
+    if (fs.existsSync(appCfgPath)) {
+      const { loadProjectConfig } = await import('./config-loader')
+      const appCfg = (await loadProjectConfig(appCfgPath)) as { safeArea?: { statusBar?: string } } | undefined
+      const statusBar = appCfg?.safeArea?.statusBar === 'hide' ? 'hide' : 'show'
+      fs.writeFileSync(path.join(outDir, 'app-config.json'), JSON.stringify({ safeArea: { statusBar } }, null, 2))
+    }
+  } catch { /* 无 app.config / 加载失败 ⇒ 不写，宿主默认 show */ }
   if (compiled === 0) throw new Error('零页面编译成功——App 屏内容产物为空（路由格式/编译器有问题？）')
   return { ok: true, platform, outFile, compiled, skipped, diagnostics }
 }

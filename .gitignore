@@ -52,6 +52,8 @@ hosts/harmony/host-app/build-profile.json5
 # Android assets：bundle-*.js（上面已列）之外的项目屏内容与夹具
 hosts/android/app/src/main/assets/bundle-vapor.js
 hosts/android/app/src/main/assets/app-screen-content.json
+# ★决策 #594：运行时表现配置（app.config.ts → app-config.json；构建期产出）——同"宿主构建产物不入库"
+hosts/android/app/src/main/assets/app-config.json
 hosts/android/app/src/main/assets/app-4050-tree.json
 hosts/android/app/src/main/assets/vapor-tree.json
 hosts/android/app/src/main/assets/vapor-artifacts.json
@@ -64,6 +66,7 @@ hosts/android/app/src/main/assets/vapor-stress-artifacts.json
 hosts/shared/bridge/app-screen-content.generated.ts
 # 鸿蒙：rawfile 全部为 gen-fixtures.mjs 从 Android 同源复制/生成的项目产物与夹具
 hosts/harmony/host-app/entry/src/main/resources/rawfile/app-screen-content.json
+hosts/harmony/host-app/entry/src/main/resources/rawfile/app-config.json
 hosts/harmony/host-app/entry/src/main/resources/rawfile/bundle-app-stack.js
 hosts/harmony/host-app/entry/src/main/resources/rawfile/bundle-host-runtime.js
 hosts/harmony/host-app/entry/src/main/resources/rawfile/bundle-superapp.js

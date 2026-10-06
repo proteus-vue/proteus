@@ -35,7 +35,10 @@ body {
    *   显式 `width:100%` 让两端口径一致（superapp 的 `.sa-page` 同样声明了 width）。 */
   width: 100%;
   min-height: 100vh;
-  padding: 16px 12px 32px;
+  /* ★★★安全区避让（2026-10-08 · 决策 #593/#594）：页根用**框架内置环境变量**让位——
+   *   App（自绘，状态栏**显示**）解析出真实 inset ⇒ 内容避开状态栏/手势条；Web 桌面 env()=0 ⇒ 不变；
+   *   MP/Skyline 不支持 env ⇒ 由 p-safe 组件承载（此处 var 兜底 0，不影响布局）。 */
+  padding: calc(var(--pf-inset-top, 0px) + 16px) 12px calc(var(--pf-inset-bottom, 0px) + 32px);
   box-sizing: border-box;
 }
 

@@ -247,6 +247,12 @@ if [ -f "$APP_SC" ]; then
 else
   echo "    ⚠ 未见 $APP_SC —— 缺它只影响视觉合成路径（先跑 examples 的 build:android）"
 fi
+# ★★★运行时表现配置 → assets（2026-10-08 · 决策 #594）：宿主据此显隐系统状态栏（缺省 show）
+APP_CFG="$ROOT/${PROTEUS_APP_PROJECT:-superapp}/dist/app/android/app-config.json"
+if [ -f "$APP_CFG" ]; then
+  cp "$APP_CFG" "$APP/src/main/assets/app-config.json"
+  echo "    app-config.json 已入 assets（$(du -h "$APP_CFG" | awk '{print $1}')）"
+fi
 
 # ★★G-39：宿主运行时 bundle（第三个 entry，同 build-batch.mjs）
 BUNDLE_HR="$HERE/bridge/dist/bundle-host-runtime.js"

@@ -64,6 +64,10 @@ if (!APP_ENUM_VALUES) {
 /** 已知的数值键（内核读顶层数值） */
 const NUMERIC_KEYS = ['width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight', 'top', 'left', 'gap', 'flexGrow', 'flexShrink', 'flexBasis', 'fontSize', 'letterSpacing', 'borderRadius', 'borderWidth', 'opacity', 'widthRatio', 'heightRatio', 'borderRadiusPct', 'minWidthPct', 'maxWidthPct', 'minHeightPct', 'maxHeightPct', 'aspectRatio']
 const EDGE_KEYS = ['margin', 'padding']
+// ★★★内置环境变量 token（2026-10-08 · 决策 #593）：长度值可为 `env:--pf-*[+N][~F]` 字符串
+//   （宿主构建内核请求前解析为逻辑像素）⇒ 数值键/边缘键校验须放行该形态（否则误报"非有限数"）。
+const ENV_TOKEN_RE = /^env:--pf-[a-z0-9-]+([+-]\d+)?(~-?\d+(\.\d+)?)?$/
+const isLenOk = (v) => (typeof v === 'number' && Number.isFinite(v)) || (typeof v === 'string' && ENV_TOKEN_RE.test(v))
 /** ★批次 17：margin 的逐边 auto 标记（对象；值为布尔） */
 const MARGIN_AUTO_KEY = 'marginAuto'
 /** 颜色键（内核 parse_css_color 只认 #RGB/#RRGGBB/#RRGGBBAA——rgb()/rgba() 会致整树建不起来） */
@@ -246,7 +250,7 @@ for (const f of targets) {
       }
       // ⑤ 数值键
       for (const k of NUMERIC_KEYS) {
-        if (k in n && n[k] !== undefined && !(typeof n[k] === 'number' && Number.isFinite(n[k]))) {
+        if (k in n && n[k] !== undefined && !isLenOk(n[k])) {
           // backgroundColor/color 是字符串键，不在 NUMERIC_KEYS；这里只查数值键
           problems.push(`[${rel}] ${page}: 节点 ${n.id} ${k}=${JSON.stringify(n[k])} 非有限数`)
         }
@@ -265,7 +269,7 @@ for (const f of targets) {
             problems.push(`[${rel}] ${page}: 节点 ${n.id} ${k} 非对象`)
           } else {
             for (const side of ['top', 'right', 'bottom', 'left']) {
-              if (side in n[k] && !(typeof n[k][side] === 'number' && Number.isFinite(n[k][side]))) {
+              if (side in n[k] && !isLenOk(n[k][side])) {
                 problems.push(`[${rel}] ${page}: 节点 ${n.id} ${k}.${side} 非有限数`)
               }
             }

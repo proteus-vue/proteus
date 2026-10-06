@@ -53,9 +53,23 @@ public class SuperappActivity extends android.app.Activity {
     @Override
     protected void onCreate(android.os.Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        // 全屏取景（与 L4/StressSfc 同款：Manifest 无需主题，运行时全屏零重建）
-        getWindow().setFlags(android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN,
-                android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        // ★★★状态栏/edge-to-edge 策略（2026-10-08 · 决策 #594）：app-config `safeArea.statusBar`（缺省 **show**）。
+        //   与 Web 手机端 viewport-fit=cover + edge-to-edge 对齐：内容铺满全屏（含状态栏区），状态栏**透明**
+        //   （页面背景透上来），页面自身用 --pf-inset-top/bottom 让位。`hide` = 沉浸式（旧行为：FLAG_FULLSCREEN）。
+        //   ★此前无条件 FLAG_FULLSCREEN ⇒ 状态栏恒隐藏；现改为按配置（且透明使状态栏区显示页面背景）。
+        boolean barHidden0 = statusBarHidden();
+        if (barHidden0) {
+            getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        } else {
+            getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN);
+            // 状态栏/导航栏透明：内容（页面背景）透上来，与 Web edge-to-edge 同观感（pre-35 需显式设色）
+            try {
+                getWindow().setStatusBarColor(android.graphics.Color.TRANSPARENT);
+                getWindow().setNavigationBarColor(android.graphics.Color.TRANSPARENT);
+                // window background = page light bg (round-corner screen shows window bg)
+                getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(0xFFF4F5F7));
+            } catch (Throwable ignored) { }
+        }
         if (android.os.Build.VERSION.SDK_INT >= 30) {
             getWindow().setDecorFitsSystemWindows(false);
         }
@@ -541,6 +555,19 @@ public class SuperappActivity extends android.app.Activity {
         android.util.Log.i(TAG, "SUPERAPP_LAUNCHER_REPORT_READY");
     }
 
+    /**
+     * ★★★系统状态栏是否隐藏（2026-10-08 · 决策 #594）：读 assets/app-config.json 的 `safeArea.statusBar`。
+     *   缺文件/字段 ⇒ **false（显示）** = 框架默认（与 Web 手机端对齐）。`'hide'` ⇒ true。
+     */
+    private boolean statusBarHidden() {
+        try {
+            String sc = readAsset("app-config.json");
+            if (sc == null) return false;
+            org.json.JSONObject o = new org.json.JSONObject(sc);
+            return "hide".equals(o.optJSONObject("safeArea") != null ? o.optJSONObject("safeArea").optString("statusBar", "show") : "show");
+        } catch (Throwable t) { return false; }
+    }
+
     private String readAsset(String name) {
         try (java.io.InputStream is = getAssets().open(name)) {
             java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
@@ -555,7 +582,19 @@ public class SuperappActivity extends android.app.Activity {
         super.onWindowFocusChanged(hasFocus);
         if (hasFocus && android.os.Build.VERSION.SDK_INT >= 30) {
             android.view.WindowInsetsController wic = getWindow().getInsetsController();
-            if (wic != null) wic.hide(android.view.WindowInsets.Type.statusBars());
+            // ★★★状态栏显示策略（2026-10-08 · 决策 #594）：app-config `safeArea.statusBar`（缺省 **show** ——
+            //   与 Web 手机端 viewport-fit=cover + edge-to-edge 对齐：状态栏显示、内容铺到状态栏区、
+            //   页根用 --pf-inset-top 让位）。`hide` = 沉浸式全屏。
+            if (wic != null) {
+                if (statusBarHidden()) {
+                    wic.hide(android.view.WindowInsets.Type.statusBars());
+                } else {
+                    wic.show(android.view.WindowInsets.Type.statusBars());
+                    // 浅色页面 ⇒ 状态栏图标用**深色**（WCAG/可读）；仅 API 30+（本宿主已≥30 分支）。
+                    wic.setSystemBarsAppearance(android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS,
+                            android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS);
+                }
+            }
             // ★底部 Tab 栏让开**系统导航条**（全屏 edge-to-edge ⇒ 手势条会压住 tab 文字）：取导航栏 inset，
             //   给 tabBar 加底部内边距（内容上移）。
             android.view.WindowInsets wi = getWindow().getDecorView().getRootWindowInsets();

@@ -14,7 +14,7 @@
   "pass": true,
   "visual": {
     "_note": "★视觉验收结论（独立子代理按 Web 基准并排图评审；来源 = css-conformance/results/side-by-side/）。verdict: pass（与 Web 基准无可归因差异）/ fail（有实差异——见 caseIssues）/ unclear（图不足以判）。纪律：左半恒为 Web 基准（D1）；不看不清不编（unclear）。",
-    "reviewedAt": "2026-10-06T15:25:54.052Z",
+    "reviewedAt": "2026-10-06T16:16:21.954Z",
     "reviewedBy": "independent-visual-subagent",
     "sideBySideDir": "css-conformance/results/side-by-side/",
     "summary": {
@@ -26,25 +26,25 @@
         "end": "web",
         "verdict": "pass",
         "caseIssues": [],
-        "evidence": "基准端：desktop env()=0 ⇒ A/C 取 min-height；结构/色/宽正确。"
+        "evidence": "基准端：desktop env()=0 ⇒ A/C 取 min-height；App 手机端多一段状态栏+内容避让，属正确差异。"
       },
       {
         "end": "android",
         "verdict": "pass",
         "caseIssues": [],
-        "evidence": "A 盒 65 CSS（Web 20）、B 63、C 22（状态栏≈min-height）——inset 生效；结构忠实。"
+        "evidence": "系统状态栏可见（时钟/5G/电量），标题在其下（--pf-inset-top 生效，A≈65 vs Web 20）；无遮挡/裁切。"
       },
       {
         "end": "ios",
         "verdict": "pass",
         "caseIssues": [],
-        "evidence": "A 盒 64 CSS、C 43（iOS 状态栏≈44pt）、B 78——inset 生效；结构忠实。"
+        "evidence": "容器截图不含系统 chrome，但 --pf-inset-top 明显生效（标题下移 ~66 CSS，A≈64 > Web 20）⇒ 内容避开状态栏区。"
       },
       {
         "end": "harmony",
         "verdict": "pass",
         "caseIssues": [],
-        "evidence": "A 盒 65.6 CSS、C 46、B 71——inset 生效；结构忠实。"
+        "evidence": "系统状态栏可见，标题在其下（A≈65.6/C≈46 > Web）；色/宽/右边距与 Web 一致，无裁切。"
       },
       {
         "end": "mp",
@@ -52,7 +52,7 @@
         "caseIssues": [
           {
             "case": "case-inset-top",
-            "issue": "Skyline 不应用内联 style 的自定义属性 ⇒ --pf-* 未生效（A/B/C 未增高）。引擎边界（同不支持 env()）；MP 安全区由 p-safe 组件交付。",
+            "issue": "Skyline 不应用内联自定义属性 ⇒ --pf-* 惰性（标题在顶、模拟刘海压字）。引擎边界（同不支持 env()）；MP 避让由 p-safe 组件交付。",
             "severity": "minor"
           }
         ],
