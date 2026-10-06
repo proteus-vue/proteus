@@ -360,14 +360,16 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
         jnum(it.c_str(), it.size(), "id", &id);
         jnum(it.c_str(), it.size(), "fontSize", &fs);
         double wpx = 0, hpx = 0;
+        double fwd = 400; jnum(it.c_str(), it.size(), "fontWeight", &fwd); int fw = (int)(fwd + 0.5);
+        std::string ff; jstr(it.c_str(), it.size(), "fontFamily", &ff);
         double lsDesign = 0; jnum(it.c_str(), it.size(), "letterSpacing", &lsDesign);   // ★批次 20：字距（设计 px）
-        measureTextTypoPx(tx, fs * density, &wpx, &hpx, lsDesign * density);
+        measureTextTypoPx(tx, fs * density, &wpx, &hpx, lsDesign * density, fw, ff);
         // ★批次 13：line-height ⇒ 行盒高覆盖字形高
         std::string lhTok; jstr(it.c_str(), it.size(), "lineHeight", &lhTok);
         double lhDesign = lineHeightDesignPx(lhTok, fs);
         if (lhDesign > 0) hpx = lhDesign * density;
         firstHpx[(int)id] = hpx;
-        char mb[160]; snprintf(mb, sizeof(mb), "%s\"%d\":{\"width\":%.2f,\"height\":%.2f}", mc > 0 ? "," : "", (int)id, wpx / density, hpx / density);
+        char mb[160]; snprintf(mb, sizeof(mb), "%s\"%d\":{\"width\":%.2f,\"height\":%.2f}", mc > 0 ? "," : "", (int)id, std::ceil(wpx / density), hpx / density);
         measures += mb; mc++;
     }
     measures += "}";
@@ -388,6 +390,8 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
             double id = -1, fs = 14;
             jnum(it.c_str(), it.size(), "id", &id);
             jnum(it.c_str(), it.size(), "fontSize", &fs);
+            double fwd = 400; jnum(it.c_str(), it.size(), "fontWeight", &fwd); int fw = (int)(fwd + 0.5);
+            std::string ff; jstr(it.c_str(), it.size(), "fontFamily", &ff);
             double lsDesign = 0; jnum(it.c_str(), it.size(), "letterSpacing", &lsDesign);
             std::string ws; jstr(it.c_str(), it.size(), "whiteSpace", &ws);
             const bool single = (ws == "nowrap" || ws == "pre");
@@ -401,10 +405,10 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
             // ★★★line-clamp 项（2026-10-08）：多行截断行数（测量封顶用）
             { double lcD = 0; jnum(it.c_str(), it.size(), "lineClamp", &lcD); clampLines = (int)(lcD + 0.5); }
             if (!single && boxWpx > 1.0) {
-                measureTextWrappedTypoPx(tx, fs * density, boxWpx, &wpx, &hpx, lsDesign * density, wbM);
+                measureTextWrappedTypoPx(tx, fs * density, boxWpx, &wpx, &hpx, lsDesign * density, wbM, fw, ff);
                 if (lhDesign > 0 || clampLines > 0) {
                     double nW = 0, nH = 0;
-                    measureTextTypoPx(tx, fs * density, &nW, &nH, lsDesign * density);
+                    measureTextTypoPx(tx, fs * density, &nW, &nH, lsDesign * density, fw, ff);
                     if (nH > 0.5) {
                         int lines = (int)((hpx / nH) + 0.5);
                         if (lines < 1) lines = 1;
@@ -415,13 +419,13 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
                     }
                 }
             } else {
-                measureTextTypoPx(tx, fs * density, &wpx, &hpx, lsDesign * density);
+                measureTextTypoPx(tx, fs * density, &wpx, &hpx, lsDesign * density, fw, ff);
                 if (lhDesign > 0) hpx = lhDesign * density;
             }
             double fH = 0;
             { auto fit = firstHpx.find((int)id); if (fit != firstHpx.end()) fH = fit->second; }
             if (hpx > fH + 0.5) changed = true;
-            char mb[160]; snprintf(mb, sizeof(mb), "%s\"%d\":{\"width\":%.2f,\"height\":%.2f}", mc2 > 0 ? "," : "", (int)id, wpx / density, hpx / density);
+            char mb[160]; snprintf(mb, sizeof(mb), "%s\"%d\":{\"width\":%.2f,\"height\":%.2f}", mc2 > 0 ? "," : "", (int)id, std::ceil(wpx / density), hpx / density);
             measures2 += mb; mc2++;
         }
         measures2 += "}";
