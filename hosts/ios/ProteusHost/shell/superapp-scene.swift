@@ -52,7 +52,9 @@ final class SuperappScene: NSObject {
         //   渲染路径从内核 rects 的 maxBottom − 视口高推导（见 selfdraw-scene 的 rects 块）。
         SelfDrawBridge.contentScrollRangeEnabled = true
         // ② 宿主桥（screen.* + 能力）——与 AppStackScene 同一份
-        ctx.setObject(HostRuntimeBridge(), forKeyedSubscript: "proteusHost" as NSString)
+        let hostBridge = HostRuntimeBridge()
+        hostBridge.jsContextRef = ctx.jsGlobalContextRef
+        ctx.setObject(hostBridge, forKeyedSubscript: "proteusHost" as NSString)
         // ③ proteusSelfDraw 由 SelfDrawViewController 注入（本场景复用同一 bridge）
 
         // ④ 载入 superapp bundle（同目录 bundle-superapp.js）

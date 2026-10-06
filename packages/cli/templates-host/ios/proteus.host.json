@@ -1,0 +1,10 @@
+{
+  "platform": "ios",
+  "appName": "{{appName}}",
+  "bundleId": "{{bundleId}}",
+  "homePage": "index",
+  "executableName": "ProteusHost",
+  "sourceSets": ["runtime", "platform", "shell"],
+  "screenContentResource": "app-screen-content.json",
+  "kernelCrates": ["packages/layout-core-rust", "packages/host-abi"]
+}

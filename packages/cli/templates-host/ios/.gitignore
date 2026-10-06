@@ -1,0 +1,19 @@
+# Proteus iOS 最小宿主 —— 忽略项
+
+# 构建产物
+build/
+*.app
+*.o
+*.a
+
+# ★内核静态库（由 Proteus 框架的 cargo 构建；机器本地，不入库）
+kernel/
+
+# ★签名/描述文件（机器本地，不入库）
+*.mobileprovision
+*.p12
+embedded.mobileprovision
+entitlements.plist
+
+# 编译产物（随项目走，可重生成；由 `build --package` 拷入）
+app-screen-content.json

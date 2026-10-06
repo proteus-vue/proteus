@@ -55,12 +55,15 @@ PLATFORM_SRC="$(ls "$HERE"/platform/ios/ProteusPlatform/*.swift 2>/dev/null | tr
 #   事实源**；本脚本的重合度由"两端都能编过"保证）。缺任一 ⇒ `cannot find 'XxxScene' in scope`。
 HOST_SRCS=(
   "$IOS/ProteusHost/runtime/selfdraw-scene.swift"
-  "$IOS/ProteusHost/dev/host-runtime-scene.swift"
+  "$IOS/ProteusHost/runtime/host-runtime-bridge.swift"
+  "$IOS/ProteusHost/runtime/proteus-host-controller.swift"
   "$IOS/ProteusHost/runtime/host-capabilities.swift"
   "$IOS/ProteusHost/runtime/host-lifecycle-events.swift"
   "$IOS/ProteusHost/runtime/screen-host.swift"
+  "$IOS/ProteusHost/dev/host-runtime-scene.swift"
   "$IOS/ProteusHost/dev/app-stack-scene.swift"
   "$IOS/ProteusHost/dev/showcase-scene.swift"
+  "$IOS/ProteusHost/shell/selfdraw-app.swift"
 )
 for f in "${HOST_SRCS[@]}"; do [ -f "$f" ] || { echo "✗ 缺宿主源码：$f"; exit 3; }; done
 xcrun --sdk iphonesimulator swiftc -O -target arm64-apple-ios15.0-simulator \

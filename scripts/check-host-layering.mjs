@@ -70,12 +70,20 @@ const SHELL_FORBIDDEN_DEV = [
   { re: /libproteus_bench\.so|proteus_bench/, why: 'dev 装置模块（proteus_bench）——shell 不应依赖 dev' },
   { re: /\bsuperappDrive\b|\bsuperappBoot\b/, why: 'dev 应用驱动（superappBoot/Drive）——待拆分' },
   { re: /\b(bench4050|hitProbe|recycleProbe|spliceProbe|textProbe|vaporProbe|sfcStressProbe|jsvmProbe|memProbe)\b/, why: 'dev 探针符号' },
+  // ★第三刀：iOS 参考宿主壳分发到 dev 装置场景（最小宿主不含这些分支，只走 superapp/渲染路径）
+  { re: /\b(ShowcaseScene|AppStackScene|HostRuntimeScene)\b/, why: 'dev 装置场景（iOS：showcase/app-stack/host-runtime）——参考宿主壳专用，最小壳不应依赖' },
 ]
 // 壳→dev 的**具名登记**（命中数棘轮；待第二刀后端拆分清零）
 const SHELL_MIXED_FILES = {
   'hosts/harmony/host-app/entry/src/main/ets/shell/Superapp.ets': {
     reason: '壳从 dev 取 superappDrive（一次性 VM 驱动项目 bundle）——与 dev screen.* 执行器簇耦合；待拆分',
     maxHits: 6,   // 2026-10-07 实测：import 行（libproteus_bench.so + superappDrive）+ 4 处调用
+  },
+  // ★第三刀：iOS **参考宿主**壳把场景分发到 dev 装置（Showcase/AppStack/HostRuntime）。这是"参考宿主含装置"
+  //   的固有形态；**最小宿主**（CLI 生成）不含这些分支。命中数棘轮守（不得新增 dev 依赖）。
+  'hosts/ios/ProteusHost/shell/selfdraw-app.swift': {
+    reason: 'iOS 参考宿主壳分发到 dev 装置场景（showcase/app-stack/host-runtime）；最小壳模板不含',
+    maxHits: 5,   // 2026-10-07 实测：HostRuntimeScene.run/handleTraitChange/handleTransition + AppStackScene.run + ShowcaseScene.run
   },
 }
 
@@ -93,6 +101,10 @@ const RUNTIME_FORBIDDEN = [
   { re: /(?:^|[^A-Za-z_])(?:Lights|Flip|Ink|InkScroll)DemoActivity\b/, why: 'dev 装置类名（Android Demo Activity）' },
   { re: /\b(MainActivity|L4Activity|StressSfcActivity|LightsHost|MirrorHit|OpsFixture)\b/, why: 'dev 装置类名（Android）' },
   { re: /\b(calayer-scene|l4-scene|layout-core-bench|app-stack-scene|host-runtime-scene|showcase-scene)\b/, why: 'dev 装置场景名（iOS）' },
+  // ★第三刀补强（2026-10-07）：上面的 lowercase 模式只命中**字符串字面量**里的场景名——
+  //   而 runtime 反向依赖的真实形态是**引用 scene 类型**（如 `ShowcaseScene.run(...)`，无裸词）。
+  //   实测：`let x = ShowcaseScene.self` 不被上面任何模式命中 ⇒ 补一条**类型名**模式。
+  { re: /\b(ShowcaseScene|SuperappScene|HostRuntimeScene|AppStackScene|CalayerScene|LayoutCoreBench)\b/, why: 'shell/dev 场景类型（iOS）——runtime 不得引用' },
 ]
 // 允许在注释里出现（提及/说明不算依赖）——只扫**代码行**（剥注释后）
 const stripComments = (src, ext) => {
@@ -123,10 +135,8 @@ const problems = []
  *   对这些文件，禁止名检查降级为 **命中数棘轮**（不得超过登记值；新增即红 ⇒ 逼着拆分或显式更新登记）。
  *   第二刀（runtime 抽包 / 壳最小化）时应把它们拆干净并从本表移除。 */
 const RUNTIME_MIXED_FILES = {
-  'hosts/ios/ProteusHost/runtime/selfdraw-scene.swift': {
-    reason: '壳+引擎混装：SelfDrawViewController（应用入口/场景分发：showcase/superapp）与自绘管线同文件；待第二刀拆分',
-    maxHits: 8,   // 2026-10-07 实测计数（superapp 3 + showcase 4 + morpheus 1）
-  },
+  // ★第三刀（2026-10-07）：原 selfdraw-scene.swift 混装已拆（应用入口/场景分发 → shell/selfdraw-app.swift），
+  //   runtime/ 现**零反向依赖** —— 本表暂无登记（保持空表；新增混装须登记理由 + 命中数棘轮）。
 }
 const root = (rel) => path.join(ROOT, rel)
 const filesUnder = (rel, exts) => {

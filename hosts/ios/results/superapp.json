@@ -1,9 +1,9 @@
 {
   "host_id" : "ios",
-  "host_stats" : "{\"ok\":true,\"data\":{\"screens\":[{\"rootNodeId\":140,\"visible\":false,\"screenId\":\"overflow#5\"},{\"rootNodeId\":110,\"screenId\":\"border-style#2\",\"visible\":false},{\"rootNodeId\":130,\"visible\":false,\"screenId\":\"justify-self#4\"},{\"visible\":true,\"screenId\":\"text#6\",\"rootNodeId\":150},{\"rootNodeId\":100,\"screenId\":\"border-style#1\",\"visible\":false},{\"screenId\":\"border#3\",\"rootNodeId\":120,\"visible\":false}],\"mount_calls\":6,\"visible_calls\":11,\"shared_calls\":0,\"anim_completed\":0,\"anim_calls\":0,\"destroy_calls\":0,\"anim_hook_missing\":0,\"content_node_total\":118,\"live_screens\":6,\"calls\":[\"screen.mount\",\"screen.visible\",\"screen.mount\",\"screen.visible\",\"screen.visible\",\"screen.mount\",\"screen.visible\",\"screen.visible\",\"screen.mount\",\"screen.visible\",\"screen.visible\",\"screen.mount\",\"screen.visible\",\"screen.visible\",\"screen.mount\",\"screen.visible\",\"screen.visible\",\"screen.stats\"],\"rect_calls\":0}}",
+  "host_stats" : "{\"data\":{\"live_screens\":1,\"anim_hook_missing\":0,\"destroy_calls\":3,\"anim_calls\":0,\"anim_completed\":0,\"rect_calls\":0,\"mount_calls\":4,\"screens\":[{\"screenId\":\"mine#4\",\"visible\":true,\"rootNodeId\":100}],\"visible_calls\":4,\"content_node_total\":253,\"calls\":[\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.stats\"],\"shared_calls\":0},\"ok\":true}",
   "ok" : true,
-  "rendered_page" : "text",
-  "run_ts" : 1791248680.4952979,
+  "rendered_page" : "mine",
+  "run_ts" : 1791260082.2419159,
   "scroll_probe" : {
     "after_drag_down_100k" : 0,
     "after_drag_left_100k_x" : 0,
@@ -14,65 +14,52 @@
     "range_set" : true
   },
   "state" : {
-    "current" : "text",
-    "depth" : 6,
+    "current" : "mine",
+    "depth" : 1,
     "screens" : [
-      "border-style",
-      "border",
-      "justify-self",
-      "overflow",
-      "text"
+      "index",
+      "messages",
+      "mine",
+      "verify"
     ],
     "stack" : [
-      "border-style",
-      "border-style",
-      "border",
-      "justify-self",
-      "overflow",
-      "text"
+      "mine"
     ],
     "tabLabels" : {
-      "border" : "CSS 验收 · 边框",
-      "justify-self" : "CSS 验收 · 网格自对齐",
-      "text" : "CSS 验收 · 文本"
+      "index" : "Proteus 超级应用",
+      "messages" : "消息",
+      "mine" : "我的",
+      "verify" : "验收控制台"
     },
     "tabs" : [
-
+      "index",
+      "messages",
+      "mine"
     ]
   },
   "switch_log" : [
     {
-      "current" : "border-style",
+      "current" : "index",
       "ok" : true,
-      "tap" : "border-style",
+      "tap" : "index",
       "via" : "drive"
     },
     {
-      "current" : "border",
+      "current" : "messages",
       "ok" : true,
-      "tap" : "border",
+      "tap" : "messages",
       "via" : "drive"
     },
     {
-      "current" : "justify-self",
+      "current" : "mine",
       "ok" : true,
-      "tap" : "justify-self",
-      "via" : "drive"
-    },
-    {
-      "current" : "overflow",
-      "ok" : true,
-      "tap" : "overflow",
-      "via" : "drive"
-    },
-    {
-      "current" : "text",
-      "ok" : true,
-      "tap" : "text",
+      "tap" : "mine",
       "via" : "drive"
     }
   ],
   "tabs" : [
-
+    "index",
+    "messages",
+    "mine"
   ]
 }

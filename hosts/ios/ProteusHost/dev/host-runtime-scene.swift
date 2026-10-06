@@ -27,55 +27,8 @@ import Foundation
 import JavaScriptCore
 import UIKit
 
-/// 宿主桥（JS 侧 `proteusHost.memUsage()` / `.gc()` / `.post()` / `.invoke()`）——**条件注入**语义同 Android：
-/// JS 侧按 `typeof proteusHost.memUsage === 'function'` 判定内存账本是否可用（缺则诚实标注）
-@objc protocol HostRuntimeExports: JSExport {
-    func memUsage() -> String
-    func gc() -> Void
-    func post(_ json: String) -> Void
-    /// ★★App 原生能力通道（与 Android 的 `quickjs_jni.c` `js_host_invoke` 同一契约：
-    ///   返回 JSON 串；`{"ok":false,"missing":true}` = 诚实降级，桥映射为 `*.unsupported`）
-    func invoke(_ method: String, _ argsJson: String) -> String
-}
-
-final class HostRuntimeBridge: NSObject, HostRuntimeExports {
-    /// ★App 端原生能力（真实 UIKit/Foundation 实现——见 host-capabilities.swift）
-    let capabilities = HostCapabilities()
-    /// ★★M5 执行器的宿主实现（screen.* 协议——真内核树 + CADisplayLink 帧循环；见 screen-host.swift）
-    let screen = ScreenHost()
-
-    /// ★内存读数（`scope="process"`——JSC 无 per-context API，见文件头）
-    func memUsage() -> String {
-        let mb = physFootprintMB()
-        let bytes = mb > 0 ? Int(mb * 1024 * 1024) : 0
-        return "{\"ok\":true,\"scope\":\"process\",\"memory_used_size\":\(bytes),\"obj_count\":0}"
-    }
-
-    /// ★GC（JSC 公开 API `JSGarbageCollect`——宿主唯一能主动回收的手段）
-    func gc() {
-        if let ref = HostRuntimeScene.ctxRef {
-            JSGarbageCollect(ref)
-        }
-    }
-
-    /// 场景不依赖 post（渲染链路在 js-render/selfdraw 场景）；保留以满足探测
-    func post(_ json: String) {
-        NSLog("[proteus] host-runtime post: %@", json.count > 200 ? String(json.prefix(200)) + "…" : json)
-    }
-
-    /// JS 桥 → 原生能力（同步；见 host-capabilities.swift 的契约说明）
-    /// ★`screen.*` 归 M5 执行器（真内核树操作 + 帧循环动画）；其余归能力层（与 Android 腿同一分发）
-    func invoke(_ method: String, _ argsJson: String) -> String {
-        if method.hasPrefix("screen.") {
-            return screen.invoke(method, argsJson)
-        }
-        return capabilities.invoke(method, argsJson)
-    }
-}
-
 /// G-39 宿主运行时场景（`--host-runtime` 启动参数进入）
 final class HostRuntimeScene: NSObject {
-    static var ctxRef: JSGlobalContextRef?
     private static var evalJs: ((String) -> String)?
     private static var mainPhase1: [String: Any] = [:]
     private static var mainPhase2: [String: Any] = [:]
@@ -83,9 +36,7 @@ final class HostRuntimeScene: NSObject {
     private static var observersInstalled = false
 
     /// 场景主入口（由 `SelfDrawViewController.viewDidLoad` 调用）
-    static func run(ctx: JSContext, bundleURL: URL) {
-        ctxRef = ctx.jsGlobalContextRef
-        runTs = Int(Date().timeIntervalSince1970)
+    static func run(ctx: JSContext, bundleURL: URL) {        runTs = Int(Date().timeIntervalSince1970)
         evalJs = { expr in ctx.evaluateScript(expr)?.toString() ?? "null" }
 
         // ① 平台参数（TS 侧读它们自报标识——与 Android 壳同契约）
@@ -96,7 +47,9 @@ final class HostRuntimeScene: NSObject {
         //   ★G-39 续：加 `invoke`（App 原生能力通道）——caps 由 bridge 持有（真实 UIKit 实现）
         //   ★M5 续：ScreenHost 的完成回推需要 JS 求值入口（与 HostLifecycleEvents 同法）
         ScreenHost.evalJs = { expr in ctx.evaluateScript(expr)?.toString() ?? "null" }
-        ctx.setObject(HostRuntimeBridge(), forKeyedSubscript: "proteusHost" as NSString)
+        let hostBridge = HostRuntimeBridge()
+        hostBridge.jsContextRef = ctx.jsGlobalContextRef
+        ctx.setObject(hostBridge, forKeyedSubscript: "proteusHost" as NSString)
 
         // ③ 加载 bundle（JSC 无模块系统——IIFE 整份 evaluate）
         guard let src = try? String(contentsOf: bundleURL, encoding: .utf8) else {
