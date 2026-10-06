@@ -28,7 +28,7 @@
 
 | ID | 项 | 状态 | 判据（命令 / 文件 / 文档） | 范围 |
 |---|---|---|---|---|
-| G1 | **tab 栏视觉规格**（颜色/图标/标签映射/角标规则/高亮）共享，三端只"读规格建原生视图" | 未做 | `cmd:pnpm check:host-separation-ledger` | 本轮 |
+| G1 | **tab 栏视觉规格**（颜色/图标/标签映射/角标规则/高亮）共享，三端只"读规格建原生视图" | 已落地 | `file:packages/render-backend/src/tab-bar-spec.ts` | 本轮 |
 | G2 | **insets → `--pf-*` 归一化**共享（各端只采集原始值）；模板最小壳补齐采集 | 未做 | `cmd:pnpm check:host-separation-ledger` | 本轮 |
 | G3 | **手势分类**收敛到 `packages/gesture`（iOS 停止自研复刻）；各端只喂原始 down/move/up + 时间戳 | 未做 | `cmd:pnpm check:host-separation-ledger` | 本轮 |
 | G4 | **能力桥契约**（方法名清单 + 结果封装）抽成机器可读契约 + 薄分发器；补鸿蒙 `invoke`/能力注册 | 未做 | `cmd:pnpm check:host-separation-ledger` | 本轮 |
