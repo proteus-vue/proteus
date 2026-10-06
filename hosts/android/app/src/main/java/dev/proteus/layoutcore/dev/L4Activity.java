@@ -140,7 +140,7 @@ public class L4Activity extends Activity {
         //     ——首版实测抓出的场景缺陷）
         ProteusHostView.GradSpec grad = new ProteusHostView.GradSpec(
                 1, 90f, 0.5f, 0.5f, 1f,
-                new int[]{0xFF7C5CFF, 0xFFFF9A6C}, new float[]{0f, 1f});
+                new int[]{0xFF7C5CFF, 0xFFFF9A6C}, new float[]{0f, 1f}, null, null, null);
         cmds.add(new ProteusHostView.Cmd(x, y, bw, bh, 0xFF000000, null, 0f, 0, 0f, grad));
         y += bh + gap;
         // ④ 字形（白 18u；color=0 透明——宿主对每条 Cmd 先铺底色矩形，文本节点不铺）

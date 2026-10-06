@@ -902,7 +902,7 @@ final class LightsHost {
                 }
             }
             // ★★渐变（v1 · 2026-10-01）：解析进 Cmd（`GradSpec.parse` 非法返回 null ⇒ 退回纯色）
-            ProteusHostView.GradSpec grad = ProteusHostView.GradSpec.parse(spec.optJSONObject("fillGradient"));
+            ProteusHostView.GradSpec grad = ProteusHostView.GradSpec.parse(spec.optJSONObject("fillGradient"), null, null, null);
             // ★★发光 v1：静态规格 → `[color(int), radius, alpha]`（缺省 null = 不发光）
             float[] glow = null;
             org.json.JSONObject glo = spec.optJSONObject("glow");

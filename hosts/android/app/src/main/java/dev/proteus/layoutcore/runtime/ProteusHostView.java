@@ -216,9 +216,57 @@ public class ProteusHostView extends ViewGroup {
         final float cx, cy, r;
         final int[] colors;
         final float[] offsets;
-        GradSpec(int kind, float angleDeg, float cx, float cy, float r, int[] colors, float[] offsets) {
+        // ★★★背景定位家族（2026-10-07）：背景图层**图像盒**的声明（字符串；null=未声明 ⇒ 恒填满元素盒，零行为变化）
+        final String bgSize, bgPos, bgRepeat;
+        GradSpec(int kind, float angleDeg, float cx, float cy, float r, int[] colors, float[] offsets,
+                 String bgSize, String bgPos, String bgRepeat) {
             this.kind = kind; this.angleDeg = angleDeg; this.cx = cx; this.cy = cy; this.r = r;
             this.colors = colors; this.offsets = offsets;
+            this.bgSize = bgSize; this.bgPos = bgPos; this.bgRepeat = bgRepeat;
+        }
+        /** 是否声明了背景定位几何（未声明 ⇒ 走「恒填满元素盒」既有路径） */
+        boolean hasBgGeom() { return bgSize != null || bgPos != null; }
+        /** 背景图层**图像盒**（画布绝对坐标 [x,y,w,h]）——按 Web 几何：size %= 相对盒、px 直接、auto=盒；
+         *  position %= pct×(盒−图)（★减图尺寸）、px 直接、关键字 left/top=0·right/bottom=100%·center=居中。 */
+        float[] imageBox(float ex, float ey, float ew, float eh) {
+            float iw = ew, ih = eh;
+            if (bgSize != null) {
+                String[] st = bgSize.trim().split("\\s+");
+                if (st.length >= 1 && !st[0].isEmpty()) iw = bgLen(st[0], ew, ew);
+                if (st.length >= 2 && !st[1].isEmpty()) ih = bgLen(st[1], eh, eh);
+                else if (st.length == 1) ih = eh; // 单值：宽定、高=auto=盒高（渐变无固有尺寸 ⇒ auto=定位区）
+            }
+            if (!(iw > 0f)) iw = ew;
+            if (!(ih > 0f)) ih = eh;
+            float ix = 0f, iy = 0f;
+            String[] pt = bgPos != null ? bgPos.trim().split("\\s+") : new String[0];
+            if (pt.length == 1) {
+                String t = pt[0];
+                if (t.equals("top") || t.equals("bottom")) { ix = bgPos1("center", ew, iw); iy = bgPos1(t, eh, ih); }
+                else { ix = bgPos1(t, ew, iw); iy = bgPos1("center", eh, ih); }
+            } else if (pt.length >= 2) {
+                ix = bgPos1(pt[0], ew, iw); iy = bgPos1(pt[1], eh, ih);
+            }
+            return new float[]{ ex + ix, ey + iy, iw, ih };
+        }
+        private static float bgLen(String t, float pctBase, float autoVal) {
+            if (t.equals("auto")) return autoVal;
+            try {
+                if (t.endsWith("%")) return Float.parseFloat(t.substring(0, t.length() - 1)) / 100f * pctBase;
+                if (t.endsWith("px")) return Float.parseFloat(t.substring(0, t.length() - 2));
+                return Float.parseFloat(t);
+            } catch (NumberFormatException e) { return autoVal; }
+        }
+        /** 定位分量：关键字或长度/百分比（%=相对 盒−图 的差） */
+        private static float bgPos1(String t, float box, float img) {
+            if (t.equals("left") || t.equals("top")) return 0f;
+            if (t.equals("right") || t.equals("bottom")) return box - img;
+            if (t.equals("center")) return (box - img) / 2f;
+            try {
+                if (t.endsWith("%")) return Float.parseFloat(t.substring(0, t.length() - 1)) / 100f * (box - img);
+                if (t.endsWith("px")) return Float.parseFloat(t.substring(0, t.length() - 2));
+                return Float.parseFloat(t);
+            } catch (NumberFormatException e) { return 0f; }
         }
         /**
          * 解析树里的 **`fillGradient`** JSON（非法 ⇒ null——★不静默挂一个空渐变）。
@@ -226,7 +274,7 @@ public class ProteusHostView extends ViewGroup {
          *   `angle` · `stops` · `offset` · `color` · `alpha` · `cx` · `cy`。门禁
          *   `check-gradient-contract.mjs` 要求本端引用全部键名（漏一个 = 该维度静默降级）。
          */
-        static GradSpec parse(org.json.JSONObject fg) {
+        static GradSpec parse(org.json.JSONObject fg, String bgSize, String bgPos, String bgRepeat) {
             if (fg == null) return null;
             String k = fg.optString("kind", "");
             int kind = "linear".equals(k) ? 1 : "radial".equals(k) ? 2 : 0;
@@ -258,7 +306,7 @@ public class ProteusHostView extends ViewGroup {
             float cy = (float) fg.optDouble("cy", 0.5);
             float r = (float) fg.optDouble("r", 1.0);
             if (kind == 2 && !(r > 0)) return null;
-            return new GradSpec(kind, angle, cx, cy, r, colors, offsets);
+            return new GradSpec(kind, angle, cx, cy, r, colors, offsets, bgSize, bgPos, bgRepeat);
         }
     }
 
@@ -2434,22 +2482,24 @@ public class ProteusHostView extends ViewGroup {
             }
             if (gradShader == null && c.gradient != null) {
                 final GradSpec g = c.gradient;
+                // ★★★背景定位家族（2026-10-07）：声明了 size/position ⇒ 在**图像盒**内建渐变；未声明 ⇒ 元素盒（零变化）。
+                final float[] ib = g.hasBgGeom() ? g.imageBox(c.x, c.y, c.w, c.h) : new float[]{c.x, c.y, c.w, c.h};
+                final android.graphics.Shader.TileMode tile = "repeat".equals(g.bgRepeat)
+                        ? android.graphics.Shader.TileMode.REPEAT : android.graphics.Shader.TileMode.CLAMP;
                 if (g.kind == 1) {
                     final double rad = Math.toRadians(g.angleDeg);
                     // I2-ALLOW: **非几何舍入**——渐变端点（绘制效果参数）的浮点换算；
                     //   内核只管矩形几何（已吸附），渐变是宿主绘制属性（与 borderRadius 同层）。
                     final float dx = (float) Math.sin(rad);
                     final float dy = (float) -Math.cos(rad);
-                    final float ex0 = c.x + (0.5f - dx / 2f) * c.w;
-                    final float ey0 = c.y + (0.5f - dy / 2f) * c.h;
-                    final float ex1 = c.x + (0.5f + dx / 2f) * c.w;
-                    final float ey1 = c.y + (0.5f + dy / 2f) * c.h;
-                    gradShader = new android.graphics.LinearGradient(ex0, ey0, ex1, ey1, g.colors, g.offsets,
-                            android.graphics.Shader.TileMode.CLAMP);
+                    final float ex0 = ib[0] + (0.5f - dx / 2f) * ib[2];
+                    final float ey0 = ib[1] + (0.5f - dy / 2f) * ib[3];
+                    final float ex1 = ib[0] + (0.5f + dx / 2f) * ib[2];
+                    final float ey1 = ib[1] + (0.5f + dy / 2f) * ib[3];
+                    gradShader = new android.graphics.LinearGradient(ex0, ey0, ex1, ey1, g.colors, g.offsets, tile);
                 } else if (g.kind == 2 && g.r > 0f) {
                     gradShader = new android.graphics.RadialGradient(
-                            c.x + g.cx * c.w, c.y + g.cy * c.h, g.r * c.w, g.colors, g.offsets,
-                            android.graphics.Shader.TileMode.CLAMP);
+                            ib[0] + g.cx * ib[2], ib[1] + g.cy * ib[3], g.r * ib[2], g.colors, g.offsets, tile);
                 }
             }
             if (gradShader != null) bgPaint.setShader(gradShader);

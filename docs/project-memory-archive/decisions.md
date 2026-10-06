@@ -1269,3 +1269,18 @@
 **⑤ 交付物**：`docs/css-background-family-plan.md`（登记件 + 实施计划：侦察证据 / Web 真值 / 范围与具名边界 / 实施链 7 步 / 风险纪律）；`gen-css-feature-inventory.mjs` 的两条 `notYet` 描述改为**指向家族 plan**（`css:verify background-position` 输出即如实标注耦合）；`board-inventory` §其他文档登记。
 **⑥ 诚实边界 / 状态**：**实施未开工**——本批需跨 kernel + 三端宿主 + 一致性链 + 验收页 + 四端真机验证（≈2–3 个普通属性批、多会话）；**动画定位与多层渐变**明确留下批；渐变 `auto` 固有尺寸语义待与 Web 逐值核对。
 **⑦ 影响**：`docs/css-background-family-plan.md`（新）· `scripts/gen-css-feature-inventory.mjs`（两条 note/evidence）· `docs/generated/css-feature-inventory.{json,md}`（重生成）· `docs/board-inventory.md`（登记）；**下一动作**：按 plan §3 实施链开工（契约四同步 → 编译器折叠 → 内核 → 三端宿主几何重写 → 一致性链 → 验收）。
+568. **★★CSS 逐项 · 背景定位家族（background-size / -position / -repeat）实现——编译期+一致性+三端宿主渐变几何全环（静态单层）**（承 #567 登记件）：
+**① 用户指令**：承 #567（侦察登记），「继续」⇒ 实施家族·静态单层。
+**② 交付（四段全做）**：
+  · **契约四同步**：`contracts/src/style.ts` 新级别 BackgroundSize/BackgroundPosition/BackgroundRepeat + 属性映射；runtime `PROP_TYPES`（isBgSize/isBgPosition/enum repeat）；注册表 `VALUE_TYPE_BY_LEVEL=enum` + 重生成（semantic 67→70）。
+  · **编译器折叠**：`template.ts` `APP_PAINT_FIELDS` + `parseStaticStyle` 解析分支（size/position 1–2 值[长度/百分比/auto/关键字]、repeat 枚举；字符串原样下发宿主解析几何）；CSE `ENUM_PROPS/ENUM_IR` 直通三字段。
+  · **一致性链**：snapshot 接口+STYLE_KEYS+validate、coverage 映射、appliers/app（APP_PAINT_FIELDS+enumFields）、probes/web（读 background-size/position/repeat 计算值）；能力对齐源 `app-profile-features.json` 加三条 feature（semantic）。
+  · **三端宿主渐变几何重写**（本批核心工作量）：
+    - **Android**（主承载端）：`GradSpec` 加 bgSize/bgPos/bgRepeat + `imageBox()`（按 Web 几何：size %=相对盒、position %=pct×(盒−图)、关键字 left/top=0·right/bottom=100%·center）；shader 改在**图像盒**内建端点（未声明 ⇒ 元素盒，零变化）；repeat ⇒ `TileMode.REPEAT`；物理化把 size/position 里的 px ×密度。
+    - **iOS**：`CAGradientLayer.frame = 图像盒`（端点/径向本就在单位空间 ⇒ 自动落在盒内）；加 `bgImageFrame/bgLen/bgPos1`。
+    - **鸿蒙**：`TextDrawSpec` 加 bgSize/bgPos/bgRepeat + `bgImageBox()`；渐变端点改在图像盒、repeat ⇒ `TileMode.REPEAT` 平铺整盒。
+**③ 判据**：`css:verify` 三项（size/position/repeat）三段（implemented/parity/endsMapped）**全绿** · 验收页 `css-conformance/pages/background-position.vue`（5 案例）+ Web 基准采集（案例渲染正确：左上/偏移/平铺/右下百分比/宽图）· test:coupled 311 绿 · 全量 5319/5319 · 门禁全绿（style-ir-schema/style-coverage/app-css-surface/css-capability-alignment/host-kernel-keys/gradient-contract/svg-path-shape/anim-record-bytes/content/stats/docs-stats）· 三端零设备编译（javac/swiftc/hvigor）全绿。
+**④ ★Web 真值（真 Chromium 实测，驱动三端实现）**：`pos %= X%×(盒宽−图宽)`（★减图尺寸）；`size %`相对盒；`repeat` 图像尺寸为砖平铺相位=偏移；渐变方向相对**图像盒**。
+**⑤ 踩坑**：GradSpec 构造/parse 签名变更 ⇒ dev 装置（LightsHost/L4Activity）两处调用点需同步（javac 抓出）。
+**⑥ 诚实边界**：a) **动画定位**（@keyframes 移动 background-position，语料 p-progress/p-skeleton）留下一批；b) **多层渐变逐层定位**（built-in-components）留下一批；c) **iOS `CAGradientLayer` 无 tile 模式 ⇒ repeat 不可表达**（具名边界；Android TileMode.REPEAT / 鸿蒙 REPEAT / Web 原生）；d) size 的 cover/contain/多值留下一批；e) 本批**无语料消费者**（三条真实用法全在边界内）⇒ 属**能力地基**，靠验收页验证。
+**⑦ 影响**：`docs/css-background-family-plan.md`（登记件）+ contracts/runtime/compiler/consistency/registry + 三端宿主（ProteusHostView/VaporRenderHost/selfdraw-scene/proteus_render.cpp）+ 验收页 + web 基准；**下一批**：动画定位 / 多层渐变（具名边界）。
