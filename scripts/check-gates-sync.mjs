@@ -76,6 +76,10 @@ const LOCAL_ONLY = {
   //   校验三端 runtime/shell/dev 三层齐备 + runtime 无反向依赖 + 无被跟踪产物。
   //   与 check:host-rounding / check:host-kernel-keys 同族：宿主侧门禁，开发机跑（CI 无宿主源码语境）。
   'check:host-layering': '宿主侧分层门禁（三端 runtime/shell/dev + runtime 无反向依赖 + 无被跟踪产物）——与 check:host-rounding 同族（开发机跑）',
+  // ★★★宿主关注点分离台账门禁（2026-10-09 · 用户「先把宿主关注点分离完全打通，不留遗留项」）：
+  //   校验 docs/proteus-host-separation-ledger.md 自洽（已落地项判据真实存在 · 进行/未做写明范围 · 范围外给理由 · 必需行在场）。
+  //   与 check:host-layering 同族（宿主侧门禁，开发机跑——CI 无宿主源码/台账语境差异）。
+  'check:host-separation-ledger': '宿主关注点分离完成度台账自洽门禁——与 check:host-layering 同族（开发机跑）',
   // ★C3 编译期基线：绝对毫秒跨机不可比（本仓既有认识：异构 CI 同机可达 1.6×），
   //   判据虽以比值为主（体积膨胀比），但全量/增量仍带宽松绝对上界 ⇒
   //   在 CI 共享 runner 上会因机器差异产生噪声红。⇒ 归**开发机**：改编译器后本地跑。
