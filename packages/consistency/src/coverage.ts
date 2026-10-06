@@ -55,6 +55,9 @@ export const SEMANTIC_FIELD_SNAPSHOT_KEYS: Readonly<Record<string, readonly stri
   /* ── grid ── */
   gridTemplateColumns: ['gridTemplateColumns'],
   gridTemplateRows: ['gridTemplateRows'],
+  // ★★★grid-auto-columns/rows 项（2026-10-08）：隐式轨道尺寸
+  gridAutoColumns: ['gridAutoColumns'],
+  gridAutoRows: ['gridAutoRows'],
   gridColumn: ['gridColumn'],
   gridRow: ['gridRow'],
   // ★★★grid-template-areas 项（2026-10-08）：命名区域模板 + 命名区引用（读数键 = 同名串）

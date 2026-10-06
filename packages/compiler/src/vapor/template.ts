@@ -61,7 +61,7 @@ export const APP_LAYOUT_FIELDS = [
   //   内核/宿主按轴裁剪子内容；归一化（visible↔非visible ⇒ visible→auto）在**级联后的最终样式**上执行
   //   （见 normalizeOverflowFields——per-rule 归一会被跨规则级联破坏）。
   'overflowX', 'overflowY',
-  'gridTemplateColumns', 'gridTemplateRows', 'gridColumn', 'gridRow', 'gridTemplateAreas', 'gridArea', 'aspectRatio', 'pointerEvents',
+  'gridTemplateColumns', 'gridTemplateRows', 'gridAutoColumns', 'gridAutoRows', 'gridColumn', 'gridRow', 'gridTemplateAreas', 'gridArea', 'aspectRatio', 'pointerEvents',
   // ★★★justify-self 项（2026-10-06 · css:next P0·9×）：网格项**行内轴自对齐**（CSS Box Alignment 3）。
   //   语料 9 处全在 grid 上下文（p-formfactor 仪表盘——`justify-self: start/stretch`）；
   //   内核 taffy `Style.justify_self` 原生支持（仅 grid 容器消费——与 Web「flex 下被忽略」同语义）
@@ -433,14 +433,17 @@ function parseGridTemplate(raw: string): string | null {
   const toks = splitTopLevelSpaces(raw)
   if (toks.length === 0) return null
   for (const tok of toks) {
+    // ★数值 repeat(N, X)：展开为 N 个 X（taffy 也支持，但展开后更直观、与既有行为一致）
     const rep = /^repeat\(\s*(\d+)\s*,\s*(.+?)\s*\)$/i.exec(tok)
     if (rep) {
       const n = Number(rep[1])
-      const inner = rep[2]!.trim().split(/\s+/).filter(Boolean)
+      const inner = splitTopLevelSpaces(rep[2]!.trim())
       if (inner.length === 0 || inner.some((x) => !isGridTrack(x))) return null
       for (let i = 0; i < n; i++) out.push(...inner)
       continue
     }
+    // ★★★repeat(auto-fill|auto-fit, X)：原样透传（内核 taffy 原生解析 AutoFill/AutoFit）
+    if (/^repeat\(\s*auto-(?:fill|fit)\s*,.*\)$/i.test(tok)) { out.push(tok); continue }
     if (!isGridTrack(tok)) return null
     out.push(tok)
   }
@@ -464,9 +467,22 @@ function splitTopLevelSpaces(s: string): string[] {
 
 /** 单个网格轨迹是否受支持：`<n>fr` / `<n>px` / 纯数字（非负） */
 function isGridTrack(t: string): boolean {
-  if (/^\d*\.?\d+fr$/.test(t)) return true
-  if (/^\d*\.?\d+px$/.test(t)) return true
-  return /^\d*\.?\d+$/.test(t)
+  // ★★★grid 轨迹解析升级（2026-10-08）：接受全部 taffy 可解析的**单条轨道尺寸**——
+  //   fr / px / 纯数字 / % / auto / min-content / max-content / fit-content(...) / minmax(a, b)。
+  //   内核用 taffy 官方 FromStr 解析（见 layout-core-rust parse_grid_tracks）。
+  if (t.startsWith('minmax(') && t.endsWith(')')) {
+    const inner = t.slice(7, -1)
+    const parts = splitTopLevelSpaces(inner.replace(/,/g, ' '))
+    return parts.length === 2 && parts.every((p) => isTrackSize(p))
+  }
+  return isTrackSize(t)
+}
+
+/** 单条轨道尺寸（min/max 分量）：fr / px / 纯数字 / % / auto / min-content / max-content / fit-content(...) */
+function isTrackSize(t: string): boolean {
+  return /^\d*\.?\d+(fr|px|%)?$/.test(t)
+    || t === 'auto' || t === 'min-content' || t === 'max-content'
+    || /^fit-content\(.*\)$/.test(t)
 }
 
 /**
@@ -719,6 +735,17 @@ export function parseStaticStyle(
     if (LAYOUT_FIELDS.has(key)) {
       // ★批次 12（CSS Grid）：`grid-template-columns/rows` —— 显式轨迹串（`1fr 1fr 200px`）；
       //   `repeat(N, X)` 展开为 N 个 X；不支持的形态（`auto`/`minmax`/`fit-content`）诊断跳过。
+      // ★★★grid-auto-columns/rows 项（2026-10-08）：**隐式轨道尺寸**——每个值走 isGridTrack（minmax/auto/%/…）。
+      if (key === 'gridAutoColumns' || key === 'gridAutoRows') {
+        const tracks = splitTopLevelSpaces(rawVal.trim())
+        if (tracks.length === 0 || tracks.some((x) => !isGridTrack(x))) {
+          pushDiag(`\`${rawKey}: ${rawVal}\` 未解析（支持 minmax(0, 1fr) / 100px / auto / 1fr 等轨道尺寸）——已跳过`)
+          continue
+        }
+        out[key] = tracks.join(' ')
+        markImportant(key)
+        continue
+      }
       if (key === 'gridTemplateColumns' || key === 'gridTemplateRows') {
         const tracks = parseGridTemplate(rawVal)
         if (tracks === null) {

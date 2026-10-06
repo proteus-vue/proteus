@@ -115,6 +115,12 @@ node scripts/css-acceptance-record.mjs <feature-id> <verdicts.json>
   ★**已修**：编译器**级联后归一**——`display===flex` 且未显式写 `flex-direction` ⇒ 补 `row`（两路径：`vapor/template.ts`
   的 `normalizeFlexDirection` + CSE `compute.ts`）；未声明 display 的保持 column（不破坏块级堆叠）；grid 不补。
   ★同源纪律：**规则里声明了 flex 布局能力（display:flex）却没写方向时，必须按 CSS 初值补 row**——这是"缺省值必须查 Web 标准"在 flex 轴上的实例。
+- **★★★解析 CSS 值优先用**引擎官方解析器**，别手写（2026-10-08 grid 轨迹升级）**：`layout-core-rust` 早期手写 `parse_grid_tracks`（只认 `fr`/`px`）——
+  结果语料 22 处 `minmax()` / `repeat(auto-fill,…)` **整条被丢弃**（真实 grid 在 App 端消失）。
+  ⇒ 启用 taffy 的 `parse` feature（仅引 cssparser），改用 **官方 `GridTemplateComponent::from_str` / `TrackSizingFunction::from_str`**
+  ——一行拿到 minmax/fr/px/%/auto/min-content + repeat 的正确语义。★**踩坑**：taffy 只认**带单位的 0**（`0px`）
+  ⇒ 解析前把**独立数值 0** 改写为 `0px`（CSS `minmax(0, 1fr)` 是最高频写法）；且组件级解析器只吃**单个组件**，整串要先**paren-aware 切分**。
+  ★同源纪律：**引擎/库已提供的官方解析器 > 手写子集**——手写省事的代价是"验收端与语料脱节"（手写只覆盖想象到的形态）。
 - **★★App/MP 文本引擎「长词默认断开」——Web `word-break: normal` 的"任其溢出"不可表达**（2026-10-06 word-break 项实锤）：
   Android `StaticLayout` / iOS CoreText / 鸿蒙 Typography / Skyline 的**自然行为**都是"长不可断词按盒宽折断"
   （= 相当于 `break-all`）；而 Web `normal` 是"词边界断、超长词整体溢出"。

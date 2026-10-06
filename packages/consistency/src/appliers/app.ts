@@ -36,7 +36,7 @@ export const APP_LAYOUT_FIELDS: readonly string[] = [
   'display', 'position', 'top', 'left', 'right', 'bottom', 'overflow',
   // ★★★overflow-x 项（2026-10-06）：逐轴溢出（内核/宿主按轴裁剪子内容）
   'overflowX', 'overflowY',
-  'gridTemplateColumns', 'gridTemplateRows', 'gridColumn', 'gridRow', 'gridTemplateAreas', 'gridArea', 'aspectRatio', 'pointerEvents',
+  'gridTemplateColumns', 'gridTemplateRows', 'gridAutoColumns', 'gridAutoRows', 'gridColumn', 'gridRow', 'gridTemplateAreas', 'gridArea', 'aspectRatio', 'pointerEvents',
   // ★★★grid-auto-flow 项（2026-10-08）：自动放置方向/密度（grid 容器布局，内核 taffy）
   'gridAutoFlow',
   'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
@@ -205,7 +205,7 @@ export function mapStyleIRToApp(fields: Record<string, unknown>): AppMappingResu
         drop(field, value, '未知字体角色（只认 system/serif/sans-serif/monospace）')
         continue
       }
-      if (field === 'gridTemplateColumns' || field === 'gridTemplateRows') {
+      if (field === 'gridTemplateColumns' || field === 'gridTemplateRows' || field === 'gridAutoColumns' || field === 'gridAutoRows') {
         put(field, value, value) // 内核解析轨迹串（既有通道）
         continue
       }

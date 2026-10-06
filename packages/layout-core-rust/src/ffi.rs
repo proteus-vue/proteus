@@ -162,6 +162,11 @@ pub(crate) struct NodeDto {
     pub(crate) grid_template_columns: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) grid_template_rows: Option<String>,
+    /// ★★★grid-auto-columns/rows 项（2026-10-08）：隐式轨道尺寸（grid 容器消费）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) grid_auto_columns: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) grid_auto_rows: Option<String>,
     /// ★★★grid-auto-flow 项（2026-10-08）：自动放置（grid 容器消费）
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) grid_auto_flow: Option<String>,
@@ -327,6 +332,8 @@ impl NodeDto {
             bottom: None,
             grid_template_columns: None,
             grid_template_rows: None,
+            grid_auto_columns: None,
+            grid_auto_rows: None,
             grid_auto_flow: None,
             grid_column: None,
             grid_row: None,
@@ -799,6 +806,8 @@ pub(crate) fn style_from_dto(dto: &NodeDto) -> Result<LStyle, String> {
     // ★批次 12（CSS Grid）：显式轨迹串（原样透传，内核解析）
     style.grid_template_columns = dto.grid_template_columns.clone();
     style.grid_template_rows = dto.grid_template_rows.clone();
+    style.grid_auto_columns = dto.grid_auto_columns.clone();
+    style.grid_auto_rows = dto.grid_auto_rows.clone();
     style.grid_auto_flow = dto.grid_auto_flow.clone();
     style.grid_column = dto.grid_column.as_ref().map(|g| (g.start, g.end));
     style.grid_row = dto.grid_row.as_ref().map(|g| (g.start, g.end));

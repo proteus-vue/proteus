@@ -1069,10 +1069,20 @@ describe('★批次 12 · CSS Grid（display:grid + 显式轨迹）', () => {
     expect(parseStaticStyle('grid-template-rows: 100px 100px', () => {}).gridTemplateRows).toBe('100px 100px')
   })
 
-  it('③ 未支持形态（auto/minmax）⇒ 诊断跳过（不猜）', () => {
+  // ★★★grid 轨迹解析升级（2026-10-08）：auto/minmax/% 等**现已支持**（内核 taffy FromStr）——
+  //   旧断言「auto/minmax ⇒ 跳过」已随能力升级更新；真正未支持的（命名线 [name] / span 文字）仍诊断跳过。
+  it('③ minmax/auto/% 已支持；命名线/span 未支持仍诊断跳过', () => {
+    expect((parseStaticStyle('grid-template-columns: auto 1fr', () => {}) as { gridTemplateColumns?: string }).gridTemplateColumns).toBe('auto 1fr')
+    expect((parseStaticStyle('grid-template-columns: minmax(0, 1fr) minmax(0, 1fr)', () => {}) as { gridTemplateColumns?: string }).gridTemplateColumns).toBe('minmax(0, 1fr) minmax(0, 1fr)')
+    expect((parseStaticStyle('grid-template-columns: repeat(auto-fill, minmax(150px, 1fr))', () => {}) as { gridTemplateColumns?: string }).gridTemplateColumns).toBe('repeat(auto-fill, minmax(150px, 1fr))')
+    // 真正未支持：命名线 ⇒ 诊断跳过
     const d: string[] = []
-    expect(parseStaticStyle('grid-template-columns: auto 1fr', (m) => d.push(m)).gridTemplateColumns).toBeUndefined()
+    expect((parseStaticStyle('grid-template-columns: [a] 1fr', (m) => d.push(m)) as { gridTemplateColumns?: string }).gridTemplateColumns).toBeUndefined()
     expect(d.some((m) => m.includes('grid-template'))).toBe(true)
+  })
+  it('③b grid-auto-columns/rows（隐式轨道尺寸）折叠', () => {
+    expect((parseStaticStyle('grid-auto-columns: minmax(0, 1fr)', () => {}) as { gridAutoColumns?: string }).gridAutoColumns).toBe('minmax(0, 1fr)')
+    expect((parseStaticStyle('grid-auto-rows: minmax(0, auto)', () => {}) as { gridAutoRows?: string }).gridAutoRows).toBe('minmax(0, auto)')
   })
 
   it('④ 端到端：grid 容器经 <style> class 折进节点 style', () => {

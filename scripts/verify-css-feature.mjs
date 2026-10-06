@@ -100,6 +100,9 @@ const PROBE_VALUES = {
   'text-shadow': ['text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3)', 'textShadow', 'rgba(0, 0, 0, 0.3) 0px 1px 2px'],
   // ★★★grid-auto-flow 项（2026-10-08）：自动放置（Web computed 归一：row dense → dense）
   'grid-auto-flow': ['grid-auto-flow: column', 'gridAutoFlow', 'column'],
+  // ★★★grid-auto-columns/rows 项（2026-10-08）：隐式轨道尺寸（浏览器 computed 归一：裸 0 → 0px）
+  'grid-auto-columns': ['grid-auto-columns: minmax(0, 1fr)', 'gridAutoColumns', 'minmax(0px, 1fr)'],
+  'grid-auto-rows': ['grid-auto-rows: minmax(0, auto)', 'gridAutoRows', 'minmax(0px, auto)'],
   // ★★★outline 族项（2026-10-08）：轮廓偏移（Web computed 为 px）
   'outline-offset': ['outline-offset: 2px', 'outlineOffset', { kind: 'absolute', dp: 2 }],
   // ★★★背景定位家族（2026-10-07）：size/position/repeat 探针（字符串原样透传——CSE 归一空白小写）
@@ -149,7 +152,7 @@ if (!probe) {
     parity.irField = irField
     parity.irValue = irVal
     parity.computedProbe = Object.fromEntries(
-      Object.entries(computed).filter(([k]) => ['inset', 'top', 'right', 'bottom', 'left', 'overflow-x', 'overflow-y', 'white-space', 'word-break', 'justify-self', 'grid-area', 'background-color', 'color', 'border-radius', 'text-align', 'opacity', 'font-size', 'letter-spacing', 'line-height', 'flex-direction', 'justify-content', 'align-items', 'gap', 'border-bottom-width', 'border-top-width', 'border-left-width', 'border-right-width', 'border-bottom-color', 'border-top-color', 'border-left-color', 'border-right-color', 'border-style', 'border-top-style', 'border-bottom-style', 'border-top-left-radius', 'border-bottom-right-radius', 'background-size', 'background-position', 'background-repeat', 'grid-auto-flow', 'grid-template-areas', 'grid-area', 'text-shadow', 'outline-width', 'outline-offset', 'outline-style'].includes(k)),
+      Object.entries(computed).filter(([k]) => ['inset', 'top', 'right', 'bottom', 'left', 'overflow-x', 'overflow-y', 'white-space', 'word-break', 'justify-self', 'grid-area', 'background-color', 'color', 'border-radius', 'text-align', 'opacity', 'font-size', 'letter-spacing', 'line-height', 'flex-direction', 'justify-content', 'align-items', 'gap', 'border-bottom-width', 'border-top-width', 'border-left-width', 'border-right-width', 'border-bottom-color', 'border-top-color', 'border-left-color', 'border-right-color', 'border-style', 'border-top-style', 'border-bottom-style', 'border-top-left-radius', 'border-bottom-right-radius', 'background-size', 'background-position', 'background-repeat', 'grid-auto-flow', 'grid-auto-columns', 'grid-auto-rows', 'grid-template-areas', 'grid-area', 'text-shadow', 'outline-width', 'outline-offset', 'outline-style'].includes(k)),
     )
     // 判据：IR 出值且与浏览器 resolved 语义一致（按形态）
     if (irVal === undefined) {

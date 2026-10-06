@@ -667,10 +667,12 @@
       "probe": [
         "grid-template-columns",
         "grid-template-rows",
+        "grid-auto-columns",
+        "grid-auto-rows",
         "grid-column",
         "grid-row"
       ],
-      "note": "★批次 12（2026-10-04）：引擎 `Display::Grid` + `LStyle.grid_template_columns/rows`（字符串轨迹）+ `NodeDto` + taffy grid_template_* 映射（parse_grid_tracks：fr/px/数字）；编译器 display:grid 入封闭集 + `grid-template-columns/rows` 解析（**显式轨迹**，`repeat(N,X)` 编译期展开）。★批次 41（2026-10-04）：`grid-column`/`grid-row` **线号放置**（`<n>` / `<start> / <end>`，线号可负——`1 / -1` 跨全宽）已支持（内核 taffy `Line<GridPlacement>`）。★**诚实边界**：显式轨迹（fr/px/数字）+ 线号放置（非 span/非命名线）——auto/minmax/fit-content/命名线/隐式行（grid-auto-*）/`span`/`grid-area` 定位**未支持**，诊断跳过；Skyline 端实测退化为 block ⇒ 有条件可用"
+      "note": "★批次 12（2026-10-04）：引擎 `Display::Grid` + `LStyle.grid_template_columns/rows`（字符串轨迹）+ `NodeDto` + taffy grid_template_* 映射（parse_grid_tracks：fr/px/数字）；编译器 display:grid 入封闭集 + `grid-template-columns/rows` 解析（**显式轨迹**，`repeat(N,X)` 编译期展开）。★批次 41（2026-10-04）：`grid-column`/`grid-row` **线号放置**（`<n>` / `<start> / <end>`，线号可负——`1 / -1` 跨全宽）已支持（内核 taffy `Line<GridPlacement>`）。★★★grid 轨迹解析升级（2026-10-08）：① **minmax()** 支持（minmax(0, 1fr)——语料最高频；内核改用 taffy 官方 FromStr，裸 0→0px）；② 轨迹串接受 auto / % / min-content / max-content / fit-content + repeat(auto-fill|auto-fit, …)；③ 新增 **grid-auto-columns/rows**（隐式轨道尺寸，taffy GridTrackVec<TrackSizingFunction> 原生）。★**诚实边界**：命名线（[name]）/ span 文字未支持（诊断跳过）；Skyline 端实测退化为 block ⇒ 有条件可用"
     },
     {
       "id": "justify-self",

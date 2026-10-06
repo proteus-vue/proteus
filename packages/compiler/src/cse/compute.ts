@@ -926,6 +926,9 @@ function mapToIrField(prop: string, val: CssComputedValue): { field: string; val
   //   （探针实测：`grid-template-columns` 等算出来了却没进 IR ⇒ App/Skyline 静默丢 Grid）。
   if (prop === 'grid-template-columns') return { field: 'gridTemplateColumns', value: typeof val === 'string' ? normalizeGridTrack(val) : null }
   if (prop === 'grid-template-rows') return { field: 'gridTemplateRows', value: typeof val === 'string' ? normalizeGridTrack(val) : null }
+  // ★★★grid-auto-columns/rows 项（2026-10-08）：隐式轨道串（透传，内核 taffy 解析）
+  if (prop === 'grid-auto-columns') return { field: 'gridAutoColumns', value: typeof val === 'string' ? normalizeGridTrack(val) : null }
+  if (prop === 'grid-auto-rows') return { field: 'gridAutoRows', value: typeof val === 'string' ? normalizeGridTrack(val) : null }
   // ★★★grid-template-areas 项（2026-10-08 · css:next P0·2×）：命名区域模板——透传（浏览器 computed 形态
   //   `"a b" "c c"`；编译器折叠面已把 CSS 多引号串归一为此形态，内核两形态都认）。
   if (prop === 'grid-template-areas') return { field: 'gridTemplateAreas', value: typeof val === 'string' ? val.trim().replace(/\s+/g, ' ') : null }
@@ -945,7 +948,9 @@ function mapToIrField(prop: string, val: CssComputedValue): { field: string; val
 
 /** grid 轨迹串归一（空格/斜杠规范化——浏览器 computed 会把 `1fr 1fr` 原样返回，但多余空白要归一） */
 function normalizeGridTrack(v: string): string {
-  return v.trim().replace(/\s+/g, ' ')
+  // ★★★grid 轨迹解析升级（2026-10-08）：与浏览器 computed 同口径——裸 `0` → `0px`（`minmax(0, 1fr)` → `minmax(0px, 1fr)`）。
+  const s = v.trim().replace(/\s+/g, ' ')
+  return s.replace(/(^|[\s,(])0(?=[\s,)])/g, '$10px')
 }
 
 export { resolveOverflowFields, resolveBorderRadiusFields }

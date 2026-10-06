@@ -1192,7 +1192,7 @@ public final class VaporRenderHost {
             "width", "height", "minWidth", "maxWidth", "minHeight", "maxHeight",
             "margin", "padding", "flexDirection", "flexWrap", "justifyContent", "alignItems", "alignContent", "alignSelf",
             "flexGrow", "flexShrink", "flexBasis", "gap", "rowGap", "columnGap", "display", "position", "top", "left", "right", "bottom",
-            "gridTemplateColumns", "gridTemplateRows", "aspectRatio", "pointerEvents", "fontFamily",
+            "gridTemplateColumns", "gridTemplateRows", "gridAutoColumns", "gridAutoRows", "aspectRatio", "pointerEvents", "fontFamily",
             // ★★★grid-template-areas 项（2026-10-08）：命名区域模板 + 子项 grid-area 命名区引用——
             //   内核（taffy GridTemplateAreas / NamedLine）已消费；漏登记 ⇒ 请求树不带 ⇒ 内核静默用默认
             //   （由 check:host-kernel-keys 当场抓出——第 5 次"宿主白名单须跟内核新字段走"）。纯字符串，无密度换算。
@@ -1293,7 +1293,7 @@ public final class VaporRenderHost {
         //   此前只缩了容器 width/padding（×density），轨迹串原样 ⇒ track 比物理空间小 density 倍
         //   ⇒ 子项（宽已 ×density）恰好**填满 track** ⇒ justify-self 无对齐空间（真机 center/end 全落 start）。
         //   ⇒ 与 width 同轴：把串里每个 <n>px 乘 lengthScale（fr/auto/% 等无量纲/相对单位不动）。
-        for (String gk : new String[]{"gridTemplateColumns", "gridTemplateRows"}) {
+        for (String gk : new String[]{"gridTemplateColumns", "gridTemplateRows", "gridAutoColumns", "gridAutoRows"}) {
             String graw = spec.optString(gk, null);
             if (graw == null || graw.isEmpty()) continue;
             spec.put(gk, scalePxInCssLengths(graw));

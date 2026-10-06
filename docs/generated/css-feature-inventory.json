@@ -17,20 +17,20 @@
       "unit": 30
     },
     "byImpl": {
-      "not-started": 540,
+      "not-started": 538,
       "excluded": 280,
-      "implemented": 126,
+      "implemented": 128,
       "partial": 3
     },
     "byPriority": {
       "P2": 115,
       "excluded": 280,
-      "P0": 15,
-      "done": 126,
+      "P0": 13,
+      "done": 128,
       "P1": 413
     },
-    "actionable": 543,
-    "actionableP0": 15
+    "actionable": 541,
+    "actionableP0": 13
   },
   "entries": [
     {
@@ -8191,19 +8191,19 @@
       "inherited": false,
       "initial": "auto",
       "syntax": "<track-size>+",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "implemented",
+      "implNote": "IR 注册表在册（scope=semantic）",
       "channel": null,
       "evidencedBy": {
-        "inIrRegistry": false,
-        "irScope": null,
-        "inCompilerFold": false,
+        "inIrRegistry": true,
+        "irScope": "semantic",
+        "inCompilerFold": true,
         "matrixLevel": null,
         "webSupport": null
       },
       "usage": 1,
-      "priority": "P0",
-      "acceptance": "none"
+      "priority": "done",
+      "acceptance": "pending"
     },
     {
       "id": "grid-auto-flow",
@@ -8239,19 +8239,19 @@
       "inherited": false,
       "initial": "auto",
       "syntax": "<track-size>+",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "implemented",
+      "implNote": "IR 注册表在册（scope=semantic）",
       "channel": null,
       "evidencedBy": {
-        "inIrRegistry": false,
-        "irScope": null,
-        "inCompilerFold": false,
+        "inIrRegistry": true,
+        "irScope": "semantic",
+        "inCompilerFold": true,
         "matrixLevel": null,
         "webSupport": null
       },
       "usage": 1,
-      "priority": "P0",
-      "acceptance": "none"
+      "priority": "done",
+      "acceptance": "pending"
     },
     {
       "id": "grid-column",
