@@ -609,13 +609,23 @@
     },
     {
       "id": "at-media",
-      "css": "@media（响应式）",
+      "css": "@media（响应式 / 环境条件）",
       "category": "at-rule",
-      "today": "absent",
-      "tier": "L3",
-      "strategy": "降级",
+      "today": "supported",
+      "tier": "L2",
+      "strategy": "独立通道",
       "probe": [],
-      "note": "编译期无法唯一确定断点；跨端建议走 flex/比例布局 + 框架流体能力"
+      "note": "★条件 at-rule 通道（2026-10-08）：@media 是**跨端控制结构**，其语义由 **@proteus-vue/fluid 独立通道**交付（非编译器折叠面）——视口/容器断点 → createContainerQuery/resolveBreakpoint/createAdaptiveController（以**容器**为基准，车机/多窗口）；prefers-reduced-motion → shouldReduceMotion/createDeviceEnv；orientation/display-mode(折叠) → readDisplayMode；hover/pointer → probePointer。★具名边界（决策 #279 FLD001 / W-6）：手写 @media 在 App 端**无对等**（自绘引擎无 CSS 条件块）⇒ 框架规定响应式走 fluid 容器查询（禁止手写 @media），Web/MP 由各自 CSS 引擎原生处理。原 note：编译期无法唯一确定断点（无容器/视口上下文）。"
+    },
+    {
+      "id": "at-supports",
+      "css": "@supports（特性检测）",
+      "category": "at-rule",
+      "today": "supported",
+      "tier": "L2",
+      "strategy": "独立通道",
+      "probe": [],
+      "note": "★条件 at-rule 通道（2026-10-08）：@supports 的语义由 **@proteus-vue/fluid 的 detectFluidCapabilities**（probe 式运行时能力检测：clamp/grid/containerQuery/flexGap/aspectRatio）+ formSupports 交付（运行时能力分支）；App 端无 CSS 引擎 ⇒ @supports 条件块跳过（具名边界）；Web/MP 由各自 CSS 引擎原生处理。"
     },
     {
       "id": "keyframes",
