@@ -1701,3 +1701,11 @@
 **⑥ 判据**：`check:host-separation-ledger` / `check:layers` / `check:docs-stats` / `check:docs` 全绿；b5-plan 引用的全部 `docs/*`/`packages/*`/`hosts/*`/`platform/*` 路径逐个 `ls` 存在（含行号抽查）。
 **⑦ 诚实边界**：本批为**工单立项**（未开工）；主闭环**不因立单回退**（分离本身已打通，这批是"分离判定后的独立实现/重构"）。
 
+609. **★宿主关注点分离 B5-1 开工（第 1 步）——Android 字形层抽 `platform/`（HA0.5 续）（★用户 2026-10-07「好的」= 开工 B5-1）**：
+**① 取证（先摸清再动）**：Android 文本/字体代码在 `hosts/android/.../runtime/ProteusHostView.java`（**18.6 万字符单体**）+ `VaporRenderHost`（度量/绘制）+ C-ABI 蹦床 `platform/android/proteus-jni/src/host.rs:79`（`trampoline_measure_text` 调 Java `measureText`）。★关键：Android 比 iOS 耦合深——**measure/draw 全在宿主 View 内**（不像 iOS 有独立 `SelfDrawBridge`），故 **HA0.5 Android 分两步**：先**字形层**（低风险），度量/绘制/渲染待续。
+**② 交付（第 1 步）**：新增 `platform/android/proteus-platform/src/dev/proteus/platform/ProteusTextPlatform.java`（**118 行**，纯 `android.graphics.Typeface`）：字体角色映射 `typefaceOf`（system/serif/monospace/rounded/condensed + `custom:<名>`）+ 自定义字体注册表（`registerFont`/`registeredFontCount`/`clearFonts`/`customFontMisses`/`lastMissingCustomFont`）——与 iOS `ProteusTextAdapter` 的字体段**对称**。`ProteusHostView` 的同名方法改**委托**（既有调用方零改动，行为不变）；`MainActivity`（dev host）的计数读取改指平台类。构建脚本接入 platform 源根（`check-host-compile.sh` / `build-and-run.sh` 的 `find … *.java` 加 `platform/android/proteus-platform/src`）。
+**③ ★门禁盲区修复（本步关键）**：`check:platform-layering` 的 C 判据原形态只要求"端目录里有**该端特征 API**"——而 `platform/android/` 里是 **SDK/AAR（HA5 绑定层，用了 `android.*`/`Typeface`）** ⇒ **旧判据会误绿**（即使没有真正抽出的平台适配）。⇒ 新增 `PLATFORM_ADAPTATION` 清单：Android 必须存在 `dev/proteus/platform/` 包（iOS 对应 `ProteusTextAdapter`）。**破坏性验证**：移除 `ProteusTextPlatform.java` ⇒ **退出码 1** + 指名"别把 SDK/AAR 当抽取完成"；还原 ⇒ 0。
+**④ 验收（全绿）**：`check:android-host-compile`（零设备 javac）✅ · `check:platform-layering`（+破坏性）✅ · **真 APK 构建**（javac→dex→sign，platform 源一并编）✅ · **Android 真机 css-conf 首页渲染无回归**（标题/卡片/列表/文本全对）✅ · `acceptance-stub`（零设备桩测，·5 7s）✅ · `host-rounding`/`host-layering`/`android-bundle`/`docs`/`docs-stats` ✅。
+**⑤ ★教训 / 可执行**：a) **"抽取完成"要有实质判据**——端目录里"有该端特征 API"是不够的（SDK/AAR 也有），要判"**实质平台适配是否真的离开宿主**"（本次 C 判据因此收紧，且配破坏性验证）；b) **低风险优先**：Android 度量/绘制与 `ProteusHostView`（单体）耦合深，先抽**独立可抽**的字形层拿到端到端绿（含真机），再谈度量/绘制——**"剥离术"逐层来，不求一把梭**。
+**⑥ 诚实边界**：本轮只落 **B5-1 第 1 步**（字形层）；**文本度量/绘制执行仍在 `hosts/android`**（B5-1 余步）· B5-2（HA4 C-ABI 回调绑定）未开工 · 鸿蒙平台层未开始。
+
