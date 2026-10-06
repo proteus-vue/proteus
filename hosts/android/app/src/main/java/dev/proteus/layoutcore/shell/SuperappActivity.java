@@ -144,7 +144,9 @@ public class SuperappActivity extends android.app.Activity {
         // ④ 载入 superapp bundle + 启动（路由栈 + 宿主真建树 → 进入入口 tab）
         String bundle = readAsset("bundle-superapp.js");
         if (bundle == null) { fail("缺 assets/bundle-superapp.js（先跑 node hosts/android/bridge/build-batch.mjs）"); return; }
-        QuickJsEngine.EvalResult load = QuickJsEngine.evalWithHost(bundle, new HostBridge(caps, screenHost));
+        // ★★★B1：壳走**统一运行期**——宿主桥用 SuperappRuntimeHost（暴露 mount/applyOps/onGesture 原语给
+        //   JS 共享运行期）；旧静态屏内容改由 JS 侧 __proteusSuperappRender 实例化。
+        QuickJsEngine.EvalResult load = QuickJsEngine.evalWithHost(bundle, new SuperappRuntimeHost(draw, new HostBridge(caps, screenHost)));
         if (!load.ok) { fail("bundle eval 失败：" + load.error); return; }
         QuickJsEngine.EvalResult boot = QuickJsEngine.eval("__proteusSuperappBootJson()");
         QuickJsEngine.nativeRunPendingJobs();   // 泵 await 续体（路由异步）
@@ -166,6 +168,20 @@ public class SuperappActivity extends android.app.Activity {
                 }
                 renderCurrent(readState());
                 android.util.Log.i(TAG, "SUPERAPP_LAUNCHER_READY screen=" + currentName(readState()));
+                // ★★★B1 判据用：`--es tap "x,y"`（**物理像素**）——注入合成 tap 走
+                //   hitTest → 手势 sink → JS 共享运行期派发（与真触摸同一条链）。
+                String tap = getIntent() != null ? getIntent().getStringExtra("tap") : null;
+                android.util.Log.i(TAG, "SUPERAPP_TAP_EXTRA=" + tap);
+                if (tap != null && tap.contains(",")) {
+                    String[] xy = tap.split(",");
+                    String json = "{\"x\":" + xy[0].trim() + ",\"y\":" + xy[1].trim() + "}";
+                    QuickJsEngine.EvalResult tr = QuickJsEngine.eval("proteusHost.tapAt(" + org.json.JSONObject.quote(json) + ")");
+                    QuickJsEngine.nativeRunPendingJobs();   // 泵微任务（$nav → router.push 的续体）
+                    android.util.Log.i(TAG, "SUPERAPP_TAP " + json + " => " + (tr != null ? tr.value : "?")
+                            + " cur=" + currentName(readState()));
+                    QuickJsEngine.EvalResult dbg = QuickJsEngine.eval("__proteusSuperappDebug()");
+                    android.util.Log.i(TAG, "SUPERAPP_DEBUG " + (dbg != null ? dbg.value : "?"));
+                }
                 // ⑥ drive 模式（验证脚本用）：用**真 MotionEvent** 逐个点 Tab → 重绘 → 落证据
                 if ("1".equals(getIntent() != null ? getIntent().getStringExtra("drive") : null)) {
                     contentHost.post(new Runnable() {
@@ -401,34 +417,28 @@ public class SuperappActivity extends android.app.Activity {
     }
 
     private void renderCurrent(String stateJson) {
-        String page = currentName(stateJson);
+        final String page = currentName(stateJson);
         try {
-            String sc = readAsset("app-screen-content.json");
-            if (sc == null) { android.util.Log.w(TAG, "缺 app-screen-content.json——无法上屏"); return; }
-            org.json.JSONObject all = new org.json.JSONObject(sc);
-            if (!all.has(page)) page = all.has("index") ? "index" : all.keys().next();
-            org.json.JSONArray nodes = all.getJSONObject(page).getJSONArray("nodes");
-            org.json.JSONObject tree = new org.json.JSONObject();
-            // ★★★视口 = **实测视图尺寸**（不是 DisplayMetrics 估算）：全屏 edge-to-edge 下宿主的
-            //   contentHost 高度才是真值——用估算会与实际差一个导航栏高（实测 2236 vs 2440）
-            //   ⇒ `bottom` 定位元素整体上移（fab 偏高 2.3×）。布局未就绪时回落估算值。
-            //   ★fallback 用 `dm` 的**像素原值**（无损——不再 `logical*density` 往返舍入）且
-            //   **不减 tab 栏**：视口口径 = 全屏（Tab 栏是 overlay 不占流；页面自身 120dp 下内边距让位，
-            //   与 Web 同构——批次 47/48 已定调，此处 fallback 曾残留"屏高−tab 栏"旧口径）。
+            // ★★★B1（统一运行期）：视口 = **实测视图尺寸**（全屏 edge-to-edge；见下方 fallback 说明）。
+            //   fallback 用 `dm` 像素原值（无损）且**不减 tab 栏**（Tab 栏是 overlay 不占流；页根自身下内边距让位）。
             int vwPx = contentHost.getWidth() > 0 ? contentHost.getWidth() : physWidthPx;
             int vhPx = contentHost.getHeight() > 0 ? contentHost.getHeight() : physHeightPx;
-            tree.put("viewport", new org.json.JSONObject()
-                    .put("width", vwPx / density).put("height", vhPx / density));
-            tree.put("nodes", nodes);
-            // ★内置环境变量（决策 #593/#595）：每次渲染刷新（旋转/折叠重排）；--pf-vw/--pf-vh = 视口逻辑尺寸
+            // ★内置环境变量（决策 #593/#595）：每次渲染刷新；--pf-vw/--pf-vh = 视口逻辑尺寸
             org.json.JSONObject envObj = collectEnvVars();
             envObj.put("--pf-vw", vwPx / density);
             envObj.put("--pf-vh", vhPx / density);
             draw.setEnvVars(envObj);
-            draw.mount(tree.toString());
+            // ★★★B1：内容由 JS **共享运行期**实例化（交互/响应式/导航）；宿主只提供 mount/applyOps 原语。
+            org.json.JSONObject args = new org.json.JSONObject();
+            args.put("name", page);
+            args.put("viewport", new org.json.JSONObject()
+                    .put("width", vwPx / density).put("height", vhPx / density));
+            QuickJsEngine.EvalResult rr = QuickJsEngine.eval(
+                    "__proteusSuperappRender(" + org.json.JSONObject.quote(args.toString()) + ")");
             if (draw.view() != null) draw.view().invalidate();
-            android.util.Log.i(TAG, "SUPERAPP_RENDER page=" + page + " nodes=" + nodes.length()
-                    + " viewport=" + (vwPx / density) + "x" + (vhPx / density));
+            android.util.Log.i(TAG, "SUPERAPP_RENDER page=" + page
+                    + " viewport=" + (vwPx / density) + "x" + (vhPx / density)
+                    + " runtime=" + (rr != null && rr.value != null ? rr.value : "?"));
         } catch (Throwable t) {
             android.util.Log.w(TAG, "renderCurrent 失败：" + t.getMessage());
         }
