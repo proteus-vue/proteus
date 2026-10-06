@@ -405,7 +405,7 @@ const padW = ref(200)
       const acts = ev.handlers[h]
       if (!acts) return false
       for (const a of acts) {
-        if (a.op === 'emit') continue
+        if (a.op === 'emit' || a.op === 'nav') continue
         const v = evalExpr(a.program as never, { read: (k: string) => store[k] } as never)
         const cur = store[a.source]
         const base = typeof cur === 'number' && Number.isFinite(cur) ? cur : 0

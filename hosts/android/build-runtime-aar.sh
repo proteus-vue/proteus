@@ -30,7 +30,7 @@ trap 'rm -rf "$WORK"' EXIT
 
 SDK="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
 PLATFORM="$(ls -d "$SDK"/platforms/android-* 2>/dev/null | sort -V | tail -1)/android.jar"
-[ -f "$PLATFORM" ] || { echo "✗ 缺 android.jar（$PLATFORM）"; exit 2; }
+[ -f "$PLATFORM" ] || { echo "✗ 缺 android.jar（${PLATFORM}）"; exit 2; }
 BT="$(ls -d "$SDK"/build-tools/* 2>/dev/null | sort -V | tail -1)"
 
 echo "==> ① 交叉编译 native 库（aarch64-linux-android）"
@@ -58,7 +58,7 @@ done
 [ -n "$JDK" ] && [ -x "$JDK/bin/javac" ] || { echo "✗ 找不到 javac"; exit 2; }
 mkdir -p "$WORK/classes"
 find "$RT_SRC" -name '*.java' > "$WORK/srcs.txt"
-[ -s "$WORK/srcs.txt" ] || { echo "✗ runtime 源为空（$RT_SRC）"; exit 2; }
+[ -s "$WORK/srcs.txt" ] || { echo "✗ runtime 源为空（${RT_SRC}）"; exit 2; }
 "$JDK/bin/javac" -nowarn -encoding UTF-8 --release 17 -cp "$PLATFORM" -d "$WORK/classes" @"$WORK/srcs.txt" || { echo "✗ runtime 编译失败"; exit 3; }
 (cd "$WORK/classes" && "$JDK/bin/jar" cf "$WORK/classes.jar" .) || { echo "✗ jar 打包失败"; exit 3; }
 echo "    classes.jar $(du -h "$WORK/classes.jar" | awk '{print $1}')（$(find "$WORK/classes" -name '*.class' | wc -l | tr -d ' ') 个 class）"
@@ -107,7 +107,7 @@ if [ -n "$NM" ] && [ -x "$NM" ]; then
   if [ "$N_KERNEL" -ge 20 ] && [ "$N_ONLOAD" -ge 1 ]; then
     echo "    ✓ .so 符号齐备：内核 ABI $N_KERNEL · JNI_OnLoad $N_ONLOAD"
   else
-    echo "    ✗ .so 符号不足：内核 $N_KERNEL（应 ≥20）· JNI_OnLoad $N_ONLOAD"; FAILS=$((FAILS + 1))
+    echo "    ✗ .so 符号不足：内核 ${N_KERNEL}（应 ≥20）· JNI_OnLoad $N_ONLOAD"; FAILS=$((FAILS + 1))
   fi
 fi
 

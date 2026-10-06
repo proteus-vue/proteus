@@ -1,9 +1,9 @@
 {
   "host_id" : "ios",
-  "host_stats" : "{\"data\":{\"live_screens\":0,\"calls\":[\"screen.mount\",\"screen.stats\"],\"anim_hook_missing\":0,\"screens\":[],\"anim_completed\":0,\"visible_calls\":0,\"shared_calls\":0,\"destroy_calls\":0,\"rect_calls\":0,\"mount_calls\":0,\"anim_calls\":0,\"content_node_total\":0},\"ok\":true}",
+  "host_stats" : "{\"ok\":true,\"data\":{\"screens\":[],\"mount_calls\":0,\"visible_calls\":0,\"destroy_calls\":0,\"anim_hook_missing\":0,\"anim_calls\":0,\"anim_completed\":0,\"rect_calls\":0,\"shared_calls\":0,\"live_screens\":0,\"calls\":[\"screen.mount\",\"screen.stats\"],\"content_node_total\":0}}",
   "ok" : true,
-  "rendered_page" : "word-break",
-  "run_ts" : 1791307598.8597279,
+  "rendered_page" : "text",
+  "run_ts" : 1791317864.8655939,
   "scroll_probe" : {
     "after_drag_down_100k" : 0,
     "after_drag_left_100k_x" : 0,
@@ -14,8 +14,8 @@
     "range_set" : true
   },
   "state" : {
-    "current" : "word-break",
-    "depth" : 19,
+    "current" : "text",
+    "depth" : 2,
     "screens" : [
       "background-position",
       "border-style",
@@ -23,6 +23,7 @@
       "grid-auto-flow",
       "grid-auto",
       "grid-template-areas",
+      "index",
       "justify-self",
       "line-clamp",
       "math-functions",
@@ -37,25 +38,8 @@
       "word-break"
     ],
     "stack" : [
-      "background-position",
-      "background-position",
-      "border-style",
-      "border",
-      "grid-auto-flow",
-      "grid-auto",
-      "grid-template-areas",
-      "justify-self",
-      "line-clamp",
-      "math-functions",
-      "outline",
-      "overflow-page",
-      "overflow",
-      "place-items",
-      "safe-area",
-      "text-shadow",
-      "text",
-      "vw-vh",
-      "word-break"
+      "index",
+      "text"
     ],
     "tabLabels" : {
       "border" : "CSS 验收 · 边框",
@@ -65,116 +49,41 @@
     },
     "tabs" : [
 
-    ]
+    ],
+    "tabSpec" : {
+      "badge" : {
+        "fontSize" : 11,
+        "offsetX" : 4,
+        "offsetY" : 4,
+        "padX" : 4,
+        "radius" : 8
+      },
+      "badgeBg" : "#d64545",
+      "brand" : "#5b5bd6",
+      "height" : 56,
+      "icons" : {
+        "index" : "⌂",
+        "messages" : "✉",
+        "mine" : "☺"
+      },
+      "iconSize" : 19,
+      "labels" : {
+        "index" : "首页",
+        "messages" : "消息",
+        "mine" : "我的"
+      },
+      "labelSize" : 10,
+      "line" : "#dcdfe5",
+      "surface" : "#ffffff",
+      "text3" : "#5f6673"
+    }
   },
   "switch_log" : [
     {
-      "current" : "background-position",
-      "ok" : true,
-      "tap" : "background-position",
-      "via" : "drive"
-    },
-    {
-      "current" : "border-style",
-      "ok" : true,
-      "tap" : "border-style",
-      "via" : "drive"
-    },
-    {
-      "current" : "border",
-      "ok" : true,
-      "tap" : "border",
-      "via" : "drive"
-    },
-    {
-      "current" : "grid-auto-flow",
-      "ok" : true,
-      "tap" : "grid-auto-flow",
-      "via" : "drive"
-    },
-    {
-      "current" : "grid-auto",
-      "ok" : true,
-      "tap" : "grid-auto",
-      "via" : "drive"
-    },
-    {
-      "current" : "grid-template-areas",
-      "ok" : true,
-      "tap" : "grid-template-areas",
-      "via" : "drive"
-    },
-    {
-      "current" : "justify-self",
-      "ok" : true,
-      "tap" : "justify-self",
-      "via" : "drive"
-    },
-    {
-      "current" : "line-clamp",
-      "ok" : true,
-      "tap" : "line-clamp",
-      "via" : "drive"
-    },
-    {
-      "current" : "math-functions",
-      "ok" : true,
-      "tap" : "math-functions",
-      "via" : "drive"
-    },
-    {
-      "current" : "outline",
-      "ok" : true,
-      "tap" : "outline",
-      "via" : "drive"
-    },
-    {
-      "current" : "overflow-page",
-      "ok" : true,
-      "tap" : "overflow-page",
-      "via" : "drive"
-    },
-    {
-      "current" : "overflow",
-      "ok" : true,
-      "tap" : "overflow",
-      "via" : "drive"
-    },
-    {
-      "current" : "place-items",
-      "ok" : true,
-      "tap" : "place-items",
-      "via" : "drive"
-    },
-    {
-      "current" : "safe-area",
-      "ok" : true,
-      "tap" : "safe-area",
-      "via" : "drive"
-    },
-    {
-      "current" : "text-shadow",
-      "ok" : true,
-      "tap" : "text-shadow",
-      "via" : "drive"
-    },
-    {
       "current" : "text",
       "ok" : true,
-      "tap" : "text",
-      "via" : "drive"
-    },
-    {
-      "current" : "vw-vh",
-      "ok" : true,
-      "tap" : "vw-vh",
-      "via" : "drive"
-    },
-    {
-      "current" : "word-break",
-      "ok" : true,
-      "tap" : "word-break",
-      "via" : "drive"
+      "tap" : "inject",
+      "via" : "tap-inject"
     }
   ],
   "tabs" : [

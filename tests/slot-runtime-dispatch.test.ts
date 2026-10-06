@@ -119,7 +119,7 @@ const padW = ref(300)
       const acts = ev.handlers[h]
       if (!acts) return false
       for (const a of acts) {
-        if (a.op === 'emit') continue
+        if (a.op === 'emit' || a.op === 'nav') continue
         store[a.source] = (store[a.source] ?? 0) + 30
       }
       return true

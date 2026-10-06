@@ -195,6 +195,11 @@ const COUPLING = [
       'tests/app-css-surface.test.ts',
       // ★C1 最小切片（2026-10-04）：SFC <style> 单类规则 → class→节点样式
       'tests/vapor-class-styles.test.ts',
+      // ★B4（2026-10-07 · 决策 #604 ⑨）：HandlerAction 联合成员（加 op:'nav'）的**类型收窄守卫**断言——
+      //   此前漏网（vitest 不做类型检查）⇒ 只有 vue-tsc 才报；补进映射防再漏。
+      'tests/slot-runtime-dispatch.test.ts',
+      'tests/vapor-emits.test.ts',
+      'tests/vapor-v3-e2e.test.ts',
     ],
     why: 'Vapor 子系统（表达式/槽位/事件/生命周期/样式对象——独立测试体系）+ App CSS 支持面 SSOT',
   },

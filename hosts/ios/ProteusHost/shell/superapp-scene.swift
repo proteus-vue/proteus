@@ -58,6 +58,8 @@ final class SuperappScene: NSObject {
     private static var tabLabels: [String: String] = [:]
     private static var switchLog: [[String: Any]] = []
     private static var driveLog: [[String: Any]] = []
+    /// ★B1 判据（2026-10-07）：`--tap=x,y` 注入模式（走注入链后落报告自退，不走 drive 时间链）
+    private static var tapMode = false
 
     /// 入口：由 `runSelfdraw` 在自动场景（桌面点开 / --superapp）时调用。
     static func run(ctx: JSContext, bundleURL: URL, bridge: SelfDrawBridge, containerView: UIView) {
@@ -132,8 +134,36 @@ final class SuperappScene: NSObject {
         // ★★★修（2026-10-05 · 逐屏截图）：按 **driveScreens**（全部屏）计时——
         //   首版用 `tabNames.count`：验收项目无 tab ⇒ 恒 1×0.15s ⇒ **报告在其余屏截图前落盘**。
         let finishAt = 0.15 * Double((driveScreens.isEmpty ? 1 : driveScreens.count) + 1)
-        for (delay, step) in steps { DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: step) }
-        DispatchQueue.main.asyncAfter(deadline: .now() + max(finishAt, 0.2)) { finish() }
+        // ★★★B1 交互判据（2026-10-07）：`--tap=x,y`（内容坐标，vp）——注入一次合成 tap，走**与真触摸
+        //   同一条链**（SelfDrawBridge.tapAt → 内核 hitTest → onDispatchToJS → JS 共享运行期 dispatchGesture
+        //   → $nav 动作 → router.push/mountScreen）→ 重绘 → 落报告 → 自退。与 Android `--es tap` 同语义，
+        //   使三端交互判据对称（Android `--es tap` / 鸿蒙 `uinput` / iOS 本入口）。
+        if let ta = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--tap=") }) {
+            Self.tapMode = true
+            let body = String(ta.dropFirst("--tap=".count))
+            let parts = body.split(separator: ",")
+            if parts.count == 2, let x = Double(parts[0]), let y = Double(parts[1]) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                    let out = bridgeRef?.tapAt(x, y) ?? "{}"
+                    NSLog("[proteus] SUPERAPP_TAP inject x=%f y=%f => %@", x, y, String(out.prefix(220)))
+                    // 下一 runloop：路由/处理器续体排空 → 重渲 → 落报告 → 自退（与 drive 同款完成信号）
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                        renderCurrent()
+                        takeSnapshot()
+                        switchLog.append(["tap": "inject", "current": currentName(), "ok": true, "via": "tap-inject"])
+                        writeReport(reportBody())
+                        NSLog("[proteus] SUPERAPP_TAP_REPORT_READY current=%@", currentName())
+                        if ProcessInfo.processInfo.environment["PROTEUS_EXIT_AFTER_REPORT"] == "1" { exit(0) }
+                    }
+                }
+            } else {
+                NSLog("[proteus] SUPERAPP_TAP_ARG_INVALID %@", ta)
+            }
+        }
+        if !Self.tapMode {
+            for (delay, step) in steps { DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: step) }
+            DispatchQueue.main.asyncAfter(deadline: .now() + max(finishAt, 0.2)) { finish() }
+        }
         NSLog("[proteus] SUPERAPP_LAUNCHER_READY")
     }
 

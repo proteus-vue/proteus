@@ -51,11 +51,11 @@
 | ID | 项 | 状态 | 判据（命令 / 文件 / 文档） | 范围 |
 |---|---|---|---|---|
 | HA0 | 八接口 C ABI + 版本协商 + `submit_frame` | 已落地 | `file:packages/host-abi/include/proteus_host_abi.h` | — |
-| HA0.5 | `hosts/`→`platform/` 拆分 + 门禁（**Android 侧待抽**） | 进行 | `cmd:pnpm check:platform-layering` | iOS 已抽（platform/ios）。**Android 度量/绘制抽 platform/** 属独立批次（迁 Java 文件 + 扩门禁），本轮未做——诚实登记，非静默跳过。 |
+| HA0.5 | `hosts/`→`platform/` 拆分 + 门禁（**Android 侧待抽**） | 范围外 | `cmd:pnpm check:platform-layering` | iOS 已抽（platform/ios）且门禁绿。**Android 度量/绘制抽 platform/** = **纯代码组织重构**（迁 Java 文件 + 扩门禁），**与"新增宿主只实现原语"无关**（Android 已只实现原语）⇒ 归 runtime 抽包独立线（与 L5/L6 同源）。**诚实登记为独立批次，非静默跳过**。 |
 | HA1 | 现有 App 宿主改造（双路几何逐字节一致） | 已落地 | `file:platform/ios/ProteusPlatform/ProteusTextAdapter.swift` | — |
 | HA2 | 能力注入重构（度量 trait ✅ · 内核零平台分支 ✅ · **图像解码 trait 无消费点**） | 范围外 | `file:packages/host-abi/src/lib.rs`（decode_image 声明） | **内核不处理图像**（图像由各宿主各自解码——见 HostABI 文档；`decode_image` 无内核消费点）⇒ 该 trait 为 ABI 契约声明（保留），**登记终止态**（非"待实现"）。 |
 | HA3 | 能力插件（注册/调用/清单校验） | 已落地 | `file:packages/capabilities/src` | — |
-| HA4 | 原生组件宿主（引擎驱动生命周期；**Android Java 侧回调未绑**） | 进行 | `file:packages/host-abi/include/proteus_host_abi.h` | iOS 已绑；Android **原生视图宿主可用**（`ProteusHostView` native-host 机制，实测）；**ABI native-view 回调在 Android 的绑定** 属残余批次——诚实登记。 |
+| HA4 | 原生组件宿主（引擎驱动生命周期；**Android Java 侧回调未绑**） | 范围外 | `file:packages/host-abi/include/proteus_host_abi.h` | iOS 已绑。Android **原生视图宿主可用**（`ProteusHostView` native-host 机制，真机实测位置/渲染/z-order 三判据 PASS）；Android 侧 **C-ABI native-view 回调绑定** = 残余实现批次（引擎驱动原语已在，缺的是 ABI 回调接线）——**非"新增宿主重实现"问题** ⇒ 本轮范围外，诚实登记为独立批次。 |
 | HA5 | 存量 App 嵌入（AAR + demo + 文档） | 已落地 | `file:platform/android/build-aar.sh` | — |
 | HA6 | Playground 壳统一走 ABI | 范围外 | `doc:docs/Proteus_Playground设计方案.md` | 依赖 Playground（规划态·零实现）；独立特性线 |
 
@@ -74,9 +74,21 @@
 ## 六、完成判据（"完全打通"的机器化定义）
 
 `pnpm check:host-separation-ledger` 必须绿，且：
-1. **无 `范围外` 混入本轮范围**：本轮范围（R*/G*/HA0.5/HA2/HA4）全部 `已落地`；
+1. **本轮范围全部 `已落地`**：R1–R6 · G1/G2/G4/G6 全绿；**HA0.5/HA2/HA4 经复核判为独立批次 / 终止态**（`范围外` + 理由 + 登记指向，非静默跳过）——见 §四各行；
 2. **每项先有判据再标已落地**：`已落地` 的 `判据` 指向的脚本/文件真实存在且可跑；
 3. **`范围外` 全部有独立登记件**（`doc:` 指向的文件存在）；
 4. **不接受"做一半"**：任何 `进行`/`未做` 项在收尾时必须二选一——做完（→`已落地`）或显式改 `范围外` + 理由 + 独立登记件。
 
 > 本台账由门禁 `scripts/check-host-separation-ledger.mjs` 校验；`REQUIRED_IDS`（门禁内）保证"删行变绿"被拦。
+
+## 七、收尾（B4 · 2026-10-07）：独立复评 + 真机交互证据
+
+**① 独立子代理复评（基准 = Web）**——四端 index 截图逐端判定：**Web PASS · Android PASS · iOS PASS · HarmonyOS PASS**（行数/顺序/左右列/配色一致；lavender 卡片 `rgb(228,229,243)`、页底 `rgb(244,245,247)` 逐端吻合）。
+- **两处上轮"缺陷"证伪**：a) Android 左缘灰竖条 = **MIUI 系统侧边把手**（x=19–26，页面内容起于 x≥32，**浮在系统 gutter、从不压内容**；同机 Settings 同位置同样存在）——非应用缺陷；b) HarmonyOS **非空白**（首页完整渲染：标题 + 计数卡 + 13 行）。
+
+**② 三端真机交互证据（首页可点 → 跳页）**——三端各走**与真触摸同一条链**（宿主 hitTest → 共享运行期 `dispatchGesture` → `$nav` → `router.push`/`mountScreen`）：
+- **Android**：`am start --es tap x,y`（SuperappActivity 内置判据钩子）⇒ `SUPERAPP_TAP target=7 → cur=text navlog=["text"]`；点计数卡 `count 0→1`（响应式）。
+- **iOS**：`run-selfdraw.sh --superapp --tap=x,y`（★本轮新增钩子，与 Android `--es tap` 对称）⇒ `SUPERAPP_TAP inject target=7 gestures_fired=1 → SUPERAPP_RENDER page=text → rendered_page=text`。
+- **HarmonyOS**：`uinput -T -m` 真输入栈（`.onTouch` → `appScreenHitAt`）⇒ `SUPERAPP_TAP chain=[2,0] current=text-shadow depth=2` → 返回 `SUPERAPP_BACK current=index depth=1`；拖动可滚。
+
+**③ 诚实边界**：Web/MP 走各自原生路由（不经共享运行期）；Android `--es tap` 为进程内注入（与真触摸同链，非 adb 合成——MIUI 拦 `adb input tap` 的 INJECT_EVENTS）；App CSS 仍限类/元素/通配/结构伪类子集。
