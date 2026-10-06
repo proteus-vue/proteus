@@ -1306,6 +1306,18 @@ public final class VaporRenderHost {
             String braw = spec.optString(bk, null);
             if (braw != null && !braw.isEmpty()) spec.put(bk, scalePxInCssLengths(braw));
         }
+        // ★★★行高物理化（2026-10-08 · 用户抓出「安卓 view 不随内容自动增高」）：`lineHeight` 是**字符串 token**
+        //   （如 "20px" / 无单位倍数 "1.5"）——不在 LEN_SCALARS（那是数值字段）⇒ 此前 "20px" 原样留在**逻辑**空间，
+        //   而盒/字号已 ×density ⇒ 文本节点测量高度只有真实的 1/density ⇒ 容器不随内容增高、文字溢出盒外
+        //   （iOS 几何是逻辑点无需换算、鸿蒙 lineHeightDesignPx 显式 ×density——三端仅 Android 有此缺口）。
+        //   ⇒ 与 grid 轨迹串同轴：把 token 里的 <n>px 乘 lengthScale（无单位倍数不含 px ⇒ 不动，其高度随 fontSize 已物理）。
+        {
+            String lhTok = spec.optString("lineHeight", null);
+            if (lhTok != null && !lhTok.isEmpty()) {
+                String scaled = scalePxInCssLengths(lhTok);
+                if (!scaled.equals(lhTok)) spec.put("lineHeight", scaled);
+            }
+        }
         // ★批次 39：静态变换（transform）的 **px 位移**按密度缩放（txPct/tyPct 是盒比例、scale/rotate 无量纲——不动）
         JSONObject tf = spec.optJSONObject("transform");
         if (tf != null) {

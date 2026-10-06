@@ -148,6 +148,19 @@ node scripts/css-acceptance-record.mjs <feature-id> <verdicts.json>
 - **★MP 截图到达判据：`automation_runtime_info` 现须显式 `--action`（2026-10-08 修）**：
   缺 `--action` 时该工具返 `INPUT_ERROR`（此前可无参调用）⇒ 旧探针 `grep "currentPage 名"` **永不命中** ⇒ 每页白等 30s 超时后才截图。
   改 `--action currentPage` 并按 **`"route": "/pages/<name>"`** 判到达。★同源：**外部 CLI 的参数契约会演进**——探针命中不了先查工具自身用法（`-h`），别默认页面没到。
+- **★★★宿主长度字段的"物理化"必须覆盖**字符串 token**（不止数值字段）——`lineHeight` 曾漏（2026-10-08 用户抓出「安卓 view 不随内容自动增高」）**：
+  Android `VaporRenderHost.physicalizeSpec` 有 `LEN_SCALARS`（数值长度字段清单，×density）——但 **`lineHeight` 是字符串 token**（``"20px"`` / 无单位 ``"1.5"``），
+  不在该清单 ⇒ 字号已 ×density（42）而行高仍留在**逻辑**空间（20）⇒ 文本节点**测量高度只有真实的 1/density** ⇒ 内核盒被算小、`<view>` 不随内容增高、文字溢出盒外。
+  ★判据（实测）：`WRAPMEAS` 打点 5 行 × 20 = 100px（应 ≈300）；iOS 几何是**逻辑点**（无需换算）、鸿蒙 `lineHeightDesignPx` 显式 ×density ⇒ **三端仅 Android 有此缺口**。
+  ★修法：与 grid 轨迹串同轴——把 token 里每个 `<n>px` 乘 `lengthScale`（无单位倍数不含 px ⇒ 不动，其高度随 fontSize 自然物理）。
+  ★同源纪律：**"新增长度字段必须登记"这条纪律要覆盖两种形态**——数值字段（`LEN_SCALARS`）**和**字符串长度 token（grid/background/lineHeight 的 `scalePxInCssLengths` 分支）。只登记前者 ⇒ 字符串 token 静默留逻辑空间。
+
+- **★★★CATextLayer 对多行文本忽略段落 `line-height`（`minimum/maximumLineHeight`）——需走 CoreText（2026-10-08 用户抓出「iOS 行高比其他端矮」）**：
+  真机 + 本机复现：CATextLayer 渲染多行文本时**恒用字体自然行高**，显式 `\n`、`CTParagraphStyle`、`lineSpacing`、"textLayerString 建 NSAttributedString + NSMutableParagraphStyle.min/maximumLineHeight"
+  **全不生效**；而 `boundingRect(with: NSPS)` **计算**却遵守 ⇒ 宿主"量得对、画得不对"（盒高对、行距小）。
+  ★修法：新增 `CATextLayer` 子类，重写 `draw(in:)` 用 **CoreText `CTFrameDraw`** 渲染（本机实测 pitch 精确 = 声明值）；**仅**"多行 + 声明 line-height"形态启用（其余走原生，零行为变化）。
+  ★★踩坑：CALayer 的 `draw(in:)` 上下文是 **y 向下**（CA 坐标系）⇒ `CTFrameDraw` 前需 `ctx.translateBy(0, h); ctx.scaleBy(1, -1)` 翻转——**不翻则整段镜像**（真机实测；而在**独立 CGContext** 上恰好相反，不能照搬现成结论）。
+  ★同源纪律：**"量"与"画"用同一个引擎才可能一致**——iOS 文本的测量走 CoreText（`boundingRect`），绘制却走 CATextLayer，两者对行高的处理不同 ⇒ 声明行高时必然分叉。
 - **★★★闭合路径上的周期图案（dotted/dashed）必须让周期整除周长（2026-10-08 outline/border 圆角跟随批）**：
   dash 间距固定为 `2·线宽` 时，若它不整除环的周长，起点/终点处会**多出一个间距过近的点**
   （三端独立评审逐像素都抓到：Android/鸿蒙 = 两个点间距 0.55× 正常值（"双点"）；iOS = 两圆**融合成一个
