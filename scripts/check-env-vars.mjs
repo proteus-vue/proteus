@@ -55,6 +55,32 @@ for (const [f, marker, why] of need) {
   if (!fs.readFileSync(p, 'utf-8').includes(marker)) problems.push(`${why}（${f} 无 "${marker}"）`)
 }
 
+// ★★★B2（G2）：**三端实例的 --pf-* 字面量 ⊆ 契约闭集**——防"各端手拄闭集时拼错/私增未知名"。
+//   ★不报"未消费"（契约超集允许某端未用某变量），只报"字面量不在契约里"。
+{
+  const hostDirs = [
+    'hosts/android/app/src/main/java',
+    'hosts/ios/ProteusHost',
+    'hosts/harmony/host-app/entry/src/main/ets',
+    'hosts/harmony/host-app/proteus_render/src',
+  ]
+  const walk = (dir) => {
+    const abs = path.join(ROOT, dir)
+    if (!fs.existsSync(abs)) return
+    for (const ent of fs.readdirSync(abs, { withFileTypes: true })) {
+      const rel = dir + '/' + ent.name
+      if (ent.isDirectory()) walk(rel)
+      else if (/\.(java|swift|h|cpp|ets)$/.test(ent.name)) {
+        const src = fs.readFileSync(path.join(ROOT, rel), 'utf-8')
+        for (const m of src.matchAll(/"(--pf-[a-z0-9-]+)"/g)) {
+          if (!isEnvVarName(m[1])) problems.push(`宿主 ${rel} 使用了契约外变量名：${m[1]}`)
+        }
+      }
+    }
+  }
+  for (const d of hostDirs) walk(d)
+}
+
 if (problems.length) {
   console.error(`❌ 内置环境变量门禁未过（${problems.length} 项）：`)
   for (const p of problems) console.error('  - ' + p)

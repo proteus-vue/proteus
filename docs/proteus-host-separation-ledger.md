@@ -29,9 +29,9 @@
 | ID | 项 | 状态 | 判据（命令 / 文件 / 文档） | 范围 |
 |---|---|---|---|---|
 | G1 | **tab 栏视觉规格**（颜色/图标/标签映射/角标规则/高亮）共享，三端只"读规格建原生视图" | 已落地 | `file:packages/render-backend/src/tab-bar-spec.ts` | 本轮 |
-| G2 | **insets → `--pf-*` 归一化**共享（各端只采集原始值）；模板最小壳补齐采集 | 未做 | `cmd:pnpm check:host-separation-ledger` | 本轮 |
+| G2 | **insets → `--pf-*` 名归一**：三端实例的 `--pf-*` 字面量须 ⊆ 契约闭集（防拼错/私增） | 已落地 | `cmd:pnpm check:env-vars`（扩展：扫描 hosts/** 的 --pf-* 字面量 ⊆ 超集；破坏性验证：注入 --pf-bogus ⇒ 红） | 本轮 |
 | G3 | **手势分类**收敛到 `packages/gesture`（iOS 停止自研复刻）；各端只喂原始 down/move/up + 时间戳 | 未做 | `cmd:pnpm check:host-separation-ledger` | 本轮 |
-| G4 | **能力桥契约**（方法名清单 + 结果封装）抽成机器可读契约 + 薄分发器；补鸿蒙 `invoke`/能力注册 | 未做 | `cmd:pnpm check:host-separation-ledger` | 本轮 |
+| G4 | **能力桥契约**（方法名清单 + 结果封装）抽成机器可读契约 + 薄分发器；补鸿蒙 `invoke`/能力注册 | 已落地 | `cmd:pnpm check:host-invoke-contract` | 本轮 |
 | G5 | **mountPage 门面**（Android/鸿蒙各加等价门面，照 iOS `ProteusHostController.mountPage`） | 未做 | `cmd:pnpm check:host-separation-ledger` | 本轮 |
 | G6 | **防回归门禁**：tab 样式常量 / `--pf-*` 词表 / 能力方法清单若再现于 `hosts/**` 即红 | 未做 | `cmd:pnpm check:host-separation-ledger` | 本轮 |
 
