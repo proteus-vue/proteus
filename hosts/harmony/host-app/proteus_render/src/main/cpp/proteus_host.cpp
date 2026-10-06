@@ -298,6 +298,28 @@ static napi_value AppScreenHitAt(napi_env env, napi_callback_info info) {
     napi_value out; napi_create_string_utf8(env, rj.c_str(), rj.size(), &out); return out;
 }
 
+/** 把长度串里的 `<n>px` 数值 ×scale（CSS 逻辑 px → 物理 px；%、auto、关键字不动） */
+static std::string scalePxInCssLengths(const std::string& s, double scale) {
+    if (scale == 1.0 || s.empty()) return s;
+    std::string out; out.reserve(s.size() + 8);
+    for (size_t i = 0; i < s.size();) {
+        char c = s[i];
+        if ((c >= '0' && c <= '9') || c == '.' || (c == '-' && i + 1 < s.size() && (s[i+1] >= '0' && s[i+1] <= '9'))) {
+            size_t j = i;
+            while (j < s.size() && ((s[j] >= '0' && s[j] <= '9') || s[j] == '.' || s[j] == '-')) j++;
+            if (j + 1 < s.size() && s[j] == 'p' && s[j+1] == 'x') {
+                double v = atof(s.substr(i, j - i).c_str()) * scale;
+                char buf[32]; snprintf(buf, sizeof(buf), "%.4gpx", v);
+                out += buf; i = j + 2;
+                continue;
+            }
+            out += s.substr(i, j - i); i = j; continue;
+        }
+        out += c; i++;
+    }
+    return out;
+}
+
 static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
     size_t argc = 1; napi_value args[1] = {nullptr};
     napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
@@ -505,6 +527,39 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
                              sdx * density, sdy * density, sblur * density, (uint32_t)scolor);
                     arr += sb;
                 }
+            }
+        }
+        // ★★★背景定位家族（2026-10-07）：**渐变 + 图像盒几何**进 cmd——渲染层 `proteus_render.cpp`
+        //   的 `grad` 解析器据此真画（此前 app-content 路径**不产 grad 键** ⇒ 鸿蒙应用内容不渲染渐变）。
+        //   形态与 dev 基准同源：`grad:{kind,angle,stops:[{offset,color(ARGB)}]}` + size/position/repeat 串。
+        {
+            std::string fgSub = extractValueAfterKey(it, "fillGradient", '{', '}');
+            if (!fgSub.empty()) {
+                std::string gk; jstr(fgSub.c_str(), fgSub.size(), "kind", &gk); if (gk.empty()) gk = "linear";
+                double gang = 90; jnum(fgSub.c_str(), fgSub.size(), "angle", &gang);
+                std::string stopsArr = extractValueAfterKey(fgSub, "stops", '[', ']');
+                std::vector<std::string> stops = splitJsonObjects(stopsArr);
+                if (stops.size() >= 2) {
+                    std::string g = ",\"grad\":{\"kind\":\"" + jsonEscape(gk) + "\",\"angle\":" + std::to_string((int)gang) + ",\"stops\":[";
+                    for (size_t si = 0; si < stops.size(); si++) {
+                        double goff = 0; jnum(stops[si].c_str(), stops[si].size(), "offset", &goff);
+                        std::string gcol; jstr(stops[si].c_str(), stops[si].size(), "color", &gcol);
+                        uint32_t gargb = gcol.empty() ? 0u : hexToArgb(gcol);
+                        g += (si ? "," : "");
+                        g += "{\"offset\":" + std::to_string(goff) + ",\"color\":" + std::to_string((unsigned long)gargb) + "}";
+                    }
+                    g += "]}";
+                    arr += g;
+                }
+            }
+            // 图像盒几何（字符串原样；渲染层 `bgImageBox` 解析）
+            const char* bgKeys[3] = {"backgroundSize", "backgroundPosition", "backgroundRepeat"};
+            for (int bi = 0; bi < 3; bi++) {
+                std::string bv; jstr(it.c_str(), it.size(), bgKeys[bi], &bv);
+                // ★size/position 的 **px 值**是 CSS 逻辑 px ⇒ ×density 转物理 px（与节点 w/h 同口径）；
+                //   % / auto / 关键字不含 px ⇒ 不动。repeat 是枚举 ⇒ 不动。
+                if (bi < 2 && !bv.empty()) bv = scalePxInCssLengths(bv, density);
+                if (!bv.empty()) arr += std::string(",\"") + bgKeys[bi] + "\":\"" + jsonEscape(bv) + "\"";
             }
         }
         if (bw > 0 && bc > 0) {

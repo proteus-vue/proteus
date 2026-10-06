@@ -2,7 +2,7 @@
   "_note": "★CSS 能力逐项验收包（用户指定流程：实现一个 → 全端对齐视觉验收一个）。gates：implemented（IR 在册）/ parity（真 Chromium 同构样本与 CSE 值一致）/ endsMapped（三端可表达）。★视觉验收（像素级）仍由独立子代理按 Web 基准并排做——本包只归档**机器可判**的三段；pass=true 表示\"可以进入视觉验收\"，不等于\"视觉已验收\"。",
   "id": "background-repeat",
   "kind": "property",
-  "verifiedAt": "2026-10-06T05:11:16.531Z",
+  "verifiedAt": "2026-10-06T05:29:30.450Z",
   "implEvidence": {
     "impl": "implemented",
     "implNote": "IR 注册表在册（scope=engine-only · 矩阵 BackgroundRepeat）",
