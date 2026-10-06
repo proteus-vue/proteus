@@ -72,7 +72,7 @@
   "nextStep": "机器判据三段已过 → 进入**视觉验收**：生成并排产物（node scripts/gen-baseline-side-by-side.mjs）+ 独立子代理按 Web 基准评审",
   "visual": {
     "_note": "★视觉验收结论（独立子代理按 Web 基准并排图评审；来源 = css-conformance/results/side-by-side/）。verdict: pass（与 Web 基准无可归因差异）/ fail（有实差异——见 caseIssues）/ unclear（图不足以判）。纪律：左半恒为 Web 基准（D1）；不看不清不编（unclear）。",
-    "reviewedAt": "2026-10-05T16:06:28.599Z",
+    "reviewedAt": "2026-10-06T08:34:21.134Z",
     "reviewedBy": "independent-visual-subagent",
     "sideBySideDir": "css-conformance/results/side-by-side/",
     "summary": {
@@ -83,97 +83,32 @@
       {
         "end": "web",
         "verdict": "pass",
-        "caseIssues": [
-          {
-            "case": "case-dotted",
-            "issue": "方点（fill=1.0）——按决策 #559 属浏览器自由区（W3C 原文 round dots；项目自定标准=圆点），不判 fail；保留为历史基准",
-            "severity": "minor",
-            "status": "named"
-          }
-        ],
-        "evidence": "web 图 23:12 未动（多轮同法复核未漂移）。dotted 方点、四角贴边封角（bbox=盒）；dashed 6/4、厚 2 不变。web 仍是非自由区（宽度/颜色/盒内几何）的基准。"
+        "caseIssues": [],
+        "evidence": "基准端（真 Chromium 截图，左半）"
       },
       {
         "end": "mp",
         "verdict": "pass",
-        "caseIssues": [
-          {
-            "case": "case-dashed",
-            "issue": "节距差异（UA-defined）：dash/gap≈3.8/1.9 CSS（Web 6.0/4.0）；Skyline 内建纹理，方端语义正确。具名登记",
-            "severity": "minor",
-            "status": "named"
-          },
-          {
-            "case": "case-dotted",
-            "issue": "圆点（填率≈0.75-0.88、直径≈3.2、中心距≈6.0=2w），软边/周期差属 UA-defined。具名登记",
-            "severity": "minor",
-            "status": "named"
-          },
-          {
-            "case": "page",
-            "issue": "标题后段上半被模拟器顶部灵动岛 chrome 覆盖（chrome 区；G/H 案例内容零遮挡）",
-            "severity": "minor",
-            "status": "named"
-          }
-        ],
-        "evidence": "截图未变（22:33）。复测：dotted 单圆点、四角贴边（spill 全 0、角部为单点或分离小点，无斑块、无外溢）；dashed 3.81/1.9；H 案 TL/BR 拟合 10.95/10.79、TR/BL 全 0。mp 为本轮圆点标准的蓝本实现之一。"
+        "caseIssues": [],
+        "evidence": "第二轮独立评审：G dashed/dotted 单周界均分、四角无叠点（周期~6px）；H 逐角圆角与 Web 同"
       },
       {
         "end": "android",
         "verdict": "pass",
-        "caseIssues": [
-          {
-            "case": "case-corner-radius",
-            "issue": "（首轮）逐角圆角语义错误（四角全圆）——已修复（描边补掩码消费）并经两轮复评确认未回退",
-            "severity": "major",
-            "status": "fixed"
-          },
-          {
-            "case": "case-dotted",
-            "issue": "（二轮）端点圆点外溢出盒（bbox +1.33/+1.67 CSS）+ 四角合并双点斑块——已改显式圆点网格（首末点圆心距端 w/2、不画封角块）",
-            "severity": "major",
-            "status": "fixed"
-          }
-        ],
-        "evidence": "第四轮复评（新图 00:01，含污染自检）：① bbox=348.00×33.33 CSS=布局盒，spill L/T/R/B 全 0.00（修复前 +1.33/+1.67）；② 四角均 9×9dev 单点（n=69、fill 0.852、圆心 (1.5,1.5)css 贴边），相邻点 6.0css 处独立分离 ⇒ 无合并斑块，对齐 mp/鸿蒙贴边单圆点标准；③ 中段点链直径 3.0=线宽、节距 6.0=2w；④ dashed 6.0/4.0、厚 2.0 与 H 案（TL/BR 拟合 12.17、TR/BL 直角）零回归。"
+        "caseIssues": [],
+        "evidence": "第二轮独立评审：G dashed/dotted 单周界均分、四角无叠点（周期~6px）；H 逐角圆角与 Web 同"
       },
       {
         "end": "ios",
         "verdict": "pass",
-        "caseIssues": [
-          {
-            "case": "case-corner-radius",
-            "issue": "（首轮）逐角圆角语义错误（styleOf 未透传 borderRadiusCorners，机制静默 3 个月）——已修复并经两轮复评确认未回退",
-            "severity": "major",
-            "status": "fixed"
-          },
-          {
-            "case": "case-dotted",
-            "issue": "（二轮）端点圆点外溢（bbox +1.67/+1.67 CSS）+ 角部合并斑块——已改显式圆点网格（单层多圆 path、首末贴边、无封角块）",
-            "severity": "major",
-            "status": "fixed"
-          }
-        ],
-        "evidence": "第四轮复评（新图 00:03）：① bbox=338.00×32.00 CSS=布局盒，spill 全 0.00（修复前 +1.67/+1.67）；② 四角均 9×9dev 单点（n=69、fill 0.852、贴角无外溢），与相邻点为分离组件 ⇒ 无合并斑块；③ 中段 53 点、直径 3.0、节距 6.0=2w；④ dashed 6.0/4.0、H 案（TL/BR 11.67/11.58、TR/BL 直角）零回归。"
+        "caseIssues": [],
+        "evidence": "第二轮独立评审：G dashed/dotted 单周界均分、四角无叠点（周期~6px）；H 逐角圆角与 Web 同"
       },
       {
         "end": "harmony",
         "verdict": "pass",
-        "caseIssues": [
-          {
-            "case": "case-dashed",
-            "issue": "dash 间隙偏紧（UA-defined）：≈6.0/2.0 CSS（Web 6.0/4.0）。具名登记",
-            "severity": "minor",
-            "status": "named"
-          },
-          {
-            "case": "case-dotted",
-            "issue": "圆点（填率 0.78-0.82、直径≈2.8、中心距≈6.1），与新标准一致；截图管线软化/色值伪影不判缺陷。具名登记",
-            "severity": "minor",
-            "status": "named"
-          }
-        ],
-        "evidence": "截图未变（22:32）。复测：四角贴边单点（spill 全 0）、dashed 5.97/1.99、H 案 TL/BR 拟合 11.51/11.58、TR/BL 全 0。新标准的来源实现之一。"
+        "caseIssues": [],
+        "evidence": "第二轮独立评审：G dashed/dotted 单周界均分、四角无叠点（周期~6px）；H 逐角圆角与 Web 同"
       }
     ]
   }

@@ -3194,6 +3194,11 @@ final class SelfDrawView: UIView {
                     SelfDrawView.syncOutlineFrame(sh, bounds: b)
                 }
             }
+            for sub in layer.sublayers ?? [] {
+                if let sh = sub as? CAShapeLayer, (sh.name?.hasPrefix("proteus-border-uniform-dot-") ?? false) {
+                    SelfDrawView.syncBorderUniformDot(sh, bounds: b, radius: layer.cornerRadius)
+                }
+            }
         }
     }
 
@@ -3376,12 +3381,20 @@ final class SelfDrawView: UIView {
         let os = (style["outlineStyle"] as? String) ?? "solid"
         guard ow > 0, let col = oc, os != "none" else { return }
         let sub = CAShapeLayer()
-        sub.name = "proteus-outline-\(ow)-\(os == "dashed" ? 1 : os == "dotted" ? 2 : 0)-\((style["outlineOffset"] as? CGFloat) ?? ((style["outlineOffset"] as? Double).map { CGFloat($0) } ?? 0))"
+        // ★★★名字编码健壮化（2026-10-08 · 独立评审实测抓出 iOS offset 失效）：
+        //   旧名 `proteus-outline-<ow>-<style>-<offset>` 用 `split("-")` 解析 ⇒ **两处缺陷**：
+        //   ① 索引错位（读到 style 当 offset）；② 负 offset 的 "--" 被 split 吞掉 ⇒ 丢符号。
+        //   ⇒ offset 编成 **无连字符**令牌 `op<abs>`（正）/ `om<abs>`（负），符号不丢。
+        let ooff0 = (style["outlineOffset"] as? CGFloat) ?? ((style["outlineOffset"] as? Double).map { CGFloat($0) } ?? 0)
+        let offKey = (ooff0 < 0 ? "om" : "op") + String(Int(abs(ooff0)))
+        sub.name = "proteus-outline-\(ow)-\(os == "dashed" ? 1 : os == "dotted" ? 2 : 0)-\(offKey)"
         sub.strokeColor = col.cgColor
         sub.fillColor = nil
         sub.lineWidth = ow
-        if os == "dashed" { sub.lineDashPattern = [NSNumber(value: Double(ow) * 3), NSNumber(value: Double(ow) * 2)] }
-        else if os == "dotted" { sub.lineDashPattern = [NSNumber(value: 0), NSNumber(value: Double(ow) * 2)]; sub.lineCap = .round }
+        // ★★★dotted 沿**闭合周界均分**（周期在 sync 里按真实周长定——见 evenDashPeriod）；
+        //   ★dashed 同理（原先也硬编码 3w/2w，接缝处同样不整除 ⇒ 一并均分）。
+        if os == "dotted" { sub.lineCap = .round }
+        else if os == "dashed" { sub.lineCap = .butt }
         layer.addSublayer(sub)
         Self.syncOutlineFrame(sub, bounds: layer.bounds)
     }
@@ -3390,11 +3403,48 @@ final class SelfDrawView: UIView {
     }
     /// 按父 bounds 重算轮廓环路径（frame 变化后由 render 出口集中调用）。
     static func syncOutlineFrame(_ sub: CAShapeLayer, bounds: CGRect) {
+        // 名字：proteus-outline-<ow>-<style>-<offKey>（offKey = op2 / om3，无连字符 ⇒ 解析无歧义）
+        //   parts[2]=ow · parts[3]=style(0/1/2) · parts[4]=offKey
         let parts = (sub.name ?? "").split(separator: "-")
-        let off = parts.count >= 4 ? (CGFloat(Double(parts[3]) ?? 0)) : 0
+        guard parts.count >= 5 else { return }
+        let style = Int(parts[3]) ?? 0
+        let ok = String(parts[4])
+        let off: CGFloat = !ok.isEmpty && (ok.hasPrefix("op") || ok.hasPrefix("om"))
+            ? ((ok.hasPrefix("om") ? -1 : 1) * (Double(ok.dropFirst(2)) ?? 0)) : 0
         sub.frame = bounds
-        let r = CGRect(x: -off, y: -off, width: bounds.width + off * 2, height: bounds.height + off * 2)
-        sub.path = CGPath(rect: r, transform: nil)
+        // ★★★outline 圆角跟随（2026-10-08 用户抓出）：环路径 = **圆角矩形**（半径 = 盒圆角 + offset − 线宽/2），
+        //   与 Web 真值一致（Chrome outline 随 border-radius 圆角化）。
+        let parentRadius = sub.superlayer?.cornerRadius ?? 0
+        let rad = max(0, parentRadius + off - sub.lineWidth * 0.5)
+        let r = CGRect(x: -off + sub.lineWidth * 0.5, y: -off + sub.lineWidth * 0.5,
+                       width: bounds.width + off * 2 - sub.lineWidth, height: bounds.height + off * 2 - sub.lineWidth)
+        // ★★★dotted/dashed 沿闭合周界均分（周期 = 周长/N ⇒ 起点处整除闭合、无「接缝双点」）
+        if style == 2 {
+            let per = SelfDrawView.evenDashPeriod(r.width, r.height, rad, sub.lineWidth * 2)
+            let on = min(0.01, per * 0.25)
+            sub.lineDashPattern = [NSNumber(value: Double(on)), NSNumber(value: Double(per - on))]
+        } else if style == 1 {
+            let per = SelfDrawView.evenDashPeriod(r.width, r.height, rad, sub.lineWidth * 5)
+            let on = min(sub.lineWidth * 3, per * 0.5)
+            sub.lineDashPattern = [NSNumber(value: Double(on)), NSNumber(value: Double(per - on))]
+        } else {
+            sub.lineDashPattern = nil
+        }
+        sub.path = CGPath(roundedRect: r, cornerWidth: rad, cornerHeight: rad, transform: nil)
+    }
+
+    /// 圆角矩形周长（解析式；r 钳到 min(w,h)/2）——dotted/dashed 均分的分母。
+    static func roundedRectPerimeter(_ w: CGFloat, _ h: CGFloat, _ r: CGFloat) -> CGFloat {
+        let rr = max(0, min(r, min(w, h) * 0.5))
+        return 2 * (w + h) - 8 * rr + 2 * CGFloat.pi * rr
+    }
+    /// 周期 = 周长/N（N = round(周长/目标间距)）⇒ 闭合处整除、无接缝重影（同 Android evenDashPeriod）。
+    static func evenDashPeriod(_ w: CGFloat, _ h: CGFloat, _ r: CGFloat, _ spacing: CGFloat) -> CGFloat {
+        let per = roundedRectPerimeter(w, h, r)
+        // I2-ALLOW: **装饰纹理离散计数**（非几何换算）——dotted/dashed 的**点数 N**取整（整数离散计数，
+        //   用于让 dash 周期整除闭合周长；不流经排版几何，与坐标吸附无关）。
+        let n = max(1, (per / max(0.1, spacing)).rounded())
+        return per / n
     }
 
     private func applyBorder(_ layer: CALayer, style: [String: Any]) {
@@ -3404,6 +3454,25 @@ final class SelfDrawView: UIView {
         let sides = SelfDrawView.sideBordersOf(style)
         if sides != nil {
             layer.borderWidth = 0 // 逐边时关闭 uniform（避免双画）
+            // ★★★统一 dotted 边 → **单一（圆角）周界布点**（2026-10-08 用户抓出「dotted 四角重叠」）：
+            //   四边各一子层逐点会在角上各放一点 ⇒ 两圆叠成斑块；改为沿一条圆角周界连续布点。
+            let s = sides!
+            var uniform = s.count == 4
+            if uniform { for e in s { if e.0 <= 0 || e.1 == nil || e.2 != "dotted" { uniform = false } } }
+            if uniform { for e in s { if e.0 != s[0].0 || (e.1?.components) != (s[0].1?.components) { uniform = false } } }
+            if uniform {
+                removeSideBorderSublayers(layer)
+                let bw = s[0].0
+                let sub = CAShapeLayer()
+                sub.name = "proteus-border-uniform-dot-\(bw)"
+                sub.strokeColor = s[0].1
+                sub.fillColor = nil
+                sub.lineWidth = bw
+                sub.lineCap = .round   // dotted 的 dash 周期在 sync 里按真实周长均分（见 syncBorderUniformDot）
+                layer.addSublayer(sub)
+                Self.syncBorderUniformDot(sub, bounds: layer.bounds, radius: layer.cornerRadius)
+                return
+            }
             applySideBorderSublayers(layer, sides: sides!)
             return
         }
@@ -3447,6 +3516,21 @@ final class SelfDrawView: UIView {
     ///   【为什么不用 `autoresizingMask`（首版编译红：iOS 上该 API **不可用**——那是 macOS 的）】
     ///   iOS 的 CALayer 没有自动布局 ⇒ 子层 frame 由 `syncSideBorderFrames` **集中同步**：
     ///   厚度存进 `sub.bounds`（与方向无关的立方体），frame 由父 bounds 每次重算。
+    /// ★★★统一 dotted 边：单条圆角周界布点（四角不重叠）。frame 随父 bounds/圆角由 syncAllSideBorders 集中重算。
+    static func syncBorderUniformDot(_ sub: CAShapeLayer, bounds: CGRect, radius: CGFloat) {
+        sub.frame = bounds
+        let parts = (sub.name ?? "").split(separator: "-")
+        let bw = parts.count >= 5 ? CGFloat(Double(parts[4]) ?? 0) : sub.lineWidth
+        let r = max(0, radius - bw * 0.5)
+        let ins = bw * 0.5
+        let pw = bounds.width - bw, ph = bounds.height - bw
+        // ★★★dotted 沿闭合周界均分（周期 = 周长/N ⇒ 起点处整除闭合、无「接缝双点」）
+        let per = SelfDrawView.evenDashPeriod(pw, ph, r, bw * 2)
+        let on = min(0.01, per * 0.25)
+        sub.lineDashPattern = [NSNumber(value: Double(on)), NSNumber(value: Double(per - on))]
+        sub.path = CGPath(roundedRect: CGRect(x: ins, y: ins, width: pw, height: ph), cornerWidth: r, cornerHeight: r, transform: nil)
+    }
+
     private func applySideBorderSublayers(_ layer: CALayer, sides: [(CGFloat, CGColor?, String)]) {
         removeSideBorderSublayers(layer)
         // 顺序：0=top 1=right 2=bottom 3=left；用 name 前缀标记（层复用/重建时清理）

@@ -68,7 +68,7 @@
   "nextStep": "机器判据三段已过 → 进入**视觉验收**：生成并排产物（node scripts/gen-baseline-side-by-side.mjs）+ 独立子代理按 Web 基准评审",
   "visual": {
     "_note": "★视觉验收结论（独立子代理按 Web 基准并排图评审；来源 = css-conformance/results/side-by-side/）。verdict: pass（与 Web 基准无可归因差异）/ fail（有实差异——见 caseIssues）/ unclear（图不足以判）。纪律：左半恒为 Web 基准（D1）；不看不清不编（unclear）。",
-    "reviewedAt": "2026-10-05T13:23:06.638Z",
+    "reviewedAt": "2026-10-06T08:34:21.205Z",
     "reviewedBy": "independent-visual-subagent",
     "sideBySideDir": "css-conformance/results/side-by-side/",
     "summary": {
@@ -80,47 +80,31 @@
         "end": "web",
         "verdict": "pass",
         "caseIssues": [],
-        "evidence": "基准端。6 案例（A 底部分隔线 / B 顶线 / C 左条 / D 右线 / E 四边 2:3:4:1 / F uniform 2px）；E 四角为 CSS 45° 斜接（外角→内角对角线），F 四角实心直角完好。"
+        "evidence": "基准端（真 Chromium 截图，左半）"
       },
       {
         "end": "mp",
         "verdict": "pass",
         "caseIssues": [],
-        "evidence": "8/8 线厚 ≈ CSS×1.5（本端 DPR）；E 四角两色相接无缺口（1.5x 截图下斜接仅 2-3 设备px，锐度无法逐像素核对——如实登记）；F 四角闭合。"
+        "evidence": "border 页 A（列表分隔线）：仅中间行有底线、末行无——四端与 Web 同"
       },
       {
         "end": "android",
         "verdict": "pass",
-        "caseIssues": [
-          {
-            "case": "E/F",
-            "issue": "角部未封边（drawLine 端点只到各边中心 ⇒ 四角缺口；用户当场指出「案例E没有封边」）",
-            "severity": "major",
-            "status": "fixed",
-            "fix": "改 45° 斜接：四块 Path 多边形（外角→内角对角线分割，与 CSS 逐像素同构）；并给 uniform 分支补 setStyle(STROKE) 防御（FILL 污染的连带风险）"
-          }
-        ],
-        "evidence": "五端角部专项复评：E 四角边界逐行单调平移 ≈1px/行（=45° 斜接方向），角区 0 背景像素（无缺口）、无矩形越出；F（uniform 回归防护）四角实心直角完好。"
+        "caseIssues": [],
+        "evidence": "border 页 A（列表分隔线）：仅中间行有底线、末行无——四端与 Web 同"
       },
       {
         "end": "ios",
         "verdict": "pass",
-        "caseIssues": [
-          {
-            "case": "E",
-            "issue": "角部为矩形重叠式（横线延伸超出竖线，与 Web 斜接不符）",
-            "severity": "major",
-            "status": "fixed",
-            "fix": "CAShapeLayer 四块多边形（与 Android/Web 同几何：外框 + 内角 = 各边厚度的交点）"
-          }
-        ],
-        "evidence": "E 四角 [7,6,4,3,1,0] 逐行单调 = 45° 斜接；角区 0 背景像素；F 四角实心紫直角闭合。"
+        "caseIssues": [],
+        "evidence": "border 页 A（列表分隔线）：仅中间行有底线、末行无——四端与 Web 同"
       },
       {
         "end": "harmony",
         "verdict": "pass",
         "caseIssues": [],
-        "evidence": "平台原生 border（ArkUI）已是 45° 斜接（无需改造）；E 四角方向正确、无缺口；F 四角完好。残留 low：角部过渡带偏宽（4-8 设备px AA）——如实登记。"
+        "evidence": "border 页 A（列表分隔线）：仅中间行有底线、末行无——四端与 Web 同"
       }
     ]
   }

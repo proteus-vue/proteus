@@ -156,6 +156,7 @@ struct VaporChannelState {
     double radius = 0;
     std::string grad;      // "1:N"（1=linear；N=色标数）
     std::string outline;   // ★★★outline 族项（2026-10-08）："1" = 有轮廓
+    std::string borderDot; // ★★★uniform dotted border（2026-10-08）："1" = 画布单周界点线
     std::string glow;      // "N:alpha"
     int clip = 0;          // 0=无；1=inset…
     double strokeLen = 0;
@@ -305,6 +306,11 @@ struct TextDrawSpec {
     double outlineWidth = 0, outlineOffset = 0;
     uint32_t outlineColor = 0;
     bool outlineDotted = false, outlineDashed = false;
+    /** ★★★uniform dotted border（2026-10-08 用户抓出「dotted 四角重叠」）：四边同宽/同色/均 dotted 时
+     *   不走 ArkUI 原生 DOTTED（逐边绘制 ⇒ 四角重叠），改为在画布上沿**单条圆角周界**画点（与 outline/Web 一致）。 */
+    bool hasDotBorder = false;
+    double dotBorderWidth = 0;
+    uint32_t dotBorderColor = 0;
     bool hasGlow = false;
     uint32_t glowColor = 0;
     double glowRadius = 0, glowAlpha = 1;
@@ -368,6 +374,17 @@ static void gradEndpoints(double angleDeg, double w, double h, float* x0, float*
     *x1 = (float)((0.5 + dx / 2.0) * w); *y1 = (float)((0.5 + dy / 2.0) * h);
 }
 
+/** ★★★dotted/dashed 沿**闭合周界均分**（2026-10-08 修「角上双点/接缝重影」）：dash 周期取**周长/N**
+ *   （N = round(周长 / 目标间距)）⇒ 图案在闭合处**整除**——否则首末留下间距过近的两点（三端独立评审
+ *   逐像素均抓出：Android/鸿蒙 0.55× 间距「双点」、iOS 两圆融合成 2× 大点）。
+ *   周长（圆角矩形解析式）= 2(W+H) − 8r + 2πr（r 钳到 min(W,H)/2）。三端同源（Android/iOS evenDashPeriod）。 */
+static float evenDashPeriod(float W, float H, float r, float spacing) {
+    const float rr = std::max(0.0f, std::min(r, std::min(W, H) * 0.5f));
+    const double per = 2.0 * (W + H) - 8.0 * rr + 2.0 * 3.14159265358979323846 * rr;
+    const int n = std::max(1, (int)std::round(per / std::max(0.1f, spacing)));
+    return (float)(per / n);
+}
+
 /**
  * ★★**画四通道 + 文本**（2026-10-03）——与 DrawTextCallback 同一条 content modifier 画布路径。
  *
@@ -429,6 +446,32 @@ static void drawChannelsAndText(OH_Drawing_Canvas* canvas, const TextDrawSpec* s
         OH_Drawing_PointDestroy(p0);
         OH_Drawing_PointDestroy(p1);
     }
+    // ★★★uniform dotted border（2026-10-08 用户抓出「dotted 四角重叠」）：沿**单条圆角周界**画点——
+    //   四边同宽/同色/均 dotted 时不走 ArkUI 原生逐边 DOTTED（逐边 ⇒ 角上点重叠），
+    //   改为与 outline/Web 同式的圆角环（半径 = 盒圆角 − 线宽/2；点在环上，四角不重叠）。
+    if (spec->hasDotBorder && spec->dotBorderWidth > 0 && spec->dotBorderColor != 0) {
+        const double bw = spec->dotBorderWidth;
+        OH_Drawing_Pen* bp = OH_Drawing_PenCreate();
+        OH_Drawing_PenSetAntiAlias(bp, true);
+        OH_Drawing_PenSetColor(bp, spec->dotBorderColor);
+        OH_Drawing_PenSetWidth(bp, (float)bw);
+        const float brad = (float)std::max(0.0, spec->radius - bw / 2.0);
+        // ★★★dotted 沿闭合周界均分（周期 = 周长/N ⇒ 起点处整除闭合、无「接缝双点」）
+        const float bPer = evenDashPeriod((float)(w - bw), (float)(h - bw), brad, (float)bw * 2.0f);
+        const float bOn = std::min(0.01f, bPer * 0.25f);
+        float bdv[2] = {bOn, bPer - bOn};
+        OH_Drawing_PenSetPathEffect(bp, OH_Drawing_CreateDashPathEffect(bdv, 2, 0));
+        OH_Drawing_PenSetCap(bp, LINE_ROUND_CAP);
+        OH_Drawing_CanvasAttachPen(canvas, bp);
+        OH_Drawing_Rect* brc = OH_Drawing_RectCreate((float)(bw / 2.0), (float)(bw / 2.0), (float)(w - bw / 2.0), (float)(h - bw / 2.0));
+        if (brc != nullptr) {
+            OH_Drawing_RoundRect* br2 = OH_Drawing_RoundRectCreate(brc, brad, brad);
+            if (br2 != nullptr) { OH_Drawing_CanvasDrawRoundRect(canvas, br2); OH_Drawing_RoundRectDestroy(br2); }
+            OH_Drawing_RectDestroy(brc);
+        }
+        OH_Drawing_CanvasDetachPen(canvas);
+        OH_Drawing_PenDestroy(bp);
+    }
     // ★★★outline 族项（2026-10-08）：轮廓环（画在盒 ± offset；正=外扩 / 负=内缩；不占布局）
     if (spec->hasOutline && spec->outlineWidth > 0 && spec->outlineColor != 0) {
         const double ow = spec->outlineWidth, ooff = spec->outlineOffset;
@@ -436,11 +479,30 @@ static void drawChannelsAndText(OH_Drawing_Canvas* canvas, const TextDrawSpec* s
         OH_Drawing_PenSetAntiAlias(op, true);
         OH_Drawing_PenSetColor(op, spec->outlineColor);
         OH_Drawing_PenSetWidth(op, (float)ow);
-        if (spec->outlineDotted) { float dv[2] = {0.01f, (float)ow * 2.0f}; OH_Drawing_PenSetPathEffect(op, OH_Drawing_CreateDashPathEffect(dv, 2, 0)); OH_Drawing_PenSetCap(op, LINE_ROUND_CAP); }
-        else if (spec->outlineDashed) { float iv[2] = {(float)ow * 3.0f, (float)ow * 2.0f}; OH_Drawing_PenSetPathEffect(op, OH_Drawing_CreateDashPathEffect(iv, 2, 0)); }
+        // ★★★outline 圆角跟随（2026-10-08 用户抓出）：环 = **圆角矩形**（半径 = 盒圆角 + offset − 线宽/2）——
+        //   与 Web 真值一致；dotted/dashed 的 path effect 沿圆角周界（四角不重叠）。
+        const float orad = (float)std::max(0.0, spec->radius + ooff - ow / 2.0);
+        const float orw = (float)(w + ooff * 2.0 - ow), orh = (float)(h + ooff * 2.0 - ow);
+        // ★★★dotted/dashed 沿闭合周界均分（周期 = 周长/N ⇒ 起点处整除闭合、无「接缝双点」）
+        if (spec->outlineDotted) {
+            const float oPer = evenDashPeriod(orw, orh, orad, (float)ow * 2.0f);
+            const float oOn = std::min(0.01f, oPer * 0.25f);
+            float dv[2] = {oOn, oPer - oOn};
+            OH_Drawing_PenSetPathEffect(op, OH_Drawing_CreateDashPathEffect(dv, 2, 0));
+            OH_Drawing_PenSetCap(op, LINE_ROUND_CAP);
+        } else if (spec->outlineDashed) {
+            const float oPer = evenDashPeriod(orw, orh, orad, (float)ow * 5.0f);
+            const float oOn = std::min((float)ow * 3.0f, oPer * 0.5f);
+            float iv[2] = {oOn, oPer - oOn};
+            OH_Drawing_PenSetPathEffect(op, OH_Drawing_CreateDashPathEffect(iv, 2, 0));
+        }
         OH_Drawing_CanvasAttachPen(canvas, op);
         OH_Drawing_Rect* orr = OH_Drawing_RectCreate((float)(-ooff + ow/2.0), (float)(-ooff + ow/2.0), (float)(w + ooff - ow/2.0), (float)(h + ooff - ow/2.0));
-        if (orr != nullptr) { OH_Drawing_CanvasDrawRect(canvas, orr); OH_Drawing_RectDestroy(orr); }
+        if (orr != nullptr) {
+            OH_Drawing_RoundRect* orr2 = OH_Drawing_RoundRectCreate(orr, orad, orad);
+            if (orr2 != nullptr) { OH_Drawing_CanvasDrawRoundRect(canvas, orr2); OH_Drawing_RoundRectDestroy(orr2); }
+            OH_Drawing_RectDestroy(orr);
+        }
         OH_Drawing_CanvasDetachPen(canvas);
         OH_Drawing_PenDestroy(op);
     }
@@ -598,7 +660,7 @@ static void DrawTextCallback(ArkUI_DrawContext* context, void* userData) {
     // ★★早退条件放宽（2026-10-03）：**有通道**（渐变/发光/裁剪/描边）也要进回调
     //   —— 此前只判 `text.empty()` ⇒ 纯通道节点（无文本）永远不画（四通道全丢）。
     if (spec == nullptr) return;
-    if (spec->text.empty() && !spec->hasGrad && !spec->hasGlow && !spec->hasClip && !spec->hasStroke && !spec->hasOutline) return;
+    if (spec->text.empty() && !spec->hasGrad && !spec->hasGlow && !spec->hasClip && !spec->hasStroke && !spec->hasOutline && !spec->hasDotBorder) return;
     void* canvasRaw = OH_ArkUI_DrawContext_GetCanvas(context);
     if (canvasRaw == nullptr) return;
     auto* canvas = static_cast<OH_Drawing_Canvas*>(canvasRaw);
@@ -916,6 +978,9 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
                 OH_ArkUI_RenderNodeUtils_DisposeNodeBorderRadiusOption(br);
             }
         }
+        // ★★★uniform dotted border（2026-10-08）：本节点是否"四边同宽/同色/均 dotted" —— 是则**不走原生逐边**，
+        //   改在画布上沿单条圆角周界画点（见 drawChannelsAndText）。此处先声明结果变量，供后面 spec 块使用。
+        bool dotBorder = false; double dotBorderW = 0; uint32_t dotBorderC = 0;
         // ★★★逐边 border 批（2026-10-05 · 用户「全端对齐不留缺陷」）：**原生逐边**绘制——
         //   ArkUI 的 BorderWidth/BorderColor 选项支持逐方向（TOP/RIGHT/BOTTOM/LEFT）。
         //   逐边未声明的边（-1/0）回落 uniform 值——与 Web 的 border 简写缺省语义一致。
@@ -940,9 +1005,25 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
             if (anySide) {
                 ArkUI_EdgeDirection dir[4] = {ARKUI_EDGE_DIRECTION_TOP, ARKUI_EDGE_DIRECTION_RIGHT,
                                               ARKUI_EDGE_DIRECTION_BOTTOM, ARKUI_EDGE_DIRECTION_LEFT};
+                // ★★★uniform dotted 检测（2026-10-08）：四边**有效**宽/色一致 且 style 全 dotted ⇒ 交画布单环画。
+                {
+                    bool allDot = true;
+                    double effW[4]; uint32_t effC[4];
+                    for (int si = 0; si < 4; si++) {
+                        char sk2[32]; snprintf(sk2, sizeof(sk2), "bws%s", sn[si]);
+                        std::string stv; jsonString(it, sk2, &stv);
+                        effW[si] = swArr[si] >= 0 ? swArr[si] : borderWidth;
+                        effC[si] = scArr[si] > 0 ? scArr[si] : (uint32_t)borderColor;
+                        if (stv != "dotted" || effW[si] <= 0 || effC[si] == 0) allDot = false;
+                    }
+                    for (int si = 1; si < 4 && allDot; si++) {
+                        if (effW[si] != effW[0] || effC[si] != effC[0]) allDot = false;
+                    }
+                    if (allDot) { dotBorder = true; dotBorderW = effW[0]; dotBorderC = effC[0]; }
+                }
                 ArkUI_NodeBorderWidthOption* swo = OH_ArkUI_RenderNodeUtils_CreateNodeBorderWidthOption();
                 ArkUI_NodeBorderColorOption* sco = OH_ArkUI_RenderNodeUtils_CreateNodeBorderColorOption();
-                if (swo != nullptr && sco != nullptr) {
+                if (!dotBorder && swo != nullptr && sco != nullptr) {
                     for (int si = 0; si < 4; si++) {
                         // ★★★单位修正 v2（2026-10-05 · 独立终评实测：边框比基准细 ~3 倍）：
                         //   实测证明 ArkUI 该通道按**物理 px**解释（除以 density 后 1px 边框只画出 0.3 CSS px）；
@@ -1100,6 +1181,11 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
                     spec->outlineDotted = (osV == "dotted"); spec->outlineDashed = (osV == "dashed");
                     ch.outline = "1"; hasAnyChannel = true;
                 }
+            }
+            // ★★★uniform dotted border（2026-10-08）：四边同宽/同色/均 dotted ⇒ 画布单圆角周界画点
+            if (dotBorder && dotBorderW > 0 && dotBorderC != 0) {
+                spec->hasDotBorder = true; spec->dotBorderWidth = dotBorderW; spec->dotBorderColor = dotBorderC;
+                ch.borderDot = "1"; hasAnyChannel = true;
             }
             // 发光：{"color":N,"radius":N,"alpha":N} → 分层同心描边
             if (it.find("\"glow\":") != std::string::npos) {

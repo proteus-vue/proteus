@@ -47,7 +47,7 @@
   width: 140px;
   height: 48px;
   background: #eef1f6;
-  border-radius: 6px;
+  border-radius: 16px;   /* ★加大圆角：验 outline 是否跟随盒圆角 */
   flex-shrink: 0;
   display: flex;
   align-items: center;
