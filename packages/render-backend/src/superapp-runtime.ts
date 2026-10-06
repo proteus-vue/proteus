@@ -44,6 +44,11 @@ export interface SuperappRuntimeOptions {
   gestureCbName?: string
   /** 导航出口（`$nav('目标')` → 这里；App 壳 = router.push） */
   navigate?: (target: string) => void
+  /**
+   * ★★★跨调用**状态种子**（鸿蒙一次性 VM）：上次调用 `snapshot()` 的返回，回灌以恢复实例态
+   *   （`{屏名: {变量: 值}}`）。宿主持有、每次新建 VM 时回传——见 `ScreenRuntimeOptions.seedData`。
+   */
+  seedData?: Record<string, Record<string, unknown>>
   /** 诊断（不静默） */
   onNote?: (note: string) => void
 }
@@ -51,10 +56,18 @@ export interface SuperappRuntimeOptions {
 export interface SuperappRuntime {
   /** 挂载（或重挂载）某屏：实例化 → `host.mount`；并记忆为"当前屏"（手势派发用） */
   mountScreen(name: string): boolean
+  /**
+   * ★★★**强制挂载**（2026-10-07 · 鸿蒙一次性 VM）：无条件重实例化 + `host.mount`（同屏也重挂）。
+   *   一次性 VM 每次交互都是新 VM ⇒ 必须从 `content()` 拿到**反映当前 state** 的整树（不能 like
+   *   `mountScreen` 那样"同屏短路"）。也用于"数据变更后重挂"。
+   */
+  mountScreenInto(name: string): boolean
   /** 派发一次手势：宿主报的内核 id + 冒泡链 → 当前屏实例派发 */
   dispatchGesture(type: string, chain: readonly number[]): { handled: boolean; fired: number[] }
   /** 当前屏名 */
   current(): string
+  /** ★跨调用状态导出（`{屏名: 数据}`）——一次性 VM 宿主持有、下次回灌 `seedData` */
+  snapshot(): Record<string, Record<string, unknown>>
 }
 
 /**
@@ -76,6 +89,7 @@ export function createSuperappRuntime(opts: SuperappRuntimeOptions): SuperappRun
     applyOps: (ops) => { opts.host.applyOps(ops) },
     viewport: opts.viewport,
     ...(opts.navigate ? { navigate: opts.navigate } : {}),
+    ...(opts.seedData ? { seedData: opts.seedData } : {}),
     onNote: note,
   })
   let cur = ''
@@ -140,7 +154,16 @@ export function createSuperappRuntime(opts: SuperappRuntimeOptions): SuperappRun
       cur = name
       return true
     },
+    mountScreenInto(name: string): boolean {
+      if (!rt.has(name)) { note(`[superapp-runtime] 无该屏运行期产物：${name}`); return false }
+      const inst = rt.instance(name)
+      // ★仅重挂（跳过滚动/历史逻辑——一次性 VM 宿主每次都从 content() 取新树；滚动由宿主自己管）
+      opts.host.mount(JSON.stringify({ viewport: inst.content().viewport, nodes: inst.content().nodes }))
+      cur = name
+      return true
+    },
     dispatchGesture: dispatch,
     current: () => cur,
+    snapshot: () => rt.snapshot(),
   }
 }

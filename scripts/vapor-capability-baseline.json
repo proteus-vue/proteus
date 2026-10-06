@@ -1,9 +1,11 @@
 {
   "scannedPages": 29,
   "counts": {
+    "CSE_DYNCLASS_VALUE_EXPLOSION": 2,
     "VAPOR_BUILTIN_PARTIAL": 2,
     "VAPOR_DIRECTIVE_NOT_REGISTERED": 6,
     "VAPOR_DYNCLASS_LAYOUT_UNSUPPORTED": 28,
+    "VAPOR_DYNCLASS_PLAN_UNMAPPED": 5,
     "VAPOR_EXPR_UNSUPPORTED": 1,
     "VAPOR_KEY_IS_ROW_IDENTITY": 22,
     "VAPOR_SCRIPT_LIFECYCLE_NOT_RUN": 8,
@@ -12,5 +14,5 @@
     "VAPOR_TEMPLATE_UNSUPPORTED": 5,
     "VAPOR_VMODEL_NO_WRITEBACK": 22
   },
-  "note": "棘轮：只减不增（--update 只允许更小）。★2026-10-05 人工评审后重定（非回归——三类均为**新增的如实诊断**，把此前「静默」的既有限制暴露出来）：① VAPOR_DYNCLASS_LAYOUT_UNSUPPORTED 0→28：批次 30 补（768f273b「动态 :class 设布局字段如实诊断（诚实边界）」）新诊断——App 端动态类当前仅支持绘制字段，28 页命中是**既有真实限制**的如实上报；② VAPOR_STYLE_SELECTOR_UNSUPPORTED 0→3：批次 46（ee5affcc）新诊断——<style> 中被跳过的不支持选择器（此前静默丢弃）；③ VAPOR_BUILTIN_PARTIAL 1→2：Teleport 诚实边界多命中一页（gp0-root-portal——内容渲染在原位置的既有行为如实上报）。scannedPages 27→29：examples/pages 新增 2 页（批次 42/44 等）。三类的**修复方向**：分别对应 G-61 B2（动态 class 预计算）/ B1（CSE 全选择器面）——属本 plan 的落地范围，届时基线随修复下降。"
+  "note": "棘轮：只减不增（--update 只允许更小）。★2026-10-05 人工评审后重定（非回归——三类均为**新增的如实诊断**，把此前「静默」的既有限制暴露出来）：① VAPOR_DYNCLASS_LAYOUT_UNSUPPORTED 0→28：批次 30 补（768f273b「动态 :class 设布局字段如实诊断（诚实边界）」）新诊断——App 端动态类当前仅支持绘制字段，28 页命中是**既有真实限制**的如实上报；② VAPOR_STYLE_SELECTOR_UNSUPPORTED 0→3：批次 46（ee5affcc）新诊断——<style> 中被跳过的不支持选择器（此前静默丢弃）；③ VAPOR_BUILTIN_PARTIAL 1→2：Teleport 诚实边界多命中一页（gp0-root-portal——内容渲染在原位置的既有行为如实上报）。scannedPages 27→29：examples/pages 新增 2 页（批次 42/44 等）。三类的**修复方向**：分别对应 G-61 B2（动态 class 预计算）/ B1（CSE 全选择器面）——属本 plan 的落地范围，届时基线随修复下降。 ★★2026-10-07 人工评审后重定（非回归——两条均为**如实诊断**，且暴露了门禁的结构性盲区）：① CSE_DYNCLASS_VALUE_EXPLOSION 0→2：`examples/pages/devtools-open-api-demo.vue` 的 4 处 `:class=\"'x-' + v\"` 拼接式动态类**改为对象语法**（此前不可静态枚举 ⇒ E-CSS-004 **error**、动态类**静默丢弃**、计数器/徽章无底色）。改后动态类**生效**，但 8 个事件源色码 = 单表 9 取值 > 阈值 8 ⇒ **诚实 warn**（error→warn = 严格更优）。② VAPOR_DYNCLASS_PLAN_UNMAPPED 0→5：基线**陈旧**于 G-61 后的编译器（动态类计划已发射；部分节点的计划未映射到运行期节点 ⇒ 编译器回退旧线性通路——`vapor/build.ts` 的既有 fallback，如实上报）。本页贡献 1（改前后不变），其余 4 来自它页。★结构性发现：这两条增长此前被**门禁 arm A（error 零容忍）的提前 return 掩盖**——arm A 先报 4 条 E-CSS-004 即返回，整链从未跑到 arm B（棘轮）。修 arm A 后才暴露 arm B 的基线陈旧。⇒ 后续 arm A 与 arm B 应**同时报告**（不提前返回），避免\"修了 A 才发现 B\"。"
 }

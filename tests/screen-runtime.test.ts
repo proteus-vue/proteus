@@ -97,4 +97,41 @@ describe('★B1 · 统一运行期（createScreenRuntime）', () => {
     expect(r.handled, '无该节点 ⇒ 不跑 handler（不静默乱跑）').toBe(false)
     expect(Number(inst.data()['count']), 'count 不变').toBe(0)
   })
+
+  it('③ 一次性 VM 状态回灌（snapshot→seedData）：跨 VM 保留 count（鸿蒙「点击计数不动」的修法）', async () => {
+    const dir = makeTempProject()
+    const build = await buildAppRuntimeContent(dir, 'android')
+    const artifacts = JSON.parse(fs.readFileSync(build.outFile, 'utf-8')) as Record<string, ScreenRuntimeArtifact>
+    const ev = artifacts['idx']!.events[0]!
+
+    // VM A：派发 count++ → 导出 snapshot（宿主持有）
+    const rtA = createScreenRuntime({ artifacts, applyOps: () => {}, viewport: { width: 390, height: 844 } })
+    rtA.instance('idx').dispatch('tap', [ev.nodeId])
+    expect(Number(rtA.instance('idx').data()['count'])).toBe(1)
+    const snap = rtA.snapshot()
+
+    // VM B（新实例）——回灌 snapshot ⇒ count 从 1 起（不是 0）
+    const rtB = createScreenRuntime({ artifacts, applyOps: () => {}, viewport: { width: 390, height: 844 }, seedData: snap })
+    const instB = rtB.instance('idx')
+    expect(Number(instB.data()['count']), 'snapshot 回灌 ⇒ count 保留 1').toBe(1)
+    instB.dispatch('tap', [ev.nodeId])   // 1→2
+    expect(Number(instB.data()['count'])).toBe(2)
+  })
+
+  it('③b refresh()：数据变后 content() 反映新值（applyOps 为 no-op 的宿主整树重挂上屏）', async () => {
+    const dir = makeTempProject()
+    const build = await buildAppRuntimeContent(dir, 'android')
+    const artifacts = JSON.parse(fs.readFileSync(build.outFile, 'utf-8')) as Record<string, ScreenRuntimeArtifact>
+    const ev = artifacts['idx']!.events[0]!
+    const rt = createScreenRuntime({ artifacts, applyOps: () => {}, viewport: { width: 390, height: 844 } })
+    const inst = rt.instance('idx')
+    const textsOf = (nodes: unknown[]): string =>
+      (nodes as Array<Record<string, unknown>>).map((n) => String(n.text ?? '')).join('|')
+    const before = textsOf(inst.content().nodes)   // count=0 渲染
+    expect(before).toContain('0')
+    inst.dispatch('tap', [ev.nodeId])              // count 0→1；dispatch 内部已 rebuild
+    const after = textsOf(inst.content().nodes)
+    expect(after, 'content() 文本应随 count 变化（无需 applyOps）').not.toBe(before)
+    expect(after).toContain('1')
+  })
 })
