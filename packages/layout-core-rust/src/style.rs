@@ -432,6 +432,10 @@ pub struct LStyle {
     pub grid_template_columns: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub grid_template_rows: Option<String>,
+    /// ★★★grid-auto-flow 项（2026-10-08）：类 grid 容器的自动放置（`row`/`column`/`dense`/`column dense`）。
+    ///   仅对 **grid 容器**生效（taffy `GridAutoFlow`）；item 子项上的该属性被忽略（与 Web 同）。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub grid_auto_flow: Option<String>,
     /// ★批次 41：grid item 放置（CSS `grid-column` 线号）——`(start, Option<end>)`；线号可为负（-1 = 最后一条线）。
     ///   `end=None` ⇒ auto（跨 1 轨）。仅对 **grid 容器里的 item** 生效（taffy `Line<GridPlacement>`）。
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -664,6 +668,7 @@ impl Default for LStyle {
             overflow: Overflow::default(),
             grid_template_columns: None,
             grid_template_rows: None,
+            grid_auto_flow: None,
             grid_column: None,
             grid_row: None,
             translate_x: 0.0,

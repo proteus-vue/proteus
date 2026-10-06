@@ -625,6 +625,19 @@ export const STYLE_IR_FIELDS: Record<string, StyleFieldSpec> = {
       inheritable: false,
     },
   },
+  "gridAutoFlow": {
+    scope: "semantic",
+    domain: "layout",
+    valueType: "enum",
+    sources: {
+      compiler: "APP_LAYOUT_FIELDS",
+      matrixLevel: "GridAutoFlow",
+      runtimeWhitelist: false,
+      runtimeForbidden: false,
+      consistencyMatrix: true,
+      inheritable: false,
+    },
+  },
   "gridColumn": {
     scope: "semantic",
     domain: "layout",
@@ -1292,13 +1305,13 @@ export const STYLE_IR_FIELDS: Record<string, StyleFieldSpec> = {
 
 /** 摘要（判据与官网数字读它——机器推导，非手写） */
 export const STYLE_IR_SUMMARY = {
-  total: 96,
-  semantic: 70,
+  total: 97,
+  semantic: 71,
   engineOnly: 26,
   byDomain: {
     "derived": 10,
     "edges": 8,
-    "layout": 41,
+    "layout": 42,
     "matrix-only": 4,
     "paint": 32,
     "special": 1,

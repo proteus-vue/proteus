@@ -37,6 +37,8 @@ export const APP_LAYOUT_FIELDS: readonly string[] = [
   // ★★★overflow-x 项（2026-10-06）：逐轴溢出（内核/宿主按轴裁剪子内容）
   'overflowX', 'overflowY',
   'gridTemplateColumns', 'gridTemplateRows', 'gridColumn', 'gridRow', 'aspectRatio', 'pointerEvents',
+  // ★★★grid-auto-flow 项（2026-10-08）：自动放置方向/密度（grid 容器布局，内核 taffy）
+  'gridAutoFlow',
   'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
   'marginTop', 'marginRight', 'marginBottom', 'marginLeft',
 ]
@@ -211,6 +213,8 @@ export function mapStyleIRToApp(fields: Record<string, unknown>): AppMappingResu
         'alignItems', 'alignContent', 'alignSelf', 'boxSizing', 'whiteSpace',
         // ★★★justify-self 项（2026-10-06）：网格项行内轴自对齐（字符串枚举，内核 DTO 通道）
         'justifySelf',
+        // ★★★grid-auto-flow 项（2026-10-08）：枚举字符串（内核 DTO 通道）
+        'gridAutoFlow',
         // ★★★word-break 项（2026-10-06）：行内断词策略（字符串枚举，透传宿主文本引擎）
         'wordBreak',
         // ★★★背景定位家族（2026-10-07）：字符串形态（宿主解析几何）

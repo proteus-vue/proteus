@@ -1305,3 +1305,15 @@
   · **Web**：overflow-page scrollY=0（锁）· background-position scrollY=22（可滚）；· **Android**：range=0（锁，rootOvf=hidden）/ range=20（可滚）；· **iOS**：range=0（锁）/ range=20（可滚）；· **鸿蒙**：max=0（锁，contentH 2125>816）/ max=41（可滚）。四端**锁/不锁行为一致**。
 **⑤ ★验收纪律（新坑）**：这类「**页面级行为**」页，内容**必须用静态高块**（非 v-for）——App 屏内容是**静态结构**，v-for 不展开（实测 40 行只折 1 行 ⇒ 无真溢出、测不出锁滚）。写进 PLAYBOOK。
 **⑥ 影响**：三端宿主（VaporRenderHost.java / selfdraw-scene.swift / Superapp.ets）· 验收页 overflow-page.vue · PLAYBOOK（页面滚动锁定真值 + 静态高块纪律）；实测无既有页受影响（无页声明页根 overflow-y:hidden ⇒ 纯 opt-in）。
+571. **★★★CSS 逐项 · grid-auto-flow（类 grid 容器自动放置方向/密度，P0·3×，App/Web 对齐）**：
+**① 用户指令**：「继续下一项」⇒ css:next 取下一项 = grid-auto-flow。
+**② 侦察（先取证）**：Web 真值（真 Chromium 实测，2 列 3 项）——`row`(初值) 第 3 项**折到第 2 行**；`column` 进隐式第 3 列；`dense` 让自动项**回填**显式落位留出的空洞。语料 3×（p-formfactor 仪表盘 `grid-auto-flow: column` + 多列形态 `dense`）。**内核 taffy 0.14 原生** `Style.grid_auto_flow`（Row/Column/RowDense/ColumnDense）；延续 #560 纯内核布局（**宿主零改动**——三端自绘按算出的 rect 画，Android 仅需白名单透传）。**Skyline 无 Grid 容器**（引擎锁死——与 justify-self 同款具名边界）。
+**③ 交付（全链）**：
+  · **契约四同步**：新级别 `GridAutoFlow`（值集 = 四端可表达子集 row/column/dense/column dense；Web `row dense` 归一为 `dense`）——contracts + runtime PROP_TYPES + 注册表 VALUE_TYPE_BY_LEVEL（semantic 70→71）。
+  · **编译器折叠**：`APP_LAYOUT_FIELDS` + `APP_ENUM_VALUES.gridAutoFlow` 封闭集 + 解析分支（`row dense`→`dense` 归一）；CSE `ENUM_PROPS`/`ENUM_IR` 直通 `gridAutoFlow`。
+  · **内核 Rust**：`LStyle.grid_auto_flow` + `NodeDto.grid_auto_flow` + ffi 绑定 + `taffy_engine::parse_grid_auto_flow` → `out.grid_auto_flow`（仅 grid 容器消费）；新增单测 `grid_auto_flow_row_vs_column`（row 折行 vs column 进列，与 Web 真值同）。
+  · **一致性链**：snapshot 接口+STYLE_KEYS+validate、coverage、appliers/app（APP_LAYOUT_FIELDS+enumFields）、probes/web、skyline applier（grid 族丢；gridAutoFlow 按"MP build 透传"归通用字符串）；能力对齐源 `app-profile-features.json` 加 feature（semantic）；profile 边界基线加 `grid-auto-flow.vue:display:grid` 豁免（同 justify-self 先例）。
+  · **★宿主键白名单**：新增内核键 `gridAutoFlow` 漏登记 Android `VaporRenderHost.LAYOUT_KEYS` ⇒ **门禁 `check:host-kernel-keys` 当场抓出**（"宿主白名单必须跟内核新字段走"——第四次同款缺陷被门禁拦住，未上真机即发现）。
+**④ 判据**：`css:verify grid-auto-flow` 三段（implemented/parity/endsMapped）**全绿** · 验收页 `css-conformance/pages/grid-auto-flow.vue`（3 案例）· **四端真机**：Android/iOS/鸿蒙 ✅ 三案与 Web 同（**独立子代理逐案例复核**）· MP ◐（Skyline 无 Grid 容器，堆叠成单列——引擎锁死具名边界，与 justify-self 同款）· probe 四端页面级 PASS · 全量 5319/5319（web-probe golden 刷新）· coupled 311 绿 · 门禁全绿（style-ir-schema/style-coverage/app-css-surface/host-kernel-keys/css-capability-alignment/profile-baseline/content/stats/docs-stats）。
+**⑤ 诚实边界**：a) **MP/Skyline 无 Grid 容器**（官方属性表无 grid 族，`display:grid` 退化）⇒ 三案在该端堆叠成单列（引擎锁死，页面顶部具名）；b) App/Web 对齐（主承载端 = App 自研内核 taffy GridAutoFlow 原生）。
+**⑥ 影响**：contracts/runtime/compiler/cse/内核 Rust(style/ffi/taffy_engine)/consistency 链/Android 宿主(LAYOUT_KEYS)/验收页/能力源/基线；**下一项**：按 css:next 取。

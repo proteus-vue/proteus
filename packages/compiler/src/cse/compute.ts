@@ -56,6 +56,8 @@ const ENUM_PROPS = new Set([
   'border-top-style', 'border-right-style', 'border-bottom-style', 'border-left-style',
   // ★★★justify-self 项（2026-10-06）：网格项行内轴自对齐（关键字枚举，小写归一）
   'justify-self',
+  // ★★★grid-auto-flow 项（2026-10-08）：类 grid 容器的自动放置（关键字枚举）
+  'grid-auto-flow',
   // ★★★word-break 项（2026-10-06）：行内断词策略（关键字枚举，小写归一）
   'word-break',
   // ★★★背景定位家族（2026-10-07）：size/position/repeat（关键字/长度/百分比——字符串原样透传，仅归一空白）
@@ -744,6 +746,8 @@ function mapToIrField(prop: string, val: CssComputedValue): { field: string; val
     'align-self': 'alignSelf',
     // ★★★justify-self 项（2026-10-06 · css:next P0·9×）：网格项行内轴自对齐（CSE 直通同名 IR 字段）
     'justify-self': 'justifySelf',
+    // ★★★grid-auto-flow 项（2026-10-08）：CSE 直通同名 IR 字段
+    'grid-auto-flow': 'gridAutoFlow',
     // ★★★word-break 项（2026-10-06 · css:next P0·7× · CSS Text）：行内断词策略（继承属性；CSE 直通同名 IR 字段）
     'word-break': 'wordBreak',
     // ★★★背景定位家族（2026-10-07）：CSE 直通同名 IR 字段（字符串）

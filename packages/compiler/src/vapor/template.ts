@@ -69,6 +69,9 @@ export const APP_LAYOUT_FIELDS = [
   'justifySelf',
   // ★★全端对齐批（2026-10-05 · white-space）：文本换行/空白语义（值透传宿主消费；内核忽略该键）——
   //   此前 App 端只有单行模型是历史缺口；现五端实现（Android/iOS/鸿蒙/MP 对齐 Web 基准）。
+  // ★★★grid-auto-flow 项（2026-10-08 · css:next P0·3× · CSS Grid）：类 grid 容器的**自动放置方向/密度**
+  //   （row/column/dense/column dense）。内核 taffy `GridAutoFlow` 原生（仅 grid 容器消费）；宿主零改动（纯内核布局）。
+  'gridAutoFlow',
   'whiteSpace',
   // ★★★word-break 项（2026-10-06 · css:next P0·7× · CSS Text）：**行内断词策略**（继承属性；
   //   值透传宿主消费——内核忽略该键，与 whiteSpace 同处置）。语料 7 处（长串/代码块 `break-all`）。
@@ -96,6 +99,8 @@ export const APP_ENUM_VALUES: Record<string, readonly string[]> = {
   justifySelf: ['auto', 'normal', 'start', 'end', 'flex-start', 'flex-end', 'self-start', 'self-end', 'center', 'stretch'],
   flexDirection: ['row', 'column', 'row-reverse', 'column-reverse'],
   flexWrap: ['nowrap', 'wrap', 'wrap-reverse'],
+  // ★★★grid-auto-flow 项（2026-10-08）：自动放置封闭集（与 runtime PROP_TYPES.GridAutoFlow 同集；Web `row dense` 归一为 `dense`）
+  gridAutoFlow: ['row', 'column', 'dense', 'column dense'],
 }
 
 /** 绘制字段（宿主自绘读这些键；模板照样要带上，否则挂载后无底色/无字色） */
@@ -703,6 +708,21 @@ export function parseStaticStyle(
         }
         out[key] = g
         markImportant(key)
+        continue
+      }
+      // ★★★grid-auto-flow 项（2026-10-08 · css:next P0·3× · CSS Grid）：类 grid 容器的**自动放置方向/密度**。
+      //   值集 = 四端可表达子集（row / column / dense / column dense）；Web `row dense` 归一为 `dense`（同为 RowDense）。
+      //   内核 taffy `GridAutoFlow` 原生（仅 grid 容器消费）⇒ 宿主零改动（纯内核布局）。
+      if (key === 'gridAutoFlow') {
+        let v = rawVal.trim().toLowerCase()
+        if (v === 'row dense') v = 'dense'
+        const allowedGaf = APP_ENUM_VALUES.gridAutoFlow!
+        if (!allowedGaf.includes(v)) {
+          pushDiag(`\`${rawKey}: ${rawVal}\` 不是 App 引擎支持的值（gridAutoFlow 仅认：${allowedGaf.join(' / ')}）——已跳过`)
+          continue
+        }
+        out.gridAutoFlow = v
+        markImportant('gridAutoFlow')
         continue
       }
       if (key === 'whiteSpace') {

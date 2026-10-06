@@ -207,7 +207,8 @@ node scripts/css-acceptance-record.mjs <feature-id> <verdicts.json>
   ★★**纪律升级（不再靠注释）**：新增门禁 `pnpm check:host-kernel-keys`——从内核 `style_from_dto`
   **推出**消费键，断言宿主白名单覆盖（或 `EXCUSED` 显式豁免）；**改内核字段/宿主白名单后必跑**。
   历史同类（都栽在白名单）：clipPath/glow/mask（2026-10-01/03）· borderRadiusCorners（iOS styleOf）·
-  本轮 justifySelf（+ 顺带抓出批次 41 的 gridColumn/gridRow 从未登记）。
+  justifySelf + 批次 41 的 gridColumn/gridRow（2026-10-06）· **gridAutoFlow（2026-10-08 · grid-auto-flow 项）——
+  本轮由 `check:host-kernel-keys` 门禁**在**上真机前**当场抓出，未再真机白跑**（门禁价值实证）。
 - **b) 宿主物理化的「长度」必须连字符串里的 px 一起缩**：Android 宿主把数值长度乘密度（×density），
   但 `gridTemplateColumns: "240px"` 是**字符串**（不在数值白名单）⇒ track 未缩 ⇒ 子项（宽已缩）
   **恰好填满 track** ⇒ `justify-self` 无对齐空间（Web 端逻辑单位无此问题）。修法：物理化时把

@@ -85,6 +85,8 @@ const VALUE_TYPE_BY_LEVEL = {
   Overflow: 'enum',
   // ★★★justify-self 项（2026-10-06）：网格项行内轴自对齐值类型（与 runtime PROP_TYPES.JustifySelf 同集）
   JustifySelf: 'enum',
+  // ★★★grid-auto-flow 项（2026-10-08）：自动放置枚举（与 runtime PROP_TYPES.GridAutoFlow 同集）
+  GridAutoFlow: 'enum',
   // ★★★word-break 项（2026-10-06）：行内断词策略值类型（与 runtime PROP_TYPES.WordBreak 同集）
   WordBreak: 'enum',  // ★★★背景定位家族（2026-10-07）：size/position/repeat 值类型（与 runtime PROP_TYPES 同集）
   BackgroundSize: 'enum',
