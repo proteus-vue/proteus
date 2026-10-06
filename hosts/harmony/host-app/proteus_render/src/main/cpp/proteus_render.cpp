@@ -297,6 +297,9 @@ struct TextDrawSpec {
     int lineClamp = 0;
     /* ── ★★四通道（2026-10-03）——在 content modifier 的 canvas 上画（RenderNode 无这些属性 API）── */
     double w = 0, h = 0, radius = 0;          // 物理 px（与 canvas 同坐标系）
+    /** ★★★text 内间距批（2026-10-09）：文本绘制内缩 = 盒内 padding（物理 px）——
+     *   文字自内容盒内缘起排、折行宽 = 盒宽 − padL − padR（Web 真值）。 */
+    double padL = 0, padT = 0, padR = 0, padB = 0;
     bool hasGrad = false;
     bool gradLinear = true;
     double gradAngle = 90;
@@ -644,27 +647,34 @@ static void drawChannelsAndText(OH_Drawing_Canvas* canvas, const TextDrawSpec* s
                     //   非 ellipsis 分支此前硬编码 10000 ⇒ typography **永不折行**（B 案例正文
                     //   单行冲到屏右缘、D 案例溢出无裁切）。改为节点**布局盒宽**（>1.0 才用——
                     //   无宽信息时保留兜底大宽，行为与既有不变）。nowrap 语义的产物透传为后续项。
-                    const double layoutW = spec->w > 1.0 ? spec->w : 10000.0;
+                    // ★★★text 内间距批（2026-10-09）：折行宽 = **内容盒宽**（内缩 padding）
+                    const double contentW = spec->w - spec->padL - spec->padR;
+                    const double layoutW = contentW > 1.0 ? contentW : (spec->w > 1.0 ? spec->w : 10000.0);
                     OH_Drawing_TypographyLayout(typo, layoutW);
                     // ★批次 13（CSS 半行距居中）：声明行高 ⇒ 字形内容区在行盒内垂直居中
                     //   （typoH 为字形内容高；offset = (盒高 − 字形高)/2）；未声明 ⇒ 顶对齐（既有）。
                     double offY = 0.0;
                     if (spec->lineHeightPx > 0) {
                         double typoH = OH_Drawing_TypographyGetHeight(typo);
-                        offY = (spec->h - typoH) * 0.5;
+                        // ★★★text 内间距批（2026-10-09）：行盒 = **内容盒**（内缩 padding-top/bottom）
+                        double contentH = spec->h - spec->padT - spec->padB;
+                        offY = (contentH - typoH) * 0.5;
                         if (offY < 0) offY = 0;
                     }
                     // ★★全端对齐批：nowrap 溢出裁切（overflow:hidden）⇒ 裁到盒（Web 裁切语义）
+                    // ★★★text 内间距批（2026-10-09）：绘制原点内缩 padding（内容盒左上）
+                    const double padX = spec->padL;
+                    const double padY = spec->padT;
                     if (spec->clipText && spec->w > 1.0) {
                         OH_Drawing_CanvasSave(canvas);
                         OH_Drawing_Rect* cr = OH_Drawing_RectCreate(0.0f, 0.0f,
                                 static_cast<float>(spec->w), static_cast<float>(spec->h > 1.0 ? spec->h : spec->fontSizePx * 1.4));
                         OH_Drawing_CanvasClipRect(canvas, cr, INTERSECT, false);
-                        OH_Drawing_TypographyPaint(typo, canvas, 0.0, offY);
+                        OH_Drawing_TypographyPaint(typo, canvas, padX, padY + offY);
                         OH_Drawing_CanvasRestore(canvas);
                         OH_Drawing_RectDestroy(cr);
                     } else {
-                        OH_Drawing_TypographyPaint(typo, canvas, 0.0, offY);
+                        OH_Drawing_TypographyPaint(typo, canvas, padX, padY + offY);
                     }
                     OH_Drawing_DestroyTypography(typo);
                 }
@@ -1169,6 +1179,9 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
             spec->w = w;
             spec->h = h;
             spec->radius = radius;
+            // ★★★text 内间距批（2026-10-09）：读文本内缩（物理 px；缺省 0 ⇒ 零行为变化）
+            { jsonNumber(it, "padL", &spec->padL); jsonNumber(it, "padT", &spec->padT);
+              jsonNumber(it, "padR", &spec->padR); jsonNumber(it, "padB", &spec->padB); }
             VaporChannelState ch;
             ch.radius = radius;
             // 渐变：{"kind":"linear","angle":90,"stops":[{"offset":0,"color":N},…]}

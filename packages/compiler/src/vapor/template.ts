@@ -1009,16 +1009,8 @@ export function parseStaticStyle(
           markImportant(pctKey)
           continue
         }
-        // ★★全端对齐批（2026-10-05）：`vh` 单位（真实项目最常见：`min-height: 100vh` 页面铺满）——
-        //   此前直接落 不是纯数值 诊断被丢 ⇒ App 端页面底色不铺满。映射 `*Pct`（内核 percent，基=父）。
-        //   页面根/全屏容器的父即视口 ⇒ 等价 vh；其余场景为**近似**（如实注释，不静默）。
-        const vh = /^(\d+(?:\.\d+)?)vh$/.exec(rawVal)
-        if (vh) {
-          const pctKey = key + 'Pct'
-          out[pctKey] = Number(vh[1]) / 100
-          markImportant(pctKey)
-          continue
-        }
+        // ★★★vw/vh 单位（2026-10-08 · 决策 #595）：`min-height:100vh` 等 → env 视口变量（**运行时真视口**，
+        //   比原 `*Pct`（父内容盒近似）更准）。`envLengthToken` 在下方通用尾部先捕获——此处无需特例。
       }
       const envTok = envLengthToken(rawVal)
       if (envTok !== undefined) { out[key] = envTok; markImportant(key); continue }
@@ -2601,9 +2593,10 @@ function envBase(s: string): { name: string; fallback?: number } | undefined {
   return undefined
 }
 
-/** env 引用 → token 串（env:<name>；偏移 +N/-N；fallback ~F）。 */
-function envTokenOf(name: string, offset: number, fallback?: number): string {
+/** env 引用 → token 串：`env:<name>[*<scale>][+/-<offset>][~<fallback>]`。 */
+function envTokenOf(name: string, offset: number, fallback?: number, scale?: number): string {
   let t = 'env:' + name
+  if (scale !== undefined && scale !== 1) t += '*' + scale
   if (offset) t += (offset > 0 ? '+' : '') + offset
   if (fallback !== undefined) t += '~' + fallback
   return t
@@ -2616,22 +2609,51 @@ function lenOrEnv(v: string): number | string | undefined {
   return numOf(v)
 }
 
-/** 识别 env 长度表达式 → token 串；非 env ⇒ undefined（走原逻辑）。 */
+/** ★★★`vw`/`vh` 单位（2026-10-08 · 决策 #595 · Stage 2）：`Nvw`/`Nvh` → `env:--pf-vw*<N/100>`（视口尺寸，
+ *   运行期真实视口；App 端此前**整条丢弃** `vw`/`vh`）。与 Web `vw`/`vh` 同语义（Web 原生支持→此处仅 App 折叠面用）。 */
+function vwVhToken(s: string): string | undefined {
+  const m = /^(\d*\.?\d+)(vw|vh)$/i.exec(s.trim())
+  if (!m) return undefined
+  const scale = Number(m[1]) / 100
+  return envTokenOf(m[2]!.toLowerCase() === 'vw' ? '--pf-vw' : '--pf-vh', 0, undefined, scale)
+}
+
+/** 识别 env 长度表达式（含 vw/vh 单位）→ token 串；非 env ⇒ undefined（走原逻辑）。 */
 function envLengthToken(raw: string): string | undefined {
   const s = raw.trim()
   const base = envBase(s)
   if (base) return envTokenOf(base.name, 0, base.fallback)
+  const vw = vwVhToken(s)
+  if (vw) return vw
   const c = /^calc\(\s*([\s\S]+?)\s*\)$/i.exec(s)
   if (!c) return undefined
-  const inner = c[1]!
+  const inner = c[1]!.trim()
+  // 先试「env ± Npx」（偏移）
   const fwd = /^([\s\S]+?)\s*([+-])\s*(-?\d*\.?\d+)px$/i.exec(inner)
   const rev = /^(-?\d*\.?\d+)px\s*([+-])\s*([\s\S]+)$/i.exec(inner)
   let b: { name: string; fallback?: number } | undefined
   let off = 0
-  if (fwd) { b = envBase(fwd[1]!); if (b) off = (fwd[2] === '-' ? -1 : 1) * Number(fwd[3]) }
-  else if (rev) { b = envBase(rev[3]!); if (b) off = (rev[2] === '-' ? -1 : 1) * Number(rev[1]) }
+  let scale: number | undefined
+  if (fwd) { b = envBase(fwd[1]!) ?? envVwVhBase(fwd[1]!); if (b) off = (fwd[2] === '-' ? -1 : 1) * Number(fwd[3]) }
+  else if (rev) { b = envBase(rev[3]!) ?? envVwVhBase(rev[3]!); if (b) off = (rev[2] === '-' ? -1 : 1) * Number(rev[1]) }
+  if (!b) {
+    // 再试「env * N」「N * env」「env / N」（缩放）
+    const fwd2 = /^([\s\S]+?)\s*\*\s*(-?\d*\.?\d+)$/i.exec(inner)
+    const rev2 = /^(-?\d*\.?\d+)\s*\*\s*([\s\S]+)$/i.exec(inner)
+    const div = /^([\s\S]+?)\s*\/\s*(-?\d*\.?\d+)$/i.exec(inner)
+    if (fwd2) { b = envBase(fwd2[1]!) ?? envVwVhBase(fwd2[1]!); if (b) scale = Number(fwd2[2]) }
+    else if (rev2) { b = envBase(rev2[2]!) ?? envVwVhBase(rev2[2]!); if (b) scale = Number(rev2[1]) }
+    else if (div) { const d = Number(div[2]); b = envBase(div[1]!) ?? envVwVhBase(div[1]!); if (b && d !== 0) scale = 1 / d }
+  }
   if (!b) return undefined
-  return envTokenOf(b.name, off, b.fallback)
+  return envTokenOf(b.name, off, b.fallback, scale)
+}
+
+/** `Nvw`/`Nvh` 作为 env 基元（供 calc 内使用）→ `--pf-vw`/`--pf-vh`（scale 由外层 calc 处理）。 */
+function envVwVhBase(s: string): { name: string } | undefined {
+  const m = /^(?:\d*\.?\d+)?(vw|vh)$/i.exec(s.trim())
+  if (!m) return undefined
+  return { name: m[1]!.toLowerCase() === 'vw' ? '--pf-vw' : '--pf-vh' }
 }
 
 /** `56px` / `56` / `0.5` → 数值；`50%` / `auto` → undefined（百分比**宽高**在调用处另行映射为 widthRatio/heightRatio；其余属性的百分比仍不支持，见诊断） */

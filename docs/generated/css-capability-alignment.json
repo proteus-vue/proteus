@@ -921,7 +921,7 @@
       "app": "supported",
       "tier": "L1",
       "strategy": "编译期折叠",
-      "note": "px/数字 → {top,right,bottom,left}；1–4 值简写按 CSS 标准展开（`padding: 8px 12px`）；Web 探针取 padding-top 代表",
+      "note": "px/数字 → {top,right,bottom,left}；1–4 值简写按 CSS 标准展开（`padding: 8px 12px`）；Web 探针取 padding-top 代表。★文本节点内间距修复（2026-10-09 · 用户抓出「App 端 text 的 padding-left 被丢弃」）：盒子布局（内核 taffy）一直吃 padding，但**文本绘制**此前从**盒原点**起排 ⇒ text 节点的 padding 静默丢弃（与 Web 不符——Web 的文本 padding 内缩**行盒**、折行宽 = 内容盒宽）。三端宿主统一改为按**内容盒**绘制（Android ProteusHostView.drawCmds/drawTextMultiline、iOS lineBoxFrame/contentBox、鸿蒙 proteus_render 的 padL/T/R/B 内缩；JsRenderHost 同步）。",
       "supportTier": "universal"
     },
     {
@@ -1556,7 +1556,7 @@
       "app": "absent",
       "tier": "L0",
       "strategy": "编译期折叠",
-      "note": "收 px/数字/rpx（宽高另支持 %）。★批次 21：`rpx`（小程序 750 设计单位，1rpx = 0.5px，与 rpxRatio:2 互为逆）折为 px——真项目 125 处。其余相对单位（em/rem/vw/vh）编译期无法无上下文求值 ⇒ 诊断跳过（`var()` 令牌见 css-vars 行；`clamp()/min()/max()` 的**可绝对化**形态见 math-functions 行——已支持）。★批次 22 + calc 收口（2026-10-08）：`calc()` **完整算术常量折叠**——`+ - * /` 与括号、`env(safe-area-inset-*)` fallback（`var()` 已在解析前置换 ⇒ `calc(var(--u) * 1.15)` 也折）；**CSE 与 App 折叠面共享唯一实现 `calc-fold.ts`（同口径）**——此前 CSE 仅支持单层同单位加减（`calc(8px * 0.6)` 等在 CSE 被丢、App 却折得出 ⇒ 两路径分叉）。含 `%`/相对单位的 calc（`calc(100% - 20px)`）仍诊断（无上下文）。组件库 64 处 `calc(var(--x) * N)` 依赖它",
+      "note": "收 px/数字/rpx（宽高另支持 %）。★批次 21：`rpx`（小程序 750 设计单位，1rpx = 0.5px，与 rpxRatio:2 互为逆）折为 px——真项目 125 处。★★`vw`/`vh`（2026-10-08 · 决策 #595 · Stage 2）：编译期折为内置视口变量 `--pf-vw`/`--pf-vh`（`19vw` → `env:--pf-vw*0.19`，宿主采集**真实视口逻辑尺寸**；`min-height:100vh` → `env:--pf-vh`）——此前 App **整条丢弃** `vw`/`vh`（页面不铺满/宽度丢失）；现与 Web 同语义。其余相对单位（em/rem）编译期无上下文 ⇒ 诊断跳过（`var()` 见 css-vars 行；`clamp()/min()/max()` 见 math-functions 行——已支持）。★批次 22 + calc 收口（2026-10-08）：`calc()` **完整算术常量折叠**——`+ - * /` 与括号、`env(safe-area-inset-*)` fallback（`var()` 已在解析前置换 ⇒ `calc(var(--u) * 1.15)` 也折）；**CSE 与 App 折叠面共享唯一实现 `calc-fold.ts`（同口径）**——此前 CSE 仅支持单层同单位加减（`calc(8px * 0.6)` 等在 CSE 被丢、App 却折得出 ⇒ 两路径分叉）。含 `%`/相对单位的 calc（`calc(100% - 20px)`）仍诊断（无上下文）。组件库 64 处 `calc(var(--x) * N)` 依赖它",
       "supportTier": "unsupported"
     },
     {
@@ -1621,7 +1621,7 @@
       "app": "supported",
       "tier": "L4",
       "strategy": "直映射",
-      "note": "★★★word-break 项（2026-10-06 · css:next P0·7× · CSS Text · 继承属性）：行内断词策略。值集 = 四端可表达子集（normal / break-all / break-word；keep-all/auto-phrase 诊断跳过）。语料 7 处（长串/代码块 break-all · p-rich-text break-word）。契约：新级别 WordBreak（四同步）；CSE 继承集（word-break 是继承属性）+ 展开映射；编译器 APP_LAYOUT_FIELDS + APP_INHERITABLE_FIELDS（补 white-space 同族）+ 折叠分支（透传宿主文本引擎，内核忽略该键）；consistency 链条（applier/snapshot/probes/coverage）。★承载端：Android StaticLayout setBreakStrategy / iOS CATextLayer lineBreakMode(byCharWrapping) / 鸿蒙 OH_Drawing_SetTypographyTextWordBreakType / MP wxss（官方表支持 normal/break-all）。★诚实边界：keep-all（CJK 专用，Skyline 无、内核无对应）/ auto-phrase（实验）未支持（诊断跳过）；break-word 归一波 overflow-wrap 语义（主流实现等价）",
+      "note": "★★★word-break 项（2026-10-06 · css:next P0·7× · CSS Text · 继承属性）：行内断词策略。值集 = 四端可表达子集（normal / break-all / break-word；keep-all/auto-phrase 诊断跳过）。语料 7 处（长串/代码块 break-all · p-rich-text break-word）。契约：新级别 WordBreak（四同步）；CSE 继承集（word-break 是继承属性）+ 展开映射；编译器 APP_LAYOUT_FIELDS + APP_INHERITABLE_FIELDS（补 white-space 同族）+ 折叠分支（透传宿主文本引擎，内核忽略该键）；consistency 链条（applier/snapshot/probes/coverage）。★承载端：Android StaticLayout setBreakStrategy / iOS CATextLayer lineBreakMode(byCharWrapping) / 鸿蒙 OH_Drawing_SetTypographyTextWordBreakType / MP wxss（官方表支持 normal/break-all）。★normal 断词对齐（2026-10-09）：App 三端（自绘）对「无断点长串且溢出盒宽」显式判为**单行溢出**（= Web normal「不折长词」）——Android `isUnbreakableToken`+单行绘制 / iOS `effectiveWrap`+跳过 CoreText / 鸿蒙 `WORD_BREAK_TYPE_NORMAL`；**MP/Skyline 引擎锁定**（恒软换行，具名豁免）。★诚实边界：keep-all（CJK 专用，Skyline 无、内核无对应）/ auto-phrase（实验）未支持（诊断跳过）；break-word 归一波 overflow-wrap 语义（主流实现等价）",
       "supportTier": "universal"
     },
     {

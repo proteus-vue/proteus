@@ -152,6 +152,9 @@ struct Superapp {
           '--pf-cutout-left': cutL,
           '--pf-cutout-right': cutR,
           '--pf-keyboard-height': 0,
+          // ★视口逻辑尺寸（决策 #595）：`vw`/`vh` 单位用（本作用域无 disp ⇒ 取默认显示）
+          '--pf-vw': display.getDefaultDisplaySync().width / vp2px(1),
+          '--pf-vh': display.getDefaultDisplaySync().height / vp2px(1),
         };
         // I2-ALLOW: **日志读数**取整（安全区写进 hilog 供人核对——非几何换算；几何值 envVars 保留 vp 原值）
         hilog.info(DOMAIN, TAG, 'ENV_VARS top=%{public}d bottom=%{public}d', Math.round(this.envVars['--pf-inset-top']), Math.round(totalB));

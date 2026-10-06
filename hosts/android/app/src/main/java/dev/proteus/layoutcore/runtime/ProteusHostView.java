@@ -120,6 +120,14 @@ public class ProteusHostView extends ViewGroup {
          */
         float[] textShadow;
         /**
+         * ★★★text 内间距批（2026-10-09 · 用户抓出「App 端 text 的内间距不生效，.v-t 的 padding-left 被丢弃」）：
+         *   文本**绘制内缩** = 盒内 padding（物理 px）。Web 真值：文本节点的 padding 内缩**行盒**
+         *   （文字自内容盒内缘起排；折行宽 = 内容盒宽 = 盒宽 − padding-left − padding-right）。
+         *   此前三端都从**盒原点**绘制 ⇒ padding 静默丢弃（与 Web 不符）。
+         *   非 final（构造器重载链长——与 lineClamp/outline/textShadow 同处置，构建后赋值）。
+         */
+        float padL, padT, padR, padB;
+        /**
          * ★★圆角半径（px；0 = 直角）——纯绘制属性（内核不收，只影响观感）。
          *
          * 【为什么加（2026-10-01 · 灯光秀）】灯光秀的 800 颗灯珠用 4px 圆角（圆点观感）；
@@ -549,7 +557,9 @@ public class ProteusHostView extends ViewGroup {
                 canvas.drawRect(c.x, c.y, c.x + c.w, c.y + c.h, bg);
                 if (c.text != null) {
                     if (c.fontSize > 0 && c.fontSize != last) { tp.setTextSize(c.fontSize); last = c.fontSize; }
-                    canvas.drawText(c.text, c.x + 1f, c.y + c.h * 0.8f, tp);
+                    // ★★★text 内间距批（2026-10-09）：载体文本同走内容盒（与主绘制一致）
+                    canvas.drawText(c.text, c.x + c.padL + 1f,
+                            c.y + c.padT + Math.max(1f, c.h - c.padT - c.padB) * 0.8f, tp);
                 }
             }
         }
@@ -587,7 +597,11 @@ public class ProteusHostView extends ViewGroup {
         // ① 指令坐标 → 相对载体
         List<Cmd> rel = new java.util.ArrayList<>(items.size());
         for (Cmd c : items) {
-            rel.add(new Cmd(c.x - rect.left, c.y - rect.top, c.w, c.h, c.color, c.text, c.fontSize));
+            {   // ★★★text 内间距批（2026-10-09）：载体副本必须保留 padding（否则动画中文本内间距丢失）
+                Cmd _rc = new Cmd(c.x - rect.left, c.y - rect.top, c.w, c.h, c.color, c.text, c.fontSize);
+                _rc.padL = c.padL; _rc.padT = c.padT; _rc.padR = c.padR; _rc.padB = c.padB;
+                rel.add(_rc);
+            }
         }
         final CarrierView carrier = new CarrierView(getContext(), rel);
         // ② 播放中把这些指令从指令流跳过（否则**重影**：指令流一份 + 载体一份）
@@ -2734,18 +2748,25 @@ public class ProteusHostView extends ViewGroup {
                     lastShadow = false;
                 }
                 // ★批次 4：绘制 x 按对齐换算（LEFT:CENTER:RIGHT 的 x 语义不同——见 Paint.Align）
-                final float tx = c.textAlign == 1 ? c.x + c.w * 0.5f
-                        : c.textAlign == 2 ? c.x + c.w - 1f : c.x + 1f;
+                // ★★★text 内间距批（2026-10-09）：行盒 = **内容盒**（盒内缩 padding）——
+                //   Web 的文本 padding 把文字推入内缘，折行/对齐都以内含盒为基准。
+                final float tcx = c.x + c.padL;
+                final float tcw = Math.max(1f, c.w - c.padL - c.padR);
+                final float tx = c.textAlign == 1 ? tcx + tcw * 0.5f
+                        : c.textAlign == 2 ? tcx + tcw - 1f : tcx + 1f;
                 // ★批次 13（line-height，CSS 标准语义）：**半行距居中**——行盒高 = lineHeight 时，
                 //   字形内容区在行盒内**垂直居中**（上下各分一半行距）＝ Web/Skyline 的真 CSS 行为。
                 //   未声明行高 ⇒ 沿用旧 0.8h（既有路径零行为变化）。
+                // ★★★text 内间距批（2026-10-09）：垂直同样以**内容盒**为基准（padding-top/bottom 内缩）。
+                final float tcy = c.y + c.padT;
+                final float tch = Math.max(1f, c.h - c.padT - c.padB);
                 final float baseY;
                 if (c.lineHeight > 0f) {
                     android.graphics.Paint.FontMetrics fm = textPaint.getFontMetrics();
                     final float contentH = fm.descent - fm.ascent;
-                    baseY = c.y + (c.lineHeight - contentH) * 0.5f - fm.ascent;
+                    baseY = tcy + (c.lineHeight - contentH) * 0.5f - fm.ascent;
                 } else {
-                    baseY = c.y + c.h * 0.8f;
+                    baseY = tcy + tch * 0.8f;
                 }
                 // ★★全端对齐批（2026-10-05 · white-space 五端对齐）：按模式分流绘制——
                 //   multiLine ⇒ StaticLayout 折行（盒宽约束 + line-height 行距）；
@@ -2756,7 +2777,9 @@ public class ProteusHostView extends ViewGroup {
                     drawTextMultiline(canvas, c);
                 } else if (c.clipText) {
                     int ssave = canvas.save();
-                    canvas.clipRect(c.x, c.y, c.x + c.w, c.y + c.h);
+                    // ★★★text 内间距批（2026-10-09）：CSS overflow 裁剪面 = **padding 盒**（border 盒内缩边框）
+                    canvas.clipRect(c.x + c.borderWidth, c.y + c.borderWidth,
+                            c.x + c.w - c.borderWidth, c.y + c.h - c.borderWidth);
                     if (hardShadow) drawShadowCopy(canvas, c, textPaint, tx, baseY, false);
                     canvas.drawText(c.text, tx, baseY, textPaint);
                     canvas.restoreToCount(ssave);
@@ -3479,8 +3502,9 @@ public class ProteusHostView extends ViewGroup {
      *   textPaint 状态（字号/字重/字距/颜色/alpha）由调用方已设好（与单行路径同一份 paint 状态机）。
      */
     private void drawTextMultiline(Canvas canvas, Cmd c) {
+        // ★★★text 内间距批（2026-10-09）：折行宽 = **内容盒宽**（内缩 padding）
         // I2-ALLOW: 文本**测量/位图**宽（StaticLayout 需整型像素宽——canvas 文本排版参数，非绘制几何发射；绘制几何一律走内核吸附指令流）
-        int w = Math.max(1, (int) Math.ceil(c.w));
+        int w = Math.max(1, (int) Math.ceil(c.w - c.padL - c.padR));
         android.text.Layout.Alignment al = c.textAlign == 1
                 ? android.text.Layout.Alignment.ALIGN_CENTER
                 : c.textAlign == 2 ? android.text.Layout.Alignment.ALIGN_OPPOSITE
@@ -3504,7 +3528,8 @@ public class ProteusHostView extends ViewGroup {
         }
         android.text.StaticLayout layout = b.build();
         int save = canvas.save();
-        canvas.translate(c.x, c.y + (extra > 0.5f ? extra * 0.5f : 0f));
+        // ★★★text 内间距批（2026-10-09）：多行原点内缩 padding（内容盒左上）
+        canvas.translate(c.x + c.padL, c.y + c.padT + (extra > 0.5f ? extra * 0.5f : 0f));
         layout.draw(canvas);
         canvas.restoreToCount(save);
     }
@@ -3529,8 +3554,9 @@ public class ProteusHostView extends ViewGroup {
 
     /** 多行硬边投影：与 drawTextMultiline 同构（平移 dx/dy） */
     private void drawTextMultilineOffset(Canvas canvas, Cmd c, android.text.TextPaint tp, float dx, float dy) {
+        // ★★★text 内间距批（2026-10-09）：阴影副本与本体同款内容盒（宽 + 原点）
         // I2-ALLOW: 文本**测量/位图**宽（StaticLayout 需整型像素宽——canvas 文本排版参数，非绘制几何发射）
-        int w = Math.max(1, (int) Math.ceil(c.w));
+        int w = Math.max(1, (int) Math.ceil(c.w - c.padL - c.padR));
         android.text.Layout.Alignment al = c.textAlign == 1
                 ? android.text.Layout.Alignment.ALIGN_CENTER
                 : c.textAlign == 2 ? android.text.Layout.Alignment.ALIGN_OPPOSITE
@@ -3553,7 +3579,7 @@ public class ProteusHostView extends ViewGroup {
         }
         android.text.StaticLayout layout = b.build();
         int save = canvas.save();
-        canvas.translate(c.x + dx, c.y + dy + (extra > 0.5f ? extra * 0.5f : 0f));
+        canvas.translate(c.x + c.padL + dx, c.y + c.padT + dy + (extra > 0.5f ? extra * 0.5f : 0f));
         layout.draw(canvas);
         canvas.restoreToCount(save);
     }

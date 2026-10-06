@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-06T13:45:15.762Z",
+  "generatedAt": "2026-10-06T17:26:58.309Z",
   "rows": [
     {
       "end": "mp",
@@ -51,6 +51,12 @@
     },
     {
       "end": "mp",
+      "page": "math-functions.png",
+      "out": "css-conformance/results/side-by-side/math-functions.mp-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "mp",
       "page": "outline.png",
       "out": "css-conformance/results/side-by-side/outline.mp-vs-web.png",
       "status": "ok"
@@ -75,6 +81,12 @@
     },
     {
       "end": "mp",
+      "page": "safe-area.png",
+      "out": "css-conformance/results/side-by-side/safe-area.mp-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "mp",
       "page": "text-shadow.png",
       "out": "css-conformance/results/side-by-side/text-shadow.mp-vs-web.png",
       "status": "ok"
@@ -83,6 +95,12 @@
       "end": "mp",
       "page": "text.png",
       "out": "css-conformance/results/side-by-side/text.mp-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "mp",
+      "page": "vw-vh.png",
+      "out": "css-conformance/results/side-by-side/vw-vh.mp-vs-web.png",
       "status": "ok"
     },
     {
@@ -141,6 +159,12 @@
     },
     {
       "end": "android",
+      "page": "math-functions.png",
+      "out": "css-conformance/results/side-by-side/math-functions.android-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "android",
       "page": "outline.png",
       "out": "css-conformance/results/side-by-side/outline.android-vs-web.png",
       "status": "ok"
@@ -165,6 +189,12 @@
     },
     {
       "end": "android",
+      "page": "safe-area.png",
+      "out": "css-conformance/results/side-by-side/safe-area.android-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "android",
       "page": "text-shadow.png",
       "out": "css-conformance/results/side-by-side/text-shadow.android-vs-web.png",
       "status": "ok"
@@ -173,6 +203,12 @@
       "end": "android",
       "page": "text.png",
       "out": "css-conformance/results/side-by-side/text.android-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "android",
+      "page": "vw-vh.png",
+      "out": "css-conformance/results/side-by-side/vw-vh.android-vs-web.png",
       "status": "ok"
     },
     {
@@ -231,6 +267,12 @@
     },
     {
       "end": "ios",
+      "page": "math-functions.png",
+      "out": "css-conformance/results/side-by-side/math-functions.ios-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "ios",
       "page": "outline.png",
       "out": "css-conformance/results/side-by-side/outline.ios-vs-web.png",
       "status": "ok"
@@ -255,6 +297,12 @@
     },
     {
       "end": "ios",
+      "page": "safe-area.png",
+      "out": "css-conformance/results/side-by-side/safe-area.ios-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "ios",
       "page": "text-shadow.png",
       "out": "css-conformance/results/side-by-side/text-shadow.ios-vs-web.png",
       "status": "ok"
@@ -263,6 +311,12 @@
       "end": "ios",
       "page": "text.png",
       "out": "css-conformance/results/side-by-side/text.ios-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "ios",
+      "page": "vw-vh.png",
+      "out": "css-conformance/results/side-by-side/vw-vh.ios-vs-web.png",
       "status": "ok"
     },
     {
@@ -321,6 +375,12 @@
     },
     {
       "end": "harmony",
+      "page": "math-functions.png",
+      "out": "css-conformance/results/side-by-side/math-functions.harmony-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "harmony",
       "page": "outline.png",
       "out": "css-conformance/results/side-by-side/outline.harmony-vs-web.png",
       "status": "ok"
@@ -345,6 +405,12 @@
     },
     {
       "end": "harmony",
+      "page": "safe-area.png",
+      "out": "css-conformance/results/side-by-side/safe-area.harmony-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "harmony",
       "page": "text-shadow.png",
       "out": "css-conformance/results/side-by-side/text-shadow.harmony-vs-web.png",
       "status": "ok"
@@ -353,6 +419,12 @@
       "end": "harmony",
       "page": "text.png",
       "out": "css-conformance/results/side-by-side/text.harmony-vs-web.png",
+      "status": "ok"
+    },
+    {
+      "end": "harmony",
+      "page": "vw-vh.png",
+      "out": "css-conformance/results/side-by-side/vw-vh.harmony-vs-web.png",
       "status": "ok"
     },
     {

@@ -27,13 +27,16 @@ if (names.length < 8) problems.push(`契约 ENV_VARS 过少（${names.length} �
 for (const n of names) {
   if (!n.startsWith('--pf-')) problems.push(`契约变量名非 --pf-* 前缀：${n}`)
   const s = ENV_VARS[n]
-  if (!s || !s.desc || !['A', 'B', 'C'].includes(s.group)) problems.push(`契约变量缺语义/分组：${n}`)
+  // ★Stage 2（2026-10-09 · 决策 #595）：新增分组 D（视口/设备标量）——分组白名单随契约扩集同步
+  if (!s || !s.desc || !['A', 'B', 'C', 'D'].includes(s.group)) problems.push(`契约变量缺语义/分组：${n}`)
 }
 if (!isEnvVarName('--pf-inset-top')) problems.push('isEnvVarName 判 --pf-inset-top 为假')
 
 // ②④⑤ 源码事实：文件存在 + 关键标记
 const need = [
   ['packages/compiler/src/vapor/template.ts', 'envLengthToken', '编译器 App 折叠未发射 env 引用'],
+  // ★Stage 2：vw/vh 单位折 --pf-vw/--pf-vh（含缩放；App 端此前整条丢弃 vw/vh）
+  ['packages/compiler/src/vapor/template.ts', 'vwVhToken', '编译器未折 vw/vh 单位'],
   ['packages/compiler/src/cse/compute.ts', 'envRefOf', 'CSE 未发射 env 引用'],
   ['packages/consistency/src/appliers/app.ts', "kind === 'env'", 'App applier 未认 env 变体'],
   ['packages/consistency/src/appliers/skyline.ts', "kind === 'env'", 'Skyline applier 未认 env 变体'],

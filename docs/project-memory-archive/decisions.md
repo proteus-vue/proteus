@@ -1559,3 +1559,43 @@
 **⑤ 判据**：四端真机——Android/鸿蒙/MP **显示状态栏 + 页面内容避开**（截图可见）；iOS 内容避让生效；独立子代理终评；`probe` 四端 safe-area 页 PASS；门禁（host-kernel-keys/app-screen-content/gates-sync/script-compile/coupled）全绿；全量。
 **⑥ 顺带修（本次改动暴露/触发的门禁真缺陷 + goog 命中）**：a) `check:host-kernel-keys` 的 LAYOUT_KEYS 提取**正则要求 3 个右括号**（真实是 `asList(...))` 2 个）⇒ 原正则**永不匹配真实收尾**、一路吞到后面的 `)));`，把无关字符串当键（白名单虚高 101 ⇒ 改精确后 52）——**门禁自身假绿**（决策 #593 的 env 代码让它溢出到另一个 `)));` 才暴露）。b) 修为精确正则后抓出 **`glow` 漏登记**（内核 `style_from_dto` 读 `dto.glow` 供 glow 强度动画）⇒ 补进 LAYOUT_KEYS。c) `check:app-screen-content` 的数值键校验**未放行 env token**（examples/svg-skeleton-demo 本就用了 `env(safe-area-inset-top)` ⇒ 现折为 `env:` token ⇒ 被误判"非有限数"）⇒ 加 env token 判据。
 **⑦ 影响**：`packages/app-config/src/{types,validate}.ts` · `packages/cli/src/app-content.ts` · 三端宿主（Android SuperappActivity + Manifest 主题；鸿蒙 Superapp.ets；iOS selfdraw-app.swift）+ 三端构建脚本 + 鸿蒙 gen-fixtures · 编译器 vapor/template.ts（box shorthand env）· `scripts/css-conformance.mjs`（CHROME + probe）· `scripts/check-{host-kernel-keys,app-screen-content}.mjs` · `css-conformance/styles/global.css` + app.config（show）· superapp/app.config.ts。**下一项**：Stage 2（内核 env 表 + ABI v2 + 标量/主题变量）。
+
+596. **★★★App 端 text 节点内间距（padding）三端宿主补齐——用户真机抓出「.v-t 的 padding-left 被丢弃」**：
+**① 用户指令**：「App端text的内间距好像都不生效，比如这个案例的.v-t里面的padding-left直接被丢弃了」。
+**② 取证（先证伪再改）**：编译产物**没丢**——`css-conformance/dist/app/android/screen-content.json` 的 vw-vh node 6 = `{"padding":{"left":10},"text":"30vw",...}`；内核（taffy）也一直按 padding 布局（盒尺寸含 padding）。**真因在绘制**：三端宿主**都把文本画在盒原点**（Android `canvas.drawText(c.text, c.x+1f, c.y+c.h*0.8f)`；iOS CATextLayer frame=整盒；鸿蒙 `TypographyPaint(typo, canvas, 0.0, offY)`）⇒ **文本节点的 padding 静默丢弃**（与 Web 不符——Web 的文本 padding 内缩**行盒**、折行宽 = 内容盒宽）。
+**③ Web 真值（#508 精神）**：文本节点 padding 把**行盒**内缩（文字自内容盒内缘起排）；折行宽 = 盒宽 − padding-left − padding-right；垂直同理。overflow 裁剪面 = padding 盒。
+**④ 交付（三端同一口径 + JsRenderHost 同步）**：
+  · **Android**（`ProteusHostView.java` + `VaporRenderHost.mkCmd`）：`Cmd` 加 `padL/padT/padR/padB`（`applyTextPad` 从 spec 读，已物理化 ×density）；`drawCmds` 单行 tx/baseY 以**内容盒**为基准；`drawTextMultiline`/`…Offset` 折行宽 = 内容盒宽 + 原点内缩；nowrap 裁切裁到 padding 盒；动画载体**拷贝 padding**（否则动画中丢失）；`JsRenderHost.buildCmdOf` 同语义补 padding（两条 host 通路不漂移）。
+  · **iOS**（`selfdraw-scene.swift`）：`styleOf` 透传 padding；新增 `contentBox(f,style)`（border 盒内缩 padding）；`lineBoxFrame` **新增页首** `guard text 非空 else return f`（**只对文本节点**内缩——否则容器被内缩 ⇒ 透出宿主底/尺寸错，真机抓出）；`lineBoxFrame` 以内容盒做半行距居中；`clampedText` 预截断用内容盒宽。
+  · **鸿蒙**（`proteus_host.cpp` + `proteus_render.cpp`）：cmd 发 `padL/padT/padR/padB`（×density）；`TextDrawSpec` 加字段；`TypographyLayout` 折行宽 = 内容盒宽、`TypographyPaint` 原点内缩。
+**⑤ 判据（四端真机 + 独立子代理）**：文本内缩实测（box 左缘→首个白色文本像素）——Web 10.5 CSS px vs Android 11.05 / iOS 11.33 / 鸿蒙 11.23（`padding-left:10px` 语义，均**非贴左**）；`text`/`safe-area` 页同族 PASS；独立子代理四端逐图 **PASS**；`probe` 四端 vw-vh PASS（`background-position` 的 probe 红为**既有视口裁剪假红**，见 `docs/css-background-family-plan.md`——与本次无关，HEAD 与四端一致）。
+**⑥ 顺带修**：`check-app-screen-content.mjs` 的 `ENV_TOKEN_RE` **未含 `*scale`**（vw/vh 折 `env:--pf-vw*0.3` 的新形态）⇒ 补（**门禁覆盖面跟实际形态走**——同 #594 教训）。
+**⑦ 影响**：`hosts/android/.../{ProteusHostView,VaporRenderHost,JsRenderHost}.java` · `hosts/ios/.../selfdraw-scene.swift` · `hosts/harmony/.../{proteus_host.cpp,proteus_render.cpp}` · `scripts/check-app-screen-content.mjs` · capability 源 padding note。★**纪律复述**：**门禁覆盖率必须跟实际形态走**（形态变了别让旧门禁失效）。
+
+595. **★★★框架内置 CSS 环境变量 · Stage 2（群 D · 视口标量）——`--pf-vw`/`--pf-vh`：`vw`/`vh` 单位折内置视口变量（App 端此前整条丢弃）**：
+**① 用户指令**：「继续刚才的 Stage2」（承 #593 Stage 1）。
+**② 缺口取证**：App 端 `width:30vw` / `min-height:100vh` **整条丢弃**（页面不铺满/宽度丢失）——此前只把 `min-height:100vh` 近似成 `minHeightPct=1`（页高近似，非真视口）。
+**③ 交付（Stage 2 契约扩集 + 编译器折单位 + 三端填视口）**：
+  · **契约**（`contracts/env-vars.ts`）：`EnvVarName` 加 `--pf-vw`/`--pf-vh`（**群 D**：视口/设备标量，`layout:true`）；`check-env-vars` 分组白名单 `A/B/C` → `A/B/C/D`。
+  · **编译器**（`vapor/template.ts`）：`vwVhToken(s)`——`Nvw`/`Nvh` → `env:--pf-vw*<N/100>`（**缩放形态**，`envTokenOf` 加 scale 参数）；`min-height:100vh` 由 `envLengthToken` 折 `env:--pf-vh`（删旧 `*Pct` 特例）；CSE 同步。
+  · **三端宿主填视口**：Android `SuperappActivity.renderCurrent` 注入 `--pf-vw/vh`（vwPx/vhPx ÷ density）；iOS `envVarTable()` 加视口 bounds；鸿蒙 `Superapp.ets` 用 `display.getDefaultDisplaySync()` 补 `--pf-vw/vh`。三端 `resolveEnvToken`/`evalEnvToken` 解析 `*scale`。
+  · **验收页** `css-conformance/pages/vw-vh.vue`（A: `width:30vw`；B: `height:20vh`；`.v-t{padding-left:10px}`——**同一页同时验收「视口单位」与「文本内间距」**）。
+  · **单元断言**：`tests/vapor-class-styles.test.ts` 加 `vw/vh` 折 token 用例（含 `calc(var(--pf-vw)*0.5)`）；**同步改**旧 `min-height:100vh ⇒ minHeightPct` 断言为 `env:--pf-vh`（配套断言跟内核改动同步——纪律）。
+**④ 判据**：四端真机——A 盒宽 = 视口宽 **30.00%**、B 盒高 = 视口高 **20.02%**（Android/iOS/鸿蒙逐端一致）；独立子代理四端逐图 **PASS**；`probe` 四端 vw-vh PASS；`test:coupled` 9 文件 236 绿；门禁全绿。
+**⑤ 诚实边界**：`--pf-dpr`/`--pf-orientation` 与非长度值通道（`--pf-color-scheme`/`--pf-font-scale`/`--pf-reduce-motion`）**本轮未做**（留下一切片）；env 仍**宿主侧解析**（Stage 2 的「内核 env 表 + ABI v2」为后续迁移，本切片沿用 Stage 1 形态——避免一次动 HostABI 过大）。
+**⑥ 影响**：`contracts/{env-vars,style-ir-values}.ts` · `compiler/src/vapor/template.ts` · `consistency/src/appliers/{app,skyline,web}.ts` · 三端宿主 · `css-conformance/pages/vw-vh.vue` + 采图 · `tests/vapor-class-styles.test.ts` · `scripts/check-env-vars.mjs` · capability 源。★**下一项**：Stage 2 余项（`--pf-dpr`/`--pf-orientation` + 主题/无障碍非长度通道）或内核 env 表迁移。
+
+597. **★★★用户抓出「回退」：Android/iOS `word-break:normal` 折长词（与 Web 不符）——三端 App 补齐「长词溢出」语义（#562 具名边界被 #b3c5aff8 只半修）**：
+**① 用户指令**：「意外发现安卓的 word-break：normal 现在也自动折行了，我看鸿蒙的就是正常的，应该是之前做了某些改动引起的安卓回归……之前好的或者修过的又回归了，这个是非常严肃的事情了」。
+**② 取证（先证伪"本次引入"）**：HEAD（本次改动前）的 Android word-break case-A **已折行**（两行）——**非本轮 #595/#596 引入**。真因：决策 **#562** 曾把「App/MP `normal` 折行」**具名成引擎边界**（App 文本引擎默认断长词）；但后续 **#b3c5aff8**（grid-auto 验收）**只修了鸿蒙**（显式 `WORD_BREAK_TYPE_NORMAL` = 词边界断、长词溢出）⇒ 四端不一致（鸿蒙/Web 单行溢出 vs Android/iOS 折行）。★按铁律 #569「不得以别批次未落地跳过端」⇒ 本项补齐 Android/iOS。
+**③ Web 真值**：`normal` = 词边界断、**长不可断串整串溢出（单行、不折）**；`break-all` = 任意字符处折行。
+**④ 交付（三端统一「无断点长串 ⇒ 单行溢出」判据）**：
+  · **Android**（`VaporRenderHost`）：新增 `isUnbreakableToken`（无空白且无 CJK）——`normal` 下长串宽 > 内容盒宽 ⇒ `mkCmd.multiLine=false`（单行绘制，不折）+ `applyWrapRemeasure` 跳过（不增长盒高）；CWJ 短文本/含空白文本走原折行路径（零行为变化）。
+  · **iOS**（`selfdraw-scene.swift`）：新增 `isUnbreakableToken` + `effectiveWrap(style,text,boxWidth)`（wrap 判定叠加「无断点长串溢出 ⇒ 不折行」）；`makeLayer`/`configureLayer` 用 `effectiveWrap`（+ 传 `wrapOverride` 给 `textLayerString` 统一断行策略）；`needsCoreText && wrapMode`（CoreText 会硬折 ⇒ 仅实际换行时启用）；`wrapRemeasure` 用 `effectiveWrap`（不增长盒高）。
+  · **iOS 溢出加宽**（独立复评抓出的二次缺陷）：`CATextLayer` **只在自身 bounds 内绘制** ⇒ 单行溢出不加宽 frame 会被**裁切**（Android/鸿蒙共享画布无此问题）⇒ `lineBoxFrame` 对「单行 ∧ 非裁切/省略 ∧ 自然宽 > 内容盒宽」**加宽可视 frame 至自然宽**（按 `text-align` 锚点）。
+  · **鸿蒙**：已正确（#b3c5aff8），未改。
+  · **验收页**：`word-break.vue` 具名边界更新（App 三端已对齐 Web；**MP/Skyline 引擎锁定**——恒软换行，穷尽官方表后确认，具名豁免）；capability 源 word-break note 同步。
+**⑤ 判据（四端真机 + 两轮独立子代理）**：case A 单行溢出、完整 30 字符（Web/iOS/Android/鸿蒙 逐端像素实测溢出量 +257/+387/+364/+433 px，按各自 DPR 归一一致）；case B 五端两行一致；MP case A 折行（引擎锁定，非缺陷）；独立子代理终评 **全 PASS**（含 iOS padding/text 无回归）。`probe` 四端仅 `background-position` 为**既有视口裁剪假红**（与本次无关）。
+**⑥ 教训（★用户点名的"打地鼠"根源）**：**「引擎边界」具名要么本轮穷尽所有端，要么在别端可表达时必须同批补齐**——#562 具名了边界却未记录"鸿蒙后来能表达"⇒ 半年后成回退。★**"能力边界"是有时效的**：一旦某端引擎/实现变了，"边界"就可能只剩一端，**必须复核**（同 #569）。
+**⑦ 影响**：`hosts/android/.../VaporRenderHost.java` · `hosts/ios/.../selfdraw-scene.swift` · `css-conformance/pages/word-break.vue` · capability 源 · 四端验收截图。★**下一项**：Stage 2 余项（`--pf-dpr`/`--pf-orientation` + 主题/无障碍）或内核 env 表迁移。
+

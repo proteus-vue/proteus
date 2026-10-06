@@ -66,7 +66,9 @@ const NUMERIC_KEYS = ['width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'm
 const EDGE_KEYS = ['margin', 'padding']
 // ★★★内置环境变量 token（2026-10-08 · 决策 #593）：长度值可为 `env:--pf-*[+N][~F]` 字符串
 //   （宿主构建内核请求前解析为逻辑像素）⇒ 数值键/边缘键校验须放行该形态（否则误报"非有限数"）。
-const ENV_TOKEN_RE = /^env:--pf-[a-z0-9-]+([+-]\d+)?(~-?\d+(\.\d+)?)?$/
+// ★★★Stage 2（2026-10-09 · 决策 #595）：token 语法 = `env:<name>[*<scale>][+/-<offset>][~<fallback>]`
+//   ——`vw/vh` 折为 `env:--pf-vw*0.3` 的**缩放**形态 ⇒ 正则必须跟上（门禁覆盖面跟实际形态走）。
+const ENV_TOKEN_RE = /^env:--pf-[a-z0-9-]+(\*[0-9.]+)?([+-]\d+)?(~-?\d+(\.\d+)?)?$/
 const isLenOk = (v) => (typeof v === 'number' && Number.isFinite(v)) || (typeof v === 'string' && ENV_TOKEN_RE.test(v))
 /** ★批次 17：margin 的逐边 auto 标记（对象；值为布尔） */
 const MARGIN_AUTO_KEY = 'marginAuto'

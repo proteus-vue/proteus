@@ -895,4 +895,7 @@
   --pf-cutout-left: 0px;
   --pf-cutout-right: 0px;
   --pf-keyboard-height: 0px;
+  /* ★决策 #595：视口尺寸（`vw`/`vh` 单位与流式布局；Web 原生 vw/vh） */
+  --pf-vw: 100vw;
+  --pf-vh: 100vh;
 }

@@ -676,6 +676,25 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
             // ★★★line-clamp 项（2026-10-08）：多行截断行数（渲染侧据此设 maxLines + 尾部省略号）
             { double lc = 0; if (jnum(it.c_str(), it.size(), "lineClamp", &lc) && lc > 0) { char lb2[48]; snprintf(lb2, sizeof(lb2), ",\"lineClamp\":%d", (int)(lc + 0.5)); arr += lb2; } }
             { std::string ov; if (jstr(it.c_str(), it.size(), "overflow", &ov) && ov == "hidden") arr += ",\"clipText\":1"; }
+            // ★★★text 内间距批（2026-10-09 · 用户抓出「App 端 text 的 padding-left 被丢弃」）：
+            //   文本绘制内缩 = 盒内 padding（物理 px，×density）——渲染侧据此内缩折行宽与绘制原点
+            //   （Web 真值：文字自 padding 内缘起排、折行宽 = 盒宽 − padding-left − padding-right）。
+            {
+                std::string psub = extractValueAfterKey(it, "padding", '{', '}');
+                if (!psub.empty()) {
+                    double pl = 0, pt = 0, pr = 0, pb = 0;
+                    jnum(psub.c_str(), psub.size(), "left", &pl);
+                    jnum(psub.c_str(), psub.size(), "top", &pt);
+                    jnum(psub.c_str(), psub.size(), "right", &pr);
+                    jnum(psub.c_str(), psub.size(), "bottom", &pb);
+                    if (pl > 0 || pt > 0 || pr > 0 || pb > 0) {
+                        char pb2[128];
+                        snprintf(pb2, sizeof(pb2), ",\"padL\":%.2f,\"padT\":%.2f,\"padR\":%.2f,\"padB\":%.2f",
+                                 pl * density, pt * density, pr * density, pb * density);
+                        arr += pb2;
+                    }
+                }
+            }
             // ★批次 35：文本装饰（underline / line-through）
             { std::string td; if (jstr(it.c_str(), it.size(), "textDecoration", &td) && td != "none") arr += ",\"textDecoration\":\"" + jsonEscape(td) + "\""; }
             // ★批次 36：字体角色（font-family → role；鸿蒙按可用字族映射，缺则回落默认）
