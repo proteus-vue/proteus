@@ -95,6 +95,11 @@
 
 /* 徽章：定宽 80（stretch 不覆盖显式宽——Web 真值），各案不同底色便于逐案定位 */
 .js-item {
+  /* ★显式 display:flex —— 让下面的 align-items/justify-content 真正生效：
+     Web 的 <view> 默认 display:block（两键无效 ⇒ 文字贴左上），App/Skyline 的 <view> 默认 flex
+     （两键生效 ⇒ 文字居中）⇒ 不声明会让五端「徽章内文字对齐」不一致（与 justify-self 无关，是本页写法缺陷）。
+     ★纪律：容器要靠 flex 对齐两轴，必须**显式** display:flex（别依赖各端默认 display 分歧）。 */
+  display: flex;
   width: 80px;
   height: 32px;
   border-radius: 6px;
