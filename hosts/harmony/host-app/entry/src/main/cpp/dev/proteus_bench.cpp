@@ -3963,6 +3963,138 @@ static napi_value SuperappDrive(napi_env env, napi_callback_info info) {
     napi_value r; napi_create_string_utf8(env, out.c_str(), out.size(), &r); return r;
 }
 
+/* ═══════════════ ★★★B1：App 壳**统一运行期**渲染（鸿蒙腿，一次性 VM）═══════════════
+ * superappScreen(argsJson {bundle, filesDir, page, viewport:{width,height}, chain?:[int,...]}): string(JSON)
+ *
+ * 【它做什么】在**一次性 VM** 内：注入 `proteusHost`（运行期原语：mount/applyOps/resetScroll/onGesture/invoke）
+ *   → eval bundle-superapp.js → boot → `__proteusSuperappRender({name:page, viewport})`
+ *   （JS 共享运行期 `createSuperappRuntime` **实例化**该屏 → 调 `host.mount(tree)`，此处**捕获** tree）
+ *   → 若给了 `chain`（ArkTS 侧的命中链）→ `__proteusSuperappGesture({type:'tap', chain})`（派发 → 导航）
+ *   → 返回 `{ ok, state, tree }`（tree = 运行期实例化后的 `{viewport,nodes}`）。
+ *   ArkTS 拿到 tree 后走既有 `appScreenCommands` + `renderCommands` 上屏。
+ *
+ * 【为什么一次性 VM（不是持久）】见 SuperappBoot 注释：本机跨 napi 调用复用同一 VM ⇒ V8 微任务排空
+ *   HandleScope 溢出 / SIGSEGV（决策 #540 实测）。⇒ 每次交互一个 VM（render 与 tap 在同一次调用内完成，
+ *   命中测试由 ArkTS 侧（它持有内核树）用 `gestureHitAt` 算出 chain 传入）。
+ *
+ * 【诚实边界】一次性 VM ⇒ 跨交互的**运行期实例态不保留**（点一下计数不累加）——**导航可用**（本批目标）；
+ *   持久交互态需先解持久 VM 崩溃（登记）。命中链由 ArkTS 传（本机内核树归 ArkTS 持有）。
+ */
+static std::string g_scRuntimeTree;   // 运行期实例化后的屏内容（由 MountCaptureCb 捕获）
+
+/** `proteusHost.mount(treeJson)` 的运行期实现：**捕获** tree（交给 ArkTS 上屏），不在此建树。 */
+static JSVM_Value MountCaptureCb(JSVM_Env env, JSVM_CallbackInfo info) {
+    size_t argc = 1; JSVM_Value args[1] = {nullptr};
+    OH_JSVM_GetCbInfo(env, info, &argc, args, nullptr, nullptr);
+    if (argc > 0 && args[0] != nullptr) jsvmStr(env, args[0], &g_scRuntimeTree);
+    JSVM_Value r = nullptr; OH_JSVM_CreateStringUtf8(env, "{\"ok\":true}", JSVM_AUTO_LENGTH, &r); return r;
+}
+
+/** 运行期其余原语的空实现（applyOps/resetScroll/onGesture：本机不上屏增量/滚动由 ArkTS 管）。 */
+static JSVM_Value NoopCb(JSVM_Env env, JSVM_CallbackInfo info) {
+    (void)info;
+    JSVM_Value r = nullptr; OH_JSVM_CreateStringUtf8(env, "{\"ok\":true}", JSVM_AUTO_LENGTH, &r); return r;
+}
+
+static napi_value SuperappScreen(napi_env env, napi_callback_info info) {
+    size_t argc = 1; napi_value args[1] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    std::string argsJson;
+    if (argc >= 1 && args[0] != nullptr) {
+        size_t len = 0; napi_get_value_string_utf8(env, args[0], nullptr, 0, &len);
+        argsJson.resize(len + 1); napi_get_value_string_utf8(env, args[0], &argsJson[0], len + 1, &len); argsJson.resize(len);
+    }
+    std::string bundle, page;
+    jstr(argsJson.c_str(), argsJson.size(), "bundle", &bundle);
+    jstr(argsJson.c_str(), argsJson.size(), "page", &page);
+    if (page.empty()) page = "index";
+    double vpW = 390, vpH = 844;
+    { std::string vpObj = extractValueAfterKey(argsJson, "viewport", '{', '}');
+      if (!vpObj.empty()) { jnum(vpObj.c_str(), vpObj.size(), "width", &vpW); jnum(vpObj.c_str(), vpObj.size(), "height", &vpH); } }
+    std::string chainArr = extractValueAfterKey(argsJson, "chain", '[', ']');
+    std::vector<int> chainD = parseIntArrayBare(chainArr);
+    bool hasChain = !chainD.empty();
+
+    std::string err;
+    g_scRuntimeTree.clear();
+    if (bundle.empty()) err = "缺 bundle";
+
+    JSVM_VM vm = nullptr; JSVM_Env jenv = nullptr; JSVM_HandleScope scope = nullptr; JSVM_VMScope vmScope = nullptr;
+    bool policyOk = false; bool cr = false;
+    OH_JSVM_Init(nullptr);
+    JSVM_CreateVMOptions vo; memset(&vo, 0, sizeof(vo));
+    if (err.empty()) {
+        if (OH_JSVM_CreateVM(&vo, &vm) != JSVM_OK || vm == nullptr) err = "CreateVM 失败";
+        else if (OH_JSVM_OpenVMScope(vm, &vmScope) != JSVM_OK) err = "OpenVMScope 失败";
+        else if (OH_JSVM_CreateEnv(vm, 0, nullptr, &jenv) != JSVM_OK || jenv == nullptr) err = "CreateEnv 失败";
+        else if (OH_JSVM_OpenHandleScope(jenv, &scope) != JSVM_OK) err = "OpenHandleScope 失败";
+        else policyOk = (OH_JSVM_SetMicrotaskPolicy(vm, JSVM_MICROTASK_EXPLICIT) == JSVM_OK);
+    }
+    if (err.empty()) {
+        jsvmEvalStr(jenv, "globalThis.__PROTEUS_HOST_ID__ = 'harmony';"
+                          "globalThis.__PROTEUS_HOST_FRAME_DRIVER__ = 'postFrameCallback';", nullptr);
+        JSVM_Value host = nullptr; OH_JSVM_CreateObject(jenv, &host);
+        struct NamedFn { const char* name; JSVM_CallbackStruct cb; };
+        NamedFn fns[] = {
+            {"invoke", {InvokeCb, nullptr}},
+            {"mount", {MountCaptureCb, nullptr}},
+            {"applyOps", {NoopCb, nullptr}},
+            {"resetScroll", {NoopCb, nullptr}},
+            {"onGesture", {NoopCb, nullptr}},
+        };
+        for (auto& f : fns) {
+            JSVM_Value fn = nullptr;
+            OH_JSVM_CreateFunction(jenv, f.name, JSVM_AUTO_LENGTH, &f.cb, &fn);
+            OH_JSVM_SetNamedProperty(jenv, host, f.name, fn);
+        }
+        JSVM_Value global = nullptr; OH_JSVM_GetGlobal(jenv, &global);
+        OH_JSVM_SetNamedProperty(jenv, global, "proteusHost", host);
+        JSVM_Value src = nullptr; OH_JSVM_CreateStringUtf8(jenv, bundle.c_str(), bundle.size(), &src);
+        JSVM_Script script = nullptr;
+        if (OH_JSVM_CompileScript(jenv, src, nullptr, 0, false, &cr, &script) != JSVM_OK) err = "bundle 编译失败";
+        else { JSVM_Value rr = nullptr; if (OH_JSVM_RunScript(jenv, script, &rr) != JSVM_OK) err = "bundle 执行失败"; }
+    }
+    if (err.empty()) {
+        // ① boot（进入入口 tab）
+        jsvmEvalStr(jenv, "String(__proteusSuperappBootJson())", nullptr);
+        // ② 渲染目标屏（JS 共享运行期实例化 → host.mount 捕获 tree）
+        char vpb[128]; snprintf(vpb, sizeof(vpb), "{\"name\":\"%s\",\"viewport\":{\"width\":%.4f,\"height\":%.4f}}",
+                                jsonEscape(page).c_str(), vpW, vpH);
+        std::string renderExpr = "String(__proteusSuperappRender('" + std::string(vpb) + "'))";
+        jsvmEvalStr(jenv, renderExpr.c_str(), nullptr);
+        if (policyOk) OH_JSVM_PerformMicrotaskCheckpoint(vm);
+        // ③ 可选：派发一次 tap（导航）——派发后运行期的 navigate 会挂载目标屏（再次 host.mount 捕获）
+        if (hasChain) {
+            std::string ch = "[";
+            for (size_t i = 0; i < chainD.size(); i++) { if (i) ch += ","; ch += std::to_string(chainD[i]); }
+            ch += "]";
+            std::string gexpr = "String(__proteusSuperappGesture('{\"type\":\"tap\",\"chain\":" + ch + "}'))";
+            jsvmEvalStr(jenv, gexpr.c_str(), nullptr);
+            if (policyOk) OH_JSVM_PerformMicrotaskCheckpoint(vm);
+        }
+    }
+    std::string cur = "null";
+    // ★★修：返回“**实际渲染的屏名**”（而非路由态 current）——因 boot 后路由 current 恒为入口 index，
+    //   而 render/mountScreen 可能挂的是另一页；两者不一致会导致 ArkTS 重绘时回到 index。
+    std::string rendered = page;
+    if (err.empty()) {
+        std::string got;
+        jsvmEvalStr(jenv, "String(__proteusSuperappRuntimeCurrent())", &got);
+        if (got != "null" && !got.empty()) rendered = got;
+        jsvmEvalStr(jenv, "String(__proteusSuperappState())", &cur);
+    }
+    if (jenv != nullptr && scope != nullptr) OH_JSVM_CloseHandleScope(jenv, scope);
+    if (jenv != nullptr) OH_JSVM_DestroyEnv(jenv);
+    if (vm != nullptr && vmScope != nullptr) OH_JSVM_CloseVMScope(vm, vmScope);
+    if (vm != nullptr) OH_JSVM_DestroyVM(vm);
+    std::string out = "{\"ok\":" + std::string(err.empty() ? "true" : "false")
+        + ",\"current\":\"" + jsonEscape(rendered) + "\",\"state\":" + cur + ",\"tree\":" + (g_scRuntimeTree.empty() ? "null" : g_scRuntimeTree);
+    if (!err.empty()) out += ",\"error\":\"" + jsonEscape(err) + "\"";
+    out += "}";
+    napi_value r; napi_create_string_utf8(env, out.c_str(), out.size(), &r); return r;
+}
+
+
 static napi_value BenchInit(napi_env env, napi_value exports) {
     napi_property_descriptor desc[] = {
         {"bench4050", nullptr, Bench4050, nullptr, nullptr, nullptr, napi_default, nullptr},
@@ -3981,6 +4113,7 @@ static napi_value BenchInit(napi_env env, napi_value exports) {
         // ★★★批次 44：superapp 真实应用（持久 VM——桌面点开形态）
         {"superappBoot", nullptr, SuperappBoot, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"superappDrive", nullptr, SuperappDrive, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"superappScreen", nullptr, SuperappScreen, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"animCurveBezier", nullptr, AnimCurveBezier, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"hostRuntimeProbe", nullptr, HostRuntimeProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"mountVirtualProbe", nullptr, MountVirtualProbe, nullptr, nullptr, nullptr, napi_default, nullptr},

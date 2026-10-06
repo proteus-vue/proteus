@@ -251,6 +251,12 @@ interface SuperappRuntimeHostShape {
     return JSON.stringify({ ok, current: runtime.current() })
   }
 
+/** ★宿主调：读运行期**当前屏名**（`mountScreen` 记忆——一次性 VM 里用于校正"渲染的是哪页"）。 */
+;(globalThis as unknown as { __proteusSuperappRuntimeCurrent?: () => string }).__proteusSuperappRuntimeCurrent = () => {
+  const g = globalThis as unknown as { __SUPERAPP_RUNTIME__?: SuperappRuntime }
+  return g.__SUPERAPP_RUNTIME__ ? g.__SUPERAPP_RUNTIME__.current() : ''
+}
+
 /** ★宿主调（可选）：派发一次语义手势（宿主也可走 onGesture 反向回调；此入口供探针/驱动）。 */
 ;(globalThis as unknown as { __proteusSuperappGesture?: (argsJson: string) => string })
   .__proteusSuperappGesture = (argsJson: string) => {
