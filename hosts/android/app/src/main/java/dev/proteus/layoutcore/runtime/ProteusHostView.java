@@ -2286,6 +2286,20 @@ public class ProteusHostView extends ViewGroup {
         canvas.drawPath(path, p);
     }
 
+    /** ★★★dotted 沿**闭合周界均分**（2026-10-08 修「角上双点」）：dash 周期取**周长/N**
+     *   （N = round(周长 / 目标间距)），使 dash 在闭合处**整除**——否则首末会留下两个间距过近的点
+     *   （三端独立评审逐像素均抓出：Android/鸿蒙 0.55× 间距「双点」、iOS 两圆融合成 2× 大点）。
+     *   周长按圆角矩形解析式 = 2(W+H) − 8r + 2πr（r 钳到 min(W,H)/2）。
+     *   ★纪律同源：**闭合路径上的周期图案必须整除周长**（否则接缝处必现重影）——同 outline 环。 */
+    private static float evenDashPeriod(float W, float H, float r, float wantSpacing) {
+        final float rr = Math.max(0f, Math.min(r, Math.min(W, H) * 0.5f));
+        final double per = 2.0 * (W + H) - 8.0 * rr + 2.0 * Math.PI * rr;
+        // I2-ALLOW: **装饰纹理离散计数**（非几何换算）——dotted/dashed 的**点数 N**取整（整数离散计数，
+        //   用于让 dash 周期整除闭合周长；不流经排版几何，与坐标吸附无关）。
+        final int n = Math.max(1, (int) Math.round(per / Math.max(0.1f, wantSpacing)));
+        return (float) (per / n);
+    }
+
     /** ★★★dotted 圆点网格（决策 #559 修复轮）：沿线段均匀布点——**首末点贴边**（圆心距端 w/2，
      *   圆缘恰在盒边 ⇒ 无外溢）、中段等距（step ≈ 2w；段数取整使首末对称）。
      *   【为什么不用 ROUND-cap 虚线】cap 圆头以**线段端点**为圆心向外伸 w/2 ⇒ 端点圆溢出盒外，
@@ -2750,6 +2764,30 @@ public class ProteusHostView extends ViewGroup {
                 final float ix1 = x1 - wr, iy1 = y1 - wb; // 右下内角
                 borderPaint.setStyle(android.graphics.Paint.Style.FILL);
                 borderPaint.setPathEffect(null);
+                // ★★★统一 dotted 边 → **单一（圆角）周界布点**（2026-10-08 用户抓出「dotted 四角重叠」）：
+                //   四边逐点会在角上各放一点 ⇒ 两圆叠成斑块；改为沿**一条**圆角周界连续布点 ⇒ 四角不重叠。
+                //   （仅四边同宽/同色/皆 dotted 的**统一**形态走此路；逐边异形仍逐边绘制=稀有回退。）
+                final int bst0 = (int) sb[8], bst1 = (int) sb[9], bst2 = (int) sb[10], bst3 = (int) sb[11];
+                final boolean uniformDot = bst0 == 2 && bst1 == 2 && bst2 == 2 && bst3 == 2
+                        && wt == wr && wr == wb && wb == wl && ct == cr && cr == cb && cb == cl && wt > 0f && ct != 0;
+                if (uniformDot) {
+                    final float bw2 = wt, brad = Math.max(0f, c.radius - bw2 * 0.5f);
+                    final float bhalf = bw2 * 0.5f;
+                    final android.graphics.Path bPath = new android.graphics.Path();
+                    bPath.addRoundRect(new android.graphics.RectF(c.x + bhalf, c.y + bhalf, c.x + c.w - bhalf, c.y + c.h - bhalf), brad, brad, android.graphics.Path.Direction.CW);
+                    borderPaint.setStyle(android.graphics.Paint.Style.STROKE);
+                    borderPaint.setStrokeWidth(bw2);
+                    borderPaint.setColor(ct);
+                    borderPaint.setAlpha(opD < 1.0 ? Math.max(0, Math.min(255, (int) (Color.alpha(ct) * opD))) : Color.alpha(ct));
+                    final float bPer = evenDashPeriod(c.w - bw2, c.h - bw2, brad, bw2 * 2f);
+                    final float bOn = Math.min(0.01f, bPer * 0.25f);
+                    borderPaint.setPathEffect(new android.graphics.DashPathEffect(new float[]{bOn, bPer - bOn}, 0f));
+                    borderPaint.setStrokeCap(android.graphics.Paint.Cap.ROUND);
+                    canvas.drawPath(bPath, borderPaint);
+                    borderPaint.setStrokeCap(android.graphics.Paint.Cap.BUTT);
+                    borderPaint.setPathEffect(null);
+                    borderPaint.setStyle(android.graphics.Paint.Style.FILL);
+                } else {
                 // top：[外左外上]→[外右外上]→[右内上]→[左内上]
                 if (wt > 0f && ct != 0) {
                     borderPaint.setColor(ct);
@@ -2874,6 +2912,7 @@ public class ProteusHostView extends ViewGroup {
                         borderPaint.setStyle(android.graphics.Paint.Style.FILL);
                     }
                 }
+                }
             } else if (c.borderWidth > 0 && c.borderColor != 0) {
                 // ★批次 5（CSS 兼容对齐 · 边框）：uniform 边框（stroke 半内缩：strokeWidth/2 居中于边线）。
                 // ★★★防御（2026-10-05 · 逐边斜接改造的连带风险）：逐边分支用 FILL 画多边形 ⇒
@@ -2917,20 +2956,30 @@ public class ProteusHostView extends ViewGroup {
                     borderPaint.setStrokeWidth(ow);
                     borderPaint.setColor(ocol);
                     borderPaint.setAlpha(op < 1f ? Math.max(0, Math.min(255, (int) (Color.alpha(ocol) * op))) : Color.alpha(ocol));
-                    // 环的描边中线 = 盒边 + offset（Web: outline 位于距离盒边 offset 处；stroke 居中于该线）
-                    final float ocx = c.x - ooff, ocy = c.y - ooff, ocw = c.w + ooff * 2f, och = c.h + ooff * 2f;
+                    // ★★★outline 圆角跟随 + 沿周界点（2026-10-08 用户抓出）：
+                    //   ① **跟随盒圆角**（Web 真值：Chrome outline 圆角跟随 border-radius）；
+                    //   ② dotted 沿**单一（圆角）周界**布点（零长 dash + 圆头 = 圆点）——**四角不再重叠**
+                    //      （此前四边逐点 ⇒ 相邻边在角上各放一点、两圆叠成斑块）。
+                    final float oinset = ow * 0.5f;
+                    final float orx = c.x - ooff + oinset, ory = c.y - ooff + oinset;
+                    final float orw = c.w + ooff * 2f - ow, orh = c.h + ooff * 2f - ow;
+                    // I2-ALLOW: **装饰纹理参数**（轮廓圆角半径随 offset 平移；非布局几何）
+                    final float orad = Math.max(0f, c.radius + ooff - ow * 0.5f);
+                    final android.graphics.Path oPath = new android.graphics.Path();
+                    oPath.addRoundRect(new android.graphics.RectF(orx, ory, orx + orw, ory + orh), orad, orad, android.graphics.Path.Direction.CW);
                     if (ostyle == 2) {
-                        // dotted ⇒ 圆点网格（与 border dotted 同标准：决策 #559）——四边逐点
-                        drawDotRow(canvas, ocx, ocy, ocx + ocw, ocy, ow, borderPaint);
-                        drawDotRow(canvas, ocx, ocy + och, ocx + ocw, ocy + och, ow, borderPaint);
-                        drawDotRow(canvas, ocx, ocy, ocx, ocy + och, ow, borderPaint);
-                        drawDotRow(canvas, ocx + ocw, ocy, ocx + ocw, ocy + och, ow, borderPaint);
+                        // 圆点：零长段 + 圆头，沿**单条圆角周界**均分（周期 = 周长/N ⇒ 起点处整除闭合、无「双点」）
+                        final float oPer = evenDashPeriod(orw, orh, orad, ow * 2f);
+                        final float oOn = Math.min(0.01f, oPer * 0.25f);
+                        borderPaint.setPathEffect(new android.graphics.DashPathEffect(new float[]{oOn, oPer - oOn}, 0f));
+                        borderPaint.setStrokeCap(android.graphics.Paint.Cap.ROUND);
+                        canvas.drawPath(oPath, borderPaint);
+                        borderPaint.setStrokeCap(android.graphics.Paint.Cap.BUTT);
                     } else {
                         if (ostyle == 1) borderPaint.setPathEffect(new android.graphics.DashPathEffect(new float[]{ow * 3f, ow * 2f}, 0f));
-                        final float oinset = ow * 0.5f;
-                        canvas.drawRect(ocx + oinset, ocy + oinset, ocx + ocw - oinset, ocy + och - oinset, borderPaint);
-                        borderPaint.setPathEffect(null);
+                        canvas.drawPath(oPath, borderPaint);
                     }
+                    borderPaint.setPathEffect(null);
                     borderPaint.setStyle(android.graphics.Paint.Style.FILL);
                 }
             }
