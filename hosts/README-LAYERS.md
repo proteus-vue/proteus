@@ -92,8 +92,7 @@ L1 框架主仓（本仓）发独立包 → L2 宿主 App 仓**只依赖不 fork
     `proteus build --target harmony --package --host-dir <dir>`（编译产物 → hvigorw 打包 .hap）。
   · **真机判据**：生成的独立工程 zero-device 构建出 `.hap`（`ohpm install` + `hvigorw assembleHap`），
     装机（复用本机华为 CA 签名）→ 启动 → 渲染项目真实内容（`HOST_PAGE_RENDER page=index nodes_rendered=73`）。
-  ★**只做鸿蒙样板**：Android（AAR）/ iOS（SwiftPM）抽包按同一套复制，**留下一轮**（Android 93 处可见性 +
-  iOS 混装文件拆分各是一摊）。★runtime 的**发布形态**仍是"从框架 checkout 同源复制"（可注入
+  ★**（注：本节写于第二刀时，当时"只做鸿蒙"——现已由第三刀/iOS、第四刀/Android 全部兑现，见下）**。★runtime 的**发布形态**仍是"从框架 checkout 同源复制"（可注入
   `PROTEUS_HOST_RUNTIME_DIR`）；拆成独立发布包列为后续——**已登记** `docs/proteus-host-runtime-package-plan.md`（触发条件：外部 L2 消费者 / API 冻结 / 特性流收敛）。
 
 - **第三刀 · iOS 样板（2026-10-07 打通）**：把同一模式在 **iOS** 跑通并真机验证。
