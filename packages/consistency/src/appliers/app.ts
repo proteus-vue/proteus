@@ -234,6 +234,13 @@ export function mapStyleIRToApp(fields: Record<string, unknown>): AppMappingResu
         put(field, value, value)
         continue
       }
+      // ★★★grid 放置族补齐（2026-10-07）：gridColumn/gridRow 也是字符串（如 1 / 3）——原处理误置于
+      //   “结构化族”（字符串先被本区捕获 ⇒ 那支**不可达**、静默丢弃）⇒ 移到这里（dto + ops layout.*，
+      //   与 gridTemplateColumns/gridArea 同形）。
+      if (field === 'gridColumn' || field === 'gridRow') {
+        put(field, value, value)
+        continue
+      }
       const enumFields = new Set([
         'color', 'backgroundColor', 'display', 'position', 'overflow', 'visibility', 'pointerEvents',
         // ★★★overflow-x 项（2026-10-06）：逐轴溢出（字符串枚举）
@@ -278,11 +285,6 @@ export function mapStyleIRToApp(fields: Record<string, unknown>): AppMappingResu
     /* ── 结构化族 ── */
     if (field === 'borderRadiusCorners') {
       dto['borderRadiusCorners'] = value // 宿主可选读（逐角掩码）
-      continue
-    }
-    if (field === 'gridColumn' || field === 'gridRow') {
-      dto[field] = value
-      ops[`layout.${field}`] = JSON.stringify(value)
       continue
     }
     if (field === 'textShadow') {
