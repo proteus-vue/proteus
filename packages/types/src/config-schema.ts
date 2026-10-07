@@ -87,6 +87,10 @@ const targetsSchema = {
         urlSchemes: { type: 'array', items: { type: 'string' } },
         privacyUsageDescriptions: { type: 'object', additionalProperties: { type: 'string' } },
         appCategory: { type: 'string' },
+        appTransportSecurity: {
+          type: 'object',
+          properties: { allowArbitraryLoads: { type: 'boolean' }, allowLocalNetworking: { type: 'boolean' } },
+        },
         requiresFullScreen: { type: 'boolean' },
         developmentRegion: { type: 'string' },
       },
@@ -101,7 +105,25 @@ const targetsSchema = {
         minSdk: { type: 'integer', minimum: 1 },
         targetSdk: { type: 'integer', minimum: 1 },
         orientation: { enum: ['portrait', 'landscape', 'unspecified'] },
-        permissions: { type: 'array', items: { type: 'string' } },
+        permissions: {
+          type: 'array',
+          items: {
+            oneOf: [
+              { type: 'string' },
+              { type: 'object', required: ['name'], properties: { name: { type: 'string' }, maxSdkVersion: { type: 'integer', minimum: 1 } } },
+            ],
+          },
+        },
+        usesFeatures: {
+          type: 'array',
+          items: {
+            oneOf: [
+              { type: 'string' },
+              { type: 'object', required: ['name'], properties: { name: { type: 'string' }, required: { type: 'boolean' } } },
+            ],
+          },
+        },
+        queryPackages: { type: 'array', items: { type: 'string' } },
         icon: { type: 'string' },
         launchPage: { type: 'string' },
         theme: { type: 'string' },
@@ -125,7 +147,26 @@ const targetsSchema = {
         compatibleSdkVersion: { type: 'string' },
         targetSdkVersion: { type: 'string' },
         deviceTypes: { type: 'array', items: { type: 'string' } },
-        permissions: { type: 'array', items: { type: 'string' } },
+        permissions: {
+          type: 'array',
+          items: {
+            oneOf: [
+              { type: 'string' },
+              {
+                type: 'object',
+                required: ['name'],
+                properties: {
+                  name: { type: 'string' },
+                  reason: { type: 'string' },
+                  usedScene: {
+                    type: 'object',
+                    properties: { abilities: { type: 'array', items: { type: 'string' } }, when: { enum: ['inuse', 'always'] } },
+                  },
+                },
+              },
+            ],
+          },
+        },
         icon: { type: 'string' },
         appCategory: { type: 'string' },
         orientation: { type: 'string' },

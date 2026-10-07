@@ -117,7 +117,9 @@ export default {
 | `versionName` / `versionCode` | `string` / `number` | 否 | 版本（缺省回退 `app.*`） |
 | `minSdk` / `targetSdk` | `number` | 否 | SDK 范围（缺省 24 / 34） |
 | `orientation` | `'portrait' \| 'landscape' \| 'unspecified'` | 否 | 屏幕方向（缺省 unspecified） |
-| `permissions` | `string[]` | 否 | 追加 `<uses-permission>` |
+| `permissions` | `Array<string \| AndroidPermission>` | 否 | 权限声明：字符串简写=`name`；结构化可带 `maxSdkVersion` |
+| `usesFeatures` | `Array<string \| AndroidUsesFeature>` | 否 | 硬件/功能特性（`<uses-feature>`）；字符串简写=required |
+| `queryPackages` | `string[]` | 否 | 包可见性（`<queries>`；Android 11+ 查询/拉起他应用前声明） |
 | `icon` / `theme` / `launchPage` | `string` | 否 | 图标资源 / 应用主题 / 起始页（manifest `ProteusHomePage` meta-data） |
 | `allowBackup` / `largeHeap` / `hardwareAccelerated` / `supportsRtl` / `usesCleartextTraffic` | `boolean` | 否 | 应用标志（存在则改、缺失则插入 `<application>`） |
 | `networkSecurityConfig` / `appCategory` | `string` | 否 | 网络安全配置引用 / 应用类别 |
@@ -132,7 +134,7 @@ export default {
 | `versionName` / `versionCode` | `string` / `number` | 否 | 版本（缺省回退 `app.*`） |
 | `compatibleSdkVersion` / `targetSdkVersion` | `string` | 否 | SDK（缺省 `5.0.5(17)`） |
 | `deviceTypes` | `string[]` | 否 | 设备类型（缺省 `["phone","tablet","2in1"]`） |
-| `permissions` | `string[]` | 否 | 追加 requestPermissions |
+| `permissions` | `Array<string \| HarmonyPermission>` | 否 | 权限声明（`requestPermissions`）：字符串简写=`name`；结构化可带 `reason`+`usedScene`（★用户授权权限必需，reason 写文案则自动生成 `$string:` 资源） |
 | `icon` / `appCategory` | `string` | 否 | 应用图标（app.json5） / 应用类别 |
 | `orientation` | `string` | 否 | 入口 Ability 方向（module.json5 abilities[0]） |
 

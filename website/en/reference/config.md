@@ -173,7 +173,7 @@ Renderer (`'skyline'`, default, or `'webview'`) — replaces the old top-level `
 
 ### `targets.mp.style`
 
-- **Type**: `{ /** px → rpx 转换开关（缺省 true） */ px2rpx?: boolean /** 换算比例（缺省按 375 设计稿 2:1） */ rpxRatio?: number }`
+- **Type**: `{ px2rpx?: boolean rpxRatio?: number }`
 - **Required**: No
 
 Style conversion (MP-only; the Web target never converts — Web keeps standard CSS).
@@ -194,7 +194,7 @@ Conversion ratio (default 2:1 on a 375 design mockup).
 
 ### `targets.mp.setDataBridge`
 
-- **Type**: `{ /** 合并窗口（ms，缺省 16——约 1 帧） */ batchWindow?: number /** 是否按组件粒度 setData（缺省 true） */ perComponent?: boolean }`
+- **Type**: `{ batchWindow?: number perComponent?: boolean }`
 - **Required**: No
 
 Reactivity → setData bridge strategy.
@@ -222,7 +222,7 @@ The only global style entry on MP: a CSS file relative to root (defaults to `app
 
 ### `targets.mp.page`
 
-- **Type**: `{ /** 页面自动包滚动容器（缺省 true——Skyline 页面滚动必须 scroll-view） */ autoScrollContainer?: boolean /** ★Skyline iOS 白屏兜底：列出白屏高风险页，强制走 WebView 渲染（页面级降级，不全局） */ webviewPages?: string[] }`
+- **Type**: `{ autoScrollContainer?: boolean webviewPages?: string[] }`
 - **Required**: No
 
 Page mode (Skyline pages do not scroll by themselves).
@@ -404,6 +404,27 @@ Privacy usage descriptions (`NSXxxUsageDescription`) — ★required for App Sto
 
 App category (`LSApplicationCategoryType`, e.g. `public.app-category.games`; not written by default).
 
+### `targets.ios.appTransportSecurity`
+
+- **Type**: `{ allowArbitraryLoads?: boolean allowLocalNetworking?: boolean }`
+- **Required**: No
+
+App Transport Security（NSAppTransportSecurity）——放宽 ATS（如允许明文 HTTP 联调；缺省不写）
+
+### `targets.ios.appTransportSecurity.allowArbitraryLoads`
+
+- **Type**: `boolean`
+- **Required**: No
+
+NSAllowsArbitraryLoads（允许任意明文 HTTP；★上架需说明理由，仅联调建议开启）
+
+### `targets.ios.appTransportSecurity.allowLocalNetworking`
+
+- **Type**: `boolean`
+- **Required**: No
+
+NSAllowsLocalNetworking（允许本地网络明文——iOS 10+，比 arbitrary 更窄）
+
 ### `targets.ios.requiresFullScreen`
 
 - **Type**: `boolean`
@@ -471,10 +492,52 @@ Screen orientation (`activity android:screenOrientation`; default `'unspecified'
 
 ### `targets.android.permissions`
 
+- **Type**: `Array<string | AndroidPermission>`
+- **Required**: No
+
+Permission declarations (`<uses-permission>`) — string shorthand = name only; a structured entry may carry `maxSdkVersion`.
+
+### `targets.android.permissions.<entry>.name`
+
+- **Type**: `string`
+- **Required**: Yes
+
+Full permission name (e.g. `android.permission.CAMERA`).
+
+### `targets.android.permissions.<entry>.maxSdkVersion`
+
+- **Type**: `number`
+- **Required**: No
+
+`android:maxSdkVersion` — the permission only applies up to this API level (e.g. storage permissions are obsolete on Android 13+).
+
+### `targets.android.usesFeatures`
+
+- **Type**: `Array<string | AndroidUsesFeature>`
+- **Required**: No
+
+Hardware/feature declarations (`<uses-feature>`) — string shorthand = required: true.
+
+### `targets.android.usesFeatures.<entry>.name`
+
+- **Type**: `string`
+- **Required**: Yes
+
+Feature name (e.g. `android.hardware.camera` / `android.hardware.location.gps`).
+
+### `targets.android.usesFeatures.<entry>.required`
+
+- **Type**: `boolean`
+- **Required**: No
+
+`android:required` (default true — the store filters out devices lacking it).
+
+### `targets.android.queryPackages`
+
 - **Type**: `string[]`
 - **Required**: No
 
-Extra `<uses-permission android:name="…"/>`.
+Package visibility (`<queries>` `<package>` — declare before querying/opening other apps on Android 11+).
 
 ### `targets.android.icon`
 
@@ -606,10 +669,45 @@ deviceTypes (default `["phone","tablet","2in1"]`).
 
 ### `targets.harmony.permissions`
 
+- **Type**: `Array<string | HarmonyPermission>`
+- **Required**: No
+
+Permission declarations (`requestPermissions`) — string shorthand = name only; a structured entry may carry `reason` + `usedScene` (★required for user-grant permissions — a plain-text reason makes the framework generate the `$string:` resource).
+
+### `targets.harmony.permissions.<entry>.name`
+
+- **Type**: `string`
+- **Required**: Yes
+
+Full permission name (e.g. `ohos.permission.INTERNET` / `ohos.permission.LOCATION`).
+
+### `targets.harmony.permissions.<entry>.reason`
+
+- **Type**: `string`
+- **Required**: No
+
+Request reason (★required for user-grant permissions): a plain-text reason makes the framework generate a `$string:` resource (written into the entry string.json in three languages); a `$string:xxx` value is used as a resource reference verbatim (you must supply it).
+
+### `targets.harmony.permissions.<entry>.usedScene`
+
+- **Type**: `{ abilities?: string[] when?: 'inuse' | 'always' }`
+- **Required**: No
+
+Usage scene (★required for user-grant permissions).
+
+### `targets.harmony.permissions.<entry>.usedScene.abilities`
+
 - **Type**: `string[]`
 - **Required**: No
 
-Extra requestPermissions (module.json5).
+Related abilities (default = the entry `EntryAbility`).
+
+### `targets.harmony.permissions.<entry>.usedScene.when`
+
+- **Type**: `'inuse' | 'always'`
+- **Required**: No
+
+When it is used: `'inuse'` (while in use, default) | `'always'`.
 
 ### `targets.harmony.icon`
 

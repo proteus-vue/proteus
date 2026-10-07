@@ -98,4 +98,7 @@ export type {
   AndroidTargetConfig,
   HarmonyTargetConfig,
   AppIdentityConfig,
+  AndroidPermission,
+  AndroidUsesFeature,
+  HarmonyPermission,
 } from './config'

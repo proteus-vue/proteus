@@ -88,6 +88,15 @@ const optBool = (path: string, v: unknown, errors: ConfigValidationError[]) => {
 const optEnum = (path: string, v: unknown, allowed: string[], errors: ConfigValidationError[]) => {
   if (v !== undefined && !allowed.includes(v as string)) errors.push({ code: 'CONFIG_INVALID_ENUM', path, message: `${path} 仅支持 ${allowed.map((x) => `'${x}'`).join(' / ')}` })
 }
+/** 权限/特性数组：元素为字符串（简写）或对象（须有 name） */
+const permEntries = (path: string, v: unknown, errors: ConfigValidationError[]) => {
+  if (v === undefined) return
+  if (!Array.isArray(v)) { errors.push({ code: 'CONFIG_INVALID_TYPE', path, message: `${path} 应为数组（字符串或对象条目）` }); return }
+  v.forEach((item, i) => {
+    if (typeof item === 'string') return
+    if (!isPlainObject(item) || typeof item.name !== 'string') errors.push({ code: 'CONFIG_INVALID_TYPE', path: `${path}[${i}]`, message: `${path}[${i}] 应为字符串或含 name 的对象` })
+  })
+}
 
 /** 校验 targets 各端（v4 按端分区） */
 function validateTargets(targets: Record<string, unknown>, errors: ConfigValidationError[]): void {
@@ -163,7 +172,9 @@ function validateTargets(targets: Record<string, unknown>, errors: ConfigValidat
     posInt('targets.android.versionCode', and.versionCode, errors)
     posInt('targets.android.minSdk', and.minSdk, errors)
     posInt('targets.android.targetSdk', and.targetSdk, errors)
-    strArr('targets.android.permissions', and.permissions, errors)
+    permEntries('targets.android.permissions', and.permissions, errors)
+    permEntries('targets.android.usesFeatures', and.usesFeatures, errors)
+    strArr('targets.android.queryPackages', and.queryPackages, errors)
     optEnum('targets.android.orientation', and.orientation, ['portrait', 'landscape', 'unspecified'], errors)
     optStr('targets.android.icon', and.icon, errors)
     optStr('targets.android.launchPage', and.launchPage, errors)
@@ -196,6 +207,14 @@ function validateTargets(targets: Record<string, unknown>, errors: ConfigValidat
     optStr('targets.ios.appCategory', ios.appCategory, errors)
     optBool('targets.ios.requiresFullScreen', ios.requiresFullScreen, errors)
     optStr('targets.ios.developmentRegion', ios.developmentRegion, errors)
+    if (ios.appTransportSecurity !== undefined) {
+      const ats = ios.appTransportSecurity
+      if (!isPlainObject(ats)) errors.push({ code: 'CONFIG_INVALID_TYPE', path: 'targets.ios.appTransportSecurity', message: 'targets.ios.appTransportSecurity 应为对象（{ allowArbitraryLoads?, allowLocalNetworking? }）' })
+      else {
+        optBool('targets.ios.appTransportSecurity.allowArbitraryLoads', ats.allowArbitraryLoads, errors)
+        optBool('targets.ios.appTransportSecurity.allowLocalNetworking', ats.allowLocalNetworking, errors)
+      }
+    }
     if (ios.privacyUsageDescriptions !== undefined) {
       const pud = ios.privacyUsageDescriptions
       if (!isPlainObject(pud)) {
@@ -213,7 +232,7 @@ function validateTargets(targets: Record<string, unknown>, errors: ConfigValidat
   if (isPlainObject(hm)) {
     posInt('targets.harmony.versionCode', hm.versionCode, errors)
     strArr('targets.harmony.deviceTypes', hm.deviceTypes, errors)
-    strArr('targets.harmony.permissions', hm.permissions, errors)
+    permEntries('targets.harmony.permissions', hm.permissions, errors)
     optStr('targets.harmony.icon', hm.icon, errors)
     optStr('targets.harmony.appCategory', hm.appCategory, errors)
     optStr('targets.harmony.orientation', hm.orientation, errors)

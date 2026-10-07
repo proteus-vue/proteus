@@ -158,10 +158,50 @@ export interface IosTargetConfig {
   privacyUsageDescriptions?: Record<string, string>
   /** 应用类别（LSApplicationCategoryType，如 `public.app-category.games`；缺省不写） */
   appCategory?: string
+  /** App Transport Security（NSAppTransportSecurity）——放宽 ATS（如允许明文 HTTP 联调；缺省不写） */
+  appTransportSecurity?: {
+    /** NSAllowsArbitraryLoads（允许任意明文 HTTP；★上架需说明理由，仅联调建议开启） */
+    allowArbitraryLoads?: boolean
+    /** NSAllowsLocalNetworking（允许本地网络明文——iOS 10+，比 arbitrary 更窄） */
+    allowLocalNetworking?: boolean
+  }
   /** UIRequiresFullScreen（iPad 要求全屏、禁用分屏；缺省不写） */
   requiresFullScreen?: boolean
   /** CFBundleDevelopmentRegion（缺省开发语言，如 `zh_CN` / `en`；缺省不写） */
   developmentRegion?: string
+}
+
+/** Android 权限条目（`permissions` 数组元素——字符串简写 = 仅 name） */
+export interface AndroidPermission {
+  /** 权限全名（如 `android.permission.CAMERA`） */
+  name: string
+  /** android:maxSdkVersion——该权限仅对 ≤ 此 API level 生效（如存储权限在 Android 13+ 已废弃） */
+  maxSdkVersion?: number
+}
+
+/** Android 硬件/功能特性（`<uses-feature>`）——如 `android.hardware.camera`（字符串简写 = required: true） */
+export interface AndroidUsesFeature {
+  /** 特性名（如 `android.hardware.camera` / `android.hardware.location.gps`） */
+  name: string
+  /** android:required（缺省 true——不满足则应用商店过滤该设备） */
+  required?: boolean
+}
+
+/** Harmony 权限条目（`permissions` 数组元素——字符串简写 = 仅 name）。
+ *  ★**用户授权权限（user_grant）必须声明 `reason` + `usedScene`**，否则上架/授权会被拒。 */
+export interface HarmonyPermission {
+  /** 权限全名（如 `ohos.permission.INTERNET` / `ohos.permission.LOCATION`） */
+  name: string
+  /** 申请原因（★用户授权权限必需）：写**普通文案**则框架自动生成 `$string:` 资源（写入 entry 三语言 string.json）；
+   *  写 `$string:xxx` 则按资源引用原样使用（须自备该资源） */
+  reason?: string
+  /** 使用场景（★用户授权权限必需） */
+  usedScene?: {
+    /** 关联 Ability（缺省 = 入口 `EntryAbility`） */
+    abilities?: string[]
+    /** 使用时机：`'inuse'`（使用时，缺省）| `'always'`（始终） */
+    when?: 'inuse' | 'always'
+  }
 }
 
 /** Android 目标（→ AndroidManifest.xml） */
@@ -180,8 +220,12 @@ export interface AndroidTargetConfig {
   targetSdk?: number
   /** 屏幕方向（activity android:screenOrientation；缺省 unspecified） */
   orientation?: 'portrait' | 'landscape' | 'unspecified'
-  /** 追加 <uses-permission android:name="..."/>（缺省空） */
-  permissions?: string[]
+  /** 权限声明（`<uses-permission>`）——字符串简写 = 仅 name；结构化条目可带 `maxSdkVersion` */
+  permissions?: Array<string | AndroidPermission>
+  /** 硬件/功能特性（`<uses-feature>`）——字符串简写 = required: true */
+  usesFeatures?: Array<string | AndroidUsesFeature>
+  /** 包可见性（`<queries>` 的 `<package>`——Android 11+ 查询/拉起其他应用前需声明） */
+  queryPackages?: string[]
   /** 应用图标资源名（android:icon；缺省不写） */
   icon?: string
   /** 起始页名（manifest 的 ProteusHomePage meta-data；缺省 index）——宿主启动时渲染该屏 */
@@ -222,8 +266,9 @@ export interface HarmonyTargetConfig {
   targetSdkVersion?: string
   /** deviceTypes（缺省 ["phone","tablet","2in1"]） */
   deviceTypes?: string[]
-  /** 追加 requestPermissions（module.json5） */
-  permissions?: string[]
+  /** 追加 requestPermissions（module.json5）——字符串简写 = 仅 name；结构化条目可带 `reason` + `usedScene`
+   *  （★用户授权权限必需——reason 写普通文案则框架自动生成 `$string:` 资源并写入 entry 三语言 string.json） */
+  permissions?: Array<string | HarmonyPermission>
   /** 应用图标（app.json5 的 icon，如 `$media:my_icon`——资源置于 AppScope 的 resources 下 media/ 目录；缺省不写） */
   icon?: string
   /** 应用类别（app.json5 的 appCategory，如 `game` / `audio`；缺省不写） */
