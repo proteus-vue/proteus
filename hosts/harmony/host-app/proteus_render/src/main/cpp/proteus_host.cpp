@@ -523,9 +523,12 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
         double bw = 0; jnum(it.c_str(), it.size(), "borderWidth", &bw);
         if (isHidden) { bg = 0; radius = 0; text.clear(); bw = 0; }   // ★批次 25：hidden ⇒ 不绘制
         uint32_t bc = 0; std::string bcCss; if (jstr(it.c_str(), it.size(), "borderColor", &bcCss)) bc = hexToArgb(bcCss);
-        char head[320];
-        snprintf(head, sizeof(head), "%s{\"kind\":\"background\",\"x\":%.2f,\"y\":%.2f,\"w\":%.2f,\"h\":%.2f,\"color\":%u,\"radius\":%.2f",
-                 emitted > 0 ? "," : "", r.x * density, r.y * density, r.w * density, r.h * density, bg, radius * density);
+        char head[384];
+        // ★★★id / parentId（2026-10-08 · effects D 案「鸿蒙文字不随盒旋转」）：**父 transform 级联**需知道父子关系
+        //   （宿主扁平绘制 ⇒ 父盒旋转/缩放须显式施加到子树，含文本）。此前 cmd **不带 id/parentId**。
+        double parentIdD = -1; jnum(it.c_str(), it.size(), "parentId", &parentIdD);
+        snprintf(head, sizeof(head), "%s{\"kind\":\"background\",\"id\":%d,\"parentId\":%d,\"x\":%.2f,\"y\":%.2f,\"w\":%.2f,\"h\":%.2f,\"color\":%u,\"radius\":%.2f",
+                 emitted > 0 ? "," : "", (int)id, (int)parentIdD, r.x * density, r.y * density, r.w * density, r.h * density, bg, radius * density);
         arr += head;
         // ★★★静态透明度（2026-10-08 · 子代理审 effects 案例 A）：此前**完全不发射 opacity** ⇒ 声明 opacity 的
         //   节点渲染为**完全不透明**。发射给 render 侧 SetOpacity（RenderNode 原生属性）。

@@ -1806,6 +1806,8 @@ public final class VaporRenderHost {
             injectTransform(id, spec);
             injectRadiusCorners(id, spec);
             injectFontRole(id, spec);
+            // ★★★父关系（CSS 父 transform 级联用，2026-10-08 · effects D 案）：宿主扁平绘制需显式级联。
+            if (view != null) view.setNodeParent(id, spec.has("parentId") && !spec.isNull("parentId") ? spec.optInt("parentId", -1) : null);
         }
     }
 
