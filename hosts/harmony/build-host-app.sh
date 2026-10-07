@@ -17,18 +17,27 @@
 #   安卓能出「CSS 验收」独立桌面图标（`dev.proteus.cssconf`，与 `dev.proteus.layoutcore` 并存）。
 #   鸿蒙**一个 bundleName 只能有一个桌面图标**（launcher 只取单个入口 UIAbility 的 icon/label——
 #   SDK `module.json` schema + 官方"配置应用图标和名称"优先级规则）⇒ 要第二图标必须**第二个 bundleName**。
-#   机制 = `build-profile.json5` 的**产品维度**（product）：`cssconf` 产品带自己的
-#   `bundleName: dev.proteus.cssconf` + `label: $string:app_name_cssconf`（"CSS 验收"）。
-#   本脚本 `--css` ⇒ 构建 `-p product=cssconf` + 默认应用工程 css-conformance。
-#   ★**唯一前置**：`dev.proteus.cssconf` 的**签名 profile**（bound 到该 bundleName）。
-#     生成：DevEco Studio → File → Project Structure → Signing Configs → 勾 "Automatically
-#     generate signature"（需登录华为账号）——DevEco 会把新 profile 写进本地 build-profile.json5
-#     并（通常）自动挂到 cssconf 产品。★未配置签名时本脚本产出 unsigned hap 并**明确提示**。
+#   ★★★**bundleName / 桌面 label 的事实源是 `AppScope/app.json5`（不是 build-profile 的 product！）**：
+#     · SignHap **比对的是 app.json5 的 bundleName 与 profile**（实测：只改 product.bundleName 报
+#       `00303074 does not match SigningConfigs`）；DevEco 自动签名也按 app.json5 的 bundleName 签发。
+#     ⇒ 本脚本 `--css` 时**临时把 app.json5 换成 `dev.proteus.cssconf` + 标签 `$string:app_name_cssconf`**
+#       （经 safe-edit 唯一通道 `appjson-set-cssconf.mjs`），构建完**自动还原**为宿主（`appjson-set-host.mjs`；
+#       trap EXIT 双保险）。product（cssconf/default）只用来选签名。
+#   本脚本 `--css` ⇒ `-p product=cssconf` + 默认应用工程 css-conformance。
+#   ★**唯一前置**：`dev.proteus.cssconf` 的**签名 profile**（bound 到该 bundleName）。一次性生成：
+#     ① `bash hosts/harmony/build-host-app.sh --css --keep-appjson`
+#        （切成 cssconf 且**保留** app.json5，供 DevEco 读取；产出 unsigned hap 属正常）
+#     ② DevEco → File → Project Structure → Signing Configs → 勾 Automatically generate signature
+#        （登录华为账号）；生成 bound 到 dev.proteus.cssconf 的签名配置，写入本地 build-profile.json5；
+#     ③ 给本地 build-profile.json5 的 **cssconf 产品**加 `"signingConfig": "<签名名>"`
+#        （并在 app.signingConfigs 里命名它，例如 "cssconf"）；
+#     ④ 再 `bash hosts/harmony/build-host-app.sh --css`（app.json5 用完自动还原）⇒ signed hap。
 #
 # 用法：
 #   bash hosts/harmony/build-host-app.sh            # 构建默认应用（superapp）
 #   bash hosts/harmony/build-host-app.sh --clean    # 清理后重建
 #   bash hosts/harmony/build-host-app.sh --css      # 构建「CSS 验收」独立应用（product=cssconf）
+#   bash hosts/harmony/build-host-app.sh --css --keep-appjson   # 同上但保留 app.json5（DevEco 生成签名用）
 #   PROTEUS_APP_PROJECT=xxx bash hosts/harmony/build-host-app.sh   # 换应用工程（默认随 --css 自动为 css-conformance）
 set -uo pipefail
 
@@ -39,14 +48,17 @@ ROOT="$(cd "$HERE/../.." && pwd)"
 # ── 参数解析 ──
 CLEAN=0
 CSS=0
+KEEP_APPJSON=0
 for arg in "$@"; do
   case "$arg" in
     --clean) CLEAN=1 ;;
     --css)   CSS=1 ;;
+    --keep-appjson) KEEP_APPJSON=1 ;;   # 仅供 DevEco 生成 cssconf 签名：切成 cssconf 后**保留** app.json5（见文件头）
     *) echo "✗ 未知参数：${arg}（用法见文件头）"; exit 2 ;;
   esac
 done
 # --css ⇒ 产品 cssconf，且默认应用工程 = css-conformance（可被显式 PROTEUS_APP_PROJECT 覆盖）
+APPJSON="$APP_DIR/AppScope/app.json5"
 if [ "$CSS" = "1" ]; then
   PRODUCT="cssconf"
   export PROTEUS_APP_PROJECT="${PROTEUS_APP_PROJECT:-css-conformance}"
@@ -110,13 +122,13 @@ if [ "$PRODUCT" = "cssconf" ]; then
   # cssconf 产品的签名是**绑定 dev.proteus.cssconf 的另一份 profile**——单独提醒。
   if ! grep -q '"signingConfig": *"cssconf"' "$APP_DIR/build-profile.json5" 2>/dev/null; then
     echo
-    echo "  ⚠ cssconf 产品暂无专属签名配置——将产出 **unsigned hap**（不能装机）。"
-    echo "    ① 先跑一次本命令（产出 unsigned hap，让 DevEco 能读到 cssconf 产品）"
-    echo "    ② DevEco Studio → File → Project Structure → Signing Configs"
-    echo "       → 勾 Automatically generate signature（登录华为账号；DevEco 生成 bound 到"
-    echo "         dev.proteus.cssconf 的 profile 并写入本地 build-profile.json5）"
-    echo "       → 确认 cssconf 产品挂上该 signingConfig（命名为 cssconf）"
-    echo "    ③ 再次运行本命令 ⇒ 产出 signed hap（可装机）"
+    echo "  ⚠ cssconf 产品暂无专属签名配置——将产出 **unsigned hap**（不能装机）。一次性生成："
+    echo "    ① bash hosts/harmony/build-host-app.sh --css --keep-appjson"
+    echo "       （把 app.json5 切成 dev.proteus.cssconf 且**保留**，供 DevEco 读取）"
+    echo "    ② DevEco → File → Project Structure → Signing Configs → 勾 Automatically generate"
+    echo "       signature（登录华为账号）⇒ 生成 bound 到 dev.proteus.cssconf 的签名配置"
+    echo "    ③ 给本地 build-profile.json5 的 cssconf 产品加 \"signingConfig\": \"cssconf\""
+    echo "    ④ bash hosts/harmony/build-host-app.sh --css ⇒ signed hap（app.json5 用完自动还原）"
     echo
   fi
 elif grep -q '"signingConfigs": \[\]' "$APP_DIR/build-profile.json5" 2>/dev/null; then
@@ -157,12 +169,40 @@ if [ "$CLEAN" = "1" ]; then
   "$HVIGORW" clean --no-daemon >/dev/null 2>&1 || true
 fi
 
+# ── ★★★app.json5 切换（--css：换 bundleName + 标签；构建后还原）──
+#   【为什么必须改 app.json5（2026-10-08 · 用户点破）】鸿蒙的 bundleName 事实源是 AppScope/app.json5
+#   （**不是** build-profile 的 product）——SignHap 校验比对的是 app.json5 的 bundleName 与 profile，
+#   实测只改 product.bundleName 报 `00303074 does not match SigningConfigs`；DevEco 自动签名也按它签发。
+#   ⇒ 构建「CSS 验收」应用前把它换成 cssconf（经 safe-edit 唯一通道），构建后还原为宿主（default）。
+APPJSON_SWAPPED=0
+restore_appjson() {
+  if [ "$APPJSON_SWAPPED" = "1" ] && [ "$KEEP_APPJSON" != "1" ]; then
+    node "$ROOT/scripts/safe-edit.mjs" "$APPJSON" --script "$HERE/appjson-set-host.mjs" --apply >/dev/null 2>&1 \
+      && echo "    ✓ app.json5 已还原为 dev.proteus.host" \
+      || echo "    ⚠ app.json5 还原失败——请手动改回 bundleName=dev.proteus.host（否则下次 default 构建签名会不匹配）"
+    APPJSON_SWAPPED=0
+  fi
+}
+trap restore_appjson EXIT
+if [ "$PRODUCT" = "cssconf" ]; then
+  if [ "$KEEP_APPJSON" = "1" ]; then
+    echo "==> app.json5 → cssconf（--keep-appjson：**保留**，供 DevEco 生成 dev.proteus.cssconf 签名）"
+  else
+    echo "==> app.json5 → cssconf（构建后自动还原）"
+  fi
+  node "$ROOT/scripts/safe-edit.mjs" "$APPJSON" --script "$HERE/appjson-set-cssconf.mjs" --apply >/dev/null 2>&1 \
+    || { echo "✗ app.json5 切换失败（appjson-set-cssconf.mjs）"; exit 3; }
+  grep -q '"bundleName": *"dev.proteus.cssconf"' "$APPJSON" || { echo "✗ app.json5 bundleName 未变为 dev.proteus.cssconf"; exit 3; }
+  APPJSON_SWAPPED=1
+fi
+
 echo "==> 构建（assembleHap · product=${PRODUCT}）"
 # ★★构建失败必须中止（本仓实测：hvigor 失败经 `| grep | tail` 管道**吞掉退出码** ⇒ 脚本照打
 #   "下一步"，让人误用**旧 hap** 验证——"验证了但验的是旧的"。取 PIPESTATUS[0]）。
 HV_OUT="$("$HVIGORW" assembleHap --mode module -p product="$PRODUCT" --no-daemon 2>&1)"
 HV_RC=$?
 printf '%s\n' "$HV_OUT" | grep -vE "^\> hvigor .*Finished|UP-TO-DATE" | tail -15
+restore_appjson
 if [ "$HV_RC" != "0" ]; then
   # ★变量必须用 ${} 包裹：紧跟全角 `）`（U+FF09）时 bash 会把它并入变量名 ⇒ unbound variable
   echo "✗ 构建失败（hvigor 退出码 ${HV_RC}）——修正后再构建（勿用旧 hap 验证）"

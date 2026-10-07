@@ -439,12 +439,23 @@ bash hosts/harmony/run-host-app.sh            # 装机 + 启动 + 机器验证�
 **为什么机制不同（先取证）**：安卓 `--css` 靠换 `packageName`（`dev.proteus.cssconf`）出第二个图标；
 而**鸿蒙一个 bundleName 只能有一个桌面图标**（launcher 只取单个**入口 UIAbility** 的 icon/label——
 SDK `module.json` schema + 官方"配置应用图标和名称"优先级规则；设备 `bm dump` 实测只有一个 home-skill ability）。
-⇒ 第二个图标 = **第二个 bundleName**，靠 `build-profile.json5` 的**产品维度**：
+⇒ 第二个图标 = **第二个 bundleName**。
 
-| 产品 | bundleName | 桌面 label | 应用 |
-|---|---|---|---|
-| `default` | `dev.proteus.host` | `$string:app_name` | superapp |
-| `cssconf` | `dev.proteus.cssconf` | `$string:app_name_cssconf`（"CSS 验收"） | css-conformance |
+**★★★关键：bundleName / 桌面 label 的事实源是 `AppScope/app.json5`（不是 build-profile 的 product！）**
+- hvigor 的 `SignHap` **比对的是 app.json5 的 bundleName 与签名 profile**——实测只改 product.bundleName
+  会报 `00303074 The bundleName ... does not match ... SigningConfigs`；
+- DevEco 的"自动签名"也按 **`AppScope/app.json5`** 的 bundleName 签发 profile。
+⇒ 所以 `build-host-app.sh --css` 的做法是：**临时把 `AppScope/app.json5` 换成 `dev.proteus.cssconf`
++ 标签 `$string:app_name_cssconf`**（经 `safe-edit` 唯一通道 `appjson-set-cssconf.mjs`），构建后
+**自动还原**（`appjson-set-host.mjs` + `trap EXIT` 双保险）。build-profile 的 **product（default/cssconf）只用来选签名**。
+
+| 产品 | signingConfig（选签名） | app.json5 bundleName（`--css` 临时切换） | 桌面 label | 应用 |
+|---|---|---|---|---|
+| `default` | `default`（bound dev.proteus.host） | `dev.proteus.host` | `$string:app_name` | superapp |
+| `cssconf` | 需 `cssconf`（bound dev.proteus.cssconf） | `dev.proteus.cssconf` | `$string:app_name_cssconf`（"CSS 验收"） | css-conformance |
+
+★桌面 label 用**应用级**（app.json5 的 label）：能力 UIAbility **不设 label** 才会回退到应用级——
+本工程已移除 `abilities[].label`（否则它会盖过、且两产品共享）。
 
 **命令**：
 ```bash
@@ -453,16 +464,17 @@ bash hosts/harmony/run-superapp.sh --css     # 装机 + 启动 + 机器验证（
 ```
 
 **★唯一前置：cssconf 需要自己的一份签名 profile**（签名**不能用别的 bundle**——hvigor 实测报
-`00303074 The bundleName ... does not match ... SigningConfigs`）。本机现有 profile bound 到
-`dev.proteus.host`，对 `dev.proteus.cssconf` 无效。步骤（一次性）：
-1. 先跑一次 `bash hosts/harmony/build-host-app.sh --css`（产出 unsigned hap——让 DevEco 能读到 cssconf 产品）；
+`00303074`）。本机现有 profile bound 到 `dev.proteus.host`，对 `dev.proteus.cssconf` 无效。步骤（一次性）：
+1. `bash hosts/harmony/build-host-app.sh --css --keep-appjson`
+   —— 把 app.json5 切成 `dev.proteus.cssconf` 且**保留**（供 DevEco 读取；产出 unsigned hap 属正常）；
 2. DevEco Studio → `File → Project Structure → Signing Configs` → 勾 **Automatically generate signature**
    （登录华为账号）——DevEco 生成 bound 到 `dev.proteus.cssconf` 的签名配置并写进本地 `build-profile.json5`；
 3. 在本地 `build-profile.json5` 的 **cssconf 产品**上加 `"signingConfig": "cssconf"`
    （并在 `app.signingConfigs` 里命名该签名为 `cssconf`）；
-4. 再跑 `build-host-app.sh --css` ⇒ 产出 signed hap ⇒ `run-superapp.sh --css` 装机。
+4. 再跑 `bash hosts/harmony/build-host-app.sh --css`（app.json5 用完**自动还原**）⇒ 产出 signed hap
+   ⇒ `bash hosts/harmony/run-superapp.sh --css` 装机。
 
-> 说明：三端（Android/iOS/鸿蒙）superapp 与 cssconformance 的**内容**同源（`app-screen-content.json` +
+> 说明：三端（Android/iOS/鸿蒙）superapp 与 css-conformance 的**内容**同源（`app-screen-content.json` +
 > bundle），只有**宿主壳的 bundleName/label**不同——所以 cssconf 图标点开即 CSS 验收页集（30 页）。
 
 ### 已排除的路线（实测，勿重走）
