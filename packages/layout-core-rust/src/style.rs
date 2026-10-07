@@ -321,6 +321,20 @@ impl GradState {
     }
 }
 
+/// ★★★grid item 放置（2026-10-08 · 网格轨道项）：CSS `grid-column`/`grid-row` 的 IR 形态。
+///   `start`/`end` = 线号（可为负，-1 = 最后一条线；None = auto）；`span` = 跨 n 轨（None = 不指定）。
+///   映射到 taffy `Line<GridPlacement>`：start = start?Line : span?Span : Auto；
+///   end = end?Line : (start 存在且 span 存在)?Span : Auto。
+#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
+pub struct GridLine {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start: Option<i16>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub end: Option<i16>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub span: Option<u16>,
+}
+
 /// 引擎就绪样式（对应 TS 侧 `LayoutNode` 的输入部分；字段与 TS 参考实现一一对应）。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LStyle {
@@ -447,13 +461,13 @@ pub struct LStyle {
     ///   仅对 **grid 容器**生效（taffy `GridAutoFlow`）；item 子项上的该属性被忽略（与 Web 同）。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub grid_auto_flow: Option<String>,
-    /// ★批次 41：grid item 放置（CSS `grid-column` 线号）——`(start, Option<end>)`；线号可为负（-1 = 最后一条线）。
-    ///   `end=None` ⇒ auto（跨 1 轨）。仅对 **grid 容器里的 item** 生效（taffy `Line<GridPlacement>`）。
+    /// ★批次 41 / ★★★2026-10-08：grid item 放置（CSS `grid-column`）——`GridLine{start,end,span}`，线号可为负（-1 = 最后一条线）。
+    ///   仅对 **grid 容器里的 item** 生效（taffy `Line<GridPlacement>`）。span = 跨 n 轨（`span 2` / `1 / span 2`）。
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub grid_column: Option<(i16, Option<i16>)>,
-    /// ★批次 41：`grid-row` 线号放置（同 `grid_column`）
+    pub grid_column: Option<GridLine>,
+    /// ★批次 41 / ★★★2026-10-08：`grid-row` 放置（同 `grid_column`）
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub grid_row: Option<(i16, Option<i16>)>,
+    pub grid_row: Option<GridLine>,
     /// ★★★grid-template-areas 项（2026-10-08 · css:next P0·2× · CSS Grid）：**命名区域模板**。
     ///   规范串形态：行以 `;` 分隔、每行的区域名以空格分隔（`.` = 空单元）——如 `"media info;rec rec"`。
     ///   仅对 **grid 容器**生效（taffy `GridTemplateAreas`）；子项以 `grid_area` 引用。

@@ -379,24 +379,37 @@ function parseLineHeight(raw: string): string | null {
 }
 
 /**
- * ★批次 41（CSS Grid 补全）：\`grid-column\`/\`grid-row\` 的**线号放置** → \`{start, end?}\`。
- *   支持：\`<line>\`（单值 ⇒ end 缺省 auto）· \`<start> / <end>\`（线号可为负，-1 = 最后一条线）。
- *   \`span\`/\`auto\`/命名线 ⇒ null（未支持，调用方诊断）。
+ * ★批次 41 / ★★★2026-10-08（网格轨道项）：\`grid-column\`/\`grid-row\` 放置 → \`{start?, end?, span?}\`。
+ *   支持：\`<line>\`（单值 ⇒ start）· \`<start> / <end>\`（线号可为负，-1 = 最后一条线）·
+ *   \`span <n>\`（跨 n 轨，无起点 ⇒ 自动放置起）· \`<start> / span <n>\` · \`span <n> / <end>\`。
+ *   \`auto\` / 命名线 ⇒ null（未支持，调用方诊断）。
+ *   ★span 的 IR 形态：`{span:n}`（无 start）/ `{start:s, span:n}` / `{end:e, span:n}`——内核按
+ *     taffy \`Line<GridPlacement>\`（start/end 各可为 Line/Span/Auto）映射。
  */
-function parseGridLine(val: string): { start: number; end?: number } | null {
+function parseGridLine(val: string): { start?: number; end?: number; span?: number } | null {
   const parts = val.split('/').map((s) => s.trim())
   if (parts.length === 0 || parts.length > 2) return null
-  const lineOf = (t: string): number | undefined => {
-    if (!/^-?\d+$/.test(t)) return undefined
-    const n = Number(t)
-    return n === 0 ? undefined : n   // 0 非法线号
+  // 单个 token → 线号或 `span <n>`（`span` 与数之间可空格，忽略大小写）
+  const tokOf = (t: string): { line?: number; span?: number } | null => {
+    const sp = /^span\s+(\d+)$/i.exec(t)
+    if (sp) { const n = Number(sp[1]); return n >= 1 ? { span: n } : null }
+    if (/^-?\d+$/.test(t)) { const n = Number(t); return n === 0 ? null : { line: n } } // 0 非法线号
+    return null
   }
-  const start = lineOf(parts[0]!)
-  if (start === undefined) return null
-  if (parts.length === 1) return { start }
-  const end = lineOf(parts[1]!)
-  if (end === undefined) return null
-  return { start, end }
+  const a = tokOf(parts[0]!)
+  if (!a) return null
+  if (parts.length === 1) return a.line !== undefined ? { start: a.line } : { span: a.span }
+  const b = tokOf(parts[1]!)
+  if (!b) return null
+  const out: { start?: number; end?: number; span?: number } = {}
+  // a = 起点侧（line 或 span），b = 终点侧（line 或 span）
+  if (a.line !== undefined) out.start = a.line
+  if (a.span !== undefined) out.span = a.span
+  if (b.line !== undefined) out.end = b.line
+  if (b.span !== undefined) out.span = b.span
+  // `span x / span y` 或 `x / y`（双线号）：至少要有起点或跨度信息，否则无意义
+  if (out.start === undefined && out.end === undefined && out.span === undefined) return null
+  return out
 }
 
 /**
@@ -818,12 +831,13 @@ export function parseStaticStyle(
         continue
       }
       if (key === 'gridColumn' || key === 'gridRow') {
-        // ★批次 41（CSS Grid 补全 · 批 12 续）：`grid-column`/`grid-row` **线号放置**——
-        //   item 跨列/跨行（仪表盘 KPI 卡、全宽行）刚需。支持 `<line>` 与 `<start> / <end>`（线号可为负）；
-        //   `span`/`auto`/命名线 未支持 ⇒ 诊断跳过（不猜）。
+        // ★批次 41（CSS Grid 补全 · 批 12 续）：`grid-column`/`grid-row` 放置——item 跨列/跨行（仪表盘 KPI 卡、全宽行）刚需。
+        //   ★★★2026-10-08（网格轨道项）：**补 `span <n>`**（`span 2` / `1 / span 2` / `span 2 / 3`）——
+        //     此前只认纯数字线号 ⇒ `grid-row: span 2` 被**静默丢弃**（App 三端案例 D 卡位错的根因）。
+        //   仍不支持：`auto` / 命名线（`span <name>`）⇒ 诊断跳过（不猜）。
         const g = parseGridLine(rawVal)
         if (g === null) {
-          pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 未支持（仅线号 \`<n>\` 或 \`<start> / <end>\`；span/auto/命名线 暂不支持）——已跳过`)
+          pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 未支持（仅线号 \`<n>\` / \`<start> / <end>\` / \`span <n>\`；auto/命名线 暂不支持）——已跳过`)
           continue
         }
         out[key] = g

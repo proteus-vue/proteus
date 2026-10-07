@@ -128,6 +128,16 @@ node scripts/css-acceptance-record.mjs <feature-id> <verdicts.json>
   ——一行拿到 minmax/fr/px/%/auto/min-content + repeat 的正确语义。★**踩坑**：taffy 只认**带单位的 0**（`0px`）
   ⇒ 解析前把**独立数值 0** 改写为 `0px`（CSS `minmax(0, 1fr)` 是最高频写法）；且组件级解析器只吃**单个组件**，整串要先**paren-aware 切分**。
   ★同源纪律：**引擎/库已提供的官方解析器 > 手写子集**——手写省事的代价是"验收端与语料脱节"（手写只覆盖想象到的形态）。
+- **★★★折叠面"只做了数字这一类"⇒ 语义类（span/auto/命名）整类被静默丢弃（2026-10-08 grid 轨道项）**：
+  `grid-row: span 2`（案例 D 卡跨 2 行）在 App 三端**整条丢失** ⇒ 卡片 y 位置错（`parseGridLine` 只认纯数字线号 `1` / `1 / 3`，
+  `span` 值 ⇒ null ⇒ 诊断跳过**不落字段**）；而 **Web/MP 透传原生关键字**（浏览器/Skyline 原生支持 span）⇒ 只有 App 端错。
+  ★**判据（先查产物，别猜）**：编译 `dist/app/<端>/screen-content.json` 看该子项**有没有 `gridRow` 字段**——没有即折叠面丢了。
+  ★修法：IR 加 `span` 维度（`GridLine{start?,end?,span?}`）+ 内核 `GridPlacement::Span`（**引擎本就支持——是折叠面挡在门外**）。
+  ★同源纪律：**一个 CSS 属性的取值常有"数字/关键字/函数"多个语义类——折叠面必须逐类处理**，
+  只做"数字"这一类 ⇒ 其余类**静默丢弃**（不报错、只在 App 端看上去"没生效"）。
+  同类前科：grid 轨迹（只认 fr/px、丢 minmax）/ justify-self（漏登记）——**"折叠面覆盖不完整"是本项最多发的 App 端偏差源**。
+  ★第二个同源纪律：**"Web 对 ≠ App 对"**——Web/MP 把 CSS 原样交给浏览器/小程序引擎（关键字全支持），
+  而 App 走**自研折叠链**（每类值都要我们显式接）⇒ 多端一致性问题先问「这条链**每端各自**怎么走」。
 - **★★App/MP 文本引擎「长词默认断开」——Web `word-break: normal` 的"任其溢出"不可表达**（2026-10-06 word-break 项实锤）：
   Android `StaticLayout` / iOS CoreText / 鸿蒙 Typography / Skyline 的**自然行为**都是"长不可断词按盒宽折断"
   （= 相当于 `break-all`）；而 Web `normal` 是"词边界断、超长词整体溢出"。
