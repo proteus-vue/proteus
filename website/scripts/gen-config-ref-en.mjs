@@ -4,17 +4,18 @@
 export const PAGE_EN = {
   order: 42,
   group: '工程命令',
+  groupEn: 'Toolchain',
   zh: {
     title: '配置参考（proteus.config.ts）',
     lede:
-      '> 本页由**类型源码自动生成**（`packages/types/src/config.ts` 的 `ProteusConfig` 与目标端接口，`website/scripts/gen-config-ref.mjs`），请勿手工编辑。每个字段一个标题（右侧目录可跳转）。字段说明取自类型上的 JSDoc——**结构与说明随类型同步**。',
+      '> 本页由**类型源码自动生成**（`packages/types/src/{config,router-config,compiler-types}.ts`，`website/scripts/gen-config-ref.mjs`），请勿手工编辑。每个字段一个标题（右侧目录可跳转），被引用的具名接口（如 `RouterSection`）会展开为嵌套条目。字段说明取自类型上的 JSDoc（缺失即留空——不编造）。改类型 → 重跑生成器即同步。',
     example:
       "// proteus.config.ts（v4 · 按端分区）\nexport default {\n  version: 4,\n  targets: {\n    mp: { appid: 'wx…', renderer: 'skyline' },\n    ios: { bundleId: 'com.acme.app' },\n    android: { applicationId: 'com.acme.app', minSdk: 26 },\n  },\n  pagesDir: 'src/pages',\n}",
   },
   en: {
     title: 'Configuration reference (proteus.config.ts)',
     lede:
-      '> This page is **auto-generated from the type source** (`ProteusConfig` and the target interfaces in `packages/types/src/config.ts`, via `website/scripts/gen-config-ref.mjs`) — do not hand-edit. Every field is its own heading (jump from the outline on the right). Field descriptions come from the JSDoc on the type — **structure and prose stay in sync with the type**.',
+      '> This page is **auto-generated from the type source** (`packages/types/src/{config,router-config,compiler-types}.ts`, via `website/scripts/gen-config-ref.mjs`) — do not hand-edit. Every field is its own heading (jump from the outline), and referenced named interfaces (e.g. `RouterSection`) expand into nested entries. Descriptions come from the JSDoc on the type (empty when none — nothing is invented). Change the type and re-run the generator to resync.',
     example:
       "// proteus.config.ts (v4, per-target)\nexport default {\n  version: 4,\n  targets: {\n    mp: { appid: 'wx…', renderer: 'skyline' },\n    ios: { bundleId: 'com.acme.app' },\n    android: { applicationId: 'com.acme.app', minSdk: 26 },\n  },\n  pagesDir: 'src/pages',\n}",
   },
@@ -43,10 +44,12 @@ export const FIELD_EN = {
   layout: 'Fluid-layout p-fluid clamp generation parameters. Cross-target shared (same design baseline on Web/MP/App).',
   'layout.designWidth': 'Design mockup width (the base for p-fluid clamp generation).',
   'layout.fluidViewport': 'Viewport range (clamp upper/lower bounds).',
+  'layout.fluidViewport.min': 'Viewport lower bound (px; the minimum size p-fluid generates).',
+  'layout.fluidViewport.max': 'Viewport upper bound (px; the maximum size p-fluid generates).',
   budget: 'Bundle-size budget.',
   'budget.mainPackageKB': 'Main-package size limit (KB).',
   'budget.strict': 'Strict mode: exceeding the limit fails the build.',
-  vite: 'vite passthrough (the vite config is assembled by the framework; this field is for developer extensions — object or `(ctx) => object`).',
+  vite: 'vite passthrough (the vite config is assembled by the framework; this field is for developer extensions — object or a `(ctx) => object` function whose `ctx` is `{ command: \'serve\' | \'build\', mode: string }`).',
   audit: 'D-2 dogfooding gates (pages must not raw-write platform APIs / hand-write @media / pull in third-party UI; rule-level `off`/`warn`/`error`).',
   gates: 'Unified gate switches (`gates.disabled`: disable gates / aggregate domains).',
   // —— Web ——
@@ -88,6 +91,9 @@ export const FIELD_EN = {
   'targets.ios.urlSchemes': 'URL scheme allow-list (`CFBundleURLTypes`) — registers deep links / being opened by other apps (e.g. `["myapp"]` → `myapp://…`).',
   'targets.ios.privacyUsageDescriptions': 'Privacy usage descriptions (`NSXxxUsageDescription`) — ★required for App Store review: key = the full plist key (e.g. `NSCameraUsageDescription`), value = the user-facing purpose string.',
   'targets.ios.appCategory': 'App category (`LSApplicationCategoryType`, e.g. `public.app-category.games`; not written by default).',
+  'targets.ios.appTransportSecurity': 'App Transport Security (`NSAppTransportSecurity`) — relax ATS (e.g. allow cleartext HTTP for local debugging; not written by default). Prefer the narrower `allowLocalNetworking`.',
+  'targets.ios.appTransportSecurity.allowArbitraryLoads': '`NSAllowsArbitraryLoads` — allow arbitrary cleartext HTTP (★App Store requires a justification; recommended only for debugging, not for release).',
+  'targets.ios.appTransportSecurity.allowLocalNetworking': '`NSAllowsLocalNetworking` — allow cleartext on local networks only (iOS 10+; narrower than arbitrary).',
   'targets.ios.requiresFullScreen': '`UIRequiresFullScreen` (require full screen on iPad, disable split view; not written by default).',
   'targets.ios.developmentRegion': '`CFBundleDevelopmentRegion` (default development language, e.g. `zh_CN` / `en`; not written by default).',
   // —— Android ——
@@ -137,4 +143,95 @@ export const FIELD_EN = {
   'app.name': 'App display name (falls back to app.config\u2019s `app.name`).',
   'app.version': 'Version (semver; falls back to app.config\u2019s `app.version`).',
   'app.buildNumber': 'Build number (falls back to app.config\u2019s `app.buildNumber`).',
+  // —— router 段展开（RouterSection）——
+  'router.routesOutput': 'Route-table output path (generated by gen-routes at compile time; defaults to `src/router/auto-routes.ts`; `""` = generate nothing).',
+  'router.subPackages': 'Subpackage declarations: `root` (an independent scan tree) / `name` (for app.json display + module mapping).',
+  'router.subPackages.<entry>.root': 'Subpackage root directory (relative to the project root, e.g. `subpackages/order`).',
+  'router.subPackages.<entry>.name': 'Subpackage name (optional; maps to app.json `subPackages[].name`).',
+  'router.customRoute': 'wx.router custom route builders (transition presets), inlined into app.js at build time.',
+  'router.customRoute.registerPresets': 'Whether to register the built-in preset builders (default true).',
+  'router.customRoute.builders': 'Preset builders registry: name → preset source file.',
+  'router.tabBar': 'Native tabBar declaration (`color` / `selectedColor` / `list`).',
+  'router.tabBar.color': 'Unselected text color (e.g. `#8a8a99`).',
+  'router.tabBar.selectedColor': 'Selected text color (e.g. `#7c5cff`).',
+  'router.tabBar.list': 'The tab list (order = display order; `name` = route name).',
+  'router.tabBar.list.<entry>.name': 'Route name (matches the page name).',
+  'router.tabBar.list.<entry>.text': 'Tab label.',
+  'router.tabBar.list.<entry>.icon': 'Icon path (optional).',
+  'router.pages': 'Per-page config (the `pages.json` equivalent): title / isTab / transition / guards — the single entry managing every route and target.',
+  'router.meta': 'The synonymous old name of `pages` (when both are present, `pages` wins and a duplicate is recorded).',
+  // —— audit / gates 段展开 ——
+  'audit.dir': 'Directory of the pages under audit (relative to the project root; defaults to `src`).',
+  'audit.rules': 'rule → severity; rules not listed default to `error`.',
+  'gates.disabled': 'Gate / preset / aggregate-domain IDs to disable (from the `proteus gate ls` catalog); all enabled by default.',
+  // —— rules 段展开（TransformRuleOverrides）——
+  'targets.mp.rules.disabled': 'Disabled rule IDs (the rule no longer applies; output degrades to no transform + a compile-time warning).',
+  'targets.mp.rules.mapping': 'Mapping overrides: rule ID → mapping patch (tag/* tag mapping / event/click-to-tap events / semantic/base-class semantic classes).',
+  'targets.mp.rules.customTags': 'Custom tag mapping: new HTML tag → Mini Program tag (the entry point for AI to extend tags).',
+  'targets.mp.rules.failFast': 'Support-matrix fail-fast: semantics outside the matrix (the "output verbatim" class — non-method event handlers / tags without an equivalent component / SVG / keyboard events) are upgraded from a soft warning to a compile-time hard error (CompilerError, fail-closed); default false keeps the warning.',
+}
+
+/**
+ * ★相关超链（See also）：字段路径 → [{ zh, en, url }]（真实站内页——受 check:doc-links 门禁）。
+ *   组级 key 命中时，其子字段会**继承**该组的相关链接（renderField 后查 SEE_ALSO[full] ?? SEE_ALSO[组前缀]）。
+ */
+export const SEE_ALSO = {
+  'router': [
+    { zh: '路由与导航', en: 'Routing & navigation', url: '/docs/16-router' },
+    { zh: '路由配置', en: 'Route config', url: '/docs/framework/route-config' },
+    { zh: '分包', en: 'Subpackages', url: '/docs/framework/subpackages' },
+  ],
+  'router.pages': [{ zh: '页面构成', en: 'Page anatomy', url: '/docs/09-page-anatomy' }],
+  'audit': [{ zh: '质量门禁', en: 'Quality gates', url: '/docs/29-quality-gates' }],
+  'gates': [{ zh: '质量门禁', en: 'Quality gates', url: '/docs/29-quality-gates' }],
+  'app': [{ zh: '运行时配置 app.config', en: 'Runtime config (app.config)', url: '/docs/11-app-config' }],
+  'pagesDir': [{ zh: '路由与导航', en: 'Routing & navigation', url: '/docs/16-router' }],
+  'layout': [{ zh: '柔性布局', en: 'Fluid layout', url: '/docs/17-fluid-layout' }],
+  'budget': [{ zh: '性能预算', en: 'Performance budget', url: '/docs/framework/perf-budget' }],
+  'targets.mp.rules': [{ zh: '编译规则目录', en: 'Compile rule catalog', url: '/docs/reference/rules' }],
+  'targets.mp': [{ zh: 'Skyline 渲染约束', en: 'Skyline render constraints', url: '/docs/22-skyline-render-constraints' }],
+  'targets.mp.skylineLayout': [{ zh: 'Skyline 渲染约束', en: 'Skyline render constraints', url: '/docs/22-skyline-render-constraints' }],
+  'targets.mp.page.webviewPages': [{ zh: 'Skyline 渲染约束', en: 'Skyline render constraints', url: '/docs/22-skyline-render-constraints' }],
+  'targets.mp.permissions': [{ zh: '平台 API', en: 'Platform API', url: '/docs/19-platform-api' }],
+  'targets.android.permissions': [{ zh: '平台 API', en: 'Platform API', url: '/docs/19-platform-api' }],
+  'targets.harmony.permissions': [{ zh: '平台 API', en: 'Platform API', url: '/docs/19-platform-api' }],
+  'vite': [{ zh: '编译配置', en: 'Compiler config', url: '/docs/10-config' }],
+}
+
+/**
+ * ★组级 runnable 示例（大厂参考页常见：一个可复制片段）。key = 字段路径（或组路径）。
+ */
+export const EXAMPLE = {
+  'targets.mp.style': {
+    zh: "// targets.mp.style\nstyle: { px2rpx: true, rpxRatio: 2 }",
+    en: "// targets.mp.style\nstyle: { px2rpx: true, rpxRatio: 2 }",
+  },
+  'targets.mp.permissions': {
+    zh: "// targets.mp —— 仅 name 的简写\npermissions: ['android.permission.INTERNET']",
+    en: "// targets.mp — name-only shorthand\npermissions: ['android.permission.INTERNET']",
+  },
+  'targets.android.permissions': {
+    zh: "// 字符串简写 + 结构化（带 maxSdkVersion）\npermissions: [\n  'android.permission.INTERNET',\n  { name: 'android.permission.WRITE_EXTERNAL_STORAGE', maxSdkVersion: 32 },\n]",
+    en: "// string shorthand + structured entry (with maxSdkVersion)\npermissions: [\n  'android.permission.INTERNET',\n  { name: 'android.permission.WRITE_EXTERNAL_STORAGE', maxSdkVersion: 32 },\n]",
+  },
+  'targets.android.usesFeatures': {
+    zh: "usesFeatures: ['android.hardware.camera', { name: 'android.hardware.location.gps', required: false }]",
+    en: "usesFeatures: ['android.hardware.camera', { name: 'android.hardware.location.gps', required: false }]",
+  },
+  'targets.harmony.permissions': {
+    zh: "// reason 写普通文案 → 框架自动生成 $string: 资源；字符串简写仍可用\npermissions: [\n  { name: 'ohos.permission.LOCATION', reason: '用于展示附近门店' },\n  'ohos.permission.INTERNET',\n]",
+    en: "// a plain-text reason makes the framework generate the $string: resource; string shorthand still works\npermissions: [\n  { name: 'ohos.permission.LOCATION', reason: 'Used to show nearby stores' },\n  'ohos.permission.INTERNET',\n]",
+  },
+  'targets.ios.urlSchemes': {
+    zh: "urlSchemes: ['myapp']   // → myapp://…",
+    en: "urlSchemes: ['myapp']   // → myapp://…",
+  },
+  'router.pages': {
+    zh: "// router.pages —— pages.json 等价物\npages: {\n  'index': { title: '首页', isTab: true },\n  'user/profile': { title: '个人资料', requiresAuth: true },\n}",
+    en: "// router.pages — the pages.json equivalent\npages: {\n  'index': { title: 'Home', isTab: true },\n  'user/profile': { title: 'Profile', requiresAuth: true },\n}",
+  },
+  'vite': {
+    zh: "// 对象形态\nexport default {\n  vite: { server: { port: 5173 }, resolve: { alias: { '@lib': './src/lib' } } },\n}\n// 函数形态（按 command/mode）\nexport default {\n  vite: ({ command, mode }) => ({ base: mode === 'web' ? '/' : undefined }),\n}",
+    en: "// object form\nexport default {\n  vite: { server: { port: 5173 }, resolve: { alias: { '@lib': './src/lib' } } },\n}\n// function form (per command/mode)\nexport default {\n  vite: ({ command, mode }) => ({ base: mode === 'web' ? '/' : undefined }),\n}",
+  },
 }

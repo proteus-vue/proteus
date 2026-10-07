@@ -7,7 +7,7 @@ generated: true
 
 # 配置参考（proteus.config.ts）
 
-> 本页由**类型源码自动生成**（`packages/types/src/config.ts` 的 `ProteusConfig` 与目标端接口，`website/scripts/gen-config-ref.mjs`），请勿手工编辑。每个字段一个标题（右侧目录可跳转）。字段说明取自类型上的 JSDoc——**结构与说明随类型同步**。
+> 本页由**类型源码自动生成**（`packages/types/src/{config,router-config,compiler-types}.ts`，`website/scripts/gen-config-ref.mjs`），请勿手工编辑。每个字段一个标题（右侧目录可跳转），被引用的具名接口（如 `RouterSection`）会展开为嵌套条目。字段说明取自类型上的 JSDoc（缺失即留空——不编造）。改类型 → 重跑生成器即同步。
 
 ```ts
 // proteus.config.ts（v4 · 按端分区）
@@ -47,6 +47,8 @@ export default {
 
 页面根目录（主包路由扫描起点）——**跨端共享**
 
+- **相关**：[路由与导航](/docs/16-router)
+
 ### `app`
 
 - **类型**：`AppIdentityConfig`
@@ -54,12 +56,138 @@ export default {
 
 共享应用身份（构建期写进各端原生工程文件；缺省可由 app.config 的 app.* 回退）。 留在跨端层是刻意的——同一身份重复写进三端配置文件更易漂移；各端可覆盖（targets.<端>.label/version…）。 与 app.config 的 app.* 边界（G-35.1）：此处 = **构建期**（CLI 消费，写原生文件）；app.config = **运行期**（业务读取）。
 
+- **相关**：[运行时配置 app.config](/docs/11-app-config)
+
 ### `router`
 
 - **类型**：`RouterSection`
 - **必填**：否
 
 #492 项目级路由管理（统一路由配置面——跨端共享）： routesOutput / subPackages / customRoute / tabBar / pages 全在此； 消费方（gen-routes / app 骨架）经 resolveRouterConfig() 取生效配置——禁止散读。
+
+- **相关**：[路由与导航](/docs/16-router) · [路由配置](/docs/framework/route-config) · [分包](/docs/framework/subpackages)
+
+### `router.routesOutput`
+
+- **类型**：`string`
+- **必填**：否
+
+路由表产物路径（编译期 gen-routes 生成；缺省 src/router/auto-routes.ts）
+
+### `router.subPackages`
+
+- **类型**：`Array<SubPackageDecl>`
+- **必填**：否
+
+分包配置（各分包独立扫描树）
+
+### `router.subPackages.<entry>.root`
+
+- **类型**：`string`
+- **必填**：是
+
+分包根目录（相对工程根，独立扫描树；如 `subpackages/order`）
+
+### `router.subPackages.<entry>.name`
+
+- **类型**：`string`
+- **必填**：否
+
+分包名（可选；对应 app.json 的 `subPackages[].name`）
+
+### `router.customRoute`
+
+- **类型**：`CustomRouteConfig`
+- **必填**：否
+
+wx.router 自定义路由（转场 builders）
+
+### `router.customRoute.registerPresets`
+
+- **类型**：`boolean`
+- **必填**：否
+
+是否注册内置预设 builders（缺省 true）
+
+### `router.customRoute.builders`
+
+- **类型**：`Record<string, string>`
+- **必填**：否
+
+预设 builders 注册表：name → 预设源码文件（构建期内联进 app.js 注册）
+
+### `router.tabBar`
+
+- **类型**：`{ color?: string selectedColor?: string list: Array<{ name: string text: string icon?: string }> }`
+- **必填**：否
+
+tabBar 声明（list.name 对应路由名；缺省按 meta.isTab 推导）
+
+### `router.tabBar.color`
+
+- **类型**：`string`
+- **必填**：否
+
+未选中文字颜色（如 `#8a8a99`）
+
+### `router.tabBar.selectedColor`
+
+- **类型**：`string`
+- **必填**：否
+
+选中文字颜色（如 `#7c5cff`）
+
+### `router.tabBar.list`
+
+- **类型**：`Array<{ name: string text: string icon?: string }>`
+- **必填**：是
+
+tab 列表（顺序即展示顺序；`name` 对应路由名）
+
+### `router.tabBar.list.<entry>.name`
+
+- **类型**：`string`
+- **必填**：是
+
+路由名（对应页面 name）
+
+### `router.tabBar.list.<entry>.text`
+
+- **类型**：`string`
+- **必填**：是
+
+tab 文案
+
+### `router.tabBar.list.<entry>.icon`
+
+- **类型**：`string`
+- **必填**：否
+
+图标路径（可选）
+
+### `router.pages`
+
+- **类型**：`Record<string, RouteMeta>`
+- **必填**：否
+
+★★**页面配置**（2026-10-02 · 统一路由页面管理 —— `pages.json` 等价物）： 每页的配置集中声明在此（标题 / isTab / 转场 / 登录与权限 / MP 页面窗口扩展 …）， 是"一个入口管理全端路由页面"的**核心字段**（对齐 uni-app：一个 pages.json 管全端）。 匹配规则（决策 #113）：**精确页面路径 > 目录前缀 > 默认**； 页面出现次序由 pages/ 目录扫描（约定式）决定——配置不重复声明"有哪些页"。 取值见 `RouteMeta`（`title`/`isTab`/`transition`/`requiresAuth`/`permissions`/`redirectTo`/ `parent`/`pageJson` …）。
+
+```ts
+// router.pages —— pages.json 等价物
+pages: {
+  'index': { title: '首页', isTab: true },
+  'user/profile': { title: '个人资料', requiresAuth: true },
+}
+```
+
+- **相关**：[页面构成](/docs/09-page-anatomy)
+
+### `router.meta`
+
+- **类型**：`Record<string, RouteMeta>`
+- **必填**：否
+
+页面配置的**旧名**（与 `pages` 同义；两份都写时 `pages` 胜并登记 duplicate）。建议迁移到 `pages`。
 
 ### `compiler`
 
@@ -73,32 +201,44 @@ G-29 编译器后端插拔（缺省 node 零开销；'rust' → 每次构建跑 
 - **类型**：`CompilerBackend`
 - **必填**：否
 
+编译后端：`'node'`（缺省，零开销）| `'rust'`（对每个 .vue 跑 Node/Rust 双编译语义等价校验，不一致构建红）
+
 ### `layout`
 
-- **类型**：`{ designWidth?: number fluidViewport?: { min?: number; max?: number } }`
+- **类型**：`{ designWidth?: number fluidViewport?: { min?: number max?: number } }`
 - **必填**：否
 
 G-22 柔性布局（fluid-layout-plan）：p-fluid 编译期 clamp 生成参数——**跨端共享**（Web/MP/App 同一设计基准）
+
+- **相关**：[柔性布局](/docs/17-fluid-layout)
 
 ### `layout.designWidth`
 
 - **类型**：`number`
 - **必填**：否
 
+设计稿宽度（p-fluid clamp 生成基准；如 375 / 750）
+
 ### `layout.fluidViewport`
 
-- **类型**：`{ min?: number; max?: number }`
+- **类型**：`{ min?: number max?: number }`
 - **必填**：否
+
+视口范围（clamp 上下界）
 
 ### `layout.fluidViewport.min`
 
 - **类型**：`number`
 - **必填**：否
 
+视口下界（px；p-fluid 生成的最小尺寸）
+
 ### `layout.fluidViewport.max`
 
 - **类型**：`number`
 - **必填**：否
+
+视口上界（px；p-fluid 生成的最大尺寸）
 
 ### `budget`
 
@@ -107,15 +247,21 @@ G-22 柔性布局（fluid-layout-plan）：p-fluid 编译期 clamp 生成参数�
 
 包体积预算
 
+- **相关**：[性能预算](/docs/framework/perf-budget)
+
 ### `budget.mainPackageKB`
 
 - **类型**：`number`
 - **必填**：是
 
+主包体积上限（KB；超限按 `strict` 决定告警或失败）
+
 ### `budget.strict`
 
 - **类型**：`boolean`
 - **必填**：是
+
+严格模式：`true` = 超限直接构建失败（非仅告警）
 
 ### `vite`
 
@@ -124,12 +270,41 @@ G-22 柔性布局（fluid-layout-plan）：p-fluid 编译期 clamp 生成参数�
 
 #418/★#421 vite 透传（配置收敛——开发者不写 vite.config.ts）
 
+```ts
+// 对象形态
+export default {
+  vite: { server: { port: 5173 }, resolve: { alias: { '@lib': './src/lib' } } },
+}
+// 函数形态（按 command/mode）
+export default {
+  vite: ({ command, mode }) => ({ base: mode === 'web' ? '/' : undefined }),
+}
+```
+
+- **相关**：[编译配置](/docs/10-config)
+
 ### `audit`
 
 - **类型**：`AuditConfig`
 - **必填**：否
 
-#447 D-2 dogfooding 门禁（页面不裸写平台 API / 手写
+#447 D-2 dogfooding 门禁（页面不裸写平台 API / 手写 @media / 引第三方 UI；规则级可配 off/warn/error）
+
+- **相关**：[质量门禁](/docs/29-quality-gates)
+
+### `audit.dir`
+
+- **类型**：`string`
+- **必填**：否
+
+被审计页面目录（相对工程根；缺省 src——对齐 pagesDir 扫描语义）
+
+### `audit.rules`
+
+- **类型**：`Partial<Record<AuditRuleId, AuditSeverity>>`
+- **必填**：否
+
+规则门禁：缺省 'error'（列出的规则改级别；未列 = error）
 
 ### `gates`
 
@@ -137,6 +312,15 @@ G-22 柔性布局（fluid-layout-plan）：p-fluid 编译期 clamp 生成参数�
 - **必填**：否
 
 #456 统一门禁开关（gates.disabled：自选关闭门禁/聚合域）
+
+- **相关**：[质量门禁](/docs/29-quality-gates)
+
+### `gates.disabled`
+
+- **类型**：`string[]`
+- **必填**：否
+
+禁用的门禁/聚合域 id 列表（值域 = CLI `proteus gate ls` 目录 + 聚合域 route/module/config/i18n/capabilities/components/d2/devtools-budget 与 css/style/router/cli/app-config；缺省全部启用）
 
 ## 目标端 · Web
 
@@ -156,6 +340,8 @@ G-22 柔性布局（fluid-layout-plan）：p-fluid 编译期 clamp 生成参数�
 
 小程序 AppID（构建期写 project.config.json / IDE 导入 / automator 体检）。**≠ app.config 的 app.id**（运行时标识）
 
+- **相关**：[Skyline 渲染约束](/docs/22-skyline-render-constraints)
+
 ### `targets.mp.renderer`
 
 - **类型**：`'skyline' | 'webview'`
@@ -163,12 +349,21 @@ G-22 柔性布局（fluid-layout-plan）：p-fluid 编译期 clamp 生成参数�
 
 渲染器（★取代旧顶层 `skyline: boolean`）：`'skyline'`（默认）| `'webview'`
 
+- **相关**：[Skyline 渲染约束](/docs/22-skyline-render-constraints)
+
 ### `targets.mp.style`
 
 - **类型**：`{ px2rpx?: boolean rpxRatio?: number }`
 - **必填**：否
 
 样式换算（MP 专属；Web 端永不换算——Web 保持标准 CSS，由编译器吸收差异）
+
+```ts
+// targets.mp.style
+style: { px2rpx: true, rpxRatio: 2 }
+```
+
+- **相关**：[Skyline 渲染约束](/docs/22-skyline-render-constraints)
 
 ### `targets.mp.style.px2rpx`
 
@@ -191,6 +386,8 @@ px → rpx 转换开关（缺省 true）
 
 响应式 → setData 桥接策略
 
+- **相关**：[Skyline 渲染约束](/docs/22-skyline-render-constraints)
+
 ### `targets.mp.setDataBridge.batchWindow`
 
 - **类型**：`number`
@@ -212,12 +409,16 @@ px → rpx 转换开关（缺省 true）
 
 全局样式（MP 端唯一全局入口）：相对 root 的 CSS 文件路径（缺省探测根/应用目录的 app.wxss）。构建期编译（px→rpx）后产出产物根 app.wxss（微信自动生效）；Web 端同一文件在入口 import（单源）。
 
+- **相关**：[Skyline 渲染约束](/docs/22-skyline-render-constraints)
+
 ### `targets.mp.page`
 
 - **类型**：`{ autoScrollContainer?: boolean webviewPages?: string[] }`
 - **必填**：否
 
 页面模式（Skyline 页面本身不滚动）
+
+- **相关**：[Skyline 渲染约束](/docs/22-skyline-render-constraints)
 
 ### `targets.mp.page.autoScrollContainer`
 
@@ -233,6 +434,8 @@ px → rpx 转换开关（缺省 true）
 
 Skyline iOS 白屏兜底：列出白屏高风险页，强制走 WebView 渲染（页面级降级，不全局）
 
+- **相关**：[Skyline 渲染约束](/docs/22-skyline-render-constraints)
+
 ### `targets.mp.skylineLayout`
 
 - **类型**：`{ defaultDisplayBlock?: boolean defaultContentBox?: boolean tagNameStyleIsolation?: boolean enableScrollViewAutoSize?: boolean keyframeStyleIsolation?: boolean }`
@@ -240,30 +443,42 @@ Skyline iOS 白屏兜底：列出白屏高风险页，强制走 WebView 渲染�
 
 Skyline 布局对齐开关（消费官方《Skyline WXSS 样式支持与差异》对齐表）。 仅 `defaultDisplayBlock` 默认 true（本仓真机验证过）；其余默认**不注入**（未验证的开关不由框架替项目做主）。
 
+- **相关**：[Skyline 渲染约束](/docs/22-skyline-render-constraints)
+
 ### `targets.mp.skylineLayout.defaultDisplayBlock`
 
 - **类型**：`boolean`
 - **必填**：否
+
+节点默认 block 布局，对齐 WebView/Web（表单元素不再被 stretch 占满居中）；**默认 true**
 
 ### `targets.mp.skylineLayout.defaultContentBox`
 
 - **类型**：`boolean`
 - **必填**：否
 
+默认 `content-box` 盒模型，对齐 Web
+
 ### `targets.mp.skylineLayout.tagNameStyleIsolation`
 
 - **类型**：`boolean`
 - **必填**：否
+
+tag 选择器全局匹配，对齐 WebView（★开发者工具会拒——平台限制）
 
 ### `targets.mp.skylineLayout.enableScrollViewAutoSize`
 
 - **类型**：`boolean`
 - **必填**：否
 
+`scroll-view` 自动撑开
+
 ### `targets.mp.skylineLayout.keyframeStyleIsolation`
 
 - **类型**：`boolean`
 - **必填**：否
+
+`@keyframes` 样式全局共享
 
 ### `targets.mp.profileBoundary`
 
@@ -272,10 +487,14 @@ Skyline 布局对齐开关（消费官方《Skyline WXSS 样式支持与差异�
 
 VC2-b 编译期 Profile 边界校验（使用了某端不支持的样式即报；Web 端构建同样执行）。escape hatch：样式块内注释 `proteus-allow-profile: <理由>`。
 
+- **相关**：[Skyline 渲染约束](/docs/22-skyline-render-constraints)
+
 ### `targets.mp.profileBoundary.level`
 
 - **类型**：`'error' | 'warn' | 'off'`
 - **必填**：否
+
+违规级别：`'error'`（缺省，阻断构建）| `'warn'`（报告不阻断）| `'off'`（不启用）
 
 ### `targets.mp.rules`
 
@@ -283,6 +502,36 @@ VC2-b 编译期 Profile 边界校验（使用了某端不支持的样式即报�
 - **必填**：否
 
 底线循环 ①③：规则覆盖（AI/config 改写或禁用规则）
+
+- **相关**：[编译规则目录](/docs/reference/rules)
+
+### `targets.mp.rules.disabled`
+
+- **类型**：`string[]`
+- **必填**：否
+
+禁用的规则 ID 列表：规则不生效，对应输出退化为无转换 + 编译期警告
+
+### `targets.mp.rules.mapping`
+
+- **类型**：`Record<string, Record<string, string>>`
+- **必填**：否
+
+覆盖映射：规则 ID → 映射补丁（tag/* 标签映射 / event/click-to-tap 事件 / semantic/base-class 语义类）
+
+### `targets.mp.rules.customTags`
+
+- **类型**：`Record<string, string>`
+- **必填**：否
+
+自定义标签映射：新增 HTML 标签 → 小程序标签（AI 扩展新标签的入口）
+
+### `targets.mp.rules.failFast`
+
+- **类型**：`boolean`
+- **必填**：否
+
+2026-09-09 支持矩阵 fail-fast：矩阵外语义（「已原样输出」类——非方法引用事件处理器/无对等组件标签/SVG/键盘事件） 从软警告升级为编译期硬报错（CompilerError fail-closed——防「已原样输出」静默放行产出无效产物）； 缺省 false 保持警告（诚实但不拦截）
 
 ## 目标端 · iOS
 
@@ -298,7 +547,7 @@ CFBundleIdentifier（缺省 = 宿主默认 bundle id，见宿主工程 / proteus
 - **类型**：`string`
 - **必填**：否
 
-CFBundleDisplayName（缺省回退 app.name / targets.app.name）
+CFBundleDisplayName（缺省回退 `app.name`）
 
 ### `targets.ios.version`
 
@@ -369,6 +618,10 @@ UIStatusBarHidden（隐藏状态栏；缺省不写）
 - **必填**：否
 
 URL scheme 白名单（CFBundleURLTypes）——注册深链/被其他 App 拉起（如 `['myapp']` → `myapp://…`）
+
+```ts
+urlSchemes: ['myapp']   // → myapp://…
+```
 
 ### `targets.ios.privacyUsageDescriptions`
 
@@ -477,6 +730,16 @@ targetSdkVersion（缺省 34）
 
 权限声明（`<uses-permission>`）——字符串简写 = 仅 name；结构化条目可带 `maxSdkVersion`
 
+```ts
+// 字符串简写 + 结构化（带 maxSdkVersion）
+permissions: [
+  'android.permission.INTERNET',
+  { name: 'android.permission.WRITE_EXTERNAL_STORAGE', maxSdkVersion: 32 },
+]
+```
+
+- **相关**：[平台 API](/docs/19-platform-api)
+
 ### `targets.android.permissions.<entry>.name`
 
 - **类型**：`string`
@@ -497,6 +760,10 @@ android:maxSdkVersion——该权限仅对 ≤ 此 API level 生效（如存储�
 - **必填**：否
 
 硬件/功能特性（`<uses-feature>`）——字符串简写 = required: true
+
+```ts
+usesFeatures: ['android.hardware.camera', { name: 'android.hardware.location.gps', required: false }]
+```
 
 ### `targets.android.usesFeatures.<entry>.name`
 
@@ -654,6 +921,16 @@ deviceTypes（缺省 ["phone","tablet","2in1"]）
 
 追加 requestPermissions（module.json5）——字符串简写 = 仅 name；结构化条目可带 `reason` + `usedScene` （★用户授权权限必需——reason 写普通文案则框架自动生成 `$string:` 资源并写入 entry 三语言 string.json）
 
+```ts
+// reason 写普通文案 → 框架自动生成 $string: 资源；字符串简写仍可用
+permissions: [
+  { name: 'ohos.permission.LOCATION', reason: '用于展示附近门店' },
+  'ohos.permission.INTERNET',
+]
+```
+
+- **相关**：[平台 API](/docs/19-platform-api)
+
 ### `targets.harmony.permissions.<entry>.name`
 
 - **类型**：`string`
@@ -719,12 +996,16 @@ deviceTypes（缺省 ["phone","tablet","2in1"]）
 
 应用显示名（缺省回退 app.config 的 app.name）
 
+- **相关**：[运行时配置 app.config](/docs/11-app-config)
+
 ### `app.version`
 
 - **类型**：`string`
 - **必填**：否
 
 版本号（语义化；缺省回退 app.config 的 app.version）
+
+- **相关**：[运行时配置 app.config](/docs/11-app-config)
 
 ### `app.buildNumber`
 
@@ -733,4 +1014,6 @@ deviceTypes（缺省 ["phone","tablet","2in1"]）
 
 构建号（缺省回退 app.config 的 app.buildNumber）
 
-<!-- generated by website/scripts/gen-config-ref.mjs · SSOT：packages/types/src/config.ts（ProteusConfig + 目标端接口） -->
+- **相关**：[运行时配置 app.config](/docs/11-app-config)
+
+<!-- generated by website/scripts/gen-config-ref.mjs · SSOT：packages/types/src/{config,router-config,compiler-types}.ts -->

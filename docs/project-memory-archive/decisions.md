@@ -2024,3 +2024,9 @@
 **④ 落地**：native-config（归一 + apply：android maxSdkVersion/uses-feature/queries、ios setPlistAts、harmony 结构化 requestPermissions + reason 资源写入）；config-validate（permEntries + ATS）；schema（oneOf）。
 **⑤ 验证**：native-config 单测 14 例全绿；端到端 apply 真实模板三端逐条命中；根 vue-tsc 零错误；generate types --check 无漂移；config:check 三 config 全过；全量 pnpm test 5368/5368 全绿；website 十门禁 + build:website。
 **⑥ ★教训**：a) 权限不是字符串——要逐权限原因/场景；b) 平台要求的资源引用要会「生成」（鸿蒙 reason 自动建 `$string:` 资源 + 三语言写入）；c) 生成器要展开引用的辅助接口（否则联合类型在参考页是黑盒）。
+646. **★★★配置参考页「大厂标准」细节完善（子代理审查 → 修 8 项）（★用户 2026-10-08「RouterSection 没有说明/超链；app 及下面类型说明空了一大块；让子代理从大厂标准审查」）**：
+**做法**：派子代理按大厂参考文档标准（Vue/Vite/Tailwind/Stripe）审议 + 复评。
+**修 8 项**：① 被引用接口未展开（RouterSection/audit/gates/rules → 递归展开；根因：只认 3 个 helper + 深度上限）；② 13 个空字段（补 SSOT JSDoc）；③ EN 页混中文（补 FIELD_EN）；④ 无超链（新增 SEE_ALSO，组级继承）；⑤ vite 光秃（加示例；撤销把 ViteConfigContext 当配置字段）；⑥ `@media` 截断（TS JSDoc API 把 `@x` 当标签 → 改读注释原文，根治整类）；⑦ 内联数组元素类型 `Array<{…}>` 子字段不展开（补解析）；⑧ EN 全角冒号 + 陈旧路径。
+**新增门禁**：生成器内置空段落门禁（BLANK_FIELDS → `--check` 红）+ 破坏性验证。
+**验证**：126 字段零空段落 + EN 零中文 + 24 条 See-also 全解析 + 全量 test 5368/5368 + website 十门禁 + build:website。
+**★教训**：a) 被引用类型必须展开（EXPANDABLE 递归 + 跨文件解析）；b) **TS 的 JSDoc API 会截断含 `@` 的注释**（读原文才稳）；c) 内联数组元素类型与具名数组类型分开处理；d) **空段落是门禁问题**（机器可判）；e) 子代理按大厂标准审查性价比高。

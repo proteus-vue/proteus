@@ -15,7 +15,9 @@ import type { RouteMeta } from './router-types'
 import type { RouterSection } from './router-config'
 
 export interface ViteConfigContext {
+  /** vite 命令：`'serve'`（dev）或 `'build'` */
   command: 'serve' | 'build'
+  /** vite 模式串（如 `'web'` / `'mp-weixin'`）——函数形态 `vite` 据此返回不同扩展 */
   mode: string
 }
 
@@ -114,14 +116,20 @@ export interface MpTargetConfig {
   /** ★Skyline 布局对齐开关（消费官方《Skyline WXSS 样式支持与差异》对齐表）。
    *  仅 `defaultDisplayBlock` 默认 true（本仓真机验证过）；其余默认**不注入**（未验证的开关不由框架替项目做主）。 */
   skylineLayout?: {
+    /** 节点默认 block 布局，对齐 WebView/Web（表单元素不再被 stretch 占满居中）；**默认 true** */
     defaultDisplayBlock?: boolean
+    /** 默认 `content-box` 盒模型，对齐 Web */
     defaultContentBox?: boolean
+    /** tag 选择器全局匹配，对齐 WebView（★开发者工具会拒——平台限制） */
     tagNameStyleIsolation?: boolean
+    /** `scroll-view` 自动撑开 */
     enableScrollViewAutoSize?: boolean
+    /** `@keyframes` 样式全局共享 */
     keyframeStyleIsolation?: boolean
   }
   /** ★VC2-b 编译期 Profile 边界校验（使用了某端不支持的样式即报；Web 端构建同样执行）。escape hatch：样式块内注释 `proteus-allow-profile: <理由>`。 */
   profileBoundary?: {
+    /** 违规级别：`'error'`（缺省，阻断构建）| `'warn'`（报告不阻断）| `'off'`（不启用） */
     level?: 'error' | 'warn' | 'off'
   }
   /** ★底线循环 ①③：规则覆盖（AI/config 改写或禁用规则） */
@@ -132,7 +140,7 @@ export interface MpTargetConfig {
 export interface IosTargetConfig {
   /** CFBundleIdentifier（缺省 = 宿主默认 bundle id，见宿主工程 / proteus.host.json） */
   bundleId?: string
-  /** CFBundleDisplayName（缺省回退 app.name / targets.app.name） */
+  /** CFBundleDisplayName（缺省回退 `app.name`） */
   displayName?: string
   /** CFBundleShortVersionString（缺省回退 app.version） */
   version?: string
@@ -310,16 +318,26 @@ export interface ProteusConfig {
   router?: RouterSection
   /** ★G-29 编译器后端插拔（缺省 node 零开销；'rust' → 每次构建跑 Node/Rust 双编译语义等价校验） */
   compiler?: {
+    /** 编译后端：`'node'`（缺省，零开销）| `'rust'`（对每个 .vue 跑 Node/Rust 双编译语义等价校验，不一致构建红） */
     backend?: CompilerBackend
   }
   /** ★G-22 柔性布局（fluid-layout-plan）：p-fluid 编译期 clamp 生成参数——**跨端共享**（Web/MP/App 同一设计基准） */
   layout?: {
+    /** 设计稿宽度（p-fluid clamp 生成基准；如 375 / 750） */
     designWidth?: number
-    fluidViewport?: { min?: number; max?: number }
+    /** 视口范围（clamp 上下界） */
+    fluidViewport?: {
+      /** 视口下界（px；p-fluid 生成的最小尺寸） */
+      min?: number
+      /** 视口上界（px；p-fluid 生成的最大尺寸） */
+      max?: number
+    }
   }
   /** 包体积预算 */
   budget?: {
+    /** 主包体积上限（KB；超限按 `strict` 决定告警或失败） */
     mainPackageKB: number
+    /** 严格模式：`true` = 超限直接构建失败（非仅告警） */
     strict: boolean
   }
   /** ★#418/★#421 vite 透传（配置收敛——开发者不写 vite.config.ts） */
