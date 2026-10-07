@@ -710,6 +710,8 @@ public class ProteusHostView extends ViewGroup {
      *   缺省空集 ⇒ 既有全部路径零行为变化。
      */
     private java.util.Set<Integer> fixedNodes = java.util.Collections.emptySet();
+    /**★批 A③：sticky 节点的吸附阈值（id → top，dp）；绘制时 screen y = max(自然y − scrollY, top)。 */
+    private java.util.Map<Integer, Float> stickyTops = java.util.Collections.emptyMap();
     /** 节点 id → [tx, ty, scale, rotate, opacity, rotateX, rotateY]（**宿主侧真源**：探针从这里读） */
     private final Map<Integer, float[]> animTx = new HashMap<>();
     /**
@@ -855,6 +857,12 @@ public class ProteusHostView extends ViewGroup {
     /** ★★★批 A：注入 position:fixed 的节点 id 集（绘制时反向补偿内容滚动，见 fixedNodes 注释）。 */
     public void setFixedNodes(java.util.Set<Integer> s) {
         this.fixedNodes = (s == null) ? java.util.Collections.emptySet() : s;
+        invalidate();
+    }
+
+    /** ★批 A③：注入 sticky 节点吸附阈值（绘制时按 scrollY 钳制）。 */
+    public void setStickyTops(java.util.Map<Integer, Float> m) {
+        this.stickyTops = (m == null) ? java.util.Collections.emptyMap() : m;
         invalidate();
     }
 
@@ -2300,7 +2308,7 @@ public class ProteusHostView extends ViewGroup {
         // ★滚动列表模式：绘制列表内容（这是**真实帧**的来源——canvas 来自窗口）
         if (listRenderer != null) {
             listRenderer.draw(canvas);
-        } else if (framePicture != null && !animatingFrame() && fixedNodes.isEmpty()) {
+        } else if (framePicture != null && !animatingFrame() && fixedNodes.isEmpty() && stickyTops.isEmpty()) {
             // ★★★显示列表回放（2026-10-02 正式路径）：静态帧回放（2ms）替代逐条重放（8ms）。
             //   `animatingFrame` = 有逐帧覆盖（动画表中非空）时为真 ⇒ 那些帧必须走全功能 drawCmds
             //   （显示列表是**静态录制**，播不了逐帧动画）。
@@ -2454,8 +2462,12 @@ public class ProteusHostView extends ViewGroup {
                     || hasClip || ovfClip != null || hasAncestorTx;
             // ★★★批 A：fixed 节点反向补偿内容滚动（净位移 0 ⇒ 钉在视口；见 fixedNodes 注释）
             final boolean isFixed = ids != null && i < ids.length && fixedNodes.contains(ids[i]);
-            final int save = (xf || isFixed) ? canvas.save() : -1;
+            // ★★★批 A③：sticky 吸附——screen y = max(c.y − scrollY, top) ⇒ 绘制前平移 max(0, top + scrollY − c.y)
+            final Float sTop = (ids != null && i < ids.length) ? stickyTops.get(ids[i]) : null;
+            final boolean isSticky = sTop != null;
+            final int save = (xf || isFixed || isSticky) ? canvas.save() : -1;
             if (isFixed) canvas.translate(scrollX, scrollY);
+            if (isSticky) canvas.translate(0f, Math.max(0f, sTop + scrollY - c.y));
             if (ovfClip != null) canvas.clipRect(ovfClip[0], ovfClip[1], ovfClip[0] + ovfClip[2], ovfClip[1] + ovfClip[3]);
             // ★★软边遮罩（mask v1）：**saveLayer 包裹**（开层 → 画内容 → 用 DST_IN 叠渐变 → 还原）。
             //   揭示色标来自 `animMask`（内核已算好）或建树静态声明——宿主零揭示数学。
@@ -3212,7 +3224,7 @@ public class ProteusHostView extends ViewGroup {
                 maskPaint.setShader(null);
                 canvas.restoreToCount(maskLayer);
             }
-            if (xf || isFixed) canvas.restoreToCount(save);
+            if (xf || isFixed || isSticky) canvas.restoreToCount(save);
         }
     }
 

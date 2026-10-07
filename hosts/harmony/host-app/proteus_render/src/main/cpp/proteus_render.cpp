@@ -151,6 +151,8 @@ static ArkUI_RenderNodeHandle g_rootNode = nullptr;
 ///   扁平建树（每节点绝对 SetPosition 挂 g_rootNode）；滚动 = 平移 g_rootNode（-y）。
 ///   ⇒ fixed 节点须在 scrollRoot 时把自身 y 加回 +y（净位移 0 ⇒ 钉在视口）。ClearRoot 时清。
 static std::vector<std::array<double, 3>> g_fixedNodes;   // {baseX, baseY, (double)(intptr_t)node}
+/// ★批 A③（决策 #655）：**sticky 节点登记表** {baseX, baseY, top, node}——scrollRoot 时 y = max(baseY, y + top)。
+static std::vector<std::array<double, 4>> g_stickyNodes;
 
 /**
  * ★★**已建通道真源表**（2026-10-03 · 三端打通绘制通道）——`probeChannels` 回读它。
@@ -1025,7 +1027,10 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
         OH_ArkUI_RenderNodeUtils_SetSize(node, static_cast<int32_t>(w), static_cast<int32_t>(h));
         OH_ArkUI_RenderNodeUtils_SetPosition(node, static_cast<int32_t>(x), static_cast<int32_t>(y));
         // ★★★批 A：position:fixed ⇒ 登记（scrollRoot 时补偿滚动，钉在视口）
-        { std::string posV; if (jsonString(it, "position", &posV) && posV == "fixed") g_fixedNodes.push_back({x, y, (double)(intptr_t)node}); }
+        { std::string posV; if (jsonString(it, "position", &posV)) {
+            if (posV == "fixed") g_fixedNodes.push_back({x, y, (double)(intptr_t)node});
+            else if (posV == "sticky") { double sTop = 0; jsonNumber(it, "top", &sTop); g_stickyNodes.push_back({x, y, sTop, (double)(intptr_t)node}); }
+        } }
         // ★★★静态变换 + **父 transform 级联**（2026-10-08 · effects D 案）：把祖先链的绝对仿射合成进
         //   本节点矩阵——宿主扁平建树不级联，CSS 却要求子树随父变换（含文本）。合成公式：
         //     C_lin = Aa_lin·Lo_lin ;  C_t = Aa_lin·(Pc + Lo_t) + Aa_t − Pc
@@ -1805,6 +1810,7 @@ static napi_value GestureSample(napi_env env, napi_callback_info info) {
 static napi_value ClearRoot(napi_env env, napi_callback_info info) {
     (void)info;
     g_fixedNodes.clear();   // ★★★批 A：重建内容 ⇒ 清 fixed 登记（旧句柄失效）
+    g_stickyNodes.clear();  // ★★★批 A③：同清 sticky 登记
     if (g_rootNode != nullptr) {
         OH_ArkUI_RenderNodeUtils_ClearChildren(g_rootNode);
     }
@@ -1837,6 +1843,14 @@ static napi_value ScrollRoot(napi_env env, napi_callback_info info) {
         for (auto& fn : g_fixedNodes) {
             ArkUI_RenderNodeHandle fnode = (ArkUI_RenderNodeHandle)(intptr_t)fn[2];
             if (fnode != nullptr) OH_ArkUI_RenderNodeUtils_SetPosition(fnode, (int32_t)fn[0], (int32_t)(fn[1] + y * g_density));
+        }
+        // ★★★批 A③：sticky 吸附——y = max(baseY, scroll + top)（屏幕 y = max(baseY − scroll, top)）
+        for (auto& sn : g_stickyNodes) {
+            ArkUI_RenderNodeHandle snode = (ArkUI_RenderNodeHandle)(intptr_t)sn[3];
+            if (snode != nullptr) {
+                double ny = std::max(sn[1], (y + sn[2]) * g_density);
+                OH_ArkUI_RenderNodeUtils_SetPosition(snode, (int32_t)sn[0], (int32_t)ny);
+            }
         }
     }
     napi_value out;
