@@ -1979,3 +1979,11 @@
 **④ 立门禁**：`scripts/check-lockfile-sync.mjs`——**判据 = CI 安装步同一条命令**（`pnpm install --frozen-lockfile --ignore-scripts --lockfile-only --offline`，~0.3s 只读）；接 `verify` 链最前（fail-fast）+ gates-sync 的 LOCAL_ONLY。破坏性验证：stash 回退 lockfile ⇒ rc=1（打印 pnpm 归因）；恢复 ⇒ rc=0。
 **⑤ 影响面（如实）**：线上自 `55804e90`（2026-10-06 21:28 UTC）起未真正上线（含 #637 官网文档梳理）。
 **⑥ ★教训**：a) 本地能「自动修正」的漂移 ⇒ 必须立「对准消费方契约」的门禁（复现 CI 那条命令——**自测通过 ≠ 契约成立**）；b) **run conclusion=success ≠ 部署真跑了**——看 **job steps 是否真 ran**；c) 门禁只报红，修静默故障仍是收尾纪律。
+640. **★★★官网配置文档重构（编译器配置 / 运行时配置）+ 收口三个「孤儿配置字段」（★用户 2026-10-08）**：
+**① 触发**：用户「官网文档没同步框架配置新内容；全局配置/页面配置及内容不符实际，现在是编译器配置和运行时配置」。
+**② 取证**：官网 `guides/10-config`/`11-app-config` 未跟上——#635 的 `native` 段零覆盖；实际模型 = `proteus.config`（编译器配置·构建期）vs `app.config`（运行时配置·运行时）按**消费时机**划分。
+**③ 顺带真缺陷（孤儿字段）**：`skylineLayout`（gen-routes）/`profileBoundary`（profile-boundary-plugin）/`layout`（plugin.ts p-fluid）三项在 `ProteusConfig` 已声明 + 有消费方，却漏登 `CONFIG_FIELD_LAYERS` + CLI `KNOWN_FIELDS` + Schema ⇒ 写了被判 `CONFIG_UNKNOWN_FIELD`（阻断）；而文档却把它们列为有效字段（照文档写即被拦）。
+**④ 修**：`config-layers.ts`（归 compiler）/`config-validate.ts`（KNOWN_FIELDS + 类型校验）/`config-schema.ts`（+3 property）三处同步补录（铁律 #5）。
+**⑤ 文档**：`10-config`→「编译器配置与页面配置」（补 native/globalStyle/page.webviewPages/skylineLayout/profileBoundary/layout）；`11-app-config`→「运行时配置 app.config」（补 safeArea.statusBar）；同步 6 处交叉引用（zh+en）。
+**⑥ 验证**：website 十门禁 + 根 vue-tsc/instr-spec/docs/script-compile/no-blind-wait/safe-edit/gates-sync/stats/alltarget 全绿 + schema 无漂移 + 45 例单测全绿 + 破坏性验证 + build:website 成功。
+**⑦ ★教训**：a) 配置字段有**四个登记点**（ProteusConfig / CONFIG_FIELD_LAYERS / KNOWN_FIELDS / Schema），只改其一 = 半接线（声明了却用不了）；b) **文档是白名单的镜子**——文档列出而校验器不认 ⇒ 用户被阻断 ⇒ 文档↔校验器须同源；c) 配置页按**消费时机**组织（编译器配置 vs 运行时配置），非旧「全局/页面」。

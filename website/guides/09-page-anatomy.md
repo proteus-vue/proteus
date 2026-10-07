@@ -64,5 +64,5 @@ function handleTap() {
 
 ## 下一步
 
-- [全局配置与页面配置](/docs/10-config)：两层配置各管什么
+- [编译器配置与页面配置](/docs/10-config)：编译器配置与页面配置各管什么
 - [语义模型](/docs/framework/11-semantic-model)：理解这套映射背后的 IR

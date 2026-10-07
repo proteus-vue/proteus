@@ -63,7 +63,7 @@ if (enabled && variant === 'variant-a') {
 | 必填缺失 / 类型错 | `validateAppConfig` 规则表逐条报（路径级 `errors: [{ path, message }]`） |
 | 远端拉取失败 | 按 fallback 回退（见下），**应用永不因配置失败崩溃** |
 
-校验规则表（RULES）与应用配置字段全表一一对应（[应用配置](/docs/11-app-config) 的「校验规则」列），新增字段补录 RULES 即自动覆盖。
+校验规则表（RULES）与运行时配置字段全表一一对应（[运行时配置](/docs/11-app-config) 的「校验规则」列），新增字段补录 RULES 即自动覆盖。
 
 ## 远端热更新
 
@@ -83,5 +83,5 @@ if (enabled && variant === 'variant-a') {
 
 ## 下一步
 
-- [应用配置 app.config](/docs/11-app-config)：字段全表与校验规则
+- [运行时配置 app.config](/docs/11-app-config)：字段全表与校验规则
 - [页面间数据传递](/docs/framework/page-data)

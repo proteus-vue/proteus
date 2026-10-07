@@ -11,6 +11,31 @@ export const proteusConfigSchema = {
   properties: {
     platform: { enum: ['mp-weixin', 'web'] },
     skyline: { type: 'boolean' },
+    // ★★2026-10-08 孤儿字段收口（官网配置文档梳理）：ProteusConfig 已声明 + 有消费方，却漏登 schema/白名单
+    skylineLayout: {
+      type: 'object',
+      properties: {
+        defaultDisplayBlock: { type: 'boolean' },
+        defaultContentBox: { type: 'boolean' },
+        tagNameStyleIsolation: { type: 'boolean' },
+        enableScrollViewAutoSize: { type: 'boolean' },
+        keyframeStyleIsolation: { type: 'boolean' },
+      },
+    },
+    profileBoundary: {
+      type: 'object',
+      properties: { level: { enum: ['error', 'warn', 'off'] } },
+    },
+    layout: {
+      type: 'object',
+      properties: {
+        designWidth: { type: 'number' },
+        fluidViewport: {
+          type: 'object',
+          properties: { min: { type: 'number' }, max: { type: 'number' } },
+        },
+      },
+    },
     appid: { type: 'string' },
     pagesDir: { type: 'string' },
     // ★Skyline iOS 白屏兜底：页面级 WebView 降级通道（page.webviewPages）

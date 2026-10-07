@@ -69,7 +69,7 @@ const config: ProteusConfig = {
 }
 ```
 
-Field docs: [global config](/docs/10-config).
+Field docs: [compiler config](/docs/10-config).
 
 ## Template scripts (per-target commands)
 
@@ -94,4 +94,4 @@ If `@proteus-vue/*` packages fail to install (version not yet published to npm),
 ## Next steps
 
 - [Run & preview](/docs/06-run-preview): bring up every target
-- [Global & page configuration](/docs/10-config): full field reference for proteus.config.ts
+- [Compiler & page configuration](/docs/10-config): full field reference for proteus.config.ts

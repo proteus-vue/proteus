@@ -24,7 +24,7 @@ Here is what a scaffolded project looks like, and what each path is for:
 ## Three key conventions
 
 1. **A page is a file**: every `.vue` under `src/pages/` is a page, and its route path is derived from the directory structure (see [Routing & navigation](/docs/16-router))
-2. **Config comes in two layers**: global config lives in `proteus.config.ts`; page config lives in each page's `<route>` block (see [Global & page configuration](/docs/10-config))
+2. **Config comes in two layers**: compiler config lives in `proteus.config.ts`; page config lives in each page's `<route>` block (see [Compiler & page configuration](/docs/10-config))
 3. **Generated output — do not hand-edit**: `src/router/auto-routes.ts`, `app.json`, etc. are generated at build time; rebuilding refreshes them
 
 ## Next steps

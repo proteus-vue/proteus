@@ -1,19 +1,19 @@
 ---
-title: 应用配置 app.config
+title: 运行时配置 app.config
 order: 11
 group: 代码构成
 ---
 
-# 应用配置 app.config
+# 运行时配置 app.config
 
-工程里有**两个配置文件**，职责正交（决策 #211）：
+工程里有**两个配置文件**，职责正交（决策 #211）——按**消费时机**划分：
 
 | 文件 | 时机 | 管什么 | 消费方 |
 |---|---|---|---|
-| `proteus.config.ts` | **构建期** | 怎么构建：appid / skyline / pagesDir / 编译规则 / 样式转换 | 编译器、CLI、Vite 插件 |
-| `app.config.ts` | **运行时** | 怎么表现：应用标识 / API 地址 / 功能开关 / 主题字体 / 安全区 | 业务代码（`useAppConfig`） |
+| `proteus.config.ts` | **构建期**（编译器配置） | 怎么构建：appid / skyline / pagesDir / 编译规则 / 样式转换 / 路由扫描 / 原生工程身份 | 编译器、CLI、Vite 插件 |
+| `app.config.ts` | **运行时**（运行时配置） | 怎么表现：应用标识 / API 地址 / 功能开关 / 主题字体 / 安全区 | 业务代码（`useAppConfig`） |
 
-> 一句话：**proteus.config 管「怎么构建」，app.config 管「怎么表现」**。改构建配置要重新 `build:mp`；改运行时配置可远端热更新。类型契约 `AppConfig`（`@proteus-vue/app-config` 单一来源）。
+> 一句话：**`proteus.config` = 编译器配置（构建期固化）；`app.config` = 运行时配置（启动读取 + 可选远端热更新）**。改编译器配置要重新 `build:mp`；改运行时配置可远端热更新。类型契约 `AppConfig`（`@proteus-vue/app-config` 单一来源）。
 
 ## 定义
 
@@ -42,7 +42,7 @@ export default defineAppConfig({
   },
   theme: { default: 'system', allowUserToggle: true },
   font: { defaultScale: 1.0, allowUserAdjust: true },
-  safeArea: { islandGlass: true },
+  safeArea: { islandGlass: true, statusBar: 'show' },
 })
 ```
 
@@ -94,6 +94,7 @@ export default defineAppConfig({
 | `font.defaultScale` | `number` | 是 | `0.5-2.0` | 缺省字号缩放（联动 p-scale 无障碍档位） |
 | `font.allowUserAdjust` | `boolean` | 是 | 布尔 | 是否允许用户调字号 |
 | `safeArea.islandGlass` | `boolean` | 是 | 布尔 | 灵动岛/刘海屏玻璃适配（p-safe 消费） |
+| `safeArea.statusBar` | `'show' 或 'hide'` | 否 | 二值枚举 | 状态栏显示策略（缺省 `'show'`）：`'show'` 与 Web `viewport-fit=cover` edge-to-edge 对齐（内容背景铺到状态栏区、内容用 `--pf-inset-top` 让位）；`'hide'` 沉浸式全屏。三端宿主经构建期产出的 `app-config.json` 读取 |
 
 ### 可选扩展字段
 

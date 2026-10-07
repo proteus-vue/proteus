@@ -69,7 +69,7 @@ const config: ProteusConfig = {
 }
 ```
 
-字段说明见[全局配置](/docs/10-config)。
+字段说明见[编译器配置](/docs/10-config)。
 
 ## 模板 scripts（各端命令）
 
@@ -94,4 +94,4 @@ const config: ProteusConfig = {
 ## 下一步
 
 - [运行与预览](/docs/06-run-preview)：把各端都跑起来
-- [全局配置](/docs/10-config)：proteus.config.ts 字段全表
+- [编译器配置](/docs/10-config)：proteus.config.ts 字段全表
