@@ -29,7 +29,21 @@ describe('渐变填充（v1）· 校验器', () => {
     expect(validateGradientFill({ kind: 'radial', stops: [{ offset: 0, color: '#ffffff' }, { offset: 1, color: '#000000' }] })).toEqual([])
   })
 
-  it('★错误可定位：kind / 色标数量 / 升序 / 颜色六位 / alpha 范围 / r 正数', () => {
+  // ★★★硬色标（2026-10-08 · 用户抓出「iOS/鸿蒙背景页导航后仍是首页」）：**相等 offset = 硬边**
+  //   ——Web CSS `linear-gradient(a 25%, b 25%)` 是同位置两色标（硬边），本引擎 CSS 编译产物真实会发
+  //   （棋盘平铺 tile 就靠它）。旧"`严格升序`"校验会把整条渐变拒掉 ⇒ 内核建树失败 ⇒ 整屏空白。
+  //   ⇒ 判据 = **非降序**（相等允许、逆序拒绝）；本用例锁定"相等接受 / 逆序拒绝"两侧。
+  it('★硬色标：相等 offset 接受（硬边）· 逆序仍拒绝', () => {
+    const eq = validateGradientFill({ kind: 'linear', angle: 45, stops: [
+      { offset: 0.25, color: '#cdd3ef' }, { offset: 0.25, color: '#000000', alpha: 0 },
+      { offset: 0.75, color: '#000000', alpha: 0 }, { offset: 0.75, color: '#cdd3ef' },
+    ] })
+    expect(eq, '相等 offset（硬边）应被接受').toEqual([])
+    const desc = validateGradientFill({ kind: 'linear', angle: 90, stops: [{ offset: 0.5, color: '#ffffff' }, { offset: 0.3, color: '#000000' }] })
+    expect(desc.some((x) => x.path === 'stops[1].offset' && /逆序/.test(x.message))).toBe(true)
+  })
+
+  it('★错误可定位：kind / 色标数量 / 逆序 / 颜色六位 / alpha 范围 / r 正数', () => {
     const e1 = validateGradientFill({ kind: 'diagonal', stops: [] })
     expect(e1.some((x) => x.path === 'fillGradient.kind')).toBe(true)
 
@@ -37,7 +51,7 @@ describe('渐变填充（v1）· 校验器', () => {
     expect(e2.some((x) => x.path === 'fillGradient.stops' && /2\.\.8/.test(x.message))).toBe(true)
 
     const e3 = validateGradientFill({ kind: 'linear', angle: 90, stops: [{ offset: 0.5, color: '#ffffff' }, { offset: 0.3, color: '#000000' }] })
-    expect(e3.some((x) => x.path === 'stops[1].offset' && /升序/.test(x.message))).toBe(true)
+    expect(e3.some((x) => x.path === 'stops[1].offset' && /逆序/.test(x.message))).toBe(true)
 
     // ★8 位颜色被明确拒绝（CSS4 vs #AARRGGBB 两端分歧的根因——见 gradient.ts 文件头）
     const e4 = validateGradientFill({ kind: 'linear', angle: 90, stops: [{ offset: 0, color: '#ff553380' }, { offset: 1, color: '#000000' }] })

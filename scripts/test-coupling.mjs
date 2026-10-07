@@ -58,6 +58,15 @@ const COUPLING = [
   //   · cse-core：内核单测（34 条——逐级层叠/长手竞争/继承/计算值/IR 映射/trace）
   //   · cse-parity-web：**判据①-b**（113 用例 / 153 项 vs 真 Chromium getComputedStyle）
   //   · cse-explain：explain --style 的 trace 端到端
+  // ★★★渐变跨语言契约（2026-10-08 · 硬色标修复轮）：**同一套色标规则三处实现必须同步**——
+  //   TS 校验器（animation/gradient.ts）· 内核解析（layout-core-rust/ffi.rs parse_gradient）·
+  //   两端宿主 GradSpec。改一处（如"严格升序 → 非降序"）若不同步另两处，编译器放行的渐变会在
+  //   内核被拒 ⇒ 建树返回 0 ⇒ **整屏空白**（本轮用户实测）。⇒ 改动其中任一 ⇒ 定向跑渐变判据。
+  {
+    match: /^packages\/(animation\/src\/gradient\.ts|layout-core-rust\/src\/ffi\.rs)/,
+    tests: ['tests/anim-gradient.test.ts', 'tests/layout-core-render-cmd.test.ts', 'tests/animation-presets.test.ts'],
+    why: '渐变跨语言契约（TS 校验器 ⇄ 内核 parse_gradient ⇄ Swift/Kotlin GradSpec）——色标/硬边/alpha/角度数学',
+  },
   {
     match: /^packages\/compiler\/src\/cse\//,
     tests: ['tests/cse-core.test.ts', 'tests/e2e-cse-parity.test.ts', 'tests/cse-explain.test.ts', 'tests/cse-dynamic.test.ts', 'tests/e2e-cse-dynamic.test.ts', 'tests/cse-dynamic-integration.test.ts', 'tests/appliers-conformance.test.ts', 'tests/degrade-conformance.test.ts', 'tests/app-ir-switch.test.ts'],

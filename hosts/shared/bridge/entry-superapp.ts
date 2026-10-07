@@ -254,7 +254,10 @@ interface SuperappRuntimeHostShape {
     // ★remount（鸿蒙一次性 VM 判据用）：无条件重挂——拿"反映当前 state"的整树（同屏也重挂）；
     //   否则走 mountScreen（含导航/滚动语义）。两种都返回 snapshot（一次性 VM 宿主持有）。
     const ok = args.remount ? runtime.mountScreenInto(args.name) : runtime.mountScreen(args.name)
-    return JSON.stringify({ ok, current: runtime.current(), snapshot: runtime.snapshot() })
+    // ★★★宿主回执如实回传（2026-10-08）：`mountScreen` 现在校验 `host.mount` 回执（ok:false ⇒ false）
+    //   ——把**宿主原话**一并带上，使"渲染失败"在宿主日志/报告里可见（此前被丢弃 ⇒ 整屏保持旧内容
+    //   却报 ok:true，用户看到的是"点背景还是首页"）。
+    return JSON.stringify({ ok, current: runtime.current(), snapshot: runtime.snapshot(), hostReply: runtime.lastHostReply() })
   }
 
 /** ★宿主调：读运行期**全量状态快照**（`{屏名:{变量:值}}`）——一次性 VM 宿主持有、下次回灌 `seedData`。 */

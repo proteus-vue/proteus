@@ -125,7 +125,11 @@ static inline double evalEnvToken(const std::string& name, const std::map<std::s
 
 /// 就地替换 nodes 串里的 `"env:<token>"`（含引号）→ 数值（vp）。
 static inline void substituteEnvTokens(std::string& nodes, const std::map<std::string, double>& env) {
-  if (env.empty()) return;
+  // ★★★修（2026-10-08 · 用户抓出「鸿蒙/iOS 背景页导航后只有首页」）：**不得因 env 表为空而早退**——
+  //   旧实现在 env 为空（宿主采集未就绪）时直接 return ⇒ `env:--pf-vh`（无 fallback）原样进内核 ⇒
+  //   内核按字符串解析失败（"invalid type: string, expected f32"）⇒ **整屏 create 失败（0 节点、白屏）**。
+  //   正解：始终替换，未知/缺表 ⇒ evalEnvToken 返回 fallback（缺省 0）——与 iOS resolveEnvToken 同语义。
+  (void)env;
   std::string out; out.reserve(nodes.size());
   size_t i = 0;
   while (i < nodes.size()) {

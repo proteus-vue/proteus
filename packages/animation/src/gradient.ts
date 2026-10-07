@@ -343,8 +343,11 @@ export function validateGradientFill(g: unknown): Array<{ path: string; message:
     const off = st['offset']
     if (typeof off !== 'number' || !Number.isFinite(off) || off < 0 || off > 1) {
       out.push({ path: `stops[${i}].offset`, message: `offset 非法：${JSON.stringify(off)}`, hint: '应为 0..1 的有限数' })
-    } else if (off <= prev) {
-      out.push({ path: `stops[${i}].offset`, message: `offset 非升序：${off} 不大于前一个 ${prev}`, hint: '色标必须按 offset 严格升序（同位置写两个会得到硬边——需要硬边请换成相邻的极小间隔）' })
+    } else if (off < prev) {
+      // ★★★硬色标（2026-10-08）：**允许相等 offset**——Web CSS 的 `linear-gradient(a 25%, b 25%)`
+      //   = **硬边**（同位置两色标），与内核 `ffi.rs` 同口径（Web 为唯一基准；此前严格升序
+      //   会把棋盘 tile 那类硬边渐变整条拒掉）。
+      out.push({ path: `stops[${i}].offset`, message: `offset 逆序：${off} 小于前一个 ${prev}`, hint: '色标须按 offset 非降序（相等=硬边，允许；逆序则拒绝）' })
     } else {
       prev = off
     }

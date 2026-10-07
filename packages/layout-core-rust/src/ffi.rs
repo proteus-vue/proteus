@@ -1471,7 +1471,19 @@ pub unsafe extern "C" fn proteus_layout_create(request_json: *const c_char) -> u
     });
     match r {
         Ok(Ok(h)) => h,
-        _ => 0,
+        // ★★★失败必须可观测（2026-10-08 · 用户抓出「iOS/鸿蒙背景页导航后仍是首页」）：
+        //   此前失败只返回 0，**内核原话被丢弃** ⇒ 宿主只能报"节点数 N"（本仓实测：iOS
+        //   `background` 建树失败，排查被迫靠"改代码→打包→装真机"，一轮 5 分钟）。
+        //   ⇒ 把内核原话写 stderr（devicectl --console / logcat / hilog 直接可见）；
+        //     失败=静默的反面——与『零静默失败』同纪律。
+        Ok(Err(e)) => {
+            eprintln!("[proteus-layout-core] proteus_layout_create 失败：{e}");
+            0
+        }
+        Err(_) => {
+            eprintln!("[proteus-layout-core] proteus_layout_create panic（已捕获）");
+            0
+        }
     }
 }
 
@@ -3026,9 +3038,14 @@ fn parse_gradient(v: &serde_json::Value, field: &str) -> Result<crate::style::Gr
         if !(0.0..=1.0).contains(&off) {
             return Err(format!("{field}.stops[{i}].offset 越界：{off}（应为 0..1）"));
         }
-        if off <= prev {
+        // ★★★硬色标（2026-10-08 · 用户抓出「iOS/鸿蒙背景页导航后仍是首页」）：**允许相等 offset**
+        //   ——Web CSS 的 `linear-gradient(45deg, a 25%, b 25%)` = **硬边**（同位置两色标），
+        //   是本引擎 CSS 编译产物**真实会发**的形态（棋盘平铺 tile 就靠它；实测：严格升序校验
+        //   直接拒掉整棵树 ⇒ 建树返回 0 ⇒ 宿主持旧内容 ⇒ 点「背景」仍显示上一页）。
+        //   ⇒ 判据改为**非降序**（`off < prev` 才拒）：相等 = 硬边，与浏览器同语义（Web 为唯一基准）。
+        if off < prev {
             return Err(format!(
-                "{field}.stops[{i}].offset 非升序：{off} 不大于前一个 {prev}（色标必须严格升序）"
+                "{field}.stops[{i}].offset 逆序：{off} 小于前一个 {prev}（色标须非降序；相等=硬边，允许）"
             ));
         }
         prev = off;
@@ -4534,6 +4551,47 @@ pub unsafe extern "C" fn proteus_rects_free(ptr: *mut u8, len: u32) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// ★★★**硬色标（相等 offset）必须被内核接受**（2026-10-08 · 用户抓出「iOS/鸿蒙背景页导航后仍是首页」）。
+    ///
+    /// 【这份测试在防什么】CSS `linear-gradient(45deg, a 25%, b 25%)` 是**同位置两色标 = 硬边**，
+    ///   是浏览器合法语义，也是本引擎 **CSS 编译产物真实会发**的形态（棋盘平铺 tile）。
+    ///   旧实现要求 offset **严格升序** ⇒ 把整条渐变拒掉 ⇒ `proteus_layout_create` 返回 0 ⇒
+    ///   **整屏空白**（宿主只能报"节点数 N"，用户看到的是"点背景还是首页"）。
+    ///   ⇒ 本测试钉住：① 相等 offset 建树成功；② 逆序 offset 仍被拒（可定位报错）。
+    #[test]
+    fn gradient_equal_offsets_are_accepted_hard_stop() {
+        let tree = serde_json::json!({
+            "viewport": {"width": 320.0, "height": 240.0},
+            "nodes": [
+                {"id": 1, "parentId": null, "width": 320.0, "height": 240.0},
+                {"id": 2, "parentId": 1, "width": 100.0, "height": 56.0,
+                 "fillGradient": {"kind": "linear", "angle": 45, "stops": [
+                    {"offset": 0.25, "color": "#cdd3ef"},
+                    {"offset": 0.25, "color": "#000000", "alpha": 0.0},
+                    {"offset": 0.75, "color": "#000000", "alpha": 0.0},
+                    {"offset": 0.75, "color": "#cdd3ef"}]}}
+            ]
+        });
+        let h = unsafe { proteus_layout_create(std::ffi::CString::new(tree.to_string()).unwrap().as_ptr()) };
+        assert!(h > 0, "相等 offset（硬边）的渐变必须建树成功——旧严格升序校验会整屏空白");
+        unsafe { proteus_layout_destroy(h) };
+
+        // 逆序仍拒（可定位）：0.5 → 0.3
+        let bad = serde_json::json!({
+            "viewport": {"width": 320.0, "height": 240.0},
+            "nodes": [
+                {"id": 1, "parentId": null, "width": 320.0, "height": 240.0,
+                 "fillGradient": {"kind": "linear", "angle": 90, "stops": [
+                    {"offset": 0.5, "color": "#ffffff"},
+                    {"offset": 0.3, "color": "#000000"}]}}
+            ]
+        });
+        // 内核在保护失败时返回 0；此处只要"不 panic 且被拒"即可（错误文本走 stderr）。
+        let hb = unsafe { proteus_layout_create(std::ffi::CString::new(bad.to_string()).unwrap().as_ptr()) };
+        if hb > 0 { unsafe { proteus_layout_destroy(hb) }; }
+        assert_eq!(hb, 0, "逆序 offset 必须被拒（建树返回 0）");
+    }
 
     /// ★★VC4-b：**统一几何快照**（VC3-a 格式）——App 端探针的机器判据。
     ///
