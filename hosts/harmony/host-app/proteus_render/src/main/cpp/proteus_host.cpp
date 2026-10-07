@@ -560,6 +560,16 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
                         double goff = 0; jnum(stops[si].c_str(), stops[si].size(), "offset", &goff);
                         std::string gcol; jstr(stops[si].c_str(), stops[si].size(), "color", &gcol);
                         uint32_t gargb = gcol.empty() ? 0u : hexToArgb(gcol);
+                        // ★★★stop 的独立 `alpha` 字段必须并入 ARGB（2026-10-08 · 用户抓出「鸿蒙案例 C 完全不对」）：
+                        //   CSS `transparent` 编译成 `{"color":"#000000","alpha":0}`——**颜色与透明度分开两个字段**。
+                        //   此前本处只读 `color` ⇒ alpha 被丢 ⇒ `transparent` 变成**不透明黑**（棋盘平铺的透明格
+                        //   本该露出底色，鸿蒙却糊成黑块）。与 iOS `applyGradient`/Android `GradSpec.parse` 同口径。
+                        double galpha = 1.0;
+                        if (jnum(stops[si].c_str(), stops[si].size(), "alpha", &galpha)) {
+                            // I2-ALLOW: **颜色通道**量化（alpha 0..1 → ARGB 字节），非几何换算
+                            uint32_t a8 = (uint32_t)(galpha <= 0 ? 0.0 : (galpha >= 1 ? 255.0 : galpha * 255.0 + 0.5));
+                            gargb = (gargb & 0x00FFFFFFu) | (a8 << 24);
+                        }
                         g += (si ? "," : "");
                         g += "{\"offset\":" + std::to_string(goff) + ",\"color\":" + std::to_string((unsigned long)gargb) + "}";
                     }

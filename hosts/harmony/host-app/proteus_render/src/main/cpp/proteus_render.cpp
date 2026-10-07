@@ -50,6 +50,11 @@
 #include <native_drawing/drawing_round_rect.h>
 #include <native_drawing/drawing_shader_effect.h>
 #include <native_drawing/drawing_point.h>
+// ★★★repeat 二维平铺（2026-10-08）：把渐变栅格化成图像砖再平铺 ⇒ 需 bitmap/image/sampling/matrix
+#include <native_drawing/drawing_bitmap.h>
+#include <native_drawing/drawing_image.h>
+#include <native_drawing/drawing_sampling_options.h>
+#include <native_drawing/drawing_matrix.h>
 #include <unordered_map>
 
 #define LOG_DOMAIN 0x0002
@@ -421,40 +426,109 @@ static void drawChannelsAndText(OH_Drawing_Canvas* canvas, const TextDrawSpec* s
         double ix = 0, iy = 0, iw = w, ih = h;
         if (hasGeom) bgImageBox(spec->bgSize, spec->bgPos, w, h, &ix, &iy, &iw, &ih);
         const bool rep = (spec->bgRepeat == "repeat");
-        float x0, y0, x1, y1;
-        gradEndpoints(spec->gradAngle, iw, ih, &x0, &y0, &x1, &y1);
-        x0 += (float)ix; x1 += (float)ix; y0 += (float)iy; y1 += (float)iy;
-        OH_Drawing_Point* p0 = OH_Drawing_PointCreate(x0, y0);
-        OH_Drawing_Point* p1 = OH_Drawing_PointCreate(x1, y1);
-        OH_Drawing_TileMode tile = rep ? OH_Drawing_TileMode::REPEAT : OH_Drawing_TileMode::CLAMP;
-        OH_Drawing_ShaderEffect* shader = OH_Drawing_ShaderEffectCreateLinearGradient(
-            p0, p1, spec->gradColors.data(), spec->gradPos.data(),
-            (uint32_t)spec->gradColors.size(), tile);
-        if (shader != nullptr) {
-            OH_Drawing_Brush* br = OH_Drawing_BrushCreate();
-            OH_Drawing_BrushSetShaderEffect(br, shader);
-            OH_Drawing_CanvasAttachBrush(canvas, br);
-            // ★图像盒可能超出元素（如 size 400%）⇒ 裁到元素盒（Web 背景绘制区）——
-            //   否则渐变溢出到页面边缘（与 Android/iOS 同款修复）。
-            OH_Drawing_Rect* clip = OH_Drawing_RectCreate(0, 0, w, h);
-            if (clip != nullptr) { OH_Drawing_CanvasClipRect(canvas, clip, OH_Drawing_CanvasClipOp::INTERSECT, true); OH_Drawing_RectDestroy(clip); }
-            // repeat 铺满整盒；否则只画图像盒（盒外露出底色）
-            OH_Drawing_Rect* r = rep ? OH_Drawing_RectCreate(0, 0, w, h)
-                                     : OH_Drawing_RectCreate((float)ix, (float)iy, (float)(ix + iw), (float)(iy + ih));
-            if (spec->radius > 0 && !hasGeom) {
-                OH_Drawing_RoundRect* rr = OH_Drawing_RoundRectCreate(r, (float)spec->radius, (float)spec->radius);
-                OH_Drawing_CanvasDrawRoundRect(canvas, rr);
-                OH_Drawing_RoundRectDestroy(rr);
-            } else {
-                OH_Drawing_CanvasDrawRect(canvas, r);
+        // ★★★repeat 必须是**二维平铺**（2026-10-08 · 用户抓出「鸿蒙案例 C 完全不对」）：
+        //   `OH_Drawing_*LinearGradient(..., REPEAT)` 只在**渐变轴一维**重复 ⇒ 斜条纹；
+        //   Web 的 `background-repeat: repeat` 是**二维栅格平铺**。⇒ 先按 CLAMP 把渐变**栅格化成图像砖**
+        //   （图像盒尺寸），再以 `ShaderEffectCreateImageShader(REPEAT, REPEAT, ·, translate(ix,iy))`
+        //   二维平铺（相位对齐图像盒原点 = Web background-position）。非 repeat 仍走线性 shader（零变化）。
+        if (rep) {
+            const int tw = (int)std::max(1.0, std::ceil(iw));
+            const int th = (int)std::max(1.0, std::ceil(ih));
+            // ① 砖：把 CLAMP 线性渐变画进一张 tw×th 位图
+            OH_Drawing_Bitmap* bmp = OH_Drawing_BitmapCreate();
+            OH_Drawing_BitmapFormat fmt{OH_Drawing_ColorFormat::COLOR_FORMAT_RGBA_8888,
+                                        OH_Drawing_AlphaFormat::ALPHA_FORMAT_PREMUL};
+            OH_Drawing_BitmapBuild(bmp, (uint32_t)tw, (uint32_t)th, &fmt);
+            OH_Drawing_Canvas* bc = OH_Drawing_CanvasCreate();
+            OH_Drawing_CanvasBind(bc, bmp);
+            OH_Drawing_CanvasClear(bc, 0x00000000u);
+            float tx0, ty0, tx1, ty1;
+            gradEndpoints(spec->gradAngle, (double)tw, (double)th, &tx0, &ty0, &tx1, &ty1);
+            OH_Drawing_Point* tp0 = OH_Drawing_PointCreate(tx0, ty0);
+            OH_Drawing_Point* tp1 = OH_Drawing_PointCreate(tx1, ty1);
+            OH_Drawing_ShaderEffect* tsh = OH_Drawing_ShaderEffectCreateLinearGradient(
+                tp0, tp1, spec->gradColors.data(), spec->gradPos.data(),
+                (uint32_t)spec->gradColors.size(), OH_Drawing_TileMode::CLAMP);
+            if (tsh != nullptr) {
+                OH_Drawing_Brush* tbr = OH_Drawing_BrushCreate();
+                OH_Drawing_BrushSetShaderEffect(tbr, tsh);
+                OH_Drawing_CanvasAttachBrush(bc, tbr);
+                OH_Drawing_Rect* tr = OH_Drawing_RectCreate(0, 0, (float)tw, (float)th);
+                OH_Drawing_CanvasDrawRect(bc, tr);
+                OH_Drawing_RectDestroy(tr);
+                OH_Drawing_CanvasDetachBrush(bc);
+                OH_Drawing_BrushDestroy(tbr);
+                OH_Drawing_ShaderEffectDestroy(tsh);
             }
-            OH_Drawing_RectDestroy(r);
-            OH_Drawing_CanvasDetachBrush(canvas);
-            OH_Drawing_BrushDestroy(br);
-            OH_Drawing_ShaderEffectDestroy(shader);
+            OH_Drawing_PointDestroy(tp0);
+            OH_Drawing_PointDestroy(tp1);
+            // ② 图像 + 二维平铺 shader（相位 = 图像盒原点）
+            OH_Drawing_Image* img = OH_Drawing_ImageCreate();
+            if (OH_Drawing_ImageBuildFromBitmap(img, bmp)) {
+                OH_Drawing_SamplingOptions* so = OH_Drawing_SamplingOptionsCreate(
+                    OH_Drawing_FilterMode::FILTER_MODE_LINEAR, OH_Drawing_MipmapMode::MIPMAP_MODE_NONE);
+                OH_Drawing_Matrix* mat = OH_Drawing_MatrixCreateTranslation((float)ix, (float)iy);
+                OH_Drawing_ShaderEffect* shader = OH_Drawing_ShaderEffectCreateImageShader(
+                    img, OH_Drawing_TileMode::REPEAT, OH_Drawing_TileMode::REPEAT, so, mat);
+                if (shader != nullptr) {
+                    OH_Drawing_Brush* br = OH_Drawing_BrushCreate();
+                    OH_Drawing_BrushSetShaderEffect(br, shader);
+                    OH_Drawing_CanvasAttachBrush(canvas, br);
+                    OH_Drawing_Rect* clip = OH_Drawing_RectCreate(0, 0, w, h);
+                    if (clip != nullptr) { OH_Drawing_CanvasClipRect(canvas, clip, OH_Drawing_CanvasClipOp::INTERSECT, true); OH_Drawing_RectDestroy(clip); }
+                    OH_Drawing_Rect* r = OH_Drawing_RectCreate(0, 0, w, h);
+                    if (spec->radius > 0 && !hasGeom) {
+                        OH_Drawing_RoundRect* rr = OH_Drawing_RoundRectCreate(r, (float)spec->radius, (float)spec->radius);
+                        OH_Drawing_CanvasDrawRoundRect(canvas, rr);
+                        OH_Drawing_RoundRectDestroy(rr);
+                    } else {
+                        OH_Drawing_CanvasDrawRect(canvas, r);
+                    }
+                    OH_Drawing_RectDestroy(r);
+                    OH_Drawing_CanvasDetachBrush(canvas);
+                    OH_Drawing_BrushDestroy(br);
+                    OH_Drawing_ShaderEffectDestroy(shader);
+                }
+                OH_Drawing_MatrixDestroy(mat);
+                OH_Drawing_SamplingOptionsDestroy(so);
+            }
+            OH_Drawing_ImageDestroy(img);
+            OH_Drawing_CanvasDestroy(bc);
+            OH_Drawing_BitmapDestroy(bmp);
+        } else {
+            float x0, y0, x1, y1;
+            gradEndpoints(spec->gradAngle, iw, ih, &x0, &y0, &x1, &y1);
+            x0 += (float)ix; x1 += (float)ix; y0 += (float)iy; y1 += (float)iy;
+            OH_Drawing_Point* p0 = OH_Drawing_PointCreate(x0, y0);
+            OH_Drawing_Point* p1 = OH_Drawing_PointCreate(x1, y1);
+            OH_Drawing_ShaderEffect* shader = OH_Drawing_ShaderEffectCreateLinearGradient(
+                p0, p1, spec->gradColors.data(), spec->gradPos.data(),
+                (uint32_t)spec->gradColors.size(), OH_Drawing_TileMode::CLAMP);
+            if (shader != nullptr) {
+                OH_Drawing_Brush* br = OH_Drawing_BrushCreate();
+                OH_Drawing_BrushSetShaderEffect(br, shader);
+                OH_Drawing_CanvasAttachBrush(canvas, br);
+                // ★图像盒可能超出元素（如 size 400%）⇒ 裁到元素盒（Web 背景绘制区）——
+                //   否则渐变溢出到页面边缘（与 Android/iOS 同款修复）。
+                OH_Drawing_Rect* clip = OH_Drawing_RectCreate(0, 0, w, h);
+                if (clip != nullptr) { OH_Drawing_CanvasClipRect(canvas, clip, OH_Drawing_CanvasClipOp::INTERSECT, true); OH_Drawing_RectDestroy(clip); }
+                // 只画图像盒（盒外露出底色）
+                OH_Drawing_Rect* r = OH_Drawing_RectCreate((float)ix, (float)iy, (float)(ix + iw), (float)(iy + ih));
+                if (spec->radius > 0 && !hasGeom) {
+                    OH_Drawing_RoundRect* rr = OH_Drawing_RoundRectCreate(r, (float)spec->radius, (float)spec->radius);
+                    OH_Drawing_CanvasDrawRoundRect(canvas, rr);
+                    OH_Drawing_RoundRectDestroy(rr);
+                } else {
+                    OH_Drawing_CanvasDrawRect(canvas, r);
+                }
+                OH_Drawing_RectDestroy(r);
+                OH_Drawing_CanvasDetachBrush(canvas);
+                OH_Drawing_BrushDestroy(br);
+                OH_Drawing_ShaderEffectDestroy(shader);
+            }
+            OH_Drawing_PointDestroy(p0);
+            OH_Drawing_PointDestroy(p1);
         }
-        OH_Drawing_PointDestroy(p0);
-        OH_Drawing_PointDestroy(p1);
     }
     // ★★★uniform dotted border（2026-10-08 用户抓出「dotted 四角重叠」）：沿**单条圆角周界**画点——
     //   四边同宽/同色/均 dotted 时不走 ArkUI 原生逐边 DOTTED（逐边 ⇒ 角上点重叠），

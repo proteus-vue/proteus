@@ -383,6 +383,13 @@ public class ProteusHostView extends ViewGroup {
      *   缺省不存 = 无变换。动画表缺该节点时退回本表（静态是动画的基态）。
      */
     private final Map<Integer, float[]> nodeStaticTx = new HashMap<>();
+    /**
+     * ★★★渐变**二维平铺砖缓存**（2026-10-08 · 用户抓出「Android 案例 C 完全不对」）：
+     *   节点 id → `[signature, BitmapShader]`。`background-repeat: repeat` 需把渐变**栅格化成图像砖**
+     *   再二维平铺（见 `drawCmds` 内注释）——砖内容只在（尺寸/角度/色标）变化时重栅格化，避免**每帧**
+     *   分配 Bitmap（顺带修掉"每帧 new LinearGradient"同族的分配抖动）。
+     */
+    private final Map<Integer, Object[]> gradTileCache = new HashMap<>();
     /** 场景注入某节点的静态变换（编译期 CSS `transform`）——px 位移 + 盒比例位移 + 等比缩放 + 旋转 */
     public void setNodeTransform(int nodeId, float txPx, float tyPx, float scale, float rotate, float txPct, float tyPct) {
         if (txPx == 0f && tyPx == 0f && txPct == 0f && tyPct == 0f && scale == 1f && rotate == 0f) {
@@ -1249,6 +1256,7 @@ public class ProteusHostView extends ViewGroup {
         morphCache.clear();
         animGlow.clear();
         animMask.clear();
+        gradTileCache.clear();   // ★逐树状态（id 每树重分配——防幽灵砖）
     }
 
     /**
@@ -2486,9 +2494,54 @@ public class ProteusHostView extends ViewGroup {
                 final GradSpec g = c.gradient;
                 // ★★★背景定位家族（2026-10-07）：声明了 size/position ⇒ 在**图像盒**内建渐变；未声明 ⇒ 元素盒（零变化）。
                 final float[] ib = g.hasBgGeom() ? g.imageBox(c.x, c.y, c.w, c.h) : new float[]{c.x, c.y, c.w, c.h};
-                final android.graphics.Shader.TileMode tile = "repeat".equals(g.bgRepeat)
-                        ? android.graphics.Shader.TileMode.REPEAT : android.graphics.Shader.TileMode.CLAMP;
-                if (g.kind == 1) {
+                // ★★★repeat 必须是**二维平铺**（2026-10-08 · 用户抓出「Android 案例 C 完全不对」）：
+                //   `LinearGradient+REPEAT` / `RadialGradient+REPEAT` 只在**渐变轴一维**重复 ⇒ 画成斜条纹；
+                //   而 Web 的 `background-repeat: repeat` 是**二维栅格平铺**（砖块整体在 x/y 两个方向重复）。
+                //   ⇒ repeat 时把渐变先**栅格化成图像砖**（图像盒尺寸，CLAMP 渲染），再用
+                //   `BitmapShader(REPEAT, REPEAT)` 二维平铺；相位由 `setLocalMatrix(translate(ib[0],ib[1]))`
+                //   对齐图像盒原点（= Web 的 background-position）。
+                if ("repeat".equals(g.bgRepeat)) {
+                    // I2-ALLOW: **位图尺寸**取整（栅格化砖的像素宽高——非几何坐标；几何仍走内核吸附值，
+                    //   此处只决定"砖位图开多大"，与 iOS rasterTile 的 size、鸿蒙 ceil 同轴）。
+                    final int tw = Math.max(1, Math.round(ib[2]));
+                    final int th = Math.max(1, Math.round(ib[3]));
+                    final String sig = tw + "x" + th + "|" + g.kind + "|" + g.angleDeg + "|" + g.cx + "|" + g.cy + "|" + g.r
+                            + "|" + java.util.Arrays.hashCode(g.colors) + "|" + java.util.Arrays.hashCode(g.offsets);
+                    android.graphics.BitmapShader bs = null;
+                    final int curNodeId = (ids != null && i < ids.length) ? ids[i] : -1;
+                    final Object[] cached = curNodeId >= 0 ? gradTileCache.get(curNodeId) : null;
+                    if (cached != null && sig.equals(cached[0])) {
+                        bs = (android.graphics.BitmapShader) cached[1];
+                    } else {
+                        final android.graphics.Bitmap bmp = android.graphics.Bitmap.createBitmap(tw, th, android.graphics.Bitmap.Config.ARGB_8888);
+                        final android.graphics.Canvas bc = new android.graphics.Canvas(bmp);
+                        final android.graphics.Paint tp = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                        // I2-ALLOW: **装饰纹理**栅格化的浮点换算（非几何舍入——砖尺寸已由内核几何给出，
+                        //   此处只是把渐变端点按砖盒换算；与 non-repeat 路径同式）
+                        if (g.kind == 1) {
+                            final double rad = Math.toRadians(g.angleDeg);
+                            final float dx = (float) Math.sin(rad);
+                            final float dy = (float) -Math.cos(rad);
+                            tp.setShader(new android.graphics.LinearGradient(
+                                    tw * (0.5f - dx / 2f), th * (0.5f - dy / 2f),
+                                    tw * (0.5f + dx / 2f), th * (0.5f + dy / 2f),
+                                    g.colors, g.offsets, android.graphics.Shader.TileMode.CLAMP));
+                        } else if (g.kind == 2 && g.r > 0f) {
+                            tp.setShader(new android.graphics.RadialGradient(
+                                    g.cx * tw, g.cy * th, g.r * (float) tw, g.colors, g.offsets, android.graphics.Shader.TileMode.CLAMP));
+                        }
+                        bc.drawRect(0, 0, tw, th, tp);
+                        bs = new android.graphics.BitmapShader(bmp,
+                                android.graphics.Shader.TileMode.REPEAT, android.graphics.Shader.TileMode.REPEAT);
+                        if (curNodeId >= 0) gradTileCache.put(curNodeId, new Object[]{sig, bs});
+                    }
+                    if (bs != null) {
+                        final android.graphics.Matrix m = new android.graphics.Matrix();
+                        m.setTranslate(ib[0], ib[1]);
+                        bs.setLocalMatrix(m);
+                        gradShader = bs;
+                    }
+                } else if (g.kind == 1) {
                     final double rad = Math.toRadians(g.angleDeg);
                     // I2-ALLOW: **非几何舍入**——渐变端点（绘制效果参数）的浮点换算；
                     //   内核只管矩形几何（已吸附），渐变是宿主绘制属性（与 borderRadius 同层）。
@@ -2498,10 +2551,10 @@ public class ProteusHostView extends ViewGroup {
                     final float ey0 = ib[1] + (0.5f - dy / 2f) * ib[3];
                     final float ex1 = ib[0] + (0.5f + dx / 2f) * ib[2];
                     final float ey1 = ib[1] + (0.5f + dy / 2f) * ib[3];
-                    gradShader = new android.graphics.LinearGradient(ex0, ey0, ex1, ey1, g.colors, g.offsets, tile);
+                    gradShader = new android.graphics.LinearGradient(ex0, ey0, ex1, ey1, g.colors, g.offsets, android.graphics.Shader.TileMode.CLAMP);
                 } else if (g.kind == 2 && g.r > 0f) {
                     gradShader = new android.graphics.RadialGradient(
-                            ib[0] + g.cx * ib[2], ib[1] + g.cy * ib[3], g.r * ib[2], g.colors, g.offsets, tile);
+                            ib[0] + g.cx * ib[2], ib[1] + g.cy * ib[3], g.r * ib[2], g.colors, g.offsets, android.graphics.Shader.TileMode.CLAMP);
                 }
             }
             if (gradShader != null) bgPaint.setShader(gradShader);
@@ -2561,6 +2614,25 @@ public class ProteusHostView extends ViewGroup {
                 canvas.clipRect(c.x, c.y, c.x + c.w, c.y + c.h);
                 canvas.drawRect(fb[0], fb[1], fb[0] + fb[2], fb[1] + fb[3], bgPaint);
                 canvas.restoreToCount(csave);
+            }
+            else if (c.gradient != null && "repeat".equals(c.gradient.bgRepeat)) {
+                // ★★★repeat：先铺**元素底色**，再叠二维平铺渐变（2026-10-08 · 子代理诊断抓出）——
+                //   Web/iOS 在砖的**透明格**里露出的是元素 `background-color`；而 Paint 一旦挂 shader，
+                //   其 color 只作 alpha 调制、不再填色 ⇒ 透明格透出**页面白**（实测 Android/鸿蒙均如此）。
+                //   ⇒ 与 `bgBoxed` 分支同法：先画实心底色，再画平铺砖。
+                final int baseColor = animBg != null ? animBg : c.color;
+                if (android.graphics.Color.alpha(baseColor) != 0) {
+                    bgPaint.setShader(null);
+                    bgPaint.setColor(baseColor);
+                    if (rcm != null) drawPathCorners(canvas, c, rcm, bgPaint);
+                    else if (c.radius > 0f) canvas.drawRoundRect(c.x, c.y, c.x + c.w, c.y + c.h, c.radius, c.radius, bgPaint);
+                    else canvas.drawRect(c.x, c.y, c.x + c.w, c.y + c.h, bgPaint);
+                    bgPaint.setShader(gradShader);
+                    bgPaint.setAlpha(Math.max(0, Math.min(255, (int) (op * 255f))));
+                }
+                if (rcm != null) drawPathCorners(canvas, c, rcm, bgPaint);
+                else if (c.radius > 0f) canvas.drawRoundRect(c.x, c.y, c.x + c.w, c.y + c.h, c.radius, c.radius, bgPaint);
+                else canvas.drawRect(c.x, c.y, c.x + c.w, c.y + c.h, bgPaint);
             }
             else if (rcm != null) { drawPathCorners(canvas, c, rcm, bgPaint); }
             else if (c.radius > 0f) canvas.drawRoundRect(c.x, c.y, c.x + c.w, c.y + c.h, c.radius, c.radius, bgPaint);
