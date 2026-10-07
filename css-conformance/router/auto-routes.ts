@@ -29,6 +29,7 @@ export const routes: RouteRecord[] = [
   { name: "overflow-page", path: "pages/overflow-page", component: "../pages/overflow-page.vue", parent: "index" },
   { name: "overflow", path: "pages/overflow", component: "../pages/overflow.vue", parent: "index" },
   { name: "place-items", path: "pages/place-items", component: "../pages/place-items.vue", parent: "index" },
+  { name: "position-scroll", path: "pages/position-scroll", component: "../pages/position-scroll.vue", parent: "index" },
   { name: "position", path: "pages/position", component: "../pages/position.vue", parent: "index" },
   { name: "safe-area", path: "pages/safe-area", component: "../pages/safe-area.vue", parent: "index" },
   { name: "text-shadow", path: "pages/text-shadow", component: "../pages/text-shadow.vue", parent: "index" },
@@ -136,6 +137,10 @@ export const screens: Record<string, AppScreenSpec> = {
     "name": "place-items",
     "path": "pages/place-items"
   },
+  "position-scroll": {
+    "name": "position-scroll",
+    "path": "pages/position-scroll"
+  },
   "position": {
     "name": "position",
     "path": "pages/position"
@@ -167,7 +172,7 @@ export const screens: Record<string, AppScreenSpec> = {
 }
 
 /** 路由名数组（App 深栈/压测按它循环取屏——顺序与 routes 一致） */
-export const screenNames: string[] = ["animation","at-rules","background-position","background","border-style","border","box-model","effects","flex","font","grid-auto-flow","grid-auto","grid-template-areas","grid-tracks","index","justify-self","line-clamp","math-functions","misc","outline","overflow-page","overflow","place-items","position","safe-area","text-shadow","text","units","vw-vh","word-break"]
+export const screenNames: string[] = ["animation","at-rules","background-position","background","border-style","border","box-model","effects","flex","font","grid-auto-flow","grid-auto","grid-template-areas","grid-tracks","index","justify-self","line-clamp","math-functions","misc","outline","overflow-page","overflow","place-items","position-scroll","position","safe-area","text-shadow","text","units","vw-vh","word-break"]
 
 /** tab 根屏（meta.isTab）—— App 端 tab 语义（switchTab/reset）的合法目标 */
 export const tabNames: string[] = []
@@ -198,6 +203,7 @@ declare module '@proteus-vue/router/types' {
     'overflow-page': {  },
     'overflow': {  },
     'place-items': {  },
+    'position-scroll': {  },
     'position': {  },
     'safe-area': {  },
     'text-shadow': {  },

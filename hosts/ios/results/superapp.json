@@ -1,45 +1,57 @@
 {
   "host_id" : "ios",
-  "host_stats" : "{\"ok\":true,\"data\":{\"screens\":[],\"mount_calls\":0,\"visible_calls\":0,\"destroy_calls\":0,\"anim_hook_missing\":0,\"anim_calls\":0,\"anim_completed\":0,\"rect_calls\":0,\"shared_calls\":0,\"live_screens\":0,\"calls\":[\"screen.mount\",\"screen.stats\"],\"content_node_total\":0}}",
+  "host_stats" : "{\"data\":{\"screens\":[],\"shared_calls\":0,\"content_node_total\":0,\"live_screens\":0,\"calls\":[\"screen.mount\",\"screen.stats\"],\"visible_calls\":0,\"rect_calls\":0,\"mount_calls\":0,\"anim_calls\":0,\"anim_completed\":0,\"anim_hook_missing\":0,\"destroy_calls\":0},\"ok\":true}",
   "ok" : true,
-  "rendered_page" : "text",
-  "run_ts" : 1791317864.8655939,
+  "rendered_page" : "position-scroll",
+  "run_ts" : 1791387521.981308,
   "scroll_probe" : {
-    "after_drag_down_100k" : 0,
+    "after_drag_down_100k" : 169,
     "after_drag_left_100k_x" : 0,
     "after_drag_right_100k_x" : 0,
     "after_drag_up_100k" : 0,
-    "ok" : true,
-    "range" : 0,
+    "ok" : false,
+    "range" : 169,
     "range_set" : true
   },
   "state" : {
-    "current" : "text",
+    "current" : "position-scroll",
     "depth" : 2,
     "screens" : [
+      "animation",
+      "at-rules",
       "background-position",
+      "background",
       "border-style",
       "border",
+      "box-model",
+      "effects",
+      "flex",
+      "font",
       "grid-auto-flow",
       "grid-auto",
       "grid-template-areas",
+      "grid-tracks",
       "index",
       "justify-self",
       "line-clamp",
       "math-functions",
+      "misc",
       "outline",
       "overflow-page",
       "overflow",
       "place-items",
+      "position-scroll",
+      "position",
       "safe-area",
       "text-shadow",
       "text",
+      "units",
       "vw-vh",
       "word-break"
     ],
     "stack" : [
       "index",
-      "text"
+      "position-scroll"
     ],
     "tabLabels" : {
       "border" : "CSS 验收 · 边框",
@@ -80,10 +92,12 @@
   },
   "switch_log" : [
     {
-      "current" : "text",
+      "current" : "position-scroll",
+      "dy" : 500,
+      "offset" : 0,
       "ok" : true,
-      "tap" : "inject",
-      "via" : "tap-inject"
+      "scroll" : "position-scroll",
+      "via" : "scroll-inject"
     }
   ],
   "tabs" : [

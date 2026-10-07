@@ -160,6 +160,32 @@ final class SuperappScene: NSObject {
                 NSLog("[proteus] SUPERAPP_TAP_ARG_INVALID %@", ta)
             }
         }
+        // ★★★批 A⑤（2026-10-08 · 决策 #656）：`--screen=<name>` + `--scroll=<dy>`（vp）——导航到指定屏、
+        //   注入一次**内容滚动**（`driveScrollDrag`）→ 截图 → 落报告 → 自退。用于 fixed/sticky 的**滚动锚定**证据
+        //   （fixed 徽标滚动后屏幕位置不变 / sticky 条吸附）。与 Android `--es screen`/`--es scroll` 同语义。
+        if let scArg = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--scroll=") }),
+           let snArg = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--screen=") }) {
+            Self.tapMode = true
+            let sName = String(snArg.dropFirst("--screen=".count))
+            let dy = Double(String(scArg.dropFirst("--scroll=".count))) ?? 0
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                _ = evalJs?("__proteusSuperappNav(\(jsonQuote(sName)))")
+                DispatchQueue.main.async {
+                    renderCurrent()   // 新树 ⇒ offset 归零
+                    // ★注意：`onScrollDrag` **异步生效**（下一 runloop 才落 offset —— 探针读数错位一格已证）
+                    //   ⇒ 拖拽后**再等一个 runloop** 才读 offset + 截图（否则读到 0 / 截到未滚状态）。
+                    if let vw = bridgeRef?.view { _ = vw.driveScrollDrag(dx: 0, dy: -CGFloat(dy)) }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                        let offY = Double(bridgeRef?.view?.contentOffset.y ?? 0)
+                        takeSnapshot()   // 画当前（已滚动）状态
+                        switchLog.append(["scroll": sName, "dy": dy, "offset": offY, "current": currentName(), "ok": true, "via": "scroll-inject"])
+                        writeReport(reportBody())
+                        NSLog("[proteus] SUPERAPP_SCROLL_REPORT_READY page=%@ dy=%f offset=%f", sName, dy, offY)
+                        if ProcessInfo.processInfo.environment["PROTEUS_EXIT_AFTER_REPORT"] == "1" { exit(0) }
+                    }
+                }
+            }
+        }
         if !Self.tapMode {
             for (delay, step) in steps { DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: step) }
             DispatchQueue.main.asyncAfter(deadline: .now() + max(finishAt, 0.2)) { finish() }
