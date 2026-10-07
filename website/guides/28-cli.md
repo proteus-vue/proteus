@@ -49,7 +49,7 @@ proteus gate run d2 [dir]        # 专项：D-2 页面门禁（与 audit d2 同�
 | `fluid:check` | 柔性布局规则（禁手写 `@media` / 硬编码断点等 FLD 系列） |
 | `api-check` | CMP007 门禁：回调式平台 API / 同步存储 / 裸全局调用 → 改 `useXxx()` Hook |
 | `capabilities:manifest` / `capabilities:check` | 能力清单扫描 / 平台原生模块规范（业务目录禁 `wx.*`） |
-| `router:check` / `config:check` / `app-config:check` / `i18n:check` | 路由块 / 工程配置 / 应用配置 / 硬编码文案 |
+| `router:check` / `config:check` / `app-config:check` / `i18n:check` | 路由块 / 编译器配置 / 运行时配置 / 硬编码文案 |
 | `module:check` / `module:duplicates` / `audit module` | 模块契约 / 分包重复依赖 / 综合审计 |
 | `health` | 工程环境体检：Node 版本 / 结构 / 依赖 / 产物 / appid / IDE 一次性诊断 |
 

@@ -49,7 +49,7 @@ Dedicated commands can run on their own, or be aggregated by `proteus audit all`
 | `fluid:check` | fluid layout rules (FLD series: no hand-written `@media`, no hardcoded breakpoints, …) |
 | `api-check` | CMP007 gate: callback-style platform APIs / sync storage / raw global calls → migrate to `useXxx()` Hooks |
 | `capabilities:manifest` / `capabilities:check` | capability inventory scan / platform native-module conventions (business directories ban `wx.*`) |
-| `router:check` / `config:check` / `app-config:check` / `i18n:check` | route blocks / project config / app config / hardcoded copy |
+| `router:check` / `config:check` / `app-config:check` / `i18n:check` | route blocks / compiler config / runtime config / hardcoded copy |
 | `module:check` / `module:duplicates` / `audit module` | module contracts / duplicate subpackage dependencies / comprehensive audit |
 | `health` | project environment checkup: Node version / structure / dependencies / artifacts / appid / IDE — one-shot diagnostics |
 
