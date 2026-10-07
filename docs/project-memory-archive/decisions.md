@@ -1865,3 +1865,12 @@
 - **修法**：新增 `nativeResetEngine`（`quickjs_jni.c`）+ `QuickJsEngine.resetEngine()`（Java），在 `SuperappActivity.boot()` **开头**调用 ⇒ 每次新 Activity 在**全新上下文**启动（与 iOS 的「每实例新 JSContext」对齐）；同时清 guest 回调名 `g_gesture_cb`。
 - **验证**：Android 真机 3 轮 reopen 循环（force-stop → 启 → 返回 → 再启）index 均正常渲染；`font` 页正常。
 **③ ★教训**：a) **同一属性两处实现会互相打架**——行高**要么只由段落样式管**（frame 保持整盒），treating frame 为"字形高"又与段落行高并存必出冲突；b) **进程级 static 的 JS 上下文是跨实例脏态温床**——Activity 重启 ≠ 引擎重启；跨端对比：iOS **每实例新 `JSContext`** 天然干净，Android 共享 static ⇒ 需显式 `resetEngine`；c) **「杀后台就好」是本缺陷的指纹**：任何"重启应用即恢复"的偶发问题，先查**进程级全局态**（static / singleton / 缓存）是否跨实例泄漏；d) **空白 ≠ 内核问题**：iOS 的空白根因在**宿主层**（frame/绘制），Android 的空白根因在**引擎生命周期**（非内核）——先用**另一端同页是否正常**把层位切开（Android 正常 ⇒ iOS 宿主层）。
+
+627. **★★App 三端 `white-space` 归一化（案例 C：Web 一行、App 换行）+ 鸿蒙多行盒高溢出 + 构建依赖漏触发（★用户 2026-10-08「font 案例 C：App 三端都换行、Web 一行，哪个对？」+「鸿蒙的溢出了」）**：
+**① 正确答案 = Web 一行**（Web = 唯一基准，决策 #546/#569）：CSS `white-space: normal`（缺省）下 `\n`/制表/连续空格 **折叠**为单空格（换行折叠）——案例 C 文本含 `\n`（SFC mustache 的多行字符串）⇒ 浏览器渲染**一行**。App 宿主此前把 `\n` 当**强制换行** ⇒ 与 Web 不符（三端换行）。
+**② 修法（共享实例化，一处改全三端）**：`packages/slot-runtime/src/instantiate.ts` 加 `normalizeWhiteSpace` + **唯一文本写出口 `setNormText`**，按节点 `whiteSpace` 归一化（normal/nowrap ⇒ 折叠全部空白为单空格并去首尾；pre-line ⇒ 折叠空格/制表但保留 `\n`；pre/pre-wrap ⇒ 原样）。**所有**设置 `text` 的路径统一走它。★slot-runtime 为 **App-only**（Web/MP 走浏览器/原生 CSS）⇒ 只影响 App 三端。
+- **★二次缺陷**：只在 `emit()` 归一化是不够的——**订阅表回填**（`target.text = String(v)`，4 处）用**原值**把归一化结果**覆盖**回去（本轮实测：emit 后 node13 已折叠、最终仍带 `\n`）。⇒ 必须把所有写口收成**一个** helper（`setNormText`），不能只补一处。
+**③ 鸿蒙多行盒高溢出**：`measureTextWrappedTypoPx`/`measureTextTypoPx` 增 `outLines`（用 `OH_Drawing_TypographyGetLineCount`）；宿主此前用 `hpx / 单行高` **反推**行数——含 `\n` 的文本其单行度量（宽 10000）本身就是**多行高** ⇒ 比值恒 ≈1 ⇒ 行数误判 1 ⇒ 盒高只算一行 ⇒ 第二行**溢出盒外**。改用真实行计数（`lineHeight` 时盒高 = 行数 × 行高）。
+**④ ★构建依赖漏触发（本轮实测白跑一轮）**：`hosts/android/build-and-run.sh` 只在**入口 TS** 更新时重建 superapp bundle；`render-backend`/`slot-runtime` 的 **dist** 改了但入口没动 ⇒ **旧 bundle 冒充新代码**（改完在设备上测的还是旧行为）。补：bundle 依赖 `packages/{render-backend,slot-runtime}/dist/index.js` 更新也触发重建（`-nt` 判断）。
+**⑤ 验证**：四端真机案例 C 均**一行**（= Web）；`pre-wrap`（`text.vue` 案例 C）仍**保留换行**（无回归）；新增 `tests/whitespace-normalize.test.ts`（5 用例锁 5 种 white-space 语义）+ 接 `test:coupled`（新增 `packages/slot-runtime/src/instantiate.ts` 精化映射）。
+**⑥ ★教训**：a) **「哪个对」先答基准**——`white-space: normal` 折叠 `\n` 是 CSS 规范，Web 为准；b) **「同一语义多处写口」要收成一个出口**（`setNormText`）——只补 emit 会被订阅表回填覆盖（静默还原）；c) **构建产物依赖要显式登记**——"入口没变" ≠ "产物没变"（改依赖包的 dist 也要重建 bundle）；d) **鸿蒙行数不能反推**——有 `\n` 时单行度量已是多行高，比值法失真；用 `GetLineCount`。
