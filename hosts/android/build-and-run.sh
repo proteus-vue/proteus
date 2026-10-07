@@ -584,6 +584,7 @@ if [ "$LIGHTS" = "1" ]; then PKG="dev.proteus.lights"; ACTIVITY="dev.proteus.lig
 elif [ "$FLIP" = "1" ]; then PKG="dev.proteus.flip"; ACTIVITY="dev.proteus.flip/dev.proteus.layoutcore.FlipDemoActivity"
 elif [ "$INKSCROLL" = "1" ]; then PKG="dev.proteus.inkscroll"; ACTIVITY="dev.proteus.inkscroll/dev.proteus.layoutcore.InkScrollDemoActivity"
 elif [ "$INK" = "1" ]; then PKG="dev.proteus.ink"; ACTIVITY="dev.proteus.ink/dev.proteus.layoutcore.InkDemoActivity"
+elif [ "$CSSCONF" = "1" ]; then PKG="dev.proteus.cssconf"; ACTIVITY="dev.proteus.cssconf/dev.proteus.layoutcore.SuperappActivity"
 else PKG="dev.proteus.layoutcore"; ACTIVITY="dev.proteus.layoutcore/.MainActivity"; fi
 "$ADB" wait-for-device
 "$ADB" install -r -t "$APK" 2>&1 | tail -3
