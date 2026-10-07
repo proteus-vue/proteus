@@ -176,6 +176,12 @@ ENTRY="$HERE/bridge/entry-batch.ts"
 NEED_BUILD=0
 if [ ! -f "$BUNDLE" ]; then NEED_BUILD=1; fi
 if [ -f "$ENTRY" ] && [ -f "$BUNDLE" ] && [ "$ENTRY" -nt "$BUNDLE" ]; then NEED_BUILD=1; fi
+# ★★superapp bundle 还依赖 render-backend / slot-runtime 的 **dist**（经 esbuild alias 打包进来）——
+#   这两包改了但入口没动 ⇒ 旧 bundle 冒充新代码（本轮实测：slot-runtime 文本归一化改了、
+#   入口 entry-superapp.ts 未动 ⇒ bundle 未重建 ⇒ 真机测的还是旧代码，白跑）。
+for dep in packages/render-backend/dist/index.js packages/slot-runtime/dist/index.js; do
+  if [ -f "$BUNDLE" ] && [ "$ROOT/$dep" -nt "$BUNDLE" ]; then NEED_BUILD=1; fi
+done
 if [ "$NEED_BUILD" = "1" ]; then
   echo "    构建 bundle（缺产物 或 入口更新）…"
   if ! node "$HERE/bridge/build-batch.mjs" 2>&1 | sed 's/^/    /'; then

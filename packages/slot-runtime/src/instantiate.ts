@@ -210,6 +210,40 @@ function applyStyleField(
   ;(target as Record<string, unknown>)[key] = v
 }
 
+/**
+ * ★★★CSS `white-space` 的**文本归一化**（2026-10-08 · 用户抓出「font 案例 C：Web 一行、App 三端换行」）。
+ *
+ * 【为什么必须有（Web 是唯一基准，决策 #546/#569）】CSS `white-space: normal`（缺省）下，`\n`/制表/连续空格
+ *   会**折叠**为单个空格——**换行折叠**（浏览器 `getComputedStyle`/`white-space` 语义）。而 App 宿主此前把
+ *   `\n` 当**强制换行**（SFC 里 mustache 的多行字符串原样带 `\n`）⇒ 与 Web 不符（Web 一行、App 两行）。
+ *   ⇒ 在**共享运行期实例化**处按 `white-space` 归一化文本（App 三端同源；Web/MP 用浏览器/原生 CSS，不经过本函数）。
+ * 【各值语义（CSS 规范）】normal/nowrap ⇒ 折叠全部空白为单空格并去首尾；pre-line ⇒ 折叠空格/制表但**保留 \n**；
+ *   pre/pre-wrap ⇒ **原样保留**（本函数不动）。
+ */
+/** 把文本写进节点（**唯一出口**）——按节点的 `whiteSpace` 归一化后写入。所有设置 `text` 的路径都走它。 */
+function setNormText(obj: Record<string, unknown>, value: unknown): void {
+  const t = value === undefined || value === null ? '' : String(value)
+  obj['text'] = normalizeWhiteSpace(t, obj['whiteSpace'] as string | undefined)
+}
+
+function normalizeWhiteSpace(text: string, ws: string | undefined): string {
+  switch (ws) {
+    case 'pre':
+    case 'pre-wrap':
+      return text // 原样保留
+    case 'pre-line':
+      // 折叠空格/制表/回车，但保留 \n；并去掉每行首尾空格
+      return text
+        .replace(/[ \t\r\f\v]+/g, ' ')
+        .split('\n')
+        .map((l) => l.trim())
+        .join('\n')
+    default:
+      // normal / nowrap / 缺省：所有空白（含 \n）折叠为单空格；去首尾
+      return text.replace(/\s+/g, ' ').trim()
+  }
+}
+
 function engineFieldOf(propKey: string): { kind: 'style'; key: string } | { kind: 'text' } | null {
   if (propKey === 'text.content') return { kind: 'text' }
   const m = propKey.match(/^(?:layout|paint|text)\.(.+)$/)
@@ -362,13 +396,13 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
     if (n.style) for (const [k, v] of Object.entries(n.style)) {
       ;(out as Record<string, unknown>)[k] = v
     }
-    if (n.text !== undefined) out.text = n.text
+    if (n.text !== undefined) setNormText(out as unknown as Record<string, unknown>, n.text)
     // ★★**文本段序列**（2026-10-03 · P2-2 混合文本）：静态段 + 表达式段 ⇒ 实例化时求值拼接。
     //   为什么在实例化做：`textSegments` 只在模板产物里（订阅表编的是**合成表达式**——
     //   `'a' + (x) + 'b'`）；实例化拿不到订阅表的求值器（调用方未传 table 时也要能出首帧），
     //   而表达式段在编译期已编成 `ExprProgram`（纯 JSON）⇒ 本层直接执行即可（无 eval）。
     if (n.textSegments && n.textSegments.length > 0) {
-      out.text = evalTextSegments(n.textSegments, ctx.read)
+      setNormText(out as unknown as Record<string, unknown>, evalTextSegments(n.textSegments, ctx.read))
     }
     // ★★`tag` / `component` **必须透传**（2026-10-03 P2 批次补的真缺陷）：本函数此前只写
     //   id/parentId/style/text，`tag` 被丢弃 ⇒ 宿主看不到节点类型（诊断串一直是 `undefined`；
@@ -509,7 +543,7 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
           }
           if (f.kind === 'text') {
             // ★P2-9：空值（undefined/null）⇒ **空串**（`String(undefined)` 会把字面量 "undefined" 写上屏）
-            target.text = v === undefined || v === null ? '' : String(v)
+            setNormText(target as unknown as Record<string, unknown>, v)
           } else {
             // ★回填也写**顶层**（与 emit 的摊平一致——否则回填的键核心看不到）
             applyStyleField(target, sl.propKey, f.key, v, opts.table?.classRules, opts.table?.classPlans?.[String(sl.nodeId)])
@@ -585,7 +619,7 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
       if (!evS.ok) continue
       const v = evS.value
       if (f.kind === 'text') {
-        target.text = v === undefined || v === null ? '' : String(v)
+        setNormText(target as unknown as Record<string, unknown>, v)
       } else {
         applyStyleField(target, sl.propKey, f.key, v, opts.table?.classRules, opts.table?.classPlans?.[String(sl.nodeId)])
       }
@@ -613,7 +647,7 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
         }
         if (f.kind === 'text') {
           // ★P2-9：空值 ⇒ 空串（同 cloneRow 的口径）
-          target.text = v === undefined || v === null ? '' : String(v)
+          setNormText(target as unknown as Record<string, unknown>, v)
         } else {
           applyStyleField(target, sl.propKey, f.key, v, opts.table?.classRules, opts.table?.classPlans?.[String(sl.nodeId)])
         }
@@ -942,7 +976,7 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
           for (const node of subtree) {
             const tn = tpl.nodes.find((x) => x.id === node.id - idOffset)
             if (tn?.textSegments && tn.textSegments.length > 0) {
-              node.text = evalTextSegments(tn.textSegments, scopedRead)
+              setNormText(node as unknown as Record<string, unknown>, evalTextSegments(tn.textSegments, scopedRead))
             }
           }
           // ② 作用域样式绑定（`slotScopedSlots`：nodeId 是**本树 local id**）
@@ -964,7 +998,7 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
               continue
             }
             if (f.kind === 'text') {
-              target.text = v === undefined || v === null ? '' : String(v)
+              setNormText(target as unknown as Record<string, unknown>, v)
             } else {
               applyStyleField(target, sc.propKey, f.key, v, opts.table?.classRules, opts.table?.classPlans?.[String(sc.nodeId)])
             }
