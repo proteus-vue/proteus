@@ -1893,3 +1893,14 @@
 **⑥ ★★结构性缺口（登记）**：`check:host-kernel-keys` 明说"**iOS/鸿蒙把 nodes 原样转发（无白名单）**"——但 iOS 的 `styleOf` **恰恰是一份自绘样式白名单**，该门禁**不覆盖它**。于是同款缺陷**已复发多次**（该文件注释自记：clipPath/glow/mask、borderRadiusCorners 静默 3 个月、justifySelf/gridColumn、本轮 letterSpacing/textDecoration）⇒ **须补门禁**：iOS `styleOf` 透传字段 vs 宿主实际消费的绘制字段集（下一步）。
 **⑦ 未修（如实登记，非 clear defect）**：a) **默认 `line-height` 三端偏紧**（无声明 `line-height` 的卡片：Web ≈20css/行 vs iOS ≈17 / Android ≈18.7 / 鸿蒙 ≈16.6）——属**字体度量差**（`normal` 由各端字体 metrics 决定），候选进 `allow-differences`；b) 鸿蒙文本在盒内垂直居中偏下 ~2–3.6css；c) Android/鸿蒙品牌红略暗。三者均 minor，未在本轮改。
 **⑧ 教训**：**"字段在必经白名单被吞"是最高频的静默降级**（无报错、无日志）——修这类 bug **先验证字段到达了绘制层**（打点），别从"下游渲染对不对"猜起（我第一轮就猜错了层）。
+
+630. **★★★App 三端 `opacity` 不生效 + iOS `transform`/`transform-origin`/`visibility` 全丢——子代理审 effects 页（★用户 2026-10-08「继续审查视觉效果页面」）**：
+**① 审查方式**：独立子代理审 `effects.vue` 四端截图（Web 基准 + iOS/Android/鸿蒙）+ 逐案量化（换算 css px）。
+**② clear defects**：**A opacity**——iOS/Android/鸿蒙三端 **0.5 盒与 1.0 盒像素等同**（透明完全无效果）；**C transform**——iOS 两盒**直立**（rotate 10°/scale 1.2 都不生效）；**D transform-origin**——iOS 直立（无旋转自然也无锚点）；**F visibility:hidden**——iOS **隐藏盒仍被绘制**（Web/Android 空白占位）。
+**③ 根因（两个病灶）**：
+- **a) iOS `styleOf` 又漏 4 个字段**（`transform`/`transformOrigin`/`opacity`/`visibility`）——与上一轮 `letterSpacing`/`textDecoration` **同款**（该白名单文件**第 N 次复发**：注释自记 clipPath/glow/mask、borderRadiusCorners 3 月、justifySelf/gridColumn、letterSpacing/textDecoration、本轮 4 个）。
+- **b) 「静态 opacity」在三端**都缺应用点**：iOS 只有动画路径 `applyTransform(opacity:)`（无静态）；Android `injectTransform` 从 node 读 transform 却**从不读 `opacity`**；鸿蒙 host **完全不发射 opacity**、render 侧也无 `SetOpacity`。
+**④ 修复**：**iOS** `styleOf` 补透传 4 字段 + `makeLayer` 应用 `layer.opacity`；**Android** 新增 `setNodeOpacity`（复用 `nodeStaticTx[4]`——`drawCmds` 已读 `op=tf[4]`）+ `injectTransform` 读 `spec.opacity`；**鸿蒙** host emit `opacity`（默认 1、<1 才发）+ render `SetOpacity`（RenderNode 原生属性）。visibility 仅 iOS 缺（Android 已有、鸿蒙 host 已处理）。
+**⑤ 验证（三端真机）**：A 三端 0.5 盒明显浅于 1.0 盒（= Web）· C/D iOS 旋转+缩放+锚点恢复 · F iOS 隐藏盒不再绘制。门禁全绿。
+**⑥ ★★结构性缺口（再次强化登记，见 #629）**：`styleOf` 这类"**建层必经白名单**"的漏字段**已跨 2 个页面、6+ 字段复发**——`check:host-kernel-keys` 明说不覆盖 iOS。⇒ **必须补门禁**（iOS `styleOf` 透传字段 vs 宿主实际消费的绘制字段集）；这是本轮最该做、还没做的治本项。
+**⑦ 教训**：a) **"必经白名单漏字段"是本仓最高频静默降级**——审一个页面就挖出一批，说明远不止这两页；b) **"某字段在 A 端生效"≠"三端都生效"**（opacity 在动画路径有、静态路径三端全缺；visibility Android 有、iOS 无）——**逐端逐字段核**；c) 子代理四端量化审查的性价比极高（两个页面各抓出 2–3 个 clear defect，且都经真机复现确认）。
