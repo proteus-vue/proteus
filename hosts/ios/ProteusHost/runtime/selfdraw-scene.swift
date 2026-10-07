@@ -3283,7 +3283,15 @@ final class SelfDrawView: UIView {
         let gl = CAGradientLayer()
         gl.frame = CGRect(origin: .zero, size: size)
         if applyGradient(gl, spec: spec, bounds: gl.bounds) {
-            gl.render(in: UIGraphicsGetCurrentContext()!)
+            let c = UIGraphicsGetCurrentContext()!
+            // ★★★必须翻转 CTM 再 render（2026-10-08 · 用户抓出「App 案例 C：iOS 平铺方向反了」）：
+            //   CoreGraphics 原点在**左下**（y 向上），UIKit/图层坐标在**左上**（y 向下）——
+            //   `UIGraphicsBeginImageContextWithOptions` 给的上下文**未翻转**，直接 `layer.render` 会把像素
+            //   **上下颠倒**。对 `linear-gradient(45deg, …)` 这类**非对称**砖块 ⇒ 相位镜面（"\" 变 "/"），
+            //   棋盘平铺方向随之反了。与下方手建 CGContext 的同款修复（本仓既有实测）。
+            c.translateBy(x: 0, y: size.height)
+            c.scaleBy(x: 1, y: -1)
+            gl.render(in: c)
         }
         return UIGraphicsGetImageFromCurrentImageContext()
     }
