@@ -2066,3 +2066,9 @@
 **④ 判据**：`cargo test` 211+ 全绿（新增 `tests/position_fixed_sticky.rs` 2 断言：fixed 按 inset 落位 / sticky 布局同 static）+ `test:coupled` 388 + 定向 vitest 162（同步「sticky 不支持」旧断言为「现支持」+ 新增 fixed 断言）+ **superapp 产物实测含 `position:"fixed"`**（Android screen-content）+ `check:app-screen-content`/`check:host-kernel-keys`/`check:style-ir-schema` 全绿。
 **⑤ 诚实边界**：本步 = **IR 正确化**（内核布局就绪、编译器不再撒谎）；**宿主「fixed 不随滚动 / sticky 吸附」与 z-index→语义层映射为批 A 后续步**（本步无视觉回归——fixed 暂同 absolute 行为，与改写前一致，仅 IR 不再撒谎）。MP 端：Skyline 官方支持 fixed、无 sticky（引擎锁死⇒具名豁免）。
 **⑥ 教训**：**「当时等价」是时效性判断**——批次 45 的 `fixed→absolute` 在「单全屏无滚动」时为真，一旦内容滚动落地就变假；这类「为解决当时问题而引入的改写」必须随能力演进**复核**（同 #597「引擎边界有时效」）。
+652. **★★★超应用 CSS 扩展 · 批 A②(1/3)：iOS 宿主 `position: fixed` 脱离内容滚动（承 #651）**：
+**① 缺口**：`position:fixed` 语义 = 相对**视口**固定、**不随内容滚动**。iOS 滚动用「根层 `sublayerTransform` 全局平移内容」实现（`applyContentOffset`）⇒ fixed 层若不脱离该变换，就会随滚动漂走（= 错成 absolute）。
+**② 交付**：`styleOf` 透传 `position`（建层必经之路，此前被白名单丢弃——同 #650 的整类缺陷）；`buildLayers` 建层后把 `position:fixed` 的层**重挂到视图层**（`self.layer.addSublayer`，不在内容变换下 ⇒ 不随滚动）+ `zPosition=2000` 浮起。
+**③ 判据**：iOS `swiftc -typecheck` 绿 + `check:ios-style-keys` 绿（透传 61）+ **真机 superapp 全屏渲染正常**（fixed 底栏在底部、内容/卡片零回归）。
+**④ 诚实边界**：frame 用内核给的**绝对 rect**（= 视口坐标系下的内容坐标，offset=0 即屏幕坐标）；**命中测试**仍按内核内容坐标映射 ⇒ fixed 元素在**滚动后**的 tap 映射会偏 `contentOffset`（具名，待批 A 内补命中补偿）。**Android/鸿蒙（画布平移路径）的 fixed + sticky（全端）+ z-index→语义层 为批 A 后续步**（提交间存在瞬时的跨端不一致窗口——非"跳过端"，是同批分步）。
+**⑤ 教训**：**「全局内容变换」式滚动**（iOS sublayerTransform / Android/鸿蒙画布平移）下，`fixed` 必须把该变换**抵消掉**（层脱离内容变换）——这类"滚动实现模型"决定了 fixed/sticky 的落点（对比 Web：浏览器原生区分）。
