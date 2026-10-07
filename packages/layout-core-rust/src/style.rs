@@ -134,6 +134,11 @@ pub enum Position {
     Static,
     Relative,
     Absolute,
+    /// ★批 A（2026-10-08 · 决策 #651）：`position: fixed`——相对**视口**定位。
+    ///   内核按 absolute 布局（inset 相对根/最近定位祖先）；**宿主负责不随内容滚动**（钉在视口）。
+    Fixed,
+    /// ★批 A：`position: sticky`——静态布局（inset 是**吸附阈值**、非布局偏移）+ 宿主按滚动吸附。
+    Sticky,
 }
 
 impl Default for Position {

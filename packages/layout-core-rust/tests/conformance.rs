@@ -181,6 +181,8 @@ fn to_style(g: &GoldenNode) -> LStyle {
         "static" => Position::Static,
         "relative" => Position::Relative,
         "absolute" => Position::Absolute,
+        "fixed" => Position::Fixed,
+        "sticky" => Position::Sticky,
         other => panic!("未知 position：{other}"),
     };
     s.top = g.top;

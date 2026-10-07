@@ -338,8 +338,22 @@ impl TaffyEngine {
                     bottom: style.bottom.map(length).unwrap_or(auto()),
                 };
             }
-            Position::Static => {
+            Position::Static | Position::Sticky => {
+                // ★批 A（2026-10-08 · 决策 #651）：sticky 的**布局** = 静态（inset 是吸附**阈值**、非布局偏移——
+                //   偏移由宿主按滚动实现）⇒ 与 static 同（不施加 inset）。
                 out.position = taffy::Position::Relative;
+            }
+            Position::Fixed => {
+                // ★批 A：fixed 的内核布局同 absolute（inset 相对根/最近定位祖先；**宿主负责不随滚动**）。
+                //   诚实边界：CSS fixed 的 containing block 恒为视口；本内核按最近定位祖先前推——
+                //   页面级 fixed（根的直接子）与 CSS 一致；嵌在定位祖先前推下为已知偏差。
+                out.position = taffy::Position::Absolute;
+                out.inset = taffy::Rect {
+                    left: style.left.map(length).unwrap_or(auto()),
+                    right: style.right.map(length).unwrap_or(auto()),
+                    top: style.top.map(length).unwrap_or(auto()),
+                    bottom: style.bottom.map(length).unwrap_or(auto()),
+                };
             }
         }
 
