@@ -101,6 +101,12 @@ Consumes the five alignment switches from the official *Skyline WXSS style suppo
 | `minimumOSVersion` | `string` | No | Minimum OS version (default 15.0) |
 | `deviceFamily` | `number[]` | No | UIDeviceFamily (1=iPhone / 2=iPad; default `[1]`) |
 | `orientations` | `string[]` | No | Supported orientations (default `['portrait']`) |
+| `launchPage` | `string` | No | Home page name (the `ProteusHomePage` Info.plist key; default index) |
+| `userInterfaceStyle` | `'light' \| 'dark' \| 'automatic'` | No | Interface appearance (not written by default = system) |
+| `statusBarStyle` / `statusBarHidden` | `string` / `boolean` | No | Status-bar style / hide it |
+| `urlSchemes` | `string[]` | No | Deep-link registration (CFBundleURLTypes, e.g. `['myapp']` → `myapp://…`) |
+| `privacyUsageDescriptions` | `Record<string,string>` | No | ★App-Store-required privacy strings (`NSCameraUsageDescription` → purpose) |
+| `appCategory` / `developmentRegion` / `requiresFullScreen` | `string` / `boolean` | No | Category / default language / iPad full screen |
 
 **`targets.android` (→ AndroidManifest.xml)**
 
@@ -112,7 +118,9 @@ Consumes the five alignment switches from the official *Skyline WXSS style suppo
 | `minSdk` / `targetSdk` | `number` | No | SDK range (default 24 / 34) |
 | `orientation` | `'portrait' \| 'landscape' \| 'unspecified'` | No | Screen orientation (default unspecified) |
 | `permissions` | `string[]` | No | Extra `<uses-permission>` |
-| `icon` | `string` | No | App icon resource name (not written by default) |
+| `icon` / `theme` / `launchPage` | `string` | No | Icon resource / app theme / home page (manifest `ProteusHomePage` meta-data) |
+| `allowBackup` / `largeHeap` / `hardwareAccelerated` / `supportsRtl` / `usesCleartextTraffic` | `boolean` | No | App flags (set-or-add on `<application>`) |
+| `networkSecurityConfig` / `appCategory` | `string` | No | Network security config reference / app category |
 
 **`targets.harmony` (→ AppScope/app.json5 + entry/module.json5 + string.json)**
 
@@ -125,6 +133,10 @@ Consumes the five alignment switches from the official *Skyline WXSS style suppo
 | `compatibleSdkVersion` / `targetSdkVersion` | `string` | No | SDK (default `5.0.5(17)`) |
 | `deviceTypes` | `string[]` | No | Device types (default `["phone","tablet","2in1"]`) |
 | `permissions` | `string[]` | No | Extra requestPermissions |
+| `icon` / `appCategory` | `string` | No | App icon (app.json5) / app category |
+| `orientation` | `string` | No | Entry Ability orientation (module.json5 abilities[0]) |
+
+> **Full per-field reference** (type / required / description, auto-generated and jumpable) is in [Configuration reference](/docs/reference/config).
 
 > **Native identity injection**: the fields under `targets.{ios,android,harmony}` are **rendered by the CLI** (`proteus create host` / `proteus build --target <target> --package`) into the host project's native files — these used to be hardcoded in the host. **Responsibility boundary (G-35.1)**: `targets.*` = build time (writes native files); app.config's `app.*` = runtime (read by business). Values fall back, but the boundary does not change.
 

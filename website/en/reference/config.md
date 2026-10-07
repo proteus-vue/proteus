@@ -355,6 +355,69 @@ UIDeviceFamily (1 = iPhone / 2 = iPad; default `[1]`).
 
 Supported orientations (default `['portrait']`).
 
+### `targets.ios.launchPage`
+
+- **Type**: `string`
+- **Required**: No
+
+Home page name (the `ProteusHomePage` Info.plist key; default index) — the host renders this screen on launch.
+
+### `targets.ios.userInterfaceStyle`
+
+- **Type**: `'light' | 'dark' | 'automatic'`
+- **Required**: No
+
+Interface appearance (`'light'` / `'dark'` / `'automatic'`; not written by default = system).
+
+### `targets.ios.statusBarStyle`
+
+- **Type**: `string`
+- **Required**: No
+
+Status-bar style (e.g. `UIStatusBarStyleLightContent`; not written by default).
+
+### `targets.ios.statusBarHidden`
+
+- **Type**: `boolean`
+- **Required**: No
+
+Hide the status bar (not written by default).
+
+### `targets.ios.urlSchemes`
+
+- **Type**: `string[]`
+- **Required**: No
+
+URL scheme allow-list (`CFBundleURLTypes`) — registers deep links / being opened by other apps (e.g. `["myapp"]` → `myapp://…`).
+
+### `targets.ios.privacyUsageDescriptions`
+
+- **Type**: `Record<string, string>`
+- **Required**: No
+
+Privacy usage descriptions (`NSXxxUsageDescription`) — ★required for App Store review: key = the full plist key (e.g. `NSCameraUsageDescription`), value = the user-facing purpose string.
+
+### `targets.ios.appCategory`
+
+- **Type**: `string`
+- **Required**: No
+
+App category (`LSApplicationCategoryType`, e.g. `public.app-category.games`; not written by default).
+
+### `targets.ios.requiresFullScreen`
+
+- **Type**: `boolean`
+- **Required**: No
+
+`UIRequiresFullScreen` (require full screen on iPad, disable split view; not written by default).
+
+### `targets.ios.developmentRegion`
+
+- **Type**: `string`
+- **Required**: No
+
+`CFBundleDevelopmentRegion` (default development language, e.g. `zh_CN` / `en`; not written by default).
+
 ## Target · Android
 
 ### `targets.android.applicationId`
@@ -420,6 +483,69 @@ Extra `<uses-permission android:name="…"/>`.
 
 App icon resource name (`android:icon`; not written by default).
 
+### `targets.android.launchPage`
+
+- **Type**: `string`
+- **Required**: No
+
+Home page name (the `ProteusHomePage` manifest meta-data; default index) — the host renders this screen on launch.
+
+### `targets.android.theme`
+
+- **Type**: `string`
+- **Required**: No
+
+App theme (`application android:theme`, e.g. `@android:style/Theme.NoTitleBar.Fullscreen`; not written by default).
+
+### `targets.android.allowBackup`
+
+- **Type**: `boolean`
+- **Required**: No
+
+`android:allowBackup` (allow adb/cloud backup; not written by default = platform default true).
+
+### `targets.android.largeHeap`
+
+- **Type**: `boolean`
+- **Required**: No
+
+`android:largeHeap` (request a large heap — for big images/lists; not written by default).
+
+### `targets.android.hardwareAccelerated`
+
+- **Type**: `boolean`
+- **Required**: No
+
+`android:hardwareAccelerated` (hardware acceleration; not written by default = platform default true).
+
+### `targets.android.supportsRtl`
+
+- **Type**: `boolean`
+- **Required**: No
+
+`android:supportsRtl` (RTL layout support; not written by default).
+
+### `targets.android.usesCleartextTraffic`
+
+- **Type**: `boolean`
+- **Required**: No
+
+`android:usesCleartextTraffic` (allow cleartext HTTP — often needed for local/intranet debugging; not written by default).
+
+### `targets.android.networkSecurityConfig`
+
+- **Type**: `string`
+- **Required**: No
+
+`android:networkSecurityConfig` (network security config resource reference, e.g. `@xml/network_security_config`; not written by default).
+
+### `targets.android.appCategory`
+
+- **Type**: `string`
+- **Required**: No
+
+`android:appCategory` (app category, e.g. `game` / `audio`; not written by default).
+
 ## Target · HarmonyOS
 
 ### `targets.harmony.bundleName`
@@ -484,6 +610,27 @@ deviceTypes (default `["phone","tablet","2in1"]`).
 - **Required**: No
 
 Extra requestPermissions (module.json5).
+
+### `targets.harmony.icon`
+
+- **Type**: `string`
+- **Required**: No
+
+App icon (`app.json5` icon, e.g. `$media:my_icon` — resource under AppScope resources media/; not written by default).
+
+### `targets.harmony.appCategory`
+
+- **Type**: `string`
+- **Required**: No
+
+App category (`app.json5` appCategory, e.g. `game` / `audio`; not written by default).
+
+### `targets.harmony.orientation`
+
+- **Type**: `string`
+- **Required**: No
+
+Entry Ability orientation (`module.json5` abilities[0].orientation, e.g. `portrait` / `landscape` / `auto_rotation`; not written by default).
 
 ## Shared identity · app
 

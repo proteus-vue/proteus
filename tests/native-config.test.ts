@@ -108,6 +108,43 @@ describe('applyNativeConfig · android', () => {
     expect(rep.ok).toBe(true)
     expect(rep.skipped.some((s) => s.includes('AndroidManifest'))).toBe(true)
   })
+
+  it('★扩充字段：launchPage / theme / 应用标志（set-or-add 到 <application>）', () => {
+    const d = mkdir('and3')
+    const manifest = path.join(d, 'AndroidManifest.xml')
+    fs.writeFileSync(
+      manifest,
+      `<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="dev.proteus.layoutcore">
+    <application android:label="Old">
+        <meta-data android:name="ProteusHomePage" android:value="index" />
+    </application>
+</manifest>
+`,
+    )
+    const r = resolveNativeConfig({
+      android: {
+        launchPage: 'home',
+        theme: '@android:style/Theme.NoTitleBar.Fullscreen',
+        largeHeap: true,
+        supportsRtl: false,
+        usesCleartextTraffic: true,
+        networkSecurityConfig: '@xml/network_security_config',
+        appCategory: 'game',
+      },
+    })
+    const rep = applyNativeConfig(d, 'android', r)
+    const out = fs.readFileSync(manifest, 'utf-8')
+    expect(rep.ok).toBe(true)
+    expect(out).toContain('android:name="ProteusHomePage" android:value="home"')
+    expect(out).toContain('android:theme="@android:style/Theme.NoTitleBar.Fullscreen"')
+    expect(out).toContain('android:largeHeap="true"')
+    expect(out).toContain('android:supportsRtl="false"')
+    expect(out).toContain('android:usesCleartextTraffic="true"')
+    expect(out).toContain('android:networkSecurityConfig="@xml/network_security_config"')
+    expect(out).toContain('android:appCategory="game"')
+    expect(out).toContain('android:label="Old"') // 未声明 label → 不覆盖手改值
+  })
 })
 
 describe('applyNativeConfig · ios', () => {
@@ -142,6 +179,47 @@ describe('applyNativeConfig · ios', () => {
     expect(out).toContain('<key>UIDeviceFamily</key><array><integer>1</integer><integer>2</integer></array>')
     expect(out).toContain('UIInterfaceOrientationLandscapeLeft')
     expect(out).toContain('<key>ProteusHomePage</key><string>index</string>')
+  })
+
+  it('★扩充字段：launchPage / 界面风格 / 状态栏 / 深链 scheme / 隐私说明 / 类别（set-or-add）', () => {
+    const d = mkdir('ios2')
+    const plist = path.join(d, 'Info.plist')
+    fs.writeFileSync(
+      plist,
+      `<?xml version="1.0"?><plist version="1.0"><dict>
+  <key>CFBundleIdentifier</key><string>dev.proteus.host</string>
+  <key>ProteusHomePage</key><string>index</string>
+</dict></plist>`,
+    )
+    const r = resolveNativeConfig({
+      ios: {
+        launchPage: 'home',
+        userInterfaceStyle: 'dark',
+        statusBarStyle: 'UIStatusBarStyleLightContent',
+        statusBarHidden: true,
+        urlSchemes: ['myapp', 'myapp-dev'],
+        privacyUsageDescriptions: { NSCameraUsageDescription: '拍照上传头像', NSLocationWhenInUseUsageDescription: '附近门店' },
+        appCategory: 'public.app-category.utilities',
+        developmentRegion: 'zh_CN',
+      },
+    })
+    const rep = applyNativeConfig(d, 'ios', r)
+    const out = fs.readFileSync(plist, 'utf-8')
+    expect(rep.ok).toBe(true)
+    expect(out).toContain('<key>ProteusHomePage</key><string>home</string>') // 改已有
+    expect(out).toContain('<key>UIUserInterfaceStyle</key><string>dark</string>') // 插入
+    expect(out).toContain('<key>UIStatusBarStyle</key><string>UIStatusBarStyleLightContent</string>')
+    expect(out).toContain('<key>UIStatusBarHidden</key><true/>')
+    expect(out).toContain('<key>CFBundleURLTypes</key><array>')
+    expect(out).toContain('<string>myapp</string>')
+    expect(out).toContain('<string>myapp-dev</string>')
+    expect(out).toContain('<key>NSCameraUsageDescription</key><string>拍照上传头像</string>')
+    expect(out).toContain('<key>NSLocationWhenInUseUsageDescription</key><string>附近门店</string>')
+    expect(out).toContain('<key>LSApplicationCategoryType</key><string>public.app-category.utilities</string>')
+    expect(out).toContain('<key>CFBundleDevelopmentRegion</key><string>zh_CN</string>')
+    // 幂等：再跑结果一致
+    applyNativeConfig(d, 'ios', r)
+    expect(fs.readFileSync(plist, 'utf-8')).toBe(out)
   })
 })
 
@@ -200,5 +278,49 @@ describe('applyNativeConfig · harmony', () => {
     expect(modJson).toContain('"name": "ohos.permission.INTERNET"')
     const str = fs.readFileSync(path.join(d, 'AppScope/resources/base/element/string.json'), 'utf-8')
     expect(str).toContain('"value": "鸿蒙演示"')
+  })
+
+  it('★扩充字段：icon / appCategory（app.json5）+ 入口 Ability orientation（module.json5）', () => {
+    const d = mkdir('hm2')
+    fs.mkdirSync(path.join(d, 'AppScope'), { recursive: true })
+    fs.mkdirSync(path.join(d, 'entry/src/main'), { recursive: true })
+    fs.writeFileSync(
+      path.join(d, 'AppScope/app.json5'),
+      `{
+  "app": {
+    "bundleName": "dev.proteus.host",
+    "icon": "$media:app_icon",
+    "label": "$string:app_name"
+  }
+}
+`,
+    )
+    fs.writeFileSync(
+      path.join(d, 'entry/src/main/module.json5'),
+      `{
+  "module": {
+    "name": "entry",
+    "type": "entry",
+    "abilities": [
+      { "name": "EntryAbility", "srcEntry": "./ets/shell/EntryAbility.ets", "exported": true }
+    ]
+  }
+}
+`,
+    )
+    const r = resolveNativeConfig({
+      harmony: { icon: '$media:brand_icon', appCategory: 'game', orientation: 'portrait' },
+    })
+    const rep = applyNativeConfig(d, 'harmony', r)
+    expect(rep.ok).toBe(true)
+    const appJson = fs.readFileSync(path.join(d, 'AppScope/app.json5'), 'utf-8')
+    expect(appJson).toContain('"icon": "$media:brand_icon"') // 改已有
+    expect(appJson).toContain('"appCategory": "game"') // 插入
+    const modJson = fs.readFileSync(path.join(d, 'entry/src/main/module.json5'), 'utf-8')
+    expect(modJson).toContain('"orientation": "portrait"') // 插入到 abilities[0]
+    // 幂等
+    applyNativeConfig(d, 'harmony', r)
+    expect(fs.readFileSync(path.join(d, 'AppScope/app.json5'), 'utf-8')).toBe(appJson)
+    expect(fs.readFileSync(path.join(d, 'entry/src/main/module.json5'), 'utf-8')).toBe(modJson)
   })
 })

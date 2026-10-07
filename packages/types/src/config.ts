@@ -144,6 +144,24 @@ export interface IosTargetConfig {
   deviceFamily?: number[]
   /** 支持的方向（缺省 [portrait]） */
   orientations?: Array<'portrait' | 'portrait-upside-down' | 'landscape-left' | 'landscape-right'>
+  /** 起始页名（Info.plist 的 ProteusHomePage；缺省 index）——宿主启动时渲染该屏 */
+  launchPage?: string
+  /** UIUserInterfaceStyle（界面明暗：`'light'` / `'dark'` / `'automatic'`；缺省不写 = 系统） */
+  userInterfaceStyle?: 'light' | 'dark' | 'automatic'
+  /** UIStatusBarStyle（状态栏样式，如 `UIStatusBarStyleLightContent`；缺省不写） */
+  statusBarStyle?: string
+  /** UIStatusBarHidden（隐藏状态栏；缺省不写） */
+  statusBarHidden?: boolean
+  /** URL scheme 白名单（CFBundleURLTypes）——注册深链/被其他 App 拉起（如 `['myapp']` → `myapp://…`） */
+  urlSchemes?: string[]
+  /** 隐私用途说明（NSXxxUsageDescription）——★上架必需：key 为完整 plist 键名（如 `NSCameraUsageDescription`），value 为面向用户的用途字符串 */
+  privacyUsageDescriptions?: Record<string, string>
+  /** 应用类别（LSApplicationCategoryType，如 `public.app-category.games`；缺省不写） */
+  appCategory?: string
+  /** UIRequiresFullScreen（iPad 要求全屏、禁用分屏；缺省不写） */
+  requiresFullScreen?: boolean
+  /** CFBundleDevelopmentRegion（缺省开发语言，如 `zh_CN` / `en`；缺省不写） */
+  developmentRegion?: string
 }
 
 /** Android 目标（→ AndroidManifest.xml） */
@@ -166,6 +184,24 @@ export interface AndroidTargetConfig {
   permissions?: string[]
   /** 应用图标资源名（android:icon；缺省不写） */
   icon?: string
+  /** 起始页名（manifest 的 ProteusHomePage meta-data；缺省 index）——宿主启动时渲染该屏 */
+  launchPage?: string
+  /** 应用主题（application android:theme，如 `@android:style/Theme.NoTitleBar.Fullscreen`；缺省不写） */
+  theme?: string
+  /** android:allowBackup（允许 adb/云备份；缺省不写 = 平台默认 true） */
+  allowBackup?: boolean
+  /** android:largeHeap（申请大堆——大图/大列表场景；缺省不写） */
+  largeHeap?: boolean
+  /** android:hardwareAccelerated（硬件加速；缺省不写 = 平台默认 true） */
+  hardwareAccelerated?: boolean
+  /** android:supportsRtl（RTL 布局支持；缺省不写） */
+  supportsRtl?: boolean
+  /** android:usesCleartextTraffic（允许明文 HTTP——本地/内网联调常需；缺省不写） */
+  usesCleartextTraffic?: boolean
+  /** android:networkSecurityConfig（网络安全配置资源引用，如 `@xml/network_security_config`；缺省不写） */
+  networkSecurityConfig?: string
+  /** android:appCategory（应用类别，如 `game` / `audio`；缺省不写） */
+  appCategory?: string
 }
 
 /** Harmony 目标（→ AppScope/app.json5 + entry/module.json5 + string.json） */
@@ -188,6 +224,12 @@ export interface HarmonyTargetConfig {
   deviceTypes?: string[]
   /** 追加 requestPermissions（module.json5） */
   permissions?: string[]
+  /** 应用图标（app.json5 的 icon，如 `$media:my_icon`——资源置于 AppScope 的 resources 下 media/ 目录；缺省不写） */
+  icon?: string
+  /** 应用类别（app.json5 的 appCategory，如 `game` / `audio`；缺省不写） */
+  appCategory?: string
+  /** 入口 Ability 方向（module.json5 的 abilities[0].orientation，如 `portrait` / `landscape` / `auto_rotation`；缺省不写） */
+  orientation?: string
 }
 
 /** 目标端集合（键 = 具体平台名；至少声明一个） */

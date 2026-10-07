@@ -101,6 +101,12 @@ export default {
 | `minimumOSVersion` | `string` | 否 | 最底系统版本（缺省 15.0） |
 | `deviceFamily` | `number[]` | 否 | UIDeviceFamily（1=iPhone / 2=iPad；缺省 `[1]`） |
 | `orientations` | `string[]` | 否 | 支持方向（缺省 `['portrait']`） |
+| `launchPage` | `string` | 否 | 起始页名（Info.plist 的 `ProteusHomePage`；缺省 index） |
+| `userInterfaceStyle` | `'light' \| 'dark' \| 'automatic'` | 否 | 界面明暗（缺省不写 = 系统） |
+| `statusBarStyle` / `statusBarHidden` | `string` / `boolean` | 否 | 状态栏样式 / 隐藏 |
+| `urlSchemes` | `string[]` | 否 | 深链注册（CFBundleURLTypes，如 `['myapp']` → `myapp://…`） |
+| `privacyUsageDescriptions` | `Record<string,string>` | 否 | ★上架必需的隐私说明（`NSCameraUsageDescription` → 用途文案） |
+| `appCategory` / `developmentRegion` / `requiresFullScreen` | `string` / `boolean` | 否 | 类别 / 缺省语言 / iPad 全屏 |
 
 **`targets.android`（→ AndroidManifest.xml）**
 
@@ -112,7 +118,9 @@ export default {
 | `minSdk` / `targetSdk` | `number` | 否 | SDK 范围（缺省 24 / 34） |
 | `orientation` | `'portrait' \| 'landscape' \| 'unspecified'` | 否 | 屏幕方向（缺省 unspecified） |
 | `permissions` | `string[]` | 否 | 追加 `<uses-permission>` |
-| `icon` | `string` | 否 | 应用图标资源名（缺省不写） |
+| `icon` / `theme` / `launchPage` | `string` | 否 | 图标资源 / 应用主题 / 起始页（manifest `ProteusHomePage` meta-data） |
+| `allowBackup` / `largeHeap` / `hardwareAccelerated` / `supportsRtl` / `usesCleartextTraffic` | `boolean` | 否 | 应用标志（存在则改、缺失则插入 `<application>`） |
+| `networkSecurityConfig` / `appCategory` | `string` | 否 | 网络安全配置引用 / 应用类别 |
 
 **`targets.harmony`（→ AppScope/app.json5 + entry/module.json5 + string.json）**
 
@@ -125,6 +133,10 @@ export default {
 | `compatibleSdkVersion` / `targetSdkVersion` | `string` | 否 | SDK（缺省 `5.0.5(17)`） |
 | `deviceTypes` | `string[]` | 否 | 设备类型（缺省 `["phone","tablet","2in1"]`） |
 | `permissions` | `string[]` | 否 | 追加 requestPermissions |
+| `icon` / `appCategory` | `string` | 否 | 应用图标（app.json5） / 应用类别 |
+| `orientation` | `string` | 否 | 入口 Ability 方向（module.json5 abilities[0]） |
+
+> **逐字段完整参考**（类型 / 必填 / 说明，自动生成可跳转）见 [配置参考](/docs/reference/config)。
 
 > **原生工程身份的注入**：`targets.{ios,android,harmony}` 的字段由 CLI（`proteus create host` / `proteus build --target <端> --package`）**渲染进**宿主工程的原生文件——此前它们硬编码在宿主工程里。**职责边界（G-35.1）**：`targets.*` = 构建期（写原生文件）；app.config 的 `app.*` = 运行期（业务读取）。缺值回退，但边界不变。
 
