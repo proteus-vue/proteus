@@ -2171,6 +2171,15 @@ final class SelfDrawView: UIView {
         t.m41 = -contentOffset.x
         t.m42 = -contentOffset.y
         self.layer.sublayerTransform = t
+        // ★★★批 A③：sticky 吸附——内容 y = max(baseY, offset + top)（屏幕 y 随之 = max(baseY−offset, top)）
+        if !stickyNodes.isEmpty {
+            for (sid, s) in stickyNodes {
+                guard let lyr = layersById[sid] else { continue }
+                var f = lyr.frame
+                f.origin.y = max(s.baseY, contentOffset.y + s.top)
+                lyr.frame = f
+            }
+        }
         return contentOffset
     }
 
@@ -2182,6 +2191,15 @@ final class SelfDrawView: UIView {
     func setVerticalScrollRange(_ range: Int) {
         verticalRange = max(0, range)
         verticalRangeSet = true
+    }
+
+    /// ★★★批 A③（2026-10-08 · 决策 #655）：**sticky 吸附表** id → (baseY, top 阈值)。
+    ///   `baseY` = 该层**自然内容坐标 y**（建层后从 layer.frame 现取，保持父相对坐标系一致）；
+    ///   `top` = 吸附阈值（CSS `top`）。屏幕 y = max(baseY − offset, top) ⇒ 内容 y = max(baseY, offset + top)。
+    private(set) var stickyNodes: [Int: (baseY: CGFloat, top: CGFloat)] = [:]
+    func setStickyTops(_ tops: [Int: CGFloat]) {
+        stickyNodes.removeAll(keepingCapacity: true)
+        for (id, top) in tops { if let lyr = layersById[id] { stickyNodes[id] = (baseY: lyr.frame.origin.y, top: top) } }
     }
 
     /// 视口外的待更新层（id → 目标绝对 rect）——滚入视野前必须刷上
@@ -7113,6 +7131,13 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         view.clearLayers()
         view.buildLayers(flat: flat)
         CATransaction.commit()
+        // ★★★批 A③：收集 position:sticky 节点（id → top 阈值）→ 视图按滚动吸附（建层后：层已就位）
+        var stickyTops: [Int: CGFloat] = [:]
+        for n in nodes {
+            guard (n["position"] as? String) == "sticky", let sid = n["id"] as? Int else { continue }
+            stickyTops[sid] = CGFloat((n["top"] as? Double) ?? 0)
+        }
+        view.setStickyTops(stickyTops)
         // ★批次 42（动效 · 对齐 Web）：**CSS animation**（编译期折叠）——建层后启动（各节点 style["animation"] → anims → 内核 anim_start + 帧循环）
         cssAnimNodes = startCssAnimations(flat: flat)
         // ★★C2：全量挂载后，按**内核解析好的段列表**补建 SVG 描边子层（见 attachSvgStroke 注释）

@@ -47,6 +47,8 @@ public final class VaporRenderHost {
     private final List<JSONObject> specs = new ArrayList<>();
     /** ★★★批 A（决策 #653）：`position:fixed` 的节点 id 集（从 spec 收集，注入视图做滚动反向补偿）。 */
     private final java.util.Set<Integer> fixedIdsOf = new java.util.HashSet<>();
+    /** ★批 A③（决策 #655）：sticky 节点吸附阈值（id → top，dp）。 */
+    private final java.util.Map<Integer, Float> stickyTopsOf = new java.util.HashMap<>();
     private final Map<Integer, Integer> indexById = new HashMap<>();
     /** 绘制指令与 id → 指令下标（增量补丁用；与 JsRenderHost 同款） */
     private final List<ProteusHostView.Cmd> cmds = new ArrayList<>();
@@ -2027,9 +2029,12 @@ public final class VaporRenderHost {
         }
         // ★★★批 A（决策 #653）：收集 position:fixed 节点 → 视图绘制时反向补偿内容滚动（钉在视口）
         fixedIdsOf.clear();
+        stickyTopsOf.clear();
         for (int i = 0; i < specs.size(); i++) {
             JSONObject sp = specs.get(i);
-            if ("fixed".equals(sp.optString("position", ""))) { int fid = sp.optInt("id", -1); if (fid >= 0) fixedIdsOf.add(fid); }
+            String pos = sp.optString("position", "");
+            if ("fixed".equals(pos)) { int fid = sp.optInt("id", -1); if (fid >= 0) fixedIdsOf.add(fid); }
+            else if ("sticky".equals(pos)) { int sid = sp.optInt("id", -1); if (sid >= 0) stickyTopsOf.put(sid, (float) sp.optDouble("top", 0)); }
         }
         lastCmdCount = cmds.size();
         pushToView();
@@ -2079,6 +2084,7 @@ public final class VaporRenderHost {
             view.setCmdNodeIds(a);
         }
         view.setFixedNodes(fixedIdsOf);   // ★★★批 A：fixed 节点集（滚动反向补偿）
+        view.setStickyTops(stickyTopsOf); // ★★★批 A③：sticky 节点阈值（滚动吸附）
         view.invalidate();
     }
 
