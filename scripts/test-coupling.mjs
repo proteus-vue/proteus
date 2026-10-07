@@ -188,6 +188,13 @@ const COUPLING = [
     tests: ['tests/explain.test.ts', 'tests/explain-vapor-gaps.test.ts'],
     why: '转换说明输出（CLI explain）',
   },
+  // ★★★slot-runtime 共享实例化（2026-10-08 · 决策 #627）：文本实例化 + white-space 归一化
+  //   —— App 三端同源（Web/MP 不经此）；改 instantiate 必跑归一化 + 运行期用例。
+  {
+    match: /^packages\/slot-runtime\/src\/instantiate\.ts$/,
+    tests: ['tests/whitespace-normalize.test.ts', 'tests/screen-runtime.test.ts', 'tests/superapp-runtime.test.ts'],
+    why: '共享运行期实例化（文本/列表/槽位实例化 + white-space 归一化——App 三端同源）',
+  },
   {
     match: /^packages\/compiler\/src\/vapor\//,
     // Vapor 线是**独立子系统**（编译器内的一等公民：expr/slots/events/模板/样式对象…）
@@ -209,8 +216,11 @@ const COUPLING = [
       'tests/slot-runtime-dispatch.test.ts',
       'tests/vapor-emits.test.ts',
       'tests/vapor-v3-e2e.test.ts',
+      // ★★★white-space 文本归一化（2026-10-08 · 决策 #627）：共享实例化按 white-space 折叠 \n
+      //   （App 三端同源；Web/MP 走原生 CSS 不经此）——改 instantiate.ts 必跑。
+      'tests/whitespace-normalize.test.ts',
     ],
-    why: 'Vapor 子系统（表达式/槽位/事件/生命周期/样式对象——独立测试体系）+ App CSS 支持面 SSOT',
+    why: 'Vapor 子系统（表达式/槽位/事件/生命周期/样式对象——独立测试体系）+ App CSS 支持面 SSOT + white-space 归一化',
   },
   {
     match: /^packages\/compiler\/src\/ir\//,

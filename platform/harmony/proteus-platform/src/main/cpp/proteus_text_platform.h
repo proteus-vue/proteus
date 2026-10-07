@@ -55,9 +55,11 @@ static inline void applyTextFont(OH_Drawing_TextStyle* tstyle, int fontWeight, c
 
 /// 单行度量（物理 px）：`*outW/*outH` = 最长行宽 / 行盒高（同 iOS `measureText` / Android `measureSingle`）。
 static inline void measureTextTypoPx(const std::string& text, double fontPx, double* outW, double* outH, double letterSpacingPx = 0,
-                                     int fontWeight = 400, const std::string& fontFamily = "") {
+                                     int fontWeight = 400, const std::string& fontFamily = "",
+                                     int* outLines = nullptr) {
     *outW = 0;
     *outH = 0;
+    if (outLines != nullptr) *outLines = 0;
     if (text.empty() || fontPx <= 0) return;
     OH_Drawing_FontCollection* fc = OH_Drawing_CreateFontCollection();
     if (fc == nullptr) return;
@@ -76,6 +78,7 @@ static inline void measureTextTypoPx(const std::string& text, double fontPx, dou
             OH_Drawing_TypographyLayout(typo, 10000.0);
             *outW = OH_Drawing_TypographyGetLongestLine(typo);
             *outH = OH_Drawing_TypographyGetHeight(typo);
+            if (outLines != nullptr) *outLines = (int)OH_Drawing_TypographyGetLineCount(typo);
             OH_Drawing_DestroyTypography(typo);
         }
         OH_Drawing_DestroyTypographyHandler(handler);
@@ -89,8 +92,10 @@ static inline void measureTextTypoPx(const std::string& text, double fontPx, dou
 static inline void measureTextWrappedTypoPx(const std::string& text, double fontPx, double lineWidthPx,
                                      double* outW, double* outH, double letterSpacingPx = 0,
                                      const std::string& wordBreak = "",
-                                     int fontWeight = 400, const std::string& fontFamily = "") {
+                                     int fontWeight = 400, const std::string& fontFamily = "",
+                                     int* outLines = nullptr) {
     *outW = 0; *outH = 0;
+    if (outLines != nullptr) *outLines = 0;
     if (text.empty() || fontPx <= 0 || lineWidthPx <= 1.0) return;
     OH_Drawing_FontCollection* fc = OH_Drawing_CreateFontCollection();
     if (fc == nullptr) return;
@@ -114,6 +119,11 @@ static inline void measureTextWrappedTypoPx(const std::string& text, double font
             OH_Drawing_TypographyLayout(typo, lineWidthPx);
             *outW = OH_Drawing_TypographyGetLongestLine(typo);
             *outH = OH_Drawing_TypographyGetHeight(typo);
+            // ★★★返回**真实行数**（2026-10-08 · 用户抓出「鸿蒙案例 C 文字溢出盒外」）：
+            //   宿主此前用 `hpx / 单行高` **反推**行数——但含 `\n` 的文本，`measureTextTypoPx`（宽 10000）
+            //   本身就返回**多行高** ⇒ 比值恒 ≈ 1 ⇒ 行数被判 1 ⇒ 盒高只算一行 ⇒ 第二行**溢出盒外**。
+            //   ⇒ 直接用 Typography 的行计数（唯一真值）。
+            if (outLines != nullptr) *outLines = (int)OH_Drawing_TypographyGetLineCount(typo);
             OH_Drawing_DestroyTypography(typo);
         }
         OH_Drawing_DestroyTypographyHandler(handler);

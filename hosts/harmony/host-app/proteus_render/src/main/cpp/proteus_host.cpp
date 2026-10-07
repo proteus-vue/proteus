@@ -405,22 +405,28 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
             // ★★★line-clamp 项（2026-10-08）：多行截断行数（测量封顶用）
             { double lcD = 0; jnum(it.c_str(), it.size(), "lineClamp", &lcD); clampLines = (int)(lcD + 0.5); }
             if (!single && boxWpx > 1.0) {
-                measureTextWrappedTypoPx(tx, fs * density, boxWpx, &wpx, &hpx, lsDesign * density, wbM, fw, ff);
-                if (lhDesign > 0 || clampLines > 0) {
-                    double nW = 0, nH = 0;
-                    measureTextTypoPx(tx, fs * density, &nW, &nH, lsDesign * density, fw, ff);
-                    if (nH > 0.5) {
-                        int lines = (int)((hpx / nH) + 0.5);
-                        if (lines < 1) lines = 1;
-                        // ★★★line-clamp 项（2026-10-08）：测量封顶——行数 = min(自然行数, clamp)。
-                        //   与绘制同源（渲染侧 maxLines + 尾部省略号），否则盒高与墨迹打架。
-                        if (clampLines > 0 && lines > clampLines) lines = clampLines;
-                        hpx = (lhDesign > 0) ? (lines * lhDesign * density) : (lines * nH);
-                    }
+                // ★★★真实行数（2026-10-08 · 用户抓出「鸿蒙案例 C 文字溢出盒外」）：改用 Typography 行计数
+                //   （此前用 `hpx / 单行高` 反推——含 `\n` 的文本单行度量本身就是多行高 ⇒ 比值恒 ≈1 ⇒ 行数误判 1
+                //   ⇒ 盒高只算一行 ⇒ 第二行溢出）。lineHeight 声明时盒高 = 行数 × 行高。
+                int lines = 0;
+                measureTextWrappedTypoPx(tx, fs * density, boxWpx, &wpx, &hpx, lsDesign * density, wbM, fw, ff, &lines);
+                if (lines < 1) lines = 1;
+                const double perLine = (hpx > 0) ? (hpx / lines) : 0;
+                // ★★line-clamp 项：测量封顶——行数 = min(自然行数, clamp)（与绘制 maxLines 同源）
+                const int naturalLines = lines;
+                if (clampLines > 0 && lines > clampLines) lines = clampLines;
+                if (lhDesign > 0) {
+                    hpx = lines * lhDesign * density;
+                } else if (clampLines > 0 && naturalLines > clampLines && perLine > 0) {
+                    hpx = lines * perLine;   // 无行高 + clamp ⇒ 按实测每行高封顶
                 }
+                // else：保留折行实测高（含 \n 的多行）
             } else {
-                measureTextTypoPx(tx, fs * density, &wpx, &hpx, lsDesign * density, fw, ff);
-                if (lhDesign > 0) hpx = lhDesign * density;
+                // ★pre/nowrap：`\n` 仍成立（pre）或忽略（nowrap）——按**实测行数**算盒高（否则 pre 的第二行溢出）
+                int lines = 0;
+                measureTextTypoPx(tx, fs * density, &wpx, &hpx, lsDesign * density, fw, ff, &lines);
+                if (lines < 1) lines = 1;
+                if (lhDesign > 0) hpx = lines * lhDesign * density;
             }
             double fH = 0;
             { auto fit = firstHpx.find((int)id); if (fit != firstHpx.end()) fH = fit->second; }
