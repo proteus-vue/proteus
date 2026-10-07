@@ -2090,3 +2090,11 @@
 **③ 判据**：iOS `swiftc -typecheck` 绿 + Android `check:android-host-compile` 绿 + 鸿蒙 `build-host-app --css` 真编译 C++ 成功（HAP 签出）。
 **④ 诚实边界**：仅为 **`top` 吸顶**；`left` 阈值、以及「吸附到底后随父盒下沿离开」的**边界钳制**未做（CSS sticky 的完整语义有一块「滚动离开 containing block 即解除吸附」——本轮未做）。真机截图待批 A 验收页齐后统一采。
 **⑤ 批 A 剩余**：**z-index 数值→语义层映射**（用户选定）——★**须先厘清两套 layer 体系**：① **挂载层**（`global/page/overlay`，`mount-layers.ts` + `layerContainers`，**已接渲染**）vs ② **层级原语**（`content/navigation/mask/popout`，`layer="popout"` 属性 + `LAYER_MAPPING`，目前**仅编译期校验 LY 规则、未见发射到渲染产物**）——z-index→语义层需先确认/接线后者到输出（独立子课题）。+ 验收页（position 页加 fixed/sticky 案例）+ 四端真机 + 探针 + 子代理。
+656. **★★★超应用 CSS 扩展 · 批 A⑤：滚动锚定验收页 + Web 滚动基准 + Android 真机证据（fixed 钉住 / sticky 吸顶）+ 顺修 iOS superapp 无法滚动**：
+**① 缺口**：fixed/sticky 的语义**只在滚动时可见**（页顶时与静态无异）——现有 position.vue 假设"装进视口"，无法体现。
+**② 交付**：新验收页 `css-conformance/pages/position-scroll.vue`（fixed 徽标 + sticky 吸顶条 + 撑高内容；sticky 走 block 级 `proteus-allow-profile` 豁免——MP/Skyline 引擎锁死）；`collect-web` 加**滚动后截图** `<page>.scroll.png`；iOS superapp 加 `--screen=`/`--scroll=` 注入（对齐 Android `--es screen/--es scroll`）+ run-selfdraw 透传。
+**③ Android 真机证据**（`results/android/position-scroll{,.scroll}.png`，`d67e31a3`）：**fixed 徽标页顶与滚动 300px 后同一屏幕位置（钉住）**· **sticky 条滚动后吸附屏幕顶部**（y≈0）——`scrollY=300` logcat 佐证。
+**④ ★顺修（真能力缺口）**：`SelfDrawView` 的真 UIPanGestureRecognizer 唯一出口 `onScrollDrag` **只接在 proteus-host-controller / selfdraw-app，superapp 场景未接线** ⇒ iOS superapp 真触摸拖拽无反应（**长页无法滚动**）+ `driveScrollDrag` 空转（offset 恒 0）。镜像同款接线修之；`--scroll` 注入传正 dy（`scrollDragBy` 约定正=内容上移）；真机注入滚动 offset=169（钳制生效）。
+**⑤ 诚实边界（未采到）**：iOS/鸿蒙**滚动锚定截图**——iOS 空跑起的是 superapp bundle（有"消息"页）而非 css-conformance（`--screen=position-scroll` 无处可去）；鸿蒙无滚动注入参数。⇒ fixed/sticky 的 iOS/鸿蒙**实现**已编译验证（swiftc / HAP），**仅缺滚动像素证据**。
+**⑥ 判据汇总**：iOS swiftc -typecheck 绿 + Android check:android-host-compile 绿 + 鸿蒙 build-host-app --css 绿 + Web 基准（页顶 vs 滚动后）正确。
+**⑦ 教训**：**装置也是"被测对象"**——iOS superapp 的滚动出口未接线这件事，直到做"滚动锚定证据"才暴露；`--screen` 注入在"跑的不是目标 bundle"时会静默导航失败（截到别的页）——采图前应先**核对 rendered_page 与预期一致**。
