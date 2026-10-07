@@ -2072,3 +2072,15 @@
 **③ 判据**：iOS `swiftc -typecheck` 绿 + `check:ios-style-keys` 绿（透传 61）+ **真机 superapp 全屏渲染正常**（fixed 底栏在底部、内容/卡片零回归）。
 **④ 诚实边界**：frame 用内核给的**绝对 rect**（= 视口坐标系下的内容坐标，offset=0 即屏幕坐标）；**命中测试**仍按内核内容坐标映射 ⇒ fixed 元素在**滚动后**的 tap 映射会偏 `contentOffset`（具名，待批 A 内补命中补偿）。**Android/鸿蒙（画布平移路径）的 fixed + sticky（全端）+ z-index→语义层 为批 A 后续步**（提交间存在瞬时的跨端不一致窗口——非"跳过端"，是同批分步）。
 **⑤ 教训**：**「全局内容变换」式滚动**（iOS sublayerTransform / Android/鸿蒙画布平移）下，`fixed` 必须把该变换**抵消掉**（层脱离内容变换）——这类"滚动实现模型"决定了 fixed/sticky 的落点（对比 Web：浏览器原生区分）。
+653. **★★★超应用 CSS 扩展 · 批 A②(2/3)：Android 宿主 `position:fixed` 反向补偿内容滚动**（承 #651/#652）：
+**① 缺口**：Android 内容滚动 = `onDraw` 里 `canvas.translate(-scrollX,-scrollY)` **全局平移**（与 iOS `sublayerTransform` 同模型）⇒ fixed 节点须抵消。
+**② 交付**：`ProteusHostView` 加 `fixedNodes` 集 + `setFixedNodes`；`drawCmds` 对 fixed 节点 `canvas.translate(+scrollX,+scrollY)` 抵消（净位移 0 ⇒ 钉在视口），并纳入 save/restore 条件；**有 fixed 时跳过静态显示列表回放**（回放是静态录制、播不了随滚动补偿）。`VaporRenderHost` 从 spec 收集 `position:fixed` 节点 id → `view.setFixedNodes`。
+**③ 判据**：`check:android-host-compile` 通过（javac + android.jar，零设备）。
+**④ 诚实边界**：Android 真机截图待批 A 验收页齐后统一采（fixed 仅在**滚动**时可见差异）。
+
+654. **★★★超应用 CSS 扩展 · 批 A②(3/3)：鸿蒙宿主 `position:fixed` 补偿内容滚动 —— fixed 全三端补齐**（承 #652/#653）：
+**① 缺口**：鸿蒙扁平建树（每节点绝对 `SetPosition` 挂 `g_rootNode`）+ 滚动 = 平移 `g_rootNode`（`-y`）⇒ fixed 节点须把自身 y 加回。
+**② 交付**：`proteus_render.cpp` 加 `g_fixedNodes` 登记表 `{baseX,baseY,node}`（建树时按 spec `position:fixed` 登记、`ClearRoot` 清）；`scrollRoot` 时对 fixed 节点 `SetPosition(fnode, baseX, baseY + y*density)`（净位移 0）。`#include <array>`。
+**③ 判据**：`build-host-app.sh --css` 成功（hvigor/CMake **真编译 C++**，HAP 签出）。
+**④ 意义**：三端（iOS/Android/鸿蒙）fixed 补偿**同批补齐**（iOS 层脱离内容变换 / Android·鸿蒙画布·根翻译反向补偿）——**无跨端一致性窗口**（对比：批 A①→②(1/3) 之间曾有意保留的过渡态）。★**模型一致**：三端滚动都是「全局平移内容」⇒ fixed 一律「抵消该平移」，实现各异（层挂载点 / canvas translate / RenderNode position）而语义同一。
+**⑤ 批 A 剩余**：**sticky（宿主吸附，全端）** + **z-index 数值→语义层映射**（用户选定；编译期折 `layer`，需复核 LY001「禁止裸 z-index」的既有立场）+ 验收页 + 四端真机。
