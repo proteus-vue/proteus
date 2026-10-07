@@ -273,17 +273,35 @@ export const GRADIENT_CONTRACT_KEYS = [
  * 线性渐变的**端点**（单位空间）——两端宿主按同一式换算（本函数是**契约的钉子**：
  * 测试钉住数值；Swift/Kotlin 各自实现同式，门禁保证键名覆盖）。
  *
+ * 【★★★ 渐变线长度 = CSS 规范式（2026-10-08 修 · 用户抓出「案例 C 与 Web 仍有差异」）】
+ *   此前用 `hypot(W·sinθ, H·cosθ)`（中心 ± 半程**单位方向**向量），该式**只在 0/90/180/270° 与 CSS 一致**：
+ *   对角角度下渐变线**偏短** ⇒ 色带偏粗（45° 正方砖：本式 16px vs CSS 22.63px ⇒ 实色占比 0.42 vs 0.25）。
+ *   CSS 规定渐变线长度 = `|W·sinθ| + |H·cosθ|`（从**起始角**到**结束角**的投影长度）——
+ *   45° 正方时即**对角线**（corner-to-corner），与浏览器一致。
+ *
+ * @param angleDeg CSS 角度（0=向上，90=向右）
+ * @param width 盒宽（单位空间换算用；缺省 1 = 正方）
+ * @param height 盒高（缺省 1 = 正方）
  * @returns 起点/终点（单位空间；0° = 从下到上）
  */
-export function linearGradientEndpoints(angleDeg: number): { x0: number; y0: number; x1: number; y1: number } {
+export function linearGradientEndpoints(
+  angleDeg: number,
+  width = 1,
+  height = 1,
+): { x0: number; y0: number; x1: number; y1: number } {
   const rad = (angleDeg * Math.PI) / 180
-  const dx = Math.sin(rad)
-  const dy = -Math.cos(rad)
+  const s = Math.sin(rad)
+  const c = Math.cos(rad)
+  const w = width > 0 ? width : 1
+  const h = height > 0 ? height : 1
+  // CSS 渐变线长度（= 方向向量在盒上的投影跨度）
+  const L = Math.abs(w * s) + Math.abs(h * c)
+  // 单位空间端点：中心 ± (L/2) 除以对应轴尺寸（ux = sinθ, uy = -cosθ）
   return {
-    x0: 0.5 - dx / 2,
-    y0: 0.5 - dy / 2,
-    x1: 0.5 + dx / 2,
-    y1: 0.5 + dy / 2,
+    x0: 0.5 - (L / (2 * w)) * s,
+    y0: 0.5 + (L / (2 * h)) * c,
+    x1: 0.5 + (L / (2 * w)) * s,
+    y1: 0.5 - (L / (2 * h)) * c,
   }
 }
 

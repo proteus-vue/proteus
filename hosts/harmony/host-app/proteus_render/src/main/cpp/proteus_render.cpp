@@ -383,10 +383,16 @@ static void gradEndpoints(double angleDeg, double w, double h, float* x0, float*
     //   （x 分量乘盒宽、y 分量乘盒高；CSS 角约定 0=向上 90=向右）。
     //   ★旧式 `len=(|sin|*h+|cos|*w)/2` 在**非正方盒**上算错（如 2:1 盒的 90° 渐变只跨 h 不跨 w ⇒
     //     两侧被 CLAMP 成纯色——本页 D/E 案例真机抓出）。改为与 Android `LinearGradient` 端点逐式一致。
+    // ★★★渐变线长度 = CSS 规范式（2026-10-08 修 · 用户抓出「案例 C 与 Web 仍有差异」）：
+    //   **L = |w·sinθ| + |h·cosθ|**（起始角→结束角的投影跨度）；旧式 `hypot(w·sinθ,h·cosθ)` 只在
+    //   0/90/180/270 与 CSS 一致——对角角度下渐变线偏短 ⇒ 色带偏粗（45° 正方砖实色占比 0.42 vs CSS 0.25）。
+    //   ★与 TS `linearGradientEndpoints` / iOS `linearEndpoints` / Android `linearGradientEndpoints` 同式。
+    if (!(w > 0)) w = 1; if (!(h > 0)) h = 1;
     const double rad = angleDeg * 3.14159265358979323846 / 180.0;
-    const double dx = std::sin(rad), dy = -std::cos(rad);
-    *x0 = (float)((0.5 - dx / 2.0) * w); *y0 = (float)((0.5 - dy / 2.0) * h);
-    *x1 = (float)((0.5 + dx / 2.0) * w); *y1 = (float)((0.5 + dy / 2.0) * h);
+    const double s = std::sin(rad), uy = -std::cos(rad);
+    const double L = std::fabs(w * s) + std::fabs(h * uy);
+    *x0 = (float)(0.5 * w - L * s / 2.0); *y0 = (float)(0.5 * h - L * uy / 2.0);
+    *x1 = (float)(0.5 * w + L * s / 2.0); *y1 = (float)(0.5 * h + L * uy / 2.0);
 }
 
 /** ★★★dotted/dashed 沿**闭合周界均分**（2026-10-08 修「角上双点/接缝重影」）：dash 周期取**周长/N**

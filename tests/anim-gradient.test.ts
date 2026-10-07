@@ -80,10 +80,25 @@ describe('渐变填充（v1）· 校验器', () => {
     const left = linearGradientEndpoints(270)
     expect(close(left.x0, 1) && close(left.x1, 0)).toBe(true)
 
-    // 45°：向右上（dx=+√2/2, dy=-√2/2）
+    // ★★★ 渐变线长度 = CSS 规范式（2026-10-08 修）：对角角度下必须**角到角**——
+    //   旧式 `hypot(W·sin,H·cos)` 只在 0/90/180/270 与 CSS 一致，45° 会偏短 ⇒ 色带偏粗（用户抓出案例 C 差异）。
+    //   45° 正方：渐变线 = **对角线** ⇒ 端点 (0,1)→(1,0)（corner-to-corner）。
     const diag = linearGradientEndpoints(45)
-    expect(close(diag.x0, 0.5 - Math.SQRT2 / 4)).toBe(true)
-    expect(close(diag.y0, 0.5 + Math.SQRT2 / 4)).toBe(true)
+    expect(close(diag.x0, 0)).toBe(true)
+    expect(close(diag.y0, 1)).toBe(true)
+    expect(close(diag.x1, 1)).toBe(true)
+    expect(close(diag.y1, 0)).toBe(true)
+
+    // 非正方盒（2:1）90°：渐变线应**跨满盒宽**（x 从 0 到 1，y 居中）——旧式同样正确，作回归钉子
+    const wide = linearGradientEndpoints(90, 2, 1)
+    expect(close(wide.x0, 0) && close(wide.x1, 1)).toBe(true)
+    expect(close(wide.y0, 0.5) && close(wide.y1, 0.5)).toBe(true)
+
+    // 对角 + 非正方（2:1）45°：CSS L = |2·√2/2| + |1·√2/2| = 3√2/2；单位端点按轴归一
+    const wideDiag = linearGradientEndpoints(45, 2, 1)
+    const L45 = Math.abs(2 * Math.SQRT2 / 2) + Math.abs(1 * Math.SQRT2 / 2)
+    expect(close(wideDiag.x0, 0.5 - (L45 / 4) * (Math.SQRT2 / 2))).toBe(true)
+    expect(close(wideDiag.y0, 0.5 + (L45 / 2) * (Math.SQRT2 / 2))).toBe(true)
   })
 
   it('★径向缺省落定（两端宿主读到的永远是落定后的值）', () => {
