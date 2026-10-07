@@ -17,10 +17,31 @@
 //     3) DevEco 自动注册本机设备 UDID 并生成 p12/cer/p7b，路径写入 `build-profile.json5`
 //   完成后本目录的 `build-profile.json5` 会出现 signingConfigs 内容（本地状态，勿提交）。
 //   ★只跑 unsigned 构建链（不装机）时无需任何配置——`signingConfigs: []` 即可产出 unsigned hap。
+//
+// 【★★★两个产品：default（superapp）+ cssconf（CSS 验收独立应用）——2026-10-08】
+//   鸿蒙**一个 bundleName 只能有一个桌面图标**（launcher 只取单个入口 UIAbility 的 icon/label
+//   ——SDK module.json schema + 官方"配置应用图标和名称"优先级规则），要第二个桌面图标（"CSS 验收"）
+//   = **第二个 bundleName**。机制 = **产品维度**：
+//      · default  → dev.proteus.host    → 桌标取 $string:app_name（应用：superapp）
+//      · cssconf  → dev.proteus.cssconf → 桌标取 $string:app_name_cssconf（"CSS 验收"）
+//   桌标 label 走**应用级**（app.json5 的 label ← 产品 label）：能力 UIAbility 不设 label 时回退到应用级。
+//   用法：`bash hosts/harmony/build-host-app.sh --css`（默认应用工程 css-conformance）。
+//   ★cssconf 需要**自己的一份签名 profile**（bound 到 dev.proteus.cssconf——签名不能用别人的 bundle）：
+//     先跑一次 `--css`（产出 unsigned hap，让 DevEco 能读到 cssconf 产品）→ DevEco 里"自动签名"
+//     生成 bound 到 dev.proteus.cssconf 的签名配置，加进本文件 signingConfigs（命名 cssconf）
+//     并在 cssconf 产品加 `"signingConfig": "cssconf"` → 再跑 `--css` 即得 signed hap。
 {
   "app": {
     "signingConfigs": [],
     "products": [
+      {
+        "name": "cssconf",
+        "bundleName": "dev.proteus.cssconf",
+        "label": "$string:app_name_cssconf",
+        "compatibleSdkVersion": "5.0.5(17)",
+        "targetSdkVersion": "5.0.5(17)",
+        "runtimeOS": "HarmonyOS"
+      },
       {
         "name": "default",
         "signingConfig": "default",
@@ -46,7 +67,8 @@
         {
           "name": "default",
           "applyToProducts": [
-            "default"
+            "default",
+            "cssconf"
           ]
         }
       ]
@@ -58,7 +80,8 @@
         {
           "name": "default",
           "applyToProducts": [
-            "default"
+            "default",
+            "cssconf"
           ]
         }
       ]
