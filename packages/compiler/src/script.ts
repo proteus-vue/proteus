@@ -4389,6 +4389,22 @@ ${indentBody([unsubLine, appConfigUnsubLine, semGridOffLine, storeDisposeLine, r
       trace?.add('script/lifecycle-callback', { before: `${hook}(…)`, after: `Page ${hook} 钩子（回调体提取 + 派发）` })
     }
   }
+  // ★★★$nav 平台级导航全局（MP 侧 · 2026-10-08 · 决策 #616）：模板 `@tap="$nav('x')"` 编译为
+  //   `bind:tap="proteusInline$navX"`，其方法体 `this.$nav('x')` ⇒ 需 `$nav` 是**页方法**。
+  //   委托给全局 `$nav`（`createRouter` 创建时登记：name/path → router.push）；未加载则**静默掠过**
+  //   （产物可独立运行）。与 Web（`globalProperties.$nav`）/ App（编译器编成 nav 动作）**三端同一写法**。
+  //   用户已自带 `$nav` ⇒ 不覆盖（methodNames 已含）。
+  if (!extra.isComponent && !appShell && !disabled.has('page/nav-global') && !methodNames.has('$nav')) {
+    methodNames.add('$nav')
+    methodLines.push(
+      '  $nav(target) {' +
+        ' var g = (typeof globalThis !== "undefined") ? globalThis : null;' +
+        ' if (g && typeof g.$nav === "function") { try { g.$nav(target); return } catch (e) {} }' +
+        // 回退：小程序原生导航（约定 = 路由 path 为 pages/<名>；部分应用在 app 级登记 globalThis.$nav 走上面分支）
+        ' if (typeof wx !== "undefined" && wx.navigateTo) { try { wx.navigateTo({ url: "/pages/" + target }) } catch (e) {} }' +
+        ' },',
+    )
+  }
   if (!extra.isComponent && !appShell && !disabled.has('page/lifecycle-bus')) {
     // 派发辅助（Page 方法——不污染全局；运行时若未加载则静默掠过，产物可独立运行）
     methodNames.add('proteusPageEmit')
