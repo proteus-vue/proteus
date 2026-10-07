@@ -18,6 +18,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { resolveNativeConfigFromProject, applyNativeConfigFromProject } from './native-config'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 /** CLI 包根（src/ 或 dist/ 的上一级）——模板随包发布，位于 <pkgRoot>/templates-host */
@@ -265,12 +266,22 @@ export function deriveBundleName(appName: string, tld = 'com'): string {
 }
 
 /** CLI 运行器：解析 → 生成 → 打印报告；返回退出码（0 成功） */
-export function runCreateHost(args: CreateHostArgs): number {
+export async function runCreateHost(args: CreateHostArgs): Promise<number> {
   const name = path.basename(path.resolve(args.targetDir)) || 'proteus-host'
-  const appName = args.appName ?? name
+  // ★★★决策 #635：若给了 --project，先解析项目的 `proteus.config` 的 `native` 段——
+  //   应用名/包名优先取配置（CLI 显式 --name/--bundle 仍覆盖）；生成后再 applyNativeConfig 补齐
+  //   版本/SDK/方向/权限等模板未携带的字段。
+  const native = args.projectRoot ? await resolveNativeConfigFromProject(args.projectRoot) : undefined
+  const appName = args.appName ?? native?.app.name ?? name
   // ★android 默认包名 = runtime AAR 的包（dev.proteus.layoutcore）⇒ 壳与 runtime **同包**
-  //   （零可见性改动；见决策 #566）。用户显式 --bundle 可改（用公开 API 时可行，但失去同包访问）。
-  const bundleName = args.bundleName ?? (args.platform === 'android' ? 'dev.proteus.layoutcore' : deriveBundleName(appName))
+  //   （零可见性改动；见决策 #566）。用户显式 --bundle 或 native.android.applicationId 可改。
+  const platformDefaultBundle =
+    args.platform === 'android'
+      ? native?.android.applicationId ?? 'dev.proteus.layoutcore'
+      : args.platform === 'ios'
+        ? native?.ios.bundleId ?? deriveBundleName(appName)
+        : native?.harmony.bundleName ?? deriveBundleName(appName)
+  const bundleName = args.bundleName ?? platformDefaultBundle
   let r: CreateHostResult
   try {
     r = createHost({ platform: args.platform, targetDir: args.targetDir, appName, bundleName, projectRoot: args.projectRoot })
@@ -278,10 +289,16 @@ export function runCreateHost(args: CreateHostArgs): number {
     console.error(`[proteus create host] ${(e as Error).message}`)
     return 1
   }
+  // ★决策 #635：把 native 段其余字段（version/sdk/orientation/permissions/…）渲染进原生工程文件
+  if (args.projectRoot && native) {
+    const rep = await applyNativeConfigFromProject(args.targetDir, args.platform, args.projectRoot)
+    for (const c of rep.changes) console.log(`  · native: ${c.file} ${c.field} → ${c.to}`)
+    for (const s of rep.skipped) console.log(`  · native(跳过): ${s}`)
+  }
   console.log(`[proteus create host] 已生成最小宿主工程：${path.resolve(args.targetDir)}`)
   console.log(`  平台     : ${r.platform}`)
-  console.log(`  应用名   : ${appName}`)
-  console.log(`  包名     : ${bundleName}`)
+  console.log(`  应用名   : ${appName}${native && !args.appName ? '（来自 proteus.config native）' : ''}`)
+  console.log(`  包名     : ${bundleName}${native && !args.bundleName ? '（来自 proteus.config native）' : ''}`)
   console.log(`  文件     : ${r.files.length} 个（模板 + runtime）`)
   for (const n of r.notes) console.log(`  · ${n}`)
   console.log('')

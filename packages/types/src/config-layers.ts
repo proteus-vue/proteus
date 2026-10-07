@@ -31,6 +31,7 @@ export const CONFIG_FIELD_LAYERS: Record<string, ConfigLayer> = {
   page: 'compiler', // ★Skyline 白屏兜底：page.autoScrollContainer（页面滚动容器）/ page.webviewPages（页面级 renderer 降级）
   audit: 'build', // ★#447 D-2 dogfooding 门禁（构建期质量门禁——audit-d2 消费，紧邻 budget 同层）
   gates: 'build', // ★#456 统一门禁开关（gates.disabled——check/audit all 聚合门禁配置）
+  native: 'build', // ★#635 原生项目配置（构建期——CLI create host / build --package 渲染进原生工程文件）
 }
 
 /**

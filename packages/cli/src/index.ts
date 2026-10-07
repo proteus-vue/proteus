@@ -14,6 +14,7 @@ import { parseConformanceArgs, runConformance, runConformanceDemo } from './conf
 import { parseHostArgs, runHostPush } from './host'
 import { parseCreateHostArgs, runCreateHost } from './host-scaffold'
 import { packageHarmonyHost, packageIosHost, packageAndroidHost } from './host-package'
+import { applyNativeConfigFromProject } from './native-config'
 import { scanRepoDirectory, formatRepoReport } from './repo-conformance'
 import { explainTarget } from './explain'
 import { listRules } from './rules'
@@ -75,6 +76,13 @@ async function main(): Promise<void> {
                 console.error('[proteus] --package 需要宿主工程目录：--host-dir <dir>（或 PROTEUS_HOST_DIR）')
                 process.exitCode = 1
               } else {
+                // ★★★决策 #635：打包前把项目 `proteus.config` 的 `native` 段渲染进宿主原生文件
+                //   （包名/版本/SDK/方向/权限/图标）——"项目 → 构建链"的传递在此落地。
+                const platform = args.target === 'all' ? 'harmony' : args.target
+                const nrep = await applyNativeConfigFromProject(hostDir, platform, process.cwd())
+                for (const c of nrep.changes) console.log(`[proteus] native: ${c.file} ${c.field} → ${c.to}`)
+                for (const s of nrep.skipped) console.log(`[proteus] native(跳过): ${s}`)
+                if (!nrep.ok) console.error('[proteus] ⚠ native 配置应用失败（继续打包）')
                 const pk = args.target === 'ios'
                   ? packageIosHost({ hostDir, projectRoot: process.cwd() })
                   : args.target === 'android'
@@ -600,7 +608,7 @@ async function main(): Promise<void> {
       // ★hosts 第二刀 Stage 2：proteus create host <platform> <dir> —— 生成独立可编译的最小宿主工程
       if (rest[0] === 'host') {
         try {
-          process.exitCode = runCreateHost(parseCreateHostArgs(rest.slice(1)))
+          process.exitCode = await runCreateHost(parseCreateHostArgs(rest.slice(1)))
         } catch (e) {
           console.error(`[proteus] ${e instanceof Error ? e.message : String(e)}`)
           process.exitCode = 1
@@ -616,7 +624,7 @@ async function main(): Promise<void> {
       //   devices/logs/serve 随 B4 transport 适配器落地
       try {
         if (rest[0] === 'create') {
-          process.exitCode = runCreateHost(parseCreateHostArgs(rest.slice(1)))
+          process.exitCode = await runCreateHost(parseCreateHostArgs(rest.slice(1)))
           break
         }
         const args = parseHostArgs(rest)

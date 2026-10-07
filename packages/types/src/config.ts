@@ -44,6 +44,100 @@ export interface GatesConfig {
   disabled?: string[]
 }
 
+/* ================= ★★★原生项目配置（`native` 段 · 决策 #635） =================
+ *
+ * 【它解决什么（用户 2026-10-08）】「app.config 没有完整的平台项目配置……无法把项目的这些
+ *   传递到构建链」。此前**原生项目身份**（包名/Bundle ID/版本/SDK/方向/权限/图标）**硬编码**
+ *   在各宿主工程文件里（AndroidManifest.xml / Info.plist / AppScope/app.json5 / module.json5），
+ *   项目侧只能手改宿主——`proteus build --target <端> --package` 也从不注入这些值。
+ *   ⇒ 在**构建期**配置面（`proteus.config`，按 G-35.1「proteus.config=构建期」）新增 `native` 段，
+ *     由 CLI **渲染进**宿主工程的原生项目文件，再走平台工具链打包。
+ *
+ * 【与 app.config 的边界（决策 #635）】`native` = **构建期**（CLI/工具链消费，写进原生工程文件）；
+ *   app.config 的 `app.name/version/buildNumber` = **运行时**（业务读取/上报）。二者可互为镜像，
+ *   但**不改职责边界**：需要进原生工程的，写这里；运行期展示的，写 app.config。缺省缺值时，
+ *   CLI 回退读取 `app.config.ts` 的 `app.*`（减少重复声明）。
+ */
+export interface NativeAppConfig {
+  /** 应用显示名（缺省回退 app.config 的 app.name） */
+  name?: string
+  /** 版本号（语义化；缺省回退 app.config 的 app.version） */
+  version?: string
+  /** 构建号（缺省回退 app.config 的 app.buildNumber） */
+  buildNumber?: string | number
+}
+
+/** Android 原生项目配置（→ AndroidManifest.xml） */
+export interface NativeAndroidConfig {
+  /** applicationId / package（缺省 = 宿主运行时同包 dev.proteus.layoutcore，保证同包访问） */
+  applicationId?: string
+  /** 桌面/应用名（android:label；缺省回退 native.app.name） */
+  label?: string
+  /** versionName（缺省回退 native.app.version） */
+  versionName?: string
+  /** versionCode（正整数；缺省回退 native.app.buildNumber） */
+  versionCode?: number
+  /** minSdkVersion（缺省 24） */
+  minSdk?: number
+  /** targetSdkVersion（缺省 34） */
+  targetSdk?: number
+  /** 屏幕方向（activity android:screenOrientation；缺省 unspecified） */
+  orientation?: 'portrait' | 'landscape' | 'unspecified'
+  /** 追加 <uses-permission android:name="..."/>（缺省空） */
+  permissions?: string[]
+  /** 应用图标资源名（android:icon；缺省不写） */
+  icon?: string
+}
+
+/** iOS 原生项目配置（→ Info.plist） */
+export interface NativeIosConfig {
+  /** CFBundleIdentifier（缺省 = 宿主默认 bundle id，见宿主工程 / proteus.host.json） */
+  bundleId?: string
+  /** CFBundleDisplayName（缺省回退 native.app.name） */
+  displayName?: string
+  /** CFBundleShortVersionString（缺省回退 native.app.version） */
+  version?: string
+  /** CFBundleVersion（缺省回退 native.app.buildNumber） */
+  buildNumber?: string
+  /** MinimumOSVersion（缺省 15.0） */
+  minimumOSVersion?: string
+  /** UIDeviceFamily（1=iPhone / 2=iPad；缺省 [1]） */
+  deviceFamily?: number[]
+  /** 支持的方向（缺省 [portrait]） */
+  orientations?: Array<'portrait' | 'portrait-upside-down' | 'landscape-left' | 'landscape-right'>
+}
+
+/** Harmony 原生项目配置（→ AppScope/app.json5 + entry/module.json5 + string.json） */
+export interface NativeHarmonyConfig {
+  /** bundleName（缺省 = 宿主默认，见宿主 app.json5） */
+  bundleName?: string
+  /** 应用名（$string:app_name 的值；缺省回退 native.app.name） */
+  label?: string
+  /** vendor（缺省 proteus） */
+  vendor?: string
+  /** versionName（缺省回退 native.app.version） */
+  versionName?: string
+  /** versionCode（正整数；缺省回退 native.app.buildNumber） */
+  versionCode?: number
+  /** compatibleSdkVersion（如 "5.0.5(17)"；缺省 5.0.5(17)） */
+  compatibleSdkVersion?: string
+  /** targetSdkVersion（缺省同 compatibleSdkVersion） */
+  targetSdkVersion?: string
+  /** deviceTypes（缺省 ["phone","tablet","2in1"]） */
+  deviceTypes?: string[]
+  /** 追加 requestPermissions（module.json5） */
+  permissions?: string[]
+}
+
+/** 原生项目配置（构建期——CLI 渲染进三端原生工程文件） */
+export interface NativeProjectConfig {
+  /** 三端共享的应用身份（name/version/buildNumber） */
+  app?: NativeAppConfig
+  android?: NativeAndroidConfig
+  ios?: NativeIosConfig
+  harmony?: NativeHarmonyConfig
+}
+
 export interface ProteusConfig {
   /** 目标平台 */
   platform: 'mp-weixin' | 'web'
@@ -158,4 +252,8 @@ export interface ProteusConfig {
   audit?: AuditConfig
   /** ★#456 统一门禁开关（gates.disabled：自选关闭门禁/聚合域——check/audit all/gate run 统一生效；缺省全部启用） */
   gates?: GatesConfig
+  /** ★★★原生项目配置（`native` 段 · 决策 #635）：包名/Bundle ID/版本/SDK/方向/权限/图标——
+   *   由 CLI（`create host` / `build --target <端> --package`）**渲染进**宿主工程的原生项目文件。
+   *   构建期消费（区别于 app.config 的运行期职责，G-35.1）；缺省值回退 app.config 的 app.*。 */
+  native?: NativeProjectConfig
 }

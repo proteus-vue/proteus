@@ -49,6 +49,14 @@ export type { HttpMethod, RequestConfig, RequestResponse, IRequestAdapter } from
 export type { PlatformAPI, StorageAPI, RouterAPI, UIAPI } from './platform-api'
 // ★运行时实现归 @proteus-vue/api（createApi + 三端 adapter）；本文件仅类型契约（规划 M9）
 export type { ProteusConfig } from './config'
+// ★#635 原生项目配置（构建期——CLI 渲染进三端原生工程文件）
+export type {
+  NativeProjectConfig,
+  NativeAppConfig,
+  NativeAndroidConfig,
+  NativeIosConfig,
+  NativeHarmonyConfig,
+} from './config'
 // ★#447 D-2 门禁规则配置（id/severity 单一来源——CLI config:validate + audit d2 同源消费）
 export { AUDIT_RULE_IDS, AUDIT_SEVERITIES } from './config'
 export type { AuditRuleId, AuditSeverity, AuditConfig } from './config'
