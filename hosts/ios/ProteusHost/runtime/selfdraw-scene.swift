@@ -3442,6 +3442,16 @@ final class SelfDrawView: UIView {
             let single = (text as NSString).size(withAttributes: attrs2).width
             if single > cbf.width + 0.5 { return cbf }
         }
+        // ★★★单行 + line-height 渲染**空白**修复（2026-10-08 · 用户抓出「iOS 文本样式页案例 A/B 空白」）：
+        //   【现象】iOS 上**短**单行文本声明 line-height 时整块空白（Android 正常）；**长**文本不空白。
+        //   【根因】**两套行高机制冲突**——① 本函数把 frame 缩到字形自然高 contentH（"半行距居中"，
+        //     批次 13）；② `textLayerString` 对 wrap 文本又设了段落样式 `minimum=maximumLineHeight=boxH`
+        //     （= CSS line-height）。当 frame(contentH) **小于**行盒高(boxH) ⇒ CATextLayer 把整行画到
+        //     bounds 外 ⇒ **空白**。短文本（宽 ≤ 盒宽）才走到②，长文本在上一段已 `return cbf`（故不空白）。
+        //   【修法】wrap 文本的行高**已由段落样式承担**（CoreText 在行盒内居中字形）⇒ frame 必须是
+        //     **完整内容盒**（高 = 布局给出的行盒高），**不再收缩**。非 wrap（nowrap/pre）无段落样式，
+        //     仍需本收缩做居中（保持原行为）。
+        if SelfDrawView.isWrapStyle(style) { return cbf }
         guard let lhTok = style["lineHeight"] as? String,
               let boxH = ProteusTextAdapter.lineHeightPx(lhTok, fontSize: (style["fontSize"] as? CGFloat) ?? 14),
               boxH > 0 else { return cbf }
