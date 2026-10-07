@@ -153,6 +153,23 @@ else
   echo "==> Rust 核静态库是最新（跳过重建）"
 fi
 
+# ── ★★★桥接 bundle 重建（★用户抓出「鸿蒙 CSS 验收还是旧 demo」的根因）──
+#   【为什么必须先重建】宿主的**运行期内容源是 bundle-superapp.js**（内含该项目编译期产出的屏内容，
+#   entry-superapp 里 `APP_SCREEN_CONTENT`/`APP_SCREEN_REGISTRY` 构建时内联）——`Superapp.ets`
+#   renderCurrent 走 `superappScreen(bundle,...)` 实例化**该 bundle 内嵌的屏**，失败才回退静态
+#   `app-screen-content.json`。而 gen-fixtures 只是**复制** `hosts/android/bridge/dist/bundle-superapp.js`
+#   ——若它还是**上一个项目**的内容（如 superapp），则 --css 应用虽换了 bundleName 与
+#   app-screen-content，**运行期仍渲染 superapp 的 index（= 旧版全局组件 demo）**。
+#   ⇒ 按 **PROTEUS_APP_PROJECT** 重建 bundle（build-batch 经 gen-app-screen-content 读该 env）。
+#   ★与 Android 的 `build-and-run.sh` 同一机制（那里也按 PROTEUS_APP_PROJECT 建 bundle）。
+echo "==> 桥接 bundle 重建（应用工程=${PROTEUS_APP_PROJECT:-superapp}）"
+if [ -f "$ROOT/packages/render-backend/dist/index.js" ]; then
+  PROTEUS_APP_PROJECT="${PROTEUS_APP_PROJECT:-superapp}" node "$ROOT/hosts/android/bridge/build-batch.mjs" 2>&1 | grep -E "bundle-superapp|bundle-app-stack|bundle-host-runtime|✗|错误" | sed 's/^/    /'
+  [ "${PIPESTATUS[0]}" = "0" ] || { echo "✗ bundle 重建失败——中止（否则运行期渲染旧项目内容）"; exit 2; }
+else
+  echo "  ⚠ 缺 packages/render-backend/dist——无法重建 bundle（先跑 node scripts/build-packages.mjs）"
+fi
+
 # ── 夹具再生成（★唯一事实源 → rawfile，可复现：SFC/订阅表一变，构建即刷新）──
 #   由 gen-fixtures.mjs 固化：stress-44（SFC 实例化）+ app-4050-tree（与 Android 同源复制）。
 #   ★PROTEUS_APP_PROJECT 由本脚本（--css）或环境决定 ⇒ app-screen-content/bundle 随之切换。
@@ -197,6 +214,9 @@ if [ "$PRODUCT" = "cssconf" ]; then
 fi
 
 echo "==> 构建（assembleHap · product=${PRODUCT}）"
+# ★生效的 bundleName 快照（app.json5 是事实源；--css 时已切为 cssconf，构建后会被还原）——
+#   供构建失败的定向提示使用（还原之后再读就晚了）。
+EFFECTIVE_BUNDLE="$(grep -o '"bundleName": *"[^"]*"' "$APPJSON" 2>/dev/null | head -1 | sed 's/.*"\([^"]*\)"$/\1/')"
 # ★★构建失败必须中止（本仓实测：hvigor 失败经 `| grep | tail` 管道**吞掉退出码** ⇒ 脚本照打
 #   "下一步"，让人误用**旧 hap** 验证——"验证了但验的是旧的"。取 PIPESTATUS[0]）。
 HV_OUT="$("$HVIGORW" assembleHap --mode module -p product="$PRODUCT" --no-daemon 2>&1)"
@@ -206,6 +226,17 @@ restore_appjson
 if [ "$HV_RC" != "0" ]; then
   # ★变量必须用 ${} 包裹：紧跟全角 `）`（U+FF09）时 bash 会把它并入变量名 ⇒ unbound variable
   echo "✗ 构建失败（hvigor 退出码 ${HV_RC}）——修正后再构建（勿用旧 hap 验证）"
+  # ★★★签名 bundleName 不匹配的**定向提示**（2026-10-08）：签名 profile 绑定**单个 bundleName**——
+  #   本机 profile 是哪个 bundle，就只能签哪个产品。当前生效的 bundleName 见 AppScope/app.json5。
+  if printf '%s' "$HV_OUT" | grep -q "00303074"; then
+    cur="$EFFECTIVE_BUNDLE"
+    echo "  ⚠ 签名 bundleName 不匹配：本机签名 profile 只绑定**一个** bundleName，"
+    echo "     而当前 AppScope/app.json5 的 bundleName = 「${cur}」。"
+    echo "     ⇒ 需要一份绑定到「${cur}」的签名 profile（DevEco → Project Structure → Signing Configs →"
+    echo "        Automatically generate signature），并把本地 build-profile.json5 的对应产品"
+    echo "        （default / cssconf）signingConfig 指向它。"
+    echo "     （本机 profile 现状：~/.ohos/config/*.p7b 的 bundle-name 决定可签哪个 bundle）"
+  fi
   exit 1
 fi
 
