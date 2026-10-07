@@ -1874,3 +1874,11 @@
 **④ ★构建依赖漏触发（本轮实测白跑一轮）**：`hosts/android/build-and-run.sh` 只在**入口 TS** 更新时重建 superapp bundle；`render-backend`/`slot-runtime` 的 **dist** 改了但入口没动 ⇒ **旧 bundle 冒充新代码**（改完在设备上测的还是旧行为）。补：bundle 依赖 `packages/{render-backend,slot-runtime}/dist/index.js` 更新也触发重建（`-nt` 判断）。
 **⑤ 验证**：四端真机案例 C 均**一行**（= Web）；`pre-wrap`（`text.vue` 案例 C）仍**保留换行**（无回归）；新增 `tests/whitespace-normalize.test.ts`（5 用例锁 5 种 white-space 语义）+ 接 `test:coupled`（新增 `packages/slot-runtime/src/instantiate.ts` 精化映射）。
 **⑥ ★教训**：a) **「哪个对」先答基准**——`white-space: normal` 折叠 `\n` 是 CSS 规范，Web 为准；b) **「同一语义多处写口」要收成一个出口**（`setNormText`）——只补 emit 会被订阅表回填覆盖（静默还原）；c) **构建产物依赖要显式登记**——"入口没变" ≠ "产物没变"（改依赖包的 dist 也要重建 bundle）；d) **鸿蒙行数不能反推**——有 `\n` 时单行度量已是多行高，比值法失真；用 `GetLineCount`。
+
+628. **★★「安卓修复对桌面 CSS 验收无效」= 装了**另一个打包壳**，非宿主耦合（★用户 2026-10-08「安卓你修复的为什么对我桌面的 CSS 验收无效？难道这个修复调整是绑定了宿主？宿主关注点分离不是白做了吗？」）**：
+**① 现象与取证**：桌面「CSS 验收」图标 = **独立打包应用 `dev.proteus.cssconf`**（`hosts/android/build-and-run.sh --css` 生成，label「CSS 验收」，launcher 复用 `dev.proteus.layoutcore.SuperappActivity` 的 FQN）。而本轮我只重建/安装了**另一个包 `dev.proteus.layoutcore`**（通用宿主）⇒ 用户设备上的 cssconf APK 停留在 **11:04（修复前）**，故"看不到修复"。
+**② ★修复**不**在宿主里（宿主分离没有白做）**：改动落在**共享包** `packages/slot-runtime/src/instantiate.ts`（App 运行期，**所有** App 包共用）+ `platform/harmony/proteus-platform`（平台层）+ `hosts/harmony/.../proteus_host.cpp`。
+ - **证据（本次实测）**：`proteus-cssconf.apk` 与 `proteus-layoutcore.apk` 的 `assets/bundle-superapp.js` **md5 完全相同**（`2ee2350f…`）、`classes.dex` 与三个 `.so`（quickjs/jni/wasm）**逐一致** ⇒ 二者只是**同一份共享代码的两个打包壳**（换包名 + label），各自重建即各带同一修复。重建 cssconf 后案例 C 恢复**一行**（= Web）。
+ - **正解**：这是**打包**（每个分发 App 的 APK 要把当前共享 bundle 打进 assets），不是**宿主耦合**。与"改完 JS 要重新 `vite build` 出网页"同性质——改了共享代码，**每个要分发的壳都需重建**；但**逻辑只有一份**（不在各宿主重复实现）。
+**③ ★工作流修复（避免再装错）**：`build-and-run.sh` 的 `--css`（cssconf）此前**安装/启动目标落到 else 分支**（layoutcore）⇒ 装错包、启错包。补 `elif "$CSSCONF"` → `PKG=dev.proteus.cssconf` · `ACTIVITY=…SuperappActivity`（`bash -n` 通过）。★并登记：**做 css-conformance 验证必须构 `--css`（cssconf 独立应用）**，不是默认 `layoutcore`。
+**④ ★教训**：a) **"改了共享代码，设备上没变"先查装的是哪个壳**——本仓 Android 有 **7 个分发包**（layoutcore / cssconf / lights / flip / ink / inkscroll / demo），共享同一 bundle+内核+Activity，**各自需重建**；b) **判断"是否宿主耦合"看改动落在哪一层**（`packages/*` 共享 vs `hosts/<端>/` 私有）——本次落 `packages/slot-runtime`（共享）；c) **构建脚本的"目标包"映射要与实际分发形态对齐**（`--css` 必须装/启 cssconf）——漏映射 ⇒ 装了也看不出。
