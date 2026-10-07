@@ -20,6 +20,7 @@
 #include <sstream>
 #include <cstdlib>
 #include <vector>
+#include <map>
 #include <cstdint>
 #include <cmath>
 #include <cstdio>
@@ -898,6 +899,19 @@ static napi_value Attach(napi_env env, napi_callback_info info) {
  *
  * @return 建出的节点数（-1 = 前置不满足/解析失败）
  */
+// ★★★2D 仿射（CSS 父 transform 级联用，2026-10-08 · effects D 案「鸿蒙文字不随盒旋转」）：
+//   宿主扁平建树（每节点直接挂 g_rootNode、绝对 SetPosition）⇒ ArkUI 不会把父节点的变换**级联**到子节点；
+//   而 CSS `transform` 作用于整棵子树 ⇒ 需把**祖先链的变换**显式合成进子节点自身的矩阵。x' = a·x + c·y + tx。
+struct Aff { double a, b, c, d, tx, ty; };
+static inline Aff affMul(const Aff& M1, const Aff& M2) {   // 先 M2 后 M1
+    return Aff{ M1.a * M2.a + M1.c * M2.b, M1.b * M2.a + M1.d * M2.b,
+                M1.a * M2.c + M1.c * M2.d, M1.b * M2.c + M1.d * M2.d,
+                M1.a * M2.tx + M1.c * M2.ty + M1.tx, M1.b * M2.tx + M1.d * M2.ty + M1.ty };
+}
+static inline void affApply(const Aff& M, double x, double y, double* ox, double* oy) {
+    *ox = M.a * x + M.c * y + M.tx; *oy = M.b * x + M.d * y + M.ty;
+}
+
 static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
     if (jsonCStr == nullptr || g_content == nullptr || g_rootNode == nullptr) return -1;
     std::string json = jsonCStr;
@@ -931,6 +945,28 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
         }
     }
 
+    // ★★★预扫描（CSS 父 transform 级联，2026-10-08）：收集每个节点的**自身绝对仿射**与父关系
+    //   —— 供 build 循环把祖先链变换合成进子节点矩阵（宿主扁平建树不级联）。
+    std::map<int, Aff> ownAbs; std::map<int, int> parentOf; std::map<int, bool> hasTf;
+    for (const auto& it : items) {
+        double id = -1, pid = -1, x = 0, y = 0, w = 0, h = 0;
+        if (!jsonNumber(it, "id", &id)) continue;
+        jsonNumber(it, "parentId", &pid);
+        if (!jsonNumber(it, "x", &x) || !jsonNumber(it, "w", &w)) continue;
+        jsonNumber(it, "y", &y); jsonNumber(it, "h", &h);
+        double tx = 0, ty = 0, sc = 1, rot = 0, toX = 0.5, toY = 0.5;
+        jsonNumber(it, "tx", &tx); jsonNumber(it, "ty", &ty);
+        jsonNumber(it, "scale", &sc); jsonNumber(it, "rotate", &rot);
+        jsonNumber(it, "toX", &toX); jsonNumber(it, "toY", &toY);
+        bool tf = (tx != 0 || ty != 0 || sc != 1 || rot != 0);
+        hasTf[(int)id] = tf;
+        parentOf[(int)id] = (int)pid;
+        // 自身绝对仿射 A(p) = Q + RS(p−Q) + T（Q = 绝对枢轴）
+        double rad = rot * 3.14159265358979323846 / 180.0, co = std::cos(rad), si = std::sin(rad);
+        double a = sc * co, b = sc * si, c = -sc * si, d = sc * co;
+        double Qx = x + toX * w, Qy = y + toY * h;
+        ownAbs[(int)id] = Aff{ a, b, c, d, Qx - (a * Qx + c * Qy) + tx, Qy - (b * Qx + d * Qy) + ty };
+    }
     int32_t built = 0;
     int32_t textCount = 0;
     for (const auto& it : items) {
@@ -983,23 +1019,51 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
         }
         OH_ArkUI_RenderNodeUtils_SetSize(node, static_cast<int32_t>(w), static_cast<int32_t>(h));
         OH_ArkUI_RenderNodeUtils_SetPosition(node, static_cast<int32_t>(x), static_cast<int32_t>(y));
-        // ★批次 39：静态变换（与 platformAnimStep 同通道：SetTransform 4×4 列主序 + SetScale）
-        if (tfTx != 0 || tfTy != 0 || tfScale != 1 || tfRotate != 0) {
-            double rad = tfRotate * 3.14159265358979323846 / 180.0;
-            double co = std::cos(rad), si = std::sin(rad);
-            // 列主序：m00/m10 = 旋转；m30/m31 = 平移（物理 px）
-            float m[16] = {
-                (float)co, (float)si, 0, 0,
-                (float)-si, (float)co, 0, 0,
-                0, 0, 1, 0,
-                (float)tfTx, (float)tfTy, 0, 1
-            };
-            OH_ArkUI_RenderNodeUtils_SetTransform(node, m);
-            if (tfScale != 1) OH_ArkUI_RenderNodeUtils_SetScale(node, (float)tfScale, (float)tfScale);
-        }
-        // ★批次 40：变换锚点（transform-origin，盒分数 0..1）——SetPivot 是**规范化**坐标（与 iOS/Android 同口径）
-        if (toX != 0.5 || toY != 0.5) {
-            OH_ArkUI_RenderNodeUtils_SetPivot(node, (float)toX, (float)toY);
+        // ★★★静态变换 + **父 transform 级联**（2026-10-08 · effects D 案）：把祖先链的绝对仿射合成进
+        //   本节点矩阵——宿主扁平建树不级联，CSS 却要求子树随父变换（含文本）。合成公式：
+        //     C_lin = Aa_lin·Lo_lin ;  C_t = Aa_lin·(Pc + Lo_t) + Aa_t − Pc
+        //   （Aa = 祖先链绝对仿射，Lo = 本节点局部自变换，Pc = 本节点绝对位置）。
+        {
+            // ★★★防环/限深（2026-10-08）：parentId 若成环或悬空会让本遍历**死循环**（真机实测 THREAD_BLOCK_6S
+            //   —— 主线程被看门狗打死、整屏空白）。用 visited 集 + 深度上限做结构性防护（不靠数据"应该无环"）。
+            std::vector<int> parentChain;
+            {
+                std::map<int, bool> seen;
+                int a = parentOf.count((int)nodeId) ? parentOf[(int)nodeId] : -1;
+                for (int guard = 0; a >= 0 && guard < 256 && !seen.count(a); ++guard) {
+                    seen[a] = true; parentChain.push_back(a);
+                    a = parentOf.count(a) ? parentOf[a] : -1;
+                }
+            }
+            bool anyAncTf = false;
+            for (int a : parentChain) { if (hasTf.count(a) && hasTf[a]) { anyAncTf = true; break; } }
+            const bool selfTf = (tfTx != 0 || tfTy != 0 || tfScale != 1 || tfRotate != 0);
+            if (selfTf || anyAncTf) {
+                // Lo = 本节点局部自变换（绕局部枢轴 q = toX*w, toY*h）
+                double rad = tfRotate * 3.14159265358979323846 / 180.0, co = std::cos(rad), si = std::sin(rad);
+                double a = tfScale * co, b = tfScale * si, c = -tfScale * si, d = tfScale * co;
+                double qx = toX * w, qy = toY * h;
+                Aff Lo{ a, b, c, d, qx - (a * qx + c * qy) + tfTx, qy - (b * qx + d * qy) + tfTy };
+                // Aa = 祖先链（外→内）绝对仿射复合
+                std::vector<int> anc = parentChain;   // 已环安全（见上）
+                Aff Aa{ 1, 0, 0, 1, 0, 0 };
+                for (auto riter = anc.rbegin(); riter != anc.rend(); ++riter) {   // 外→内
+                    auto oi = ownAbs.find(*riter); if (oi != ownAbs.end()) Aa = affMul(Aa, oi->second);
+                }
+                // C = Aa ∘ Lo，表达为子节点局部（原点 Pc）
+                Aff C;
+                C.a = Aa.a * Lo.a + Aa.c * Lo.b; C.b = Aa.b * Lo.a + Aa.d * Lo.b;
+                C.c = Aa.a * Lo.c + Aa.c * Lo.d; C.d = Aa.b * Lo.c + Aa.d * Lo.d;
+                double t1x, t1y; affApply(Aa, x + Lo.tx, y + Lo.ty, &t1x, &t1y);
+                C.tx = t1x - x; C.ty = t1y - y;
+                float m[16] = {
+                    (float)C.a, (float)C.b, 0, 0,
+                    (float)C.c, (float)C.d, 0, 0,
+                    0, 0, 1, 0,
+                    (float)C.tx, (float)C.ty, 0, 1
+                };
+                OH_ArkUI_RenderNodeUtils_SetTransform(node, m);
+            }
         }
         // ★取证日志（2026-10-02）：下发值必须可直接核对（"渲染去哪了"这类问题不能靠猜）
         //   ★hilog 不吃 `%.1f`（打 <private>）⇒ snprintf 预格式化 + %{public}s（与 ArkTS 侧同坑）

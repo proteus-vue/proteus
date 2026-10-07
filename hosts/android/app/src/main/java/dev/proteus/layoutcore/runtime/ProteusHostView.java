@@ -419,6 +419,38 @@ public class ProteusHostView extends ViewGroup {
         }
     }
 
+    /**
+     * ★★★节点 id → 父 id（CSS **父 transform 级联**用，2026-10-08 · 用户抓出「安卓/鸿蒙 D 案文字不随盒旋转」）。
+     *
+     * 【为什么需要】App 端是**扁平**绘制（每个节点一条 Cmd、绝对坐标），而 CSS `transform` 作用于**整棵子树**——
+     *   父盒旋转/缩放，子元素（含文本）应随之变换。此前宿主只按**本节点**的变换绘制 ⇒ 子节点（如盒内文字）
+     *   **不随父变换**（Web/iOS 正确：CALayer transform 级联到 sublayer；Android/鸿蒙扁平 ⇒ 需显式级联）。
+     *   ⇒ 由 `VaporRenderHost` 建层时注入父关系，`drawCmds` 绘制子节点前先施加**祖先链**的变换。
+     */
+    private final java.util.Map<Integer, Integer> nodeParent = new java.util.HashMap<>();
+    /** 注入父 id（null/负 ⇒ 清）。 */
+    public void setNodeParent(int nodeId, Integer parentId) {
+        if (parentId == null || parentId < 0) nodeParent.remove(nodeId);
+        else nodeParent.put(nodeId, parentId);
+    }
+
+    /**
+     * ★★★单节点变换的**绘制应用**（绕其 transform-origin）——供**祖先级联**复用（见 `drawCmds`）。
+     *   只做 平移/旋转/等比缩放（祖先链上 skew/3D 罕见；本节点自身的完整变换仍走 `drawCmds` 原路径）。
+     */
+    private void applyTransformAbout(Canvas canvas, int nodeId, float[] tf, float bx, float by, float bw, float bh) {
+        if (tf == null) return;
+        float tx = tf[0], ty = tf[1];
+        if (tf.length >= 11) { tx += tf[9] * bw; ty += tf[10] * bh; }
+        final float[] org = nodeTransformOrigin.get(nodeId);
+        final float ox = org != null ? org[0] : 0.5f;
+        final float oy = org != null ? org[1] : 0.5f;
+        final float cx = bx + bw * ox, cy = by + bh * oy;
+        canvas.translate(tx, ty);
+        if (tf.length > 3 && tf[3] != 0f) canvas.rotate(tf[3], cx, cy);
+        if (tf.length > 2 && tf[2] != 1f) canvas.scale(tf[2], tf[2], cx, cy);
+    }
+
     /** 节点 id → Rust 几何（**位置/尺寸的唯一来源**；子 View 的 measure/layout 都用它） */
     private final Map<Integer, RectF> nativeRects = new HashMap<>();
 
@@ -1263,6 +1295,7 @@ public class ProteusHostView extends ViewGroup {
         nodeClipKindAndBase.clear();
         nodeTransformOrigin.clear();
         nodeStaticTx.clear();
+        nodeParent.clear();   // ★★★父 transform 级联表（逐树状态——id 每树重分配）
         nodeRadiusCorners.clear();
         nodeClipRects.clear();   // ★★★overflow-x 项：逐树状态（id 每树重分配——防幽灵裁剪）
         nodeFontRole.clear();
@@ -2366,6 +2399,9 @@ public class ProteusHostView extends ViewGroup {
         boolean lastShadow = false;   // ★★★text-shadow 项（2026-10-08）：阴影状态变化才设/清 setShadowLayer
         final java.util.Set<Integer> skip = skipCmdIndices;   // ★被载体提升的指令：跳过（否则重影）
         final int[] ids = cmdNodeIds;
+        // ★★★父 transform 级联用：本帧 id → Cmd（取祖先的盒作 transform-origin 基准）
+        final java.util.Map<Integer, Cmd> cmdById = new java.util.HashMap<>();
+        if (ids != null) { for (int k = 0; k < ids.length && k < list.size(); k++) cmdById.put(ids[k], list.get(k)); }
         for (int i = 0; i < list.size(); i++) {
             if (skip != null && skip.contains(i)) continue;
             final Cmd c = list.get(i);
@@ -2392,8 +2428,17 @@ public class ProteusHostView extends ViewGroup {
             //   与 clipPath（节点自身形状）天然可叠加：先 overflow 裁（子树约束）、后 clipPath（形状）。
             //   ★进入 save/restore 判定（不 restore 会泄漏到后面所有指令——与 clipPath 同款纪律）。
             final float[] ovfClip = (ids != null && i < ids.length && ids[i] >= 0) ? nodeClipRects.get(ids[i]) : null;
+            // ★★★CSS **父 transform 级联**（2026-10-08）：收集本节点的祖先链（须在自身变换前施加）。
+            java.util.List<Integer> ancIds = null;
+            if (ids != null && i < ids.length && ids[i] >= 0) {
+                for (Integer a = nodeParent.get(ids[i]); a != null; a = nodeParent.get(a)) {
+                    final float[] atf = animTx.containsKey(a) ? animTx.get(a) : nodeStaticTx.get(a);
+                    if (atf != null) { if (ancIds == null) ancIds = new java.util.ArrayList<>(); ancIds.add(a); }
+                }
+            }
+            final boolean hasAncestorTx = ancIds != null;
             final boolean xf = (tf != null && (tfTx != 0f || tfTy != 0f || tf[2] != 1f || tf[3] != 0f || has3d))
-                    || hasClip || ovfClip != null;
+                    || hasClip || ovfClip != null || hasAncestorTx;
             final int save = xf ? canvas.save() : -1;
             if (ovfClip != null) canvas.clipRect(ovfClip[0], ovfClip[1], ovfClip[0] + ovfClip[2], ovfClip[1] + ovfClip[3]);
             // ★★软边遮罩（mask v1）：**saveLayer 包裹**（开层 → 画内容 → 用 DST_IN 叠渐变 → 还原）。
@@ -2413,6 +2458,15 @@ public class ProteusHostView extends ViewGroup {
             // ★★倾斜（skew v1）：取出本节点的倾斜角（画布变换用——见下）
             final float tfSkewX = tf != null && tf.length >= 9 ? tf[7] : 0f;
             final float tfSkewY = tf != null && tf.length >= 9 ? tf[8] : 0f;
+            // ★★★先施加**祖先链**变换（外→内；CSS 父 transform 级联到子树）——子节点（含文本）随父旋转/缩放。
+            if (ancIds != null) {
+                for (int k = ancIds.size() - 1; k >= 0; k--) {
+                    final int a = ancIds.get(k);
+                    final float[] atf = animTx.containsKey(a) ? animTx.get(a) : nodeStaticTx.get(a);
+                    final Cmd ac = cmdById.get(a);
+                    if (atf != null && ac != null) applyTransformAbout(canvas, a, atf, ac.x, ac.y, ac.w, ac.h);
+                }
+            }
             if (xf) {
                 // ★tf 可能为 null 而仅因裁剪进入本分支（C1）——兜底为零变换
                 // ★批次 39：tfTx/tfTy 已含静态位移的盒比例分量（见上）
@@ -2602,16 +2656,28 @@ public class ProteusHostView extends ViewGroup {
                 final int scol = VaporRenderHost.shadowColorOf(c.boxShadow);   // ★无损取色（见 Cmd.boxShadow 注释）
                 final float scAlpha = Color.alpha(scol) / 255f;
                 final int scRgb = scol & 0x00FFFFFF;
-                final int SHADOW_LAYERS = 6;
+                // ★★★阴影柔化（2026-10-08 · 用户抓出「安卓投影明显有差异」）：旧实现 6 层"同心矩形"，
+                //   每层外扩 `sblur*t`（t→1 时外扩达整 blur）⇒ **色带**且**中部过重**（真机：Android 阴影
+                //   比 Web(iOS/鸿蒙原生 GPU 阴影) 更厚更圆、可见硬阶）。⇒ 改为**多环高斯近似**：
+                //   CSS `box-shadow` blur B ⇒ σ=B/2；阴影 = 盒轮廓卷积高斯。用 N 个**半宽 σ·k** 的同心
+                //   环形（外→内）叠加、权重取高斯核 `exp(-k²/2)` 归一，得到平滑且量与 Web 同的软阴影。
+                //   ★与 iOS/鸿蒙"原生模糊阴影"同一观感（它们用 GPU；安卓用分层近似——差异应只在量化级）。
+                final int SHADOW_LAYERS = 14;
+                final float sigma = Math.max(0.5f, sblur * 0.5f);   // CSS blur → 高斯 σ
+                // 高斯核权重（k = 环半径/σ，从外 3σ 到内 0）
+                double wsum = 0; for (int s = 0; s < SHADOW_LAYERS; s++) { final double k = 3.0 * (s) / (SHADOW_LAYERS - 1); wsum += Math.exp(-0.5 * k * k); }
                 final int ssave = canvas.save();
                 canvas.translate(sdx, sdy);
-                for (int s = SHADOW_LAYERS; s >= 1; s--) {
-                    final float t = (float) s / SHADOW_LAYERS; // 1(最外) → 1/N(最内)
-                    final float exp = c.radius > 0f ? c.radius + sblur * t : sblur * t;
-                    final int a = Math.max(0, Math.min(255, (int) (scAlpha * (1f - t) * (255f / SHADOW_LAYERS) * 2f * op)));
+                for (int s = SHADOW_LAYERS - 1; s >= 0; s--) {   // 由外(3σ)向内(0)
+                    final double k = 3.0 * s / (SHADOW_LAYERS - 1);
+                    final double wgt = Math.exp(-0.5 * k * k) / wsum;
+                    final float infl = (float) (sigma * k);           // 外扩 = σ·k
+                    final float exp = c.radius > 0f ? c.radius + infl : infl;
+                    final int a = Math.max(0, Math.min(255, (int) (scAlpha * wgt * 255.0 * op)));
+                    if (a == 0) continue;
                     shadowPaint.setColor((a << 24) | scRgb);
-                    if (c.radius > 0f) canvas.drawRoundRect(c.x - sblur * t, c.y - sblur * t, c.x + c.w + sblur * t, c.y + c.h + sblur * t, exp, exp, shadowPaint);
-                    else canvas.drawRect(c.x - sblur * t, c.y - sblur * t, c.x + c.w + sblur * t, c.y + c.h + sblur * t, shadowPaint);
+                    if (c.radius > 0f) canvas.drawRoundRect(c.x - infl, c.y - infl, c.x + c.w + infl, c.y + c.h + infl, exp, exp, shadowPaint);
+                    else canvas.drawRect(c.x - infl, c.y - infl, c.x + c.w + infl, c.y + c.h + infl, shadowPaint);
                 }
                 canvas.restoreToCount(ssave);
             }
