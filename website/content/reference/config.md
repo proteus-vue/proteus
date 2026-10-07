@@ -165,7 +165,7 @@ G-22 柔性布局（fluid-layout-plan）：p-fluid 编译期 clamp 生成参数�
 
 ### `targets.mp.style`
 
-- **类型**：`{ /** px → rpx 转换开关（缺省 true） */ px2rpx?: boolean /** 换算比例（缺省按 375 设计稿 2:1） */ rpxRatio?: number }`
+- **类型**：`{ px2rpx?: boolean rpxRatio?: number }`
 - **必填**：否
 
 样式换算（MP 专属；Web 端永不换算——Web 保持标准 CSS，由编译器吸收差异）
@@ -186,7 +186,7 @@ px → rpx 转换开关（缺省 true）
 
 ### `targets.mp.setDataBridge`
 
-- **类型**：`{ /** 合并窗口（ms，缺省 16——约 1 帧） */ batchWindow?: number /** 是否按组件粒度 setData（缺省 true） */ perComponent?: boolean }`
+- **类型**：`{ batchWindow?: number perComponent?: boolean }`
 - **必填**：否
 
 响应式 → setData 桥接策略
@@ -214,7 +214,7 @@ px → rpx 转换开关（缺省 true）
 
 ### `targets.mp.page`
 
-- **类型**：`{ /** 页面自动包滚动容器（缺省 true——Skyline 页面滚动必须 scroll-view） */ autoScrollContainer?: boolean /** ★Skyline iOS 白屏兜底：列出白屏高风险页，强制走 WebView 渲染（页面级降级，不全局） */ webviewPages?: string[] }`
+- **类型**：`{ autoScrollContainer?: boolean webviewPages?: string[] }`
 - **必填**：否
 
 页面模式（Skyline 页面本身不滚动）
@@ -384,6 +384,27 @@ URL scheme 白名单（CFBundleURLTypes）——注册深链/被其他 App 拉�
 
 应用类别（LSApplicationCategoryType，如 `public.app-category.games`；缺省不写）
 
+### `targets.ios.appTransportSecurity`
+
+- **类型**：`{ allowArbitraryLoads?: boolean allowLocalNetworking?: boolean }`
+- **必填**：否
+
+App Transport Security（NSAppTransportSecurity）——放宽 ATS（如允许明文 HTTP 联调；缺省不写）
+
+### `targets.ios.appTransportSecurity.allowArbitraryLoads`
+
+- **类型**：`boolean`
+- **必填**：否
+
+NSAllowsArbitraryLoads（允许任意明文 HTTP；★上架需说明理由，仅联调建议开启）
+
+### `targets.ios.appTransportSecurity.allowLocalNetworking`
+
+- **类型**：`boolean`
+- **必填**：否
+
+NSAllowsLocalNetworking（允许本地网络明文——iOS 10+，比 arbitrary 更窄）
+
 ### `targets.ios.requiresFullScreen`
 
 - **类型**：`boolean`
@@ -451,10 +472,52 @@ targetSdkVersion（缺省 34）
 
 ### `targets.android.permissions`
 
+- **类型**：`Array<string | AndroidPermission>`
+- **必填**：否
+
+权限声明（`<uses-permission>`）——字符串简写 = 仅 name；结构化条目可带 `maxSdkVersion`
+
+### `targets.android.permissions.<entry>.name`
+
+- **类型**：`string`
+- **必填**：是
+
+权限全名（如 `android.permission.CAMERA`）
+
+### `targets.android.permissions.<entry>.maxSdkVersion`
+
+- **类型**：`number`
+- **必填**：否
+
+android:maxSdkVersion——该权限仅对 ≤ 此 API level 生效（如存储权限在 Android 13+ 已废弃）
+
+### `targets.android.usesFeatures`
+
+- **类型**：`Array<string | AndroidUsesFeature>`
+- **必填**：否
+
+硬件/功能特性（`<uses-feature>`）——字符串简写 = required: true
+
+### `targets.android.usesFeatures.<entry>.name`
+
+- **类型**：`string`
+- **必填**：是
+
+特性名（如 `android.hardware.camera` / `android.hardware.location.gps`）
+
+### `targets.android.usesFeatures.<entry>.required`
+
+- **类型**：`boolean`
+- **必填**：否
+
+android:required（缺省 true——不满足则应用商店过滤该设备）
+
+### `targets.android.queryPackages`
+
 - **类型**：`string[]`
 - **必填**：否
 
-追加 <uses-permission android:name="..."/>（缺省空）
+包可见性（`<queries>` 的 `<package>`——Android 11+ 查询/拉起其他应用前需声明）
 
 ### `targets.android.icon`
 
@@ -586,10 +649,45 @@ deviceTypes（缺省 ["phone","tablet","2in1"]）
 
 ### `targets.harmony.permissions`
 
+- **类型**：`Array<string | HarmonyPermission>`
+- **必填**：否
+
+追加 requestPermissions（module.json5）——字符串简写 = 仅 name；结构化条目可带 `reason` + `usedScene` （★用户授权权限必需——reason 写普通文案则框架自动生成 `$string:` 资源并写入 entry 三语言 string.json）
+
+### `targets.harmony.permissions.<entry>.name`
+
+- **类型**：`string`
+- **必填**：是
+
+权限全名（如 `ohos.permission.INTERNET` / `ohos.permission.LOCATION`）
+
+### `targets.harmony.permissions.<entry>.reason`
+
+- **类型**：`string`
+- **必填**：否
+
+申请原因（★用户授权权限必需）：写**普通文案**则框架自动生成 `$string:` 资源（写入 entry 三语言 string.json）； 写 `$string:xxx` 则按资源引用原样使用（须自备该资源）
+
+### `targets.harmony.permissions.<entry>.usedScene`
+
+- **类型**：`{ abilities?: string[] when?: 'inuse' | 'always' }`
+- **必填**：否
+
+使用场景（★用户授权权限必需）
+
+### `targets.harmony.permissions.<entry>.usedScene.abilities`
+
 - **类型**：`string[]`
 - **必填**：否
 
-追加 requestPermissions（module.json5）
+关联 Ability（缺省 = 入口 `EntryAbility`）
+
+### `targets.harmony.permissions.<entry>.usedScene.when`
+
+- **类型**：`'inuse' | 'always'`
+- **必填**：否
+
+使用时机：`'inuse'`（使用时，缺省）| `'always'`（始终）
 
 ### `targets.harmony.icon`
 

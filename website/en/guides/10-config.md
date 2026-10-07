@@ -117,7 +117,9 @@ Consumes the five alignment switches from the official *Skyline WXSS style suppo
 | `versionName` / `versionCode` | `string` / `number` | No | Version (falls back to `app.*`) |
 | `minSdk` / `targetSdk` | `number` | No | SDK range (default 24 / 34) |
 | `orientation` | `'portrait' \| 'landscape' \| 'unspecified'` | No | Screen orientation (default unspecified) |
-| `permissions` | `string[]` | No | Extra `<uses-permission>` |
+| `permissions` | `Array<string \| AndroidPermission>` | No | Permission declarations: string shorthand = `name`; structured entry may carry `maxSdkVersion` |
+| `usesFeatures` | `Array<string \| AndroidUsesFeature>` | No | Hardware/feature declarations (`<uses-feature>`); string shorthand = required |
+| `queryPackages` | `string[]` | No | Package visibility (`<queries>`; declare before querying/opening other apps on Android 11+) |
 | `icon` / `theme` / `launchPage` | `string` | No | Icon resource / app theme / home page (manifest `ProteusHomePage` meta-data) |
 | `allowBackup` / `largeHeap` / `hardwareAccelerated` / `supportsRtl` / `usesCleartextTraffic` | `boolean` | No | App flags (set-or-add on `<application>`) |
 | `networkSecurityConfig` / `appCategory` | `string` | No | Network security config reference / app category |
@@ -132,7 +134,7 @@ Consumes the five alignment switches from the official *Skyline WXSS style suppo
 | `versionName` / `versionCode` | `string` / `number` | No | Version (falls back to `app.*`) |
 | `compatibleSdkVersion` / `targetSdkVersion` | `string` | No | SDK (default `5.0.5(17)`) |
 | `deviceTypes` | `string[]` | No | Device types (default `["phone","tablet","2in1"]`) |
-| `permissions` | `string[]` | No | Extra requestPermissions |
+| `permissions` | `Array<string \| HarmonyPermission>` | No | Permission declarations (`requestPermissions`): string shorthand = `name`; structured entry may carry `reason`+`usedScene` (★required for user-grant permissions; a plain-text reason auto-generates the `$string:` resource) |
 | `icon` / `appCategory` | `string` | No | App icon (app.json5) / app category |
 | `orientation` | `string` | No | Entry Ability orientation (module.json5 abilities[0]) |
 

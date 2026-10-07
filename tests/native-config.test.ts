@@ -145,6 +145,41 @@ describe('applyNativeConfig · android', () => {
     expect(out).toContain('android:appCategory="game"')
     expect(out).toContain('android:label="Old"') // 未声明 label → 不覆盖手改值
   })
+
+  it('★结构化权限/特性：permissions 带 maxSdkVersion + usesFeatures + queries（字符串简写仍可用）', () => {
+    const d = mkdir('and4')
+    const manifest = path.join(d, 'AndroidManifest.xml')
+    fs.writeFileSync(
+      manifest,
+      `<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="dev.proteus.layoutcore">
+    <application android:label="Old" />
+</manifest>
+`,
+    )
+    const r = resolveNativeConfig({
+      android: {
+        permissions: ['android.permission.INTERNET', { name: 'android.permission.WRITE_EXTERNAL_STORAGE', maxSdkVersion: 32 }],
+        usesFeatures: ['android.hardware.camera', { name: 'android.hardware.location.gps', required: false }],
+        queryPackages: ['com.tencent.mm', 'com.alipay.android.app'],
+      },
+    })
+    const rep = applyNativeConfig(d, 'android', r)
+    const out = fs.readFileSync(manifest, 'utf-8')
+    expect(rep.ok).toBe(true)
+    expect(out).toContain('<uses-permission android:name="android.permission.INTERNET" />')
+    expect(out).toContain('<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" />')
+    expect(out).toContain('<uses-feature android:name="android.hardware.camera" android:required="true" />')
+    expect(out).toContain('<uses-feature android:name="android.hardware.location.gps" android:required="false" />')
+    expect(out).toContain('<queries>')
+    expect(out).toContain('<package android:name="com.tencent.mm" />')
+    expect(out).toContain('<package android:name="com.alipay.android.app" />')
+    // 幂等
+    applyNativeConfig(d, 'android', r)
+    const out2 = fs.readFileSync(manifest, 'utf-8')
+    expect((out2.match(/android.permission.INTERNET/g) ?? []).length).toBe(1)
+    expect((out2.match(/<queries>/g) ?? []).length).toBe(1)
+  })
 })
 
 describe('applyNativeConfig · ios', () => {
@@ -218,6 +253,21 @@ describe('applyNativeConfig · ios', () => {
     expect(out).toContain('<key>LSApplicationCategoryType</key><string>public.app-category.utilities</string>')
     expect(out).toContain('<key>CFBundleDevelopmentRegion</key><string>zh_CN</string>')
     // 幂等：再跑结果一致
+    applyNativeConfig(d, 'ios', r)
+    expect(fs.readFileSync(plist, 'utf-8')).toBe(out)
+  })
+
+  it('★App Transport Security：NSAppTransportSecurity 放宽（allowArbitraryLoads / allowLocalNetworking）', () => {
+    const d = mkdir('ios3')
+    const plist = path.join(d, 'Info.plist')
+    fs.writeFileSync(plist, `<?xml version="1.0"?><plist version="1.0"><dict>\n  <key>CFBundleIdentifier</key><string>dev.proteus.host</string>\n</dict></plist>`)
+    const r = resolveNativeConfig({ ios: { appTransportSecurity: { allowArbitraryLoads: true, allowLocalNetworking: true } } })
+    const rep = applyNativeConfig(d, 'ios', r)
+    const out = fs.readFileSync(plist, 'utf-8')
+    expect(rep.ok).toBe(true)
+    expect(out).toContain('<key>NSAppTransportSecurity</key>')
+    expect(out).toContain('<key>NSAllowsArbitraryLoads</key><true/>')
+    expect(out).toContain('<key>NSAllowsLocalNetworking</key><true/>')
     applyNativeConfig(d, 'ios', r)
     expect(fs.readFileSync(plist, 'utf-8')).toBe(out)
   })
@@ -322,5 +372,52 @@ describe('applyNativeConfig · harmony', () => {
     applyNativeConfig(d, 'harmony', r)
     expect(fs.readFileSync(path.join(d, 'AppScope/app.json5'), 'utf-8')).toBe(appJson)
     expect(fs.readFileSync(path.join(d, 'entry/src/main/module.json5'), 'utf-8')).toBe(modJson)
+  })
+
+  it('★结构化权限：reason 普通文案 → 自动生成 $string: 资源（写入 entry 三语言 string.json）+ usedScene', () => {
+    const d = mkdir('hm3')
+    fs.mkdirSync(path.join(d, 'entry/src/main/resources/base/element'), { recursive: true })
+    fs.mkdirSync(path.join(d, 'entry/src/main/resources/zh_CN/element'), { recursive: true })
+    fs.writeFileSync(
+      path.join(d, 'entry/src/main/module.json5'),
+      `{
+  "module": {
+    "name": "entry",
+    "type": "entry",
+    "deviceTypes": ["phone"],
+    "abilities": [{ "name": "EntryAbility" }]
+  }
+}
+`,
+    )
+    for (const lang of ['base', 'zh_CN']) {
+      fs.writeFileSync(
+        path.join(d, `entry/src/main/resources/${lang}/element/string.json`),
+        `{\n  "string": [\n    { "name": "module_desc", "value": "desc" }\n  ]\n}\n`,
+      )
+    }
+    const r = resolveNativeConfig({
+      harmony: {
+        permissions: [
+          { name: 'ohos.permission.LOCATION', reason: '用于展示附近门店', usedScene: { when: 'inuse' } },
+          'ohos.permission.INTERNET',
+          { name: 'ohos.permission.CAMERA', reason: '$string:my_camera_reason' },
+        ],
+      },
+    })
+    const rep = applyNativeConfig(d, 'harmony', r)
+    expect(rep.ok).toBe(true)
+    const modJson = fs.readFileSync(path.join(d, 'entry/src/main/module.json5'), 'utf-8')
+    expect(modJson).toContain('"name": "ohos.permission.LOCATION"')
+    expect(modJson).toContain('"reason": "$string:permission_ohos_permission_LOCATION_reason"') // 自动资源键
+    expect(modJson).toContain('"usedScene": { "abilities": ["EntryAbility"], "when": "inuse" }')
+    expect(modJson).toContain('{ "name": "ohos.permission.INTERNET" }') // 字符串简写
+    expect(modJson).toContain('"reason": "$string:my_camera_reason"') // 已有 $string: 原样
+    const baseStr = fs.readFileSync(path.join(d, 'entry/src/main/resources/base/element/string.json'), 'utf-8')
+    expect(baseStr).toContain('"name": "permission_ohos_permission_LOCATION_reason", "value": "用于展示附近门店"')
+    // 幂等（reason 资源不重复）
+    applyNativeConfig(d, 'harmony', r)
+    const baseStr2 = fs.readFileSync(path.join(d, 'entry/src/main/resources/base/element/string.json'), 'utf-8')
+    expect((baseStr2.match(/permission_ohos_permission_LOCATION_reason/g) ?? []).length).toBe(1)
   })
 })

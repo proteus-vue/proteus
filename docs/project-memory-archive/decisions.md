@@ -2017,3 +2017,10 @@
 **④ 纪律**：只写声明过的字段（declared）+ 幂等 + 保留工程其余内容。
 **⑤ 验证**：native-config 单测 11 例全绿；端到端 apply 真实模板三端逐条命中；根 vue-tsc 零错误；generate types --check 无漂移；config:check 三 config 全过；全量 pnpm test 5365/5365 全绿；website 十门禁 + build:website。
 **⑥ ★教训**：a) 补字段要**四处同步**（类型/schema/validate/applyNativeConfig）；b) 「存在则改、缺失则插」是「补丁只写声明字段」的实现前提；c) **JSDoc 里的 `*/` 会破坏块注释**（`resources/*/media/` → TS1131，本仓第二次踩）。
+645. **★★★权限声明结构化 —— 逐权限原因说明（reason / usedScene / maxSdkVersion）+ Android uses-feature/queries + iOS ATS（★用户 2026-10-08「还是不够用，比如动态权限申请原因描述等等」，承 #644）**：
+**① 缺口**：三端 `permissions` 只是纯字符串数组——鸿蒙用户授权权限必须 `reason`+`usedScene`（reason 须 `$string:` 资源引用）；Android 权限可带 `maxSdkVersion`。
+**② 实现**：`permissions` → `Array<string | AndroidPermission>` / `Array<string | HarmonyPermission>`（字符串简写=仅 name）；新增 `usesFeatures`/`queryPackages`（Android）、`appTransportSecurity`（iOS ATS）。
+**③ 关键增量**：鸿蒙 `reason` 写普通文案 ⇒ 框架自动生成 `$string:` 资源键（`permission_<name>_reason`）+ 写入 entry 三语言 string.json（幂等）；`$string:xxx` 原样引用；usedScene 缺省 EntryAbility/inuse。
+**④ 落地**：native-config（归一 + apply：android maxSdkVersion/uses-feature/queries、ios setPlistAts、harmony 结构化 requestPermissions + reason 资源写入）；config-validate（permEntries + ATS）；schema（oneOf）。
+**⑤ 验证**：native-config 单测 14 例全绿；端到端 apply 真实模板三端逐条命中；根 vue-tsc 零错误；generate types --check 无漂移；config:check 三 config 全过；全量 pnpm test 5368/5368 全绿；website 十门禁 + build:website。
+**⑥ ★教训**：a) 权限不是字符串——要逐权限原因/场景；b) 平台要求的资源引用要会「生成」（鸿蒙 reason 自动建 `$string:` 资源 + 三语言写入）；c) 生成器要展开引用的辅助接口（否则联合类型在参考页是黑盒）。

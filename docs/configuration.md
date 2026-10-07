@@ -182,22 +182,34 @@ CLI 在 `proteus create host` 与 `proteus build --target <端> --package` 时**
 | 字段 | 目标文件 | 说明 |
 |---|---|---|
 | `app.{name,version,buildNumber}` | 各端 · 共享 | 缺省回退 `app.config.ts` 的 `app.*`（运行期身份，二者可互为镜像） |
-| `targets.android.{applicationId,label,versionName,versionCode,minSdk,targetSdk,orientation,permissions,icon,launchPage,theme,allowBackup,largeHeap,hardwareAccelerated,supportsRtl,usesCleartextTraffic,networkSecurityConfig,appCategory}` | `AndroidManifest.xml` | applicationId 缺省 = `dev.proteus.layoutcore`（与 runtime AAR 同包）；activity 用 FQN 以便换包；`launchPage`=起始页 meta-data |
-| `targets.ios.{bundleId,displayName,version,buildNumber,minimumOSVersion,deviceFamily,orientations,launchPage,userInterfaceStyle,statusBarStyle,statusBarHidden,urlSchemes,privacyUsageDescriptions,appCategory,requiresFullScreen,developmentRegion}` | `Info.plist` | `urlSchemes`=深链注册（CFBundleURLTypes）；`privacyUsageDescriptions`=NSXxxUsageDescription（★上架必需） |
-| `targets.harmony.{bundleName,label,vendor,versionName,versionCode,compatibleSdkVersion,targetSdkVersion,deviceTypes,permissions,icon,appCategory,orientation}` | `AppScope/app.json5` + `entry/module.json5` + `string.json` | bundleName 也是**签名绑定**的键（换它要换 profile）；`orientation`=入口 Ability 方向 |
+| `targets.android.{applicationId,label,versionName,versionCode,minSdk,targetSdk,orientation,permissions,usesFeatures,queryPackages,icon,launchPage,theme,allowBackup,largeHeap,hardwareAccelerated,supportsRtl,usesCleartextTraffic,networkSecurityConfig,appCategory}` | `AndroidManifest.xml` | applicationId 缺省 = `dev.proteus.layoutcore`（与 runtime AAR 同包）；activity 用 FQN 以便换包；`permissions` 支持结构化条目（`{name,maxSdkVersion}`）；`usesFeatures`/`queryPackages` 对应 `<uses-feature>`/`<queries>` |
+| `targets.ios.{bundleId,displayName,version,buildNumber,minimumOSVersion,deviceFamily,orientations,launchPage,userInterfaceStyle,statusBarStyle,statusBarHidden,urlSchemes,privacyUsageDescriptions,appCategory,appTransportSecurity,requiresFullScreen,developmentRegion}` | `Info.plist` | `urlSchemes`=深链注册（CFBundleURLTypes）；`privacyUsageDescriptions`=NSXxxUsageDescription（★上架必需）；`appTransportSecurity`=ATS 放宽（联调常用） |
+| `targets.harmony.{bundleName,label,vendor,versionName,versionCode,compatibleSdkVersion,targetSdkVersion,deviceTypes,permissions,icon,appCategory,orientation}` | `AppScope/app.json5` + `entry/module.json5` + `string.json` | bundleName 也是**签名绑定**的键（换它要换 profile）；`permissions` 支持结构化条目（`{name,reason,usedScene}`——★用户授权权限必需，reason 写文案则框架自动生成 `$string:` 资源并写入 entry 三语言 string.json） |
 
 ```typescript
 targets: {
   android: {
     applicationId: 'com.acme.myapp', orientation: 'portrait', minSdk: 26, targetSdk: 35,
-    permissions: ['android.permission.INTERNET'], largeHeap: true, usesCleartextTraffic: true, launchPage: 'home',
+    // 结构化权限（含 maxSdkVersion）+ 特性 + 包可见性
+    permissions: ['android.permission.INTERNET', { name: 'android.permission.WRITE_EXTERNAL_STORAGE', maxSdkVersion: 32 }],
+    usesFeatures: ['android.hardware.camera', { name: 'android.hardware.location.gps', required: false }],
+    queryPackages: ['com.tencent.mm'],
+    largeHeap: true, usesCleartextTraffic: true, launchPage: 'home',
   },
   ios: {
     bundleId: 'com.acme.myapp', deviceFamily: [1], orientations: ['portrait'],
     userInterfaceStyle: 'dark', urlSchemes: ['myapp'],
     privacyUsageDescriptions: { NSCameraUsageDescription: '拍照上传头像' },
+    appTransportSecurity: { allowLocalNetworking: true },
   },
-  harmony: { bundleName: 'com.acme.myapp', deviceTypes: ['phone'], orientation: 'portrait' },
+  harmony: {
+    bundleName: 'com.acme.myapp', deviceTypes: ['phone'], orientation: 'portrait',
+    // 结构化权限：reason 写普通文案 → 框架生成 $string: 资源；usedScene 缺省 EntryAbility/inuse
+    permissions: [
+      { name: 'ohos.permission.LOCATION', reason: '用于展示附近门店' },
+      'ohos.permission.INTERNET',
+    ],
+  },
 }
 ```
 

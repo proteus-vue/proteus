@@ -42,6 +42,14 @@ export interface ResolvedNativeApp {
   buildNumber: string
 }
 
+export interface ResolvedAndroidPermission {
+  name: string
+  maxSdkVersion?: number
+}
+export interface ResolvedAndroidFeature {
+  name: string
+  required: boolean
+}
 export interface ResolvedAndroidNative {
   applicationId?: string
   label: string
@@ -50,7 +58,9 @@ export interface ResolvedAndroidNative {
   minSdk: number
   targetSdk: number
   orientation: 'portrait' | 'landscape' | 'unspecified'
-  permissions: string[]
+  permissions: ResolvedAndroidPermission[]
+  usesFeatures: ResolvedAndroidFeature[]
+  queryPackages: string[]
   icon?: string
   launchPage?: string
   theme?: string
@@ -78,10 +88,16 @@ export interface ResolvedIosNative {
   urlSchemes?: string[]
   privacyUsageDescriptions?: Record<string, string>
   appCategory?: string
+  appTransportSecurity?: { allowArbitraryLoads?: boolean; allowLocalNetworking?: boolean }
   requiresFullScreen?: boolean
   developmentRegion?: string
 }
 
+export interface ResolvedHarmonyPermission {
+  name: string
+  reason?: string
+  usedScene?: { abilities?: string[]; when?: 'inuse' | 'always' }
+}
 export interface ResolvedHarmonyNative {
   bundleName?: string
   label: string
@@ -91,7 +107,7 @@ export interface ResolvedHarmonyNative {
   compatibleSdkVersion: string
   targetSdkVersion: string
   deviceTypes: string[]
-  permissions: string[]
+  permissions: ResolvedHarmonyPermission[]
   icon?: string
   appCategory?: string
   orientation?: string
@@ -131,6 +147,20 @@ export interface NativeApplyReport {
 const DEFAULT_VERSION = '0.1.0'
 const DEFAULT_BUILD = '1'
 
+/* ── 权限/特性条目归一（字符串简写 → 结构化对象） ── */
+function normAndroidPermissions(v: Array<string | { name: string; maxSdkVersion?: number }> | undefined): ResolvedAndroidPermission[] {
+  if (!Array.isArray(v)) return []
+  return v.map((p) => (typeof p === 'string' ? { name: p } : { name: p.name, maxSdkVersion: p.maxSdkVersion }))
+}
+function normAndroidFeatures(v: Array<string | { name: string; required?: boolean }> | undefined): ResolvedAndroidFeature[] {
+  if (!Array.isArray(v)) return []
+  return v.map((f) => (typeof f === 'string' ? { name: f, required: true } : { name: f.name, required: f.required !== false }))
+}
+function normHarmonyPermissions(v: Array<string | { name: string; reason?: string; usedScene?: { abilities?: string[]; when?: 'inuse' | 'always' } }> | undefined): ResolvedHarmonyPermission[] {
+  if (!Array.isArray(v)) return []
+  return v.map((p) => (typeof p === 'string' ? { name: p } : { name: p.name, reason: p.reason, usedScene: p.usedScene }))
+}
+
 /** 解析原生身份为规范值（各端小节缺值 → 回退 app.config 的 app.*；再缺 → 内置默认） */
 export function resolveNativeConfig(native: NativeSections | undefined, fallback?: NativeAppFallback): ResolvedNativeConfig {
   const n = native ?? {}
@@ -152,7 +182,9 @@ export function resolveNativeConfig(native: NativeSections | undefined, fallback
     minSdk: a.minSdk ?? 24,
     targetSdk: a.targetSdk ?? 34,
     orientation: a.orientation ?? 'unspecified',
-    permissions: a.permissions ?? [],
+    permissions: normAndroidPermissions(a.permissions),
+    usesFeatures: normAndroidFeatures(a.usesFeatures),
+    queryPackages: a.queryPackages ?? [],
     icon: a.icon,
     launchPage: a.launchPage,
     theme: a.theme,
@@ -179,6 +211,7 @@ export function resolveNativeConfig(native: NativeSections | undefined, fallback
     urlSchemes: i.urlSchemes,
     privacyUsageDescriptions: i.privacyUsageDescriptions,
     appCategory: i.appCategory,
+    appTransportSecurity: i.appTransportSecurity,
     requiresFullScreen: i.requiresFullScreen,
     developmentRegion: i.developmentRegion,
   }
@@ -191,7 +224,7 @@ export function resolveNativeConfig(native: NativeSections | undefined, fallback
     compatibleSdkVersion: h.compatibleSdkVersion ?? '5.0.5(17)',
     targetSdkVersion: h.targetSdkVersion ?? h.compatibleSdkVersion ?? '5.0.5(17)',
     deviceTypes: h.deviceTypes ?? ['phone', 'tablet', '2in1'],
-    permissions: h.permissions ?? [],
+    permissions: normHarmonyPermissions(h.permissions),
     icon: h.icon,
     appCategory: h.appCategory,
     orientation: h.orientation,
@@ -211,6 +244,8 @@ export function resolveNativeConfig(native: NativeSections | undefined, fallback
         targetSdk: a.targetSdk != null,
         orientation: a.orientation != null,
         permissions: a.permissions != null,
+        usesFeatures: a.usesFeatures != null,
+        queryPackages: a.queryPackages != null,
         icon: a.icon != null,
         launchPage: a.launchPage != null,
         theme: a.theme != null,
@@ -237,6 +272,7 @@ export function resolveNativeConfig(native: NativeSections | undefined, fallback
         urlSchemes: i.urlSchemes != null,
         privacyUsageDescriptions: i.privacyUsageDescriptions != null,
         appCategory: i.appCategory != null,
+        appTransportSecurity: i.appTransportSecurity != null,
         requiresFullScreen: i.requiresFullScreen != null,
         developmentRegion: i.developmentRegion != null,
       },
@@ -334,6 +370,19 @@ function setPlistUrlSchemes(src: string, schemes: string[]): [string, boolean] {
   const idx = src.lastIndexOf('</dict>')
   if (idx < 0) return [src, false]
   return [src.slice(0, idx) + arr + src.slice(idx), true]
+}
+
+/** plist NSAppTransportSecurity（dict）——存在则替换，不存在则插入 */
+function setPlistAts(src: string, ats: { allowArbitraryLoads?: boolean; allowLocalNetworking?: boolean }): [string, boolean] {
+  const inner =
+    (ats.allowArbitraryLoads != null ? `<key>NSAllowsArbitraryLoads</key>${ats.allowArbitraryLoads ? '<true/>' : '<false/>'}` : '') +
+    (ats.allowLocalNetworking != null ? `<key>NSAllowsLocalNetworking</key>${ats.allowLocalNetworking ? '<true/>' : '<false/>'}` : '')
+  const block = `<key>NSAppTransportSecurity</key><dict>${inner}</dict>`
+  const re = /<key>NSAppTransportSecurity<\/key>\s*<dict>[\s\S]*?<\/dict>/
+  if (re.test(src)) return [src.replace(re, block), true]
+  const idx = src.lastIndexOf('</dict>')
+  if (idx < 0) return [src, false]
+  return [src.slice(0, idx) + `  ${block}\n` + src.slice(idx), true]
 }
 
 /** 替换 json5 里 `"key": "value"`（字符串值）——`src` 为单个对象体 */
@@ -477,14 +526,37 @@ function applyAndroid(hostDir: string, r: ResolvedAndroidNative, d: Record<keyof
     push(attr, val, '', hit)
     src = s
   }
-  // permissions（幂等：已含则不加）
+  // permissions（幂等：已含则不加；结构化条目带 maxSdkVersion）
   if (d.permissions) for (const p of r.permissions) {
-    if (src.includes(`android:name="${p}"`)) continue
+    if (src.includes(`android:name="${p.name}"`)) continue
+    const attr = p.maxSdkVersion != null ? ` android:name="${p.name}" android:maxSdkVersion="${p.maxSdkVersion}"` : ` android:name="${p.name}"`
     const anchor = /<manifest\b[^>]*>/
     if (anchor.test(src)) {
-      src = src.replace(anchor, (m) => `${m}\n    <uses-permission android:name="${p}" />`)
-      out.changes.push({ file: rel, field: 'uses-permission', to: p })
-    } else out.skipped.push(`${rel}:uses-permission ${p}（无 <manifest> 锚点）`)
+      src = src.replace(anchor, (m) => `${m}\n    <uses-permission${attr} />`)
+      out.changes.push({ file: rel, field: 'uses-permission', to: p.name })
+    } else out.skipped.push(`${rel}:uses-permission ${p.name}（无 <manifest> 锚点）`)
+  }
+  // uses-feature（幂等：已含则不加）
+  if (d.usesFeatures) for (const f of r.usesFeatures) {
+    if (src.includes(`<uses-feature android:name="${f.name}"`)) continue
+    const attr = f.required ? ` android:name="${f.name}" android:required="true"` : ` android:name="${f.name}" android:required="false"`
+    const anchor = /<manifest\b[^>]*>/
+    if (anchor.test(src)) {
+      src = src.replace(anchor, (m) => `${m}\n    <uses-feature${attr} />`)
+      out.changes.push({ file: rel, field: 'uses-feature', to: f.name })
+    } else out.skipped.push(`${rel}:uses-feature ${f.name}（无 <manifest> 锚点）`)
+  }
+  // queries（Android 11+ 包可见性——幂等替换整块 <queries>）
+  if (d.queryPackages && r.queryPackages.length) {
+    const body = r.queryPackages.map((p) => `        <package android:name="${p}" />`).join('\n')
+    const block = `    <queries>\n${body}\n    </queries>`
+    const re = /\s*<queries>[\s\S]*?<\/queries>/
+    if (re.test(src)) { src = src.replace(re, '\n' + block); out.changes.push({ file: rel, field: 'queries', to: r.queryPackages.join(',') }) }
+    else {
+      const anchor = /<\/manifest>/
+      if (anchor.test(src)) { src = src.replace(anchor, `${block}\n</manifest>`); out.changes.push({ file: rel, field: 'queries', to: r.queryPackages.join(',') }) }
+      else out.skipped.push(`${rel}:queries（无 </manifest> 锚点）`)
+    }
   }
   fs.writeFileSync(file, src)
 }
@@ -546,6 +618,11 @@ function applyIos(hostDir: string, r: ResolvedIosNative, d: Record<keyof Resolve
     const [s, hit] = setPlistUrlSchemes(src, r.urlSchemes)
     if (hit) { out.changes.push({ file: rel, field: 'CFBundleURLTypes', to: r.urlSchemes.join(',') }); src = s }
   }
+  // NSAppTransportSecurity（ATS 放宽——联调常用）
+  if (d.appTransportSecurity && r.appTransportSecurity) {
+    const [s, hit] = setPlistAts(src, r.appTransportSecurity)
+    if (hit) { out.changes.push({ file: rel, field: 'NSAppTransportSecurity', to: JSON.stringify(r.appTransportSecurity) }); src = s }
+  }
   // 隐私用途说明（NSXxxUsageDescription——set-or-add 字符串）
   if (d.privacyUsageDescriptions && r.privacyUsageDescriptions) {
     for (const [k, v] of Object.entries(r.privacyUsageDescriptions)) {
@@ -585,14 +662,48 @@ function applyHarmony(hostDir: string, r: ResolvedHarmonyNative, d: Record<keyof
         if (h1) { nb = s1; out.changes.push({ file: rel, field: 'deviceTypes', to: r.deviceTypes.join(',') }) } else out.skipped.push(`${rel}:deviceTypes（未找到）`)
       }
       if (d.permissions && r.permissions.length) {
-        const arr = `[${r.permissions.map((p) => `{ "name": "${p}" }`).join(', ')}]`
+        // ★结构化 requestPermissions：字符串简写 = 仅 name；带 reason 的条目生成 $string: 资源引用 + usedScene
+        const defaultAbility = 'EntryAbility'
+        const resNames: Array<{ key: string; value: string }> = []
+        const entries = r.permissions.map((p) => {
+          const obj: string[] = [`"name": "${p.name}"`]
+          if (p.reason) {
+            if (p.reason.startsWith('$string:')) {
+              obj.push(`"reason": "${p.reason}"`)
+            } else {
+              // 普通文案 → 生成资源键（permission__<name 末段>__reason），写入 entry 三语言 string.json
+              const key = `permission_${p.name.replace(/[^A-Za-z0-9]+/g, '_')}_reason`
+              obj.push(`"reason": "$string:${key}"`)
+              resNames.push({ key, value: p.reason })
+            }
+            obj.push(
+              `"usedScene": { "abilities": ["${(p.usedScene?.abilities ?? [defaultAbility]).join('", "')}"], "when": "${p.usedScene?.when ?? 'inuse'}" }`,
+            )
+          }
+          return `{ ${obj.join(', ')} }`
+        })
+        const arr = `[${entries.join(', ')}]`
         if (/["']requestPermissions["']\s*:\s*\[/.test(nb)) {
           nb = nb.replace(/(["']requestPermissions["']\s*:\s*)\[[^\]]*\]/, `$1${arr}`)
         } else {
-          // 在 module 体末尾插入（module 内顶级键）
+          // 在 module 体末尾插入（module 内顶级键）——★注意：json5 可能已无尾随逗号，插前补一个
           nb = nb.replace(/\s*$/, `,\n    "requestPermissions": ${arr}\n  `)
         }
-        out.changes.push({ file: rel, field: 'requestPermissions', to: r.permissions.join(',') })
+        out.changes.push({ file: rel, field: 'requestPermissions', to: r.permissions.map((p) => p.name).join(',') })
+        // reason 资源写入（entry 三语言 string.json：base/en_US/zh_CN）
+        for (const { key, value } of resNames) {
+          let wrote = false
+          for (const lang of ['base', 'en_US', 'zh_CN']) {
+            const f = path.join(hostDir, `entry/src/main/resources/${lang}/element/string.json`)
+            if (!fs.existsSync(f)) continue
+            const src0 = fs.readFileSync(f, 'utf-8')
+            if (src0.includes(`"name": "${key}"`)) { wrote = true; continue }
+            // 在 string 数组末尾追加一条（幂等：已含则跳过）
+            const inserted = src0.replace(/(\n\s*\][\s\S]*)$/, `,\n    { "name": "${key}", "value": "${value}" }$1`)
+            if (inserted !== src0) { fs.writeFileSync(f, inserted); wrote = true; out.changes.push({ file: path.relative(hostDir, f), field: key, to: value }) }
+          }
+          if (!wrote) out.skipped.push(`${path.join(rel, '..', '..', '..', 'resources')}:${key}（entry string.json 未找到）`)
+        }
       }
       // ★入口 Ability 方向（abilities[0].orientation）——存在则改，不存在则在该 ability 对象体首插
       if (d.orientation && r.orientation) {
