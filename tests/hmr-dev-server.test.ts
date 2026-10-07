@@ -300,6 +300,13 @@ const count = ref(1)
     ws.onmessage = (ev) => received.push(JSON.parse(String(ev.data)))
     await waitFor(() => server.clientCount === 1)
 
+    // ★先确保 watch 通道活跃（防满负载下 FSEvents 首投递延迟——见 ensureWatchActive 注释）；
+    //   预热写入 ref(1)→ref(9)，等首事件到达后清空，再断言「真实变更」的**唯一** payload。
+    await ensureWatchActive(dir, () => received.length >= 1, () =>
+      fs.writeFileSync(vueFile, source.replace('const count = ref(1)', 'const count = ref(9)')),
+    )
+    received.length = 0
+
     // 变更页面 → 增量编译 → payload.code 为编译产物 JS
     fs.writeFileSync(vueFile, source.replace('const count = ref(1)', 'const count = ref(2)'))
     await waitFor(() => received.length === 1)

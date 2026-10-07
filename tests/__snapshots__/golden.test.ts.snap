@@ -30,6 +30,7 @@ Page({
   console.log('tapped')
 
 },
+  $nav(target) { var g = (typeof globalThis !== "undefined") ? globalThis : null; if (g && typeof g.$nav === "function") { try { g.$nav(target); return } catch (e) {} } if (typeof wx !== "undefined" && wx.navigateTo) { try { wx.navigateTo({ url: "/pages/" + target }) } catch (e) {} } },
   proteusPageEmit(evt, payload) { var g = (typeof globalThis !== "undefined") ? globalThis : null; if (g && typeof g.__proteusEmitPage === "function") { try { g.__proteusEmitPage(evt, payload) } catch (e) {} } },
   onShow() { this.proteusPageEmit("show") },
   onHide() { this.proteusPageEmit("hide") },
@@ -107,6 +108,7 @@ Page({
     this.setData(params)
   },
   proteusOnTextInput(e) { this.setData({ text: e.detail.value }) },
+  $nav(target) { var g = (typeof globalThis !== "undefined") ? globalThis : null; if (g && typeof g.$nav === "function") { try { g.$nav(target); return } catch (e) {} } if (typeof wx !== "undefined" && wx.navigateTo) { try { wx.navigateTo({ url: "/pages/" + target }) } catch (e) {} } },
   proteusPageEmit(evt, payload) { var g = (typeof globalThis !== "undefined") ? globalThis : null; if (g && typeof g.__proteusEmitPage === "function") { try { g.__proteusEmitPage(evt, payload) } catch (e) {} } },
   onShow() { this.proteusPageEmit("show") },
   onHide() { this.proteusPageEmit("hide") },
@@ -180,6 +182,7 @@ Page({
     }
     this.setData(params)
   },
+  $nav(target) { var g = (typeof globalThis !== "undefined") ? globalThis : null; if (g && typeof g.$nav === "function") { try { g.$nav(target); return } catch (e) {} } if (typeof wx !== "undefined" && wx.navigateTo) { try { wx.navigateTo({ url: "/pages/" + target }) } catch (e) {} } },
   proteusPageEmit(evt, payload) { var g = (typeof globalThis !== "undefined") ? globalThis : null; if (g && typeof g.__proteusEmitPage === "function") { try { g.__proteusEmitPage(evt, payload) } catch (e) {} } },
   onShow() { this.proteusPageEmit("show") },
   onHide() { this.proteusPageEmit("hide") },
@@ -250,6 +253,7 @@ Page({
     }
     this.setData(params)
   },
+  $nav(target) { var g = (typeof globalThis !== "undefined") ? globalThis : null; if (g && typeof g.$nav === "function") { try { g.$nav(target); return } catch (e) {} } if (typeof wx !== "undefined" && wx.navigateTo) { try { wx.navigateTo({ url: "/pages/" + target }) } catch (e) {} } },
   proteusPageEmit(evt, payload) { var g = (typeof globalThis !== "undefined") ? globalThis : null; if (g && typeof g.__proteusEmitPage === "function") { try { g.__proteusEmitPage(evt, payload) } catch (e) {} } },
   onShow() { this.proteusPageEmit("show") },
   onHide() { this.proteusPageEmit("hide") },

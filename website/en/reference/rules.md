@@ -7,7 +7,7 @@ generated: true
 
 # Compile rule catalog
 
-> 118 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
+> 119 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
 
 ## Template transforms (65)
 
@@ -858,7 +858,7 @@ after:  <text style="font-size: calc(15.77px + 1.1268vw)">x</text>（示意—�
 
 > why: Skyline has no clamp length function (per the official support table) — the Web end keeps real CSS clamp while the MP end uses the linear calc alternative (vw is naturally viewport-fluid with zero runtime cost; converged through real-device testing in #496 M3)
 
-## Script transforms (38)
+## Script transforms (39)
 
 ### `script/const-to-data`
 
@@ -1253,6 +1253,19 @@ after:  function onShow() { refresh()
 ```
 
 > why: The official API only offers declarative Page({onShow}); there is no wx.onPageShow global subscription API (verified against official docs) — so the runtime can only receive events via compiled output dispatch. The previous MP bridge used the non-existent wx.onPageShow and failed silently. Not auto-adding side-effecting hooks keeps user-visible behavior unchanged (no surprise share buttons, no hot IPC)
+
+### `page/nav-global`
+
+**$nav platform-level navigation global (page method $nav — the same `@tap="$nav(...)"` works on all three targets)**
+
+Page mode: injects a page method `$nav(target)` — delegates to the global `$nav` (registered when createRouter runs: name/path → router.push); silently no-ops when not loaded (artifact runs standalone), falling back to Mini Program native `wx.navigateTo`. Not injected if the user already declares `$nav`
+
+```
+before: @tap="$nav('detail')"（MP 侧无页方法 $nav → 默默不导航）
+after:  bind:tap="proteusInline$navDetail" + 生成 $nav(target) 页方法（委托全局 $nav / 回退 wx.navigateTo）
+```
+
+> why: The template `@tap="$nav('x')"` compiles to `bind:tap="proteusInline$navX"`, whose body is `this.$nav(...)` — so `$nav` must be a page method. This is the MP-side counterpart of the Web (globalProperties.$nav) / App (compiled to a nav action) forms of the same syntax (the MP leg of decision #616)
 
 ### `script/onload-params`
 
