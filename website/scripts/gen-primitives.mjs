@@ -611,6 +611,11 @@ const COVERED_PACKAGES = {
   'compiler-backend': '工具链分区（渲染后端 SPI）',
   'compiler-backend-rust': '工具链分区（Rust 后端等价性）',
   contracts: '框架分区（style/route/store 契约）',
+  // ★★2026-10-08 补登记（check:primitives 存量红）：多端一致性校验工具链（快照格式 / 分级容差 /
+  //   比对引擎 / 像素观察 / 失败报告 / 三端样式应用器）——**非用户面语义原语**（不逐条出页），
+  //   官网专页覆盖：`/consistency`（Consistency.vue，多端一致性标准 + 实时机器指标，数据由
+  //   gen-consistency-data.mjs 从 docs/generated/*.json 生成）+ 框架分区 29-conformance（门禁口径）。
+  consistency: '一致性标准专页（/consistency：Consistency.vue 展示多端一致性数值校验 + L4 像素观察，数据由 gen-consistency-data 从机器产物生成）+ 框架分区 29-conformance（跨端一致性的门禁口径）',
   fluid: '柔性系统分区（content/system，5 页）',
   glass: '柔性系统分区（玻璃语义）',
   mcp: '工具链分区（MCP 服务）',

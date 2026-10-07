@@ -1964,3 +1964,10 @@
 **④ 验证**：website 十门禁全绿（doc-links / en-drift / content / doc-components / reference / css-compat / plugin-docs / stats / consistency-data / css-engine-data）+ 根 check:doc-links/script-compile/no-blind-wait/safe-edit/gates-sync/docs 全绿 + `pnpm build:website` 成功（更新文案已进 dist 产物）。已知存量红（非本轮引入）：`check:primitives` 报 `packages/consistency` 包级文档覆盖缺口。
 **⑤ ★★教训**：a) **"手写的下一步链接"没有机器判据 = 静默死链**（改 slug/挪分区/删页都会留下 404，直到读者点到——与"提交≠交付""sleep 盲等"同源：**只有工具层能兜住**）⇒ 立 `check:doc-links` 门禁；b) **文档是端能力的镜子，滞后会系统性误导**（把已真机落地的 App 三端写成"原型映射"）——凡端能力推进（真机里程碑）**必须同步端注册表 SSOT + 生成器**；c) **"生成页"不可手改**：本轮一度手改 content/primitives 的链接 → check:primitives/check:content 立即红 → 改生成器源头重跑（"改错地方会被门禁拽回"是好事）。
 `
+
+638. **★官网包级覆盖门禁存量红收口——`packages/consistency` 登记进 `COVERED_PACKAGES`（★用户 2026-10-08「继续」，承接 #637 轮末留存待办）**：
+**① 缺口**：`pnpm --dir website check:primitives` 红——`packages/consistency` 有 `src/` 但既未登记进 SOURCES、也未在 COVERED_PACKAGES 声明归属 ⇒ 其原语文档页不会被生成（官网搜索不到）。
+**② 处置（判据）**：该包是**多端一致性校验工具链**（快照格式 / 分级容差 / 比对引擎 VC5 / 像素观察 VC7 / 失败报告 VC8 / 三端样式应用器）——**非用户面语义原语**（不逐条出页）；官网已有**专页覆盖**（`/consistency` = Consistency.vue，数据由 gen-consistency-data 从机器产物生成）+ 框架分区 29-conformance（门禁口径）⇒ 正确处置 = 在 `COVERED_PACKAGES` 声明归属，**不塞进 SOURCES**。
+**③ 修**：`website/scripts/gen-primitives.mjs` 的 `COVERED_PACKAGES` 补一行（写清两个覆盖位置）。
+**④ 验证**：check:primitives 转绿（34 页与源一致）；website 邻接门禁 content / doc-links / reference / en-drift / stats / consistency-data 全绿 + 根 script-compile / gates-sync / no-blind-wait 全绿。
+**⑤ ★教训**：a) 与 worklet（#460 官网缺整包页）· Vapor 三包（2026-09-29 一次漏三个）**同族**——「新增包未登记官网覆盖 ⇒ 静默从官网消失」是**复发型**缺口，`checkPackageCoverage` 是包级结构性兜底；b) **处置二分法**：用户面语义原语 → SOURCES（逐条出页）；工具链/实现/契约包 → COVERED_PACKAGES（写明归属页）；c) 门禁只负责**报红**，"清存量红"仍是收尾纪律的一部分（机器只能提醒，不能替你补洞）。
