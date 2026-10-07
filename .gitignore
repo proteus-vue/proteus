@@ -122,3 +122,6 @@ __pycache__/
 
 # 临时探针目录（调试用；断言已固化进 tests/ 与 scripts/vapor-capability-probe.mts）
 .tmp-probe/
+# ★导航丝滑演示录屏**原片**（9.5MB）——规范同 morpheus-* 系列：交付物是裁切后的正片
+#   hosts/android/results/nav-router-fast-switch.mp4（2.4MB，已在库）；原片留本机复跑用
+hosts/android/results/nav-router-raw.mp4
