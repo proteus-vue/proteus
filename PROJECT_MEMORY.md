@@ -57,7 +57,6 @@
 ## 待办 / 注意事项
 
 **★本轮（2026-10-08）留存 —— 新会话接手必读**
-- **下一件事（用户已提、未做）**：`check:primitives` 存量红——`packages/consistency` 有 `src/` 但未登记进官网 `SOURCES`/`COVERED_PACKAGES`（`website/scripts/gen-primitives.mjs`）⇒ 其原语文档页不会被生成。二选一：登记 SOURCES 逐条出页，或在 COVERED_PACKAGES 写明官网覆盖位置。
 - **鸿蒙签名现状（环境态，非代码）**：本机 `~/.ohos/config/*.p7b` 现绑定 `dev.proteus.cssconf`；故 `dev.proteus.host`（default 产品）暂无匹配签名 ⇒ 默认鸿蒙构建在 SignHap 报 `00303074`（脚本已给定向提示）。要恢复默认应用可装机，需在 DevEco 为 `dev.proteus.host` 再签一份。
 - **Android 真机安装被阻（环境态）**：本机 Xiaomi（MIUI/Android 17）`adb install` 返回 `INSTALL_FAILED_USER_RESTRICTED`（“USB 安装”守卫，需设备端手动开）。APK 本身经 `aapt2 dump badging` 验证正确。
 - **★iOS `styleOf` 透传覆盖门禁（欠账，跨 6+ 次复发）**：`hosts/ios/.../selfdraw-scene.swift` 的 `styleOf` 白名单漏字段是本仓最高频静默降级（clipPath/glow/mask/borderRadiusCorners/justifySelf/gridColumn/letterSpacing/textDecoration/transform/transformOrigin/opacity/visibility…）。需补「iOS styleOf 透传字段 vs 宿主实际消费字段」门禁（`check:host-kernel-keys` 明说不覆盖 iOS）。
