@@ -1841,3 +1841,16 @@
 **③ 清理边界违规**（不靠基线蒙混）：新页曾触发 `display:inline-flex`（skyline 不支持）与 `filter:blur(24px)`（L3 未 opt-in）——分别改用 `flex`+`width:fit-content` 与纯 `radial-gradient`（radial 本身已柔和淡出）；并把 `CssEngine.vue` 的 `inline-block` 基线条目**删掉**（棘轮只减不增）。
 **④ 验证**：`audit:website`（D-2 零 error）· `build:website` · `check:css-engine-numbers`/`check:css-engine-data`/`check:docs-stats`/`check:gates-sync`/`check:stats`/`check:content`/`check:fluid-wording`/`check:en-drift`/`check:capability-demo`/`check:component-demo` 全绿；浏览器目视 zh+en（Hero 双列 / 数字卡 / 对比表 5 列 / 四端截图 2×2 放大 / 证据链 / CTA）。
 **⑤ ★教训**：a) **`p-view` 默认 `display:flex`**——页面写 `display:grid` 会被组件默认样式盖掉且**不报错**（只有探针/`getComputedStyle` 才看得出）⇒ **精确列网格要落在原生 `<div>`/`<section>` 上**；b) **新页的 profile/cse 边界违规就地清理，别登记基线**（`inline-flex`/`filter` 都有等价实现）；c) **视觉升级会牵出功能缺陷**（网格塌成单列正是"看起来像文档页"的隐藏原因之一——不只是留白问题）。
+
+625. **★★CSS 引擎产品页改用自有视觉语言「案卷台账」（Court Ledger）+ 修 `p-view` 默认样式导致的布局塌陷（★用户 2026-10-08「风格是复制粘贴的动画引擎，CSS 引擎需要有自己的特色风格」+「终端红黄绿三点没正确渲染」）**：
+**① 自有视觉语言（不再复制 /animation）**：Themis = **律法与秩序女神**；CSS 层叠的本质是**法庭审判**（声明竞争、裁判裁决）⇒ 视觉语言定名 **「案卷台账」（Court Ledger）**：
+- 背景 = **ruled 台账纸**（细横线 + 顶部微光），**非**动画页的星场 / 放射光晕 / 方格网；
+- 分节 = **`§ NN` 案号标头**（mono，如 `§03 THE HEARING`），**非**动画页的 `sec-rule` 渐变线；
+- 卡片 = **hairline 案卷记录 + 左侧判词竖线**（判决语义色：绿=赢 / 红=输），**非**渐变面板 + 紫光 hover；
+- **Hero 视觉 = 层叠裁决台**：三声 `margin-top` 宣言竞争 → 败者**红色删除线** → 唯一**绿色胜出** → 计算值 + 四端同一结果（**直接演示引擎核心动作**，不是装饰图形）；
+- 结案 = seal 风（`THEMIS` 字距拉宽 + 顶部品牌线），**非**光晕 CTA；
+- 大标题改「**每条声明，都上法庭 / 一次裁决，所有端同一个样**」（EN: Every declaration goes to court）。
+- 配色沿用仓内单品牌纪律（`--brand` 紫 = 裁判），**判决语义色**（`--ok` / `--rec`）为本页签名。
+**② 修「终端红黄绿三点没渲染」（根因比表象更广）**：`p-view` 组件默认 `display:flex; flex-direction:column` —— **会盖掉页面写在它上面的 `display`（横向 flex / grid），且构建不报错**。⇒ 三点（`flex:1` 星等比）在纵向 flex 下被抽成竖条 / 尺寸 0；对比表 / 证据网格等也**塌成单列**。修：**布局一律落在原生 `div`/`section`**（卡片网格保留 `p-grid`，其 auto-fit 不受影响）。探针实测 `.tdot` = 11×11 / `display:block` / 三色正确。
+**③ 验证**：`audit:website`（D-2 零 error）· `build:website` · `check:css-engine-numbers`/`check:css-engine-data`/`check:docs-stats`/`check:gates-sync`/`check:stats`/`check:content`/`check:fluid-wording`/`check:en-drift` 全绿；浏览器目视 zh+en。
+**④ ★教训**：a) **`p-view` 默认 `display:flex`（纵向）**——页面若需要「横向 flex」或「grid」，**必须用原生 `div`/`section`**，否则被组件默认样式静默盖掉（构建/类型都不报，只有 `getComputedStyle` 探针看得出）；b) **"复制粘贴别的产品页"是贪快陷阱**——用户会立刻看出"这不是它自己的东西"；**给产品一个能自洽的隐喻**（Themis 的法庭 → 案卷台账）比套用现成风格更省心；c) **视觉 bug 常是布局机制问题**（三点竖条 = flex 方向被盖），先探针 `getComputedStyle` 再改，别盲调尺寸。
