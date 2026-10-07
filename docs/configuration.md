@@ -171,6 +171,31 @@ rules: {
 - `customTags`：新增 HTML 标签 → 小程序标签。配合 `tag/unknown-kebab` 的逃生舱语义，AI 可随时扩展新标签而不动框架源码。
 - 示例页配套：`examples/pages/showcase.vue` 的 `<demo-box>` 标签演示（config 中取消注释 `customTags: { 'demo-box': 'view' }` 即生效，重新 `npm run build:mp` 即可看到 WXML 变为 `<view>`）。
 
+### native（★原生项目配置 · 决策 #635）
+
+把**原生工程身份**（包名/Bundle ID/版本/SDK/方向/权限/图标）从项目传给构建链——CLI 在
+`proteus create host` 与 `proteus build --target <端> --package` 时**渲染进**宿主工程的原生文件：
+
+| 字段 | 目标文件 | 说明 |
+|---|---|---|
+| `native.app.{name,version,buildNumber}` | 各端 · 共享 | 缺省回退 `app.config.ts` 的 `app.*`（运行期身份，二者可互为镜像） |
+| `native.android.{applicationId,label,versionName,versionCode,minSdk,targetSdk,orientation,permissions,icon}` | `AndroidManifest.xml` | applicationId 缺省 = `dev.proteus.layoutcore`（与 runtime AAR 同包）；activity 用 FQN 以便换包 |
+| `native.ios.{bundleId,displayName,version,buildNumber,minimumOSVersion,deviceFamily,orientations}` | `Info.plist` | |
+| `native.harmony.{bundleName,label,vendor,versionName,versionCode,compatibleSdkVersion,targetSdkVersion,deviceTypes,permissions}` | `AppScope/app.json5` + `entry/module.json5` + `string.json` | bundleName 也是**签名绑定**的键（换它要换 profile） |
+
+```typescript
+native: {
+  app: { name: 'MyApp', version: '1.2.3', buildNumber: '45' },
+  android: { applicationId: 'com.acme.myapp', orientation: 'portrait', minSdk: 26, permissions: ['android.permission.INTERNET'] },
+  ios: { bundleId: 'com.acme.myapp', deviceFamily: [1], orientations: ['portrait'] },
+  harmony: { bundleName: 'com.acme.myapp', deviceTypes: ['phone'] },
+}
+```
+
+- **职责边界（G-35.1）**：`native` = **构建期**（CLI 消费，写原生文件）；`app.config` 的 `app.*` = **运行期**（业务读取/上报）。缺值回退，但边界不变。
+- **字段级补丁**：只改身份字段、**保留**工程其余内容（手改过的布局/能力不受影响）；**幂等**（重复应用结果一致）。
+- 生效命令：`proteus create host <端> <dir> --project <项目根>`（生成即注入）· `proteus build --target <端> --package --host-dir <dir>`（打包前重注入）。
+
 ## 修改配置后
 
 ```bash

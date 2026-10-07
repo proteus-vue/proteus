@@ -135,6 +135,63 @@ export const proteusConfigSchema = {
         disabled: { type: 'array', items: { type: 'string' } },
       },
     },
+    // ★★★原生项目配置（`native` 段 · 决策 #635）：CLI 渲染进三端原生工程文件
+    native: {
+      type: 'object',
+      properties: {
+        app: {
+          type: 'object',
+          properties: {
+            name: { type: 'string' },
+            version: { type: 'string' },
+            buildNumber: { type: ['string', 'number'] },
+          },
+        },
+        android: {
+          type: 'object',
+          properties: {
+            applicationId: { type: 'string' },
+            label: { type: 'string' },
+            versionName: { type: 'string' },
+            versionCode: { type: 'integer', minimum: 1 },
+            minSdk: { type: 'integer', minimum: 1 },
+            targetSdk: { type: 'integer', minimum: 1 },
+            orientation: { enum: ['portrait', 'landscape', 'unspecified'] },
+            permissions: { type: 'array', items: { type: 'string' } },
+            icon: { type: 'string' },
+          },
+        },
+        ios: {
+          type: 'object',
+          properties: {
+            bundleId: { type: 'string' },
+            displayName: { type: 'string' },
+            version: { type: 'string' },
+            buildNumber: { type: 'string' },
+            minimumOSVersion: { type: 'string' },
+            deviceFamily: { type: 'array', items: { type: 'integer', minimum: 1, maximum: 6 } },
+            orientations: {
+              type: 'array',
+              items: { enum: ['portrait', 'portrait-upside-down', 'landscape-left', 'landscape-right'] },
+            },
+          },
+        },
+        harmony: {
+          type: 'object',
+          properties: {
+            bundleName: { type: 'string' },
+            label: { type: 'string' },
+            vendor: { type: 'string' },
+            versionName: { type: 'string' },
+            versionCode: { type: 'integer', minimum: 1 },
+            compatibleSdkVersion: { type: 'string' },
+            targetSdkVersion: { type: 'string' },
+            deviceTypes: { type: 'array', items: { type: 'string' } },
+            permissions: { type: 'array', items: { type: 'string' } },
+          },
+        },
+      },
+    },
   },
 } as const
 

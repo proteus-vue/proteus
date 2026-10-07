@@ -39,6 +39,20 @@ const config: ProteusConfig = {
   // ★全局样式（MP app.wxss 通道；Web 端 main.ts 同源 import）——设计 token + 页面骨架类。
   globalStyle: 'styles/global.css',
   budget: { mainPackageKB: 800, strict: false },
+  // ★★★原生项目配置（决策 #635）：从项目 → 构建链传递原生工程身份（包名/版本/SDK/权限）。
+  //   由 `proteus create host` 与 `proteus build --package` 渲染进宿主原生文件。
+  native: {
+    app: { name: 'Proteus CSS 验收', version: '1.2.3', buildNumber: '45' },
+    android: {
+      applicationId: 'cn.proteus.cssconformance',
+      orientation: 'portrait',
+      minSdk: 26,
+      targetSdk: 35,
+      permissions: ['android.permission.INTERNET'],
+    },
+    ios: { bundleId: 'cn.proteus.cssconformance', deviceFamily: [1], orientations: ['portrait'] },
+    harmony: { bundleName: 'cn.proteus.cssconformance', deviceTypes: ['phone'] },
+  },
   // ★Web 端必须挂 `defaultScopedPlugin`（S50 坑：view/text 等标签需改写成 proteus-* 组件，
   //   否则浏览器按未知元素（display:inline）渲染 ⇒ 块级布局全部失效——superapp 实测同因）。
   vite: async () => {

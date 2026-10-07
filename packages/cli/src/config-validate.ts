@@ -56,6 +56,7 @@ const KNOWN_FIELDS = new Set([
   'page', // ★Skyline 白屏兜底：page.autoScrollContainer / page.webviewPages（页面级 WebView 降级通道）
   'audit', // ★#447 D-2 dogfooding 门禁（audit-d2 消费——规则级可配）
   'gates', // ★#456 统一门禁开关（gates.disabled——check/audit all 消费）
+  'native', // ★#635 原生项目配置（包名/Bundle ID/版本/SDK/方向/权限/图标——CLI create host / build --package 消费）
 ])
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
@@ -217,12 +218,43 @@ export function validateConfig(config: unknown): ConfigValidationResult {
     }
   }
 
+  // ★#635 native（原生项目配置）：结构 + 类型（轻量校验——数值字段正整数、权限为字符串数组）
+  if (cfg.native !== undefined) {
+    const nat = cfg.native as Record<string, unknown>
+    if (!isPlainObject(nat)) {
+      errors.push({ code: 'CONFIG_INVALID_TYPE', path: 'native', message: 'native 应为对象（{ app?, android?, ios?, harmony? }）' })
+    } else {
+      for (const section of ['app', 'android', 'ios', 'harmony']) {
+        const sec = nat[section]
+        if (sec !== undefined && !isPlainObject(sec)) {
+          errors.push({ code: 'CONFIG_INVALID_TYPE', path: `native.${section}`, message: `native.${section} 应为对象` })
+        }
+      }
+      const posInt = (path: string, v: unknown) => {
+        if (v !== undefined && (!Number.isInteger(v) || (v as number) < 1)) errors.push({ code: 'CONFIG_INVALID_TYPE', path, message: `${path} 应为正整数` })
+      }
+      const strArr = (path: string, v: unknown) => {
+        if (v !== undefined && (!Array.isArray(v) || !v.every((x) => typeof x === 'string'))) errors.push({ code: 'CONFIG_INVALID_TYPE', path, message: `${path} 应为字符串数组` })
+      }
+      const and = (nat.android ?? {}) as Record<string, unknown>
+      posInt('native.android.versionCode', and.versionCode); posInt('native.android.minSdk', and.minSdk); posInt('native.android.targetSdk', and.targetSdk)
+      strArr('native.android.permissions', and.permissions)
+      const ios = (nat.ios ?? {}) as Record<string, unknown>
+      strArr('native.ios.orientations', ios.orientations)
+      if (ios.deviceFamily !== undefined && (!Array.isArray(ios.deviceFamily) || !ios.deviceFamily.every((x) => Number.isInteger(x)))) {
+        errors.push({ code: 'CONFIG_INVALID_TYPE', path: 'native.ios.deviceFamily', message: 'native.ios.deviceFamily 应为整数数组（1=iPhone / 2=iPad）' })
+      }
+      const hm = (nat.harmony ?? {}) as Record<string, unknown>
+      posInt('native.harmony.versionCode', hm.versionCode)
+      strArr('native.harmony.deviceTypes', hm.deviceTypes); strArr('native.harmony.permissions', hm.permissions)
+    }
+  }
+
   for (const k of Object.keys(cfg)) {
     if (!KNOWN_FIELDS.has(k)) {
       errors.push({ code: 'CONFIG_UNKNOWN_FIELD', path: k, message: `未知字段 "${k}"（可能拼写错误；合法字段：${[...KNOWN_FIELDS].join(' / ')}）` })
     }
   }
-
   // ★B5 §3：跨层隐式依赖检测（CONFIG_LAYER_VIOLATION：字段归属表漏标 / 跨层反模式）
   // 未知字段的「未标注归属」已由 CONFIG_UNKNOWN_FIELD 报，此处跳过避免重复
   for (const e of checkConfigLayerViolations(cfg)) {

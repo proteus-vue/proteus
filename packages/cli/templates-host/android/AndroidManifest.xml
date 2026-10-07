@@ -1,8 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- {{appName}} —— Proteus 最小 Android 宿主（CLI 生成）
-     ★包名与 runtime AAR 一致（dev.proteus.layoutcore）⇒ 同包访问，零可见性改动。 -->
+     ★包名与 runtime AAR 一致（dev.proteus.layoutcore）⇒ 同包访问，零可见性改动。
+     ★★★身份字段（package / label / versionCode / versionName / uses-sdk）
+       由 `proteus create host` 与 `proteus build`（target=android，package）从项目
+       `proteus.config` 的 `native` 段填充（决策 #635）——手改这里只在项目未声明时生效。 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="{{bundleName}}">
+    package="{{bundleName}}"
+    android:versionCode="1"
+    android:versionName="0.1.0">
+
+    <uses-sdk
+        android:minSdkVersion="24"
+        android:targetSdkVersion="34" />
 
     <application
         android:label="{{appName}}"
@@ -11,8 +20,11 @@
         android:hasCode="true">
         <!-- 起始页名（编译产物 app-screen-content.json 的键；换项目改这里） -->
         <meta-data android:name="ProteusHomePage" android:value="index" />
+        <!-- ★activity 用 **FQN**（不是相对名 .AppActivity）：这样 manifest 的 `package`（applicationId）
+             可与宿主类所在包解耦——`native.android.applicationId` 换包后仍能解析到
+             dev.proteus.layoutcore.AppActivity（运行期类仍由 runtime AAR 提供）。 -->
         <activity
-            android:name=".AppActivity"
+            android:name="dev.proteus.layoutcore.AppActivity"
             android:exported="true"
             android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
             <intent-filter>
