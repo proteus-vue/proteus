@@ -40,6 +40,8 @@ const links: NavLink[] = [
   { to: '/animation', label: '动画引擎', key: 'animation' },
   // ★★CS6 一致性标准（对外展示——实时机器指标 + 三端真截图；"可验证一致性"是我们的标准制定权主张）
   { to: '/consistency', label: '一致性标准', key: 'consistency' },
+  // ★★★Themis 编译期 CSS 引擎（招牌产品页——写一次样式，所有端长一个样，并可被证明）
+  { to: '/themis', label: 'CSS 引擎', key: 'themis' },
 ]
 /** 导航文案（双语 key） */
 function navText(l: { key: string; label: string }): string {
@@ -48,6 +50,7 @@ function navText(l: { key: string; label: string }): string {
   if (l.key === 'ecosystem') return t('app.ecosystem')
   if (l.key === 'animation') return t('app.animation')
   if (l.key === 'consistency') return t('app.consistency')
+  if (l.key === 'themis') return t('app.themis')
   return l.label
 }
 

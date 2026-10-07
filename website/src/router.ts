@@ -12,6 +12,7 @@ import MultiDevice from './pages/MultiDevice.vue'
 import Ecosystem from './pages/Ecosystem.vue'
 import Animation from './pages/Animation.vue'
 import Consistency from './pages/Consistency.vue'
+import CssEngine from './pages/CssEngine.vue'
 import Changelog from './pages/Changelog.vue'
 
 export const router = createRouter({
@@ -26,6 +27,8 @@ export const router = createRouter({
     { path: '/animation', name: 'animation', component: Animation },
     // ★★CS6 多端一致性标准页（对外展示：实时机器指标 + 三端真截图 + 与 Flutter 的诚实对照）
     { path: '/consistency', name: 'consistency', component: Consistency },
+    // ★★★Themis 编译期 CSS 引擎产品页（招牌产品页——叙事来自白皮书 + 全机器数字 + 四端真渲染）
+    { path: '/themis', name: 'themis', component: CssEngine },
     { path: '/changelog', name: 'changelog', component: Changelog },
     { path: '/docs', redirect: '/docs/01-intro' },
     { path: '/docs/:slug', name: 'guide', component: DocsPage },

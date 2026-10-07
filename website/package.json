@@ -23,7 +23,9 @@
     "check:en-drift": "node scripts/check-en-drift.mjs",
     "check:stats": "tsx scripts/check-stats.ts",
     "gen:consistency-data": "node scripts/gen-consistency-data.mjs",
-    "check:consistency-data": "node scripts/gen-consistency-data.mjs --check"
+    "check:consistency-data": "node scripts/gen-consistency-data.mjs --check",
+    "gen:css-engine-data": "node scripts/gen-css-engine-data.mjs",
+    "check:css-engine-data": "node scripts/gen-css-engine-data.mjs --check"
   },
   "dependencies": {
     "@proteus-vue/animation": "0.3.0-beta.22",

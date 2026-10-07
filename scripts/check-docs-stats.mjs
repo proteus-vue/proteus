@@ -71,9 +71,56 @@ console.log(JSON.stringify({
 
 const facts = sourceFacts()
 
+// ── ★★★CSS 引擎（Themis）对外数字（2026-10-08 新增）：白皮书 §6 与 board-inventory 曾**静默漂移**
+//   三处（IR 字段 77→108 · lint 存量 95→119 · 覆盖 50/50→82/82）而无任何门禁覆盖。
+//   ⇒ 从 SSOT 产物读真值，加入 STALE（旧写法黑名单）+ MUST_STATE（白皮书须写当前值）。
+const CE_NUMBERS = path.join(ROOT, 'docs/generated/css-engine-numbers.json')
+let ce = null
+if (fs.existsSync(CE_NUMBERS)) {
+  const d = JSON.parse(fs.readFileSync(CE_NUMBERS, 'utf-8'))
+  ce = {
+    ir: d.ir.total,
+    irBreak: `semantic ${d.ir.semantic} + engine-only ${d.ir.engineOnly}`,
+    lint: d.lint.total,
+    m1: (d.coverage.m1 * 100).toFixed(2),
+    union: `${d.coverage.unionCovered}/${d.coverage.unionTotal}`,
+  }
+} else {
+  console.warn('⚠ 缺 docs/generated/css-engine-numbers.json——CSS 引擎数字未纳入文档门禁（跑 pnpm gen:css-engine-numbers）')
+}
+
 // ── 过期写法黑名单：每条给出「为什么它是错的」────────────────────────────────
 // 约定：pattern 匹配的是**已证伪的当前态断言**，不是泛指的数字。
 const STALE = [
+  // ★★★CSS 引擎（Themis）旧数字（2026-10-08）：白皮书 §6 曾写 77/95/50-50（真值见 SSOT）
+  ...(ce
+    ? [
+        {
+          id: 'ce-ir-fields-77',
+          re: /77\*{0,2}\s*IR\s*字段/g,
+          truth: `${ce.ir}`,
+          why: `StyleIR 实为 ${ce.ir} 字段（${ce.irBreak}，见 css-engine-numbers.json::ir）——白皮书 §6 曾写 77`,
+        },
+        {
+          id: 'ce-ir-breakdown-old',
+          re: /semantic 50 \+ engine-only 27/g,
+          truth: ce.irBreak,
+          why: `字段分解已变（${ce.irBreak}）——旧口径 50+27 见 css-engine-numbers.json::ir`,
+        },
+        {
+          id: 'ce-lint-95',
+          re: /95\*{0,2}\s*条存量/g,
+          truth: `${ce.lint}`,
+          why: `Profile lint 存量棘轮实为 ${ce.lint} 条（各工程基线求和）——白皮书 §6 曾写 95`,
+        },
+        {
+          id: 'ce-coverage-50-50',
+          re: /50\/50（并集 100%）/g,
+          truth: `${ce.union}`,
+          why: `三端 Applier 覆盖并集为 ${ce.union}（semantic 面扩到 ${ce.ir} 字段后）——旧口径 50/50`,
+        },
+      ]
+    : []),
   {
     id: 'primitives-183',
     re: /183\s*(?:个|条)?\s*(?:语义)?原语/g,
@@ -187,6 +234,14 @@ const MUST_STATE = [
   { file: 'docs/Proteus_原生能力接入方案.md', re: new RegExp(`${facts.hooks}\\s*个\\s*Capability\\s*Hook`), why: `${facts.hooks} 个 Capability Hook（SSOT 数）` },
   { file: 'docs/Proteus_原生能力接入方案.md', re: new RegExp(`${facts.primitives}\\s*个?\\s*语义原语`), why: `${facts.primitives} 语义原语（SSOT 数）` },
   { file: 'docs/Proteus_JS引擎选型与可插拔方案.md', re: /EN2/, why: '含 EN2（引擎层可插拔）推进项' },
+  // ★★★CSS 引擎（Themis）白皮书必须写出**当前**数字（防「删掉就绿」；旧值由 STALE 拦）
+  ...(ce
+    ? [
+        { file: 'docs/Proteus_Themis多端一致CSS引擎产品白皮书.md', re: new RegExp(`${ce.ir}\\*{0,2}\\s*IR\\s*字段|${ce.ir} 字段`), why: `${ce.ir} IR 字段（SSOT 数）` },
+        { file: 'docs/Proteus_Themis多端一致CSS引擎产品白皮书.md', re: new RegExp(`${ce.lint}\\*{0,2}\\s*条存量`), why: `${ce.lint} 条 lint 存量（SSOT 数）` },
+        { file: 'docs/Proteus_Themis多端一致CSS引擎产品白皮书.md', re: new RegExp(`M1 ${ce.m1.replace('.', '\\.')}%`), why: `M1 ${ce.m1}%（SSOT 数）` },
+      ]
+    : []),
 ]
 for (const { file, re, why } of MUST_STATE) {
   const p = path.join(ROOT, file)

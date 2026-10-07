@@ -15,7 +15,7 @@
 | 和"运行期 CSS 引擎"（Kraken/Lynx/WebF）的区别 | 运行期**零 CSS 解析**：宿主只消费已折叠的 StyleIR，样式应用是 O(1) 查表 |
 | 和 uni-app x / Taro 的区别 | 不是"CSS 子集尽量折叠"，是**完整层叠 + 不能一致的写法全端禁用** |
 | 和 RN / Flutter 的区别 | 不是"没有 CSS 所以没有分叉"，是**有完整 CSS 且分叉可判定、可拦截、可对拍** |
-| 怎么兑现 | **113 用例 / 153 项逐属性 ≡ 真 Chromium**；各端几何 ≡ Web ≤0.5dp；双后端 IR 逐字节相同；`proteus explain` 全程可回放 |
+| 怎么兑现 | **113 用例 / 153 项逐属性 ≡ 真 Chromium**（测试夹具静态计数）；各端几何 ≡ Web ≤0.5dp；双后端 IR 逐字节相同；`proteus explain` 全程可回放 |
 
 ---
 
@@ -95,7 +95,7 @@ SFC <style>
 │  ⑤ 动态类预计算 属性维度分解 · 互斥分组 · 爆炸保护          │
 └───────────────────────────┬─────────────────────────────┘
                             ▼
-                   StyleIR（77 字段闭集 · 版本化）
+                   StyleIR（108 字段闭集 · 版本化）
                             │
         ┌───────────────────┼───────────────────┐
         ▼                   ▼                   ▼
@@ -146,13 +146,13 @@ E-CSS / W-CSS 两族诊断接入 **Web 构建链**：Profile 外写法在 Web �
 
 | 指标 | 数值 | 含义 |
 |---|---|---|
-| **153** 项属性对拍 | ≡ 真 Chromium | 113 个用例逐属性与浏览器计算样式一致（编译期硬门禁） |
+| **113** 用例 / **153** 项对拍 | ≡ 真 Chromium | 逐属性与浏览器计算样式一致（编译期硬门禁）；★计数来自测试夹具 `tests/fixtures/cse-parity-cases.ts`（非 JSON 产物） |
 | **≤0.5 dp** | 三端几何对拍 | 运行期硬门禁，容差逐字段，禁全局阈值 |
 | **O(1)** 动态样式 | 读次数 == 字段数 | profile 实测（Proxy 计次） |
-| **77** IR 字段 | 闭集·版本化 | semantic 50 + engine-only 27，三端 Applier 覆盖 50/50（并集 100%） |
+| **108** IR 字段 | 闭集·版本化 | semantic 82 + engine-only 26，三端 Applier 覆盖 82/82（并集 100%） |
 | **5/5** conformance | 同一 IR → 等价应用后状态 | App 几何 6 项 ≤0.5dp · Skyline 语义替身 · 降级登记 |
 | **逐字节** 双后端 | Node ⇄ Rust | IR Golden 真二进制对拍 + 破坏性验证 |
-| **95** 条存量 | 棘轮基线 | 全仓首扫 lint 存量钉底，只减不增 |
+| **119** 条存量 | 棘轮基线 | 全仓扫 lint 存量钉底（examples 26 · showcase 26 · css-conformance 25 · website 42），只减不增 |
 | **0** 次 CSS 解析 | 运行期 | 选择器匹配/层叠/单位换算在调用栈零出现（INV-CE-03） |
 
 ---
@@ -229,11 +229,12 @@ Taffy ⇄ Blink 的布局语义差（margin 折叠、百分比基准等）是结
 
 | 本文表述 | 仓内证据 |
 |---|---|
-| 113 用例 / 153 项 ≡ Chromium | `docs/proteus-css-engine-plan/README.md` §4 B1；`tests/e2e-cse-parity.test.ts` |
-| 77 字段（50+27）/ 覆盖 50/50 / conformance 5/5 / M1 68.0% | 同上 §4 B0/B3 |
+| ★本文 §6 对外数字的**单一事实源** | `docs/generated/css-engine-numbers.json`（生成器 `scripts/gen-css-engine-numbers.mjs`；门禁 `pnpm check:css-engine-numbers`）——页面与本白皮书均只读本件 |
+| 113 用例 / 153 项 ≡ Chromium | `tests/fixtures/cse-parity-cases.ts`（夹具计数，与 `tests/e2e-cse-parity.test.ts` 运行时同源）；`docs/generated/css-engine-numbers.json`::parity |
+| 108 字段（82+26）/ M1 65.45% | `docs/generated/css-engine-numbers.json`::ir / ::coverage（SSOT）；门禁 `pnpm check:css-engine-numbers` |
 | 动态类 O(1)（读次数==字段数）/ 4 用例 13 组合 32 项 | 同上 §4 B2；`packages/compiler/src/cse/dynamic.ts` |
 | 双后端逐字节 / IR Golden | 同上 §4 B0 与 §6 INV-CE-01 |
-| 95 条 lint 棘轮基线 / Web 构建链拦截 | 同上 §4 B4；`packages/compiler/src/cse/lint.ts` |
+| 119 条 lint 棘轮基线 / Web 构建链拦截 | `{examples,showcase,css-conformance,website}/cse-lint-baseline.json`；门禁 `pnpm check:cse-lint-baseline` · `packages/compiler/src/cse/lint.ts` |
 | 降级配方与拒绝语义 | `packages/compiler/src/cse/degrade.ts` 头注释 |
 | 长手层层叠设计动机 | `packages/compiler/src/cse/types.ts` 头注释 |
 | "App 端无 CSS 引擎"历史现状 | `docs/generated/app-css-surface.md:6-7`（G-61 前口径，现已由 CSE 收口） |
