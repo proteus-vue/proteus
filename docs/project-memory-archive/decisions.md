@@ -1822,3 +1822,15 @@
 **③ 关键取舍**：本机 `adb shell input tap` 被 **INJECT_EVENTS 权限拦**（ROM 策略）⇒ 用进程内 `proteusHost.tapAt`（`--es tap` 同族）——**与真触摸同一条 gesture→hitTest→dispatch 链**，仅免去 OS 触摸屏层（本仓既有立场：合成 MotionEvent 是该机的唯一"真触摸"形态）。
 **④ 验证**：dry-run 日志逐行确认 13 页全部 push→back 正确、零打空；视频帧扫描确认全程高速变化（无卡帧）。
 **⑤ 教训**：a) **演示视频要"可复现"**（驱动入库，不只交付成片）——否则下轮想重录得重写一遍；b) **录屏的起止要锚定状态**（1.2s 预热让 index 先上屏；尾部死帧裁掉）；c) **该机的 `input tap` 不可用是环境事实**（INJECT_EVENTS），进程内合成 tap 是等价替代——与「先取证再断言」同源。
+
+623. **★★★CSS 引擎（Themis）产品官网上线——双语旗舰页 `/themis` + 全机器数字 SSOT + 白皮书数字收口（★用户 2026-10-08「把 CSS 引擎完整产品做到官网上，产品叙事参考白皮书」）**：
+**① 交付形态**（用户选「单页旗舰页」）：新增 `website/src/pages/CssEngine.vue`（对标 `/animation`、`/consistency`）——11 章节：Hero · 30 秒摘要 · 三个端三套真相 · 三条主张（算完再上线 / 真值只有一个 / 失败要响亮）· 五步管线 · 七大能力 · 数字页 · 横向对比 · 开发者体验 · 边界与承诺（含三条禁语）· 多端真渲染证据 · 证据链。双语（`isEn` inline，同 Consistency 形态）。
+**② ★零手写数字（同 `/consistency` 纪律）**：
+- `scripts/gen-css-engine-numbers.mjs` → `docs/generated/css-engine-numbers.json`（**数字 SSOT**）：从产物/源码读出——IR 108（82+26）· 逐属性对拍 113 用例/153 项 · M1 65.45%（并集 82/82）· 判据② ≤0.5dp · lint 棘轮 119（26/26/25/42）· 能力对齐 79 行×3 端 · 能力清单 949（P0 0）。
+- `website/scripts/gen-css-engine-data.mjs` → `website/src/data/css-engine-page.ts` + **四端真截图**（border-style / background-position × web/android/ios/harmony，8 张）；`--check` 幂等 + 资产字节比对。
+- 两门禁接 root `verify` 链 **+ CI**（`check:css-engine-numbers` / `check:css-engine-data`）。
+**③ 白皮书 §6/§10 数字更正**（此前**静默漂移、无任何门禁**）：IR **77→108**（50/27→82/26）· lint **95→119** · 覆盖 50/50→82/82 · M1 **68.0%→65.45%**；§10 证据索引改指向新 SSOT + 门禁；`docs/board-inventory.md` 同处更正。`scripts/check-docs-stats.mjs` 加 **STALE**（旧值黑名单，容忍 `**` 加粗）+ **MUST_STATE**（白皮书须写当前值）——**破坏性验证**：改回 77/95 当场红。
+**④ 接线**：router `/themis` · 导航项 + `navText` 分支 · i18n `app.themis`（zh/en 同键）· `website/profile-boundary-baseline.json` +3 条（`CssEngine.vue` 的 `display:grid`/`inline-block`/`white-space:pre`——**同站内其余所有页先例**，棘轮如实登记）。
+**⑤ 验收**：`audit:website`（D-2 零 error）· `build:website`（vue-tsc+vite）· `check:stats`/`check:content`/`check:css-engine-numbers`/`check:css-engine-data`/`check:docs-stats`/`check:gates-sync`/`check:fluid-wording`/`check:en-drift`/`check:doc-components` 全绿；**浏览器目视** `/themis` zh+en（导航高亮、数字卡、对比表、四端证据 2×2 放大可读）。
+**⑥ 诚实边界**：a) 「113 用例/153 项」「5/5 conformance」是**测试运行时/夹具计数**、无 JSON 产物——页面与白皮书**如实标注来源**，不伪装成产物数字；b) 四端截图取自**已入库的 css-conformance 结果**（代表页，非全量逐页——「30 页×4 端逐页量产化」仍为待办）。
+**⑦ ★教训**：a) **「对外数字必须有 SSOT + 门禁」**——白皮书 §6 三处数字漂移几个月无人发现，根因是**文档数字零覆盖**（与 README/stats 同族缺口）；b) **跨语言/跨文件同一规则要数清同步面**（IR 字段/对拍项/M1/lint 各在不同产物，须一处复算）；c) **官网自门禁（D-2 四规则 + profile-boundary）对新页同样零容忍**——`display:grid` 等需按既有先例登记基线；d) **真截图的"展示"要放大 + 顶裁**（整屏 1200×2608 按 200px 缩略不可读）。
