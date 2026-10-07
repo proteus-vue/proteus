@@ -1994,3 +1994,11 @@
 **④ 消费方**：plugin-vite（plugin/gen-routes/vite-config）+ cli（build/dev/health/app-content/app-runtime-content/native-config/strict-cli/check）约 15 处；六个具体 config 迁移。
 **⑤ 验证**：config:check 五 config 全过 + v3 自动迁移通过；真机构建链（examples build:mp:42 页/2 分包/rendererOptions 绿 + build:web + check:mp-artifacts）；根 vue-tsc 零错误；149 例 config 单测全绿；generate types --check 无漂移；website 十门禁 + build:website；根门禁全绿。**已知存量红（非本轮，HEAD 即红）**：golden `$nav` / registry-drift `page/nav-global` / CssEngine emoji / hmr-dev-server 时序。
 **⑥ ★教训**：a) 配置字段**四个登记点**（ProteusConfig / CONFIG_FIELD_LAYERS / KNOWN_FIELDS / Schema）——只改其一 = 半接线；b) **归一器不得吞掉未知字段**（否则 config:check 看不到拼写错误——本轮实测被抓）；c) 形状归一必须**幂等**；d) 旧配置**自动迁移可用**（不破人），新形态是唯一 canonical。
+642. **★★★生成式「配置参考」分区（逐字段锚点导航）（★用户 2026-10-08，承接 #641）**：
+**① 触发**：用户「文档细粒度不够，很多字段没有单独详细说明，而且没做锚点导航，不符合大厂标准」。
+**② 根因**：docs 引擎 TOC/锚点**只从 markdown 标题生成**（`buildToc` 只收 heading block）；`10-config` 子字段此前是加粗伪标题 ⇒ 不进目录、无独立详情。
+**③ 做法**：`website/scripts/gen-config-ref.mjs` 用 **TypeScript 编译器 API** 解析 `packages/types/src/config.ts` → 逐字段（名/可选/类型/JSDoc，嵌套递归）渲染 `content/reference/config.md`（zh）+ `en/reference/config.md`（EN overlay 数据模块，结构同源）。
+**④ 形态**：每字段一个 `###` 标题（→ 锚点 → TOC 可跳转）+ 类型/必填/说明；嵌套字段递归；68 标题 / 7 分区。
+**⑤ 接线**：website gen/check:config-ref + 根 `check:config-ref`（进 verify）+ CI + website build 前置；10-config zh+en 互链。
+**⑥ 验证**：check:config-ref 绿 + **破坏性验证**（改 JSDoc → --check 红 rc=1；还原即绿）+ website 十门禁 + 根 gates-sync/script-compile/safe-edit/deps + build:website（文案/锚点 id/TOC 进 dist）。
+**⑦ ★教训**：a) **锚点/TOC = markdown 标题驱动**（加粗伪标题不进目录——细粒度文档须把子项升为标题）；b) 文档可**生成式**消除手写漂移（TS 编译器 API 解析类型，稳于正则）；c) 生成页双语结构必须同源（否则 en-drift 红）。

@@ -192,6 +192,7 @@ The `<route>` block is entirely optional — `path` / `name` are derived from th
 
 ## Next steps
 
+- [Configuration reference (per field)](/docs/reference/config): type / required / description for every field of proteus.config.ts (auto-generated, jumpable)
 - [Runtime config (app.config)](/docs/11-app-config): the full field table of runtime config and useAppConfig
 - [Routing & navigation](/docs/16-router): the complete model of the route tree and per-target codegen
 - [CLI & project commands](/docs/28-cli): the full `proteus` command-line family
