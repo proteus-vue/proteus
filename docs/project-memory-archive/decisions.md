@@ -2030,3 +2030,9 @@
 **新增门禁**：生成器内置空段落门禁（BLANK_FIELDS → `--check` 红）+ 破坏性验证。
 **验证**：126 字段零空段落 + EN 零中文 + 24 条 See-also 全解析 + 全量 test 5368/5368 + website 十门禁 + build:website。
 **★教训**：a) 被引用类型必须展开（EXPANDABLE 递归 + 跨文件解析）；b) **TS 的 JSDoc API 会截断含 `@` 的注释**（读原文才稳）；c) 内联数组元素类型与具名数组类型分开处理；d) **空段落是门禁问题**（机器可判）；e) 子代理按大厂标准审查性价比高。
+647. **★★★修两个官网实测缺陷：文档锚点撞挂载根 id（`app`）+ 站内链接被 Web 适配器劫持（★用户 2026-10-08「空白问题还是存在，因为关键词 app，#app 全局设了 min-height:100vh」+「点页内超链路由刷新但视图不刷新」）**：
+**① 锚点撞壳 id**：`website/index.html` 挂载根 `<div id="app">` + `#app{min-height:100vh}` 与生成页字段标题 `### app`→`H3#app` **id 撞车** ⇒ 壳规则把标题撑成整屏（「大片空白」）+ 锚点跳到挂载根。修：挂载根改命名空间 `proteus-app`（挂载根=内部实现、锚点=公开契约，撞车让壳让位）。
+**② 链接被劫持（真缺陷）**：`@proteus-vue/shared` 的 web-adapter **构造时**就挂 `document` 级 `<a>` 点击拦截器（preventDefault+pushState+emit）；该单例被 components/api/desktop 间接 import ⇒ vue-router 宿主（官网）也被装 ⇒ 站内 `<a>` 被绕过 vue-router 抢走 ⇒ URL 变/视图不动。修：**守卫**——仅有 Proteus 路由监听（onPageLoad 注册）时才拦截。
+**③ 验证**：浏览器实测（playwright/IAB）复现两症状 → 修后逐条复验 + 截图；全量 pnpm test 5372/5372 全绿；website 十门禁 + 根门禁 + build:website。
+**④ 新增门禁**：`tests/website-anchor-collision.test.ts`（壳 id 命名空间化 + 无锚点撞壳 id，破坏性验证过）+ `tests/web-adapter-link-guard.test.ts`（无监听不拦/有监听拦）。
+**⑤ ★教训**：a) **id 是全局命名空间**——壳裸词 id 与文档标题锚点撞车（壳样式误伤 + 锚点跳错），壳 id 应命名空间化；b) **模块加载副作用会污染宿主**——共享包顶层 `document.addEventListener` 对「不驱动本页的宿主」即劫持，应**惰性+守卫**；c) **浏览器实测不可替代**（均为「直开正常、交互才暴露」）。

@@ -22,7 +22,12 @@
     <link rel="mask-icon" href="favicon.svg" color="#8b5cf6" />
   </head>
   <body>
-    <div id="app"></div>
+    <!-- ★★★2026-10-08：挂载根 id 由裸词 `app` 改为命名空间 `proteus-app`——
+         文档内容里出现同名标题（如配置参考的 app 字段）时，其锚点 id 会**与挂载根撞车**：
+         `#app { min-height:100vh }` 会把那个标题撑成整屏（用户实测「点 app 看到大片空白」），
+         且页内锚点会跳到挂载根而非标题。挂载根是内部实现、锚点是公开契约 ⇒ 让挂载根让位。
+         守卫：tests/website-anchor-collision.test.ts（壳 id 不得与任何文档标题锚点相同）。 -->
+    <div id="proteus-app"></div>
     <!-- ★2026-09-11 dev 修复：Playground 在浏览器内联编译（@proteus-vue/compiler → @babel/*），
          而 @babel/types 等 CJS 依赖引用 `process.env.BABEL_TYPES_8_BREAKING`（bare process）。
          生产构建靠 NODE_ENV 替换裁掉该分支；**dev 模式** Vite 不注入 bare process → 模块初始化抛

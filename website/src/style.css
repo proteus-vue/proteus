@@ -93,7 +93,9 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-#app { min-height: 100vh; }
+/* ★挂载根 id 用命名空间（非 `app`）：避免与文档内容里同名标题（如配置参考的 `app` 字段）的
+   `id="app"` 撞车——否则 `#app{min-height:100vh}` 会把那个标题撑成整屏、页内锚点也跳错元素。 */
+#proteus-app { min-height: 100vh; }
 .site { min-height: 100vh; display: flex; flex-direction: column; }
 .main { flex: 1; width: 100%; padding: 0 24px; }
 .site > .nav, .site > .footer { width: calc(100% - 48px); max-width: var(--container); }

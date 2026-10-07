@@ -63,4 +63,4 @@ for (const [name, dir] of Object.entries(createDesktopDirectives())) {
 }
 
 app.use(router)
-app.mount('#app')
+app.mount('#proteus-app')
