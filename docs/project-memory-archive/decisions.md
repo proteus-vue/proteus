@@ -1882,3 +1882,14 @@
  - **正解**：这是**打包**（每个分发 App 的 APK 要把当前共享 bundle 打进 assets），不是**宿主耦合**。与"改完 JS 要重新 `vite build` 出网页"同性质——改了共享代码，**每个要分发的壳都需重建**；但**逻辑只有一份**（不在各宿主重复实现）。
 **③ ★工作流修复（避免再装错）**：`build-and-run.sh` 的 `--css`（cssconf）此前**安装/启动目标落到 else 分支**（layoutcore）⇒ 装错包、启错包。补 `elif "$CSSCONF"` → `PKG=dev.proteus.cssconf` · `ACTIVITY=…SuperappActivity`（`bash -n` 通过）。★并登记：**做 css-conformance 验证必须构 `--css`（cssconf 独立应用）**，不是默认 `layoutcore`。
 **④ ★教训**：a) **"改了共享代码，设备上没变"先查装的是哪个壳**——本仓 Android 有 **7 个分发包**（layoutcore / cssconf / lights / flip / ink / inkscroll / demo），共享同一 bundle+内核+Activity，**各自需重建**；b) **判断"是否宿主耦合"看改动落在哪一层**（`packages/*` 共享 vs `hosts/<端>/` 私有）——本次落 `packages/slot-runtime`（共享）；c) **构建脚本的"目标包"映射要与实际分发形态对齐**（`--css` 必须装/启 cssconf）——漏映射 ⇒ 装了也看不出。
+
+629. **★★iOS 字距/文本装饰丢失（`styleOf` 白名单漏 `letterSpacing`/`textDecoration`）——子代理四端审查抓出（★用户 2026-10-08「让子代理审查下文本样式多端对齐，我感觉还有问题」）**：
+**① 审查方式**：独立子代理审 `font.vue`（文本样式）四端截图（Web 基准 + iOS/Android/鸿蒙）+ 逐案量化（换算到 css px）。**用户"感觉还有问题"是对的**。
+**② 两个 clear defect（同一根因）**：案例 **D letter-spacing**：iOS 字距偏窄（串宽 **119css vs Web 143css**）；案例 **F text-decoration**：iOS **下划线整条消失**（Web/Android/鸿蒙都有）。
+**③ 根因 = `styleOf` 白名单漏字段**：`hosts/ios/ProteusHost/runtime/selfdraw-scene.swift::styleOf` 的白名单只含 `backgroundColor/color/text/fontFamily/textAlign/borderColor/lineHeight/whiteSpace/wordBreak/overflow/textOverflow/overflowX/overflowY`（字符串）+ 若干数值字段——**没有 `letterSpacing`（数值）与 `textDecoration`（字符串）**。而 `styleOf` 是 **App 建层必经之路**（`buildLayers` 用它）+ **度量真源**（`letterSpacingOf`/`lineHeightOf` 读 `metaByNodeId` = styleOf 产物）⇒ 漏透传 ⇒ ① 绘制端 `textLayerString` 读不到 kern/underline；② 度量端也无 kern（盒宽偏窄）。
+ - **真机取证**（临时 `TXTDIAG` 日志，已移除）：全页 `kern=nil deco=nil`，而节点里明明有值（`letterSpacing:2` / `textDecoration:"underline"`）⇒ 证实"进 styleOf 被吞"。★**这也是我第一轮 `needsCoreText` 修复"无效"的原因**（字段在更上游就被丢了，下手太晚）。
+**④ 同时修正**：`needsCoreText` 此前只认 `lineHeight`；扩为「行高 / 字距 / 装饰」任一 ⇒ 走 CoreText（`CATextLayer` 默认渲染器丢弃 NSAttributedString 的 kern/underline——两条路径都要对）。
+**⑤ 验证**：iOS 真机 before/after：D 字距恢复（119→≈143css = Web）、F 下划线出现、C/E 无回归。门禁 `check-selfdraw-compile`/`host-rounding`/`platform-layering`/`no-blind-wait`/`host-kernel-keys` 全绿。
+**⑥ ★★结构性缺口（登记）**：`check:host-kernel-keys` 明说"**iOS/鸿蒙把 nodes 原样转发（无白名单）**"——但 iOS 的 `styleOf` **恰恰是一份自绘样式白名单**，该门禁**不覆盖它**。于是同款缺陷**已复发多次**（该文件注释自记：clipPath/glow/mask、borderRadiusCorners 静默 3 个月、justifySelf/gridColumn、本轮 letterSpacing/textDecoration）⇒ **须补门禁**：iOS `styleOf` 透传字段 vs 宿主实际消费的绘制字段集（下一步）。
+**⑦ 未修（如实登记，非 clear defect）**：a) **默认 `line-height` 三端偏紧**（无声明 `line-height` 的卡片：Web ≈20css/行 vs iOS ≈17 / Android ≈18.7 / 鸿蒙 ≈16.6）——属**字体度量差**（`normal` 由各端字体 metrics 决定），候选进 `allow-differences`；b) 鸿蒙文本在盒内垂直居中偏下 ~2–3.6css；c) Android/鸿蒙品牌红略暗。三者均 minor，未在本轮改。
+**⑧ 教训**：**"字段在必经白名单被吞"是最高频的静默降级**（无报错、无日志）——修这类 bug **先验证字段到达了绘制层**（打点），别从"下游渲染对不对"猜起（我第一轮就猜错了层）。
