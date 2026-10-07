@@ -4309,6 +4309,11 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             rects[id] = CGRect(x: r["x"] ?? 0, y: r["y"] ?? 0, width: r["width"] ?? 0, height: r["height"] ?? 0)
         }
 
+        // ★★★同一闪屏根因（见 render 全量路径的注释）：清树 + 物化若**各自 commit**，render server
+        //   会先收到空树、再收到"静态部分"、再收到"可见行"——多个中间帧 ⇒ 闪。⇒ 整个首帧挂载
+        //   （清树 → 静态物化 → 可见行物化）**包进同一事务**，原子提交。
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
         // ③ 虚拟化初始化（清层 + 真源表 + 空池）
         view.clearLayers()
         let poolCap = (root["poolCapacity"] as? Int) ?? 96
@@ -4323,6 +4328,7 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
 
         // ⑤ 首帧：可见区 → 核心决策 → 物化（含预载区）
         let scrolled = applyVirtualScroll(dx: 0, dy: 0, explicitRange: view.visibleRowRange())
+        CATransaction.commit()
         lastNodes = nodes
         lastNodeCount = nodes.count
         lastTreeHash = String(format: "%08x", requestJson.hashValue)
@@ -7022,8 +7028,18 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             //   而增量/虚拟化路径有 —— 分叉且静默（本仓纪律：同一语义一处实现）。
             flat.append((id: id, parentId: pid, rect: rect, style: SelfDrawView.styleOf(n)))
         }
+        // ★★★切换页面"闪一下"的根因（2026-10-08 · 用户「iOS 每次导航切换页面都会闪下，安卓/鸿蒙丝滑」）：
+        //   `clearLayers` 与 `buildLayers` **各自** begin/commit 一个 CATransaction —— 而
+        //   `CATransaction.commit()` 在**非嵌套**时会把该事务**立即 flush 给 render server**
+        //   ⇒ render server 先收到"一棵空树（只剩 view 黑底）"、再收到"新树" ⇒ 中间那一帧**必现黑闪**
+        //   （Android/鸿蒙只重画一张 canvas、层树不销毁重建，故无此空窗）。
+        //   ⇒ 把"清树 + 建树"**包进同一事务**：内层 begin/commit 变成嵌套（不再立即 flush），
+        //     外层 commit 时才**原子地**一次性提交"旧树→新树"，render server 不经过空树态。
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
         view.clearLayers()
         view.buildLayers(flat: flat)
+        CATransaction.commit()
         // ★批次 42（动效 · 对齐 Web）：**CSS animation**（编译期折叠）——建层后启动（各节点 style["animation"] → anims → 内核 anim_start + 帧循环）
         cssAnimNodes = startCssAnimations(flat: flat)
         // ★★C2：全量挂载后，按**内核解析好的段列表**补建 SVG 描边子层（见 attachSvgStroke 注释）
