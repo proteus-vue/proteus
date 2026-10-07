@@ -749,6 +749,27 @@ Java_dev_proteus_layoutcore_QuickJsEngine_nativeSetHostCallback(JNIEnv *env, jcl
   }
 }
 
+/**
+ * ★★★重置引擎上下文（新 Activity 启动前调）：释放持久上下文/运行时 ⇒ 下次 eval 重建**全新**上下文。
+ *
+ * 【为什么必须有（用户 2026-10-08「安卓有时点开应用直接空白，杀后台重开正常」）】
+ *   本桥的 `g_ctx/g_rt` 是**进程级 static**（跨 Activity 实例存活）。旧实例的 JS 全局态
+ *   （路由栈 / 当前屏 / 屏实例）**不随 Activity 销毁而清** —— 新实例 `boot()` 在同一**脏上下文中**
+ *   再 `eval` bundle + `bootSuperapp` ⇒ 路由/启动判定异常 ⇒ **空白**；**杀进程（清 static）即恢复**
+ *   （与用户观察完全一致）。⇒ 每个 Activity 启动前显式重置 = **每次全新上下文**
+ *   （与 iOS 的"每 Activity 新 JSContext"对齐）。
+ *
+ * 【为什么也清 guest 回调名】`g_gesture_cb` 指向旧上下文里的全局函数 —— 重置后必须失效。
+ * 【不 DeleteGlobalRef 宿主对象】紧接的 `nativeSetHostCallback` 会替换它（重置后旧对象已无引用路径）。
+ */
+JNIEXPORT void JNICALL
+Java_dev_proteus_layoutcore_QuickJsEngine_nativeResetEngine(JNIEnv *env, jclass cls) {
+  (void)env; (void)cls;
+  if (g_ctx != NULL) { JS_FreeContext(g_ctx); g_ctx = NULL; }
+  if (g_rt != NULL) { JS_FreeRuntime(g_rt); g_rt = NULL; }
+  g_gesture_cb[0] = '\0';
+}
+
 /** 引擎版本（诊断：确认 .so 真的加载了 QuickJS） */
 JNIEXPORT jstring JNICALL
 Java_dev_proteus_layoutcore_QuickJsEngine_nativeVersion(JNIEnv *env, jclass cls) {

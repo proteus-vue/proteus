@@ -109,6 +109,10 @@ public class SuperappActivity extends android.app.Activity {
     // ────────────────────────── 启动 ──────────────────────────
 
     private void boot() {
+        // ★★★每次新 Activity 启动前**重置引擎上下文**（用户 2026-10-08「安卓有时点开直接空白，杀后台重开正常」）：
+        //   本桥 JS 上下文是**进程级 static**，旧 Activity 的脏全局态（路由/当前屏）会污染新实例的 boot ⇒ 空白。
+        //   重置后 boot 在**全新上下文**里 eval bundle —— 与 iOS 的"每实例新 JSContext"对齐。
+        QuickJsEngine.resetEngine();
         // ① 建宿主桥（能力 + 屏树）——屏树供 superapp 路由语义（screen.mount/stats/rect…）
         caps = new HostCapabilities(this);
         screenHost = new ScreenHost(root);

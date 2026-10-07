@@ -48,6 +48,15 @@ public final class QuickJsEngine {
     /** 执行 JS 并注入 `proteusHost.post(json)`（→ `host.post` 回调） */
     static native String nativeEvalWithHost(String source);
 
+    /**
+     * ★★★重置引擎上下文（新 Activity 启动前调）——见 C 侧 `nativeResetEngine` 注释：
+     *   本桥的 JS 上下文是**进程级 static**，旧 Activity 的脏全局态会让新实例 boot 空白；重置 = 每次全新上下文。
+     */
+    static native void nativeResetEngine();
+
+    /** 重置引擎上下文（引擎未加载 ⇒ no-op）。**每个新 Activity 的 boot 开头调用**。 */
+    public static void resetEngine() { if (loaded) nativeResetEngine(); }
+
     /** 注册宿主回调（须有 `public void post(String)` 方法）；传 null 解除 */
     static native void nativeSetHostCallback(Object host);
 
