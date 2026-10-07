@@ -805,6 +805,9 @@ pub(crate) fn style_from_dto(dto: &NodeDto) -> Result<LStyle, String> {
             "static" => Position::Static,
             "relative" => Position::Relative,
             "absolute" => Position::Absolute,
+            // ★批 A（2026-10-08 · 决策 #651）：fixed / sticky（超应用刚需——固定头/底栏、吸顶）
+            "fixed" => Position::Fixed,
+            "sticky" => Position::Sticky,
             other => return Err(format!("未知 position：{other}")),
         };
     }

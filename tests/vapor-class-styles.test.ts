@@ -106,7 +106,8 @@ describe('★C1 最小切片 · SFC <style> 单类规则 → class→节点样�
     expect((mIf.z as { display?: string }).display, 'display:inline-flex 不支持 ⇒ 跳过（不传非法值）').toBeUndefined()
     const m2 = parseClassStyles('.y { display: flex; position: sticky }', () => {})
     expect((m2.y as { display?: string }).display, 'display:flex 合法保留').toBe('flex')
-    expect((m2.y as { position?: string }).position, 'position:sticky 不支持 ⇒ 跳过').toBeUndefined()
+    // ★批 A（2026-10-08 · 决策 #651）：sticky/fixed 已入内核 position 枚举 ⇒ 不再跳过、如实保留
+    expect((m2.y as { position?: string }).position, 'position:sticky 现支持 ⇒ 保留').toBe('sticky')
     // 真机建树契约：折叠出的值必须在内核封闭集内
     const diag: string[] = []
     parseStaticStyle('display: inline-flex', (x) => diag.push(x))
@@ -1530,6 +1531,13 @@ describe('★flex-direction 初值归一（display:flex 缺省补 row · 对齐 
     expect(parseStaticStyle('padding-top:10vh', () => {})).toEqual({ padding: { top: 'env:--pf-vh*0.1' } })
     // calc 内 env*vw 缩放
     expect(parseStaticStyle('width:calc(var(--pf-vw) * 0.5)', () => {})).toEqual({ width: 'env:--pf-vw*0.5' })
+  })
+  it('★★★批 A 定位族（2026-10-08 · 决策 #651）：position fixed/sticky 如实透传（不再被静默改写）', () => {
+    // 旧批次 45 把 fixed 静默改成 absolute（理由"App 单全屏视口等价"）——内容滚动后不成立 ⇒ 移除。
+    expect(parseStaticStyle('position: fixed; top: 0; left: 0', () => {})).toEqual({ position: 'fixed', top: 0, left: 0 })
+    expect(parseStaticStyle('position: sticky; top: 8px', () => {})).toEqual({ position: 'sticky', top: 8 })
+    // static/relative/absolute 不变
+    expect(parseStaticStyle('position: absolute; right: 6', () => {})).toEqual({ position: 'absolute', right: 6 })
   })
   it('★★★E 组设备标量 --pf-hairline（2026-10-08 · 决策 #598）：边框细线宽度折 env（长手 + 简写 + 四值）', () => {
     // 边框宽度**长手**（绘制侧长度字段）

@@ -90,7 +90,8 @@ const LAYOUT_FIELDS = new Set<string>(APP_LAYOUT_FIELDS)
  */
 export const APP_ENUM_VALUES: Record<string, readonly string[]> = {
   display: ['flex', 'grid', 'none'],
-  position: ['static', 'relative', 'absolute'],
+  // ★批 A（2026-10-08 · 决策 #651）：fixed / sticky 入集（超应用刚需——固定头/底栏、吸顶）。
+  position: ['static', 'relative', 'absolute', 'fixed', 'sticky'],
   overflow: ['visible', 'hidden', 'scroll', 'auto'],
   // ★★★overflow-x 项（同上）：逐轴同集（归一化后出现 auto）
   overflowX: ['visible', 'hidden', 'scroll', 'auto'],
@@ -947,11 +948,10 @@ export function parseStaticStyle(
           if (dv === '-webkit-box' || dv === '-webkit-inline-box' || dv === 'box') continue
         }
         let enumVal = rawVal.trim().toLowerCase()
-        // ★★★批次 45：`position: fixed` → `absolute`。App 端**单全屏视口**（无滚动视口/无窗口）——
-        //   此处两者等价（都相对视口定位）；内核 position 枚举只有 static/relative/absolute。
-        //   实测来源：App.vue 的 `.sa-chrome`（固定浮层，Web 真值 `position:fixed;inset:0`）此前被
-        //   诊断跳过 ⇒ chrome 浮层丢失定位 ⇒ 被压进普通流（页面布局塌）。
-        if (key === 'position' && enumVal === 'fixed') enumVal = 'absolute'
+        // ★★★批 A（2026-10-08 · 决策 #651）：**移除**批次 45 的 `position: fixed` → `absolute` 静默改写。
+        //   旧理由「App 单全屏视口，fixed/absolute 等价」在**内容已支持滚动**后不成立——
+        //   fixed 应**不随内容滚动**、absolute 会随。内核现已支持 `Position::Fixed`（宿主负责不随滚动）
+        //   ⇒ 如实透传 `fixed`（不再静默改写；`sticky` 同理已入内核）。
         const allowed = APP_ENUM_VALUES[key]
         if (allowed && !allowed.includes(enumVal)) {
           pushDiag(
