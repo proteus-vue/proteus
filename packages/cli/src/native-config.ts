@@ -52,6 +52,15 @@ export interface ResolvedAndroidNative {
   orientation: 'portrait' | 'landscape' | 'unspecified'
   permissions: string[]
   icon?: string
+  launchPage?: string
+  theme?: string
+  allowBackup?: boolean
+  largeHeap?: boolean
+  hardwareAccelerated?: boolean
+  supportsRtl?: boolean
+  usesCleartextTraffic?: boolean
+  networkSecurityConfig?: string
+  appCategory?: string
 }
 
 export interface ResolvedIosNative {
@@ -62,6 +71,15 @@ export interface ResolvedIosNative {
   minimumOSVersion: string
   deviceFamily: number[]
   orientations: Array<'portrait' | 'portrait-upside-down' | 'landscape-left' | 'landscape-right'>
+  launchPage?: string
+  userInterfaceStyle?: 'light' | 'dark' | 'automatic'
+  statusBarStyle?: string
+  statusBarHidden?: boolean
+  urlSchemes?: string[]
+  privacyUsageDescriptions?: Record<string, string>
+  appCategory?: string
+  requiresFullScreen?: boolean
+  developmentRegion?: string
 }
 
 export interface ResolvedHarmonyNative {
@@ -74,6 +92,9 @@ export interface ResolvedHarmonyNative {
   targetSdkVersion: string
   deviceTypes: string[]
   permissions: string[]
+  icon?: string
+  appCategory?: string
+  orientation?: string
 }
 
 export interface ResolvedNativeConfig {
@@ -133,6 +154,15 @@ export function resolveNativeConfig(native: NativeSections | undefined, fallback
     orientation: a.orientation ?? 'unspecified',
     permissions: a.permissions ?? [],
     icon: a.icon,
+    launchPage: a.launchPage,
+    theme: a.theme,
+    allowBackup: a.allowBackup,
+    largeHeap: a.largeHeap,
+    hardwareAccelerated: a.hardwareAccelerated,
+    supportsRtl: a.supportsRtl,
+    usesCleartextTraffic: a.usesCleartextTraffic,
+    networkSecurityConfig: a.networkSecurityConfig,
+    appCategory: a.appCategory,
   }
   const ios: ResolvedIosNative = {
     bundleId: i.bundleId,
@@ -142,6 +172,15 @@ export function resolveNativeConfig(native: NativeSections | undefined, fallback
     minimumOSVersion: i.minimumOSVersion ?? '15.0',
     deviceFamily: i.deviceFamily ?? [1],
     orientations: i.orientations ?? ['portrait'],
+    launchPage: i.launchPage,
+    userInterfaceStyle: i.userInterfaceStyle,
+    statusBarStyle: i.statusBarStyle,
+    statusBarHidden: i.statusBarHidden,
+    urlSchemes: i.urlSchemes,
+    privacyUsageDescriptions: i.privacyUsageDescriptions,
+    appCategory: i.appCategory,
+    requiresFullScreen: i.requiresFullScreen,
+    developmentRegion: i.developmentRegion,
   }
   const harmony: ResolvedHarmonyNative = {
     bundleName: h.bundleName,
@@ -153,6 +192,9 @@ export function resolveNativeConfig(native: NativeSections | undefined, fallback
     targetSdkVersion: h.targetSdkVersion ?? h.compatibleSdkVersion ?? '5.0.5(17)',
     deviceTypes: h.deviceTypes ?? ['phone', 'tablet', '2in1'],
     permissions: h.permissions ?? [],
+    icon: h.icon,
+    appCategory: h.appCategory,
+    orientation: h.orientation,
   }
   return {
     app: { name, version, buildNumber },
@@ -170,6 +212,15 @@ export function resolveNativeConfig(native: NativeSections | undefined, fallback
         orientation: a.orientation != null,
         permissions: a.permissions != null,
         icon: a.icon != null,
+        launchPage: a.launchPage != null,
+        theme: a.theme != null,
+        allowBackup: a.allowBackup != null,
+        largeHeap: a.largeHeap != null,
+        hardwareAccelerated: a.hardwareAccelerated != null,
+        supportsRtl: a.supportsRtl != null,
+        usesCleartextTraffic: a.usesCleartextTraffic != null,
+        networkSecurityConfig: a.networkSecurityConfig != null,
+        appCategory: a.appCategory != null,
       },
       ios: {
         bundleId: i.bundleId != null,
@@ -179,6 +230,15 @@ export function resolveNativeConfig(native: NativeSections | undefined, fallback
         minimumOSVersion: i.minimumOSVersion != null,
         deviceFamily: i.deviceFamily != null,
         orientations: i.orientations != null,
+        launchPage: i.launchPage != null,
+        userInterfaceStyle: i.userInterfaceStyle != null,
+        statusBarStyle: i.statusBarStyle != null,
+        statusBarHidden: i.statusBarHidden != null,
+        urlSchemes: i.urlSchemes != null,
+        privacyUsageDescriptions: i.privacyUsageDescriptions != null,
+        appCategory: i.appCategory != null,
+        requiresFullScreen: i.requiresFullScreen != null,
+        developmentRegion: i.developmentRegion != null,
       },
       harmony: {
         bundleName: h.bundleName != null,
@@ -190,6 +250,9 @@ export function resolveNativeConfig(native: NativeSections | undefined, fallback
         targetSdkVersion: h.targetSdkVersion != null,
         deviceTypes: h.deviceTypes != null,
         permissions: h.permissions != null,
+        icon: h.icon != null,
+        appCategory: h.appCategory != null,
+        orientation: h.orientation != null,
       },
     },
   }
@@ -228,11 +291,66 @@ function setPlistString(src: string, key: string, value: string): [string, boole
   return [src, false]
 }
 
+/** plist 字符串：存在则改，不存在则在末尾 `</dict>` 前插入（返回是否命中——总是命中，因为总有 </dict>） */
+function setPlistStringOrAdd(src: string, key: string, value: string): [string, boolean] {
+  const [s, hit] = setPlistString(src, key, value)
+  if (hit) return [s, true]
+  const idx = src.lastIndexOf('</dict>')
+  if (idx < 0) return [src, false]
+  const ins = `  <key>${key}</key><string>${value}</string>\n`
+  return [src.slice(0, idx) + ins + src.slice(idx), true]
+}
+
+/** plist 布尔：存在则改，不存在则插入（返回是否命中） */
+function setPlistBoolOrAdd(src: string, key: string, value: boolean): [string, boolean] {
+  const re = new RegExp(`(<key>${key}</key>\\s*)<true/>|<false/>`)
+  const tag = value ? '<true/>' : '<false/>'
+  if (re.test(src)) return [src.replace(new RegExp(`(<key>${key}</key>\\s*)(<true/>|<false/>)`), `$1${tag}`), true]
+  const idx = src.lastIndexOf('</dict>')
+  if (idx < 0) return [src, false]
+  return [src.slice(0, idx) + `  <key>${key}</key>${tag}\n` + src.slice(idx), true]
+}
+
+/** plist URL scheme（CFBundleURLTypes：array of dict）——存在则替换，不存在则插入（嵌套 array，需括号配平） */
+function setPlistUrlSchemes(src: string, schemes: string[]): [string, boolean] {
+  const body = schemes.map((s) => `<dict><key>CFBundleURLSchemes</key><array><string>${s}</string></array></dict>`).join('')
+  const arr = `  <key>CFBundleURLTypes</key><array>${body}</array>\n`
+  const keyRe = /<key>CFBundleURLTypes<\/key>\s*<array>/
+  const km = keyRe.exec(src)
+  if (km) {
+    // 从 <array> 起配平（内部还有 <array>…</array>）找到与外层配对的 </array>
+    let i = km.index + km[0].length
+    let depth = 1
+    while (i < src.length) {
+      const open = src.indexOf('<array>', i)
+      const close = src.indexOf('</array>', i)
+      if (close < 0) break
+      if (open >= 0 && open < close) { depth++; i = open + '<array>'.length; continue }
+      depth--; i = close + '</array>'.length
+      if (depth === 0) return [src.slice(0, km.index) + `<key>CFBundleURLTypes</key><array>${body}</array>` + src.slice(i), true]
+    }
+    return [src, false]
+  }
+  const idx = src.lastIndexOf('</dict>')
+  if (idx < 0) return [src, false]
+  return [src.slice(0, idx) + arr + src.slice(idx), true]
+}
+
 /** 替换 json5 里 `"key": "value"`（字符串值）——`src` 为单个对象体 */
 function setJson5String(src: string, key: string, value: string): [string, boolean] {
   const re = new RegExp(`("${key}"\\s*:\\s*)"[^"]*"`)
   if (re.test(src)) return [src.replace(re, `$1"${value}"`), true]
   return [src, false]
+}
+
+/** json5 字符串：存在则改，不存在则在对象体开头插入（`src` 为对象体；返回是否命中） */
+function setJson5StringOrAdd(src: string, key: string, value: string): [string, boolean] {
+  const [s, hit] = setJson5String(src, key, value)
+  if (hit) return [s, true]
+  const idx = src.indexOf('{')
+  if (idx < 0) return [src, false]
+  const ws = /\n\s*/.exec(src.slice(idx))?.[0] ?? '\n  '
+  return [src.slice(0, idx + 1) + `${ws}"${key}": "${value}",` + src.slice(idx + 1), true]
 }
 
 /** 替换 json5 里 `"key": 123`（数值） */
@@ -339,6 +457,26 @@ function applyAndroid(hostDir: string, r: ResolvedAndroidNative, d: Record<keyof
     push('android:icon', r.icon, '', hit)
     src = s
   }
+  // ★扩充字段：起始页（manifest meta-data ProteusHomePage）/ 主题 / 应用标志（set-or-add 到 <application>）
+  if (d.launchPage && r.launchPage) {
+    const re = /(<meta-data\s+android:name="ProteusHomePage"\s+android:value=")[^"]*(")/
+    if (re.test(src)) { src = src.replace(re, `$1${r.launchPage}$2`); out.changes.push({ file: rel, field: 'ProteusHomePage', to: r.launchPage }) }
+    else out.skipped.push(`${rel}:ProteusHomePage（无 meta-data 锚点）`)
+  }
+  const appAttrs: Array<[string, string]> = []
+  if (d.theme && r.theme) appAttrs.push(['android:theme', r.theme])
+  if (d.allowBackup) appAttrs.push(['android:allowBackup', String(r.allowBackup)])
+  if (d.largeHeap) appAttrs.push(['android:largeHeap', String(r.largeHeap)])
+  if (d.hardwareAccelerated) appAttrs.push(['android:hardwareAccelerated', String(r.hardwareAccelerated)])
+  if (d.supportsRtl) appAttrs.push(['android:supportsRtl', String(r.supportsRtl)])
+  if (d.usesCleartextTraffic) appAttrs.push(['android:usesCleartextTraffic', String(r.usesCleartextTraffic)])
+  if (d.networkSecurityConfig && r.networkSecurityConfig) appAttrs.push(['android:networkSecurityConfig', r.networkSecurityConfig])
+  if (d.appCategory && r.appCategory) appAttrs.push(['android:appCategory', r.appCategory])
+  for (const [attr, val] of appAttrs) {
+    const [s, hit] = setOrAddAttrInTag(src, 'application', attr, val)
+    push(attr, val, '', hit)
+    src = s
+  }
   // permissions（幂等：已含则不加）
   if (d.permissions) for (const p of r.permissions) {
     if (src.includes(`android:name="${p}"`)) continue
@@ -388,6 +526,34 @@ function applyIos(hostDir: string, r: ResolvedIosNative, d: Record<keyof Resolve
     const re = /(<key>UISupportedInterfaceOrientations<\/key>\s*)<array>[\s\S]*?<\/array>/
     if (re.test(src)) { src = src.replace(re, `$1${arr}`); out.changes.push({ file: rel, field: 'UISupportedInterfaceOrientations', to: r.orientations.join(',') }) }
   }
+  // ★扩充字段：起始页（ProteusHomePage）/ UI 风格 / 状态栏 / 类别 / 全屏 / 语言（set-or-add 字符串）
+  const strFields: Array<[string, string | undefined, boolean]> = [
+    ['ProteusHomePage', r.launchPage, !!d.launchPage],
+    ['UIUserInterfaceStyle', r.userInterfaceStyle, !!d.userInterfaceStyle],
+    ['UIStatusBarStyle', r.statusBarStyle, !!d.statusBarStyle],
+    ['LSApplicationCategoryType', r.appCategory, !!d.appCategory],
+    ['CFBundleDevelopmentRegion', r.developmentRegion, !!d.developmentRegion],
+  ]
+  for (const [k, v, on] of strFields) {
+    if (!on || v == null) continue
+    const [s, hit] = setPlistStringOrAdd(src, k, v)
+    if (hit) { out.changes.push({ file: rel, field: k, to: v }); src = s }
+  }
+  if (d.statusBarHidden) { const [s, hit] = setPlistBoolOrAdd(src, 'UIStatusBarHidden', !!r.statusBarHidden); if (hit) { out.changes.push({ file: rel, field: 'UIStatusBarHidden', to: String(!!r.statusBarHidden) }); src = s } }
+  if (d.requiresFullScreen) { const [s, hit] = setPlistBoolOrAdd(src, 'UIRequiresFullScreen', !!r.requiresFullScreen); if (hit) { out.changes.push({ file: rel, field: 'UIRequiresFullScreen', to: String(!!r.requiresFullScreen) }); src = s } }
+  // CFBundleURLTypes（URL scheme 深链注册）
+  if (d.urlSchemes && r.urlSchemes && r.urlSchemes.length) {
+    const [s, hit] = setPlistUrlSchemes(src, r.urlSchemes)
+    if (hit) { out.changes.push({ file: rel, field: 'CFBundleURLTypes', to: r.urlSchemes.join(',') }); src = s }
+  }
+  // 隐私用途说明（NSXxxUsageDescription——set-or-add 字符串）
+  if (d.privacyUsageDescriptions && r.privacyUsageDescriptions) {
+    for (const [k, v] of Object.entries(r.privacyUsageDescriptions)) {
+      const [s, hit] = setPlistStringOrAdd(src, k, v)
+      if (hit) { out.changes.push({ file: rel, field: k, to: v }); src = s }
+      else out.skipped.push(`${rel}:${k}（无 </dict> 锚点）`)
+    }
+  }
   fs.writeFileSync(file, src)
 }
 
@@ -401,6 +567,8 @@ function applyHarmony(hostDir: string, r: ResolvedHarmonyNative, d: Record<keyof
     if (d.vendor) { const [s, hit] = setJson5String(src, 'vendor', r.vendor); if (hit) { out.changes.push({ file: rel, field: 'vendor', to: r.vendor }); src = s } }
     if (d.versionCode) { const [s, hit] = setJson5Number(src, 'versionCode', r.versionCode); if (hit) { out.changes.push({ file: rel, field: 'versionCode', to: String(r.versionCode) }); src = s } }
     if (d.versionName) { const [s, hit] = setJson5String(src, 'versionName', r.versionName); if (hit) { out.changes.push({ file: rel, field: 'versionName', to: r.versionName }); src = s } }
+    if (d.icon && r.icon) { const [s, hit] = setJson5StringOrAdd(src, 'icon', r.icon); if (hit) { out.changes.push({ file: rel, field: 'icon', to: r.icon }); src = s } }
+    if (d.appCategory && r.appCategory) { const [s, hit] = setJson5StringOrAdd(src, 'appCategory', r.appCategory); if (hit) { out.changes.push({ file: rel, field: 'appCategory', to: r.appCategory }); src = s } }
     fs.writeFileSync(appJson, src)
   } else out.skipped.push('AppScope/app.json5（未找到）')
 
@@ -425,6 +593,20 @@ function applyHarmony(hostDir: string, r: ResolvedHarmonyNative, d: Record<keyof
           nb = nb.replace(/\s*$/, `,\n    "requestPermissions": ${arr}\n  `)
         }
         out.changes.push({ file: rel, field: 'requestPermissions', to: r.permissions.join(',') })
+      }
+      // ★入口 Ability 方向（abilities[0].orientation）——存在则改，不存在则在该 ability 对象体首插
+      if (d.orientation && r.orientation) {
+        const abRe = /(["']abilities["']\s*:\s*\[\s*\{)/
+        const m = abRe.exec(nb)
+        if (m) {
+          const head = m[0]
+          const tail = nb.slice(m.index + head.length)
+          const re = /(["']orientation["']\s*:\s*)"[^"]*"/
+          nb = re.test(tail)
+            ? nb.slice(0, m.index + head.length) + tail.replace(re, `$1"${r.orientation}"`) + ''
+            : nb.slice(0, m.index + head.length) + `\n        "orientation": "${r.orientation}",` + tail
+          out.changes.push({ file: rel, field: 'abilities[0].orientation', to: r.orientation })
+        } else out.skipped.push(`${rel}:orientation（无 abilities 锚点）`)
       }
       if (nb !== body) { const [s2] = setJson5ObjectBody(src, 'module', nb); src = s2 }
     } else out.skipped.push(`${rel}:module 体（未找到）`)

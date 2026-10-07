@@ -335,6 +335,69 @@ UIDeviceFamily（1=iPhone / 2=iPad；缺省 [1]）
 
 支持的方向（缺省 [portrait]）
 
+### `targets.ios.launchPage`
+
+- **类型**：`string`
+- **必填**：否
+
+起始页名（Info.plist 的 ProteusHomePage；缺省 index）——宿主启动时渲染该屏
+
+### `targets.ios.userInterfaceStyle`
+
+- **类型**：`'light' | 'dark' | 'automatic'`
+- **必填**：否
+
+UIUserInterfaceStyle（界面明暗：`'light'` / `'dark'` / `'automatic'`；缺省不写 = 系统）
+
+### `targets.ios.statusBarStyle`
+
+- **类型**：`string`
+- **必填**：否
+
+UIStatusBarStyle（状态栏样式，如 `UIStatusBarStyleLightContent`；缺省不写）
+
+### `targets.ios.statusBarHidden`
+
+- **类型**：`boolean`
+- **必填**：否
+
+UIStatusBarHidden（隐藏状态栏；缺省不写）
+
+### `targets.ios.urlSchemes`
+
+- **类型**：`string[]`
+- **必填**：否
+
+URL scheme 白名单（CFBundleURLTypes）——注册深链/被其他 App 拉起（如 `['myapp']` → `myapp://…`）
+
+### `targets.ios.privacyUsageDescriptions`
+
+- **类型**：`Record<string, string>`
+- **必填**：否
+
+隐私用途说明（NSXxxUsageDescription）——★上架必需：key 为完整 plist 键名（如 `NSCameraUsageDescription`），value 为面向用户的用途字符串
+
+### `targets.ios.appCategory`
+
+- **类型**：`string`
+- **必填**：否
+
+应用类别（LSApplicationCategoryType，如 `public.app-category.games`；缺省不写）
+
+### `targets.ios.requiresFullScreen`
+
+- **类型**：`boolean`
+- **必填**：否
+
+UIRequiresFullScreen（iPad 要求全屏、禁用分屏；缺省不写）
+
+### `targets.ios.developmentRegion`
+
+- **类型**：`string`
+- **必填**：否
+
+CFBundleDevelopmentRegion（缺省开发语言，如 `zh_CN` / `en`；缺省不写）
+
 ## 目标端 · Android
 
 ### `targets.android.applicationId`
@@ -400,6 +463,69 @@ targetSdkVersion（缺省 34）
 
 应用图标资源名（android:icon；缺省不写）
 
+### `targets.android.launchPage`
+
+- **类型**：`string`
+- **必填**：否
+
+起始页名（manifest 的 ProteusHomePage meta-data；缺省 index）——宿主启动时渲染该屏
+
+### `targets.android.theme`
+
+- **类型**：`string`
+- **必填**：否
+
+应用主题（application android:theme，如 `@android:style/Theme.NoTitleBar.Fullscreen`；缺省不写）
+
+### `targets.android.allowBackup`
+
+- **类型**：`boolean`
+- **必填**：否
+
+android:allowBackup（允许 adb/云备份；缺省不写 = 平台默认 true）
+
+### `targets.android.largeHeap`
+
+- **类型**：`boolean`
+- **必填**：否
+
+android:largeHeap（申请大堆——大图/大列表场景；缺省不写）
+
+### `targets.android.hardwareAccelerated`
+
+- **类型**：`boolean`
+- **必填**：否
+
+android:hardwareAccelerated（硬件加速；缺省不写 = 平台默认 true）
+
+### `targets.android.supportsRtl`
+
+- **类型**：`boolean`
+- **必填**：否
+
+android:supportsRtl（RTL 布局支持；缺省不写）
+
+### `targets.android.usesCleartextTraffic`
+
+- **类型**：`boolean`
+- **必填**：否
+
+android:usesCleartextTraffic（允许明文 HTTP——本地/内网联调常需；缺省不写）
+
+### `targets.android.networkSecurityConfig`
+
+- **类型**：`string`
+- **必填**：否
+
+android:networkSecurityConfig（网络安全配置资源引用，如 `@xml/network_security_config`；缺省不写）
+
+### `targets.android.appCategory`
+
+- **类型**：`string`
+- **必填**：否
+
+android:appCategory（应用类别，如 `game` / `audio`；缺省不写）
+
 ## 目标端 · 鸿蒙
 
 ### `targets.harmony.bundleName`
@@ -464,6 +590,27 @@ deviceTypes（缺省 ["phone","tablet","2in1"]）
 - **必填**：否
 
 追加 requestPermissions（module.json5）
+
+### `targets.harmony.icon`
+
+- **类型**：`string`
+- **必填**：否
+
+应用图标（app.json5 的 icon，如 `$media:my_icon`——资源置于 AppScope 的 resources 下 media/ 目录；缺省不写）
+
+### `targets.harmony.appCategory`
+
+- **类型**：`string`
+- **必填**：否
+
+应用类别（app.json5 的 appCategory，如 `game` / `audio`；缺省不写）
+
+### `targets.harmony.orientation`
+
+- **类型**：`string`
+- **必填**：否
+
+入口 Ability 方向（module.json5 的 abilities[0].orientation，如 `portrait` / `landscape` / `auto_rotation`；缺省不写）
 
 ## 共享身份 app
 

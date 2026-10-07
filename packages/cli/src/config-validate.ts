@@ -79,6 +79,15 @@ const posInt = (path: string, v: unknown, errors: ConfigValidationError[]) => {
 const strArr = (path: string, v: unknown, errors: ConfigValidationError[]) => {
   if (v !== undefined && (!Array.isArray(v) || !v.every((x) => typeof x === 'string'))) errors.push({ code: 'CONFIG_INVALID_TYPE', path, message: `${path} 应为字符串数组` })
 }
+const optStr = (path: string, v: unknown, errors: ConfigValidationError[]) => {
+  if (v !== undefined && typeof v !== 'string') errors.push({ code: 'CONFIG_INVALID_TYPE', path, message: `${path} 应为字符串` })
+}
+const optBool = (path: string, v: unknown, errors: ConfigValidationError[]) => {
+  if (v !== undefined && typeof v !== 'boolean') errors.push({ code: 'CONFIG_INVALID_TYPE', path, message: `${path} 应为 boolean` })
+}
+const optEnum = (path: string, v: unknown, allowed: string[], errors: ConfigValidationError[]) => {
+  if (v !== undefined && !allowed.includes(v as string)) errors.push({ code: 'CONFIG_INVALID_ENUM', path, message: `${path} 仅支持 ${allowed.map((x) => `'${x}'`).join(' / ')}` })
+}
 
 /** 校验 targets 各端（v4 按端分区） */
 function validateTargets(targets: Record<string, unknown>, errors: ConfigValidationError[]): void {
@@ -148,31 +157,66 @@ function validateTargets(targets: Record<string, unknown>, errors: ConfigValidat
     }
   }
 
-  // android 段：正整数 + 字符串数组
+  // android 段：正整数 + 字符串数组 + 应用标志
   const and = targets.android
   if (isPlainObject(and)) {
     posInt('targets.android.versionCode', and.versionCode, errors)
     posInt('targets.android.minSdk', and.minSdk, errors)
     posInt('targets.android.targetSdk', and.targetSdk, errors)
     strArr('targets.android.permissions', and.permissions, errors)
-    if (and.orientation !== undefined && !['portrait', 'landscape', 'unspecified'].includes(and.orientation as string)) {
-      errors.push({ code: 'CONFIG_INVALID_ENUM', path: 'targets.android.orientation', message: "targets.android.orientation 仅支持 'portrait' / 'landscape' / 'unspecified'" })
-    }
+    optEnum('targets.android.orientation', and.orientation, ['portrait', 'landscape', 'unspecified'], errors)
+    optStr('targets.android.icon', and.icon, errors)
+    optStr('targets.android.launchPage', and.launchPage, errors)
+    optStr('targets.android.theme', and.theme, errors)
+    optStr('targets.android.networkSecurityConfig', and.networkSecurityConfig, errors)
+    optStr('targets.android.appCategory', and.appCategory, errors)
+    optBool('targets.android.allowBackup', and.allowBackup, errors)
+    optBool('targets.android.largeHeap', and.largeHeap, errors)
+    optBool('targets.android.hardwareAccelerated', and.hardwareAccelerated, errors)
+    optBool('targets.android.supportsRtl', and.supportsRtl, errors)
+    optBool('targets.android.usesCleartextTraffic', and.usesCleartextTraffic, errors)
   }
-  // ios 段：整数数组（deviceFamily）+ 字符串数组（orientations）
+  // ios 段：字符串 / 数组 / 布尔 + 隐私说明对象
   const ios = targets.ios
   if (isPlainObject(ios)) {
     strArr('targets.ios.orientations', ios.orientations, errors)
     if (ios.deviceFamily !== undefined && (!Array.isArray(ios.deviceFamily) || !ios.deviceFamily.every((x) => Number.isInteger(x)))) {
       errors.push({ code: 'CONFIG_INVALID_TYPE', path: 'targets.ios.deviceFamily', message: 'targets.ios.deviceFamily 应为整数数组（1=iPhone / 2=iPad）' })
     }
+    optStr('targets.ios.bundleId', ios.bundleId, errors)
+    optStr('targets.ios.displayName', ios.displayName, errors)
+    optStr('targets.ios.version', ios.version, errors)
+    optStr('targets.ios.buildNumber', ios.buildNumber, errors)
+    optStr('targets.ios.minimumOSVersion', ios.minimumOSVersion, errors)
+    optStr('targets.ios.launchPage', ios.launchPage, errors)
+    optEnum('targets.ios.userInterfaceStyle', ios.userInterfaceStyle, ['light', 'dark', 'automatic'], errors)
+    optStr('targets.ios.statusBarStyle', ios.statusBarStyle, errors)
+    optBool('targets.ios.statusBarHidden', ios.statusBarHidden, errors)
+    strArr('targets.ios.urlSchemes', ios.urlSchemes, errors)
+    optStr('targets.ios.appCategory', ios.appCategory, errors)
+    optBool('targets.ios.requiresFullScreen', ios.requiresFullScreen, errors)
+    optStr('targets.ios.developmentRegion', ios.developmentRegion, errors)
+    if (ios.privacyUsageDescriptions !== undefined) {
+      const pud = ios.privacyUsageDescriptions
+      if (!isPlainObject(pud)) {
+        errors.push({ code: 'CONFIG_INVALID_TYPE', path: 'targets.ios.privacyUsageDescriptions', message: 'targets.ios.privacyUsageDescriptions 应为对象（NSXxxUsageDescription → 用途字符串）' })
+      } else {
+        for (const [k, v] of Object.entries(pud)) {
+          if (typeof v !== 'string') errors.push({ code: 'CONFIG_INVALID_TYPE', path: `targets.ios.privacyUsageDescriptions.${k}`, message: `privacyUsageDescriptions.${k} 应为字符串` })
+          else if (!/^NS[A-Za-z]+UsageDescription$/.test(k)) errors.push({ code: 'CONFIG_INVALID_KEY', path: `targets.ios.privacyUsageDescriptions.${k}`, message: `键 "${k}" 应为完整 plist 键名（形如 NSCameraUsageDescription）` })
+        }
+      }
+    }
   }
-  // harmony 段：正整数 + 字符串数组
+  // harmony 段：正整数 + 字符串数组 + 图标/类目/方向
   const hm = targets.harmony
   if (isPlainObject(hm)) {
     posInt('targets.harmony.versionCode', hm.versionCode, errors)
     strArr('targets.harmony.deviceTypes', hm.deviceTypes, errors)
     strArr('targets.harmony.permissions', hm.permissions, errors)
+    optStr('targets.harmony.icon', hm.icon, errors)
+    optStr('targets.harmony.appCategory', hm.appCategory, errors)
+    optStr('targets.harmony.orientation', hm.orientation, errors)
   }
 }
 

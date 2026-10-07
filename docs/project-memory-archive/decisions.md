@@ -2010,3 +2010,10 @@
 **⑤ 连带**：规则数 118→119 ⇒ compiler-ir-m5 COUNT_SNAPSHOT（重复 phase 字面量改引用常量）+ website/src/stats.ts + 重跑 gen:reference。
 **⑥ 验证**：**全量 pnpm test 5362/5362 全绿**（4 红 → 0）；hmr 连跑 3 次稳定；门禁 stats/docs/docs-stats/content/en-drift/doc-links/reference/script-compile/safe-edit/deps/gates-sync 全绿。
 **⑦ ★教训**：a) 实现加转换决策**必须同步三处**（注册表 / 快照 / 官网规则数），三条门禁各守一角；b) **flake 修法要成对**（`ensureWatchActive` 预热须随新增同类用例接入）；c) **测试里别放第二份常量**（改一漏一）。
+644. **★★★扩充 targets 各端字段支持度（原生工程能力全量）（★用户 2026-10-08「targets 平台字段支持度还是不够，继续扩充」）**：
+**① 现状**：v4 各端仅基本身份字段（android 9 / ios 7 / harmony 9）。
+**② 扩充（+22）**：android +launchPage/theme/allowBackup/largeHeap/hardwareAccelerated/supportsRtl/usesCleartextTraffic/networkSecurityConfig/appCategory；ios +launchPage/userInterfaceStyle/statusBarStyle/statusBarHidden/urlSchemes/privacyUsageDescriptions(★上架必需)/appCategory/requiresFullScreen/developmentRegion；harmony +icon/appCategory/orientation。
+**③ 实现**：类型 + schema + validate（optStr/optBool/optEnum + privacy 键名校验）+ native-config（setPlistStringOrAdd/setPlistBoolOrAdd/setPlistUrlSchemes[嵌套配平]/setJson5StringOrAdd；application 属性 set-or-add、ios 存在则改缺失则插、harmony app.json5 插入 + module abilities[0].orientation）。
+**④ 纪律**：只写声明过的字段（declared）+ 幂等 + 保留工程其余内容。
+**⑤ 验证**：native-config 单测 11 例全绿；端到端 apply 真实模板三端逐条命中；根 vue-tsc 零错误；generate types --check 无漂移；config:check 三 config 全过；全量 pnpm test 5365/5365 全绿；website 十门禁 + build:website。
+**⑥ ★教训**：a) 补字段要**四处同步**（类型/schema/validate/applyNativeConfig）；b) 「存在则改、缺失则插」是「补丁只写声明字段」的实现前提；c) **JSDoc 里的 `*/` 会破坏块注释**（`resources/*/media/` → TS1131，本仓第二次踩）。
