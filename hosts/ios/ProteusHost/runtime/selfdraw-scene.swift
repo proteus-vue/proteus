@@ -3083,8 +3083,16 @@ final class SelfDrawView: UIView {
     ///   （CATextLayer 忽略段落行高 ⇒ 只有这种形态才需要；单行/未声明行高仍走原生路径，零行为变化。）
     static func needsCoreText(_ style: [String: Any]) -> Bool {
         guard isWrapStyle(style) else { return false }
-        guard let lh = style["lineHeight"] as? String, !lh.isEmpty else { return false }
-        return true
+        // ★★★修复（2026-10-08 · 子代理审美审查 + 取证）：此前**只**在声明 lineHeight 时用 CoreText ⇒
+        //   字距（letterSpacing→`.kern`）与文本装饰（textDecoration→`.underlineStyle`/`.strikethroughStyle`）
+        //   的富文本**被 CATextLayer 默认渲染器丢弃**（其 `draw` 不用 NSAttributedString 的这些属性——
+        //   真机实测：案例 D 字距偏窄 ~17%、案例 F 下划线整条消失，而 Web/Android/鸿蒙正常）。
+        //   ⇒ 凡需要富文本属性的（行高 / 字距 / 装饰）都走 CoreText（唯一正确渲染路径）。
+        let hasLH = (style["lineHeight"] as? String).map { !$0.isEmpty } ?? false
+        let kern = ((style["letterSpacing"] as? Double) ?? (style["letterSpacing"] as? CGFloat).map(Double.init) ?? 0) != 0
+        let deco = style["textDecoration"] as? String
+        let hasDeco = deco == "underline" || deco == "line-through"
+        return hasLH || kern || hasDeco
     }
 
     /// ★★★line-clamp 项（2026-10-08 · CSS Overflow）：按 `lineClamp` 预截断文本（尾省略号）。
@@ -3131,6 +3139,15 @@ final class SelfDrawView: UIView {
         for k in ["backgroundColor", "color", "text", "fontFamily", "textAlign", "borderColor", "lineHeight", "whiteSpace", "wordBreak", "overflow", "textOverflow", "overflowX", "overflowY"] {
             if let v = n[k] as? String { style[k] = v }
         }
+        // ★★★修复（2026-10-08 · 子代理审美审查 + 真机取证）：**letterSpacing / textDecoration 此前被本函数丢弃**——
+        //   `styleOf` 是建层**必经之路**（superapp 路径 `buildLayers` 用的就是这个 style）+ 度量真源
+        //   （`letterSpacingOf`/`lineHeightOf` 读 `metaByNodeId` = styleOf 产物）⇒ 漏透传 ⇒
+        //   ① 绘制端 `textLayerString` 读不到 kern/underline（CATextLayer 富文本属性失效）；
+        //   ② 度量端也无 kern（盒宽偏窄）。真机取证：TXTDIAG 全页 `kern=nil deco=nil`（节点里明明有值）。
+        //   ⇒ 补透传（与 clipPath/glow/mask/lineClamp「styleOf 漏字段」同款教训——**本文件已复发多次**）。
+        if let v = n["textDecoration"] as? String { style["textDecoration"] = v }
+        if let ls = n["letterSpacing"] as? Double { style["letterSpacing"] = CGFloat(ls) }
+        if let ls = n["letterSpacing"] as? CGFloat { style["letterSpacing"] = ls }
         if let bw = n["borderWidth"] as? Double { style["borderWidth"] = CGFloat(bw) }
         if let bw = n["borderWidth"] as? CGFloat { style["borderWidth"] = bw }
         // ★★I3：绘制提示必须**透传**——本函数是 `acquireLayer`/`buildLayers` 的必经之路，
