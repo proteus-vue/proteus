@@ -1815,3 +1815,10 @@
 **② 修复**：把"清树 + 建树"包进**同一外层事务**——内层 `begin/commit` 变成**嵌套**（不再立即 flush），外层 `commit` 时一次性**原子提交**"旧树→新树"，render server 不经过空树态。虚拟化 `mountVirtual`（清树 → `materializeStaticNodes` → 首帧物化，三处 commit）同款问题，一并包进同一事务。
 **③ 验证**：iOS `--superapp --drive` 30 页重跑——30 张截图 **30 个不同哈希**（无回归）、零 `SUPERAPP_RENDER_FAIL`；`check-selfdraw-compile` 通过。★闪屏是**亚帧时序**现象，截图/报告抓不到，最终以**用户目视**为准（本仓纪律：无法机器判定 ⇒ 交用户目视验收）。
 **④ 教训**：a) **`CATransaction` 不嵌套 ⇒ 每次 `commit` 立即上屏**——"先清后建"分两次 commit 必有空窗；**原子替换整棵层树必须包进一个外层事务**（与 Android `invalidate` 一次性重画同语义）；b) **同一个"更新模型"跨端不同**：iOS 销毁重建层树、Android/鸿蒙重画画布/清根重建——**层树模型的端要格外注意中间态**（空树 = 黑闪）；c) 该模式散布多处（全量 render + 虚拟化 mountVirtual），**改一处要普查同类调用点**。
+
+622. **★★导航快速切换演示视频（router 完整编译路线）+ 可复现驱动 `--es navdemo`（★用户 2026-10-08「录一段页面导航快速切换的短视频，作为框架导航丝滑切换页面高性能渲染的案例，导航走 router 完整编译路线」）**：
+**① 交付**：`hosts/android/results/nav-router-fast-switch.mp4`（Android 真机录屏，1200×2608，18.85s，2.3MB）——从 index 快速点进 13 个特性页再返回，每 ~0.7s 一个完整往返；原片（9.5MB）按既有规范入 .gitignore。
+**② 驱动**：`SuperappActivity` 新增 `--es navdemo 1`——**快速往返导航**（index ↔ 13 特性页 × 2 趟）。每次往返走**真实链路**：前进=合成 tap → 内核 `hitTest` → 共享运行期派发 → `$nav('目标')` → `router.push`；返回=`onBackPressed()` → `__proteusSuperappBack()` → `router.back`。**非静态截图/预渲染**（完整编译路由 + 真内核建树 + 真上屏）。
+**③ 关键取舍**：本机 `adb shell input tap` 被 **INJECT_EVENTS 权限拦**（ROM 策略）⇒ 用进程内 `proteusHost.tapAt`（`--es tap` 同族）——**与真触摸同一条 gesture→hitTest→dispatch 链**，仅免去 OS 触摸屏层（本仓既有立场：合成 MotionEvent 是该机的唯一"真触摸"形态）。
+**④ 验证**：dry-run 日志逐行确认 13 页全部 push→back 正确、零打空；视频帧扫描确认全程高速变化（无卡帧）。
+**⑤ 教训**：a) **演示视频要"可复现"**（驱动入库，不只交付成片）——否则下轮想重录得重写一遍；b) **录屏的起止要锚定状态**（1.2s 预热让 index 先上屏；尾部死帧裁掉）；c) **该机的 `input tap` 不可用是环境事实**（INJECT_EVENTS），进程内合成 tap 是等价替代——与「先取证再断言」同源。
