@@ -87,6 +87,12 @@ final class SuperappScene: NSObject {
         bridge.onDispatchToJS = { target, chain, type, _, _ in
             rtHost.dispatchGestureToJS(type: type, target: target, chain: chain)
         }
+        // ★★★批 A⑤（2026-10-08 · 决策 #656）：**接线 onScrollDrag**——`SelfDrawView` 装的真 UIPanGestureRecognizer
+        //   的唯一出口；superapp 场景**此前未接** ⇒ 真触摸拖拽无反应（长页无法滚动）+ `driveScrollDrag` 空转（offset 恒 0）。
+        //   与 selfdraw-app.swift / proteus-host-controller.swift 同款接线（同一 bridge 方法 `scrollDragBy`）。
+        bridge.view?.onScrollDrag = { [weak bridge] dx, dy in
+            bridge?.scrollDragBy(dx: Double(dx), dy: Double(dy)) ?? "{\"ok\":false,\"error\":\"bridge 已释放\"}"
+        }
         // ③ proteusSelfDraw 由 SelfDrawViewController 注入（本场景复用同一 bridge）
 
         // ④ 载入 superapp bundle（同目录 bundle-superapp.js）
@@ -174,7 +180,7 @@ final class SuperappScene: NSObject {
                     renderCurrent()   // 新树 ⇒ offset 归零
                     // ★注意：`onScrollDrag` **异步生效**（下一 runloop 才落 offset —— 探针读数错位一格已证）
                     //   ⇒ 拖拽后**再等一个 runloop** 才读 offset + 截图（否则读到 0 / 截到未滚状态）。
-                    if let vw = bridgeRef?.view { _ = vw.driveScrollDrag(dx: 0, dy: -CGFloat(dy)) }
+                    if let vw = bridgeRef?.view { _ = vw.driveScrollDrag(dx: 0, dy: CGFloat(dy)) }
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
                         let offY = Double(bridgeRef?.view?.contentOffset.y ?? 0)
                         takeSnapshot()   // 画当前（已滚动）状态
