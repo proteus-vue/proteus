@@ -1854,3 +1854,14 @@
 **② 修「终端红黄绿三点没渲染」（根因比表象更广）**：`p-view` 组件默认 `display:flex; flex-direction:column` —— **会盖掉页面写在它上面的 `display`（横向 flex / grid），且构建不报错**。⇒ 三点（`flex:1` 星等比）在纵向 flex 下被抽成竖条 / 尺寸 0；对比表 / 证据网格等也**塌成单列**。修：**布局一律落在原生 `div`/`section`**（卡片网格保留 `p-grid`，其 auto-fit 不受影响）。探针实测 `.tdot` = 11×11 / `display:block` / 三色正确。
 **③ 验证**：`audit:website`（D-2 零 error）· `build:website` · `check:css-engine-numbers`/`check:css-engine-data`/`check:docs-stats`/`check:gates-sync`/`check:stats`/`check:content`/`check:fluid-wording`/`check:en-drift` 全绿；浏览器目视 zh+en。
 **④ ★教训**：a) **`p-view` 默认 `display:flex`（纵向）**——页面若需要「横向 flex」或「grid」，**必须用原生 `div`/`section`**，否则被组件默认样式静默盖掉（构建/类型都不报，只有 `getComputedStyle` 探针看得出）；b) **"复制粘贴别的产品页"是贪快陷阱**——用户会立刻看出"这不是它自己的东西"；**给产品一个能自洽的隐喻**（Themis 的法庭 → 案卷台账）比套用现成风格更省心；c) **视觉 bug 常是布局机制问题**（三点竖条 = flex 方向被盖），先探针 `getComputedStyle` 再改，别盲调尺寸。
+
+626. **★★iOS 单行+line-height 文本空白 + Android 冷启/复开偶发空白（CSE 主线两缺陷）（★用户 2026-10-08「iOS 文本样式页案例 A/B 渲染空白」+「安卓有时点开应用直接空白，杀后台重开正常」）**：
+**① iOS · `font.vue` 案例 A/B 空白（单行文本 + line-height）**：
+- **根因**：**两套行高机制冲突**。`lineBoxFrame` 为「半行距居中」把文本层 frame 缩到**字形自然高**（20px 字 28px 行高 ⇒ frame 高 24），而 `textLayerString` 对 wrap 文本又设了**段落样式** `minimum=maximumLineHeight=lineHeight`（= 28）⇒ **frame(24) < 行盒(28)** ⇒ CATextLayer 把整行画到 bounds 外 ⇒ **空白**。**只有短文本**（自然宽 ≤ 盒宽）会走到该分支（长文本在更早的"溢出加宽"分支 `return cbf`）⇒ 故 A/B 空白、C（多行）/D/E/F（无 line-height）正常。**Android 无此问题**（其文本绘制不依赖 CATextLayer 的 frame/段落行高耦合）。
+- **修法**：wrap 文本的行高**已由段落样式承担**（CoreText 在行盒内居中字形）⇒ frame 用**完整内容盒**、**不再收缩**；非 wrap（nowrap/pre）无段落样式，仍需收缩居中（保持原行为）。
+- **验证**：iOS 真机 `font` 页 A/B 恢复、C/D/E/F 与 `text`（white-space）页零回归（哈希同前）。
+**② Android · 冷启/复开偶发空白**：
+- **根因**：QuickJS 桥的 `g_ctx/g_rt` 是**进程级 static**（跨 Activity 实例存活）——旧实例的 JS 全局态（路由栈 / 当前屏 / 屏实例）**不随 Activity 销毁而清**；新实例在同一**脏上下文**里再 `eval` bundle + `bootSuperapp` ⇒ 路由/启动判定异常 ⇒ **空白**；**杀进程（清 static）即恢复**（与用户「杀后台重开正常」完全一致）。
+- **修法**：新增 `nativeResetEngine`（`quickjs_jni.c`）+ `QuickJsEngine.resetEngine()`（Java），在 `SuperappActivity.boot()` **开头**调用 ⇒ 每次新 Activity 在**全新上下文**启动（与 iOS 的「每实例新 JSContext」对齐）；同时清 guest 回调名 `g_gesture_cb`。
+- **验证**：Android 真机 3 轮 reopen 循环（force-stop → 启 → 返回 → 再启）index 均正常渲染；`font` 页正常。
+**③ ★教训**：a) **同一属性两处实现会互相打架**——行高**要么只由段落样式管**（frame 保持整盒），treating frame 为"字形高"又与段落行高并存必出冲突；b) **进程级 static 的 JS 上下文是跨实例脏态温床**——Activity 重启 ≠ 引擎重启；跨端对比：iOS **每实例新 `JSContext`** 天然干净，Android 共享 static ⇒ 需显式 `resetEngine`；c) **「杀后台就好」是本缺陷的指纹**：任何"重启应用即恢复"的偶发问题，先查**进程级全局态**（static / singleton / 缓存）是否跨实例泄漏；d) **空白 ≠ 内核问题**：iOS 的空白根因在**宿主层**（frame/绘制），Android 的空白根因在**引擎生命周期**（非内核）——先用**另一端同页是否正常**把层位切开（Android 正常 ⇒ iOS 宿主层）。
