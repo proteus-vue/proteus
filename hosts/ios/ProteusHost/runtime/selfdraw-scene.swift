@@ -724,6 +724,12 @@ final class SelfDrawView: UIView {
         if let d = style["perspective"] as? CGFloat, d > 0 {
             layerPerspective[nodeId] = d
         }
+        // ★★★静态透明度（2026-10-08 · 子代理审 effects 案例 A）：`opacity` 此前**无任何静态应用点**
+        //   （仅动画路径经 applyTransform 的 opacity 参数）⇒ 声明 opacity 的节点渲染为**完全不透明**。
+        let opRaw = (style["opacity"] as? Double) ?? (style["opacity"] as? CGFloat).map(Double.init)
+        if let opRaw, opRaw < 1 {
+            layer.opacity = Float(max(0, min(1, opRaw)))
+        }
         // ★★变换原点快照（transform-origin v1：同款"建层读一次"纪律）
         if let o = style["transformOrigin"] as? [String: Any],
            let ox = (o["x"] as? Double) ?? (o["x"] as? CGFloat).map(Double.init),
@@ -3148,6 +3154,15 @@ final class SelfDrawView: UIView {
         if let v = n["textDecoration"] as? String { style["textDecoration"] = v }
         if let ls = n["letterSpacing"] as? Double { style["letterSpacing"] = CGFloat(ls) }
         if let ls = n["letterSpacing"] as? CGFloat { style["letterSpacing"] = ls }
+        // ★★★修复（2026-10-08 · 子代理审 effects 页 + 真机取证）：**transform / transformOrigin / opacity /
+        //   visibility 也被本函数丢弃**（同 letterSpacing/textDecoration 同款——本文件第 N 次复发）⇒
+        //   案例 C（transform）/ D（transform-origin）在 iOS 完全不生效、案例 F（visibility:hidden）
+        //   仍被绘制（真机：旋转盒直立、隐藏盒照样画出）。
+        if let tf = n["transform"] as? [String: Any] { style["transform"] = tf }
+        if let to = n["transformOrigin"] as? [String: Any] { style["transformOrigin"] = to }
+        if let v = n["visibility"] as? String { style["visibility"] = v }
+        if let op = n["opacity"] as? Double { style["opacity"] = CGFloat(op) }
+        if let op = n["opacity"] as? CGFloat { style["opacity"] = op }
         if let bw = n["borderWidth"] as? Double { style["borderWidth"] = CGFloat(bw) }
         if let bw = n["borderWidth"] as? CGFloat { style["borderWidth"] = bw }
         // ★★I3：绘制提示必须**透传**——本函数是 `acquireLayer`/`buildLayers` 的必经之路，

@@ -527,6 +527,15 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
         snprintf(head, sizeof(head), "%s{\"kind\":\"background\",\"x\":%.2f,\"y\":%.2f,\"w\":%.2f,\"h\":%.2f,\"color\":%u,\"radius\":%.2f",
                  emitted > 0 ? "," : "", r.x * density, r.y * density, r.w * density, r.h * density, bg, radius * density);
         arr += head;
+        // ★★★静态透明度（2026-10-08 · 子代理审 effects 案例 A）：此前**完全不发射 opacity** ⇒ 声明 opacity 的
+        //   节点渲染为**完全不透明**。发射给 render 侧 SetOpacity（RenderNode 原生属性）。
+        {
+            double opv = 1; jnum(it.c_str(), it.size(), "opacity", &opv);
+            if (opv < 1.0) {
+                char ob[48]; snprintf(ob, sizeof(ob), ",\"opacity\":%.4f", opv < 0 ? 0.0 : opv);
+                arr += ob;
+            }
+        }
         // ★★★overflow-x 项（2026-10-06）：有效裁剪矩形（物理 px——与几何同乘 density；render 侧 SetClip）
         if (ri->second.hasClip) {
             char cb[128];
