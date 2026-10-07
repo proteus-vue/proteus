@@ -12,13 +12,17 @@ import type { RouteMeta } from './router-types'
 
 /** 分包声明（与顶层 subPackages 同形） */
 export interface SubPackageDecl {
+  /** 分包根目录（相对工程根，独立扫描树；如 `subpackages/order`） */
   root: string
+  /** 分包名（可选；对应 app.json 的 `subPackages[].name`） */
   name?: string
 }
 
 /** wx.router 自定义路由配置（与顶层 customRoute 同形；统一形态下两字段均可选——缺省 registerPresets: true） */
 export interface CustomRouteConfig {
+  /** 是否注册内置预设 builders（缺省 true） */
   registerPresets?: boolean
+  /** 预设 builders 注册表：name → 预设源码文件（构建期内联进 app.js 注册） */
   builders?: Record<string, string>
 }
 
@@ -32,9 +36,19 @@ export interface RouterSection {
   customRoute?: CustomRouteConfig
   /** tabBar 声明（list.name 对应路由名；缺省按 meta.isTab 推导） */
   tabBar?: {
+    /** 未选中文字颜色（如 `#8a8a99`） */
     color?: string
+    /** 选中文字颜色（如 `#7c5cff`） */
     selectedColor?: string
-    list: Array<{ name: string; text: string; icon?: string }>
+    /** tab 列表（顺序即展示顺序；`name` 对应路由名） */
+    list: Array<{ 
+      /** 路由名（对应页面 name） */
+      name: string
+      /** tab 文案 */
+      text: string
+      /** 图标路径（可选） */
+      icon?: string
+    }>
   }
   /**
    * ★★★**页面配置**（2026-10-02 · 统一路由页面管理 —— `pages.json` 等价物）：
