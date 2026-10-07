@@ -164,6 +164,9 @@ jobs:
       - name: 一致性指标 + 允许差异清单 schema（CS1/CS2：M1–M4 复算一致 · M4 的 L1 算子必须全捕获）
         run: pnpm run check:consistency-metrics
 
+      - name: Themis 引擎数字 SSOT（IR 字段 / 逐属性对拍 / M1 / lint 棘轮 / 能力清单——从产物复算，防白皮书与页面漂移）
+        run: pnpm run check:css-engine-numbers
+
       - name: 三端快照同一格式（VC3/VC4：Web golden ⇄ App 内核工件 ⇄ 小程序双模式，过同一校验器）
         run: pnpm run check:consistency-snapshot
 
@@ -330,6 +333,11 @@ jobs:
       #   必须与 docs/generated/*.json 逐字节一致（SSOT=机器产物；页面零手写数字，防"产物变了页面说谎"）
       - name: 一致性页数据门禁（页面 ↔ docs/generated 机器产物同源）
         run: cd website && pnpm run check:consistency-data
+
+      # ★★★Themis（CSS 引擎）产品页数据门禁（2026-10-08）：页面展示的 IR 字段 / 逐属性对拍 /
+      #   M1 / lint 棘轮 / 能力清单 + 四端真截图，必须与 SSOT 逐字节一致（页面零手写数字）
+      - name: Themis 页数据门禁（页面 ↔ 数字 SSOT + 四端真截图同源）
+        run: cd website && pnpm run check:css-engine-data
 
       # ★2026-09-27：文档组件名对账（vue 代码块里引用不存在的组件会让读者照抄报错——
       #   `p-card` 曾在 3 处文档里潜伏，既有门禁全放行）
