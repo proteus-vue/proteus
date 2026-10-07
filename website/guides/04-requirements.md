@@ -8,7 +8,7 @@ group: 开始
 
 ## 30 秒创建工程
 
-环境就绪后，一条命令生成工程骨架（当前脚手架面向**已接线的 Web / 微信小程序**；原生/Flutter 等其余端直食同一语义 IR，接入进度见[端与成熟度](/docs/framework/ends-matrix)，详见[创建你的第一个工程](/docs/05-create-project)）：
+环境就绪后，一条命令生成工程骨架（脚手架生成 Web / 微信小程序工程；App 三端（iOS/Android/鸿蒙）直食同一语义 IR——`proteus build --target ios|android|harmony` 编译屏内容、宿主工程打包，接入进度见[端与成熟度](/docs/framework/ends-matrix)，详见[创建你的第一个工程](/docs/05-create-project)）：
 
 ```bash
 npm create @proteus-vue/proteus my-app
@@ -32,16 +32,17 @@ npm run dev:web     # 浏览器直接跑 Web 端
 
 > 无真实 AppID 时可在开发者工具「详情 → 基本信息」使用测试号，但 Skyline 能力建议用真实 AppID 验证。
 
-## 两端的不同依赖面
+## 各端的不同依赖面
 
 | 你要做什么 | 需要安装 | 不需要 |
 |---|---|---|
 | 只跑 Web 端（`dev:web` / `build:web`） | Node.js 一项 | 微信开发者工具 / AppID |
 | 调试小程序端（`dev:mp`） | + 微信开发者工具 + AppID（测试号可用） | — |
 | 构建小程序产物（`build:mp`） | + 微信基础库 ≥ 2.29.2（工具内切换） | — |
+| 构建 App 三端（`build --target ios\|android\|harmony`） | + Xcode（iOS）/ Android SDK + JDK（Android）/ DevEco Studio（鸿蒙） | 小程序端工具 |
 | 上线发布 | + 真实 AppID（替换模板占位 `wx0000000000`） | — |
 
-只需要跑 Web 端的话，Node.js 就够了——微信开发者工具在你要调试小程序端时再装也不迟。
+只需要跑 Web 端的话，Node.js 就够了——微信开发者工具（小程序端）与各端原生工具链（App 三端）在你要构建对应端时再装也不迟。
 
 ## 版本出处
 

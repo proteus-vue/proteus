@@ -6,7 +6,7 @@ group: 开始
 
 # Create your first project
 
-One scaffold command creates a **Web + WeChat Mini Program dual-target template project** (the scaffold currently targets the two wired ends, Web / Mini Program; native/Flutter render-backend rollout is tracked in [Ends & maturity](/docs/framework/ends-matrix)). Everything below is sourced from `packages/create-proteus` and its templates.
+One scaffold command creates a **Web + WeChat Mini Program dual-target template project** (the scaffold produces a Web / WeChat Mini Program project; the three App targets' rollout is tracked in [Ends & maturity](/docs/framework/ends-matrix)). Everything below is sourced from `packages/create-proteus` and its templates.
 
 ## Create
 
@@ -22,7 +22,7 @@ The scaffold asks no interactive questions: the project name is the command argu
 
 1. **Copies the built-in template project** (framework snapshot + compile pipeline + example home page; artifact list below)
 2. **Replaces placeholders**: `{{name}}` in the template → your project name
-3. **Prints next steps**: `npm run dev:web` for Web, `npm run build:mp` for the Mini Program
+3. **Prints next steps**: `npm run dev:web` for Web, `npm run build:mp` for the Mini Program (the three App targets build via `proteus build --target ios|android|harmony`)
 
 ## Template artifact list
 
@@ -71,7 +71,7 @@ const config: ProteusConfig = {
 
 Field docs: [global config](/docs/10-config).
 
-## Template scripts (dual-target commands)
+## Template scripts (per-target commands)
 
 | Command | What it does |
 |---|---|
@@ -79,6 +79,9 @@ Field docs: [global config](/docs/10-config).
 | `npm run build:web` | `proteus build --target web` (vue-tsc typecheck + vite build) |
 | `npm run dev:mp` | `proteus dev --target skyline` (gen-routes + vite dev) |
 | `npm run build:mp` | `proteus build --target skyline` (gen-routes → vue-tsc → Mini Program artifacts) |
+| `npx proteus build --target ios` | Compile the screen-content IR for iOS → `dist/app/ios/` |
+| `npx proteus build --target android` | → `dist/app/android/` |
+| `npx proteus build --target harmony` | → `dist/app/harmony/` |
 | `npm run debug:mp` | `PROTEUS_DEBUG=1` — artifacts with source line comments + decision trace |
 | `npm run proteus` | CLI entry (same as `npx proteus`) |
 
@@ -90,5 +93,5 @@ If `@proteus-vue/*` packages fail to install (version not yet published to npm),
 
 ## Next steps
 
-- [Run & preview](/docs/06-run-preview): bring up both targets
+- [Run & preview](/docs/06-run-preview): bring up every target
 - [Global & page configuration](/docs/10-config): full field reference for proteus.config.ts

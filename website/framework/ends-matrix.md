@@ -15,9 +15,9 @@ group: 总览
 | Web SPA | vue-dom | Vue 3（同线程） | localStorage | `createWebPinia()` | ✅ 已落地 |
 | 微信小程序 | skyline（WebView 降级） | 独立 JS 运行时 | wx storage（防抖） | `createMpPinia()` | ✅ 已落地 |
 | Headless（SSR/测试） | headless | Node | memory | `createSsrPinia()` | ✅ 已落地（工具档） |
-| iOS 原生 | native-ios（UIKit） | JSI 载体（G-40） | NativeKVAdapter（待接入） | `createAppPinia()` | 🟡 原型映射 |
-| Android 原生 | native-android（Jetpack） | JSI 载体（G-40） | NativeKVAdapter（待接入） | `createAppPinia()` | 🟡 原型映射 |
-| 鸿蒙 | native-harmony（ArkUI） | JSI 载体（G-40） | 待定 | `createAppPinia()` | 🟡 原型映射 |
+| iOS 原生 | native-ios（UIKit + CoreAnimation） | 共享运行期 bundle（JavaScriptCore） | NativeKVAdapter（待接入） | `createAppPinia()` | 🟡 渲染核心真机落地 |
+| Android 原生 | native-android（自绘 Canvas） | 共享运行期 bundle（QuickJS） | NativeKVAdapter（待接入） | `createAppPinia()` | 🟡 渲染核心真机落地 |
+| 鸿蒙 | native-harmony（ArkUI RenderNode） | 共享运行期 bundle（JSVM） | 待定 | `createAppPinia()` | 🟡 渲染核心真机落地 |
 | Flutter 混合 | flutter | 同一 JS 逻辑层 | 待定 | `createAppPinia()` | 🟡 widget 级映射 |
 | 快应用 | 快应用引擎（待定） | 待定 | 待定 | 待定 | ⬜ 未开始 |
 

@@ -126,7 +126,7 @@ compileAnimations([{ kind: 'textColor', from: '#ffffff', to: '#00ff00',
 
 ## 预设库（13 条）
 
-预设优先于参数——常见演出都是一句话。全部条目（含"何时用/如何验证"）见 [Morpheus 声明项说明书](/docs/generated/anim-manual)。
+预设优先于参数——常见演出都是一句话。全部条目（含"何时用/如何验证"）见 Morpheus 声明项说明书（仓内生成物 `docs/generated/anim-manual.md`，48 条逐条 what/why/when/示例/如何验证）。
 
 | 类别 | 预设 | 一句话 |
 |---|---|---|
@@ -146,7 +146,7 @@ const batch = compileRoute(spec, { enter: 101, exit: 100 })
 ## 与 AI 说明书同源
 
 48 条声明项（21 预设 / 19 声明面原语 / 6 约束 / 2 边界）以 `ANIM_RULES` 为单一事实源，与编译器 112 条规则**同构**：每条含 what / why / when / 示例 / 如何验证 / 实现位置，AI 可单独消费一条。
-生成物 [anim-manual](/docs/generated/anim-manual) 在生成前会跑 `runConformance()` 对账——预设必须真实存在于导出面、跨语言契约值必须一致、`verify` 必须可追溯；**对不上就不生成文档**。
+生成物 `docs/generated/anim-manual.md` 在生成前会跑 `runConformance()` 对账——预设必须真实存在于导出面、跨语言契约值必须一致、`verify` 必须可追溯；**对不上就不生成文档**。
 
 ## 下一步
 

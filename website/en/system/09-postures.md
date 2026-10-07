@@ -144,4 +144,4 @@ On real devices (Web foldables) `env(fold-*)` reports the hinge band width; the 
 ## Next
 
 - [Focus navigation](/docs/system/10-focus-navigation): the spatial-navigation engine for keyboard/remote reachability
-- [p-formfactor](/docs/system/11-p-formfactor): the component-level use of the `posture` prop
+- [p-formfactor](/docs/system/11-formfactor-composition): the component-level use of the `posture` prop

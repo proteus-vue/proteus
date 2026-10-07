@@ -82,5 +82,5 @@ const focusEnabled = computed(() => capsEnabled(caps.value.dpad))   // 仅遥控
 
 ## 下一步
 
-- [p-formfactor](/docs/system/11-p-formfactor)：引擎挂载的容器组件
+- [p-formfactor](/docs/system/11-formfactor-composition)：引擎挂载的容器组件
 - [能力三态与降级](/docs/system/08-capabilities)：`dpad` 声明从哪来

@@ -82,13 +82,13 @@ error(message: string, data?: unknown): Promise<CapResult<void>>
 | Web SPA | ✅ | vue-dom · webBridge implementation (direct platform API) |
 | WeChat Mini Program | ✅ | skyline (WebView fallback) · wx bridge → (wx-native equivalent; exact mapping in the zh version) |
 | Headless (SSR / testing) | ✅ | headless · mock bridge injected (testing / SSR tier) |
-| iOS native | 🟡 | native-ios (UIKit) · prototype mapping — capability bridge not wired |
-| Android native | 🟡 | native-android (Jetpack) · prototype mapping — capability bridge not wired |
-| HarmonyOS | 🟡 | native-harmony (ArkUI) · prototype mapping — capability bridge not wired |
+| iOS native | 🟡 | native-ios (UIKit + CoreAnimation) · render core shipped — capability bridge not wired |
+| Android native | 🟡 | native-android (self-drawn Canvas) · render core shipped — capability bridge not wired |
+| HarmonyOS | 🟡 | native-harmony (ArkUI RenderNode) · render core shipped — capability bridge not wired |
 | Flutter hybrid | 🟡 | flutter · same JS logic layer — capability bridge not wired |
 | Quick App | ⬜ | Quick App engine (TBD) · target not started |
 
-> Status scale: ✅ target shipped & this capability usable · ⚠️ target shipped but bridge missing → explicit `Err` degradation · 🟡 prototype mapping — capability bridge not wired · ⬜ target not started. Target architecture matrix → [Ends & maturity](/docs/framework/ends-matrix).
+> Status scale: ✅ target shipped & this capability usable · ⚠️ target shipped but bridge missing → explicit `Err` degradation · 🟡 render core shipped — capability bridge not wired · ⬜ target not started. Target architecture matrix → [Ends & maturity](/docs/framework/ends-matrix).
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 

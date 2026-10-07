@@ -8,7 +8,7 @@ group: 开始
 
 ## Create a project in 30 seconds
 
-Once the environment is ready, one command scaffolds the project skeleton (the generator currently targets **the wired Web / WeChat Mini Program ends**; the remaining ends — native / Flutter — consume the same semantic IR directly, progress in [Ends & maturity](/docs/framework/ends-matrix); see [Create your first project](/docs/05-create-project)):
+Once the environment is ready, one command scaffolds the project skeleton (the generator produces a Web / WeChat Mini Program project; the three App targets — iOS / Android / HarmonyOS — consume the same semantic IR directly: `proteus build --target ios|android|harmony` compiles screen content and the host project packages it. Progress in [Ends & maturity](/docs/framework/ends-matrix); see [Create your first project](/docs/05-create-project)):
 
 ```bash
 npm create @proteus-vue/proteus my-app
@@ -39,9 +39,10 @@ Before you start, prepare the following environment:
 | Web only (`dev:web` / `build:web`) | Just Node.js | WeChat DevTools / AppID |
 | Debug Mini Program (`dev:mp`) | + WeChat DevTools + AppID (test account OK) | — |
 | Build Mini Program artifacts (`build:mp`) | + base library ≥ 2.29.2 (switch inside DevTools) | — |
+| Build the three App targets (`build --target ios\|android\|harmony`) | + Xcode (iOS) / Android SDK + JDK (Android) / DevEco Studio (HarmonyOS) | Mini Program tooling |
 | Release | + real AppID (replace template placeholder `wx0000000000`) | — |
 
-If you only run the Web side, Node.js is enough — install WeChat DevTools only when you start debugging the Mini Program.
+If you only run the Web side, Node.js is enough — install WeChat DevTools (Mini Program) and each native toolchain (the three App targets) only when you build that target.
 
 ## Version rationale
 

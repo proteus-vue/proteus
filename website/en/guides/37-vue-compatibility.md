@@ -126,6 +126,6 @@ You write **standard Vue SFC**, but cross-target output goes through the compile
 
 ## Section navigation
 
-- [Introduction](/docs/guides/01-intro): get something running
-- [Components intro](/docs/guides/12-components-intro): components and capabilities
+- [Introduction](/docs/01-intro): get something running
+- [Components intro](/docs/12-components-intro): components and capabilities
 - [Vapor update path](/docs/framework/43-vapor-update-path): update mechanism and why it is in-house

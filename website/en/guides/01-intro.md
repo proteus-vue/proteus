@@ -10,7 +10,7 @@ Proteus is a **semantic-convergent cross-platform app framework**: you write you
 
 - **Web** (✅ shipped): standard Vite + Vue, runs directly with zero transformation; devtools / HMR / code-splitting all work
 - **WeChat Mini Program** (✅ shipped): the compiler turns the same source into native Skyline artifacts (WXML / WXSS / `Page()` JS / JSON)
-- **App (iOS / Android / HarmonyOS)** (🟡 prototype mapping): RenderBackend SPI native controls — wired per roadmap
+- **App — iOS / Android / HarmonyOS** (✅ shipped on device): a self-built Rust layout core plus native host rendering — one source for rendering / interaction / navigation / reactivity / the CSS engine
 - **Flutter / Quick App** (🟡 / ⬜): same semantic model, per-target implementations follow the roadmap
 
 > See [Ends & maturity](/docs/framework/ends-matrix) for the full 8-target status table; component/capability pages carry per-terminal compatibility tables.
@@ -29,20 +29,20 @@ Teams shipping both Web and Mini Programs today maintain two mental models:
 
 ## The core mechanism (in one paragraph)
 
-The page you write is a **standard Vue SFC**. On Web it is simply a Vue component; in Mini Programs the compiler transforms it into the four native artifacts — tag mapping (`div→view` etc.), reactive rewriting (`ref` → batched `setData`), and style conversion are all automatic. There is no `wx.` in your business code, and no conditional compilation.
+The page you write is a **standard Vue SFC**. On Web it is simply a Vue component; in Mini Programs the compiler transforms it into the four native artifacts; the three App targets compile it into **screen-content IR** (`screen-content.json`) drawn by a self-built Rust layout core plus native host rendering — tag mapping (`div→view` etc.), reactive rewriting (`ref` → batched `setData` / incremental `applyOps`), and style conversion are all automatic. There is no `wx.` in your business code, and no conditional compilation.
 
 ## Who it fits — and who it doesn't
 
 **Fits:**
 
-- Teams that need **Web + WeChat Mini Program delivery** (full Web; Skyline-first Mini Program; App/Harmony wired per roadmap)
+- Teams that need **Web / WeChat Mini Program / App (iOS·Android·HarmonyOS) delivery** (one `src/` for all three App targets; the App side runs on a self-built Rust core with native rendering)
 - Teams that want **AI agents to participate in development** (AI produces standard code that conforms to the IR contract; enforced at compile time)
 - Teams with **existing Mini Programs** to migrate gradually (compat layer + `proteus migrate mp` codemod)
 
 **Doesn't fit** (honest boundaries):
 
 - Target platforms include Alipay / Douyin / Kuaishou Mini Programs — explicitly out of scope
-- You need native rendering on real iOS / Android devices today — native backends are prototype mappings, advancing per roadmap
+- Targets include Flutter / Quick App — the same semantic model is planned, per-target implementations follow the roadmap
 - You rely on runtime dynamic page/route registration — Proteus declares statically at compile time
 
 ## Why the name Proteus
@@ -53,4 +53,4 @@ Proteus is the sea god of Greek myth: one being that shifts between many forms w
 
 - [Proteus vs. traditional cross-platform frameworks](/docs/02-difference): design trade-offs in a minute
 - [Try the Playground](/docs/03-playground): run your first page in the browser, no install
-- [Create your first project](/docs/05-create-project): scaffold and run both targets end to end
+- [Create your first project](/docs/05-create-project): scaffold and run every target end to end

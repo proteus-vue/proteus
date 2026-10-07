@@ -22,9 +22,9 @@ export const ENDS_EN = {
   web: { name: 'Web SPA', engine: 'vue-dom' },
   'mp-weixin': { name: 'WeChat Mini Program', engine: 'skyline (WebView fallback)' },
   headless: { name: 'Headless (SSR / testing)', engine: 'headless' },
-  'app-ios': { name: 'iOS native', engine: 'native-ios (UIKit)' },
-  'app-android': { name: 'Android native', engine: 'native-android (Jetpack)' },
-  'app-harmony': { name: 'HarmonyOS', engine: 'native-harmony (ArkUI)' },
+  'app-ios': { name: 'iOS native', engine: 'native-ios (UIKit + CoreAnimation)' },
+  'app-android': { name: 'Android native', engine: 'native-android (self-drawn Canvas)' },
+  'app-harmony': { name: 'HarmonyOS', engine: 'native-harmony (ArkUI RenderNode)' },
   flutter: { name: 'Flutter hybrid', engine: 'flutter' },
   'quick-app': { name: 'Quick App', engine: 'Quick App engine (TBD)' },
 }
@@ -36,12 +36,12 @@ export const END_NOTE_EN = {
   headless: 'IR render test tier (tooling target)',
   flutter: 'widget-level mapping — component-level not yet verified',
   'quick-app': 'target not started',
-  prototype: 'prototype mapping — component-level wiring not started',
+  prototype: 'render core shipped — component-level wiring not started',
 }
 
 /** 兼容进度表页脚图例 EN */
 export const COMP_LEGEND_EN =
-  '> Status scale: ✅ shipped & this component usable · 🟡 prototype mapping — component-level wiring not started · ⬜ target not started. Target architecture matrix (engine / runtime / persistence) → [Ends & maturity](/docs/framework/ends-matrix).'
+  '> Status scale: ✅ shipped & this component usable · 🟡 render core shipped — component-level wiring not started · ⬜ target not started. Target architecture matrix (engine / runtime / persistence) → [Ends & maturity](/docs/framework/ends-matrix).'
 
 /** 页面小节/表头等共享文案 EN */
 export const SHARED_EN = {
@@ -1216,7 +1216,7 @@ export const CAP_SHARED_EN = {
   endNone: 'not on this target',
   noDataGeneric: '—',
   capLegend:
-    '> Status scale: ✅ target shipped & this capability usable · ⚠️ target shipped but bridge missing → explicit `Err` degradation · 🟡 prototype mapping — capability bridge not wired · ⬜ target not started. Target architecture matrix → [Ends & maturity](/docs/framework/ends-matrix).',
+    '> Status scale: ✅ target shipped & this capability usable · ⚠️ target shipped but bridge missing → explicit `Err` degradation · 🟡 render core shipped — capability bridge not wired · ⬜ target not started. Target architecture matrix → [Ends & maturity](/docs/framework/ends-matrix).',
   ironRule: '> Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.',
   // 兼容进度行逐端注记（镜像 zh switch）
   endNote: {
@@ -1230,7 +1230,7 @@ export const CAP_SHARED_EN = {
     headless: 'mock bridge injected (testing / SSR tier)',
     flutter: 'same JS logic layer — capability bridge not wired',
     'quick-app': 'target not started',
-    prototype: 'prototype mapping — capability bridge not wired',
+    prototype: 'render core shipped — capability bridge not wired',
   },
 }
 

@@ -21,13 +21,13 @@ Mask
 | Web SPA | ✅ | vue-dom · dual-source compile target for both targets (compile-time mapping + event normalization) |
 | WeChat Mini Program | ✅ | skyline (WebView fallback) · Proteus extension component — no Mini Program equivalent |
 | Headless (SSR / testing) | ✅ | headless · IR render test tier (tooling target) |
-| iOS native | 🟡 | native-ios (UIKit) · prototype mapping — component-level wiring not started |
-| Android native | 🟡 | native-android (Jetpack) · prototype mapping — component-level wiring not started |
-| HarmonyOS | 🟡 | native-harmony (ArkUI) · prototype mapping — component-level wiring not started |
+| iOS native | 🟡 | native-ios (UIKit + CoreAnimation) · render core shipped — component-level wiring not started |
+| Android native | 🟡 | native-android (self-drawn Canvas) · render core shipped — component-level wiring not started |
+| HarmonyOS | 🟡 | native-harmony (ArkUI RenderNode) · render core shipped — component-level wiring not started |
 | Flutter hybrid | 🟡 | flutter · widget-level mapping — component-level not yet verified |
 | Quick App | ⬜ | Quick App engine (TBD) · target not started |
 
-> Status scale: ✅ shipped & this component usable · 🟡 prototype mapping — component-level wiring not started · ⬜ target not started. Target architecture matrix (engine / runtime / persistence) → [Ends & maturity](/docs/framework/ends-matrix).
+> Status scale: ✅ shipped & this component usable · 🟡 render core shipped — component-level wiring not started · ⬜ target not started. Target architecture matrix (engine / runtime / persistence) → [Ends & maturity](/docs/framework/ends-matrix).
 
 ## Props
 

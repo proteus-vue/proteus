@@ -83,4 +83,4 @@ unsupported  → 不渲染（该形态确实没有这条路径）
 ## 下一步
 
 - [折叠姿态](/docs/system/09-postures)：姿态会覆盖拓扑与度量（另一种"动态能力"）
-- [p-formfactor](/docs/system/11-p-formfactor)：能力的容器组件落地
+- [p-formfactor](/docs/system/11-formfactor-composition)：能力的容器组件落地

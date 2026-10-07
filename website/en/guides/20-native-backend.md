@@ -6,6 +6,8 @@ group: 渲染与能力
 
 # Native capabilities
 
+> **How this relates to the shipped App targets (2026-10-08).** The App targets that ship today (iOS / Android / HarmonyOS) do **not** go through the native-control mapping described on this page. They use the **self-drawn path**: the compiler emits screen-content IR, a self-built Rust layout core lays it out, and each host draws it with its own primitives (iOS CoreAnimation / Android Canvas / HarmonyOS ArkUI RenderNode). Rendering, interaction, navigation, reactivity and the CSS engine are proven on real devices. **NativeBackend** (the native-control mapping below — UIView / UILabel / …) is a separate, additional backend SPI: a genuine alternative render engine, not the shipped default. The business source is identical for both.
+
 In traditional cross-platform frameworks, "native capabilities" means writing your own bridges: one Swift implementation, one Kotlin implementation, maintained year after year. Proteus generalizes the render backend's SPI methodology to every native implementation — **a native capability is also one line of semantic mapping**. Scanning a QR code or getting a location is not an `if (platform)` branch; it is a `capability.*` row in a mapping table, sharing one table and one source with `ui.*` and `shell.*`.
 
 > **Business code calls semantics; the backend provides the implementation.**

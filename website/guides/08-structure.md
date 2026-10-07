@@ -13,10 +13,11 @@ group: 代码构成
 | `proteus.config.ts` | **唯一配置文件**：platform / skyline / appid / pagesDir / rules / setDataBridge / style + `vite` 透传字段（vite 配置由框架组装，无需 vite.config.ts）；编译期读取，改完需重新 `npm run build:mp` |
 | `src/main.ts` | Web 入口 |
 | `src/main.mp.ts` | 小程序极简入口：不写 `App()`，app 骨架由框架自动生成 |
+| `dist/app/<端>/` | App 三端的屏内容 IR（`ios` / `android` / `harmony`），由 `proteus build --target <端>` 产出 |
 | `src/pages/` | 页面目录（`pagesDir`），每个 `.vue` 即一个页面 |
 | `src/router/` | RouterView / 路由实例 / `auto-routes.ts`（编译期生成，勿手动编辑） |
 | `src/shims/` | wx / 事件 / Vue 类型声明 |
-| `.github/workflows/proteus.yml` | CI 模板（check 门禁 → 双端构建 → 产物归档） |
+| `.github/workflows/proteus.yml` | CI 模板（check 门禁 → 多端构建 → 产物归档） |
 
 > 模板未含但推荐新建的目录：`src/components/`（业务组件——plugin-vite 扫描自动写入 usingComponents）、`src/stores/`（Pinia store——纯逻辑，stores-purity CI 硬卡口）、`src/capabilities/`（能力声明——audit 门禁消费）。
 
