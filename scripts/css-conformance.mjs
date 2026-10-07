@@ -142,7 +142,10 @@ async function collectWeb() {
           process.exit(1)
         }
         // ★修正（同①）：scrollIntoView 后按**视口坐标**裁剪（页面应装进视口）
-        await el.scrollIntoViewIfNeeded()
+        //   ★★修（2026-10-08）：改用**原生** scrollIntoView——Playwright 的 scrollIntoViewIfNeeded 会等元素
+        //   "stable"（连续两帧同位置），而 animation.vue 的无限动画元素**永不静止** ⇒ 该页超时并中断整轮
+        //   （真因：web 基准长期只有 19/30 页）。原生滚动不做稳定等待，裁剪坐标语义不变。
+        await el.evaluate((node) => node.scrollIntoView({ block: 'center', inline: 'nearest' }))
         const box = await el.boundingBox()
         if (box && box.width > 0 && box.height > 0) {
           await page.screenshot({

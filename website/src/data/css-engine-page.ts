@@ -66,9 +66,9 @@ export const CSS_ENGINE_PAGE = {
       "structureRelPct": 0.5
     },
     "lint": {
-      "total": 119,
+      "total": 118,
       "byProject": {
-        "examples": 26,
+        "examples": 25,
         "showcase": 26,
         "css-conformance": 25,
         "website": 42

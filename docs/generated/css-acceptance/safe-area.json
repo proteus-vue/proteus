@@ -1,10 +1,10 @@
 {
-  "_note": "★CSS 能力逐项验收包（用户指定流程）。本项为**框架内置环境变量模块（Stage 1，决策 #593）**——非单一 CSS 属性，验收载体 = css-conformance/pages/safe-area.vue + 四端真机 + 独立子代理终评。",
+  "_note": "★CSS 能力逐项验收包（用户指定流程）。本项为**框架内置环境变量模块**——非单一 CSS 属性，验收载体 = css-conformance/pages/safe-area.vue + 四端真机 + 独立子代理终评。★Stage 1（几何 A/B/C 组，决策 #593）· Stage 2 群 D 视口（#595）· **Stage 2 群 E 设备标量 --pf-hairline（#598）** 均并入本页验收。",
   "id": "safe-area",
   "kind": "framework-env-vars",
   "verifiedAt": "2026-10-08",
-  "scope": "Stage 1 · 几何类 env 变量（--pf-inset-* / --pf-status-bar-height / --pf-nav-bar-* / --pf-cutout-* / --pf-keyboard-height）",
-  "architecture": "宿主侧解析（编译器发射 env 引用 token → 宿主用平台 insets 解析）；Stage 2 迁内核 env 表 + ABI v2",
+  "scope": "A/B/C 组几何（--pf-inset-* / --pf-status-bar-height / --pf-nav-bar-* / --pf-cutout-* / --pf-keyboard-height）· D 组视口（--pf-vw/--pf-vh）· **E 组设备标量（--pf-hairline = 1/设备像素比）**",
+  "architecture": "宿主侧解析（编译器发射 env 引用 token → 宿主用平台 insets/设备标量解析）；--pf-hairline 值 = 1/设备像素比（Android 1/density · iOS 1/UIScreen.scale · 鸿蒙 1/vp2px(1) · Web JS 注入 1/devicePixelRatio（CSS 无法派生）· MP 1/pixelRatio）",
   "gates": {
     "contract": true,
     "compiler": true,
@@ -13,8 +13,8 @@
   },
   "pass": true,
   "visual": {
-    "_note": "★视觉验收结论（独立子代理按 Web 基准并排图评审；来源 = css-conformance/results/side-by-side/）。verdict: pass（与 Web 基准无可归因差异）/ fail（有实差异——见 caseIssues）/ unclear（图不足以判）。纪律：左半恒为 Web 基准（D1）；不看不清不编（unclear）。",
-    "reviewedAt": "2026-10-06T16:16:21.954Z",
+    "_note": "★视觉验收结论（独立子代理按 Web 基准并排图评审；来源 = css-conformance/results/side-by-side/）。verdict: pass（与 Web 基准无可归因差异）/ fail（有实差异——见 caseIssues）/ unclear（图不足以判）。纪律：左半恒为 Web 基准（D1）；不看不清不编（unclear）。★本轮（#598）新增 D 案例（--pf-hairline 细线 + 1px 参考对照），子代理逐端复评：Android/iOS/鸿蒙 pass（细线严格细于参考）；MP 首轮 fail（细线反比参考粗——--pf-hairline 在 Skyline 惰性 ⇒ border-width 落初始 medium）⇒ 加 CSS 兜底 var(--pf-hairline,1px) 后复评 pass。",
+    "reviewedAt": "2026-10-08T00:00:00.000Z",
     "reviewedBy": "independent-visual-subagent",
     "sideBySideDir": "css-conformance/results/side-by-side/",
     "summary": {
@@ -26,25 +26,31 @@
         "end": "web",
         "verdict": "pass",
         "caseIssues": [],
-        "evidence": "基准端：desktop env()=0 ⇒ A/C 取 min-height；App 手机端多一段状态栏+内容避让，属正确差异。"
+        "evidence": "基准端：desktop env()=0 ⇒ A/C 取 min-height；--pf-hairline=0.5px（DPR2，JS 按 devicePixelRatio 注入），浏览器绘制把亚像素盒边吸附到 1 CSS px（引擎锁定），D 两线视觉同宽。"
       },
       {
         "end": "android",
         "verdict": "pass",
         "caseIssues": [],
-        "evidence": "系统状态栏可见（时钟/5G/电量），标题在其下（--pf-inset-top 生效，A≈65 vs Web 20）；无遮挡/裁切。"
+        "evidence": "系统状态栏可见，标题在其下（--pf-inset-top 生效）；D 细线（1 物理 px）严格细于 1px 参考线（3 物理 px）；无遮挡/裁切。"
       },
       {
         "end": "ios",
         "verdict": "pass",
         "caseIssues": [],
-        "evidence": "容器截图不含系统 chrome，但 --pf-inset-top 明显生效（标题下移 ~66 CSS，A≈64 > Web 20）⇒ 内容避开状态栏区。"
+        "evidence": "容器截图不含系统 chrome，--pf-inset-top 明显生效（标题下移）；D 细线为单条极淡像素行，明显细于满强度 1px 参考线。"
       },
       {
         "end": "harmony",
         "verdict": "pass",
-        "caseIssues": [],
-        "evidence": "系统状态栏可见，标题在其下（A≈65.6/C≈46 > Web）；色/宽/右边距与 Web 一致，无裁切。"
+        "caseIssues": [
+          {
+            "case": "D",
+            "issue": "细线存在但比 Android/iOS 略淡（亚像素抗锯齿 + 采集轻微去饱和），仍细于 1px 参考线，非可归因缺陷。",
+            "severity": "low"
+          }
+        ],
+        "evidence": "系统状态栏可见；D 细线为极细淡带，1px 参考线为实心深色带；A/B/C 高与 Web 差异 = 对应 inset 生效，符合预期。"
       },
       {
         "end": "mp",
@@ -52,11 +58,16 @@
         "caseIssues": [
           {
             "case": "case-inset-top",
-            "issue": "Skyline 不应用内联自定义属性 ⇒ --pf-* 惰性（标题在顶、模拟刘海压字）。引擎边界（同不支持 env()）；MP 避让由 p-safe 组件交付。",
+            "issue": "Skyline 不应用内联自定义属性 ⇒ --pf-inset-* 惰性（标题在顶）。引擎边界（同不支持 env()）；MP 避让由 p-safe 组件交付。",
+            "severity": "minor"
+          },
+          {
+            "case": "case-hairline",
+            "issue": "MP 无法表达**亚像素**细线（--pf-hairline 在 Skyline 惰性，CSS 兜底 1px）。具名引擎边界。",
             "severity": "minor"
           }
         ],
-        "evidence": "结构/色/宽忠实；inset 机制在 Skyline 不可用 = 具名引擎边界，非缺陷。"
+        "evidence": "结构/色/宽忠实；加兜底后 D 细线与 1px 参考线同厚（不再倒置）；inset/亚像素细线机制在 Skyline 不可用 = 具名引擎边界，非缺陷。"
       }
     ]
   }

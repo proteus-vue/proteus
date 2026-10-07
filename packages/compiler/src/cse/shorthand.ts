@@ -104,7 +104,9 @@ export function expandShorthandDecl(prop: string, value: string, important: bool
         style = low
         continue
       }
-      if (/^\d*\.?\d+(px|em|rem|%|vw|vh)?$/.test(low) || ['thin', 'medium', 'thick'].includes(low)) {
+      // ★E 组（设备标量 · 决策 #598）：宽度 token 亦可是内置 env 引用（var(--pf-hairline) / env(...) / calc(...)）
+      if (/^\d*\.?\d+(px|em|rem|%|vw|vh)?$/.test(low) || ['thin', 'medium', 'thick'].includes(low)
+          || /^var\(\s*--pf-|^env\(|^calc\(/.test(low)) {
         width = t
         continue
       }

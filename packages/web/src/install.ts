@@ -6,6 +6,7 @@ import type { App } from 'vue'
 import { installBuiltInComponents } from '@proteus-vue/built-in-components'
 import { installWxApi } from './wx'
 import { installMountLayers } from './mount-layers'
+import { installEnvVars } from './env-vars'
 
 /**
  * 注册框架内置组件（proteus-*）+ wx API 模拟（wx.* 全局注入）+ ★三层挂载组件（GP3-a）。
@@ -18,6 +19,8 @@ export function installWebPlatform(app: App): App {
   installBuiltInComponents(app)
   installWxApi()
   installMountLayers(app)
+  // ★★★内置环境变量 · E 组设备标量（决策 #598）：--pf-hairline = 1/devicePixelRatio 注入 :root
+  installEnvVars()
   // ★★★$nav 平台级导航全局（Web 侧 · 2026-10-08 · 决策 #616）：模板 `@tap="$nav('routeName')"`
   //   编译为 `n.$nav(...)`（setup ctx）⇒ 注册为 **globalProperty** 让任意组件解析到它；
   //   实现委托给路由登记到 `globalThis.$nav` 的函数（`createRouter` 时登记，路由记录为唯一事实源）。

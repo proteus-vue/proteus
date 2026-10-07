@@ -6769,6 +6769,8 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         // ★视口逻辑尺寸（决策 #595）：`vw`/`vh` 单位与流式布局用
         t["--pf-vw"] = Double(v.bounds.width)
         t["--pf-vh"] = Double(v.bounds.height)
+        // ★E 组（设备标量 · 决策 #598）：--pf-hairline = 1/UIScreen.scale（一条物理像素的逻辑长度，pt）
+        t["--pf-hairline"] = 1.0 / Double(UIScreen.main.scale)
         return t
     }
 
