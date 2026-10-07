@@ -1809,3 +1809,9 @@
 **④ 修复（一处语义五处实现，须同改）**：TS 契约钉子 `linearGradientEndpoints(angle, w, h)`（加 width/height 参数）· iOS `applyGradient`/`applyGradientTick`/mask（新共享 `linearEndpoints`）· Android 动画 TickGrad/repeat 砖/非 repeat 静态/mask（新共享 `linearGradientEndpoints`）· 鸿蒙 `gradEndpoints`。**全部改为 CSS 式**。
 **⑤ 验证（真机四端）**：案例 C 实色占比 Web/iOS/Android/鸿蒙 **0.248/0.230/0.254/0.218**（此前 Android 0.42）；20 砖序列逐段一致；周期按各端 DPR（2/3/3.5）均为 **16 CSS 单位**。`background-position` 页 A–E（90°/非正方/百分比）与 Web 逐案一致（回归——该式 90° 与旧式等价，所以此前的盒测试全过、漏掉了对角）。
 **⑥ 教训**：a) **「对称/轴对齐用例全过」会掩盖公式错**——旧式在 0/90/180/270 恒等 ⇒ 所有盒型测试都绿，只有**对角+硬色标**的案例才暴露（与 #618「硬色标」同案的两层根因）；b) **「一处语义多处实现」的同步面要数清**——渐变端点散布 TS/两宿主各两处/鸿蒙，漏一处即一端尺寸错；c) **跨端对齐要拿"可量化的物理量"**（实色占比、砖周期）比，不能只看"形状像"；d) 用户凭直觉指向「内核参数取值」是对的——**先核公式对不对，再核实现**。
+
+621. **★★iOS 导航切换页面"闪一下"——清树+建树包进同一 `CATransaction`（原子提交）（★用户 2026-10-08「iOS 每次导航切换页面都会闪下，安卓和鸿蒙没这个问题非常丝滑」）**：
+**① 根因**：iOS 全量渲染路径 `view.clearLayers()` 与 `view.buildLayers(flat:)` **各自** begin/commit 一个 `CATransaction`。而 **`CATransaction.commit()` 在非嵌套时会把该事务立即 flush 给 render server** ⇒ render server 先收到"一棵**空树**（只剩 view 黑底）"、再收到"新树" ⇒ 中间那一帧**必现黑闪**。Android（一张 canvas `invalidate` 重画）/ 鸿蒙（`ClearChildren` + 一次重建）都**没有"空树"中间态**，故丝滑。
+**② 修复**：把"清树 + 建树"包进**同一外层事务**——内层 `begin/commit` 变成**嵌套**（不再立即 flush），外层 `commit` 时一次性**原子提交**"旧树→新树"，render server 不经过空树态。虚拟化 `mountVirtual`（清树 → `materializeStaticNodes` → 首帧物化，三处 commit）同款问题，一并包进同一事务。
+**③ 验证**：iOS `--superapp --drive` 30 页重跑——30 张截图 **30 个不同哈希**（无回归）、零 `SUPERAPP_RENDER_FAIL`；`check-selfdraw-compile` 通过。★闪屏是**亚帧时序**现象，截图/报告抓不到，最终以**用户目视**为准（本仓纪律：无法机器判定 ⇒ 交用户目视验收）。
+**④ 教训**：a) **`CATransaction` 不嵌套 ⇒ 每次 `commit` 立即上屏**——"先清后建"分两次 commit 必有空窗；**原子替换整棵层树必须包进一个外层事务**（与 Android `invalidate` 一次性重画同语义）；b) **同一个"更新模型"跨端不同**：iOS 销毁重建层树、Android/鸿蒙重画画布/清根重建——**层树模型的端要格外注意中间态**（空树 = 黑闪）；c) 该模式散布多处（全量 render + 虚拟化 mountVirtual），**改一处要普查同类调用点**。
