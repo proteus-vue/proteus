@@ -1073,6 +1073,9 @@ export function parseStaticStyle(
         const parsed: (number | string)[] = []
         for (const t of map) {
           if (key === 'borderWidth') {
+            // ★E 组：宽度可为 env 引用（var(--pf-hairline)）——与 CSE 同口径（CSE 对 border-*-width 发射 env）
+            const et = envLengthToken(t)
+            if (et !== undefined) { parsed.push(et); continue }
             const n = numOf(t)
             if (n === undefined) { ok = false; break }
             parsed.push(n)
@@ -1327,9 +1330,10 @@ export function parseStaticStyle(
         if (n === undefined) { pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 不是合法数值（0..1 或 %）`); continue }
         out[key] = Math.max(0, Math.min(1, n))
       } else {
-        const num = numOf(rawVal)
-        if (num === undefined) { pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 不是纯数值`); continue }
-        out[key] = num
+        // ★E 组（设备标量）：绘制侧长度字段亦接受内置 env 引用（border-bottom-width: var(--pf-hairline) 等）
+        const le = lenOrEnv(rawVal)
+        if (le === undefined) { pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 不是纯数值`); continue }
+        out[key] = le
       }
       markImportant(key)
       continue
@@ -2814,8 +2818,8 @@ function parseFlexShorthand(raw: string, toNum: (v: string) => number | undefine
  *   · color：`normalizeCssColor` 可归一者（hex/rgb/rgba/transparent）；`var()`/命名色 ⇒ 忽略。
  *   ★`var(--x)` 编译期无法解析（token 源不在 SFC 内）⇒ 该维度为 undefined（如实反映）。
  */
-function parseBorderShorthand(raw: string): { width?: number; color?: string; style?: string } {
-  const out: { width?: number; color?: string; style?: string } = {}
+function parseBorderShorthand(raw: string): { width?: number | string; color?: string; style?: string } {
+  const out: { width?: number | string; color?: string; style?: string } = {}
   const STYLES = new Set(['solid', 'dashed', 'dotted', 'double', 'none', 'hidden', 'groove', 'ridge', 'inset', 'outset'])
   const KEYWORDS = new Set(['thin', 'medium', 'thick', 'currentcolor'])
   for (const tok of splitTopLevelSpaces(raw)) {   // ★批次 23：括号感知（color-mix() 内空格不切）
@@ -2827,6 +2831,9 @@ function parseBorderShorthand(raw: string): { width?: number; color?: string; st
       if (c) { out.color = c; continue }
     }
     if (out.width === undefined) {
+      // ★E 组（设备标量 · --pf-hairline）：边框宽度亦可是内置 env 引用（border-bottom: var(--pf-hairline) solid #ccc）
+      const et = envLengthToken(tok)
+      if (et !== undefined) { out.width = et; continue }
       const n = numOf(tok)
       if (n !== undefined && n > 0) { out.width = n; continue }
     }

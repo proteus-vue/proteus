@@ -1024,7 +1024,13 @@ function mapToIrField(prop: string, val: CssComputedValue): { field: string; val
   }
   if (/^border-(top|right|bottom|left)-width$/.test(prop)) {
     const side = prop.split('-')[1]!
-    return { field: `border${side[0]!.toUpperCase()}${side.slice(1)}Width`, value: typeof val === 'number' ? val : null }
+    const field = `border${side[0]!.toUpperCase()}${side.slice(1)}Width`
+    // ★E 组（设备标量 · 决策 #598）：边框宽度亦可是内置 env 引用（var(--pf-hairline)）——发射 env 变体
+    if (typeof val === 'object' && val !== null && 'env' in val) {
+      const e = val as { env: EnvVarName; offset?: number; fallback?: number }
+      return { field, value: { kind: 'env', name: e.env, ...(e.offset !== undefined ? { offset: e.offset } : {}), ...(e.fallback !== undefined ? { fallback: e.fallback } : {}) } satisfies RL }
+    }
+    return { field, value: typeof val === 'number' ? val : null }
   }
   // ★★★边框族收口批（2026-10-05）：`border-<side>-style` → `border<Side>Style`（宿主按线型绘制：solid/dashed/dotted）。
   //   `none` 由调用方转换为该边宽度 0（见上方 width 映射的完成阶段）；此处只透传线型字符串。

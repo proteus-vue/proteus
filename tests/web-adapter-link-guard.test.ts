@@ -30,7 +30,7 @@ describe('★★★Web adapter：<a> 点击拦截守卫（决策 #647）', () =>
     vi.stubEnv('BASE_URL', '/')
     window.history.replaceState(null, '', '/start')
   })
-  afterEach(() => vi.unstubAllEnvs())
+  afterEach(() => { vi.unstubAllEnvs() })
 
   it('无监听者（vue-router 宿主）→ 不拦截：defaultPrevented=false，adapter 不改 URL', () => {
     createWebAdapter() // 构造即挂 document click 拦截器；本用例**不注册 onPageLoad**

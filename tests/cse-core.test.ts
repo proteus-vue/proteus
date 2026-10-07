@@ -325,6 +325,15 @@ describe('★★★G-61 B1 · CSE 计算值', () => {
     const r2 = compute('.a { padding-top: var(--pf-inset-tp) }', n)
     expect(r2.byKey[n.key]!.fields['paddingTop']).toBeUndefined()
   })
+  it('★★★E 组设备标量 --pf-hairline（2026-10-08 · 决策 #598）：细线宽度折 env 变体（含边框长手/简写）', () => {
+    const n = node('div', ['a'])
+    // 边框宽度**长手**（绘制侧长度）——与 CSE 对 border-*-width 的既有路径一致
+    const r = compute('.a { border-bottom-width: var(--pf-hairline); border-bottom-color: #5b5bd6; border-bottom-style: solid }', n)
+    expect(r.byKey[n.key]!.fields['borderBottomWidth']).toEqual({ kind: 'env', name: '--pf-hairline' })
+    // 边框**简写**（border-bottom: <w> solid <c>）中的宽度亦接受 env
+    const r2 = compute('.a { border-bottom: var(--pf-hairline) solid #5b5bd6 }', n)
+    expect(r2.byKey[n.key]!.fields['borderBottomWidth']).toEqual({ kind: 'env', name: '--pf-hairline' })
+  })
   it('★★★var() 简写展开（2026-10-08 · css:next）：值含 var() 的简写在 compute 期替换后展开（与 App 折叠面同口径）', () => {
     const n = node('div', ['a'])
     // 单值令牌 ⇒ 四边同值

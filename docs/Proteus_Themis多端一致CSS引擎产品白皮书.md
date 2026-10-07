@@ -152,7 +152,7 @@ E-CSS / W-CSS 两族诊断接入 **Web 构建链**：Profile 外写法在 Web �
 | **108** IR 字段 | 闭集·版本化 | semantic 82 + engine-only 26，三端 Applier 覆盖 82/82（并集 100%） |
 | **5/5** conformance | 同一 IR → 等价应用后状态 | App 几何 6 项 ≤0.5dp · Skyline 语义替身 · 降级登记 |
 | **逐字节** 双后端 | Node ⇄ Rust | IR Golden 真二进制对拍 + 破坏性验证 |
-| **119** 条存量 | 棘轮基线 | 全仓扫 lint 存量钉底（examples 26 · showcase 26 · css-conformance 25 · website 42），只减不增 |
+| **118** 条存量 | 棘轮基线 | 全仓扫 lint 存量钉底（examples 25 · showcase 26 · css-conformance 25 · website 42），只减不增 |
 | **0** 次 CSS 解析 | 运行期 | 选择器匹配/层叠/单位换算在调用栈零出现（INV-CE-03） |
 
 ---
@@ -234,7 +234,7 @@ Taffy ⇄ Blink 的布局语义差（margin 折叠、百分比基准等）是结
 | 108 字段（82+26）/ M1 65.45% | `docs/generated/css-engine-numbers.json`::ir / ::coverage（SSOT）；门禁 `pnpm check:css-engine-numbers` |
 | 动态类 O(1)（读次数==字段数）/ 4 用例 13 组合 32 项 | 同上 §4 B2；`packages/compiler/src/cse/dynamic.ts` |
 | 双后端逐字节 / IR Golden | 同上 §4 B0 与 §6 INV-CE-01 |
-| 119 条 lint 棘轮基线 / Web 构建链拦截 | `{examples,showcase,css-conformance,website}/cse-lint-baseline.json`；门禁 `pnpm check:cse-lint-baseline` · `packages/compiler/src/cse/lint.ts` |
+| 118 条 lint 棘轮基线 / Web 构建链拦截 | `{examples,showcase,css-conformance,website}/cse-lint-baseline.json`；门禁 `pnpm check:cse-lint-baseline` · `packages/compiler/src/cse/lint.ts` |
 | 降级配方与拒绝语义 | `packages/compiler/src/cse/degrade.ts` 头注释 |
 | 长手层层叠设计动机 | `packages/compiler/src/cse/types.ts` 头注释 |
 | "App 端无 CSS 引擎"历史现状 | `docs/generated/app-css-surface.md:6-7`（G-61 前口径，现已由 CSE 收口） |

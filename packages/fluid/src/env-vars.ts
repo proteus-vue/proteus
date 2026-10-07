@@ -17,6 +17,7 @@ interface WxWindowInfo {
   statusBarHeight?: number
   screenWidth?: number
   screenHeight?: number
+  pixelRatio?: number
   safeArea?: { top?: number; bottom?: number; left?: number; right?: number }
 }
 
@@ -59,5 +60,7 @@ export function readEnvVars(): EnvVarMap {
     '--pf-cutout-left': px(0),
     '--pf-cutout-right': px(0),
     '--pf-keyboard-height': px(0),
+    // ★E 组（设备标量 · 决策 #598）：--pf-hairline = 1/设备像素比（一条物理像素的逻辑长度）
+    '--pf-hairline': px(1 / (typeof info.pixelRatio === 'number' && info.pixelRatio > 0 ? info.pixelRatio : 1)),
   }
 }

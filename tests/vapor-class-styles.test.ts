@@ -1531,6 +1531,18 @@ describe('★flex-direction 初值归一（display:flex 缺省补 row · 对齐 
     // calc 内 env*vw 缩放
     expect(parseStaticStyle('width:calc(var(--pf-vw) * 0.5)', () => {})).toEqual({ width: 'env:--pf-vw*0.5' })
   })
+  it('★★★E 组设备标量 --pf-hairline（2026-10-08 · 决策 #598）：边框细线宽度折 env（长手 + 简写 + 四值）', () => {
+    // 边框宽度**长手**（绘制侧长度字段）
+    expect(parseStaticStyle('border-bottom-width: var(--pf-hairline)', () => {})).toEqual({ borderBottomWidth: 'env:--pf-hairline' })
+    // 边框**简写**（border-bottom: <w> solid <c>）中的宽度
+    expect(parseStaticStyle('border-bottom: var(--pf-hairline) solid #5b5bd6', () => {}))
+      .toEqual({ borderBottomWidth: 'env:--pf-hairline', borderBottomColor: '#5b5bd6' })
+    // border-width 单值 ⇒ uniform 字段；四值 ⇒ 逐边落（env 与数值可混）
+    expect(parseStaticStyle('border-width: var(--pf-hairline)', () => {})).toEqual({ borderWidth: 'env:--pf-hairline' })
+    expect(parseStaticStyle('border-width: var(--pf-hairline) 2px', () => {})).toEqual({
+      borderTopWidth: 'env:--pf-hairline', borderRightWidth: 2, borderBottomWidth: 'env:--pf-hairline', borderLeftWidth: 2,
+    })
+  })
   it('⑤ display:grid ⇒ 不补（网格不用主轴 flex-direction）', () => {
     const st = nodeStyle('<template><view class="b"></view></template><style>.b{display:grid;grid-template-columns:1fr 1fr}</style>')
     expect(st.flexDirection).toBeUndefined()

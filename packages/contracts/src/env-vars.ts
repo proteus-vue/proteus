@@ -12,7 +12,8 @@
 //   出口归一（鸿蒙 px→vp、Android px→dp），消费侧不再换算（决策 #593 · 坑 P2）。
 //
 // 【三组】A 避让（inset，内容该离屏幕边多远）· B 系统栏本体（栏本身多高，用于铺背景）·
-//   C 环境态（flags / 局部量）。Stage 1 落地这三组的**长度子集**；标量/主题组见 §Stage-2。
+//   C 环境态（flags / 局部量）。Stage 1 落地这三组的**长度子集**；Stage 2 依次补
+//   D 视口几何（`--pf-vw`/`--pf-vh`）与 E 设备标量（`--pf-hairline`）；标量/主题非长度通道见 §Stage-2。
 //
 // 【与既有 `--pf-safe-*` 的关系（不冲突）】`--pf-safe-top/-bottom/-side` 是 form-profile
 //   推导的**设计默认值**（平板/车机/手表的默认安全距离，`packages/fluid/src/formfactor.ts`）；
@@ -44,13 +45,15 @@ export type EnvVarName =
   // ── D 组 · 设备几何（视口尺寸；用于 `vw`/`vh` 单位与流式布局）──
   | '--pf-vw' // 视口宽（逻辑像素）——`Nvw` 编译期折为 `env:--pf-vw*<N/100>`
   | '--pf-vh' // 视口高（逻辑像素）——`Nvh` 同理
+  // ── E 组 · 设备标量（物理像素比派生的长度）──
+  | '--pf-hairline' // 一条**物理像素**对应的逻辑长度（= 1 / 设备像素比）——细线分割线用
 
 /** 变量元数据（语义 + 分组 + 是否参与布局）。 */
 export interface EnvVarSpec {
   /** 语义说明（开发者可见） */
   desc: string
-  /** 分组：A 避让 / B 系统栏本体 / C 环境态 */
-  group: 'A' | 'B' | 'C' | 'D'
+  /** 分组：A 避让 / B 系统栏本体 / C 环境态 / D 视口几何 / E 设备标量 */
+  group: 'A' | 'B' | 'C' | 'D' | 'E'
   /** 是否参与布局（false ⇒ 宿主提供但**不触发重排**；如键盘高度） */
   layout: boolean
 }
@@ -73,6 +76,7 @@ export const ENV_VARS: Record<EnvVarName, EnvVarSpec> = {
   '--pf-fold-width': { desc: '折叠铰链带宽', group: 'C', layout: true },
   '--pf-vw': { desc: '视口宽（逻辑像素）——`Nvw` 单位 / 流式布局用', group: 'D', layout: true },
   '--pf-vh': { desc: '视口高（逻辑像素）——`Nvh` 单位用', group: 'D', layout: true },
+  '--pf-hairline': { desc: '一条物理像素对应的逻辑长度（= 1/设备像素比）——细线分割线用', group: 'E', layout: true },
 }
 
 /** 是否为合法内置环境变量名（`--pf-*` 闭集内）。 */

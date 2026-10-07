@@ -27,8 +27,8 @@ if (names.length < 8) problems.push(`契约 ENV_VARS 过少（${names.length} �
 for (const n of names) {
   if (!n.startsWith('--pf-')) problems.push(`契约变量名非 --pf-* 前缀：${n}`)
   const s = ENV_VARS[n]
-  // ★Stage 2（2026-10-09 · 决策 #595）：新增分组 D（视口/设备标量）——分组白名单随契约扩集同步
-  if (!s || !s.desc || !['A', 'B', 'C', 'D'].includes(s.group)) problems.push(`契约变量缺语义/分组：${n}`)
+  // ★Stage 2（2026-10-09 · 决策 #595）：新增分组 D（视口几何）；★E 组（设备标量 · --pf-hairline）随契约扩集同步
+  if (!s || !s.desc || !['A', 'B', 'C', 'D', 'E'].includes(s.group)) problems.push(`契约变量缺语义/分组：${n}`)
 }
 if (!isEnvVarName('--pf-inset-top')) problems.push('isEnvVarName 判 --pf-inset-top 为假')
 
@@ -47,6 +47,13 @@ const need = [
   ['hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_host_helpers.h', 'substituteEnvTokens', '鸿蒙未替换 env token'],
   ['hosts/harmony/host-app/entry/src/main/ets/shell/Superapp.ets', 'getWindowAvoidArea', '鸿蒙未采集 avoidArea'],
   ['packages/built-in-components/src/style.css', '--pf-inset-top', 'Web 基础样式未定义 --pf-*'],
+  // ★E 组（设备标量 · --pf-hairline = 1/设备像素比）：四端 + Web 基础样式 + MP 读数**逐处**核对——
+  //   任一端漏 ⇒ 该端静默为 0（"看起来对、其实差"，本门禁创立时的原始教训）。
+  ['packages/built-in-components/src/style.css', '--pf-hairline', 'Web 基础样式未定义 --pf-hairline'],
+  ['packages/fluid/src/env-vars.ts', '--pf-hairline', 'MP 读数未提供 --pf-hairline'],
+  ['hosts/android/app/src/main/java/dev/proteus/layoutcore/shell/SuperappActivity.java', '"--pf-hairline"', 'Android 未采集 --pf-hairline'],
+  ['hosts/ios/ProteusHost/runtime/selfdraw-scene.swift', '--pf-hairline', 'iOS 未采集 --pf-hairline'],
+  ['hosts/harmony/host-app/entry/src/main/ets/shell/Superapp.ets', '--pf-hairline', '鸿蒙未采集 --pf-hairline'],
   ['packages/fluid/src/env-vars.ts', 'readEnvVars', 'MP 运行期读数未提供'],
 ]
 for (const [f, marker, why] of need) {

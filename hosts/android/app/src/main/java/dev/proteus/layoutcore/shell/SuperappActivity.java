@@ -514,6 +514,8 @@ public class SuperappActivity extends android.app.Activity {
             o.put("--pf-cutout-left", cutL / d);
             o.put("--pf-cutout-right", cutR / d);
             o.put("--pf-keyboard-height", 0.0);   // State 1：不接键盘（不参与布局）
+            // ★E 组（设备标量 · 决策 #598）：--pf-hairline = 1/density（一条物理像素的逻辑长度，dp）
+            o.put("--pf-hairline", 1.0 / d);
             android.util.Log.i(TAG, "ENV_VARS top=" + (Math.max(sb, cutT) / d) + " bottom=" + (nav / d) + " gesture=" + gesture);
         } catch (Throwable t) { android.util.Log.w(TAG, "collectEnvVars 失败：" + t.getMessage()); }
         return o;
