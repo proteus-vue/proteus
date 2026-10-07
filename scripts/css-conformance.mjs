@@ -127,6 +127,17 @@ async function collectWeb() {
       // ★修正（2026-10-05 · 回退 fullPage）：**视口截图**——真机截图恒为视口大小，两者须同坐标系可比。
       //   （页面应装进视口：案例过多时拆页/压缩，而不是长截图。）
       await page.screenshot({ path: path.join(outDir, `${p.name}.png`), type: 'png' })
+      // ★★★批 A⑤（2026-10-08 · 决策 #656）：**滚动后截图**——fixed/sticky 的语义只在**滚动**时可见
+      //   （页顶时与静态无异）。仅当页面**高于视口**（可滚动）时采 `<page>.scroll.png`（滚动到 min(400,maxScroll)）。
+      {
+        const maxScroll = await page.evaluate(() => { const se = document.scrollingElement || document.documentElement; return Math.max(0, se.scrollHeight - se.clientHeight) })
+        if (maxScroll > 20) {
+          const y = Math.min(400, maxScroll)
+          await page.evaluate((yy) => { (document.scrollingElement || document.documentElement).scrollTop = yy }, y)
+          await page.screenshot({ path: path.join(outDir, `${p.name}.scroll.png`), type: 'png' })
+          await page.evaluate(() => { (document.scrollingElement || document.documentElement).scrollTop = 0 })
+        }
+      }
       // ★★孤儿清理（2026-10-05 · 子代理评审发现）：页面**删案例**后重采不删旧裁剪图
       //   ⇒ `<page>.case-<已删id>.png` 残留（易被误引为"本轮证据"）。
       //   纪律与"旧图门禁"同源：**证据集必须与页面案例清单一致**——重采前按前缀清掉。
