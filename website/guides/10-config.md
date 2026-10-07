@@ -192,6 +192,7 @@ proteus migrate types proteus.config.ts   # 存量配置迁移（注入 version:
 
 ## 下一步
 
+- [配置参考（逐字段）](/docs/reference/config)：proteus.config.ts 每个字段的类型/必填/说明（自动生成、可跳转）
 - [运行时配置 app.config](/docs/11-app-config)：运行时配置的字段全表与 useAppConfig
 - [路由与导航](/docs/16-router)：路由树与按端 codegen 的完整模型
 - [CLI 与工程命令](/docs/28-cli)：`proteus` 命令行全家桶
