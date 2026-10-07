@@ -1405,8 +1405,8 @@ describe('★批次 40 · transform-origin（变换锚点，对齐 Web）', () =
 // ★批次 41（CSS Grid 补全 · 批 12 续）：`grid-column` / `grid-row` **线号放置**（对齐 Web）——2026-10-04
 //   真项目 36 处（`1`/`2`、`1 / -1` 全宽——仪表盘 KPI 卡）；内核 taffy `Line<GridPlacement>`。
 describe('★批次 41 · grid-column / grid-row 线号放置（补齐 CSS Grid）', () => {
-  const gc = (css: string) => (parseStaticStyle(css, () => {}) as { gridColumn?: { start: number; end?: number } }).gridColumn
-  const gr = (css: string) => (parseStaticStyle(css, () => {}) as { gridRow?: { start: number; end?: number } }).gridRow
+  const gc = (css: string) => (parseStaticStyle(css, () => {}) as { gridColumn?: { start?: number; end?: number; span?: number } }).gridColumn
+  const gr = (css: string) => (parseStaticStyle(css, () => {}) as { gridRow?: { start?: number; end?: number; span?: number } }).gridRow
 
   it('① 单值线号 / start-end / 负线号', () => {
     expect(gc('grid-column: 1')).toEqual({ start: 1 })
@@ -1416,10 +1416,17 @@ describe('★批次 41 · grid-column / grid-row 线号放置（补齐 CSS Grid�
     expect(gr('grid-row: 1 / 3')).toEqual({ start: 1, end: 3 })
   })
 
-  it('② span / auto / 命名线 ⇒ 如实诊断跳过', () => {
-    for (const bad of ['grid-column: span 2', 'grid-column: auto', 'grid-column: foo-start']) {
+  it('①b ★2026-10-08 span：`span n` / `start / span n` / `span n / end`（案例 D 卡位错修复）', () => {
+    expect(gr('grid-row: span 2')).toEqual({ span: 2 })
+    expect(gc('grid-column: span 2')).toEqual({ span: 2 })
+    expect(gc('grid-column: 1 / span 2')).toEqual({ start: 1, span: 2 })
+    expect(gr('grid-row: span 2 / 3')).toEqual({ end: 3, span: 2 })
+  })
+
+  it('② auto / 命名线 ⇒ 如实诊断跳过；span 0 亦跳过', () => {
+    for (const bad of ['grid-column: auto', 'grid-column: foo-start', 'grid-row: span 0']) {
       const d: string[] = []
-      expect((parseStaticStyle(bad, (m) => d.push(m)) as { gridColumn?: unknown }).gridColumn, bad).toBeUndefined()
+      expect((parseStaticStyle(bad, (m) => d.push(m)) as { gridColumn?: unknown; gridRow?: unknown }).gridColumn ?? (parseStaticStyle(bad, () => {}) as { gridRow?: unknown }).gridRow, bad).toBeUndefined()
       expect(d.length, `${bad} 应诊断`).toBeGreaterThan(0)
     }
   })

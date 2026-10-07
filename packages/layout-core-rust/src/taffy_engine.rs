@@ -20,13 +20,35 @@ use std::collections::HashMap;
 // ★刻意**不用** `taffy::prelude::*`（它导出的 `Rect`/`Size`/`Point` 与本 crate 的
 //   `style::Rect`/`style::Size` 撞名，glob 下解析结果不直观）——只按需导入具体符号。
 use taffy::prelude::{auto, fr, length, percent, AlignContent, AlignItems, AlignSelf, BoxSizing, Dimension, JustifyContent, LengthPercentageAuto};
-// ★批次 41：grid item 放置（GridPlacement::from_line_index）
-use taffy::style_helpers::TaffyGridLine;
+// ★批次 41 / ★★★2026-10-08：grid item 放置（GridPlacement::from_line_index / from_span）
+use taffy::style_helpers::{TaffyGridLine, TaffyGridSpan};
 use taffy::{AvailableSpace as TaffyAvailableSpace, NodeId, Style, TaffyTree};
 
 use crate::engine::{AvailableSpace, LayoutEngine, LayoutOutput, RootConstraint, TextMeasurer};
 use crate::node::{LayoutTree, LNode, NodeIndex, NO_PARENT};
-use crate::style::{Display, FlexDirection, FlexWrap, LStyle, Overflow, Position, Rect, Size};
+use crate::style::{Display, FlexDirection, FlexWrap, GridLine, LStyle, Overflow, Position, Rect, Size};
+
+/// ★★★2026-10-08（网格轨道项）：IR `GridLine` → taffy `Line<GridPlacement>`。
+///   `span <n>` ⇒ `GridPlacement::Span`（跨 n 轨）；起点缺省 = Auto（自动放置起）；线号 ⇒ Line。
+///   CSS 语义：`span 2` ⇒ start=Span(2)/end=Auto；`1 / span 2` ⇒ start=Line(1)/end=Span(2)。
+fn grid_line_of(gl: GridLine) -> taffy::Line<taffy::GridPlacement> {
+    let start = if let Some(s) = gl.start {
+        taffy::GridPlacement::from_line_index(s)
+    } else if let Some(n) = gl.span {
+        taffy::GridPlacement::from_span(n)
+    } else {
+        taffy::GridPlacement::Auto
+    };
+    let end = if let Some(e) = gl.end {
+        taffy::GridPlacement::from_line_index(e)
+    } else if gl.start.is_some() && gl.span.is_some() {
+        // `1 / span 2`：起线已知、跨度已知 ⇒ 终点 = Span
+        taffy::GridPlacement::from_span(gl.span.unwrap())
+    } else {
+        taffy::GridPlacement::Auto
+    };
+    taffy::Line { start, end }
+}
 
 /// Taffy 后端（DCP-1：`taffy = "0.14"`，**禁止降级到 0.13**——0.13 有 measure 指数退化）
 pub struct TaffyEngine {
@@ -209,17 +231,11 @@ impl TaffyEngine {
             out.grid_column = line.clone();
             out.grid_row = line;
         }
-        if let Some((s, e)) = style.grid_column {
-            out.grid_column = taffy::Line {
-                start: taffy::GridPlacement::from_line_index(s),
-                end: match e { Some(x) => taffy::GridPlacement::from_line_index(x), None => taffy::GridPlacement::Auto },
-            };
+        if let Some(gl) = style.grid_column {
+            out.grid_column = grid_line_of(gl);
         }
-        if let Some((s, e)) = style.grid_row {
-            out.grid_row = taffy::Line {
-                start: taffy::GridPlacement::from_line_index(s),
-                end: match e { Some(x) => taffy::GridPlacement::from_line_index(x), None => taffy::GridPlacement::Auto },
-            };
+        if let Some(gl) = style.grid_row {
+            out.grid_row = grid_line_of(gl);
         }
 
         // ③ flex 主轴 / 对齐 / 伸缩

@@ -57,13 +57,17 @@ pub extern "C" fn proteus_layout_version() -> *mut c_char {
 
 /* ────────────────────────── 引擎就绪输入（JSON DTO） ────────────────────────── */
 
-/// ★批次 41：网格线号放置（CSS `grid-column: 1 / 3` ⇒ `{start:1, end:3}`；线号可为负）
+/// ★批次 41 / ★★★2026-10-08：网格 item 放置（CSS `grid-column`/`grid-row`）。
+///   线号形态 `1 / 3` ⇒ `{start:1, end:3}`；跨轨形态 `span 2` / `1 / span 2` ⇒ `span:2`（+ 可选 start/end）。
 #[derive(serde::Deserialize, serde::Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct GridLineDto {
-    pub(crate) start: i16,
+    #[serde(default)]
+    pub(crate) start: Option<i16>,
     #[serde(default)]
     pub(crate) end: Option<i16>,
+    #[serde(default)]
+    pub(crate) span: Option<u16>,
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Clone)]
@@ -814,8 +818,8 @@ pub(crate) fn style_from_dto(dto: &NodeDto) -> Result<LStyle, String> {
     style.grid_auto_columns = dto.grid_auto_columns.clone();
     style.grid_auto_rows = dto.grid_auto_rows.clone();
     style.grid_auto_flow = dto.grid_auto_flow.clone();
-    style.grid_column = dto.grid_column.as_ref().map(|g| (g.start, g.end));
-    style.grid_row = dto.grid_row.as_ref().map(|g| (g.start, g.end));
+    style.grid_column = dto.grid_column.as_ref().map(|g| crate::GridLine { start: g.start, end: g.end, span: g.span });
+    style.grid_row = dto.grid_row.as_ref().map(|g| crate::GridLine { start: g.start, end: g.end, span: g.span });
     style.grid_template_areas = dto.grid_template_areas.clone();
     style.grid_area = dto.grid_area.clone();
     if let Some(o) = dto.overflow.as_deref() {

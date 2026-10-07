@@ -2036,3 +2036,8 @@
 **③ 验证**：浏览器实测（playwright/IAB）复现两症状 → 修后逐条复验 + 截图；全量 pnpm test 5372/5372 全绿；website 十门禁 + 根门禁 + build:website。
 **④ 新增门禁**：`tests/website-anchor-collision.test.ts`（壳 id 命名空间化 + 无锚点撞壳 id，破坏性验证过）+ `tests/web-adapter-link-guard.test.ts`（无监听不拦/有监听拦）。
 **⑤ ★教训**：a) **id 是全局命名空间**——壳裸词 id 与文档标题锚点撞车（壳样式误伤 + 锚点跳错），壳 id 应命名空间化；b) **模块加载副作用会污染宿主**——共享包顶层 `document.addEventListener` 对「不驱动本页的宿主」即劫持，应**惰性+守卫**；c) **浏览器实测不可替代**（均为「直开正常、交互才暴露」）。
+648. **★★★修 CSE 网格轨道：App 三端 `grid-row/column: span N` 静默丢失（案例 D 卡位错）（★用户 2026-10-08「回到 CSE 主线，网格轨道页面 App 三端案例 D 都不对，卡片 y 位置不对」）**：
+**① 根因**：案例 D 子项 `grid-row: span 2`。App 产物实测：子项**无 `gridRow`**——span 被丢弃。折叠面 `parseGridLine()`（`vapor/template.ts`）只认纯数字线号；span/auto/命名线 ⇒ null ⇒ 诊断跳过。Web/MP 走原生关键字 ⇒ 只 App 三端错（三端同内核同 IR ⇒ 现象一致）。
+**② 修**：IR `GridLine{start?,end?,span?}`——折叠面 span 三形态解析；内核 `style.rs` 结构体 + `ffi.rs` DTO span + `taffy_engine.rs` `grid_line_of`（span ⇒ `GridPlacement::Span`）。
+**③ 验证**：cargo test 211+ 全绿 + test:coupled 386 绿 + 定向 vitest 121 + 三端真机重截（Android/iOS/鸿蒙）案例 D 均正确 + 全量 pnpm test 5373/5373 + 门禁全绿。
+**④ ★教训**：a) **"引擎能表达"≠"折叠面放了行"**（taffy `GridPlacement::Span` 一直支持，折叠面只认数字把它挡在门外）——CSS 值的语义类须逐类处理；b) **Web 对 ≠ App 对**（Web/Skyline 透传关键字，App 走自研折叠链）；c) 三端同内核 ⇒ 一处修对三端同好。
