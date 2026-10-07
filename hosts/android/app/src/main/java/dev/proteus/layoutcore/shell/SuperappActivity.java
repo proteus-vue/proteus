@@ -212,6 +212,13 @@ public class SuperappActivity extends android.app.Activity {
                         @Override public void run() { driveTabs(0); }
                     });
                 }
+                // ★★★导航丝滑演示（用户 2026-10-08）：`--es navdemo 1`——快速往返导航（router 完整编译路线）
+                if ("1".equals(getIntent() != null ? getIntent().getStringExtra("navdemo") : null)) {
+                    // 1.2s 预热：让 index 先上屏（录屏从"已就绪的 index"开始，避免录到启动瞬间）
+                    root.postDelayed(new Runnable() {
+                        @Override public void run() { driveNavDemo(0); }
+                    }, 1200);
+                }
             }
         });
     }
@@ -593,6 +600,52 @@ public class SuperappActivity extends android.app.Activity {
                 });
             }
         });
+    }
+
+    // ────────────────────────── 导航丝滑演示（用户 2026-10-08） ──────────────────────────
+
+    /** index 页可点导航行的**物理 y 中心**（与截图坐标系一致：内容视图全屏、origin 0,0）。 */
+    private static final int[] NAV_DEMO_ROWS = {
+        605, 761, 917, 1073, 1229, 1385, 1541, 1697, 1853, 2009, 2165, 2321, 2477,
+    };
+    private int navDemoPass = 0;
+
+    /**
+     * ★★★导航丝滑演示（用户 2026-10-08「录一段快速切换页面的短视频，导航走 router 完整编译路线」）：
+     *   `--es navdemo 1` —— **快速往返导航**（index ↔ 各特性页，多趟循环）。
+     *   每次往返都走**真实链路**：
+     *     前进：合成 tap → 内核 `hitTest` → 共享运行期派发 → `$nav('目标')` → `router.push`；
+     *     返回：`onBackPressed()` → `__proteusSuperappBack()` → `router.back`。
+     *   ⇒ **不是静态截图/预渲染**，而是完整编译路由 + 真内核建树 + 真上屏，高速连发以展示切换性能。
+     *   （本机 `adb shell input tap` 被 INJECT_EVENTS 拦，故用进程内 `proteusHost.tapAt`——与真触摸同一条
+     *     gesture→hitTest→dispatch 链，仅免去 OS 触摸屏层。）
+     */
+    private void driveNavDemo(final int k) {
+        if (k >= NAV_DEMO_ROWS.length) {
+            navDemoPass++;
+            if (navDemoPass < 2) { driveNavDemo(0); return; }   // 两趟 ≈ 15s（够一段演示）
+            android.util.Log.i(TAG, "SUPERAPP_NAVDEMO_DONE passes=" + navDemoPass + " cur=" + currentName(readState()));
+            return;
+        }
+        final int y = NAV_DEMO_ROWS[k];
+        final String json = "{\"x\":600,\"y\":" + y + "}";
+        QuickJsEngine.eval("proteusHost.tapAt(" + org.json.JSONObject.quote(json) + ")");
+        QuickJsEngine.nativeRunPendingJobs();
+        android.util.Log.i(TAG, "SUPERAPP_NAVDEMO push y=" + y + " cur=" + currentName(readState()));
+        root.postDelayed(new Runnable() {
+            @Override public void run() {
+                // 仅当已离开 index 才返回（否则 onBackPressed 会 finish 掉应用）
+                if (!"index".equals(currentName(readState()))) {
+                    onBackPressed();
+                    android.util.Log.i(TAG, "SUPERAPP_NAVDEMO back cur=" + currentName(readState()));
+                } else {
+                    android.util.Log.w(TAG, "SUPERAPP_NAVDEMO MISS y=" + y + "（tap 未命中，跳过返回）");
+                }
+                root.postDelayed(new Runnable() {
+                    @Override public void run() { driveNavDemo(k + 1); }
+                }, 260);
+            }
+        }, 340);
     }
 
     /** 向 `target` 派发一次真 MotionEvent 序列（DOWN → MOVE → UP）；返回 DOWN 是否被消费。 */
