@@ -10,21 +10,17 @@ import type { ProteusConfig } from '../packages/types/src/config'
 const ROOT = path.resolve('.')
 
 const BASE_CONFIG = {
-  platform: 'mp-weixin',
-  skyline: true,
-  appid: 'wx0000000000',
+  version: 4,
+  targets: { mp: { appid: 'wx0000000000', renderer: 'skyline', setDataBridge: { batchWindow: 16, perComponent: true }, style: { px2rpx: true, rpxRatio: 2 } } },
   pagesDir: 'src/pages',
-  routesOutput: 'src/router/auto-routes.ts',
-  customRoute: { registerPresets: true, builders: {} },
-  setDataBridge: { batchWindow: 16, perComponent: true },
-  style: { px2rpx: true, rpxRatio: 2 },
+  router: { routesOutput: 'src/router/auto-routes.ts', customRoute: { registerPresets: true, builders: {} } },
 } as ProteusConfig
 
 describe('#418 框架组装 vite 配置（resolveProteusViteConfig）', () => {
   it('web 目标：vue + route-blocks 插件 / configFile false / 别名 @ / define 注入', async () => {
     const { config, needsGenRoutes, platform } = await resolveProteusViteConfig(
       { root: ROOT, command: 'build', mode: 'web' },
-      { ...BASE_CONFIG, platform: 'web' },
+      BASE_CONFIG,
     )
     expect(platform).toBe('web')
     expect(needsGenRoutes).toBe(false)
@@ -67,7 +63,6 @@ describe('#418 框架组装 vite 配置（resolveProteusViteConfig）', () => {
       { root: ROOT, command: 'serve', mode: 'web' },
       {
         ...BASE_CONFIG,
-        platform: 'web',
         vite: { server: { port: 5999 }, resolve: { alias: [{ find: 'x', replacement: 'y' }] } },
       },
     )
@@ -85,7 +80,6 @@ describe('#418 框架组装 vite 配置（resolveProteusViteConfig）', () => {
       { root: ROOT, command: 'serve', mode: 'web' },
       {
         ...BASE_CONFIG,
-        platform: 'web',
         vite: (ctx) => ({ define: { __CUSTOM__: ctx.mode === 'web' } }),
       },
     )

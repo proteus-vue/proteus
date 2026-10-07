@@ -6,6 +6,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { loadTsConfig } from './config-check'
+import { loadProteusConfig } from './config-loader'
 import { isValidAppid, resolveMpIdeCli } from './mp-e2e'
 
 export interface HealthItem {
@@ -83,16 +84,16 @@ export async function runHealthCheck(root: string, opts: HealthCheckOptions = {}
       : 'app.config.ts 缺失（可选）：应用级运行时配置（app.name/api/features/theme）建议创建，proteus gen config 生成骨架',
   })
 
-  // ⑤ proteus.config 关键字段（appid 有效性 / pagesDir）
+  // ⑤ proteus.config 关键字段（appid 有效性 / pagesDir；是否 mp 端由 targets.mp 判定）
   let appid = ''
   let pagesDir = 'pages'
-  let platform = 'mp-weixin'
+  let isMpProject = true
   if (hasProteusConfig) {
     try {
-      const config = (await loadTsConfig(abs('proteus.config.ts'))) as { appid?: string; pagesDir?: string; platform?: string }
-      appid = config.appid ?? ''
+      const { config } = await loadProteusConfig(abs('proteus.config.ts'))
+      appid = config.targets.mp?.appid ?? ''
       pagesDir = config.pagesDir ?? 'pages'
-      platform = config.platform ?? 'mp-weixin'
+      isMpProject = config.targets.mp !== undefined
     } catch (e) {
       items.push({
         name: 'proteus-config-load',
@@ -157,8 +158,8 @@ export async function runHealthCheck(root: string, opts: HealthCheckOptions = {}
     })
   }
 
-  // ⑧ IDE 可用性（MP 工程：platform=mp-weixin）
-  if (platform === 'mp-weixin') {
+  // ⑧ IDE 可用性（MP 工程：声明了 targets.mp）
+  if (isMpProject) {
     const ideCli = resolveMpIdeCli()
     items.push({
       name: 'ide-cli',

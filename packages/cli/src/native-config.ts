@@ -17,8 +17,16 @@
 //   · **不静默**——每个应用/跳过的字段都进返回报告。
 import fs from 'node:fs'
 import path from 'node:path'
-import type { NativeProjectConfig } from '@proteus-vue/types'
+import type { AppIdentityConfig, AndroidTargetConfig, IosTargetConfig, HarmonyTargetConfig } from '@proteus-vue/types'
 import type { AppPlatform } from './targets'
+
+/** 原生工程身份的各端小节（v4：targets.<端> 平铺 + 共享 app；此处聚合供解析） */
+export interface NativeSections {
+  app?: AppIdentityConfig
+  android?: AndroidTargetConfig
+  ios?: IosTargetConfig
+  harmony?: HarmonyTargetConfig
+}
 
 /** 运行时配置里本模块要回退读取的最小子集（app.config 的 app.*） */
 export interface NativeAppFallback {
@@ -102,8 +110,8 @@ export interface NativeApplyReport {
 const DEFAULT_VERSION = '0.1.0'
 const DEFAULT_BUILD = '1'
 
-/** 解析 native 段为规范值（native 缺值 → 回退 app.config 的 app.*；再缺 → 内置默认） */
-export function resolveNativeConfig(native: NativeProjectConfig | undefined, fallback?: NativeAppFallback): ResolvedNativeConfig {
+/** 解析原生身份为规范值（各端小节缺值 → 回退 app.config 的 app.*；再缺 → 内置默认） */
+export function resolveNativeConfig(native: NativeSections | undefined, fallback?: NativeAppFallback): ResolvedNativeConfig {
   const n = native ?? {}
   const name = n.app?.name ?? fallback?.name ?? 'Proteus App'
   const version = n.app?.version ?? fallback?.version ?? DEFAULT_VERSION
@@ -461,18 +469,23 @@ export function applyNativeConfig(hostDir: string, platform: AppPlatform, resolv
   return out
 }
 
-/** 从工程根解析 native 段（读 proteus.config.ts 的 native + app.config.ts 的 app.* 作回退） */
+/** 从工程根解析原生身份（读 proteus.config.ts 的 targets.<端>+app，回退 app.config.ts 的 app.*） */
 export async function resolveNativeConfigFromProject(projectRoot: string): Promise<ResolvedNativeConfig> {
-  let native: NativeProjectConfig | undefined
+  let native: NativeSections | undefined
   let fallback: NativeAppFallback | undefined
   try {
     const cfgPath = path.join(projectRoot, 'proteus.config.ts')
     if (fs.existsSync(cfgPath)) {
-      const { loadProjectConfig } = await import('./config-loader')
-      const cfg = (await loadProjectConfig(cfgPath)) as { native?: NativeProjectConfig } | undefined
-      native = cfg?.native
+      const { loadProteusConfig } = await import('./config-loader')
+      const { config } = await loadProteusConfig(cfgPath)
+      native = {
+        app: config.app,
+        android: config.targets.android,
+        ios: config.targets.ios,
+        harmony: config.targets.harmony,
+      }
     }
-  } catch { /* 无配置/加载失败 ⇒ native 全用默认 */ }
+  } catch { /* 无配置/加载失败 ⇒ 原生身份全用默认 */ }
   try {
     const appCfgPath = path.join(projectRoot, 'app.config.ts')
     if (fs.existsSync(appCfgPath)) {

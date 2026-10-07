@@ -12,7 +12,7 @@ import { compileVueSfc } from '@proteus-vue/compiler'
 import type { TransformRuleOverrides } from '@proteus-vue/compiler'
 import { resolveRustCliBin, verifyDualCompilerEquivalence } from '@proteus-vue/compiler-backend'
 import { resolveProteusViteConfig, runGenRoutes } from '@proteus-vue/plugin-vite'
-import { loadProjectConfig } from './config-loader'
+import { loadProteusConfig } from './config-loader'
 import { APP_PLATFORMS, VITE_TARGETS, isAppPlatform, isViteTarget, type AppPlatform, type BuildTarget, type ViteTarget } from './targets'
 
 /** ★G-29：Rust CLI 定位缓存（按 root 键控——buildDir 全目录共享一次 resolve，避免逐文件 require.resolve） */
@@ -80,7 +80,9 @@ export async function runTargetedBuildProgrammatic(
 ): Promise<{ ok: boolean; results: Array<{ target: string; ok: boolean }> }> {
   const cfgFile = path.join(root, 'proteus.config.ts')
   if (!fs.existsSync(cfgFile)) throw new Error(`缺少 ${path.relative(root, cfgFile)}——proteus build 需要框架配置驱动（create-proteus 模板自带）`)
-  const config = (await loadProjectConfig(cfgFile)) as Record<string, unknown>
+  // ★v4（决策 #641）：加载并归一到按端分区形态（targets.{web,mp,ios,android,harmony}）
+  const { config, warnings } = await loadProteusConfig(cfgFile)
+  for (const w of warnings) console.warn(`[proteus] ${w}`)
   const results: Array<{ target: string; ok: boolean }> = []
 
   // ★★★App 端（按**具体平台**构建——标准做法，不自造笼统 "app"）：

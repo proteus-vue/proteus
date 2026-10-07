@@ -4,10 +4,14 @@
 //   （与 config:check 的严格纯数据沙箱分开：check 保留 strict 版禁运行时依赖；dev/build 用本宽松版）
 // ★#420 dogfooding：支持相对 .ts/.mts 子模块（config 引用本地 TS 数据/逻辑，如 website 的 ends.ts）——
 //   递归 esbuild 转 CJS 执行（缓存防重复）
+// ★★★2026-10-08 配置 v4（决策 #641）：`loadProteusConfig` = proteus.config 专用（加载 + 归一到 v4）；
+//   `loadProjectConfig` 保留为**原始加载器**（app.config.ts 等非 ProteusConfig 消费者仍用）。
 import fs from 'node:fs'
 import path from 'node:path'
 import { createRequire } from 'node:module'
 import { transformSync } from 'esbuild'
+import { resolveProteusConfig } from '@proteus-vue/types'
+import type { ProteusConfig } from '@proteus-vue/types'
 
 const tsCache = new Map<string, unknown>()
 
@@ -76,4 +80,15 @@ export async function loadProjectConfig(file: string): Promise<unknown> {
   }
   new Function('module', 'exports', 'require', '__dirname', '__filename', code)(mod, mod.exports, fileRequire, dir, file)
   return mod.exports.default
+}
+
+/**
+ * ★v4：加载 proteus.config.ts 并**归一到按端分区形态**（消费方唯一入口）。
+ *   旧 v3 平铺文件经 resolveProteusConfig 自动迁移 → 消费方读到的永远是 v4（targets.{web,mp,ios,android,harmony}）。
+ *   返回 { config, warnings }——warnings 供 CLI 在构建时提示（旧字段迁移/缺 appid 等）。
+ */
+export async function loadProteusConfig(file: string): Promise<{ config: ProteusConfig; warnings: string[] }> {
+  const raw = await loadProjectConfig(file)
+  const { config, warnings } = resolveProteusConfig(raw)
+  return { config, warnings }
 }

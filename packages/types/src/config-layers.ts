@@ -9,35 +9,20 @@ export type ConfigLayer = 'compiler' | 'router' | 'pinia' | 'api' | 'platform' |
 
 /**
  * 顶层字段 → 归属层（单一来源；新增顶层字段必须补录——完整性守卫：validateConfig 检测漏标）
- * 与 proteus.config.ts 顶层键一一对应（02 §4 表 + 现有 schema/validateConfig KNOWN_FIELDS）
+ * ★★★2026-10-08 配置模型 v4（决策 #641）：顶层只剩**跨端共享面**（targets 按端分区承载各端配置）。
  */
 export const CONFIG_FIELD_LAYERS: Record<string, ConfigLayer> = {
-  platform: 'compiler',
-  skyline: 'compiler',
-  appid: 'build',
+  version: 'build', // 配置 schema 版本（加载期迁移用）
+  targets: 'build', // ★v4 目标端集合（按端分区——web/mp/ios/android/harmony，各端自持配置）
   pagesDir: 'compiler',
-  // ★#492 三字段已收编 router 段（router.routesOutput/subPackages/customRoute）——顶层保留为向后兼容别名
-  routesOutput: 'router',
-  subPackages: 'router',
-  customRoute: 'router',
-  rules: 'compiler',
-  compiler: 'compiler', // ★G-29 编译器后端插拔（§5 config.compiler.backend）
-  setDataBridge: 'build',
-  style: 'compiler',
-  globalStyle: 'compiler', // ★全局样式（MP app.wxss 通道——编译期产出）
-  budget: 'build',
+  app: 'build', // 共享应用身份（构建期写原生工程文件的 name/version/buildNumber）
   router: 'router',
-  vite: 'build', // ★#418 配置收敛：vite 透传字段（构建工具链配置）
-  page: 'compiler', // ★Skyline 白屏兜底：page.autoScrollContainer（页面滚动容器）/ page.webviewPages（页面级 renderer 降级）
-  audit: 'build', // ★#447 D-2 dogfooding 门禁（构建期质量门禁——audit-d2 消费，紧邻 budget 同层）
-  gates: 'build', // ★#456 统一门禁开关（gates.disabled——check/audit all 聚合门禁配置）
-  native: 'build', // ★#635 原生项目配置（构建期——CLI create host / build --package 渲染进原生工程文件）
-  // ★★2026-10-08 补登记（官网配置文档梳理挖出的**孤儿字段**）：以下三项在 ProteusConfig 已声明、
-  //   且有真实消费方，却一直漏登归属表 / 白名单 / schema ⇒ 项目里写了会被 config-validate 判
-  //   CONFIG_UNKNOWN_FIELD（阻断），本表也会判漏标。铁律 #5「新增字段必须补录」的存量欠账，一并收口。
-  skylineLayout: 'compiler', // Skyline 布局对齐开关（VC2-c——gen-routes 注入 page.json）
-  profileBoundary: 'compiler', // VC2-b 编译期 Profile 边界校验级别（error/warn/off——profile-boundary-plugin 消费）
+  compiler: 'compiler', // ★G-29 编译器后端插拔（§5 config.compiler.backend）
   layout: 'compiler', // G-22 柔性布局编译期 clamp 参数（designWidth/fluidViewport——p-fluid 生成）
+  budget: 'build',
+  vite: 'build', // ★#418 配置收敛：vite 透传字段（构建工具链配置）
+  audit: 'build', // ★#447 D-2 dogfooding 门禁（构建期质量门禁——audit-d2 消费）
+  gates: 'build', // ★#456 统一门禁开关（gates.disabled——check/audit all 聚合门禁配置）
 }
 
 /**
@@ -60,18 +45,6 @@ export const CROSS_LAYER_PATTERNS: CrossLayerPattern[] = [
     forbiddenKeys: ['stores', 'storeKey', 'hydrate', 'persist'],
     layer: 'pinia',
     message: 'router 字段不得声明 pinia 语义（stores/storeKey/hydrate/persist 归属 pinia 层，跨层隐式依赖）',
-  },
-  {
-    field: 'customRoute',
-    forbiddenKeys: ['mapping', 'customTags'],
-    layer: 'compiler',
-    message: 'customRoute（router 层）不得声明 compiler 语义（mapping/customTags 归属 compiler 层）',
-  },
-  {
-    field: 'rules',
-    forbiddenKeys: ['navigateTo', 'switchTab', 'reLaunch'],
-    layer: 'router',
-    message: 'rules（compiler 层）不得声明路由语义（navigateTo/switchTab/reLaunch 归属 router 层）',
   },
 ]
 

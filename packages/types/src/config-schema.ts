@@ -1,30 +1,173 @@
 // packages/types/src/config-schema.ts
 // ★types-plan B3：ProteusConfig JSON Schema（单一来源产物 2）——对齐 @proteus-vue/plugin-vite 的 ProteusConfig
-// ★铁律 #5：schema 字段变更必须同步 plugin-vite/config.ts + CLI config-validate.ts（CI `proteus generate types --check` 拦截生成文件漂移）
+// ★铁律 #5：schema 字段变更必须同步 config.ts + CLI config-validate.ts（CI `proteus generate types --check` 拦截生成文件漂移）
+// ★★★2026-10-08 配置模型 v4（决策 #641）：**按端分区**——顶层 targets.{web,mp,ios,android,harmony}。
 // 编辑器接入：VS Code settings.json → "json.schemas": [{ "fileMatch": ["proteus.config.json"], "url": ".proteus/proteus.config.schema.json" }]
+
+const nativeApp = {
+  type: 'object',
+  properties: {
+    name: { type: 'string' },
+    version: { type: 'string' },
+    buildNumber: { type: ['string', 'number'] },
+  },
+} as const
+
+const targetsSchema = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    web: {
+      type: 'object',
+      properties: { output: { type: 'string' } },
+    },
+    mp: {
+      type: 'object',
+      required: ['appid'],
+      properties: {
+        appid: { type: 'string' },
+        renderer: { enum: ['skyline', 'webview'] },
+        style: {
+          type: 'object',
+          properties: { px2rpx: { type: 'boolean' }, rpxRatio: { type: 'number' } },
+        },
+        setDataBridge: {
+          type: 'object',
+          properties: { batchWindow: { type: 'number' }, perComponent: { type: 'boolean' } },
+        },
+        globalStyle: { type: 'string' },
+        page: {
+          type: 'object',
+          properties: {
+            autoScrollContainer: { type: 'boolean' },
+            webviewPages: { type: 'array', items: { type: 'string' } },
+          },
+        },
+        skylineLayout: {
+          type: 'object',
+          properties: {
+            defaultDisplayBlock: { type: 'boolean' },
+            defaultContentBox: { type: 'boolean' },
+            tagNameStyleIsolation: { type: 'boolean' },
+            enableScrollViewAutoSize: { type: 'boolean' },
+            keyframeStyleIsolation: { type: 'boolean' },
+          },
+        },
+        profileBoundary: {
+          type: 'object',
+          properties: { level: { enum: ['error', 'warn', 'off'] } },
+        },
+        rules: {
+          type: 'object',
+          properties: {
+            disabled: { type: 'array', items: { type: 'string' } },
+            mapping: { type: 'object' },
+            customTags: { type: 'object', additionalProperties: { type: 'string' } },
+          },
+        },
+      },
+    },
+    ios: {
+      type: 'object',
+      properties: {
+        bundleId: { type: 'string' },
+        displayName: { type: 'string' },
+        version: { type: 'string' },
+        buildNumber: { type: 'string' },
+        minimumOSVersion: { type: 'string' },
+        deviceFamily: { type: 'array', items: { type: 'integer', minimum: 1, maximum: 6 } },
+        orientations: {
+          type: 'array',
+          items: { enum: ['portrait', 'portrait-upside-down', 'landscape-left', 'landscape-right'] },
+        },
+      },
+    },
+    android: {
+      type: 'object',
+      properties: {
+        applicationId: { type: 'string' },
+        label: { type: 'string' },
+        versionName: { type: 'string' },
+        versionCode: { type: 'integer', minimum: 1 },
+        minSdk: { type: 'integer', minimum: 1 },
+        targetSdk: { type: 'integer', minimum: 1 },
+        orientation: { enum: ['portrait', 'landscape', 'unspecified'] },
+        permissions: { type: 'array', items: { type: 'string' } },
+        icon: { type: 'string' },
+      },
+    },
+    harmony: {
+      type: 'object',
+      properties: {
+        bundleName: { type: 'string' },
+        label: { type: 'string' },
+        vendor: { type: 'string' },
+        versionName: { type: 'string' },
+        versionCode: { type: 'integer', minimum: 1 },
+        compatibleSdkVersion: { type: 'string' },
+        targetSdkVersion: { type: 'string' },
+        deviceTypes: { type: 'array', items: { type: 'string' } },
+        permissions: { type: 'array', items: { type: 'string' } },
+      },
+    },
+  },
+} as const
+
+const routerSchema = {
+  type: 'object',
+  description: '★#492 项目级路由管理（统一路由配置面）：结构 + tabBar + pages 唯一声明处',
+  properties: {
+    routesOutput: { type: 'string' },
+    subPackages: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['root'],
+        properties: { root: { type: 'string' }, name: { type: 'string' } },
+      },
+    },
+    customRoute: {
+      type: 'object',
+      properties: {
+        registerPresets: { type: 'boolean' },
+        builders: { type: 'object', additionalProperties: { type: 'string' } },
+      },
+    },
+    tabBar: {
+      type: 'object',
+      required: ['list'],
+      properties: {
+        color: { type: 'string' },
+        selectedColor: { type: 'string' },
+        list: {
+          type: 'array',
+          items: {
+            type: 'object',
+            required: ['name', 'text'],
+            properties: { name: { type: 'string' }, text: { type: 'string' }, icon: { type: 'string' } },
+          },
+        },
+      },
+    },
+    pages: { type: 'object' },
+    meta: { type: 'object', description: '★pages 的旧名别名（同义，建议用 pages）' },
+  },
+} as const
 
 export const proteusConfigSchema = {
   $schema: 'http://json-schema.org/draft-07/schema#',
   title: 'ProteusConfig',
   type: 'object',
-  required: ['platform', 'skyline', 'appid', 'pagesDir', 'setDataBridge', 'style'],
+  required: ['targets', 'pagesDir'],
   properties: {
-    platform: { enum: ['mp-weixin', 'web'] },
-    skyline: { type: 'boolean' },
-    // ★★2026-10-08 孤儿字段收口（官网配置文档梳理）：ProteusConfig 已声明 + 有消费方，却漏登 schema/白名单
-    skylineLayout: {
+    version: { type: 'number', description: '配置 schema 版本（v4 起为 4；<4 加载期自动迁移）' },
+    targets: targetsSchema,
+    pagesDir: { type: 'string', description: '页面根目录（主包路由扫描起点）' },
+    app: nativeApp,
+    router: routerSchema,
+    compiler: {
       type: 'object',
-      properties: {
-        defaultDisplayBlock: { type: 'boolean' },
-        defaultContentBox: { type: 'boolean' },
-        tagNameStyleIsolation: { type: 'boolean' },
-        enableScrollViewAutoSize: { type: 'boolean' },
-        keyframeStyleIsolation: { type: 'boolean' },
-      },
-    },
-    profileBoundary: {
-      type: 'object',
-      properties: { level: { enum: ['error', 'warn', 'off'] } },
+      properties: { backend: { enum: ['node', 'rust'] } },
     },
     layout: {
       type: 'object',
@@ -36,65 +179,6 @@ export const proteusConfigSchema = {
         },
       },
     },
-    appid: { type: 'string' },
-    pagesDir: { type: 'string' },
-    // ★Skyline iOS 白屏兜底：页面级 WebView 降级通道（page.webviewPages）
-    page: {
-      type: 'object',
-      properties: {
-        autoScrollContainer: { type: 'boolean' },
-        webviewPages: { type: 'array', items: { type: 'string' } },
-      },
-    },
-    routesOutput: { type: 'string', description: '★#492 已收编 router 段（向后兼容别名）' },
-    subPackages: {
-      type: 'array',
-      description: '★#492 已收编 router 段（向后兼容别名）',
-      items: {
-        type: 'object',
-        required: ['root'],
-        properties: { root: { type: 'string' }, name: { type: 'string' } },
-      },
-    },
-    customRoute: {
-      type: 'object',
-      description: '★#492 已收编 router 段（向后兼容别名）',
-      properties: {
-        registerPresets: { type: 'boolean' },
-        builders: { type: 'object', additionalProperties: { type: 'string' } },
-      },
-    },
-    rules: {
-      type: 'object',
-      properties: {
-        disabled: { type: 'array', items: { type: 'string' } },
-        mapping: { type: 'object' },
-        customTags: { type: 'object', additionalProperties: { type: 'string' } },
-      },
-    },
-    // ★G-29 编译器后端插拔（compiler-backend-1-plan §5）：backend 'node' | 'rust'（缺省 node）
-    compiler: {
-      type: 'object',
-      properties: {
-        backend: { enum: ['node', 'rust'] },
-      },
-    },
-    setDataBridge: {
-      type: 'object',
-      properties: {
-        batchWindow: { type: 'number' },
-        perComponent: { type: 'boolean' },
-      },
-    },
-    style: {
-      type: 'object',
-      properties: {
-        px2rpx: { type: 'boolean' },
-        rpxRatio: { type: 'number' },
-      },
-    },
-    // ★全局样式（MP app.wxss 通道）：相对 root 的 CSS 文件，构建期编译为产物根 app.wxss
-    globalStyle: { type: 'string' },
     budget: {
       type: 'object',
       properties: {
@@ -102,46 +186,7 @@ export const proteusConfigSchema = {
         strict: { type: 'boolean' },
       },
     },
-    router: {
-      type: 'object',
-      description: '★#492 项目级路由管理（统一路由配置面）：结构 + tabBar + meta 唯一声明处',
-      properties: {
-        routesOutput: { type: 'string' },
-        subPackages: {
-          type: 'array',
-          items: {
-            type: 'object',
-            required: ['root'],
-            properties: { root: { type: 'string' }, name: { type: 'string' } },
-          },
-        },
-        customRoute: {
-          type: 'object',
-          properties: {
-            registerPresets: { type: 'boolean' },
-            builders: { type: 'object', additionalProperties: { type: 'string' } },
-          },
-        },
-        tabBar: {
-          type: 'object',
-          required: ['list'],
-          properties: {
-            color: { type: 'string' },
-            selectedColor: { type: 'string' },
-            list: {
-              type: 'array',
-              items: {
-                type: 'object',
-                required: ['name', 'text'],
-                properties: { name: { type: 'string' }, text: { type: 'string' }, icon: { type: 'string' } },
-              },
-            },
-          },
-        },
-        meta: { type: 'object' },
-      },
-    },
-    // ★#447 D-2 dogfooding 门禁（audit-d2）：规则级可配——rules 子键 severity 枚举；未列规则默认 error
+    vite: { type: ['object', 'string'], description: '★#418/★#421 vite 透传（对象或函数——函数形态 schema 无法表达，此处放宽）' },
     audit: {
       type: 'object',
       properties: {
@@ -153,68 +198,10 @@ export const proteusConfigSchema = {
         },
       },
     },
-    // ★#456 统一门禁开关：gates.disabled（门禁/聚合域 id 列表——缺省全部启用）
     gates: {
       type: 'object',
       properties: {
         disabled: { type: 'array', items: { type: 'string' } },
-      },
-    },
-    // ★★★原生项目配置（`native` 段 · 决策 #635）：CLI 渲染进三端原生工程文件
-    native: {
-      type: 'object',
-      properties: {
-        app: {
-          type: 'object',
-          properties: {
-            name: { type: 'string' },
-            version: { type: 'string' },
-            buildNumber: { type: ['string', 'number'] },
-          },
-        },
-        android: {
-          type: 'object',
-          properties: {
-            applicationId: { type: 'string' },
-            label: { type: 'string' },
-            versionName: { type: 'string' },
-            versionCode: { type: 'integer', minimum: 1 },
-            minSdk: { type: 'integer', minimum: 1 },
-            targetSdk: { type: 'integer', minimum: 1 },
-            orientation: { enum: ['portrait', 'landscape', 'unspecified'] },
-            permissions: { type: 'array', items: { type: 'string' } },
-            icon: { type: 'string' },
-          },
-        },
-        ios: {
-          type: 'object',
-          properties: {
-            bundleId: { type: 'string' },
-            displayName: { type: 'string' },
-            version: { type: 'string' },
-            buildNumber: { type: 'string' },
-            minimumOSVersion: { type: 'string' },
-            deviceFamily: { type: 'array', items: { type: 'integer', minimum: 1, maximum: 6 } },
-            orientations: {
-              type: 'array',
-              items: { enum: ['portrait', 'portrait-upside-down', 'landscape-left', 'landscape-right'] },
-            },
-          },
-        },
-        harmony: {
-          type: 'object',
-          properties: {
-            bundleName: { type: 'string' },
-            label: { type: 'string' },
-            vendor: { type: 'string' },
-            versionName: { type: 'string' },
-            versionCode: { type: 'integer', minimum: 1 },
-            compatibleSdkVersion: { type: 'string' },
-            targetSdkVersion: { type: 'string' },
-            deviceTypes: { type: 'array', items: { type: 'string' } },
-            permissions: { type: 'array', items: { type: 'string' } },
-          },
-        },
       },
     },
   },

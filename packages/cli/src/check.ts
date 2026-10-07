@@ -6,8 +6,9 @@ import path from 'node:path'
 import { runCssCheck, formatCssCheck } from './css-check'
 import { runStyleCheck, formatStyleCheck } from './style-check'
 import { checkRoutes, formatRouterCheck, resolvePagesDir } from './router-check'
-import { checkConfigFile, loadTsConfig } from './config-check'
-import { checkRequiredTargets, checkFeatureConflicts, checkProteusDirConsistency } from './strict-cli'
+import { checkConfigFile } from './config-check'
+import { loadProteusConfig } from './config-loader'
+import { checkRequiredTargets, checkProteusDirConsistency } from './strict-cli'
 import { appConfigCheckSummary } from './app-config-check'
 import { readDisabledGates } from './gate-config'
 
@@ -77,9 +78,9 @@ export async function runCheck(root: string, opts: CheckOptions): Promise<CheckS
         ok = false
         lines.push(`[proteus-config] ${(e as Error).message}`)
       }
-      // ★cli-plus G-33：defineProteus 新形态规则（CLI002 targets 完整 + CLI003 能力冲突）
-      const config = await loadTsConfig(configFile)
-      const strictViolations = [...checkRequiredTargets(config), ...checkFeatureConflicts(config)]
+      // ★v4（决策 #641）：CLI002 必要 target 校验（对**归一后**配置判 targets 至少声明一个端）
+      const { config } = await loadProteusConfig(configFile)
+      const strictViolations = checkRequiredTargets(config)
       const strictErrors = strictViolations.filter((v) => v.severity === 'error')
       if (strictErrors.length) ok = false
       for (const v of strictViolations) {

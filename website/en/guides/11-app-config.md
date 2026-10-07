@@ -10,7 +10,7 @@ A project has **two config files** with orthogonal responsibilities (decision #2
 
 | File | Timing | What it governs | Consumers |
 |---|---|---|---|
-| `proteus.config.ts` | **Build time** (compiler config) | How it's built: appid / skyline / pagesDir / compile rules / style transforms / route scanning / native project identity | Compiler, CLI, Vite plugin |
+| `proteus.config.ts` | **Build time** (compiler config) | How it's built: targets `targets.{web,mp,ios,android,harmony}` / compile rules / style transforms / route scanning / native project identity | Compiler, CLI, Vite plugin |
 | `app.config.ts` | **Runtime** (runtime config) | How it behaves: app identity / API base URL / feature flags / theme & font / safe area | Business code (`useAppConfig`) |
 
 > In short: **`proteus.config` = the compiler config (frozen at build time); `app.config` = the runtime config (read at launch + optional remote hot update)**. Changing the compiler config means re-running `build:mp`; the runtime config can receive remote hot updates. The `AppConfig` type contract has its single source of truth in `@proteus-vue/app-config`.

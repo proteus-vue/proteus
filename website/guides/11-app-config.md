@@ -10,7 +10,7 @@ group: 代码构成
 
 | 文件 | 时机 | 管什么 | 消费方 |
 |---|---|---|---|
-| `proteus.config.ts` | **构建期**（编译器配置） | 怎么构建：appid / skyline / pagesDir / 编译规则 / 样式转换 / 路由扫描 / 原生工程身份 | 编译器、CLI、Vite 插件 |
+| `proteus.config.ts` | **构建期**（编译器配置） | 怎么构建：目标端 `targets.{web,mp,ios,android,harmony}` / 编译规则 / 样式转换 / 路由扫描 / 原生工程身份 | 编译器、CLI、Vite 插件 |
 | `app.config.ts` | **运行时**（运行时配置） | 怎么表现：应用标识 / API 地址 / 功能开关 / 主题字体 / 安全区 | 业务代码（`useAppConfig`） |
 
 > 一句话：**`proteus.config` = 编译器配置（构建期固化）；`app.config` = 运行时配置（启动读取 + 可选远端热更新）**。改编译器配置要重新 `build:mp`；改运行时配置可远端热更新。类型契约 `AppConfig`（`@proteus-vue/app-config` 单一来源）。

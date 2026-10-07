@@ -1,5 +1,6 @@
 // examples/proteus.config.ts —— Proteus 示例工程配置（完整工程形态，自包含）
 // ★配置不再挂在仓库根：示例 = 独立工程（对应 create-proteus 生成的工程结构）
+// ★★★2026-10-08 配置模型 v4（决策 #641）：按端分区——小程序专属字段在 targets.mp，跨端共享面留顶层。
 import type { ProteusConfig } from '@proteus-vue/plugin-vite'
 // ★#420 配置收敛：Web 端工程专属插件（框架内建 vue + route-blocks，此处补 defaultScoped/devtools 中继/docs 引擎）
 import { defaultScopedPlugin, devtoolsRelayPlugin } from '@proteus-vue/plugin-vite'
@@ -10,23 +11,42 @@ import type { PluginOption } from 'vite'
 import path from 'node:path'
 
 const config: ProteusConfig = {
-  platform: 'mp-weixin',
-  skyline: true,
+  version: 4,
+  // ★目标端（按端分区）：本示例以微信小程序为主目标
+  targets: {
+    mp: {
+      appid: 'wxa720d0c502451748',
+      renderer: 'skyline',
+      // ★原生组件页降级 WebView 渲染（2026-09-12）：web-view/camera/map/video 在 Skyline 渲染引擎下
+      //   官方不支持（DevTools 报「Skyline 暂不支持 web-view/camera/map/video 组件调试」）——该演示页
+      //   强制走 WebView 渲染模式（page.json 不写 renderer:skyline），原生组件才能正常加载/调试。
+      //   这正是「Skyline 白屏兜底 · 页面级降级通道」机制的实际用途。
+      page: { webviewPages: ['native-components-demo'] },
+      // ★底线循环 ①③：规则覆盖（改这里立即改变编译行为）
+      rules: {
+        disabled: [],
+        mapping: {},
+        // 已启用：<demo-box> → <view>（config-demo 页演示）；删除此键即回到未注册标签原样输出
+        customTags: { 'demo-box': 'view' },
+      },
+      setDataBridge: {
+        batchWindow: 16, // ~1 帧
+        perComponent: true,
+      },
+      style: {
+        px2rpx: true,
+        rpxRatio: 2,
+      },
+    },
+  },
   // ★G-29 编译器后端插拔（compiler-backend-1-plan §5）：backend: 'node' | 'rust'（缺省 node 零开销）
   //   改 'rust' → 每次 build:mp 对每个 .vue 跑 Node/Rust 双编译语义等价校验（G-29.1）——不一致构建红
   //   （等价 CLI：proteus build --compiler rust；或临时 env：PROTEUS_COMPILER=rust npm run build:mp）
   compiler: {
     backend: 'node',
   },
-  appid: 'wxa720d0c502451748',
   pagesDir: 'pages',
-  // ★原生组件页降级 WebView 渲染（2026-09-12）：web-view/camera/map/video 在 Skyline 渲染引擎下
-  //   官方不支持（DevTools 报「Skyline 暂不支持 web-view/camera/map/video 组件调试」）——该演示页
-  //   强制走 WebView 渲染模式（page.json 不写 renderer:skyline），原生组件才能正常加载/调试。
-  //   这正是「Skyline 白屏兜底 · 页面级降级通道」机制的实际用途。
-  page: { webviewPages: ['native-components-demo'] },
-  // ★#492 项目级路由管理：路由相关配置统一在 router 段（结构 + tabBar + meta）——
-  //   routesOutput/subPackages/customRoute 已从顶层收编此处，顶层写法仍兼容（router.* 优先）
+  // ★#492 项目级路由管理：路由相关配置统一在 router 段（结构 + tabBar + pages）——跨端共享
   router: {
     // 路由表产物路径（编译期 gen-routes 生成）
     routesOutput: 'router/auto-routes.ts',
@@ -48,7 +68,6 @@ const config: ProteusConfig = {
     //   一个入口管全端路由页面——`pages/**/*.vue` 由目录约定式发现（不在此重复声明"有哪些页"），
     //   每页的配置集中在此（标题 / isTab / 转场 / 登录与权限 / MP 页面窗口扩展）。
     //   匹配规则：**精确页面路径 > 目录前缀 > 默认**（决策 #113）。
-    //   ★字段名 `meta` → **`pages`**（旧名仍兼容；两份都写时 pages 胜并告警）。
     pages: {
       // 主包页面（pageRel：pages/ 去前缀；index.vue → 目录路径归并）
       'index': { title: '首页', isTab: true },
@@ -80,28 +99,13 @@ const config: ProteusConfig = {
       'list': { title: '订单列表' },
     },
   },
-  // ★底线循环 ①③：规则覆盖（改这里立即改变编译行为）
-  rules: {
-    disabled: [],
-    mapping: {},
-    // 已启用：<demo-box> → <view>（config-demo 页演示）；删除此键即回到未注册标签原样输出
-    customTags: { 'demo-box': 'view' },
-  },
-  setDataBridge: {
-    batchWindow: 16, // ~1 帧
-    perComponent: true,
-  },
-  style: {
-    px2rpx: true,
-    rpxRatio: 2,
-  },
   // ★组件库已拆包（2026-09-14）：@proteus-vue/components 由编译器自 node_modules 解析，无需配置
   // 包体积预算：主包 ≤1.2MB（微信上限 2MB）；strict 时超限构建失败
   budget: {
     mainPackageKB: 1200,
     strict: false,
   },
-  // ★决策 #113 集中式 meta 已迁入上方 router.meta（★#492 项目级路由管理）
+  // ★决策 #113 集中式 meta 已迁入上方 router.pages（★#492 项目级路由管理）
   // ★#420 配置收敛（原 vite.config.ts 内容收归此处——vite 配置由框架组装，本字段做工程专属扩展）：
   //   Web：框架内建 vue + route-blocks，此处补 defaultScoped（<style> 默认 scoped 对齐 MP 语义）/ devtools 中继 / docs 引擎；
   //   mp：框架内建 mpTransform（语义组件库自 node_modules 解析 @proteus-vue/components）；

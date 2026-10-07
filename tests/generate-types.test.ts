@@ -14,21 +14,13 @@ afterAll(() => {
 })
 
 describe('JSON Schema 单一来源（config-schema.ts）', () => {
-  it('必填字段与 ProteusConfig 对齐（★#492 routesOutput/customRoute 移出顶层必填——router 段二选一由 validateConfig 管）', () => {
-    expect(proteusConfigSchema.required).toEqual([
-      'platform',
-      'skyline',
-      'appid',
-      'pagesDir',
-      'setDataBridge',
-      'style',
-    ])
+  it('必填字段与 ProteusConfig 对齐（★v4 #641：targets + pagesDir——跨端共享面）', () => {
+    expect(proteusConfigSchema.required).toEqual(['targets', 'pagesDir'])
   })
 
-  it('platform 枚举 + subPackages items 结构', () => {
-    expect(proteusConfigSchema.properties.platform.enum).toEqual(['mp-weixin', 'web'])
-    const items = proteusConfigSchema.properties.subPackages.items
-    expect(items.required).toEqual(['root'])
+  it('targets 各端结构 + mp.appid 必填', () => {
+    expect(Object.keys(proteusConfigSchema.properties.targets.properties)).toEqual(['web', 'mp', 'ios', 'android', 'harmony'])
+    expect(proteusConfigSchema.properties.targets.properties.mp.required).toEqual(['appid'])
   })
 
   it('序列化 JSON 可解析且与 schema 一致', () => {

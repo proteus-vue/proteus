@@ -22,7 +22,7 @@ describe('proteus check（G-33 M1 聚合）', () => {
     const dir = makeTmp({
       'pages/index.vue': `<template><view class="a" /></template>\n<style>.a { display: flex; gap: 8px; }</style>`,
       'app.json': JSON.stringify({ pages: ['pages/index'] }),
-      'proteus.config.ts': `export default { platform: 'mp-weixin', skyline: true, appid: 'wx0000000000', pagesDir: 'pages', routesOutput: 'router/auto-routes.ts', customRoute: { registerPresets: true }, setDataBridge: { batchWindow: 16, perComponent: true }, style: { px2rpx: true, rpxRatio: 2 } }`,
+      'proteus.config.ts': `export default { version: 4, targets: { mp: { appid: 'wx0000000000', renderer: 'skyline' } }, pagesDir: 'pages', router: { routesOutput: 'router/auto-routes.ts', customRoute: { registerPresets: true } } }`,
     })
     try {
       const summary = await runCheck(dir, { strictCss: true, strictStyle: true, strictRouter: true, strictCli: true })

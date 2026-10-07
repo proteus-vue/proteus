@@ -88,14 +88,10 @@ describe('virtual-list 兼容别名（转发 p-list-view）', () => {
       'x',
     )
     const config: ProteusConfig = {
-      platform: 'mp-weixin',
-      skyline: true,
-      appid: 'wx0000000000',
+      version: 4,
+      targets: { mp: { appid: 'wx0000000000', renderer: 'skyline', setDataBridge: { batchWindow: 16, perComponent: true }, style: { px2rpx: true, rpxRatio: 2 } } },
       pagesDir: 'src/pages',
-      routesOutput: 'src/router/auto-routes.ts',
-      customRoute: { registerPresets: true, builders: {} },
-      setDataBridge: { batchWindow: 16, perComponent: true },
-      style: { px2rpx: true, rpxRatio: 2 },
+      router: { routesOutput: 'src/router/auto-routes.ts', customRoute: { registerPresets: true, builders: {} } },
     }
     runGenRoutes({ config, root, componentsDir: FRAMEWORK_COMPONENTS_DIR })
     // 页面 → virtual-list；virtual-list 组件.json → p-list-view（嵌套解析）
@@ -122,14 +118,10 @@ describe('p-list-view / p-scroll-view 端到端（页面 usingComponents 自动�
       `<template><p-scroll-view><p-list-view :items="items" /></p-scroll-view></template>\n<route>\n{\n  "meta": { "title": "列表" }\n}\n</route>\n`,
     )
     const config: ProteusConfig = {
-      platform: 'mp-weixin',
-      skyline: true,
-      appid: 'wx0000000000',
+      version: 4,
+      targets: { mp: { appid: 'wx0000000000', renderer: 'skyline', setDataBridge: { batchWindow: 16, perComponent: true }, style: { px2rpx: true, rpxRatio: 2 } } },
       pagesDir: 'src/pages',
-      routesOutput: 'src/router/auto-routes.ts',
-      customRoute: { registerPresets: true, builders: {} },
-      setDataBridge: { batchWindow: 16, perComponent: true },
-      style: { px2rpx: true, rpxRatio: 2 },
+      router: { routesOutput: 'src/router/auto-routes.ts', customRoute: { registerPresets: true, builders: {} } },
     }
     runGenRoutes({ config, root, componentsDir: FRAMEWORK_COMPONENTS_DIR })
     const pageJson = JSON.parse(fs.readFileSync(path.join(root, 'dist/mp-weixin/pages/index.json'), 'utf-8'))

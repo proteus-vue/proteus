@@ -1,12 +1,36 @@
 // proteus.config.ts —— Proteus 统一配置（★#418：唯一配置文件——vite 配置由框架组装，不再有 vite.config.ts）
+// ★★★2026-10-08 配置模型 v4（决策 #641）：**按端分区**——目标端 = 键（web/mp/ios/android/harmony），
+//   各端自持配置；跨端共享面（pagesDir/router/budget/vite/audit/gates/compiler/layout/app）留顶层。
 import type { ProteusConfig } from '@proteus-vue/plugin-vite'
 
 const config: ProteusConfig = {
-  platform: 'mp-weixin',
-  skyline: true,
-  appid: 'wx0000000000', // 替换为真实 AppID
+  version: 4,
+  targets: {
+    mp: {
+      appid: 'wx0000000000', // 替换为真实 AppID
+      renderer: 'skyline',
+      // ★底线循环 ①③：规则覆盖（改这里立即改变编译行为）
+      rules: {
+        disabled: [],
+        mapping: {},
+        customTags: {}, // 例：{ 'my-widget': 'view' } —— 新增标签映射
+      },
+      setDataBridge: {
+        batchWindow: 16, // ~1 帧
+        perComponent: true,
+      },
+      style: {
+        px2rpx: true,
+        rpxRatio: 2,
+      },
+    },
+    // ★App 三端（可选）：原生工程身份（包名/Bundle ID/版本），由 `proteus build --package` 注入原生文件
+    // ios: { bundleId: 'com.example.app' },
+    // android: { applicationId: 'com.example.app' },
+    // harmony: { bundleName: 'com.example.app' },
+  },
   pagesDir: 'src/pages',
-  // ★#492 项目级路由管理：路由相关配置统一在 router 段（结构 + tabBar + meta）
+  // ★#492 项目级路由管理：路由相关配置统一在 router 段（结构 + tabBar + pages）
   router: {
     // 路由表产物路径（编译期 gen-routes 生成）
     routesOutput: 'src/router/auto-routes.ts',
@@ -19,22 +43,8 @@ const config: ProteusConfig = {
         scaleDown: 'node_modules/@proteus-vue/router/src/presets/scaleDown.ts',
       },
     },
-    // 集中式 meta（可选）：精确路径 > 目录前缀 > 默认
-    // meta: { 'index': { title: '首页', isTab: true } },
-  },
-  // ★底线循环 ①③：规则覆盖（改这里立即改变编译行为）
-  rules: {
-    disabled: [],
-    mapping: {},
-    customTags: {}, // 例：{ 'my-widget': 'view' } —— 新增标签映射
-  },
-  setDataBridge: {
-    batchWindow: 16, // ~1 帧
-    perComponent: true,
-  },
-  style: {
-    px2rpx: true,
-    rpxRatio: 2,
+    // 集中式页面配置（可选）：精确路径 > 目录前缀 > 默认
+    // pages: { 'index': { title: '首页', isTab: true } },
   },
   // vite 透传（可选）：完全兼容 vite 的字段——plugins / server / resolve / build 等按需追加。
   // 例：server: { port: 5173 }, plugins: [myVitePlugin()]

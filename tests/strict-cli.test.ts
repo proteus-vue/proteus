@@ -6,50 +6,22 @@ import os from 'node:os'
 import path from 'node:path'
 import {
   checkRequiredTargets,
-  checkFeatureConflicts,
   checkProteusDirConsistency,
   registerGeneratedFile,
-  FEATURE_PLATFORM_MATRIX,
 } from '../packages/cli/src/strict-cli'
 import { parseDevArgs, runDev } from '../packages/cli/src/dev'
 
-describe('CLI002 缺失必要 target 配置（error）', () => {
-  it('合法 defineProteus 配置 → 零违规', () => {
-    expect(checkRequiredTargets({ entry: 'src/main.ts', targets: { web: { output: 'dist' } } })).toHaveLength(0)
+describe('CLI002 缺失必要 target 配置（error · v4 按端分区）', () => {
+  it('合法 v4 配置（targets 至少一端）→ 零违规', () => {
+    expect(checkRequiredTargets({ targets: { web: { output: 'dist' } } })).toHaveLength(0)
+    expect(checkRequiredTargets({ targets: { mp: { appid: 'wx1' } } })).toHaveLength(0)
   })
 
-  it('缺 entry / 缺 targets → error', () => {
-    const v = checkRequiredTargets({ targets: { web: {} } })
+  it('缺 targets / targets 为空 → error', () => {
+    const v = checkRequiredTargets({ pagesDir: 'src/pages' })
     expect(v.map((x) => x.code)).toContain('CLI002')
     expect(v[0].severity).toBe('error')
-    expect(checkRequiredTargets({ entry: 'src/main.ts' })).toHaveLength(1)
-  })
-
-  it('旧形态 ProteusConfig（无 entry/targets）→ 不误报（CLI002 仅针对 defineProteus 新形态）', () => {
-    expect(checkRequiredTargets({ platform: 'mp-weixin', skyline: true })).toHaveLength(0)
-  })
-})
-
-describe('CLI003 能力开关冲突（warn）', () => {
-  it('feature 开启但 target 不支持 → warn（memorial 仅 web/skyline）', () => {
-    const v = checkFeatureConflicts({
-      entry: 'x',
-      targets: { ios: { bundleId: 'a' }, web: { output: 'dist' } },
-      features: { memorial: true, styleSafety: true },
-    })
-    const memorial = v.find((x) => x.code === 'CLI003' && x.message.includes('memorial'))
-    expect(memorial?.severity).toBe('warn')
-    expect(memorial?.message).toContain('ios')
-    expect(v.some((x) => x.message.includes('styleSafety'))).toBe(false) // 支持 ios
-  })
-
-  it('未知能力开关 → warn', () => {
-    const v = checkFeatureConflicts({ targets: { web: {} }, features: { unknownFeature: true } })
-    expect(v[0].message).toContain('未知能力开关')
-  })
-
-  it('FEATURE_PLATFORM_MATRIX 注册表完整（防漂移）', () => {
-    expect(Object.keys(FEATURE_PLATFORM_MATRIX).sort()).toEqual(['glass', 'memorial', 'safeArea', 'skeleton', 'strictRouter', 'styleSafety'])
+    expect(checkRequiredTargets({ targets: {} })).toHaveLength(1)
   })
 })
 

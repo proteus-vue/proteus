@@ -4,10 +4,21 @@ import type { ProteusConfig } from '@proteus-vue/plugin-vite'
 import path from 'node:path'
 
 const config: ProteusConfig = {
-  platform: 'mp-weixin',
-  skyline: true,
-  // ★官方演示小程序 appid（与 examples 不同：examples 是内部测试工程）
-  appid: 'wxa720d0c502451748',
+  version: 4,
+  // ★v4（决策 #641）：小程序专属字段收进 targets.mp
+  targets: {
+    mp: {
+      // ★官方演示小程序 appid（与 examples 不同：examples 是内部测试工程）
+      appid: 'wxa720d0c502451748',
+      renderer: 'skyline',
+      rules: { disabled: [], mapping: {}, customTags: {} },
+      setDataBridge: { batchWindow: 16, perComponent: true },
+      style: { px2rpx: true, rpxRatio: 2 },
+      // ★全局样式（MP app.wxss 通道）：设计 token（CSS 变量）+ 全局重置。
+      //   Web 端同一文件在 main.ts import（★单一事实源：两端消费同一份 tokens.css）
+      globalStyle: 'styles/tokens.css',
+    },
+  },
   pagesDir: 'pages',
   // ★#492 项目级路由管理：结构 + tabBar + meta 统一在 router 段
   router: {
@@ -67,12 +78,6 @@ const config: ProteusConfig = {
       'css-profile-probe': { title: 'CSS Profile 探针' },
     },
   },
-  rules: { disabled: [], mapping: {}, customTags: {} },
-  setDataBridge: { batchWindow: 16, perComponent: true },
-  style: { px2rpx: true, rpxRatio: 2 },
-  // ★全局样式（MP app.wxss 通道）：设计 token（CSS 变量）+ 全局重置。
-  //   Web 端同一文件在 main.ts import（★单一事实源：两端消费同一份 tokens.css）
-  globalStyle: 'styles/tokens.css',
   // 包体积预算：官方演示主包 ≤1.2MB（微信上限 2MB）
   budget: { mainPackageKB: 1200, strict: false },
   // ★组件库已拆包（2026-09-14）：@proteus-vue/components 由编译器自 node_modules 解析，无需配置

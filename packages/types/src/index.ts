@@ -49,14 +49,7 @@ export type { HttpMethod, RequestConfig, RequestResponse, IRequestAdapter } from
 export type { PlatformAPI, StorageAPI, RouterAPI, UIAPI } from './platform-api'
 // ★运行时实现归 @proteus-vue/api（createApi + 三端 adapter）；本文件仅类型契约（规划 M9）
 export type { ProteusConfig } from './config'
-// ★#635 原生项目配置（构建期——CLI 渲染进三端原生工程文件）
-export type {
-  NativeProjectConfig,
-  NativeAppConfig,
-  NativeAndroidConfig,
-  NativeIosConfig,
-  NativeHarmonyConfig,
-} from './config'
+// ★#641：原生工程身份已并入 v4 targets.<端>（原 native.* 段；类型见下方 ProteusTargets 相关导出）
 // ★#447 D-2 门禁规则配置（id/severity 单一来源——CLI config:validate + audit d2 同源消费）
 export { AUDIT_RULE_IDS, AUDIT_SEVERITIES } from './config'
 export type { AuditRuleId, AuditSeverity, AuditConfig } from './config'
@@ -92,11 +85,17 @@ export { CONFIG_FIELD_LAYERS, CROSS_LAYER_PATTERNS, CONFIG_AUDIT_RULES, checkCon
 
 // ============ define-proteus（cli-plus G-33 M1：五端统一配置入口） ============
 export { defineProteus } from './define-proteus'
+// ★配置 v4 归一（决策 #641）：消费方唯一入口 + v4 目标端类型
+export { resolveProteusConfig } from './config-resolve'
+export type { ResolveProteusConfigResult } from './config-resolve'
+export { migrateShapeToV4 } from './config-v4-shape'
 export type {
-  DefineProteusConfig,
-  DefineProteusTargets,
-  DefineProteusFeatures,
-  DefineProteusTheme,
-  DefineProteusFontScale,
-  DefineProteusCache,
-} from './define-proteus'
+  ProteusTargets,
+  ProteusTargetName,
+  WebTargetConfig,
+  MpTargetConfig,
+  IosTargetConfig,
+  AndroidTargetConfig,
+  HarmonyTargetConfig,
+  AppIdentityConfig,
+} from './config'

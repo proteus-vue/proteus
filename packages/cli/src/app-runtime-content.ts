@@ -70,9 +70,9 @@ export async function buildAppRuntimeContent(
   try {
     const cfgPath = path.join(root, 'proteus.config.ts')
     if (fs.existsSync(cfgPath)) {
-      const { loadProjectConfig } = await import('./config-loader')
-      const cfg = (await loadProjectConfig(cfgPath)) as { globalStyle?: string }
-      const gs = cfg?.globalStyle ? path.resolve(root, cfg.globalStyle) : undefined
+      const { loadProteusConfig } = await import('./config-loader')
+      const { config: cfgV4 } = await loadProteusConfig(cfgPath)
+      const gs = cfgV4.targets.mp?.globalStyle ? path.resolve(root, cfgV4.targets.mp.globalStyle) : undefined
       if (gs && fs.existsSync(gs)) {
         globalCss = fs.readFileSync(gs, 'utf-8')
         tokens = parseCssVarTokens(globalCss)

@@ -127,17 +127,13 @@ describe('gen-routes 端到端（p-* 组件 usingComponents 自动解析）', ()
   })
 
   function makeConfig(extra: Partial<ProteusConfig> = {}): ProteusConfig {
-    return {
-      platform: 'mp-weixin',
-      skyline: true,
-      appid: 'wx0000000000',
+    const base: ProteusConfig = {
+      version: 4,
+      targets: { mp: { appid: 'wx0000000000', renderer: 'skyline', setDataBridge: { batchWindow: 16, perComponent: true }, style: { px2rpx: true, rpxRatio: 2 } } },
       pagesDir: 'src/pages',
-      routesOutput: 'src/router/auto-routes.ts',
-      customRoute: { registerPresets: true, builders: {} },
-      setDataBridge: { batchWindow: 16, perComponent: true },
-      style: { px2rpx: true, rpxRatio: 2 },
-      ...extra,
+      router: { routesOutput: 'src/router/auto-routes.ts', customRoute: { registerPresets: true, builders: {} } },
     }
+    return { ...base, ...extra }
   }
 
   function writeFixture(dir: string, rel: string, content: string): void {

@@ -1,8 +1,9 @@
 // packages/cli/src/config-validate.ts
 // ★types-plan B5：配置校验器（validateConfig）——手写校验（铁律 #1：不引入 zod 等运行时依赖）
-// 放 CLI 侧（对齐 component-audit/i18n-check 治理工具模式）；ProteusConfig 类型在 @proteus-vue/plugin-vite
+// 放 CLI 侧（对齐 component-audit/i18n-check 治理工具模式）；ProteusConfig 类型在 @proteus-vue/types
+// ★★★2026-10-08 配置模型 v4（决策 #641）：**按端分区**——校验对象为**归一后的 v4 形态**
+//   （config:check 先经 resolveProteusConfig 归一，故 v3 旧文件自动通过并提示迁移）。
 // 错误码：CONFIG_INVALID_ROOT / CONFIG_MISSING_REQUIRED / CONFIG_INVALID_TYPE / CONFIG_INVALID_ENUM / CONFIG_UNKNOWN_FIELD
-// ★source map 行列定位为后续批次（需配置源文件解析；当前 path 已可定位）
 
 import { checkConfigLayerViolations, AUDIT_RULE_IDS, AUDIT_SEVERITIES } from '@proteus-vue/types'
 
@@ -16,59 +17,27 @@ export type ConfigValidationResult = { ok: true } | { ok: false; errors: ConfigV
 
 /** 顶层必填字段：字段名 → 期望类型（'object' 需非 null 对象） */
 const REQUIRED_FIELDS: Array<[string, string]> = [
-  ['platform', 'string'],
-  ['skyline', 'boolean'],
-  ['appid', 'string'],
+  ['targets', 'object'],
   ['pagesDir', 'string'],
-  ['setDataBridge', 'object'],
-  ['style', 'object'],
 ]
 
-/** ★#492 路由字段二选一存在：顶层（遗留别名）或 router.* 段（统一形态）至少声明一处 */
-const ROUTER_REQUIRED_EITHER: Array<[string, string]> = [
-  ['routesOutput', 'string'],
-  ['customRoute', 'object'],
-]
+/** 顶层已知字段白名单（未知字段 = 拼写错误，阻断）——v4 只剩跨端共享面 */
+const KNOWN_FIELDS = new Set(['version', 'targets', 'pagesDir', 'app', 'router', 'compiler', 'layout', 'budget', 'vite', 'audit', 'gates'])
 
-/** router 段已知子键白名单（统一路由管理——未知子键 = 拼写错误，阻断）
- * ★2026-10-02：新增 `pages`（**页面配置首选名**，`pages.json` 等价物）；`meta` 为同义旧名别名
- *   （两份都写时 pages 胜并登记 duplicate——见 packages/types/src/router-config.ts）。
- *   ★门禁抓到过：加配置项时忘了登记本表 ⇒ config:check 拒绝 examples 的真实配置（当场红）。 */
+/** 已知目标端键（targets.<key>） */
+const KNOWN_TARGETS = new Set(['web', 'mp', 'ios', 'android', 'harmony'])
+
+/** router 段已知子键白名单 */
 const ROUTER_SECTION_FIELDS = new Set(['routesOutput', 'subPackages', 'customRoute', 'tabBar', 'pages', 'meta'])
 
-/** 顶层已知字段白名单（未知字段 = 拼写错误，阻断） */
-const KNOWN_FIELDS = new Set([
-  'platform',
-  'skyline',
-  'appid',
-  'pagesDir',
-  'routesOutput',
-  'subPackages',
-  'customRoute',
-  'rules',
-  'compiler', // ★G-29 编译器后端插拔（compiler-backend-1-plan §5）：backend 'node' | 'rust'
-  'setDataBridge',
-  'style',
-  'globalStyle', // ★全局样式（MP app.wxss 通道）
-  'budget',
-  'router',
-  'vite', // ★#418 配置收敛：vite 透传扩展字段（resolveProteusViteConfig 消费）
-  'page', // ★Skyline 白屏兜底：page.autoScrollContainer / page.webviewPages（页面级 WebView 降级通道）
-  'audit', // ★#447 D-2 dogfooding 门禁（audit-d2 消费——规则级可配）
-  'gates', // ★#456 统一门禁开关（gates.disabled——check/audit all 消费）
-  'native', // ★#635 原生项目配置（包名/Bundle ID/版本/SDK/方向/权限/图标——CLI create host / build --package 消费）
-  // ★★2026-10-08 补登记（孤儿字段收口）：三项在 ProteusConfig 已声明 + 有真实消费方，却漏登白名单
-  //   ⇒ 写了会被判「未知字段」阻断。与 config-layers 的 CONFIG_FIELD_LAYERS 同步补录（铁律 #5）。
-  'skylineLayout', // Skyline 布局对齐开关（VC2-c——gen-routes 注入 page.json）
-  'profileBoundary', // VC2-b 编译期 Profile 边界校验级别（error/warn/off——profile-boundary-plugin 消费）
-  'layout', // G-22 柔性布局编译期 clamp 参数（designWidth/fluidViewport——p-fluid 生成）
-])
+/** 共享 app 身份已知子键 */
+const APP_IDENTITY_FIELDS = new Set(['name', 'version', 'buildNumber'])
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null
 }
 
-/** 分包数组校验（顶层 subPackages 与 router.subPackages 共用——同形） */
+/** 分包数组校验 */
 function validateSubPackages(v: unknown, path: string, errors: ConfigValidationError[]): void {
   if (!Array.isArray(v)) {
     errors.push({ code: 'CONFIG_INVALID_TYPE', path, message: `${path} 应为数组` })
@@ -82,7 +51,7 @@ function validateSubPackages(v: unknown, path: string, errors: ConfigValidationE
   }
 }
 
-/** customRoute 校验（顶层遗留别名与 router.customRoute 共用——同形；两字段均可选） */
+/** customRoute 校验 */
 function validateCustomRoute(v: unknown, path: string, errors: ConfigValidationError[]): void {
   if (!isPlainObject(v)) {
     errors.push({ code: 'CONFIG_INVALID_TYPE', path, message: `${path} 应为对象（{ registerPresets?, builders? }）` })
@@ -104,7 +73,110 @@ function validateCustomRoute(v: unknown, path: string, errors: ConfigValidationE
   }
 }
 
-/** 校验 ProteusConfig（纯函数；返回错误码 + 字段路径，供 CLI/CI 门禁消费） */
+const posInt = (path: string, v: unknown, errors: ConfigValidationError[]) => {
+  if (v !== undefined && (!Number.isInteger(v) || (v as number) < 1)) errors.push({ code: 'CONFIG_INVALID_TYPE', path, message: `${path} 应为正整数` })
+}
+const strArr = (path: string, v: unknown, errors: ConfigValidationError[]) => {
+  if (v !== undefined && (!Array.isArray(v) || !v.every((x) => typeof x === 'string'))) errors.push({ code: 'CONFIG_INVALID_TYPE', path, message: `${path} 应为字符串数组` })
+}
+
+/** 校验 targets 各端（v4 按端分区） */
+function validateTargets(targets: Record<string, unknown>, errors: ConfigValidationError[]): void {
+  let declared = 0
+  for (const k of Object.keys(targets)) {
+    if (!KNOWN_TARGETS.has(k)) {
+      errors.push({ code: 'CONFIG_UNKNOWN_FIELD', path: `targets.${k}`, message: `未知目标端 "${k}"（合法：${[...KNOWN_TARGETS].join(' / ')}）` })
+      continue
+    }
+    if (targets[k] !== undefined) {
+      if (!isPlainObject(targets[k])) {
+        errors.push({ code: 'CONFIG_INVALID_TYPE', path: `targets.${k}`, message: `targets.${k} 应为对象` })
+        continue
+      }
+      declared++
+    }
+  }
+  if (declared === 0) {
+    errors.push({ code: 'CONFIG_MISSING_REQUIRED', path: 'targets', message: 'targets 至少声明一个端（web/mp/ios/android/harmony）' })
+  }
+
+  // mp 段：appid 必填 + 类型
+  const mp = targets.mp
+  if (isPlainObject(mp)) {
+    if (typeof mp.appid !== 'string' || !mp.appid) {
+      errors.push({ code: 'CONFIG_MISSING_REQUIRED', path: 'targets.mp.appid', message: 'targets.mp.appid 必填（小程序 AppID）' })
+    }
+    if (mp.renderer !== undefined && mp.renderer !== 'skyline' && mp.renderer !== 'webview') {
+      errors.push({ code: 'CONFIG_INVALID_ENUM', path: 'targets.mp.renderer', message: `targets.mp.renderer 仅支持 "skyline" / "webview"，实际 ${JSON.stringify(mp.renderer)}` })
+    }
+    if (mp.style !== undefined) {
+      const st = mp.style
+      if (!isPlainObject(st)) errors.push({ code: 'CONFIG_INVALID_TYPE', path: 'targets.mp.style', message: 'targets.mp.style 应为对象（{ px2rpx?, rpxRatio? }）' })
+      else {
+        if (st.px2rpx !== undefined && typeof st.px2rpx !== 'boolean') errors.push({ code: 'CONFIG_INVALID_TYPE', path: 'targets.mp.style.px2rpx', message: 'targets.mp.style.px2rpx 应为 boolean' })
+        if (st.rpxRatio !== undefined && typeof st.rpxRatio !== 'number') errors.push({ code: 'CONFIG_INVALID_TYPE', path: 'targets.mp.style.rpxRatio', message: 'targets.mp.style.rpxRatio 应为 number' })
+      }
+    }
+    if (mp.setDataBridge !== undefined) {
+      const sdb = mp.setDataBridge
+      if (!isPlainObject(sdb)) errors.push({ code: 'CONFIG_INVALID_TYPE', path: 'targets.mp.setDataBridge', message: 'targets.mp.setDataBridge 应为对象（{ batchWindow?, perComponent? }）' })
+      else {
+        if (sdb.batchWindow !== undefined && typeof sdb.batchWindow !== 'number') errors.push({ code: 'CONFIG_INVALID_TYPE', path: 'targets.mp.setDataBridge.batchWindow', message: 'targets.mp.setDataBridge.batchWindow 应为 number' })
+        if (sdb.perComponent !== undefined && typeof sdb.perComponent !== 'boolean') errors.push({ code: 'CONFIG_INVALID_TYPE', path: 'targets.mp.setDataBridge.perComponent', message: 'targets.mp.setDataBridge.perComponent 应为 boolean' })
+      }
+    }
+    if (mp.globalStyle !== undefined && typeof mp.globalStyle !== 'string') {
+      errors.push({ code: 'CONFIG_INVALID_TYPE', path: 'targets.mp.globalStyle', message: 'targets.mp.globalStyle 应为字符串（CSS 文件路径）' })
+    }
+    if (mp.page !== undefined) {
+      const pg = mp.page
+      if (!isPlainObject(pg)) errors.push({ code: 'CONFIG_INVALID_TYPE', path: 'targets.mp.page', message: 'targets.mp.page 应为对象（{ autoScrollContainer?, webviewPages? }）' })
+      else {
+        if (pg.autoScrollContainer !== undefined && typeof pg.autoScrollContainer !== 'boolean') errors.push({ code: 'CONFIG_INVALID_TYPE', path: 'targets.mp.page.autoScrollContainer', message: 'targets.mp.page.autoScrollContainer 应为 boolean' })
+        if (pg.webviewPages !== undefined && (!Array.isArray(pg.webviewPages) || !pg.webviewPages.every((x) => typeof x === 'string'))) errors.push({ code: 'CONFIG_INVALID_TYPE', path: 'targets.mp.page.webviewPages', message: 'targets.mp.page.webviewPages 应为字符串数组' })
+      }
+    }
+    if (mp.skylineLayout !== undefined && !isPlainObject(mp.skylineLayout)) {
+      errors.push({ code: 'CONFIG_INVALID_TYPE', path: 'targets.mp.skylineLayout', message: 'targets.mp.skylineLayout 应为对象（对齐开关布尔值）' })
+    }
+    if (mp.profileBoundary !== undefined) {
+      const pb = mp.profileBoundary
+      if (!isPlainObject(pb)) errors.push({ code: 'CONFIG_INVALID_TYPE', path: 'targets.mp.profileBoundary', message: "targets.mp.profileBoundary 应为对象（{ level?: 'error' | 'warn' | 'off' }）" })
+      else if (pb.level !== undefined && !['error', 'warn', 'off'].includes(pb.level as string)) {
+        errors.push({ code: 'CONFIG_INVALID_TYPE', path: 'targets.mp.profileBoundary.level', message: "targets.mp.profileBoundary.level 应为 'error' / 'warn' / 'off'" })
+      }
+    }
+  }
+
+  // android 段：正整数 + 字符串数组
+  const and = targets.android
+  if (isPlainObject(and)) {
+    posInt('targets.android.versionCode', and.versionCode, errors)
+    posInt('targets.android.minSdk', and.minSdk, errors)
+    posInt('targets.android.targetSdk', and.targetSdk, errors)
+    strArr('targets.android.permissions', and.permissions, errors)
+    if (and.orientation !== undefined && !['portrait', 'landscape', 'unspecified'].includes(and.orientation as string)) {
+      errors.push({ code: 'CONFIG_INVALID_ENUM', path: 'targets.android.orientation', message: "targets.android.orientation 仅支持 'portrait' / 'landscape' / 'unspecified'" })
+    }
+  }
+  // ios 段：整数数组（deviceFamily）+ 字符串数组（orientations）
+  const ios = targets.ios
+  if (isPlainObject(ios)) {
+    strArr('targets.ios.orientations', ios.orientations, errors)
+    if (ios.deviceFamily !== undefined && (!Array.isArray(ios.deviceFamily) || !ios.deviceFamily.every((x) => Number.isInteger(x)))) {
+      errors.push({ code: 'CONFIG_INVALID_TYPE', path: 'targets.ios.deviceFamily', message: 'targets.ios.deviceFamily 应为整数数组（1=iPhone / 2=iPad）' })
+    }
+  }
+  // harmony 段：正整数 + 字符串数组
+  const hm = targets.harmony
+  if (isPlainObject(hm)) {
+    posInt('targets.harmony.versionCode', hm.versionCode, errors)
+    strArr('targets.harmony.deviceTypes', hm.deviceTypes, errors)
+    strArr('targets.harmony.permissions', hm.permissions, errors)
+  }
+}
+
+/** 校验 v4 ProteusConfig（纯函数；返回错误码 + 字段路径，供 CLI/CI 门禁消费） */
 export function validateConfig(config: unknown): ConfigValidationResult {
   const errors: ConfigValidationError[] = []
   if (!isPlainObject(config)) {
@@ -121,15 +193,23 @@ export function validateConfig(config: unknown): ConfigValidationResult {
     }
   }
 
-  if (cfg.platform !== undefined && cfg.platform !== 'mp-weixin' && cfg.platform !== 'web') {
-    errors.push({ code: 'CONFIG_INVALID_ENUM', path: 'platform', message: `platform 仅支持 "mp-weixin" / "web"，实际 ${JSON.stringify(cfg.platform)}` })
+  // targets（按端分区）
+  if (isPlainObject(cfg.targets)) {
+    validateTargets(cfg.targets as Record<string, unknown>, errors)
   }
 
-  if (cfg.subPackages !== undefined) {
-    validateSubPackages(cfg.subPackages, 'subPackages', errors)
+  // 共享 app 身份（构建期写原生工程文件）
+  if (cfg.app !== undefined) {
+    if (!isPlainObject(cfg.app)) {
+      errors.push({ code: 'CONFIG_INVALID_TYPE', path: 'app', message: 'app 应为对象（{ name?, version?, buildNumber? }）' })
+    } else {
+      for (const k of Object.keys(cfg.app as Record<string, unknown>)) {
+        if (!APP_IDENTITY_FIELDS.has(k)) errors.push({ code: 'CONFIG_UNKNOWN_FIELD', path: `app.${k}`, message: `app 段未知字段 "${k}"（合法：${[...APP_IDENTITY_FIELDS].join(' / ')}）` })
+      }
+    }
   }
 
-  // ★#492 router 段（项目级路由管理）：子键白名单 + 类型校验 + 二选一存在性
+  // router 段（项目级路由管理）：子键白名单 + 类型校验
   if (cfg.router !== undefined) {
     if (!isPlainObject(cfg.router)) {
       errors.push({ code: 'CONFIG_INVALID_TYPE', path: 'router', message: 'router 应为对象（项目级路由管理段）' })
@@ -143,23 +223,19 @@ export function validateConfig(config: unknown): ConfigValidationResult {
       if (router.routesOutput !== undefined && typeof router.routesOutput !== 'string') {
         errors.push({ code: 'CONFIG_INVALID_TYPE', path: 'router.routesOutput', message: 'router.routesOutput 应为字符串（路由表产物路径）' })
       }
-      if (router.subPackages !== undefined) {
-        validateSubPackages(router.subPackages, 'router.subPackages', errors)
-      }
+      if (router.subPackages !== undefined) validateSubPackages(router.subPackages, 'router.subPackages', errors)
       if (router.customRoute !== undefined) validateCustomRoute(router.customRoute, 'router.customRoute', errors)
       if (router.tabBar !== undefined) {
         const tb = router.tabBar as Record<string, unknown>
         if (!isPlainObject(tb)) {
           errors.push({ code: 'CONFIG_INVALID_TYPE', path: 'router.tabBar', message: 'router.tabBar 应为对象（{ color?, selectedColor?, list }）' })
+        } else if (!Array.isArray(tb.list)) {
+          errors.push({ code: 'CONFIG_INVALID_TYPE', path: 'router.tabBar.list', message: 'router.tabBar.list 应为数组（{ name, text, icon? }）' })
         } else {
-          if (!Array.isArray(tb.list)) {
-            errors.push({ code: 'CONFIG_INVALID_TYPE', path: 'router.tabBar.list', message: 'router.tabBar.list 应为数组（{ name, text, icon? }）' })
-          } else {
-            for (let i = 0; i < tb.list.length; i++) {
-              const item = tb.list[i]
-              if (!isPlainObject(item) || typeof item.name !== 'string' || typeof item.text !== 'string') {
-                errors.push({ code: 'CONFIG_INVALID_TYPE', path: `router.tabBar.list[${i}]`, message: `tab 项 ${i} 须为 { name: string, text: string, icon?: string }` })
-              }
+          for (let i = 0; i < tb.list.length; i++) {
+            const item = tb.list[i]
+            if (!isPlainObject(item) || typeof item.name !== 'string' || typeof item.text !== 'string') {
+              errors.push({ code: 'CONFIG_INVALID_TYPE', path: `router.tabBar.list[${i}]`, message: `tab 项 ${i} 须为 { name: string, text: string, icon?: string }` })
             }
           }
         }
@@ -167,25 +243,7 @@ export function validateConfig(config: unknown): ConfigValidationResult {
     }
   }
 
-  // ★#492 路由字段二选一存在性：顶层或 router.* 至少一处（两处声明合法——router.* 优先，构建期提示收敛）
-  for (const [field, type] of ROUTER_REQUIRED_EITHER) {
-    const top = cfg[field]
-    const nested = isPlainObject(cfg.router) ? (cfg.router as Record<string, unknown>)[field] : undefined
-    if (top === undefined && nested === undefined) {
-      errors.push({ code: 'CONFIG_MISSING_REQUIRED', path: `router.${field}`, message: `缺少路由字段 ${field}——请在 router 段声明（router.${field}），顶层写法为兼容别名` })
-    } else if (top !== undefined && type === 'string' && typeof top !== 'string') {
-      errors.push({ code: 'CONFIG_INVALID_TYPE', path: field, message: `${field} 应为 ${type}，实际 ${typeof top}` })
-    } else if (top !== undefined && type === 'object' && !isPlainObject(top)) {
-      errors.push({ code: 'CONFIG_INVALID_TYPE', path: field, message: `${field} 应为 ${type}，实际 ${Array.isArray(top) ? 'array' : typeof top}` })
-    }
-  }
-
-  // ★顶层遗留 customRoute 兼容校验（router.customRoute 校验见上）
-  if (cfg.customRoute !== undefined) {
-    validateCustomRoute(cfg.customRoute, 'customRoute', errors)
-  }
-
-  // ★#447 audit（D-2 dogfooding 门禁）：dir 字符串 + rules 子键合法 id × severity 枚举
+  // audit（D-2 dogfooding 门禁）
   if (cfg.audit !== undefined) {
     const audit = cfg.audit as Record<string, unknown>
     if (!isPlainObject(audit)) {
@@ -211,7 +269,7 @@ export function validateConfig(config: unknown): ConfigValidationResult {
     }
   }
 
-  // ★#456 gates（统一门禁开关）：disabled 须为字符串数组
+  // gates（统一门禁开关）
   if (cfg.gates !== undefined) {
     const gates = cfg.gates as Record<string, unknown>
     if (!isPlainObject(gates)) {
@@ -223,50 +281,7 @@ export function validateConfig(config: unknown): ConfigValidationResult {
     }
   }
 
-  // ★#635 native（原生项目配置）：结构 + 类型（轻量校验——数值字段正整数、权限为字符串数组）
-  if (cfg.native !== undefined) {
-    const nat = cfg.native as Record<string, unknown>
-    if (!isPlainObject(nat)) {
-      errors.push({ code: 'CONFIG_INVALID_TYPE', path: 'native', message: 'native 应为对象（{ app?, android?, ios?, harmony? }）' })
-    } else {
-      for (const section of ['app', 'android', 'ios', 'harmony']) {
-        const sec = nat[section]
-        if (sec !== undefined && !isPlainObject(sec)) {
-          errors.push({ code: 'CONFIG_INVALID_TYPE', path: `native.${section}`, message: `native.${section} 应为对象` })
-        }
-      }
-      const posInt = (path: string, v: unknown) => {
-        if (v !== undefined && (!Number.isInteger(v) || (v as number) < 1)) errors.push({ code: 'CONFIG_INVALID_TYPE', path, message: `${path} 应为正整数` })
-      }
-      const strArr = (path: string, v: unknown) => {
-        if (v !== undefined && (!Array.isArray(v) || !v.every((x) => typeof x === 'string'))) errors.push({ code: 'CONFIG_INVALID_TYPE', path, message: `${path} 应为字符串数组` })
-      }
-      const and = (nat.android ?? {}) as Record<string, unknown>
-      posInt('native.android.versionCode', and.versionCode); posInt('native.android.minSdk', and.minSdk); posInt('native.android.targetSdk', and.targetSdk)
-      strArr('native.android.permissions', and.permissions)
-      const ios = (nat.ios ?? {}) as Record<string, unknown>
-      strArr('native.ios.orientations', ios.orientations)
-      if (ios.deviceFamily !== undefined && (!Array.isArray(ios.deviceFamily) || !ios.deviceFamily.every((x) => Number.isInteger(x)))) {
-        errors.push({ code: 'CONFIG_INVALID_TYPE', path: 'native.ios.deviceFamily', message: 'native.ios.deviceFamily 应为整数数组（1=iPhone / 2=iPad）' })
-      }
-      const hm = (nat.harmony ?? {}) as Record<string, unknown>
-      posInt('native.harmony.versionCode', hm.versionCode)
-      strArr('native.harmony.deviceTypes', hm.deviceTypes); strArr('native.harmony.permissions', hm.permissions)
-    }
-  }
-
-  // ★★2026-10-08 孤儿字段收口：轻量类型校验（与 CONFIG_FIELD_LAYERS 同步补录）
-  if (cfg.skylineLayout !== undefined && !isPlainObject(cfg.skylineLayout)) {
-    errors.push({ code: 'CONFIG_INVALID_TYPE', path: 'skylineLayout', message: 'skylineLayout 应为对象（对齐开关布尔值）' })
-  }
-  if (cfg.profileBoundary !== undefined) {
-    const pb = cfg.profileBoundary as Record<string, unknown>
-    if (!isPlainObject(pb)) {
-      errors.push({ code: 'CONFIG_INVALID_TYPE', path: 'profileBoundary', message: "profileBoundary 应为对象（{ level?: 'error' | 'warn' | 'off' }）" })
-    } else if (pb.level !== undefined && !['error', 'warn', 'off'].includes(pb.level as string)) {
-      errors.push({ code: 'CONFIG_INVALID_TYPE', path: 'profileBoundary.level', message: "profileBoundary.level 应为 'error' / 'warn' / 'off'" })
-    }
-  }
+  // layout（柔性布局编译参数）
   if (cfg.layout !== undefined) {
     const lay = cfg.layout as Record<string, unknown>
     if (!isPlainObject(lay)) {
@@ -276,13 +291,13 @@ export function validateConfig(config: unknown): ConfigValidationResult {
     }
   }
 
+  // 未知顶层字段
   for (const k of Object.keys(cfg)) {
     if (!KNOWN_FIELDS.has(k)) {
       errors.push({ code: 'CONFIG_UNKNOWN_FIELD', path: k, message: `未知字段 "${k}"（可能拼写错误；合法字段：${[...KNOWN_FIELDS].join(' / ')}）` })
     }
   }
-  // ★B5 §3：跨层隐式依赖检测（CONFIG_LAYER_VIOLATION：字段归属表漏标 / 跨层反模式）
-  // 未知字段的「未标注归属」已由 CONFIG_UNKNOWN_FIELD 报，此处跳过避免重复
+  // 跨层隐式依赖检测
   for (const e of checkConfigLayerViolations(cfg)) {
     const topField = e.path.split('.')[0]
     if (!KNOWN_FIELDS.has(topField)) continue

@@ -12,11 +12,11 @@ afterAll(() => {
 })
 
 describe('migrateConfigText（codemod 规则集）', () => {
-  it('无 version 配置 → 注入 version: 2（首行）', () => {
+  it('无 version 配置 → 注入 version: 4（首行）', () => {
     const src = 'export default defineConfig({\n  platform: "mp-weixin",\n})\n'
     const out = migrateConfigText(src)
-    expect(out).toContain('version: 2')
-    expect(out.indexOf('version: 2')).toBeLessThan(out.indexOf('platform'))
+    expect(out).toContain('version: 4')
+    expect(out.indexOf('version: 4')).toBeLessThan(out.indexOf('platform'))
   })
 
   it('幂等：跑两次结果一致', () => {
@@ -26,20 +26,13 @@ describe('migrateConfigText（codemod 规则集）', () => {
   })
 
   it('已有 version → 不重复注入', () => {
-    const src = 'export default defineConfig({\n  version: 2,\n  platform: "mp-weixin",\n})\n'
+    const src = 'export default defineConfig({\n  version: 4,\n  targets: { mp: { appid: "wx1" } },\n})\n'
     expect(migrateConfigText(src)).toBe(src)
-  })
-
-  it('重命名映射：router.transitions → router.animation', () => {
-    const src = 'export default defineConfig({\n  router: {\n    transitions: ["slideUp"],\n  },\n})\n'
-    const out = migrateConfigText(src)
-    expect(out).not.toContain('transitions:')
-    expect(out).toContain('animation:')
   })
 
   it('export default 对象形态（无 defineConfig）也能注入', () => {
     const src = 'export default {\n  platform: "web",\n}\n'
-    expect(migrateConfigText(src)).toContain('version: 2')
+    expect(migrateConfigText(src)).toContain('version: 4')
   })
 })
 
@@ -52,7 +45,7 @@ describe('migrateTypesFile（写回 + dry-run）', () => {
     expect(fs.readFileSync(f, 'utf-8')).not.toContain('version') // 未写盘
     const w = migrateTypesFile(f) // 写回
     expect(w.changed).toBe(true)
-    expect(fs.readFileSync(f, 'utf-8')).toContain('version: 2')
+    expect(fs.readFileSync(f, 'utf-8')).toContain('version: 4')
     // 再次 → 无需迁移
     const again = migrateTypesFile(f)
     expect(again.changed).toBe(false)

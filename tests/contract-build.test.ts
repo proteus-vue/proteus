@@ -13,18 +13,19 @@ import type { ProteusConfig } from '../packages/plugin-vite/src/config'
 const FRAMEWORK_COMPONENTS_DIR = path.resolve('packages/components')
 
 function makeConfig(extra: Partial<ProteusConfig> = {}): ProteusConfig {
+  const { router: extraRouter, ...rest } = extra
   return {
-    platform: 'mp-weixin',
-    skyline: true,
-    appid: 'wx0000000000',
+    version: 4,
+    targets: { mp: { appid: 'wx0000000000', renderer: 'skyline', setDataBridge: { batchWindow: 16, perComponent: true }, style: { px2rpx: true, rpxRatio: 2 } } },
     pagesDir: 'src/pages',
-    routesOutput: 'src/router/auto-routes.ts',
-    customRoute: { registerPresets: true, builders: {} },
-    setDataBridge: { batchWindow: 16, perComponent: true },
-    style: { px2rpx: true, rpxRatio: 2 },
-    subPackages: [{ root: 'subpackages/order', name: 'order' }],
-    ...extra,
-  }
+    router: {
+      routesOutput: 'src/router/auto-routes.ts',
+      customRoute: { registerPresets: true, builders: {} },
+      subPackages: [{ root: 'subpackages/order', name: 'order' }],
+      ...extraRouter,
+    },
+    ...rest,
+  } as ProteusConfig
 }
 
 function writeFixture(abs: string, content: string): void {

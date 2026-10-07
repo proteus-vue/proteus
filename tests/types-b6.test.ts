@@ -29,25 +29,28 @@ describe('品牌类型（B6 §2：防混淆）', () => {
 })
 
 describe('配置版本迁移（B6 §3）', () => {
-  it('CONFIG_VERSION = 3；迁移注册表 v1→v2→v3 链（★#492 v3 = 路由字段收编 router 段）', () => {
-    expect(CONFIG_VERSION).toBe(3)
+  it('CONFIG_VERSION = 4；迁移注册表 v1→v2→v3→v4 链（★#641 v4 = 按端分区）', () => {
+    expect(CONFIG_VERSION).toBe(4)
     expect(configMigrations[0]).toMatchObject({ from: 1, to: 2 })
     expect(configMigrations[1]).toMatchObject({ from: 2, to: 3 })
+    expect(configMigrations[2]).toMatchObject({ from: 3, to: 4 })
   })
 
-  it('migrateConfig：v1 → v2 补默认字段；v2 原样返回', () => {
+  it('migrateConfig：v1 链式迁到 v4（补 setDataBridge + 收编 router + 按端分区）', () => {
     const r = migrateConfig({ platform: 'mp-weixin' }, 1)
-    expect(r.version).toBe(3) // 链式迁到最新
-    expect(r.config.setDataBridge).toEqual({ batchWindow: 16, perComponent: true })
-    const r2 = migrateConfig({ platform: 'mp-weixin', setDataBridge: { batchWindow: 8, perComponent: false } }, 2)
-    expect(r2.version).toBe(3)
-    expect(r2.config.setDataBridge).toEqual({ batchWindow: 8, perComponent: false })
+    expect(r.version).toBe(4)
+    expect(r.config.setDataBridge).toBeUndefined() // 已搬进 targets.mp
+    expect((r.config.targets as { mp?: { setDataBridge?: unknown } }).mp?.setDataBridge).toEqual({ batchWindow: 16, perComponent: true })
+    const r2 = migrateConfig({ platform: 'mp-weixin', setDataBridge: { batchWindow: 8, perComponent: false } }, 3)
+    expect(r2.version).toBe(4)
+    expect((r2.config.targets as { mp?: { setDataBridge?: unknown } }).mp?.setDataBridge).toEqual({ batchWindow: 8, perComponent: false })
   })
 
   it('configNeedsMigration：显式 version < 最新 → true；无 version / 最新 → false', () => {
     expect(configNeedsMigration({ version: 1 })).toBe(true)
-    expect(configNeedsMigration({ version: 2 })).toBe(true) // ★#492 v3 起 v2 也需迁移
-    expect(configNeedsMigration({ version: 3 })).toBe(false)
+    expect(configNeedsMigration({ version: 2 })).toBe(true)
+    expect(configNeedsMigration({ version: 3 })).toBe(true) // ★#641 v4 起 v3 也需迁移
+    expect(configNeedsMigration({ version: 4 })).toBe(false)
     expect(configNeedsMigration({})).toBe(false) // 未声明 version → 当前形态
   })
 })
@@ -61,6 +64,6 @@ describe('Schema Registry 扩展（B6 §4，零 zod）', () => {
     const json = JSON.parse(proteusConfigSchemaJson()) as { properties: Record<string, unknown> }
     expect(json.properties.myPlugin).toBeDefined()
     // 核心字段不受影响
-    expect(json.properties.platform).toBeDefined()
+    expect(json.properties.targets).toBeDefined()
   })
 })

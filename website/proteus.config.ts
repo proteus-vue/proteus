@@ -23,20 +23,20 @@ function resolveEnds(spec: string) {
 }
 
 const config: ProteusConfig = {
-  platform: 'web',
-  skyline: false,
-  appid: '',
+  version: 4,
+  // ★v4（决策 #641）：官网只构建 Web 端（文档站）
+  targets: { web: {} },
   pagesDir: 'src/pages',
-  // ★显式关闭框架路由表生成（2026-09-19）：官网是**文档站**，路由由自身的 `src/router.ts`
-  //   （vue-router 配置）驱动，**不使用**框架的应用侧路由表。此前 web 目标跳过 gen-routes
-  //   看不出问题；`webOnly`（web 目标也更新路由表）落地后会被误生成一个未使用的
-  //   `auto-routes.ts`，而它 import `@proteus-vue/router/types`——官网并不依赖该包
-  //   → 官网构建类型检查失败（CI 实测 `Cannot find module '@proteus-vue/router/types'`）。
-  //   `routesOutput: ''` 为框架提供的显式 opt-out 语义。
-  routesOutput: '',
-  customRoute: { registerPresets: false, builders: {} },
-  setDataBridge: { batchWindow: 16, perComponent: false },
-  style: { px2rpx: false, rpxRatio: 2 },
+  router: {
+    // ★显式关闭框架路由表生成（2026-09-19）：官网是**文档站**，路由由自身的 `src/router.ts`
+    //   （vue-router 配置）驱动，**不使用**框架的应用侧路由表。此前 web 目标跳过 gen-routes
+    //   看不出问题；`webOnly`（web 目标也更新路由表）落地后会被误生成一个未使用的
+    //   `auto-routes.ts`，而它 import `@proteus-vue/router/types`——官网并不依赖该包
+    //   → 官网构建类型检查失败（CI 实测 `Cannot find module '@proteus-vue/router/types'`）。
+    //   `routesOutput: ''` 为框架提供的显式 opt-out 语义。
+    routesOutput: '',
+    customRoute: { registerPresets: false, builders: {} },
+  },
   // ★#447/#448 D-2 dogfooding 门禁（`proteus audit d2` 消费——官网=验证场：四规则全 error 零容忍；开发者工程可按需降级/关闭）
   audit: {
     dir: 'src',

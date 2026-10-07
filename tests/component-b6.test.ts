@@ -89,14 +89,10 @@ describe('gen-routes 端到端（B6 组件自动解析）', () => {
       `<template><p-nav-bar title="标题" back /><p-skeleton :visible="loading" /><p-error-boundary><p-text>内容</p-text></p-error-boundary></template>\n`,
     )
     const config: ProteusConfig = {
-      platform: 'mp-weixin',
-      skyline: true,
-      appid: 'wx0000000000',
+      version: 4,
+      targets: { mp: { appid: 'wx0000000000', renderer: 'skyline', setDataBridge: { batchWindow: 16, perComponent: true }, style: { px2rpx: true, rpxRatio: 2 } } },
       pagesDir: 'src/pages',
-      routesOutput: 'src/router/auto-routes.ts',
-      customRoute: { registerPresets: true, builders: {} },
-      setDataBridge: { batchWindow: 16, perComponent: true },
-      style: { px2rpx: true, rpxRatio: 2 },
+      router: { routesOutput: 'src/router/auto-routes.ts', customRoute: { registerPresets: true, builders: {} } },
     }
     runGenRoutes({ config, root, componentsDir: FRAMEWORK_COMPONENTS_DIR })
     const pageJson = JSON.parse(fs.readFileSync(path.join(root, 'dist/mp-weixin/pages/index.json'), 'utf-8'))

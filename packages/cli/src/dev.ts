@@ -6,7 +6,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { createRequire } from 'node:module'
-import { loadProjectConfig } from './config-loader'
+import { loadProteusConfig } from './config-loader'
 import { resolveProteusViteConfig, runGenRoutes } from '@proteus-vue/plugin-vite'
 
 export interface DevOptions {
@@ -113,7 +113,9 @@ async function importViteFrom(root: string): Promise<typeof import('vite')> {
 export async function runDevProgrammatic(opts: DevOptions, root = process.cwd()): Promise<() => Promise<void>> {
   const cfgFile = path.join(root, 'proteus.config.ts')
   if (!fs.existsSync(cfgFile)) throw new Error(`缺少 ${path.relative(root, cfgFile)}——proteus dev 需要框架配置驱动（create-proteus 模板自带）`)
-  const config = (await loadProjectConfig(cfgFile)) as Record<string, unknown>
+  // ★v4（决策 #641）：加载并归一到按端分区形态
+  const { config, warnings } = await loadProteusConfig(cfgFile)
+  for (const w of warnings) console.warn(`[proteus] ${w}`)
   const mode = opts.target === 'skyline' ? 'mp-weixin' : 'web'
   const resolved = await resolveProteusViteConfig({ root, command: 'serve', mode }, config as never)
   if (resolved.needsGenRoutes) {
