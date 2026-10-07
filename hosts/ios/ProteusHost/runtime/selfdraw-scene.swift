@@ -926,6 +926,17 @@ final class SelfDrawView: UIView {
             //   建层时父必已建好 ⇒ 直接 parent 深度 +1，O(1)。
             depthById[item.id] = item.parentId.flatMap { depthById[$0] }.map { $0 + 1 } ?? 0
         }
+        // ★★★批 A②（2026-10-08 · 决策 #652）：**fixed 层脱离内容滚动**——`position:fixed` 的层重挂到**视图层**
+        //   （不在 sublayerTransform 内容变换之下 ⇒ 不随滚动），并抬高 zPosition 浮在内容上。
+        //   诚实边界：frame 用内核给的**绝对 rect**（= 视口坐标系下的内容坐标，offset=0 即屏幕坐标）；
+        //   命中测试仍按内核内容坐标映射（fixed 元素滚动后 tap 映射会偏 contentOffset——本轮具名，见决策 #652）。
+        for item in flat where (item.style["position"] as? String) == "fixed" {
+            guard let layer = layersById[item.id], let abs = absOriginByNodeId[item.id] else { continue }
+            layer.removeFromSuperlayer()
+            layer.frame = CGRect(origin: abs, size: item.rect.size)
+            layer.zPosition = 2000
+            self.layer.addSublayer(layer)
+        }
         // ★批次 39：**静态变换**（编译期 CSS transform）——建层后应用（此时 layer.bounds 已定）。
         //   位移分 px（直接用）与**盒比例**（txPct/tyPct × 盒尺寸：translate(-50%,-50%) 居中刚需）；
         //   缩放取等比（编译器已拒绝非等比）。与动画同一条 `applyTransform` 通道（静态是基态，动画覆盖之）。
@@ -3148,7 +3159,8 @@ final class SelfDrawView: UIView {
         // ★★全端对齐批（2026-10-05）：whiteSpace/overflow 也必须透传——层配置按其分流（折行/截断/裁切）
         // ★★★overflow-x 项（2026-10-06）：overflowX/overflowY 也透传（层配置按其开裁剪）
         // ★★★word-break 项（2026-10-06）：wordBreak 也透传（段落样式按其设 lineBreakMode）
-        for k in ["backgroundColor", "color", "text", "fontFamily", "textAlign", "borderColor", "lineHeight", "whiteSpace", "wordBreak", "overflow", "textOverflow", "overflowX", "overflowY"] {
+        // ★批 A（决策 #651/#652）：position 必须透传——fixed 层需重挂到视图层（不随内容滚动）。
+        for k in ["backgroundColor", "color", "text", "fontFamily", "textAlign", "borderColor", "lineHeight", "whiteSpace", "wordBreak", "overflow", "textOverflow", "overflowX", "overflowY", "position"] {
             if let v = n[k] as? String { style[k] = v }
         }
         // ★★★修复（2026-10-08 · 子代理审美审查 + 真机取证）：**letterSpacing / textDecoration 此前被本函数丢弃**——
