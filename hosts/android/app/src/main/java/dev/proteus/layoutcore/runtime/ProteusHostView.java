@@ -399,6 +399,26 @@ public class ProteusHostView extends ViewGroup {
         nodeStaticTx.put(nodeId, new float[]{txPx, tyPx, scale, rotate, 1f, 0f, 0f, 0f, 0f, txPct, tyPct});
     }
 
+    /**
+     * ★★★静态透明度（2026-10-08 · 子代理审 effects 案例 A）：复用 `nodeStaticTx[4]`（与动画同槽位，
+     * `drawCmds` 的 `op = tf[4]` 已消费）——此前 `setNodeTransform` 恒写 `1f` 且**无独立 opacity 入口**
+     * ⇒ 声明 `opacity` 的节点渲染为**完全不透明**（真机：A 案 0.5 盒与 1.0 盒像素等同）。
+     * 无 transform 的节点也要生效 ⇒ 建一个**恒等变换 + opacity** 的表项。
+     */
+    public void setNodeOpacity(int nodeId, float op) {
+        if (op >= 1f) {
+            float[] e = nodeStaticTx.get(nodeId);
+            if (e != null) e[4] = 1f;
+            return;
+        }
+        float[] e = nodeStaticTx.get(nodeId);
+        if (e == null) {
+            nodeStaticTx.put(nodeId, new float[]{0f, 0f, 1f, 0f, op, 0f, 0f, 0f, 0f, 0f, 0f});
+        } else {
+            e[4] = op;
+        }
+    }
+
     /** 节点 id → Rust 几何（**位置/尺寸的唯一来源**；子 View 的 measure/layout 都用它） */
     private final Map<Integer, RectF> nativeRects = new HashMap<>();
 

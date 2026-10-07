@@ -1010,6 +1010,11 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
                          "PROTEUS_RENDER_NODE %{public}s", gbuf);
         }
         OH_ArkUI_RenderNodeUtils_SetBackgroundColor(node, static_cast<uint32_t>(color));
+        // ★★★静态透明度（2026-10-08 · 子代理审 effects 案例 A）：读指令的 opacity（默认 1）→ RenderNode.SetOpacity。
+        {
+            double opv = 1; jsonNumber(it, "opacity", &opv);
+            if (opv < 1.0) OH_ArkUI_RenderNodeUtils_SetOpacity(node, (float)(opv < 0 ? 0.0 : opv));
+        }
         // ★★★overflow-x 项（2026-10-06）：**有效裁剪矩形** → SetClip（RectShape，inset 模型）——
         //   裁**子内容**（元素几何由内核绝对定位；裁剪区 = 祖先链交集——内核已算好，宿主不算第二份）。
         //   参照系：节点**局部坐标**（与 SetSize/SetPosition 的绝对定位不同——见 native_render.h 的

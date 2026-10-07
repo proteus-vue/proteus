@@ -1838,14 +1838,18 @@ public final class VaporRenderHost {
     private void injectTransform(int id, JSONObject spec) {
         if (view == null) return;
         JSONObject t = spec.optJSONObject("transform");
-        if (t == null) return;
-        view.setNodeTransform(id,
-                (float) t.optDouble("txPx", 0),
-                (float) t.optDouble("tyPx", 0),
-                (float) t.optDouble("sx", 1),
-                (float) t.optDouble("rotate", 0),
-                (float) t.optDouble("txPct", 0),
-                (float) t.optDouble("tyPct", 0));
+        if (t != null) {
+            view.setNodeTransform(id,
+                    (float) t.optDouble("txPx", 0),
+                    (float) t.optDouble("tyPx", 0),
+                    (float) t.optDouble("sx", 1),
+                    (float) t.optDouble("rotate", 0),
+                    (float) t.optDouble("txPct", 0),
+                    (float) t.optDouble("tyPct", 0));
+        }
+        // ★★★静态透明度（2026-10-08 · 子代理审 effects 案例 A）：`opacity` 此前**无任何入口**
+        //   ⇒ 声明 opacity 的节点渲染为**完全不透明**。放在 transform 之后（写同一 nodeStaticTx[4] 槽位）。
+        if (spec.has("opacity")) view.setNodeOpacity(id, (float) spec.optDouble("opacity", 1));
     }
 
     /** ★批次 34：逐角圆角掩码注入（`borderRadiusCorners` 对象 → bit0=TL/1=TR/2=BR/3=BL；全 true ⇒ 不注入） */
