@@ -52,6 +52,13 @@ const LOCAL_ONLY = {
   //   它的作用域是**开发机收尾**：`pnpm verify` 末尾提醒；发布收尾用 strict 强制。
   'check:deploy-pending': '面向开发机收尾（本地 git 历史中 [deploy] 之后 website/** 是否仍有改动）；CI 视角天然自洽 ⇒ 假门禁',
   'check:deploy-pending:strict': '同上（strict 只是把提醒改为 exit 1，供发布收尾显式调用）',
+  // ★★lockfile 同步门禁（2026-10-08 新增，背景：lockfile 与某 workspace package.json 失同步 ⇒
+  //   **官网/CI 已连续多轮静默未部署**——pages.yml 安装步 `--frozen-lockfile` 直接失败、
+  //   后续 step 全 skipped，而 run conclusion 仍常显示 success）。
+  //   ★CI 的「安装」步（`pnpm install --frozen-lockfile`）**已是同一判据** ⇒ 接 CI 是重复执行。
+  //   本条补的是**本地 pre-push 盲区**：本地 `pnpm install`（非 frozen）会**静默把 lockfile 改对**，
+  //   开发机永远看不到漂移 ⇒ 只有在 `verify` 里显式跑一次，才在推送前拦下。
+  'check:lockfile-sync': '判据 = CI 安装步同一条命令（`pnpm install --frozen-lockfile`）⇒ CI 已覆盖；本条补本地 pre-push 盲区（本地非 frozen install 静默修正 lockfile）',
   // ★★★G-61 B5 基准守护（2026-10-05）：`:strict` 变体是**收尾显式调用**（与 check:pushed:strict 同族）——
   //   CI 侧跑的是**非 strict** 版（有 diff 才判审批留痕）；strict 供发布收尾强制。
   'check:baseline-approval:strict': '同上（strict 只是把提醒改为 --require，供收尾显式调用）',
