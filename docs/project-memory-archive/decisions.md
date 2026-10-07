@@ -2084,3 +2084,9 @@
 **③ 判据**：`build-host-app.sh --css` 成功（hvigor/CMake **真编译 C++**，HAP 签出）。
 **④ 意义**：三端（iOS/Android/鸿蒙）fixed 补偿**同批补齐**（iOS 层脱离内容变换 / Android·鸿蒙画布·根翻译反向补偿）——**无跨端一致性窗口**（对比：批 A①→②(1/3) 之间曾有意保留的过渡态）。★**模型一致**：三端滚动都是「全局平移内容」⇒ fixed 一律「抵消该平移」，实现各异（层挂载点 / canvas translate / RenderNode position）而语义同一。
 **⑤ 批 A 剩余**：**sticky（宿主吸附，全端）** + **z-index 数值→语义层映射**（用户选定；编译期折 `layer`，需复核 LY001「禁止裸 z-index」的既有立场）+ 验收页 + 四端真机。
+655. **★★★超应用 CSS 扩展 · 批 A③：`position: sticky` 全三端吸附（复用 fixed 管线）**（承 #651/#652/#653/#654）：
+**① 语义**：sticky = 滚动到阈值前同静态、到达后吸附（**不随内容滚动**）。三端滚动模型与 fixed 同（内容全局平移）⇒ sticky 按「内容 y = `max(baseY, offset + top)`」钳制（屏幕 y = `max(baseY − offset, top)`）。
+**② 交付**：**iOS** 视图 `stickyNodes(id→baseY,top)` + `setStickyTops`；`applyContentOffset` 内 `frame.y = max(baseY, offset + top)`（`baseY` 建层后从 `frame.origin.y` 现取——保持父相对坐标系一致）。**Android** 视图 `stickyTops(id→top)` + `setStickyTops`；`drawCmds` 对 sticky 节点 `translate(0, max(0, top+scrollY−c.y))`；`VaporRenderHost` 收集 spec `position:sticky` 的 `top`。**鸿蒙** `g_stickyNodes(baseX,baseY,top,node)` 登记（`ClearRoot` 清）；`scrollRoot` 内 `y = max(baseY, (scroll+top)*density)`。三端有 sticky 时同 fixed 跳过静态显示列表回放。
+**③ 判据**：iOS `swiftc -typecheck` 绿 + Android `check:android-host-compile` 绿 + 鸿蒙 `build-host-app --css` 真编译 C++ 成功（HAP 签出）。
+**④ 诚实边界**：仅为 **`top` 吸顶**；`left` 阈值、以及「吸附到底后随父盒下沿离开」的**边界钳制**未做（CSS sticky 的完整语义有一块「滚动离开 containing block 即解除吸附」——本轮未做）。真机截图待批 A 验收页齐后统一采。
+**⑤ 批 A 剩余**：**z-index 数值→语义层映射**（用户选定）——★**须先厘清两套 layer 体系**：① **挂载层**（`global/page/overlay`，`mount-layers.ts` + `layerContainers`，**已接渲染**）vs ② **层级原语**（`content/navigation/mask/popout`，`layer="popout"` 属性 + `LAYER_MAPPING`，目前**仅编译期校验 LY 规则、未见发射到渲染产物**）——z-index→语义层需先确认/接线后者到输出（独立子课题）。+ 验收页（position 页加 fixed/sticky 案例）+ 四端真机 + 探针 + 子代理。
