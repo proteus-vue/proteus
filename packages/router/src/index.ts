@@ -28,7 +28,23 @@ export function createRouter(
   options: RouterOptions = {},
 ): ReturnType<typeof createRouterCore> {
   const adapter: RouterAdapter = options.adapter ?? (sharedAdapter as RouterAdapter)
-  return createRouterCore(routes, { ...options, adapter })
+  const router = createRouterCore(routes, { ...options, adapter })
+  // ★★★$nav 平台级导航全局（2026-10-08 · 决策 #616）：createRouter 时登记**全局单例**，
+  //   供 Web/MP 的模板事件 `@tap="$nav('routeName')"` 运行期解析（App 由编译器编成 nav 动作，用不到此）。
+  //   ★目标解析：先按**路由名**（push({name})，路由记录为单一事实源）；未命中再按 **path**。
+  ;(globalThis as { $nav?: (target: string) => void }).$nav = (target: string): void => {
+    const rec = resolveNavRecord(routes, target)
+    const push = (router as { push: (loc: { name?: string; path?: string }) => unknown }).push.bind(router)
+    if (rec) push(rec.name === target ? { name: target } : { path: rec.path })
+    else push({ name: target }) // 未命中：交给 router 明确报错（不静默）
+  }
+  return router
+}
+
+/** 字符串目标 → 路由记录（先按**路由名**，再按 **path** 兜底）；未命中 ⇒ null。 */
+function resolveNavRecord(routes: RouteRecord[], target: string): RouteRecord | null {
+  const t = target.replace(/^\//, '')
+  return routes.find((r) => r.name === target) ?? routes.find((r) => r.path === t || r.path === target) ?? null
 }
 
 // ★路由规划 M3/M4：三端共享转场映射 + codegen（scan/tree 管线产物消费）

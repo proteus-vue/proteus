@@ -18,5 +18,17 @@ export function installWebPlatform(app: App): App {
   installBuiltInComponents(app)
   installWxApi()
   installMountLayers(app)
+  // ★★★$nav 平台级导航全局（Web 侧 · 2026-10-08 · 决策 #616）：模板 `@tap="$nav('routeName')"`
+  //   编译为 `n.$nav(...)`（setup ctx）⇒ 注册为 **globalProperty** 让任意组件解析到它；
+  //   实现委托给路由登记到 `globalThis.$nav` 的函数（`createRouter` 时登记，路由记录为唯一事实源）。
+  //   与 App（编译器编成 nav 动作）/ MP（编译器注入页方法 `this.$nav`）**三端同一写法**。
+  ;(app.config.globalProperties as Record<string, unknown>).$nav = (target: string): void => {
+    const g = globalThis as { $nav?: (t: string) => void }
+    if (typeof g.$nav === 'function') g.$nav(target)
+    else
+      console.warn(
+        `[proteus] $nav('${target}') 不可用：请先 createRouter(routes)（它在创建时登记 $nav 全局）。`,
+      )
+  }
   return app
 }
