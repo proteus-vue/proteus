@@ -16,14 +16,10 @@ function writeProject(dir: string, auditTs: string | null, pages: Record<string,
   fs.writeFileSync(
     path.join(dir, 'proteus.config.ts'),
     `export default {
-  platform: 'web',
-  skyline: false,
-  appid: '',
+  version: 4,
+  targets: { web: {} },
   pagesDir: 'src/pages',
-  routesOutput: 'src/router/auto-routes.ts',
-  customRoute: { registerPresets: false, builders: {} },
-  setDataBridge: { batchWindow: 16, perComponent: false },
-  style: { px2rpx: false, rpxRatio: 2 },
+  router: { routesOutput: 'src/router/auto-routes.ts', customRoute: { registerPresets: false, builders: {} } },
   ${auditTs ?? ''}
   ${gatesTs ?? ''}
 }

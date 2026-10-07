@@ -6,7 +6,7 @@ import { describe, it, expect } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { resolveRouterConfig, hasLegacyRouterAliases, DEFAULT_ROUTES_OUTPUT, migrateConfig, CONFIG_VERSION } from '@proteus-vue/types'
+import { resolveRouterConfig, hasLegacyRouterAliases, DEFAULT_ROUTES_OUTPUT, migrateConfig, CONFIG_VERSION, resolveProteusConfig } from '@proteus-vue/types'
 import { validateConfig } from '../packages/cli/src/config-validate'
 import { runGenRoutes } from '@proteus-vue/plugin-vite'
 
@@ -76,7 +76,7 @@ describe('#492 resolveRouterConfig（生效路由配置解析）', () => {
 })
 
 describe('#492 validateConfig（路由字段二选一存在 + router 段嵌套校验）', () => {
-  const base = { platform: 'mp-weixin', skyline: true, appid: 'wx1', pagesDir: 'src/pages', setDataBridge: {}, style: {} }
+  const base = { version: 4, targets: { mp: { appid: 'wx1' } }, pagesDir: 'src/pages' }
 
   it('统一形态（router.* 声明）→ 校验通过', () => {
     const r = validateConfig({
@@ -86,14 +86,10 @@ describe('#492 validateConfig（路由字段二选一存在 + router 段嵌套�
     expect(r.ok).toBe(true)
   })
 
-  it('两处都不声明 → CONFIG_MISSING_REQUIRED 指向 router.*', () => {
-    const r = validateConfig(base)
-    expect(r.ok).toBe(false)
-    if (!r.ok) {
-      const paths = r.errors.filter((e) => e.code === 'CONFIG_MISSING_REQUIRED').map((e) => e.path)
-      expect(paths).toContain('router.routesOutput')
-      expect(paths).toContain('router.customRoute')
-    }
+  it('路由字段不在 router 段（仅顶层）→ 归一后落 router，仍通过', () => {
+    // ★v4：仅顶层 routesOutput/customRoute —— 归一（resolveProteusConfig）会收进 router 段
+    const r = validateConfig(resolveProteusConfig({ ...base, routesOutput: 'a', customRoute: { registerPresets: true, builders: {} } }).config)
+    expect(r.ok).toBe(true)
   })
 
   it('router 段未知子键 → CONFIG_UNKNOWN_FIELD', () => {
@@ -108,10 +104,10 @@ describe('#492 validateConfig（路由字段二选一存在 + router 段嵌套�
     if (!r.ok) expect(r.errors.some((e) => e.path === 'router.subPackages[0].root')).toBe(true)
   })
 
-  it('顶层遗留写法（customRoute）→ 类型错误仍报顶层路径', () => {
-    const r = validateConfig({ ...base, routesOutput: 'a', customRoute: { registerPresets: 'yes' } })
+  it('router.customRoute 类型错误 → 报 router.customRoute 路径', () => {
+    const r = validateConfig({ ...base, router: { routesOutput: 'a', customRoute: { registerPresets: 'yes' } } })
     expect(r.ok).toBe(false)
-    if (!r.ok) expect(r.errors.some((e) => e.path === 'customRoute.registerPresets')).toBe(true)
+    if (!r.ok) expect(r.errors.some((e) => e.path === 'router.customRoute.registerPresets')).toBe(true)
   })
 })
 
@@ -177,8 +173,8 @@ describe('#492 gen-routes 消费统一 router 段（tabBar 显式声明接线—
   })
 })
 
-describe('#492 配置迁移 v2→v3（顶层收编 router 段）', () => {
-  it('顶层三字段迁移进 router 段；router.* 已声明键不被覆盖', () => {
+describe('#492 配置迁移 v2→v3→v4（顶层收编 router 段 + 按端分区）', () => {
+  it('顶层路由三字段迁移进 router 段；router.* 已声明键不被覆盖', () => {
     const { version, config } = migrateConfig(
       {
         routesOutput: 'legacy.ts',
@@ -188,8 +184,8 @@ describe('#492 配置迁移 v2→v3（顶层收编 router 段）', () => {
       },
       2,
     )
+    // ★v4：链式迁到最新（v2→v3 收编 router → v4 按端分区）——router 段保留
     expect(version).toBe(CONFIG_VERSION)
-    expect(version).toBe(3)
     expect((config as Record<string, unknown>).routesOutput).toBeUndefined()
     expect((config as Record<string, unknown>).customRoute).toBeUndefined()
     const router = (config as { router: Record<string, unknown> }).router

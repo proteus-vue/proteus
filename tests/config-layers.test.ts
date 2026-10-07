@@ -11,7 +11,7 @@ import {
 
 describe('CONFIG_FIELD_LAYERS（02 §4 字段归属表）', () => {
   it('归属表覆盖全部顶层字段（防漂移：validateConfig 集成后漏标即报错）', () => {
-    const KNOWN = ['platform', 'skyline', 'appid', 'pagesDir', 'routesOutput', 'subPackages', 'customRoute', 'rules', 'setDataBridge', 'style', 'budget', 'router']
+    const KNOWN = ['version', 'targets', 'pagesDir', 'app', 'router', 'compiler', 'layout', 'budget', 'vite', 'audit', 'gates']
     for (const field of KNOWN) {
       expect(CONFIG_FIELD_LAYERS[field], `归属表缺 ${field}`).toBeDefined()
     }
@@ -19,7 +19,7 @@ describe('CONFIG_FIELD_LAYERS（02 §4 字段归属表）', () => {
 
   it('getFieldLayer：查询已知字段 / 未知返回 undefined', () => {
     expect(getFieldLayer('router')).toBe('router')
-    expect(getFieldLayer('rules')).toBe('compiler')
+    expect(getFieldLayer('targets')).toBe('build')
     expect(getFieldLayer('not-a-field' as never)).toBeUndefined()
   })
 
@@ -51,10 +51,8 @@ describe('CONFIG_AUDIT_RULES（03 §4 产物 3：数据驱动，字段新增自�
 describe('checkConfigLayerViolations（B5 §3：CONFIG_LAYER_VIOLATION）', () => {
   it('合法配置（无跨层语义键）→ 零违规', () => {
     const ok = {
-      platform: 'mp-weixin',
-      router: { meta: { user: { requiresAuth: true } } },
-      customRoute: { registerPresets: true, builders: {} },
-      rules: { disabled: ['event/click-to-tap'] },
+      targets: { mp: { appid: 'wx1' } },
+      router: { pages: { user: { requiresAuth: true } } },
     }
     expect(checkConfigLayerViolations(ok)).toEqual([])
   })
@@ -64,12 +62,6 @@ describe('checkConfigLayerViolations（B5 §3：CONFIG_LAYER_VIOLATION）', () =
     expect(r[0]?.code).toBe('CONFIG_LAYER_VIOLATION')
     expect(r[0]?.path).toBe('router.stores')
     expect(r[0]?.message).toMatch(/pinia/)
-  })
-
-  it('customRoute 下声明 compiler 语义键 → 越层', () => {
-    const r = checkConfigLayerViolations({ customRoute: { mapping: {} } })
-    expect(r[0]?.code).toBe('CONFIG_LAYER_VIOLATION')
-    expect(r[0]?.path).toBe('customRoute.mapping')
   })
 
   it('未标注归属层的字段 → 漏标违规', () => {

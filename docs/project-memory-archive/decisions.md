@@ -1987,3 +1987,10 @@
 **⑤ 文档**：`10-config`→「编译器配置与页面配置」（补 native/globalStyle/page.webviewPages/skylineLayout/profileBoundary/layout）；`11-app-config`→「运行时配置 app.config」（补 safeArea.statusBar）；同步 6 处交叉引用（zh+en）。
 **⑥ 验证**：website 十门禁 + 根 vue-tsc/instr-spec/docs/script-compile/no-blind-wait/safe-edit/gates-sync/stats/alltarget 全绿 + schema 无漂移 + 45 例单测全绿 + 破坏性验证 + build:website 成功。
 **⑦ ★教训**：a) 配置字段有**四个登记点**（ProteusConfig / CONFIG_FIELD_LAYERS / KNOWN_FIELDS / Schema），只改其一 = 半接线（声明了却用不了）；b) **文档是白名单的镜子**——文档列出而校验器不认 ⇒ 用户被阻断 ⇒ 文档↔校验器须同源；c) 配置页按**消费时机**组织（编译器配置 vs 运行时配置），非旧「全局/页面」。
+641. **★★★配置模型 v4 重构（按端分区）+ 官网配置文档对齐（★用户 2026-10-08「proteus.config/app.config 有小程序时代设计，不符超级应用定位（platform 二选一、一级字段是小程序 skyline 的）；文档细粒度不够、无锚点导航」）**：
+**① 取证**：`platform: 'mp-weixin' | 'web'` 只在 `vite-config.ts` 做一次 fallback（目标端真源 = CLI `--target`）；顶层一批字段是小程序/Skyline 专属。
+**② v4 形状（按端分区）**：`targets.{web,mp,ios,android,harmony}` 各端自持配置（含原生工程身份——原 `native.*` 并入 `targets.{ios,android,harmony}`）；跨端共享面留顶层（pagesDir/router/budget/vite/audit/gates/compiler/layout/app）；`platform` 删除；`skyline:boolean` → `targets.mp.renderer`。
+**③ 实现**：`config.ts` 重写 + 目标端类型；`config-resolve.ts`（`resolveProteusConfig` = 消费方唯一入口：迁移+归一+默认）；`config-v4-shape.ts`（纯形状变换，供 migration 与 resolve 共用，避免循环依赖）；`CONFIG_VERSION=4` + v3→v4 迁移；`config-layers`/`config-validate`/`config-schema` 三处 lockstep；`migrate-types` 注入 version:4。
+**④ 消费方**：plugin-vite（plugin/gen-routes/vite-config）+ cli（build/dev/health/app-content/app-runtime-content/native-config/strict-cli/check）约 15 处；六个具体 config 迁移。
+**⑤ 验证**：config:check 五 config 全过 + v3 自动迁移通过；真机构建链（examples build:mp:42 页/2 分包/rendererOptions 绿 + build:web + check:mp-artifacts）；根 vue-tsc 零错误；149 例 config 单测全绿；generate types --check 无漂移；website 十门禁 + build:website；根门禁全绿。**已知存量红（非本轮，HEAD 即红）**：golden `$nav` / registry-drift `page/nav-global` / CssEngine emoji / hmr-dev-server 时序。
+**⑥ ★教训**：a) 配置字段**四个登记点**（ProteusConfig / CONFIG_FIELD_LAYERS / KNOWN_FIELDS / Schema）——只改其一 = 半接线；b) **归一器不得吞掉未知字段**（否则 config:check 看不到拼写错误——本轮实测被抓）；c) 形状归一必须**幂等**；d) 旧配置**自动迁移可用**（不破人），新形态是唯一 canonical。

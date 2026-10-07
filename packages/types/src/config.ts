@@ -2,6 +2,11 @@
 // ★类型收口（10-type-consolidation）：ProteusConfig（原 @proteus-vue/plugin-vite/src/config.ts 的 interface）
 // runtime 值（defineConfig 等助手）留 @proteus-vue/plugin-vite
 // ★#421：vite 字段类型 = vite 官方 UserConfig（仅类型 import——vite 为本包类型依赖，零运行时）
+// ★★★2026-10-08 配置模型 v4（决策 #641）：**按端分区**——目标端 = 键（web/mp/ios/android/harmony），
+//   小程序专属字段（appid/renderer/样式换算/setDataBridge/… ）收进 `targets.mp`，原生工程身份进 `targets.<端>`。
+//   去掉了小程序时代的 `platform: 'mp-weixin'|'web'` 二选一（目标端真源 = CLI --target）；
+//   跨端共享面（pagesDir/router/budget/vite/audit/gates/compiler/layout/app）留顶层。
+//   消费方一律经 `resolveProteusConfig`（迁移 + 默认值归一）读取——**禁止裸读原始 config 字段**。
 import type { UserConfig } from 'vite'
 import type { TransformRuleOverrides } from './compiler-types'
 import type { RouteMeta } from './router-types'
@@ -44,21 +49,21 @@ export interface GatesConfig {
   disabled?: string[]
 }
 
-/* ================= ★★★原生项目配置（`native` 段 · 决策 #635） =================
+/* ================= ★★★ 目标端（v4 按端分区） =================
  *
- * 【它解决什么（用户 2026-10-08）】「app.config 没有完整的平台项目配置……无法把项目的这些
- *   传递到构建链」。此前**原生项目身份**（包名/Bundle ID/版本/SDK/方向/权限/图标）**硬编码**
- *   在各宿主工程文件里（AndroidManifest.xml / Info.plist / AppScope/app.json5 / module.json5），
- *   项目侧只能手改宿主——`proteus build --target <端> --package` 也从不注入这些值。
- *   ⇒ 在**构建期**配置面（`proteus.config`，按 G-35.1「proteus.config=构建期」）新增 `native` 段，
- *     由 CLI **渲染进**宿主工程的原生项目文件，再走平台工具链打包。
- *
- * 【与 app.config 的边界（决策 #635）】`native` = **构建期**（CLI/工具链消费，写进原生工程文件）；
- *   app.config 的 `app.name/version/buildNumber` = **运行时**（业务读取/上报）。二者可互为镜像，
- *   但**不改职责边界**：需要进原生工程的，写这里；运行期展示的，写 app.config。缺省缺值时，
- *   CLI 回退读取 `app.config.ts` 的 `app.*`（减少重复声明）。
+ * 【为什么按端分区（决策 #641 · 用户 2026-10-08）】旧模型把小程序/Skyline 专属字段平铺在**顶层**
+ *   （`skyline` / `appid` / `setDataBridge` / `style.px2rpx` / `page` / `globalStyle` / `rules` …）——
+ *   那是「小程序编译器」时代的形状，与「一份源码、多端承载」的定位不符；且 `platform: 'mp-weixin'|'web'`
+ *   二选一根本表达不了 App 三端。
+ *   ⇒ 目标端成为**一级键**：`targets.web / targets.mp / targets.ios / targets.android / targets.harmony`
+ *     （键 = 具体平台名，去「微信」化；与 CLI `--target` 同一套具体平台命名）。
+ *   · 每个端拥有**自己的全部配置**（含原生工程身份）——不再有跨端漂移的顶层 MP 字段；
+ *   · **跨端共享**的部分（pagesDir / router / budget / vite / audit / gates / compiler / layout / app 身份）
+ *     留在顶层（重复三遍反而更糟，见各自注释）。
  */
-export interface NativeAppConfig {
+
+/** 共享应用身份（各端缺省回退；可被端侧覆盖）——构建期写入原生工程文件的 name/version/buildNumber */
+export interface AppIdentityConfig {
   /** 应用显示名（缺省回退 app.config 的 app.name） */
   name?: string
   /** 版本号（语义化；缺省回退 app.config 的 app.version） */
@@ -67,15 +72,89 @@ export interface NativeAppConfig {
   buildNumber?: string | number
 }
 
-/** Android 原生项目配置（→ AndroidManifest.xml） */
-export interface NativeAndroidConfig {
+/** Web 目标（浏览器 SPA） */
+export interface WebTargetConfig {
+  /** 构建产物输出目录（缺省由框架推导 dist/web） */
+  output?: string
+}
+
+/**
+ * 微信小程序目标（`targets.mp`）——Skyline / WebView 同一构建管线。
+ * ★旧顶层小程序字段（appid / skyline / skylineLayout / profileBoundary / setDataBridge /
+ *   style.px2rpx·rpxRatio / globalStyle / page / rules）全部收此。
+ */
+export interface MpTargetConfig {
+  /** 小程序 AppID（构建期写 project.config.json / IDE 导入 / automator 体检）。**≠ app.config 的 app.id**（运行时标识） */
+  appid: string
+  /** 渲染器（★取代旧顶层 `skyline: boolean`）：`'skyline'`（默认）| `'webview'` */
+  renderer?: 'skyline' | 'webview'
+  /** 样式换算（MP 专属；Web 端永不换算——Web 保持标准 CSS，由编译器吸收差异） */
+  style?: {
+    /** px → rpx 转换开关（缺省 true） */
+    px2rpx?: boolean
+    /** 换算比例（缺省按 375 设计稿 2:1） */
+    rpxRatio?: number
+  }
+  /** 响应式 → setData 桥接策略 */
+  setDataBridge?: {
+    /** 合并窗口（ms，缺省 16——约 1 帧） */
+    batchWindow?: number
+    /** 是否按组件粒度 setData（缺省 true） */
+    perComponent?: boolean
+  }
+  /** ★全局样式（MP 端唯一全局入口）：相对 root 的 CSS 文件路径（缺省探测根/应用目录的 app.wxss）。构建期编译（px→rpx）后产出产物根 app.wxss（微信自动生效）；Web 端同一文件在入口 import（单源）。 */
+  globalStyle?: string
+  /** 页面模式（Skyline 页面本身不滚动） */
+  page?: {
+    /** 页面自动包滚动容器（缺省 true——Skyline 页面滚动必须 scroll-view） */
+    autoScrollContainer?: boolean
+    /** ★Skyline iOS 白屏兜底：列出白屏高风险页，强制走 WebView 渲染（页面级降级，不全局） */
+    webviewPages?: string[]
+  }
+  /** ★Skyline 布局对齐开关（消费官方《Skyline WXSS 样式支持与差异》对齐表）。
+   *  仅 `defaultDisplayBlock` 默认 true（本仓真机验证过）；其余默认**不注入**（未验证的开关不由框架替项目做主）。 */
+  skylineLayout?: {
+    defaultDisplayBlock?: boolean
+    defaultContentBox?: boolean
+    tagNameStyleIsolation?: boolean
+    enableScrollViewAutoSize?: boolean
+    keyframeStyleIsolation?: boolean
+  }
+  /** ★VC2-b 编译期 Profile 边界校验（使用了某端不支持的样式即报；Web 端构建同样执行）。escape hatch：样式块内注释 `proteus-allow-profile: <理由>`。 */
+  profileBoundary?: {
+    level?: 'error' | 'warn' | 'off'
+  }
+  /** ★底线循环 ①③：规则覆盖（AI/config 改写或禁用规则） */
+  rules?: TransformRuleOverrides
+}
+
+/** iOS 目标（→ Info.plist） */
+export interface IosTargetConfig {
+  /** CFBundleIdentifier（缺省 = 宿主默认 bundle id，见宿主工程 / proteus.host.json） */
+  bundleId?: string
+  /** CFBundleDisplayName（缺省回退 app.name / targets.app.name） */
+  displayName?: string
+  /** CFBundleShortVersionString（缺省回退 app.version） */
+  version?: string
+  /** CFBundleVersion（缺省回退 app.buildNumber） */
+  buildNumber?: string
+  /** MinimumOSVersion（缺省 15.0） */
+  minimumOSVersion?: string
+  /** UIDeviceFamily（1=iPhone / 2=iPad；缺省 [1]） */
+  deviceFamily?: number[]
+  /** 支持的方向（缺省 [portrait]） */
+  orientations?: Array<'portrait' | 'portrait-upside-down' | 'landscape-left' | 'landscape-right'>
+}
+
+/** Android 目标（→ AndroidManifest.xml） */
+export interface AndroidTargetConfig {
   /** applicationId / package（缺省 = 宿主运行时同包 dev.proteus.layoutcore，保证同包访问） */
   applicationId?: string
-  /** 桌面/应用名（android:label；缺省回退 native.app.name） */
+  /** 桌面/应用名（android:label；缺省回退 app.name） */
   label?: string
-  /** versionName（缺省回退 native.app.version） */
+  /** versionName（缺省回退 app.version） */
   versionName?: string
-  /** versionCode（正整数；缺省回退 native.app.buildNumber） */
+  /** versionCode（正整数；缺省回退 app.buildNumber） */
   versionCode?: number
   /** minSdkVersion（缺省 24） */
   minSdk?: number
@@ -89,35 +168,17 @@ export interface NativeAndroidConfig {
   icon?: string
 }
 
-/** iOS 原生项目配置（→ Info.plist） */
-export interface NativeIosConfig {
-  /** CFBundleIdentifier（缺省 = 宿主默认 bundle id，见宿主工程 / proteus.host.json） */
-  bundleId?: string
-  /** CFBundleDisplayName（缺省回退 native.app.name） */
-  displayName?: string
-  /** CFBundleShortVersionString（缺省回退 native.app.version） */
-  version?: string
-  /** CFBundleVersion（缺省回退 native.app.buildNumber） */
-  buildNumber?: string
-  /** MinimumOSVersion（缺省 15.0） */
-  minimumOSVersion?: string
-  /** UIDeviceFamily（1=iPhone / 2=iPad；缺省 [1]） */
-  deviceFamily?: number[]
-  /** 支持的方向（缺省 [portrait]） */
-  orientations?: Array<'portrait' | 'portrait-upside-down' | 'landscape-left' | 'landscape-right'>
-}
-
-/** Harmony 原生项目配置（→ AppScope/app.json5 + entry/module.json5 + string.json） */
-export interface NativeHarmonyConfig {
-  /** bundleName（缺省 = 宿主默认，见宿主 app.json5） */
+/** Harmony 目标（→ AppScope/app.json5 + entry/module.json5 + string.json） */
+export interface HarmonyTargetConfig {
+  /** bundleName（缺省 = 宿主默认，见宿主 app.json5）——也是**签名绑定**的键（换它要换 profile） */
   bundleName?: string
-  /** 应用名（$string:app_name 的值；缺省回退 native.app.name） */
+  /** 应用名（$string:app_name 的值；缺省回退 app.name） */
   label?: string
   /** vendor（缺省 proteus） */
   vendor?: string
-  /** versionName（缺省回退 native.app.version） */
+  /** versionName（缺省回退 app.version） */
   versionName?: string
-  /** versionCode（正整数；缺省回退 native.app.buildNumber） */
+  /** versionCode（正整数；缺省回退 app.buildNumber） */
   versionCode?: number
   /** compatibleSdkVersion（如 "5.0.5(17)"；缺省 5.0.5(17)） */
   compatibleSdkVersion?: string
@@ -129,131 +190,55 @@ export interface NativeHarmonyConfig {
   permissions?: string[]
 }
 
-/** 原生项目配置（构建期——CLI 渲染进三端原生工程文件） */
-export interface NativeProjectConfig {
-  /** 三端共享的应用身份（name/version/buildNumber） */
-  app?: NativeAppConfig
-  android?: NativeAndroidConfig
-  ios?: NativeIosConfig
-  harmony?: NativeHarmonyConfig
+/** 目标端集合（键 = 具体平台名；至少声明一个） */
+export interface ProteusTargets {
+  web?: WebTargetConfig
+  mp?: MpTargetConfig
+  ios?: IosTargetConfig
+  android?: AndroidTargetConfig
+  harmony?: HarmonyTargetConfig
 }
 
+/** 目标端名（具体平台；与 CLI 具体平台命名一致） */
+export type ProteusTargetName = 'web' | 'mp' | 'ios' | 'android' | 'harmony'
+
 export interface ProteusConfig {
-  /** 目标平台 */
-  platform: 'mp-weixin' | 'web'
-  /** ★G-29 编译器后端插拔：backend 选 'rust' 时，构建（proteus build / build:mp）对每个 .vue 跑 Node/Rust
-   *  双编译语义等价校验（G-29.1）——不一致构建红；产物仍由 Node 引擎生成（阶段定位，产物级 Rust codegen 后续批次）
-   *  缺省 'node'（不校验——零开销）；CLI 可用 `proteus build --compiler rust` 临时覆盖 */
+  /** 配置 schema 版本（v4 起为 4；缺省视为当前形态——显式声明且 <4 时加载期自动迁移） */
+  version?: number
+  /** ★目标端配置（按端分区）——至少声明一个端；键 = web / mp / ios / android / harmony */
+  targets: ProteusTargets
+  /** 页面根目录（主包路由扫描起点）——**跨端共享** */
+  pagesDir: string
+  /**
+   * ★共享应用身份（构建期写进各端原生工程文件；缺省可由 app.config 的 app.* 回退）。
+   *   留在跨端层是刻意的——同一身份重复写进三端配置文件更易漂移；各端可覆盖（targets.<端>.label/version…）。
+   *   与 app.config 的 app.* 边界（G-35.1）：此处 = **构建期**（CLI 消费，写原生文件）；app.config = **运行期**（业务读取）。
+   */
+  app?: AppIdentityConfig
+  /**
+   * ★#492 项目级路由管理（统一路由配置面——跨端共享）：
+   *   routesOutput / subPackages / customRoute / tabBar / pages 全在此；
+   *   消费方（gen-routes / app 骨架）经 resolveRouterConfig() 取生效配置——禁止散读。
+   */
+  router?: RouterSection
+  /** ★G-29 编译器后端插拔（缺省 node 零开销；'rust' → 每次构建跑 Node/Rust 双编译语义等价校验） */
   compiler?: {
     backend?: CompilerBackend
   }
-  /** 是否启用 Skyline 渲染（仅 mp-weixin 生效） */
-  skyline: boolean
-  /**
-   * ★Skyline 布局对齐（VC2-c：消费官方《Skyline WXSS 样式支持与差异》的 5 个对齐开关
-   *   ——版本要求见 docs/generated/css-capability-alignment.json 的 profile.skylineAlignSwitches）。
-   *
-   * 各开关语义与最低版本（Android/iOS/基础库）：
-   *   · defaultDisplayBlock      默认 block 布局，对齐 WebView      8.0.34/8.0.36/2.31.1（**默认 true**）
-   *   · defaultContentBox        默认 content-box 盒模型，对齐 Web   8.0.42/8.0.42/3.1.0
-   *   · tagNameStyleIsolation    tag 选择器全局匹配，对齐 WebView    8.0.51/8.0.51/3.6.0
-   *   · enableScrollViewAutoSize scroll-view 自动撑开               8.0.54/8.0.54/3.7.2
-   *   · keyframeStyleIsolation   @keyframes 样式全局共享             8.0.57/8.0.57/3.8.0
-   *
-   * ★默认策略（产物中如实记录实际取值，见构建期 skyline-options 记录）：
-   *   只有 defaultDisplayBlock 默认 true（本仓 2026-08 真机验证过）；其余默认 **不注入**
-   *   （保守：未在本仓验证过的开关不由框架替项目做主，避免静默改变布局/样式语义）。
-   *   ★已知限制：tagNameStyleIsolation 在开发者工具校验被拒（本仓 2026-09 实测）——
-   *     显式开启会构建失败，属平台限制，注释保留。
-   */
-  skylineLayout?: {
-    defaultDisplayBlock?: boolean
-    defaultContentBox?: boolean
-    tagNameStyleIsolation?: boolean
-    enableScrollViewAutoSize?: boolean
-    keyframeStyleIsolation?: boolean
-  }
-  /**
-   * ★VC2-b：Profile 边界校验（编译期静态校验——「使用了某端不支持的样式」报错）。
-   *   数据源：《Skyline WXSS 样式支持与差异》官方属性表的纯枚举 formats（生成物见
-   *   `packages/css-compat/src/generated/skyline-boundary-rules.generated.ts`）。
-   *   默认 `'error'`（阻断构建——**Web 端构建同样执行**，卡片硬性要求：否则问题延迟到 App 端暴露）。
-   *   escape hatch：样式块内注释 `proteus-allow-profile: <理由>`（理由非空才生效；豁免计入统计）。
-   */
-  profileBoundary?: {
-    level?: 'error' | 'warn' | 'off'
-  }
-  /** ★G-22 柔性布局（fluid-layout-plan）：p-fluid 编译期 clamp 生成参数（构建期配置——编译需要，运行期由 app-config 覆盖 Web 端） */
+  /** ★G-22 柔性布局（fluid-layout-plan）：p-fluid 编译期 clamp 生成参数——**跨端共享**（Web/MP/App 同一设计基准） */
   layout?: {
     designWidth?: number
     fluidViewport?: { min?: number; max?: number }
-  }
-  /** 小程序 AppID——★平台编译标识（构建期写 project.config.json / IDE 导入 / automator 体检）
-   *  ★决策 #211 职责边界：区别于 app.config.ts 的 app.id（应用运行时标识）——appid 是构建期消费，必须在此 */
-  appid: string
-  /** 页面根目录（主包路由扫描起点） */
-  pagesDir: string
-  /** 路由输出文件（编译期生成）
-   *  ★#492 已收编 router 段（router.routesOutput）——顶层写法保留为向后兼容别名，建议统一到 router 段（项目级路由管理） */
-  routesOutput?: string
-  /** 分包配置（可选）
-   *  ★#492 已收编 router 段（router.subPackages）——顶层写法保留为向后兼容别名，建议统一到 router 段 */
-  subPackages?: Array<{ root: string; name?: string }>
-  /** wx.router 自定义路由配置
-   *  ★#492 已收编 router 段（router.customRoute）——顶层写法保留为向后兼容别名，建议统一到 router 段 */
-  customRoute?: {
-    registerPresets?: boolean
-    /** 内置预设 builders 注册表：name → 预设源码文件 */
-    builders?: Record<string, string>
-  }
-  /** ★底线循环 ①③：规则覆盖（AI/config 改写或禁用规则） */
-  rules?: TransformRuleOverrides
-  /** 响应式 → setData 桥接策略 */
-  setDataBridge: {
-    batchWindow: number
-    perComponent: boolean
-  }
-  /** 样式换算策略 */
-  style: {
-    px2rpx: boolean
-    rpxRatio: number
-  }
-  /** ★全局样式（MP 端唯一全局样式入口）：相对 root 的 CSS 文件路径（缺省探测根/应用目录的 app.wxss）。
-   *  构建期编译（px→rpx）后产出产物根 `app.wxss`（微信自动全局生效）——用于设计 token / 全局重置；
-   *  Web 端同一文件在入口 import（单源）。页面级 wxss 各自 scoped，变量无法跨页继承，故需此全局通道。 */
-  globalStyle?: string
-  /** ★15-page-scroll-container：页面模式自动包滚动容器（Skyline 页面本身不滚动，滚动必须 scroll-view；默认 true） */
-  page?: {
-    autoScrollContainer?: boolean
-    /** ★Skyline iOS 白屏兜底（roadmap v0.5 对策② · 页面级降级通道）：
-     *  指定页面（页面名，如 'home' / 'list' 或 'pages/home'）强制走 WebView 渲染（page.json renderer 不写 skyline），
-     *  仅对 Skyline 白屏高风险页启用——不全局降级。为空/未设 → 全站随 config.skyline。 */
-    webviewPages?: string[]
   }
   /** 包体积预算 */
   budget?: {
     mainPackageKB: number
     strict: boolean
   }
-  /** ★#492 项目级路由管理（统一路由配置面——路由相关配置唯一声明处）：
-   *  结构（routesOutput/subPackages/customRoute）+ tabBar + 页面配置（pages）全部在此；
-   *  顶层三字段为向后兼容别名，双处同时声明时 router.* 优先（config:check 提示收敛）。
-   *  消费方（gen-routes / app 骨架）经 resolveRouterConfig() 取生效配置——禁止散读顶层字段 */
-  router?: RouterSection
-  /** ★#418/★#421 vite 透传（配置收敛——开发者不写 vite.config.ts）：
-   *   框架用 resolveProteusViteConfig 组装 vite 配置（vue/mpTransform/别名/构建参数全内置），
-   *   本字段做开发者扩展——**类型即 vite 官方 UserConfig**（plugins/server/resolve/build…全兼容）：
-   *   对象形态直接给；函数形态 (ctx) => 对象（ctx 携带 command/mode，async 可用——module manualChunks 场景）。
-   *   合并语义：plugins 追加在框架插件后、resolve.alias 拼接保框架 @、define/build 深合并。
-   *   类型依赖：@proteus-vue/types 依赖 vite（仅类型引用，零运行时） */
+  /** ★#418/★#421 vite 透传（配置收敛——开发者不写 vite.config.ts） */
   vite?: ViteUserConfig | ((ctx: ViteConfigContext) => ViteUserConfig | void | Promise<ViteUserConfig | void>)
-  /** ★#447 D-2 dogfooding 门禁（05-dogfooding-conformance D-2）：页面不裸写平台 API / 手写 @media / 引第三方 UI
-   *   规则级可配（off/warn/error——缺省全部 error）；消费者：CLI `proteus audit d2`（★#448 官网/开发者双场景单引擎） */
+  /** ★#447 D-2 dogfooding 门禁（页面不裸写平台 API / 手写 @media / 引第三方 UI；规则级可配 off/warn/error） */
   audit?: AuditConfig
-  /** ★#456 统一门禁开关（gates.disabled：自选关闭门禁/聚合域——check/audit all/gate run 统一生效；缺省全部启用） */
+  /** ★#456 统一门禁开关（gates.disabled：自选关闭门禁/聚合域） */
   gates?: GatesConfig
-  /** ★★★原生项目配置（`native` 段 · 决策 #635）：包名/Bundle ID/版本/SDK/方向/权限/图标——
-   *   由 CLI（`create host` / `build --target <端> --package`）**渲染进**宿主工程的原生项目文件。
-   *   构建期消费（区别于 app.config 的运行期职责，G-35.1）；缺省值回退 app.config 的 app.*。 */
-  native?: NativeProjectConfig
 }

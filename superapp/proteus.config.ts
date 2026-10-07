@@ -9,10 +9,22 @@
 import type { ProteusConfig } from '@proteus-vue/plugin-vite'
 
 const config: ProteusConfig = {
-  platform: 'mp-weixin',
-  skyline: true,
-  // ★测试 appid（与 examples/showcase 同一测试号；生产发布需换正式号）
-  appid: 'wxa720d0c502451748',
+  version: 4,
+  // ★v4（决策 #641）：小程序专属字段收进 targets.mp
+  targets: {
+    mp: {
+      // ★测试 appid（与 examples/showcase 同一测试号；生产发布需换正式号）
+      appid: 'wxa720d0c502451748',
+      renderer: 'skyline',
+      rules: { disabled: [], mapping: {}, customTags: {} },
+      setDataBridge: { batchWindow: 16, perComponent: true },
+      style: { px2rpx: true, rpxRatio: 2 },
+      // ★全局样式（MP app.wxss 通道）：设计 token（CSS 变量）+ 全局重置。
+      //   Web 端同一文件在 main.ts import（★单一事实源：两端消费同一份 tokens.css）
+      //   规范文档：docs/Proteus_超级应用视觉设计规范.md
+      globalStyle: 'styles/global.css',
+    },
+  },
   pagesDir: 'pages',
   // ★#492 项目级路由管理：结构 + tabBar + meta 统一在 router 段
   router: {
@@ -45,13 +57,6 @@ const config: ProteusConfig = {
       verify: { title: '验收控制台' },
     },
   },
-  rules: { disabled: [], mapping: {}, customTags: {} },
-  setDataBridge: { batchWindow: 16, perComponent: true },
-  style: { px2rpx: true, rpxRatio: 2 },
-  // ★全局样式（MP app.wxss 通道）：设计 token（CSS 变量）+ 全局重置。
-  //   Web 端同一文件在 main.ts import（★单一事实源：两端消费同一份 tokens.css）
-  //   规范文档：docs/Proteus_超级应用视觉设计规范.md
-  globalStyle: 'styles/global.css',
   budget: { mainPackageKB: 1200, strict: false },
   // ★★2026-10-04（外部视觉验收挖出的**总根因**）：Web 端必须挂 `defaultScopedPlugin`——
   //   它把模板里的 `<view>/<text>/<button>…` 改写为 `<proteus-view>` 等**已注册组件**（S50 坑的既有经验）。

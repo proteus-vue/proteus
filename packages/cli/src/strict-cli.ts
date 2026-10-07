@@ -50,40 +50,12 @@ export interface StrictCliViolation {
   message: string
 }
 
-/** CLI002：缺失必要 target 配置（defineProteus 形态 targets 为空/缺 entry）
- * ★形态识别：旧 ProteusConfig（platform 单端编译管线）不适用 CLI002（无 targets 语义） */
+/** CLI002：缺失必要 target 配置（v4：targets 至少声明一个端——web/mp/ios/android/harmony） */
 export function checkRequiredTargets(config: unknown): StrictCliViolation[] {
   const out: StrictCliViolation[] = []
-  const c = (config ?? {}) as { entry?: unknown; targets?: unknown; platform?: unknown }
-  // 旧形态（platform 驱动单端管线）→ 跳过（CLI002 仅针对 defineProteus 多端 targets 形态）
-  if (typeof c.platform === 'string' && !('targets' in c)) return out
-  if (typeof c.entry !== 'string' || !c.entry) {
-    out.push({ code: 'CLI002', severity: 'error', message: '缺失必要配置 entry（五端统一入口）' })
-  }
+  const c = (config ?? {}) as { targets?: unknown }
   if (!c.targets || typeof c.targets !== 'object' || Object.keys(c.targets as object).length === 0) {
-    out.push({ code: 'CLI002', severity: 'error', message: '缺失必要 target 配置（targets 至少声明一个端）' })
-  }
-  return out
-}
-
-/** CLI003：能力开关冲突——feature 开启但 targets 含不支持端（warn） */
-export function checkFeatureConflicts(config: unknown): StrictCliViolation[] {
-  const out: StrictCliViolation[] = []
-  const c = (config ?? {}) as { features?: Record<string, boolean>; targets?: Record<string, unknown> }
-  const features = c.features ?? {}
-  const targets = c.targets ?? {}
-  const declaredTargets = Object.keys(targets)
-  for (const [feature, enabled] of Object.entries(features)) {
-    if (enabled !== true) continue
-    const supported = FEATURE_PLATFORM_MATRIX[feature]
-    if (!supported) {
-      out.push({ code: 'CLI003', severity: 'warn', message: `未知能力开关 ${feature}（注册表见 FEATURE_PLATFORM_MATRIX）` })
-      continue
-    }
-    const unsupported = declaredTargets.filter((t) => supported.indexOf(t) < 0)
-    if (unsupported.length) {
-      out.push({ code: 'CLI003', severity: 'warn', message: `能力 ${feature} 已开启但 target ${unsupported.join('/')} 不支持（支持端：${supported.join('/')}）` })
-    }
+    out.push({ code: 'CLI002', severity: 'error', message: '缺失必要 target 配置（targets 至少声明一个端：web/mp/ios/android/harmony）' })
   }
   return out
 }

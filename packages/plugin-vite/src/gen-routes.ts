@@ -91,6 +91,9 @@ let shellFile: string | null = null
 
 export function runGenRoutes(options: GenRoutesOptions): void {
   const config = options.config
+  // ★v4（决策 #641）：小程序专属字段在 targets.mp（原顶层 skyline/appid/rules/page/skylineLayout）
+  const mpTarget = config.targets?.mp
+  const isSkyline = (mpTarget?.renderer ?? 'skyline') === 'skyline'
   const ROOT = options.root ?? process.cwd()
   // ★#492 项目级路由管理：解析生效路由配置（router.* 优先，顶层三字段为兼容别名；双处声明提示收敛）
   const { router: rc, duplicates } = resolveRouterConfig(config as never)
@@ -599,19 +602,19 @@ function writeAppJson(allPages: PageInfo[], routes: RouteRecord[]): void {
   if (Object.keys(preloadRule).length) appJson.preloadRule = preloadRule
   appJson.window = windowConfig
   // Skyline 渲染前提（微信平台校验）：页面 renderer=skyline 时必须声明 requiredComponents
-  if (config.skyline) appJson.lazyCodeLoading = 'requiredComponents'
+  if (isSkyline) appJson.lazyCodeLoading = 'requiredComponents'
   // ★Skyline 布局对齐（VC2-c：5 个官方开关——版本要求见 docs/generated/css-capability-alignment.json
   //   的 profile.skylineAlignSwitches）。默认策略：只有 defaultDisplayBlock 默认 true（本仓真机验证过），
   //   其余开关**只注入显式配置的**（未验证的开关不由框架替项目做主——见 ProteusConfig.skylineLayout 注释）。
   //   （text 行内恢复走类选择器 .proteus-text-inline——tagNameStyleIsolation 当前开发者工具校验拒绝，不可用）
   let skylineOptionsRecord: Record<string, boolean> | null = null
-  if (config.skyline) {
+  if (isSkyline) {
     const sky = {
-      defaultDisplayBlock: config.skylineLayout?.defaultDisplayBlock ?? true,
-      ...(config.skylineLayout?.defaultContentBox !== undefined ? { defaultContentBox: config.skylineLayout.defaultContentBox } : {}),
-      ...(config.skylineLayout?.tagNameStyleIsolation !== undefined ? { tagNameStyleIsolation: config.skylineLayout.tagNameStyleIsolation } : {}),
-      ...(config.skylineLayout?.enableScrollViewAutoSize !== undefined ? { enableScrollViewAutoSize: config.skylineLayout.enableScrollViewAutoSize } : {}),
-      ...(config.skylineLayout?.keyframeStyleIsolation !== undefined ? { keyframeStyleIsolation: config.skylineLayout.keyframeStyleIsolation } : {}),
+      defaultDisplayBlock: mpTarget?.skylineLayout?.defaultDisplayBlock ?? true,
+      ...(mpTarget?.skylineLayout?.defaultContentBox !== undefined ? { defaultContentBox: mpTarget?.skylineLayout?.defaultContentBox } : {}),
+      ...(mpTarget?.skylineLayout?.tagNameStyleIsolation !== undefined ? { tagNameStyleIsolation: mpTarget?.skylineLayout?.tagNameStyleIsolation } : {}),
+      ...(mpTarget?.skylineLayout?.enableScrollViewAutoSize !== undefined ? { enableScrollViewAutoSize: mpTarget?.skylineLayout?.enableScrollViewAutoSize } : {}),
+      ...(mpTarget?.skylineLayout?.keyframeStyleIsolation !== undefined ? { keyframeStyleIsolation: mpTarget?.skylineLayout?.keyframeStyleIsolation } : {}),
     }
     appJson.rendererOptions = { skyline: sky }
     skylineOptionsRecord = sky
@@ -760,17 +763,17 @@ function extractTemplateBody(src: string): string {
  * 扫描页面模板中的自定义组件标签（非原生/HTML 标签）→ usingComponents 映射
  * 解析顺序：应用组件 <appRoot>/components/<tag>/index(.vue) → 框架内置组件 src/components/<tag>/index(.vue)
  * 路径：应用 /components/<tag>/index；框架 /proteus/<tag>/index（插件产物 rel 前缀 proteus/，与应用隔离）
- * config.rules.customTags 的标签是自定义映射（非组件），加入白名单
+ * targets.mp.rules.customTags 的标签是自定义映射（非组件），加入白名单
  */
 function collectComponents(file: string, skipSemantic = false): Record<string, string> {
   const src = fs.readFileSync(file, 'utf-8')
   const tpl = extractTemplateBody(src)
-  const customTags = new Set(Object.keys(config.rules?.customTags ?? {}))
+  const customTags = new Set(Object.keys(mpTarget?.rules?.customTags ?? {}))
   // ★#496 语义编译标签（仅页面——产物层展开为 flex 档位容器，不注入 usingComponents；组件模板保留运行时组件需注册）
   // ★#505 M3 批 3：语义跳过须与编译侧规则状态一致——fluid/semantic-grid 被禁用时页面 p-grid 回退运行时组件
   //   （产物保留 <p-grid> 标签）→ 必须注册 usingComponents；规则启用才按语义编译跳过（防禁用后半失效产物：
   //   wxml 引用 <p-grid> 而 page.json 不注册 → MP 整块不渲染）
-  const gridRuleDisabled = (config.rules?.disabled ?? []).includes('fluid/semantic-grid')
+  const gridRuleDisabled = (mpTarget?.rules?.disabled ?? []).includes('fluid/semantic-grid')
   const semanticTags = skipSemantic && !gridRuleDisabled ? new Set(['p-grid']) : new Set()
   const used = new Set<string>()
   // 标签扫描跳过 HTML 注释块（注释里可能出现 <p-xxx> 示例文本——旧正则直接扫文本会把注释示例误当使用）
@@ -855,7 +858,7 @@ function writePageJsons(pages: PageInfo[]): void {
   }
   for (const p of pages) {
     const pageJson: Record<string, unknown> = {}
-    if (config.skyline && !matchWebviewPage(config.page?.webviewPages, p.relSrc, p.relInSub, p.mpPath)) {
+    if (isSkyline && !matchWebviewPage(mpTarget?.page?.webviewPages, p.relSrc, p.relInSub, p.mpPath)) {
       pageJson.renderer = 'skyline'
       pageJson.componentFramework = 'glass-easel' // Skyline 强制要求（真机校验：需同时设置）
     }
@@ -932,7 +935,7 @@ function writeComponentJsons(emittedComponents?: ReadonlySet<string> | null): vo
       // ★2026-09-07 Skyline 组件声明遗漏修复：页面 json 有 componentFramework: glass-easel，组件 json 此前漏加——
       //   真机/模拟器实证：p-popover 组件内 <root-portal>（官方悬浮层）无该声明不渲染（V2 无效）；
       //   补声明后组件内 portal/悬浮渲染正常（V4 绿块可见）。Skyline 下组件与页面同需该声明。
-      if (config.skyline) json.componentFramework = 'glass-easel'
+      if (isSkyline) json.componentFramework = 'glass-easel'
       // ★样式穿透（2026-08 真机实测）：默认 styleIsolation: isolated 使页面 wxss 无法作用于组件内部——
       //   <p-view class="box"> 的 class 虽被微信合并到组件根节点，但页面 .box.data-v-xxx 规则进不去 → 外层容器样式失效。
       //   apply-shared：页面样式可作用组件（等价 Vue 父组件 scoped 样式作用于子组件根节点语义）；组件 wxss 不反向影响页面。
@@ -954,16 +957,16 @@ function writeProjectConfig(): void {
   const projectName = path.basename(ROOT).replace(/[^\w.-]/g, '-')
   const projectConfig = {
     compileType: 'miniprogram',
-    appid: config.appid,
+    appid: mpTarget?.appid ?? '',
     projectname: projectName,
     // ★2026-09-09 真机复测实证：skyline 项目需 IDE 级 skylineRenderEnable 开关，否则模拟器回落 WebView
     //   （getSkylineInfoSync().isSupported=false / reason=a-b test not enabled——产物 json 声明 renderer:skyline 不够）。
     //   写入 project.config.json（非 private——private 每次重建被清，实测开关丢失后复测全是 WebView 假绿/假红）。
-    setting: { minifyWXML: true, urlCheck: false, ...(config.skyline ? { skylineRenderEnable: true } : {}) },
+    setting: { minifyWXML: true, urlCheck: false, ...(isSkyline ? { skylineRenderEnable: true } : {}) },
   }
   fs.mkdirSync(OUT_DIR, { recursive: true })
   fs.writeFileSync(path.join(OUT_DIR, 'project.config.json'), JSON.stringify(projectConfig, null, 2) + '\n')
-  console.log(`[gen-routes] 已生成 dist/mp-weixin/project.config.json（appid=${config.appid}，projectname=${projectName}）`)
+  console.log(`[gen-routes] 已生成 dist/mp-weixin/project.config.json（appid=${mpTarget?.appid ?? ''}，projectname=${projectName}）`)
 }
 
   // ---- 主流程 ----

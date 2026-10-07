@@ -1,6 +1,8 @@
 // packages/types/src/migration.ts
 // ★types-plan B6：配置版本迁移（对齐 Pinia M7.4 migrations 数组）——proteus.config.ts 声明 version，
 // 加载时 version < CONFIG_VERSION 自动跑迁移链（纯函数可测；升级/回滚友好）
+import { migrateShapeToV4 } from './config-v4-shape'
+
 export interface Migration {
   from: number
   to: number
@@ -8,8 +10,8 @@ export interface Migration {
   up: (config: Record<string, unknown>) => Record<string, unknown>
 }
 
-/** 当前配置 schema 版本（config 未声明 version 时视为 1） */
-export const CONFIG_VERSION = 3
+/** 当前配置 schema 版本（config 未声明 version 时视为 1；v4 = 按端分区模型） */
+export const CONFIG_VERSION = 4
 
 /**
  * 配置迁移注册表：from → to 链式执行。
@@ -40,6 +42,13 @@ export const configMigrations: Migration[] = [
       if (Object.keys(merged).length === 0) return c
       return Object.assign({}, c, { router: Object.assign({}, existing, merged) })
     },
+  },
+  // v3 → v4（★#641 配置模型按端分区）：平铺的小程序专属字段 → targets.mp；native.* → targets.<端>/app；
+  //   platform 二选一彻底移除（目标端真源 = CLI --target）。形状变换复用 config-v4-shape（与 resolve 同源）。
+  {
+    from: 3,
+    to: 4,
+    up: (c) => migrateShapeToV4(c, []),
   },
 ]
 

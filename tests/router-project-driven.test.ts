@@ -29,18 +29,14 @@ function makeProject(meta: Record<string, unknown>, tabBar?: { list: Array<{ nam
   fs.writeFileSync(path.join(pagesDir, 'index.vue'), '<template><view>home</view></template>\n')
   fs.writeFileSync(path.join(pagesDir, 'detail.vue'), '<template><view>detail</view></template>\n')
   const config = {
-    platform: 'mp-weixin',
-    skyline: true,
-    appid: 'wx0000000000',
+    version: 4,
+    targets: { mp: { appid: 'wx0000000000', renderer: 'skyline', setDataBridge: { batchWindow: 16, perComponent: true }, style: { px2rpx: true, rpxRatio: 2 } } },
     pagesDir: 'src/pages',
     router: {
       routesOutput: 'src/router/auto-routes.ts',
       meta,
       ...(tabBar ? { tabBar } : {}),
     },
-    customRoute: { registerPresets: true, builders: {} },
-    setDataBridge: { batchWindow: 16, perComponent: true },
-    style: { px2rpx: true, rpxRatio: 2 },
   } as unknown as ProteusConfig
   return { root, config }
 }

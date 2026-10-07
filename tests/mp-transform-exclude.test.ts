@@ -44,12 +44,10 @@ describe('resolveSharedModule 扩展名白名单（MP 资源排除）', () => {
 describe('G-42/官网 webOnly 页面（gen-routes 端到端）', () => {
   function makeConfig(extra: Partial<ProteusConfig> = {}): ProteusConfig {
     return {
-      platform: 'mp-weixin',
-      appid: 'wx0000000000',
+      version: 4,
+      targets: { mp: { appid: 'wx0000000000', renderer: 'skyline', style: { px2rpx: true, rpxRatio: 2 } } },
       pagesDir: 'src/pages',
-      routesOutput: 'src/router/auto-routes.ts',
-      customRoute: { registerPresets: true, builders: {} },
-      style: { px2rpx: true, rpxRatio: 2 },
+      router: { routesOutput: 'src/router/auto-routes.ts', customRoute: { registerPresets: true, builders: {} } },
       ...extra,
     } as ProteusConfig
   }

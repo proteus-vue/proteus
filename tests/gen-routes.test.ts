@@ -14,19 +14,16 @@ afterAll(() => {
   fs.rmSync(TMP, { recursive: true, force: true })
 })
 
-/** 构造最小 config（指向临时工程） */
+/** 构造最小 config（指向临时工程；v4 按端分区——extra 可覆盖顶层，router 段与 base 深合并） */
 function makeConfig(extra: Partial<ProteusConfig> = {}): ProteusConfig {
+  const { router: extraRouter, ...rest } = extra
   return {
-    platform: 'mp-weixin',
-    skyline: true,
-    appid: 'wx0000000000',
+    version: 4,
+    targets: { mp: { appid: 'wx0000000000', renderer: 'skyline', setDataBridge: { batchWindow: 16, perComponent: true }, style: { px2rpx: true, rpxRatio: 2 } } },
     pagesDir: 'src/pages',
-    routesOutput: 'src/router/auto-routes.ts',
-    customRoute: { registerPresets: true, builders: {} },
-    setDataBridge: { batchWindow: 16, perComponent: true },
-    style: { px2rpx: true, rpxRatio: 2 },
-    ...extra,
-  }
+    router: { routesOutput: 'src/router/auto-routes.ts', customRoute: { registerPresets: true, builders: {} }, ...extraRouter },
+    ...rest,
+  } as ProteusConfig
 }
 
 function writeFixture(dir: string, rel: string, content: string): string {
@@ -70,7 +67,7 @@ describe('runGenRoutes：路由表生成全链路', () => {
     writeFixture(root, 'src/pages/index.vue', `<template><view>首页</view></template>\n<route>\n{\n  "meta": { "title": "首页", "isTab": true }\n}\n</route>\n`)
     writeFixture(root, 'src/subpackages/order/pages/list.vue', `<template><view>订单</view></template>\n<route>\n{\n  "meta": { "title": "订单列表" }\n}\n</route>\n`)
 
-    runGenRoutes({ config: makeConfig({ subPackages: [{ root: 'src/subpackages/order', name: 'order' }] }), root })
+    runGenRoutes({ config: makeConfig({ router: { subPackages: [{ root: 'src/subpackages/order', name: 'order' }] } }), root })
 
     const appJson = JSON.parse(fs.readFileSync(path.join(root, 'dist/mp-weixin/app.json'), 'utf-8'))
     expect(appJson.pages).toEqual(['pages/index'])
@@ -91,7 +88,7 @@ describe('runGenRoutes：路由表生成全链路', () => {
       { name: 'common', chunk: 'common' },
     ]
     runGenRoutes({
-      config: makeConfig({ subPackages: [{ root: 'src/subpackages/trade', name: 'trade' }, { root: 'src/subpackages/user', name: 'user' }] }),
+      config: makeConfig({ router: { subPackages: [{ root: 'src/subpackages/trade', name: 'trade' }, { root: 'src/subpackages/user', name: 'user' }] } }),
       root,
       moduleConfigs,
     })
@@ -137,7 +134,7 @@ describe('runGenRoutes：路由表生成全链路', () => {
 
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     try {
-      runGenRoutes({ config: makeConfig({ subPackages: [{ root: 'src/subpackages/trade', name: 'trade' }] }), root })
+      runGenRoutes({ config: makeConfig({ router: { subPackages: [{ root: 'src/subpackages/trade', name: 'trade' }] } }), root })
       // list.vue chunk=trade 与分包名对齐 → 不警告；detail.vue chunk=user 不一致 → 警告
       expect(warnSpy.mock.calls.some((c) => c[0].includes('chunk') && c[0].includes('user') && c[0].includes('不一致'))).toBe(true)
     } finally {
@@ -146,7 +143,7 @@ describe('runGenRoutes：路由表生成全链路', () => {
 
     // 非法 chunk（非 kebab-case）→ 报错
     writeFixture(root, 'src/subpackages/trade/pages/bad.vue', `<template><view>x</view></template>\n<route>\n{\n  "meta": {},\n  "chunk": "Trade!"\n}\n</route>\n`)
-    expect(() => runGenRoutes({ config: makeConfig({ subPackages: [{ root: 'src/subpackages/trade', name: 'trade' }] }), root })).toThrow(/kebab-case/)
+    expect(() => runGenRoutes({ config: makeConfig({ router: { subPackages: [{ root: 'src/subpackages/trade', name: 'trade' }] } }), root })).toThrow(/kebab-case/)
   })
 
   it('★决策 #113 集中式 meta：页面零 <route> 声明也收录，meta 从 config router.meta 注入（精确路径 > 目录前缀）', () => {
@@ -238,7 +235,7 @@ describe('runGenRoutes：路由表生成全链路', () => {
     //   wxml 引用 <p-grid> 而 page.json 不注册 = MP 整块不渲染（半失效产物）；修复后与编译侧规则状态一致
     const rootOff = path.join(TMP, 'grid-off')
     writeFixture(rootOff, 'src/pages/index.vue', gridTpl)
-    runGenRoutes({ config: makeConfig({ rules: { disabled: ['fluid/semantic-grid'] } }), root: rootOff, componentsDir: FW })
+    runGenRoutes({ config: makeConfig({ targets: { mp: { appid: 'wx0000000000', renderer: 'skyline', rules: { disabled: ['fluid/semantic-grid'] } } } }), root: rootOff, componentsDir: FW })
     const pageJsonOff = JSON.parse(fs.readFileSync(path.join(rootOff, 'dist/mp-weixin/pages/index.json'), 'utf-8'))
     expect(pageJsonOff.usingComponents?.['p-grid']).toBe('/proteus/p-grid/index')
   })
@@ -292,7 +289,7 @@ describe('★Skyline iOS 白屏兜底：page.webviewPages 页面级 WebView 降�
     writeFixture(dir, 'src/pages/home.vue', '<template><div>home</div></template>')
     writeFixture(dir, 'src/pages/detail.vue', '<template><div>detail</div></template>')
     runGenRoutes({
-      config: makeConfig({ page: { autoScrollContainer: true, webviewPages: ['home'] } }),
+      config: makeConfig({ targets: { mp: { appid: 'wx0000000000', renderer: 'skyline', page: { autoScrollContainer: true, webviewPages: ['home'] } } } }),
       root: dir,
     })
     const homeJson = JSON.parse(fs.readFileSync(path.join(dir, 'dist/mp-weixin/pages/home.json'), 'utf-8'))
@@ -348,7 +345,7 @@ describe('★runGenRoutes：routesOutput 显式关闭', () => {
   it("routesOutput: '' → 不生成路由表（工程自带路由机制）", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-genroutes-off-'))
     writeFixture(dir, 'src/pages/index.vue', '<template><div>home</div></template>')
-    runGenRoutes({ config: makeConfig({ routesOutput: '' }), root: dir, webOnly: true })
+    runGenRoutes({ config: makeConfig({ router: { routesOutput: '' } }), root: dir, webOnly: true })
     expect(fs.existsSync(path.join(dir, 'src/router/auto-routes.ts')), "★routesOutput 为空时不得生成路由表").toBe(false)
     fs.rmSync(dir, { recursive: true, force: true })
   })

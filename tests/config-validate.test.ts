@@ -1,5 +1,6 @@
 // tests/config-validate.test.ts
 // ★types-plan B5：validateConfig（错误码/路径定位）+ config:check CLI（TS 配置加载 + 校验）
+// ★v4（决策 #641）：校验对象 = 归一后的按端分区形态（targets.{web,mp,ios,android,harmony}）
 import { describe, it, expect, afterAll } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
@@ -13,17 +14,19 @@ afterAll(() => {
 })
 
 const VALID = {
-  platform: 'mp-weixin',
-  skyline: true,
-  appid: 'wx0000000000',
+  version: 4,
+  targets: {
+    mp: {
+      appid: 'wx0000000000',
+      renderer: 'skyline',
+      setDataBridge: { batchWindow: 16, perComponent: true },
+      style: { px2rpx: true, rpxRatio: 2 },
+    },
+    ios: { bundleId: 'com.demo.app' },
+  },
   pagesDir: 'pages',
-  routesOutput: 'router/auto-routes.ts',
-  subPackages: [{ root: 'subpackages/order', name: 'order' }],
-  customRoute: { registerPresets: true, builders: {} },
-  setDataBridge: { batchWindow: 16, perComponent: true },
-  style: { px2rpx: true, rpxRatio: 2 },
+  router: { routesOutput: 'router/auto-routes.ts', subPackages: [{ root: 'subpackages/order', name: 'order' }], customRoute: { registerPresets: true, builders: {} }, meta: { user: { requiresAuth: true } } },
   budget: { mainPackageKB: 1200, strict: false },
-  router: { meta: { user: { requiresAuth: true } } },
 }
 
 describe('validateConfig（types-plan B5）', () => {
@@ -40,23 +43,41 @@ describe('validateConfig（types-plan B5）', () => {
     }
   })
 
-  it('类型错误 → CONFIG_INVALID_TYPE；非法枚举 → CONFIG_INVALID_ENUM', () => {
-    const t = validateConfig({ ...VALID, skyline: 'yes' })
+  it('目标端类型错误 → CONFIG_INVALID_TYPE；renderer 非法枚举 → CONFIG_INVALID_ENUM', () => {
+    const t = validateConfig({ ...VALID, targets: { ...VALID.targets, mp: { ...VALID.targets.mp, renderer: 'glass' } } })
     expect(t.ok).toBe(false)
-    if (!t.ok) expect(t.errors.some((e) => e.code === 'CONFIG_INVALID_TYPE' && e.path === 'skyline')).toBe(true)
-    const en = validateConfig({ ...VALID, platform: 'h5' })
-    if (!en.ok) expect(en.errors.some((e) => e.code === 'CONFIG_INVALID_ENUM' && e.path === 'platform')).toBe(true)
+    if (!t.ok) expect(t.errors.some((e) => e.code === 'CONFIG_INVALID_ENUM' && e.path === 'targets.mp.renderer')).toBe(true)
+    const t2 = validateConfig({ ...VALID, targets: { mp: 'yes' } })
+    if (!t2.ok) expect(t2.errors.some((e) => e.code === 'CONFIG_INVALID_TYPE' && e.path === 'targets.mp')).toBe(true)
   })
 
-  it('未知字段（拼写错误）→ CONFIG_UNKNOWN_FIELD', () => {
+  it('targets 为空 / 缺 targets → 报错', () => {
+    const r = validateConfig({ ...VALID, targets: {} })
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.errors.some((e) => e.path === 'targets')).toBe(true)
+  })
+
+  it('目标端 mp 缺 appid → CONFIG_MISSING_REQUIRED', () => {
+    const r = validateConfig({ ...VALID, targets: { mp: {} } })
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.errors.some((e) => e.path === 'targets.mp.appid')).toBe(true)
+  })
+
+  it('未知顶层字段（拼写错误）→ CONFIG_UNKNOWN_FIELD', () => {
     const r = validateConfig({ ...VALID, pagsDir: 'pages' })
     expect(r.ok).toBe(false)
     if (!r.ok) expect(r.errors.some((e) => e.code === 'CONFIG_UNKNOWN_FIELD' && e.path === 'pagsDir')).toBe(true)
   })
 
-  it('subPackages 非法项 → CONFIG_INVALID_TYPE 定位下标', () => {
-    const r = validateConfig({ ...VALID, subPackages: [{ root: 123 }] })
-    if (!r.ok) expect(r.errors.some((e) => e.path === 'subPackages[0].root')).toBe(true)
+  it('未知目标端键 → CONFIG_UNKNOWN_FIELD', () => {
+    const r = validateConfig({ ...VALID, targets: { ...VALID.targets, flutter: { output: 'dist' } } })
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.errors.some((e) => e.code === 'CONFIG_UNKNOWN_FIELD' && e.path === 'targets.flutter')).toBe(true)
+  })
+
+  it('router.subPackages 非法项 → CONFIG_INVALID_TYPE 定位下标', () => {
+    const r = validateConfig({ ...VALID, router: { ...VALID.router, subPackages: [{ root: 123 }] } })
+    if (!r.ok) expect(r.errors.some((e) => e.path === 'router.subPackages[0].root')).toBe(true)
   })
 
   it('非对象根 → CONFIG_INVALID_ROOT', () => {
@@ -139,12 +160,22 @@ describe('config:check CLI（TS 配置加载 + 校验报告）', () => {
     expect(result.ok, text).toBe(true)
   })
 
+  it('v3 旧形态配置 → 归一迁移后通过（不因旧字段报未知）', async () => {
+    const old = path.join(TMP, 'old.config.ts')
+    fs.writeFileSync(
+      old,
+      `export default { platform: 'mp-weixin', skyline: true, appid: 'wx0000000000', pagesDir: 'pages', routesOutput: 'router/auto-routes.ts', customRoute: { registerPresets: true, builders: {} }, setDataBridge: { batchWindow: 16, perComponent: true }, style: { px2rpx: true, rpxRatio: 2 } }\n`,
+    )
+    const { result, text } = await checkConfigFile(old)
+    expect(result.ok, text).toBe(true)
+  })
+
   it('非法配置文件 → 错误报告（缺字段 + 未知字段）', async () => {
     const bad = path.join(TMP, 'bad.config.ts')
-    fs.writeFileSync(bad, `export default { platform: 'mp-weixin', pagesDir: 'pages', unknownField: 1 }\n`)
+    fs.writeFileSync(bad, `export default { targets: { mp: {} }, pagesDir: 'pages', unknownField: 1 }\n`)
     const { result, text } = await checkConfigFile(bad)
     expect(result.ok).toBe(false)
-    expect(text).toContain('[CONFIG_MISSING_REQUIRED]')
+    expect(text).toContain('[CONFIG_MISSING_REQUIRED]') // 缺 pagesDir
     expect(text).toContain('unknownField')
   })
 

@@ -172,8 +172,12 @@ export async function resolveProteusViteConfig(
   config: ProteusConfig,
 ): Promise<ProteusViteResult> {
   const { root, command, mode } = ctx
-  const platform = mode === 'mp-weixin' || mode === 'web' ? (mode as 'web' | 'mp-weixin') : (config.platform as 'web' | 'mp-weixin')
+  // ★v4（决策 #641）：目标端真源 = vite mode（web/mp-weixin，由 CLI --target 映射）；不再读 config.platform
+  const platform = mode === 'mp-weixin' ? 'mp-weixin' : 'web'
   const isMp = platform === 'mp-weixin'
+  // 小程序专属配置在 targets.mp（原顶层 skyline/profileBoundary）
+  const mpTarget = config.targets?.mp
+  const mpSkyline = (mpTarget?.renderer ?? 'skyline') === 'skyline'
   const isDebug = process.env.PROTEUS_DEBUG === '1'
 
   /** ★VC2-b 存量基线路径（棘轮：只减不增）——**项目根下、入库**（`.proteus/` 是 gitignore 的本地目录，
@@ -186,7 +190,7 @@ export async function resolveProteusViteConfig(
   if (isMp) {
     // ★组件库已拆包（2026-09-14）：不再传 frameworkComponentsDir——mpTransform 自行从 node_modules 解析包根
     plugins = [
-      profileBoundaryPlugin({ level: config.profileBoundary?.level, baselinePath: boundaryBaselinePath }),
+      profileBoundaryPlugin({ level: mpTarget?.profileBoundary?.level, baselinePath: boundaryBaselinePath }),
       // ★G-61 B4（P6）：CSE lint 在 MP 与 Web 两条链都跑（同判据——防 Web 通过而 App 失败）
       cseLintPlugin({ target: 'skyline', baselinePath: cseLintBaselinePath }),
       virtualMpEntryPlugin(),
@@ -211,7 +215,7 @@ export async function resolveProteusViteConfig(
     //   配套：业务需在入口调 installFluidLayout(app) 注册 v-p-fluid 指令（@proteus-vue/components）。
     plugins = [
       // ★VC2-b：Profile 边界校验（Web 端**同样执行**——卡片硬性要求，防"问题延迟到 App 端暴露"）
-      profileBoundaryPlugin({ level: config.profileBoundary?.level, baselinePath: boundaryBaselinePath }),
+      profileBoundaryPlugin({ level: mpTarget?.profileBoundary?.level, baselinePath: boundaryBaselinePath }),
       // ★★★G-61 B4（P6）：CSE lint（语义级）——Profile 外写法在 Web 端也报错
       //   （同判据：E-CSS-004/005/006 + W-CSS-101/102/103；与上面的字符串级校验互补）
       cseLintPlugin({ target: 'web', baselinePath: cseLintBaselinePath }),
@@ -231,8 +235,8 @@ export async function resolveProteusViteConfig(
     define: {
       // devtools 打通：dev serve 默认开启可观测；build 默认关闭零开销；PROTEUS_DEBUG=1 强制生产调试
       __PROTEUS_DEBUG__: command === 'serve' || isDebug,
-      // Skyline 开关注入：mp 构建时 __PROTEUS_SKYLINE__ = config.skyline
-      __PROTEUS_SKYLINE__: isMp && config.skyline,
+      // Skyline 开关注入：mp 构建时 __PROTEUS_SKYLINE__ = targets.mp.renderer === 'skyline'
+      __PROTEUS_SKYLINE__: isMp && mpSkyline,
       // ★平台编译期宏（条件显隐）——Web 端 .vue 走标准 @vitejs/plugin-vue：**vite define 对 .vue 不生效**
       //   （实测：模板表达式/script 内 __MP__ 残留），故 Web 端由 platformMacroPlugin（enforce:'pre'
       //   源码替换）处理，见 plugins。这里仍保留 define 供**非 .vue 的 .ts/.js 模块**使用（同源取值）。

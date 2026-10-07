@@ -71,14 +71,10 @@ describe('--trace-router 闭环（嵌套推导决策链）', () => {
     try {
       runGenRoutes({
         config: {
-          platform: 'mp-weixin',
-          skyline: true,
-          appid: 'wx0000000000',
+          version: 4,
+          targets: { mp: { appid: 'wx0000000000', renderer: 'skyline', setDataBridge: { batchWindow: 16, perComponent: true }, style: { px2rpx: true, rpxRatio: 2 } } },
           pagesDir: 'src/pages',
-          routesOutput: 'src/router/auto-routes.ts',
-          customRoute: { registerPresets: true, builders: {} },
-          setDataBridge: { batchWindow: 16, perComponent: true },
-          style: { px2rpx: true, rpxRatio: 2 },
+          router: { routesOutput: 'src/router/auto-routes.ts', customRoute: { registerPresets: true, builders: {} } },
         },
         root: tmp,
         trace: (msg) => logs.push(msg),

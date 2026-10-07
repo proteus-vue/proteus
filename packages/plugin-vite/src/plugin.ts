@@ -732,10 +732,10 @@ async function loadPresetBuilders(
 export interface PluginOptions {
   /** ★拆包步骤 5：完整 ProteusConfig（由 vite.config 从项目 proteus.config.ts 注入） */
   config: ProteusConfig
-  /** 样式换算（缺省取 config.style.px2rpx） */
+  /** 样式换算（缺省取 config.targets.mp.style.px2rpx） */
   px2rpx?: boolean
   rpxRatio?: number
-  /** ★底线循环 ①③：规则覆盖（缺省取 config.rules） */
+  /** ★底线循环 ①③：规则覆盖（缺省取 config.targets.mp.rules） */
   rules?: TransformRuleOverrides
   /**
    * ★语义组件库目录（@proteus-vue/components，2026-09-14 拆包）：**通常无需传入**——
@@ -849,15 +849,17 @@ function resolveEffectiveSubPackages(cfg: ProteusConfig): Array<{ root: string; 
 
 export default function mpTransform(opts: PluginOptions): Plugin {
   const cfg = opts.config
+  // ★v4（决策 #641）：小程序专属字段在 targets.mp（原顶层 style/rules/page/skyline/globalStyle）
+  const mpTarget = cfg.targets?.mp
   const effectiveSubPackages = resolveEffectiveSubPackages(cfg)
-  const px2rpx = opts.px2rpx ?? cfg.style.px2rpx
-  const rpxRatio = opts.rpxRatio ?? cfg.style.rpxRatio
-  const rules = opts.rules ?? cfg.rules
+  const px2rpx = opts.px2rpx ?? mpTarget?.style?.px2rpx ?? true
+  const rpxRatio = opts.rpxRatio ?? mpTarget?.style?.rpxRatio ?? 2
+  const rules = opts.rules ?? mpTarget?.rules
   // ★15-page-scroll-container：页面自动包滚动容器开关（默认 true）
-  const autoScrollContainer = cfg.page?.autoScrollContainer ?? true
-  // ★平台化薄接缝：从 config.skyline 派生 MP 渲染引擎（skyline=→skyline；未开 skyline/webview=→webview）；
+  const autoScrollContainer = mpTarget?.page?.autoScrollContainer ?? true
+  // ★平台化薄接缝：从 targets.mp.renderer 派生 MP 渲染引擎（'skyline'→skyline；'webview'→webview）；
   //   下钻编译器关 Skyline-only 特判 + 纳入缓存 key（防止同源码跨渲染引擎命中错误缓存）
-  const renderer = cfg.skyline ? ('skyline' as const) : ('webview' as const)
+  const renderer = (mpTarget?.renderer ?? 'skyline') === 'skyline' ? ('skyline' as const) : ('webview' as const)
   // ★G-22 柔性布局：p-fluid 编译期 clamp 生成参数（proteus.config.layout，构建期配置）
   const fluidLayout = cfg.layout ? { designWidth: cfg.layout.designWidth, viewport: cfg.layout.fluidViewport } : undefined
   const isDebug = process.env.PROTEUS_DEBUG === '1'
@@ -1003,11 +1005,11 @@ export default function mpTransform(opts: PluginOptions): Plugin {
         this.emitFile({ type: 'asset', fileName: 'app.js', source: appJs })
         console.log(`[mp-transform] app.js 已直出（${isDebug ? 'debug' : '正式'}），内置预设：${presets.map((p) => p.name).join('/') || '无'}${appUsesStore ? '，Pinia 已安装' : ''}`)
       }
-      // ★app.wxss 全局样式（MP 唯一全局样式通道）：config.globalStyle 显式指定，或探测
+      // ★app.wxss 全局样式（MP 唯一全局样式通道）：targets.mp.globalStyle 显式指定，或探测
       //   应用目录/根目录的 app.wxss → 编译（px→rpx）后产出产物根 app.wxss（微信自动全局生效）。
       //   用途：设计 token（CSS 变量）+ 全局重置——页面级 wxss 各自 scoped，变量无法跨页继承，故需全局通道。
       {
-        const explicit = cfg.globalStyle ? path.resolve(projectRoot, cfg.globalStyle) : undefined
+        const explicit = mpTarget?.globalStyle ? path.resolve(projectRoot, mpTarget.globalStyle) : undefined
         const candidates = [
           explicit,
           path.join(appDir, 'app.wxss'),
@@ -1019,7 +1021,7 @@ export default function mpTransform(opts: PluginOptions): Plugin {
           // ★`:root` → `page`：源文件写标准 CSS（:root，Web 标准），小程序 WXSS 的根选择器是 `page`
           //   （WXSS 不支持 :root，微信会告警且不生效）——构建期改写，保持设计 token 单一事实源。
           const normalized = rewriteRootToPage(raw)
-          const wxss = transformStyleToWxss(normalized, { px2rpx: cfg.style?.px2rpx ?? true, rpxRatio: cfg.style?.rpxRatio ?? 2, rules: cfg.rules })
+          const wxss = transformStyleToWxss(normalized, { px2rpx, rpxRatio, rules })
           this.emitFile({ type: 'asset', fileName: 'app.wxss', source: wxss })
           console.log(`[mp-transform] app.wxss 已产出（${path.relative(projectRoot, globalStylePath).replace(/\\/g, '/')}——全局设计 token/重置，:root→page）`)
         }
@@ -1230,7 +1232,7 @@ export default function mpTransform(opts: PluginOptions): Plugin {
         let code = ''
         let bundleHit = false
         if (bundleCacheEnabled) {
-          const bKey = bundleCacheKey(sharedFile, projectRoot) + `-sky${cfg.skyline ? 1 : 0}` // ★#495c define 输入纳入缓存键（skyline 切换防 stale）
+          const bKey = bundleCacheKey(sharedFile, projectRoot) + `-sky${renderer === 'skyline' ? 1 : 0}` // ★#495c define 输入纳入缓存键（skyline 切换防 stale）
           const cachedBundle = bundleCache.get(bKey)
           if (cachedBundle) {
             code = cachedBundle.output
@@ -1271,7 +1273,7 @@ export default function mpTransform(opts: PluginOptions): Plugin {
             //   与 vite 路径 `{ ...framework, ...user }` 语义一致）。
             define: {
               __PROTEUS_DEBUG__: isDebug ? 'true' : 'false',
-              __PROTEUS_SKYLINE__: cfg.skyline ? 'true' : 'false',
+              __PROTEUS_SKYLINE__: renderer === 'skyline' ? 'true' : 'false',
               // ★平台编译期宏（条件显隐）：MP 共享 .ts 模块脚本内的 __MP__/__WEB__/__TARGET__ 在此替换
               ...platformDefines('mp'),
               'process.env.NODE_ENV': isDebug ? '"development"' : '"production"',
@@ -1412,9 +1414,9 @@ export default function mpTransform(opts: PluginOptions): Plugin {
             throw new Error(`[mp-transform] G-29.1 双编译语义不等价：${rel}\n  ${v.details.join('\n  ')}（${v.reason}）——产物未生成；config.compiler.backend 改回 'node' 可降级`)
           }
         }
-        // ★Skyline iOS 白屏兜底（页面级通道）：该页在 page.webviewPages → 强制 webview 渲染
+        // ★Skyline iOS 白屏兜底（页面级通道）：该页在 targets.mp.page.webviewPages → 强制 webview 渲染
         //   （产物 page.json 无 renderer:skyline + 编译器关 Skyline-only 特判/降级不一致）
-        const pageRenderer = !isComponent && matchWebviewPage(cfg.page?.webviewPages, rel) ? ('webview' as const) : renderer
+        const pageRenderer = !isComponent && matchWebviewPage(mpTarget?.page?.webviewPages, rel) ? ('webview' as const) : renderer
         // ★build-plan M8：编译缓存（PROTEUS_NO_CACHE=1 关闭；debug 构建跳过——sourcemap/行号注入与缓存互斥）
         const cacheEnabled = !process.env.PROTEUS_NO_CACHE && !isDebug
         let wxml: string
