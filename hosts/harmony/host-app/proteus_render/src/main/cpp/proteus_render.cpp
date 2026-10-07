@@ -24,6 +24,7 @@
 #include <cstdint>
 #include <cmath>
 #include <cstdio>
+#include <array>   // ★★★批 A：fixed 节点登记表 {baseX, baseY, node}
 #include <vector>
 #include <hilog/log.h>
 
@@ -146,6 +147,10 @@ static bool jsonNum(const char* s, const char* key, double* out) {
  */
 static ArkUI_NodeHandle g_rootHost = nullptr;
 static ArkUI_RenderNodeHandle g_rootNode = nullptr;
+/// ★★★批 A（2026-10-08 · 决策 #654）：**position:fixed 节点登记表** {baseX, baseY, node}。
+///   扁平建树（每节点绝对 SetPosition 挂 g_rootNode）；滚动 = 平移 g_rootNode（-y）。
+///   ⇒ fixed 节点须在 scrollRoot 时把自身 y 加回 +y（净位移 0 ⇒ 钉在视口）。ClearRoot 时清。
+static std::vector<std::array<double, 3>> g_fixedNodes;   // {baseX, baseY, (double)(intptr_t)node}
 
 /**
  * ★★**已建通道真源表**（2026-10-03 · 三端打通绘制通道）——`probeChannels` 回读它。
@@ -1019,6 +1024,8 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
         }
         OH_ArkUI_RenderNodeUtils_SetSize(node, static_cast<int32_t>(w), static_cast<int32_t>(h));
         OH_ArkUI_RenderNodeUtils_SetPosition(node, static_cast<int32_t>(x), static_cast<int32_t>(y));
+        // ★★★批 A：position:fixed ⇒ 登记（scrollRoot 时补偿滚动，钉在视口）
+        { std::string posV; if (jsonString(it, "position", &posV) && posV == "fixed") g_fixedNodes.push_back({x, y, (double)(intptr_t)node}); }
         // ★★★静态变换 + **父 transform 级联**（2026-10-08 · effects D 案）：把祖先链的绝对仿射合成进
         //   本节点矩阵——宿主扁平建树不级联，CSS 却要求子树随父变换（含文本）。合成公式：
         //     C_lin = Aa_lin·Lo_lin ;  C_t = Aa_lin·(Pc + Lo_t) + Aa_t − Pc
@@ -1797,6 +1804,7 @@ static napi_value GestureSample(napi_env env, napi_callback_info info) {
 /** clearRoot(): number —— 清空根的所有子节点（重建内容前调用；返回剩余子节点数） */
 static napi_value ClearRoot(napi_env env, napi_callback_info info) {
     (void)info;
+    g_fixedNodes.clear();   // ★★★批 A：重建内容 ⇒ 清 fixed 登记（旧句柄失效）
     if (g_rootNode != nullptr) {
         OH_ArkUI_RenderNodeUtils_ClearChildren(g_rootNode);
     }
@@ -1825,6 +1833,11 @@ static napi_value ScrollRoot(napi_env env, napi_callback_info info) {
     int32_t rc = -1;
     if (g_rootNode != nullptr) {
         rc = OH_ArkUI_RenderNodeUtils_SetPosition(g_rootNode, 0, (int32_t)(-y * g_density));
+        // ★★★批 A：fixed 节点把滚动加回自身（净位移 0 ⇒ 不随内容滚动；见 g_fixedNodes 注释）
+        for (auto& fn : g_fixedNodes) {
+            ArkUI_RenderNodeHandle fnode = (ArkUI_RenderNodeHandle)(intptr_t)fn[2];
+            if (fnode != nullptr) OH_ArkUI_RenderNodeUtils_SetPosition(fnode, (int32_t)fn[0], (int32_t)(fn[1] + y * g_density));
+        }
     }
     napi_value out;
     napi_create_int32(env, rc, &out);
