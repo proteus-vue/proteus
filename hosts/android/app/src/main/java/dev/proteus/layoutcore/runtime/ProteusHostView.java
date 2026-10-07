@@ -2315,6 +2315,24 @@ public class ProteusHostView extends ViewGroup {
         }
     }
 
+    /// ★★★线性渐变端点（像素空间 · CSS 规范式 · 2026-10-08 修）：
+    ///   **渐变线长度 = |w·sinθ| + |h·cosθ|**（起始角→结束角的投影跨度）；旧式 `hypot(w·sinθ,h·cosθ)`
+    ///   只在 0/90/180/270 与 CSS 一致——对角角度下渐变线偏短 ⇒ 色带偏粗（45° 正方砖实色占比 0.42 vs CSS 0.25；
+    ///   用户实测「案例 C 与 Web 有差异」）。★与 TS `linearGradientEndpoints` / iOS `linearEndpoints` /
+    ///   鸿蒙 `gradEndpoints` **同式**（一处语义多处实现，须同改）。返回 `[x0,y0,x1,y1]`（画布绝对坐标）。
+    static float[] linearGradientEndpoints(float angleDeg, float x, float y, float w, float h) {
+        if (!(w > 0f)) w = 1f;
+        if (!(h > 0f)) h = 1f;
+        final double rad = Math.toRadians(angleDeg);
+        final float s = (float) Math.sin(rad);
+        final float uy = (float) -Math.cos(rad);
+        final float L = Math.abs(w * s) + Math.abs(h * uy);
+        return new float[]{
+                x + 0.5f * w - (L * s) / 2f, y + 0.5f * h - (L * uy) / 2f,
+                x + 0.5f * w + (L * s) / 2f, y + 0.5f * h + (L * uy) / 2f,
+        };
+    }
+
     public void drawCmds(Canvas canvas) {
         // ★单次遍历下发全部指令（无 View 树、无递归 measure/layout）
         final List<Cmd> list = cmds;
@@ -2475,12 +2493,9 @@ public class ProteusHostView extends ViewGroup {
                 final boolean geoOk = Float.isFinite(tg.geo[0]) && Float.isFinite(tg.geo[1])
                         && Float.isFinite(tg.geo[2]) && Float.isFinite(tg.geo[3]);
                 if (tg.kind == 1 && c.gradient != null && geoOk) {
-                    final double rad = Math.toRadians(tg.geo[0]);
-                    final float dx = (float) Math.sin(rad);
-                    final float dy = (float) -Math.cos(rad);
+                    final float[] ep = linearGradientEndpoints(tg.geo[0], c.x, c.y, c.w, c.h);
                     gradShader = new android.graphics.LinearGradient(
-                            c.x + (0.5f - dx / 2f) * c.w, c.y + (0.5f - dy / 2f) * c.h,
-                            c.x + (0.5f + dx / 2f) * c.w, c.y + (0.5f + dy / 2f) * c.h,
+                            ep[0], ep[1], ep[2], ep[3],
                             java.util.Arrays.copyOf(tg.colors, tg.n), java.util.Arrays.copyOf(tg.offsets, tg.n),
                             android.graphics.Shader.TileMode.CLAMP);
                 } else if (tg.kind == 2 && c.gradient != null && geoOk && tg.geo[3] > 0f) {
@@ -2519,12 +2534,9 @@ public class ProteusHostView extends ViewGroup {
                         // I2-ALLOW: **装饰纹理**栅格化的浮点换算（非几何舍入——砖尺寸已由内核几何给出，
                         //   此处只是把渐变端点按砖盒换算；与 non-repeat 路径同式）
                         if (g.kind == 1) {
-                            final double rad = Math.toRadians(g.angleDeg);
-                            final float dx = (float) Math.sin(rad);
-                            final float dy = (float) -Math.cos(rad);
+                            final float[] ep = linearGradientEndpoints(g.angleDeg, 0f, 0f, tw, th);
                             tp.setShader(new android.graphics.LinearGradient(
-                                    tw * (0.5f - dx / 2f), th * (0.5f - dy / 2f),
-                                    tw * (0.5f + dx / 2f), th * (0.5f + dy / 2f),
+                                    ep[0], ep[1], ep[2], ep[3],
                                     g.colors, g.offsets, android.graphics.Shader.TileMode.CLAMP));
                         } else if (g.kind == 2 && g.r > 0f) {
                             tp.setShader(new android.graphics.RadialGradient(
@@ -2542,16 +2554,8 @@ public class ProteusHostView extends ViewGroup {
                         gradShader = bs;
                     }
                 } else if (g.kind == 1) {
-                    final double rad = Math.toRadians(g.angleDeg);
-                    // I2-ALLOW: **非几何舍入**——渐变端点（绘制效果参数）的浮点换算；
-                    //   内核只管矩形几何（已吸附），渐变是宿主绘制属性（与 borderRadius 同层）。
-                    final float dx = (float) Math.sin(rad);
-                    final float dy = (float) -Math.cos(rad);
-                    final float ex0 = ib[0] + (0.5f - dx / 2f) * ib[2];
-                    final float ey0 = ib[1] + (0.5f - dy / 2f) * ib[3];
-                    final float ex1 = ib[0] + (0.5f + dx / 2f) * ib[2];
-                    final float ey1 = ib[1] + (0.5f + dy / 2f) * ib[3];
-                    gradShader = new android.graphics.LinearGradient(ex0, ey0, ex1, ey1, g.colors, g.offsets, android.graphics.Shader.TileMode.CLAMP);
+                    final float[] ep = linearGradientEndpoints(g.angleDeg, ib[0], ib[1], ib[2], ib[3]);
+                    gradShader = new android.graphics.LinearGradient(ep[0], ep[1], ep[2], ep[3], g.colors, g.offsets, android.graphics.Shader.TileMode.CLAMP);
                 } else if (g.kind == 2 && g.r > 0f) {
                     gradShader = new android.graphics.RadialGradient(
                             ib[0] + g.cx * ib[2], ib[1] + g.cy * ib[3], g.r * ib[2], g.colors, g.offsets, android.graphics.Shader.TileMode.CLAMP);
@@ -3088,13 +3092,10 @@ public class ProteusHostView extends ViewGroup {
                 final float[] mpos = {rev[1], rev[3]};
                 android.graphics.Shader mshader;
                 if (mk == 1) {
-                    // 线性：沿 angle（与渐变同一套端点换算：0°=向上）
-                    final double rad = Math.toRadians(maskSpec[1]);
-                    final float dx = (float) Math.sin(rad);
-                    final float dy = (float) -Math.cos(rad);
+                    // 线性：沿 angle（与渐变同一套端点换算：0°=向上；CSS 规范式渐变线长度）
+                    final float[] mep = linearGradientEndpoints(maskSpec[1], c.x, c.y, c.w, c.h);
                     mshader = new android.graphics.LinearGradient(
-                            c.x + (0.5f - dx / 2f) * c.w, c.y + (0.5f - dy / 2f) * c.h,
-                            c.x + (0.5f + dx / 2f) * c.w, c.y + (0.5f + dy / 2f) * c.h,
+                            mep[0], mep[1], mep[2], mep[3],
                             mcols, mpos, android.graphics.Shader.TileMode.CLAMP);
                 } else {
                     // 径向：自圆心向外

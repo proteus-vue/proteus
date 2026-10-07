@@ -780,10 +780,10 @@ final class SelfDrawView: UIView {
                     gm.contentsScale = UIScreen.main.scale
                     if mkind == 1 {
                         let angle = (mk["angle"] as? Double) ?? 180
-                        let rad = angle * .pi / 180
-                        let dx = sin(rad), dy = -cos(rad)
-                        gm.startPoint = CGPoint(x: 0.5 - dx / 2, y: 0.5 - dy / 2)
-                        gm.endPoint = CGPoint(x: 0.5 + dx / 2, y: 0.5 + dy / 2)
+                        // ★同一 CSS 规范式（见 linearEndpoints）——遮罩渐变与填充渐变同轴
+                        let ep = Self.linearEndpoints(angleDeg: angle, width: Double(gm.bounds.width), height: Double(gm.bounds.height))
+                        gm.startPoint = CGPoint(x: ep.x0, y: ep.y0)
+                        gm.endPoint = CGPoint(x: ep.x1, y: ep.y1)
                         gm.type = .axial
                     } else {
                         let cx = (mk["cx"] as? Double) ?? 0.5
@@ -1700,6 +1700,22 @@ final class SelfDrawView: UIView {
     }
 
     @discardableResult
+    /// ★★★线性渐变端点（CSS 规范式 · 2026-10-08 修）：**渐变线长度 = |W·sinθ| + |H·cosθ|**
+    ///   （从起始角到结束角的投影跨度）。旧式 `hypot(W·sinθ,H·cosθ)` 只在 0/90/180/270 与 CSS 一致——
+    ///   对角角度下渐变线偏短 ⇒ 色带偏粗（45° 正方砖实色占比 0.42 vs CSS 0.25，用户实测「案例 C 与 Web 有差异」）。
+    ///   ★与 TS `linearGradientEndpoints(angle, w, h)` / Android / 鸿蒙 **同式**（一处语义多处实现，须同改）。
+    ///   ★单位空间（0..1 归一）——CAGradientLayer 的 startPoint/endPoint 语义；调用方传**像素或逻辑尺寸均可**（比值不变）。
+    static func linearEndpoints(angleDeg: Double, width: Double, height: Double)
+      -> (x0: CGFloat, y0: CGFloat, x1: CGFloat, y1: CGFloat) {
+        let rad = angleDeg * .pi / 180
+        let s = sin(rad), c = cos(rad)
+        let w = width > 0 ? width : 1
+        let h = height > 0 ? height : 1
+        let L = abs(w * s) + abs(h * c)
+        return (CGFloat(0.5 - (L / (2 * w)) * s), CGFloat(0.5 + (L / (2 * h)) * c),
+                CGFloat(0.5 + (L / (2 * w)) * s), CGFloat(0.5 - (L / (2 * h)) * c))
+    }
+
     static func applyGradient(_ layer: CAGradientLayer, spec: [String: Any], bounds: CGRect) -> Bool {
         guard let kind = spec["kind"] as? String,
               let stops = spec["stops"] as? [[String: Any]], stops.count >= 2 else { return false }
@@ -1718,12 +1734,10 @@ final class SelfDrawView: UIView {
         layer.locations = locations
         if kind == "linear" {
             guard let angle = (spec["angle"] as? Double) ?? (spec["angle"] as? CGFloat).map(Double.init) else { return false }
-            let rad = angle * .pi / 180
-            let dx = sin(rad)
-            let dy = -cos(rad)
-            // ★与 TS linearGradientEndpoints 同式（单位空间 0..1）：
-            layer.startPoint = CGPoint(x: 0.5 - dx / 2, y: 0.5 - dy / 2)
-            layer.endPoint = CGPoint(x: 0.5 + dx / 2, y: 0.5 + dy / 2)
+            // ★单位空间端点 = CSS 规范式（见 linearEndpoints；bounds 供宽高比——正方时 45°=角到角）
+            let ep = Self.linearEndpoints(angleDeg: angle, width: Double(bounds.width), height: Double(bounds.height))
+            layer.startPoint = CGPoint(x: ep.x0, y: ep.y0)
+            layer.endPoint = CGPoint(x: ep.x1, y: ep.y1)
             layer.type = .axial
         } else if kind == "radial" {
             let cx = (spec["cx"] as? Double) ?? (spec["cx"] as? CGFloat).map(Double.init) ?? 0.5
@@ -1799,11 +1813,10 @@ final class SelfDrawView: UIView {
         // ★★几何（渐变 v2 扩展——"光本身在动"）：与建树时的 `applyGradient` **同式**
         //   （线性：端点 = 中心 ± 半程方向；径向：半径 = r（start→end 距离））
         if kind == 1 {
-            let rad = Double(angle) * .pi / 180
-            let dx = sin(rad)
-            let dy = -cos(rad)
-            g.startPoint = CGPoint(x: 0.5 - dx / 2, y: 0.5 - dy / 2)
-            g.endPoint = CGPoint(x: 0.5 + dx / 2, y: 0.5 + dy / 2)
+            // ★与建树同式（CSS 规范式；节点盒尺寸 = 渐变层的 bounds）
+            let ep = Self.linearEndpoints(angleDeg: Double(angle), width: Double(g.bounds.width), height: Double(g.bounds.height))
+            g.startPoint = CGPoint(x: ep.x0, y: ep.y0)
+            g.endPoint = CGPoint(x: ep.x1, y: ep.y1)
         } else if kind == 2, r > 0 {
             g.startPoint = CGPoint(x: CGFloat(cx), y: CGFloat(cy))
             g.endPoint = CGPoint(x: CGFloat(cx) + CGFloat(r), y: CGFloat(cy))
