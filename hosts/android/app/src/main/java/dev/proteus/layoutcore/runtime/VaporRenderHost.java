@@ -45,6 +45,8 @@ public final class VaporRenderHost {
 
     /** 当前树 spec（顺序 = JS 产出顺序 = 绘制顺序） */
     private final List<JSONObject> specs = new ArrayList<>();
+    /** ★★★批 A（决策 #653）：`position:fixed` 的节点 id 集（从 spec 收集，注入视图做滚动反向补偿）。 */
+    private final java.util.Set<Integer> fixedIdsOf = new java.util.HashSet<>();
     private final Map<Integer, Integer> indexById = new HashMap<>();
     /** 绘制指令与 id → 指令下标（增量补丁用；与 JsRenderHost 同款） */
     private final List<ProteusHostView.Cmd> cmds = new ArrayList<>();
@@ -2023,6 +2025,12 @@ public final class VaporRenderHost {
             cmds.add(mkCmd(spec, r));
             cmdIdsOf.add(id);
         }
+        // ★★★批 A（决策 #653）：收集 position:fixed 节点 → 视图绘制时反向补偿内容滚动（钉在视口）
+        fixedIdsOf.clear();
+        for (int i = 0; i < specs.size(); i++) {
+            JSONObject sp = specs.get(i);
+            if ("fixed".equals(sp.optString("position", ""))) { int fid = sp.optInt("id", -1); if (fid >= 0) fixedIdsOf.add(fid); }
+        }
         lastCmdCount = cmds.size();
         pushToView();
     }
@@ -2070,6 +2078,7 @@ public final class VaporRenderHost {
             for (int i = 0; i < a.length; i++) a[i] = cmdIdsOf.get(i);
             view.setCmdNodeIds(a);
         }
+        view.setFixedNodes(fixedIdsOf);   // ★★★批 A：fixed 节点集（滚动反向补偿）
         view.invalidate();
     }
 

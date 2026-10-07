@@ -703,6 +703,13 @@ public class ProteusHostView extends ViewGroup {
      *   ⇒ 映射在宿主侧；绘制时按下标查表套变换。
      */
     private int[] cmdNodeIds = null;
+    /**
+     * ★★★批 A（2026-10-08 · 决策 #653）：**position:fixed 的节点 id 集**——绘制时反向补偿内容滚动。
+     *   语义：fixed 层**不随内容滚动**（相对视口固定）。本视图的内容滚动 = `canvas.translate(-scrollX,-scrollY)`
+     *   ⇒ fixed 节点在 drawCmds 里再 `translate(+scrollX,+scrollY)` 抵消（净位移 0 ⇒ 钉在视口）。
+     *   缺省空集 ⇒ 既有全部路径零行为变化。
+     */
+    private java.util.Set<Integer> fixedNodes = java.util.Collections.emptySet();
     /** 节点 id → [tx, ty, scale, rotate, opacity, rotateX, rotateY]（**宿主侧真源**：探针从这里读） */
     private final Map<Integer, float[]> animTx = new HashMap<>();
     /**
@@ -842,6 +849,12 @@ public class ProteusHostView extends ViewGroup {
 
     public void setCmdNodeIds(int[] ids) {
         this.cmdNodeIds = ids;
+        invalidate();
+    }
+
+    /** ★★★批 A：注入 position:fixed 的节点 id 集（绘制时反向补偿内容滚动，见 fixedNodes 注释）。 */
+    public void setFixedNodes(java.util.Set<Integer> s) {
+        this.fixedNodes = (s == null) ? java.util.Collections.emptySet() : s;
         invalidate();
     }
 
@@ -2287,7 +2300,7 @@ public class ProteusHostView extends ViewGroup {
         // ★滚动列表模式：绘制列表内容（这是**真实帧**的来源——canvas 来自窗口）
         if (listRenderer != null) {
             listRenderer.draw(canvas);
-        } else if (framePicture != null && !animatingFrame()) {
+        } else if (framePicture != null && !animatingFrame() && fixedNodes.isEmpty()) {
             // ★★★显示列表回放（2026-10-02 正式路径）：静态帧回放（2ms）替代逐条重放（8ms）。
             //   `animatingFrame` = 有逐帧覆盖（动画表中非空）时为真 ⇒ 那些帧必须走全功能 drawCmds
             //   （显示列表是**静态录制**，播不了逐帧动画）。
@@ -2439,7 +2452,10 @@ public class ProteusHostView extends ViewGroup {
             final boolean hasAncestorTx = ancIds != null;
             final boolean xf = (tf != null && (tfTx != 0f || tfTy != 0f || tf[2] != 1f || tf[3] != 0f || has3d))
                     || hasClip || ovfClip != null || hasAncestorTx;
-            final int save = xf ? canvas.save() : -1;
+            // ★★★批 A：fixed 节点反向补偿内容滚动（净位移 0 ⇒ 钉在视口；见 fixedNodes 注释）
+            final boolean isFixed = ids != null && i < ids.length && fixedNodes.contains(ids[i]);
+            final int save = (xf || isFixed) ? canvas.save() : -1;
+            if (isFixed) canvas.translate(scrollX, scrollY);
             if (ovfClip != null) canvas.clipRect(ovfClip[0], ovfClip[1], ovfClip[0] + ovfClip[2], ovfClip[1] + ovfClip[3]);
             // ★★软边遮罩（mask v1）：**saveLayer 包裹**（开层 → 画内容 → 用 DST_IN 叠渐变 → 还原）。
             //   揭示色标来自 `animMask`（内核已算好）或建树静态声明——宿主零揭示数学。
@@ -3196,7 +3212,7 @@ public class ProteusHostView extends ViewGroup {
                 maskPaint.setShader(null);
                 canvas.restoreToCount(maskLayer);
             }
-            if (xf) canvas.restoreToCount(save);
+            if (xf || isFixed) canvas.restoreToCount(save);
         }
     }
 
