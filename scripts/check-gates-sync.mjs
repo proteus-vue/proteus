@@ -77,6 +77,11 @@ const LOCAL_ONLY = {
   //   断言 Android 宿主白名单覆盖（漏登记 = 请求树不带 = 内核静默用默认——本仓已三次踩同款）。
   //   与 check:host-rounding 同族：宿主侧门禁，开发机跑（CI 无宿主构建语境）。
   'check:host-kernel-keys': '宿主侧键契约门禁（内核 ffi.rs ↔ Android 宿主白名单）——与 check:host-rounding 同族（开发机跑）',
+  // ★★★iOS styleOf 透传覆盖门禁（决策 #650）：宿主侧门禁（扫 selfdraw-scene.swift 的 styleOf 白名单 ↔ 消费键）
+  //   ——与 check:host-kernel-keys 同族（hosts/ 宿主源码，CI 无宿主语境不跑）。
+  //   ★与 check:ios-selfdraw-compile（需 Xcode）不同：本门禁是**纯静态文本扫描**（零 Xcode/零设备）——
+  //     本可入 CI，但为与 host-kernel-keys 同族语义一致（命门在宿主源码），统一归开发机 verify 链。
+  'check:ios-style-keys': 'iOS 宿主 styleOf 白名单 ↔ 消费键覆盖门禁——与 check:host-kernel-keys 同族（开发机跑；纯静态扫描，零 Xcode）',
   // ★★★内置环境变量门禁（决策 #593）：与 check:host-rounding / check:host-kernel-keys 同族（跨宿主源码 + Web 基础样式事实核对，开发机跑；需先 build-packages）
   'check:env-vars': '内置 CSS 环境变量四同步门禁（契约 + 编译器两路径 + 一致性三端 + 三端宿主 + Web 基础样式）——与 check:host-rounding 同族（开发机跑，需 dist）',
   // ★★★hosts 关注点分层门禁（2026-10-07 · 用户「宿主里项目信息与项目无关抽象混在一起」）：

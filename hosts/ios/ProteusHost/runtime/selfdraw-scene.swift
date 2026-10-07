@@ -3184,6 +3184,11 @@ final class SelfDrawView: UIView {
         if let fw = n["fontWeight"] as? CGFloat { style["fontWeight"] = fw }
         if let br = n["borderRadius"] as? Double { style["borderRadius"] = CGFloat(br) }
         if let br = n["borderRadius"] as? CGFloat { style["borderRadius"] = br }
+        // ★★★iOS styleOf 透传覆盖门禁（2026-10-08 · 决策 #650）首跑抓出：borderRadiusPct 被宿主读
+        //   （applyRadiusPct）却未透传 ⇒ border-radius:50% 在 iOS superapp 路径静默不生效
+        //   （Android 读原始 spec，故只 iOS 漏——与 clipPath/glow/mask 同款白名单漏项）。
+        if let rp = n["borderRadiusPct"] as? Double { style["borderRadiusPct"] = CGFloat(rp) }
+        if let rp = n["borderRadiusPct"] as? CGFloat { style["borderRadiusPct"] = rp }
         // ★★★边框族收口批（2026-10-05 · 子代理终评抓出的 major）：**逐角掩码必须透传**——
         //   styleOf 是建层必经之路；漏透传 ⇒ applyRadiusCorners 的 guard 读不到掩码直接 return
         //   ⇒ maskedCorners 保持缺省（全四角）+ cornerRadius>0 ⇒ 声明"仅 TL/BR"的盒画成**四角全圆**
@@ -3247,6 +3252,10 @@ final class SelfDrawView: UIView {
         //   ★抓出方式：A/B 的通道签名对照（iOS 4/5 vs Android 5/5）——**跨端对照就是这块的探针**。
         if let gl = n["glow"] as? [String: Any] { style["glow"] = gl }
         if let mk = n["mask"] as? [String: Any] { style["mask"] = mk }
+        // ★★★iOS styleOf 透传覆盖门禁（2026-10-08 · 决策 #650）首跑抓出：animation（编译期折叠的
+        //   keyframe 规格数组）被 startCssAnimations 读却未透传 ⇒ CSS animation 在 iOS superapp 路径
+        //   静默不启动（唯一启动路径读的是 styleOf 产物）。Android 读原始 spec 故不受影响。
+        if let an = n["animation"] as? [[String: Any]] { style["animation"] = an }
         return style
     }
 
@@ -5301,6 +5310,8 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             }
             if any { nodes += 1 }
         }
+        // ★机器判据（决策 #650）：CSS animation 的**节点数**——styleOf 漏透传 animation 时恒为 0
+        NSLog("[proteus] CSS_ANIM nodes=%d anims=%d", nodes, anims.count)
         guard !anims.isEmpty, let data = try? JSONSerialization.data(withJSONObject: ["anims": anims]),
               let json = String(data: data, encoding: .utf8) else { return 0 }
         _ = animStart(json)
