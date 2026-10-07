@@ -7,7 +7,7 @@ generated: true
 
 # 编译规则目录
 
-> 118 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
+> 119 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
 
 ## 模板转换（65）
 
@@ -858,7 +858,7 @@ after:  <text style="font-size: calc(15.77px + 1.1268vw)">x</text>（示意—�
 
 > why: Skyline 无 clamp 长度函数（官方支持表）——Web 端可保留真实 CSS clamp，MP 端 calc 线性替代（vw 天然随窗流式零运行时；#496 M3 实测收敛）
 
-## 脚本转换（38）
+## 脚本转换（39）
 
 ### `script/const-to-data`
 
@@ -1253,6 +1253,19 @@ after:  function onShow() { refresh()
 ```
 
 > why: 官方只有 Page({onShow}) 声明式，**没有 wx.onPageShow / wx.onPageHide 全局订阅 API**（官方文档已核实）⇒ 运行时 usePageLifecycle() 要拿事件只能靠产物派发。★上轮 MP 桥用了不存在的 wx.onPageShow ⇒ 静默失效（本规则修的是那个实缺）。副作用清单不自动补 = 不改变用户可见行为（不擅自加转发按钮/不擅自开高频 IPC）
+
+### `page/nav-global`
+
+**$nav 平台级导航全局（页面方法 $nav —— 模板 @tap="$nav(...)" 三端同一写法）**
+
+页面模式：注入 `$nav(target)` 页方法——委托全局 `$nav`（createRouter 创建时登记：name/path → router.push）；未加载则静默掠过（产物可独立运行），回退小程序原生 `wx.navigateTo`。用户已自带 `$nav` 则不覆盖
+
+```
+before: @tap="$nav('detail')"（MP 侧无页方法 $nav → 默默不导航）
+after:  bind:tap="proteusInline$navDetail" + 生成 $nav(target) 页方法（委托全局 $nav / 回退 wx.navigateTo）
+```
+
+> why: 模板 `@tap="$nav('x')"` 编译为 `bind:tap="proteusInline$navX"`，其方法体 `this.$nav(...)` ⇒ `$nav` 必须是页方法。Web（globalProperties.$nav）/ App（编译器编成 nav 动作）同写法的 MP 侧对应通道（决策 #616 的 MP 腿）
 
 ### `script/onload-params`
 

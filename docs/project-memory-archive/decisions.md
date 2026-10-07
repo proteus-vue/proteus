@@ -2002,3 +2002,11 @@
 **⑤ 接线**：website gen/check:config-ref + 根 `check:config-ref`（进 verify）+ CI + website build 前置；10-config zh+en 互链。
 **⑥ 验证**：check:config-ref 绿 + **破坏性验证**（改 JSDoc → --check 红 rc=1；还原即绿）+ website 十门禁 + 根 gates-sync/script-compile/safe-edit/deps + build:website（文案/锚点 id/TOC 进 dist）。
 **⑦ ★教训**：a) **锚点/TOC = markdown 标题驱动**（加粗伪标题不进目录——细粒度文档须把子项升为标题）；b) 文档可**生成式**消除手写漂移（TS 编译器 API 解析类型，稳于正则）；c) 生成页双语结构必须同源（否则 en-drift 红）。
+643. **★★★清掉全量测试 4 处存量红（registry-drift / golden / emoji / hmr 时序）（★用户 2026-10-08「清掉」，承 #642）**：
+**① registry-drift（真缺陷·半接线）**：`packages/compiler/src/script.ts` 用 `page/nav-global`（`$nav` 页方法 · 决策 #616 MP 腿）却未登记 transforms 注册表 ⇒ 补 AI 说明书。
+**② golden（快照陈旧）**：4 快照缺 `$nav` 助手（#616 产物增量）⇒ `-u` 重生（仅 +4 行）。
+**③ fluid-formfactor-render emoji（误报）**：`CssEngine.vue` 的 `✕`/`▼` 是文本标记（`✕`=✓ 的配对、`▼`=流程箭头）⇒ 按类收编进 ALLOW（照 `◐` 先例）。
+**④ hmr-dev-server（真·时序 flake）**：`★真实增量编译` 用例漏用 `ensureWatchActive` 预热（2026-09-19 为其余 4 个加过）⇒ 满负载 FSEvents 首投递延迟超时；接同一 helper。
+**⑤ 连带**：规则数 118→119 ⇒ compiler-ir-m5 COUNT_SNAPSHOT（重复 phase 字面量改引用常量）+ website/src/stats.ts + 重跑 gen:reference。
+**⑥ 验证**：**全量 pnpm test 5362/5362 全绿**（4 红 → 0）；hmr 连跑 3 次稳定；门禁 stats/docs/docs-stats/content/en-drift/doc-links/reference/script-compile/safe-edit/deps/gates-sync 全绿。
+**⑦ ★教训**：a) 实现加转换决策**必须同步三处**（注册表 / 快照 / 官网规则数），三条门禁各守一角；b) **flake 修法要成对**（`ensureWatchActive` 预热须随新增同类用例接入）；c) **测试里别放第二份常量**（改一漏一）。
