@@ -64,5 +64,5 @@ function handleTap() {
 
 ## Next steps
 
-- [Global & page configuration](/docs/10-config): what each of the two config layers handles
+- [Compiler & page configuration](/docs/10-config): what the compiler config and the page config each handle
 - [Semantic model](/docs/framework/11-semantic-model): understand the IR behind this set of mappings

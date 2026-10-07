@@ -32,6 +32,12 @@ export const CONFIG_FIELD_LAYERS: Record<string, ConfigLayer> = {
   audit: 'build', // ★#447 D-2 dogfooding 门禁（构建期质量门禁——audit-d2 消费，紧邻 budget 同层）
   gates: 'build', // ★#456 统一门禁开关（gates.disabled——check/audit all 聚合门禁配置）
   native: 'build', // ★#635 原生项目配置（构建期——CLI create host / build --package 渲染进原生工程文件）
+  // ★★2026-10-08 补登记（官网配置文档梳理挖出的**孤儿字段**）：以下三项在 ProteusConfig 已声明、
+  //   且有真实消费方，却一直漏登归属表 / 白名单 / schema ⇒ 项目里写了会被 config-validate 判
+  //   CONFIG_UNKNOWN_FIELD（阻断），本表也会判漏标。铁律 #5「新增字段必须补录」的存量欠账，一并收口。
+  skylineLayout: 'compiler', // Skyline 布局对齐开关（VC2-c——gen-routes 注入 page.json）
+  profileBoundary: 'compiler', // VC2-b 编译期 Profile 边界校验级别（error/warn/off——profile-boundary-plugin 消费）
+  layout: 'compiler', // G-22 柔性布局编译期 clamp 参数（designWidth/fluidViewport——p-fluid 生成）
 }
 
 /**

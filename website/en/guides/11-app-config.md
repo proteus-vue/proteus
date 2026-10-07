@@ -1,19 +1,19 @@
 ---
-title: Application config (app.config)
+title: Runtime config (app.config)
 order: 11
 group: 代码构成
 ---
 
-# Application config (app.config)
+# Runtime config (app.config)
 
-A project has **two config files** with orthogonal responsibilities (decision #211):
+A project has **two config files** with orthogonal responsibilities (decision #211) — split by **when they are consumed**:
 
 | File | Timing | What it governs | Consumers |
 |---|---|---|---|
-| `proteus.config.ts` | **Build time** | how it's built: `appid` / `skyline` / `pagesDir` / compile rules / style transforms | Compiler, CLI, Vite plugin |
-| `app.config.ts` | **Runtime** | how it behaves: app identity / API base URL / feature flags / theme & font / safe area | Business code (`useAppConfig`) |
+| `proteus.config.ts` | **Build time** (compiler config) | How it's built: appid / skyline / pagesDir / compile rules / style transforms / route scanning / native project identity | Compiler, CLI, Vite plugin |
+| `app.config.ts` | **Runtime** (runtime config) | How it behaves: app identity / API base URL / feature flags / theme & font / safe area | Business code (`useAppConfig`) |
 
-> In short: **`proteus.config` governs "how it's built"; `app.config` governs "how it behaves"**. Changing the build config means re-running `build:mp`; the runtime config can receive remote hot updates. The `AppConfig` type contract has its single source of truth in `@proteus-vue/app-config`.
+> In short: **`proteus.config` = the compiler config (frozen at build time); `app.config` = the runtime config (read at launch + optional remote hot update)**. Changing the compiler config means re-running `build:mp`; the runtime config can receive remote hot updates. The `AppConfig` type contract has its single source of truth in `@proteus-vue/app-config`.
 
 ## Definition
 
@@ -42,7 +42,7 @@ export default defineAppConfig({
   },
   theme: { default: 'system', allowUserToggle: true },
   font: { defaultScale: 1.0, allowUserAdjust: true },
-  safeArea: { islandGlass: true },
+  safeArea: { islandGlass: true, statusBar: 'show' },
 })
 ```
 
@@ -94,6 +94,7 @@ export default defineAppConfig({
 | `font.defaultScale` | `number` | Yes | `0.5-2.0` | Default font-size scaling (linked to the p-scale accessibility levels) |
 | `font.allowUserAdjust` | `boolean` | Yes | boolean | Whether users can adjust the font size |
 | `safeArea.islandGlass` | `boolean` | Yes | boolean | Dynamic Island / notch-screen glass adaptation (consumed by p-safe) |
+| `safeArea.statusBar` | `'show' or 'hide'` | No | two-value enum | Status-bar display policy (default `'show'`): `'show'` aligns with the Web `viewport-fit=cover` edge-to-edge layout (the content background extends under the status bar, and content yields via `--pf-inset-top`); `'hide'` is immersive full-screen. The three native hosts read this from the build-time `app-config.json` |
 
 ### Optional extension fields
 

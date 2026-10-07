@@ -1,16 +1,23 @@
 ---
-title: 全局配置与页面配置
+title: 编译器配置与页面配置
 order: 10
 group: 代码构成
 ---
 
-# 全局配置与页面配置
+# 编译器配置与页面配置
 
-Proteus 的配置分两层：**全局配置**（`proteus.config.ts`，管整个工程怎么构建）与**页面配置**（页面 `<route>` 块，管单个页面）。两层都在**编译期**读取——改完全局配置需重新 `npm run build:mp`。
+Proteus 的配置分**两个正交的面**，由**消费时机**划定边界（决策 #211）：构建期消费的字段进 `proteus.config.ts`，运行时消费的进 `app.config.ts`。
 
-> 职责边界（决策 #211）：`proteus.config.ts` 管「怎么构建」；`app.config.ts` 管「怎么表现」（运行时），见 [应用配置](/docs/11-app-config)。
+| 配置面 | 文件 | 时机 | 管什么 | 消费方 |
+|---|---|---|---|---|
+| **编译器配置** | `proteus.config.ts` | **构建期** | 怎么构建：目标端 / 编译规则 / 样式换算 / 路由扫描 / 原生工程身份 | 编译器、CLI、Vite 插件 |
+| **运行时配置** | `app.config.ts` | **运行时** | 怎么表现：应用标识 / API 地址 / 功能开关 / 主题字体 | 业务代码（`useAppConfig`） |
 
-## 全局配置：proteus.config.ts
+> 一句话：**`proteus.config` = 编译器配置（构建期固化，改完需重新构建）；`app.config` = 运行时配置（启动读取 + 可选远端热更新）**。
+
+本页讲**编译器配置**与**页面配置**（页面 `<route>` 块——管单个页面的元信息，同样由**编译期**的 `gen-routes` 消费）；运行时配置见 [运行时配置 app.config](/docs/11-app-config)。
+
+## 编译器配置：proteus.config.ts
 
 类型契约 `ProteusConfig`（`@proteus-vue/types/config` 单一来源）。**必填 6 项**：`platform` / `skyline` / `appid` / `pagesDir` / `setDataBridge` / `style` + **路由字段**（`routesOutput` / `customRoute`——★#492 在 `router` 段声明，顶层写法为兼容别名），其余可选。
 
@@ -27,16 +34,19 @@ Proteus 的配置分两层：**全局配置**（`proteus.config.ts`，管整个�
 | `subPackages` | `array` | 否 | router | ★#492 已收编 `router.subPackages`——顶层写法保留为兼容别名 |
 | `setDataBridge` | `object` | 是 | build | 响应式 → setData 桥接策略，见下表 |
 | `style` | `object` | 是 | compiler | 样式换算策略，见下表 |
+| `globalStyle` | `string` | 否 | compiler | ★全局样式（MP 端唯一全局入口）：相对 root 的 CSS 文件路径（缺省探测根/应用目录的 `app.wxss`）。见下表 |
 | `compiler` | `object` | 否 | compiler | 编译器后端插拔，见下表 |
-| `skylineLayout` | `object` | 否 | compiler | Skyline 布局对齐，见下表 |
-| `layout` | `object` | 否 | compiler | 柔性布局编译参数，见下表 |
+| `skylineLayout` | `object` | 否 | compiler | Skyline 布局对齐开关（消费官方对齐表），见下表 |
+| `profileBoundary` | `object` | 否 | compiler | 编译期 Profile 边界校验（使用了某端不支持的样式即报），见下表 |
+| `layout` | `object` | 否 | compiler | 柔性布局编译参数（p-fluid clamp 生成），见下表 |
 | `rules` | `object` | 否 | compiler | 编译规则覆盖，见下表 |
-| `page` | `object` | 否 | compiler | 页面模式（自动滚动容器），见下表 |
+| `page` | `object` | 否 | compiler | 页面模式（自动滚动容器 / WebView 降级），见下表 |
 | `budget` | `object` | 否 | build | 包体积预算，见下表 |
 | `router` | `object` | 否 | router | ★#492 **项目级路由管理**（统一路由配置面：结构 + tabBar + meta），见下表 |
 | `vite` | `object 或 函数` | 否 | build | **vite 透传**（★#418）：vite 配置由框架组装（vue/mpTransform/别名/构建参数内建），此字段做开发者扩展——见下表 |
 | `audit` | `object` | 否 | build | **D-2 页面门禁规则**（★#447）：off/warn/error 自选——见下表 |
 | `gates` | `object` | 否 | build | **统一门禁开关**（★#456）：`gates.disabled` 自选关闭门禁/聚合域——见下表 |
+| `native` | `object` | 否 | build | **★★原生项目配置**（★#635）：包名 / Bundle ID / 版本 / SDK / 方向 / 权限 / 图标——由 CLI 渲染进三端原生工程文件，见下表 |
 
 ### `vite`（透传——完全兼容 vite）
 
@@ -69,9 +79,23 @@ const config: ProteusConfig = {
 
 **`skylineLayout`（Skyline 布局对齐）**
 
+消费官方《Skyline WXSS 样式支持与差异》的 5 个对齐开关（版本要求见 `docs/generated/css-capability-alignment.json`）——**仅 `defaultDisplayBlock` 默认 `true`**（本仓真机验证过），其余默认**不注入**（未在本仓验证的开关不由框架替项目做主）：
+
 | 子字段 | 类型 | 必填 | 说明 |
 |---|---|---|---|
-| `defaultDisplayBlock` | `boolean` | 否 | Skyline 节点默认 flex——表单元素被 stretch 占满且居中，与 WebView/Web 块级布局不一致；默认开启（Skyline 官方对齐方案，2026-08 真机实测） |
+| `defaultDisplayBlock` | `boolean` | 否 | 节点默认 block 布局，对齐 WebView/Web（表单元素不再被 stretch 占满居中）；**默认 true** |
+| `defaultContentBox` | `boolean` | 否 | 默认 `content-box` 盒模型，对齐 Web |
+| `tagNameStyleIsolation` | `boolean` | 否 | tag 选择器全局匹配，对齐 WebView（★开发者工具会拒——平台限制） |
+| `enableScrollViewAutoSize` | `boolean` | 否 | `scroll-view` 自动撑开 |
+| `keyframeStyleIsolation` | `boolean` | 否 | `@keyframes` 样式全局共享 |
+
+**`profileBoundary`（编译期 Profile 边界校验）**
+
+编译期静态校验「使用了某端不支持的样式」——数据源为官方 Skyline 属性支持表的纯枚举（VC2-b）。**Web 端构建同样执行**（否则问题会延迟到 App 端才暴露）。逃生舱：样式块内注释 `proteus-allow-profile: <理由>`（理由非空才生效；豁免计入统计）。
+
+| 子字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `level` | `'error' 或 'warn' 或 'off'` | 否 | 违规级别（缺省 `'error'`——阻断构建） |
 
 **`layout`（柔性布局编译参数）**
 
@@ -98,8 +122,12 @@ const config: ProteusConfig = {
 
 | 子字段 | 类型 | 必填 | 说明 |
 |---|---|---|---|
-| `px2rpx` | `boolean` | 是 | px → rpx 转换开关 |
+| `px2rpx` | `boolean` | 是 | px → rpx 转换开关（**仅编译期生效**，Web 端永不转换——Web 保持标准 CSS，由编译器吸收差异） |
 | `rpxRatio` | `number` | 是 | 换算比例（默认按 375 设计稿 2:1，见 [样式转换](/docs/framework/compile-style)） |
+
+**`globalStyle`（全局样式入口）**
+
+MP 端**唯一全局样式入口**：相对 root 的 CSS 文件路径（缺省探测根/应用目录的 `app.wxss`）。构建期编译（px→rpx）后产出产物根 `app.wxss`（微信自动全局生效）——用于设计 token / 全局重置；Web 端同一文件在入口 import（单源）。★页面级 wxss 各自 scoped，变量无法跨页继承，**故需此全局通道**。
 
 **`subPackages`（顶层兼容别名——★#492 已收编 `router.subPackages`）**
 
@@ -121,6 +149,9 @@ const config: ProteusConfig = {
 | 子字段 | 类型 | 必填 | 说明 |
 |---|---|---|---|
 | `autoScrollContainer` | `boolean` | 否 | 页面自动包滚动容器（Skyline 页面本身不滚动，滚动必须 scroll-view；默认 `true`） |
+| `webviewPages` | `string[]` | 否 | ★Skyline iOS 白屏兜底：把白屏高风险页列出，该页强制走 WebView 渲染（不全局降级），见下方说明 |
+
+> **`page.webviewPages`（页面级 WebView 降级通道）**：Skyline 渲染器在 iOS 真机有已知偶发白屏（微信平台问题，动效/canvas 场景高发）。列出高风险页后，命中页的 `page.json` 不写 `renderer: skyline`，其余页不受影响。键匹配宽松（页面名 `home` / `pages/home` / 分包内相对路径均可）；建议仅对**真机复现过白屏**的页启用，未复现不预先降级。
 
 **`budget`（包体积预算）**
 
@@ -196,6 +227,32 @@ const config: ProteusConfig = {
 
 > 语义分层：`audit.rules` 管 **D-2 内部规则级别**（off/warn/error）；`gates.disabled` 管 **门禁/聚合域开关**（整域跳过）——两层可叠加。
 
+**`native`（★★原生项目配置——★#635，把原生工程身份传给构建链）**
+
+把**原生工程身份**（包名 / Bundle ID / 版本 / SDK / 方向 / 权限 / 图标）从项目传给构建链——CLI 在 `proteus create host` 与 `proteus build --target <端> --package` 时**渲染进**宿主工程的原生文件（此前这些值硬编码在宿主工程里，项目侧只能手改）：
+
+| 字段 | 目标文件 | 说明 |
+|---|---|---|
+| `native.app.{name,version,buildNumber}` | 各端 · 共享 | 缺省回退 app.config 的 `app.*`（运行期身份，二者可互为镜像） |
+| `native.android.{applicationId,label,versionName,versionCode,minSdk,targetSdk,orientation,permissions,icon}` | `AndroidManifest.xml` | applicationId 缺省 = 宿主运行时同包；activity 用 FQN 以便换包 |
+| `native.ios.{bundleId,displayName,version,buildNumber,minimumOSVersion,deviceFamily,orientations}` | `Info.plist` | |
+| `native.harmony.{bundleName,label,vendor,versionName,versionCode,compatibleSdkVersion,targetSdkVersion,deviceTypes,permissions}` | `AppScope/app.json5` + `entry/module.json5` + `string.json` | bundleName 也是**签名绑定**的键（换它要换 profile） |
+
+```ts
+// proteus.config.ts
+const config: ProteusConfig = {
+  // …必填字段…
+  native: {
+    app: { name: 'MyApp', version: '1.2.3', buildNumber: '45' },
+    android: { applicationId: 'com.acme.myapp', orientation: 'portrait', minSdk: 26, permissions: ['android.permission.INTERNET'] },
+    ios: { bundleId: 'com.acme.myapp', deviceFamily: [1], orientations: ['portrait'] },
+    harmony: { bundleName: 'com.acme.myapp', deviceTypes: ['phone'] },
+  },
+}
+```
+
+> **职责边界（G-35.1）**：`native` = **构建期**（CLI 消费，写原生文件）；app.config 的 `app.*` = **运行期**（业务读取/上报）。缺值回退，但边界不变。**字段级补丁**：只改身份字段、保留工程其余内容（手改过的布局/能力不受影响）；**幂等**（重复应用结果一致）。
+
 ### 校验与工具
 
 ```bash
@@ -240,6 +297,6 @@ proteus generate types                    # 生成 JSON Schema（.proteus/proteu
 
 ## 下一步
 
-- [应用配置 app.config](/docs/11-app-config)：运行时配置的字段全表与 useAppConfig
+- [运行时配置 app.config](/docs/11-app-config)：运行时配置的字段全表与 useAppConfig
 - [路由与导航](/docs/16-router)：路由树与按端 codegen 的完整模型
 - [CLI 与工程命令](/docs/28-cli)：`proteus` 命令行全家桶

@@ -65,7 +65,7 @@ export default {
 }
 ```
 
-> Layering: `audit.rules` sets D-2 **rule severities**; `gates.disabled` switches **whole gates/domains**. Full field reference: [global config](/docs/10-config).
+> Layering: `audit.rules` sets D-2 **rule severities**; `gates.disabled` switches **whole gates/domains**. Full field reference: [compiler config](/docs/10-config).
 
 **③ Wire into CI** — one command:
 
@@ -93,7 +93,7 @@ export default {
 - **Downgrade instead of disable**: set a rule to `'warn'` — still reported but exit 0 (record first, clean later); `'off'` truly disables it.
 - **Disable a whole gate**: `gates.disabled: ['fluid']` (e.g., keep a legacy-violating domain out while you clean it up).
 - **Exemptions stay visible**: when no primitive exists yet, per-line `// d2-exempt: <reason>` or whole-file `/* d2-exempt-file: <reason> */` — reasons are listed in the report, auditable and reclaimable (delete the exemption once the primitive lands).
-- **All standalone commands remain**: full command surface in the [CLI reference](/docs/reference/cli); gate fields in [global config](/docs/10-config).
+- **All standalone commands remain**: full command surface in the [CLI reference](/docs/reference/cli); gate fields in [compiler config](/docs/10-config).
 
 ## Honest boundaries
 

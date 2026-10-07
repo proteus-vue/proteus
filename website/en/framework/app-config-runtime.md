@@ -63,7 +63,7 @@ if (enabled && variant === 'variant-a') {
 | required field missing / wrong type | reported one by one against the `validateAppConfig` rule table (path-level `errors: [{ path, message }]`) |
 | remote fetch fails | falls back per `fallback` (see below) — **the app never crashes because of a config failure** |
 
-The validation rule table (`RULES`) maps one-to-one onto the full app-config field table (the "Validation rule" column in [Application config (app.config)](/docs/11-app-config)); new fields are covered automatically once they are recorded in `RULES`.
+The validation rule table (`RULES`) maps one-to-one onto the full runtime-config field table (the "Validation rule" column in [Runtime config (app.config)](/docs/11-app-config)); new fields are covered automatically once they are recorded in `RULES`.
 
 ## Remote hot updates
 
@@ -83,5 +83,5 @@ Effect chain: remote value → validation (same semantics as `setConfig`; invali
 
 ## Next steps
 
-- [Application config (app.config)](/docs/11-app-config): the full field table and validation rules
+- [Runtime config (app.config)](/docs/11-app-config): the full field table and validation rules
 - [Data passing between pages](/docs/framework/page-data)

@@ -57,6 +57,11 @@ const KNOWN_FIELDS = new Set([
   'audit', // ★#447 D-2 dogfooding 门禁（audit-d2 消费——规则级可配）
   'gates', // ★#456 统一门禁开关（gates.disabled——check/audit all 消费）
   'native', // ★#635 原生项目配置（包名/Bundle ID/版本/SDK/方向/权限/图标——CLI create host / build --package 消费）
+  // ★★2026-10-08 补登记（孤儿字段收口）：三项在 ProteusConfig 已声明 + 有真实消费方，却漏登白名单
+  //   ⇒ 写了会被判「未知字段」阻断。与 config-layers 的 CONFIG_FIELD_LAYERS 同步补录（铁律 #5）。
+  'skylineLayout', // Skyline 布局对齐开关（VC2-c——gen-routes 注入 page.json）
+  'profileBoundary', // VC2-b 编译期 Profile 边界校验级别（error/warn/off——profile-boundary-plugin 消费）
+  'layout', // G-22 柔性布局编译期 clamp 参数（designWidth/fluidViewport——p-fluid 生成）
 ])
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
@@ -247,6 +252,27 @@ export function validateConfig(config: unknown): ConfigValidationResult {
       const hm = (nat.harmony ?? {}) as Record<string, unknown>
       posInt('native.harmony.versionCode', hm.versionCode)
       strArr('native.harmony.deviceTypes', hm.deviceTypes); strArr('native.harmony.permissions', hm.permissions)
+    }
+  }
+
+  // ★★2026-10-08 孤儿字段收口：轻量类型校验（与 CONFIG_FIELD_LAYERS 同步补录）
+  if (cfg.skylineLayout !== undefined && !isPlainObject(cfg.skylineLayout)) {
+    errors.push({ code: 'CONFIG_INVALID_TYPE', path: 'skylineLayout', message: 'skylineLayout 应为对象（对齐开关布尔值）' })
+  }
+  if (cfg.profileBoundary !== undefined) {
+    const pb = cfg.profileBoundary as Record<string, unknown>
+    if (!isPlainObject(pb)) {
+      errors.push({ code: 'CONFIG_INVALID_TYPE', path: 'profileBoundary', message: "profileBoundary 应为对象（{ level?: 'error' | 'warn' | 'off' }）" })
+    } else if (pb.level !== undefined && !['error', 'warn', 'off'].includes(pb.level as string)) {
+      errors.push({ code: 'CONFIG_INVALID_TYPE', path: 'profileBoundary.level', message: "profileBoundary.level 应为 'error' / 'warn' / 'off'" })
+    }
+  }
+  if (cfg.layout !== undefined) {
+    const lay = cfg.layout as Record<string, unknown>
+    if (!isPlainObject(lay)) {
+      errors.push({ code: 'CONFIG_INVALID_TYPE', path: 'layout', message: 'layout 应为对象（{ designWidth?, fluidViewport? }）' })
+    } else if (lay.designWidth !== undefined && typeof lay.designWidth !== 'number') {
+      errors.push({ code: 'CONFIG_INVALID_TYPE', path: 'layout.designWidth', message: 'layout.designWidth 应为数字' })
     }
   }
 

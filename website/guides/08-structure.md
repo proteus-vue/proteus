@@ -24,7 +24,7 @@ group: 代码构成
 ## 三个关键约定
 
 1. **页面即文件**：`src/pages/` 下每个 `.vue` 就是一个页面，路径由目录结构推导（详见[路由与导航](/docs/16-router)）
-2. **配置分两层**：全局配置在 `proteus.config.ts`，页面配置在各页面的 `<route>` 块（详见[全局配置与页面配置](/docs/10-config)）
+2. **配置分两层**：编译器配置在 `proteus.config.ts`，页面配置在各页面的 `<route>` 块（详见[编译器配置与页面配置](/docs/10-config)）
 3. **生成物勿手改**：`src/router/auto-routes.ts`、`app.json` 等由编译期生成，重新构建即刷新
 
 ## 下一步

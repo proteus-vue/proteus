@@ -1,16 +1,23 @@
 ---
-title: Global & page configuration
+title: Compiler & page configuration
 order: 10
 group: 代码构成
 ---
 
-# Global & page configuration
+# Compiler & page configuration
 
-Proteus configuration is split into two layers: **global configuration** (`proteus.config.ts` — governs how the whole project is built) and **page configuration** (the `<route>` block inside a page — governs that single page). Both layers are read at **compile time** — after changing the global config you must re-run `npm run build:mp`.
+Proteus configuration is split into **two orthogonal surfaces**, their boundary drawn by **when they are consumed** (decision #211): fields consumed at build time go in `proteus.config.ts`; fields consumed at runtime go in `app.config.ts`.
 
-> Responsibility boundary (decision #211): `proteus.config.ts` governs "how it builds"; `app.config.ts` governs "how it behaves" (at runtime) — see [Application config (app.config)](/docs/11-app-config).
+| Config surface | File | Timing | What it governs | Consumers |
+|---|---|---|---|---|
+| **Compiler config** | `proteus.config.ts` | **Build time** | How it's built: target / compile rules / style conversion / route scanning / native project identity | Compiler, CLI, Vite plugin |
+| **Runtime config** | `app.config.ts` | **Runtime** | How it behaves: app identity / API base URL / feature flags / theme & font | Business code (`useAppConfig`) |
 
-## Global config: `proteus.config.ts`
+> In short: **`proteus.config` = the compiler config (frozen at build time — a change needs a rebuild); `app.config` = the runtime config (read at launch + optional remote hot update)**.
+
+This page covers the **compiler config** and the **page config** (the page `<route>` block — it governs one page's metadata and is likewise consumed at **compile time** by `gen-routes`); for the runtime config see [Runtime config (app.config)](/docs/11-app-config).
+
+## Compiler config: `proteus.config.ts`
 
 The type contract `ProteusConfig` (`@proteus-vue/types/config` is the single source of truth). **6 required fields**: `platform` / `skyline` / `appid` / `pagesDir` / `setDataBridge` / `style` + the **route fields** (`routesOutput` / `customRoute` — declared in the `router` section since #492; the top-level spelling remains as a compatibility alias); everything else is optional.
 
@@ -24,19 +31,22 @@ The type contract `ProteusConfig` (`@proteus-vue/types/config` is the single sou
 | `pagesDir` | `string` | Yes | compiler | Pages root directory (the starting point of main-package route scanning); defaults to `src/pages` |
 | `routesOutput` | `string` | No | router | Collected into `router.routesOutput` since #492 — the top-level spelling remains as a compatibility alias |
 | `customRoute` | `object` | No | router | Collected into `router.customRoute` since #492 — the top-level spelling remains as a compatibility alias |
+| `subPackages` | `array` | No | router | Collected into `router.subPackages` since #492 — the top-level spelling remains as a compatibility alias |
 | `setDataBridge` | `object` | Yes | build | Reactivity → setData bridge strategy — see the table below |
 | `style` | `object` | Yes | compiler | Style conversion strategy — see the table below |
+| `globalStyle` | `string` | No | compiler | The global style entry (the only global entry on MP): a CSS file path relative to root (defaults to `app.wxss` in the root/app dir) — see below |
 | `compiler` | `object` | No | compiler | Compiler backend swapping — see the table below |
-| `skylineLayout` | `object` | No | compiler | Skyline layout alignment — see the table below |
-| `layout` | `object` | No | compiler | Fluid layout compile parameters — see the table below |
-| `subPackages` | `array` | No | router | Collected into `router.subPackages` since #492 — the top-level spelling remains as a compatibility alias — see the table below |
+| `skylineLayout` | `object` | No | compiler | Skyline layout-alignment switches (consuming the official alignment table) — see the table below |
+| `profileBoundary` | `object` | No | compiler | Compile-time profile-boundary checks (a style unsupported on a target is reported) — see the table below |
+| `layout` | `object` | No | compiler | Fluid-layout compile parameters (p-fluid clamp generation) — see the table below |
 | `rules` | `object` | No | compiler | Compile rule overrides — see the table below |
-| `page` | `object` | No | compiler | Page mode (auto scroll container) — see the table below |
+| `page` | `object` | No | compiler | Page mode (auto scroll container / WebView fallback) — see the table below |
 | `budget` | `object` | No | build | Bundle-size budget — see the table below |
 | `router` | `object` | No | router | **Project-level route management** (#492: the unified routing config surface — structure + tabBar + meta) — see the table below |
 | `vite` | `object or function` | No | build | **vite passthrough** (#418): the vite config is assembled by the framework (vue / mpTransform / aliases / build options are built in); this field is for developer extensions — see the table below |
 | `audit` | `object` | No | build | **D-2 page gate rules** (#447): pick `off`/`warn`/`error` per rule — see the table below |
 | `gates` | `object` | No | build | **Unified gate switches** (#456): optionally disable gates / aggregate domains via `gates.disabled` — see the table below |
+| `native` | `object` | No | build | **Native project config** (#635): package name / Bundle ID / version / SDK / orientation / permissions / icon — rendered by the CLI into the three targets' native project files; see the table below |
 
 ### `vite` (passthrough — fully vite-compatible)
 
@@ -69,11 +79,25 @@ const config: ProteusConfig = {
 
 **`skylineLayout` (Skyline layout alignment)**
 
+Consumes the five alignment switches from the official *Skyline WXSS style support & differences* table (version requirements in `docs/generated/css-capability-alignment.json`) — **only `defaultDisplayBlock` defaults to `true`** (verified on real devices in this repo); the rest default to **not injected** (a switch unverified here is not decided on the project's behalf):
+
 | Subfield | Type | Required | Description |
 |---|---|---|---|
-| `defaultDisplayBlock` | `boolean` | No | Skyline nodes default to flex — form elements get stretched to fill and centered, which differs from WebView/Web block layout; on by default (Skyline's official alignment scheme; verified on real devices 2026-08) |
+| `defaultDisplayBlock` | `boolean` | No | Nodes default to block layout, aligned with WebView/Web (form elements are no longer stretched to fill and centered); **default true** |
+| `defaultContentBox` | `boolean` | No | Defaults to the `content-box` box model, aligned with Web |
+| `tagNameStyleIsolation` | `boolean` | No | Tag selectors match globally, aligned with WebView (★rejected by the devtools — a platform limit) |
+| `enableScrollViewAutoSize` | `boolean` | No | `scroll-view` sizes itself automatically |
+| `keyframeStyleIsolation` | `boolean` | No | `@keyframes` styles are shared globally |
 
-**`layout` (fluid layout compile parameters)**
+**`profileBoundary` (compile-time profile-boundary check)**
+
+A compile-time static check for "a style unsupported on a target is used" — sourced from the pure enumeration of the official Skyline property support table (VC2-b). **It also runs on the Web build** (otherwise the problem surfaces late on the App targets). Escape hatch: a `proteus-allow-profile: <reason>` comment inside the style block (a non-empty reason is required; exemptions are counted).
+
+| Subfield | Type | Required | Description |
+|---|---|---|---|
+| `level` | `'error' or 'warn' or 'off'` | No | Violation severity (defaults to `'error'` — blocks the build) |
+
+**`layout` (fluid-layout compile parameters)**
 
 | Subfield | Type | Required | Description |
 |---|---|---|---|
@@ -98,8 +122,12 @@ const config: ProteusConfig = {
 
 | Subfield | Type | Required | Description |
 |---|---|---|---|
-| `px2rpx` | `boolean` | Yes | px → rpx conversion switch |
+| `px2rpx` | `boolean` | Yes | px → rpx conversion switch (**compile-time only**; the Web target never converts — Web keeps standard CSS and the compiler absorbs the difference) |
 | `rpxRatio` | `number` | Yes | Conversion ratio (defaults to 2:1 on a 375 design mockup — see [style conversion](/docs/framework/compile-style)) |
+
+**`globalStyle` (global style entry)**
+
+The **only global style entry** on MP: a CSS file path relative to root (defaults to `app.wxss` in the root/app dir). Compiled at build time (px→rpx) into the artifact-root `app.wxss` (WeChat applies it globally automatically) — for design tokens / global resets; the Web target imports the same file at its entry (single source). ★Page-level wxss is scoped per page, so variables cannot be inherited across pages — **hence this global channel**.
 
 **`subPackages` (top-level compatibility alias — collected into `router.subPackages` since #492)**
 
@@ -121,6 +149,9 @@ const config: ProteusConfig = {
 | Subfield | Type | Required | Description |
 |---|---|---|---|
 | `autoScrollContainer` | `boolean` | No | Pages are automatically wrapped in a scroll container (Skyline pages do not scroll by themselves — scrolling requires a scroll-view; defaults to `true`) |
+| `webviewPages` | `string[]` | No | ★Skyline iOS white-screen fallback: list the high-risk pages to force those pages onto WebView rendering (no global downgrade) — see the note below |
+
+> **`page.webviewPages` (page-level WebView fallback channel)**: the Skyline renderer has a known intermittent white screen on iOS devices (a WeChat platform issue, more frequent with animations/canvas). Listing the high-risk pages makes their `page.json` omit `renderer: skyline`, leaving other pages unaffected. Key matching is lenient (page name `home` / `pages/home` / a subpackage-relative path all work); enable it only for pages that **actually reproduced** the white screen — do not downgrade preemptively.
 
 **`budget` (bundle-size budget)**
 
@@ -196,6 +227,32 @@ const config: ProteusConfig = {
 
 > Semantic layering: `audit.rules` controls **D-2 internal rule severity** (`off`/`warn`/`error`); `gates.disabled` controls **gate / aggregate-domain switches** (skip a whole domain) — the two layers stack.
 
+**`native` (native project config — #635, passing native project identity to the build chain)**
+
+Passes the **native project identity** (package name / Bundle ID / version / SDK / orientation / permissions / icon) from the project to the build chain — the CLI **renders it into** the host project's native files at `proteus create host` and `proteus build --target <target> --package` (these values used to be hardcoded in the host project, editable only by hand on the project side):
+
+| Field | Target file | Description |
+|---|---|---|
+| `native.app.{name,version,buildNumber}` | All targets · shared | Falls back to app.config's `app.*` (the runtime identity; the two can mirror each other) |
+| `native.android.{applicationId,label,versionName,versionCode,minSdk,targetSdk,orientation,permissions,icon}` | `AndroidManifest.xml` | applicationId defaults to the host runtime's package; the activity uses the FQN so the package can change |
+| `native.ios.{bundleId,displayName,version,buildNumber,minimumOSVersion,deviceFamily,orientations}` | `Info.plist` | |
+| `native.harmony.{bundleName,label,vendor,versionName,versionCode,compatibleSdkVersion,targetSdkVersion,deviceTypes,permissions}` | `AppScope/app.json5` + `entry/module.json5` + `string.json` | bundleName is also the **signing-bound** key (changing it means changing the profile) |
+
+```ts
+// proteus.config.ts
+const config: ProteusConfig = {
+  // …required fields…
+  native: {
+    app: { name: 'MyApp', version: '1.2.3', buildNumber: '45' },
+    android: { applicationId: 'com.acme.myapp', orientation: 'portrait', minSdk: 26, permissions: ['android.permission.INTERNET'] },
+    ios: { bundleId: 'com.acme.myapp', deviceFamily: [1], orientations: ['portrait'] },
+    harmony: { bundleName: 'com.acme.myapp', deviceTypes: ['phone'] },
+  },
+}
+```
+
+> **Responsibility boundary (G-35.1)**: `native` = **build time** (consumed by the CLI, written into the native files); app.config's `app.*` = **runtime** (read/reported by business code). Values fall back, but the boundary does not change. **Field-level patch**: only the identity fields change; the rest of the project is preserved (hand-edited layout/capabilities are untouched); **idempotent** (re-applying yields the same result).
+
 ### Validation & tooling
 
 ```bash
@@ -203,9 +260,9 @@ proteus config:check proteus.config.ts   # required fields + cross-layer depende
 proteus generate types                    # generates the JSON Schema (.proteus/proteus.config.schema.json — IDE autocomplete)
 ```
 
-The field-ownership table (compiler / router / build / pinia…) is driven by `CONFIG_FIELD_LAYERS` as its single source of truth: **new top-level fields must declare their ownership layer**; cross-layer semantics (e.g., writing a pinia key inside a router field) raise `CONFIG_LAYER_VIOLATION`.
-
 > Migration of existing projects since #492: the top-level `routesOutput` / `subPackages` / `customRoute` spelling keeps working (backward compatible; when both are declared, `router.*` wins and the build logs a convergence hint); new projects declare inside the `router` section (the create-proteus template already ships the unified form). Config schema version is now v3: projects with an explicit `version: 2` are collected into the router section by the migration chain automatically.
+
+The field-ownership table (compiler / router / build / pinia…) is driven by `CONFIG_FIELD_LAYERS` as its single source of truth: **new top-level fields must declare their ownership layer**; cross-layer semantics (e.g., writing a pinia key inside a router field) raise `CONFIG_LAYER_VIOLATION`.
 
 ## Page configuration: the `<route>` block
 
@@ -240,6 +297,6 @@ The `<route>` block is entirely optional — `path` / `name` are derived from th
 
 ## Next steps
 
-- [Application config (app.config)](/docs/11-app-config): the full field table of runtime config and useAppConfig
+- [Runtime config (app.config)](/docs/11-app-config): the full field table of runtime config and useAppConfig
 - [Routing & navigation](/docs/16-router): the complete model of the route tree and per-target codegen
 - [CLI & project commands](/docs/28-cli): the full `proteus` command-line family
