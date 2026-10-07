@@ -92,4 +92,4 @@ pnpm test tests/fluid-formfactor.test.ts tests/fluid-formfactor-render.test.ts  
 
 - [流体度量](/docs/system/07-fluid-metrics)：画像里的 `ratio` 怎么解出字号与热区
 - [能力三态与降级](/docs/system/08-capabilities)：14 项能力怎么过滤与降级
-- [p-formfactor](/docs/system/11-p-formfactor)：业务零分支地消费整张画像
+- [p-formfactor](/docs/system/11-formfactor-composition)：业务零分支地消费整张画像

@@ -84,4 +84,4 @@ expect(dp).toBeGreaterThanOrEqual(44)   // 触控（HIG 44pt / Material 48dp 的
 ## 下一步
 
 - [能力三态与降级](/docs/system/08-capabilities)：热区下限里的 `dpad` 判定从哪来
-- [p-formfactor](/docs/system/11-p-formfactor)：这些变量在组件层的落地
+- [p-formfactor](/docs/system/11-formfactor-composition)：这些变量在组件层的落地

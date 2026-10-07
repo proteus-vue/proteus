@@ -15,9 +15,9 @@ group: 总览
 | Web SPA | vue-dom | Vue 3 (same thread) | localStorage | `createWebPinia()` | ✅ shipped |
 | WeChat Mini Program | skyline (WebView fallback) | Separate JS runtime | wx storage (debounced) | `createMpPinia()` | ✅ shipped |
 | Headless (SSR/testing) | headless | Node | memory | `createSsrPinia()` | ✅ shipped (tool tier) |
-| iOS native | native-ios (UIKit) | JSI carrier (G-40) | NativeKVAdapter (not yet onboarded) | `createAppPinia()` | 🟡 prototype mapping |
-| Android native | native-android (Jetpack) | JSI carrier (G-40) | NativeKVAdapter (not yet onboarded) | `createAppPinia()` | 🟡 prototype mapping |
-| HarmonyOS | native-harmony (ArkUI) | JSI carrier (G-40) | TBD | `createAppPinia()` | 🟡 prototype mapping |
+| iOS native | native-ios (UIKit + CoreAnimation) | Shared runtime bundle (JavaScriptCore) | NativeKVAdapter (not yet onboarded) | `createAppPinia()` | 🟡 render core shipped on device |
+| Android native | native-android (self-drawn Canvas) | Shared runtime bundle (QuickJS) | NativeKVAdapter (not yet onboarded) | `createAppPinia()` | 🟡 render core shipped on device |
+| HarmonyOS | native-harmony (ArkUI RenderNode) | Shared runtime bundle (JSVM) | TBD | `createAppPinia()` | 🟡 render core shipped on device |
 | Flutter hybrid | flutter | Same JS logic layer | TBD | `createAppPinia()` | 🟡 widget-level mapping |
 | Quick App | Quick App engine (TBD) | TBD | TBD | TBD | ⬜ not started |
 

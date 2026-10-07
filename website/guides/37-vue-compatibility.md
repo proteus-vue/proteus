@@ -126,6 +126,6 @@ group: 渲染与能力
 
 ## 本组导航
 
-- [快速开始](/docs/guides/01-intro)：从零跑起来
-- [渲染与能力](/docs/guides/12-components-intro)：组件与能力体系
+- [快速开始](/docs/01-intro)：从零跑起来
+- [渲染与能力](/docs/12-components-intro)：组件与能力体系
 - [Vapor 更新路径](/docs/framework/43-vapor-update-path)：更新机制与自研理由

@@ -327,7 +327,7 @@ jobs:
         run: cd website && pnpm run check:plugin-docs
 
       - name: 参考文档漂移门禁（CLI/编译规则目录/CSS 兼容规则/组件能力页与源一致）
-        run: cd website && pnpm run check:reference && pnpm run check:css-compat && pnpm run check:content
+        run: cd website && pnpm run check:reference && pnpm run check:css-compat && pnpm run check:content && pnpm run check:doc-links
 
       # ★★CS6（2026-10-02）：一致性标准页数据门禁——页面展示的 M1–M4 / 允许差异清单 / 真截图
       #   必须与 docs/generated/*.json 逐字节一致（SSOT=机器产物；页面零手写数字，防"产物变了页面说谎"）

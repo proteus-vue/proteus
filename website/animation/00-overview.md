@@ -72,7 +72,7 @@ const batch = compileRoute(spec, { enter: a, exit: b })
 
 - **交互演示**（转场播放器 / 曲线求值器 / 预设目录）：[动画引擎产品页](/animation)
 - **真机证据表**（每一项都有可复跑的判据脚本）：[证据与诚实边界](/docs/animation/04-boundaries)
-- **AI 说明书**（48 条声明项，逐条 what / why / when / 示例 / 如何验证）：[Morpheus 声明项说明书](/docs/generated/anim-manual)
+- **AI 说明书**（48 条声明项，逐条 what / why / when / 示例 / 如何验证）：Morpheus 声明项说明书（仓内生成物 `docs/generated/anim-manual.md`，48 条逐条 what/why/when/示例/如何验证）
 
 ## 下一步
 

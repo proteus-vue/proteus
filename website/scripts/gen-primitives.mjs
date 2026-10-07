@@ -390,7 +390,7 @@ function renderPage(srcDirAbs, rel, file, order, group) {
   if (rel === 'packages/api') {
     body.push('> 来源模块 `@proteus-vue/api`（工程原语工厂——**注入式**：消费方注入 reactivity/driver/routerLike 等，api 包零 vue 依赖；MP 产物安全子集：无 `?.`/`??`/数组解构）。')
   } else if (rel === 'packages/worklet') {
-    body.push('> 来源模块 `@proteus-vue/worklet`（**Skyline UI 线程动画**——封装官方 `wx.worklet`；非 Skyline 环境**诚实降级** JS 线程 rAF 插值，不假装有 UI 线程隔离。详见 [Skyline 踩坑总账](/docs/framework/skyline-pitfalls)）。')
+    body.push('> 来源模块 `@proteus-vue/worklet`（**Skyline UI 线程动画**——封装官方 `wx.worklet`；非 Skyline 环境**诚实降级** JS 线程 rAF 插值，不假装有 UI 线程隔离。详见 [Skyline 踩坑总账](/docs/22-skyline-render-constraints)）。')
   } else {
     body.push(`> 来源模块 \`@proteus-vue/${rel.replace('packages/', '')}\`（Pure logic + Web 接线——env 注入可单测，缺省回落真实全局）。平台映射 / 降级链见模块头原文。`)
   }
@@ -465,7 +465,7 @@ function renderPage(srcDirAbs, rel, file, order, group) {
     body.push('- **模板侧零运行时 API**：`worklet:style="{{animatedStyle}}"` 由**编译器透传**官方 WXML 前缀（无需 import）')
     body.push('- **诚实降级**：非 Skyline（WebView / Web / SSR）→ 同 API 的 JS 线程 rAF 插值，`hasWorklet() === false` / `real === false`，**不假装有 UI 线程隔离**')
     body.push('- **能力探测**：用 `hasWorklet()` 判「真·小程序 + Skyline 渲染器 + `wx.worklet` 存在」三者齐备；组件层能力矩阵 SSOT 见 `@proteus-vue/shared` 的 `detectMpRenderer`')
-    body.push('- 真实消费：`packages/components/runtime/capability.ts` 的 `hasWorklet()` 能力探测；Skyline 侧限制见 [Skyline 踩坑总账](/docs/framework/skyline-pitfalls)')
+    body.push('- 真实消费：`packages/components/runtime/capability.ts` 的 `hasWorklet()` 能力探测；Skyline 侧限制见 [Skyline 踩坑总账](/docs/22-skyline-render-constraints)')
   } else if (rel === 'packages/gesture') {
     body.push('- 识别器纯逻辑零依赖：Web Pointer / MP touch 归一为 `GestureInput` → 语义手势事件（tap/pan/swipe/pinch/rotate/longpress…）——可单测')
     body.push('- Web 官方接线：`useGesture()` Hook 与 `v-gesture:<kind>="onX"` 指令；MP/原生端映射由各端 Backend 承接——「事件是 Backend 实现细节」')

@@ -112,7 +112,7 @@ compileAnimations([{ kind: 'textColor', from: '#ffffff', to: '#00ff00',
 
 ## Preset library (13 entries)
 
-Presets over parameters — common motions are one-liners. The full catalogue (with “when to use” and “how to verify”) lives in the [Morpheus declaration manual](/docs/generated/anim-manual).
+Presets over parameters — common motions are one-liners. The full catalogue (with “when to use” and “how to verify”) lives in the the Morpheus declaration manual (repo artifact `docs/generated/anim-manual.md`).
 
 | Category | Presets | One-liner |
 |---|---|---|
@@ -133,7 +133,7 @@ const batch = compileRoute(spec, { enter: 101, exit: 100 })
 
 The 48 declaration entries (21 presets / 19 surface primitives / 6 constraints / 2 boundaries) share `ANIM_RULES` as their single source of truth and are **isomorphic** to the compiler’s 112 rules: each carries what / why / when / example / how to verify / implementation site, so an AI can consume a single entry.
 
-The generated [anim-manual](/docs/generated/anim-manual) runs `runConformance()` before rendering — presets must really exist in the export surface, cross-language contract values must match, and `verify` must be traceable; **if the reconciliation fails, no document is generated**.
+The generated `docs/generated/anim-manual.md` runs `runConformance()` before rendering — presets must really exist in the export surface, cross-language contract values must match, and `verify` must be traceable; **if the reconciliation fails, no document is generated**.
 
 ## Next
 

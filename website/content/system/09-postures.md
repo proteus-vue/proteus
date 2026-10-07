@@ -163,4 +163,4 @@ postures: [
 ## 下一步
 
 - [焦点导航](/docs/system/10-focus-navigation)：键盘/遥控可达性的空间导航引擎
-- [p-formfactor](/docs/system/11-p-formfactor)：`posture` prop 的组件层用法
+- [p-formfactor](/docs/system/11-formfactor-composition)：`posture` prop 的组件层用法

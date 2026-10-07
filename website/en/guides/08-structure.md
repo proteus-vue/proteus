@@ -13,10 +13,11 @@ Here is what a scaffolded project looks like, and what each path is for:
 | `proteus.config.ts` | **The single config file**: platform / skyline / appid / pagesDir / rules / setDataBridge / style + `vite` passthrough fields (the vite config is assembled by the framework, so no `vite.config.ts` is needed); read at build time — rerun `npm run build:mp` after changes |
 | `src/main.ts` | Web entry |
 | `src/main.mp.ts` | Minimal Mini Program entry: no `App()` call — the app skeleton is generated automatically by the framework |
+| `dist/app/<target>/` | App targets' screen-content IR (`ios` / `android` / `harmony`), produced by `proteus build --target <target>` |
 | `src/pages/` | Page directory (`pagesDir`): every `.vue` here is one page |
 | `src/router/` | RouterView / router instance / `auto-routes.ts` (generated at build time — do not hand-edit) |
 | `src/shims/` | wx / events / Vue type declarations |
-| `.github/workflows/proteus.yml` | CI template (check gate → build for both targets → archive artifacts) |
+| `.github/workflows/proteus.yml` | CI template (check gate → build for every target → archive artifacts) |
 
 > Directories the template does not include but creating them is recommended: `src/components/` (business components — plugin-vite scans and writes them into usingComponents automatically), `src/stores/` (Pinia stores — pure logic, hard-gated by the stores-purity CI), `src/capabilities/` (capability declarations — consumed by the audit gate).
 

@@ -6,7 +6,7 @@ group: 开始
 
 # 创建你的第一个工程
 
-一条脚手架命令，创建一个 **Web + 微信小程序双端模板工程**（脚手架当前面向已接线的 Web/小程序；原生/Flutter 渲染后端接入进度见[端与成熟度](/docs/framework/ends-matrix)）。本页的命令与生成物以 `packages/create-proteus` 源码与模板为准。
+一条脚手架命令，创建一个 **Web + 微信小程序双端模板工程**（脚手架生成 Web / 微信小程序工程；App 三端（iOS/Android/鸿蒙）接入进度见[端与成熟度](/docs/framework/ends-matrix)）。本页的命令与生成物以 `packages/create-proteus` 源码与模板为准。
 
 ## 创建
 
@@ -22,7 +22,7 @@ npm install
 
 1. **复制内置模板工程**（框架快照 + 编译管线 + 首页示例，模板清单见下）
 2. **替换占位符**：模板中的 `{{name}}` → 项目名
-3. **打印下一步提示**：`npm run dev:web` 跑 Web 端、`npm run build:mp` 跑小程序端
+3. **打印下一步提示**：`npm run dev:web` 跑 Web 端、`npm run build:mp` 跑小程序端（App 三端用 `proteus build --target ios|android|harmony` 编译屏内容）
 
 ## 模板生成物清单
 
@@ -71,7 +71,7 @@ const config: ProteusConfig = {
 
 字段说明见[全局配置](/docs/10-config)。
 
-## 模板 scripts（双端命令）
+## 模板 scripts（各端命令）
 
 | 命令 | 做什么 |
 |---|---|
@@ -79,6 +79,9 @@ const config: ProteusConfig = {
 | `npm run build:web` | `proteus build --target web`（vue-tsc 类型检查 + vite build） |
 | `npm run dev:mp` | `proteus dev --target skyline`（gen-routes + vite dev） |
 | `npm run build:mp` | `proteus build --target skyline`（gen-routes → vue-tsc → 小程序产物四件套） |
+| `npx proteus build --target ios` | 编译 iOS 屏内容 IR → `dist/app/ios/` |
+| `npx proteus build --target android` | → `dist/app/android/` |
+| `npx proteus build --target harmony` | → `dist/app/harmony/` |
 | `npm run debug:mp` | `PROTEUS_DEBUG=1` 产物注入源码行号注释 + 决策 trace |
 | `npm run proteus` | CLI 入口（`npx proteus` 同义） |
 
@@ -90,5 +93,5 @@ const config: ProteusConfig = {
 
 ## 下一步
 
-- [运行与预览](/docs/06-run-preview)：把 Web 端和小程序端都跑起来
+- [运行与预览](/docs/06-run-preview)：把各端都跑起来
 - [全局配置](/docs/10-config)：proteus.config.ts 字段全表

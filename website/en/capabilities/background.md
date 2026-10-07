@@ -166,13 +166,13 @@ C25 后台事件（wx onAppHide/onAppShow / web visibilitychange）
 | Web SPA | ✅ | vue-dom · webBridge implementation (direct platform API) |
 | WeChat Mini Program | ✅ | skyline (WebView fallback) · wx bridge → wx.onBackground |
 | Headless (SSR / testing) | ✅ | headless · mock bridge injected (testing / SSR tier) |
-| iOS native | ✅ | native-ios (UIKit) · App host bridge (capability-app.ts) · device-verified on both ends (check:host-runtime) |
-| Android native | ✅ | native-android (Jetpack) · App host bridge (capability-app.ts) · device-verified on both ends (check:host-runtime) |
-| HarmonyOS | 🟡 | native-harmony (ArkUI) · App bridge ready (platform-neutral TS) — Harmony host shell not wired |
+| iOS native | ✅ | native-ios (UIKit + CoreAnimation) · App host bridge (capability-app.ts) · device-verified on both ends (check:host-runtime) |
+| Android native | ✅ | native-android (self-drawn Canvas) · App host bridge (capability-app.ts) · device-verified on both ends (check:host-runtime) |
+| HarmonyOS | 🟡 | native-harmony (ArkUI RenderNode) · App bridge ready (platform-neutral TS) — Harmony host shell not wired |
 | Flutter hybrid | 🟡 | flutter · same JS logic layer — capability bridge not wired |
 | Quick App | ⬜ | Quick App engine (TBD) · target not started |
 
-> Status scale: ✅ target shipped & this capability usable · ⚠️ target shipped but bridge missing → explicit `Err` degradation · 🟡 prototype mapping — capability bridge not wired · ⬜ target not started. Target architecture matrix → [Ends & maturity](/docs/framework/ends-matrix).
+> Status scale: ✅ target shipped & this capability usable · ⚠️ target shipped but bridge missing → explicit `Err` degradation · 🟡 render core shipped — capability bridge not wired · ⬜ target not started. Target architecture matrix → [Ends & maturity](/docs/framework/ends-matrix).
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 

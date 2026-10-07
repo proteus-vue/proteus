@@ -207,7 +207,7 @@ function endSupportLine(m, labels) {
  * ★★App 宿主桥（`packages/api/src/capability-app.ts`）提供的方法集——**从源码推导**，不硬编码。
  *
  * 【为什么需要（2026-09-30 用户指出「官网文档好像没更新」）】能力页的端表对 native 端**硬编码**
- *   写「端原型映射——能力桥未接线」。此前对多数能力是准确的，但**生命周期三能力（C23/C24/C25）
+ *   写「渲染核心已落地——能力桥未接线」。此前对多数能力是准确的，但**生命周期三能力（C23/C24/C25）
  *   的 App 腿已落地并真机双端验证**（`capability-app.ts` + `check:host-runtime` ①~⑤）
  *   ⇒ 页面与源码事实脱节（与 wx/web 列早已用 `wxMissing`/`webMissing` 推导同构，只有 native 列是写死的）。
  *   ⇒ 本函数读 `capability-app.ts` 的返回对象，抽出它真正提供的方法名（如 getAppLifecycle）。
@@ -1020,11 +1020,11 @@ function genComponents(ir, ends) {
         case 'headless': note = 'IR 渲染测试档（工具端）'; break
         case 'flutter': note = 'widget 级映射——组件级未验证'; break
         case 'quick-app': note = '端未开始'; break
-        default: note = '端原型映射——组件级接线未开始'
+        default: note = '渲染核心已落地——组件级接线未开始'
       }
       compRows.push({ name: end.name, status: STATUS_MARK[end.status] ?? '⬜', note: `${end.engine} · ${note}` })
     }
-    lines.push(...compatSection(compRows, '> 状态口径：✅ 端已落地·本组件可用；🟡 端原型映射·组件级接线未开始；⬜ 端未开始。端架构对照（引擎 / 运行时 / 持久化）见 [端与成熟度](/docs/framework/ends-matrix)。'))
+    lines.push(...compatSection(compRows, '> 状态口径：✅ 端已落地·本组件可用；🟡 组件级接线未开始；⬜ 端未开始。端架构对照（引擎 / 运行时 / 持久化）见 [端与成熟度](/docs/framework/ends-matrix)。'))
     if (props.length) {
       lines.push('## Props')
       lines.push('')
@@ -2014,20 +2014,20 @@ function genCapabilities(ir, ends) {
             status = '✅'
             note = 'App 宿主桥（capability-app.ts）· 真机双端验证（check:host-runtime）'
           } else {
-            note = '端原型映射——能力桥未接线'
+            note = '渲染核心已落地——能力桥未接线'
           }
           break
         case 'app-harmony':
           // ★鸿蒙：桥是**平台中立 TS**（壳注入标识即生效）——但鸿蒙宿主壳尚未构建 ⇒ 诚实标 🟡
           note = refs.length && refs.every((r) => APP_BRIDGE_KEYS.has(r))
             ? 'App 桥已就绪（平台中立）——鸿蒙宿主壳未接线'
-            : '端原型映射——能力桥未接线'
+            : '渲染核心已落地——能力桥未接线'
           break
-        default: note = '端原型映射——能力桥未接线'
+        default: note = '渲染核心已落地——能力桥未接线'
       }
       capRows.push({ name: end.name, status, note: `${end.engine} · ${note}` })
     }
-    lines.push(...compatSection(capRows, '> 状态口径：✅ 端已落地·本能力可用；⚠️ 端已落地·桥未提供→Err 显式降级；🟡 端原型映射·能力桥未接线；⬜ 端未开始。端架构对照见 [端与成熟度](/docs/framework/ends-matrix)。'))
+    lines.push(...compatSection(capRows, '> 状态口径：✅ 端已落地·本能力可用；⚠️ 端已落地·桥未提供→Err 显式降级；🟡 能力桥未接线；⬜ 端未开始。端架构对照见 [端与成熟度](/docs/framework/ends-matrix)。'))
     lines.push('> 铁律：能力原语全部返回 `Result<T>`（无回调 / 无全局对象）；平台不支持 → `Err` 显式降级，业务零平台分支。')
     lines.push('')
     // ★官网漏修：扩展接口段（该能力的额外 hook——富操作句柄）

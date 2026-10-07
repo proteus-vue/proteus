@@ -15,12 +15,15 @@ group: 开始
 | `npm run dev:mp` | 小程序 dev（`proteus dev --target skyline`：gen-routes + vite dev；日常迭代建议用 build:mp） |
 | `npm run build:mp` | 小程序正式构建（`proteus build --target skyline`：gen-routes → vue-tsc → vite build）→ `dist/mp-weixin/` |
 | `npm run debug:mp` | 全链路调试构建（`PROTEUS_DEBUG=1`，产物注入 `[proteus][环节]` 日志与决策链文件） |
+| `npx proteus build --target ios\|android\|harmony` | 编译各 App 端的屏内容 IR → `dist/app/<端>/` |
+| `npx proteus create host <端> <dir>` | 生成最小宿主工程（壳 + runtime） |
+| `npx proteus build --target <端> --package --host-dir <dir>` | 编译 + 调平台工具链打包（hvigorw / swiftc / javac+d8）|
 | `npx proteus explain src/pages/index.vue` | 查看该文件实际触发的全部编译规则决策 trace |
 | `npx proteus rules` | 编译器规则能力清单（每条规则自带 AI 说明书） |
 
 > 命令全部走 CLI——CLI 加载 `proteus.config.ts`、框架组装 vite 配置（`vite.config.ts` 不是工程文件）。npm scripts 只是 CLI 命令别名。
 
-> 本仓库（monorepo 根目录）另有 `npm run preview:web`（预览 Web 构建产物）与 `npm run verify`（test + 双端构建一键全量验证）。
+> 本仓库（monorepo 根目录）另有 `npm run preview:web`（预览 Web 构建产物）与 `npm run verify`（test + 多端构建一键全量验证）。
 
 ## 发布到各端
 
@@ -28,7 +31,7 @@ group: 开始
 |---|---|---|---|
 | Web | `dist/web/`（标准静态 SPA） | 任意静态托管 / CDN / 容器 | ✅ |
 | 微信小程序 | `dist/mp-weixin/` | 开发者工具「上传代码」→ 提审 → 发布（微信平台流程） | ✅ |
-| App（iOS / Android / 鸿蒙） | 原生工程（JSI 载体，G-40） | 随端宿主发布流程 | 🟡 原型映射 |
+| App（iOS / Android / 鸿蒙） | 屏内容 IR + 最小宿主工程 | `create host` + `build --package`（hvigorw / swiftc / javac+d8）| ✅ 真机落地 |
 | Flutter | Flutter 工程嵌入 | Flutter 发布流程 | 🟡 |
 | 快应用 | 待定 | 待定 | ⬜ |
 
