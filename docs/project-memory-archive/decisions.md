@@ -1971,3 +1971,11 @@
 **③ 修**：`website/scripts/gen-primitives.mjs` 的 `COVERED_PACKAGES` 补一行（写清两个覆盖位置）。
 **④ 验证**：check:primitives 转绿（34 页与源一致）；website 邻接门禁 content / doc-links / reference / en-drift / stats / consistency-data 全绿 + 根 script-compile / gates-sync / no-blind-wait 全绿。
 **⑤ ★教训**：a) 与 worklet（#460 官网缺整包页）· Vapor 三包（2026-09-29 一次漏三个）**同族**——「新增包未登记官网覆盖 ⇒ 静默从官网消失」是**复发型**缺口，`checkPackageCoverage` 是包级结构性兜底；b) **处置二分法**：用户面语义原语 → SOURCES（逐条出页）；工具链/实现/契约包 → COVERED_PACKAGES（写明归属页）；c) 门禁只负责**报红**，"清存量红"仍是收尾纪律的一部分（机器只能提醒，不能替你补洞）。
+
+639. **★★★修复「官网连续多轮静默未部署」根因——`pnpm-lock.yaml` 与 workspace package.json 失同步 + 立 `check:lockfile-sync` 门禁（★用户 2026-10-08「继续」，#638 收尾时查出）**：
+**① 现象（先取证）**：`[deploy]` 推数轮官网仍不更新。查 pages.yml runs——**真部署的 run 全 failure**，而「无标记被跳过」的 run 反显示 success（**假绿**，部署 step 全 skipped）。
+**② 根因（两级）**：一级 = pages.yml/ci.yml 安装步 `pnpm install --frozen-lockfile`，而 lockfile 与 `packages/render-backend/package.json` **失同步**（后者于 B1-step2 `3e3cfd95` 加 `@proteus-vue/slot-runtime`，lockfile importers 缺 `link:` 项）⇒ 安装失败（`ERR_PNPM_OUTDATED_LOCKFILE`）、后续 step 全 skipped。二级 = **本地 `pnpm install`（非 frozen）静默把 lockfile 改对** ⇒ 开发机看不到；CI run 又可能显示 success。
+**③ 修**：`pnpm install --no-frozen-lockfile` 重算 lockfile（+3 行）；`--frozen-lockfile` 复测通过。
+**④ 立门禁**：`scripts/check-lockfile-sync.mjs`——**判据 = CI 安装步同一条命令**（`pnpm install --frozen-lockfile --ignore-scripts --lockfile-only --offline`，~0.3s 只读）；接 `verify` 链最前（fail-fast）+ gates-sync 的 LOCAL_ONLY。破坏性验证：stash 回退 lockfile ⇒ rc=1（打印 pnpm 归因）；恢复 ⇒ rc=0。
+**⑤ 影响面（如实）**：线上自 `55804e90`（2026-10-06 21:28 UTC）起未真正上线（含 #637 官网文档梳理）。
+**⑥ ★教训**：a) 本地能「自动修正」的漂移 ⇒ 必须立「对准消费方契约」的门禁（复现 CI 那条命令——**自测通过 ≠ 契约成立**）；b) **run conclusion=success ≠ 部署真跑了**——看 **job steps 是否真 ran**；c) 门禁只报红，修静默故障仍是收尾纪律。
