@@ -72,6 +72,15 @@ export function createWebAdapter(): PlatformAdapter {
 
   // 站内 <a> 链接：拦截默认整页跳转 → SPA 导航（pushState，navigateTo 语义）
   // 外部链接 / _blank / 修饰键点击（新标签页）不拦截；route-type 属性驱动 CSS 转场
+  // ★★★2026-10-08 修复（用户实测「点页内超链 → 路由刷新但视图不刷新，手动刷新才对」）：
+  //   本拦截器在 **adapter 单例构造时**（模块加载副作用）就挂上 `document`——而 `adapter` 被
+  //   `@proteus-vue/shared/platform` 里任意消费者（components/api/desktop…）**间接 import** ⇒
+  //   即使用 vue-router 的宿主（如官网自身）也会被装上这个拦截器。它 `preventDefault` + `pushState`
+  //   + 自己的 emit，**绕过 vue-router** ⇒ URL 变了、宿主路由表没收到、视图不更新（无报错）。
+  //   ⇒ **守卫：只有「确实有 Proteus 路由在驱动本页」时才拦截**——判据 = 已注册 onPageLoad 监听
+  //     （`@proteus-vue/router` 的 createRouter 在 web 端会注册，见 router-core.ts）。没有监听者
+  //     ⇒ 无人接管这次导航 ⇒ **不抢**，交还浏览器/宿主路由（vue-router 的 router-link 自带
+  //     preventDefault，其默认跳转也照常工作）。
   document.addEventListener('click', (e) => {
     if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
     const target = e.target as HTMLElement | null
@@ -79,6 +88,8 @@ export function createWebAdapter(): PlatformAdapter {
     if (!anchor) return
     const href = anchor.getAttribute('href') || ''
     if (anchor.target === '_blank' || !href.startsWith('/')) return
+    // ★无人监听（无 Proteus 路由驱动本页）→ 不拦截（否则会吞掉宿主路由的导航）
+    if (listeners.length === 0) return
     e.preventDefault()
     const routeType = anchor.getAttribute('route-type') || undefined
     historyIndex += 1
