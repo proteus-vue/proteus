@@ -1767,3 +1767,15 @@
 **⑤ ★教训（可执行）**：a) **"模板能渲染" ≠ "事件能触发"**——App 靠编译成动作、Web/MP 靠运行期函数，**同一写法的落地机制不同**，只验一端会漏（本轮 Web/MP 静默失败、App 正常）；b) **"跨端一致"要含交互**（不只视觉）；c) **`$`-前缀全局属性在 MP（原生 `Page`）没有 Vue 的 `globalProperties` 机制**——注入点与 Web 完全不同（这是框架侧要解决的）。
 **⑥ 验证**：Web playwright NAV_OK · MP 产物核对 · App 真机 target 命中 · 四端重建/安装 · build green。
 
+617. **★★★$nav 升格为**框架级**导航全局——Web/MP 统一 `@tap="$nav('routeName')"`（承 #616 的架构缺口收口）（★用户 2026-10-08「好的」）**：
+**① 承前**：#616 在 demo 侧修了 Web/MP 导航（应用自己定义 `$nav`），并把「`$nav` 是 App 专属、却在共享页面里被当统一写法 ⇒ 别的端静默失效」登记为**框架级缺口**。本条 = 该缺口的**框架侧收口**：把 `$nav` 做成**平台级导航全局**，使「一份页面、四端都能点」，不再依赖每个应用自定义。
+**② 三端各自落地、同一写法**：
+- **router**（`packages/router/src/index.ts`）：`createRouter(routes)` 创建时**登记 `globalThis.$nav`**——字符串目标按**路由名**（优先，`push({name})`）/ **path**（兜底，`push({path})`）解析；路由记录 = 单一事实源；未命中交 router 明确报错（不静默）。
+- **Web**（`packages/web/src/install.ts`）：`installWebPlatform` 注册 `app.config.globalProperties.$nav` → 模板 `n.$nav` 命中；委托 `globalThis.$nav`（未 `createRouter` 时 **warn 不静默**）。
+- **MP**（`packages/compiler/src/script.ts`）：给**每页**注入页方法 `$nav(target)`——优先 `globalThis.$nav`（若应用 createRouter 且能登记，如经 app 级 bundle）；否则 **`wx.navigateTo({url:'/pages/'+target})` 回退**（小程序原生、自带导航栈与页面生命周期）。
+- **App**：不变（编译器把 `$nav(...)` 编成 nav 动作、不看函数体）。
+- **应用侧**（css-conformance）：`main.ts` 导入 `./router`（触发 `createRouter` 注册）；`index.vue` **移除**上一轮的应用级 `$nav`（改走框架）。
+**③ 验收**：**Web playwright 功能测**（点「文本换行」→ 标题变 + url `/pages/text`；点「弹性布局」→ 命中）✅ · **MP 产物** `$nav(target){ globalThis.$nav … wx.navigateTo 回退 }` ✅ · **App 真机** `SUPERAPP_TAP target=7 → cur=text` ✅ · 新增 `tests/router-nav-global.test.ts`（3 用例：登记 + 名/path 解析导航 + MP 产物含页方法）✅ · router/platform/compiler 59 测试绿 · **test:coupled 347 绿** · root vue-tsc 0 · **examples/showcase MP 构建仍绿**（框架改动无回归）· 四端重建/安装。
+**④ ★★教训 / 可执行**：a) **"App 专属能力混进共享层写法"要**升格到框架**修**（不只修调用方）——否则每个应用都要自己重造 `$nav`；b) **各端落地机制不同但**写法收敛为一**（`createRouter` 登记 + Web globalProperty + MP 编译器注入 + App 编译器编译动作）；c) **转译层（MP/vapor 编译器）要在注入点考虑"运行时可能未加载"**（`globalThis.$nav` 缺 ⇒ 回退原生、静默掠过 ⇒ 产物可独立运行）；d) **`$`-全局在 MP（原生 `Page`）无 Vue `globalProperties` 机制** ⇒ 只能在**编译期注入页方法**（App 壳/入口是直出、无模块解析 ⇒ 不能靠 import 侧效应）。
+**⑤ 诚实边界**：MP 的 `globalThis.$nav` 分支依赖"应用在某处 `createRouter` 并登记全局"——现用的 css-conformance 走 **wx.navigateTo 回退**（原生足够）；若某应用需要"名字→path 非 pages/<名> 约定"的解析，需自建 app 级注册（小程序入口直出限制）——**登记为已知边界**。App 侧不依赖此（编译成动作）。
+
