@@ -217,7 +217,16 @@ final class SuperappScene: NSObject {
               let qArr = String(data: qd, encoding: .utf8) else { return }
         let argLiteral = String(qArr.dropFirst().dropLast())   // 去掉外层 [ ]
         let out = evalJs?("__proteusSuperappRender(\(argLiteral))") ?? "{\"ok\":false}"
-        NSLog("[proteus] SUPERAPP_RENDER page=%@ runtime=%@", usePage, String(out.prefix(160)))
+        // ★★渲染失败必须**醒目且完整**（2026-10-08 · 用户抓出「iOS/鸿蒙背景页导航后仍是首页」）：
+        //   宿主 mount 失败时 runtime 回 `{"ok":false,…,"hostReply":"…"}`——成功只记首段（日志不爆炸），
+        //   失败记**完整回执**（含宿主原话：内核建树失败原因），使"屏幕没换"当场可归因（此前被静默丢弃）。
+        var renderOut = out
+        if out.contains("\"ok\":false") {
+            NSLog("[proteus] SUPERAPP_RENDER_FAIL page=%@ runtime=%@", usePage, out)
+        } else {
+            renderOut = String(out.prefix(160))
+        }
+        NSLog("[proteus] SUPERAPP_RENDER page=%@ runtime=%@", usePage, renderOut)
         // ★重绘后把 tab 栏提到最上层（自绘每次重建层树，可能压住它——见 buildTabBar 层级注释）
         if let p = tabBarParent(), let bar = p.viewWithTag(771001) { p.bringSubviewToFront(bar) }
     }

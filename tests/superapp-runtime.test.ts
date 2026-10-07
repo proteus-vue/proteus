@@ -118,6 +118,26 @@ describe('★B1 · 壳级运行期驱动（createSuperappRuntime）', () => {
     expect(scroll, '再前进 detail 应回到它上次的 0').toBe(0)
   })
 
+  // ★★★宿主 mount 失败必须**可观测**（2026-10-08 · 用户抓出「iOS/鸿蒙背景页导航后仍是首页」）。
+  //   【防什么】宿主 `mount` 是**有回执的**（`{ok:true,…}` / `{ok:false,error}`），旧实现**丢弃**它 ⇒
+  //   内核建树失败（`proteus_layout_create` 返回 0）时**整屏保持旧内容却仍报 ok:true**——用户看到的是
+  //   "点背景还是首页"，且无任何日志。本用例钉住：失败 ⇒ mountScreen 返 false + lastHostReply 带原话。
+  it('★宿主 mount 失败 ⇒ 返 false 且 lastHostReply 暴露原话（不静默）', async () => {
+    const dir = makeTempProject()
+    const build = await buildAppRuntimeContent(dir, 'android')
+    const artifacts = JSON.parse(fs.readFileSync(build.outFile, 'utf-8')) as Record<string, ScreenRuntimeArtifact>
+    const notes: string[] = []
+    const rt = createSuperappRuntime({
+      artifacts,
+      host: { mount: () => '{"ok":false,"error":"proteus_layout_create 失败（节点数 18）"}', applyOps: () => '{"ok":true}' },
+      viewport: { width: 390, height: 844 },
+      onNote: (n) => notes.push(n),
+    })
+    expect(rt.mountScreen('home'), '宿主回 ok:false ⇒ 不得报成功').toBe(false)
+    expect(rt.lastHostReply(), '应暴露宿主原话供报告落盘').toContain('proteus_layout_create 失败')
+    expect(notes.some((n) => n.includes('宿主 mount 失败')), '失败必须有 note（不静默）').toBe(true)
+  })
+
   it('缺该屏产物 ⇒ 不挂载、明确 note（不静默）', async () => {
     const dir = makeTempProject()
     const build = await buildAppRuntimeContent(dir, 'android')

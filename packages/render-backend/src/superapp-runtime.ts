@@ -68,6 +68,15 @@ export interface SuperappRuntime {
   current(): string
   /** ★跨调用状态导出（`{屏名: 数据}`）——一次性 VM 宿主持有、下次回灌 `seedData` */
   snapshot(): Record<string, Record<string, unknown>>
+  /**
+   * ★★★**最近一次 `host.mount` 的原始回执**（2026-10-08 · 用户抓出「iOS/鸿蒙背景页导航后仍是首页」）。
+   *
+   * 【为什么必须暴露（本仓实测的静默失效）】宿主 `mount` 是**有回执的**（`{ok:true,...}` /
+   *   `{ok:false,error}`），而运行期此前**丢弃**它、只看"有没有该屏产物" ⇒ 内核建树失败
+   *   （`proteus_layout_create` 返回 0）时**整屏保持旧内容却仍报 ok:true** —— 与「hook 静默失效」
+   *   同源：**没有回执校验 = 失败不可观测**。宿主持有本值即可在报告里如实落盘失败原因。
+   */
+  lastHostReply(): string | null
 }
 
 /**
@@ -93,6 +102,8 @@ export function createSuperappRuntime(opts: SuperappRuntimeOptions): SuperappRun
     onNote: note,
   })
   let cur = ''
+  // ★最近一次宿主 mount 回执（见 lastHostReply 注释——失败必须可观测，不得静默）
+  let lastHostReply: string | null = null
 
   // 注册手势反向回调（宿主在命中时报"内核 id + 冒泡链"）
   if (typeof opts.host.onGesture === 'function') {
@@ -112,6 +123,16 @@ export function createSuperappRuntime(opts: SuperappRuntimeOptions): SuperappRun
     }
     const r = dispatch(type, chain)
     return JSON.stringify(r)
+  }
+
+  /** 解析宿主 mount 回执：`{ok:false,…}` ⇒ 失败（其余/非 JSON ⇒ 放行，保持旧宿主兼容）。 */
+  function hostOk(reply: string): boolean {
+    try {
+      const o = JSON.parse(reply) as { ok?: boolean }
+      return o?.ok !== false
+    } catch {
+      return true
+    }
   }
 
   function dispatch(type: string, chain: readonly number[]): { handled: boolean; fired: number[] } {
@@ -148,7 +169,14 @@ export function createSuperappRuntime(opts: SuperappRuntimeOptions): SuperappRun
         restore = 0                        // ★前进：重置
       }
       const inst = rt.instance(name)
-      opts.host.mount(JSON.stringify({ viewport: inst.content().viewport, nodes: inst.content().nodes }))
+      const reply = opts.host.mount(JSON.stringify({ viewport: inst.content().viewport, nodes: inst.content().nodes }))
+      lastHostReply = reply
+      // ★★宿主回执校验（见 lastHostReply 注释）：`ok:false` ⇒ **不上屏成功**，如实回报失败
+      //   （旧行为：丢弃回执恒返 true ⇒ 内核建树失败时屏幕保持旧内容而报告仍是 ok:true）。
+      if (!hostOk(reply)) {
+        note(`[superapp-runtime] 宿主 mount 失败：${String(reply).slice(0, 200)}`)
+        return false
+      }
       // 挂载后再设滚动（树已重建；宿主按此值定位）
       if (typeof opts.host.setScroll === 'function') opts.host.setScroll(restore)
       cur = name
@@ -158,12 +186,18 @@ export function createSuperappRuntime(opts: SuperappRuntimeOptions): SuperappRun
       if (!rt.has(name)) { note(`[superapp-runtime] 无该屏运行期产物：${name}`); return false }
       const inst = rt.instance(name)
       // ★仅重挂（跳过滚动/历史逻辑——一次性 VM 宿主每次都从 content() 取新树；滚动由宿主自己管）
-      opts.host.mount(JSON.stringify({ viewport: inst.content().viewport, nodes: inst.content().nodes }))
+      const reply = opts.host.mount(JSON.stringify({ viewport: inst.content().viewport, nodes: inst.content().nodes }))
+      lastHostReply = reply
+      if (!hostOk(reply)) {
+        note(`[superapp-runtime] 宿主 mount（重挂）失败：${String(reply).slice(0, 200)}`)
+        return false
+      }
       cur = name
       return true
     },
     dispatchGesture: dispatch,
     current: () => cur,
     snapshot: () => rt.snapshot(),
+    lastHostReply: () => lastHostReply,
   }
 }

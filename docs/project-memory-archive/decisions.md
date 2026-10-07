@@ -1779,3 +1779,14 @@
 **④ ★★教训 / 可执行**：a) **"App 专属能力混进共享层写法"要**升格到框架**修**（不只修调用方）——否则每个应用都要自己重造 `$nav`；b) **各端落地机制不同但**写法收敛为一**（`createRouter` 登记 + Web globalProperty + MP 编译器注入 + App 编译器编译动作）；c) **转译层（MP/vapor 编译器）要在注入点考虑"运行时可能未加载"**（`globalThis.$nav` 缺 ⇒ 回退原生、静默掠过 ⇒ 产物可独立运行）；d) **`$`-全局在 MP（原生 `Page`）无 Vue `globalProperties` 机制** ⇒ 只能在**编译期注入页方法**（App 壳/入口是直出、无模块解析 ⇒ 不能靠 import 侧效应）。
 **⑤ 诚实边界**：MP 的 `globalThis.$nav` 分支依赖"应用在某处 `createRouter` 并登记全局"——现用的 css-conformance 走 **wx.navigateTo 回退**（原生足够）；若某应用需要"名字→path 非 pages/<名> 约定"的解析，需自建 app 级注册（小程序入口直出限制）——**登记为已知边界**。App 侧不依赖此（编译成动作）。
 
+618. **★★★修复 App 三端「点背景列表项导航后仍显示上一页/首页」——根因 = 内核渐变色标严格升序校验拒掉合法硬色标（Web 基准）+ 宿主 env token 未解析 + 运行期丢弃宿主 mount 回执（静默失效）（★用户 2026-10-08「测试发现鸿蒙和iOS点击背景列表项导航的还是首页，其他端导航正常」）**：
+**① 现象**：css-conformance 首页点「背景」→ **鸿蒙/iOS 显示的是上一页（背景定位）**；Android/Web/MP 正常。取证：`SUPERAPP_RENDER page=background ... ok:false`（运行期返 false）而**屏幕保持旧内容**——即「导航成功、渲染失败、失败被吞」。
+**② 三处根因（层层取证，逐条修）**：
+- **a) 内核 `parse_gradient` 要求色标 offset 严格升序 ⇒ 拒掉 Web 合法的硬色标（相等 offset）**——`background` 页的棋盘平铺 tile 是 `linear-gradient(45deg, a 25%, b 25%, …)`（同位置两色标 = 硬边，浏览器合法且本引擎 CSS 编译产物真实会发）⇒ `proteus_layout_create` 返回 0 ⇒ **整屏建不起来**。修：判据改**非降序**（相等 = 硬边允许、逆序仍拒），与浏览器同语义（**Web 为唯一基准**）；同步改 TS 校验器（`packages/animation/src/gradient.ts`）。
+- **b) 鸿蒙 `substituteEnvTokens` 在 env 表为空时早退 ⇒ `env:--pf-vh`（无 fallback）原样进内核 ⇒ "invalid type: string, expected f32" ⇒ 建树失败**（iOS 的 `resolveEnvToken` 恒会替换 ⇒ 无此问题）。修：去掉早退（始终替换，未知/缺表 ⇒ fallback 0）。
+- **c) 宿主 `mount` 有回执（`{ok:true,…}` / `{ok:false,error}`），而共享运行期 `createSuperappRuntime.mountScreen` 丢弃回执、只看「有无该屏产物」⇒ 内核建树失败时整屏保持旧内容却仍报 ok:true**（用户看到「点背景还是首页」，且无任何日志）。修：运行期**校验回执**（`ok:false` ⇒ 返 false + note）+ 暴露 `lastHostReply()`；`entry-superapp` 把宿主原话随 `__proteusSuperappRender` 回执带回；iOS 宿主失败时记**完整**回执（成功只记首段）。
+- **附加（Android 独有）**：无底色的纯渐变节点 `c.color`=0（透明黑）⇒ `bgPaint` alpha=0，而 Android shader 输出受 paint alpha **调制** ⇒ **渐变整条画成全透明**（B 区线性渐变空白、C 区因有底色可见）。修：有 shader 时把 paint alpha 复位为 `op`（与 iOS/鸿蒙同语义）。
+**③ 工具化（「失败必须可观测」）**：内核 `proteus_layout_create` 失败**此前只返回 0、原话被丢**（排查被迫靠「改代码→打包→装真机」，一轮 5 分钟）⇒ 现把**内核原话写 stderr**（devicectl --console / logcat / hilog 直接可见）。
+**④ 验收（三端真机）**：iOS（`--superapp --drive` → `page=background ok:true` + shot-background 正确 4 段）✅ · 鸿蒙（`nodes_rendered=18` + 截图正确）✅ · Android（截图 B 区渐变恢复）✅。
+**⑤ 测试**：`tests/anim-gradient.test.ts` +新增「相等 offset 接受 / 逆序拒绝」用例；rust `ffi.rs` +内核级用例 `gradient_equal_offsets_are_accepted_hard_stop`；`tests/superapp-runtime.test.ts` +「宿主 mount 失败 ⇒ 返 false + lastHostReply」用例；`scripts/test-coupling.mjs` +**渐变跨语言契约**配对（改 TS 校验器 / 内核解析 ⇒ 定向跑渐变判据，防三处实现分叉）。
+**⑥ 教训（可执行）**：a) **「三处实现同一规则时必须同源」**——色标规则散布 TS 校验器 / 内核解析 / 两端宿主 GradSpec，改一处不同步另两处 ⇒ 编译器放行的产物在内核被拒 ⇒ **整屏空白**；b) **「有回执的调用必须校验回执」**——丢弃回执 = 失败不可观测（与 hook 静默失效同源）；c) **「静默早退」是缺陷温床**——`if (env.empty()) return` 让「宿主还没就绪」变成「整屏崩」；d) **「以 Web 为基准」含校验规则**（硬色标合法，不该被引擎拒）；e) **内核错误文本必须可回传**（否则每轮排查都靠真机重打）。

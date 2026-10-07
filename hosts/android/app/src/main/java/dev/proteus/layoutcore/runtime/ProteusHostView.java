@@ -2505,6 +2505,16 @@ public class ProteusHostView extends ViewGroup {
                 }
             }
             if (gradShader != null) bgPaint.setShader(gradShader);
+            // ★★★背景渐变不随"底色 alpha"消失（2026-10-08 · 与 iOS/鸿蒙对齐）：无底色而有渐变的节点
+            //   `c.color`=0（透明黑）⇒ 上一步 `setColor` 把 paint alpha 置 0，而 Android 的 shader
+            //   输出会被 paint alpha 调制 ⇒ 渐变**整体画成全透明**（真机：B 区线性渐变空白、C 区因有
+            //   底色可见）。Web 语义：`background-image` 的绘制不透明度 = 元素 opacity（与底色无关）⇒
+            //   有 shader 时把 paint alpha 复位为 op。
+            if (gradShader != null) {
+                // I2-ALLOW: **颜色通道**量化（opacity → ARGB alpha 字节），非几何换算——与上方
+                //   `(int)(Color.alpha(base) * op)` 同轴（不进排版几何、不参与坐标吸附）。
+                bgPaint.setAlpha(Math.max(0, Math.min(255, (int) (op * 255f))));
+            }
             // ★批次 10（CSS 兼容对齐 · 超级应用视觉）：盒阴影——**分层圆角矩形近似**（N 层 alpha 衰减）。
             //   ★为什么不用 setShadowLayer：Android 硬件加速下它**只支持文本**（对 Path/Rect 无效）——
             //     真机静默不画（见下方 glow 的同款注释）。分层填充是确定性的且 GPU 廉价。
