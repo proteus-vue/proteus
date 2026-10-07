@@ -1538,8 +1538,14 @@ final class SelfDrawView: UIView {
             //   ★为什么在宿主解：宿主是**执行变换的那一端**（内核只透传语义——它不算矩阵）。
             //   ★快照在 `layerTransformOrigin`（建层时从树样式读一次——与 perspective 同一形态）。
             let org = layerTransformOrigin[nodeId] ?? CGPoint(x: 0.5, y: 0.5)
-            let px = b.width * org.x
-            let py = b.height * org.y
+            // ★★★修正（2026-10-08 · 子代理审 effects C/D + 真机取证）：**CATransform3D 绕 anchorPoint 施加**
+            //   （CALayer 缺省 anchorPoint = 层中心 c=(w/2,h/2)）⇒ 要绕 bounds 点 q 旋转/缩放，合成必须是
+            //   `T(q−c)·M·T(−(q−c))`；此前用 `T(q)·M·T(−q)`——**漏减 anchorPoint 偏移 c** ⇒ 所有 iOS 变换
+            //   都绕了**错误点**（误差 = (I−M)·c）：案例 C 的 scale(1.2) 盒左移 ~9css、案例 D 的
+            //   `transform-origin:0 0` 实际绕中心转——而 Web/Android/鸿蒙均正确（Android 用
+            //   `canvas.rotate(θ, qx, qy)` 本就绕绝对点 q）。
+            let px = b.width * (org.x - 0.5)
+            let py = b.height * (org.y - 0.5)
             t = CATransform3DTranslate(t, px, py, 0)
             if rotate != 0 {
                 t = CATransform3DRotate(t, rotate * .pi / 180, 0, 0, 1) // 度 → 弧度
