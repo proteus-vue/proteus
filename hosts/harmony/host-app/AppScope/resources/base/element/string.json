@@ -3,6 +3,10 @@
     {
       "name": "app_name",
       "value": "ProteusHost"
+    },
+    {
+      "name": "app_name_cssconf",
+      "value": "CSS 验收"
     }
   ]
 }
