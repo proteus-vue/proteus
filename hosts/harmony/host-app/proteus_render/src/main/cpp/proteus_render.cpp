@@ -1062,6 +1062,11 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
                     0, 0, 1, 0,
                     (float)C.tx, (float)C.ty, 0, 1
                 };
+                // ★★★修（2026-10-08 · effects C/D 仍偏差的**根因**）：ArkUI 的 SetTransform **矩阵是绕节点
+                //   pivot 施加**的（pivot 缺省 (0.5,0.5)）——而 C 已把枢轴烘焙进矩阵 ⇒ 枢轴被施加**两次**
+                //   （实测：scale 1.2 盒左移量恰为正确值的 **2 倍**：−16.8 vs −8.4 设计 px）。
+                //   ⇒ 显式 SetPivot(0,0)，让矩阵绕**节点局部原点**施加，与 C 的"局部坐标"口径一致。
+                OH_ArkUI_RenderNodeUtils_SetPivot(node, 0.0f, 0.0f);
                 OH_ArkUI_RenderNodeUtils_SetTransform(node, m);
             }
         }
@@ -1272,17 +1277,20 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
         // ★批次 10（CSS 兼容对齐 · 超级应用视觉）：盒阴影 → RenderNode 原生 shadow API
         //   （color/offset/radius/alpha；spread 无原生项——近似忽略）
         if (shadowRadius > 0 && shadowColor > 0) {
-            // ★★★批次 48 修复（独立视觉验收抓出「鸿蒙客服球光晕远大于 Web（≈2.5–3×、强度≈4×）」，与 iOS/Android 同源）：
-            //   ① **alpha 施加两次**（color 里已含 alpha，又 `SetShadowAlpha(1.0)` 叠一层）⇒ 阴影过浓；
-            //      ⇒ 把 color 置为**不含 alpha 的 RGB**，浓度只由 `SetShadowAlpha` 单一通道给（源=color 的 alpha）。
-            //   ② 单位：其它长度（x/y/w/h/radius）在本文件都是**物理 px**，而 ArkUI 的 shadow radius 取 **vp**
-            //      ⇒ 此处除以 density 换算（此前直接传 px 值 ⇒ 光晕半径被放大 ~3.5×）。
-            //   ★两处叠加正是"光晕又大又浓"的根因；两行修复后与 Web 同量级。
+            // ★★★批次 48 修复（独立视觉验收抓出「鸿蒙客服球光晕远大于 Web」）：**alpha 施加两次**
+            //   （color 里已含 alpha，又 `SetShadowAlpha(1.0)` 叠一层）⇒ 阴影过浓；⇒ 把 color 置为
+            //   **不含 alpha 的 RGB**，浓度只由 `SetShadowAlpha` 单一通道给（源=color 的 alpha）。
+            // ★★★修（2026-10-08 · 用户「鸿蒙的阴影还是和其他端差异太大」）：**单位口径全错**（方向与批 48 相反）。
+            //   实测（effects B 案 0 4px 12px rgba(0,0,0,.18)，逐端剖同一列灰度）：
+            //     · offset/radius **均取物理 px**（与全文件其它长度 x/y/w/h 同单位，无需 ÷density）；
+            //     · 但旧代码 **offset 传物理 px、radius 却 ÷density 当 vp** ⇒ blur 被缩到 1/3.5
+            //       ⇒ 光晕只剩"盒下一坨硬块"、左右/上方几乎没有 ⇒ 与 Web 的均布柔光不符。
+            //   ⇒ 两者都按**物理 px** 传（offset 原值、radius 原值）。
             const uint32_t scRgb = static_cast<uint32_t>(shadowColor) & 0x00FFFFFFu;
             const float scA = static_cast<float>((static_cast<uint32_t>(shadowColor) >> 24) & 0xFFu) / 255.0f;
             OH_ArkUI_RenderNodeUtils_SetShadowColor(node, scRgb);
             OH_ArkUI_RenderNodeUtils_SetShadowOffset(node, static_cast<int32_t>(shadowDx), static_cast<int32_t>(shadowDy));
-            OH_ArkUI_RenderNodeUtils_SetShadowRadius(node, static_cast<float>(shadowRadius) / (g_density > 0 ? g_density : 1.0f));
+            OH_ArkUI_RenderNodeUtils_SetShadowRadius(node, static_cast<float>(shadowRadius));
             OH_ArkUI_RenderNodeUtils_SetShadowAlpha(node, scA > 0 ? scA : 1.0f);
         }
         // ★★★文本上屏（2026-10-02）：指令带 "text" ⇒ 给该节点挂 content modifier，
