@@ -69,4 +69,5 @@ Steps 4 and 5 are the crux: before AI output ever enters the codebase, machines 
 
 - [Conformance](/docs/framework/29-conformance): the machine acceptance system for AI output
 - [Semantic model](/docs/framework/11-semantic-model): where the IR that AI consumes comes from
-- [CLI & project commands](/docs/28-cli): commands to run MCP / gates locally
+- [CLI & project commands](/docs/28-cli): gates and project commands
+- [MCP Server reference](/docs/reference/mcp): `proteus mcp serve` (mount into Claude Desktop / Cursor)

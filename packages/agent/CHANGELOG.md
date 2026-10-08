@@ -1,5 +1,11 @@
 # @proteus-vue/agent
 
+## 0.3.0-beta.26
+
+### Patch Changes
+
+- @proteus-vue/mcp@0.3.0-beta.26
+
 ## 0.3.0-beta.23
 
 ### Patch Changes

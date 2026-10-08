@@ -52,6 +52,7 @@ import { runAuditAll, formatAuditAll } from './audit-all'
 import { runDevtoolsBudget, formatDevtoolsBudget } from './devtools-budget'
 import { runD2Audit, formatD2Audit, resolveD2Target } from './d2-audit'
 import { runGlassAudit, formatGlassAudit } from './glass-audit'
+import { parseMcpArgs, runMcpServe } from './mcp'
 import { runGate, formatGateList } from './gate'
 import { planMpE2E, diagnoseMpE2EEnv, formatMpE2EDiagnosis, prepareMpE2EProject } from './mp-e2e'
 import { warnIfDistStale } from './dist-freshness'
@@ -723,6 +724,13 @@ async function main(): Promise<void> {
     case 'version':
       console.log(resolveCliVersion())
       break
+    case 'mcp': {
+      // ★决策 #681：`proteus mcp serve` —— stdio MCP server（MCP 客户端直连）。
+      //   ★输出走 stderr（stdout 是 JSON-RPC 协议通道，见 mcp.ts）——此处不调 ui.ts。
+      const { options } = parseMcpArgs(rest)
+      await runMcpServe(options)
+      break
+    }
     case 'help':
     default:
       // ★美化帮助（决策 #213）：分组 + ANSI 色彩（TTY 自动检测；非 TTY/CI 纯文本）
