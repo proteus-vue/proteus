@@ -74,7 +74,7 @@ export const DIAG_CODES: Record<string, DiagCodeDef> = {
   // ── 构建期 · 环境（工具链/签名）──
   'PT-BE-001': { stage: 'B', category: 'E', title: '找不到可用 Xcode（iOS 工具链）', hints: ['安装完整 Xcode（非 CommandLineTools）；非默认安装位用 PROTEUS_DEVELOPER_DIR 指定'] },
   'PT-BE-002': { stage: 'B', category: 'E', title: '找不到 Android SDK / JDK', hints: ['装 JDK 17（brew install openjdk@17）并设 JAVA_HOME；ANDROID_HOME 指向 Android SDK'] },
-  'PT-BE-003': { stage: 'B', category: 'E', title: 'iOS 签名不可用（无匹配描述文件 / 身份）', hints: ['在 Xcode 打开工程 → Signing & Capabilities → 勾“Automatically manage signing”选好 Team（会为该 bundleId 生成描述文件）', '查本机描述文件与证书：proteus host signing ios --list'] },
+  'PT-BE-003': { stage: 'B', category: 'E', title: 'iOS 签名不可用（无匹配描述文件 / 身份）', hints: ['用 Xcode 为该 bundleId 建 Apple 描述文件（New Project → iOS App → Bundle ID 填它 → Automatically manage signing）；CLI 宿主是 swiftc、无 .xcodeproj', '查本机描述文件与证书：proteus host signing ios --list'] },
   'PT-BE-004': { stage: 'B', category: 'E', title: '未找到已连接的 iOS 设备', hints: ['用数据线连接设备并信任本机；xcrun devicectl list devices 应显示 connected'] },
   'PT-BE-005': { stage: 'B', category: 'E', title: '缺少 runtime 依赖（AAR / 静态库）', hints: ['删除宿主目录后重生成：proteus create host android <dir>（从 CLI 随包 runtime 拷入）'] },
   // ── 构建期 · 宿主编译失败 ──

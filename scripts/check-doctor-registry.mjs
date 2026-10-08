@@ -52,7 +52,7 @@ for (const { file, id, group } of ids) {
   if (seen.has(id)) note(`✗ 重复 id：${id}（${file}）`)
   seen.add(id)
   if (!/^[a-z]+\/[a-z][a-z0-9-]*$/.test(id)) note(`✗ id 命名不合规（应 组/kebab-case）：${id}（${file}）`)
-  const GROUPS = ['env', 'toolchain', 'deps', 'project', 'hosts', 'ports', 'devices', 'gates']
+  const GROUPS = ['env', 'toolchain', 'deps', 'project', 'endpoint', 'ports', 'devices', 'gates']
   if (!GROUPS.includes(group)) note(`✗ 未知组：${group}（${id}，${file}）`)
 }
 

@@ -6,7 +6,7 @@
 import path from 'node:path'
 import type { DoctorCheck } from '../types'
 import { ok, skip, fail, hasToolsDir } from './util'
-import { resolveDeveloperDir } from '../../host-package'
+import { resolveDeveloperDir, findAllXcodes } from '../../host-package'
 import { resolveMpIdeCli } from '../../mp-e2e'
 import { androidSigningStatus, IOS_PROFILE_DIRS } from '../../signing'
 
@@ -23,9 +23,13 @@ export const TOOLCHAIN_CHECKS: DoctorCheck[] = [
     level: 'error',
     appliesTo: (ctx) => has(ctx, 'ios'),
     run(ctx) {
+      // ★决策 #690：透明展示**全部** Xcode + 选中哪个（用户装了多个时不再"凭猜"）
+      const all = findAllXcodes()
       const dir = resolveDeveloperDir()
-      if (dir) return ok('toolchain/xcode', 'Xcode（iOS SDK）', dir)
-      return fail({ checkId: 'toolchain/xcode', level: 'error', code: 'PT-BE-001', title: '找不到可用 Xcode（iOS SDK）', expected: '完整 Xcode（非 CommandLineTools）提供 iOS SDK', actual: '未找到', fix: { command: 'PROTEUS_DEVELOPER_DIR=/path/to/Xcode.app/Contents/Developer proteus doctor', description: '安装完整 Xcode 或指定非默认安装位' }, evidence: [{ command: 'xcode-select -p', note: '可能指向 CommandLineTools' }] })
+      const listNote = all.length > 1 ? `本机 ${all.length} 个 Xcode：${all.map((c) => c.app + (c.hasIosSdk ? (c.hasDevicectl ? '✓' : '◐') : '✗')).join(' · ')}` : ''
+      const evidence = all.map((c) => ({ command: c.app, note: `sdk=${c.hasIosSdk} devicectl=${c.hasDevicectl}` }))
+      if (dir) return { checkId: 'toolchain/xcode', level: 'ok', title: 'Xcode（iOS SDK）', actual: `${dir}${listNote ? `  （${listNote}）` : ''}`, evidence }
+      return fail({ checkId: 'toolchain/xcode', level: 'error', code: 'PT-BE-001', title: '找不到可用 Xcode（iOS SDK）', expected: '任一 Xcode（非 CommandLineTools）提供 iOS SDK', actual: all.length ? `找到 ${all.length} 个但均无 iOS SDK` : '未找到', fix: { command: 'PROTEUS_DEVELOPER_DIR=/path/to/Xcode.app/Contents/Developer proteus doctor', description: '安装完整 Xcode 或用 PROTEUS_DEVELOPER_DIR 指定（本工具会自行扫描 /Applications 与 /Volumes 各安装位）' }, evidence: evidence.length ? evidence : [{ command: 'xcode-select -p', note: '可能指向 CommandLineTools' }] })
     },
   },
   {
@@ -138,7 +142,7 @@ export const TOOLCHAIN_CHECKS: DoctorCheck[] = [
       const profile = ctx.findIosProfile(bundleId)
       return profile
         ? ok('toolchain/ios-signing', 'iOS 签名（项目 bundleId）', `${bundleId} ← ${path.basename(profile)}`)
-        : fail({ checkId: 'toolchain/ios-signing', level: 'error', code: 'PT-BE-003', title: `iOS 签名不可用（无覆盖 ${bundleId} 的描述文件）`, expected: `本机 provisioning profile 覆盖 ${bundleId}`, actual: '无匹配 profile', fix: { command: 'proteus host signing ios --list  # 查本机描述文件/证书；缺失时在 Xcode 开启自动签名', description: 'iOS 需覆盖该 bundleId 的描述文件' }, evidence: [{ command: `ls "${path.join(process.env.HOME ?? '', 'Library/Developer/Xcode/UserData/Provisioning Profiles')}"`, note: `无覆盖 ${bundleId} 的 profile` }] })
+        : fail({ checkId: 'toolchain/ios-signing', level: 'error', code: 'PT-BE-003', title: `iOS 签名不可用（无覆盖 ${bundleId} 的描述文件）`, expected: `本机 provisioning profile 覆盖 ${bundleId}`, actual: '无匹配 profile', fix: { command: 'proteus host signing ios --bundle=<bundleId>  # 查本机描述文件；缺失时用 Xcode 为该 bundleId 建描述文件（CLI 宿主是 swiftc，无 .xcodeproj）', description: 'iOS 需覆盖该 bundleId 的 Apple 描述文件' }, evidence: [{ command: `ls "${path.join(process.env.HOME ?? '', 'Library/Developer/Xcode/UserData/Provisioning Profiles')}"`, note: `无覆盖 ${bundleId} 的 profile` }] })
     },
   },
   {

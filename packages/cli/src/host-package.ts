@@ -206,38 +206,85 @@ function findRepoRootForKernel(hostDir: string): string | null {
   return null
 }
 
+/** 一个 Xcode 候选（供 doctor 透明展示 + 解析选择） */
+export interface XcodeCandidate {
+  /** `*.app/Contents/Developer`（DEVELOPER_DIR 形态） */
+  dir: string
+  /** `*.app` 路径（人读） */
+  app: string
+  /** 提供 iOS SDK（Platforms/iPhoneOS.platform 非空） */
+  hasIosSdk: boolean
+  /** 有 devicectl（Xcode ≥ 15 ⇒ 真机能力） */
+  hasDevicectl: boolean
+}
+
 /**
- * ★解析可用 Xcode 的 DEVELOPER_DIR（决策 #684）——判据 = **该目录能提供 iOS SDK**（纯文件系统，零子进程）。
+ * ★枚举本机所有 Xcode（决策 #690 · 用户：「我装了多个 Xcode，不能强依赖默认安装路径」）。
+ *   来源（合并去重）：① env（PROTEUS_DEVELOPER_DIR/DEVELOPER_DIR）② `xcode-select -p`
+ *   ③ 常见安装位 ④ **Spotlight mdfind** ⑤ **有界 glob**（Applications、Volumes 一/二层下的 Xcode*.app）——
+ *   Spotlight 关掉时兜底。★每个候选都实测能力（有 SDK / 有 devicectl），不靠"记忆中的路径"。
+ */
+export function findAllXcodes(): XcodeCandidate[] {
+  const roots = new Set<string>()
+  const push = (p?: string | null): void => { if (p && p.trim()) roots.add(path.resolve(p.trim())) }
+  push(process.env.PROTEUS_DEVELOPER_DIR)
+  push(process.env.DEVELOPER_DIR)
+  try { push(run('xcode-select', ['-p'], { encoding: 'utf-8' }).trim()) } catch { /* 无 xcode-select */ }
+  // 常见位 + mdfind（Spotlight）
+  push('/Applications/Xcode.app/Contents/Developer')
+  push(path.join(os.homedir(), 'Applications', 'Xcode.app', 'Contents', 'Developer'))
+  try {
+    for (const p of run('mdfind', ["kMDItemCFBundleIdentifier == 'com.apple.dt.Xcode'"], { encoding: 'utf-8' }).split('\n')) {
+      if (p.trim()) push(path.join(p.trim(), 'Contents', 'Developer'))
+    }
+  } catch { /* mdfind 不可用 */ }
+  // ★有界 glob 兜底（Spotlight 可能没索引 /Volumes 外部盘）：只扫固定深度，不递归全盘
+  for (const pat of ['/Applications/Xcode*.app', '/Volumes/*/Xcode*.app', '/Volumes/*/*/Xcode*.app', path.join(os.homedir(), 'Applications/Xcode*.app')]) {
+    try {
+      const out = run('sh', ['-c', `ls -d ${pat} 2>/dev/null`], { encoding: 'utf-8' })
+      for (const p of out.split('\n')) if (p.trim()) push(path.join(p.trim(), 'Contents', 'Developer'))
+    } catch { /* 无匹配 */ }
+  }
+  const hasNonEmptySdk = (d: string): boolean => {
+    const p = path.join(d, 'Platforms', 'iPhoneOS.platform')
+    try {
+      return fs.existsSync(p) && fs.readdirSync(p).length > 0
+    } catch {
+      return false
+    }
+  }
+  return [...roots]
+    .filter((d) => fs.existsSync(d))
+    .map((d) => ({
+      dir: d,
+      app: d.replace(/\/Contents\/Developer\/?$/, ''),
+      hasIosSdk: hasNonEmptySdk(d),
+      hasDevicectl: fs.existsSync(path.join(d, 'usr', 'bin', 'devicectl')),
+    }))
+}
+
+/**
+ * ★解析可用 Xcode 的 DEVELOPER_DIR —— 判据 = **该目录能提供 iOS SDK**（纯文件系统）。
  *
  * 【为什么需要在 CLI 里做（本仓实测真缺陷）】`proteus dev/build --target ios` 此前只在**调用方 shell**
- *   设了 DEVELOPER_DIR 时才能成功（`source hosts/ios/lib/xcode-env.sh`）——否则 swiftc 报
- *   `xcrun: error: SDK "iphoneos" cannot be located`（因为 `xcode-select -p` 指向 CommandLineTools，
- *   而本机完整 Xcode 在**非默认位**）。⇒ 把 xcode-env.sh 的两级偏好判据搬进 CLI，用户无需设 env。
- *   判据与 xcode-env.sh 一致：① 能给 iOS SDK（`Platforms/iPhoneOS.platform`）② 优先同时有 devicectl。
+ *   设了 DEVELOPER_DIR 时才能成功——否则 swiftc 报 `SDK "iphoneos" cannot be located`（`xcode-select -p`
+ *   指向 CommandLineTools，而完整 Xcode 在**非默认位**）。
+ * 【多 Xcode（决策 #690）】不硬编码默认路径——`findAllXcodes()` 全盘枚举（mdfind + glob + env + xcode-select），
+ *   按**能力完备度**两级偏好：① iOS SDK + devicectl（真机能力）② 至少 iOS SDK。
+ *   ★`PROTEUS_DEVELOPER_DIR` 显式指定恒最高优先（用户表态 > 自动挑选）。
  */
 export function resolveDeveloperDir(): string | null {
-  const hasIosSdk = (d: string): boolean => !!d && fs.existsSync(path.join(d, 'Platforms', 'iPhoneOS.platform'))
-  const hasDevicectl = (d: string): boolean => fs.existsSync(path.join(d, 'usr', 'bin', 'devicectl'))
-  const cands = [
-    process.env.PROTEUS_DEVELOPER_DIR,
-    process.env.DEVELOPER_DIR,
-    // xcode-select -p 的结果（可能是 CommandLineTools ⇒ hasIosSdk 为假）
-    (() => { try { return run('xcode-select', ['-p'], { encoding: 'utf-8' }).trim() } catch { return undefined } })(),
-    '/Applications/Xcode.app/Contents/Developer',
-    path.join(os.homedir(), 'Applications', 'Xcode.app', 'Contents', 'Developer'),
-  ].filter((c): c is string => !!c)
-  // mdfind 补非默认安装位（本机在 /Volumes 上）
-  try {
-    const found = run('mdfind', ["kMDItemCFBundleIdentifier == 'com.apple.dt.Xcode'"], { encoding: 'utf-8' })
-      .split('\n').filter(Boolean).map((p) => path.join(p.trim(), 'Contents', 'Developer'))
-    cands.push(...found)
-  } catch { /* mdfind 不可用 */ }
-  const uniq = [...new Set(cands)]
+  const all = findAllXcodes()
+  const explicit = process.env.PROTEUS_DEVELOPER_DIR
+  if (explicit) {
+    const hit = all.find((c) => c.dir === path.resolve(explicit))
+    if (hit?.hasIosSdk) return hit.dir
+  }
   // ① 真机能力完备（iOS SDK + devicectl）
-  const full = uniq.find((d) => hasIosSdk(d) && hasDevicectl(d))
-  if (full) return full
+  const full = all.find((c) => c.hasIosSdk && c.hasDevicectl)
+  if (full) return full.dir
   // ② 至少给 iOS SDK（模拟器/类型检查够用）
-  return uniq.find(hasIosSdk) ?? null
+  return all.find((c) => c.hasIosSdk)?.dir ?? null
 }
 
 function listSwift(dir: string): string[] {
@@ -407,7 +454,7 @@ function signApp(appDir: string, bundleId: string, log: string[]): { ok: boolean
         makeDiag('PT-BE-003', {
           cause: `本机描述文件（~/Library/Developer/Xcode/UserData/Provisioning Profiles/）中没有覆盖 bundleId「${bundleId}」的 profile`,
           suggestions: [
-            `在 Xcode 打开你的工程 → target → Signing & Capabilities → 勾“Automatically manage signing”并选好 Team，Xcode 会为 ${bundleId} 自动生成描述文件`,
+            `给 ${bundleId} 建 Apple 开发描述文件：Xcode → New Project → iOS App（Bundle ID 填 ${bundleId}）→ 勾 Automatically manage signing 选 Team（此工程仅为建描述文件，可弃）`,
             `查本机已有描述文件与证书：proteus host signing ios --list`,
             `或把项目的 iOS bundleId（proteus.config 的 native.ios.bundleId，当前 ${bundleId}）改成某个已有描述文件覆盖的 id`,
           ],

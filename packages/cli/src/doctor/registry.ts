@@ -44,5 +44,5 @@ export const CHECKS: DoctorCheck[] = [
 ]
 
 /** 组顺序（呈现与并行分波用） */
-export const GROUP_ORDER: DoctorCheck['group'][] = ['env', 'toolchain', 'deps', 'project', 'ports', 'devices', 'hosts', 'gates']
+export const GROUP_ORDER: DoctorCheck['group'][] = ['env', 'toolchain', 'deps', 'project', 'ports', 'devices', 'endpoint', 'gates']
 

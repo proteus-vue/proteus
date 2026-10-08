@@ -114,18 +114,18 @@ describe('★#686 doctor · 超时不 hang', () => {
 })
 
 describe('★#686 doctor · hosts 投影聚合（不新增探测）', () => {
-  it('按 finding 投影：ios 三个前置坏 ⇒ hosts/ios = error 且含"还差"', () => {
+  it('按 finding 投影：ios 三个前置坏 ⇒ endpoint/ios = error 且含"还差"', () => {
     const byId = new Map<string, DoctorFinding>()
     byId.set('toolchain/xcode', { checkId: 'toolchain/xcode', level: 'error', title: '无 Xcode', diagCode: 'PT-BE-001', evidence: [] })
     byId.set('toolchain/xcode-devicectl', { checkId: 'toolchain/xcode-devicectl', level: 'ok', title: 'ok', evidence: [] })
     byId.set('deps/workspace-links', { checkId: 'deps/workspace-links', level: 'ok', title: 'ok', evidence: [] })
     const out = projectHosts(['ios'], byId)
     expect(out).toHaveLength(1)
-    expect(out[0].checkId).toBe('hosts/ios')
+    expect(out[0].checkId).toBe('endpoint/ios')
     expect(out[0].level).toBe('error')
     expect(out[0].actual).toContain('还差')
   })
-  it('全 ok ⇒ hosts/ios = ok', () => {
+  it('全 ok ⇒ endpoint/ios = ok', () => {
     const byId = new Map<string, DoctorFinding>()
     byId.set('toolchain/xcode', { checkId: 'toolchain/xcode', level: 'ok', title: 'x', evidence: [] })
     byId.set('toolchain/xcode-devicectl', { checkId: 'toolchain/xcode-devicectl', level: 'ok', title: 'x', evidence: [] })
@@ -193,8 +193,8 @@ describe('★#686 doctor · iOS 签名检查（读项目 bundleId——doctor �
     const sign = rep.groups.flatMap((g) => g.findings).find((f) => f.checkId === 'toolchain/ios-signing')
     expect(sign?.level).toBe('error')
     expect(sign?.diagCode).toBe('PT-BE-003')
-    // hosts/ios 投影必须把它算进去（"要打包 ios 还差签名"——用户诉求的核心）
-    const hostsIos = rep.groups.flatMap((g) => g.findings).find((f) => f.checkId === 'hosts/ios')
+    // endpoint/ios 投影必须把它算进去（"要打包 ios 还差签名"——用户诉求的核心）
+    const hostsIos = rep.groups.flatMap((g) => g.findings).find((f) => f.checkId === 'endpoint/ios')
     expect(hostsIos?.level).toBe('error')
     expect(hostsIos?.actual).toContain('ios-signing')
   })
@@ -264,5 +264,41 @@ describe('★#688 签名工具（随 CLI 包分发 · 解耦框架源码）', ()
     const r = ensureAndroidDebugKeystore({ jdkDir: null, keystore: ks })
     expect(r.ok).toBe(true)
     expect(r.created).toBe(false)
+  })
+})
+
+
+describe('★#690 多 Xcode（不只找默认安装位）', () => {
+  it('findAllXcodes：枚举多个（含 CommandLineTools / 各 Volumes）且带能力判据', async () => {
+    const { findAllXcodes } = await import('../packages/cli/src/host-package')
+    const all = findAllXcodes()
+    // 至少枚举到本机存在的 Xcode（CI 可能 0 个 ⇒ 不硬断言非空，但结构必须齐）
+    for (const c of all) {
+      expect(c).toHaveProperty('dir')
+      expect(c).toHaveProperty('app')
+      expect(typeof c.hasIosSdk).toBe('boolean')
+      expect(typeof c.hasDevicectl).toBe('boolean')
+    }
+  })
+  it('resolveDeveloperDir：若有可用 Xcode 则返回"有 iOS SDK"的那个；显式 PROTEUS_DEVELOPER_DIR 优先', async () => {
+    const { findAllXcodes, resolveDeveloperDir } = await import('../packages/cli/src/host-package')
+    const all = findAllXcodes()
+    const picked = resolveDeveloperDir()
+    if (picked) {
+      const hit = all.find((c) => c.dir === picked)
+      expect(hit?.hasIosSdk).toBe(true) // 选中的必能给 iOS SDK
+    }
+    // 显式指定（若本机有带 SDK 的 Xcode）⇒ 必须优先它
+    const withSdk = all.find((c) => c.hasIosSdk)
+    if (withSdk) {
+      const prev = process.env.PROTEUS_DEVELOPER_DIR
+      process.env.PROTEUS_DEVELOPER_DIR = withSdk.dir
+      try {
+        expect(resolveDeveloperDir()).toBe(withSdk.dir)
+      } finally {
+        if (prev === undefined) delete process.env.PROTEUS_DEVELOPER_DIR
+        else process.env.PROTEUS_DEVELOPER_DIR = prev
+      }
+    }
   })
 })
