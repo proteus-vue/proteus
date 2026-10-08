@@ -246,7 +246,10 @@ function scanPages(): PageInfo[] {
   }
 
   // 主包：pagesDir
-  const mainBlocks = keepMp(scanRoutes(path.join(ROOT, config.pagesDir), { derivePath: true, verbose: true, includeNoRoute: true }))
+  // ★route 来源登记的逐条 `[route] …` 属**调试**输出（每页一行，31 页就刷 31 行）——
+  //   缺省静默，仅 `PROTEUS_DEBUG=1` 时打印（用户实测"终端很吵"；与 `debug:mp` 脚本同开关）。
+  const traceRoutes = process.env.PROTEUS_DEBUG === '1'
+  const mainBlocks = keepMp(scanRoutes(path.join(ROOT, config.pagesDir), { derivePath: true, verbose: traceRoutes, includeNoRoute: true }))
   for (const b of mainBlocks) {
     // ★平台变体：产物路径去变体后缀（page.mp.vue → pages/page，与 page.vue 同路由路径）
     const relSrc = path.relative(APP_DIR, splitVariant(b.componentPath).base).replace(/\\/g, '/').replace(/\.vue$/, '')
@@ -276,7 +279,7 @@ function scanPages(): PageInfo[] {
   for (const sp of rc.subPackages) {
     const spRootAbs = path.join(ROOT, sp.root)
     const spName = sp.name ?? path.basename(sp.root)
-    const spBlocks = keepMp(scanRoutes(spRootAbs, { derivePath: true, verbose: true, includeNoRoute: true }))
+    const spBlocks = keepMp(scanRoutes(spRootAbs, { derivePath: true, verbose: traceRoutes, includeNoRoute: true }))
     for (const b of spBlocks) {
       // ★平台变体：产物路径去变体后缀（与 page.vue 同路由路径）
       const basePath = splitVariant(b.componentPath).base

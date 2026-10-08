@@ -101,9 +101,18 @@ export async function runTargetedBuildProgrammatic(
       const r = await buildAppScreenContent(root, p)
       console.log(`[proteus] ✅ App 屏内容（${p}）→ ${path.relative(root, r.outFile)}（编译 ${r.compiled} 页 / 跳过 ${r.skipped}）`)
       if (r.diagnostics.length) {
+        // ★只打一行**摘要 + 2 例**（此前打 6 例 ×「节点 N 字段 …」= 长列表刷屏，用户实测"终端很吵"）；
+        //   完整清单属调试信息 ⇒ 需要时置 PROTEUS_DEBUG=1 全量打印。
         const uniq = [...new Set(r.diagnostics)]
-        console.warn(`[proteus] ⚠ ${p}：${uniq.length} 类页面诊断（多为 CSS class / 不支持语法；App 路径不吃 class 属缺口 C1）：`)
-        for (const d of uniq.slice(0, 6)) console.warn(`    · ${d}`)
+        const byField = new Map<string, number>()
+        for (const d of uniq) {
+          const m = d.match(/字段\s*([a-zA-Z]+)/) ?? d.match(/\b(VAPOR_\w+|CSS\d+|FLD\d+|STS\d+)\b/)
+          const k = m ? m[1] : d.replace(/^[^:]*:\s*/, '').slice(0, 20)
+          byField.set(k, (byField.get(k) ?? 0) + 1)
+        }
+        const top = [...byField.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, n]) => `${k}×${n}`).join(' · ')
+        console.warn(`[proteus] ⚠ ${p}：${uniq.length} 类页面诊断（App 路径不吃 CSS class 属缺口 C1）——主要：${top}${process.env.PROTEUS_DEBUG === '1' ? '' : '  （PROTEUS_DEBUG=1 看全量）'}`)
+        if (process.env.PROTEUS_DEBUG === '1') for (const d of uniq) console.warn(`    · ${d}`)
       }
       results.push({ target: p, ok: true })
     } catch (e) {
