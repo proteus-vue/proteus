@@ -69,11 +69,14 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
   .dot{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px var(--ok-soft);flex:none}
   .dot.off{background:var(--err);box-shadow:0 0 0 3px var(--err-soft)}
 
-  main{padding:var(--s5) var(--s5) var(--s6);max-width:1080px;margin:0 auto}
-  .blk{margin-bottom:var(--s5)}
+  main{padding:var(--s5) var(--s5) var(--s6);max-width:1200px;margin:0 auto}
+  .blk{margin-bottom:var(--s6)}
+  /* 双栏区块（Elements｜Console · Events｜Network）——窄屏塌成单栏 */
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:var(--s5);align-items:start}
+  @media(max-width:880px){.two{grid-template-columns:1fr}}
 
   /* ── 指标卡 ── */
-  .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--s3)}
+  .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--s4);margin-bottom:var(--s6)}
   @media(max-width:900px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
   @media(max-width:520px){.grid{grid-template-columns:1fr}}
   @media(max-width:520px){header{padding:0 var(--s4);gap:var(--s2)} .crumbs .sep,.crumbs .plat{display:none} main{padding:var(--s4) var(--s4) var(--s6)}}
