@@ -24,6 +24,7 @@ import { fileURLToPath } from 'node:url'
 // ★Apollo 诊断（决策 #684）：把宿主工具链的失败归因成 Proteus 码 + 可行动建议 + **保留原文**
 import { makeDiag, parseSwiftcOutput, captureRaw, type ProteusDiagnostic } from './diag'
 import { resolveIosSigning, IOS_PROFILE_DIRS } from './signing'
+import { resolveAndroidSdk, resolveJdk17, findApps } from './host-paths'
 
 /** ★本模块所在目录（`packages/cli/src` 或 `dist`）——JDK 等**框架仓资源**上溯解析的起点。 */
 const HERE_PKG = path.dirname(fileURLToPath(import.meta.url))
@@ -224,7 +225,13 @@ export interface XcodeCandidate {
  *   ③ 常见安装位 ④ **Spotlight mdfind** ⑤ **有界 glob**（Applications、Volumes 一/二层下的 Xcode*.app）——
  *   Spotlight 关掉时兜底。★每个候选都实测能力（有 SDK / 有 devicectl），不靠"记忆中的路径"。
  */
+let xcodesCache: XcodeCandidate[] | null = null
 export function findAllXcodes(): XcodeCandidate[] {
+  if (xcodesCache) return xcodesCache
+  xcodesCache = computeAllXcodes()
+  return xcodesCache
+}
+function computeAllXcodes(): XcodeCandidate[] {
   const roots = new Set<string>()
   const push = (p?: string | null): void => { if (p && p.trim()) roots.add(path.resolve(p.trim())) }
   push(process.env.PROTEUS_DEVELOPER_DIR)
@@ -238,13 +245,11 @@ export function findAllXcodes(): XcodeCandidate[] {
       if (p.trim()) push(path.join(p.trim(), 'Contents', 'Developer'))
     }
   } catch { /* mdfind 不可用 */ }
-  // ★有界 glob 兜底（Spotlight 可能没索引 /Volumes 外部盘）：只扫固定深度，不递归全盘
-  for (const pat of ['/Applications/Xcode*.app', '/Volumes/*/Xcode*.app', '/Volumes/*/*/Xcode*.app', path.join(os.homedir(), 'Applications/Xcode*.app')]) {
-    try {
-      const out = run('sh', ['-c', `ls -d ${pat} 2>/dev/null`], { encoding: 'utf-8' })
-      for (const p of out.split('\n')) if (p.trim()) push(path.join(p.trim(), 'Contents', 'Developer'))
-    } catch { /* 无匹配 */ }
-  }
+  // ★★★有界 find 兜底（Spotlight 可能没索引 /Volumes 外部盘；且 `/Volumes/<a>/<b>/<c>/X.app` 深于 glob 层数）
+  //   —— 与 host-paths.findApps 同源策略（任意层数、maxdepth 4）。
+  try {
+    for (const app of findApps('Xcode*.app')) push(path.join(app, 'Contents', 'Developer'))
+  } catch { /* find 不可用 */ }
   const hasNonEmptySdk = (d: string): boolean => {
     const p = path.join(d, 'Platforms', 'iPhoneOS.platform')
     try {
@@ -522,36 +527,29 @@ export interface PackageAndroidResult {
   diagnostics?: ProteusDiagnostic[]
 }
 
+/** Android SDK 解析（决策 #691：不硬编码默认位——走 host-paths 的全盘枚举 + 能力判据） */
 function androidSdk(): { sdk: string; platform: string; buildTools: string } | null {
-  const sdk = process.env.ANDROID_HOME ?? path.join(os.homedir(), 'Library', 'Android', 'sdk')
-  if (!fs.existsSync(path.join(sdk, 'platforms'))) return null
-  const platforms = fs.readdirSync(path.join(sdk, 'platforms')).filter((d) => d.startsWith('android-')).sort((a, b) => Number(a.slice(8)) - Number(b.slice(8)))
-  const bt = fs.existsSync(path.join(sdk, 'build-tools')) ? fs.readdirSync(path.join(sdk, 'build-tools')).sort() : []
-  if (!platforms.length || !bt.length) return null
-  return {
-    sdk,
-    platform: path.join(sdk, 'platforms', platforms[platforms.length - 1], 'android.jar'),
-    buildTools: path.join(sdk, 'build-tools', bt[bt.length - 1]),
-  }
+  const hit = resolveAndroidSdk()
+  if (!hit || !hit.hasPlatforms || !hit.hasBuildTools || !hit.androidJar || !hit.buildToolsDir) return null
+  return { sdk: hit.sdk, platform: hit.androidJar, buildTools: hit.buildToolsDir }
 }
 
+/** JDK 解析（决策 #691：不只看 JAVA_HOME/.tools——枚举系统 JVM·Homebrew·sdkman·IDE 自带 JBR） */
 function findJdk(): string | null {
-  // ★★★JDK 解析（2026-10-08 修）：候选含**框架仓的 .tools/jdk17**（不在项目 cwd 下）。
-  //   实测教训：从项目目录跑 `proteus build --package` 时 cwd=项目根 ⇒ 只看 cwd/.tools 会漏
-  //   ⇒ 报"找不到 javac"（而框架 .tools 里就有）。⇒ 把**框架根**（resolveFrameworkRoot 上溯）也纳入候选。
-  const cands = [
-    process.env.JAVA_HOME,
-    path.join(process.cwd(), '.tools', 'jdk17'),
-    path.join(process.cwd(), '.tools', 'jdk-17.0.20.1+1', 'Contents', 'Home'),
-  ]
+  // ★框架 .tools/jdk17 仍作为**最高兜底**（仓内工程习惯）；优先系统/IDE 的就绪 JDK。
+  //   `resolveJdk17` 已含 `.tools/jdk17`（framework .tools 来源）⇒ 直接用它。
+  const hit = resolveJdk17()
+  if (hit?.hasJavac) return hit.home
+  // 兜底：框架根上溯的 .tools（HERE_PKG 是 dist/src 所在；工程 cwd 未必是框架根）
   let dir = HERE_PKG
   for (let i = 0; i < 8; i++) {
-    cands.push(path.join(dir, '.tools', 'jdk17'), path.join(dir, '.tools', 'jdk-17.0.20.1+1', 'Contents', 'Home'))
+    for (const c of [path.join(dir, '.tools', 'jdk17'), path.join(dir, '.tools', 'jdk-17.0.20.1+1', 'Contents', 'Home')]) {
+      if (fs.existsSync(path.join(c, 'bin', 'javac'))) return c
+    }
     const up = path.dirname(dir)
     if (up === dir) break
     dir = up
   }
-  for (const c of cands) if (c && fs.existsSync(path.join(c, 'bin', 'javac'))) return c
   return null
 }
 
