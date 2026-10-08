@@ -241,7 +241,16 @@ export const GATES: GateInfo[] = [
     group: '专项检查',
     scope: 'project',
     usage: 'proteus health [dir]',
-    desc: '★工程/环境健康检查：Node/结构/依赖/产物/appid/pagesDir/workspace 链接/IDE（诊断型工具——经独立命令运行）',
+    desc: '★工程/环境健康检查（已并入 doctor——薄壳：等价 proteus doctor --only project；经独立命令运行）',
+  },
+  {
+    id: 'doctor',
+    group: '仓库治理',
+    scope: 'project',
+    usage: 'proteus doctor [dir] [--json] [--strict] [--only <groups>] [--deep]',
+    // ★未接线（○）：doctor 是多旗标诊断工具（--json/--report/--only/--deep/--list…），
+    //   按 gate.ts 既有约定「未接线（○：写型/诊断/多旗标工具）经独立命令」执行——强行接 run 适配器会丢旗标语义。
+    desc: '★★环境/工具链/依赖/工程/宿主/端口/设备体检（M5 · #686）——诊断型多旗标工具，经独立命令运行（`proteus doctor`）',
   },
   // —— 框架自检（framework scope；devtools-budget 为独立烟测可任意目录） ——
   {
