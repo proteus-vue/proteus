@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- {{appName}} —— Proteus 最小 Android 宿主（CLI 生成）
-     ★包名与 runtime AAR 一致（dev.proteus.layoutcore）⇒ 同包访问，零可见性改动。
-     ★★★身份字段（package / label / versionCode / versionName / uses-sdk）
-       由 `proteus create host` 与 `proteus build`（target=android，package）从项目
-       `proteus.config` 的 `native` 段填充（决策 #635）——手改这里只在项目未声明时生效。 -->
+<!-- {{appName}} —— Proteus Android 宿主 · **dev 变体** Manifest（`proteus dev` 构建时选用）
+     ★与 release（AndroidManifest.xml）**唯一差别** = 多了 INTERNET 权限（dev server 走 HTTP 拉 bundle）。
+       两变体共用 activity/application 声明；`proteus dev` 用本文件，打包（release）用 release 文件。
+     ★变体隔离的机器判据：release APK 的 manifest **不得**含 android.permission.INTERNET。
+     （注：XML 注释内不得出现连续两个 ASCII 连字符——故此处不写命令字面量。） -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="{{bundleName}}"
     android:versionCode="1"
@@ -13,16 +13,16 @@
         android:minSdkVersion="24"
         android:targetSdkVersion="34" />
 
+    <!-- 仅 dev 变体：dev server 走局域网（测试机连本机 DevServer） -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 允许明文 HTTP（dev server 无 TLS）：仅 dev 变体 -->
     <application
         android:label="{{appName}}"
         android:debuggable="true"
         android:allowBackup="false"
+        android:usesCleartextTraffic="true"
         android:hasCode="true">
-        <!-- 起始页名（native.android.launchPage 注入点；运行期壳由 JS 注册表决定落地页，此为兜底/兼容） -->
         <meta-data android:name="ProteusHomePage" android:value="index" />
-        <!-- ★activity 用 **FQN**（不是相对名 .AppActivity）：这样 manifest 的 `package`（applicationId）
-             可与宿主类所在包解耦——`native.android.applicationId` 换包后仍能解析到
-             dev.proteus.layoutcore.AppActivity（运行期类仍由 runtime AAR 提供）。 -->
         <activity
             android:name="dev.proteus.layoutcore.AppActivity"
             android:exported="true"
@@ -34,3 +34,4 @@
         </activity>
     </application>
 </manifest>
+

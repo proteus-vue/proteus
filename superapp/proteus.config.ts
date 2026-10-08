@@ -12,6 +12,13 @@ const config: ProteusConfig = {
   version: 4,
   // ★v4（决策 #641）：小程序专属字段收进 targets.mp
   targets: {
+    // ★★★原生身份（2026-10-08 · 决策「完整宿主 + 项目自有包名」）：CLI 生成宿主 / 打包时从这三段取
+    //   applicationId / bundleId / bundleName（`resolveNativeConfigFromProject`）⇒ 产出的安装包
+    //   **用本项目自己的包名**（不再统一回退 `dev.proteus.layoutcore`）。缺省/未声明 ⇒ 平台默认值。
+    //   ★与 app.config.ts 的 `app.id` 保持同一语义（应用身份单一来源）。
+    android: { applicationId: 'cn.proteus.superapp' },
+    ios: { bundleId: 'cn.proteus.superapp' },
+    harmony: { bundleName: 'cn.proteus.superapp' },
     mp: {
       // ★测试 appid（与 examples/showcase 同一测试号；生产发布需换正式号）
       appid: 'wxa720d0c502451748',

@@ -57,7 +57,12 @@ for cand in "$ROOT/.tools/jdk17" "$ROOT/.tools/jdk-17.0.20.1+1/Contents/Home"; d
 done
 [ -n "$JDK" ] && [ -x "$JDK/bin/javac" ] || { echo "✗ 找不到 javac"; exit 2; }
 mkdir -p "$WORK/classes"
-find "$RT_SRC" -name '*.java' > "$WORK/srcs.txt"
+# ★★★平台适配层（`platform/android/proteus-platform`：字体/度量——换壳不改）与 runtime **一起编译**
+#   （宿主源码引用它；`build-and-run.sh` / `check-host-compile.sh` 同口径）。
+#   ★实测教训（2026-10-08）：漏了它 ⇒ `ProteusHostView` 引用 `ProteusTextPlatform` 报 11 个「找不到符号」
+#     ⇒ AAR 长期陈旧（不含 SuperappRuntimeHost 等新 runtime 类）而无人察觉。
+PLATFORM_JAVA_DIR="$ROOT/platform/android/proteus-platform/src"
+find "$RT_SRC" "$PLATFORM_JAVA_DIR" -name '*.java' > "$WORK/srcs.txt" 2>/dev/null
 [ -s "$WORK/srcs.txt" ] || { echo "✗ runtime 源为空（${RT_SRC}）"; exit 2; }
 "$JDK/bin/javac" -nowarn -encoding UTF-8 --release 17 -cp "$PLATFORM" -d "$WORK/classes" @"$WORK/srcs.txt" || { echo "✗ runtime 编译失败"; exit 3; }
 (cd "$WORK/classes" && "$JDK/bin/jar" cf "$WORK/classes.jar" .) || { echo "✗ jar 打包失败"; exit 3; }
@@ -92,7 +97,9 @@ for entry in "AndroidManifest.xml" "classes.jar" "jni/arm64-v8a/libproteus_jni.s
   printf '%s' "$LIST" | grep -q "$entry" && echo "    ✓ AAR 含 $entry" || { echo "    ✗ AAR 缺 $entry"; FAILS=$((FAILS + 1)); }
 done
 CJ_LIST="$("$JDK/bin/jar" tf "$WORK/classes.jar" 2>/dev/null)"
-for cls in "dev/proteus/layoutcore/VaporRenderHost.class" "dev/proteus/layoutcore/ProteusHostView.class" "dev/proteus/layoutcore/RustLayout.class"; do
+# ★断言含**运行期壳必需类**（2026-10-08 补 SuperappRuntimeHost——它曾是"AAR 陈旧"的漏网证据：
+#   CLI 生成的运行期壳引用它，而 AAR 里没有 ⇒ 打包必失败）
+for cls in "dev/proteus/layoutcore/VaporRenderHost.class" "dev/proteus/layoutcore/ProteusHostView.class" "dev/proteus/layoutcore/RustLayout.class" "dev/proteus/layoutcore/SuperappRuntimeHost.class" "dev/proteus/layoutcore/QuickJsEngine.class" "dev/proteus/layoutcore/HostBridge.class" "dev/proteus/layoutcore/ScreenHost.class" "dev/proteus/layoutcore/HostCapabilities.class" "dev/proteus/platform/ProteusTextPlatform.class"; do
   printf '%s' "$CJ_LIST" | grep -q "$cls" && echo "    ✓ classes.jar 含 $(basename "$cls")" || { echo "    ✗ classes.jar 缺 $cls"; FAILS=$((FAILS + 1)); }
 done
 READELF="$(ls "$NDK"/toolchains/llvm/prebuilt/*/bin/llvm-readelf 2>/dev/null | head -1)"

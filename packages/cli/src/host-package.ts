@@ -16,6 +16,9 @@ import os from 'node:os'
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
+/** ★本模块所在目录（`packages/cli/src` 或 `dist`）——JDK 等**框架仓资源**上溯解析的起点。 */
+const HERE_PKG = path.dirname(fileURLToPath(import.meta.url))
+
 /** DevEco Contents 目录候选（与 hosts/harmony/build-host-app.sh 的 find_deveco 同策略） */
 function resolveDevEco(): string | null {
   const candidates = [
@@ -318,8 +321,14 @@ function signApp(appDir: string, bundleId: string, log: string[]): boolean {
 
 export interface PackageAndroidOptions {
   hostDir: string
-  /** 项目根（含 dist/app/android/screen-content.json）；缺省 = 不拷产物 */
+  /** 项目根（含 dist/app/android/screen-content.json 与 bundle-superapp.js）；缺省 = 不拷产物 */
   projectRoot?: string
+  /** ★★★dev 变体（2026-10-08）：选 `AndroidManifest.dev.xml`（含 INTERNET）+ 覆写 ProteusBuildConfig 的 DEV/DEV_URL。 */
+  dev?: boolean
+  /** dev server 基址（如 `http://192.168.x.x:51789`）；dev=true 时写入 BuildConfig.DEV_URL。 */
+  devUrl?: string
+  /** 打包产物输出路径（缺省 `<hostDir>/build/proteus-host.apk`；CLI 传 dist/app/android/proteus-host.apk）。 */
+  outApk?: string
 }
 
 export interface PackageAndroidResult {
@@ -344,16 +353,44 @@ function androidSdk(): { sdk: string; platform: string; buildTools: string } | n
 }
 
 function findJdk(): string | null {
-  const cands = [process.env.JAVA_HOME, path.join(process.cwd(), '.tools', 'jdk17'), path.join(process.cwd(), '.tools', 'jdk-17.0.20.1+1', 'Contents', 'Home')]
+  // ★★★JDK 解析（2026-10-08 修）：候选含**框架仓的 .tools/jdk17**（不在项目 cwd 下）。
+  //   实测教训：从项目目录跑 `proteus build --package` 时 cwd=项目根 ⇒ 只看 cwd/.tools 会漏
+  //   ⇒ 报"找不到 javac"（而框架 .tools 里就有）。⇒ 把**框架根**（resolveFrameworkRoot 上溯）也纳入候选。
+  const cands = [
+    process.env.JAVA_HOME,
+    path.join(process.cwd(), '.tools', 'jdk17'),
+    path.join(process.cwd(), '.tools', 'jdk-17.0.20.1+1', 'Contents', 'Home'),
+  ]
+  let dir = HERE_PKG
+  for (let i = 0; i < 8; i++) {
+    cands.push(path.join(dir, '.tools', 'jdk17'), path.join(dir, '.tools', 'jdk-17.0.20.1+1', 'Contents', 'Home'))
+    const up = path.dirname(dir)
+    if (up === dir) break
+    dir = up
+  }
   for (const c of cands) if (c && fs.existsSync(path.join(c, 'bin', 'javac'))) return c
   return null
 }
 
-/** 打包 Android 最小宿主为 .apk：产物拷入 → javac → d8 → aapt2 → zip → zipalign → apksigner */
+/**
+ * 打包 Android 最小宿主为 .apk：产物拷入 → javac → d8 → aapt2 → zip → zipalign → apksigner。
+ * ★★★dev/release 变体（2026-10-08 · 用户「dev 与 build 怎么区分」）：
+ *   · release（默认）：manifest=`AndroidManifest.xml`（无 INTERNET），BuildConfig.DEV=false（bundle 内嵌 assets）。
+ *   · dev（`dev:true`）：manifest=`AndroidManifest.dev.xml`（含 INTERNET+cleartext），
+ *     **构建前覆写** `src/.../ProteusBuildConfig.java` 的 DEV=true / DEV_URL=<devUrl>（bundle 走 HTTP + 热刷）。
+ *     覆写是**就地**的（写在宿主工程内，构建后**还原为 release 默认**——保证工程源码始终是 release 形态）。
+ */
 export function packageAndroidHost(opts: PackageAndroidOptions): PackageAndroidResult {
   const hostDir = path.resolve(opts.hostDir)
   const log: string[] = []
-  const manifest = path.join(hostDir, 'AndroidManifest.xml')
+  const isDev = opts.dev === true
+  // ★dev 变体选 dev manifest（缺则回落 release 并告警——不静默产"没有网络权限的 dev 包"）
+  let manifest = path.join(hostDir, 'AndroidManifest.xml')
+  if (isDev) {
+    const devManifest = path.join(hostDir, 'AndroidManifest.dev.xml')
+    if (fs.existsSync(devManifest)) manifest = devManifest
+    else log.push('⚠ dev 变体缺 AndroidManifest.dev.xml——回落 release manifest（dev 通道可能无网络权限）')
+  }
   if (!fs.existsSync(manifest)) return { ok: false, hostDir, apk: null, screenContentCopied: false, log: [`✗ 不是 Android 宿主工程（缺 AndroidManifest.xml）：${hostDir}`] }
   const assetsDir = path.join(hostDir, 'app/src/main/assets')
   const srcDir = path.join(hostDir, 'src')
@@ -363,28 +400,65 @@ export function packageAndroidHost(opts: PackageAndroidOptions): PackageAndroidR
   const aarPath = path.join(hostDir, 'libs', 'proteus-runtime.aar')
   if (!fs.existsSync(aarPath)) return { ok: false, hostDir, apk: null, screenContentCopied: false, log: [`✗ 缺 runtime AAR：${path.relative(hostDir, aarPath)}（先跑 hosts/android/build-runtime-aar.sh 并用 create host 拷入）`] }
 
-  // ② 编译产物 → assets/app-screen-content.json
+  // ② 编译产物 → assets（screen-content.json + bundle-superapp.js + app-config.json）
   let screenContentCopied = false
   if (opts.projectRoot) {
-    const sc = path.join(opts.projectRoot, 'dist', 'app', 'android', 'screen-content.json')
+    const appDist = path.join(opts.projectRoot, 'dist', 'app', 'android')
+    fs.mkdirSync(assetsDir, { recursive: true })
+    const sc = path.join(appDist, 'screen-content.json')
     if (fs.existsSync(sc)) {
-      fs.mkdirSync(assetsDir, { recursive: true })
       fs.copyFileSync(sc, path.join(assetsDir, 'app-screen-content.json'))
       screenContentCopied = true
       log.push('✓ 编译产物 app-screen-content.json 已就位')
     } else {
       log.push(`⚠ 未见 ${path.relative(opts.projectRoot, sc)}——沿用宿主既有产物`)
     }
+    // ★运行期 bundle（App 壳的内容源）——缺则运行期壳无法启动（明确告警，不静默）
+    const bundle = path.join(appDist, 'bundle-superapp.js')
+    if (fs.existsSync(bundle)) {
+      fs.copyFileSync(bundle, path.join(assetsDir, 'bundle-superapp.js'))
+      log.push(`✓ 运行期 bundle bundle-superapp.js 已就位（${(fs.statSync(bundle).size / 1024).toFixed(0)} KB）`)
+    } else {
+      log.push(`⚠ 未见 ${path.relative(opts.projectRoot, bundle)}——运行期壳需要它（先跑 proteus build 的 bundle 步骤）`)
+    }
+    const cfg = path.join(appDist, 'app-config.json')
+    if (fs.existsSync(cfg)) fs.copyFileSync(cfg, path.join(assetsDir, 'app-config.json'))
+  }
+
+  // ②' dev 变体：**就地**覆写 ProteusBuildConfig（DEV/DEV_URL），并在 finally 还原 release 默认
+  const buildCfgPath = listFiles(srcDir, '.java').find((f) => f.endsWith('ProteusBuildConfig.java'))
+  let buildCfgBackup: string | null = null
+  if (isDev) {
+    if (!buildCfgPath) {
+      log.push('⚠ 未找到 ProteusBuildConfig.java——dev 变体将无法把 bundle 指向 dev server')
+    } else {
+      buildCfgBackup = fs.readFileSync(buildCfgPath, 'utf-8')
+      const url = (opts.devUrl ?? '').replace(/"/g, '')
+      const out = buildCfgBackup
+        .replace(/public static final boolean DEV = (?:true|false);/, 'public static final boolean DEV = true;')
+        .replace(/public static final String DEV_URL = "[^"]*";/, `public static final String DEV_URL = "${url}";`)
+      fs.writeFileSync(buildCfgPath, out)
+      log.push(`✓ dev 变体：BuildConfig DEV=true · DEV_URL=${url || '(未给)'}`)
+    }
   }
 
   // ③ 工具链
   const sdkInfo = androidSdk()
-  if (!sdkInfo) return { ok: false, hostDir, apk: null, screenContentCopied, log: [...log, '✗ 找不到 Android SDK（设 ANDROID_HOME）'] }
+  if (!sdkInfo) {
+    if (buildCfgBackup && buildCfgPath) fs.writeFileSync(buildCfgPath, buildCfgBackup)
+    return { ok: false, hostDir, apk: null, screenContentCopied, log: [...log, '✗ 找不到 Android SDK（设 ANDROID_HOME）'] }
+  }
   const jdk = findJdk()
-  if (!jdk) return { ok: false, hostDir, apk: null, screenContentCopied, log: [...log, '✗ 找不到 javac（设 JAVA_HOME 或 .tools/jdk17）'] }
+  if (!jdk) {
+    if (buildCfgBackup && buildCfgPath) fs.writeFileSync(buildCfgPath, buildCfgBackup)
+    return { ok: false, hostDir, apk: null, screenContentCopied, log: [...log, '✗ 找不到 javac（设 JAVA_HOME 或 .tools/jdk17）'] }
+  }
   const { platform, buildTools } = sdkInfo
   // ★d8/apksigner 是 Java 启动脚本：需 JAVA_HOME（javac 用全路径不受影响，但子工具读 JAVA_HOME）
   const env = { ...process.env, JAVA_HOME: jdk }
+  const restore = () => {
+    if (buildCfgBackup !== null && buildCfgPath) fs.writeFileSync(buildCfgPath, buildCfgBackup)
+  }
 
   // ④ AAR → classes.jar（unzip）
   const build = path.join(hostDir, 'build')
@@ -394,23 +468,25 @@ export function packageAndroidHost(opts: PackageAndroidOptions): PackageAndroidR
   try {
     execFileSync('unzip', ['-o', '-q', aarPath, '-d', extract], { encoding: 'utf-8' })
   } catch (e) {
+    restore()
     return { ok: false, hostDir, apk: null, screenContentCopied, log: [...log, '✗ 解压 AAR 失败：' + String((e as Error).message).slice(-400)] }
   }
   const classesJar = path.join(extract, 'classes.jar')
-  if (!fs.existsSync(classesJar)) return { ok: false, hostDir, apk: null, screenContentCopied, log: [...log, '✗ AAR 内缺 classes.jar'] }
+  if (!fs.existsSync(classesJar)) { restore(); return { ok: false, hostDir, apk: null, screenContentCopied, log: [...log, '✗ AAR 内缺 classes.jar'] } }
   const jniSo = path.join(extract, 'jni/arm64-v8a/libproteus_jni.so')
-  if (!fs.existsSync(jniSo)) return { ok: false, hostDir, apk: null, screenContentCopied, log: [...log, '✗ AAR 内缺 jni/arm64-v8a/libproteus_jni.so'] }
+  if (!fs.existsSync(jniSo)) { restore(); return { ok: false, hostDir, apk: null, screenContentCopied, log: [...log, '✗ AAR 内缺 jni/arm64-v8a/libproteus_jni.so'] } }
 
   // ⑤ javac 壳（-cp android.jar:classes.jar）
   const classesDir = path.join(build, 'classes')
   fs.mkdirSync(classesDir, { recursive: true })
   const javaSrcs = listFiles(srcDir, '.java')
-  if (!javaSrcs.length) return { ok: false, hostDir, apk: null, screenContentCopied, log: [...log, '✗ src/ 无 .java'] }
+  if (!javaSrcs.length) { restore(); return { ok: false, hostDir, apk: null, screenContentCopied, log: [...log, '✗ src/ 无 .java'] } }
   log.push(`→ javac（壳 ${javaSrcs.length} 个源；-cp android.jar:classes.jar）`)
   try {
     execFileSync(path.join(jdk, 'bin', 'javac'), ['-nowarn', '-encoding', 'UTF-8', '--release', '17', '-cp', `${platform}:${classesJar}`, '-d', classesDir, ...javaSrcs], { encoding: 'utf-8', maxBuffer: 32 * 1024 * 1024 })
   } catch (e) {
     const msg = String((e as { stderr?: string }).stderr ?? (e as Error).message)
+    restore()
     return { ok: false, hostDir, apk: null, screenContentCopied, log: [...log, '✗ javac 失败：', msg.slice(-1200)] }
   }
   log.push('✓ javac 通过')
@@ -424,9 +500,10 @@ export function packageAndroidHost(opts: PackageAndroidOptions): PackageAndroidR
     execFileSync(path.join(buildTools, 'd8'), ['--release', '--min-api', '24', '--lib', platform, '--output', dexDir, ...classFiles, classesJar], { encoding: 'utf-8', maxBuffer: 64 * 1024 * 1024, env })
   } catch (e) {
     const msg = String((e as { stderr?: string }).stderr ?? (e as Error).message)
+    restore()
     return { ok: false, hostDir, apk: null, screenContentCopied, log: [...log, '✗ d8 失败：', msg.slice(-1200)] }
   }
-  if (!fs.existsSync(path.join(dexDir, 'classes.dex'))) return { ok: false, hostDir, apk: null, screenContentCopied, log: [...log, '✗ d8 未产出 classes.dex'] }
+  if (!fs.existsSync(path.join(dexDir, 'classes.dex'))) { restore(); return { ok: false, hostDir, apk: null, screenContentCopied, log: [...log, '✗ d8 未产出 classes.dex'] } }
   log.push('✓ d8 通过（classes.dex）')
 
   // ⑦ aapt2 link → 基础 APK（manifest + assets）
@@ -440,6 +517,7 @@ export function packageAndroidHost(opts: PackageAndroidOptions): PackageAndroidR
       '-A', assetsDir, '--java', genDir], { encoding: 'utf-8', maxBuffer: 32 * 1024 * 1024, env })
   } catch (e) {
     const msg = String((e as { stderr?: string }).stderr ?? (e as Error).message)
+    restore()
     return { ok: false, hostDir, apk: null, screenContentCopied, log: [...log, '✗ aapt2 link 失败：', msg.slice(-1200)] }
   }
 
@@ -455,6 +533,7 @@ export function packageAndroidHost(opts: PackageAndroidOptions): PackageAndroidR
       execFileSync('zip', ['-q', '-0', apk, `lib/arm64-v8a/${so}`], { cwd: build, encoding: 'utf-8' })
     }
   } catch (e) {
+    restore()
     return { ok: false, hostDir, apk: null, screenContentCopied, log: [...log, '✗ 组装 APK 失败：' + String((e as Error).message).slice(-400)] }
   }
   log.push('✓ 组装 APK（classes.dex + jni .so）')
@@ -465,6 +544,7 @@ export function packageAndroidHost(opts: PackageAndroidOptions): PackageAndroidR
     execFileSync(path.join(buildTools, 'zipalign'), ['-f', '16384', apk, aligned], { encoding: 'utf-8' })
     fs.renameSync(aligned, apk)
   } catch (e) {
+    restore()
     return { ok: false, hostDir, apk: null, screenContentCopied, log: [...log, '✗ zipalign 失败：' + String((e as Error).message).slice(-400)] }
   }
 
@@ -475,10 +555,22 @@ export function packageAndroidHost(opts: PackageAndroidOptions): PackageAndroidR
     execFileSync(path.join(buildTools, 'apksigner'), ['sign', '--ks', ks, '--ks-pass', 'pass:android', '--key-pass', 'pass:android', '--v1-signing-enabled', 'true', '--v2-signing-enabled', 'true', apk], { encoding: 'utf-8', maxBuffer: 32 * 1024 * 1024, env })
     execFileSync(path.join(buildTools, 'apksigner'), ['verify', '--print-certs', apk], { encoding: 'utf-8', env })
   } catch (e) {
+    restore()
     return { ok: false, hostDir, apk: null, screenContentCopied, log: [...log, '✗ 签名失败：' + String((e as Error).message).slice(-600)] }
   }
   log.push(`✓ 产出：${path.relative(hostDir, apk)}（已签名 v1+v2，可 adb install）`)
-  return { ok: true, hostDir, apk, screenContentCopied, log }
+  restore()   // ★dev 变体：还原 ProteusBuildConfig 为 release 默认（工程源码始终 release 形态）
+  // ★★★产物输出（2026-10-08）：CLI 传 outApk ⇒ 拷贝到 `dist/app/android/proteus-host.apk`
+  //   （用户「dist 里要直接有打包好的安装包」）。未传则留在宿主工程 build/ 下。
+  let finalApk = apk
+  if (opts.outApk) {
+    const dest = path.resolve(opts.outApk)
+    fs.mkdirSync(path.dirname(dest), { recursive: true })
+    fs.copyFileSync(apk, dest)
+    finalApk = dest
+    log.push(`✓ 安装包输出：${dest}（${(fs.statSync(dest).size / 1024 / 1024).toFixed(1)} MB）`)
+  }
+  return { ok: true, hostDir, apk: finalApk, screenContentCopied, log }
 }
 
 /** 递归列出目录下某扩展名的文件 */
