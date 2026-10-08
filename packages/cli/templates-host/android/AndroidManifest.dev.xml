@@ -23,10 +23,14 @@
         android:usesCleartextTraffic="true"
         android:hasCode="true">
         <meta-data android:name="ProteusHomePage" android:value="index" />
+        <!-- ★★★主题：`Theme.Material.NoActionBar`（**与 release manifest / hosts 壳宿主 SuperappActivity 一致**）——
+             旧值 `Theme.NoTitleBar.Fullscreen`（theme 级 windowFullscreen + 黑 windowBackground）与运行期
+             edge-to-edge 冲突 ⇒ **状态栏/底部导航区渲染为默认黑**（用户实测）。透明由运行期
+             `setStatusBarColor/setNavigationBarColor(TRANSPARENT) + setDecorFitsSystemWindows(false)` 负责。 -->
         <activity
             android:name="dev.proteus.layoutcore.AppActivity"
             android:exported="true"
-            android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
+            android:theme="@android:style/Theme.Material.NoActionBar">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

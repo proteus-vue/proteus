@@ -559,6 +559,51 @@ function applyAndroid(hostDir: string, r: ResolvedAndroidNative, d: Record<keyof
     }
   }
   fs.writeFileSync(file, src)
+  // ★★★dev 变体 manifest 同样注入（决策 #670）：`proteus dev` 选 `AndroidManifest.dev.xml`，
+  //   而此前只改 release manifest ⇒ **dev 包 versionCode 恒为模板默认 1**（装到高版本机器报 downgrade）、
+  //   且 appAttrs（主题/allowBackup…）也漏。⇒ 复用同一套变换施加到 dev 文件（幂等）。
+  const devFile = path.join(path.dirname(file), 'AndroidManifest.dev.xml')
+  if (fs.existsSync(devFile) && devFile !== file) {
+    let dsrc = fs.readFileSync(devFile, 'utf-8')
+    const drel = path.relative(hostDir, devFile)
+    if (d.applicationId && r.applicationId) dsrc = setAttr(dsrc, 'package', r.applicationId)[0]
+    if (d.label) dsrc = setAttr(dsrc, 'android:label', r.label)[0]
+    // ★versionCode/versionName 恒写 dev（dev 包须有真 versionCode，否则降级；模板默认 1 是坑）
+    dsrc = setAttr(dsrc, 'android:versionCode', String(r.versionCode))[0]
+    dsrc = setAttr(dsrc, 'android:versionName', r.versionName)[0]
+    if (d.minSdk || d.targetSdk) {
+      if (d.minSdk) dsrc = setAttr(dsrc, 'android:minSdkVersion', String(r.minSdk))[0]
+      if (d.targetSdk) dsrc = setAttr(dsrc, 'android:targetSdkVersion', String(r.targetSdk))[0]
+    }
+    if (d.orientation && r.orientation !== 'unspecified') dsrc = setOrAddAttrInTag(dsrc, 'activity', 'android:screenOrientation', r.orientation)[0]
+    if (d.icon && r.icon) dsrc = setOrAddAttrInTag(dsrc, 'application', 'android:icon', r.icon)[0]
+    if (d.launchPage && r.launchPage) {
+      const re = /(<meta-data\s+android:name="ProteusHomePage"\s+android:value=")[^"]*(")/
+      if (re.test(dsrc)) dsrc = dsrc.replace(re, `$1${r.launchPage}$2`)
+    }
+    // dev 专属：usesCleartextTraffic 恒 true（dev server 无 TLS）；其余 appAttrs 照 release
+    const dAppAttrs: Array<[string, string]> = [['android:usesCleartextTraffic', 'true']]
+    if (d.theme && r.theme) dAppAttrs.push(['android:theme', r.theme])
+    if (d.allowBackup) dAppAttrs.push(['android:allowBackup', String(r.allowBackup)])
+    if (d.largeHeap) dAppAttrs.push(['android:largeHeap', String(r.largeHeap)])
+    if (d.hardwareAccelerated) dAppAttrs.push(['android:hardwareAccelerated', String(r.hardwareAccelerated)])
+    if (d.supportsRtl) dAppAttrs.push(['android:supportsRtl', String(r.supportsRtl)])
+    if (d.networkSecurityConfig && r.networkSecurityConfig) dAppAttrs.push(['android:networkSecurityConfig', r.networkSecurityConfig])
+    if (d.appCategory && r.appCategory) dAppAttrs.push(['android:appCategory', r.appCategory])
+    for (const [attr, val] of dAppAttrs) dsrc = setOrAddAttrInTag(dsrc, 'application', attr, val)[0]
+    if (d.permissions) for (const p of r.permissions) {
+      if (dsrc.includes(`android:name="${p.name}"`)) continue
+      const attr = p.maxSdkVersion != null ? ` android:name="${p.name}" android:maxSdkVersion="${p.maxSdkVersion}"` : ` android:name="${p.name}"`
+      if (/<manifest\b[^>]*>/.test(dsrc)) dsrc = dsrc.replace(/<manifest\b[^>]*>/, (m) => `${m}\n    <uses-permission${attr} />`)
+    }
+    if (d.usesFeatures) for (const f of r.usesFeatures) {
+      if (dsrc.includes(`<uses-feature android:name="${f.name}"`)) continue
+      const attr = f.required ? ` android:name="${f.name}" android:required="true"` : ` android:name="${f.name}" android:required="false"`
+      if (/<manifest\b[^>]*>/.test(dsrc)) dsrc = dsrc.replace(/<manifest\b[^>]*>/, (m) => `${m}\n    <uses-feature${attr} />`)
+    }
+    fs.writeFileSync(devFile, dsrc)
+    out.changes.push({ file: drel, field: 'versionCode', to: String(r.versionCode) })
+  }
 }
 
 function applyIos(hostDir: string, r: ResolvedIosNative, d: Record<keyof ResolvedIosNative, boolean>, out: NativeApplyReport): void {
