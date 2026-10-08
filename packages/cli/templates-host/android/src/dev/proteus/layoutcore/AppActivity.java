@@ -55,6 +55,9 @@ public final class AppActivity extends Activity {
     /** dev 可视化层（DEV 角标 + 热重载提示；release 不创建） */
     private DevOverlay devOverlay;
 
+    /** 当前屏名（供 dev-watch 的 DevTools 心跳上报；UI 线程写、watch 线程读 ⇒ volatile） */
+    private volatile String lastScreenName = "";
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -231,6 +234,10 @@ public final class AppActivity extends Activity {
                 while (!Thread.currentThread().isInterrupted()) {
                     try { Thread.sleep(1000); } catch (InterruptedException e) { return; }
                     String v = httpGetText(base + "/version");
+                    // ★DevTools 心跳（决策 #672）：本线程在 CPU 后台线程 ⇒ 可安全读 volatile lastScreenName，
+                    //   每秒把"设备在线 + 当前屏"上报给 dev server 的面板（失败静默，不干扰热刷）。
+                    //   ★必须先 ping 再判 continue：否则"版本没变"这条主路径永不 ping ⇒ 面板一直"设备离线"。
+                    httpGetText(base + "/ping?screen=" + java.net.URLEncoder.encode(lastScreenName));
                     if (v == null || v.equals(last)) continue;
                     last = v;
                     final String fresh = httpGetText(base + "/bundle");
@@ -500,6 +507,8 @@ public final class AppActivity extends Activity {
 
     private void renderCurrent(String stateJson) {
         final String page = currentName(stateJson);
+        // ★DevTools 心跳用：每次渲染更新"当前屏"（UI 线程写；dev-watch 线程读）
+        if (page != null && !page.isEmpty()) lastScreenName = page;
         try {
             int vwPx = contentHost.getWidth() > 0 ? contentHost.getWidth() : physWidthPx;
             int vhPx = contentHost.getHeight() > 0 ? contentHost.getHeight() : physHeightPx;

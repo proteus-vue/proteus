@@ -22,6 +22,7 @@ import os from 'node:os'
 import { buildAppBundle } from './app-bundle'
 import { appBundleFile, type AppPlatform } from './targets'
 import { resolveAppRoutes } from './app-routes'
+import { renderDevtoolsPage } from './app-devtools-page'
 
 export interface AppDevServerOptions {
   projectRoot: string
@@ -113,6 +114,23 @@ export async function startAppDevServer(opts: AppDevServerOptions): Promise<AppD
   let building = false
   let pendingReason: string | null = null
 
+  // ── DevTools 面板状态（决策 #672）──
+  interface RebuildEvent { version: number; bytes: number; ms: number; reason: string; time: number }
+  interface HostState { screen: string; time: number }
+  const events: RebuildEvent[] = []         // 环形（近 50 条）重建时间线
+  let lastBytes = 0
+  let lastMs = 0
+  let lastHost: HostState | null = null
+  const sseClients = new Set<import('node:http').ServerResponse>()
+
+  /** 向所有 SSE 客户端广播一条事件。 */
+  const broadcast = (obj: unknown): void => {
+    const frame = `data: ${JSON.stringify(obj)}\n\n`
+    for (const c of sseClients) { try { c.write(frame) } catch { sseClients.delete(c) } }
+  }
+  /** 面板连接时的初始快照（版本/体积/耗时/时间线/宿主态）。 */
+  const snapshot = (): unknown => ({ type: 'snapshot', version, bytes: lastBytes, lastMs, events: events.slice(-50), host: lastHost })
+
   const rebuild = async (reason: string): Promise<void> => {
     if (building) { pendingReason = reason; return }   // 重建中 ⇒ 记待办（防抖，不并发）
     building = true
@@ -120,7 +138,14 @@ export async function startAppDevServer(opts: AppDevServerOptions): Promise<AppD
     try {
       const r = await buildAppBundle({ projectRoot, platform, outFile, dev: true })
       version++
-      opts.onRebuild?.({ version, bytes: r.bytes, ms: Date.now() - t0, reason })
+      const ms = Date.now() - t0
+      lastBytes = r.bytes
+      lastMs = ms
+      const ev: RebuildEvent = { version, bytes: r.bytes, ms, reason, time: Date.now() }
+      events.push(ev)
+      if (events.length > 50) events.shift()
+      broadcast({ type: 'rebuild', ...ev })
+      opts.onRebuild?.({ version, bytes: r.bytes, ms, reason })
     } catch (e) {
       console.error(`[proteus-dev] ✗ 重建失败：${(e as Error).message}`)
     } finally {      building = false
@@ -134,7 +159,22 @@ export async function startAppDevServer(opts: AppDevServerOptions): Promise<AppD
   await rebuild('initial')
 
   const server = http.createServer((req, res) => {
-    const url = (req.url ?? '/').split('?')[0]
+    const [pathname, query] = (req.url ?? '/').split('?')
+    const url = pathname
+    // ★DevTools 面板（决策 #672）：浏览器打开 dev server 根路径即见可视化面板。
+    if (url === '/' || url === '/index.html') {
+      const boundPort = (server.address() as { port: number } | null)?.port ?? port
+      const bindAddr = host === '0.0.0.0' || host === '::' ? lanAddress() : host
+      const html = renderDevtoolsPage({
+        platform,
+        projectName: path.basename(projectRoot),
+        projectRoot,
+        url: `http://${bindAddr}:${boundPort}`,
+      })
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
+      res.end(html)
+      return
+    }
     if (url === '/health') {
       res.writeHead(200, { 'content-type': 'application/json' })
       res.end(JSON.stringify({ ok: true, version }))
@@ -157,8 +197,26 @@ export async function startAppDevServer(opts: AppDevServerOptions): Promise<AppD
       }
       return
     }
+    // ★SSE 事件流（面板实时更新：重建事件 + 宿主心跳）
+    if (url === '/events') {
+      res.writeHead(200, { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-store', connection: 'keep-alive' })
+      res.write(`data: ${JSON.stringify(snapshot())}\n\n`)
+      sseClients.add(res)
+      const ping = setInterval(() => { try { res.write(': keep-alive\n\n') } catch { /* 断开由 close 处理 */ } }, 15000)
+      req.on('close', () => { clearInterval(ping); sseClients.delete(res) })
+      return
+    }
+    // ★宿主心跳（AppActivity 的 dev-watch 每次轮询顺带上报"当前屏"）⇒ 面板显示"设备在线 + 当前屏"
+    if (url === '/ping') {
+      const q = new URLSearchParams(query ?? '')
+      lastHost = { screen: q.get('screen') ?? '', time: Date.now() }
+      broadcast({ type: 'host', ...lastHost })
+      res.writeHead(200, { 'content-type': 'text/plain', 'cache-control': 'no-store' })
+      res.end('ok')
+      return
+    }
     res.writeHead(404, { 'content-type': 'text/plain' })
-    res.end('proteus dev server: /health /version /bundle')
+    res.end('proteus dev server: / (devtools) · /health · /version · /bundle · /events · /ping')
   })
 
   await new Promise<void>((resolve) => server.listen(port, host, () => resolve()))
@@ -195,6 +253,8 @@ export async function startAppDevServer(opts: AppDevServerOptions): Promise<AppD
     close: async () => {
       if (debounce) clearTimeout(debounce)
       for (const w of watchers) w.close()
+      for (const c of sseClients) { try { c.end() } catch { /* 已断 */ } }
+      sseClients.clear()
       await new Promise<void>((resolve) => server.close(() => resolve()))
     },
   }

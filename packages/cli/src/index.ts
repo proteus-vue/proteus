@@ -804,6 +804,7 @@ async function runAppDev(target: AppPlatform): Promise<number> {
     },
   })
   ui.ok(`dev server  ${ui.cyan(server.url)}`)
+  ui.info(`DevTools 面板  ${ui.cyan(`${server.url}/`)}  ${ui.dim('（浏览器打开：设备/屏幕/重建时间线）')}`)
 
   // ③ debug 宿主（bundle 走 dev server）→ 打包到 dist
   const outPkg = path.join(projectRoot, 'dist', 'app', target, APP_PACKAGE_NAME[target])
