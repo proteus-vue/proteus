@@ -15,9 +15,9 @@
 - **包规模**：**45 个 @proteus-vue/* npm 包**（+ `packages/layout-core-rust` = **cargo crate，非 npm 包**，故不计数）（★2026-09-29 layout-core = App 排版核心）（check:pkg 0 error · `pnpm check:stats` 校验 ✓；31→38 修正 → G-07 glass 39 → Skyline 收口 worklet 40 → ★2026-09-14 组件库拆包 `@proteus-vue/components` 41 → ★Vapor 线新增 `@proteus-vue/slot-runtime` 42 + `@proteus-vue/layout-core` 43 → ★2026-09-30 MA1 新增 `@proteus-vue/animation` 44；版本统一 0.3.0-beta.8，见「当前状态速览」）
 - **文档**：`docs/proteus-architecture.md`（L0 规约·真理来源）→ `docs/board-inventory.md`（全景索引）→ `docs/roadmap.md`（版本线）→ `roadmap-2-plan`（里程碑线）→ 各 plan
 
+## 当前状态速览（最近一次更新：**2026-10-08·（三一五）· ★★dev 宿主状态栏黑边 + dev 包 versionCode（#664 D3 只改了 release manifest，dev 走 `.dev.xml`）· 决策 #670**——用户实测：`npx proteus dev --target android` 宿主**仍是黑状态栏 + 黑底部安全区**。★**根因（"漏一端"）**：`proteus dev` 选 **`AndroidManifest.dev.xml`**，而 #664 D3 只改了 **release** `AndroidManifest.xml` 的主题 ⇒ dev 包仍带 `Theme.NoTitleBar.Fullscreen`（黑 windowBackground）。**同源**：`applyNativeConfigFromProject` **只注入 release manifest** ⇒ dev manifest `versionCode` 恒为模板默认 `1`（#668 只治了 aapt2 硬编码）。★**修法**：① 模板 `AndroidManifest.dev.xml` 主题改 `Theme.Material.NoActionBar`；② `native-config.ts` 结尾**同样注入 dev manifest**（versionCode/主题/权限… 幂等）；③ `host-package.ts` 打包前**定向幂等替换**旧主题 ⇒ **已生成的一次性宿主下次 dev/build 自愈**（无需手工删宿主）。★**真机复验**：dev manifest `versionCode="45"` + 新主题 → `PROTEUS_APP_READY` → 截图状态栏**透明**。★教训：**"改模板/单一变体"要数清**（同一宿主有 release/dev 两份 manifest）；一次性 scaffold 让模板修复到不了已生成工程 ⇒ 构建期**定向自愈**。★新会话以此为准。
 ## 当前状态速览（最近一次更新：**2026-10-08·（三一四）· ★★CLI 终端输出视觉优化（用户「对比大厂少了些什么、总感觉不好看」）· 决策 #669**——用户指 **CLI 终端输出**（非宿主页面）。★**诊断**：a) **外泄噪声**——外部工具原始 stderr 直刷屏（esbuild `import.meta`×2/重建 · javac 弃用 · keytool 证书横幅 · adb 原始输出）；根因 `execFileSync` **默认漏子进程 stderr**、esbuild 警告未 override。b) **没层次**——一屏 `[proteus] …` + 31 行 `[route]` + 433 行诊断。★**交付**：新增 `packages/cli/src/ui.ts`（TTY 感知 header/step/ok/event/hint；**非 TTY ⇒ 零 ANSI**）；`host-package` 外部工具改走 `run()`（捕获 stderr）；esbuild `logOverride empty-import-meta silent`；`dev`/`build --package` 重排为 **◆ 头部 → ✓ 步骤(耗时) → ✓ 已就绪(总耗时)**，adb 改捕获，热刷行 `[HH:MM:SS] ⟳ bundle v2 (505ms · change:…)`；`[route]`/诊断收成**一行摘要**（`PROTEUS_DEBUG=1` 看全量）。★**复验**：`proteus dev` 一屏**几十行 → 6 行**；非 TTY **0 行含 ANSI**。★教训：**工具噪声治源头（捕获 stderr）不治症状（筛行）**；CLI 观感 = **层次 + 安静**。★新会话以此为准。
 ## 当前状态速览（最近一次更新：**2026-10-08·（三一三）· ★★dev 装/起修 `INSTALL_FAILED_VERSION_DOWNGRADE` + dev 无人值守装起 · 决策 #668**——用户实测：`npx proteus dev --target android`（css-conformance）报 `Update version code 1 is older than current 45` ⇒ 装/起失败（dev server 起了但机器装不上新包）。★**根因 1**：`host-package` 的 aapt2 link **硬编码 `--version-code 1`**，**覆盖** manifest 里 `proteus.config` native 段的真值（`app.buildNumber=45`）⇒ 每个包 versionCode 恒为 1 ⇒ 装到更高 versionCode 的机器必失败。⇒ 从 manifest 读 `android:versionCode`；复验 APK badging `versionCode='45'`（修前 `1`）。★**根因 2（用户问「是否该自动杀掉进程重开」）**：裸 `adb install` 遇 downgrade/签名不符即失败。⇒ `runAppDev` 装/起改**无人值守三步**：① `force-stop` 旧进程 → ② `install -r -t -g -d`（allow downgrade）；失败 ⇒ ③ `uninstall` 后重装 → `start`。真机复验：`卸载旧包后重装…` → `Success` → `PROTEUS_APP_READY`+`DEV_WATCH_START`。★**dev 链路四段齐了**（#666 打包 + #667 监听根 + 本条装/起）。★教训：手工链里的 **magic 常量**（`--version-code 1`）是定时炸弹；dev 工具要在**脏机器**上也能无人值守跑通。★新会话以此为准。
-## 当前状态速览（最近一次更新：**2026-10-08·（三一二）· ★★★dev 热刷链路纯 npm 打通 —— 修「监听根硬编码」致模板工程热刷静默失效 · 决策 #667**——用户「继续打通这个完整的 cli 打包构建 dev 热刷链路」。★**实测**：`proteus dev --target android`（纯 npm · 不碰框架源码）**出包+装+dev server 都对**（dev 复用 #666 随包桥源/AAR ⇒ 打包那半已通），但**改源码后宿主不刷新**。★**根因（监听根硬编码，与 #664 D1 同族）**：`app-dev-server` 的 `watchTargets` 硬编码**项目根**下 `pages/router/App.vue`——而 create-proteus 模板放在 **`src/`** ⇒ 候选**全不存在** ⇒ **监听列表为空** ⇒ dev server 起来但**永不重建**（主仓工程恰好根形态 ⇒ 框架内测全绿、真用户断）。★**修法**：`resolveWatchRoots()` 按**布局/配置**——① 整棵 `src/`（模板形态）② honor `pagesDir`/`router.routesOutput`/`targets.mp.globalStyle`（与 #664 D1 的 `resolveAppRoutes` 同口径）③ 根级常见文件 ④ 祖先已在集合则跳过后代；**空集合打告警**。★**真机（Android d67e31a3 · 纯 npm）**：`watch 2 处：src, proteus.config.ts`（修前为空）→ 出包 3.5MB → 装 → `PROTEUS_DEV_BUNDLE_FROM_SERVER bytes=330322` → `PROTEUS_APP_READY` → 改 `src/pages/index.vue` → server **59ms** 重建 v2 → 宿主 **`PROTEUS_DEV_RELOADED`** → 截图 h1 变「HELLO HOT RELOAD」（未重装未重启）。配套断言 +3。★教训：**"配置驱动"要贯穿到每个消费者**（`pagesDir` 早在配置里，监听器却硬编码根名）。★新会话以此为准。
 
 ## ★《收纳规范》（2026-10-03 立 · 门禁 `pnpm check:memory`）
 
@@ -44,11 +44,11 @@
 |---|---|
 | `docs/project-memory-archive/2026-10.md` | 2026-10 里程碑详细叙事 + 状态速览历史栈（约 4.5k 行）|
 | `docs/project-memory-archive/2026-09.md` | 09 月全部叙事 + 柔性系统重组历史 + 2026-08 进度快照 + 已落地文件 + 09-19 验证状态（约 6.5k 行） |
-| `docs/project-memory-archive/decisions.md` | 决策链全文 #1–#669——按号检索（`grep -n "^669\." …`）|
+| `docs/project-memory-archive/decisions.md` | 决策链全文 #1–#670——按号检索（`grep -n "^670\." …`）|
 
 检索示例：`grep -n "2026-09-29\|判据建错靶" docs/project-memory-archive/2026-09.md`
 
-## 关键决策与文档偏差（#1–#669 → 归档速查）
+## 关键决策与文档偏差（#1–#670 → 归档速查）
 
 **全文在 `docs/project-memory-archive/decisions.md`**（按号检索：`grep -n "^290\." docs/project-memory-archive/decisions.md`）。
 决策号**只增不改号**（外部文档按号引用）；新决策追加到该文件末尾（号 +1）。
