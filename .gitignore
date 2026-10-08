@@ -89,6 +89,8 @@ hosts/**/build/
 hosts/ios/build-*/
 hosts/**/*.app/
 hosts/**/verify-jsc
+# ★iOS 签名切换档（2026-10-08）：两台电脑共用本仓 ⇒ 按主机名分档，属**机器本地状态**（勿提交）。
+hosts/ios/signing.local.json
 # 实验构建产物与**单次运行**原始数据（本机产物）
 hosts/ios/experiments/build/
 hosts/ios/experiments/results/experiments.json
