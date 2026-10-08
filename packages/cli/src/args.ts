@@ -219,6 +219,68 @@ export function parseGateArgs(argv: string[]): GateArgs {
   return { sub, id: positional[0], root: positional[1] ? path.resolve(positional[1]) : '.' }
 }
 
+export interface DoctorArgs {
+  root: string
+  json: boolean
+  report?: string
+  strict: boolean
+  only?: string[]
+  skip?: string[]
+  target?: string
+  deep: boolean
+  verbose: boolean
+  timeoutMs?: number
+  noParallel: boolean
+  list: boolean
+}
+
+const DOCTOR_GROUPS = ['env', 'toolchain', 'deps', 'project', 'hosts', 'ports', 'devices', 'gates']
+
+/** `proteus doctor [dir] [flags]` —— 环境/工程/端就绪度体检（M5 · 决策 #686） */
+export function parseDoctorArgs(argv: string[]): DoctorArgs {
+  const args: DoctorArgs = { root: '.', json: false, strict: false, deep: false, verbose: false, noParallel: false, list: false }
+  const valOf = (a: string): string => {
+    const i = argv.indexOf(a)
+    const v = i >= 0 ? argv[i + 1] : undefined
+    if (v === undefined || v.startsWith('-')) throw new Error(`${a} 需要参数值`)
+    return v
+  }
+  const groups = (raw: string): string[] => {
+    const gs = raw.split(',').map((s) => s.trim()).filter(Boolean)
+    for (const g of gs) if (!DOCTOR_GROUPS.includes(g)) throw new Error(`未知组：${g}（允许：${DOCTOR_GROUPS.join('/')}）`)
+    return gs
+  }
+  const takesValue = new Set(['--report', '--only', '--skip', '--target', '--timeout'])
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i]
+    if (a === '--json') args.json = true
+    else if (a === '--strict') args.strict = true
+    else if (a === '--deep') args.deep = true
+    else if (a === '--verbose' || a === '-v') args.verbose = true
+    else if (a === '--no-parallel') args.noParallel = true
+    else if (a === '--list') args.list = true
+    else if (takesValue.has(a)) {
+      if (a === '--report') args.report = valOf(a)
+      else if (a === '--only') args.only = groups(valOf(a))
+      else if (a === '--skip') args.skip = groups(valOf(a))
+      else if (a === '--target') {
+        const t = valOf(a)
+        args.target = t
+      } else if (a === '--timeout') {
+        const n = Number(valOf(a))
+        if (!Number.isFinite(n) || n <= 0) throw new Error(`--timeout 需正数`)
+        args.timeoutMs = n
+      }
+      i++
+    } else if (a.startsWith('-')) {
+      throw new Error(`未知参数：${a}`)
+    } else {
+      args.root = a
+    }
+  }
+  return args
+}
+
 export interface D2AuditArgs {
   /** 审计目录（★#448：缺省读工程 proteus.config 的 audit.dir ?? src——resolveD2Target 解析） */
   dir?: string
@@ -499,9 +561,14 @@ export const HELP_GROUPS: HelpGroup[] = [
         descEn: '★G-45 B3 debugging base: pre-flight validation of plugin modules (proteus.plugin.json integrity/signature sig-*/conformance coverage CMP084/087)\n      + push envelope generation (manifestHash/bundleHash — G-45.8 integrity)\n      FAIL → exit 1; devices/logs/serve land with the B4 transport adapter',
       },
       {
+        usage: 'proteus doctor [dir] [--json] [--report <path>] [--strict] [--only <groups>] [--skip <groups>] [--target <端>] [--deep] [--verbose] [--list] [--no-parallel]',
+        desc: '★★环境/工程/端就绪度体检（M5 · #686）：一次性回答「这台机器能不能编译/打包/调试到 N 个端」\n      分组：env 环境 · toolchain 工具链 · deps 依赖 · project 工程 · hosts 端就绪（投影聚合）· ports 端口 · devices 设备（慢）· gates 门禁\n      --json 机器可读（含完整取证）· --report 落盘 · --strict warn 也失败 · --deep 启慢检查 · --verbose 逐项取证 · --list 只列目录\n      ★只诊断不修改（Apollo 硬约束）——每项给可复制修复命令；error → exit 1（warn 不阻断）',
+        descEn: '★★Environment/project/endpoint readiness check (M5 · #686): answers "can this machine compile/package/debug to N ends" at once\n      Groups: env · toolchain · deps · project · hosts (projection) · ports · devices (slow) · gates\n      --json machine-readable (full evidence) · --report to file · --strict warn fails too · --deep enable slow · --verbose per-item evidence · --list only list\n      ★Diagnose only, never modify (Apollo hard constraint) — each item gives a copyable fix command; error → exit 1 (warn does not block)',
+      },
+      {
         usage: 'proteus health [dir]',
-        desc: '★工程/环境健康检查（与 check 领域门禁正交）：Node 版本 / 工程结构 / 依赖 / 产物 / appid / pagesDir / workspace 链接 / IDE\n      一次性诊断（✅/⚠/✗）；error 级 → exit 1（warn 不阻断）',
-        descEn: '★Project/environment health check (orthogonal to the check domain gates): Node version / project structure / dependencies / build artifacts / appid / pagesDir / workspace links / IDE\n      one-shot diagnostics (✅/⚠/✗); error level → exit 1 (warn does not block)',
+        desc: '★工程/环境健康检查（已并入 doctor——本命令等价 proteus doctor --only project，保留为薄壳）',
+        descEn: '★Project/environment health check (merged into doctor — equivalent to proteus doctor --only project, kept as a thin shell)',
       },
       {
         usage: 'proteus css:check [dir|file] [--no-strict] [--fix] [--report <path>]',

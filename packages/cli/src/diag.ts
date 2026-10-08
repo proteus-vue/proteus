@@ -18,8 +18,8 @@
 //   ④ **不做自动修复**，只给建议。
 import { dim, bold, cyan, red, yellow, gray } from './ui'
 
-/** 阶段：C 编译期 / B 构建期 / D 部署期 */
-export type DiagStage = 'C' | 'B' | 'D'
+/** 阶段：C 编译期 / B 构建期 / D 部署期 / **E 体检期（Environment · doctor）** */
+export type DiagStage = 'C' | 'B' | 'D' | 'E'
 /** 类别：S 语法 / T 类型 / R 资源 / E 环境能力 / D 依赖 / X 未知 */
 export type DiagCategory = 'S' | 'T' | 'R' | 'E' | 'D' | 'X'
 
@@ -84,10 +84,47 @@ export const DIAG_CODES: Record<string, DiagCodeDef> = {
   'PT-BR-001': { stage: 'B', category: 'R', title: '缺少运行期 bundle（bundle-superapp.js）', hints: ['先跑 proteus build --target <端> 产出 bundle，再打包'] },
   // ── 部署期 ──
   'PT-DD-001': { stage: 'D', category: 'D', title: '安装到设备失败', hints: ['确认设备已连接且已授权；iOS 首次需在设备上信任开发者证书'] },
+
+  // ── 体检期（Environment · doctor，2026-10-09 · 决策 #686）：阶段 E = 编译之前的环境体检 ──
+  //   ★阶段扩展（Apollo 原仅 C/B/D）——理由：doctor 的发现发生在**编译之前**，语义上不属 C/B/D 任一，
+  //     独立成 E（Environment）。不改 L0–L4 分层与三条硬约束。
+  // env（PT-EE）
+  'PT-EE-001': { stage: 'E', category: 'E', title: 'Node 版本不满足', hints: ['本仓门禁要求 Node ≥ 22（Node 18 下 jsdom 27 假红）——fnm/nvm install 22'] },
+  'PT-EE-002': { stage: 'E', category: 'E', title: '包管理器版本不匹配', hints: ['用 corepack 对齐 package.json 的 packageManager（corepack enable && corepack prepare pnpm@<ver> --activate）'] },
+  'PT-EE-003': { stage: 'E', category: 'E', title: '缺少 Rust 工具链（rustup）', hints: ['PATH 上的 rustc 可能来自 Homebrew；Android/iOS target 装在 ~/.cargo ⇒ rustup toolchain install stable'] },
+  'PT-EE-004': { stage: 'E', category: 'E', title: 'git 身份未配置', hints: ['提交/发布流程需要 user.name 与 user.email：git config --global user.email …'] },
+  'PT-EE-005': { stage: 'E', category: 'E', title: '磁盘空间不足', hints: ['iOS 模拟器 runtime 约 8 GB——清理磁盘'] },
+  'PT-EE-006': { stage: 'E', category: 'E', title: 'Android NDK 缺失', hints: ['见 hosts/android/README.md §前置（.tools/ndk）'] },
+  'PT-EE-007': { stage: 'E', category: 'E', title: 'JS 引擎（QuickJS）产物缺失', hints: ['跑 scripts/setup-android-js-engine.sh'] },
+  'PT-EE-010': { stage: 'E', category: 'E', title: '微信开发者工具 CLI 未探测到', hints: ['设 PROTEUS_IDE_CLI 或 --ide（小程序 E2E 需要）'] },
+  'PT-EE-011': { stage: 'E', category: 'E', title: '缺少 DevEco Studio / hvigor', hints: ['HarmonyOS 端构建需要 DevEco 6.1.1+'] },
+  'PT-EE-012': { stage: 'E', category: 'E', title: '缺少 adb', hints: ['安装 platform-tools 并加入 PATH（ANDROID_HOME/platform-tools）'] },
+  'PT-EE-013': { stage: 'E', category: 'E', title: 'hdc 版本过低', hints: ['旧版 hdc 与 HarmonyOS 7 设备协议不兼容——用 DevEco 自带 hdc'] },
+  'PT-EE-020': { stage: 'E', category: 'E', title: '端口被占用', hints: ['释放端口或指定 --port'] },
+  'PT-EE-021': { stage: 'E', category: 'E', title: '无可用设备', hints: ['连接设备并在设备上授权（Android：adb；iOS：devicectl）'] },
+  'PT-EE-022': { stage: 'E', category: 'E', title: '命令不存在', hints: ['安装对应工具或加入 PATH'] },
+  'PT-EE-023': { stage: 'E', category: 'E', title: '命令探测超时', hints: ['该工具可能挂死；在医生外单独运行确认'] },
+  // deps（PT-ED）
+  'PT-ED-001': { stage: 'E', category: 'D', title: '框架包版本与 CLI 不一致', hints: ['pnpm install（对齐 linked 版本）'] },
+  'PT-ED-002': { stage: 'E', category: 'D', title: '依赖未安装 / workspace 链接不完整', hints: ['pnpm install（prepare 钩子重建 dist）'] },
+  'PT-ED-003': { stage: 'E', category: 'D', title: 'lockfile 与 package.json 不同步', hints: ['本地 pnpm install 后提交 lockfile'] },
+  'PT-ED-004': { stage: 'E', category: 'D', title: '存在未声明依赖', hints: ['node scripts/check-deps.mjs --fix-list'] },
+  'PT-ED-005': { stage: 'E', category: 'D', title: 'CLI dist 陈旧', hints: ['pnpm build:packages'] },
+  // project（PT-ER）
+  'PT-ER-001': { stage: 'E', category: 'R', title: '工程配置缺失或校验失败', hints: ['proteus gen config / 修 proteus.config.ts'] },
+  'PT-ER-002': { stage: 'E', category: 'R', title: 'pagesDir 不存在', hints: ['proteus.config.pagesDir 指向错误'] },
+  'PT-ER-003': { stage: 'E', category: 'R', title: '.proteus/ 生成物与指纹基线不一致', hints: ['删除 .proteus/ 重新生成'] },
+  'PT-ER-004': { stage: 'E', category: 'R', title: '缺少 app.config.ts（可选）', hints: ['proteus gen config 生成骨架'] },
+  'PT-ER-005': { stage: 'E', category: 'R', title: 'appid 无效或为占位', hints: ['IDE 导入 / automator 体检会失败——填真实 appid'] },
+  'PT-ER-006': { stage: 'E', category: 'R', title: 'gates.disabled 含未注册 id', hints: ['proteus gate ls 查看合法 id'] },
+  'PT-ER-007': { stage: 'E', category: 'R', title: '必要 npm scripts 缺失', hints: ['补齐 build:web / build:mp / test'] },
+  'PT-ER-008': { stage: 'E', category: 'R', title: '门禁入口不可达', hints: ['检查 scripts/ 与 gate.ts 注册表是否同步'] },
+
   // ── 未知（★不可省略——只定位不猜因，方案 §6.3）──
   'PT-CX-000': { stage: 'C', category: 'X', title: '编译期未知错误' },
   'PT-BX-000': { stage: 'B', category: 'X', title: '构建期未知错误' },
   'PT-DX-000': { stage: 'D', category: 'X', title: '部署期未知错误' },
+  'PT-EX-000': { stage: 'E', category: 'X', title: '体检期未知错误' },
 }
 
 /** 该阶段/类别的"未知"兜底码 */

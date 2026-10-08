@@ -467,13 +467,63 @@ async function main(): Promise<void> {
       }
       break
     }
+    case 'doctor': {
+      // ★★环境/工程/端就绪度体检（M5 · 决策 #686）——见 packages/cli/src/doctor/
+      const { parseDoctorArgs } = await import('./args')
+      const { runDoctor, listChecks } = await import('./doctor')
+      const { formatHuman, toJson } = await import('./doctor/report')
+      try {
+        const dargs = parseDoctorArgs(rest)
+        if (dargs.list) {
+          console.log(listChecks())
+          break
+        }
+        const root = path.resolve(dargs.root)
+        // targets：从工程 proteus.config 读（缺省空 ⇒ 端相关组 skip）
+        let targets: string[] = []
+        try {
+          const { loadProteusConfig } = await import('./config-loader')
+          if (fs.existsSync(path.join(root, 'proteus.config.ts'))) {
+            const { config } = await loadProteusConfig(path.join(root, 'proteus.config.ts'))
+            targets = Object.keys(config.targets ?? {}).filter((k) => (config.targets as Record<string, unknown>)[k] !== undefined)
+          }
+        } catch { /* 工程配置读不到 ⇒ targets 空（端组 skip），不阻断 */ }
+        const rep = await runDoctor({
+          root,
+          targets,
+          cliVersion: resolveCliVersion(),
+          only: dargs.only as never,
+          skip: dargs.skip as never,
+          target: dargs.target,
+          deep: dargs.deep,
+          noParallel: dargs.noParallel,
+          timeoutMs: dargs.timeoutMs,
+        })
+        const strictFail = dargs.strict && (rep.summary.error > 0 || rep.summary.warn > 0)
+        if (dargs.report) {
+          const { writeFileSync } = await import('node:fs')
+          writeFileSync(path.resolve(dargs.report), toJson(rep))
+          if (!dargs.json) console.log(formatHuman(rep, { verbose: dargs.verbose }))
+        } else if (dargs.json) {
+          console.log(toJson(rep))
+        } else {
+          console.log(formatHuman(rep, { verbose: dargs.verbose, quietWhenGreen: true }))
+        }
+        if (!rep.ok || strictFail) process.exitCode = 1
+      } catch (e) {
+        console.error(`[proteus-doctor] ${(e as Error).message}`)
+        process.exitCode = 1
+      }
+      break
+    }
     case 'health': {
-      // ★工程/环境健康检查（与 check 领域门禁正交）：Node 版本/结构/依赖/产物/appid/IDE 一次性诊断
+      // ★薄壳（决策 D2 · #686）：已并入 doctor——本命令等价 `proteus doctor --only project`（保留输出格式防打断既有 CI）
       const root = rest[0] && !rest[0].startsWith('-') ? rest[0] : '.'
       try {
         const items = await runHealthCheck(root)
         const { text, ok } = formatHealthReport(items)
         console.log(text)
+        console.log('  • proteus health 已并入 proteus doctor（本命令等价 proteus doctor --only project）——建议迁移')
         if (!ok) process.exitCode = 1
       } catch (e) {
         console.error(`[proteus-health] ${(e as Error).message}`)

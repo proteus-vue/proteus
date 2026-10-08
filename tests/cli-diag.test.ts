@@ -22,7 +22,8 @@ import {
 describe('★#684 Apollo · 错误码 SSOT', () => {
   it('码格式 = PT-{阶段}{类别}-{序号}，目录内码全部合法', () => {
     for (const code of Object.keys(DIAG_CODES)) {
-      expect(code, code).toMatch(/^PT-[CBD][STREDX]-\d{3}$/)
+      // 阶段 C/B/D/E（E = 体检期 · 决策 #686 扩展 Apollo 阶段）
+      expect(code, code).toMatch(/^PT-[CBDE][STREDX]-\d{3}$/)
     }
   })
   it('未登记码 ⇒ makeDiag 抛（杜绝手写野码）', () => {

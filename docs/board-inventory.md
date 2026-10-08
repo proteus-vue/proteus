@@ -112,7 +112,7 @@
 
 | plan | 编号 | 状态 | 说明 |
 |------|------|------|------|
-| `proteus-cli-plan` / `proteus-cli-plus-plan` | G-17 | ✅ | build/explain/rules/check 全家 + 健康检查 + 美观 help |
+| `proteus-cli-plan` / `proteus-cli-plus-plan` | G-17 | ✅ | build/explain/rules/check 全家 + 美观 help + **M5 `proteus doctor` 环境/工程/端体检（#686）**（`health` 已并入 doctor 薄壳） |
 | `proteus-devtools-plan` / `proteus-devtools-plus-plan` | G-19 | ✅ | TraceBus + 九视图 + 双向调试 + 远程中转 + 会话导出导入 |
 | `proteus-vue-devtools-plan` | G-19 | ✅ | vue devtools 面板（Router/App Config/Style Safety）+ 本地面板双通道 |
 | `proteus-testing-plan` / `proteus-test-framework-plan` | G-16 | ✅ | 四层金字塔 + 统一测试 API + 双端驱动 |

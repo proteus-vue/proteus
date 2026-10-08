@@ -169,6 +169,9 @@ jobs:
       - name: 三端松手惯性接线（手指拖拽 + 惯性两段；挡"代码在、没接线"回归）
         run: pnpm run check:scroll-fling
 
+      - name: doctor 注册表自检（M5 · id 唯一/命名/组齐/失败码已登记）
+        run: pnpm run check:doctor-registry
+
       - name: SFC 五端报告（含**留白 16±0.5 硬断言** + 双口径差异率透明化——夹具口径不遮饰）
         run: pnpm run check:consistency-sfc
 

@@ -252,3 +252,22 @@ proteus dev --target android                  # scaffold → dev server → debu
   补 `check:ios-selfdraw-compile` 只管框架参考宿主的盲区。
 - **诚实边界**：iOS dev `.app` 为**开发签名**（本机 provisioning profile，非 App Store 分发）。
 
+
+### ★★M5 `proteus doctor`（环境/工程/端就绪度体检 · 决策 #686）
+
+设计全文见 **`docs/proteus-cli-plan/10-m5-doctor.md`**（B1–B4 已实现）。要点：
+
+- **定位**：跨端工程"能不能跑起来"的体检器——一次性、可并行、可机器消费地回答"这台机器 + 这个仓库，
+  现在能不能编译/打包/调试到 N 个端"，并为每项不通过给出**首因 + 取证 + 可复制修复命令**。
+- **不是新检查逻辑，是编排层**：宿主探测（`host-package` 的 `resolveDeveloperDir`）、工程健康（`health.ts`）、
+  依赖对齐（`check-deps`）、工具链探测各自已有实现，doctor 负责**收集 / 去重 / 归一呈现 / 统一退出码**。
+- **8 组**：`env` 环境 · `toolchain` 工具链 · `deps` 依赖 · `project` 工程 · `hosts` **端投影聚合** · `ports` 端口 ·
+  `devices` 设备（慢，`--deep` 开）· `gates` 门禁可运行性。**30 项检查**（SSOT：`doctor/registry.ts` 的 `CHECKS`）。
+- **接口**：`proteus doctor [dir] [--json] [--report <path>] [--strict] [--only/--skip <groups>] [--target <端>]
+  [--deep] [--verbose] [--list] [--no-parallel] [--timeout <ms>]`。`error → exit 1`（`warn` 不阻断；`--strict` 收紧）。
+- **★四条硬约束（继承 Apollo #684）**：码自建（`PT-*`，新增**阶段 E**=体检期）· **禁猜因**（未知→`PT-EX-000`，不编造原因）·
+  **保留原文**（`evidence` 全量，`--json` 恒含、`--verbose` 展开）· **不自动修复**（只给 `fix.command`）。
+- **`health` 薄壳**：已并入 doctor——`proteus health [dir]` 等价 `proteus doctor --only project`（保留输出 + 一行迁移提示）。
+- **门禁**：`check:doctor-registry`（注册表自检：id 唯一/命名/组齐/**失败码已登记**/CHECKS 展开完整）+ CI + verify 链。
+- **诚实边界**：a) 检查项为**结构/环境事实**，非"门禁结论"（doctor 只答"能不能跑"，不答"跑出来绿不绿"，决策 D3）；
+  b) 框架仓里 `project` 组 **skip**（框架仓不是 Proteus 工程，避免 CI 被误伤）。
