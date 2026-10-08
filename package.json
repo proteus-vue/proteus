@@ -111,6 +111,7 @@
     "check:ios-host": "node hosts/ios/bridge/build.mjs && node hosts/ios/verify.mjs",
     "check:ios-perf": "node hosts/ios/bench.mjs",
     "check:ios-selfdraw-compile": "bash hosts/ios/check-selfdraw-compile.sh",
+    "check:ios-cli-host-compile": "bash hosts/ios/check-cli-host-compile.sh",
     "check:ios-signing-selftest": "node hosts/ios/lib/ios-signing.selftest.mjs",
     "check:js-engine": "node scripts/verify-js-engine.mjs",
     "check:js-engine-build": "bash scripts/setup-android-js-engine.sh --check",

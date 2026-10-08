@@ -162,8 +162,14 @@ export function packageHarmonyHost(opts: PackageHostOptions): PackageHostResult 
 
 export interface PackageIosOptions {
   hostDir: string
-  /** 项目根（含 dist/app/ios/screen-content.json）；缺省 = 不拷产物 */
+  /** 项目根（含 dist/app/ios/screen-content.json + bundle-superapp.js）；缺省 = 不拷产物 */
   projectRoot?: string
+  /** ★dev 变体（决策 #683）：覆写 `ProteusBuildConfig.swift` 的 DEV/DEV_URL（bundle 走 HTTP + 热刷）。 */
+  dev?: boolean
+  /** dev server 基址（如 `http://192.168.x.x:51789`）；dev=true 时写入 DEV_URL。 */
+  devUrl?: string
+  /** 打包产物输出路径（缺省 `<hostDir>/build/ProteusHost.app`；CLI 传 dist/app/ios/ProteusHost.app）。 */
+  outApp?: string
 }
 
 export interface PackageIosResult {
@@ -214,10 +220,11 @@ export function packageIosHost(opts: PackageIosOptions): PackageIosResult {
   const bundleId = (plistSrc.match(/<key>CFBundleIdentifier<\/key>\s*<string>([^<]+)<\/string>/) ?? [])[1] ?? ''
   if (!bundleId) return { ok: false, hostDir, app: null, screenContentCopied: false, log: ['✗ Info.plist 缺 CFBundleIdentifier'] }
 
-  // ② 编译产物 → hostDir/app-screen-content.json
+  // ② 编译产物 → hostDir（app-screen-content.json + bundle-superapp.js + app-config.json）
   let screenContentCopied = false
   if (opts.projectRoot) {
-    const sc = path.join(opts.projectRoot, 'dist', 'app', 'ios', 'screen-content.json')
+    const appDist = path.join(opts.projectRoot, 'dist', 'app', 'ios')
+    const sc = path.join(appDist, 'screen-content.json')
     if (fs.existsSync(sc)) {
       fs.copyFileSync(sc, path.join(hostDir, 'app-screen-content.json'))
       screenContentCopied = true
@@ -225,11 +232,41 @@ export function packageIosHost(opts: PackageIosOptions): PackageIosResult {
     } else {
       log.push(`⚠ 未见 ${path.relative(opts.projectRoot, sc)}——沿用宿主既有产物`)
     }
+    // ★运行期 bundle（App 壳的内容源）——缺则运行期壳无法启动（明确告警，不静默）
+    const bundle = path.join(appDist, 'bundle-superapp.js')
+    if (fs.existsSync(bundle)) {
+      fs.copyFileSync(bundle, path.join(hostDir, 'bundle-superapp.js'))
+      log.push(`✓ 运行期 bundle bundle-superapp.js 已就位（${(fs.statSync(bundle).size / 1024).toFixed(0)} KB）`)
+    } else {
+      log.push(`⚠ 未见 ${path.relative(opts.projectRoot, bundle)}——运行期壳需要它（先跑 proteus build 的 bundle 步骤）`)
+    }
+    const cfg = path.join(appDist, 'app-config.json')
+    if (fs.existsSync(cfg)) fs.copyFileSync(cfg, path.join(hostDir, 'app-config.json'))
+  }
+
+  // ②' dev 变体：**就地**覆写 ProteusBuildConfig.swift（DEV/DEV_URL），构建后还原 release 默认
+  const buildCfgPath = listSwift(shellDir).find((f) => f.endsWith('ProteusBuildConfig.swift')) ?? path.join(shellDir, 'ProteusBuildConfig.swift')
+  let buildCfgBackup: string | null = null
+  if (opts.dev === true) {
+    if (!fs.existsSync(buildCfgPath)) {
+      log.push('⚠ 未找到 ProteusBuildConfig.swift——dev 变体将无法把 bundle 指向 dev server')
+    } else {
+      buildCfgBackup = fs.readFileSync(buildCfgPath, 'utf-8')
+      const url = (opts.devUrl ?? '').replace(/"/g, '')
+      const out = buildCfgBackup
+        .replace(/static let DEV = (?:true|false)/, 'static let DEV = true')
+        .replace(/static let DEV_URL = "[^"]*"/, `static let DEV_URL = "${url}"`)
+      fs.writeFileSync(buildCfgPath, out)
+      log.push(`✓ dev 变体：ProteusBuildConfig DEV=true · DEV_URL=${url || '(未给)'}`)
+    }
+  }
+  const restoreBuildCfg = () => {
+    if (buildCfgBackup !== null) fs.writeFileSync(buildCfgPath, buildCfgBackup)
   }
 
   // ③ 内核：cargo build 两个 crate（aarch64-apple-ios）
   const repoRoot = findRepoRootForKernel(hostDir)
-  if (!repoRoot) return { ok: false, hostDir, app: null, screenContentCopied, log: [...log, '✗ 找不到框架仓（含 packages/layout-core-rust）'] }
+  if (!repoRoot) { restoreBuildCfg(); return { ok: false, hostDir, app: null, screenContentCopied, log: [...log, '✗ 找不到框架仓（含 packages/layout-core-rust）'] } }
   const env = { ...process.env, PATH: `${path.join(os.homedir(), '.cargo', 'bin')}:${process.env.PATH ?? ''}` }
   const cargoTargetDir = process.env.CARGO_TARGET_DIR ?? path.join(repoRoot, 'spike', 'target')
   for (const c of ['packages/layout-core-rust', 'packages/host-abi']) {
@@ -238,16 +275,17 @@ export function packageIosHost(opts: PackageIosOptions): PackageIosResult {
       run('cargo', ['build', '--release', '--target', 'aarch64-apple-ios', '--manifest-path', path.join(repoRoot, c, 'Cargo.toml')], { env, encoding: 'utf-8', maxBuffer: 64 * 1024 * 1024 })
     } catch (e) {
       const msg = String((e as { stderr?: string }).stderr ?? (e as Error).message).slice(-1200)
+      restoreBuildCfg()
       return { ok: false, hostDir, app: null, screenContentCopied, log: [...log, '✗ cargo 编译失败：', msg] }
     }
   }
   const libCore = path.join(cargoTargetDir, 'aarch64-apple-ios', 'release', 'libproteus_layout_core.a')
   const libAbi = path.join(cargoTargetDir, 'aarch64-apple-ios', 'release', 'libproteus_host_abi.a')
-  for (const l of [libCore, libAbi]) if (!fs.existsSync(l)) return { ok: false, hostDir, app: null, screenContentCopied, log: [...log, `✗ 未生成内核静态库：${l}`] }
+  for (const l of [libCore, libAbi]) if (!fs.existsSync(l)) { restoreBuildCfg(); return { ok: false, hostDir, app: null, screenContentCopied, log: [...log, `✗ 未生成内核静态库：${l}`] } }
   log.push('✓ 内核两静态库就位（libproteus_layout_core.a + libproteus_host_abi.a）')
 
   // ④ swiftc 编译（runtime 源集 + 内核 .a）
-  const appDir = path.join(hostDir, 'build', 'ProteusHost.app')
+  const appDir = path.resolve(opts.outApp ?? path.join(hostDir, 'build', 'ProteusHost.app'))
   fs.rmSync(appDir, { recursive: true, force: true })
   fs.mkdirSync(appDir, { recursive: true })
   const exe = path.join(appDir, 'ProteusHost')
@@ -259,15 +297,24 @@ export function packageIosHost(opts: PackageIosOptions): PackageIosResult {
   } catch (e) {
     const msg = String((e as { stderr?: string }).stderr ?? (e as Error).message)
     const errs = msg.split('\n').filter((l) => l.includes('error:')).slice(0, 8).join('\n')
+    restoreBuildCfg()
     return { ok: false, hostDir, app: null, screenContentCopied, log: [...log, '✗ swiftc 编译失败：', errs || msg.slice(-1000)] }
   }
   log.push('✓ swiftc 编译通过')
+  restoreBuildCfg() // ★dev 变体：编译完成即还原 BuildConfig 为 release 默认（工程源码始终 release 形态）
 
-  // ⑤ 组装 .app
-  const plistOut = plistSrc.replace(/<key>CFBundleExecutable<\/key>\s*<string>[^<]*<\/string>/, '<key>CFBundleExecutable</key><string>ProteusHost</string>')
+  // ⑤ 组装 .app（Info.plist + 运行期 bundle + 屏内容 + app-config）
+  let plistOut = plistSrc.replace(/<key>CFBundleExecutable<\/key>\s*<string>[^<]*<\/string>/, '<key>CFBundleExecutable</key><string>ProteusHost</string>')
+  // ★dev 变体：注入 ATS 例外（允许 HTTP 连局域网 dev server）——**仅 dev**，release 不含（保持默认 ATS 严格）
+  if (opts.dev === true && !plistOut.includes('NSAppTransportSecurity')) {
+    plistOut = plistOut.replace('</dict></plist>', '  <key>NSAppTransportSecurity</key><dict><key>NSAllowsArbitraryLoads</key><true/></dict>\n</dict></plist>')
+  }
   fs.writeFileSync(path.join(appDir, 'Info.plist'), plistOut)
-  const scOut = path.join(hostDir, 'app-screen-content.json')
-  if (fs.existsSync(scOut)) fs.copyFileSync(scOut, path.join(appDir, 'app-screen-content.json'))
+  for (const res of ['app-screen-content.json', 'bundle-superapp.js', 'app-config.json']) {
+    const src = path.join(hostDir, res)
+    if (fs.existsSync(src)) fs.copyFileSync(src, path.join(appDir, res))
+  }
+  if (!fs.existsSync(path.join(appDir, 'bundle-superapp.js'))) log.push('⚠ .app 内缺 bundle-superapp.js——运行期壳无法启动（先跑 proteus build 产出 bundle）')
   log.push('✓ .app 已组装')
 
   // ⑥ 签名（本机 provisioning profile；与 run-selfdraw.sh 同源）

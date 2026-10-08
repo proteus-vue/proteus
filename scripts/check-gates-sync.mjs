@@ -39,6 +39,10 @@ const LOCAL_ONLY = {
   //   背景：`run-selfdraw.sh` 是唯一编译 selfdraw-scene.swift 的地方且需真机+签名
   //   ⇒ 改宿主代码本地无任何检查（实测触发：加自定义字体注册通道时）。
   'check:ios-selfdraw-compile': '需 macOS + Xcode（iphoneos SDK 做 swiftc -typecheck）；CI 为 ubuntu-latest',
+  // ★CLI iOS 宿主模板编译检查（2026-10-08，check:ios-selfdraw-compile 的姊妹盲区）：
+  //   它检查**框架参考宿主**；CLI 生成宿主的**壳模板**（templates-host/ios/shell/*.swift）此前无任何本地判据
+  //   ⇒ 改模板只能等真机打包才发现编译错。同样需 macOS + Xcode。
+  'check:ios-cli-host-compile': '需 macOS + Xcode（iphoneos SDK 做 swiftc -typecheck）；CI 为 ubuntu-latest',
   // ★★「提交 ≠ 交付」门禁（2026-09-28 新增，背景：一天 111 个提交漏推送 —— 用户指出）。
   //   CI 里跑它**没有意义**：CI 的 checkout 是 detached HEAD（或 `refs/pull/*`），
   //   "本地领先 upstream N 个提交"这个状态在 CI 中天然为 0 ⇒ **恒绿，属假门禁**。

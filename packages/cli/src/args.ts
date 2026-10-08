@@ -464,8 +464,8 @@ export const HELP_GROUPS: HelpGroup[] = [
       },
       {
         usage: 'proteus dev [--target <web|skyline|ios|android|harmony>]',
-        desc: '开发服务器：web → Vite；skyline → dev-mp watch 构建\n      ★App 端（#662 · 热刷）：android/ios/harmony → scaffold 完整宿主 → 起 HTTP dev server（局域网）\n      → 编 **debug** 宿主（bundle 走 dev server）→ 装到设备 → 启动 → watch；改源码保存即热刷当前屏（无需重装）',
-        descEn: 'Dev server: web → Vite; skyline → dev-mp watch build\n      ★App targets (#662 · hot reload): android/ios/harmony → scaffold the full host → start an HTTP dev server (LAN)\n      → build a **debug** host (bundle served over HTTP) → install on device → launch → watch; saving source hot-reloads the current screen (no reinstall)',
+        desc: '开发服务器：web → Vite；skyline → dev-mp watch 构建\n      ★App 端（#662/#683 · 热刷）：android/ios → scaffold 完整宿主 → 起 HTTP dev server（局域网）\n      → 编 **debug** 宿主（bundle 走 dev server）→ 装到设备（adb / devicectl）→ 启动 → watch；改源码保存即热刷当前屏\n      ★hongmeng 热刷通道待接（本批端到端兑现 android + ios）',
+        descEn: 'Dev server: web → Vite; skyline → dev-mp watch build\n      ★App targets (#662/#683 · hot reload): android/ios → scaffold the full host → start an HTTP dev server (LAN)\n      → build a **debug** host (bundle over HTTP) → install (adb / devicectl) → launch → watch; saving source hot-reloads the current screen\n      ★hongmeng hot-reload channel pending (this batch delivers android + ios end-to-end)',
       },
       {
         usage: 'proteus create host <platform> <dir> [--name <应用名>] [--bundle <包名>] [--project <项目根>]',
