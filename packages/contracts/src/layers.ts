@@ -97,6 +97,105 @@ export function popoutStackValue(stackDepth: number): number {
 /** 弹层栈深上限（规范 §6.2 硬约束：超过 ⇒ 报错，防递归弹层把值推向溢出） */
 export const POPOUT_STACK_LIMIT = 16
 
+/* ═══════════════════════════════════════════════════════════════════════════
+ * ★★★批 A④（2026-10-08 · 决策 #658）：**z-index 数值 → 语义层区间映射**（用户选定策略）。
+ *
+ * 【为什么需要（缺口实证）】`:style` 内联裸 z-index 被 LY001 拦（规范 §3.5 立场不变），
+ *   但**类样式**（`<style>` 块 / CSS 文件）里的 z-index 是**合法且语料在用**的写法
+ *   （superapp 66 处：路由层叠 z:0/1/2 · Tab 栏 z:2/3 · 壳骨架 1.5e6）——
+ *   而 App 三端此前**静默丢**（折叠面无该字段、applier drop、宿主无 z 序）⇒ Web/MP 正常、
+ *   App 端按声明序画（碰巧对时才看起来对）。
+ *
+ * 【映射口径（规范 §3.4 区间表，机器可读形态）】数值落在哪个区间 = 该元素属于哪个**语义层**：
+ *   `1–9` content · `10–99` navigation · `100–999` mask · `1000+` popout。
+ *   ★**区间内保留数值序**（这正是 Web 行为：100 < 1000 ⇒ 数值越大越靠上；
+ *     1 < 2 ⇒ 同层内数值序）——映射的用途是①诊断/迁移指引（"你写的 1000 是 Popout 语义，
+ *     可改用 layer="popout" 获得跨端层容器语义"）②越界拦截（负值/异常大值）。
+ *   ★**跨容器不生效**（与 CSS stacking context 一致）：z-index 只重排**同一父节点内**的兄弟
+ *     绘制序——实现见三端宿主（宿主层排序，内核零改动；树序仍是缺省真源）。
+ *
+ * 【诚实边界（v1 具名）】
+ *   · 负 z-index 不在支持面（CSS 的负 z 呈现在容器背景**之后**——各端自绘管线无"容器背景层
+ *     与子内容分层"概念，收紧为**不支持并诊断**，不静默当 0）；
+ *   · `z-index: auto` = 未声明（按声明序参与，与 CSS 同语义）；
+ *   · stacking context 的完整语义（父 z 隔离子 z、opacity/transform 创建新上下文）**不实现**——
+ *     v1 语义 = "同父兄弟按 (z, 声明序) 稳定排序"，覆盖语料全部形态（绝对定位兄弟层叠）。
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/** 语义层区间（含下沿、不含上沿；popout 上界为 `Z_INDEX_MAX`） */
+export const Z_INDEX_RANGES: ReadonlyArray<{ layer: LayerPrimitive; min: number; maxExclusive: number | null }> = [
+  { layer: 'layer-content', min: 1, maxExclusive: 10 },
+  { layer: 'layer-navigation', min: 10, maxExclusive: 100 },
+  { layer: 'layer-mask', min: 100, maxExclusive: 1000 },
+  { layer: 'layer-popout', min: 1000, maxExclusive: null },
+]
+
+/**
+ * 数值上沿（越界诊断用；不拦截编译——框架自身在挂载层域用到 1.5e6 级别，
+ * 该值是**壳骨架**的内部用法，业务代码超此值提示"疑似异常"）。
+ */
+export const Z_INDEX_MAX = 100_000
+
+export interface ZIndexVerdict {
+  /** 合法（v1 支持面内：n ≥ 0 的有限数） */
+  ok: boolean
+  /** 映射到的语义层（0 归 content——CSS 里 z:0 与正 z 同属"定位层序"） */
+  layer: LayerPrimitive
+  /** 层内序（区间内偏移；0 与 auto 归 0） */
+  inLayerRank: number
+  /** 不合法原因（ok=false 时给人类可读理由；调用方决定 severity——本仓编译期用诊断不阻断） */
+  reason?: string
+  /** 迁移指引（诊断用；语义层非 content 时提示可改用 layer= 属性获得跨端层容器语义） */
+  hint?: string
+  /** 疑似异常值（ok=true 但超 Z_INDEX_MAX——**仍然发射**（排序权重本身有效），仅诊断提示） */
+  suspicious?: boolean
+}
+
+/**
+ * 数值 → 语义层判定（**唯一判据**：编译器折叠面 / 宿主 / 诊断共用，铁律 #9 同源）。
+ *
+ * @param n 解析出的 z-index 数值（应为整数；非整数先四舍五入——CSS 里 z-index 取整）
+ */
+export function zIndexOf(n: number): ZIndexVerdict {
+  if (!Number.isFinite(n)) {
+    return { ok: false, layer: 'layer-content', inLayerRank: 0, reason: `z-index 非有限数（收到 ${String(n)}）` }
+  }
+  const v = Math.round(n)
+  if (v < 0) {
+    return {
+      ok: false,
+      layer: 'layer-content',
+      inLayerRank: 0,
+      reason: `负 z-index（${v}）不在 App 支持面（CSS 负 z 呈现在容器背景之后——自绘管线无该分层概念）`,
+      hint: '改用正数（1 起）表达层序；确需"垫底"请调整声明顺序',
+    }
+  }
+  if (v > Z_INDEX_MAX) {
+    return {
+      ok: true,
+      layer: 'layer-popout',
+      inLayerRank: v - 1000,
+      suspicious: true,
+      reason: `z-index ${v} 超出 ${Z_INDEX_MAX}（疑似异常值；框架壳骨架的内部用法除外）`,
+      hint: '业务层序用 1–1000 区间（content 1-9 / navigation 10-99 / mask 100-999 / popout 1000+）',
+    }
+  }
+  // 区间查表（v=0 与 auto 同档 ⇒ content 层内 0）
+  for (const r of Z_INDEX_RANGES) {
+    if (v >= r.min && (r.maxExclusive === null || v < r.maxExclusive)) {
+      const rank = v - r.min
+      const hint =
+        r.layer === 'layer-content'
+          ? undefined
+          : `数值 ${v} 落在 ${r.layer.slice('layer-'.length)} 语义区间——需要跨端层容器语义时可用 \`layer="${r.layer}"\` 声明`
+      return { ok: true, layer: r.layer, inLayerRank: rank, ...(hint ? { hint } : {}) }
+    }
+  }
+  // v === 0
+  return { ok: true, layer: 'layer-content', inLayerRank: 0 }
+}
+
+
 /**
  * `layer` 属性的**合法值集合**（编译期校验用）。
  * ★`layer-transition` 是**框架内部层**（规范 §4.6：高于 popout、转场期间由宿主提升、

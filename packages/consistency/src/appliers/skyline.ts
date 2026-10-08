@@ -112,6 +112,12 @@ export function mapStyleIRToSkyline(fields: Record<string, unknown>, opts: Skyli
     }
     // 数值族（无单位/带单位）
     if (typeof value === 'number') {
+      // ★★★批 A④（2026-10-08 · 决策 #658）：z-index **原样透传**（微信 WXSS 原生支持 z-index——
+      //   与 Web 同语义的层叠序；Skyline/WebView 两形态都由 CSS 引擎处理）。
+      if (field === 'zIndex') {
+        put(field, 'z-index', String(Math.round(value)))
+        continue
+      }
       if (field === 'opacity' || field === 'flexGrow' || field === 'flexShrink' || field === 'fontWeight' || field === 'aspectRatio') {
         put(field, kebab(field), String(value))
         continue

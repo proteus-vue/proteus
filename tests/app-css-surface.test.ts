@@ -34,8 +34,10 @@ import path from 'node:path'
 const APP_FIELDS = [...APP_LAYOUT_FIELDS, ...APP_PAINT_FIELDS, ...APP_EDGE_FIELDS, ...APP_DERIVED_FIELDS, ...APP_SPECIAL_FIELDS]
 const FORBIDDEN = new Set<string>(FORBIDDEN_PROPS)
 const MATRIX_KEYS = new Set<string>(Object.keys(STYLE_PROP_LEVELS))
-/** ★已登记的分层差异（引擎字段层需要 FORBIDDEN 名的属性）——与 check-app-css-surface.mjs 同源维护 */
-const APP_ENGINE_LEVEL_FIELDS = new Set(['display', 'position', 'overflow', 'boxShadow', 'textShadow'])
+/** ★已登记的分层差异（引擎字段层需要 FORBIDDEN 名的属性）——与 check-app-css-surface.mjs 同源维护
+ *  ★批 A④（2026-10-08 · 决策 #658）：`zIndex` 加入——类样式里的 z-index 现由折叠面解析进引擎产物
+ *  （承载 = 构建期兄弟重排 + 宿主按数组序绘制；LY001 仍拦**内联** style/:style 裸写法）。 */
+const APP_ENGINE_LEVEL_FIELDS = new Set(['display', 'position', 'overflow', 'boxShadow', 'textShadow', 'zIndex'])
 
 describe('★App CSS 支持面 · ① SSOT 完备性', () => {
   it('五组常量各自非空、各自无重复（防导出/生成器腐化）', () => {

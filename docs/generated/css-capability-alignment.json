@@ -734,7 +734,8 @@
       "outlineWidth",
       "outlineColor",
       "outlineStyle",
-      "outlineOffset"
+      "outlineOffset",
+      "zIndex"
     ],
     "declAttrs": [
       "fill-gradient",
@@ -1715,7 +1716,9 @@
       "id": "z-index",
       "css": "z-index",
       "category": "layer",
-      "compilerFields": [],
+      "compilerFields": [
+        "zIndex"
+      ],
       "web": "supported",
       "skyline": "supported",
       "app": "absent",

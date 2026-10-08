@@ -1,0 +1,144 @@
+{
+  "_note": "★CSS 能力逐项验收包（用户指定流程：实现一个 → 全端对齐视觉验收一个）。gates：implemented（IR 在册）/ parity（真 Chromium 同构样本与 CSE 值一致）/ endsMapped（三端可表达）。★视觉验收（像素级）仍由独立子代理按 Web 基准并排做——本包只归档**机器可判**的三段；pass=true 表示\"可以进入视觉验收\"，不等于\"视觉已验收\"。",
+  "id": "z-index",
+  "kind": "property",
+  "verifiedAt": "2026-10-08T01:49:54.402Z",
+  "implEvidence": {
+    "impl": "implemented",
+    "implNote": "IR 注册表在册（scope=engine-only · 矩阵 FORBIDDEN）",
+    "inIrRegistry": true,
+    "irScope": "engine-only",
+    "inCompilerFold": false,
+    "matrixLevel": "FORBIDDEN",
+    "webSupport": true,
+    "usage": 66,
+    "priority": "done"
+  },
+  "parity": {
+    "ran": true,
+    "pass": true,
+    "detail": [
+      "IR `zIndex` = 2（与浏览器样本 z-index: 2 一致）"
+    ],
+    "css": "z-index: 2",
+    "irField": "zIndex",
+    "irValue": 2,
+    "computedProbe": {
+      "align-content": "normal",
+      "align-items": "normal",
+      "background-color": "rgba(0, 0, 0, 0)",
+      "background-position": "0% 0%",
+      "background-repeat": "repeat",
+      "background-size": "auto",
+      "border-bottom-color": "rgb(0, 0, 0)",
+      "border-bottom-right-radius": "0px",
+      "border-bottom-style": "none",
+      "border-bottom-width": "0px",
+      "border-left-color": "rgb(0, 0, 0)",
+      "border-left-width": "0px",
+      "border-right-color": "rgb(0, 0, 0)",
+      "border-right-width": "0px",
+      "border-top-color": "rgb(0, 0, 0)",
+      "border-top-left-radius": "0px",
+      "border-top-style": "none",
+      "border-top-width": "0px",
+      "bottom": "auto",
+      "color": "rgb(0, 0, 0)",
+      "display": "block",
+      "flex-direction": "row",
+      "flex-wrap": "nowrap",
+      "font-family": "Times",
+      "font-size": "16px",
+      "font-weight": "400",
+      "grid-auto-columns": "auto",
+      "grid-auto-flow": "row",
+      "grid-auto-rows": "auto",
+      "grid-template-areas": "none",
+      "grid-template-columns": "none",
+      "height": "60px",
+      "justify-content": "normal",
+      "justify-items": "normal",
+      "justify-self": "auto",
+      "left": "auto",
+      "letter-spacing": "normal",
+      "line-height": "normal",
+      "max-width": "none",
+      "min-width": "0px",
+      "opacity": "1",
+      "outline-offset": "0px",
+      "outline-style": "none",
+      "outline-width": "3px",
+      "overflow-x": "visible",
+      "overflow-y": "visible",
+      "right": "auto",
+      "text-align": "start",
+      "text-shadow": "none",
+      "top": "auto",
+      "width": "100px",
+      "word-break": "normal",
+      "-webkit-line-clamp": "none"
+    }
+  },
+  "endExpressibility": {
+    "web": "基准端（浏览器原生——A 档）",
+    "skyline": "可表达（z-index）",
+    "app": "可表达（dto: zIndex）",
+    "skylineUnsupported": [],
+    "appUnsupported": []
+  },
+  "gates": {
+    "implemented": true,
+    "parity": true,
+    "endsMapped": true
+  },
+  "pass": true,
+  "nextStep": "机器判据三段已过 → 进入**视觉验收**：生成并排产物（node scripts/gen-baseline-side-by-side.mjs）+ 独立子代理按 Web 基准评审",
+  "visual": {
+    "_note": "★视觉验收结论（独立子代理按 Web 基准并排图评审；来源 = css-conformance/results/side-by-side/）。verdict: pass（与 Web 基准无可归因差异）/ fail（有实差异——见 caseIssues）/ unclear（图不足以判）。纪律：左半恒为 Web 基准（D1）；不看不清不编（unclear）。",
+    "reviewedAt": "2026-10-08T01:52:07.905Z",
+    "reviewedBy": "independent-visual-subagent",
+    "sideBySideDir": "css-conformance/results/side-by-side/",
+    "summary": {
+      "fails": 0,
+      "ends": "web:pass · android:pass · ios:pass · harmony:pass · mp:unclear"
+    },
+    "verdicts": [
+      {
+        "end": "web",
+        "verdict": "pass",
+        "caseIssues": [],
+        "evidence": "css-conformance/results/side-by-side/position.web-vs-web.png（基准自身）；E 案例三片层序：红(z:5) 在上 → 橙(z:3) → 蓝(z:1)，与声明序相反但按数值叠放——机器像素判据 RED=6319 > BLUE=5736 > ORANGE=2848 且红覆盖橙重叠区"
+      },
+      {
+        "end": "android",
+        "verdict": "pass",
+        "caseIssues": [],
+        "evidence": "css-conformance/results/side-by-side/position.android-vs-web.png；真机 d67e31a3 全链（build-batch → build-and-run → --es screen position）；E 案例红片可见面积居首（14280 > 12928 > 6408），红覆盖橙重叠区像素判据通过；A/B/C/D 案例与 Web 基准逐案例一致"
+      },
+      {
+        "end": "ios",
+        "verdict": "pass",
+        "caseIssues": [],
+        "evidence": "css-conformance/results/side-by-side/position.ios-vs-web.png；真机 iPhone12（drive 模式逐屏截图 Documents/shot-position.png）；E 案例红居首（14330 > 12924 > 6408）；A/B/C/D 与 Web 一致"
+      },
+      {
+        "end": "harmony",
+        "verdict": "pass",
+        "caseIssues": [],
+        "evidence": "css-conformance/results/side-by-side/position.harmony-vs-web.png；真机 KLE-AL00U（scene=superapp-screen-position + snapshot_display）；E 案例红居首（19376 > 10723 > 8641，面积比含状态栏裁切影响）；A/B/C/D 与 Web 一致"
+      },
+      {
+        "end": "mp",
+        "verdict": "unclear",
+        "caseIssues": [
+          {
+            "case": "case-zindex-numeric",
+            "issue": "本轮未能采到 MP 真机截图（wechatide open_project_window 报 APPID_ERROR——环境态，与本次改动无关）。★但产物级判据成立：position.wxss 里 zn-a/zn-b/zn-c 的 z-index 5/3/1 逐条在（MP 端走原生 WXSS 引擎，与 Web 同语义透传，非 App 自绘路径）。",
+            "severity": "low"
+          }
+        ],
+        "evidence": "css-conformance/dist/mp-weixin/pages/position.wxss（z-index: 5 / 3 / 1 三条）；截图待 APPID 环境修复后补采"
+      }
+    ]
+  }
+}

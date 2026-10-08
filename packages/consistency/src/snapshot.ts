@@ -483,6 +483,8 @@ const STYLE_KEYS = new Set([
   // ★★★背景定位家族（2026-10-07）：size/position/repeat（与接口/覆盖表同批——闭集纪律）
   'backgroundSize', 'backgroundPosition', 'backgroundRepeat',
   'aspectRatio', 'flexBasis', 'transform', 'boxShadow',
+  // ★★★批 A④（2026-10-08 · 决策 #658）：z-index 数值层序（与接口/覆盖表同批——闭集纪律）
+  'zIndex',
   // ★★★text-shadow 项（2026-10-08）：文本阴影（与 boxShadow 同族字符串键）
   'textShadow',
   'gridTemplateColumns', 'gridTemplateRows', 'gridAutoColumns', 'gridAutoRows', 'gridColumn', 'gridRow',

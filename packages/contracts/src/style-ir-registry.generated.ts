@@ -1432,15 +1432,15 @@ export const STYLE_IR_FIELDS: Record<string, StyleFieldSpec> = {
     },
   },
   "zIndex": {
-    scope: "engine-only",
-    domain: "layout",
+    scope: "semantic",
+    domain: "paint",
     valueType: "forbidden",
     sources: {
-      compiler: null,
+      compiler: "APP_PAINT_FIELDS",
       matrixLevel: "FORBIDDEN",
       runtimeWhitelist: false,
       runtimeForbidden: true,
-      consistencyMatrix: false,
+      consistencyMatrix: true,
       inheritable: false,
     },
   },
@@ -1449,14 +1449,14 @@ export const STYLE_IR_FIELDS: Record<string, StyleFieldSpec> = {
 /** 摘要（判据与官网数字读它——机器推导，非手写） */
 export const STYLE_IR_SUMMARY = {
   total: 108,
-  semantic: 82,
-  engineOnly: 26,
+  semantic: 83,
+  engineOnly: 25,
   byDomain: {
     "derived": 10,
     "edges": 8,
-    "layout": 48,
+    "layout": 47,
     "matrix-only": 4,
-    "paint": 37,
+    "paint": 38,
     "special": 1,
   },
 } as const

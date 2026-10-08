@@ -187,8 +187,11 @@ export function mapStyleIRToApp(fields: Record<string, unknown>): AppMappingResu
 
     /* ── 数值族 ── */
     if (typeof value === 'number') {
+      // ★★★批 A④（2026-10-08 · 决策 #658）：z-index 从"无能力（drop）"改为**直传**——
+      //   宿主按 (zIndex, 声明序) 对同父兄弟做稳定排序（同父层叠 = CSS/WXSS 引擎语义；
+      //   判据区间映射见 contracts/layers.ts 的 zIndexOf）。
       if (field === 'zIndex') {
-        drop(field, value, 'App 无层叠上下文（注册表 forbidden）')
+        put(field, value, value)
         continue
       }
       if (field === 'opacity' || field === 'flexGrow' || field === 'flexShrink' || field === 'aspectRatio' ||

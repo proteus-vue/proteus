@@ -1,21 +1,21 @@
 {
   "host_id" : "ios",
-  "host_stats" : "{\"data\":{\"screens\":[],\"shared_calls\":0,\"content_node_total\":0,\"live_screens\":0,\"calls\":[\"screen.mount\",\"screen.stats\"],\"visible_calls\":0,\"rect_calls\":0,\"mount_calls\":0,\"anim_calls\":0,\"anim_completed\":0,\"anim_hook_missing\":0,\"destroy_calls\":0},\"ok\":true}",
+  "host_stats" : "{\"ok\":true,\"data\":{\"visible_calls\":0,\"content_node_total\":0,\"mount_calls\":0,\"destroy_calls\":0,\"anim_calls\":0,\"anim_hook_missing\":0,\"live_screens\":0,\"calls\":[\"screen.mount\",\"screen.stats\"],\"anim_completed\":0,\"screens\":[],\"shared_calls\":0,\"rect_calls\":0}}",
   "ok" : true,
-  "rendered_page" : "position-scroll",
-  "run_ts" : 1791387521.981308,
+  "rendered_page" : "word-break",
+  "run_ts" : 1791424042.0707641,
   "scroll_probe" : {
-    "after_drag_down_100k" : 169,
+    "after_drag_down_100k" : 0,
     "after_drag_left_100k_x" : 0,
     "after_drag_right_100k_x" : 0,
     "after_drag_up_100k" : 0,
-    "ok" : false,
-    "range" : 169,
+    "ok" : true,
+    "range" : 0,
     "range_set" : true
   },
   "state" : {
-    "current" : "position-scroll",
-    "depth" : 2,
+    "current" : "word-break",
+    "depth" : 32,
     "screens" : [
       "animation",
       "at-rules",
@@ -51,7 +51,37 @@
     ],
     "stack" : [
       "index",
-      "position-scroll"
+      "animation",
+      "at-rules",
+      "background-position",
+      "background",
+      "border-style",
+      "border",
+      "box-model",
+      "effects",
+      "flex",
+      "font",
+      "grid-auto-flow",
+      "grid-auto",
+      "grid-template-areas",
+      "grid-tracks",
+      "index",
+      "justify-self",
+      "line-clamp",
+      "math-functions",
+      "misc",
+      "outline",
+      "overflow-page",
+      "overflow",
+      "place-items",
+      "position-scroll",
+      "position",
+      "safe-area",
+      "text-shadow",
+      "text",
+      "units",
+      "vw-vh",
+      "word-break"
     ],
     "tabLabels" : {
       "border" : "CSS 验收 · 边框",
@@ -92,12 +122,190 @@
   },
   "switch_log" : [
     {
-      "current" : "position-scroll",
-      "dy" : 500,
-      "offset" : 0,
+      "current" : "animation",
       "ok" : true,
-      "scroll" : "position-scroll",
-      "via" : "scroll-inject"
+      "tap" : "animation",
+      "via" : "drive"
+    },
+    {
+      "current" : "at-rules",
+      "ok" : true,
+      "tap" : "at-rules",
+      "via" : "drive"
+    },
+    {
+      "current" : "background-position",
+      "ok" : true,
+      "tap" : "background-position",
+      "via" : "drive"
+    },
+    {
+      "current" : "background",
+      "ok" : true,
+      "tap" : "background",
+      "via" : "drive"
+    },
+    {
+      "current" : "border-style",
+      "ok" : true,
+      "tap" : "border-style",
+      "via" : "drive"
+    },
+    {
+      "current" : "border",
+      "ok" : true,
+      "tap" : "border",
+      "via" : "drive"
+    },
+    {
+      "current" : "box-model",
+      "ok" : true,
+      "tap" : "box-model",
+      "via" : "drive"
+    },
+    {
+      "current" : "effects",
+      "ok" : true,
+      "tap" : "effects",
+      "via" : "drive"
+    },
+    {
+      "current" : "flex",
+      "ok" : true,
+      "tap" : "flex",
+      "via" : "drive"
+    },
+    {
+      "current" : "font",
+      "ok" : true,
+      "tap" : "font",
+      "via" : "drive"
+    },
+    {
+      "current" : "grid-auto-flow",
+      "ok" : true,
+      "tap" : "grid-auto-flow",
+      "via" : "drive"
+    },
+    {
+      "current" : "grid-auto",
+      "ok" : true,
+      "tap" : "grid-auto",
+      "via" : "drive"
+    },
+    {
+      "current" : "grid-template-areas",
+      "ok" : true,
+      "tap" : "grid-template-areas",
+      "via" : "drive"
+    },
+    {
+      "current" : "grid-tracks",
+      "ok" : true,
+      "tap" : "grid-tracks",
+      "via" : "drive"
+    },
+    {
+      "current" : "index",
+      "ok" : true,
+      "tap" : "index",
+      "via" : "drive"
+    },
+    {
+      "current" : "justify-self",
+      "ok" : true,
+      "tap" : "justify-self",
+      "via" : "drive"
+    },
+    {
+      "current" : "line-clamp",
+      "ok" : true,
+      "tap" : "line-clamp",
+      "via" : "drive"
+    },
+    {
+      "current" : "math-functions",
+      "ok" : true,
+      "tap" : "math-functions",
+      "via" : "drive"
+    },
+    {
+      "current" : "misc",
+      "ok" : true,
+      "tap" : "misc",
+      "via" : "drive"
+    },
+    {
+      "current" : "outline",
+      "ok" : true,
+      "tap" : "outline",
+      "via" : "drive"
+    },
+    {
+      "current" : "overflow-page",
+      "ok" : true,
+      "tap" : "overflow-page",
+      "via" : "drive"
+    },
+    {
+      "current" : "overflow",
+      "ok" : true,
+      "tap" : "overflow",
+      "via" : "drive"
+    },
+    {
+      "current" : "place-items",
+      "ok" : true,
+      "tap" : "place-items",
+      "via" : "drive"
+    },
+    {
+      "current" : "position-scroll",
+      "ok" : true,
+      "tap" : "position-scroll",
+      "via" : "drive"
+    },
+    {
+      "current" : "position",
+      "ok" : true,
+      "tap" : "position",
+      "via" : "drive"
+    },
+    {
+      "current" : "safe-area",
+      "ok" : true,
+      "tap" : "safe-area",
+      "via" : "drive"
+    },
+    {
+      "current" : "text-shadow",
+      "ok" : true,
+      "tap" : "text-shadow",
+      "via" : "drive"
+    },
+    {
+      "current" : "text",
+      "ok" : true,
+      "tap" : "text",
+      "via" : "drive"
+    },
+    {
+      "current" : "units",
+      "ok" : true,
+      "tap" : "units",
+      "via" : "drive"
+    },
+    {
+      "current" : "vw-vh",
+      "ok" : true,
+      "tap" : "vw-vh",
+      "via" : "drive"
+    },
+    {
+      "current" : "word-break",
+      "ok" : true,
+      "tap" : "word-break",
+      "via" : "drive"
     }
   ],
   "tabs" : [
