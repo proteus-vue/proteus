@@ -60,6 +60,17 @@ final class ScreenHost: NSObject {
     /// ★节点 id → 屏（动画**按树分发**用——与 Android 腿同法；混批会被内核整批拒绝）
     private var nodeToScreen: [Int: ScreenTree] = [:]
 
+    /// ★★★env token 解析（决策 #694 · 对齐 Android #677）：编译产物里 `"minHeight":"env:--pf-vh"` /
+    ///   `padding:{top:"env:--pf-inset-top"}` 是**字符串**，而内核 `NodeDto` 读 `Option<f32>`
+    ///   ⇒ 原样喂 `proteus_layout_create` ⇒ serde「invalid type: string … expected f32」⇒ 返 0
+    ///   ⇒ **点卡片不切屏**（真机实测，此前完全静默——首屏走 `SelfDrawView.render` 那条路已解析，
+    ///   故只有**切屏**暴露）。解析器取值 = 建视图的壳（`SelfDrawBridge.current`）——
+    ///   **单一实现**（`SelfDrawView#resolveEnvTokens`），本类不另写一份；与 Android
+    ///   `ScreenHost.setEnvResolver` 同契约（那边显式注入，这边按"当前桥"取，等价）。
+    private func resolveEnvTokens(in node: inout [String: Any]) {
+        if let b = SelfDrawBridge.current { b.resolveEnvTokens(inNode: &node) }
+    }
+
     // ── 诊断记账（判据读：证明动作真发生，非壳自述） ──
     private var mountCalls = 0, visibleCalls = 0, destroyCalls = 0, animCalls = 0, animCompleted = 0, animHookMissing = 0
     /// ★阶段 1：真建进内核树的**页面内容节点**累计数（判据读它证"路由页面真落地"，非 3 占位）
@@ -203,7 +214,11 @@ final class ScreenHost: NSObject {
                 let newId = idMap[cid] ?? (1000 + i)
                 var parentId = contentParent
                 if let pid = cn["parentId"] as? Int, let mapped = idMap[pid] { parentId = mapped }
-                nodes.append(contentNode(newId, parentId, cn))
+                // ★env token 解析（决策 #694）：**先解析再建节点**——与 Android `ScreenHost` 同法。
+                //   （该通路漏解析 ⇒ `env:` 字符串直进内核 ⇒ serde 拒收 ⇒ create 返 0 ⇒ 不切屏。）
+                var node = cn
+                resolveEnvTokens(in: &node)
+                nodes.append(contentNode(newId, parentId, node))
                 contentNodeIds.append(newId)
             }
         } else {

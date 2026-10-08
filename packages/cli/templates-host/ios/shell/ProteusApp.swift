@@ -18,6 +18,15 @@
 import UIKit
 import JavaScriptCore
 
+/* ────────────────────────── 品牌色（壳内单一来源） ────────────────────────── */
+
+/// 壳 chrome 用色（**非内核几何**）：内容底 / 品牌色。与 Web token（`--sp-bg #f5f6fa` / `--brand #5b5bd6`）
+///   及 Android 壳（`0xFFF4F5F7`）同源——启动占位与内容底色一致 ⇒ 无"黑→内容"突变（决策 #694）。
+enum ProteusBrandColor {
+    static let pageBackground = UIColor(red: 0xF5/255, green: 0xF6/255, blue: 0xFA/255, alpha: 1)
+    static let brand = UIColor(red: 0x5B/255, green: 0x5B/255, blue: 0xD6/255, alpha: 1)
+}
+
 /* ────────────────────────── 宿主驱动（引擎 + 运行期装配） ────────────────────────── */
 
 /// 一个"可重载"的宿主实例：持一枚 JSContext + 桥 + 视图。dev 热刷 = 丢弃旧的、按新 bundle 建新的。
@@ -36,9 +45,80 @@ final class ProteusHostDriver {
     private var tabIcons: [String: String] = [:]
     private var tabBar: UIView?
 
+    // ★dev DevTools 上报缓冲（决策 #693）：页面 console.* → /log；手势 → /trace；渲染后 → /tree。
+    //   仅 DEV 变体产生（installDevConsoleShim / 手势回调里判 DEV）；主线程写、dev-watch 线程读（串行队列保护）。
+    let reportQueue = DispatchQueue(label: "proteus.dev.report")
+    var logOutbox: [[String]] = []       // [channel, level, text]
+    var traceOutbox: [[String]] = []     // [gesture, id, chain, handled, fired]
+    var lastTreeJson: String?            // 最近一次渲染后的实例化节点树（供 dev-watch 上报 /tree）
+
+    /// JS console 垫片：把页面 `console.log/info/warn/error` 捕获进 logOutbox（channel=project）。
+    /// ★与 Android `installDevConsole` 同语义：**须在 eval bundle 之前装**（页面顶层 console.* 也被捕获）。
+    /// ★★★用 `globalThis`，**不是 `window`**（App 的 JSContext 非浏览器——实测 `Can't find variable: window`
+    ///   会当场抛 ReferenceError）；且 JSC 裸上下文**没有 `console`** ⇒ 需先建。
+    private func installDevConsoleShim(_ ctx: JSContext) {
+        let shim = """
+        (function(){
+          var g = globalThis;
+          if (g.__proteusConsoleShim) return; g.__proteusConsoleShim = true;
+          if (!g.console) g.console = {};
+          ['log','info','warn','error'].forEach(function(level){
+            var orig = (typeof g.console[level] === 'function') ? g.console[level] : function(){};
+            g.console[level] = function(){
+              try {
+                var args = Array.prototype.slice.call(arguments).map(function(a){
+                  try { return (typeof a === 'string') ? a : JSON.stringify(a); } catch(e){ return String(a); }
+                }).join(' ');
+                if (g.proteusHost && g.proteusHost.post) g.proteusHost.post(JSON.stringify({proteusConsole: level, text: args}));
+              } catch(e){}
+              try { orig.apply(g.console, arguments); } catch(e){}
+            };
+          });
+        })();
+        """
+        _ = ctx.evaluateScript(shim)
+    }
+
+    /// 记录一次手势 trace（供面板 Events）——由 dev 场景在派发后调用（决策 #693）。
+    func recordGestureTrace(gesture: String, id: Int, chain: [Int], handled: Bool) {
+        guard ProteusBuildConfig.DEV else { return }
+        reportQueue.sync {
+            traceOutbox.append([gesture, String(id), chain.map(String.init).joined(separator: ","), handled ? "1" : "0", ""])
+            if traceOutbox.count > 80 { traceOutbox.removeFirst() }
+        }
+    }
+
+    /// 当前屏名（面板"当前屏"读数）
+    func currentScreenName() -> String {
+        guard let ctx = self.ctx else { return currentPage }
+        return currentName(ctx)
+    }
+
+    /// 当前屏实例化节点树（面板 Elements）——经运行期快照桥
+    func snapshotTreeJson() -> String? {
+        guard let ctx = self.ctx else { return nil }
+        return ctx.evaluateScript("__proteusSuperappTree ? __proteusSuperappTree() : null")?.toString()
+    }
+
+    /// 取走并清空待上报日志（主线程调用；dev-watch 上报 /log）
+    func drainLogs() -> [[String]] {
+        var out: [[String]] = []
+        reportQueue.sync { out = logOutbox; logOutbox.removeAll() }
+        return out
+    }
+
+    /// 取走并清空待上报 trace（主线程调用；dev-watch 上报 /trace）
+    func drainTraces() -> [[String]] {
+        var out: [[String]] = []
+        reportQueue.sync { out = traceOutbox; traceOutbox.removeAll() }
+        return out
+    }
+
     init(frame: CGRect) {
         view = SelfDrawView(frame: frame)
-        view.backgroundColor = .black
+        // ★底色 = 内容同族浅色（决策 #694）：`SelfDrawView` 覆盖不到的区域 / 切换期此前露黑底
+        //   （观感"突然黑屏"）——改浅色后与 Web/Android（contentHost 0xFFF4F5F7）一致。
+        view.backgroundColor = ProteusBrandColor.pageBackground
         bridge.view = view
         // 触摸 → 命中 → JS 派发（与参考宿主壳同一条链）
         view.onGesture = { [weak self] x, y, type in
@@ -69,9 +149,26 @@ final class ProteusHostDriver {
         // 签名 = (target:Int, chain:[Int], type:String, x:Double, y:Double)
         bridge.onDispatchToJS = { target, chain, type, _, _ in
             rtHost.dispatchGestureToJS(type: type, target: target, chain: chain)
+            // ★dev 事件 trace（决策 #693）：面板 Events 的"手势派发链路"读数
+            self.recordGestureTrace(gesture: type, id: target, chain: chain, handled: true)
         }
         ctx.exceptionHandler = { _, exc in
             NSLog("[proteus] JS 异常: %@", exc?.toString() ?? "?")
+        }
+        // ②' ★dev：JS console 垫片（页面 console.* → 面板 Console·项目通道）+ 手势 trace 收集（决策 #693）
+        if ProteusBuildConfig.DEV {
+            installDevConsoleShim(ctx)
+            // 页面 console.*（经 `proteusHost.post`）→ logOutbox → dev-watch 上报 /log（channel=project）
+            caps.postSink = { [weak self] json in
+                guard let self, let d = json.data(using: .utf8),
+                      let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any],
+                      let level = o["proteusConsole"] as? String else { return }
+                let text = (o["text"] as? String) ?? ""
+                self.reportQueue.sync {
+                    self.logOutbox.append(["project", level, String(text.prefix(600))])
+                    if self.logOutbox.count > 200 { self.logOutbox.removeFirst() }
+                }
+            }
         }
         // ③ eval bundle + boot（路由栈装配 + 入口 tab）
         _ = ctx.evaluateScript(bundleSource)
@@ -107,6 +204,8 @@ final class ProteusHostDriver {
         } else {
             NSLog("[proteus] PROTEUS_HOST_RENDER page=%@ ok", page)
         }
+        // ★dev：渲染后抓实例化节点树（供面板 Elements；决策 #693）
+        if ProteusBuildConfig.DEV { lastTreeJson = snapshotTreeJson() }
         return out
     }
 
@@ -223,21 +322,53 @@ final class ProteusHostDriver {
 /* ────────────────────────── bundle 源（dev/release 的唯一分叉点） ────────────────────────── */
 
 enum BundleSource {
-    /// 解出 bundle 源：DEV ⇒ HTTP dev server（有限重试）；否则读内嵌 `bundle-superapp.js`。
+    /// 解出 bundle 源（**同步**；dev 单次尝试）——仅供**已在后台队列**的调用（dev 热重载路径）。
+    ///   启动路径请用 `loadAsync`（不阻塞主线程）。
     static func load() -> String? {
-        if ProteusBuildConfig.DEV, let base = devServerBase() {
-            for i in 0..<5 {
-                if let s = httpGetText(base + "/bundle"), !s.isEmpty {
-                    NSLog("[proteus] PROTEUS_DEV_BUNDLE_FROM_SERVER bytes=%d base=%@ try=%d", s.utf8.count, base, i)
-                    return s
-                }
-                Thread.sleep(forTimeInterval: 0.3 * Double(i + 1))   // 覆盖"App 先于 server ready"的时序竞争
-            }
-            NSLog("[proteus] PROTEUS_DEV_BUNDLE_FETCH_FAIL base=%@ 回落内嵌", base)
+        if let s = fetchDevOnce(), !s.isEmpty { return s }
+        return loadEmbedded()
+    }
+
+    /// ★★★启动路径（决策 #694）：**后台**解 bundle 源——不阻塞主线程（此前 dev 首次 HTTP 在主线程
+    ///   同步执行 ⇒ 启动黑屏数秒）。完成回调在**主线程**调用；`src == nil` = dev server 与内嵌资产都不可用。
+    ///   dev 下做**有界重试**（覆盖"App 先于 server ready"的时序竞争）——用`调度延迟`让出，**非线程盲等**。
+    static func loadAsync(attempts: Int = 4, _ done: @escaping (String?) -> Void) {
+        guard ProteusBuildConfig.DEV, devServerBase() != nil else {
+            let s = loadEmbedded()   // release / 无 dev base：直接内嵌（零延迟，不重试）
+            DispatchQueue.main.async { done(s) }
+            return
         }
+        let queue = DispatchQueue.global(qos: .userInitiated)
+        func attempt(_ n: Int) {
+            queue.async {
+                if let s = fetchDevOnce(), !s.isEmpty {
+                    NSLog("[proteus] PROTEUS_DEV_BUNDLE_FROM_SERVER bytes=%d base=%@", s.utf8.count, devServerBase() ?? "")
+                    DispatchQueue.main.async { done(s) }
+                    return
+                }
+                if n <= 0 {
+                    NSLog("[proteus] PROTEUS_DEV_BUNDLE_FETCH_FAIL 回落内嵌（dev server 不可达）")
+                    let s = loadEmbedded()
+                    DispatchQueue.main.async { done(s) }
+                    return
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { attempt(n - 1) }
+            }
+        }
+        attempt(attempts)
+    }
+
+    /// 内嵌 `bundle-superapp.js`（release 唯一来源；dev 的兜底）。
+    static func loadEmbedded() -> String? {
         guard let path = Bundle.main.path(forResource: "bundle-superapp", ofType: "js"),
               let src = try? String(contentsOfFile: path, encoding: .utf8) else { return nil }
         return src
+    }
+
+    /// dev：单次从 dev server 拉 bundle（仅 DEV 变体走到）。
+    static func fetchDevOnce() -> String? {
+        guard ProteusBuildConfig.DEV, let base = devServerBase() else { return nil }
+        return httpGetText(base + "/bundle")
     }
 
     /// dev server 基址：启动参数 `--proteusDev <url>` 优先，其次编译期注入的 DEV_URL。
@@ -260,6 +391,68 @@ enum BundleSource {
         }.resume()
         _ = sem.wait(timeout: .now() + 10)
         return out
+    }
+
+    /// 同步 POST JSON（dev 通道用；元素树上报 `/tree`）。URLSession 同步封装。
+    static func httpPostJson(_ url: String, body: String) -> String? {
+        guard let u = URL(string: url) else { return nil }
+        var req = URLRequest(url: u)
+        req.httpMethod = "POST"
+        req.timeoutInterval = 8
+        req.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")
+        req.httpBody = body.data(using: .utf8)
+        var out: String?
+        let sem = DispatchSemaphore(value: 0)
+        URLSession.shared.dataTask(with: req) { data, _, _ in
+            if let d = data, !d.isEmpty { out = String(data: d, encoding: .utf8) }
+            sem.signal()
+        }.resume()
+        _ = sem.wait(timeout: .now() + 10)
+        return out
+    }
+}
+
+/* ────────────────────────── 启动占位层（避免"突然黑屏"） ────────────────────────── */
+
+/// 启动占位层（决策 #694）：内容就绪前遮住 `SelfDrawView` 的黑底，显示**项目背景色 + 应用名 + 转圈**。
+///   ★为什么要它：dev 首次拉 bundle 走网络（虽已异步），而 `SelfDrawView` 初始化即黑 ⇒ 直接露黑底观感差。
+///   占位底用与内容同族的浅色（`#F5F6FA`，与 Android contentHost 同源）⇒ 启动到首帧是"浅色 → 内容"，
+///   而非"黑 → 内容"。首帧渲染完成即移除（release/dev 同路径；release 只是瞬间）。
+final class ProteusLaunchPlaceholder: UIView {
+    private let spinner = UIActivityIndicatorView(style: .medium)
+    private let titleLabel = UILabel()
+    private let hintLabel = UILabel()
+
+    init(frame: CGRect, appName: String) {
+        super.init(frame: frame)
+        backgroundColor = ProteusBrandColor.pageBackground
+        titleLabel.text = appName
+        titleLabel.font = .systemFont(ofSize: 17, weight: .semibold)
+        titleLabel.textColor = UIColor(red: 0x1F/255, green: 0x24/255, blue: 0x30/255, alpha: 1)
+        titleLabel.textAlignment = .center
+        hintLabel.text = ProteusBuildConfig.DEV ? "正在连接开发服务器…" : "正在启动…"
+        hintLabel.font = .systemFont(ofSize: 12)
+        hintLabel.textColor = UIColor(red: 0x5F/255, green: 0x66/255, blue: 0x73/255, alpha: 1)
+        hintLabel.textAlignment = .center
+        spinner.color = ProteusBrandColor.brand
+        let stack = UIStackView(arrangedSubviews: [titleLabel, spinner, hintLabel])
+        stack.axis = .vertical
+        stack.alignment = .center
+        stack.spacing = 12
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.centerXAnchor.constraint(equalTo: centerXAnchor),
+            stack.centerYAnchor.constraint(equalTo: centerYAnchor),
+        ])
+        spinner.startAnimating()
+    }
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    /// 加载失败：停下转圈、改文案（**保留占位**——不露黑底；用户看到"明确失败"而非黑屏）。
+    func fail(_ msg: String) {
+        spinner.stopAnimating()
+        hintLabel.text = msg
     }
 }
 
@@ -285,11 +478,16 @@ final class ProteusAppDelegate: UIResponder, UIApplicationDelegate {
 final class ProteusSceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
     private var driver: ProteusHostDriver?
-    /// dev 热刷：版本轮询定时器（条件轮询——仅常驻期跑，版本变更才重载）
-    private var versionTimer: Timer?
+    /// dev 热刷：版本轮询 + DevTools 上报（后台队列——不阻塞 UI；JSC 读取回主线程）
+    private var versionTimer: DispatchSourceTimer?
+    private let devWatchQueue = DispatchQueue(label: "proteus.dev.watch")
     private var lastVersion = ""
+    private var devEnvJson = "{}"        // 设备/引擎环境（/ping 上报，面板"设备环境"）
+    private var lastSentTree: String = "" // 上次已上报的节点树（变更才 POST /tree）
     /// 起始页名（Info.plist `ProteusHomePage`，缺省 index）——壳不硬编码项目页名
     private var homePage = "index"
+    /// 启动占位层（内容就绪前遮黑底；首帧后移除）——决策 #694
+    private var placeholder: UIView?
     /// dev 可视化层（DEV 角标 + 热重载提示）——仅 dev 变体创建（决策 #692）
     private var devOverlay: ProteusDevOverlay?
 
@@ -297,12 +495,20 @@ final class ProteusSceneDelegate: UIResponder, UIWindowSceneDelegate {
         guard let ws = scene as? UIWindowScene else { return }
         let w = UIWindow(windowScene: ws)
         let vc = UIViewController()
-        vc.view.backgroundColor = .black
+        vc.view.backgroundColor = ProteusBrandColor.pageBackground   // 与占位层/内容同族（决策 #694）
         let d = ProteusHostDriver(frame: UIScreen.main.bounds)
         d.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         d.view.frame = vc.view.bounds
         vc.view.addSubview(d.view)
         driver = d
+        // ★★★启动占位（决策 #694）：内容就绪前遮住 `SelfDrawView` 的黑底——避免"突然黑屏"。
+        //   App 名/连接态显示在占位层上；首帧渲染完成即移除。启动拉 bundle 在**后台**进行（不阻塞主线程）。
+        let ph = ProteusLaunchPlaceholder(
+            frame: vc.view.bounds,
+            appName: (Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String) ?? "Proteus")
+        ph.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        vc.view.addSubview(ph)
+        placeholder = ph
         w.rootViewController = vc
         w.makeKeyAndVisible()
         window = w
@@ -315,44 +521,131 @@ final class ProteusSceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     private func boot() {
         guard let d = driver else { return }
-        guard let src = BundleSource.load() else {
-            NSLog("[proteus] PROTEUS_HOST_FAIL 无 bundle 源（dev server 与内嵌资产均不可用）")
-            writeReport(ok: false, raw: "无 bundle 源")
-            return
+        // ★★★启动不阻塞主线程（决策 #694）：dev 首次拉 bundle 此前在**主线程**同步 HTTP（含 5 次重试的
+        //   `Thread.sleep`）⇒ 整个启动窗口主线程被占死 ⇒ 占位层不转、屏幕"黑住一段时间"。
+        //   改为**后台**拉取 + 主线程回调；占位层在此期间持续显示（转圈可见）。★同时删除了固定盲等重试。
+        BundleSource.loadAsync { [weak self] src in
+            guard let self, let d = self.driver else { return }
+            guard let src = src else {
+                NSLog("[proteus] PROTEUS_HOST_FAIL 无 bundle 源（dev server 与内嵌资产均不可用）")
+                (self.placeholder as? ProteusLaunchPlaceholder)?.fail("无法加载应用资源（dev server 不可达）")
+                self.writeReport(ok: false, raw: "无 bundle 源")
+                return
+            }
+            self.startDriver(src: src, d: d)
         }
+    }
+
+    /// bundle 就绪后的启动：起驱动 → 上报 → 撤占位 → dev 层/watch（决策 #694 拆分）。
+    private func startDriver(src: String, d: ProteusHostDriver) {
         let out = d.start(bundleSource: src, embedView: d.view)
         if homePage != "index" { d.navigate(to: homePage) }
         let ok = out.contains("\"ok\":true")
         NSLog("[proteus] PROTEUS_HOST_PAGE_RENDER ok=%@ page=%@", ok ? "true" : "false", d.currentPage)
         writeReport(ok: ok, raw: out)
+        // 内容已上屏 ⇒ 撤启动占位（黑底不再可见）
+        placeholder?.removeFromSuperview()
+        placeholder = nil
         if ProteusBuildConfig.DEV {
-            // ★dev 可视化层（决策 #692）：DEV 角标 + 热重载提示——release 不创建（零残留）
-            let overlay = ProteusDevOverlay(host: d.view)
+            // ★dev 可视化层（决策 #692/#693）：DEV 角标 + 热重载提示——**加在 window 上**（固定悬浮、不被
+            //   内容重绘/滚动/切屏覆盖；对齐 Android 加在 Activity root FrameLayout）。release 不创建（零残留）。
+            let host = self.window ?? d.view
+            let overlay = ProteusDevOverlay(host: host)
             overlay.attach()
             devOverlay = overlay
             startDevWatch()
             DispatchQueue.main.async { [weak self] in self?.devOverlay?.flash("DEV 模式 · 改源码保存即热刷") }
         }
+        // ★dev 窗口截图（决策 #693，仅 DEV + 显式 env）：把整个 window（含 DEV 角标/提示）渲染到 Documents
+        //   ⇒ 供 CLI/脚本 `devicectl copy from` 取回核验视觉（角标内边距等）。非 DEV / 无 env ⇒ 不做。
+        if ProteusBuildConfig.DEV, ProcessInfo.processInfo.environment["PROTEUS_DEV_SNAPSHOT"] == "1" {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+                guard let win = self?.window, win.bounds.width > 0 else { return }
+                let fmt = UIGraphicsImageRendererFormat.default(); fmt.scale = UIScreen.main.scale
+                let img = UIGraphicsImageRenderer(bounds: win.bounds, format: fmt).image { _ in
+                    win.drawHierarchy(in: win.bounds, afterScreenUpdates: true)
+                }
+                if let png = img.pngData() {
+                    let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+                    try? png.write(to: dir.appendingPathComponent("proteus-dev-snapshot.png"))
+                    NSLog("[proteus] PROTEUS_DEV_SNAPSHOT_READY")
+                }
+            }
+        }
         if ProcessInfo.processInfo.environment["PROTEUS_EXIT_AFTER_REPORT"] == "1" { exit(0) }
     }
 
-    // ── dev 热刷：轮询 dev server `/version`，变更即重载（保留当前屏）──
+    // ── dev 热刷 + DevTools 上报（决策 #693，对齐 Android #672-#675）──
+    //   ★每 tick **先上报再判版本**（否则"版本没变"这条主路径永不上报 ⇒ 面板恒"设备离线"，Android #672 同坑）。
+    //   ★JSC 读取在主线程（JSC 非线程安全），HTTP 发送在后台队列（不阻塞 UI）。
 
     private func startDevWatch() {
         guard let base = BundleSource.devServerBase() else { return }
         lastVersion = BundleSource.httpGetText(base + "/version") ?? ""
-        versionTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
+        devEnvJson = Self.collectDeviceEnv()
+        let t = DispatchSource.makeTimerSource(queue: devWatchQueue)
+        t.schedule(deadline: .now() + 1.5, repeating: 1.5)
+        t.setEventHandler { [weak self] in
             guard let self, let d = self.driver else { return }
+            // ① JSC 读取（主线程——eval 非线程安全）
+            var screen = ""
+            var tree: String?
+            var logs: [[String]] = []
+            var traces: [[String]] = []
+            DispatchQueue.main.sync {
+                screen = d.currentScreenName()
+                tree = d.lastTreeJson
+                logs = d.drainLogs()
+                traces = d.drainTraces()
+            }
+            // ② 上报（后台队列）——ping(设备在线+当前屏+环境) / log / tree / trace
+            _ = BundleSource.httpGetText(base + "/ping?screen=" + urlEnc(screen) + "&env=" + urlEnc(self.devEnvJson))
+            for e in logs { _ = BundleSource.httpGetText(base + "/log?channel=" + e[0] + "&level=" + urlEnc(e[1]) + "&text=" + urlEnc(e[2])) }
+            if let tree, !tree.isEmpty, tree != self.lastSentTree {
+                self.lastSentTree = tree
+                _ = BundleSource.httpPostJson(base + "/tree", body: tree)
+            }
+            for e in traces { _ = BundleSource.httpGetText(base + "/trace?type=" + urlEnc(e[0]) + "&id=" + e[1] + "&chain=" + urlEnc(e[2]) + "&handled=" + e[3] + "&fired=" + urlEnc(e[4])) }
+            // ③ 版本变更 ⇒ 热重载（回主线程重建 JSContext）
             let v = BundleSource.httpGetText(base + "/version") ?? ""
             guard !v.isEmpty, v != self.lastVersion else { return }
-            self.lastVersion = v
+            // ★先取 bundle 再记账（决策 #694）：`load()` 现为单次尝试 ⇒ 拉失败时**不要**标记该版本已消费，
+            //   留待下一 tick（1.5s）重试；否则一次网络抖动会让该版本**永不重载**。
             guard let src = BundleSource.load() else { return }
-            let keepPage = d.currentPage
-            d.start(bundleSource: src, embedView: d.view)   // 新建 ctx + 重 eval + 重 boot + 重渲
-            d.navigate(to: keepPage)                         // 保留当前屏（与 Android hotReload 同语义）
-            NSLog("[proteus] PROTEUS_DEV_RELOADED version=%@ page=%@", v, keepPage)
-            self.devOverlay?.flash("⟳ 已热重载 · v\(v) · \(keepPage)")   // ★热刷新提示（决策 #692，对齐安卓 #671）
+            self.lastVersion = v
+            DispatchQueue.main.async {
+                d.start(bundleSource: src, embedView: d.view)   // 新建 ctx + 重 eval + 重 boot + 重渲
+                d.navigate(to: screen)                           // 保留当前屏（与 Android hotReload 同语义）
+                NSLog("[proteus] PROTEUS_DEV_RELOADED version=%@ page=%@", v, screen)
+                self.devOverlay?.flash("⟳ 已热重载 · v\(v) · \(screen)")   // 热刷新提示（对齐安卓 #671）
+            }
         }
+        t.resume()
+        versionTimer = t
+    }
+
+    private func urlEnc(_ s: String) -> String {
+        s.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+    }
+
+    /// 设备/引擎环境（面板"设备环境"）——device 型号/系统/屏幕 + 内核·引擎版本。
+    private static func collectDeviceEnv() -> String {
+        var o: [String: String] = [:]
+        let dev = UIDevice.current
+        o["platform"] = "iOS"
+        o["model"] = dev.model
+        o["systemVersion"] = dev.systemVersion
+        o["name"] = dev.name
+        let s = UIScreen.main
+        o["screen"] = "\(Int(s.bounds.width))x\(Int(s.bounds.height))"
+        o["screenPx"] = "\(Int(s.bounds.width * s.scale))x\(Int(s.bounds.height * s.scale))"
+        o["density"] = String(format: "%.2f", s.scale)
+        o["theme"] = "dark"
+        o["jsEngine"] = "JavaScriptCore"
+        o["hostBuild"] = ProteusBuildConfig.DEV ? "dev" : "release"
+        o["layoutCore"] = "proteus-layout-core (rust)"
+        guard let d = try? JSONSerialization.data(withJSONObject: o, options: [.sortedKeys]) else { return "{}" }
+        return String(data: d, encoding: .utf8) ?? "{}"
     }
 
     private func writeReport(ok: Bool, raw: String) {

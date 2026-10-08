@@ -147,10 +147,10 @@ describe('createHost · ios（第三刀样板）', () => {
     expect(fs.existsSync(path.join(r.targetDir, 'runtime/proteus-host-controller.swift'))).toBe(true)
     expect(fs.existsSync(path.join(r.targetDir, 'platform/ProteusTextAdapter.swift'))).toBe(true)
     expect(fs.existsSync(path.join(r.targetDir, 'runtime/build'))).toBe(false) // 排除
-    // 壳不依赖 dev（无 showcase/app-stack/host-runtime 场景）
+    // 壳走运行期形态（#683）且不依赖 dev 场景（无 app-stack/host-runtime/showcase 场景类）
     const app = fs.readFileSync(path.join(r.targetDir, 'shell/ProteusApp.swift'), 'utf-8')
-    expect(app).toContain('ProteusHostController')
-    expect(app).not.toMatch(/showcase|superapp|proteus_bench|HostRuntimeScene|ShowcaseScene/i)
+    expect(app).toContain('SuperappRuntimeHost')
+    expect(app).not.toMatch(/proteus_bench|HostRuntimeScene|AppStackScene|ShowcaseScene/i)
   })
 
   it('编译产物拷入 app-screen-content.json', () => {

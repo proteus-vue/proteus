@@ -4415,7 +4415,10 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     }
     static func resetPaintHintStats() { paintHintCompact = 0; paintHintGeneric = 0 }
 
-    weak var view: SelfDrawView?
+    // ★view 绑定时自登记为"当前桥"——屏切换通路的 env 解析据此取到同一实现（决策 #694）。
+    weak var view: SelfDrawView? {
+        didSet { if view != nil { SelfDrawBridge.current = self } }
+    }
     var jsReport: [String: Any] = [:]
     /// ★句柄常驻：Vue 的后续更新复用同一棵 Rust 树（与 §5.1「节点树页面存活期间常驻」一致）
     private var handle: UInt64 = 0
@@ -4449,6 +4452,11 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     ///   内容页语义 = 装不下才滚、最多滚到内容底（与 Web 页面一致）；
     ///   **仅内容页场景开启**（`--stress`），既有 pan/滚动探针用例保持"无界拖拽"（零行为变化）。
     static var contentScrollRangeEnabled = false
+
+    /// ★★★当前活动的自绘桥（决策 #694）：env token 解析的**单一实现**落点。
+    ///   屏切换通路（`ScreenHost.mount`）按此取解析器——与首屏渲染（`render` 内的 `resolveEnvTokens`）
+    ///   同一份实现，不另写第二份解析。桥在 `view` 绑定时自登记（每进程一个宿主，故"当前"语义成立）。
+    static weak var current: SelfDrawBridge?
 
     deinit {
         if handle != 0 { _ = proteus_layout_destroy(handle) }
@@ -6985,23 +6993,30 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         return (table[name] ?? fallback) * scale + off
     }
 
-    /// 把 nodes 里所有 `env:` token 字符串就地替换为逻辑点数值（顶层标量 + margin/padding 四边）。
-    private func resolveEnvTokens(in nodes: inout [[String: Any]]) {
-        let table = envVarTable()
+    /// 解析**单个**节点的 `env:` token（就地替换；顶层标量 + margin/padding 四边）。
+    ///   ★★★包可见（决策 #694）：**屏切换通路**（`ScreenHost.mount`）也必须走同一解析——
+    ///   与 Android `VaporRenderHost.resolveEnvInSpec` 同源同口径（`NodeDto` 读 `Option<f32>`，
+    ///   字符串直进内核 = serde「expected f32」⇒ create 返 0 ⇒ 点卡片不切屏，真机实测完全静默）。
+    func resolveEnvTokens(inNode node: inout [String: Any], table: [String: Double]? = nil) {
+        let t = table ?? envVarTable()
         let sides = ["top", "right", "bottom", "left"]
-        for i in nodes.indices {
-            for (k, v) in nodes[i] {
-                if let s = v as? String, let d = Self.resolveEnvToken(s, table) { nodes[i][k] = d }
-            }
-            for edge in ["margin", "padding"] {
-                if var obj = nodes[i][edge] as? [String: Any] {
-                    for side in sides {
-                        if let s = obj[side] as? String, let d = Self.resolveEnvToken(s, table) { obj[side] = d }
-                    }
-                    nodes[i][edge] = obj
+        for (k, v) in node {
+            if let s = v as? String, let d = Self.resolveEnvToken(s, t) { node[k] = d }
+        }
+        for edge in ["margin", "padding"] {
+            if var obj = node[edge] as? [String: Any] {
+                for side in sides {
+                    if let s = obj[side] as? String, let d = Self.resolveEnvToken(s, t) { obj[side] = d }
                 }
+                node[edge] = obj
             }
         }
+    }
+
+    /// 把 nodes 里所有 `env:` token 字符串就地替换为逻辑点数值（逐节点委托，同一实现）。
+    private func resolveEnvTokens(in nodes: inout [[String: Any]]) {
+        let table = envVarTable()
+        for i in nodes.indices { resolveEnvTokens(inNode: &nodes[i], table: table) }
     }
 
     private func render(treeJson: String, phase: String) -> String {

@@ -12,9 +12,11 @@
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>MinimumOSVersion</key><string>15.0</string>
   <key>UIDeviceFamily</key><array><integer>1</integer></array>
-  <!-- 空 UILaunchScreen + 强制深色：启动屏与首帧连续（不留白闪） -->
+  <!-- 空 UILaunchScreen：启动屏与首帧连续。★强制浅色（决策 #694）——本项目内容底为浅色
+       （ProteusBrandColor.pageBackground #f5f6fa，与 Web token/Android 壳同源）⇒ 启动屏也用浅色，
+       消除"黑启动屏 → 浅色内容"的突闪；dev 首次拉 bundle 期间由 ProteusLaunchPlaceholder 续显。 -->
   <key>UILaunchScreen</key><dict/>
-  <key>UIUserInterfaceStyle</key><string>Dark</string>
+  <key>UIUserInterfaceStyle</key><string>Light</string>
   <key>UIApplicationSceneManifest</key><dict>
     <key>UIApplicationSupportsMultipleScenes</key><false/>
   </dict>
