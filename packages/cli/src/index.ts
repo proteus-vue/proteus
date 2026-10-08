@@ -803,14 +803,32 @@ async function runAppDev(target: AppPlatform): Promise<number> {
     const adb = process.env.ADB ?? path.join(os.homedir(), 'Library', 'Android', 'sdk', 'platform-tools', 'adb')
     const pkgName = (await resolveNativeConfigFromProject(projectRoot))?.android.applicationId ?? 'dev.proteus.layoutcore'
     const { execFileSync } = await import('node:child_process')
+    // ★★★dev 的装/起 = **杀掉旧实例 → 装新包 → 起新实例**（决策 #668）：
+    //   ① 先 force-stop（杀掉仍在跑的旧进程，避免残留实例 + 让后续启动是"全新一次"）；
+    //   ② 装包容忍 versionCode 冲突——`-d`（allow downgrade）+ `-r`；若仍失败（签名不符等）⇒
+    //      **卸载后重装**（dev 迭代不保 app 数据；bundle 每轮从 dev server 重拉）。
+    //   ★为什么（用户实测）：dev 包 versionCode 常低于已装的 release/验收包 ⇒ 裸 `install -r` 报
+    //     `INSTALL_FAILED_VERSION_DOWNGRADE`/`UPDATE_INCOMPATIBLE` ⇒ "装/起失败"。dev 就该**无人值守地
+    //     把机器掰到"跑我的新 dev 包"**（杀掉重开），而不是让用户手动清。
+    const adbTry = (args: string[]): boolean => {
+      try { execFileSync(adb, args, { encoding: 'utf-8', stdio: 'inherit' }); return true }
+      catch { return false }
+    }
     try {
-      execFileSync(adb, ['install', '-r', '-t', '-g', androidApk], { encoding: 'utf-8', stdio: 'inherit' })
-      execFileSync(adb, ['shell', 'am', 'force-stop', pkgName], { encoding: 'utf-8' })
+      adbTry(['shell', 'am', 'force-stop', pkgName])   // 旧进程可能已不在 ⇒ 忽略失败
+      let installed = adbTry(['install', '-r', '-t', '-g', '-d', androidApk])
+      if (!installed) {
+        console.log('[proteus-dev] 装包失败（版本降级/签名不符）⇒ 卸载旧包后重装…')
+        adbTry(['uninstall', pkgName])                 // 可能未安装 ⇒ 忽略失败
+        installed = adbTry(['install', '-r', '-t', '-g', androidApk])
+      }
+      if (!installed) throw new Error('adb install 两路径均失败（见上方 adb 输出）')
+      adbTry(['shell', 'am', 'force-stop', pkgName])
       execFileSync(adb, ['shell', 'am', 'start', '-n', `${pkgName}/dev.proteus.layoutcore.AppActivity`, '--es', 'proteusDev', server.url], { encoding: 'utf-8' })
-      console.log(`[proteus-dev] ✓ 已安装并启动（dev server=${server.url}）——改源码保存即热刷`)
-      console.log('[proteus-dev] 若安装报 INSTALL_FAILED_USER_RESTRICTED（MIUI 等）：adb shell settings put global verifier_verify_adb_installs 0')
+      console.log(`[proteus-dev] ✓ 已装（清旧后）并启动（dev server=${server.url}）——改源码保存即热刷`)
     } catch (e) {
       console.error(`[proteus-dev] ⚠ 装/起失败（dev server 仍在跑，可手动装）：${(e as Error).message.slice(0, 200)}`)
+      console.error(`[proteus-dev] 手动：adb install -r -t -g -d ${path.relative(projectRoot, androidApk)}（MIUI 若拒：adb shell settings put global verifier_verify_adb_installs 0）`)
     }
   } else {
     console.log(`[proteus-dev] ${target} 的「装 + 起」请用设备工具（ios: devicectl / harmony: hdc）；debug 包：${path.relative(projectRoot, outPkg)}`)

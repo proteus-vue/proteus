@@ -511,9 +511,16 @@ export function packageAndroidHost(opts: PackageAndroidOptions): PackageAndroidR
   const genDir = path.join(build, 'gen')
   fs.mkdirSync(genDir, { recursive: true })
   log.push('→ aapt2 link')
+  // ★★★versionCode/Name 从 manifest 取（决策 #668）——此前**硬编码 `1`/`0.1.0`**，
+  //   覆盖 manifest 里由 `proteus.config` native 段注入的真值 ⇒ 每个包 versionCode 恒为 1
+  //   ⇒ 装到已有更高 versionCode 的机器上报 `INSTALL_FAILED_VERSION_DOWNGRADE`（用户实测）。
+  //   manifest 已由 `applyNativeConfigFromProject` 写入 project 的 versionCode/Name ⇒ 以它为准。
+  const manifestXml = fs.readFileSync(manifest, 'utf-8')
+  const vCode = (manifestXml.match(/android:versionCode\s*=\s*"(\d+)"/) ?? [])[1] ?? '1'
+  const vName = (manifestXml.match(/android:versionName\s*=\s*"([^"]+)"/) ?? [])[1] ?? '0.1.0'
   try {
     execFileSync(path.join(buildTools, 'aapt2'), ['link', '-o', apk, '-I', platform, '--manifest', manifest,
-      '--min-sdk-version', '24', '--target-sdk-version', '34', '--version-code', '1', '--version-name', '0.1.0',
+      '--min-sdk-version', '24', '--target-sdk-version', '34', '--version-code', vCode, '--version-name', vName,
       '-A', assetsDir, '--java', genDir], { encoding: 'utf-8', maxBuffer: 32 * 1024 * 1024, env })
   } catch (e) {
     const msg = String((e as { stderr?: string }).stderr ?? (e as Error).message)
