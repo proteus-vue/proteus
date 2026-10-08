@@ -64,6 +64,8 @@ public final class AppActivity extends Activity {
     private volatile String devPerfJson = "{}";
     /** 事件 trace 出箱（UI 线程抽取 → watch 线程上报；决策 #675） */
     private final java.util.List<String[]> traceOutbox = java.util.Collections.synchronizedList(new java.util.ArrayList<String[]>());
+    /** 桥调用日志出箱（决策 #679：JS→原生 invoke → 面板 Network·项目通道） */
+    private final java.util.List<String[]> bridgeOutbox = java.util.Collections.synchronizedList(new java.util.ArrayList<String[]>());
     /** 待上报的被点元素 id（命中测试线程写、watch 线程读；决策 #675） */
     private volatile int inspectOutbox = 0;
 
@@ -331,9 +333,14 @@ public final class AppActivity extends Activity {
         inspectOutbox = kernelId;
     }
 
-    /** 建运行期宿主（唯一入口）。 */
+    /** 建运行期宿主（唯一入口）。★dev 变体接**桥调用日志**（决策 #679）⇒ 面板 Network·项目通道。 */
     private SuperappRuntimeHost buildRuntimeHost() {
-        return new SuperappRuntimeHost(draw, new HostBridge(caps, screenHost));
+        HostBridge bridge = new HostBridge(caps, screenHost);
+        if (ProteusBuildConfig.DEV) {
+            bridge.setInvokeLogger((method, ok, ms) ->
+                bridgeOutbox.add(new String[]{ method == null ? "?" : method, ok ? "1" : "0", String.valueOf(ms) }));
+        }
+        return new SuperappRuntimeHost(draw, bridge);
     }
 
     /** 记一次渲染的性能读数（决策 #675/#676）：渲染耗时 + mount 次数 + 逐帧耗时 + 重排/patch 计数。
@@ -409,6 +416,7 @@ public final class AppActivity extends Activity {
                     flushHostLog(base);   // ★把设备日志推到面板 Console（决策 #673）
                     flushTrace(base);     // ★把事件 trace 推到面板（决策 #675）
                     flushInspect(base);   // ★把被点元素推到面板（决策 #675）
+                    flushBridge(base);    // ★把桥调用推到面板 Network·项目通道（决策 #679）
                     if (v == null || v.equals(last)) continue;
                     last = v;
                     final String fresh = httpGetText(base + "/bundle");
@@ -473,8 +481,8 @@ public final class AppActivity extends Activity {
             + "var c=globalThis.console||(globalThis.console={});['log','info','warn','error'].forEach(function(l){c[l]=mk(l)});})()");
     }
 
-    /** 宿主 dev 事件入队（UI 线程）。 */
-    private void devLog(String level, String text) { if (text != null) hostLogQueue.add(new String[]{level, text}); }
+    /** 宿主 dev 事件入队（UI 线程）——**原生通道**（决策 #679 分流）。 */
+    private void devLog(String level, String text) { if (text != null) hostLogQueue.add(new String[]{"native", level, text}); }
 
     /** 每 400ms 在 UI 线程抽一次 JS console 队列（eval 仅 UI 线程安全），追加到待 flush 队列。 */
     private void startLogPump() {
@@ -488,7 +496,8 @@ public final class AppActivity extends Activity {
                     if (r.ok && r.value != null && !r.value.isEmpty()) {
                         for (String line : r.value.split("\u0002")) {
                             int u = line.indexOf('\u0001');
-                            if (u > 0) hostLogQueue.add(new String[]{line.substring(0, u), line.substring(u + 1)});
+                            // ★channel=project（决策 #679）：这些是**项目 JS 的 console.***（区别于宿主 dev 事件）
+                            if (u > 0) hostLogQueue.add(new String[]{"project", line.substring(0, u), line.substring(u + 1)});
                         }
                     }
                 } catch (Throwable ignored) { /* 引擎未就绪 ⇒ 下轮再试 */ }
@@ -514,14 +523,15 @@ public final class AppActivity extends Activity {
         } catch (Throwable ignored) { }
     }
 
-    /** watch 线程：把设备日志逐条 GET /log?level=&text=（失败丢弃不重试——dev 诊断，非关键路径）。 */
+    /** watch 线程：把设备日志逐条 GET /log?channel=&level=&text=（失败丢弃不重试——dev 诊断，非关键路径）。 */
     private void flushHostLog(String base) {
         while (!hostLogQueue.isEmpty()) {
-            String[] e = hostLogQueue.remove(0);
-            String text = e[1];
+            String[] e = hostLogQueue.remove(0);   // e = [channel, level, text]
+            String text = e[2];
             if (text.length() > 600) text = text.substring(0, 600) + "…";
             try {
-                httpGetText(base + "/log?level=" + java.net.URLEncoder.encode(e[0], "UTF-8")
+                httpGetText(base + "/log?channel=" + e[0]
+                    + "&level=" + java.net.URLEncoder.encode(e[1], "UTF-8")
                     + "&text=" + java.net.URLEncoder.encode(text, "UTF-8"));
             } catch (Throwable t) { break; }
         }
@@ -535,6 +545,17 @@ public final class AppActivity extends Activity {
                 httpGetText(base + "/trace?type=" + java.net.URLEncoder.encode(e[0], "UTF-8")
                     + "&id=" + e[1] + "&chain=" + java.net.URLEncoder.encode(e[2], "UTF-8")
                     + "&handled=" + e[3] + "&fired=" + java.net.URLEncoder.encode(e[4], "UTF-8"));
+            } catch (Throwable t) { break; }
+        }
+    }
+
+    /** watch 线程：把桥调用逐条 GET /bridge?method=&ok=&ms=（决策 #679；面板 Network·项目通道）。 */
+    private void flushBridge(String base) {
+        while (!bridgeOutbox.isEmpty()) {
+            String[] e = bridgeOutbox.remove(0);
+            try {
+                httpGetText(base + "/bridge?method=" + java.net.URLEncoder.encode(e[0], "UTF-8")
+                    + "&ok=" + e[1] + "&ms=" + e[2]);
             } catch (Throwable t) { break; }
         }
     }

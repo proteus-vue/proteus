@@ -45,7 +45,13 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
   .card .k{color:var(--dim);font-size:12px;text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px}
   .card .v{font-size:22px;font-weight:650;font-variant-numeric:tabular-nums}
   .card .v small{font-size:13px;color:var(--dim);font-weight:400;margin-left:4px}
-  h2{font-size:13px;color:var(--dim);text-transform:uppercase;letter-spacing:.7px;margin:26px 0 12px}
+  h2{font-size:13px;color:var(--dim);text-transform:uppercase;letter-spacing:.7px;margin:26px 0 12px;display:flex;align-items:center;gap:10px}
+  .flt{display:inline-flex;gap:2px;text-transform:none;letter-spacing:0;font-size:11px}
+  .flt b{cursor:pointer;padding:2px 8px;border:1px solid var(--line);border-radius:6px;color:var(--dim);font-weight:500}
+  .flt b.on{background:var(--brand);border-color:var(--brand);color:#fff}
+  .ch{font-weight:600;padding:0 4px;border-radius:4px;font-size:10px}
+  .ch-native{color:#c9a227;background:rgba(201,162,39,.13)}
+  .ch-project{color:#5b7cff;background:rgba(91,124,255,.15)}
   .tl{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
   .row{display:grid;grid-template-columns:64px 1fr auto;gap:12px;align-items:center;padding:11px 16px;border-top:1px solid var(--line);font-size:13px}
   .row:first-child{border-top:0}
@@ -132,7 +138,7 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
       <div class="box" id="box" style="display:none"></div>
     </div>
     <div>
-      <h2>Console（设备日志）</h2>
+      <h2>Console（设备日志）<span class="flt" data-flt="con"><b class="on" data-ch="all">全部</b><b data-ch="project">项目</b><b data-ch="native">原生</b></span></h2>
       <div class="panel con" id="con"><div class="empty">暂无日志…在页面里 <b>console.log</b> 或改源码即出现。</div></div>
     </div>
   </div>
@@ -143,7 +149,7 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
       <div class="panel con" id="events"><div class="empty">暂无手势…在设备上点一下屏幕即出现。</div></div>
     </div>
     <div>
-      <h2>Network（dev server 请求）</h2>
+      <h2>Network（通道）<span class="flt" data-flt="net"><b class="on" data-ch="all">全部</b><b data-ch="native">原生</b><b data-ch="project">项目</b></span></h2>
       <div class="panel" id="net"><div class="empty">暂无请求。</div></div>
     </div>
   </div>
@@ -190,11 +196,12 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
     return r;
   }
   const stCls = (s) => s >= 500 ? 'err' : s >= 400 ? 'warn' : 'ok';
+  const chTag = (ch) => '<span class="ch ch-' + (ch === 'project' ? 'project' : 'native') + '">' + (ch === 'project' ? '项目' : '原生') + '</span>';
   function addNet(e, isNew) {
     const r = document.createElement('div');
     r.className = 'nrow' + (isNew ? ' new' : '');
-    r.innerHTML = '<span class="m">' + e.method + '</span>'
-      + '<span class="p">' + (e.path || '') + '</span>'
+    r.innerHTML = '<span class="m">' + chTag(e.channel) + ' ' + e.method + '</span>'
+      + '<span class="p">' + escapeHtml(e.path || '') + '</span>'
       + '<span class="st ' + stCls(e.status) + '">' + e.status + '</span>'
       + '<span class="ms">' + (e.bytes ? Math.round(e.bytes / 1024) + 'KB · ' : '') + e.ms + 'ms</span>';
     return r;
@@ -203,19 +210,37 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
     const lv = ['log','info','warn','error'].includes(e.level) ? e.level : 'log';
     const r = document.createElement('div');
     r.className = 'crow lv-' + lv + (isNew ? ' new' : '');
-    r.innerHTML = '<span class="t">' + fmtTime(e.time) + '</span><span class="x">' + escapeHtml(e.text || '') + '</span>';
+    r.innerHTML = '<span class="t">' + fmtTime(e.time) + '</span><span class="x">' + chTag(e.channel) + ' ' + escapeHtml(e.text || '') + '</span>';
     return r;
   }
+  // 渠道过滤（决策 #679）：全部 / 项目(project) / 原生(native)
+  const filt = { net: 'all', con: 'all' };
+  let lastNet = [], lastCon = [];
+  const passF = (ch, f) => f === 'all' || ch === f;
   function fillNet(list) {
+    lastNet = list || [];
+    const shown = lastNet.filter((e) => passF(e.channel, filt.net));
     netEl.innerHTML = '';
-    if (!list.length) { netEl.innerHTML = '<div class="empty">暂无请求。</div>'; return; }
-    list.slice().reverse().forEach((e) => netEl.appendChild(addNet(e, false)));
+    if (!shown.length) { netEl.innerHTML = '<div class="empty">暂无请求' + (filt.net === 'all' ? '' : '（该通道）') + '。</div>'; return; }
+    shown.slice().reverse().forEach((e) => netEl.appendChild(addNet(e, false)));
   }
   function fillCon(list) {
+    lastCon = list || [];
+    const shown = lastCon.filter((e) => passF(e.channel, filt.con));
     conEl.innerHTML = '';
-    if (!list.length) { conEl.innerHTML = '<div class="empty">暂无日志…在页面里 <b>console.log</b> 或改源码即出现。</div>'; return; }
-    list.slice().reverse().forEach((e) => conEl.appendChild(addCon(e, false)));
+    if (!shown.length) { conEl.innerHTML = '<div class="empty">暂无日志' + (filt.con === 'all' ? '…在页面里 <b>console.log</b> 或改源码即出现。' : '（该通道）。') + '</div>'; return; }
+    shown.slice().reverse().forEach((e) => conEl.appendChild(addCon(e, false)));
   }
+  // 过滤按钮接线
+  document.querySelectorAll('.flt').forEach((box) => {
+    const which = box.dataset.flt;   // 'net' | 'con'
+    box.addEventListener('click', (ev) => {
+      const b = ev.target.closest('b'); if (!b) return;
+      filt[which] = b.dataset.ch;
+      box.querySelectorAll('b').forEach((x) => x.classList.toggle('on', x === b));
+      if (which === 'net') fillNet(lastNet); else fillCon(lastCon);
+    });
+  });
   // ── 元素树（决策 #674/#675）：实例化节点树（含内核 rect）+ 点选高亮 + 盒模型 ──
   function renderTree(t) {
     treeData = t || { nodes: [] };
@@ -349,11 +374,15 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
     $('c-ms').innerHTML = e.ms + '<small>ms</small>';
   }
   function pushNet(e) {
+    lastNet.push(e); if (lastNet.length > 200) lastNet.shift();
+    if (!passF(e.channel, filt.net)) return;   // 被过滤掉 ⇒ 不入当前视图（切回"全部"时会补上）
     if (netEl.querySelector('.empty')) netEl.innerHTML = '';
     netEl.insertBefore(addNet(e, true), netEl.firstChild);
     while (netEl.children.length > 80) netEl.removeChild(netEl.lastChild);
   }
   function pushCon(e) {
+    lastCon.push(e); if (lastCon.length > 400) lastCon.shift();
+    if (!passF(e.channel, filt.con)) return;
     if (conEl.querySelector('.empty')) conEl.innerHTML = '';
     conEl.insertBefore(addCon(e, true), conEl.firstChild);
     while (conEl.children.length > 200) conEl.removeChild(conEl.lastChild);

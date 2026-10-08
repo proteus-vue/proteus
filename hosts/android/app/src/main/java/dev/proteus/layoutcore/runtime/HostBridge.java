@@ -21,6 +21,12 @@ public final class HostBridge {
     /** ★★M5 执行器的宿主实现（screen.* 协议——真内核树 + 真动画） */
     private final ScreenHost screen;
 
+    /** ★DevTools 桥调用日志端口（决策 #679）：JS→原生的 `proteusHost.invoke` 逐次上报
+     *  （dev 面板"Network · 项目通道"）。★release 下为 null ⇒ 零开销、零行为变化。 */
+    public interface InvokeLogger { void log(String method, boolean ok, long ms); }
+    private InvokeLogger invokeLogger;
+    public void setInvokeLogger(InvokeLogger l) { this.invokeLogger = l; }
+
     public HostBridge(HostCapabilities caps, ScreenHost screen) {
         this.caps = caps;
         this.screen = screen;
@@ -28,13 +34,22 @@ public final class HostBridge {
 
     @SuppressWarnings("unused")
     public String invoke(String method, String argsJson) throws Exception {
-        // ★screen.* 归 M5 执行器（真内核树操作 + 帧循环动画）；其余归能力层
-        if (method != null && method.startsWith("screen.")) {
-            org.json.JSONObject a = (argsJson == null || argsJson.isEmpty() || "null".equals(argsJson.trim()))
-                    ? new org.json.JSONObject() : new org.json.JSONObject(argsJson);
-            return screen.invoke(method, a);
+        long t0 = System.nanoTime();
+        boolean ok = true;
+        try {
+            // ★screen.* 归 M5 执行器（真内核树操作 + 帧循环动画）；其余归能力层
+            if (method != null && method.startsWith("screen.")) {
+                org.json.JSONObject a = (argsJson == null || argsJson.isEmpty() || "null".equals(argsJson.trim()))
+                        ? new org.json.JSONObject() : new org.json.JSONObject(argsJson);
+                return screen.invoke(method, a);
+            }
+            return caps.invoke(method, argsJson);
+        } catch (Throwable t) {
+            ok = false;
+            throw t;
+        } finally {
+            if (invokeLogger != null) { try { invokeLogger.log(method, ok, (System.nanoTime() - t0) / 1_000_000); } catch (Throwable ignored) { } }
         }
-        return caps.invoke(method, argsJson);
     }
 
     @SuppressWarnings("unused")

@@ -117,8 +117,9 @@ export async function startAppDevServer(opts: AppDevServerOptions): Promise<AppD
   // ── DevTools 面板状态（决策 #672/#673）──
   interface RebuildEvent { version: number; bytes: number; ms: number; reason: string; time: number }
   interface HostState { screen: string; time: number; env?: Record<string, unknown>; perf?: Record<string, unknown> }
-  interface NetEvent { method: string; path: string; status: number; bytes: number; ms: number; time: number }
-  interface ConsoleEvent { level: string; text: string; time: number }
+  /** ★channel（决策 #679）：'native' = 宿主/H TTP；'project' = 项目 JS 侧（console.* / 桥调用）。 */
+  interface NetEvent { channel: 'native' | 'project'; method: string; path: string; status: number; bytes: number; ms: number; time: number }
+  interface ConsoleEvent { channel: 'native' | 'project'; level: string; text: string; time: number }
   interface TraceEvent { gesture: string; id: number; chain: number[]; handled: boolean; fired: number[]; time: number }
   const events: RebuildEvent[] = []         // 环形（近 50 条）重建时间线
   const netLog: NetEvent[] = []             // 环形网络日志（dev server 收到的请求——它就是"网络源头"）
@@ -192,7 +193,7 @@ export async function startAppDevServer(opts: AppDevServerOptions): Promise<AppD
     res.end = ((chunk?: unknown, ...rest: unknown[]) => {
       if (typeof chunk === 'string') netBytes += Buffer.byteLength(chunk)
       else if (Buffer.isBuffer(chunk)) netBytes += chunk.length
-      if (!isNoise) recordNet({ method: req.method ?? 'GET', path: req.url ?? '/', status: netStatus, bytes: netBytes, ms: Date.now() - netStart, time: Date.now() })
+      if (!isNoise) recordNet({ channel: 'native', method: req.method ?? 'GET', path: req.url ?? '/', status: netStatus, bytes: netBytes, ms: Date.now() - netStart, time: Date.now() })
       return (_end as (...a: unknown[]) => unknown)(chunk, ...rest)
     }) as typeof res.end
     // ★DevTools 面板（决策 #672）：浏览器打开 dev server 根路径即见可视化面板。
@@ -293,18 +294,33 @@ export async function startAppDevServer(opts: AppDevServerOptions): Promise<AppD
       res.end(JSON.stringify(lastTree ?? { nodes: [] }))
       return
     }
-    // ★控制台日志（决策 #673）：宿主（模板 AppActivity）把 JS console.* 与关键 dev 事件转发到此 ⇒ 面板 Console。
-    //   `GET /log?level=log|info|warn|error&text=<urlencoded>`（一行一条；复用宿主的 httpGetText，免加 POST）。
+    // ★控制台日志（决策 #673）：宿主把**项目 JS 的 console.\*** 与**原生（宿主）dev 事件**转发到此 ⇒ 面板 Console。
+    //   `GET /log?channel=project|native&level=log|info|warn|error&text=<urlencoded>`（一行一条；免加 POST）。
+    //   ★channel 缺省 `native`（兼容旧宿主：只想报原生事件）。
     if (url === '/log') {
       const q = new URLSearchParams(query ?? '')
-      const ev: ConsoleEvent = { level: q.get('level') ?? 'log', text: q.get('text') ?? '', time: Date.now() }
+      const ch = q.get('channel') === 'project' ? 'project' : 'native'
+      const ev: ConsoleEvent = { channel: ch, level: q.get('level') ?? 'log', text: q.get('text') ?? '', time: Date.now() }
       if (ev.text) { consoleLog.push(ev); if (consoleLog.length > 200) consoleLog.shift(); broadcast({ type: 'console', ...ev }) }
       res.writeHead(200, { 'content-type': 'text/plain', 'cache-control': 'no-store' })
       res.end('ok')
       return
     }
+    // ★项目通道·桥调用（决策 #679）：宿主把 JS→原生的 `proteusHost.invoke(method,args)` 逐次上报 ⇒
+    //   面板 Network · **项目通道**（`screen.mount`/`ui.*` 等；方法即"路径"）。
+    //   `GET /bridge?method=<name>&ok=1|0&ms=<n>`。
+    if (url === '/bridge') {
+      const q = new URLSearchParams(query ?? '')
+      const method = q.get('method') ?? ''
+      if (method) {
+        recordNet({ channel: 'project', method: 'INVOKE', path: method, status: q.get('ok') === '1' ? 200 : 500, bytes: 0, ms: Number(q.get('ms')) || 0, time: Date.now() })
+      }
+      res.writeHead(200, { 'content-type': 'text/plain', 'cache-control': 'no-store' })
+      res.end('ok')
+      return
+    }
     res.writeHead(404, { 'content-type': 'text/plain' })
-    res.end('proteus dev server: / (devtools) · /health · /version · /bundle · /events · /ping')
+    res.end('proteus dev server: / (devtools) · /health · /version · /bundle · /events · /ping · /tree · /inspect · /trace · /log · /bridge')
   })
 
   await new Promise<void>((resolve) => server.listen(port, host, () => resolve()))
