@@ -40,6 +40,8 @@ export interface AppDevServer {
   port: number
   /** 当前 bundle 版本号（单调递增） */
   version(): number
+  /** 实际监听到的源码根（相对项目根；供 CLI UI 打"watch 就绪"行） */
+  watchRoots: string[]
   /** 关闭 server + 停 watch */
   close(): Promise<void>
 }
@@ -121,8 +123,7 @@ export async function startAppDevServer(opts: AppDevServerOptions): Promise<AppD
       opts.onRebuild?.({ version, bytes: r.bytes, ms: Date.now() - t0, reason })
     } catch (e) {
       console.error(`[proteus-dev] ✗ 重建失败：${(e as Error).message}`)
-    } finally {
-      building = false
+    } finally {      building = false
       const next = pendingReason
       pendingReason = null
       if (next) void rebuild(next)   // 串行补跑（保证最终一致；非并发）
@@ -167,10 +168,9 @@ export async function startAppDevServer(opts: AppDevServerOptions): Promise<AppD
   let debounce: NodeJS.Timeout | null = null
   const watchers: fs.FSWatcher[] = []
   const watchRoots = await resolveWatchRoots(projectRoot)
+  // ★watch 就绪行不在此打印（由 `proteus dev` 的 UI 在「安装」步骤后统一打一行）——避免重复。
   if (watchRoots.length === 0) {
     console.warn('[proteus-dev] ⚠ 未找到可监听的项目源码（pagesDir/router/App.vue/src/）——热刷不会触发；检查工程布局')
-  } else {
-    console.log(`[proteus-dev] watch ${watchRoots.length} 处：${watchRoots.map((p) => path.relative(projectRoot, p) || '.').join(', ')}`)
   }
   for (const t of watchRoots) {
     try {
@@ -190,6 +190,7 @@ export async function startAppDevServer(opts: AppDevServerOptions): Promise<AppD
   return {
     url,
     port: actualPort,
+    watchRoots,
     version: () => version,
     close: async () => {
       if (debounce) clearTimeout(debounce)

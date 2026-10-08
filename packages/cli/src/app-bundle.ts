@@ -207,6 +207,10 @@ export async function buildAppBundle(opts: BuildAppBundleOptions): Promise<Build
       target: 'es2020',
       minify: opts.dev ? false : true,
       legalComments: 'none',
+      // ★`import.meta` 在 iife 下为空——**预期**（App bundle 不用 `import.meta.env`：平台探测有运行时兜底，
+      //   见 shared/platform/index.ts 的 detectMPRuntime）。esbuild 默认把它当警告刷屏（用户实测"终端很吵"）
+      //   ⇒ 显式静音该条（不影响其它潜在警告）。
+      logOverride: { 'empty-import-meta': 'silent' },
       define: { 'process.env.NODE_ENV': opts.dev ? '"development"' : '"production"', __DEV__: opts.dev ? 'true' : 'false' },
       plugins: [
         {

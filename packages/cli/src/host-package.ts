@@ -13,7 +13,13 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
-import { execFileSync } from 'node:child_process'
+import { execFileSync as __exec } from 'node:child_process'
+
+/** 运行外部工具：**捕获 stdout+stderr**（execFileSync 默认把子进程 stderr 漏到终端 ⇒ javac/keytool/apksigner 噪声刷屏）。
+ *  成功只返回 stdout；失败抛错（**stderr 在 err.stderr**，各调用点的 catch 已读）。 */
+function run(cmd: string, args: string[], opts: { cwd?: string; env?: NodeJS.ProcessEnv; maxBuffer?: number; encoding?: BufferEncoding } = {}): string {
+  return __exec(cmd, args, { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'], ...opts })
+}
 import { fileURLToPath } from 'node:url'
 
 /** ★本模块所在目录（`packages/cli/src` 或 `dist`）——JDK 等**框架仓资源**上溯解析的起点。 */
@@ -109,7 +115,7 @@ export function packageHarmonyHost(opts: PackageHostOptions): PackageHostResult 
   const ohpm = path.join(deveco, 'tools', 'ohpm', 'bin', 'ohpm')
   if (fs.existsSync(ohpm)) {
     try {
-      execFileSync(ohpm, ['install', '--all'], { cwd: hostDir, env, encoding: 'utf-8', maxBuffer: 8 * 1024 * 1024 })
+      run(ohpm, ['install', '--all'], { cwd: hostDir, env, encoding: 'utf-8', maxBuffer: 8 * 1024 * 1024 })
       log.push('✓ ohpm install（依赖已解析到 oh_modules）')
     } catch (e) {
       log.push('⚠ ohpm install 失败（继续尝试构建）：' + String(e instanceof Error ? e.message : e).slice(0, 200))
@@ -119,7 +125,7 @@ export function packageHarmonyHost(opts: PackageHostOptions): PackageHostResult 
   }
   log.push(`→ hvigorw assembleHap（${path.relative(path.dirname(deveco), hvigorw)}）`)
   try {
-    const out = execFileSync(hvigorw, ['assembleHap', '--mode', 'module', '-p', 'product=default', '--no-daemon'], {
+    const out = run(hvigorw, ['assembleHap', '--mode', 'module', '-p', 'product=default', '--no-daemon'], {
       cwd: hostDir,
       env,
       encoding: 'utf-8',
@@ -229,7 +235,7 @@ export function packageIosHost(opts: PackageIosOptions): PackageIosResult {
   for (const c of ['packages/layout-core-rust', 'packages/host-abi']) {
     log.push(`→ cargo build --release --target aarch64-apple-ios（${c}）`)
     try {
-      execFileSync('cargo', ['build', '--release', '--target', 'aarch64-apple-ios', '--manifest-path', path.join(repoRoot, c, 'Cargo.toml')], { env, encoding: 'utf-8', maxBuffer: 64 * 1024 * 1024 })
+      run('cargo', ['build', '--release', '--target', 'aarch64-apple-ios', '--manifest-path', path.join(repoRoot, c, 'Cargo.toml')], { env, encoding: 'utf-8', maxBuffer: 64 * 1024 * 1024 })
     } catch (e) {
       const msg = String((e as { stderr?: string }).stderr ?? (e as Error).message).slice(-1200)
       return { ok: false, hostDir, app: null, screenContentCopied, log: [...log, '✗ cargo 编译失败：', msg] }
@@ -247,7 +253,7 @@ export function packageIosHost(opts: PackageIosOptions): PackageIosResult {
   const exe = path.join(appDir, 'ProteusHost')
   log.push('→ swiftc 编译（runtime 源集 + 壳 + 内核）')
   try {
-    execFileSync('xcrun', ['--sdk', 'iphoneos', 'swiftc', '-O', '-target', 'arm64-apple-ios15.0',
+    run('xcrun', ['--sdk', 'iphoneos', 'swiftc', '-O', '-target', 'arm64-apple-ios15.0',
       '-framework', 'UIKit', '-framework', 'CoreText', '-framework', 'JavaScriptCore', '-framework', 'AVFoundation',
       '-parse-as-library', '-o', exe, ...swifts, libAbi, libCore], { env, encoding: 'utf-8', maxBuffer: 64 * 1024 * 1024 })
   } catch (e) {
@@ -279,7 +285,7 @@ function signApp(appDir: string, bundleId: string, log: string[]): boolean {
       if (!f.endsWith('.mobileprovision')) continue
       const pf = path.join(profileDir, f)
       try {
-        const plist = execFileSync('security', ['cms', '-D', '-i', pf], { encoding: 'utf-8', maxBuffer: 8 * 1024 * 1024 })
+        const plist = run('security', ['cms', '-D', '-i', pf], { encoding: 'utf-8', maxBuffer: 8 * 1024 * 1024 })
         const m = plist.match(/<key>application-identifier<\/key>\s*<string>([^<]+)<\/string>/)
         if (m && m[1].endsWith(`.${bundleId}`)) { profile = pf; break }
       } catch { /* 跳过无效 profile */ }
@@ -288,19 +294,19 @@ function signApp(appDir: string, bundleId: string, log: string[]): boolean {
   if (!profile) { log.push(`✗ 无匹配描述文件（bundleId=${bundleId}）`); return false }
   let identity = ''
   try {
-    const ids = execFileSync('security', ['find-identity', '-v', '-p', 'codesigning'], { encoding: 'utf-8' })
+    const ids = run('security', ['find-identity', '-v', '-p', 'codesigning'], { encoding: 'utf-8' })
     const m = ids.split('\n').filter((l) => !l.includes('CSSMERR') && /Apple Development|iPhone Developer/.test(l)).join('\n').match(/[0-9A-F]{40}/)
     if (m) identity = m[0]
   } catch { /* fallthrough */ }
   if (!identity) { log.push('✗ 无签名身份（security find-identity）'); return false }
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-ios-'))
   try {
-    const plist = execFileSync('security', ['cms', '-D', '-i', profile], { encoding: 'utf-8', maxBuffer: 8 * 1024 * 1024 })
+    const plist = run('security', ['cms', '-D', '-i', profile], { encoding: 'utf-8', maxBuffer: 8 * 1024 * 1024 })
     fs.writeFileSync(path.join(tmp, 'profile.plist'), plist)
-    const ent = execFileSync('/usr/libexec/PlistBuddy', ['-x', '-c', 'Print :Entitlements', path.join(tmp, 'profile.plist')], { encoding: 'utf-8' })
+    const ent = run('/usr/libexec/PlistBuddy', ['-x', '-c', 'Print :Entitlements', path.join(tmp, 'profile.plist')], { encoding: 'utf-8' })
     fs.writeFileSync(path.join(tmp, 'entitlements.plist'), ent)
     fs.copyFileSync(profile, path.join(appDir, 'embedded.mobileprovision'))
-    execFileSync('codesign', ['--force', '--sign', identity, '--entitlements', path.join(tmp, 'entitlements.plist'), '--timestamp=none', appDir], { encoding: 'utf-8', maxBuffer: 16 * 1024 * 1024 })
+    run('codesign', ['--force', '--sign', identity, '--entitlements', path.join(tmp, 'entitlements.plist'), '--timestamp=none', appDir], { encoding: 'utf-8', maxBuffer: 16 * 1024 * 1024 })
     log.push(`✓ 已签名（identity=${identity.slice(0, 8)}… profile=${path.basename(profile)}）`)
     return true
   } catch (e) {
@@ -466,7 +472,7 @@ export function packageAndroidHost(opts: PackageAndroidOptions): PackageAndroidR
   const extract = path.join(build, 'aar')
   fs.mkdirSync(extract, { recursive: true })
   try {
-    execFileSync('unzip', ['-o', '-q', aarPath, '-d', extract], { encoding: 'utf-8' })
+    run('unzip', ['-o', '-q', aarPath, '-d', extract], { encoding: 'utf-8' })
   } catch (e) {
     restore()
     return { ok: false, hostDir, apk: null, screenContentCopied, log: [...log, '✗ 解压 AAR 失败：' + String((e as Error).message).slice(-400)] }
@@ -483,7 +489,7 @@ export function packageAndroidHost(opts: PackageAndroidOptions): PackageAndroidR
   if (!javaSrcs.length) { restore(); return { ok: false, hostDir, apk: null, screenContentCopied, log: [...log, '✗ src/ 无 .java'] } }
   log.push(`→ javac（壳 ${javaSrcs.length} 个源；-cp android.jar:classes.jar）`)
   try {
-    execFileSync(path.join(jdk, 'bin', 'javac'), ['-nowarn', '-encoding', 'UTF-8', '--release', '17', '-cp', `${platform}:${classesJar}`, '-d', classesDir, ...javaSrcs], { encoding: 'utf-8', maxBuffer: 32 * 1024 * 1024 })
+    run(path.join(jdk, 'bin', 'javac'), ['-nowarn', '-encoding', 'UTF-8', '--release', '17', '-cp', `${platform}:${classesJar}`, '-d', classesDir, ...javaSrcs], { encoding: 'utf-8', maxBuffer: 32 * 1024 * 1024 })
   } catch (e) {
     const msg = String((e as { stderr?: string }).stderr ?? (e as Error).message)
     restore()
@@ -497,7 +503,7 @@ export function packageAndroidHost(opts: PackageAndroidOptions): PackageAndroidR
   const classFiles = listFiles(classesDir, '.class')
   log.push('→ d8（壳 classes + AAR classes.jar）')
   try {
-    execFileSync(path.join(buildTools, 'd8'), ['--release', '--min-api', '24', '--lib', platform, '--output', dexDir, ...classFiles, classesJar], { encoding: 'utf-8', maxBuffer: 64 * 1024 * 1024, env })
+    run(path.join(buildTools, 'd8'), ['--release', '--min-api', '24', '--lib', platform, '--output', dexDir, ...classFiles, classesJar], { encoding: 'utf-8', maxBuffer: 64 * 1024 * 1024, env })
   } catch (e) {
     const msg = String((e as { stderr?: string }).stderr ?? (e as Error).message)
     restore()
@@ -519,7 +525,7 @@ export function packageAndroidHost(opts: PackageAndroidOptions): PackageAndroidR
   const vCode = (manifestXml.match(/android:versionCode\s*=\s*"(\d+)"/) ?? [])[1] ?? '1'
   const vName = (manifestXml.match(/android:versionName\s*=\s*"([^"]+)"/) ?? [])[1] ?? '0.1.0'
   try {
-    execFileSync(path.join(buildTools, 'aapt2'), ['link', '-o', apk, '-I', platform, '--manifest', manifest,
+    run(path.join(buildTools, 'aapt2'), ['link', '-o', apk, '-I', platform, '--manifest', manifest,
       '--min-sdk-version', '24', '--target-sdk-version', '34', '--version-code', vCode, '--version-name', vName,
       '-A', assetsDir, '--java', genDir], { encoding: 'utf-8', maxBuffer: 32 * 1024 * 1024, env })
   } catch (e) {
@@ -535,9 +541,9 @@ export function packageAndroidHost(opts: PackageAndroidOptions): PackageAndroidR
     fs.copyFileSync(path.join(extract, 'jni/arm64-v8a', so), path.join(libDir, so))
   }
   try {
-    execFileSync('zip', ['-q', '-j', apk, path.join(dexDir, 'classes.dex')], { cwd: build, encoding: 'utf-8' })
+    run('zip', ['-q', '-j', apk, path.join(dexDir, 'classes.dex')], { cwd: build, encoding: 'utf-8' })
     for (const so of fs.readdirSync(libDir)) {
-      execFileSync('zip', ['-q', '-0', apk, `lib/arm64-v8a/${so}`], { cwd: build, encoding: 'utf-8' })
+      run('zip', ['-q', '-0', apk, `lib/arm64-v8a/${so}`], { cwd: build, encoding: 'utf-8' })
     }
   } catch (e) {
     restore()
@@ -548,7 +554,7 @@ export function packageAndroidHost(opts: PackageAndroidOptions): PackageAndroidR
   // ⑨ zipalign -f 16384
   const aligned = path.join(build, 'proteus-host-aligned.apk')
   try {
-    execFileSync(path.join(buildTools, 'zipalign'), ['-f', '16384', apk, aligned], { encoding: 'utf-8' })
+    run(path.join(buildTools, 'zipalign'), ['-f', '16384', apk, aligned], { encoding: 'utf-8' })
     fs.renameSync(aligned, apk)
   } catch (e) {
     restore()
@@ -558,9 +564,9 @@ export function packageAndroidHost(opts: PackageAndroidOptions): PackageAndroidR
   // ⑩ apksigner（自生成 debug.keystore）
   const ks = path.join(build, 'debug.keystore')
   try {
-    execFileSync(path.join(jdk, 'bin', 'keytool'), ['-genkeypair', '-keystore', ks, '-storepass', 'android', '-keypass', 'android', '-alias', 'androiddebugkey', '-dname', 'CN=Android Debug,O=Android,C=US', '-keyalg', 'RSA', '-keysize', '2048', '-validity', '10000'], { encoding: 'utf-8', env })
-    execFileSync(path.join(buildTools, 'apksigner'), ['sign', '--ks', ks, '--ks-pass', 'pass:android', '--key-pass', 'pass:android', '--v1-signing-enabled', 'true', '--v2-signing-enabled', 'true', apk], { encoding: 'utf-8', maxBuffer: 32 * 1024 * 1024, env })
-    execFileSync(path.join(buildTools, 'apksigner'), ['verify', '--print-certs', apk], { encoding: 'utf-8', env })
+    run(path.join(jdk, 'bin', 'keytool'), ['-genkeypair', '-keystore', ks, '-storepass', 'android', '-keypass', 'android', '-alias', 'androiddebugkey', '-dname', 'CN=Android Debug,O=Android,C=US', '-keyalg', 'RSA', '-keysize', '2048', '-validity', '10000'], { encoding: 'utf-8', env })
+    run(path.join(buildTools, 'apksigner'), ['sign', '--ks', ks, '--ks-pass', 'pass:android', '--key-pass', 'pass:android', '--v1-signing-enabled', 'true', '--v2-signing-enabled', 'true', apk], { encoding: 'utf-8', maxBuffer: 32 * 1024 * 1024, env })
+    run(path.join(buildTools, 'apksigner'), ['verify', '--print-certs', apk], { encoding: 'utf-8', env })
   } catch (e) {
     restore()
     return { ok: false, hostDir, apk: null, screenContentCopied, log: [...log, '✗ 签名失败：' + String((e as Error).message).slice(-600)] }
