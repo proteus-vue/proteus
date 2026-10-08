@@ -21,6 +21,8 @@ function run(cmd: string, args: string[], opts: { cwd?: string; env?: NodeJS.Pro
   return __exec(cmd, args, { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'], ...opts })
 }
 import { fileURLToPath } from 'node:url'
+// ★Apollo 诊断（决策 #684）：把宿主工具链的失败归因成 Proteus 码 + 可行动建议 + **保留原文**
+import { makeDiag, parseSwiftcOutput, captureRaw, type ProteusDiagnostic } from './diag'
 
 /** ★本模块所在目录（`packages/cli/src` 或 `dist`）——JDK 等**框架仓资源**上溯解析的起点。 */
 const HERE_PKG = path.dirname(fileURLToPath(import.meta.url))
@@ -52,6 +54,8 @@ export interface PackageHostResult {
   /** 已把编译产物拷进宿主 rawfile */
   screenContentCopied: boolean
   log: string[]
+  /** ★Apollo 诊断（决策 #684）：失败时的结构化根因 */
+  diagnostics?: ProteusDiagnostic[]
 }
 
 /** 把项目编译产物拷进宿主入口模块的 rawfile（若项目根与产物存在） */
@@ -178,6 +182,8 @@ export interface PackageIosResult {
   app: string | null
   screenContentCopied: boolean
   log: string[]
+  /** ★Apollo 诊断（决策 #684）：失败时的结构化根因（CLI 据此完整输出，**不再吞详情**） */
+  diagnostics?: ProteusDiagnostic[]
 }
 
 /** 找框架仓根（含 packages/layout-core-rust）——内核 crate 在其下。
@@ -199,6 +205,40 @@ function findRepoRootForKernel(hostDir: string): string | null {
   return null
 }
 
+/**
+ * ★解析可用 Xcode 的 DEVELOPER_DIR（决策 #684）——判据 = **该目录能提供 iOS SDK**（纯文件系统，零子进程）。
+ *
+ * 【为什么需要在 CLI 里做（本仓实测真缺陷）】`proteus dev/build --target ios` 此前只在**调用方 shell**
+ *   设了 DEVELOPER_DIR 时才能成功（`source hosts/ios/lib/xcode-env.sh`）——否则 swiftc 报
+ *   `xcrun: error: SDK "iphoneos" cannot be located`（因为 `xcode-select -p` 指向 CommandLineTools，
+ *   而本机完整 Xcode 在**非默认位**）。⇒ 把 xcode-env.sh 的两级偏好判据搬进 CLI，用户无需设 env。
+ *   判据与 xcode-env.sh 一致：① 能给 iOS SDK（`Platforms/iPhoneOS.platform`）② 优先同时有 devicectl。
+ */
+export function resolveDeveloperDir(): string | null {
+  const hasIosSdk = (d: string): boolean => !!d && fs.existsSync(path.join(d, 'Platforms', 'iPhoneOS.platform'))
+  const hasDevicectl = (d: string): boolean => fs.existsSync(path.join(d, 'usr', 'bin', 'devicectl'))
+  const cands = [
+    process.env.PROTEUS_DEVELOPER_DIR,
+    process.env.DEVELOPER_DIR,
+    // xcode-select -p 的结果（可能是 CommandLineTools ⇒ hasIosSdk 为假）
+    (() => { try { return run('xcode-select', ['-p'], { encoding: 'utf-8' }).trim() } catch { return undefined } })(),
+    '/Applications/Xcode.app/Contents/Developer',
+    path.join(os.homedir(), 'Applications', 'Xcode.app', 'Contents', 'Developer'),
+  ].filter((c): c is string => !!c)
+  // mdfind 补非默认安装位（本机在 /Volumes 上）
+  try {
+    const found = run('mdfind', ["kMDItemCFBundleIdentifier == 'com.apple.dt.Xcode'"], { encoding: 'utf-8' })
+      .split('\n').filter(Boolean).map((p) => path.join(p.trim(), 'Contents', 'Developer'))
+    cands.push(...found)
+  } catch { /* mdfind 不可用 */ }
+  const uniq = [...new Set(cands)]
+  // ① 真机能力完备（iOS SDK + devicectl）
+  const full = uniq.find((d) => hasIosSdk(d) && hasDevicectl(d))
+  if (full) return full
+  // ② 至少给 iOS SDK（模拟器/类型检查够用）
+  return uniq.find(hasIosSdk) ?? null
+}
+
 function listSwift(dir: string): string[] {
   if (!fs.existsSync(dir)) return []
   return fs.readdirSync(dir).filter((f) => f.endsWith('.swift')).sort().map((f) => path.join(dir, f))
@@ -212,13 +252,13 @@ export function packageIosHost(opts: PackageIosOptions): PackageIosResult {
   const platDir = path.join(hostDir, 'platform')
   const shellDir = path.join(hostDir, 'shell')
   const infoPlist = path.join(hostDir, 'Info.plist')
-  if (!fs.existsSync(rtDir)) return { ok: false, hostDir, app: null, screenContentCopied: false, log: [`✗ 不是 iOS 宿主工程（缺 runtime/）：${hostDir}`] }
-  if (!fs.existsSync(infoPlist)) return { ok: false, hostDir, app: null, screenContentCopied: false, log: [`✗ 缺 Info.plist：${hostDir}`] }
+  if (!fs.existsSync(rtDir)) return { ok: false, hostDir, app: null, screenContentCopied: false, log: [`✗ 不是 iOS 宿主工程（缺 runtime/）：${hostDir}`], diagnostics: [makeDiag('PT-BE-005', { raw: `缺 runtime/：${hostDir}` })] }
+  if (!fs.existsSync(infoPlist)) return { ok: false, hostDir, app: null, screenContentCopied: false, log: [`✗ 缺 Info.plist：${hostDir}`], diagnostics: [makeDiag('PT-BE-005', { raw: `缺 Info.plist：${hostDir}` })] }
   const swifts = [...listSwift(rtDir), ...listSwift(platDir), ...listSwift(shellDir)]
-  if (!swifts.length) return { ok: false, hostDir, app: null, screenContentCopied: false, log: ['✗ 源集为空（runtime/ + platform/ + shell/ 无 .swift）'] }
+  if (!swifts.length) return { ok: false, hostDir, app: null, screenContentCopied: false, log: ['✗ 源集为空（runtime/ + platform/ + shell/ 无 .swift）'], diagnostics: [makeDiag('PT-BE-005', { raw: '源集为空（runtime/ + platform/ + shell/ 无 .swift）' })] }
   const plistSrc = fs.readFileSync(infoPlist, 'utf-8')
   const bundleId = (plistSrc.match(/<key>CFBundleIdentifier<\/key>\s*<string>([^<]+)<\/string>/) ?? [])[1] ?? ''
-  if (!bundleId) return { ok: false, hostDir, app: null, screenContentCopied: false, log: ['✗ Info.plist 缺 CFBundleIdentifier'] }
+  if (!bundleId) return { ok: false, hostDir, app: null, screenContentCopied: false, log: ['✗ Info.plist 缺 CFBundleIdentifier'], diagnostics: [makeDiag('PT-BE-005', { raw: 'Info.plist 缺 CFBundleIdentifier' })] }
 
   // ② 编译产物 → hostDir（app-screen-content.json + bundle-superapp.js + app-config.json）
   let screenContentCopied = false
@@ -266,8 +306,15 @@ export function packageIosHost(opts: PackageIosOptions): PackageIosResult {
 
   // ③ 内核：cargo build 两个 crate（aarch64-apple-ios）
   const repoRoot = findRepoRootForKernel(hostDir)
-  if (!repoRoot) { restoreBuildCfg(); return { ok: false, hostDir, app: null, screenContentCopied, log: [...log, '✗ 找不到框架仓（含 packages/layout-core-rust）'] } }
-  const env = { ...process.env, PATH: `${path.join(os.homedir(), '.cargo', 'bin')}:${process.env.PATH ?? ''}` }
+  if (!repoRoot) { restoreBuildCfg(); return { ok: false, hostDir, app: null, screenContentCopied, log: [...log, '✗ 找不到框架仓（含 packages/layout-core-rust）'], diagnostics: [makeDiag('PT-BE-005', { cause: '本机找不到框架仓（含 packages/layout-core-rust）——iOS 打包需要内核 crate', raw: '找不到框架仓（含 packages/layout-core-rust）' })] } }
+  // ★解析可用 Xcode（决策 #684）——用户无需预先 source xcode-env.sh；否则 swiftc 会报
+  //   `SDK "iphoneos" cannot be located`（xcode-select 指向 CommandLineTools、完整 Xcode 在非默认位）。
+  const devDir = resolveDeveloperDir()
+  const env = {
+    ...process.env,
+    PATH: `${path.join(os.homedir(), '.cargo', 'bin')}:${process.env.PATH ?? ''}`,
+    ...(devDir ? { DEVELOPER_DIR: devDir } : {}),
+  }
   const cargoTargetDir = process.env.CARGO_TARGET_DIR ?? path.join(repoRoot, 'spike', 'target')
   for (const c of ['packages/layout-core-rust', 'packages/host-abi']) {
     log.push(`→ cargo build --release --target aarch64-apple-ios（${c}）`)
@@ -276,12 +323,12 @@ export function packageIosHost(opts: PackageIosOptions): PackageIosResult {
     } catch (e) {
       const msg = String((e as { stderr?: string }).stderr ?? (e as Error).message).slice(-1200)
       restoreBuildCfg()
-      return { ok: false, hostDir, app: null, screenContentCopied, log: [...log, '✗ cargo 编译失败：', msg] }
+      return { ok: false, hostDir, app: null, screenContentCopied, log: [...log, '✗ cargo 编译失败：', msg], diagnostics: [makeDiag('PT-BD-002', { cause: `Rust 内核编译失败：${c}`, raw: msg })] }
     }
   }
   const libCore = path.join(cargoTargetDir, 'aarch64-apple-ios', 'release', 'libproteus_layout_core.a')
   const libAbi = path.join(cargoTargetDir, 'aarch64-apple-ios', 'release', 'libproteus_host_abi.a')
-  for (const l of [libCore, libAbi]) if (!fs.existsSync(l)) { restoreBuildCfg(); return { ok: false, hostDir, app: null, screenContentCopied, log: [...log, `✗ 未生成内核静态库：${l}`] } }
+  for (const l of [libCore, libAbi]) if (!fs.existsSync(l)) { restoreBuildCfg(); return { ok: false, hostDir, app: null, screenContentCopied, log: [...log, `✗ 未生成内核静态库：${l}`], diagnostics: [makeDiag('PT-BD-002', { cause: `cargo 未产出内核静态库：${l}`, raw: `未生成内核静态库：${l}` })] } }
   log.push('✓ 内核两静态库就位（libproteus_layout_core.a + libproteus_host_abi.a）')
 
   // ④ swiftc 编译（runtime 源集 + 内核 .a）
@@ -298,7 +345,17 @@ export function packageIosHost(opts: PackageIosOptions): PackageIosResult {
     const msg = String((e as { stderr?: string }).stderr ?? (e as Error).message)
     const errs = msg.split('\n').filter((l) => l.includes('error:')).slice(0, 8).join('\n')
     restoreBuildCfg()
-    return { ok: false, hostDir, app: null, screenContentCopied, log: [...log, '✗ swiftc 编译失败：', errs || msg.slice(-1000)] }
+    // ★Apollo L0：解析 swiftc 输出为逐条诊断（file:line:col + 消息）；解析不出则整段原文兜底。
+    //   ★特判：`SDK "iphoneos" cannot be located` / `unable to load standard library` = **找不到可用 Xcode**
+    //   （比对"未知错误"更有用——给出 PT-BE-001 + 可行动建议）。
+    const xcodeMissing = /SDK "iphoneos" cannot be located|unable to load standard library for target/i.test(msg)
+    const diags: ProteusDiagnostic[] = xcodeMissing
+      ? [makeDiag('PT-BE-001', { cause: '当前工具链路径下找不到 iOS SDK（xcode-select 可能指向 CommandLineTools，或完整 Xcode 在非默认位置）', raw: msg.slice(-1500) })]
+      : (() => {
+          const parsed = parseSwiftcOutput(msg)
+          return parsed.length ? parsed : [captureRaw('B', errs || msg.slice(-1500))]
+        })()
+    return { ok: false, hostDir, app: null, screenContentCopied, log: [...log, '✗ swiftc 编译失败：', errs || msg.slice(-1000)], diagnostics: diags }
   }
   log.push('✓ swiftc 编译通过')
   restoreBuildCfg() // ★dev 变体：编译完成即还原 BuildConfig 为 release 默认（工程源码始终 release 形态）
@@ -318,13 +375,14 @@ export function packageIosHost(opts: PackageIosOptions): PackageIosResult {
   log.push('✓ .app 已组装')
 
   // ⑥ 签名（本机 provisioning profile；与 run-selfdraw.sh 同源）
-  if (!signApp(appDir, bundleId, log)) return { ok: false, hostDir, app: null, screenContentCopied, log }
+  const sign = signApp(appDir, bundleId, log)
+  if (!sign.ok) return { ok: false, hostDir, app: null, screenContentCopied, log, diagnostics: sign.diagnostics }
   log.push(`✓ 产出：${path.relative(hostDir, appDir)}（已签名，可 devicectl 装机）`)
   return { ok: true, hostDir, app: appDir, screenContentCopied, log }
 }
 
 /** 用本机 provisioning profile 签名 .app（entitlements 从 profile 原样提取——同 run-selfdraw.sh） */
-function signApp(appDir: string, bundleId: string, log: string[]): boolean {
+function signApp(appDir: string, bundleId: string, log: string[]): { ok: boolean; diagnostics?: ProteusDiagnostic[] } {
   const profileDir = path.join(os.homedir(), 'Library', 'Developer', 'Xcode', 'UserData', 'Provisioning Profiles')
   let profile = ''
   try {
@@ -338,14 +396,34 @@ function signApp(appDir: string, bundleId: string, log: string[]): boolean {
       } catch { /* 跳过无效 profile */ }
     }
   } catch { /* 无 profile 目录 */ }
-  if (!profile) { log.push(`✗ 无匹配描述文件（bundleId=${bundleId}）`); return false }
+  if (!profile) {
+    log.push(`✗ 无匹配描述文件（bundleId=${bundleId}）`)
+    // ★L3（确定原因）：本机描述文件列表里没有覆盖该 bundleId 的 profile ⇒ 可行动
+    return {
+      ok: false,
+      diagnostics: [
+        makeDiag('PT-BE-003', {
+          cause: `本机描述文件（~/Library/Developer/Xcode/UserData/Provisioning Profiles/）中没有覆盖 bundleId「${bundleId}」的 profile`,
+          suggestions: [
+            '上档签名：bash hosts/ios/signing.sh use <账号|SHA-1前缀>（会在 Apple 侧为该 App ID 建档）',
+            '自查：bash hosts/ios/signing.sh status（列出本机 keychain 身份 + 有效描述文件 + 当前档）',
+            `或把项目的 iOS bundleId（proteus.config native.ios.bundleId，当前 ${bundleId}）改成某个已有 profile 覆盖的 id`,
+          ],
+          raw: `无匹配描述文件（bundleId=${bundleId}）\nprofiles dir: ${profileDir}`,
+        }),
+      ],
+    }
+  }
   let identity = ''
   try {
     const ids = run('security', ['find-identity', '-v', '-p', 'codesigning'], { encoding: 'utf-8' })
     const m = ids.split('\n').filter((l) => !l.includes('CSSMERR') && /Apple Development|iPhone Developer/.test(l)).join('\n').match(/[0-9A-F]{40}/)
     if (m) identity = m[0]
   } catch { /* fallthrough */ }
-  if (!identity) { log.push('✗ 无签名身份（security find-identity）'); return false }
+  if (!identity) {
+    log.push('✗ 无签名身份（security find-identity）')
+    return { ok: false, diagnostics: [makeDiag('PT-BE-003', { cause: '本机 keychain 无有效 Apple Development 签名身份', suggestions: ['在 Xcode 登录开发者账号（Settings→Accounts）或 `bash hosts/ios/signing.sh use <账号>`', '自查：security find-identity -v -p codesigning'], raw: '无签名身份（security find-identity）' })] }
+  }
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-ios-'))
   try {
     const plist = run('security', ['cms', '-D', '-i', profile], { encoding: 'utf-8', maxBuffer: 8 * 1024 * 1024 })
@@ -355,10 +433,11 @@ function signApp(appDir: string, bundleId: string, log: string[]): boolean {
     fs.copyFileSync(profile, path.join(appDir, 'embedded.mobileprovision'))
     run('codesign', ['--force', '--sign', identity, '--entitlements', path.join(tmp, 'entitlements.plist'), '--timestamp=none', appDir], { encoding: 'utf-8', maxBuffer: 16 * 1024 * 1024 })
     log.push(`✓ 已签名（identity=${identity.slice(0, 8)}… profile=${path.basename(profile)}）`)
-    return true
+    return { ok: true }
   } catch (e) {
-    log.push('✗ codesign 失败：' + String((e as { stderr?: string }).stderr ?? (e as Error).message).slice(-600))
-    return false
+    const msg = String((e as { stderr?: string }).stderr ?? (e as Error).message).slice(-600)
+    log.push('✗ codesign 失败：' + msg)
+    return { ok: false, diagnostics: [makeDiag('PT-BE-003', { cause: 'codesign 执行失败（身份/描述文件不匹配或 entitlement 越权）', raw: msg })] }
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true })
   }
@@ -390,6 +469,8 @@ export interface PackageAndroidResult {
   apk: string | null
   screenContentCopied: boolean
   log: string[]
+  /** ★Apollo 诊断（决策 #684）：失败时的结构化根因 */
+  diagnostics?: ProteusDiagnostic[]
 }
 
 function androidSdk(): { sdk: string; platform: string; buildTools: string } | null {
@@ -451,7 +532,7 @@ export function packageAndroidHost(opts: PackageAndroidOptions): PackageAndroidR
 
   // ① runtime AAR（libs/proteus-runtime.aar）——缺则尝试框架仓构建
   const aarPath = path.join(hostDir, 'libs', 'proteus-runtime.aar')
-  if (!fs.existsSync(aarPath)) return { ok: false, hostDir, apk: null, screenContentCopied: false, log: [`✗ 缺 runtime AAR：${path.relative(hostDir, aarPath)}（先跑 hosts/android/build-runtime-aar.sh 并用 create host 拷入）`] }
+  if (!fs.existsSync(aarPath)) return { ok: false, hostDir, apk: null, screenContentCopied: false, log: [`✗ 缺 runtime AAR：${path.relative(hostDir, aarPath)}（先跑 hosts/android/build-runtime-aar.sh 并用 create host 拷入）`], diagnostics: [makeDiag('PT-BE-005', { cause: `宿主缺 runtime AAR：${path.relative(hostDir, aarPath)}`, raw: `缺 runtime AAR：${aarPath}` })] }
 
   // ② 编译产物 → assets（screen-content.json + bundle-superapp.js + app-config.json）
   let screenContentCopied = false
@@ -499,12 +580,12 @@ export function packageAndroidHost(opts: PackageAndroidOptions): PackageAndroidR
   const sdkInfo = androidSdk()
   if (!sdkInfo) {
     if (buildCfgBackup && buildCfgPath) fs.writeFileSync(buildCfgPath, buildCfgBackup)
-    return { ok: false, hostDir, apk: null, screenContentCopied, log: [...log, '✗ 找不到 Android SDK（设 ANDROID_HOME）'] }
+    return { ok: false, hostDir, apk: null, screenContentCopied, log: [...log, '✗ 找不到 Android SDK（设 ANDROID_HOME）'], diagnostics: [makeDiag('PT-BE-002', { cause: '找不到 Android SDK（缺 platforms/ 或 build-tools/）', raw: '找不到 Android SDK（设 ANDROID_HOME）' })] }
   }
   const jdk = findJdk()
   if (!jdk) {
     if (buildCfgBackup && buildCfgPath) fs.writeFileSync(buildCfgPath, buildCfgBackup)
-    return { ok: false, hostDir, apk: null, screenContentCopied, log: [...log, '✗ 找不到 javac（设 JAVA_HOME 或 .tools/jdk17）'] }
+    return { ok: false, hostDir, apk: null, screenContentCopied, log: [...log, '✗ 找不到 javac（设 JAVA_HOME 或 .tools/jdk17）'], diagnostics: [makeDiag('PT-BE-002', { cause: '找不到 javac（Android 打包需 JDK 17）', raw: '找不到 javac（设 JAVA_HOME 或 .tools/jdk17）' })] }
   }
   const { platform, buildTools } = sdkInfo
   // ★d8/apksigner 是 Java 启动脚本：需 JAVA_HOME（javac 用全路径不受影响，但子工具读 JAVA_HOME）

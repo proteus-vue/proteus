@@ -14,7 +14,7 @@ import { buildDir, planTargetedBuild, runTargetedBuildProgrammatic } from './bui
 import { parseConformanceArgs, runConformance, runConformanceDemo } from './conformance'
 import { parseHostArgs, runHostPush } from './host'
 import { parseCreateHostArgs, runCreateHost, createHost, deriveBundleName } from './host-scaffold'
-import { packageHarmonyHost, packageIosHost, packageAndroidHost } from './host-package'
+import { packageHarmonyHost, packageIosHost, packageAndroidHost, resolveDeveloperDir } from './host-package'
 import { applyNativeConfigFromProject, resolveNativeConfigFromProject } from './native-config'
 import { appHostDir, appBundleFile, APP_PACKAGE_NAME, isAppPlatform, type AppPlatform } from './targets'
 import { buildAppBundle } from './app-bundle'
@@ -57,6 +57,30 @@ import { runGate, formatGateList } from './gate'
 import { planMpE2E, diagnoseMpE2EEnv, formatMpE2EDiagnosis, prepareMpE2EProject } from './mp-e2e'
 import { warnIfDistStale } from './dist-freshness'
 import * as ui from './ui'
+import { formatDiagnostics, diagnosticsToJson, type ProteusDiagnostic } from './diag'
+
+/**
+ * ★Apollo 诊断输出（决策 #684）——打包/构建失败时统一走这里。
+ *   · `--json` ⇒ 结构化输出（供 CI；方案 §15.9）
+ *   · `--raw` ⇒ 只打原始错误（跳过语义块；方案 §11 决策①）
+ *   · 否则 ⇒ 分层：语义块（码/位置/根因/建议）+ **原始错误全文**（★禁止吞掉，方案 §7）
+ *   · 无结构化诊断时 ⇒ **回落打印完整 log**（绝不静默——此前正是只过滤 `✗` 行把详情吞了）
+ */
+function printDiagnostics(diags: ProteusDiagnostic[] | undefined, log: string[]): void {
+  const argv = process.argv.slice(2)
+  if (argv.includes('--json')) {
+    console.log(diagnosticsToJson(diags ?? []))
+    return
+  }
+  const rawOnly = argv.includes('--raw')
+  if (diags && diags.length) {
+    const text = formatDiagnostics(diags, { color: process.stdout.isTTY === true && !process.env.NO_COLOR, rawOnly })
+    if (text) console.log(text)
+  } else {
+    // 无结构化诊断 ⇒ 打印**全部** log 行（含缩进详情），避免"冒号后空"
+    for (const l of log) console.log(`    ${l}`)
+  }
+}
 
 async function main(): Promise<void> {
   const [cmd, ...rest] = process.argv.slice(2)
@@ -126,7 +150,8 @@ async function main(): Promise<void> {
                 for (const l of pk.log) if (/^⚠/.test(l)) ui.warn(l.replace(/^⚠\s*/, ''))
                 if (!pk.ok) {
                   sPack.fail('失败')
-                  for (const l of pk.log) if (/✗/.test(l)) ui.fail(l.replace(/^✗\s*/, ''))
+                  // ★Apollo（#684）：完整输出诊断（结构化 + 原文），不再只过滤 `✗` 行吞掉详情
+                  printDiagnostics(pk.diagnostics, pk.log)
                   process.exitCode = 1
                 } else {
                   sPack.done(ui.dim(path.relative(projectRoot, outPkg)))
@@ -826,7 +851,10 @@ async function runAppDev(target: AppPlatform): Promise<number> {
         : packageHarmonyHost({ hostDir, projectRoot, platform: 'harmony' })
   if (!pk.ok) {
     sPack.fail('打包失败')
-    for (const l of pk.log.filter((x) => x.startsWith('✗') || x.includes('✗'))) ui.fail(l.replace(/^✗\s*/, ''))
+    // ★★Apollo（决策 #684）：**完整**输出诊断（结构化根因 + 原文），不再只过滤 `✗` 行把详情丢掉。
+    //   此前：`pk.log.filter(x=>x.includes('✗'))` ⇒ 缩进的详情（如 swiftc 的 `file:line:col: error: ...`）
+    //   不含 `✗` ⇒ 被吞 ⇒ 终端只见「swiftc 编译失败：」**冒号后空**（用户配图投诉）。
+    printDiagnostics(pk.diagnostics, pk.log)
     await server.close()
     return 1
   }
@@ -869,9 +897,9 @@ async function runAppDev(target: AppPlatform): Promise<number> {
     const iosApp = 'app' in pk ? (pk as { app: string | null }).app : null
     if (iosApp) {
       const { execFileSync } = await import('node:child_process')
-      // Xcode 工具链：优先 env → 非默认安装位（与 hosts/ios/lib/xcode-env.sh 同判据：能给 iOS SDK + 有 devicectl）
-      const devDir = process.env.PROTEUS_DEVELOPER_DIR ?? process.env.DEVELOPER_DIR ?? '/Volumes/data1/work/office-applications/Xcode.app/Contents/Developer'
-      const env = { ...process.env, DEVELOPER_DIR: devDir }
+      // Xcode 工具链：统一经 resolveDeveloperDir（能力判据 = 能给 iOS SDK + 有 devicectl；纯 fs，零子进程猜测）
+      const devDir = resolveDeveloperDir()
+      const env = devDir ? { ...process.env, DEVELOPER_DIR: devDir } : { ...process.env }
       const xcrun = (args: string[]): { ok: boolean; out: string } => {
         try { return { ok: true, out: execFileSync('xcrun', args, { env, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 8 * 1024 * 1024 }) } }
         catch (e) { return { ok: false, out: String((e as { stderr?: string }).stderr ?? (e as Error).message) } }
