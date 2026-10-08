@@ -19,6 +19,7 @@ import { pathToFileURL } from 'node:url'
 import { buildLayoutTemplate, buildVaporSubscriptions, compileEvents, parseCssVarTokens } from '@proteus-vue/compiler'
 import { extractRefLiterals, reorderNodesByZ } from './app-content'
 import type { AppPlatform } from './targets'
+import { resolveAppRoutes } from './app-routes'
 
 /** 一个屏的运行期产物 */
 export interface ScreenRuntimeArtifact {
@@ -59,7 +60,8 @@ export async function buildAppRuntimeContent(
 ): Promise<AppRuntimeContentResult> {
   const diagnostics: string[] = []
 
-  const autoRoutes = path.join(root, 'router', 'auto-routes.ts')
+  // ★honor `router.routesOutput`（唯一实现 app-routes.ts）——与 app-content 同源同口径。
+  const { file: autoRoutes, config: cfgV4 } = await resolveAppRoutes(root)
   if (!fs.existsSync(autoRoutes)) {
     throw new Error(`缺 ${path.relative(root, autoRoutes)}——先运行 gen-routes（proteus build --target skyline/web 会产出）`)
   }
@@ -68,15 +70,10 @@ export async function buildAppRuntimeContent(
   let tokens: Record<string, string> | undefined
   let globalCss: string | undefined
   try {
-    const cfgPath = path.join(root, 'proteus.config.ts')
-    if (fs.existsSync(cfgPath)) {
-      const { loadProteusConfig } = await import('./config-loader')
-      const { config: cfgV4 } = await loadProteusConfig(cfgPath)
-      const gs = cfgV4.targets.mp?.globalStyle ? path.resolve(root, cfgV4.targets.mp.globalStyle) : undefined
-      if (gs && fs.existsSync(gs)) {
-        globalCss = fs.readFileSync(gs, 'utf-8')
-        tokens = parseCssVarTokens(globalCss)
-      }
+    const gs = cfgV4?.targets.mp?.globalStyle ? path.resolve(root, cfgV4.targets.mp.globalStyle) : undefined
+    if (gs && fs.existsSync(gs)) {
+      globalCss = fs.readFileSync(gs, 'utf-8')
+      tokens = parseCssVarTokens(globalCss)
     }
   } catch { /* 无配置/加载失败 ⇒ 不折叠 var()（保持既有行为，不阻断） */ }
 

@@ -9,7 +9,7 @@ import os from 'node:os'
 import { fileURLToPath } from 'node:url'
 // ★B5 补丁脚本（src 与 dist 同指向仓库根 scripts/）——★2026-09-08 wechatide 标准后 automator 补丁不再需要，保留路径备用
 const AUTOMATOR_PATCH_SCRIPT = fileURLToPath(new URL('../../../scripts/patch-automator.mjs', import.meta.url))
-import { parseBuildArgs, parseExplainArgs, parseRulesArgs, parseRouterCheckArgs, parseModuleCheckArgs, parseModuleDuplicatesArgs, parseModuleAuditArgs, parseModuleInitArgs, parseCapabilityManifestArgs, parseCapabilityCheckArgs, parseComponentsAuditArgs, parseI18nCheckArgs, parseConfigCheckArgs, parseCssCheckArgs, parseStyleCheckArgs, parseCheckArgs, parseGenerateTypesArgs, parseMigrateTypesArgs, parseD2AuditArgs, parseGateArgs, formatHelpText } from './args'
+import { parseBuildArgs, parseExplainArgs, parseRulesArgs, parseRouterCheckArgs, parseModuleCheckArgs, parseModuleDuplicatesArgs, parseModuleAuditArgs, parseModuleInitArgs, parseCapabilityManifestArgs, parseCapabilityCheckArgs, parseComponentsAuditArgs, parseI18nCheckArgs, parseConfigCheckArgs, parseCssCheckArgs, parseStyleCheckArgs, parseCheckArgs, parseGenerateTypesArgs, parseMigrateTypesArgs, parseD2AuditArgs, parseGateArgs, formatHelpText, resolveCliVersion } from './args'
 import { buildDir, planTargetedBuild, runTargetedBuildProgrammatic } from './build'
 import { parseConformanceArgs, runConformance, runConformanceDemo } from './conformance'
 import { parseHostArgs, runHostPush } from './host'
@@ -54,9 +54,14 @@ import { runD2Audit, formatD2Audit, resolveD2Target } from './d2-audit'
 import { runGlassAudit, formatGlassAudit } from './glass-audit'
 import { runGate, formatGateList } from './gate'
 import { planMpE2E, diagnoseMpE2EEnv, formatMpE2EDiagnosis, prepareMpE2EProject } from './mp-e2e'
+import { warnIfDistStale } from './dist-freshness'
 
 async function main(): Promise<void> {
   const [cmd, ...rest] = process.argv.slice(2)
+  // ★★★启动期「陈旧 dist」告警（决策 #663）：`npx proteus` 走 dist ⇒ 改了 src 忘重建时会**跑旧代码**
+  //   而本地 tsx src 手测正常（假绿）。实测事故：`proteus dev --target android` 仍启动 web（dist 停在 2.5h 前）。
+  //   ★只在**从 dist 运行**时检查、只告警不阻断（详见 dist-freshness.ts 的诚实边界）。
+  warnIfDistStale(cmd)
 
   switch (cmd) {
     case 'build': {
@@ -703,7 +708,7 @@ async function main(): Promise<void> {
       break
     }
     case 'version':
-      console.log('0.1.0')
+      console.log(resolveCliVersion())
       break
     case 'help':
     default:

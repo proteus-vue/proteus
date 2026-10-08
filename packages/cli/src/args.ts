@@ -2,9 +2,29 @@
 // CLI 参数解析（纯函数，可单测）——零依赖，手写解析
 import fs from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import type { TransformRuleOverrides } from '@proteus-vue/compiler'
 import type { ProteusConfig } from '@proteus-vue/plugin-vite'
 import { BUILD_TARGETS, type BuildTarget } from './targets'
+
+/**
+ * ★CLI 版本号：从本包 `package.json` 读（此前 `help`/`version` 硬编码 `'0.1.0'`——
+ *   与真实版本 `0.3.0-beta.*` 长期不符，用户实测指出）。
+ *   模块布局在 src 与 dist 两种形态下都是 `<pkg>/{src,dist}/args.ts|js` ⇒ `../package.json` 命中；
+ *   发布形态（`node_modules/@proteus-vue/cli/...`）同样命中。读取失败回退 `'0.0.0'`（**不抛**——
+ *   版本显示绝不该阻断任何命令）。
+ */
+export function resolveCliVersion(): string {
+  for (const rel of ['../package.json', '../../package.json']) {
+    try {
+      const v = JSON.parse(fs.readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8')).version
+      if (typeof v === 'string' && v) return v
+    } catch {
+      /* 试下一个候选路径 */
+    }
+  }
+  return '0.0.0'
+}
 
 export interface BuildArgs {
   /** 输入目录（扫描 .vue） */
@@ -438,19 +458,19 @@ export const HELP_GROUPS: HelpGroup[] = [
     titleEn: 'Build & development',
     entries: [
       {
-        usage: 'proteus build <dir> [--out <dir>] [--debug] [--no-px2rpx] [--rpx-ratio <n>] [--rules <json>] [--compiler <node|rust>] [--target <web|skyline|ios|android|harmony|all>] [--package --host-dir <dir>]',
-        desc: '扫描 <dir> 下所有 .vue，编译为小程序四件套（.wxml / .js / .wxss）到 <out>\n      --debug    产物注入源码行号注释 + 决策 trace 落盘（.transform-debug/）\n      --rules    JSON 规则覆盖文件（disabled / mapping / customTags）\n      --compiler 编译器后端（G-29）：node（缺省）/ rust（每页 Node/Rust 双编译语义等价校验，G-29.1）\n      --target   工程构建（G-33 M2）：web/skyline（复用 Vite 管线）· ios/android/harmony（App 屏内容：路由 → SFC → 编译器）· all（逐端全构建）；缺省 = 独立编译\n      --package  （hosts 第二/三/四刀）harmony→hvigorw 打 .hap；ios→swiftc 打 .app；android→javac/d8/aapt2 打 .apk（--host-dir 指定宿主工程，缺省读 PROTEUS_HOST_DIR）',
-        descEn: 'Scan all .vue files under <dir> and compile them into the mini-program four-file set (.wxml / .js / .wxss) to <out>\n      --debug    inject source line-number comments into the artifacts + write the decision trace to disk (.transform-debug/)\n      --rules    JSON rule override file (disabled / mapping / customTags)\n      --compiler compiler backend (G-29): node (default) / rust (per-page Node/Rust dual-compile semantic equivalence check, G-29.1)\n      --target   project build (G-33 M2): spawn the project build:web / build:mp scripts (reusing the Vite pipeline); default = standalone compilation',
+        usage: 'proteus build <dir> [--out <dir>] [--debug] [--no-px2rpx] [--rpx-ratio <n>] [--rules <json>] [--compiler <node|rust>] [--target <web|skyline|ios|android|harmony|all>] [--package [--host-dir <dir>]]',
+        desc: '扫描 <dir> 下所有 .vue 编译为小程序四件套（.wxml / .js / .wxss）到 <out>；带 --target 则走工程构建\n      --debug    产物注入源码行号注释 + 决策 trace 落盘（.transform-debug/）\n      --rules    JSON 规则覆盖文件（disabled / mapping / customTags）\n      --compiler 编译器后端（G-29）：node（缺省）/ rust（每页 Node/Rust 双编译语义等价校验，G-29.1）\n      --target   工程构建：web/skyline（Vite 管线）· ios/android/harmony（App 屏内容：路由 → SFC → 编译器）· all（逐端全构建）\n      --package  ★打包完整安装包（#662）：harmony→.hap；ios→.app；android→.apk（javac/d8/aapt2/apksigner）\n                 ★App 端**缺省自动 scaffold 到 dist/app/<端>/host**（无需 --host-dir）+ 产 bundle-superapp.js\n                 + 注入项目包名（proteus.config native 段）⇒ 一条命令出**项目自有包名**的安装包。缺省读 PROTEUS_HOST_DIR',
+        descEn: 'Scan all .vue under <dir> and compile to the mini-program four-file set (.wxml / .js / .wxss) to <out>; with --target, run a project build\n      --debug    inject source line-number comments + write the decision trace (.transform-debug/)\n      --rules    JSON rule override file (disabled / mapping / customTags)\n      --compiler compiler backend (G-29): node (default) / rust (per-page Node/Rust dual-compile equivalence check, G-29.1)\n      --target   project build: web/skyline (Vite pipeline) · ios/android/harmony (App screen content: router → SFC → compiler) · all (every target)\n      --package  ★package a full installer (#662): harmony→.hap; ios→.app; android→.apk\n                 ★App targets auto-scaffold the host into dist/app/<target>/host (no --host-dir needed) + build bundle-superapp.js\n                 + inject the project package name (proteus.config native section) → one command yields an installer with the project own package name. Defaults to PROTEUS_HOST_DIR',
       },
       {
-        usage: 'proteus dev [--target <web|skyline>]',
-        desc: '开发服务器（G-33 M1）：web → vite --mode web；skyline → dev-mp watch 构建（app 端待 M3 原生同步）',
-        descEn: 'Development server (G-33 M1): web → vite --mode web; skyline → dev-mp watch build (the app side awaits M3 native sync)',
+        usage: 'proteus dev [--target <web|skyline|ios|android|harmony>]',
+        desc: '开发服务器：web → Vite；skyline → dev-mp watch 构建\n      ★App 端（#662 · 热刷）：android/ios/harmony → scaffold 完整宿主 → 起 HTTP dev server（局域网）\n      → 编 **debug** 宿主（bundle 走 dev server）→ 装到设备 → 启动 → watch；改源码保存即热刷当前屏（无需重装）',
+        descEn: 'Dev server: web → Vite; skyline → dev-mp watch build\n      ★App targets (#662 · hot reload): android/ios/harmony → scaffold the full host → start an HTTP dev server (LAN)\n      → build a **debug** host (bundle served over HTTP) → install on device → launch → watch; saving source hot-reloads the current screen (no reinstall)',
       },
       {
         usage: 'proteus create host <platform> <dir> [--name <应用名>] [--bundle <包名>] [--project <项目根>]',
-        desc: '★hosts 第二刀 Stage 2（宿主/项目分离）：生成**独立可编译的最小宿主工程**（壳 + runtime HAR 依赖）\n      platform 支持 harmony / ios / android；harmony→AppScope+entry+proteus_render(HAR)；ios→runtime 源集+platform+shell；android→AndroidManifest+src+libs(runtime AAR)\n      --name 应用名 · --bundle 包名（缺省 com.example.<slug>）· --project 项目根（有 dist/app/<platform>/ 则拷编译产物进 rawfile）',
-        descEn: '★hosts cut-2 Stage 2 (host/project separation): generate a standalone compilable minimal host project (shell + runtime HAR dependency). platform currently: harmony.',
+        desc: '★生成**独立可编译的完整宿主工程**（应用壳 + runtime 依赖；platform: harmony / ios / android）\n      harmony→AppScope+entry+proteus_render(HAR)；ios→runtime 源集+platform+shell；android→AndroidManifest+src+libs(runtime AAR)\n      --name 应用名 · --bundle 包名（缺省 com.example.<slug>）· --project 项目根（有 dist/app/<platform>/ 则拷编译产物进 rawfile）\n      ★注：App 端 `build --package` / `dev` 已**缺省自动 scaffold** 到 dist/app/<端>/host，通常无需手动 create',
+        descEn: '★Generate a standalone compilable full host project (app shell + runtime deps; platform: harmony / ios / android)\n      harmony→AppScope+entry+proteus_render(HAR); ios→runtime source set+platform+shell; android→AndroidManifest+src+libs(runtime AAR)\n      --name app name · --bundle package name (default com.example.<slug>) · --project project root (copies artifacts into rawfile if dist/app/<platform>/ exists)\n      ★Note: App `build --package` / `dev` already auto-scaffold into dist/app/<target>/host; manual create is rarely needed',
       },
     ],
   },
@@ -699,7 +719,8 @@ export function formatHelpText(useColor = typeof process !== 'undefined' && proc
   lines.push(LINE.repeat(SEP_WIDTH))
   const hint = '提示：proteus <command> --help（单命令参数）· 文档 docs/ · GitHub github.com/proteus-vue/proteus'
   lines.push(useColor ? `${ANSI_DIM}${hint}${ANSI_RESET}` : hint)
-  lines.push(`版本 ${useColor ? `${ANSI_BOLD}0.1.0${ANSI_RESET}` : '0.1.0'}`)
+  const ver = resolveCliVersion()
+  lines.push(`版本 ${useColor ? `${ANSI_BOLD}${ver}${ANSI_RESET}` : ver}`)
   return lines.join('\n').replace(/\n\n\n/g, '\n\n').trimEnd() + '\n'
 }
 

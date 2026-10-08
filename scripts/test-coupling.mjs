@@ -68,6 +68,11 @@ const COUPLING = [
     why: '渐变跨语言契约（TS 校验器 ⇄ 内核 parse_gradient ⇄ Swift/Kotlin GradSpec）——色标/硬边/alpha/角度数学',
   },
   {
+    match: /^packages\/compiler\/src\/calc-fold\.ts$/,
+    tests: ['tests/cse-core.test.ts', 'tests/vapor-class-styles.test.ts'],
+    why: 'calc() 常量折叠**唯一实现**（CSE foldCalc ⇄ App 折叠面 vapor/template 共用）——两路径同口径（完整算术 + env fallback）；分叉过 em/% 折叠与算术能力',
+  },
+  {
     match: /^packages\/compiler\/src\/cse\//,
     tests: ['tests/cse-core.test.ts', 'tests/e2e-cse-parity.test.ts', 'tests/cse-explain.test.ts', 'tests/cse-dynamic.test.ts', 'tests/e2e-cse-dynamic.test.ts', 'tests/cse-dynamic-integration.test.ts', 'tests/appliers-conformance.test.ts', 'tests/degrade-conformance.test.ts', 'tests/app-ir-switch.test.ts'],
     why: 'CSE 编译期 CSS 引擎（五级层叠/长手竞争/继承/计算值/IR 映射）——判据①-b 逐属性比对 + trace',

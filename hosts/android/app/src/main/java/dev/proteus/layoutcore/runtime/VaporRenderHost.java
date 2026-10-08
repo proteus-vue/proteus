@@ -1680,7 +1680,11 @@ public final class VaporRenderHost {
         if (t != null && !t.isEmpty()) {
             float fs = (float) spec.optDouble("fontSize", 14);
             String tc = spec.optString("color", null);
-            int textColor = tc != null ? parseColor(tc) : 0xFFFFFFFF;
+            // ★★★CSS 初值 `color`（2026-10-08 · 以 Web 为基准）：缺省 **黑**（Web 未声明 color 时
+            //   computed 即黑）。此前缺省 **白** ⇒ 未声明颜色的页面（如 create-proteus 模板首屏
+            //   `div/h1/p` 无 color）文字**白字白底 = 不可见**——用户实测「新工程编译到手机跑不起来」
+            //   的真因（页面其实渲染了，只是全白看不见）。
+            int textColor = tc != null ? parseColor(tc) : 0xFF000000;
             // ★批次 3：字重（`font-weight` 折叠值；缺省 400 = normal）
             int fw = (int) spec.optDouble("fontWeight", 400);
             // ★批次 16（CSS 兼容对齐 · 以 Web 为基准）：`text-overflow: ellipsis` —— **单行**溢出以 … 截断。
