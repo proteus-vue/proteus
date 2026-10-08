@@ -11,6 +11,8 @@
 //   · **步骤加载动画**：`step()` 在 **TTY** 下转一个 spinner（等待期有"在跑"的反馈，用户诉求）；
 //     非 TTY ⇒ 不转、不打 `\r`（重定向/CI 日志仍是逐行）；
 //   · 符号约定：`✓` 成功（绿）· `✗` 失败（红）· `•` 信息 · `⚠` 警告 · `⟳` 事件。
+import { spawn, type ChildProcess } from 'node:child_process'
+
 const isTTY = (() => {
   try { return process.stdout.isTTY === true && !process.env.NO_COLOR && process.env.TERM !== 'dumb' } catch { return false }
 })()
@@ -25,30 +27,42 @@ export const red = wrap(31)
 export const gray = wrap(90)
 
 // ── 步骤加载动画（spinner）──────────────────────────────────────────────
-const SPIN = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
-let spinnerTimer: NodeJS.Timeout | null = null
+// ★★★为什么用**子进程**而不是 setInterval（决策 #678 二次修正）：`打包 debug 宿主`/`安装到设备`
+//   是 `execFileSync` **同步阻塞**（javac/d8/aapt2/adb）⇒ 主进程事件循环被占死 ⇒ 主进程的
+//   `setInterval` 连一帧都跑不到 ⇒ 静止。⇒ 用**独立子进程**跑动画：主进程照常同步阻塞，
+//   子进程（自己的事件循环空闲）持续写 `\r\u001b[K  ⠋ label…` ⇒ **真转圈**。
+//   ★非 TTY ⇒ 不 spawn（零进程开销、日志逐行）；子进程 stdout=`inherit`（写同一个 TTY）。
+const SPIN_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
+/** 子进程脚本：`argv[1]`=帧数组(JSON)、`argv[2]`=label；80ms/帧写一行（cyan 帧 + dim 文案）。 */
+const SPIN_CHILD_SRC =
+  "const f=JSON.parse(process.argv[1]);const l=process.argv[2]||'';let i=0;" +
+  "const w=()=>process.stdout.write('\\r\\u001b[K  \\u001b[36m'+f[i++%f.length]+'\\u001b[0m \\u001b[2m'+l+'…\\u001b[0m');" +
+  'w();const t=setInterval(w,80);'
+let spinnerChild: ChildProcess | null = null
 let spinnerActive = false
-/** 清掉正在转的 spinner 行（其它输出/步骤结束前调）——非 TTY 下为空操作。 */
+/** 清掉正在转的 spinner（杀掉子进程）+ 清当前行——非 TTY 下为空操作。 */
 function clearSpinner(): void {
   if (!spinnerActive) return
   spinnerActive = false
-  if (spinnerTimer) { clearInterval(spinnerTimer); spinnerTimer = null }
+  if (spinnerChild) { try { spinnerChild.kill('SIGKILL') } catch { /* 已退出 */ } spinnerChild = null }
   if (isTTY) process.stdout.write('\r\u001b[K')
 }
 function startSpinner(label: string): void {
   if (!isTTY) return
   spinnerActive = true
-  // ★★★**同步写第一帧**（决策 #678 实测修正）：`打包 debug 宿主`/`安装到设备` 是 `execFileSync`
-  //   **同步阻塞**（javac/d8/aapt2/adb）——事件循环被占死 ⇒ `setInterval` **连第一帧都跑不到**
-  //   ⇒ 整个同步步骤一帧不出（用户实测"没显示 spinner"）。⇒ 这里**立即**写一帧（同步，不经 timer），
-  //   timer 仅在事件循环空闲（异步 await，如 `构建 dev bundle`）时继续动画。
-  process.stdout.write(`\r\u001b[K  ${cyan(SPIN[0])} ${dim(label + '…')}`)
-  let i = 1
-  spinnerTimer = setInterval(() => {
-    process.stdout.write(`\r\u001b[K  ${cyan(SPIN[i++ % SPIN.length])} ${dim(label + '…')}`)
-  }, 80)
-  spinnerTimer.unref?.()   // 不阻止进程退出
+  try {
+    spinnerChild = spawn(process.execPath, ['-e', SPIN_CHILD_SRC, JSON.stringify(SPIN_FRAMES), label], {
+      stdio: ['ignore', 'inherit', 'ignore'],
+    })
+    spinnerChild.on('error', () => { spinnerChild = null })   // spawn 失败 ⇒ 退化为无动画（不报错）
+  } catch {
+    spinnerChild = null
+  }
+  // 同步首帧兜底：子进程启动前（~50ms）也有"在跑"的提示
+  process.stdout.write(`\r\u001b[K  ${cyan(SPIN_FRAMES[0])} ${dim(label + '…')}`)
 }
+// 父进程异常退出（Ctrl+C / 崩溃）时兜底杀子进程，避免孤儿 spinner。
+process.on('exit', () => { if (spinnerChild) { try { spinnerChild.kill('SIGKILL') } catch { /* ignore */ } } })
 
 /** 命令头部：`◆ Proteus dev · android · 项目名`（前后留空行，界定一次运行） */
 export function header(title: string, sub?: string): void {
