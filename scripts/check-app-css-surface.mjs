@@ -72,7 +72,10 @@ const undeclared = APP_FIELDS.filter((f) => !MATRIX_KEYS.has(f) && !DERIVED.has(
 //     两层职责不同，交集本身不构成缺陷；但**新增**交集（未登记）意味着"开发者能在 App 写一个语义层禁止的属性"
 //     ⇒ 收敛模型的新逃生口 ⇒ 必须显式登记（棘轮），故判据② = 交集 ⊆ APP_ENGINE_LEVEL_FIELDS。
 const forbiddenHits = APP_FIELDS.filter((f) => FORBIDDEN.has(f))
-const APP_ENGINE_LEVEL_FIELDS = new Set(['display', 'position', 'overflow', 'boxShadow', 'textShadow']) // ★已登记：引擎字段层需要（内核默认模型 / 语义组件映射目标 / 自绘盒阴影）
+// ★已登记：引擎字段层需要（内核默认模型 / 语义组件映射目标 / 自绘盒阴影）
+//   ★批 A④（2026-10-08 · 决策 #658）：`zIndex` —— 类样式里的 z-index 现由折叠面解析进引擎产物
+//   （承载 = 构建期兄弟重排 + 宿主按数组序绘制；LY001 仍拦**内联** style/:style 裸写法）。
+const APP_ENGINE_LEVEL_FIELDS = new Set(['display', 'position', 'overflow', 'boxShadow', 'textShadow', 'zIndex'])
 const forbiddenUnregistered = forbiddenHits.filter((f) => !APP_ENGINE_LEVEL_FIELDS.has(f))
 /* ── ③ 分层差异：App 引擎接受面不在 runtime 白名单（同为分层差异，informational）── */
 const RUNTIME_ALIAS_OK = (f) => RUNTIME_ALLOW.has(f) || RUNTIME_ALLOW.has(`${f}Top`) || MATRIX_KEYS.has(f)

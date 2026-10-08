@@ -22,6 +22,8 @@
 import { parse as sfcParse, type SFCDescriptor } from '@vue/compiler-sfc'
 import { parse as domParse } from '@vue/compiler-dom'
 import { isEnvVarName } from '@proteus-vue/contracts/env-vars'
+// ★★★批 A④（2026-10-08 · 决策 #658）：z-index 数值→语义层区间映射（SSOT 在 contracts/layers.ts）
+import { zIndexOf } from '@proteus-vue/contracts/layers'
 import type { VaporDiagnostic } from './build'
 import type { VueCompatDeps } from './sources'
 import type { LayoutNode, LayoutTemplate, ListTemplate, TextSegment } from '@proteus-vue/slot-runtime'
@@ -113,7 +115,12 @@ export const APP_ENUM_VALUES: Record<string, readonly string[]> = {
 /** 绘制字段（宿主自绘读这些键；模板照样要带上，否则挂载后无底色/无字色） */
 // ★★★逐边 border 批（2026-10-05 · border-bottom 等 4 个 P0 项）：追加**逐边** width/color（宿主逐边绘制；
 //   uniform borderWidth/borderColor 保留 = 四边缺省值）。语料 21 处 `border-<side>: <w> <style> <color>`。
-export const APP_PAINT_FIELDS = ['backgroundColor', 'color', 'fontSize', 'fontWeight', 'fontFamily', 'textAlign', 'lineHeight', 'textOverflow', 'letterSpacing', 'textDecoration', 'visibility', 'borderRadius', 'borderColor', 'borderWidth', 'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth', 'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor', 'borderTopStyle', 'borderRightStyle', 'borderBottomStyle', 'borderLeftStyle', 'opacity', 'boxShadow', 'textShadow', 'transform', 'backgroundSize', 'backgroundPosition', 'backgroundRepeat', 'outlineWidth', 'outlineColor', 'outlineStyle', 'outlineOffset'] as const
+// ★★★z-index 项（2026-10-08 · 批 A④ · 决策 #658）：**数值层序**（同父兄弟按 (z, 声明序) 排绘制序）。
+//   Web/MP 原生（CSS/WXSS 引擎）；App 此前**静默丢**（折叠面无该字段 + applier drop + 宿主无 z 序）。
+//   判据 = contracts/layers.ts 的 `zIndexOf`（数值→语义层区间映射 + 越界诊断；SSOT）。
+//   ★LY001 立场不变（内联 style/:style 裸 z-index 仍编译期拦——那是"层级控制手段"的逃生口）；
+//     本条服务**类样式**里的 z-index（语料 66 处：路由层叠/壳骨架——合法且跨端必需）。
+export const APP_PAINT_FIELDS = ['backgroundColor', 'color', 'fontSize', 'fontWeight', 'fontFamily', 'textAlign', 'lineHeight', 'textOverflow', 'letterSpacing', 'textDecoration', 'visibility', 'borderRadius', 'borderColor', 'borderWidth', 'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth', 'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor', 'borderTopStyle', 'borderRightStyle', 'borderBottomStyle', 'borderLeftStyle', 'opacity', 'boxShadow', 'textShadow', 'transform', 'backgroundSize', 'backgroundPosition', 'backgroundRepeat', 'outlineWidth', 'outlineColor', 'outlineStyle', 'outlineOffset', 'zIndex'] as const
 const PAINT_FIELDS = new Set<string>(APP_PAINT_FIELDS)
 /**
  * ★批次 4（CSS 兼容对齐）：`text-align` 的**封闭集**（App 自绘文本在盒内的水平对齐）。
@@ -1322,6 +1329,35 @@ export function parseStaticStyle(
         const sv = rawVal.trim().toLowerCase()
         if (!['solid', 'dashed', 'dotted', 'none'].includes(sv)) { pushDiag(`outline-style \`${rawVal}\` 未支持（solid/dashed/dotted/none）——已跳过`); continue }
         out.outlineStyle = sv; markImportant('outlineStyle'); continue
+      } else if (key === 'zIndex') {
+        // ★★★批 A④（2026-10-08 · 决策 #658）：**数值层序**（同父兄弟绘制序权重）。
+        //   语义：宿主按 (zIndex, 声明序) 对**同一父节点内**的兄弟做稳定排序——
+        //   与 CSS/WXSS 引擎的层叠序一致（跨容器不生效 = stacking context 语义）。
+        //   `auto` = 不发射（按声明序参与——零行为变化）。
+        //   判据（区间映射 + 越界）走 contracts/layers.ts 的 `zIndexOf`（SSOT，与宿主/文档同源）。
+        const av = rawVal.trim().toLowerCase()
+        if (av === 'auto') { continue }
+        const zv = numOf(rawVal)
+        if (zv !== undefined) {
+          const verdict = zIndexOf(zv)
+          if (!verdict.ok) {
+            pushDiag(
+              `\`${rawKey}: ${rawVal}\` 不在 App 支持面（${verdict.reason}）——已跳过`,
+              verdict.hint ?? '用 0 起的整数表达层序（1–1000 区间为业务常规值域）',
+            )
+            continue
+          }
+          if (verdict.suspicious) {
+            pushDiag(`\`${rawKey}: ${rawVal}\` ${verdict.reason}——已按层序权重发射（如属框架壳骨架用法请忽略）`, verdict.hint)
+          } else if (verdict.hint) {
+            pushDiag(`\`${rawKey}: ${rawVal}\` ${verdict.hint}`)
+          }
+          out.zIndex = Math.round(zv)
+          markImportant('zIndex')
+          continue
+        }
+        pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 不是合法数值（0 起整数 / auto）——已跳过`)
+        continue
       } else if (key === 'opacity') {
         // ★批次 15（以 Web 为基准）：Web 对 `opacity` 越界值一律 clamp 到 0..1（含 `%`）
         //   ⇒ App 同语义（此前原样透传 1.5 等，与 Web 不符）。

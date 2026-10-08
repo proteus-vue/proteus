@@ -17,7 +17,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { buildLayoutTemplate, buildVaporSubscriptions, compileEvents, parseCssVarTokens } from '@proteus-vue/compiler'
-import { extractRefLiterals } from './app-content'
+import { extractRefLiterals, reorderNodesByZ } from './app-content'
 import type { AppPlatform } from './targets'
 
 /** 一个屏的运行期产物 */
@@ -105,6 +105,28 @@ export async function buildAppRuntimeContent(
 
     const subRes = buildVaporSubscriptions(sfcSrc, filename)
     const evRes = compileEvents(sfcSrc)
+
+    // ★★★批 A④（2026-10-08 · 决策 #658）：**z-index 层叠序重排**（运行期通路——与静态通路同源同实现）。
+    //   ★为什么这里也必须有（本仓实测踩到）：App 壳**运行期**消费 `runtime-content.json` 的 `tpl.nodes`
+    //     （`instantiateTemplate` 按**数组序** emit ⇒ 数组序 = 绘制序）；只修静态 `screen-content.json`
+    //     ⇒ 产物 JSON 已是新序、而设备渲染仍按旧序（**静默**——这正是本项要消灭的那类形态）。
+    {
+      const tpl = tplRes.template as { nodes?: Array<{ id: number; parentId: number | null; style?: Record<string, unknown> }> }
+      if (Array.isArray(tpl.nodes)) {
+        const zDiags: string[] = []
+        tpl.nodes = reorderNodesByZ(
+          tpl.nodes,
+          (n) => ({
+            id: n.id,
+            parentId: n.parentId ?? null,
+            position: n.style?.position,
+            zIndex: n.style?.zIndex,
+          }),
+          zDiags,
+        )
+        for (const d of zDiags) diagnostics.push(`${r.name}: ${d}`)
+      }
+    }
 
     out[r.name] = {
       tpl: tplRes.template,

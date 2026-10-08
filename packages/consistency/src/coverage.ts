@@ -95,6 +95,8 @@ export const SEMANTIC_FIELD_SNAPSHOT_KEYS: Readonly<Record<string, readonly stri
   borderBottomStyle: ['borderBottomStyle'],
   borderLeftStyle: ['borderLeftStyle'],
   opacity: ['opacity'],
+  // ★★★批 A④（2026-10-08 · 决策 #658）：z-index 数值层序（读数键 = 同名数值，与 Web computed 同口径）
+  zIndex: ['zIndex'],
   boxShadow: ['boxShadow'],
   // ★★★text-shadow 项（2026-10-08）：文本阴影（读数键 = 同名串）
   textShadow: ['textShadow'],

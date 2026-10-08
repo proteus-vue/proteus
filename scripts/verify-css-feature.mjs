@@ -109,6 +109,8 @@ const PROBE_VALUES = {
   'grid-auto-rows': ['grid-auto-rows: minmax(0, auto)', 'gridAutoRows', 'minmax(0px, auto)'],
   // ★★★outline 族项（2026-10-08）：轮廓偏移（Web computed 为 px）
   'outline-offset': ['outline-offset: 2px', 'outlineOffset', { kind: 'absolute', dp: 2 }],
+  // ★★★批 A④（2026-10-08 · 决策 #658）：z-index 数值层序（浏览器 computed 为整数；CSE 产出 zIndex 数值）
+  'z-index': ['z-index: 2', 'zIndex', 2],
   // ★★★背景定位家族（2026-10-07）：size/position/repeat 探针（字符串原样透传——CSE 归一空白小写）
   'background-size': ['background-size: 50px 50px', 'backgroundSize', '50px 50px'],
   'background-position': ['background-position: 25px 10px', 'backgroundPosition', '25px 10px'],

@@ -124,7 +124,14 @@ export async function buildAppScreenContent(root: string, platform: AppPlatform 
     }
     // ★★★G-61 后批：**IR 覆盖**（切换执行——见 applyIrOverlay；白名单来自 SWITCH_BATCHES）
     applyIrOverlay(sfcSrc, path.relative(root, abs), pageStatics, tokens, globalCss, res.template, irSwitchFields(), diagnostics, r.name)
-    out[r.name] = screenContentFromLayoutTemplate(res.template)
+    const pageSc = screenContentFromLayoutTemplate(res.template)
+    // ★★★批 A④（2026-10-08 · 决策 #658）：**z-index 层叠序**（脱离流兄弟按 (z, 声明序) 重排 + 两相位）
+    {
+      const zDiags: string[] = []
+      ;(pageSc as { nodes: ShellNode[] }).nodes = reorderSiblingsByZ((pageSc.nodes ?? []) as ShellNode[], zDiags)
+      for (const d of zDiags) diagnostics.push(`${r.name}: ${d}`)
+    }
+    out[r.name] = pageSc
     compiled++
     for (const d of res.diagnostics) diagnostics.push(`${r.name}: ${d.code} ${d.message}`)
   }
@@ -154,7 +161,12 @@ export async function buildAppScreenContent(root: string, platform: AppPlatform 
           diagnostics,
           'app-shell',
         )
-        const shellNodes = (screenContentFromLayoutTemplate(shellRes.template).nodes ?? []) as ShellNode[]
+        const shellNodes = (() => {
+          const zDiags: string[] = []
+          const reordered = reorderSiblingsByZ((screenContentFromLayoutTemplate(shellRes.template).nodes ?? []) as ShellNode[], zDiags)
+          for (const d of zDiags) diagnostics.push(`App.vue(壳): ${d}`)
+          return reordered
+        })()
         const globalSub = subtreeOf(shellNodes, 'global-layer')
         const overlaySub = subtreeOf(shellNodes, 'overlay-layer')
         // ★壳自带 tab 栏（overlay-layer 的**最后一个直接子节点**）在合并时**剔除**——它由**宿主原生
@@ -344,11 +356,108 @@ function applyIrOverlay(
 }
 
 /** 屏内容节点（`screenContentFromLayoutTemplate` 的形状——只声明本文件用到的字段） */
-interface ShellNode {
+export interface ShellNode {
   id: number
   parentId: number | null
   semantic?: string
   [k: string]: unknown
+}
+
+/**
+ * ★★★批 A④（2026-10-08 · 决策 #658）：**z-index 层叠序重排**（同一父内重排"脱离流"兄弟）。
+ *
+ * 【为什么在构建期做（一处实现）】本仓产物是**扁平数组**（`{id, parentId, …}`），而
+ *   **内核按数组序建 children**（`ffi.rs` 的建树循环）＋运行期 `instantiateTemplate` 也按
+ *   **模板 `nodes` 数组序** emit ⇒ 数组序 = 布局流序 = 宿主绘制序
+ *   （Android 按 `nodeIdx` 排序下发 drawCmds；iOS 依 flat 序 `addSublayer`；鸿蒙按 json 序 `AddChild`）。
+ *   在**产物生成处**重排一次 = 三端同时生效、零宿主改动，且**命中序自动同步**
+ *   （内核 `hit_path` 用 `paint_order`，其相位内序取自同一 children 序）。
+ *   ★★**两条通路必须都走本函数**（本仓实测踩到）：静态屏内容 `screen-content.json`（最小宿主/降级）
+ *     与运行期产物 `runtime-content.json`（App 壳真实通路）——只修一条 ⇒ 另一条静默保持旧序
+ *     （真机现象：产物 JSON 已是新序、渲染仍是旧序）。
+ *
+ * 【重排规则（与 CSS 对齐，且**布局安全**）】把每个父节点的孩子重新排列为
+ *   **① 在流元素（保原序）→ ② 脱离流元素（absolute/fixed，按 `(zIndex, 原序)` 稳定排序）**：
+ *   · 「在流在前、定位在后」= CSS 2.1 附录 E 两相位绘制序（与内核 `paint_order` 同步）；
+ *   · **只重排脱离流元素**——absolute/fixed 不参与流布局，其兄弟相对序**不影响布局**；
+ *     在流元素（relative/sticky/static）**一律保原序**（重排它们会改布局流序——那不是 z-index 的语义）。
+ *   · `z-index: auto`（未声明）视作 0 参与（同 z 稳定保序 = CSS 同层行为）。
+ *
+ * 【诚实边界（v1 具名）】`relative`/`sticky`/static(flex·grid item) 的 z-index 在 CSS 里也生效
+ *   （改绘制序、不改布局），而本渲染模型的「布局序 = 绘制序」是同一份数组 ⇒ v1 对这类节点
+ *   **不发散效果**（诊断提示，不静默假装）——要跨端层序请用 absolute/fixed 或 `layer=` 属性。
+ *   详见决策 #658「层叠序 v1 边界」。
+ *
+ * @param nodes 扁平节点数组（任意形状——用 `get` 抽取字段；**不修改原数组元素顺序之外的内容**）
+ * @param get 字段抽取（id / parentId / position / zIndex——两条通路的形状不同：平铺 vs `style` 子对象）
+ */
+export function reorderNodesByZ<T>(
+  nodes: T[],
+  get: (n: T) => { id: number; parentId: number | null; position?: unknown; zIndex?: unknown },
+  diagnostics: string[] = [],
+): T[] {
+  const isDetached = (n: T): boolean => {
+    const p = get(n).position
+    return p === 'absolute' || p === 'fixed'
+  }
+  const zOf = (n: T): number => {
+    const z = get(n).zIndex
+    return typeof z === 'number' && Number.isFinite(z) ? z : 0
+  }
+  // 诊断：在流元素带 z-index（v1 无法表达——如实告知，不静默）
+  for (const n of nodes) {
+    const meta = get(n)
+    if (typeof meta.zIndex === 'number' && meta.zIndex > 0 && !isDetached(n)) {
+      const pos = typeof meta.position === 'string' ? meta.position : 'static'
+      diagnostics.push(
+        `节点 ${meta.id}：\`z-index: ${meta.zIndex}\` 写在**在流**元素（position: ${pos}）上——` +
+          `App 端 v1 布局序与绘制序同一（引擎模型）⇒ 该 z 不参与排版（Web 端此写法仅对 relative/sticky/flex·grid item 生效）；` +
+          `要层序请改用 absolute/fixed（或 layer= 属性）。`,
+      )
+    }
+  }
+  const byParent = new Map<number | null, T[]>()
+  for (const n of nodes) {
+    const pid = get(n).parentId ?? null
+    const arr = byParent.get(pid)
+    if (arr) arr.push(n)
+    else byParent.set(pid, [n])
+  }
+  for (const arr of byParent.values()) {
+    // 稳定排序：键 = (是否脱离流, z)。在流（键 0）之间保序；脱离流（键 1）内部按 z 稳定排。
+    const key = (n: T): [number, number] => [isDetached(n) ? 1 : 0, isDetached(n) ? zOf(n) : 0]
+    const idx = new Map(arr.map((n, i) => [n, i]))
+    arr.sort((a, b) => {
+      const [ka, za] = key(a)
+      const [kb, zb] = key(b)
+      if (ka !== kb) return ka - kb
+      if (za !== zb) return za - zb
+      return (idx.get(a) ?? 0) - (idx.get(b) ?? 0)
+    })
+  }
+  const out: T[] = []
+  const emit = (pid: number | null): void => {
+    for (const n of byParent.get(pid) ?? []) {
+      out.push(n)
+      emit(get(n).id)
+    }
+  }
+  emit(null)
+  // 防御：若树不连通（孤儿——异常产物），把未覆盖的节点按原序补回（不静默丢节点）
+  if (out.length !== nodes.length) {
+    const seen = new Set(out.map((n) => get(n).id))
+    for (const n of nodes) if (!seen.has(get(n).id)) out.push(n)
+  }
+  return out
+}
+
+/** `ShellNode`（样式**平铺**在顶层）版本——静态屏内容通路（`screen-content`）用 */
+export function reorderSiblingsByZ(nodes: ShellNode[], diagnostics: string[] = []): ShellNode[] {
+  return reorderNodesByZ(
+    nodes,
+    (n) => ({ id: n.id, parentId: n.parentId ?? null, position: n.position, zIndex: n.zIndex }),
+    diagnostics,
+  )
 }
 
 /** 某语义容器（`global-layer`/`overlay-layer`）的**子树 id 集合**（含根；按 parentId 链闭包） */

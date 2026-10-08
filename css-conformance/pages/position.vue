@@ -44,6 +44,16 @@
         <view class="z-high"><text class="t t--w">z:2</text></view>
       </view>
     </view>
+
+    <!-- E：z-index 数值序（★声明序与层序**相反**——证明按数值而非文档序叠放） -->
+    <text class="cc-sec">E · z-index 数值序（声明序反向：5 → 3 → 1）</text>
+    <view class="cc-card">
+      <view id="case-zindex-numeric" class="z-host z-host--tall">
+        <view class="zn-a"><text class="t t--w">z:5（先声明）</text></view>
+        <view class="zn-b"><text class="t t--w">z:3</text></view>
+        <view class="zn-c"><text class="t t--w">z:1（后声明）</text></view>
+      </view>
+    </view>
   </view>
 </template>
 
@@ -64,4 +74,9 @@
 .z-host { position: relative; height: 64px; }
 .z-low { position: absolute; left: 8px; top: 8px; width: 120px; height: 40px; background-color: #4b78c8; z-index: 1; display: flex; align-items: center; justify-content: center; }
 .z-high { position: absolute; left: 60px; top: 20px; width: 120px; height: 40px; background-color: #2e7d5b; z-index: 2; display: flex; align-items: center; justify-content: center; }
+/* E：数值序（声明序反向——z:5 最先声明却在最上；三片同点重叠，只露出最上者与错位边缘） */
+.z-host--tall { height: 96px; }
+.zn-a { position: absolute; left: 10px; top: 10px; width: 150px; height: 44px; background-color: #b4525c; z-index: 5; display: flex; align-items: center; justify-content: center; }
+.zn-b { position: absolute; left: 26px; top: 26px; width: 150px; height: 44px; background-color: #c98a3a; z-index: 3; display: flex; align-items: center; justify-content: center; }
+.zn-c { position: absolute; left: 42px; top: 42px; width: 150px; height: 44px; background-color: #3f7f9c; z-index: 1; display: flex; align-items: center; justify-content: center; }
 </style>
