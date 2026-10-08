@@ -33,8 +33,9 @@ proteus dev [--target <web|skyline|ios|android|harmony>]
 ```
 
 Dev server: web → Vite; skyline → dev-mp watch build
-      ★App targets (#662 · hot reload): android/ios/harmony → scaffold the full host → start an HTTP dev server (LAN)
-      → build a **debug** host (bundle served over HTTP) → install on device → launch → watch; saving source hot-reloads the current screen (no reinstall)
+      ★App targets (#662/#683 · hot reload): android/ios → scaffold the full host → start an HTTP dev server (LAN)
+      → build a **debug** host (bundle over HTTP) → install (adb / devicectl) → launch → watch; saving source hot-reloads the current screen
+      ★hongmeng hot-reload channel pending (this batch delivers android + ios end-to-end)
 
 ### `proteus create`
 
@@ -91,14 +92,24 @@ proteus host push <module-dir>
       + push envelope generation (manifestHash/bundleHash — G-45.8 integrity)
       FAIL → exit 1; devices/logs/serve land with the B4 transport adapter
 
+### `proteus doctor`
+
+```bash
+proteus doctor [dir] [--json] [--report <path>] [--strict] [--only <groups>] [--skip <groups>] [--target <端>] [--deep] [--verbose] [--list] [--no-parallel]
+```
+
+★★Environment/project/endpoint readiness check (M5 · #686): answers "can this machine compile/package/debug to N ends" at once
+      Groups: env · toolchain · deps · project · hosts (projection) · ports · devices (slow) · gates
+      --json machine-readable (full evidence) · --report to file · --strict warn fails too · --deep enable slow · --verbose per-item evidence · --list only list
+      ★Diagnose only, never modify (Apollo hard constraint) — each item gives a copyable fix command; error → exit 1 (warn does not block)
+
 ### `proteus health`
 
 ```bash
 proteus health [dir]
 ```
 
-★Project/environment health check (orthogonal to the check domain gates): Node version / project structure / dependencies / build artifacts / appid / pagesDir / workspace links / IDE
-      one-shot diagnostics (✅/⚠/✗); error level → exit 1 (warn does not block)
+★Project/environment health check (merged into doctor — equivalent to proteus doctor --only project, kept as a thin shell)
 
 ### `proteus css:check`
 
@@ -342,6 +353,18 @@ proteus rules [template | script | style | validate]
 ```
 
 Lists all compile rules (AI-manual directory)
+
+### `proteus mcp`
+
+```bash
+proteus mcp serve [--http [--port N] [--host H] [--token T]] [--allow-write [--workspace <dir>]] [--rate-limit <n>] [--quiet]
+```
+
+★MCP server (#681/#682) — let MCP clients (Claude Desktop / Cursor…) connect to the framework semantic layer
+      (11 tools / 5 resources / 3 prompts: primitives · design tokens · capability matrix · C-IR validation · six-end conformance)
+      Default **stdio** (client command mode); --http serves Streamable HTTP (remote/shared; binds 127.0.0.1:7802/mcp by default)
+      --allow-write enables write_file (read-only by default) · --workspace write root (default cwd) · --rate-limit per-minute cap (default 60)
+      --host 0.0.0.0 to expose requires --token (Bearer auth) · --quiet disables structured request logs
 
 ### `proteus version`
 

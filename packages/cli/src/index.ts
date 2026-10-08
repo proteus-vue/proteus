@@ -488,17 +488,26 @@ async function main(): Promise<void> {
             targets = Object.keys(config.targets ?? {}).filter((k) => (config.targets as Record<string, unknown>)[k] !== undefined)
           }
         } catch { /* 工程配置读不到 ⇒ targets 空（端组 skip），不阻断 */ }
-        const rep = await runDoctor({
-          root,
-          targets,
-          cliVersion: resolveCliVersion(),
-          only: dargs.only as never,
-          skip: dargs.skip as never,
-          target: dargs.target,
-          deep: dargs.deep,
-          noParallel: dargs.noParallel,
-          timeoutMs: dargs.timeoutMs,
-        })
+        // ★等待反馈（决策 #687）：体检 ~1-2s（devices 组更久）——TTY 下转 spinner，跑完由报告接管。
+        //   ★`--json` 不打（stdout 要干净，供 CI 消费）；非 TTY 本就空操作（ui.beginSpinner 保证）。
+        //   （报告首行已含 `◆ Proteus doctor …`——此处不再另打 header，避免重复。）
+        const stopSpin = dargs.json ? null : ui.beginSpinner('体检中')
+        let rep
+        try {
+          rep = await runDoctor({
+            root,
+            targets,
+            cliVersion: resolveCliVersion(),
+            only: dargs.only as never,
+            skip: dargs.skip as never,
+            target: dargs.target,
+            deep: dargs.deep,
+            noParallel: dargs.noParallel,
+            timeoutMs: dargs.timeoutMs,
+          })
+        } finally {
+          stopSpin?.()
+        }
         const strictFail = dargs.strict && (rep.summary.error > 0 || rep.summary.warn > 0)
         if (dargs.report) {
           const { writeFileSync } = await import('node:fs')
