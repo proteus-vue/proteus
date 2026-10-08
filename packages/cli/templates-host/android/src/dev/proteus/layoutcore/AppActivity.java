@@ -58,6 +58,9 @@ public final class AppActivity extends Activity {
     /** 当前屏名（供 dev-watch 的 DevTools 心跳上报；UI 线程写、watch 线程读 ⇒ volatile） */
     private volatile String lastScreenName = "";
 
+    /** 设备环境 JSON（采集一次，心跳带上；决策 #674） */
+    private volatile String devEnvJson = "{}";
+
     /** ★DevTools Console（决策 #673）：待转发给 dev server 的设备日志（UI 线程写、watch 线程 flush）。
      *  含两类：a) 宿主 dev 事件（ready/reload/error，devLog 直接入队）b) JS console.*（UI 泵 eval 抽取入队）。 */
     private final java.util.List<String[]> hostLogQueue = java.util.Collections.synchronizedList(new java.util.ArrayList<String[]>());
@@ -156,7 +159,7 @@ public final class AppActivity extends Activity {
         // ★dev 可视化层（决策 #671）：叠加在内容/tab 之上——DEV 角标（release 不创建）。挂起后短暂提示"dev 模式"。
         devOverlay = new DevOverlay(this, root);
         devOverlay.attach();
-        if (ProteusBuildConfig.DEV) { installDevConsole(); startLogPump(); }
+        if (ProteusBuildConfig.DEV) { installDevConsole(); startLogPump(); devEnvJson = collectDeviceEnv(); }
         contentHost.post(new Runnable() {
             @Override public void run() {
                 renderCurrent(readState());
@@ -164,6 +167,7 @@ public final class AppActivity extends Activity {
                 if (ProteusBuildConfig.DEV) {
                     devOverlay.flash("DEV 模式 · 改源码保存即热刷");
                     devLog("info", "app ready · screen=index");
+                    pushDevTree();
                     startDevWatch();
                 }
             }
@@ -229,6 +233,68 @@ public final class AppActivity extends Activity {
         }
     }
 
+    /** POST 纯文本（DevTools 元素树上报；决策 #674——无 JSON 依赖，body 就是 JSON 串）。失败静默。 */
+    private static void httpPostText(String url, String body) {
+        java.net.HttpURLConnection c = null;
+        try {
+            java.net.URL u = new java.net.URL(url);
+            c = (java.net.HttpURLConnection) u.openConnection();
+            c.setConnectTimeout(3000);
+            c.setReadTimeout(8000);
+            c.setRequestMethod("POST");
+            c.setDoOutput(true);
+            c.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+            byte[] bytes = body.getBytes("UTF-8");
+            c.setFixedLengthStreamingMode(bytes.length);
+            java.io.OutputStream os = c.getOutputStream();
+            os.write(bytes);
+            os.flush();
+            os.close();
+            c.getResponseCode();
+        } catch (Throwable ignored) {
+        } finally {
+            if (c != null) try { c.disconnect(); } catch (Throwable ignored) { }
+        }
+    }
+
+    /** 当前屏实例化节点树 → POST /tree（面板 Elements）。★须在 UI 线程调（eval 非线程安全）。 */
+    private void pushDevTree() {
+        if (!ProteusBuildConfig.DEV) return;
+        final String base = devServerBase();
+        if (base == null) return;
+        try {
+            QuickJsEngine.EvalResult r = QuickJsEngine.eval("__proteusSuperappTree()");
+            if (r.ok && r.value != null && r.value.length() > 20) {
+                final String tree = r.value;
+                final String url = base + "/tree";
+                new Thread(new Runnable() { @Override public void run() { httpPostText(url, tree); } }, "proteus-dev-tree").start();
+            }
+        } catch (Throwable ignored) { }
+    }
+
+    /** 采集设备环境（决策 #674）——dev 面板展示，便于定位"只有某机型复现"的问题。JSON 串。 */
+    private String collectDeviceEnv() {
+        JSONObject o = new JSONObject();
+        try {
+            o.put("platform", "android");
+            o.put("model", android.os.Build.MODEL);
+            o.put("brand", android.os.Build.BRAND);
+            o.put("manufacturer", android.os.Build.MANUFACTURER);
+            o.put("androidRelease", android.os.Build.VERSION.RELEASE);
+            o.put("sdkInt", android.os.Build.VERSION.SDK_INT);
+            o.put("abi", android.os.Build.SUPPORTED_ABIS != null && android.os.Build.SUPPORTED_ABIS.length > 0 ? android.os.Build.SUPPORTED_ABIS[0] : "");
+            android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
+            o.put("density", dm.density);
+            o.put("screen", Math.round(dm.widthPixels / dm.density) + "x" + Math.round(dm.heightPixels / dm.density));  // 逻辑 dp
+            o.put("screenPx", dm.widthPixels + "x" + dm.heightPixels);
+            o.put("locale", java.util.Locale.getDefault().toString());
+            try { o.put("theme", (getResources().getConfiguration().uiMode & android.content.res.Configuration.UI_MODE_NIGHT_MASK)
+                == android.content.res.Configuration.UI_MODE_NIGHT_YES ? "dark" : "light"); } catch (Throwable ignored) { }
+            try { o.put("appVersion", getPackageManager().getPackageInfo(getPackageName(), 0).versionName); } catch (Throwable ignored) { }
+        } catch (Throwable ignored) { }
+        return o.toString();
+    }
+
     /**
      * ★dev 热刷（B2）：轮询 dev server 的 `/version`；变化 ⇒ 重拉 bundle → 重置 JS 上下文 → 重 boot → 重绘。
      *   ★用**有界轮询 + 条件**（非盲等）：每轮 1s，且只在版本号变化时才重建（见 AI 效率规范）。
@@ -245,7 +311,10 @@ public final class AppActivity extends Activity {
                     // ★DevTools 心跳（决策 #672）：本线程在 CPU 后台线程 ⇒ 可安全读 volatile lastScreenName，
                     //   每秒把"设备在线 + 当前屏"上报给 dev server 的面板（失败静默，不干扰热刷）。
                     //   ★必须先 ping 再判 continue：否则"版本没变"这条主路径永不 ping ⇒ 面板一直"设备离线"。
-                    httpGetText(base + "/ping?screen=" + java.net.URLEncoder.encode(lastScreenName));
+                    try {
+                        httpGetText(base + "/ping?screen=" + java.net.URLEncoder.encode(lastScreenName, "UTF-8")
+                            + "&env=" + java.net.URLEncoder.encode(devEnvJson, "UTF-8"));
+                    } catch (Throwable ignored) { /* 心跳尽力而为 */ }
                     flushHostLog(base);   // ★把设备日志推到面板 Console（决策 #673）
                     if (v == null || v.equals(last)) continue;
                     last = v;
@@ -283,7 +352,7 @@ public final class AppActivity extends Activity {
             }
             renderCurrent(readState());
             Log.i(TAG, "PROTEUS_DEV_RELOADED screen=" + currentName(readState()));
-            if (ProteusBuildConfig.DEV) { installDevConsole(); devLog("info", "hot reload · v" + (ver != null ? ver : "?")); }
+            if (ProteusBuildConfig.DEV) { installDevConsole(); pushDevTree(); devLog("info", "hot reload · v" + (ver != null ? ver : "?")); }
             // ★热重载瞬时提示（决策 #671）：界面本身无"已刷新"信号（尤其只改样式时），显式给一条。
             if (devOverlay != null) {
                 String t = android.text.format.DateFormat.format("HH:mm:ss", System.currentTimeMillis()).toString();

@@ -307,3 +307,12 @@ interface SuperappRuntimeHostShape {
     notes: g.__SUPERAPP_NOTES__ ?? [],
   })
 }
+
+/** ★DevTools 元素内省（决策 #674）：当前屏**已实例化节点**（Template 实例化产物）的 JSON。
+ *  `{viewport, nodes:[{id,parentId,tag,style?,text?}]}`——供 dev 面板"元素"树（宿主读它推给 dev server）。
+ *  ★诚实边界：是**模板实例化树**（结构/样式/文本），**不含**内核 box/几何读数。 */
+;(globalThis as unknown as { __proteusSuperappTree?: () => string }).__proteusSuperappTree = () => {
+  const g = globalThis as unknown as { __SUPERAPP_RUNTIME__?: SuperappRuntime }
+  const c = g.__SUPERAPP_RUNTIME__?.currentContent()
+  return JSON.stringify(c ?? { nodes: [] })
+}

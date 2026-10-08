@@ -73,6 +73,19 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
   .crow.lv-error{background:rgba(255,92,92,.10)}.crow.lv-error .x{color:var(--err)}
   .crow.lv-info .x{color:var(--brand)}
   .crow.new{animation:flash 1.2s ease-out}
+  .devbar{display:flex;flex-wrap:wrap;gap:8px;padding:10px 22px;border-bottom:1px solid var(--line);background:var(--surface);font-size:12px}
+  .devbar:empty{display:none}
+  .chip{border:1px solid var(--line);border-radius:8px;padding:4px 9px;color:var(--dim)}
+  .chip b{color:var(--ink);font-weight:600}
+  .trow{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:baseline;padding:5px 12px;border-top:1px solid var(--line);font-size:12px;font-family:var(--mono)}
+  .trow:first-child{border-top:0}
+  .trow .tag{color:var(--brand);font-weight:600}
+  .trow .tx{color:var(--ink)}
+  .trow .st{color:var(--dim);text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:52%}
+  .envrow{display:flex;justify-content:space-between;gap:12px;padding:6px 12px;border-top:1px solid var(--line);font-size:12px;font-family:var(--mono)}
+  .envrow:first-child{border-top:0}
+  .envrow .k{color:var(--dim);white-space:nowrap}
+  .envrow .v{color:var(--ink);text-align:right;overflow-wrap:anywhere}
   .eps{display:flex;flex-wrap:wrap;gap:10px}
   .ep{font-family:var(--mono);font-size:12px;color:var(--dim);border:1px solid var(--line);border-radius:8px;padding:6px 10px}
   .ep b{color:var(--ink)}
@@ -88,6 +101,7 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
   <div class="grow"></div>
   <span class="pill" id="host-pill"><span class="dot off" id="host-dot"></span><span id="host-txt">设备离线</span></span>
 </header>
+<div id="devbar" class="devbar"></div>
 <main>
   <div class="grid">
     <div class="card"><div class="k">Bundle 版本</div><div class="v" id="c-ver">—</div></div>
@@ -101,12 +115,23 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
 
   <div class="two">
     <div>
-      <h2>Network（dev server 请求）</h2>
-      <div class="panel" id="net"><div class="empty">暂无请求。</div></div>
+      <h2>Elements（当前屏节点树）</h2>
+      <div class="panel" id="tree"><div class="empty">暂无节点树…宿主渲染后上报。</div></div>
     </div>
     <div>
       <h2>Console（设备日志）</h2>
       <div class="panel con" id="con"><div class="empty">暂无日志…在页面里 <b>console.log</b> 或改源码即出现。</div></div>
+    </div>
+  </div>
+
+  <div class="two">
+    <div>
+      <h2>Network（dev server 请求）</h2>
+      <div class="panel" id="net"><div class="empty">暂无请求。</div></div>
+    </div>
+    <div>
+      <h2>设备环境</h2>
+      <div class="panel" id="env"><div class="empty">等待宿主心跳…</div></div>
     </div>
   </div>
 
@@ -117,11 +142,12 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
     <span class="ep"><b>GET /bundle</b> bundle-superapp.js</span>
     <span class="ep"><b>GET /health</b> 探活</span>
     <span class="ep"><b>GET /events</b> SSE 事件流</span>
-    <span class="ep"><b>GET /ping</b> 宿主心跳</span>
+    <span class="ep"><b>GET /ping</b> 宿主心跳 + 设备环境</span>
+    <span class="ep"><b>POST /tree</b> 元素内省上报</span>
     <span class="ep"><b>GET /log</b> 宿主日志上报</span>
   </div>
 </main>
-<footer>Proteus DevTools · dev server <span style="font-family:var(--mono)">${esc(info.url)}</span> · 数据来自 dev server（重建 / 网络 / 宿主心跳 + 设备日志）</footer>
+<footer>Proteus DevTools · dev server <span style="font-family:var(--mono)">${esc(info.url)}</span> · 数据来自 dev server（重建 / 网络 / 宿主心跳 + 设备环境 / 元素树 / 日志）</footer>
 <script>
   const META = ${meta};
   const $ = (id) => document.getElementById(id);
@@ -130,6 +156,9 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
   const tl = $('tl');
   const netEl = $('net');
   const conEl = $('con');
+  const treeEl = $('tree');
+  const envEl = $('env');
+  const devbarEl = $('devbar');
   const rows = [];
   function addRow(e, isNew) {
     const r = document.createElement('div');
@@ -166,6 +195,49 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
     if (!list.length) { conEl.innerHTML = '<div class="empty">暂无日志…在页面里 <b>console.log</b> 或改源码即出现。</div>'; return; }
     list.slice().reverse().forEach((e) => conEl.appendChild(addCon(e, false)));
   }
+  // ── 元素树（决策 #674）：把实例化节点树按 parentId 层级渲染 ──
+  function renderTree(t) {
+    treeEl.innerHTML = '';
+    const nodes = (t && t.nodes) || [];
+    if (!nodes.length) { treeEl.innerHTML = '<div class="empty">暂无节点树…宿主渲染后上报。</div>'; return; }
+    const kids = {};
+    nodes.forEach((n) => { (kids[n.parentId ?? 'root'] = kids[n.parentId ?? 'root'] || []).push(n); });
+    const walk = (parent, depth) => {
+      for (const n of (kids[parent] || [])) {
+        const r = document.createElement('div');
+        r.className = 'trow';
+        // ★实例化节点的样式是**顶层平铺**（非 n.style 子对象——见 instantiate.ts 的 emit）
+        const keyStyles = ['width', 'widthRatio', 'height', 'minHeight', 'maxWidth', 'backgroundColor', 'color', 'fontSize', 'fontWeight', 'lineHeight', 'display', 'flexDirection', 'justifyContent', 'alignItems', 'padding', 'margin', 'gap', 'position', 'top', 'left', 'right', 'bottom', 'borderRadius', 'textAlign']
+          .filter((k) => n[k] !== undefined)
+          .map((k) => k + ':' + (typeof n[k] === 'object' ? JSON.stringify(n[k]) : n[k]))
+          .join('; ');
+        r.innerHTML = '<span style="padding-left:' + (depth * 14) + 'px"><span class="tag">' + escapeHtml(n.tag || n.semantic || '?') + '</span>'
+          + (n.text ? ' <span class="tx">' + escapeHtml(String(n.text).slice(0, 40)) + '</span>' : '') + '</span>'
+          + '<span class="st" title="' + escapeHtml(keyStyles) + '">' + escapeHtml(keyStyles) + '</span>';
+        treeEl.appendChild(r);
+        walk(n.id, depth + 1);
+      }
+    };
+    walk('root', 0);
+    walk(undefined, 0);   // parentId 恰为 undefined 的孤立节点兜底
+  }
+  // ── 设备环境（决策 #674）：宿主心跳带的 env ──
+  function renderEnv(env) {
+    if (!env || !Object.keys(env).length) { envEl.innerHTML = '<div class="empty">等待宿主心跳…</div>'; return; }
+    const order = ['platform', 'model', 'brand', 'manufacturer', 'androidRelease', 'sdkInt', 'abi', 'density', 'screen', 'viewport', 'theme', 'locale', 'appVersion'];
+    const keys = [...order.filter((k) => env[k] !== undefined), ...Object.keys(env).filter((k) => !order.includes(k))];
+    devbarEl.innerHTML = '';
+    envEl.innerHTML = '';
+    for (const k of keys) {
+      const v = env[k];
+      const chip = document.createElement('span'); chip.className = 'chip';
+      chip.innerHTML = k + ' <b>' + escapeHtml(String(v)) + '</b>';
+      devbarEl.appendChild(chip);
+      const row = document.createElement('div'); row.className = 'envrow';
+      row.innerHTML = '<span class="k">' + escapeHtml(k) + '</span><span class="v">' + escapeHtml(String(v)) + '</span>';
+      envEl.appendChild(row);
+    }
+  }
   function setSnapshot(s) {
     $('c-ver').textContent = 'v' + (s.version ?? 0);
     if (s.bytes) $('c-size').innerHTML = Math.round(s.bytes / 1024) + '<small>KB</small>';
@@ -176,6 +248,8 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
     else evs.forEach((e, i) => tl.appendChild(addRow(e, false)));
     fillNet(s.net || []);
     fillCon(s.console || []);
+    renderTree(s.tree);
+    renderEnv(s.host && s.host.env);
     applyHost(s.host);
   }
   function applyHost(h) {
@@ -184,6 +258,7 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
     $('host-dot').className = 'dot' + (on ? '' : ' off');
     $('host-txt').textContent = on ? '设备在线' : '设备离线';
     $('c-screen').textContent = (on && h.screen) ? h.screen : '—';
+    if (h && h.env) renderEnv(h.env);
   }
   function pushRebuild(e) {
     if (tl.querySelector('.empty')) tl.innerHTML = '';
@@ -211,6 +286,7 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
     else if (d.type === 'host') applyHost(d);
     else if (d.type === 'net') pushNet(d);
     else if (d.type === 'console') pushCon(d);
+    else if (d.type === 'tree') renderTree(d.tree);
   };
   es.onerror = () => { /* 浏览器自动重连 */ };
   setInterval(() => applyHost(window.__lastHost), 2000);   // 心跳超时 ⇒ 自动转"离线"
