@@ -105,8 +105,11 @@ describe('★完整宿主 · App DevTools 面板（决策 #672：dev server 可�
     expect(html).toContain('my-app')
     expect(html).toContain('设备在线')            // 宿主心跳状态
     expect(html).toContain('重建时间线')
+    expect(html).toContain('Network')             // Network 面板（#673）
+    expect(html).toContain('Console')             // Console 面板（#673）
     expect(html).toContain("EventSource('/events')")  // 走 SSE 实时
     expect(html).toContain('/ping')               // 心跳端点文案
+    expect(html).toContain('/log')                // 日志上报端点文案
     expect(html).toContain('192.168.1.2:1234')    // 注入的 dev URL
   })
   it.skipIf(!hasSuperapp)('dev server：/ 出面板 · /events SSE 快照 · /ping 反映宿主态 · 404 兜底', async () => {
@@ -124,6 +127,13 @@ describe('★完整宿主 · App DevTools 面板（决策 #672：dev server 可�
       await fetch(`${server.url}/ping?screen=detail`)
       const sse2 = await fetch(`${server.url}/events`).then((r) => r.body!.getReader().read())
       expect(new TextDecoder().decode(sse2.value), '/ping 后 snapshot 反映宿主态').toContain('"screen":"detail"')
+      // 控制台日志上报（#673）：/log ⇒ snapshot.console 含该条
+      await fetch(`${server.url}/log?level=error&text=boom%20%E4%B8%AD%E6%96%87`)
+      const sse3 = await fetch(`${server.url}/events`).then((r) => r.body!.getReader().read())
+      expect(new TextDecoder().decode(sse3.value), '/log 后 snapshot 含控制台日志（含中文）').toContain('boom 中文')
+      // Network（#673）：snapshot.net 记非噪声请求（/ping 已发）——证明 dev server 请求被捕获。
+      const sse4 = await fetch(`${server.url}/events`).then((r) => r.body!.getReader().read())
+      expect(new TextDecoder().decode(sse4.value), 'snapshot.net 记 dev server 请求').toContain('"path":"/ping?screen=detail"')
       expect(await fetch(`${server.url}/nope`).then((r) => r.text())).toContain('devtools')
     } finally {
       await server.close()
