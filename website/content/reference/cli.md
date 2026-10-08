@@ -33,8 +33,9 @@ proteus dev [--target <web|skyline|ios|android|harmony>]
 ```
 
 开发服务器：web → Vite；skyline → dev-mp watch 构建
-      ★App 端（#662 · 热刷）：android/ios/harmony → scaffold 完整宿主 → 起 HTTP dev server（局域网）
-      → 编 **debug** 宿主（bundle 走 dev server）→ 装到设备 → 启动 → watch；改源码保存即热刷当前屏（无需重装）
+      ★App 端（#662/#683 · 热刷）：android/ios → scaffold 完整宿主 → 起 HTTP dev server（局域网）
+      → 编 **debug** 宿主（bundle 走 dev server）→ 装到设备（adb / devicectl）→ 启动 → watch；改源码保存即热刷当前屏
+      ★hongmeng 热刷通道待接（本批端到端兑现 android + ios）
 
 ### `proteus create`
 
@@ -91,14 +92,24 @@ proteus host push <module-dir>
       + push 信封生成（manifestHash/bundleHash——G-45.8 完整性）
       FAIL → exit 1；devices/logs/serve 随 B4 transport 适配器落地
 
+### `proteus doctor`
+
+```bash
+proteus doctor [dir] [--json] [--report <path>] [--strict] [--only <groups>] [--skip <groups>] [--target <端>] [--deep] [--verbose] [--list] [--no-parallel]
+```
+
+★★环境/工程/端就绪度体检（M5 · #686）：一次性回答「这台机器能不能编译/打包/调试到 N 个端」
+      分组：env 环境 · toolchain 工具链 · deps 依赖 · project 工程 · hosts 端就绪（投影聚合）· ports 端口 · devices 设备（慢）· gates 门禁
+      --json 机器可读（含完整取证）· --report 落盘 · --strict warn 也失败 · --deep 启慢检查 · --verbose 逐项取证 · --list 只列目录
+      ★只诊断不修改（Apollo 硬约束）——每项给可复制修复命令；error → exit 1（warn 不阻断）
+
 ### `proteus health`
 
 ```bash
 proteus health [dir]
 ```
 
-★工程/环境健康检查（与 check 领域门禁正交）：Node 版本 / 工程结构 / 依赖 / 产物 / appid / pagesDir / workspace 链接 / IDE
-      一次性诊断（✅/⚠/✗）；error 级 → exit 1（warn 不阻断）
+★工程/环境健康检查（已并入 doctor——本命令等价 proteus doctor --only project，保留为薄壳）
 
 ### `proteus css:check`
 
@@ -342,6 +353,18 @@ proteus rules [template | script | style | validate]
 ```
 
 列出全部编译规则（AI 说明书目录）
+
+### `proteus mcp`
+
+```bash
+proteus mcp serve [--http [--port N] [--host H] [--token T]] [--allow-write [--workspace <dir>]] [--rate-limit <n>] [--quiet]
+```
+
+★MCP server（#681/#682）——让 Claude Desktop / Cursor 等 MCP 客户端直连本框架语义层
+      （11 工具/5 资源/3 提示词：原语库 · design token · 能力矩阵 · C-IR 校验 · 六端 conformance）
+      缺省 **stdio**（客户端 command 拉起）；--http 起 Streamable HTTP（远端/共享；缺省绑 127.0.0.1:7802/mcp）
+      --allow-write 开启 write_file（缺省只读）· --workspace 写入根（缺省 cwd）· --rate-limit 每分钟上限（缺省 60）
+      --host 0.0.0.0 对外时务必配 --token（Bearer 鉴权）· --quiet 关结构化请求日志
 
 ### `proteus version`
 

@@ -79,6 +79,16 @@ export interface Step {
   /** 不打完成行、只追加一条缩进信息（用于需要多行说明的步骤） */
   note(msg: string): void
 }
+
+/**
+ * ★只开一个 spinner、**不打任何完成行**（返回 stop 函数）——给"结果自行呈现"的命令用
+ *   （如 `proteus doctor`：跑完直接打报告，不想要一行 `✓ 体检中 …`）。
+ *   **非 TTY ⇒ 空操作**（重定向/CI 零 ANSI、零 `\r`）；stop() 清当前行。
+ */
+export function beginSpinner(label: string): () => void {
+  startSpinner(label)
+  return () => clearSpinner()
+}
 export function step(label: string): Step {
   const t0 = Date.now()
   const ms = (): string => (isTTY ? dim(`${Date.now() - t0}ms`) : `${Date.now() - t0}ms`)
