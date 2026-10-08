@@ -34,6 +34,9 @@ const SPECS = [
       { name: 'onFling 接竖向（else startFlingY）', re: /else\s+startFlingY\s*\(/ },
       { name: 'stepInertia 推进 Y 轴（applyScrollY）', re: /getCurrY\(\)[\s\S]{0,200}?applyScrollY/ },
       { name: 'applyScrollY 唯一入口存在', re: /String\s+applyScrollY\s*\(/ },
+      // ★★自驱动：视图自己的 onDraw 必须推进 fling（否则 fling 只有 LightsHost 驱动 ⇒ superapp 松手仍顿住，
+      //   这正是 2026-10-09 用户「滑了还是一样」的第二处根因——只判"声明"会漏掉它）
+      { name: 'onDraw 自驱动 stepInertia（脱离 LightsHost）', re: /void\s+onDraw[\s\S]{0,700}?stepInertia\(\)\s*;/ },
     ],
   },
   {
@@ -64,12 +67,12 @@ for (const spec of SPECS) {
   const abs = path.join(ROOT, spec.file)
   if (!fs.existsSync(abs)) {
     problems.push(`✗ ${spec.end}：源文件不存在 ${spec.file}`)
-    results.push({ end: spec.end, ok: false, missing: ['源文件'] })
+    results.push({ end: spec.end, ok: false, missing: ['源文件'], total: spec.must.length })
     continue
   }
   const src = fs.readFileSync(abs, 'utf-8')
   const missing = spec.must.filter((m) => !m.re.test(src)).map((m) => m.name)
-  results.push({ end: spec.end, ok: missing.length === 0, missing })
+  results.push({ end: spec.end, ok: missing.length === 0, missing, total: spec.must.length })
   for (const m of missing) problems.push(`✗ ${spec.end}：缺少「${m}」（松手惯性接线不完整）`)
 }
 
@@ -80,7 +83,7 @@ if (JSON_OUT) {
 
 console.log('[check-scroll-fling] 三端「松手惯性」接线门禁（结构判据；行为须真机验收）')
 for (const r of results) {
-  console.log(r.ok ? `  ✅ ${r.end}：接线齐（4 项）` : `  ✗ ${r.end}：缺 ${r.missing.join(' / ')}`)
+  console.log(r.ok ? `  ✅ ${r.end}：接线齐（${r.total} 项）` : `  ✗ ${r.end}：缺 ${r.missing.join(' / ')}`)
 }
 if (problems.length) {
   console.log('\n诊断：')

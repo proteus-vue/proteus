@@ -533,6 +533,24 @@ export function packageAndroidHost(opts: PackageAndroidOptions): PackageAndroidR
   // ① runtime AAR（libs/proteus-runtime.aar）——缺则尝试框架仓构建
   const aarPath = path.join(hostDir, 'libs', 'proteus-runtime.aar')
   if (!fs.existsSync(aarPath)) return { ok: false, hostDir, apk: null, screenContentCopied: false, log: [`✗ 缺 runtime AAR：${path.relative(hostDir, aarPath)}（先跑 hosts/android/build-runtime-aar.sh 并用 create host 拷入）`], diagnostics: [makeDiag('PT-BE-005', { cause: `宿主缺 runtime AAR：${path.relative(hostDir, aarPath)}`, raw: `缺 runtime AAR：${aarPath}` })] }
+  // ★★★runtime AAR 定向自愈（2026-10-09 · 决策 #685 用户实测「安卓滑了还是一样」的根因）：
+  //   `createHost` 是**一次性 scaffold**——已存在的宿主**不会**再拷 AAR ⇒ 改了 runtime 源码（如本次
+  //   加竖向 fling）后，旧宿主仍打包**陈旧 AAR** ⇒ "改了没生效、症状照旧"。与 D3 主题自愈同源。
+  //   ⇒ 打包前，若 CLI 随包 prebuilt AAR 与宿主里的**不一致**，就用 prebuilt 覆盖（runtime 属框架拥有，
+  //     非项目自有产物）。这样任何**已生成**宿主下次 `build --package`/`dev` 自动拿到最新 runtime。
+  try {
+    const prebuilt = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'templates-host', 'prebuilt', 'android', 'proteus-runtime.aar')
+    if (fs.existsSync(prebuilt)) {
+      const same = fs.statSync(prebuilt).size === fs.statSync(aarPath).size &&
+        fs.readFileSync(prebuilt).equals(fs.readFileSync(aarPath))
+      if (!same) {
+        fs.copyFileSync(prebuilt, aarPath)
+        log.push('ℹ runtime AAR 已自愈更新（宿主陈旧 → 覆盖为 CLI 随包版本）')
+      }
+    }
+  } catch (e) {
+    log.push(`⚠ runtime AAR 自愈检查失败（继续打包旧 AAR）：${e instanceof Error ? e.message : String(e)}`)
+  }
 
   // ② 编译产物 → assets（screen-content.json + bundle-superapp.js + app-config.json）
   let screenContentCopied = false

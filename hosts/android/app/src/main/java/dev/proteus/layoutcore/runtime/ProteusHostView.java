@@ -2365,6 +2365,15 @@ public class ProteusHostView extends ViewGroup {
     protected void onDraw(Canvas canvas) {
         onDrawCount++;
         long __dt0 = System.nanoTime();
+        // ★★★惯性**自驱动**（2026-10-09 · 决策 #685 —— 用户「安卓滑了还是一样」的第二处根因）：
+        //   此前 `stepInertia` **只在 `LightsHost`（dev 长卷场景）的 Choreographer 帧循环里调**
+        //   ⇒ superapp（真实应用）路径的 fling **起动了却没人推进** ⇒ 松手仍 dead-stop。
+        //   ⇒ 由视图**自己的绘制循环**驱动：fling 活跃时每帧推进（applyScroll* 会 invalidate）+
+        //     继续排下一帧（`postInvalidateOnAnimation`）⇒ 自持，**不依赖任何外部帧源**。
+        if (flingActive()) {
+            stepInertia();
+            postInvalidateOnAnimation();
+        }
         super.onDraw(canvas);
         ensurePicture();   // ★首帧补建（setCmds 早于布局时）
         // ★滚动：自绘内容随 scrollY 平移，并**裁剪到滚动视口**
