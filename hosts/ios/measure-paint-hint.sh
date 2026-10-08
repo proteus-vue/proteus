@@ -37,7 +37,17 @@ source "$HERE/lib/xcode-env.sh"
 
 ROOT="$(cd "$HERE/../.." && pwd)"
 ROUNDS="${1:-5}"
-BUNDLE_ID="${PROTEUS_BUNDLE_ID:-cn.shxuxi.proteus.experiments}"
+# ★★两台电脑签名切换（2026-10-08）：bundle 按**本机签名档**取（无档时回退原默认值）。
+#   本脚本只做**安装已构建产物 + 度量**，不重签名，故只需要正确的 bundle id。
+PROTEUS_IOS_PIN_ACTIVE=0
+if _PIN_OUT="$(node "$HERE/lib/ios-signing.mjs" resolve --shell 2>/dev/null)"; then
+  eval "$_PIN_OUT"
+fi
+_PIN_BUNDLE="cn.shxuxi.proteus.experiments"
+if [ "${PROTEUS_IOS_PIN_ACTIVE}" = "1" ] && [ -n "${PROTEUS_IOS_BUNDLE_ID:-}" ]; then
+  _PIN_BUNDLE="${PROTEUS_IOS_BUNDLE_ID}"
+fi
+BUNDLE_ID="${PROTEUS_BUNDLE_ID:-$_PIN_BUNDLE}"
 RESULTS="$HERE/results"
 mkdir -p "$RESULTS"
 

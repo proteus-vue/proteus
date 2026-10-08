@@ -17,6 +17,8 @@
 # 用法：bash hosts/ios/run-selfdraw.sh [--bench] [设备UDID]
 #   --bench  跑**逻辑层基准**（复杂响应式用例 + 规模扫描）而非自绘场景；
 #            报告落到 results/logic-bench-report.json
+#   ★★两台电脑（家/办公室）签名切换（2026-10-08）：按**主机名**读 hosts/ios/signing.local.json 的
+#     签名档选证书/描述文件——每台机只需上档一次（bash hosts/ios/signing.sh use <账号>，见 hosts/ios/README.md）。
 set -euo pipefail
 
 # ★解析可用的 Xcode（devicectl/xcodebuild 只在完整 Xcode 里；本机 Xcode 在非默认位置）
@@ -25,6 +27,18 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/xcode-env.sh"
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
+
+# ★★★两台电脑的签名切换（2026-10-08）——按**主机名**读 hosts/ios/signing.local.json 的签名档，
+#   解析出本机该用的证书/描述文件/bundle（实现与判据见 hosts/ios/lib/ios-signing.mjs 文件头）。
+#   无档 / 解析失败 ⇒ 完全落回下方原有自动逻辑（单机用户零影响）。
+#   优先级：PROTEUS_BUNDLE_ID（显式）> 本机签名档 > 自动扫描述文件（原逻辑）。
+PROTEUS_IOS_PIN_ACTIVE=0
+if _PIN_OUT="$(node "$HERE/lib/ios-signing.mjs" resolve --shell 2>/dev/null)"; then
+  eval "$_PIN_OUT"
+else
+  echo "    [pin] ⚠ 签名档解析失败（落回自动模式）——诊断：node hosts/ios/lib/ios-signing.mjs status"
+fi
+
 RUST_CRATE="$ROOT/packages/layout-core-rust"
 BUILD="$HERE/build-selfdraw"
 APP="$BUILD/ProteusSelfDraw.app"
@@ -37,7 +51,13 @@ APP="$BUILD/ProteusSelfDraw.app"
 #   （描述文件不存在 ⇒ 每次跑都要手动传 PROTEUS_BUNDLE_ID，且报错在**编译+签名 5 分钟后**才出现）。
 #   ⇒ 现在从**本机可用的描述文件**里自动挑第一个**有效**（未过期）的，与 BUNDLE_ID 匹配逻辑同源。
 #   显式覆盖仍可用：PROTEUS_BUNDLE_ID=xxx。
-if [ -z "${PROTEUS_BUNDLE_ID:-}" ]; then
+# ★★2026-10-08 再改：**本机签名档（按主机名）优先**——两台电脑各上档一次后，本段直接取档里的 bundle，
+#   不再依赖"扫到的第一个描述文件"（多团队/多项目机器上，扫第一个是**枚举顺序**，不是本机意图）。
+#   优先级：PROTEUS_BUNDLE_ID（显式）> 本机签名档 > 自动扫描述文件（下方原逻辑）。
+if [ -z "${PROTEUS_BUNDLE_ID:-}" ] && [ "${PROTEUS_IOS_PIN_ACTIVE}" = "1" ] && [ -n "${PROTEUS_IOS_BUNDLE_ID:-}" ]; then
+  BUNDLE_ID="$PROTEUS_IOS_BUNDLE_ID"
+  echo "    [pin] 按本机签名档选中 bundle id：${BUNDLE_ID}（档位：${PROTEUS_IOS_PIN_LABEL:-?} · team ${PROTEUS_IOS_TEAM:-?}）"
+elif [ -z "${PROTEUS_BUNDLE_ID:-}" ]; then
   _AUTO_ID=""
   for _pf in "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"/*.mobileprovision; do
     [ -f "$_pf" ] || continue
@@ -216,7 +236,13 @@ cp "$ROOT/hosts/android/app/src/main/assets/vapor-artifacts.json" "$APP/vapor-ar
 #   手工拼装会 0xe8008016 invalid entitlements；免费个人团队还需 team-identifier
 #   + keychain-access-groups，少一项即无效）
 PROFILE_DIR="$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"
-PROFILE="$(ls -t "$PROFILE_DIR"/*.mobileprovision 2>/dev/null | head -1 || true)"
+# ★★2026-10-08：本机签名档优先——档里那份是"被本机证书授权"的描述文件（判据见 lib/ios-signing.mjs），
+#   比 `ls -t | head -1`（取最新，可能属别的团队/项目）更准；无档时保持原逻辑。
+if [ "${PROTEUS_IOS_PIN_ACTIVE}" = "1" ] && [ -n "${PROTEUS_IOS_PROFILE_PATH:-}" ] && [ -f "${PROTEUS_IOS_PROFILE_PATH}" ]; then
+  PROFILE="${PROTEUS_IOS_PROFILE_PATH}"
+else
+  PROFILE="$(ls -t "$PROFILE_DIR"/*.mobileprovision 2>/dev/null | head -1 || true)"
+fi
 [ -n "$PROFILE" ] || { echo "✗ 未找到描述文件（${PROFILE_DIR}）"; exit 3; }
 PLIST_TMP="$(mktemp -d)"
 security cms -D -i "$PROFILE" > "$PLIST_TMP/profile.plist" 2>/dev/null
@@ -260,13 +286,23 @@ cp "$PROFILE" "$APP/embedded.mobileprovision"
 [ -s "$PLIST_TMP/entitlements.plist" ] && cp "$PLIST_TMP/entitlements.plist" "$PLIST_TMP/ent.plist"
 
 echo "==> ⑥ 签名"
+# ★★2026-10-08：本机签名档优先——档里的 SHA-1 是"描述文件授权 ∩ 本机钥匙串"反查出来的
+#   （判据见 hosts/ios/lib/ios-signing.mjs），比"取 find-identity 第一张"更准：同名两张/多团队机器上，
+#   取第一张必错其一（本机实测：find-identity 第一张是另一个账号的证书）。
+IDENTITY=""
+if [ "${PROTEUS_IOS_PIN_ACTIVE}" = "1" ] && [ -n "${PROTEUS_IOS_IDENTITY_SHA1:-}" ]; then
+  IDENTITY="$PROTEUS_IOS_IDENTITY_SHA1"
+fi
+# 以下为**无档时的原自动逻辑**：
 # ★★按 **SHA-1** 选身份（2026-10-01 修复）：证书被吊销后重签会**同名两张**（同一 Apple ID、CN 相同），
 #   按名称选会命中任一张（实测：选到吊销的那张 ⇒ 装机报
 #   `0xe8008018 The identity used to sign the executable is no longer valid`）。
 #   ⇒ 显式排除带 `CSSMERR`（已吊销）的条目，取第一张有效证书的 SHA-1；回退才用名称。
-IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null \
-  | grep -v CSSMERR | grep -E 'Apple Development|iPhone Developer' \
-  | grep -oE '[0-9A-F]{40}' | head -1)"
+if [ -z "$IDENTITY" ]; then
+  IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null \
+    | grep -v CSSMERR | grep -E 'Apple Development|iPhone Developer' \
+    | grep -oE '[0-9A-F]{40}' | head -1)"
+fi
 if [ -z "$IDENTITY" ]; then
   IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '/Apple Development|iPhone Developer/ {print $2; exit}')"
 fi
@@ -275,15 +311,37 @@ fi
 #   ① entitlements 必须用 `PlistBuddy -x` 导出为 **XML**（只 Print 会得到"描述"而非 plist
 #      → codesign 报 "unrecognized blob type / invalid length"）
 #   ② 手工拼装 entitlements 会 0xe8008016；免费个人团队还需 team-identifier + keychain-access-groups）
+# ★★2026-10-08：有签名档 ⇒ 直接用档里那份（还要与 BUNDLE_ID 一致，不一致才回退扫描）；
+#   一致性（描述文件是否授权所选证书）在选定后由 `verify-pair` 显式校验——装机前的最后一道静默失效闸。
 PROFILE=""
 PROBE="$BUILD/probe.plist"
-for pf in "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"/*.mobileprovision; do
-  [ -f "$pf" ] || continue
-  security cms -D -i "$pf" > "$PROBE" 2>/dev/null || continue
-  APPID="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:application-identifier' "$PROBE" 2>/dev/null || true)"
-  case "$APPID" in *".$BUNDLE_ID") PROFILE="$pf"; break ;; esac
-done
+_pick_appid() { # $1=描述文件 → 打印 application-identifier（失败非零）
+  security cms -D -i "$1" > "$PROBE" 2>/dev/null || return 1
+  /usr/libexec/PlistBuddy -c 'Print :Entitlements:application-identifier' "$PROBE" 2>/dev/null
+}
+if [ "${PROTEUS_IOS_PIN_ACTIVE}" = "1" ] && [ -n "${PROTEUS_IOS_PROFILE_PATH:-}" ] && [ -f "${PROTEUS_IOS_PROFILE_PATH}" ]; then
+  _pin_appid="$(_pick_appid "${PROTEUS_IOS_PROFILE_PATH}")" || _pin_appid=""
+  case "$_pin_appid" in
+    *".$BUNDLE_ID") PROFILE="${PROTEUS_IOS_PROFILE_PATH}" ;;
+    *) echo "    [pin] ⚠ 档里的描述文件（${_pin_appid:-解析失败}）与 BUNDLE_ID=${BUNDLE_ID} 不一致——改用扫描" ;;
+  esac
+fi
+if [ -z "$PROFILE" ]; then
+  for pf in "$PROFILE_DIR"/*.mobileprovision; do
+    [ -f "$pf" ] || continue
+    _cand_appid="$(_pick_appid "$pf")" || continue
+    case "$_cand_appid" in *".$BUNDLE_ID") PROFILE="$pf"; break ;; esac
+  done
+fi
 [ -n "$PROFILE" ] || { echo "✗ 无匹配描述文件（BUNDLE_ID=${BUNDLE_ID}；换一个已 provision 的 ID：PROTEUS_BUNDLE_ID=... ）"; exit 3; }
+# ★一致性校验（2026-10-08）：所选描述文件必须**授权所选证书**，否则装机必被拒（且错误出现得晚、看似签名问题）。
+#   仅在 IDENTITY 是 SHA-1 时校验（回退成名称的极老路径没有可判定的 SHA-1，跳过并留给装机报错）。
+if printf '%s' "$IDENTITY" | grep -qE '^[0-9A-Fa-f]{40}$'; then
+  if ! node "$HERE/lib/ios-signing.mjs" verify-pair "$PROFILE" "$IDENTITY" >/dev/null 2>&1; then
+    echo "    ⚠ 所选描述文件未授权所选证书（装机可能报 identity no longer valid / 0xe8008018）"
+    echo "      诊断：bash hosts/ios/signing.sh status（有档时按档走；无档时检查钥匙串与描述文件是否同团队）"
+  fi
+fi
 /usr/libexec/PlistBuddy -x -c 'Print :Entitlements' "$PROBE" > "$BUILD/entitlements.plist"
 cp "$PROFILE" "$APP/embedded.mobileprovision"
 codesign --force --sign "$IDENTITY" --entitlements "$BUILD/entitlements.plist" --timestamp=none "$APP" 2>&1 | tail -1

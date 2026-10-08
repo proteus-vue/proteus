@@ -6,6 +6,15 @@
 ## 怎么跑
 
 ```bash
+# ⓪ 【两台电脑（家/办公室）首次各做一次】签名切换上档：
+#    同一块工作盘在两台 Mac 间来回插，而签名资产（钥匙串证书/描述文件/登录的 Apple ID）是每台机各一套。
+#    本仓按**主机名**记住每台机该用哪套 ⇒ 各上档一次之后，脚本自动选对（含"续签后同名两张证书"的场景）。
+bash hosts/ios/signing.sh list                 # 看本机有哪些证书/描述文件（先看看再上档）
+bash hosts/ios/signing.sh use lyl@shxuxi.cn    # 给**本机**上档（办公室；家里换成相应账号）
+bash hosts/ios/signing.sh status               # 校验：证书 ✓ 描述文件 ✓ + 下一步提示
+#     换机后若提示缺描述文件（免费团队 7 天过期）：bash hosts/ios/experiments/device/provision.sh
+#     （无参数——自动用本机档的 bundle/team；档只写本机、不会覆盖另一台机的档）
+
 # ① 验收（不依赖模拟器——真实 JavaScriptCore 跑同一份 bundle，16 项断言）
 node hosts/ios/bridge/build.mjs     # 打 JS bundle（Vue 运行时 + render-backend + 入口）
 node hosts/ios/verify.mjs           # → ✅ iOS 竖切链路验收通过

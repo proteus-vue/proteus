@@ -16,8 +16,24 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../../lib/xcode-env.sh"
 
 # ★默认值已更新（2026-09-28）：旧包名/旧团队属 F4R3P3L477，其签名证书私钥已丢且
 #   bundle id 已在 Apple 侧登记（免费团队不可复用）⇒ 改用新团队 XKH568R7A5 的包名。
-BUNDLE_ID="${1:-cn.shxuxi.proteus.experiments}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# ★★两台电脑签名切换（2026-10-08）：无参数且本机已上档 ⇒ 用**档里**的 bundle/team
+#   （每台机 `bash hosts/ios/signing.sh use <账号>` 一次即可）。没有它时下方 team 默认取 Xcode
+#   偏好里**第一个**——多账号机器上会取错（本仓实测过：取到旧团队 F4R3P3L477）。显式参数仍最高优先。
+PROTEUS_IOS_PIN_ACTIVE=0
+if _PIN_OUT="$(node "$HERE/../../lib/ios-signing.mjs" resolve --shell 2>/dev/null)"; then
+  eval "$_PIN_OUT"
+else
+  echo "    [pin] ⚠ 签名档解析失败（落回参数/Xcode 偏好逻辑——诊断：node hosts/ios/lib/ios-signing.mjs status）"
+fi
+
+_DEFAULT_BUNDLE="cn.shxuxi.proteus.experiments"
+if [ "${PROTEUS_IOS_PIN_ACTIVE}" = "1" ] && [ -n "${PROTEUS_IOS_BUNDLE_ID:-}" ]; then
+  _DEFAULT_BUNDLE="${PROTEUS_IOS_BUNDLE_ID}"
+  echo "    [pin] 按本机签名档选中 bundle id：${_DEFAULT_BUNDLE}（档位：${PROTEUS_IOS_PIN_LABEL:-?} · team ${PROTEUS_IOS_TEAM:-?}）"
+fi
+BUNDLE_ID="${1:-$_DEFAULT_BUNDLE}"
 WORK="$HERE/.provision-work"
 DEVICE="$(xcrun devicectl list devices 2>/dev/null | grep -vE 'simulated' \
   | grep -oE '[0-9A-Fa-f]{8}-([0-9A-Fa-f]{4}-){3}[0-9A-Fa-f]{12}|[0-9A-Fa-f]{8}-[0-9A-Fa-f]{16}' | head -1 || true)"
@@ -25,6 +41,11 @@ DEVICE="$(xcrun devicectl list devices 2>/dev/null | grep -vE 'simulated' \
 [ -n "$DEVICE" ] || { echo "✗ 未发现真机（先连接并信任）"; exit 2; }
 
 TEAM="${2:-}"
+# ★本机签名档优先（2026-10-08）——避免"取 Xcode 偏好第一个团队"在多账号机器上取错。
+if [ -z "$TEAM" ] && [ "${PROTEUS_IOS_PIN_ACTIVE}" = "1" ] && [ -n "${PROTEUS_IOS_TEAM:-}" ]; then
+  TEAM="${PROTEUS_IOS_TEAM}"
+  echo "    [pin] 按本机签名档选中 team：${TEAM}"
+fi
 if [ -z "$TEAM" ]; then
   # 从 Xcode 偏好里取 Personal Team ID（登录后才有）
   # ★注意：Xcode 里可能登录了**多个** Apple ID（本机有两个 Personal Team）——
