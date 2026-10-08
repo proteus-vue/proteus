@@ -82,6 +82,8 @@ export interface DoctorContext {
   runCmd(cmd: string, args: string[], opts?: { timeoutMs?: number; env?: Record<string, string> }): DoctorEvidence
   /** 端口是否可绑定（注入） */
   portFree(port: number): Promise<boolean>
+  /** 查找覆盖某 bundleId 的本机 iOS 描述文件（注入；默认复用 host-package.findIosSigningProfile） */
+  findIosProfile(bundleId: string): string | null
   /** 读 package.json（工程）解析对象（缺省 null） */
   projectPackage(): Record<string, unknown> | null
   /** 单检查缺省超时（ms） */
