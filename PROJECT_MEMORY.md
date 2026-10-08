@@ -15,9 +15,9 @@
 - **包规模**：**45 个 @proteus-vue/* npm 包**（+ `packages/layout-core-rust` = **cargo crate，非 npm 包**，故不计数）（★2026-09-29 layout-core = App 排版核心）（check:pkg 0 error · `pnpm check:stats` 校验 ✓；31→38 修正 → G-07 glass 39 → Skyline 收口 worklet 40 → ★2026-09-14 组件库拆包 `@proteus-vue/components` 41 → ★Vapor 线新增 `@proteus-vue/slot-runtime` 42 + `@proteus-vue/layout-core` 43 → ★2026-09-30 MA1 新增 `@proteus-vue/animation` 44；版本统一 0.3.0-beta.8，见「当前状态速览」）
 - **文档**：`docs/proteus-architecture.md`（L0 规约·真理来源）→ `docs/board-inventory.md`（全景索引）→ `docs/roadmap.md`（版本线）→ `roadmap-2-plan`（里程碑线）→ 各 plan
 
+## 当前状态速览（最近一次更新：**2026-10-08·（三〇四）· ★★css-conformance 首页索引漏项修复（用户实测指出）+ 新增「索引↔页面」双向对齐门禁 · 决策 #659**——批 A⑤ 的吸顶页 `position-scroll` 路由/构建/跑器全都自动覆盖，唯独**首页手写索引**漏了它 ⇒ 桌面点开 30 页只见 29 项。★**修 + 三端重建验证**：补入口（紧邻 position 条目）；Android/鸿蒙真机截图见新入口 · iOS drive 遍历 31 屏含它。★**★门禁（重点）**：`tests/css-conformance-index-entries.test.ts` 四判据（页面↔入口双向 + 不重复 + 读空护栏；剥离注释防自污染），**破坏性验证过**（删入口当场红并指名）。★教训：**自动收录机制 ≠ 人手动维护清单**——后者必须机器对齐（本仓"清单漂移"线第 N 次）。★新会话以此为准。
 ## 当前状态速览（最近一次更新：**2026-10-08·（三〇三）· ★★★超应用 CSS 扩展 · 批 A④：`z-index` 数值→语义层映射（App 三端从"静默丢"到"跨端层叠序"）· 决策 #658**——**批 A（定位族）由此收官**。★**缺口**：类样式 z-index（语料 66 处）在 App 三端**静默丢**（折叠面忽略 + applier drop + 宿主无 z 序）⇒ Web/MP 正常、App 按声明序画。★**判据 SSOT**：`contracts/layers.ts` 的 `zIndexOf`（区间映射 1-9/10-99/100-999/1000+；负值不支持；超 1e5 标 suspicious）+ `Z_INDEX_RANGES`。★**实现（构建期一处、三端同效）**：`reorderNodesByZ` **两条通路共用**（静态 screen-content + 运行期 runtime-content）——同父孩子重排为「在流（保原序）→ 脱离流（按 (z, 声明序) 稳定排序）」；只重排脱离流 ⇒ 布局安全。折叠面 +`zIndex` 字段；applier 直传（app→dto · skyline→wxss）。★**验收页 E 案例（声明序反向 5→3→1）**：Android/iOS/鸿蒙**三端红片均在最上**（机器像素判据可见面积居首）+ Web 基准一致 + MP 产物级（WXSS z 值逐条在）。★**★根因曲折（最大教训）**：首轮只修静态通路 ⇒ 产物 JSON 新序而**渲染仍旧序**——App 壳运行期消费 `runtime-content.json`（同族前科：鸿蒙 #636 内嵌 bundle）。★**诚实边界**：负 z · stacking context 完整语义 · relative/sticky 的 z 均 v1 不做（诊断不静默）；MP 真机截图未采（wechatide APPID_ERROR 环境态，验收包如实 `unclear`）。★**批 A 剩余**：仅 iOS/鸿蒙**滚动锚定像素证据**（fixed/sticky 批 A⑤ 欠账）。★新会话以此为准。
 ## 当前状态速览（最近一次更新：**2026-10-08·（三〇二）· ★★两台电脑 iOS 签名切换器（office/home 按主机名分档）· 决策 #657**——同一块工作盘在两台 Mac 间来回插，而签名资产（钥匙串证书 / Xcode 描述文件 / Apple ID）是**机器本地**。★**判据（SSOT）**：`hosts/ios/lib/ios-signing.mjs`——**描述文件授权 ∩ 钥匙串有效身份**取交集选证书（规避"续签同名两张"与"多团队取第一张必错其一"两类错），档按**主机名**存 `hosts/ios/signing.local.json`（gitignored；两台机互不覆盖）。★**接线**：`run-selfdraw.sh`（bundle/描述文件/证书三处 + 装机前 `verify-pair` 一致性闸）· `provision.sh`（无参取档 bundle/team）· `measure-paint-hint.sh`（bundle）；人手入口 `bash hosts/ios/signing.sh list/use/status/clear`；自测 7 用例（`pnpm check:ios-signing-selftest`，已接 CI+verify）。★**真机验证（办公室机 kagsdeimac · iPhone12）**：上档 `lyl@shxuxi.cn` → provision 生成新描述文件 → 全链：构建 ✓ → 签名用**新证书 3F19D4BA**（非同名旧证 72B96437）✓ → 装机 ✓；★**启动被拦 = 新证书须在设备上手动信任**（设置→通用→VPN与设备管理——iOS 强制、脚本代不了）。★回家用机首次需 `bash hosts/ios/signing.sh use <家里账号>` 上档。★新会话以此为准。
-## 当前状态速览（最近一次更新：**2026-10-08·（三〇一）· ★★★超应用 CSS 扩展 · 批 A⑤：滚动锚定验收 + Android 真机证据（fixed 钉住 / sticky 吸顶）+ 顺修 iOS superapp 无法滚动 · 决策 #656**——fixed/sticky 语义**只在滚动时可见**。★**交付**：新页 `css-conformance/pages/position-scroll.vue`（fixed 徽标 + sticky 吸顶条 + 撑高内容；sticky 走 block 级 `proteus-allow-profile` 豁免——MP/Skyline 引擎锁死）；`collect-web` 加**滚动后截图**；iOS superapp 加 `--screen=`/`--scroll=` 注入（对齐 Android `--es screen/--es scroll`）+ run-selfdraw 透传。★**Android 真机证据**（`results/android/position-scroll{,.scroll}.png`，真机 d67e31a3）：**fixed 徽标页顶与滚动 300px 后同一屏幕位置（钉住）**·**sticky 条滚动后吸附屏幕顶部**（logcat `scrollY=300` 佐证）。★**★顺修（真能力缺口）**：`SelfDrawView` 真 UIPanGestureRecognizer 唯一出口 `onScrollDrag` **只接在 host-controller/selfdraw-app，superapp 场景未接线** ⇒ iOS superapp 真触摸拖拽无反应（**长页无法滚动**）+ `driveScrollDrag` 空转 ⇒ 镜像接线修之；真机注入 offset=169。★**诚实边界**：iOS/鸿蒙**滚动锚定截图本轮未采到**（iOS 空跑起的是 superapp bundle 而非 css-conformance ⇒ `--screen=position-scroll` 无处可去、截到"消息"页；鸿蒙无滚动注入参数）——fixed/sticky 的 iOS/鸿蒙**实现已编译验证**（swiftc / HAP），仅缺滚动像素证据。★**批 A 剩余**：**z-index 数值→语义层映射**（用户选定；须先厘清两套 layer 体系 + LY001「禁止裸 z-index」取舍）+ iOS/鸿蒙滚动锚定像素证据补齐。★新会话以此为准。
 
 ## ★《收纳规范》（2026-10-03 立 · 门禁 `pnpm check:memory`）
 
@@ -44,11 +44,11 @@
 |---|---|
 | `docs/project-memory-archive/2026-10.md` | 2026-10 里程碑详细叙事 + 状态速览历史栈（约 4.5k 行）|
 | `docs/project-memory-archive/2026-09.md` | 09 月全部叙事 + 柔性系统重组历史 + 2026-08 进度快照 + 已落地文件 + 09-19 验证状态（约 6.5k 行） |
-| `docs/project-memory-archive/decisions.md` | 决策链全文 #1–#658——按号检索（`grep -n "^658\." …`）|
+| `docs/project-memory-archive/decisions.md` | 决策链全文 #1–#659——按号检索（`grep -n "^659\." …`）|
 
 检索示例：`grep -n "2026-09-29\|判据建错靶" docs/project-memory-archive/2026-09.md`
 
-## 关键决策与文档偏差（#1–#658 → 归档速查）
+## 关键决策与文档偏差（#1–#659 → 归档速查）
 
 **全文在 `docs/project-memory-archive/decisions.md`**（按号检索：`grep -n "^290\." docs/project-memory-archive/decisions.md`）。
 决策号**只增不改号**（外部文档按号引用）；新决策追加到该文件末尾（号 +1）。
