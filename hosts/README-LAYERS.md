@@ -137,3 +137,26 @@ L1 框架主仓（本仓）发独立包 → L2 宿主 App 仓**只依赖不 fork
   keystore**（自动生成，机器本地）；c) 无 Gradle——沿用本仓"手工链 + 断言"哲学（见 hosts/android/README.md）。
 
 - 分层**不改任何运行期行为**：只搬文件 + 改编译源清单，三端零设备编译 + 一次真实构建截图黑盒验证。
+
+## 5. ★★★完整开发流程：CLI 生成宿主 = **项目自有**（2026-10-08 · 决策 #662）
+
+> 用户：「dist/app 里三端只有三个简单文件，没有完整宿主项目」「包名用项目自己的」「CLI 一条命令出包」
+> 「dev 模式实时刷新 App 宿主页面内容」「**不再所有项目共用一个内部壳**，内部壳仅框架内核测试用」。
+
+**壳的定位（本节收口，替代此前模糊表述）**：
+| 壳 | 位置 | 定位 | 用途 |
+|---|---|---|---|
+| **项目宿主** | CLI 生成到 `dist/app/<端>/host/` | **项目自有**：项目包名 / 完整运行期工程 / dev 热刷 | **正式开发**（`proteus build --package` / `proteus dev`） |
+| **框架测试壳** | `hosts/<端>/**`（如 `SuperappActivity`） | 框架内核测试装置：多带 `--es drive/screen/scroll/tap` 验证钩子 | **仅**框架内核测试 / 快速真机验证（保留） |
+
+**项目宿主形态（android，2026-10-08 起）**：`AndroidManifest.xml`（release）+ `AndroidManifest.dev.xml`（dev，
+**唯一差别**加 INTERNET）+ `src/dev/proteus/layoutcore/AppActivity.java`（**运行期壳**：QuickJS +
+`SuperappRuntimeHost` + `assets/bundle-superapp.js` + 路由/tab/交互）+ `ProteusBuildConfig.java`（DEV/DEV_URL，
+构建期由 CLI 覆写）+ `libs/proteus-runtime.aar`。
+**变体**：release（内嵌 bundle、无网络）· dev（HTTP dev server + 热刷，见 `packages/cli/src/app-dev-server.ts`）。
+**判据**：`proteus build --target android --package` → `dist/app/android/proteus-host.apk`（项目包名）真机跑通；
+`proteus dev --target android` → 宿主 `PROTEUS_DEV_BUNDLE_FROM_SERVER` + 改源码 ⇒ `PROTEUS_DEV_RELOADED`。
+**★AAR 构建的坑（2026-10-08 修）**：`build-runtime-aar.sh` **必须一起编 `platform/android/proteus-platform`**
+（宿主引用 `ProteusTextPlatform`）；漏了 ⇒ AAR **长期陈旧**（不含 `SuperappRuntimeHost` 等新类）却无人察觉——
+现有断言已扩到 9 个必需类（含 `SuperappRuntimeHost`/`QuickJsEngine`）。
+**★iOS/鸿蒙**：同一模型（`create host`/`--package` 可用）；**dev 热刷宿主通道待接**（后续批次）。

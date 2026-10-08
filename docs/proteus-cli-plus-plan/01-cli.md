@@ -207,3 +207,35 @@ proteus build --target android --package --host-dir <dir>   # 编译项目内容
 （可注入 `PROTEUS_HOST_RUNTIME_DIR`；独立发布包**已登记** `docs/proteus-host-runtime-package-plan.md`）；③ **华为 CA 签名属机器本地**——模板给
 `signingConfigs: []`（unsigned 可构建、不能装机），装机需在 DevEco 勾选一次 "Automatically generate signature"。
 **安全**：`check:secret-scan` 门禁扫 git 跟踪面（签名/密钥/明文口令不得入库）。
+
+### ★★★完整开发流程（2026-10-08 · 决策 #662 · 用户「dist 里要有完整宿主项目 + 一条命令 + dev 热刷」）
+
+**一条命令出包**（`--host-dir` **可省** —— 缺省自动 scaffold 到 `dist/app/<端>/host`）：
+```bash
+proteus build --target android --package      # → dist/app/android/{host/完整工程, bundle-superapp.js, proteus-host.apk}
+```
+**dev 热刷**（改源码保存即刷新真机，**不重装不重签**）：
+```bash
+proteus dev --target android                  # scaffold → dev server → debug 宿主 → adb 装+起 → watch
+```
+**`dist/app/<端>/` 完整布局**（构建产物，`.gitignore`）：`host/`（完整可编译宿主工程）·
+`bundle-superapp.js`（项目侧运行期内容源）· `proteus-host.{apk,app,hap}`（安装包）·
+`screen-content.json`/`runtime-content.json`/`app-config.json`（内容产物）。
+
+**★dev/build 区分 = 构建变体**（同一份宿主工程）：
+| 变体 | 触发 | bundle 来源 | 网络权限 | 壳能力 |
+|---|---|---|---|---|
+| **release** | `build --target <端> --package` | 内嵌 `assets/bundle-superapp.js` | 无 INTERNET | 零测试钩子 |
+| **dev** | `dev --target <端>` | **HTTP dev server**（`/version` 轮询 + `/bundle` 热拉） | INTERNET + cleartext | dev 通道 + 热刷 |
+
+- release Manifest = `AndroidManifest.xml`；dev = `AndroidManifest.dev.xml`（**唯一差别**加 INTERNET）。
+- dev 变体构建前**就地覆写** `ProteusBuildConfig`（DEV=true/DEV_URL），收尾**还原** ⇒ 工程源码恒为 release 形态。
+- 包名 = 项目 `proteus.config` 的 native 段（`android.applicationId` / `ios.bundleId` / `harmony.bundleName`）。
+
+**★壳的定位（2026-10-08 收口）**：**CLI 生成的宿主 = 项目自有**（项目包名 / 完整工程 / dev 热刷）—— 正式开发用它；
+`hosts/*`（含 `SuperappActivity`）**仅作框架内核测试与快速真机验证**（多带 `--es drive/screen/scroll/tap` 钩子）。
+
+**★范围诚实边界**：本批**端到端兑现 Android**（`app-bundle`/`app-dev-server` + 模板运行期壳 + 打包 + 热刷真机验证：
+`PROTEUS_DEV_BUNDLE_FROM_SERVER` → 改 .vue → 202ms 重建 → `PROTEUS_DEV_RELOADED`）；
+**iOS/鸿蒙**复用同一模型（`create host`/`--package` 三端均可用），**dev 热刷的宿主通道待接**
+（iOS `#if DEBUG`+ATS、鸿蒙 `buildMode`+NetworkKit）—— 属后续批次。

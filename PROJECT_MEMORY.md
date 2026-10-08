@@ -15,9 +15,9 @@
 - **包规模**：**45 个 @proteus-vue/* npm 包**（+ `packages/layout-core-rust` = **cargo crate，非 npm 包**，故不计数）（★2026-09-29 layout-core = App 排版核心）（check:pkg 0 error · `pnpm check:stats` 校验 ✓；31→38 修正 → G-07 glass 39 → Skyline 收口 worklet 40 → ★2026-09-14 组件库拆包 `@proteus-vue/components` 41 → ★Vapor 线新增 `@proteus-vue/slot-runtime` 42 + `@proteus-vue/layout-core` 43 → ★2026-09-30 MA1 新增 `@proteus-vue/animation` 44；版本统一 0.3.0-beta.8，见「当前状态速览」）
 - **文档**：`docs/proteus-architecture.md`（L0 规约·真理来源）→ `docs/board-inventory.md`（全景索引）→ `docs/roadmap.md`（版本线）→ `roadmap-2-plan`（里程碑线）→ 各 plan
 
+## 当前状态速览（最近一次更新：**2026-10-08·（三〇七）· ★★★完整宿主工程 + 项目自有包名 + CLI 一条命令出包 + App dev 热刷（Android 先行）· 决策 #662**——用户「dist/app 里三端只有三个简单文件，没有完整宿主项目；包名用项目自己的；CLI 一条命令出包；dev 模式实时刷新；不再所有项目共用一个内部壳」。★**取证先行**（这是能做小的关键）：`create host`（完整宿主+项目包名）与 `build --package`（三端打包）**早已实现**——缺的是「接进 dist + 一条命令 + dev 热刷」。★**交付**：`targets.ts` 落点 SSOT · **`app-bundle.ts`**（项目侧 bundle，重定向生成物不污染框架）· **模板 Android 壳→运行期形态**（QuickJS+路由/tab/交互）+ `ProteusBuildConfig`+`AndroidManifest.dev.xml` · `packageAndroidHost` 支持 dev/release 变体 · `build --target <端> --package` **缺省自动 scaffold 到 `dist/app/<端>/host`**（`--host-dir` 可省）· **`app-dev-server.ts`**（HTTP `/version`/`/bundle` + watch）· `proteus dev --target <app端>`（scaffold→server→debug 宿主→adb 装+起→watch）。★**dev/build = 构建变体**（同一份工程；差异只在 Manifest + BuildConfig）。★**真机**：一条命令 → `proteus-host.apk`（**包名 cn.proteus.superapp**，release **无 INTERNET**）跑通真实 superapp；`proteus dev` → 宿主 `PROTEUS_DEV_BUNDLE_FROM_SERVER` → 改 .vue **202ms** 重建 → **`PROTEUS_DEV_RELOADED`**（未重装）。★**顺修真缺陷**：`build-runtime-aar.sh` 漏编 platform 层 ⇒ AAR **长期陈旧**（不含 SuperappRuntimeHost）⇒ 补 + 断言扩到 9 类。★**壳定位收口**：`hosts/*` 仅框架内核测试/快速真机验证，**CLI 生成宿主 = 项目自有**。★**诚实边界**：本批**端到端只兑现 Android**；iOS/鸿蒙复用同模型但 **dev 热刷通道待接**；release dev 分支不可达（非剥离，需 R8）；热刷=页面内容（原生插件热插拔属 G-45）。★新会话以此为准。
 ## 当前状态速览（最近一次更新：**2026-10-08·（三〇六）· ★★★吸顶三端渲染修复（用户实测三问：鸿蒙两条 / 安卓鸿蒙无文字 / iOS 滚动回弹）+ iOS fixed 从未生效真缺陷 · 决策 #661**——① **鸿蒙两条蓝条**：`renderCommands` 追加语义 + 该页渲染两次 ⇒ 树叠加 ⇒ `paintTree` 先 `clearRoot()`。② **安卓/鸿蒙无文字**：只平移锚点、文字是独立子节点 ⇒ **三端同构「整棵子树」**（Android 相位分区+子树位移 · 鸿蒙登记 id→句柄/父/基准位后整子树重挂+平移 · iOS CALayer 天然嵌套无需改）。③ **iOS 滚动回弹**：手工 `addSublayer` 的层**隐式动画未禁**（0.25s）⇒ 显式 `CATransaction` 禁动作。★**顺修（真缺陷）**：iOS `fixed` **从未生效**——`sublayerTransform` 作用于**所有子层**（"重挂到根层即脱离变换"是错的）⇒ 改 frame 补偿 + 含 fixed 禁用 patch 增量 + `reapplyPinOffsets`。★**鸿蒙 top 单位**（dp 误发物理）修。★**真机验证**：Android cssconf 单条带白字+吸 y0 · 鸿蒙单条带白字+吸 y0 · iOS sticky 吸顶 + **fixed 徽标出现**。★**诚实边界**：**鸿蒙 `--css` 被签名阻塞**（本机无绑 `dev.proteus.cssconf` 的 profile，设备上那个是另一张证书 `66ADD09E…`）⇒ 鸿蒙验证在宿主壳完成；跑 CSS 验收需先在 DevEco 补签。★新会话以此为准。
 ## 当前状态速览（最近一次更新：**2026-10-08·（三〇五）· ★★★吸顶 demo 三修（用户实测）+ 鸿蒙 fixed/sticky 真缺陷 + 官网数字补刷 + 安卓放错包根修 · 决策 #660**——用户三问：吸顶后到底 / 官网数字没变 / **安卓总是放错包**。★**demo**：内容 15→40 行（可滚 136dp→**1336dp**，吸附后可续滚）。★**★相位 2（真缺陷）**：sticky 被后画内容盖住（滚动 400px 可见、1500px 消失）——CSS 2.1 附录 E：sticky 是 positioned 元素应画在在流内容之后 ⇒ **三端同修**（Android 分区/比较器 · iOS `zPosition=1500` · 鸿蒙重挂末尾）。★**★★鸿蒙 real bug**：`appScreenCommands` 的 cmd **完全不发射 `position`** ⇒ 渲染侧 fixed/sticky **从未登记**（批 A⑤ 只有编译验证、缺口静默至今）⇒ cmd 补 `position`+`top`；另补鸿蒙**滚动注入装置**（`--ps scroll`；★时序坑：env 异步回调二次渲染会归零 ⇒ 待处理标志消费式）。真机：sticky 吸顶 y0-123 · fixed 钉住 y33-120。★**官网数字**：`check:css-engine-numbers` 红（#658 后未重生成）⇒ semantic 82→**83** + 官网 `css-engine-page.ts` 同步。★**放错包**：`run-superapp-launcher.sh` 硬编码 layoutcore ⇒ 加 `--css`；`build-and-run.sh --css` 补 `PROTEUS_APP_PROJECT` 默认 css-conformance；PLAYBOOK 补 `--css`。★**诚实边界（新发现未闭）**：**iOS fixed 徽标在 superapp 路径缺失**（探针已编译未触发 ⇒ flat 无该 fixed 项，疑内核未返 rect）——继承自批 A⑤（当时仅编译验证）；待下一轮取证。★新会话以此为准。
-## 当前状态速览（最近一次更新：**2026-10-08·（三〇四）· ★★css-conformance 首页索引漏项修复（用户实测指出）+ 新增「索引↔页面」双向对齐门禁 · 决策 #659**——批 A⑤ 的吸顶页 `position-scroll` 路由/构建/跑器全都自动覆盖，唯独**首页手写索引**漏了它 ⇒ 桌面点开 30 页只见 29 项。★**修 + 三端重建验证**：补入口（紧邻 position 条目）；Android/鸿蒙真机截图见新入口 · iOS drive 遍历 31 屏含它。★**★门禁（重点）**：`tests/css-conformance-index-entries.test.ts` 四判据（页面↔入口双向 + 不重复 + 读空护栏；剥离注释防自污染），**破坏性验证过**（删入口当场红并指名）。★教训：**自动收录机制 ≠ 人手动维护清单**——后者必须机器对齐（本仓"清单漂移"线第 N 次）。★新会话以此为准。
 
 ## ★《收纳规范》（2026-10-03 立 · 门禁 `pnpm check:memory`）
 
@@ -44,11 +44,11 @@
 |---|---|
 | `docs/project-memory-archive/2026-10.md` | 2026-10 里程碑详细叙事 + 状态速览历史栈（约 4.5k 行）|
 | `docs/project-memory-archive/2026-09.md` | 09 月全部叙事 + 柔性系统重组历史 + 2026-08 进度快照 + 已落地文件 + 09-19 验证状态（约 6.5k 行） |
-| `docs/project-memory-archive/decisions.md` | 决策链全文 #1–#661——按号检索（`grep -n "^661\." …`）|
+| `docs/project-memory-archive/decisions.md` | 决策链全文 #1–#662——按号检索（`grep -n "^662\." …`）|
 
 检索示例：`grep -n "2026-09-29\|判据建错靶" docs/project-memory-archive/2026-09.md`
 
-## 关键决策与文档偏差（#1–#661 → 归档速查）
+## 关键决策与文档偏差（#1–#662 → 归档速查）
 
 **全文在 `docs/project-memory-archive/decisions.md`**（按号检索：`grep -n "^290\." docs/project-memory-archive/decisions.md`）。
 决策号**只增不改号**（外部文档按号引用）；新决策追加到该文件末尾（号 +1）。
@@ -57,6 +57,7 @@
 ## 待办 / 注意事项
 
 **★本轮（2026-10-08）留存 —— 新会话接手必读**
+- **★★★完整宿主 + CLI 出包 + dev 热刷（#662，Android 已端到端）**：`proteus build --target android --package`（`--host-dir` 可省）→ `dist/app/android/{host/, bundle-superapp.js, proteus-host.apk}`（**项目包名** = `proteus.config` native 段，如 `cn.proteus.superapp`）；`proteus dev --target android` → 改源码秒级热刷（真机验过 `PROTEUS_DEV_RELOADED`）。**剩余**：**iOS/鸿蒙 dev 热刷宿主通道待接**（iOS `#if DEBUG`+ATS / 鸿蒙 `buildMode`+NetworkKit）——本批**只端到端兑现 Android**；壳定位已收口（`hosts/*` 仅框架测试，CLI 生成宿主=项目自有）。
 - **iOS 签名切换器（#657，两台电脑 office/home 分档）**：办公室机（kagsdeimac）已上档 `lyl@shxuxi.cn`；★**设备端需"信任新证书"**（设置→通用→VPN与设备管理——iOS 强制步骤；若 App 启动被拦先点这个）；**回家用机首次** `bash hosts/ios/signing.sh use <家里账号>` 上档一次即可；自查 `bash hosts/ios/signing.sh status`。
 - **★超应用 CSS 能力扩展（主线，进行中）**：计划 `docs/proteus-superapp-css-expansion-plan.md`（5 个新族 **F1 定位 / F2 filter / F3 排版 / F4 交互态与伪元素 / F5 滚动**；裁定 A→E 顺序）。**★批 A（定位族）已收官**：fixed / sticky（全三端）· z-index 数值→语义层映射（#658）· 验收页 E 案例 + 四端验证（Android/iOS/鸿蒙红片在最上+Web 基准+MP 产物级）+ `css:verify z-index` 三段判据全过。**剩余**：
   · **iOS/鸿蒙的滚动锚定像素证据待补**（批 A⑤ 欠账；装置问题：iOS superapp 空跑起的是 `bundle-superapp.js` 而非 css-conformance ⇒ `--screen=` 无处可去；鸿蒙 `superapp-screen-*` 无滚动参数）。fixed/sticky 的 iOS/鸿蒙**实现已编译验证**（swiftc/HAP），仅缺滚动像素。
