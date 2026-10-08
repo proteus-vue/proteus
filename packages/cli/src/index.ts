@@ -12,7 +12,7 @@ const AUTOMATOR_PATCH_SCRIPT = fileURLToPath(new URL('../../../scripts/patch-aut
 import { parseBuildArgs, parseExplainArgs, parseRulesArgs, parseRouterCheckArgs, parseModuleCheckArgs, parseModuleDuplicatesArgs, parseModuleAuditArgs, parseModuleInitArgs, parseCapabilityManifestArgs, parseCapabilityCheckArgs, parseComponentsAuditArgs, parseI18nCheckArgs, parseConfigCheckArgs, parseCssCheckArgs, parseStyleCheckArgs, parseCheckArgs, parseGenerateTypesArgs, parseMigrateTypesArgs, parseD2AuditArgs, parseGateArgs, formatHelpText, resolveCliVersion } from './args'
 import { buildDir, planTargetedBuild, runTargetedBuildProgrammatic } from './build'
 import { parseConformanceArgs, runConformance, runConformanceDemo } from './conformance'
-import { parseHostArgs, runHostPush } from './host'
+import { parseHostArgs, runHostPush, runHostSigning } from './host'
 import { parseCreateHostArgs, runCreateHost, createHost, deriveBundleName } from './host-scaffold'
 import { packageHarmonyHost, packageIosHost, packageAndroidHost, resolveDeveloperDir } from './host-package'
 import { applyNativeConfigFromProject, resolveNativeConfigFromProject } from './native-config'
@@ -769,6 +769,8 @@ async function main(): Promise<void> {
         const args = parseHostArgs(rest)
         if (args.sub === 'push') {
           process.exitCode = runHostPush(args)
+        } else if (args.sub === 'signing') {
+          process.exitCode = runHostSigning(args)
         }
       } catch (e) {
         console.error(`[proteus] ${e instanceof Error ? e.message : String(e)}`)

@@ -172,6 +172,9 @@ jobs:
       - name: doctor 注册表自检（M5 · id 唯一/命名/组齐/失败码已登记）
         run: pnpm run check:doctor-registry
 
+      - name: CLI 建议解耦框架源码（无 hosts/ · scripts/setup- · build-runtime-aar.sh 死链）
+        run: pnpm run check:cli-advice
+
       - name: SFC 五端报告（含**留白 16±0.5 硬断言** + 双口径差异率透明化——夹具口径不遮饰）
         run: pnpm run check:consistency-sfc
 

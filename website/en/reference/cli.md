@@ -92,6 +92,16 @@ proteus host push <module-dir>
       + push envelope generation (manifestHash/bundleHash — G-45.8 integrity)
       FAIL → exit 1; devices/logs/serve land with the B4 transport adapter
 
+### `proteus host`
+
+```bash
+proteus host signing <ios|android> [--list] [--generate] [--bundle=<id>]
+```
+
+★★Signing tools (#688) — shipped with the CLI, decoupled from framework source (works without hosts/)
+      ios: list local provisioning profiles/certs; --bundle=<id> resolves a usable signing combo (guides Xcode auto-signing)
+      android: check/generate debug keystore (--generate; locally self-signed)
+
 ### `proteus doctor`
 
 ```bash

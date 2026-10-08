@@ -23,6 +23,7 @@ function run(cmd: string, args: string[], opts: { cwd?: string; env?: NodeJS.Pro
 import { fileURLToPath } from 'node:url'
 // ★Apollo 诊断（决策 #684）：把宿主工具链的失败归因成 Proteus 码 + 可行动建议 + **保留原文**
 import { makeDiag, parseSwiftcOutput, captureRaw, type ProteusDiagnostic } from './diag'
+import { resolveIosSigning, IOS_PROFILE_DIRS } from './signing'
 
 /** ★本模块所在目录（`packages/cli/src` 或 `dist`）——JDK 等**框架仓资源**上溯解析的起点。 */
 const HERE_PKG = path.dirname(fileURLToPath(import.meta.url))
@@ -382,36 +383,20 @@ export function packageIosHost(opts: PackageIosOptions): PackageIosResult {
 }
 
 /**
- * ★本机描述文件目录（iOS 签名；与 run-selfdraw.sh / signApp 同源）。
- */
-export function iosProfileDir(): string {
-  return path.join(os.homedir(), 'Library', 'Developer', 'Xcode', 'UserData', 'Provisioning Profiles')
-}
-
-/**
- * ★查找覆盖某 bundleId 的本机 provisioning profile（**唯一实现**——signApp 与 doctor 共用，零逻辑复制）。
+ * ★查找覆盖某 bundleId 的本机 provisioning profile（**唯一实现**——signApp 与 doctor 共用）。
+ *   ★决策 #688：委托给 `signing.ts`（**随 CLI 包分发**的可移植签名核心，不再依赖框架 `hosts/ios/lib`）——
+ *   判据 = 描述文件 ∩ 钥匙串（未过期且授权证书在本机），容器内无匹配 ⇒ null。
  * @returns 命中的 profile 路径，或 null
  */
 export function findIosSigningProfile(bundleId: string): string | null {
-  const dir = iosProfileDir()
-  try {
-    for (const f of fs.readdirSync(dir)) {
-      if (!f.endsWith('.mobileprovision')) continue
-      const pf = path.join(dir, f)
-      try {
-        const plist = run('security', ['cms', '-D', '-i', pf], { encoding: 'utf-8', maxBuffer: 8 * 1024 * 1024 })
-        const m = plist.match(/<key>application-identifier<\/key>\s*<string>([^<]+)<\/string>/)
-        if (m && m[1].endsWith(`.${bundleId}`)) return pf
-      } catch { /* 跳过无效 profile */ }
-    }
-  } catch { /* 无 profile 目录 */ }
-  return null
+  const r = resolveIosSigning(bundleId)
+  return r.ok && r.profile ? r.profile.file : null
 }
 
 /** 用本机 provisioning profile 签名 .app（entitlements 从 profile 原样提取——同 run-selfdraw.sh） */
 function signApp(appDir: string, bundleId: string, log: string[]): { ok: boolean; diagnostics?: ProteusDiagnostic[] } {
-  const profileDir = iosProfileDir()
-  // ★唯一实现复用（零逻辑复制）：findIosSigningProfile 与 doctor 的签名检查共用同一匹配逻辑
+  const profileDir = IOS_PROFILE_DIRS[0]
+  // ★唯一实现复用（零逻辑复制）：signing.ts（随 CLI 包分发）与 doctor 的签名检查共用同一判据
   const profile = findIosSigningProfile(bundleId) ?? ''
   if (!profile) {
     log.push(`✗ 无匹配描述文件（bundleId=${bundleId}）`)
@@ -422,9 +407,9 @@ function signApp(appDir: string, bundleId: string, log: string[]): { ok: boolean
         makeDiag('PT-BE-003', {
           cause: `本机描述文件（~/Library/Developer/Xcode/UserData/Provisioning Profiles/）中没有覆盖 bundleId「${bundleId}」的 profile`,
           suggestions: [
-            '上档签名：bash hosts/ios/signing.sh use <账号|SHA-1前缀>（会在 Apple 侧为该 App ID 建档）',
-            '自查：bash hosts/ios/signing.sh status（列出本机 keychain 身份 + 有效描述文件 + 当前档）',
-            `或把项目的 iOS bundleId（proteus.config native.ios.bundleId，当前 ${bundleId}）改成某个已有 profile 覆盖的 id`,
+            `在 Xcode 打开你的工程 → target → Signing & Capabilities → 勾“Automatically manage signing”并选好 Team，Xcode 会为 ${bundleId} 自动生成描述文件`,
+            `查本机已有描述文件与证书：proteus host signing ios --list`,
+            `或把项目的 iOS bundleId（proteus.config 的 native.ios.bundleId，当前 ${bundleId}）改成某个已有描述文件覆盖的 id`,
           ],
           raw: `无匹配描述文件（bundleId=${bundleId}）\nprofiles dir: ${profileDir}`,
         }),
@@ -439,7 +424,7 @@ function signApp(appDir: string, bundleId: string, log: string[]): { ok: boolean
   } catch { /* fallthrough */ }
   if (!identity) {
     log.push('✗ 无签名身份（security find-identity）')
-    return { ok: false, diagnostics: [makeDiag('PT-BE-003', { cause: '本机 keychain 无有效 Apple Development 签名身份', suggestions: ['在 Xcode 登录开发者账号（Settings→Accounts）或 `bash hosts/ios/signing.sh use <账号>`', '自查：security find-identity -v -p codesigning'], raw: '无签名身份（security find-identity）' })] }
+    return { ok: false, diagnostics: [makeDiag('PT-BE-003', { cause: '本机 keychain 无有效 Apple Development 签名身份', suggestions: ['在 Xcode 登录开发者账号（Settings → Accounts），或用 Xcode 为工程自动管理签名', '自查：security find-identity -v -p codesigning'], raw: '无签名身份（security find-identity）' })] }
   }
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-ios-'))
   try {
@@ -549,7 +534,7 @@ export function packageAndroidHost(opts: PackageAndroidOptions): PackageAndroidR
 
   // ① runtime AAR（libs/proteus-runtime.aar）——缺则尝试框架仓构建
   const aarPath = path.join(hostDir, 'libs', 'proteus-runtime.aar')
-  if (!fs.existsSync(aarPath)) return { ok: false, hostDir, apk: null, screenContentCopied: false, log: [`✗ 缺 runtime AAR：${path.relative(hostDir, aarPath)}（先跑 hosts/android/build-runtime-aar.sh 并用 create host 拷入）`], diagnostics: [makeDiag('PT-BE-005', { cause: `宿主缺 runtime AAR：${path.relative(hostDir, aarPath)}`, raw: `缺 runtime AAR：${aarPath}` })] }
+  if (!fs.existsSync(aarPath)) return { ok: false, hostDir, apk: null, screenContentCopied: false, log: [`✗ 缺 runtime AAR：${path.relative(hostDir, aarPath)}`], diagnostics: [makeDiag('PT-BE-005', { cause: `宿主缺 runtime AAR：${path.relative(hostDir, aarPath)}`, suggestions: ['删除宿主目录后重生成：proteus create host android <dir>（会从 CLI 随包 runtime 拷入）', '若已在项目内：删掉 dist/app/android/host 后重跑 proteus build --target android --package'], raw: `缺 runtime AAR：${aarPath}` })] }
   // ★★★runtime AAR 定向自愈（2026-10-09 · 决策 #685 用户实测「安卓滑了还是一样」的根因）：
   //   `createHost` 是**一次性 scaffold**——已存在的宿主**不会**再拷 AAR ⇒ 改了 runtime 源码（如本次
   //   加竖向 fling）后，旧宿主仍打包**陈旧 AAR** ⇒ "改了没生效、症状照旧"。与 D3 主题自愈同源。

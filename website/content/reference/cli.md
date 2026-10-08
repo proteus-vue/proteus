@@ -92,6 +92,16 @@ proteus host push <module-dir>
       + push 信封生成（manifestHash/bundleHash——G-45.8 完整性）
       FAIL → exit 1；devices/logs/serve 随 B4 transport 适配器落地
 
+### `proteus host`
+
+```bash
+proteus host signing <ios|android> [--list] [--generate] [--bundle=<id>]
+```
+
+★★签名工具（#688）——随 CLI 包分发、**解耦框架源码**（用户无 hosts/ 时也自诊自修）
+      ios：列本机描述文件/证书；--bundle=<id> 解析某 bundleId 的可用签名组合（指导 Xcode 自动签名）
+      android：检查/生成 debug keystore（--generate；本地自签）
+
 ### `proteus doctor`
 
 ```bash
