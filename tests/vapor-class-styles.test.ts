@@ -1556,3 +1556,31 @@ describe('★flex-direction 初值归一（display:flex 缺省补 row · 对齐 
     expect(st.flexDirection).toBeUndefined()
   })
 })
+
+describe('★App 页根「块级满宽」（对齐 Web · 用户实测「text-align:center + 根 padding 渲染成顶左」）', () => {
+  // ★CSS：块级页根宽度 = 包含块宽（auto 宽填满）；App 内核把单根当 flex 容器，auto 宽按内容收缩
+  //   （实测 292px vs 视口 400px）⇒ 页根缩到文字宽 ⇒ text-align:center 只在小盒里居中（"顶左"）。
+  //   ⇒ 单根且未声明宽度 ⇒ 补 widthRatio:1（= width:100%）。
+  const rootStyle = (sfc: string): Record<string, unknown> => {
+    const r = buildLayoutTemplate(sfc, 'pages/p.vue')
+    const root = r.template.nodes.find((n) => n.id === r.template.roots[0])!
+    return root.style as Record<string, unknown>
+  }
+  it('单根未声明宽度 ⇒ 补 widthRatio:1（页根满宽）', () => {
+    const st = rootStyle('<template><div class="home"><h1>Hi</h1></div></template><style>.home{text-align:center;padding:48px 0}</style>')
+    expect(st.widthRatio).toBe(1)
+    expect(st.textAlign).toBe('center') // 其它声明不受影响
+  })
+  it('根显式声明宽度 ⇒ 不动（尊重显式声明）', () => {
+    expect(rootStyle('<template><div style="width:200px">x</div></template>').widthRatio).toBeUndefined()
+    expect(rootStyle('<template><div style="width:100%">x</div></template>').widthRatio).toBe(1) // 100% 本就是 1
+    expect(rootStyle('<template><div style="min-width:50px">x</div></template>').widthRatio).toBeUndefined()
+  })
+  it('多根（片段）⇒ 不补（各根按各自语义）', () => {
+    const r = buildLayoutTemplate('<template><text>a</text><text>b</text></template>', 'pages/p.vue')
+    for (const id of r.template.roots) {
+      const n = r.template.nodes.find((x) => x.id === id)!
+      expect((n.style as Record<string, unknown>).widthRatio).toBeUndefined()
+    }
+  })
+})
