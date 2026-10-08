@@ -334,13 +334,23 @@ public final class AppActivity extends Activity {
         return new SuperappRuntimeHost(draw, new HostBridge(caps, screenHost));
     }
 
-    /** 记一次渲染的性能读数（决策 #675）：relayout 计数 + mount 调用数（draw 原子上抛，非自造第二份数学）。 */
+    /** 记一次渲染的性能读数（决策 #675/#676）：渲染耗时 + mount 次数 + 逐帧耗时 + 重排/patch 计数。
+     *  ★数据源全为宿主/内核原子上抛（不自造第二份数学）。 */
     private void recordPerf(long renderStartMs) {
         if (!ProteusBuildConfig.DEV) return;
         try {
             JSONObject o = new JSONObject();
             o.put("renderMs", System.currentTimeMillis() - renderStartMs);
             o.put("mountCalls", draw.mountCalls);
+            // ★逐帧耗时（ProteusHostView.onDraw 实测，决策 #676）
+            if (draw.view() != null) {
+                o.put("frameMs", Math.round(draw.view().lastFrameMs() * 100) / 100.0);
+                o.put("frameAvgMs", Math.round(draw.view().frameMsAverage() * 100) / 100.0);
+                o.put("draws", draw.view().onDrawTotal());
+            }
+            // ★重排 / patch 计数（内核回执累计，决策 #676）
+            o.put("relayout", draw.relayoutTotal);
+            o.put("patches", draw.patchAppliedTotal);
             o.put("t", System.currentTimeMillis());
             devPerfJson = o.toString();
         } catch (Throwable ignored) { }
@@ -365,6 +375,10 @@ public final class AppActivity extends Activity {
             try { o.put("theme", (getResources().getConfiguration().uiMode & android.content.res.Configuration.UI_MODE_NIGHT_MASK)
                 == android.content.res.Configuration.UI_MODE_NIGHT_YES ? "dark" : "light"); } catch (Throwable ignored) { }
             try { o.put("appVersion", getPackageManager().getPackageInfo(getPackageName(), 0).versionName); } catch (Throwable ignored) { }
+            // ★内核/引擎级（决策 #676）：显示内核版本与 JS 引擎标识——"设备环境"深入到内核一级。
+            try { o.put("layoutCore", RustLayout.version()); } catch (Throwable ignored) { }
+            try { o.put("jsEngine", QuickJsEngine.isAvailable() ? QuickJsEngine.nativeVersion() : "不可用"); } catch (Throwable ignored) { }
+            try { o.put("hostBuild", ProteusBuildConfig.DEV ? "dev" : "release"); } catch (Throwable ignored) { }
         } catch (Throwable ignored) { }
         return o.toString();
     }
