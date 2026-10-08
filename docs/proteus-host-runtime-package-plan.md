@@ -39,6 +39,17 @@
 **当前无消费者被阻塞**：CLI 生成的宿主从框架仓复制 runtime 即可用，三端真机全绿；
 "外部项目不 clone 框架就依赖 runtime"这一 L2 场景尚未发生 ⇒ 这是**未来需求，不是当前瓶颈**。
 
+> ★★★**2026-10-08 更新（决策 #666「彻底打通」）——上述判断已被证实**：用户实测（纯 npm 安装、
+> 不碰框架源码）跑 `proteus build --target android --package` **报「找不到框架仓根」**⇒ L2 场景**已发生**。
+> **已就地解决 Android 路径**（不改本 epic 的分发面设计，而是"随包内置产物"的过渡形态）：
+> · 桥源随 CLI 包发布（`templates-host/shared/bridge/entry-superapp.ts`，SSOT 门禁 `check:bridge-sync`）；
+> · Android runtime AAR 随包（`templates-host/prebuilt/android/proteus-runtime.aar`，`build-runtime-aar.sh` 同步）；
+> · 纯 npm 安装已真机出包验证。
+> **仍未解决（本 epic 核心）**：iOS/harmony —— 其 runtime 是 **26MB/33MB 未 strip** 的 Rust 静态库，
+> 随 npm 包发布不现实，仍需 xcframework/HAR + Maven/ohpm/SwiftPM 的**独立托管**。
+> ⇒ 本 epic 范围收窄为 **iOS/harmony 的 runtime 独立发布**；触发条件 A 的"Android 部分"视为已处理。
+
+
 ## 3. 触发条件（满足其一即评估启动）
 
 - **A. 出现真实外部 L2 消费者**：某项目要用 `proteus create host`，且**不能**携带框架 checkout（G-42.6 落地的时点）；
