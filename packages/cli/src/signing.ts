@@ -224,8 +224,15 @@ export function androidSigningStatus(opts: { jdkDir?: string | null; buildToolsD
   const nextSteps: string[] = []
   const keytool = opts.jdkDir ? path.join(opts.jdkDir, 'bin', 'keytool') : 'keytool'
   const apksigner = opts.buildToolsDir ? path.join(opts.buildToolsDir, 'apksigner') : 'apksigner'
-  const keytoolOk = run(keytool, ['-help']).ok || run('keytool', ['-help']).ok
-  const apksignerOk = fs.existsSync(apksigner) || run('apksigner', ['--version']).ok
+  // ★判据用**文件存在**（零 JVM 启动）——此前 spawn `keytool -help`（JVM 启动 ~500ms）把 doctor 拖慢。
+  //   给定了 jdkDir / buildToolsDir 时看文件；否则看 PATH（sh -c 'command -v'）。
+  const onPath = (name: string): boolean => {
+    try {
+      return spawnSync('sh', ['-c', `command -v ${name} 2>/dev/null`], { encoding: 'utf8' }).status === 0
+    } catch { return false }
+  }
+  const keytoolOk = opts.jdkDir ? fs.existsSync(keytool) : onPath('keytool')
+  const apksignerOk = fs.existsSync(apksigner) || onPath('apksigner')
   const keystoreExists = fs.existsSync(opts.keystore)
   if (!keytoolOk) {
     messages.push('keytool 不可用（Android debug 签名需 JDK 17）')

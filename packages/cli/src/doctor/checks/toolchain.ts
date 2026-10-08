@@ -4,11 +4,16 @@
 // ★决策 #688：**所有 fix/directive 必须解耦框架源码**——用户没有 `hosts/`、`scripts/`、`.tools/`
 //   （那是框架 checkout）⇒ 一律指 `proteus host signing …` / 通用安装命令 / GUI 指引。
 import path from 'node:path'
+import fs from 'node:fs'
 import type { DoctorCheck } from '../types'
 import { ok, skip, fail, hasToolsDir } from './util'
 import { resolveDeveloperDir, findAllXcodes } from '../../host-package'
 import { resolveMpIdeCli } from '../../mp-e2e'
 import { androidSigningStatus, IOS_PROFILE_DIRS } from '../../signing'
+import { findAllJdks, resolveJdk17, findAllAndroidSdks, resolveAndroidSdk, findAllDevEcos, resolveDevEco, findHdc } from '../../host-paths'
+
+/** DevEco Contents（若有）——供 JDK/hdc 解析复用（DevEco 自带 jbr 与 hdc） */
+const devecoContents = ((): string | null => resolveDevEco()?.contents ?? null)()
 
 /** 是否声明了某端（targets 含它） */
 const has = (ctx: { targets: string[] }, end: string): boolean => ctx.targets.includes(end)
@@ -54,14 +59,16 @@ export const TOOLCHAIN_CHECKS: DoctorCheck[] = [
     level: 'error',
     appliesTo: (ctx) => has(ctx, 'android'),
     run(ctx) {
+      // ★决策 #691：枚举系统 JVM / Homebrew / sdkman / IDE 自带 JBR（不只看 JAVA_HOME/.tools）
+      const all = findAllJdks(devecoContents)
+      const pick = resolveJdk17(devecoContents)
+      const listNote = all.length > 1 ? `本机 ${all.length} 个 JDK：${all.map((c) => `${c.source}(${c.major ?? '?'})`).join(' · ')}` : ''
+      const evidence = all.map((c) => ({ command: c.home, note: `${c.source} javac=${c.hasJavac} major=${c.major ?? '?'}` }))
+      if (pick?.hasJavac) {
+        return { checkId: 'toolchain/android-jdk', level: 'ok', title: 'JDK 17', actual: `${pick.home}（${pick.source}${pick.major ? ` · java ${pick.major}` : ''}）${listNote ? `  （${listNote}）` : ''}`, evidence }
+      }
       const jdk = ctx.runCmd('java', ['-version'], { timeoutMs: 4000 })
-      const verStr = `${jdk.stderr ?? ''}${jdk.stdout ?? ''}`
-      const m = verStr.match(/version "(\d+)/)
-      const major = m ? Number(m[1]) : NaN
-      // .tools/jdk17 存在也算通过——★上溯若干层（仓内工程可用框架仓的 .tools）
-      const localJdk = hasToolsDir(ctx, 'jdk17') || hasToolsDir(ctx, 'jdk-17.0.20.1+1/Contents/Home')
-      if (major === 17 || localJdk) return ok('toolchain/android-jdk', 'JDK 17', major === 17 ? `java ${major}` : '.tools/jdk17 就位')
-      return fail({ checkId: 'toolchain/android-jdk', level: 'error', code: 'PT-BE-002', title: 'JDK 17 未找到', expected: 'JAVA_HOME 指向 JDK 17（或 .tools/jdk17）', actual: Number.isFinite(major) ? `java ${major}` : (jdk.note ?? '不可用'), fix: { command: 'brew install openjdk@17  # 或设 JAVA_HOME 指向 JDK 17', description: 'Android 打包需 JDK 17（javac/d8/apksigner）' }, evidence: [jdk] })
+      return fail({ checkId: 'toolchain/android-jdk', level: 'error', code: 'PT-BE-002', title: 'JDK 17 未找到', expected: '任一含 javac 的 JDK（Android 打包需 17）', actual: all.length ? `找到 ${all.length} 个但均无 javac` : '未找到（JAVA_HOME 未设、无系统 JVM/IDE JBR）', fix: { command: 'brew install openjdk@17  # 或设 JAVA_HOME；或装 Android Studio（自带 jbr）', description: 'Android 打包需 JDK 17（javac/d8/apksigner）' }, evidence: evidence.length ? evidence : [jdk] })
     },
   },
   {
@@ -71,12 +78,15 @@ export const TOOLCHAIN_CHECKS: DoctorCheck[] = [
     level: 'error',
     appliesTo: (ctx) => has(ctx, 'android'),
     run(ctx) {
-      const sdk = process.env.ANDROID_HOME ?? process.env.ANDROID_SDK_ROOT ?? path.join(process.env.HOME ?? '', 'Library', 'Android', 'sdk')
-      const hasPlatforms = ctx.exists(path.join(sdk, 'platforms'))
-      const bt = ctx.exists(path.join(sdk, 'build-tools'))
-      return hasPlatforms && bt
-        ? ok('toolchain/android-sdk', 'Android SDK', `${sdk}（platforms + build-tools）`)
-        : fail({ checkId: 'toolchain/android-sdk', level: 'error', code: 'PT-BE-002', title: 'Android SDK 不完整', expected: 'SDK 含 platforms/ 与 build-tools/（aapt2/d8/apksigner）', actual: `platforms=${hasPlatforms} build-tools=${bt}`, fix: { command: `# 用 Android Studio SDK Manager 装 platform-tools + build-tools；确认 ANDROID_HOME 指向 SDK（当前 ${sdk}）` }, evidence: [{ command: `ls ${sdk}/platforms`, note: hasPlatforms ? 'ok' : 'ENOENT' }] })
+      // ★决策 #691：全盘枚举（ANDROID_HOME / ~/Library/Android/sdk / Homebrew / …），能力判据 = platforms + build-tools
+      const all = findAllAndroidSdks()
+      const pick = resolveAndroidSdk()
+      const evidence = all.map((c) => ({ command: c.sdk, note: `platforms=${c.hasPlatforms} build-tools=${c.hasBuildTools}` }))
+      if (pick?.hasPlatforms && pick.hasBuildTools) {
+        const listNote = all.length > 1 ? `（本机 ${all.length} 个 SDK）` : ''
+        return { checkId: 'toolchain/android-sdk', level: 'ok', title: 'Android SDK', actual: `${pick.sdk}（platforms + build-tools）${listNote}`, evidence }
+      }
+      return fail({ checkId: 'toolchain/android-sdk', level: 'error', code: 'PT-BE-002', title: 'Android SDK 不完整', expected: '任一含 platforms/ 与 build-tools/（aapt2/d8/apksigner）的 SDK', actual: all.length ? `找到 ${all.length} 个但缺 platforms/build-tools` : '未找到（ANDROID_HOME 未设、无常见安装位）', fix: { command: '用 Android Studio SDK Manager 装 platform-tools + build-tools；或设 ANDROID_HOME 指向 SDK', description: '本工具会扫描 ANDROID_HOME 与 ~/Library/Android/sdk、Homebrew 等位' }, evidence: evidence.length ? evidence : [{ command: 'ls $ANDROID_HOME/platforms', note: 'ENOENT' }] })
     },
   },
   {
@@ -121,10 +131,18 @@ export const TOOLCHAIN_CHECKS: DoctorCheck[] = [
     level: 'warn',
     appliesTo: (ctx) => has(ctx, 'android'),
     run(ctx) {
-      const hasNdk = hasToolsDir(ctx, 'ndk')
-      return hasNdk
-        ? ok('toolchain/android-ndk', 'Android NDK', '.tools/ndk 就位')
-        : fail({ checkId: 'toolchain/android-ndk', level: 'warn', code: 'PT-EE-006', title: 'Android NDK 缺失', expected: '.tools/ndk', actual: '不存在', fix: { command: '# 用 Android Studio SDK Manager 装 NDK（或 sdkmanager "ndk;27.0.12077973"）；本机 .tools/ndk 亦可', description: 'Android 原生库（JNI）构建需要 NDK' }, evidence: [{ command: 'ls .tools/ndk', note: 'ENOENT' }] })
+      // ★决策 #691：NDK 的真实位置是 **SDK 的 `ndk/<ver>`**（不是框架 `.tools/ndk`——那是本仓内部约定）
+      const sdk = resolveAndroidSdk()
+      const ndkRoot = sdk ? path.join(sdk.sdk, 'ndk') : null
+      let ndkVer: string | null = null
+      try {
+        if (ndkRoot && fs.existsSync(ndkRoot)) ndkVer = fs.readdirSync(ndkRoot).filter((d: string) => !d.startsWith('.')).sort().pop() ?? null
+      } catch { /* 读不动 ⇒ 视为无 */ }
+      const frameworkNdk = hasToolsDir(ctx, 'ndk') // 仓内工程的 .tools/ndk（兜底）
+      if (ndkVer || frameworkNdk) {
+        return ok('toolchain/android-ndk', 'Android NDK', ndkVer ? `${path.join(ndkRoot!, ndkVer)}` : '.tools/ndk 就位')
+      }
+      return fail({ checkId: 'toolchain/android-ndk', level: 'warn', code: 'PT-EE-006', title: 'Android NDK 缺失', expected: 'SDK 的 ndk/<版本> 目录（sdkmanager "ndk;<ver>"）', actual: '不存在', fix: { command: 'sdkmanager "ndk;27.0.12077973"  # 或用 Android Studio SDK Manager → SDK Tools → NDK', description: 'Android 原生库（JNI）构建需要 NDK' }, evidence: [{ command: `ls ${ndkRoot ?? '$ANDROID_HOME/ndk'}`, note: 'ENOENT' }] })
     },
   },
   {
@@ -152,16 +170,15 @@ export const TOOLCHAIN_CHECKS: DoctorCheck[] = [
     level: 'error',
     appliesTo: (ctx) => has(ctx, 'harmony'),
     run(ctx) {
-      const cands = [
-        process.env.PROTEUS_DEVECO,
-        '/Volumes/data1/work/office-applications/DevEco-Studio.app/Contents',
-        path.join(process.env.HOME ?? '', 'Applications/DevEco-Studio.app/Contents'),
-        '/Applications/DevEco-Studio.app/Contents',
-      ].filter((c): c is string => !!c)
-      const hit = cands.find((c) => ctx.exists(path.join(c, 'tools/hvigor/bin/hvigorw')))
-      return hit
-        ? ok('toolchain/harmony-deveco', 'DevEco Studio', hit)
-        : fail({ checkId: 'toolchain/harmony-deveco', level: 'error', code: 'PT-EE-011', title: '缺少 DevEco Studio / hvigor', expected: 'DevEco 6.1.1+（tools/hvigor/bin/hvigorw 存在）', actual: '未找到', fix: { command: 'PROTEUS_DEVECO=/path/to/DevEco-Studio.app/Contents proteus doctor', description: '安装 DevEco Studio' }, evidence: [{ command: 'ls <devEco>/tools/hvigor/bin/hvigorw', note: '候选位均未命中' }] })
+      // ★决策 #691：全盘枚举（PROTEUS_DEVECO / mdfind / glob 各安装位）——不再硬编码框架机路径
+      const all = findAllDevEcos()
+      const pick = resolveDevEco()
+      const evidence = all.map((c) => ({ command: c.contents, note: `hvigorw=${c.hasHvigor}` }))
+      if (pick?.hasHvigor) {
+        const listNote = all.length > 1 ? `（本机 ${all.length} 个 DevEco）` : ''
+        return { checkId: 'toolchain/harmony-deveco', level: 'ok', title: 'DevEco Studio', actual: `${pick.contents}${listNote}`, evidence }
+      }
+      return fail({ checkId: 'toolchain/harmony-deveco', level: 'error', code: 'PT-EE-011', title: '缺少 DevEco Studio / hvigor', expected: '任一含 tools/hvigor/bin/hvigorw 的 DevEco（6.1.1+）', actual: all.length ? `找到 ${all.length} 个但无 hvigorw` : '未找到（Applications / Volumes 各安装位均无）', fix: { command: 'PROTEUS_DEVECO=/path/to/DevEco-Studio.app/Contents proteus doctor', description: '安装 DevEco Studio，或用 PROTEUS_DEVECO 指定（本工具会扫描 Applications 与 Volumes）' }, evidence: evidence.length ? evidence : [{ command: 'ls <devEco>/tools/hvigor/bin/hvigorw', note: '候选位均未命中' }] })
     },
   },
   {
@@ -171,18 +188,23 @@ export const TOOLCHAIN_CHECKS: DoctorCheck[] = [
     level: 'warn',
     appliesTo: (ctx) => has(ctx, 'harmony'),
     run(ctx) {
-      const ev = ctx.runCmd('hdc', ['-v'], { timeoutMs: 4000 })
-      // 版本门槛 ≥ 3.2.0d（旧版与 HarmonyOS 7 协议不兼容）
+      // ★决策 #691：找 hdc ①PATH ②DevEco 自带（真实路径 = sdk/<ver>/openharmony/toolchains/hdc）
+      //   ★旧建议 `$DEVECO_SDK_HOME/../hdc` 是**错的**（实测 hdc 在 sdk 的 toolchains 下）——已修。
+      const found = findHdc(devecoContents)
+      if (!found) {
+        return fail({ checkId: 'toolchain/harmony-hdc', level: 'warn', code: 'PT-EE-013', title: 'hdc 不可用', expected: 'PATH 或 DevEco 自带 hdc ≥ 3.2.0d', actual: '未找到（PATH 无 hdc，DevEco SDK toolchains 亦未命中）', fix: { command: `export PATH="${devecoContents ? path.join(devecoContents, 'sdk/default/openharmony/toolchains') : '$DEVECO/sdk/<ver>/openharmony/toolchains'}:$PATH"`, description: '用 DevEco 自带 hdc（在 SDK 的 toolchains 下）' }, evidence: [{ note: 'PATH 与 DevEco SDK 均未找到 hdc' }] })
+      }
+      const ev = ctx.runCmd(found.hdc, ['-v'], { timeoutMs: 4000 })
       const m = (ev.stdout ?? ev.stderr ?? '').match(/(\d+\.\d+\.\d+)/)
       const ver = m ? m[1] : null
       if (ev.exitCode === 0 && ver) {
         const [a, b] = ver.split('.').map(Number)
         const okVer = a > 3 || (a === 3 && b >= 2)
         return okVer
-          ? ok('toolchain/harmony-hdc', 'hdc', ver)
-          : fail({ checkId: 'toolchain/harmony-hdc', level: 'warn', code: 'PT-EE-013', title: 'hdc 版本过低', expected: '≥ 3.2.0d', actual: ver, fix: { command: 'export PATH="$DEVECO_SDK_HOME/../hdc:$PATH"  # 用 DevEco Studio 自带的 hdc', description: '旧版 hdc 与 HarmonyOS 7 设备协议不兼容' }, evidence: [ev] })
+          ? ok('toolchain/harmony-hdc', 'hdc', `${ver}  （${found.source}）`)
+          : fail({ checkId: 'toolchain/harmony-hdc', level: 'warn', code: 'PT-EE-013', title: 'hdc 版本过低', expected: '≥ 3.2.0d', actual: ver, fix: { command: '用 DevEco Studio 自带的 hdc（在 <DEVECO>/sdk/<ver>/openharmony/toolchains/hdc）', description: '旧版 hdc 与 HarmonyOS 7 设备协议不兼容' }, evidence: [ev] })
       }
-      return fail({ checkId: 'toolchain/harmony-hdc', level: 'warn', code: 'PT-EE-013', title: 'hdc 不可用', expected: 'DevEco 自带 hdc ≥ 3.2.0d', actual: ev.note ?? '不可用', evidence: [ev] })
+      return fail({ checkId: 'toolchain/harmony-hdc', level: 'warn', code: 'PT-EE-013', title: 'hdc 不可用', expected: 'DevEco 自带 hdc ≥ 3.2.0d', actual: `${found.hdc}（${ev.note ?? '执行失败'}）`, evidence: [ev] })
     },
   },
   {
