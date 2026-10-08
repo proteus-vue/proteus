@@ -27,151 +27,227 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>Proteus DevTools · ${esc(info.projectName)}</title>
 <style>
-  :root{--bg:#0e1016;--surface:#171a23;--surface2:#1e2230;--line:#2a2f3d;--ink:#e7e9ef;--dim:#8b93a7;
-        --brand:#5b7cff;--ok:#35d07f;--warn:#f5b544;--err:#ff5c5c;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  :root{
+    /* 设计令牌（8px 间距尺度 / 统一圆角 / 字号尺度 / 语义色）——"大厂生产"观感的基础 */
+    --bg:#0a0b0f; --surface:#12141b; --surface-2:#181b24; --surface-3:#1e222c;
+    --line:#232734; --line-2:#2c3140;
+    --ink:#eef1f7; --ink-2:#b6bdcc; --dim:#727c90; --faint:#4b5464;
+    --brand:#6b7cff; --brand-soft:rgba(107,124,255,.14);
+    --ok:#3ddc84; --ok-soft:rgba(61,220,132,.14);
+    --warn:#f4b740; --warn-soft:rgba(244,183,64,.14);
+    --err:#ff6262; --err-soft:rgba(255,98,98,.14);
+    --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px;
+    --r-sm:8px; --r:12px; --r-lg:16px;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    --sh:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.6);
+  }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,"PingFang SC",sans-serif}
-  header{display:flex;align-items:center;gap:12px;padding:16px 22px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:5}
-  .logo{font-weight:700;font-size:16px;letter-spacing:.2px}
-  .logo b{color:var(--brand)}
-  .proj{color:var(--dim);font-size:13px}
+  html{-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+  body{margin:0;background:radial-gradient(1200px 600px at 50% -200px,#141826 0%,var(--bg) 60%) no-repeat,var(--bg);
+       color:var(--ink);font:13px/1.55 var(--sans)}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-thumb{background:#242936;border-radius:8px;border:2px solid transparent;background-clip:padding-box}
+  ::-webkit-scrollbar-thumb:hover{background:#333a4a;background-clip:padding-box}
+
+  /* ── 顶部应用栏 ── */
+  header{display:flex;align-items:center;gap:var(--s3);padding:0 var(--s5);height:56px;
+         border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20;
+         background:rgba(10,11,15,.72);backdrop-filter:saturate(160%) blur(12px);-webkit-backdrop-filter:saturate(160%) blur(12px)}
+  .brand{display:flex;align-items:center;gap:10px}
+  .mark{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;font-size:14px;color:#fff;
+        background:linear-gradient(140deg,var(--brand),#8b5cf6);box-shadow:0 2px 8px -2px rgba(107,124,255,.6)}
+  .btitle{font-weight:650;font-size:14px;letter-spacing:.1px}
+  .btitle b{color:var(--brand);font-weight:750}
+  .crumbs{display:flex;align-items:center;gap:var(--s2);color:var(--dim);font-size:12px;min-width:0}
+  .crumbs .proj{color:var(--ink-2);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .crumbs .sep{color:var(--faint)}
+  .crumbs .plat{font-family:var(--mono);color:var(--dim);text-transform:lowercase}
   .grow{flex:1}
-  .dot{width:9px;height:9px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 4px rgba(53,208,127,.16);display:inline-block;margin-right:6px;vertical-align:middle}
-  .dot.off{background:var(--err);box-shadow:0 0 0 4px rgba(255,92,92,.16)}
-  .pill{padding:3px 10px;border:1px solid var(--line);border-radius:999px;font-size:12px;color:var(--dim)}
-  main{padding:22px;max-width:960px;margin:0 auto}
-  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
-  .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px}
-  .card .k{color:var(--dim);font-size:12px;text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px}
-  .card .v{font-size:22px;font-weight:650;font-variant-numeric:tabular-nums}
-  .card .v small{font-size:13px;color:var(--dim);font-weight:400;margin-left:4px}
-  h2{font-size:13px;color:var(--dim);text-transform:uppercase;letter-spacing:.7px;margin:26px 0 12px;display:flex;align-items:center;gap:10px}
-  .flt{display:inline-flex;gap:2px;text-transform:none;letter-spacing:0;font-size:11px}
-  .flt b{cursor:pointer;padding:2px 8px;border:1px solid var(--line);border-radius:6px;color:var(--dim);font-weight:500}
-  .flt b.on{background:var(--brand);border-color:var(--brand);color:#fff}
-  .ch{font-weight:600;padding:0 4px;border-radius:4px;font-size:10px}
-  .ch-native{color:#c9a227;background:rgba(201,162,39,.13)}
-  .ch-project{color:#5b7cff;background:rgba(91,124,255,.15)}
-  .tl{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
-  .row{display:grid;grid-template-columns:64px 1fr auto;gap:12px;align-items:center;padding:11px 16px;border-top:1px solid var(--line);font-size:13px}
+  .pill{display:inline-flex;align-items:center;gap:7px;padding:5px 11px;border:1px solid var(--line-2);
+        border-radius:999px;font-size:12px;color:var(--ink-2);background:var(--surface);font-weight:500;white-space:nowrap;flex:none}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px var(--ok-soft);flex:none}
+  .dot.off{background:var(--err);box-shadow:0 0 0 3px var(--err-soft)}
+
+  main{padding:var(--s5) var(--s5) var(--s6);max-width:1080px;margin:0 auto}
+  .blk{margin-bottom:var(--s5)}
+
+  /* ── 指标卡 ── */
+  .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--s3)}
+  @media(max-width:900px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  @media(max-width:520px){.grid{grid-template-columns:1fr}}
+  @media(max-width:520px){header{padding:0 var(--s4);gap:var(--s2)} .crumbs .sep,.crumbs .plat{display:none} main{padding:var(--s4) var(--s4) var(--s6)}}
+  .card{position:relative;background:linear-gradient(var(--surface-2),var(--surface));border:1px solid var(--line);
+        border-radius:var(--r);padding:var(--s3) var(--s4) 14px;overflow:hidden;transition:border-color .15s,transform .15s}
+  .card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--line-2)}
+  .card[data-kind=build]::before{background:linear-gradient(var(--brand),#8b5cf6)}
+  .card[data-kind=nav]::before{background:var(--ok)}
+  .card[data-kind=perf]::before{background:var(--warn)}
+  .card:hover{border-color:var(--line-2)}
+  .card .k{color:var(--dim);font-size:11px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;margin:0 0 6px}
+  .card .v{font-size:24px;line-height:1.15;font-weight:680;font-variant-numeric:tabular-nums;letter-spacing:-.4px}
+  .card .v small{font-size:12px;color:var(--dim);font-weight:500;margin-left:3px;letter-spacing:0}
+  .host{display:flex;align-items:center;gap:var(--s2)}
+  .screen{font-family:var(--mono);font-size:18px;color:var(--brand);font-weight:600}
+
+  /* ── 区块标题 ── */
+  h2{display:flex;align-items:center;gap:10px;margin:0 0 var(--s3);font-size:12px;font-weight:650;
+     letter-spacing:.5px;text-transform:uppercase;color:var(--ink-2)}
+  h2::before{content:"";width:3px;height:13px;border-radius:2px;background:var(--brand);opacity:.85}
+  h2 .flt{margin-left:auto}
+
+  /* ── 分段控件（过滤）── */
+  .flt{display:inline-flex;gap:2px;padding:2px;background:var(--surface-2);border:1px solid var(--line);border-radius:9px}
+  .flt b{cursor:pointer;padding:3px 10px;border-radius:6px;color:var(--dim);font-weight:550;font-size:11px;
+         letter-spacing:0;text-transform:none;transition:background .12s,color .12s;user-select:none}
+  .flt b:hover{color:var(--ink-2)}
+  .flt b.on{background:var(--brand);color:#fff;box-shadow:0 1px 4px -1px rgba(107,124,255,.6)}
+
+  /* ── 通道标 ── */
+  .ch{display:inline-block;font-weight:650;padding:1px 6px;border-radius:5px;font-size:10px;letter-spacing:.2px;vertical-align:middle}
+  .ch-native{color:var(--warn);background:var(--warn-soft)}
+  .ch-project{color:var(--brand);background:var(--brand-soft)}
+
+  /* ── 通用面板（带"外框"观感）── */
+  .panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:auto;max-height:340px}
+  .empty{display:flex;align-items:center;gap:10px;color:var(--dim);padding:var(--s5) var(--s4);font-size:12.5px}
+  .empty::before{content:"○";color:var(--faint);font-size:15px}
+
+  /* ── 重建时间线 ── */
+  .tl{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+  .row{display:grid;grid-template-columns:52px 1fr auto;gap:var(--s3);align-items:center;padding:11px var(--s4);border-top:1px solid var(--line);font-size:12.5px}
   .row:first-child{border-top:0}
-  .row .ver{font-family:var(--mono);color:var(--brand);font-weight:600}
-  .row .why{color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .row .meta{color:var(--dim);font-family:var(--mono);font-size:12px;white-space:nowrap}
-  .row.new{animation:flash 1.4s ease-out}
-  @keyframes flash{from{background:rgba(91,124,255,.22)}to{background:transparent}}
-  .empty{color:var(--dim);padding:18px 16px;font-size:13px}
-  .two{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}
-  @media(max-width:760px){.two{grid-template-columns:1fr}}
-  .panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;max-height:320px;overflow-y:auto}
-  .nrow{display:grid;grid-template-columns:52px 1fr auto auto;gap:10px;align-items:center;padding:8px 12px;border-top:1px solid var(--line);font-size:12px;font-family:var(--mono)}
+  .row .ver{font-family:var(--mono);color:var(--brand);font-weight:650;font-size:12px}
+  .row .why{color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .row .meta{color:var(--dim);font-family:var(--mono);font-size:11.5px;white-space:nowrap;text-align:right}
+
+  /* ── Network ── */
+  .nrow{display:grid;grid-template-columns:auto 1fr auto auto;gap:var(--s3);align-items:center;padding:9px var(--s3);
+        border-top:1px solid var(--line);font-size:12px;font-family:var(--mono)}
   .nrow:first-child{border-top:0}
-  .nrow .m{color:var(--dim);font-weight:600}
-  .nrow .p{color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .nrow .st{font-weight:600}
-  .st.ok{color:var(--ok)}.st.warn{color:var(--warn)}.st.err{color:var(--err)}
-  .nrow .ms{color:var(--dim);text-align:right;min-width:52px}
-  .nrow.new{animation:flash 1.2s ease-out}
-  .crow{padding:7px 12px;border-top:1px solid var(--line);font-size:12px;font-family:var(--mono);display:grid;grid-template-columns:60px 1fr;gap:10px;white-space:pre-wrap;word-break:break-word}
+  .nrow .m{color:var(--ink-2);font-weight:600;white-space:nowrap}
+  .nrow .p{color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:.92}
+  .nrow .st{font-weight:700;font-size:11.5px}
+  .st.ok{color:var(--ok)} .st.warn{color:var(--warn)} .st.err{color:var(--err)}
+  .nrow .ms{color:var(--dim);text-align:right;min-width:56px;font-size:11.5px}
+
+  /* ── Console / Events ── */
+  .crow{display:grid;grid-template-columns:62px 1fr;gap:var(--s3);padding:8px var(--s3);border-top:1px solid var(--line);
+        font-size:12px;font-family:var(--mono);white-space:pre-wrap;word-break:break-word;line-height:1.5}
   .crow:first-child{border-top:0}
-  .crow .t{color:var(--dim)}
-  .crow.lv-warn{background:rgba(245,181,68,.08)}.crow.lv-warn .x{color:var(--warn)}
-  .crow.lv-error{background:rgba(255,92,92,.10)}.crow.lv-error .x{color:var(--err)}
+  .crow .t{color:var(--faint);font-size:11px}
+  .crow .x{color:var(--ink-2)}
   .crow.lv-info .x{color:var(--brand)}
-  .crow.new{animation:flash 1.2s ease-out}
-  .devbar{display:flex;flex-wrap:wrap;gap:8px;padding:10px 22px;border-bottom:1px solid var(--line);background:var(--surface);font-size:12px}
-  .devbar:empty{display:none}
-  .chip{border:1px solid var(--line);border-radius:8px;padding:4px 9px;color:var(--dim)}
-  .chip b{color:var(--ink);font-weight:600}
-  .trow{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:baseline;padding:5px 12px;border-top:1px solid var(--line);font-size:12px;font-family:var(--mono)}
+  .crow.lv-warn{background:var(--warn-soft)} .crow.lv-warn .x{color:var(--warn)}
+  .crow.lv-error{background:var(--err-soft)} .crow.lv-error .x{color:var(--err)}
+
+  .new{animation:flash 1.3s cubic-bezier(.2,.7,.3,1)}
+  @keyframes flash{0%{background:var(--brand-soft)}100%{background:transparent}}
+
+  /* ── Elements 树 + 盒模型 ── */
+  .trow{display:grid;grid-template-columns:1fr auto;gap:var(--s2);align-items:baseline;padding:6px var(--s3);
+        border-top:1px solid var(--line);font-size:12px;font-family:var(--mono);cursor:pointer}
   .trow:first-child{border-top:0}
-  .trow .tag{color:var(--brand);font-weight:600}
-  .trow .tx{color:var(--ink)}
-  .trow .st{color:var(--dim);text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:52%}
-  .trow.sel{background:rgba(91,124,255,.18);outline:1px solid rgba(91,124,255,.5)}
-  .trow:hover{background:rgba(255,255,255,.03)}
-  .box{margin-top:10px;border:1px solid var(--line);border-radius:10px;overflow:hidden}
-  .box .bh{padding:8px 12px;background:var(--surface2);font-size:12px;font-family:var(--mono);color:var(--ink)}
-  .bm{padding:10px 12px;display:grid;grid-template-columns:repeat(2,1fr);gap:6px 16px;font-size:12px;font-family:var(--mono)}
-  .bm .k{color:var(--dim)}
-  .bm .v{color:var(--ink);text-align:right}
-  .mbox{position:relative;margin:12px;border:1px dashed var(--brand);background:rgba(91,124,255,.06);border-radius:4px;min-height:24px}
-  .mbox .lbl{position:absolute;top:-9px;left:6px;background:var(--bg);padding:0 4px;font-size:10px;color:var(--brand)}
-  .envrow{display:flex;justify-content:space-between;gap:12px;padding:6px 12px;border-top:1px solid var(--line);font-size:12px;font-family:var(--mono)}
+  .trow:hover{background:rgba(255,255,255,.025)}
+  .trow .tag{color:var(--brand);font-weight:650}
+  .trow .tx{color:var(--ink-2)}
+  .trow .st{color:var(--faint);text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:54%;font-size:11px}
+  .trow.sel{background:var(--brand-soft);box-shadow:inset 3px 0 0 var(--brand)}
+  .box{margin-top:var(--s3);border:1px solid var(--line-2);border-radius:var(--r);overflow:hidden;background:var(--surface)}
+  .box .bh{padding:9px var(--s3);background:var(--surface-3);font-size:12px;font-family:var(--mono);color:var(--ink);border-bottom:1px solid var(--line)}
+  .bm{display:grid;grid-template-columns:auto 1fr;gap:5px var(--s4);padding:var(--s3);font-size:12px;font-family:var(--mono)}
+  .bm .k{color:var(--dim)} .bm .v{color:var(--ink);text-align:right;overflow-wrap:anywhere}
+  .mbox{position:relative;margin:var(--s3);border:1px dashed var(--brand);background:var(--brand-soft);border-radius:5px;min-height:22px}
+  .mbox .lbl{position:absolute;top:-8px;left:8px;background:var(--surface);padding:0 5px;font-size:10px;color:var(--brand);letter-spacing:.3px}
+
+  /* ── 设备环境 ── */
+  .envrow{display:flex;justify-content:space-between;gap:var(--s3);padding:7px var(--s3);border-top:1px solid var(--line);font-size:12px;font-family:var(--mono)}
   .envrow:first-child{border-top:0}
-  .envrow .k{color:var(--dim);white-space:nowrap}
-  .envrow .v{color:var(--ink);text-align:right;overflow-wrap:anywhere}
-  .eps{display:flex;flex-wrap:wrap;gap:10px}
-  .ep{font-family:var(--mono);font-size:12px;color:var(--dim);border:1px solid var(--line);border-radius:8px;padding:6px 10px}
-  .ep b{color:var(--ink)}
+  .envrow .k{color:var(--dim);white-space:nowrap} .envrow .v{color:var(--ink-2);text-align:right;overflow-wrap:anywhere}
+  .envgrp{display:flex;align-items:center;gap:8px;padding:8px var(--s3);background:var(--surface-2);
+          color:var(--brand);font-size:11px;font-weight:650;letter-spacing:.5px;text-transform:uppercase}
+  .envgrp::before{content:"";width:5px;height:5px;border-radius:2px;background:var(--brand)}
+
+  /* ── 端点 ── */
+  .eps{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:var(--s2)}
+  .ep{display:flex;align-items:baseline;gap:8px;font-family:var(--mono);font-size:11.5px;color:var(--dim);
+      border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 11px;background:var(--surface)}
+  .ep b{color:var(--ink-2);font-weight:650;white-space:nowrap}
+
   a{color:var(--brand);text-decoration:none}
-  .host{display:flex;align-items:center;gap:10px}
-  .screen{font-family:var(--mono);color:var(--ink)}
-  footer{color:var(--dim);font-size:12px;text-align:center;padding:26px}
+  footer{color:var(--faint);font-size:11.5px;text-align:center;padding:var(--s5) var(--s4) var(--s6);border-top:1px solid var(--line);margin-top:var(--s5)}
+  footer code{font-family:var(--mono);color:var(--dim)}
 </style></head>
 <body>
 <header>
-  <div class="logo">◈ <b>Proteus</b> DevTools</div>
-  <span class="proj">${esc(info.projectName)} · ${esc(info.platform)}</span>
+  <div class="brand"><span class="mark">◈</span><span class="btitle"><b>Proteus</b> DevTools</span></div>
+  <div class="crumbs"><span class="sep">/</span><span class="proj">${esc(info.projectName)}</span><span class="sep">·</span><span class="plat">${esc(info.platform)}</span></div>
   <div class="grow"></div>
   <span class="pill" id="host-pill"><span class="dot off" id="host-dot"></span><span id="host-txt">设备离线</span></span>
 </header>
 <main>
   <div class="grid">
-    <div class="card"><div class="k">Bundle 版本</div><div class="v" id="c-ver">—</div></div>
-    <div class="card"><div class="k">Bundle 体积</div><div class="v" id="c-size">—<small>KB</small></div></div>
-    <div class="card"><div class="k">重建耗时</div><div class="v" id="c-ms">—<small>ms</small></div></div>
-    <div class="card"><div class="k">当前屏</div><div class="v host"><span class="screen" id="c-screen">—</span></div></div>
-    <div class="card"><div class="k">渲染耗时</div><div class="v" id="c-render">—<small>ms</small></div></div>
-    <div class="card"><div class="k">逐帧耗时</div><div class="v" id="c-frame">—<small>ms</small></div></div>
-    <div class="card"><div class="k">重排计数</div><div class="v" id="c-relayout">—</div></div>
-    <div class="card"><div class="k">patch 总数</div><div class="v" id="c-patches">—</div></div>
+    <div class="card" data-kind="build"><div class="k">Bundle 版本</div><div class="v" id="c-ver">—</div></div>
+    <div class="card" data-kind="build"><div class="k">Bundle 体积</div><div class="v" id="c-size">—<small>KB</small></div></div>
+    <div class="card" data-kind="build"><div class="k">重建耗时</div><div class="v" id="c-ms">—<small>ms</small></div></div>
+    <div class="card" data-kind="nav"><div class="k">当前屏</div><div class="v host"><span class="screen" id="c-screen">—</span></div></div>
+    <div class="card" data-kind="perf"><div class="k">渲染耗时</div><div class="v" id="c-render">—<small>ms</small></div></div>
+    <div class="card" data-kind="perf"><div class="k">逐帧耗时</div><div class="v" id="c-frame">—<small>ms</small></div></div>
+    <div class="card" data-kind="perf"><div class="k">重排计数</div><div class="v" id="c-relayout">—</div></div>
+    <div class="card" data-kind="perf"><div class="k">Patch 总数</div><div class="v" id="c-patches">—</div></div>
   </div>
 
-  <h2>重建时间线（实时）</h2>
-  <div class="tl" id="tl"><div class="empty">等待事件…改一次源码即出现。</div></div>
+  <div class="blk">
+    <h2>重建时间线 · 实时</h2>
+    <div class="tl" id="tl"><div class="empty">等待事件…改一次源码即出现。</div></div>
+  </div>
 
-  <div class="two">
+  <div class="blk two">
     <div>
-      <h2>Elements（当前屏节点树 · 点节点看盒模型）</h2>
+      <h2>Elements · 当前屏节点树</h2>
       <div class="panel" id="tree"><div class="empty">暂无节点树…宿主渲染后上报。</div></div>
       <div class="box" id="box" style="display:none"></div>
     </div>
     <div>
-      <h2>Console（设备日志）<span class="flt" data-flt="con"><b class="on" data-ch="all">全部</b><b data-ch="project">项目</b><b data-ch="native">原生</b></span></h2>
-      <div class="panel con" id="con"><div class="empty">暂无日志…在页面里 <b>console.log</b> 或改源码即出现。</div></div>
+      <h2>Console · 设备日志<span class="flt" data-flt="con"><b class="on" data-ch="all">全部</b><b data-ch="project">项目</b><b data-ch="native">原生</b></span></h2>
+      <div class="panel" id="con"><div class="empty">暂无日志…在页面里 console.log 或改源码即出现。</div></div>
     </div>
   </div>
 
-  <div class="two">
+  <div class="blk two">
     <div>
-      <h2>Events（手势派发 trace）</h2>
-      <div class="panel con" id="events"><div class="empty">暂无手势…在设备上点一下屏幕即出现。</div></div>
+      <h2>Events · 手势派发 trace</h2>
+      <div class="panel" id="events"><div class="empty">暂无手势…在设备上点一下屏幕即出现。</div></div>
     </div>
     <div>
-      <h2>Network（通道）<span class="flt" data-flt="net"><b class="on" data-ch="all">全部</b><b data-ch="native">原生</b><b data-ch="project">项目</b></span></h2>
+      <h2>Network · 通道<span class="flt" data-flt="net"><b class="on" data-ch="all">全部</b><b data-ch="native">原生</b><b data-ch="project">项目</b></span></h2>
       <div class="panel" id="net"><div class="empty">暂无请求。</div></div>
     </div>
   </div>
 
-  <h2>设备环境（含内核/引擎）</h2>
-  <div class="panel" id="env"><div class="empty">等待宿主心跳…</div></div>
+  <div class="blk">
+    <h2>设备环境 · 含内核 / 引擎</h2>
+    <div class="panel" id="env"><div class="empty">等待宿主心跳…</div></div>
+  </div>
 
-  <h2>端点</h2>
-  <div class="eps">
-    <span class="ep"><b>GET /</b> 本面板</span>
-    <span class="ep"><b>GET /version</b> bundle 版本号</span>
-    <span class="ep"><b>GET /bundle</b> bundle-superapp.js</span>
-    <span class="ep"><b>GET /health</b> 探活</span>
-    <span class="ep"><b>GET /events</b> SSE 事件流</span>
-    <span class="ep"><b>GET /ping</b> 心跳 + 设备环境 + 性能</span>
-    <span class="ep"><b>POST /tree</b> 元素内省（含内核 rect）</span>
-    <span class="ep"><b>GET /inspect</b> 被点元素</span>
-    <span class="ep"><b>GET /trace</b> 事件 trace</span>
-    <span class="ep"><b>GET /log</b> 宿主日志</span>
+  <div class="blk">
+    <h2>端点</h2>
+    <div class="eps">
+      <span class="ep"><b>GET /</b>本面板</span>
+      <span class="ep"><b>GET /version</b>bundle 版本号</span>
+      <span class="ep"><b>GET /bundle</b>bundle-superapp.js</span>
+      <span class="ep"><b>GET /health</b>探活</span>
+      <span class="ep"><b>GET /events</b>SSE 事件流</span>
+      <span class="ep"><b>GET /ping</b>心跳 · 环境 · 性能</span>
+      <span class="ep"><b>POST /tree</b>元素内省（含 rect）</span>
+      <span class="ep"><b>GET /inspect</b>被点元素</span>
+      <span class="ep"><b>GET /trace</b>事件 trace</span>
+      <span class="ep"><b>GET /log</b>宿主日志</span>
+      <span class="ep"><b>GET /bridge</b>桥调用</span>
+    </div>
   </div>
 </main>
-<footer>Proteus DevTools · dev server <span style="font-family:var(--mono)">${esc(info.url)}</span> · 数据来自 dev server（重建 / 网络 / 宿主心跳 + 设备环境 + 性能 / 元素树 + 盒模型 / 事件 trace / 日志）</footer>
+<footer>Proteus DevTools · dev server <code>${esc(info.url)}</code> · 数据来自 dev server（重建 / 网络 / 宿主心跳 + 环境 + 性能 / 元素树 + 盒模型 / 事件 trace / 日志 / 桥调用）</footer>
 <script>
   const META = ${meta};
   const $ = (id) => document.getElementById(id);
@@ -323,8 +399,8 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
     for (const g of groups) {
       const rows = g.keys.filter((k) => env[k] !== undefined);
       if (!rows.length) continue;
-      const h = document.createElement('div'); h.className = 'envrow'; h.style.color = 'var(--dim)'; h.style.flex = 'none';
-      h.innerHTML = '<span class="k" style="color:var(--brand)">' + g.t + '</span>';
+      const h = document.createElement('div'); h.className = 'envgrp';
+      h.textContent = g.t;
       envEl.appendChild(h);
       for (const k of rows) {
         const row = document.createElement('div'); row.className = 'envrow';
