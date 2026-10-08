@@ -48,9 +48,7 @@ jobs:
       - name: 安全编辑门禁（★用户纪律：程序化编辑必须走 safe-edit——临时文件 + diff + 校验，禁止直接改源文件）
         run: node scripts/check-safe-edit.mjs
 
-      - name: 运行时桥源同步门禁（★决策 #666「彻底打通」：真源 hosts/shared/bridge/entry-superapp.ts
-        ⇄ CLI 随包副本 templates-host/shared/bridge/entry-superapp.ts 不得漂移——外部用户走副本，
-        改了真源没同步副本 ⇒ 外部跑旧逻辑。纯静态、零依赖 ⇒ 接 CI。）
+      - name: 运行时桥源同步门禁（★决策 #666：真源 hosts/shared/bridge/entry-superapp.ts ⇄ CLI 随包副本不得漂移——外部用户走副本，改了真源没同步副本即跑旧逻辑）
         run: node scripts/sync-host-bridge.mjs --check
 
       - name: 凭证入库扫描门禁（★hosts 第二刀 Stage 3：签名/密钥/明文口令不得入库——git 跟踪面）
