@@ -308,3 +308,9 @@ interface SuperappRuntimeHostShape {
   const c = g.__SUPERAPP_RUNTIME__?.currentContent()
   return JSON.stringify(c ?? { nodes: [] })
 }
+
+/** ★DevTools 事件 trace（决策 #675）：自上次调用以来的手势派发（排空式）。宿主轮询取走 → POST /trace。 */
+;(globalThis as unknown as { __proteusSuperappEvents?: () => string }).__proteusSuperappEvents = () => {
+  const g = globalThis as unknown as { __SUPERAPP_RUNTIME__?: SuperappRuntime }
+  return JSON.stringify(g.__SUPERAPP_RUNTIME__?.devEvents() ?? [])
+}
