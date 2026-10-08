@@ -140,7 +140,10 @@ export async function startAppDevServer(opts: AppDevServerOptions): Promise<AppD
     } catch { /* 某些平台不支持 recursive——退化为不监听该项（首建仍可用） */ }
   }
 
-  const url = `http://${lanAddress()}:${actualPort}`
+  // ★url 按**实际绑定 host**计算：绑定 0.0.0.0 时用**局域网地址**（真机经局域网访问本机）；
+  //   显式绑定某 host（如 127.0.0.1，测试用）时用它本身。
+  const bindAddr = host === '0.0.0.0' || host === '::' ? lanAddress() : host
+  const url = `http://${bindAddr}:${actualPort}`
   return {
     url,
     port: actualPort,
