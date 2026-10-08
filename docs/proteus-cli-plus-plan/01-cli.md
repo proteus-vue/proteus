@@ -235,7 +235,20 @@ proteus dev --target android                  # scaffold → dev server → debu
 **★壳的定位（2026-10-08 收口）**：**CLI 生成的宿主 = 项目自有**（项目包名 / 完整工程 / dev 热刷）—— 正式开发用它；
 `hosts/*`（含 `SuperappActivity`）**仅作框架内核测试与快速真机验证**（多带 `--es drive/screen/scroll/tap` 钩子）。
 
-**★范围诚实边界**：本批**端到端兑现 Android**（`app-bundle`/`app-dev-server` + 模板运行期壳 + 打包 + 热刷真机验证：
-`PROTEUS_DEV_BUNDLE_FROM_SERVER` → 改 .vue → 202ms 重建 → `PROTEUS_DEV_RELOADED`）；
-**iOS/鸿蒙**复用同一模型（`create host`/`--package` 三端均可用），**dev 热刷的宿主通道待接**
-（iOS `#if DEBUG`+ATS、鸿蒙 `buildMode`+NetworkKit）—— 属后续批次。
+**★范围诚实边界**：**Android（#662）+ iOS（#683）已端到端兑现**（`app-bundle`/`app-dev-server` + 模板运行期壳 + 打包 + 热刷真机验证：
+`PROTEUS_DEV_BUNDLE_FROM_SERVER` → 改 .vue → 重建 → `PROTEUS_DEV_RELOADED`）；
+**鸿蒙**复用同一模型（`create host`/`--package` 三端均可用），**dev 热刷的宿主通道待接**
+（鸿蒙 `buildMode`+NetworkKit）—— 属后续批次。
+
+**★iOS（#683）落地要点**：
+- 壳模板升级为**运行期形态**（`templates-host/ios/shell/ProteusApp.swift`：JSC + `SuperappRuntimeHost` + `bundle-superapp.js` boot/render），
+  与 Android `AppActivity` / 鸿蒙 `Superapp.ets` 同形；壳不再走静态 `app-screen-content.json` 挂载。
+- dev 通道：`ProteusBuildConfig.swift`（DEV/DEV_URL，CLI 编译前覆写、编译后还原）+ URLSession 拉 bundle（有限重试）
+  + `/version` 轮询 → 变更即重建 JSContext 重载（保留当前屏）；`packageIosHost` dev 变体注入 ATS 例外。
+- 装机：`devicectl device install/process launch`（`--proteusDev <url>` 注入 dev server）。
+- **真机验证**：iPhone 12 · `PROTEUS_DEV_BUNDLE_FROM_SERVER bytes=961159` → `PROTEUS_HOST_PAGE_RENDER ok=true page=index`
+  → 改 `.vue` → `bundle v3 (276ms)` → **`PROTEUS_DEV_RELOADED version=3 page=index`**。
+- **零设备编译门禁**：`check:ios-cli-host-compile`（`swiftc -typecheck` CLI 模板壳 + runtime + platform）——
+  补 `check:ios-selfdraw-compile` 只管框架参考宿主的盲区。
+- **诚实边界**：iOS dev `.app` 为**开发签名**（本机 provisioning profile，非 App Store 分发）。
+

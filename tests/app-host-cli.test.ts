@@ -155,6 +155,31 @@ describe('★完整宿主 · targets SSOT', () => {
   })
 })
 
+describe('★完整宿主 · iOS 宿主模板为运行期形态（决策 #683）', () => {
+  const shellDir = path.join(ROOT, 'packages/cli/templates-host/ios/shell')
+  it('壳走运行期（bundle-superapp + proteusHost + boot/render），非静态屏内容挂载', () => {
+    const src = fs.readFileSync(path.join(shellDir, 'ProteusApp.swift'), 'utf-8')
+    expect(src, '运行期启动入口').toContain('__proteusSuperappBootJson')
+    expect(src, '运行期渲染入口').toContain('__proteusSuperappRender')
+    expect(src, '注入运行期桥').toContain('SuperappRuntimeHost')
+    expect(src, '读内嵌 bundle').toContain("forResource: \"bundle-superapp\"")
+    // ★反例守卫：不得退回"静态屏内容挂载"形态（ProteusHostController.mountPage + fromScreenContent）
+    expect(src, '不再用静态 mountPage(fromScreenContent:)').not.toContain('fromScreenContent:')
+  })
+  it('变体常量齐备（DEV / DEV_URL，供 CLI 覆写）', () => {
+    const cfg = fs.readFileSync(path.join(shellDir, 'ProteusBuildConfig.swift'), 'utf-8')
+    expect(cfg).toMatch(/static let DEV = (?:true|false)/)
+    expect(cfg).toMatch(/static let DEV_URL = "[^"]*"/)
+  })
+  it('dev 通道齐备（HTTP 拉 bundle + /version 轮询 + 重载）', () => {
+    const src = fs.readFileSync(path.join(shellDir, 'ProteusApp.swift'), 'utf-8')
+    expect(src, '从 dev server 拉 bundle').toContain('/bundle')
+    expect(src, '轮询版本').toContain('/version')
+    expect(src, '重载标记').toContain('PROTEUS_DEV_RELOADED')
+    expect(src, '保留当前屏').toContain('keepPage')
+  })
+})
+
 describe.skipIf(!hasSuperapp)('★完整宿主 · app-bundle（项目侧 bundle）', () => {
   it('产出项目侧 bundle，含运行期入口，且不污染框架生成物', async () => {
     const fwGen = path.join(ROOT, 'hosts/shared/bridge/app-screen-content.generated.ts')

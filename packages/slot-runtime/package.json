@@ -1,6 +1,6 @@
 {
   "name": "@proteus-vue/slot-runtime",
-  "version": "0.3.0-beta.23",
+  "version": "0.3.0-beta.28",
   "description": "Vapor for Proteus IR（V1）：平台无关的更新指令集（OpCode/OpBuffer）+ 槽位容器（Slot/emit）——把「更新一个节点」从 O(子树规模) 降为 O(1) 槽位写入",
   "type": "module",
   "license": "Apache-2.0",

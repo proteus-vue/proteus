@@ -822,7 +822,7 @@ async function runAppDev(target: AppPlatform): Promise<number> {
     target === 'android'
       ? packageAndroidHost({ hostDir, projectRoot, dev: true, devUrl: server.url, outApk: outPkg })
       : target === 'ios'
-        ? packageIosHost({ hostDir, projectRoot })
+        ? packageIosHost({ hostDir, projectRoot, dev: true, devUrl: server.url, outApp: outPkg })
         : packageHarmonyHost({ hostDir, projectRoot, platform: 'harmony' })
   if (!pk.ok) {
     sPack.fail('打包失败')
@@ -864,8 +864,50 @@ async function runAppDev(target: AppPlatform): Promise<number> {
       sInstall.done()
       if (!start.ok) ui.warn(`启动命令未回执：${start.out.trim().slice(-160)}`)
     }
-  } else if (target !== 'android') {
-    ui.info(`${target} 的「装 + 起」请用设备工具（ios: devicectl / harmony: hdc）`)
+  } else if (target === 'ios') {
+    // ★★★iOS 装 + 起（决策 #683）：devicectl（Xcode 15+；DEVELOPER_DIR 经 xcode-env 解析）。
+    const iosApp = 'app' in pk ? (pk as { app: string | null }).app : null
+    if (iosApp) {
+      const { execFileSync } = await import('node:child_process')
+      // Xcode 工具链：优先 env → 非默认安装位（与 hosts/ios/lib/xcode-env.sh 同判据：能给 iOS SDK + 有 devicectl）
+      const devDir = process.env.PROTEUS_DEVELOPER_DIR ?? process.env.DEVELOPER_DIR ?? '/Volumes/data1/work/office-applications/Xcode.app/Contents/Developer'
+      const env = { ...process.env, DEVELOPER_DIR: devDir }
+      const xcrun = (args: string[]): { ok: boolean; out: string } => {
+        try { return { ok: true, out: execFileSync('xcrun', args, { env, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 8 * 1024 * 1024 }) } }
+        catch (e) { return { ok: false, out: String((e as { stderr?: string }).stderr ?? (e as Error).message) } }
+      }
+      const sInstall = ui.step('安装到设备')
+      // 设备列表（首个 connected）——取**标识符列**（UDID/UUID 形态），无则回落设备名（devicectl 二者皆可）
+      const dl = xcrun(['devicectl', 'list', 'devices'])
+      const row = dl.out.split('\n').find((l) => /\bconnected\b/.test(l)) ?? ''
+      const cols = row.trim().split(/\s{2,}/).map((c) => c.trim()).filter(Boolean)
+      const devId = cols.find((c) => /^[0-9A-Fa-f-]{20,}$/.test(c) || /\.coredevice\.local$/.test(c)) ?? cols[0] ?? ''
+      if (!dl.ok || !devId) {
+        sInstall.fail('未找到已连接 iOS 设备')
+        ui.hint(`debug 包已产出：${path.relative(projectRoot, iosApp)}`)
+        ui.hint('手动：xcrun devicectl device install app --device <UDID> <app>')
+      } else {
+        xcrun(['devicectl', 'device', 'process', 'launch', '--device', devId, '--terminate-existing', bundleName]) // 杀旧实例（忽略失败）
+        let r = xcrun(['devicectl', 'device', 'install', 'app', '--device', devId, iosApp])
+        if (!r.ok) {
+          sInstall.note('签名/版本冲突 ⇒ 卸载旧包后重装')
+          xcrun(['devicectl', 'device', 'uninstall', 'app', '--device', devId, bundleName])
+          r = xcrun(['devicectl', 'device', 'install', 'app', '--device', devId, iosApp])
+        }
+        if (!r.ok) {
+          sInstall.fail('devicectl install 失败')
+          sInstall.note(r.out.trim().split('\n').slice(-3).join('\n'))
+        } else {
+          // ★启动注入 dev server 地址（`--proteusDev <url>`）；DEV_URL 已编译进二进制作为兜底
+          const start = xcrun(['devicectl', 'device', 'process', 'launch', '--device', devId, '--terminate-existing', bundleName, '--', '--proteusDev', server.url])
+          sInstall.done()
+          if (!start.ok) sInstall.note(`启动未回执：${start.out.trim().slice(-160)}`)
+          ui.hint('iOS 首次运行若被拦：设置→通用→VPN与设备管理→信任该开发者证书')
+        }
+      }
+    }
+  } else if (target === 'harmony') {
+    ui.info('harmony 的「装 + 起」请用 hdc')
     ui.info(`debug 包：${path.relative(projectRoot, outPkg)} · 启动注入 dev server：${server.url}`)
   }
 
