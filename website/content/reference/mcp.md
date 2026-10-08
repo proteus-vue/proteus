@@ -43,7 +43,27 @@ Proteus 的 **AI 原生开发**落地：`@proteus-vue/mcp` 暴露 MCP（Model Co
 
 ## 接入方式
 
-MCP 无独立 CLI——宿主（Agent 框架 / Claude Desktop 等）接 `createMcpServer(options)`（`@proteus-vue/mcp`，MCP stdio/transport 由宿主侧接）后注册 tools/resources/prompts。
+**① 库内调用**：宿主（Agent 框架等）接 `createMcpServer(options)`（`@proteus-vue/mcp`）在**进程内**注册 tools/resources/prompts。
+
+**② CLI stdio server（推荐给 MCP 客户端）**：`proteus mcp serve` 起一个 **stdio MCP server**（JSON-RPC over stdin/stdout），Claude Desktop / Cursor / Cline 等可直接挂载，无需自己接传输层。
+
+```jsonc
+// Claude Desktop / Cursor 的 mcpServers 配置示例
+{
+  "mcpServers": {
+    "proteus": {
+      "command": "npx",
+      "args": ["-y", "@proteus-vue/cli", "mcp", "serve"]
+      // 需要写文件时：加 "--allow-write", "--workspace", "/path/to/project"
+    }
+  }
+}
+```
+
+- **缺省只读**：`write_file` 默认禁用；加 `--allow-write`（配合 `--workspace <dir>` 限定写根）才开写闸。
+- **`--rate-limit <n>`**：每分钟调用上限（缺省 60）。
+- **★stdout 是协议的**：server 只把 JSON-RPC 写到 stdout；状态提示一律走 stderr（否则客户端解析失败）。
+- **诚实边界**：依赖 `document` 的工具（`run_conformance` / `generate_code`）在纯 Node stdio 下无 document ⇒ 如实报错；HTTP/SSE 传输暂未提供。
 
 ## 设计要点
 

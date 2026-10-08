@@ -221,6 +221,7 @@
     "@proteus-vue/worklet": "workspace:*",
     "@types/node": "^20.0.0",
     "@types/ws": "^8.18.0",
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "@vitejs/plugin-vue": "^5.0.0",
     "@vue/compiler-dom": "^3.5.42",
     "@vue/compiler-sfc": "^3.5.42",

@@ -43,7 +43,27 @@ Proteus's **AI-native development** lands here: `@proteus-vue/mcp` exposes an MC
 
 ## Integration
 
-MCP has no standalone CLI — the host (an Agent framework / Claude Desktop, etc.) plugs in `createMcpServer(options)` (`@proteus-vue/mcp`; the MCP stdio transport is wired host-side), which registers the tools/resources/prompts.
+**① In-process**: the host plugs in `createMcpServer(options)` (`@proteus-vue/mcp`) and registers tools/resources/prompts **in-process**.
+
+**② CLI stdio server (recommended for MCP clients)**: `proteus mcp serve` starts a **stdio MCP server** (JSON-RPC over stdin/stdout) that Claude Desktop / Cursor / Cline can mount directly — no need to wire the transport yourself.
+
+```jsonc
+// Claude Desktop / Cursor mcpServers example
+{
+  "mcpServers": {
+    "proteus": {
+      "command": "npx",
+      "args": ["-y", "@proteus-vue/cli", "mcp", "serve"]
+      // to enable file writing: add "--allow-write", "--workspace", "/path/to/project"
+    }
+  }
+}
+```
+
+- **Read-only by default**: `write_file` is disabled; enable it with `--allow-write` (plus `--workspace <dir>` to bound the write root).
+- **`--rate-limit <n>`**: per-minute call cap (default 60).
+- **★stdout is the protocol**: the server writes JSON-RPC to stdout only; status messages go to stderr (otherwise the client fails to parse).
+- **Honest boundary**: `document`-dependent tools (`run_conformance` / `generate_code`) honestly error out under pure-Node stdio (no document); HTTP/SSE transport is not yet provided.
 
 ## Design notes
 

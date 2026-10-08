@@ -1,5 +1,5 @@
 // packages/mcp/src/tools.ts
-// ★G-36 B1（proteus-ai-agent-plan 03-mcp-server §2）：MCP 工具实现（11 个——只读 8 + 写入 3）
+// ★G-36 B1（proteus-ai-agent-plan 03-mcp-server §2）：MCP 工具实现（11 个——只读 10 + 写入 1）
 //   数据源（SSOT）：G-32 原语目录（component-ir PRIMITIVE_CATALOG）/ MP 对照矩阵（MP_MAPPING_MATRIX）/
 //   C-IR 校验（validateComponentIR）/ 六引擎能力与 conformance（render-backend）
 import {

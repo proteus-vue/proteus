@@ -40,9 +40,25 @@ server.readResource('proteus://primitives/catalog')
 server.getPrompt('proteus-migrate-wx')  // prompts/get
 ```
 
-## 传输适配（后续）
+## 传输适配：stdio（已落地 · 决策 #681）
 
-本包是**传输无关核心**（tools/resources/prompts 注册表 + 校验 + 策略 + 分发）。`@modelcontextprotocol/sdk` 的 stdio/HTTP 传输适配为薄壳（listTools/callTool 一一映射），后续批次接入。
+本包是传输无关核心（tools/resources/prompts 注册表 + 校验 + 策略 + 分发）+ **stdio 传输适配器**：
+
+```ts
+import { serveStdio } from '@proteus-vue/mcp'
+await serveStdio({ writeEnabled: false })   // JSON-RPC over stdin/stdout（MCP 客户端直连）
+```
+
+或经 CLI（Claude Desktop / Cursor 可直接挂）：
+
+```bash
+proteus mcp serve                    # 只读（write_file 禁用）
+proteus mcp serve --allow-write --workspace ./  # 开写闸（限定写根）
+```
+
+- **★硬约束**：stdio 下 **stdout 只出 JSON-RPC**，状态提示一律走 stderr（`onReady` 回调）。
+- 适配器做三处形状翻译：工具 `inputSchema` → **JSON Schema**、`callTool` → `content[]`+`isError`（**两层失败语义**）、resources/prompts → 协议结构。
+- **诚实边界**：`document` 依赖工具（`run_conformance`/`generate_code`）在纯 Node stdio 下无 document（经 `documentLike` 注入可解）；**HTTP/SSE 传输仍为后续**。
 
 ## 数据源（SSOT）
 
