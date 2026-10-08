@@ -9,7 +9,7 @@ import os from 'node:os'
 import { fileURLToPath } from 'node:url'
 // ★B5 补丁脚本（src 与 dist 同指向仓库根 scripts/）——★2026-09-08 wechatide 标准后 automator 补丁不再需要，保留路径备用
 const AUTOMATOR_PATCH_SCRIPT = fileURLToPath(new URL('../../../scripts/patch-automator.mjs', import.meta.url))
-import { parseBuildArgs, parseExplainArgs, parseRulesArgs, parseRouterCheckArgs, parseModuleCheckArgs, parseModuleDuplicatesArgs, parseModuleAuditArgs, parseModuleInitArgs, parseCapabilityManifestArgs, parseCapabilityCheckArgs, parseComponentsAuditArgs, parseI18nCheckArgs, parseConfigCheckArgs, parseCssCheckArgs, parseStyleCheckArgs, parseCheckArgs, parseGenerateTypesArgs, parseMigrateTypesArgs, parseD2AuditArgs, parseGateArgs, formatHelpText, resolveCliVersion } from './args'
+import { parseBuildArgs, parseExplainArgs, parseRulesArgs, parseRouterCheckArgs, parseModuleCheckArgs, parseModuleDuplicatesArgs, parseModuleAuditArgs, parseModuleInitArgs, parseCapabilityManifestArgs, parseCapabilityCheckArgs, parseComponentsAuditArgs, parseI18nCheckArgs, parseConfigCheckArgs, parseCssCheckArgs, parseStyleCheckArgs, parseCheckArgs, parseGenerateTypesArgs, parseMigrateTypesArgs, parseD2AuditArgs, parseGateArgs, formatHelpText, formatCommandHelp, isHelpRequest, resolveCliVersion } from './args'
 import { buildDir, planTargetedBuild, runTargetedBuildProgrammatic } from './build'
 import { parseConformanceArgs, runConformance, runConformanceDemo } from './conformance'
 import { parseHostArgs, runHostPush, runHostSigning } from './host'
@@ -88,6 +88,20 @@ async function main(): Promise<void> {
   //   而本地 tsx src 手测正常（假绿）。实测事故：`proteus dev --target android` 仍启动 web（dist 停在 2.5h 前）。
   //   ★只在**从 dist 运行**时检查、只告警不阻断（详见 dist-freshness.ts 的诚实边界）。
   warnIfDistStale(cmd)
+
+  // ★★★单命令 help（决策 #689）：`proteus <cmd...> --help` / `-h` 与 `proteus help <cmd...>`
+  //   在**命令分发之前**拦截——此前 `proteus build --help` 报「未知选项」、`proteus doctor --help` 报
+  //   「未知参数」，而全量 help 页脚**恰恰承诺**了 `proteus <command> --help`（承诺了不存在的能力）。
+  //   匹配 = 命令路径从长到短前缀（`host signing` → `build`）；未匹配 ⇒ 回落全量 help（不吞请求）。
+  {
+    let helpPath: string[] | null = null
+    if (cmd === 'help' && rest.length) helpPath = rest
+    else if (cmd !== 'help' && isHelpRequest(rest)) helpPath = [cmd, ...rest.filter((t) => !t.startsWith('-'))]
+    if (helpPath) {
+      console.log(formatCommandHelp(helpPath) ?? formatHelpText())
+      return
+    }
+  }
 
   switch (cmd) {
     case 'build': {

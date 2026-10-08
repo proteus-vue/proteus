@@ -763,6 +763,66 @@ function styleUsageParams(usage: string, color: boolean): string {
     .replace(/(\[[^\]]+\])/g, `${ANSI_DIM}$1${ANSI_RESET}`)
 }
 
+/** 渲染一组 entry 为行（命令名 cyan + 参数语义着色 + 6 空格 desc 前缀；后续行保留自带缩进） */
+function renderEntries(entries: HelpEntry[], useColor: boolean): string[] {
+  const lines: string[] = []
+  for (const entry of entries) {
+    // 命令名 = usage 前两个 token（proteus <子命令>）→ cyan；其余参数语义着色
+    const tokens = entry.usage.split(' ')
+    const cmdLen = tokens[0] === 'proteus' && tokens[1] ? 2 : 1
+    const cmd = tokens.slice(0, cmdLen).join(' ')
+    const rest = styleUsageParams(tokens.slice(cmdLen).join(' '), useColor)
+    lines.push(useColor ? `  ${ANSI_CYAN}${cmd}${ANSI_RESET} ${rest}`.trimEnd() : `  ${entry.usage}`)
+    const descLines = entry.desc.split('\n')
+    lines.push(`      ${descLines[0]}`)
+    for (const l of descLines.slice(1)) lines.push(l)
+    lines.push('')
+  }
+  return lines
+}
+
+/**
+ * ★★★单命令帮助（`proteus <cmd...> --help` / `proteus help <cmd...>`）——决策 #689。
+ *
+ * 【为什么有它（用户：「cli 命令不支持子命令的 help」）】此前 `proteus build --help` 报
+ *   `未知选项：--help`、`proteus doctor --help` 报 `未知参数：--help`——而全量 help 的页脚**恰恰写着**
+ *   「proteus <command> --help（单命令参数）」⇒ **承诺了不存在的能力**（与 #681 的"文档承诺"同源）。
+ *   ⇒ 在**命令分发之前**拦截 help 请求，只打该命令的条目。
+ *
+ * 【匹配】`pathTokens` = 命令路径（如 `['host','signing']`）——**从长到短**取前缀匹配
+ *   （`proteus build web --help` 会先试 `build web` 未中、回落 `build`，故带 flag 值也不误伤）。
+ * @returns 该命令的帮助文本；**无匹配 ⇒ null**（调用方回落全量 help——不吞请求）
+ */
+export function formatCommandHelp(
+  pathTokens: string[],
+  useColor = typeof process !== 'undefined' && process.stdout?.isTTY === true,
+): string | null {
+  const toks = pathTokens.filter((t) => t && !t.startsWith('-'))
+  if (!toks.length) return null
+  let matched: HelpEntry[] = []
+  for (let n = toks.length; n >= 1; n--) {
+    const prefix = `proteus ${toks.slice(0, n).join(' ')}`
+    matched = HELP_GROUPS.flatMap((g) => g.entries.filter((e) => e.usage === prefix || e.usage.startsWith(prefix + ' ')))
+    if (matched.length) break
+  }
+  if (!matched.length) return null
+  const lines: string[] = []
+  const cmd = toks.join(' ')
+  lines.push(useColor ? `${ANSI_BOLD}Proteus CLI${ANSI_RESET} —— ${useColor ? ANSI_CYAN : ''}proteus ${cmd}${useColor ? ANSI_RESET : ''}` : `Proteus CLI —— proteus ${cmd}`)
+  lines.push(LINE.repeat(SEP_WIDTH))
+  lines.push('')
+  lines.push(...renderEntries(matched, useColor))
+  lines.push(LINE.repeat(SEP_WIDTH))
+  const hint = '提示：proteus help（全部命令）· 文档 docs/ · GitHub github.com/proteus-vue/proteus'
+  lines.push(useColor ? `${ANSI_DIM}${hint}${ANSI_RESET}` : hint)
+  return lines.join('\n').replace(/\n\n\n/g, '\n\n').trimEnd() + '\n'
+}
+
+/** 是否 help 请求（`--help` / `-h`） */
+export function isHelpRequest(args: string[]): boolean {
+  return args.includes('--help') || args.includes('-h')
+}
+
 /**
  * ★帮助文本渲染（分组 + ANSI 色彩 + 装饰线；useColor=false 纯文本——非 TTY/CI 安全）
  * 命令名 cyan、分组标题 bold + 分隔线、<必选> 黄、[可选] 灰、头部/尾部装饰
@@ -779,19 +839,7 @@ export function formatHelpText(useColor = typeof process !== 'undefined' && proc
     const title = useColor ? `${ANSI_BOLD}${group.title}${ANSI_RESET}` : group.title
     lines.push(`${title} ${LINE.repeat(Math.max(2, SEP_WIDTH - title.length - 1))}`)
     lines.push('')
-    for (const entry of group.entries) {
-      // 命令名 = usage 前两个 token（proteus <子命令>，如 'proteus check'/'proteus test'）→ cyan；其余参数语义着色
-      const tokens = entry.usage.split(' ')
-      const cmdLen = tokens[0] === 'proteus' && tokens[1] ? 2 : 1
-      const cmd = tokens.slice(0, cmdLen).join(' ')
-      const rest = styleUsageParams(tokens.slice(cmdLen).join(' '), useColor)
-      lines.push(useColor ? `  ${ANSI_CYAN}${cmd}${ANSI_RESET} ${rest}`.trimEnd() : `  ${entry.usage}`)
-      // desc：首行统一 6 空格前缀；后续行保留 desc 内自带缩进（避免叠加变深）
-      const descLines = entry.desc.split('\n')
-      lines.push(`      ${descLines[0]}`)
-      for (const l of descLines.slice(1)) lines.push(l)
-      lines.push('')
-    }
+    lines.push(...renderEntries(group.entries, useColor))
   }
   lines.push(LINE.repeat(SEP_WIDTH))
   const hint = '提示：proteus <command> --help（单命令参数）· 文档 docs/ · GitHub github.com/proteus-vue/proteus'
