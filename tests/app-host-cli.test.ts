@@ -46,6 +46,25 @@ describe('★完整宿主 · auto-routes 路径解析（honor router.routesOutpu
   })
 })
 
+describe('★完整宿主 · 随包发布（决策 #666 彻底打通：纯 npm 安装免框架 checkout）', () => {
+  it('vendored 桥源与真源逐字节一致（无漂移 —— 门禁 sync-host-bridge 的 vitest 侧）', () => {
+    const src = fs.readFileSync(path.join(ROOT, 'hosts/shared/bridge/entry-superapp.ts'), 'utf-8')
+    const vend = fs.readFileSync(path.join(ROOT, 'packages/cli/templates-host/shared/bridge/entry-superapp.ts'), 'utf-8')
+    const mark = vend.indexOf('// ===== AUTO-SYNCED BODY BELOW')
+    expect(mark, '随包副本须带 AUTO-SYNCED 头').toBeGreaterThanOrEqual(0)
+    const body = vend.slice(vend.indexOf('\n', mark) + 1)
+    expect(body, '真源 ⇄ CLI 随包副本必须逐字节一致').toBe(src)
+  })
+  it('随包桥源 + Android runtime AAR 在场（外部用户无框架也能 build --package）', () => {
+    const bridge = path.join(ROOT, 'packages/cli/templates-host/shared/bridge/entry-superapp.ts')
+    expect(fs.existsSync(bridge), 'vendored 桥源随包').toBe(true)
+    expect(fs.readFileSync(bridge, 'utf-8')).toContain('__proteusSuperappBootJson')
+    const aar = path.join(ROOT, 'packages/cli/templates-host/prebuilt/android/proteus-runtime.aar')
+    expect(fs.existsSync(aar), '随包 runtime AAR 在场').toBe(true)
+    expect(fs.readFileSync(aar).subarray(0, 2).toString('latin1'), 'AAR 是 ZIP 容器').toBe('PK')
+  })
+})
+
 describe('★完整宿主 · targets SSOT', () => {
   it('宿主目录/安装包命名在 dist/app/<端>/ 下', () => {
     expect(appHostDir('/p', 'android')).toBe('/p/dist/app/android/host')

@@ -121,6 +121,14 @@ fi
 echo
 if [ "$FAILS" -eq 0 ]; then
   echo "✅ runtime AAR 产出通过（$AAR · $(du -h "$AAR" | awk '{print $1}')）"
+  # ★★★决策 #666「彻底打通」：同步一份到**随 CLI 发布**的位置——外部用户无框架 checkout 时
+  #   `proteus build --package` 回退用它（host-scaffold.resolveRuntimeDirs 的 prebuilt 候选）。
+  #   放 prebuilt/（**非** android/libs，避开模板 .gitignore 的 libs/*.aar ⇒ 可入库+入 npm 包）。
+  REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+  PREBUILT="$REPO_ROOT/packages/cli/templates-host/prebuilt/android"
+  mkdir -p "$PREBUILT"
+  cp "$AAR" "$PREBUILT/proteus-runtime.aar"
+  echo "✅ 随包副本已同步（$PREBUILT/proteus-runtime.aar · $(du -h "$PREBUILT/proteus-runtime.aar" | awk '{print $1}')）"
 else
   echo "✗ AAR 有 $FAILS 项断言失败"; exit 1
 fi

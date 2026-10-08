@@ -129,6 +129,9 @@ export function resolveRuntimeDirs(platform: HostPlatform, override?: string[]):
       override?.[i],
       process.env.PROTEUS_HOST_RUNTIME_DIR && spec.runtimeUnits.length === 1 ? process.env.PROTEUS_HOST_RUNTIME_DIR : undefined,
       expanded,
+      // ★★★随包内置 runtime（决策 #666）：无框架 checkout 时用它——`templates-host/prebuilt/<platform>/`。
+      //   单单元端的**产物型**单元（如 android 的 AAR）在此；用 artifacts 而非 dest（prebuilt 布局独立于目标 dest）。
+      spec.runtimeUnits.length === 1 && unit.artifact ? path.join(CLI_PKG_ROOT, 'templates-host', 'prebuilt', platform) : undefined,
       path.join(CLI_PKG_ROOT, 'templates-host', platform, unit.dest),
     ].filter((c): c is string => !!c)
     const hit = candidates.find((c) => fs.existsSync(unit.artifact ? path.join(c, unit.artifact) : path.join(c, unit.marker)))
