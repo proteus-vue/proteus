@@ -55,6 +55,24 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
   .row.new{animation:flash 1.4s ease-out}
   @keyframes flash{from{background:rgba(91,124,255,.22)}to{background:transparent}}
   .empty{color:var(--dim);padding:18px 16px;font-size:13px}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}
+  @media(max-width:760px){.two{grid-template-columns:1fr}}
+  .panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;max-height:320px;overflow-y:auto}
+  .nrow{display:grid;grid-template-columns:52px 1fr auto auto;gap:10px;align-items:center;padding:8px 12px;border-top:1px solid var(--line);font-size:12px;font-family:var(--mono)}
+  .nrow:first-child{border-top:0}
+  .nrow .m{color:var(--dim);font-weight:600}
+  .nrow .p{color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .nrow .st{font-weight:600}
+  .st.ok{color:var(--ok)}.st.warn{color:var(--warn)}.st.err{color:var(--err)}
+  .nrow .ms{color:var(--dim);text-align:right;min-width:52px}
+  .nrow.new{animation:flash 1.2s ease-out}
+  .crow{padding:7px 12px;border-top:1px solid var(--line);font-size:12px;font-family:var(--mono);display:grid;grid-template-columns:60px 1fr;gap:10px;white-space:pre-wrap;word-break:break-word}
+  .crow:first-child{border-top:0}
+  .crow .t{color:var(--dim)}
+  .crow.lv-warn{background:rgba(245,181,68,.08)}.crow.lv-warn .x{color:var(--warn)}
+  .crow.lv-error{background:rgba(255,92,92,.10)}.crow.lv-error .x{color:var(--err)}
+  .crow.lv-info .x{color:var(--brand)}
+  .crow.new{animation:flash 1.2s ease-out}
   .eps{display:flex;flex-wrap:wrap;gap:10px}
   .ep{font-family:var(--mono);font-size:12px;color:var(--dim);border:1px solid var(--line);border-radius:8px;padding:6px 10px}
   .ep b{color:var(--ink)}
@@ -81,6 +99,17 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
   <h2>重建时间线（实时）</h2>
   <div class="tl" id="tl"><div class="empty">等待事件…改一次源码即出现。</div></div>
 
+  <div class="two">
+    <div>
+      <h2>Network（dev server 请求）</h2>
+      <div class="panel" id="net"><div class="empty">暂无请求。</div></div>
+    </div>
+    <div>
+      <h2>Console（设备日志）</h2>
+      <div class="panel con" id="con"><div class="empty">暂无日志…在页面里 <b>console.log</b> 或改源码即出现。</div></div>
+    </div>
+  </div>
+
   <h2>端点</h2>
   <div class="eps">
     <span class="ep"><b>GET /</b> 本面板</span>
@@ -89,14 +118,18 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
     <span class="ep"><b>GET /health</b> 探活</span>
     <span class="ep"><b>GET /events</b> SSE 事件流</span>
     <span class="ep"><b>GET /ping</b> 宿主心跳</span>
+    <span class="ep"><b>GET /log</b> 宿主日志上报</span>
   </div>
 </main>
-<footer>Proteus DevTools · dev server <span style="font-family:var(--mono)">${esc(info.url)}</span> · 数据来自 dev server（重建事件 + 宿主心跳）</footer>
+<footer>Proteus DevTools · dev server <span style="font-family:var(--mono)">${esc(info.url)}</span> · 数据来自 dev server（重建 / 网络 / 宿主心跳 + 设备日志）</footer>
 <script>
   const META = ${meta};
   const $ = (id) => document.getElementById(id);
   const fmtTime = (t) => new Date(t).toLocaleTimeString('en-GB', { hour12: false });
+  const escapeHtml = (s) => String(s).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
   const tl = $('tl');
+  const netEl = $('net');
+  const conEl = $('con');
   const rows = [];
   function addRow(e, isNew) {
     const r = document.createElement('div');
@@ -106,6 +139,33 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
       + '<span class="meta">' + (e.bytes ? Math.round(e.bytes / 1024) + ' KB · ' : '') + (e.ms || 0) + 'ms · ' + fmtTime(e.time) + '</span>';
     return r;
   }
+  const stCls = (s) => s >= 500 ? 'err' : s >= 400 ? 'warn' : 'ok';
+  function addNet(e, isNew) {
+    const r = document.createElement('div');
+    r.className = 'nrow' + (isNew ? ' new' : '');
+    r.innerHTML = '<span class="m">' + e.method + '</span>'
+      + '<span class="p">' + (e.path || '') + '</span>'
+      + '<span class="st ' + stCls(e.status) + '">' + e.status + '</span>'
+      + '<span class="ms">' + (e.bytes ? Math.round(e.bytes / 1024) + 'KB · ' : '') + e.ms + 'ms</span>';
+    return r;
+  }
+  function addCon(e, isNew) {
+    const lv = ['log','info','warn','error'].includes(e.level) ? e.level : 'log';
+    const r = document.createElement('div');
+    r.className = 'crow lv-' + lv + (isNew ? ' new' : '');
+    r.innerHTML = '<span class="t">' + fmtTime(e.time) + '</span><span class="x">' + escapeHtml(e.text || '') + '</span>';
+    return r;
+  }
+  function fillNet(list) {
+    netEl.innerHTML = '';
+    if (!list.length) { netEl.innerHTML = '<div class="empty">暂无请求。</div>'; return; }
+    list.slice().reverse().forEach((e) => netEl.appendChild(addNet(e, false)));
+  }
+  function fillCon(list) {
+    conEl.innerHTML = '';
+    if (!list.length) { conEl.innerHTML = '<div class="empty">暂无日志…在页面里 <b>console.log</b> 或改源码即出现。</div>'; return; }
+    list.slice().reverse().forEach((e) => conEl.appendChild(addCon(e, false)));
+  }
   function setSnapshot(s) {
     $('c-ver').textContent = 'v' + (s.version ?? 0);
     if (s.bytes) $('c-size').innerHTML = Math.round(s.bytes / 1024) + '<small>KB</small>';
@@ -114,6 +174,8 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
     const evs = (s.events || []).slice().reverse();
     if (!evs.length) { tl.innerHTML = '<div class="empty">等待事件…改一次源码即出现。</div>'; }
     else evs.forEach((e, i) => tl.appendChild(addRow(e, false)));
+    fillNet(s.net || []);
+    fillCon(s.console || []);
     applyHost(s.host);
   }
   function applyHost(h) {
@@ -131,12 +193,24 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
     $('c-size').innerHTML = Math.round(e.bytes / 1024) + '<small>KB</small>';
     $('c-ms').innerHTML = e.ms + '<small>ms</small>';
   }
+  function pushNet(e) {
+    if (netEl.querySelector('.empty')) netEl.innerHTML = '';
+    netEl.insertBefore(addNet(e, true), netEl.firstChild);
+    while (netEl.children.length > 80) netEl.removeChild(netEl.lastChild);
+  }
+  function pushCon(e) {
+    if (conEl.querySelector('.empty')) conEl.innerHTML = '';
+    conEl.insertBefore(addCon(e, true), conEl.firstChild);
+    while (conEl.children.length > 200) conEl.removeChild(conEl.lastChild);
+  }
   const es = new EventSource('/events');
   es.onmessage = (m) => {
     let d; try { d = JSON.parse(m.data); } catch { return; }
     if (d.type === 'snapshot') setSnapshot(d);
     else if (d.type === 'rebuild') pushRebuild(d);
     else if (d.type === 'host') applyHost(d);
+    else if (d.type === 'net') pushNet(d);
+    else if (d.type === 'console') pushCon(d);
   };
   es.onerror = () => { /* 浏览器自动重连 */ };
   setInterval(() => applyHost(window.__lastHost), 2000);   // 心跳超时 ⇒ 自动转"离线"

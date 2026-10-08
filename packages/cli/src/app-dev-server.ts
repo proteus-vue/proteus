@@ -114,10 +114,14 @@ export async function startAppDevServer(opts: AppDevServerOptions): Promise<AppD
   let building = false
   let pendingReason: string | null = null
 
-  // ── DevTools 面板状态（决策 #672）──
+  // ── DevTools 面板状态（决策 #672/#673）──
   interface RebuildEvent { version: number; bytes: number; ms: number; reason: string; time: number }
   interface HostState { screen: string; time: number }
+  interface NetEvent { method: string; path: string; status: number; bytes: number; ms: number; time: number }
+  interface ConsoleEvent { level: string; text: string; time: number }
   const events: RebuildEvent[] = []         // 环形（近 50 条）重建时间线
+  const netLog: NetEvent[] = []             // 环形网络日志（dev server 收到的请求——它就是"网络源头"）
+  const consoleLog: ConsoleEvent[] = []     // 环形控制台日志（宿主转发：JS console + 宿主 dev 事件）
   let lastBytes = 0
   let lastMs = 0
   let lastHost: HostState | null = null
@@ -128,8 +132,18 @@ export async function startAppDevServer(opts: AppDevServerOptions): Promise<AppD
     const frame = `data: ${JSON.stringify(obj)}\n\n`
     for (const c of sseClients) { try { c.write(frame) } catch { sseClients.delete(c) } }
   }
-  /** 面板连接时的初始快照（版本/体积/耗时/时间线/宿主态）。 */
-  const snapshot = (): unknown => ({ type: 'snapshot', version, bytes: lastBytes, lastMs, events: events.slice(-50), host: lastHost })
+  /** 面板连接时的初始快照（版本/体积/耗时/时间线/宿主态 + 网络 + 控制台）。 */
+  const snapshot = (): unknown => ({
+    type: 'snapshot', version, bytes: lastBytes, lastMs,
+    events: events.slice(-50), host: lastHost,
+    net: netLog.slice(-80), console: consoleLog.slice(-200),
+  })
+  /** 记一条网络日志（dev server 请求）+ 广播。 */
+  const recordNet = (e: NetEvent): void => {
+    netLog.push(e)
+    if (netLog.length > 80) netLog.shift()
+    broadcast({ type: 'net', ...e })
+  }
 
   const rebuild = async (reason: string): Promise<void> => {
     if (building) { pendingReason = reason; return }   // 重建中 ⇒ 记待办（防抖，不并发）
@@ -161,6 +175,21 @@ export async function startAppDevServer(opts: AppDevServerOptions): Promise<AppD
   const server = http.createServer((req, res) => {
     const [pathname, query] = (req.url ?? '/').split('?')
     const url = pathname
+    // ★Network 日志（决策 #673）：dev server **就是** App 的网络源头（bundle/version/ping/…）⇒
+    //   捕获每个请求的 方法/路径/状态/字节/耗时，推给面板（面板 Network 表）。SSE/面板自身不计入噪声。
+    const netStart = Date.now()
+    let netStatus = 0
+    let netBytes = 0
+    const isNoise = url === '/events' || url === '/' || url === '/index.html' || url === '/health'
+    const _writeHead = res.writeHead.bind(res)
+    res.writeHead = ((code: number, ...rest: unknown[]) => { netStatus = code; return (_writeHead as (...a: unknown[]) => unknown)(code, ...rest) }) as typeof res.writeHead
+    const _end = res.end.bind(res)
+    res.end = ((chunk?: unknown, ...rest: unknown[]) => {
+      if (typeof chunk === 'string') netBytes += Buffer.byteLength(chunk)
+      else if (Buffer.isBuffer(chunk)) netBytes += chunk.length
+      if (!isNoise) recordNet({ method: req.method ?? 'GET', path: req.url ?? '/', status: netStatus, bytes: netBytes, ms: Date.now() - netStart, time: Date.now() })
+      return (_end as (...a: unknown[]) => unknown)(chunk, ...rest)
+    }) as typeof res.end
     // ★DevTools 面板（决策 #672）：浏览器打开 dev server 根路径即见可视化面板。
     if (url === '/' || url === '/index.html') {
       const boundPort = (server.address() as { port: number } | null)?.port ?? port
@@ -211,6 +240,16 @@ export async function startAppDevServer(opts: AppDevServerOptions): Promise<AppD
       const q = new URLSearchParams(query ?? '')
       lastHost = { screen: q.get('screen') ?? '', time: Date.now() }
       broadcast({ type: 'host', ...lastHost })
+      res.writeHead(200, { 'content-type': 'text/plain', 'cache-control': 'no-store' })
+      res.end('ok')
+      return
+    }
+    // ★控制台日志（决策 #673）：宿主（模板 AppActivity）把 JS console.* 与关键 dev 事件转发到此 ⇒ 面板 Console。
+    //   `GET /log?level=log|info|warn|error&text=<urlencoded>`（一行一条；复用宿主的 httpGetText，免加 POST）。
+    if (url === '/log') {
+      const q = new URLSearchParams(query ?? '')
+      const ev: ConsoleEvent = { level: q.get('level') ?? 'log', text: q.get('text') ?? '', time: Date.now() }
+      if (ev.text) { consoleLog.push(ev); if (consoleLog.length > 200) consoleLog.shift(); broadcast({ type: 'console', ...ev }) }
       res.writeHead(200, { 'content-type': 'text/plain', 'cache-control': 'no-store' })
       res.end('ok')
       return

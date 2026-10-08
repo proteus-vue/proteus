@@ -58,6 +58,11 @@ public final class AppActivity extends Activity {
     /** 当前屏名（供 dev-watch 的 DevTools 心跳上报；UI 线程写、watch 线程读 ⇒ volatile） */
     private volatile String lastScreenName = "";
 
+    /** ★DevTools Console（决策 #673）：待转发给 dev server 的设备日志（UI 线程写、watch 线程 flush）。
+     *  含两类：a) 宿主 dev 事件（ready/reload/error，devLog 直接入队）b) JS console.*（UI 泵 eval 抽取入队）。 */
+    private final java.util.List<String[]> hostLogQueue = java.util.Collections.synchronizedList(new java.util.ArrayList<String[]>());
+    private android.os.Handler logPump;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -138,6 +143,7 @@ public final class AppActivity extends Activity {
 
         String bundle = loadBundleSource();
         if (bundle == null) { fail("无法获取 bundle（release: assets/bundle-superapp.js；dev: dev server）"); return; }
+        if (ProteusBuildConfig.DEV) installDevConsole();   // ★装 console 垫片须在 eval bundle 之前 ⇒ 页面顶层 console.* 也被捕获
         QuickJsEngine.EvalResult load = QuickJsEngine.evalWithHost(bundle, new SuperappRuntimeHost(draw, new HostBridge(caps, screenHost)));
         if (!load.ok) { fail("bundle eval 失败：" + load.error); return; }
         QuickJsEngine.EvalResult bootRes = QuickJsEngine.eval("__proteusSuperappBootJson()");
@@ -150,12 +156,14 @@ public final class AppActivity extends Activity {
         // ★dev 可视化层（决策 #671）：叠加在内容/tab 之上——DEV 角标（release 不创建）。挂起后短暂提示"dev 模式"。
         devOverlay = new DevOverlay(this, root);
         devOverlay.attach();
+        if (ProteusBuildConfig.DEV) { installDevConsole(); startLogPump(); }
         contentHost.post(new Runnable() {
             @Override public void run() {
                 renderCurrent(readState());
                 Log.i(TAG, "PROTEUS_APP_READY screen=" + currentName(readState()));
                 if (ProteusBuildConfig.DEV) {
                     devOverlay.flash("DEV 模式 · 改源码保存即热刷");
+                    devLog("info", "app ready · screen=index");
                     startDevWatch();
                 }
             }
@@ -238,6 +246,7 @@ public final class AppActivity extends Activity {
                     //   每秒把"设备在线 + 当前屏"上报给 dev server 的面板（失败静默，不干扰热刷）。
                     //   ★必须先 ping 再判 continue：否则"版本没变"这条主路径永不 ping ⇒ 面板一直"设备离线"。
                     httpGetText(base + "/ping?screen=" + java.net.URLEncoder.encode(lastScreenName));
+                    flushHostLog(base);   // ★把设备日志推到面板 Console（决策 #673）
                     if (v == null || v.equals(last)) continue;
                     last = v;
                     final String fresh = httpGetText(base + "/bundle");
@@ -261,6 +270,7 @@ public final class AppActivity extends Activity {
             QuickJsEngine.resetEngine();
             caps = new HostCapabilities(this);
             screenHost = new ScreenHost(root);
+            installDevConsole();   // reset 后重装（新上下文）——须在 eval bundle 之前
             QuickJsEngine.EvalResult load = QuickJsEngine.evalWithHost(bundle, new SuperappRuntimeHost(draw, new HostBridge(caps, screenHost)));
             if (!load.ok) { Log.w(TAG, "PROTEUS_DEV_RELOAD_EVAL_FAIL " + load.error); return; }
             QuickJsEngine.EvalResult bootRes = QuickJsEngine.eval("__proteusSuperappBootJson()");
@@ -273,6 +283,7 @@ public final class AppActivity extends Activity {
             }
             renderCurrent(readState());
             Log.i(TAG, "PROTEUS_DEV_RELOADED screen=" + currentName(readState()));
+            if (ProteusBuildConfig.DEV) { installDevConsole(); devLog("info", "hot reload · v" + (ver != null ? ver : "?")); }
             // ★热重载瞬时提示（决策 #671）：界面本身无"已刷新"信号（尤其只改样式时），显式给一条。
             if (devOverlay != null) {
                 String t = android.text.format.DateFormat.format("HH:mm:ss", System.currentTimeMillis()).toString();
@@ -280,6 +291,59 @@ public final class AppActivity extends Activity {
             }
         } catch (Throwable t) {
             Log.w(TAG, "PROTEUS_DEV_RELOAD_FAIL " + t.getMessage());
+            if (ProteusBuildConfig.DEV) devLog("error", "reload fail: " + t.getMessage());
+        }
+    }
+
+    // ────────────────────────── DevTools Console（决策 #673） ──────────────────────────
+
+    /** 把 JS 的 console.* 捕获到 `__proteusConsole`（仅 dev 装，release 不装 ⇒ 引擎/包零开销）。 */
+    private void installDevConsole() {
+        // ★Error 友好（决策 #673 实测：页面 console.error('…', err) 时 JSON.stringify(err)='{}' 丢信息）
+        //   ⇒ 先取 stack（或 String(err)），再用 JSON；对象 JSON 化失败则 String。
+        QuickJsEngine.eval("(function(){if(globalThis.__proteusConsole)return;var q=globalThis.__proteusConsole=[],"
+            + "fmt=function(x){if(typeof x==='string')return x;"
+            + "if(x&&typeof x==='object'){if(typeof x.stack==='string'||typeof x.message==='string'){return (x.name||'Error')+(x.message?': '+x.message:'')+(x.stack?'\\n'+x.stack:'')}"
+            + "try{var s=JSON.stringify(x);return s===undefined?String(x):s}catch(e){return String(x)}}"
+            + "return String(x)};"
+            + "mk=function(l){return function(){var a=[].slice.call(arguments).map(fmt).join(' ');q.push(l+'\\u0001'+a);if(q.length>500)q.shift()}};"
+            + "var c=globalThis.console||(globalThis.console={});['log','info','warn','error'].forEach(function(l){c[l]=mk(l)});})()");
+    }
+
+    /** 宿主 dev 事件入队（UI 线程）。 */
+    private void devLog(String level, String text) { if (text != null) hostLogQueue.add(new String[]{level, text}); }
+
+    /** 每 400ms 在 UI 线程抽一次 JS console 队列（eval 仅 UI 线程安全），追加到待 flush 队列。 */
+    private void startLogPump() {
+        if (logPump != null) return;
+        logPump = new android.os.Handler(android.os.Looper.getMainLooper());
+        logPump.post(new Runnable() {
+            @Override public void run() {
+                try {
+                    QuickJsEngine.EvalResult r = QuickJsEngine.eval(
+                        "(function(){var q=globalThis.__proteusConsole;if(!q||!q.length)return '';return q.splice(0,q.length).join('\\u0002')})()");
+                    if (r.ok && r.value != null && !r.value.isEmpty()) {
+                        for (String line : r.value.split("\u0002")) {
+                            int u = line.indexOf('\u0001');
+                            if (u > 0) hostLogQueue.add(new String[]{line.substring(0, u), line.substring(u + 1)});
+                        }
+                    }
+                } catch (Throwable ignored) { /* 引擎未就绪 ⇒ 下轮再试 */ }
+                logPump.postDelayed(this, 400);
+            }
+        });
+    }
+
+    /** watch 线程：把设备日志逐条 GET /log?level=&text=（失败丢弃不重试——dev 诊断，非关键路径）。 */
+    private void flushHostLog(String base) {
+        while (!hostLogQueue.isEmpty()) {
+            String[] e = hostLogQueue.remove(0);
+            String text = e[1];
+            if (text.length() > 600) text = text.substring(0, 600) + "…";
+            try {
+                httpGetText(base + "/log?level=" + java.net.URLEncoder.encode(e[0], "UTF-8")
+                    + "&text=" + java.net.URLEncoder.encode(text, "UTF-8"));
+            } catch (Throwable t) { break; }
         }
     }
 
