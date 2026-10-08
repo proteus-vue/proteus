@@ -26,6 +26,7 @@ import { buildLayoutTemplate, parseCssVarTokens, extractFromSfc, computeTree, ov
 import type { AlignNode } from '@proteus-vue/compiler'
 import { screenContentFromLayoutTemplate } from '@proteus-vue/render-backend'
 import { APP_PLATFORMS, type AppPlatform } from './targets'
+import { resolveAppRoutes } from './app-routes'
 
 // ★目标/平台名 SSOT 在 ./targets（三处一致，不漂）。此处再导出供既有消费方（hosts 生成器等）。
 export { APP_PLATFORMS, type AppPlatform, isAppPlatform } from './targets'
@@ -63,7 +64,9 @@ function irSwitchFields(): readonly string[] {
 }
 
 export async function buildAppScreenContent(root: string, platform: AppPlatform = 'android'): Promise<AppScreenContentResult> {
-  const autoRoutes = path.join(root, 'router', 'auto-routes.ts')
+  // ★honor `router.routesOutput`（唯一实现 app-routes.ts）——此前硬编码 `router/auto-routes.ts`
+  //   与 create-proteus 模板缺省（`src/router/auto-routes.ts`）不一致 ⇒ 新工程 App 构建失败。
+  const { file: autoRoutes, config: cfgV4 } = await resolveAppRoutes(root)
   if (!fs.existsSync(autoRoutes)) {
     throw new Error(`缺 ${path.relative(root, autoRoutes)}——先运行 gen-routes（proteus build --target skyline/web 会产出）`)
   }
@@ -74,15 +77,10 @@ export async function buildAppScreenContent(root: string, platform: AppPlatform 
   //   构建期折进节点（页面大量用全局类 `sa-card`/`sa-item`…，此前只折 SFC 内 `<style>` ⇒ 全落空）。
   let globalCss: string | undefined
   try {
-    const cfgPath = path.join(root, 'proteus.config.ts')
-    if (fs.existsSync(cfgPath)) {
-      const { loadProteusConfig } = await import('./config-loader')
-      const { config: cfgV4 } = await loadProteusConfig(cfgPath)
-      const gs = cfgV4.targets.mp?.globalStyle ? path.resolve(root, cfgV4.targets.mp.globalStyle) : undefined
-      if (gs && fs.existsSync(gs)) {
-        globalCss = fs.readFileSync(gs, 'utf-8')
-        tokens = parseCssVarTokens(globalCss)
-      }
+    const gs = cfgV4?.targets.mp?.globalStyle ? path.resolve(root, cfgV4.targets.mp.globalStyle) : undefined
+    if (gs && fs.existsSync(gs)) {
+      globalCss = fs.readFileSync(gs, 'utf-8')
+      tokens = parseCssVarTokens(globalCss)
     }
   } catch {
     /* 无配置/加载失败 ⇒ 不折叠 var()（保持既有行为，不阻断） */

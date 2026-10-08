@@ -518,7 +518,9 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
         double fs = 24; jnum(it.c_str(), it.size(), "fontSize", &fs);
         double fw = 400; jnum(it.c_str(), it.size(), "fontWeight", &fw);   // ★批次 3：字重
         std::string ta; jstr(it.c_str(), it.size(), "textAlign", &ta);      // ★批次 4：对齐
-        uint32_t tc = 0xFFFFFFFFu; std::string tcCss; if (jstr(it.c_str(), it.size(), "color", &tcCss)) tc = hexToArgb(tcCss);
+        // ★★★CSS 初值 `color`（2026-10-08 · 以 Web 为基准）：缺省 **黑**（0xFF000000；Web 未声明即黑）。
+        //   此前缺省 0xFFFFFFFF（白）⇒ 未声明颜色的页面白字白底不可见（与 Android/iOS 同源修复）。
+        uint32_t tc = 0xFF000000u; std::string tcCss; if (jstr(it.c_str(), it.size(), "color", &tcCss)) tc = hexToArgb(tcCss);
         // ★批次 5：uniform 边框（宽度 + 颜色）
         double bw = 0; jnum(it.c_str(), it.size(), "borderWidth", &bw);
         if (isHidden) { bg = 0; radius = 0; text.clear(); bw = 0; }   // ★批次 25：hidden ⇒ 不绘制

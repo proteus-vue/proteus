@@ -16,6 +16,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { resolveAppRoutes } from './app-routes'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 
@@ -68,10 +69,13 @@ export async function buildAppContentModuleSource(opts: AppContentModuleOptions)
   const rt = await buildAppRuntimeContent(projectRoot, platform)
   const runtimeContent = JSON.parse(fs.readFileSync(rt.outFile, 'utf-8')) as Record<string, unknown>
 
-  // 屏注册表（来自项目 router/auto-routes.ts；与 Web/MP 同一棵路由树）
-  const autoRoutesPath = path.join(projectRoot, 'router', 'auto-routes.ts')
+  // 屏注册表（来自项目 auto-routes.ts；与 Web/MP 同一棵路由树）
+  // ★honor `router.routesOutput`（唯一实现 app-routes.ts）——此前硬编码 ⇒ 新工程（模板缺省
+  //   `src/router/auto-routes.ts`）注册表读空 ⇒ 运行期 `app-navigation: 屏注册表为空`（用户实测）。
+  const autoRoutesPath = (await resolveAppRoutes(projectRoot)).file
   let registry: unknown = { screens: {}, tabNames: [], tabLabels: {}, indexName: '', routes: [] }
   try {
+    if (!fs.existsSync(autoRoutesPath)) throw new Error(`缺 ${path.relative(projectRoot, autoRoutesPath)}`)
     const arMod = (await import(pathToFileURL(autoRoutesPath).href)) as {
       screens?: Record<string, unknown>
       tabNames?: string[]

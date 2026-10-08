@@ -14,22 +14,27 @@ generated: true
 ### `proteus build`
 
 ```bash
-proteus build <dir> [--out <dir>] [--debug] [--no-px2rpx] [--rpx-ratio <n>] [--rules <json>] [--compiler <node|rust>] [--target <web|skyline|ios|android|harmony|all>] [--package --host-dir <dir>]
+proteus build <dir> [--out <dir>] [--debug] [--no-px2rpx] [--rpx-ratio <n>] [--rules <json>] [--compiler <node|rust>] [--target <web|skyline|ios|android|harmony|all>] [--package [--host-dir <dir>]]
 ```
 
-Scan all .vue files under <dir> and compile them into the mini-program four-file set (.wxml / .js / .wxss) to <out>
-      --debug    inject source line-number comments into the artifacts + write the decision trace to disk (.transform-debug/)
+Scan all .vue under <dir> and compile to the mini-program four-file set (.wxml / .js / .wxss) to <out>; with --target, run a project build
+      --debug    inject source line-number comments + write the decision trace (.transform-debug/)
       --rules    JSON rule override file (disabled / mapping / customTags)
-      --compiler compiler backend (G-29): node (default) / rust (per-page Node/Rust dual-compile semantic equivalence check, G-29.1)
-      --target   project build (G-33 M2): spawn the project build:web / build:mp scripts (reusing the Vite pipeline); default = standalone compilation
+      --compiler compiler backend (G-29): node (default) / rust (per-page Node/Rust dual-compile equivalence check, G-29.1)
+      --target   project build: web/skyline (Vite pipeline) · ios/android/harmony (App screen content: router → SFC → compiler) · all (every target)
+      --package  ★package a full installer (#662): harmony→.hap; ios→.app; android→.apk
+                 ★App targets auto-scaffold the host into dist/app/<target>/host (no --host-dir needed) + build bundle-superapp.js
+                 + inject the project package name (proteus.config native section) → one command yields an installer with the project own package name. Defaults to PROTEUS_HOST_DIR
 
 ### `proteus dev`
 
 ```bash
-proteus dev [--target <web|skyline>]
+proteus dev [--target <web|skyline|ios|android|harmony>]
 ```
 
-Development server (G-33 M1): web → vite --mode web; skyline → dev-mp watch build (the app side awaits M3 native sync)
+Dev server: web → Vite; skyline → dev-mp watch build
+      ★App targets (#662 · hot reload): android/ios/harmony → scaffold the full host → start an HTTP dev server (LAN)
+      → build a **debug** host (bundle served over HTTP) → install on device → launch → watch; saving source hot-reloads the current screen (no reinstall)
 
 ### `proteus create`
 
@@ -37,7 +42,10 @@ Development server (G-33 M1): web → vite --mode web; skyline → dev-mp watch 
 proteus create host <platform> <dir> [--name <应用名>] [--bundle <包名>] [--project <项目根>]
 ```
 
-★hosts cut-2 Stage 2 (host/project separation): generate a standalone compilable minimal host project (shell + runtime HAR dependency). platform currently: harmony.
+★Generate a standalone compilable full host project (app shell + runtime deps; platform: harmony / ios / android)
+      harmony→AppScope+entry+proteus_render(HAR); ios→runtime source set+platform+shell; android→AndroidManifest+src+libs(runtime AAR)
+      --name app name · --bundle package name (default com.example.<slug>) · --project project root (copies artifacts into rawfile if dist/app/<platform>/ exists)
+      ★Note: App `build --package` / `dev` already auto-scaffold into dist/app/<target>/host; manual create is rarely needed
 
 ## Checks & gates
 

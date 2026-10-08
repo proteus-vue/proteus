@@ -278,7 +278,10 @@ describe('★★★G-61 B3 · 三端 Applier conformance（相对 Web 基准）'
     //   本项补齐；故**不再**计 unsupported（同理的 grid-area/template-areas/auto-* 早已透传）。
     expect(sky.wxss['grid-template-columns'], 'Skyline 应透传 grid-template-columns').toBe('1fr 1fr')
     expect(sky.unsupported.some((u) => u.field.startsWith('grid')), 'grid 族已透传，不应再计 unsupported').toBe(false)
-    // z-index 在 App 侧必须被拒（无层叠上下文）
-    expect(app.unsupported.some((u) => u.field === 'zIndex'), 'App 应拒 zIndex').toBe(true)
+    // ★★★批 A④（2026-10-08 · 决策 #658）：z-index 从"App 侧无能力（drop）"改为**直传**——
+    //   宿主按 (zIndex, 声明序) 对同父兄弟做稳定排序（同父层叠 = CSS/WXSS 引擎语义；
+    //   判据区间映射见 contracts/layers.ts 的 zIndexOf）。⇒ 不再计 unsupported；必须落进 DTO（不静默丢）。
+    expect(app.unsupported.some((u) => u.field === 'zIndex'), 'App 不应再把 zIndex 计为 unsupported（#658 已直传）').toBe(false)
+    expect(app.dto['zIndex'], 'zIndex 必须落进 DTO（直传、不静默丢）').toBe(3)
   })
 })

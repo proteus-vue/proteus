@@ -13,6 +13,7 @@ import path from 'node:path'
 import { appHostDir, appBundleFile, APP_PACKAGE_NAME, isAppPlatform } from '../packages/cli/src/targets'
 import { buildAppBundle } from '../packages/cli/src/app-bundle'
 import { startAppDevServer } from '../packages/cli/src/app-dev-server'
+import { resolveAppRoutes } from '../packages/cli/src/app-routes'
 
 const ROOT = path.resolve(__dirname, '..')
 const SUPERAPP = path.join(ROOT, 'superapp')
@@ -20,6 +21,30 @@ const hasSuperapp = fs.existsSync(path.join(SUPERAPP, 'proteus.config.ts'))
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-apphost-'))
 
 afterAll(() => { fs.rmSync(TMP, { recursive: true, force: true }) })
+
+describe('★完整宿主 · auto-routes 路径解析（honor router.routesOutput）', () => {
+  // ★用户实测（决策 #664 D1）：App 三处此前硬编码 `<root>/router/auto-routes.ts`，而 create-proteus
+  //   模板缺省 `src/router/auto-routes.ts` ⇒ 新工程 `build --target android --package` 当场失败。
+  const mk = (cfg: string) => {
+    const d = fs.mkdtempSync(path.join(TMP, 'proj-'))
+    fs.writeFileSync(path.join(d, 'proteus.config.ts'), cfg)
+    return d
+  }
+  it('按配置的 routesOutput 解析（模板缺省 src/router/…）', async () => {
+    const d = mk(`export default { router: { routesOutput: 'src/router/auto-routes.ts' } }`)
+    expect((await resolveAppRoutes(d)).file).toBe(path.join(d, 'src/router/auto-routes.ts'))
+  })
+  it('自定义 routesOutput 生效（主仓形态 router/…）', async () => {
+    const d = mk(`export default { router: { routesOutput: 'router/auto-routes.ts' } }`)
+    expect((await resolveAppRoutes(d)).file).toBe(path.join(d, 'router/auto-routes.ts'))
+  })
+  it('无配置 / 未声明 routesOutput ⇒ 回退 router/auto-routes.ts（不抛）', async () => {
+    const dNoCfg = fs.mkdtempSync(path.join(TMP, 'proj-'))
+    expect((await resolveAppRoutes(dNoCfg)).file).toBe(path.join(dNoCfg, 'router/auto-routes.ts'))
+    const dNoField = mk(`export default { pagesDir: 'src/pages' }`)
+    expect((await resolveAppRoutes(dNoField)).file).toBe(path.join(dNoField, 'router/auto-routes.ts'))
+  })
+})
 
 describe('★完整宿主 · targets SSOT', () => {
   it('宿主目录/安装包命名在 dist/app/<端>/ 下', () => {

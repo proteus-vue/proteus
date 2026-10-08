@@ -662,7 +662,9 @@ final class SelfDrawView: UIView {
                                             family: (style["fontFamily"] as? String) ?? "system")
             tl.font = ProteusTextAdapter.cgFont(of: ufont)
             tl.fontSize = fs
-            let textCg = (style["color"] as? String).flatMap(parseHexColor)?.cgColor ?? UIColor.white.cgColor
+            // ★★★CSS 初值 `color`（2026-10-08 · 以 Web 为基准）：缺省 **黑**（Web 未声明 color 时即黑）。
+            //   此前缺省 **白** ⇒ 未声明颜色的页面白字白底不可见（与 Android/Harmony 同源修复）。
+            let textCg = (style["color"] as? String).flatMap(parseHexColor)?.cgColor ?? UIColor.black.cgColor
             tl.foregroundColor = textCg
             tl.string = textLayerString(clamped, style: style, font: ufont, color: textCg,
                                          wrapOverride: wrapMode)

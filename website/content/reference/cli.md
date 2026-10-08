@@ -14,23 +14,27 @@ generated: true
 ### `proteus build`
 
 ```bash
-proteus build <dir> [--out <dir>] [--debug] [--no-px2rpx] [--rpx-ratio <n>] [--rules <json>] [--compiler <node|rust>] [--target <web|skyline|ios|android|harmony|all>] [--package --host-dir <dir>]
+proteus build <dir> [--out <dir>] [--debug] [--no-px2rpx] [--rpx-ratio <n>] [--rules <json>] [--compiler <node|rust>] [--target <web|skyline|ios|android|harmony|all>] [--package [--host-dir <dir>]]
 ```
 
-扫描 <dir> 下所有 .vue，编译为小程序四件套（.wxml / .js / .wxss）到 <out>
+扫描 <dir> 下所有 .vue 编译为小程序四件套（.wxml / .js / .wxss）到 <out>；带 --target 则走工程构建
       --debug    产物注入源码行号注释 + 决策 trace 落盘（.transform-debug/）
       --rules    JSON 规则覆盖文件（disabled / mapping / customTags）
       --compiler 编译器后端（G-29）：node（缺省）/ rust（每页 Node/Rust 双编译语义等价校验，G-29.1）
-      --target   工程构建（G-33 M2）：web/skyline（复用 Vite 管线）· ios/android/harmony（App 屏内容：路由 → SFC → 编译器）· all（逐端全构建）；缺省 = 独立编译
-      --package  （hosts 第二/三/四刀）harmony→hvigorw 打 .hap；ios→swiftc 打 .app；android→javac/d8/aapt2 打 .apk（--host-dir 指定宿主工程，缺省读 PROTEUS_HOST_DIR）
+      --target   工程构建：web/skyline（Vite 管线）· ios/android/harmony（App 屏内容：路由 → SFC → 编译器）· all（逐端全构建）
+      --package  ★打包完整安装包（#662）：harmony→.hap；ios→.app；android→.apk（javac/d8/aapt2/apksigner）
+                 ★App 端**缺省自动 scaffold 到 dist/app/<端>/host**（无需 --host-dir）+ 产 bundle-superapp.js
+                 + 注入项目包名（proteus.config native 段）⇒ 一条命令出**项目自有包名**的安装包。缺省读 PROTEUS_HOST_DIR
 
 ### `proteus dev`
 
 ```bash
-proteus dev [--target <web|skyline>]
+proteus dev [--target <web|skyline|ios|android|harmony>]
 ```
 
-开发服务器（G-33 M1）：web → vite --mode web；skyline → dev-mp watch 构建（app 端待 M3 原生同步）
+开发服务器：web → Vite；skyline → dev-mp watch 构建
+      ★App 端（#662 · 热刷）：android/ios/harmony → scaffold 完整宿主 → 起 HTTP dev server（局域网）
+      → 编 **debug** 宿主（bundle 走 dev server）→ 装到设备 → 启动 → watch；改源码保存即热刷当前屏（无需重装）
 
 ### `proteus create`
 
@@ -38,9 +42,10 @@ proteus dev [--target <web|skyline>]
 proteus create host <platform> <dir> [--name <应用名>] [--bundle <包名>] [--project <项目根>]
 ```
 
-★hosts 第二刀 Stage 2（宿主/项目分离）：生成**独立可编译的最小宿主工程**（壳 + runtime HAR 依赖）
-      platform 支持 harmony / ios / android；harmony→AppScope+entry+proteus_render(HAR)；ios→runtime 源集+platform+shell；android→AndroidManifest+src+libs(runtime AAR)
+★生成**独立可编译的完整宿主工程**（应用壳 + runtime 依赖；platform: harmony / ios / android）
+      harmony→AppScope+entry+proteus_render(HAR)；ios→runtime 源集+platform+shell；android→AndroidManifest+src+libs(runtime AAR)
       --name 应用名 · --bundle 包名（缺省 com.example.<slug>）· --project 项目根（有 dist/app/<platform>/ 则拷编译产物进 rawfile）
+      ★注：App 端 `build --package` / `dev` 已**缺省自动 scaffold** 到 dist/app/<端>/host，通常无需手动 create
 
 ## 检查与门禁
 
