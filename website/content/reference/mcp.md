@@ -43,9 +43,9 @@ Proteus 的 **AI 原生开发**落地：`@proteus-vue/mcp` 暴露 MCP（Model Co
 
 ## 接入方式
 
-**① 库内调用**：宿主（Agent 框架等）接 `createMcpServer(options)`（`@proteus-vue/mcp`）在**进程内**注册 tools/resources/prompts。
+**① 库内调用**：宿主（Agent 框架等）接 `createMcpServer(options)`（`@proteus-vue/mcp`）在**进程内**注册 tools/resources/prompts；或经 `serveStdio()` / `startHttpServer()` 接传输层。
 
-**② CLI stdio server（推荐给 MCP 客户端）**：`proteus mcp serve` 起一个 **stdio MCP server**（JSON-RPC over stdin/stdout），Claude Desktop / Cursor / Cline 等可直接挂载，无需自己接传输层。
+**② CLI stdio（推荐给 MCP 客户端）**——`proteus mcp serve` 起一个 stdio MCP server（本地进程拉起，JSON-RPC over stdin/stdout）：
 
 ```jsonc
 // Claude Desktop / Cursor 的 mcpServers 配置示例
@@ -60,16 +60,29 @@ Proteus 的 **AI 原生开发**落地：`@proteus-vue/mcp` 暴露 MCP（Model Co
 }
 ```
 
-- **缺省只读**：`write_file` 默认禁用；加 `--allow-write`（配合 `--workspace <dir>` 限定写根）才开写闸。
-- **`--rate-limit <n>`**：每分钟调用上限（缺省 60）。
-- **★stdout 是协议的**：server 只把 JSON-RPC 写到 stdout；状态提示一律走 stderr（否则客户端解析失败）。
-- **诚实边界**：依赖 `document` 的工具（`run_conformance` / `generate_code`）在纯 Node stdio 下无 document ⇒ 如实报错；HTTP/SSE 传输暂未提供。
+**③ Streamable HTTP（远端 / 共享 / 多客户端 / 容器内）**——`proteus mcp serve --http`，缺省监听 `127.0.0.1:7802`，端点为 `/mcp`：
+
+```bash
+proteus mcp serve --http                              # http://127.0.0.1:7802/mcp
+proteus mcp serve --http --host 0.0.0.0 --token s3cr3t # 对外 + Bearer 鉴权
+```
+
+- **stateless per-request**：每个请求独立处理、不建会话——只读知识面天然并发安全、无会话运维面；代价是不支持服务端主动推送（如日志通知），GET/DELETE 返回 405。
+- **安全**：缺省只绑 `127.0.0.1`；`--host 0.0.0.0` 对外时**务必**配 `--token`（否则任何人可调）。`--port N` / `--host H` / `--token T` 仅 HTTP 模式。
+- **需要 Node ≥ 20**（Streamable HTTP 依赖 ESM 全局 `crypto`；stdio 无此要求）。
+
+**通用选项**：`--allow-write`（开 `write_file`，缺省只读）· `--workspace <dir>`（写根，缺省 cwd）· `--rate-limit <n>`（每分钟上限，缺省 60）· `--quiet`（关结构化请求日志）。
+
+**★stdout 是协议的**：stdio 下 server 只把 JSON-RPC 写到 stdout，状态提示与请求日志一律走 stderr（否则客户端解析失败）。
+
+**★六端 conformance 开箱全通**：`run_conformance` 需 `document`（vue-dom 引擎）——server **自动注入 happy-dom**（可选依赖），故 `proteus mcp serve` 下六端全部可跑；未装 happy-dom 时 vue-dom 端如实报错（不静默假装通过）。
 
 ## 设计要点
 
 - **写护栏**：`write_file` 在护栏内落盘（AI 产码不绕过仓库门禁）；`validate_ir` + `run_conformance` 是产码后机器校验关
 - **语义优先**：工具操作对象是 IR/原语/Token（约束面），非自由文本——AI 产码符合 IR 契约（见[与传统框架的区别](/docs/02-difference)）
 - **对照反查**：`lookup_miniprogram` 让 AI 在存量小程序迁移时按语义查 wx 等价物
+
 
 ## 生态联动
 

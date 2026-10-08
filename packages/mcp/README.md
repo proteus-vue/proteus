@@ -40,25 +40,29 @@ server.readResource('proteus://primitives/catalog')
 server.getPrompt('proteus-migrate-wx')  // prompts/get
 ```
 
-## 传输适配：stdio（已落地 · 决策 #681）
+## 传输适配：stdio + Streamable HTTP（决策 #681 / #682）
 
-本包是传输无关核心（tools/resources/prompts 注册表 + 校验 + 策略 + 分发）+ **stdio 传输适配器**：
+本包是传输无关核心（tools/resources/prompts 注册表 + 校验 + 策略 + 分发）+ **两个传输适配器**：
 
 ```ts
-import { serveStdio } from '@proteus-vue/mcp'
-await serveStdio({ writeEnabled: false })   // JSON-RPC over stdin/stdout（MCP 客户端直连）
+import { serveStdio, startHttpServer } from '@proteus-vue/mcp'
+await serveStdio({ writeEnabled: false })                 // ① JSON-RPC over stdin/stdout
+const h = await startHttpServer({ port: 7802 })           // ② Streamable HTTP（stateless per-request）
 ```
 
 或经 CLI（Claude Desktop / Cursor 可直接挂）：
 
 ```bash
-proteus mcp serve                    # 只读（write_file 禁用）
-proteus mcp serve --allow-write --workspace ./  # 开写闸（限定写根）
+proteus mcp serve                                       # stdio，只读（write_file 禁用）
+proteus mcp serve --allow-write --workspace ./          # 开写闸（限定写根）
+proteus mcp serve --http --host 0.0.0.0 --token s3cr3t  # HTTP 对外 + Bearer 鉴权
 ```
 
-- **★硬约束**：stdio 下 **stdout 只出 JSON-RPC**，状态提示一律走 stderr（`onReady` 回调）。
+- **stdio**：**★stdout 只出 JSON-RPC**，状态提示一律走 stderr（`onReady` 回调）。
+- **HTTP**：缺省绑 `127.0.0.1:7802/mcp`；`--host 0.0.0.0` 对外时**务必**配 `--token`；**需 Node ≥ 20**（ESM 全局 `crypto`）。
 - 适配器做三处形状翻译：工具 `inputSchema` → **JSON Schema**、`callTool` → `content[]`+`isError`（**两层失败语义**）、resources/prompts → 协议结构。
-- **诚实边界**：`document` 依赖工具（`run_conformance`/`generate_code`）在纯 Node stdio 下无 document（经 `documentLike` 注入可解）；**HTTP/SSE 传输仍为后续**。
+- **documentLike 自动注入**：`run_conformance` 的 vue-dom 端需 `document` ⇒ server 懒加载 **happy-dom**（**可选依赖**）注入 ⇒ 六端开箱全通；未装则 vue-dom 端如实报错（不静默假装通过）。
+- **诚实边界**：HTTP 为 **stateless per-request**（无会话/无服务端推送；GET/DELETE → 405）；写闸与 stdio 同语义（缺省只读）。
 
 ## 数据源（SSOT）
 
