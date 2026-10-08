@@ -52,6 +52,9 @@ public final class AppActivity extends Activity {
     /** dev 变体的热刷线程（DEV=false 时始终 null） */
     private Thread devWatch;
 
+    /** dev 可视化层（DEV 角标 + 热重载提示；release 不创建） */
+    private DevOverlay devOverlay;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -141,11 +144,17 @@ public final class AppActivity extends Activity {
             return;
         }
         buildTabBar();
+        // ★dev 可视化层（决策 #671）：叠加在内容/tab 之上——DEV 角标（release 不创建）。挂起后短暂提示"dev 模式"。
+        devOverlay = new DevOverlay(this, root);
+        devOverlay.attach();
         contentHost.post(new Runnable() {
             @Override public void run() {
                 renderCurrent(readState());
                 Log.i(TAG, "PROTEUS_APP_READY screen=" + currentName(readState()));
-                if (ProteusBuildConfig.DEV) startDevWatch();
+                if (ProteusBuildConfig.DEV) {
+                    devOverlay.flash("DEV 模式 · 改源码保存即热刷");
+                    startDevWatch();
+                }
             }
         });
     }
@@ -226,8 +235,9 @@ public final class AppActivity extends Activity {
                     last = v;
                     final String fresh = httpGetText(base + "/bundle");
                     if (fresh == null || fresh.isEmpty()) continue;
+                    final String ver = v.trim();
                     runOnUiThread(new Runnable() {
-                        @Override public void run() { hotReload(fresh); }
+                        @Override public void run() { hotReload(fresh, ver); }
                     });
                 }
             }
@@ -238,7 +248,7 @@ public final class AppActivity extends Activity {
     }
 
     /** 用新 bundle 重载应用（保留当前屏名）：重置引擎 → 重建桥 → 重 boot → 导航回原屏 → 重绘。 */
-    private void hotReload(String bundle) {
+    private void hotReload(String bundle, String ver) {
         try {
             final String wantPage = currentName(readState());
             QuickJsEngine.resetEngine();
@@ -256,6 +266,11 @@ public final class AppActivity extends Activity {
             }
             renderCurrent(readState());
             Log.i(TAG, "PROTEUS_DEV_RELOADED screen=" + currentName(readState()));
+            // ★热重载瞬时提示（决策 #671）：界面本身无"已刷新"信号（尤其只改样式时），显式给一条。
+            if (devOverlay != null) {
+                String t = android.text.format.DateFormat.format("HH:mm:ss", System.currentTimeMillis()).toString();
+                devOverlay.flash("⟳ 已热重载 · v" + (ver != null ? ver : "?") + " · " + t);
+            }
         } catch (Throwable t) {
             Log.w(TAG, "PROTEUS_DEV_RELOAD_FAIL " + t.getMessage());
         }
