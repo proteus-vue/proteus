@@ -13,6 +13,7 @@ import path from 'node:path'
 import { appHostDir, appBundleFile, APP_PACKAGE_NAME, isAppPlatform } from '../packages/cli/src/targets'
 import { buildAppBundle } from '../packages/cli/src/app-bundle'
 import { startAppDevServer, resolveWatchRoots } from '../packages/cli/src/app-dev-server'
+import { renderDevtoolsPage } from '../packages/cli/src/app-devtools-page'
 import { resolveAppRoutes } from '../packages/cli/src/app-routes'
 
 const ROOT = path.resolve(__dirname, '..')
@@ -95,6 +96,39 @@ describe('★完整宿主 · dev 热刷监听根（决策 #667：按布局/配�
     fs.mkdirSync(d, { recursive: true })
     expect(await resolveWatchRoots(d)).toEqual([])
   })
+})
+
+describe('★完整宿主 · App DevTools 面板（决策 #672：dev server 可视化）', () => {
+  it('渲染自包含 DevTools 单页（含关键 UI 锚点 + 注入项目信息）', () => {
+    const html = renderDevtoolsPage({ platform: 'android', projectName: 'my-app', projectRoot: '/x/my-app', url: 'http://192.168.1.2:1234' })
+    expect(html).toContain('Proteus DevTools')
+    expect(html).toContain('my-app')
+    expect(html).toContain('设备在线')            // 宿主心跳状态
+    expect(html).toContain('重建时间线')
+    expect(html).toContain("EventSource('/events')")  // 走 SSE 实时
+    expect(html).toContain('/ping')               // 心跳端点文案
+    expect(html).toContain('192.168.1.2:1234')    // 注入的 dev URL
+  })
+  it.skipIf(!hasSuperapp)('dev server：/ 出面板 · /events SSE 快照 · /ping 反映宿主态 · 404 兜底', async () => {
+    // 用真实工程（superapp：含 auto-routes/screens）⇒ 首建产出初始重建事件（另有 skipIf 守卫，见文件头）。
+    const server = await startAppDevServer({ projectRoot: SUPERAPP, platform: 'android', host: '127.0.0.1', port: 0 })
+    try {
+      const home = await fetch(`${server.url}/`).then((r) => r.text())
+      expect(home, '/ ⇒ DevTools 页面').toContain('Proteus DevTools')
+      // SSE：先拿到 snapshot 首帧（含初始重建事件）
+      const sse = await fetch(`${server.url}/events`).then((r) => r.body!.getReader().read())
+      const first = new TextDecoder().decode(sse.value)
+      expect(first, 'SSE 首帧 = snapshot').toContain('"type":"snapshot"')
+      expect(first, 'snapshot 含重建时间线').toContain('"reason":"initial"')
+      // 宿主心跳：/ping?screen=x ⇒ 下次 snapshot 的 host.screen = x
+      await fetch(`${server.url}/ping?screen=detail`)
+      const sse2 = await fetch(`${server.url}/events`).then((r) => r.body!.getReader().read())
+      expect(new TextDecoder().decode(sse2.value), '/ping 后 snapshot 反映宿主态').toContain('"screen":"detail"')
+      expect(await fetch(`${server.url}/nope`).then((r) => r.text())).toContain('devtools')
+    } finally {
+      await server.close()
+    }
+  }, 120_000)
 })
 
 describe('★完整宿主 · targets SSOT', () => {
