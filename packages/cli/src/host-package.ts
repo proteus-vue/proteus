@@ -25,6 +25,7 @@ import { fileURLToPath } from 'node:url'
 import { makeDiag, parseSwiftcOutput, captureRaw, type ProteusDiagnostic } from './diag'
 import { resolveIosSigning, IOS_PROFILE_DIRS } from './signing'
 import { resolveAndroidSdk, resolveJdk17, findApps } from './host-paths'
+import { syncRuntimeUnits, syncShellTemplates } from './host-scaffold'
 
 /** ★本模块所在目录（`packages/cli/src` 或 `dist`）——JDK 等**框架仓资源**上溯解析的起点。 */
 const HERE_PKG = path.dirname(fileURLToPath(import.meta.url))
@@ -85,6 +86,9 @@ export function packageHarmonyHost(opts: PackageHostOptions): PackageHostResult 
   if (!fs.existsSync(path.join(hostDir, 'entry'))) {
     return { ok: false, hostDir, hap: null, screenContentCopied: false, log: [`✗ 不是宿主工程（缺 entry/）：${hostDir}`] }
   }
+  // ⓪ ★runtime 源集自愈（决策 #692）：框架 runtime 改动同步进已存在宿主（否则改了 runtime 没生效）
+  const sync = syncRuntimeUnits(hostDir, 'harmony')
+  if (sync.synced) log.push(`ℹ runtime 源集已自愈同步（${sync.dirs.join(', ')}）`)
   // ① 产物拷入 rawfile
   const screenContentCopied = copyScreenContent(hostDir, opts.projectRoot, platform, log)
   // ② build-profile.json5（本地，含签名）——缺则从模板生成（unsigned）
@@ -301,11 +305,17 @@ function listSwift(dir: string): string[] {
 export function packageIosHost(opts: PackageIosOptions): PackageIosResult {
   const hostDir = path.resolve(opts.hostDir)
   const log: string[] = []
+  if (!fs.existsSync(path.join(hostDir, 'runtime'))) return { ok: false, hostDir, app: null, screenContentCopied: false, log: [`✗ 不是 iOS 宿主工程（缺 runtime/）：${hostDir}`], diagnostics: [makeDiag('PT-BE-005', { raw: `缺 runtime/：${hostDir}` })] }
+  // ⓪ ★runtime 源集自愈（决策 #692）：框架 runtime（含 #685 滚动惯性）改动同步进已存在宿主
+  const sync = syncRuntimeUnits(hostDir, 'ios')
+  if (sync.synced) log.push(`ℹ runtime 源集已自愈同步（${sync.dirs.join(', ')}）`)
+  // ⓪' ★壳模板补缺（决策 #692）：模板新增文件（如 ProteusDevOverlay.swift）补进老宿主（只补缺、不覆盖）
+  const added = syncShellTemplates(hostDir, 'ios')
+  if (added.length) log.push(`ℹ 壳模板已补缺（${added.join(', ')}）`)
   const rtDir = path.join(hostDir, 'runtime')
   const platDir = path.join(hostDir, 'platform')
   const shellDir = path.join(hostDir, 'shell')
   const infoPlist = path.join(hostDir, 'Info.plist')
-  if (!fs.existsSync(rtDir)) return { ok: false, hostDir, app: null, screenContentCopied: false, log: [`✗ 不是 iOS 宿主工程（缺 runtime/）：${hostDir}`], diagnostics: [makeDiag('PT-BE-005', { raw: `缺 runtime/：${hostDir}` })] }
   if (!fs.existsSync(infoPlist)) return { ok: false, hostDir, app: null, screenContentCopied: false, log: [`✗ 缺 Info.plist：${hostDir}`], diagnostics: [makeDiag('PT-BE-005', { raw: `缺 Info.plist：${hostDir}` })] }
   const swifts = [...listSwift(rtDir), ...listSwift(platDir), ...listSwift(shellDir)]
   if (!swifts.length) return { ok: false, hostDir, app: null, screenContentCopied: false, log: ['✗ 源集为空（runtime/ + platform/ + shell/ 无 .swift）'], diagnostics: [makeDiag('PT-BE-005', { raw: '源集为空（runtime/ + platform/ + shell/ 无 .swift）' })] }

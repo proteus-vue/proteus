@@ -290,6 +290,8 @@ final class ProteusSceneDelegate: UIResponder, UIWindowSceneDelegate {
     private var lastVersion = ""
     /// 起始页名（Info.plist `ProteusHomePage`，缺省 index）——壳不硬编码项目页名
     private var homePage = "index"
+    /// dev 可视化层（DEV 角标 + 热重载提示）——仅 dev 变体创建（决策 #692）
+    private var devOverlay: ProteusDevOverlay?
 
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
         guard let ws = scene as? UIWindowScene else { return }
@@ -323,7 +325,14 @@ final class ProteusSceneDelegate: UIResponder, UIWindowSceneDelegate {
         let ok = out.contains("\"ok\":true")
         NSLog("[proteus] PROTEUS_HOST_PAGE_RENDER ok=%@ page=%@", ok ? "true" : "false", d.currentPage)
         writeReport(ok: ok, raw: out)
-        if ProteusBuildConfig.DEV { startDevWatch() }
+        if ProteusBuildConfig.DEV {
+            // ★dev 可视化层（决策 #692）：DEV 角标 + 热重载提示——release 不创建（零残留）
+            let overlay = ProteusDevOverlay(host: d.view)
+            overlay.attach()
+            devOverlay = overlay
+            startDevWatch()
+            DispatchQueue.main.async { [weak self] in self?.devOverlay?.flash("DEV 模式 · 改源码保存即热刷") }
+        }
         if ProcessInfo.processInfo.environment["PROTEUS_EXIT_AFTER_REPORT"] == "1" { exit(0) }
     }
 
@@ -342,6 +351,7 @@ final class ProteusSceneDelegate: UIResponder, UIWindowSceneDelegate {
             d.start(bundleSource: src, embedView: d.view)   // 新建 ctx + 重 eval + 重 boot + 重渲
             d.navigate(to: keepPage)                         // 保留当前屏（与 Android hotReload 同语义）
             NSLog("[proteus] PROTEUS_DEV_RELOADED version=%@ page=%@", v, keepPage)
+            self.devOverlay?.flash("⟳ 已热重载 · v\(v) · \(keepPage)")   // ★热刷新提示（决策 #692，对齐安卓 #671）
         }
     }
 

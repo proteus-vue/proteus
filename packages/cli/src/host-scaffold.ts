@@ -167,6 +167,72 @@ function copyDirFiltered(src: string, dest: string, excludeDirs: Set<string>, ex
 
 /* ================= 生成 ================= */
 
+/**
+ * ★★★runtime 源集**定向自愈**（决策 #692）——把框架 runtime 源目录重同步进**已存在**的宿主。
+ *
+ * 【为什么有它】`createHost` 是**一次性 scaffold** ⇒ 宿主生成后，框架 `hosts/<端>/.../runtime` 的**后续改动
+ *   （如 #685 的滚动惯性 `startMomentum`）不会进已存在的宿主** —— 与 Android 的 AAR 陈旧（#685 rework）
+ *   **同源同形**（那次只给 Android 做了 AAR 自愈，iOS/harmony 的**源集**漏了）。
+ *   ⇒ 打包前把每端 runtime 源目录重拷贝（按 exclude 过滤；artifact 型单元跳过——那由各自的产物自愈负责）。
+ * @returns 同步的单元数（0 = 无框架 runtime 可解析 → 不动，避免误删宿主现有文件）
+ */
+export function syncRuntimeUnits(hostDir: string, platform: HostPlatform): { synced: number; dirs: string[] } {
+  const spec = PLATFORM_SPECS[platform]
+  const runtimeDirs = resolveRuntimeDirs(platform)
+  if (runtimeDirs.length !== spec.runtimeUnits.length) return { synced: 0, dirs: [] } // 未找齐 ⇒ 不动
+  const dirs: string[] = []
+  let synced = 0
+  for (let i = 0; i < spec.runtimeUnits.length; i++) {
+    const unit = spec.runtimeUnits[i]
+    if (unit.artifact) continue // AAR 等产物型：走各自的产物自愈（见 host-package 的 AAR 自愈），不走源同步
+    const src = runtimeDirs[i]
+    const dest = path.join(hostDir, unit.dest)
+    if (!fs.existsSync(src) || !fs.existsSync(dest)) continue
+    const files: string[] = []
+    copyDirFiltered(src, dest, new Set(spec.excludeDirs), new Set(spec.excludeFiles), files)
+    synced++
+    dirs.push(unit.dest)
+  }
+  return { synced, dirs }
+}
+
+/**
+ * ★壳文件**同步**（决策 #692）：把 `templates-host/<端>/shell/` 下的模板文件刷进已存在宿主。
+ *   ★**覆盖**（不是"只补缺"）——理由：`dist/app/<端>/host/` 是**构建产物**（CLI 生成），壳文件**框架所有**
+ *     （用户改的是**项目** src/，不是生成的宿主）；不覆盖会导致"模板加了新 wiring，老宿主拿不到"
+ *     （如本次 `ProteusApp.swift` 新增 devOverlay 调用）。
+ *   ★模板文件已做 `{{var}}` 替换（用宿主 `proteus.host.json` 的 appName/bundleId/appName）。
+ * @returns 刷新的文件名（相对 shell）
+ */
+export function syncShellTemplates(hostDir: string, platform: HostPlatform): string[] {
+  const templatesDir = (() => {
+    try { return resolveTemplatesDir(platform) } catch { return null }
+  })()
+  if (!templatesDir) return []
+  const shellSrc = path.join(templatesDir, 'shell')
+  if (!fs.existsSync(shellSrc)) return []
+  const shellDest = path.join(hostDir, 'shell')
+  if (!fs.existsSync(shellDest)) return [] // 宿主无 shell/（如 android 的壳在 src/dev 下）⇒ 跳过
+  // 读宿主身份（做 {{var}} 替换）
+  let vars: Record<string, string> = {}
+  try {
+    const hj = JSON.parse(fs.readFileSync(path.join(hostDir, 'proteus.host.json'), 'utf-8')) as { appName?: string; bundleId?: string }
+    vars = { appName: hj.appName ?? '', bundleName: hj.bundleId ?? '', bundleId: hj.bundleId ?? '' }
+  } catch { /* 无 manifest ⇒ 用空替换（模板里 {{appName}} 常见于注释） */ }
+  const synced: string[] = []
+  for (const f of fs.readdirSync(shellSrc)) {
+    const src = path.join(shellSrc, f)
+    if (!fs.statSync(src).isFile()) continue
+    const dest = path.join(hostDir, 'shell', f)
+    const content = fs.readFileSync(src, 'utf-8').replace(/\{\{(\w+)\}\}/g, (_m, k: string) => vars[k] ?? `{{${k}}}`)
+    if (fs.existsSync(dest) && fs.readFileSync(dest, 'utf-8') === content) continue // 已一致 ⇒ 不计入（幂等）
+    fs.mkdirSync(path.dirname(dest), { recursive: true })
+    fs.writeFileSync(dest, content)
+    synced.push(f)
+  }
+  return synced
+}
+
 export function createHost(opts: CreateHostOptions): CreateHostResult {
   const { platform, targetDir } = opts
   const spec = PLATFORM_SPECS[platform]
