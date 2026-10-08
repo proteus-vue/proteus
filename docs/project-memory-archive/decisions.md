@@ -2182,3 +2182,11 @@
 **④ ★真机验证（Android d67e31a3 · 纯 npm 安装 · 无框架 checkout）**：`npm create @proteus-vue/proteus` + 装**本地 CLI tarball** → `npx proteus build --target android --package` → **3.4MB APK** → 装机 → `PROTEUS_APP_READY screen=index`（内容可见）。★外部依赖 = JDK（`JAVA_HOME`）+ Android SDK（build-tools/platforms）——`build --package` 固有。
 **⑤ ★诚实边界**：a) **范围 = Android + superapp 桥**——iOS/harmony 的 runtime 是 **26MB/33MB 未 strip** 的 Rust 静态库（xcframework/HAR 需独立托管：Maven/ohpm/SwiftPM）⇒ 随 npm 包发布**不现实**，留 `docs/proteus-host-runtime-package-plan.md` 的独立 epic（本轮已**证伪**该文档"当前无消费者被阻塞 / L2 场景尚未发生"的前提）；b) #665（页根满宽）在**已发布的 compiler** 里尚缺（未发版）⇒ 纯 npm 输出的页面仍是顶左，待下次发版带上即对齐。
 **⑥ 教训**：a) **"仓库里能跑"要问"消费者手里有什么"**（#664 同款）——`hosts/` 在框架仓旁边是**局部真相**，npm 消费者拿不到；b) **二进制随包 = 挑最轻的那个**（Android AAR 1.6MB 自包含 vs iOS/harmony 26/33MB 静态库）——先量再定范围，不为对称硬扛；c) **两份副本必须机器对齐**（桥源真源 ⇄ 随包副本 = `check:bridge-sync`）——否则框架测试绿、外部用户跑旧逻辑（#663/#664 病根）。
+
+667. **★★★dev 热刷链路纯 npm 打通 —— 修「监听根硬编码」致模板工程热刷静默失效**：
+**① 用户诉求**：「继续打通这个完整的 cli 打包构建 dev 热刷链路」（承 #666 的纯 npm 路径）。
+**② 实测**：`proteus dev --target android`（纯 npm 工程）**出包+装+dev server 都对**（dev 链路复用 #666 的随包桥源/AAR ⇒ 打包那半已通），但**改源码后宿主不刷新**（热刷失效）。
+**③ 根因（"监听根硬编码"，与 #664 D1 同族）**：`app-dev-server.ts` 的 `watchTargets` 硬编码**项目根**下的 `pages/router/styles/components/App.vue`——而 create-proteus 模板把它们放在 **`src/`**（`src/pages`、`src/router`、`src/App.vue`）⇒ 候选**全不存在** ⇒ **监听列表为空** ⇒ dev server 起来了但**永不重建**。主仓工程（css-conformance/superapp）恰好根形态 ⇒ 框架内测全绿、真用户断。
+**④ 修法**：`resolveWatchRoots(projectRoot)`（导出供测）——① 模板形态整棵 `src/`；② **honor 配置**（`pagesDir` / `router.routesOutput` 目录 / `targets.mp.globalStyle` 目录；与 #664 D1 的 `resolveAppRoutes` **同一口径**）；③ 根级常见文件（App.vue/app.config.ts/app-shell.ts/proteus.config.ts）；④ 祖先目录已在集合 ⇒ 跳过后代（避免重复监听/双触发）；**空集合 ⇒ 打告警**（不静默）。
+**⑤ ★真机验证（Android d67e31a3 · 纯 npm · 不碰框架源码）**：`watch 2 处：src, proteus.config.ts`（修前为空）→ 出包 3.5MB → 装 → 启动 → `PROTEUS_DEV_BUNDLE_FROM_SERVER bytes=330322` → `PROTEUS_APP_READY` → 改 `src/pages/index.vue` → server **59ms** 重建 v2 → 宿主 **`PROTEUS_DEV_RELOADED`** → 截图 h1 变「HELLO HOT RELOAD」（未重装未重启）。配套断言 `tests/app-host-cli.test.ts` +3（模板/根形态/空工程）；回归 css-conformance/superapp/examples 监听根不变。
+**⑥ 教训**：**"配置驱动"要贯穿到每个消费者**——`pagesDir` 早就在配置里，但监听器却硬编码根目录名（同 #664 D1 的 `routesOutput`）；**凡是"资源位置"都必须从配置解析**，一处硬编码 = 一处外部用户断点。
