@@ -71,6 +71,9 @@ public final class VaporRenderHost {
     /** 最近一次 `applyOps` 的读数（判据直接从回执读，这里留痕便于 logcat 诊断） */
     public int lastApplied = -1;
     public int lastChangedNodes = -1;
+    /** ★DevTools 累计（决策 #676）：patch 应用总数 / 内核重排总数（跨所有 applyOps）——面板"重排计数"。 */
+    public int patchAppliedTotal = 0;
+    public int relayoutTotal = 0;
     /** ★★文本同步（2026-10-01 修复上一批的漏消费）：内核回 `text_updates`，宿主必须落到绘制真源 */
     int textSyncedTotal = 0;
     /** 最近一次文本更新的探针（`{id,text}` JSON——判据据此断言"新文本真的到了宿主"） */
@@ -547,6 +550,9 @@ public final class VaporRenderHost {
                 relayout = uo.optInt("relayout_count", -1);
                 lastApplied = uo.optInt("applied", -1);
                 lastChangedNodes = changed != null ? changed.length() : 0;
+                // ★DevTools 累计（决策 #676）：patch / 重排总数（面板"重排计数"）
+                if (lastApplied > 0) patchAppliedTotal += lastApplied;
+                if (relayout > 0) relayoutTotal += relayout;
                 // ★★内核拒收明细透传（同 applyOps：取证盲区会把"补丁被拒"伪装成"补丁生效"）
                 JSONArray unsupported2 = uo.optJSONArray("unsupported");
                 if (unsupported2 != null && unsupported2.length() > 0) {

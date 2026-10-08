@@ -32,6 +32,16 @@ import java.util.Map;
  *       → 原生 View 天然在自绘内容**之上**（这是 Android 的固有约束，已如实记录）
  */
 public class ProteusHostView extends ViewGroup {
+    /** ★DevTools 逐帧耗时（决策 #676）：最近一次 onDraw 的绘制耗时（ms，含 drawCmds/回放）。 */
+    private double lastFrameMs = 0;
+    /** ★DevTools 逐帧累加：onDraw 次数 + 绘制耗时总和（面板算均值）。 */
+    private long frameMsSum = 0;
+    private double lastDrawMs = 0;
+    public double lastFrameMs() { return lastFrameMs; }
+    public long onDrawTotal() { return onDrawCount; }
+    public double frameMsAverage() { return onDrawCount > 0 ? (frameMsSum / 1e6) / onDrawCount : 0; }
+    public double lastDrawMs() { return lastDrawMs; }
+
     /** 绘制指令（由 Rust 核心的布局结果生成） */
     public static final class Cmd {
         final float x, y, w, h;
@@ -2327,6 +2337,7 @@ public class ProteusHostView extends ViewGroup {
     @Override
     protected void onDraw(Canvas canvas) {
         onDrawCount++;
+        long __dt0 = System.nanoTime();
         super.onDraw(canvas);
         ensurePicture();   // ★首帧补建（setCmds 早于布局时）
         // ★滚动：自绘内容随 scrollY 平移，并**裁剪到滚动视口**
@@ -2358,6 +2369,10 @@ public class ProteusHostView extends ViewGroup {
             drawCmds(canvas);
         }
         if (scrolled) canvas.restoreToCount(save);
+        // ★DevTools 逐帧耗时（决策 #676）：整帧 onDraw 耗时（含 drawCmds/显示列表回放）
+        long __dt = System.nanoTime() - __dt0;
+        lastFrameMs = __dt / 1e6;
+        frameMsSum += __dt;
     }
 
     /** 用布局后的尺寸建立默认滚动视口（= 宿主全屏）；也可由场景显式设置 */

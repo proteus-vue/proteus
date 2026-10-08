@@ -110,15 +110,16 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
   <div class="grow"></div>
   <span class="pill" id="host-pill"><span class="dot off" id="host-dot"></span><span id="host-txt">设备离线</span></span>
 </header>
-<div id="devbar" class="devbar"></div>
 <main>
   <div class="grid">
     <div class="card"><div class="k">Bundle 版本</div><div class="v" id="c-ver">—</div></div>
     <div class="card"><div class="k">Bundle 体积</div><div class="v" id="c-size">—<small>KB</small></div></div>
-    <div class="card"><div class="k">最近重建</div><div class="v" id="c-ms">—<small>ms</small></div></div>
+    <div class="card"><div class="k">重建耗时</div><div class="v" id="c-ms">—<small>ms</small></div></div>
     <div class="card"><div class="k">当前屏</div><div class="v host"><span class="screen" id="c-screen">—</span></div></div>
-    <div class="card"><div class="k">最近渲染</div><div class="v" id="c-render">—<small>ms</small></div></div>
-    <div class="card"><div class="k">mount 次数</div><div class="v" id="c-mount">—</div></div>
+    <div class="card"><div class="k">渲染耗时</div><div class="v" id="c-render">—<small>ms</small></div></div>
+    <div class="card"><div class="k">逐帧耗时</div><div class="v" id="c-frame">—<small>ms</small></div></div>
+    <div class="card"><div class="k">重排计数</div><div class="v" id="c-relayout">—</div></div>
+    <div class="card"><div class="k">patch 总数</div><div class="v" id="c-patches">—</div></div>
   </div>
 
   <h2>重建时间线（实时）</h2>
@@ -147,7 +148,7 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
     </div>
   </div>
 
-  <h2>设备环境</h2>
+  <h2>设备环境（含内核/引擎）</h2>
   <div class="panel" id="env"><div class="empty">等待宿主心跳…</div></div>
 
   <h2>端点</h2>
@@ -175,7 +176,6 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
   const conEl = $('con');
   const treeEl = $('tree');
   const envEl = $('env');
-  const devbarEl = $('devbar');
   const boxEl = $('box');
   const eventsEl = $('events');
   let treeData = null;   // 最近一次元素树（含 rect）
@@ -283,21 +283,29 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
     // 点选联动：手势命中该节点即高亮
     if (e.id) selectNode(e.id);
   }
-  // ── 设备环境（决策 #674）：宿主心跳带的 env ──
+  // ── 设备环境（决策 #674/#676）：分组展示（设备 / 屏幕 / 内核·引擎） ──
   function renderEnv(env) {
     if (!env || !Object.keys(env).length) { envEl.innerHTML = '<div class="empty">等待宿主心跳…</div>'; return; }
-    const order = ['platform', 'model', 'brand', 'manufacturer', 'androidRelease', 'sdkInt', 'abi', 'density', 'screen', 'viewport', 'theme', 'locale', 'appVersion'];
-    const keys = [...order.filter((k) => env[k] !== undefined), ...Object.keys(env).filter((k) => !order.includes(k))];
-    devbarEl.innerHTML = '';
+    const groups = [
+      { t: '设备', keys: ['platform', 'model', 'brand', 'manufacturer', 'androidRelease', 'sdkInt', 'abi', 'locale', 'theme'] },
+      { t: '屏幕', keys: ['screen', 'screenPx', 'density'] },
+      { t: '内核 / 引擎', keys: ['layoutCore', 'jsEngine', 'hostBuild', 'appVersion'] },
+    ];
+    const known = new Set(groups.flatMap((g) => g.keys));
+    const extra = Object.keys(env).filter((k) => !known.has(k));
+    if (extra.length) groups.push({ t: '其它', keys: extra });
     envEl.innerHTML = '';
-    for (const k of keys) {
-      const v = env[k];
-      const chip = document.createElement('span'); chip.className = 'chip';
-      chip.innerHTML = k + ' <b>' + escapeHtml(String(v)) + '</b>';
-      devbarEl.appendChild(chip);
-      const row = document.createElement('div'); row.className = 'envrow';
-      row.innerHTML = '<span class="k">' + escapeHtml(k) + '</span><span class="v">' + escapeHtml(String(v)) + '</span>';
-      envEl.appendChild(row);
+    for (const g of groups) {
+      const rows = g.keys.filter((k) => env[k] !== undefined);
+      if (!rows.length) continue;
+      const h = document.createElement('div'); h.className = 'envrow'; h.style.color = 'var(--dim)'; h.style.flex = 'none';
+      h.innerHTML = '<span class="k" style="color:var(--brand)">' + g.t + '</span>';
+      envEl.appendChild(h);
+      for (const k of rows) {
+        const row = document.createElement('div'); row.className = 'envrow';
+        row.innerHTML = '<span class="k">' + escapeHtml(k) + '</span><span class="v">' + escapeHtml(String(env[k])) + '</span>';
+        envEl.appendChild(row);
+      }
     }
   }
   function setSnapshot(s) {
@@ -319,7 +327,9 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
   function applyPerf(p) {
     if (!p) return;
     if (p.renderMs != null) $('c-render').innerHTML = p.renderMs + '<small>ms</small>';
-    if (p.mountCalls != null) $('c-mount').textContent = p.mountCalls;
+    if (p.frameMs != null) $('c-frame').innerHTML = p.frameMs + '<small>ms</small>';
+    if (p.relayout != null) $('c-relayout').textContent = p.relayout;
+    if (p.patches != null) $('c-patches').textContent = p.patches;
   }
   function applyHost(h) {
     window.__lastHost = h;
