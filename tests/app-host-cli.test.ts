@@ -177,7 +177,8 @@ describe('★完整宿主 · iOS 宿主模板为运行期形态（决策 #683）
     expect(src, '从 dev server 拉 bundle').toContain('/bundle')
     expect(src, '轮询版本').toContain('/version')
     expect(src, '重载标记').toContain('PROTEUS_DEV_RELOADED')
-    expect(src, '保留当前屏').toContain('keepPage')
+    // ★保留当前屏（决策 #693）：重载前抓当前屏名，重建后 navigate 回去（与 Android hotReload 同语义）
+    expect(src, '保留当前屏').toContain('navigate(to:')
   })
 })
 

@@ -458,9 +458,13 @@ export function findIosSigningProfile(bundleId: string): string | null {
 /** 用本机 provisioning profile 签名 .app（entitlements 从 profile 原样提取——同 run-selfdraw.sh） */
 function signApp(appDir: string, bundleId: string, log: string[]): { ok: boolean; diagnostics?: ProteusDiagnostic[] } {
   const profileDir = IOS_PROFILE_DIRS[0]
-  // ★唯一实现复用（零逻辑复制）：signing.ts（随 CLI 包分发）与 doctor 的签名检查共用同一判据
-  const profile = findIosSigningProfile(bundleId) ?? ''
-  if (!profile) {
+  // ★★★签名身份 = **描述文件授权 ∩ 钥匙串**（决策 #694）：此前这里从 `security find-identity` 取
+  //   **首个** Apple Development 证书 —— 续签后**同名的两张证书**（旧/新）取第一张 ⇒ 可能签成
+  //   **设备未信任的那张**（真机表现为 `FBSOpenApplicationErrorDomain` 装机后被拦）。
+  //   与 `run-selfdraw.sh`/`signing.ts` 同源（那边早用交集判据）——**单一实现**，不再各取各的。
+  const resolved = resolveIosSigning(bundleId)
+  const profile = resolved.ok && resolved.profile ? resolved.profile.file : ''
+  if (!profile || !resolved.identity) {
     log.push(`✗ 无匹配描述文件（bundleId=${bundleId}）`)
     // ★L3（确定原因）：本机描述文件列表里没有覆盖该 bundleId 的 profile ⇒ 可行动
     return {
@@ -478,16 +482,8 @@ function signApp(appDir: string, bundleId: string, log: string[]): { ok: boolean
       ],
     }
   }
-  let identity = ''
-  try {
-    const ids = run('security', ['find-identity', '-v', '-p', 'codesigning'], { encoding: 'utf-8' })
-    const m = ids.split('\n').filter((l) => !l.includes('CSSMERR') && /Apple Development|iPhone Developer/.test(l)).join('\n').match(/[0-9A-F]{40}/)
-    if (m) identity = m[0]
-  } catch { /* fallthrough */ }
-  if (!identity) {
-    log.push('✗ 无签名身份（security find-identity）')
-    return { ok: false, diagnostics: [makeDiag('PT-BE-003', { cause: '本机 keychain 无有效 Apple Development 签名身份', suggestions: ['在 Xcode 登录开发者账号（Settings → Accounts），或用 Xcode 为工程自动管理签名', '自查：security find-identity -v -p codesigning'], raw: '无签名身份（security find-identity）' })] }
-  }
+  // 交集里取**最新签发**的一张（与 signing.ts 同一判据；续签 = 最新那张）
+  const identity = resolved.identity.sha1
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-ios-'))
   try {
     const plist = run('security', ['cms', '-D', '-i', profile], { encoding: 'utf-8', maxBuffer: 8 * 1024 * 1024 })

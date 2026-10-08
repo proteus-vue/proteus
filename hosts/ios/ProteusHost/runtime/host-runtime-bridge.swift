@@ -44,9 +44,15 @@ final class HostRuntimeBridge: NSObject, HostRuntimeExports {
         }
     }
 
-    /// 场景不依赖 post（渲染链路在 js-render/selfdraw 场景）；保留以满足探测
+    /// ★dev post 汇聚端口（决策 #693）：dev 变体注入 sink ⇒ 页面 `console.*`（经 JS 垫片 `proteusHost.post`）
+    ///   转成宿主日志上报（面板 Console）。null（release）⇒ 只 NSLog（零额外开销）。
+    var postSink: ((String) -> Void)?
+
+    /// 场景不依赖 post（渲染链路在 js-render/selfdraw 场景）；保留以满足探测。
+    ///   dev 变体经 `postSink` 把页面 console.* 汇聚给宿主 DevTools 上报（决策 #693）；release 只 NSLog。
     func post(_ json: String) {
         NSLog("[proteus] host-runtime post: %@", json.count > 200 ? String(json.prefix(200)) + "…" : json)
+        postSink?(json)
     }
 
     /// JS 桥 → 原生能力（同步；见 host-capabilities.swift 的契约说明）
