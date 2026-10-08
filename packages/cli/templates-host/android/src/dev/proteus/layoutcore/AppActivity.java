@@ -60,6 +60,12 @@ public final class AppActivity extends Activity {
 
     /** 设备环境 JSON（采集一次，心跳带上；决策 #674） */
     private volatile String devEnvJson = "{}";
+    /** 性能读数 JSON（每次渲染更新：mount/applyOps 耗时 + relayout 计数；决策 #675） */
+    private volatile String devPerfJson = "{}";
+    /** 事件 trace 出箱（UI 线程抽取 → watch 线程上报；决策 #675） */
+    private final java.util.List<String[]> traceOutbox = java.util.Collections.synchronizedList(new java.util.ArrayList<String[]>());
+    /** 待上报的被点元素 id（命中测试线程写、watch 线程读；决策 #675） */
+    private volatile int inspectOutbox = 0;
 
     /** ★DevTools Console（决策 #673）：待转发给 dev server 的设备日志（UI 线程写、watch 线程 flush）。
      *  含两类：a) 宿主 dev 事件（ready/reload/error，devLog 直接入队）b) JS console.*（UI 泵 eval 抽取入队）。 */
@@ -147,7 +153,7 @@ public final class AppActivity extends Activity {
         String bundle = loadBundleSource();
         if (bundle == null) { fail("无法获取 bundle（release: assets/bundle-superapp.js；dev: dev server）"); return; }
         if (ProteusBuildConfig.DEV) installDevConsole();   // ★装 console 垫片须在 eval bundle 之前 ⇒ 页面顶层 console.* 也被捕获
-        QuickJsEngine.EvalResult load = QuickJsEngine.evalWithHost(bundle, new SuperappRuntimeHost(draw, new HostBridge(caps, screenHost)));
+        QuickJsEngine.EvalResult load = QuickJsEngine.evalWithHost(bundle, buildRuntimeHost());
         if (!load.ok) { fail("bundle eval 失败：" + load.error); return; }
         QuickJsEngine.EvalResult bootRes = QuickJsEngine.eval("__proteusSuperappBootJson()");
         QuickJsEngine.nativeRunPendingJobs();
@@ -257,18 +263,86 @@ public final class AppActivity extends Activity {
         }
     }
 
-    /** 当前屏实例化节点树 → POST /tree（面板 Elements）。★须在 UI 线程调（eval 非线程安全）。 */
+    /** 当前屏实例化节点树 → POST /tree（面板 Elements）。★须在 UI 线程调（eval 非线程安全）。
+     *  ★决策 #675：**并入内核几何**（`draw.readRects()` 的 rects，按 id 合并）⇒ 面板 Elements 看到真实 box；
+     *   并把当前屏名一并带上（面板校验"树 ↔ 屏"一致）。dev-server 侧记 lastTree + SSE `tree`。 */
     private void pushDevTree() {
         if (!ProteusBuildConfig.DEV) return;
         final String base = devServerBase();
         if (base == null) return;
         try {
             QuickJsEngine.EvalResult r = QuickJsEngine.eval("__proteusSuperappTree()");
-            if (r.ok && r.value != null && r.value.length() > 20) {
-                final String tree = r.value;
-                final String url = base + "/tree";
-                new Thread(new Runnable() { @Override public void run() { httpPostText(url, tree); } }, "proteus-dev-tree").start();
+            if (!r.ok || r.value == null || r.value.length() < 20) return;
+            JSONObject body = new JSONObject(r.value);
+            // 内核几何（真源）：屏幕空间 rects，按内核 id 合并进节点（宿主重映射后 id 与内核一致，见 ScreenHost.mount）
+            try {
+                JSONObject all = new JSONObject(draw.readRects());
+                JSONObject rects = all.optJSONObject("rects");
+                if (rects != null) {
+                    JSONArray nodes = body.optJSONArray("nodes");
+                    for (int i = 0; nodes != null && i < nodes.length(); i++) {
+                        JSONObject n = nodes.optJSONObject(i);
+                        if (n == null) continue;
+                        JSONObject rc = rects.optJSONObject(String.valueOf(n.optInt("id")));
+                        if (rc != null) n.put("rect", rc);
+                    }
+                }
+            } catch (Throwable ignored) { /* 无几何 ⇒ 只有结构 */ }
+            body.put("screen", lastScreenName);
+            final String tree = body.toString();
+            final String url = base + "/tree";
+            new Thread(new Runnable() { @Override public void run() { httpPostText(url, tree); } }, "proteus-dev-tree").start();
+        } catch (Throwable ignored) { }
+    }
+
+    /** ★事件 trace（决策 #675）：排空 JS 侧手势 trace（UI 线程 eval）→ GET /trace 逐条上报（watch 线程 / 后台线程）。
+     *  ★须 UI 线程读（eval 非线程安全）⇒ 抽取入队，再由后台线程 POST（与设备日志同管线）。 */
+    private void pumpDevEvents() {
+        if (!ProteusBuildConfig.DEV) return;
+        try {
+            QuickJsEngine.EvalResult r = QuickJsEngine.eval("__proteusSuperappEvents()");
+            if (!r.ok || r.value == null || r.value.length() <= 4) return;
+            JSONArray arr = new JSONArray(r.value);
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject e = arr.optJSONObject(i);
+                if (e == null) continue;
+                StringBuilder chain = new StringBuilder();
+                JSONArray ch = e.optJSONArray("chain");
+                for (int j = 0; ch != null && j < ch.length(); j++) { if (j > 0) chain.append(','); chain.append(ch.optInt(j)); }
+                StringBuilder fired = new StringBuilder();
+                JSONArray fr = e.optJSONArray("fired");
+                for (int j = 0; fr != null && j < fr.length(); j++) { if (j > 0) fired.append(','); fired.append(fr.optInt(j)); }
+                {
+                    String tid = String.valueOf(e.optInt("id"));
+                    traceOutbox.add(new String[]{ e.optString("type", ""), tid, chain.toString(), e.optBoolean("handled") ? "1" : "0", fired.toString() });
+                    // ★被点元素 = 本次手势命中的内核节点 id ⇒ 一并选入内省（决策 #675，点屏幕任一元素 → 高亮该元素）
+                    int kid = e.optInt("id");
+                    if (kid > 0) inspectOutbox = kid;
+                }
             }
+        } catch (Throwable ignored) { }
+    }
+
+    /** ★被点元素（决策 #675）：宿主命中测试拿到目标内核 id 时入队（touch 线程）→ 后台线程 GET /inspect。 */
+    private void queueInspect(int kernelId) {
+        if (!ProteusBuildConfig.DEV || kernelId <= 0) return;
+        inspectOutbox = kernelId;
+    }
+
+    /** 建运行期宿主（唯一入口）。 */
+    private SuperappRuntimeHost buildRuntimeHost() {
+        return new SuperappRuntimeHost(draw, new HostBridge(caps, screenHost));
+    }
+
+    /** 记一次渲染的性能读数（决策 #675）：relayout 计数 + mount 调用数（draw 原子上抛，非自造第二份数学）。 */
+    private void recordPerf(long renderStartMs) {
+        if (!ProteusBuildConfig.DEV) return;
+        try {
+            JSONObject o = new JSONObject();
+            o.put("renderMs", System.currentTimeMillis() - renderStartMs);
+            o.put("mountCalls", draw.mountCalls);
+            o.put("t", System.currentTimeMillis());
+            devPerfJson = o.toString();
         } catch (Throwable ignored) { }
     }
 
@@ -313,9 +387,12 @@ public final class AppActivity extends Activity {
                     //   ★必须先 ping 再判 continue：否则"版本没变"这条主路径永不 ping ⇒ 面板一直"设备离线"。
                     try {
                         httpGetText(base + "/ping?screen=" + java.net.URLEncoder.encode(lastScreenName, "UTF-8")
-                            + "&env=" + java.net.URLEncoder.encode(devEnvJson, "UTF-8"));
+                            + "&env=" + java.net.URLEncoder.encode(devEnvJson, "UTF-8")
+                            + "&perf=" + java.net.URLEncoder.encode(devPerfJson, "UTF-8"));
                     } catch (Throwable ignored) { /* 心跳尽力而为 */ }
                     flushHostLog(base);   // ★把设备日志推到面板 Console（决策 #673）
+                    flushTrace(base);     // ★把事件 trace 推到面板（决策 #675）
+                    flushInspect(base);   // ★把被点元素推到面板（决策 #675）
                     if (v == null || v.equals(last)) continue;
                     last = v;
                     final String fresh = httpGetText(base + "/bundle");
@@ -340,7 +417,7 @@ public final class AppActivity extends Activity {
             caps = new HostCapabilities(this);
             screenHost = new ScreenHost(root);
             installDevConsole();   // reset 后重装（新上下文）——须在 eval bundle 之前
-            QuickJsEngine.EvalResult load = QuickJsEngine.evalWithHost(bundle, new SuperappRuntimeHost(draw, new HostBridge(caps, screenHost)));
+            QuickJsEngine.EvalResult load = QuickJsEngine.evalWithHost(bundle, buildRuntimeHost());
             if (!load.ok) { Log.w(TAG, "PROTEUS_DEV_RELOAD_EVAL_FAIL " + load.error); return; }
             QuickJsEngine.EvalResult bootRes = QuickJsEngine.eval("__proteusSuperappBootJson()");
             QuickJsEngine.nativeRunPendingJobs();
@@ -398,6 +475,7 @@ public final class AppActivity extends Activity {
                         }
                     }
                 } catch (Throwable ignored) { /* 引擎未就绪 ⇒ 下轮再试 */ }
+                pumpDevEvents();   // ★同频排空手势 trace（决策 #675）
                 logPump.postDelayed(this, 400);
             }
         });
@@ -414,6 +492,26 @@ public final class AppActivity extends Activity {
                     + "&text=" + java.net.URLEncoder.encode(text, "UTF-8"));
             } catch (Throwable t) { break; }
         }
+    }
+
+    /** watch 线程：把事件 trace 逐条 GET /trace?type=&id=&chain=&handled=&fired=（决策 #675）。 */
+    private void flushTrace(String base) {
+        while (!traceOutbox.isEmpty()) {
+            String[] e = traceOutbox.remove(0);
+            try {
+                httpGetText(base + "/trace?type=" + java.net.URLEncoder.encode(e[0], "UTF-8")
+                    + "&id=" + e[1] + "&chain=" + java.net.URLEncoder.encode(e[2], "UTF-8")
+                    + "&handled=" + e[3] + "&fired=" + java.net.URLEncoder.encode(e[4], "UTF-8"));
+            } catch (Throwable t) { break; }
+        }
+    }
+
+    /** watch 线程：把"被点元素 id"报给面板（决策 #675）。 */
+    private void flushInspect(String base) {
+        int id = inspectOutbox;
+        if (id <= 0) return;
+        inspectOutbox = 0;
+        try { httpGetText(base + "/inspect?id=" + id); } catch (Throwable ignored) { }
     }
 
     // ────────────────────────── Tab 栏 ──────────────────────────
@@ -642,6 +740,7 @@ public final class AppActivity extends Activity {
         final String page = currentName(stateJson);
         // ★DevTools 心跳用：每次渲染更新"当前屏"（UI 线程写；dev-watch 线程读）
         if (page != null && !page.isEmpty()) lastScreenName = page;
+        long t0 = System.currentTimeMillis();
         try {
             int vwPx = contentHost.getWidth() > 0 ? contentHost.getWidth() : physWidthPx;
             int vhPx = contentHost.getHeight() > 0 ? contentHost.getHeight() : physHeightPx;
@@ -655,6 +754,9 @@ public final class AppActivity extends Activity {
             QuickJsEngine.EvalResult rr = QuickJsEngine.eval("__proteusSuperappRender(" + JSONObject.quote(args.toString()) + ")");
             if (draw.view() != null) draw.view().invalidate();
             Log.i(TAG, "PROTEUS_RENDER page=" + page + " viewport=" + (vwPx / density) + "x" + (vhPx / density));
+            // ★切屏自动刷树（决策 #675 · 修 bug1：此前只有 boot/hotReload 推树 ⇒ 切屏后面板树不更新）
+            //   + 性能读数（renderMs/mount/relayout）。★renderCurrent 只在 UI 线程调 ⇒ eval 安全。
+            if (ProteusBuildConfig.DEV) { pushDevTree(); recordPerf(t0); }
         } catch (Throwable t) {
             Log.w(TAG, "renderCurrent 失败：" + t.getMessage());
         }

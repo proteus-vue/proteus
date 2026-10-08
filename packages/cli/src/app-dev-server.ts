@@ -116,16 +116,19 @@ export async function startAppDevServer(opts: AppDevServerOptions): Promise<AppD
 
   // ── DevTools 面板状态（决策 #672/#673）──
   interface RebuildEvent { version: number; bytes: number; ms: number; reason: string; time: number }
-  interface HostState { screen: string; time: number; env?: Record<string, unknown> }
+  interface HostState { screen: string; time: number; env?: Record<string, unknown>; perf?: Record<string, unknown> }
   interface NetEvent { method: string; path: string; status: number; bytes: number; ms: number; time: number }
   interface ConsoleEvent { level: string; text: string; time: number }
+  interface TraceEvent { gesture: string; id: number; chain: number[]; handled: boolean; fired: number[]; time: number }
   const events: RebuildEvent[] = []         // 环形（近 50 条）重建时间线
   const netLog: NetEvent[] = []             // 环形网络日志（dev server 收到的请求——它就是"网络源头"）
   const consoleLog: ConsoleEvent[] = []     // 环形控制台日志（宿主转发：JS console + 宿主 dev 事件）
+  const traceLog: TraceEvent[] = []         // 环形事件 trace（手势派发——决策 #675）
   let lastBytes = 0
   let lastMs = 0
   let lastHost: HostState | null = null
-  let lastTree: unknown = null              // ★元素内省（决策 #674）：当前屏实例化节点树
+  let lastTree: unknown = null              // ★元素内省（决策 #674）：当前屏实例化节点树（含 rects 几何）
+  let lastInspect: { id: number; time: number } | null = null   // ★元素点选（决策 #675）
   const sseClients = new Set<import('node:http').ServerResponse>()
 
   /** 向所有 SSE 客户端广播一条事件。 */
@@ -133,11 +136,12 @@ export async function startAppDevServer(opts: AppDevServerOptions): Promise<AppD
     const frame = `data: ${JSON.stringify(obj)}\n\n`
     for (const c of sseClients) { try { c.write(frame) } catch { sseClients.delete(c) } }
   }
-  /** 面板连接时的初始快照（版本/体积/耗时/时间线/宿主态 + 网络 + 控制台 + 元素树）。 */
+  /** 面板连接时的初始快照（版本/体积/耗时/时间线/宿主态 + 网络 + 控制台 + 元素树 + 点选 + trace）。 */
   const snapshot = (): unknown => ({
     type: 'snapshot', version, bytes: lastBytes, lastMs,
     events: events.slice(-50), host: lastHost,
     net: netLog.slice(-80), console: consoleLog.slice(-200), tree: lastTree,
+    inspect: lastInspect, trace: traceLog.slice(-80),
   })
   /** 记一条网络日志（dev server 请求）+ 广播。 */
   const recordNet = (e: NetEvent): void => {
@@ -240,10 +244,36 @@ export async function startAppDevServer(opts: AppDevServerOptions): Promise<AppD
     if (url === '/ping') {
       const q = new URLSearchParams(query ?? '')
       let env: Record<string, unknown> | undefined
+      let perf: Record<string, unknown> | undefined
       const envRaw = q.get('env')
       if (envRaw) { try { env = JSON.parse(envRaw) as Record<string, unknown> } catch { /* 非法 ⇒ 不带 */ } }
-      lastHost = { screen: q.get('screen') ?? '', time: Date.now(), ...(env ? { env } : {}) }
+      const perfRaw = q.get('perf')
+      if (perfRaw) { try { perf = JSON.parse(perfRaw) as Record<string, unknown> } catch { /* 非法 ⇒ 不带 */ } }
+      lastHost = { screen: q.get('screen') ?? '', time: Date.now(), ...(env ? { env } : {}), ...(perf ? { perf } : {}) }
       broadcast({ type: 'host', ...lastHost })
+      res.writeHead(200, { 'content-type': 'text/plain', 'cache-control': 'no-store' })
+      res.end('ok')
+      return
+    }
+    // ★元素点选（决策 #675）：宿主在触摸命中时上报"被点内核节点 id" ⇒ 面板高亮该节点 + 详情。
+    if (url === '/inspect') {
+      const q = new URLSearchParams(query ?? '')
+      const id = Number(q.get('id'))
+      if (Number.isFinite(id)) { lastInspect = { id, time: Date.now() }; broadcast({ type: 'inspect', id, time: lastInspect.time }) }
+      res.writeHead(200, { 'content-type': 'text/plain', 'cache-control': 'no-store' })
+      res.end('ok')
+      return
+    }
+    // ★事件 trace（决策 #675）：宿主逐条上报手势派发 ⇒ 面板"事件"面板。
+    if (url === '/trace') {
+      const q = new URLSearchParams(query ?? '')
+      const ev: TraceEvent = {
+        gesture: q.get('type') ?? '', id: Number(q.get('id')) || 0,
+        chain: (q.get('chain') || '').split(',').map((x) => Number(x)).filter((x) => Number.isFinite(x)),
+        handled: q.get('handled') === '1', fired: (q.get('fired') || '').split(',').map((x) => Number(x)).filter((x) => Number.isFinite(x)),
+        time: Date.now(),
+      }
+      if (ev.gesture) { traceLog.push(ev); if (traceLog.length > 80) traceLog.shift(); broadcast({ type: 'trace', ...ev }) }
       res.writeHead(200, { 'content-type': 'text/plain', 'cache-control': 'no-store' })
       res.end('ok')
       return

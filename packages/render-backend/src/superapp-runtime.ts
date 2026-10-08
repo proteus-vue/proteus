@@ -68,6 +68,8 @@ export interface SuperappRuntime {
   current(): string
   /** ★DevTools 元素内省（决策 #674）：当前屏**已实例化节点**（Template 实例化产物：id/parentId/tag/style/text）——供面板"元素"树。 */
   currentContent(): { viewport?: { width: number; height: number }; nodes: readonly unknown[] } | null
+  /** ★DevTools 事件 trace（决策 #675）：自上次调用以来发生的手势派发（type/命中 id/冒泡链/handled/fired）——排空式。 */
+  devEvents(): ReadonlyArray<{ type: string; id: number; chain: readonly number[]; handled: boolean; fired: readonly number[]; time: number }>
   /** ★跨调用状态导出（`{屏名: 数据}`）——一次性 VM 宿主持有、下次回灌 `seedData` */
   snapshot(): Record<string, Record<string, unknown>>
   /**
@@ -106,6 +108,8 @@ export function createSuperappRuntime(opts: SuperappRuntimeOptions): SuperappRun
   let cur = ''
   // ★最近一次宿主 mount 回执（见 lastHostReply 注释——失败必须可观测，不得静默）
   let lastHostReply: string | null = null
+  // ★DevTools 事件 trace（决策 #675）：记录每次手势派发（排空式——宿主/dev server 取走即清）。
+  const devEvents: Array<{ type: string; id: number; chain: readonly number[]; handled: boolean; fired: readonly number[]; time: number }> = []
 
   // 注册手势反向回调（宿主在命中时报"内核 id + 冒泡链"）
   if (typeof opts.host.onGesture === 'function') {
@@ -114,7 +118,7 @@ export function createSuperappRuntime(opts: SuperappRuntimeOptions): SuperappRun
   // 全局回调：宿主 → 本模块 → 当前屏实例。★保持接收者绑定（iOS JSC JSExport 拆离会丢 this）。
   ;(globalThis as unknown as Record<string, unknown>)[cbName] = (
     type: string,
-    _kernelId: number,
+    kernelId: number,
     chainJson?: string,
   ): string => {
     let chain: number[] = []
@@ -124,6 +128,9 @@ export function createSuperappRuntime(opts: SuperappRuntimeOptions): SuperappRun
       note(`[superapp-runtime] 手势链 JSON 解析失败：${String(chainJson).slice(0, 40)}`)
     }
     const r = dispatch(type, chain)
+    // ★trace + 记录命中 id（宿主据此把"被点节点"与面板元素树对齐）
+    devEvents.push({ type, id: kernelId, chain, handled: r.handled, fired: r.fired, time: Date.now() })
+    if (devEvents.length > 200) devEvents.shift()
     return JSON.stringify(r)
   }
 
@@ -204,6 +211,8 @@ export function createSuperappRuntime(opts: SuperappRuntimeOptions): SuperappRun
       if (!cur) return null
       try { return rt.instance(cur).content() as { viewport?: { width: number; height: number }; nodes: readonly unknown[] } } catch { return null }
     },
+    // ★排空式：返回自上次调用以来的手势 trace，并清空（宿主每次轮询取走）。
+    devEvents: () => { const out = devEvents.slice(); devEvents.length = 0; return out },
     snapshot: () => rt.snapshot(),
     lastHostReply: () => lastHostReply,
   }

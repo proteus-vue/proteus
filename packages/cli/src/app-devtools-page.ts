@@ -82,6 +82,15 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
   .trow .tag{color:var(--brand);font-weight:600}
   .trow .tx{color:var(--ink)}
   .trow .st{color:var(--dim);text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:52%}
+  .trow.sel{background:rgba(91,124,255,.18);outline:1px solid rgba(91,124,255,.5)}
+  .trow:hover{background:rgba(255,255,255,.03)}
+  .box{margin-top:10px;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .box .bh{padding:8px 12px;background:var(--surface2);font-size:12px;font-family:var(--mono);color:var(--ink)}
+  .bm{padding:10px 12px;display:grid;grid-template-columns:repeat(2,1fr);gap:6px 16px;font-size:12px;font-family:var(--mono)}
+  .bm .k{color:var(--dim)}
+  .bm .v{color:var(--ink);text-align:right}
+  .mbox{position:relative;margin:12px;border:1px dashed var(--brand);background:rgba(91,124,255,.06);border-radius:4px;min-height:24px}
+  .mbox .lbl{position:absolute;top:-9px;left:6px;background:var(--bg);padding:0 4px;font-size:10px;color:var(--brand)}
   .envrow{display:flex;justify-content:space-between;gap:12px;padding:6px 12px;border-top:1px solid var(--line);font-size:12px;font-family:var(--mono)}
   .envrow:first-child{border-top:0}
   .envrow .k{color:var(--dim);white-space:nowrap}
@@ -108,6 +117,8 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
     <div class="card"><div class="k">Bundle 体积</div><div class="v" id="c-size">—<small>KB</small></div></div>
     <div class="card"><div class="k">最近重建</div><div class="v" id="c-ms">—<small>ms</small></div></div>
     <div class="card"><div class="k">当前屏</div><div class="v host"><span class="screen" id="c-screen">—</span></div></div>
+    <div class="card"><div class="k">最近渲染</div><div class="v" id="c-render">—<small>ms</small></div></div>
+    <div class="card"><div class="k">mount 次数</div><div class="v" id="c-mount">—</div></div>
   </div>
 
   <h2>重建时间线（实时）</h2>
@@ -115,8 +126,9 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
 
   <div class="two">
     <div>
-      <h2>Elements（当前屏节点树）</h2>
+      <h2>Elements（当前屏节点树 · 点节点看盒模型）</h2>
       <div class="panel" id="tree"><div class="empty">暂无节点树…宿主渲染后上报。</div></div>
+      <div class="box" id="box" style="display:none"></div>
     </div>
     <div>
       <h2>Console（设备日志）</h2>
@@ -126,14 +138,17 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
 
   <div class="two">
     <div>
+      <h2>Events（手势派发 trace）</h2>
+      <div class="panel con" id="events"><div class="empty">暂无手势…在设备上点一下屏幕即出现。</div></div>
+    </div>
+    <div>
       <h2>Network（dev server 请求）</h2>
       <div class="panel" id="net"><div class="empty">暂无请求。</div></div>
     </div>
-    <div>
-      <h2>设备环境</h2>
-      <div class="panel" id="env"><div class="empty">等待宿主心跳…</div></div>
-    </div>
   </div>
+
+  <h2>设备环境</h2>
+  <div class="panel" id="env"><div class="empty">等待宿主心跳…</div></div>
 
   <h2>端点</h2>
   <div class="eps">
@@ -142,12 +157,14 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
     <span class="ep"><b>GET /bundle</b> bundle-superapp.js</span>
     <span class="ep"><b>GET /health</b> 探活</span>
     <span class="ep"><b>GET /events</b> SSE 事件流</span>
-    <span class="ep"><b>GET /ping</b> 宿主心跳 + 设备环境</span>
-    <span class="ep"><b>POST /tree</b> 元素内省上报</span>
-    <span class="ep"><b>GET /log</b> 宿主日志上报</span>
+    <span class="ep"><b>GET /ping</b> 心跳 + 设备环境 + 性能</span>
+    <span class="ep"><b>POST /tree</b> 元素内省（含内核 rect）</span>
+    <span class="ep"><b>GET /inspect</b> 被点元素</span>
+    <span class="ep"><b>GET /trace</b> 事件 trace</span>
+    <span class="ep"><b>GET /log</b> 宿主日志</span>
   </div>
 </main>
-<footer>Proteus DevTools · dev server <span style="font-family:var(--mono)">${esc(info.url)}</span> · 数据来自 dev server（重建 / 网络 / 宿主心跳 + 设备环境 / 元素树 / 日志）</footer>
+<footer>Proteus DevTools · dev server <span style="font-family:var(--mono)">${esc(info.url)}</span> · 数据来自 dev server（重建 / 网络 / 宿主心跳 + 设备环境 + 性能 / 元素树 + 盒模型 / 事件 trace / 日志）</footer>
 <script>
   const META = ${meta};
   const $ = (id) => document.getElementById(id);
@@ -159,6 +176,10 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
   const treeEl = $('tree');
   const envEl = $('env');
   const devbarEl = $('devbar');
+  const boxEl = $('box');
+  const eventsEl = $('events');
+  let treeData = null;   // 最近一次元素树（含 rect）
+  let selId = null;      // 当前选中节点 id
   const rows = [];
   function addRow(e, isNew) {
     const r = document.createElement('div');
@@ -195,31 +216,72 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
     if (!list.length) { conEl.innerHTML = '<div class="empty">暂无日志…在页面里 <b>console.log</b> 或改源码即出现。</div>'; return; }
     list.slice().reverse().forEach((e) => conEl.appendChild(addCon(e, false)));
   }
-  // ── 元素树（决策 #674）：把实例化节点树按 parentId 层级渲染 ──
+  // ── 元素树（决策 #674/#675）：实例化节点树（含内核 rect）+ 点选高亮 + 盒模型 ──
   function renderTree(t) {
+    treeData = t || { nodes: [] };
     treeEl.innerHTML = '';
-    const nodes = (t && t.nodes) || [];
-    if (!nodes.length) { treeEl.innerHTML = '<div class="empty">暂无节点树…宿主渲染后上报。</div>'; return; }
+    const nodes = treeData.nodes || [];
+    if (!nodes.length) { treeEl.innerHTML = '<div class="empty">暂无节点树…宿主渲染后上报。</div>'; boxEl.style.display = 'none'; return; }
     const kids = {};
     nodes.forEach((n) => { (kids[n.parentId ?? 'root'] = kids[n.parentId ?? 'root'] || []).push(n); });
-    const walk = (parent, depth) => {
-      for (const n of (kids[parent] || [])) {
-        const r = document.createElement('div');
-        r.className = 'trow';
-        // ★实例化节点的样式是**顶层平铺**（非 n.style 子对象——见 instantiate.ts 的 emit）
-        const keyStyles = ['width', 'widthRatio', 'height', 'minHeight', 'maxWidth', 'backgroundColor', 'color', 'fontSize', 'fontWeight', 'lineHeight', 'display', 'flexDirection', 'justifyContent', 'alignItems', 'padding', 'margin', 'gap', 'position', 'top', 'left', 'right', 'bottom', 'borderRadius', 'textAlign']
-          .filter((k) => n[k] !== undefined)
-          .map((k) => k + ':' + (typeof n[k] === 'object' ? JSON.stringify(n[k]) : n[k]))
-          .join('; ');
-        r.innerHTML = '<span style="padding-left:' + (depth * 14) + 'px"><span class="tag">' + escapeHtml(n.tag || n.semantic || '?') + '</span>'
-          + (n.text ? ' <span class="tx">' + escapeHtml(String(n.text).slice(0, 40)) + '</span>' : '') + '</span>'
-          + '<span class="st" title="' + escapeHtml(keyStyles) + '">' + escapeHtml(keyStyles) + '</span>';
-        treeEl.appendChild(r);
-        walk(n.id, depth + 1);
-      }
+    const rowOf = (n, depth) => {
+      const r = document.createElement('div');
+      r.className = 'trow' + (n.id === selId ? ' sel' : '');
+      r.dataset.id = n.id;
+      const keyStyles = ['width', 'widthRatio', 'height', 'minHeight', 'backgroundColor', 'color', 'fontSize', 'fontWeight', 'display', 'flexDirection', 'justifyContent', 'alignItems', 'padding', 'margin', 'position', 'top', 'left', 'borderRadius', 'textAlign', 'opacity']
+        .filter((k) => n[k] !== undefined)
+        .map((k) => k + ':' + (typeof n[k] === 'object' ? JSON.stringify(n[k]) : n[k]))
+        .join('; ');
+      const rc = n.rect ? Math.round(n.rect.x) + ',' + Math.round(n.rect.y) + ' ' + Math.round(n.rect.width) + '×' + Math.round(n.rect.height) : '';
+      r.innerHTML = '<span style="padding-left:' + (depth * 14) + 'px"><span class="tag">' + escapeHtml(n.tag || n.semantic || '?') + '</span>'
+        + (n.text ? ' <span class="tx">' + escapeHtml(String(n.text).slice(0, 34)) + '</span>' : '') + '</span>'
+        + '<span class="st" title="' + escapeHtml(keyStyles) + '">' + escapeHtml(rc || keyStyles) + '</span>';
+      r.addEventListener('click', () => selectNode(n.id));
+      return r;
     };
+    const walk = (parent, depth) => { for (const n of (kids[parent] || [])) { treeEl.appendChild(rowOf(n, depth)); walk(n.id, depth + 1); } };
     walk('root', 0);
-    walk(undefined, 0);   // parentId 恰为 undefined 的孤立节点兜底
+    walk(undefined, 0);
+    if (selId != null) renderBox(findNode(selId));
+  }
+  function findNode(id) {
+    const nodes = (treeData && treeData.nodes) || [];
+    return nodes.find((n) => n.id === id) || null;
+  }
+  function selectNode(id) { selId = id; renderBox(findNode(id)); renderTree(treeData); }
+  // 盒模型：内核 rect（x/y/w/h）+ 关键样式
+  function renderBox(n) {
+    if (!n) { boxEl.style.display = 'none'; return; }
+    const r = n.rect || {};
+    const rc = n.rect ? 'x=' + Math.round(r.x) + '  y=' + Math.round(r.y) + '  ' + Math.round(r.width) + '×' + Math.round(r.height) : '（无内核几何）';
+    const styles = Object.keys(n).filter((k) => k !== 'id' && k !== 'parentId' && k !== 'tag' && k !== 'text' && k !== 'rect' && !Array.isArray(n[k]))
+      .map((k) => '<div class="k">' + escapeHtml(k) + '</div><div class="v">' + escapeHtml(typeof n[k] === 'object' ? JSON.stringify(n[k]) : String(n[k])) + '</div>').join('');
+    boxEl.style.display = 'block';
+    boxEl.innerHTML = '<div class="bh">#' + n.id + ' &lt;' + escapeHtml(n.tag || n.semantic || '?') + '&gt;' + (n.text ? ' “' + escapeHtml(String(n.text).slice(0, 40)) + '”' : '') + '</div>'
+      + '<div class="mbox"' + (r.width ? ' style="width:' + Math.max(4, Math.min(560, r.width)) + 'px;height:' + Math.max(4, Math.min(200, r.height)) + 'px"' : '') + '><span class="lbl">内核 rect</span></div>'
+      + '<div class="bm"><div class="k">rect</div><div class="v">' + escapeHtml(rc) + '</div>' + styles + '</div>';
+  }
+  // ── 事件 trace（决策 #675）──
+  function addEvent(e, isNew) {
+    const r = document.createElement('div');
+    r.className = 'crow lv-info' + (isNew ? ' new' : '');
+    const chain = (e.chain || []).join(' → ');
+    r.innerHTML = '<span class="t">' + fmtTime(e.time) + '</span><span class="x">'
+      + escapeHtml(e.gesture) + '  target=#' + e.id + (chain ? '  chain[' + escapeHtml(chain) + ']' : '')
+      + '  ' + (e.handled ? '✅handled' : '∅') + ((e.fired || []).length ? '  fired[' + (e.fired || []).join(',') + ']' : '') + '</span>';
+    return r;
+  }
+  function fillEvents(list) {
+    eventsEl.innerHTML = '';
+    if (!list.length) { eventsEl.innerHTML = '<div class="empty">暂无手势…在设备上点一下屏幕即出现。</div>'; return; }
+    list.slice().reverse().forEach((e) => eventsEl.appendChild(addEvent(e, false)));
+  }
+  function pushEvent(e) {
+    if (eventsEl.querySelector('.empty')) eventsEl.innerHTML = '';
+    eventsEl.insertBefore(addEvent(e, true), eventsEl.firstChild);
+    while (eventsEl.children.length > 80) eventsEl.removeChild(eventsEl.lastChild);
+    // 点选联动：手势命中该节点即高亮
+    if (e.id) selectNode(e.id);
   }
   // ── 设备环境（决策 #674）：宿主心跳带的 env ──
   function renderEnv(env) {
@@ -249,8 +311,15 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
     fillNet(s.net || []);
     fillCon(s.console || []);
     renderTree(s.tree);
+    fillEvents(s.trace || []);
+    if (s.inspect && s.inspect.id) { selId = s.inspect.id; if (treeData) renderTree(treeData); }
     renderEnv(s.host && s.host.env);
     applyHost(s.host);
+  }
+  function applyPerf(p) {
+    if (!p) return;
+    if (p.renderMs != null) $('c-render').innerHTML = p.renderMs + '<small>ms</small>';
+    if (p.mountCalls != null) $('c-mount').textContent = p.mountCalls;
   }
   function applyHost(h) {
     window.__lastHost = h;
@@ -259,6 +328,7 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
     $('host-txt').textContent = on ? '设备在线' : '设备离线';
     $('c-screen').textContent = (on && h.screen) ? h.screen : '—';
     if (h && h.env) renderEnv(h.env);
+    if (h && h.perf) applyPerf(h.perf);
   }
   function pushRebuild(e) {
     if (tl.querySelector('.empty')) tl.innerHTML = '';
@@ -287,6 +357,8 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
     else if (d.type === 'net') pushNet(d);
     else if (d.type === 'console') pushCon(d);
     else if (d.type === 'tree') renderTree(d.tree);
+    else if (d.type === 'trace') pushEvent(d);
+    else if (d.type === 'inspect') { selId = d.id; if (treeData) renderTree(treeData); }
   };
   es.onerror = () => { /* 浏览器自动重连 */ };
   setInterval(() => applyHost(window.__lastHost), 2000);   // 心跳超时 ⇒ 自动转"离线"
