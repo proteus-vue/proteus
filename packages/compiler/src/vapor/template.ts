@@ -3875,6 +3875,22 @@ export function buildLayoutTemplate(
   }
 
   walk(ast.children ?? [], null)
+  // ★★★App 页根「块级满宽」（2026-10-08 · 用户实测「text-align:center + 根 padding 渲染成顶左」）：
+  //   CSS 里**块级页根**（`<div class="home">`）宽度 = 包含块（视口）宽度（`display:block` 的 auto 宽
+  //   填满），高度 = 内容高。而 App 内核把**单根**当 flex 容器，auto 宽 ⇒ **按内容 fit-content 收缩**
+  //   （实测 292px vs 视口 400px）⇒ 页根盒子缩到文字宽 ⇒ `text-align:center` 只在那条小盒里居中
+  //   （视觉"顶左"）、根 padding 只作用在小盒上。Web 无此问题。
+  //   修法：**单根且未声明宽度** ⇒ 补 `widthRatio:1`（= `width:100%`，与 `width:100%` 同表示，
+  //   内核按包含块解析——本仓 css-conformance `.cc-page{width:100%}` / superapp `.sa-page` 已验证）。
+  //   ★只补**宽度**（高度保持 content/auto，与 CSS 一致）；★只在**根**补（子元素块级满宽属 flex 语义，
+  //   由内核 layout 承担，不在此处伪补）；★声明了宽度者一律不动（尊重显式声明）。
+  if (roots.length === 1) {
+    const r = nodes.find((n) => n.id === roots[0])
+    if (r) {
+      const st = r.style as Record<string, unknown>
+      if (st.width === undefined && st.widthRatio === undefined && st.minWidth === undefined) st.widthRatio = 1
+    }
+  }
   const ok = !diagnostics.some((d) => d.severity === 'error')
   // ★产物本身不带诊断（干净形状便于跨端序列化）；诊断放在包装层
   return { template: { nodes, lists, roots, ok }, diagnostics, ok, dynamicClassRules: projectDynamicClassRules(classRules) }
