@@ -69,6 +69,13 @@ public final class ScreenHost {
         this.animHostView = hostView;
     }
 
+    /** ★env token 解析器（决策 #677）：屏切换通路也须把 `env:--pf-vh` 等**解析成数值**再喂内核——
+     *  否则 Rust serde「expected f32」⇒ `create` 返 0 ⇒ 点卡片不切屏（真机实测）。
+     *  ★由宿主在 `draw` 建好后注入（`draw::resolveEnvInSpec`）——单一实现，不在此另写一份解析。 */
+    public interface EnvResolver { void resolve(JSONObject node) throws Exception; }
+    private EnvResolver envResolver;
+    public void setEnvResolver(EnvResolver r) { this.envResolver = r; }
+
     /**
      * 执行一个 `screen.*` 请求（由 `HostBridge.invoke` 转调；返回 JSON 串）。
      * ★未知方法 ⇒ `UnsupportedOperationException`（与 `HostCapabilities` 同一诚实分档）。
@@ -237,6 +244,9 @@ public final class ScreenHost {
             for (int i = 0; i < content.length(); i++) {
                 JSONObject cn = content.optJSONObject(i);
                 if (cn == null || !cn.has("id")) continue;
+                // ★env token 解析（决策 #677）：`minHeight:"env:--pf-vh"` / `padding:{top:"env:…"}` 等
+                //   字符串须先解析成数值——否则内核 serde 拒收（expected f32）⇒ create 返 0 ⇒ 不切屏。
+                if (envResolver != null) envResolver.resolve(cn);
                 int newId = idMap.get(cn.getInt("id"));
                 Integer parentId = contentParent; // 根/悬空父 ⇒ 挂 page 内容容器
                 if (cn.has("parentId") && !cn.isNull("parentId")) {
