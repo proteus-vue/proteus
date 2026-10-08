@@ -543,7 +543,10 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
                 arr += pb;
                 if (posV == "sticky") {
                     double st = 0; jnum(it.c_str(), it.size(), "top", &st);
-                    char sb[48]; snprintf(sb, sizeof(sb), ",\"top\":%.2f", st * density);
+                    // ★单位（用户实测修复 2026-10-08）：**top 发 vp（设计单位）**——渲染侧 `scrollRoot` 用
+                    //   `max(baseY, (y + top) * density)`（y 也是 vp）⇒ top 必须同口径；此前发 `st*density`
+                    //   （物理）⇒ 被再乘一次密度 ⇒ 吸附位偏大（条吸到错误位置）。
+                    char sb[48]; snprintf(sb, sizeof(sb), ",\"top\":%.2f", st);
                     arr += sb;
                 }
             }

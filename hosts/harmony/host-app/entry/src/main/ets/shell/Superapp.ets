@@ -19,7 +19,7 @@ import { NodeContent } from '@kit.ArkUI';
 import { display, window } from '@kit.ArkUI';
 import { util } from '@kit.ArkTS';
 import { fileIo } from '@kit.CoreFileKit';
-import { attach, renderCommands, scrollRoot, appScreenCommands, appScreenContentHeight, appScreenHitAt, hostRtShellInstall, hostRtShellEvent } from 'proteus_render';
+import { attach, renderCommands, scrollRoot, clearRoot, appScreenCommands, appScreenContentHeight, appScreenHitAt, hostRtShellInstall, hostRtShellEvent } from 'proteus_render';
 import { superappDrive, superappScreen } from 'libproteus_bench.so';
 
 const DOMAIN = 0x0002;
@@ -513,6 +513,12 @@ struct Superapp {
         'page': page, 'filesDir': this.filesDir,
         'env': this.envVars,   // ★内置环境变量（决策 #593）——宿主采集的 vp 值，C++ 侧解析 env token
       } as Record<string, Object>));
+      // ★★★用户实测修复（2026-10-08）：「鸿蒙这个案例有**两个**蓝条」——根因 = `renderCommands` 是
+      //   **追加**语义（不清旧子节点），而本页 `aboutToAppear` 里 `renderCurrent` 会被调**两次**
+      //   （截图分支一次 + env 异步回调一次，见 pendingScrollInject 注释）⇒ **两棵完整树叠着**、
+      //   两套 sticky 登记 ⇒ 两条蓝条错位可见（截图确认 y≈261 与 y≈430 各一条）。
+      //   ⇒ 每次上屏前先 `clearRoot()`（清子节点 + 清 fixed/sticky/id 登记；dev/Index 早有同款纪律）。
+      clearRoot();
       const n: number = renderCommands(cmds);
       hilog.info(DOMAIN, TAG, 'SUPERAPP_RENDER page=%{public}s nodes_rendered=%{public}d', page, n);
       // ★★★鸿蒙滚动对齐：重算滚动范围 + 重放偏移（renderCommands 重建指令后根位置归零）。

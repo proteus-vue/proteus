@@ -1156,11 +1156,14 @@ public final class VaporRenderHost {
             List<NodeCmd> c = rowCmds.get(r);
             if (c != null) all.addAll(c);
         }
-        // ★★★批 A③ 修（2026-10-08）：sticky **相位 2**（与 emitAll 同口径——CSS：sticky 是 positioned，
-        //   绘制在在流内容之后）。`stickyTopsOf` 为空时本比较器 = 原 nodeIdx 序（零行为变化）。
+        // ★★★批 A③ 修（2026-10-08）+ 用户实测修（整棵子树）：sticky **相位 2**（与 emitAll 同口径——
+        //   CSS：sticky 是 positioned，绘制在在流内容之后）。判据用 **`stickySubtreeIdSetOf`**
+        //   （锚点 + 全部子孙——见 emitAll 注释：只挪锚点会让条盖住子文字）。
+        //   集合为空时本比较器 = 原 nodeIdx 序（零行为变化）。
+        java.util.Set<Integer> stickySub = computeStickySubtree();
         all.sort((a, b) -> {
-            final int pa = stickyTopsOf.containsKey(a.nodeId) ? 1 : 0;
-            final int pb = stickyTopsOf.containsKey(b.nodeId) ? 1 : 0;
+            final int pa = stickySub.contains(a.nodeId) ? 1 : 0;
+            final int pb = stickySub.contains(b.nodeId) ? 1 : 0;
             if (pa != pb) return pa - pb;
             return Integer.compare(a.nodeIdx, b.nodeIdx);
         });
@@ -2019,6 +2022,34 @@ public final class VaporRenderHost {
         }
     }
 
+    /**
+     * ★★★用户实测修复（2026-10-08）：**sticky 整棵子树 id 集**（锚点 + 全部子孙）。
+     *   为什么：sticky 的**相位 2 分区**与**吸附位移**都必须覆盖整棵子树——只处理锚点本身会
+     *   ① 子文字被锚点背景盖住（相位 1 先画文字、相位 2 后画条）② 条吸顶后文字不跟随。
+     */
+    private java.util.Set<Integer> computeStickySubtree() {
+        java.util.Set<Integer> out = new java.util.HashSet<>();
+        java.util.Map<Integer, Integer> parentById = new java.util.HashMap<>();
+        for (int i = 0; i < specs.size(); i++) {
+            JSONObject sp = specs.get(i);
+            int sid = sp.optInt("id", -1);
+            if (sid < 0) continue;
+            parentById.put(sid, sp.has("parentId") && !sp.isNull("parentId") ? sp.optInt("parentId", -1) : -1);
+            if ("sticky".equals(sp.optString("position", ""))) out.add(sid);
+        }
+        for (int i = 0; i < specs.size(); i++) {
+            int id = specs.get(i).optInt("id", -1);
+            int cur = id, guard = 0;
+            while (guard++ < 256) {
+                Integer p = parentById.get(cur);
+                if (p == null || p < 0) break;
+                if (out.contains(p)) { out.add(id); break; }
+                cur = p;
+            }
+        }
+        return out;
+    }
+
     private void emitAll() throws Exception {
         JSONObject rects = new JSONObject(RustLayout.readRects(handle)).getJSONObject("rects");
         applyClipRects(rects);   // ★★★overflow-x 项（2026-10-06）：内核下发的有效裁剪矩形 → 视图表
@@ -2032,9 +2063,18 @@ public final class VaporRenderHost {
         //   ★为什么在**宿主绘制序**修而不是构建期重排：sticky **参与流布局**（占位），
         //     构建期重排节点数组会改布局（#658 的 reorderNodesByZ 只动 absolute/fixed——它们脱离流）。
         //     cmds 顺序**纯绘制序**（rects 已由内核算好）⇒ 分区不影响任何几何。
+        // ★★★用户实测修复（2026-10-08 · 两处根因）：
+        //   ① 「蓝条**没有文字**」——此前把 sticky **锚点**单独挪到相位 2，而锚点的**子文字留在相位 1**
+        //      ⇒ 相位 1 先画文字、相位 2 再画条背景 ⇒ **条把文字盖住**。⇒ 必须按**整棵子树**分区
+        //      （锚点 + 全部子孙都在相位 2，树序不变 ⇒ 条先、文字后，文字可见）。
+        //   ② 吸附位移也必须施加到**整棵子树**（条吸顶、文字跟随）——由 `ProteusHostView.stickyAnchorOf`
+        //      在绘制侧统一处理（对子树每个 cmd 施加同一 delta）。
+        //   语义同 CSS 2.1 附录 E：sticky 是 positioned 元素、整套子树绘制在在流内容之后。
+        //   先算「sticky 子树 id 集」（含锚点自身）——用于分区。
+        java.util.Set<Integer> stickySubtree = computeStickySubtree();
         for (int i = 0; i < specs.size(); i++) {
             JSONObject spec = specs.get(i);
-            if ("sticky".equals(spec.optString("position", ""))) continue; // 相位 2 留到第二遍
+            if (stickySubtree.contains(spec.optInt("id", -1))) continue; // 相位 2 留到第二遍（整棵子树）
             int id = spec.getInt("id");
             JSONObject r = rects.optJSONObject(String.valueOf(id));
             if (r == null) continue; // 无盒（display:none）——不产生指令（本仓实测的语义）
@@ -2051,10 +2091,10 @@ public final class VaporRenderHost {
             if ("fixed".equals(pos)) { int fid = sp.optInt("id", -1); if (fid >= 0) fixedIdsOf.add(fid); }
             else if ("sticky".equals(pos)) { int sid = sp.optInt("id", -1); if (sid >= 0) stickyTopsOf.put(sid, (float) sp.optDouble("top", 0)); }
         }
-        // 第二遍：sticky（相位 2——绘制在全部在流内容之上；吸附时才不会被后画的内容盖住）
+        // 第二遍：sticky **整棵子树**（相位 2——绘制在全部在流内容之上；条先、其子文字后 ⇒ 文字可见）
         for (int i = 0; i < specs.size(); i++) {
             JSONObject spec = specs.get(i);
-            if (!"sticky".equals(spec.optString("position", ""))) continue;
+            if (!stickySubtree.contains(spec.optInt("id", -1))) continue;
             int id = spec.getInt("id");
             JSONObject r = rects.optJSONObject(String.valueOf(id));
             if (r == null) continue;
