@@ -15,6 +15,7 @@ import { buildAppBundle } from '../packages/cli/src/app-bundle'
 import { startAppDevServer, resolveWatchRoots } from '../packages/cli/src/app-dev-server'
 import { renderDevtoolsPage } from '../packages/cli/src/app-devtools-page'
 import { resolveAppRoutes } from '../packages/cli/src/app-routes'
+import { syncRuntimeUnits, syncShellTemplates } from '../packages/cli/src/host-scaffold'
 
 const ROOT = path.resolve(__dirname, '..')
 const SUPERAPP = path.join(ROOT, 'superapp')
@@ -237,4 +238,38 @@ describe.skipIf(!hasSuperapp)('★完整宿主 · dev server（热刷核心）',
     }
     expect(s.version(), '改了源码后 version 应递增（watch 生效）').toBeGreaterThan(v0)
   }, 30_000)
+})
+
+
+describe('★#692 runtime/壳 自愈同步（框架改动同步进已存在宿主）', () => {
+  it('syncRuntimeUnits：把框架 runtime 源同步进宿主（幂等；含 #685 momentum）', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-sync-'))
+    try {
+      // 造一个"宿主"：只放 runtime/ + platform/ 空目录（模拟已 scaffold 的宿主）
+      fs.mkdirSync(path.join(dir, 'runtime'), { recursive: true })
+      fs.mkdirSync(path.join(dir, 'platform'), { recursive: true })
+      const r = syncRuntimeUnits(dir, 'ios')
+      // 框架仓存在 ⇒ ios 两单元都应同步（runtime + platform）
+      expect(r.synced).toBe(2)
+      // runtime 源文件已拷入（且含 #685 的 startMomentum —— 证明"框架改动进了宿主"）
+      const scene = fs.readFileSync(path.join(dir, 'runtime/selfdraw-scene.swift'), 'utf-8')
+      expect(scene).toContain('startMomentum')
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  })
+  it('syncShellTemplates：壳模板刷进宿主（覆盖式；补上 ProteusDevOverlay）', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-shell-'))
+    try {
+      fs.mkdirSync(path.join(dir, 'shell'), { recursive: true })
+      fs.writeFileSync(path.join(dir, 'proteus.host.json'), JSON.stringify({ appName: 'X', bundleId: 'com.x' }))
+      const synced = syncShellTemplates(dir, 'ios')
+      expect(synced).toContain('ProteusDevOverlay.swift')   // 新增的 dev 可视化层被补入
+      expect(fs.existsSync(path.join(dir, 'shell/ProteusDevOverlay.swift'))).toBe(true)
+      // 幂等：再跑一次不应有任何变化
+      expect(syncShellTemplates(dir, 'ios')).toEqual([])
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  })
 })
