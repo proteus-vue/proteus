@@ -73,13 +73,13 @@ export const DIAG_CODES: Record<string, DiagCodeDef> = {
   'PT-BD-002': { stage: 'B', category: 'D', title: 'Rust 内核编译失败（cargo）', hints: ['本机需 Rust 工具链（rustup）；见 packages/layout-core-rust 的 README'] },
   // ── 构建期 · 环境（工具链/签名）──
   'PT-BE-001': { stage: 'B', category: 'E', title: '找不到可用 Xcode（iOS 工具链）', hints: ['安装完整 Xcode（非 CommandLineTools）；非默认安装位用 PROTEUS_DEVELOPER_DIR 指定'] },
-  'PT-BE-002': { stage: 'B', category: 'E', title: '找不到 Android SDK / JDK', hints: ['设 ANDROID_HOME / JAVA_HOME，或确认本仓 .tools/jdk17 存在'] },
-  'PT-BE-003': { stage: 'B', category: 'E', title: 'iOS 签名不可用（无匹配描述文件 / 身份）', hints: ['上档签名：bash hosts/ios/signing.sh use <账号|SHA-1前缀>；再用 status 自查'] },
+  'PT-BE-002': { stage: 'B', category: 'E', title: '找不到 Android SDK / JDK', hints: ['装 JDK 17（brew install openjdk@17）并设 JAVA_HOME；ANDROID_HOME 指向 Android SDK'] },
+  'PT-BE-003': { stage: 'B', category: 'E', title: 'iOS 签名不可用（无匹配描述文件 / 身份）', hints: ['在 Xcode 打开工程 → Signing & Capabilities → 勾“Automatically manage signing”选好 Team（会为该 bundleId 生成描述文件）', '查本机描述文件与证书：proteus host signing ios --list'] },
   'PT-BE-004': { stage: 'B', category: 'E', title: '未找到已连接的 iOS 设备', hints: ['用数据线连接设备并信任本机；xcrun devicectl list devices 应显示 connected'] },
-  'PT-BE-005': { stage: 'B', category: 'E', title: '缺少 runtime 依赖（AAR / 静态库）', hints: ['Android：跑 hosts/android/build-runtime-aar.sh 生成 AAR；再 proteus create host 重生成'] },
+  'PT-BE-005': { stage: 'B', category: 'E', title: '缺少 runtime 依赖（AAR / 静态库）', hints: ['删除宿主目录后重生成：proteus create host android <dir>（从 CLI 随包 runtime 拷入）'] },
   // ── 构建期 · 宿主编译失败 ──
-  'PT-BS-001': { stage: 'B', category: 'S', title: '原生宿主编译失败（swiftc）', hints: ['本地零设备复现：bash hosts/ios/check-cli-host-compile.sh（秒级）'] },
-  'PT-BS-002': { stage: 'B', category: 'S', title: '原生宿主编译失败（javac）', hints: ['本地零设备复现：bash hosts/android/check-host-compile.sh'] },
+  'PT-BS-001': { stage: 'B', category: 'S', title: '原生宿主编译失败（swiftc）', hints: ['按下方定位修正宿主工程源码；iOS 需 Xcode 完整工具链（非 CommandLineTools）'] },
+  'PT-BS-002': { stage: 'B', category: 'S', title: '原生宿主编译失败（javac）', hints: ['按下方定位修正宿主工程源码；确认 JDK 17 与 android.jar 就位'] },
   // ── 构建期 · 资源 ──
   'PT-BR-001': { stage: 'B', category: 'R', title: '缺少运行期 bundle（bundle-superapp.js）', hints: ['先跑 proteus build --target <端> 产出 bundle，再打包'] },
   // ── 部署期 ──
@@ -94,8 +94,8 @@ export const DIAG_CODES: Record<string, DiagCodeDef> = {
   'PT-EE-003': { stage: 'E', category: 'E', title: '缺少 Rust 工具链（rustup）', hints: ['PATH 上的 rustc 可能来自 Homebrew；Android/iOS target 装在 ~/.cargo ⇒ rustup toolchain install stable'] },
   'PT-EE-004': { stage: 'E', category: 'E', title: 'git 身份未配置', hints: ['提交/发布流程需要 user.name 与 user.email：git config --global user.email …'] },
   'PT-EE-005': { stage: 'E', category: 'E', title: '磁盘空间不足', hints: ['iOS 模拟器 runtime 约 8 GB——清理磁盘'] },
-  'PT-EE-006': { stage: 'E', category: 'E', title: 'Android NDK 缺失', hints: ['见 hosts/android/README.md §前置（.tools/ndk）'] },
-  'PT-EE-007': { stage: 'E', category: 'E', title: 'JS 引擎（QuickJS）产物缺失', hints: ['跑 scripts/setup-android-js-engine.sh'] },
+  'PT-EE-006': { stage: 'E', category: 'E', title: 'Android NDK 缺失', hints: ['用 Android Studio SDK Manager 装 NDK（sdkmanager "ndk;<版本>"）'] },
+  'PT-EE-007': { stage: 'E', category: 'E', title: 'JS 引擎（QuickJS）产物缺失', hints: ['QuickJS 由 CLI 随包提供（打包时自动就绪）'] },
   'PT-EE-010': { stage: 'E', category: 'E', title: '微信开发者工具 CLI 未探测到', hints: ['设 PROTEUS_IDE_CLI 或 --ide（小程序 E2E 需要）'] },
   'PT-EE-011': { stage: 'E', category: 'E', title: '缺少 DevEco Studio / hvigor', hints: ['HarmonyOS 端构建需要 DevEco 6.1.1+'] },
   'PT-EE-012': { stage: 'E', category: 'E', title: '缺少 adb', hints: ['安装 platform-tools 并加入 PATH（ANDROID_HOME/platform-tools）'] },

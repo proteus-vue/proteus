@@ -7,7 +7,7 @@ import type { DoctorGroup, DoctorFinding, DoctorLevel } from '../types'
 /** 需要"按端"判定的项（其余项与端无关，不参与投影；★SSOT——R6：新增端须在此登记）。 */
 const PER_HOST_IDS: Record<string, string[]> = {
   ios: ['toolchain/xcode', 'toolchain/xcode-devicectl', 'toolchain/ios-signing', 'deps/workspace-links'],
-  android: ['toolchain/android-jdk', 'toolchain/android-sdk', 'deps/workspace-links'],
+  android: ['toolchain/android-jdk', 'toolchain/android-sdk', 'toolchain/android-signing', 'deps/workspace-links'],
   harmony: ['toolchain/harmony-deveco', 'deps/workspace-links'],
   web: ['env/node-version', 'deps/workspace-links'],
   skyline: ['toolchain/wechat-devtools', 'project/appid'],

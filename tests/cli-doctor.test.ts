@@ -218,3 +218,51 @@ describe('★#686 doctor · DIAG_CODES 阶段 E 扩展', () => {
     for (const c of eCodes) expect(() => makeDiag(c)).not.toThrow()
   })
 })
+
+
+describe('★#688 CLI 建议解耦框架源码（用户：建议不能是"项目不存在的方式"）', () => {
+  it('doctor 的全部 fix.command / description 不含框架专属路径（hosts/ · scripts/setup- · build-runtime-aar）', async () => {
+    const ctx = fakeCtx({ targets: ['ios', 'android', 'harmony', 'web', 'skyline'] })
+    const rep = await runDoctor({ root: '/proj', targets: ['ios', 'android', 'harmony', 'web', 'skyline'], cliVersion: '0.0.0', contextOverrides: ctx })
+    const advice = rep.groups
+      .flatMap((g) => g.findings)
+      .flatMap((f) => [f.fix?.command ?? '', f.fix?.description ?? ''])
+      .join('\n')
+    expect(advice).not.toMatch(/\bbash\s+hosts\//)
+    expect(advice).not.toMatch(/scripts\/setup-/)
+    expect(advice).not.toMatch(/build-runtime-aar\.sh/)
+  })
+})
+
+describe('★#688 签名工具（随 CLI 包分发 · 解耦框架源码）', () => {
+  it('resolveIosSigning：无覆盖该 bundleId 的描述文件 ⇒ ok:false 且 nextSteps 全为 CLI/系统级/GUI 指引（无 hosts/）', async () => {
+    const { resolveIosSigning } = await import('../packages/cli/src/signing')
+    const r = resolveIosSigning('cn.proteus.nonexistent.bundle')
+    expect(r.bundleId).toBe('cn.proteus.nonexistent.bundle')
+    // 该 bundleId 必然无描述文件 ⇒ ok 必为 false（本机不存在此 profile）
+    expect(r.ok).toBe(false)
+    for (const s of r.nextSteps) expect(s, s).not.toMatch(/\bbash\s+hosts\//)
+    expect(r.nextSteps.join('\n')).toMatch(/Xcode|bundleId/)
+  })
+  it('androidSigningStatus：返回结构齐（keystore/keytoolOk/apksignerOk/messages/nextSteps）', async () => {
+    const { androidSigningStatus } = await import('../packages/cli/src/signing')
+    const st = androidSigningStatus({ jdkDir: null, buildToolsDir: null, keystore: '/tmp/nonexistent-debug.keystore' })
+    expect(st).toHaveProperty('keytoolOk')
+    expect(st).toHaveProperty('apksignerOk')
+    expect(st).toHaveProperty('keystore')
+    expect(Array.isArray(st.nextSteps)).toBe(true)
+    for (const s of st.nextSteps) expect(s).not.toMatch(/\bbash\s+hosts\//)
+  })
+  it('ensureAndroidDebugKeystore：keystore 已存在 ⇒ created:false 且 ok:true（幂等，不重生成）', async () => {
+    const { ensureAndroidDebugKeystore } = await import('../packages/cli/src/signing')
+    const { mkdtempSync, writeFileSync } = await import('node:fs')
+    const { tmpdir } = await import('node:os')
+    const { join } = await import('node:path')
+    const dir = mkdtempSync(join(tmpdir(), 'proteus-ks-'))
+    const ks = join(dir, 'debug.keystore')
+    writeFileSync(ks, 'sentinel')
+    const r = ensureAndroidDebugKeystore({ jdkDir: null, keystore: ks })
+    expect(r.ok).toBe(true)
+    expect(r.created).toBe(false)
+  })
+})
