@@ -1,11 +1,11 @@
 {
   "name": "@proteus-vue/layout-core",
-  "version": "0.3.0-beta.21",
+  "version": "0.3.0-beta.23",
   "description": "★★M1（App 端高性能渲染）：排版核心——渲染 IR → 布局几何求解（flex 子集 · 严格单次测量 · 零依赖）",
   "type": "module",
   "license": "Apache-2.0",
   "dependencies": {
-    "@proteus-vue/component-ir": "0.3.0-beta.21"
+    "@proteus-vue/component-ir": "0.3.0-beta.23"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

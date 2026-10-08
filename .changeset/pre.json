@@ -47,10 +47,14 @@
     "@proteus-vue/website": "0.1.0",
     "@proteus-vue/components": "0.1.0",
     "@proteus-vue/layout-core": "0.3.0-beta.11",
-    "@proteus-vue/slot-runtime": "0.3.0-beta.11"
+    "@proteus-vue/slot-runtime": "0.3.0-beta.11",
+    "proteus-css-conformance": "0.1.0",
+    "@proteus-vue/animation": "0.3.0-beta.22",
+    "@proteus-vue/consistency": "0.3.0-beta.21",
+    "proteus-superapp": "0.1.0"
   },
   "changesets": [
-    "auto-release-bump-1790642297821-dggmr",
+    "auto-release-bump-1791436669101-e0rzb",
     "batch3-host-capabilities",
     "compiler-silent-traps",
     "fix-template-deps-and-smoke",

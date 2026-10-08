@@ -1,4 +1,4 @@
-# @proteus-vue/layout-core
+# @proteus-vue/slot-runtime
 
 ## 0.3.0-beta.23
 
@@ -35,13 +35,3 @@
   - `@proteus-vue/types`
   - `@proteus-vue/web`
   - `@proteus-vue/worklet`
-
-- Updated dependencies
-  - @proteus-vue/component-ir@0.3.0-beta.23
-
-## 0.3.0-beta.21
-
-### Patch Changes
-
-- Updated dependencies
-  - @proteus-vue/component-ir@0.3.0-beta.21
