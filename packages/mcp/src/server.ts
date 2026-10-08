@@ -1,5 +1,5 @@
 // packages/mcp/src/server.ts
-// ★G-36 B1（proteus-ai-agent-plan 03-mcp-server）：MCP Server 核心（传输无关——stdio/HTTP 适配器后续接入）
+// ★G-36 B1（proteus-ai-agent-plan 03-mcp-server）：MCP Server 核心（传输无关——stdio/HTTP 适配器见 stdio.ts/http.ts）
 //   · tools/list / tools/call / resources/list / resources/read / prompts/list / prompts/get 协议面
 //   · CMP021 鉴权与策略：tool_policy（read_only / write + require_confirm）+ 速率限制（60/min）
 //   · 防注入：所有工具参数经 Schema 校验（tools.ts validateToolArgs——拒绝超长/非法输入）
@@ -7,8 +7,13 @@ import { MCP_TOOLS, validateToolArgs } from './tools'
 import type { McpToolDefWithHandler, ToolContext } from './tools'
 import { MCP_RESOURCES } from './resources'
 import { MCP_PROMPTS } from './prompts'
+import { resolveMcpVersion } from './meta'
 
 export interface McpServerOptions {
+  /** serverInfo.name（缺省 proteus-mcp） */
+  name?: string
+  /** serverInfo.version（缺省读本包 package.json 真实版本——避免写死漂移） */
+  version?: string
   /** 写入类工具策略（CMP021 tool_policy.write——默认禁用） */
   writeEnabled?: boolean
   /** 写入根目录（write_file 解析基准——防逃逸；缺省 process.cwd()） */
@@ -66,8 +71,8 @@ export function createMcpServer(options: McpServerOptions = {}): ProteusMcpServe
   const ctx: ToolContext = { writeEnabled, workspaceRoot: options.workspaceRoot, documentLike: options.documentLike }
 
   return {
-    name: 'proteus-mcp',
-    version: '0.1.0',
+    name: options.name ?? 'proteus-mcp',
+    version: options.version ?? resolveMcpVersion(),
     listTools() {
       return MCP_TOOLS.map((t) => ({ name: t.name, description: t.description, readonly: t.readonly, requireConfirm: t.requireConfirm, inputSchema: t.inputSchema }))
     },

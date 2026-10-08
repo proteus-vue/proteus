@@ -39,7 +39,7 @@ import type { McpCallResult, McpServerOptions, ProteusMcpServer } from './server
 import type { McpToolSchemaProperty } from './tools'
 
 export interface ServeStdioOptions extends McpServerOptions {
-  /** serverInfo 覆盖（缺省 name=proteus-mcp / version=核心版本） */
+  /** serverInfo 覆盖（缺省取 core.name/core.version——后者为真实包版本，见 meta.ts） */
   serverInfo?: { name: string; version: string }
   /** initialize 后回调（调用方在此打"已就绪"——**务必走 stderr**，stdout 留给协议） */
   onReady?: (info: { name: string; version: string; tools: number }) => void

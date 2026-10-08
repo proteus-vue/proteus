@@ -13,3 +13,9 @@ export type { DesignTokenGroup } from './tokens'
 // ★stdio 传输适配器（决策 #681）：MCP 客户端（Claude Desktop / Cursor…）直连入口
 export { serveStdio, buildStdioServer, toJsonSchema, toProtocolTools, toProtocolCallResult } from './stdio'
 export type { ServeStdioOptions } from './stdio'
+// ★Streamable HTTP 传输适配器（决策 #682）：远端/共享/多客户端接法（stateless per-request）
+export { startHttpServer } from './http'
+export type { ServeHttpOptions, HttpHandle } from './http'
+// 运行时工具（真实包版本 / documentLike 自动注入）
+export { resolveMcpVersion } from './meta'
+export { resolveDocumentLike } from './document'

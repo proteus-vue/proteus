@@ -657,9 +657,9 @@ export const HELP_GROUPS: HelpGroup[] = [
         descEn: 'Lists all compile rules (AI-manual directory)',
       },
       {
-        usage: 'proteus mcp serve [--allow-write] [--workspace <dir>] [--rate-limit <n>]',
-        desc: '★MCP stdio server（#681）——让 Claude Desktop / Cursor 等 MCP 客户端直连本框架语义层\n      （11 工具/5 资源/3 提示词：原语库 · design token · 能力矩阵 · C-IR 校验 · 六端 conformance）\n      --allow-write 开启 write_file（缺省只读）· --workspace 写入根（缺省 cwd）· --rate-limit 每分钟上限（缺省 60）',
-        descEn: '★MCP stdio server (#681) — let MCP clients (Claude Desktop / Cursor…) connect to the framework semantic layer\n      (11 tools / 5 resources / 3 prompts: primitives · design tokens · capability matrix · C-IR validation · six-end conformance)\n      --allow-write enables write_file (read-only by default) · --workspace write root (default cwd) · --rate-limit per-minute cap (default 60)',
+        usage: 'proteus mcp serve [--http [--port N] [--host H] [--token T]] [--allow-write [--workspace <dir>]] [--rate-limit <n>] [--quiet]',
+        desc: '★MCP server（#681/#682）——让 Claude Desktop / Cursor 等 MCP 客户端直连本框架语义层\n      （11 工具/5 资源/3 提示词：原语库 · design token · 能力矩阵 · C-IR 校验 · 六端 conformance）\n      缺省 **stdio**（客户端 command 拉起）；--http 起 Streamable HTTP（远端/共享；缺省绑 127.0.0.1:7802/mcp）\n      --allow-write 开启 write_file（缺省只读）· --workspace 写入根（缺省 cwd）· --rate-limit 每分钟上限（缺省 60）\n      --host 0.0.0.0 对外时务必配 --token（Bearer 鉴权）· --quiet 关结构化请求日志',
+        descEn: '★MCP server (#681/#682) — let MCP clients (Claude Desktop / Cursor…) connect to the framework semantic layer\n      (11 tools / 5 resources / 3 prompts: primitives · design tokens · capability matrix · C-IR validation · six-end conformance)\n      Default **stdio** (client command mode); --http serves Streamable HTTP (remote/shared; binds 127.0.0.1:7802/mcp by default)\n      --allow-write enables write_file (read-only by default) · --workspace write root (default cwd) · --rate-limit per-minute cap (default 60)\n      --host 0.0.0.0 to expose requires --token (Bearer auth) · --quiet disables structured request logs',
       },
       {
         usage: 'proteus version',

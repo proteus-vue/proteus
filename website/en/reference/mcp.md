@@ -43,9 +43,9 @@ Proteus's **AI-native development** lands here: `@proteus-vue/mcp` exposes an MC
 
 ## Integration
 
-**① In-process**: the host plugs in `createMcpServer(options)` (`@proteus-vue/mcp`) and registers tools/resources/prompts **in-process**.
+**① In-process**: the host plugs in `createMcpServer(options)` (`@proteus-vue/mcp`) to register tools/resources/prompts **in-process**; or wire a transport via `serveStdio()` / `startHttpServer()`.
 
-**② CLI stdio server (recommended for MCP clients)**: `proteus mcp serve` starts a **stdio MCP server** (JSON-RPC over stdin/stdout) that Claude Desktop / Cursor / Cline can mount directly — no need to wire the transport yourself.
+**② CLI stdio (recommended for MCP clients)** — `proteus mcp serve` starts a stdio MCP server (a locally spawned process, JSON-RPC over stdin/stdout):
 
 ```jsonc
 // Claude Desktop / Cursor mcpServers example
@@ -60,10 +60,22 @@ Proteus's **AI-native development** lands here: `@proteus-vue/mcp` exposes an MC
 }
 ```
 
-- **Read-only by default**: `write_file` is disabled; enable it with `--allow-write` (plus `--workspace <dir>` to bound the write root).
-- **`--rate-limit <n>`**: per-minute call cap (default 60).
-- **★stdout is the protocol**: the server writes JSON-RPC to stdout only; status messages go to stderr (otherwise the client fails to parse).
-- **Honest boundary**: `document`-dependent tools (`run_conformance` / `generate_code`) honestly error out under pure-Node stdio (no document); HTTP/SSE transport is not yet provided.
+**③ Streamable HTTP (remote / shared / multi-client / in-container)** — `proteus mcp serve --http`, listens on `127.0.0.1:7802`, endpoint `/mcp` by default:
+
+```bash
+proteus mcp serve --http                               # http://127.0.0.1:7802/mcp
+proteus mcp serve --http --host 0.0.0.0 --token s3cr3t # exposed + Bearer auth
+```
+
+- **Stateless per-request**: each request is handled independently, no sessions — a read-only knowledge surface is naturally concurrency-safe with no session ops; the cost is no server-initiated push (e.g. log notifications), and GET/DELETE return 405.
+- **Security**: binds `127.0.0.1` by default; when exposing via `--host 0.0.0.0` **always** set `--token`. `--port N` / `--host H` / `--token T` are HTTP-only.
+- **Requires Node ≥ 20** (Streamable HTTP relies on the ESM global `crypto`; stdio has no such requirement).
+
+**Common options**: `--allow-write` (enable `write_file`, read-only by default) · `--workspace <dir>` (write root, default cwd) · `--rate-limit <n>` (per-minute cap, default 60) · `--quiet` (disable structured request logs).
+
+**★stdout is the protocol**: under stdio the server writes JSON-RPC to stdout only; status messages and request logs go to stderr (otherwise the client fails to parse).
+
+**★Six-end conformance works out of the box**: `run_conformance` needs `document` (the vue-dom engine) — the server **auto-injects happy-dom** (optional dependency), so all six engines run under `proteus mcp serve`; without happy-dom the vue-dom engine honestly errors out (never silently pretends to pass).
 
 ## Design notes
 

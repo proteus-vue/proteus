@@ -76,6 +76,8 @@ for (const rel of TARGETS) {
     ...Object.keys(pkg.dependencies ?? {}),
     ...Object.keys(pkg.devDependencies ?? {}),
     ...Object.keys(pkg.peerDependencies ?? {}),
+    // ★optionalDependencies 也是**已声明**——语义是"可缺省"，代码须能优雅降级（如 mcp 的 happy-dom）
+    ...Object.keys(pkg.optionalDependencies ?? {}),
   ])
   const used = new Map() // mod → [files]
   const files = []
@@ -140,6 +142,7 @@ for (const tt of TPL_TARGETS) {
     ...Object.keys(pkg.dependencies ?? {}),
     ...Object.keys(pkg.devDependencies ?? {}),
     ...Object.keys(pkg.peerDependencies ?? {}),
+    ...Object.keys(pkg.optionalDependencies ?? {}),
   ])
   const used = new Map()
   for (const f of TPL_FILES) {
