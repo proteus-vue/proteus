@@ -605,6 +605,7 @@ final class SelfDrawView: UIView {
         metaByNodeId.removeAll(keepingCapacity: true)
         absOriginByNodeId.removeAll(keepingCapacity: true)
         layersById.removeAll(keepingCapacity: true)
+        fixedBases.removeAll(keepingCapacity: true)   // ★★用户实测修复：fixed 基位随层树一起清
         // ★★C2（2026-10-01）：描边形状层也要清——**它与 `layersById` 是同一份层的两份簿记**：
         //   只清前者 ⇒ 全量重建后 `attachSvgStroke` 的幂等检查（`layerStrokeShapes[id] != nil`）
         //   会命中**已被丢弃的旧层**的登记 ⇒ 新层上永远没有描边子层
@@ -931,18 +932,16 @@ final class SelfDrawView: UIView {
         //   诚实边界：frame 用内核给的**绝对 rect**（= 视口坐标系下的内容坐标，offset=0 即屏幕坐标）；
         //   命中测试仍按内核内容坐标映射（fixed 元素滚动后 tap 映射会偏 contentOffset——本轮具名，见决策 #652）。
         for item in flat where (item.style["position"] as? String) == "fixed" {
-            guard let layer = layersById[item.id], let abs = absOriginByNodeId[item.id] else {
-                // ★批 A② 探针（2026-10-08）：guard 失败 ⇒ 该 fixed 层**不会被重挂**（诊断用；不静默）
-                NSLog("[proteus] FIXED_SKIP id=%d hasLayer=%d hasAbs=%d", item.id,
-                      layersById[item.id] != nil ? 1 : 0, absOriginByNodeId[item.id] != nil ? 1 : 0)
-                continue
-            }
-            layer.removeFromSuperlayer()
-            layer.frame = CGRect(origin: abs, size: item.rect.size)
-            layer.zPosition = 2000
-            self.layer.addSublayer(layer)
-            NSLog("[proteus] FIXED_RAISED id=%d abs=(%.1f,%.1f) size=(%.1f,%.1f)",
-                  item.id, abs.x, abs.y, item.rect.size.width, item.rect.size.height)
+            guard let layer = layersById[item.id], let abs = absOriginByNodeId[item.id] else { continue }
+            // ★★★用户实测修复（2026-10-08）：**不再"重挂到 self.layer"**——那是**错的**：
+            //   内容滚动走 `self.layer.sublayerTransform`，而 `sublayerTransform` 作用于**它自己的所有子层**
+            //   ⇒ 把 fixed 重挂到 self.layer 仍**在变换之下**（随内容滚走，真机现象「fixed 徽标不显示」）。
+            //   实测证据：探针 `FIXED_RAISED` 已执行，但截图 0 红像素。
+            //   ⇒ 改用**与 sticky 同一套 frame 补偿**（不依赖"逃出变换"）：内容被平移 −offset，
+            //     把 fixed 的 frame 反向 +offset ⇒ 屏幕位置恒定（= 视口锚定）。
+            //   ★与 Android（`canvas.translate(+scrollX,+scrollY)`）/ 鸿蒙（`SetPosition(baseY + y)`）同构。
+            fixedBases[item.id] = (base: abs, size: item.rect.size)
+            layer.zPosition = 2000   // 浮在内容与 sticky 之上（同父内层序；★诚实边界：fixed 须为页根直接子级，见 #652）
         }
         // ★批次 39：**静态变换**（编译期 CSS transform）——建层后应用（此时 layer.bounds 已定）。
         //   位移分 px（直接用）与**盒比例**（txPct/tyPct × 盒尺寸：translate(-50%,-50%) 居中刚需）；
@@ -2148,6 +2147,11 @@ final class SelfDrawView: UIView {
     func resetContentOffset() {
         contentOffset = .zero
         self.layer.sublayerTransform = CATransform3DIdentity
+        // ★★用户实测修复：fixed 基位 = 视口坐标 ⇒ 归零后帧回到基位（否则重挂新树时 fixed 停在旧偏移处）
+        for (fid, b) in fixedBases {
+            guard let lyr = layersById[fid] else { continue }
+            lyr.frame = CGRect(origin: b.base, size: b.size)
+        }
     }
 
     /// 屏幕固定视口（可见区判定的基准）
@@ -2179,13 +2183,26 @@ final class SelfDrawView: UIView {
         t.m42 = -contentOffset.y
         self.layer.sublayerTransform = t
         // ★★★批 A③：sticky 吸附——内容 y = max(baseY, offset + top)（屏幕 y 随之 = max(baseY−offset, top)）
-        if !stickyNodes.isEmpty {
+        //   ★★同帧禁用隐式动画（用户实测修复 2026-10-08）：`frame` 改的是手工 `addSublayer` 的层
+        //   （非 UIView-backed ⇒ **隐式动画默认开启** 0.25s）⇒ 快速滚动时吸顶条"追不上"、停手后补动画
+        //   （现象：「跟随滚动然后再自动回到顶部」）。内容走 `sublayerTransform`（UIView-backed，动画本就被禁）
+        //   ⇒ 这正是不对称的根因。显式事务 + `setDisableActions(true)` ⇒ 每帧零动画精确落位（与 Android/鸿蒙一致）。
+        if !stickyNodes.isEmpty || !fixedBases.isEmpty {
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
             for (sid, s) in stickyNodes {
                 guard let lyr = layersById[sid] else { continue }
                 var f = lyr.frame
                 f.origin.y = max(s.baseY, contentOffset.y + s.top)
                 lyr.frame = f
             }
+            // ★★★fixed 视口锚定（frame 补偿）：内容被平移 −offset ⇒ frame 反向 +offset（屏幕位置恒定）
+            for (fid, b) in fixedBases {
+                guard let lyr = layersById[fid] else { continue }
+                lyr.frame = CGRect(x: b.base.x + contentOffset.x, y: b.base.y + contentOffset.y,
+                                   width: b.size.width, height: b.size.height)
+            }
+            CATransaction.commit()
         }
         return contentOffset
     }
@@ -2200,10 +2217,37 @@ final class SelfDrawView: UIView {
         verticalRangeSet = true
     }
 
+    /**
+     * ★★★用户实测修复（2026-10-08）：**按当前 `contentOffset` 重新落位 sticky/fixed**（建层后/重渲后调用）。
+     *   为什么需要：`stickyNodes`/`fixedBases` 记的是**内容坐标基位**；重渲时层的 frame 由内核 rect 给出
+     *   （内容坐标）⇒ 若当时 offset≠0（已滚动），条/徽标会停在内容位（与视口错位）。此方法把同一条
+     *   补偿逻辑复用一次，保证"重渲即正确落位"（零动画——同 `applyContentOffset`）。
+     */
+    func reapplyPinOffsets() {
+        guard !stickyNodes.isEmpty || !fixedBases.isEmpty else { return }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for (sid, s) in stickyNodes {
+            guard let lyr = layersById[sid] else { continue }
+            var f = lyr.frame
+            f.origin.y = max(s.baseY, contentOffset.y + s.top)
+            lyr.frame = f
+        }
+        for (fid, b) in fixedBases {
+            guard let lyr = layersById[fid] else { continue }
+            lyr.frame = CGRect(x: b.base.x + contentOffset.x, y: b.base.y + contentOffset.y,
+                               width: b.size.width, height: b.size.height)
+        }
+        CATransaction.commit()
+    }
+
     /// ★★★批 A③（2026-10-08 · 决策 #655）：**sticky 吸附表** id → (baseY, top 阈值)。
     ///   `baseY` = 该层**自然内容坐标 y**（建层后从 layer.frame 现取，保持父相对坐标系一致）；
     ///   `top` = 吸附阈值（CSS `top`）。屏幕 y = max(baseY − offset, top) ⇒ 内容 y = max(baseY, offset + top)。
     private(set) var stickyNodes: [Int: (baseY: CGFloat, top: CGFloat)] = [:]
+    /** ★★★用户实测修复（2026-10-08）：**fixed 锚点基位**（id → 视口坐标下的原点/尺寸）。
+     *  用 frame 补偿（内容平移 −offset ⇒ fixed 反加 +offset）实现视口锚定——见 buildLayers 的 fixed 段注释。 */
+    private var fixedBases: [Int: (base: CGPoint, size: CGSize)] = [:]
     func setStickyTops(_ tops: [Int: CGFloat]) {
         stickyNodes.removeAll(keepingCapacity: true)
         for (id, top) in tops {
@@ -6972,7 +7016,13 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         //   ★顺序很关键：先算变化集与补丁（都在内存里），**再**决定要不要碰层树 ——
         //     若变化集缺失/与本地层不匹配，就退回全量（正确性优先）。
         let tDiff0 = CFAbsoluteTimeGetCurrent()
-        let maybePatches = handle != 0 ? diffPatches(from: lastNodes, to: nodes) : nil
+        // ★★★用户实测修复（2026-10-08）：**含 `position:fixed` 的树禁用 patch 增量路径**。
+        //   根因：patch 分支在成功后会**提前 return**（跳过后面的 `clearLayers + buildLayers`）——
+        //   而 fixed 层的正确性依赖 `buildLayers` 里的**重挂到视图层**（脱离 `sublayerTransform` 内容变换）。
+        //   走增量 ⇒ fixed 层仍留在原父内（随内容滚动）⇒ 真机现象「iOS 的 fixed 徽标不显示/随滚动跑掉」。
+        //   ⇒ 有 fixed 就强制全量重建（fixed 页面通常只有少数几个，全量成本可接受；语义更正确）。
+        let hasFixedNode = nodes.contains { ($0["position"] as? String) == "fixed" }
+        let maybePatches = (handle != 0 && !hasFixedNode) ? diffPatches(from: lastNodes, to: nodes) : nil
         let diffMs = (CFAbsoluteTimeGetCurrent() - tDiff0) * 1000
         if let patches = maybePatches {
             let pj = jsonString2(patches)
@@ -7156,6 +7206,9 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             stickyTops[sid] = CGFloat((n["top"] as? Double) ?? 0)
         }
         view.setStickyTops(stickyTops)
+        // ★★用户实测修复（2026-10-08）：建层后**立即按当前滚动偏移落位** sticky/fixed
+        //   （否则重渲时它们停在内容坐标 ⇒ 与视口错位；offset=0 时即基位，零行为变化）。
+        view.reapplyPinOffsets()
         // ★批次 42（动效 · 对齐 Web）：**CSS animation**（编译期折叠）——建层后启动（各节点 style["animation"] → anims → 内核 anim_start + 帧循环）
         cssAnimNodes = startCssAnimations(flat: flat)
         // ★★C2：全量挂载后，按**内核解析好的段列表**补建 SVG 描边子层（见 attachSvgStroke 注释）

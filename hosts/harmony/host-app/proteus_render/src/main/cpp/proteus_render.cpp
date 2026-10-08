@@ -58,6 +58,7 @@
 #include <native_drawing/drawing_sampling_options.h>
 #include <native_drawing/drawing_matrix.h>
 #include <unordered_map>
+#include <unordered_set>
 
 #define LOG_DOMAIN 0x0002
 // ★hilog 的 LogType 是第一个宏参数（不是 domain）——固定用 LOG_APP
@@ -150,9 +151,19 @@ static ArkUI_RenderNodeHandle g_rootNode = nullptr;
 /// ★★★批 A（2026-10-08 · 决策 #654）：**position:fixed 节点登记表** {baseX, baseY, node}。
 ///   扁平建树（每节点绝对 SetPosition 挂 g_rootNode）；滚动 = 平移 g_rootNode（-y）。
 ///   ⇒ fixed 节点须在 scrollRoot 时把自身 y 加回 +y（净位移 0 ⇒ 钉在视口）。ClearRoot 时清。
-static std::vector<std::array<double, 3>> g_fixedNodes;   // {baseX, baseY, (double)(intptr_t)node}
-/// ★批 A③（决策 #655）：**sticky 节点登记表** {baseX, baseY, top, node}——scrollRoot 时 y = max(baseY, y + top)。
-static std::vector<std::array<double, 4>> g_stickyNodes;
+static std::vector<std::array<double, 4>> g_fixedNodes;   // {baseX, baseY, (double)(intptr_t)node, id}
+/// ★批 A③（决策 #655）：**sticky 节点登记表** {baseX, baseY, top, node, id}——scrollRoot 时 y = max(baseY, y + top)。
+static std::vector<std::array<double, 5>> g_stickyNodes;
+/// ★★★用户实测修复（2026-10-08）：**id → 句柄 / 父 / 基准位置**（`scrollRoot` 平移**子树**用）。
+///   为什么必须有：本端是**扁平**建树（每个元素都是 g_rootNode 的直接子节点、绝对坐标定位）
+///   ⇒ 只 `SetPosition` 锚点（sticky 条 / fixed 徽标）**不会带走它的子孙**（条的子文本留在原地）
+///   ⇒ 真机现象「蓝条吸顶了、**条上的文字没跟过去**」（与 Android 同源缺陷）。⇒ 按 parentId 链
+///   找出锚点子树、整体加同一位移（子节点基准位置 + 锚点位移）。
+static std::unordered_map<int, ArkUI_RenderNodeHandle> g_nodeById;
+static std::unordered_map<int, int> g_parentOfHost;          // id → parentId（-1 = 根）
+static std::unordered_map<int, std::array<double, 2>> g_basePos;   // id → {baseX, baseY}（物理 px）
+/// ★★建树序（json = 前序）：sticky 子树**按此序重挂** ⇒ 保持"条先、其子文字后"的相对绘制序。
+static std::vector<int> g_buildOrder;
 
 /**
  * ★★**已建通道真源表**（2026-10-03 · 三端打通绘制通道）——`probeChannels` 回读它。
@@ -1026,10 +1037,20 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
         }
         OH_ArkUI_RenderNodeUtils_SetSize(node, static_cast<int32_t>(w), static_cast<int32_t>(h));
         OH_ArkUI_RenderNodeUtils_SetPosition(node, static_cast<int32_t>(x), static_cast<int32_t>(y));
+        // ★★★用户实测修复（2026-10-08）：登记 id → 句柄 / 父 / 基准位置（scrollRoot 平移**子树**用；
+        //   见 g_nodeById 注释——扁平建树 ⇒ 锚点位移不会自动带走子孙）。
+        {
+            double pidD = -1; jsonNumber(it, "parentId", &pidD);
+            int nid = (int)nodeId;
+            g_nodeById[nid] = node;
+            g_parentOfHost[nid] = (int)pidD;
+            g_basePos[nid] = { x, y };
+            g_buildOrder.push_back(nid);   // ★★建树序（sticky 子树重挂按此序）
+        }
         // ★★★批 A：position:fixed ⇒ 登记（scrollRoot 时补偿滚动，钉在视口）
         { std::string posV; if (jsonString(it, "position", &posV)) {
-            if (posV == "fixed") g_fixedNodes.push_back({x, y, (double)(intptr_t)node});
-            else if (posV == "sticky") { double sTop = 0; jsonNumber(it, "top", &sTop); g_stickyNodes.push_back({x, y, sTop, (double)(intptr_t)node}); }
+            if (posV == "fixed") g_fixedNodes.push_back({x, y, (double)(intptr_t)node, (double)(int)nodeId});
+            else if (posV == "sticky") { double sTop = 0; jsonNumber(it, "top", &sTop); g_stickyNodes.push_back({x, y, sTop, (double)(intptr_t)node, (double)(int)nodeId}); }
         } }
         // ★★★静态变换 + **父 transform 级联**（2026-10-08 · effects D 案）：把祖先链的绝对仿射合成进
         //   本节点矩阵——宿主扁平建树不级联，CSS 却要求子树随父变换（含文本）。合成公式：
@@ -1528,15 +1549,34 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
     //   CSS 2.1 附录 E：`position:sticky` 是 **positioned 元素**，绘制在**在流内容之后**（浏览器如此）。
     //   本端此前按 json 序 AddChild ⇒ sticky 声明在内容前 ⇒ 吸附后被后画的内容节点盖住
     //   （与 Android/iOS 同缺陷：滚动 400px 可见、1500px 后整条消失）。
-    //   ⇒ 建树收尾把 sticky 节点**重挂到末尾**（RemoveChild + AddChild；只改兄弟绘制序、不动坐标）。
-    for (auto& sn : g_stickyNodes) {
-        auto snode = (ArkUI_RenderNodeHandle)(intptr_t)sn[3];
-        if (snode == nullptr || g_rootNode == nullptr) continue;
-        OH_ArkUI_RenderNodeUtils_RemoveChild(g_rootNode, snode);
-        int32_t rcRe = OH_ArkUI_RenderNodeUtils_AddChild(g_rootNode, snode);
-        if (rcRe != ARKUI_ERROR_CODE_NO_ERROR) {
-            OH_LOG_Print(LOG_APP, LOG_ERROR, LOG_DOMAIN, LOG_TAG,
-                         "PROTEUS_RENDER_STICKY_RAISE_FAIL rc=%{public}d", rcRe);
+    //   ★★★用户实测修（2026-10-08 · 「蓝条没有文字了」）：必须抬**整棵子树**（锚点 + 全部子孙、**保原相对序**）
+    //     ——此前只抬锚点 ⇒ 锚点的**子文字**仍在原位、被抬到末尾的**条背景盖住**（与 Android 同源）。
+    //     本端扁平建树 ⇒ 子孙是 g_rootNode 的兄弟；按 `g_buildOrder`（json=前序）筛子树、依序重挂。
+    {
+        std::unordered_set<int> sub;
+        for (auto& sn : g_stickyNodes) {
+            int anchor = (int)sn[4];
+            sub.insert(anchor);
+            for (auto& kv : g_parentOfHost) {
+                int cur = kv.second, guard = 0;
+                while (cur != -1 && guard++ < 256) {
+                    if (cur == anchor) { sub.insert(kv.first); break; }
+                    auto pit = g_parentOfHost.find(cur);
+                    cur = (pit == g_parentOfHost.end()) ? -1 : pit->second;
+                }
+            }
+        }
+        for (size_t oi = 0; oi < g_buildOrder.size(); oi++) {
+            int nid = g_buildOrder[oi];
+            if (!sub.count(nid)) continue;
+            auto nit = g_nodeById.find(nid);
+            if (nit == g_nodeById.end() || nit->second == nullptr || g_rootNode == nullptr) continue;
+            OH_ArkUI_RenderNodeUtils_RemoveChild(g_rootNode, nit->second);
+            int32_t rcRe = OH_ArkUI_RenderNodeUtils_AddChild(g_rootNode, nit->second);
+            if (rcRe != ARKUI_ERROR_CODE_NO_ERROR) {
+                OH_LOG_Print(LOG_APP, LOG_ERROR, LOG_DOMAIN, LOG_TAG,
+                             "PROTEUS_RENDER_STICKY_RAISE_FAIL rc=%{public}d", rcRe);
+            }
         }
     }
     g_nodeCount = built;
@@ -1826,6 +1866,10 @@ static napi_value ClearRoot(napi_env env, napi_callback_info info) {
     (void)info;
     g_fixedNodes.clear();   // ★★★批 A：重建内容 ⇒ 清 fixed 登记（旧句柄失效）
     g_stickyNodes.clear();  // ★★★批 A③：同清 sticky 登记
+    g_nodeById.clear();         // ★★用户实测修复：同清 id→句柄/父/基准位（旧句柄随 ClearChildren 失效）
+    g_parentOfHost.clear();
+    g_basePos.clear();
+    g_buildOrder.clear();       // ★★同清建树序
     if (g_rootNode != nullptr) {
         OH_ArkUI_RenderNodeUtils_ClearChildren(g_rootNode);
     }
@@ -1854,18 +1898,43 @@ static napi_value ScrollRoot(napi_env env, napi_callback_info info) {
     int32_t rc = -1;
     if (g_rootNode != nullptr) {
         rc = OH_ArkUI_RenderNodeUtils_SetPosition(g_rootNode, 0, (int32_t)(-y * g_density));
+        // ★★★用户实测修复（2026-10-08）：**平移整棵子树**（此前只 SetPosition 锚点本身 ⇒
+        //   条吸顶了、**条上的文字没跟过去**——扁平建树 ⇒ 子孙是 g_rootNode 的兄弟、不被带走的必然结果；
+        //   与 Android 同源缺陷）。
+        //   规则：锚点自身设为目标位，其**全部子孙**加**同一位移量**（子孙基准位 + 锚点位移）。
+        auto shiftSubtree = [&](int anchorId, double anchorNewY) {
+            auto bit = g_basePos.find(anchorId);
+            if (bit == g_basePos.end()) return;
+            double dy = anchorNewY - bit->second[1];
+            for (auto& kv : g_parentOfHost) {
+                int cur = kv.second, guard = 0;
+                bool desc = false;
+                while (cur != -1 && guard++ < 256) {
+                    if (cur == anchorId) { desc = true; break; }
+                    auto pit = g_parentOfHost.find(cur);
+                    cur = (pit == g_parentOfHost.end()) ? -1 : pit->second;
+                }
+                if (!desc) continue;
+                auto nit = g_nodeById.find(kv.first);
+                auto bpit = g_basePos.find(kv.first);
+                if (nit == g_nodeById.end() || bpit == g_basePos.end() || nit->second == nullptr) continue;
+                OH_ArkUI_RenderNodeUtils_SetPosition(nit->second, (int32_t)bpit->second[0],
+                                                     (int32_t)std::llround(bpit->second[1] + dy));
+            }
+        };
         // ★★★批 A：fixed 节点把滚动加回自身（净位移 0 ⇒ 不随内容滚动；见 g_fixedNodes 注释）
         for (auto& fn : g_fixedNodes) {
             ArkUI_RenderNodeHandle fnode = (ArkUI_RenderNodeHandle)(intptr_t)fn[2];
-            if (fnode != nullptr) OH_ArkUI_RenderNodeUtils_SetPosition(fnode, (int32_t)fn[0], (int32_t)(fn[1] + y * g_density));
+            double newY = fn[1] + y * g_density;
+            if (fnode != nullptr) OH_ArkUI_RenderNodeUtils_SetPosition(fnode, (int32_t)fn[0], (int32_t)newY);
+            shiftSubtree((int)fn[3], newY);
         }
         // ★★★批 A③：sticky 吸附——y = max(baseY, scroll + top)（屏幕 y = max(baseY − scroll, top)）
         for (auto& sn : g_stickyNodes) {
             ArkUI_RenderNodeHandle snode = (ArkUI_RenderNodeHandle)(intptr_t)sn[3];
-            if (snode != nullptr) {
-                double ny = std::max(sn[1], (y + sn[2]) * g_density);
-                OH_ArkUI_RenderNodeUtils_SetPosition(snode, (int32_t)sn[0], (int32_t)ny);
-            }
+            double newY = std::max(sn[1], (y + sn[2]) * g_density);
+            if (snode != nullptr) OH_ArkUI_RenderNodeUtils_SetPosition(snode, (int32_t)sn[0], (int32_t)newY);
+            shiftSubtree((int)sn[4], newY);
         }
     }
     napi_value out;

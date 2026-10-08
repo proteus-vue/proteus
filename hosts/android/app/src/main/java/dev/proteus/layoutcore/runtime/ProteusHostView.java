@@ -712,6 +712,12 @@ public class ProteusHostView extends ViewGroup {
     private java.util.Set<Integer> fixedNodes = java.util.Collections.emptySet();
     /**★批 A③：sticky 节点的吸附阈值（id → top，dp）；绘制时 screen y = max(自然y − scrollY, top)。 */
     private java.util.Map<Integer, Float> stickyTops = java.util.Collections.emptyMap();
+    /**
+     * ★★★批 A③ 修（2026-10-08）：**id → cmds 下标**（sticky 锚点 c.y 反查用；`setCmdNodeIds` 时重建）。
+     *   为什么需要：锚点子树平移量 = max(0, top + scrollY − **锚点自身**的 y)——子孙 cmd 的 c.y 不是锚点的 y
+     *   ⇒ 必须能 O(1) 反查锚点指令（见 drawCmds 的锚点段）。
+     */
+    private java.util.Map<Integer, Integer> cmdIndexByIdView = java.util.Collections.emptyMap();
     /** 节点 id → [tx, ty, scale, rotate, opacity, rotateX, rotateY]（**宿主侧真源**：探针从这里读） */
     private final Map<Integer, float[]> animTx = new HashMap<>();
     /**
@@ -851,6 +857,10 @@ public class ProteusHostView extends ViewGroup {
 
     public void setCmdNodeIds(int[] ids) {
         this.cmdNodeIds = ids;
+        // ★★★批 A③ 修：重建 id → 下标（sticky 锚点 c.y 反查；O(n) 一次/次推树，不在绘制热路径）
+        java.util.Map<Integer, Integer> m = new java.util.HashMap<>();
+        if (ids != null) for (int k = 0; k < ids.length; k++) if (ids[k] >= 0) m.put(ids[k], k);
+        this.cmdIndexByIdView = m;
         invalidate();
     }
 
@@ -864,6 +874,37 @@ public class ProteusHostView extends ViewGroup {
     public void setStickyTops(java.util.Map<Integer, Float> m) {
         this.stickyTops = (m == null) ? java.util.Collections.emptyMap() : m;
         invalidate();
+    }
+
+    /**
+     * ★★★用户实测修复（2026-10-08）：**该 id 所属的 sticky 锚点**（自身是锚点或锚点的子孙）——返回锚点 id，
+     * 否则 null。用于把 sticky 的平移施加到**锚点整棵子树**（条 + 条上的文字…）——此前只平移锚点本身
+     * ⇒ 条吸顶而文字留在原地（真机现象「蓝条没有文字了」）。
+     * 沿 `nodeParent` 上溯（带防环），命中 `stickyTops` 即返回；无则 null（非 sticky 子树，零行为变化）。
+     */
+    private Integer stickyAnchorOf(int nodeId) {
+        if (stickyTops.isEmpty()) return null;
+        int cur = nodeId, guard = 0;
+        while (guard++ < 256) {
+            if (stickyTops.containsKey(cur)) return cur;
+            final Integer p = nodeParent.get(cur);
+            if (p == null) return null;
+            cur = p;
+        }
+        return null;
+    }
+
+    /** ★同 stickyAnchorOf（2026-10-08）：返回该 id 所属的 **fixed 锚点**（含自身/子孙），无则 null。 */
+    private Integer fixedAnchorOf(int nodeId) {
+        if (fixedNodes.isEmpty()) return null;
+        int cur = nodeId, guard = 0;
+        while (guard++ < 256) {
+            if (fixedNodes.contains(cur)) return cur;
+            final Integer p = nodeParent.get(cur);
+            if (p == null) return null;
+            cur = p;
+        }
+        return null;
     }
 
     /** 节点 → 变换映射的规模（探针/判据：确认值真的落了） */
@@ -2461,13 +2502,20 @@ public class ProteusHostView extends ViewGroup {
             final boolean xf = (tf != null && (tfTx != 0f || tfTy != 0f || tf[2] != 1f || tf[3] != 0f || has3d))
                     || hasClip || ovfClip != null || hasAncestorTx;
             // ★★★批 A：fixed 节点反向补偿内容滚动（净位移 0 ⇒ 钉在视口；见 fixedNodes 注释）
-            final boolean isFixed = ids != null && i < ids.length && fixedNodes.contains(ids[i]);
-            // ★★★批 A③：sticky 吸附——screen y = max(c.y − scrollY, top) ⇒ 绘制前平移 max(0, top + scrollY − c.y)
-            final Float sTop = (ids != null && i < ids.length) ? stickyTops.get(ids[i]) : null;
-            final boolean isSticky = sTop != null;
+            //   ★用户实测修复（2026-10-08）：同 sticky——判据改为「本节点属某 fixed 锚点的子树」，
+            //     否则徽标钉住了、**徽标上的文字**（子节点）留在原地（与"蓝条没文字"同源）。
+            final Integer fAnchor = (ids != null && i < ids.length && ids[i] >= 0) ? fixedAnchorOf(ids[i]) : null;
+            final boolean isFixed = fAnchor != null;
+            final Integer sAnchor = (ids != null && i < ids.length && ids[i] >= 0) ? stickyAnchorOf(ids[i]) : null;
+            final boolean isSticky = sAnchor != null;
             final int save = (xf || isFixed || isSticky) ? canvas.save() : -1;
             if (isFixed) canvas.translate(scrollX, scrollY);
-            if (isSticky) canvas.translate(0f, Math.max(0f, sTop + scrollY - c.y));
+            if (isSticky) {
+                // 锚点 y：经 id→下标表取锚点指令（子孙 cmd 的 y 是各自的，不能当锚点用）
+                final Integer ai = cmdIndexByIdView.get(sAnchor);
+                final float anchorY = (ai != null && ai >= 0 && ai < list.size()) ? list.get(ai).y : c.y;
+                canvas.translate(0f, Math.max(0f, stickyTops.get(sAnchor) + scrollY - anchorY));
+            }
             if (ovfClip != null) canvas.clipRect(ovfClip[0], ovfClip[1], ovfClip[0] + ovfClip[2], ovfClip[1] + ovfClip[3]);
             // ★★软边遮罩（mask v1）：**saveLayer 包裹**（开层 → 画内容 → 用 DST_IN 叠渐变 → 还原）。
             //   揭示色标来自 `animMask`（内核已算好）或建树静态声明——宿主零揭示数学。
