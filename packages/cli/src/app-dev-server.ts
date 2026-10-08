@@ -116,7 +116,7 @@ export async function startAppDevServer(opts: AppDevServerOptions): Promise<AppD
 
   // ── DevTools 面板状态（决策 #672/#673）──
   interface RebuildEvent { version: number; bytes: number; ms: number; reason: string; time: number }
-  interface HostState { screen: string; time: number }
+  interface HostState { screen: string; time: number; env?: Record<string, unknown> }
   interface NetEvent { method: string; path: string; status: number; bytes: number; ms: number; time: number }
   interface ConsoleEvent { level: string; text: string; time: number }
   const events: RebuildEvent[] = []         // 环形（近 50 条）重建时间线
@@ -125,6 +125,7 @@ export async function startAppDevServer(opts: AppDevServerOptions): Promise<AppD
   let lastBytes = 0
   let lastMs = 0
   let lastHost: HostState | null = null
+  let lastTree: unknown = null              // ★元素内省（决策 #674）：当前屏实例化节点树
   const sseClients = new Set<import('node:http').ServerResponse>()
 
   /** 向所有 SSE 客户端广播一条事件。 */
@@ -132,11 +133,11 @@ export async function startAppDevServer(opts: AppDevServerOptions): Promise<AppD
     const frame = `data: ${JSON.stringify(obj)}\n\n`
     for (const c of sseClients) { try { c.write(frame) } catch { sseClients.delete(c) } }
   }
-  /** 面板连接时的初始快照（版本/体积/耗时/时间线/宿主态 + 网络 + 控制台）。 */
+  /** 面板连接时的初始快照（版本/体积/耗时/时间线/宿主态 + 网络 + 控制台 + 元素树）。 */
   const snapshot = (): unknown => ({
     type: 'snapshot', version, bytes: lastBytes, lastMs,
     events: events.slice(-50), host: lastHost,
-    net: netLog.slice(-80), console: consoleLog.slice(-200),
+    net: netLog.slice(-80), console: consoleLog.slice(-200), tree: lastTree,
   })
   /** 记一条网络日志（dev server 请求）+ 广播。 */
   const recordNet = (e: NetEvent): void => {
@@ -235,13 +236,31 @@ export async function startAppDevServer(opts: AppDevServerOptions): Promise<AppD
       req.on('close', () => { clearInterval(ping); sseClients.delete(res) })
       return
     }
-    // ★宿主心跳（AppActivity 的 dev-watch 每次轮询顺带上报"当前屏"）⇒ 面板显示"设备在线 + 当前屏"
+    // ★宿主心跳（AppActivity 的 dev-watch 每次轮询顺带上报"当前屏" + 设备环境）⇒ 面板"设备在线 + 当前屏 + 设备环境"
     if (url === '/ping') {
       const q = new URLSearchParams(query ?? '')
-      lastHost = { screen: q.get('screen') ?? '', time: Date.now() }
+      let env: Record<string, unknown> | undefined
+      const envRaw = q.get('env')
+      if (envRaw) { try { env = JSON.parse(envRaw) as Record<string, unknown> } catch { /* 非法 ⇒ 不带 */ } }
+      lastHost = { screen: q.get('screen') ?? '', time: Date.now(), ...(env ? { env } : {}) }
       broadcast({ type: 'host', ...lastHost })
       res.writeHead(200, { 'content-type': 'text/plain', 'cache-control': 'no-store' })
       res.end('ok')
+      return
+    }
+    // ★元素内省（决策 #674）：宿主每渲染后 POST 当前屏实例化节点树（JSON body）⇒ 面板"元素"树。
+    if (url === '/tree') {
+      if (req.method === 'POST') {
+        let body = ''
+        req.on('data', (c) => { body += c; if (body.length > 2_000_000) req.destroy() })
+        req.on('end', () => {
+          try { lastTree = JSON.parse(body); broadcast({ type: 'tree', tree: lastTree }) } catch { /* 非法 JSON ⇒ 忽略 */ }
+          res.writeHead(200, { 'content-type': 'text/plain', 'cache-control': 'no-store' }); res.end('ok')
+        })
+        return
+      }
+      res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' })
+      res.end(JSON.stringify(lastTree ?? { nodes: [] }))
       return
     }
     // ★控制台日志（决策 #673）：宿主（模板 AppActivity）把 JS console.* 与关键 dev 事件转发到此 ⇒ 面板 Console。

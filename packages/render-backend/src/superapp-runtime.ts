@@ -66,6 +66,8 @@ export interface SuperappRuntime {
   dispatchGesture(type: string, chain: readonly number[]): { handled: boolean; fired: number[] }
   /** 当前屏名 */
   current(): string
+  /** ★DevTools 元素内省（决策 #674）：当前屏**已实例化节点**（Template 实例化产物：id/parentId/tag/style/text）——供面板"元素"树。 */
+  currentContent(): { viewport?: { width: number; height: number }; nodes: readonly unknown[] } | null
   /** ★跨调用状态导出（`{屏名: 数据}`）——一次性 VM 宿主持有、下次回灌 `seedData` */
   snapshot(): Record<string, Record<string, unknown>>
   /**
@@ -197,6 +199,11 @@ export function createSuperappRuntime(opts: SuperappRuntimeOptions): SuperappRun
     },
     dispatchGesture: dispatch,
     current: () => cur,
+    // ★DevTools 元素内省（决策 #674）：当前屏已实例化节点（避免暴露整个 rt/instance 给桥）。
+    currentContent: () => {
+      if (!cur) return null
+      try { return rt.instance(cur).content() as { viewport?: { width: number; height: number }; nodes: readonly unknown[] } } catch { return null }
+    },
     snapshot: () => rt.snapshot(),
     lastHostReply: () => lastHostReply,
   }
