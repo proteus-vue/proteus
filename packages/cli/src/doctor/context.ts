@@ -7,6 +7,7 @@ import path from 'node:path'
 import os from 'node:os'
 import net from 'node:net'
 import { spawnSync } from 'node:child_process'
+import { findIosSigningProfile } from '../host-package'
 import type { DoctorContext, DoctorEvidence } from './types'
 
 /** 默认单检查超时（方案 §3.5） */
@@ -91,6 +92,8 @@ export function buildDoctorContext(opts: BuildContextOptions): DoctorContext {
         return null
       }
     },
+    // ★复用 host-package 的唯一实现（零逻辑复制：doctor 的签名检查与打包 signApp 同判据）
+    findIosProfile: (bundleId: string) => findIosSigningProfile(bundleId),
     timeoutMs: DEFAULT_TIMEOUT_MS,
   }
   return { ...base, ...(opts.overrides ?? {}) }

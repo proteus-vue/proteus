@@ -99,6 +99,24 @@ export const TOOLCHAIN_CHECKS: DoctorCheck[] = [
     },
   },
   {
+    id: 'toolchain/ios-signing',
+    group: 'toolchain',
+    title: 'iOS 签名（项目 bundleId）',
+    level: 'error',
+    appliesTo: (ctx) => has(ctx, 'ios'),
+    run(ctx) {
+      // ★读**项目实际**的 iOS bundleId（与打包同源）——config 正则抓取（project/appid 同款手法）
+      const raw = ctx.readFile('proteus.config.ts') ?? ''
+      const m = raw.match(/ios\s*:\s*\{[^}]*bundleId\s*:\s*['"]([^'"]+)['"]/) ?? raw.match(/bundleId\s*:\s*['"]([^'"]+)['"]/)
+      if (!m) return skip('toolchain/ios-signing', 'iOS 签名（项目 bundleId）', '未在 proteus.config 读到 ios.bundleId')
+      const bundleId = m[1]
+      const profile = ctx.findIosProfile(bundleId)
+      return profile
+        ? ok('toolchain/ios-signing', 'iOS 签名（项目 bundleId）', `${bundleId} ← ${path.basename(profile)}`)
+        : fail({ checkId: 'toolchain/ios-signing', level: 'error', code: 'PT-BE-003', title: `iOS 签名不可用（无覆盖 ${bundleId} 的描述文件）`, expected: `本机 provisioning profile 覆盖 ${bundleId}`, actual: '无匹配 profile', fix: { command: 'bash hosts/ios/signing.sh use <账号|SHA-1前缀>', description: '上档签名（Apple 侧为该 App ID 建档）' }, docs: 'hosts/ios/README.md', evidence: [{ command: `ls "${path.join(process.env.HOME ?? '', 'Library/Developer/Xcode/UserData/Provisioning Profiles')}"`, note: `无覆盖 ${bundleId} 的 profile` }] })
+    },
+  },
+  {
     id: 'toolchain/harmony-deveco',
     group: 'toolchain',
     title: 'DevEco Studio',

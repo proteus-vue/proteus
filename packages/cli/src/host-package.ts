@@ -381,21 +381,38 @@ export function packageIosHost(opts: PackageIosOptions): PackageIosResult {
   return { ok: true, hostDir, app: appDir, screenContentCopied, log }
 }
 
-/** 用本机 provisioning profile 签名 .app（entitlements 从 profile 原样提取——同 run-selfdraw.sh） */
-function signApp(appDir: string, bundleId: string, log: string[]): { ok: boolean; diagnostics?: ProteusDiagnostic[] } {
-  const profileDir = path.join(os.homedir(), 'Library', 'Developer', 'Xcode', 'UserData', 'Provisioning Profiles')
-  let profile = ''
+/**
+ * ★本机描述文件目录（iOS 签名；与 run-selfdraw.sh / signApp 同源）。
+ */
+export function iosProfileDir(): string {
+  return path.join(os.homedir(), 'Library', 'Developer', 'Xcode', 'UserData', 'Provisioning Profiles')
+}
+
+/**
+ * ★查找覆盖某 bundleId 的本机 provisioning profile（**唯一实现**——signApp 与 doctor 共用，零逻辑复制）。
+ * @returns 命中的 profile 路径，或 null
+ */
+export function findIosSigningProfile(bundleId: string): string | null {
+  const dir = iosProfileDir()
   try {
-    for (const f of fs.readdirSync(profileDir)) {
+    for (const f of fs.readdirSync(dir)) {
       if (!f.endsWith('.mobileprovision')) continue
-      const pf = path.join(profileDir, f)
+      const pf = path.join(dir, f)
       try {
         const plist = run('security', ['cms', '-D', '-i', pf], { encoding: 'utf-8', maxBuffer: 8 * 1024 * 1024 })
         const m = plist.match(/<key>application-identifier<\/key>\s*<string>([^<]+)<\/string>/)
-        if (m && m[1].endsWith(`.${bundleId}`)) { profile = pf; break }
+        if (m && m[1].endsWith(`.${bundleId}`)) return pf
       } catch { /* 跳过无效 profile */ }
     }
   } catch { /* 无 profile 目录 */ }
+  return null
+}
+
+/** 用本机 provisioning profile 签名 .app（entitlements 从 profile 原样提取——同 run-selfdraw.sh） */
+function signApp(appDir: string, bundleId: string, log: string[]): { ok: boolean; diagnostics?: ProteusDiagnostic[] } {
+  const profileDir = iosProfileDir()
+  // ★唯一实现复用（零逻辑复制）：findIosSigningProfile 与 doctor 的签名检查共用同一匹配逻辑
+  const profile = findIosSigningProfile(bundleId) ?? ''
   if (!profile) {
     log.push(`✗ 无匹配描述文件（bundleId=${bundleId}）`)
     // ★L3（确定原因）：本机描述文件列表里没有覆盖该 bundleId 的 profile ⇒ 可行动

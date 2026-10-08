@@ -181,6 +181,36 @@ describe('★#686 doctor · 退出码矩阵（ok 语义）', () => {
   })
 })
 
+describe('★#686 doctor · iOS 签名检查（读项目 bundleId——doctor 与打包同判据）', () => {
+  it('★bundleId 无匹配 profile ⇒ error + PT-BE-003（用户实测的打包失败能被提前诊断）', async () => {
+    const ctx = fakeCtx({
+      targets: ['ios'],
+      findIosProfile: () => null,
+    })
+    ;(ctx as unknown as { _file: (p: string, c: string) => void })._file('proteus.config.ts', "export default { targets: { ios: { bundleId: 'cn.proteus.cssconformance' } } }")
+    ;(ctx as unknown as { _add: (p: string) => void })._add('packages/layout-core-rust/Cargo.toml')
+    const rep = await runDoctor({ root: '/proj', targets: ['ios'], cliVersion: '0.0.0', contextOverrides: ctx })
+    const sign = rep.groups.flatMap((g) => g.findings).find((f) => f.checkId === 'toolchain/ios-signing')
+    expect(sign?.level).toBe('error')
+    expect(sign?.diagCode).toBe('PT-BE-003')
+    // hosts/ios 投影必须把它算进去（"要打包 ios 还差签名"——用户诉求的核心）
+    const hostsIos = rep.groups.flatMap((g) => g.findings).find((f) => f.checkId === 'hosts/ios')
+    expect(hostsIos?.level).toBe('error')
+    expect(hostsIos?.actual).toContain('ios-signing')
+  })
+  it('bundleId 有匹配 profile ⇒ ok', async () => {
+    const ctx = fakeCtx({
+      targets: ['ios'],
+      findIosProfile: () => '/Users/x/Library/Developer/Xcode/UserData/Provisioning Profiles/p.mobileprovision',
+    })
+    ;(ctx as unknown as { _file: (p: string, c: string) => void })._file('proteus.config.ts', "export default { targets: { ios: { bundleId: 'cn.proteus.cssconformance' } } }")
+    ;(ctx as unknown as { _add: (p: string) => void })._add('packages/layout-core-rust/Cargo.toml')
+    const rep = await runDoctor({ root: '/proj', targets: ['ios'], cliVersion: '0.0.0', contextOverrides: ctx })
+    const sign = rep.groups.flatMap((g) => g.findings).find((f) => f.checkId === 'toolchain/ios-signing')
+    expect(sign?.level).toBe('ok')
+  })
+})
+
 describe('★#686 doctor · DIAG_CODES 阶段 E 扩展', () => {
   it('PT-E* 码全部以 E 阶段登记（makeDiag 不 throw）', () => {
     const eCodes = Object.keys(DIAG_CODES).filter((c) => c.startsWith('PT-E'))
