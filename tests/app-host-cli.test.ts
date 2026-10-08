@@ -12,7 +12,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { appHostDir, appBundleFile, APP_PACKAGE_NAME, isAppPlatform } from '../packages/cli/src/targets'
 import { buildAppBundle } from '../packages/cli/src/app-bundle'
-import { startAppDevServer } from '../packages/cli/src/app-dev-server'
+import { startAppDevServer, resolveWatchRoots } from '../packages/cli/src/app-dev-server'
 import { resolveAppRoutes } from '../packages/cli/src/app-routes'
 
 const ROOT = path.resolve(__dirname, '..')
@@ -62,6 +62,38 @@ describe('★完整宿主 · 随包发布（决策 #666 彻底打通：纯 npm �
     const aar = path.join(ROOT, 'packages/cli/templates-host/prebuilt/android/proteus-runtime.aar')
     expect(fs.existsSync(aar), '随包 runtime AAR 在场').toBe(true)
     expect(fs.readFileSync(aar).subarray(0, 2).toString('latin1'), 'AAR 是 ZIP 容器').toBe('PK')
+  })
+})
+
+describe('★完整宿主 · dev 热刷监听根（决策 #667：按布局/配置，非硬编码根目录名）', () => {
+  // ★用户实测：create-proteus 模板把页面放 `src/` 下，而旧 watchTargets 硬编码根级
+  //   pages/router/App.vue ⇒ 候选全不存在 ⇒ **监听列表为空** ⇒ 热刷静默失效。
+  const root = path.join(TMP, 'watch-proj')
+  it('模板形态（src/ 布局）⇒ 监听到 src/', async () => {
+    const d = path.join(root, 'tpl')
+    fs.mkdirSync(path.join(d, 'src', 'pages'), { recursive: true })
+    fs.writeFileSync(path.join(d, 'src', 'pages', 'index.vue'), '<template><view/></template>')
+    fs.writeFileSync(path.join(d, 'proteus.config.ts'), `export default { pagesDir: 'src/pages', router: { routesOutput: 'src/router/auto-routes.ts' } }`)
+    const roots = await resolveWatchRoots(d)
+    expect(roots.map((r) => path.relative(d, r))).toContain('src')
+    expect(roots.length, '模板⇒至少监听 src').toBeGreaterThan(0)
+  })
+  it('根形态（pages/ 布局）⇒ 监听到 pages/ + router/（且不含整棵根）', async () => {
+    const d = path.join(root, 'flat')
+    fs.mkdirSync(path.join(d, 'pages'), { recursive: true })
+    fs.mkdirSync(path.join(d, 'router'), { recursive: true })
+    fs.writeFileSync(path.join(d, 'pages', 'index.vue'), 'x')
+    fs.writeFileSync(path.join(d, 'router', 'auto-routes.ts'), 'export const routes=[]')
+    fs.writeFileSync(path.join(d, 'proteus.config.ts'), `export default { pagesDir: 'pages', router: { routesOutput: 'router/auto-routes.ts' } }`)
+    const roots = await resolveWatchRoots(d).then((rs) => rs.map((r) => path.relative(d, r)))
+    expect(roots).toContain('pages')
+    expect(roots).toContain('router')
+    expect(roots, '不该监听整个项目根（否则含 dist/node_modules）').not.toContain('')
+  })
+  it('空工程 ⇒ 返回空（调用方给告警，不静默）', async () => {
+    const d = path.join(root, 'empty')
+    fs.mkdirSync(d, { recursive: true })
+    expect(await resolveWatchRoots(d)).toEqual([])
   })
 })
 

@@ -21,6 +21,7 @@ import http from 'node:http'
 import os from 'node:os'
 import { buildAppBundle } from './app-bundle'
 import { appBundleFile, type AppPlatform } from './targets'
+import { resolveAppRoutes } from './app-routes'
 
 export interface AppDevServerOptions {
   projectRoot: string
@@ -54,10 +55,46 @@ export function lanAddress(): string {
   return '127.0.0.1'
 }
 
-/** 需要监听的项目源码目录/文件（页面/路由/样式等——改这些影响 bundle 内容） */
-function watchTargets(projectRoot: string): string[] {
-  const cands = ['pages', 'router', 'styles', 'components', 'App.vue', 'proteus.config.ts', 'app.config.ts', 'app-shell.ts']
-  return cands.map((c) => path.join(projectRoot, c)).filter((p) => fs.existsSync(p))
+/**
+ * 计算需要监听的项目源码根（**按项目布局/配置**，不是硬编码根目录名）。
+ *
+ * ★★★为什么（决策 #667 · 用户实测「dev 热刷链路」）：此前硬编码 `pages`/`router`/`App.vue` 于**项目根**——
+ *   而 create-proteus 模板把它们放在 **`src/`** 下（`src/pages`、`src/router`、`src/App.vue`）⇒
+ *   候选全不存在 ⇒ **监听列表为空** ⇒ dev server 起来了但**永不重建**（热刷静默失效）。
+ *   主仓工程（css-conformance/superapp）恰好是根形态 ⇒ 框架内测全绿、真用户断（同 #664 D1 的
+ *   「靠主仓布局巧合满足才隐身」）。
+ *   修法：honor 配置（`pagesDir`/`router.routesOutput`/`globalStyle`）**并**兜底整棵 `src/`（模板形态）。
+ *   返回值为「监听根」（目录递归 / 文件单点）；祖先已在集合时跳过后代（避免重复监听）。
+ */
+export async function resolveWatchRoots(projectRoot: string): Promise<string[]> {
+  const cands: string[] = []
+  const push = (p: string): void => { if (p && fs.existsSync(p)) cands.push(p) }
+  // ① 模板形态：整棵 `src/`（src/pages、src/router、src/App.vue、src/styles 全在内）
+  push(path.join(projectRoot, 'src'))
+  // ② 配置驱动（根形态工程：pages/、router/、styles/）——honor 配置（同 #664 D1 的单一口径）
+  let config: { pagesDir?: string; targets?: { mp?: { globalStyle?: string } } } | undefined
+  let routesDir: string | undefined
+  try {
+    const r = await resolveAppRoutes(projectRoot)
+    config = r.config as typeof config
+    routesDir = path.dirname(r.file)
+  } catch { /* 无配置/加载失败 ⇒ 仅靠 ① + ③ */ }
+  if (config?.pagesDir) push(path.resolve(projectRoot, config.pagesDir))
+  if (routesDir) push(routesDir)
+  const gs = config?.targets?.mp?.globalStyle
+  if (gs) push(path.dirname(path.resolve(projectRoot, gs)))
+  // ③ 根级常见文件（布局壳/应用配置/入口——改它们同样影响 bundle）
+  for (const f of ['App.vue', 'app.vue', 'app.config.ts', 'app-shell.ts', 'proteus.config.ts']) {
+    push(path.join(projectRoot, f))
+  }
+  // ④ 去重：祖先（目录）已在集合 ⇒ 跳过其后代（避免重复监听/双触发）
+  const uniq = [...new Set(cands)].sort((a, b) => a.length - b.length)
+  const roots: string[] = []
+  for (const c of uniq) {
+    if (roots.some((r) => c === r || c.startsWith(r + path.sep))) continue
+    roots.push(c)
+  }
+  return roots
 }
 
 /**
@@ -129,7 +166,13 @@ export async function startAppDevServer(opts: AppDevServerOptions): Promise<AppD
   // watch（防抖 250ms——一次保存常触发多个 fs 事件）
   let debounce: NodeJS.Timeout | null = null
   const watchers: fs.FSWatcher[] = []
-  for (const t of watchTargets(projectRoot)) {
+  const watchRoots = await resolveWatchRoots(projectRoot)
+  if (watchRoots.length === 0) {
+    console.warn('[proteus-dev] ⚠ 未找到可监听的项目源码（pagesDir/router/App.vue/src/）——热刷不会触发；检查工程布局')
+  } else {
+    console.log(`[proteus-dev] watch ${watchRoots.length} 处：${watchRoots.map((p) => path.relative(projectRoot, p) || '.').join(', ')}`)
+  }
+  for (const t of watchRoots) {
     try {
       const w = fs.watch(t, { recursive: fs.statSync(t).isDirectory() }, (_evt, fname) => {
         if (fname && /\.(vue|ts|css|scss|json)$/.test(String(fname)) === false) return
