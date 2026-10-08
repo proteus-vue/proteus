@@ -10,20 +10,37 @@
 # 前置：① node hosts/android/bridge/build-batch.mjs（含 bundle-superapp）
 #      ② bash hosts/android/build-and-run.sh --no-install（含 assets/app-screen-content.json）
 #      ③ 设备已连接
-# 用法：bash hosts/android/run-superapp-launcher.sh
+# 用法：bash hosts/android/run-superapp-launcher.sh            # 默认应用（Proteus LayoutCore）
+#       bash hosts/android/run-superapp-launcher.sh --css      # ★CSS 验收独立应用（dev.proteus.cssconf）
+#
+# ★★★`--css`（2026-10-08 用户指出「安卓你总是放错包」）：CSS 验收有**独立桌面应用**
+#   （`dev.proteus.cssconf`，构建入口 `build-and-run.sh --css`）——本脚本此前**硬编码** layoutcore 包
+#   ⇒ 按 PLAYBOOK 跑 CSS 截图时**永远装进 Proteus LayoutCore**（用户看到的就是"放错包"）。
+#   ⇒ 加 `--css` 对齐 build-and-run.sh 的同名旗标（包名/APK 名/Activity 三处一起换）。
+#   ★Activity 必须用 **FQN**（包名换后相对名 `.SuperappActivity` 会解析到新包下不存在——
+#     与 build-and-run.sh 的 cssconf 分支同款注释）。
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 SDK="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
 ADB="$SDK/platform-tools/adb"
-PKG="dev.proteus.layoutcore"
-ACTIVITY="$PKG/.SuperappActivity"
-APK="$HERE/build/proteus-layoutcore.apk"
+
+CSSCONF=0
+for arg in "$@"; do [ "$arg" = "--css" ] && CSSCONF=1; done
+if [ "$CSSCONF" = "1" ]; then
+  PKG="dev.proteus.cssconf"
+  ACTIVITY="$PKG/dev.proteus.layoutcore.SuperappActivity"   # ★FQN（见文件头）
+  APK="$HERE/build/proteus-cssconf.apk"
+else
+  PKG="dev.proteus.layoutcore"
+  ACTIVITY="$PKG/.SuperappActivity"
+  APK="$HERE/build/proteus-layoutcore.apk"
+fi
 REPORT="/sdcard/Android/data/$PKG/files/superapp-launcher.json"
 
 [ -x "$ADB" ] || { echo "✗ 缺 adb（${ADB}）"; exit 2; }
-[ -f "$APK" ] || { echo "✗ 缺 APK——先跑：bash hosts/android/build-and-run.sh --no-install"; exit 2; }
+[ -f "$APK" ] || { echo "✗ 缺 APK（${APK}）——先跑：bash hosts/android/build-and-run.sh --no-install$([ "$CSSCONF" = "1" ] && echo " --css")"; exit 2; }
 "$ADB" shell true >/dev/null 2>&1 || { echo "✗ 无设备（adb devices）"; exit 2; }
 
 WAIT_SH="$ROOT/.agents/skills/ai-efficiency-rules/scripts/wait_for.sh"

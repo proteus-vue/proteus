@@ -5,9 +5,13 @@
    现有 position.vue 假设"装进视口"，无法体现。本页刻意做**高于视口**的内容：
      · case-fixed  ：`position:fixed`（视口锚定）——滚动时**屏幕位置不变**（右上角徽标）。
      · case-sticky ：`position:sticky; top:0`——滚动到阈值后**吸附顶部**；未到阈值时随流。
-   【判据（Web 为基准）】页顶截图 vs **滚动后截图** 逐端比对：
+  【判据（Web 为基准）】页顶截图 vs **滚动后截图** 逐端比对：
      fixed 徽标两图同屏幕位置（钉住）；sticky 条滚动后吸在 top=0。
-   【★诚实边界】sticky 在 MP/Skyline 引擎锁死（官方属性表无 sticky）；fixed 全端支持。
+  【★★内容必须**远高于视口**（2026-10-08 用户指出的 demo 缺陷）】吸顶的关键语义是
+    「吸附**之后仍能继续滚动**」——若内容只比视口高一点点（初版 15 行 ≈ 1005dp vs 视口 869dp，
+    可滚范围仅 136dp），吸顶后马上到底 ⇒ 看起来像"到头了"、演示不出吸附持续生效。
+    ⇒ 现为 40 行（≈2000dp+，可滚范围 ≥1 屏）：吸附后继续滚一整屏，sticky 恒在 top=0。
+  【★诚实边界】sticky 在 MP/Skyline 引擎锁死（官方属性表无 sticky）；fixed 全端支持。
 -->
 <template>
   <view class="cc-page">
@@ -38,6 +42,31 @@
       <view class="row"><text class="row-t">行 13</text></view>
       <view class="row"><text class="row-t">行 14</text></view>
       <view class="row"><text class="row-t">行 15</text></view>
+      <view class="row"><text class="row-t">行 16</text></view>
+      <view class="row"><text class="row-t">行 17</text></view>
+      <view class="row"><text class="row-t">行 18</text></view>
+      <view class="row"><text class="row-t">行 19</text></view>
+      <view class="row"><text class="row-t">行 20</text></view>
+      <view class="row"><text class="row-t">行 21</text></view>
+      <view class="row"><text class="row-t">行 22</text></view>
+      <view class="row"><text class="row-t">行 23</text></view>
+      <view class="row"><text class="row-t">行 24</text></view>
+      <view class="row"><text class="row-t">行 25</text></view>
+      <view class="row"><text class="row-t">行 26</text></view>
+      <view class="row"><text class="row-t">行 27</text></view>
+      <view class="row"><text class="row-t">行 28</text></view>
+      <view class="row"><text class="row-t">行 29</text></view>
+      <view class="row"><text class="row-t">行 30</text></view>
+      <view class="row"><text class="row-t">行 31</text></view>
+      <view class="row"><text class="row-t">行 32</text></view>
+      <view class="row"><text class="row-t">行 33</text></view>
+      <view class="row"><text class="row-t">行 34</text></view>
+      <view class="row"><text class="row-t">行 35</text></view>
+      <view class="row"><text class="row-t">行 36</text></view>
+      <view class="row"><text class="row-t">行 37</text></view>
+      <view class="row"><text class="row-t">行 38</text></view>
+      <view class="row"><text class="row-t">行 39</text></view>
+      <view class="row"><text class="row-t">行 40 · 页面底部</text></view>
     </view>
   </view>
 </template>

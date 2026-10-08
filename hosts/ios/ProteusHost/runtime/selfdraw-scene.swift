@@ -931,11 +931,18 @@ final class SelfDrawView: UIView {
         //   诚实边界：frame 用内核给的**绝对 rect**（= 视口坐标系下的内容坐标，offset=0 即屏幕坐标）；
         //   命中测试仍按内核内容坐标映射（fixed 元素滚动后 tap 映射会偏 contentOffset——本轮具名，见决策 #652）。
         for item in flat where (item.style["position"] as? String) == "fixed" {
-            guard let layer = layersById[item.id], let abs = absOriginByNodeId[item.id] else { continue }
+            guard let layer = layersById[item.id], let abs = absOriginByNodeId[item.id] else {
+                // ★批 A② 探针（2026-10-08）：guard 失败 ⇒ 该 fixed 层**不会被重挂**（诊断用；不静默）
+                NSLog("[proteus] FIXED_SKIP id=%d hasLayer=%d hasAbs=%d", item.id,
+                      layersById[item.id] != nil ? 1 : 0, absOriginByNodeId[item.id] != nil ? 1 : 0)
+                continue
+            }
             layer.removeFromSuperlayer()
             layer.frame = CGRect(origin: abs, size: item.rect.size)
             layer.zPosition = 2000
             self.layer.addSublayer(layer)
+            NSLog("[proteus] FIXED_RAISED id=%d abs=(%.1f,%.1f) size=(%.1f,%.1f)",
+                  item.id, abs.x, abs.y, item.rect.size.width, item.rect.size.height)
         }
         // ★批次 39：**静态变换**（编译期 CSS transform）——建层后应用（此时 layer.bounds 已定）。
         //   位移分 px（直接用）与**盒比例**（txPct/tyPct × 盒尺寸：translate(-50%,-50%) 居中刚需）；
@@ -2199,7 +2206,18 @@ final class SelfDrawView: UIView {
     private(set) var stickyNodes: [Int: (baseY: CGFloat, top: CGFloat)] = [:]
     func setStickyTops(_ tops: [Int: CGFloat]) {
         stickyNodes.removeAll(keepingCapacity: true)
-        for (id, top) in tops { if let lyr = layersById[id] { stickyNodes[id] = (baseY: lyr.frame.origin.y, top: top) } }
+        for (id, top) in tops {
+            guard let lyr = layersById[id] else { continue }
+            stickyNodes[id] = (baseY: lyr.frame.origin.y, top: top)
+            // ★★★批 A③ 修（2026-10-08 · 用户实测"吸顶后被内容盖住"）：**sticky 相位 2 绘制**——
+            //   CSS 2.1 附录 E：`position:sticky` 是 **positioned 元素**，绘制在**在流内容之后**（浏览器如此）。
+            //   本端此前按建层次序 addSublayer ⇒ sticky 声明在内容前 ⇒ 吸附后被后画的内容层盖住
+            //   （与 Android 同缺陷：滚动 400px 可见、1500px 后整条消失）。
+            //   ⇒ 用 CALayer `zPosition` 抬到同父层序最上（只改**绘制序**、不动 frame/父子链——
+            //     与 fixed 的"重挂到视图层 + zPosition=2000"同一手段族；但 sticky **留在原父内**，
+            //     因为 sticky 属于 containing block 的层叠上下文，不该逃出父容器）。
+            lyr.zPosition = 1500
+        }
     }
 
     /// 视口外的待更新层（id → 目标绝对 rect）——滚入视野前必须刷上

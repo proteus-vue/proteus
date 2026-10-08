@@ -51,7 +51,9 @@ pnpm run css:verify <feature-id>
 # ④ 四端真机截图（各自全链；App 端用 PROTEUS_APP_PROJECT=css-conformance 注入）
 node scripts/css-conformance.mjs shot-mp
 export PROTEUS_APP_PROJECT=css-conformance
-node hosts/android/bridge/build-batch.mjs && bash hosts/android/build-and-run.sh --no-install && bash hosts/android/run-superapp-launcher.sh
+# ★★Android 必须带 `--css`（两个脚本都要）——CSS 验收是**独立桌面应用** `dev.proteus.cssconf`；
+#   漏 `--css` ⇒ 装进 **Proteus LayoutCore**（用户 2026-10-08 当场指出「安卓你总是放错包」）。
+node hosts/android/bridge/build-batch.mjs && bash hosts/android/build-and-run.sh --no-install --css && bash hosts/android/run-superapp-launcher.sh --css
 node hosts/ios/bridge/build-app-stack.mjs && bash hosts/ios/run-selfdraw.sh --superapp --drive
 bash hosts/harmony/build-host-app.sh && bash hosts/harmony/run-superapp.sh
 # 归位：cp hosts/<端>/results/superapp*.png css-conformance/results/<端>/<page>.png

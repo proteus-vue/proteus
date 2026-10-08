@@ -398,6 +398,12 @@ if [ "$CSSCONF" = "1" ]; then
   # ★★★（用户：「安卓没有固定的桌面软件打开 CSS 验收」）：**CSS 验收独立应用**——同 sed 生成法，
   #   只换包名 + 标签；★launcher **仍是 .SuperappActivity**（它就是这个应用的入口，区别于 lights/flip 换 demo Activity）
   #   ⇒ 用 **FQN**（包名换了，相对名 .SuperappActivity 会解析到 dev.proteus.cssconf.SuperappActivity ⇒ 不存在）。
+  # ★★★`--css` **自带项目推断**（2026-10-08 · 用户指出「安卓你总是放错包」）：本应用 = CSS 验收，
+  #   默认应用工程就该是 `css-conformance`——此前必须**同时**记得 `export PROTEUS_APP_PROJECT=css-conformance`，
+  #   漏了 ⇒ 包名是 cssconf、内容却是 superapp/layoutcore（静默错配）。与鸿蒙 build-host-app.sh --css 同法
+  #   （显式 PROTEUS_APP_PROJECT 仍最高优先）。
+  export PROTEUS_APP_PROJECT="${PROTEUS_APP_PROJECT:-css-conformance}"
+  echo "    CSS 验收应用：应用工程=${PROTEUS_APP_PROJECT}（--css 自带推断；PROTEUS_APP_PROJECT 可覆盖）"
   MANIFEST="$BUILD/AndroidManifest.cssconf.xml"
   sed -e 's/package="dev.proteus.layoutcore"/package="dev.proteus.cssconf"/'   -e 's/android:label="Proteus LayoutCore"/android:label="CSS 验收"/'   -e 's/android:name="\.SuperappActivity"/android:name="dev.proteus.layoutcore.SuperappActivity"/'   "$APP/src/main/AndroidManifest.xml" > "$MANIFEST"
   grep -q 'dev.proteus.cssconf' "$MANIFEST" || { echo "✗ css 清单生成失败（包名没换）"; exit 3; }
