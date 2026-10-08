@@ -5,6 +5,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import net from 'node:net'
+import os from 'node:os'
 import { fileURLToPath } from 'node:url'
 // ★B5 补丁脚本（src 与 dist 同指向仓库根 scripts/）——★2026-09-08 wechatide 标准后 automator 补丁不再需要，保留路径备用
 const AUTOMATOR_PATCH_SCRIPT = fileURLToPath(new URL('../../../scripts/patch-automator.mjs', import.meta.url))
@@ -12,9 +13,12 @@ import { parseBuildArgs, parseExplainArgs, parseRulesArgs, parseRouterCheckArgs,
 import { buildDir, planTargetedBuild, runTargetedBuildProgrammatic } from './build'
 import { parseConformanceArgs, runConformance, runConformanceDemo } from './conformance'
 import { parseHostArgs, runHostPush } from './host'
-import { parseCreateHostArgs, runCreateHost } from './host-scaffold'
+import { parseCreateHostArgs, runCreateHost, createHost, deriveBundleName } from './host-scaffold'
 import { packageHarmonyHost, packageIosHost, packageAndroidHost } from './host-package'
-import { applyNativeConfigFromProject } from './native-config'
+import { applyNativeConfigFromProject, resolveNativeConfigFromProject } from './native-config'
+import { appHostDir, appBundleFile, APP_PACKAGE_NAME, isAppPlatform, type AppPlatform } from './targets'
+import { buildAppBundle } from './app-bundle'
+import { startAppDevServer } from './app-dev-server'
 import { scanRepoDirectory, formatRepoReport } from './repo-conformance'
 import { explainTarget } from './explain'
 import { listRules } from './rules'
@@ -69,27 +73,51 @@ async function main(): Promise<void> {
           if (!hasLegacyViteConfig(process.cwd()) || !isViteT) {
             const r = await runTargetedBuildProgrammatic(args.target)
             if (!r.ok) process.exitCode = 1
-            // ★hosts 第二/三刀：--package → 调平台工具链把宿主工程打成安装包（harmony→.hap / ios→.app）
+            // ★hosts 第二/三刀：--package → 调平台工具链把宿主工程打成安装包（harmony→.hap / ios→.app / android→.apk）
+            // ★★★完整宿主闭环（2026-10-08 · 用户「dist 里要有完整宿主项目 + 一条命令出包」）：
+            //   缺省 hostDir = `dist/app/<platform>/host`；不存在则**自动 scaffold**（create host：模板 + runtime
+            //   + 项目包名/版本/权限）；随后产**项目侧 bundle**（App 运行期内容源）并拷入宿主 → 打包 → 输出安装包。
             if (args.package && (args.target === 'harmony' || args.target === 'ios' || args.target === 'android' || args.target === 'all')) {
-              const hostDir = args.hostDir ?? process.env.PROTEUS_HOST_DIR
-              if (!hostDir) {
-                console.error('[proteus] --package 需要宿主工程目录：--host-dir <dir>（或 PROTEUS_HOST_DIR）')
-                process.exitCode = 1
-              } else {
-                // ★★★决策 #635：打包前把项目 `proteus.config` 的 `native` 段渲染进宿主原生文件
-                //   （包名/版本/SDK/方向/权限/图标）——"项目 → 构建链"的传递在此落地。
-                const platform = args.target === 'all' ? 'harmony' : args.target
-                const nrep = await applyNativeConfigFromProject(hostDir, platform, process.cwd())
+              const platform = (args.target === 'all' ? 'harmony' : args.target) as AppPlatform
+              const projectRoot = process.cwd()
+              const hostDir = path.resolve(args.hostDir ?? process.env.PROTEUS_HOST_DIR ?? appHostDir(projectRoot, platform))
+              const autoScaffold = !(args.hostDir ?? process.env.PROTEUS_HOST_DIR)
+              try {
+                // ① 自动 scaffold（仅缺省落点 + 目录不存在时；已存在则**只刷新内容**，保留用户改动）
+                if (autoScaffold && !fs.existsSync(hostDir)) {
+                  const native = await resolveNativeConfigFromProject(projectRoot)
+                  const appName = native?.app.name ?? path.basename(projectRoot)
+                  const bundleName =
+                    platform === 'android'
+                      ? (native?.android.applicationId ?? 'dev.proteus.layoutcore')
+                      : platform === 'ios'
+                        ? (native?.ios.bundleId ?? deriveBundleName(appName))
+                        : (native?.harmony.bundleName ?? deriveBundleName(appName))
+                  console.log(`[proteus] 生成完整宿主工程 → ${path.relative(projectRoot, hostDir)}（包名 ${bundleName}）`)
+                  createHost({ platform, targetDir: hostDir, appName, bundleName, projectRoot })
+                  console.log('[proteus] ✓ 宿主工程已生成（模板 + runtime + 编译产物）')
+                }
+                // ② 项目侧运行期 bundle（App 壳内容源）→ dist/app/<platform>/bundle-superapp.js
+                console.log('[proteus] 构建项目侧 bundle（bundle-superapp.js）…')
+                const b = await buildAppBundle({ projectRoot, platform, outFile: appBundleFile(projectRoot, platform) })
+                console.log(`[proteus] ✓ bundle ${path.relative(projectRoot, b.outFile)}（${(b.bytes / 1024).toFixed(0)} KB · 编译 ${b.compiled} 页）`)
+                // ③ native 配置渲染进宿主原生文件（包名/版本/SDK/方向/权限）
+                const nrep = await applyNativeConfigFromProject(hostDir, platform, projectRoot)
                 for (const c of nrep.changes) console.log(`[proteus] native: ${c.file} ${c.field} → ${c.to}`)
-                for (const s of nrep.skipped) console.log(`[proteus] native(跳过): ${s}`)
                 if (!nrep.ok) console.error('[proteus] ⚠ native 配置应用失败（继续打包）')
-                const pk = args.target === 'ios'
-                  ? packageIosHost({ hostDir, projectRoot: process.cwd() })
-                  : args.target === 'android'
-                  ? packageAndroidHost({ hostDir, projectRoot: process.cwd() })
-                  : packageHarmonyHost({ hostDir, projectRoot: process.cwd(), platform: 'harmony' })
+                // ④ 打包
+                const outPkg = path.join(projectRoot, 'dist', 'app', platform, APP_PACKAGE_NAME[platform])
+                const pk =
+                  platform === 'ios'
+                    ? packageIosHost({ hostDir, projectRoot })
+                    : platform === 'android'
+                      ? packageAndroidHost({ hostDir, projectRoot, outApk: outPkg })
+                      : packageHarmonyHost({ hostDir, projectRoot, platform: 'harmony' })
                 for (const l of pk.log) console.log(`[proteus] ${l}`)
                 if (!pk.ok) process.exitCode = 1
+              } catch (e) {
+                console.error(`[proteus] --package 失败：${(e as Error).message}`)
+                process.exitCode = 1
               }
             }
           } else {
@@ -412,6 +440,14 @@ async function main(): Promise<void> {
     case 'dev': {
       const { target } = parseDevArgs(rest)
       try {
+        // ★★★App 端 dev（2026-10-08 · 用户「dev 模式实时刷新 App 宿主页面内容」）：
+        //   `proteus dev --target <android|ios|harmony>` = 完整宿主闭环的**开发形态**：
+        //     scaffold（缺则）→ 起 dev server（HTTP，局域网）→ 编 **debug** 宿主（bundle 走 dev server + 热刷）
+        //     → 装到设备 → 启动（注入 dev server 地址）→ watch 源码，改动即重建 bundle（宿主秒级刷新）。
+        if (isAppPlatform(target)) {
+          process.exitCode = await runAppDev(target)
+          break
+        }
         // ★#418 配置收敛：无 vite.config.ts（新形态）→ 程序化驱动（框架组装 vite 配置）；有 → 遗留 spawn
         if (!hasLegacyViteConfig(process.cwd())) {
           const close = await runDevProgrammatic({ target })
@@ -707,4 +743,80 @@ async function probePort(port: number, timeoutMs = 500): Promise<boolean> {
     if (busy) return true
   }
   return false
+}
+
+/**
+ * ★★★App 端 dev（2026-10-08 · 用户「dev 模式实时刷新 App 宿主页面内容」）。
+ *
+ * 流程：scaffold（缺则）→ 起 dev server → 编 **debug** 宿主（bundle 走 dev server + 热刷）→
+ *       装到设备（android adb）→ 启动（注入 dev server 地址）→ watch 持续（改动即重建）。
+ *
+ * ★诚实边界：本函数实现 **android** 的"装 + 起"（adb 通用）；ios/harmony 的装/起用设备侧工具
+ *   （devicectl / hdc），本批先给出 server + debug 宿主编译（产物落 dist），装/起留待 B3（如实打印下一步）。
+ */
+async function runAppDev(target: AppPlatform): Promise<number> {
+  const projectRoot = process.cwd()
+  const hostDir = path.resolve(appHostDir(projectRoot, target))
+
+  // ① scaffold（缺则）——与 `build --package` 同一实现
+  if (!fs.existsSync(hostDir)) {
+    const native = await resolveNativeConfigFromProject(projectRoot)
+    const appName = native?.app.name ?? path.basename(projectRoot)
+    const bundleName =
+      target === 'android'
+        ? (native?.android.applicationId ?? 'dev.proteus.layoutcore')
+        : target === 'ios'
+          ? (native?.ios.bundleId ?? deriveBundleName(appName))
+          : (native?.harmony.bundleName ?? deriveBundleName(appName))
+    console.log(`[proteus] 生成完整宿主工程 → ${path.relative(projectRoot, hostDir)}（包名 ${bundleName}）`)
+    createHost({ platform: target, targetDir: hostDir, appName, bundleName, projectRoot })
+  }
+
+  // ② dev server（含首建 bundle）
+  const server = await startAppDevServer({
+    projectRoot,
+    platform: target,
+    onRebuild: (i) => console.log(`[proteus-dev] ⟳ bundle v${i.version} 重建完成（${(i.bytes / 1024).toFixed(0)} KB · ${i.ms}ms · ${i.reason}）`),
+  })
+  console.log(`[proteus-dev] dev server: ${server.url}（宿主从它拉 bundle；改源码即刷新）`)
+
+  // ③ debug 宿主（bundle 走 dev server）→ 打包到 dist
+  const outPkg = path.join(projectRoot, 'dist', 'app', target, APP_PACKAGE_NAME[target])
+  await applyNativeConfigFromProject(hostDir, target, projectRoot)
+  const pk =
+    target === 'android'
+      ? packageAndroidHost({ hostDir, projectRoot, dev: true, devUrl: server.url, outApk: outPkg })
+      : target === 'ios'
+        ? packageIosHost({ hostDir, projectRoot })
+        : packageHarmonyHost({ hostDir, projectRoot, platform: 'harmony' })
+  for (const l of pk.log) console.log(`[proteus] ${l}`)
+  if (!pk.ok) { await server.close(); return 1 }
+
+  // ④ 装 + 起（android：adb；ios/harmony 本批给下一步指引）
+  const androidApk = target === 'android' && 'apk' in pk ? (pk as { apk: string | null }).apk : null
+  if (target === 'android' && androidApk) {
+    const adb = process.env.ADB ?? path.join(os.homedir(), 'Library', 'Android', 'sdk', 'platform-tools', 'adb')
+    const pkgName = (await resolveNativeConfigFromProject(projectRoot))?.android.applicationId ?? 'dev.proteus.layoutcore'
+    const { execFileSync } = await import('node:child_process')
+    try {
+      execFileSync(adb, ['install', '-r', '-t', '-g', androidApk], { encoding: 'utf-8', stdio: 'inherit' })
+      execFileSync(adb, ['shell', 'am', 'force-stop', pkgName], { encoding: 'utf-8' })
+      execFileSync(adb, ['shell', 'am', 'start', '-n', `${pkgName}/dev.proteus.layoutcore.AppActivity`, '--es', 'proteusDev', server.url], { encoding: 'utf-8' })
+      console.log(`[proteus-dev] ✓ 已安装并启动（dev server=${server.url}）——改源码保存即热刷`)
+      console.log('[proteus-dev] 若安装报 INSTALL_FAILED_USER_RESTRICTED（MIUI 等）：adb shell settings put global verifier_verify_adb_installs 0')
+    } catch (e) {
+      console.error(`[proteus-dev] ⚠ 装/起失败（dev server 仍在跑，可手动装）：${(e as Error).message.slice(0, 200)}`)
+    }
+  } else {
+    console.log(`[proteus-dev] ${target} 的「装 + 起」请用设备工具（ios: devicectl / harmony: hdc）；debug 包：${path.relative(projectRoot, outPkg)}`)
+    console.log(`[proteus-dev] 启动时注入 dev server 地址：${server.url}`)
+  }
+
+  // ⑤ 持续运行（Ctrl+C 退出）——watch 在 server 内部
+  const close = async () => { await server.close(); process.exit(0) }
+  process.on('SIGINT', () => void close())
+  process.on('SIGTERM', () => void close())
+  console.log('[proteus-dev] watch 中…（Ctrl+C 退出）')
+  await new Promise<void>(() => { /* 挂住——server 与 watch 在后台跑 */ })
+  return 0
 }

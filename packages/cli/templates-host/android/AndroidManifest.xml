@@ -18,7 +18,7 @@
         android:debuggable="true"
         android:allowBackup="false"
         android:hasCode="true">
-        <!-- 起始页名（编译产物 app-screen-content.json 的键；换项目改这里） -->
+        <!-- 起始页名（native.android.launchPage 注入点；运行期壳由 JS 注册表决定落地页，此为兜底/兼容） -->
         <meta-data android:name="ProteusHomePage" android:value="index" />
         <!-- ★activity 用 **FQN**（不是相对名 .AppActivity）：这样 manifest 的 `package`（applicationId）
              可与宿主类所在包解耦——`native.android.applicationId` 换包后仍能解析到

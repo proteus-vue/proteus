@@ -201,7 +201,11 @@ describe('createHost · android（第四刀样板）', () => {
     expect(fs.existsSync(path.join(r.targetDir, 'libs/proteus-runtime.aar'))).toBe(true)
     const app = fs.readFileSync(path.join(r.targetDir, 'src/dev/proteus/layoutcore/AppActivity.java'), 'utf-8')
     expect(app).toContain('VaporRenderHost')
-    expect(app).not.toMatch(/superapp|MainActivity|LightsHost|showcase|morpheus/i)
+    // ★壳不得依赖**具体装置**（其它项目的 demo Activity / 场景类）——但 `bundle-superapp.js` 是
+    //   **运行期协议名**（App 壳内容源，三端同款），**允许出现**（2026-10-08 形态升级：
+    //   最小壳 → 运行期壳，读 bundle 是运行期语义，不是装置依赖）。
+    expect(app).not.toMatch(/MainActivity|LightsHost|FlipDemo|InkDemo|showcase|morpheus/i)
+    expect(app, '运行期壳读 bundle-superapp.js（协议）').toContain('bundle-superapp.js')
   })
 
   it('编译产物拷入 assets', () => {

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- {{appName}} —— Proteus Android 宿主 · **dev 变体** Manifest（`proteus dev` 构建时选用）
+     ★与 release（AndroidManifest.xml）**唯一差别** = 多了 INTERNET 权限（dev server 走 HTTP 拉 bundle）。
+       两变体共用 activity/application 声明；`proteus dev` 用本文件，打包（release）用 release 文件。
+     ★变体隔离的机器判据：release APK 的 manifest **不得**含 android.permission.INTERNET。
+     （注：XML 注释内不得出现连续两个 ASCII 连字符——故此处不写命令字面量。） -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="{{bundleName}}"
+    android:versionCode="1"
+    android:versionName="0.1.0">
+
+    <uses-sdk
+        android:minSdkVersion="24"
+        android:targetSdkVersion="34" />
+
+    <!-- 仅 dev 变体：dev server 走局域网（测试机连本机 DevServer） -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 允许明文 HTTP（dev server 无 TLS）：仅 dev 变体 -->
+    <application
+        android:label="{{appName}}"
+        android:debuggable="true"
+        android:allowBackup="false"
+        android:usesCleartextTraffic="true"
+        android:hasCode="true">
+        <meta-data android:name="ProteusHomePage" android:value="index" />
+        <activity
+            android:name="dev.proteus.layoutcore.AppActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
+
