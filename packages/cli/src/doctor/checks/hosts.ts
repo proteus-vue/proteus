@@ -26,7 +26,7 @@ export function projectHosts(targets: string[], byId: Map<string, DoctorFinding>
     const relevant = ids.map((id) => byId.get(id)).filter((f): f is DoctorFinding => !!f && f.level !== 'skip')
     const bad = relevant.filter((f) => f.level === 'error' || f.level === 'warn')
     const level: DoctorLevel = bad.some((f) => f.level === 'error') ? 'error' : bad.length ? 'warn' : 'ok'
-    const title = `hosts/${end}`
+    const title = `endpoint/${end}`
     if (level === 'ok') {
       out.push({ checkId: title, level: 'ok', title: `${end} 就绪`, actual: `${relevant.length} 项前置通过`, evidence: [] })
     } else {
@@ -46,4 +46,3 @@ export function projectHosts(targets: string[], byId: Map<string, DoctorFinding>
   return out
 }
 
-export const HOSTS_GROUP: DoctorGroup = 'hosts'

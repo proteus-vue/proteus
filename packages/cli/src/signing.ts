@@ -172,9 +172,16 @@ export function resolveIosSigning(bundleId: string, now = Date.now()): IosSignin
   if (!match.length) {
     const expired = profiles.filter((p) => p.expiry && p.expiry.getTime() <= now && p.bundleId === bundleId)
     if (expired.length) warnings.push(`找到 ${expired.length} 个覆盖 ${bundleId} 的描述文件但**均已过期**`)
+    // ★决策 #690：描述文件由 **Apple** 签发——CLI 生成的 iOS 宿主是 **swiftc 直编（无 .xcodeproj）**，
+    //   所以"在 Xcode 打开你的工程"对 CLI 宿主**不适用**。给出**真能照做**的两条路径（都不依赖打包：
+    //   `proteus create host ios` 就能生成宿主，无需先打包）。
     nextSteps.push(
-      `在 Xcode 打开你的工程 → target → Signing & Capabilities → 勾选 “Automatically manage signing”，选好 Team，Xcode 会为该 bundleId 自动生成描述文件`,
-      `或把项目的 iOS bundleId（proteus.config 的 native.ios.bundleId，当前 ${bundleId}）改成某个**已有描述文件覆盖**的 id（用 proteus host signing ios --list 查）`,
+      `给该 bundleId（${bundleId}）建一个 Apple 开发描述文件（二选一）：`,
+      `  ① 用 Xcode（需登录 Apple ID）：File → New → Project → iOS App，Bundle Identifier 填 ${bundleId}，` +
+        `勾 “Automatically manage signing” 选好 Team —— Xcode 会自动为该 App ID 建描述文件（此工程仅为生成描述文件，可弃）`,
+      `  ② 或复用已有描述文件：proteus host signing ios --list 看本机哪个 bundleId 有描述文件，` +
+        `把项目的 proteus.config native.ios.bundleId 改成它`,
+      `生成后验证：proteus host signing ios --bundle=${bundleId}`,
     )
     return { ok: false, bundleId, warnings, nextSteps }
   }
@@ -183,7 +190,7 @@ export function resolveIosSigning(bundleId: string, now = Date.now()): IosSignin
   if (!embedded.length) {
     warnings.push('描述文件授权的证书**不在本机钥匙串**（在另一台机器签发？）')
     nextSteps.push(
-      '本机导入该证书的私钥（.p12：双击 → 钥匙串），或在 Xcode 用本机 Apple ID 重新生成描述文件（见上条）',
+      '本机导入该证书的私钥（.p12：双击 → 钥匙串），或用本机 Apple ID 在 Xcode 重新生成描述文件（见上条路径①）',
     )
     return { ok: false, bundleId, profile, warnings, nextSteps }
   }

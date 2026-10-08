@@ -7,7 +7,7 @@
 import type { ProteusDiagnostic } from '../diag'
 
 /** 体检组（8 组，SSOT 见 registry.ts 的 CHECKS） */
-export type DoctorGroup = 'env' | 'toolchain' | 'deps' | 'project' | 'hosts' | 'ports' | 'devices' | 'gates'
+export type DoctorGroup = 'env' | 'toolchain' | 'deps' | 'project' | 'endpoint' | 'ports' | 'devices' | 'gates'
 
 /** 单项结果级别：ok 通过 / warn 提示 / error 阻断 / skip 不适用（不计入分母、不阻断） */
 export type DoctorLevel = 'ok' | 'warn' | 'error' | 'skip'
@@ -119,7 +119,7 @@ export const GROUP_TITLES: Record<DoctorGroup, string> = {
   toolchain: '工具链',
   deps: '依赖',
   project: '工程',
-  hosts: '宿主',
+  endpoint: '端就绪',
   ports: '端口',
   devices: '设备',
   gates: '门禁',
