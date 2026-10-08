@@ -2098,3 +2098,11 @@
 **⑤ 诚实边界（未采到）**：iOS/鸿蒙**滚动锚定截图**——iOS 空跑起的是 superapp bundle（有"消息"页）而非 css-conformance（`--screen=position-scroll` 无处可去）；鸿蒙无滚动注入参数。⇒ fixed/sticky 的 iOS/鸿蒙**实现**已编译验证（swiftc / HAP），**仅缺滚动像素证据**。
 **⑥ 判据汇总**：iOS swiftc -typecheck 绿 + Android check:android-host-compile 绿 + 鸿蒙 build-host-app --css 绿 + Web 基准（页顶 vs 滚动后）正确。
 **⑦ 教训**：**装置也是"被测对象"**——iOS superapp 的滚动出口未接线这件事，直到做"滚动锚定证据"才暴露；`--screen` 注入在"跑的不是目标 bundle"时会静默导航失败（截到别的页）——采图前应先**核对 rendered_page 与预期一致**。
+657. **★★两台电脑 iOS 签名切换器（office/home 按主机名分档）**：
+**① 触发**：用户换到公司电脑后问「能做一个方便两个电脑设备来回切换场景的签名切换吗？办公室设备就是这个账户（lyl@shxuxi.cn）」。背景：同一块工作盘在两台 Mac 间来回插，而签名资产（钥匙串证书 / Xcode 描述文件 / Apple ID 登录态）是**机器本地**；此前脚本各自"自动猜"（`find-identity` 取第一张——本机实测是另一账号的证书；`ls -t` 取最新描述文件——可能属别的团队），换机即错且报错出现在编译+签名 5 分钟后。
+**② 判据 SSOT（本文件新立）**：`hosts/ios/lib/ios-signing.mjs` —— **描述文件授权（DeveloperCertificates 逐张 SHA-1） ∩ 钥匙串有效身份（find-identity -v）** 取交集选证书：同时规避「续签同名两张」（证件定胜负）与「多团队取第一张」（交集过滤）。档按**主机名**存 `hosts/ios/signing.local.json`（gitignored；`PROTEUS_IOS_HOST` 可覆盖）。
+**③ 接线**：`hosts/ios/signing.sh`（list/use/status/clear + resolve --shell + verify-pair）；`run-selfdraw.sh` 三处（bundle/描述文件/证书）+ 装机前 `verify-pair` 一致性闸；`provision.sh` 无参走档（bundle/team）；`measure-paint-hint.sh`（bundle）。优先级：`PROTEUS_BUNDLE_ID` 显式 > 本机档 > 原自动逻辑（无档零影响）。
+**④ 自测/门禁**：7 用例纯逻辑自测（`check:ios-signing-selftest`，接 verify + CI）；gates-sync / shell-i18n-vars / secret-scan / host-layering / safe-edit / no-blind-wait 全绿。
+**⑤ 真机验证（办公室机 · iPhone12）**：上档选中今早续签新证 3F19D4BA（旧同名 72B96437 被排除）→ provision 生成新描述文件 → 全链：构建 ✓ 签名 ✓（新证书）装机 ✓ → **启动被拦：新证书须设备端手动信任**（设置→通用→VPN与设备管理；iOS 强制、脚本代不了）。顺带清旧包腾出免费账号 3-app 名额。
+**⑥ 诚实边界**：设备端"信任证书"无法脚本化；`devicectl device info apps` 在 iOS 26 枚举恒空（但 uninstall 有效）。
+**⑦ 教训**：a) **机器本地资产用"主机名分档"存共享盘**——不依赖记忆、不污染仓库、换机自动落回；b) **判据要对着"能装机的组合"**（描述文件 ∩ 钥匙串），不是"看起来对的字段"；c) 续签同名多张证书由交集判据兜住。
