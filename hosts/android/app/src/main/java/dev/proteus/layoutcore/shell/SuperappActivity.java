@@ -141,6 +141,7 @@ public class SuperappActivity extends android.app.Activity {
         draw = new VaporRenderHost(this, contentHost);
         draw.setLengthScale(density);          // 逻辑单位 → 物理像素（唯一换算点，与 StressSfc 同）
         draw.enableContentScrollRange();       // 内容装不下才滚（与 Web 页面语义一致）
+        screenHost.setEnvResolver(draw::resolveEnvInSpec);   // ★屏切换通路的 env 解析（决策 #677）
 
         // ③ Tab 栏（原生 chrome——MP 由原生 tabBar 提供；先占位，boot 后填文案）
         tabBar = new android.widget.LinearLayout(this);

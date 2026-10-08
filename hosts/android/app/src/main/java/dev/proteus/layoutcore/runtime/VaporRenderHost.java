@@ -1302,8 +1302,11 @@ public final class VaporRenderHost {
         double v = (base != null ? base : fallback) * scale + off;
         return v;
     }
-    /** 字符串值若是 env token ⇒ 就地替换为 dp 数值（shape-agnostic：只碰 `env:` 前缀的字符串）。 */
-    private void resolveEnvInSpec(JSONObject spec) throws Exception {
+    /** 字符串值若是 env token ⇒ 就地替换为 dp 数值（shape-agnostic：只碰 `env:` 前缀的字符串）。
+     *  ★包可见（决策 #677）：`ScreenHost`（屏切换通路）**也必须**走同一解析——否则它把
+     *    `"minHeight":"env:--pf-vh"` 等字符串原样喂内核 ⇒ serde「expected f32」⇒ `create` 返 0
+     *    ⇒ 点卡片不切屏（真机实测，此前**完全静默**）。 */
+    void resolveEnvInSpec(JSONObject spec) throws Exception {
         java.util.Iterator<String> it = spec.keys();
         java.util.List<String> toSet = new java.util.ArrayList<>();
         while (it.hasNext()) {

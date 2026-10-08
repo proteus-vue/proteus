@@ -140,6 +140,8 @@ public final class AppActivity extends Activity {
         draw = new VaporRenderHost(this, contentHost);
         draw.setLengthScale(density);
         draw.enableContentScrollRange();
+        // ★屏切换通路的 env 解析器（决策 #677）：`ScreenHost.mount` 须把 `env:…` 解析成数值再喂内核。
+        screenHost.setEnvResolver(draw::resolveEnvInSpec);
 
         tabBar = new android.widget.LinearLayout(this);
         tabBar.setOrientation(android.widget.LinearLayout.HORIZONTAL);
@@ -430,6 +432,7 @@ public final class AppActivity extends Activity {
             QuickJsEngine.resetEngine();
             caps = new HostCapabilities(this);
             screenHost = new ScreenHost(root);
+            screenHost.setEnvResolver(draw::resolveEnvInSpec);   // ★重建 ScreenHost 后重注入（决策 #677）
             installDevConsole();   // reset 后重装（新上下文）——须在 eval bundle 之前
             QuickJsEngine.EvalResult load = QuickJsEngine.evalWithHost(bundle, buildRuntimeHost());
             if (!load.ok) { Log.w(TAG, "PROTEUS_DEV_RELOAD_EVAL_FAIL " + load.error); return; }
@@ -490,9 +493,25 @@ public final class AppActivity extends Activity {
                     }
                 } catch (Throwable ignored) { /* 引擎未就绪 ⇒ 下轮再试 */ }
                 pumpDevEvents();   // ★同频排空手势 trace（决策 #675）
+                syncDevScreen();   // ★同步"运行时当前屏"（决策 #677：导航走 runtime.mountScreen，不经 renderCurrent）
                 logPump.postDelayed(this, 400);
             }
         });
+    }
+
+    /** ★同步 DevTools 的"当前屏"（决策 #677）：导航（$nav → runtime.mountScreen）**不经 renderCurrent**，
+     *   故 `lastScreenName` 会停在旧屏 ⇒ 面板树/当前屏不更新。此处从**运行期真源**读当前屏，变了就刷树+心跳。
+     *   ★UI 线程（logPump）调用 ⇒ eval 安全。 */
+    private void syncDevScreen() {
+        if (!ProteusBuildConfig.DEV) return;
+        try {
+            QuickJsEngine.EvalResult r = QuickJsEngine.eval("(typeof __proteusSuperappRuntimeCurrent==='function')?__proteusSuperappRuntimeCurrent():''");
+            String cur = (r.ok && r.value != null) ? r.value : "";
+            if (!cur.isEmpty() && !cur.equals(lastScreenName)) {
+                lastScreenName = cur;
+                pushDevTree();              // 切屏 ⇒ 面板 Elements 树同步（含新屏 rect）
+            }
+        } catch (Throwable ignored) { }
     }
 
     /** watch 线程：把设备日志逐条 GET /log?level=&text=（失败丢弃不重试——dev 诊断，非关键路径）。 */
