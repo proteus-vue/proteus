@@ -1524,6 +1524,21 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
         }
         built++;
     }
+    // ★★★批 A③ 修（2026-10-08 · 用户实测"吸顶后被内容盖住"）：**sticky 相位 2 绘制**——
+    //   CSS 2.1 附录 E：`position:sticky` 是 **positioned 元素**，绘制在**在流内容之后**（浏览器如此）。
+    //   本端此前按 json 序 AddChild ⇒ sticky 声明在内容前 ⇒ 吸附后被后画的内容节点盖住
+    //   （与 Android/iOS 同缺陷：滚动 400px 可见、1500px 后整条消失）。
+    //   ⇒ 建树收尾把 sticky 节点**重挂到末尾**（RemoveChild + AddChild；只改兄弟绘制序、不动坐标）。
+    for (auto& sn : g_stickyNodes) {
+        auto snode = (ArkUI_RenderNodeHandle)(intptr_t)sn[3];
+        if (snode == nullptr || g_rootNode == nullptr) continue;
+        OH_ArkUI_RenderNodeUtils_RemoveChild(g_rootNode, snode);
+        int32_t rcRe = OH_ArkUI_RenderNodeUtils_AddChild(g_rootNode, snode);
+        if (rcRe != ARKUI_ERROR_CODE_NO_ERROR) {
+            OH_LOG_Print(LOG_APP, LOG_ERROR, LOG_DOMAIN, LOG_TAG,
+                         "PROTEUS_RENDER_STICKY_RAISE_FAIL rc=%{public}d", rcRe);
+        }
+    }
     g_nodeCount = built;
     // ★★MA0-RT 计数只对**绘制指令构建**（`renderCommands` 的 JS 路径）有意义——
     //   `proteus_render_commands_cstr` 是**探针的建树入口**（vapor 场景，为让通道真建出来），

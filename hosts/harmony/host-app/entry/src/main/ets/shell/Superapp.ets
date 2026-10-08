@@ -41,6 +41,18 @@ struct Superapp {
   private nodesByPage: Map<string, string> = new Map<string, string>();
   /** 场景：'superapp'（常驻，桌面点开）/ 'superapp-drive'（脚本驱动切 tab + 落报告） */
   private scene: string = AppStorage.get<string>('proteusScene') ?? '';
+  /**
+   * ★★★批 A⑤ 补齐（2026-10-08）：**待执行的滚动注入量**（vp；0 = 无）。
+   *
+   * 【为什么是"待处理标志"而不是"当场调 scrollRoot"（真机实测的时序坑）】env 采集是**异步**的
+   *   （`getLastWindow` promise）⇒ 本页 `aboutToAppear` 里**渲染两次**：截图分支一次（早）、
+   *   env 回调里再一次（晚，见该处注释）。若在截图分支**当场** `scrollRoot(400)`，晚到的那次
+   *   `renderCurrent()`（内部 `paintTree` → `scrollRoot(this.scrollOffset)`，而 `scrollOffset`
+   *   尚为 0）会把滚动**归零** ⇒ 截到页顶（实测：日志 `offset=400` 但画面在顶部）。
+   *   ⇒ 把注入量**记在这里**，由 `paintTree`（**每次真上屏**的共用出口）消费并置零
+   *   （消费式：只注入一次，晚到的渲染也能补上——顺序无关）。
+   */
+  private pendingScrollInject: number = 0;
   @State tabKeys: string[] = [];
   // ★★B2（G1）：tab 栏视觉规格（共享 state.tabSpec）——宿主读规格建视图（不再硬编码）。
   //   缺省值与 render-backend 的 TAB_BAR_SPEC 同（基准 = superapp/App.vue .sa-tabbar + token）。
@@ -222,6 +234,19 @@ struct Superapp {
         //   同坐标系。此前滚到底 ⇒ 内容高于视口的页（如 background-position contentH=857>816）
         //   会把**页头/标题**切出屏外（真机抓出：鸿蒙页比 Web 少标题、整体上移）。
         //   保持 offset=0（renderCurrent 已 scrollRoot(0)）⇒ 页顶对齐。
+        // ★★★批 A⑤ 补齐（2026-10-08）：**可选滚动注入**（`--ps scroll <dy>`，vp）——采 fixed/sticky
+        //   的「滚动后」证据（对齐 Android `--es scroll "0,400"` / iOS `--scroll=`）。
+        //   ★只**登记**到待处理标志（不当场 scrollRoot——env 异步回调会再渲染一次把 offset 归零；
+        //     见 pendingScrollInject 注释）；真正注入发生在每次 paintTree 收尾（消费式）。
+        const scrollArg: string = AppStorage.get<string>('proteusScroll') ?? '';
+        if (scrollArg.length > 0) {
+          const dy = Number.parseFloat(scrollArg);
+          if (!Number.isNaN(dy) && dy > 0) {
+            this.pendingScrollInject = dy;
+            this.switchLog.push(JSON.stringify({ scroll: want, dy: dy, via: 'scroll-inject' }));
+            hilog.info(DOMAIN, TAG, 'SUPERAPP_SCROLL_PENDING %{public}s', scrollArg);
+          }
+        }
         this.booted = true;
         this.writeReport();
       } else if (this.scene === 'superapp-drive') {
@@ -501,6 +526,14 @@ struct Superapp {
       } catch (e) { /* nodes 解析失败 ⇒ 不锁（保持可滚） */ }
       if (this.scrollOffset > this.maxScroll) { this.scrollOffset = this.maxScroll; }
       if (this.scrollOffset < 0) { this.scrollOffset = 0; }
+      // ★★★批 A⑤ 补齐（2026-10-08）：**消费待处理滚动注入**（见 pendingScrollInject 注释）——
+      //   放在 "scrollRoot(this.scrollOffset)" **之前**：注入量并入 offset 后由该行统一下发
+      //   （保证"最后的渲染"一定带上注入，无论 env 异步回调有没有迟到）。
+      if (this.pendingScrollInject > 0) {
+        this.scrollOffset = Math.min(this.pendingScrollInject, this.maxScroll);
+        this.pendingScrollInject = 0;   // 消费式：只注入一次
+        hilog.info(DOMAIN, TAG, 'SUPERAPP_SCROLL_TEST offset=%{public}f max=%{public}f', this.scrollOffset, this.maxScroll);
+      }
       scrollRoot(this.scrollOffset);
       hilog.info(DOMAIN, TAG, 'SUPERAPP_SCROLL contentH=%{public}s viewport=%{public}s max=%{public}s offset=%{public}s',
         chVp.toFixed(1), Superapp.vpH.toFixed(1), this.maxScroll.toFixed(1), this.scrollOffset.toFixed(1));

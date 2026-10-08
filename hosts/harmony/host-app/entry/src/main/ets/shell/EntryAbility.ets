@@ -23,6 +23,13 @@ export default class EntryAbility extends UIAbility {
     const scene = want?.parameters?.['scene'];
     const sceneStr: string = typeof scene === 'string' ? scene : '';
     AppStorage.setOrCreate('proteusScene', sceneStr);
+    // ★★★批 A⑤ 补齐（2026-10-08）：**滚动注入参数**（`--ps scroll 400`，vp）——逐屏截图装置用。
+    //   对齐 Android `--es scroll "0,400"` / iOS `--scroll=400` 的语义（三端同法）。
+    //   ★为什么必须有：fixed/sticky 的语义**只在滚动后可见**，没有滚动注入就采不到"吸附"证据
+    //   （批 A⑤ 记过这条装置缺口：「鸿蒙无滚动注入参数」）。
+    const scroll = want?.parameters?.['scroll'];
+    const scrollStr: string = typeof scroll === 'string' ? scroll : '';
+    AppStorage.setOrCreate('proteusScroll', scrollStr);
     // ★★★批次 44（2026-10-05）：**桌面点开（无 scene）= superapp 真实应用**（用户原话
     //   「手机主屏图标点开 App 就能测完整体验」）；脚本要跑装置/探针 ⇒ 显式传 `--ps scene <名>`
     //   （含 `bench` = 原缺省的全套装置路径）⇒ 落 dev/Index。

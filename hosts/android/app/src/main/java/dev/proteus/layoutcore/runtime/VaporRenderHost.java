@@ -1156,7 +1156,14 @@ public final class VaporRenderHost {
             List<NodeCmd> c = rowCmds.get(r);
             if (c != null) all.addAll(c);
         }
-        all.sort((a, b) -> Integer.compare(a.nodeIdx, b.nodeIdx));
+        // ★★★批 A③ 修（2026-10-08）：sticky **相位 2**（与 emitAll 同口径——CSS：sticky 是 positioned，
+        //   绘制在在流内容之后）。`stickyTopsOf` 为空时本比较器 = 原 nodeIdx 序（零行为变化）。
+        all.sort((a, b) -> {
+            final int pa = stickyTopsOf.containsKey(a.nodeId) ? 1 : 0;
+            final int pb = stickyTopsOf.containsKey(b.nodeId) ? 1 : 0;
+            if (pa != pb) return pa - pb;
+            return Integer.compare(a.nodeIdx, b.nodeIdx);
+        });
         List<ProteusHostView.Cmd> outCmds = new ArrayList<>(all.size());
         cmds.clear();
         cmdIdsOf.clear();
@@ -2018,8 +2025,16 @@ public final class VaporRenderHost {
         cmds.clear();
         cmdIdsOf.clear();
         cmdIndexById.clear();
+        // ★★★批 A③ 修（2026-10-08 · 用户实测"吸附后被内容盖住"）：**sticky 相位 2 绘制**——
+        //   CSS 2.1 附录 E：`position:sticky` 是 **positioned 元素**，应在**在流内容之后**绘制
+        //   （浏览器如此）；本宿主此前按**树序**画 ⇒ sticky 条声明在内容之前，吸附后被内容（白卡片）盖住
+        //   （现象：滚动 400px 时可见、1500px 后整条消失——机器像素扫描抓出）。
+        //   ★为什么在**宿主绘制序**修而不是构建期重排：sticky **参与流布局**（占位），
+        //     构建期重排节点数组会改布局（#658 的 reorderNodesByZ 只动 absolute/fixed——它们脱离流）。
+        //     cmds 顺序**纯绘制序**（rects 已由内核算好）⇒ 分区不影响任何几何。
         for (int i = 0; i < specs.size(); i++) {
             JSONObject spec = specs.get(i);
+            if ("sticky".equals(spec.optString("position", ""))) continue; // 相位 2 留到第二遍
             int id = spec.getInt("id");
             JSONObject r = rects.optJSONObject(String.valueOf(id));
             if (r == null) continue; // 无盒（display:none）——不产生指令（本仓实测的语义）
@@ -2035,6 +2050,17 @@ public final class VaporRenderHost {
             String pos = sp.optString("position", "");
             if ("fixed".equals(pos)) { int fid = sp.optInt("id", -1); if (fid >= 0) fixedIdsOf.add(fid); }
             else if ("sticky".equals(pos)) { int sid = sp.optInt("id", -1); if (sid >= 0) stickyTopsOf.put(sid, (float) sp.optDouble("top", 0)); }
+        }
+        // 第二遍：sticky（相位 2——绘制在全部在流内容之上；吸附时才不会被后画的内容盖住）
+        for (int i = 0; i < specs.size(); i++) {
+            JSONObject spec = specs.get(i);
+            if (!"sticky".equals(spec.optString("position", ""))) continue;
+            int id = spec.getInt("id");
+            JSONObject r = rects.optJSONObject(String.valueOf(id));
+            if (r == null) continue;
+            cmdIndexById.put(id, cmds.size());
+            cmds.add(mkCmd(spec, r));
+            cmdIdsOf.add(id);
         }
         lastCmdCount = cmds.size();
         pushToView();

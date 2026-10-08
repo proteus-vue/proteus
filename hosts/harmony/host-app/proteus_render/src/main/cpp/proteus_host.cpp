@@ -530,7 +530,24 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
         snprintf(head, sizeof(head), "%s{\"kind\":\"background\",\"id\":%d,\"parentId\":%d,\"x\":%.2f,\"y\":%.2f,\"w\":%.2f,\"h\":%.2f,\"color\":%u,\"radius\":%.2f",
                  emitted > 0 ? "," : "", (int)id, (int)parentIdD, r.x * density, r.y * density, r.w * density, r.h * density, bg, radius * density);
         arr += head;
-        // ★★★静态透明度（2026-10-08 · 子代理审 effects 案例 A）：此前**完全不发射 opacity** ⇒ 声明 opacity 的
+        // ★★★批 A③ 修（2026-10-08 · 真机抓出）：**cmd 必须带 `position`**——渲染侧（proteus_render.cpp 的
+        //   `renderCommandsImpl`）据它登记 fixed/sticky 补偿表（scrollRoot 时钉住/吸附）。
+        //   ★此前这条 cmd **完全不发射 position** ⇒ 渲染侧 `jsonString(it,"position")` 永远取不到
+        //   ⇒ **fixed/sticky 在鸿蒙从未登记**（滚动时既不钉住也不吸附；批 A⑤ 只做过编译验证、
+        //     无滚动像素证据，该缺口一直静默）。`top` 仅 sticky 需要（吸附阈值）。
+        {
+            std::string posV;
+            if (jstr(it.c_str(), it.size(), "position", &posV) && (posV == "fixed" || posV == "sticky")) {
+                char pb[64];
+                snprintf(pb, sizeof(pb), ",\"position\":\"%s\"", posV.c_str());
+                arr += pb;
+                if (posV == "sticky") {
+                    double st = 0; jnum(it.c_str(), it.size(), "top", &st);
+                    char sb[48]; snprintf(sb, sizeof(sb), ",\"top\":%.2f", st * density);
+                    arr += sb;
+                }
+            }
+        }        // ★★★静态透明度（2026-10-08 · 子代理审 effects 案例 A）：此前**完全不发射 opacity** ⇒ 声明 opacity 的
         //   节点渲染为**完全不透明**。发射给 render 侧 SetOpacity（RenderNode 原生属性）。
         {
             double opv = 1; jnum(it.c_str(), it.size(), "opacity", &opv);

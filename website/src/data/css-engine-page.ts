@@ -20,8 +20,8 @@ export const CSS_ENGINE_PAGE = {
     },
     "ir": {
       "total": 108,
-      "semantic": 82,
-      "engineOnly": 26
+      "semantic": 83,
+      "engineOnly": 25
     },
     "parity": {
       "cases": 113,
