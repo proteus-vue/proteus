@@ -47,6 +47,7 @@ const count = ref(0)
       <view class="ix-item" @tap="$nav('flex')"><text class="ix-item__t">弹性布局</text><text class="ix-item__d">flex 族</text></view>
       <view class="ix-item" @tap="$nav('box-model')"><text class="ix-item__t">盒模型</text><text class="ix-item__d">宽高 / margin / padding / box-sizing</text></view>
       <view class="ix-item" @tap="$nav('position')"><text class="ix-item__t">定位</text><text class="ix-item__d">position / inset / z-index</text></view>
+      <view class="ix-item" @tap="$nav('position-scroll')"><text class="ix-item__t">定位（滚动锚定）</text><text class="ix-item__d">fixed / sticky</text></view>
       <view class="ix-item" @tap="$nav('background')"><text class="ix-item__t">背景</text><text class="ix-item__d">color / image / size / repeat</text></view>
       <view class="ix-item" @tap="$nav('font')"><text class="ix-item__t">文本样式</text><text class="ix-item__d">字号 / 字重 / 行高 / 对齐</text></view>
       <view class="ix-item" @tap="$nav('effects')"><text class="ix-item__t">视觉效果</text><text class="ix-item__d">shadow / transform / aspect-ratio</text></view>
