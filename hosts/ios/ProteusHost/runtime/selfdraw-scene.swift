@@ -2525,6 +2525,8 @@ final class SelfDrawView: UIView {
         guard let t = touches.first else { return }
         let p = t.location(in: self)
         touchStart = (Double(p.x), Double(p.y), CFAbsoluteTimeGetCurrent())
+        // ★手指按下 ⇒ 停掉惯性（与 UIScrollView/Android 同语义：新触摸打断动量）
+        stopMomentum()
     }
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
@@ -2626,6 +2628,19 @@ final class SelfDrawView: UIView {
         let t = g.translation(in: self)
         g.setTranslation(.zero, in: self)
         driveScrollDrag(dx: -t.x, dy: -t.y)
+        // ★★★松手惯性（2026-10-09 · 用户「App 三端滚动松手就顿住，没有大厂那种惯性」）：
+        //   拖拽开始 ⇒ 停掉上一段惯性；松手（ended/cancelled）⇒ 按**松手速度**启动减速。
+        //   ★速度取 `g.velocity(in:)`（点/秒，**手指速度**）；出口参数空间是**内容位移**
+        //     ⇒ 取负（与上面 translation 的换算同款，单一换算点纪律）。
+        switch g.state {
+        case .began:
+            stopMomentum()
+        case .ended, .cancelled:
+            let v = g.velocity(in: self)
+            startMomentum(vx: -v.x, vy: -v.y)
+        default:
+            break
+        }
     }
 
     /// 拖拽出口（**唯一**）：pan 处理器与判据探针**都走这里** ⇒ 两条路径不可能分叉。
@@ -2635,6 +2650,68 @@ final class SelfDrawView: UIView {
     func driveScrollDrag(dx: CGFloat, dy: CGFloat) -> String {
         scrollDragDriveCount += 1
         return onScrollDrag?(dx, dy) ?? "{\"ok\":false,\"error\":\"未接线\"}"
+    }
+
+    // ────────────────────────── ★★松手惯性（deceleration） ──────────────────────────
+
+    /// 惯性帧驱动（与 `displayLink` 分开：动画帧循环可能在非滚动场景下没开，惯性必须自持）。
+    private var momentumLink: CADisplayLink?
+    /// 当前**内容速度**（点/秒）——每帧按 `decelerationRate` 指数衰减。
+    private var momVx: CGFloat = 0
+    private var momVy: CGFloat = 0
+    private var momLastTs: CFTimeInterval = 0
+    /// 减速系数（= `UIScrollView.DecelerationRate.normal` 的 0.998/ms；平台标准值，不自造曲线）。
+    private let decelerationRate: CGFloat = 0.998
+    /// 停止阈值（点/秒）——低于它认为"停了"，避免无限微小步进。
+    private let momentumStopThreshold: CGFloat = 5
+
+    /// 惯性驱动帧数 / 真的推动了内容的帧数（**"惯性真的接线了"的机器证据**——本仓纪律：
+    ///   "报告有、通路无"只能靠计数现形）。
+    private(set) var momentumFrames = 0
+    private(set) var momentumMovedFrames = 0
+
+    /// 启动惯性（松手时调用）。速度单位=点/秒；`|v|` 过小 ⇒ 不启动（自然停止）。
+    func startMomentum(vx: CGFloat, vy: CGFloat) {
+        stopMomentum()
+        guard abs(vx) > momentumStopThreshold || abs(vy) > momentumStopThreshold else { return }
+        momVx = vx
+        momVy = vy
+        momLastTs = 0
+        let link = CADisplayLink(target: self, selector: #selector(stepMomentum(_:)))
+        link.add(to: .main, forMode: .common)   // .common：手势/滚动期间也继续
+        momentumLink = link
+    }
+
+    /// 停止惯性（拖拽开始 / 松手阈值到 / 视图移除时调用）。
+    func stopMomentum() {
+        momentumLink?.invalidate()
+        momentumLink = nil
+        momVx = 0
+        momVy = 0
+        momLastTs = 0
+    }
+
+    var momentumActive: Bool { momentumLink != nil }
+
+    @objc private func stepMomentum(_ link: CADisplayLink) {
+        momentumFrames += 1
+        // 首帧无"上一帧" ⇒ 用 1/60 兜底（与 displayLink 的 dt 口径一致）
+        let dt = momLastTs == 0 ? (1.0 / 60.0) : (link.timestamp - momLastTs)
+        momLastTs = link.timestamp
+        // 指数减速（UIScrollView 同款）：v *= rate^(dt*1000)
+        let decay = CGFloat(pow(Double(decelerationRate), dt * 1000.0))
+        momVx *= decay
+        momVy *= decay
+        if abs(momVx) < momentumStopThreshold && abs(momVy) < momentumStopThreshold {
+            stopMomentum()
+            return
+        }
+        // 本帧位移 = 速度 × dt（→ 出口=内容位移，与手指拖拽同一条通路 ⇒ 落点一致）
+        let dx = momVx * CGFloat(dt)
+        let dy = momVy * CGFloat(dt)
+        let before = contentOffset
+        _ = driveScrollDrag(dx: dx, dy: dy)
+        if contentOffset != before { momentumMovedFrames += 1 }   // ★真的推动了内容（与 Android/Harmony 同口径）
     }
 
     /// 真识别器是否已安装（判据读——"接线"的第一条证据）

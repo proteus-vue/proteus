@@ -1240,23 +1240,29 @@ public class ProteusHostView extends ViewGroup {
      */
     public String scrollDragBy(float dx, float dy) {
         scrollDragDriveCount++;
-        // ① 内容偏移（滚动量直接相加：正 = 向下滚动 = 内容上移）
+        // ① 内容偏移（滚动量直接相加：正 = 向下滚动 = 内容上移）——走**唯一入口** `applyScrollY`
         final int prev = scrollY;
-        int target = prev + (int) dy;
-        // ★★垂直**范围钳制**（2026-10-02 —— 用户实测「安卓示例页面可以一直上下滚动」的修复）：
-        //   仅当场景**显式设置过**范围（`setVerticalScrollRange`，由内容高 − 视口高推导）时钳制；
-        //   默认未设置 ⇒ 与改前行为完全一致（既有探针/内核动画用例零影响）。
-        //   ★为什么必须有：无范围时手指可把内容拖到屏幕外任意远（观感=坏了），
-        //     且 contentScrollY 单调漂移（实测锚块 y 180→264 无界），而 Web/MP 根本不滚动
-        //     ⇒ 跨端交互不一致（正是多端一致性要消灭的形态）。
-        if (verticalRangeSet) target = Math.max(0, Math.min(verticalRange, target));
-        setContentScrollY(target);
-        if (coreHandle == 0) return "{\"ok\":false,\"error\":\"未接入核心\"}";
-        // ② 内核按**新滚动位置**驱动全部窗口动画（宿主只报位置——换算在内核）
-        String out = kernelAnimSeekScroll("{\"scroll\":" + scrollY + "}");
+        String out = applyScrollY(prev + (int) dy);
         // ③ 观察者回调（诊断/判据读数；不改变上面两条实现）
         if (scrollDragListener != null) scrollDragListener.onScrollDrag(dx, dy);
         return out;
+    }
+
+    /**
+     * ★★**应用纵向滚动位置**（拖动手势 / 惯性滑动 / 判据驱动**共用唯一入口**）——与 `applyScrollX` 同构：
+     *   ① 内容偏移（钳到 [0,range]）→ ② 内核 seek_scroll（驱动滚动动画）→ ③ 由调用方记账。
+     *   ★惯性（`startFlingY`→`stepInertia`）与手指拖拽**必须**走同一条，否则"松手后落点"与"手指落点"分叉。
+     */
+    public String applyScrollY(int y) {
+        int clamped = y;
+        // ★★垂直**范围钳制**（2026-10-02 —— 用户实测「安卓示例页面可以一直上下滚动」的修复）：
+        //   仅当场景**显式设置过**范围（`setVerticalScrollRange`，由内容高 − 视口高推导）时钳制；
+        //   默认未设置 ⇒ 与改前行为完全一致（既有探针/内核动画用例零影响）。
+        if (verticalRangeSet) clamped = Math.max(0, Math.min(verticalRange, clamped));
+        setContentScrollY(clamped);
+        if (coreHandle == 0) return "{\"ok\":false,\"error\":\"未接入核心\"}";
+        // ② 内核按**新滚动位置**驱动全部窗口动画（宿主只报位置——换算在内核）
+        return kernelAnimSeekScroll("{\"scroll\":" + scrollY + "}");
     }
 
     /**
@@ -1898,6 +1904,25 @@ public class ProteusHostView extends ViewGroup {
     }
 
     /**
+     * ★★★竖向抛滑（2026-10-09 · 用户「App 三端页面滚动不跟手，松手就顿住，没有大厂那种惯性」）。
+     *
+     * 【为什么需要】此前 `onFling` **只在 `horizontalScroll` 模式**下接 `startFlingX` ⇒
+     *   **正常的竖向页面滚动松手即停**（dead-stop），与 Web（浏览器原生惯性）/ iOS UIScrollView 观感差一截。
+     *
+     * 【符号】`GestureDetector.onFling` 的 `vy` 是**手指速度**（正 = 手指向下）；而滚动约定
+     *   `scrollY += 滚动量`（正 = 内容上移 = 向下翻看，见 `scrollDragBy` 的标定）⇒ **取 −vy**。
+     *   `OverScroller.fling(startY, velocityY, ...)` 的 velocityY 是**内容速度**（正 = 内容下移/看更早）。
+     *   ★方向一律用真机读数标定（本仓纪律），不靠假设。
+     */
+    public void startFlingY(float vy) {
+        int max = verticalRangeSet ? verticalRange : 0;
+        // ★未设范围（竖向未接线/内容不滚动）⇒ 范围 [0,0] ⇒ OverScroller 立即结束（不产生漂移），安全。
+        scroller().fling(0, scrollY, 0, (int) (-vy), 0, 0, 0, max);
+        flingDrives++;
+        postInvalidateOnAnimation();
+    }
+
+    /**
      * ★★**每帧推进惯性**（由 LightsHost 的 Choreographer 帧循环调用——复用同一帧驱动，
      *   不新增第二条帧源；本仓纪律："帧驱动唯一来源"）。
      * ★两个读数（`inertiaFrames`/`inertiaMoved`）是**"抛滑真的接线了"的机器证据**（2026-10-01）：
@@ -1908,9 +1933,11 @@ public class ProteusHostView extends ViewGroup {
         if (flingScroller == null) return;
         if (flingScroller.computeScrollOffset()) {
             inertiaFrames++;
+            // ★双轴（2026-10-09）：竖向 fling 也在这条帧驱动上推进（同一 OverScroller 同时持 x/y 时间线）
             final int nx = flingScroller.getCurrX();
-            if (nx != scrollX) inertiaMoved++;
-            applyScrollX(nx);
+            final int ny = flingScroller.getCurrY();
+            if (nx != scrollX) { inertiaMoved++; applyScrollX(nx); }
+            if (ny != scrollY) { inertiaMoved++; applyScrollY(ny); }
         }
     }
 
@@ -2174,11 +2201,11 @@ public class ProteusHostView extends ViewGroup {
                             b.putString("direction", dir);
                             b.putFloat("speed", (float) Math.hypot(vx, vy));
                             report("fling", e2, b);
-                            // ★★手卷抛滑**接线**（2026-10-01）：横轴模式下把平台的甩速交给
+                            // ★★抛滑**接线**（2026-10-01 横轴 / 2026-10-09 竖向）：把平台的甩速交给
                             //   `OverScroller`（惯性由帧循环 `stepInertia` 推进）。
-                            //   ★此前只 report（"手势语义上报"）而 `startFlingX` 无人调用 ⇒
-                            //     惯性滑动**声明了但没接**（同类缺陷：报告有、通路无）。
+                            //   ★此前只 report（"手势语义上报"）且**竖向未接** ⇒ 竖向滚动松手即停（dead-stop）。
                             if (horizontalScroll) startFlingX(vx);
+                            else startFlingY(vy);
                             return true;
                         }
 

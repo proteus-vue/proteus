@@ -29,6 +29,9 @@ const TAG = 'ProteusSuperapp';
 interface RtViewport { width: number; height: number }
 interface RtArgs { bundle: string; filesDir: string; page: string; viewport: RtViewport; chain?: number[]; state?: Record<string, Object>; remount?: boolean }
 const TAB_H = 56;   // 底部 Tab 栏高度（vp）
+/** 惯性减速速率（= iOS UIScrollView normal 0.998/ms；平台标准值，不自造曲线）+ 停止阈值（vp/ms）。 */
+const DECEL_RATE = 0.998;
+const MOMENTUM_STOP = 0.02;
 
 @Entry
 @Component
@@ -89,6 +92,17 @@ struct Superapp {
   private touchStartX: number = -1;
   private touchStartY: number = -1;
   private touchMoved: boolean = false;
+  /** ★★★松手惯性（2026-10-09 · 用户「三端滚动松手就顿住，没有大厂那种惯性」）：
+   *  触摸移动时采样速度（vp/ms）；松手按**松手速度**启动减速循环（`setInterval(16ms)` 指数衰减）。
+   *  与 Android `OverScroller`/iOS CADisplayLink 同语义（三端一致：松手继续滑、渐停）。 */
+  private touchLastTs: number = 0;
+  private velOffset: number = 0;   // 内容偏移速度（vp/ms；正 = offset 增大）
+  private touchVelSum: number = 0; // 一段内的位移累加（用于采样瞬时速度）
+  private touchVelDt: number = 0;  // 一段内的时间累加
+  private momentumTimer: number = -1;
+  /** 惯性帧数 / 真推动帧数（"惯性真的接线了"的机器证据——本仓纪律：报告有通路无只能靠计数现形）。 */
+  private momentumFrames: number = 0;
+  private momentumMovedFrames: number = 0;
   /** ★★B1：ArkTS 侧导航历史栈（不含当前）——鸿蒙一次性 VM，JS 路由态不跨调用保留 ⇒ 栈由宿主记。 */
   private navStack: string[] = [];
   /** ★★B1：每屏滚动进度（返回恢复 / 前进重置）。 */
@@ -377,6 +391,7 @@ struct Superapp {
    *   ★内容坐标 = 视口坐标 + scrollOffset（命中树在内容坐标系）。
    */
   private onTapAt(vpX: number, vpY: number): void {
+    this.stopMomentum();   // ★点按 ⇒ 停掉惯性（与 iOS/Android：tap 打断动量）
     try {
       const contentY: number = vpY + this.scrollOffset;
       const hitJson: string = appScreenHitAt(vpX, contentY);
@@ -424,25 +439,33 @@ struct Superapp {
   private onScrollTouch(e: TouchEvent): void {
     const t: TouchObject = e.touches[0];
     if (t === undefined) { return; }
-    if (e.type === TouchType.Down) { this.touchLastY = t.windowY; this.touchStartX = t.windowX; this.touchStartY = t.windowY; this.touchMoved = false; return; }
+    if (e.type === TouchType.Down) {
+      this.stopMomentum();   // ★手指按下 ⇒ 停掉上一段惯性（与 iOS/Android 同语义）
+      this.touchLastY = t.windowY; this.touchStartX = t.windowX; this.touchStartY = t.windowY; this.touchMoved = false;
+      this.touchLastTs = Date.now(); this.touchVelSum = 0; this.touchVelDt = 0; this.velOffset = 0;
+      return;
+    }
     if (e.type === TouchType.Move) {
-      if (this.touchLastY < 0) { this.touchLastY = t.windowY; return; }
+      if (this.touchLastY < 0) { this.touchLastY = t.windowY; this.touchLastTs = Date.now(); return; }
       const dy: number = t.windowY - this.touchLastY;
       this.touchLastY = t.windowY;
+      const now: number = Date.now();
+      const dt: number = now - this.touchLastTs;
+      this.touchLastTs = now;
       if (Math.abs(t.windowY - this.touchStartY) > 16 || Math.abs(t.windowX - this.touchStartX) > 16) { this.touchMoved = true; }
-      let next: number = this.scrollOffset - dy;
-      if (next < 0) { next = 0; }
-      if (next > this.maxScroll) { next = this.maxScroll; }
-      if (next !== this.scrollOffset) {
-        this.scrollOffset = next;
-        scrollRoot(this.scrollOffset);
-      }
+      // ★速度采样（vp/ms）：本步骤的**实际内容位移**（钳制前）叠加，累计到 ≥24ms 算一次瞬时速度。
+      const step: number = this.applyScrollBy(-dy);
+      if (dt > 0) { this.touchVelSum += step; this.touchVelDt += dt; }
+      if (this.touchVelDt >= 24) { this.velOffset = this.touchVelSum / this.touchVelDt; this.touchVelSum = 0; this.touchVelDt = 0; }
       return;
     }
     if (e.type === TouchType.Up) {
       if (!this.touchMoved && this.touchStartX >= 0) {
         // ★B1：几乎没动 ⇒ tap → 命中 → 导航（与 Android hitTest→gesture→JS 同语义）
         this.onTapAt(this.touchStartX, this.touchStartY);
+      } else if (this.touchMoved) {
+        // ★★松手惯性：用**松手速度**启动减速循环（与 Android OverScroller / iOS CADisplayLink 同语义）
+        this.startMomentum(this.velOffset);
       }
       // ★注意：**不加自定义边缘滑返**——鸿蒙系统边缘手势（返回）会自动走 @Entry 的 `onBackPress`
       //   （本页已实现）；再叠一层自定义手势会与系统手势**冲突**（实测：左缘自绘滑返把系统"最近任务"
@@ -450,7 +473,51 @@ struct Superapp {
       this.touchLastY = -1; this.touchMoved = false;
       return;
     }
-    if (e.type === TouchType.Cancel) { this.touchLastY = -1; this.touchMoved = false; }
+    if (e.type === TouchType.Cancel) { this.stopMomentum(); this.touchLastY = -1; this.touchMoved = false; }
+  }
+
+  /** 按**内容位移**（vp；正 = offset 增大）滚动一步，钳到 [0,maxScroll]。返回**实际位移**（钳制后）——
+   *   惯性速度采样用"实际位移"（撞边界即速度归零，与 iOS/Android 手感一致）。 */
+  private applyScrollBy(delta: number): number {
+    let next: number = this.scrollOffset + delta;
+    if (next < 0) { next = 0; }
+    if (next > this.maxScroll) { next = this.maxScroll; }
+    if (next !== this.scrollOffset) {
+      const actual: number = next - this.scrollOffset;
+      this.scrollOffset = next;
+      scrollRoot(this.scrollOffset);
+      return actual;
+    }
+    return 0;
+  }
+
+  // ────────────────────────── ★★松手惯性（deceleration） ──────────────────────────
+
+  /** 启动惯性（松手时调用）。速度单位 = vp/ms；过小 ⇒ 不启动（自然停止）。 */
+  private startMomentum(v: number): void {
+    this.stopMomentum();
+    if (Math.abs(v) <= MOMENTUM_STOP) { return; }
+    this.velOffset = v;
+    let last: number = Date.now();
+    this.momentumTimer = setInterval(() => {
+      const now: number = Date.now();
+      const dt: number = now - last; last = now;
+      if (dt <= 0) { return; }
+      this.momentumFrames++;
+      // 指数减速（与 iOS 同式）：v *= rate^dt
+      this.velOffset *= Math.pow(DECEL_RATE, dt);
+      if (Math.abs(this.velOffset) < MOMENTUM_STOP) { this.stopMomentum(); return; }
+      const s: number = this.applyScrollBy(this.velOffset * dt);
+      if (s !== 0) { this.momentumMovedFrames++; }
+      // ★撞到边界即停（内容到顶/底不再空转）
+      if (s === 0 && (this.scrollOffset <= 0 || this.scrollOffset >= this.maxScroll)) { this.stopMomentum(); }
+    }, 16);
+  }
+
+  /** 停止惯性（手指按下 / 停止阈值到 / 页面销毁时调用）。 */
+  private stopMomentum(): void {
+    if (this.momentumTimer >= 0) { clearInterval(this.momentumTimer); this.momentumTimer = -1; }
+    this.velOffset = 0;
   }
 
   /** 把**当前页**内容真画到屏上（复用既有 appScreenCommands + renderCommands 通道） */
@@ -581,7 +648,10 @@ struct Superapp {
         + ',"current":"' + this.current + '"'
         + ',"switch_log":[' + this.switchLog.join(',') + ']}'
         // ★★★滚动对齐（2026-10-05）：滚动读数（范围/当前偏移）——与 Android/iOS 的 scroll 读数同语义
-        .replace(/\}$/, ',"scroll":{"max":' + this.maxScroll.toFixed(1) + ',"offset":' + this.scrollOffset.toFixed(1) + '}}');
+        //   ★惯性读数（2026-10-09）：momentum_frames/moved = **"惯性真的接线了"的机器证据**（本仓纪律：
+        //     "报告有、通路无"只能靠计数现形——Android 曾有 startFlingX 声明但无人调的先例）。
+        .replace(/\}$/, ',"scroll":{"max":' + this.maxScroll.toFixed(1) + ',"offset":' + this.scrollOffset.toFixed(1)
+          + ',"momentum_frames":' + this.momentumFrames + ',"momentum_moved":' + this.momentumMovedFrames + '}}');
       const path: string = this.filesDir + '/superapp.json';
       const fd = fileIo.openSync(path, fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE | fileIo.OpenMode.TRUNC);
       fileIo.writeSync(fd.fd, body);
