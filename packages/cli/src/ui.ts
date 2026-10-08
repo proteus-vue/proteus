@@ -37,8 +37,13 @@ function clearSpinner(): void {
 }
 function startSpinner(label: string): void {
   if (!isTTY) return
-  let i = 0
   spinnerActive = true
+  // ★★★**同步写第一帧**（决策 #678 实测修正）：`打包 debug 宿主`/`安装到设备` 是 `execFileSync`
+  //   **同步阻塞**（javac/d8/aapt2/adb）——事件循环被占死 ⇒ `setInterval` **连第一帧都跑不到**
+  //   ⇒ 整个同步步骤一帧不出（用户实测"没显示 spinner"）。⇒ 这里**立即**写一帧（同步，不经 timer），
+  //   timer 仅在事件循环空闲（异步 await，如 `构建 dev bundle`）时继续动画。
+  process.stdout.write(`\r\u001b[K  ${cyan(SPIN[0])} ${dim(label + '…')}`)
+  let i = 1
   spinnerTimer = setInterval(() => {
     process.stdout.write(`\r\u001b[K  ${cyan(SPIN[i++ % SPIN.length])} ${dim(label + '…')}`)
   }, 80)
