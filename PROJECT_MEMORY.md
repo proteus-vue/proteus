@@ -15,7 +15,7 @@
 - **包规模**：**45 个 @proteus-vue/* npm 包**（+ `packages/layout-core-rust` = **cargo crate，非 npm 包**，故不计数）（★2026-09-29 layout-core = App 排版核心）（check:pkg 0 error · `pnpm check:stats` 校验 ✓；31→38 修正 → G-07 glass 39 → Skyline 收口 worklet 40 → ★2026-09-14 组件库拆包 `@proteus-vue/components` 41 → ★Vapor 线新增 `@proteus-vue/slot-runtime` 42 + `@proteus-vue/layout-core` 43 → ★2026-09-30 MA1 新增 `@proteus-vue/animation` 44；版本统一 0.3.0-beta.8，见「当前状态速览」）
 - **文档**：`docs/proteus-architecture.md`（L0 规约·真理来源）→ `docs/board-inventory.md`（全景索引）→ `docs/roadmap.md`（版本线）→ `roadmap-2-plan`（里程碑线）→ 各 plan
 
-## 当前状态速览（最近一次更新：**2026-10-08·（三二二）· ★★★修「点卡片不切屏」（env token 未解析 ⇒ 内核建树返 0）+ 切屏同步 DevTools 树 · 决策 #677**——根因锁定：`ScreenHost.mount`（**屏切换通路**）把内容节点原样喂内核，内容含 `minHeight:"env:--pf-vh"` 等**字符串** env token，而内核 `min_height: Option<f32>` 只收数字 ⇒ serde「expected f32」⇒ `proteus_layout_create` 返 **0** ⇒ 不切屏（`app-adapter` catch 后静默 no-op）。★`VaporRenderHost` 有 `resolveEnvInSpec`、**`ScreenHost` 没有**（两条通路口径不一致）。★**修法**：`resolveEnvInSpec` → 包可见（唯一实现）；`ScreenHost` 加 `EnvResolver` 注入端口，mount 逐节点解析；宿主注入（模板 `AppActivity` + 框架壳 `SuperappActivity`）。★**顺带**：导航不经 `renderCurrent` ⇒ 加 `syncDevScreen()`（读 `__proteusSuperappRuntimeCurrent()` 真源）。★**真机**：点「文本换行」→ **屏幕真的切到 text 页** + `/tree screen=text` + Console 不再报 create 失败。★**AAR 随包副本**已重跑同步。★教训：**同一语义的预处理必须每条通路都做**。★新会话以此为准。
+## 当前状态速览（最近一次更新：**2026-10-08·（三二四）· ★★DevTools Network/Console 支持「项目通道 / 原生通道」过滤 · 决策 #679**——用户「Network/Console 显示渠道可选**项目内**和**原生通道**吧？」。★**通道定义（诚实）**：**原生** = 宿主↔dev server HTTP（`/version` `/bundle` `/ping` `/log` `/tree` `/trace` `/bridge`）+ 宿主 dev 事件；**项目** = 项目 JS 侧——`console.*` + **桥调用**（`proteusHost.invoke`，如 `screen.mount`）。★App 宿主**无 Web 网络栈** ⇒ 项目侧无 fetch/XHR；项目"网络"以**桥调用**呈现。★**交付**：服务端 `channel` 字段 + `/log?channel=` + 新增 `GET /bridge`；宿主 `HostBridge` 加 `InvokeLogger`（dev 上报、release null 零开销）+ 模板接 logger/`flushBridge` + console pump 标 `project`/`devLog` 标 `native`；面板 Network/Console 加 **全部/项目/原生** 过滤 + 行通道色标（原生黄/项目蓝）。★**真机（Android · css-conformance dev）**：Network **全部 80 · 项目 5 · 原生 80**（项目 5=`INVOKE screen.mount`/`screen.visible`）；Console 原生 4、项目 0（本轮无页面 console.log）。★教训：**"渠道"先要说清它是什么**（诚实定义 > 强套框架名词）。★新会话以此为准。
 ## 当前状态速览（最近一次更新：**2026-10-08·（三二三）· ★★CLI 步骤等待加加载动画（spinner，TTY 感知）· 决策 #678**——用户「等待期加 loading 提示」→「要真转圈」。★**交付（终形态=子进程动画）**：`ui.ts` `step()` TTY 下 **spawn 独立子进程**跑 spinner（子进程每 80ms 写 `\r\u001b[K  ⠋ label…`），主进程照常同步阻塞 ⇒ **真转圈**；`clearSpinner()` kill 子进程 + 清行 + `exit` 兜底；**非 TTY ⇒ 不 spawn、无 `\r`**。★**两轮返工**：首版主进程 `setInterval`+同步首帧 ⇒ 用户实测"没显示"（`打包/安装` 是 `execFileSync` **同步阻塞**，主进程事件循环占死、连首帧都跑不到）；要"真转圈"⇒ 反馈源**不能与被阻塞者同线程** ⇒ **独立子进程**。★验证：PTY 阻塞 1.2s 内帧序 `⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏…`（持续变化）→ `✓`；管道 0 帧无 `\r`。★教训：**同步阻塞时只有另一个进程能持续动**。★新会话以此为准。
 ## 当前状态速览（最近一次更新：**2026-10-08·（三二一）· ★★DevTools 设备环境深入内核级 + 顶栏合并 + 逐帧耗时/重排计数 · 决策 #676**——用户「设备环境能深入到内核级别？」「最上面一排（chips）也属设备环境，合并过去、顶部难看」「完善后再补逐帧耗时/重排计数」。★**交付**：a) **设备环境深入内核级**——`collectDeviceEnv` 增 `layoutCore`（`RustLayout.version()`=`proteus-layout-core 0.1.0 · engine=taffy-0.14`）· `jsEngine`（`quickjs:2026-06-04`）· `hostBuild`；b) **顶栏合并**——删顶部 chips 横条，设备环境卡**分组**（设备/屏幕/内核·引擎）；c) **逐帧耗时**——`ProteusHostView.onDraw` 计时（`lastFrameMs`/`frameMsAverage`）⇒ `5.39ms`；d) **重排/patch 计数**——`VaporRenderHost` 累计。面板 4 卡（渲染/逐帧/重排/patch）。★**★AAR 随包副本一并更新**（`ProteusHostView`/`VaporRenderHost` 在 runtime AAR 里 ⇒ 改后必跑 `build-runtime-aar.sh`，否则模板 javac 找不到新方法——本轮踩到）。★**真机（Android · css-conformance dev）**：`layoutCore=proteus-layout-core 0.1.0 · engine=taffy-0.14` · `jsEngine=quickjs:2026-06-04`；`渲染 74ms · 逐帧 5.39ms · 重排 0 · patch 0`。★**诚实边界**：逐帧=`onDraw` 绘制耗时（不含系统 vsync）；重排/patch=内核回执累计（静态页 0）；仅 Android。★教训：**"环境"要到能定位问题的那一层**（内核+引擎版本）。★新会话以此为准。
 
@@ -44,11 +44,11 @@
 |---|---|
 | `docs/project-memory-archive/2026-10.md` | 2026-10 里程碑详细叙事 + 状态速览历史栈（约 4.5k 行）|
 | `docs/project-memory-archive/2026-09.md` | 09 月全部叙事 + 柔性系统重组历史 + 2026-08 进度快照 + 已落地文件 + 09-19 验证状态（约 6.5k 行） |
-| `docs/project-memory-archive/decisions.md` | 决策链全文 #1–#678——按号检索（`grep -n "^678\." …`）|
+| `docs/project-memory-archive/decisions.md` | 决策链全文 #1–#679——按号检索（`grep -n "^679\." …`）|
 
 检索示例：`grep -n "2026-09-29\|判据建错靶" docs/project-memory-archive/2026-09.md`
 
-## 关键决策与文档偏差（#1–#678 → 归档速查）
+## 关键决策与文档偏差（#1–#679 → 归档速查）
 
 **全文在 `docs/project-memory-archive/decisions.md`**（按号检索：`grep -n "^290\." docs/project-memory-archive/decisions.md`）。
 决策号**只增不改号**（外部文档按号引用）；新决策追加到该文件末尾（号 +1）。
