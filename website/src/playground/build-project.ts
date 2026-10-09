@@ -34,6 +34,18 @@ export function hash(s: string): string {
   return (h >>> 0).toString(36)
 }
 
+/**
+ * ★Web 事件归一（决策 #700 续）：把语义事件 `@tap` / `v-on:tap` 映射为 Web 原生 `@click`。
+ *   【为什么（实测真 bug）】Proteus 的事件等价是 **`click ↔ tap`**（`EVENT_MAP: { click: 'tap' }`，
+ *     `packages/compiler/src/tags.ts`）：**Web 端用 `@click`**（官网自身 19 处 `@click`、仅 2 处 `@tap`），
+ *     `@tap` 是 MP 原生名。预览是 **Web**（浏览器真 Vue）⇒ 不改写时 `@tap` 是永不触发的组件自定义事件
+ *     （`p-button` 只 emit `click`）⇒ **点了没反应**。本归一让预览与 Web 端一致（`@tap` 与 `@click` 都可点）。
+ *   ★只改模板字符串（不解析 AST）：`@tap` 后接非单词字符（`.stop`/`=`/空白/引号）才替换，避免误伤 `@tapX`。
+ */
+export function normalizeWebEvents(template: string): string {
+  return template.replace(/@tap\b/g, '@click').replace(/v-on:tap\b/g, 'v-on:click')
+}
+
 /** POSIX 路径归一（仅 `.`/`..`/空段） */
 function normalizePath(p: string): string {
   const parts: string[] = []
@@ -73,7 +85,9 @@ export function rewriteModuleSpecifiers(esm: string, resolve: (spec: string) => 
  *   ★scopeId：scoped 时把组件标为 `data-v-<id>`（配合 compileStyle 改写）。
  */
 export function compileVueToEsm(path: string, src: string, id: string): { esm: string; css: string } {
-  const { descriptor, errors } = parse(src, { filename: path })
+  // ★Web 事件归一（@tap → @click）**先于 parse**——compileScript(inlineTemplate) 读的是 parse 时的**模板 AST**，
+  //   事后改 `descriptor.template.content` 对它无效（实测：script setup 路径改 content 不生效 ⇒ onClick 不出现）。
+  const { descriptor, errors } = parse(normalizeWebEvents(src), { filename: path })
   if (errors && errors.length) throw new Error(errors[0]!.message ?? 'SFC 解析失败')
   if (!descriptor.template) throw new Error('缺 <template>')
   const scoped = descriptor.styles.some((s) => s.scoped)
