@@ -241,6 +241,16 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
   .jrow .jt{color:var(--faint)} .jrow .jk{color:var(--brand)} .jrow .jx{color:var(--ink-2);overflow-wrap:anywhere}
   .jrow.jempty{display:block;color:var(--dim);font-family:var(--sans);line-height:1.6}
   .jd-hint{padding:0 var(--s4) var(--s4);color:var(--faint);font-size:11px;font-family:var(--mono)}
+  /* ★★CPU Profiler（决策 #715）：阶段耗时排行条（label + 总耗时占比条 + count/max）+ handler 源位置 */
+  .cpu{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:var(--s2) 0;overflow:hidden}
+  .craw{display:grid;grid-template-columns:minmax(0,1fr) 150px 92px;gap:var(--s3);align-items:center;padding:6px var(--s3);border-top:1px solid var(--line);font-size:12px;font-family:var(--mono)}
+  .craw:first-child{border-top:0}
+  .craw .cl{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink-2)}
+  .craw .cl .cloc{color:var(--brand);margin-left:6px;font-size:11px}
+  .craw .cbar{height:7px;border-radius:4px;background:var(--brand);min-width:2px;justify-self:start}
+  .craw .cmeta{text-align:right;color:var(--dim);font-size:11px}
+  .craw.ctop .cbar{background:var(--err)}
+  .cpu .empty{padding:var(--s3)}
   .prof{position:relative;height:120px;display:flex;align-items:flex-end;gap:2px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:10px var(--s3);overflow:hidden}
   .prof .pbar{flex:0 0 4px;min-width:3px;border-radius:2px 2px 0 0;background:var(--brand);transition:height .1s}
   .prof .pbar.jank{background:var(--err)}
@@ -283,6 +293,12 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
     <div class="prof" id="prof"><div class="empty">暂无性能采样…设备心跳（每 ~1.5s）上报 渲染/逐帧耗时。</div></div>
     <!-- ★掉帧详情（决策 #714）：点红柱 ⇒ 该掉帧窗口内的事件链（重建/手势/请求/日志 + 帧统计） -->
     <div class="ndetail" id="jank-detail" style="display:none"></div>
+  </div>
+
+  <!-- ★★CPU Profiler（决策 #715）：运行期阶段耗时排行——哪一段/哪个 handler 最贵（带模板源位置） -->
+  <div class="blk">
+    <h2>CPU · 运行期阶段耗时<span id="cpu-stat" class="pstat">等待设备心跳…</span></h2>
+    <div class="cpu" id="cpu"><div class="empty">暂无采样…交互（点击）/切屏后，设备心跳汇总运行期各阶段耗时。</div></div>
   </div>
 
   <div class="blk two">
@@ -682,6 +698,10 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
     ;(s.trace || []).forEach((e) => logEvent('gesture', (e.gesture || '') + ' #' + e.id + (e.src ? ' @' + e.src : ''), e.time));
     evlog.sort(function (a, b) { return a.t - b.t; });
     if (s.perf) { profSamples = s.perf.slice(-400); renderProf(); }   // ★性能时间线（决策 #709）
+    // ★CPU Profiler（决策 #715）：取快照最后一帧的 perf.profile（若有）播种 CPU 面板
+    var lastProf = null;
+    for (var pi = profSamples.length - 1; pi >= 0 && !lastProf; pi--) { var pp = profSamples[pi] && profSamples[pi].perf; if (pp && pp.profile) lastProf = pp.profile; }
+    if (lastProf) applyProfile(lastProf);
   }
   function applyPerf(p) {
     if (!p) return;
@@ -689,6 +709,39 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
     if (p.frameMs != null) $('c-frame').innerHTML = p.frameMs + '<small>ms</small>';
     if (p.relayout != null) $('c-relayout').textContent = p.relayout;
     if (p.patches != null) $('c-patches').textContent = p.patches;
+    if (p.profile) applyProfile(p.profile);   // ★CPU Profiler（决策 #715）
+  }
+  // ★★CPU Profiler（决策 #715）：运行期阶段耗时排行（哪一段/哪个 handler 最贵）。
+  //   形状 {屏名: [{label,count,totalMs,maxMs,loc?}]}（宿主 /ping?perf= 里嵌套上报）。
+  //   ★只显示**累计**排行（窗口内），带模板源位置徽章（handler 类）——归因"这次卡在哪段"。
+  const cpuEl = $('cpu');
+  let cpuData = null;
+  function applyProfile(prof) {
+    cpuData = prof || null;
+    renderCpu();
+  }
+  function renderCpu() {
+    if (!cpuEl) return;
+    if (!cpuData || !Object.keys(cpuData).length) { cpuEl.innerHTML = '<div class="empty">暂无采样…交互（点击）/切屏后，设备心跳汇总运行期各阶段耗时。</div>'; return; }
+    var screens = Object.keys(cpuData);
+    var all = [];
+    var grandMax = 1;
+    screens.forEach(function (sc) { (cpuData[sc] || []).forEach(function (e) { all.push({ sc: sc, e: e }); if (e.totalMs > grandMax) grandMax = e.totalMs; }); });
+    all.sort(function (a, b) { return b.e.totalMs - a.e.totalMs; });
+    var rows = all.slice(0, 12).map(function (x, i) {
+      var e = x.e, loc = e.loc ? (e.loc.line + ':' + e.loc.column) : '';
+      var pct = Math.max(3, Math.round((e.totalMs / grandMax) * 100));
+      return '<div class="craw' + (i === 0 ? ' ctop' : '') + '">'
+        + '<div class="cl" title="' + escapeHtml(x.sc + ' · ' + e.label) + '">' + escapeHtml(e.label) + (loc ? '<span class="cloc">' + escapeHtml(x.sc + '.vue:' + loc) + '</span>' : '') + '</div>'
+        + '<div class="cbar" style="width:' + pct + '%"></div>'
+        + '<div class="cmeta">' + e.totalMs.toFixed(1) + 'ms · ×' + e.count + (e.maxMs ? ' · max ' + e.maxMs.toFixed(1) : '') + '</div>'
+        + '</div>';
+    }).join('');
+    var total = all.reduce(function (a, x) { return a + x.e.totalMs; }, 0);
+    cpuEl.innerHTML = rows
+      + '<div class="jd-hint">本窗口各阶段累计 ' + total.toFixed(1) + 'ms（前 12 项）· 单位 ms · ×N=次数 · max=最慢单次。归因到具体 handler（带模板源位置）。</div>';
+    var stat = $('cpu-stat');
+    if (stat) stat.innerHTML = all.length + ' 阶段 · 合计 ' + total.toFixed(1) + 'ms';
   }
   // ★性能时间线 Profiler（决策 #709/#710）：真实逐帧采样（CADisplayLink）⇒ 帧间隔柱 + 掉帧高亮 + fps
   const profEl = $('prof');
@@ -768,6 +821,7 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
   function pushPerf(p) {
     profSamples.push(p); if (profSamples.length > 400) profSamples.shift();
     renderProf();
+    if (p && p.perf && p.perf.profile) applyProfile(p.perf.profile);   // ★CPU Profiler（决策 #715）
   }
   function applyHost(h) {
     window.__lastHost = h;

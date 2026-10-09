@@ -252,4 +252,48 @@ describe('★B1 · 壳级运行期驱动（createSuperappRuntime）', () => {
     const withLoc = (content.nodes as Array<{ loc?: unknown }>).filter((n) => n.loc)
     expect(withLoc.length, '非 dev 节点不应带 loc').toBe(0)
   })
+
+  it('★★CPU Profiler（决策 #715）：profile=true ⇒ 阶段耗时采样带 handler 归因（含模板 loc）', async () => {
+    const dir = makeTempProject()
+    const build = await buildAppRuntimeContent(dir, 'android', { dev: true })
+    const artifacts = JSON.parse(fs.readFileSync(build.outFile, 'utf-8')) as Record<string, ScreenRuntimeArtifact>
+    const rt = createSuperappRuntime({
+      artifacts,
+      host: { mount: () => '{"ok":true}', applyOps: () => '{"ok":true}' },
+      viewport: { width: 390, height: 844 },
+      profile: true,   // ★开 profiling
+    })
+    rt.mountScreen('home')                       // 触发 instantiate / relink / flush
+    const homeEv = artifacts['home']!.events[0]!
+    rt.dispatchGesture('tap', [homeEv.nodeId])   // 触发 dispatch + handler + 重建
+
+    const stats = rt.profileStats()
+    const home = stats['home'] ?? []
+    const labels = home.map((e) => e.label)
+    expect(labels, '应含 instantiate').toContain('instantiate')
+    expect(labels, '应含 dispatch').toContain('dispatch')
+    expect(labels.some((l) => l.startsWith('handler「')), '应含具体 handler 归因').toBe(true)
+    // handler 采样带模板源位置（整份 .vue 行）——这是"归因到源码"的关键
+    const h = home.find((e) => e.label.startsWith('handler「'))!
+    expect(h.loc, 'handler 采样应带模板源位置').toBeTruthy()
+    expect(h.loc!.line).toBeGreaterThan(0)
+    expect(h.count).toBeGreaterThan(0)
+    // 排空式：再取为空
+    expect(Object.keys(rt.profileStats())).toHaveLength(0)
+  })
+
+  it('★CPU Profiler 未启用（缺省）⇒ profileStats 恒空（零开销）', async () => {
+    const dir = makeTempProject()
+    const build = await buildAppRuntimeContent(dir, 'android', { dev: true })
+    const artifacts = JSON.parse(fs.readFileSync(build.outFile, 'utf-8')) as Record<string, ScreenRuntimeArtifact>
+    const rt = createSuperappRuntime({
+      artifacts,
+      host: { mount: () => '{"ok":true}', applyOps: () => '{"ok":true}' },
+      viewport: { width: 390, height: 844 },
+      // 不传 profile
+    })
+    rt.mountScreen('home')
+    rt.dispatchGesture('tap', [artifacts['home']!.events[0]!.nodeId])
+    expect(Object.keys(rt.profileStats()), '未启用 ⇒ 无采样').toHaveLength(0)
+  })
 })

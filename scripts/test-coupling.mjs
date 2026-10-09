@@ -97,6 +97,14 @@ const COUPLING = [
     why: 'vapor 源位置（模板内容相对行 → 整份 .vue 行）——节点/事件 loc 同口径（dev 构建发射；面板 Elements/Events → 源行）',
   },
   {
+    // ★★★批次 55（决策 #715）：运行期阶段耗时自采样（CPU Profiler）——`runtime-profiler.ts`（累加器）
+    //   经 `screen-runtime.ts` 插桩（instantiate/relink/flush/dispatch/handler），`superapp-runtime`
+    //   排空暴露。改任一处 ⇒ 定向跑 profiler 累加 + 壳级归因判据。
+    match: /^packages\/render-backend\/src\/(runtime-profiler|screen-runtime|superapp-runtime)\.ts$/,
+    tests: ['tests/runtime-profiler.test.ts', 'tests/screen-runtime.test.ts', 'tests/superapp-runtime.test.ts'],
+    why: 'CPU Profiler（运行期阶段耗时自采样）：累加正确 + 排空 + handler 归因带模板 loc（dev-only，未启用零开销）',
+  },
+  {
     match: /^packages\/compiler\/src\/script\.ts$/,
     tests: [
       'tests/mp-transform.test.ts',
