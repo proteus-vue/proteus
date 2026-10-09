@@ -233,6 +233,8 @@ describe('★完整宿主 · iOS 宿主模板为运行期形态（决策 #683）
     expect(rt, '布局枚举封闭集').toContain('["row", "column", "row-reverse", "column-reverse"]')
     expect(page, '面板可编辑集含布局字段').toMatch(/const EDITABLE = \[[\s\S]*?'width'/)
     expect(page, '面板可编辑集含 flex').toMatch(/EDITABLE = \[[\s\S]*?'flexGrow'/)
+    // ★escapeHtml 必须转义引号（对象字段 padding/margin 的 JSON 带 " 会截断属性；决策 #706 修）
+    expect(page, 'escapeHtml 转义引号').toMatch(/escapeHtml = .*replace\(\/\[<>&"'\]/)
   })
 
   // ★面板→设备命令（决策 #701/#702 安卓腿）：Android 宿主也接 /cmd + 元素高亮 + REPL

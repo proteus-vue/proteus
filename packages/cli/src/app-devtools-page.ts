@@ -275,7 +275,9 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
   const META = ${meta};
   const $ = (id) => document.getElementById(id);
   const fmtTime = (t) => new Date(t).toLocaleTimeString('en-GB', { hour12: false });
-  const escapeHtml = (s) => String(s).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
+  // ★必须转义引号（决策 #706 修）：对象字段（padding/margin = {top,…}）序列化成 JSON 带双引号，
+  //   而 value 属性里出现未转义的双引号 ⇒ 属性被提前截断 ⇒ 输入框只剩 {（用户实测「解析有问题」）。
+  const escapeHtml = (s) => String(s).replace(/[<>&"']/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' }[c]));
   const tl = $('tl');
   const netEl = $('net');
   const conEl = $('con');
