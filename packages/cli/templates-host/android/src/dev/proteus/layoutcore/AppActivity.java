@@ -577,14 +577,26 @@ public final class AppActivity extends Activity {
                 if (draw != null) draw.highlightNode(id);
                 devLog("info", "highlight #" + id);
             } else if ("edit".equals(type)) {
-                // ★★就地编辑（决策 #719）：改该节点某字段 ⇒ 桥 `updatePatches`（合并 spec + 内核增量重排）
-                //   ⇒ 布局类/绘制类都生效（与 iOS #706 同语义；实现路径按各端已有能力取最省）。
+                // ★★就地编辑（决策 #719/#722）：**委托给桥** `applyLiveEdit`（改树 + 全量重挂，对齐 iOS #706）
+                //   —— 桥是"树/渲染"的持有者；全量重建让**任意字段**生效（增量 `updatePatches` 只认字段子集，
+                //   `flexDirection` 等会被内核**静默忽略** ⇒ "改了 flex 方向布局不动"，用户实测）。
                 int id = o.optInt("nodeId", 0);
                 String key = o.optString("key", "");
                 String value = o.optString("value", "");
-                if (id > 0 && !key.isEmpty()) {
-                    boolean ok = applyLiveEdit(id, key, value);
+                if (id > 0 && !key.isEmpty() && draw != null) {
+                    boolean ok = false;
+                    try { ok = new org.json.JSONObject(draw.applyLiveEdit(id, key, value)).optBoolean("ok", false); } catch (Throwable ignored) { }
                     if (ok) { editsApplied = true; if (devOverlay != null) devOverlay.setEdited(true); }
+                    // ★编辑后**重推树**（决策 #722）：applyLiveEdit 走内核全量重挂 ⇒ 几何变了，
+                    //   而 `/tree` 只在 pushDevTree 时刷新（切屏才触发）⇒ 不推则面板树停在旧几何
+                    //   （面板显示与设备不一致）。推一次让面板/盒模型反映新布局。
+                    if (ok) pushDevTree();
+                    // ★就地编辑**即时反馈**（决策 #722）：此前编辑后界面无任何"已应用"信号（用户实测
+                    //   "元素刷新了但没提示、感觉延迟很高"）——补一条瞬时 toast（与热重载 flash 同款）。
+                    if (devOverlay != null) {
+                        if (ok) devOverlay.flash("✎ 已就地编辑 #" + id + " · " + key + "=" + value);
+                        else devOverlay.flash("⚠ 就地编辑未生效 #" + id + " · " + key);
+                    }
                     devLog(ok ? "info" : "warn", "edit #" + id + " " + key + "=" + value + (ok ? "" : "（不支持/无该节点）"));
                 }
             } else if ("reset".equals(type)) {
@@ -597,60 +609,6 @@ public final class AppActivity extends Activity {
                 }
             }
         } catch (Throwable ignored) { /* 命令尽力而为——不干扰渲染 */ }
-    }
-
-    /** ★★就地编辑核心（决策 #719）：值强转/校验 → 桥 `updatePatches([{id,style:{k:v}}])`（同 Java 包可直接调）。
-     *   禁改结构字段（id/parentId/rect/tag/semantic）——与 iOS `applyLiveEdit` 同约束。 */
-    private boolean applyLiveEdit(int id, String key, String value) {
-        if (draw == null) return false;
-        if ("id".equals(key) || "parentId".equals(key) || "rect".equals(key) || "tag".equals(key) || "semantic".equals(key)) return false;
-        Object coerced = coerceLiveEdit(key, value);
-        if (coerced == null) return false;
-        try {
-            org.json.JSONObject style = new org.json.JSONObject();
-            style.put(key, coerced);
-            org.json.JSONObject patch = new org.json.JSONObject();
-            patch.put("id", id);
-            patch.put("style", style);
-            org.json.JSONArray patches = new org.json.JSONArray();
-            patches.put(patch);
-            org.json.JSONObject reply = new org.json.JSONObject(draw.updatePatches(patches.toString()));
-            if (draw.view() != null) draw.view().invalidate();
-            return reply.optBoolean("ok", false);
-        } catch (Throwable t) { return false; }
-    }
-
-    /** ★就地编辑**值强转/校验**（决策 #719，镜像 iOS `coerceLiveEdit`）：颜色按 hex；padding/margin
-     *   单值⇒四边同值 / JSON 对象；枚举按**内核封闭集**；其余能解析为数字则数字，否则原串。
-     *   ★返回 null = 拒绝（非法值**不静默**改）。 */
-    private static Object coerceLiveEdit(String key, String value) {
-        if ("backgroundColor".equals(key) || "borderColor".equals(key) || "color".equals(key)) {
-            return (value != null && value.matches("#[0-9a-fA-F]{3,8}")) ? value : null;
-        }
-        if ("padding".equals(key) || "margin".equals(key)) {
-            try {
-                double d = Double.parseDouble(value);
-                org.json.JSONObject e = new org.json.JSONObject();
-                e.put("top", d); e.put("right", d); e.put("bottom", d); e.put("left", d);
-                return e;
-            } catch (Throwable ignored) { }
-            try {
-                org.json.JSONObject o = new org.json.JSONObject(value);
-                boolean any = false;
-                for (String s : new String[]{"top", "right", "bottom", "left"}) if (o.has(s)) any = true;
-                return any ? o : null;
-            } catch (Throwable ignored) { return null; }
-        }
-        if ("display".equals(key)) return ("flex".equals(value) || "none".equals(value)) ? value : null;
-        if ("position".equals(key)) return (java.util.Arrays.asList("static", "relative", "absolute", "fixed", "sticky").contains(value)) ? value : null;
-        if ("overflow".equals(key) || "overflowX".equals(key) || "overflowY".equals(key)) {
-            return (java.util.Arrays.asList("visible", "hidden", "scroll", "auto").contains(value)) ? value : null;
-        }
-        if ("flexDirection".equals(key)) {
-            return (java.util.Arrays.asList("row", "column", "row-reverse", "column-reverse").contains(value)) ? value : null;
-        }
-        // 默认：能解析为数字 ⇒ 数字（尺寸/弹性/字号/圆角/透明/偏移…）；否则按字符串原样收（文本/字体族/对齐…）
-        try { return Double.valueOf(value); } catch (Throwable ignored) { return value; }
     }
 
     /** ★重置为**项目代码的实时效果**（决策 #719）：**强制重挂**当前屏（`remount:true`）⇒ 从项目内容
