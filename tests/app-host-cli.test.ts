@@ -180,6 +180,31 @@ describe('★完整宿主 · iOS 宿主模板为运行期形态（决策 #683）
     // ★保留当前屏（决策 #693）：重载前抓当前屏名，重建后 navigate 回去（与 Android hotReload 同语义）
     expect(src, '保留当前屏').toContain('navigate(to:')
   })
+  // ★★★DevTools 上报三对齐（决策 #698）——iOS 此前缺这三点（面板四卡恒「—」/ 切屏树不更新 / Console 恒空）
+  it('DevTools 上报对齐（决策 #698）：perf + 现取树 + 原生日志', () => {
+    const src = fs.readFileSync(path.join(shellDir, 'ProteusApp.swift'), 'utf-8')
+    // ① 性能读数上报（/ping?perf=）——面板"渲染耗时/逐帧/重排/PATCH"
+    expect(src, '/ping 端点').toContain('/ping?screen=')
+    expect(src, '/ping 带 perf').toContain('&perf=')
+    expect(src, 'perf 读数构造').toContain('func perfJson()')
+    expect(src, 'perf 含 renderMs').toContain('renderMs')
+    expect(src, 'perf 含 relayout').toContain('"relayout"')
+    expect(src, 'perf 含 patches').toContain('"patches"')
+    // ② 每 tick 现取树（切屏/交互绕过 renderCurrent ⇒ 缓存会停在旧屏，与 Android #677 同坑）
+    expect(src, '每 tick 现取树').toContain('d.liveTreeJson()')
+    expect(src, '现取树实现').toContain('func liveTreeJson()')
+    // ③ 原生日志（channel=native）——对齐 Android devLog；否则无 console.log 的项目 Console 恒空
+    expect(src, '原生日志方法').toContain('func devLog(')
+    expect(src, 'app ready 原生日志').toMatch(/devLog\("info",\s*"app ready/)
+  })
+  it('iOS 桥暴露 DevTools 性能计数（决策 #698，与 Android draw 同口径）', () => {
+    const rt = fs.readFileSync(path.join(ROOT, 'hosts/ios/ProteusHost/runtime/selfdraw-scene.swift'), 'utf-8')
+    expect(rt, 'mount 计数').toContain('var mountCalls')
+    expect(rt, 'patch 累计').toContain('var patchAppliedTotal')
+    expect(rt, '重排累计').toContain('var relayoutTotal')
+    expect(rt, 'applyOps 累计 patch').toMatch(/patchAppliedTotal \+= applied/)
+    expect(rt, '逐帧耗时读数').toContain('var frameCostMs')
+  })
 })
 
 describe.skipIf(!hasSuperapp)('★完整宿主 · app-bundle（项目侧 bundle）', () => {

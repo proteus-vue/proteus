@@ -51,6 +51,9 @@ final class ProteusHostDriver {
     var logOutbox: [[String]] = []       // [channel, level, text]
     var traceOutbox: [[String]] = []     // [gesture, id, chain, handled, fired]
     var lastTreeJson: String?            // 最近一次渲染后的实例化节点树（供 dev-watch 上报 /tree）
+    /// ★DevTools 性能读数（决策 #698，对齐 Android `recordPerf`）——面板"渲染耗时/逐帧/重排/PATCH"。
+    ///   renderMs = 壳测；frameMs/relayout/patches = 桥/视图的原子上抛（不自造第二份数学）。
+    private(set) var lastRenderMs: Double = 0
 
     /// JS console 垫片：把页面 `console.log/info/warn/error` 捕获进 logOutbox（channel=project）。
     /// ★与 Android `installDevConsole` 同语义：**须在 eval bundle 之前装**（页面顶层 console.* 也被捕获）。
@@ -100,6 +103,16 @@ final class ProteusHostDriver {
         return ctx.evaluateScript("__proteusSuperappTree ? __proteusSuperappTree() : null")?.toString()
     }
 
+    /// ★每 tick 现取的节点树（决策 #698，对齐 Android `pushDevTree`/`syncDevScreen`）。
+    ///   【为什么不能复用 `lastTreeJson`】它只在 `renderCurrent` 里更新——而两件事都**绕过** renderCurrent：
+    ///     ① 交互更新走 JS `applyOps`（不经壳）；② 点卡片切屏走 JS `runtime.mountScreen`（径直 host.mount，
+    ///       不经壳的 navigate）。⇒ 面板树会**停在旧屏**（与 Android #677 同坑）。现取即真源（运行期 currentContent）。
+    func liveTreeJson() -> String? {
+        let t = snapshotTreeJson()
+        lastTreeJson = t
+        return t
+    }
+
     /// 取走并清空待上报日志（主线程调用；dev-watch 上报 /log）
     func drainLogs() -> [[String]] {
         var out: [[String]] = []
@@ -112,6 +125,33 @@ final class ProteusHostDriver {
         var out: [[String]] = []
         reportQueue.sync { out = traceOutbox; traceOutbox.removeAll() }
         return out
+    }
+
+    /// ★dev 原生日志（channel=native）——对齐 Android `devLog`（决策 #698）。
+    ///   用途：面板 Console 的"原生通道"（app ready / 热重载 / 渲染失败等）。缺了它，
+    ///   当项目页没有 `console.log` 时 Console 恒空（Android 靠原生事件撑着，iOS 没有 ⇒ 观感"一直空"）。
+    func devLog(_ level: String, _ text: String) {
+        guard ProteusBuildConfig.DEV, !text.isEmpty else { return }
+        reportQueue.sync {
+            logOutbox.append(["native", level, String(text.prefix(600))])
+            if logOutbox.count > 200 { logOutbox.removeFirst() }
+        }
+    }
+
+    /// ★DevTools 性能读数 JSON（决策 #698）——面板"渲染耗时/逐帧/重排计数/PATCH 总数"。
+    ///   ★数据源全为壳/桥/视图的原子读数（renderMs 壳测 · frameMs 视图帧循环 · 计数内核回执），不自造第二份。
+    func perfJson() -> String {
+        var o: [String: Any] = [:]
+        // ★亚毫秒精度（决策 #698）：`Int(rounded())` 会把 <0.5ms 主渲染截成 0（面板显示"0 ms"像坏了）；
+        //   保留两位小数（与 frameMs 同口径）。
+        o["renderMs"] = (lastRenderMs * 100).rounded() / 100
+        o["mountCalls"] = bridge.mountCalls
+        // ★逐帧耗时 = 最近一次产帧的宿主总耗时（与 Android onDraw 耗时同义；决策 #698）
+        o["frameMs"] = (bridge.frameCostMs * 100).rounded() / 100
+        o["relayout"] = bridge.relayoutTotal
+        o["patches"] = bridge.patchAppliedTotal
+        guard let d = try? JSONSerialization.data(withJSONObject: o, options: [.sortedKeys]) else { return "{}" }
+        return String(data: d, encoding: .utf8) ?? "{}"
     }
 
     init(frame: CGRect) {
@@ -182,15 +222,16 @@ final class ProteusHostDriver {
         let out = renderCurrent(ctx)
         buildTabBar(in: embedView)
         // ★安全区：`start` 在布局前同步调用 ⇒ `view.safeAreaInsets` 尚未就绪 ⇒ 下一 runloop 重渲一次
-        //   （"布局后重渲"是确定性事件，非盲等）
-        DispatchQueue.main.async { [weak self] in self?.renderCurrent(ctx) }
+        //   （"布局后重渲"是确定性事件，非盲等）。★primary:false ⇒ 不覆盖"渲染耗时"读数（决策 #698）。
+        DispatchQueue.main.async { [weak self] in self?.renderCurrent(ctx, primary: false) }
         return out
     }
 
     /// 把当前屏真画到屏上（运行期实例化 → 宿主 mount → CALayer）
     @discardableResult
-    func renderCurrent(_ ctx: JSContext? = nil) -> String {
+    func renderCurrent(_ ctx: JSContext? = nil, primary: Bool = true) -> String {
         guard let ctx = ctx ?? self.ctx else { return "{\"ok\":false,\"error\":\"无 JSContext\"}" }
+        let t0 = Date()
         let page = currentName(ctx)
         currentPage = page
         let vp = view.bounds.size.width > 0 ? view.bounds.size : UIScreen.main.bounds.size
@@ -201,11 +242,18 @@ final class ProteusHostDriver {
         let out = ctx.evaluateScript("__proteusSuperappRender(\(argsLit))")?.toString() ?? "{\"ok\":false}"
         if out.contains("\"ok\":false") {
             NSLog("[proteus] PROTEUS_HOST_RENDER_FAIL page=%@ %@", page, out)
+            devLog("error", "render fail · \(page) · \(String(out.prefix(160)))")
         } else {
             NSLog("[proteus] PROTEUS_HOST_RENDER page=%@ ok", page)
         }
-        // ★dev：渲染后抓实例化节点树（供面板 Elements；决策 #693）
-        if ProteusBuildConfig.DEV { lastTreeJson = snapshotTreeJson() }
+        // ★dev：渲染后抓实例化节点树（供面板 Elements；决策 #693）+ 记渲染耗时（决策 #698）
+        if ProteusBuildConfig.DEV {
+            lastTreeJson = snapshotTreeJson()
+            // ★只记**主渲染**（start/navigate）的耗时——安全区的"布局后重渲"（primary:false）是内部校正，
+            //   其成本极低（实测 ~0.36ms）；若让它覆盖，面板"渲染耗时"会显示一个与"挂载成本"无关的假小值
+            //   （Android 单次 renderCurrent ⇒ 无此问题）。
+            if primary { lastRenderMs = Date().timeIntervalSince(t0) * 1000 }
+        }
         return out
     }
 
@@ -554,6 +602,7 @@ final class ProteusSceneDelegate: UIResponder, UIWindowSceneDelegate {
             overlay.attach()
             devOverlay = overlay
             startDevWatch()
+            d.devLog("info", "app ready · screen=\(d.currentPage)")   // ★原生日志（决策 #698，对齐 Android devLog）
             DispatchQueue.main.async { [weak self] in self?.devOverlay?.flash("DEV 模式 · 改源码保存即热刷") }
         }
         // ★dev 窗口截图（决策 #693，仅 DEV + 显式 env）：把整个 window（含 DEV 角标/提示）渲染到 Documents
@@ -590,16 +639,18 @@ final class ProteusSceneDelegate: UIResponder, UIWindowSceneDelegate {
             // ① JSC 读取（主线程——eval 非线程安全）
             var screen = ""
             var tree: String?
+            var perf = "{}"
             var logs: [[String]] = []
             var traces: [[String]] = []
             DispatchQueue.main.sync {
                 screen = d.currentScreenName()
-                tree = d.lastTreeJson
+                tree = d.liveTreeJson()   // ★现取（决策 #698）：切屏/交互绕过 renderCurrent ⇒ 缓存会停在旧屏
+                perf = d.perfJson()       // ★性能读数（决策 #698）
                 logs = d.drainLogs()
                 traces = d.drainTraces()
             }
-            // ② 上报（后台队列）——ping(设备在线+当前屏+环境) / log / tree / trace
-            _ = BundleSource.httpGetText(base + "/ping?screen=" + urlEnc(screen) + "&env=" + urlEnc(self.devEnvJson))
+            // ② 上报（后台队列）——ping(设备在线+当前屏+环境+性能) / log / tree / trace
+            _ = BundleSource.httpGetText(base + "/ping?screen=" + urlEnc(screen) + "&env=" + urlEnc(self.devEnvJson) + "&perf=" + urlEnc(perf))
             for e in logs { _ = BundleSource.httpGetText(base + "/log?channel=" + e[0] + "&level=" + urlEnc(e[1]) + "&text=" + urlEnc(e[2])) }
             if let tree, !tree.isEmpty, tree != self.lastSentTree {
                 self.lastSentTree = tree
@@ -617,6 +668,7 @@ final class ProteusSceneDelegate: UIResponder, UIWindowSceneDelegate {
                 d.start(bundleSource: src, embedView: d.view)   // 新建 ctx + 重 eval + 重 boot + 重渲
                 d.navigate(to: screen)                           // 保留当前屏（与 Android hotReload 同语义）
                 NSLog("[proteus] PROTEUS_DEV_RELOADED version=%@ page=%@", v, screen)
+                d.devLog("info", "hot reload · v\(v) · \(screen)")   // ★原生日志（决策 #698）
                 self.devOverlay?.flash("⟳ 已热重载 · v\(v) · \(screen)")   // 热刷新提示（对齐安卓 #671）
             }
         }
