@@ -40,7 +40,7 @@
     "@proteus-vue/components": "workspace:*",
     "@proteus-vue/desktop": "0.3.0-beta.28",
     "@proteus-vue/devtools-runtime": "0.3.0-beta.28",
-    "@proteus-vue/docs": "0.3.0-beta.28",
+    "@proteus-vue/docs": "0.3.0-beta.33",
     "@proteus-vue/fluid": "0.3.0-beta.28",
     "@proteus-vue/gesture": "0.3.0-beta.28",
     "@proteus-vue/i18n": "0.3.0-beta.28",

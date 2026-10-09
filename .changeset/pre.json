@@ -54,9 +54,10 @@
     "proteus-superapp": "0.1.0"
   },
   "changesets": [
-    "auto-release-bump-1791547875418-nxa2k",
+    "auto-release-bump-1791552833683-bwzos",
     "batch3-host-capabilities",
     "compiler-silent-traps",
+    "css-doc-anchors",
     "fix-template-deps-and-smoke",
     "framework-element-probe",
     "mp-e2e-wechatide-standard",
@@ -70,6 +71,8 @@
     "sync-publish-drift",
     "sync-shared-pinia",
     "sync-singleton-and-routes",
+    "template-app-scripts",
+    "template-home-redesign",
     "transparency-hardening",
     "web-sim-and-alignment-fixes"
   ]
