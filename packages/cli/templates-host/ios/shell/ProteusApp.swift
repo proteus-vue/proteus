@@ -182,8 +182,15 @@ final class ProteusHostDriver {
         //   保留两位小数（与 frameMs 同口径）。
         o["renderMs"] = (lastRenderMs * 100).rounded() / 100
         o["mountCalls"] = bridge.mountCalls
-        // ★逐帧耗时 = 最近一次产帧的宿主总耗时（与 Android onDraw 耗时同义；决策 #698）
-        o["frameMs"] = (bridge.frameCostMs * 100).rounded() / 100
+        // ★★逐帧真实值（Profiler · 决策 #710）：读并清零本 tick 窗口的 CADisplayLink 采样——
+        //   fps / 真实帧间隔均长 frameMs / 最长 maxMs / 掉帧数。**取代**旧的"最近渲染成本"（那是静态值，恒直线）。
+        if let fs = bridge.drainDevFrameStats() {
+            o["fps"] = fs.fps
+            o["frameMs"] = fs.frameMs
+            o["frameMaxMs"] = fs.maxMs
+            o["frames"] = fs.frames
+            o["dropped"] = fs.dropped   // ★恒发（含 0）——面板以**设备真值**判掉帧（不用 frameMs>预算近似）
+        }
         o["relayout"] = bridge.relayoutTotal
         o["patches"] = bridge.patchAppliedTotal
         guard let d = try? JSONSerialization.data(withJSONObject: o, options: [.sortedKeys]) else { return "{}" }
@@ -678,6 +685,7 @@ final class ProteusSceneDelegate: UIResponder, UIWindowSceneDelegate {
             overlay.attach()
             devOverlay = overlay
             startDevWatch()
+            d.bridge.startDevFrameSampler()   // ★逐帧采样器（Profiler 真值 · 决策 #710）
             d.devLog("info", "app ready · screen=\(d.currentPage)")   // ★原生日志（决策 #698，对齐 Android devLog）
             DispatchQueue.main.async { [weak self] in self?.devOverlay?.flash("DEV 模式 · 改源码保存即热刷") }
         }
