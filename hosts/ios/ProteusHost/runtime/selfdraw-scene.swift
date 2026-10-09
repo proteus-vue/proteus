@@ -1005,6 +1005,49 @@ final class SelfDrawView: UIView {
 
     var frameLoopRunning: Bool { displayLink != nil }
 
+    /* ══════════ ★★dev 逐帧采样器（Profiler 真值 · 决策 #710）══════════
+     * 【为什么需要】此前面板的 `frameMs` = `lastTiming["host_total_ms"]`（**最近一次渲染的成本**）——
+     *   两次渲染之间**值不变** ⇒ 每次心跳报同一数字 ⇒ 图是水平直线 ⇒ 恒「100% 掉帧」（**测量口径错**，非真卡）。
+     *   ⇒ 用**常驻 `CADisplayLink`** 采**真实刷新间隔**：空闲 ⇒ ≈16.7ms(60fps)；主线程被阻塞/掉帧 ⇒ 间隔变长。
+     *   ★dev-only（release 不启），窗口式（每次读清零，算这段的 fps/avg/max/掉帧数）。 */
+    private var devLink: CADisplayLink?
+    private var devFrameCount = 0
+    private var devIntervalSum: Double = 0
+    private var devIntervalMax: Double = 0
+    private var devDropped = 0
+    private var devLastTs: CFTimeInterval = 0
+
+    func startDevFrameSampler() {
+        guard devLink == nil else { return }
+        devLastTs = 0
+        let l = CADisplayLink(target: self, selector: #selector(onDevFrame(_:)))
+        l.add(to: .main, forMode: .common)
+        devLink = l
+    }
+
+    @objc private func onDevFrame(_ link: CADisplayLink) {
+        guard devLastTs != 0 else { devLastTs = link.timestamp; return }
+        // 真实帧间隔（ms）；>1.5× 目标 ⇒ 算一次掉帧（主线程被阻塞、跳过了 vsync）
+        let dtMs = (link.timestamp - devLastTs) * 1000.0
+        devLastTs = link.timestamp
+        devFrameCount += 1
+        devIntervalSum += dtMs
+        devIntervalMax = max(devIntervalMax, dtMs)
+        let target = link.targetTimestamp - link.timestamp   // 本帧预算（可变刷新率下随屏）
+        if dtMs > target * 1000.0 * 1.5 { devDropped += 1 }
+    }
+
+    /// 读并**清零**逐帧采样窗口（dev-watch 每 tick 调一次 ⇒ 得到该 tick 窗口的 fps/帧耗时/掉帧）。
+    func drainDevFrameStats() -> (fps: Double, frameMs: Double, maxMs: Double, dropped: Int, frames: Int) {
+        let n = devFrameCount
+        let avgMs = n > 0 ? devIntervalSum / Double(n) : 0
+        let fps = devIntervalSum > 0 ? Double(n) / (devIntervalSum / 1000.0) : 0
+        let r = (fps: (fps * 10).rounded() / 10, frameMs: (avgMs * 100).rounded() / 100,
+                 maxMs: (devIntervalMax * 100).rounded() / 100, dropped: devDropped, frames: n)
+        devFrameCount = 0; devIntervalSum = 0; devIntervalMax = 0; devDropped = 0
+        return r
+    }
+
     @objc private func onDisplayLink(_ link: CADisplayLink) {
         let now = link.timestamp
         // ★首帧 dt = 0（没有"上一帧"）；此后用**真实 timestamp 差**（不是假设 16.67ms）
@@ -5560,6 +5603,10 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
 
     /// ★DevTools 元素高亮（决策 #701）：面板选中节点 ⇒ 在设备屏上给该节点 rect 描边覆盖
     func highlightNode(_ id: Int) { view?.highlightNode(id) }
+
+    /// ★dev 逐帧采样（Profiler 真值 · 决策 #710）：启动采样器 / 读并清零窗口。
+    func startDevFrameSampler() { view?.startDevFrameSampler() }
+    func drainDevFrameStats() -> (fps: Double, frameMs: Double, maxMs: Double, dropped: Int, frames: Int)? { view?.drainDevFrameStats() }
 
     /// ★★就地编辑某节点字段（DevTools 就地编辑 v2 · 决策 #706）——**能力全面放开**：任意节点字段
     ///   （**布局类** width/padding/flex… + **绘制类** backgroundColor/color/… + 文本/枚举）。

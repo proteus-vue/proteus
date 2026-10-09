@@ -250,6 +250,13 @@ describe('★完整宿主 · iOS 宿主模板为运行期形态（决策 #683）
     expect(server, '快照含性能时间线').toContain('perf: perfHist.slice')
     expect(page, '面板 Profiler 渲染').toContain('function renderProf(')
     expect(page, '掉帧预算 16.7').toContain('16.7')
+    // ★逐帧真实采样（决策 #710）：CADisplayLink 采样器 + 桥转发 + 壳上报 fps
+    const rtSampler = fs.readFileSync(path.join(ROOT, 'hosts/ios/ProteusHost/runtime/selfdraw-scene.swift'), 'utf-8')
+    expect(rtSampler, '逐帧采样器').toContain('func startDevFrameSampler(')
+    expect(rtSampler, '逐帧窗口读取').toContain('func drainDevFrameStats(')
+    const shSampler = fs.readFileSync(path.join(shellDir, 'ProteusApp.swift'), 'utf-8')
+    expect(shSampler, '启动采样器').toContain('startDevFrameSampler()')
+    expect(shSampler, '上报 fps').toContain('o["fps"]')
   })
 
   // ★面板→设备命令（决策 #701/#702 安卓腿）：Android 宿主也接 /cmd + 元素高亮 + REPL

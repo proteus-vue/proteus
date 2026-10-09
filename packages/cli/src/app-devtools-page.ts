@@ -215,7 +215,10 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
       border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 11px;background:var(--surface)}
   .ep b{color:var(--ink-2);font-weight:650;white-space:nowrap}
 
-  /* ★性能时间线 Profiler（决策 #709）：柱 = 帧耗时样本；>16.7ms 标红（掉帧） */
+  /* ★性能时间线 Profiler（决策 #709/#710）：柱 = 帧间隔样本；>16.7ms 标红（掉帧） */
+  .pstat{display:inline-flex;align-items:center;gap:7px;margin-left:auto;padding:4px 12px;border-radius:999px;background:var(--surface-3);border:1px solid var(--line-2);color:var(--ink-2);font-size:11.5px;font-weight:500;letter-spacing:.2px;white-space:nowrap}
+  .pstat b{font-weight:700}
+  .pdot{width:7px;height:7px;border-radius:50%;flex:none;box-shadow:0 0 0 3px rgba(255,255,255,.05)}
   .prof{position:relative;height:120px;display:flex;align-items:flex-end;gap:2px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:10px var(--s3);overflow:hidden}
   .prof .pbar{flex:0 0 4px;min-width:3px;border-radius:2px 2px 0 0;background:var(--brand);transition:height .1s}
   .prof .pbar.jank{background:var(--err)}
@@ -254,7 +257,7 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
 
   <!-- ★性能时间线 Profiler（决策 #709）：帧耗时逐样本条 + 掉帧高亮（>16.7ms 预算） -->
   <div class="blk">
-    <h2>性能时间线 · Profiler<span class="flt" id="prof-stat" style="margin-left:auto;color:var(--dim);font-weight:400">等待设备心跳…</span></h2>
+    <h2>性能时间线 · Profiler<span id="prof-stat" class="pstat">等待设备心跳…</span></h2>
     <div class="prof" id="prof"><div class="empty">暂无性能采样…设备心跳（每 ~1.5s）上报 渲染/逐帧耗时。</div></div>
   </div>
 
@@ -629,29 +632,41 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
     if (p.relayout != null) $('c-relayout').textContent = p.relayout;
     if (p.patches != null) $('c-patches').textContent = p.patches;
   }
-  // ★性能时间线 Profiler（决策 #709）：帧耗时样本 ⇒ 柱状条 + 掉帧（>预算）高亮 + 统计
+  // ★性能时间线 Profiler（决策 #709/#710）：真实逐帧采样（CADisplayLink）⇒ 帧间隔柱 + 掉帧高亮 + fps
   const profEl = $('prof');
   const BUDGET_MS = 16.7;   // 60fps 帧预算
   let profSamples = [];
   function renderProf() {
     if (!profEl) return;
-    if (!profSamples.length) { profEl.innerHTML = '<div class="empty">暂无性能采样…设备心跳（每 ~1.5s）上报 渲染/逐帧耗时。</div>'; return; }
+    if (!profSamples.length) { profEl.innerHTML = '<div class="empty">暂无性能采样…设备心跳（每 ~1.5s）上报逐帧统计。</div>'; return; }
+    // ★帧间隔（真实 CADisplayLink 采样）；掉帧按**样本自带** dropped（设备算的）——无则回落 >预算
     var vals = profSamples.map(function (s) { return Number(s.perf && s.perf.frameMs) || 0; });
     var mx = Math.max(BUDGET_MS * 1.5, Math.max.apply(null, vals), 1);
-    // y 轴：0..mx，柱高按比例（容器 100px 绘图区）
     var H = 96;
-    var jank = vals.filter(function (v) { return v > BUDGET_MS; }).length;
+    // ★掉帧 = **设备真值** dropped（CADisplayLink 实测跳过 vsync 的帧数）——**不用** frameMs>预算 近似
+    //   （实测：59.4fps ⇒ frameMs 16.85 > 16.7 会被误判掉帧；那只是 60Hz 的采样抖动，不是卡）
+    var jank = profSamples.filter(function (s) { var p = s.perf || {}; return Number(p.dropped) > 0; }).length;
+    var droppedTotal = profSamples.reduce(function (a, s) { return a + (Number((s.perf || {}).dropped) || 0); }, 0);
     var avg = vals.reduce(function (a, b) { return a + b; }, 0) / vals.length;
-    var bars = vals.map(function (v) {
+    var fpsList = profSamples.map(function (s) { return Number(s.perf && s.perf.fps) || 0; }).filter(function (f) { return f > 0; });
+    var avgFps = fpsList.length ? fpsList.reduce(function (a, b) { return a + b; }, 0) / fpsList.length : 0;
+    var bars = vals.map(function (v, i) {
+      var p = profSamples[i].perf || {};
+      var isJank = Number(p.dropped) > 0;
       var h = Math.max(2, Math.round((v / mx) * H));
-      return '<div class="pbar' + (v > BUDGET_MS ? ' jank' : '') + '" style="height:' + h + 'px" title="' + v.toFixed(2) + 'ms"></div>';
+      return '<div class="pbar' + (isJank ? ' jank' : '') + '" style="height:' + h + 'px" title="' + v.toFixed(2) + 'ms' + (p.fps ? ' · ' + p.fps + 'fps' : '') + (p.dropped ? ' · 掉帧 ' + p.dropped : '') + '"></div>';
     }).join('');
     var budgetTop = Math.round((1 - BUDGET_MS / mx) * H);
     profEl.innerHTML = bars
       + '<div class="pbudget" style="bottom:calc(10px + ' + budgetTop + 'px)"><span>16.7ms 预算</span></div>'
-      + '<div class="plabel">max ' + Math.max.apply(null, vals).toFixed(1) + 'ms · avg ' + avg.toFixed(1) + 'ms</div>';
+      + '<div class="plabel">max ' + Math.max.apply(null, vals).toFixed(1) + 'ms · avg ' + avg.toFixed(1) + 'ms' + (avgFps ? ' · ' + avgFps.toFixed(0) + 'fps' : '') + '</div>';
     var stat = $('prof-stat');
-    if (stat) stat.innerHTML = profSamples.length + ' 样本 · ' + (jank ? '<b style="color:var(--err)">' + jank + ' 掉帧</b>' : '<b style="color:var(--ok)">无掉帧</b>');
+    if (stat) {
+      var dot = jank ? 'var(--err)' : 'var(--ok)';
+      stat.innerHTML = '<span class="pdot" style="background:' + dot + '"></span>' + profSamples.length + ' 样本'
+        + (avgFps ? ' · ' + avgFps.toFixed(0) + 'fps' : '')
+        + ' · ' + (jank ? '<b style="color:var(--err)">' + droppedTotal + ' 掉帧</b>' : '<b style="color:var(--ok)">无掉帧</b>');
+    }
   }
   function pushPerf(p) {
     profSamples.push(p); if (profSamples.length > 400) profSamples.shift();
