@@ -166,6 +166,18 @@ describe('★#686 doctor · 输出与脱敏', () => {
     // 测试环境非 TTY ⇒ 不应有 ANSI 转义
     expect(text.includes('\u001b[')).toBe(false)
   })
+  // ★★决策 #720：devices 组默认跳过 ⇒ 全绿易被误读为"设备也正常"；未查设备时末尾须醒目标注
+  it('未 --deep ⇒ 末尾标注「设备未检查」（防"端就绪"被误读为设备正常）', async () => {
+    const { formatHuman, deviceNotCheckedHint } = await import('../packages/cli/src/doctor/report')
+    // 声明了 app 端 target、且报告里**无 devices 组**（= 未查）⇒ 给提示
+    const rep = await runDoctor({ root: '/proj', targets: ['android'], cliVersion: '0.0.0', contextOverrides: fakeCtx() })
+    expect(rep.groups.some((g) => g.id === 'devices'), '默认不应含 devices 组').toBe(false)
+    expect(deviceNotCheckedHint(rep), '应给设备未检查提示').toContain('设备未检查')
+    expect(formatHuman(rep, { quietWhenGreen: true }), '报告末尾应含提示').toContain('设备未检查')
+    // 无 app 端 target（仅 mp）⇒ 不提示
+    const repMp = await runDoctor({ root: '/proj', targets: ['mp'], cliVersion: '0.0.0', contextOverrides: fakeCtx() })
+    expect(deviceNotCheckedHint(repMp), '仅 mp ⇒ 不提示设备').toBeNull()
+  })
   it('--list：只列目录、不执行探测（返回字符串含 id）', () => {
     const s = listChecks()
     expect(s).toContain('env/node-version')

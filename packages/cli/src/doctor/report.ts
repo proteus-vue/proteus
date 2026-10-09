@@ -59,6 +59,8 @@ export function formatHuman(rep: DoctorReport, opts: FormatOptions = {}): string
     out.push(`  ${groups}`)
     out.push(dim('─'.repeat(72)))
     out.push(`  ${rep.summary.total} 项检查全部通过 · ${(rep.durationMs / 1000).toFixed(2)}s    ${dim('★ proteus doctor --verbose 查看逐项取证')}`)
+    const devHint = deviceNotCheckedHint(rep)
+    if (devHint) out.push(`  ${yellow('⚠ ' + devHint)}`)
     return out.join('\n')
   }
   for (const g of rep.groups) {
@@ -104,9 +106,24 @@ export function formatHuman(rep: DoctorReport, opts: FormatOptions = {}): string
     for (const d of warns) out.push(`    ${d.code}  ${d.context ?? ''}  ${d.suggestions?.[0] ?? ''}`)
   }
   out.push('')
+  const devHint = deviceNotCheckedHint(rep)
+  if (devHint) out.push(`  ${yellow('⚠ ' + devHint)}`)
   out.push(dim('  ★ 完整报告：proteus doctor --json --report doctor-report.json'))
   out.push(dim('  ★ 逐项取证：proteus doctor --verbose'))
   return out.join('\n')
+}
+
+/**
+ * ★★「设备未检查」提示（决策 #720）：devices 组是慢检查、**默认跳过** ⇒ 报告里**没有该组**，
+ *   而"环境/工具链/…/端就绪"全绿极易被**误读为"设备也正常"**（用户实测：doctor 全绿，`adb install`
+ *   却报 `device offline` —— "端就绪"其实是 **endpoint 组**、与设备无关）。⇒ 未 `--deep` 且声明了
+ *   移动端 target 时，末尾醒目标注"设备未检查 + 怎么查"。
+ */
+export function deviceNotCheckedHint(rep: DoctorReport): string | null {
+  const appTargets = rep.targets.filter((t) => t === 'ios' || t === 'android' || t === 'harmony')
+  if (!appTargets.length) return null
+  if (rep.groups.some((g) => g.id === 'devices')) return null   // 已查（--deep / --only devices）
+  return `设备未检查（${appTargets.join('/')}）—— 加 --deep 才查设备连接：proteus doctor --deep`
 }
 
 function warnTotal(n: number): string {
