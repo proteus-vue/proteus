@@ -725,6 +725,17 @@ describe('★★★鸿蒙运行期宿主（决策 #725 · 与 Android/iOS 同级
     expect(idx, '鸿蒙 aa start EntryAbility').toContain("'-a', 'EntryAbility'")
   })
 
+  it('鸿蒙打包把 hap 落 dist/app/harmony/proteus-host.hap（outHap，防"提示成功但找不到 .hap"）', () => {
+    const pkg = fs.readFileSync(path.join(CLI, 'src/host-package.ts'), 'utf-8')
+    expect(pkg, 'PackageHostOptions.outHap').toContain('outHap?: string')
+    expect(pkg, '拷贝产物到 outHap').toMatch(/opts\.outHap/)
+    const idx = fs.readFileSync(path.join(CLI, 'src/index.ts'), 'utf-8')
+    // 两个调用点（build --package / dev）都要传 outHap（与 android outApk / ios outApp 同形）
+    const calls = idx.match(/packageHarmonyHost\([^)]*\)/g) ?? []
+    expect(calls.length, '两处 packageHarmonyHost 调用').toBeGreaterThanOrEqual(2)
+    expect(calls.every((c) => c.includes('outHap')), '每处都传 outHap').toBe(true)
+  })
+
   it('鸿蒙壳源自愈（syncHarmonyShell，防"模板升级老宿主拿不到"——同 #721 Android）', () => {
     const pkg = fs.readFileSync(path.join(CLI, 'src/host-package.ts'), 'utf-8')
     expect(pkg, 'packageHarmonyHost 调壳源自愈').toContain('syncHarmonyShell(hostDir)')

@@ -48,6 +48,10 @@ export interface PackageHostOptions {
   /** 编译产物项目根（含 dist/app/<platform>/screen-content.json）；缺省 = 不拷产物 */
   projectRoot?: string
   platform?: string
+  /** ★★★产物输出（决策 #725）：给了 ⇒ 把产出的 hap 拷贝到该路径（如 `dist/app/harmony/proteus-host.hap`）。
+   *   与 Android `outApk` / iOS `outApp` 同形——否则 CLI 打印的 `dist/app/harmony/proteus-host.hap` **并不存在**
+   *   （真产物只留在 `host/entry/build/.../entry-default-*.hap`；用户实测「提示打包成功，项目里找不到 .hap」）。 */
+  outHap?: string
 }
 
 export interface PackageHostResult {
@@ -178,7 +182,18 @@ export function packageHarmonyHost(opts: PackageHostOptions): PackageHostResult 
   if (!hap) return { ok: false, hostDir, hap: null, screenContentCopied, log: [...log, `✗ 未见 hap 产出（${path.relative(hostDir, outDir)}）`] }
   const signed = !/signingConfigs":\s*\[\s*\]/.test(fs.readFileSync(bp, 'utf-8'))
   log.push(`✓ 产出：${path.relative(hostDir, hap)}${signed ? '' : '（unsigned——装机需先在 DevEco 配置签名）'}`)
-  return { ok: true, hostDir, hap, screenContentCopied, log }
+  // ★★★产物输出（决策 #725）：CLI 传 outHap ⇒ 拷贝到 `dist/app/harmony/proteus-host.hap`（与 android outApk 同形）。
+  //   ★此前 harmony **漏了这一步**：CLI 打印 `dist/app/harmony/proteus-host.hap` 但那里**没有文件**（真产物只留在
+  //     `host/entry/build/.../entry-default-*.hap`）⇒ 用户「提示打包成功，项目里找不到 .hap」。
+  let finalHap = hap
+  if (opts.outHap) {
+    const dest = path.resolve(opts.outHap)
+    fs.mkdirSync(path.dirname(dest), { recursive: true })
+    fs.copyFileSync(hap, dest)
+    finalHap = dest
+    log.push(`✓ 安装包输出：${dest}（${(fs.statSync(dest).size / 1024 / 1024).toFixed(1)} MB）`)
+  }
+  return { ok: true, hostDir, hap: finalHap, screenContentCopied, log }
 }
 
 /* ================= iOS（第三刀样板） ================= */

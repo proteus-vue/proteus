@@ -158,10 +158,10 @@ async function main(): Promise<void> {
                 const sPack = ui.step('打包安装包')
                 const pk =
                   platform === 'ios'
-                    ? packageIosHost({ hostDir, projectRoot })
+                    ? packageIosHost({ hostDir, projectRoot, outApp: outPkg })
                     : platform === 'android'
                       ? packageAndroidHost({ hostDir, projectRoot, outApk: outPkg })
-                      : packageHarmonyHost({ hostDir, projectRoot, platform: 'harmony' })
+                      : packageHarmonyHost({ hostDir, projectRoot, platform: 'harmony', outHap: outPkg })
                 for (const l of pk.log) if (/^⚠/.test(l)) ui.warn(l.replace(/^⚠\s*/, ''))
                 if (!pk.ok) {
                   sPack.fail('失败')
@@ -924,7 +924,7 @@ async function runAppDev(target: AppPlatform): Promise<number> {
       ? packageAndroidHost({ hostDir, projectRoot, dev: true, devUrl: server.url, outApk: outPkg })
       : target === 'ios'
         ? packageIosHost({ hostDir, projectRoot, dev: true, devUrl: server.url, outApp: outPkg })
-        : packageHarmonyHost({ hostDir, projectRoot, platform: 'harmony' })
+        : packageHarmonyHost({ hostDir, projectRoot, platform: 'harmony', outHap: outPkg })
   if (!pk.ok) {
     sPack.fail('打包失败')
     // ★★Apollo（决策 #684）：**完整**输出诊断（结构化根因 + 原文），不再只过滤 `✗` 行把详情丢掉。
