@@ -287,10 +287,12 @@ describe('★完整宿主 · iOS 宿主模板为运行期形态（决策 #683）
 
   it('掉帧详情 · 事件链归因（决策 #714）：面板可点掉帧柱 + Android 真 dropped', () => {
     const page = fs.readFileSync(path.join(ROOT, 'packages/cli/src/app-devtools-page.ts'), 'utf-8')
-    expect(page, '掉帧详情入口').toContain('function showJankDetail(')
+    // ★决策 #717：原 showJankDetail 已并入统一的 showWindowDetail（掉帧柱仍开它、并多带本窗口 CPU 明细）
+    expect(page, '窗口详情入口（含事件链）').toContain('function showWindowDetail(')
     expect(page, '掉帧柱可点').toMatch(/pbar\.jank[\s\S]*?addEventListener\('click'/)
     expect(page, '事件日志缓冲').toContain('function logEvent(')
-    expect(page, '归因窗口').toContain('掉帧前 ')
+    expect(page, '归因窗口').toContain('前 ')
+    expect(page, '事件链（不断言因果）').toContain('同时段，不断言因果')
     // Android 逐帧采样器（Choreographer）+ recordPerf 发 fps/frameMaxMs/dropped/frames（键名与 iOS 对齐）
     const pv = fs.readFileSync(path.join(ROOT, 'hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/ProteusHostView.java'), 'utf-8')
     expect(pv, 'Android 逐帧采样器').toContain('public void startDevFrameSampler()')
@@ -327,6 +329,19 @@ describe('★完整宿主 · iOS 宿主模板为运行期形态（决策 #683）
     expect(act, 'Android 排空 profile 采样').toContain('__proteusSuperappProfile')
     expect(act, 'Android profile 走 UI 泵').toContain('private void pumpProfile(')
     expect(act, 'Android perf 带 profile').toContain('o.put("profile"')
+  })
+
+  // ★★CPU ⇄ 掉帧事件链联动（决策 #717）：CPU 行可点 → 窗口详情（本窗口 CPU 明细 + 事件链）
+  it('CPU ⇄ 事件链联动（决策 #717）：CPU 行可点 + 统一窗口详情 + 聚焦行', () => {
+    const page = fs.readFileSync(path.join(ROOT, 'packages/cli/src/app-devtools-page.ts'), 'utf-8')
+    expect(page, '统一窗口详情入口').toContain('function showWindowDetail(')
+    expect(page, '旧掉帧详情已并入（不再单列 showJankDetail）').not.toContain('function showJankDetail(')
+    expect(page, '窗口详情含本窗口 CPU 明细段').toContain('运行期 CPU 阶段（本窗口）')
+    expect(page, '窗口→样本反查（CPU 行点击定位）').toContain('function latestSampleWithStage(')
+    expect(page, 'CPU 行可点').toMatch(/class="craw clink/)
+    expect(page, 'CPU 行点击打开窗口详情').toMatch(/latestSampleWithStage\(r0\.dataset\.label\)[\s\S]*?showWindowDetail\(/)
+    expect(page, '掉帧柱也开同一窗口详情').toMatch(/pbar\.jank[\s\S]*?showWindowDetail\(Number\(b\.dataset\.i\)\)/)
+    expect(page, '聚焦行高亮样式').toContain('.craw.cfocus')
   })
 
   // ★面板→设备命令（决策 #701/#702 安卓腿）：Android 宿主也接 /cmd + 元素高亮 + REPL

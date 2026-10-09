@@ -250,6 +250,13 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
   .craw .cbar{height:7px;border-radius:4px;background:var(--brand);min-width:2px;justify-self:start}
   .craw .cmeta{text-align:right;color:var(--dim);font-size:11px}
   .craw.ctop .cbar{background:var(--err)}
+  /* ★CPU ⇄ 事件链联动（决策 #717）：行可点（跳窗口详情）；详情里聚焦行高亮 */
+  .craw.clink{cursor:pointer}
+  .craw.clink:hover{background:var(--surface-3)}
+  .craw.cfocus{background:var(--brand-soft)}
+  .craw.cfocus .cl{color:var(--ink)}
+  .cdot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--ok);box-shadow:0 0 0 3px var(--ok-soft)}
+  .jd-cpu{max-height:180px}
   .cpu .empty{padding:var(--s3)}
   .prof{position:relative;height:120px;display:flex;align-items:flex-end;gap:2px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:10px var(--s3);overflow:hidden}
   .prof .pbar{flex:0 0 4px;min-width:3px;border-radius:2px 2px 0 0;background:var(--brand);transition:height .1s}
@@ -713,12 +720,24 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
   }
   // ★★CPU Profiler（决策 #715）：运行期阶段耗时排行（哪一段/哪个 handler 最贵）。
   //   形状 {屏名: [{label,count,totalMs,maxMs,loc?}]}（宿主 /ping?perf= 里嵌套上报）。
-  //   ★只显示**累计**排行（窗口内），带模板源位置徽章（handler 类）——归因"这次卡在哪段"。
+  //   ★行可点（决策 #717）：跳到"该阶段出现的最新窗口"的**窗口详情**（CPU 明细 + 事件链联动）。
   const cpuEl = $('cpu');
   let cpuData = null;
   function applyProfile(prof) {
     cpuData = prof || null;
     renderCpu();
+  }
+  // ★★窗口 → CPU 明细反查（决策 #717）：每个 perf 样本自带那一窗口的 profile（修复 #716 后就有）——
+  //   找"含某阶段的最新样本索引"，供 CPU 行点击时联动到那一帧的事件链。
+  function latestSampleWithStage(label) {
+    for (var i = profSamples.length - 1; i >= 0; i--) {
+      var pr = profSamples[i] && profSamples[i].perf && profSamples[i].perf.profile;
+      if (!pr) continue;
+      var hit = false;
+      Object.keys(pr).forEach(function (sc) { if ((pr[sc] || []).some(function (e) { return e.label === label; })) hit = true; });
+      if (hit) return i;
+    }
+    return -1;
   }
   function renderCpu() {
     if (!cpuEl) return;
@@ -731,7 +750,8 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
     var rows = all.slice(0, 12).map(function (x, i) {
       var e = x.e, loc = e.loc ? (e.loc.line + ':' + e.loc.column) : '';
       var pct = Math.max(3, Math.round((e.totalMs / grandMax) * 100));
-      return '<div class="craw' + (i === 0 ? ' ctop' : '') + '">'
+      // ★可点（决策 #717）：跳到该阶段出现的最新窗口详情（CPU + 事件链）
+      return '<div class="craw clink' + (i === 0 ? ' ctop' : '') + '" data-label="' + escapeHtml(e.label) + '" title="点击查看该阶段所在窗口的事件链">'
         + '<div class="cl" title="' + escapeHtml(x.sc + ' · ' + e.label) + '">' + escapeHtml(e.label) + (loc ? '<span class="cloc">' + escapeHtml(x.sc + '.vue:' + loc) + '</span>' : '') + '</div>'
         + '<div class="cbar" style="width:' + pct + '%"></div>'
         + '<div class="cmeta">' + e.totalMs.toFixed(1) + 'ms · ×' + e.count + (e.maxMs ? ' · max ' + e.maxMs.toFixed(1) : '') + '</div>'
@@ -739,7 +759,13 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
     }).join('');
     var total = all.reduce(function (a, x) { return a + x.e.totalMs; }, 0);
     cpuEl.innerHTML = rows
-      + '<div class="jd-hint">本窗口各阶段累计 ' + total.toFixed(1) + 'ms（前 12 项）· 单位 ms · ×N=次数 · max=最慢单次。归因到具体 handler（带模板源位置）。</div>';
+      + '<div class="jd-hint">本窗口各阶段累计 ' + total.toFixed(1) + 'ms（前 12 项）· 单位 ms · ×N=次数 · max=最慢单次。★点某行 ⇒ 看该阶段所在窗口的事件链。</div>';
+    cpuEl.querySelectorAll('.craw.clink').forEach(function (r0) {
+      r0.addEventListener('click', function () {
+        var idx = latestSampleWithStage(r0.dataset.label);
+        if (idx >= 0) showWindowDetail(idx, r0.dataset.label);
+      });
+    });
     var stat = $('cpu-stat');
     if (stat) stat.innerHTML = all.length + ' 阶段 · 合计 ' + total.toFixed(1) + 'ms';
   }
@@ -781,7 +807,7 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
       + '<div class="pbudget" style="bottom:calc(10px + ' + budgetTop + 'px)"><span>16.7ms 预算</span></div>'
       + '<div class="plabel">max ' + Math.max.apply(null, vals).toFixed(1) + 'ms · avg ' + avg.toFixed(1) + 'ms' + (avgFps ? ' · ' + avgFps.toFixed(0) + 'fps' : '') + '</div>';
     profEl.querySelectorAll('.pbar.jank').forEach(function (b) {
-      b.addEventListener('click', function () { showJankDetail(Number(b.dataset.i)); });
+      b.addEventListener('click', function () { showWindowDetail(Number(b.dataset.i)); });
     });
     var stat = $('prof-stat');
     if (stat) {
@@ -791,9 +817,10 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
         + ' · ' + (jank ? '<b style="color:var(--err)">' + droppedTotal + ' 掉帧</b>' : '<b style="color:var(--ok)">无掉帧</b>');
     }
   }
-  // ★★掉帧详情 + 归因（决策 #714）：把该掉帧样本**前 ~1.6s 窗口**内的重建/手势/请求/日志串成"事件链"——
-  //   开发者据此判断"这次掉帧是热重载？点了什么？拉了 bundle？还是纯渲染"。★只做**相关**，不做因果断言。
-  function showJankDetail(i) {
+  // ★★窗口详情 · CPU ⇄ 事件链联动（决策 #717，接管并增强 #714 的掉帧详情）：给定一个 perf 样本（=一个
+  //   心跳窗口），同时展示 **该窗口的运行期 CPU 阶段明细**（哪个 handler/阶段撑起来的，带模板源位置）
+  //   + **该窗口的事件链**（重建/手势/请求/日志）。掉帧柱与 CPU 排行行都打开它。★只做"相关"，不做因果断言。
+  function showWindowDetail(i, focus) {
     var box = $('jank-detail'); if (!box) return;
     var s = profSamples[i]; if (!s) return;
     var p = s.perf || {};
@@ -804,19 +831,40 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
     var relHtml = rel.length
       ? rel.map(function (e) { return '<div class="jrow"><span class="jt">' + (t ? (e.t - t) + 'ms' : e.t) + '</span><span class="jk">' + escapeHtml(kindTag[e.kind] || e.kind) + '</span><span class="jx">' + escapeHtml(e.label) + '</span></div>'; }).join('')
       : '<div class="jrow jempty">该窗口内无重建/手势/请求——掉帧**非本次动作引起**（纯渲染 / 后台负载 / 主线程其它阻塞）。</div>';
-    var dps = Object.keys(p).map(function (k) { return '<span class="dpill"><b>' + escapeHtml(k) + '</b>' + escapeHtml(String(p[k])) + '</span>'; }).join('');
-    box.innerHTML = '<div class="nd-h"><span class="jdot"></span>'
-      + '<span class="nd-m">掉帧详情</span>'
-      + '<span class="nd-path">' + (s.t ? fmtTime(s.t) : '') + ' · 掉帧前 ' + (WIN / 1000) + 's 内的事件链</span>'
-      + '<span class="nd-st err">掉帧 ' + (p.dropped || 0) + ' 帧</span>'
+    // ★本窗口 CPU 明细（决策 #717）：从该样本的 perf.profile 取（每 ping 自带那一窗口的采样）
+    var prof = p.profile || {};
+    var cpuRows = [];
+    Object.keys(prof).forEach(function (sc) { (prof[sc] || []).forEach(function (e) { cpuRows.push({ sc: sc, e: e }); }); });
+    cpuRows.sort(function (a, b) { return b.e.totalMs - a.e.totalMs; });
+    var cmax = 1; cpuRows.forEach(function (x) { if (x.e.totalMs > cmax) cmax = x.e.totalMs; });
+    var cpuHtml = cpuRows.length
+      ? cpuRows.slice(0, 10).map(function (x) {
+          var e = x.e, loc = e.loc ? (x.sc + '.vue:' + e.loc.line + ':' + e.loc.column) : '';
+          var pct = Math.max(4, Math.round((e.totalMs / cmax) * 100));
+          var on = focus && e.label === focus ? ' cfocus' : '';
+          return '<div class="craw' + on + '"><div class="cl">' + escapeHtml(e.label) + (loc ? '<span class="cloc">' + escapeHtml(loc) + '</span>' : '') + '</div>'
+            + '<div class="cbar" style="width:' + pct + '%"></div>'
+            + '<div class="cmeta">' + e.totalMs.toFixed(1) + 'ms · ×' + e.count + (e.maxMs ? ' · max ' + e.maxMs.toFixed(1) : '') + '</div></div>';
+        }).join('')
+      : '<div class="jrow jempty">该窗口无运行期 CPU 采样（本次心跳未带 profile——确认 dev 构建已开 CPU Profiler）。</div>';
+    var dps = Object.keys(p).filter(function (k) { return k !== 'profile'; }).map(function (k) { return '<span class="dpill"><b>' + escapeHtml(k) + '</b>' + escapeHtml(String(p[k])) + '</span>'; }).join('');
+    var jankN = Number(p.dropped) || 0;
+    box.innerHTML = '<div class="nd-h">' + (jankN > 0 ? '<span class="jdot"></span>' : '<span class="cdot"></span>')
+      + '<span class="nd-m">窗口详情</span>'
+      + '<span class="nd-path">' + (s.t ? fmtTime(s.t) : '') + ' · 前 ' + (WIN / 1000) + 's 的事件链 + 本窗口 CPU 明细</span>'
+      + (jankN > 0 ? '<span class="nd-st err">掉帧 ' + jankN + ' 帧</span>' : '<span class="nd-st ok">无掉帧</span>')
       + '<button class="nd-close" title="关闭">✕</button></div>'
       + '<div class="jd-pills">' + dps + '</div>'
+      + '<div class="jd-sec">运行期 CPU 阶段（本窗口）' + (focus ? ' · 已聚焦 <b style="color:var(--brand)">' + escapeHtml(focus) + '</b>' : '') + '</div>'
+      + '<div class="jd-rows jd-cpu">' + cpuHtml + '</div>'
       + '<div class="jd-sec">触发窗口 · 事件链（同时段，不断言因果）</div>'
       + '<div class="jd-rows">' + relHtml + '</div>'
       + '<div class="jd-hint">帧间隔 ' + escapeHtml(String(p.frameMs != null ? p.frameMs : '?')) + 'ms · 最长 ' + escapeHtml(String(p.frameMaxMs != null ? p.frameMaxMs : '?')) + 'ms · 本窗口 ' + escapeHtml(String(p.frames != null ? p.frames : '?')) + ' 帧。</div>';
     box.style.display = 'block';
     var cb = box.querySelector('#jank-close');
     if (cb) cb.addEventListener('click', function () { box.style.display = 'none'; });
+    var fx = box.querySelector('.craw.cfocus');
+    if (fx && fx.scrollIntoView) fx.scrollIntoView({ block: 'nearest' });
   }
   function pushPerf(p) {
     profSamples.push(p); if (profSamples.length > 400) profSamples.shift();
