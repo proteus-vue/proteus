@@ -188,6 +188,8 @@ const demoSets = computed(() => D.demoPages.map((p) => ({
           </p>
           <div class="hero-cta">
             <a href="#verdict" class="btn btn-primary">{{ isEn ? 'See the four-end verdict' : '看四端裁决' }}</a>
+            <!-- ★CSS 支持参考入口（用户「CSS 文档入口太深」）：产品页首屏直达逐属性多端支持情况 -->
+            <router-link to="/docs/reference/css-support" class="btn btn-ghost">{{ isEn ? 'Full CSS support reference' : 'CSS 支持参考' }}</router-link>
             <router-link to="/consistency" class="btn btn-ghost">{{ isEn ? 'Consistency standard' : '一致性标准' }}</router-link>
           </div>
           <div class="hero-pills">
@@ -300,6 +302,11 @@ const demoSets = computed(() => D.demoPages.map((p) => ({
             <p class="ab-d">{{ a.d }}</p>
           </div>
         </p-grid>
+        <!-- ★CSS 支持参考入口（用户「CSS 文档入口太深」）：七项能力 → 逐属性可查、逐能力可锚定 -->
+        <p class="sec-note">
+          {{ isEn ? 'Want the property-by-property detail? ' : '想看逐属性的细节？' }}
+          <router-link to="/docs/reference/css-support" class="ref-link">{{ isEn ? 'Full CSS support reference — every capability, with jumpable anchors' : 'CSS 多端支持参考——每项能力都有可跳转锚点' }}</router-link>
+        </p>
       </section>
 
       <!-- ═══ §05 卷宗数字 ═══ -->
@@ -412,6 +419,7 @@ margin-top: 5px    ← margin-top (style.css:42) · specificity (0,1,0) · sourc
         <p class="cta-sub">{{ isEn ? 'Every declaration has been to court; every pixel is on the record.' : '每条声明都上过法庭，每个像素都有据可查。' }}</p>
         <div class="cta-actions">
           <router-link to="/docs/01-intro" class="btn btn-primary">{{ isEn ? 'Get started' : '开始使用' }}</router-link>
+          <router-link to="/docs/reference/css-support" class="btn btn-ghost">{{ isEn ? 'CSS support reference' : 'CSS 支持参考' }}</router-link>
           <router-link to="/consistency" class="btn btn-ghost">{{ isEn ? 'Consistency standard' : '一致性标准' }}</router-link>
           <a class="btn btn-ghost" href="https://github.com/proteus-vue/proteus" target="_blank" rel="noreferrer">GitHub ↗</a>
         </div>
@@ -499,6 +507,9 @@ margin-top: 5px    ← margin-top (style.css:42) · specificity (0,1,0) · sourc
 .sec-title { color: var(--ink); font-size: 24px; font-weight: 800; letter-spacing: -0.015em; margin: 0; }
 .sec-line { flex: 1; height: 1px; background: var(--line); align-self: center; }
 .sec-note { color: var(--muted); font-size: 14px; line-height: 1.85; margin: 0 0 24px; max-width: 860px; }
+/* ★CSS 支持参考入口（首屏/§04 深链）：品牌色下划线强调——与正文 note 区分 */
+.ref-link { color: var(--brand); font-weight: 600; text-decoration: none; border-bottom: 1px solid rgba(124, 92, 255, 0.4); transition: border-color 0.15s, color 0.15s; }
+.ref-link:hover { color: var(--brand-ink); border-bottom-color: var(--brand); }
 [data-reveal] { opacity: 0; transform: translateY(18px); transition: opacity 0.65s cubic-bezier(0.22, 1, 0.36, 1), transform 0.65s cubic-bezier(0.22, 1, 0.36, 1); }
 [data-reveal].revealed { opacity: 1; transform: none; }
 .card-ic { display: flex; width: 34px; height: 34px; align-items: center; justify-content: center; border-radius: 10px; color: var(--brand-ink); background: var(--brand-soft); border: 1px solid rgba(124, 92, 255, 0.3); }
