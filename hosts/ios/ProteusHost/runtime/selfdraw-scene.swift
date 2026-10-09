@@ -4429,6 +4429,18 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
 
     /// 最近一次布局的分段耗时（供报告）
     private(set) var lastTiming: [String: Double] = [:]
+    /* ── ★DevTools 性能计数（决策 #698，与 Android `draw` 同口径）──
+     *   面板"渲染耗时/逐帧/重排计数/PATCH 总数"的数据源。此前 iOS **完全没有**这些累计
+     *   （`/ping` 也不带 `perf`）⇒ 面板那四张卡片恒为「—」（Android 有、iOS 空）。
+     *   ★计数全来自**内核回执**（applyOps/updatePatches 返回的 applied/relayout），不自造第二份数学。 */
+    private(set) var mountCalls = 0
+    private(set) var patchAppliedTotal = 0
+    private(set) var relayoutTotal = 0
+    /// ★"逐帧耗时"读数（决策 #698）——取**最近一次产帧**的宿主总耗时（render/applyOps/splice/updatePatches
+    ///   的 `host_total_ms`）。与 Android `ProteusHostView.lastFrameMs`（onDraw 耗时）**同义**（每帧产出的成本）。
+    ///   ★不用 `SelfDrawView.lastFrameMs`——那是 CADisplayLink 的**帧间隔**（≈16.67ms 预算，非成本），
+    ///     且只在动画期非零；拿它当"耗时"会误导。
+    var frameCostMs: Double { (lastTiming["host_total_ms"] ?? 0) }
     /// ★★上一次更新提交的几何快照（id → "x,y,w,h"）——用于**自检「几何真的变了吗」**
     ///
     /// 【为什么必须自检（本仓实测的第八个测量装置缺陷）】类B 基准树少了 `flexShrink: 0`，
@@ -4469,6 +4481,8 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         // ★重置几何快照（新树 ⇒ 旧快照无意义；否则首帧会把全部节点算成"刚变化"）
         lastGeom.removeAll(keepingCapacity: true)
         lastGeomChanged = 0
+        // ★DevTools 性能计数（决策 #698）：mount 次数（与 Android `draw.mountCalls` 同口径）
+        mountCalls += 1
         return render(treeJson: treeJson, phase: "mount")
     }
 
@@ -4815,6 +4829,9 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         let o = (try? JSONSerialization.jsonObject(with: Data(out.utf8))) as? [String: Any]
         let applied = (o?["applied"] as? Int) ?? 0
         let relayout = (o?["relayout_count"] as? Int) ?? 0
+        // ★DevTools 性能计数（决策 #698）：累计内核回执（与 applyOps 同口径）
+        if applied > 0 { patchAppliedTotal += applied }
+        if relayout > 0 { relayoutTotal += relayout }
 
         // 无有效补丁 ⇒ 什么都不用做（例如只改了颜色）
         if applied == 0 {
@@ -6748,6 +6765,9 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         let o = (try? JSONSerialization.jsonObject(with: Data(out.utf8))) as? [String: Any]
         let applied = (o?["applied"] as? Int) ?? 0
         let relayout = (o?["relayout_count"] as? Int) ?? 0
+        // ★DevTools 性能计数（决策 #698）：累计内核回执（与 Android `draw.patchAppliedTotal/relayoutTotal` 同口径）
+        if applied > 0 { patchAppliedTotal += applied }
+        if relayout > 0 { relayoutTotal += relayout }
         let scopes = (o?["scopes"] as? [Int]) ?? []
         let unsupported = (o?["unsupported"] as? [[String: Any]]) ?? []
 
