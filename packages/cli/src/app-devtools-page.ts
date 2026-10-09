@@ -21,7 +21,7 @@ const esc = (s: string): string => s.replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '
 
 /** 渲染 DevTools 单页（内联一切；`__PROTEUS_UI__` 注入项目信息，其余走 SSE 实时更新）。 */
 export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
-  const meta = JSON.stringify({ platform: info.platform, projectName: info.projectName, url: info.url })
+  const meta = JSON.stringify({ platform: info.platform, projectName: info.projectName, url: info.url, projectRoot: info.projectRoot })
   return `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
@@ -203,6 +203,10 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
   .box .bh{display:flex;align-items:center;gap:8px}
   .breset{background:none;border:1px solid var(--line-2);border-radius:5px;color:var(--brand2);font-size:11px;padding:2px 8px;cursor:pointer;flex:none}
   .breset:hover{border-color:var(--brand2)}
+  /* ★元素 → 模板源位置徽章（决策 #713）：可点跳转编辑器；靠右、在"重置"按钮左边 */
+  .srcloc{cursor:pointer;color:var(--brand);border:1px solid var(--line-2);border-radius:6px;padding:1px 7px;font-size:11px;white-space:nowrap;margin-left:auto;flex:none}
+  .srcloc:hover{border-color:var(--brand);background:var(--brand-soft)}
+  .srcloc+.breset{margin-left:8px}
   .mbox{position:relative;margin:var(--s3);border:1px dashed var(--brand);background:var(--brand-soft);border-radius:5px;min-height:22px}
   .mbox .lbl{position:absolute;top:-8px;left:8px;background:var(--surface);padding:0 5px;font-size:10px;color:var(--brand);letter-spacing:.3px}
 
@@ -335,6 +339,7 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
   const boxEl = $('box');
   const eventsEl = $('events');
   let treeData = null;   // 最近一次元素树（含 rect）
+  let treeFile = null;   // ★（决策 #713）当前屏源文件（相对项目根）——据节点 loc 拼 file:line:col
   let selId = null;      // 当前选中节点 id
   let boxEditing = false;   // ★就地编辑进行中（暂停树重渲染，防抢焦点；决策 #704）
   let pendingTree = null;   // 编辑期间到达的新树（焦点离开后补刷）
@@ -439,6 +444,7 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
   // ── 元素树（决策 #674/#675）：实例化节点树（含内核 rect）+ 点选高亮 + 盒模型 ──
   function renderTree(t) {
     treeData = t || { nodes: [] };
+    treeFile = (t && t.file) || null;   // ★（决策 #713）屏源文件（dev 构建才有）
     treeEl.innerHTML = '';
     // ★编辑中：保留输入框（勿被新树替换），把新树挂起，待焦点离开再刷（决策 #704）
     if (boxEditing) { pendingTree = t || { nodes: [] }; return; }
@@ -497,12 +503,32 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
         return '<div class="k">' + escapeHtml(k) + '</div><div class="v">' + escapeHtml(v) + '</div>';
       }).join('');
     boxEl.style.display = 'block';
-    boxEl.innerHTML = '<div class="bh">#' + n.id + ' &lt;' + escapeHtml(n.tag || n.semantic || '?') + '&gt;' + (n.text ? ' “' + escapeHtml(String(n.text).slice(0, 40)) + '”' : '')
+    // ★（决策 #713）元素 → 源码：节点带 loc（dev 构建）时显示 file:line:col + 跳转按钮
+    var locHtml = '';
+    if (n.loc && n.loc.line) {
+      var fileShort = treeFile ? treeFile.split('/').slice(-2).join('/') : '';
+      var locText = (fileShort ? fileShort + ':' : '') + n.loc.line + ':' + (n.loc.column || 1);
+      // ★不用正则（模板字面量里 \/ 会被吞成 /，产出的正则变成 //$/ 破坏整段脚本——本仓实测踩到）
+      var root = META.projectRoot || '';
+      if (root.length && root.charAt(root.length - 1) === '/') root = root.slice(0, -1);
+      var absPath = treeFile ? (root ? root + '/' + treeFile : treeFile) : '';
+      locHtml = '<span class="srcloc" title="模板源位置（点击跳转编辑器）' + (absPath ? ' ' + escapeHtml(absPath) : '') + '"'
+        + (absPath ? ' data-abs="' + escapeHtml(absPath) + '" data-line="' + n.loc.line + '" data-col="' + (n.loc.column || 1) + '"' : '')
+        + '>' + escapeHtml(locText) + '</span>';
+    }
+    boxEl.innerHTML = '<div class="bh">#' + n.id + ' &lt;' + escapeHtml(n.tag || n.semantic || '?') + '&gt;' + (n.text ? ' “' + escapeHtml(String(n.text).slice(0, 40)) + '”' : '') + locHtml
       + '<button class="breset" title="恢复项目代码的实时效果（清除就地编辑）">重置样式</button></div>'
       + '<div class="mbox"' + (r.width ? ' style="width:' + Math.max(4, Math.min(560, r.width)) + 'px;height:' + Math.max(4, Math.min(200, r.height)) + 'px"' : '') + '><span class="lbl">内核 rect</span></div>'
       + '<div class="bm"><div class="k">rect</div><div class="v">' + escapeHtml(rc) + '</div>' + styles + '</div>';
     var rb = boxEl.querySelector('.breset');
     if (rb) rb.addEventListener('click', function () { doReset(); });
+    // ★跳转编辑器：vscode://file/绝对路径:行:列（VS Code / Cursor 等注册了该协议即生效）
+    var sl = boxEl.querySelector('.srcloc');
+    if (sl && sl.dataset.abs) {
+      sl.addEventListener('click', function () {
+        window.open('vscode://file' + sl.dataset.abs + ':' + sl.dataset.line + ':' + sl.dataset.col, '_self');
+      });
+    }
   }
   // ★就地编辑：**回车或失焦**都提交到设备（决策 #704）——失焦是"改完点别处"的惯性动作，不能要求回车。
   //   ★决策 #706：本地叠加记账在 edits，显示不回弹；宿主侧"改树+重渲"真正落布局。

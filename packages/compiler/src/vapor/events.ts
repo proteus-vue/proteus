@@ -29,6 +29,8 @@ import { compileExpr } from './expr'
 import { parse as sfcParse } from '@vue/compiler-sfc'
 import { parse as domParse } from '@vue/compiler-dom'
 import type { VueCompatDeps } from './sources'
+// ★模板源位置换算（唯一实现——与 template.ts 同口径；决策 #712/#713）
+import { templateContentLineOffset, sourceLocOf, type SourceLoc } from './source-loc'
 // ★kebab 形态内置组件名的**唯一**规范化入口（template.ts 同源导入——"一处实现"）
 import { normalizeBuiltinTag } from './template'
 // ★混排归一化（同一入口——三处遍历 id 同源）
@@ -354,20 +356,13 @@ export function compileEvents(
   const vueParse = compat?.sfcParse ?? sfcParse
   const dom = compat?.domParse ?? domParse
   let body = ''
-  // ★事件源位置换算（决策 #712）：`domParse` 的 loc 是**模板内容**相对行（content 的第 1 行 = `<template>` 开标签之后）——
-  //   要锚回**整份 `.vue`** 的行号，须加上"内容起点之前的行数"（前导注释 / `<script>` 在上方都会让它 ≠ 0）。
+  // ★事件源位置换算（决策 #712）：`domParse` 的 loc 是**模板内容**相对行——
+  //   要锚回**整份 `.vue`** 的行号，须加上"内容起点之前的行数"（唯一实现在 source-loc.ts）。
   let bodyLineOffset = 0
   try {
     const parsed = vueParse(source, { filename: 'anonymous.vue' }).descriptor
     body = parsed.template?.content ?? ''
-    const tpl = parsed.template as { loc?: { start?: { line?: number; offset?: number } } } | undefined
-    const startOff = tpl?.loc?.start?.offset
-    if (typeof startOff === 'number') {
-      const contentOff = source.indexOf(body, startOff)
-      bodyLineOffset = contentOff >= 0
-        ? (source.slice(0, contentOff).match(/\n/g)?.length ?? 0)
-        : Math.max(0, (tpl?.loc?.start?.line ?? 1) - 1)
-    }
+    bodyLineOffset = templateContentLineOffset(source, parsed)
   } catch {
     diag('SFC 解析失败（事件编译跳过）', '请检查 SFC 形态')
     return out
@@ -402,12 +397,8 @@ export function compileEvents(
    * ★绑定处源位置（决策 #712）：从 `@click` 属性的 exp 取 `{line,column}`；**列**用模板内容相对值（1 基），
    *   **行**加上 `bodyLineOffset` 换算成**整份 `.vue` 文件**的 1 基行号（调试面板/日志据此直接跳转源文件）。
    */
-  const locOf = (p: { exp?: { loc?: { start?: { line?: number; column?: number } } } }): { line: number; column: number } | undefined => {
-    const s = p.exp?.loc?.start
-    return s && typeof s.line === 'number' && typeof s.column === 'number'
-      ? { line: s.line + bodyLineOffset, column: s.column }
-      : undefined
-  }
+  const locOf = (p: { exp?: { loc?: { start?: { line?: number; column?: number } } } }): SourceLoc | undefined =>
+    sourceLocOf(p.exp?.loc, bodyLineOffset)
   /**
    * 在一个元素上收集事件（正则时代的属性扫描换成 AST 走查——**同一条解析器**：
    *   正则版在「逻辑容器/插槽声明」处会把不产元素的标签算进 id ⇒ 其后的事件 nodeId 漂移，

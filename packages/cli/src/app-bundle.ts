@@ -75,6 +75,11 @@ export interface AppContentModuleOptions {
   platform: string
   /** 生成模块内 `import type { ScreenContent }` 的相对路径基准目录；缺省 = 框架桥目录 */
   importBaseDir?: string
+  /**
+   * ★★（决策 #713）**dev 构建**：随运行期屏内容一并发射**节点模板源位置**（`LayoutNode.loc`）——
+   *   面板 Elements 选中/就地编辑 → 跳回 `.vue` 源行的唯一通路。缺省 false ⇒ 产物逐字节不变。
+   */
+  dev?: boolean
 }
 
 /**
@@ -91,7 +96,7 @@ export async function buildAppContentModuleSource(opts: AppContentModuleOptions)
 
   const r = await buildAppScreenContent(projectRoot, platform)
   const content = JSON.parse(fs.readFileSync(r.outFile, 'utf-8')) as Record<string, unknown>
-  const rt = await buildAppRuntimeContent(projectRoot, platform)
+  const rt = await buildAppRuntimeContent(projectRoot, platform, { dev: opts.dev === true })
   const runtimeContent = JSON.parse(fs.readFileSync(rt.outFile, 'utf-8')) as Record<string, unknown>
 
   // 屏注册表（来自项目 auto-routes.ts；与 Web/MP 同一棵路由树）
@@ -182,6 +187,8 @@ export async function buildAppBundle(opts: BuildAppBundleOptions): Promise<Build
     platform: opts.platform,
     // 生成模块落在 dist/app/<platform>/ ⇒ 相对路径基准用其所在目录（type-only import 会被擦除，形似即可）
     importBaseDir: path.join(projectRoot, 'dist', 'app', opts.platform),
+    // ★★（决策 #713）随 dev 构建发射节点 loc（面板 Elements → 源码映射）
+    dev: opts.dev === true,
   })
   fs.mkdirSync(path.dirname(genModule), { recursive: true })
   fs.writeFileSync(genModule, source)
