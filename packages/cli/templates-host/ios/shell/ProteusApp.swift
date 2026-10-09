@@ -33,13 +33,35 @@ enum ProteusBrandColor {
 ///   【为什么（本缺口的由来）】`UIScreenEdgePanGestureRecognizer` 只在**框架宿主** `superapp-scene.swift`
 ///   装了，CLI 生成的 dev 宿主（本项目 `proteus dev --target ios` 跑的）**从来没接** ⇒ 用户在 CLI 宿主上
 ///   发现「没有滑动返回」。本类与框架宿主同语义（`.ended` 且右滑 ≥60pt ⇒ 返回）。
-///   `UIScreenEdgePanGestureRecognizer` 需要 `NSObject` target（不能用闭包）⇒ 本类承接收手。
-private final class ProteusSwipeBackTarget: NSObject {
+///   ★★★手势**共存**（决策 #705 修，用户复测「右滑没反应」）：`SelfDrawView` 上装了**滚动** `UIPanGestureRecognizer`
+///   ⇒ 两条 pan 抢同一触摸，默认**不并发** ⇒ 滚动 pan 先识别、边缘 pan 被取消 ⇒ **右滑没反应**。
+///   ⇒ 让本 target 兼 `UIGestureRecognizerDelegate`，`shouldRecognizeSimultaneouslyWith` 返 **true**
+///   ⇒ 两条 pan 可**同时**识别：滚动 pan 照常（边缘横滑的纵向分量近 0），边缘 pan 照常触发返回。
+///   （不用 `require(toFail:)`——那会让滚动**等边缘 pan 失败**，非边缘触摸时可能拖慢滚动；并发的代价最小。）
+private final class ProteusSwipeBackTarget: NSObject, UIGestureRecognizerDelegate {
     let onBack: () -> Void
-    init(_ onBack: @escaping () -> Void) { self.onBack = onBack }
-    @objc func handle(_ g: UIScreenEdgePanGestureRecognizer) {
-        if g.state == .ended, g.translation(in: g.view).x > 60 { onBack() }
+    /// ★状态回调（决策 #705）：把每次识别状态/位移回传（dev 上报到 Console）——**真机右滑的活证据**。
+    let onEvent: (String) -> Void
+    init(_ onBack: @escaping () -> Void, onEvent: @escaping (String) -> Void) {
+        self.onBack = onBack
+        self.onEvent = onEvent
     }
+    @objc func handle(_ g: UIScreenEdgePanGestureRecognizer) {
+        let dx = g.translation(in: g.view).x
+        onEvent("swipeBack state=\(Self.name(g.state)) dx=\(Int(dx))")
+        if g.state == .ended, dx > 60 { onBack() }
+    }
+    static func name(_ s: UIGestureRecognizer.State) -> String {
+        switch s {
+        case .began: return "began"
+        case .changed: return "changed"
+        case .ended: return "ended"
+        case .cancelled: return "cancelled"
+        case .failed: return "failed"
+        default: return "possible"
+        }
+    }
+    func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
 }
 
 /* ────────────────────────── 宿主驱动（引擎 + 运行期装配） ────────────────────────── */
@@ -602,11 +624,16 @@ final class ProteusSceneDelegate: UIResponder, UIWindowSceneDelegate {
         window = w
         // ★★★边缘右滑返回（决策 #705）：装 `UIScreenEdgePanGestureRecognizer`（左缘）⇒ 右滑 ≥60pt 触发 goBack。
         //   与框架宿主 `superapp-scene.swift` 同语义。手势装在整个 vc.view（含内容 + tab）。
-        let backTarget = ProteusSwipeBackTarget { [weak self] in self?.driver?.goBack() }
+        let backTarget = ProteusSwipeBackTarget({ [weak self] in self?.driver?.goBack() },
+                                                onEvent: { [weak self] s in self?.driver?.devLog("info", s) })
         swipeBackTarget = backTarget
         let edgePan = UIScreenEdgePanGestureRecognizer(target: backTarget, action: #selector(ProteusSwipeBackTarget.handle(_:)))
         edgePan.edges = .left
-        vc.view.addGestureRecognizer(edgePan)
+        edgePan.delegate = backTarget   // ★并发识别（见目标类注释）——否则被 SelfDrawView 的滚动 pan 抢走
+        // ★★★装在与**滚动 pan 同一个视图**（`d.view` = SelfDrawView）上——**与框架宿主 `superapp-scene.swift`
+        //   完全一致**（那里 edgePan 装在 `containerView` = SelfDrawView 上、已真机验过）。此前装在父 `vc.view`
+        //   上（层级不同）⇒ 用户复测「右滑没反应」；改为同视图，行为与已验证的框架宿主一致。
+        d.view.addGestureRecognizer(edgePan)
         homePage = (Bundle.main.object(forInfoDictionaryKey: "ProteusHomePage") as? String) ?? "index"
         // 布局完成后启动（safeAreaInsets 就绪；非盲等——是"布局完成"这一确定事件）
         DispatchQueue.main.async { [weak self] in self?.boot() }
@@ -773,10 +800,15 @@ final class ProteusSceneDelegate: UIResponder, UIWindowSceneDelegate {
             writeDevSnapshot(to: "proteus-dev-shot.png")
             d.devLog("info", "snapshot ready")
         case "probe":
-            // ★自检探针（决策 #705）：报告边缘右滑返回手势**是否真装在视图上**（运行期证据，非源码推断）
-            let v = window?.rootViewController?.view
-            let has = (v?.gestureRecognizers ?? []).contains { $0 is UIScreenEdgePanGestureRecognizer }
-            d.devLog("info", "probe edgePan=\(has ? 1 : 0)")
+            // ★自检探针（决策 #705）：报告边缘右滑返回手势**是否真装在自绘视图上**（运行期证据，非源码推断）
+            let v = d.view
+            let has = (v.gestureRecognizers ?? []).contains { $0 is UIScreenEdgePanGestureRecognizer }
+            let sim = (v.gestureRecognizers ?? []).first { $0 is UIScreenEdgePanGestureRecognizer }?.delegate != nil
+            d.devLog("info", "probe edgePan=\(has ? 1 : 0) delegate=\(sim ? 1 : 0)")
+        case "back":
+            // ★自检（决策 #705）：直接驱动返回（不经手势）——用于隔离"手势没触发" vs "返回本身坏"
+            d.devLog("info", "back → \(d.currentPage)")
+            d.goBack()
         default:
             break
         }
