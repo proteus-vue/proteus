@@ -3558,36 +3558,6 @@ final class SelfDrawView: UIView {
         return abs.offsetBy(dx: -contentOffset.x, dy: -contentOffset.y)
     }
 
-    /// ★★就地编辑某节点的**绘制属性**（DevTools 就地编辑 v1 · 决策 #702）——直接改该节点 CALayer 的
-    ///   可绘制属性（**不改内核树**，属 dev 期实时预览；重新渲染即还原）。
-    ///   支持：`backgroundColor` / `color`（文本色）/ `opacity` / `borderRadius` / `borderWidth` / `borderColor`。
-    ///   【为什么先做这一档】这些是**纯绘制**属性 ⇒ 直接写层即可，**无需内核重排/重挂**（零布局副作用）；
-    ///   布局类属性（width/padding…）的就地编辑需走内核增量（`applyOps`），属后续批次。
-    @discardableResult
-    func applyLiveEdit(id: Int, key: String, value: String) -> Bool {
-        guard let layer = layersById[id] else { return false }
-        switch key {
-        case "backgroundColor": layer.backgroundColor = parseHexColor(value)?.cgColor
-        case "borderColor": layer.borderColor = parseHexColor(value)?.cgColor
-        case "color":
-            // ★文本色（决策 #704 修）：`tl.string` 若是 **NSAttributedString**（声明了 line-height/字距/装饰），
-            //   颜色**烘焙在富文本属性里** ⇒ 只设 `foregroundColor` **不生效**。⇒ 两处都改（纯串走 foregroundColor，
-            //   富文本另**重写属性里的 .foregroundColor**）。非文本层 ⇒ 不支持（返 false，不静默）。
-            guard let tl = layer as? CATextLayer, let cg = parseHexColor(value)?.cgColor else { return false }
-            tl.foregroundColor = cg
-            if let attr = tl.string as? NSAttributedString {
-                let m = NSMutableAttributedString(attributedString: attr)
-                m.addAttribute(.foregroundColor, value: UIColor(cgColor: cg), range: NSRange(location: 0, length: m.length))
-                tl.string = m
-            }
-        case "opacity": guard let d = Double(value) else { return false }; layer.opacity = Float(max(0, min(1, d)))
-        case "borderRadius": guard let d = Double(value) else { return false }; layer.cornerRadius = CGFloat(d)
-        case "borderWidth": guard let d = Double(value) else { return false }; layer.borderWidth = CGFloat(d)
-        default: return false
-        }
-        setNeedsLayout()
-        return true
-    }
 
     /// 面板→设备命令 `highlight` 的覆盖层（决策 #701：DevTools 元素高亮）
     private var highlightLayer: CAShapeLayer?
@@ -4478,6 +4448,8 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     private var recycleHandle: UInt64 = 0
     /// 上一帧的节点数组（**增量 diff 的基线**）——只有它才能算出「哪些节点真的变了」
     private var lastNodes: [[String: Any]] = []
+    /// 最近一次渲染的视口（就地编辑重渲染时复用）——决策 #706。
+    private var lastViewport: [String: Any] = ["width": 390, "height": 844]
 
     /// 最近一次布局的分段耗时（供报告）
     private(set) var lastTiming: [String: Double] = [:]
@@ -5589,9 +5561,61 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     /// ★DevTools 元素高亮（决策 #701）：面板选中节点 ⇒ 在设备屏上给该节点 rect 描边覆盖
     func highlightNode(_ id: Int) { view?.highlightNode(id) }
 
-    /// ★DevTools 就地编辑 v1（决策 #702）：改某节点的绘制属性（面板下发 key/value）
+    /// ★★就地编辑某节点字段（DevTools 就地编辑 v2 · 决策 #706）——**能力全面放开**：任意节点字段
+    ///   （**布局类** width/padding/flex… + **绘制类** backgroundColor/color/… + 文本/枚举）。
+    ///   唯一通路：改宿主保存的节点树 `lastNodes[idx][key]` ⇒ `render(force:true)` **全量重建**
+    ///   ⇒ 内核按新样式**重新布局** + 重建全部层。（v1 只改层属性、不触布局，故仅覆盖绘制类。）
+    ///
+    /// 【为什么统一到"改树 + 重渲"】局部改层只对**纯绘制**字段成立（布局类改层无效）；统一走内核重排
+    ///   才能**真正放开**全部字段，且只有一份真相（`lastNodes`）。
+    /// 【诚实边界】① 值按**字段类型强转**（数字/颜色/对象/枚举），非法值返 false（不静默）；
+    ///   ② **枚举字段**（display/position/overflow/flexDirection）按**内核封闭集**校验（防非法值致整树建不起来）；
+    ///   ③ `id`/`parentId`/`rect`/`tag`/`semantic` **不可编辑**（结构/语义身份，改了会破坏树/命中）；
+    ///   ④ 编辑**不落项目源码**（dev 期实时预览，重挂/重置即还原）。
     @discardableResult
-    func applyLiveEdit(id: Int, key: String, value: String) -> Bool { view?.applyLiveEdit(id: id, key: key, value: value) ?? false }
+    func applyLiveEdit(id: Int, key: String, value: String) -> Bool {
+        guard key != "id", key != "parentId", key != "rect", key != "tag", key != "semantic" else { return false }
+        guard let idx = lastNodes.firstIndex(where: { ($0["id"] as? Int) == id }) else { return false }
+        guard let coerced = Self.coerceLiveEdit(key: key, value: value) else { return false }
+        lastNodes[idx][key] = coerced
+        _ = render(treeJson: Self.treeJson(viewport: lastViewport, nodes: lastNodes), phase: "mount", force: true)
+        return true
+    }
+
+    /// 就地编辑的**值强转 + 校验**（决策 #706）。返回 nil = 非法（调用方返 false，不静默）。
+    ///   枚举校验用**内核封闭集**（与 `check-app-screen-content` 同口径）——非法值会让整树建不起来。
+    static func coerceLiveEdit(key: String, value: String) -> Any? {
+        switch key {
+        case "backgroundColor", "borderColor", "color":
+            return parseHexColor(value) != nil ? value : nil           // 颜色：合法 hex 才收（存原串）
+        case "padding", "margin":
+            if let d = Double(value) {                                  // 单值 ⇒ 四边同值（CSS 语义）
+                return ["top": d, "right": d, "bottom": d, "left": d]
+            }
+            if let data = value.data(using: .utf8),
+               let o = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] {
+                var e: [String: Double] = [:]
+                for s in ["top", "right", "bottom", "left"] { if let v = o[s] as? Double { e[s] = v } else if let v = o[s] as? Int { e[s] = Double(v) } }
+                return e.isEmpty ? nil : e
+            }
+            return nil
+        case "display": return ["flex", "none"].contains(value) ? value : nil
+        case "position": return ["static", "relative", "absolute", "fixed", "sticky"].contains(value) ? value : nil
+        case "overflow", "overflowX", "overflowY": return ["visible", "hidden", "scroll", "auto"].contains(value) ? value : nil
+        case "flexDirection": return ["row", "column", "row-reverse", "column-reverse"].contains(value) ? value : nil
+        default:
+            // 数字字段（布局尺寸/弹性/字号/字距/透明/圆角/边框/偏移/比例…）——按"能解析为数字"收
+            if let d = Double(value) { return d }
+            // 其余按字符串原样收（文本 / 字体族 / 对齐 / 换行 / 断词 / 语义类字符串值…）
+            return value
+        }
+    }
+
+    /// 由视口 + 节点数组重建渲染请求 JSON（就地编辑重渲用）。
+    static func treeJson(viewport: [String: Any], nodes: [[String: Any]]) -> String {
+        let data = (try? JSONSerialization.data(withJSONObject: ["viewport": viewport, "nodes": nodes])) ?? Data()
+        return String(data: data, encoding: .utf8) ?? "{\"nodes\":[]}"
+    }
 
     /// ★★**离屏像素自检**（2026-10-03 · 三端对齐：判据 ④ 的 iOS 腿）——
     ///   把层树渲染到离屏位图，数"与背景色不同"的像素。
@@ -7131,6 +7155,7 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         let measureMs = (CFAbsoluteTimeGetCurrent() - tMeasure0) * 1000
 
         // ── ② 组装核心请求（只保留核心认识的字段）──
+        lastViewport = root["viewport"] as? [String: Any] ?? lastViewport   // ★就地编辑重渲染复用（决策 #706）
         var req: [String: Any] = ["viewport": root["viewport"] as? [String: Any] ?? ["width": 390, "height": 844],
                                  "nodes": nodes, "textMeasures": textMeasures]
         // 删掉纯绘制字段（核心只管几何——传了也无害，但保持请求最小便于诊断）

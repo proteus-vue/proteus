@@ -351,7 +351,8 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
     if (!nodes.length) { treeEl.innerHTML = '<div class="empty">暂无节点树…宿主渲染后上报。</div>'; boxEl.style.display = 'none'; return; }
     const kids = {};
     nodes.forEach((n) => { (kids[n.parentId ?? 'root'] = kids[n.parentId ?? 'root'] || []).push(n); });
-    const rowOf = (n, depth) => {
+    const rowOf = (n0, depth) => {
+      const n = nodeView(n0);   // ★叠加就地编辑值（面板显示不回弹；决策 #706）
       const r = document.createElement('div');
       r.className = 'trow' + (n.id === selId ? ' sel' : '');
       r.dataset.id = n.id;
@@ -386,14 +387,15 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
   });
   function selectNode(id) { selId = id; renderBox(findNode(id)); renderTree(treeData); sendHighlight(id); }
   // 盒模型：内核 rect（x/y/w/h）+ 关键样式
-  function renderBox(n) {
-    if (!n) { boxEl.style.display = 'none'; return; }
+  function renderBox(n0) {
+    if (!n0) { boxEl.style.display = 'none'; return; }
+    const n = nodeView(n0);   // ★叠加就地编辑值（决策 #706）
     const r = n.rect || {};
     const rc = n.rect ? 'x=' + Math.round(r.x) + '  y=' + Math.round(r.y) + '  ' + Math.round(r.width) + '×' + Math.round(r.height) : '（无内核几何）';
-    const styles = Object.keys(n).filter((k) => k !== 'id' && k !== 'parentId' && k !== 'tag' && k !== 'text' && k !== 'rect' && !Array.isArray(n[k]))
+    const styles = Object.keys(n).filter((k) => k !== 'id' && k !== 'parentId' && k !== 'tag' && k !== 'rect' && !Array.isArray(n[k]))
       .map((k) => {
         var v = typeof n[k] === 'object' ? JSON.stringify(n[k]) : String(n[k]);
-        // ★就地编辑（决策 #702）：可编辑的绘制属性 ⇒ 渲染输入框（回车提交到设备）
+        // ★就地编辑（决策 #706）：可编辑字段 ⇒ 渲染输入框（回车或失焦提交到设备）
         if (EDITABLE.indexOf(k) >= 0) {
           return '<div class="k">' + escapeHtml(k) + '</div><div class="v"><input class="bedit" data-id="' + n.id + '" data-key="' + escapeHtml(k) + '" value="' + escapeHtml(v) + '"></div>';
         }
@@ -408,11 +410,9 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
     if (rb) rb.addEventListener('click', function () { doReset(); });
   }
   // ★就地编辑：**回车或失焦**都提交到设备（决策 #704）——失焦是"改完点别处"的惯性动作，不能要求回车。
-  //   提交后把值同步回内存树（n[key]），使"失焦提交 → 焦点离开补刷"不会被旧值回滚。
+  //   ★决策 #706：本地叠加记账在 edits，显示不回弹；宿主侧"改树+重渲"真正落布局。
   function commitEdit(t) {
     var id = Number(t.dataset.id), key = t.dataset.key, val = t.value;
-    var n = findNode(id);
-    if (n) n[key] = val;                    // 本地记账（防补刷回滚）
     sendEdit(id, key, val);
   }
   boxEl.addEventListener('keydown', function (ev) {
@@ -430,13 +430,34 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
     fetch('/panelcmd?' + q.toString()).catch(function () {});
   }
   function sendHighlight(id) { sendCmd('highlight', { id: id }); }
-  // ★就地编辑 v1（决策 #702）：改某节点的**绘制属性**（设备上实时预览，重新渲染即还原）
-  const EDITABLE = ['backgroundColor', 'color', 'opacity', 'borderRadius', 'borderWidth', 'borderColor'];
-  function sendEdit(id, key, value) { sendCmd('edit', { id: id, key: key, value: value }); }
+  // ★就地编辑（决策 #706）：**能力全面放开**——布局类（尺寸/弹性/间距/定位/方向）+ 绘制类 + 文本/枚举。
+  //   ★全部走宿主的"改树 + 内核重排"通路（决策 #706）——布局类也能改（v1 只改层、只能绘制类）。
+  const EDITABLE = [
+    // 布局 · 尺寸
+    'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight', 'aspectRatio',
+    // 布局 · 弹性
+    'flexGrow', 'flexShrink', 'flexBasis', 'gap', 'rowGap', 'columnGap',
+    // 布局 · 间距（单值=四边 / 或 JSON {top,right,bottom,left}）
+    'padding', 'margin',
+    // 布局 · 定位/方向/对齐/溢出
+    'position', 'top', 'left', 'display', 'flexDirection', 'justifyContent', 'alignItems', 'alignSelf', 'overflow',
+    // 绘制
+    'backgroundColor', 'color', 'borderColor', 'opacity', 'borderRadius', 'borderWidth',
+    // 文本
+    'text', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'textAlign', 'textOverflow', 'whiteSpace', 'wordBreak', 'fontFamily',
+  ];
+  // ★就地编辑**本地叠加**（决策 #706）：宿主重渲后 /tree 回到项目值 ⇒ 面板在此叠加用户编辑值，显示不回弹。
+  const edits = {};   // id → { key: valueStr }
+  function nodeView(n) { return edits[n.id] ? Object.assign({}, n, edits[n.id]) : n; }
+  function sendEdit(id, key, value) {
+    (edits[id] = edits[id] || {})[key] = value;   // 本地记账（面板显示用）
+    sendCmd('edit', { id: id, key: key, value: value });
+  }
   // ★重置为项目代码（决策 #704）：① 下发 reset（宿主**强制重挂**还原本地编辑）② 面板**重新取树**复位
   //   ——就地编辑只改宿主层、不改树 ⇒ 服务器上的当前树即"项目代码态"，重取即复位面板显示。
   function doReset() {
     sendCmd('reset', {});
+    for (var k in edits) delete edits[k];   // ★清面板本地叠加（决策 #706）——连同宿主的"改树+重渲"一起回项目值
     fetch('/tree').then(function (r) { return r.json(); }).then(function (t) {
       boxEditing = false; pendingTree = null;
       renderTree(t);
