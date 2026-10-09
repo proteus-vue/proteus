@@ -14,7 +14,13 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+// ★`--root <dir>`：让门禁可对**夹具**运行（tests/env-vars-gate.test.ts 的破坏性验证用——
+//   注入"删掉 mount 通路调用"的夹具须红）。缺省 = 仓库根（正常用法零影响）。
+const _argv = process.argv.slice(2)
+const _rootIdx = _argv.indexOf('--root')
+const ROOT = _rootIdx >= 0 && _argv[_rootIdx + 1]
+  ? path.resolve(_argv[_rootIdx + 1])
+  : path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const problems = []
 const rel = (p) => path.relative(ROOT, p)
 
@@ -60,6 +66,28 @@ for (const [f, marker, why] of need) {
   const p = path.join(ROOT, f)
   if (!fs.existsSync(p)) { problems.push(`${why}（缺文件 ${f}）`); continue }
   if (!fs.readFileSync(p, 'utf-8').includes(marker)) problems.push(`${why}（${f} 无 "${marker}"）`)
+}
+
+// ★★★**调用点**核对（2026-10-09 · 决策 #694 的机器版）——「解析器存在」≠「该通路调用了它」。
+//   【为什么单列：上面 need 是**定义/能力存在**级判据，曾整条放行 #694】iOS 的 env 解析器
+//   （`selfdraw-scene.swift` 的 `resolveEnvToken`）**一直在**（首屏 `render` 通路调它 ⇒ need 绿），
+//   但**屏切换通路** `screen-host.swift` 的 `ScreenHost.mount` **没调** ⇒ 编译产物 `"env:--pf-vh"`
+//   字符串直进内核 ⇒ serde `expected f32` ⇒ `proteus_layout_create` 返 0 ⇒ **点卡片不切屏**
+//   （真机实测完全静默、零报错）。这是本仓"**同一语义两通路**"复发——门禁判据必须**跟着通路走**：
+//   逐条断言**每个会建内核请求的宿主入口**都**显式调用了**解析器（不是"文件里有这个词"）。
+//   ★破坏性验证：删掉任一调用 ⇒ 本门禁当场红（见 tests/env-vars-gate.test.ts）。
+const needMountPath = [
+  // iOS：屏切换通路（`ScreenHost.mount`）建节点前必须解析（`in: &node` 是 inout 调用、区别于定义）
+  ['hosts/ios/ProteusHost/runtime/screen-host.swift', 'resolveEnvTokens(in: &node)', 'iOS 屏切换通路（ScreenHost.mount）未调用 env 解析（#694 复发：点卡片不切屏）'],
+  // Android：屏切换通路（`ScreenHost`）建节点前必须解析（`envResolver.resolve` 是 mount 循环内的调用）
+  ['hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/ScreenHost.java', 'envResolver.resolve(', 'Android 屏切换通路（ScreenHost）未调用 env 解析（#677 复发）'],
+  // 鸿蒙：屏内容 → 内核树的唯一出口（`AppScreenCommands`）建树前必须替换 token
+  ['hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_host.cpp', 'substituteEnvTokens(nodes, envTable)', '鸿蒙屏内容入口（AppScreenCommands）未替换 env token'],
+]
+for (const [f, marker, why] of needMountPath) {
+  const p = path.join(ROOT, f)
+  if (!fs.existsSync(p)) { problems.push(`${why}（缺文件 ${f}）`); continue }
+  if (!fs.readFileSync(p, 'utf-8').includes(marker)) problems.push(`${why}（${f} 未出现调用 "${marker}"）`)
 }
 
 // ★★★B2（G2）：**三端实例的 --pf-* 字面量 ⊆ 契约闭集**——防"各端手拄闭集时拼错/私增未知名"。
