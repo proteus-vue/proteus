@@ -417,6 +417,11 @@ public final class AppActivity extends Activity {
                     flushTrace(base);     // ★把事件 trace 推到面板（决策 #675）
                     flushInspect(base);   // ★把被点元素推到面板（决策 #675）
                     flushBridge(base);    // ★把桥调用推到面板 Network·项目通道（决策 #679）
+                    // ★面板→设备命令（决策 #701）：轮询 /cmd（one-shot），回 UI 线程执行 highlight/eval
+                    final String cmdJson = httpGetText(base + "/cmd");
+                    if (cmdJson != null && !cmdJson.isEmpty() && !"{}".equals(cmdJson) && !"null".equals(cmdJson)) {
+                        runOnUiThread(new Runnable() { @Override public void run() { applyCommand(cmdJson); } });
+                    }
                     if (v == null || v.equals(last)) continue;
                     last = v;
                     final String fresh = httpGetText(base + "/bundle");
@@ -483,6 +488,25 @@ public final class AppActivity extends Activity {
 
     /** 宿主 dev 事件入队（UI 线程）——**原生通道**（决策 #679 分流）。 */
     private void devLog(String level, String text) { if (text != null) hostLogQueue.add(new String[]{"native", level, text}); }
+
+    /** ★面板→设备命令执行（决策 #701，UI 线程）：`highlight`（元素高亮）/ `eval`（REPL）。结果经 devLog 回 Console。 */
+    private void applyCommand(String json) {
+        try {
+            org.json.JSONObject o = new org.json.JSONObject(json);
+            String type = o.optString("type", "");
+            if ("highlight".equals(type)) {
+                int id = o.optInt("id", 0);
+                if (draw != null) draw.highlightNode(id);
+                devLog("info", "highlight #" + id);
+            } else if ("eval".equals(type)) {
+                String expr = o.optString("expr", "");
+                if (!expr.isEmpty()) {
+                    QuickJsEngine.EvalResult r = QuickJsEngine.eval(expr);
+                    devLog("log", "› " + expr + "\n" + (r != null && r.ok ? String.valueOf(r.value) : ("✗ " + (r != null ? r.error : "无引擎"))));
+                }
+            }
+        } catch (Throwable ignored) { /* 命令尽力而为——不干扰渲染 */ }
+    }
 
     /** 每 400ms 在 UI 线程抽一次 JS console 队列（eval 仅 UI 线程安全），追加到待 flush 队列。 */
     private void startLogPump() {

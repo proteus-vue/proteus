@@ -1,6 +1,7 @@
 package dev.proteus.layoutcore;
 
 import android.content.Context;
+import android.graphics.RectF;
 import android.view.ViewGroup;
 import dev.proteus.platform.ProteusTextPlatform;
 
@@ -175,6 +176,21 @@ public final class VaporRenderHost {
     }
 
     public ProteusHostView view() { return view; }
+
+    /** ★DevTools 元素高亮（决策 #701 安卓腿）：读该节点内核矩形（内容坐标）⇒ 视图转屏幕坐标画描边；id<=0 清除。 */
+    public void highlightNode(int id) {
+        if (view == null) return;
+        if (id <= 0 || handle == 0L) { view.setDevHighlight(null); return; }
+        try {
+            org.json.JSONObject r = new org.json.JSONObject(nodeRectJson(id));
+            if (!r.optBoolean("ok", false)) { view.setDevHighlight(null); return; }
+            float x = (float) r.optDouble("x", 0), y = (float) r.optDouble("y", 0);
+            float w = (float) r.optDouble("width", 0), h = (float) r.optDouble("height", 0);
+            view.setDevHighlightFromContent(new RectF(x, y, x + w, y + h));
+        } catch (Throwable t) {
+            view.setDevHighlight(null);
+        }
+    }
 
     /** ★诊断：读某节点的内核几何（真源）——判 layout 问题用 */
     String nodeRectJson(int nodeId) { return handle > 0 ? RustLayout.nodeRect(handle, nodeId) : "{}"; }

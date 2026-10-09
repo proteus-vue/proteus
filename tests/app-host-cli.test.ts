@@ -228,6 +228,22 @@ describe('★完整宿主 · iOS 宿主模板为运行期形态（决策 #683）
     expect(page, '面板下发 edit').toContain('function sendEdit(')
     expect(server, 'edit 命令字段').toContain('cmd.key')
   })
+
+  // ★面板→设备命令（决策 #701/#702 安卓腿）：Android 宿主也接 /cmd + 元素高亮 + REPL
+  it('Android 宿主接命令通道（决策 #701/#702）：/cmd 轮询 + highlight + eval', () => {
+    const act = fs.readFileSync(path.join(ROOT, 'packages/cli/templates-host/android/src/dev/proteus/layoutcore/AppActivity.java'), 'utf-8')
+    expect(act, '轮询 /cmd').toContain('"/cmd"')
+    expect(act, '命令执行器').toContain('private void applyCommand(')
+    expect(act, 'highlight 分支').toContain('"highlight".equals(type)')
+    expect(act, 'eval 分支').toContain('"eval".equals(type)')
+    const vrh = fs.readFileSync(path.join(ROOT, 'hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/VaporRenderHost.java'), 'utf-8')
+    expect(vrh, 'Android 高亮入口').toContain('public void highlightNode(')
+    const pv = fs.readFileSync(path.join(ROOT, 'hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/ProteusHostView.java'), 'utf-8')
+    expect(pv, 'view 高亮矩形').toContain('setDevHighlight')
+    // ★Android 宿主**模板**纳入编译门禁（此前无判据）
+    const gate = fs.readFileSync(path.join(ROOT, 'hosts/android/check-host-compile.sh'), 'utf-8')
+    expect(gate, '模板 src 纳入 javac').toContain('templates-host/android/src')
+  })
 })
 
 describe.skipIf(!hasSuperapp)('★完整宿主 · app-bundle（项目侧 bundle）', () => {
