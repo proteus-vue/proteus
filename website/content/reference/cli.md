@@ -33,9 +33,9 @@ proteus dev [--target <web|skyline|ios|android|harmony>]
 ```
 
 开发服务器：web → Vite；skyline → dev-mp watch 构建
-      ★App 端（#662/#683 · 热刷）：android/ios → scaffold 完整宿主 → 起 HTTP dev server（局域网）
+      ★App 端（#662/#683/#725 · 热刷）：android/ios → scaffold 完整宿主 → 起 HTTP dev server（局域网）
       → 编 **debug** 宿主（bundle 走 dev server）→ 装到设备（adb / devicectl）→ 启动 → watch；改源码保存即热刷当前屏
-      ★hongmeng 热刷通道待接（本批端到端兑现 android + ios）
+      ★harmony（#725）：装 + 起已接（hdc install / aa start）；热刷通道（bundle 走 dev server）待接
 
 ### `proteus create`
 

@@ -33,9 +33,9 @@ proteus dev [--target <web|skyline|ios|android|harmony>]
 ```
 
 Dev server: web → Vite; skyline → dev-mp watch build
-      ★App targets (#662/#683 · hot reload): android/ios → scaffold the full host → start an HTTP dev server (LAN)
+      ★App targets (#662/#683/#725 · hot reload): android/ios → scaffold the full host → start an HTTP dev server (LAN)
       → build a **debug** host (bundle over HTTP) → install (adb / devicectl) → launch → watch; saving source hot-reloads the current screen
-      ★hongmeng hot-reload channel pending (this batch delivers android + ios end-to-end)
+      ★harmony (#725): install + launch wired (hdc install / aa start); hot-reload channel (bundle over HTTP) pending
 
 ### `proteus create`
 
