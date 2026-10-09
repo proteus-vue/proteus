@@ -7,16 +7,23 @@ export const ENV_CHECKS: DoctorCheck[] = [
     id: 'env/node-version',
     group: 'env',
     title: 'Node 版本',
-    level: 'error',
+    // ★分档（决策 #696）：框架仓（跑自身测试套件，jsdom 27 依赖 `require(ESM)`）⇒ error（阻断）；
+    //   用户工程 ⇒ warn（Web/MP 端 ≥ 18 可跑，App 三端/框架仓测试建议 ≥ 22.12）。
+    //   ★旧行为对所有工程一律报 error ⇒ 用户工程在 Node 18 上被"阻断"，与官网《环境要求》自相矛盾。
+    level: 'warn',
     run(ctx) {
       const v = ctx.tool.nodeVersion
       const major = Number(v.split('.')[0])
       const minor = Number(v.split('.')[1] ?? 0)
       // 判据：≥ 22.12（require(ESM) 门槛，决策 #204 / AGENTS.md）
       const okv = major > 22 || (major === 22 && minor >= 12)
-      return okv
-        ? ok('env/node-version', 'Node 版本', `${v}（≥ 22.12）`)
-        : fail({ checkId: 'env/node-version', level: 'error', code: 'PT-EE-001', title: 'Node 版本不满足', expected: '≥ 22.12（require(ESM) 支持）', actual: v, fix: { command: 'fnm install 22  # 或 nvm install 22', description: 'Node ≥ 22.12' }, evidence: [{ command: 'node --version', stdout: v, exitCode: 0 }] })
+      if (okv) return ok('env/node-version', 'Node 版本', `${v}（≥ 22.12）`)
+      const fix = { command: 'fnm install 22  # 或 nvm install 22' }
+      // 框架仓（有 layout-core-rust 签名）⇒ 阻断；用户工程 ⇒ 仅提示（不阻断 web/mp 构建）
+      if (ctx.exists('packages/layout-core-rust/Cargo.toml')) {
+        return fail({ checkId: 'env/node-version', level: 'error', code: 'PT-EE-001', title: 'Node 版本不满足', expected: '≥ 22.12（require(ESM) 支持）', actual: v, fix: { ...fix, description: '框架仓测试套件（jsdom 27）需 Node ≥ 22.12' }, evidence: [{ command: 'node --version', stdout: v, exitCode: 0 }] })
+      }
+      return fail({ checkId: 'env/node-version', level: 'warn', code: 'PT-EE-001', title: 'Node 版本偏低（建议升级）', expected: '≥ 22.12（推荐；Web/MP 端 ≥ 18 可跑）', actual: v, fix: { ...fix, description: 'App 三端打包与框架仓测试建议 Node ≥ 22.12' }, evidence: [{ command: 'node --version', stdout: v, exitCode: 0 }] })
     },
   },
   {

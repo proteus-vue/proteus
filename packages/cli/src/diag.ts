@@ -89,7 +89,7 @@ export const DIAG_CODES: Record<string, DiagCodeDef> = {
   //   ★阶段扩展（Apollo 原仅 C/B/D）——理由：doctor 的发现发生在**编译之前**，语义上不属 C/B/D 任一，
   //     独立成 E（Environment）。不改 L0–L4 分层与三条硬约束。
   // env（PT-EE）
-  'PT-EE-001': { stage: 'E', category: 'E', title: 'Node 版本不满足', hints: ['本仓门禁要求 Node ≥ 22（Node 18 下 jsdom 27 假红）——fnm/nvm install 22'] },
+  'PT-EE-001': { stage: 'E', category: 'E', title: 'Node 版本不满足', hints: ['框架仓测试套件（jsdom 27）需 Node ≥ 22.12；用户工程 Web/MP 端 ≥ 18 可跑（App 三端建议 ≥ 22.12）——fnm/nvm install 22'] },
   'PT-EE-002': { stage: 'E', category: 'E', title: '包管理器版本不匹配', hints: ['用 corepack 对齐 package.json 的 packageManager（corepack enable && corepack prepare pnpm@<ver> --activate）'] },
   'PT-EE-003': { stage: 'E', category: 'E', title: '缺少 Rust 工具链（rustup）', hints: ['PATH 上的 rustc 可能来自 Homebrew；Android/iOS target 装在 ~/.cargo ⇒ rustup toolchain install stable'] },
   'PT-EE-004': { stage: 'E', category: 'E', title: 'git 身份未配置', hints: ['提交/发布流程需要 user.name 与 user.email：git config --global user.email …'] },

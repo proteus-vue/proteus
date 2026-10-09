@@ -54,9 +54,18 @@ describe('★#686 doctor · 纯函数三态（注入 ctx）', () => {
     const badCtx = fakeCtx({ tool: { nodeVersion: '18.16.1', pnpmVersion: '9.15.9', platform: 'darwin', arch: 'arm64' } })
     const check = CHECKS.find((c) => c.id === 'env/node-version')!
     expect((await check.run(okCtx)).level).toBe('ok')
+    // ★决策 #696 分档：Node < 22.12 —— 用户工程（无 layout-core-rust 签名）⇒ **warn**（Web/MP ≥ 18 可跑，不阻断）
     const bad = await check.run(badCtx)
-    expect(bad.level).toBe('error')
+    expect(bad.level).toBe('warn')
     expect(bad.diagCode).toBe('PT-EE-001')
+  })
+  it('env/node-version：框架仓（有 layout-core-rust 签名）在 Node < 22.12 ⇒ error（阻断自身测试套件）', async () => {
+    const ctx = fakeCtx({ tool: { nodeVersion: '18.16.1', pnpmVersion: '9.15.9', platform: 'darwin', arch: 'arm64' } })
+    ;(ctx as unknown as { _add: (p: string) => void })._add('packages/layout-core-rust/Cargo.toml')
+    const check = CHECKS.find((c) => c.id === 'env/node-version')!
+    const r = await check.run(ctx)
+    expect(r.level).toBe('error')
+    expect(r.diagCode).toBe('PT-EE-001')
   })
   it('deps/installed：有/无 node_modules 两态', async () => {
     const check = CHECKS.find((c) => c.id === 'deps/installed')!
