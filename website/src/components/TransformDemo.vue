@@ -541,28 +541,29 @@ run(project.value.files[project.value.entry]?.content ?? '')
   border-bottom: 1px solid var(--line);
 }
 .pane-label { color: var(--muted); font-size: 12px; margin-right: auto; }
-/* ★决策 #700：多文件项目文件页签 */
+/* ★决策 #700：多文件项目文件页签（自成一行的完整 chip——不再是"贴边被切"的连接式） */
 .pg-files {
   display: flex !important;
   flex-direction: row !important;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  padding: 8px 12px 0;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
 }
 .file-tab {
   color: var(--muted);
   background: var(--panel);
   border: 1px solid var(--line);
-  border-bottom: none;
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-  padding: var(--sp-4) var(--sp-10);
+  border-radius: 6px;
+  padding: 3px 10px;
   font-size: 12px;
+  line-height: 1.5;
   font-family: ui-monospace, Menlo, monospace;
   cursor: pointer;
 }
-.file-tab.on { color: var(--ink); border-color: var(--brand2); background: rgba(107,124,255,.12); }
-.file-tab.file-add, .file-tab.file-del { padding: var(--sp-4) var(--sp-8); }
+.file-tab.on { color: var(--ink); border-color: var(--brand2); background: rgba(107,124,255,.16); }
+.file-tab.file-add, .file-tab.file-del { padding: 3px 8px; }
 .file-tab:hover { border-color: var(--brand2); }
 .pane-btn {
   color: var(--brand2);
