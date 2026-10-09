@@ -15,11 +15,11 @@
 //   `@vue/compiler-sfc`（Node API）⇒ 端上跑不了（与 Vapor 夹具 `gen-vapor-fixture.mjs` 同形态）。
 import fs from 'node:fs'
 import path from 'node:path'
-import { pathToFileURL } from 'node:url'
 import { buildLayoutTemplate, buildVaporSubscriptions, compileEvents, parseCssVarTokens } from '@proteus-vue/compiler'
 import { extractRefLiterals, reorderNodesByZ } from './app-content'
 import type { AppPlatform } from './targets'
 import { resolveAppRoutes } from './app-routes'
+import { loadTsModule } from './config-loader'
 
 /** 一个屏的运行期产物 */
 export interface ScreenRuntimeArtifact {
@@ -78,7 +78,8 @@ export async function buildAppRuntimeContent(
   } catch { /* 无配置/加载失败 ⇒ 不折叠 var()（保持既有行为，不阻断） */ }
 
   const routerDir = path.dirname(autoRoutes)
-  const mod = (await import(pathToFileURL(autoRoutes).href)) as {
+  // ★经 config-loader 的 TS 加载器（Node 的 ESM `import()` 不认 `.ts`——真缺陷，见 loadTsModule 注释）
+  const mod = loadTsModule(autoRoutes) as {
     routes?: Array<{ name: string; component?: string }>
   }
   const routes = mod.routes ?? []

@@ -296,6 +296,32 @@ export function resolveDeveloperDir(): string | null {
   return all.find((c) => c.hasIosSdk)?.dir ?? null
 }
 
+/**
+ * 解析 `devicectl list devices` 输出，返回**可用设备**行。
+ * ★★★状态词表（2026-10-09 实测真缺陷）：devicectl 对可用设备的 State 列有两种形态——
+ *   · `connected`（USB 直连）· **`available (paired)`**（已配对可用，实测本机 iPhone 12 就是这个）。
+ *   此前只认字面 `connected` ⇒ 设备明明在线却匹配不到那行 ⇒ 误判「未找到已连接 iOS 设备」
+ *   （`proteus dev --target ios` 打包成功却装不上）。⇒ 二者都算可用。
+ *   ★`unavailable` 用**词边界** `\bavailable\b` 排除（无边界则 `unavailable` 也会命中）。
+ *   ★返回**共用一份实现**（`dev` 安装路径 + `doctor devices` 两处都调它，避免"同一判据两处实现"复发）。
+ */
+export function usableIosDeviceRows(stdout: string): string[] {
+  return (stdout ?? '')
+    .split('\n')
+    .filter((l) => /\S/.test(l)) // 去空行
+    .filter((l) => !/^-{3,}/.test(l.trim())) // 去分隔线
+    .filter((l) => /\b(connected|available)\b/.test(l)) // 可用状态（词边界排除 unavailable）
+}
+
+/** 从 `devicectl list devices` 输出解析**首个可用设备**的标识符（UDID / coredevice 主机名），无则 null。 */
+export function parseIosDeviceId(stdout: string): string | null {
+  const row = usableIosDeviceRows(stdout)[0]
+  if (!row) return null
+  // 取**标识符列**（UDID/UUID 形态），无则回落首个非空列（devicectl 标识符与设备名二者皆可）
+  const cols = row.trim().split(/\s{2,}/).map((c) => c.trim()).filter(Boolean)
+  return cols.find((c) => /^[0-9A-Fa-f-]{20,}$/.test(c) || /\.coredevice\.local$/.test(c)) ?? cols[0] ?? null
+}
+
 function listSwift(dir: string): string[] {
   if (!fs.existsSync(dir)) return []
   return fs.readdirSync(dir).filter((f) => f.endsWith('.swift')).sort().map((f) => path.join(dir, f))

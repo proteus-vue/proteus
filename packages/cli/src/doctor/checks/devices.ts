@@ -2,7 +2,7 @@
 import path from 'node:path'
 import type { DoctorCheck } from '../types'
 import { ok, fail } from './util'
-import { resolveDeveloperDir } from '../../host-package'
+import { resolveDeveloperDir, usableIosDeviceRows } from '../../host-package'
 
 export const DEVICES_CHECKS: DoctorCheck[] = [
   {
@@ -33,10 +33,12 @@ export const DEVICES_CHECKS: DoctorCheck[] = [
       if (!dir) return fail({ checkId: 'devices/ios', level: 'warn', code: 'PT-BE-004', title: '无可用 Xcode，无法枚举设备', expected: 'xcrun devicectl list devices', actual: '无 Xcode', evidence: [{ note: 'resolveDeveloperDir() 未命中' }] })
       const devicectl = path.join(dir, 'usr', 'bin', 'devicectl')
       const ev = ctx.runCmd(devicectl, ['list', 'devices'], { timeoutMs: 12000, env: { DEVELOPER_DIR: dir } })
-      const connected = (ev.stdout ?? '').split('\n').filter((l) => /\bconnected\b/.test(l)).length
-      return connected > 0
-        ? ok('devices/ios', 'iOS 设备', `${connected} 台 connected`)
-        : fail({ checkId: 'devices/ios', level: 'warn', code: 'PT-BE-004', title: '无 iOS 设备', expected: 'devicectl list devices 至少 1 台 connected', actual: '0 台', fix: { description: '连接设备并在设备上信任开发者证书' }, evidence: [ev] })
+      // ★状态识别走 host-package 的 usableIosDeviceRows（单一实现）：`connected` 与 `available (paired)` 都算可用
+      //   （此前只认 `connected` ⇒ 设备显示 `available (paired)` 时误报「无 iOS 设备」，实测踩到）。
+      const usable = usableIosDeviceRows(ev.stdout ?? '').length
+      return usable > 0
+        ? ok('devices/ios', 'iOS 设备', `${usable} 台可用`)
+        : fail({ checkId: 'devices/ios', level: 'warn', code: 'PT-BE-004', title: '无 iOS 设备', expected: 'devicectl list devices 至少 1 台可用（connected / available (paired)）', actual: '0 台', fix: { description: '连接设备并在设备上信任开发者证书' }, evidence: [ev] })
     },
   },
   {
