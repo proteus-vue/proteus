@@ -16,6 +16,8 @@ cd my-app && npm install
 npm run dev:web     # run the Web side in a browser
 ```
 
+> **No separate CLI install needed**: `npm create` is fetched by npx (the `create-proteus` scaffold — one-off, nothing to preinstall); the following `npm install` installs the CLI (`@proteus-vue/cli`) into `node_modules` as a **project devDependency**, so `npm run dev:web` & co. work immediately. **You do not need `npm i -g @proteus-vue/cli`**: the CLI is a **project-local tool**, version-locked with the project (same as Vite/Vue — avoids a global version drifting from what the project expects).
+
 > Want to see what it can do first? Open [Playground](/playground) to edit code in the browser and watch the compiled output live — zero install.
 
 ## Environment checklist

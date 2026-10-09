@@ -16,6 +16,8 @@ cd my-app
 npm install
 ```
 
+> **Where the CLI comes from**: `npm create` is fetched by npx (the `@proteus-vue/create-proteus` scaffold — nothing to preinstall); `npm install` installs the CLI (`@proteus-vue/cli`) plus the framework packages as **project devDependencies** into this project's `node_modules`. After that, `npm run dev:web` & co. and `npx proteus …` all work — **no global CLI install needed**.
+
 The scaffold asks no interactive questions: the project name is the command argument (normalized to lowercase letters / digits / hyphens — capitals and illegal characters become `-`, leading/trailing `-` are trimmed). It refuses when the target directory already exists and is not empty.
 
 ## What it does — three things
