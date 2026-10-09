@@ -32,6 +32,8 @@ final class ProteusDevOverlay {
     private var toast: ProteusPaddedLabel?
     /// ★底部调试面板（决策 #704）：tap DEV 角标展开/收起。
     private var sheet: UIView?
+    /// ★遮罩（决策 #735）：面板打开时的全屏半透明遮罩——点外关（标准弹窗语义）。
+    private var scrim: UIView?
     private var statusLabel: UILabel?
     private var sheetOn = false
     /// 是否有**就地编辑**未还原（决定"渲染状态"提示与角标配色）。
@@ -124,35 +126,90 @@ final class ProteusDevOverlay {
         sheetOn ? hideSheet() : showSheet()
     }
 
+    /// 点遮罩（面板外）⇒ 关闭（决策 #735）。
+    @objc private func onScrimTap() {
+        if sheetOn { hideSheet() }
+    }
+
     private func showSheet() {
         guard let host = host else { return }
         if sheet == nil { buildSheet(in: host) }
         guard let s = sheet else { return }
         sheetOn = true
         refreshStatus()
+        // 遮罩（点外关）+ 面板
+        if let sc = scrim {
+            sc.isHidden = false
+            sc.alpha = 0
+            host.bringSubviewToFront(sc)
+        }
         host.bringSubviewToFront(s)
         s.isHidden = false
         s.transform = CGAffineTransform(translationX: 0, y: s.bounds.height)
-        UIView.animate(withDuration: 0.22) { s.transform = .identity }
+        UIView.animate(withDuration: 0.22) {
+            s.transform = .identity
+            self.scrim?.alpha = 1
+        }
         if let b = badge { host.bringSubviewToFront(b) }
     }
 
     private func hideSheet() {
         guard let s = sheet, let host = host else { return }
         sheetOn = false
-        UIView.animate(withDuration: 0.2, animations: { s.transform = CGAffineTransform(translationX: 0, y: s.bounds.height) },
-                       completion: { _ in s.isHidden = true })
+        UIView.animate(withDuration: 0.2, animations: {
+            s.transform = CGAffineTransform(translationX: 0, y: s.bounds.height)
+            self.scrim?.alpha = 0
+        }, completion: { _ in
+            s.isHidden = true
+            self.scrim?.isHidden = true
+        })
         if let b = badge { host.bringSubviewToFront(b) }
         _ = host
     }
 
+    /// ★把手下拉关闭（决策 #735）：拖动面板向下 ⇒ 跟随位移；松手超阈值/快滑 ⇒ 关闭，否则弹回。
+    @objc private func handleSheetPan(_ g: UIPanGestureRecognizer) {
+        guard let s = sheet, let host = host else { return }
+        let ty = max(0, g.translation(in: host).y)   // 只允许向下拖
+        switch g.state {
+        case .changed:
+            s.transform = CGAffineTransform(translationX: 0, y: ty)
+        case .ended, .cancelled:
+            let vy = g.velocity(in: host).y
+            if ty > 80 || vy > 800 {
+                hideSheet()
+            } else {
+                UIView.animate(withDuration: 0.2) { s.transform = .identity }
+            }
+        default:
+            break
+        }
+    }
+
     /// 底部调试面板：状态行 + 「重置为项目代码」+ 面板 URL 提示。
     private func buildSheet(in host: UIView) {
+        // ★遮罩（决策 #735）：全屏 40% 黑，铺在面板之下、内容之上；**点外关**（标准弹窗语义）。
+        let sc = UIView()
+        sc.backgroundColor = UIColor(white: 0, alpha: 0.4)
+        sc.translatesAutoresizingMaskIntoConstraints = false
+        sc.isHidden = true
+        sc.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(onScrimTap)))
+        host.addSubview(sc)
+        NSLayoutConstraint.activate([
+            sc.leadingAnchor.constraint(equalTo: host.leadingAnchor),
+            sc.trailingAnchor.constraint(equalTo: host.trailingAnchor),
+            sc.topAnchor.constraint(equalTo: host.topAnchor),
+            sc.bottomAnchor.constraint(equalTo: host.bottomAnchor),
+        ])
+        self.scrim = sc
+
         let s = UIView()
         s.backgroundColor = UIColor(red: 0x15/255, green: 0x18/255, blue: 0x20/255, alpha: 0.98)
         s.layer.cornerRadius = 16
         s.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
         s.translatesAutoresizingMaskIntoConstraints = false
+        // ★把手下拉关闭（决策 #735）：面板上挂 pan（按钮的 tap 与 pan 不冲突——pan 需位移）。
+        s.addGestureRecognizer(UIPanGestureRecognizer(target: self, action: #selector(handleSheetPan(_:))))
         host.addSubview(s)
 
         let grab = UIView()
