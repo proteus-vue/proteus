@@ -205,6 +205,24 @@ describe('★完整宿主 · iOS 宿主模板为运行期形态（决策 #683）
     expect(rt, 'applyOps 累计 patch').toMatch(/patchAppliedTotal \+= applied/)
     expect(rt, '逐帧耗时读数').toContain('var frameCostMs')
   })
+  // ★面板→设备命令通道 + 元素高亮 + REPL（决策 #701）
+  it('面板→设备命令通道齐备（决策 #701）：/panelcmd 入队 + /cmd 轮询 + 宿主执行', () => {
+    const server = fs.readFileSync(path.join(ROOT, 'packages/cli/src/app-dev-server.ts'), 'utf-8')
+    expect(server, '命令端点 /panelcmd').toContain("url === '/panelcmd'")
+    expect(server, '取命令端点 /cmd').toContain("url === '/cmd'")
+    expect(server, 'one-shot 取走即清').toMatch(/pendingCmd = null/)
+    const shell = fs.readFileSync(path.join(shellDir, 'ProteusApp.swift'), 'utf-8')
+    expect(shell, '壳轮询 /cmd').toContain('"/cmd"')
+    expect(shell, '命令执行器').toContain('func applyCommand(')
+    expect(shell, 'highlight 分支').toMatch(/case "highlight"/)
+    expect(shell, 'eval 分支').toMatch(/case "eval"/)
+    expect(shell, 'REPL 求值').toContain('func evalExpr(')
+    const rt = fs.readFileSync(path.join(ROOT, 'hosts/ios/ProteusHost/runtime/selfdraw-scene.swift'), 'utf-8')
+    expect(rt, '桥高亮入口').toContain('func highlightNode(')
+    const page = fs.readFileSync(path.join(ROOT, 'packages/cli/src/app-devtools-page.ts'), 'utf-8')
+    expect(page, '面板下发 highlight').toContain('function sendHighlight(')
+    expect(page, '面板 REPL 输入').toContain("$('repl')")
+  })
 })
 
 describe.skipIf(!hasSuperapp)('★完整宿主 · app-bundle（项目侧 bundle）', () => {
@@ -251,6 +269,25 @@ describe.skipIf(!hasSuperapp)('★完整宿主 · dev server（热刷核心）',
     expect(bundle.length).toBeGreaterThan(50_000)
     expect(bundle).toContain('__proteusSuperappBootJson')
   }, 60_000)
+
+  it('★面板→设备命令通道（决策 #701）：/panelcmd 入队 ⇒ /cmd one-shot 取走 ⇒ 再取为空', async () => {
+    const s = server!
+    // 入队 highlight
+    const q = await fetch(`${s.url}/panelcmd?type=highlight&id=42`).then((r) => r.json()) as { ok: boolean }
+    expect(q.ok).toBe(true)
+    // 取走（one-shot）
+    const c1 = await fetch(`${s.url}/cmd`).then((r) => r.json()) as { type: string; nodeId: number }
+    expect(c1.type).toBe('highlight')
+    expect(c1.nodeId).toBe(42)
+    // 再取 ⇒ 空（已清）
+    const c2 = await fetch(`${s.url}/cmd`).then((r) => r.json()) as Record<string, unknown>
+    expect(c2.type).toBeUndefined()
+    // eval 命令入队覆盖式
+    await fetch(`${s.url}/panelcmd?type=eval&expr=1%2B1`)
+    const c3 = await fetch(`${s.url}/cmd`).then((r) => r.json()) as { type: string; expr: string }
+    expect(c3.type).toBe('eval')
+    expect(c3.expr).toBe('1+1')
+  }, 30_000)
 
   it('改源码 ⇒ version 递增（真 watch；有界条件等待，非盲等）', async () => {
     const s = server!

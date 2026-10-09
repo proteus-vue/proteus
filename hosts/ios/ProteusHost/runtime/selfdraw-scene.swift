@@ -3558,6 +3558,27 @@ final class SelfDrawView: UIView {
         return abs.offsetBy(dx: -contentOffset.x, dy: -contentOffset.y)
     }
 
+    /// 面板→设备命令 `highlight` 的覆盖层（决策 #701：DevTools 元素高亮）
+    private var highlightLayer: CAShapeLayer?
+
+    /// ★★高亮某节点（DevTools 元素高亮 · 决策 #701）——在**屏幕坐标**该节点 rect 上画一个描边覆盖层。
+    ///   【为什么用它】面板 Elements 点节点 ⇒ 经命令通道 `/panelcmd?type=highlight&id=N` 下发 ⇒ 宿主
+    ///   在设备屏上高亮该节点——"面板选中的就是设备上那个"的直观证据（Chrome DevTools 同款交互）。
+    ///   ★`id <= 0` ⇒ 清除高亮。覆盖层挂在本视图 `layer` 上（`zPosition` 极高 ⇒ 压在最上层）。
+    func highlightNode(_ id: Int) {
+        highlightLayer?.removeFromSuperlayer()
+        highlightLayer = nil
+        guard id > 0, let r = screenRect(of: id), r.width > 0, r.height > 0 else { return }
+        let l = CAShapeLayer()
+        l.path = UIBezierPath(rect: r).cgPath
+        l.strokeColor = UIColor.systemBlue.cgColor
+        l.fillColor = UIColor.systemBlue.withAlphaComponent(0.18).cgColor
+        l.lineWidth = 2
+        l.zPosition = 100_000
+        layer.addSublayer(l)
+        highlightLayer = l
+    }
+
     /// ★★**复用层时必须清空全部可绘制属性**（本仓纪律：复用 = 完全重配，不是"覆盖部分字段"）
     ///
     /// 【为什么（复用池最容易出的静默错）】被复用的层带着**上一个节点的外观**：
@@ -5531,6 +5552,9 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     func readRects() -> String {
         rects()
     }
+
+    /// ★DevTools 元素高亮（决策 #701）：面板选中节点 ⇒ 在设备屏上给该节点 rect 描边覆盖
+    func highlightNode(_ id: Int) { view?.highlightNode(id) }
 
     /// ★★**离屏像素自检**（2026-10-03 · 三端对齐：判据 ④ 的 iOS 腿）——
     ///   把层树渲染到离屏位图，数"与背景色不同"的像素。

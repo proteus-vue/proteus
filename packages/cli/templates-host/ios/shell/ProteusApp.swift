@@ -127,8 +127,7 @@ final class ProteusHostDriver {
         return out
     }
 
-    /// ★dev 原生日志（channel=native）——对齐 Android `devLog`（决策 #698）。
-    ///   用途：面板 Console 的"原生通道"（app ready / 热重载 / 渲染失败等）。缺了它，
+    /// ★dev 原生日志（channel=native）——对齐 Android `devLog`（决策 #698）。    ///   用途：面板 Console 的"原生通道"（app ready / 热重载 / 渲染失败等）。缺了它，
     ///   当项目页没有 `console.log` 时 Console 恒空（Android 靠原生事件撑着，iOS 没有 ⇒ 观感"一直空"）。
     func devLog(_ level: String, _ text: String) {
         guard ProteusBuildConfig.DEV, !text.isEmpty else { return }
@@ -152,6 +151,14 @@ final class ProteusHostDriver {
         o["patches"] = bridge.patchAppliedTotal
         guard let d = try? JSONSerialization.data(withJSONObject: o, options: [.sortedKeys]) else { return "{}" }
         return String(data: d, encoding: .utf8) ?? "{}"
+    }
+
+    /// ★DevTools REPL（决策 #701）：在设备 JSContext 里求值一个表达式，返回结果字符串（主线程调用）。
+    func evalExpr(_ expr: String) -> String {
+        guard let ctx = self.ctx else { return "（无 JSContext）" }
+        let v = ctx.evaluateScript(expr)
+        if let exc = ctx.exception { return "✗ " + (exc.toString() ?? "异常") }
+        return v?.toString() ?? "undefined"
     }
 
     init(frame: CGRect) {
@@ -657,6 +664,11 @@ final class ProteusSceneDelegate: UIResponder, UIWindowSceneDelegate {
                 _ = BundleSource.httpPostJson(base + "/tree", body: tree)
             }
             for e in traces { _ = BundleSource.httpGetText(base + "/trace?type=" + urlEnc(e[0]) + "&id=" + e[1] + "&chain=" + urlEnc(e[2]) + "&handled=" + e[3] + "&fired=" + urlEnc(e[4])) }
+            // ★面板→设备命令（决策 #701）：轮询 /cmd（one-shot），执行 highlight / eval。回主线程改 UI/JS。
+            let cmdJson = BundleSource.httpGetText(base + "/cmd") ?? ""
+            if !cmdJson.isEmpty, cmdJson != "{}", cmdJson != "null" {
+                DispatchQueue.main.async { self.applyCommand(cmdJson, driver: d) }
+            }
             // ③ 版本变更 ⇒ 热重载（回主线程重建 JSContext）
             let v = BundleSource.httpGetText(base + "/version") ?? ""
             guard !v.isEmpty, v != self.lastVersion else { return }
@@ -677,7 +689,31 @@ final class ProteusSceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     private func urlEnc(_ s: String) -> String {
-        s.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        // ★query 分量编码（决策 #701 修）：`.urlQueryAllowed` **包含** `+ & = # ?` 等 query 分隔符，
+        //   而服务端 `URLSearchParams` 把 `+` 解成空格 ⇒ 含 `+`/`&` 的日志/表达式会被改写
+        //   （实测：REPL 求值 `1+1` 的**回显文本**变成 `1 1`，虽然求值本身正确）。⇒ 从允许集里剔掉它们。
+        var cs = CharacterSet.urlQueryAllowed
+        cs.remove(charactersIn: "+&=#?")
+        return s.addingPercentEncoding(withAllowedCharacters: cs) ?? ""
+    }
+
+    /// ★面板→设备命令执行（决策 #701，主线程调用）：`highlight`（元素高亮）/ `eval`（REPL）。
+    ///   结果经 `d.devLog` 回 Console 通道 ⇒ 面板可见（闭环）。
+    private func applyCommand(_ json: String, driver d: ProteusHostDriver) {
+        guard let data = json.data(using: .utf8),
+              let o = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return }
+        let type = (o["type"] as? String) ?? ""
+        switch type {
+        case "highlight":
+            let id = (o["nodeId"] as? NSNumber)?.intValue ?? 0
+            d.bridge.highlightNode(id)
+            d.devLog("info", "highlight #\(id)")
+        case "eval":
+            let expr = (o["expr"] as? String) ?? ""
+            if !expr.isEmpty { d.devLog("log", "› \(expr)\n\(d.evalExpr(expr))") }
+        default:
+            break
+        }
     }
 
     /// 设备/引擎环境（面板"设备环境"）——device 型号/系统/屏幕 + 内核·引擎版本。
