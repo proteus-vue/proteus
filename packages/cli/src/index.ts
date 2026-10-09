@@ -1046,15 +1046,25 @@ async function runAppDev(target: AppPlatform): Promise<number> {
         } else {
           hdcRun(['shell', 'aa', 'force-stop', bundleName])   // 旧进程可能已不在 ⇒ 忽略
           let r = hdcRun(['install', hap])
-          if (!/success/i.test(r.out)) {
-            sInstall.note('版本/签名冲突 ⇒ 卸载旧包后重装')
+          // ★错误归因（决策 #725）：hdc install 失败有两种成因、处置不同——
+          //   · version downgrade（同 bundle 已有更高 versionCode）⇒ **卸载旧包再装**（dev 迭代常见）；
+          //   · no signature file ⇒ 产物 **unsigned**（华为 CA 调试证书机器本地，需 DevEco 配一次），
+          //     卸载重装**无效** ⇒ 不空跑卸载，直接给"配签名"指引。
+          if (!/success/i.test(r.out) && /downgrade|version.{0,12}conflict/i.test(r.out)) {
+            sInstall.note('版本冲突 ⇒ 卸载旧包后重装')
             hdcRun(['uninstall', bundleName])
             r = hdcRun(['install', hap])
           }
           if (!/success/i.test(r.out)) {
             sInstall.fail('hdc install 失败')
             ui.dim(r.out.trim().split('\n').slice(-3).join('\n')).split('\n').forEach((l) => ui.hint(l))
-            ui.hint(`装机需已配置签名（DevEco → Project Structure → Signing Configs → Automatically generate signature）`)
+            if (/no signature|signature file|verify[^\n]*sign|pkcs7/i.test(r.out)) {
+              ui.hint('产物**未签名**（unsigned）——鸿蒙只信任华为 CA 调试证书，需在 DevEco 配**一次**签名：')
+              ui.hint('  DevEco → File → Project Structure → Signing Configs → Automatically generate signature（登录华为账号）')
+              ui.hint(`  配好后重跑即可；hap 已在 ${path.relative(projectRoot, hap)}`)
+            } else {
+              ui.hint(`手动：hdc install ${path.relative(projectRoot, hap)}`)
+            }
           } else {
             hdcRun(['shell', 'aa', 'force-stop', bundleName])
             const start = hdcRun(['shell', 'aa', 'start', '-a', 'EntryAbility', '-b', bundleName])
