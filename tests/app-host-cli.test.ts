@@ -387,12 +387,17 @@ describe('★完整宿主 · iOS 宿主模板为运行期形态（决策 #683）
     // ① 键名 bug 修：highlight 必须读 dev server 下发的 nodeId（不是 id）
     expect(act, 'highlight 读 nodeId（对齐 dev server）').toContain('o.optInt("nodeId"')
     expect(act, 'highlight 不再误读 id').not.toContain('o.optInt("id", 0)')
-    // ② edit（就地编辑 v2）：值强转 + 桥 updatePatches（复用，不需要改 AAR）+ 编辑标记
+    // ② edit（就地编辑）：★#722 下沉到**桥** `applyLiveEdit`（改树 + 全量重挂，对齐 iOS #706）——
+    //   增量 `updatePatches` 只认字段子集，`flexDirection` 等被内核**静默忽略**（用户实测"改了 flex 不动"）。
     expect(act, 'edit 分支').toContain('"edit".equals(type)')
-    expect(act, '就地编辑核心').toContain('private boolean applyLiveEdit(')
-    expect(act, '值强转/校验').toContain('private static Object coerceLiveEdit(')
-    expect(act, '就地编辑走桥 updatePatches').toContain('draw.updatePatches(')
-    expect(act, '布局枚举封闭集').toContain('"row-reverse", "column-reverse"')
+    expect(act, 'edit 委托桥 applyLiveEdit').toContain('draw.applyLiveEdit(id, key, value)')
+    expect(act, '不再走增量 updatePatches').not.toContain('draw.updatePatches(')
+    const vrh = fs.readFileSync(path.join(ROOT, 'hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/VaporRenderHost.java'), 'utf-8')
+    expect(vrh, '桥 applyLiveEdit（改树+全量重挂）').toContain('public String applyLiveEdit(')
+    expect(vrh, '桥值强转/校验').toContain('private static Object coerceLiveEdit(')
+    expect(vrh, '保留原始树供重建').toContain('lastTreeJson = treeJson')
+    expect(vrh, '改树后 mount 全量重建').toMatch(/target\.put\(key, coerced\)[\s\S]*?mount\(tree\.toString\(\)\)/)
+    expect(vrh, '布局枚举封闭集').toContain('"row-reverse", "column-reverse"')
     expect(act, '编辑标记 setEdited').toContain('devOverlay.setEdited(true)')
     // ③ reset（重置为项目代码）：remount 透传渲染期（全量重挂）
     expect(act, 'reset 分支').toContain('"reset".equals(type)')
@@ -408,6 +413,12 @@ describe('★完整宿主 · iOS 宿主模板为运行期形态（决策 #683）
     expect(ov, '重置按钮').toContain('重置为项目代码')
     expect(ov, '编辑状态标记').toContain('void setEdited(')
     expect(ov, '重置回调注入').toContain('void setResetAction(')
+    // ★#722 对齐 iOS：① 高亮**填充 + 描边**（此前只有描边 ⇒ 与 iOS 视觉不一致）；
+    //   ② 就地编辑**即时反馈**（toast——此前编辑后无"已应用"信号，用户实测"没提示、感觉延迟很高"）
+    const pv = fs.readFileSync(path.join(ROOT, 'hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/ProteusHostView.java'), 'utf-8')
+    expect(pv, '高亮填充（对齐 iOS alpha 0.18）').toContain('devHighlight')
+    expect(pv, '高亮有 FILL').toMatch(/Paint\.Style\.FILL/)
+    expect(act, '就地编辑即时提示').toContain('已就地编辑 #')
   })
 
   // ★★★决策 #721：Android「已生成宿主的 dev 壳源自愈」——android 壳在 src/dev/（不在 shell/），

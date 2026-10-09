@@ -57,6 +57,15 @@ public final class VaporRenderHost {
 
     private ProteusHostView view;
     private long handle = 0L;
+    /**
+     * ★★★最近一次 `mount` 的**原始** tree JSON（逻辑单位，**未 physicalize**）——就地编辑（决策 #722）用。
+     *   【为什么要留原始串】就地编辑 = **改树 + 全量重挂**（与 iOS `lastNodes` + `render(force:true)` **同语义**）。
+     *   ★为什么不用 `updatePatches`（增量）：内核 `PatchStyle` 只认**字段子集**（width/height/flexGrow/
+     *     padding/margin/display…），而 `flexDirection`/`justifyContent`/`alignItems`/`position`/`top`/… **不在其中**
+     *     —— `#[serde(default)]` 会**静默忽略**（不报错）⇒ "改了 flex 方向布局不动"（用户实测）。
+     *     全量重建走 `create`（`NodeDto` 字段完整）⇒ **任意字段**都生效（对齐 iOS）。
+     */
+    private String lastTreeJson = "";
 
     /* ────────────────────────── 读数（判据用）────────────────────────── */
 
@@ -199,6 +208,85 @@ public final class VaporRenderHost {
     String nodeRectJson(int nodeId) { return handle > 0 ? RustLayout.nodeRect(handle, nodeId) : "{}"; }
 
     /**
+     * ★★★**就地编辑**（DevTools · 决策 #722，**对齐 iOS #706/#719**）——改宿主保存的**原始节点树**某字段
+     *   ⇒ **全量重挂**（`mount`）。
+     *
+     * 【为什么走全量重挂而不是 `updatePatches`（增量）】内核增量通路的 `PatchStyle` 只认**字段子集**
+     *   （width/height/flexGrow/flexShrink/flexBasis/gap/padding/margin/display/text/…），而
+     *   `flexDirection`/`flexWrap`/`justifyContent`/`alignItems`/`alignSelf`/`position`/`top`/`left`/… **不在其中**
+     *   —— `#[serde(default)]` **静默忽略**（不报错）⇒ "改了 flex 方向布局不动"（用户实测）。
+     *   ⇒ 统一到"改树 + 全量重建"（`create` 的 `NodeDto` 字段完整 ⇒ **任意字段**生效），与 iOS 同语义。
+     *   【值强转】`coerceLiveEdit`（字段类型校验：颜色 hex / padding·margin / 枚举封闭集 / 数字或原串）。
+     *   【禁改】`id`/`parentId`/`rect`/`tag`/`semantic`（结构/语义身份）。
+     * @return `{ok, error?}` JSON
+     */
+    public String applyLiveEdit(int id, String key, String value) {
+        JSONObject out = new JSONObject();
+        try {
+            if (lastTreeJson == null || lastTreeJson.isEmpty()) return err(out, "尚无挂载树（无从编辑）").toString();
+            if (id <= 0 || key == null || key.isEmpty()) return err(out, "非法参数（id/key）").toString();
+            if (key.equals("id") || key.equals("parentId") || key.equals("rect") || key.equals("tag") || key.equals("semantic"))
+                return err(out, "不可编辑字段：" + key).toString();
+            JSONObject tree = new JSONObject(lastTreeJson);
+            JSONArray nodes = tree.optJSONArray("nodes");
+            if (nodes == null) return err(out, "树无 nodes").toString();
+            JSONObject target = null;
+            for (int i = 0; i < nodes.length(); i++) {
+                JSONObject n = nodes.optJSONObject(i);
+                if (n != null && n.optInt("id", -1) == id) { target = n; break; }
+            }
+            if (target == null) return err(out, "无该节点：#" + id).toString();
+            Object coerced = coerceLiveEdit(key, value);
+            if (coerced == null) return err(out, "非法值：" + key + "=" + value).toString();
+            target.put(key, coerced);
+            // ★改树 ⇒ 全量重挂（mount 内部会 physicalize + 重建 → 内核按新样式**重新布局**+重建层）
+            String re = mount(tree.toString());
+            JSONObject r = new JSONObject(re);
+            out.put("ok", r.optBoolean("ok", false));
+            if (!r.optBoolean("ok", false)) out.put("error", r.optString("error", "重挂失败"));
+            return out.toString();
+        } catch (Throwable t) {
+            return err(out, t.getClass().getSimpleName() + ": " + t.getMessage()).toString();
+        }
+    }
+
+    /** ★就地编辑**值强转/校验**（决策 #722，镜像 iOS `coerceLiveEdit`）：颜色按 hex；padding/margin
+     *   单值⇒四边同值 / JSON 对象；枚举按**内核封闭集**；其余能解析为数字则数字，否则原串。
+     *   ★返回 null = 拒绝（非法值**不静默**改）。 */
+    private static Object coerceLiveEdit(String key, String value) {
+        if ("backgroundColor".equals(key) || "borderColor".equals(key) || "color".equals(key)) {
+            return (value != null && value.matches("#[0-9a-fA-F]{3,8}")) ? value : null;
+        }
+        if ("padding".equals(key) || "margin".equals(key)) {
+            try {
+                double d = Double.parseDouble(value);
+                JSONObject e = new JSONObject();
+                e.put("top", d); e.put("right", d); e.put("bottom", d); e.put("left", d);
+                return e;
+            } catch (Throwable ignored) { }
+            try {
+                JSONObject o = new JSONObject(value);
+                boolean any = false;
+                for (String s : new String[]{"top", "right", "bottom", "left"}) if (o.has(s)) any = true;
+                return any ? o : null;
+            } catch (Throwable ignored) { return null; }
+        }
+        if ("display".equals(key)) return ("flex".equals(value) || "none".equals(value) || "grid".equals(value)) ? value : null;
+        if ("position".equals(key)) return (java.util.Arrays.asList("static", "relative", "absolute", "fixed", "sticky").contains(value)) ? value : null;
+        if ("overflow".equals(key) || "overflowX".equals(key) || "overflowY".equals(key)) {
+            return (java.util.Arrays.asList("visible", "hidden", "scroll", "auto").contains(value)) ? value : null;
+        }
+        if ("flexDirection".equals(key)) {
+            return (java.util.Arrays.asList("row", "column", "row-reverse", "column-reverse").contains(value)) ? value : null;
+        }
+        if ("flexWrap".equals(key)) {
+            return (java.util.Arrays.asList("nowrap", "wrap", "wrap-reverse").contains(value)) ? value : null;
+        }
+        // 默认：能解析为数字 ⇒ 数字（尺寸/弹性/字号/圆角/透明/偏移…）；否则按字符串原样收（文本/字体族/对齐…）
+        try { return Double.valueOf(value); } catch (Throwable ignored) { return value; }
+    }
+
+    /**
      * 首帧建树：`{viewport:{width,height}, nodes:[…]}`。
      *
      * 顺序与 `JsRenderHost.render` **逐条相同**（度量 → 请求 → create → 指令）：
@@ -208,6 +296,9 @@ public final class VaporRenderHost {
         mountCalls++;
         // ★★重建 ⇒ 收起旧高亮（决策 #714）：高亮框不随树重建消失，切屏后会挂在旧 rect 上。
         highlightNode(0);
+        // ★★保存**原始** tree 串（逻辑单位）——就地编辑（决策 #722）用它重建；★必须在 physicalize **之前**
+        //   （physicalize 是就地改 parse 出来的 tree，不动这个串；之后编辑基于逻辑单位改写再重新 mount）。
+        lastTreeJson = treeJson;
         JSONObject out = new JSONObject();
         try {
             JSONObject tree = new JSONObject(treeJson);

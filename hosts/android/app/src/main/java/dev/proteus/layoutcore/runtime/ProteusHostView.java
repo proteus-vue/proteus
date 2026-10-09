@@ -2473,11 +2473,18 @@ public class ProteusHostView extends ViewGroup {
             drawCmds(canvas);
         }
         if (scrolled) canvas.restoreToCount(save);
-        // ★DevTools 元素高亮（决策 #701）：**屏幕坐标**画描边（在 scroll restore 之后 ⇒ 不随滚动平移）
+        // ★DevTools 元素高亮（决策 #701/#722）：**屏幕坐标**画——**填充 + 描边**（对齐 iOS #706 的
+        //   `fillColor systemBlue alpha 0.18` + `stroke systemBlue`）。此前只有描边 ⇒ Android/iOS 视觉不一致
+        //   （用户实测"高亮样式和 iOS 没对齐"）。用**两个 Paint**：填充一层 + 描边一层。
         if (devHighlight != null && devHighlight.width() > 0 && devHighlight.height() > 0) {
+            float d = getResources().getDisplayMetrics().density;
+            android.graphics.Paint fill = new android.graphics.Paint();
+            fill.setStyle(android.graphics.Paint.Style.FILL);
+            fill.setColor(0x2E2F6BFF);   // systemBlue「#2F6BFF」alpha 0.18
+            canvas.drawRect(devHighlight, fill);
             devHighlightPaint.setStyle(android.graphics.Paint.Style.STROKE);
-            devHighlightPaint.setStrokeWidth(2 * getResources().getDisplayMetrics().density);
-            devHighlightPaint.setColor(0xFF2F6BFF);   // 系统蓝（与 iOS systemBlue 近似，dev 高亮）
+            devHighlightPaint.setStrokeWidth(2 * d);
+            devHighlightPaint.setColor(0xFF2F6BFF);   // 系统蓝（与 iOS systemBlue 对齐）
             devHighlightPaint.setAntiAlias(true);
             canvas.drawRect(devHighlight, devHighlightPaint);
         }
