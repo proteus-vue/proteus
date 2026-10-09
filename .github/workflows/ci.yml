@@ -211,6 +211,11 @@ jobs:
       - name: 鸿蒙 runtime HAR 随包副本新鲜度（prebuilt ⇄ 真源，防"真源改了副本没同步"）
         run: pnpm run check:harmony-runtime-prebuilt
 
+      # ★★★三端宿主变体一致性（dev-host = 宿主）：每端**单一壳**、功能清单齐全、dev 件以 DEV 门控、
+      #   android release 无 INTERNET。防「功能误入 if(DEV) / dev-only 文件 ⇒ **release 静默丢功能**」。
+      - name: 三端宿主变体一致性（dev-host = 宿主：单一壳 + dev 件门控 + 功能齐全）
+        run: pnpm run check:host-variant-parity
+
       # ★★C2（2026-10-01）：SVG 段列表的跨语言序列化形态（内核 serde ⇄ 两端翻译器）——
       #   真缺陷教训：两端各写"臆想的形态" ⇒ 层建不出来而内核读数全对（静默）。
       - name: SVG 段列表跨语言形态（C2：内核 serde ⇄ 双端翻译器）
