@@ -1,5 +1,12 @@
 # @proteus-vue/agent
 
+## 0.3.0-beta.31
+
+### Patch Changes
+
+- @proteus-vue/mcp@0.3.0-beta.31
+- @proteus-vue/component-ir@0.3.0-beta.31
+
 ## 0.3.0-beta.29
 
 ### Patch Changes
