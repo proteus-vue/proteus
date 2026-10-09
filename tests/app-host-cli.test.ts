@@ -238,8 +238,13 @@ describe('★完整宿主 · iOS 宿主模板为运行期形态（决策 #683）
     // ★网络详情（决策 #707）
     expect(server, '网表带 contentType/preview').toContain('netContentType')
     expect(server, '网表预览截断').toContain('preview: netPreview.slice')
+    expect(server, '原始响应用量上限').toContain('RAW_CAP')
+    expect(server, '原始体按需端点').toContain("url === '/netbody'")
+    expect(server, '原始体另存（不进 SSE）').toContain('netBodies.set(')
     expect(page, '面板网络详情').toContain('function showNetDetail(')
     expect(page, '点行看详情').toMatch(/addNet[\s\S]*?showNetDetail\(e\)/)
+    expect(page, '详情含原始响应').toContain('原始响应')
+    expect(page, '面板按需取原始体').toContain('/netbody?id=')
   })
 
   // ★面板→设备命令（决策 #701/#702 安卓腿）：Android 宿主也接 /cmd + 元素高亮 + REPL
@@ -330,18 +335,23 @@ describe.skipIf(!hasSuperapp)('★完整宿主 · dev server（热刷核心）',
     expect(bundle).toContain('__proteusSuperappBootJson')
   }, 60_000)
 
-  it('★网络详情（决策 #707）：网表带 content-type + 响应预览（/bundle 抓 text/javascript + 头部）', async () => {
+  it('★网络详情（决策 #707/#708）：网表带 content-type + 预览；原始响应按需经 /netbody 取', async () => {
     const s = server!
     await fetch(`${s.url}/bundle`)   // 触发一次网表记录（/bundle 非噪声）
-    // 读 SSE 快照里的 net 表，找 /bundle 行
+    // 读 SSE 快照里的 net 表，找 /bundle 行（★原始体不在此——防 SSE 快照膨胀）
     const reader = (await fetch(`${s.url}/events`)).body!.getReader()
     const first = new TextDecoder().decode((await reader.read()).value)
     await reader.cancel()
-    const snap = JSON.parse(first.replace(/^data: /, '')) as { net?: Array<{ path: string; contentType?: string; preview?: string }> }
+    const snap = JSON.parse(first.replace(/^data: /, '')) as { net?: Array<{ id?: number; path: string; contentType?: string; preview?: string; raw?: string }> }
     const bundleEv = (snap.net ?? []).find((e) => (e.path ?? '').startsWith('/bundle'))
     expect(bundleEv, 'net 表含 /bundle 行').toBeTruthy()
     expect(bundleEv!.contentType, '带响应 content-type').toMatch(/javascript/)
     expect(bundleEv!.preview, '带响应预览（bundle 头部）').toMatch(/use strict|packages\//)
+    expect(bundleEv!.raw, '★原始体不进 SSE（防快照膨胀）').toBeUndefined()
+    // ★原始响应按需取（决策 #708）：/netbody?id= ⇒ 该条完整体（> 预览）
+    const nb = (await fetch(`${s.url}/netbody?id=${bundleEv!.id}`).then((r) => r.json())) as { body: string | null }
+    expect(nb.body, '取到原始响应').toBeTruthy()
+    expect(nb.body!.length, '原始响应比预览（300）长').toBeGreaterThan(300)
   }, 60_000)
 
   it('★面板→设备命令通道（决策 #701）：/panelcmd 入队 ⇒ /cmd one-shot 取走 ⇒ 再取为空', async () => {

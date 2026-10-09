@@ -141,13 +141,27 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
   .st.ok{color:var(--ok)} .st.warn{color:var(--warn)} .st.err{color:var(--err)}
   .nrow .ms{color:var(--dim);text-align:right;min-width:56px;font-size:11.5px}
   .nrow{cursor:pointer} .nrow:hover{background:var(--surface-3)}
-  /* ★网络详情（决策 #707） */
+  /* ★网络详情（决策 #707/#708）——对齐 Chrome DevTools 的头/元数据/响应三段 */
   .ndetail{margin-top:var(--s3);border:1px solid var(--line-2);border-radius:var(--r);overflow:hidden;background:var(--surface)}
-  .ndetail .nd-h{padding:9px var(--s3);background:var(--surface-3);font-size:12px;font-family:var(--mono);color:var(--ink);border-bottom:1px solid var(--line);overflow-wrap:anywhere}
-  .nd-b{display:grid;grid-template-columns:auto 1fr;gap:5px var(--s4);padding:var(--s3);font-size:12px;font-family:var(--mono)}
+  .nd-h{display:flex;align-items:center;gap:var(--s3);padding:9px var(--s3);background:var(--surface-3);border-bottom:1px solid var(--line)}
+  .nd-m{font-weight:700;color:var(--brand2);font-family:var(--mono);font-size:12px;letter-spacing:.3px}
+  .nd-path{flex:1;min-width:0;color:var(--ink);font-family:var(--mono);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .nd-st{font-weight:700;font-size:12px;padding:1px 8px;border-radius:999px}
+  .nd-st.ok{color:var(--ok);background:var(--ok-soft)} .nd-st.warn{color:var(--warn);background:var(--warn-soft)} .nd-st.err{color:var(--err);background:var(--err-soft)}
+  .nd-close{margin-left:4px;background:none;border:none;color:var(--dim);cursor:pointer;font-size:13px;line-height:1;padding:2px 4px}
+  .nd-close:hover{color:var(--ink)}
+  .nd-b{display:grid;grid-template-columns:auto 1fr;gap:6px var(--s4);padding:var(--s3) var(--s4);font-size:12px}
   .nd-k{color:var(--dim)} .nd-v{color:var(--ink);text-align:right;overflow-wrap:anywhere}
-  .nd-preview{padding:0 var(--s3) var(--s3)}
-  .nd-preview pre{margin:5px 0 0;max-height:160px;overflow:auto;background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:var(--s3);font-size:11px;color:var(--ink-2);white-space:pre-wrap;overflow-wrap:anywhere}
+  .nd-v.mono{font-family:var(--mono);font-size:11.5px}
+  .nd-tabs{display:flex;gap:var(--s2);padding:0 var(--s4);border-bottom:1px solid var(--line)}
+  .nd-tabs b{color:var(--dim);font-weight:600;font-size:12px;padding:7px 10px;border-bottom:2px solid transparent}
+  .nd-tabs b.on{color:var(--ink);border-bottom-color:var(--brand2)}
+  .nd-resp{padding:var(--s3) var(--s4) var(--s4)}
+  .nd-lbl{display:flex;align-items:center;gap:8px;color:var(--dim);font-size:11px;margin:10px 0 4px}
+  .nd-raw-lbl span{flex:1}
+  .nd-copy{background:none;border:1px solid var(--line-2);border-radius:5px;color:var(--brand2);font-size:11px;padding:1px 8px;cursor:pointer}
+  .nd-copy:hover:not(:disabled){border-color:var(--brand2)} .nd-copy:disabled{opacity:.4;cursor:default}
+  .nd-resp pre{margin:0;max-height:240px;overflow:auto;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:var(--s3);font-size:11px;line-height:1.5;color:var(--ink-2);font-family:var(--mono);white-space:pre-wrap;overflow-wrap:anywhere}
 
   /* ── Console / Events ── */
   .crow{display:grid;grid-template-columns:62px 1fr;gap:var(--s3);padding:8px var(--s3);border-top:1px solid var(--line);
@@ -320,18 +334,47 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
     return r;
   }
   // ★网络详情（决策 #707）：方法/URL/状态/大小/耗时 + 响应类型 +（text 类）内容预览
+  // ★网络详情（决策 #707/#708）：方法/URL/状态/大小/耗时 + 响应类型 + 预览 + **原始响应（按需 /netbody）**
   const ndetailEl = $('ndetail');
+  function ndRow(k, v, mono) { return '<div class="nd-k">' + escapeHtml(k) + '</div><div class="nd-v' + (mono ? ' mono' : '') + '">' + escapeHtml(v) + '</div>'; }
   function showNetDetail(e) {
     if (!ndetailEl) return;
-    const row = function (k, v) { return '<div class="nd-k">' + escapeHtml(k) + '</div><div class="nd-v">' + escapeHtml(v) + '</div>'; };
-    ndetailEl.innerHTML = '<div class="nd-h">' + chTag(e.channel) + ' ' + escapeHtml(e.method) + ' ' + escapeHtml(e.path || '') + '</div>'
+    const st = stCls(e.status);
+    ndetailEl.innerHTML =
+      '<div class="nd-h"><span class="nd-m">' + escapeHtml(e.method || 'GET') + '</span>'
+      + '<span class="nd-path">' + escapeHtml(e.path || '') + '</span>'
+      + '<span class="nd-st ' + st + '">' + e.status + '</span>'
+      + '<button class="nd-close" title="关闭">✕</button></div>'
       + '<div class="nd-b">'
-      + row('状态', String(e.status)) + row('大小', e.bytes ? Math.round(e.bytes / 1024) + ' KB（' + e.bytes + ' B）' : '0 B')
-      + row('耗时', e.ms + ' ms') + row('时间', fmtTime(e.time))
-      + (e.contentType ? row('内容类型', e.contentType) : '')
+      + ndRow('状态', String(e.status)) + ndRow('大小', e.bytes ? Math.round(e.bytes / 1024) + ' KB · ' + e.bytes + ' B' : '0 B')
+      + ndRow('耗时', e.ms + ' ms') + ndRow('时间', fmtTime(e.time))
+      + (e.contentType ? ndRow('内容类型', e.contentType, true) : '')
       + '</div>'
-      + (e.preview ? '<div class="nd-preview"><div class="nd-k">响应预览</div><pre>' + escapeHtml(e.preview) + '</pre></div>' : '');
+      + '<div class="nd-tabs"><b class="on" data-nd="resp">响应</b></div>'
+      + '<div class="nd-resp">'
+      + (e.preview ? '<div class="nd-lbl">预览（前 300 字符）</div><pre>' + escapeHtml(e.preview) + '</pre>' : '<div class="nd-lbl">（无响应体）</div>')
+      // ★原始响应（决策 #708）：完整体（上限 64KB），按需取；截断如实标注
+      + '<div class="nd-lbl nd-raw-lbl"><span>原始响应' + (e.rawCapped ? '（截断 · 共 ' + Math.round((e.bytes || 0) / 1024) + ' KB）' : '') + '</span>'
+      + '<button class="nd-copy" disabled>复制</button></div>'
+      + '<pre class="nd-raw" id="nd-raw">加载中…</pre>'
+      + '</div>';
     ndetailEl.style.display = 'block';
+    var closeBtn = ndetailEl.querySelector('.nd-close');
+    if (closeBtn) closeBtn.addEventListener('click', function () { ndetailEl.style.display = 'none'; });
+    // 按需取原始响应（不进 SSE）
+    var rawEl = ndetailEl.querySelector('#nd-raw');
+    var cpBtn = ndetailEl.querySelector('.nd-copy');
+    fetch('/netbody?id=' + encodeURIComponent(e.id)).then(function (r) { return r.json(); }).then(function (d) {
+      var body = d && d.body != null ? String(d.body) : '';
+      rawEl.textContent = body || '（无）';
+      if (body && cpBtn) {
+        cpBtn.disabled = false;
+        cpBtn.addEventListener('click', function () {
+          try { navigator.clipboard.writeText(body); } catch (err) { /* 忽略 */ }
+          cpBtn.textContent = '已复制'; setTimeout(function () { cpBtn.textContent = '复制'; }, 1200);
+        });
+      }
+    }).catch(function () { rawEl.textContent = '（取原始响应失败）'; });
   }
   function addCon(e, isNew) {
     const lv = ['log','info','warn','error'].includes(e.level) ? e.level : 'log';

@@ -118,9 +118,9 @@ export async function startAppDevServer(opts: AppDevServerOptions): Promise<AppD
   interface RebuildEvent { version: number; bytes: number; ms: number; reason: string; time: number }
   interface HostState { screen: string; time: number; env?: Record<string, unknown>; perf?: Record<string, unknown> }
   /** ★channel（决策 #679）：'native' = 宿主/H TTP；'project' = 项目 JS 侧（console.* / 桥调用）。 */
-  /** ★★网络**详情**（决策 #707）：在方法/路径/状态/字节/耗时之外，补 **content-type + 响应体预览**
-   *   （App 端网络源头 = dev server 自身请求 bundle/version/ping/tree/… ⇒ 详情看这几个）。 */
-  interface NetEvent { channel: 'native' | 'project'; method: string; path: string; status: number; bytes: number; ms: number; time: number; contentType?: string; preview?: string }
+  /** ★★网络**详情**（决策 #707/#708）：元数据 = 方法/路径/状态/字节/耗时 + **content-type + 响应预览**；
+   *   ★原始响应（完整体，上限 64KB）**按需**经 `GET /netbody?id=` 取（`id` 标识该条；**不进 SSE**）。 */
+  interface NetEvent { id?: number; channel: 'native' | 'project'; method: string; path: string; status: number; bytes: number; ms: number; time: number; contentType?: string; preview?: string; raw?: string; rawCapped?: boolean }
   interface ConsoleEvent { channel: 'native' | 'project'; level: string; text: string; time: number }
   interface TraceEvent { gesture: string; id: number; chain: number[]; handled: boolean; fired: number[]; time: number }
   /** ★面板→设备命令（决策 #701）：`highlight` / `eval`（REPL）/ `edit`（就地改绘制属性，决策 #702）。 */
@@ -135,6 +135,11 @@ export async function startAppDevServer(opts: AppDevServerOptions): Promise<AppD
   let lastTree: unknown = null              // ★元素内省（决策 #674）：当前屏实例化节点树（含 rects 几何）
   let lastInspect: { id: number; time: number } | null = null   // ★元素点选（决策 #675）
   let pendingCmd: CmdEvent | null = null                        // ★面板→设备命令（决策 #701，one-shot）
+  /** ★★原始响应**按需**取（决策 #708）：net 事件只带元数据（含 id），原始体另存此表（有界）；
+   *   面板点某行 ⇒ `GET /netbody?id=` 取**该条**的原始响应。**不进 SSE 快照**（否则 80×64KB ≈ 5MB/帧，撑爆）。 */
+  const netBodies = new Map<number, string>()
+  let netSeq = 0
+  const netBodiesOrder: number[] = []
   const sseClients = new Set<import('node:http').ServerResponse>()
 
   /** 向所有 SSE 客户端广播一条事件。 */
@@ -149,11 +154,19 @@ export async function startAppDevServer(opts: AppDevServerOptions): Promise<AppD
     net: netLog.slice(-80), console: consoleLog.slice(-200), tree: lastTree,
     inspect: lastInspect, trace: traceLog.slice(-80),
   })
-  /** 记一条网络日志（dev server 请求）+ 广播。 */
-  const recordNet = (e: NetEvent): void => {
-    netLog.push(e)
+  /** 记一条网络日志（dev server 请求）+ 广播。★原始响应（`body`）另存 `netBodies`（有界），**不进 SSE**。 */
+  const recordNet = (e: NetEvent, body?: string): void => {
+    const id = ++netSeq
+    const meta: NetEvent = { ...e, id }
+    delete (meta as { raw?: string }).raw          // 元数据不带原始体（面板按需取）
+    if (body != null) {
+      netBodies.set(id, body)
+      netBodiesOrder.push(id)
+      while (netBodiesOrder.length > 30) { const old = netBodiesOrder.shift()!; netBodies.delete(old) }
+    }
+    netLog.push(meta)
     if (netLog.length > 80) netLog.shift()
-    broadcast({ type: 'net', ...e })
+    broadcast({ type: 'net', ...meta })
   }
 
   const rebuild = async (reason: string): Promise<void> => {
@@ -193,6 +206,9 @@ export async function startAppDevServer(opts: AppDevServerOptions): Promise<AppD
     let netBytes = 0
     let netContentType = ''
     let netPreview = ''
+    let netRaw = ''              // ★原始响应累积（决策 #708；上限 64KB）
+    let netRawCapped = false
+    const RAW_CAP = 64 * 1024
     const isNoise = url === '/events' || url === '/' || url === '/index.html' || url === '/health'
     const _writeHead = res.writeHead.bind(res)
     res.writeHead = ((code: number, ...rest: unknown[]) => {
@@ -206,14 +222,22 @@ export async function startAppDevServer(opts: AppDevServerOptions): Promise<AppD
     }) as typeof res.writeHead
     const _end = res.end.bind(res)
     res.end = ((chunk?: unknown, ...rest: unknown[]) => {
-      if (typeof chunk === 'string') { netBytes += Buffer.byteLength(chunk); if (!netPreview) netPreview = chunk }
-      else if (Buffer.isBuffer(chunk)) { netBytes += chunk.length; if (!netPreview && netContentType.includes('text')) netPreview = chunk.toString('utf8') }
+      // 累积完整响应体（决策 #708，上限 64KB）：字符串 chunk / text/* buffer
+      if (typeof chunk === 'string') {
+        netBytes += Buffer.byteLength(chunk)
+        if (netRaw.length < RAW_CAP) netRaw += chunk; if (netRaw.length >= RAW_CAP) netRawCapped = true
+      } else if (Buffer.isBuffer(chunk)) {
+        netBytes += chunk.length
+        if (netRaw.length < RAW_CAP && netContentType.includes('text')) netRaw += chunk.toString('utf8')
+        if (netRaw.length >= RAW_CAP) netRawCapped = true
+      }
+      if (!netPreview && netRaw) netPreview = netRaw
       if (!isNoise) recordNet({
         channel: 'native', method: req.method ?? 'GET', path: req.url ?? '/', status: netStatus, bytes: netBytes, ms: Date.now() - netStart, time: Date.now(),
         ...(netContentType ? { contentType: netContentType } : {}),
-        // 预览截断（网表不做大传输展示；JS bundle 只取头部一行注释）
         ...(netPreview ? { preview: netPreview.slice(0, 300) } : {}),
-      })
+        ...(netRawCapped ? { rawCapped: true } : {}),
+      }, netRaw ? netRaw.slice(0, RAW_CAP) : undefined)   // ★原始体按需（决策 #708）
       return (_end as (...a: unknown[]) => unknown)(chunk, ...rest)
     }) as typeof res.end
     // ★DevTools 面板（决策 #672）：浏览器打开 dev server 根路径即见可视化面板。
@@ -366,6 +390,14 @@ export async function startAppDevServer(opts: AppDevServerOptions): Promise<AppD
       pendingCmd = null                       // ★one-shot：取走即清（宿主每 tick 取一次）
       res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' })
       res.end(JSON.stringify(c ?? {}))
+      return
+    }
+    // ★★原始响应（决策 #708）：`GET /netbody?id=N` ⇒ 该条请求的**完整响应体**（面板点行按需取；不进 SSE）
+    if (url === '/netbody') {
+      const q = new URLSearchParams(query ?? '')
+      const id = Number(q.get('id'))
+      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+      res.end(JSON.stringify({ id, body: netBodies.get(id) ?? null }))
       return
     }
     res.writeHead(404, { 'content-type': 'text/plain' })
