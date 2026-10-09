@@ -25,7 +25,7 @@ import { fileURLToPath } from 'node:url'
 import { makeDiag, parseSwiftcOutput, captureRaw, type ProteusDiagnostic } from './diag'
 import { resolveIosSigning, IOS_PROFILE_DIRS } from './signing'
 import { resolveAndroidSdk, resolveJdk17, findApps } from './host-paths'
-import { syncRuntimeUnits, syncShellTemplates } from './host-scaffold'
+import { syncRuntimeUnits, syncShellTemplates, syncAndroidShell } from './host-scaffold'
 
 /** ★本模块所在目录（`packages/cli/src` 或 `dist`）——JDK 等**框架仓资源**上溯解析的起点。 */
 const HERE_PKG = path.dirname(fileURLToPath(import.meta.url))
@@ -608,6 +608,12 @@ export function packageAndroidHost(opts: PackageAndroidOptions): PackageAndroidR
   const assetsDir = path.join(hostDir, 'app/src/main/assets')
   const srcDir = path.join(hostDir, 'src')
   if (!fs.existsSync(srcDir)) return { ok: false, hostDir, apk: null, screenContentCopied: false, log: ['✗ 缺 src/'] }
+
+  // ⓪ ★★★dev 壳源定向同步（决策 #721）：android 壳在 `src/dev/...`（**不在 shell/**）⇒ `syncShellTemplates`
+  //   显式跳过 ⇒ 已存在宿主永远拿不到新壳（用户实测：点节点树无高亮/就地编辑无效/宿主 dev 面板没有——全是
+  //   #719 新壳的功能）。与 runtime 源集自愈（#692）/ AAR 自愈（#685）同源同形：模板是框架所有，宿主须自愈。
+  const shellSynced = syncAndroidShell(hostDir)
+  if (shellSynced.length) log.push(`ℹ dev 壳源已自愈同步（${shellSynced.join(', ')}）`)
 
   // ① runtime AAR（libs/proteus-runtime.aar）——缺则尝试框架仓构建
   const aarPath = path.join(hostDir, 'libs', 'proteus-runtime.aar')

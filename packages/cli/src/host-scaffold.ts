@@ -233,6 +233,55 @@ export function syncShellTemplates(hostDir: string, platform: HostPlatform): str
   return synced
 }
 
+/**
+ * ★★★Android **dev 壳源**定向同步（决策 #721）——把模板 `templates-host/android/src/**` 覆盖进已存在宿主。
+ *
+ * 【为什么单列（而不是复用 syncShellTemplates）】Android 的壳**不在 `<端>/shell/`**（那是 iOS 的布局），
+ *   而在 `src/dev/proteus/layoutcore/*.java` 与 `src/**`。⇒ `syncShellTemplates` 里 `hostDir/shell/`
+ *   不存在 ⇒ **显式 `return []`（跳过）**，`packageAndroidHost` 又没调任何壳同步 ⇒ **已生成宿主永远拿不到
+ *   新壳**。用户实测症状（决策 #719 的新壳全无）：**「点击节点树没高亮、就地编辑无效、宿主调试面板也没有」**。
+ *   ★与 runtime 源集自愈（#692）/ AAR 自愈（#685）**同源同形**：模板是框架所有，已生成宿主须能自愈到最新壳。
+ *   ★覆盖（不是只补缺）：`dist/app/android/host/` 是**构建产物**（CLI 生成），壳文件**框架所有**；用户改的是
+ *     **项目** src/，不是生成的宿主。宿主 `src/` 与模板 `src/` **一一对应**（createHost 整树镜像）。
+ * @returns 刷新的文件名（相对 src）
+ */
+export function syncAndroidShell(hostDir: string): string[] {
+  const templatesDir = (() => {
+    try { return resolveTemplatesDir('android') } catch { return null }
+  })()
+  if (!templatesDir) return []
+  const srcSrc = path.join(templatesDir, 'src')
+  const srcDest = path.join(hostDir, 'src')
+  if (!fs.existsSync(srcSrc) || !fs.existsSync(srcDest)) return []
+  // 读宿主身份（做 {{var}} 替换，与 createHost 同口径）——
+  //   ★优先 `proteus.host.json`（新宿主有）；缺则**回落 AndroidManifest.xml**（老宿主没有该 manifest 文件，
+  //     但 Manifest 里有 `package=` 与 `android:label=` ⇒ 可推出 bundleName/appName，避免注释里残留 {{appName}}）。
+  let vars: Record<string, string> = {}
+  try {
+    const hj = JSON.parse(fs.readFileSync(path.join(hostDir, 'proteus.host.json'), 'utf-8')) as { appName?: string; bundleName?: string; bundleId?: string }
+    const bn = hj.bundleName ?? hj.bundleId ?? ''
+    vars = { appName: hj.appName ?? '', bundleName: bn, bundleId: hj.bundleId ?? bn }
+  } catch { /* 无 manifest ⇒ 回落 Manifest XML */ }
+  if (!vars.appName) {
+    try {
+      const mf = fs.readFileSync(path.join(hostDir, 'AndroidManifest.xml'), 'utf-8')
+      const label = (mf.match(/android:label="([^"]*)"/) ?? [])[1] ?? ''
+      const pkg = (mf.match(/\bpackage="([^"]*)"/) ?? [])[1] ?? ''
+      vars = { appName: label, bundleName: pkg, bundleId: pkg }
+    } catch { /* 都无 ⇒ 空替换（占位保留，仅注释，无害） */ }
+  }
+  const synced: string[] = []
+  walk(srcSrc, (full, rel) => {
+    const dest = path.join(srcDest, rel)
+    const content = fs.readFileSync(full, 'utf-8').replace(/\{\{(\w+)\}\}/g, (_m, k: string) => vars[k] ?? `{{${k}}}`)
+    if (fs.existsSync(dest) && fs.readFileSync(dest, 'utf-8') === content) return // 已一致 ⇒ 不计入（幂等）
+    fs.mkdirSync(path.dirname(dest), { recursive: true })
+    fs.writeFileSync(dest, content)
+    synced.push(rel)
+  })
+  return synced
+}
+
 export function createHost(opts: CreateHostOptions): CreateHostResult {
   const { platform, targetDir } = opts
   const spec = PLATFORM_SPECS[platform]

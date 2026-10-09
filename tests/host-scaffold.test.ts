@@ -11,7 +11,7 @@ import { describe, it, expect, afterAll } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { createHost, parseCreateHostArgs, deriveBundleName } from '../packages/cli/src/host-scaffold'
+import { createHost, parseCreateHostArgs, deriveBundleName, syncAndroidShell } from '../packages/cli/src/host-scaffold'
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-host-'))
 const TPL_HARMONY = path.resolve('packages/cli/templates-host/harmony')
@@ -220,6 +220,31 @@ describe('createHost · android（第四刀样板）', () => {
     })
     expect(r.screenContentCopied).toBe(true)
     expect(fs.existsSync(path.join(r.targetDir, 'app/src/main/assets/app-screen-content.json'))).toBe(true)
+  })
+})
+
+// ★★决策 #721：已生成宿主的 **dev 壳源自愈**——android 壳在 src/dev/（不在 shell/），
+//   syncShellTemplates 显式跳过（`hostDir/shell/` 不存在）⇒ 用户实测「点节点树无高亮/就地编辑无效/
+//   宿主 dev 面板没有」（#719 新壳全无）。syncAndroidShell 把模板 src/** 覆盖进已存在宿主。
+describe('syncAndroidShell · dev 壳源自愈（决策 #721）', () => {
+  it('旧宿主的文件被模板**覆盖**更新（不是只补缺）', () => {
+    const dir = path.join(TMP, 'a-sync')
+    createHost({
+      platform: 'android', targetDir: dir, appName: 'X', bundleName: 'dev.proteus.layoutcore',
+      templatesDir: TPL_ANDROID, runtimeDirs: [makeFakeAndroidRuntime(path.join(TMP, 'rt-sync'))],
+    })
+    // 模拟"旧宿主"：把 AppActivity 改回旧内容 + 删掉 DevOverlay
+    const appPath = path.join(dir, 'src/dev/proteus/layoutcore/AppActivity.java')
+    fs.writeFileSync(appPath, '// 旧壳\n')
+    fs.rmSync(path.join(dir, 'src/dev/proteus/layoutcore/DevOverlay.java'))
+    const synced = syncAndroidShell(dir)
+    expect(synced, '应变更有改动').toContain('dev/proteus/layoutcore/AppActivity.java')
+    expect(fs.readFileSync(appPath, 'utf-8'), '旧壳被覆盖为模板最新').toContain('nodeId')
+    expect(fs.existsSync(path.join(dir, 'src/dev/proteus/layoutcore/DevOverlay.java')), '缺失文件被补回').toBe(true)
+    // 幂等：再同步一次 = 无改动
+    expect(syncAndroidShell(dir)).toEqual([])
+    // {{appName}} 已替换（无残留占位）
+    expect(fs.readFileSync(appPath, 'utf-8')).not.toContain('{{appName}}')
   })
 })
 

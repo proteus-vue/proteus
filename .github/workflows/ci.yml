@@ -198,6 +198,13 @@ jobs:
               消费端常量一致——历史上错位解析过，本门禁从内核写入序列**推出**宽度再比对）
         run: pnpm run check:anim-record-bytes
 
+      # ★★决策 #721：Android runtime AAR 新鲜度（runtime/*.java 内容哈希 ↔ 入库 AAR）。
+      #   改了 runtime Java（如 #714 drainDevFrameStats / #719 highlightNode）却忘重建 AAR ⇒
+      #   CLI 生成的宿主壳编译不过（"找不到符号"）——本仓实测栽过 2 次（#685 / #721）。
+      #   ★纯 Node 内容哈希 ⇒ CI 可跑（不需 NDK）。
+      - name: Android runtime AAR 新鲜度（runtime 源哈希 ↔ 入库 AAR，防"源改了 AAR 没重建"）
+        run: pnpm run check:android-runtime-aar-fresh
+
       # ★★C2（2026-10-01）：SVG 段列表的跨语言序列化形态（内核 serde ⇄ 两端翻译器）——
       #   真缺陷教训：两端各写"臆想的形态" ⇒ 层建不出来而内核读数全对（静默）。
       - name: SVG 段列表跨语言形态（C2：内核 serde ⇄ 双端翻译器）
