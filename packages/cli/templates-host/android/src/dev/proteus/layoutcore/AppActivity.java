@@ -62,6 +62,8 @@ public final class AppActivity extends Activity {
     private volatile String devEnvJson = "{}";
     /** 性能读数 JSON（每次渲染更新：mount/applyOps 耗时 + relayout 计数；决策 #675） */
     private volatile String devPerfJson = "{}";
+    /** ★★CPU Profiler 采样（决策 #715）：UI 泵排空后存此（"{}"=无），并入 perf（面板 `perf.profile`）。 */
+    private volatile String devProfileJson = "";
     /** 事件 trace 出箱（UI 线程抽取 → watch 线程上报；决策 #675） */
     private final java.util.List<String[]> traceOutbox = java.util.Collections.synchronizedList(new java.util.ArrayList<String[]>());
     /** 桥调用日志出箱（决策 #679：JS→原生 invoke → 面板 Network·项目通道） */
@@ -333,9 +335,23 @@ public final class AppActivity extends Activity {
         } catch (Throwable ignored) { }
     }
 
+    /** ★★CPU Profiler 排空（决策 #715 · Android 腿）：UI 泵每 400ms 调（与 console/trace 同频）——
+     *   排空式取走 JS 侧阶段耗时（instantiate/flush/dispatch/handler「hN」）存 `devProfileJson`，
+     *   下一 tick 心跳并入 `perf.profile`（面板 CPU 面板消费）。★走 pump（非仅 post-render）才能捕获
+     *   "点击/切屏"（它们不经 renderCurrent）——与 iOS `perfJson()` 每 tick 排空同语义。★UI 线程 ⇒ eval 安全。 */
+    private void pumpProfile() {
+        if (!ProteusBuildConfig.DEV) return;
+        try {
+            QuickJsEngine.EvalResult r = QuickJsEngine.eval("__proteusSuperappProfile ? __proteusSuperappProfile() : '{}'");
+            if (r != null && r.ok && r.value != null) {
+                String s = r.value.trim();
+                if (!s.isEmpty() && !"{}".equals(s)) devProfileJson = s;
+            }
+        } catch (Throwable ignored) { /* 引擎未就绪 ⇒ 下轮再试 */ }
+    }
+
     /** ★被点元素（决策 #675）：宿主命中测试拿到目标内核 id 时入队（touch 线程）→ 后台线程 GET /inspect。 */
-    private void queueInspect(int kernelId) {
-        if (!ProteusBuildConfig.DEV || kernelId <= 0) return;
+    private void queueInspect(int kernelId) {        if (!ProteusBuildConfig.DEV || kernelId <= 0) return;
         inspectOutbox = kernelId;
     }
 
@@ -378,16 +394,12 @@ public final class AppActivity extends Activity {
             // ★重排 / patch 计数（内核回执累计，决策 #676）
             o.put("relayout", draw.relayoutTotal);
             o.put("patches", draw.patchAppliedTotal);
-            // ★★★CPU Profiler（决策 #715 · Android 腿）：JS 侧运行期阶段耗时（instantiate/flush/dispatch/
-            //   handler「hN」）——排空式取走，嵌套进 perf（面板消费 `perf.profile`）。★UI 线程 eval 安全
-            //   （recordPerf 只在 UI 线程的 renderCurrent 后调）。键名/形状与 iOS `perfJson()` 一致 ⇒ 端无关。
-            try {
-                QuickJsEngine.EvalResult pr = QuickJsEngine.eval("__proteusSuperappProfile ? __proteusSuperappProfile() : '{}'");
-                if (pr != null && pr.ok && pr.value != null) {
-                    String s = pr.value.trim();
-                    if (!s.isEmpty() && !"{}".equals(s)) o.put("profile", new JSONObject(s));
-                }
-            } catch (Throwable ignored) { /* profiling 尽力而为 */ }
+            // ★★★CPU Profiler（决策 #715 · Android 腿）：`profile` 由 **UI 泵**（logPump 每 400ms）
+            //   排空后存 `devProfileJson`，此处并入 perf（面板消费 `perf.profile`）——drain 走 pump
+            //   才能捕获"点击/切屏"（它们不经 renderCurrent）；与 iOS 每 tick 排空同语义。
+            if (devProfileJson != null && !devProfileJson.isEmpty() && !"{}".equals(devProfileJson)) {
+                try { o.put("profile", new JSONObject(devProfileJson)); } catch (Throwable ignored) { }
+            }
             o.put("t", System.currentTimeMillis());
             devPerfJson = o.toString();
         } catch (Throwable ignored) { }
@@ -554,6 +566,7 @@ public final class AppActivity extends Activity {
                     }
                 } catch (Throwable ignored) { /* 引擎未就绪 ⇒ 下轮再试 */ }
                 pumpDevEvents();   // ★同频排空手势 trace（决策 #675）
+                pumpProfile();     // ★同频排空 CPU Profiler 阶段耗时（决策 #715 · Android 腿）
                 syncDevScreen();   // ★同步"运行时当前屏"（决策 #677：导航走 runtime.mountScreen，不经 renderCurrent）
                 logPump.postDelayed(this, 400);
             }
