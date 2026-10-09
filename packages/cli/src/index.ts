@@ -960,6 +960,11 @@ async function runAppDev(target: AppPlatform): Promise<number> {
     if (!r.ok) {
       sInstall.fail('adb install 失败')
       ui.dim(r.out.trim().split('\n').slice(-3).join('\n')).split('\n').forEach((l) => ui.hint(l))
+      // ★★`device offline` 恢复提示（决策 #720）：USB 连着但 adb 传输层掉线 ⇒ `adb reconnect` 常能救回
+      //   （本次实测：`doctor` 因 devices 组默认跳过而显示"全绿"，`adb install` 却报 `device offline`）。
+      if (/device offline|no devices\/emulators|device unauthorized/i.test(r.out)) {
+        ui.hint('设备 adb 通道离线 ⇒ 先试：adb reconnect offline   （仍不行：重插 USB / 手机重开 USB 调试）')
+      }
       ui.hint(`手动：adb install -r -t -g -d ${path.relative(projectRoot, androidApk)}（MIUI 若拒：adb shell settings put global verifier_verify_adb_installs 0）`)
     } else {
       adbRun(['shell', 'am', 'force-stop', bundleName])
