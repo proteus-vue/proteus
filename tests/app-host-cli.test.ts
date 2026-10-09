@@ -784,3 +784,24 @@ describe('★★★鸿蒙运行期宿主（决策 #725 · 与 Android/iOS 同级
     expect(fs.readFileSync(vendored, 'utf-8'), '逐字节等于 platform/ 源').toBe(fs.readFileSync(source, 'utf-8'))
   })
 })
+
+describe('★★★三端宿主变体模型（dev-host = 宿主：单一壳 + DEV 门控 + release 不丢功能）', () => {
+  const TH = path.join(ROOT, 'packages/cli/templates-host')
+  it('每端**单一壳**：dev 与 release 共用同一份主壳文件 + 编译期 DEV 常量（android/ios）', () => {
+    // android/ios：变体常量 = 单一分叉点
+    expect(fs.readFileSync(path.join(TH, 'android/src/dev/proteus/layoutcore/ProteusBuildConfig.java'), 'utf-8'), 'android DEV 常量').toMatch(/static\s+final\s+boolean\s+DEV\b/)
+    expect(fs.readFileSync(path.join(TH, 'ios/shell/ProteusBuildConfig.swift'), 'utf-8'), 'ios DEV 常量').toMatch(/static\s+let\s+DEV\s*=\s*(?:true|false)/)
+    // dev 调试层以 DEV 早退（release 零残留）
+    expect(fs.readFileSync(path.join(TH, 'android/src/dev/proteus/layoutcore/DevOverlay.java'), 'utf-8'), 'DevOverlay 以 DEV 早退').toMatch(/if\s*\(\s*!?\s*ProteusBuildConfig\.DEV\s*\)\s*return/)
+    // 主壳内含 dev 门控（同一份壳里切 dev 件）
+    expect(fs.readFileSync(path.join(TH, 'ios/shell/ProteusApp.swift'), 'utf-8'), 'iOS 壳内 DEV 门控').toContain('ProteusBuildConfig.DEV')
+    // android release manifest 无 INTERNET（dev 变体才有）
+    expect(fs.readFileSync(path.join(TH, 'android/AndroidManifest.xml'), 'utf-8'), 'release 无 INTERNET').not.toMatch(/android\.permission\.INTERNET/)
+    expect(fs.readFileSync(path.join(TH, 'android/AndroidManifest.dev.xml'), 'utf-8'), 'dev 有 INTERNET').toMatch(/android\.permission\.INTERNET/)
+  })
+  it('变体一致性门禁已注册 + 接入 verify', () => {
+    const pj = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8')) as { scripts: Record<string, string> }
+    expect(pj.scripts['check:host-variant-parity'], '门禁已注册').toBeTruthy()
+    expect(pj.scripts.verify, '门禁接入 verify 链').toContain('check:host-variant-parity')
+  })
+})

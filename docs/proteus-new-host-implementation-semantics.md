@@ -38,6 +38,24 @@
   - 框架所有（壳 `.swift/.java/.ets`、runtime 源/AAR、manifest 主题、native 配置注入）⇒ **打包前自愈覆盖**。
   - 项目所有（`src/`、路由、页面 SFC、`proteus.config`）⇒ **绝不覆盖**。
 
+### ★★★宿主定位：**dev-host = 宿主**（一套壳，两个变体）—— dev 调试图层**可去**、宿主功能**不可去**
+
+★**用户定的定位（2026-10-09）**：「三端宿主是 **dev-host 调试基座即宿主**；防止 **build 打包后丢失 dev 宿主
+的完整功能（dev 调试相关的除外）**」。
+
+- **每端只有一套壳**（`templates-host/<端>`）：`proteus dev` 与 `proteus build --package` **共用同一份壳文件**。
+- **唯一分叉点 = 一个编译期常量**（Android/iOS 的 `ProteusBuildConfig.DEV`；harmony 待补）：
+  - `DEV=true`（`dev`）⇒ bundle 走 HTTP dev server + 开热刷/面板（**dev 调试件**）；
+  - `DEV=false`（`build --package`）⇒ bundle 读内嵌资产 + **不创建** dev 调试件。
+- **dev 调试件**（可被 `DEV` 门控/剥离）：热刷 watch、DevTools 面板/角标/overlay、console 垫片、日志上报、
+  逐帧采样器、命令通道、元素高亮、就地编辑。
+- **宿主功能**（**必须 release 保留**，绝不门控）：运行期启动/实例化、上屏、返回栈、滚动+惯性、安全区/edge-to-edge、
+  启动占位。
+- **两条红线**（`check:host-variant-parity` 机器强制）：
+  1. **功能不得只落 dev-only 文件**（如 DevOverlay）或 `if (DEV)` 块内 ⇒ 否则 **release 静默丢功能**；
+  2. **release 隔离**（android release manifest **不得**含 `INTERNET`）。
+- **自检问句**：「这段代码，`DEV=true` 和 `DEV=false` **都要**吗？」都要 ⇒ 放**主壳**；只 dev 要 ⇒ 放 `if (DEV)`。
+
 ---
 
 ## 2. 自愈清单（★新宿主必须让"老宿主"自动拿到最新的一切）
