@@ -870,4 +870,21 @@ describe('★★★鸿蒙 dev 通道 · 批 2a 地基（热刷/心跳/日志 —
     const idx = fs.readFileSync(path.join(ROOT, 'hosts/harmony/host-app/proteus_render/Index.ets'), 'utf-8')
     expect(idx, 'Index.ets 导出两者').toMatch(/appScreenNodeRect[\s\S]*hostAppEval/)
   })
+  it('鸿蒙 dev 深化（决策 #730）：逐帧 perf + 被点元素 /inspect + 项目 console（channel=project）', () => {
+    const mp = fs.readFileSync(path.join(TH, 'entry/src/main/ets/shell/MainPage.ets'), 'utf-8')
+    expect(mp, '独立常驻逐帧采样器').toContain('startDevFrameSampler(')
+    expect(mp, '帧统计排空').toContain('drainFrameStats(')
+    for (const k of ["'fps'", "'frameMs'", "'dropped'", "'frames'"]) {
+      expect(mp, `perf 含 ${k}`).toContain(k)
+    }
+    expect(mp, 'tap → 被点元素').toContain('pendingInspectId')
+    expect(mp, '项目 console 入队').toContain('devProjectLog(')
+    const dw = fs.readFileSync(path.join(TH, 'entry/src/main/ets/dev/DevWatch.ets'), 'utf-8')
+    expect(dw, 'dev-watch 上报 /inspect').toContain("/inspect?id=")
+    expect(dw, '日志 channel 三字段解析').toContain("channel=")   // /log?channel=…
+    // native：项目 console 回收（垫片 → dev.console）
+    const h = fs.readFileSync(path.join(ROOT, 'hosts/harmony/host-app/proteus_render/src/main/cpp/host_app_runtime_impl.h'), 'utf-8')
+    expect(h, 'console 垫片').toContain('devInstallConsoleShim')
+    expect(h, '回收 dev.console').toContain('dev.console')
+  })
 })

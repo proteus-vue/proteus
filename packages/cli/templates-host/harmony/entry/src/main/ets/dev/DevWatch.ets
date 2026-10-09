@@ -32,6 +32,8 @@ export class DevWatch {
   public takeTreeJson: () => string = () => '';
   public takeLogs: () => string[] = () => [];
   public takeTraces: () => string[] = () => [];
+  /** ★被点元素 id（决策 #730；-1=无）⇒ `/inspect` 上报（面板高亮被点节点）。 */
+  public takeInspect: () => number = () => -1;
   public applyBundle: (b: string, v: string) => void = () => {};
   /** ★面板→设备命令（决策 #729）：GET `/cmd` 取到非空命令 ⇒ 回调宿主 `applyCommand(json)`。 */
   public onCmd: (json: string) => void = () => {};
@@ -96,13 +98,14 @@ export class DevWatch {
     this.get('/ping?screen=' + encodeURIComponent(this.currentScreen())
       + '&env=' + encodeURIComponent(this.envJson())
       + '&perf=' + encodeURIComponent(this.perfJson()));
-    // ② 原生日志 → Console
+    // ② 日志 → Console（`channel\tlevel\ttext`；channel=project|native）
     const logs: string[] = this.takeLogs();
     for (const l of logs) {
-      const tab: number = l.indexOf('\t');
-      const level: string = tab >= 0 ? l.slice(0, tab) : 'log';
-      const text: string = tab >= 0 ? l.slice(tab + 1) : l;
-      this.get('/log?channel=native&level=' + encodeURIComponent(level) + '&text=' + encodeURIComponent(text));
+      const parts: string[] = l.split('\t');
+      const channel: string = parts.length >= 3 ? parts[0] : 'native';
+      const level: string = parts.length >= 3 ? parts[1] : (parts[0] || 'log');
+      const text: string = parts.length >= 3 ? parts.slice(2).join('\t') : parts.slice(1).join('\t');
+      this.get('/log?channel=' + encodeURIComponent(channel) + '&level=' + encodeURIComponent(level) + '&text=' + encodeURIComponent(text));
     }
     // ③ 事件 trace → Events
     const traces: string[] = this.takeTraces();
@@ -110,6 +113,9 @@ export class DevWatch {
     // ④ 实例化树 → Elements（有则上报）
     const tree: string = this.takeTreeJson();
     if (tree.length > 0) { this.post('/tree', tree); }
+    // ④b 被点元素 → 面板高亮（决策 #730）
+    const ins: number = this.takeInspect();
+    if (ins >= 0) { this.get('/inspect?id=' + ins); }
     // ⑤ 面板→设备命令（决策 #729）：`/cmd` one-shot（取走即清）；非空 ⇒ 宿主执行（highlight/edit/reset/eval）。
     this.get('/cmd', (c: string) => {
       const t: string = c.trim();

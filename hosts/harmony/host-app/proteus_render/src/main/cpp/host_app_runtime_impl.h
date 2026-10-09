@@ -38,6 +38,33 @@ static std::string g_scAnimToken;
 static double g_scAnimRemainMs = 0;
 static std::vector<uint64_t> g_scAnimHandles;
 
+/** ★★★dev 项目 console 回收（决策 #730）：页面 `console.*` 经垫片 → `proteusHost.invoke('dev.console',…)`
+ *   → 攒到这里（`level\ttext` 逐行）⇒ 每次渲染收尾带走（面板 Console·项目通道）。一次性 VM ⇒ 只捕获**本次调用内**
+ *   （boot/render/tap 同 VM）产生的 console。 */
+static std::string g_devConsoleOut;
+static void devConsoleAppend(const std::string& level, const std::string& text) {
+    std::string t = text;
+    for (char& c : t) { if (c == '\n' || c == '\r') c = ' '; }
+    g_devConsoleOut += level + "\t" + t + "\n";
+    if (g_devConsoleOut.size() > 16384) { g_devConsoleOut.erase(0, g_devConsoleOut.size() - 12000); }
+}
+
+/** 在 VM 内安装 console 垫片（须在 eval bundle **之前**——页面顶层 console.* 也被捕获）。 */
+static void devInstallConsoleShim(JSVM_Env jenv) {
+    jsvmEvalStr(jenv,
+        "(function(){var g=globalThis;if(g.__proteusConsoleShim)return;g.__proteusConsoleShim=true;"
+        "if(!g.console)g.console={};"
+        "['log','info','warn','error'].forEach(function(level){"
+        "var orig=(typeof g.console[level]==='function')?g.console[level]:function(){};"
+        "g.console[level]=function(){"
+        "try{var args=Array.prototype.slice.call(arguments).map(function(a){"
+        "try{return (typeof a==='string')?a:JSON.stringify(a);}catch(e){return String(a);}}).join(' ');"
+        "if(g.proteusHost&&g.proteusHost.invoke)g.proteusHost.invoke('dev.console',JSON.stringify({level:level,text:args}));"
+        "}catch(e){}"
+        "try{orig.apply(g.console,arguments);}catch(e){}"
+        "};});})();", nullptr);
+}
+
 /** screen.* 分发（返回 JSON 串，与 Android ScreenHost.invoke 同形：多数包 {ok,data}） */
 static std::string screenInvokeDispatch(const std::string& method, const std::string& argsJson) {
     if (method == "screen.mount") {
@@ -113,6 +140,14 @@ static std::string screenInvokeDispatch(const std::string& method, const std::st
     }
     if (method == "screen.rect" || method == "screen.shared") {
         return "{\"ok\":false,\"missing\":true,\"reason\":\"未实现（e4 诚实跳过）\"}";
+    }
+    // ★dev 项目 console（决策 #730）：垫片 → invoke('dev.console') ⇒ 回收给宿主上报（面板 Console·项目通道）。
+    if (method == "dev.console") {
+        std::string level, text;
+        jstr(argsJson.c_str(), argsJson.size(), "level", &level);
+        jstr(argsJson.c_str(), argsJson.size(), "text", &text);
+        devConsoleAppend(level.empty() ? "log" : level, text);
+        return "{\"ok\":true}";
     }
     if (method == "screen.stats") {
         char b[320];
@@ -365,6 +400,7 @@ static napi_value HostAppRender(napi_env env, napi_callback_info info) {
 
     std::string err;
     g_scRuntimeTree.clear();
+    g_devConsoleOut.clear();   // ★dev：本 VM 的项目 console 回收区清零（本次调用内捕获）
     if (bundle.empty()) err = "缺 bundle";
 
     JSVM_VM vm = nullptr; JSVM_Env jenv = nullptr; JSVM_HandleScope scope = nullptr; JSVM_VMScope vmScope = nullptr;
@@ -381,6 +417,7 @@ static napi_value HostAppRender(napi_env env, napi_callback_info info) {
     if (err.empty()) {
         jsvmEvalStr(jenv, "globalThis.__PROTEUS_HOST_ID__ = 'harmony';"
                           "globalThis.__PROTEUS_HOST_FRAME_DRIVER__ = 'postFrameCallback';", nullptr);
+        devInstallConsoleShim(jenv);   // ★dev 项目 console（须在 eval bundle 之前）
         JSVM_Value host = nullptr; OH_JSVM_CreateObject(jenv, &host);
         struct NamedFn { const char* name; JSVM_CallbackStruct cb; };
         NamedFn fns[] = {
@@ -453,6 +490,7 @@ static napi_value HostAppRender(napi_env env, napi_callback_info info) {
         + ",\"current\":\"" + jsonEscape(rendered) + "\",\"state\":" + cur
         + ",\"snapshot\":" + (snap.empty() ? std::string("{}") : snap)
         + ",\"tree\":" + (g_scRuntimeTree.empty() ? "null" : g_scRuntimeTree);
+    if (!g_devConsoleOut.empty()) out += ",\"console\":\"" + jsonEscape(g_devConsoleOut) + "\"";
     if (!err.empty()) out += ",\"error\":\"" + jsonEscape(err) + "\"";
     out += "}";
     napi_value r; napi_create_string_utf8(env, out.c_str(), out.size(), &r); return r;

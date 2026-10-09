@@ -112,6 +112,18 @@ struct MainPage {
   /** ★dev 命令态（决策 #729）：高亮节点 id（0=无）；就地编辑覆盖（节点 id → `{字段:值}`；渲染时每轮重施）。 */
   private highlightId: number = 0;
   private devEdits: Map<number, Record<string, Object>> = new Map<number, Record<string, Object>>();
+  /** ★dev 逐帧采样（决策 #730 · 对齐 iOS CADisplayLink）：独立**常驻** displaySync 采真实帧间隔 →
+   *  fps / frameMs / frameMaxMs / dropped（排空式，每心跳取一次）。与惯性用的 dSync **分开**（互不干扰）。 */
+  private devFrameSync: displaySync.DisplaySync | null = null;
+  private devFrameLastTs: number = 0;
+  private devFrameCount: number = 0;
+  private devFrameSumMs: number = 0;
+  private devFrameMaxMs: number = 0;
+  private devFrameDropped: number = 0;
+  /** ★dev 渲染/重排计数（面板 perf 卡）：mountCalls=渲染次数（重排≈重建）。 */
+  private devMountCalls: number = 0;
+  /** ★dev 被点元素（决策 #730）：命中链末位 id（-1=无）→ `/inspect` 上报（面板高亮被点节点）。 */
+  private pendingInspectId: number = -1;
   private static vpW: number = 390;
   private static vpH: number = 844;
 
@@ -230,10 +242,18 @@ struct MainPage {
     const w = new DevWatch(base);
     w.currentScreen = (): string => this.current;
     w.envJson = (): string => JSON.stringify(this.envVars);
-    w.perfJson = (): string => JSON.stringify({ 'renderMs': this.lastRenderMs } as Record<string, number>);
+    // ★perf 读数（决策 #730）：renderMs + 逐帧（fps/frameMs/maxMs/dropped/frames，**排空式**每心跳取一次）
+    //   + mountCalls（渲染次数）。relayout 用 mountCalls 表意、patches=0（鸿蒙无增量 patch 通道）。
+    w.perfJson = (): string => {
+      const f = this.drainFrameStats();
+      const o: Record<string, number> = { 'renderMs': this.lastRenderMs, 'mountCalls': this.devMountCalls, 'patches': 0 };
+      for (const k of Object.keys(f)) { o[k] = f[k]; }
+      return JSON.stringify(o);
+    };
     w.takeTreeJson = (): string => { const t: string = this.pendingTreeJson; this.pendingTreeJson = ''; return t; };
     w.takeLogs = (): string[] => { const q: string[] = this.devLogQueue; this.devLogQueue = []; return q; };
     w.takeTraces = (): string[] => { const q: string[] = this.devTraceQueue; this.devTraceQueue = []; return q; };
+    w.takeInspect = (): number => { const id: number = this.pendingInspectId; this.pendingInspectId = -1; return id; };
     w.applyBundle = (b: string, v: string): void => {
       this.bundle = b;
       this.renderCurrent();
@@ -242,14 +262,76 @@ struct MainPage {
     };
     // ★面板→设备命令（决策 #729）：dev-watch 取到 /cmd ⇒ 宿主执行（highlight/edit/reset/eval）
     w.onCmd = (json: string): void => { this.applyCommand(json); };
+    this.startDevFrameSampler();
     this.devWatch = w;
     w.start();
   }
 
-  /** 宿主原生日志入队（dev-watch 排空上报面板 Console）。 */
+  /** ★dev 逐帧采样（决策 #730）：独立**常驻** displaySync 采真实帧间隔（与惯性 dSync 分开，互不干扰）。 */
+  private startDevFrameSampler(): void {
+    if (this.devFrameSync !== null) { return; }
+    try {
+      const s = displaySync.create();
+      s.setExpectedFrameRateRange({ expected: 60, min: 30, max: 120 });
+      s.on('frame', (info: displaySync.IntervalInfo) => { this.onDevFrame(info); });
+      s.start();
+      this.devFrameSync = s;
+    } catch (e) { hilog.warn(DOMAIN, TAG, 'HOST_PAGE_DEVFRAME_ERR %{public}s', JSON.stringify(e) ?? ''); }
+  }
+
+  /** 帧回调：真实帧间隔（ms）；`> 1.5× 本帧预算` ⇒ 掉帧（主线程阻塞跳过 vsync）——口径同 iOS onDevFrame。 */
+  private onDevFrame(info: displaySync.IntervalInfo): void {
+    const ts: number = info.timestamp;   // ns
+    if (this.devFrameLastTs <= 0) { this.devFrameLastTs = ts; return; }
+    const dtMs: number = (ts - this.devFrameLastTs) / 1e6;
+    this.devFrameLastTs = ts;
+    const targetMs: number = (info.targetTimestamp - info.timestamp) / 1e6;   // 本帧预算（可变刷新率随屏）
+    this.devFrameCount++;
+    this.devFrameSumMs += dtMs;
+    if (dtMs > this.devFrameMaxMs) { this.devFrameMaxMs = dtMs; }
+    if (targetMs > 0 && dtMs > targetMs * 1.5) { this.devFrameDropped++; }
+  }
+
+  /** 排空逐帧统计（每心跳取一次 ⇒ 新鲜窗口；#723 教训：周期量每 tick drain，不烤进缓存）。 */
+  private drainFrameStats(): Record<string, number> {
+    const n: number = this.devFrameCount;
+    const sum: number = this.devFrameSumMs;
+    const o: Record<string, number> = {
+      'frames': n,
+      'frameMs': n > 0 ? Math.round((sum / n) * 100) / 100 : 0,
+      'frameMaxMs': Math.round(this.devFrameMaxMs * 100) / 100,
+      'fps': sum > 0 ? Math.round((n / (sum / 1000)) * 10) / 10 : 0,
+      'dropped': this.devFrameDropped,
+    };
+    this.devFrameCount = 0; this.devFrameSumMs = 0; this.devFrameMaxMs = 0; this.devFrameDropped = 0;
+    return o;
+  }
+
+  /** 宿主原生日志入队（dev-watch 排空上报面板 Console），格式 `channel\tlevel\ttext`。 */
   private devLog(level: string, text: string): void {
+    this.enqueueLog('native', level, text);
+  }
+
+  /** ★项目 `console.*`（决策 #730）入队（channel=project ⇒ 面板 Console·项目通道）。 */
+  private devProjectLog(level: string, text: string): void {
+    this.enqueueLog('project', level, text);
+  }
+
+  private enqueueLog(channel: string, level: string, text: string): void {
     if (this.devLogQueue.length > 200) { this.devLogQueue.shift(); }
-    this.devLogQueue.push(level + '\t' + text);
+    this.devLogQueue.push(channel + '\t' + level + '\t' + text);
+  }
+
+  /** ★dev 项目 console（决策 #730）：`hostAppRender` 返回的 `rt.console`（`level\ttext\n` 逐行）⇒ 入队（channel=project）。 */
+  private drainProjectConsole(rt: Record<string, Object>): void {
+    if (this.devWatch === null) { return; }
+    const cons = rt['console'] as string | undefined;
+    if (cons === undefined || cons.length === 0) { return; }
+    for (const line of cons.split('\n')) {
+      if (line.length === 0) { continue; }
+      const tab: number = line.indexOf('\t');
+      this.devProjectLog(tab >= 0 ? line.slice(0, tab) : 'log', tab >= 0 ? line.slice(tab + 1) : line);
+    }
   }
 
   /* ═══════════════ ★★★dev 命令集（决策 #729 · 面板→设备；`/cmd` 契约三端一致）═══════════════
@@ -337,6 +419,7 @@ struct MainPage {
     this.stopMomentum();
     if (this.dSync !== null) { try { this.dSync.stop(); } catch (e) { /* 无 */ } }
     if (this.devWatch !== null) { this.devWatch.stop(); }
+    if (this.devFrameSync !== null) { try { this.devFrameSync.stop(); } catch (e) { /* 无 */ } }
   }
 
   /** 运行期渲染入参 → JSON（用接口声明，避 ArkTS 未型字面量） */
@@ -386,6 +469,7 @@ struct MainPage {
             hilog.info(DOMAIN, TAG, 'HOST_PAGE_RUNTIME page=%{public}s nodes=%{public}d', page, (tree['nodes'] as Object[]).length);
           }
           this.saveSnapshot(rt);
+          this.drainProjectConsole(rt);   // ★dev 项目 console（决策 #730）
           // 屏名以**实际渲染的 current** 为准（boot 后路由 current 恒为 index，会盖掉真实当前屏）
           const cur = rt['current'] as string;
           if (cur !== undefined && cur.length > 0) { this.current = cur; }
@@ -399,6 +483,7 @@ struct MainPage {
       hilog.error(DOMAIN, TAG, 'HOST_PAGE_RENDER_ERROR %{public}s', JSON.stringify(e) ?? '');
     }
     this.lastRenderMs = Date.now() - t0;
+    this.devMountCalls++;
   }
 
   /** 把某屏 nodes 画到屏上（appScreenCommands → renderCommands）+ 重算/重放滚动范围 */
@@ -519,6 +604,7 @@ struct MainPage {
       const rtOut: string = hostAppRender(this.rtArgsJson(this.current, chain));
       const rt = JSON.parse(rtOut) as Record<string, Object>;
       this.saveSnapshot(rt);
+      this.drainProjectConsole(rt);   // ★dev 项目 console（tap 的 VM 调用也会产生）
       const target = rt['current'] as string;
       if (target !== undefined && target.length > 0) {
         if (target !== prev && prev.length > 0) {
@@ -539,6 +625,8 @@ struct MainPage {
       if (this.devWatch !== null) {
         const handled: boolean = target !== undefined && target.length > 0 && target !== prev;
         this.pushTrace('tap', chain, handled, []);
+        // ★被点元素（决策 #730 → 面板高亮）：命中链**末位** id ⇒ `/inspect`（dev-watch 上报）
+        this.pendingInspectId = chain[chain.length - 1];
       }
     } catch (e) {
       hilog.error(DOMAIN, TAG, 'HOST_PAGE_TAP_ERROR %{public}s', JSON.stringify(e) ?? '');
