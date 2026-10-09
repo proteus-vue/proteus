@@ -4494,8 +4494,23 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     /// 最近一次渲染的视口（就地编辑重渲染时复用）——决策 #706。
     private var lastViewport: [String: Any] = ["width": 390, "height": 844]
 
-    /// 最近一次布局的分段耗时（供报告）
-    private(set) var lastTiming: [String: Double] = [:]
+    /// ★★（决策 #718）"本 tick 是否有**新**渲染发生"的脏标记：render/applyOps/updatePatches/splice 写
+    ///   `lastTiming` 时置真；壳每 tick 读时**只在脏时取一次并清**（否则 `lastTiming` 会**残留**
+    ///   ⇒ 空闲窗口也报上次的 65ms，正是 #710「恒定读数」那类陷阱）。见 `consumeRenderTiming()`。
+    private var renderTimingDirty = false
+    /// 最近一次布局的分段耗时（供报告）。★写它即标脏（供"本 tick 有新渲染"判定）——用计算属性包一层，
+    ///   避免逐个写点手动置脏（漏一处就会漏报一次渲染窗口）。
+    private var _lastTiming: [String: Double] = [:]
+    private(set) var lastTiming: [String: Double] {
+        get { _lastTiming }
+        set { _lastTiming = newValue; renderTimingDirty = true }
+    }
+    /// ★★读**本 tick 新发生**的渲染分段耗时（无新渲染 ⇒ nil）；读后清脏（排空式，决策 #718）。
+    func consumeRenderTiming() -> [String: Double]? {
+        guard renderTimingDirty else { return nil }
+        renderTimingDirty = false
+        return _lastTiming
+    }
     /* ── ★DevTools 性能计数（决策 #698，与 Android `draw` 同口径）──
      *   面板"渲染耗时/逐帧/重排计数/PATCH 总数"的数据源。此前 iOS **完全没有**这些累计
      *   （`/ping` 也不带 `perf`）⇒ 面板那四张卡片恒为「—」（Android 有、iOS 空）。

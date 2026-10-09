@@ -87,7 +87,6 @@ final class ProteusHostDriver {
     let reportQueue = DispatchQueue(label: "proteus.dev.report")
     var logOutbox: [[String]] = []       // [channel, level, text]
     var traceOutbox: [[String]] = []     // [gesture, id, chain, handled, fired]
-    var lastTreeJson: String?            // 最近一次渲染后的实例化节点树（供 dev-watch 上报 /tree）
     /// ★DevTools 性能读数（决策 #698，对齐 Android `recordPerf`）——面板"渲染耗时/逐帧/重排/PATCH"。
     ///   renderMs = 壳测；frameMs/relayout/patches = 桥/视图的原子上抛（不自造第二份数学）。
     private(set) var lastRenderMs: Double = 0
@@ -158,13 +157,10 @@ final class ProteusHostDriver {
     }
 
     /// ★每 tick 现取的节点树（决策 #698，对齐 Android `pushDevTree`/`syncDevScreen`）。
-    ///   【为什么不能复用 `lastTreeJson`】它只在 `renderCurrent` 里更新——而两件事都**绕过** renderCurrent：
-    ///     ① 交互更新走 JS `applyOps`（不经壳）；② 点卡片切屏走 JS `runtime.mountScreen`（径直 host.mount，
-    ///       不经壳的 navigate）。⇒ 面板树会**停在旧屏**（与 Android #677 同坑）。现取即真源（运行期 currentContent）。
+    ///   【为什么现取而非缓存】交互更新走 JS `applyOps`、点卡片切屏走 JS `runtime.mountScreen`——
+    ///   两者都**绕过** renderCurrent ⇒ 缓存会**停在旧屏**（与 Android #677 同坑）。现取即真源。
     func liveTreeJson() -> String? {
-        let t = snapshotTreeJson()
-        lastTreeJson = t
-        return t
+        snapshotTreeJson()
     }
 
     /// 取走并清空待上报日志（主线程调用；dev-watch 上报 /log）
@@ -210,6 +206,20 @@ final class ProteusHostDriver {
         }
         o["relayout"] = bridge.relayoutTotal
         o["patches"] = bridge.patchAppliedTotal
+        // ★★★原生渲染阶段分解（决策 #718）：JS profile 只覆盖 **JS 侧**（instantiate/flush/dispatch/…）；
+        //   而"切屏掉帧"的大头是**原生 mount**（Rust 布局 + CALayer 重建）——**不在** JS profile 里
+        //   （实测：切屏 renderMs 64ms 而 JS 阶段只有 3ms）。⇒ 把桥最近一次渲染的分段耗时上报，
+        //   面板"原生渲染"段展示 ⇒ 这才回答"切屏为什么掉帧"。★形状 [{label,ms}]（端无关，与 profile 同族）。
+        //   ★★排空式（`consumeRenderTiming()`）：`lastTiming` 会残留 ⇒ 只在**本 tick 真有渲染**时发一次，
+        //     否则空闲窗口会反复报上次的 65ms（#710「恒定读数」那类陷阱）。
+        if let lt = bridge.consumeRenderTiming(), !lt.isEmpty {
+            var arr: [[String: Any]] = []
+            if let m = lt["measure_ms"], m > 0 { arr.append(["label": "measure", "ms": m]) }
+            if let l = lt["layout_ms"], l > 0 { arr.append(["label": "layout", "ms": l]) }
+            if let b = lt["build_layers_ms"], b > 0 { arr.append(["label": "build_layers", "ms": b]) }
+            if let t = lt["host_total_ms"], t > 0 { arr.append(["label": "total", "ms": t]) }
+            if !arr.isEmpty { o["render"] = arr }
+        }
         // ★★★CPU Profiler（决策 #715）：JS 侧运行期阶段耗时（instantiate/flush/dispatch/handler「hN」）——
         //   排空式取走。嵌套进 perf（面板 `renderProf`/`applyPerf` 消费 `perf.profile`）。
         if let ctx = self.ctx,
@@ -340,12 +350,10 @@ final class ProteusHostDriver {
         } else {
             NSLog("[proteus] PROTEUS_HOST_RENDER page=%@ ok", page)
         }
-        // ★dev：渲染后抓实例化节点树（供面板 Elements；决策 #693）+ 记渲染耗时（决策 #698）
+        // ★dev：记渲染耗时（决策 #698）。★已删"渲染后抓树写 lastTreeJson"——**死代码**（写了从不读；
+        //   树改为 dev-watch 每 tick 现取 `liveTreeJson()`）⇒ 顺带去掉渲染热路径上的整树序列化浪费。
+        // ★只记**主渲染**（start/navigate）的耗时——安全区的"布局后重渲"（primary:false）是内部校正，其成本极低。
         if ProteusBuildConfig.DEV {
-            lastTreeJson = snapshotTreeJson()
-            // ★只记**主渲染**（start/navigate）的耗时——安全区的"布局后重渲"（primary:false）是内部校正，
-            //   其成本极低（实测 ~0.36ms）；若让它覆盖，面板"渲染耗时"会显示一个与"挂载成本"无关的假小值
-            //   （Android 单次 renderCurrent ⇒ 无此问题）。
             if primary { lastRenderMs = Date().timeIntervalSince(t0) * 1000 }
         }
         return out
