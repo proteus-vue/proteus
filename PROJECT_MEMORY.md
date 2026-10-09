@@ -56,6 +56,13 @@
 
 ## 待办 / 注意事项
 
+**★★★（2026-10-09 本轮留存 · 明天开工第一项）Vapor 事件「方法引用 / 方法体」支持** —— 计划 `docs/vapor-event-methods-plan.md`（决策 #740，**已立项未动工**）。
+- **现象**：App 端页面 `@click="handleTap"`（方法引用/调用/多语句）**点了没反应**——`compileEvents` 只认**内联单语句**（`@click="count++"`）；Web/小程序正常 ⇒ **三端分叉**（劝退级）。**已登记的边界**（能力清单 #16 ❌），非疏漏。
+- **做法**：`<script setup>` 方法体用 babel 解析 → **编译期降级为动作列表**（守「纯数据/无 eval/封闭集」，不引入解释器）。
+- **工作量**：**T1 ≈3 人日**（方法引用/调用 + 多语句简单方法体，**可先交付**）· **T2 ≈2–3 人日**（带参 + `$event` + 局部变量 + `if/else`）· 合计 **≈5–7 人日**；**不做**循环/async/任意 JS（诊断）。
+- **附带**：Vapor 面改动**必须三端重跑** `check:vapor-three-end`（Android/鸿蒙/iOS）；改完同步能力清单 #16 + 模板 + guides/09。
+- **现状缓解**（已做，本项做完可回收）：模板已改内联写法（#739）+ guides/09 加"App 事件只认内联"提示。
+
 **★本轮（2026-10-08）留存 —— 新会话接手必读**
 - **★★★App DevTools 面板（#672–#675）**：`proteus dev` 的 dev server 根路径 = 浏览器 DevTools（**设备环境** chips / 设备在线 / Bundle 版本·体积·重建耗时 / 当前屏 / 重建时间线 / **Elements 节点树（含内核 rect，点节点看盒模型）** / **Events 手势 trace** / **Network** / **Console** / **渲染耗时+mount**）。端点 `/`(面板) `/events`(SSE) `/ping`(心跳+env+perf) `/tree` `/inspect` `/trace` `/log`。宿主模板采集设备信息 + 推树(切屏自动刷) + JS console 垫片 + trace；**仅 dev**。
 - **★★修（#694a · 2026-10-09 已修）**：App **导航挂载失败（点卡片不切屏）**——根因 = **env token 未解析**（编译产物 `"minHeight":"env:--pf-vh"` 字符串直进内核 ⇒ serde `expected f32` ⇒ `proteus_layout_create` 返 0）；Android 已由 #677 修、**iOS 漏了** ⇒ #694a 在 iOS `ScreenHost.mount` 补同一解析（`SelfDrawBridge.current` 单一实现）。★**仍欠**：**破坏性验证**（剥掉解析调用 ⇒ 应复现 create 返 0）未跑完——`packageIosHost` 会 `syncRuntimeUnits` 覆盖生成宿主，须剥**框架源码**重打包（那次被用户叫停）。★下次**别耗真机全流程**，用 **Node 层兜底**：直接对 `screen.mount` 载荷断言「无 `env:` 字符串残留」。**用户可见 ⇒ 优先**。
