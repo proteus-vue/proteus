@@ -123,9 +123,18 @@ iOS/Android 的接线：`templates-host/{ios,android}` 的壳 + `ProteusBuildCon
 - ✅ **项目 `console.*` → 面板 Console·项目通道**：VM 注入 console 垫片（`proteusHost.invoke('dev.console')` 回收）
   → `hostAppRender` 返回 `console`（`level\ttext`）→ 壳入队（channel=project）→ 面板。真机验证捕获项目 `console.error`。
 
+### 步 5 · dev 宿主 UI/DX 对齐（位置/形态/配色）——✅ **已落地（决策 #732 · 2026-10-09）**
+用户逐条抓出 7 项（"还是想到什么做什么"——**标准没逐模块定死 dev 宿主 UI 规格**是根因）。修复：
+- **DEV 胶囊**：右上角（容器 `alignItems(End)` + `chromeTopVp=安全区顶+6`）、半透明品牌蓝 `0xCC2F6BFF` 胶囊。
+- **底部 sheet 菜单**：`@State sheetOn` 贴底面板（DevTools + 状态行 + 「重置为项目代码」+ 面板 URL），**非居中 dialog**。
+- **顶部 toast**：`@State flashMsg` 自绘**顶部居中**（角标下 40vp）+ 深色胶囊 `0xE61F2430`（`promptAction.showToast` 默认底部 = 错）。
+- **编辑态**：`edit` 成功 ⇒ 胶囊 `DEV ✎` + 琥珀 `0xE6E08A00` + sheet 状态行"非项目代码效果"；`reset` 清除。
+- **启动**：`start_window_background` `#FFFFFF→#F5F6FA`（消白闪）；**去双重渲染**（起手不渲、只 env 到位渲一次）。
+- **源码映射**：`hostAppRender` 取 `__proteusHostAppTree()`（运行期 `currentContent()`，**带 `file`**）⇒ `/tree` body 带 `file` ⇒ 面板 `file:line:col` + `vscode://` 跳转。
+- **标准扩写**：`docs/proteus-new-host-implementation-semantics.md` 新增 **§8.5 dev 宿主 UI/DX 规格表**（逐模块 位置/形态/配色/行为/事实源）；`check:host-variant-parity` 扩 **§④ dev UI 规格断言**（破坏性验证：改右上→左上即红）。
+
 ### 一句话结论
-**鸿蒙 dev 通道已与 Android/iOS 对齐**：热刷(`/version`→`/bundle`) · 心跳(`/ping`) · 日志(`/log` native+project) ·
-元素树(`/tree`) · 事件(`/trace`) · 被点(`/inspect`) · 逐帧 perf · 命令集(`/cmd`：highlight/edit/reset/eval)。
+**鸿蒙 dev 通道与 dev 宿主已全面对齐 Android/iOS**：热刷/心跳/日志(native+project)/元素树(带 file)/事件/被点/逐帧 perf/命令集 + dev 胶囊(右上)/底部 sheet/顶部 toast/编辑态/启动占位/源码映射。
 
 ---
 

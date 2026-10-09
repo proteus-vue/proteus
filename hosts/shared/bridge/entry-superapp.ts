@@ -365,5 +365,8 @@ __HOSTAPP.__proteusHostAppRender = __HOSTAPP.__proteusSuperappRender
 __HOSTAPP.__proteusHostAppSnapshot = __HOSTAPP.__proteusSuperappSnapshot
 __HOSTAPP.__proteusHostAppRuntimeCurrent = __HOSTAPP.__proteusSuperappRuntimeCurrent
 __HOSTAPP.__proteusHostAppGesture = __HOSTAPP.__proteusSuperappGesture
+// ★dev 元素树（决策 #732）：含 `file`/`screen`（面板据节点 loc 拼 file:line:col → 跳编辑器）——
+//   鸿蒙壳取它作 `/tree` body（比 mount 捕获树多 `file` 字段）。
+__HOSTAPP.__proteusHostAppTree = __HOSTAPP.__proteusSuperappTree
 
 

@@ -482,6 +482,14 @@ static napi_value HostAppRender(napi_env env, napi_callback_info info) {
     // ★快照必须在 VM/Env 销毁**之前**取（在已销毁的 env 上 eval ⇒ SIGSEGV；本处曾踩过）
     std::string snap = "{}";
     if (err.empty()) jsvmEvalStr(jenv, "String(__proteusHostAppSnapshot())", &snap);
+    // ★★★dev 元素树（决策 #732）：优先取**运行期** `__proteusHostAppTree()`（= `currentContent()`，
+    //   **带 `file`/`screen`** ⇒ 面板据节点 loc 拼 `file:line:col` → 跳编辑器）。比 mount 捕获树多 `file` 字段。
+    //   ★须在 VM 销毁**之前**取；无该全局/返回空 ⇒ 回退捕获树（`g_scRuntimeTree`）。
+    if (err.empty()) {
+        std::string t2;
+        jsvmEvalStr(jenv, "String(__proteusHostAppTree())", &t2);
+        if (!t2.empty() && t2 != "null" && t2.find("\"nodes\"") != std::string::npos) { g_scRuntimeTree = t2; }
+    }
     if (jenv != nullptr && scope != nullptr) OH_JSVM_CloseHandleScope(jenv, scope);
     if (jenv != nullptr) OH_JSVM_DestroyEnv(jenv);
     if (vm != nullptr && vmScope != nullptr) OH_JSVM_CloseVMScope(vm, vmScope);

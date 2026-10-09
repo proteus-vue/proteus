@@ -251,6 +251,26 @@
 
 ---
 
+## 8.5 ★★★dev 宿主 **UI/DX 规格**（2026-10-09 · 决策 #732 补 —— 逐模块「位置/形态/配色/行为」）
+
+★**为什么单列这张表**：此前本文件只列了"角标/toast/占位"**几行**，**没有逐模块定死规格** ⇒ 鸿蒙 dev 层被做成
+"只有 toast、无角标/无菜单/无编辑态、toast 弹底部、菜单是居中 dialog"——**每样都差一点**（用户逐条抓出）。
+⇒ **事实源 = Android `DevOverlay.java` / iOS `ProteusDevOverlay.swift`**（两端逐像素一致）；**新宿主照下表搬，不自由发挥**。
+
+| 模块 | 位置 | 形态 / 配色 | 行为 | 事实源 |
+|---|---|---|---|---|
+| **DEV 角标** | **右上角**，`安全区顶 + 6`、右 `10` | 胶囊：`11fp bold` 白字；正常 `DEV` + **半透明品牌蓝 `0xCC2F6BFF`**；有未还原编辑 `DEV ✎` + **琥珀 `0xE6E08A00`** | **可点** ⇒ 开关底部 sheet | Android `TOP\|END`+6/10dp · iOS `topAnchor+6/trailing-10` |
+| **编辑态** | （角标/状态行/居中表） | 角标转琥珀 + `✎`；sheet 状态行「⚠ 渲染状态：含就地编辑 — 非项目代码效果」（琥珀字） | `edit` 成功置位；`reset` 清除 | Android `setEdited` · iOS `markEdited` |
+| **热重载 / 编辑 toast** | **顶部居中**，角标**下方**（`安全区顶 + 40`） | 深色胶囊 `0xE61F2430`、圆角、`13fp` 白字；~**1.5s** 淡出 | `flash(msg)`；**非底部**（`promptAction.showToast` 默认底部 = 错） | Android `Gravity.TOP\|CENTER_H` · iOS `centerXAnchor` |
+| **底部 sheet 菜单** | **屏幕底部**（贴底、圆角上沿） | 深色板 `0xF21F2430`；title **「DevTools」** + 状态行 + **「重置为项目代码」按钮**（品牌蓝）+ 面板 URL；点遮罩关 | `toggleSheet`；重置与 `/cmd reset` **同一实现** | Android `buildSheet` · iOS `buildSheet` |
+| **启动占位** | **屏幕居中** | 浅底 + **App 名** + **转圈** + 文案；dev「正在连接开发服务器…」/ release「正在启动…」；失败停转圈保留 | 首帧后移除；**同步加载端给最短可见**（否则一闪） | Android `LaunchPlaceholder` · iOS `ProteusLaunchPlaceholder` |
+| **元素高亮** | 覆盖在被选元素上 | **fill(`0x2E2F6BFF` α0.18) + stroke(`0xFF2F6BFF`, `2×density`)** 双层 | 与命中**同源**（同一内核树）；`id<=0` 清除 | Android `devHighlight` · iOS `CAShapeLayer` |
+| **源码映射** | 面板 Elements 详情 | 节点带 `loc` **且** `/tree` body 带 **`file`** ⇒ 显示 `file:line:col` + 可点跳 `vscode://file/<abs>` | `/tree` 须发**运行期** `currentContent()`（含 `file`） | Android `pushDevTree`（body 带 `screen`）· 面板 `locHtml` |
+
+★**机器判据**：`check:host-variant-parity` 读各端 dev 壳源码断言上表关键项（角标右上、toast 顶部、菜单 sheet、编辑态 `✎`、tree 带 `file`）。
+
+---
+
 ## 9. 新宿主 Checklist（逐项打勾 = 对齐 iOS 的最小完整集）
 
 **架构**

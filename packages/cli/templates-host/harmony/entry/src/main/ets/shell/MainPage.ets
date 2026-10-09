@@ -30,7 +30,6 @@ import {
 // ★★★dev 通道（决策 #728）：变体常量 + dev-watch/角标（**dev 调试件**，release 门控不创建——守宿主定位 #727）。
 import { DEV, DEV_URL } from './ProteusBuildConfig';
 import { DevWatch } from '../dev/DevWatch';
-import { DevOverlay } from '../dev/DevOverlay';
 
 const DOMAIN = 0x0002;
 const TAG = 'ProteusHostPage';
@@ -101,7 +100,6 @@ struct MainPage {
   private nudgeCb: NudgeFrameCallback = new NudgeFrameCallback();
   /** ★dev 通道（决策 #728）：dev-watch + 角标（**release 不创建**）。 */
   private devWatch: DevWatch | null = null;
-  private devOverlay: DevOverlay | null = null;
   /** dev 上报缓冲（宿主读线程/主线程写→dev-watch 排空）：原生日志（`level\ttext`）与事件 trace（已编码 query）。 */
   private devLogQueue: string[] = [];
   private devTraceQueue: string[] = [];
@@ -127,9 +125,19 @@ struct MainPage {
   /** ★启动占位（决策 #731）：内容首帧前显示浅底+App名+转圈；首帧渲染后置 false 撤掉。 */
   @State loading: boolean = true;
   private firstPainted: boolean = false;
-  /** ★dev 胶囊（决策 #731）：DEV 角标可见性 + 面板 URL（菜单显示）。 */
+  /** ★dev 胶囊（决策 #731/#732）：DEV 角标可见性 + 面板 URL（菜单显示）+ 菜单/编辑态/toast。 */
   @State devCapsule: boolean = false;
   @State panelUrl: string = '';
+  /** ★菜单展开（决策 #732）：底部 sheet（对齐 Android/iOS 的 `toggleSheet`，非居中 dialog）。 */
+  @State sheetOn: boolean = false;
+  /** ★编辑态（决策 #732）：有未还原的就地编辑 ⇒ 角标 `DEV ✎` + 琥珀 + sheet 状态行"非项目代码效果"。 */
+  @State edited: boolean = false;
+  /** ★顶部 toast（决策 #732）：自绘**顶部居中**提示（`promptAction.showToast` 默认底部，不对齐两端）。 */
+  @State flashMsg: string = '';
+  private flashTimer: number = -1;
+  /** ★★chrome 顶部基准（决策 #732）：= 安全区顶 + 6vp。**用 @State**（`envVars` 是普通字段 ⇒ 赋值不重渲 ⇒
+   *   胶囊会停在 build 时"env 尚空"的 0+6=6vp 处、贴到状态栏）。@State 赋值即重渲 ⇒ 位置随安全区正确落位。 */
+  @State chromeTopVp: number = 54;
   /** 应用名（启动占位显示；`$r('app.string.app_name')`）。 */
   private appName: string = 'Proteus';
   private static vpW: number = 390;
@@ -221,21 +229,24 @@ struct MainPage {
           '--pf-vh': disp.height / vp2px(1),
           '--pf-hairline': 1 / vp2px(1),
         };
+        // ★chrome 顶部基准（决策 #732）：安全区顶 + 6vp ⇒ 胶囊/toast 落在状态栏下方（@State 触发重渲）
+        this.chromeTopVp = Math.max(sysTop, cutT) + 6;
         this.renderCurrent();
       }).catch((err: Error) => {
         hilog.error(DOMAIN, TAG, 'HOST_PAGE_WINDOW_ERR %{public}s', String(err?.message ?? err));
         this.renderCurrent();
       });
-      // 立即渲染一次（窗口 promise 未回前先出内容；env 到位后会再渲染一次覆盖）
-      this.renderCurrent();
+      // ★★★去双重渲染（决策 #732 · 用户「启动就掉帧」）：此前此处**立即**渲染一次、env 回调**再**渲染一次
+      //   ⇒ 每次启动 eval **两遍** 4MB bundle（dev 模式 dev-watch 首 tick 再一遍 = 三遍）⇒ 主线程长阻塞 =
+      //   **启动掉帧**。⇒ 起手**不渲**，只等 `getLastWindow` 回调（带安全区 env）**渲一次**；
+      //   `getLastWindow` 失败时由上面的 catch 兜底渲一次（覆盖"窗口取不到"）。
+      //   顺序沿用"只渲一次"纪律（与 Android/iOS `bootAsync` → 主线程回调一次上屏同构）。
       // ⑤ dev 通道（决策 #728）：`DEV` 编译期常量 或 启动参数注入的 dev server 地址 ⇒ 起 dev-watch + 角标。
       //   ★dev 调试件**门控创建**（release 零残留）——宿主功能不受影响（守 #727）。
       const devBase: string = MainPage.resolveDevBase();
       if (DEV || devBase.length > 0) {
         this.panelUrl = devBase;
-        this.devCapsule = true;   // ★dev 胶囊（决策 #731）：右上 "DEV" 角标（可点展开面板 URL）
-        this.devOverlay = new DevOverlay();
-        this.devOverlay.setPanelUrl(devBase);
+        this.devCapsule = true;   // ★dev 胶囊（决策 #731）：右上 "DEV" 角标（可点展开底部 sheet）
         this.startDevWatch(devBase);
         this.devLog('info', 'app ready · screen=' + this.current + ' · dev=' + (devBase.length > 0 ? devBase : '(无地址)'));
       }
@@ -272,7 +283,7 @@ struct MainPage {
     w.applyBundle = (b: string, v: string): void => {
       this.bundle = b;
       this.renderCurrent();
-      if (this.devOverlay !== null) { this.devOverlay.flash('⟳ 已热重载 · v' + v); }
+      this.flash('⟳ 已热重载 · v' + v);
       this.devLog('info', 'hot reload · v' + v + ' · screen=' + this.current);
     };
     // ★面板→设备命令（决策 #729）：dev-watch 取到 /cmd ⇒ 宿主执行（highlight/edit/reset/eval）
@@ -376,19 +387,21 @@ struct MainPage {
           // ★★类型强转（决策 #731 · 黑屏根因）：字符串值按字段类型转成数字/对象/枚举——否则内核 serde 失败 ⇒ 空屏
           const coerced: Object | null = this.coerceLiveEdit(key, value);
           if (coerced === null) {
-            if (this.devOverlay !== null) { this.devOverlay.flash('⚠ 就地编辑值非法 #' + id + ' · ' + key + '=' + value); }
+            this.flash('⚠ 就地编辑值非法 #' + id + ' · ' + key + '=' + value);
             this.devLog('warn', 'edit #' + id + ' ' + key + '=' + value + '（值非法，未应用）');
             return;
           }
           let ov: Record<string, Object> = this.devEdits.get(id) ?? {};
           ov[key] = coerced;
           this.devEdits.set(id, ov);
+          this.edited = true;     // ★编辑态（决策 #732）：角标 `DEV ✎` + 琥珀 + sheet 状态行
           this.renderCurrent();   // 改树 + 全量重挂（每轮重施覆盖）
-          if (this.devOverlay !== null) { this.devOverlay.flash('✎ 已就地编辑 #' + id + ' · ' + key + '=' + value); }
+          this.flash('✎ 已就地编辑 #' + id + ' · ' + key + '=' + value);
           this.devLog('info', 'edit #' + id + ' ' + key + '=' + value);
         }
       } else if (type === 'reset') {
         this.devEdits.clear();
+        this.edited = false;
         this.renderCurrent();
         this.devLog('info', 'reset · 恢复项目代码效果');
       } else if (type === 'eval') {
@@ -793,22 +806,67 @@ struct MainPage {
       .width('100%')
       .height('100%')
 
-      // ② ★dev 胶囊（决策 #731，对齐 Android/iOS DevOverlay）：右上 "DEV" 角标（可点 ⇒ 展开面板 URL）
+      // ② ★dev 胶囊（决策 #731/#732，对齐 Android/iOS DevOverlay）——**右上角**：
+      //   ★容器只占**顶部一条**（`width 100%` + **高度自适应**，不 `height('100%')`）⇒ 只有这条(含胶囊)可点、
+      //     下方内容点击**正常穿透**（此前全屏容器 `hitTestBehavior(Transparent)` 让胶囊点击被吞/错位）。
+      //   顶部偏移 = 安全区顶(chromeTopVp) + 6vp、右 10vp（对齐 Android `TOP|END` + statusBar + 6/10dp）。
+      //   有未还原就地编辑 ⇒ `DEV ✎` + 琥珀（`0xE6E08A00`）；否则 `DEV` + 半透明品牌蓝（`0xCC2F6BFF`）。
       if (this.devCapsule) {
         Column() {
-          Text('DEV')
+          Text(this.edited ? 'DEV ✎' : 'DEV')
             .fontSize(11).fontWeight(FontWeight.Bold).fontColor('#FFFFFF')
-            .padding({ left: 8, right: 8, top: 3, bottom: 3 })
-            .backgroundColor(this.editing() ? '#C08A18' : '#2F6BFF')
-            .borderRadius(9)
-            .onClick(() => { this.showDevMenu(); })
+            .padding({ left: 9, right: 9, top: 3, bottom: 3 })
+            .backgroundColor(this.edited ? '#E6E08A00' : '#CC2F6BFF')
+            .borderRadius(40)
+            .onClick(() => { this.toggleSheet(); })
         }
         .width('100%')
         .alignItems(HorizontalAlign.End)
-        .padding({ top: 6, right: 8 })
+        .padding({ top: this.chromeTopVp, right: 10 })
       }
 
-      // ③ ★启动占位（决策 #731，对齐 Android LaunchPlaceholder / iOS）：浅底 + App 名 + 品牌蓝转圈，**居中**
+      // ③ ★顶部 toast（决策 #732）：**顶部一条**（高度自适应）⇒ **顶部居中**、角标下方 ~34vp、深色胶囊
+      //   （对齐 Android/iOS 位置；不用 `promptAction.showToast`——它默认弹底部）。
+      if (this.flashMsg.length > 0) {
+        Column() {
+          Text(this.flashMsg)
+            .fontSize(13).fontColor('#FFFFFF')
+            .padding({ left: 12, right: 12, top: 6, bottom: 6 })
+            .backgroundColor('#E61F2430').borderRadius(14)
+        }
+        .width('100%')
+        .alignItems(HorizontalAlign.Center)
+        .padding({ top: this.chromeTopVp + 34 })
+      }
+
+      // ④ ★dev 底部 sheet（决策 #732，对齐 Android/iOS `buildSheet`）：全屏容器 `justifyContent(End)` ⇒ 贴底。
+      //   title「DevTools」+ 渲染状态行 + 「重置为项目代码」+ 面板 URL。
+      if (this.devCapsule && this.sheetOn) {
+        Column() {
+          Column({ space: 10 }) {
+            Text('DevTools').fontSize(14).fontWeight(FontWeight.Bold).fontColor('#FFFFFF').width('100%')
+            Text(this.edited ? '⚠ 渲染状态：含就地编辑 — 非项目代码效果' : '渲染状态：项目代码（实时）')
+              .fontSize(12).fontColor(this.edited ? '#FFC24D' : '#FFFFFF').width('100%')
+            Button('重置为项目代码')
+              .fontSize(13).backgroundColor('#2F6BFF').width('100%')
+              .onClick(() => { this.resetAll(); this.sheetOn = false; })
+            Text(this.panelUrl.length > 0 ? ('面板：' + this.panelUrl + '（浏览器打开·元素高亮/就地编辑/REPL）') : '面板：浏览器打开 dev server 地址')
+              .fontSize(11).fontColor('#9AA0AE').width('100%')
+          }
+          .width('100%').alignItems(HorizontalAlign.Start)
+          .padding({ left: 16, right: 16, top: 16, bottom: 28 })
+          .backgroundColor('#F21F2430')
+          .borderRadius({ topLeft: 16, topRight: 16 })
+          // 点 sheet 内的空白/按钮**不关**（点遮罩关）——onClick 只吞事件
+          .onClick(() => { /* 吞掉内部点击 */ })
+        }
+        .width('100%').height('100%').justifyContent(FlexAlign.End)
+        // ★遮罩：点 sheet 之外的区域 ⇒ 关闭（与两端"点外部收起"同语义）
+        .backgroundColor('#66000000')
+        .onClick(() => { this.sheetOn = false; })
+      }
+
+      // ⑤ ★启动占位（决策 #731，对齐 Android LaunchPlaceholder / iOS）：浅底 + App 名 + 品牌蓝转圈，**居中**
       if (this.loading) {
         Column({ space: 16 }) {
           Text(this.appName)
@@ -821,6 +879,9 @@ struct MainPage {
         .backgroundColor('#F5F6FA')
       }
     }
+    // ★★★ `Stack` 默认 `alignContent: Center` ⇒ 子层（胶囊 Column/Text）会被**整体居中**（用户实测"胶囊跑到屏幕中间"）。
+    //   显式 `TopEnd` ⇒ 右上角定位（配合各子层的 margin 微调）；内容层/占位层用 100% 尺寸自撑满，不受影响。
+    .alignContent(Alignment.TopEnd)
     .width('100%')
     .height('100%')
     .backgroundColor('#101020')
@@ -829,21 +890,23 @@ struct MainPage {
     .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
   }
 
-  /** 是否处于"已就地编辑"态（dev 菜单/角标配色；下批接编辑标记后置位，本批按 devEdits 非空判）。 */
-  private editing(): boolean { return this.devEdits.size > 0; }
+  /** ★顶部 toast（决策 #732）：自绘**顶部居中**、角标下方、深色胶囊、~1.5s 淡出。
+   *   ★为什么不用 `promptAction.showToast`——它默认弹在**屏幕底部**（用户实测"位置偏下"、与两端不一致）。 */
+  private flash(msg: string): void {
+    this.flashMsg = msg;
+    if (this.flashTimer >= 0) { clearTimeout(this.flashTimer); }
+    this.flashTimer = setTimeout(() => { this.flashMsg = ''; this.flashTimer = -1; }, 1500);
+  }
 
-  /** ★dev 胶囊点击 → 底部菜单（渲染状态 + 面板 URL + 提示）；对齐 Android/iOS DevOverlay 的展开。 */
-  private showDevMenu(): void {
-    const url: string = this.panelUrl.length > 0 ? this.panelUrl : '(未注入 dev server)';
-    const st: string = this.editing() ? '⚠ 非项目代码效果（已就地编辑 ' + this.devEdits.size + ' 处）' : '项目代码效果';
-    try {
-      this.getUIContext().showAlertDialog({
-        title: 'Proteus Dev',
-        message: '渲染状态：' + st + '\n面板：' + url + '\n\n改源码保存即热刷；元素高亮/就地编辑见面板。',
-        confirm: { value: '知道了', action: () => { /* 关闭 */ } },
-      });
-    } catch (e) {
-      if (this.devOverlay !== null) { this.devOverlay.flash('DEV · ' + st); }
-    }
+  /** ★dev 胶囊点击 → 底部 sheet 开关（对齐 Android/iOS `toggleSheet`）。 */
+  private toggleSheet(): void { this.sheetOn = !this.sheetOn; }
+
+  /** sheet「重置为项目代码」——与面板 `/cmd reset` **同一实现**（清就地编辑 + 重渲 + 清编辑态）。 */
+  private resetAll(): void {
+    this.devEdits.clear();
+    this.edited = false;
+    this.renderCurrent();
+    this.flash('已重置为项目代码');
+    this.devLog('info', 'reset · 恢复项目代码效果');
   }
 }
