@@ -181,6 +181,8 @@ const SHEET_SPEC = {
     { re: /ButtonType\.Normal\)\.borderRadius\(10\)/, why: '按钮圆角 10（非默认全圆角）' },
     { re: /#66000000/, why: '须遮罩（#735）' },
     { re: /PanGesture\(\{ direction: PanDirection\.Vertical \}\)/, why: '须把手下拉关闭（#735）' },
+    { re: /\.transition\(TransitionEffect\.opacity/, why: '遮罩须淡入淡出转场（#736）' },
+    { re: /TransitionEffect\.move\(TransitionEdge\.BOTTOM\)/, why: '面板须从底部滑入滑出（#736）' },
   ],
 }
 const SHEET_SPEC_FILE = {
