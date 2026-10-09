@@ -23,10 +23,12 @@ export {
   appScreenCommands,
   appScreenContentHeight,
   appScreenHitAt,
+  appScreenNodeRect,
   appScreenAnimTick,
   hostRtShellInstall,
   hostRtShellEvent,
   hostAppBoot,
   hostAppDrive,
   hostAppRender,
+  hostAppEval,
 } from 'libproteus_host.so'

@@ -25,7 +25,7 @@ import { displaySync } from '@kit.ArkGraphics2D';
 import { util } from '@kit.ArkTS';
 import {
   attach, renderCommands, scrollRoot, clearRoot,
-  appScreenCommands, appScreenContentHeight, appScreenHitAt, hostAppRender,
+  appScreenCommands, appScreenContentHeight, appScreenHitAt, appScreenNodeRect, hostAppRender, hostAppEval,
 } from 'proteus_render';
 // ★★★dev 通道（决策 #728）：变体常量 + dev-watch/角标（**dev 调试件**，release 门控不创建——守宿主定位 #727）。
 import { DEV, DEV_URL } from './ProteusBuildConfig';
@@ -109,6 +109,9 @@ struct MainPage {
   private pendingTreeJson: string = '';
   /** 最近一次渲染耗时（ms；dev 心跳 perf 上报）。 */
   private lastRenderMs: number = 0;
+  /** ★dev 命令态（决策 #729）：高亮节点 id（0=无）；就地编辑覆盖（节点 id → `{字段:值}`；渲染时每轮重施）。 */
+  private highlightId: number = 0;
+  private devEdits: Map<number, Record<string, Object>> = new Map<number, Record<string, Object>>();
   private static vpW: number = 390;
   private static vpH: number = 844;
 
@@ -237,6 +240,8 @@ struct MainPage {
       if (this.devOverlay !== null) { this.devOverlay.flash('⟳ 已热重载 · v' + v); }
       this.devLog('info', 'hot reload · v' + v + ' · screen=' + this.current);
     };
+    // ★面板→设备命令（决策 #729）：dev-watch 取到 /cmd ⇒ 宿主执行（highlight/edit/reset/eval）
+    w.onCmd = (json: string): void => { this.applyCommand(json); };
     this.devWatch = w;
     w.start();
   }
@@ -245,6 +250,87 @@ struct MainPage {
   private devLog(level: string, text: string): void {
     if (this.devLogQueue.length > 200) { this.devLogQueue.shift(); }
     this.devLogQueue.push(level + '\t' + text);
+  }
+
+  /* ═══════════════ ★★★dev 命令集（决策 #729 · 面板→设备；`/cmd` 契约三端一致）═══════════════
+   *   命令种类（对齐 dev server `/panelcmd` 与 AppActivity/ProteusApp 的 `applyCommand`）：
+   *     · highlight(nodeId)：叠半透明高亮框（`appScreenNodeRect` 取内核 rect → 追加一条背景 cmd）；
+   *     · edit(nodeId,key,value)：就地编辑——写入 `devEdits`（渲染时每轮重施到实例树）⇒ 任意字段生效；
+   *     · reset：清 `devEdits`（恢复项目代码效果）+ 重渲；
+   *     · eval(expr)：`hostAppEval`（一次性 VM 内求值）→ 结果入 Console。
+   *   ★highlight 高亮框与命中**同源**（同一棵内核树）；★就地编辑走"改树+全量重挂"（每轮重施），
+   *     不受增量 `PatchStyle` 字段子集所限（Android #722 的教训）。 */
+  private applyCommand(json: string): void {
+    try {
+      const o = JSON.parse(json) as Record<string, Object>;
+      const type: string = typeof o['type'] === 'string' ? o['type'] as string : '';
+      if (type === 'highlight') {
+        const id: number = typeof o['nodeId'] === 'number' ? o['nodeId'] as number : 0;
+        this.highlightId = id;
+        this.renderCurrent();   // 重渲以叠/撤高亮框
+        this.devLog('info', 'highlight #' + id);
+      } else if (type === 'edit') {
+        const id: number = typeof o['nodeId'] === 'number' ? o['nodeId'] as number : 0;
+        const key: string = typeof o['key'] === 'string' ? o['key'] as string : '';
+        const value: string = typeof o['value'] === 'string' ? o['value'] as string : '';
+        if (id > 0 && key.length > 0) {
+          // 禁改结构字段（与 iOS/Android 一致：id/parentId/文本结构不动，只改样式）
+          if (key === 'id' || key === 'parentId') { this.devLog('warn', 'edit #' + id + ' ' + key + '（结构字段不可改）'); return; }
+          let ov: Record<string, Object> = this.devEdits.get(id) ?? {};
+          ov[key] = value;
+          this.devEdits.set(id, ov);
+          this.renderCurrent();   // 改树 + 全量重挂（每轮重施覆盖）
+          if (this.devOverlay !== null) { this.devOverlay.flash('✎ 已就地编辑 #' + id + ' · ' + key + '=' + value); }
+          this.devLog('info', 'edit #' + id + ' ' + key + '=' + value);
+        }
+      } else if (type === 'reset') {
+        this.devEdits.clear();
+        this.renderCurrent();
+        this.devLog('info', 'reset · 恢复项目代码效果');
+      } else if (type === 'eval') {
+        const expr: string = typeof o['expr'] === 'string' ? o['expr'] as string : '';
+        if (expr.length > 0) {
+          const args: Record<string, Object> = { 'bundle': this.bundle, 'filesDir': this.filesDir, 'expr': expr };
+          let disp: string = '';
+          try {
+            const r = JSON.parse(hostAppEval(JSON.stringify(args))) as Record<string, Object>;
+            disp = r['ok'] === true ? String(r['value']) : ('✗ ' + String(r['error']));
+          } catch (e) { disp = '✗ ' + (JSON.stringify(e) ?? ''); }
+          this.devLog('log', '› ' + expr + '\n' + disp);
+        }
+      }
+      // 命令执行后**重推树**（几何可能变）——与 Android #722 同（编辑/重置改变布局，面板树须同步）
+      if (type === 'edit' || type === 'reset') { this.pendingTreeJson = ''; /* 下轮 renderCurrent 重填 */ }
+    } catch (e) { /* 命令尽力而为——不干扰渲染 */ }
+  }
+
+  /** 高亮框 cmd（内存态；无高亮 ⇒ ''）。rect 由 `appScreenNodeRect` 给出，与 cmd 同口径（物理 px）。 */
+  private highlightCmd(): string {
+    if (this.highlightId <= 0) { return ''; }
+    try {
+      const r = JSON.parse(appScreenNodeRect(this.highlightId)) as Record<string, Object>;
+      if (r['ok'] !== true) { return ''; }
+      const x: number = r['x'] as number;
+      const y: number = r['y'] as number;
+      const w: number = r['w'] as number;
+      const h: number = r['h'] as number;
+      // 半透明品牌蓝填充（对齐 iOS/Android 的 `fill(systemBlue α0.18)+stroke`）：本处以单条半透明 rect 表意。
+      return ',{"kind":"background","id":-990001,"parentId":-1,"x":' + x.toFixed(2) + ',"y":' + y.toFixed(2)
+        + ',"w":' + w.toFixed(2) + ',"h":' + h.toFixed(2) + ',"color":1230363903,"radius":0}';
+    } catch (e) { return ''; }
+  }
+
+  /** 把 `devEdits` 覆盖施到实例树（就地编辑；每轮渲染重施——全量重挂语义）。 */
+  private applyEditsToNodes(nodes: Record<string, Object>[]): void {
+    if (this.devEdits.size === 0) { return; }
+    for (const n of nodes) {
+      const idV = n['id'];
+      if (typeof idV !== 'number') { continue; }
+      const ov = this.devEdits.get(idV as number);
+      if (ov !== undefined) {
+        for (const k of Object.keys(ov)) { n[k] = ov[k]; }
+      }
+    }
   }
 
   aboutToDisappear(): void {
@@ -291,6 +377,9 @@ struct MainPage {
           const rt = JSON.parse(rtOut) as Record<string, Object>;
           const tree = rt['tree'] as Record<string, Object> | undefined;
           if (tree && Array.isArray(tree['nodes'])) {
+            // ★dev 就地编辑（决策 #729）：把面板下发的样式覆盖**应用到实例树**再上屏（改树 + 全量重挂语义——
+            //   每次渲染整树重建，故覆盖须每轮重施）。⇒ **任意字段生效**（不受增量 PatchStyle 字段子集所限）。
+            this.applyEditsToNodes(tree['nodes'] as Record<string, Object>[]);
             nodes = JSON.stringify(tree['nodes']);
             // ★dev：缓存**整棵实例化树**（含 viewport，供面板 Elements）——dev-watch 取走上报 /tree
             if (this.devWatch !== null) { this.pendingTreeJson = JSON.stringify(tree); }
@@ -317,11 +406,15 @@ struct MainPage {
     try {
       // renderCommands 是**追加**语义 ⇒ 每次上屏前先 clearRoot（清子节点 + fixed/sticky/id 登记），防叠树
       clearRoot();
-      const cmds: string = appScreenCommands(JSON.stringify({
+      let cmds: string = appScreenCommands(JSON.stringify({
         'nodes': nodes, 'density': vp2px(1), 'vpW': MainPage.vpW, 'vpH': MainPage.vpH,
         'page': page, 'filesDir': this.filesDir,
         'env': this.envVars,   // ★安全区 env token（--pf-inset-*）替换用
       } as Record<string, Object>));
+      // ★dev 元素高亮（决策 #729）：内存里的 cmds 是数组串 `[…]` ⇒ 在尾部叠一条**半透明高亮框 cmd**
+      //   （rect 与 cmd 同口径=物理 px，由 `appScreenNodeRect` 给出；与命中同源）。不改 C++、不动命中/sticky 语义。
+      const hl: string = this.highlightCmd();
+      if (hl.length > 0) { cmds = cmds.replace(/\]\s*$/, hl + ']'); }
       const n: number = renderCommands(cmds);
       hilog.info(DOMAIN, TAG, 'HOST_PAGE_RENDER page=%{public}s nodes_rendered=%{public}d', page, n);
       const chVp: number = appScreenContentHeight();

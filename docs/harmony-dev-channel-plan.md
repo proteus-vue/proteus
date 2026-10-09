@@ -105,13 +105,19 @@ iOS/Android 的接线：`templates-host/{ios,android}` 的壳 + `ProteusBuildCon
 - ✅ **真机验收**：`proteus dev --target harmony` ⇒ `DEVWATCH_START`；心跳入 SSE（`host.screen/env/perf`）；
   改源码 ⇒ `version 1→2` ⇒ host 自动重渲（`hot reload · v2`）；`/tree` 97 节点、`/log` 达面板。
 
-### 步 3 · dev 命令集（highlight / 就地编辑 / eval）——⬜ 待做（批 2b）
-- **`/cmd` 轮询 + highlight**（需 runtime 新增"内核 id → rect + 描边"原语）、**就地编辑**（改树+全量重挂）、
-  **eval**（一次性 VM 内求值）。对齐 Android/iOS 的 `applyCommand`。
+### 步 3 · dev 命令集（highlight / 就地编辑 / eval）——✅ **已落地（决策 #729 · 2026-10-09）**
+- ✅ dev-watch 轮询 `/cmd`（one-shot）→ 宿主 `applyCommand`：
+  - **highlight**：native `appScreenNodeRect(id)`（内核 rect → **cmd 同口径物理 px**，与命中同源）
+    → 在 cmd 尾部叠一条**半透明高亮框**（不改 C++ 命中/sticky 语义）；
+  - **就地编辑**：写入 `devEdits`（节点 id → 字段覆盖），每轮渲染**重施到实例树** ⇒ **任意字段生效**
+    （不走增量 `PatchStyle` 字段子集——Android #722 的教训）；
+  - **reset**：清 `devEdits` + 重渲（恢复项目代码效果）；
+  - **eval**：native `hostAppEval`（一次性 VM 内 boot + 求值）→ 结果入 Console。
+- ✅ **真机验收**：highlight #1 → 浅蓝高亮框；edit #1 `color=#D64545` → 标题变红；reset → 恢复黑；eval `1+2` → `3`。
 
-### 步 4 · 深化（可选）
+### 步 4 · 深化（可选）——⬜ 待做
 - **项目 `console.*` → 面板 Console·项目通道**（dev 垫片；一次性 VM 下代价待评）。
-- **逐帧/掉帧 perf 读数**（需帧采样器；本批 perf 仅 `renderMs`）。
+- **逐帧/掉帧 perf 读数**（需帧采样器；当前 perf 仅 `renderMs`）。
 
 ---
 

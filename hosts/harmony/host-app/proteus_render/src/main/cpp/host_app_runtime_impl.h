@@ -457,3 +457,63 @@ static napi_value HostAppRender(napi_env env, napi_callback_info info) {
     out += "}";
     napi_value r; napi_create_string_utf8(env, out.c_str(), out.size(), &r); return r;
 }
+
+
+/**
+ * hostAppEval(argsJson {bundle, filesDir, expr}): string(JSON) —— **dev REPL**（决策 #729）：
+ *   一次性 VM：注入 proteusHost{invoke} → eval bundle → boot → 求值  → 返回 {ok,value/error}。
+ *   ★诚实边界（一次性 VM）：求值对着**新 boot 的初始态**（非当前屏活态）——与 snapshot 回灌同族边界。
+ *   与 Android/iOS 的 eval REPL 同契约（返回字符串化的求值结果）。
+ */
+static napi_value HostAppEval(napi_env env, napi_callback_info info) {
+    size_t argc = 1; napi_value args[1] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    std::string argsJson;
+    if (argc >= 1 && args[0] != nullptr) {
+        size_t len = 0; napi_get_value_string_utf8(env, args[0], nullptr, 0, &len);
+        argsJson.resize(len + 1); napi_get_value_string_utf8(env, args[0], &argsJson[0], len + 1, &len); argsJson.resize(len);
+    }
+    std::string bundle, expr;
+    jstr(argsJson.c_str(), argsJson.size(), "bundle", &bundle);
+    jstr(argsJson.c_str(), argsJson.size(), "expr", &expr);
+    std::string err, value = "null";
+    JSVM_VM vm = nullptr; JSVM_Env jenv = nullptr; JSVM_HandleScope scope = nullptr; JSVM_VMScope vmScope = nullptr;
+    bool policyOk = false; bool cr = false;
+    if (bundle.empty()) err = "缺 bundle";
+    if (expr.empty()) err = "缺 expr";
+    OH_JSVM_Init(nullptr);
+    JSVM_CreateVMOptions vo; memset(&vo, 0, sizeof(vo));
+    if (err.empty()) {
+        if (OH_JSVM_CreateVM(&vo, &vm) != JSVM_OK || vm == nullptr) err = "CreateVM 失败";
+        else if (OH_JSVM_OpenVMScope(vm, &vmScope) != JSVM_OK) err = "OpenVMScope 失败";
+        else if (OH_JSVM_CreateEnv(vm, 0, nullptr, &jenv) != JSVM_OK || jenv == nullptr) err = "CreateEnv 失败";
+        else if (OH_JSVM_OpenHandleScope(jenv, &scope) != JSVM_OK) err = "OpenHandleScope 失败";
+        else policyOk = (OH_JSVM_SetMicrotaskPolicy(vm, JSVM_MICROTASK_EXPLICIT) == JSVM_OK);
+    }
+    if (err.empty()) {
+        jsvmEvalStr(jenv, "globalThis.__PROTEUS_HOST_ID__ = 'harmony';", nullptr);
+        JSVM_Value host = nullptr; OH_JSVM_CreateObject(jenv, &host);
+        JSVM_CallbackStruct cb; cb.callback = InvokeCb; cb.data = nullptr;
+        JSVM_Value fn = nullptr; OH_JSVM_CreateFunction(jenv, "invoke", JSVM_AUTO_LENGTH, &cb, &fn);
+        OH_JSVM_SetNamedProperty(jenv, host, "invoke", fn);
+        JSVM_Value global = nullptr; OH_JSVM_GetGlobal(jenv, &global);
+        OH_JSVM_SetNamedProperty(jenv, global, "proteusHost", host);
+        JSVM_Value src = nullptr; OH_JSVM_CreateStringUtf8(jenv, bundle.c_str(), bundle.size(), &src);
+        JSVM_Script script = nullptr;
+        if (OH_JSVM_CompileScript(jenv, src, nullptr, 0, false, &cr, &script) != JSVM_OK) err = "bundle 编译失败";
+        else { JSVM_Value rr = nullptr; if (OH_JSVM_RunScript(jenv, script, &rr) != JSVM_OK) err = "bundle 执行失败"; }
+    }
+    if (err.empty()) {
+        jsvmEvalStr(jenv, "String(__proteusHostAppBootJson())", nullptr);
+        std::string de = "(function(){ try { return String((" + expr + ")); } catch(e) { return '✗ ' + (e && e.message ? e.message : String(e)); } })()";
+        jsvmEvalStr(jenv, de.c_str(), &value);
+    }
+    if (jenv != nullptr && scope != nullptr) OH_JSVM_CloseHandleScope(jenv, scope);
+    if (jenv != nullptr) OH_JSVM_DestroyEnv(jenv);
+    if (vm != nullptr && vmScope != nullptr) OH_JSVM_CloseVMScope(vm, vmScope);
+    if (vm != nullptr) OH_JSVM_DestroyVM(vm);
+    std::string out = "{\"ok\":" + std::string(err.empty() ? "true" : "false") + ",\"value\":\"" + jsonEscape(value) + "\"";
+    if (!err.empty()) out += ",\"error\":\"" + jsonEscape(err) + "\"";
+    out += "}";
+    napi_value r; napi_create_string_utf8(env, out.c_str(), out.size(), &r); return r;
+}

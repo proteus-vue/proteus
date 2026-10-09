@@ -9,6 +9,8 @@ export const appScreenCommands: (json: string) => string;
 export const appScreenContentHeight: () => number;
 /** 真触摸命中（vp 坐标）→ 内核 hitTest JSON */
 export const appScreenHitAt: (x: number, y: number) => string;
+/** ★dev 元素高亮（决策 #729）：内核节点 rect（**cmd 同口径=物理 px**）→ `{ok,x,y,w,h}`；供叠一条半透明高亮框 */
+export const appScreenNodeRect: (id: number) => string;
 /** 屏转场动画推进一帧（16.7ms）；返回 JSON */
 export const appScreenAnimTick: () => string;
 /** 建立持久壳 VM（注入 proteusHost + 平台全局 → eval bundle → 探测生命周期钩子） */
@@ -22,3 +24,5 @@ export const hostAppDrive: (json: string) => string;
 /** ★应用运行期·渲染（一次性 VM）：实例化某屏（+可选 tap 命中链）→ 返回 {current,state,snapshot,tree}；
  *  入参 {bundle,filesDir,page,viewport:{width,height},chain?:[],state?:{},remount?:bool} */
 export const hostAppRender: (json: string) => string;
+/** ★dev REPL（决策 #729）：一次性 VM 求值 JS 表达式；入参 {bundle,filesDir,expr} → {ok,value/error} */
+export const hostAppEval: (json: string) => string;

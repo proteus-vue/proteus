@@ -852,4 +852,22 @@ describe('★★★鸿蒙 dev 通道 · 批 2a 地基（热刷/心跳/日志 —
     expect(pkg, '00303074 定向归因').toContain('00303074')
     expect(pkg, '归因含修复指引').toMatch(/signingConfigs.*\[\]|Automatically generate signature/)
   })
+  it('鸿蒙 dev 命令集（决策 #729）：applyCommand(highlight/edit/reset/eval) + native 原语 + /cmd 轮询', () => {
+    const mp = fs.readFileSync(path.join(TH, 'entry/src/main/ets/shell/MainPage.ets'), 'utf-8')
+    expect(mp, 'applyCommand').toContain('private applyCommand(')
+    for (const t of ["type === 'highlight'", "type === 'edit'", "type === 'reset'", "type === 'eval'"]) {
+      expect(mp, `命令分支 ${t}`).toContain(t)
+    }
+    expect(mp, '高亮框走 appScreenNodeRect').toContain('appScreenNodeRect(')
+    expect(mp, 'eval 走 hostAppEval').toContain('hostAppEval(')
+    expect(mp, '就地编辑每轮重施').toContain('applyEditsToNodes(')
+    const dw = fs.readFileSync(path.join(TH, 'entry/src/main/ets/dev/DevWatch.ets'), 'utf-8')
+    expect(dw, 'dev-watch 轮询 /cmd').toContain("'/cmd'")
+    // native 原语导出
+    const host = fs.readFileSync(path.join(ROOT, 'hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_host.cpp'), 'utf-8')
+    expect(host, '导出 appScreenNodeRect').toContain('{"appScreenNodeRect"')
+    expect(host, '导出 hostAppEval').toContain('{"hostAppEval"')
+    const idx = fs.readFileSync(path.join(ROOT, 'hosts/harmony/host-app/proteus_render/Index.ets'), 'utf-8')
+    expect(idx, 'Index.ets 导出两者').toMatch(/appScreenNodeRect[\s\S]*hostAppEval/)
+  })
 })
