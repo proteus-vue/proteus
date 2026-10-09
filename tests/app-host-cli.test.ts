@@ -680,7 +680,7 @@ describe('★★★鸿蒙运行期宿主（决策 #725 · 与 Android/iOS 同级
     expect(src, '一次性 VM 状态回灌').toMatch(/snapshot/i)
   })
 
-  it('CLI 模板壳对齐参考宿主（edge-to-edge 安全区 + 松手惯性 + 返回栈 — 决策 #725 收口）', () => {
+  it('CLI 模板壳对齐 dev 宿主（原生手势 + vsync 帧源 + edge-to-edge 安全区 + 返回栈 — 决策 #726/#731）', () => {
     const src = fs.readFileSync(path.join(shell, 'MainPage.ets'), 'utf-8')
     // ① edge-to-edge：状态栏/底部安全区不再黑（setWindowLayoutFullScreen + 窗口浅底 + 系统栏）
     expect(src, 'edge-to-edge').toContain('setWindowLayoutFullScreen(true)')
@@ -689,14 +689,21 @@ describe('★★★鸿蒙运行期宿主（决策 #725 · 与 Android/iOS 同级
     // ② 安全区内边距 → env 传 appScreenCommands
     expect(src, '采安全区').toContain('getWindowAvoidArea(')
     expect(src, 'env 传 appScreenCommands').toContain("'env': this.envVars")
-    // ③ 松手惯性
-    expect(src, '惯性启动').toContain('startMomentum(')
-    expect(src, '惯性减速循环').toContain('DECEL_RATE')
+    // ③ ★vsync 帧源（displaySync）驱动惯性——与 Android/iOS dev 宿主同族（CADisplayLink/Choreographer）
+    expect(src, 'vsync 帧源 displaySync').toContain('displaySync.create()')
+    expect(src, '帧回调接线').toContain(".on('frame'")
+    expect(src, '惯性减速').toContain('DECEL_RATE')
+    // ★反例守卫：不得退回 setInterval 定时器（不与 vsync 对齐 ⇒ 攒批跳变"卡一下再瞬间过去"）
+    const codeOnly = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
+    expect(codeOnly, '不用 setInterval 驱动惯性').not.toContain('setInterval(')
+    // ★触摸：拖拽/点按在 .onTouch 里判别（不用原生 PanGesture——与 TapGesture 竞争会误判；见文件头）
+    expect(src, '触摸回调接线').toContain('.onTouch((e: TouchEvent)')
+    expect(src, 'tap-vs-drag 判别').toContain('touchMoved')
     // ④ 返回栈（系统边缘滑返 → onBackPress）
     expect(src, '返回栈').toContain('private goBack(')
     expect(src, 'onBackPress 消费返回').toContain('return this.goBack()')
-    // 反例守卫：不再用旧的无惯性 onTouch 方法名
-    expect(src, '不用与 ArkUI 冲突的 onTouch 方法名').not.toMatch(/private onTouch\(/)
+    // ★反例守卫：不叠横向手势（会抢系统边缘滑返）
+    expect(src, '不叠横向手势').not.toContain('PanDirection.Horizontal')
   })
 
   it('runtime HAR 下沉驱动簇（中性名 hostAppBoot/Drive/Render；无 superapp 专名进 runtime）', () => {

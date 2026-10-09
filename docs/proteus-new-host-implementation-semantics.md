@@ -162,16 +162,21 @@
 
 ### ★★★"平台体感"逐项对齐表（**2026-10-09 · 决策 #726 补**——"先让宿主跑起来"≠"宿主对齐"）
 
+★★★**基准纪律（用户校正 · 2026-10-09）**：「**你不能用原来鸿蒙的参考宿主做基准啊，原来的参考宿主本身就有问题，你要看安卓 iOS 的 dev 宿主怎么实现的啊**」。
+⇒ **对齐基准 = 该能力的 `packages/cli/templates-host/{android,ios}`（dev 宿主 · 产品壳）**，
+**不是** `hosts/<端>/host-app`（**验证装置**——它有自己的坑，照它对齐 = 把装置的病搬进产品）。
+下表右列"参考宿主"仅作**鸿蒙腿已落地能力**的线索，**判定一律回到 dev 宿主/平台标准原语**。
+
 ★**教训（用户实测反复）**：把运行期/上屏/导航接通后，**壳的"平台体感"仍可能整片缺**——
 用户原话「鸿蒙 dev 宿主和开始安卓 iOS 一样的问题：**状态栏和底部安全区都是黑色的**，**没有滑动返回**，**滚动惯性没有**」。
-⇒ **这三项（连同启动占位/状态栏）是"独立于渲染"的壳职责，必须逐项搬**，**事实源 = 该端的参考宿主**。
+⇒ **这三项（连同启动占位/状态栏）是"独立于渲染"的壳职责，必须逐项搬**。
 
-| 体感面 | 参考宿主（鸿蒙 = `Superapp.ets`） | 新宿主须搬 |
+| 体感面 | **平台标准做法（dev 宿主用的是这个）** | 新宿主须搬 |
 |---|---|---|
-| **状态栏/安全区不黑** | `setWindowLayoutFullScreen(true)` + `setWindowBackgroundColor(浅底)` + `setWindowSystemBarEnable([...])` | 同（否则状态栏/底部导航区成**黑带**——"窗口背景"问题，非"页面背景"） |
-| **安全区内边距** | `getWindowAvoidArea`（SYSTEM/NAVIGATION_INDICATOR/CUTOUT，px→vp）→ `env`（`--pf-inset-*`） | 同（随 `appScreenCommands` 的 `env` 下发 ⇒ 页面自让位）；★异步采集 ⇒ 取到后**再渲染一次** |
-| **滚动惯性** | 触摸采样速度(vp/ms，≥24ms 一采) → 松手 `startMomentum`（指数减速 `v*=0.998^dt`） | 同（否则"松手顿住"）；★留 `momentumFrames/moved` 计数（机器证据） |
-| **滑动返回** | `onBackPress` → `goBack`（出栈 + 恢复滚动）；**系统边缘滑返自动触发，禁叠自定义手势** | 同（自绘会与系统"最近任务"手势冲突） |
+| **状态栏/安全区不黑** | edge-to-edge + 窗口浅底 + 系统栏控制（iOS/Android 均如此；鸿蒙 `setWindowLayoutFullScreen`） | 同（否则状态栏/底部导航区成**黑带**——"窗口背景"问题，非"页面背景"） |
+| **安全区内边距** | 平台避免区 API → `env`（`--pf-inset-*`）（Android `WindowInsets` / iOS `safeAreaInsets` / 鸿蒙 `getWindowAvoidArea`） | 同（随 `appScreenCommands` 的 `env` 下发 ⇒ 页面自让位）；★异步采集 ⇒ 取到后**再渲染一次** |
+| **滚动惯性** | **平台 vsync 帧源**驱动减速（iOS `CADisplayLink` / Android `Choreographer` / 鸿蒙 **`displaySync`**） | 同（**绝不用 `setInterval`**——不与 vsync 对齐 ⇒ 主线程一忙就**攒批跳变**"卡一下再瞬间过去"）；★留 `momentumFrames/moved` 计数（机器证据） |
+| **滑动返回** | 系统边缘滑返/返回键 → 返回栈（iOS `UIScreenEdgePanGesture`+`onBackPressed` / Android `onBackPressed` / 鸿蒙 `onBackPress`）；**禁叠自定义边缘手势**（与系统"最近任务"冲突） | 同 |
 
 ★**这些通路的验证要"可机器判定"**：状态栏/安全区看截图（黑带消失）；惯性看计数（`MOMENTUM_END frames/moved`）；
 返回看日志（`BACK current=… depth=…`）。**只有手感 = 无法回归**（本仓纪律）。
