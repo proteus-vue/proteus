@@ -111,7 +111,53 @@ for (const [end, cfg] of Object.entries(ENDS)) {
   if (dev && !/android\.permission\.INTERNET/.test(dev)) problems.push('③ Android: dev manifest 缺 INTERNET（dev server 走 HTTP 需要）')
 }
 
-console.log('三端宿主变体一致性门禁（dev-host = 宿主：单一壳 + dev 件门控 + 功能齐全）')
+/* ── ④ dev 宿主 **UI/DX 规格**（决策 #732；逐模块规格见语义文档 §8.5）──
+ *   反面教训：鸿蒙 dev 层一度"只有 toast、无角标/菜单/编辑态、toast 弹底部、菜单居中 dialog"。
+ *   ★只对**已有 dev 视觉层的端**断言（Android/iOS 已落地；鸿蒙本批对齐）。 */
+const DEV_UI_SPEC = {
+  android: [
+    { re: /Gravity\.TOP\s*\|\s*Gravity\.END/, why: 'DEV 角标须右上角（TOP|END）' },
+    { re: /Gravity\.TOP\s*\|\s*Gravity\.CENTER_HORIZONTAL/, why: 'toast 须顶部居中（非底部）' },
+    { re: /setEdited\s*\(/, why: '须有编辑态（DEV ✎ + 琥珀）' },
+    { re: /toggleSheet|buildSheet/, why: '须有底部 sheet 菜单' },
+  ],
+  ios: [
+    { re: /trailingAnchor[^\n]*-10/, why: 'DEV 角标须右上（trailing -10）' },
+    { re: /centerXAnchor[^\n]*host\.centerXAnchor/, why: 'toast 须水平居中' },
+    { re: /func setEdited|markEdited/, why: '须有编辑态' },
+    { re: /toggleSheet|buildSheet/, why: '须有底部 sheet 菜单' },
+  ],
+  harmony: [
+    { re: /alignItems\(HorizontalAlign\.End\)/, why: 'DEV 胶囊须右上角（容器 alignItems End）' },
+    { re: /alignItems\(HorizontalAlign\.Center\)/, why: 'toast 须顶部居中（容器 alignItems Center）' },
+    { re: /this\.edited\b/, why: '须有编辑态（DEV ✎ + 琥珀）' },
+    { re: /sheetOn/, why: '须有底部 sheet 菜单（非居中 dialog）' },
+    { re: /showAlertDialog\)/, why: '菜单不得用居中 dialog（应底部 sheet）', negate: true },
+  ],
+}
+const DEV_UI_FILE = {
+  android: 'android/src/dev/proteus/layoutcore/DevOverlay.java',
+  ios: 'ios/shell/ProteusDevOverlay.swift',
+  harmony: 'harmony/entry/src/main/ets/shell/MainPage.ets',
+}
+for (const [end, specs] of Object.entries(DEV_UI_SPEC)) {
+  const src = read(T(DEV_UI_FILE[end]))
+  if (!src) { problems.push(`④ ${ENDS[end].label}: 缺 dev 视觉层文件（${DEV_UI_FILE[end]}）`); continue }
+  for (const s of specs) {
+    const hit = s.re.test(src)
+    if (s.negate) { if (hit) problems.push(`④ ${ENDS[end].label}: dev UI 规格违反——${s.why}`) }
+    else if (!hit) problems.push(`④ ${ENDS[end].label}: dev UI 规格缺项——${s.why}`)
+  }
+}
+// ④b 源码映射：鸿蒙 /tree 须带 `file`（取运行期 currentContent），否则面板跳不了编辑器
+{
+  const impl = read(path.join(ROOT, 'hosts/harmony/host-app/proteus_render/src/main/cpp/host_app_runtime_impl.h'))
+  if (impl && !/__proteusHostAppTree/.test(impl)) {
+    problems.push('④ 鸿蒙: hostAppRender 未取 `__proteusHostAppTree`（/tree 不带 file ⇒ 面板无源码映射）')
+  }
+}
+
+console.log('三端宿主变体一致性门禁（dev-host = 宿主：单一壳 + dev 件门控 + 功能齐全 + dev UI 规格）')
 for (const n of notes) console.log(`  ▸ ${n}`)
 if (problems.length) {
   console.error(`\n❌ 违反（${problems.length}）：`)

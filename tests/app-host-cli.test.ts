@@ -891,8 +891,8 @@ describe('★★★鸿蒙 dev 通道 · 批 2a 地基（热刷/心跳/日志 —
     const mp = fs.readFileSync(path.join(TH, 'entry/src/main/ets/shell/MainPage.ets'), 'utf-8')
     // ① dev 胶囊（右上 DEV 角标 + 可点菜单）
     expect(mp, 'dev 胶囊状态').toContain('devCapsule')
-    expect(mp, "角标文本 'DEV'").toContain("Text('DEV')")
-    expect(mp, '胶囊点击菜单').toContain('showDevMenu(')
+    expect(mp, '角标文本含 DEV').toMatch(/this\.edited \? 'DEV ✎' : 'DEV'/)
+    expect(mp, '胶囊点击开 sheet').toContain('toggleSheet(')
     // ② 启动占位（浅底 + App 名 + 转圈 + 首帧后撤）
     expect(mp, '占位状态').toContain('loading: boolean = true')
     expect(mp, '转圈组件').toContain('LoadingProgress()')
