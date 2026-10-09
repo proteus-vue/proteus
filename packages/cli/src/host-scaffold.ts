@@ -300,8 +300,10 @@ export function syncHarmonyShell(hostDir: string): string[] {
     try { return resolveTemplatesDir('harmony') } catch { return null }
   })()
   if (!templatesDir) return []
-  const srcSrc = path.join(templatesDir, 'entry', 'src', 'main', 'ets', 'shell')
-  const srcDest = path.join(hostDir, 'entry', 'src', 'main', 'ets', 'shell')
+  // ★同步整个 `ets/`（含 `shell/` 宿主壳 + `dev/` dev 调试图层）——决策 #728：dev 层（DevWatch/DevOverlay/
+  //   ProteusBuildConfig）也是**框架所有**，老宿主须自愈拿到（否则"dev 通道加了老宿主没有"——同 #721 族）。
+  const srcSrc = path.join(templatesDir, 'entry', 'src', 'main', 'ets')
+  const srcDest = path.join(hostDir, 'entry', 'src', 'main', 'ets')
   if (!fs.existsSync(srcSrc) || !fs.existsSync(srcDest)) return []
   let vars: Record<string, string> = {}
   try {

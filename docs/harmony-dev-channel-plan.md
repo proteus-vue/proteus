@@ -92,20 +92,26 @@ iOS/Android 的接线：`templates-host/{ios,android}` 的壳 + `ProteusBuildCon
   改为**随 HAR 自持**该平台适配头（引号 include 同目录解析，与布局无关）。
 - ✅ 真机验收：参考宿主 `run-superapp.sh`（下沉忠实、无回归）+ CLI `build --target harmony --package` 真机装机跑起来。
 
-### 步 2 · dev 地基（心跳 + 热刷 + 日志）——⬜ 待做（批 2）
-- `module.json5` 加 `ohos.permission.INTERNET`（或经 `proteus.config` 的 `targets.harmony.permissions`
-  → `native-config.ts` 幂等写入）。
-- 建鸿蒙版 `ProteusBuildConfig`（`DEV`/`DEV_URL`，对齐两端）+ `EntryAbility` 读 `want.parameters['proteusDev']`
-  → `AppStorage`（仿参考宿主 scene/scroll 写法）。
-- ArkTS 侧 dev-watch（`@ohos.net.http`）：轮询 `/version`→`/bundle`（热刷）+ `/ping`（上报 screen/env/perf）
-  + `/log`（`hilog` 或 console 转发）。★遵守本仓"禁盲等"：条件轮询，非固定 sleep。
-- `packageHarmonyHost` 加 `dev`/`devUrl`（覆写 buildConfig）——★`runAppDev` 的 `hdc install`+`aa start` 已在 #725 补。
+### 步 2 · dev 地基（心跳 + 热刷 + 日志）——✅ **已落地（决策 #728 · 2026-10-09）**
+- ✅ `module.json5` 加 `ohos.permission.INTERNET`（恒带；release 不发起网络 ⇒ 由 `DEV` 门控代码保证）。
+- ✅ 鸿蒙版 `ProteusBuildConfig.ets`（`DEV`/`DEV_URL`，对齐两端）+ `EntryAbility` 读 `want.parameters['proteusDev']`
+  → `AppStorage`（`--ps proteusDev <url>`；`DEV_URL` 编译期兜底）。
+- ✅ ArkTS 侧 dev-watch（`dev/DevWatch.ets`，`@kit.NetworkKit` 的 `http`）：有界 `setInterval` 轮询
+  `/version`→`/bundle`（**热刷**）+ `/ping`（上报 screen/env/perf）+ `/log`（原生日志）+ `/trace`（事件）+ `/tree`（POST 树）。
+  ★单飞（busy）+ 失败静默（尽力而为）——产品内的周期性 dev 轮询（非"等条件"盲等）。
+- ✅ `packageHarmonyHost` 加 `dev`/`devUrl`（编译前覆写 `ProteusBuildConfig.ets` 为 `DEV=true`·`DEV_URL`，编译后还原）；
+  `runAppDev` 的 `hdc install`+`aa start --ps proteusDev <url>`（#725 装起 + #728 注入）。
+- ✅ dev 可视化层 `dev/DevOverlay.ets`（角标替身：`flash` toast + 面板 URL）；`if (DEV || devBase)` 门控创建（release 零残留）。
+- ✅ **真机验收**：`proteus dev --target harmony` ⇒ `DEVWATCH_START`；心跳入 SSE（`host.screen/env/perf`）；
+  改源码 ⇒ `version 1→2` ⇒ host 自动重渲（`hot reload · v2`）；`/tree` 97 节点、`/log` 达面板。
 
-### 步 3 · dev 命令集（highlight / 节点树 / eval / 就地编辑）
-- `highlight`：runtime 加"内核 id → rect + 画描边"能力（参考 bench 的 rects 通路）。
-- `/tree`：新增"导出可内省树"的 C++ 方法（当前只有 RenderCmd）。
-- `eval` / 就地编辑：受 H2 约束——`eval` 进"重建 VM"（能读数据快照，但与活 App 状态的一致性需明确边界）；
-  就地编辑走"改节点数据 + 重渲"（同 iOS/Android 语义）。
+### 步 3 · dev 命令集（highlight / 就地编辑 / eval）——⬜ 待做（批 2b）
+- **`/cmd` 轮询 + highlight**（需 runtime 新增"内核 id → rect + 描边"原语）、**就地编辑**（改树+全量重挂）、
+  **eval**（一次性 VM 内求值）。对齐 Android/iOS 的 `applyCommand`。
+
+### 步 4 · 深化（可选）
+- **项目 `console.*` → 面板 Console·项目通道**（dev 垫片；一次性 VM 下代价待评）。
+- **逐帧/掉帧 perf 读数**（需帧采样器；本批 perf 仅 `renderMs`）。
 
 ---
 

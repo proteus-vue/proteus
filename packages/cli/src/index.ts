@@ -924,7 +924,7 @@ async function runAppDev(target: AppPlatform): Promise<number> {
       ? packageAndroidHost({ hostDir, projectRoot, dev: true, devUrl: server.url, outApk: outPkg })
       : target === 'ios'
         ? packageIosHost({ hostDir, projectRoot, dev: true, devUrl: server.url, outApp: outPkg })
-        : packageHarmonyHost({ hostDir, projectRoot, platform: 'harmony', outHap: outPkg })
+        : packageHarmonyHost({ hostDir, projectRoot, platform: 'harmony', outHap: outPkg, dev: true, devUrl: server.url })
   if (!pk.ok) {
     sPack.fail('打包失败')
     // ★★Apollo（决策 #684）：**完整**输出诊断（结构化根因 + 原文），不再只过滤 `✗` 行把详情丢掉。
@@ -1067,7 +1067,9 @@ async function runAppDev(target: AppPlatform): Promise<number> {
             }
           } else {
             hdcRun(['shell', 'aa', 'force-stop', bundleName])
-            const start = hdcRun(['shell', 'aa', 'start', '-a', 'EntryAbility', '-b', bundleName])
+            // ★dev server 地址注入（决策 #728）：`--ps proteusDev <url>` ⇒ 进 `want.parameters` ⇒ 壳写入 AppStorage
+            //   （与 Android `--es proteusDev` / iOS `--proteusDev` 同契约；`DEV_URL` 编译期兜底）。
+            const start = hdcRun(['shell', 'aa', 'start', '-a', 'EntryAbility', '-b', bundleName, '--ps', 'proteusDev', server.url])
             sInstall.done()
             if (!/success/i.test(start.out)) ui.warn(`启动命令未回执：${start.out.trim().slice(-160)}`)
             ui.hint(`dev server  ${server.url}`)

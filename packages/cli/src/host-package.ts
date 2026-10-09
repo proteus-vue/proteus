@@ -52,6 +52,10 @@ export interface PackageHostOptions {
    *   与 Android `outApk` / iOS `outApp` 同形——否则 CLI 打印的 `dist/app/harmony/proteus-host.hap` **并不存在**
    *   （真产物只留在 `host/entry/build/.../entry-default-*.hap`；用户实测「提示打包成功，项目里找不到 .hap」）。 */
   outHap?: string
+  /** ★★★dev 变体（决策 #728）：覆写 `ProteusBuildConfig.ets` 的 DEV/DEV_URL（bundle 走 HTTP dev server + 热刷）。 */
+  dev?: boolean
+  /** dev server 基址（如 `http://192.168.x.x:54789`）；dev=true 时写入 DEV_URL。 */
+  devUrl?: string
 }
 
 export interface PackageHostResult {
@@ -155,6 +159,25 @@ export function packageHarmonyHost(opts: PackageHostOptions): PackageHostResult 
   } else {
     log.push('⚠ 未找到 ohpm —— 若构建报“target 未找到”，请在 DevEco 里先同步依赖')
   }
+  // ②c ★★★dev 变体（决策 #728）：就地覆写 `ProteusBuildConfig.ets` 的 DEV/DEV_URL（bundle 走 HTTP + 热刷），
+  //   构建后**还原** release 默认（与 android/ios 同形——工程源码始终 release 形态）。用 finally 保证失败也还原。
+  //   唯一的 dev/release 分叉点 = 这份编译期常量（见宿主定位 #727）。
+  const buildCfgPath = path.join(hostDir, 'entry/src/main/ets/shell/ProteusBuildConfig.ets')
+  let restoreCfg: (() => void) | null = null
+  if (opts.dev === true) {
+    if (fs.existsSync(buildCfgPath)) {
+      const orig = fs.readFileSync(buildCfgPath, 'utf-8')
+      const url = (opts.devUrl ?? '').replace(/["'\\]/g, '')
+      const next = orig
+        .replace(/export const DEV: boolean = (?:true|false);/, 'export const DEV: boolean = true;')
+        .replace(/export const DEV_URL: string = '[^']*';/, `export const DEV_URL: string = '${url}';`)
+      fs.writeFileSync(buildCfgPath, next)
+      restoreCfg = () => { try { fs.writeFileSync(buildCfgPath, orig) } catch { /* 还原失败：源码保持 dev 形态（下次 build 覆写为 release） */ } }
+      log.push(`✓ dev 变体：ProteusBuildConfig DEV=true · DEV_URL=${url || '(未给)'}`)
+    } else {
+      log.push('⚠ 未找到 ProteusBuildConfig.ets——dev 变体将无法把 bundle 指向 dev server')
+    }
+  }
   log.push(`→ hvigorw assembleHap（${path.relative(path.dirname(deveco), hvigorw)}）`)
   try {
     const out = run(hvigorw, ['assembleHap', '--mode', 'module', '-p', 'product=default', '--no-daemon'], {
@@ -167,6 +190,8 @@ export function packageHarmonyHost(opts: PackageHostOptions): PackageHostResult 
   } catch (e) {
     const msg = e instanceof Error ? (e as { stdout?: string }).stdout ?? e.message : String(e)
     return { ok: false, hostDir, hap: null, screenContentCopied, log: [...log, `✗ hvigor 构建失败：`, String(msg).slice(-1500)] }
+  } finally {
+    if (restoreCfg) restoreCfg()   // ★dev 变体：编译完成即还原 BuildConfig 为 release 默认
   }
   // ④ 找产出 hap
   const outDir = path.join(hostDir, 'entry', 'build', 'default', 'outputs', 'default')

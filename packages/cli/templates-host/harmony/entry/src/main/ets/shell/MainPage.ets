@@ -27,6 +27,10 @@ import {
   attach, renderCommands, scrollRoot, clearRoot,
   appScreenCommands, appScreenContentHeight, appScreenHitAt, hostAppRender,
 } from 'proteus_render';
+// ★★★dev 通道（决策 #728）：变体常量 + dev-watch/角标（**dev 调试件**，release 门控不创建——守宿主定位 #727）。
+import { DEV, DEV_URL } from './ProteusBuildConfig';
+import { DevWatch } from '../dev/DevWatch';
+import { DevOverlay } from '../dev/DevOverlay';
 
 const DOMAIN = 0x0002;
 const TAG = 'ProteusHostPage';
@@ -95,6 +99,16 @@ struct MainPage {
   private momentumMovedFrames: number = 0;
   /** 请求帧用的空回调实例（见 `NudgeFrameCallback`）。 */
   private nudgeCb: NudgeFrameCallback = new NudgeFrameCallback();
+  /** ★dev 通道（决策 #728）：dev-watch + 角标（**release 不创建**）。 */
+  private devWatch: DevWatch | null = null;
+  private devOverlay: DevOverlay | null = null;
+  /** dev 上报缓冲（宿主读线程/主线程写→dev-watch 排空）：原生日志（`level\ttext`）与事件 trace（已编码 query）。 */
+  private devLogQueue: string[] = [];
+  private devTraceQueue: string[] = [];
+  /** 最近一次实例化树 JSON（dev-watch 取走上报 Elements）。 */
+  private pendingTreeJson: string = '';
+  /** 最近一次渲染耗时（ms；dev 心跳 perf 上报）。 */
+  private lastRenderMs: number = 0;
   private static vpW: number = 390;
   private static vpH: number = 844;
 
@@ -186,14 +200,57 @@ struct MainPage {
       });
       // 立即渲染一次（窗口 promise 未回前先出内容；env 到位后会再渲染一次覆盖）
       this.renderCurrent();
+      // ⑤ dev 通道（决策 #728）：`DEV` 编译期常量 或 启动参数注入的 dev server 地址 ⇒ 起 dev-watch + 角标。
+      //   ★dev 调试件**门控创建**（release 零残留）——宿主功能不受影响（守 #727）。
+      const devBase: string = MainPage.resolveDevBase();
+      if (DEV || devBase.length > 0) {
+        this.devOverlay = new DevOverlay();
+        this.devOverlay.setPanelUrl(devBase);
+        this.startDevWatch(devBase);
+        this.devLog('info', 'app ready · screen=' + this.current + ' · dev=' + (devBase.length > 0 ? devBase : '(无地址)'));
+      }
     } catch (e) {
       hilog.error(DOMAIN, TAG, 'HOST_PAGE_BOOT_ERROR %{public}s', JSON.stringify(e) ?? '');
     }
   }
 
+  /** dev server 基址：**启动参数优先**（`--ps proteusDev <url>` → AppStorage），其次**编译期** `DEV_URL`（与 Android/iOS 同契约）。 */
+  private static resolveDevBase(): string {
+    const fromArg: string = AppStorage.get<string>('proteusDev') ?? '';
+    if (fromArg.length > 0) { return fromArg.replace(/\/+$/, ''); }
+    return DEV_URL.replace(/\/+$/, '');
+  }
+
+  /** 起 dev-watch：注入读数/动作函数（ArkTS 结构类型不认对象字面量 ⇒ 逐字段赋）。 */
+  private startDevWatch(base: string): void {
+    if (base.length === 0) { return; }
+    const w = new DevWatch(base);
+    w.currentScreen = (): string => this.current;
+    w.envJson = (): string => JSON.stringify(this.envVars);
+    w.perfJson = (): string => JSON.stringify({ 'renderMs': this.lastRenderMs } as Record<string, number>);
+    w.takeTreeJson = (): string => { const t: string = this.pendingTreeJson; this.pendingTreeJson = ''; return t; };
+    w.takeLogs = (): string[] => { const q: string[] = this.devLogQueue; this.devLogQueue = []; return q; };
+    w.takeTraces = (): string[] => { const q: string[] = this.devTraceQueue; this.devTraceQueue = []; return q; };
+    w.applyBundle = (b: string, v: string): void => {
+      this.bundle = b;
+      this.renderCurrent();
+      if (this.devOverlay !== null) { this.devOverlay.flash('⟳ 已热重载 · v' + v); }
+      this.devLog('info', 'hot reload · v' + v + ' · screen=' + this.current);
+    };
+    this.devWatch = w;
+    w.start();
+  }
+
+  /** 宿主原生日志入队（dev-watch 排空上报面板 Console）。 */
+  private devLog(level: string, text: string): void {
+    if (this.devLogQueue.length > 200) { this.devLogQueue.shift(); }
+    this.devLogQueue.push(level + '\t' + text);
+  }
+
   aboutToDisappear(): void {
     this.stopMomentum();
     if (this.dSync !== null) { try { this.dSync.stop(); } catch (e) { /* 无 */ } }
+    if (this.devWatch !== null) { this.devWatch.stop(); }
   }
 
   /** 运行期渲染入参 → JSON（用接口声明，避 ArkTS 未型字面量） */
@@ -215,6 +272,7 @@ struct MainPage {
 
   /** 把**当前页**真画到屏上（运行期实例化 → appScreenCommands → renderCommands） */
   private renderCurrent(): void {
+    const t0: number = Date.now();
     const page: string = this.current;
     let nodes: string = this.nodesByPage.get(page) ?? '[]';
     const disp = display.getDefaultDisplaySync();
@@ -234,6 +292,8 @@ struct MainPage {
           const tree = rt['tree'] as Record<string, Object> | undefined;
           if (tree && Array.isArray(tree['nodes'])) {
             nodes = JSON.stringify(tree['nodes']);
+            // ★dev：缓存**整棵实例化树**（含 viewport，供面板 Elements）——dev-watch 取走上报 /tree
+            if (this.devWatch !== null) { this.pendingTreeJson = JSON.stringify(tree); }
             hilog.info(DOMAIN, TAG, 'HOST_PAGE_RUNTIME page=%{public}s nodes=%{public}d', page, (tree['nodes'] as Object[]).length);
           }
           this.saveSnapshot(rt);
@@ -242,12 +302,14 @@ struct MainPage {
           if (cur !== undefined && cur.length > 0) { this.current = cur; }
         } catch (re) {
           hilog.error(DOMAIN, TAG, 'HOST_PAGE_RUNTIME_ERROR %{public}s', JSON.stringify(re) ?? '');
+          this.devLog('error', 'runtime error: ' + (JSON.stringify(re) ?? ''));
         }
       }
       this.paintTree(this.current, nodes);
     } catch (e) {
       hilog.error(DOMAIN, TAG, 'HOST_PAGE_RENDER_ERROR %{public}s', JSON.stringify(e) ?? '');
     }
+    this.lastRenderMs = Date.now() - t0;
   }
 
   /** 把某屏 nodes 画到屏上（appScreenCommands → renderCommands）+ 重算/重放滚动范围 */
@@ -375,11 +437,30 @@ struct MainPage {
       }
       let nodes: string = this.nodesByPage.get(this.current) ?? '[]';
       const tree = rt['tree'] as Record<string, Object> | undefined;
-      if (tree && Array.isArray(tree['nodes'])) { nodes = JSON.stringify(tree['nodes']); }
+      if (tree && Array.isArray(tree['nodes'])) {
+        nodes = JSON.stringify(tree['nodes']);
+        if (this.devWatch !== null) { this.pendingTreeJson = JSON.stringify(tree); }
+      }
       this.paintTree(this.current, nodes);
+      // ★dev 事件 trace（决策 #728 → 面板 Events）：命中 → 导航。`handled`/`fired` 由运行期返回（本批最简：handled=导航是否发生）。
+      if (this.devWatch !== null) {
+        const handled: boolean = target !== undefined && target.length > 0 && target !== prev;
+        this.pushTrace('tap', chain, handled, []);
+      }
     } catch (e) {
       hilog.error(DOMAIN, TAG, 'HOST_PAGE_TAP_ERROR %{public}s', JSON.stringify(e) ?? '');
     }
+  }
+
+  /** dev 事件 trace 入队（dev-watch 排空 → `/trace?<encoded>`）。字段与 dev server `/trace` 契约一致。 */
+  private pushTrace(type: string, chain: number[], handled: boolean, fired: number[]): void {
+    const q: string = 'type=' + encodeURIComponent(type)
+      + '&id=' + (chain.length > 0 ? chain[chain.length - 1] : 0)
+      + '&chain=' + encodeURIComponent(chain.join(','))
+      + '&handled=' + (handled ? '1' : '0')
+      + '&fired=' + encodeURIComponent(fired.join(','));
+    if (this.devTraceQueue.length > 80) { this.devTraceQueue.shift(); }
+    this.devTraceQueue.push(q);
   }
 
   /** 按内容位移（vp；正 = offset 增大）滚动一步，钳到 [0,maxScroll]。返回**实际位移**（钳制后）。 */
