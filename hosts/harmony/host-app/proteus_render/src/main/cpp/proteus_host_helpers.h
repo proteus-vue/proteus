@@ -288,6 +288,18 @@ static inline std::string extractValueAfterKey(const std::string& json, const ch
     return "";
 }
 
+/** `[2,3,4]` → int 数组（零依赖；命中断点链解析用）——runtime 桥与 dev 装置共用。 */
+static inline std::vector<int> parseIntArrayBare(const std::string& s) {
+    std::vector<int> out;
+    const char* p = s.c_str();
+    while (*p) {
+        while (*p && !isdigit((unsigned char)*p)) p++;
+        if (!*p) break;
+        out.push_back((int)strtol(p, const_cast<char**>(&p), 10));
+    }
+    return out;
+}
+
 static inline void parseRects(const std::string& s, std::unordered_map<int, Rect>& out) {
     size_t p = 0;
     while (true) {

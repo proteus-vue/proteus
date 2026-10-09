@@ -18,7 +18,7 @@ export {
 } from 'libproteus_render.so'
 export type { ProteusRenderStats } from 'libproteus_render.so'
 
-// 宿主桥（appScreen 桥 + 壳生命周期桥）——同属 HAR runtime
+// 宿主桥（appScreen 桥 + 壳生命周期桥 + 应用运行期驱动）——同属 HAR runtime
 export {
   appScreenCommands,
   appScreenContentHeight,
@@ -26,4 +26,7 @@ export {
   appScreenAnimTick,
   hostRtShellInstall,
   hostRtShellEvent,
+  hostAppBoot,
+  hostAppDrive,
+  hostAppRender,
 } from 'libproteus_host.so'

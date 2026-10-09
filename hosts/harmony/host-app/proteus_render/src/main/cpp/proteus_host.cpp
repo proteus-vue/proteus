@@ -8,6 +8,7 @@
 //     已在 scripts/check-host-layering.mjs 具名登记（待后端拆分）。
 //   NAPI 模块名 `proteus_host`（.so = libproteus_host.so）；ArkTS 侧 `import ... from 'proteus_host'`。
 #include "proteus_host_helpers.h"
+#include "host_app_runtime_impl.h"
 #include <arkui/native_node_napi.h>
 
 #define PROTEUS_HOST_DOMAIN 0x0003
@@ -793,6 +794,11 @@ static napi_value HostBridgeInit(napi_env env, napi_value exports) {
         {"appScreenAnimTick", nullptr, AppScreenAnimTick, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"hostRtShellInstall", nullptr, HostRtShellInstall, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"hostRtShellEvent", nullptr, HostRtShellEvent, nullptr, nullptr, nullptr, napi_default, nullptr},
+        // ★★★应用运行期驱动（中性名）——一次性 VM 里 eval bundle + boot + 实例化上屏（见 host_app_runtime_impl.h）。
+        //   此前在 dev 装置（proteus_bench 的 superapp*）⇒ 壳反向依赖 dev；现归 runtime（换一个 App 不用改）。
+        {"hostAppBoot", nullptr, HostAppBoot, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"hostAppDrive", nullptr, HostAppDrive, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"hostAppRender", nullptr, HostAppRender, nullptr, nullptr, nullptr, napi_default, nullptr},
     };
     napi_define_properties(env, exports, sizeof(desc) / sizeof(desc[0]), desc);
     return exports;

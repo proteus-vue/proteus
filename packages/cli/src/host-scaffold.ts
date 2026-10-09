@@ -132,6 +132,9 @@ export function resolveRuntimeDirs(platform: HostPlatform, override?: string[]):
       // ★★★随包内置 runtime（决策 #666）：无框架 checkout 时用它——`templates-host/prebuilt/<platform>/`。
       //   单单元端的**产物型**单元（如 android 的 AAR）在此；用 artifacts 而非 dest（prebuilt 布局独立于目标 dest）。
       spec.runtimeUnits.length === 1 && unit.artifact ? path.join(CLI_PKG_ROOT, 'templates-host', 'prebuilt', platform) : undefined,
+      // ★★★随包内置 runtime（**目录型**单元 · 决策 #725）：harmony 的 HAR 是**目录**（C++ 源 + Rust 核 .a），
+      //   同样需要"无框架 checkout 也能装机"——故 prebuilt 下按 unit.dest 放一份（`prebuilt/<platform>/<dest>`）。
+      unit.artifact ? undefined : path.join(CLI_PKG_ROOT, 'templates-host', 'prebuilt', platform, unit.dest),
       path.join(CLI_PKG_ROOT, 'templates-host', platform, unit.dest),
     ].filter((c): c is string => !!c)
     const hit = candidates.find((c) => fs.existsSync(unit.artifact ? path.join(c, unit.artifact) : path.join(c, unit.marker)))
@@ -275,6 +278,42 @@ export function syncAndroidShell(hostDir: string): string[] {
     const dest = path.join(srcDest, rel)
     const content = fs.readFileSync(full, 'utf-8').replace(/\{\{(\w+)\}\}/g, (_m, k: string) => vars[k] ?? `{{${k}}}`)
     if (fs.existsSync(dest) && fs.readFileSync(dest, 'utf-8') === content) return // 已一致 ⇒ 不计入（幂等）
+    fs.mkdirSync(path.dirname(dest), { recursive: true })
+    fs.writeFileSync(dest, content)
+    synced.push(rel)
+  })
+  return synced
+}
+
+/**
+ * ★★★鸿蒙**壳源**定向同步（决策 #725）——把模板 `templates-host/harmony/entry/src/main/ets/shell/**`
+ *   覆盖进已存在宿主（与 `syncAndroidShell` 同形）。
+ *
+ * 【为什么单列】鸿蒙壳在 `entry/src/main/ets/shell/`（非 `hostDir/shell/`）⇒ `syncShellTemplates` 跳过
+ *   （它要求 `hostDir/shell/` 存在）⇒ **已生成宿主永远拿不到模板新 wiring**（与 #721 Android 同源同形：
+ *   用户实测「模板加了新功能，老宿主全无」）。用户本轮验收即"cli 就能跑起来"——壳模板必须能自愈。
+ * 【覆盖式】`dist/app/harmony/host/` 是**构建产物**（CLI 生成），壳文件**框架所有**；用户改的是**项目** src/。
+ * @returns 刷新的文件名（相对 ets/shell）
+ */
+export function syncHarmonyShell(hostDir: string): string[] {
+  const templatesDir = (() => {
+    try { return resolveTemplatesDir('harmony') } catch { return null }
+  })()
+  if (!templatesDir) return []
+  const srcSrc = path.join(templatesDir, 'entry', 'src', 'main', 'ets', 'shell')
+  const srcDest = path.join(hostDir, 'entry', 'src', 'main', 'ets', 'shell')
+  if (!fs.existsSync(srcSrc) || !fs.existsSync(srcDest)) return []
+  let vars: Record<string, string> = {}
+  try {
+    const hj = JSON.parse(fs.readFileSync(path.join(hostDir, 'proteus.host.json'), 'utf-8')) as { appName?: string; bundleName?: string; bundleId?: string }
+    const bn = hj.bundleName ?? hj.bundleId ?? ''
+    vars = { appName: hj.appName ?? '', bundleName: bn, bundleId: hj.bundleId ?? bn }
+  } catch { /* 无 manifest ⇒ 空替换（占位保留，仅注释，无害） */ }
+  const synced: string[] = []
+  walk(srcSrc, (full, rel) => {
+    const dest = path.join(srcDest, rel)
+    const content = fs.readFileSync(full, 'utf-8').replace(/\{\{(\w+)\}\}/g, (_m, k: string) => vars[k] ?? `{{${k}}}`)
+    if (fs.existsSync(dest) && fs.readFileSync(dest, 'utf-8') === content) return // 幂等
     fs.mkdirSync(path.dirname(dest), { recursive: true })
     fs.writeFileSync(dest, content)
     synced.push(rel)

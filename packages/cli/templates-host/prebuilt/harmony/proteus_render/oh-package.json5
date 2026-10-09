@@ -1,0 +1,12 @@
+{
+  "name": "proteus_render",
+  "version": "1.0.0",
+  "description": "Proteus 鸿蒙渲染运行时（HAR · 项目无关的 RenderNode 直绘 + NAPI 原生模块）",
+  "main": "Index.ets",
+  "author": "",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "libproteus_render.so": "file:./src/main/cpp/types/libproteus_render",
+    "libproteus_host.so": "file:./src/main/cpp/types/libproteus_host"
+  }
+}

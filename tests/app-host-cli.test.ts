@@ -666,3 +666,76 @@ describe('★#692 runtime/壳 自愈同步（框架改动同步进已存在宿�
     }
   })
 })
+
+describe('★★★鸿蒙运行期宿主（决策 #725 · 与 Android/iOS 同级）', () => {
+  const CLI = path.join(ROOT, 'packages/cli')
+  const shell = path.join(CLI, 'templates-host/harmony/entry/src/main/ets/shell')
+  const harCpp = path.join(ROOT, 'hosts/harmony/host-app/proteus_render/src/main/cpp')
+
+  it('CLI 模板壳走运行期（eval bundle-superapp + hostAppRender），非静态屏内容挂载', () => {
+    const src = fs.readFileSync(path.join(shell, 'MainPage.ets'), 'utf-8')
+    expect(src, '读内嵌运行期 bundle').toContain("getRawFileContentSync('bundle-superapp.js')")
+    expect(src, '运行期渲染入口（中性名）').toContain('hostAppRender(')
+    expect(src, '命中链上屏').toContain('appScreenHitAt(')
+    expect(src, '一次性 VM 状态回灌').toMatch(/snapshot/i)
+  })
+
+  it('runtime HAR 下沉驱动簇（中性名 hostAppBoot/Drive/Render；无 superapp 专名进 runtime）', () => {
+    // 中性头在场，且**不含** superapp 字样（否则 check:host-layering 的 runtime 禁词必红）
+    const impl = fs.readFileSync(path.join(harCpp, 'host_app_runtime_impl.h'), 'utf-8')
+    expect(impl, '中性导出').toContain('HostAppRender')
+    expect(impl, '中性别名协议全局').toContain('__proteusHostAppRender')
+    const codeOnly = impl.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
+    expect(codeOnly, 'runtime 中性头代码里不得含 superapp 专名').not.toMatch(/superapp/i)
+    // 桥注册三导出 + Index.ets/d.ts 暴露
+    const host = fs.readFileSync(path.join(harCpp, 'proteus_host.cpp'), 'utf-8')
+    for (const n of ['hostAppBoot', 'hostAppDrive', 'hostAppRender']) {
+      expect(host, `桥注册 ${n}`).toContain(`{"${n}", nullptr,`)
+    }
+    const idx = fs.readFileSync(path.join(ROOT, 'hosts/harmony/host-app/proteus_render/Index.ets'), 'utf-8')
+    expect(idx, 'Index.ets 导出 hostAppRender').toContain('hostAppRender,')
+  })
+
+  it('参考宿主壳改依赖 runtime（不再 import dev 装置 libproteus_bench）', () => {
+    const sp = fs.readFileSync(path.join(ROOT, 'hosts/harmony/host-app/entry/src/main/ets/shell/Superapp.ets'), 'utf-8')
+    expect(sp, '从 runtime 取 hostAppRender').toContain('hostAppRender')
+    expect(sp, '不再 import libproteus_bench').not.toContain("from 'libproteus_bench.so'")
+    const lay = fs.readFileSync(path.join(ROOT, 'scripts/check-host-layering.mjs'), 'utf-8')
+    expect(lay, '棘轮登记已清零移除').not.toContain("entry/src/main/ets/shell/Superapp.ets'")
+  })
+
+  it('bridge 暴露中性协议别名（runtime 侧调 __proteusHostApp*）', () => {
+    const bridge = fs.readFileSync(path.join(ROOT, 'hosts/shared/bridge/entry-superapp.ts'), 'utf-8')
+    expect(bridge, '别名定义').toContain('__proteusHostAppRender')
+    expect(bridge, '别名 = 同一实现').toMatch(/__proteusHostAppRender\s*=\s*__HOSTAPP\.__proteusSuperappRender/)
+  })
+
+  it('CLI 打包拷运行期 bundle 进 rawfile + 鸿蒙装/起走 hdc', () => {
+    const pkg = fs.readFileSync(path.join(CLI, 'src/host-package.ts'), 'utf-8')
+    expect(pkg, '拷 bundle-superapp.js 进 rawfile').toContain("path.join(rf, 'bundle-superapp.js')")
+    // 自持 runtime：prebuilt/harmony 目录（无框架 checkout 也能装机）
+    const scaf = fs.readFileSync(path.join(CLI, 'src/host-scaffold.ts'), 'utf-8')
+    expect(scaf, 'prebuilt 目录型单元解析').toMatch(/templates-host'?, ?'prebuilt'?, ?platform, unit\.dest/)
+    expect(
+      fs.existsSync(path.join(CLI, 'templates-host/prebuilt/harmony/proteus_render/src/main/cpp/CMakeLists.txt')),
+      'prebuilt/harmony runtime 目录应在场',
+    ).toBe(true)
+    const idx = fs.readFileSync(path.join(CLI, 'src/index.ts'), 'utf-8')
+    expect(idx, 'runAppDev 鸿蒙 hdc install').toMatch(/hdc.*install|findHdc/)
+    expect(idx, '鸿蒙 aa start EntryAbility').toContain("'-a', 'EntryAbility'")
+  })
+
+  it('鸿蒙壳源自愈（syncHarmonyShell，防"模板升级老宿主拿不到"——同 #721 Android）', () => {
+    const pkg = fs.readFileSync(path.join(CLI, 'src/host-package.ts'), 'utf-8')
+    expect(pkg, 'packageHarmonyHost 调壳源自愈').toContain('syncHarmonyShell(hostDir)')
+    const scaf = fs.readFileSync(path.join(CLI, 'src/host-scaffold.ts'), 'utf-8')
+    expect(scaf, 'syncHarmonyShell 导出').toContain('export function syncHarmonyShell(')
+  })
+
+  it('平台适配头随 HAR 自持（与 platform/ 源逐字节一致——防两份漂移）', () => {
+    const vendored = path.join(harCpp, 'proteus_text_platform.h')
+    const source = path.join(ROOT, 'platform/harmony/proteus-platform/src/main/cpp/proteus_text_platform.h')
+    expect(fs.existsSync(vendored), 'HAR 自持平台适配头（CLI 宿主深度无关）').toBe(true)
+    expect(fs.readFileSync(vendored, 'utf-8'), '逐字节等于 platform/ 源').toBe(fs.readFileSync(source, 'utf-8'))
+  })
+})

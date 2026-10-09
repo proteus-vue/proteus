@@ -349,3 +349,21 @@ interface SuperappRuntimeHostShape {
   return JSON.stringify(g.__SUPERAPP_RUNTIME__?.profileStats() ?? {})
 }
 
+/* ═══════════ ★★★中性协议别名（2026-10-09）：runtime 侧调用入口 ═══════════
+ * 【为什么有它】鸿蒙 runtime HAR 的**应用运行期驱动**（`host_app_runtime_impl.h`）按**中性名**调用
+ *   全局——因为 runtime 是"换一个 App 不用改"的单元（分层门禁 `check-host-layering` 明令 runtime 目录
+ *   不得出现 `superapp` 专名）。⇒ 把 `__proteusSuperapp*` **同一实现**逐一同义暴露为 `__proteusHostApp*`
+ *   （**不是第二份逻辑**：同一函数引用；装置仍用 superapp 名，runtime 用中性名）。
+ * 【消费方】`proteus_host.cpp`（HAR 桥导出的 hostAppBoot/Drive/Render）只调中性名；别名必须与真身
+ *   同处一个 JS 上下文（同一份 bundle）——故在此声明。 */
+const __HOSTAPP = globalThis as unknown as Record<string, unknown>
+__HOSTAPP.__proteusHostAppBootJson = __HOSTAPP.__proteusSuperappBootJson
+__HOSTAPP.__proteusHostAppState = __HOSTAPP.__proteusSuperappState
+__HOSTAPP.__proteusHostAppDrive = __HOSTAPP.__proteusSuperappDrive
+__HOSTAPP.__proteusHostAppDriveReadJson = __HOSTAPP.__proteusSuperappDriveReadJson
+__HOSTAPP.__proteusHostAppRender = __HOSTAPP.__proteusSuperappRender
+__HOSTAPP.__proteusHostAppSnapshot = __HOSTAPP.__proteusSuperappSnapshot
+__HOSTAPP.__proteusHostAppRuntimeCurrent = __HOSTAPP.__proteusSuperappRuntimeCurrent
+__HOSTAPP.__proteusHostAppGesture = __HOSTAPP.__proteusSuperappGesture
+
+

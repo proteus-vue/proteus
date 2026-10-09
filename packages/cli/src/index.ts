@@ -14,7 +14,8 @@ import { buildDir, planTargetedBuild, runTargetedBuildProgrammatic } from './bui
 import { parseConformanceArgs, runConformance, runConformanceDemo } from './conformance'
 import { parseHostArgs, runHostPush, runHostSigning } from './host'
 import { parseCreateHostArgs, runCreateHost, createHost, deriveBundleName } from './host-scaffold'
-import { packageHarmonyHost, packageIosHost, packageAndroidHost, resolveDeveloperDir, parseIosDeviceId } from './host-package'
+import { packageHarmonyHost, packageIosHost, packageAndroidHost, resolveDeveloperDir, parseIosDeviceId, resolveDevEco } from './host-package'
+import { findHdc } from './host-paths'
 import { applyNativeConfigFromProject, resolveNativeConfigFromProject } from './native-config'
 import { appHostDir, appBundleFile, APP_PACKAGE_NAME, isAppPlatform, type AppPlatform } from './targets'
 import { buildAppBundle } from './app-bundle'
@@ -1019,8 +1020,51 @@ async function runAppDev(target: AppPlatform): Promise<number> {
       }
     }
   } else if (target === 'harmony') {
-    ui.info('harmony 的「装 + 起」请用 hdc')
-    ui.info(`debug 包：${path.relative(projectRoot, outPkg)} · 启动注入 dev server：${server.url}`)
+    // ★★★鸿蒙装 + 起（决策 #725）：hdc（DevEco 自带设备工具）。此前只打印"请用 hdc"提示 stub
+    //   ⇒ `proteus dev --target harmony` 实际没起设备；现补齐"装 + 起"，使 CLI 独立可启动（对齐 android/ios）。
+    const hap = 'hap' in pk ? (pk as { hap: string | null }).hap : null
+    if (!hap) {
+      ui.info('harmony 未产出 hap——见上方打包日志')
+    } else {
+      const { execFileSync } = await import('node:child_process')
+      const hdcInfo = findHdc(resolveDevEco())
+      if (!hdcInfo) {
+        ui.warn('未找到 hdc（DevEco 设备工具）——装 DevEco Studio 或用 PROTEUS_HDC 指定')
+        ui.hint(`手动：hdc install ${path.relative(projectRoot, hap)}`)
+      } else {
+        const hdc = hdcInfo.hdc
+        const hdcRun = (args: string[]): { ok: boolean; out: string } => {
+          try { return { ok: true, out: execFileSync(hdc, args, { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 8 * 1024 * 1024 }) } }
+          catch (e) { return { ok: false, out: String((e as { stderr?: string }).stderr ?? (e as Error).message) } }
+        }
+        const sInstall = ui.step('安装到设备')
+        const dt = hdcRun(['list', 'targets', '-v'])
+        if (!/Connected/i.test(dt.out)) {
+          sInstall.fail('未找到已连接鸿蒙设备')
+          ui.hint('设备端：开发者选项 → USB 调试打开 + 点「允许」；密钥须 RSA-3072（bash hosts/harmony/hdc.sh check 诊断）')
+          ui.hint(`手动：hdc install ${path.relative(projectRoot, hap)}`)
+        } else {
+          hdcRun(['shell', 'aa', 'force-stop', bundleName])   // 旧进程可能已不在 ⇒ 忽略
+          let r = hdcRun(['install', hap])
+          if (!/success/i.test(r.out)) {
+            sInstall.note('版本/签名冲突 ⇒ 卸载旧包后重装')
+            hdcRun(['uninstall', bundleName])
+            r = hdcRun(['install', hap])
+          }
+          if (!/success/i.test(r.out)) {
+            sInstall.fail('hdc install 失败')
+            ui.dim(r.out.trim().split('\n').slice(-3).join('\n')).split('\n').forEach((l) => ui.hint(l))
+            ui.hint(`装机需已配置签名（DevEco → Project Structure → Signing Configs → Automatically generate signature）`)
+          } else {
+            hdcRun(['shell', 'aa', 'force-stop', bundleName])
+            const start = hdcRun(['shell', 'aa', 'start', '-a', 'EntryAbility', '-b', bundleName])
+            sInstall.done()
+            if (!/success/i.test(start.out)) ui.warn(`启动命令未回执：${start.out.trim().slice(-160)}`)
+            ui.hint(`dev server  ${server.url}`)
+          }
+        }
+      }
+    }
   }
 
   // ⑤ 持续运行（Ctrl+C 退出）——watch 在 server 内部
