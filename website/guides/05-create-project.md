@@ -16,6 +16,8 @@ cd my-app
 npm install
 ```
 
+> **CLI 从哪来**：`npm create` 由 npx 拉取脚手架（`@proteus-vue/create-proteus`，无需预装）；`npm install` 把 CLI（`@proteus-vue/cli`）连同框架包作为**工程 devDependency** 装进本工程 `node_modules`。此后 `npm run dev:web` 等脚本、以及 `npx proteus …` 都可用——**无需全局安装 CLI**。
+
 脚手架没有交互式提问：项目名就是命令参数（自动规范化为小写字母 / 数字 / 连字符——大写与非法字符替换为 `-`、首尾 `-` 去除）；目标目录已存在且非空时会拒绝。
 
 ## 它做三件事

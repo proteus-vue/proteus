@@ -16,6 +16,8 @@ cd my-app && npm install
 npm run dev:web     # 浏览器直接跑 Web 端
 ```
 
+> **CLI 无需单独安装**：`npm create` 由 npx 拉取脚手架（`create-proteus`，一次性、无需预装）；紧接着 `npm install` 把 CLI（`@proteus-vue/cli`）作为**工程 devDependency** 装进 `node_modules`——`npm run dev:web` 等脚本随之可用。**不需要 `npm i -g @proteus-vue/cli`**：CLI 是**工程本地工具**，版本随工程锁定（这与 Vite/Vue 一致，避免全局版本与工程要求错配）。
+
 > 想先看看能做出什么？打开 [Playground](/playground) 在浏览器里改代码、实时看编译产物——零安装。
 
 ## 环境清单
