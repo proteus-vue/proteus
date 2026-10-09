@@ -10,6 +10,15 @@
     "dev:mp": "proteus dev --target skyline",
     "build:mp": "proteus build --target skyline",
     "debug:mp": "PROTEUS_DEBUG=1 proteus build --target skyline",
+    "dev:android": "proteus dev --target android",
+    "build:android": "proteus build --target android",
+    "package:android": "proteus build --target android --package",
+    "dev:ios": "proteus dev --target ios",
+    "build:ios": "proteus build --target ios",
+    "package:ios": "proteus build --target ios --package",
+    "dev:harmony": "proteus dev --target harmony",
+    "build:harmony": "proteus build --target harmony",
+    "package:harmony": "proteus build --target harmony --package",
     "proteus": "proteus"
   },
   "dependencies": {

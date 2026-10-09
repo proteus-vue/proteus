@@ -96,11 +96,13 @@ const config: ProteusConfig = {
 | `npm run build:web` | `proteus build --target web` (vue-tsc typecheck + vite build) |
 | `npm run dev:mp` | `proteus dev --target skyline` (gen-routes + vite dev) |
 | `npm run build:mp` | `proteus build --target skyline` (gen-routes → vue-tsc → Mini Program artifacts) |
-| `npx proteus build --target ios` | Compile the screen-content IR for iOS → `dist/app/ios/` |
-| `npx proteus build --target android` | → `dist/app/android/` |
-| `npx proteus build --target harmony` | → `dist/app/harmony/` |
 | `npm run debug:mp` | `PROTEUS_DEBUG=1` — artifacts with source line comments + decision trace |
+| `npm run dev:android` / `dev:ios` / `dev:harmony` | `proteus dev --target <target>` (App hot-reload dev: install host → LAN dev server → saving source hot-reloads; needs a device + the target toolchain) |
+| `npm run build:android` / `build:ios` / `build:harmony` | `proteus build --target <target>` (compile the screen-content IR → `dist/app/<target>/`) |
+| `npm run package:android` / `package:ios` / `package:harmony` | `proteus build --target <target> --package` (+ platform toolchain to produce an installer: apk / app / hap) |
 | `npm run proteus` | CLI entry (same as `npx proteus`) |
+
+> The three App scripts depend on their respective toolchain and a device (Android SDK/device · Xcode/certificate · DevEco/signing); read [Environment requirements](/docs/04-requirements) before first use.
 
 > Scripts are just aliases of CLI commands — `npx proteus dev --target web` is equivalent. The CLI is the single driver: load `proteus.config.ts` → assemble the vite config → start/build; npm scripts and vite.config are never in the path.
 

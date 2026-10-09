@@ -71,4 +71,19 @@ describe('create-proteus copyTemplate', () => {
     expect(page).toContain('<route>')
     expect(page).toContain('Hello Proteus')
   })
+
+  it('★模板 scripts 覆盖 App 三端（dev/build/package）+ 严格等于 CLI 别名', () => {
+    const dir = path.join(TMP, 'scripts-check')
+    copyTemplate(dir, { name: 'x' }, TEMPLATES)
+    const s = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf-8')).scripts as Record<string, string>
+    for (const t of ['android', 'ios', 'harmony']) {
+      // 「scripts = CLI 别名」原则：逐字相等（编译/带包两态）
+      expect(s[`dev:${t}`], `dev:${t}`).toBe(`proteus dev --target ${t}`)
+      expect(s[`build:${t}`], `build:${t}`).toBe(`proteus build --target ${t}`)
+      expect(s[`package:${t}`], `package:${t}`).toBe(`proteus build --target ${t} --package`)
+    }
+    // Web/小程序入口不得因新增 App 端而改动
+    expect(s['dev:web']).toBe('proteus dev --target web')
+    expect(s['build:mp']).toBe('proteus build --target skyline')
+  })
 })

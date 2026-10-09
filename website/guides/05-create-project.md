@@ -95,11 +95,13 @@ const config: ProteusConfig = {
 | `npm run build:web` | `proteus build --target web`（vue-tsc 类型检查 + vite build） |
 | `npm run dev:mp` | `proteus dev --target skyline`（gen-routes + vite dev） |
 | `npm run build:mp` | `proteus build --target skyline`（gen-routes → vue-tsc → 小程序产物四件套） |
-| `npx proteus build --target ios` | 编译 iOS 屏内容 IR → `dist/app/ios/` |
-| `npx proteus build --target android` | → `dist/app/android/` |
-| `npx proteus build --target harmony` | → `dist/app/harmony/` |
 | `npm run debug:mp` | `PROTEUS_DEBUG=1` 产物注入源码行号注释 + 决策 trace |
+| `npm run dev:android` / `dev:ios` / `dev:harmony` | `proteus dev --target <端>`（App 端热刷调试：装宿主 → 局域网 dev server → 改源码即热刷；需设备 + 对应工具链） |
+| `npm run build:android` / `build:ios` / `build:harmony` | `proteus build --target <端>`（编译屏内容 IR → `dist/app/<端>/`） |
+| `npm run package:android` / `package:ios` / `package:harmony` | `proteus build --target <端> --package`（+ 平台工具链打安装包：apk / app / hap） |
 | `npm run proteus` | CLI 入口（`npx proteus` 同义） |
+
+> App 三端脚本依赖各自工具链与设备（Android SDK/设备 · Xcode/证书 · DevEco/签名），首次用前先看[环境要求](/docs/04-requirements)。
 
 > 脚本只是 CLI 命令的别名——直接 `npx proteus dev --target web` 等价。CLI 是唯一驱动：加载 `proteus.config.ts` → 框架组装 vite 配置 → 启动/构建，全程不经过 npm 脚本与 vite.config。
 
