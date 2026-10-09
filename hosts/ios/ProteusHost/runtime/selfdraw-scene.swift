@@ -3569,7 +3569,17 @@ final class SelfDrawView: UIView {
         switch key {
         case "backgroundColor": layer.backgroundColor = parseHexColor(value)?.cgColor
         case "borderColor": layer.borderColor = parseHexColor(value)?.cgColor
-        case "color": (layer as? CATextLayer)?.foregroundColor = parseHexColor(value)?.cgColor
+        case "color":
+            // ★文本色（决策 #704 修）：`tl.string` 若是 **NSAttributedString**（声明了 line-height/字距/装饰），
+            //   颜色**烘焙在富文本属性里** ⇒ 只设 `foregroundColor` **不生效**。⇒ 两处都改（纯串走 foregroundColor，
+            //   富文本另**重写属性里的 .foregroundColor**）。非文本层 ⇒ 不支持（返 false，不静默）。
+            guard let tl = layer as? CATextLayer, let cg = parseHexColor(value)?.cgColor else { return false }
+            tl.foregroundColor = cg
+            if let attr = tl.string as? NSAttributedString {
+                let m = NSMutableAttributedString(attributedString: attr)
+                m.addAttribute(.foregroundColor, value: UIColor(cgColor: cg), range: NSRange(location: 0, length: m.length))
+                tl.string = m
+            }
         case "opacity": guard let d = Double(value) else { return false }; layer.opacity = Float(max(0, min(1, d)))
         case "borderRadius": guard let d = Double(value) else { return false }; layer.cornerRadius = CGFloat(d)
         case "borderWidth": guard let d = Double(value) else { return false }; layer.borderWidth = CGFloat(d)
@@ -4525,7 +4535,9 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         lastGeomChanged = 0
         // ★DevTools 性能计数（决策 #698）：mount 次数（与 Android `draw.mountCalls` 同口径）
         mountCalls += 1
-        return render(treeJson: treeJson, phase: "mount")
+        // ★force=全量重建（决策 #704）：`mount` 语义 = 建/重挂屏（非频繁更新——更新走 applyOps/updatePatches）
+        //   ⇒ 恒全量重建，重置（remount）时按项目内容重配层、覆盖就地编辑。★增量 diff 只服务"更新"。
+        return render(treeJson: treeJson, phase: "mount", force: true)
     }
 
     func update(_ treeJson: String) -> String {
@@ -7088,7 +7100,7 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         for i in nodes.indices { resolveEnvTokens(inNode: &nodes[i], table: table) }
     }
 
-    private func render(treeJson: String, phase: String) -> String {
+    private func render(treeJson: String, phase: String, force: Bool = false) -> String {
         guard let view = view else { return "{\"ok\":false,\"error\":\"view 未设置\"}" }
         let t0 = CFAbsoluteTimeGetCurrent()
 
@@ -7185,7 +7197,9 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         //   走增量 ⇒ fixed 层仍留在原父内（随内容滚动）⇒ 真机现象「iOS 的 fixed 徽标不显示/随滚动跑掉」。
         //   ⇒ 有 fixed 就强制全量重建（fixed 页面通常只有少数几个，全量成本可接受；语义更正确）。
         let hasFixedNode = nodes.contains { ($0["position"] as? String) == "fixed" }
-        let maybePatches = (handle != 0 && !hasFixedNode) ? diffPatches(from: lastNodes, to: nodes) : nil
+        // ★`force`（决策 #704 · 重置）：跳过增量 diff ⇒ 走**全量重建**（destroy+create+重建全部层）——
+        //   就地编辑改的是**层属性**，树未变 ⇒ 增量 0 patch 不会重建层、编辑残留；全量重建按项目内容重配层。
+        let maybePatches = (handle != 0 && !hasFixedNode && !force) ? diffPatches(from: lastNodes, to: nodes) : nil
         let diffMs = (CFAbsoluteTimeGetCurrent() - tDiff0) * 1000
         if let patches = maybePatches {
             let pj = jsonString2(patches)
