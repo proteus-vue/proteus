@@ -72,8 +72,11 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
   main{padding:var(--s5) var(--s5) var(--s6);max-width:1200px;margin:0 auto}
   .blk{margin-bottom:var(--s6)}
   /* 双栏区块（Elements｜Console · Events｜Network）——窄屏塌成单栏 */
-  .two{display:grid;grid-template-columns:1fr 1fr;gap:var(--s5);align-items:start}
-  @media(max-width:880px){.two{grid-template-columns:1fr}}
+  .two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:var(--s5);align-items:start}
+  /* ★★grid 子项必须 min-width:0（决策 #712 修）：默认 min-width:auto ⇒ 超长不可断内容（如 /ping?…长 URL）
+     会把列**撑爆**、溢出到隔壁列（实测：点开网络详情后详情框跑到全宽、Events 栏被挤成竖排窄条）。 */
+  .two>*{min-width:0}
+  @media(max-width:880px){.two{grid-template-columns:minmax(0,1fr)}}
 
   /* ── 指标卡 ── */
   .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--s4);margin-bottom:var(--s6)}
@@ -132,7 +135,7 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
   .row .meta{color:var(--dim);font-family:var(--mono);font-size:11.5px;white-space:nowrap;text-align:right}
 
   /* ── Network ── */
-  .nrow{display:grid;grid-template-columns:auto 1fr auto auto;gap:var(--s3);align-items:center;padding:9px var(--s3);
+  .nrow{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;gap:var(--s3);align-items:center;padding:9px var(--s3);
         border-top:1px solid var(--line);font-size:12px;font-family:var(--mono)}
   .nrow:first-child{border-top:0}
   .nrow .m{color:var(--ink-2);font-weight:600;white-space:nowrap}
@@ -172,6 +175,8 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
   .crow.lv-info .x{color:var(--brand)}
   .crow.lv-warn{background:var(--warn-soft)} .crow.lv-warn .x{color:var(--warn)}
   .crow.lv-error{background:var(--err-soft)} .crow.lv-error .x{color:var(--err)}
+  /* ★页面处理器 source map（决策 #712）：handler 模板源位置徽章（page.vue:line:col） */
+  .crow .src{color:var(--brand);border:1px solid var(--line-2);border-radius:6px;padding:0 5px;font-size:11px;margin-left:4px}
 
   .new{animation:flash 1.3s cubic-bezier(.2,.7,.3,1)}
   @keyframes flash{0%{background:var(--brand-soft)}100%{background:transparent}}
@@ -569,7 +574,8 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
     r.className = 'crow lv-info' + (isNew ? ' new' : '');    const chain = (e.chain || []).join(' → ');
     r.innerHTML = '<span class="t">' + fmtTime(e.time) + '</span><span class="x">'
       + escapeHtml(e.gesture) + '  target=#' + e.id + (chain ? '  chain[' + escapeHtml(chain) + ']' : '')
-      + '  ' + (e.handled ? '✅handled' : '∅') + ((e.fired || []).length ? '  fired[' + (e.fired || []).join(',') + ']' : '') + '</span>';
+      + '  ' + (e.handled ? '✅handled' : '∅') + ((e.fired || []).length ? '  fired[' + (e.fired || []).join(',') + ']' : '')
+      + (e.src ? '  <span class="src">' + escapeHtml(e.src) + '</span>' : '') + '</span>';
     return r;
   }
   function fillEvents(list) {

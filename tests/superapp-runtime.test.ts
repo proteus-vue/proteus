@@ -97,6 +97,68 @@ describe('★B1 · 壳级运行期驱动（createSuperappRuntime）', () => {
     expect(r2.handled).toBe(true)
   })
 
+  it('★页面处理器 source map（决策 #712）：派发结果带 firedHandlers.loc + devEvents.src 锚回模板行', async () => {
+    const dir = makeTempProject()
+    const build = await buildAppRuntimeContent(dir, 'android')
+    const artifacts = JSON.parse(fs.readFileSync(build.outFile, 'utf-8')) as Record<string, ScreenRuntimeArtifact>
+    const rt = createSuperappRuntime({
+      artifacts,
+      host: { mount: () => '{"ok":true}', applyOps: () => '{"ok":true}', onGesture: () => {} },
+      viewport: { width: 390, height: 844 },
+    })
+    rt.mountScreen('home')
+    const homeEv = artifacts['home']!.events[0]!
+    // ★走**真机路径**：宿主命中 → 反向调全局回调 `__proteusRuntimeGesture(type, kernelId, chainJson)`
+    //   （`dispatchGesture` 直调不含命中 id，devEvents 的 `id` 要靠它）
+    const cb = (globalThis as unknown as { __proteusRuntimeGesture?: (t: string, id: number, c: string) => string })
+      .__proteusRuntimeGesture
+    expect(cb, '应注册手势回调').toBeTruthy()
+    const out = JSON.parse(cb!('tap', homeEv.nodeId, JSON.stringify([homeEv.nodeId]))) as {
+      handled: boolean
+      screen: string
+      firedHandlers?: Array<{ handler: string; loc?: { line: number; column: number } }>
+    }
+    // 派发结果带 firedHandlers（含模板源位置）+ screen（iOS 壳据此在 native 回调里拼 `page.vue:line:col`）
+    expect(out.firedHandlers?.length, '应带 firedHandlers').toBeGreaterThan(0)
+    expect(out.firedHandlers![0]!.handler).toBe(homeEv.handler)
+    expect(out.firedHandlers![0]!.loc, 'handler 应带 loc').toBeTruthy()
+    expect(out.screen).toBe('home')
+    // devEvents（面板 Events 数据源）带 src 串（`home.vue:line:col`）
+    const evs = rt.devEvents()
+    expect(evs.length).toBeGreaterThan(0)
+    const src = evs.find((e) => e.src)?.src
+    expect(src, 'devEvents 应带 src').toBeTruthy()
+    expect(src!, 'src 应锚回 home.vue:line:col').toMatch(/^home\.vue:\d+:\d+$/)
+    // 排空式：再取为空（宿主每次轮询取走）
+    expect(rt.devEvents()).toHaveLength(0)
+  })
+
+  it('★页面处理器错误出口（决策 #712）：handler 求值失败 ⇒ onError 收到（带模板源位置）+ 不炸', async () => {
+    const dir = makeTempProject()
+    const build = await buildAppRuntimeContent(dir, 'android')
+    const artifacts = JSON.parse(fs.readFileSync(build.outFile, 'utf-8')) as Record<string, ScreenRuntimeArtifact>
+    const errors: string[] = []
+    const rt = createSuperappRuntime({
+      artifacts,
+      host: { mount: () => '{"ok":true}', applyOps: () => '{"ok":true}' },
+      viewport: { width: 390, height: 844 },
+      onError: (e) => errors.push(e),
+    })
+    rt.mountScreen('home')
+    const homeEv = artifacts['home']!.events[0]!
+    // 把 home handler 换成运行期会抛的程序（非白名单方法）
+    artifacts['home']!.handlers[homeEv.handler] = [
+      { op: 'set', source: 'count', program: { k: 'mcall', recv: { k: 'root', name: 'count' }, method: '__nope__', args: [] } },
+    ] as never
+    expect(() => rt.dispatchGesture('tap', [homeEv.nodeId]), '坏表达式不得炸整次手势').not.toThrow()
+    // onError 透传（entry-superapp 据此走 console.error → 面板 Console·项目通道）
+    expect(errors.length, 'onError 应收到').toBeGreaterThan(0)
+    expect(errors.join('\n')).toContain('home.vue:')
+    // handlerErrors() 排空式读出
+    expect(rt.handlerErrors().join('\n')).toContain('__nope__')
+    expect(rt.handlerErrors()).toHaveLength(0)
+  })
+
   it('★返回保留滚动 / 前进重置（系统 App 语义）', async () => {
     const dir = makeTempProject()
     const build = await buildAppRuntimeContent(dir, 'android')

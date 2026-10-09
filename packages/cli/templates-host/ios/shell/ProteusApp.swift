@@ -120,12 +120,29 @@ final class ProteusHostDriver {
     }
 
     /// 记录一次手势 trace（供面板 Events）——由 dev 场景在派发后调用（决策 #693）。
-    func recordGestureTrace(gesture: String, id: Int, chain: [Int], handled: Bool) {
+    ///   ★`src`（决策 #712·source map）：首个 handler 的模板源位置（`page.vue:line:col`）——面板锚回模板行。
+    func recordGestureTrace(gesture: String, id: Int, chain: [Int], handled: Bool, src: String? = nil) {
         guard ProteusBuildConfig.DEV else { return }
         reportQueue.sync {
-            traceOutbox.append([gesture, String(id), chain.map(String.init).joined(separator: ","), handled ? "1" : "0", ""])
+            traceOutbox.append([gesture, String(id), chain.map(String.init).joined(separator: ","), handled ? "1" : "0", "", src ?? ""])
             if traceOutbox.count > 80 { traceOutbox.removeFirst() }
         }
+    }
+
+    /// 从 JS 派发结果 JSON 里取首个带 `loc` 的 handler 源位置（`firedHandlers[*].loc` + 顶层 `screen`
+    ///   ⇒ `page.vue:line:col`）。【为何在壳侧解析】JS `__proteusRuntimeGesture` 已把 `firedHandlers` 带出；
+    ///   壳只需提取展示串，避免再引入一条"壳→JS 读 devEvents"的通路（Android 侧走 `__proteusSuperappEvents` 排空）。
+    static func extractTraceSrc(_ json: String?) -> String? {
+        guard let json, let d = json.data(using: .utf8),
+              let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any],
+              let arr = o["firedHandlers"] as? [[String: Any]] else { return nil }
+        let screen = (o["screen"] as? String) ?? ""
+        for h in arr {
+            if let loc = h["loc"] as? [String: Any], let line = loc["line"] as? Int, let col = loc["column"] as? Int {
+                return screen.isEmpty ? "\(line):\(col)" : "\(screen).vue:\(line):\(col)"
+            }
+        }
+        return nil
     }
 
     /// 当前屏名（面板"当前屏"读数）
@@ -251,9 +268,10 @@ final class ProteusHostDriver {
         // 手势命中链 → JS 运行期（SelfDrawBridge 命中后反向调 JS 注册的回调）
         // 签名 = (target:Int, chain:[Int], type:String, x:Double, y:Double)
         bridge.onDispatchToJS = { target, chain, type, _, _ in
-            rtHost.dispatchGestureToJS(type: type, target: target, chain: chain)
+            let resultJson = rtHost.dispatchGestureToJS(type: type, target: target, chain: chain)
             // ★dev 事件 trace（决策 #693）：面板 Events 的"手势派发链路"读数
-            self.recordGestureTrace(gesture: type, id: target, chain: chain, handled: true)
+            // ★★页面处理器 source map（决策 #712）：从 JS 派发结果里取**首个 handler 的模板源位置**（`src`）
+            self.recordGestureTrace(gesture: type, id: target, chain: chain, handled: true, src: Self.extractTraceSrc(resultJson))
         }
         ctx.exceptionHandler = { _, exc in
             NSLog("[proteus] JS 异常: %@", exc?.toString() ?? "?")
@@ -743,7 +761,11 @@ final class ProteusSceneDelegate: UIResponder, UIWindowSceneDelegate {
                 self.lastSentTree = tree
                 _ = BundleSource.httpPostJson(base + "/tree", body: tree)
             }
-            for e in traces { _ = BundleSource.httpGetText(base + "/trace?type=" + urlEnc(e[0]) + "&id=" + e[1] + "&chain=" + urlEnc(e[2]) + "&handled=" + e[3] + "&fired=" + urlEnc(e[4])) }
+            // ★页面处理器 source map（决策 #712）：`src`（若有）一并上报——面板 Events 锚回 `page.vue:line:col`。
+            for e in traces {
+                let srcPart = e.count > 5 && !e[5].isEmpty ? "&src=" + urlEnc(e[5]) : ""
+                _ = BundleSource.httpGetText(base + "/trace?type=" + urlEnc(e[0]) + "&id=" + e[1] + "&chain=" + urlEnc(e[2]) + "&handled=" + e[3] + "&fired=" + urlEnc(e[4]) + srcPart)
+            }
             // ★面板→设备命令（决策 #701）：轮询 /cmd（one-shot），执行 highlight / eval。回主线程改 UI/JS。
             let cmdJson = BundleSource.httpGetText(base + "/cmd") ?? ""
             if !cmdJson.isEmpty, cmdJson != "{}", cmdJson != "null" {
