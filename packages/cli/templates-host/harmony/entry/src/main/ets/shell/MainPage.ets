@@ -20,7 +20,7 @@
 //     而两手势在 `GestureMode.Parallel` 下**同时识别** ⇒ 拖拽也会触发 tap（真机实测：拖动被当点击导航）。
 //     ⇒ 拖拽 + 点按的判别沿用 `.onTouch` 的 `touchMoved`（与 Android/iOS dev 宿主同——它们也在各自触摸回调里判别）。
 import { hilog } from '@kit.PerformanceAnalysisKit';
-import { NodeContent, display, window } from '@kit.ArkUI';
+import { NodeContent, display, window, FrameCallback } from '@kit.ArkUI';
 import { displaySync } from '@kit.ArkGraphics2D';
 import { util } from '@kit.ArkTS';
 import {
@@ -38,6 +38,18 @@ const MOMENTUM_STOP = 0.02;
 /** 运行期渲染入参（ArkTS 禁未型字面量 ⇒ 用接口声明） */
 interface RtViewport { width: number; height: number }
 interface RtArgs { bundle: string; filesDir: string; page: string; viewport: RtViewport; chain?: number[]; state?: Record<string, Object> }
+
+/**
+ * ★空帧回调——**仅用于"请求一帧"**（`postFrameCallback` 会驱动 ArkUI 产出下一帧）。
+ *   【为什么需要（决策 #726 · 用户实测「二级页返回后视图不更新、点一下才更新」）】RenderNode 子树在 C++
+ *   侧重建后，**触摸事件会自带一帧**（点击/拖动 ⇒ 画面刷新）；而**返回键/边缘滑返**这类**非触摸**重建后
+ *   **没有帧被请求** ⇒ 画面停在旧树。注册一个帧回调即请求一帧 ⇒ 新树被合成。
+ *   （不能传闭包——ArkTS 要求 `FrameCallback` **实例**，见本仓记忆：闭包在编译期报错。）
+ */
+class NudgeFrameCallback extends FrameCallback {
+  onFrame(_frameTimeInNano: number): void { /* 空：只为请求一帧 */ }
+  onIdle(): void { /* 空 */ }
+}
 
 @Entry
 @Component
@@ -81,6 +93,8 @@ struct MainPage {
   /** 惯性帧数 / 真推动帧数（"惯性真的接线了"的机器证据——本仓纪律：有通路无靠计数现形）。 */
   private momentumFrames: number = 0;
   private momentumMovedFrames: number = 0;
+  /** 请求帧用的空回调实例（见 `NudgeFrameCallback`）。 */
+  private nudgeCb: NudgeFrameCallback = new NudgeFrameCallback();
   private static vpW: number = 390;
   private static vpH: number = 844;
 
@@ -253,6 +267,10 @@ struct MainPage {
       if (this.scrollOffset > this.maxScroll) this.scrollOffset = this.maxScroll;
       if (this.scrollOffset < 0) this.scrollOffset = 0;
       scrollRoot(this.scrollOffset);
+      // ★★★请求一帧（决策 #726）：非触摸驱动的重建（返回键/边缘滑返）默认**没有帧**⇒ 画面停在旧树
+      //   （用户「点一下屏幕才更新」的真因）。postFrameCallback 请求下一帧 ⇒ 新树被合成。
+      //   （C++ 侧已 `OH_ArkUI_RenderNodeUtils_Invalidate` 标脏；此处补"产帧"。）
+      try { this.getUIContext().postFrameCallback(this.nudgeCb); } catch (e) { /* 无 UIContext（旧版本）⇒ 跳过 */ }
     } catch (e) {
       hilog.error(DOMAIN, TAG, 'HOST_PAGE_PAINT_ERROR %{public}s', JSON.stringify(e) ?? '');
     }

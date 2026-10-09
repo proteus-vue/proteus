@@ -1586,6 +1586,19 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
     //   【本仓实测】首版两条路径共用计数 ⇒ 平台动画判据 A4 当场红（draw_delta=1）：
     //   探针在 `platformAnimBegin` 之后跑了一次建树 ⇒ 被算成"应用层在动画窗口内重建指令"。
     if (!fromProbe) g_cmdBuildCount++;
+    // ★★★非触摸驱动的重建必须**显式请求重绘**（决策 #726 · 用户实测「二级页返回后视图不更新、
+    //   点一下屏幕才更新」）：`clearRoot()`+`renderCommands()` 在 C++ 侧**重建了 RenderNode 子树**，
+    //   但 **RS/ArkUI 不会自动合成一帧**——触摸事件（点击/拖动）会带来一帧，所以"点击才更新"；
+    //   而**返回键/边缘滑返**这类非触摸路径重建后无新帧 ⇒ 画面停在旧树。
+    //   `OH_ArkUI_RenderNodeUtils_Invalidate`（native_render.h：mark dirty ⇒ 触发子 RenderNode **重渲染**）
+    //   即缺的那记"请求帧"。放在建树**收尾** ⇒ boot/tap/back 全路径都拿到新帧。
+    //   ★诚实边界：若该 API 在低版本 SDK 不可用（introduced=20），失败只记日志、不阻断（回退旧行为）。
+    if (g_rootHost != nullptr) {
+        int32_t rcInv = OH_ArkUI_RenderNodeUtils_Invalidate(g_rootHost);
+        if (rcInv != ARKUI_ERROR_CODE_NO_ERROR) {
+            OH_LOG_Print(LOG_APP, LOG_WARN, LOG_DOMAIN, LOG_TAG, "PROTEUS_RENDER_INVALIDATE rc=%{public}d", rcInv);
+        }
+    }
     OH_LOG_Print(LOG_APP, LOG_INFO, LOG_DOMAIN, LOG_TAG,
                  "PROTEUS_RENDER_DONE nodes=%{public}d parsed=%{public}zu texts=%{public}d",
                 built, items.size(), textCount);
