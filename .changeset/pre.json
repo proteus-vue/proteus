@@ -54,7 +54,7 @@
     "proteus-superapp": "0.1.0"
   },
   "changesets": [
-    "auto-release-bump-1791451525967-iztaw",
+    "auto-release-bump-1791463134966-1zimk",
     "batch3-host-capabilities",
     "compiler-silent-traps",
     "fix-template-deps-and-smoke",
