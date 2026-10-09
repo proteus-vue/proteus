@@ -21,12 +21,12 @@
 //   页面里的 inline style；逐页诊断如实返回（调用方可打印）。CSS class 展开属后续批次。
 import fs from 'node:fs'
 import path from 'node:path'
-import { pathToFileURL } from 'node:url'
 import { buildLayoutTemplate, parseCssVarTokens, extractFromSfc, computeTree, overlayIrValues, SWITCH_BATCHES, APP_ENUM_VALUES } from '@proteus-vue/compiler'
 import type { AlignNode } from '@proteus-vue/compiler'
 import { screenContentFromLayoutTemplate } from '@proteus-vue/render-backend'
 import { APP_PLATFORMS, type AppPlatform } from './targets'
 import { resolveAppRoutes } from './app-routes'
+import { loadTsModule } from './config-loader'
 
 // ★目标/平台名 SSOT 在 ./targets（三处一致，不漂）。此处再导出供既有消费方（hosts 生成器等）。
 export { APP_PLATFORMS, type AppPlatform, isAppPlatform } from './targets'
@@ -86,8 +86,9 @@ export async function buildAppScreenContent(root: string, platform: AppPlatform 
     /* 无配置/加载失败 ⇒ 不折叠 var()（保持既有行为，不阻断） */
   }
   const routerDir = path.dirname(autoRoutes)
-  // 动态加载（TS 直接 import；auto-routes 仅 type import ⇒ 无运行时依赖）
-  const mod = (await import(pathToFileURL(autoRoutes).href)) as {
+  // 动态加载（★经 config-loader 的 TS 加载器：Node 的 ESM `import()` 不认 `.ts`——用 `tsx` 手测会
+  //   假绿掩盖；见 config-loader.loadTsModule 注释。auto-routes 仅 type import ⇒ 无运行时依赖）
+  const mod = loadTsModule(autoRoutes) as {
     routes?: Array<{ name: string; component?: string }>
   }
   const routes = mod.routes ?? []
@@ -143,7 +144,7 @@ export async function buildAppScreenContent(root: string, platform: AppPlatform 
     const shellPath = path.join(root, 'app-shell.ts')
     const appVue = path.join(root, 'App.vue')
     if (fs.existsSync(shellPath) && fs.existsSync(appVue)) {
-      const shellMod = (await import(pathToFileURL(shellPath).href)) as { statics?: Record<string, unknown> }
+      const shellMod = loadTsModule(shellPath) as { statics?: Record<string, unknown> }
       const statics = shellMod.statics ?? {}
       const shellRes = buildLayoutTemplate(fs.readFileSync(appVue, 'utf-8'), path.relative(root, appVue), undefined, tokens, statics, globalCss)
       if (shellRes.ok) {

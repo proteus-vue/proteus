@@ -15,8 +15,17 @@ import type { ProteusConfig } from '@proteus-vue/types'
 
 const tsCache = new Map<string, unknown>()
 
-/** 相对 TS 子模块 → CJS 执行（递归 transformSync；缓存防重复） */
-function loadTsModule(abs: string): unknown {
+/**
+ * 相对 TS 子模块 → CJS 执行（递归 transformSync；缓存防重复）。
+ * ★★★对外导出（2026-10-09 真缺陷修复）：`proteus build/dev --target ios|android` 的**路由加载**
+ *   （`app-content` / `app-runtime-content` / `app-bundle`）此前直接 `await import(pathToFileURL(x.ts))`——
+ *   而 **Node 的 ESM 加载器不认 `.ts`**（Node 18/20/22.14 均报 `Unknown file extension ".ts"`；
+ *   仅 Node 23+/开启 `--experimental-strip-types` 才行）⇒ `proteus dev --target ios` 首建 bundle 报
+ *   「重建失败：Unknown file extension ".ts" for router/auto-routes.ts」（`app-content.ts` 那处**不在 try 内**
+ *   ⇒ 直接冒泡）。★用 `tsx src` 手测却正常 = 典型**假绿**（与 dist-freshness 记的同一形态）。
+ *   ⇒ 三处统一走本加载器（esbuild TS→CJS，Node 版本无关）。
+ */
+export function loadTsModule(abs: string): unknown {
   if (tsCache.has(abs)) return tsCache.get(abs)
   const src = fs.readFileSync(abs, 'utf-8')
   const { code } = transformSync(src, { loader: 'ts', format: 'cjs', platform: 'node', logLevel: 'silent' })

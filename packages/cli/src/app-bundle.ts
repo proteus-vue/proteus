@@ -15,8 +15,9 @@
 //   且产物落**项目 dist**。两者共享同一份 `entry-superapp.ts` 源与同一套 alias 策略（不重造）。
 import fs from 'node:fs'
 import path from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 import { resolveAppRoutes } from './app-routes'
+import { loadTsModule } from './config-loader'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 /** 本 CLI 包根（`src` 与 `dist` 两种形态下都是 `<pkg>`）——随包资源（模板/桥源）以此为锚 */
@@ -100,7 +101,9 @@ export async function buildAppContentModuleSource(opts: AppContentModuleOptions)
   let registry: unknown = { screens: {}, tabNames: [], tabLabels: {}, indexName: '', routes: [] }
   try {
     if (!fs.existsSync(autoRoutesPath)) throw new Error(`缺 ${path.relative(projectRoot, autoRoutesPath)}`)
-    const arMod = (await import(pathToFileURL(autoRoutesPath).href)) as {
+    // ★经 config-loader 的 TS 加载器：Node 的 ESM `import()` 不认 `.ts` ⇒ 此前这里抛错被 catch 吞掉
+    //   ⇒ 屏注册表静默为空（运行期「app-navigation: 屏注册表为空」）。见 loadTsModule 注释。
+    const arMod = loadTsModule(autoRoutesPath) as {
       screens?: Record<string, unknown>
       tabNames?: string[]
       routes?: Array<{ name: string; meta?: { title?: string } }>

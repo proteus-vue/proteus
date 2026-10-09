@@ -14,7 +14,7 @@ import { buildDir, planTargetedBuild, runTargetedBuildProgrammatic } from './bui
 import { parseConformanceArgs, runConformance, runConformanceDemo } from './conformance'
 import { parseHostArgs, runHostPush, runHostSigning } from './host'
 import { parseCreateHostArgs, runCreateHost, createHost, deriveBundleName } from './host-scaffold'
-import { packageHarmonyHost, packageIosHost, packageAndroidHost, resolveDeveloperDir } from './host-package'
+import { packageHarmonyHost, packageIosHost, packageAndroidHost, resolveDeveloperDir, parseIosDeviceId } from './host-package'
 import { applyNativeConfigFromProject, resolveNativeConfigFromProject } from './native-config'
 import { appHostDir, appBundleFile, APP_PACKAGE_NAME, isAppPlatform, type AppPlatform } from './targets'
 import { buildAppBundle } from './app-bundle'
@@ -980,11 +980,10 @@ async function runAppDev(target: AppPlatform): Promise<number> {
         catch (e) { return { ok: false, out: String((e as { stderr?: string }).stderr ?? (e as Error).message) } }
       }
       const sInstall = ui.step('安装到设备')
-      // 设备列表（首个 connected）——取**标识符列**（UDID/UUID 形态），无则回落设备名（devicectl 二者皆可）
+      // 设备列表（首个可用设备）——取**标识符列**（UDID/UUID 形态），无则回落设备名（devicectl 二者皆可）。
+      // ★状态识别走 host-package 的 parseIosDeviceId（单一实现）：`connected` 与 `available (paired)` 都算可用。
       const dl = xcrun(['devicectl', 'list', 'devices'])
-      const row = dl.out.split('\n').find((l) => /\bconnected\b/.test(l)) ?? ''
-      const cols = row.trim().split(/\s{2,}/).map((c) => c.trim()).filter(Boolean)
-      const devId = cols.find((c) => /^[0-9A-Fa-f-]{20,}$/.test(c) || /\.coredevice\.local$/.test(c)) ?? cols[0] ?? ''
+      const devId = dl.ok ? parseIosDeviceId(dl.out) ?? '' : ''
       if (!dl.ok || !devId) {
         sInstall.fail('未找到已连接 iOS 设备')
         ui.hint(`debug 包已产出：${path.relative(projectRoot, iosApp)}`)
