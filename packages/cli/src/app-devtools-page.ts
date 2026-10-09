@@ -170,6 +170,12 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
   /* ★就地编辑输入（决策 #702） */
   .bedit{width:100%;background:var(--surface-3);border:1px solid var(--line-2);border-radius:4px;color:var(--ink);font:inherit;font-size:12px;padding:2px 6px;text-align:right;outline:none}
   .bedit:focus{border-color:var(--brand)}
+  /* ★重置样式（恢复项目代码；决策 #704） */
+  .bh{position:relative}
+  .breset{margin-left:auto}
+  .box .bh{display:flex;align-items:center;gap:8px}
+  .breset{background:none;border:1px solid var(--line-2);border-radius:5px;color:var(--brand2);font-size:11px;padding:2px 8px;cursor:pointer;flex:none}
+  .breset:hover{border-color:var(--brand2)}
   .mbox{position:relative;margin:var(--s3);border:1px dashed var(--brand);background:var(--brand-soft);border-radius:5px;min-height:22px}
   .mbox .lbl{position:absolute;top:-8px;left:8px;background:var(--surface);padding:0 5px;font-size:10px;color:var(--brand);letter-spacing:.3px}
 
@@ -279,6 +285,8 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
   const eventsEl = $('events');
   let treeData = null;   // 最近一次元素树（含 rect）
   let selId = null;      // 当前选中节点 id
+  let boxEditing = false;   // ★就地编辑进行中（暂停树重渲染，防抢焦点；决策 #704）
+  let pendingTree = null;   // 编辑期间到达的新树（焦点离开后补刷）
   const rows = [];
   function addRow(e, isNew) {
     const r = document.createElement('div');
@@ -337,6 +345,8 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
   function renderTree(t) {
     treeData = t || { nodes: [] };
     treeEl.innerHTML = '';
+    // ★编辑中：保留输入框（勿被新树替换），把新树挂起，待焦点离开再刷（决策 #704）
+    if (boxEditing) { pendingTree = t || { nodes: [] }; return; }
     const nodes = treeData.nodes || [];
     if (!nodes.length) { treeEl.innerHTML = '<div class="empty">暂无节点树…宿主渲染后上报。</div>'; boxEl.style.display = 'none'; return; }
     const kids = {};
@@ -365,6 +375,15 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
     const nodes = (treeData && treeData.nodes) || [];
     return nodes.find((n) => n.id === id) || null;
   }
+  // ★进入输入框 ⇒ 暂停树重渲染（否则新树会替换掉正在编辑的输入框 ⇒ 抢焦点/丢输入）；离开 ⇒ 提交并恢复。
+  //   （决策 #704：用户「修改后要回车才生效，习惯是点别处失焦」——失焦即提交，且不被刷新打断）
+  boxEl.addEventListener('focusin', function (ev) { if (ev.target.classList && ev.target.classList.contains('bedit')) boxEditing = true; });
+  boxEl.addEventListener('focusout', function (ev) {
+    var t = ev.target;
+    if (t && t.classList && t.classList.contains('bedit')) commitEdit(t);   // ★失焦即提交
+    boxEditing = false;
+    if (pendingTree) { var p = pendingTree; pendingTree = null; renderTree(p); }
+  });
   function selectNode(id) { selId = id; renderBox(findNode(id)); renderTree(treeData); sendHighlight(id); }
   // 盒模型：内核 rect（x/y/w/h）+ 关键样式
   function renderBox(n) {
@@ -381,16 +400,28 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
         return '<div class="k">' + escapeHtml(k) + '</div><div class="v">' + escapeHtml(v) + '</div>';
       }).join('');
     boxEl.style.display = 'block';
-    boxEl.innerHTML = '<div class="bh">#' + n.id + ' &lt;' + escapeHtml(n.tag || n.semantic || '?') + '&gt;' + (n.text ? ' “' + escapeHtml(String(n.text).slice(0, 40)) + '”' : '') + '</div>'
+    boxEl.innerHTML = '<div class="bh">#' + n.id + ' &lt;' + escapeHtml(n.tag || n.semantic || '?') + '&gt;' + (n.text ? ' “' + escapeHtml(String(n.text).slice(0, 40)) + '”' : '')
+      + '<button class="breset" title="恢复项目代码的实时效果（清除就地编辑）">重置样式</button></div>'
       + '<div class="mbox"' + (r.width ? ' style="width:' + Math.max(4, Math.min(560, r.width)) + 'px;height:' + Math.max(4, Math.min(200, r.height)) + 'px"' : '') + '><span class="lbl">内核 rect</span></div>'
       + '<div class="bm"><div class="k">rect</div><div class="v">' + escapeHtml(rc) + '</div>' + styles + '</div>';
+    var rb = boxEl.querySelector('.breset');
+    if (rb) rb.addEventListener('click', function () { sendCmd('reset', {}); });
   }
-  // ★就地编辑输入：回车提交（决策 #702）
+  // ★就地编辑：**回车或失焦**都提交到设备（决策 #704）——失焦是"改完点别处"的惯性动作，不能要求回车。
+  //   提交后把值同步回内存树（n[key]），使"失焦提交 → 焦点离开补刷"不会被旧值回滚。
+  function commitEdit(t) {
+    var id = Number(t.dataset.id), key = t.dataset.key, val = t.value;
+    var n = findNode(id);
+    if (n) n[key] = val;                    // 本地记账（防补刷回滚）
+    sendEdit(id, key, val);
+  }
   boxEl.addEventListener('keydown', function (ev) {
     var t = ev.target;
     if (!t || !t.classList || !t.classList.contains('bedit')) return;
     if (ev.key !== 'Enter') return;
-    sendEdit(Number(t.dataset.id), t.dataset.key, t.value);
+    ev.preventDefault();
+    commitEdit(t);
+    t.blur();                               // 回车等价"提交并离开"（blur 会触发上面的 focusout 提交，幂等）
   });
   // ── 事件 trace（决策 #675）──
   // ★面板→设备命令（决策 #701）：选中节点 ⇒ 下发 highlight（设备屏上高亮该节点）
