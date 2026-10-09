@@ -37,6 +37,7 @@ describe('create-proteus copyTemplate', () => {
     expect(rel.has('src/main.mp.ts')).toBe(true)
     expect(rel.has('src/App.vue')).toBe(true)
     expect(rel.has('src/pages/index.vue')).toBe(true)
+    expect(rel.has('src/styles/global.css')).toBe(true)
   })
 
   it('{{name}} 替换进 package.json（npm 包名规范）', () => {
@@ -64,12 +65,35 @@ describe('create-proteus copyTemplate', () => {
     expect(pkg.scripts['build:mp']).toBe('proteus build --target skyline')
   })
 
-  it('首页是标准 Vue SFC（可编译的最小闭环）', () => {
+  it('首页是标准 Vue SFC（可编译的最小闭环 + 跨端安全写法）', () => {
     const dir = path.join(TMP, 'page-check')
     copyTemplate(dir, { name: 'x' }, TEMPLATES)
     const page = fs.readFileSync(path.join(dir, 'src/pages/index.vue'), 'utf-8')
     expect(page).toContain('<route>')
-    expect(page).toContain('Hello Proteus')
+    // 首页是新版展示页（不再是裸 'Hello Proteus'）
+    expect(page).toContain('一次编写，多端运行')
+    // ★用**原始标签**（不依赖内置组件——组件三端尚未对齐）
+    expect(page).not.toMatch(/<p-[a-z]/)
+    // ★跨端安全写法：静态 class + 令牌；无 :hover/伪类选择器
+    expect(page).not.toMatch(/:hover\s*[,{]/)
+    // ★事件用**内联动作**（App 事件编译只支持内联，不支持方法引用 @click="fn"——否则 App 端不产出事件，按钮点不动）
+    expect(page).toMatch(/@click="count\+\+"/)
+    expect(page).not.toMatch(/@click="handleTap"/)
+  })
+
+  it('★全局样式四端同源：global.css 存在 + config.globalStyle 指向 + main.ts import', () => {
+    const dir = path.join(TMP, 'globalcss-check')
+    copyTemplate(dir, { name: 'x' }, TEMPLATES)
+    const gcss = path.join(dir, 'src/styles/global.css')
+    expect(fs.existsSync(gcss)).toBe(true)
+    // 小程序端：targets.mp.globalStyle 指向同一份
+    const cfg = fs.readFileSync(path.join(dir, 'proteus.config.ts'), 'utf-8')
+    expect(cfg).toContain("globalStyle: 'src/styles/global.css'")
+    // Web 端：main.ts import 同一份
+    const main = fs.readFileSync(path.join(dir, 'src/main.ts'), 'utf-8')
+    expect(main).toContain("import './styles/global.css'")
+    // 页面骨架类在 global.css 里（App 端靠这些 .class 规则折叠）
+    expect(fs.readFileSync(gcss, 'utf-8')).toContain('.page')
   })
 
   it('★模板 scripts 覆盖 App 三端（dev/build/package）+ 严格等于 CLI 别名', () => {

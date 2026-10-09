@@ -40,9 +40,10 @@ my-app/
 ├─ scripts/ledger_check.mjs     # 台账自检（`node scripts/ledger_check.mjs --check`）
 ├─ .github/workflows/proteus.yml # CI 模板（check 门禁 → 双端构建 → 产物归档）
 └─ src/
-   ├─ main.ts / main.mp.ts      # Web / 小程序双入口
+   ├─ main.ts / main.mp.ts      # Web / 小程序双入口（main.ts 引全局样式）
    ├─ App.vue                   # 根组件
-   ├─ pages/index.vue           # 首页示例（p-* 组件 + @tap + 插值全覆盖）
+   ├─ styles/global.css         # 全局样式（设计基线：根重置 + .page/.card 骨架）——四端同源
+   ├─ pages/index.vue           # 首页展示页（原始标签 + 静态 class + 交互演示）
    ├─ router/
    │  ├─ index.ts               # 路由实例
    │  ├─ auto-routes.ts         # gen-routes 产物（编译期生成，勿手改）

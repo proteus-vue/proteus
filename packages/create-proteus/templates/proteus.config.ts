@@ -9,6 +9,9 @@ const config: ProteusConfig = {
     mp: {
       appid: 'wx0000000000', // 替换为真实 AppID
       renderer: 'skyline',
+      // ★全局样式（设计令牌 + 页面基线）：小程序端 → app.wxss；Web 端在 src/main.ts import；
+      //   App 端构建期折进节点样式（一份文件、四端一致——详见 src/styles/global.css）
+      globalStyle: 'src/styles/global.css',
       // ★底线循环 ①③：规则覆盖（改这里立即改变编译行为）
       rules: {
         disabled: [],
