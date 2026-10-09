@@ -49,9 +49,11 @@ const ENDS = {
     capability: extractCases('hosts/ios/ProteusHost/runtime/host-capabilities.swift'),
   },
   harmony: {
-    // 鸿蒙 `screen.*` + 能力都在 dev 的 proteus_bench.cpp（一处 `method == "..."` 分发）。
-    screen: extractMethodEq('hosts/harmony/host-app/entry/src/main/cpp/dev/proteus_bench.cpp').filter((m) => m.startsWith('screen.')),
-    capability: extractMethodEq('hosts/harmony/host-app/entry/src/main/cpp/dev/proteus_bench.cpp').filter((m) => !m.startsWith('screen.')),
+    // ★决策 #725：鸿蒙 `screen.*`（一处 `method == "..."` 分发）已按**中性名下沉**到 runtime HAR
+    //   （`host_app_runtime_impl.h`，由 proteus_host.cpp 导出 hostAppBoot/Drive/Render）——壳不再依赖 dev。
+    //   能力族鸿蒙仍未接线（覆盖率如实为 0），故 capability 从同一头抽（当前为空，如实报告）。
+    screen: extractMethodEq('hosts/harmony/host-app/proteus_render/src/main/cpp/host_app_runtime_impl.h').filter((m) => m.startsWith('screen.')),
+    capability: extractMethodEq('hosts/harmony/host-app/proteus_render/src/main/cpp/host_app_runtime_impl.h').filter((m) => !m.startsWith('screen.')),
   },
 }
 

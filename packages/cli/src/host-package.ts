@@ -25,13 +25,13 @@ import { fileURLToPath } from 'node:url'
 import { makeDiag, parseSwiftcOutput, captureRaw, type ProteusDiagnostic } from './diag'
 import { resolveIosSigning, IOS_PROFILE_DIRS } from './signing'
 import { resolveAndroidSdk, resolveJdk17, findApps } from './host-paths'
-import { syncRuntimeUnits, syncShellTemplates, syncAndroidShell } from './host-scaffold'
+import { syncRuntimeUnits, syncShellTemplates, syncAndroidShell, syncHarmonyShell } from './host-scaffold'
 
 /** ★本模块所在目录（`packages/cli/src` 或 `dist`）——JDK 等**框架仓资源**上溯解析的起点。 */
 const HERE_PKG = path.dirname(fileURLToPath(import.meta.url))
 
 /** DevEco Contents 目录候选（与 hosts/harmony/build-host-app.sh 的 find_deveco 同策略） */
-function resolveDevEco(): string | null {
+export function resolveDevEco(): string | null {
   const candidates = [
     process.env.PROTEUS_DEVECO,
     '/Volumes/data1/work/office-applications/DevEco-Studio.app/Contents',
@@ -61,21 +61,35 @@ export interface PackageHostResult {
   diagnostics?: ProteusDiagnostic[]
 }
 
-/** 把项目编译产物拷进宿主入口模块的 rawfile（若项目根与产物存在） */
+/** 把项目编译产物拷进宿主入口模块的 rawfile（屏内容 + ★运行期 bundle；若存在）。
+ *  ★2026-10-09：鸿蒙壳升级为**运行期壳**（eval `bundle-superapp.js` 走 router/事件/响应式）⇒
+ *   打包必须连同 `dist/app/<platform>/bundle-superapp.js` 一起拷入 rawfile，否则壳只能走静态回退
+ *   （无交互/无导航）——这是"和 Android/iOS 一样跑运行期"的产物前置。bundle 缺则如实告警。 */
 function copyScreenContent(hostDir: string, projectRoot: string | undefined, platform: string, log: string[]): boolean {
   if (!projectRoot) return false
   const sc = path.join(projectRoot, 'dist', 'app', platform, 'screen-content.json')
+  const rf = path.join(hostDir, 'entry', 'src', 'main', 'resources', 'rawfile')
+  let copied = false
   if (!fs.existsSync(sc)) {
     log.push(`⚠ 未见编译产物 ${path.relative(projectRoot, sc)}——沿用宿主 rawfile 既有产物`)
-    return false
+  } else {
+    fs.mkdirSync(rf, { recursive: true })
+    fs.copyFileSync(sc, path.join(rf, 'app-screen-content.json'))
+    copied = true
+    log.push(`✓ 编译产物已拷入 rawfile（${path.relative(projectRoot, sc)}）`)
   }
-  const rf = path.join(hostDir, 'entry', 'src', 'main', 'resources', 'rawfile')
-  fs.mkdirSync(rf, { recursive: true })
-  fs.copyFileSync(sc, path.join(rf, 'app-screen-content.json'))
+  // ★运行期 bundle（壳 eval 它即得完整应用）——与屏内容同源目录
+  const bundle = path.join(projectRoot, 'dist', 'app', platform, 'bundle-superapp.js')
+  if (fs.existsSync(bundle)) {
+    fs.mkdirSync(rf, { recursive: true })
+    fs.copyFileSync(bundle, path.join(rf, 'bundle-superapp.js'))
+    log.push(`✓ 运行期 bundle 已拷入 rawfile（${path.relative(projectRoot, bundle)}）`)
+  } else {
+    log.push(`⚠ 未见运行期 bundle ${path.relative(projectRoot, bundle)}——壳将走**静态回退**（无路由/交互；跑 \`proteus build --package\` 会自动产出）`)
+  }
   const gk = path.join(rf, '.gitkeep')
   if (fs.existsSync(gk)) fs.rmSync(gk)
-  log.push(`✓ 编译产物已拷入 rawfile（${path.relative(projectRoot, sc)}）`)
-  return true
+  return copied
 }
 
 /** 构建最小宿主工程为 .hap：拷产物 → 确保 build-profile → hvigorw assembleHap */
@@ -89,6 +103,10 @@ export function packageHarmonyHost(opts: PackageHostOptions): PackageHostResult 
   // ⓪ ★runtime 源集自愈（决策 #692）：框架 runtime 改动同步进已存在宿主（否则改了 runtime 没生效）
   const sync = syncRuntimeUnits(hostDir, 'harmony')
   if (sync.synced) log.push(`ℹ runtime 源集已自愈同步（${sync.dirs.join(', ')}）`)
+  // ⓪b ★★壳源自愈（决策 #725）：模板壳（entry/.../ets/shell）覆盖进已存在宿主——否则老宿主拿不到
+  //   新 wiring（与 #721 Android 同源同形；本轮"cli 就能跑起来"要求运行期壳必须能自愈）。
+  const shellSynced = syncHarmonyShell(hostDir)
+  if (shellSynced.length) log.push(`ℹ 壳源已自愈同步（${shellSynced.join(', ')}）`)
   // ① 产物拷入 rawfile
   const screenContentCopied = copyScreenContent(hostDir, opts.projectRoot, platform, log)
   // ② build-profile.json5（本地，含签名）——缺则从模板生成（unsigned）

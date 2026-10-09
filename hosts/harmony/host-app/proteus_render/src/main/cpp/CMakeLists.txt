@@ -15,8 +15,12 @@ if(DEFINED PACKAGE_FIND_FILE)
 endif()
 
 include_directories(${NATIVERENDER_ROOT_PATH})
-# ★HA0.5：平台适配层（文本度量/字体——换壳不改；platform/harmony/proteus_text_platform.h）
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../../../../../../platform/harmony/proteus-platform/src/main/cpp)
+# ★HA0.5：平台适配层（文本度量/字体——换壳不改）——**已随 HAR 自持**（本目录 `proteus_text_platform.h`）。
+#   ★★★决策 #725：此前用**框架深度相对路径** include `platform/harmony/...`，在**框架参考宿主**里恰好命中、
+#     而 **CLI 生成的宿主**（HAR 位于 `dist/app/harmony/host/proteus_render`，比框架浅一层）⇒ 该路径失效
+#     ⇒ `fatal error: 'proteus_text_platform.h' file not found`（用户「cli 就能跑起来」的拦路石）。自持后
+#     引号 include 在**同目录**解析，与宿主布局无关（CI 无法暴露——它不建宿主）。源见 platform/harmony/。
+#   ☆ 参考宿主的 entry CMakeLists 仍可视需要 include platform/（冗余无害），HAR 自身不再依赖它。
 
 # ★Rust 排版核（runtime 属性——宿主桥用它建树/动画；由 hosts/harmony/build-rust-core.sh 交叉编译到此目录）
 set(RUST_LIB ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/libproteus_layout_core.a)

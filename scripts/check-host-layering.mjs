@@ -75,10 +75,9 @@ const SHELL_FORBIDDEN_DEV = [
 ]
 // 壳→dev 的**具名登记**（命中数棘轮；待第二刀后端拆分清零）
 const SHELL_MIXED_FILES = {
-  'hosts/harmony/host-app/entry/src/main/ets/shell/Superapp.ets': {
-    reason: '壳从 dev 取 superappDrive（一次性 VM 驱动项目 bundle）——与 dev screen.* 执行器簇耦合；待拆分',
-    maxHits: 6,   // 2026-10-07 实测：import 行（libproteus_bench.so + superappDrive）+ 4 处调用
-  },
+  // ★第四刀（2026-10-09）：鸿蒙壳的 superappDrive/superappScreen 已下沉到 runtime HAR
+  //   （proteus_host 导出 hostAppBoot/Drive/Render，实现见 host_app_runtime_impl.h）——壳改依赖
+  //   `proteus_render` 的 hostAppDrive/hostAppRender ⇒ 鸿蒙壳**不再反向依赖 dev**（本条登记已清零移除）。
   // ★第三刀：iOS **参考宿主**壳把场景分发到 dev 装置（Showcase/AppStack/HostRuntime）。这是"参考宿主含装置"
   //   的固有形态；**最小宿主**（CLI 生成）不含这些分支。命中数棘轮守（不得新增 dev 依赖）。
   'hosts/ios/ProteusHost/shell/selfdraw-app.swift': {
@@ -108,7 +107,7 @@ const RUNTIME_FORBIDDEN = [
 ]
 // 允许在注释里出现（提及/说明不算依赖）——只扫**代码行**（剥注释后）
 const stripComments = (src, ext) => {
-  if (ext === '.java' || ext === '.swift' || ext === '.cpp' || ext === '.ets' || ext === '.ts') {
+  if (ext === '.java' || ext === '.swift' || ext === '.cpp' || ext === '.h' || ext === '.ets' || ext === '.ts') {
     return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
   }
   return src

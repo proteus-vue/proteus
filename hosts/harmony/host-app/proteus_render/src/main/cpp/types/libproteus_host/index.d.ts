@@ -15,3 +15,10 @@ export const appScreenAnimTick: () => string;
 export const hostRtShellInstall: (json: string) => string;
 /** 真事件转发：__proteusHostShellLifecycle('pause'|'resume') + 泵 job + 读回 + 落盘 */
 export const hostRtShellEvent: (evt: string) => string;
+/** ★应用运行期·启动（一次性 VM）：eval bundle → boot（路由栈 + 进入入口 tab）；入参 {bundle,filesDir} */
+export const hostAppBoot: (json: string) => string;
+/** ★应用运行期·驱动链（一次性 VM）：boot + 逐 tab 切页；入参 {bundle,filesDir,tabs?} */
+export const hostAppDrive: (json: string) => string;
+/** ★应用运行期·渲染（一次性 VM）：实例化某屏（+可选 tap 命中链）→ 返回 {current,state,snapshot,tree}；
+ *  入参 {bundle,filesDir,page,viewport:{width,height},chain?:[],state?:{},remount?:bool} */
+export const hostAppRender: (json: string) => string;

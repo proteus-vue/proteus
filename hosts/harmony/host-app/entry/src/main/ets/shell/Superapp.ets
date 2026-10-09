@@ -19,8 +19,7 @@ import { NodeContent } from '@kit.ArkUI';
 import { display, window } from '@kit.ArkUI';
 import { util } from '@kit.ArkTS';
 import { fileIo } from '@kit.CoreFileKit';
-import { attach, renderCommands, scrollRoot, clearRoot, appScreenCommands, appScreenContentHeight, appScreenHitAt, hostRtShellInstall, hostRtShellEvent } from 'proteus_render';
-import { superappDrive, superappScreen } from 'libproteus_bench.so';
+import { attach, renderCommands, scrollRoot, clearRoot, appScreenCommands, appScreenContentHeight, appScreenHitAt, hostRtShellInstall, hostRtShellEvent, hostAppDrive, hostAppRender } from 'proteus_render';
 
 const DOMAIN = 0x0002;
 const TAG = 'ProteusSuperapp';
@@ -107,7 +106,7 @@ struct Superapp {
   private navStack: string[] = [];
   /** ★★B1：每屏滚动进度（返回恢复 / 前进重置）。 */
   private scrollByScreen: Map<string, number> = new Map<string, number>();
-  /** ★★★跨调用状态（2026-10-07 · 鸿蒙一次性 VM）：上次 superappScreen 返回的 `snapshot`
+  /** ★★★跨调用状态（2026-10-07 · 鸿蒙一次性 VM）：上次 hostAppRender 返回的 `snapshot`
    *   （`{屏名:{变量:值}}`）——每次新 VM 作 `state` 回灌，恢复 count 等实例态（否则点击计数不动）。 */
   private runtimeState: Record<string, Object> | null = null;
   /** 视口高/宽（vp；renderCurrent 处记录——与 contentH 同源）。 */
@@ -238,7 +237,7 @@ struct Superapp {
       //   与 Android `--es screen <name>` / iOS drive 遍历同法（三端同语义）。
       if (this.scene.startsWith('superapp-screen-')) {
         const want: string = this.scene.slice('superapp-screen-'.length);
-        const out2: string = superappDrive(JSON.stringify({ 'bundle': bundle, 'filesDir': this.filesDir, 'tabs': [want] } as Record<string, Object>));
+        const out2: string = hostAppDrive(JSON.stringify({ 'bundle': bundle, 'filesDir': this.filesDir, 'tabs': [want] } as Record<string, Object>));
         hilog.info(DOMAIN, TAG, 'SUPERAPP_SCREEN_DRIVE %{public}s', out2.substring(0, 200));
         const o2 = JSON.parse(out2) as Record<string, Object>;
         const dr2 = o2['drive'] as Record<string, Object> | undefined;
@@ -266,7 +265,7 @@ struct Superapp {
       } else if (this.scene === 'superapp-drive') {
         // ★drive：**一次原生调用**完成 boot + 逐 tab 切页（one-kick + 宿主泵——鸿蒙 JSVM 专用形态）。
         //   跨原生调用反复启动新导航会与 V8 微任务排空重入 ⇒ 崩溃（本仓实测）；故合成单条 async 驱动。
-        const out: string = superappDrive(JSON.stringify({ 'bundle': bundle, 'filesDir': this.filesDir } as Record<string, Object>));
+        const out: string = hostAppDrive(JSON.stringify({ 'bundle': bundle, 'filesDir': this.filesDir } as Record<string, Object>));
         hilog.info(DOMAIN, TAG, 'SUPERAPP_DRIVE %{public}s', out.substring(0, 300));
         const o = JSON.parse(out) as Record<string, Object>;
         const dr = o['drive'] as Record<string, Object> | undefined;
@@ -282,10 +281,10 @@ struct Superapp {
         this.booted = true;
         this.writeReport();
       } else {
-        // 常驻：**复用 superappDrive**（tabs=['index'] ⇒ boot 后跳过 index ⇒ 等价"仅启动"）。
+        // 常驻：**复用 hostAppDrive**（tabs=['index'] ⇒ boot 后跳过 index ⇒ 等价"仅启动"）。
         //   ★为什么不用 superappBoot：其原生泵是**无条件 400 轮** checkpoint，boot 落定后再泵
-        //   会崩（SIGSEGV，实测）；superappDrive 有终态提前退出，是本机**唯一稳定**路径。
-        const out: string = superappDrive(JSON.stringify({ 'bundle': bundle, 'filesDir': this.filesDir, 'tabs': ['index'] } as Record<string, Object>));
+        //   会崩（SIGSEGV，实测）；hostAppDrive 有终态提前退出，是本机**唯一稳定**路径。
+        const out: string = hostAppDrive(JSON.stringify({ 'bundle': bundle, 'filesDir': this.filesDir, 'tabs': ['index'] } as Record<string, Object>));
         hilog.info(DOMAIN, TAG, 'SUPERAPP_BOOT %{public}s', out.substring(0, 240));
         const o = JSON.parse(out) as Record<string, Object>;
         const dr = o['drive'] as Record<string, Object> | undefined;
@@ -354,7 +353,7 @@ struct Superapp {
     return JSON.stringify(a);
   }
 
-  /** ★从 superappScreen 返回里保存 snapshot（供下次回灌）——一次性 VM 的状态持有侧。 */
+  /** ★从 hostAppRender 返回里保存 snapshot（供下次回灌）——一次性 VM 的状态持有侧。 */
   private saveSnapshot(rt: Record<string, Object>): void {
     const snap = rt['snapshot'];
     if (snap !== undefined && snap !== null) {
@@ -386,7 +385,7 @@ struct Superapp {
   }
 
   /**
-   * ★★★B1：**点击命中 → 导航**（鸿蒙腿）。appScreenHitAt(内容坐标) → 冒泡链 → superappScreen(chain)
+   * ★★★B1：**点击命中 → 导航**（鸿蒙腿）。appScreenHitAt(内容坐标) → 冒泡链 → hostAppRender(chain)
    *   （JS 共享运行期派发 tap → $nav 动作 → 导航 → 挂载目标屏）→ applyState + 重绘。
    *   ★内容坐标 = 视口坐标 + scrollOffset（命中树在内容坐标系）。
    */
@@ -402,7 +401,7 @@ struct Superapp {
       //   路由值）——若以改后的 this.current 与 target 比较，会在"路由已 settle"时判成"未变化"⇒ 不入栈
       //   ⇒ 二级页返回时无栈可弹 ⇒ **直接退出应用**（用户抓出「二级页滑动返回退出应用」的真因）。
       const prev: string = this.current;
-      const rtOut: string = superappScreen(Superapp.rtArgsJson(this.current, this.bundle, this.filesDir, Superapp.vpW, Superapp.vpH, chain, this.runtimeState));
+      const rtOut: string = hostAppRender(Superapp.rtArgsJson(this.current, this.bundle, this.filesDir, Superapp.vpW, Superapp.vpH, chain, this.runtimeState));
       const rt = JSON.parse(rtOut) as Record<string, Object>;
       const st = rt['state'] as Record<string, Object> | undefined;
       if (st) { this.applyState(st); }
@@ -422,8 +421,8 @@ struct Superapp {
         this.current = target;
       }
       // ★★★统一上屏（2026-10-07）：**每次 tap 都重绘**——导航 tap 画目标屏；**数据 tap（count++）也画同屏**
-      //   新树（此前只在导航分支重绘 ⇒ 点计数没反应）。用 superappScreen 返回的 tree **直接上屏**，省一次
-      //   renderCurrent 的 superappScreen boot（一次性 VM 每次 boot 要 eval 整包 ⇒ 卡顿/"不灵敏"）。
+      //   新树（此前只在导航分支重绘 ⇒ 点计数没反应）。用 hostAppRender 返回的 tree **直接上屏**，省一次
+      //   renderCurrent 的 hostAppRender boot（一次性 VM 每次 boot 要 eval 整包 ⇒ 卡顿/"不灵敏"）。
       let nodes: string = this.nodesByPage.get(this.current) ?? '[]';
       const tree = rt['tree'] as Record<string, Object> | undefined;
       if (tree && Array.isArray(tree['nodes'])) { nodes = JSON.stringify(tree['nodes']); }
@@ -542,12 +541,12 @@ struct Superapp {
     const contentH: number = vpH;
     try {
       attach(this.content, vpDensity, vpW, contentH);
-      // ★★★B1（统一运行期）：内容由 JS **共享运行期**实例化（superappScreen：boot → createSuperappRuntime
+      // ★★★B1（统一运行期）：内容由 JS **共享运行期**实例化（hostAppRender：boot → createSuperappRuntime
       //   → 实例化该屏 → host.mount 捕获 tree）；拿不到则回退静态 nodesByPage（诚实降级）。
       //   ★带上次 snapshot（一次性 VM 状态回灌）；返回的 snapshot 存回（下次用）。
       Superapp.vpW = vpW;
       try {
-        const rtOut: string = superappScreen(Superapp.rtArgsJson(page, this.bundle, this.filesDir, vpW, vpH, undefined, this.runtimeState));
+        const rtOut: string = hostAppRender(Superapp.rtArgsJson(page, this.bundle, this.filesDir, vpW, vpH, undefined, this.runtimeState));
         const rt = JSON.parse(rtOut) as Record<string, Object>;
         const tree = rt['tree'] as Record<string, Object> | undefined;
         if (tree && Array.isArray(tree['nodes'])) {
@@ -570,8 +569,8 @@ struct Superapp {
   }
 
   /** ★★★把某屏 nodes 画到屏上（appScreenCommands → renderCommands）+ 重算/重放滚动范围。
-   *   renderCurrent 与 onTapAt **共用**——onTapAt 用 superappScreen(chain) 返回的 tree 直接画，
-   *   省掉一次 renderCurrent 的 superappScreen boot（一次性 VM 每次 boot 要 eval 整包 ⇒ 卡顿）。
+   *   renderCurrent 与 onTapAt **共用**——onTapAt 用 hostAppRender(chain) 返回的 tree 直接画，
+   *   省掉一次 renderCurrent 的 hostAppRender boot（一次性 VM 每次 boot 要 eval 整包 ⇒ 卡顿）。
    *   视口取 Superapp.vpW/vpH（由 renderCurrent 设定）。 */
   private paintTree(page: string, nodes: string): void {
     try {
@@ -617,12 +616,12 @@ struct Superapp {
 
   /**
    * 切 tab（常驻交互：用户点底部 Tab）→ 重绘。
-   * ★实现 = **一次性 VM 的 `superappDrive`**（tabs=[name]）：每次交互独立装配 → boot → 切到目标 tab
+   * ★实现 = **一次性 VM 的 `hostAppDrive`**（tabs=[name]）：每次交互独立装配 → boot → 切到目标 tab
    *   并读回新状态（跨调用的持久 VM 在鸿蒙会崩，见 native 注释）。语义与 Web `wx.switchTab` 同形。
    */
   private switchTab(name: string): void {
     try {
-      const out: string = superappDrive(JSON.stringify({
+      const out: string = hostAppDrive(JSON.stringify({
         'bundle': this.bundle, 'filesDir': this.filesDir, 'tabs': [name],
       } as Record<string, Object>));
       const o = JSON.parse(out) as Record<string, Object>;

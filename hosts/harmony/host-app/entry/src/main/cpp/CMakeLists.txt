@@ -10,8 +10,8 @@ project(proteus_host)
 
 set(NATIVERENDER_ROOT_PATH ${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${NATIVERENDER_ROOT_PATH})
-# ★HA0.5：平台适配层（文本度量/字体——换壳不改；platform/harmony/proteus_text_platform.h）
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../../../../../../platform/harmony/proteus-platform/src/main/cpp)
+# ★HA0.5 平台适配层（文本度量/字体）已随 HAR **自持**（proteus_render/src/main/cpp/proteus_text_platform.h）
+#   ⇒ 经下方 HAR helpers 的引号 include 解析，无需再引框架深度相对路径（决策 #725；见 HAR CMakeLists 注释）。
 # ★HAR runtime 提供的共享 helper 头（proteus_host_helpers.h；dev→runtime 单向依赖，允许方向）
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../../../proteus_render/src/main/cpp)
 

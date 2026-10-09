@@ -205,6 +205,12 @@ jobs:
       - name: Android runtime AAR 新鲜度（runtime 源哈希 ↔ 入库 AAR，防"源改了 AAR 没重建"）
         run: pnpm run check:android-runtime-aar-fresh
 
+      # ★★★决策 #725：鸿蒙 runtime HAR 随包副本新鲜度（prebuilt ⇄ 真源 逐字节哈希）。
+      #   改了 hosts/harmony/.../proteus_render 却没同步 prebuilt/harmony ⇒ **外部用户（无框架 checkout）
+      #   跑旧运行时**（本地全绿、外部错——同 #666/#721）。★纯 Node 内容哈希 ⇒ CI 可跑（不需 DevEco）。
+      - name: 鸿蒙 runtime HAR 随包副本新鲜度（prebuilt ⇄ 真源，防"真源改了副本没同步"）
+        run: pnpm run check:harmony-runtime-prebuilt
+
       # ★★C2（2026-10-01）：SVG 段列表的跨语言序列化形态（内核 serde ⇄ 两端翻译器）——
       #   真缺陷教训：两端各写"臆想的形态" ⇒ 层建不出来而内核读数全对（静默）。
       - name: SVG 段列表跨语言形态（C2：内核 serde ⇄ 双端翻译器）
