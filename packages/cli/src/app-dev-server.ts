@@ -23,6 +23,7 @@ import { buildAppBundle } from './app-bundle'
 import { appBundleFile, type AppPlatform } from './targets'
 import { resolveAppRoutes } from './app-routes'
 import { renderDevtoolsPage } from './app-devtools-page'
+import { inlineMapOf, mapStack, type RawSourceMap } from './sourcemap'
 
 export interface AppDevServerOptions {
   projectRoot: string
@@ -137,6 +138,9 @@ export async function startAppDevServer(opts: AppDevServerOptions): Promise<AppD
   let lastTree: unknown = null              // ★元素内省（决策 #674）：当前屏实例化节点树（含 rects 几何）
   let lastInspect: { id: number; time: number } | null = null   // ★元素点选（决策 #675）
   let pendingCmd: CmdEvent | null = null                        // ★面板→设备命令（决策 #701，one-shot）
+  /** ★source map 缓存（决策 #711）：按 bundle 版本缓存（dev 变 ⇒ 重抽）。 */
+  let mapCacheVersion = -1
+  let mapCache: RawSourceMap | null = null
   /** ★★原始响应**按需**取（决策 #708）：net 事件只带元数据（含 id），原始体另存此表（有界）；
    *   面板点某行 ⇒ `GET /netbody?id=` 取**该条**的原始响应。**不进 SSE 快照**（否则 80×64KB ≈ 5MB/帧，撑爆）。 */
   const netBodies = new Map<number, string>()
@@ -170,6 +174,24 @@ export async function startAppDevServer(opts: AppDevServerOptions): Promise<AppD
     netLog.push(meta)
     if (netLog.length > 80) netLog.shift()
     broadcast({ type: 'net', ...meta })
+  }
+
+  /**
+   * ★source map 栈映射（决策 #711，**零依赖**）：读 bundle 的**内联** sourceMap（按版本缓存）⇒ 逐帧映射。
+   *   失败（无 map / 无内联 / 解析错）⇒ 原样返回（**不阻断**——映射是辅助，不因它挂掉整个端点）。
+   */
+  const mapStackText = (stack: string): string => {
+    if (!stack) return ''
+    try {
+      if (mapCacheVersion !== version) {
+        mapCacheVersion = version
+        mapCache = inlineMapOf(fs.readFileSync(outFile, 'utf-8'))
+      }
+      if (!mapCache) return stack
+      return mapStack(mapCache, stack)
+    } catch {
+      return stack
+    }
   }
 
   const rebuild = async (reason: string): Promise<void> => {
@@ -409,8 +431,16 @@ export async function startAppDevServer(opts: AppDevServerOptions): Promise<AppD
       res.end(JSON.stringify({ id, body: netBodies.get(id) ?? null }))
       return
     }
+    // ★★source map 栈映射（决策 #711）：`GET /mapstack?stack=<urlencoded>` ⇒ 栈里的
+    //   `bundle-superapp.js:行:列` 映射回 `.vue`/`.ts` 源（map 从 bundle 的**内联** sourceMap 抽，缓存）。
+    if (url === '/mapstack') {
+      const q = new URLSearchParams(query ?? '')
+      res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' })
+      res.end(mapStackText(q.get('stack') ?? ''))
+      return
+    }
     res.writeHead(404, { 'content-type': 'text/plain' })
-    res.end('proteus dev server: / (devtools) · /health · /version · /bundle · /events · /ping · /tree · /inspect · /trace · /log · /bridge · /panelcmd · /cmd')
+    res.end('proteus dev server: / (devtools) · /health · /version · /bundle · /events · /ping · /tree · /inspect · /trace · /log · /bridge · /panelcmd · /cmd · /netbody · /mapstack')
   })
 
   await new Promise<void>((resolve) => server.listen(port, host, () => resolve()))
@@ -449,6 +479,9 @@ export async function startAppDevServer(opts: AppDevServerOptions): Promise<AppD
       for (const w of watchers) w.close()
       for (const c of sseClients) { try { c.end() } catch { /* 已断 */ } }
       sseClients.clear()
+      // ★强制关闭 keep-alive 连接（决策 #711 修）：Node 18+ 的 `server.close()` **不关空闲 keep-alive 连接** ⇒
+      //   调用方（测试/CLI 退出）会挂到 keep-alive 超时（实测 vitest afterAll **hook 超时 10s**）。
+      server.closeAllConnections?.()
       await new Promise<void>((resolve) => server.close(() => resolve()))
     },
   }

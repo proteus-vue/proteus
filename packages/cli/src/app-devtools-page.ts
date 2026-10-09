@@ -310,6 +310,7 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
       <span class="ep"><b>GET /panelcmd</b>面板→设备命令（入队）</span>
       <span class="ep"><b>GET /cmd</b>宿主取命令（轮询）</span>
       <span class="ep"><b>GET /netbody</b>原始响应（按需）</span>
+      <span class="ep"><b>GET /mapstack</b>source map 栈映射</span>
     </div>
   </div>
 </main>

@@ -210,6 +210,9 @@ export async function buildAppBundle(opts: BuildAppBundleOptions): Promise<Build
       target: 'es2020',
       minify: opts.dev ? false : true,
       legalComments: 'none',
+      // ★★★source map（决策 #711）：**dev 内联**（`//# sourceMappingURL=data:...base64`）——调试生态地基
+      //   （栈/日志行号能映射回 `.vue`/`.ts` 源）。release 不出（生产不需、减小体积）。
+      ...(opts.dev ? { sourcemap: 'inline' as const, sourcesContent: true } : {}),
       // ★`import.meta` 在 iife 下为空——**预期**（App bundle 不用 `import.meta.env`：平台探测有运行时兜底，
       //   见 shared/platform/index.ts 的 detectMPRuntime）。esbuild 默认把它当警告刷屏（用户实测"终端很吵"）
       //   ⇒ 显式静音该条（不影响其它潜在警告）。
