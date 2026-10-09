@@ -3558,6 +3558,27 @@ final class SelfDrawView: UIView {
         return abs.offsetBy(dx: -contentOffset.x, dy: -contentOffset.y)
     }
 
+    /// ★★就地编辑某节点的**绘制属性**（DevTools 就地编辑 v1 · 决策 #702）——直接改该节点 CALayer 的
+    ///   可绘制属性（**不改内核树**，属 dev 期实时预览；重新渲染即还原）。
+    ///   支持：`backgroundColor` / `color`（文本色）/ `opacity` / `borderRadius` / `borderWidth` / `borderColor`。
+    ///   【为什么先做这一档】这些是**纯绘制**属性 ⇒ 直接写层即可，**无需内核重排/重挂**（零布局副作用）；
+    ///   布局类属性（width/padding…）的就地编辑需走内核增量（`applyOps`），属后续批次。
+    @discardableResult
+    func applyLiveEdit(id: Int, key: String, value: String) -> Bool {
+        guard let layer = layersById[id] else { return false }
+        switch key {
+        case "backgroundColor": layer.backgroundColor = parseHexColor(value)?.cgColor
+        case "borderColor": layer.borderColor = parseHexColor(value)?.cgColor
+        case "color": (layer as? CATextLayer)?.foregroundColor = parseHexColor(value)?.cgColor
+        case "opacity": guard let d = Double(value) else { return false }; layer.opacity = Float(max(0, min(1, d)))
+        case "borderRadius": guard let d = Double(value) else { return false }; layer.cornerRadius = CGFloat(d)
+        case "borderWidth": guard let d = Double(value) else { return false }; layer.borderWidth = CGFloat(d)
+        default: return false
+        }
+        setNeedsLayout()
+        return true
+    }
+
     /// 面板→设备命令 `highlight` 的覆盖层（决策 #701：DevTools 元素高亮）
     private var highlightLayer: CAShapeLayer?
 
@@ -5555,6 +5576,10 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
 
     /// ★DevTools 元素高亮（决策 #701）：面板选中节点 ⇒ 在设备屏上给该节点 rect 描边覆盖
     func highlightNode(_ id: Int) { view?.highlightNode(id) }
+
+    /// ★DevTools 就地编辑 v1（决策 #702）：改某节点的绘制属性（面板下发 key/value）
+    @discardableResult
+    func applyLiveEdit(id: Int, key: String, value: String) -> Bool { view?.applyLiveEdit(id: id, key: key, value: value) ?? false }
 
     /// ★★**离屏像素自检**（2026-10-03 · 三端对齐：判据 ④ 的 iOS 腿）——
     ///   把层树渲染到离屏位图，数"与背景色不同"的像素。

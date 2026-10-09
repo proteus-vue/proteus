@@ -167,6 +167,9 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
   .box .bh{padding:9px var(--s3);background:var(--surface-3);font-size:12px;font-family:var(--mono);color:var(--ink);border-bottom:1px solid var(--line)}
   .bm{display:grid;grid-template-columns:auto 1fr;gap:5px var(--s4);padding:var(--s3);font-size:12px;font-family:var(--mono)}
   .bm .k{color:var(--dim)} .bm .v{color:var(--ink);text-align:right;overflow-wrap:anywhere}
+  /* ★就地编辑输入（决策 #702） */
+  .bedit{width:100%;background:var(--surface-3);border:1px solid var(--line-2);border-radius:4px;color:var(--ink);font:inherit;font-size:12px;padding:2px 6px;text-align:right;outline:none}
+  .bedit:focus{border-color:var(--brand)}
   .mbox{position:relative;margin:var(--s3);border:1px dashed var(--brand);background:var(--brand-soft);border-radius:5px;min-height:22px}
   .mbox .lbl{position:absolute;top:-8px;left:8px;background:var(--surface);padding:0 5px;font-size:10px;color:var(--brand);letter-spacing:.3px}
 
@@ -369,12 +372,26 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
     const r = n.rect || {};
     const rc = n.rect ? 'x=' + Math.round(r.x) + '  y=' + Math.round(r.y) + '  ' + Math.round(r.width) + '×' + Math.round(r.height) : '（无内核几何）';
     const styles = Object.keys(n).filter((k) => k !== 'id' && k !== 'parentId' && k !== 'tag' && k !== 'text' && k !== 'rect' && !Array.isArray(n[k]))
-      .map((k) => '<div class="k">' + escapeHtml(k) + '</div><div class="v">' + escapeHtml(typeof n[k] === 'object' ? JSON.stringify(n[k]) : String(n[k])) + '</div>').join('');
+      .map((k) => {
+        var v = typeof n[k] === 'object' ? JSON.stringify(n[k]) : String(n[k]);
+        // ★就地编辑（决策 #702）：可编辑的绘制属性 ⇒ 渲染输入框（回车提交到设备）
+        if (EDITABLE.indexOf(k) >= 0) {
+          return '<div class="k">' + escapeHtml(k) + '</div><div class="v"><input class="bedit" data-id="' + n.id + '" data-key="' + escapeHtml(k) + '" value="' + escapeHtml(v) + '"></div>';
+        }
+        return '<div class="k">' + escapeHtml(k) + '</div><div class="v">' + escapeHtml(v) + '</div>';
+      }).join('');
     boxEl.style.display = 'block';
     boxEl.innerHTML = '<div class="bh">#' + n.id + ' &lt;' + escapeHtml(n.tag || n.semantic || '?') + '&gt;' + (n.text ? ' “' + escapeHtml(String(n.text).slice(0, 40)) + '”' : '') + '</div>'
       + '<div class="mbox"' + (r.width ? ' style="width:' + Math.max(4, Math.min(560, r.width)) + 'px;height:' + Math.max(4, Math.min(200, r.height)) + 'px"' : '') + '><span class="lbl">内核 rect</span></div>'
       + '<div class="bm"><div class="k">rect</div><div class="v">' + escapeHtml(rc) + '</div>' + styles + '</div>';
   }
+  // ★就地编辑输入：回车提交（决策 #702）
+  boxEl.addEventListener('keydown', function (ev) {
+    var t = ev.target;
+    if (!t || !t.classList || !t.classList.contains('bedit')) return;
+    if (ev.key !== 'Enter') return;
+    sendEdit(Number(t.dataset.id), t.dataset.key, t.value);
+  });
   // ── 事件 trace（决策 #675）──
   // ★面板→设备命令（决策 #701）：选中节点 ⇒ 下发 highlight（设备屏上高亮该节点）
   function sendCmd(type, params) {
@@ -382,6 +399,9 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
     fetch('/panelcmd?' + q.toString()).catch(function () {});
   }
   function sendHighlight(id) { sendCmd('highlight', { id: id }); }
+  // ★就地编辑 v1（决策 #702）：改某节点的**绘制属性**（设备上实时预览，重新渲染即还原）
+  const EDITABLE = ['backgroundColor', 'color', 'opacity', 'borderRadius', 'borderWidth', 'borderColor'];
+  function sendEdit(id, key, value) { sendCmd('edit', { id: id, key: key, value: value }); }
   // ★REPL（决策 #701）：输入表达式 ⇒ 设备 JSContext 求值 ⇒ 结果回 Console
   const replEl = $('repl');
   if (replEl) {
