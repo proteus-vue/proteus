@@ -69,7 +69,7 @@ const CAPS = [
 
 /** ★已知缺口（具名登记：理由 + 决策号；补齐后删除）——不静默豁免。 */
 const KNOWN_GAPS = {
-  'harmony:splash': '鸿蒙启动占位未接（决策 #728 仍列）：release 同步读 rawfile bundle、无异步加载窗口 ⇒ 暂不需应用级占位（系统 startWindow 已遮黑）；待"鸿蒙 dev 通道深化/加载态"批次按需补',
+  // （当前无缺口：鸿蒙启动占位已于 #731 接上）
 }
 
 const problems = []
