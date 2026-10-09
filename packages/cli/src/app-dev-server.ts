@@ -121,8 +121,8 @@ export async function startAppDevServer(opts: AppDevServerOptions): Promise<AppD
   interface NetEvent { channel: 'native' | 'project'; method: string; path: string; status: number; bytes: number; ms: number; time: number }
   interface ConsoleEvent { channel: 'native' | 'project'; level: string; text: string; time: number }
   interface TraceEvent { gesture: string; id: number; chain: number[]; handled: boolean; fired: number[]; time: number }
-  /** ★面板→设备命令（决策 #701）：`highlight`（高亮节点）/ `eval`（设备上跑 JS，REPL）/ `edit`（就地改样式）。 */
-  interface CmdEvent { type: string; nodeId?: number; expr?: string; time: number }
+  /** ★面板→设备命令（决策 #701）：`highlight` / `eval`（REPL）/ `edit`（就地改绘制属性，决策 #702）。 */
+  interface CmdEvent { type: string; nodeId?: number; expr?: string; key?: string; value?: string; time: number }
   const events: RebuildEvent[] = []         // 环形（近 50 条）重建时间线
   const netLog: NetEvent[] = []             // 环形网络日志（dev server 收到的请求——它就是"网络源头"）
   const consoleLog: ConsoleEvent[] = []     // 环形控制台日志（宿主转发：JS console + 宿主 dev 事件）
@@ -333,10 +333,12 @@ export async function startAppDevServer(opts: AppDevServerOptions): Promise<AppD
       const cmd: CmdEvent = { type, time: Date.now() }
       if (q.get('id') != null && q.get('id') !== '') cmd.nodeId = Number(q.get('id'))
       if (q.get('expr') != null) cmd.expr = q.get('expr') ?? ''
+      if (q.get('key') != null) cmd.key = q.get('key') ?? ''
+      if (q.get('value') != null) cmd.value = q.get('value') ?? ''
       if (type) {
         pendingCmd = cmd
         // ★SSE 事件的 `type` 是**事件判别符**（'cmd'）——命令种类另用 `kind`，避免与 cmd.type 撞键
-        broadcast({ type: 'cmd', kind: cmd.type, nodeId: cmd.nodeId, expr: cmd.expr, time: cmd.time })
+        broadcast({ type: 'cmd', kind: cmd.type, nodeId: cmd.nodeId, expr: cmd.expr, key: cmd.key, value: cmd.value, time: cmd.time })
       }
       res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' })
       res.end(JSON.stringify({ ok: !!type, queued: cmd }))

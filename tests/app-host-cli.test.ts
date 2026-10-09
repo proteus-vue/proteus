@@ -222,6 +222,11 @@ describe('★完整宿主 · iOS 宿主模板为运行期形态（决策 #683）
     const page = fs.readFileSync(path.join(ROOT, 'packages/cli/src/app-devtools-page.ts'), 'utf-8')
     expect(page, '面板下发 highlight').toContain('function sendHighlight(')
     expect(page, '面板 REPL 输入').toContain("$('repl')")
+    // ★就地编辑 v1（决策 #702）
+    expect(shell, 'edit 命令分支').toMatch(/case "edit"/)
+    expect(rt, '就地编辑入口').toContain('func applyLiveEdit(')
+    expect(page, '面板下发 edit').toContain('function sendEdit(')
+    expect(server, 'edit 命令字段').toContain('cmd.key')
   })
 })
 
@@ -287,6 +292,13 @@ describe.skipIf(!hasSuperapp)('★完整宿主 · dev server（热刷核心）',
     const c3 = await fetch(`${s.url}/cmd`).then((r) => r.json()) as { type: string; expr: string }
     expect(c3.type).toBe('eval')
     expect(c3.expr).toBe('1+1')
+    // edit 命令（决策 #702）
+    await fetch(`${s.url}/panelcmd?type=edit&id=7&key=backgroundColor&value=%23ff0000`)
+    const c4 = await fetch(`${s.url}/cmd`).then((r) => r.json()) as { type: string; nodeId: number; key: string; value: string }
+    expect(c4.type).toBe('edit')
+    expect(c4.nodeId).toBe(7)
+    expect(c4.key).toBe('backgroundColor')
+    expect(c4.value).toBe('#ff0000')
   }, 30_000)
 
   it('改源码 ⇒ version 递增（真 watch；有界条件等待，非盲等）', async () => {

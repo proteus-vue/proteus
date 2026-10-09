@@ -711,6 +711,14 @@ final class ProteusSceneDelegate: UIResponder, UIWindowSceneDelegate {
         case "eval":
             let expr = (o["expr"] as? String) ?? ""
             if !expr.isEmpty { d.devLog("log", "› \(expr)\n\(d.evalExpr(expr))") }
+        case "edit":
+            let id = (o["nodeId"] as? NSNumber)?.intValue ?? 0
+            let key = (o["key"] as? String) ?? ""
+            let value = (o["value"] as? String) ?? ""
+            if !key.isEmpty {
+                let ok = d.bridge.applyLiveEdit(id: id, key: key, value: value)
+                d.devLog(ok ? "info" : "warn", "edit #\(id) \(key)=\(value)\(ok ? "" : "（不支持/无该层）")")
+            }
         default:
             break
         }
