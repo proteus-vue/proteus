@@ -33,6 +33,8 @@ export class DevWatch {
   public takeLogs: () => string[] = () => [];
   public takeTraces: () => string[] = () => [];
   public applyBundle: (b: string, v: string) => void = () => {};
+  /** ★面板→设备命令（决策 #729）：GET `/cmd` 取到非空命令 ⇒ 回调宿主 `applyCommand(json)`。 */
+  public onCmd: (json: string) => void = () => {};
 
   constructor(base: string) {
     this.base = base.replace(/\/+$/, '');
@@ -108,7 +110,12 @@ export class DevWatch {
     // ④ 实例化树 → Elements（有则上报）
     const tree: string = this.takeTreeJson();
     if (tree.length > 0) { this.post('/tree', tree); }
-    // ⑤ 版本 → 热刷（最后一件事；回调里放开单飞）
+    // ⑤ 面板→设备命令（决策 #729）：`/cmd` one-shot（取走即清）；非空 ⇒ 宿主执行（highlight/edit/reset/eval）。
+    this.get('/cmd', (c: string) => {
+      const t: string = c.trim();
+      if (t.length > 2 && t !== '{}' && t !== 'null') { this.onCmd(t); }
+    });
+    // ⑥ 版本 → 热刷（最后一件事；回调里放开单飞）
     this.get('/version', (v: string) => {
       const nv: string = v.trim();
       if (nv.length > 0 && nv !== this.lastVer) {

@@ -181,6 +181,8 @@ static napi_value HostRtShellEvent(napi_env env, napi_callback_info info) {
 
 /** App 合成页的持久内核树（真实触摸命中用；`AppScreenCommands` 建、`AppScreenHitAt` 打） */
 static uint64_t g_appTouchTree = 0;
+/** ★设备密度（vp2px；AppScreenCommands 记录）——`appScreenNodeRect` 把内核设计单位 rect 换算成 **cmd 同口径（物理 px）**。 */
+static double g_appScreenDensity = 1.0;
 static std::string g_appTouchPage;
 static std::string g_appTouchFilesDir;
 static int g_appTouchContentNodes = 0;
@@ -299,8 +301,35 @@ static napi_value AppScreenHitAt(napi_env env, napi_callback_info info) {
     napi_value out; napi_create_string_utf8(env, rj.c_str(), rj.size(), &out); return out;
 }
 
-/** 把长度串里的 `<n>px` 数值 ×scale（CSS 逻辑 px → 物理 px；%、auto、关键字不动） */
-static std::string scalePxInCssLengths(const std::string& s, double scale) {
+/**
+ * ★★★appScreenNodeRect(id): string(JSON) —— **dev 元素高亮**（决策 #729）：返回内核节点 rect，
+ *   **cmd 同口径（物理 px = 设计单位 × density）** ⇒ 宿主可直接把它当作一条背景 cmd 叠加（半透明高亮框）。
+ *   ★与 `appScreenHitAt` 同源（同一棵 `g_appTouchTree` 内核树）——"高亮框必须与命中同源"（本仓纪律）。
+ * 出参 `{ok,x,y,w,h}`；未建树/无该节点 ⇒ `{ok:false}`。
+ */
+static napi_value AppScreenNodeRect(napi_env env, napi_callback_info info) {
+    size_t argc = 1; napi_value args[1] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    int id = -1;
+    if (argc >= 1) { int32_t v = -1; napi_get_value_int32(env, args[0], &v); id = v; }
+    std::string rj = "{\"ok\":false}";
+    if (g_appTouchTree != 0 && id >= 0) {
+        char* raw = proteus_layout_rects(g_appTouchTree);
+        if (raw != nullptr) {
+            std::unordered_map<int, Rect> rectMap; parseRects(raw, rectMap);
+            proteus_layout_free_string(raw);
+            auto it = rectMap.find(id);
+            if (it != rectMap.end()) {
+                char b[128];
+                snprintf(b, sizeof(b), "{\"ok\":true,\"x\":%.2f,\"y\":%.2f,\"w\":%.2f,\"h\":%.2f}",
+                         it->second.x * g_appScreenDensity, it->second.y * g_appScreenDensity,
+                         it->second.w * g_appScreenDensity, it->second.h * g_appScreenDensity);
+                rj = b;
+            }
+        }
+    }
+    napi_value out; napi_create_string_utf8(env, rj.c_str(), rj.size(), &out); return out;
+}static std::string scalePxInCssLengths(const std::string& s, double scale) {
     if (scale == 1.0 || s.empty()) return s;
     std::string out; out.reserve(s.size() + 8);
     for (size_t i = 0; i < s.size();) {
@@ -447,6 +476,7 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
     //   （旧版此处 `proteus_layout_destroy` ⇒ 句柄释放后无法由真触摸驱动命中）。
     if (g_appTouchTree != 0) proteus_layout_destroy(g_appTouchTree);
     g_appTouchTree = handle;
+    g_appScreenDensity = density;   // ★dev 高亮（appScreenNodeRect）换算用
     g_appTouchPage = page;
     g_appTouchFilesDir = filesDir;
     g_appTouchContentNodes = (int)nItems.size();
@@ -791,6 +821,7 @@ static napi_value HostBridgeInit(napi_env env, napi_value exports) {
         {"appScreenCommands", nullptr, AppScreenCommands, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"appScreenContentHeight", nullptr, AppScreenContentHeight, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"appScreenHitAt", nullptr, AppScreenHitAt, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"appScreenNodeRect", nullptr, AppScreenNodeRect, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"appScreenAnimTick", nullptr, AppScreenAnimTick, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"hostRtShellInstall", nullptr, HostRtShellInstall, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"hostRtShellEvent", nullptr, HostRtShellEvent, nullptr, nullptr, nullptr, napi_default, nullptr},
@@ -799,6 +830,7 @@ static napi_value HostBridgeInit(napi_env env, napi_value exports) {
         {"hostAppBoot", nullptr, HostAppBoot, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"hostAppDrive", nullptr, HostAppDrive, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"hostAppRender", nullptr, HostAppRender, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"hostAppEval", nullptr, HostAppEval, nullptr, nullptr, nullptr, napi_default, nullptr},
     };
     napi_define_properties(env, exports, sizeof(desc) / sizeof(desc[0]), desc);
     return exports;
