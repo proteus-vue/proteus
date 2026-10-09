@@ -1,24 +1,22 @@
 <script setup lang="ts">
-// website/src/components/PreviewMount.vue —— ★Playground 实时预览面板（决策 #699）
+// website/src/components/PreviewMount.vue —— ★Playground 实时预览面板（决策 #699/#700）
 //
-// 把 Playground 编辑器的 SFC 源码**实时挂载成真实 Vue 应用**（`playground/live-mount.ts`），
-// 并提供**设备框**（复用 DEVICES 真实宽高）。大厂 Playground 的"写即见"第一档。
+// 把 Playground 的**多文件项目**（`playground/project.ts`）实时挂载成真实 Vue 应用
+// （`playground/build-project.ts`：多文件 ESM 模块链接 + 外部 ESM 依赖）。大厂 Playground 的"写即见"。
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { mountPreview } from '../playground/live-mount'
+import { mountProject } from '../playground/build-project'
+import type { PlaygroundProject } from '../playground/project'
 
-const props = defineProps<{
-  source: string
-  /** 设备框宽度（px）；<=0 表示自适应父容器 */
-  width?: number
-  /** 设备框高度（px）；0/未给 ⇒ 自适应内容高度 */
-  height?: number
-}>()
+const props = defineProps<{ project: PlaygroundProject }>()
 
 const hostRef = ref<HTMLElement | null>(null)
 const err = ref('')
+const building = ref(false)
 let styleEl: HTMLStyleElement | null = null
 let unmountFn: (() => void) | null = null
 let timer: ReturnType<typeof setTimeout> | null = null
+/** 递增令牌：并发构建时只应用最后一次（防旧结果覆盖新结果） */
+let token = 0
 
 function projectCss(css: string): void {
   if (!styleEl) {
@@ -29,29 +27,36 @@ function projectCss(css: string): void {
   styleEl.textContent = css
 }
 
-function renderNow(): void {
+async function renderNow(): Promise<void> {
   const el = hostRef.value
   if (!el) return
+  const my = ++token
   err.value = ''
+  building.value = true
   try {
+    const r = await mountProject(el, props.project)
+    if (my !== token) { r.unmount(); return } // 期间又有新构建 ⇒ 丢弃本次
     unmountFn?.()
-    const r = mountPreview(el, props.source)
     unmountFn = r.unmount
     projectCss(r.css)
   } catch (e) {
+    if (my !== token) return
     unmountFn = null
     err.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    if (my === token) building.value = false
   }
 }
 
-/** 防抖（编辑期不每键重挂；120ms 足够"写即见"） */
+/** 防抖（编辑期不每键重挂；200ms 足够"写即见"） */
 function schedule(): void {
   if (timer) clearTimeout(timer)
-  timer = setTimeout(renderNow, 120)
+  timer = setTimeout(() => void renderNow(), 200)
 }
 
-onMounted(renderNow)
-watch(() => props.source, schedule)
+onMounted(() => void renderNow())
+// 深监 project（多文件内容/增删都会触发）
+watch(() => props.project, schedule, { deep: true })
 onBeforeUnmount(() => {
   if (timer) clearTimeout(timer)
   unmountFn?.()
@@ -62,19 +67,14 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="pv-wrap">
-    <div
-      class="pv-frame"
-      :style="{
-        width: width && width > 0 ? width + 'px' : '100%',
-        height: height && height > 0 ? height + 'px' : 'auto',
-      }"
-    >
-      <!-- 真实挂载点（Vue 应用注入此元素） -->
+    <div class="pv-frame">
       <div ref="hostRef" class="pv-host" />
+      <p-text v-if="building && !err" class="pv-status">编译中…</p-text>
       <p-text v-if="err" class="pv-err">✗ {{ err }}</p-text>
     </div>
     <p-text class="pv-note">
-      真实 Vue 编译 + 挂载产物（`@vue/compiler-sfc` 浏览器内直跑）· 宽度自适应面板 · 边界：仅 `vue` 导入 · 真 TS 注解不支持
+      真实 Vue 编译 + 挂载（`@vue/compiler-sfc` 浏览器内直跑）· 多文件 ESM 模块链接 · 依赖走 esm.sh ·
+      边界：仅 `.vue`/`.js` · `vue` 用宿主单例 · 无循环 import
     </p-text>
   </div>
 </template>
@@ -86,14 +86,13 @@ onBeforeUnmount(() => {
   border-radius: var(--radius-md, 10px);
   /* ★背景 = 官网深色面板令牌（p-* 组件默认浅色文字为深色主题设计——白底会"隐形"） */
   background: var(--panel, #141419);
-  /* ★profile-boundary：overflow 只用 Skyline 接受的 hidden（预览框按设备固定大小，超出裁切） */
   overflow: hidden;
   margin: 0 auto;
   min-height: 80px;
-  /* ★设备框宽（如 Web 1440）常宽于面板 ⇒ 上限 100%，避免横向溢出裁切 */
   max-width: 100%;
 }
 .pv-host { min-height: 40px; }
+.pv-status { display: block; color: var(--muted); font-size: 12px; padding: 8px 12px; }
 .pv-err {
   display: block;
   color: var(--danger, #b42318);
@@ -102,7 +101,6 @@ onBeforeUnmount(() => {
   padding: 10px 12px;
   font-size: 12px;
   font-family: ui-monospace, Menlo, monospace;
-  /* ★profile-boundary：white-space 保持默认（normal 为 Skyline 接受值）；长串换行用 overflow-wrap */
   overflow-wrap: anywhere;
 }
 .pv-note { display: block; color: var(--muted); font-size: 12px; margin-top: 8px; }

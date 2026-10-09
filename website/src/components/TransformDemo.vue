@@ -9,17 +9,18 @@
 //   COMPILED BACKEND（Node 真实；Rust 诚实禁用——浏览器无 Rust 运行时）
 //   DEVICE（预览框真实宽高 + G-25 formForWidth 档位真求解）
 import { computed, ref, watch } from 'vue'
-import { compileLive, DEMO_SOURCE, DEMO_SOURCE_EN } from '../playground/compile'
+import { compileLive } from '../playground/compile'
 // ★IR Tab：G-29 NodeBackend 真实 CompilerIR（./node 子路径——浏览器安全单入口，index 全量含 fs 仅 node 侧）
 import { createNodeCompilerBackend } from '@proteus-vue/compiler-backend/node'
 // ★语法色（@proteus-vue/docs 公共导出：code → span.docs-tok-*，内容全转义防注入；样式见 style.css --syn-*）
 import { highlight } from '@proteus-vue/docs'
 // ★#388 后端切换（全部真实调用 @proteus-vue/render-backend 五官方后端）
 import { RENDER_BACKENDS, COMPILE_BACKENDS, DEVICES, renderWithBackend, deviceForm, type TreeJsonNode } from '../playground/backends'
-import { decodeSource, encodeSource, playgroundUrl } from '../playground/share'
+import { decodeSource, playgroundUrl } from '../playground/share'
 import RenderBox from './RenderBox.vue'
-// ★决策 #699：实时预览面板（真实 Vue 编译+挂载）——标准 Playground 的"写即见"支柱
+// ★决策 #699/#700：实时预览面板（真实 Vue 编译+挂载；多文件项目 + 外部 ESM 依赖）
 import PreviewMount from './PreviewMount.vue'
+import { demoProject, encodeProject, decodeProject, singleFileProject, type PlaygroundProject } from '../playground/project'
 // ★#477 Mini Playground chrome 双语
 import { locale, t } from '../i18n'
 // ★#445/#449 桌面原语（豁免回收）：剪贴板 copyText + 页面 URL 读写（location/history 收口）——env 省略回落真实全局，页面零裸平台 API
@@ -38,14 +39,35 @@ const props = defineProps({
 
 const backend = createNodeCompilerBackend()
 
-function demoSource(): string {
-  return locale.value === 'en' ? DEMO_SOURCE_EN : DEMO_SOURCE
+// ★决策 #700：编辑对象 = **多文件项目**（不再是单字符串）。单文件分享串仍兼容（回退为单文件项目）。
+const project = ref<PlaygroundProject>(
+  props.initialSource
+    ? decodeProject(props.initialSource) ?? singleFileProject(decodeSource(props.initialSource))
+    : demoProject(locale.value === 'en'),
+)
+/** 当前编辑的文件（默认入口） */
+const activeFile = ref(project.value.entry)
+const fileNames = computed(() => Object.keys(project.value.files))
+const activeExt = computed(() => (activeFile.value.split('.').pop() ?? 'vue'))
+function highlightLangOf(name: string): string {
+  const e = name.split('.').pop() ?? 'vue'
+  return e === 'vue' ? 'vue' : 'js'
 }
-const source = ref(props.initialSource || demoSource())
-// ★#477 语言切换时，若编辑器仍是默认示例（未编辑）→ 跟随新语言；用户改过则保留
+/** 当前文件内容（可写——编辑器 v-model；写入落回该项目文件） */
+const fileContent = computed<string>({
+  get: () => project.value.files[activeFile.value]?.content ?? '',
+  set: (v: string) => {
+    const f = project.value.files[activeFile.value]
+    if (f) f.content = v
+  },
+})
+/** 兼容既有读取（编译 Tab / 分享）——当前文件内容 */
+const source = computed(() => fileContent.value)
+// ★语言切换：仅当仍是默认示例（未改动）时跟随；多文件默认示例整体重制
 watch(locale, () => {
   if (props.initialSource) return
-  if (source.value === DEMO_SOURCE || source.value === DEMO_SOURCE_EN) source.value = demoSource()
+  project.value = demoProject(locale.value === 'en')
+  activeFile.value = project.value.entry
 })
 
 const TABS = ['Preview', 'Skyline', 'IR', 'Web', 'WXSS', 'Render', 'Trace'] as const
@@ -152,12 +174,13 @@ const renderTreeJson = computed(() => (renderTree.value ? JSON.stringify(renderT
 const renderJsonHtml = computed(() => highlight(renderTreeJson.value || '（空）', 'json'))
 
 let timer: ReturnType<typeof setTimeout> | undefined
-watch(source, (src) => {
+watch(fileContent, (src) => {
   clearTimeout(timer)
   timer = setTimeout(() => {
     run(src)
     // 分享链接随编辑同步（desktop replacePageUrl = history.replaceState 收口——不产生历史记录，可复制即复现）
-    if (!props.compact) replacePageUrl(playgroundUrl(currentPageOrigin(), currentPagePathname(), src))
+    // ★决策 #700：分享**整个多文件项目**（不再只是一份 SFC）
+    if (!props.compact) replacePageUrl(playgroundUrl(currentPageOrigin(), currentPagePathname(), encodeProject(project.value)))
   }, 200)
 })
 
@@ -209,7 +232,8 @@ function traceChangedClass(e: { before?: string; after?: string }): string {
 
 // ★#387 编辑器语法色（叠加法）：高亮 pre 垫底 + 文字透明 textarea 浮上——真实可编辑 + 真实语法色，
 //   同源 docs 引擎 highlight（内部转义）；vue 语言不支持时自动退化为纯转义（仍可编辑）
-const sourceHtml = computed(() => highlight(source.value + '\n', 'vue'))
+//   ★决策 #700：按**当前文件扩展名**选语言（.vue / .js）
+const sourceHtml = computed(() => highlight(fileContent.value + '\n', highlightLangOf(activeFile.value)))
 const editorHlEl = ref<HTMLElement | null>(null)
 const composing = ref(false)
 /** ★#389 p-toast 可见态 */
@@ -223,14 +247,38 @@ function syncEditorScroll(e: Event): void {
 }
 
 function copyShareLink(): void {
-  const url = playgroundUrl(currentPageOrigin(), currentPagePathname(), source.value)
+  const url = playgroundUrl(currentPageOrigin(), currentPagePathname(), encodeProject(project.value))
   void copyText(url) // desktop/p-clipboard 原语（Clipboard API + 降级）
   // ★#389 p-toast 反馈（框架内置轻提示）
   toastVisible.value = true
 }
 
-// 初次编译（含首跑渲染后端）
-run(source.value)
+// ── 多文件编辑（决策 #700）──
+/** 重置为默认多文件示例 */
+function resetDemo(): void {
+  project.value = demoProject(locale.value === 'en')
+  activeFile.value = project.value.entry
+}
+/** 新增文件（简单命名：新组件 / 新模块） */
+function addFile(): void {
+  let i = 1
+  while (project.value.files[`components/New${i}.vue`]) i++
+  const name = `components/New${i}.vue`
+  // ★转义闭合标签（`<\/` ）：避免在 SFC 脚本块里出现字面闭合标签提前终止本块
+  const tpl = `<script setup>\n// ${locale.value === 'en' ? 'new component' : '新组件'}\n<\/script>\n\n<template>\n  <p-text>New${i}</p-text>\n</template>\n`
+  project.value.files[name] = { content: tpl }
+  activeFile.value = name
+}
+/** 删除当前文件（入口不可删） */
+function removeFile(): void {
+  const name = activeFile.value
+  if (name === project.value.entry) return
+  delete project.value.files[name]
+  activeFile.value = project.value.entry
+}
+
+// 初次编译（含首跑渲染后端——编译 Tab 以**入口文件**为准）
+run(project.value.files[project.value.entry]?.content ?? '')
 </script>
 
 <template>
@@ -278,16 +326,33 @@ run(source.value)
       <template #aside>
         <p-view class="pg-pane">
           <p-view class="pane-head">
-            <p-text class="pane-label">{{ t('pd.file') }}</p-text>
+            <p-text class="pane-label">{{ activeFile }}</p-text>
             <button v-if="!compact" class="pane-btn" @click="copyShareLink">{{ t('pd.copy') }}</button>
-            <button class="pane-btn" @click="source = demoSource()">{{ t('pd.reset') }}</button>
+            <button class="pane-btn" @click="resetDemo">{{ t('pd.reset') }}</button>
           </p-view>
+          <!-- ★决策 #700：多文件项目——文件页签 + 新增/删除 -->
+          <p-stack direction="row" :gap="6" class="pg-files">
+            <button
+              v-for="f in fileNames"
+              :key="f"
+              class="file-tab"
+              :class="{ on: f === activeFile }"
+              @click="activeFile = f"
+            >{{ f.split('/').pop() }}</button>
+            <button class="file-tab file-add" title="新增文件" @click="addFile">＋</button>
+            <button
+              v-if="activeFile !== project.entry"
+              class="file-tab file-del"
+              title="删除当前文件"
+              @click="removeFile"
+            >✕</button>
+          </p-stack>
           <p-view class="editor-shell" :class="{ composing }">
             <!-- 高亮垫底（aria-hidden：仅供视觉，真实输入在 textarea） -->
             <pre ref="editorHlEl" class="editor-hl" aria-hidden="true"><code v-html="sourceHtml" /></pre>
             <!-- 真实输入层：文字透明 + caret 可见；IME 合成期切回纯文本（合成字透明会看不见） -->
             <textarea
-              v-model="source"
+              v-model="fileContent"
               class="editor-input"
               spellcheck="false"
               wrap="off"
@@ -317,8 +382,8 @@ run(source.value)
         <p-text class="tab-desc"><span class="tab-desc-key">{{ activeTab }}</span>{{ tabInfo(activeTab) }}</p-text>
         <!-- ★#388 Render Tab：选中渲染后端的真实输出（设备框预览 + 后端语义标签） -->
         <p-view v-if="activeTab === 'Preview'" class="preview-view">
-          <!-- 实时预览按面板宽度自适应（设备框仅用于 Render 后端语义树；预览里 1440 设备框会横向溢出） -->
-          <PreviewMount :source="source" :width="0" :height="0" />
+          <!-- 实时预览：整份多文件项目挂载（宽度自适应面板） -->
+          <PreviewMount :project="project" />
         </p-view>
         <p-view v-else-if="activeTab === 'Render'" class="render-view">
           <p-view class="device-frame" :style="{ '--frame-w': device.width + 'px', '--frame-h': device.height + 'px' }">
@@ -476,6 +541,29 @@ run(source.value)
   border-bottom: 1px solid var(--line);
 }
 .pane-label { color: var(--muted); font-size: 12px; margin-right: auto; }
+/* ★决策 #700：多文件项目文件页签 */
+.pg-files {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px 0;
+}
+.file-tab {
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-bottom: none;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  padding: var(--sp-4) var(--sp-10);
+  font-size: 12px;
+  font-family: ui-monospace, Menlo, monospace;
+  cursor: pointer;
+}
+.file-tab.on { color: var(--ink); border-color: var(--brand2); background: rgba(107,124,255,.12); }
+.file-tab.file-add, .file-tab.file-del { padding: var(--sp-4) var(--sp-8); }
+.file-tab:hover { border-color: var(--brand2); }
 .pane-btn {
   color: var(--brand2);
   background: none;
