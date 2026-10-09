@@ -387,6 +387,35 @@ describe('★完整宿主 · iOS 宿主模板为运行期形态（决策 #683）
     expect(gate, '模板 src 纳入 javac').toContain('templates-host/android/src')
   })
 
+  // ★★★决策 #724：Android 启动占位 + 不阻塞主线程（对齐 iOS #694）——用户实测「启动黑屏一下，iOS 有加载提示」
+  it('Android 启动占位 + 后台拉 bundle（决策 #724，对齐 iOS #694）', () => {
+    const act = fs.readFileSync(path.join(ROOT, 'packages/cli/templates-host/android/src/dev/proteus/layoutcore/AppActivity.java'), 'utf-8')
+    // ① 启动占位层（App 名 + 转圈 + 状态文案；首帧后撤）
+    expect(act, '挂启动占位').toContain('new LaunchPlaceholder(')
+    expect(act, '撤占位（首帧后）').toContain('placeholder.remove()')
+    // ② 后台拉 bundle（不阻塞主线程）——主线程同步拉 + sleep 盲等是"黑屏"根因
+    expect(act, '后台拉 bundle').toContain('private void bootAsync()')
+    expect(act, 'bundle 就绪回调').toContain('private void onBundleReady(')
+    expect(act, '后台线程拉取').toContain('proteus-dev-bundle')
+    expect(act, '主线程回调').toContain('runOnUiThread(')
+    // ③ 窗口/根容器底色 = 页面同族浅色（首帧前不闪黑）+ 主题用 **Light** 变体（启动窗口不闪黑）
+    expect(act, '窗口底色浅色').toContain('LaunchPlaceholder.PAGE_BACKGROUND')
+    const mf = fs.readFileSync(path.join(ROOT, 'packages/cli/templates-host/android/AndroidManifest.xml'), 'utf-8')
+    expect(mf, '主题用 Light 变体（浅色 windowBackground）').toContain('Theme.Material.Light.NoActionBar')
+    // 打包期主题规范化：老宿主自愈到 Light（含深色 Material → Light）
+    const pkg = fs.readFileSync(path.join(ROOT, 'packages/cli/src/host-package.ts'), 'utf-8')
+    expect(pkg, '老宿主主题自愈到 Light').toContain('Theme.Material.Light.NoActionBar')
+    // ④ 占位组件存在 + 对齐 iOS 的品牌色/文案 + **内容居中**（对齐 iOS centerX/centerY）
+    const ph = fs.readFileSync(path.join(ROOT, 'packages/cli/templates-host/android/src/dev/proteus/layoutcore/LaunchPlaceholder.java'), 'utf-8')
+    expect(ph, '占位失败态（保留占位）').toContain('void fail(')
+    expect(ph, '品牌色对齐 iOS').toContain('0xFF5B5BD6')
+    expect(ph, 'dev 文案').toContain('正在连接开发服务器')
+    expect(ph, '内容居中（对齐 iOS centerX/centerY）').toMatch(/setGravity\(Gravity\.CENTER\)/)
+    // iOS 侧同样有占位（两端对齐）
+    const ios = fs.readFileSync(path.join(shellDir, 'ProteusApp.swift'), 'utf-8')
+    expect(ios, 'iOS 占位层（基准）').toContain('class ProteusLaunchPlaceholder')
+  })
+
   // ★★Android dev 命令集补齐（决策 #719）：edit/reset + 修 highlight 键名 + DevOverlay 扩展
   it('Android dev 命令集补齐（决策 #719）：highlight 键名修 + edit/reset + DevOverlay 菜单', () => {
     const act = fs.readFileSync(path.join(ROOT, 'packages/cli/templates-host/android/src/dev/proteus/layoutcore/AppActivity.java'), 'utf-8')

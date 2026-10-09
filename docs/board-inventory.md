@@ -161,8 +161,15 @@
 >
 > ★★**2026-10-09 新增（非 plan，立项）**：`docs/harmony-dev-channel-plan.md` —— **鸿蒙 DevTools dev 通道立项**
 > （决策 #719）。固化取证：鸿蒙 CLI 壳**无运行期**（不 eval bundle，只渲染静态 `app-screen-content.json`）⇒
-> 「鸿蒙接 dev 通道」前置是**先把壳升级为运行期壳**；含障碍清单（一次性 VM / 无 INTERNET / 无高亮/节点树能力 /
+> 「鸿蒙接 dev 通道」前置是**先把壳升级为运行期壳**；含障碍清单（一次性 VM / 无 INTERNET / 无高亮·节点树能力 /
 > `packageHarmonyHost` 无 dev 变体）与分三步方案。**本轮仅安卓落地，鸿蒙另立里程碑。**
+>
+> ★★★**2026-10-09 新增（非 plan，规范）**：`docs/proteus-new-host-implementation-semantics.md` —— **新宿主实现语义**
+> （决策 #724）。把 iOS/Android 两套宿主 + dev server 落地经验（决策 #692–#724）固化成**可执行清单**——
+> 核心心智（壳归框架/项目归项目 · 一次性 scaffold 必配自愈）· dev 通道端点与命令语义 · **就地编辑须"改树+全量重挂"**
+> · 启动语义（浅色主题防闪黑 / 占位 / 异步拉 bundle）· 读数语义（周期量每 tick drain / 恒定即口径错）·
+> 两端对齐检查表（iOS 为基准）· 门禁清单 · **反模式总账（症状⇒根因⇒铁律）** · 新宿主 Checklist。
+> **目标：新宿主不再"一步一坑"。**
 > 依赖关系：`Koine`（词汇契约）在底 → `Proteus UI`（组件）在其上 → `Keryx`（图标）为组件提供词汇；`Themis` 为三者提供"一致性可证明"的门禁管线。命名体系延续万神殿（Proteus/Morpheus/Themis/Hephaestus/Charites/Keryx/Koine/Mnemosyne/Janus）。
 
 | 文件 | 说明 |
