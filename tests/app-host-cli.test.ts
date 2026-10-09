@@ -704,6 +704,12 @@ describe('★★★鸿蒙运行期宿主（决策 #725 · 与 Android/iOS 同级
     expect(src, 'onBackPress 消费返回').toContain('return this.goBack()')
     expect(src, '显式左缘滑返判别').toContain('edgeTracking')
     expect(src, '左缘阈值').toContain('this.touchStartX <= 20')
+    // ★★★非触摸重建要"请求一帧"（决策 #726：返回键/滑返后 = 无触摸 ⇒ 无帧 ⇒ 画面停在旧树，"点一下才更新"）
+    expect(src, '重建后请求一帧').toContain('postFrameCallback(this.nudgeCb)')
+    expect(src, '帧回调实例（非闭包）').toContain('class NudgeFrameCallback extends FrameCallback')
+    // C++ 侧标脏（RenderNode 重建后驱动重渲染）
+    const renderCpp = fs.readFileSync(path.join(ROOT, 'hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_render.cpp'), 'utf-8')
+    expect(renderCpp, 'RenderNode 重建后标脏').toContain('OH_ArkUI_RenderNodeUtils_Invalidate')
     // ★反例守卫：不叠横向手势（会抢系统边缘滑返）
     expect(src, '不叠横向手势').not.toContain('PanDirection.Horizontal')
   })
