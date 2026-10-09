@@ -297,6 +297,26 @@ describe('★完整宿主 · iOS 宿主模板为运行期形态（决策 #683）
     expect(act, 'Android 上报 fps').toContain('o.put("fps"')
   })
 
+  // ★CPU Profiler（决策 #715）——静态锁：桥暴露 + 两处真机腿取采样 + 面板渲染
+  it('CPU Profiler（决策 #715）：桥暴露 profileStats + iOS/Android 取采样 + 面板渲染排行', () => {
+    const page = fs.readFileSync(path.join(ROOT, 'packages/cli/src/app-devtools-page.ts'), 'utf-8')
+    expect(page, '面板 CPU 排行渲染').toContain('function renderCpu(')
+    expect(page, '面板消费 perf.profile').toContain('applyProfile(p.profile)')
+    expect(page, '面板 CPU 区块').toContain('CPU · 运行期阶段耗时')
+    // 桥：全局排空入口 + dev 开关
+    const bridge = fs.readFileSync(path.join(ROOT, 'hosts/shared/bridge/entry-superapp.ts'), 'utf-8')
+    expect(bridge, '桥暴露 profile 排空入口').toContain('__proteusSuperappProfile')
+    expect(bridge, '桥按 __DEV__ 开 profiling').toContain('profile: true')
+    // iOS 壳：perfJson 嵌套 profile
+    const shell = fs.readFileSync(path.join(shellDir, 'ProteusApp.swift'), 'utf-8')
+    expect(shell, 'iOS 取 profile 采样').toContain('__proteusSuperappProfile')
+    expect(shell, 'iOS perf 带 profile').toContain('o["profile"] = prof')
+    // Android 壳：recordPerf 嵌套 profile
+    const act = fs.readFileSync(path.join(ROOT, 'packages/cli/templates-host/android/src/dev/proteus/layoutcore/AppActivity.java'), 'utf-8')
+    expect(act, 'Android 取 profile 采样').toContain('__proteusSuperappProfile')
+    expect(act, 'Android perf 带 profile').toContain('o.put("profile"')
+  })
+
   // ★面板→设备命令（决策 #701/#702 安卓腿）：Android 宿主也接 /cmd + 元素高亮 + REPL
   it('Android 宿主接命令通道（决策 #701/#702）：/cmd 轮询 + highlight + eval', () => {
     const act = fs.readFileSync(path.join(ROOT, 'packages/cli/templates-host/android/src/dev/proteus/layoutcore/AppActivity.java'), 'utf-8')

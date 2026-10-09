@@ -11,6 +11,7 @@
 //   不便单测；把内核抽成纯函数 ⇒ 可用 mock host 在 node 侧**端到端**验证（本仓纪律：逻辑尽量可单测）。
 import { createScreenRuntime } from './screen-runtime'
 import type { ScreenRuntimeArtifact } from './screen-runtime'
+import type { ProfEntry } from './runtime-profiler'
 
 /** 宿主原语（App 壳各端 `proteusHost` 的**子集**；平台无关形状） */
 export interface SuperappHostPorts {
@@ -53,6 +54,8 @@ export interface SuperappRuntimeOptions {
   onNote?: (note: string) => void
   /** ★页面处理器运行期错误出口（决策 #712·source map）——转发给 `createScreenRuntime.onError`。 */
   onError?: (error: string) => void
+  /** ★★★**运行期阶段耗时自采样**（CPU Profiler · 决策 #715）——dev 构建开启；缺省零开销。 */
+  profile?: boolean
 }
 
 export interface SuperappRuntime {
@@ -82,6 +85,11 @@ export interface SuperappRuntime {
    *   handler 求值失败（带**模板源位置** `.vue:line:col`）。排空式，供宿主 dev-watch 转发面板 Console。
    */
   handlerErrors(): string[]
+  /**
+   * ★★★**排空运行期阶段耗时**（CPU Profiler · 决策 #715）——自上次调用以来的各屏阶段采样
+   *   （`{屏名: [{label,count,totalMs,maxMs,loc?}]}`，按累计耗时降序）。排空式；未开 profiling ⇒ 空。
+   */
+  profileStats(): Record<string, ProfEntry[]>
   /** ★跨调用状态导出（`{屏名: 数据}`）——一次性 VM 宿主持有、下次回灌 `seedData` */
   snapshot(): Record<string, Record<string, unknown>>
   /**
@@ -117,6 +125,7 @@ export function createSuperappRuntime(opts: SuperappRuntimeOptions): SuperappRun
     ...(opts.seedData ? { seedData: opts.seedData } : {}),
     onNote: note,
     ...(opts.onError ? { onError: opts.onError } : {}),
+    ...(opts.profile ? { profile: true } : {}),   // ★CPU Profiler（决策 #715）
   })
   let cur = ''
   // ★最近一次宿主 mount 回执（见 lastHostReply 注释——失败必须可观测，不得静默）
@@ -245,6 +254,8 @@ export function createSuperappRuntime(opts: SuperappRuntimeOptions): SuperappRun
     devEvents: () => { const out = devEvents.slice(); devEvents.length = 0; return out },
     // ★排空式：当前屏页面处理器运行期错误（带模板源位置）——宿主 dev-watch 转发面板 Console。
     handlerErrors: () => (cur ? rt.instance(cur).handlerErrors() : []),
+    // ★排空式：运行期阶段耗时（CPU Profiler · 决策 #715）——宿主 dev-watch 取走随 /ping?perf= 上报。
+    profileStats: () => rt.profileStats(),
     snapshot: () => rt.snapshot(),
     lastHostReply: () => lastHostReply,
   }

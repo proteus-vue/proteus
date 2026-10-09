@@ -210,6 +210,15 @@ final class ProteusHostDriver {
         }
         o["relayout"] = bridge.relayoutTotal
         o["patches"] = bridge.patchAppliedTotal
+        // ★★★CPU Profiler（决策 #715）：JS 侧运行期阶段耗时（instantiate/flush/dispatch/handler「hN」）——
+        //   排空式取走。嵌套进 perf（面板 `renderProf`/`applyPerf` 消费 `perf.profile`）。
+        if let ctx = self.ctx,
+           let profStr = ctx.evaluateScript("__proteusSuperappProfile ? __proteusSuperappProfile() : '{}'")?.toString(),
+           let pd = profStr.data(using: .utf8),
+           let prof = (try? JSONSerialization.jsonObject(with: pd)) as? [String: Any],
+           !prof.isEmpty {
+            o["profile"] = prof
+        }
         guard let d = try? JSONSerialization.data(withJSONObject: o, options: [.sortedKeys]) else { return "{}" }
         return String(data: d, encoding: .utf8) ?? "{}"
     }

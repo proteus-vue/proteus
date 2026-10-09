@@ -378,6 +378,16 @@ public final class AppActivity extends Activity {
             // ★重排 / patch 计数（内核回执累计，决策 #676）
             o.put("relayout", draw.relayoutTotal);
             o.put("patches", draw.patchAppliedTotal);
+            // ★★★CPU Profiler（决策 #715 · Android 腿）：JS 侧运行期阶段耗时（instantiate/flush/dispatch/
+            //   handler「hN」）——排空式取走，嵌套进 perf（面板消费 `perf.profile`）。★UI 线程 eval 安全
+            //   （recordPerf 只在 UI 线程的 renderCurrent 后调）。键名/形状与 iOS `perfJson()` 一致 ⇒ 端无关。
+            try {
+                QuickJsEngine.EvalResult pr = QuickJsEngine.eval("__proteusSuperappProfile ? __proteusSuperappProfile() : '{}'");
+                if (pr != null && pr.ok && pr.value != null) {
+                    String s = pr.value.trim();
+                    if (!s.isEmpty() && !"{}".equals(s)) o.put("profile", new JSONObject(s));
+                }
+            } catch (Throwable ignored) { /* profiling 尽力而为 */ }
             o.put("t", System.currentTimeMillis());
             devPerfJson = o.toString();
         } catch (Throwable ignored) { }

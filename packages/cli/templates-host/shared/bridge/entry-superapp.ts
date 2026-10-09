@@ -271,6 +271,9 @@ interface SuperappRuntimeHostShape {
         //   走 `console.error`（dev 垫片转发面板 Console·项目通道 error 级）——不再静默吞掉。
         onNote: (n: string) => pushNote(n),
         onError: (e: string) => { pushNote(e); try { console.error(e) } catch { /* 无 console（非 dev）⇒ 仅 notes */ } },
+        // ★★★CPU Profiler（决策 #715）：dev 构建开阶段耗时自采样（instantiate/flush/dispatch/handler）。
+        //   `__DEV__` 由构建注入（dev bundle 为 true，release 为 false）⇒ release 零开销。
+        ...((globalThis as unknown as { __DEV__?: boolean }).__DEV__ ? { profile: true } : {}),
       })
       g.__SUPERAPP_RUNTIME__ = runtime
     }
@@ -337,3 +340,11 @@ interface SuperappRuntimeHostShape {
   const g = globalThis as unknown as { __SUPERAPP_RUNTIME__?: SuperappRuntime }
   return JSON.stringify(g.__SUPERAPP_RUNTIME__?.devEvents() ?? [])
 }
+
+/** ★★★CPU Profiler（决策 #715）：自上次调用以来的**运行期阶段耗时**（排空式）——宿主轮询取走
+ *  随 `/ping?perf=` 上报（`perf.profile`）。形状 `{屏名: [{label,count,totalMs,maxMs,loc?}]}`。 */
+;(globalThis as unknown as { __proteusSuperappProfile?: () => string }).__proteusSuperappProfile = () => {
+  const g = globalThis as unknown as { __SUPERAPP_RUNTIME__?: SuperappRuntime }
+  return JSON.stringify(g.__SUPERAPP_RUNTIME__?.profileStats() ?? {})
+}
+

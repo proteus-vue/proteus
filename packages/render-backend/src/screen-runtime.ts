@@ -36,6 +36,8 @@ import type {
   DispatchState,
   EvalContext,
 } from '@proteus-vue/slot-runtime'
+// ★★★运行期阶段耗时自采样（CPU Profiler · 决策 #715）——dev-only 的框架级归因
+import { createRuntimeProfiler, NULL_PROFILER, type RuntimeProfiler, type ProfEntry } from './runtime-profiler'
 
 /** 一屏的运行期产物（与 `packages/cli/src/app-runtime-content.ts` 的 `ScreenRuntimeArtifact` 同形） */
 export interface ScreenRuntimeArtifact {
@@ -83,6 +85,12 @@ export interface CreateScreenRuntimeOptions {
    *   （App 壳 = `router.push(target)`；与 `<navigator>` 同语义）。缺省 ⇒ 只记 note（不静默）。
    */
   navigate?: (target: string) => void
+  /**
+   * ★★★**运行期阶段耗时自采样**（CPU Profiler · 决策 #715）——dev 构建开启：给 `instantiate` /
+   *   `flush` / `dispatch` / 每个 handler 计时，归因"卡在哪一段"。缺省 false ⇒ **零开销**（空实现）。
+   *   采样经 `profileStats()` 排空 ⇒ 宿主每 tick 取走（随 `/ping?perf=` 上报面板）。
+   */
+  profile?: boolean
 }
 
 /** 一屏的运行期实例（挂载 + 事件 + 增量） */
@@ -113,6 +121,12 @@ export interface ScreenRuntimeInstance {
    *   排空式（取走即清）：供宿主 dev-watch / 面板 Console 消费（与 `SuperappRuntime.devEvents` 同形态）。
    */
   handlerErrors(): string[]
+  /**
+   * ★★★**排空本屏运行期阶段耗时**（CPU Profiler · 决策 #715）——自上次调用以来的阶段采样
+   *   （`instantiate` / `relink` / `flush` / `dispatch` / `handler「hN」`，按累计耗时降序）。
+   *   排空式；未启用 profiling（`profile` 未开）⇒ 恒空数组。
+   */
+  profileStats(): ProfEntry[]
 }
 
 export interface ScreenRuntime {
@@ -122,8 +136,9 @@ export interface ScreenRuntime {
   has(name: string): boolean
   /** ★跨调用状态导出（`{屏名: 数据}`）——一次性 VM 宿主回灌用 */
   snapshot(): Record<string, Record<string, unknown>>
+  /** ★★★排空**当前所有已建实例**的运行期阶段耗时（CPU Profiler · 决策 #715）——排空式、按屏归并。 */
+  profileStats(): Record<string, ProfEntry[]>
 }
-
 /**
  * 创建 App 壳的统一运行期。
  *
@@ -143,6 +158,8 @@ export function createScreenRuntime(opts: CreateScreenRuntimeOptions): ScreenRun
   function make(name: string): ScreenRuntimeInstance {
     const art = opts.artifacts[name]
     if (!art) throw new Error(`[screen-runtime] 无该屏产物：${name}`)
+    // ★★阶段耗时自采样器（决策 #715）：dev 才建真累加器；否则空实现（`time` 透传，零开销）。
+    const prof: RuntimeProfiler = opts.profile ? createRuntimeProfiler() : NULL_PROFILER
 
     // ── ① 数据源（端上不执行 script ⇒ 用构建期 `data` 快照；★一次性 VM 宿主可回灌 seed 恢复态）──
     const data: Record<string, unknown> = { ...art.data, ...(opts.seedData?.[name] ?? {}) }
@@ -150,12 +167,14 @@ export function createScreenRuntime(opts: CreateScreenRuntimeOptions): ScreenRun
 
     // ── ② 实例化（模板 + 数据 → 节点树）——★可重建（`refresh()`：数据变后重实例化，供"applyOps 为 no-op"
     //   的宿主（鸿蒙一次性 VM）拿到反映新数据的整树）──
-    let inst = instantiateTemplate(art.tpl, { viewport: opts.viewport, read, table: art.table, registry: new ListRegistry() })
+    let inst = prof.time('instantiate', () =>
+      instantiateTemplate(art.tpl, { viewport: opts.viewport, read, table: art.table, registry: new ListRegistry() }))
     // ★R6：内容局部 id 的**有序表**（index → localId）——手势反查用
     let localIdsOrdered = inst.nodes.map((n) => n.id)
     /** 用**当前 data** 重实例化（节点 id 由 tpl 的 slot 序决定 ⇒ 与初实例化逐位一致，id 映射稳定） */
     function rebuild(): void {
-      inst = instantiateTemplate(art.tpl, { viewport: opts.viewport, read, table: art.table, registry: new ListRegistry() })
+      inst = prof.time('instantiate', () =>
+        instantiateTemplate(art.tpl, { viewport: opts.viewport, read, table: art.table, registry: new ListRegistry() }))
       localIdsOrdered = inst.nodes.map((n) => n.id)
     }
     // 组件未展开 ⇒ 如实记（不静默）
@@ -174,8 +193,8 @@ export function createScreenRuntime(opts: CreateScreenRuntimeOptions): ScreenRun
     const evalCtx: EvalContext = { read }
     vapor.load(evalCtx, () => { /* 源变化回调：本版无响应式框架，靠 dispatch 后显式 relink */ })
     // 首帧：建订阅并写一遍全部 L1 槽位（此时树已由 content() 挂载；这些指令幂等——把初值落到内核）
-    vapor.relink(evalCtx)
-    slotRt.flush()
+    prof.time('relink', () => vapor.relink(evalCtx))
+    prof.time('flush', () => slotRt.flush())
 
     // ── ④ 事件索引（nodeId:event → handler）──
     const byNodeEvent: EventIndex = indexEventBindings(art.events)
@@ -206,10 +225,11 @@ export function createScreenRuntime(opts: CreateScreenRuntimeOptions): ScreenRun
         // ★★页面处理器「源」定位（决策 #712）：handler 执行**出错时**把**handler 名 + 源表达式**
         //   （`a.source` = 编译期保留的模板表达式原文，如 `count = count + 1`）+ 节点 id + **模板行** 一并报出——
         //   否则端上栈只有解释器内部、**定位不到是模板哪一句**（"调试生态链没数据支撑"）。
+        // ★★CPU Profiler（决策 #715）：给**每个 handler 的表达式求值**计时 ⇒ 归因"哪个 @click 最贵"。
         let v: unknown
         try {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          v = evalExpr(a.program as any, ctx2 as any)
+          v = prof.time(`handler「${handlerName}」`, () => evalExpr(a.program as any, ctx2 as any), locByHandler.get(handlerName))
         } catch (e) {
           const msg = String((e as Error)?.message ?? e)
           const loc = locByHandler.get(handlerName)
@@ -244,8 +264,8 @@ export function createScreenRuntime(opts: CreateScreenRuntimeOptions): ScreenRun
     /** ★数据变更后的重建：重实例化（节点反映新 data）+ 重算槽位（有 applyOps 的宿主拿到增量） */
     function refreshData(): void {
       rebuild()
-      vapor.relink(evalCtx)
-      slotRt.flush()
+      prof.time('relink', () => vapor.relink(evalCtx))
+      prof.time('flush', () => slotRt.flush())
     }
 
     return {
@@ -256,22 +276,24 @@ export function createScreenRuntime(opts: CreateScreenRuntimeOptions): ScreenRun
         // ★把链从内核 id 空间**翻译回内容局部 id 空间**（`events` 索引是 local 空间）
         const localChain = chain.map(localIdOf)
         const fired: Array<{ handler: string; nodeId: number; loc?: { line: number; column: number } }> = []
-        const r = dispatchGesture(localChain, type, byNodeEvent, dispatchState, (h, id) => {
+        // ★★CPU Profiler（决策 #715）：整次派发计时（含 handler + 重建）——"点一下总花多久"。
+        const r = prof.time('dispatch', () => dispatchGesture(localChain, type, byNodeEvent, dispatchState, (h, id) => {
           const ok = runHandler(h, id)
           if (ok) fired.push({ handler: h, nodeId: id, ...(locByHandler.has(h) ? { loc: locByHandler.get(h)! } : {}) })
           return ok
-        })
+        }))
         // handler 改了数据 ⇒ 重建（无 applyOps 的宿主靠 content() 重挂；有 applyOps 的宿主拿增量——两种都覆盖）
         if (r.fired.length > 0) refreshData()
         // ★★★页面处理器 source map（决策 #712）：把「跑了哪些 handler + 各自**模板源位置**」随派发结果带出——
         //   面板 Events 据此把"点了→跑了 h0"锚回 `page.vue:line:col`（调试生态链的数据支撑）。
         return { handled: r.fired.length > 0, fired: r.fired, firedHandlers: fired }
       },
-      flush() { slotRt.flush() },
+      flush() { prof.time('flush', () => slotRt.flush()) },
       refresh() { refreshData() },
       data() { return data },
       snapshot() { return { ...data } },
       handlerErrors() { const out = handlerErrors.slice(); handlerErrors.length = 0; return out },
+      profileStats() { return prof.drain() },
     }
   }
 
@@ -286,6 +308,15 @@ export function createScreenRuntime(opts: CreateScreenRuntimeOptions): ScreenRun
     snapshot() {
       const out: Record<string, Record<string, unknown>> = {}
       for (const [name, it] of instances) out[name] = it.snapshot()
+      return out
+    },
+    /** ★★★排空各屏阶段耗时（CPU Profiler · 决策 #715）——按屏归并（每屏只在其有数据时出现）。 */
+    profileStats() {
+      const out: Record<string, ProfEntry[]> = {}
+      for (const [name, it] of instances) {
+        const entries = it.profileStats()
+        if (entries.length > 0) out[name] = entries
+      }
       return out
     },
   }

@@ -185,6 +185,9 @@ export { createHostScreenPorts, SCREEN_ANIM_DONE_KEY } from './screen-executor-h
 // ★★★B1：App 壳统一运行期（实例化 + 订阅 + 手势派发 + content-local↔内核 id 反查）
 export { createScreenRuntime } from './screen-runtime'
 export type { ScreenRuntime, ScreenRuntimeInstance, ScreenRuntimeArtifact, CreateScreenRuntimeOptions } from './screen-runtime'
+// ★★★运行期阶段耗时自采样（CPU Profiler · 决策 #715）——DEV 面板消费；契约导出供宿主/测试引用
+export { createRuntimeProfiler, NULL_PROFILER } from './runtime-profiler'
+export type { RuntimeProfiler, ProfEntry } from './runtime-profiler'
 export { HOST_INVOKE_METHODS, HOST_SCREEN_METHODS, HOST_CAPABILITY_METHODS, HOST_METHOD_OPTIONAL } from './host-invoke-contract'
 export { TAB_BAR_SPEC } from './tab-bar-spec'
 export type { TabBarSpec } from './tab-bar-spec'
