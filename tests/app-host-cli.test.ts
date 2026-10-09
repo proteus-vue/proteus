@@ -908,4 +908,19 @@ describe('★★★鸿蒙 dev 通道 · 批 2a 地基（热刷/心跳/日志 —
     expect(mp, '颜色 hex 校验').toMatch(/\^#\[0-9a-fA-F\]/)
     expect(mp, 'padding→对象').toContain("'top': d, 'right': d, 'bottom': d, 'left': d")
   })
+  it('鸿蒙 dev 掉帧口径 + 设备环境（决策 #733）', () => {
+    const mp = fs.readFileSync(path.join(TH, 'entry/src/main/ets/shell/MainPage.ets'), 'utf-8')
+    // ★掉帧判据用**固定 60Hz 预算**（对齐 Android；勿用随屏刷新的 targetTimestamp —— 120Hz 屏会全假掉帧）
+    expect(mp, '固定帧预算常量').toContain('FRAME_BUDGET_MS')
+    expect(mp, '掉帧判据').toContain('dtMs > MainPage.FRAME_BUDGET_MS * 1.5')
+    expect(mp, '不再用 targetTimestamp 作预算').not.toContain('info.targetTimestamp - info.timestamp')
+    // ★设备环境：含"内核/引擎"组键（对齐 Android/iOS collectDeviceEnv）
+    expect(mp, 'collectDevEnv').toContain('collectDevEnv()')
+    for (const k of ["o['platform']", "o['model']", "o['layoutCore']", "o['jsEngine']"]) {
+      expect(mp, `设备环境含 ${k}`).toContain(k)
+    }
+    // ★dev 模式不在起手渲内嵌包（去双重 eval）
+    expect(mp, 'dev 模式标志').toContain('devMode')
+    expect(mp, 'dev 包未到回退兜底').toContain('devBundleArrived')
+  })
 })

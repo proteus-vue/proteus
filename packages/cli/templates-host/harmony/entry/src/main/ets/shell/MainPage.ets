@@ -23,6 +23,9 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { NodeContent, display, window, FrameCallback } from '@kit.ArkUI';
 import { displaySync } from '@kit.ArkGraphics2D';
 import { util } from '@kit.ArkTS';
+// ★设备环境采集（决策 #733）：机型/OS/SDK/ABI —— 面板"设备环境·含内核/引擎"组（对齐 Android/iOS）
+import { deviceInfo } from '@kit.BasicServicesKit';
+import { bundleManager } from '@kit.AbilityKit';
 import {
   attach, renderCommands, scrollRoot, clearRoot,
   appScreenCommands, appScreenContentHeight, appScreenHitAt, appScreenNodeRect, hostAppRender, hostAppEval,
@@ -140,8 +143,14 @@ struct MainPage {
   @State chromeTopVp: number = 54;
   /** 应用名（启动占位显示；`$r('app.string.app_name')`）。 */
   private appName: string = 'Proteus';
+  /** ★dev 模式（决策 #733）：dev server 包**优先**（对齐 Android/iOS `bootAsync`）——不在起手渲内嵌包，
+   *   等 dev bundle 到达渲一次（有界回退到内嵌包）⇒ 少一次 4MB eval + 少一次 4MB 同步读 = 启动不卡。 */
+  private devMode: boolean = false;
+  private devBundleArrived: boolean = false;
   private static vpW: number = 390;
   private static vpH: number = 844;
+  /** ★60Hz 帧预算（ms）——掉帧判据用**固定值**（三端一致；勿用随屏刷新的 targetTimestamp）。 */
+  private static readonly FRAME_BUDGET_MS: number = 16.67;
 
   aboutToAppear(): void {
     hilog.info(DOMAIN, TAG, 'HOST_PAGE_APPEAR');
@@ -154,12 +163,17 @@ struct MainPage {
         if (v.length > 0) { this.appName = v; }
       } catch (e) { /* 读不到 ⇒ 保持默认 */ }
       // ① 运行期 bundle（项目路由/交互/响应式）——缺则回退静态屏内容
-      try {
-        const bb: Uint8Array = ctx.resourceManager.getRawFileContentSync('bundle-superapp.js');
-        this.bundle = util.TextDecoder.create('utf-8').decodeToString(bb);
-      } catch (e) {
-        this.bundle = '';
-        hilog.info(DOMAIN, TAG, 'HOST_PAGE_NO_BUNDLE 缺运行期 bundle —— 回退静态屏内容');
+      //   ★dev 模式（决策 #733）：**先不读** 4MB 内嵌包（省一次同步读 + 一次 4MB eval）——dev bundle
+      //     到达后由 dev-watch 触发渲一次；超时未到 ⇒ 回退读内嵌包（有界，见 dev-watch 侧兜底）。
+      this.devMode = (DEV || MainPage.resolveDevBase().length > 0);
+      if (!this.devMode) {
+        try {
+          const bb: Uint8Array = ctx.resourceManager.getRawFileContentSync('bundle-superapp.js');
+          this.bundle = util.TextDecoder.create('utf-8').decodeToString(bb);
+        } catch (e) {
+          this.bundle = '';
+          hilog.info(DOMAIN, TAG, 'HOST_PAGE_NO_BUNDLE 缺运行期 bundle —— 回退静态屏内容');
+        }
       }
       // ② 静态屏内容（回退 + 起始页推断）
       try {
@@ -267,7 +281,12 @@ struct MainPage {
     if (base.length === 0) { return; }
     const w = new DevWatch(base);
     w.currentScreen = (): string => this.current;
-    w.envJson = (): string => JSON.stringify(this.envVars);
+    // ★设备环境（决策 #733）：**设备/屏幕/内核·引擎**（对齐两端）× + `--pf-*` 安全区（鸿蒙特有，作"其它"）
+    w.envJson = (): string => {
+      const dev: Record<string, Object> = JSON.parse(this.collectDevEnv()) as Record<string, Object>;
+      for (const k of Object.keys(this.envVars)) { dev[k] = this.envVars[k]; }
+      return JSON.stringify(dev);
+    };
     // ★perf 读数（决策 #730）：renderMs + 逐帧（fps/frameMs/maxMs/dropped/frames，**排空式**每心跳取一次）
     //   + mountCalls（渲染次数）。relayout 用 mountCalls 表意、patches=0（鸿蒙无增量 patch 通道）。
     w.perfJson = (): string => {
@@ -282,6 +301,7 @@ struct MainPage {
     w.takeInspect = (): number => { const id: number = this.pendingInspectId; this.pendingInspectId = -1; return id; };
     w.applyBundle = (b: string, v: string): void => {
       this.bundle = b;
+      this.devBundleArrived = true;
       this.renderCurrent();
       this.flash('⟳ 已热重载 · v' + v);
       this.devLog('info', 'hot reload · v' + v + ' · screen=' + this.current);
@@ -291,6 +311,17 @@ struct MainPage {
     this.startDevFrameSampler();
     this.devWatch = w;
     w.start();
+    // ★dev 包未按时到达 ⇒ 回退读内嵌包（有界兜底；避免"dev server 挂了就空白"）——决策 #733
+    setTimeout(() => {
+      if (!this.devBundleArrived && this.bundle.length === 0) {
+        try {
+          const bb: Uint8Array = getContext(this).resourceManager.getRawFileContentSync('bundle-superapp.js');
+          this.bundle = util.TextDecoder.create('utf-8').decodeToString(bb);
+          this.renderCurrent();
+          this.devLog('warn', 'dev bundle 未到达 ⇒ 回退内嵌包');
+        } catch (e) { /* 无内嵌包 ⇒ 保持静态回退 */ }
+      }
+    }, 4000);
   }
 
   /** ★dev 逐帧采样（决策 #730）：独立**常驻** displaySync 采真实帧间隔（与惯性 dSync 分开，互不干扰）。 */
@@ -305,17 +336,19 @@ struct MainPage {
     } catch (e) { hilog.warn(DOMAIN, TAG, 'HOST_PAGE_DEVFRAME_ERR %{public}s', JSON.stringify(e) ?? ''); }
   }
 
-  /** 帧回调：真实帧间隔（ms）；`> 1.5× 本帧预算` ⇒ 掉帧（主线程阻塞跳过 vsync）——口径同 iOS onDevFrame。 */
+  /** 帧回调：真实帧间隔（ms）；`> 1.5× **60Hz 预算**` ⇒ 掉帧（主线程阻塞跳过 vsync）。
+   *   ★★★口径对齐 Android（决策 #733）：Android 用**固定** `16.67 * 1.5`；此前鸿蒙用
+   *   `targetTimestamp - timestamp`（**随屏刷新率**）——**120Hz 屏上这是 8.3ms**，阈值 12.5ms ⇒
+   *   **正常 16.7ms 的帧全被判掉帧**（用户实测 15/49 假掉帧）。⇒ 改**固定 60Hz 预算**（三端一致）。 */
   private onDevFrame(info: displaySync.IntervalInfo): void {
     const ts: number = info.timestamp;   // ns
     if (this.devFrameLastTs <= 0) { this.devFrameLastTs = ts; return; }
     const dtMs: number = (ts - this.devFrameLastTs) / 1e6;
     this.devFrameLastTs = ts;
-    const targetMs: number = (info.targetTimestamp - info.timestamp) / 1e6;   // 本帧预算（可变刷新率随屏）
     this.devFrameCount++;
     this.devFrameSumMs += dtMs;
     if (dtMs > this.devFrameMaxMs) { this.devFrameMaxMs = dtMs; }
-    if (targetMs > 0 && dtMs > targetMs * 1.5) { this.devFrameDropped++; }
+    if (dtMs > MainPage.FRAME_BUDGET_MS * 1.5) { this.devFrameDropped++; }
   }
 
   /** 排空逐帧统计（每心跳取一次 ⇒ 新鲜窗口；#723 教训：周期量每 tick drain，不烤进缓存）。 */
@@ -888,6 +921,39 @@ struct MainPage {
     // ★内容铺满**全屏**（含状态栏与手势区）——与 Web viewport（390×844 全屏）同口径；叠加
     //   `setWindowLayoutFullScreen(true)`（见 aboutToAppear）⇒ 状态栏透明、内容透上来。
     .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
+  }
+
+  /** ★设备环境采集（决策 #733）——**对齐 Android/iOS `collectDeviceEnv`** 与面板分组键名
+   *   （设备 / 屏幕 / 内核·引擎）⇒ 面板"设备环境·含内核/引擎"不再只显示 `--pf-*` 安全区。
+   *   ★只采一次（缓存）；`--pf-*` 安全区由 caller 作为**额外项**并入。 */
+  private devEnvCache: string = '';
+  private collectDevEnv(): string {
+    if (this.devEnvCache.length > 0) { return this.devEnvCache; }
+    const o: Record<string, string | number> = {};
+    try { o['platform'] = 'harmony'; } catch (e) { /* 无 */ }
+    try { o['model'] = deviceInfo.productModel ?? ''; } catch (e) { /* 无 */ }
+    try { o['brand'] = deviceInfo.marketName ?? ''; } catch (e) { /* 无 */ }
+    try { o['manufacturer'] = deviceInfo.brand ?? ''; } catch (e) { /* 无 */ }
+    try { o['osRelease'] = deviceInfo.osFullName ?? ''; } catch (e) { /* 无 */ }
+    try { o['sdkInt'] = deviceInfo.sdkApiVersion ?? 0; } catch (e) { /* 无 */ }
+    try { o['abi'] = deviceInfo.abiList ?? ''; } catch (e) { /* 无 */ }
+    try {
+      const d: number = vp2px(1);
+      const disp = display.getDefaultDisplaySync();
+      o['density'] = Math.round(d * 100) / 100;
+      o['screen'] = Math.round(disp.width / d) + 'x' + Math.round(disp.height / d);   // 逻辑 vp
+      o['screenPx'] = disp.width + 'x' + disp.height;                                  // 物理 px
+    } catch (e) { /* 无 */ }
+    // ★内核 / 引擎（面板 §"内核 / 引擎"组）：鸿蒙内核 = Rust 排版核（静态链接进 HAR）；引擎 = OH_JSVM
+    o['layoutCore'] = 'proteus-layout-core (rust · static)';
+    o['jsEngine'] = 'OH_JSVM (ArkTS)';
+    o['hostBuild'] = DEV ? 'dev' : 'release';
+    try {
+      const bi = bundleManager.getBundleInfoForSelfSync(bundleManager.BundleFlag.GET_BUNDLE_INFO_DEFAULT);
+      o['appVersion'] = bi.versionName ?? '';
+    } catch (e) { /* 无 */ }
+    this.devEnvCache = JSON.stringify(o);
+    return this.devEnvCache;
   }
 
   /** ★顶部 toast（决策 #732）：自绘**顶部居中**、角标下方、深色胶囊、~1.5s 淡出。
