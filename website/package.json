@@ -23,6 +23,8 @@
     "check:primitives": "node scripts/gen-primitives.mjs --check",
     "gen:css-compat": "tsx scripts/gen-css-compat.mjs",
     "check:css-compat": "tsx scripts/gen-css-compat.mjs --check",
+    "gen:css-support": "node scripts/gen-css-support.mjs",
+    "check:css-support": "node scripts/gen-css-support.mjs --check",
     "check:en-drift": "node scripts/check-en-drift.mjs",
     "check:stats": "tsx scripts/check-stats.ts",
     "gen:consistency-data": "node scripts/gen-consistency-data.mjs",
