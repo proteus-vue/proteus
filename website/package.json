@@ -54,7 +54,7 @@
     "typescript": "^5.4.0",
     "vite": "^5.0.0",
     "vue-tsc": "^2.0.0",
-    "@proteus-vue/cli": "0.3.0-beta.28",
+    "@proteus-vue/cli": "0.3.0-beta.29",
     "@proteus-vue/plugin-vite": "0.3.0-beta.28",
     "esbuild": "^0.28.2",
     "@proteus-vue/worklet": "workspace:*"

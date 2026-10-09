@@ -149,7 +149,7 @@ importers:
         version: 3.5.42(typescript@5.9.3)
     devDependencies:
       '@proteus-vue/cli':
-        specifier: 0.3.0-beta.28
+        specifier: 0.3.0-beta.29
         version: link:../packages/cli
       '@proteus-vue/compiler':
         specifier: 0.3.0-beta.28
@@ -264,7 +264,7 @@ importers:
         version: 3.5.42(typescript@5.9.3)
     devDependencies:
       '@proteus-vue/cli':
-        specifier: 0.3.0-beta.28
+        specifier: 0.3.0-beta.29
         version: link:../packages/cli
       '@proteus-vue/compiler':
         specifier: 0.3.0-beta.28
@@ -933,7 +933,7 @@ importers:
         version: 3.5.42(typescript@5.9.3)
     devDependencies:
       '@proteus-vue/cli':
-        specifier: 0.3.0-beta.28
+        specifier: 0.3.0-beta.29
         version: link:../packages/cli
       '@proteus-vue/compiler':
         specifier: 0.3.0-beta.28
@@ -991,7 +991,7 @@ importers:
         version: 3.5.42(typescript@5.9.3)
     devDependencies:
       '@proteus-vue/cli':
-        specifier: 0.3.0-beta.28
+        specifier: 0.3.0-beta.29
         version: link:../packages/cli
       '@proteus-vue/compiler':
         specifier: 0.3.0-beta.28
@@ -1073,7 +1073,7 @@ importers:
         version: 4.6.4(vue@3.5.42(typescript@5.9.3))
     devDependencies:
       '@proteus-vue/cli':
-        specifier: 0.3.0-beta.28
+        specifier: 0.3.0-beta.29
         version: link:../packages/cli
       '@proteus-vue/plugin-vite':
         specifier: 0.3.0-beta.28
