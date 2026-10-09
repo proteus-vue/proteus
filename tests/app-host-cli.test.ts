@@ -227,6 +227,12 @@ describe('★完整宿主 · iOS 宿主模板为运行期形态（决策 #683）
     expect(rt, '就地编辑入口').toContain('func applyLiveEdit(')
     expect(page, '面板下发 edit').toContain('function sendEdit(')
     expect(server, 'edit 命令字段').toContain('cmd.key')
+    // ★能力全面放开（决策 #706）：布局字段也走"改树+内核重排"通路
+    expect(rt, '就地在桥（含 lastNodes）').toMatch(/func applyLiveEdit\(id: Int, key: String, value: String\) -> Bool \{\s*\n\s*guard key != "id"/)
+    expect(rt, '值强转/校验').toContain('func coerceLiveEdit(')
+    expect(rt, '布局枚举封闭集').toContain('["row", "column", "row-reverse", "column-reverse"]')
+    expect(page, '面板可编辑集含布局字段').toMatch(/const EDITABLE = \[[\s\S]*?'width'/)
+    expect(page, '面板可编辑集含 flex').toMatch(/EDITABLE = \[[\s\S]*?'flexGrow'/)
   })
 
   // ★面板→设备命令（决策 #701/#702 安卓腿）：Android 宿主也接 /cmd + 元素高亮 + REPL
