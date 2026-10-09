@@ -8,42 +8,54 @@ group: 代码构成
 
 A page is a **standard Vue SFC** (a `.vue` file) with up to four parts: `<template>`, `<script setup>`, `<style>`, and the `<route>` block unique to Proteus.
 
-The `src/pages/index.vue` shipped with the scaffold is complete and ready to run:
+The `src/pages/index.vue` shipped with the scaffold is a **ready-to-run showcase page** (brand area + key numbers + interactive demo + next steps, with four-end-identical styling). Below is its skeleton (trimmed; the real file is fuller):
 
 ```vue
 <route>
 {
-  "meta": {
-    "title": "Home",
-    "isTab": true
-  }
+  "meta": { "title": "Home", "isTab": true }
 }
 </route>
+
 <script setup lang="ts">
 import { ref } from 'vue'
 
+// The only dynamic state: the demo counter (updates live on click, identical across ends)
 const count = ref(0)
-
-function handleTap() {
-  count.value++
-}
 </script>
 
 <template>
-  <div class="home">
-    <h1>Hello Proteus</h1>
-    <p class="tapped-count">tapped {{ count }} times</p>
-    <button @click="handleTap">tap</button>
+  <div class="page">
+    <h1 class="hero-title">Write once, run on every end</h1>
+
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-value">5</div>
+        <div class="stat-label">targets</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">1</div>
+        <div class="stat-label">source</div>
+      </div>
+    </div>
+
+    <button class="btn" @click="count++">Tap me +1</button>
+    <div class="counter">Tapped {{ count }} times</div>
   </div>
 </template>
 
 <style>
-.home {
-  text-align: center;
-  padding: 48px 0;
-}
+.page { width: 100%; min-height: 100vh; background-color: #f5f6f8; padding: 20px 16px; }
+.hero-title { display: block; font-size: 28px; font-weight: 800; color: #16181d; }
+.stats { display: flex; flex-direction: row; gap: 12px; }
+.stat { flex: 1; background-color: #ffffff; border-radius: 14px; padding: 16px; }
+.btn { display: block; width: 100%; font-size: 16px; color: #ffffff; background-color: #4f46e5; border-radius: 12px; padding: 13px; }
 </style>
 ```
+
+> ★**Cross-end-consistent style** (following the repo's `css-conformance` acceptance baseline): **use plain tags** (`div / h1 / p / button`, without depending on built-in components) + **static classes and design tokens** (`var(--x)` pointing at `global.css`'s `:root`, expanded to literal values for App at compile time). Avoid `:hover` / pseudo-classes, which the App end does not support yet; values Skyline rejects (`inline-block`, etc.) are blocked by a gate. Reusable baseline styles live in `src/styles/global.css` (Mini Program via `globalStyle`, Web via an import in `main.ts`, App folded at compile time — one file, four ends).
+>
+> ★**Event form** (affects App interactivity): the App event compiler **only supports inline actions** (`@click="count++"` / `@click="count = count + 1"` / `@click="show = !show"`) and **not method references** (`@click="handleTap"`) — the latter works on Web/Mini Program but emits **no event** on App (visible but not tappable). The starter template uses the inline form uniformly for identical behavior across ends.
 
 ## Four parts, one semantic set → artifacts per target
 

@@ -40,9 +40,10 @@ my-app/
 ├─ scripts/ledger_check.mjs     # ledger self-check (`node scripts/ledger_check.mjs --check`)
 ├─ .github/workflows/proteus.yml # CI template (check gates → dual build → artifact archive)
 └─ src/
-   ├─ main.ts / main.mp.ts      # Web / Mini Program dual entries
+   ├─ main.ts / main.mp.ts      # Web / Mini Program dual entries (main.ts imports the global CSS)
    ├─ App.vue                   # root component
-   ├─ pages/index.vue           # example home page (p-* components + @tap + interpolation)
+   ├─ styles/global.css         # global styles (baseline reset + .page/.card skeleton) — one file, four ends
+   ├─ pages/index.vue           # home showcase page (plain tags + static classes + interactive demo)
    ├─ router/
    │  ├─ index.ts               # router instance
    │  ├─ auto-routes.ts         # gen-routes output (generated; do not edit)
