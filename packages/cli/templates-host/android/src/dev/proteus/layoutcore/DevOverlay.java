@@ -32,6 +32,8 @@ final class DevOverlay {
     private TextView toast;
     /** ★底部调试面板（决策 #719）：tap DEV 角标展开/收起。 */
     private LinearLayout sheet;
+    /** ★遮罩（决策 #735）：面板打开时全屏 40% 黑，**点外关**。 */
+    private View scrim;
     private TextView statusLabel;
     private boolean sheetOn = false;
     /** 是否有**就地编辑**未还原（决定"渲染状态"提示与角标配色）。 */
@@ -147,6 +149,7 @@ final class DevOverlay {
         if (sheet == null) return;
         sheetOn = true;
         refreshStatus();
+        if (scrim != null) { scrim.setVisibility(View.VISIBLE); scrim.bringToFront(); }
         sheet.setVisibility(View.VISIBLE);
         sheet.bringToFront();
         if (badge != null) badge.bringToFront();
@@ -164,6 +167,7 @@ final class DevOverlay {
         sheet.animate().translationY(h).setDuration(200)
                 .withEndAction(new Runnable() { @Override public void run() {
                     if (sheet != null) sheet.setVisibility(View.GONE);
+                    if (scrim != null) scrim.setVisibility(View.GONE);
                 } }).start();
         if (badge != null) badge.bringToFront();
     }
@@ -184,7 +188,19 @@ final class DevOverlay {
         s.setPadding(pad, 0, pad, pad);
         s.setElevation(12 * density);
 
-        // grab 把手（对齐 iOS：36×4、圆角2、白 20%、top 8、水平居中）
+        // ★遮罩（决策 #735）：全屏 40% 黑，铺在面板之下；点外关。
+        scrim = new View(act);
+        scrim.setBackgroundColor(0x66000000);
+        scrim.setVisibility(View.GONE);
+        scrim.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { hideSheet(); } });
+        FrameLayout.LayoutParams scp = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT);
+        root.addView(scrim, scp);
+
+        // ★把手下拉关闭（决策 #735）：grab + title 包进 header（只 header 可拖——不与按钮 tap 冲突）。
+        LinearLayout header = new LinearLayout(act);
+        header.setOrientation(LinearLayout.VERTICAL);
+
         View grab = new View(act);
         GradientDrawable gbg = new GradientDrawable();
         gbg.setColor(0x33FFFFFF);
@@ -193,7 +209,7 @@ final class DevOverlay {
         LinearLayout.LayoutParams glp = new LinearLayout.LayoutParams((int) (36 * density), (int) (4 * density));
         glp.gravity = Gravity.CENTER_HORIZONTAL;
         glp.topMargin = (int) (8 * density);
-        s.addView(grab, glp);
+        header.addView(grab, glp);
 
         TextView title = new TextView(act);
         title.setText("DevTools");
@@ -203,7 +219,31 @@ final class DevOverlay {
         LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         tlp.topMargin = (int) (12 * density);   // title top = grab 底 + 12（对齐 iOS）
-        s.addView(title, tlp);
+        header.addView(title, tlp);
+        // header 拖动 ⇒ 面板跟随下移；松手超阈值/快滑 ⇒ 关，否则弹回（对齐 iOS handleSheetPan）
+        final float[] downY = {0f};
+        header.setOnTouchListener(new View.OnTouchListener() {
+            @Override public boolean onTouch(View v, android.view.MotionEvent e) {
+                switch (e.getActionMasked()) {
+                    case android.view.MotionEvent.ACTION_DOWN: downY[0] = e.getRawY(); return true;
+                    case android.view.MotionEvent.ACTION_MOVE: {
+                        float dy = Math.max(0, e.getRawY() - downY[0]);   // 只允许向下拖
+                        if (sheet != null) sheet.setTranslationY(dy);
+                        return true;
+                    }
+                    case android.view.MotionEvent.ACTION_UP:
+                    case android.view.MotionEvent.ACTION_CANCEL: {
+                        float dy = sheet != null ? sheet.getTranslationY() : 0;
+                        if (dy > 80 * density) hideSheet();
+                        else if (sheet != null) sheet.animate().translationY(0f).setDuration(200).start();
+                        return true;
+                    }
+                    default: return false;
+                }
+            }
+        });
+        s.addView(header, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 
         statusLabel = new TextView(act);
         statusLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);

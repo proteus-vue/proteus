@@ -157,25 +157,30 @@ for (const [end, specs] of Object.entries(DEV_UI_SPEC)) {
   }
 }
 
-/* ── ⑤ dev 宿主 **sheet 逐像素规格**（决策 #734；以 iOS 为基准，三端一致）──
- *   反面教训：Android sheet 无圆角、鸿蒙按钮全圆角 + 遮罩"点外关" ⇒ 三端不一致（用户抓出）。
- *   ★三端都必须：sheet 仅上两角圆角 + grab 把手 + 按钮圆角 10 + **无遮罩**（只点胶囊收）。 */
+/* ── ⑤ dev 宿主 **sheet 逐像素规格 + 标准弹窗语义**（决策 #734/#735；三端一致）──
+ *   逐像素：sheet 仅上两角圆角 + grab 把手 + 按钮圆角 10。
+ *   标准弹窗语义（#735）：**遮罩 + 点外关 + 把手下拉关闭**（比"只点胶囊"更好用；两端旧做法一并升级）。 */
 const SHEET_SPEC = {
   android: [
     { re: /setCornerRadii/, why: 'sheet 须上两角圆角（setCornerRadii）' },
     { re: /grab/i, why: '须 grab 把手' },
     { re: /setCornerRadius\(10 \* density\)/, why: '按钮圆角 10' },
+    { re: /scrim/, why: '须遮罩（#735）' },
+    { re: /onTouch|setOnTouchListener/, why: '须把手下拉关闭（#735）' },
   ],
   ios: [
     { re: /maskedCorners/, why: 'sheet 须仅上两角圆角（maskedCorners）' },
     { re: /grab/, why: '须 grab 把手' },
     { re: /reset\.layer\.cornerRadius = 10/, why: '按钮圆角 10' },
+    { re: /scrim/, why: '须遮罩（#735）' },
+    { re: /UIPanGestureRecognizer/, why: '须把手下拉关闭（#735）' },
   ],
   harmony: [
     { re: /borderRadius\(\{ topLeft: 16, topRight: 16 \}\)/, why: 'sheet 须仅上两角圆角' },
     { re: /borderRadius\(2\)/, why: '须 grab 把手（36×4 r2）' },
     { re: /ButtonType\.Normal\)\.borderRadius\(10\)/, why: '按钮圆角 10（非默认全圆角）' },
-    { re: /#66000000/, why: 'sheet **不得加遮罩**（应只点胶囊收）', negate: true },
+    { re: /#66000000/, why: '须遮罩（#735）' },
+    { re: /PanGesture\(\{ direction: PanDirection\.Vertical \}\)/, why: '须把手下拉关闭（#735）' },
   ],
 }
 const SHEET_SPEC_FILE = {

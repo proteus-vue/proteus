@@ -133,6 +133,8 @@ struct MainPage {
   @State panelUrl: string = '';
   /** ★菜单展开（决策 #732）：底部 sheet（对齐 Android/iOS 的 `toggleSheet`，非居中 dialog）。 */
   @State sheetOn: boolean = false;
+  /** ★下拉位移（决策 #735）：拖把手下拉时 sheet 的 y 偏移（header PanGesture 驱动）。 */
+  @State sheetPanDy: number = 0;
   /** ★编辑态（决策 #732）：有未还原的就地编辑 ⇒ 角标 `DEV ✎` + 琥珀 + sheet 状态行"非项目代码效果"。 */
   @State edited: boolean = false;
   /** ★顶部 toast（决策 #732）：自绘**顶部居中**提示（`promptAction.showToast` 默认底部，不对齐两端）。 */
@@ -872,19 +874,33 @@ struct MainPage {
         .padding({ top: this.chromeTopVp + 34 })
       }
 
-      // ④ ★dev 底部 sheet（决策 #732/#734，**逐像素对齐 iOS `ProteusDevOverlay.buildSheet`**）：
-      //   底部 sheet 本体（上两角圆角 16）+ grab 把手（36×4 r2 白20% top8 居中）+ title「DevTools」14 bold
-      //   + 状态行 12 + 「重置为项目代码」按钮（**圆角 10**、高 44、白 14 bold）+ 面板 URL 11（白 α0.5）。
-      //   ★★**无遮罩**（对齐 iOS/Android：点 sheet 外不关闭，**只点胶囊/按钮收起**）——此前鸿蒙加了遮罩"点外部关"，
-      //     与两端不一致（用户抓出）；容器 `hitTestBehavior(Transparent)` ⇒ 外部点击穿透到内容（两端同）。
+      // ④ ★dev 底部 sheet（决策 #732/#734/#735，**逐像素对齐 iOS `ProteusDevOverlay.buildSheet`**）：
+      //   标准弹窗语义（三端统一）：**遮罩 + 点外关 + 把手下拉关闭** + 点胶囊 toggle + 重置按钮。
+      //   面板本体：上两角圆角 16 + grab 把手(36×4 r2 白20%) + `DevTools`14bold + 状态12 + 按钮(圆角10高44) + URL11。
       if (this.devCapsule && this.sheetOn) {
-        Column() {
+        Stack() {
+          // 遮罩（全屏 40% 黑）：**点外关**（决策 #735）
+          Column()
+            .width('100%').height('100%').backgroundColor('#66000000')
+            .onClick(() => { this.sheetOn = false; this.sheetPanDy = 0; })
+          // 面板本体（贴底；把手下拉 ⇒ `translate(y)` 跟随，松手超阈值/快滑 ⇒ 关）
           Column() {
-            // grab 把手（对齐 iOS）
-            Row() { Row().width(36).height(4).borderRadius(2).backgroundColor('#33FFFFFF') }
-              .width('100%').justifyContent(FlexAlign.Center).margin({ top: 8 })
-            Text('DevTools')
-              .fontSize(14).fontWeight(FontWeight.Bold).fontColor('#FFFFFF').width('100%').margin({ top: 12 })
+            // header（grab + title）——**可下拉关闭**（决策 #735；仅 header 可拖，不与按钮 tap 冲突）
+            Column() {
+              Row() { Row().width(36).height(4).borderRadius(2).backgroundColor('#33FFFFFF') }
+                .width('100%').justifyContent(FlexAlign.Center).margin({ top: 8 })
+              Text('DevTools')
+                .fontSize(14).fontWeight(FontWeight.Bold).fontColor('#FFFFFF').width('100%').margin({ top: 12 })
+            }
+            .width('100%').alignItems(HorizontalAlign.Start)
+            .gesture(
+              PanGesture({ direction: PanDirection.Vertical })
+                .onActionUpdate((e: GestureEvent) => { this.sheetPanDy = Math.max(0, e.offsetY); })
+                .onActionEnd((e: GestureEvent) => {
+                  if (this.sheetPanDy > 80 || e.velocityY > 800) { this.sheetOn = false; }
+                  this.sheetPanDy = 0;
+                })
+            )
             Text(this.edited ? '⚠ 渲染状态：含就地编辑 — 非项目代码效果' : '渲染状态：项目代码（实时）')
               .fontSize(12).fontColor(this.edited ? '#FFC24D' : '#FFFFFF').width('100%').margin({ top: 8 })
             Button('重置为项目代码')
@@ -892,7 +908,7 @@ struct MainPage {
               .fontSize(14).fontWeight(FontWeight.Bold).fontColor('#FFFFFF')
               .backgroundColor('#2F6BFF').width('100%').height(44)
               .margin({ top: 14 })
-              .onClick(() => { this.resetAll(); this.sheetOn = false; })
+              .onClick(() => { this.resetAll(); this.sheetOn = false; this.sheetPanDy = 0; })
             Text(this.panelUrl.length > 0 ? ('面板：' + this.panelUrl + '（浏览器打开·元素高亮/就地编辑/REPL）') : '面板：浏览器打开 dev server 地址')
               .fontSize(11).fontColor('#80FFFFFF').width('100%').margin({ top: 12 })
           }
@@ -900,10 +916,10 @@ struct MainPage {
           .padding({ left: 18, right: 18, top: 0, bottom: (this.envVars['--pf-inset-bottom'] ?? 0) + 16 })
           .backgroundColor('#FA151820')                  // 对齐 iOS sheet 底色 #151820 α0.98
           .borderRadius({ topLeft: 16, topRight: 16 })   // ★仅上两角（对齐 iOS）
+          .translate({ y: this.sheetPanDy })             // ★下拉跟随（决策 #735）
           .onClick(() => { /* 吞掉 sheet 内点击 */ })
         }
-        .width('100%').height('100%').justifyContent(FlexAlign.End)
-        .hitTestBehavior(HitTestMode.Transparent)        // 外部点击穿透（无遮罩——对齐两端）
+        .width('100%').height('100%').alignContent(Alignment.Bottom)
       }
 
       // ⑤ ★启动占位（决策 #731，对齐 Android LaunchPlaceholder / iOS）：浅底 + App 名 + 品牌蓝转圈，**居中**
