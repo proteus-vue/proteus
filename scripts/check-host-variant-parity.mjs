@@ -157,7 +157,43 @@ for (const [end, specs] of Object.entries(DEV_UI_SPEC)) {
   }
 }
 
-console.log('三端宿主变体一致性门禁（dev-host = 宿主：单一壳 + dev 件门控 + 功能齐全 + dev UI 规格）')
+/* ── ⑤ dev 宿主 **sheet 逐像素规格**（决策 #734；以 iOS 为基准，三端一致）──
+ *   反面教训：Android sheet 无圆角、鸿蒙按钮全圆角 + 遮罩"点外关" ⇒ 三端不一致（用户抓出）。
+ *   ★三端都必须：sheet 仅上两角圆角 + grab 把手 + 按钮圆角 10 + **无遮罩**（只点胶囊收）。 */
+const SHEET_SPEC = {
+  android: [
+    { re: /setCornerRadii/, why: 'sheet 须上两角圆角（setCornerRadii）' },
+    { re: /grab/i, why: '须 grab 把手' },
+    { re: /setCornerRadius\(10 \* density\)/, why: '按钮圆角 10' },
+  ],
+  ios: [
+    { re: /maskedCorners/, why: 'sheet 须仅上两角圆角（maskedCorners）' },
+    { re: /grab/, why: '须 grab 把手' },
+    { re: /reset\.layer\.cornerRadius = 10/, why: '按钮圆角 10' },
+  ],
+  harmony: [
+    { re: /borderRadius\(\{ topLeft: 16, topRight: 16 \}\)/, why: 'sheet 须仅上两角圆角' },
+    { re: /borderRadius\(2\)/, why: '须 grab 把手（36×4 r2）' },
+    { re: /ButtonType\.Normal\)\.borderRadius\(10\)/, why: '按钮圆角 10（非默认全圆角）' },
+    { re: /#66000000/, why: 'sheet **不得加遮罩**（应只点胶囊收）', negate: true },
+  ],
+}
+const SHEET_SPEC_FILE = {
+  android: 'android/src/dev/proteus/layoutcore/DevOverlay.java',
+  ios: 'ios/shell/ProteusDevOverlay.swift',
+  harmony: 'harmony/entry/src/main/ets/shell/MainPage.ets',
+}
+for (const [end, specs] of Object.entries(SHEET_SPEC)) {
+  const src = read(T(SHEET_SPEC_FILE[end]))
+  if (!src) continue
+  for (const s of specs) {
+    const hit = s.re.test(src)
+    if (s.negate) { if (hit) problems.push(`⑤ ${ENDS[end].label}: sheet 规格违反——${s.why}`) }
+    else if (!hit) problems.push(`⑤ ${ENDS[end].label}: sheet 规格缺项——${s.why}`)
+  }
+}
+
+console.log('三端宿主变体一致性门禁（dev-host = 宿主：单一壳 + dev 件门控 + 功能齐全 + dev UI/sheet 规格）')
 for (const n of notes) console.log(`  ▸ ${n}`)
 if (problems.length) {
   console.error(`\n❌ 违反（${problems.length}）：`)

@@ -168,21 +168,42 @@ final class DevOverlay {
         if (badge != null) badge.bringToFront();
     }
 
-    /** 底部调试面板：状态行 + 「重置为项目代码」+ 面板 URL 提示（对齐 iOS `buildSheet`）。 */
+    /** 底部调试面板：状态行 + 「重置为项目代码」+ 面板 URL 提示（对齐 iOS `buildSheet`）。
+     *   ★逐像素规格（决策 #734）：sheet 圆角 **16 仅上两角** + `grab` 把手（36×4 r2 白20% top8）——
+     *   此前 sheet **无圆角**、无把手（与 iOS 不一致，用户抓出）。 */
     private void buildSheet(float density) {
         int pad = (int) (18 * density);
         LinearLayout s = new LinearLayout(act);
         s.setOrientation(LinearLayout.VERTICAL);
-        s.setBackgroundColor(0xF2151820);
-        s.setPadding(pad, (int) (14 * density), pad, pad);
+        // sheet 圆角（仅上两角 16dp；下两角 0）——对齐 iOS `maskedCorners=[MinXMinY,MaxXMinY]`
+        GradientDrawable sbg = new GradientDrawable();
+        sbg.setColor(0xFA151820);   // 对齐 iOS sheet 底色 `#151820` α0.98
+        float r16 = 16 * density;
+        sbg.setCornerRadii(new float[]{ r16, r16, r16, r16, 0, 0, 0, 0 });
+        s.setBackground(sbg);
+        s.setPadding(pad, 0, pad, pad);
         s.setElevation(12 * density);
+
+        // grab 把手（对齐 iOS：36×4、圆角2、白 20%、top 8、水平居中）
+        View grab = new View(act);
+        GradientDrawable gbg = new GradientDrawable();
+        gbg.setColor(0x33FFFFFF);
+        gbg.setCornerRadius(2 * density);
+        grab.setBackground(gbg);
+        LinearLayout.LayoutParams glp = new LinearLayout.LayoutParams((int) (36 * density), (int) (4 * density));
+        glp.gravity = Gravity.CENTER_HORIZONTAL;
+        glp.topMargin = (int) (8 * density);
+        s.addView(grab, glp);
 
         TextView title = new TextView(act);
         title.setText("DevTools");
         title.setTextColor(Color.WHITE);
         title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
         title.setTypeface(title.getTypeface(), android.graphics.Typeface.BOLD);
-        s.addView(title);
+        LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        tlp.topMargin = (int) (12 * density);   // title top = grab 底 + 12（对齐 iOS）
+        s.addView(title, tlp);
 
         statusLabel = new TextView(act);
         statusLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
