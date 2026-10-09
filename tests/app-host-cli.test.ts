@@ -844,4 +844,12 @@ describe('★★★鸿蒙 dev 通道 · 批 2a 地基（热刷/心跳/日志 —
     const scaf = fs.readFileSync(path.join(CLI, 'src/host-scaffold.ts'), 'utf-8')
     expect(scaf, '同步 ets/（非仅 shell/）').toContain("'entry', 'src', 'main', 'ets')")
   })
+  it('hvigor 失败两个流都取（stderr 有 ERROR）+ bundleName/签名不符的定向归因', () => {
+    const pkg = fs.readFileSync(path.join(CLI, 'src/host-package.ts'), 'utf-8')
+    // ★stderr 也要纳入（否则只显示 stdout 的 Finished 行、看不到 ERROR——用户实测）
+    expect(pkg, '取 stderr').toMatch(/stderr/)
+    expect(pkg, '两流合并展示').toMatch(/eo\.stdout[\s\S]{0,120}eo\.stderr/)
+    expect(pkg, '00303074 定向归因').toContain('00303074')
+    expect(pkg, '归因含修复指引').toMatch(/signingConfigs.*\[\]|Automatically generate signature/)
+  })
 })
