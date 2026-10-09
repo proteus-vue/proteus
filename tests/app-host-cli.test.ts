@@ -302,6 +302,12 @@ describe('★完整宿主 · iOS 宿主模板为运行期形态（决策 #683）
     expect(act, 'Android 启动采样器').toContain('startDevFrameSampler()')
     expect(act, 'Android 上报 dropped').toContain('o.put("dropped"')
     expect(act, 'Android 上报 fps').toContain('o.put("fps"')
+    // ★★★决策 #723：逐帧统计必须**每 tick（UI 泵）drain**，不能只在 render 时 drain——
+    //   否则一次切屏的 dropped 被烤进缓存 devPerfJson ⇒ 之后每个心跳重发同一值 ⇒ **面板恒红**（用户实测）。
+    expect(act, '每 tick drain 逐帧（pumpFrames）').toContain('private void pumpFrames()')
+    expect(act, 'UI 泵调 pumpFrames').toContain('pumpFrames();')
+    // 调用（`.drainDevFrameStats()`）只应出现 **1 次**（在 pumpFrames 里）——recordPerf 不再 drain（否则又会冻结）
+    expect((act.match(/\.drainDevFrameStats\(\)/g) ?? []).length, 'drain 调用仅 1 处').toBe(1)
   })
 
   // ★CPU Profiler（决策 #715）——静态锁：桥暴露 + 两处真机腿取采样 + 面板渲染

@@ -67,6 +67,15 @@ public final class AppActivity extends Activity {
     /** ★★原生渲染分段（决策 #718）：每次渲染后由 `recordPerf` 写入（JSON 数组 [{label,ms}]），
      *   心跳 `takePerfJsonForPing()` 取用一次即清（排空式 ⇒ 空闲窗口不误报上次 mount 的耗时）。 */
     private volatile String devRenderJson = "";
+    /**
+     * ★★★**逐帧统计**（决策 #723）：由 **UI 泵**（logPump 每 400ms）drain 存此，心跳并入 perf。
+     *   【为什么必须每 tick drain（用户实测"切屏后一直掉帧"的根因）】此前帧统计只在 **render 时**
+     *   `drainDevFrameStats()` 一次、并**烤进缓存的 `devPerfJson`** ⇒ render 之后每个心跳都**重发同一个
+     *   `dropped`**（一次切屏的掉帧**染色之后所有样本** ⇒ 面板**全红**）；且 drain 紧跟 render ⇒ 窗口里
+     *   常常**一帧没采到**（`fps=0 frames=0`）。iOS 是**每 tick** 在 `perfJson()` 里 drain（新鲜窗口）
+     *   —— 本值即对齐它（UI 泵 = 安卓的"每 tick"）。
+     */
+    private volatile String devFrameJson = "";
     /** ★★是否有**未还原的就地编辑**（决策 #719）——决定 DevOverlay 的"渲染状态"提示与角标配色。 */
     private volatile boolean editsApplied = false;
     /** 事件 trace 出箱（UI 线程抽取 → watch 线程上报；决策 #675） */
@@ -382,24 +391,17 @@ public final class AppActivity extends Activity {
             JSONObject o = new JSONObject();
             o.put("renderMs", System.currentTimeMillis() - renderStartMs);
             o.put("mountCalls", draw.mountCalls);
-            // ★逐帧耗时（ProteusHostView.onDraw 实测，决策 #676）
+            // ★逐帧耗时（ProteusHostView.onDraw 实测，决策 #676）——**渲染成本**（非帧率）
             if (draw.view() != null) {
-                o.put("frameMs", Math.round(draw.view().lastFrameMs() * 100) / 100.0);
+                o.put("drawCostMs", Math.round(draw.view().lastFrameMs() * 100) / 100.0);
                 o.put("frameAvgMs", Math.round(draw.view().frameMsAverage() * 100) / 100.0);
                 o.put("draws", draw.view().onDrawTotal());
-                // ★★真实帧率（决策 #714 · Android 腿）：读并清零 Choreographer 窗口采样——
-                //   fps / 真实帧间隔均长 frameMs / 最长 frameMaxMs / 掉帧数 dropped / 帧数 frames。
-                //   ★**取代**上面的 onDraw 成本当"帧率"看（那是"花了多久画一帧"，不是"多久出一帧"）。
-                //   ★键名与 iOS `perfJson()` **逐字一致** ⇒ 面板 Profiler 端无关。
-                double[] fs = draw.view().drainDevFrameStats();
-                if (fs != null && fs.length >= 5) {
-                    o.put("fps", fs[0]);
-                    o.put("frameMs", fs[1]);
-                    o.put("frameMaxMs", fs[2]);
-                    o.put("dropped", (int) fs[3]);   // ★恒发（含 0）——面板以设备真值判掉帧
-                    o.put("frames", (int) fs[4]);
-                }
             }
+            // ★★★逐帧率/掉帧（fps/frameMs/frameMaxMs/dropped/frames，决策 #723）**不在这里 drain**——
+            //   改由 **UI 泵每 tick** drain 存 `devFrameJson`（见 pumpFrames），`takePerfJsonForPing` 并入。
+            //   ★原因（用户实测"切屏后一直掉帧"）：此处是 **render 时** drain 且烤进**缓存的 devPerfJson**
+            //     ⇒ render 后每个心跳重发同一 `dropped`（一次切屏的掉帧**染色所有样本** ⇒ 全红），
+            //     且 drain 紧跟 render ⇒ 窗口常**一帧没采到**（fps=0 frames=0）。iOS 每 tick drain 无此病。
             // ★重排 / patch 计数（内核回执累计，决策 #676）
             o.put("relayout", draw.relayoutTotal);
             o.put("patches", draw.patchAppliedTotal);
@@ -426,18 +428,46 @@ public final class AppActivity extends Activity {
         } catch (Throwable ignored) { }
     }
 
-    /** ★★拼"本次心跳的 perf"（决策 #718）：把**新发生的那次渲染**的原生分段（`devRenderJson`）
-     *   并入缓存的 `devPerfJson`，并**取用一次即清**（排空式）——空闲窗口不带 render、不误报。 */
+    /** ★★拼"本次心跳的 perf"（决策 #718/#723）：把**新发生的那次渲染**的原生分段（`devRenderJson`，
+     *   取用即清）与**本 tick 的逐帧统计**（`devFrameJson`，UI 泵每 400ms 刷新）并入缓存的 `devPerfJson`。 */
     private String takePerfJsonForPing() {
         String base = devPerfJson;
-        String rr = devRenderJson;
-        if (rr == null || rr.isEmpty()) return base;
+        String rr = devRenderJson;          // 原生渲染分段（仅"真有渲染"的那一次，取用即清）
+        String fj = devFrameJson;           // 逐帧统计（本 tick 新鲜）
         devRenderJson = "";
+        if ((rr == null || rr.isEmpty()) && (fj == null || fj.isEmpty())) return base;
         try {
             JSONObject o = new JSONObject(base);
-            o.put("render", new org.json.JSONArray(rr));
+            if (rr != null && !rr.isEmpty()) o.put("render", new org.json.JSONArray(rr));
+            if (fj != null && !fj.isEmpty()) {
+                JSONObject f = new JSONObject(fj);
+                java.util.Iterator<String> it = f.keys();
+                while (it.hasNext()) { String k = it.next(); o.put(k, f.get(k)); }
+            }
             return o.toString();
         } catch (Throwable t) { return base; }
+    }
+
+    /**
+     * ★★★**逐帧统计 drain**（决策 #723 · Android 腿）——UI 泵每 400ms 调一次：drain Choreographer
+     *   窗口（fps/帧间隔均值/最长/掉帧数/帧数）存 `devFrameJson`（volatile，心跳取走）。
+     *   【为什么每 tick drain】见 `devFrameJson` 注释——render-only drain 会让一次切屏的 `dropped`
+     *   **染色之后所有心跳**（面板全红）且窗口常空（fps=0）。★与 iOS `perfJson()` 每 tick drain 同语义。
+     *   ★UI 线程（logPump）调用 ⇒ 与 Choreographer 写值同线程，无竞态。
+     */
+    private void pumpFrames() {
+        if (!ProteusBuildConfig.DEV || draw == null || draw.view() == null) return;
+        try {
+            double[] fs = draw.view().drainDevFrameStats();
+            if (fs == null || fs.length < 5) return;
+            JSONObject o = new JSONObject();
+            o.put("fps", fs[0]);
+            o.put("frameMs", fs[1]);        // 真实帧间隔均长
+            o.put("frameMaxMs", fs[2]);
+            o.put("dropped", (int) fs[3]);  // ★设备真值（CADisplayLink/Choreographer 实测跳过 vsync 的帧数）
+            o.put("frames", (int) fs[4]);
+            devFrameJson = o.toString();
+        } catch (Throwable ignored) { }
     }
 
     /** 采集设备环境（决策 #674）——dev 面板展示，便于定位"只有某机型复现"的问题。JSON 串。 */
@@ -641,6 +671,7 @@ public final class AppActivity extends Activity {
                 } catch (Throwable ignored) { /* 引擎未就绪 ⇒ 下轮再试 */ }
                 pumpDevEvents();   // ★同频排空手势 trace（决策 #675）
                 pumpProfile();     // ★同频排空 CPU Profiler 阶段耗时（决策 #715 · Android 腿）
+                pumpFrames();      // ★同频排空逐帧统计（决策 #723：每 tick drain ⇒ 不染色、窗口不空）
                 syncDevScreen();   // ★同步"运行时当前屏"（决策 #677：导航走 runtime.mountScreen，不经 renderCurrent）
                 logPump.postDelayed(this, 400);
             }
