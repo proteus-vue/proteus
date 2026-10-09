@@ -478,6 +478,61 @@ public class ProteusHostView extends ViewGroup {
                 content.right - scrollX, content.bottom - scrollY));
     }
 
+    /* ══════════ ★★dev 逐帧采样器（决策 #714 · Profiler 真值 · Android 腿）══════════
+     * 【为什么需要（与 iOS #710 同源）】Android 的 `frameMs` 此前 = **onDraw 成本**（花了多久画一帧），
+     *   ≠ 帧**间隔**（多久出一帧）⇒ 不能当帧率看、也无法判"跳过 vsync 的掉帧"。⇒ 用平台标准
+     *   `Choreographer` 采**真实帧回调间隔**：空闲 ≈16.67ms(60Hz)；主线程被阻塞/掉帧 ⇒ 间隔变长。
+     *   ★**默认不启**（release 零开销）：只由 dev 宿主在启动时调 `startDevFrameSampler()`。
+     *   ★窗口式（读即清零——dev-watch 每 tick 读一次得该窗口 fps/均值/最长/掉帧数）。 */
+    private android.view.Choreographer devChoreo = null;
+    private long devLastFrameNs = 0;
+    private int devFrameCount = 0;
+    private long devIntervalSumNs = 0;
+    private long devIntervalMaxNs = 0;
+    private int devDropped = 0;
+    private boolean devSamplerRunning = false;
+
+    /** ★开关逐帧采样器（**只由 dev 宿主调**；release 不调 ⇒ 完全不参与，零开销）。 */
+    public void startDevFrameSampler() {
+        if (devChoreo != null) return;
+        devChoreo = android.view.Choreographer.getInstance();
+        devSamplerRunning = true;
+        devChoreo.postFrameCallback(devFrameCb);
+    }
+
+    private final android.view.Choreographer.FrameCallback devFrameCb = new android.view.Choreographer.FrameCallback() {
+        @Override public void doFrame(long frameTimeNanos) {
+            if (!devSamplerRunning) return;
+            if (devLastFrameNs != 0) {
+                long dtNs = frameTimeNanos - devLastFrameNs;
+                double dtMs = dtNs / 1e6;
+                devFrameCount++;
+                devIntervalSumNs += dtNs;
+                if (dtNs > devIntervalMaxNs) devIntervalMaxNs = dtNs;
+                // 掉帧 = 间隔 > 1.5× 60Hz 预算（≈ 跳过了一个 vsync）
+                if (dtMs > 16.67 * 1.5) devDropped++;
+            }
+            devLastFrameNs = frameTimeNanos;
+            devChoreo.postFrameCallback(this);
+        }
+    };
+
+    /** 读并清零逐帧采样窗口：`{fps, frameMs, frameMaxMs, dropped, frames}`（dev 宿主每 tick 调）。 */
+    public double[] drainDevFrameStats() {
+        int n = devFrameCount;
+        double avgMs = n > 0 ? (devIntervalSumNs / 1e6) / n : 0;
+        double fps = devIntervalSumNs > 0 ? n / (devIntervalSumNs / 1e9) : 0;
+        double[] r = new double[]{
+            Math.round(fps * 10) / 10.0,
+            Math.round(avgMs * 100) / 100.0,
+            Math.round((devIntervalMaxNs / 1e6) * 100) / 100.0,
+            (double) devDropped,
+            (double) n,
+        };
+        devFrameCount = 0; devIntervalSumNs = 0; devIntervalMaxNs = 0; devDropped = 0;
+        return r;
+    }
+
     /* ══════════ ★★字体族（与 iOS `SelfDrawBridge.font(size:weight:family:)` 同契约） ══════════ */
 
     /**
