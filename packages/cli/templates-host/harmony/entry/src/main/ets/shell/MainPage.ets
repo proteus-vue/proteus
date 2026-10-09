@@ -124,6 +124,14 @@ struct MainPage {
   private devMountCalls: number = 0;
   /** ★dev 被点元素（决策 #730）：命中链末位 id（-1=无）→ `/inspect` 上报（面板高亮被点节点）。 */
   private pendingInspectId: number = -1;
+  /** ★启动占位（决策 #731）：内容首帧前显示浅底+App名+转圈；首帧渲染后置 false 撤掉。 */
+  @State loading: boolean = true;
+  private firstPainted: boolean = false;
+  /** ★dev 胶囊（决策 #731）：DEV 角标可见性 + 面板 URL（菜单显示）。 */
+  @State devCapsule: boolean = false;
+  @State panelUrl: string = '';
+  /** 应用名（启动占位显示；`$r('app.string.app_name')`）。 */
+  private appName: string = 'Proteus';
   private static vpW: number = 390;
   private static vpH: number = 844;
 
@@ -132,6 +140,11 @@ struct MainPage {
     try {
       const ctx = getContext(this);
       this.filesDir = ctx.filesDir;
+      // 应用名（启动占位显示）——`$r('app.string.app_name')` 在 build 里用；此处存字符串备用（读不到则回落）
+      try {
+        const v: string = (ctx.resourceManager.getStringSync($r('app.string.app_name').id) as string);
+        if (v.length > 0) { this.appName = v; }
+      } catch (e) { /* 读不到 ⇒ 保持默认 */ }
       // ① 运行期 bundle（项目路由/交互/响应式）——缺则回退静态屏内容
       try {
         const bb: Uint8Array = ctx.resourceManager.getRawFileContentSync('bundle-superapp.js');
@@ -219,6 +232,8 @@ struct MainPage {
       //   ★dev 调试件**门控创建**（release 零残留）——宿主功能不受影响（守 #727）。
       const devBase: string = MainPage.resolveDevBase();
       if (DEV || devBase.length > 0) {
+        this.panelUrl = devBase;
+        this.devCapsule = true;   // ★dev 胶囊（决策 #731）：右上 "DEV" 角标（可点展开面板 URL）
         this.devOverlay = new DevOverlay();
         this.devOverlay.setPanelUrl(devBase);
         this.startDevWatch(devBase);
@@ -358,8 +373,15 @@ struct MainPage {
         if (id > 0 && key.length > 0) {
           // 禁改结构字段（与 iOS/Android 一致：id/parentId/文本结构不动，只改样式）
           if (key === 'id' || key === 'parentId') { this.devLog('warn', 'edit #' + id + ' ' + key + '（结构字段不可改）'); return; }
+          // ★★类型强转（决策 #731 · 黑屏根因）：字符串值按字段类型转成数字/对象/枚举——否则内核 serde 失败 ⇒ 空屏
+          const coerced: Object | null = this.coerceLiveEdit(key, value);
+          if (coerced === null) {
+            if (this.devOverlay !== null) { this.devOverlay.flash('⚠ 就地编辑值非法 #' + id + ' · ' + key + '=' + value); }
+            this.devLog('warn', 'edit #' + id + ' ' + key + '=' + value + '（值非法，未应用）');
+            return;
+          }
           let ov: Record<string, Object> = this.devEdits.get(id) ?? {};
-          ov[key] = value;
+          ov[key] = coerced;
           this.devEdits.set(id, ov);
           this.renderCurrent();   // 改树 + 全量重挂（每轮重施覆盖）
           if (this.devOverlay !== null) { this.devOverlay.flash('✎ 已就地编辑 #' + id + ' · ' + key + '=' + value); }
@@ -386,7 +408,9 @@ struct MainPage {
     } catch (e) { /* 命令尽力而为——不干扰渲染 */ }
   }
 
-  /** 高亮框 cmd（内存态；无高亮 ⇒ ''）。rect 由 `appScreenNodeRect` 给出，与 cmd 同口径（物理 px）。 */
+  /** ★高亮框 cmd（决策 #731 · **对齐 Android/iOS**）：fill `systemBlue α0.18`(0x2E2F6BFF) + stroke `systemBlue`(0xFF2F6BFF, 2×density)。
+   *   两层（先填充后描边，描边在内）；rect 由 `appScreenNodeRect` 给出、与 cmd 同口径（物理 px）。
+   *   ★此 cmd 放在**最后**（覆盖在内容之上）——本仓纪律"高亮框与命中同源"。 */
   private highlightCmd(): string {
     if (this.highlightId <= 0) { return ''; }
     try {
@@ -396,10 +420,58 @@ struct MainPage {
       const y: number = r['y'] as number;
       const w: number = r['w'] as number;
       const h: number = r['h'] as number;
-      // 半透明品牌蓝填充（对齐 iOS/Android 的 `fill(systemBlue α0.18)+stroke`）：本处以单条半透明 rect 表意。
-      return ',{"kind":"background","id":-990001,"parentId":-1,"x":' + x.toFixed(2) + ',"y":' + y.toFixed(2)
-        + ',"w":' + w.toFixed(2) + ',"h":' + h.toFixed(2) + ',"color":1230363903,"radius":0}';
+      const d: number = vp2px(1);
+      const bw: number = Math.max(1, Math.round(2 * d));   // 描边宽 = 2×density（物理 px，同 Android `setStrokeWidth(2*d)`）
+      // ★用**十六进制字面量**（0x2E2F6BFF），不手写十进制——手算十进制极易错（本处一度算错 ⇒ 颜色不对）。
+      const FILL: number = 0x2E2F6BFF;     // systemBlue #2F6BFF alpha 0.18（=46/255）
+      const STROKE: number = 0xFF2F6BFF;   // systemBlue 不透明
+      const fill: string = ',{"kind":"background","id":-990001,"parentId":-1,"x":' + x.toFixed(2) + ',"y":' + y.toFixed(2)
+        + ',"w":' + w.toFixed(2) + ',"h":' + h.toFixed(2) + ',"color":' + FILL + ',"radius":0}';
+      const half: number = bw / 2;
+      const stroke: string = ',{"kind":"background","id":-990002,"parentId":-1,"x":' + (x - half).toFixed(2) + ',"y":' + (y - half).toFixed(2)
+        + ',"w":' + (w + bw).toFixed(2) + ',"h":' + (h + bw).toFixed(2) + ',"color":0,"radius":0,'
+        + '"borderWidth":' + bw + ',"borderColor":' + STROKE + '}';
+      return fill + stroke;
     } catch (e) { return ''; }
+  }
+
+  /**
+   * ★★就地编辑**值类型强转**（决策 #731 · 镜像 iOS/Android `coerceLiveEdit`）——**黑屏根因**：
+   *   此前直接把面板的字符串值塞进树 ⇒ `padding`/`fontSize` 等**内核期望数字/对象**的字段收到字符串
+   *   ⇒ **serde 失败 ⇒ 内核建树返回 0 ⇒ 空屏**。此处按字段类型强转（与两端同口径）。
+   *   非法值 ⇒ 返回 null（**不静默**，调用方报 warn）。
+   */
+  private coerceLiveEdit(key: string, value: string): Object | null {
+    // 颜色：合法 hex 才收（存原串；渲染侧 hexToArgb 解析）
+    if (key === 'backgroundColor' || key === 'borderColor' || key === 'color') {
+      return /^#[0-9a-fA-F]{3,8}$/.test(value) ? value : null;
+    }
+    // padding/margin：单值 ⇒ 四边同值；或 JSON 对象
+    if (key === 'padding' || key === 'margin') {
+      const d: number = Number(value);
+      if (!Number.isNaN(d) && value.trim().length > 0) {
+        return { 'top': d, 'right': d, 'bottom': d, 'left': d } as Record<string, number>;
+      }
+      try {
+        const o = JSON.parse(value) as Record<string, Object>;
+        const e: Record<string, number> = {};
+        for (const s of ['top', 'right', 'bottom', 'left']) {
+          const v = o[s];
+          if (typeof v === 'number') { e[s] = v; }
+        }
+        return Object.keys(e).length > 0 ? e : null;
+      } catch (err) { return null; }
+    }
+    // 枚举封闭集（防非法值致整树建不起来）
+    if (key === 'display') { return ['flex', 'none', 'grid'].indexOf(value) >= 0 ? value : null; }
+    if (key === 'position') { return ['static', 'relative', 'absolute', 'fixed', 'sticky'].indexOf(value) >= 0 ? value : null; }
+    if (key === 'overflow' || key === 'overflowX' || key === 'overflowY') { return ['visible', 'hidden', 'scroll', 'auto'].indexOf(value) >= 0 ? value : null; }
+    if (key === 'flexDirection') { return ['row', 'column', 'row-reverse', 'column-reverse'].indexOf(value) >= 0 ? value : null; }
+    if (key === 'flexWrap') { return ['nowrap', 'wrap', 'wrap-reverse'].indexOf(value) >= 0 ? value : null; }
+    // 默认：能解析为数字 ⇒ 数字（尺寸/弹性/字号/圆角/透明/偏移…）；否则按字符串原样收（文本/字体族/对齐…）
+    const n: number = Number(value);
+    if (!Number.isNaN(n) && value.trim().length > 0) { return n; }
+    return value;
   }
 
   /** 把 `devEdits` 覆盖施到实例树（就地编辑；每轮渲染重施——全量重挂语义）。 */
@@ -511,6 +583,15 @@ struct MainPage {
       //   （用户「点一下屏幕才更新」的真因）。postFrameCallback 请求下一帧 ⇒ 新树被合成。
       //   （C++ 侧已 `OH_ArkUI_RenderNodeUtils_Invalidate` 标脏；此处补"产帧"。）
       try { this.getUIContext().postFrameCallback(this.nudgeCb); } catch (e) { /* 无 UIContext（旧版本）⇒ 跳过 */ }
+      // ★启动占位（决策 #731）：内容首帧已上屏 ⇒ 占位**最短可见 ~800ms** 后撤。
+      //   ★为什么"最短时长"：release（rawfile 同步读）首帧即内容 ⇒ 占位一闪（用户「没看到占位」）；
+      //     Android/iOS 的占位时长由**异步加载**决定（有真实等待）；鸿蒙 release 无等待 ⇒ 显式给最短窗口，
+      //     与两端**观感对齐**（打开即见"App名+转圈"→ 内容）。dev 模式通常 dev bundle 更晚到，占位自然更久。
+      if (!this.firstPainted && n > 0) {
+        this.firstPainted = true;
+        const self = this;
+        setTimeout(() => { self.loading = false; }, 800);
+      }
     } catch (e) {
       hilog.error(DOMAIN, TAG, 'HOST_PAGE_PAINT_ERROR %{public}s', JSON.stringify(e) ?? '');
     }
@@ -696,16 +777,49 @@ struct MainPage {
   }
 
   build() {
-    Column() {
-      Stack() {
-        ContentSlot(this.content)
+    Stack() {
+      // ① 内容层（Proteus 屏内容直绘）
+      Column() {
+        Stack() {
+          ContentSlot(this.content)
+        }
+        .width('100%')
+        .layoutWeight(1)
+        .clip(true)
+        // ★触摸：拖拽滚动 + 点按命中 + 松手惯性（在 handleTouch 里判别 tap/drag；惯性由 displaySync vsync 驱动）。
+        //   ★不用原生 PanGesture（与 TapGesture 竞争会误判，见文件头）；不叠横向手势（不抢系统边缘滑返）。
+        .onTouch((e: TouchEvent) => { this.handleTouch(e); })
       }
       .width('100%')
-      .layoutWeight(1)
-      .clip(true)
-      // ★触摸：拖拽滚动 + 点按命中 + 松手惯性（在 handleTouch 里判别 tap/drag；惯性由 displaySync vsync 驱动）。
-      //   ★不用原生 PanGesture（与 TapGesture 竞争会误判，见文件头）；不叠横向手势（不抢系统边缘滑返）。
-      .onTouch((e: TouchEvent) => { this.handleTouch(e); })
+      .height('100%')
+
+      // ② ★dev 胶囊（决策 #731，对齐 Android/iOS DevOverlay）：右上 "DEV" 角标（可点 ⇒ 展开面板 URL）
+      if (this.devCapsule) {
+        Column() {
+          Text('DEV')
+            .fontSize(11).fontWeight(FontWeight.Bold).fontColor('#FFFFFF')
+            .padding({ left: 8, right: 8, top: 3, bottom: 3 })
+            .backgroundColor(this.editing() ? '#C08A18' : '#2F6BFF')
+            .borderRadius(9)
+            .onClick(() => { this.showDevMenu(); })
+        }
+        .width('100%')
+        .alignItems(HorizontalAlign.End)
+        .padding({ top: 6, right: 8 })
+      }
+
+      // ③ ★启动占位（决策 #731，对齐 Android LaunchPlaceholder / iOS）：浅底 + App 名 + 品牌蓝转圈，**居中**
+      if (this.loading) {
+        Column({ space: 16 }) {
+          Text(this.appName)
+            .fontSize(18).fontWeight(FontWeight.Medium).fontColor('#1A1C22')
+          LoadingProgress().width(36).height(36).color('#5B5BD6')
+          Text('正在启动…').fontSize(13).fontColor('#8A8F99')
+        }
+        .width('100%').height('100%')
+        .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
+        .backgroundColor('#F5F6FA')
+      }
     }
     .width('100%')
     .height('100%')
@@ -713,5 +827,23 @@ struct MainPage {
     // ★内容铺满**全屏**（含状态栏与手势区）——与 Web viewport（390×844 全屏）同口径；叠加
     //   `setWindowLayoutFullScreen(true)`（见 aboutToAppear）⇒ 状态栏透明、内容透上来。
     .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
+  }
+
+  /** 是否处于"已就地编辑"态（dev 菜单/角标配色；下批接编辑标记后置位，本批按 devEdits 非空判）。 */
+  private editing(): boolean { return this.devEdits.size > 0; }
+
+  /** ★dev 胶囊点击 → 底部菜单（渲染状态 + 面板 URL + 提示）；对齐 Android/iOS DevOverlay 的展开。 */
+  private showDevMenu(): void {
+    const url: string = this.panelUrl.length > 0 ? this.panelUrl : '(未注入 dev server)';
+    const st: string = this.editing() ? '⚠ 非项目代码效果（已就地编辑 ' + this.devEdits.size + ' 处）' : '项目代码效果';
+    try {
+      this.getUIContext().showAlertDialog({
+        title: 'Proteus Dev',
+        message: '渲染状态：' + st + '\n面板：' + url + '\n\n改源码保存即热刷；元素高亮/就地编辑见面板。',
+        confirm: { value: '知道了', action: () => { /* 关闭 */ } },
+      });
+    } catch (e) {
+      if (this.devOverlay !== null) { this.devOverlay.flash('DEV · ' + st); }
+    }
   }
 }

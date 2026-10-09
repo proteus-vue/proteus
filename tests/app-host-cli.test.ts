@@ -887,4 +887,25 @@ describe('★★★鸿蒙 dev 通道 · 批 2a 地基（热刷/心跳/日志 —
     expect(h, 'console 垫片').toContain('devInstallConsoleShim')
     expect(h, '回收 dev.console').toContain('dev.console')
   })
+  it('鸿蒙 dev 四收口（决策 #731）：dev 胶囊 + 启动占位 + 高亮对齐(fill+stroke) + 编辑类型强转', () => {
+    const mp = fs.readFileSync(path.join(TH, 'entry/src/main/ets/shell/MainPage.ets'), 'utf-8')
+    // ① dev 胶囊（右上 DEV 角标 + 可点菜单）
+    expect(mp, 'dev 胶囊状态').toContain('devCapsule')
+    expect(mp, "角标文本 'DEV'").toContain("Text('DEV')")
+    expect(mp, '胶囊点击菜单').toContain('showDevMenu(')
+    // ② 启动占位（浅底 + App 名 + 转圈 + 首帧后撤）
+    expect(mp, '占位状态').toContain('loading: boolean = true')
+    expect(mp, '转圈组件').toContain('LoadingProgress()')
+    expect(mp, '占位撤除（首帧后）').toContain('loading = false')
+    expect(mp, '占位居中').toContain('justifyContent(FlexAlign.Center)')
+    // ③ 高亮对齐 Android/iOS：fill 0x2E2F6BFF + stroke 0xFF2F6BFF(2×density)
+    expect(mp, 'fill 十六进制字面量').toContain('0x2E2F6BFF')
+    expect(mp, 'stroke 十六进制字面量').toContain('0xFF2F6BFF')
+    expect(mp, '描边宽 2×density').toContain('2 * d')
+    // ④ 编辑类型强转（黑屏根因）——edit 分支必须调用 coerceLiveEdit
+    expect(mp, 'coerceLiveEdit 方法').toContain('private coerceLiveEdit(')
+    expect(mp, 'edit 走强转').toContain('this.coerceLiveEdit(key, value)')
+    expect(mp, '颜色 hex 校验').toMatch(/\^#\[0-9a-fA-F\]/)
+    expect(mp, 'padding→对象').toContain("'top': d, 'right': d, 'bottom': d, 'left': d")
+  })
 })
