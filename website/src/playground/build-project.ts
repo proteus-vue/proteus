@@ -184,12 +184,21 @@ export async function buildProject(project: PlaygroundProject): Promise<{ compon
   return { component: mod.default, css: cssAll.join('\n') }
 }
 
-/** 构建并挂载到容器；返回卸载函数。调用方负责清空容器/错误处理。 */
-export async function mountProject(container: HTMLElement, project: PlaygroundProject): Promise<{ unmount: () => void; css: string }> {
-  const { component, css } = await buildProject(project)
-  container.innerHTML = ''
+/**
+ * 把组件挂到容器（注册 p-* 全局组件）；返回卸载函数。
+ *   ★**不负责清空容器**（由调用方在"确认最新"后原子替换）——避免陈旧构建把好结果清掉（见 #700 续）。
+ */
+export function mountComponent(container: HTMLElement, component: Component): () => void {
   const app = Vue.createApp(component)
   for (const [name, comp] of Object.entries(GLOBAL_COMPONENTS)) app.component(name, comp)
   app.mount(container)
-  return { unmount: () => app.unmount(), css }
+  return () => app.unmount()
+}
+
+/** 构建并挂载到容器（便捷口径：清空 + 挂载）。仅用于"一次性、无并发"场景。 */
+export async function mountProject(container: HTMLElement, project: PlaygroundProject): Promise<{ unmount: () => void; css: string }> {
+  const { component, css } = await buildProject(project)
+  container.innerHTML = ''
+  const unmount = mountComponent(container, component)
+  return { unmount, css }
 }
