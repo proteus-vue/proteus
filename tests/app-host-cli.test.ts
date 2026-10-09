@@ -699,9 +699,11 @@ describe('★★★鸿蒙运行期宿主（决策 #725 · 与 Android/iOS 同级
     // ★触摸：拖拽/点按在 .onTouch 里判别（不用原生 PanGesture——与 TapGesture 竞争会误判；见文件头）
     expect(src, '触摸回调接线').toContain('.onTouch((e: TouchEvent)')
     expect(src, 'tap-vs-drag 判别').toContain('touchMoved')
-    // ④ 返回栈（系统边缘滑返 → onBackPress）
+    // ④ 返回栈（系统边缘滑返 → onBackPress；本机系统手势不路由 ⇒ 显式左缘判别，对齐 iOS dev 宿主）
     expect(src, '返回栈').toContain('private goBack(')
     expect(src, 'onBackPress 消费返回').toContain('return this.goBack()')
+    expect(src, '显式左缘滑返判别').toContain('edgeTracking')
+    expect(src, '左缘阈值').toContain('this.touchStartX <= 20')
     // ★反例守卫：不叠横向手势（会抢系统边缘滑返）
     expect(src, '不叠横向手势').not.toContain('PanDirection.Horizontal')
   })

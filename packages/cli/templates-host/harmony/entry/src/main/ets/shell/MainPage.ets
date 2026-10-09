@@ -60,6 +60,11 @@ struct MainPage {
   private touchVelSum: number = 0;
   private touchVelDt: number = 0;
   private velOffset: number = 0;
+  /** ★边缘滑返（左缘）：跟踪标志 + 起点（与 iOS dev 宿主的 `UIScreenEdgePanGestureRecognizer` 同语义——
+   *  系统边缘手势在本机不路由到 `onBackPress`，故显式判别；只认**左缘 + 明确右滑**，最小化与系统手势冲突）。 */
+  private edgeTracking: boolean = false;
+  private edgeStartX: number = 0;
+  private edgeStartY: number = 0;
   /** ArkTS 侧导航历史栈（一次性 VM：JS 路由态不跨调用保留 ⇒ 返回栈由宿主记）+ 每屏滚动进度 */
   private navStack: string[] = [];
   private scrollByScreen: Map<string, number> = new Map<string, number>();
@@ -285,6 +290,9 @@ struct MainPage {
       this.stopMomentum();
       this.touchLastY = t.windowY; this.touchStartX = t.windowX; this.touchStartY = t.windowY; this.touchMoved = false;
       this.touchLastTs = Date.now(); this.touchVelSum = 0; this.touchVelDt = 0; this.velOffset = 0;
+      // ★左缘起手 ⇒ 进入"边缘滑返"跟踪（见 Up 分支：明确右滑才触发返回；否则照常滚动）
+      this.edgeTracking = this.touchStartX <= 20;
+      this.edgeStartX = this.touchStartX; this.edgeStartY = this.touchStartY;
       return;
     }
     if (e.type === TouchType.Move) {
@@ -295,6 +303,11 @@ struct MainPage {
       const dt: number = now - this.touchLastTs;
       this.touchLastTs = now;
       if (Math.abs(t.windowY - this.touchStartY) > 16 || Math.abs(t.windowX - this.touchStartX) > 16) this.touchMoved = true;
+      // ★边缘跟踪期间**不滚动**（横向位移为主、纵向分量近 0；与 iOS 边缘 pan 并发的语义一致）
+      if (this.edgeTracking && Math.abs(t.windowX - this.edgeStartX) > Math.abs(t.windowY - this.edgeStartY)) {
+        return;
+      }
+      this.edgeTracking = false;   // 起手在边缘但纵向拖动 ⇒ 转为普通滚动
       const step: number = this.applyScrollBy(-dy);   // 手指上滑（windowY 减小）⇒ offset 增大
       // 速度采样：本步**实际内容位移**（钳制后）累计，≥24ms 算一次瞬时速度
       if (dt > 0) { this.touchVelSum += step; this.touchVelDt += dt; }
@@ -302,15 +315,21 @@ struct MainPage {
       return;
     }
     if (e.type === TouchType.Up) {
-      if (!this.touchMoved && this.touchStartX >= 0) {
-        this.onTapAt(this.touchStartX, this.touchStartY);   // 几乎没动 ⇒ tap
+      const dx: number = t.windowX - this.edgeStartX;
+      const dyAbs: number = Math.abs(t.windowY - this.edgeStartY);
+      if (this.edgeTracking && dx > 60 && dyAbs < 60) {
+        // ★左缘明确右滑 ⇒ 滑返（对齐 iOS dev 宿主 `UIScreenEdgePanGestureRecognizer` dx>60 ⇒ 返回）
+        hilog.info(DOMAIN, TAG, 'HOST_PAGE_EDGE_BACK dx=%{public}d', Math.round(dx));
+        this.goBack();
+      } else if (!this.touchMoved && this.touchStartX >= 0) {
+        this.onTapAt(this.touchStartX, this.touchStartY);   // 几乎没动 ⇒ tap（★含左缘静点：不漏）
       } else if (this.touchMoved) {
         this.startMomentum(this.velOffset);   // ★松手惯性（显示由 displaySync vsync 驱动）
       }
-      this.touchLastY = -1; this.touchMoved = false;
+      this.touchLastY = -1; this.touchMoved = false; this.edgeTracking = false;
       return;
     }
-    if (e.type === TouchType.Cancel) { this.stopMomentum(); this.touchLastY = -1; this.touchMoved = false; }
+    if (e.type === TouchType.Cancel) { this.stopMomentum(); this.touchLastY = -1; this.touchMoved = false; this.edgeTracking = false; }
   }
 
   /** 点击命中 → 运行期派发（$nav 导航 / 数据变更）→ 重绘（与 Android/iOS 同一条命中链） */
