@@ -257,6 +257,10 @@ describe('★完整宿主 · iOS 宿主模板为运行期形态（决策 #683）
     const shSampler = fs.readFileSync(path.join(shellDir, 'ProteusApp.swift'), 'utf-8')
     expect(shSampler, '启动采样器').toContain('startDevFrameSampler()')
     expect(shSampler, '上报 fps').toContain('o["fps"]')
+    // ★元素 → 模板源位置（决策 #713）：节点 loc 徽章 + 跳转编辑器
+    expect(page, '面板渲染元素源位置').toContain('srcloc')
+    expect(page, '面板跳转编辑器').toContain('vscode://file')
+    expect(page, 'META 注入 projectRoot').toContain('projectRoot: info.projectRoot')
   })
 
   // ★面板→设备命令（决策 #701/#702 安卓腿）：Android 宿主也接 /cmd + 元素高亮 + REPL

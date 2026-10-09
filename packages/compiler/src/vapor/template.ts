@@ -34,6 +34,8 @@ import { compileExpr } from './expr'
 import { foldCalcArithmetic } from '../calc-fold'
 // ★★★批次 45：构建期静态实例化（App 壳 v-if/v-for 折叠）
 import { staticInstantiate } from './static-instantiate'
+// ★★★模板源位置换算（唯一实现——与 events.ts 同口径；决策 #712/#713）
+import { templateContentLineOffset, sourceLocOf } from './source-loc'
 // ★★★元素/文本**混排**归一化（2026-10-03）——三处遍历（template/deps/events）的**唯一**输入
 import { normalizedChildSequence } from './text-runs'
 // ★作用域插槽的变量形态解析（单名 / 对象解构——唯一入口；2026-10-03）
@@ -3063,6 +3065,12 @@ export function buildLayoutTemplate(
    *   `<style>` ⇒ 全局类全部落空（卡片/列表/文字样式全丢，页面塌）。缺省 ⇒ 零行为变化。
    */
   globalCss?: string,
+  /**
+   * ★★★批次 54（决策 #713）：**dev 构建**——为每个 `LayoutNode` 发射模板源位置 `loc`
+   *   （面板 Elements 选中/就地编辑 → 跳回 `.vue` 源行的唯一通路；App 页面 SFC 不打包、无 sourcemap）。
+   *   【为什么必须 gate 在 dev】非 dev 产物**逐字节不变**（否则 golden / app-ir-shadow / 产物体积全动）。
+   */
+  dev = false,
 ): LayoutTemplateResult {
   const diagnostics: VaporDiagnostic[] = []
   const nodes: LayoutNode[] = []
@@ -3094,6 +3102,9 @@ export function buildLayoutTemplate(
     return { template: { nodes: [], lists: [], roots: [], ok: false }, diagnostics, ok: false }
   }
   let ast = dom(desc.template.content, { comments: false }) as unknown as { children: unknown[] }
+  // ★★★批次 54（决策 #713）：dev 构建时把模板内容相对行换算成**整份 `.vue`** 行（唯一实现在 source-loc.ts，
+  //   与事件 `loc` 同口径）。非 dev ⇒ `bodyLineOffset` 不参与（零行为变化）。
+  const bodyLineOffset = dev ? templateContentLineOffset(source, desc) : 0
   // ★★★批次 45：构建期静态实例化（给了 `statics` 才做——缺省零行为变化）。
   if (statics) {
     const si = staticInstantiate(ast as unknown as { type: number; children: unknown[] }, statics)
@@ -3151,6 +3162,8 @@ export function buildLayoutTemplate(
   type Node = {
     type: number
     tag?: string
+    /** ★元素在模板内容里的源位置（决策 #713；dev 构建据此发射 `LayoutNode.loc`） */
+    loc?: { start?: { line?: number; column?: number } }
     props?: Array<{
       type: number
       name: string
@@ -3725,6 +3738,12 @@ export function buildLayoutTemplate(
       // ★★★flex-direction 项（2026-10-08）：display:flex 容器补 flex-direction 初值 row（级联后归一）
       normalizeFlexDirection(style)
       const node: LayoutNode = { id, parentId, tag, style }
+      // ★★★批次 54（决策 #713）：dev 构建发射模板源位置（面板 Elements 选中/就地编辑 → 跳源行）。
+      //   非 dev ⇒ `dev` 为 false、此处根本不进 ⇒ 产物逐字节不变。
+      if (dev) {
+        const loc = sourceLocOf(n.loc, bodyLineOffset)
+        if (loc) node.loc = loc
+      }
       if (nodeListId !== undefined) node.listId = nodeListId
       if (isComponentTag) node.component = tag
       // ★静态 `is="Name"` ⇒ 当静态组件（与 `<Name>` 完全等价——组件标记指向真名）

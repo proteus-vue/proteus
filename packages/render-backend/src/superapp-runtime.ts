@@ -72,8 +72,9 @@ export interface SuperappRuntime {
   }
   /** 当前屏名 */
   current(): string
-  /** ★DevTools 元素内省（决策 #674）：当前屏**已实例化节点**（Template 实例化产物：id/parentId/tag/style/text）——供面板"元素"树。 */
-  currentContent(): { viewport?: { width: number; height: number }; nodes: readonly unknown[] } | null
+  /** ★DevTools 元素内省（决策 #674）：当前屏**已实例化节点**（Template 实例化产物：id/parentId/tag/style/text）——供面板"元素"树。
+   *  ★（决策 #713）`:file` = 当前屏源文件（dev 构建；面板据节点 `loc` 拼 `file:line:col`）。 */
+  currentContent(): { viewport?: { width: number; height: number }; nodes: readonly unknown[]; screen?: string; file?: string } | null
   /** ★DevTools 事件 trace（决策 #675）：自上次调用以来发生的手势派发（type/命中 id/冒泡链/handled/fired）——排空式。 */
   devEvents(): ReadonlyArray<{ type: string; id: number; chain: readonly number[]; handled: boolean; fired: readonly number[]; src?: string; time: number }>
   /**
@@ -233,7 +234,12 @@ export function createSuperappRuntime(opts: SuperappRuntimeOptions): SuperappRun
     // ★DevTools 元素内省（决策 #674）：当前屏已实例化节点（避免暴露整个 rt/instance 给桥）。
     currentContent: () => {
       if (!cur) return null
-      try { return rt.instance(cur).content() as { viewport?: { width: number; height: number }; nodes: readonly unknown[] } } catch { return null }
+      try {
+        const c = rt.instance(cur).content() as { viewport?: { width: number; height: number }; nodes: readonly unknown[] }
+        // ★（决策 #713）带屏名 + 源文件 —— 面板据节点 `loc` 拼 `file:line:col`
+        const file = (opts.artifacts[cur] as { file?: string } | undefined)?.file
+        return { ...c, screen: cur, ...(file ? { file } : {}) }
+      } catch { return null }
     },
     // ★排空式：返回自上次调用以来的手势 trace，并清空（宿主每次轮询取走）。
     devEvents: () => { const out = devEvents.slice(); devEvents.length = 0; return out },

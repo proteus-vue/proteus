@@ -33,6 +33,11 @@ export interface ScreenRuntimeArtifact {
   handlers: Record<string, unknown[]>
   /** 初始数据快照（构建期从 SFC script 抽 `ref(<字面量>)`——端上不执行 script） */
   data: Record<string, unknown>
+  /**
+   * ★★**源文件路径**（决策 #713 · 仅供 dev）：该屏对应的 `.vue`（相对项目根）——
+   *   节点 `loc` 只带行列、不带文件，面板据此拼出 `file:line:col` 并跳转源文件。缺省省略（release 无）。
+   */
+  file?: string
 }
 
 export interface AppRuntimeContentResult {
@@ -53,12 +58,16 @@ const EMPTY_TABLE = { version: 1, sources: [], evaluators: [], l0Slots: [], stat
  *
  * @param root 项目根（含 `router/auto-routes.ts`）
  * @param platform 具体平台
+ * @param opts.dev ★（决策 #713）dev 构建 ⇒ 为每个模板节点发射**源位置** `loc`（面板 Elements → 源码映射）；
+ *   缺省 false ⇒ 产物逐字节不变。
  */
 export async function buildAppRuntimeContent(
   root: string,
   platform: AppPlatform,
+  opts: { dev?: boolean } = {},
 ): Promise<AppRuntimeContentResult> {
   const diagnostics: string[] = []
+  const dev = opts.dev === true
 
   // ★honor `router.routesOutput`（唯一实现 app-routes.ts）——与 app-content 同源同口径。
   const { file: autoRoutes, config: cfgV4 } = await resolveAppRoutes(root)
@@ -98,7 +107,7 @@ export async function buildAppRuntimeContent(
 
     // 静态初值（`ref(<字面量>)`）——作模板 `statics`（编译期折常量插值）+ `data` 运行期源初值
     const statics = { ...extractRefLiterals(sfcSrc) }
-    const tplRes = buildLayoutTemplate(sfcSrc, filename, undefined, tokens, statics, globalCss)
+    const tplRes = buildLayoutTemplate(sfcSrc, filename, undefined, tokens, statics, globalCss, dev)
     if (!tplRes.ok) { diagnostics.push(`${r.name}: 模板编译失败`); skipped++; continue }
 
     const subRes = buildVaporSubscriptions(sfcSrc, filename)
@@ -132,6 +141,8 @@ export async function buildAppRuntimeContent(
       events: (evRes.events ?? []) as unknown[],
       handlers: (evRes.handlers ?? {}) as Record<string, unknown[]>,
       data: statics,
+      // ★dev：屏源文件（相对项目根）——面板据节点 loc 拼 `file:line:col`
+      ...(dev ? { file: filename } : {}),
     }
     compiled++
     for (const d of tplRes.diagnostics) diagnostics.push(`${r.name}: ${d.code} ${d.message}`)

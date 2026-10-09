@@ -411,6 +411,9 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
     //   的语义标记、嵌套 v-for（P2）需要区分容器与行，才必须补上。
     if (n.tag) out.tag = n.tag
     if (n.component) out.component = n.component
+    // ★★★批次 54（决策 #713）：模板源位置随节点透传（dev 构建有、release 无）——面板 Elements
+    //   选中/就地编辑的节点据此锚回 `.vue` 源行。★id 变了（列表行/组件展开重编号）而 loc 是**源属性**不变。
+    if (n.loc) out.loc = n.loc
     // ★★★P1-3 插槽分发（2026-10-03）：出口 / 内容根标记随节点透传——分发在**本函数收尾**做
     //   （标记是**分发期**语义：分发完即摘除，不会出现在给宿主的树里——见 dissolveOutlets）。
     if (n.slotOutlet) out.slotOutlet = n.slotOutlet

@@ -90,6 +90,13 @@ const COUPLING = [
     why: '模板 → wxml 产物（类名/作用域后缀/事件绑定/指令/插槽）——产物形态断言与快照的重灾区',
   },
   {
+    // ★★★批次 54（决策 #713）：vapor **源位置**（`LayoutNode.loc` / `EventBinding.loc`）——
+    //   共享原语 `source-loc.ts`（模板内容相对行 → 整份 `.vue` 行，唯一实现）。改这三处 ⇒ 定向跑 loc 判据。
+    match: /^packages\/compiler\/src\/vapor\/(template|events|source-loc)\.ts$/,
+    tests: ['tests/vapor-node-loc.test.ts', 'tests/vapor-events.test.ts'],
+    why: 'vapor 源位置（模板内容相对行 → 整份 .vue 行）——节点/事件 loc 同口径（dev 构建发射；面板 Elements/Events → 源行）',
+  },
+  {
     match: /^packages\/compiler\/src\/script\.ts$/,
     tests: [
       'tests/mp-transform.test.ts',

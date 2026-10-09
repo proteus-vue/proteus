@@ -214,4 +214,42 @@ describe('★B1 · 壳级运行期驱动（createSuperappRuntime）', () => {
     expect(rt.mountScreen('nope')).toBe(false)
     expect(notes.some((n) => n.includes('nope'))).toBe(true)
   })
+
+  it('★元素 → 模板源位置（决策 #713）：dev 构建 ⇒ 节点带 loc + currentContent 带 file/screen', async () => {
+    const dir = makeTempProject()
+    // ★dev 构建：节点发射 loc + 屏源文件
+    const build = await buildAppRuntimeContent(dir, 'android', { dev: true })
+    const artifacts = JSON.parse(fs.readFileSync(build.outFile, 'utf-8')) as Record<string, ScreenRuntimeArtifact>
+    expect(artifacts['home']!.file, 'dev 产物应带屏源文件').toMatch(/home\.vue$/)
+    const rt = createSuperappRuntime({
+      artifacts,
+      host: { mount: () => '{"ok":true}', applyOps: () => '{"ok":true}' },
+      viewport: { width: 390, height: 844 },
+    })
+    rt.mountScreen('home')
+    const content = rt.currentContent()!
+    expect(content.screen, 'currentContent 应带屏名').toBe('home')
+    expect(content.file, 'currentContent 应带源文件').toMatch(/home\.vue$/)
+    // 至少一个节点带模板源位置（面板 Elements 选中 → 跳源的唯一数据源）
+    const withLoc = (content.nodes as Array<{ loc?: { line: number } }>).filter((n) => n.loc)
+    expect(withLoc.length, '节点应带 loc').toBeGreaterThan(0)
+    expect(withLoc[0]!.loc!.line).toBeGreaterThan(0)
+  })
+
+  it('★非 dev（缺省）⇒ 节点无 loc、产物无 file（逐字节不变的保证）', async () => {
+    const dir = makeTempProject()
+    const build = await buildAppRuntimeContent(dir, 'android')
+    const artifacts = JSON.parse(fs.readFileSync(build.outFile, 'utf-8')) as Record<string, ScreenRuntimeArtifact>
+    expect(artifacts['home']!.file, '非 dev 不应带 file').toBeUndefined()
+    const rt = createSuperappRuntime({
+      artifacts,
+      host: { mount: () => '{"ok":true}', applyOps: () => '{"ok":true}' },
+      viewport: { width: 390, height: 844 },
+    })
+    rt.mountScreen('home')
+    const content = rt.currentContent()!
+    expect(content.file, '非 dev currentContent 无 file').toBeUndefined()
+    const withLoc = (content.nodes as Array<{ loc?: unknown }>).filter((n) => n.loc)
+    expect(withLoc.length, '非 dev 节点不应带 loc').toBe(0)
+  })
 })

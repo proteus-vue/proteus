@@ -37,6 +37,13 @@ export interface LayoutNode {
   tag: string
   /** 静态样式（**引擎字段名**：width/height/margin/flexDirection/backgroundColor/…） */
   style: Record<string, unknown>
+  /**
+   * ★★★**模板源位置**（决策 #713 · DevTools 元素→源码映射）——该元素在**整份 `.vue`** 里的
+   *   `{ line, column }`（1 基；行已含模板块之前的前导行偏移，与事件 `EventBinding.loc` 同一口径）。
+   *   【只在 dev 构建发射】App 页面 SFC 不打包（无 esbuild sourcemap）⇒ 这是把「面板 Elements 选中/
+   *   就地编辑的节点」映射回模板源行的**唯一**通路。缺省省略 ⇒ 既有产物逐字节不变。
+   */
+  loc?: { line: number; column: number }
   /** 文本占位（元素含静态文本或插值子节点时存在；插值初值为空串，由运行时回填） */
   text?: string
   /**
@@ -277,6 +284,11 @@ export interface InstantiatedNode {
   tag?: string
   /** ★组件边界标记（见 LayoutNode.component；P1 组件系统） */
   component?: string
+  /**
+   * ★★★**模板源位置**（决策 #713）：随 `LayoutNode.loc` 透传（dev 构建）——面板 Elements 选中/
+   *   就地编辑的节点据此显示并跳转模板源行。列表行/组件展开后的 id 变了，但 loc 是**源属性**不变。
+   */
+  loc?: { line: number; column: number }
   text?: string
   /** 样式字段（width / height / flexDirection / margin / …）——**平铺在节点顶层** */
   [styleKey: string]: unknown
