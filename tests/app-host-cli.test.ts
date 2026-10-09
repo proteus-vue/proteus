@@ -244,6 +244,22 @@ describe('★完整宿主 · iOS 宿主模板为运行期形态（决策 #683）
     const gate = fs.readFileSync(path.join(ROOT, 'hosts/android/check-host-compile.sh'), 'utf-8')
     expect(gate, '模板 src 纳入 javac').toContain('templates-host/android/src')
   })
+
+  // ★决策 #704：失焦即生效 + 宿主 dev 菜单（状态提示 + 重置）
+  it('就地编辑可用性（决策 #704）：失焦即提交 + dev 菜单重置 + 面板重置按钮', () => {
+    const page = fs.readFileSync(path.join(ROOT, 'packages/cli/src/app-devtools-page.ts'), 'utf-8')
+    expect(page, '失焦即提交').toContain('function commitEdit(')
+    expect(page, '编辑中暂停树重渲染').toContain('boxEditing')
+    expect(page, '面板重置按钮').toContain("sendCmd('reset'")
+    const shell = fs.readFileSync(path.join(shellDir, 'ProteusApp.swift'), 'utf-8')
+    expect(shell, 'reset 命令分支').toMatch(/case "reset"/)
+    expect(shell, '重置实现').toContain('func restoreProject(')
+    expect(shell, '编辑状态标记').toContain('markEdited()')
+    const overlay = fs.readFileSync(path.join(shellDir, 'ProteusDevOverlay.swift'), 'utf-8')
+    expect(overlay, '角标可点').toContain('toggleSheet')
+    expect(overlay, '状态提示').toContain('setEdited')
+    expect(overlay, '重置回调').toContain('onReset')
+  })
 })
 
 describe.skipIf(!hasSuperapp)('★完整宿主 · app-bundle（项目侧 bundle）', () => {

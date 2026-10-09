@@ -161,6 +161,17 @@ final class ProteusHostDriver {
         return v?.toString() ?? "undefined"
     }
 
+    /// ★是否有未还原的就地编辑（决策 #704）——决定 dev 面板的"渲染状态"提示。
+    private(set) var editsApplied = false
+    /// 标记已就地编辑（非项目代码效果）。
+    func markEdited() { editsApplied = true }
+    /// ★重置为**项目代码的实时效果**（决策 #704）：重渲当前屏（从项目数据重建树 ⇒ 就地编辑全部消失）。
+    ///   ——就地编辑只改**绘制层**、不改内核树/项目态 ⇒ 重渲即"回到项目代码"。
+    func restoreProject() {
+        editsApplied = false
+        if let ctx = self.ctx { _ = renderCurrent(ctx) }
+    }
+
     init(frame: CGRect) {
         view = SelfDrawView(frame: frame)
         // ★底色 = 内容同族浅色（决策 #694）：`SelfDrawView` 覆盖不到的区域 / 切换期此前露黑底
@@ -606,6 +617,8 @@ final class ProteusSceneDelegate: UIResponder, UIWindowSceneDelegate {
             //   内容重绘/滚动/切屏覆盖；对齐 Android 加在 Activity root FrameLayout）。release 不创建（零残留）。
             let host = self.window ?? d.view
             let overlay = ProteusDevOverlay(host: host)
+            overlay.panelUrl = BundleSource.devServerBase() ?? ""
+            overlay.onReset = { [weak self] in self?.resetFromMenu() }
             overlay.attach()
             devOverlay = overlay
             startDevWatch()
@@ -717,11 +730,24 @@ final class ProteusSceneDelegate: UIResponder, UIWindowSceneDelegate {
             let value = (o["value"] as? String) ?? ""
             if !key.isEmpty {
                 let ok = d.bridge.applyLiveEdit(id: id, key: key, value: value)
+                if ok { d.markEdited(); devOverlay?.setEdited(true) }
                 d.devLog(ok ? "info" : "warn", "edit #\(id) \(key)=\(value)\(ok ? "" : "（不支持/无该层）")")
             }
+        case "reset":
+            // ★面板触发的重置（决策 #704）：与 dev 菜单的"重置为项目代码"同语义
+            resetFromMenu()
         default:
             break
         }
+    }
+
+    /// 重置为项目代码效果（dev 菜单按钮 / 面板 reset 命令共用）。
+    private func resetFromMenu() {
+        guard let d = driver else { return }
+        d.restoreProject()
+        devOverlay?.setEdited(false)
+        devOverlay?.flash("已重置为项目代码")
+        d.devLog("info", "reset · 恢复项目代码效果")
     }
 
     /// 设备/引擎环境（面板"设备环境"）——device 型号/系统/屏幕 + 内核·引擎版本。
