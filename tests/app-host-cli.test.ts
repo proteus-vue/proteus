@@ -235,6 +235,11 @@ describe('★完整宿主 · iOS 宿主模板为运行期形态（决策 #683）
     expect(page, '面板可编辑集含 flex').toMatch(/EDITABLE = \[[\s\S]*?'flexGrow'/)
     // ★escapeHtml 必须转义引号（对象字段 padding/margin 的 JSON 带 " 会截断属性；决策 #706 修）
     expect(page, 'escapeHtml 转义引号').toMatch(/escapeHtml = .*replace\(\/\[<>&"'\]/)
+    // ★网络详情（决策 #707）
+    expect(server, '网表带 contentType/preview').toContain('netContentType')
+    expect(server, '网表预览截断').toContain('preview: netPreview.slice')
+    expect(page, '面板网络详情').toContain('function showNetDetail(')
+    expect(page, '点行看详情').toMatch(/addNet[\s\S]*?showNetDetail\(e\)/)
   })
 
   // ★面板→设备命令（决策 #701/#702 安卓腿）：Android 宿主也接 /cmd + 元素高亮 + REPL
@@ -323,6 +328,20 @@ describe.skipIf(!hasSuperapp)('★完整宿主 · dev server（热刷核心）',
     const bundle = await fetch(`${s.url}/bundle`).then((r) => r.text())
     expect(bundle.length).toBeGreaterThan(50_000)
     expect(bundle).toContain('__proteusSuperappBootJson')
+  }, 60_000)
+
+  it('★网络详情（决策 #707）：网表带 content-type + 响应预览（/bundle 抓 text/javascript + 头部）', async () => {
+    const s = server!
+    await fetch(`${s.url}/bundle`)   // 触发一次网表记录（/bundle 非噪声）
+    // 读 SSE 快照里的 net 表，找 /bundle 行
+    const reader = (await fetch(`${s.url}/events`)).body!.getReader()
+    const first = new TextDecoder().decode((await reader.read()).value)
+    await reader.cancel()
+    const snap = JSON.parse(first.replace(/^data: /, '')) as { net?: Array<{ path: string; contentType?: string; preview?: string }> }
+    const bundleEv = (snap.net ?? []).find((e) => (e.path ?? '').startsWith('/bundle'))
+    expect(bundleEv, 'net 表含 /bundle 行').toBeTruthy()
+    expect(bundleEv!.contentType, '带响应 content-type').toMatch(/javascript/)
+    expect(bundleEv!.preview, '带响应预览（bundle 头部）').toMatch(/use strict|packages\//)
   }, 60_000)
 
   it('★面板→设备命令通道（决策 #701）：/panelcmd 入队 ⇒ /cmd one-shot 取走 ⇒ 再取为空', async () => {

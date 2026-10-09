@@ -140,6 +140,14 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
   .nrow .st{font-weight:700;font-size:11.5px}
   .st.ok{color:var(--ok)} .st.warn{color:var(--warn)} .st.err{color:var(--err)}
   .nrow .ms{color:var(--dim);text-align:right;min-width:56px;font-size:11.5px}
+  .nrow{cursor:pointer} .nrow:hover{background:var(--surface-3)}
+  /* ★网络详情（决策 #707） */
+  .ndetail{margin-top:var(--s3);border:1px solid var(--line-2);border-radius:var(--r);overflow:hidden;background:var(--surface)}
+  .ndetail .nd-h{padding:9px var(--s3);background:var(--surface-3);font-size:12px;font-family:var(--mono);color:var(--ink);border-bottom:1px solid var(--line);overflow-wrap:anywhere}
+  .nd-b{display:grid;grid-template-columns:auto 1fr;gap:5px var(--s4);padding:var(--s3);font-size:12px;font-family:var(--mono)}
+  .nd-k{color:var(--dim)} .nd-v{color:var(--ink);text-align:right;overflow-wrap:anywhere}
+  .nd-preview{padding:0 var(--s3) var(--s3)}
+  .nd-preview pre{margin:5px 0 0;max-height:160px;overflow:auto;background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:var(--s3);font-size:11px;color:var(--ink-2);white-space:pre-wrap;overflow-wrap:anywhere}
 
   /* ── Console / Events ── */
   .crow{display:grid;grid-template-columns:62px 1fr;gap:var(--s3);padding:8px var(--s3);border-top:1px solid var(--line);
@@ -243,6 +251,8 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
     <div>
       <h2>Network · 通道<span class="flt" data-flt="net"><b class="on" data-ch="all">全部</b><b data-ch="native">原生</b><b data-ch="project">项目</b></span></h2>
       <div class="panel" id="net"><div class="empty">暂无请求。</div></div>
+      <!-- ★网络详情（决策 #707）：点某行 ⇒ 方法/URL/状态/大小/耗时 + 响应类型 + 内容预览 -->
+      <div class="ndetail" id="ndetail" style="display:none"></div>
     </div>
   </div>
 
@@ -306,7 +316,22 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
       + '<span class="p">' + escapeHtml(e.path || '') + '</span>'
       + '<span class="st ' + stCls(e.status) + '">' + e.status + '</span>'
       + '<span class="ms">' + (e.bytes ? Math.round(e.bytes / 1024) + 'KB · ' : '') + e.ms + 'ms</span>';
+    r.addEventListener('click', function () { showNetDetail(e); });   // ★点行看详情（决策 #707）
     return r;
+  }
+  // ★网络详情（决策 #707）：方法/URL/状态/大小/耗时 + 响应类型 +（text 类）内容预览
+  const ndetailEl = $('ndetail');
+  function showNetDetail(e) {
+    if (!ndetailEl) return;
+    const row = function (k, v) { return '<div class="nd-k">' + escapeHtml(k) + '</div><div class="nd-v">' + escapeHtml(v) + '</div>'; };
+    ndetailEl.innerHTML = '<div class="nd-h">' + chTag(e.channel) + ' ' + escapeHtml(e.method) + ' ' + escapeHtml(e.path || '') + '</div>'
+      + '<div class="nd-b">'
+      + row('状态', String(e.status)) + row('大小', e.bytes ? Math.round(e.bytes / 1024) + ' KB（' + e.bytes + ' B）' : '0 B')
+      + row('耗时', e.ms + ' ms') + row('时间', fmtTime(e.time))
+      + (e.contentType ? row('内容类型', e.contentType) : '')
+      + '</div>'
+      + (e.preview ? '<div class="nd-preview"><div class="nd-k">响应预览</div><pre>' + escapeHtml(e.preview) + '</pre></div>' : '');
+    ndetailEl.style.display = 'block';
   }
   function addCon(e, isNew) {
     const lv = ['log','info','warn','error'].includes(e.level) ? e.level : 'log';

@@ -118,7 +118,9 @@ export async function startAppDevServer(opts: AppDevServerOptions): Promise<AppD
   interface RebuildEvent { version: number; bytes: number; ms: number; reason: string; time: number }
   interface HostState { screen: string; time: number; env?: Record<string, unknown>; perf?: Record<string, unknown> }
   /** ★channel（决策 #679）：'native' = 宿主/H TTP；'project' = 项目 JS 侧（console.* / 桥调用）。 */
-  interface NetEvent { channel: 'native' | 'project'; method: string; path: string; status: number; bytes: number; ms: number; time: number }
+  /** ★★网络**详情**（决策 #707）：在方法/路径/状态/字节/耗时之外，补 **content-type + 响应体预览**
+   *   （App 端网络源头 = dev server 自身请求 bundle/version/ping/tree/… ⇒ 详情看这几个）。 */
+  interface NetEvent { channel: 'native' | 'project'; method: string; path: string; status: number; bytes: number; ms: number; time: number; contentType?: string; preview?: string }
   interface ConsoleEvent { channel: 'native' | 'project'; level: string; text: string; time: number }
   interface TraceEvent { gesture: string; id: number; chain: number[]; handled: boolean; fired: number[]; time: number }
   /** ★面板→设备命令（决策 #701）：`highlight` / `eval`（REPL）/ `edit`（就地改绘制属性，决策 #702）。 */
@@ -189,14 +191,29 @@ export async function startAppDevServer(opts: AppDevServerOptions): Promise<AppD
     const netStart = Date.now()
     let netStatus = 0
     let netBytes = 0
+    let netContentType = ''
+    let netPreview = ''
     const isNoise = url === '/events' || url === '/' || url === '/index.html' || url === '/health'
     const _writeHead = res.writeHead.bind(res)
-    res.writeHead = ((code: number, ...rest: unknown[]) => { netStatus = code; return (_writeHead as (...a: unknown[]) => unknown)(code, ...rest) }) as typeof res.writeHead
+    res.writeHead = ((code: number, ...rest: unknown[]) => {
+      netStatus = code
+      // ★响应头里的 content-type（网络详情 · 决策 #707）——writeHead 的 headers 是可选对象参数
+      try {
+        const h = rest.find((x) => x && typeof x === 'object' && !Array.isArray(x)) as Record<string, unknown> | undefined
+        if (h) for (const k of Object.keys(h)) if (/^content-type$/i.test(k)) netContentType = String(h[k])
+      } catch { /* 头解析失败不影响 */ }
+      return (_writeHead as (...a: unknown[]) => unknown)(code, ...rest)
+    }) as typeof res.writeHead
     const _end = res.end.bind(res)
     res.end = ((chunk?: unknown, ...rest: unknown[]) => {
-      if (typeof chunk === 'string') netBytes += Buffer.byteLength(chunk)
-      else if (Buffer.isBuffer(chunk)) netBytes += chunk.length
-      if (!isNoise) recordNet({ channel: 'native', method: req.method ?? 'GET', path: req.url ?? '/', status: netStatus, bytes: netBytes, ms: Date.now() - netStart, time: Date.now() })
+      if (typeof chunk === 'string') { netBytes += Buffer.byteLength(chunk); if (!netPreview) netPreview = chunk }
+      else if (Buffer.isBuffer(chunk)) { netBytes += chunk.length; if (!netPreview && netContentType.includes('text')) netPreview = chunk.toString('utf8') }
+      if (!isNoise) recordNet({
+        channel: 'native', method: req.method ?? 'GET', path: req.url ?? '/', status: netStatus, bytes: netBytes, ms: Date.now() - netStart, time: Date.now(),
+        ...(netContentType ? { contentType: netContentType } : {}),
+        // 预览截断（网表不做大传输展示；JS bundle 只取头部一行注释）
+        ...(netPreview ? { preview: netPreview.slice(0, 300) } : {}),
+      })
       return (_end as (...a: unknown[]) => unknown)(chunk, ...rest)
     }) as typeof res.end
     // ★DevTools 面板（决策 #672）：浏览器打开 dev server 根路径即见可视化面板。
