@@ -188,8 +188,20 @@ export function packageHarmonyHost(opts: PackageHostOptions): PackageHostResult 
     })
     log.push(...out.split('\n').filter((l) => l.trim()).slice(-6))
   } catch (e) {
-    const msg = e instanceof Error ? (e as { stdout?: string }).stdout ?? e.message : String(e)
-    return { ok: false, hostDir, hap: null, screenContentCopied, log: [...log, `✗ hvigor 构建失败：`, String(msg).slice(-1500)] }
+    // ★★★失败要**两个流都取**（决策 #728 收口）：hvigor 的 `ERROR:` 行写在 **stderr**，而此前只取 `stdout`
+    //   ⇒ 失败时只显示一堆 `Finished` 行、**看不到真正的错误**（用户实测「✗ hvigor 构建失败」下面全是 Finished）。
+    const eo = e as { stdout?: string; stderr?: string }
+    const both = [eo.stdout, eo.stderr].filter((s): s is string => !!s).join('\n')
+    const msg = both || (e instanceof Error ? e.message : String(e))
+    const extra: string[] = []
+    // 已知归因：SignHap 的 bundleName 与签名不符（00303074）——宿主 build-profile 里的签名绑定了**另一个** bundleName。
+    if (/00303074|does not match the bundleName/i.test(msg)) {
+      extra.push('  ℹ 根因：宿主 build-profile.json5 的 SigningConfigs 绑定的 bundleName 与 app.json5 不一致')
+      extra.push('    （常见于：曾为别的 bundleName 配过签名、或改名了项目包名）。修复二选一——')
+      extra.push('    ① 清空该宿主的 signingConfigs（`"signingConfigs": []`）后重跑（产 unsigned 包）；或')
+      extra.push('    ② 在 DevEco 为**本项目 bundleName** 重新生成签名（Project Structure → Signing Configs → Automatically generate signature）')
+    }
+    return { ok: false, hostDir, hap: null, screenContentCopied, log: [...log, `✗ hvigor 构建失败：`, String(msg).slice(-2000), ...extra] }
   } finally {
     if (restoreCfg) restoreCfg()   // ★dev 变体：编译完成即还原 BuildConfig 为 release 默认
   }
