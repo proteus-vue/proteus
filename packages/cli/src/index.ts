@@ -933,9 +933,14 @@ async function runAppDev(target: AppPlatform): Promise<number> {
     await server.close()
     return 1
   }
-  // 成功：只透出"警告类"明细（如 dev 缺 dev-manifest），其余工具细节不刷屏
+  // 成功：只透出"警告类"明细（如 dev 缺 dev-manifest），其余工具细节不刷屏。
+  //   ★★例外（决策 #721）：**自愈**事件（壳源/AAR 被更新）**必须显形**——否则"宿主被更新了"静默发生，
+  //   用户会像本轮那样以为"改了没生效"（实测：宿主陈旧 ⇒ 新功能全无，却零提示）。
   sPack.done(ui.dim(path.relative(projectRoot, outPkg)))
-  for (const l of pk.log) if (/^⚠/.test(l)) ui.warn(l.replace(/^⚠\s*/, ''))
+  for (const l of pk.log) {
+    if (/^⚠/.test(l)) ui.warn(l.replace(/^⚠\s*/, ''))
+    else if (/自愈/.test(l)) ui.info(ui.dim(l.replace(/^ℹ\s*/, '')))
+  }
 
   // ④ 装 + 起（android：adb；ios/harmony 本批给下一步指引）
   const androidApk = target === 'android' && 'apk' in pk ? (pk as { apk: string | null }).apk : null

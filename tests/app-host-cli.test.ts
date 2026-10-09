@@ -410,6 +410,24 @@ describe('★完整宿主 · iOS 宿主模板为运行期形态（决策 #683）
     expect(ov, '重置回调注入').toContain('void setResetAction(')
   })
 
+  // ★★★决策 #721：Android「已生成宿主的 dev 壳源自愈」——android 壳在 src/dev/（不在 shell/），
+  //   `syncShellTemplates` 显式跳过 ⇒ 用户实测「点节点树无高亮/就地编辑无效/宿主 dev 面板没有」（#719 全无）。
+  it('Android dev 壳源自愈（决策 #721）：packageAndroidHost 调 syncAndroidShell + AAR 新鲜度门禁', () => {
+    const pkg = fs.readFileSync(path.join(ROOT, 'packages/cli/src/host-package.ts'), 'utf-8')
+    expect(pkg, 'packageAndroidHost 调壳源自愈').toContain('syncAndroidShell(hostDir)')
+    const scaf = fs.readFileSync(path.join(ROOT, 'packages/cli/src/host-scaffold.ts'), 'utf-8')
+    expect(scaf, 'syncAndroidShell 导出').toContain('export function syncAndroidShell(')
+    // 覆盖式（不是只补缺）+ manifest 回落（老宿主无 proteus.host.json）
+    expect(scaf, '覆盖式同步').toMatch(/相对路径|覆盖|fs\.writeFileSync\(dest, content\)/)
+    expect(scaf, 'appName 回落 AndroidManifest').toContain('AndroidManifest.xml')
+    // android 模板有 proteus.host.json（syncShellTemplates 靠它解析 {{var}}；android 此前缺）
+    expect(fs.existsSync(path.join(ROOT, 'packages/cli/templates-host/android/proteus.host.json')), 'android 模板应有 proteus.host.json').toBe(true)
+    // 新鲜度门禁在 verify + CI（接线不靠记忆）
+    const pj = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8')) as { scripts: Record<string, string> }
+    expect(pj.scripts['check:android-runtime-aar-fresh'], '门禁脚本已注册').toBeTruthy()
+    expect(pj.scripts.verify, '门禁接入 verify 链').toContain('check:android-runtime-aar-fresh')
+  })
+
   // ★决策 #704：失焦即生效 + 宿主 dev 菜单（状态提示 + 重置）
   it('就地编辑可用性（决策 #704）：失焦即提交 + dev 菜单重置 + 面板重置按钮', () => {
     const page = fs.readFileSync(path.join(ROOT, 'packages/cli/src/app-devtools-page.ts'), 'utf-8')

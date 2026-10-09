@@ -105,6 +105,17 @@ const COUPLING = [
     why: 'CPU Profiler（运行期阶段耗时自采样）：累加正确 + 排空 + handler 归因带模板 loc（dev-only，未启用零开销）',
   },
   {
+    // ★★★决策 #721：Android runtime 源 ⇄ CLI 生成宿主壳 ⇄ 入库 AAR 的**版本一致性**——
+    //   改了 `hosts/android/.../runtime/*.java`（如 #714 drainDevFrameStats / #719 highlightNode）⇒
+    //   ① CLI 模板壳若引用新方法 ⇒ 宿主编不过（`check:android-host-compile` 覆盖）；
+    //   ② 入库 AAR 若不重建 ⇒ 同样编不过（`check:android-runtime-aar-fresh` 覆盖）。
+    //   改任一处 ⇒ 跑宿主编译 + AAR 新鲜度 + 壳源自愈判据。
+    match: /^(hosts\/android\/app\/src\/main\/java\/dev\/proteus\/layoutcore\/runtime\/|hosts\/android\/build-runtime-aar\.sh|scripts\/check-android-runtime-aar-fresh\.mjs|packages\/cli\/src\/host-scaffold\.ts|packages\/cli\/src\/host-package\.ts)/,
+    cmds: ['pnpm check:android-host-compile', 'pnpm check:android-runtime-aar-fresh'],
+    tests: ['tests/host-scaffold.test.ts', 'tests/app-host-cli.test.ts'],
+    why: 'Android runtime 源 ⇄ AAR 构建脚本 ⇄ 生成宿主壳自愈（host-scaffold/host-package）：壳引用的方法面必须与 runtime 源/AAR 一致（本仓栽过 2 次"源改了 AAR 没重建 ⇒ 壳编译不过"）',
+  },
+  {
     match: /^packages\/compiler\/src\/script\.ts$/,
     tests: [
       'tests/mp-transform.test.ts',

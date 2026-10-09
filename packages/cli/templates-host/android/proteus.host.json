@@ -1,0 +1,8 @@
+{
+  "platform": "android",
+  "appName": "{{appName}}",
+  "bundleName": "{{bundleName}}",
+  "bundleId": "{{bundleName}}",
+  "entryModule": "app",
+  "screenContentAsset": "app/src/main/assets/app-screen-content.json"
+}

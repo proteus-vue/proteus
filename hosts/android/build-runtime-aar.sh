@@ -129,6 +129,17 @@ if [ "$FAILS" -eq 0 ]; then
   mkdir -p "$PREBUILT"
   cp "$AAR" "$PREBUILT/proteus-runtime.aar"
   echo "✅ 随包副本已同步（$PREBUILT/proteus-runtime.aar · $(du -h "$PREBUILT/proteus-runtime.aar" | awk '{print $1}')）"
+  # ★★★新鲜度指纹（决策 #721）：记下**本次构建**时 `runtime/*.java` 的内容哈希 ⇒ 门禁
+  #   `scripts/check-android-runtime-aar-fresh.mjs` 重算比对，抓"源改了 AAR 没重建"（本仓栽过 2 次）。
+  node -e '
+    const fs=require("fs"),path=require("path"),crypto=require("crypto");
+    const rt=process.argv[1], stamp=process.argv[2];
+    const files=fs.readdirSync(rt).filter(f=>f.endsWith(".java")).sort();
+    const h=crypto.createHash("sha256");
+    for(const f of files){h.update(f);h.update("\0");h.update(fs.readFileSync(path.join(rt,f)));h.update("\0")}
+    fs.writeFileSync(stamp,h.digest("hex")+"\n");
+  ' "$RT_SRC" "$PREBUILT/proteus-runtime.sources.sha256"
+  echo "✅ 源指纹已写入（proteus-runtime.sources.sha256）"
 else
   echo "✗ AAR 有 $FAILS 项断言失败"; exit 1
 fi
