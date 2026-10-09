@@ -132,6 +132,8 @@ export async function startAppDevServer(opts: AppDevServerOptions): Promise<AppD
   let lastBytes = 0
   let lastMs = 0
   let lastHost: HostState | null = null
+  /** ★性能时间线（决策 #709）：`/ping` 每次心跳的 perf 采样（环形 400 条 ≈ 每 tick 1.5s ⇒ ~10 分钟）。 */
+  const perfHist: Array<{ t: number; perf: Record<string, unknown> }> = []
   let lastTree: unknown = null              // ★元素内省（决策 #674）：当前屏实例化节点树（含 rects 几何）
   let lastInspect: { id: number; time: number } | null = null   // ★元素点选（决策 #675）
   let pendingCmd: CmdEvent | null = null                        // ★面板→设备命令（决策 #701，one-shot）
@@ -153,6 +155,7 @@ export async function startAppDevServer(opts: AppDevServerOptions): Promise<AppD
     events: events.slice(-50), host: lastHost,
     net: netLog.slice(-80), console: consoleLog.slice(-200), tree: lastTree,
     inspect: lastInspect, trace: traceLog.slice(-80),
+    perf: perfHist.slice(-400),   // ★性能时间线（决策 #709）
   })
   /** 记一条网络日志（dev server 请求）+ 广播。★原始响应（`body`）另存 `netBodies`（有界），**不进 SSE**。 */
   const recordNet = (e: NetEvent, body?: string): void => {
@@ -296,6 +299,12 @@ export async function startAppDevServer(opts: AppDevServerOptions): Promise<AppD
       if (perfRaw) { try { perf = JSON.parse(perfRaw) as Record<string, unknown> } catch { /* 非法 ⇒ 不带 */ } }
       lastHost = { screen: q.get('screen') ?? '', time: Date.now(), ...(env ? { env } : {}), ...(perf ? { perf } : {}) }
       broadcast({ type: 'host', ...lastHost })
+      // ★★性能时间线（Profiler · 决策 #709）：每次心跳的 perf 采样入环形历史（面板画帧耗时/掉帧）
+      if (perf) {
+        perfHist.push({ t: Date.now(), perf })
+        if (perfHist.length > 400) perfHist.shift()
+        broadcast({ type: 'perf', t: perfHist[perfHist.length - 1]!.t, perf })
+      }
       res.writeHead(200, { 'content-type': 'text/plain', 'cache-control': 'no-store' })
       res.end('ok')
       return

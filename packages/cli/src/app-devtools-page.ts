@@ -215,6 +215,15 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
       border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 11px;background:var(--surface)}
   .ep b{color:var(--ink-2);font-weight:650;white-space:nowrap}
 
+  /* ★性能时间线 Profiler（决策 #709）：柱 = 帧耗时样本；>16.7ms 标红（掉帧） */
+  .prof{position:relative;height:120px;display:flex;align-items:flex-end;gap:2px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:10px var(--s3);overflow:hidden}
+  .prof .pbar{flex:0 0 4px;min-width:3px;border-radius:2px 2px 0 0;background:var(--brand);transition:height .1s}
+  .prof .pbar.jank{background:var(--err)}
+  .prof .pbar-base{position:absolute;left:0;right:0;bottom:calc(10px + 0px)}
+  .prof .plabel{position:absolute;top:6px;right:var(--s3);font-size:10.5px;font-family:var(--mono);color:var(--dim)}
+  .prof .pbudget{position:absolute;left:0;right:0;border-top:1px dashed var(--warn);opacity:.6}
+  .prof .pbudget span{position:absolute;right:var(--s3);top:-14px;font-size:10px;color:var(--warn);font-family:var(--mono)}
+
   a{color:var(--brand);text-decoration:none}
   footer{color:var(--faint);font-size:11.5px;text-align:center;padding:var(--s5) var(--s4) var(--s6);border-top:1px solid var(--line);margin-top:var(--s5)}
   footer code{font-family:var(--mono);color:var(--dim)}
@@ -241,6 +250,12 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
   <div class="blk">
     <h2>重建时间线 · 实时</h2>
     <div class="tl" id="tl"><div class="empty">等待事件…改一次源码即出现。</div></div>
+  </div>
+
+  <!-- ★性能时间线 Profiler（决策 #709）：帧耗时逐样本条 + 掉帧高亮（>16.7ms 预算） -->
+  <div class="blk">
+    <h2>性能时间线 · Profiler<span class="flt" id="prof-stat" style="margin-left:auto;color:var(--dim);font-weight:400">等待设备心跳…</span></h2>
+    <div class="prof" id="prof"><div class="empty">暂无性能采样…设备心跳（每 ~1.5s）上报 渲染/逐帧耗时。</div></div>
   </div>
 
   <div class="blk two">
@@ -291,6 +306,7 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
       <span class="ep"><b>GET /bridge</b>桥调用</span>
       <span class="ep"><b>GET /panelcmd</b>面板→设备命令（入队）</span>
       <span class="ep"><b>GET /cmd</b>宿主取命令（轮询）</span>
+      <span class="ep"><b>GET /netbody</b>原始响应（按需）</span>
     </div>
   </div>
 </main>
@@ -604,6 +620,7 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
     if (s.inspect && s.inspect.id) { selId = s.inspect.id; if (treeData) renderTree(treeData); }
     renderEnv(s.host && s.host.env);
     applyHost(s.host);
+    if (s.perf) { profSamples = s.perf.slice(-400); renderProf(); }   // ★性能时间线（决策 #709）
   }
   function applyPerf(p) {
     if (!p) return;
@@ -611,6 +628,34 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
     if (p.frameMs != null) $('c-frame').innerHTML = p.frameMs + '<small>ms</small>';
     if (p.relayout != null) $('c-relayout').textContent = p.relayout;
     if (p.patches != null) $('c-patches').textContent = p.patches;
+  }
+  // ★性能时间线 Profiler（决策 #709）：帧耗时样本 ⇒ 柱状条 + 掉帧（>预算）高亮 + 统计
+  const profEl = $('prof');
+  const BUDGET_MS = 16.7;   // 60fps 帧预算
+  let profSamples = [];
+  function renderProf() {
+    if (!profEl) return;
+    if (!profSamples.length) { profEl.innerHTML = '<div class="empty">暂无性能采样…设备心跳（每 ~1.5s）上报 渲染/逐帧耗时。</div>'; return; }
+    var vals = profSamples.map(function (s) { return Number(s.perf && s.perf.frameMs) || 0; });
+    var mx = Math.max(BUDGET_MS * 1.5, Math.max.apply(null, vals), 1);
+    // y 轴：0..mx，柱高按比例（容器 100px 绘图区）
+    var H = 96;
+    var jank = vals.filter(function (v) { return v > BUDGET_MS; }).length;
+    var avg = vals.reduce(function (a, b) { return a + b; }, 0) / vals.length;
+    var bars = vals.map(function (v) {
+      var h = Math.max(2, Math.round((v / mx) * H));
+      return '<div class="pbar' + (v > BUDGET_MS ? ' jank' : '') + '" style="height:' + h + 'px" title="' + v.toFixed(2) + 'ms"></div>';
+    }).join('');
+    var budgetTop = Math.round((1 - BUDGET_MS / mx) * H);
+    profEl.innerHTML = bars
+      + '<div class="pbudget" style="bottom:calc(10px + ' + budgetTop + 'px)"><span>16.7ms 预算</span></div>'
+      + '<div class="plabel">max ' + Math.max.apply(null, vals).toFixed(1) + 'ms · avg ' + avg.toFixed(1) + 'ms</div>';
+    var stat = $('prof-stat');
+    if (stat) stat.innerHTML = profSamples.length + ' 样本 · ' + (jank ? '<b style="color:var(--err)">' + jank + ' 掉帧</b>' : '<b style="color:var(--ok)">无掉帧</b>');
+  }
+  function pushPerf(p) {
+    profSamples.push(p); if (profSamples.length > 400) profSamples.shift();
+    renderProf();
   }
   function applyHost(h) {
     window.__lastHost = h;
@@ -649,6 +694,7 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
     if (d.type === 'snapshot') setSnapshot(d);
     else if (d.type === 'rebuild') pushRebuild(d);
     else if (d.type === 'host') applyHost(d);
+    else if (d.type === 'perf') pushPerf(d);   // ★性能采样（决策 #709）
     else if (d.type === 'net') pushNet(d);
     else if (d.type === 'console') pushCon(d);
     else if (d.type === 'tree') renderTree(d.tree);

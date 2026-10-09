@@ -245,6 +245,11 @@ describe('★完整宿主 · iOS 宿主模板为运行期形态（决策 #683）
     expect(page, '点行看详情').toMatch(/addNet[\s\S]*?showNetDetail\(e\)/)
     expect(page, '详情含原始响应').toContain('原始响应')
     expect(page, '面板按需取原始体').toContain('/netbody?id=')
+    // ★性能时间线 Profiler（决策 #709）
+    expect(server, '性能采样历史').toContain('perfHist.push')
+    expect(server, '快照含性能时间线').toContain('perf: perfHist.slice')
+    expect(page, '面板 Profiler 渲染').toContain('function renderProf(')
+    expect(page, '掉帧预算 16.7').toContain('16.7')
   })
 
   // ★面板→设备命令（决策 #701/#702 安卓腿）：Android 宿主也接 /cmd + 元素高亮 + REPL
