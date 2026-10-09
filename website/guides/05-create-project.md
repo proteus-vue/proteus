@@ -28,10 +28,14 @@ npm install
 
 ```
 my-app/
+├─ .agents/skills/proteus-cobuild/SKILL.md  # 框架共建技能（AI 会话用，见 AGENTS.md）
+├─ AGENTS.md                    # 本工程对 AI 会话的约定（含框架共建机制）
 ├─ proteus.config.ts            # 框架统一配置（唯一配置——vite 组装内建，见下）
-├─ package.json                 # 双端 scripts（proteus CLI 命令，见下）+ @proteus-vue/* 依赖
+├─ package.json                 # 双端 scripts（proteus CLI 命令）+ @proteus-vue/* 依赖
 ├─ tsconfig.json
 ├─ index.html                   # Web 入口
+├─ docs/                        # 框架共建台账（实战报告_proteus接入.md + 框架问题台账.json）
+├─ scripts/ledger_check.mjs     # 台账自检（`node scripts/ledger_check.mjs --check`）
 ├─ .github/workflows/proteus.yml # CI 模板（check 门禁 → 双端构建 → 产物归档）
 └─ src/
    ├─ main.ts / main.mp.ts      # Web / 小程序双入口
@@ -41,7 +45,7 @@ my-app/
    │  ├─ index.ts               # 路由实例
    │  ├─ auto-routes.ts         # gen-routes 产物（编译期生成，勿手改）
    │  └─ RouterView.vue
-   └─ shims/                    # mp / events / vue 类型声明
+   └─ shims/                    # mp / events / import-meta / vue 类型声明
 ```
 
 > ★#418 配置收敛：模板**没有 vite.config.ts，也没有 scripts/**——vite 配置由框架组装（`@proteus-vue/plugin-vite` 的 `resolveProteusViteConfig`），gen-routes 与小程序入口由 CLI 内建；你只需要 `proteus.config.ts` + CLI 命令。需要扩展 vite 时写在 `proteus.config.ts` 的 `vite` 透传字段（plugins/server/resolve…完全兼容 vite）。
@@ -50,26 +54,36 @@ my-app/
 
 ```ts
 const config: ProteusConfig = {
-  platform: 'mp-weixin',
-  skyline: true,
-  appid: 'wx0000000000',        // ← 替换为真实 AppID
+  version: 4,                       // ★配置模型 v4（决策 #641）：目标端 = 一级键
+  targets: {
+    mp: {
+      appid: 'wx0000000000',        // ← 替换为真实 AppID
+      renderer: 'skyline',
+      rules: { disabled: [], mapping: {}, customTags: {} }, // 例：{ 'my-widget': 'view' }
+      setDataBridge: { batchWindow: 16, perComponent: true },
+      style: { px2rpx: true, rpxRatio: 2 },
+    },
+    // ★App 三端（可选）：原生工程身份（包名 / Bundle ID / 版本），由 `proteus build --package` 注入
+    // ios: { bundleId: 'com.example.app' },
+    // android: { applicationId: 'com.example.app' },
+    // harmony: { bundleName: 'com.example.app' },
+  },
   pagesDir: 'src/pages',
-  routesOutput: 'src/router/auto-routes.ts',
-  customRoute: {
-    registerPresets: true,
-    builders: {                  // 内置转场预设（随 @proteus-vue/router 发布源码）
-      halfScreen: 'node_modules/@proteus-vue/router/src/presets/halfScreen.ts',
-      slideUp:     'node_modules/@proteus-vue/router/src/presets/slideUp.ts',
-      scaleDown:   'node_modules/@proteus-vue/router/src/presets/scaleDown.ts',
+  router: {
+    routesOutput: 'src/router/auto-routes.ts',   // gen-routes 产物路径
+    customRoute: {
+      registerPresets: true,                      // 内置转场预设（随 @proteus-vue/router 发布源码）
+      builders: {
+        halfScreen: 'node_modules/@proteus-vue/router/src/presets/halfScreen.ts',
+        slideUp:     'node_modules/@proteus-vue/router/src/presets/slideUp.ts',
+        scaleDown:   'node_modules/@proteus-vue/router/src/presets/scaleDown.ts',
+      },
     },
   },
-  rules: { disabled: [], mapping: {}, customTags: {} }, // 例：{ 'my-widget': 'view' }
-  setDataBridge: { batchWindow: 16, perComponent: true },
-  style: { px2rpx: true, rpxRatio: 2 },
 }
 ```
 
-字段说明见[编译器配置](/docs/10-config)。
+> ★**v4 按端分区**（决策 #641）：小程序 / Skyline 专属字段（`appid` / `renderer` / `rules` / `setDataBridge` / `style.px2rpx`…）收进 `targets.mp`，不再平铺在顶层；App 三端身份进 `targets.{ios,android,harmony}`。旧 v3 配置（平铺形态）加载期**自动迁移**，无需手改。字段全表见[编译器配置](/docs/10-config)。
 
 ## 模板 scripts（各端命令）
 

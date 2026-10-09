@@ -28,10 +28,14 @@ The scaffold asks no interactive questions: the project name is the command argu
 
 ```
 my-app/
+├─ .agents/skills/proteus-cobuild/SKILL.md  # framework co-build skill (for AI sessions; see AGENTS.md)
+├─ AGENTS.md                    # this project's conventions for AI sessions (includes the co-build loop)
 ├─ proteus.config.ts            # the single framework config (vite assembly is built in)
 ├─ package.json                 # dual-target scripts (proteus CLI commands) + @proteus-vue/* deps
 ├─ tsconfig.json
 ├─ index.html                   # Web entry
+├─ docs/                        # framework co-build ledger (battle report + issue ledger json)
+├─ scripts/ledger_check.mjs     # ledger self-check (`node scripts/ledger_check.mjs --check`)
 ├─ .github/workflows/proteus.yml # CI template (check gates → dual build → artifact archive)
 └─ src/
    ├─ main.ts / main.mp.ts      # Web / Mini Program dual entries
@@ -41,7 +45,7 @@ my-app/
    │  ├─ index.ts               # router instance
    │  ├─ auto-routes.ts         # gen-routes output (generated; do not edit)
    │  └─ RouterView.vue
-   └─ shims/                    # mp / events / vue type declarations
+   └─ shims/                    # mp / events / import-meta / vue type declarations
 ```
 
 > **#418 config convergence**: the template has **no vite.config.ts and no scripts/** — vite config is assembled by the framework (`resolveProteusViteConfig` from `@proteus-vue/plugin-vite`); gen-routes and Mini Program entries are built into the CLI. You only need `proteus.config.ts` + CLI commands. To extend vite, use the `vite` passthrough field (plugins/server/resolve… fully vite-compatible).
@@ -50,26 +54,37 @@ my-app/
 
 ```ts
 const config: ProteusConfig = {
-  platform: 'mp-weixin',
-  skyline: true,
-  appid: 'wx0000000000',        // ← replace with your real AppID
+  version: 4,                       // ★ config model v4 (#641): targets are top-level keys
+  targets: {
+    mp: {
+      appid: 'wx0000000000',        // ← replace with your real AppID
+      renderer: 'skyline',
+      rules: { disabled: [], mapping: {}, customTags: {} }, // e.g. { 'my-widget': 'view' }
+      setDataBridge: { batchWindow: 16, perComponent: true },
+      style: { px2rpx: true, rpxRatio: 2 },
+    },
+    // ★ three App targets (optional): native project identity (package / bundle id / version),
+    //   injected by `proteus build --package`
+    // ios: { bundleId: 'com.example.app' },
+    // android: { applicationId: 'com.example.app' },
+    // harmony: { bundleName: 'com.example.app' },
+  },
   pagesDir: 'src/pages',
-  routesOutput: 'src/router/auto-routes.ts',
-  customRoute: {
-    registerPresets: true,
-    builders: {                  // built-in transition presets (shipped with @proteus-vue/router)
-      halfScreen: 'node_modules/@proteus-vue/router/src/presets/halfScreen.ts',
-      slideUp:     'node_modules/@proteus-vue/router/src/presets/slideUp.ts',
-      scaleDown:   'node_modules/@proteus-vue/router/src/presets/scaleDown.ts',
+  router: {
+    routesOutput: 'src/router/auto-routes.ts',   // gen-routes output path
+    customRoute: {
+      registerPresets: true,                      // built-in transition presets (shipped with @proteus-vue/router)
+      builders: {
+        halfScreen: 'node_modules/@proteus-vue/router/src/presets/halfScreen.ts',
+        slideUp:     'node_modules/@proteus-vue/router/src/presets/slideUp.ts',
+        scaleDown:   'node_modules/@proteus-vue/router/src/presets/scaleDown.ts',
+      },
     },
   },
-  rules: { disabled: [], mapping: {}, customTags: {} }, // e.g. { 'my-widget': 'view' }
-  setDataBridge: { batchWindow: 16, perComponent: true },
-  style: { px2rpx: true, rpxRatio: 2 },
 }
 ```
 
-Field docs: [compiler config](/docs/10-config).
+> ★ **v4 is per-target** (#641): Mini-Program / Skyline-specific fields (`appid` / `renderer` / `rules` / `setDataBridge` / `style.px2rpx`…) move under `targets.mp` instead of the top level; the three App identities go under `targets.{ios,android,harmony}`. Old v3 configs (flattened shape) are **auto-migrated at load time** — no manual change needed. Full field list: [compiler config](/docs/10-config).
 
 ## Template scripts (per-target commands)
 
