@@ -364,6 +364,20 @@ describe.skipIf(!hasSuperapp)('★完整宿主 · dev server（热刷核心）',
     const nb = (await fetch(`${s.url}/netbody?id=${bundleEv!.id}`).then((r) => r.json())) as { body: string | null }
     expect(nb.body, '取到原始响应').toBeTruthy()
     expect(nb.body!.length, '原始响应比预览（300）长').toBeGreaterThan(300)
+    // ★source map（决策 #711）：bundle 带内联 sourceMap（看**完整** /bundle，非 64KB 截断的 netbody）+ /mapstack 把帧映射回源
+    const fullBundle = await fetch(`${s.url}/bundle`).then((r) => r.text())
+    expect(fullBundle, 'bundle 含内联 sourceMappingURL').toContain('sourceMappingURL=data:application/json')
+    // 找**确实被映射**的生成位置（首行 1:1 可能无映射），用它组栈
+    const { inlineMapOf, parseMappings } = await import('../packages/cli/src/sourcemap')
+    const map = inlineMapOf(fullBundle)!
+    const rows = parseMappings(map)
+    let genLine = 0, genCol = 0
+    for (let i = 0; i < rows.length; i++) { const s = (rows[i] ?? []).find((x) => x.srcIdx >= 0); if (s) { genLine = i + 1; genCol = s.genCol + 1; break } }
+    expect(genLine, '找到被映射的生成位置').toBeGreaterThan(0)
+    const stack = `Error: boom\n    at index (bundle-superapp.js:${genLine}:${genCol})`
+    const mapped = await fetch(`${s.url}/mapstack?stack=${encodeURIComponent(stack)}`).then((r) => r.text())
+    expect(mapped, `/mapstack 映射掉 bundle 帧（${genLine}:${genCol}）`).not.toContain('bundle-superapp.js')
+    expect(mapped, '映射到源文件（.ts/.vue）').toMatch(/\.(ts|vue):\d+:\d+/)
   }, 60_000)
 
   it('★面板→设备命令通道（决策 #701）：/panelcmd 入队 ⇒ /cmd one-shot 取走 ⇒ 再取为空', async () => {
