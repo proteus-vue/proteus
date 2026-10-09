@@ -72,6 +72,13 @@ export interface CreateScreenRuntimeOptions {
   /** 诊断出口（不静默） */
   onNote?: (note: string) => void
   /**
+   * ★★★**页面处理器运行期错误出口**（决策 #712）——handler 表达式求值失败时逐条调用（带**模板源位置**）。
+   *   与 `onNote` 分开：note 是"诊断信息"（console.log 级），本出口是**用户代码出错**
+   *   （宿主/桥应转发到面板 Console 的 `error` 级 + 如实回传，不得静默吞掉）。
+   *   缺省 ⇒ 仅落进 `handlerErrors()` 排空缓冲（仍可读，不静默）。
+   */
+  onError?: (error: string) => void
+  /**
    * ★导航出口（B1）：handler 里的 `$nav('目标')` 动作 → 交给宿主/装配层执行导航
    *   （App 壳 = `router.push(target)`；与 `<navigator>` 同语义）。缺省 ⇒ 只记 note（不静默）。
    */
@@ -83,7 +90,12 @@ export interface ScreenRuntimeInstance {
   /** 供 `screen.mount` 的内容载荷（`{viewport,nodes}`，节点已实例化） */
   content(): { viewport: { width: number; height: number }; nodes: unknown[] }
   /** 派发一次语义手势（宿主 collected 命中链 → 这里）；返回是否跑了 handler */
-  dispatch(type: string, chain: readonly number[], state?: DispatchState): { handled: boolean; fired: number[] }
+  dispatch(type: string, chain: readonly number[], state?: DispatchState): {
+    handled: boolean
+    fired: number[]
+    /** ★跑了哪些 handler + 各自**模板源位置**（决策 #712·source map）——面板 Events 锚回 `.vue:line:col` */
+    firedHandlers?: Array<{ handler: string; nodeId: number; loc?: { line: number; column: number } }>
+  }
   /** 立即把脏槽位编成指令并交给 `applyOps`（确定性驱动入口） */
   flush(): void
   /**
@@ -96,6 +108,11 @@ export interface ScreenRuntimeInstance {
   data(): Record<string, unknown>
   /** ★跨调用状态导出（浅拷贝）——供宿主（一次性 VM）在下次调用回灌为 `seedData`（见 CreateScreenRuntimeOptions.seedData） */
   snapshot(): Record<string, unknown>
+  /**
+   * ★★★**排空本屏页面处理器错误**（决策 #712）——自上次调用以来的 handler 求值失败（带模板源位置）。
+   *   排空式（取走即清）：供宿主 dev-watch / 面板 Console 消费（与 `SuperappRuntime.devEvents` 同形态）。
+   */
+  handlerErrors(): string[]
 }
 
 export interface ScreenRuntime {
@@ -163,6 +180,15 @@ export function createScreenRuntime(opts: CreateScreenRuntimeOptions): ScreenRun
     // ── ④ 事件索引（nodeId:event → handler）──
     const byNodeEvent: EventIndex = indexEventBindings(art.events)
     const dispatchState = createDispatchState()
+    // ★★★页面处理器 source map（决策 #712）：handler 名 → 绑定处**模板源位置**（`{line,column}`，1 基）。
+    //   建一次即可（`art.events` 在页面生命周期内不变）；`runHandler` 出错时据此把运行期错误锚回 `.vue`。
+    const locByHandler = new Map<string, { line: number; column: number }>()
+    for (const e of art.events ?? []) {
+      const b = e as { handler?: string; loc?: { line: number; column: number } }
+      if (b.handler && b.loc) locByHandler.set(b.handler, b.loc)
+    }
+    /** 本屏运行期 handler 错误（排空式；宿主/dev server 取走即清——面板「错误」页消费） */
+    const handlerErrors: string[] = []
 
     /** 跑一个 handler（动作表：set/add/emit；emit 本版无去处 ⇒ 如实忽略） */
     function runHandler(handlerName: string, _nodeId: number, payload?: unknown): boolean {
@@ -177,8 +203,26 @@ export function createScreenRuntime(opts: CreateScreenRuntimeOptions): ScreenRun
           continue
         }
         const ctx2: EvalContext = { read: (n: string) => (n === '$event' ? payload : data[n]) }
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const v = evalExpr(a.program as any, ctx2 as any)
+        // ★★页面处理器「源」定位（决策 #712）：handler 执行**出错时**把**handler 名 + 源表达式**
+        //   （`a.source` = 编译期保留的模板表达式原文，如 `count = count + 1`）+ 节点 id + **模板行** 一并报出——
+        //   否则端上栈只有解释器内部、**定位不到是模板哪一句**（"调试生态链没数据支撑"）。
+        let v: unknown
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          v = evalExpr(a.program as any, ctx2 as any)
+        } catch (e) {
+          const msg = String((e as Error)?.message ?? e)
+          const loc = locByHandler.get(handlerName)
+          const at = loc ? `（模板 ${name}.vue:${loc.line}:${loc.column}）` : ''
+          const detail = `[screen-runtime] ${name}: handler「${handlerName}」节点 #${_nodeId}${at} 表达式 \`${a.source ?? '(?)'}\` 求值失败：${msg}`
+          // ★不静默、也不炸掉整次手势：记为错误（面板可见）+ note，其余动作/其余 handler 照常——
+          //   一个坏表达式不该让页面"点了完全没反应"（那正是本项要消灭的形态）。
+          handlerErrors.push(detail)
+          if (handlerErrors.length > 50) handlerErrors.shift()
+          note(detail)
+          opts.onError?.(detail)
+          continue
+        }
         if (!a.source) continue
         if (a.op === 'add') {
           const cur = data[a.source]
@@ -211,15 +255,23 @@ export function createScreenRuntime(opts: CreateScreenRuntimeOptions): ScreenRun
       dispatch(type, chain) {
         // ★把链从内核 id 空间**翻译回内容局部 id 空间**（`events` 索引是 local 空间）
         const localChain = chain.map(localIdOf)
-        const r = dispatchGesture(localChain, type, byNodeEvent, dispatchState, (h, id) => runHandler(h, id))
+        const fired: Array<{ handler: string; nodeId: number; loc?: { line: number; column: number } }> = []
+        const r = dispatchGesture(localChain, type, byNodeEvent, dispatchState, (h, id) => {
+          const ok = runHandler(h, id)
+          if (ok) fired.push({ handler: h, nodeId: id, ...(locByHandler.has(h) ? { loc: locByHandler.get(h)! } : {}) })
+          return ok
+        })
         // handler 改了数据 ⇒ 重建（无 applyOps 的宿主靠 content() 重挂；有 applyOps 的宿主拿增量——两种都覆盖）
         if (r.fired.length > 0) refreshData()
-        return { handled: r.fired.length > 0, fired: r.fired }
+        // ★★★页面处理器 source map（决策 #712）：把「跑了哪些 handler + 各自**模板源位置**」随派发结果带出——
+        //   面板 Events 据此把"点了→跑了 h0"锚回 `page.vue:line:col`（调试生态链的数据支撑）。
+        return { handled: r.fired.length > 0, fired: r.fired, firedHandlers: fired }
       },
       flush() { slotRt.flush() },
       refresh() { refreshData() },
       data() { return data },
       snapshot() { return { ...data } },
+      handlerErrors() { const out = handlerErrors.slice(); handlerErrors.length = 0; return out },
     }
   }
 

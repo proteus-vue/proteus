@@ -134,4 +134,38 @@ describe('★B1 · 统一运行期（createScreenRuntime）', () => {
     expect(after, 'content() 文本应随 count 变化（无需 applyOps）').not.toBe(before)
     expect(after).toContain('1')
   })
+
+  it('④ ★页面处理器 source map（决策 #712）：handler 运行期出错 ⇒ 报**模板源位置**且不炸掉整次手势', async () => {
+    const dir = makeTempProject()
+    const build = await buildAppRuntimeContent(dir, 'android')
+    const artifacts = JSON.parse(fs.readFileSync(build.outFile, 'utf-8')) as Record<string, ScreenRuntimeArtifact>
+    const ev = artifacts['idx']!.events[0]!
+    // 事件绑定应带模板源位置（编译器 loc 透传——本项的地基）
+    expect(ev.loc, '事件绑定须带 loc（模板源位置）').toBeTruthy()
+    expect(ev.loc!.line, '模板行应为文件第 2 行').toBe(2)
+
+    // 把 handler 换成一个**运行期会抛**的程序（非白名单方法——evalExpr 兜底抛错）
+    artifacts['idx']!.handlers['h0'] = [
+      { op: 'set', source: 'count', sourceText: 'count = count.bogus()', program: { k: 'mcall', recv: { k: 'root', name: 'count' }, method: '__nope__', args: [] } },
+    ] as never
+
+    const errors: string[] = []
+    const rt = createScreenRuntime({
+      artifacts,
+      applyOps: () => {},
+      viewport: { width: 390, height: 844 },
+      onError: (e) => errors.push(e),
+    })
+    const inst = rt.instance('idx')
+    // ★不炸：dispatch 应正常返回（一个坏表达式不该让页面"点了完全没反应"）
+    expect(() => inst.dispatch('tap', [ev.nodeId])).not.toThrow()
+    // ★错误如实记 + 带模板源位置（可定位到模板哪一句）
+    const drained = inst.handlerErrors()
+    expect(drained.length, 'handler 错误应被记录').toBeGreaterThan(0)
+    expect(drained.join('\n')).toContain('idx.vue:2')
+    expect(drained.join('\n'), 'onError 出口应同步收到').toContain('__nope__')
+    expect(errors.join('\n')).toContain('idx.vue:2')
+    // 排空式：再取为空
+    expect(inst.handlerErrors()).toHaveLength(0)
+  })
 })

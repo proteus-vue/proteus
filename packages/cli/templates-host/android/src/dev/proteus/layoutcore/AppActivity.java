@@ -318,7 +318,10 @@ public final class AppActivity extends Activity {
                 for (int j = 0; fr != null && j < fr.length(); j++) { if (j > 0) fired.append(','); fired.append(fr.optInt(j)); }
                 {
                     String tid = String.valueOf(e.optInt("id"));
-                    traceOutbox.add(new String[]{ e.optString("type", ""), tid, chain.toString(), e.optBoolean("handled") ? "1" : "0", fired.toString() });
+                    // ★页面处理器 source map（决策 #712）：JS 侧 devEvents 已带 `src`（首个 handler 的模板源位置）——
+                    //   一并上报（面板 Events 把"点了→跑了哪个 handler"锚回 `page.vue:line:col`）。
+                    String src = e.optString("src", "");
+                    traceOutbox.add(new String[]{ e.optString("type", ""), tid, chain.toString(), e.optBoolean("handled") ? "1" : "0", fired.toString(), src });
                     // ★被点元素 = 本次手势命中的内核节点 id ⇒ 一并选入内省（决策 #675，点屏幕任一元素 → 高亮该元素）
                     int kid = e.optInt("id");
                     if (kid > 0) inspectOutbox = kid;
@@ -561,14 +564,16 @@ public final class AppActivity extends Activity {
         }
     }
 
-    /** watch 线程：把事件 trace 逐条 GET /trace?type=&id=&chain=&handled=&fired=（决策 #675）。 */
+    /** watch 线程：把事件 trace 逐条 GET /trace?type=&id=&chain=&handled=&fired=[&src=]（决策 #675/#712）。 */
     private void flushTrace(String base) {
         while (!traceOutbox.isEmpty()) {
             String[] e = traceOutbox.remove(0);
             try {
+                String src = e.length > 5 ? e[5] : "";
                 httpGetText(base + "/trace?type=" + java.net.URLEncoder.encode(e[0], "UTF-8")
                     + "&id=" + e[1] + "&chain=" + java.net.URLEncoder.encode(e[2], "UTF-8")
-                    + "&handled=" + e[3] + "&fired=" + java.net.URLEncoder.encode(e[4], "UTF-8"));
+                    + "&handled=" + e[3] + "&fired=" + java.net.URLEncoder.encode(e[4], "UTF-8")
+                    + (src.isEmpty() ? "" : "&src=" + java.net.URLEncoder.encode(src, "UTF-8")));
             } catch (Throwable t) { break; }
         }
     }

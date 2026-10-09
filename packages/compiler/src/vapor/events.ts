@@ -77,6 +77,13 @@ export interface EventBinding {
    *   数组 ⇒ 派发侧必须能区分：手势派发**跳过**它；emit 路由按「边界节点 + 事件名」直接查表。
    */
   componentEmit?: boolean
+  /**
+   * ★★**绑定处的源位置**（决策 #712 · source map 地基）——`@click="…"` 在**整份 `.vue`** 里的
+   *   `{ line, column }`（**1 基**；行已含模板块之前的前导行偏移，可直接对照文件行号）。
+   *   App 端页面逻辑不打包（无 esbuild sourcemap）⇒ 是**唯一**能把"运行期事件/handler"映射回
+   *   **模板源行**的桥（调试生态链的地基）。★缺省省略 ⇒ 既有产物逐字节不变。
+   */
+  loc?: { line: number; column: number }
 }
 
 /**
@@ -347,8 +354,20 @@ export function compileEvents(
   const vueParse = compat?.sfcParse ?? sfcParse
   const dom = compat?.domParse ?? domParse
   let body = ''
+  // ★事件源位置换算（决策 #712）：`domParse` 的 loc 是**模板内容**相对行（content 的第 1 行 = `<template>` 开标签之后）——
+  //   要锚回**整份 `.vue`** 的行号，须加上"内容起点之前的行数"（前导注释 / `<script>` 在上方都会让它 ≠ 0）。
+  let bodyLineOffset = 0
   try {
-    body = vueParse(source, { filename: 'anonymous.vue' }).descriptor.template?.content ?? ''
+    const parsed = vueParse(source, { filename: 'anonymous.vue' }).descriptor
+    body = parsed.template?.content ?? ''
+    const tpl = parsed.template as { loc?: { start?: { line?: number; offset?: number } } } | undefined
+    const startOff = tpl?.loc?.start?.offset
+    if (typeof startOff === 'number') {
+      const contentOff = source.indexOf(body, startOff)
+      bodyLineOffset = contentOff >= 0
+        ? (source.slice(0, contentOff).match(/\n/g)?.length ?? 0)
+        : Math.max(0, (tpl?.loc?.start?.line ?? 1) - 1)
+    }
   } catch {
     diag('SFC 解析失败（事件编译跳过）', '请检查 SFC 形态')
     return out
@@ -372,13 +391,23 @@ export function compileEvents(
       type: number
       name: string
       arg?: { content?: string; isStatic?: boolean }
-      exp?: { content?: string }
+      exp?: { content?: string; loc?: { start?: { line?: number; column?: number } } }
       modifiers?: Array<{ content?: string } | string>
     }>
     children?: unknown[]
   }
 
   const handlerSeq: string[] = []
+  /**
+   * ★绑定处源位置（决策 #712）：从 `@click` 属性的 exp 取 `{line,column}`；**列**用模板内容相对值（1 基），
+   *   **行**加上 `bodyLineOffset` 换算成**整份 `.vue` 文件**的 1 基行号（调试面板/日志据此直接跳转源文件）。
+   */
+  const locOf = (p: { exp?: { loc?: { start?: { line?: number; column?: number } } } }): { line: number; column: number } | undefined => {
+    const s = p.exp?.loc?.start
+    return s && typeof s.line === 'number' && typeof s.column === 'number'
+      ? { line: s.line + bodyLineOffset, column: s.column }
+      : undefined
+  }
   /**
    * 在一个元素上收集事件（正则时代的属性扫描换成 AST 走查——**同一条解析器**：
    *   正则版在「逻辑容器/插槽声明」处会把不产元素的标签算进 id ⇒ 其后的事件 nodeId 漂移，
@@ -427,6 +456,7 @@ export function compileEvents(
       }
       const rawName = [String(argNode?.content ?? ''), ...mods].join('.')
       const value = String(p.exp?.content ?? '').trim()
+      const loc = locOf(p)   // ★绑定处源位置（决策 #712）
       // ★★修饰符解析（P2-3）：先拆修饰符再判事件名（否则 `click.stop` 整串当过事件名）
       const { event: evName, stop, self, once, notes: modNotes } = splitModifiers(rawName)
       const name = evName.toLowerCase()
@@ -452,6 +482,7 @@ export function compileEvents(
             event: evName,
             handler,
             componentEmit: true,
+            ...(loc ? { loc } : {}),
             ...(once ? { once: true } : {}),
           })
           continue
@@ -473,6 +504,7 @@ export function compileEvents(
         nodeId: id,
         event: semantic,
         handler,
+        ...(loc ? { loc } : {}),
         ...(stop ? { stop: true } : {}),
         ...(self ? { self: true } : {}),
         ...(once ? { once: true } : {}),

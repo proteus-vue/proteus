@@ -69,11 +69,13 @@ final class SuperappRuntimeHost: NSObject, SuperappRuntimeExports {
 
     /// ★由 SelfDrawView.emitGesture（实现侧）调：命中节点 + 冒泡链 → 反向调 JS 注册的回调。
     ///   在**主线程**的 UI 回调里调 JSC（非 eval 重入场景）——与 Android 的 native 反向通道同语义。
-    func dispatchGestureToJS(type: String, target: Int, chain: [Int]) {
-        guard let cb = gestureCb, let ctx = jsContext else { return }
+    ///   ★返回 JS 派发结果 JSON（含 `firedHandlers`/`src`——决策 #712 页面处理器 source map，供壳上报 /trace）。
+    @discardableResult
+    func dispatchGestureToJS(type: String, target: Int, chain: [Int]) -> String? {
+        guard let cb = gestureCb, let ctx = jsContext else { return nil }
         let chainJson = "[" + chain.map(String.init).joined(separator: ",") + "]"
         let expr = "\(cb)(\(jsQuote(type)),\(target),\(jsQuote(chainJson)))"
-        _ = ctx.evaluateScript(expr)
+        return ctx.evaluateScript(expr)?.toString()
     }
 }
 

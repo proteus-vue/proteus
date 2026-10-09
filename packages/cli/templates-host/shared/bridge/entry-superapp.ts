@@ -27,6 +27,17 @@ import type { SuperappRuntime } from '@proteus-vue/render-backend'
 
 type HostInvoke = (method: string, argsJson: string) => string
 
+/**
+ * ★诊断/错误累积缓冲（决策 #712）：运行期 note（诊断）与 handler 运行期错误都进这里，
+ *   供 `__proteusSuperappDebug()` 读（宿主 dev-watch 取走）。有界（防长跑内存泄漏）。
+ */
+function pushNote(n: string): void {
+  const g = globalThis as unknown as { __SUPERAPP_NOTES__?: string[] }
+  const arr = (g.__SUPERAPP_NOTES__ ??= [])
+  arr.push(n)
+  if (arr.length > 200) arr.shift()
+}
+
 interface SuperappHost {
   /** 宿主 `proteusHost.invoke`（screen.* 端口；三端同形） */
   invoke?: HostInvoke
@@ -256,6 +267,10 @@ interface SuperappRuntimeHostShape {
         navigate: navHandler,
         // ★★★鸿蒙一次性 VM：上次 `snapshot()` 回灌为态种子（恢复 count 等实例态）——见 screen-runtime.seedData
         ...(args.seedData ? { seedData: args.seedData } : {}),
+        // ★★★页面处理器 source map（决策 #712）：运行期 handler 出错 ⇒ 记入 notes（宿主 debug 读数可见）+
+        //   走 `console.error`（dev 垫片转发面板 Console·项目通道 error 级）——不再静默吞掉。
+        onNote: (n: string) => pushNote(n),
+        onError: (e: string) => { pushNote(e); try { console.error(e) } catch { /* 无 console（非 dev）⇒ 仅 notes */ } },
       })
       g.__SUPERAPP_RUNTIME__ = runtime
     }

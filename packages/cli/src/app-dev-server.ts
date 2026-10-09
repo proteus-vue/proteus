@@ -123,7 +123,7 @@ export async function startAppDevServer(opts: AppDevServerOptions): Promise<AppD
    *   ★原始响应（完整体，上限 64KB）**按需**经 `GET /netbody?id=` 取（`id` 标识该条；**不进 SSE**）。 */
   interface NetEvent { id?: number; channel: 'native' | 'project'; method: string; path: string; status: number; bytes: number; ms: number; time: number; contentType?: string; preview?: string; raw?: string; rawCapped?: boolean }
   interface ConsoleEvent { channel: 'native' | 'project'; level: string; text: string; time: number }
-  interface TraceEvent { gesture: string; id: number; chain: number[]; handled: boolean; fired: number[]; time: number }
+  interface TraceEvent { gesture: string; id: number; chain: number[]; handled: boolean; fired: number[]; time: number; src?: string }
   /** ★面板→设备命令（决策 #701）：`highlight` / `eval`（REPL）/ `edit`（就地改绘制属性，决策 #702）。 */
   interface CmdEvent { type: string; nodeId?: number; expr?: string; key?: string; value?: string; time: number }
   const events: RebuildEvent[] = []         // 环形（近 50 条）重建时间线
@@ -348,6 +348,8 @@ export async function startAppDevServer(opts: AppDevServerOptions): Promise<AppD
         chain: (q.get('chain') || '').split(',').map((x) => Number(x)).filter((x) => Number.isFinite(x)),
         handled: q.get('handled') === '1', fired: (q.get('fired') || '').split(',').map((x) => Number(x)).filter((x) => Number.isFinite(x)),
         time: Date.now(),
+        // ★页面处理器 source map（决策 #712）：发派发**首个** handler 的模板源位置（`page.vue:line:col`）
+        ...(q.get('src') ? { src: q.get('src')! } : {}),
       }
       if (ev.gesture) { traceLog.push(ev); if (traceLog.length > 80) traceLog.shift(); broadcast({ type: 'trace', ...ev }) }
       res.writeHead(200, { 'content-type': 'text/plain', 'cache-control': 'no-store' })

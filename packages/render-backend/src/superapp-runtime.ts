@@ -51,6 +51,8 @@ export interface SuperappRuntimeOptions {
   seedData?: Record<string, Record<string, unknown>>
   /** 诊断（不静默） */
   onNote?: (note: string) => void
+  /** ★页面处理器运行期错误出口（决策 #712·source map）——转发给 `createScreenRuntime.onError`。 */
+  onError?: (error: string) => void
 }
 
 export interface SuperappRuntime {
@@ -63,13 +65,22 @@ export interface SuperappRuntime {
    */
   mountScreenInto(name: string): boolean
   /** 派发一次手势：宿主报的内核 id + 冒泡链 → 当前屏实例派发 */
-  dispatchGesture(type: string, chain: readonly number[]): { handled: boolean; fired: number[] }
+  dispatchGesture(type: string, chain: readonly number[]): {
+    handled: boolean
+    fired: number[]
+    firedHandlers?: Array<{ handler: string; nodeId: number; loc?: { line: number; column: number } }>
+  }
   /** 当前屏名 */
   current(): string
   /** ★DevTools 元素内省（决策 #674）：当前屏**已实例化节点**（Template 实例化产物：id/parentId/tag/style/text）——供面板"元素"树。 */
   currentContent(): { viewport?: { width: number; height: number }; nodes: readonly unknown[] } | null
   /** ★DevTools 事件 trace（决策 #675）：自上次调用以来发生的手势派发（type/命中 id/冒泡链/handled/fired）——排空式。 */
-  devEvents(): ReadonlyArray<{ type: string; id: number; chain: readonly number[]; handled: boolean; fired: readonly number[]; time: number }>
+  devEvents(): ReadonlyArray<{ type: string; id: number; chain: readonly number[]; handled: boolean; fired: readonly number[]; src?: string; time: number }>
+  /**
+   * ★★★**排空当前屏页面处理器运行期错误**（决策 #712 · source map 生态链）——自上次调用以来的
+   *   handler 求值失败（带**模板源位置** `.vue:line:col`）。排空式，供宿主 dev-watch 转发面板 Console。
+   */
+  handlerErrors(): string[]
   /** ★跨调用状态导出（`{屏名: 数据}`）——一次性 VM 宿主持有、下次回灌 `seedData` */
   snapshot(): Record<string, Record<string, unknown>>
   /**
@@ -104,12 +115,15 @@ export function createSuperappRuntime(opts: SuperappRuntimeOptions): SuperappRun
     ...(opts.navigate ? { navigate: opts.navigate } : {}),
     ...(opts.seedData ? { seedData: opts.seedData } : {}),
     onNote: note,
+    ...(opts.onError ? { onError: opts.onError } : {}),
   })
   let cur = ''
   // ★最近一次宿主 mount 回执（见 lastHostReply 注释——失败必须可观测，不得静默）
   let lastHostReply: string | null = null
   // ★DevTools 事件 trace（决策 #675）：记录每次手势派发（排空式——宿主/dev server 取走即清）。
-  const devEvents: Array<{ type: string; id: number; chain: readonly number[]; handled: boolean; fired: readonly number[]; time: number }> = []
+  //   ★`src`（决策 #712·source map）：本次派发**首个** handler 的模板源位置（`page.vue:line:col`）——
+  //     面板 Events 把"点了→跑了哪个 handler"锚回**模板哪一行**（调试生态链的数据支撑）。
+  const devEvents: Array<{ type: string; id: number; chain: readonly number[]; handled: boolean; fired: readonly number[]; src?: string; time: number }> = []
 
   // 注册手势反向回调（宿主在命中时报"内核 id + 冒泡链"）
   if (typeof opts.host.onGesture === 'function') {
@@ -129,9 +143,15 @@ export function createSuperappRuntime(opts: SuperappRuntimeOptions): SuperappRun
     }
     const r = dispatch(type, chain)
     // ★trace + 记录命中 id（宿主据此把"被点节点"与面板元素树对齐）
-    devEvents.push({ type, id: kernelId, chain, handled: r.handled, fired: r.fired, time: Date.now() })
+    const srcLoc = r.firedHandlers?.find((h) => h.loc)?.loc
+    devEvents.push({
+      type, id: kernelId, chain, handled: r.handled, fired: r.fired, time: Date.now(),
+      ...(srcLoc ? { src: `${cur}.vue:${srcLoc.line}:${srcLoc.column}` } : {}),
+    })
     if (devEvents.length > 200) devEvents.shift()
-    return JSON.stringify(r)
+    // ★把**屏幕名**一并带回宿主的派发结果（决策 #712）：iOS 壳在 native 回调里直接读返回 JSON 提取
+    //   `firedHandlers[*].loc`（不额外引一条"壳→JS 读 devEvents"通路）⇒ 缺屏名则拼不出 `page.vue:line:col`。
+    return JSON.stringify({ ...r, screen: cur })
   }
 
   /** 解析宿主 mount 回执：`{ok:false,…}` ⇒ 失败（其余/非 JSON ⇒ 放行，保持旧宿主兼容）。 */
@@ -144,7 +164,11 @@ export function createSuperappRuntime(opts: SuperappRuntimeOptions): SuperappRun
     }
   }
 
-  function dispatch(type: string, chain: readonly number[]): { handled: boolean; fired: number[] } {
+  function dispatch(type: string, chain: readonly number[]): {
+    handled: boolean
+    fired: number[]
+    firedHandlers?: Array<{ handler: string; nodeId: number; loc?: { line: number; column: number } }>
+  } {
     if (!cur) return { handled: false, fired: [] }
     return rt.instance(cur).dispatch(type, chain)
   }
@@ -213,6 +237,8 @@ export function createSuperappRuntime(opts: SuperappRuntimeOptions): SuperappRun
     },
     // ★排空式：返回自上次调用以来的手势 trace，并清空（宿主每次轮询取走）。
     devEvents: () => { const out = devEvents.slice(); devEvents.length = 0; return out },
+    // ★排空式：当前屏页面处理器运行期错误（带模板源位置）——宿主 dev-watch 转发面板 Console。
+    handlerErrors: () => (cur ? rt.instance(cur).handlerErrors() : []),
     snapshot: () => rt.snapshot(),
     lastHostReply: () => lastHostReply,
   }

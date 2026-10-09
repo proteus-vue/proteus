@@ -15,8 +15,18 @@ describe('Vapor 事件编译 · 支持形态', () => {
   it('`count++` → set/add 动作（自增编成 add + 字面量 1）', () => {
     const r = compileEvents(sfc(`<p-view @click="count++"></p-view>`))
     expect(r.diagnostics).toHaveLength(0)
-    expect(r.events).toEqual([{ nodeId: 0, event: 'tap', handler: 'h0' }])
+    expect(r.events).toEqual([{ nodeId: 0, event: 'tap', handler: 'h0', loc: { line: 2, column: 17 } }])
     expect(r.handlers.h0).toEqual([{ op: 'add', source: 'count', program: { k: 'lit', v: 1 } }])
+  })
+
+  it('★源位置 loc（决策 #712）：默认下 = **整份 .vue 文件**行号（模板块前有前置行时须偏移）', () => {
+    // 前导注释 + 缩进 ⇒ `<template>` 落在文件第 2 行 ⇒ 事件在文件第 3 行（不是模板内容相对的第 2 行）
+    const raw = `<!-- 头部注释 -->\n<template>\n  <p-view @click="count++"></p-view>\n</template>\n<script setup lang="ts">\nconst count = ref(0)\n</script>\n`
+    const r = compileEvents(raw)
+    expect(r.events).toHaveLength(1)
+    // 行 = 文件行（3），列 = 模板内容相对列（Vue AST 口径，1 基）
+    expect(r.events[0]!.loc?.line).toBe(3)
+    expect(r.events[0]!.loc?.column).toBe(19)
   })
 
   it('`count--` / `++count` / `--count` 都归一为 add（含符号）', () => {
@@ -37,7 +47,7 @@ describe('Vapor 事件编译 · 支持形态', () => {
   it('★`$nav(\'detail\')` → nav 动作（B1 导航一等动作；静态目标）', () => {
     const r = compileEvents(sfc(`<p-view @tap="$nav('detail')"></p-view>`))
     expect(r.diagnostics).toHaveLength(0)
-    expect(r.events).toEqual([{ nodeId: 0, event: 'tap', handler: 'h0' }])
+    expect(r.events).toEqual([{ nodeId: 0, event: 'tap', handler: 'h0', loc: { line: 2, column: 15 } }])
     expect(r.handlers.h0).toEqual([{ op: 'nav', target: 'detail' }])
   })
 
@@ -271,7 +281,14 @@ describe('★★P2-3 事件修饰符（2026-10-03）：.stop/.self/.once 真语�
 
   it('反向：裸事件**不得**带任何修饰符字段（既有模板产物逐字节不变）', () => {
     const r = compileEvents(sfc(`<p-view @click="count++"></p-view>`))
-    expect(r.events[0]).toEqual({ nodeId: 0, event: 'tap', handler: 'h0' })
+    // ★`loc` 是决策 #712 新增的**源位置**（非修饰符）——断言其余字段 + 无修饰符字段
+    const ev = r.events[0] as Record<string, unknown>
+    expect(ev.nodeId).toBe(0)
+    expect(ev.event).toBe('tap')
+    expect(ev.handler).toBe('h0')
+    expect(ev.stop).toBeUndefined()
+    expect(ev.self).toBeUndefined()
+    expect(ev.once).toBeUndefined()
   })
 
   it('`.prevent`/`.passive`/`.capture`/按键修饰符 ⇒ 诊断但仍执行 handler（不静默丢弃）', () => {
