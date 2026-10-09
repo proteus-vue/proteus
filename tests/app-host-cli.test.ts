@@ -323,17 +323,30 @@ describe.skipIf(!hasSuperapp)('★完整宿主 · app-bundle（项目侧 bundle�
 
 describe.skipIf(!hasSuperapp)('★完整宿主 · dev server（热刷核心）', () => {
   let server: Awaited<ReturnType<typeof startAppDevServer>> | null = null
-  const probeFile = path.join(SUPERAPP, 'pages', 'index.vue')
-  let orig = ''
+  // ★★文件系统级隔离（AGENTS.md 红线 · 决策 #711 修）：dev-watch 测试**改源码触发版本递增**——
+  //   此前直接写**真实**的 `superapp/pages/index.vue` 并靠 `afterAll` 还原；实测**被中断的跑测会让还原不执行**
+  //   ⇒ 真实源被 `<!-- DEV-HOT-RELOAD-PROBE -->` 污染（残留 5 次）。⇒ **在临时副本上测**（真实源零接触，
+  //   "能靠隔离消除的副作用，不要靠记得还原来管理"）。
+  let PROJ = ''            // 项目根 = 临时副本
+  let probeFile = ''       // 探针文件（临时副本内）
 
   beforeAll(async () => {
-    orig = fs.readFileSync(probeFile, 'utf-8')
-    server = await startAppDevServer({ projectRoot: SUPERAPP, platform: 'android', host: '127.0.0.1', port: 0 })
+    PROJ = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-devwatch-'))
+    for (const f of ['pages', 'router', 'styles', 'shims']) {
+      const src = path.join(SUPERAPP, f)
+      if (fs.existsSync(src)) fs.cpSync(src, path.join(PROJ, f), { recursive: true })
+    }
+    for (const f of ['proteus.config.ts', 'app.config.ts', 'app-shell.ts', 'global-state.ts', 'package.json']) {
+      const src = path.join(SUPERAPP, f)
+      if (fs.existsSync(src)) fs.copyFileSync(src, path.join(PROJ, f))
+    }
+    probeFile = path.join(PROJ, 'pages', 'index.vue')
+    server = await startAppDevServer({ projectRoot: PROJ, platform: 'android', host: '127.0.0.1', port: 0 })
   }, 120_000)
 
   afterAll(async () => {
     if (server) await server.close()
-    fs.writeFileSync(probeFile, orig)   // 还原探针文件
+    if (PROJ) fs.rmSync(PROJ, { recursive: true, force: true })   // 删临时副本（真实源从未被写）
   })
 
   it('/health 与 /version 与 /bundle 三端点可用', async () => {
@@ -409,8 +422,9 @@ describe.skipIf(!hasSuperapp)('★完整宿主 · dev server（热刷核心）',
   it('改源码 ⇒ version 递增（真 watch；有界条件等待，非盲等）', async () => {
     const s = server!
     const v0 = s.version()
-    // ★真实改动（加一个模板注释，内容确定、可还原）
-    fs.writeFileSync(probeFile, orig.replace('<template>', '<template>\n  <!-- DEV-HOT-RELOAD-PROBE -->'))
+    // ★真实改动（临时副本内加一个模板注释；真实源零接触）
+    const cur = fs.readFileSync(probeFile, 'utf-8')
+    fs.writeFileSync(probeFile, cur.replace('<template>', '<template>\n  <!-- DEV-HOT-RELOAD-PROBE -->'))
     // 有界条件等待（最长 20s；命中即退出——不是固定 sleep）
     const deadline = Date.now() + 20_000
     while (Date.now() < deadline && s.version() === v0) {
