@@ -54,6 +54,8 @@ public final class AppActivity extends Activity {
 
     /** dev 可视化层（DEV 角标 + 热重载提示；release 不创建） */
     private DevOverlay devOverlay;
+    /** ★★启动占位层（决策 #724，对齐 iOS #694）：内容就绪前遮黑底，首帧渲染后移除。 */
+    private LaunchPlaceholder placeholder;
 
     /** 当前屏名（供 dev-watch 的 DevTools 心跳上报；UI 线程写、watch 线程读 ⇒ volatile） */
     private volatile String lastScreenName = "";
@@ -108,12 +110,17 @@ public final class AppActivity extends Activity {
             getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN);
         } else {
             getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN);
-            try {
-                getWindow().setStatusBarColor(android.graphics.Color.TRANSPARENT);
-                getWindow().setNavigationBarColor(android.graphics.Color.TRANSPARENT);
-                getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(0xFFF4F5F7));
-            } catch (Throwable ignored) { }
         }
+        // ★★窗口底色 = 页面同族浅色（决策 #724）：`Theme.Material.NoActionBar` 的 `windowBackground` 在
+        //   Activity 首帧前可见 ⇒ 若不设会**闪黑一下**（用户实测"安卓启动打开黑屏一下"）。与占位层/内容同族
+        //   （`#F5F6FA`）⇒ 启动全程"浅色 → 内容"，无黑闪。★无论 statusBar 显隐都设（此前只在 shown 分支设）。
+        try {
+            getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(LaunchPlaceholder.PAGE_BACKGROUND));
+        } catch (Throwable ignored) { }
+        try {
+            getWindow().setStatusBarColor(android.graphics.Color.TRANSPARENT);
+            getWindow().setNavigationBarColor(android.graphics.Color.TRANSPARENT);
+        } catch (Throwable ignored) { }
         if (android.os.Build.VERSION.SDK_INT >= 30) getWindow().setDecorFitsSystemWindows(false);
         android.view.WindowManager.LayoutParams attrs = getWindow().getAttributes();
         attrs.layoutInDisplayCutoutMode =
@@ -128,7 +135,9 @@ public final class AppActivity extends Activity {
         tabBarHeightPx = Math.round(56f * dm.density);
 
         root = new android.widget.FrameLayout(this);
-        root.setBackgroundColor(0xFF101020);
+        // ★根容器底色 = 页面同族浅色（对齐占位层/内容底色）：此前是深色 `0xFF101020` ⇒ 占位层就绪前的
+        //   任何一帧都可能露深底（"黑一下"）。改浅色后与占位/内容**同色**⇒无突变（决策 #724）。
+        root.setBackgroundColor(LaunchPlaceholder.PAGE_BACKGROUND);
         setContentView(root);
 
         if (!QuickJsEngine.isAvailable()) {
@@ -170,14 +179,69 @@ public final class AppActivity extends Activity {
         tabBar.setLayoutParams(tlp);
         root.addView(tabBar);
 
-        String bundle = loadBundleSource();
-        if (bundle == null) { fail("无法获取 bundle（release: assets/bundle-superapp.js；dev: dev server）"); return; }
+        // ★★启动占位（决策 #724，对齐 iOS #694）：内容就绪前遮黑底（App 名 + 转圈 + 状态文案）。
+        //   首帧渲染完成即移除 ⇒ 启动到首帧是"浅色 → 内容"，而非"黑 → 内容"。
+        placeholder = new LaunchPlaceholder(this, appLabel(), ProteusBuildConfig.DEV);
+        placeholder.attach(root);
+
+        // ★★后台拉 bundle（不阻塞主线程）⇒ 占位层期间转圈可见（此前主线程同步拉 ⇒ 黑住）。
+        bootAsync();
+    }
+
+    /**
+     * ★★**启动不阻塞主线程**（决策 #724 · 对齐 iOS #694）——`boot()` 先建 chrome + 挂**启动占位**，
+     *   再**后台**拉 bundle（有界重试，**无 \`Thread.sleep\` 盲等**），主线程回调 \`onBundleReady\`。
+     *
+     * 【为什么（用户实测「安卓启动打开是黑屏一下，iOS 有加载提示」）】此前 bundle 在 **onCreate 主线程**
+     *   同步拉取（含 5 次重试的 \`Thread.sleep(300*(i+1))\` ⇒ 最多 ~3s 主线程被占死）⇒ **占位层不转、
+     *   屏幕黑住**。⇒ 后台拉 + 主线程回调（占位期间转圈可见）。★与 iOS \`BundleSource.loadAsync\` 同语义。
+     */
+    private void bootAsync() {
+        // ① 先建 chrome（contentHost 等已在 boot 里建好）——若 dev 直接读内嵌（无 dev base）则同步返回
+        final String devBase = devServerBase();
+        if (!ProteusBuildConfig.DEV || devBase == null) {
+            String bundle = loadBundleSource();
+            if (bundle == null) { if (placeholder != null) placeholder.fail("无法加载应用资源"); fail("无法获取 bundle"); return; }
+            onBundleReady(bundle);
+            return;
+        }
+        new Thread(new Runnable() {
+            @Override public void run() {
+                // 后台有界重试（覆盖"App 先于 server ready"的时序竞争）；间隔用后台 sleep（非主线程 ⇒ 不卡 UI）
+                String s = null;
+                for (int i = 0; i < 5 && s == null; i++) {
+                    s = httpGetText(devBase + "/bundle");
+                    if (s != null && !s.isEmpty()) {
+                        Log.i(TAG, "PROTEUS_DEV_BUNDLE_FROM_SERVER bytes=" + s.length() + " base=" + devBase + " try=" + i);
+                        break;
+                    }
+                    s = null;
+                    try { Thread.sleep(300L * (i + 1)); } catch (InterruptedException e) { Thread.currentThread().interrupt(); break; }
+                }
+                final String bundle = (s != null && !s.isEmpty()) ? s : readAsset("bundle-superapp.js");
+                runOnUiThread(new Runnable() {
+                    @Override public void run() {
+                        if (bundle == null) {
+                            if (placeholder != null) placeholder.fail("无法加载应用资源（dev server 与内嵌资产均不可用）");
+                            fail("无法获取 bundle");
+                            return;
+                        }
+                        onBundleReady(bundle);
+                    }
+                });
+            }
+        }, "proteus-dev-bundle").start();
+    }
+
+    /** bundle 就绪后的启动：eval → boot → 上屏 → **撤占位** → dev 层/watch（对齐 iOS `startDriver`）。 */
+    private void onBundleReady(String bundle) {
         if (ProteusBuildConfig.DEV) installDevConsole();   // ★装 console 垫片须在 eval bundle 之前 ⇒ 页面顶层 console.* 也被捕获
         QuickJsEngine.EvalResult load = QuickJsEngine.evalWithHost(bundle, buildRuntimeHost());
-        if (!load.ok) { fail("bundle eval 失败：" + load.error); return; }
+        if (!load.ok) { if (placeholder != null) placeholder.fail("bundle 加载失败"); fail("bundle eval 失败：" + load.error); return; }
         QuickJsEngine.EvalResult bootRes = QuickJsEngine.eval("__proteusSuperappBootJson()");
         QuickJsEngine.nativeRunPendingJobs();
         if (!bootRes.ok || bootRes.value == null || bootRes.value.indexOf("\"ok\":true") < 0) {
+            if (placeholder != null) placeholder.fail("应用启动失败");
             fail("superapp boot 失败：" + (bootRes.value != null ? bootRes.value : bootRes.error));
             return;
         }
@@ -194,6 +258,8 @@ public final class AppActivity extends Activity {
             @Override public void run() {
                 renderCurrent(readState());
                 Log.i(TAG, "PROTEUS_APP_READY screen=" + currentName(readState()));
+                // ★内容已上屏 ⇒ 撤启动占位（决策 #724，对齐 iOS）：黑底/白底不再可见。
+                if (placeholder != null) { placeholder.remove(); placeholder = null; }
                 if (ProteusBuildConfig.DEV) {
                     // ★★dev 逐帧采样器（决策 #714 · Android 腿）：启动 Choreographer 采样（真实帧间隔）——
                     //   与 iOS `startDevFrameSampler()` 同语义/同键名 ⇒ 面板 Profiler 端无关（有真 dropped）。
@@ -209,27 +275,19 @@ public final class AppActivity extends Activity {
 
     /**
      * ★★★bundle 来源（dev/release 的**唯一分叉点**）——见文件头"两个变体"。
-     *   dev：先从 dev server 拉（HTTP，**含重试**——设备启动与 server ready 有时序竞争）；失败回落内嵌 assets。
-     *   release：直接读内嵌 assets。
+     *   dev 走 dev server：**后台异步**拉（`bootAsync`，有界重试 + 主线程回调，决策 #724）；
+     *   release / 无 dev base：读内嵌 assets（同步、零延迟——本方法）。
      */
     private String loadBundleSource() {
-        if (ProteusBuildConfig.DEV) {
-            String base = devServerBase();
-            if (base != null) {
-                // ★重试（有限次 + 递增间隔；覆盖"App 先于 server ready 启动"的时序竞争）——
-                //   首次实测：单次拉取在 server 尚未 listen 时失败 ⇒ 回落内嵌（虽可用但不走热刷）。
-                for (int i = 0; i < 5; i++) {
-                    String s = httpGetText(base + "/bundle");
-                    if (s != null && !s.isEmpty()) {
-                        Log.i(TAG, "PROTEUS_DEV_BUNDLE_FROM_SERVER bytes=" + s.length() + " base=" + base + " try=" + i);
-                        return s;
-                    }
-                    try { Thread.sleep(300L * (i + 1)); } catch (InterruptedException e) { Thread.currentThread().interrupt(); break; }
-                }
-                Log.w(TAG, "PROTEUS_DEV_BUNDLE_FETCH_FAIL base=" + base + "——回落内嵌 assets");
-            }
-        }
         return readAsset("bundle-superapp.js");
+    }
+
+    /** 应用名（启动占位层显示，对齐 iOS：取 `CFBundleDisplayName`；安卓取 `ApplicationInfo.loadLabel`）。 */
+    private String appLabel() {
+        try {
+            CharSequence l = getApplicationInfo() != null ? getApplicationInfo().loadLabel(getPackageManager()) : null;
+            return l != null ? l.toString() : "";
+        } catch (Throwable t) { return ""; }
     }
 
     /** dev server 基址：启动参数 `--es proteusDev <url>` 优先，其次编译期注入的 DEV_URL。 */

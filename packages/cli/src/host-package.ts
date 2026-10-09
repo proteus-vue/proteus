@@ -753,15 +753,25 @@ export function packageAndroidHost(opts: PackageAndroidOptions): PackageAndroidR
   //   ⇒ 装到已有更高 versionCode 的机器上报 `INSTALL_FAILED_VERSION_DOWNGRADE`（用户实测）。
   //   manifest 已由 `applyNativeConfigFromProject` 写入 project 的 versionCode/Name ⇒ 以它为准。
   let manifestXml = fs.readFileSync(manifest, 'utf-8')
-  // ★★★activity 主题规范化（决策 #670）：旧模板用 `Theme.NoTitleBar.Fullscreen`（theme 级 windowFullscreen +
-  //   黑 windowBackground）与运行期 edge-to-edge 冲突 ⇒ **状态栏/导航区渲染为默认黑**；新模板用
-  //   `Theme.Material.NoActionBar`（透明）。而宿主是**一次性 scaffold**（已生成的不会自动拿到模板修复）⇒
-  //   在此做**定向、幂等**迁移：只改这一个已知旧值（不动包名/版本/权限等其它内容），老宿主下次 dev/build 即自愈。
+  // ★★★activity 主题规范化（决策 #670 + #724）：旧模板 `Theme.NoTitleBar.Fullscreen`（theme 级 windowFullscreen +
+  //   黑 windowBackground）与运行期 edge-to-edge 冲突 ⇒ **状态栏/导航区黑边**（#670）；且 `Theme.Material.NoActionBar`
+  //   （**深色**变体）的 windowBackground 是深色 ⇒ **启动窗口闪黑一下**（#724 用户实测"安卓启动黑屏一下"）。
+  //   目标 = **`Theme.Material.Light.NoActionBar`**（浅色底 + 透明 edge-to-edge）。宿主是**一次性 scaffold** ⇒
+  //   在此做**定向、幂等**迁移（只改这两个已知旧值，不动包名/版本/权限等），老宿主下次 dev/build 即自愈。
+  //   ★两个字面量互不包含（`Theme.Material.NoActionBar` 不匹配 `…Light.NoActionBar`）⇒ 可安全依次替换。
+  const themeMigrated: string[] = []
   if (manifestXml.includes('@android:style/Theme.NoTitleBar.Fullscreen')) {
-    manifestXml = manifestXml.replace(/@android:style\/Theme\.NoTitleBar\.Fullscreen/g, '@android:style/Theme.Material.NoActionBar')
+    manifestXml = manifestXml.replace(/@android:style\/Theme\.NoTitleBar\.Fullscreen/g, '@android:style/Theme.Material.Light.NoActionBar')
+    themeMigrated.push('NoTitleBar.Fullscreen → Material.Light.NoActionBar')
+  }
+  if (manifestXml.includes('@android:style/Theme.Material.NoActionBar')) {
+    manifestXml = manifestXml.replace(/@android:style\/Theme\.Material\.NoActionBar/g, '@android:style/Theme.Material.Light.NoActionBar')
+    themeMigrated.push('Material.NoActionBar → Material.Light.NoActionBar（浅色底·防启动闪黑）')
+  }
+  if (themeMigrated.length) {
     try {
       fs.writeFileSync(manifest, manifestXml)
-      log.push('✓ activity 主题已规范化（NoTitleBar.Fullscreen → Material.NoActionBar · 修状态栏黑边）')
+      log.push(`✓ activity 主题已规范化（${themeMigrated.join(' · ')}）`)
     } catch { /* 只读文件系统 ⇒ 无从落盘；aapt2 仍读磁盘 manifest（原始旧主题）——极少见，忽略 */ }
   }
   const vCode = (manifestXml.match(/android:versionCode\s*=\s*"(\d+)"/) ?? [])[1] ?? '1'
