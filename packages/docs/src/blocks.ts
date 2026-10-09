@@ -5,26 +5,32 @@ import type { MdBlock, ListItem, TableAlign, HeadingBlock, InlineNode } from './
 import { parseInline, inlineToText } from './inline'
 
 const HEADING_RE = /^(#{1,6})\s+(.+)$/
+// ★显式锚点后缀：`### 标题 {#custom-id}`（MDN/VitePress 同款）——给定稳定 id，供深链引用（如逐能力锚点）
+const ANCHOR_ID_RE = /\s*\{#([A-Za-z0-9_-]+)\}\s*$/
 const FENCE_OPEN_RE = /^```(\w+)?(?:\s+(.+))?$/
 const HR_RE = /^ {0,3}(?:-{3,}|\*{3,})\s*$/
 const LIST_ITEM_RE = /^(\s*)([-*+]|\d+\.)\s+(.+)$/
 const TABLE_ROW_RE = /^\s*\|.+\|\s*$/
 const TABLE_SEP_RE = /^\s*\|?[\s:|-]+\|?\s*$/
 
-/** 锚点 id：kebab 化（中文保留）+ 去重 */
-export function slugify(text: string, taken: Set<string>): string {
-  let base = text
-    .trim()
-    .toLowerCase()
-    .replace(/[\s]+/g, '-')
-    .replace(/[`*_[\]()#]/g, '')
-    .replace(/[^\p{L}\p{N}-]/gu, '')
-  if (base === '') base = 'section'
+/** 占位去重：base 已被占用则追加 `-2/-3…`，并登记进 taken */
+function reserveId(base: string, taken: Set<string>): string {
   let id = base
   let n = 2
   while (taken.has(id)) id = `${base}-${n++}`
   taken.add(id)
   return id
+}
+
+/** 锚点 id：kebab 化（中文保留）+ 去重 */
+export function slugify(text: string, taken: Set<string>): string {
+  const base = text
+    .trim()
+    .toLowerCase()
+    .replace(/[\s]+/g, '-')
+    .replace(/[`*_[\]()#]/g, '')
+    .replace(/[^\p{L}\p{N}-]/gu, '') || 'section'
+  return reserveId(base, taken)
 }
 
 function splitTableRow(line: string): string[] {
@@ -93,11 +99,15 @@ export function parseBlocks(source: string): MdBlock[] {
     const heading = line.match(HEADING_RE)
     if (heading) {
       const depth = heading[1].length as HeadingBlock['depth']
-      const raw = heading[2].trim()
+      let raw = heading[2].trim()
+      // ★显式锚点优先：`### 标题 {#custom-id}` → 用给定 id（稳定可引用）；否则自动 slugify
+      const anchor = raw.match(ANCHOR_ID_RE)
+      let explicitId: string | null = null
+      if (anchor) { explicitId = anchor[1]; raw = raw.slice(0, anchor.index).trim() }
       const inline = parseInline(raw)
       // ★TOC 优化：text 存纯文本（剥 `code` 等标记，目录干净）；inline 保留供正文渲染（代码样式）
       const text = inlineToText(inline)
-      blocks.push({ type: 'heading', depth, id: slugify(text, takenIds), text, inline })
+      blocks.push({ type: 'heading', depth, id: explicitId ? reserveId(explicitId, takenIds) : slugify(text, takenIds), text, inline })
       i++
       continue
     }

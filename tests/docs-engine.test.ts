@@ -153,6 +153,28 @@ describe('G-36/官网 B2 块级解析（Docs IR）', () => {
     expect(slugify('安装', taken)).toBe('安装')
     expect(slugify('安装', taken)).toBe('安装-2')
   })
+
+  it('★显式锚点 `{#id}`：给定稳定 id，文本剥后缀（供逐能力深链）', () => {
+    const d = parseMarkdown([
+      '## 绘制 · 19 项 {#cat-paint}',
+      '',
+      '### background-color（+ background 纯色简写） {#background-color}',
+      '',
+      '### -webkit-line-clamp: <integer> {#-webkit-line-clamp}',
+      '',
+      '### 无锚点标题',
+    ].join('\n'))
+    const hs = d.blocks.filter((b) => b.type === 'heading') as Array<{ id: string; text: string }>
+    expect(hs.map((h) => h.id)).toEqual(['cat-paint', 'background-color', '-webkit-line-clamp', '无锚点标题'])
+    // 文本不含 `{#…}` 后缀（不进目录/正文）
+    expect(hs[0].text).toBe('绘制 · 19 项')
+    expect(hs[1].text).toBe('background-color（+ background 纯色简写）')
+    // 渲染：显式 id + 悬停锚点链接
+    const html = renderDocHtml(d)
+    expect(html).toContain('<h3 id="background-color" class="docs-h docs-h3">')
+    expect(html).toContain('class="docs-anchor" href="#background-color"')
+    expect(html).not.toContain('{#')
+  })
 })
 
 describe('G-36/官网 B2 高亮器（零依赖 tokenizer）', () => {

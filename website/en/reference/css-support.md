@@ -7,16 +7,20 @@ generated: true
 
 # CSS cross-end support reference
 
-> How 79 CSS capabilities are supported across **Web / Skyline / App**, with App extensibility tier.
+> How 79 CSS capabilities are supported across **Web / Skyline / App**, with App extensibility tier. **Every capability has its own anchor** (jump from the on-page outline; deep-linkable from anywhere), measured against the **Web baseline**, with the in-house Rust engine graded **L0–L5**.
 > ★Auto-generated (`scripts/gen-css-support.mjs`), SSOT = `docs/generated/css-capability-alignment.json`; drift gate `--check`.
 
-## End model
+## Overview
+
+**79** capabilities: **32** universal · **43** conditional · **4** unsupported. App currently supports **71**, with **8** not present yet (candidates graded by tier).
+
+### End model
 
 - **Web** — native browser CSSOM (the baseline).
 - **Skyline** — WeChat Mini Program container (the one rigid external constraint).
 - **App** — in-house self-drawn Rust engine (one engine, covering iOS / Android / HarmonyOS; the CSS surface is ours to define and extend).
 
-## App status values
+### App status values
 
 | Value | Meaning |
 |---|---|
@@ -25,7 +29,7 @@ generated: true
 | `engine-only` | engine / host can already draw it, but the compile-time fold surface is not wired yet (an available extension point) |
 | `absent` | not present today (candidate; see tier / strategy) |
 
-## App extensibility tiers (L0–L5 cost levels)
+### App extensibility tiers (L0–L5 cost levels)
 
 | Tier | Meaning |
 |---|---|
@@ -36,205 +40,521 @@ generated: true
 | L4 | not in-house (reuse the platform: fonts / BiDi / emoji / complex rich text) |
 | L5 | forbidden (compile-time error: runtime dynamic selectors / unfoldable cascade / runtime stylesheet insertion / beyond profile) |
 
-## Capability matrix
+## Capability index
 
-| Category | CSS | Web | Skyline | App status | App extensible | Strategy | Alignment |
-|---|---|---|---|---|---|---|---|
-| 绘制 | `outline-offset` | ◻ n/a | ◻ not listed | ✅ yes | L2 | host-drawn | conditional |
-| 绘制 | `outline（+ outline-width/-color/-style 长手）` | ◻ n/a | ◻ not listed | ✅ yes | L2 | host-drawn | conditional |
-| 布局 | `width` | ✅ yes | ✅ yes | ✅ yes | L1 | compile-time fold | universal |
-| 布局 | `height` | ✅ yes | ✅ yes | ✅ yes | L1 | compile-time fold | universal |
-| 布局 | `min-width / max-width / min-height / max-height` | ✅ yes | ✅ yes | ✅ yes | L1 | compile-time fold | universal |
-| 布局 | `margin（+ 四边简写 + 1–4 值 shorthand）` | ✅ yes | ✅ yes | ✅ yes | L1 | compile-time fold | universal |
-| 布局 | `padding（+ 四边简写 + 1–4 值 shorthand）` | ✅ yes | ✅ yes | ✅ yes | L1 | compile-time fold | universal |
-| 布局 | `display: flex / none` | ✅ yes | ✅ yes | ✅ yes | L2 | direct mapping | universal |
-| 布局 | `flex-direction` | ✅ yes | ✅ yes | ✅ yes | L2 | direct mapping | universal |
-| 布局 | `justify-content` | ✅ yes | ✅ yes | ✅ yes | L2 | direct mapping | universal |
-| 布局 | `align-items / align-self` | ✅ yes | ✅ yes | ✅ yes | L2 | direct mapping | universal |
-| 布局 | `flex-grow / flex-shrink / flex-basis` | ✅ yes | ✅ yes | ✅ yes | L2 | direct mapping | universal |
-| 布局 | `gap（+ row-gap / column-gap）` | ◐ partial | ◐ partial | ✅ yes | L2 | direct mapping | conditional |
-| 布局 | `position: static / relative / absolute` | ✅ yes | ✅ yes | ✅ yes | L2 | direct mapping | universal |
-| 布局 | `top / left` | ✅ yes | ✅ yes | ✅ yes | L2 | direct mapping | universal |
-| 布局 | `overflow: visible / hidden / scroll / auto` | ◐ partial | ◐ partial | ✅ yes | L2 | direct mapping | conditional |
-| 取值 | `margin/padding 1–4 值简写 + background 纯色简写 + flex 简写` | — | — | ✅ yes | L1 | compile-time fold | conditional |
-| 单位 | `width/height 百分比` | — | — | ✅ yes | L1 | compile-time fold | conditional |
-| 绘制 | `background-color（+ background 纯色简写）` | ✅ yes | ✅ yes | ✅ yes | L1 | compile-time fold | universal |
-| 绘制 | `background-size` | ◻ n/a | ✅ yes | ✅ yes | L2 | host geometry | conditional |
-| 绘制 | `background-position` | ◻ n/a | ✅ yes | ✅ yes | L2 | host geometry | conditional |
-| 绘制 | `background-repeat` | ◻ n/a | ✅ yes | ✅ yes | L2 | host geometry | conditional |
-| 绘制 | `color` | ✅ yes | ✅ yes | ✅ yes | L1 | compile-time fold | universal |
-| 绘制 | `font-size` | ✅ yes | ✅ yes | ✅ yes | L1 | compile-time fold | universal |
-| 绘制 | `border-radius` | ✅ yes | ✅ yes | ✅ yes | L1 | compile-time fold | universal |
-| 绘制 | `opacity` | ✅ yes | ✅ yes | ✅ yes | L1 | compile-time fold | universal |
-| 特殊 | `box-sizing` | ✅ yes | ✅ yes | ✅ yes | L1 | direct mapping | universal |
-| 绘制 | `border（简写）/ border-color / border-width` | ✅ yes | ✅ yes | ✅ yes | L1 | compile-time fold | universal |
-| 绘制 | `border-top` | ◻ n/a | ✅ yes | ✅ yes | L1 | compile-time fold | conditional |
-| 绘制 | `border-right` | ◻ n/a | ✅ yes | ✅ yes | L1 | compile-time fold | conditional |
-| 绘制 | `border-bottom` | ◻ n/a | ✅ yes | ✅ yes | L1 | compile-time fold | conditional |
-| 绘制 | `border-left` | ◻ n/a | ✅ yes | ✅ yes | L1 | compile-time fold | conditional |
-| 动效 | `transform（2D：translate / scale / rotate）` | ✅ yes | ✅ yes | ✅ yes | L1 | compile-time fold | universal |
-| 动效 | `transform-origin` | ✅ yes | ✅ yes | ✅ yes | L2 | compile-time fold | universal |
-| 选择器 | `类选择器 .a / .a.b` | — | — | ✅ yes | L0 | compile-time fold | conditional |
-| 选择器 | `元素/类型选择器 h3 / p.foo` | — | — | ✅ yes | L0 | compile-time fold | conditional |
-| 选择器 | `后代 / 子组合 .a .b / .a > .b` | — | — | ✅ yes | L0 | compile-time fold | conditional |
-| 选择器 | `静态结构伪类 :first-child / :last-child / :nth-child(An+B\|odd\|even) / :not(简单选择器)` | — | — | ✅ yes | L0 | compile-time fold | conditional |
-| 选择器 | `状态伪类 :hover / :active / :focus / :checked` | — | — | no | L2 | degrade | unsupported |
-| 选择器 | `属性选择器 [data-x]` | — | — | no | L0 | compile-time fold | unsupported |
-| 选择器 | `Vue 作用域穿透 :deep() / ::v-deep() / >>>` | — | — | ✅ yes | L0 | compile-time fold | conditional |
-| 选择器 | `兄弟组合 + / ~` | — | — | no | L5 | forbidden | unsupported |
-| 选择器 | `通配 *` | — | — | ✅ yes | L0 | compile-time fold | conditional |
-| 层叠 | `特异性 / 继承 / !important` | — | — | ✅ yes | L0 | compile-time fold | conditional |
-| @ 规则 | `@media（响应式 / 环境条件）` | — | — | ✅ yes | L2 | dedicated channel | conditional |
-| @ 规则 | `@supports（特性检测）` | — | — | ✅ yes | L2 | dedicated channel | conditional |
-| @ 规则 | `@keyframes（关键帧动画）` | — | — | ✅ yes | L1 | compile-time fold | conditional |
-| @ 规则 | `animation（简写：name duration timing delay …）` | — | — | ✅ yes | L1 | compile-time fold | conditional |
-| 层叠 | `CSS 自定义属性（design tokens）var(--x)` | — | — | ✅ yes | L0 | compile-time fold | conditional |
-| 单位 | `min() / max() / clamp()` | — | — | ✅ yes | L0 | compile-time fold | conditional |
-| 单位 | `em / rem / vw / vh / calc / clamp` | — | — | no | L0 | compile-time fold | unsupported |
-| 布局 | `display: grid + grid-template-columns/rows（显式轨迹）+ grid-column/row 线号放置` | ◐ partial | ◻ not listed | ✅ yes | L2 | direct mapping | conditional |
-| 布局 | `justify-self（网格项行内轴自对齐）` | ◻ n/a | ◻ not listed | ✅ yes | L2 | direct mapping | conditional |
-| 布局 | `place-items（+ justify-items 长手）` | ◻ n/a | ◻ not listed | ✅ yes | L2 | shorthand expand | conditional |
-| 文本 | `word-break（行内断词策略）` | ✅ yes | ✅ yes | ✅ yes | L4 | direct mapping | universal |
-| 布局 | `aspect-ratio` | ◻ n/a | ◻ not listed | ✅ yes | L2 | compile-time fold | conditional |
-| 布局 | `flex-wrap` | ✅ yes | ✅ yes | ✅ yes | L2 | direct mapping | universal |
-| 布局 | `align-content` | ✅ yes | ✅ yes | ✅ yes | L2 | direct mapping | universal |
-| 布局 | `right / bottom` | ✅ yes | ✅ yes | ✅ yes | L2 | direct mapping | universal |
-| 布局 | `inset（top/right/bottom/left 的 1–4 值缩写）` | — | — | ✅ yes | L2 | compile-time fold | conditional |
-| 布局 | `order` | ✅ yes | ✅ yes | no | L2 | direct mapping | conditional |
-| 层 | `z-index` | ✅ yes | ✅ yes | no | L3 | semantic component | conditional |
-| 绘制 | `box-shadow` | ✅ yes | ✅ yes | ✅ yes | L3 | compile-time fold | universal |
-| 绘制 | `text-shadow` | ◻ n/a | ✅ yes | ✅ yes | L3 | compile-time fold | conditional |
-| 绘制 | `filter / backdrop-filter` | ✅ yes | ✅ yes | no | L3 | semantic component | conditional |
-| 文本 | `font-weight` | ◻ n/a | ✅ yes | ✅ yes | L1 | compile-time fold | conditional |
-| 文本 | `text-decoration` | ✅ yes | ✅ yes | ✅ yes | L1 | compile-time fold | universal |
-| 文本 | `text-align` | ◻ n/a | ✅ yes | ✅ yes | L1 | compile-time fold | conditional |
-| 文本 | `line-height` | ✅ yes | ✅ yes | ✅ yes | L1 | compile-time fold | universal |
-| 文本 | `text-overflow` | ✅ yes | ✅ yes | ✅ yes | L1 | compile-time fold | universal |
-| 文本 | `-webkit-line-clamp: <integer>` | ◻ n/a | ◻ not listed | ✅ yes | L1 | compile-time fold | conditional |
-| 文本 | `letter-spacing` | ✅ yes | ✅ yes | ✅ yes | L1 | compile-time fold | universal |
-| 文本 | `font-family` | ✅ yes | ✅ yes | ✅ yes | L4 | compile-time fold | universal |
-| 文本 | `white-space` | ✅ yes | ✅ yes | no | L4 | degrade | conditional |
-| 布局 | `pointer-events` | ◻ n/a | ✅ yes | ✅ yes | L2 | compile-time fold | conditional |
-| 绘制 | `visibility` | ✅ yes | ✅ yes | ✅ yes | L1 | compile-time fold | universal |
-| 布局 | `grid-auto-flow` | ◻ n/a | ◻ not listed | ✅ yes | L2 | direct mapping | conditional |
-| 布局 | `grid-template-areas` | ◻ n/a | ◻ not listed | ✅ yes | L2 | direct mapping | conditional |
-| 布局 | `grid-area` | ◻ n/a | ◻ not listed | ✅ yes | L2 | direct mapping | conditional |
+> Click any capability to jump to its section (each has a stable, deep-linkable anchor).
 
-## Per-capability notes (by category)
+| Category | Capabilities |
+|---|---|
+| [绘制](#cat-paint) | [outline-offset](#outline-offset) · [outline（+ outline-width/-color/-style 长手）](#outline) · [background-color（+ background 纯色简写）](#background-color) · [background-size](#background-size) · [background-position](#background-position) · [background-repeat](#background-repeat) · [color](#color) · [font-size](#font-size) · [border-radius](#border-radius) · [opacity](#opacity) · [border（简写）/ border-color / border-width](#border-color-width) · [border-top](#border-top) · [border-right](#border-right) · [border-bottom](#border-bottom) · [border-left](#border-left) · [box-shadow](#box-shadow) · [text-shadow](#text-shadow) · [filter / backdrop-filter](#filter-backdrop) · [visibility](#visibility) |
+| [布局](#cat-layout) | [width](#width) · [height](#height) · [min-width / max-width / min-height / max-height](#min-max-wh) · [margin（+ 四边简写 + 1–4 值 shorthand）](#margin) · [padding（+ 四边简写 + 1–4 值 shorthand）](#padding) · [display: flex / none](#display) · [flex-direction](#flex-direction) · [justify-content](#justify-content) · [align-items / align-self](#align-items-self) · [flex-grow / flex-shrink / flex-basis](#flex-grow-shrink-basis) · [gap（+ row-gap / column-gap）](#gap) · [position: static / relative / absolute](#position) · [top / left](#top-left) · [overflow: visible / hidden / scroll / auto](#overflow) · [display: grid + grid-template-columns/rows（显式轨迹）+ grid-column/row 线号放置](#grid) · [justify-self（网格项行内轴自对齐）](#justify-self) · [place-items（+ justify-items 长手）](#place-items) · [aspect-ratio](#aspect-ratio) · [flex-wrap](#flex-wrap) · [align-content](#align-content) · [right / bottom](#right-bottom) · [inset（top/right/bottom/left 的 1–4 值缩写）](#inset) · [order](#order) · [pointer-events](#pointer-events) · [grid-auto-flow](#grid-auto-flow) · [grid-template-areas](#grid-template-areas) · [grid-area](#grid-area) |
+| [取值](#cat-value) | [margin/padding 1–4 值简写 + background 纯色简写 + flex 简写](#value-shorthand) |
+| [单位](#cat-unit) | [width/height 百分比](#width-ratio) · [min() / max() / clamp()](#math-functions) · [em / rem / vw / vh / calc / clamp](#unit-relative) |
+| [特殊](#cat-special) | [box-sizing](#box-sizing) |
+| [动效](#cat-motion) | [transform（2D：translate / scale / rotate）](#transform) · [transform-origin](#transform-origin) |
+| [选择器](#cat-selector) | [类选择器 .a / .a.b](#selector-class) · [元素/类型选择器 h3 / p.foo](#selector-type) · [后代 / 子组合 .a .b / .a > .b](#selector-combinator) · [静态结构伪类 :first-child / :last-child / :nth-child(An+B\|odd\|even) / :not(简单选择器)](#selector-pseudo-structural) · [状态伪类 :hover / :active / :focus / :checked](#selector-pseudo-state) · [属性选择器 data-x](#selector-attr) · [Vue 作用域穿透 :deep() / ::v-deep() / >>>](#selector-deep) · [兄弟组合 + / ~](#selector-sibling) · [通配 *](#selector-wildcard) |
+| [层叠](#cat-cascade) | [特异性 / 继承 / !important](#specificity-inheritance) · [CSS 自定义属性（design tokens）var(--x)](#css-vars) |
+| [@ 规则](#cat-at-rule) | [@media（响应式 / 环境条件）](#at-media) · [@supports（特性检测）](#at-supports) · [@keyframes（关键帧动画）](#keyframes) · [animation（简写：name duration timing delay …）](#animation) |
+| [文本](#cat-text) | [word-break（行内断词策略）](#word-break) · [font-weight](#font-weight) · [text-decoration](#text-decoration) · [text-align](#text-align) · [line-height](#line-height) · [text-overflow](#text-overflow) · [-webkit-line-clamp: <integer>](#-webkit-line-clamp) · [letter-spacing](#letter-spacing) · [font-family](#font-family) · [white-space](#text-attrs) |
+| [层](#cat-layer) | [z-index](#z-index) |
 
-> Detailed semantics / boundaries are maintained in Chinese in the source of truth; this page lists the support matrix.
+## Per-capability reference
 
-### 绘制
+## 绘制 · 19 {#cat-paint}
 
-- **`outline-offset`** — host-drawn · conditional
-- **`outline（+ outline-width/-color/-style 长手）`** — host-drawn · conditional
-- **`background-color（+ background 纯色简写）`** — compile-time fold · universal
-- **`background-size`** — host geometry · conditional
-- **`background-position`** — host geometry · conditional
-- **`background-repeat`** — host geometry · conditional
-- **`color`** — compile-time fold · universal
-- **`font-size`** — compile-time fold · universal
-- **`border-radius`** — compile-time fold · universal
-- **`opacity`** — compile-time fold · universal
-- **`border（简写）/ border-color / border-width`** — compile-time fold · universal
-- **`border-top`** — compile-time fold · conditional
-- **`border-right`** — compile-time fold · conditional
-- **`border-bottom`** — compile-time fold · conditional
-- **`border-left`** — compile-time fold · conditional
-- **`box-shadow`** — compile-time fold · universal
-- **`text-shadow`** — compile-time fold · conditional
-- **`filter / backdrop-filter`** — semantic component · conditional
-- **`visibility`** — compile-time fold · universal
+### outline-offset {#outline-offset}
 
-### 布局
+**Web** ◻ n/a · **Skyline** ◻ not listed · **App** ✅ yes · **App extensible** L2 · **Strategy** host-drawn · **Alignment** conditional
 
-- **`width`** — compile-time fold · universal
-- **`height`** — compile-time fold · universal
-- **`min-width / max-width / min-height / max-height`** — compile-time fold · universal
-- **`margin（+ 四边简写 + 1–4 值 shorthand）`** — compile-time fold · universal
-- **`padding（+ 四边简写 + 1–4 值 shorthand）`** — compile-time fold · universal
-- **`display: flex / none`** — direct mapping · universal
-- **`flex-direction`** — direct mapping · universal
-- **`justify-content`** — direct mapping · universal
-- **`align-items / align-self`** — direct mapping · universal
-- **`flex-grow / flex-shrink / flex-basis`** — direct mapping · universal
-- **`gap（+ row-gap / column-gap）`** — direct mapping · conditional
-- **`position: static / relative / absolute`** — direct mapping · universal
-- **`top / left`** — direct mapping · universal
-- **`overflow: visible / hidden / scroll / auto`** — direct mapping · conditional
-- **`display: grid + grid-template-columns/rows（显式轨迹）+ grid-column/row 线号放置`** — direct mapping · conditional
-- **`justify-self（网格项行内轴自对齐）`** — direct mapping · conditional
-- **`place-items（+ justify-items 长手）`** — shorthand expand · conditional
-- **`aspect-ratio`** — compile-time fold · conditional
-- **`flex-wrap`** — direct mapping · universal
-- **`align-content`** — direct mapping · universal
-- **`right / bottom`** — direct mapping · universal
-- **`inset（top/right/bottom/left 的 1–4 值缩写）`** — compile-time fold · conditional
-- **`order`** — direct mapping · conditional
-- **`pointer-events`** — compile-time fold · conditional
-- **`grid-auto-flow`** — direct mapping · conditional
-- **`grid-template-areas`** — direct mapping · conditional
-- **`grid-area`** — direct mapping · conditional
+> host-drawn · conditional
 
-### 取值
+### outline（+ outline-width/-color/-style 长手） {#outline}
 
-- **`margin/padding 1–4 值简写 + background 纯色简写 + flex 简写`** — compile-time fold · conditional
+**Web** ◻ n/a · **Skyline** ◻ not listed · **App** ✅ yes · **App extensible** L2 · **Strategy** host-drawn · **Alignment** conditional
 
-### 单位
+> host-drawn · conditional
 
-- **`width/height 百分比`** — compile-time fold · conditional
-- **`min() / max() / clamp()`** — compile-time fold · conditional
-- **`em / rem / vw / vh / calc / clamp`** — compile-time fold · unsupported
+### background-color（+ background 纯色简写） {#background-color}
 
-### 特殊
+**Web** ✅ yes · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L1 · **Strategy** compile-time fold · **Alignment** universal
 
-- **`box-sizing`** — direct mapping · universal
+> compile-time fold · universal
 
-### 动效
+### background-size {#background-size}
 
-- **`transform（2D：translate / scale / rotate）`** — compile-time fold · universal
-- **`transform-origin`** — compile-time fold · universal
+**Web** ◻ n/a · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L2 · **Strategy** host geometry · **Alignment** conditional
 
-### 选择器
+> host geometry · conditional
 
-- **`类选择器 .a / .a.b`** — compile-time fold · conditional
-- **`元素/类型选择器 h3 / p.foo`** — compile-time fold · conditional
-- **`后代 / 子组合 .a .b / .a > .b`** — compile-time fold · conditional
-- **`静态结构伪类 :first-child / :last-child / :nth-child(An+B|odd|even) / :not(简单选择器)`** — compile-time fold · conditional
-- **`状态伪类 :hover / :active / :focus / :checked`** — degrade · unsupported
-- **`属性选择器 [data-x]`** — compile-time fold · unsupported
-- **`Vue 作用域穿透 :deep() / ::v-deep() / >>>`** — compile-time fold · conditional
-- **`兄弟组合 + / ~`** — forbidden · unsupported
-- **`通配 *`** — compile-time fold · conditional
+### background-position {#background-position}
 
-### 层叠
+**Web** ◻ n/a · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L2 · **Strategy** host geometry · **Alignment** conditional
 
-- **`特异性 / 继承 / !important`** — compile-time fold · conditional
-- **`CSS 自定义属性（design tokens）var(--x)`** — compile-time fold · conditional
+> host geometry · conditional
 
-### @ 规则
+### background-repeat {#background-repeat}
 
-- **`@media（响应式 / 环境条件）`** — dedicated channel · conditional
-- **`@supports（特性检测）`** — dedicated channel · conditional
-- **`@keyframes（关键帧动画）`** — compile-time fold · conditional
-- **`animation（简写：name duration timing delay …）`** — compile-time fold · conditional
+**Web** ◻ n/a · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L2 · **Strategy** host geometry · **Alignment** conditional
 
-### 文本
+> host geometry · conditional
 
-- **`word-break（行内断词策略）`** — direct mapping · universal
-- **`font-weight`** — compile-time fold · conditional
-- **`text-decoration`** — compile-time fold · universal
-- **`text-align`** — compile-time fold · conditional
-- **`line-height`** — compile-time fold · universal
-- **`text-overflow`** — compile-time fold · universal
-- **`-webkit-line-clamp: <integer>`** — compile-time fold · conditional
-- **`letter-spacing`** — compile-time fold · universal
-- **`font-family`** — compile-time fold · universal
-- **`white-space`** — degrade · conditional
+### color {#color}
 
-### 层
+**Web** ✅ yes · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L1 · **Strategy** compile-time fold · **Alignment** universal
 
-- **`z-index`** — semantic component · conditional
+> compile-time fold · universal
+
+### font-size {#font-size}
+
+**Web** ✅ yes · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L1 · **Strategy** compile-time fold · **Alignment** universal
+
+> compile-time fold · universal
+
+### border-radius {#border-radius}
+
+**Web** ✅ yes · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L1 · **Strategy** compile-time fold · **Alignment** universal
+
+> compile-time fold · universal
+
+### opacity {#opacity}
+
+**Web** ✅ yes · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L1 · **Strategy** compile-time fold · **Alignment** universal
+
+> compile-time fold · universal
+
+### border（简写）/ border-color / border-width {#border-color-width}
+
+**Web** ✅ yes · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L1 · **Strategy** compile-time fold · **Alignment** universal
+
+> compile-time fold · universal
+
+### border-top {#border-top}
+
+**Web** ◻ n/a · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L1 · **Strategy** compile-time fold · **Alignment** conditional
+
+> compile-time fold · conditional
+
+### border-right {#border-right}
+
+**Web** ◻ n/a · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L1 · **Strategy** compile-time fold · **Alignment** conditional
+
+> compile-time fold · conditional
+
+### border-bottom {#border-bottom}
+
+**Web** ◻ n/a · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L1 · **Strategy** compile-time fold · **Alignment** conditional
+
+> compile-time fold · conditional
+
+### border-left {#border-left}
+
+**Web** ◻ n/a · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L1 · **Strategy** compile-time fold · **Alignment** conditional
+
+> compile-time fold · conditional
+
+### box-shadow {#box-shadow}
+
+**Web** ✅ yes · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L3 · **Strategy** compile-time fold · **Alignment** universal
+
+> compile-time fold · universal
+
+### text-shadow {#text-shadow}
+
+**Web** ◻ n/a · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L3 · **Strategy** compile-time fold · **Alignment** conditional
+
+> compile-time fold · conditional
+
+### filter / backdrop-filter {#filter-backdrop}
+
+**Web** ✅ yes · **Skyline** ✅ yes · **App** no · **App extensible** L3 · **Strategy** semantic component · **Alignment** conditional
+
+> semantic component · conditional
+
+### visibility {#visibility}
+
+**Web** ✅ yes · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L1 · **Strategy** compile-time fold · **Alignment** universal
+
+> compile-time fold · universal
+
+## 布局 · 27 {#cat-layout}
+
+### width {#width}
+
+**Web** ✅ yes · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L1 · **Strategy** compile-time fold · **Alignment** universal
+
+> compile-time fold · universal
+
+### height {#height}
+
+**Web** ✅ yes · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L1 · **Strategy** compile-time fold · **Alignment** universal
+
+> compile-time fold · universal
+
+### min-width / max-width / min-height / max-height {#min-max-wh}
+
+**Web** ✅ yes · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L1 · **Strategy** compile-time fold · **Alignment** universal
+
+> compile-time fold · universal
+
+### margin（+ 四边简写 + 1–4 值 shorthand） {#margin}
+
+**Web** ✅ yes · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L1 · **Strategy** compile-time fold · **Alignment** universal
+
+> compile-time fold · universal
+
+### padding（+ 四边简写 + 1–4 值 shorthand） {#padding}
+
+**Web** ✅ yes · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L1 · **Strategy** compile-time fold · **Alignment** universal
+
+> compile-time fold · universal
+
+### display: flex / none {#display}
+
+**Web** ✅ yes · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L2 · **Strategy** direct mapping · **Alignment** universal
+
+> direct mapping · universal
+
+### flex-direction {#flex-direction}
+
+**Web** ✅ yes · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L2 · **Strategy** direct mapping · **Alignment** universal
+
+> direct mapping · universal
+
+### justify-content {#justify-content}
+
+**Web** ✅ yes · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L2 · **Strategy** direct mapping · **Alignment** universal
+
+> direct mapping · universal
+
+### align-items / align-self {#align-items-self}
+
+**Web** ✅ yes · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L2 · **Strategy** direct mapping · **Alignment** universal
+
+> direct mapping · universal
+
+### flex-grow / flex-shrink / flex-basis {#flex-grow-shrink-basis}
+
+**Web** ✅ yes · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L2 · **Strategy** direct mapping · **Alignment** universal
+
+> direct mapping · universal
+
+### gap（+ row-gap / column-gap） {#gap}
+
+**Web** ◐ partial · **Skyline** ◐ partial · **App** ✅ yes · **App extensible** L2 · **Strategy** direct mapping · **Alignment** conditional
+
+> direct mapping · conditional
+
+### position: static / relative / absolute {#position}
+
+**Web** ✅ yes · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L2 · **Strategy** direct mapping · **Alignment** universal
+
+> direct mapping · universal
+
+### top / left {#top-left}
+
+**Web** ✅ yes · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L2 · **Strategy** direct mapping · **Alignment** universal
+
+> direct mapping · universal
+
+### overflow: visible / hidden / scroll / auto {#overflow}
+
+**Web** ◐ partial · **Skyline** ◐ partial · **App** ✅ yes · **App extensible** L2 · **Strategy** direct mapping · **Alignment** conditional
+
+> direct mapping · conditional
+
+### display: grid + grid-template-columns/rows（显式轨迹）+ grid-column/row 线号放置 {#grid}
+
+**Web** ◐ partial · **Skyline** ◻ not listed · **App** ✅ yes · **App extensible** L2 · **Strategy** direct mapping · **Alignment** conditional
+
+> direct mapping · conditional
+
+### justify-self（网格项行内轴自对齐） {#justify-self}
+
+**Web** ◻ n/a · **Skyline** ◻ not listed · **App** ✅ yes · **App extensible** L2 · **Strategy** direct mapping · **Alignment** conditional
+
+> direct mapping · conditional
+
+### place-items（+ justify-items 长手） {#place-items}
+
+**Web** ◻ n/a · **Skyline** ◻ not listed · **App** ✅ yes · **App extensible** L2 · **Strategy** shorthand expand · **Alignment** conditional
+
+> shorthand expand · conditional
+
+### aspect-ratio {#aspect-ratio}
+
+**Web** ◻ n/a · **Skyline** ◻ not listed · **App** ✅ yes · **App extensible** L2 · **Strategy** compile-time fold · **Alignment** conditional
+
+> compile-time fold · conditional
+
+### flex-wrap {#flex-wrap}
+
+**Web** ✅ yes · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L2 · **Strategy** direct mapping · **Alignment** universal
+
+> direct mapping · universal
+
+### align-content {#align-content}
+
+**Web** ✅ yes · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L2 · **Strategy** direct mapping · **Alignment** universal
+
+> direct mapping · universal
+
+### right / bottom {#right-bottom}
+
+**Web** ✅ yes · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L2 · **Strategy** direct mapping · **Alignment** universal
+
+> direct mapping · universal
+
+### inset（top/right/bottom/left 的 1–4 值缩写） {#inset}
+
+**Web** — · **Skyline** — · **App** ✅ yes · **App extensible** L2 · **Strategy** compile-time fold · **Alignment** conditional
+
+> compile-time fold · conditional
+
+### order {#order}
+
+**Web** ✅ yes · **Skyline** ✅ yes · **App** no · **App extensible** L2 · **Strategy** direct mapping · **Alignment** conditional
+
+> direct mapping · conditional
+
+### pointer-events {#pointer-events}
+
+**Web** ◻ n/a · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L2 · **Strategy** compile-time fold · **Alignment** conditional
+
+> compile-time fold · conditional
+
+### grid-auto-flow {#grid-auto-flow}
+
+**Web** ◻ n/a · **Skyline** ◻ not listed · **App** ✅ yes · **App extensible** L2 · **Strategy** direct mapping · **Alignment** conditional
+
+> direct mapping · conditional
+
+### grid-template-areas {#grid-template-areas}
+
+**Web** ◻ n/a · **Skyline** ◻ not listed · **App** ✅ yes · **App extensible** L2 · **Strategy** direct mapping · **Alignment** conditional
+
+> direct mapping · conditional
+
+### grid-area {#grid-area}
+
+**Web** ◻ n/a · **Skyline** ◻ not listed · **App** ✅ yes · **App extensible** L2 · **Strategy** direct mapping · **Alignment** conditional
+
+> direct mapping · conditional
+
+## 取值 · 1 {#cat-value}
+
+### margin/padding 1–4 值简写 + background 纯色简写 + flex 简写 {#value-shorthand}
+
+**Web** — · **Skyline** — · **App** ✅ yes · **App extensible** L1 · **Strategy** compile-time fold · **Alignment** conditional
+
+> compile-time fold · conditional
+
+## 单位 · 3 {#cat-unit}
+
+### width/height 百分比 {#width-ratio}
+
+**Web** — · **Skyline** — · **App** ✅ yes · **App extensible** L1 · **Strategy** compile-time fold · **Alignment** conditional
+
+> compile-time fold · conditional
+
+### min() / max() / clamp() {#math-functions}
+
+**Web** — · **Skyline** — · **App** ✅ yes · **App extensible** L0 · **Strategy** compile-time fold · **Alignment** conditional
+
+> compile-time fold · conditional
+
+### em / rem / vw / vh / calc / clamp {#unit-relative}
+
+**Web** — · **Skyline** — · **App** no · **App extensible** L0 · **Strategy** compile-time fold · **Alignment** unsupported
+
+> compile-time fold · unsupported
+
+## 特殊 · 1 {#cat-special}
+
+### box-sizing {#box-sizing}
+
+**Web** ✅ yes · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L1 · **Strategy** direct mapping · **Alignment** universal
+
+> direct mapping · universal
+
+## 动效 · 2 {#cat-motion}
+
+### transform（2D：translate / scale / rotate） {#transform}
+
+**Web** ✅ yes · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L1 · **Strategy** compile-time fold · **Alignment** universal
+
+> compile-time fold · universal
+
+### transform-origin {#transform-origin}
+
+**Web** ✅ yes · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L2 · **Strategy** compile-time fold · **Alignment** universal
+
+> compile-time fold · universal
+
+## 选择器 · 9 {#cat-selector}
+
+### 类选择器 .a / .a.b {#selector-class}
+
+**Web** — · **Skyline** — · **App** ✅ yes · **App extensible** L0 · **Strategy** compile-time fold · **Alignment** conditional
+
+> compile-time fold · conditional
+
+### 元素/类型选择器 h3 / p.foo {#selector-type}
+
+**Web** — · **Skyline** — · **App** ✅ yes · **App extensible** L0 · **Strategy** compile-time fold · **Alignment** conditional
+
+> compile-time fold · conditional
+
+### 后代 / 子组合 .a .b / .a > .b {#selector-combinator}
+
+**Web** — · **Skyline** — · **App** ✅ yes · **App extensible** L0 · **Strategy** compile-time fold · **Alignment** conditional
+
+> compile-time fold · conditional
+
+### 静态结构伪类 :first-child / :last-child / :nth-child(An+B|odd|even) / :not(简单选择器) {#selector-pseudo-structural}
+
+**Web** — · **Skyline** — · **App** ✅ yes · **App extensible** L0 · **Strategy** compile-time fold · **Alignment** conditional
+
+> compile-time fold · conditional
+
+### 状态伪类 :hover / :active / :focus / :checked {#selector-pseudo-state}
+
+**Web** — · **Skyline** — · **App** no · **App extensible** L2 · **Strategy** degrade · **Alignment** unsupported
+
+> degrade · unsupported
+
+### 属性选择器 [data-x] {#selector-attr}
+
+**Web** — · **Skyline** — · **App** no · **App extensible** L0 · **Strategy** compile-time fold · **Alignment** unsupported
+
+> compile-time fold · unsupported
+
+### Vue 作用域穿透 :deep() / ::v-deep() / >>> {#selector-deep}
+
+**Web** — · **Skyline** — · **App** ✅ yes · **App extensible** L0 · **Strategy** compile-time fold · **Alignment** conditional
+
+> compile-time fold · conditional
+
+### 兄弟组合 + / ~ {#selector-sibling}
+
+**Web** — · **Skyline** — · **App** no · **App extensible** L5 · **Strategy** forbidden · **Alignment** unsupported
+
+> forbidden · unsupported
+
+### 通配 * {#selector-wildcard}
+
+**Web** — · **Skyline** — · **App** ✅ yes · **App extensible** L0 · **Strategy** compile-time fold · **Alignment** conditional
+
+> compile-time fold · conditional
+
+## 层叠 · 2 {#cat-cascade}
+
+### 特异性 / 继承 / !important {#specificity-inheritance}
+
+**Web** — · **Skyline** — · **App** ✅ yes · **App extensible** L0 · **Strategy** compile-time fold · **Alignment** conditional
+
+> compile-time fold · conditional
+
+### CSS 自定义属性（design tokens）var(--x) {#css-vars}
+
+**Web** — · **Skyline** — · **App** ✅ yes · **App extensible** L0 · **Strategy** compile-time fold · **Alignment** conditional
+
+> compile-time fold · conditional
+
+## @ 规则 · 4 {#cat-at-rule}
+
+### @media（响应式 / 环境条件） {#at-media}
+
+**Web** — · **Skyline** — · **App** ✅ yes · **App extensible** L2 · **Strategy** dedicated channel · **Alignment** conditional
+
+> dedicated channel · conditional
+
+### @supports（特性检测） {#at-supports}
+
+**Web** — · **Skyline** — · **App** ✅ yes · **App extensible** L2 · **Strategy** dedicated channel · **Alignment** conditional
+
+> dedicated channel · conditional
+
+### @keyframes（关键帧动画） {#keyframes}
+
+**Web** — · **Skyline** — · **App** ✅ yes · **App extensible** L1 · **Strategy** compile-time fold · **Alignment** conditional
+
+> compile-time fold · conditional
+
+### animation（简写：name duration timing delay …） {#animation}
+
+**Web** — · **Skyline** — · **App** ✅ yes · **App extensible** L1 · **Strategy** compile-time fold · **Alignment** conditional
+
+> compile-time fold · conditional
+
+## 文本 · 10 {#cat-text}
+
+### word-break（行内断词策略） {#word-break}
+
+**Web** ✅ yes · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L4 · **Strategy** direct mapping · **Alignment** universal
+
+> direct mapping · universal
+
+### font-weight {#font-weight}
+
+**Web** ◻ n/a · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L1 · **Strategy** compile-time fold · **Alignment** conditional
+
+> compile-time fold · conditional
+
+### text-decoration {#text-decoration}
+
+**Web** ✅ yes · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L1 · **Strategy** compile-time fold · **Alignment** universal
+
+> compile-time fold · universal
+
+### text-align {#text-align}
+
+**Web** ◻ n/a · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L1 · **Strategy** compile-time fold · **Alignment** conditional
+
+> compile-time fold · conditional
+
+### line-height {#line-height}
+
+**Web** ✅ yes · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L1 · **Strategy** compile-time fold · **Alignment** universal
+
+> compile-time fold · universal
+
+### text-overflow {#text-overflow}
+
+**Web** ✅ yes · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L1 · **Strategy** compile-time fold · **Alignment** universal
+
+> compile-time fold · universal
+
+### -webkit-line-clamp: <integer> {#-webkit-line-clamp}
+
+**Web** ◻ n/a · **Skyline** ◻ not listed · **App** ✅ yes · **App extensible** L1 · **Strategy** compile-time fold · **Alignment** conditional
+
+> compile-time fold · conditional
+
+### letter-spacing {#letter-spacing}
+
+**Web** ✅ yes · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L1 · **Strategy** compile-time fold · **Alignment** universal
+
+> compile-time fold · universal
+
+### font-family {#font-family}
+
+**Web** ✅ yes · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L4 · **Strategy** compile-time fold · **Alignment** universal
+
+> compile-time fold · universal
+
+### white-space {#text-attrs}
+
+**Web** ✅ yes · **Skyline** ✅ yes · **App** no · **App extensible** L4 · **Strategy** degrade · **Alignment** conditional
+
+> degrade · conditional
+
+## 层 · 1 {#cat-layer}
+
+### z-index {#z-index}
+
+**Web** ✅ yes · **Skyline** ✅ yes · **App** no · **App extensible** L3 · **Strategy** semantic component · **Alignment** conditional
+
+> semantic component · conditional
 
 > Reproduce: the capability acceptance project (`css-conformance`) verifies each page against this matrix; end-specific boundaries follow real device measurement.
 

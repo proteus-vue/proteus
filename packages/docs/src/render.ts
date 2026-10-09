@@ -35,7 +35,10 @@ function renderBlock(block: MdBlock, sfc: boolean): string {
   switch (block.type) {
     case 'heading': {
       const text = renderInline(block.inline, sfc)
-      return `<h${block.depth} id="${escapeHtml(block.id)}" class="docs-h docs-h${block.depth}">${text}</h${block.depth}>`
+      const id = escapeHtml(block.id)
+      // ★悬停锚点：`#` 深链图标（MDN 同款）——不占正文宽度（CSS 控制显隐），鼠标便捷复制/跳转本节
+      const anchor = `<a class="docs-anchor" href="#${id}" aria-hidden="true" tabindex="-1">#</a>`
+      return `<h${block.depth} id="${id}" class="docs-h docs-h${block.depth}">${text}${anchor}</h${block.depth}>`
     }
     case 'paragraph':
       return `<p class="docs-p">${renderInline(block.inline, sfc)}</p>`

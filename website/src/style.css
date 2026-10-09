@@ -119,6 +119,23 @@ body {
   transition: color 0.15s, border-color 0.15s;
 }
 .doc-body a:hover { color: var(--brand); border-bottom-color: var(--brand); }
+/* ★逐能力锚点：标题悬停显 `#` 深链图标（MDN 同款，便于复制/跳转本节）——标题相对定位承载 */
+.doc-body h1, .doc-body h2, .doc-body h3, .doc-body h4 { position: relative; }
+.doc-body a.docs-anchor {
+  margin-left: 8px;
+  font-size: 0.85em;
+  font-weight: 400;
+  color: var(--dim);
+  border-bottom: none;
+  opacity: 0;
+  transition: opacity 0.12s, color 0.12s;
+}
+.doc-body h1:hover a.docs-anchor,
+.doc-body h2:hover a.docs-anchor,
+.doc-body h3:hover a.docs-anchor,
+.doc-body h4:hover a.docs-anchor,
+.doc-body a.docs-anchor:focus-visible { opacity: 1; }
+.doc-body a.docs-anchor:hover { color: var(--brand); border-bottom: none; }
 .doc-body strong { color: var(--ink); }
 .doc-body ul, .doc-body ol { color: var(--muted); padding-left: 22px; }
 .doc-body li { margin: 4px 0; }
