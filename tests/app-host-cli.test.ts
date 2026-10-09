@@ -680,6 +680,25 @@ describe('★★★鸿蒙运行期宿主（决策 #725 · 与 Android/iOS 同级
     expect(src, '一次性 VM 状态回灌').toMatch(/snapshot/i)
   })
 
+  it('CLI 模板壳对齐参考宿主（edge-to-edge 安全区 + 松手惯性 + 返回栈 — 决策 #725 收口）', () => {
+    const src = fs.readFileSync(path.join(shell, 'MainPage.ets'), 'utf-8')
+    // ① edge-to-edge：状态栏/底部安全区不再黑（setWindowLayoutFullScreen + 窗口浅底 + 系统栏）
+    expect(src, 'edge-to-edge').toContain('setWindowLayoutFullScreen(true)')
+    expect(src, '窗口浅底透出').toContain('setWindowBackgroundColor(')
+    expect(src, '系统栏（status+navigation）').toContain('setWindowSystemBarEnable(')
+    // ② 安全区内边距 → env 传 appScreenCommands
+    expect(src, '采安全区').toContain('getWindowAvoidArea(')
+    expect(src, 'env 传 appScreenCommands').toContain("'env': this.envVars")
+    // ③ 松手惯性
+    expect(src, '惯性启动').toContain('startMomentum(')
+    expect(src, '惯性减速循环').toContain('DECEL_RATE')
+    // ④ 返回栈（系统边缘滑返 → onBackPress）
+    expect(src, '返回栈').toContain('private goBack(')
+    expect(src, 'onBackPress 消费返回').toContain('return this.goBack()')
+    // 反例守卫：不再用旧的无惯性 onTouch 方法名
+    expect(src, '不用与 ArkUI 冲突的 onTouch 方法名').not.toMatch(/private onTouch\(/)
+  })
+
   it('runtime HAR 下沉驱动簇（中性名 hostAppBoot/Drive/Render；无 superapp 专名进 runtime）', () => {
     // 中性头在场，且**不含** superapp 字样（否则 check:host-layering 的 runtime 禁词必红）
     const impl = fs.readFileSync(path.join(harCpp, 'host_app_runtime_impl.h'), 'utf-8')

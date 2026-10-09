@@ -160,6 +160,22 @@
 | 重置 | 强制重挂 + 清编辑态 + 重推树 | 同 |
 | dev 地址解析 | "启动注入优先 + 编译期 `DEV_URL` 兜底" | **同契约、不同实现**（iOS argv / Android intent extra / harmony want.parameters） |
 
+### ★★★"平台体感"逐项对齐表（**2026-10-09 · 决策 #726 补**——"先让宿主跑起来"≠"宿主对齐"）
+
+★**教训（用户实测反复）**：把运行期/上屏/导航接通后，**壳的"平台体感"仍可能整片缺**——
+用户原话「鸿蒙 dev 宿主和开始安卓 iOS 一样的问题：**状态栏和底部安全区都是黑色的**，**没有滑动返回**，**滚动惯性没有**」。
+⇒ **这三项（连同启动占位/状态栏）是"独立于渲染"的壳职责，必须逐项搬**，**事实源 = 该端的参考宿主**。
+
+| 体感面 | 参考宿主（鸿蒙 = `Superapp.ets`） | 新宿主须搬 |
+|---|---|---|
+| **状态栏/安全区不黑** | `setWindowLayoutFullScreen(true)` + `setWindowBackgroundColor(浅底)` + `setWindowSystemBarEnable([...])` | 同（否则状态栏/底部导航区成**黑带**——"窗口背景"问题，非"页面背景"） |
+| **安全区内边距** | `getWindowAvoidArea`（SYSTEM/NAVIGATION_INDICATOR/CUTOUT，px→vp）→ `env`（`--pf-inset-*`） | 同（随 `appScreenCommands` 的 `env` 下发 ⇒ 页面自让位）；★异步采集 ⇒ 取到后**再渲染一次** |
+| **滚动惯性** | 触摸采样速度(vp/ms，≥24ms 一采) → 松手 `startMomentum`（指数减速 `v*=0.998^dt`） | 同（否则"松手顿住"）；★留 `momentumFrames/moved` 计数（机器证据） |
+| **滑动返回** | `onBackPress` → `goBack`（出栈 + 恢复滚动）；**系统边缘滑返自动触发，禁叠自定义手势** | 同（自绘会与系统"最近任务"手势冲突） |
+
+★**这些通路的验证要"可机器判定"**：状态栏/安全区看截图（黑带消失）；惯性看计数（`MOMENTUM_END frames/moved`）；
+返回看日志（`BACK current=… depth=…`）。**只有手感 = 无法回归**（本仓纪律）。
+
 ---
 
 ## 7. 门禁清单（改宿主/模板后**必跑**，零设备）

@@ -5,14 +5,19 @@
 //      （**一次性 VM**：eval bundle → boot 路由栈 → 共享运行期实例化当前屏 → host.mount 捕获 tree）；
 //   ② 捕获到的 tree → `appScreenCommands`（内容 → 内核树 → RenderCmd）→ `renderCommands`（直绘）；
 //   ③ 触摸：点按 → `appScreenHitAt` 命中链 → `hostAppRender(chain)` 派发（$nav 导航 / 数据变更）→ 重绘；
-//      拖动 → `scrollRoot` 滚动位移。
+//      拖动 → `scrollRoot` 滚动 + **松手惯性**；系统返回/边缘滑返 → `onBackPress`。
 //   ★链路全部来自 runtime（HAR 'proteus_render'）——本页**不含项目身份**（页名/内容都从产物读）；
 //     换一个项目只需替换 rawfile 产物。缺 bundle 时**回退静态 `app-screen-content.json`**（诚实降级）。
 //
-// 【★一次性 VM 的状态回灌】鸿蒙 JSVM 跨调用复用会崩（本机唯一稳定形态 = 一次性）⇒ 每次交互新建 VM，
-//   跨交互实例态（计数/列表）靠 `hostAppRender` 返回的 `snapshot` 回灌为下次 `state`（seedData）。
+// 【★与参考宿主对齐的四处（决策 #725 收口 · 用户「状态栏/底部安全区黑、无滑动返回、无滚动惯性」）】
+//   ① **edge-to-edge**：`setWindowLayoutFullScreen(true)` + `setWindowBackgroundColor(页面浅底)` +
+//      `setWindowSystemBarEnable(['status','navigation'])` ⇒ 状态栏透明、内容铺到状态栏区（否则状态栏/导航栏成黑带）；
+//   ② **安全区内边距**：采 `getWindowAvoidArea` → `env`（`--pf-inset-*`）传给 `appScreenCommands`，
+//      页面据此自让位（否则内容顶到状态栏下）；
+//   ③ **松手惯性**（`startMomentum`/`stopMomentum`，指数减速，与 Android/iOS 同式）；
+//   ④ **返回栈**：系统边缘滑返/返回键 → `onBackPress`（鸿蒙系统手势自动触发，**不叠自定义边缘手势**）。
 import { hilog } from '@kit.PerformanceAnalysisKit';
-import { NodeContent, display } from '@kit.ArkUI';
+import { NodeContent, display, window } from '@kit.ArkUI';
 import { util } from '@kit.ArkTS';
 import {
   attach, renderCommands, scrollRoot, clearRoot,
@@ -21,6 +26,9 @@ import {
 
 const DOMAIN = 0x0002;
 const TAG = 'ProteusHostPage';
+/** 惯性减速速率（= iOS UIScrollView normal 0.998/ms；平台标准值，不自造曲线）+ 停止阈值（vp/ms）。 */
+const DECEL_RATE = 0.998;
+const MOMENTUM_STOP = 0.02;
 
 /** 运行期渲染入参（ArkTS 禁未型字面量 ⇒ 用接口声明） */
 interface RtViewport { width: number; height: number }
@@ -42,10 +50,22 @@ struct MainPage {
   private touchStartX: number = -1;
   private touchStartY: number = -1;
   private touchMoved: boolean = false;
-  /** ArkTS 侧导航历史栈（一次性 VM：JS 路由态不跨调用保留 ⇒ 返回栈由宿主记） */
+  /** 惯性：触摸移动时采样速度（vp/ms）；松手按松手速度启动减速循环（与 Android OverScroller / iOS CADisplayLink 同语义） */
+  private touchLastTs: number = 0;
+  private velOffset: number = 0;
+  private touchVelSum: number = 0;
+  private touchVelDt: number = 0;
+  private momentumTimer: number = -1;
+  /** 惯性帧数 / 真推动帧数（"惯性真的接线了"的机器证据——本仓纪律：报告有通路无只能靠计数现形）。 */
+  private momentumFrames: number = 0;
+  private momentumMovedFrames: number = 0;
+  /** ArkTS 侧导航历史栈（一次性 VM：JS 路由态不跨调用保留 ⇒ 返回栈由宿主记）+ 每屏滚动进度 */
   private navStack: string[] = [];
+  private scrollByScreen: Map<string, number> = new Map<string, number>();
   /** 上次 hostAppRender 返回的 snapshot（`{屏名:{变量:值}}`）——下次新 VM 回灌 state */
   private runtimeState: Record<string, Object> | null = null;
+  /** ★内置环境变量表（决策 #593）：安全区避免区（vp）——`appScreenCommands` 的 env token 替换用。 */
+  private envVars: Record<string, number> = {};
   private static vpW: number = 390;
   private static vpH: number = 844;
 
@@ -74,6 +94,59 @@ struct MainPage {
         this.current = this.nodesByPage.has('index') ? 'index' : (names.length > 0 ? names[0] : '');
       } catch (e) { /* 无静态产物（纯运行期）——起始页用约定名 */ }
       if (!this.current) this.current = 'index';
+      // ③ 窗口设置（edge-to-edge + 系统栏）——异步；取到安全区后**再渲染一次**（env 生效）
+      window.getLastWindow(ctx).then((win: window.Window) => {
+        // ★edge-to-edge：内容铺满全屏（含状态栏/导航栏区），状态栏**叠加**在内容之上（透明）
+        //   ⇒ 页面背景透上来，与 Web viewport-fit=cover 同观感。此前非 full-screen ⇒ 状态栏占位成**黑带**。
+        win.setWindowLayoutFullScreen(true).catch((e: Error) => {
+          hilog.warn(DOMAIN, TAG, 'HOST_PAGE_FULLSCREEN_ERR %{public}s', String(e?.message ?? e));
+        });
+        // ★窗口背景 = 页面浅底：状态栏透明处透出窗口背景；若为系统默认（深/浅蓝）⇒ 屏顶露非页面色的带。
+        try { win.setWindowBackgroundColor('#F4F5F7'); } catch (e) { /* 旧版本不支持 ⇒ 保持默认 */ }
+        // ★显示状态栏 + 导航栏（内容在其下铺满）——与 Web 手机端 viewport-fit=cover 对齐。
+        win.setWindowSystemBarEnable(['status', 'navigation']).catch((e: Error) => {
+          hilog.error(DOMAIN, TAG, 'HOST_PAGE_STATUSBAR_ERR %{public}s', String(e?.message ?? e));
+        });
+        // ★采集安全区避免区（px ⇒ vp）——`env` 传给 appScreenCommands，页面据此自让位。
+        let sysTop = 0, sysB = 0, indicB = 0, cutT = 0, cutL = 0, cutR = 0;
+        try {
+          const avoid: window.AvoidArea = win.getWindowAvoidArea(window.AvoidAreaType.TYPE_SYSTEM);
+          sysTop = px2vp(avoid.topRect.height); sysB = px2vp(avoid.bottomRect.height);
+        } catch (e) { /* 旧版本 ⇒ 0 */ }
+        try {
+          const ind: window.AvoidArea = win.getWindowAvoidArea(window.AvoidAreaType.TYPE_NAVIGATION_INDICATOR);
+          indicB = px2vp(ind.bottomRect.height);
+        } catch (e) { /* 旧版本无该 type ⇒ 0 */ }
+        try {
+          const co: window.AvoidArea = win.getWindowAvoidArea(window.AvoidAreaType.TYPE_CUTOUT);
+          cutT = px2vp(co.topRect.height); cutL = px2vp(co.leftRect.width); cutR = px2vp(co.rightRect.width);
+        } catch (e) { /* 未声明 metadata ⇒ 0 */ }
+        const totalB = sysB + indicB;
+        const gesture = indicB > 0 && sysB === 0;
+        const disp = display.getDefaultDisplaySync();
+        this.envVars = {
+          '--pf-inset-top': Math.max(sysTop, cutT),
+          '--pf-inset-bottom': totalB,
+          '--pf-inset-left': cutL,
+          '--pf-inset-right': cutR,
+          '--pf-status-bar-height': sysTop,
+          '--pf-nav-bar-height': gesture ? 0 : sysB,
+          '--pf-indicator-height': gesture ? indicB : 0,
+          '--pf-nav-bar-total': totalB,
+          '--pf-cutout-top': cutT,
+          '--pf-cutout-left': cutL,
+          '--pf-cutout-right': cutR,
+          '--pf-keyboard-height': 0,
+          '--pf-vw': disp.width / vp2px(1),
+          '--pf-vh': disp.height / vp2px(1),
+          '--pf-hairline': 1 / vp2px(1),
+        };
+        this.renderCurrent();
+      }).catch((err: Error) => {
+        hilog.error(DOMAIN, TAG, 'HOST_PAGE_WINDOW_ERR %{public}s', String(err?.message ?? err));
+        this.renderCurrent();
+      });
+      // 立即渲染一次（窗口 promise 未回前先出内容；env 到位后会再渲染一次覆盖）
       this.renderCurrent();
     } catch (e) {
       hilog.error(DOMAIN, TAG, 'HOST_PAGE_BOOT_ERROR %{public}s', JSON.stringify(e) ?? '');
@@ -142,6 +215,7 @@ struct MainPage {
       const cmds: string = appScreenCommands(JSON.stringify({
         'nodes': nodes, 'density': vp2px(1), 'vpW': MainPage.vpW, 'vpH': MainPage.vpH,
         'page': page, 'filesDir': this.filesDir,
+        'env': this.envVars,   // ★安全区 env token（--pf-inset-*）替换用
       } as Record<string, Object>));
       const n: number = renderCommands(cmds);
       hilog.info(DOMAIN, TAG, 'HOST_PAGE_RENDER page=%{public}s nodes_rendered=%{public}d', page, n);
@@ -155,9 +229,27 @@ struct MainPage {
     }
   }
 
+  /** 返回上一屏（系统边缘滑返 / 返回键 → onBackPress）。栈非空 ⇒ 出栈 + 恢复该屏滚动；空 ⇒ 交系统（退出）。 */
+  private goBack(): boolean {
+    if (this.navStack.length === 0) { return false; }
+    const prev: string = this.navStack.pop() as string;
+    this.scrollByScreen.set(this.current, this.scrollOffset);
+    this.current = prev;
+    this.scrollOffset = this.scrollByScreen.get(prev) ?? 0;
+    hilog.info(DOMAIN, TAG, 'HOST_PAGE_BACK current=%{public}s depth=%{public}d', this.current, this.navStack.length + 1);
+    this.renderCurrent();
+    return true;
+  }
+
+  /** ★系统返回（含手势滑动返回）——@Entry Page 生命周期；栈非空则消费，否则交系统。 */
+  onBackPress(): boolean {
+    return this.goBack();
+  }
+
   /** 点击命中 → 运行期派发（$nav 导航 / 数据变更）→ 重绘（与 Android/iOS 同一条命中链） */
   private onTapAt(vpX: number, vpY: number): void {
     if (this.bundle.length === 0) return;
+    this.stopMomentum();
     try {
       const contentY: number = vpY + this.scrollOffset;
       const hitJson: string = appScreenHitAt(vpX, contentY);
@@ -170,7 +262,11 @@ struct MainPage {
       this.saveSnapshot(rt);
       const target = rt['current'] as string;
       if (target !== undefined && target.length > 0) {
-        if (target !== prev && prev.length > 0) { this.navStack.push(prev); }
+        if (target !== prev && prev.length > 0) {
+          this.scrollByScreen.set(prev, this.scrollOffset);
+          this.navStack.push(prev);
+          this.scrollOffset = 0;
+        }
         this.current = target;
       }
       let nodes: string = this.nodesByPage.get(this.current) ?? '[]';
@@ -182,43 +278,90 @@ struct MainPage {
     }
   }
 
-  /** 触摸：拖动滚动 / 点按命中（与 App 三端同语义）——★方法名不用 `onTouch`（与 ArkUI
-   *  `CustomComponent.onTouch` 属性方法**签名冲突** ⇒ ArkTS 编译报 "not assignable to base type"） */
+  /** 触摸：拖动滚动 + 松手惯性 + 点按命中（与 App 三端同语义）。
+   *  ★方法名不用 `onTouch`（与 ArkUI `CustomComponent.onTouch` 属性方法**签名冲突**）。 */
   private handleTouch(e: TouchEvent): void {
     const t: TouchObject = e.touches[0];
     if (t === undefined) return;
     if (e.type === TouchType.Down) {
+      this.stopMomentum();   // ★手指按下 ⇒ 停掉上一段惯性（与 iOS/Android 同语义）
       this.touchLastY = t.windowY; this.touchStartX = t.windowX; this.touchStartY = t.windowY; this.touchMoved = false;
+      this.touchLastTs = Date.now(); this.touchVelSum = 0; this.touchVelDt = 0; this.velOffset = 0;
       return;
     }
     if (e.type === TouchType.Move) {
-      if (this.touchLastY < 0) { this.touchLastY = t.windowY; this.touchStartX = t.windowX; this.touchStartY = t.windowY; return; }
+      if (this.touchLastY < 0) { this.touchLastY = t.windowY; this.touchLastTs = Date.now(); return; }
       const dy: number = t.windowY - this.touchLastY;
       this.touchLastY = t.windowY;
-      if (Math.abs(dy) > 2) this.touchMoved = true;
-      let next: number = this.scrollOffset - dy;
-      if (next < 0) next = 0;
-      if (next > this.maxScroll) next = this.maxScroll;
-      if (next !== this.scrollOffset) { this.scrollOffset = next; scrollRoot(this.scrollOffset); }
+      const now: number = Date.now();
+      const dt: number = now - this.touchLastTs;
+      this.touchLastTs = now;
+      if (Math.abs(t.windowY - this.touchStartY) > 16 || Math.abs(t.windowX - this.touchStartX) > 16) this.touchMoved = true;
+      const step: number = this.applyScrollBy(-dy);   // 手指上滑（windowY 减小）⇒ offset 增大
+      if (dt > 0) { this.touchVelSum += step; this.touchVelDt += dt; }
+      if (this.touchVelDt >= 24) { this.velOffset = this.touchVelSum / this.touchVelDt; this.touchVelSum = 0; this.touchVelDt = 0; }
       return;
     }
     if (e.type === TouchType.Up) {
-      const dx: number = Math.abs(t.windowX - this.touchStartX);
-      const dy2: number = Math.abs(t.windowY - this.touchStartY);
-      if (!this.touchMoved && dx < 12 && dy2 < 12) { this.onTapAt(t.windowX, t.windowY); }
-      this.touchLastY = -1;
+      if (!this.touchMoved && this.touchStartX >= 0) {
+        this.onTapAt(this.touchStartX, this.touchStartY);   // 几乎没动 ⇒ tap
+      } else if (this.touchMoved) {
+        this.startMomentum(this.velOffset);   // ★松手惯性
+      }
+      // ★不加自定义边缘滑返——鸿蒙系统边缘手势（返回）自动走 @Entry 的 onBackPress（叠自绘会与系统手势冲突）。
+      this.touchLastY = -1; this.touchMoved = false;
       return;
     }
-    if (e.type === TouchType.Cancel) this.touchLastY = -1;
+    if (e.type === TouchType.Cancel) { this.stopMomentum(); this.touchLastY = -1; this.touchMoved = false; }
   }
 
-  /** 系统返回（含手势）：栈非空则返回上一屏，否则交系统 */
-  onBackPress(): boolean {
-    if (this.navStack.length === 0) { return false; }
-    this.current = this.navStack.pop() as string;
-    this.scrollOffset = 0;
-    this.renderCurrent();
-    return true;
+  /** 按内容位移（vp；正 = offset 增大）滚动一步，钳到 [0,maxScroll]。返回**实际位移**（钳制后）。 */
+  private applyScrollBy(delta: number): number {
+    let next: number = this.scrollOffset + delta;
+    if (next < 0) next = 0;
+    if (next > this.maxScroll) next = this.maxScroll;
+    if (next !== this.scrollOffset) {
+      const actual: number = next - this.scrollOffset;
+      this.scrollOffset = next;
+      scrollRoot(this.scrollOffset);
+      return actual;
+    }
+    return 0;
+  }
+
+  /** 启动惯性（松手时调用）。速度单位 = vp/ms；过小 ⇒ 不启动。指数减速（与 iOS 同式）：v *= rate^dt。 */
+  private startMomentum(v: number): void {
+    this.stopMomentum();
+    if (Math.abs(v) <= MOMENTUM_STOP) return;
+    this.velOffset = v;
+    this.momentumFrames = 0; this.momentumMovedFrames = 0;
+    let last: number = Date.now();
+    this.momentumTimer = setInterval(() => {
+      const now: number = Date.now();
+      const dt: number = now - last; last = now;
+      if (dt <= 0) return;
+      this.momentumFrames++;
+      this.velOffset *= Math.pow(DECEL_RATE, dt);
+      if (Math.abs(this.velOffset) < MOMENTUM_STOP) {
+        hilog.info(DOMAIN, TAG, 'HOST_PAGE_MOMENTUM_END frames=%{public}d moved=%{public}d', this.momentumFrames, this.momentumMovedFrames);
+        this.stopMomentum(); return;
+      }
+      const s: number = this.applyScrollBy(this.velOffset * dt);
+      if (s !== 0) this.momentumMovedFrames++;
+      if (s === 0 && (this.scrollOffset <= 0 || this.scrollOffset >= this.maxScroll)) {
+        hilog.info(DOMAIN, TAG, 'HOST_PAGE_MOMENTUM_END frames=%{public}d moved=%{public}d (bound)', this.momentumFrames, this.momentumMovedFrames);
+        this.stopMomentum();
+      }
+    }, 16);
+  }
+
+  /** 停止惯性（新触摸/点按/销毁时）。 */
+  private stopMomentum(): void {
+    if (this.momentumTimer >= 0) { clearInterval(this.momentumTimer); this.momentumTimer = -1; }
+  }
+
+  aboutToDisappear(): void {
+    this.stopMomentum();
   }
 
   build() {
@@ -234,6 +377,8 @@ struct MainPage {
     .width('100%')
     .height('100%')
     .backgroundColor('#101020')
+    // ★内容铺满**全屏**（含状态栏与手势区）——与 Web viewport（390×844 全屏）同口径；叠加
+    //   `setWindowLayoutFullScreen(true)`（见 aboutToAppear）⇒ 状态栏透明、内容透上来。
     .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
   }
 }
