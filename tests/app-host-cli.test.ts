@@ -136,6 +136,11 @@ describe('★完整宿主 · App DevTools 面板（决策 #672：dev server 可�
       const sse4 = await fetch(`${server.url}/events`).then((r) => r.body!.getReader().read())
       expect(new TextDecoder().decode(sse4.value), 'snapshot.net 记 dev server 请求').toContain('"path":"/ping?screen=detail"')
       expect(await fetch(`${server.url}/nope`).then((r) => r.text())).toContain('devtools')
+      // ★★CPU Profiler 接线回归（决策 #715）：dev bundle 必须**真的**开 profile——esbuild 的
+      //   `define: { __DEV__ }` 只替换**裸标识符**（`globalThis.__DEV__` 替换不到 ⇒ 运行时 undefined
+      //   ⇒ profile 永不生效，本仓实测）。用真 dev 构建产物验"门是开的"，防该类静默复发。
+      const bundle = await fetch(`${server.url}/bundle`).then((r) => r.text())
+      expect(bundle, 'dev bundle 应开 CPU Profiler（__DEV__ 裸标识符被 define 替换）').toContain('profile: true')
     } finally {
       await server.close()
     }
@@ -307,13 +312,20 @@ describe('★完整宿主 · iOS 宿主模板为运行期形态（决策 #683）
     const bridge = fs.readFileSync(path.join(ROOT, 'hosts/shared/bridge/entry-superapp.ts'), 'utf-8')
     expect(bridge, '桥暴露 profile 排空入口').toContain('__proteusSuperappProfile')
     expect(bridge, '桥按 __DEV__ 开 profiling').toContain('profile: true')
+    // ★★回归锁（决策 #715 实测 bug）：esbuild 的 `define: { __DEV__ }` **只替换裸标识符**——
+    //   写成 `globalThis.__DEV__`（属性访问）**不会被替换** ⇒ 运行时 undefined ⇒ profile 永不生效
+    //   （面板 CPU 恒空，用户实测）。⇒ 必须用裸 `__DEV__`，且**不得**残留 `globalThis.__DEV__`。
+    expect(bridge, '桥用裸 __DEV__（define 只替换裸标识符）').toMatch(/\.\.\.\(__DEV__ \? \{ profile: true \}/)
+    // 反面：不得再出现"属性访问式"的坏写法 `globalThis as … { __DEV__`（注释里可提，但代码不得用）
+    expect(bridge, '桥不得用 globalThis 属性访问取 __DEV__').not.toMatch(/globalThis as unknown as \{ __DEV__/)
     // iOS 壳：perfJson 嵌套 profile
     const shell = fs.readFileSync(path.join(shellDir, 'ProteusApp.swift'), 'utf-8')
     expect(shell, 'iOS 取 profile 采样').toContain('__proteusSuperappProfile')
     expect(shell, 'iOS perf 带 profile').toContain('o["profile"] = prof')
-    // Android 壳：recordPerf 嵌套 profile
+    // Android 壳：UI 泵排空 + recordPerf 并入 profile（走 pump 才能捕获点击/切屏）
     const act = fs.readFileSync(path.join(ROOT, 'packages/cli/templates-host/android/src/dev/proteus/layoutcore/AppActivity.java'), 'utf-8')
-    expect(act, 'Android 取 profile 采样').toContain('__proteusSuperappProfile')
+    expect(act, 'Android 排空 profile 采样').toContain('__proteusSuperappProfile')
+    expect(act, 'Android profile 走 UI 泵').toContain('private void pumpProfile(')
     expect(act, 'Android perf 带 profile').toContain('o.put("profile"')
   })
 

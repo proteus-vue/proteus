@@ -17,6 +17,14 @@ import { APP_SCREEN_CONTENT, APP_SCREEN_REGISTRY, APP_RUNTIME_CONTENT } from './
 import { createSuperappRuntime, TAB_BAR_SPEC } from '@proteus-vue/render-backend'
 import type { SuperappRuntime } from '@proteus-vue/render-backend'
 
+// ★★★（决策 #715）**必须引用裸标识符 `__DEV__`**——esbuild 的 `define` 只替换**裸标识符**，
+//   `globalThis.__DEV__`（属性访问）**不会被替换** ⇒ 运行时读到 `undefined`（本仓实测：
+//   CPU Profiler 的 `profile:true` 因写成 `globalThis.__DEV__` 而**永不生效**，prof 恒空）。
+//   声明为 ambient（构建期 esbuild `define` 注入真值；TS 侧只做类型）。所有打 entry-superapp 的
+//   bundler（CLI `app-bundle.ts` / `hosts/android/bridge/build-batch.mjs` / `build-app-stack.mjs`）
+//   **都已 define `__DEV__`** ⇒ 裸引用在各构建路径下都成立。
+declare const __DEV__: boolean
+
 type HostInvoke = (method: string, argsJson: string) => string
 
 /**
@@ -265,7 +273,8 @@ interface SuperappRuntimeHostShape {
         onError: (e: string) => { pushNote(e); try { console.error(e) } catch { /* 无 console（非 dev）⇒ 仅 notes */ } },
         // ★★★CPU Profiler（决策 #715）：dev 构建开阶段耗时自采样（instantiate/flush/dispatch/handler）。
         //   `__DEV__` 由构建注入（dev bundle 为 true，release 为 false）⇒ release 零开销。
-        ...((globalThis as unknown as { __DEV__?: boolean }).__DEV__ ? { profile: true } : {}),
+        //   ★★必须用**裸标识符** `__DEV__`（esbuild `define` 只替换裸标识符；`globalThis.__DEV__` 替换不到）。
+        ...(__DEV__ ? { profile: true } : {}),
       })
       g.__SUPERAPP_RUNTIME__ = runtime
     }
