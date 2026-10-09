@@ -46,6 +46,18 @@ Before you start, prepare the following environment:
 
 If you only run the Web side, Node.js is enough — install WeChat DevTools (Mini Program) and each native toolchain (the three App targets) only when you build that target.
 
+## App targets: signing and native identity
+
+`build --target <target> --package` producing an installer is **not** the same as installing it on a device — the three App targets also need a **signature**, and the installer's **native identity** (package / bundle id) is empty by default:
+
+| Target | Install signing | Native identity (`proteus.config.ts`) |
+|---|---|---|
+| Android | The package is **debug-signed** out of the box (apksigner) — `adb install` works on a device | `targets.android.applicationId`; **empty falls back to the framework default `dev.proteus.layoutcore`** (if a framework sample is already installed you get `INSTALL_FAILED_UPDATE_INCOMPATIBLE` ⇒ `adb uninstall` first or set your own package name) |
+| iOS | Needs **Xcode + a developer certificate / provisioning profile** (`.p12` + `.mobileprovision`) to sign before install | `targets.ios.bundleId` |
+| HarmonyOS | The template defaults to `signingConfigs: []` ⇒ an **unsigned hap**, and `hdc install` fails with `no signature file`; to install, run **DevEco Studio "Automatically generate signature"** and build again (or configure a Huawei debug certificate) | `targets.harmony.bundleName` |
+
+> Before your first App build, set the **package name / Bundle ID** above to your own (use the same reverse-domain across the three targets) to avoid clashing with the framework's bundled samples.
+
 ## Version rationale
 
 - **Base library ≥ 2.29.2**: minimum for the Skyline render engine and `wx.router` custom routing (below it, skyline pages fall back to WebView and custom transitions are unavailable)

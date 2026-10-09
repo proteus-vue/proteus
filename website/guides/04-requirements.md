@@ -46,6 +46,18 @@ npm run dev:web     # 浏览器直接跑 Web 端
 
 只需要跑 Web 端的话，Node.js 就够了——微信开发者工具（小程序端）与各端原生工具链（App 三端）在你要构建对应端时再装也不迟。
 
+## App 端装机：签名与原生身份
+
+`build --target <端> --package` 产出安装包**不等于**能装到设备——App 三端装机还需要**签名**，且安装包的**原生身份**（包名 / Bundle ID）默认留空：
+
+| 端 | 装机签名 | 原生身份（`proteus.config.ts`） |
+|---|---|---|
+| Android | 打包自带 **debug 签名**（apksigner），真机直接 `adb install` 即可 | `targets.android.applicationId`；**未设则回落到框架默认 `dev.proteus.layoutcore`**（若设备已装框架示例会报 `INSTALL_FAILED_UPDATE_INCOMPATIBLE` ⇒ 先 `adb uninstall` 或设为自己的包名） |
+| iOS | 需 **Xcode + 开发者证书 / 描述文件**（`.p12` + `.mobileprovision`）签名后才能装 | `targets.ios.bundleId` |
+| 鸿蒙 | 模板默认 `signingConfigs: []` ⇒ 产出 **unsigned hap**，`hdc install` 报 `no signature file`；装机需在 **DevEco Studio「自动生成签名」**后构建（或配华为调试证书） | `targets.harmony.bundleName` |
+
+> 首次做 App 端前，先把上面的**包名 / Bundle ID** 设成自己的（三端建议同一反向域名），避免与框架自带示例的包名冲突。
+
 ## 版本出处
 
 - **微信基础库 ≥ 2.29.2**：Skyline 渲染引擎与 `wx.router` 自定义路由的最低版本要求（低于此版本 skyline 页面回退 WebView 且自定义转场不可用）
