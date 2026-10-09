@@ -24,7 +24,7 @@ Before you start, prepare the following environment:
 
 | Dependency | Version | Purpose |
 |---|---|---|
-| Node.js | ≥ 18 | Build toolchain (Vite 5 / esbuild / tsx) |
+| Node.js | Web/MP: ≥ 18 · App targets / framework repo: ≥ 22.12 | Build toolchain (Vite 5 / esbuild / tsx); App packaging and framework-repo tests need `require(ESM)` |
 | npm | ships with Node | Dependency management (installing `@proteus-vue/*`) |
 | Vue / Vite / TypeScript | Vue ≥ 3.4 / Vite ≥ 5 / TS ≥ 5.4 | Framework baseline (locked in the template's package.json) |
 | WeChat DevTools | latest stable | Mini-program debugging (needs a real AppID) |
@@ -39,7 +39,9 @@ Before you start, prepare the following environment:
 | Web only (`dev:web` / `build:web`) | Just Node.js | WeChat DevTools / AppID |
 | Debug Mini Program (`dev:mp`) | + WeChat DevTools + AppID (test account OK) | — |
 | Build Mini Program artifacts (`build:mp`) | + base library ≥ 2.29.2 (switch inside DevTools) | — |
-| Build the three App targets (`build --target ios\|android\|harmony`) | + Xcode (iOS) / Android SDK + JDK (Android) / DevEco Studio (HarmonyOS) | Mini Program tooling |
+| Build iOS (`build --target ios`) | + Xcode ≥ 15 (with iOS SDK + `devicectl`) + **Rust toolchain (cargo)** | Mini Program tooling / Android SDK |
+| Build Android (`build --target android`) | + Android SDK (platforms + build-tools) + JDK 17 | Xcode (bundled prebuilt runtime AAR — no cargo needed) |
+| Build HarmonyOS (`build --target harmony`) | + DevEco Studio (with hvigor + hdc) | Mini Program tooling |
 | Release | + real AppID (replace template placeholder `wx0000000000`) | — |
 
 If you only run the Web side, Node.js is enough — install WeChat DevTools (Mini Program) and each native toolchain (the three App targets) only when you build that target.
@@ -48,7 +50,8 @@ If you only run the Web side, Node.js is enough — install WeChat DevTools (Min
 
 - **Base library ≥ 2.29.2**: minimum for the Skyline render engine and `wx.router` custom routing (below it, skyline pages fall back to WebView and custom transitions are unavailable)
 - **Vue ≥ 3.4**: baseline AST shape consumed by the compiler via `@vue/compiler-sfc`
-- **Node ≥ 18**: runtime baseline for the build scripts (tsx / esbuild)
+- **Node ≥ 18 (Web/MP) · ≥ 22.12 (App targets / framework repo)**: `require(ESM)` is stable from Node 22.12, which the framework-repo test suite (jsdom 27) and the App packaging chain rely on. A user project's Web/MP side runs on Node 18; `proteus doctor` treats it as blocking inside the framework repo and downgrades it to a hint in a user project.
+- **Rust toolchain (`cargo`) · iOS only**: iOS packaging cross-compiles the layout kernel (`packages/layout-core-rust` + `packages/host-abi`) with `cargo build --target aarch64-apple-ios`; Android and HarmonyOS use a bundled prebuilt runtime and need no cargo.
 
 ## Next steps
 
