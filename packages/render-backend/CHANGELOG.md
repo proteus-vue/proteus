@@ -1,5 +1,21 @@
 # @proteus-vue/render-backend
 
+## 0.3.0-beta.31
+
+### Patch Changes
+
+- 自动补 bump（scripts/release.mjs）：以下包有本地源码变更但版本号未提升，
+  不 bump 会被 npm 静默跳过——依赖方声明的旧版本号拿到的仍是旧内容。
+
+  - `@proteus-vue/cli`
+  - `@proteus-vue/compiler`
+  - `@proteus-vue/render-backend`
+  - `@proteus-vue/slot-runtime`
+
+- Updated dependencies
+  - @proteus-vue/slot-runtime@0.3.0-beta.31
+  - @proteus-vue/component-ir@0.3.0-beta.31
+
 ## 0.3.0-beta.28
 
 ### Patch Changes

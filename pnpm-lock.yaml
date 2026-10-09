@@ -149,13 +149,13 @@ importers:
         version: 3.5.42(typescript@5.9.3)
     devDependencies:
       '@proteus-vue/cli':
-        specifier: 0.3.0-beta.29
+        specifier: 0.3.0-beta.31
         version: link:../packages/cli
       '@proteus-vue/compiler':
-        specifier: 0.3.0-beta.28
+        specifier: 0.3.0-beta.31
         version: link:../packages/compiler
       '@proteus-vue/plugin-vite':
-        specifier: 0.3.0-beta.28
+        specifier: 0.3.0-beta.31
         version: link:../packages/plugin-vite
       '@types/node':
         specifier: ^20.0.0
@@ -203,7 +203,7 @@ importers:
         specifier: 0.3.0-beta.28
         version: link:../packages/dev-host
       '@proteus-vue/devtools':
-        specifier: 0.3.0-beta.28
+        specifier: 0.3.0-beta.31
         version: link:../packages/devtools
       '@proteus-vue/devtools-runtime':
         specifier: 0.3.0-beta.28
@@ -227,7 +227,7 @@ importers:
         specifier: 0.3.0-beta.28
         version: link:../packages/module
       '@proteus-vue/render-backend':
-        specifier: 0.3.0-beta.28
+        specifier: 0.3.0-beta.31
         version: link:../packages/render-backend
       '@proteus-vue/router':
         specifier: 0.3.0-beta.28
@@ -264,16 +264,16 @@ importers:
         version: 3.5.42(typescript@5.9.3)
     devDependencies:
       '@proteus-vue/cli':
-        specifier: 0.3.0-beta.29
+        specifier: 0.3.0-beta.31
         version: link:../packages/cli
       '@proteus-vue/compiler':
-        specifier: 0.3.0-beta.28
+        specifier: 0.3.0-beta.31
         version: link:../packages/compiler
       '@proteus-vue/hmr':
         specifier: 0.3.0-beta.28
         version: link:../packages/hmr
       '@proteus-vue/plugin-vite':
-        specifier: 0.3.0-beta.28
+        specifier: 0.3.0-beta.31
         version: link:../packages/plugin-vite
       '@types/node':
         specifier: ^20.0.0
@@ -300,10 +300,10 @@ importers:
         specifier: 0.3.0-beta.28
         version: link:../compat-miniprogram
       '@proteus-vue/component-ir':
-        specifier: 0.3.0-beta.28
+        specifier: 0.3.0-beta.31
         version: link:../component-ir
       '@proteus-vue/mcp':
-        specifier: 0.3.0-beta.28
+        specifier: 0.3.0-beta.31
         version: link:../mcp
 
   packages/animation:
@@ -372,13 +372,13 @@ importers:
         specifier: 0.3.0-beta.28
         version: link:../capabilities
       '@proteus-vue/compiler':
-        specifier: 0.3.0-beta.28
+        specifier: 0.3.0-beta.31
         version: link:../compiler
       '@proteus-vue/compiler-backend':
-        specifier: 0.3.0-beta.28
+        specifier: 0.3.0-beta.31
         version: link:../compiler-backend
       '@proteus-vue/component-ir':
-        specifier: 0.3.0-beta.28
+        specifier: 0.3.0-beta.31
         version: link:../component-ir
       '@proteus-vue/consistency':
         specifier: 0.3.0-beta.28
@@ -396,16 +396,16 @@ importers:
         specifier: 0.3.0-beta.28
         version: link:../fluid
       '@proteus-vue/mcp':
-        specifier: 0.3.0-beta.28
+        specifier: 0.3.0-beta.31
         version: link:../mcp
       '@proteus-vue/module':
         specifier: 0.3.0-beta.28
         version: link:../module
       '@proteus-vue/plugin-vite':
-        specifier: 0.3.0-beta.28
+        specifier: 0.3.0-beta.31
         version: link:../plugin-vite
       '@proteus-vue/render-backend':
-        specifier: 0.3.0-beta.28
+        specifier: 0.3.0-beta.31
         version: link:../render-backend
       '@proteus-vue/router':
         specifier: 0.3.0-beta.28
@@ -414,7 +414,7 @@ importers:
         specifier: 0.3.0-beta.28
         version: link:../runtime
       '@proteus-vue/slot-runtime':
-        specifier: 0.3.0-beta.28
+        specifier: 0.3.0-beta.31
         version: link:../slot-runtime
       '@proteus-vue/types':
         specifier: 0.3.0-beta.28
@@ -463,13 +463,13 @@ importers:
         specifier: ^7.29.0
         version: 7.29.7(@babel/core@7.29.7)
       '@proteus-vue/component-ir':
-        specifier: 0.3.0-beta.28
+        specifier: 0.3.0-beta.31
         version: link:../component-ir
       '@proteus-vue/contracts':
         specifier: 0.3.0-beta.28
         version: link:../contracts
       '@proteus-vue/slot-runtime':
-        specifier: 0.3.0-beta.28
+        specifier: 0.3.0-beta.31
         version: link:../slot-runtime
       '@proteus-vue/types':
         specifier: 0.3.0-beta.28
@@ -491,7 +491,7 @@ importers:
   packages/compiler-backend:
     dependencies:
       '@proteus-vue/component-ir':
-        specifier: 0.3.0-beta.28
+        specifier: 0.3.0-beta.31
         version: link:../component-ir
     devDependencies:
       '@proteus-vue/types':
@@ -512,7 +512,7 @@ importers:
         specifier: 0.3.0-beta.28
         version: link:../contracts
       '@proteus-vue/slot-runtime':
-        specifier: 0.3.0-beta.28
+        specifier: 0.3.0-beta.31
         version: link:../slot-runtime
 
   packages/components:
@@ -582,7 +582,7 @@ importers:
         specifier: 0.3.0-beta.28
         version: link:../devtools-runtime
       '@proteus-vue/render-backend':
-        specifier: 0.3.0-beta.28
+        specifier: 0.3.0-beta.31
         version: link:../render-backend
     devDependencies:
       '@types/node':
@@ -648,7 +648,7 @@ importers:
   packages/layout-core:
     dependencies:
       '@proteus-vue/component-ir':
-        specifier: 0.3.0-beta.28
+        specifier: 0.3.0-beta.31
         version: link:../component-ir
 
   packages/mcp:
@@ -657,10 +657,10 @@ importers:
         specifier: ^1.32.1
         version: 1.32.1(zod@4.6.5)
       '@proteus-vue/component-ir':
-        specifier: 0.3.0-beta.28
+        specifier: 0.3.0-beta.31
         version: link:../component-ir
       '@proteus-vue/render-backend':
-        specifier: 0.3.0-beta.28
+        specifier: 0.3.0-beta.31
         version: link:../render-backend
     optionalDependencies:
       happy-dom:
@@ -689,10 +689,10 @@ importers:
   packages/plugin-vite:
     dependencies:
       '@proteus-vue/compiler':
-        specifier: 0.3.0-beta.28
+        specifier: 0.3.0-beta.31
         version: link:../compiler
       '@proteus-vue/compiler-backend':
-        specifier: 0.3.0-beta.28
+        specifier: 0.3.0-beta.31
         version: link:../compiler-backend
       '@proteus-vue/contracts':
         specifier: 0.3.0-beta.28
@@ -735,7 +735,7 @@ importers:
         specifier: 0.3.0-beta.28
         version: link:../animation
       '@proteus-vue/component-ir':
-        specifier: 0.3.0-beta.28
+        specifier: 0.3.0-beta.31
         version: link:../component-ir
       '@proteus-vue/contracts':
         specifier: 0.3.0-beta.28
@@ -744,7 +744,7 @@ importers:
         specifier: 0.3.0-beta.28
         version: link:../router
       '@proteus-vue/slot-runtime':
-        specifier: 0.3.0-beta.28
+        specifier: 0.3.0-beta.31
         version: link:../slot-runtime
       '@vue/runtime-core':
         specifier: ^3.4.0
@@ -813,7 +813,7 @@ importers:
   packages/test-core:
     dependencies:
       '@proteus-vue/compiler':
-        specifier: 0.3.0-beta.28
+        specifier: 0.3.0-beta.31
         version: link:../compiler
     devDependencies:
       '@vue/compiler-sfc':
@@ -933,13 +933,13 @@ importers:
         version: 3.5.42(typescript@5.9.3)
     devDependencies:
       '@proteus-vue/cli':
-        specifier: 0.3.0-beta.29
+        specifier: 0.3.0-beta.31
         version: link:../packages/cli
       '@proteus-vue/compiler':
-        specifier: 0.3.0-beta.28
+        specifier: 0.3.0-beta.31
         version: link:../packages/compiler
       '@proteus-vue/plugin-vite':
-        specifier: 0.3.0-beta.28
+        specifier: 0.3.0-beta.31
         version: link:../packages/plugin-vite
       '@types/node':
         specifier: ^20.0.0
@@ -991,13 +991,13 @@ importers:
         version: 3.5.42(typescript@5.9.3)
     devDependencies:
       '@proteus-vue/cli':
-        specifier: 0.3.0-beta.29
+        specifier: 0.3.0-beta.31
         version: link:../packages/cli
       '@proteus-vue/compiler':
-        specifier: 0.3.0-beta.28
+        specifier: 0.3.0-beta.31
         version: link:../packages/compiler
       '@proteus-vue/plugin-vite':
-        specifier: 0.3.0-beta.28
+        specifier: 0.3.0-beta.31
         version: link:../packages/plugin-vite
       '@types/node':
         specifier: ^20.0.0
@@ -1027,10 +1027,10 @@ importers:
         specifier: 0.3.0-beta.28
         version: link:../packages/api
       '@proteus-vue/compiler':
-        specifier: 0.3.0-beta.28
+        specifier: 0.3.0-beta.31
         version: link:../packages/compiler
       '@proteus-vue/compiler-backend':
-        specifier: 0.3.0-beta.28
+        specifier: 0.3.0-beta.31
         version: link:../packages/compiler-backend
       '@proteus-vue/components':
         specifier: workspace:*
@@ -1054,10 +1054,10 @@ importers:
         specifier: 0.3.0-beta.28
         version: link:../packages/i18n
       '@proteus-vue/render-backend':
-        specifier: 0.3.0-beta.28
+        specifier: 0.3.0-beta.31
         version: link:../packages/render-backend
       '@proteus-vue/slot-runtime':
-        specifier: 0.3.0-beta.28
+        specifier: 0.3.0-beta.31
         version: link:../packages/slot-runtime
       '@proteus-vue/test-ir':
         specifier: 0.3.0-beta.28
@@ -1073,10 +1073,10 @@ importers:
         version: 4.6.4(vue@3.5.42(typescript@5.9.3))
     devDependencies:
       '@proteus-vue/cli':
-        specifier: 0.3.0-beta.29
+        specifier: 0.3.0-beta.31
         version: link:../packages/cli
       '@proteus-vue/plugin-vite':
-        specifier: 0.3.0-beta.28
+        specifier: 0.3.0-beta.31
         version: link:../packages/plugin-vite
       '@proteus-vue/worklet':
         specifier: workspace:*

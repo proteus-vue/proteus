@@ -1,5 +1,11 @@
 # @proteus-vue/layout-core
 
+## 0.3.0-beta.31
+
+### Patch Changes
+
+- @proteus-vue/component-ir@0.3.0-beta.31
+
 ## 0.3.0-beta.28
 
 ### Patch Changes
