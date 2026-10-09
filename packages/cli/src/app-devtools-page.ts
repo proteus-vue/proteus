@@ -405,7 +405,7 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
       + '<div class="mbox"' + (r.width ? ' style="width:' + Math.max(4, Math.min(560, r.width)) + 'px;height:' + Math.max(4, Math.min(200, r.height)) + 'px"' : '') + '><span class="lbl">内核 rect</span></div>'
       + '<div class="bm"><div class="k">rect</div><div class="v">' + escapeHtml(rc) + '</div>' + styles + '</div>';
     var rb = boxEl.querySelector('.breset');
-    if (rb) rb.addEventListener('click', function () { sendCmd('reset', {}); });
+    if (rb) rb.addEventListener('click', function () { doReset(); });
   }
   // ★就地编辑：**回车或失焦**都提交到设备（决策 #704）——失焦是"改完点别处"的惯性动作，不能要求回车。
   //   提交后把值同步回内存树（n[key]），使"失焦提交 → 焦点离开补刷"不会被旧值回滚。
@@ -433,6 +433,16 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
   // ★就地编辑 v1（决策 #702）：改某节点的**绘制属性**（设备上实时预览，重新渲染即还原）
   const EDITABLE = ['backgroundColor', 'color', 'opacity', 'borderRadius', 'borderWidth', 'borderColor'];
   function sendEdit(id, key, value) { sendCmd('edit', { id: id, key: key, value: value }); }
+  // ★重置为项目代码（决策 #704）：① 下发 reset（宿主**强制重挂**还原本地编辑）② 面板**重新取树**复位
+  //   ——就地编辑只改宿主层、不改树 ⇒ 服务器上的当前树即"项目代码态"，重取即复位面板显示。
+  function doReset() {
+    sendCmd('reset', {});
+    fetch('/tree').then(function (r) { return r.json(); }).then(function (t) {
+      boxEditing = false; pendingTree = null;
+      renderTree(t);
+      boxEl.style.display = 'none'; selId = null;   // 收起盒模型（选中已失效）
+    }).catch(function () {});
+  }
   // ★REPL（决策 #701）：输入表达式 ⇒ 设备 JSContext 求值 ⇒ 结果回 Console
   const replEl = $('repl');
   if (replEl) {

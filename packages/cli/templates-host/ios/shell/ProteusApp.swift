@@ -165,11 +165,12 @@ final class ProteusHostDriver {
     private(set) var editsApplied = false
     /// 标记已就地编辑（非项目代码效果）。
     func markEdited() { editsApplied = true }
-    /// ★重置为**项目代码的实时效果**（决策 #704）：重渲当前屏（从项目数据重建树 ⇒ 就地编辑全部消失）。
-    ///   ——就地编辑只改**绘制层**、不改内核树/项目态 ⇒ 重渲即"回到项目代码"。
+    /// ★重置为**项目代码的实时效果**（决策 #704）：**强制重挂**当前屏——就地编辑只改绘制层、
+    ///   不改内核树/项目态，故重挂（从项目内容重建全部层）即把编辑过的层属性覆盖回项目值。
+    ///   ★必须 `remount:true`：`mountScreen` 对同屏短路 ⇒ 普通重渲**不重建层**（#704 实测：重置只出提示、样式没动）。
     func restoreProject() {
         editsApplied = false
-        if let ctx = self.ctx { _ = renderCurrent(ctx) }
+        if let ctx = self.ctx { _ = renderCurrent(ctx, remount: true) }
     }
 
     init(frame: CGRect) {
@@ -246,14 +247,18 @@ final class ProteusHostDriver {
     }
 
     /// 把当前屏真画到屏上（运行期实例化 → 宿主 mount → CALayer）
+    ///   ★`remount`（决策 #704 修）：强制**重挂**当前屏——`runtime.mountScreen` 对**同屏短路**（`if (name===cur) return`）
+    ///     ⇒ 普通重渲**不会重建层** ⇒ 就地编辑改过的层属性残留（"重置"变空操作）。remount 走 `mountScreenInto`
+    ///     （无短路）⇒ 从项目内容重建全部层 ⇒ 就地编辑被覆盖（这正是"重置为项目代码"的实现）。
     @discardableResult
-    func renderCurrent(_ ctx: JSContext? = nil, primary: Bool = true) -> String {
+    func renderCurrent(_ ctx: JSContext? = nil, primary: Bool = true, remount: Bool = false) -> String {
         guard let ctx = ctx ?? self.ctx else { return "{\"ok\":false,\"error\":\"无 JSContext\"}" }
         let t0 = Date()
         let page = currentName(ctx)
         currentPage = page
         let vp = view.bounds.size.width > 0 ? view.bounds.size : UIScreen.main.bounds.size
-        let args: [String: Any] = ["name": page, "viewport": ["width": Double(vp.width), "height": Double(vp.height)]]
+        var args: [String: Any] = ["name": page, "viewport": ["width": Double(vp.width), "height": Double(vp.height)]]
+        if remount { args["remount"] = true }
         guard let ad = try? JSONSerialization.data(withJSONObject: args),
               let argsStr = String(data: ad, encoding: .utf8) else { return "{\"ok\":false}" }
         let argsLit = jsonEscape(argsStr)   // JSON 字符串字面量（带引号）
@@ -626,22 +631,25 @@ final class ProteusSceneDelegate: UIResponder, UIWindowSceneDelegate {
             DispatchQueue.main.async { [weak self] in self?.devOverlay?.flash("DEV 模式 · 改源码保存即热刷") }
         }
         // ★dev 窗口截图（决策 #693，仅 DEV + 显式 env）：把整个 window（含 DEV 角标/提示）渲染到 Documents
-        //   ⇒ 供 CLI/脚本 `devicectl copy from` 取回核验视觉（角标内边距等）。非 DEV / 无 env ⇒ 不做。
+        //   ⇒ 供 CLI/脚本 `devicectl copy from` 取回核验视觉。非 DEV / 无 env ⇒ 不做。
         if ProteusBuildConfig.DEV, ProcessInfo.processInfo.environment["PROTEUS_DEV_SNAPSHOT"] == "1" {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
-                guard let win = self?.window, win.bounds.width > 0 else { return }
-                let fmt = UIGraphicsImageRendererFormat.default(); fmt.scale = UIScreen.main.scale
-                let img = UIGraphicsImageRenderer(bounds: win.bounds, format: fmt).image { _ in
-                    win.drawHierarchy(in: win.bounds, afterScreenUpdates: true)
-                }
-                if let png = img.pngData() {
-                    let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-                    try? png.write(to: dir.appendingPathComponent("proteus-dev-snapshot.png"))
-                    NSLog("[proteus] PROTEUS_DEV_SNAPSHOT_READY")
-                }
-            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in self?.writeDevSnapshot(to: "proteus-dev-snapshot.png") }
         }
         if ProcessInfo.processInfo.environment["PROTEUS_EXIT_AFTER_REPORT"] == "1" { exit(0) }
+    }
+
+    /// 把整窗渲染成 PNG 落 Documents（决策 #693 启动截图 / #704 面板**按需**截图 `type=snapshot`）。
+    func writeDevSnapshot(to name: String) {
+        guard let win = window, win.bounds.width > 0 else { return }
+        let fmt = UIGraphicsImageRendererFormat.default(); fmt.scale = UIScreen.main.scale
+        let img = UIGraphicsImageRenderer(bounds: win.bounds, format: fmt).image { _ in
+            win.drawHierarchy(in: win.bounds, afterScreenUpdates: true)
+        }
+        if let png = img.pngData() {
+            let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            try? png.write(to: dir.appendingPathComponent(name))
+            NSLog("[proteus] PROTEUS_DEV_SNAPSHOT_READY %@", name)
+        }
     }
 
     // ── dev 热刷 + DevTools 上报（决策 #693，对齐 Android #672-#675）──
@@ -736,6 +744,10 @@ final class ProteusSceneDelegate: UIResponder, UIWindowSceneDelegate {
         case "reset":
             // ★面板触发的重置（决策 #704）：与 dev 菜单的"重置为项目代码"同语义
             resetFromMenu()
+        case "snapshot":
+            // ★按需截图（决策 #704）：面板/CLI 下发 ⇒ 落 Documents 供 `devicectl copy from` 取回核验
+            writeDevSnapshot(to: "proteus-dev-shot.png")
+            d.devLog("info", "snapshot ready")
         default:
             break
         }
@@ -745,6 +757,7 @@ final class ProteusSceneDelegate: UIResponder, UIWindowSceneDelegate {
     private func resetFromMenu() {
         guard let d = driver else { return }
         d.restoreProject()
+        lastSentTree = ""   // ★强制下一 tick 重发 /tree ⇒ dev server 面板 Elements/盒模型同步复位（决策 #704）
         devOverlay?.setEdited(false)
         devOverlay?.flash("已重置为项目代码")
         d.devLog("info", "reset · 恢复项目代码效果")
