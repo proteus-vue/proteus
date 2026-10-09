@@ -381,6 +381,35 @@ describe('★完整宿主 · iOS 宿主模板为运行期形态（决策 #683）
     expect(gate, '模板 src 纳入 javac').toContain('templates-host/android/src')
   })
 
+  // ★★Android dev 命令集补齐（决策 #719）：edit/reset + 修 highlight 键名 + DevOverlay 扩展
+  it('Android dev 命令集补齐（决策 #719）：highlight 键名修 + edit/reset + DevOverlay 菜单', () => {
+    const act = fs.readFileSync(path.join(ROOT, 'packages/cli/templates-host/android/src/dev/proteus/layoutcore/AppActivity.java'), 'utf-8')
+    // ① 键名 bug 修：highlight 必须读 dev server 下发的 nodeId（不是 id）
+    expect(act, 'highlight 读 nodeId（对齐 dev server）').toContain('o.optInt("nodeId"')
+    expect(act, 'highlight 不再误读 id').not.toContain('o.optInt("id", 0)')
+    // ② edit（就地编辑 v2）：值强转 + 桥 updatePatches（复用，不需要改 AAR）+ 编辑标记
+    expect(act, 'edit 分支').toContain('"edit".equals(type)')
+    expect(act, '就地编辑核心').toContain('private boolean applyLiveEdit(')
+    expect(act, '值强转/校验').toContain('private static Object coerceLiveEdit(')
+    expect(act, '就地编辑走桥 updatePatches').toContain('draw.updatePatches(')
+    expect(act, '布局枚举封闭集').toContain('"row-reverse", "column-reverse"')
+    expect(act, '编辑标记 setEdited').toContain('devOverlay.setEdited(true)')
+    // ③ reset（重置为项目代码）：remount 透传渲染期（全量重挂）
+    expect(act, 'reset 分支').toContain('"reset".equals(type)')
+    expect(act, 'reset 实现').toContain('private void resetToProject(')
+    expect(act, 'remount 形参').toContain('private void renderCurrent(String stateJson, boolean remount)')
+    expect(act, 'remount 透传运行期').toMatch(/if \(remount\) args\.put\("remount", true\)/)
+    // ④ DevOverlay 扩展：可点角标 + 重置注入 + 编辑状态
+    expect(act, '注入重置动作').toContain('devOverlay.setResetAction(')
+    expect(act, '注入面板 URL').toContain('devOverlay.setPanelUrl(')
+    const ov = fs.readFileSync(path.join(ROOT, 'packages/cli/templates-host/android/src/dev/proteus/layoutcore/DevOverlay.java'), 'utf-8')
+    expect(ov, '角标可点展开').toContain('setOnClickListener')
+    expect(ov, '底部调试面板').toContain('private void buildSheet(')
+    expect(ov, '重置按钮').toContain('重置为项目代码')
+    expect(ov, '编辑状态标记').toContain('void setEdited(')
+    expect(ov, '重置回调注入').toContain('void setResetAction(')
+  })
+
   // ★决策 #704：失焦即生效 + 宿主 dev 菜单（状态提示 + 重置）
   it('就地编辑可用性（决策 #704）：失焦即提交 + dev 菜单重置 + 面板重置按钮', () => {
     const page = fs.readFileSync(path.join(ROOT, 'packages/cli/src/app-devtools-page.ts'), 'utf-8')
