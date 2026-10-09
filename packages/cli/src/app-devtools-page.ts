@@ -113,6 +113,13 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
 
   /* ── 通用面板（带"外框"观感）── */
   .panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:auto;max-height:340px}
+  /* ★REPL 输入（决策 #701）：在设备上求值 */
+  .repl{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);border-bottom:none;border-radius:var(--r) var(--r) 0 0;padding:7px 10px}
+  .repl-p{color:var(--brand2);font-weight:700;font-family:ui-monospace,Menlo,monospace}
+  .repl input{flex:1;min-width:0;background:transparent;border:none;outline:none;color:var(--ink);font-size:12.5px;font-family:ui-monospace,Menlo,monospace}
+  .repl input::placeholder{color:var(--faint)}
+  /* REPL 紧邻的 Console 面板：上圆角去掉，与输入框连成一体 */
+  .repl + .panel{border-radius:0 0 var(--r) var(--r)}
   .empty{display:flex;align-items:center;gap:10px;color:var(--dim);padding:var(--s5) var(--s4);font-size:12.5px}
   .empty::before{content:"○";color:var(--faint);font-size:15px}
 
@@ -213,7 +220,9 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
     </div>
     <div>
       <h2>Console · 设备日志<span class="flt" data-flt="con"><b class="on" data-ch="all">全部</b><b data-ch="project">项目</b><b data-ch="native">原生</b></span></h2>
-      <div class="panel" id="con"><div class="empty">暂无日志…在页面里 console.log 或改源码即出现。</div></div>
+      <!-- ★REPL 输入（决策 #701）：在**设备** JSContext 上求值，结果回 Console -->
+      <div class="repl"><span class="repl-p">›</span><input id="repl" type="text" placeholder="在设备上求值表达式（如 __proteusSuperappRuntimeCurrent()）…" spellcheck="false" autocomplete="off" /></div>
+      <div class="panel" id="con"><div class="empty">暂无日志…在页面里 console.log、上面输入框求值、或改源码即出现。</div></div>
     </div>
   </div>
 
@@ -247,6 +256,8 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
       <span class="ep"><b>GET /trace</b>事件 trace</span>
       <span class="ep"><b>GET /log</b>宿主日志</span>
       <span class="ep"><b>GET /bridge</b>桥调用</span>
+      <span class="ep"><b>GET /panelcmd</b>面板→设备命令（入队）</span>
+      <span class="ep"><b>GET /cmd</b>宿主取命令（轮询）</span>
     </div>
   </div>
 </main>
@@ -274,8 +285,7 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
       + '<span class="meta">' + (e.bytes ? Math.round(e.bytes / 1024) + ' KB · ' : '') + (e.ms || 0) + 'ms · ' + fmtTime(e.time) + '</span>';
     return r;
   }
-  const stCls = (s) => s >= 500 ? 'err' : s >= 400 ? 'warn' : 'ok';
-  const chTag = (ch) => '<span class="ch ch-' + (ch === 'project' ? 'project' : 'native') + '">' + (ch === 'project' ? '项目' : '原生') + '</span>';
+  const stCls = (s) => s >= 500 ? 'err' : s >= 400 ? 'warn' : 'ok';  const chTag = (ch) => '<span class="ch ch-' + (ch === 'project' ? 'project' : 'native') + '">' + (ch === 'project' ? '项目' : '原生') + '</span>';
   function addNet(e, isNew) {
     const r = document.createElement('div');
     r.className = 'nrow' + (isNew ? ' new' : '');
@@ -352,7 +362,7 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
     const nodes = (treeData && treeData.nodes) || [];
     return nodes.find((n) => n.id === id) || null;
   }
-  function selectNode(id) { selId = id; renderBox(findNode(id)); renderTree(treeData); }
+  function selectNode(id) { selId = id; renderBox(findNode(id)); renderTree(treeData); sendHighlight(id); }
   // 盒模型：内核 rect（x/y/w/h）+ 关键样式
   function renderBox(n) {
     if (!n) { boxEl.style.display = 'none'; return; }
@@ -366,10 +376,25 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
       + '<div class="bm"><div class="k">rect</div><div class="v">' + escapeHtml(rc) + '</div>' + styles + '</div>';
   }
   // ── 事件 trace（决策 #675）──
+  // ★面板→设备命令（决策 #701）：选中节点 ⇒ 下发 highlight（设备屏上高亮该节点）
+  function sendCmd(type, params) {
+    const q = new URLSearchParams(Object.assign({ type: type }, params || {}));
+    fetch('/panelcmd?' + q.toString()).catch(function () {});
+  }
+  function sendHighlight(id) { sendCmd('highlight', { id: id }); }
+  // ★REPL（决策 #701）：输入表达式 ⇒ 设备 JSContext 求值 ⇒ 结果回 Console
+  const replEl = $('repl');
+  if (replEl) {
+    replEl.addEventListener('keydown', function (ev) {
+      if (ev.key !== 'Enter') return;
+      var expr = replEl.value.trim(); if (!expr) return;
+      sendCmd('eval', { expr: expr });
+      replEl.value = '';
+    });
+  }
   function addEvent(e, isNew) {
     const r = document.createElement('div');
-    r.className = 'crow lv-info' + (isNew ? ' new' : '');
-    const chain = (e.chain || []).join(' → ');
+    r.className = 'crow lv-info' + (isNew ? ' new' : '');    const chain = (e.chain || []).join(' → ');
     r.innerHTML = '<span class="t">' + fmtTime(e.time) + '</span><span class="x">'
       + escapeHtml(e.gesture) + '  target=#' + e.id + (chain ? '  chain[' + escapeHtml(chain) + ']' : '')
       + '  ' + (e.handled ? '✅handled' : '∅') + ((e.fired || []).length ? '  fired[' + (e.fired || []).join(',') + ']' : '') + '</span>';

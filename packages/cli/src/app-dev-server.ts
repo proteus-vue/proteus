@@ -121,6 +121,8 @@ export async function startAppDevServer(opts: AppDevServerOptions): Promise<AppD
   interface NetEvent { channel: 'native' | 'project'; method: string; path: string; status: number; bytes: number; ms: number; time: number }
   interface ConsoleEvent { channel: 'native' | 'project'; level: string; text: string; time: number }
   interface TraceEvent { gesture: string; id: number; chain: number[]; handled: boolean; fired: number[]; time: number }
+  /** ★面板→设备命令（决策 #701）：`highlight`（高亮节点）/ `eval`（设备上跑 JS，REPL）/ `edit`（就地改样式）。 */
+  interface CmdEvent { type: string; nodeId?: number; expr?: string; time: number }
   const events: RebuildEvent[] = []         // 环形（近 50 条）重建时间线
   const netLog: NetEvent[] = []             // 环形网络日志（dev server 收到的请求——它就是"网络源头"）
   const consoleLog: ConsoleEvent[] = []     // 环形控制台日志（宿主转发：JS console + 宿主 dev 事件）
@@ -130,6 +132,7 @@ export async function startAppDevServer(opts: AppDevServerOptions): Promise<AppD
   let lastHost: HostState | null = null
   let lastTree: unknown = null              // ★元素内省（决策 #674）：当前屏实例化节点树（含 rects 几何）
   let lastInspect: { id: number; time: number } | null = null   // ★元素点选（决策 #675）
+  let pendingCmd: CmdEvent | null = null                        // ★面板→设备命令（决策 #701，one-shot）
   const sseClients = new Set<import('node:http').ServerResponse>()
 
   /** 向所有 SSE 客户端广播一条事件。 */
@@ -319,8 +322,35 @@ export async function startAppDevServer(opts: AppDevServerOptions): Promise<AppD
       res.end('ok')
       return
     }
+    // ★★★面板→设备**命令通道**（决策 #701）：面板（浏览器）入队命令，宿主**轮询** `/cmd` 取走执行。
+    //   【为什么需要】此前 DevTools 数据是**单向**（设备/宿主 → dev server → 面板）；要"元素高亮/就地编辑/
+    //   REPL"这类面板→设备动作，必须有反向通道。宿主本就每 1.5s 轮询 `/version`（热刷）⇒ 顺手轮询 `/cmd`。
+    //   ① `POST/GET /panelcmd?type=<t>&...`：面板**入队**（覆盖式——同类型只留最新，避免积压）；
+    //   ② `GET /cmd`：宿主轮询**取走**（one-shot：取一次即清空，避免重复执行）。
+    if (url === '/panelcmd') {
+      const q = new URLSearchParams(query ?? '')
+      const type = q.get('type') ?? ''
+      const cmd: CmdEvent = { type, time: Date.now() }
+      if (q.get('id') != null && q.get('id') !== '') cmd.nodeId = Number(q.get('id'))
+      if (q.get('expr') != null) cmd.expr = q.get('expr') ?? ''
+      if (type) {
+        pendingCmd = cmd
+        // ★SSE 事件的 `type` 是**事件判别符**（'cmd'）——命令种类另用 `kind`，避免与 cmd.type 撞键
+        broadcast({ type: 'cmd', kind: cmd.type, nodeId: cmd.nodeId, expr: cmd.expr, time: cmd.time })
+      }
+      res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' })
+      res.end(JSON.stringify({ ok: !!type, queued: cmd }))
+      return
+    }
+    if (url === '/cmd') {
+      const c = pendingCmd
+      pendingCmd = null                       // ★one-shot：取走即清（宿主每 tick 取一次）
+      res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' })
+      res.end(JSON.stringify(c ?? {}))
+      return
+    }
     res.writeHead(404, { 'content-type': 'text/plain' })
-    res.end('proteus dev server: / (devtools) · /health · /version · /bundle · /events · /ping · /tree · /inspect · /trace · /log · /bridge')
+    res.end('proteus dev server: / (devtools) · /health · /version · /bundle · /events · /ping · /tree · /inspect · /trace · /log · /bridge · /panelcmd · /cmd')
   })
 
   await new Promise<void>((resolve) => server.listen(port, host, () => resolve()))
