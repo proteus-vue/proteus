@@ -250,6 +250,9 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
   .craw .cbar{height:7px;border-radius:4px;background:var(--brand);min-width:2px;justify-self:start}
   .craw .cmeta{text-align:right;color:var(--dim);font-size:11px}
   .craw.ctop .cbar{background:var(--err)}
+  /* ★原生渲染阶段条（决策 #718）：用暖色区分 JS 阶段（蓝）与原生内核阶段（橙） */
+  .craw .cbar.cbar-native{background:var(--warn)}
+  .sec-note{color:var(--faint);font-weight:400;font-size:10.5px;margin-left:6px;letter-spacing:0}
   /* ★CPU ⇄ 事件链联动（决策 #717）：行可点（跳窗口详情）；详情里聚焦行高亮 */
   .craw.clink{cursor:pointer}
   .craw.clink:hover{background:var(--surface-3)}
@@ -847,15 +850,28 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
             + '<div class="cmeta">' + e.totalMs.toFixed(1) + 'ms · ×' + e.count + (e.maxMs ? ' · max ' + e.maxMs.toFixed(1) : '') + '</div></div>';
         }).join('')
       : '<div class="jrow jempty">该窗口无运行期 CPU 采样（本次心跳未带 profile——确认 dev 构建已开 CPU Profiler）。</div>';
-    var dps = Object.keys(p).filter(function (k) { return k !== 'profile'; }).map(function (k) { return '<span class="dpill"><b>' + escapeHtml(k) + '</b>' + escapeHtml(String(p[k])) + '</span>'; }).join('');
+    // ★★原生渲染阶段（决策 #718）：JS profile 只覆盖 JS 侧；"切屏掉帧"的大头在**原生 mount**
+    //   （Rust 布局 + 建层），**不在** JS profile 里。perf.render = 桥/壳上报的分段耗时（端无关形状 [{label,ms}]）。
+    var rarr = p.render || [];
+    var rmax = 1; rarr.forEach(function (x) { if (x.ms > rmax) rmax = x.ms; });
+    var renderHtml = rarr.length
+      ? '<div class="jd-rows jd-cpu">' + rarr.map(function (x) {
+          var pct = Math.max(4, Math.round((x.ms / rmax) * 100));
+          return '<div class="craw"><div class="cl">' + escapeHtml(x.label) + '</div>'
+            + '<div class="cbar cbar-native" style="width:' + pct + '%"></div>'
+            + '<div class="cmeta">' + Number(x.ms).toFixed(1) + 'ms</div></div>';
+        }).join('') + '</div>'
+      : '';
+    var dps = Object.keys(p).filter(function (k) { return k !== 'profile' && k !== 'render'; }).map(function (k) { return '<span class="dpill"><b>' + escapeHtml(k) + '</b>' + escapeHtml(String(p[k])) + '</span>'; }).join('');
     var jankN = Number(p.dropped) || 0;
     box.innerHTML = '<div class="nd-h">' + (jankN > 0 ? '<span class="jdot"></span>' : '<span class="cdot"></span>')
       + '<span class="nd-m">窗口详情</span>'
-      + '<span class="nd-path">' + (s.t ? fmtTime(s.t) : '') + ' · 前 ' + (WIN / 1000) + 's 的事件链 + 本窗口 CPU 明细</span>'
+      + '<span class="nd-path">' + (s.t ? fmtTime(s.t) : '') + ' · 前 ' + (WIN / 1000) + 's 的事件链 + 运行期 CPU / 原生渲染明细</span>'
       + (jankN > 0 ? '<span class="nd-st err">掉帧 ' + jankN + ' 帧</span>' : '<span class="nd-st ok">无掉帧</span>')
       + '<button class="nd-close" title="关闭">✕</button></div>'
       + '<div class="jd-pills">' + dps + '</div>'
-      + '<div class="jd-sec">运行期 CPU 阶段（本窗口）' + (focus ? ' · 已聚焦 <b style="color:var(--brand)">' + escapeHtml(focus) + '</b>' : '') + '</div>'
+      + (renderHtml ? '<div class="jd-sec">原生渲染阶段（本窗口 · 内核回执）  <span class="sec-note">切屏掉帧的大头通常在这里（JS profile 覆盖不到）</span></div>' + renderHtml : '')
+      + '<div class="jd-sec">运行期 CPU 阶段（本窗口 · JS）' + (focus ? ' · 已聚焦 <b style="color:var(--brand)">' + escapeHtml(focus) + '</b>' : '') + '</div>'
       + '<div class="jd-rows jd-cpu">' + cpuHtml + '</div>'
       + '<div class="jd-sec">触发窗口 · 事件链（同时段，不断言因果）</div>'
       + '<div class="jd-rows">' + relHtml + '</div>'

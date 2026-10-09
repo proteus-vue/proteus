@@ -336,12 +336,33 @@ describe('★完整宿主 · iOS 宿主模板为运行期形态（决策 #683）
     const page = fs.readFileSync(path.join(ROOT, 'packages/cli/src/app-devtools-page.ts'), 'utf-8')
     expect(page, '统一窗口详情入口').toContain('function showWindowDetail(')
     expect(page, '旧掉帧详情已并入（不再单列 showJankDetail）').not.toContain('function showJankDetail(')
-    expect(page, '窗口详情含本窗口 CPU 明细段').toContain('运行期 CPU 阶段（本窗口）')
+    expect(page, '窗口详情含本窗口 CPU 明细段').toContain('运行期 CPU 阶段（本窗口 · JS）')
     expect(page, '窗口→样本反查（CPU 行点击定位）').toContain('function latestSampleWithStage(')
     expect(page, 'CPU 行可点').toMatch(/class="craw clink/)
     expect(page, 'CPU 行点击打开窗口详情').toMatch(/latestSampleWithStage\(r0\.dataset\.label\)[\s\S]*?showWindowDetail\(/)
     expect(page, '掉帧柱也开同一窗口详情').toMatch(/pbar\.jank[\s\S]*?showWindowDetail\(Number\(b\.dataset\.i\)\)/)
     expect(page, '聚焦行高亮样式').toContain('.craw.cfocus')
+  })
+
+  // ★★原生渲染阶段进窗口详情（决策 #718）：切屏掉帧的大头在原生 mount（JS profile 覆盖不到）
+  it('原生渲染阶段进窗口详情（决策 #718）：iOS/Android 上报 perf.render + 面板原生段', () => {
+    const page = fs.readFileSync(path.join(ROOT, 'packages/cli/src/app-devtools-page.ts'), 'utf-8')
+    expect(page, '面板渲染原生段').toContain('原生渲染阶段（本窗口')
+    expect(page, '原生段数据源 perf.render').toContain('var rarr = p.render ||')
+    expect(page, '原生条用暖色区分').toContain('cbar-native')
+    // iOS 壳：lastTiming → perf.render
+    const shell = fs.readFileSync(path.join(shellDir, 'ProteusApp.swift'), 'utf-8')
+    expect(shell, 'iOS 上报原生分段').toContain('o["render"] = arr')
+    expect(shell, 'iOS 排空式取原生分段（防陈旧读数）').toContain('bridge.consumeRenderTiming()')
+    const rt718 = fs.readFileSync(path.join(ROOT, 'hosts/ios/ProteusHost/runtime/selfdraw-scene.swift'), 'utf-8')
+    expect(rt718, 'iOS 消费口清脏').toContain('func consumeRenderTiming()')
+    // ★顺带：删死代码 lastTreeJson（只写不读，占渲染热路径）——断言**代码**已无声明/赋值（注释里可提）
+    expect(shell, 'iOS 死代码 lastTreeJson 已删').not.toMatch(/var lastTreeJson|lastTreeJson\s*=/)
+    // Android 壳：内核回执分段 → perf.render（排空式 takePerfJsonForPing）
+    const act = fs.readFileSync(path.join(ROOT, 'packages/cli/templates-host/android/src/dev/proteus/layoutcore/AppActivity.java'), 'utf-8')
+    expect(act, 'Android 上报原生分段').toContain('devRenderJson = rarr.toString()')
+    expect(act, 'Android 取内核分段').toContain('draw.lastLayoutMs')
+    expect(act, 'Android 排空式取原生分段（防陈旧读数）').toContain('private String takePerfJsonForPing()')
   })
 
   // ★面板→设备命令（决策 #701/#702 安卓腿）：Android 宿主也接 /cmd + 元素高亮 + REPL

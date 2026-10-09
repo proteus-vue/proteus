@@ -64,6 +64,9 @@ public final class AppActivity extends Activity {
     private volatile String devPerfJson = "{}";
     /** ★★CPU Profiler 采样（决策 #715）：UI 泵排空后存此（"{}"=无），并入 perf（面板 `perf.profile`）。 */
     private volatile String devProfileJson = "";
+    /** ★★原生渲染分段（决策 #718）：每次渲染后由 `recordPerf` 写入（JSON 数组 [{label,ms}]），
+     *   心跳 `takePerfJsonForPing()` 取用一次即清（排空式 ⇒ 空闲窗口不误报上次 mount 的耗时）。 */
+    private volatile String devRenderJson = "";
     /** 事件 trace 出箱（UI 线程抽取 → watch 线程上报；决策 #675） */
     private final java.util.List<String[]> traceOutbox = java.util.Collections.synchronizedList(new java.util.ArrayList<String[]>());
     /** 桥调用日志出箱（决策 #679：JS→原生 invoke → 面板 Network·项目通道） */
@@ -394,6 +397,18 @@ public final class AppActivity extends Activity {
             // ★重排 / patch 计数（内核回执累计，决策 #676）
             o.put("relayout", draw.relayoutTotal);
             o.put("patches", draw.patchAppliedTotal);
+            // ★★★原生渲染阶段分解（决策 #718）：JS profile 只覆盖 JS 侧；"切屏掉帧"的大头是
+            //   **原生 mount**（Rust 布局 + 建层）——**不在** JS profile 里（实测切屏 renderMs 64ms 而
+            //   JS 阶段仅 3ms）。⇒ 把内核回执的分段耗时放进**独立的 `devRenderJson`**（不塞进缓存的
+            //   devPerfJson——否则每个 tick 都重发上次 mount 的分段，空闲窗口也报 65ms，正是 #710 那类
+            //   「恒定读数」陷阱）。由 `takePerfJsonForPing()` 取用一次即清（排空式）。
+            //   ★形状 [{label,ms}]（端无关，与 iOS `lastTiming`/`consumeRenderTiming` 同族）。
+            try {
+                org.json.JSONArray rarr = new org.json.JSONArray();
+                if (draw.lastLayoutMs > 0) rarr.put(new JSONObject().put("label", "layout").put("ms", Math.round(draw.lastLayoutMs * 100) / 100.0));
+                if (draw.lastMeasureMs > 0) rarr.put(new JSONObject().put("label", "measure").put("ms", Math.round(draw.lastMeasureMs * 100) / 100.0));
+                if (rarr.length() > 0) devRenderJson = rarr.toString();
+            } catch (Throwable ignored) { }
             // ★★★CPU Profiler（决策 #715 · Android 腿）：`profile` 由 **UI 泵**（logPump 每 400ms）
             //   排空后存 `devProfileJson`，此处并入 perf（面板消费 `perf.profile`）——drain 走 pump
             //   才能捕获"点击/切屏"（它们不经 renderCurrent）；与 iOS 每 tick 排空同语义。
@@ -403,6 +418,20 @@ public final class AppActivity extends Activity {
             o.put("t", System.currentTimeMillis());
             devPerfJson = o.toString();
         } catch (Throwable ignored) { }
+    }
+
+    /** ★★拼"本次心跳的 perf"（决策 #718）：把**新发生的那次渲染**的原生分段（`devRenderJson`）
+     *   并入缓存的 `devPerfJson`，并**取用一次即清**（排空式）——空闲窗口不带 render、不误报。 */
+    private String takePerfJsonForPing() {
+        String base = devPerfJson;
+        String rr = devRenderJson;
+        if (rr == null || rr.isEmpty()) return base;
+        devRenderJson = "";
+        try {
+            JSONObject o = new JSONObject(base);
+            o.put("render", new org.json.JSONArray(rr));
+            return o.toString();
+        } catch (Throwable t) { return base; }
     }
 
     /** 采集设备环境（决策 #674）——dev 面板展示，便于定位"只有某机型复现"的问题。JSON 串。 */
@@ -451,7 +480,7 @@ public final class AppActivity extends Activity {
                     try {
                         httpGetText(base + "/ping?screen=" + java.net.URLEncoder.encode(lastScreenName, "UTF-8")
                             + "&env=" + java.net.URLEncoder.encode(devEnvJson, "UTF-8")
-                            + "&perf=" + java.net.URLEncoder.encode(devPerfJson, "UTF-8"));
+                            + "&perf=" + java.net.URLEncoder.encode(takePerfJsonForPing(), "UTF-8"));
                     } catch (Throwable ignored) { /* 心跳尽力而为 */ }
                     flushHostLog(base);   // ★把设备日志推到面板 Console（决策 #673）
                     flushTrace(base);     // ★把事件 trace 推到面板（决策 #675）
