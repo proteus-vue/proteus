@@ -874,15 +874,19 @@ struct MainPage {
         .padding({ top: this.chromeTopVp + 34 })
       }
 
-      // ④ ★dev 底部 sheet（决策 #732/#734/#735，**逐像素对齐 iOS `ProteusDevOverlay.buildSheet`**）：
-      //   标准弹窗语义（三端统一）：**遮罩 + 点外关 + 把手下拉关闭** + 点胶囊 toggle + 重置按钮。
-      //   面板本体：上两角圆角 16 + grab 把手(36×4 r2 白20%) + `DevTools`14bold + 状态12 + 按钮(圆角10高44) + URL11。
-      if (this.devCapsule && this.sheetOn) {
-        Stack() {
-          // 遮罩（全屏 40% 黑）：**点外关**（决策 #735）
+      // ④ ★dev 底部 sheet（决策 #732/#734/#735/#736）：标准弹窗语义 + **丝滑转场**（对齐 Android/iOS 220/200ms）。
+      //   ★★转场实现（决策 #736，此前**瞬时切换无动画**）：**持久容器 `Stack`**（Bottom 对齐、`hitTestBehavior(None)`
+      //     ⇒ 无子节点时不拦触摸）+ **条件子节点各自 `.transition()`**——遮罩 `opacity` 淡入淡出、面板 `move(BOTTOM)`
+      //     滑入滑出（asymmetric：出现 220ms / 收起 200ms，`Curve.EaseInOut` 与两端一致）。
+      //     ★为什么"持久容器+条件子节点"而不是"条件容器"：转场只作用于**被增删的节点**——若把 `if` 套在整个
+      //     `Stack` 上，增删的是 Stack（子节点转场不触发）；把 `if` 放进持久 Stack 内 ⇒ 遮罩/面板各自增删 ⇒ 各自转场。
+      Stack() {
+        if (this.devCapsule && this.sheetOn) {
+          // 遮罩（全屏 40% 黑）：淡入淡出 + **点外关**
           Column()
             .width('100%').height('100%').backgroundColor('#66000000')
-            .onClick(() => { this.sheetOn = false; this.sheetPanDy = 0; })
+            .onClick(() => { this.closeSheet(); })
+            .transition(TransitionEffect.opacity(0).animation({ duration: 220, curve: Curve.EaseInOut }))
           // 面板本体（贴底；把手下拉 ⇒ `translate(y)` 跟随，松手超阈值/快滑 ⇒ 关）
           Column() {
             // header（grab + title）——**可下拉关闭**（决策 #735；仅 header 可拖，不与按钮 tap 冲突）
@@ -897,8 +901,13 @@ struct MainPage {
               PanGesture({ direction: PanDirection.Vertical })
                 .onActionUpdate((e: GestureEvent) => { this.sheetPanDy = Math.max(0, e.offsetY); })
                 .onActionEnd((e: GestureEvent) => {
-                  if (this.sheetPanDy > 80 || e.velocityY > 800) { this.sheetOn = false; }
-                  this.sheetPanDy = 0;
+                  if (this.sheetPanDy > 80 || e.velocityY > 800) {
+                    this.closeSheet();   // 超阈值：带转场收起（从当前位移滑出，连贯）
+                  } else {
+                    // 未超阈值：动画弹回原位（丝滑，而非瞬跳）
+                    try { this.getUIContext().animateTo({ duration: 200, curve: Curve.EaseInOut }, () => { this.sheetPanDy = 0; }); }
+                    catch (e) { this.sheetPanDy = 0; }
+                  }
                 })
             )
             Text(this.edited ? '⚠ 渲染状态：含就地编辑 — 非项目代码效果' : '渲染状态：项目代码（实时）')
@@ -908,7 +917,7 @@ struct MainPage {
               .fontSize(14).fontWeight(FontWeight.Bold).fontColor('#FFFFFF')
               .backgroundColor('#2F6BFF').width('100%').height(44)
               .margin({ top: 14 })
-              .onClick(() => { this.resetAll(); this.sheetOn = false; this.sheetPanDy = 0; })
+              .onClick(() => { this.resetAll(); this.closeSheet(); })
             Text(this.panelUrl.length > 0 ? ('面板：' + this.panelUrl + '（浏览器打开·元素高亮/就地编辑/REPL）') : '面板：浏览器打开 dev server 地址')
               .fontSize(11).fontColor('#80FFFFFF').width('100%').margin({ top: 12 })
           }
@@ -918,9 +927,15 @@ struct MainPage {
           .borderRadius({ topLeft: 16, topRight: 16 })   // ★仅上两角（对齐 iOS）
           .translate({ y: this.sheetPanDy })             // ★下拉跟随（决策 #735）
           .onClick(() => { /* 吞掉 sheet 内点击 */ })
+          // ★滑入滑出转场（出现 220ms / 收起 200ms，从底边进出——对齐两端）
+          .transition(TransitionEffect.asymmetric(
+            TransitionEffect.move(TransitionEdge.BOTTOM).animation({ duration: 220, curve: Curve.EaseInOut }),
+            TransitionEffect.move(TransitionEdge.BOTTOM).animation({ duration: 200, curve: Curve.EaseInOut }),
+          ))
         }
-        .width('100%').height('100%').alignContent(Alignment.Bottom)
       }
+      .width('100%').height('100%').alignContent(Alignment.Bottom)
+      .hitTestBehavior(HitTestMode.None)   // 容器自身不拦触摸（无子节点即穿透）；子节点（遮罩）照常拦
 
       // ⑤ ★启动占位（决策 #731，对齐 Android LaunchPlaceholder / iOS）：浅底 + App 名 + 品牌蓝转圈，**居中**
       if (this.loading) {
@@ -988,7 +1003,10 @@ struct MainPage {
   }
 
   /** ★dev 胶囊点击 → 底部 sheet 开关（对齐 Android/iOS `toggleSheet`）。 */
-  private toggleSheet(): void { this.sheetOn = !this.sheetOn; }
+  /** ★打开/关闭 sheet（决策 #736）：增删条件子节点 ⇒ 触发各自 `.transition()`（滑入/淡入）——对齐两端动画。 */
+  private openSheet(): void { this.sheetOn = true; }
+  private closeSheet(): void { this.sheetPanDy = 0; this.sheetOn = false; }
+  private toggleSheet(): void { if (this.sheetOn) { this.closeSheet(); } else { this.openSheet(); } }
 
   /** sheet「重置为项目代码」——与面板 `/cmd reset` **同一实现**（清就地编辑 + 重渲 + 清编辑态）。 */
   private resetAll(): void {
