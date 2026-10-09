@@ -21,6 +21,9 @@ ROOT="$(cd "$HERE/../.." && pwd)"
 SRC_DIR="$HERE/app/src/main/java/dev/proteus/layoutcore"
 # ★HA0.5：平台适配层（字体/度量等，`platform/android`）与宿主源码**一起编译**（宿主引用它）
 PLATFORM_JAVA_DIR="$ROOT/platform/android/proteus-platform/src"
+# ★★CLI 宿主**模板**（`templates-host/android/src`）也一起编译——此前它**无任何本地编译判据**
+#   （与 iOS 的 `check-cli-host-compile` 同族盲区）：模板改动只能靠真机打包才暴露编译错。
+CLI_TPL_JAVA_DIR="$ROOT/packages/cli/templates-host/android/src"
 OUT="$(mktemp -d)"
 trap 'rm -rf "$OUT"' EXIT
 
@@ -55,7 +58,7 @@ echo "    android.jar: $ANDROID_JAR"
 #   打出的 APK 不含新测试组，真机跑完判据全缺——"假绿门禁"比没有门禁更贵（排查一轮）。
 JAVAC_LOG="$OUT/javac.log"
 if ! "$JDK/bin/javac" -nowarn -encoding UTF-8 -d "$OUT" -cp "$ANDROID_JAR" \
-    $(find "$SRC_DIR" "$PLATFORM_JAVA_DIR" -name '*.java') > "$JAVAC_LOG" 2>&1; then
+    $(find "$SRC_DIR" "$PLATFORM_JAVA_DIR" "$CLI_TPL_JAVA_DIR" -name '*.java') > "$JAVAC_LOG" 2>&1; then
   grep -vE '^注:|^Note:|使用或覆盖了已过时的 API|uses or overrides a deprecated API|unchecked|deprecat' "$JAVAC_LOG" || true
   echo "✗ javac 编译失败（退出码非 0，见上方输出）"
   exit 1

@@ -464,6 +464,20 @@ public class ProteusHostView extends ViewGroup {
     /** 节点 id → Rust 几何（**位置/尺寸的唯一来源**；子 View 的 measure/layout 都用它） */
     private final Map<Integer, RectF> nativeRects = new HashMap<>();
 
+    /** ★★DevTools 元素高亮（决策 #701 安卓腿）：待高亮的**屏幕坐标**矩形（null = 无）。绘制在 onDraw 末尾。 */
+    private RectF devHighlight = null;
+    private final android.graphics.Paint devHighlightPaint = new android.graphics.Paint();
+
+    /** ★DevTools 元素高亮（决策 #701）：设置/清除高亮矩形（**屏幕坐标**——不经滚动平移）。 */
+    public void setDevHighlight(RectF r) { this.devHighlight = r; postInvalidateOnAnimation(); }
+
+    /** ★DevTools 元素高亮（决策 #701）：入参为**内容坐标** rect（来自内核）⇒ 本视图减去自身滚动得屏幕坐标。 */
+    public void setDevHighlightFromContent(RectF content) {
+        if (content == null) { setDevHighlight(null); return; }
+        setDevHighlight(new RectF(content.left - scrollX, content.top - scrollY,
+                content.right - scrollX, content.bottom - scrollY));
+    }
+
     /* ══════════ ★★字体族（与 iOS `SelfDrawBridge.font(size:weight:family:)` 同契约） ══════════ */
 
     /**
@@ -2364,8 +2378,7 @@ public class ProteusHostView extends ViewGroup {
     @Override
     protected void onDraw(Canvas canvas) {
         onDrawCount++;
-        long __dt0 = System.nanoTime();
-        // ★★★惯性**自驱动**（2026-10-09 · 决策 #685 —— 用户「安卓滑了还是一样」的第二处根因）：
+        long __dt0 = System.nanoTime();        // ★★★惯性**自驱动**（2026-10-09 · 决策 #685 —— 用户「安卓滑了还是一样」的第二处根因）：
         //   此前 `stepInertia` **只在 `LightsHost`（dev 长卷场景）的 Choreographer 帧循环里调**
         //   ⇒ superapp（真实应用）路径的 fling **起动了却没人推进** ⇒ 松手仍 dead-stop。
         //   ⇒ 由视图**自己的绘制循环**驱动：fling 活跃时每帧推进（applyScroll* 会 invalidate）+
@@ -2405,6 +2418,14 @@ public class ProteusHostView extends ViewGroup {
             drawCmds(canvas);
         }
         if (scrolled) canvas.restoreToCount(save);
+        // ★DevTools 元素高亮（决策 #701）：**屏幕坐标**画描边（在 scroll restore 之后 ⇒ 不随滚动平移）
+        if (devHighlight != null && devHighlight.width() > 0 && devHighlight.height() > 0) {
+            devHighlightPaint.setStyle(android.graphics.Paint.Style.STROKE);
+            devHighlightPaint.setStrokeWidth(2 * getResources().getDisplayMetrics().density);
+            devHighlightPaint.setColor(0xFF2F6BFF);   // 系统蓝（与 iOS systemBlue 近似，dev 高亮）
+            devHighlightPaint.setAntiAlias(true);
+            canvas.drawRect(devHighlight, devHighlightPaint);
+        }
         // ★DevTools 逐帧耗时（决策 #676）：整帧 onDraw 耗时（含 drawCmds/显示列表回放）
         long __dt = System.nanoTime() - __dt0;
         lastFrameMs = __dt / 1e6;
