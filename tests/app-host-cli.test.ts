@@ -260,6 +260,16 @@ describe('★完整宿主 · iOS 宿主模板为运行期形态（决策 #683）
     expect(overlay, '状态提示').toContain('setEdited')
     expect(overlay, '重置回调').toContain('onReset')
   })
+
+  // ★决策 #705：边缘右滑返回（CLI dev 宿主此前缺失——只在框架宿主有）
+  it('iOS CLI 宿主接边缘右滑返回（决策 #705）', () => {
+    const src = fs.readFileSync(path.join(shellDir, 'ProteusApp.swift'), 'utf-8')
+    expect(src, '边缘手势 target 类').toContain('class ProteusSwipeBackTarget')
+    expect(src, '装边缘 pan').toContain('UIScreenEdgePanGestureRecognizer')
+    expect(src, '左缘').toContain('edges = .left')
+    expect(src, '触发返回').toMatch(/goBack\(\)/)
+    expect(src, '右滑阈值 60pt').toMatch(/>\s*60/)
+  })
 })
 
 describe.skipIf(!hasSuperapp)('★完整宿主 · app-bundle（项目侧 bundle）', () => {

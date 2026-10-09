@@ -27,6 +27,21 @@ enum ProteusBrandColor {
     static let brand = UIColor(red: 0x5B/255, green: 0x5B/255, blue: 0xD6/255, alpha: 1)
 }
 
+/* ────────────────────────── 边缘右滑返回（对齐框架宿主 B1） ────────────────────────── */
+
+/// ★★★边缘右滑返回（决策 #705）：iOS 标准返回手势。
+///   【为什么（本缺口的由来）】`UIScreenEdgePanGestureRecognizer` 只在**框架宿主** `superapp-scene.swift`
+///   装了，CLI 生成的 dev 宿主（本项目 `proteus dev --target ios` 跑的）**从来没接** ⇒ 用户在 CLI 宿主上
+///   发现「没有滑动返回」。本类与框架宿主同语义（`.ended` 且右滑 ≥60pt ⇒ 返回）。
+///   `UIScreenEdgePanGestureRecognizer` 需要 `NSObject` target（不能用闭包）⇒ 本类承接收手。
+private final class ProteusSwipeBackTarget: NSObject {
+    let onBack: () -> Void
+    init(_ onBack: @escaping () -> Void) { self.onBack = onBack }
+    @objc func handle(_ g: UIScreenEdgePanGestureRecognizer) {
+        if g.state == .ended, g.translation(in: g.view).x > 60 { onBack() }
+    }
+}
+
 /* ────────────────────────── 宿主驱动（引擎 + 运行期装配） ────────────────────────── */
 
 /// 一个"可重载"的宿主实例：持一枚 JSContext + 桥 + 视图。dev 热刷 = 丢弃旧的、按新 bundle 建新的。
@@ -561,6 +576,8 @@ final class ProteusSceneDelegate: UIResponder, UIWindowSceneDelegate {
     private var placeholder: UIView?
     /// dev 可视化层（DEV 角标 + 热重载提示）——仅 dev 变体创建（决策 #692）
     private var devOverlay: ProteusDevOverlay?
+    /// ★边缘右滑返回手势 target（决策 #705）——**必须强引用**，否则被回收后手势不触发（框架宿主同注）。
+    private var swipeBackTarget: ProteusSwipeBackTarget?
 
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
         guard let ws = scene as? UIWindowScene else { return }
@@ -583,6 +600,13 @@ final class ProteusSceneDelegate: UIResponder, UIWindowSceneDelegate {
         w.rootViewController = vc
         w.makeKeyAndVisible()
         window = w
+        // ★★★边缘右滑返回（决策 #705）：装 `UIScreenEdgePanGestureRecognizer`（左缘）⇒ 右滑 ≥60pt 触发 goBack。
+        //   与框架宿主 `superapp-scene.swift` 同语义。手势装在整个 vc.view（含内容 + tab）。
+        let backTarget = ProteusSwipeBackTarget { [weak self] in self?.driver?.goBack() }
+        swipeBackTarget = backTarget
+        let edgePan = UIScreenEdgePanGestureRecognizer(target: backTarget, action: #selector(ProteusSwipeBackTarget.handle(_:)))
+        edgePan.edges = .left
+        vc.view.addGestureRecognizer(edgePan)
         homePage = (Bundle.main.object(forInfoDictionaryKey: "ProteusHomePage") as? String) ?? "index"
         // 布局完成后启动（safeAreaInsets 就绪；非盲等——是"布局完成"这一确定事件）
         DispatchQueue.main.async { [weak self] in self?.boot() }
@@ -748,6 +772,11 @@ final class ProteusSceneDelegate: UIResponder, UIWindowSceneDelegate {
             // ★按需截图（决策 #704）：面板/CLI 下发 ⇒ 落 Documents 供 `devicectl copy from` 取回核验
             writeDevSnapshot(to: "proteus-dev-shot.png")
             d.devLog("info", "snapshot ready")
+        case "probe":
+            // ★自检探针（决策 #705）：报告边缘右滑返回手势**是否真装在视图上**（运行期证据，非源码推断）
+            let v = window?.rootViewController?.view
+            let has = (v?.gestureRecognizers ?? []).contains { $0 is UIScreenEdgePanGestureRecognizer }
+            d.devLog("info", "probe edgePan=\(has ? 1 : 0)")
         default:
             break
         }
