@@ -8,6 +8,12 @@
     "deliveryWithInstall": true,
     "installationFree": false,
     "pages": "$profile:main_pages",
+    // ★★★INTERNET 权限（决策 #728 · 鸿蒙 dev 通道）：dev 变体的 dev-watch 走 HTTP 连局域网 dev server
+    //   （拉 bundle 热刷 + 心跳/日志上报）。★恒带（非仅 dev）：DevEco 无 Gradle 式 per-variant manifest 合并，
+    //   且 release 不发起任何网络请求（`DEV=false` ⇒ dev 分支不可达）⇒ "dev 才联网"由**代码门控**保证。
+    "requestPermissions": [
+      { "name": "ohos.permission.INTERNET" }
+    ],
     "abilities": [
       {
         "name": "EntryAbility",

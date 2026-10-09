@@ -805,3 +805,43 @@ describe('★★★三端宿主变体模型（dev-host = 宿主：单一壳 + DE
     expect(pj.scripts.verify, '门禁接入 verify 链').toContain('check:host-variant-parity')
   })
 })
+
+describe('★★★鸿蒙 dev 通道 · 批 2a 地基（热刷/心跳/日志 — 决策 #728）', () => {
+  const TH = path.join(ROOT, 'packages/cli/templates-host/harmony')
+  const CLI = path.join(ROOT, 'packages/cli')
+  it('鸿蒙变体常量（ProteusBuildConfig.ets DEV/DEV_URL）——与 android/ios 同模型', () => {
+    const cfg = fs.readFileSync(path.join(TH, 'entry/src/main/ets/shell/ProteusBuildConfig.ets'), 'utf-8')
+    expect(cfg, 'DEV 常量').toMatch(/export\s+const\s+DEV\s*:\s*boolean\s*=\s*(?:true|false)/)
+    expect(cfg, 'DEV_URL 常量').toMatch(/export\s+const\s+DEV_URL\s*:\s*string\s*=\s*'/)
+  })
+  it('INTERNET 权限 + dev 地址注入（want.parameters.proteusDev → AppStorage）', () => {
+    expect(fs.readFileSync(path.join(TH, 'entry/src/main/module.json5'), 'utf-8'), 'INTERNET 权限').toContain('ohos.permission.INTERNET')
+    const ea = fs.readFileSync(path.join(TH, 'entry/src/main/ets/shell/EntryAbility.ets'), 'utf-8')
+    expect(ea, '读 proteusDev 参数').toContain("['proteusDev']")
+    expect(ea, '写入 AppStorage').toContain("setOrCreate('proteusDev'")
+  })
+  it('packageHarmonyHost dev 变体（覆写 DEV/DEV_URL + 还原）+ runAppDev 传 dev/proteusDev', () => {
+    const pkg = fs.readFileSync(path.join(CLI, 'src/host-package.ts'), 'utf-8')
+    expect(pkg, 'PackageHostOptions.dev').toContain('dev?: boolean')
+    expect(pkg, '覆写 ProteusBuildConfig').toContain('ProteusBuildConfig.ets')
+    expect(pkg, '覆写 DEV=true').toMatch(/export const DEV: boolean = true/)
+    const idx = fs.readFileSync(path.join(CLI, 'src/index.ts'), 'utf-8')
+    expect(idx, 'runAppDev 鸿蒙 dev 变体').toMatch(/packageHarmonyHost\([^)]*dev:\s*true/)
+    expect(idx, 'aa start 注入 proteusDev').toContain("'--ps', 'proteusDev'")
+  })
+  it('壳：dev 件门控创建（DevWatch/DevOverlay 仅 DEV）+ 热刷/心跳/日志接线', () => {
+    const mp = fs.readFileSync(path.join(TH, 'entry/src/main/ets/shell/MainPage.ets'), 'utf-8')
+    expect(mp, '变体常量导入').toContain("from './ProteusBuildConfig'")
+    expect(mp, 'dev 门控创建').toMatch(/if\s*\(\s*DEV\s*\|\|\s*devBase\.length\s*>\s*0\s*\)/)
+    expect(mp, '起 dev-watch').toContain('this.startDevWatch(')
+    const dw = fs.readFileSync(path.join(TH, 'entry/src/main/ets/dev/DevWatch.ets'), 'utf-8')
+    for (const ep of ["'/version'", "'/bundle'", "'/ping?", "'/log?", "'/tree'", "'/trace?'"]) {
+      expect(dw, `dev-watch 端点 ${ep}`).toContain(ep)
+    }
+    expect(dw, '网络能力').toContain("from '@kit.NetworkKit'")
+  })
+  it('syncHarmonyShell 同步整个 ets/（含 dev 层，老宿主自愈）', () => {
+    const scaf = fs.readFileSync(path.join(CLI, 'src/host-scaffold.ts'), 'utf-8')
+    expect(scaf, '同步 ets/（非仅 shell/）').toContain("'entry', 'src', 'main', 'ets')")
+  })
+})

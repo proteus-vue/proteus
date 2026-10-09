@@ -48,11 +48,12 @@ const ENDS = {
   harmony: {
     label: '鸿蒙',
     shell: ['harmony/entry/src/main/ets/shell/MainPage.ets', 'harmony/entry/src/main/ets/shell/EntryAbility.ets'],
-    devOnly: [],
-    // ★鸿蒙尚无 dev 通道（批 2）⇒ 无变体常量、无 dev-only 文件；单壳即本体（登记见 KNOWN_GAPS）。
-    variantConst: null,
-    devConstRe: null,
-    devGuard: null,
+    devOnly: ['harmony/entry/src/main/ets/dev/DevWatch.ets', 'harmony/entry/src/main/ets/dev/DevOverlay.ets'],
+    // ★决策 #728：鸿蒙 dev 通道落地 ⇒ 有了编译期变体常量（与 android/ios 同模型）。
+    variantConst: 'harmony/entry/src/main/ets/shell/ProteusBuildConfig.ets',
+    devConstRe: /export\s+const\s+DEV\s*:\s*boolean\s*=/,
+    /** dev 调试件（DevWatch）须门控创建（主壳 `if (DEV …)`）——release 零残留。 */
+    devGuard: { file: 'harmony/entry/src/main/ets/shell/MainPage.ets', re: /if\s*\(\s*DEV\s*\|\|/ },
   },
 }
 
@@ -68,7 +69,7 @@ const CAPS = [
 
 /** ★已知缺口（具名登记：理由 + 决策号；补齐后删除）——不静默豁免。 */
 const KNOWN_GAPS = {
-  'harmony:splash': '鸿蒙尚无 dev 通道（批 2）；release 同步读 rawfile bundle、无异步加载 ⇒ 暂不需应用级占位（系统 startWindow 已遮黑）——待鸿蒙 dev 通道批次补',
+  'harmony:splash': '鸿蒙启动占位未接（决策 #728 仍列）：release 同步读 rawfile bundle、无异步加载窗口 ⇒ 暂不需应用级占位（系统 startWindow 已遮黑）；待"鸿蒙 dev 通道深化/加载态"批次按需补',
 }
 
 const problems = []

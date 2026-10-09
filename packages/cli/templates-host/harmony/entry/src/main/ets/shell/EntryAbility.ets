@@ -19,8 +19,14 @@ export default class EntryAbility extends UIAbility {
   private pageToLoad: string = 'shell/MainPage';
 
   onCreate(want: Want, _launchParam: AbilityConstant.LaunchParam): void {
-    hilog.info(DOMAIN, TAG, 'PROTEUS_HOST_ONCREATE bundle=%{public}s page=%{public}s',
-      want.bundleName, this.pageToLoad);
+    // ★★★dev server 地址注入（决策 #728）：`proteus dev --target harmony` 用
+    //   `aa start ... --ps proteusDev <url>` 传入（`--ps` 进 `want.parameters`——参考宿主已用此法读 `scene`）。
+    //   → `AppStorage` 供壳（MainPage/DevWatch）读取；壳里"启动参数优先、编译期 DEV_URL 兜底"（与 Android/iOS 同契约）。
+    const dev = want?.parameters?.['proteusDev'];
+    const devStr: string = typeof dev === 'string' ? dev : '';
+    AppStorage.setOrCreate('proteusDev', devStr);
+    hilog.info(DOMAIN, TAG, 'PROTEUS_HOST_ONCREATE bundle=%{public}s page=%{public}s dev=%{public}s',
+      want.bundleName, this.pageToLoad, devStr);
   }
 
   onWindowStageCreate(windowStage: window.WindowStage): void {
