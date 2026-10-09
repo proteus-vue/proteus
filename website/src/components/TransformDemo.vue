@@ -48,7 +48,6 @@ const project = ref<PlaygroundProject>(
 /** 当前编辑的文件（默认入口） */
 const activeFile = ref(project.value.entry)
 const fileNames = computed(() => Object.keys(project.value.files))
-const activeExt = computed(() => (activeFile.value.split('.').pop() ?? 'vue'))
 function highlightLangOf(name: string): string {
   const e = name.split('.').pop() ?? 'vue'
   return e === 'vue' ? 'vue' : 'js'
@@ -269,12 +268,11 @@ function addFile(): void {
   project.value.files[name] = { content: tpl }
   activeFile.value = name
 }
-/** 删除当前文件（入口不可删） */
-function removeFile(): void {
-  const name = activeFile.value
+/** 关闭某文件（浏览器标签式 × 于文件名右侧；入口不可删） */
+function removeFileByName(name: string): void {
   if (name === project.value.entry) return
   delete project.value.files[name]
-  activeFile.value = project.value.entry
+  if (activeFile.value === name) activeFile.value = project.value.entry
 }
 
 // 初次编译（含首跑渲染后端——编译 Tab 以**入口文件**为准）
@@ -330,22 +328,27 @@ run(project.value.files[project.value.entry]?.content ?? '')
             <button v-if="!compact" class="pane-btn" @click="copyShareLink">{{ t('pd.copy') }}</button>
             <button class="pane-btn" @click="resetDemo">{{ t('pd.reset') }}</button>
           </p-view>
-          <!-- ★决策 #700：多文件项目——文件页签 + 新增/删除 -->
+          <!-- ★决策 #700：多文件项目——浏览器标签式文件页签（删除键贴在该文件名右侧；入口不可删） -->
           <p-stack direction="row" :gap="6" class="pg-files">
-            <button
+            <span
               v-for="f in fileNames"
               :key="f"
               class="file-tab"
               :class="{ on: f === activeFile }"
+              role="button"
+              tabindex="0"
               @click="activeFile = f"
-            >{{ f.split('/').pop() }}</button>
+              @keydown.enter="activeFile = f"
+            >
+              {{ f.split('/').pop() }}
+              <button
+                v-if="f !== project.entry"
+                class="file-x"
+                title="关闭该文件"
+                @click.stop="removeFileByName(f)"
+              >✕</button>
+            </span>
             <button class="file-tab file-add" title="新增文件" @click="addFile">＋</button>
-            <button
-              v-if="activeFile !== project.entry"
-              class="file-tab file-del"
-              title="删除当前文件"
-              @click="removeFile"
-            >✕</button>
           </p-stack>
           <p-view class="editor-shell" :class="{ composing }">
             <!-- 高亮垫底（aria-hidden：仅供视觉，真实输入在 textarea） -->
@@ -541,7 +544,7 @@ run(project.value.files[project.value.entry]?.content ?? '')
   border-bottom: 1px solid var(--line);
 }
 .pane-label { color: var(--muted); font-size: 12px; margin-right: auto; }
-/* ★决策 #700：多文件项目文件页签（自成一行的完整 chip——不再是"贴边被切"的连接式） */
+/* ★决策 #700：多文件项目文件页签（浏览器标签式——文件名 + 右侧关闭键，自成一行的完整 chip） */
 .pg-files {
   display: flex !important;
   flex-direction: row !important;
@@ -552,19 +555,40 @@ run(project.value.files[project.value.entry]?.content ?? '')
   border-bottom: 1px solid var(--line);
 }
 .file-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   color: var(--muted);
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 6px;
-  padding: 3px 10px;
+  padding: 3px 8px 3px 10px;
   font-size: 12px;
   line-height: 1.5;
   font-family: ui-monospace, Menlo, monospace;
   cursor: pointer;
 }
 .file-tab.on { color: var(--ink); border-color: var(--brand2); background: rgba(107,124,255,.16); }
-.file-tab.file-add, .file-tab.file-del { padding: 3px 8px; }
+.file-tab.file-add { padding: 3px 8px; }
 .file-tab:hover { border-color: var(--brand2); }
+/* 关闭键：贴在该文件名右侧（浏览器标签式）；悬停才显底色，避免噪声 */
+.file-x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: .65;
+}
+.file-x:hover { opacity: 1; background: rgba(255,255,255,.14); }
 .pane-btn {
   color: var(--brand2);
   background: none;
