@@ -18,6 +18,8 @@ import { highlight } from '@proteus-vue/docs'
 import { RENDER_BACKENDS, COMPILE_BACKENDS, DEVICES, renderWithBackend, deviceForm, type TreeJsonNode } from '../playground/backends'
 import { decodeSource, encodeSource, playgroundUrl } from '../playground/share'
 import RenderBox from './RenderBox.vue'
+// ★决策 #699：实时预览面板（真实 Vue 编译+挂载）——标准 Playground 的"写即见"支柱
+import PreviewMount from './PreviewMount.vue'
 // ★#477 Mini Playground chrome 双语
 import { locale, t } from '../i18n'
 // ★#445/#449 桌面原语（豁免回收）：剪贴板 copyText + 页面 URL 读写（location/history 收口）——env 省略回落真实全局，页面零裸平台 API
@@ -46,12 +48,13 @@ watch(locale, () => {
   if (source.value === DEMO_SOURCE || source.value === DEMO_SOURCE_EN) source.value = demoSource()
 })
 
-const TABS = ['Skyline', 'IR', 'Web', 'WXSS', 'Render', 'Trace'] as const
-const activeTab = ref<(typeof TABS)[number]>('Skyline')
+const TABS = ['Preview', 'Skyline', 'IR', 'Web', 'WXSS', 'Render', 'Trace'] as const
+const activeTab = ref<(typeof TABS)[number]>('Preview')
 
 const isEn = computed(() => locale.value === 'en')
 /** ★#477 Tab 说明英文层（中文见 TAB_INFO） */
 const TAB_INFO_EN: Record<(typeof TABS)[number], string> = {
+  Preview: 'Live preview — compile+mount the standard Vue SFC with the real Vue runtime (@vue/compiler-sfc in-browser), p-* resolved against the same registry as the site; the "write and see" pillar of a standard Playground',
   Skyline: 'Mini-program output (WXML) — the standard Vue template after the compiler: v-if→wx:if, @tap→bind:tap, p-* semantic tags rendered directly',
   IR: 'CompilerIR intermediate representation — the compiler-internal semantic structure (render tree + C-IR semantic tree + bindings capability entries), the G-29 contract every render backend consumes',
   Web: 'Web output = the standard Vue SFC itself (zero transform) — the Web render backend consumes the same IR with no platform rewriting',
@@ -85,6 +88,7 @@ function deviceLabel(d: { id: string; label: string }): string {
 
 /** ★#388c 每个 Tab 的自解释说明（切换即读——透明编译的用户教育内建于 UI） */
 const TAB_INFO: Record<(typeof TABS)[number], string> = {
+  Preview: '实时预览——用真实 Vue 运行时编译+挂载标准 Vue SFC（@vue/compiler-sfc 浏览器内直跑），p-* 按官网同一份注册表解析；标准 Playground 的"写即见"支柱',
   Skyline: '小程序端产物（WXML）——标准 Vue 模板经编译器转换后的 Skyline 语法：v-if→wx:if、@tap→bind:tap、p-* 语义标签直出',
   IR: 'CompilerIR 中间表示——编译器内部的语义结构（render 树 + C-IR 语义树 + bindings 能力入口），G-29 契约，一切渲染后端的共同输入',
   Web: 'Web 端产物 = 标准 Vue SFC 本身（零转换直跑）——Web 渲染后端消费同一份 IR，无需任何平台改写',
@@ -312,7 +316,11 @@ run(source.value)
         <!-- ★#388c Tab 自解释说明条（切换即读） -->
         <p-text class="tab-desc"><span class="tab-desc-key">{{ activeTab }}</span>{{ tabInfo(activeTab) }}</p-text>
         <!-- ★#388 Render Tab：选中渲染后端的真实输出（设备框预览 + 后端语义标签） -->
-        <p-view v-if="activeTab === 'Render'" class="render-view">
+        <p-view v-if="activeTab === 'Preview'" class="preview-view">
+          <!-- 实时预览按面板宽度自适应（设备框仅用于 Render 后端语义树；预览里 1440 设备框会横向溢出） -->
+          <PreviewMount :source="source" :width="0" :height="0" />
+        </p-view>
+        <p-view v-else-if="activeTab === 'Render'" class="render-view">
           <p-view class="device-frame" :style="{ '--frame-w': device.width + 'px', '--frame-h': device.height + 'px' }">
             <p-view class="device-inner" :style="{ borderColor: activeRenderBackend.color }">
               <RenderBox v-if="renderTree" :node="renderTree" :color="activeRenderBackend.color" :root="true" />

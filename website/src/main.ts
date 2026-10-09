@@ -5,55 +5,18 @@ import { createApp } from 'vue'
 import App from './App.vue'
 import { router } from './router'
 // ★语义组件库（76 组件，183 原语 SSOT 的组件形态）——官网全局注册后模板直接写 p-* 标签
-import {
-  PView,
-  PText,
-  PHeading,
-  PGrid,
-  PStack,
-  PButton,
-  PDivider,
-  PPage,
-  PSidebar,
-  PSplit,
-  PSegment,
-  PToast,
-  PAnimate,
-  PgGlass,
-  PZone,
-  PFormfactor,
-  installFluidLayout,
-} from '@proteus-vue/components'
+//   ★注册表已提取到 playground/global-components.ts（决策 #699，官网 + Playground 预览共用一份）
+import { installFluidLayout } from '@proteus-vue/components'
 // ★G-24 B1 桌面交互原语：v-p-hover（官网卡片 hover 语义——Pure logic 双端接线）
 import { createDesktopDirectives } from '@proteus-vue/desktop'
+import { installGlobalComponents } from './playground/global-components'
 import './style.css'
 
 const app = createApp(App)
 
 // ★D-2：p-* 语义组件全局注册（模板写 <p-view>/<p-text>/…——禁第三方 UI、禁裸 div 布局）
-const components: Record<string, unknown> = {
-  'p-view': PView,
-  // ★2026-09-26 多端同屏（柔性系统）：容器断点分区——p-zone 就是本页演示的主角
-  'p-zone': PZone,
-  // ★★Fluid System v2：形态容器（多端同屏页的主角——形态自动编排）
-  'p-formfactor': PFormfactor,
-  'p-text': PText,
-  'p-heading': PHeading,
-  'p-grid': PGrid,
-  'p-stack': PStack,
-  'p-button': PButton,
-  'p-divider': PDivider,
-  'p-page': PPage,
-  'p-sidebar': PSidebar,
-  'p-split': PSplit,
-  'p-segment': PSegment,
-  'p-toast': PToast,
-  'p-animate': PAnimate,
-  'pg-glass': PgGlass,
-}
-for (const [name, comp] of Object.entries(components)) {
-  app.component(name, comp as never)
-}
+//   ★注册表在 playground/global-components.ts（官网 + Playground 预览共用，防漂移）
+installGlobalComponents(app)
 
 // 柔性布局指令（W-6：官网排版/间距的唯一响应式手段）
 installFluidLayout(app, { designWidth: 375, viewportMax: 1440 })
