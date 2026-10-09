@@ -4,20 +4,24 @@
 //   ① rawfile `bundle-superapp.js`（项目路由 + 交互 + 响应式 + 导航）→ `hostAppRender`
 //      （**一次性 VM**：eval bundle → boot 路由栈 → 共享运行期实例化当前屏 → host.mount 捕获 tree）；
 //   ② 捕获到的 tree → `appScreenCommands`（内容 → 内核树 → RenderCmd）→ `renderCommands`（直绘）；
-//   ③ 触摸：点按 → `appScreenHitAt` 命中链 → `hostAppRender(chain)` 派发（$nav 导航 / 数据变更）→ 重绘；
-//      拖动 → `scrollRoot` 滚动 + **松手惯性**；系统返回/边缘滑返 → `onBackPress`。
+//   ③ 手势（**原生识别器**，非手搓 .onTouch）：`PanGesture` 拖动滚动 + `TapGesture` 点击命中→导航；
+//      松手惯性 `startMomentum` 由 **`displaySync`（vsync 帧源）** 逐帧驱动；系统返回/边缘滑返 → `onBackPress`。
 //   ★链路全部来自 runtime（HAR 'proteus_render'）——本页**不含项目身份**（页名/内容都从产物读）；
 //     换一个项目只需替换 rawfile 产物。缺 bundle 时**回退静态 `app-screen-content.json`**（诚实降级）。
 //
-// 【★与参考宿主对齐的四处（决策 #725 收口 · 用户「状态栏/底部安全区黑、无滑动返回、无滚动惯性」）】
-//   ① **edge-to-edge**：`setWindowLayoutFullScreen(true)` + `setWindowBackgroundColor(页面浅底)` +
-//      `setWindowSystemBarEnable(['status','navigation'])` ⇒ 状态栏透明、内容铺到状态栏区（否则状态栏/导航栏成黑带）；
-//   ② **安全区内边距**：采 `getWindowAvoidArea` → `env`（`--pf-inset-*`）传给 `appScreenCommands`，
-//      页面据此自让位（否则内容顶到状态栏下）；
-//   ③ **松手惯性**（`startMomentum`/`stopMomentum`，指数减速，与 Android/iOS 同式）；
-//   ④ **返回栈**：系统边缘滑返/返回键 → `onBackPress`（鸿蒙系统手势自动触发，**不叠自定义边缘手势**）。
+// 【★★★为什么惯性用 displaySync（vsync）而非 setInterval（决策 #726/731 · 用户「快滚卡一下再瞬间过去」）】
+//   对照 **Android/iOS 的 dev 宿主**（非"参考宿主"——它是验证装置，本身有坑）：
+//   · iOS：拖拽走原生 `UIPanGestureRecognizer`（给 velocity），惯性走 **`CADisplayLink`**（vsync 帧源）；
+//   · Android：原生触摸 + `Choreographer`（vsync）。
+//   ⇒ 鸿蒙的正确等价物 = 拖拽用 `.onTouch`（与参考宿主同，已证 Smooth），**惯性用 `displaySync`（vsync 帧回调）**。
+//   ★此前照搬"参考宿主"的 `setInterval(16)`：**不对齐 vsync**，主线程一忙就把回调**攒成一批**触发
+//     ⇒ 惯性"卡一下再瞬间过去"（非丝滑）。displaySync 与 vsync 对齐（CADisplayLink 同族）。
+//   ★为什么不用原生 `PanGesture`（试过，撤回）：它 `distance` 阈值使其对**纯点击不触发**，须再叠 `TapGesture`；
+//     而两手势在 `GestureMode.Parallel` 下**同时识别** ⇒ 拖拽也会触发 tap（真机实测：拖动被当点击导航）。
+//     ⇒ 拖拽 + 点按的判别沿用 `.onTouch` 的 `touchMoved`（与 Android/iOS dev 宿主同——它们也在各自触摸回调里判别）。
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { NodeContent, display, window } from '@kit.ArkUI';
+import { displaySync } from '@kit.ArkGraphics2D';
 import { util } from '@kit.ArkTS';
 import {
   attach, renderCommands, scrollRoot, clearRoot,
@@ -26,8 +30,9 @@ import {
 
 const DOMAIN = 0x0002;
 const TAG = 'ProteusHostPage';
-/** 惯性减速速率（= iOS UIScrollView normal 0.998/ms；平台标准值，不自造曲线）+ 停止阈值（vp/ms）。 */
+/** 惯性减速速率（= iOS UIScrollView normal 0.998/ms / CADisplayLink 同式；平台标准值，不自造曲线）。 */
 const DECEL_RATE = 0.998;
+/** 停止阈值（vp/ms）——低于它认为"停了"。 */
 const MOMENTUM_STOP = 0.02;
 
 /** 运行期渲染入参（ArkTS 禁未型字面量 ⇒ 用接口声明） */
@@ -46,19 +51,15 @@ struct MainPage {
   @State current: string = '';
   private scrollOffset: number = 0;
   private maxScroll: number = 0;
+  /** 触摸：上一 Y（windowY）/ 起点 / 是否移动（tap-vs-drag 判别）+ 速度采样（vp/ms）。 */
   private touchLastY: number = -1;
   private touchStartX: number = -1;
   private touchStartY: number = -1;
   private touchMoved: boolean = false;
-  /** 惯性：触摸移动时采样速度（vp/ms）；松手按松手速度启动减速循环（与 Android OverScroller / iOS CADisplayLink 同语义） */
   private touchLastTs: number = 0;
-  private velOffset: number = 0;
   private touchVelSum: number = 0;
   private touchVelDt: number = 0;
-  private momentumTimer: number = -1;
-  /** 惯性帧数 / 真推动帧数（"惯性真的接线了"的机器证据——本仓纪律：报告有通路无只能靠计数现形）。 */
-  private momentumFrames: number = 0;
-  private momentumMovedFrames: number = 0;
+  private velOffset: number = 0;
   /** ArkTS 侧导航历史栈（一次性 VM：JS 路由态不跨调用保留 ⇒ 返回栈由宿主记）+ 每屏滚动进度 */
   private navStack: string[] = [];
   private scrollByScreen: Map<string, number> = new Map<string, number>();
@@ -66,6 +67,15 @@ struct MainPage {
   private runtimeState: Record<string, Object> | null = null;
   /** ★内置环境变量表（决策 #593）：安全区避免区（vp）——`appScreenCommands` 的 env token 替换用。 */
   private envVars: Record<string, number> = {};
+  /** ★vsync 帧源（`displaySync`，CADisplayLink/Choreographer 同族）——惯性逐帧驱动；不对齐 vsync 会攒批跳变。 */
+  private dSync: displaySync.DisplaySync | null = null;
+  /** 当前**内容速度**（vp/ms）——每帧按 `DECEL_RATE` 指数衰减。 */
+  private momV: number = 0;
+  /** 上一帧时间戳（ns；0 = 首帧只记基准）。 */
+  private momLastTs: number = 0;
+  /** 惯性帧数 / 真推动帧数（"惯性真的接线了"的机器证据——本仓纪律：有通路无靠计数现形）。 */
+  private momentumFrames: number = 0;
+  private momentumMovedFrames: number = 0;
   private static vpW: number = 390;
   private static vpH: number = 844;
 
@@ -94,7 +104,16 @@ struct MainPage {
         this.current = this.nodesByPage.has('index') ? 'index' : (names.length > 0 ? names[0] : '');
       } catch (e) { /* 无静态产物（纯运行期）——起始页用约定名 */ }
       if (!this.current) this.current = 'index';
-      // ③ 窗口设置（edge-to-edge + 系统栏）——异步；取到安全区后**再渲染一次**（env 生效）
+      // ③ vsync 帧源（惯性用）——建一次，`.on` 只挂一次（重复 on 会重复回调）
+      try {
+        this.dSync = displaySync.create();
+        this.dSync.setExpectedFrameRateRange({ expected: 60, min: 30, max: 120 });
+        this.dSync.on('frame', (info: displaySync.IntervalInfo) => { this.tickMomentum(info); });
+      } catch (e) {
+        hilog.error(DOMAIN, TAG, 'HOST_PAGE_DISPLAYSYNC_ERR %{public}s', JSON.stringify(e) ?? '');
+        this.dSync = null;
+      }
+      // ④ 窗口设置（edge-to-edge + 系统栏）——异步；取到安全区后**再渲染一次**（env 生效）
       window.getLastWindow(ctx).then((win: window.Window) => {
         // ★edge-to-edge：内容铺满全屏（含状态栏/导航栏区），状态栏**叠加**在内容之上（透明）
         //   ⇒ 页面背景透上来，与 Web viewport-fit=cover 同观感。此前非 full-screen ⇒ 状态栏占位成**黑带**。
@@ -151,6 +170,11 @@ struct MainPage {
     } catch (e) {
       hilog.error(DOMAIN, TAG, 'HOST_PAGE_BOOT_ERROR %{public}s', JSON.stringify(e) ?? '');
     }
+  }
+
+  aboutToDisappear(): void {
+    this.stopMomentum();
+    if (this.dSync !== null) { try { this.dSync.stop(); } catch (e) { /* 无 */ } }
   }
 
   /** 运行期渲染入参 → JSON（用接口声明，避 ArkTS 未型字面量） */
@@ -232,6 +256,7 @@ struct MainPage {
   /** 返回上一屏（系统边缘滑返 / 返回键 → onBackPress）。栈非空 ⇒ 出栈 + 恢复该屏滚动；空 ⇒ 交系统（退出）。 */
   private goBack(): boolean {
     if (this.navStack.length === 0) { return false; }
+    this.stopMomentum();
     const prev: string = this.navStack.pop() as string;
     this.scrollByScreen.set(this.current, this.scrollOffset);
     this.current = prev;
@@ -244,6 +269,48 @@ struct MainPage {
   /** ★系统返回（含手势滑动返回）——@Entry Page 生命周期；栈非空则消费，否则交系统。 */
   onBackPress(): boolean {
     return this.goBack();
+  }
+
+  /**
+   * 触摸：拖动滚动 + 松手惯性 + 点按命中（与 Android/iOS dev 宿主同语义——在触摸回调里判别 tap/drag）。
+   *   · Down：停惯性 + 记起点；Move：按位移滚动 + 采样速度（vp/ms，≥24ms 一采）；Up：几乎没动 ⇒ tap；
+   *     移动过 ⇒ 用**松手速度**启动惯性（`displaySync` vsync 逐帧）。
+   *   · ★方法名不用 `onTouch`（与 ArkUI `CustomComponent.onTouch` 属性方法**签名冲突**）。
+   *   · ★不加自定义边缘滑返——鸿蒙系统边缘手势（返回）自动走 @Entry 的 `onBackPress`（叠自绘会与系统手势冲突）。
+   */
+  private handleTouch(e: TouchEvent): void {
+    const t: TouchObject = e.touches[0];
+    if (t === undefined) return;
+    if (e.type === TouchType.Down) {
+      this.stopMomentum();
+      this.touchLastY = t.windowY; this.touchStartX = t.windowX; this.touchStartY = t.windowY; this.touchMoved = false;
+      this.touchLastTs = Date.now(); this.touchVelSum = 0; this.touchVelDt = 0; this.velOffset = 0;
+      return;
+    }
+    if (e.type === TouchType.Move) {
+      if (this.touchLastY < 0) { this.touchLastY = t.windowY; this.touchLastTs = Date.now(); return; }
+      const dy: number = t.windowY - this.touchLastY;
+      this.touchLastY = t.windowY;
+      const now: number = Date.now();
+      const dt: number = now - this.touchLastTs;
+      this.touchLastTs = now;
+      if (Math.abs(t.windowY - this.touchStartY) > 16 || Math.abs(t.windowX - this.touchStartX) > 16) this.touchMoved = true;
+      const step: number = this.applyScrollBy(-dy);   // 手指上滑（windowY 减小）⇒ offset 增大
+      // 速度采样：本步**实际内容位移**（钳制后）累计，≥24ms 算一次瞬时速度
+      if (dt > 0) { this.touchVelSum += step; this.touchVelDt += dt; }
+      if (this.touchVelDt >= 24) { this.velOffset = this.touchVelSum / this.touchVelDt; this.touchVelSum = 0; this.touchVelDt = 0; }
+      return;
+    }
+    if (e.type === TouchType.Up) {
+      if (!this.touchMoved && this.touchStartX >= 0) {
+        this.onTapAt(this.touchStartX, this.touchStartY);   // 几乎没动 ⇒ tap
+      } else if (this.touchMoved) {
+        this.startMomentum(this.velOffset);   // ★松手惯性（显示由 displaySync vsync 驱动）
+      }
+      this.touchLastY = -1; this.touchMoved = false;
+      return;
+    }
+    if (e.type === TouchType.Cancel) { this.stopMomentum(); this.touchLastY = -1; this.touchMoved = false; }
   }
 
   /** 点击命中 → 运行期派发（$nav 导航 / 数据变更）→ 重绘（与 Android/iOS 同一条命中链） */
@@ -278,43 +345,6 @@ struct MainPage {
     }
   }
 
-  /** 触摸：拖动滚动 + 松手惯性 + 点按命中（与 App 三端同语义）。
-   *  ★方法名不用 `onTouch`（与 ArkUI `CustomComponent.onTouch` 属性方法**签名冲突**）。 */
-  private handleTouch(e: TouchEvent): void {
-    const t: TouchObject = e.touches[0];
-    if (t === undefined) return;
-    if (e.type === TouchType.Down) {
-      this.stopMomentum();   // ★手指按下 ⇒ 停掉上一段惯性（与 iOS/Android 同语义）
-      this.touchLastY = t.windowY; this.touchStartX = t.windowX; this.touchStartY = t.windowY; this.touchMoved = false;
-      this.touchLastTs = Date.now(); this.touchVelSum = 0; this.touchVelDt = 0; this.velOffset = 0;
-      return;
-    }
-    if (e.type === TouchType.Move) {
-      if (this.touchLastY < 0) { this.touchLastY = t.windowY; this.touchLastTs = Date.now(); return; }
-      const dy: number = t.windowY - this.touchLastY;
-      this.touchLastY = t.windowY;
-      const now: number = Date.now();
-      const dt: number = now - this.touchLastTs;
-      this.touchLastTs = now;
-      if (Math.abs(t.windowY - this.touchStartY) > 16 || Math.abs(t.windowX - this.touchStartX) > 16) this.touchMoved = true;
-      const step: number = this.applyScrollBy(-dy);   // 手指上滑（windowY 减小）⇒ offset 增大
-      if (dt > 0) { this.touchVelSum += step; this.touchVelDt += dt; }
-      if (this.touchVelDt >= 24) { this.velOffset = this.touchVelSum / this.touchVelDt; this.touchVelSum = 0; this.touchVelDt = 0; }
-      return;
-    }
-    if (e.type === TouchType.Up) {
-      if (!this.touchMoved && this.touchStartX >= 0) {
-        this.onTapAt(this.touchStartX, this.touchStartY);   // 几乎没动 ⇒ tap
-      } else if (this.touchMoved) {
-        this.startMomentum(this.velOffset);   // ★松手惯性
-      }
-      // ★不加自定义边缘滑返——鸿蒙系统边缘手势（返回）自动走 @Entry 的 onBackPress（叠自绘会与系统手势冲突）。
-      this.touchLastY = -1; this.touchMoved = false;
-      return;
-    }
-    if (e.type === TouchType.Cancel) { this.stopMomentum(); this.touchLastY = -1; this.touchMoved = false; }
-  }
-
   /** 按内容位移（vp；正 = offset 增大）滚动一步，钳到 [0,maxScroll]。返回**实际位移**（钳制后）。 */
   private applyScrollBy(delta: number): number {
     let next: number = this.scrollOffset + delta;
@@ -329,39 +359,41 @@ struct MainPage {
     return 0;
   }
 
-  /** 启动惯性（松手时调用）。速度单位 = vp/ms；过小 ⇒ 不启动。指数减速（与 iOS 同式）：v *= rate^dt。 */
+  /** ★启动惯性（松手时调用）。速度单位 = vp/ms；`|v|` 过小 ⇒ 不启动。由 `displaySync`（vsync）逐帧步进。 */
   private startMomentum(v: number): void {
     this.stopMomentum();
     if (Math.abs(v) <= MOMENTUM_STOP) return;
-    this.velOffset = v;
+    this.momV = v;
+    this.momLastTs = 0;
     this.momentumFrames = 0; this.momentumMovedFrames = 0;
-    let last: number = Date.now();
-    this.momentumTimer = setInterval(() => {
-      const now: number = Date.now();
-      const dt: number = now - last; last = now;
-      if (dt <= 0) return;
-      this.momentumFrames++;
-      this.velOffset *= Math.pow(DECEL_RATE, dt);
-      if (Math.abs(this.velOffset) < MOMENTUM_STOP) {
-        hilog.info(DOMAIN, TAG, 'HOST_PAGE_MOMENTUM_END frames=%{public}d moved=%{public}d', this.momentumFrames, this.momentumMovedFrames);
-        this.stopMomentum(); return;
-      }
-      const s: number = this.applyScrollBy(this.velOffset * dt);
-      if (s !== 0) this.momentumMovedFrames++;
-      if (s === 0 && (this.scrollOffset <= 0 || this.scrollOffset >= this.maxScroll)) {
-        hilog.info(DOMAIN, TAG, 'HOST_PAGE_MOMENTUM_END frames=%{public}d moved=%{public}d (bound)', this.momentumFrames, this.momentumMovedFrames);
-        this.stopMomentum();
-      }
-    }, 16);
+    if (this.dSync === null) return;
+    this.dSync.start();
+  }
+
+  /** ★vsync 帧回调（`displaySync`）：指数减速 `v *= DECEL_RATE^dt`（与 iOS `CADisplayLink` 同式）。 */
+  private tickMomentum(info: displaySync.IntervalInfo): void {
+    const ts: number = info.timestamp;   // ns
+    if (this.momLastTs <= 0) { this.momLastTs = ts; return; }
+    const dtMs: number = (ts - this.momLastTs) / 1e6;
+    this.momLastTs = ts;
+    if (dtMs <= 0 || dtMs > 100) return;   // 异常间隔（>100ms）跳过，避免跳变
+    this.momentumFrames++;
+    this.momV *= Math.pow(DECEL_RATE, dtMs);
+    if (Math.abs(this.momV) < MOMENTUM_STOP) {
+      hilog.info(DOMAIN, TAG, 'HOST_PAGE_MOMENTUM_END frames=%{public}d moved=%{public}d', this.momentumFrames, this.momentumMovedFrames);
+      this.stopMomentum(); return;
+    }
+    const s: number = this.applyScrollBy(this.momV * dtMs);
+    if (s !== 0) this.momentumMovedFrames++;
+    if (s === 0 && (this.scrollOffset <= 0 || this.scrollOffset >= this.maxScroll)) {
+      hilog.info(DOMAIN, TAG, 'HOST_PAGE_MOMENTUM_END frames=%{public}d moved=%{public}d (bound)', this.momentumFrames, this.momentumMovedFrames);
+      this.stopMomentum();
+    }
   }
 
   /** 停止惯性（新触摸/点按/销毁时）。 */
   private stopMomentum(): void {
-    if (this.momentumTimer >= 0) { clearInterval(this.momentumTimer); this.momentumTimer = -1; }
-  }
-
-  aboutToDisappear(): void {
-    this.stopMomentum();
+    if (this.dSync !== null) { try { this.dSync.stop(); } catch (e) { /* 无 */ } }
   }
 
   build() {
@@ -372,6 +404,8 @@ struct MainPage {
       .width('100%')
       .layoutWeight(1)
       .clip(true)
+      // ★触摸：拖拽滚动 + 点按命中 + 松手惯性（在 handleTouch 里判别 tap/drag；惯性由 displaySync vsync 驱动）。
+      //   ★不用原生 PanGesture（与 TapGesture 竞争会误判，见文件头）；不叠横向手势（不抢系统边缘滑返）。
       .onTouch((e: TouchEvent) => { this.handleTouch(e); })
     }
     .width('100%')
