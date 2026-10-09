@@ -1,13 +1,14 @@
 package dev.proteus.layoutcore;
 
-// DevOverlay —— dev 变体的**开发可视化层**（决策 #671）：① 右上角持久 "DEV" 角标（对齐 Flutter 的 DEBUG 缎带）
-//   ② 热重载瞬时提示（"⟳ 已热重载 · vN · 屏名"，约 1.5s 后自动淡出）。
+// DevOverlay —— dev 变体的**开发可视化层**（决策 #671/#719）：① 右上角持久 "DEV" 角标（**可点**展开底部菜单）
+//   ② 热重载瞬时提示（约 1.5s 后自动淡出）③ ★决策 #719：底部调试面板——「渲染状态」提示（有就地编辑时
+//   标**非项目代码效果**）+ **重置为项目代码**按钮（对齐 iOS `ProteusDevOverlay`，#704）。
 //
 // 【为什么在壳（模板）而不是 AAR】这是**开发期给"人"看的 chrome**（非渲染/非内核）——与 tab 栏同类，
 //   属项目壳的关注点；且 release 变体 **完全不创建**（`ProteusBuildConfig.DEV=false` ⇒ attach 直接返回）⇒
 //   正式包零残留（与"dev 通道编译进来、release 编译掉"同一变体模型）。
 //
-// 【诚实边界】仅 Android（iOS/鸿蒙 dev 通道尚未接线，见 host-runtime-package-plan.md）。
+// 【诚实边界】仅 Android（iOS 对齐见 ProteusDevOverlay.swift · 决策 #704；鸿蒙 dev 通道另立里程碑）。
 //   ★已生成的老宿主不会自动获得本文件 + AppActivity 的那行调用 ⇒ 需重生成宿主
 //     （rm -rf dist/app/android/host 后 `proteus dev/build --package` 会重新 scaffold）。
 
@@ -20,6 +21,7 @@ import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.FrameLayout;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
 final class DevOverlay {
@@ -28,6 +30,17 @@ final class DevOverlay {
     private final Handler ui = new Handler(Looper.getMainLooper());
     private TextView badge;
     private TextView toast;
+    /** ★底部调试面板（决策 #719）：tap DEV 角标展开/收起。 */
+    private LinearLayout sheet;
+    private TextView statusLabel;
+    private boolean sheetOn = false;
+    /** 是否有**就地编辑**未还原（决定"渲染状态"提示与角标配色）。 */
+    private boolean edited = false;
+    /** 重置回调（壳注入）：恢复"项目代码的实时效果"。 */
+    private Runnable resetAction;
+    /** 面板 URL（壳注入，展示用）。 */
+    private String panelUrl = "";
+
     private final Runnable hideToast = new Runnable() {
         @Override public void run() {
             if (toast != null) toast.animate().alpha(0f).setDuration(220)
@@ -42,13 +55,19 @@ final class DevOverlay {
         this.root = root;
     }
 
+    /** ★注入"重置为项目代码"动作（决策 #719，壳调；与面板 `/cmd reset` 同一实现）。 */
+    void setResetAction(Runnable r) { this.resetAction = r; }
+
+    /** ★注入面板 URL（决策 #719，展示用）。 */
+    void setPanelUrl(String url) { this.panelUrl = url == null ? "" : url; }
+
     /** 仅 dev 变体创建（release 直接返回 ⇒ 零残留）。root 已 setContentView，故本层叠加在最上。 */
     void attach() {
         if (!ProteusBuildConfig.DEV) return;
         final float density = act.getResources().getDisplayMetrics().density;
         int pad = (int) (6 * density);
 
-        // ① 右上角 "DEV" 角标
+        // ① 右上角 "DEV" 角标（可点 ⇒ 展开底部调试面板）
         badge = new TextView(act);
         badge.setText("DEV");
         badge.setTextColor(Color.WHITE);
@@ -61,6 +80,9 @@ final class DevOverlay {
         bg.setCornerRadius(40 * density);     // 胶囊
         badge.setBackground(bg);
         badge.setElevation(6 * density);
+        badge.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { toggleSheet(); }
+        });
         FrameLayout.LayoutParams blp = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT);
         blp.gravity = Gravity.TOP | Gravity.END;
@@ -95,7 +117,119 @@ final class DevOverlay {
         toast.setVisibility(View.VISIBLE);
         toast.bringToFront();
         if (badge != null) badge.bringToFront();   // 角标始终在提示之上
+        if (sheet != null && sheetOn) sheet.bringToFront();
         ui.postDelayed(hideToast, 1500);
+    }
+
+    /** ★标注"是否有就地编辑"（决策 #719）——有 ⇒ 角标转琥珀 + 面板显示"非项目代码效果"。 */
+    void setEdited(boolean edited) {
+        this.edited = edited;
+        if (badge == null) return;
+        badge.setText(edited ? "DEV ✎" : "DEV");
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(edited ? 0xE6E08A00 : 0xCC2F6BFF);   // 琥珀（有未还原编辑） / 品牌蓝
+        bg.setCornerRadius(40 * act.getResources().getDisplayMetrics().density);
+        badge.setBackground(bg);
+        if (sheetOn) refreshStatus();
+    }
+
+    private void refreshStatus() {
+        if (statusLabel == null) return;
+        statusLabel.setText(edited ? "⚠ 渲染状态：含就地编辑 — 非项目代码效果" : "渲染状态：项目代码（实时）");
+        statusLabel.setTextColor(edited ? 0xFFFFC24D : Color.WHITE);
+    }
+
+    private void toggleSheet() { if (sheetOn) hideSheet(); else showSheet(); }
+
+    private void showSheet() {
+        final float density = act.getResources().getDisplayMetrics().density;
+        if (sheet == null) buildSheet(density);
+        if (sheet == null) return;
+        sheetOn = true;
+        refreshStatus();
+        sheet.setVisibility(View.VISIBLE);
+        sheet.bringToFront();
+        if (badge != null) badge.bringToFront();
+        // ★首帧尚未 layout ⇒ getHeight()=0；post 到 layout 之后再滑入（否则动画是空操作）
+        sheet.setTranslationY(sheet.getHeight() > 0 ? sheet.getHeight() : 600 * density);
+        sheet.post(new Runnable() { @Override public void run() {
+            if (sheet != null && sheetOn) sheet.animate().translationY(0f).setDuration(220).start();
+        } });
+    }
+
+    private void hideSheet() {
+        if (sheet == null) return;
+        sheetOn = false;
+        float h = sheet.getHeight() > 0 ? sheet.getHeight() : 600 * act.getResources().getDisplayMetrics().density;
+        sheet.animate().translationY(h).setDuration(200)
+                .withEndAction(new Runnable() { @Override public void run() {
+                    if (sheet != null) sheet.setVisibility(View.GONE);
+                } }).start();
+        if (badge != null) badge.bringToFront();
+    }
+
+    /** 底部调试面板：状态行 + 「重置为项目代码」+ 面板 URL 提示（对齐 iOS `buildSheet`）。 */
+    private void buildSheet(float density) {
+        int pad = (int) (18 * density);
+        LinearLayout s = new LinearLayout(act);
+        s.setOrientation(LinearLayout.VERTICAL);
+        s.setBackgroundColor(0xF2151820);
+        s.setPadding(pad, (int) (14 * density), pad, pad);
+        s.setElevation(12 * density);
+
+        TextView title = new TextView(act);
+        title.setText("DevTools");
+        title.setTextColor(Color.WHITE);
+        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        title.setTypeface(title.getTypeface(), android.graphics.Typeface.BOLD);
+        s.addView(title);
+
+        statusLabel = new TextView(act);
+        statusLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        slp.topMargin = (int) (8 * density);
+        s.addView(statusLabel, slp);
+
+        TextView reset = new TextView(act);
+        reset.setText("重置为项目代码");
+        reset.setTextColor(Color.WHITE);
+        reset.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        reset.setTypeface(reset.getTypeface(), android.graphics.Typeface.BOLD);
+        reset.setGravity(Gravity.CENTER);
+        GradientDrawable rbg = new GradientDrawable();
+        rbg.setColor(0xFF2F6BFF);
+        rbg.setCornerRadius(10 * density);
+        reset.setBackground(rbg);
+        reset.setPadding(0, (int) (12 * density), 0, (int) (12 * density));
+        reset.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                if (resetAction != null) resetAction.run();
+                hideSheet();
+            }
+        });
+        LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        rlp.topMargin = (int) (14 * density);
+        s.addView(reset, rlp);
+
+        TextView url = new TextView(act);
+        url.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        url.setTextColor(0x80FFFFFF);
+        url.setText(panelUrl == null || panelUrl.isEmpty()
+                ? "面板：浏览器打开 dev server 地址"
+                : "面板：" + panelUrl + "（浏览器打开·元素高亮/就地编辑/REPL）");
+        LinearLayout.LayoutParams ulp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        ulp.topMargin = (int) (12 * density);
+        s.addView(url, ulp);
+
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT);
+        lp.gravity = Gravity.BOTTOM;
+        s.setVisibility(View.GONE);
+        root.addView(s, lp);
+        sheet = s;
     }
 
     private int statusBarHeight() {

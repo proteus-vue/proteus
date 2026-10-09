@@ -67,6 +67,8 @@ public final class AppActivity extends Activity {
     /** ★★原生渲染分段（决策 #718）：每次渲染后由 `recordPerf` 写入（JSON 数组 [{label,ms}]），
      *   心跳 `takePerfJsonForPing()` 取用一次即清（排空式 ⇒ 空闲窗口不误报上次 mount 的耗时）。 */
     private volatile String devRenderJson = "";
+    /** ★★是否有**未还原的就地编辑**（决策 #719）——决定 DevOverlay 的"渲染状态"提示与角标配色。 */
+    private volatile boolean editsApplied = false;
     /** 事件 trace 出箱（UI 线程抽取 → watch 线程上报；决策 #675） */
     private final java.util.List<String[]> traceOutbox = java.util.Collections.synchronizedList(new java.util.ArrayList<String[]>());
     /** 桥调用日志出箱（决策 #679：JS→原生 invoke → 面板 Network·项目通道） */
@@ -174,6 +176,10 @@ public final class AppActivity extends Activity {
         // ★dev 可视化层（决策 #671）：叠加在内容/tab 之上——DEV 角标（release 不创建）。挂起后短暂提示"dev 模式"。
         devOverlay = new DevOverlay(this, root);
         devOverlay.attach();
+        // ★★DevOverlay 扩展（决策 #719，对齐 iOS）：角标可点展开底部菜单（渲染状态 + 一键重置）；
+        //   「重置为项目代码」与面板 `/cmd reset` **同一实现**（`resetToProject`）。
+        devOverlay.setPanelUrl(devServerBase() == null ? "" : devServerBase());
+        devOverlay.setResetAction(new Runnable() { @Override public void run() { resetToProject(); } });
         if (ProteusBuildConfig.DEV) { installDevConsole(); startLogPump(); devEnvJson = collectDeviceEnv(); }
         contentHost.post(new Runnable() {
             @Override public void run() {
@@ -558,15 +564,31 @@ public final class AppActivity extends Activity {
     /** 宿主 dev 事件入队（UI 线程）——**原生通道**（决策 #679 分流）。 */
     private void devLog(String level, String text) { if (text != null) hostLogQueue.add(new String[]{"native", level, text}); }
 
-    /** ★面板→设备命令执行（决策 #701，UI 线程）：`highlight`（元素高亮）/ `eval`（REPL）。结果经 devLog 回 Console。 */
+    /** ★面板→设备命令执行（决策 #701/#719，UI 线程）：`highlight`（元素高亮）/ `edit`（就地编辑）/
+     *   `reset`（重置为项目代码）/ `eval`（REPL）。结果经 devLog 回 Console。
+     *   ★★命令字段键名以 **dev server 为准**：`nodeId`（非 `id`）——见 `app-dev-server.ts` 的 `CmdEvent.nodeId`。
+     *     （历史 bug：曾读 `id` ⇒ 面板点元素恒收 0 ⇒ 高亮实质失效，本项修。） */
     private void applyCommand(String json) {
         try {
             org.json.JSONObject o = new org.json.JSONObject(json);
             String type = o.optString("type", "");
             if ("highlight".equals(type)) {
-                int id = o.optInt("id", 0);
+                int id = o.optInt("nodeId", 0);   // ★键名 = nodeId（对齐 dev server / iOS）
                 if (draw != null) draw.highlightNode(id);
                 devLog("info", "highlight #" + id);
+            } else if ("edit".equals(type)) {
+                // ★★就地编辑（决策 #719）：改该节点某字段 ⇒ 桥 `updatePatches`（合并 spec + 内核增量重排）
+                //   ⇒ 布局类/绘制类都生效（与 iOS #706 同语义；实现路径按各端已有能力取最省）。
+                int id = o.optInt("nodeId", 0);
+                String key = o.optString("key", "");
+                String value = o.optString("value", "");
+                if (id > 0 && !key.isEmpty()) {
+                    boolean ok = applyLiveEdit(id, key, value);
+                    if (ok) { editsApplied = true; if (devOverlay != null) devOverlay.setEdited(true); }
+                    devLog(ok ? "info" : "warn", "edit #" + id + " " + key + "=" + value + (ok ? "" : "（不支持/无该节点）"));
+                }
+            } else if ("reset".equals(type)) {
+                resetToProject();
             } else if ("eval".equals(type)) {
                 String expr = o.optString("expr", "");
                 if (!expr.isEmpty()) {
@@ -575,6 +597,71 @@ public final class AppActivity extends Activity {
                 }
             }
         } catch (Throwable ignored) { /* 命令尽力而为——不干扰渲染 */ }
+    }
+
+    /** ★★就地编辑核心（决策 #719）：值强转/校验 → 桥 `updatePatches([{id,style:{k:v}}])`（同 Java 包可直接调）。
+     *   禁改结构字段（id/parentId/rect/tag/semantic）——与 iOS `applyLiveEdit` 同约束。 */
+    private boolean applyLiveEdit(int id, String key, String value) {
+        if (draw == null) return false;
+        if ("id".equals(key) || "parentId".equals(key) || "rect".equals(key) || "tag".equals(key) || "semantic".equals(key)) return false;
+        Object coerced = coerceLiveEdit(key, value);
+        if (coerced == null) return false;
+        try {
+            org.json.JSONObject style = new org.json.JSONObject();
+            style.put(key, coerced);
+            org.json.JSONObject patch = new org.json.JSONObject();
+            patch.put("id", id);
+            patch.put("style", style);
+            org.json.JSONArray patches = new org.json.JSONArray();
+            patches.put(patch);
+            org.json.JSONObject reply = new org.json.JSONObject(draw.updatePatches(patches.toString()));
+            if (draw.view() != null) draw.view().invalidate();
+            return reply.optBoolean("ok", false);
+        } catch (Throwable t) { return false; }
+    }
+
+    /** ★就地编辑**值强转/校验**（决策 #719，镜像 iOS `coerceLiveEdit`）：颜色按 hex；padding/margin
+     *   单值⇒四边同值 / JSON 对象；枚举按**内核封闭集**；其余能解析为数字则数字，否则原串。
+     *   ★返回 null = 拒绝（非法值**不静默**改）。 */
+    private static Object coerceLiveEdit(String key, String value) {
+        if ("backgroundColor".equals(key) || "borderColor".equals(key) || "color".equals(key)) {
+            return (value != null && value.matches("#[0-9a-fA-F]{3,8}")) ? value : null;
+        }
+        if ("padding".equals(key) || "margin".equals(key)) {
+            try {
+                double d = Double.parseDouble(value);
+                org.json.JSONObject e = new org.json.JSONObject();
+                e.put("top", d); e.put("right", d); e.put("bottom", d); e.put("left", d);
+                return e;
+            } catch (Throwable ignored) { }
+            try {
+                org.json.JSONObject o = new org.json.JSONObject(value);
+                boolean any = false;
+                for (String s : new String[]{"top", "right", "bottom", "left"}) if (o.has(s)) any = true;
+                return any ? o : null;
+            } catch (Throwable ignored) { return null; }
+        }
+        if ("display".equals(key)) return ("flex".equals(value) || "none".equals(value)) ? value : null;
+        if ("position".equals(key)) return (java.util.Arrays.asList("static", "relative", "absolute", "fixed", "sticky").contains(value)) ? value : null;
+        if ("overflow".equals(key) || "overflowX".equals(key) || "overflowY".equals(key)) {
+            return (java.util.Arrays.asList("visible", "hidden", "scroll", "auto").contains(value)) ? value : null;
+        }
+        if ("flexDirection".equals(key)) {
+            return (java.util.Arrays.asList("row", "column", "row-reverse", "column-reverse").contains(value)) ? value : null;
+        }
+        // 默认：能解析为数字 ⇒ 数字（尺寸/弹性/字号/圆角/透明/偏移…）；否则按字符串原样收（文本/字体族/对齐…）
+        try { return Double.valueOf(value); } catch (Throwable ignored) { return value; }
+    }
+
+    /** ★重置为**项目代码的实时效果**（决策 #719）：**强制重挂**当前屏（`remount:true`）⇒ 从项目内容
+     *   重建全部层、覆盖就地编辑；并清编辑标记 + 强制下一 tick 重发 `/tree`（面板 Elements 同步复位）。
+     *   与 iOS `resetFromMenu`/`restoreProject` 同语义。 */
+    private void resetToProject() {
+        editsApplied = false;
+        if (devOverlay != null) devOverlay.setEdited(false);
+        renderCurrent(readState(), true);   // ★remount ⇒ 重建全部层、覆盖就地编辑；其内会 pushDevTree（树随新屏复位）
+        devLog("info", "reset · 恢复项目代码效果");
+        if (devOverlay != null) devOverlay.flash("已重置为项目代码");
     }
 
     /** 每 400ms 在 UI 线程抽一次 JS console 队列（eval 仅 UI 线程安全），追加到待 flush 队列。 */
@@ -886,7 +973,12 @@ public final class AppActivity extends Activity {
         return o;
     }
 
-    private void renderCurrent(String stateJson) {
+    private void renderCurrent(String stateJson) { renderCurrent(stateJson, false); }
+
+    /** ★`remount`（决策 #719）：强制**重挂**当前屏——`mountScreen` 对同屏短路 ⇒ 普通重渲不重建层
+     *   ⇒ 就地编辑残留（"重置"变空操作）。remount 走 `mountScreenInto`（无短路）⇒ 从项目内容重建全部层。
+     *   与 iOS `renderCurrent(remount:)` / `restoreProject` 同语义（运行期 `entry-superapp.ts` 已支持）。 */
+    private void renderCurrent(String stateJson, boolean remount) {
         final String page = currentName(stateJson);
         // ★DevTools 心跳用：每次渲染更新"当前屏"（UI 线程写；dev-watch 线程读）
         if (page != null && !page.isEmpty()) lastScreenName = page;
@@ -901,9 +993,10 @@ public final class AppActivity extends Activity {
             JSONObject args = new JSONObject();
             args.put("name", page);
             args.put("viewport", new JSONObject().put("width", vwPx / density).put("height", vhPx / density));
+            if (remount) args.put("remount", true);   // ★强制重挂（reset 用）
             QuickJsEngine.EvalResult rr = QuickJsEngine.eval("__proteusSuperappRender(" + JSONObject.quote(args.toString()) + ")");
             if (draw.view() != null) draw.view().invalidate();
-            Log.i(TAG, "PROTEUS_RENDER page=" + page + " viewport=" + (vwPx / density) + "x" + (vhPx / density));
+            Log.i(TAG, "PROTEUS_RENDER page=" + page + " viewport=" + (vwPx / density) + "x" + (vhPx / density) + (remount ? " remount" : ""));
             // ★切屏自动刷树（决策 #675 · 修 bug1：此前只有 boot/hotReload 推树 ⇒ 切屏后面板树不更新）
             //   + 性能读数（renderMs/mount/relayout）。★renderCurrent 只在 UI 线程调 ⇒ eval 安全。
             if (ProteusBuildConfig.DEV) { pushDevTree(); recordPerf(t0); }

@@ -158,6 +158,11 @@
 >
 > ★★**2026-10-07 新增（CSE 之后的四条主线，均不占 G 序）**：**Themis**（G-61 CSS 引擎的**产品白皮书**）· **Proteus UI**（OS 级组件库，内部代号 **Charites**）· **Keryx**（OS 级图标库）· **Koine**（内置组件体系重评估）。
 > 四者互为正交：Themis = 一致性引擎底座（已交付 G-61 的产品化叙事）· **Proteus UI = 设计语言层（品质·美）** · **Keryx = 图标数据层（Proteus UI 的"方言"）** · **Koine = 平台词汇层（一套语义两套词形，与 Proteus UI 正交）**。
+>
+> ★★**2026-10-09 新增（非 plan，立项）**：`docs/harmony-dev-channel-plan.md` —— **鸿蒙 DevTools dev 通道立项**
+> （决策 #719）。固化取证：鸿蒙 CLI 壳**无运行期**（不 eval bundle，只渲染静态 `app-screen-content.json`）⇒
+> 「鸿蒙接 dev 通道」前置是**先把壳升级为运行期壳**；含障碍清单（一次性 VM / 无 INTERNET / 无高亮/节点树能力 /
+> `packageHarmonyHost` 无 dev 变体）与分三步方案。**本轮仅安卓落地，鸿蒙另立里程碑。**
 > 依赖关系：`Koine`（词汇契约）在底 → `Proteus UI`（组件）在其上 → `Keryx`（图标）为组件提供词汇；`Themis` 为三者提供"一致性可证明"的门禁管线。命名体系延续万神殿（Proteus/Morpheus/Themis/Hephaestus/Charites/Keryx/Koine/Mnemosyne/Janus）。
 
 | 文件 | 说明 |
