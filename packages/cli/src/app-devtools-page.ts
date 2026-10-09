@@ -228,6 +228,19 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
   .pstat{display:inline-flex;align-items:center;gap:7px;margin-left:auto;padding:4px 12px;border-radius:999px;background:var(--surface-3);border:1px solid var(--line-2);color:var(--ink-2);font-size:11.5px;font-weight:500;letter-spacing:.2px;white-space:nowrap}
   .pstat b{font-weight:700}
   .pdot{width:7px;height:7px;border-radius:50%;flex:none;box-shadow:0 0 0 3px rgba(255,255,255,.05)}
+  /* ★掉帧详情（决策 #714）：点掉帧柱 ⇒ 该窗口的事件链归因 */
+  .pbar.jank{cursor:pointer}
+  .jdot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--err);box-shadow:0 0 0 3px var(--err-soft)}
+  .jd-pills{display:flex;flex-wrap:wrap;gap:6px;padding:var(--s3) var(--s4) 0}
+  .dpill{display:inline-flex;align-items:center;gap:5px;background:var(--surface-3);border:1px solid var(--line);border-radius:6px;padding:2px 8px;font-size:11px;font-family:var(--mono);color:var(--ink-2)}
+  .dpill b{color:var(--dim);font-weight:500}
+  .jd-sec{padding:var(--s3) var(--s4) 4px;color:var(--dim);font-size:11px;letter-spacing:.3px}
+  .jd-rows{padding:0 var(--s4) var(--s3);max-height:220px;overflow:auto}
+  .jrow{display:grid;grid-template-columns:64px 46px minmax(0,1fr);gap:var(--s3);padding:5px 0;border-top:1px solid var(--line);font-size:11.5px;font-family:var(--mono)}
+  .jrow:first-child{border-top:0}
+  .jrow .jt{color:var(--faint)} .jrow .jk{color:var(--brand)} .jrow .jx{color:var(--ink-2);overflow-wrap:anywhere}
+  .jrow.jempty{display:block;color:var(--dim);font-family:var(--sans);line-height:1.6}
+  .jd-hint{padding:0 var(--s4) var(--s4);color:var(--faint);font-size:11px;font-family:var(--mono)}
   .prof{position:relative;height:120px;display:flex;align-items:flex-end;gap:2px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:10px var(--s3);overflow:hidden}
   .prof .pbar{flex:0 0 4px;min-width:3px;border-radius:2px 2px 0 0;background:var(--brand);transition:height .1s}
   .prof .pbar.jank{background:var(--err)}
@@ -268,6 +281,8 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
   <div class="blk">
     <h2>性能时间线 · Profiler<span id="prof-stat" class="pstat">等待设备心跳…</span></h2>
     <div class="prof" id="prof"><div class="empty">暂无性能采样…设备心跳（每 ~1.5s）上报 渲染/逐帧耗时。</div></div>
+    <!-- ★掉帧详情（决策 #714）：点红柱 ⇒ 该掉帧窗口内的事件链（重建/手势/请求/日志 + 帧统计） -->
+    <div class="ndetail" id="jank-detail" style="display:none"></div>
   </div>
 
   <div class="blk two">
@@ -486,7 +501,7 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
     boxEditing = false;
     if (pendingTree) { var p = pendingTree; pendingTree = null; renderTree(p); }
   });
-  function selectNode(id) { selId = id; renderBox(findNode(id)); renderTree(treeData); sendHighlight(id); }
+  function selectNode(id, sendHl) { selId = id; renderBox(findNode(id)); renderTree(treeData); if (sendHl !== false) sendHighlight(id); }
   // 盒模型：内核 rect（x/y/w/h）+ 关键样式
   function renderBox(n0) {
     if (!n0) { boxEl.style.display = 'none'; return; }
@@ -610,11 +625,14 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
     list.slice().reverse().forEach((e) => eventsEl.appendChild(addEvent(e, false)));
   }
   function pushEvent(e) {
+    logEvent('gesture', (e.gesture || '') + ' #' + e.id + (e.src ? ' @' + e.src : ''), e.time);
     if (eventsEl.querySelector('.empty')) eventsEl.innerHTML = '';
     eventsEl.insertBefore(addEvent(e, true), eventsEl.firstChild);
     while (eventsEl.children.length > 80) eventsEl.removeChild(eventsEl.lastChild);
-    // 点选联动：手势命中该节点即高亮
-    if (e.id) selectNode(e.id);
+    // ★点选联动（决策 #714）：设备手势命中该节点 ⇒ 面板选中它**但不回发 highlight**——
+    //   高亮是"面板→设备"方向的证据（用户点树才有）；设备侧手势会**主动收起**高亮，
+    //   若这里再回发就会"点了设备反而又亮起来且一直挂着"（用户实测的坏体验）。
+    if (e.id) selectNode(e.id, false);
   }
   // ── 设备环境（决策 #674/#676）：分组展示（设备 / 屏幕 / 内核·引擎） ──
   function renderEnv(env) {
@@ -656,6 +674,13 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
     if (s.inspect && s.inspect.id) { selId = s.inspect.id; if (treeData) renderTree(treeData); }
     renderEnv(s.host && s.host.env);
     applyHost(s.host);
+    // ★（决策 #714）首帧 snapshot 播种归因日志（重建/请求/日志/手势都带时间戳）——否则早期掉帧点开无数据
+    evlog = [];
+    ;(s.events || []).forEach((e) => logEvent('rebuild', (e.reason || '') + ' · v' + e.version + ' · ' + (e.ms || 0) + 'ms', e.time));
+    ;(s.net || []).forEach((e) => logEvent('net', (e.method || '') + ' ' + (e.path || '') + (e.status ? ' → ' + e.status : ''), e.time));
+    ;(s.console || []).forEach((e) => logEvent('console', '[' + (e.level || 'log') + '] ' + (e.text || ''), e.time));
+    ;(s.trace || []).forEach((e) => logEvent('gesture', (e.gesture || '') + ' #' + e.id + (e.src ? ' @' + e.src : ''), e.time));
+    evlog.sort(function (a, b) { return a.t - b.t; });
     if (s.perf) { profSamples = s.perf.slice(-400); renderProf(); }   // ★性能时间线（决策 #709）
   }
   function applyPerf(p) {
@@ -669,6 +694,13 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
   const profEl = $('prof');
   const BUDGET_MS = 16.7;   // 60fps 帧预算
   let profSamples = [];
+  // ★★统一事件日志（决策 #714 · 掉帧归因）：重建/手势/请求/日志都带时间戳入此（有界）——
+  //   点掉帧柱时按"该掉帧前的窗口"筛出来 ⇒ 让开发者看到"掉帧那一刻旁边发生了什么"。
+  let evlog = [];
+  function logEvent(kind, label, time) {
+    evlog.push({ t: Number(time) || Date.now(), kind: kind, label: String(label || '') });
+    if (evlog.length > 600) evlog.shift();
+  }
   function renderProf() {
     if (!profEl) return;
     if (!profSamples.length) { profEl.innerHTML = '<div class="empty">暂无性能采样…设备心跳（每 ~1.5s）上报逐帧统计。</div>'; return; }
@@ -687,12 +719,17 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
       var p = profSamples[i].perf || {};
       var isJank = Number(p.dropped) > 0;
       var h = Math.max(2, Math.round((v / mx) * H));
-      return '<div class="pbar' + (isJank ? ' jank' : '') + '" style="height:' + h + 'px" title="' + v.toFixed(2) + 'ms' + (p.fps ? ' · ' + p.fps + 'fps' : '') + (p.dropped ? ' · 掉帧 ' + p.dropped : '') + '"></div>';
+      // ★掉帧柱可点（决策 #714）：展开该窗口的事件链归因
+      return '<div class="pbar' + (isJank ? ' jank' : '') + '"' + (isJank ? ' data-i="' + i + '"' : '')
+        + ' style="height:' + h + 'px" title="' + v.toFixed(2) + 'ms' + (p.fps ? ' · ' + p.fps + 'fps' : '') + (p.dropped ? ' · 掉帧 ' + p.dropped + '（点击看详情）' : '') + '"></div>';
     }).join('');
     var budgetTop = Math.round((1 - BUDGET_MS / mx) * H);
     profEl.innerHTML = bars
       + '<div class="pbudget" style="bottom:calc(10px + ' + budgetTop + 'px)"><span>16.7ms 预算</span></div>'
       + '<div class="plabel">max ' + Math.max.apply(null, vals).toFixed(1) + 'ms · avg ' + avg.toFixed(1) + 'ms' + (avgFps ? ' · ' + avgFps.toFixed(0) + 'fps' : '') + '</div>';
+    profEl.querySelectorAll('.pbar.jank').forEach(function (b) {
+      b.addEventListener('click', function () { showJankDetail(Number(b.dataset.i)); });
+    });
     var stat = $('prof-stat');
     if (stat) {
       var dot = jank ? 'var(--err)' : 'var(--ok)';
@@ -700,6 +737,33 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
         + (avgFps ? ' · ' + avgFps.toFixed(0) + 'fps' : '')
         + ' · ' + (jank ? '<b style="color:var(--err)">' + droppedTotal + ' 掉帧</b>' : '<b style="color:var(--ok)">无掉帧</b>');
     }
+  }
+  // ★★掉帧详情 + 归因（决策 #714）：把该掉帧样本**前 ~1.6s 窗口**内的重建/手势/请求/日志串成"事件链"——
+  //   开发者据此判断"这次掉帧是热重载？点了什么？拉了 bundle？还是纯渲染"。★只做**相关**，不做因果断言。
+  function showJankDetail(i) {
+    var box = $('jank-detail'); if (!box) return;
+    var s = profSamples[i]; if (!s) return;
+    var p = s.perf || {};
+    var t = Number(s.t) || 0;
+    var WIN = 1600;   // 归因窗口（ms）——一个心跳 tick 的跨度
+    var rel = t ? evlog.filter(function (e) { return e.t <= t && e.t > t - WIN; }).sort(function (a, b) { return a.t - b.t; }) : [];
+    var kindTag = { rebuild: '重建', gesture: '手势', net: '请求', console: '日志' };
+    var relHtml = rel.length
+      ? rel.map(function (e) { return '<div class="jrow"><span class="jt">' + (t ? (e.t - t) + 'ms' : e.t) + '</span><span class="jk">' + escapeHtml(kindTag[e.kind] || e.kind) + '</span><span class="jx">' + escapeHtml(e.label) + '</span></div>'; }).join('')
+      : '<div class="jrow jempty">该窗口内无重建/手势/请求——掉帧**非本次动作引起**（纯渲染 / 后台负载 / 主线程其它阻塞）。</div>';
+    var dps = Object.keys(p).map(function (k) { return '<span class="dpill"><b>' + escapeHtml(k) + '</b>' + escapeHtml(String(p[k])) + '</span>'; }).join('');
+    box.innerHTML = '<div class="nd-h"><span class="jdot"></span>'
+      + '<span class="nd-m">掉帧详情</span>'
+      + '<span class="nd-path">' + (s.t ? fmtTime(s.t) : '') + ' · 掉帧前 ' + (WIN / 1000) + 's 内的事件链</span>'
+      + '<span class="nd-st err">掉帧 ' + (p.dropped || 0) + ' 帧</span>'
+      + '<button class="nd-close" title="关闭">✕</button></div>'
+      + '<div class="jd-pills">' + dps + '</div>'
+      + '<div class="jd-sec">触发窗口 · 事件链（同时段，不断言因果）</div>'
+      + '<div class="jd-rows">' + relHtml + '</div>'
+      + '<div class="jd-hint">帧间隔 ' + escapeHtml(String(p.frameMs != null ? p.frameMs : '?')) + 'ms · 最长 ' + escapeHtml(String(p.frameMaxMs != null ? p.frameMaxMs : '?')) + 'ms · 本窗口 ' + escapeHtml(String(p.frames != null ? p.frames : '?')) + ' 帧。</div>';
+    box.style.display = 'block';
+    var cb = box.querySelector('#jank-close');
+    if (cb) cb.addEventListener('click', function () { box.style.display = 'none'; });
   }
   function pushPerf(p) {
     profSamples.push(p); if (profSamples.length > 400) profSamples.shift();
@@ -715,6 +779,7 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
     if (h && h.perf) applyPerf(h.perf);
   }
   function pushRebuild(e) {
+    logEvent('rebuild', (e.reason || '') + ' · v' + e.version + ' · ' + (e.ms || 0) + 'ms', e.time);
     if (tl.querySelector('.empty')) tl.innerHTML = '';
     tl.insertBefore(addRow(e, true), tl.firstChild);
     while (tl.children.length > 40) tl.removeChild(tl.lastChild);
@@ -723,6 +788,8 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
     $('c-ms').innerHTML = e.ms + '<small>ms</small>';
   }
   function pushNet(e) {
+    // ★归因日志**先于过滤**记（掉帧归因关心"发生了什么"，与当前视图筛选无关）
+    logEvent('net', (e.method || '') + ' ' + (e.path || '') + (e.status ? ' → ' + e.status : ''), e.time);
     lastNet.push(e); if (lastNet.length > 200) lastNet.shift();
     if (!passF(e.channel, filt.net)) return;   // 被过滤掉 ⇒ 不入当前视图（切回"全部"时会补上）
     if (netEl.querySelector('.empty')) netEl.innerHTML = '';
@@ -730,6 +797,7 @@ export function renderDevtoolsPage(info: DevtoolsPageInfo): string {
     while (netEl.children.length > 80) netEl.removeChild(netEl.lastChild);
   }
   function pushCon(e) {
+    logEvent('console', '[' + (e.level || 'log') + '] ' + (e.text || ''), e.time);
     lastCon.push(e); if (lastCon.length > 400) lastCon.shift();
     if (!passF(e.channel, filt.con)) return;
     if (conEl.querySelector('.empty')) conEl.innerHTML = '';

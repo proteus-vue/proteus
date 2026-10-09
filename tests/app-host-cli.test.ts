@@ -263,6 +263,40 @@ describe('★完整宿主 · iOS 宿主模板为运行期形态（决策 #683）
     expect(page, 'META 注入 projectRoot').toContain('projectRoot: info.projectRoot')
   })
 
+  // ★高亮生命周期 + 掉帧归因（决策 #714）——静态锁：两处真机腿 + 面板
+  it('高亮自动收起（决策 #714）：手势 / 重建时清高亮 + 设备点选不回发高亮', () => {
+    const page = fs.readFileSync(path.join(ROOT, 'packages/cli/src/app-devtools-page.ts'), 'utf-8')
+    // iOS：桥 clearHighlight（手势 + mount 各一处）
+    const rt = fs.readFileSync(path.join(ROOT, 'hosts/ios/ProteusHost/runtime/selfdraw-scene.swift'), 'utf-8')
+    expect(rt, 'iOS 清除高亮入口').toContain('func clearHighlight()')
+    expect(rt, 'iOS 手势时清高亮').toMatch(/func emitGesture\(x: Double, y: Double, type: String\) \{\s*\n\s*guard handle != 0 else \{ return \}\s*\n\s*\/\/[^\n]*决策 #714[\s\S]*?clearHighlight\(\)/)
+    expect(rt, 'iOS mount 时清高亮').toMatch(/func mount\(_ treeJson: String\) -> String \{[\s\S]*?clearHighlight\(\)/)
+    // Android：VaporRenderHost 手势监听 + mount 时 clear
+    const vrh = fs.readFileSync(path.join(ROOT, 'hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/VaporRenderHost.java'), 'utf-8')
+    expect(vrh, 'Android 手势时清高亮').toMatch(/onGesture\(String type[\s\S]*?highlightNode\(0\);[\s\S]*?gestureDispatched\+\+/)
+    expect(vrh, 'Android mount 时清高亮').toMatch(/public String mount\(String treeJson\) \{\s*\n\s*mountCalls\+\+;[\s\S]*?highlightNode\(0\);/)
+    // 面板：设备点选**不回发** highlight（只点树才亮）
+    expect(page, 'selectNode 可禁回发高亮').toContain('function selectNode(id, sendHl)')
+    expect(page, '设备点选不亮').toMatch(/selectNode\(e\.id, false\)/)
+  })
+
+  it('掉帧详情 · 事件链归因（决策 #714）：面板可点掉帧柱 + Android 真 dropped', () => {
+    const page = fs.readFileSync(path.join(ROOT, 'packages/cli/src/app-devtools-page.ts'), 'utf-8')
+    expect(page, '掉帧详情入口').toContain('function showJankDetail(')
+    expect(page, '掉帧柱可点').toMatch(/pbar\.jank[\s\S]*?addEventListener\('click'/)
+    expect(page, '事件日志缓冲').toContain('function logEvent(')
+    expect(page, '归因窗口').toContain('掉帧前 ')
+    // Android 逐帧采样器（Choreographer）+ recordPerf 发 fps/frameMaxMs/dropped/frames（键名与 iOS 对齐）
+    const pv = fs.readFileSync(path.join(ROOT, 'hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/ProteusHostView.java'), 'utf-8')
+    expect(pv, 'Android 逐帧采样器').toContain('public void startDevFrameSampler()')
+    expect(pv, 'Android 窗口读取').toContain('public double[] drainDevFrameStats()')
+    expect(pv, 'Android Choreographer').toContain('Choreographer.getInstance()')
+    const act = fs.readFileSync(path.join(ROOT, 'packages/cli/templates-host/android/src/dev/proteus/layoutcore/AppActivity.java'), 'utf-8')
+    expect(act, 'Android 启动采样器').toContain('startDevFrameSampler()')
+    expect(act, 'Android 上报 dropped').toContain('o.put("dropped"')
+    expect(act, 'Android 上报 fps').toContain('o.put("fps"')
+  })
+
   // ★面板→设备命令（决策 #701/#702 安卓腿）：Android 宿主也接 /cmd + 元素高亮 + REPL
   it('Android 宿主接命令通道（决策 #701/#702）：/cmd 轮询 + highlight + eval', () => {
     const act = fs.readFileSync(path.join(ROOT, 'packages/cli/templates-host/android/src/dev/proteus/layoutcore/AppActivity.java'), 'utf-8')

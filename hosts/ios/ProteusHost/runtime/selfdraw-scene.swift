@@ -4548,6 +4548,8 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         // ★重置几何快照（新树 ⇒ 旧快照无意义；否则首帧会把全部节点算成"刚变化"）
         lastGeom.removeAll(keepingCapacity: true)
         lastGeomChanged = 0
+        // ★★重建 ⇒ 收起旧高亮（决策 #714）：高亮层不随树重建消失，切屏后会挂在**旧 rect** 上
+        clearHighlight()
         // ★DevTools 性能计数（决策 #698）：mount 次数（与 Android `draw.mountCalls` 同口径）
         mountCalls += 1
         // ★force=全量重建（决策 #704）：`mount` 语义 = 建/重挂屏（非频繁更新——更新走 applyOps/updatePatches）
@@ -5141,6 +5143,9 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     ///   特例，见 hit.rs 模块头）⇒ 宿主与 JS 都**不该自己推**。
     func emitGesture(x: Double, y: Double, type: String) {
         guard handle != 0 else { return }
+        // ★★手势发生 ⇒ 收起元素高亮（决策 #714）：用户已看到"面板选中的是设备上这个"⇒ 高亮完成使命，
+        //   点空白/点动作都收起（含真实触摸与注入 tap——都走本入口）。下次面板选节点会再下发。
+        clearHighlight()
         let out = takeCString(proteus_layout_hit_test(handle, Float(x), Float(y)))
         guard let d = out.data(using: .utf8),
               let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any],
@@ -5603,6 +5608,14 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
 
     /// ★DevTools 元素高亮（决策 #701）：面板选中节点 ⇒ 在设备屏上给该节点 rect 描边覆盖
     func highlightNode(_ id: Int) { view?.highlightNode(id) }
+
+    /// ★★清除元素高亮（决策 #714）——`id<=0` 即清除（`highlightNode` 已有该语义）。
+    ///   【为什么需要】高亮覆盖层挂在视图 `layer` 上、**不随树重建自动消失** ⇒ 此前"无论切到哪个页面
+    ///   都还挂着上一个高亮"（用户实测）。⇒ 在**手势发生**与**屏内容重建**时主动清除：
+    ///   · 用户点了设备（含点空白）⇒ 高亮完成使命（"面板选中的就是设备上那个"已看清）⇒ 收起；
+    ///   · 切屏 / 重渲 ⇒ 旧 rect 无意义（甚至指到别的节点上）⇒ 收起。
+    ///   ★面板**重新**选中节点会再次下发 `highlight` ⇒ 不受影响（只在"手势/重建"时收）。
+    func clearHighlight() { view?.highlightNode(0) }
 
     /// ★dev 逐帧采样（Profiler 真值 · 决策 #710）：启动采样器 / 读并清零窗口。
     func startDevFrameSampler() { view?.startDevFrameSampler() }

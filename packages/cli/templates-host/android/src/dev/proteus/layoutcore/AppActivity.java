@@ -175,6 +175,9 @@ public final class AppActivity extends Activity {
                 renderCurrent(readState());
                 Log.i(TAG, "PROTEUS_APP_READY screen=" + currentName(readState()));
                 if (ProteusBuildConfig.DEV) {
+                    // ★★dev 逐帧采样器（决策 #714 · Android 腿）：启动 Choreographer 采样（真实帧间隔）——
+                    //   与 iOS `startDevFrameSampler()` 同语义/同键名 ⇒ 面板 Profiler 端无关（有真 dropped）。
+                    if (draw != null && draw.view() != null) draw.view().startDevFrameSampler();
                     devOverlay.flash("DEV 模式 · 改源码保存即热刷");
                     devLog("info", "app ready · screen=index");
                     pushDevTree();
@@ -359,6 +362,18 @@ public final class AppActivity extends Activity {
                 o.put("frameMs", Math.round(draw.view().lastFrameMs() * 100) / 100.0);
                 o.put("frameAvgMs", Math.round(draw.view().frameMsAverage() * 100) / 100.0);
                 o.put("draws", draw.view().onDrawTotal());
+                // ★★真实帧率（决策 #714 · Android 腿）：读并清零 Choreographer 窗口采样——
+                //   fps / 真实帧间隔均长 frameMs / 最长 frameMaxMs / 掉帧数 dropped / 帧数 frames。
+                //   ★**取代**上面的 onDraw 成本当"帧率"看（那是"花了多久画一帧"，不是"多久出一帧"）。
+                //   ★键名与 iOS `perfJson()` **逐字一致** ⇒ 面板 Profiler 端无关。
+                double[] fs = draw.view().drainDevFrameStats();
+                if (fs != null && fs.length >= 5) {
+                    o.put("fps", fs[0]);
+                    o.put("frameMs", fs[1]);
+                    o.put("frameMaxMs", fs[2]);
+                    o.put("dropped", (int) fs[3]);   // ★恒发（含 0）——面板以设备真值判掉帧
+                    o.put("frames", (int) fs[4]);
+                }
             }
             // ★重排 / patch 计数（内核回执累计，决策 #676）
             o.put("relayout", draw.relayoutTotal);
