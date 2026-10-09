@@ -115,9 +115,17 @@ iOS/Android 的接线：`templates-host/{ios,android}` 的壳 + `ProteusBuildCon
   - **eval**：native `hostAppEval`（一次性 VM 内 boot + 求值）→ 结果入 Console。
 - ✅ **真机验收**：highlight #1 → 浅蓝高亮框；edit #1 `color=#D64545` → 标题变红；reset → 恢复黑；eval `1+2` → `3`。
 
-### 步 4 · 深化（可选）——⬜ 待做
-- **项目 `console.*` → 面板 Console·项目通道**（dev 垫片；一次性 VM 下代价待评）。
-- **逐帧/掉帧 perf 读数**（需帧采样器；当前 perf 仅 `renderMs`）。
+### 步 4 · 深化（面板数据对齐 Android/iOS）——✅ **已落地（决策 #730 · 2026-10-09）**
+- ✅ **逐帧 perf**（对齐 iOS `CADisplayLink`）：独立**常驻** `displaySync` 采样真实帧间隔 →
+  `fps` / `frameMs` / `frameMaxMs` / `frames` / `dropped`（`>1.5× 帧预算` 判掉帧；排空式每心跳取一次——
+  #723 教训"周期量每 tick drain"）+ `mountCalls`（渲染次数）；真机实测面板 Profiler 有真帧率/掉帧。
+- ✅ **被点元素 `/inspect`**（决策 #730）：命中链末位 id → dev-watch 上报（面板高亮被点节点）。
+- ✅ **项目 `console.*` → 面板 Console·项目通道**：VM 注入 console 垫片（`proteusHost.invoke('dev.console')` 回收）
+  → `hostAppRender` 返回 `console`（`level\ttext`）→ 壳入队（channel=project）→ 面板。真机验证捕获项目 `console.error`。
+
+### 一句话结论
+**鸿蒙 dev 通道已与 Android/iOS 对齐**：热刷(`/version`→`/bundle`) · 心跳(`/ping`) · 日志(`/log` native+project) ·
+元素树(`/tree`) · 事件(`/trace`) · 被点(`/inspect`) · 逐帧 perf · 命令集(`/cmd`：highlight/edit/reset/eval)。
 
 ---
 
