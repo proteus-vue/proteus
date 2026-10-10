@@ -1606,3 +1606,60 @@ describe('★S1.1 · `<style> .x:active{}` → 节点 press* 字段（按下态�
     expect(r.diagnostics.map((d) => d.code)).not.toContain('VAPOR_STYLE_SELECTOR_UNSUPPORTED')
   })
 })
+
+// ★★★CSS 伪元素 `::before`/`::after`（本批）：编译期**物化**一个装饰子节点（内核/宿主按普通节点渲染）
+describe('★CSS 伪元素 · `::before`/`::after` 物化为装饰子节点', () => {
+  const SFC = `<template>\n  <view class="pad"><text class="lbl">hi</text></view>\n</template>\n<style>\n@keyframes ripple { from { transform: scale(0); opacity: 0.6 } to { transform: scale(1); opacity: 0 } }\n.pad { position: relative; overflow: hidden; background-color: #141a24 }\n.pad:active { background-color: #1b3550 }\n.pad::after { content: ''; position: absolute; width: 20px; height: 20px; border-radius: 50%; background-color: #39d0ff }\n.pad:active::after { animation: ripple 0.5s ease-out }\n</style>\n`
+  const r = buildLayoutTemplate(SFC, 'pseudo.vue')
+  const pad = r.template.nodes.find((n) => (n.style as { backgroundColor?: string }).backgroundColor === '#141a24')!
+  const isPseudo = (n: unknown) => (n as { pseudo?: string }).pseudo !== undefined
+  const pseudoNodes = r.template.nodes.filter(isPseudo)
+
+  it('① 物化一个 ::after 装饰子节点（parentId = 原元素；在真子节点之后）', () => {
+    expect(pseudoNodes.length, '应物化 1 个伪元素节点').toBe(1)
+    const pe = pseudoNodes[0]!
+    expect((pe as { pseudo?: string }).pseudo).toBe('after')
+    expect(pe.parentId, '伪元素挂在原元素之下').toBe(pad.id)
+    expect(pad.id, '原元素在伪元素之前（pre-order）').toBeLessThan(pe.id)
+  })
+  it('② 伪元素样式来自 `.pad::after` 规则 + 强制 pointer-events:none（不抢事件）', () => {
+    const s = pseudoNodes[0]!.style as Record<string, unknown>
+    expect(s.position).toBe('absolute')
+    expect(s.width).toBe(20)
+    expect(s.borderRadiusPct, 'border-radius:50% → 半径比例 0.5').toBe(0.5)
+    expect(s.backgroundColor).toBe('#39d0ff')
+    expect(s.pointerEvents, '伪元素强制 pointer-events:none（布尔 false）').toBe(false)
+  })
+  it('③ `:active::after{animation}` 折成伪节点的 pressAnimation（按下才播）', () => {
+    const s = pseudoNodes[0]!.style as Record<string, unknown>
+    expect(Array.isArray(s.pressAnimation), '按下触发动画折成 pressAnimation').toBe(true)
+    expect(s.animation, '按下态动画不进常驻 animation').toBeUndefined()
+  })
+  it('④ 原元素常态不被伪元素规则污染', () => {
+    const s = pad.style as Record<string, unknown>
+    expect(s.backgroundColor, '原元素态仍是常态色').toBe('#141a24')
+    expect(s.position).toBe('relative')
+    expect(s.width, '伪元素的 width 不进原元素').toBeUndefined()
+  })
+  it('⑤ `content:none` / 缺省 ⇒ 不物化（CSS 语义）', () => {
+    const r2 = buildLayoutTemplate(`<template><view class="b">y</view></template><style>.b::after{content:none;color:red}</style>`, 'p2.vue')
+    expect(r2.template.nodes.some(isPseudo), 'content:none ⇒ 不产伪元素节点').toBe(false)
+    const r3 = buildLayoutTemplate(`<template><view class="c">y</view></template><style>.c::before{color:red}</style>`, 'p3.vue')
+    expect(r3.template.nodes.some(isPseudo), '无 content ⇒ 不产伪元素节点').toBe(false)
+  })
+  it('⑥ ::before 排在真子节点之前', () => {
+    const r4 = buildLayoutTemplate(`<template><view class="a"><text class="t">x</text></view></template><style>.a::before{content:'B'}</style>`, 'p4.vue')
+    const before = r4.template.nodes.find((n) => (n as { pseudo?: string }).pseudo === 'before')!
+    const realChild = r4.template.nodes.find((n) => n.tag === 'text')!
+    expect(before.id).toBeLessThan(realChild.id)
+  })
+  it('⑦ 不支持的选择器（::placeholder）仍诊断（不静默）', () => {
+    const r5 = buildLayoutTemplate(`<template><view class="d">y</view></template><style>.d::placeholder{color:red}</style>`, 'p5.vue')
+    expect(r5.diagnostics.map((d) => d.code)).toContain('VAPOR_STYLE_SELECTOR_UNSUPPORTED')
+  })
+  it('⑧ `content:attr()` 形态 ⇒ 精确诊断（不物化）', () => {
+    const r6 = buildLayoutTemplate(`<template><view class="e" data-x="1">y</view></template><style>.e::after{content:attr(data-x)}</style>`, 'p6.vue')
+    expect(r6.diagnostics.map((d) => d.code)).toContain('VAPOR_PSEUDO_CONTENT_UNSUPPORTED')
+    expect(r6.template.nodes.some(isPseudo)).toBe(false)
+  })
+})

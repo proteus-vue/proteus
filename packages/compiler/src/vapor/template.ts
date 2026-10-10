@@ -1664,6 +1664,13 @@ export interface ClassStyleSegment {
    *   ⇒ `pressBackgroundColor`），随节点样式**扁平透传**给宿主（内核不消费——纯绘制通道）。
    */
   state?: 'active'
+  /**
+   * ★★★**伪元素**（本批支持 `::before` / `::after`）：该段是伪元素段 ⇒ 规则作用于**目标元素的生成内容盒**。
+   *   【物化（详见 walk 内 `materializePseudo`）】编译期在原元素下**合成一个装饰子节点**（绝对定位/圆形/
+   *   可带动画，样式来自伪元素规则）——内核与三端渲染层当作**普通节点**渲染（零平台改动）。
+   *   ★只允许出现在选择器的**末段**（`:active::after` 合法；`::after .x` 非法 ⇒ 解析失败）。
+   */
+  pseudoElement?: 'before' | 'after'
 }
 
 export interface ClassStyleRule {
@@ -1685,6 +1692,16 @@ export interface ClassStyleRule {
    *   由宿主 DOWN 应用 / UP 还原（零 JS 跨界）。★按下态规则**不并入常驻 `styles`**（否则常态色被按下色覆盖）。
    */
   pressState?: boolean
+  /**
+   * ★★★**伪元素规则**（本批）：该规则的末段是 `::before`/`::after` —— 其声明折进**合成装饰节点**
+   *   （见 `walk` 内 `materializePseudo`），而非目标元素本身。`content` 决定是否物化（见 `contentDecl`）。
+   */
+  pseudoElement?: 'before' | 'after'
+  /**
+   * ★★★`content` 声明（伪元素专用）：`''`/字符串 ⇒ 物化并带该文本；`none`/`normal` ⇒ 不物化；
+   *   其余（`attr()`/`url()`/计数器）⇒ 诊断跳过。仅伪元素规则收集。
+   */
+  contentDecl?: { kind: 'string'; value: string } | { kind: 'none' } | { kind: 'normal' } | { kind: 'unsupported'; raw: string }
 }
 
 /** 计算选择器链的特异性 `(id, class, tag)`——只统计 class 段与 tag 段（id 选择器不支持 ⇒ 恒 0） */
@@ -1728,9 +1745,11 @@ export function parseClassRules(css: string, tokens?: Record<string, string>, ke
         skipped++
         continue
       }
+      const pseudoElement = parsed.segments[parsed.segments.length - 1]!.pseudoElement
       const important = new Set<string>()
       const style = parseStaticStyle(decls, () => {}, important, tokens, keyframes)
-      if (Object.keys(style).length === 0) continue
+      // 非伪元素规则：声明为空 ⇒ 跳过（既有行为）；伪元素规则：即便仅 `content` 也保留（见 contentDecl）
+      if (Object.keys(style).length === 0 && !pseudoElement) continue
       // ★S1.1：`:active` 规则标记为"按下态"（其声明将改写成 `press*` 键——见 resolveClassStyles）
       const isPress = parsed.segments.some((s) => s.state === 'active')
       rules.push({
@@ -1741,11 +1760,31 @@ export function parseClassRules(css: string, tokens?: Record<string, string>, ke
         important,
         order: order++,
         ...(isPress ? { pressState: true as const } : {}),
+        ...(pseudoElement ? { pseudoElement, contentDecl: parseContentDecl(decls) } : {}),
       })
     }
   }
   return { rules, skipped }
 }
+
+/**
+ * ★★★解析伪元素的 `content` 声明（决定是否物化 + 生成内容文本）。
+ *   `''`/`"..."` ⇒ `{kind:'string'}`（引号内文本，含空串）；`none`/`normal` ⇒ 不物化；
+ *   `attr()`/`url()`/`counter()`/`open-quote` 等 ⇒ `unsupported`（诊断跳过，不静默）。
+ *   缺省（无 `content`）⇒ 返回 `undefined`（调用方按 CSS 语义视为不物化）。
+ */
+function parseContentDecl(decls: string): ClassStyleRule['contentDecl'] {
+  const m = /(?:^|;)\s*content\s*:\s*([^;]+)/i.exec(decls)
+  if (!m) return undefined
+  const raw = m[1]!.trim()
+  if (/^none$/i.test(raw)) return { kind: 'none' }
+  if (/^normal$/i.test(raw)) return { kind: 'normal' }
+  // 单个字符串字面量（`''` / `"..."`；允许简单转义）⇒ 生成内容文本
+  const sm = /^(['"])((?:\\.|(?!\1)[^\\])*)\1$/.exec(raw)
+  if (sm) return { kind: 'string', value: sm[2]!.replace(/\\(.)/g, '$1') }
+  return { kind: 'unsupported', raw }
+}
+
 
 /** 剔除 `@<name> … { … }` 块（含嵌套大括号——`@keyframes` 的关键帧块是嵌套的） */
 function stripAtRuleBlocks(css: string, name: string): string {
@@ -1799,6 +1838,10 @@ function parseSelectorChain(sel: string): { segments: ClassStyleSegment[]; combi
     segments.push(seg)
   }
   if (segments.length === 0) return null
+  // ★伪元素只允许在**末段**（`a::before` 合法；`::before .x` 非法 ⇒ 整条拒绝）
+  for (let i = 0; i < segments.length; i++) {
+    if (segments[i]!.pseudoElement && i !== segments.length - 1) return null
+  }
   return { segments, combinators }
 }
 
@@ -1846,12 +1889,19 @@ function parseNth(arg: string): { a: number; b: number } | null {
  */
 function parseSelectorSegment(part: string): ClassStyleSegment | null {
   let rest = part
+  // ★★★伪元素（本批支持 `::before`/`::after`）：先从**段尾**剥离并记录（其余 `::xxx` 如 `::placeholder`/
+  //   `::first-line` 仍走下方"未知伪类 ⇒ null"路径 ⇒ 诊断跳过）。末段约束由 parseSelectorChain 校验。
+  let pseudoElement: ClassStyleSegment['pseudoElement']
+  {
+    const m = /::(before|after)\s*$/i.exec(rest)
+    if (m) { pseudoElement = m[1]!.toLowerCase() as 'before' | 'after'; rest = rest.slice(0, m.index) }
+  }
   const pseudos: Array<{ name: string; arg?: string }> = []
   rest = rest.replace(/:([a-z-]+)(?:\(([^()]*)\))?/gi, (_m, name: string, arg: string | undefined) => {
     pseudos.push({ name: String(name).toLowerCase(), arg: arg === undefined ? undefined : String(arg) })
     return ''
   })
-  if (rest.includes(':')) return null // 残留（伪元素 `::before` 等）⇒ 不支持
+  if (rest.includes(':')) return null // 残留（未支持的伪元素 `::placeholder` 等）⇒ 不支持
   let universal = false
   let pseudo: ClassStyleSegment['pseudo']
   let not: ClassStyleSegment | undefined
@@ -1874,7 +1924,7 @@ function parseSelectorSegment(part: string): ClassStyleSegment | null {
       not = inner
       continue
     }
-    return null // 状态伪类（:hover/:active/:focus/...）与其余未支持伪类
+    return null // 状态伪类（:hover/:focus/:checked/...）与其余未支持伪类
   }
   const classes = [...rest.matchAll(/\.([A-Za-z_][\w-]*)/g)].map((x) => stripScopeSuffix(x[1]!))
   rest = rest.replace(/\.[A-Za-z_][\w-]*/g, '')
@@ -1884,13 +1934,14 @@ function parseSelectorSegment(part: string): ClassStyleSegment | null {
     if (!/^[A-Za-z][\w-]*$/.test(rest)) return null // 类型名合法形态：单标识符
     tag = rest
   }
-  if (!universal && !tag && classes.length === 0 && !pseudo && !not && !state) return null // 空段
+  if (!universal && !tag && classes.length === 0 && !pseudo && !not && !state && !pseudoElement) return null // 空段
   const seg: ClassStyleSegment = { classes }
   if (tag) seg.tag = tag
   if (universal) seg.universal = true
   if (pseudo) seg.pseudo = pseudo
   if (not) seg.not = not
   if (state) seg.state = state
+  if (pseudoElement) seg.pseudoElement = pseudoElement
   return seg
 }
 
@@ -2072,7 +2123,8 @@ export function resolveClassStyles(
   ancestors: StyleMatchNode[],
   self: StyleMatchNode,
 ): ResolvedClassStyles {
-  const matched = rules.filter((rule) => matchChain(rule, ancestors, self))
+  // ★★伪元素规则**不作用于元素自身**（其声明折进合成装饰节点——见 resolvePseudoStyles）⇒ 此处排除
+  const matched = rules.filter((rule) => rule.pseudoElement === undefined && matchChain(rule, ancestors, self))
   // 特异性升序 + 源序（后应用者胜）；特异性比较按 (id, class, tag) 字典序
   matched.sort((x, y) => {
     for (let i = 0; i < 3; i++) {
@@ -2105,6 +2157,53 @@ export function resolveClassStyles(
     important: importantKeys,
     structural,
     ...(hasPress ? { pressStyles: press } : {}),
+  }
+}
+
+/** `resolvePseudoStyles` 产物：伪元素装饰节点的样式 + 其 `:active` 触发动画 + `content`（决定是否物化）。 */
+export interface ResolvedPseudoStyles {
+  styles: Record<string, unknown>
+  /** `:active::X{animation}` 等按下态触发字段（`pressAnimation`…） */
+  pressStyles?: Record<string, unknown>
+  /** 级联后胜出的 `content` 声明（`string` 才物化） */
+  content?: ClassStyleRule['contentDecl']
+}
+
+/**
+ * ★★★**伪元素样式解析**（本批 `::before`/`::after`）：把 `pseudoElement === kind` 的规则按**同一层叠**
+ *   （特异性 + 源序 + `!important`）求值，得到**合成装饰节点**的样式；Pressed 规则（`:active::after`）折进
+ *   `pressStyles`；胜出的 `content` 决定是否物化。匹配仍按**原元素**（`.pad::after` 的 `.pad` = 原元素）。
+ */
+export function resolvePseudoStyles(
+  rules: ClassStyleRule[],
+  ancestors: StyleMatchNode[],
+  self: StyleMatchNode,
+  kind: 'before' | 'after',
+): ResolvedPseudoStyles {
+  const matched = rules.filter((rule) => rule.pseudoElement === kind && matchChain(rule, ancestors, self))
+  matched.sort((x, y) => {
+    for (let i = 0; i < 3; i++) { const d = (x.specificity[i] ?? 0) - (y.specificity[i] ?? 0); if (d !== 0) return d }
+    return x.order - y.order
+  })
+  const normal: Record<string, unknown> = {}
+  const important: Record<string, unknown> = {}
+  const press: Record<string, unknown> = {}
+  let content: ClassStyleRule['contentDecl']
+  for (const rule of matched) {
+    if (rule.contentDecl) content = rule.contentDecl   // 后应用者胜
+    if (rule.pressState) {
+      for (const [k, v] of Object.entries(rule.decls)) press[pressKeyOf(k)] = v
+      continue
+    }
+    for (const [k, v] of Object.entries(rule.decls)) {
+      if (rule.important.has(k)) important[k] = v
+      else normal[k] = v
+    }
+  }
+  return {
+    styles: { ...normal, ...important },
+    ...(Object.keys(press).length > 0 ? { pressStyles: press } : {}),
+    ...(content ? { content } : {}),
   }
 }
 
@@ -3492,6 +3591,8 @@ export function buildLayoutTemplate(
       })
 
       const style: Record<string, unknown> = {}
+      /** ★★★伪元素装饰节点规格（本批 `::before`/`::after`）：`walk` 子节点后**物化**为合成子节点 */
+      const pseudoSpecs: Array<{ pos: 'before' | 'after'; style: Record<string, unknown>; text: string }> = []
       // ★★★C1 + 批次 1：按 `class`（静态类名）+ **祖先类链**匹配 `<style>` 规则表——先合并类样式
       //   （按 **!important + 特异性 + 源序** 层叠，见 resolveClassStyles），随后 inline `style` 覆盖之。
       //   ★只处理**静态** class（ATTRIBUTE）；动态 `:class` 的值形态不可静态展开（既有诊断覆盖）。
@@ -3532,6 +3633,38 @@ export function buildLayoutTemplate(
           // ★★★S1.1（2026-10-10）：**按下态**（`:active` 规则）的 `press*` 字段并入节点样式——
           //   随节点透传宿主 ⇒ DOWN 原生应用 / UP 还原（零 JS 跨界）。
           if (resolved.pressStyles) Object.assign(style, resolved.pressStyles)
+        }
+        // ★★★**伪元素物化**（本批 `::before`/`::after`）：按同一层叠解析装饰节点样式；`content` 为
+        //   字符串才物化（`none`/`normal`/缺省 ⇒ 不产节点，CSS 语义）。★强制 `pointer-events:none`
+        //   （装饰不抢事件 —— 否则 `:active` 命中会落到伪元素上、父元素的 `:active` 永不触发）。
+        if (classRules.length && (selfClasses.size || tag)) {
+          for (const pe of ['before', 'after'] as const) {
+            const rp = resolvePseudoStyles(classRules, ancestorClasses, selfMatch!, pe)
+            if (!rp.content) continue
+            if (rp.content.kind === 'unsupported') {
+              diag(
+                `${tag}(id=${id}) ::${pe} 的 \`content\` 形态未支持（\`${rp.content.raw}\`）`,
+                "仅支持字符串字面量（`content: ''` / `content: 'x'`）；attr()/url()/counter() 保留 Vue 路径（L0）",
+                'VAPOR_PSEUDO_CONTENT_UNSUPPORTED',
+              )
+              continue
+            }
+            if (rp.content.kind === 'none' || rp.content.kind === 'normal') continue
+            const pStyle: Record<string, unknown> = { ...rp.styles }
+            if (rp.pressStyles) Object.assign(pStyle, rp.pressStyles)
+            if (pStyle.pointerEvents === undefined) pStyle.pointerEvents = false   // ★布尔（none ⇒ false；见 pointer-events 折叠）
+            // ★百分号 inset（left/top/right/bottom）= % 在内核不支持 ⇒ 如实诊断（不静默半支持）
+            for (const k of ['left', 'top', 'right', 'bottom'] as const) {
+              if (typeof pStyle[k] === 'string' && pStyle[k]!.includes('%')) {
+                diag(
+                  `${tag}(id=${id}) ::${pe} 的 \`${k}: ${pStyle[k] as string}\` 未支持（App 内核不支持百分比 inset）`,
+                  '改用 px 值，或用 flex 居中/绝对定位 + 明确像素尺寸',
+                  'VAPOR_PSEUDO_PCT_INSET',
+                )
+              }
+            }
+            pseudoSpecs.push({ pos: pe, style: pStyle, text: rp.content.value })
+          }
         }
       }
       // 本元素并入祖先链（tag+classes），供子节点组合匹配（`.a .b` / `h3 .x` / `.a > .b`）
@@ -4055,10 +4188,24 @@ export function buildLayoutTemplate(
       if (parentId === null) roots.push(id)
       if (rowCollector) rowCollector.ids.push(id)
 
+      // ★★★**物化伪元素节点**（`::before` 在真子节点**之前**）：合成一个 `parentId = id` 的装饰子节点。
+      //   id 取**续接计数器**（真元素 id 与 deps.ts 逐位一致不变；伪元素 id 追加在 walk 完成之后）。
+      const makePseudo = (spec: { pos: 'before' | 'after'; style: Record<string, unknown>; text: string }): LayoutNode => {
+        const peId = nextElementIndex++
+        const peNode: LayoutNode = { id: peId, parentId: id, tag: 'span', style: spec.style, text: spec.text, pseudo: spec.pos }
+        nodes.push(peNode)
+        if (rowCollector) rowCollector.ids.push(peId)
+        return peNode
+      }
+      for (const spec of pseudoSpecs) if (spec.pos === 'before') makePseudo(spec)
+
       // ★P3-3：`pendingTransition` **只作用于直接子元素**（Vue 同：Transition 只包一个元素）
       // ★★P1-3 插槽分发：组件元素的**直接子元素**是默认插槽内容根（打 `slotFor`）；
       //   非组件元素无插槽语义（slotCtx 缺省 ⇒ 不标记）。
       walk(subChildren, id, undefined, isComponentTag ? { parentIsComponent: true } : undefined, childAncestors, childInherited)
+
+      // ★★★`::after` 物化在**所有真子节点之后**（pre-order 序 ⇒ 紧接子树末）
+      for (const spec of pseudoSpecs) if (spec.pos === 'after') makePseudo(spec)
 
       // 行子树收集结束（pre-order ⇒ 子树连续；此处收尾）
       if (nodeListId !== undefined) {

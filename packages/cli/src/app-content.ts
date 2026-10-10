@@ -333,6 +333,8 @@ function applyIrOverlay(
     id: n.id,
     tag: (n as { tag?: string }).tag ?? '',
     children: (kidsOf.get(n.id) ?? []).map(toAlign),
+    // ★物化的伪元素装饰节点（`::before`/`::after`）是**平台合成节点** —— 对齐器跳过、不计未对齐
+    ...((n as { pseudo?: string }).pseudo ? { synthetic: true } : {}),
   })
   const oldRoots = (kidsOf.get(null) ?? []).map(toAlign)
   const r = overlayIrValues(

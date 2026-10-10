@@ -1459,6 +1459,8 @@ public class ProteusHostView extends ViewGroup {
         animMask.clear();
         gradTileCache.clear();   // ★逐树状态（id 每树重分配——防幽灵砖）
         resetFieldRuntime();     // ★场跟手运行时态（驱动指针/焦点/已改写叶——id 每树重分配）
+        pressedNodeId = -1;      // ★按下态（id 每树重分配）
+        pressedAnimTargets.clear();   // ★按下触发的动画目标
     }
 
     /**
@@ -2416,10 +2418,26 @@ public class ProteusHostView extends ViewGroup {
     private int pressedNodeId = -1;
     /** 累计"按下态真的被应用"次数（判据核"按下反馈真的发生过"） */
     int pressApplied = 0;
+    /** 节点 id → 按下触发动画（`:active{animation}` / `:active::after{animation}` 折出的通道数组）。 */
+    private java.util.Map<Integer, org.json.JSONArray> pressAnims = java.util.Collections.emptyMap();
+    /** 父节点 id → 其**伪装饰子节点** id 列表（DOWN 命中父时把按下传播到伪子）。 */
+    private java.util.Map<Integer, int[]> pseudoChildren = java.util.Collections.emptyMap();
+    /** 本次按下**已启动动画**的节点（UP 时逐个停）——空 = 无按下触发动画。 */
+    private final java.util.HashSet<Integer> pressedAnimTargets = new java.util.HashSet<>();
 
     /** 由 `VaporRenderHost` 在建树时注入"哪些节点有按下态 + 其样式"（底色/描边/凹陷/发光）。 */
     public void setPressStyles(java.util.Map<Integer, PressStyle> m) {
         this.pressStyles = m != null ? m : java.util.Collections.emptyMap();
+    }
+
+    /** 注入"哪些节点有按下触发的动画"（`:active{animation}` / `:active::after{animation}`）。 */
+    public void setPressAnimations(java.util.Map<Integer, org.json.JSONArray> m) {
+        this.pressAnims = m != null ? m : java.util.Collections.emptyMap();
+    }
+
+    /** 注入"父节点 → 伪装饰子节点"映射（按下传播用）。 */
+    public void setPseudoChildren(java.util.Map<Integer, int[]> m) {
+        this.pseudoChildren = m != null ? m : java.util.Collections.emptyMap();
     }
 
     /** 当前按下态样式（未按下/无定义 ⇒ null）。 */
@@ -2427,26 +2445,75 @@ public class ProteusHostView extends ViewGroup {
         return pressedNodeId >= 0 ? pressStyles.get(pressedNodeId) : null;
     }
 
-    /** DOWN 命中节点 ⇒ 应用按下态（`:active` 折出的 press*；仅在该节点确有此定义时动）。 */
+    /**
+     * DOWN 命中节点 ⇒ 应用按下态（`:active` 折出的 press*）+ 启动**按下触发动画**（含传播到**伪装饰子节点**）。
+     * ★视觉全部来自**页面声明的 CSS**（`:active` / `::before`/`::after` / `@keyframes`）——宿主不发明任何默认。
+     */
     private void applyPressAt(int nodeId) {
-        if (nodeId < 0 || !pressStyles.containsKey(nodeId)) return;
-        pressedNodeId = nodeId;
-        pressApplied++;
-        framePicture = null;   // 丢弃静态帧 ⇒ onDraw 重录（含按下色/凹陷/发光）
-        invalidate();
+        if (nodeId < 0) return;
+        boolean acted = false;
+        if (pressStyles.containsKey(nodeId)) {
+            pressedNodeId = nodeId;
+            pressApplied++;
+            acted = true;
+        }
+        // ★按下触发动画：节点自身（`:active{animation}`）+ 伪装饰子节点（`:active::after{animation}`）
+        pressedAnimTargets.clear();
+        if (pressAnims.containsKey(nodeId)) pressedAnimTargets.add(nodeId);
+        final int[] kids = pseudoChildren.get(nodeId);
+        if (kids != null) for (int k : kids) if (pressAnims.containsKey(k)) pressedAnimTargets.add(k);
+        if (!pressedAnimTargets.isEmpty()) acted = true;
+        if (acted) {
+            framePicture = null;   // 丢弃静态帧 ⇒ onDraw 重录（含按下色/凹陷/发光）
+            invalidate();
+        }
+        startPressAnims();
     }
 
-    /** UP/CANCEL ⇒ 还原（清帧 ⇒ 重录回常态色）。 */
+    /** UP/CANCEL ⇒ 还原（停按下触发动画 + 清帧 ⇒ 重录回常态色）。 */
     private void clearPress() {
+        stopPressAnims();
         if (pressedNodeId < 0) return;
         pressedNodeId = -1;
         framePicture = null;
         invalidate();
     }
 
-    /** ★S1.1 探针：`{pressed, applied, press_nodes}`——判据核"按下态真的被原生应用"。 */
+    /** 启动本次按下的全部触发动画（合并成**一次** `animStart`）。 */
+    private void startPressAnims() {
+        if (pressedAnimTargets.isEmpty() || coreHandle == 0L) return;
+        try {
+            org.json.JSONArray anims = new org.json.JSONArray();
+            for (Integer id : pressedAnimTargets) {
+                org.json.JSONArray chans = pressAnims.get(id);
+                org.json.JSONArray entries = VaporRenderHost.collectAnimEntries(id, chans);
+                for (int i = 0; i < entries.length(); i++) anims.put(entries.opt(i));
+            }
+            if (anims.length() == 0) return;
+            org.json.JSONObject req = new org.json.JSONObject();
+            req.put("anims", anims);
+            kernelAnimStart(req.toString());
+            driveKernelAnimFrames();   // 复用既有帧循环（内核 tick → 采样 → 写层）
+        } catch (Throwable ignored) { /* 启动失败不崩；读数由 pressProbe 暴露 */ }
+    }
+
+    /** 停本次按下的触发动画（UP 还原）。 */
+    private void stopPressAnims() {
+        if (pressedAnimTargets.isEmpty() || coreHandle == 0L) { pressedAnimTargets.clear(); return; }
+        try {
+            org.json.JSONArray ids = new org.json.JSONArray();
+            for (Integer id : pressedAnimTargets) ids.put((int) id);
+            org.json.JSONObject req = new org.json.JSONObject();
+            req.put("nodeIds", ids);
+            kernelAnimStop(req.toString());
+        } catch (Throwable ignored) { /* 停失败不崩 */ }
+        pressedAnimTargets.clear();
+    }
+
+    /** ★S1.1 探针：`{pressed, applied, press_nodes, press_anims}`——判据核"按下态真的被原生应用"。 */
     public String pressProbe() {
-        return "{\"pressed\":" + pressedNodeId + ",\"applied\":" + pressApplied + ",\"press_nodes\":" + pressStyles.size() + "}";
+        return "{\"pressed\":" + pressedNodeId + ",\"applied\":" + pressApplied + ",\"press_nodes\":" + pressStyles.size()
+                + ",\"press_anims\":" + pressAnims.size() + "}";
     }
 
     /** ★S1.5 探针：累计 `requestUnbufferedDispatch` 调用数（判据核"无缓冲分发真的被请求"）。 */
