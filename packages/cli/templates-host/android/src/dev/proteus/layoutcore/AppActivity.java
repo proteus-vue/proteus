@@ -257,7 +257,6 @@ public final class AppActivity extends Activity {
         contentHost.post(new Runnable() {
             @Override public void run() {
                 renderCurrent(readState());
-                applyDactylOverlay();   // ★Dactyl 延迟显影（app-config features.dactylOverlay；缺省关）
                 Log.i(TAG, "PROTEUS_APP_READY screen=" + currentName(readState()));
                 // ★内容已上屏 ⇒ 撤启动占位（决策 #724，对齐 iOS）：黑底/白底不再可见。
                 if (placeholder != null) { placeholder.remove(); placeholder = null; }
@@ -801,22 +800,6 @@ public final class AppActivity extends Activity {
 
     // ────────────────────────── Tab 栏 ──────────────────────────
 
-    /**
-     * ★内容区底部预留（原生 tabBar 高度；0 = 无底栏）——决策 #780 续·安全区。
-     *   tabBar 在 `gravity=BOTTOM` 悬浮；不给内容区留底 ⇒ 内容会被底栏压住。
-     *   ★与页面 CSS 的分工：本预留只管**底栏本体**（app chrome）；系统手势条由页面 `--pf-inset-bottom` 管。
-     */
-    private void setContentBottomReserve(int px) {
-        if (contentHost == null) return;
-        try {
-            android.view.ViewGroup.LayoutParams lp = contentHost.getLayoutParams();
-            if (lp instanceof android.widget.FrameLayout.LayoutParams) {
-                android.widget.FrameLayout.LayoutParams flp = (android.widget.FrameLayout.LayoutParams) lp;
-                if (flp.bottomMargin != px) { flp.bottomMargin = px; contentHost.setLayoutParams(flp); }
-            }
-        } catch (Throwable ignored) { /* 布局参数不可写 ⇒ 不静默抛出 */ }
-    }
-
     private void buildTabBar() {
         String st = readState();
         try {
@@ -857,12 +840,8 @@ public final class AppActivity extends Activity {
             Log.w(TAG, "读 tab 注册表失败：" + e.getMessage());
         }
         tabBar.removeAllViews();
-        if (tabNames.length == 0) { tabBar.setVisibility(android.view.View.GONE); setContentBottomReserve(0); return; }
+        if (tabNames.length == 0) { tabBar.setVisibility(android.view.View.GONE); return; }
         tabBar.setVisibility(android.view.View.VISIBLE);
-        // ★★内容区为原生 tabBar 预留底部空间（决策 #780 续·安全区）：否则内容会被底栏压住。
-        //   底栏在 gravity=BOTTOM 占 56dp；内容区下沿抬到 tabBar 之上 ⇒ 页面 CSS 的 `--pf-inset-bottom`
-        //   只需负责系统手势条（Web/MP 同源语义），二者不重叠。
-        setContentBottomReserve(tabBarHeightPx);
         final int onColor = tbOn, offColor = tbOff, recColor = tbRec, lineColor = tbLine;
         tabBar.setBackgroundColor(tbSurface);
         if (root.findViewWithTag("sa-top-line") == null) {
@@ -1084,25 +1063,6 @@ public final class AppActivity extends Activity {
             JSONObject sa = o.optJSONObject("safeArea");
             return "hide".equals(sa != null ? sa.optString("statusBar", "show") : "show");
         } catch (Throwable t) { return false; }
-    }
-
-    /**
-     * ★★★Dactyl 延迟显影开关（决策 #780 · `15-dactyl-demo.md` §3）：读 `app-config.json` 的
-     *   `features.dactylOverlay`（缺省 false ⇒ 对既有 App 零影响）。开启后宿主叠加绘制
-     *   幽灵拖尾 / 延迟环 / 帧格（官方触摸时间戳采样），供「输入延迟 + 视觉反馈」专项验收。
-     */
-    private void applyDactylOverlay() {
-        if (draw == null || draw.view() == null) return;
-        boolean on = false;
-        try {
-            String sc = readAsset("app-config.json");
-            if (sc != null) {
-                JSONObject o = new JSONObject(sc);
-                JSONObject f = o.optJSONObject("features");
-                if (f != null) on = f.optBoolean("dactylOverlay", false);
-            }
-        } catch (Throwable ignored) { /* 无配置/解析失败 ⇒ 保持关（不静默开启） */ }
-        draw.view().setDactylEnabled(on);
     }
 
     private String readAsset(String name) {
