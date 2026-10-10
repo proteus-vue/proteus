@@ -2430,6 +2430,10 @@ public class ProteusHostView extends ViewGroup {
     int followMoves = 0;
     /** 内核返回"真的有字段变化"的次数（判据核"跟随真的改了变换"）。 */
     int followApplied = 0;
+    /** ★S3-T2：松手 `followRelease` 调用次数（判据核"UP 真的驱动了回弹/吸附"）。 */
+    int followReleaseCalls = 0;
+    /** ★S3-T2：松手弹簧**真的启动**的轴数累计（判据核"回弹/吸附弹簧真的被内核接管"）。 */
+    int followReleaseStarted = 0;
 
     /** 由 `VaporRenderHost` 建树时注入"哪些节点有跟手规格 + (axis,gain)"。 */
     public void setFollowSpecs(java.util.Map<Integer, float[]> m) {
@@ -2454,26 +2458,50 @@ public class ProteusHostView extends ViewGroup {
         final float dy = y - followStartY;
         final int axis = spec.length > 0 ? (int) spec[0] : 1;
         final float gain = spec.length > 1 ? spec[1] : 1f;
+        final float clampMin = spec.length > 3 ? spec[2] : -1e9f;
+        final float clampMax = spec.length > 3 ? spec[3] : 1e9f;
         followMoves++;
-        // ★换算唯一实现在内核（宿主零数学、无平方根/无缓动）；返回 updates 直接落既有绘制真源。
-        final String out = RustLayout.layoutFollow(coreHandle, followTarget, dx, dy, axis, gain, -1e9f, 1e9f);
+        // ★换算/夹取唯一实现在内核（宿主零数学、无平方根/无缓动）；返回 updates 直接落既有绘制真源。
+        final String out = RustLayout.layoutFollow(coreHandle, followTarget, dx, dy, axis, gain, clampMin, clampMax);
         if (applyAnimUpdates(out) > 0) followApplied++;
     }
 
-    /** UP/CANCEL ⇒ 结束跟随（T1 无回弹——停在拖拽终点；回弹属 S3-T2）。 */
+    /** UP/CANCEL ⇒ 松手（T2）：内核按当前位移决定回弹归零 / 滑出吸附，弹簧接管推进（零 JS）。 */
     private void endFollow() {
+        if (followActive && followTarget >= 0 && coreHandle != 0L) {
+            final float[] spec = followSpecs.get(followTarget);
+            if (spec != null && spec.length >= 9) {
+                final int axis = (int) spec[0];
+                final float stiffness = spec[4], damping = spec[5], mass = spec[6];
+                final float snapThreshold = spec[7], snapTarget = spec[8];
+                followReleaseCalls++;
+                final String out = RustLayout.layoutFollowRelease(coreHandle, followTarget, axis, stiffness, damping, mass, snapThreshold, snapTarget);
+                try {
+                    org.json.JSONObject o = new org.json.JSONObject(out);
+                    if (o.optBoolean("ok", false)) followReleaseStarted += o.optInt("started", 0);
+                } catch (Throwable ignored) { /* 读数失败不静默吞掉"松手未启动"——计数器已 +1 */ }
+                // ★弹簧由既有帧循环推进（与 <Transition> 同一驱动：到"内核无活跃动画"止）
+                driveKernelAnimFrames();
+            }
+        }
         followActive = false;
         followTarget = -1;
     }
 
-    /** ★S3-T1 探针：`{follow_nodes,moves,applied}`——判据核"跟手真的走了原生通路且改了变换"。 */
+    /** ★S3-T1/T2 探针：`{follow_nodes,moves,applied,release_calls,release_started}`。 */
     public String followProbe() {
         return "{\"follow_nodes\":" + followSpecs.size() + ",\"moves\":" + followMoves
-                + ",\"applied\":" + followApplied + "}";
+                + ",\"applied\":" + followApplied + ",\"release_calls\":" + followReleaseCalls
+                + ",\"release_started\":" + followReleaseStarted + "}";
     }
 
     /** 复位跟随计数（探针开始时调用 ⇒ 读数只反映本次拖拽）。 */
-    public void resetFollowCounters() { followMoves = 0; followApplied = 0; }
+    public void resetFollowCounters() {
+        followMoves = 0;
+        followApplied = 0;
+        followReleaseCalls = 0;
+        followReleaseStarted = 0;
+    }
 
     /**
      * 按**屏幕/视图坐标**做命中派发（与 `onTouchEvent` 同一条代码路径）。

@@ -516,16 +516,19 @@ const S11_SFC = `<template>
 </style>`
 
 /**
- * ★★★S3-T1 夹具（判据 ㉞，2026-10-10 · 输入延迟专项 #767）：**拖拽跟手零 JS 跨界**。
- *   `<p-view v-follow="{ axis: 'x' }">` ⇒ 编译期折出 `followAxis:1`（随节点透传宿主）
- *   ⇒ 宿主 MOVE **直接喂内核**（`RustLayout.layoutFollow`，换算在内核）⇒ 写 `translate_x`
- *   ⇒ 帧回调采样绘制。**MOVE 期间一次 JS 都不调**（判据：`follow.moves>0` 且 `applied>0`，
- *   且节点变换真的跟手 —— 拖 dx=120 ⇒ translateX≈120）。
- *   ★轴掩码 1=x（与内核 `follow_translate` 同编码）；gain 缺省 1（1:1 跟手）。
+ * ★★★S3 夹具（判据 ㉞/㉟，2026-10-10 · 输入延迟专项 #767）：**拖拽跟手 + 松手回弹/吸附（零 JS 跨界）**。
+ *   三个跟手节点（编译期折 `followAxis` 等扁平字段，随节点透传宿主）：
+ *   · A（#1）`v-follow="{ axis:'x' }"` ⇒ **纯跟手**（无夹取/无吸附）：拖动 dx ⇒ translateX 跟手（判据 ㉞）。
+ *   · B（#2）`clamp:[-200,0] + snap:{threshold:60,target:200}` ⇒ **swipe-to-delete**：拖过阈值松手 ⇒ 滑出吸附到 -200（判据 ㉟）。
+ *   · C（#3）`snap:{threshold:80,target:200}` ⇒ **松手回弹归零**：未过阈值 ⇒ 弹回 0（判据 ㉟）。
+ *   ★`snap.target` 是**滑出幅度**（≥0），方向随拖拽方向（swipe-to-delete：左滑滑出左侧）。
+ *   ★全程宿主 MOVE/UP **直接喂内核**（`layoutFollow`/`layoutFollowRelease`）——**零 JS 回调**。
  */
 const S3_SFC = `<template>
-  <p-view style="width: 400px; height: 200px">
-    <p-view v-follow="{ axis: 'x' }" style="width: 120px; height: 60px; background-color: #2f6fed"></p-view>
+  <p-view style="width: 400px; height: 300px; flex-direction: column">
+    <p-view v-follow="{ axis: 'x' }" style="width: 120px; height: 50px; background-color: #2f6fed"></p-view>
+    <p-view v-follow="{ axis: 'x', clamp: [-200, 0], snap: { threshold: 60, target: 200 } }" style="width: 120px; height: 50px; margin-top: 10px; background-color: #e2483d"></p-view>
+    <p-view v-follow="{ axis: 'x', snap: { threshold: 80, target: 200 } }" style="width: 120px; height: 50px; margin-top: 10px; background-color: #3aa0ff"></p-view>
   </p-view>
 </template>`
 
@@ -1105,16 +1108,18 @@ console.log(`[gen-vapor-fixture] ✅ 组件注册表：${Object.keys(parsed.comp
   }
   console.log(`[gen-vapor-fixture] ✅ B-T2 夹具：动态 :class 文本策略（whiteSpace 在线性规则 · 无布局诊断）`)
 }
-// ★★★S3-T1 夹具（判据 ㉞）：`v-follow` 折出 `followAxis` 扁平字段（子节点 style 里 axis=1）
+// ★★★S3 夹具（判据 ㉞/㉟）：`v-follow` 折出 `followAxis` 等扁平字段（3 个跟手节点：纯跟手 / 吸附 / 回弹）
 {
   const nodes = parsed.s3?.tpl?.nodes ?? []
-  const followNode = nodes.find((n) => n && n.style && typeof n.style.followAxis === 'number')
+  const followNodes = nodes.filter((n) => n && n.style && typeof n.style.followAxis === 'number')
   const diag = (parsed.s3?.diagnostics ?? []).filter((m) => /follow/i.test(String(m)))
-  if (!parsed.s3?.ok || !followNode || followNode.style.followAxis !== 1 || diag.length > 0) {
-    console.error(`[gen-vapor-fixture] ✗ S3-T1 夹具不完整（判据 ㉞ 将无证据）：节点=${nodes.length} · followAxis=${followNode?.style?.followAxis} · 诊断=${diag.join('|')}`)
+  const hasSnap = followNodes.some((n) => typeof n.style.followSnapThreshold === 'number')
+  const hasClamp = followNodes.some((n) => typeof n.style.followClampMin === 'number')
+  if (!parsed.s3?.ok || followNodes.length < 3 || !hasSnap || !hasClamp || diag.length > 0) {
+    console.error(`[gen-vapor-fixture] ✗ S3 夹具不完整（判据 ㉞/㉟ 将无证据）：跟手节点=${followNodes.length} · snap=${hasSnap} · clamp=${hasClamp} · 诊断=${diag.join('|')}`)
     process.exit(1)
   }
-  console.log(`[gen-vapor-fixture] ✅ S3-T1 夹具：v-follow 折出 followAxis=${followNode.style.followAxis}（跟手零 JS 跨界）`)
+  console.log(`[gen-vapor-fixture] ✅ S3 夹具：${followNodes.length} 个跟手节点（纯跟手/吸附/回弹 · clamp+snap 折出）`)
 }
 // ★:style 对象展开（2026-10-03）：必须**逐键**（layout.width + paint.backgroundColor），不得有整键
 {

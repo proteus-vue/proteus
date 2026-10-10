@@ -1,22 +1,22 @@
 {
-  "bundle_chars": 590677,
-  "run_ms": 361,
+  "bundle_chars": 591874,
+  "run_ms": 364,
   "host_mount_calls": 33,
   "host_apply_calls": 30,
   "host_update_patch_calls": 1,
   "host_nodes": 47,
   "host_text_nodes": 19,
   "host_cmds": 47,
-  "host_layout_ms": 0.274323,
-  "host_measure_ms": 0.239167,
+  "host_layout_ms": 0.308333,
+  "host_measure_ms": 0.235937,
   "host_painted_samples": 12060,
   "host_painted_colors": 234,
   "host_applied": 1,
   "host_changed_nodes": 2,
   "host_view_on_draw": 66,
-  "host_unbuffered_dispatch": 7,
+  "host_unbuffered_dispatch": 9,
   "host_unbuffered_dispatch_errors": 0,
-  "host_touch_events": 20,
+  "host_touch_events": 35,
   "host_bytes_ops": 30,
   "report": {
     "ok": true,
@@ -43,7 +43,7 @@
       "bumpTotal",
       "lifeW"
     ],
-    "inst_ms": 0,
+    "inst_ms": 1,
     "inst_nodes": 47,
     "inst_reused_ids": 2,
     "inst_allocated_ids": 14,
@@ -625,10 +625,14 @@
       "pressed": -1
     },
     "s3_probe": {
-      "follow_nodes": 1,
+      "follow_nodes": 3,
       "moves": 6,
       "applied": 6,
-      "tx_after": 120
+      "tx_after": 120,
+      "snap_final": -200,
+      "snap_calls": 1,
+      "return_final": 0,
+      "return_calls": 1
     },
     "styleobj_probe": {
       "anchor_id": 1,
@@ -645,8 +649,8 @@
     "mount_nodes": 47,
     "updates_run": 3,
     "ops_bytes": 204,
-    "ops_ms": 1,
-    "apply_ms": 1,
+    "ops_ms": 0,
+    "apply_ms": 3,
     "text_synced_total": 3,
     "update_evidence": [
       {
@@ -836,7 +840,7 @@
       "tap@13 自身宽度 120 → 150",
       "实例树 47 节点 \/ 行 47 \/ 虚拟化行 8 \/ 增量 3 轮"
     ],
-    "host_layout_ms": 0.491,
+    "host_layout_ms": 0.492,
     "host_cmds": 47
   },
   "ok": true

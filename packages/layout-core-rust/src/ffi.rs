@@ -2094,8 +2094,45 @@ pub unsafe extern "C" fn proteus_layout_follow(
     }
 }
 
-/// **从二进制 blob 建树**（★生产入口：方案 M0 计划「非 JSON，避免运行时解析开销」）。
+/// ★★★**S3-T2（2026-10-10 · 输入延迟专项 #767）**：**松手回弹/吸附**入口——宿主 UP 时调它，
+///   内核按当前位移决定「回弹归零」或「滑出吸附」（swipe-to-delete），并以**弹簧**接管推进。
 ///
+/// 入参：`axis`（1=x/2=y/3=both）· `stiffness/damping/mass`（弹簧参数）·
+///   `snapThreshold`（|位移|≥它 ⇒ 吸附）· `snapTarget`（吸附目标位移，带符号按方向）。
+/// 出参（JSON）：`{"ok":true,"started":N,"targets":[每轴目标值…]}`（判据核"吸附判定在内核"）。
+///
+/// # Safety
+/// 返回指针须用 `proteus_layout_free_string` 释放。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_layout_follow_release(
+    handle: u64,
+    node_id: u32,
+    axis: u8,
+    stiffness: f32,
+    damping: f32,
+    mass: f32,
+    snap_threshold: f32,
+    snap_target: f32,
+) -> *mut c_char {
+    let r = std::panic::catch_unwind(|| -> Result<String, String> {
+        let mut reg = registry().lock().map_err(|_| "注册表锁失败".to_string())?;
+        let entry = reg.get_mut(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?;
+        // 逃逸借用：引擎与树同属 entry——用 `std::mem::take` 分开拿（与 anim_seek 同一手法）
+        let mut eng = std::mem::take(&mut entry.anim);
+        let targets = crate::anim::follow_release(
+            &mut eng, &entry.tree, node_id, axis, stiffness, damping, mass, snap_threshold, snap_target,
+        );
+        entry.anim = eng;
+        Ok(serde_json::json!({"ok": true, "started": targets.len(), "targets": targets}).to_string())
+    });
+    match r {
+        Ok(Ok(s)) => into_c_string(s),
+        Ok(Err(e)) => into_c_string(serde_json::json!({"ok": false, "error": e}).to_string()),
+        Err(_) => into_c_string("{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string()),
+    }
+}
+
+/// **从二进制 blob 建树**（★生产入口：方案 M0 计划「非 JSON，避免运行时解析开销」）。
 /// 【为什么需要它（本仓实测的量化依据）】
 ///   iOS 真机 4051 节点：`create`（JSON）= 75.84ms，其中 95%+ 是 serde 解析 + 建树；
 ///   而**纯布局仅 ~2ms**。⇒ 通道成本必须靠二进制消除。

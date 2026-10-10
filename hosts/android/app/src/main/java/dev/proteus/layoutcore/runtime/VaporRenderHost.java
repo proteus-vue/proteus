@@ -251,10 +251,11 @@ public final class VaporRenderHost {
     }
 
     /**
-     * ★★★S3-T1（2026-10-10 · 输入延迟专项 #767）：从 specs 收集**跟手规格**
-     *   （编译器把 `v-follow="{ axis:'x', gain:1 }"` 折成节点上的 `followAxis`/`followGain` 扁平字段）。
-     *   ★返回 `id → [axis, gain]`；宿主 MOVE 时**直接喂内核**（`RustLayout.layoutFollow`）——
-     *     换算在内核、**零 JS 跨界**（S3 判据 `js_involved_gestures_ratio == 0` 的机制面）。
+     * ★★★S3（2026-10-10 · 输入延迟专项 #767）：从 specs 收集**跟手规格**
+     *   （编译器把 `v-follow` 折成节点上的 `follow*` 扁平字段）。
+     *   ★返回 `id → [axis, gain, clampMin, clampMax, springStiffness, springDamping, springMass, snapThreshold, snapTarget]`；
+     *     宿主 MOVE 时**直接喂内核**（`RustLayout.layoutFollow`）/ UP 时 `layoutFollowRelease`——
+     *     换算/夹取/吸附判定/弹簧全在内核、**零 JS 跨界**（S3 判据 `js_involved_gestures_ratio == 0`）。
      */
     private java.util.Map<Integer, float[]> collectFollow() {
         java.util.Map<Integer, float[]> m = new java.util.HashMap<>();
@@ -262,9 +263,20 @@ public final class VaporRenderHost {
             if (!spec.has("followAxis")) continue;
             int id = spec.optInt("id", -1);
             if (id < 0) continue;
-            int axis = spec.optInt("followAxis", 1);
-            float gain = (float) spec.optDouble("followGain", 1.0);
-            m.put(id, new float[]{axis, gain});
+            m.put(id, new float[]{
+                    spec.optInt("followAxis", 1),
+                    (float) spec.optDouble("followGain", 1.0),
+                    // 无 clamp ⇒ 大开区间（= 不夹取，与 T1 行为一致）
+                    (float) spec.optDouble("followClampMin", -1e9),
+                    (float) spec.optDouble("followClampMax", 1e9),
+                    // 无 spring ⇒ 缺省临界阻尼（stiffness/damping/mass 与内核 SpringParams 同参化）
+                    (float) spec.optDouble("followSpringStiffness", 300.0),
+                    (float) spec.optDouble("followSpringDamping", 30.0),
+                    (float) spec.optDouble("followSpringMass", 1.0),
+                    // 无 snap ⇒ threshold=0（永不吸附 ⇒ 松手恒回弹归零）
+                    (float) spec.optDouble("followSnapThreshold", 0.0),
+                    (float) spec.optDouble("followSnapTarget", 0.0),
+            });
         }
         return m;
     }
@@ -1055,16 +1067,18 @@ public final class VaporRenderHost {
     }
 
     /**
-     * ★★★**S3-T1 拖拽注入**（2026-10-10 · 输入延迟专项 #767 · 判据 ㉞）：模拟一次真实拖拽
-     *   （DOWN → N×MOVE → UP），用**真 MotionEvent** 走 `onTouchEvent` 全链路——与真实手指
-     *   同一条代码路径（含 S1.5 无缓冲分发 / 命中 / S3 跟手）。
+     * ★★★**S3 拖拽注入**（2026-10-10 · 输入延迟专项 #767 · 判据 ㉞/㉟）：模拟一次真实拖拽
+     *   （DOWN → N×MOVE →[UP]→[settle]），用**真 MotionEvent** 走 `onTouchEvent` 全链路——
+     *   与真实手指同一条代码路径（含 S1.5 无缓冲分发 / 命中 / S3 跟手 / S3 松手）。
      *
-     * 【要证明什么】MOVE 期间跟手**只走内核**（`RustLayout.layoutFollow`），**一次 JS 都不调**——
-     *   注入前后读 `followProbe` 的 `moves`/`applied` 与节点变换（`animTxProbe`）即可核。
+     * 【要证明什么】MOVE 期间跟手**只走内核**（`RustLayout.layoutFollow`），**一次 JS 都不调**；
+     *   UP 时松手**只走内核**（`layoutFollowRelease`，回弹/吸附判定在内核）——读数即可核。
      *
      * 【时间戳逐次前推】（同 `tapAt` 的纪律）：事件时间戳是纯属性，前推避免被 `GestureDetector`
      *   判成双击/多击——**零等待**（不是 sleep）。
-     * @param argsJson `{x, y, dx, dy, steps}`——起点 + 总位移 + 步数（默认 6）。
+     * @param argsJson `{x, y, dx, dy, steps, release?, settleFrames?}`——
+     *   `release`（默认 true）= 末尾发 UP（触发松手）；`settleFrames`（默认 0）= 松手后**确定性步进**
+     *   若干帧（每帧 `kernelAnimTick(16.7ms)`，到"内核无活跃动画"即停，**有限次**，非盲等）⇒ 读弹簧落点。
      */
     public String dragAt(String argsJson) {
         JSONObject out = new JSONObject();
@@ -1076,6 +1090,8 @@ public final class VaporRenderHost {
             final float dxTotal = (float) a.optDouble("dx", 0);
             final float dyTotal = (float) a.optDouble("dy", 0);
             final int steps = Math.max(1, a.optInt("steps", 6));
+            final boolean release = a.optBoolean("release", true);
+            final int settleFrames = Math.max(0, a.optInt("settleFrames", 0));
             final int beforeGestures = gestureDispatched;
             view.resetFollowCounters();
             long age = 1000L * tapInjectSeq;
@@ -1095,19 +1111,38 @@ public final class VaporRenderHost {
                 view.dispatchTouchEvent(mv);
                 mv.recycle();
             }
-            android.view.MotionEvent up = android.view.MotionEvent.obtain(t0, t0 + (steps + 1) * 8,
-                    android.view.MotionEvent.ACTION_UP, x0 + dxTotal, y0 + dyTotal, 0);
-            view.dispatchTouchEvent(up);
-            up.recycle();
+            if (release) {
+                android.view.MotionEvent up = android.view.MotionEvent.obtain(t0, t0 + (steps + 1) * 8,
+                        android.view.MotionEvent.ACTION_UP, x0 + dxTotal, y0 + dyTotal, 0);
+                view.dispatchTouchEvent(up);
+                up.recycle();
+            }
+            // ★松手后**确定性步进**（有限次）：推进内核弹簧（回弹/吸附）到收敛——
+            //   到"内核无活跃动画"即提前停（有界，不是盲等；与 <Transition> 帧循环同一停判据）。
+            int settledFrames = 0;
+            if (release && settleFrames > 0) {
+                for (int f = 0; f < settleFrames; f++) {
+                    view.kernelAnimTick(16.7f);
+                    settledFrames++;
+                    try {
+                        JSONObject ao = new JSONObject(view.kernelAnimActive());
+                        if (ao.optBoolean("ok") && ao.optInt("active", -1) == 0) break;
+                    } catch (Throwable ignored) { /* 读数失败 ⇒ 跑满上限（有界） */ }
+                }
+            }
             out.put("ok", true);
             out.put("x", x0);
             out.put("y", y0);
             out.put("dx", dxTotal);
             out.put("dy", dyTotal);
             out.put("steps", steps);
+            out.put("release", release);
+            out.put("settled_frames", settledFrames);
             out.put("gestures_fired", gestureDispatched - beforeGestures);
             out.put("follow_moves", view.followMoves);
             out.put("follow_applied", view.followApplied);
+            out.put("release_calls", view.followReleaseCalls);
+            out.put("release_started", view.followReleaseStarted);
             return out.toString();
         } catch (Throwable t) {
             return err(out, t.getClass().getSimpleName() + ": " + t.getMessage()).toString();
@@ -1741,6 +1776,10 @@ public final class VaporRenderHost {
         //   漏登记 ⇒ 未乘 DPR ⇒ 边框比 Web 基准**细 3 倍**（真机实测 2/3/4/1 设备px vs 应 6/9/12/3）。
         //   （本表注释原文就写着「新增长度字段必须登记」——这次是我自己漏了。）
         "borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth",
+        // ★★★S3-T2（#767）：`v-follow` 的**长度类**跟随参数（夹取区间 / 吸附阈值与目标）按密度缩放
+        //   （跟手位移 `dx` 是物理 px、内核 `translate_x` 是物理 px ⇒ 源码里的逻辑 px 边界必须 ×density；
+        //    spring 参数 stiffness/damping/mass 是**无量纲物理量**、gain 是比例 ⇒ 不缩放——与既有弹簧同规）。
+        "followClampMin", "followClampMax", "followSnapThreshold", "followSnapTarget",
     };
 
     /** 物理化一个 spec/样式对象（原地改写；同时被 mount/updatePatches 复用——同一清单一处实现） */
