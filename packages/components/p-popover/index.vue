@@ -152,11 +152,14 @@ onMounted(() => {
   right: 0;
   bottom: 0;
   background: rgba(255, 255, 255, 0.01);
-  z-index: 998;
+  /* ★★★2026-10-10 修（Web 气泡/遮罩层被页面盖住）：`<teleport to="body">` 逃出三层挂载
+     ⇒ 裸 z-index 必须 ≥ **overlay 域**（page 层 = 1_000_000），否则被页面盖住（点不到/看不见）。
+     ★值 = 契约 `mountLayerDomainOffset('overlay')`。 */
+  z-index: 2000000;
 }
 .p-popover-panel {
   position: absolute;
-  z-index: 999;
+  z-index: 2000001; /* ★同上：面板须在命中层之上（原 999 > 998 的相对关系保持） */
   min-width: 120px;
   padding: 8px 12px;
   background: #fff;
