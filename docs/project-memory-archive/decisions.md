@@ -2674,3 +2674,12 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **④ 判据 ㉚ 跨端注意**：该判据**仅 Android**（其他端无 `inputProbeSetText` ⇒ 如实 ◐ 跳过）⇒ **不进三端跨端指纹**（`check-vapor-three-end` 的指纹逐项一致要求三端同源；㉚ 是本端专属，跳过计数已如实列出）。
 **⑤ 诚实边界**：iOS/鸿蒙原生控件未做（判据 ㉚ 在本端 ◐ 跳过）；watcher→live JS 回写桥（跨重入）未做（探针证"活"即可）；`v-model` 修饰符/成员路径未做。
 **⑥ 教训**：a) ★★★**"原生控件回调里再 Call JS" = 重入**（`setText`→watcher→JS 若同步，崩）——宿主回调必须**异步回灌**（post 主线程）；b) ★**复用 native-host 机制**（几何/measure/layout/scroll 全现成，输入控件只是"另一种原生 View"）；c) ★**探针证"控件活"（watcher 触发）+ 单测证"回写链"（B4-T2a）**分工——避免为"跨重入"阻塞本批交付。
+
+767. **★★★立项：性能计划 C 批 · 14「输入与桥延迟」= 当前主攻方向（帧已不是问题，输入才是）—— 合并入口 + 逐腿登记**（2026-10-10）：
+**① 缘起**：用户「把这个做下优化合并入口，然后重点攻破这个输入延迟，感觉这个做完那 v-model 回写这些全都是水到渠成的事了，而且还能解决框架最大的性能瓶颈」。⇒ 把 2026-10-10 出现的方案文档 `docs/proteus-performance-plan/14-input-bridge-latency.md` 归一到框架路线（此前**未登记**，且被 `git add -A` 夹带进 B4-T2b 提交 #766——本项一并**补登记**）。
+**② 核心判断（已逐条取证）**：**渲染成本已全面优于原生**（L1 ratio Android **0.344** / iOS **0.111** / Harmony **0.100**，`hosts/results/cross-end-4050.json`）——但 `hosts/android/results/gfxinfo.txt` 里 **`Janky frames 1 (0.08%)` 与 `Number High input latency 2431` 并存**（计数≈帧数 1233 的 2×）⇒ **只看帧率会误判"性能很好"；瓶颈在输入路径**（触摸事件要等主线程的 JS+命中+布局+录制让出）。
+**③ 结构性根因（B1–B4）**：B1 JS+命中+布局+录制**同线程且同步阻塞**；B2 跨边界一律 **JSON 文本 + 双 UTF-8 编解码**（Android `applyOps` 收 `number[]` 逐元素，注释自述"占布局 95%+"）；B3 交互反馈**必须过 JS**（无原生即时反馈旁路）；B4 无 UI 线程内联脚本（worklet 仅 Skyline 真）。
+**④ 六条腿**：S1 输入旁路（最高 ROI·独有点：按压态内联/命中缓存/平台识别器/iOS 接批量指针 ABI/`requestUnbufferedDispatch`）· S2 零拷贝通道（SPSC 环 + 双缓冲；三端 BytesNoCopy API）· S3 编译期交互下沉（差异化护城河；吸收 `packages/worklet`）· S4 线程解耦 · S5 Harmony 专项 · **S6 度量门禁（前置：没门禁的性能项等于没做）**。
+**⑤ 合并入口（本项交付）**：① `proteus-performance-plan/README.md` 索引加 **C 批（11–14）+ 14 = 当前主攻**；② `board-inventory.md` 的 perf-plan 行补 C 批 14；③ 文档内数字勘正（0.36→**0.344**、0.106→**0.100**）+ 登记指针；④ **与本仓已做能力的关系**：B4（v-model 回写）正是"过桥"能力的具象——**B4-T2b 做 Android 原生输入控件时当场撞上 B1（`setText→TextWatcher→同步 Call JS` 重入）与 B2（`number[]` JSON）** ⇒ S1/S2 是 B4 输入线的下一段（先低延迟，再全部过桥能力水到渠成）。
+**⑥ 诚实边界**：方案现状数字多来自既有产物（iOS 部分为模拟器口径）；Harmony ratio 是提交级/光栅级口径**不代表交互链路**；`JSObjectMakeArrayBufferWithBytesNoCopy` 零拷贝路径需先跑 4KB+ 探针验证；Android `High input latency` 计数**跨设备不可比**。
+**⑦ 下一步**：**S6 度量地基**（三端 `input-latency.json` + `check:input-latency` 棘轮，否则后续每项无法证伪）+ **S1 输入旁路**（逐腿：#768+）。★对外性能宣称在真机复测 + 外部 profiler 取证前**一律标"待真机验证"**。

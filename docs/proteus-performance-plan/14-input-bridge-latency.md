@@ -4,7 +4,8 @@
 > 版本：v1 · 2026-10-10
 > 定位：`proteus-performance-plan/` 的**输入延迟专项**——`00-baseline-and-roadmap.md` 攻的是「启动 + 批处理 + 拍平」（P0-a/P0-b **已兑现**，见 §1.1），本篇攻**触摸 → 视觉反馈这条链路**。
 > 关联：`07-benchmark-baseline.md`（JSI P99 < 0.5ms 口径）· `docs/Proteus_Benchmark案例规格.md`（输入延迟 P95 ≤ 1 帧）· `docs/对标Benchmark执行Checklist.md`（量法口径）· `packages/host-abi`（批处理红线）· `docs/Proteus_JS引擎选型与可插拔方案.md`
-> 相关决策：待登记 `#7xx`（输入旁路与零拷贝通道）
+> 相关决策：**#767**（立项）· #768（S1 输入旁路）· #769（S2 零拷贝）…（逐腿登记）
+> 批次：**C 批（`11`–`14`）· 编号 14 · 当前主攻**（`README.md` 索引已登记）
 
 ---
 
@@ -26,7 +27,7 @@
 
 | 指标 | 数值 | 出处 |
 |---|---|---|
-| L1 提交级 ratio（vs 原生） | Android **0.36** · iOS **0.111** · Harmony cold **0.106** / warm **0.108** | `hosts/results/cross-end-4050.json` |
+| L1 提交级 ratio（vs 原生） | Android **0.36** · iOS **0.111** · Harmony **0.100**（同一份 `cross-end-4050.json`） | `hosts/results/cross-end-4050.json` |
 | L2 光栅级 ratio | Android **0.349** · iOS **0.148** · Harmony `null`（未采） | 同上 |
 | 4050 节点布局 | 中位 **2.047ms** | `hosts/android/results/layout-bench.json` |
 | 单次补丁 apply | **0.0087ms**（relayout 2 次） | `hosts/android/results/layout-apply-ops.json` |
