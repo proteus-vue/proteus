@@ -2546,6 +2546,11 @@ public class ProteusHostView extends ViewGroup {
         fieldBatchPaint.setStyle(android.graphics.Paint.Style.FILL);
         fieldBatchPaint.setAntiAlias(false);
         fieldBatchPaint.setColor(color);
+        // ★★丢弃缓存显示列表（`framePicture`）——**否则静止回放旧画面**（录于批量生效之前 ⇒ 静止=正常路径/圆角，
+        //   拖拽=实时批量/尖角 ⇒ **两条路径两个形态**：用户实测"打开是方块、拖拽才是针"）。
+        //   ★通律：任何影响绘制的注入状态变化，都必须让 `framePicture` 失效（否则回放陈旧帧）。
+        framePicture = null;
+        invalidate();
     }
     /** 由 `VaporRenderHost` 注入场规格（`followField=1` 的容器）。 */
     public void setFollowFields(java.util.Map<Integer, float[]> m) {
