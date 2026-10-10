@@ -2517,3 +2517,24 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **⑤ 验证**：`handler-actions` ⑦ + `vapor-events` T3 组（log 动作/各级别/`console.table` 诊断/方法调方法）· `app-runtime-content` · 全量 **5651** · vue-tsc 0 · coupled 绿。
 **⑥ 教训**：a) ★★★**"缺什么"要先逐条实测再动手**——T3 名义有三项，实测两项**已可用**（只欠判据），真缺的只有 `console.*`；按老印象"T3 全都要做"会白做（同"别按记忆下结论"族）；b) ★★**`console.*` 的 callee 是 MemberExpression**（`console.log` ≠ Identifier callee）——首版正则 `label` 抓不到，改看 `callee.object===console && callee.property===level`；c) ★**调试日志是"方法体必备件"**——不放宽它，"方法引用能跑"在真实页面里仍会因 `console.log` 整条被拒（**点了没反应**）；d) ★**运行期出口分层**（`onLog` 缺省转 `onNote`）既保留信息又不强绑 dev 面板。
 **⑦ 边界（事件-方法线现状）**：T1+T2+T3 后，`<script setup>` **方法体**的"真业务"覆盖面已相当广（声明/调用/带参/局部/分支/日志），仍**不做**：循环 / `async`·`await` / 其它 `console.*` / 任意未知函数——都是**编译期诊断**（不静默）。更上层"全面对齐 Vue Vapor 运行时"（组件实例系统 / JSX / SSR / vdom 互通）见能力清单 P4——属**独立大批次**，非本线范围。
+
+751. **★★Vapor ⇄ Vue「全面对齐」收口评估 —— 逐缺口取证 + 推进计划（事件-方法线已完结；余下按"能否纯 JS 闭环"分级）**（2026-10-10）：
+**① 缘起**：用户「不错，继续往前推」。
+**② 先取证再定档**（★不凭印象挑活）：跑 `check:vapor-capability` 棘轮（29 样例页 / 105 条诊断）+ 逐项探针，按**实测量**排序：
+  | code | 条数 | 本质 | 能否纯 JS 闭环 |
+  |---|---|---|---|
+  | DYNCLASS_LAYOUT_UNSUPPORTED | 28 | 动态 `:class` 布局字段端上不重排 | ❌ 需内核+宿主 |
+  | KEY_IS_ROW_IDENTITY | 22 | `:key` 非可更新属性（**info，非缺口**） | — |
+  | VMODEL_NO_WRITEBACK | 22 | `v-model` 无回写（输入→源） | ❌ 需宿主输入 |
+  | SCRIPT_LIFECYCLE_NOT_RUN | 8 | `onMounted` 等端上不跑 | ◐（可降级） |
+  | DIRECTIVE_NOT_REGISTERED | 6 | 自定义指令体不执行 | ❌ 架构 |
+  | DYNCLASS_PLAN_UNMAPPED | 5 | 类计划未映射（**退化线性回退**，非正确性） | ✅（JS，仅提速） |
+  | TEMPLATE_UNSUPPORTED | 5 | v-html×3 + clip-path 非 JSON×2 | ❌ 富文本通道 |
+  | STYLE_SELECTOR_UNSUPPORTED | 3 | `.foo:hover`（触摸无 hover） | ❌ 平台语义 |
+  | BUILTIN_PARTIAL | 2 | Teleport 传送 | ❌ 宿主多渲染面 |
+  | EXPR_UNSUPPORTED | 1 | `!hasAnyEvent()`（白名单外调用） | ◐（可 `@proteus-pure`） |
+  | STYLE_DYNAMIC_OBJECT | 1 | `:style="变量"`（键名编译期不可知） | ◐ 诊断如实 |
+**③ 探针深挖（关键，避免"以为能做"）**：**动态 `:class` 布局字段**——编译期 plan 产出**StyleIR 描述符**（`width={kind:'absolute',dp:200}`）+ `padding` **被摊平**成 `paddingTop/...`；运行期统一经 `onPaintProp` 交宿主 `updatePatches`（内核 `PatchStyle`）——而内核 `PatchStyle` 只认 ~16 个字段且 `padding` 要对象、enum 只 `display`；33 个布局字段里**约 17 个内核现不支持** + 值形态不符 ⇒ **需：运行期值规范化 + 内核 PatchStyle 扩字段 + 三端宿主 applier**（且 App 壳 `screen-runtime` **根本没接 `onPaintProp`**）。**确认是大批次，不半做。**
+**④ 交付**：`docs/vapor-vue-alignment-plan.md`（取证化推进计划 + 逐项依赖/估时/验收模板）+ 登记 `board-inventory`（并更新 `vapor-event-methods-plan` 行状态→T1+T2+T3 已交付）。
+**⑤ 建议顺序**：**B5 脚本钩子降级为动作表（≈2 人日，复用事件-方法线降级器，可先交付）→ B3 动态 class 布局（≈4–6 人日，价值最高，需内核+三端宿主，单独立项）→ B4 v-model 回写（≈4–5 人日，需三端输入通道）**。**永久边界（具名不做）**：Teleport 真传送 / v-html 富文本 / 自定义指令体 / `:hover` / async·循环事件体。
+**⑥ 教训**：a) ★★★**"继续推进"要先取证再定档**——按 `check:vapor-capability` 实测量排序，避免"按印象挑一个做"；b) ★★**探针深挖是"能不能做"的判据**——动态 class 表面"只是没接线"，深挖发现值形态（StyleIR 描述符）+ 内核字段子集 + 缺 applier 三重缺口 ⇒ 一轮做不完，**不硬塞**；c) ★★**"能不能纯 JS 闭环"是分档轴**——纯 JS（DYNCLASS_PLAN_UNMAPPED / 脚本钩子降级）可快速交付；跨内核/宿主（布局字段/v-model）必须单独立项；d) ★**架构边界要"永久具名"**（Teleport 传送 / v-html / 指令体），不当"待做"挂着。
