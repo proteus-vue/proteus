@@ -6,7 +6,11 @@ import type { AppScreenSpec } from '@proteus-vue/router/app-stack'
 
 // ─── ① 全端页面清单（Web/MP：createRouter(routes)）───
 export const routes: RouteRecord[] = [
-  { name: "index", path: "pages/index", component: "../pages/index.vue", meta: {"title":"Dactyl 触感穹顶"} },
+  { name: "index", path: "pages/index", component: "../pages/index.vue", meta: {"title":"L1 触即应","isTab":true} },
+  { name: "l2", path: "pages/l2", component: "../pages/l2.vue", parent: "index", meta: {"title":"L2 跟手","isTab":true} },
+  { name: "l3", path: "pages/l3", component: "../pages/l3.vue", parent: "index", meta: {"title":"L3 沸腾","isTab":true} },
+  { name: "l4", path: "pages/l4", component: "../pages/l4.vue", parent: "index", meta: {"title":"L4 十指","isTab":true} },
+  { name: "l5", path: "pages/l5", component: "../pages/l5.vue", parent: "index", meta: {"title":"L5 崩裂","isTab":true} },
 ]
 
 export const tabRoutes: RouteRecord[] = routes.filter(r => r.meta?.isTab)
@@ -18,18 +22,38 @@ export const screens: Record<string, AppScreenSpec> = {
   "index": {
     "name": "index",
     "path": "pages/index"
+  },
+  "l2": {
+    "name": "l2",
+    "path": "pages/l2"
+  },
+  "l3": {
+    "name": "l3",
+    "path": "pages/l3"
+  },
+  "l4": {
+    "name": "l4",
+    "path": "pages/l4"
+  },
+  "l5": {
+    "name": "l5",
+    "path": "pages/l5"
   }
 }
 
 /** 路由名数组（App 深栈/压测按它循环取屏——顺序与 routes 一致） */
-export const screenNames: string[] = ["index"]
+export const screenNames: string[] = ["index","l2","l3","l4","l5"]
 
 /** tab 根屏（meta.isTab）—— App 端 tab 语义（switchTab/reset）的合法目标 */
-export const tabNames: string[] = []
+export const tabNames: string[] = ["index","l2","l3","l4","l5"]
 
 // ─── ③ 类型提示：按路由名索引的参数类型表（来源：<route> 块 params 声明）───
 declare module '@proteus-vue/router/types' {
   interface RouteParamsByName {
     'index': {  },
+    'l2': {  },
+    'l3': {  },
+    'l4': {  },
+    'l5': {  },
   }
 }

@@ -2820,7 +2820,13 @@ public class ProteusHostView extends ViewGroup {
             // 未显式指定 ⇒ 取第一个跟手节点（Dactyl L2 单跟手锚点）
             dctlFollowNode = followSpecs.keySet().iterator().next();
         }
-        if (dctlFollowNode < 0 || dctlLastEventTime < 0) { dctlVisibleLagPx = -1f; return; }
+        // ★只在**跟手拖拽进行中**计算——否则（静止/普通点按）跟手节点不动，"落点 − 手指"会把
+        //   页面距离算进去（实测：点 tab 后报 visible_lag 1886px 的假值）。
+        //   ★跟手进行中 = 指针表非空（S3-T3 的 `followPtrs`）且该节点在表内。
+        if (followPtrs.isEmpty() || dctlFollowNode < 0 || dctlLastEventTime < 0) { dctlVisibleLagPx = -1f; return; }
+        boolean nodeTracked = false;
+        for (float[] st : followPtrs.values()) { if ((int) st[0] == dctlFollowNode) { nodeTracked = true; break; } }
+        if (!nodeTracked) { dctlVisibleLagPx = -1f; return; }
         final int ci = indexOfNode(dctlFollowNode);
         if (ci < 0 || cmds == null || ci >= cmds.size()) { dctlVisibleLagPx = -1f; return; }
         final Cmd c = cmds.get(ci);

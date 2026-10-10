@@ -55,3 +55,113 @@ body {
   color: var(--text);
   margin: 24px 0 12px;
 }
+
+/* ═══════════ Dactyl 展示样式（全局类 · 编译期折进各端节点 · 四端一致）═══════════
+   ★这套类由全部五关页面共用（放全局样式表 = 单一事实源；SFC 内不再重复声明）。
+   ★自洽性红线（§7.3）：这里**不含任何非合成属性动画**（门禁 check:dactyl-visual-nonblocking 守）。 */
+.dactyl-title {
+  display: block;
+  font-size: 22px;
+  font-weight: 800;
+  color: #39d0ff;
+}
+.dactyl-sub {
+  display: block;
+  font-size: 12px;
+  color: #8a93a6;
+  margin-top: 4px;
+}
+.dactyl-hint {
+  display: block;
+  font-size: 12px;
+  color: #8a93a6;
+  padding: 8px 0 12px;
+}
+
+/* L1 磁块：按下即凹陷发光（:active ⇒ 编译期折 press* 字段，宿主 DOWN 原生即时） */
+.pads {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+.pad {
+  width: 46px;
+  height: 46px;
+  margin: 3px;
+  background-color: #141a24;
+  border-radius: 10px;
+}
+.pad:active {
+  background-color: #39d0ff;
+}
+
+/* 跟手轨道（L2/L3/L5）：穹顶平台整条随指迁移（v-follow ⇒ 内核合成平移，零 JS） */
+.lane {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  width: 100%;
+  height: 150px;
+  background-color: #0e1520;
+  border-radius: 14px;
+}
+.dome {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  height: 100px;
+  padding: 0 12px;
+  background-color: #10202e;
+  border-radius: 14px;
+}
+.peak {
+  width: 26px;
+  height: 66px;
+  margin: 0 3px;
+  background-color: #39d0ff;
+  border-radius: 10px 10px 4px 4px;
+}
+
+/* L3 沸腾数据场（数字/光点的静态示意） */
+.boil {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+.cell {
+  width: 32px;
+  height: 24px;
+  margin: 3px;
+  background-color: #2a1a3a;
+  border-radius: 6px;
+}
+
+/* L4 多指液柱（每个独立跟手锚点 ⇒ 多指同时） */
+.multi {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  width: 100%;
+  height: 170px;
+  padding: 0 12px;
+  background-color: #0e1520;
+  border-radius: 14px;
+}
+.pillar {
+  width: 46px;
+  height: 110px;
+  margin: 0 10px;
+  background-color: #7c5cff;
+  border-radius: 12px 12px 4px 4px;
+}
+
+/* L5 崩裂旋钮（滑动滑出：过阈值吸附 / 未过回弹） */
+.rupt {
+  width: 74px;
+  height: 74px;
+  margin: 0 14px;
+  background-color: #ff9a6c;
+  border-radius: 18px;
+}
+
