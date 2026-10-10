@@ -2736,3 +2736,11 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **④ 验证**：编译器单测（`:active`⇒`press*`、进常驻=否、不产选择器诊断）· 真机 ㉝ ✅（Android 34 判据全过；三端 34/30/30，㉝ Android 专属其他端如实跳过）· 全量 **5670** · 门禁全绿 · AAR 随源再生。
 **⑤ 诚实边界**：只覆盖 **Android**（iOS/鸿蒙宿主未接；判据 ㉝ 本端专属）· 只做 **`:active`**（触屏无 hover；focus/checked 无宿主通道）· **仅背景色**覆盖（圆角等 press* 字段先编译出来、宿主按需扩）· `.x:active` 的**后代**（`.x:active .y`）按祖先链匹配但"按下"是运行期态 ⇒ 仅自匹配的有效（诚实边界）。★对外"press_feedback ≤ 1 帧"需 Dactyl D1 量具实测。
 **⑥ 教训**：a) ★★★**"输入不过桥"能复用既有样式透传**（App 把 style 扁平到节点顶层 ⇒ 编译期折 `press*` 字段即可，**内核零改**）——别默认要新建通路；b) ★★**按下态与常驻态必须分开收**（并入常驻 ⇒ 常态色被覆盖——本项 design 时就分开）；c) ★**探针方法要挂在 QuickJS 找的对象上**（首版挂 `ProteusHostView`，而 QuickJS 找 `VaporRenderHost` ⇒ `pressProbe` 探测为 undefined、判据"缺失"——同 B4-T2b 的"注入面"坑）。★下一步：S1.2/S1.3/S1.4（iOS 命中缓存/平台识别器/批量指针 ABI）或 Dactyl D1。
+
+775. **★★★立项：S3 编译期交互下沉（输入延迟专项 #767 的"差异化护城河"）—— `16-s3-interaction-folding.md`**（2026-10-10）：
+**① 缘起**：用户「先专项攻破输入延迟」；S1.5/S1.1/S2/S6 已交付 ⇒ **S3 是 Dactyl L2/L3 的公共前置**（§15 §1.3）。**取证（不从头造）**：底座**已存在**——`anim.rs` 的 **`AnimDrive::Progress`**（注释原文「手势跟随的机制面：手指移动 → seek，动画值精确跟随」）· Android **`proteus_dispatch_pointers`**（批量指针，`host.rs`；iOS vtable 已声明）· `packages/animation` 声明式语法 · worklet（仅 Skyline）。**⇒ S3 = 把"声明一个跟手元素"接到这三件既有件**。
+**② 设计**：声明式 **`v-follow="{axis,clamp,spring}"`** → 编译期 pass `interaction-folding`（**可折叠判据全部满足才折**：手势驱动 · 影响限本节点合成属性 · 无副作用 · 纯"位置→属性"映射）→ 产内核 anim 规格（进订阅表）→ 运行期宿主 MOVE 经 `dispatch_pointers` 喂指针 → 内核 `seek`（Progress）→ 写字段 → 宿主帧回调采样绘制。**全程不过 JS**。
+**③ 三级模型**：Tier1（按压/滚动联动/transition——内核 IR）· **Tier2（拖拽跟手/swipe/下拉刷新——本项主攻）** · Tier3（请求/路由——JS 异步，不阻塞输入）。**worklet 从"仅 Skyline"提升为"三端统一内核指令"**。
+**④ 最小切片 S3-T1**：**Android · 单指 · 单节点 · X 轴跟手**（无夹取/回弹）；判据新烟囱 `s3`（Dactyl L2 迷你版）核 **`js_involved_gestures_ratio == 0`**（MOVE 期间宿主 0 次 JS 回调）+ 节点 transform 跟手。估时 ≈3–4 人日（全 Tier2 三端 ≈8–12）。分批 S3-T1~T4。
+**⑤ 诚实边界**：现状**交互几乎 100% 进 JS**（§14 §1.4 B3）；本项后拖拽/滚动联动才不过 JS。不含任意 JS 动画函数 / async 驱动交互（诊断回 JS）。目标 `ratio < 10%` 为**目标值**，实测前不宣称。★风险 R1（折叠误判→保守判据）/R2（合成属性红线→`check:dactyl-visual-nonblocking`）/R4（跟手期内核优先、松手 JS 恢复，同 S1.1 契约）。
+**⑥ 教训**：★★★**"新能力"先查底座**——S3 看似要从零（"交互折叠"），取证后发现 **`AnimDrive::Progress` 的手势跟随机制面 + 批量指针 ABI + 声明式语法早就在**，本项只是**接线**（与 S2 去 JSON 的"字节通道其实还是 JSON"、B4 的"$event/set 早具备"同族：**先取证已有能力，别默认从零**）。★下一步：**S3-T1**（Android 单指跟手最小切片）。
