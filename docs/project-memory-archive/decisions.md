@@ -2781,3 +2781,11 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **④ 验证**：`cargo test follow_` 4 绿 · `test:coupled` 501 绿 · `vue-tsc` 0 · `check:android-host-compile` 绿 · `check:vapor-three-end` 绿（android ✓37）· `check:host-kernel-keys`/`check:no-json-wire`/`check:android-runtime-aar-fresh`（重建 AAR）全绿。
 **⑤ 诚实边界**：仅 Android · 各指**独立跟手各自节点**（未做"同一节点多指合力"——那属手势识别层）· 多指命中按各指 DOWN 时刻（与单指同语义）· 未接多指**旋转/缩放**（pitch/zoom，属后续）。
 **⑥ 教训**：★★★**批量 ABI 的"一次跨界"是 S3-T3 的全部价值**——`ffi_calls_per_frame ≤ 1`（M 指也只是一次）必须**可证**：探针让 `batch_calls ≤ moves`（一帧一调）与 `ptrs_max`（多指真的同时）成为机器判据，而非"看着像批量"。★**并行数组替代结构体**（Java 无 value type ⇒ `int[] + float[]`；JNI 端重组成 `#[repr(C)]` 结构体）时，**长度契约**（`params == n×6`）与**字段顺序**（两侧同源）都要显式——错位会静默错值。★**指针表**（不是"单指标量"）是"跟手"支持多指的最小正确形态（`ACTION_POINTER_UP` 才能各指独立松手）。★下一步：**S3-T4**（三端同形 + worklet 收口 + `check:interaction-folding` 门禁）——S3 Tier 2（Android）已完整。
+
+779. **★★★S3-T4（部分）交付：交互折叠契约棘轮门禁 `check:interaction-folding` + 修"半应用"折叠缺陷（输入延迟专项 #767 · §16 风险 R1）**（2026-10-10）：
+**① 承接**：#776/#777/#778（S3 T1–T3）⇒ §16 §6 的 S3-T4 拆两半：**门禁（本项已交付）** + 三端同形/worklet 收口（**◐ 待做**——MP/Skyline 走 `wx.worklet` 另立）。
+**② 交付·门禁**：`scripts/check-interaction-folding.mjs`——**折叠契约棘轮**：一份**锁定语料**（21 条合法/非法 `v-follow` 形态，`CASES` = SSOT）经真实编译器（`npx tsx` 连 src）逐个折叠，断言 **合法必折（0 诊断 + 字段子集匹配）· 非法必诊（≥1 条 `VAPOR_FOLLOW_SHAPE`，0 静默）**；"折叠率"= 折出/语料（当前 10/21 = 47.6%，即**棘轮**）。接 `package.json`（`check:interaction-folding`）+ `verify` 链 + `ci.yml` 步骤；过 `check:gates-sync`。这是 §16 风险 **R1「折叠误判」** 的机器化——**可折叠必折（不漏）/ 不可折叠必诊（不静默 R1 误判）**，与 `check:no-json-wire`/`check:no-blind-wait` 同族（结构性问题只有工具层能兜住）。
+**③ 交付·修缺陷（门禁当场抓出）**：首跑红——`interpretFollowSpec` 对**部分非法**形态（如 `gain:'fast'` / `clamp:[-100]` / `spring:{stiffness:300}` / 未知键）**既折了 axis 又报了诊断**（**半应用**：作者以为生效、实际只对一半 ⇒ 静默语义偏差）。⇒ 改 **all-or-nothing**：`diag.length > 0` ⇒ **不折任何字段**（§2.2「宁可少合并不错合并」）。★对**合法**形态零行为变化（`gen-vapor-fixture` 产物逐字节未变 ⇒ 无需重跑真机；仅非法形态由"半折+诊断"变"纯诊断"）。
+**④ 验证**：`check:interaction-folding` 绿（10/21）· `test:coupled` 501 绿 · `vue-tsc` 0 · `check:gates-sync` 绿 · fixture 产物无 diff（行为中立）。
+**⑤ 诚实边界**：本项只交付**门禁**；**三端同形（MP/Skyline `wx.worklet` 收口）未做**（S3-T4 ◐）；门禁只覆盖 `v-follow` 编译期折叠契约，宿主跟手行为由真机判据 ㉞/㉟/㊱ 覆盖。
+**⑥ 教训**：★★★**"门禁的价值常在它第一次红"**——本门禁首跑即抓出真实的**半应用**缺陷（既折又诊），若只写"能折就行"的单测便漏掉。★**折叠语义必须 all-or-nothing**（部分成功 = 静默语义偏差——"看着生效、实则半对"最难查）。★**棘轮语料即契约文档**（`CASES` 写明每条期望；改折叠能力必须显式改表 ⇒ 逼出"意图"）。★下一步：**S3-T4 收口（三端同形）** 或 **S1.2/3/4（iOS）**。
