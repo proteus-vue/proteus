@@ -11,8 +11,8 @@ export const appScreenContentHeight: () => number;
 export const appScreenHitAt: (x: number, y: number) => string;
 /** ★dev 元素高亮（决策 #729）：内核节点 rect（**cmd 同口径=物理 px**）→ `{ok,x,y,w,h}`；供叠一条半透明高亮框 */
 export const appScreenNodeRect: (id: number) => string;
-/** 屏转场动画推进一帧（16.7ms）；返回 JSON */
-export const appScreenAnimTick: () => string;
+/** 屏转场动画推进一帧（缺省 16.7ms）；入参可选 `{"dtMs":n}` → 返回 JSON（与 proteus_host.cpp 的 AppScreenAnimTick 一致） */
+export const appScreenAnimTick: (json?: string) => string;
 /** 建立持久壳 VM（注入 proteusHost + 平台全局 → eval bundle → 探测生命周期钩子） */
 export const hostRtShellInstall: (json: string) => string;
 /** 真事件转发：__proteusHostShellLifecycle('pause'|'resume') + 泵 job + 读回 + 落盘 */

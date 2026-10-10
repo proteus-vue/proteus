@@ -245,9 +245,13 @@ export const GATES: GateInfo[] = [
   },
   {
     id: 'doctor',
-    group: '仓库治理',
+    // ★分组=专项检查（与 health 同族——doctor 吸收 health；二者都是 CLI 诊断型命令，
+    //   **入 HELP「检查与门禁」组**）。★#686 曾误置于「仓库治理」——该族语义是"无 CLI 面的
+    //   npm/CI 治理门禁（scope=framework，不入 HELP）"，doctor 有 CLI 面（且在 HELP 里）⇒
+    //   分组漂移会让 `gate.test` 的 B4-lite（registry↔HELP 一致）与 #457（仓库治理族成员固定）双双变红。
+    group: '专项检查',
     scope: 'project',
-    usage: 'proteus doctor [dir] [--json] [--strict] [--only <groups>] [--deep]',
+    usage: 'proteus doctor [dir] [--json] [--report <path>] [--strict] [--only <groups>] [--skip <groups>] [--target <端>] [--deep] [--verbose] [--list] [--no-parallel]',
     // ★未接线（○）：doctor 是多旗标诊断工具（--json/--report/--only/--deep/--list…），
     //   按 gate.ts 既有约定「未接线（○：写型/诊断/多旗标工具）经独立命令」执行——强行接 run 适配器会丢旗标语义。
     desc: '★★环境/工具链/依赖/工程/宿主/端口/设备体检（M5 · #686）——诊断型多旗标工具，经独立命令运行（`proteus doctor`）',
@@ -293,6 +297,16 @@ export const GATES: GateInfo[] = [
     scope: 'project',
     usage: 'proteus host push <module-dir>',
     desc: '★G-45 B3 调试基座：插件模块前置校验（proteus.plugin.json 完整性/签名 sig-*/conformance 覆盖率）\n      + push 信封生成（manifestHash/bundleHash——完整性）',
+  },
+  {
+    id: 'host-signing',
+    // ★#688 签名工具（随 CLI 分发）——有 CLI 面且在 HELP「检查与门禁」组 ⇒ 必须登记本表
+    //   （B4-lite 判据：HELP 组 usage 集 ↔ GATES 目录 usage 集**双向一致**；漏登记即红）。
+    //   ○ 未接线：诊断/多旗标工具（--list/--generate/--bundle…），经独立命令运行（`proteus host signing`）。
+    group: '专项检查',
+    scope: 'project',
+    usage: 'proteus host signing <ios|android> [--list] [--generate] [--bundle=<id>]',
+    desc: '★★签名工具（#688）——随 CLI 包分发、解耦框架源码：ios 列本机描述文件/证书（--bundle 解析可用组合）；android 检查/生成 debug keystore（--generate）',
   },
   {
     id: 'conformance',

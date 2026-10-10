@@ -59,16 +59,16 @@ export const animStop: (json: string) => string;
  *  返回 {ok, page, content_nodes, mount_ok}；给 filesDir 时落盘 app-screen-content.json。 */
 export const screenContentProbe: (argsJson: string) => string;
 /** ★★★视觉合成（2026-10-04）：App 屏内容 → 内核树 → 渲染指令数组（物理 px，renderCommands 输入）。
- *  argsJson = { nodes, density, vpW, vpH, page?, filesDir? }；返回 JSON 数组串。 */
-export const appScreenCommands: (argsJson: string) => string;
-/** ★★★鸿蒙滚动对齐（2026-10-05 · 用户抓出「内容变长后看不到下面」）：**内容高（vp）**——
- *  AppScreenCommands 建树后从内核 rects 的 maxBottom 算出；ArkTS 侧钳制滚动范围（range = max(0, 内容高 − 视口高)）。 */
-export const appScreenContentHeight: () => number;
-/** ★★★真实触摸（2026-10-04）：`.onTouch` 真注入的 vp 坐标 → 内核 hitTest（保留的合成树）。
- *  返回 {ok,target,path,chain}；每调用一次计入 app-screen-composite.json 的真实触摸读数。 */
-export const appScreenHitAt: (x: number, y: number) => string;
-/** ★批次 42（动效）：推进一帧 app-screen 树的内核动画（返回 {ok, active}） */
-export const appScreenAnimTick: (dtMsJson: string) => string;
+ *  argsJson = { nodes, density, vpW, vpH, page?, filesDir? }；返回 JSON 数组串。
+ *  ★已迁至 `proteus_render`（`libproteus_host.so`）——见关注点分层（811e0524）；本模块不再导出。
+ *  ArkTS 请从 `proteus_render` 导入（见 dev/Index.ets）。 */
+// export const appScreenCommands — 见 proteus_render
+/** ★★★鸿蒙滚动对齐（2026-10-05）：**内容高（vp）**——已迁至 `proteus_render`（本模块不再导出）。 */
+// export const appScreenContentHeight — 见 proteus_render
+/** ★★★真实触摸（2026-10-04）：`.onTouch` 真注入 vp 坐标 → 内核 hitTest——已迁至 `proteus_render`（本模块不再导出）。 */
+// export const appScreenHitAt — 见 proteus_render
+/** ★批次 42（动效）：推进一帧 app-screen 树内核动画——已迁至 `proteus_render`（本模块不再导出）。 */
+// export const appScreenAnimTick — 见 proteus_render
 /** ★★★App 三端对齐（2026-10-04）：鸿蒙 executor 探针——eval 同一份 bundle-app-stack.js + 注入
  *  proteusHost.invoke（screen.* 真内核树）+ 两相泵 job。argsJson = { bundle }；返回 {ok, exec_* , exec_read}。 */
 export const appStackExecutorProbe: (argsJson: string) => string;

@@ -21,11 +21,10 @@ import { display } from '@kit.ArkUI';
 import { hidebug } from '@kit.PerformanceAnalysisKit';
 // ★矩阵 #17：App 路由栈场景探针（移植副本，与 Android/iOS 同口径）
 import { runAppStackProbe } from './app-stack-probe';
-import { attach, renderCommands, stats, ProteusRenderStats, platformAnimBegin, platformAnimStep, platformAnimEnd, platformAnimSave, clearRoot, scrollRoot, gestureInstall, gestureSample } from 'proteus_render';
+import { attach, renderCommands, stats, ProteusRenderStats, platformAnimBegin, platformAnimStep, platformAnimEnd, platformAnimSave, clearRoot, scrollRoot, gestureInstall, gestureSample, appScreenCommands, appScreenHitAt, appScreenAnimTick } from 'proteus_render';
 // ★P3-3：宿主动画入口（`<Transition>` 桥的鸿蒙腿——与 Android/iOS 同形）
 import { animTick, animActive } from 'libproteus_bench.so';
-import { appScreenAnimTick } from 'libproteus_bench.so';   // ★批次 42：app-screen 树的 CSS animation tick
-import { bench4050, hitProbe, recycleProbe, spliceProbe, textProbe, kernelAnimProbe, memProbe, sfcStressProbe, sfcStressCommands, jsvmProbe, vaporProbe, animCurveBezier, hostRuntimeProbe, hostRtShellInstall, mountVirtualProbe, gestureHitPrepare, gestureHitAt, fontFamilyProbe, nodeRect, screenContentProbe, appStackExecutorProbe, appScreenCommands, appScreenHitAt, version as rustVersion } from 'libproteus_bench.so';
+import { bench4050, hitProbe, recycleProbe, spliceProbe, textProbe, kernelAnimProbe, memProbe, sfcStressProbe, sfcStressCommands, jsvmProbe, vaporProbe, animCurveBezier, hostRuntimeProbe, hostRtShellInstall, mountVirtualProbe, gestureHitPrepare, gestureHitAt, fontFamilyProbe, nodeRect, screenContentProbe, appStackExecutorProbe, version as rustVersion } from 'libproteus_bench.so';
 
 const DOMAIN = 0x0002;
 const TAG = 'ProteusRender';
@@ -902,9 +901,12 @@ struct Index {
           const ex = JSON.parse(exOut) as Record<string, Object>;
           const rd = (ex['exec_read'] ?? {}) as Record<string, Object>;
           const es = (rd['e_stats'] ?? {}) as Record<string, Object>;
-          const summary: string = `{"ok":${ex['ok']},"host":"harmony","exec_content_nodes":${ex['exec_content_nodes']},` +
-            `"exec_mounts":${ex['exec_mounts']},"exec_visible":${ex['exec_visible']},"exec_destroy":${ex['exec_destroy']},` +
-            `"exec_commands":${es['commands']},"exec_transitions":${es['transitions']},"exec_anim_started":${ex['exec_anim_started']},` +
+          // ★JSON 安全（2026-10-10）：`e_stats` 可能缺 `commands`/`transitions`（executor 无读数）——
+          //   直接插值 `undefined` 会产出**非法 JSON**（`"exec_commands":undefined`），使门禁读取报
+          //   `Unexpected token 'u'`。⇒ 缺省落 0（数值），保证 readin 稳定。
+          const summary: string = `{"ok":${ex['ok']},"host":"harmony","exec_content_nodes":${ex['exec_content_nodes'] ?? 0},` +
+            `"exec_mounts":${ex['exec_mounts'] ?? 0},"exec_visible":${ex['exec_visible'] ?? 0},"exec_destroy":${ex['exec_destroy'] ?? 0},` +
+            `"exec_commands":${es['commands'] ?? 0},"exec_transitions":${es['transitions'] ?? 0},"exec_anim_started":${ex['exec_anim_started'] ?? 0},` +
             `"exec_errors":${JSON.stringify(es['errors'] ?? [])}}`;
           hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_APP_EXECUTOR %{public}s', summary);
           const rf = ctxEX.filesDir + '/app-stack-executor.json';
@@ -978,7 +980,8 @@ struct Index {
             } catch (re) { /* 读回失败：用本地摘要（不阻断） */ }
             hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_APP_SCREEN_COMPOSITE %{public}s', cOut);
           } catch (cce) {
-            hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_APP_SCREEN_COMPOSITE_ERROR %{public}s', JSON.stringify(cce) ?? '');
+            const ce = cce as Error;
+            hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_APP_SCREEN_COMPOSITE_ERROR %{public}s', (ce && ce.message) ? ce.message : (JSON.stringify(cce) ?? ''));
           }
         } catch (sce) {
           hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_APP_SCREEN_CONTENT_ERROR %{public}s', JSON.stringify(sce) ?? '');

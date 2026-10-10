@@ -54,6 +54,48 @@ function extractBare(spec) {
 const BARE_RE = /(?:from\s*|import\s*\(|require\s*\()\s*['"]([^'"]+)['"]/g
 // 去除注释行后的裸模块提取（import/from 一般不在注释；URL 字符串内出现 'from' 的极少——以注释行剔除为主）
 
+/**
+ * ★2026-10-10 代码掩码：标记每个字符是否处于**代码区**（1=代码 / 0=字符串·模板串·注释内容）。
+ *
+ * 【为什么必须（本仓实测误报）】`website/src/playground/project.ts` 的 `demoProject` 把**一份 SFC 示例**
+ *   整段放进一个多行**模板串**里——其中 `import { nanoid } from 'nanoid'` 只是**示例字符串内容**，
+ *   不是网站的真实依赖。而既有"行内含 `${` 即跳过"的启发式**看不到**这种形态（该行无插值）⇒ 误报 `nanoid`。
+ *   ★**跳过规则必须对着实际形态**（本仓纪律）——"字符串/模板串/注释里的 import"根本不是 import。
+ *   本掩码只**增**跳过（字面量内的匹配一律不算），不改变任何真实代码区 import 的识别（探针复核：仅少报 1 个误报）。
+ */
+function codeMask(src) {
+  const mask = new Uint8Array(src.length).fill(1)
+  const blank = (a, b) => { for (let k = a; k < b; k++) mask[k] = 0 }
+  const len = src.length
+  function scanCode(start, end) {
+    let i = start
+    while (i < end) {
+      const ch = src[i]
+      if (ch === '/' && src[i + 1] === '/') { const e = src.indexOf('\n', i); const j = e < 0 ? end : e; blank(i, j); i = j; continue }
+      if (ch === '/' && src[i + 1] === '*') { const e = src.indexOf('*/', i + 2); const j = e < 0 ? end : e + 2; blank(i, j); i = j; continue }
+      if (ch === '\'' || ch === '"') { let j = i + 1; while (j < end) { if (src[j] === '\\') { j += 2; continue } if (src[j] === ch) { j++; break } j++ } blank(i, j); i = j; continue }
+      if (ch === '`') {
+        blank(i, i + 1); i++
+        while (i < end) {
+          if (src[i] === '\\') { blank(i, i + 2); i += 2; continue }
+          if (src[i] === '`') { blank(i, i + 1); i++; break }
+          if (src[i] === '$' && src[i + 1] === '{') { blank(i, i + 2); i += 2; let depth = 1; const s = i
+            while (i < end && depth > 0) { const c = src[i]; if (c === '{') depth++; else if (c === '}') { depth--; if (depth === 0) break } i++ }
+            scanCode(s, i) // 插值体是代码——递归标记
+            if (i < end && src[i] === '}') { blank(i, i + 1); i++ }
+            continue
+          }
+          blank(i, i + 1); i++
+        }
+        continue
+      }
+      i++
+    }
+  }
+  scanCode(0, len)
+  return mask
+}
+
 const findings = {}
 // ★#422 豁免已移除（2026-09-14 拆包）：@proteus-vue/components 现为真实 workspace 依赖（node_modules 软链），
 //   不再是 alias 虚拟模块——故不再豁免（其缺失应被本门禁如实报出）。
@@ -101,7 +143,13 @@ for (const rel of TARGETS) {
   }
   for (const f of files) {
     const src = fs.readFileSync(f, 'utf8')
-    for (const line of src.split('\n')) {
+    const mask = codeMask(src)
+    const lines = src.split('\n')
+    let off = 0
+    for (let li = 0; li < lines.length; li++) {
+      const line = lines[li]
+      const lineStart = off
+      off += line.length + 1 // ★**先推进偏移**（下方有 continue——必须保证行偏移不漂移）
       const t = line.trim()
       if (t.startsWith('//') || t.startsWith('*') || t.startsWith('/*')) continue
       if (t.includes('${')) continue // 模板插值行（动态 require 路径——非静态依赖）
@@ -112,6 +160,8 @@ for (const rel of TARGETS) {
       if (/^[A-Za-z_$][\w$]*:\s*`/.test(t) || t.startsWith('`')) continue // 模板字符串起始行（文档示例）
       if (t.includes('@proteus/container') || t.includes('@proteus/core') || t.includes('<相对产物路径>')) continue // 文档/断言示例文本
       for (const m of line.matchAll(BARE_RE)) {
+        // ★2026-10-10：**字面量/注释内的 import 形态不算依赖**（见 codeMask 头注——修 demo 模板串误报）
+        if (!mask[lineStart + m.index]) continue
         // ★★2026-10-01 修复（实测误报）：**文档文本里的 `"from"`** 会被正则当成"import from 后跟模块名"
         //   捕获（形态：`` `num(a, "from")?` `` ⇒ 正则从 `from"` 起吃到下一个引号，
         //   报出一个含 CJK/括号/空格的"依赖"）。规则对着**实际形态**看住引号内容——
@@ -147,13 +197,20 @@ for (const tt of TPL_TARGETS) {
   const used = new Map()
   for (const f of TPL_FILES) {
     const src = fs.readFileSync(f, 'utf8')
-    for (const line of src.split('\n')) {
+    const mask = codeMask(src)
+    const lines = src.split('\n')
+    let off = 0
+    for (let li = 0; li < lines.length; li++) {
+      const line = lines[li]
+      const lineStart = off
+      off += line.length + 1 // ★先推进偏移（下方 continue 不得让行偏移漂移）
       const t = line.trim()
       if (t.startsWith('//') || t.startsWith('*') || t.startsWith('/*')) continue
       if (t.includes('${')) continue
       if (/["']import \{|\\nimport/.test(t)) continue
       if (t.includes('@proteus/container') || t.includes('@proteus/core') || t.includes('<相对产物路径>')) continue
       for (const m of line.matchAll(BARE_RE)) {
+        if (!mask[lineStart + m.index]) continue // ★字面量/注释内的 import 形态不算依赖（见 codeMask 头注）
         if (!/^[@A-Za-z0-9/._~:-]+$/.test(m[1])) continue // 模板目标同款守卫（见上：文档文本 ≠ 依赖）
         const mod = extractBare(m[1])
         if (!mod || mod.length <= 1 || /^[\s|:;,.'"]+$/.test(mod) || ALIAS_VIRTUAL.has(mod)) continue
