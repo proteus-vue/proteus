@@ -1496,6 +1496,21 @@ describe('★批次 42 · CSS @keyframes + animation（对齐 Web 动效）', ()
     expect(f, '节点带 animation 规格').toBeTruthy()
     expect((f!.style as { animation: Array<{ kind: number }> }).animation[0]!.kind).toBe(4)
   })
+
+  it('⑥ animation-delay（第 2 个时间 token）→ 通道 delayMs（真实水波多圈错时的关键）', () => {
+    const kfm = kf('@keyframes ripple { from { transform: scale(0); opacity: 0.8 } to { transform: scale(1); opacity: 0 } }')
+    const o = parseStaticStyle('animation: ripple 0.6s ease-out 0.18s', () => {}, undefined, undefined, kfm) as {
+      animation?: Array<{ kind: number; delayMs: number }>
+    }
+    expect(o.animation).toBeTruthy()
+    // 所有通道带 delayMs=180（第 2 个时间 token）
+    expect(o.animation!.every((c) => c.delayMs === 180), 'delayMs=180').toBe(true)
+    // 无 delay ⇒ delayMs=0（零行为变化）
+    const o2 = parseStaticStyle('animation: ripple 0.6s', () => {}, undefined, undefined, kfm) as {
+      animation?: Array<{ delayMs: number }>
+    }
+    expect(o2.animation!.every((c) => c.delayMs === 0)).toBe(true)
+  })
 })
 
 // ★★★flex-direction 项（2026-10-08 · 用户抓出 Web 分歧）：display:flex 容器补初值 row（CSS 初值）——

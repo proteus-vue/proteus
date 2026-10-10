@@ -1411,6 +1411,9 @@ public final class VaporRenderHost {
             one.put("from", ch.optDouble("from"));
             one.put("to", lastTo);
             one.put("durMs", total);
+            // ★动画延迟（`animation-delay` 折叠）：内核 `anim_start` 支持 `delayMs`（等待期钉在起点）。
+            //   多圈错时（真实水波）靠它——非零才带（零值省略 ⇒ 既有产物逐字节不变）。
+            if (ch.has("delayMs") && ch.optDouble("delayMs", 0) > 0) one.put("delayMs", ch.optDouble("delayMs"));
             one.put("keyframes", kf);
             anims.put(one);
         }
