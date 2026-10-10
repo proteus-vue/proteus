@@ -483,7 +483,22 @@ pub struct LStyle {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub grid_area: Option<String>,
 
-    // ── ★RT0/RT2（2026-09-30）：绘制层变换 + 视觉属性（**不参与布局**）──
+    // ── ★★★B-T2（2026-10-10）：**文本策略**（内核持有 = 单一事实源）──
+    //
+    // 【为什么放内核】此前这几个字段只活在宿主/JS `spec`，内核不持有 ⇒ ① 内核树不是策略 SSOT；
+    //   ② **动态 `:class` 改它们无内核通道**（B3 的动态类边界真因）。放进内核后：
+    //   动态类走 `SET_STYLE_STR`（复用 grid 的字符串 op）⇒ 内核持有 + 宿主从内核读（单一来源）。
+    //   ★值语义：全是**可选字符串**（`nowrap`/`break-all`/`3`/`center` 等，宿主按各自引擎解释）；
+    //     内核**不解释**它们（与 taffy 无关——它们只影响**文本度量/绘制**，内核只做搬运 + 变更通知）。
+    /// `white-space`（`normal`/`nowrap`/`pre`/`pre-wrap`/`pre-line`）——换行/空白策略。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub white_space: Option<String>,
+    /// `word-break`（`normal`/`break-all`/`break-word`/`keep-all`）——断词策略。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub word_break: Option<String>,
+    /// `line-clamp` 行数（字符串形态，如 `"3"`）——文本截断行数（0/空 = 不限）。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub line_clamp: Option<String>,
     //
     // 【为什么放在内核（而不是让宿主自己算）】指令驱动动画（RT0/V6）要把曲线求值结果
     //   落在**内核持有的状态**上：ANIM_START 指令启动、每帧 tick 求值并写入这些字段，
@@ -715,6 +730,9 @@ impl Default for LStyle {
             grid_row: None,
             grid_template_areas: None,
             grid_area: None,
+            white_space: None,
+            word_break: None,
+            line_clamp: None,
             translate_x: 0.0,
             translate_y: 0.0,
             scale: 1.0,

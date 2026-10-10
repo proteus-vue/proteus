@@ -58,6 +58,8 @@ public final class RustLayout {
     private static native String nativeSetTextMeasures(long handle, String measuresJson);
     private static native String nativeSplice(long handle, String spliceJson);
     private static native String nativeApplyOps(long handle, byte[] opsBytes);
+    /** ★B-T2：文本策略回读（node_ids JSON → policy） */
+    private static native String nativeTextPolicy(long handle, String nodeIdsJson);
     /** ★★MA0-RT：曲线贝塞尔近似（供 PathInterpolator 用；曲线知识只在引擎一处） */
     private static native String nativeCurveBezier(int curve);
     /** ★★MA0-RT：提交规格（合成属性判定 + 节点级采样） */
@@ -140,6 +142,11 @@ public final class RustLayout {
     /** 读取句柄对应的绝对矩形（JSON；供截图回归等场景把几何映射到屏幕坐标） */
     public static String readRects(long handle) {
         return loaded ? nativeReadRects(handle) : "{\"ok\":false,\"error\":\"native 未加载\"}";
+    }
+
+    /** ★B-T2：读节点的**文本策略**（whiteSpace/wordBreak/lineClamp；内核=SSOT）——入参 JSON 数组 id */
+    public static String textPolicy(long handle, String nodeIdsJson) {
+        return loaded ? nativeTextPolicy(handle, nodeIdsJson) : "{\"ok\":false,\"error\":\"native 未加载\"}";
     }
 
     /**

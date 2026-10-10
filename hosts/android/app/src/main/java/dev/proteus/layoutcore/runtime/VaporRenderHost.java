@@ -523,6 +523,39 @@ public final class VaporRenderHost {
                 }
             }
 
+            // ★★★B-T2：**文本策略变更**（white-space/word-break/line-clamp 经 SET_STYLE_STR）——
+            //   从内核**回读**（单一来源）并写回 spec，随后 remeasureChanged 会按新策略重度量。
+            java.util.List<Integer> policyIds = new java.util.ArrayList<>();
+            org.json.JSONArray tpu = uo.optJSONArray("text_policy_updates");
+            if (tpu != null && tpu.length() > 0) {
+                StringBuilder ids = new StringBuilder("[");
+                for (int i = 0; i < tpu.length(); i++) {
+                    int id = tpu.optInt(i);
+                    Integer idx = indexById.get(id);
+                    if (idx == null) continue;
+                    if (ids.length() > 1) ids.append(',');
+                    ids.append(id);
+                    policyIds.add(id);
+                }
+                ids.append(']');
+                if (!policyIds.isEmpty()) {
+                    try {
+                        JSONObject pol = new JSONObject(RustLayout.textPolicy(handle, ids.toString()));
+                        JSONObject map = pol.optJSONObject("policy");
+                        if (map != null) {
+                            for (int i = 0; i < policyIds.size(); i++) {
+                                JSONObject p = map.optJSONObject(String.valueOf(policyIds.get(i)));
+                                if (p == null) continue;
+                                JSONObject spec = specs.get(indexById.get(policyIds.get(i)));
+                                if (p.has("whiteSpace")) spec.put("whiteSpace", p.optString("whiteSpace"));
+                                if (p.has("wordBreak")) spec.put("wordBreak", p.optString("wordBreak"));
+                                if (p.has("lineClamp")) spec.put("lineClamp", p.optString("lineClamp"));
+                            }
+                        }
+                    } catch (Exception ignore) { /* 回读失败不静默：下面仍按旧策略重度量，读数可核 */ }
+                }
+            }
+
             // 文本可能变了 ⇒ 需重度量（订阅更新里文本与宽度都可能动）
             double measureMs = remeasureChanged();
             long te = System.nanoTime();
@@ -535,7 +568,14 @@ public final class VaporRenderHost {
                 if (at == null || idx == null) continue;
                 cmds.set(at, mkCmd(specs.get(idx), cmds.get(at)));
             }
-            if (!textChangedIds.isEmpty()) pushToView();
+            // ★B-T2：策略变更也要重画指令（折行模式/截断变 ⇒ 绘制参数变，几何可能没动）
+            for (int id : policyIds) {
+                Integer at = cmdIndexById.get(id);
+                Integer idx = indexById.get(id);
+                if (at == null || idx == null) continue;
+                cmds.set(at, mkCmd(specs.get(idx), cmds.get(at)));
+            }
+            if (!textChangedIds.isEmpty() || !policyIds.isEmpty()) pushToView();
             double emitMs = (System.nanoTime() - te) / 1e6;
 
             out.put("ok", true);
@@ -543,6 +583,7 @@ public final class VaporRenderHost {
             out.put("changed", lastChangedNodes);
             out.put("text_synced", textChangedIds.size());
             out.put("text_synced_total", textSyncedTotal);
+            out.put("text_policy_synced", policyIds.size());
             if (lastTextProbe != null) out.put("text_probe", new JSONObject(lastTextProbe));
             // ★字段名对着内核回执核过（内核回的是 `relayout_count`——首版读 `relayout` ⇒ 恒 -1，
             //   读数静默失效。本仓纪律：判据/读数取数要对实现核一遍。）
@@ -998,6 +1039,19 @@ public final class VaporRenderHost {
         }
     }
 
+    /**
+     * ★★★B-T2（2026-10-10）：**文本策略回读**（`whiteSpace`/`wordBreak`/`lineClamp`；内核 = SSOT）。
+     *   入参 JSON 数组 id；返 `{ok,policy:{id:{…}}}`。QuickJS 绑本方法（见 quickjs_jni.c 条件注入）。
+     */
+    public String textPolicy(String nodeIdsJson) {
+        if (handle == 0L) return "{\"ok\":false,\"error\":\"尚未 mount\"}";
+        try {
+            return RustLayout.textPolicy(handle, nodeIdsJson);
+        } catch (Throwable t) {
+            return "{\"ok\":false,\"error\":\"" + t.getMessage() + "\"}";
+        }
+    }
+
     /* ══════════════════ ★★虚拟化（长列表：整树在内核、宿主只物化可见区）══════════════════ */
 
     /**
@@ -1348,7 +1402,11 @@ public final class VaporRenderHost {
             //   读 `dto.glow` → `style.glow`（**供 glow 强度动画**：anim.rs `is_glow_intensity` 需该规格
             //   作基准）；宿主此前不转发 ⇒ 内核 glow 恒 None ⇒ glow 强度动画无声失效。转发非行为变更
             //   （静态渲染 glow 仍由宿主自绘 Cmd.glow；无 glow 动画的节点 `glow_intensity==1.0` ⇒ 零影响）。
-            "glow"));
+            "glow",
+            // ★★★B-T2（2026-10-10）：**文本策略**（内核持有 = SSOT；不参与 taffy 布局）——内核
+            //   `style_from_dto` 读 `dto.white_space/word_break/line_clamp` ⇒ 必须经白名单转发，否则
+            //   内核恒 None（同款漏项，check:host-kernel-keys 抓出）。宿主据此重度量/重绘（读回见 textPolicy）。
+            "whiteSpace", "wordBreak", "lineClamp"));
 
     /* ══════════════ 物理化（逻辑单位 → 物理像素的**唯一换算点**） ══════════════
      *

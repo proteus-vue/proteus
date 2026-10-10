@@ -104,7 +104,7 @@ export class VaporRuntime {
   private readonly onceWritten = new Set<number>()
   /** ★批次 30：每节点上次由动态 `:class` 施加的引擎字段（关掉类 ⇒ 需清除这些字段） */
   private readonly lastClassFields = new Map<number, Set<string>>()
-  /** ★B3d：本表是否有**字符串布局字段**（grid 模板）——有才从线性规则补（缺省零成本） */
+  /** ★B3d/B-T2：本表是否有**字符串值字段**（grid 模板 / 文本策略）——有才从线性规则补（缺省零成本） */
   private readonly hasStringClassFields: boolean
   /** v-memo：各组的**依赖基线**（上一次比较时的值；缺省 = 还没建过基线 ⇒ 首帧必脏） */
   private readonly memoBaseline = new Map<number, unknown[]>()

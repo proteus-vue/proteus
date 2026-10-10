@@ -699,6 +699,7 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
       if (NUMERIC_LAYOUT_FIELDS.has(k)) return            // 数值 ⇒ 支持（B3a）
       if (ENUM_LAYOUT_FIELDS[k]) return                   // 枚举（白名单）⇒ 支持（B3b/B3c）
       if (STRING_LAYOUT_FIELDS.has(k)) return             // 字符串（grid 模板）⇒ 支持（B3d）
+      if (k === 'whiteSpace' || k === 'wordBreak' || k === 'lineClamp') return  // 文本策略 ⇒ 支持（B-T2）
       bad.add(k)
     }
     for (const r of tplDynamicClassRules ?? []) for (const k of Object.keys(r.decls)) consider(k)
@@ -706,9 +707,7 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
     if (bad.size > 0) {
       // ★B3 收口（决策 #756）：精确具名每类阻塞（不再是笼统"布局字段不支持"）。
       const cats: string[] = []
-      if ([...bad].some((k) => k === 'whiteSpace' || k === 'wordBreak')) cats.push('`whiteSpace`/`wordBreak`（内核**无文本布局字段**——需内核文本建模）')
       if ([...bad].some((k) => /^overflow[XY]$/.test(k))) cats.push('`overflowX`/`overflowY`（内核**无轴级 overflow 字段**——需内核+宿主）')
-      if ([...bad].some((k) => k === 'lineClamp')) cats.push('`lineClamp`（内核无字段；文本截断——需宿主文本通道）')
       diagnostics.push({
         severity: 'warn',
         code: 'VAPOR_DYNCLASS_LAYOUT_UNSUPPORTED',

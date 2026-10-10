@@ -81,20 +81,29 @@
   基线残差 `(y_a+base_a) − (y_b+base_b) ≈ 0`（三端字体不同但残差恒 0；taffy-only 盒底对齐下 ≠ 0，会露馅）。
   **三端真机全过**（残差 `[0,0]`）+ `check:vapor-three-end` 指纹一致（34 项 × 3 端）。
 - **待接入（下一步）**：`vertical-align`（编译期入集 + Rust 语义 = 文本叶在自身盒内按基线定位）；
-  `line-box` 行高扩增（跨字号行的容器高）；B-T2（策略 SSOT）/B-T3（缓存键）。
+  `line-box` 行高扩增（跨字号行的容器高）。★`vertical-align` 经查是**框架刻意禁止**（`STYLE_PROP_LEVELS`
+  的 FORBIDDEN，与 `display`/`float`/`clear` 同族：框架用 flex/grid 而非 inline 布局）⇒ **非缺口**，不做。
 
-### B-T2 · 内核**文本策略 SSOT**（white_space/word_break/line_clamp/text_align 进内核树）
-**内核**：`LStyle`（或 `TextMeasureRequest`）加 `text_align: Option<String>` + 文本策略（wrap/break/clamp 紧凑编码）；
-`ffi.rs` 的 `NodeDto`/`StyleDto` 加对应字段 + 映射。**这是 B-T3 的前置**（内核要先"知道"策略，才能进缓存键）。
-**编译期**：App 折叠路径把这三字段**同时**写进内核 DTO（SSOT）；**动态 `:class`**：复用 B3d 的 **`SET_STYLE_STR`**
-字符串 op 通道（或新增文本策略 op）⇒ **闭合 B3 的"内核无文本字段"具名边界**。
-**宿主**：宿主**改从内核树**读文本策略（单一来源）——或保留现状 + 动态类改由宿主通道回灌（spike 定，后者零宿主改动但 SSOT 仍在宿主）。
-**验收**：动态 `:class` 切 `white-space`/`line-clamp` ⇒ 三端折行/截断随之变（判据扩展）。
+### B-T2 · 内核**文本策略 SSOT**（white_space/word_break/line_clamp 进内核树）—— ★**已交付（2026-10-10 · 判据 ㉙）**
+**内核**：`LStyle` 加 `white_space`/`word_break`/`line_clamp: Option<String>`；`ffi.rs` 的 `NodeDto` 加对应字段 + `style_from_dto` 映射。
+**内核 op**：`apply_style_str_key` 加三键（复用 B3d 的**字符串 op 通道 `SET_STYLE_STR`**）——`Ok(false)`=不重排
+（文本策略只影响**文本度量/绘制**，非 taffy 几何）；`apply_ops` 记 `text_policy_updates`（变更节点，去重）。
+**回读 FFI**：`proteus_layout_text_policy(handle, nodeIdsJson)` → `{policy:{id:{whiteSpace,wordBreak,lineClamp}}}`（内核=SSOT）。
+**编译期**：动态 `:class` 放行这三字段（不再诊断）——`STRING_LAYOUT_FIELDS` 并入（同走 `SET_STYLE_STR`）。
+**宿主**：Android 消费 `text_policy_updates` → `RustLayout.textPolicy` 回读 → 写回 spec + 重度量重绘（只读变化节点）；
+  iOS 同法（回读 → 补 `lastNodes` → 重渲染）；鸿蒙提供 `proteusHost.textPolicy` 透传 + `JS` 侧回读。`LAYOUT_KEYS` 补登记三键
+  （check:host-kernel-keys 抓出——内核消费键必须经白名单转发）。
+**判据 ㉙**：夹具 `bt2`（`:class="{ ws: bt2on }"` + `.ws{white-space:nowrap}`）——翻转类 ⇒
+  `proteusHost.textPolicy([id])` 内核回读 `''`→`nowrap`→`''`（字体无关、值精确，三端逐值一致）。
+**验收**（已达成）：三端真机全过 + 指纹一致；能力棘轮 `VAPOR_DYNCLASS_LAYOUT_UNSUPPORTED` **8→4**（落账）。
+**诚实边界**：内核**不解释**策略值（宿主引擎解释）；`text_align` 未并入（本就是独立字段，另议）；只做"是否策略层通"，
+  不声称"三端靠版式像素级一致"。
 
-### B-T3 · 度量缓存键修正（潜在正确性，依赖 B-T2）
-**问题**：键 `(text_hash, max_width)`，`text_hash = 文本 ⊕ style_key`；若 `style_key` **不含** white-space/word-break/line-clamp
-（现证 `style_key` 在编译期**无生产方** ⇒ 恒 0）⇒ 同文案同字体同宽、策略不同 ⇒ **错误命中同一缓存项**（后者取其尺寸）。
-**修**：内核把文本策略并入 `style_key`（B-T2 落地后即可哈希）。**破坏性验证**：两节点同文案同宽、一 wrap 一 nowrap ⇒ 几何必须不同。
+### B-T3 · 度量缓存键修正（潜在正确性，依赖 B-T2）—— ★**待做**
+**问题**：键 `(text_hash, max_width)`，`text_hash = 文本 ⊕ style_key`；`style_key` 由宿主 `fontSignature(字号,字重,字族)`
+  生成、**不含** white-space/word-break/line-clamp ⇒ 内容寻址在真机生效时，同文案同字体同宽、策略不同 ⇒ **错误命中同一缓存项**。
+**修**：内核把文本策略并入 `style_key`（或缓存键加策略位）——B-T2 已让内核持有策略，即可哈希。
+  **破坏性验证**：两节点同文案同宽、一 wrap 一 nowrap ⇒ 几何必须不同（当前可能相同 ⇒ 缺陷）。
 
 ### B-T4（边界·不推进）
 - **CSS 内联富文本**（`<span>` 分段字形 / `v-html`）：内核分段文本 + 宿主分段绘制——**独立大课题**，见能力清单 #11/#168。

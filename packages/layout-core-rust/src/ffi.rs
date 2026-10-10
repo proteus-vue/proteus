@@ -187,6 +187,15 @@ pub(crate) struct NodeDto {
     /// ★★★grid-area 项（2026-10-08）：命名区域引用（子项 `grid-area: <name>`）
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) grid_area: Option<String>,
+    /// ★★★B-T2（2026-10-10）：**文本策略**（内核持有 = SSOT；不参与 taffy 布局）。
+    ///   `white-space`（normal/nowrap/pre/…）· `word-break`（normal/break-all/…）· `line-clamp`（"3"）。
+    ///   动态 `:class` 改它们走 `SET_STYLE_STR`；宿主从内核读（单一来源）。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) white_space: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) word_break: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) line_clamp: Option<String>,
     /// ★★**背景色**（2026-10-01，颜色动画的**底色**来源）——接受 CSS 形态：
     ///   `#RGB` / `#RRGGBB` / `#AARRGGBB` / `#RRGGBBAA`（后两者靠长度区分）。
     ///
@@ -347,6 +356,9 @@ impl NodeDto {
             grid_row: None,
             grid_template_areas: None,
             grid_area: None,
+            white_space: None,
+            word_break: None,
+            line_clamp: None,
             overflow: None,
             // ★颜色：blob 形态暂无这两个字段（按位图解码；未提供 ⇒ 该节点不进颜色轨道）
             background_color: None,
@@ -830,6 +842,10 @@ pub(crate) fn style_from_dto(dto: &NodeDto) -> Result<LStyle, String> {
     style.grid_row = dto.grid_row.as_ref().map(|g| crate::GridLine { start: g.start, end: g.end, span: g.span });
     style.grid_template_areas = dto.grid_template_areas.clone();
     style.grid_area = dto.grid_area.clone();
+    // ★B-T2：文本策略（内核持有 = SSOT；不参与 taffy 布局）
+    style.white_space = dto.white_space.clone();
+    style.word_break = dto.word_break.clone();
+    style.line_clamp = dto.line_clamp.clone();
     if let Some(o) = dto.overflow.as_deref() {
         style.overflow = match o {
             "visible" => Overflow::Visible,
@@ -2931,12 +2947,16 @@ fn apply_ops_impl(handle: u64, ptr: *const u8, len: u32, with_rects: bool) -> Re
     let text_updates_json: serde_json::Value = serde_json::Value::Object(
         outcome.text_updates.iter().map(|(id, t)| (id.to_string(), serde_json::json!(t))).collect(),
     );
+    // ★B-T2：文本策略变更节点（white-space/word-break/line-clamp 经 SET_STYLE_STR 变更）——宿主据此从内核重读
+    let text_policy_json: serde_json::Value = serde_json::json!(outcome.text_policy_updates);
 
     if outcome.dirty.is_empty() {
         return Ok(serde_json::json!({
             "ok": true, "applied": outcome.applied, "paint_only": outcome.paint_only,
             "dirty": outcome.dirty, "relayout_count": 0, "scopes": [],
             "unsupported": unsupported_json,
+            "text_updates": text_updates_json,
+            "text_policy_updates": text_policy_json,
             "timing": {"lock_ms": t_lock, "apply_ms": t_apply, "relayout_ms": 0.0, "collect_ms": 0.0},
         })
         .to_string());
@@ -2966,6 +2986,7 @@ fn apply_ops_impl(handle: u64, ptr: *const u8, len: u32, with_rects: bool) -> Re
         "changed_roots": multi.changed_roots,
         "unsupported": unsupported_json,
         "text_updates": text_updates_json,
+        "text_policy_updates": text_policy_json,
         "timing": {"lock_ms": t_lock, "apply_ms": t_apply, "relayout_ms": t_rel, "collect_ms": 0.0,
                    "engine_phases": eng_phases},
     });
@@ -4338,8 +4359,47 @@ pub unsafe extern "C" fn proteus_layout_svg_morph_path_bin(
     }
 }
 
-/// ★★**带文字色的节点清单**（2026-10-01，文字色通道的取样入口——与 `bg_nodes` 对称）
+/// ★★★B-T2（2026-10-10）：**读节点的文本策略**（内核 = SSOT）——宿主据此重度量/重绘（单一来源，不自己记）。
 ///
+/// 入参：`node_ids`（JSON 数组，如 `[3,7]`）。返回：
+///   `{"ok":true,"policy":{"3":{"whiteSpace":"nowrap","wordBreak":"break-all","lineClamp":"3"},"7":{…}}}`
+///   （缺省字段省略——只回已设的策略）。空数组/无节点 ⇒ 空对象。
+///
+/// 【为什么需要（B-T2 的落点）】动态 `:class` 改文本策略走 `SET_STYLE_STR`（内核持有）；
+///   宿主不自己维护第二份，而是**变更后问内核**（apply_ops 回执里带 `text_policy_updates` 节点 id）。
+/// # Safety
+/// 返回指针须用 `proteus_layout_free_string` 释放。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_layout_text_policy(handle: u64, node_ids: *const c_char) -> *mut c_char {
+    let r = std::panic::catch_unwind(|| -> Result<String, String> {
+        if node_ids.is_null() {
+            return Err("node_ids 为空指针".into());
+        }
+        let raw = unsafe { CStr::from_ptr(node_ids) }.to_str().map_err(|e| format!("入参非 UTF-8：{e}"))?;
+        let ids: Vec<u32> = serde_json::from_str(raw).map_err(|e| format!("node_ids 解析失败：{e}"))?;
+        let reg = registry().lock().map_err(|_| "注册表锁失败".to_string())?;
+        let entry = reg.get(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?;
+        let mut policy = serde_json::Map::new();
+        for id in ids {
+            if let Some(idx) = entry.id_to_idx.get(&id) {
+                let s = &entry.tree.nodes[*idx as usize].style;
+                let mut o = serde_json::Map::new();
+                if let Some(v) = &s.white_space { o.insert("whiteSpace".into(), serde_json::json!(v)); }
+                if let Some(v) = &s.word_break { o.insert("wordBreak".into(), serde_json::json!(v)); }
+                if let Some(v) = &s.line_clamp { o.insert("lineClamp".into(), serde_json::json!(v)); }
+                policy.insert(id.to_string(), serde_json::Value::Object(o));
+            }
+        }
+        Ok(serde_json::json!({"ok": true, "policy": policy}).to_string())
+    });
+    match r {
+        Ok(Ok(s)) => into_c_string(s),
+        Ok(Err(e)) => into_c_string(format!("{{\"ok\":false,\"error\":{}}}", json_str(&e))),
+        Err(_) => into_c_string("{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string()),
+    }
+}
+
+/// ★★**带文字色的节点清单**（2026-10-01，文字色通道的取样入口——与 `bg_nodes` 对称）
 /// 返回：`{"ok":true,"ids":[…],"count":N}`（最多 64 个）。
 /// 【为什么单列一个（而不是让调用方从 bg 清单推）】底色与文字色是**两个独立基色**
 ///   （节点可能只声明其一）⇒ 取样必须问各自的清单（真机判据的取样纪律：向唯一事实源要答案）。
@@ -5493,6 +5553,11 @@ mod tests {
                     out.extend_from_slice(&node_id.to_le_bytes());
                     out.extend_from_slice(&text_ref.to_le_bytes());
                 }
+                crate::ops::UpdateOp::SetStyleStr { node_id, key_id, value_ref } => {
+                    out.extend_from_slice(&node_id.to_le_bytes());
+                    out.extend_from_slice(&key_id.to_le_bytes());
+                    out.extend_from_slice(&value_ref.to_le_bytes());
+                }
                 crate::ops::UpdateOp::ToggleVis { node_id, visible } => {
                     out.extend_from_slice(&node_id.to_le_bytes());
                     out.push(if *visible { 1 } else { 0 });
@@ -5501,6 +5566,51 @@ mod tests {
             }
         }
         out
+    }
+
+    /// ★★★B-T2（2026-10-10）：**文本策略经内核持有 + 可回读**——`SET_STYLE_STR(whiteSpace/wordBreak/lineClamp)`
+    ///   ⇒ 内核 `text_policy_updates` 记变更 ⇒ `proteus_layout_text_policy` 回读（宿主单一来源）。
+    #[test]
+    fn text_policy_apply_and_readback() {
+        let req_json = r#"{"viewport":{"width":200.0,"height":200.0},"nodes":[
+            {"id":1,"parentId":null,"flexDirection":"column","width":200.0,"height":200.0},
+            {"id":2,"parentId":1,"text":"hello","whiteSpace":"normal"}]}"#;
+        let handle = unsafe { let c = CString::new(req_json).unwrap(); proteus_layout_create(c.as_ptr()) };
+        assert_ne!(handle, 0, "建树应成功");
+        // 改 id=2 的三项文本策略（字符串 op）
+        let keys = ["layout.whiteSpace", "layout.wordBreak", "layout.lineClamp"];
+        let strings = ["nowrap", "break-all", "3"];
+        let ops = vec![
+            crate::ops::UpdateOp::SetStyleStr { node_id: 2, key_id: 0, value_ref: 0 },
+            crate::ops::UpdateOp::SetStyleStr { node_id: 2, key_id: 1, value_ref: 1 },
+            crate::ops::UpdateOp::SetStyleStr { node_id: 2, key_id: 2, value_ref: 2 },
+        ];
+        let bytes = encode_test_ops(&keys, &strings, &ops);
+        let out = unsafe {
+            let p = proteus_layout_apply_ops(handle, bytes.as_ptr(), bytes.len() as u32);
+            let s = CStr::from_ptr(p).to_str().unwrap().to_string();
+            proteus_layout_free_string(p);
+            s
+        };
+        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+        let pu = v["text_policy_updates"].as_array().expect("须带 text_policy_updates");
+        assert_eq!(pu.len(), 1, "id=2 记一次策略变更：{out}");
+        assert_eq!(pu[0].as_u64(), Some(2));
+        // 回读
+        let rb = unsafe {
+            let ids = CString::new("[2]").unwrap();
+            let p = proteus_layout_text_policy(handle, ids.as_ptr());
+            let s = CStr::from_ptr(p).to_str().unwrap().to_string();
+            proteus_layout_free_string(p);
+            s
+        };
+        let rv: serde_json::Value = serde_json::from_str(&rb).unwrap();
+        assert_eq!(rv["ok"].as_bool(), Some(true), "{rb}");
+        let pol = &rv["policy"]["2"];
+        assert_eq!(pol["whiteSpace"].as_str(), Some("nowrap"), "{rb}");
+        assert_eq!(pol["wordBreak"].as_str(), Some("break-all"), "{rb}");
+        assert_eq!(pol["lineClamp"].as_str(), Some("3"), "{rb}");
+        assert!(unsafe { proteus_layout_destroy(handle) });
     }
 
     /// ★★V3 端到端（桌面层）：指令流 → 树变更 → 多范围增量重排

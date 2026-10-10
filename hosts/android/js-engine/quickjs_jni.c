@@ -97,6 +97,9 @@ static struct {
    *   同一条件注入原则（Java 未实现 ⇒ 不注入 ⇒ JS 侧探测为 undefined，走诚实降级）。 */
   jmethodID apply_ops;
   jmethodID read_rects;
+  /* ★★★B-T2（2026-10-10）：文本策略回读（`proteusHost.textPolicy(idsJson)`——内核=SSOT）。
+   *   同一条件注入原则（Java 未实现 ⇒ 不注入 ⇒ JS 侧探测为 undefined）。 */
+  jmethodID text_policy;
   /* ★★★长列表虚拟化（2026-10-01）：整树在内核、宿主只物化可见区。
    *   同一条件注入原则（Java 未实现 ⇒ 不注入 ⇒ JS 侧探测为 undefined）。 */
   jmethodID mount_virtual;
@@ -444,6 +447,11 @@ static JSValue js_host_read_rects(JSContext *ctx, JSValueConst this_val, int arg
   return host_call_noarg_impl(ctx, g_host_methods.read_rects, 1);
 }
 
+/** `proteusHost.textPolicy(idsJson)` —— ★★★B-T2：**文本策略回读**（whiteSpace/wordBreak/lineClamp；内核=SSOT） */
+static JSValue js_host_text_policy(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+  return host_call_impl(ctx, g_host_methods.text_policy, 1, this_val, argc, argv);
+}
+
 /** `proteusHost.mountVirtual(treeJson)` —— ★★★**虚拟化挂载**（长列表：整树在内核、只物化可见区） */
 static JSValue js_host_mount_virtual(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
   return host_call_impl(ctx, g_host_methods.mount_virtual, 1, this_val, argc, argv);
@@ -556,6 +564,10 @@ static jstring eval_impl(JNIEnv *env, jstring source, jboolean with_host) {
     }
     if (g_host_methods.read_rects != NULL) {
       JS_SetPropertyStr(g_ctx, host, "readRects", JS_NewCFunction(g_ctx, js_host_read_rects, "readRects", 0));
+    }
+    // ★★★B-T2（条件注入——同 mount 原则）：文本策略回读
+    if (g_host_methods.text_policy != NULL) {
+      JS_SetPropertyStr(g_ctx, host, "textPolicy", JS_NewCFunction(g_ctx, js_host_text_policy, "textPolicy", 1));
     }
     // ★★★长列表虚拟化（条件注入——同 mount 原则）
     if (g_host_methods.mount_virtual != NULL) {
@@ -677,6 +689,7 @@ Java_dev_proteus_layoutcore_QuickJsEngine_nativeSetHostCallback(JNIEnv *env, jcl
   g_host_methods.now_us = g_host_methods.rects = g_host_methods.probe = g_host_methods.report = NULL;
   g_host_methods.anim_control = NULL;
   g_host_methods.apply_ops = g_host_methods.read_rects = NULL;
+  g_host_methods.text_policy = NULL;
   g_host_methods.mount_virtual = g_host_methods.scroll_rows = NULL;
   g_host_methods.probe_channels = NULL;
   g_host_methods.probe_gesture = g_host_methods.tap_at = NULL;
@@ -725,6 +738,9 @@ Java_dev_proteus_layoutcore_QuickJsEngine_nativeSetHostCallback(JNIEnv *env, jcl
     g_host_methods.apply_ops = (*env)->GetMethodID(env, c, "applyOps", "(Ljava/lang/String;)Ljava/lang/String;");
     if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
     g_host_methods.read_rects = (*env)->GetMethodID(env, c, "readRects", "()Ljava/lang/String;");
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+    /* ★★★B-T2：文本策略回读（一参返回串） */
+    g_host_methods.text_policy = (*env)->GetMethodID(env, c, "textPolicy", "(Ljava/lang/String;)Ljava/lang/String;");
     if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
     /* ★★★长列表虚拟化（各一参返回串） */
     g_host_methods.mount_virtual = (*env)->GetMethodID(env, c, "mountVirtual", "(Ljava/lang/String;)Ljava/lang/String;");

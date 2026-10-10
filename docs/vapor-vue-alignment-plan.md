@@ -33,17 +33,16 @@
 - **清除回退**：plan 关闭返回 `null`/基线 ⇒ 数值发 UNSET（NaN）、枚举发**默认索引**。
 - **B3c（2026-10-10 交付）**：`justifyContent`/`alignContent`/`alignSelf`（内核字符串字段，**索引编码**走同一 SET_STYLE）。
 - **★B3d 字符串字段（判据 ㉗，2026-10-10 交付）**：`gridTemplateColumns/Rows/Areas` · `gridAutoColumns/Rows/Flow`（`STRING_LAYOUT_FIELDS`）→ **新 opcode `SET_STYLE_STR = 0x06`**（nodeId + keyId + **字符串池 valueRef**；f32 的 SET_STYLE 装不下 `1fr 1fr 200px` 这类 token 串）。内核 `apply_style_str_key` 落 `grid_template_*`/`grid_auto_*`。**CSE 计划的位图只分解数值/枚举 ⇒ 字符串字段不在计划里，运行期从线性 `classRules` 补**（`hasStringClassFields` 门控，缺省零成本）。**零宿主改动**（宿主只转发字节）。
-- **★B3 收口（2026-10-10 · 决策 #756/#757）——余 11 个字段**具名边界（各需不同基础设施，非"通道"可解）**：
+- **★B3 收口 —— 余字段**具名边界**（B3a/b/c/d 已交付数值/枚举/字符串；B-T2 已交付文本策略）**：
   | 字段 | 阻塞 | 所需 |
   |---|---|---|
-  | `whiteSpace` / `wordBreak` | 内核**无**文本布局字段（影响换行 ⇒ 影响几何） | 内核**文本建模**（度量层）+ 宿主 |
+  | `whiteSpace` / `wordBreak` / `lineClamp` | ✅ **已交付（B-T2 · 判据 ㉙）**：策略进内核（=SSOT）经 `SET_STYLE_STR`；宿主回读（`text_policy_updates`→`textPolicy`）重度量重绘 |
   | `overflowX` / `overflowY` | 内核**无**轴级 overflow 字段（只有单 `overflow`） | 内核加轴字段 + taffy `overflow.x/y` + 宿主裁剪 |
-  | `lineClamp` | 内核无字段；文本截断属**宿主绘制** | 宿主文本通道 |
   | `gridColumn` / `gridRow` / `gridArea` | 值是**线号/命名线**（非模板串），运行期动态改需再一条通道 | 内核线号字段 + 通道 |
   | `justifySelf` / `justifyItems` | 内核有字段但（动态类路径）未登记 | 登记索引解码臂（小） |
   | `pointerEvents` | 非布局（命中测试），不属几何重排 | 命中层通道 |
-  - ⇒ **不在一轮硬塞**（会成"半做"）；每项**单独立项**。诊断已**逐类具名**（`build.ts` 的 `VAPOR_DYNCLASS_LAYOUT_UNSUPPORTED` message 列出阻塞类别：白空格/断词 · 轴 overflow · 文本截断）。
-- **B3 账**：能力棘轮 `VAPOR_DYNCLASS_LAYOUT_UNSUPPORTED` 由 B3a/b/c 收敛 **28 → 8**（样例页命中；前三轮**零宿主/零协议改动**借内核既有 f32 通道 + 索引编码）；**B3d 补 grid 字符串**属**新增能力**（样例页未用动态 grid class ⇒ 棘轮计数不变；加一条新 opcode，仍**零宿主改动**）。余 **7 条**具名边界需内核文本/轴建模。
+  - ⇒ **不在一轮硬塞**（会成"半做"）；每项**单独立项**。诊断已**逐类具名**（`build.ts` 的 `VAPOR_DYNCLASS_LAYOUT_UNSUPPORTED` message 列出阻塞类别）。
+- **B3 账**：能力棘轮 `VAPOR_DYNCLASS_LAYOUT_UNSUPPORTED` 由 B3a/b/c **28→8**，B-T2（文本策略）再 **8→4**（样例页命中；B3a/b/c 零宿主/零协议、B3d 加一条 opcode、B-T2 复用该 op）；余字段（overflowX-Y / gridColumn-Row-Area / justifySelf-Items / pointerEvents）需内核轴/线号建模。
 
 ### B4 · `v-model` 回写（22 页）
 - 依赖：宿主**输入通道**（Android EditText / iOS UITextField / 鸿蒙 TextInput）×3 + 双向协议（text→source）。
@@ -66,9 +65,9 @@
 
 1. **B5（脚本钩子，≈2 人日）** —— ✅ **已交付（2026-10-10 · 判据 ㉔ 三端全过）**：复用事件-方法线降级器，
    纯编译期 + 共享执行器（`compileEvents` 产 `scriptLifecycle` → 运行期 `instance.markMounted()/markUnmounted()`）。
-2. **B3（动态 class 布局）** —— ✅ **B3a/B3b/B3c/B3d 已交付（2026-10-10 · 判据 ㉕/㉖/㉗ 三端全过）**：
-   数值/枚举/字符串（grid 模板）三类布局字段端上真重排。**余 11 个字段**具名边界（whiteSpace/wordBreak/overflowX-Y/lineClamp/gridColumn-Row-Area/justifySelf-Items/pointerEvents）
-   ——内核无对应字段，需**内核文本/轴建模**，**单独立项**。
+2. **B3（动态 class 布局）** —— ✅ **B3a/B3b/B3c/B3d + B-T2 已交付（2026-10-10 · 判据 ㉕/㉖/㉗/㉘/㉙ 三端全过）**：
+   数值/枚举/字符串（grid 模板）+ **文本策略**（whiteSpace/wordBreak/lineClamp）端上真生效；`align-items: baseline` 对文本真基线对齐。
+   **余**（overflowX-Y / gridColumn-Row-Area / justifySelf-Items / pointerEvents）——内核无对应字段，需**内核轴/线号建模**，**单独立项**。
 3. **B4（v-model 回写，≈4–5 人日）** —— 需三端输入通道，**单独立项**。
 
 **不做**（永久边界，见 §2 B6）。**更上层**（组件实例系统 / JSX / SSR / vdom 互通）见能力清单 P4——

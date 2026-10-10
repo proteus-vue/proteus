@@ -58,6 +58,8 @@
 extern "C" {
 uint64_t proteus_layout_create(const char* request_json);
 char* proteus_layout_rects(uint64_t handle);
+// ★★★B-T2（2026-10-10）：文本策略回读（whiteSpace/wordBreak/lineClamp；内核=SSOT）
+char* proteus_layout_text_policy(uint64_t handle, const char* node_ids_json);
 char* proteus_layout_hit_test(uint64_t handle, float x, float y);
 // ★★二进制指令流（矩阵 #14）：SFC 订阅驱动更新 → 内核增量重排（与 Android JNI 同一 ABI）
 char* proteus_layout_apply_ops(uint64_t handle, const uint8_t* ptr, uint32_t len);
@@ -2312,8 +2314,26 @@ static JSVM_Value VaporReadRectsCb(JSVM_Env env, JSVM_CallbackInfo info) {
     return r;
 }
 
-/* ── ★★★P3-3：宿主动画入口（`<Transition>` 桥的消费端；与 Android `VaporRenderHost.animStart` 同形）── */
+/** ★★★B-T2（2026-10-10）：`textPolicy(nodeIdsJson)` → 内核 `proteus_layout_text_policy`（文本策略回读；
+ *   与 Android `RustLayout.textPolicy` / iOS `proteus_layout_text_policy` 同形）。 */
+static JSVM_Value VaporTextPolicyCb(JSVM_Env env, JSVM_CallbackInfo info) {
+    size_t argc = 1;
+    JSVM_Value args[1] = {nullptr};
+    OH_JSVM_GetCbInfo(env, info, &argc, args, nullptr, nullptr);
+    std::string ids = "[]";
+    if (argc > 0) jsvmStr(env, args[0], &ids);
+    std::string out = "{\"ok\":false,\"error\":\"未 mount\"}";
+    if (g_vaporHandle != 0) {
+        char* rp = proteus_layout_text_policy(g_vaporHandle, ids.c_str());
+        out = rp ? rp : "{\"ok\":false}";
+        if (rp) proteus_layout_free_string(rp);
+    }
+    JSVM_Value r = nullptr;
+    OH_JSVM_CreateStringUtf8(env, out.c_str(), out.size(), &r);
+    return r;
+}
 
+/* ── ★★★P3-3：宿主动画入口（`<Transition>` 桥的消费端；与 Android `VaporRenderHost.animStart` 同形）── */
 /** `animStart(animsJson)` → 内核 `proteus_layout_anim_start`（宿主帧循环由 ArkTS 侧驱动） */
 static JSVM_Value VaporAnimStartCb(JSVM_Env env, JSVM_CallbackInfo info) {
     size_t argc = 1;
@@ -2538,6 +2558,7 @@ static napi_value VaporProbe(napi_env env, napi_callback_info info) {
             {"mount", {VaporMountCb, nullptr}},
             {"applyOps", {VaporApplyOpsCb, nullptr}},
             {"readRects", {VaporReadRectsCb, nullptr}},
+            {"textPolicy", {VaporTextPolicyCb, nullptr}},
             {"probeChannels", {VaporProbeChannelsCb, nullptr}},
             // ★A/B 的 B 路（Vue patch → 适配器补丁 → 本入口）
             {"updatePatches", {VaporUpdatePatchesCb, nullptr}},

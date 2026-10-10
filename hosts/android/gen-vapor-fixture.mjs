@@ -466,6 +466,26 @@ const BT1_SFC = `<template>
 const _bt1 = ref(0)
 </script>`
 
+/**
+ * ★★★B-T2 夹具（判据 ㉙，2026-10-10）：**动态 `:class` 的文本策略走内核**（`white-space` 经 SET_STYLE_STR）。
+ *   `:class="{ ws: bt2on }"` + `.ws{ white-space: nowrap }` —— 翻转类 ⇒ 内核 `layout.whiteSpace` 变 ⇒
+ *   `proteusHost.textPolicy([id])` 回读可见（内核 = SSOT；宿主不自己记）。
+ *   判据核**内核策略回读**：class 关 ⇒ 空；开 ⇒ "nowrap"；再关 ⇒ 空。
+ */
+const BT2_SFC = `<template>
+  <p-view style="width: 400px; height: 100px">
+    <p-text :class="{ ws: bt2on }" style="font-size: 18px">hello proteus text</p-text>
+  </p-view>
+</template>
+
+<script setup lang="ts">
+const bt2on = ref(false)
+</script>
+
+<style>
+.ws { white-space: nowrap; }
+</style>`
+
 /** 长列表夹具：**行高 100px**（视口 2400 ⇒ 可见 ~24 行；预加载 ±10 ⇒ 物化 ~34 行）
  *  ——判据的口径：1000 行都必须在内核树里（几何正确），但宿主只物化可见区。
  *  ★行内含 `:width` 绑定（L1 槽位）与插值文本（`{{ item.title }}`）。 */
@@ -644,6 +664,8 @@ process.stdout.write(JSON.stringify({
   b3d: build(${JSON.stringify(B3D_SFC)}, 'vapor-b3d.vue'),
   // ★★B-T1：文本基线对齐（align-items:baseline，判据 ㉘）
   bt1: build(${JSON.stringify(BT1_SFC)}, 'vapor-bt1.vue'),
+  // ★★B-T2：动态 :class 的文本策略走内核（white-space，判据 ㉙）
+  bt2: build(${JSON.stringify(BT2_SFC)}, 'vapor-bt2.vue'),
   // ★:style 对象展开（判据 ㉒）
   styleObj: build(${JSON.stringify(STYLE_OBJ_SFC)}, 'vapor-style-obj.vue'),
   // ★★★六端 SFC 压力夹具：编译**共享 SFC 文件**（examples 页面）——与 Web/MP 同源
@@ -824,7 +846,7 @@ for (const [nm, def] of Object.entries(parsed.components)) {
       `父绑定 @${parentEmitBinds[0].event}（nodeId=${parentEmitBinds[0].nodeId}）`,
   )
 }
-fs.writeFileSync(OUT, JSON.stringify({ ...parsed.small, components: parsed.components, slot: parsed.slot, scoped: parsed.scoped, dyn: parsed.dyn, directive: parsed.directive, mixed: parsed.mixed, t2: parsed.t2, b5: parsed.b5, b3a: parsed.b3a, b3b: parsed.b3b, b3d: parsed.b3d, bt1: parsed.bt1, styleObj: parsed.styleObj }))
+fs.writeFileSync(OUT, JSON.stringify({ ...parsed.small, components: parsed.components, slot: parsed.slot, scoped: parsed.scoped, dyn: parsed.dyn, directive: parsed.directive, mixed: parsed.mixed, t2: parsed.t2, b5: parsed.b5, b3a: parsed.b3a, b3b: parsed.b3b, b3d: parsed.b3d, bt1: parsed.bt1, bt2: parsed.bt2, styleObj: parsed.styleObj }))
 console.log(`[gen-vapor-fixture] ✅ 组件注册表：${Object.keys(parsed.components).join(', ')}（随父产物下发）`)
 // ★P1-3 插槽分发夹具（判据 ⑮）：父产物必须带 slotFor 标记、子产物必须带 slotOutlet 标记
 //   （"生成器静默退化"是本仓重点拦的形态——标记缺了就是分发不可能发生）
@@ -1022,6 +1044,17 @@ console.log(`[gen-vapor-fixture] ✅ 组件注册表：${Object.keys(parsed.comp
     process.exit(1)
   }
   console.log(`[gen-vapor-fixture] ✅ B-T1 夹具：文本基线对齐（${nodes.length} 节点 · align-items:baseline）`)
+}
+// ★★★B-T2 夹具（判据 ㉙）：动态 :class 的文本策略（white-space）+ paint.class 槽 + 无布局诊断
+{
+  const classSlot = (parsed.bt2?.table?.sources ?? []).flatMap((s) => s.slots ?? []).some((x) => x.propKey === 'paint.class')
+  const linearHasWs = JSON.stringify(parsed.bt2?.table?.classRules ?? []).includes('whiteSpace')
+  const layoutDiag = (parsed.bt2?.diagnostics ?? []).some((m) => /布局字段/.test(String(m)))
+  if (!parsed.bt2?.ok || !classSlot || !linearHasWs || layoutDiag) {
+    console.error(`[gen-vapor-fixture] ✗ B-T2 夹具不完整（判据 ㉙ 将无证据）：paint.class 槽=${classSlot} · classRules 含 whiteSpace=${linearHasWs} · 布局诊断=${layoutDiag}`)
+    process.exit(1)
+  }
+  console.log(`[gen-vapor-fixture] ✅ B-T2 夹具：动态 :class 文本策略（whiteSpace 在线性规则 · 无布局诊断）`)
 }
 // ★:style 对象展开（2026-10-03）：必须**逐键**（layout.width + paint.backgroundColor），不得有整键
 {
