@@ -1458,6 +1458,7 @@ public class ProteusHostView extends ViewGroup {
         animGlow.clear();
         animMask.clear();
         gradTileCache.clear();   // ★逐树状态（id 每树重分配——防幽灵砖）
+        resetFieldRuntime();     // ★场跟手运行时态（驱动指针/焦点/已改写叶——id 每树重分配）
     }
 
     /**
@@ -2358,11 +2359,18 @@ public class ProteusHostView extends ViewGroup {
             // ★★★S3-T1/T3（2026-10-10 · 输入延迟专项 #767）：**跟手启动**——命中节点若有 `v-follow`
             //   折出的 follow 规格，记下该指拖拽起点（后续 MOVE 直接喂内核，零 JS 跨界）。
             beginFollowAt(ev.getPointerId(0), gestureTarget, ev.getX(), ev.getY());
+            // ★★★场跟手（通用 `v-follow={field:…}`）：该指落在某"场容器"子树内 ⇒ 记它驱动该场
+            //   （焦点=触点，后续 MOVE 喂内核 `follow_field`；换算/一片节点起伏全在内核、零 JS）。
+            beginFieldAt(ev.getPointerId(0), lastHitChain, ev.getX(), ev.getY());
         }
         // ★★★S3-T1/T3：MOVE ⇒ 全部跟手指针**一帧一次批量**喂内核（换算在内核、宿主零数学、**零 JS 跨界**）。
         //   ★T3：多指 ⇒ `layoutFollowBatch`（每帧至多一次 FFI——`ffi_calls_per_frame ≤ 1`）。
         if (action == android.view.MotionEvent.ACTION_MOVE && !followPtrs.isEmpty()) {
             applyFollowBatch(ev);
+        }
+        // ★★★场跟手：MOVE ⇒ 只记最新焦点 + 标脏（真 FFI 在 onDraw 每帧一次）——与单节点跟手分开表。
+        if (action == android.view.MotionEvent.ACTION_MOVE && !fieldPtr.isEmpty()) {
+            applyFieldFocus(ev);
         }
         // ★S3：多指场景的落点（POINTER_DOWN/UP）——命中该指所在节点则纳入/移出跟手表
         if (action == android.view.MotionEvent.ACTION_POINTER_DOWN) {
@@ -2371,38 +2379,60 @@ public class ProteusHostView extends ViewGroup {
             final float px = ev.getX(ai), py = ev.getY(ai);
             final int hit = hitNodeAt(px, py);
             beginFollowAt(pid, hit, px, py);
+            beginFieldAt(pid, hitChainAt(px, py), px, py);
         }
         if (action == android.view.MotionEvent.ACTION_POINTER_UP) {
             endFollowPointer(ev.getPointerId(ev.getActionIndex()));
+            endFieldPointer(ev.getPointerId(ev.getActionIndex()));
         }
         // ★S1.1：UP/CANCEL ⇒ 还原按下态（与触碰开始时同一帧）
         if (action == android.view.MotionEvent.ACTION_UP || action == android.view.MotionEvent.ACTION_CANCEL) {
             clearPress();
             endFollow();   // ★S3：抬指 ⇒ 松手（回弹/吸附在内核）
+            endField();    // ★场跟手：抬指 ⇒ 叶片回声明基态（场消失 = 静止网格）
         }
         // ★交给平台识别器判定 tap / longpress / fling / scroll（不自研阈值与时间窗）
         detector().onTouchEvent(ev);
         return true;      // 消费，避免同一个手势被重复上报
     }
 
-    /* ── ★★★S1.1 按下态（`:active` → press* 字段；DOWN 原生应用 / UP 还原，零 JS 跨界）── */
-    /** 节点 id → 按下态背景色（ARGB；来自编译器 `:active` 折出的 `pressBackgroundColor`） */
-    private java.util.Map<Integer, Integer> pressBgMap = java.util.Collections.emptyMap();
+    /* ── ★★★S1.1 按下态（`:active` → press* 字段；DOWN 原生应用 / UP 还原，零 JS 跨界）──
+     *
+     * 【是什么】编译器把 `<style>.x:active{…}` 折成节点上的 `press*` 扁平字段（底色 / 描边 / 凹陷 scale /
+     *   发光 box-shadow）——宿主在 DOWN 命中时**原生即时**应用（同帧重绘），UP 还原。⇒ "输入不过桥"：
+     *   按下反馈延迟 = 0 个 JS 往返（对标 RN Pressable / Flutter InkWell 必过逻辑层）。
+     * 【为什么单独一张表】按下态是**瞬时覆盖**（非动画、非声明常驻）——与 `anim*` 逐帧表分开，
+     *   避免污染/被清；只在 `pressedNodeId` 命中的那一条指令上生效。 */
+    /** 一个节点的按下态样式（全部可选：`null` = 该属性不覆盖）。 */
+    static final class PressStyle {
+        Integer bg;            // 按下底色（ARGB）
+        Integer borderColor;   // 按下描边色（ARGB）
+        float sx = 1f, sy = 1f; // 按下凹陷（transform: scale）
+        Integer glowColor;     // 按下发光色（ARGB；来自 box-shadow）
+        float glowRadius;      // 按下发光半径（px）
+    }
+    /** 节点 id → 按下态样式（来自编译器 `:active` 折出的 `press*` 字段）。 */
+    private java.util.Map<Integer, PressStyle> pressStyles = java.util.Collections.emptyMap();
     private int pressedNodeId = -1;
     /** 累计"按下态真的被应用"次数（判据核"按下反馈真的发生过"） */
     int pressApplied = 0;
 
-    /** 由 `VaporRenderHost` 在建树时注入"哪些节点有按下态 + 其背景色"。 */
-    public void setPressBgMap(java.util.Map<Integer, Integer> m) {
-        this.pressBgMap = m != null ? m : java.util.Collections.emptyMap();
+    /** 由 `VaporRenderHost` 在建树时注入"哪些节点有按下态 + 其样式"（底色/描边/凹陷/发光）。 */
+    public void setPressStyles(java.util.Map<Integer, PressStyle> m) {
+        this.pressStyles = m != null ? m : java.util.Collections.emptyMap();
+    }
+
+    /** 当前按下态样式（未按下/无定义 ⇒ null）。 */
+    private PressStyle pressedStyle() {
+        return pressedNodeId >= 0 ? pressStyles.get(pressedNodeId) : null;
     }
 
     /** DOWN 命中节点 ⇒ 应用按下态（有 press 定义才动）；重录帧以立即反映。 */
     private void applyPressAt(int nodeId) {
-        if (nodeId < 0 || !pressBgMap.containsKey(nodeId)) return;
+        if (nodeId < 0 || !pressStyles.containsKey(nodeId)) return;
         pressedNodeId = nodeId;
         pressApplied++;
-        framePicture = null;   // 丢弃静态帧 ⇒ onDraw 重录（含按下色）
+        framePicture = null;   // 丢弃静态帧 ⇒ onDraw 重录（含按下色/凹陷/发光）
         invalidate();
     }
 
@@ -2414,9 +2444,9 @@ public class ProteusHostView extends ViewGroup {
         invalidate();
     }
 
-    /** ★S1.1 探针：`{pressed, applied, hasPressNodes}`——判据核"按下态真的被原生应用"。 */
+    /** ★S1.1 探针：`{pressed, applied, press_nodes}`——判据核"按下态真的被原生应用"。 */
     public String pressProbe() {
-        return "{\"pressed\":" + pressedNodeId + ",\"applied\":" + pressApplied + ",\"press_nodes\":" + pressBgMap.size() + "}";
+        return "{\"pressed\":" + pressedNodeId + ",\"applied\":" + pressApplied + ",\"press_nodes\":" + pressStyles.size() + "}";
     }
 
     /** ★S1.5 探针：累计 `requestUnbufferedDispatch` 调用数（判据核"无缓冲分发真的被请求"）。 */
@@ -2466,6 +2496,25 @@ public class ProteusHostView extends ViewGroup {
             if (o.optBoolean("ok", false) && !o.isNull("target")) return o.getInt("target");
         } catch (Throwable ignored) { /* 命中失败 ⇒ 该指不跟手（不静默 panic） */ }
         return -1;
+    }
+
+    /** 命中某点并返回**冒泡链**（多指各自命中——用于判定该指是否落在某"场容器"子树内）。 */
+    private int[] hitChainAt(float viewX, float viewY) {
+        if (coreHandle == 0L) return new int[0];
+        try {
+            final float contentY = viewY + scrollY;
+            final String json = RustLayout.hitTest(coreHandle, viewX, contentY);
+            final org.json.JSONObject o = new org.json.JSONObject(json);
+            if (o.optBoolean("ok", false)) {
+                final org.json.JSONArray arr = o.optJSONArray("chain");
+                if (arr != null) {
+                    final int[] chain = new int[arr.length()];
+                    for (int i = 0; i < arr.length(); i++) chain[i] = arr.getInt(i);
+                    return chain;
+                }
+            }
+        } catch (Throwable ignored) { /* 命中失败 ⇒ 该指不驱动场（不静默 panic） */ }
+        return new int[0];
     }
 
     /** DOWN/POINTER_DOWN 命中节点 ⇒ 记该指跟随起点（有 follow 规格才纳入；零 JS 跨界）。 */
@@ -2568,6 +2617,147 @@ public class ProteusHostView extends ViewGroup {
         followBatchCalls = 0;
         followPointersMax = 0;
         followPtrs.clear();
+    }
+
+    /* ── ★★★场跟手（通用 `v-follow={field:…}`）：一个手势焦点 → 容器子树**一片叶节点**的高度/朝向场 ──
+     *
+     * 【是什么】与单节点跟手同族（`v-follow`），但语义是「**一个焦点驱动一片节点**」：编译器把
+     *   `v-follow={field:{falloff,minScale,maxScale,rotate}}` 折成容器的 `followField*` 字段 ⇒ 宿主把
+     *   手指焦点直喂内核 `follow_field`，内核逐**叶节点**按距焦点求 `scale`/`rotate`（换算唯一实现在内核、
+     *   宿主零数学、**零 JS 跨界**）。典型：[针林/穹顶/数据场] 任一"以手指为中心起伏"的表征。
+     *
+     * 【为什么每帧一次】MOVE 只记最新焦点 + 标脏 + 请求重绘；内核调用落在 `onDraw` **每帧至多一次**
+     *   （§2.3 "一帧一次 FFI"）——无缓冲分发下 MOVE 率可 > 刷新率，"每 MOVE 一次跨界"会把 UI 线程塞满。
+     *
+     * 【★与 `resetPerTreeState` 的关系】场把 `scale/rotate` 写进 `animTx`（与逐帧动画同一绘制真源）；
+     *   累计被改写的叶 id（`fieldTouched`），抬指时逐个 `animTx.remove` ⇒ 叶片回到**声明基态**（静止针林网格）。
+     */
+    /** 场容器 id → 场参数 `[containerId, falloff, minScale, maxScale, maxRotate]`（`followField*` 折出）。 */
+    private java.util.Map<Integer, float[]> fieldSpecs = java.util.Collections.emptyMap();
+    /** 场容器 id 集（判定命中的冒泡链里有没有场容器）。 */
+    private java.util.Set<Integer> fieldContainerIds = java.util.Collections.emptySet();
+    /** 指针 id → 其驱动的场容器 id（多指可各驱一场）。 */
+    private final java.util.HashMap<Integer, Integer> fieldPtr = new java.util.HashMap<>();
+    /** 场容器 id → 最新焦点 `[focusX, focusY]`（**内容坐标**，与内核绝对矩形同系）。 */
+    private final java.util.HashMap<Integer, float[]> fieldFocus = new java.util.HashMap<>();
+    /** 本帧有无焦点更新（真 FFI 在 `flushFieldFollow` 每帧至多一次）。 */
+    private boolean fieldDirty = false;
+    /** 本手势内被场改写过的叶 id（抬指时复位——叶片回声明基态）。 */
+    private final java.util.HashSet<Integer> fieldTouched = new java.util.HashSet<>();
+    /** 场跟手 FFI 调用次数（探针核"每帧一次"）。 */
+    int fieldMoves = 0;
+
+    /** 由 `VaporRenderHost` 建树/更新时注入"哪些容器是场 + 其参数"。 */
+    public void setFollowFields(java.util.Map<Integer, float[]> m) {
+        this.fieldSpecs = m != null ? m : java.util.Collections.emptyMap();
+        final java.util.HashSet<Integer> ids = new java.util.HashSet<>();
+        for (Integer cid : this.fieldSpecs.keySet()) ids.add(cid);
+        this.fieldContainerIds = ids;
+        this.fieldPtr.clear();
+        this.fieldFocus.clear();
+        this.fieldTouched.clear();
+        this.fieldDirty = false;
+    }
+
+    /** 复位移场运行时态（换树时调——叶 id 是每树重分配的，旧 id 会指向新树别的节点）。 */
+    private void resetFieldRuntime() {
+        fieldPtr.clear();
+        fieldFocus.clear();
+        fieldTouched.clear();
+        fieldDirty = false;
+    }
+
+    /** 冒泡链里第一个场容器 id（无则 -1）。 */
+    private int fieldContainerInChain(int[] chain) {
+        if (chain == null || fieldContainerIds.isEmpty()) return -1;
+        for (int id : chain) if (fieldContainerIds.contains(id)) return id;
+        return -1;
+    }
+
+    /** DOWN / POINTER_DOWN：该指落在某场容器子树内 ⇒ 记它驱动该场（焦点=触点，内容坐标）。 */
+    private void beginFieldAt(int pointerId, int[] chain, float viewX, float viewY) {
+        final int cid = fieldContainerInChain(chain);
+        if (cid < 0) return;
+        fieldPtr.put(pointerId, cid);
+        fieldFocus.put(cid, new float[]{viewX, viewY + scrollY});
+        fieldDirty = true;
+    }
+
+    /** MOVE：只记最新焦点（廉价）+ 标脏 + 请求重绘；真 FFI 在 `onDraw` 每帧一次。 */
+    private void applyFieldFocus(android.view.MotionEvent ev) {
+        if (fieldPtr.isEmpty() || coreHandle == 0L) return;
+        boolean any = false;
+        for (java.util.Map.Entry<Integer, Integer> e : fieldPtr.entrySet()) {
+            final int idx = ev.findPointerIndex(e.getKey());
+            if (idx < 0) continue;
+            fieldFocus.put(e.getValue(), new float[]{ev.getX(idx), ev.getY(idx) + scrollY});
+            any = true;
+        }
+        if (any) { fieldDirty = true; postInvalidateOnAnimation(); }
+    }
+
+    /** 单个指针抬起：移出驱动表；全部抬起 ⇒ 复位叶片（场消失 = 回静止网格）。 */
+    private void endFieldPointer(int pointerId) {
+        final Integer cid = fieldPtr.remove(pointerId);
+        if (cid == null) return;
+        if (fieldPtr.isEmpty()) { fieldDirty = false; resetFieldLeaves(); }
+        else fieldFocus.remove(cid);
+    }
+
+    /** UP/CANCEL：全部指针结束 ⇒ 复位叶片。 */
+    private void endField() {
+        if (fieldPtr.isEmpty()) return;
+        fieldPtr.clear();
+        fieldFocus.clear();
+        fieldDirty = false;
+        resetFieldLeaves();
+    }
+
+    /** 抬指复位：把本手势内被场改写的叶从 `animTx` 移除 ⇒ 回**声明基态**（静止针林网格）。 */
+    private void resetFieldLeaves() {
+        if (fieldTouched.isEmpty()) return;
+        for (Integer id : fieldTouched) animTx.remove(id);
+        fieldTouched.clear();
+        invalidate();
+    }
+
+    /** 每帧一次（`onDraw` 起始）：对每个有焦点的场调一次内核 `follow_field`，结果落 `animTx`。 */
+    private void flushFieldFollow() {
+        if (!fieldDirty || fieldSpecs.isEmpty() || coreHandle == 0L) return;
+        fieldDirty = false;
+        for (java.util.Map.Entry<Integer, float[]> e : fieldFocus.entrySet()) {
+            final int cid = e.getKey();
+            final float[] spec = fieldSpecs.get(cid);
+            if (spec == null) continue;
+            final float fx = e.getValue()[0], fy = e.getValue()[1];
+            fieldMoves++;
+            final byte[] bin = RustLayout.layoutFollowFieldBin(coreHandle, cid, fx, fy, spec[1], spec[2], spec[3], spec[4]);
+            // ★精简记录：id u32 + scale f32 + rotate f32 = 12B/条（场只改这两项）。
+            if (bin != null && bin.length >= 12) {
+                final java.nio.ByteBuffer bb = java.nio.ByteBuffer.wrap(bin).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+                final int n = bin.length / 12;
+                for (int i = 0; i < n; i++) {
+                    final int id = bb.getInt();
+                    final float sc = bb.getFloat(), rot = bb.getFloat();
+                    float[] t = animTx.get(id);
+                    if (t == null) { t = new float[]{0f, 0f, sc, rot, 1f, 0f, 0f, 0f, 0f}; animTx.put(id, t); }
+                    else { t[2] = sc; t[3] = rot; }   // 只改 scale/rotate（保留既有 tx/ty/opacity）
+                    fieldTouched.add(id);
+                }
+            }
+        }
+    }
+
+    /** ★场跟手探针：`{field_nodes,moves,touched,driving}`。 */
+    public String fieldProbe() {
+        return "{\"field_nodes\":" + fieldSpecs.size() + ",\"moves\":" + fieldMoves
+                + ",\"touched\":" + fieldTouched.size() + ",\"driving\":" + fieldPtr.size() + "}";
+    }
+
+    /** 复位场跟手计数（探针开始时调用）。 */
+    public void resetFieldCounters() {
+        fieldMoves = 0;
+        resetFieldRuntime();
     }
 
     /**
@@ -2676,6 +2866,9 @@ public class ProteusHostView extends ViewGroup {
         }
         super.onDraw(canvas);
         ensurePicture();   // ★首帧补建（setCmds 早于布局时）
+        // ★★★场跟手（通用 `v-follow={field:…}`）：每帧**至多一次**内核调用（MOVE 只记焦点 + 标脏）——
+        //   结果落 `animTx` ⇒ 后续 `drawCmds` 与显示列表失效判定（`hasFrameOverrides`）自然生效。
+        flushFieldFollow();
         // ★滚动：自绘内容随 scrollY 平移，并**裁剪到滚动视口**
         //   （native-host 的裁剪在 applyScrollToNativeHosts 里单独做——
         //    它们不受这个 clipRect 约束，这是 Android 的固有行为）
@@ -2833,6 +3026,9 @@ public class ProteusHostView extends ViewGroup {
         for (int i = 0; i < list.size(); i++) {
             if (skip != null && skip.contains(i)) continue;
             final Cmd c = list.get(i);
+            // ★S1.1：本指令节点的按下态样式（仅在 DOWN 命中的那一条上非空）——底色/描边/凹陷/发光统一走这一份
+            final PressStyle ps = (pressedNodeId >= 0 && ids != null && i < ids.length && ids[i] == pressedNodeId)
+                    ? pressStyles.get(pressedNodeId) : null;
             // ★★逐节点变换（内核动画的**绘制落点**）：按并行表查该指令的节点变换
             //   变换语义与 iOS `applyTransform` **同构**：平移 → 以**元素中心**为锚旋转/缩放。
             float[] tf = (ids != null && i < ids.length && ids[i] >= 0) ? animTx.get(ids[i]) : null;
@@ -2865,8 +3061,10 @@ public class ProteusHostView extends ViewGroup {
                 }
             }
             final boolean hasAncestorTx = ancIds != null;
+            // ★S1.1：按下态凹陷（`:active{transform:scale(…)`）——以元素中心为锚缩放（叠加在既有变换之上）
+            final boolean hasPressScale = ps != null && (ps.sx != 1f || ps.sy != 1f);
             final boolean xf = (tf != null && (tfTx != 0f || tfTy != 0f || tf[2] != 1f || tf[3] != 0f || has3d))
-                    || hasClip || ovfClip != null || hasAncestorTx;
+                    || hasClip || ovfClip != null || hasAncestorTx || hasPressScale;
             // ★★★批 A：fixed 节点反向补偿内容滚动（净位移 0 ⇒ 钉在视口；见 fixedNodes 注释）
             //   ★用户实测修复（2026-10-08）：同 sticky——判据改为「本节点属某 fixed 锚点的子树」，
             //     否则徽标钉住了、**徽标上的文字**（子节点）留在原地（与"蓝条没文字"同源）。
@@ -2947,6 +3145,11 @@ public class ProteusHostView extends ViewGroup {
                     canvas.concat(m3d);
                     canvas.translate(-cx, -cy);
                 }
+                // ★S1.1：按下态凹陷（`:active{transform:scale}`）——最后叠加，以元素中心为锚（与 CSS 同语义）
+                if (hasPressScale) {
+                    final float pcx = c.x + c.w * 0.5f, pcy = c.y + c.h * 0.5f;
+                    canvas.scale(ps.sx, ps.sy, pcx, pcy);
+                }
             }
             // ★★C1 裁剪（2026-10-01）：该节点有裁剪形状时，在**绘制内容之前**设 clipPath——
             //   参数由内核每帧下发（盒分数 → px 用 c.w/c.h 换算；与 iOS mask 同一套语义）。
@@ -2989,9 +3192,8 @@ public class ProteusHostView extends ViewGroup {
             // ★★颜色覆盖（2026-10-01）：该节点参与颜色动画时用内核值，否则用静态 `Cmd.color`
             //   （表里没有 ⇒ 零额外开销；与 `animTx` 的查表同一形态）
             final Integer animBg = (ids != null && i < ids.length && ids[i] >= 0) ? animColor.get(ids[i]) : null;
-            // ★S1.1：按下态背景色优先（DOWN 应用 / UP 还原；下拉刷新式即时反馈）
-            final Integer pressBg = (pressedNodeId >= 0 && ids != null && i < ids.length && ids[i] == pressedNodeId)
-                    ? pressBgMap.get(pressedNodeId) : null;
+            // ★S1.1：按下态背景色优先（DOWN 应用 / UP 还原；按下即反馈）
+            final Integer pressBg = ps != null ? ps.bg : null;
             bgPaint.setColor(pressBg != null ? pressBg : (animBg != null ? animBg : c.color));
             if (op < 1f) {
                 int base = pressBg != null ? pressBg : (animBg != null ? animBg : c.color);
@@ -3264,6 +3466,30 @@ public class ProteusHostView extends ViewGroup {
                     }
                 }
             }
+            // ★S1.1：按下态发光（`:active{box-shadow:…}`）——与静态 glow 同式（分层同心描边 + alpha 平方衰减），
+            //   画在盒边（中心光晕）。有静态 glow 时叠加（CSS 语义上是多阴影，视觉一致）。
+            if (ps != null && ps.glowColor != null && ps.glowRadius > 0f) {
+                final int gcol = ps.glowColor;
+                final float grad = ps.glowRadius;
+                final float galpha = Color.alpha(gcol) / 255f;
+                final int gsave = canvas.save();
+                canvas.translate(c.x, c.y);
+                strokePaint.setStyle(android.graphics.Paint.Style.STROKE);
+                strokePaint.setStrokeCap(android.graphics.Paint.Cap.ROUND);
+                strokePaint.setStrokeJoin(android.graphics.Paint.Join.ROUND);
+                final float baseW = Math.max(1f, grad * 0.12f);
+                for (int k = 1; k <= GLOW_LAYERS; k++) {
+                    final float t = (k - 1f) / GLOW_LAYERS;
+                    final float a = galpha * (1 - t) * (1 - t);
+                    if (a <= 0.003f) continue;
+                    final float boost = grad * (k / (float) GLOW_LAYERS);
+                    strokePaint.setColor((gcol & 0x00FFFFFF) | (((int) (a * 255)) << 24));
+                    strokePaint.setStrokeWidth(baseW + boost * 2f);
+                    if (c.radius > 0f) canvas.drawRoundRect(0, 0, c.w, c.h, c.radius, c.radius, strokePaint);
+                    else canvas.drawRect(0, 0, c.w, c.h, strokePaint);
+                }
+                canvas.restoreToCount(gsave);
+            }
             if (c.text != null) {
                 if (c.fontSize > 0 && c.fontSize != lastSize) {
                     textPaint.setTextSize(c.fontSize);
@@ -3384,6 +3610,8 @@ public class ProteusHostView extends ViewGroup {
                 int cr = (int) sb[5]; if (cr == 0) cr = c.borderColor;
                 int cb = (int) sb[6]; if (cb == 0) cb = c.borderColor;
                 int cl = (int) sb[7]; if (cl == 0) cl = c.borderColor;
+                // ★S1.1：按下态描边色（`:active{border-color:…}`）覆盖四边（CSS 中 border-color 作用于所有边）
+                if (ps != null && ps.borderColor != null) { ct = cr = cb = cl = ps.borderColor; }
                 final float x0 = c.x, y0 = c.y, x1 = c.x + c.w, y1 = c.y + c.h;
                 final float ix0 = x0 + wl, iy0 = y0 + wt; // 左上内角
                 final float ix1 = x1 - wr, iy1 = y1 - wb; // 右下内角
@@ -3544,9 +3772,11 @@ public class ProteusHostView extends ViewGroup {
                 //   paint 样式被改过；此处**显式设回 STROKE**（否则 uniform 边框会被填充成实心块）。
                 borderPaint.setStyle(android.graphics.Paint.Style.STROKE);
                 borderPaint.setPathEffect(null);
-                borderPaint.setColor(c.borderColor);
+                // ★S1.1：按下态描边色（`:active{border-color:…}`）覆盖
+                final int bc = (ps != null && ps.borderColor != null) ? ps.borderColor : c.borderColor;
+                borderPaint.setColor(bc);
                 borderPaint.setStrokeWidth(c.borderWidth);
-                borderPaint.setAlpha(op < 1f ? Math.max(0, Math.min(255, (int) (Color.alpha(c.borderColor) * op))) : Color.alpha(c.borderColor));
+                borderPaint.setAlpha(op < 1f ? Math.max(0, Math.min(255, (int) (Color.alpha(bc) * op))) : Color.alpha(bc));
                 final float inset = c.borderWidth * 0.5f;
                 final float l = c.x + inset, t = c.y + inset, rr = c.x + c.w - inset, bb = c.y + c.h - inset;
                 // ★★★边框族收口批（2026-10-05 · 子代理终评抓出的 major）：**逐角掩码必须作用于边框描边**——
