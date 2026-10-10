@@ -2683,3 +2683,10 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **⑤ 合并入口（本项交付）**：① `proteus-performance-plan/README.md` 索引加 **C 批（11–14）+ 14 = 当前主攻**；② `board-inventory.md` 的 perf-plan 行补 C 批 14；③ 文档内数字勘正（0.36→**0.344**、0.106→**0.100**）+ 登记指针；④ **与本仓已做能力的关系**：B4（v-model 回写）正是"过桥"能力的具象——**B4-T2b 做 Android 原生输入控件时当场撞上 B1（`setText→TextWatcher→同步 Call JS` 重入）与 B2（`number[]` JSON）** ⇒ S1/S2 是 B4 输入线的下一段（先低延迟，再全部过桥能力水到渠成）。
 **⑥ 诚实边界**：方案现状数字多来自既有产物（iOS 部分为模拟器口径）；Harmony ratio 是提交级/光栅级口径**不代表交互链路**；`JSObjectMakeArrayBufferWithBytesNoCopy` 零拷贝路径需先跑 4KB+ 探针验证；Android `High input latency` 计数**跨设备不可比**。
 **⑦ 下一步**：**S6 度量地基**（三端 `input-latency.json` + `check:input-latency` 棘轮，否则后续每项无法证伪）+ **S1 输入旁路**（逐腿：#768+）。★对外性能宣称在真机复测 + 外部 profiler 取证前**一律标"待真机验证"**。
+
+768. **★★★S1.5 交付（输入延迟专项 #767 第一颗果子）：Android `requestUnbufferedDispatch` + 判据 ㉛**（2026-10-10）：
+**① 为什么先做它**：方案 §4 里 S1.5 是**投入产出比最高、最快出真机证据**的一项——Android 官方降输入延迟的标准手段，改动是 1 处调用；且全仓此前**零命中**（`grep` 确认）。
+**② 交付**：`ProteusHostView.onTouchEvent` 在 `ACTION_DOWN` 时调 `requestUnbufferedDispatch(ev)`（绕过输入批处理 ⇒ 触摸事件立即送达），带**计数/失败探针**（`unbufferedDispatchCount`/`Errors`，不静默）；`MainActivity` 的 vapor 报告暴露 `host_unbuffered_dispatch*`；**判据 ㉛**（`host_unbuffered_dispatch > 0 且 errors == 0`）。
+**③ 判据形态**：㉛ 读**宿主顶层报告键**（`host_unbuffered_dispatch`，与 `host_nodes` 同层）——★首版误读 `rep`（= `d.report`，JS 侧）⇒ 值恒缺；修正为读 `d`（顶层）。且 ㉛ 依赖报告里**真的发生过触摸**（runShort 的 tap 注入走 `dispatchTouchEvent→onTouchEvent`）——**本批一并把交互闭环接进真机判据**（此前 runShort 未注入 tap）。
+**④ ★诚实边界**：`requestUnbufferedDispatch` 的**收益**需 `gfxinfo` 的 `High input latency` 计数**前后对比**（S6 度量地基），本批先证"**请求真的发生**"（机器判据），**未宣称延迟数字**（对齐方案 §8：真机复测 + 外部 profiler 前不对外宣称）。老平台可能不支持 ⇒ 失败计数如实上报（不静默）。
+**⑤ 教训**：a) ★★**判据读"哪一层"要看清**（宿主顶层 `d` vs JS 内层 `d.report`——首版读错层、值恒缺，与"判据挑权威源"同族）；b) ★**先捡"改动 1 处 + 有机器判据"的果子**（S1.5），把真机证据先立起来，再啃 S2/S3 重活。

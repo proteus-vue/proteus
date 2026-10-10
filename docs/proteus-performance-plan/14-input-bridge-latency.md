@@ -170,7 +170,7 @@ hosts/android/results/gfxinfo.txt
 | **S1.2** | **命中缓存**：DOWN 命中一次，MOVE/UP 复用 `target`/`chain` | iOS 补缓存（Android 已有 `gestureTarget`/`gestureChain`，`ProteusHostView.java:2330-2333`） | `hit_test_calls_per_gesture == 1` |
 | **S1.3** | **手势识别下沉到平台识别器** | iOS 补 `UITapGestureRecognizer` / `UILongPressGestureRecognizer` / `UIPanGestureRecognizer`（`delaysTouchesBegan=false`，`cancelsTouchesInView` 精确控制）；**保留自研分类器仅作兜底** | 三端 `check:scroll-fling` 式结构门禁 |
 | **S1.4** | **iOS 接批量指针 ABI** | `proteus_dispatch_pointers`（`hosts/ios/.../selfdraw-scene.swift:177-224` 已有 vtable 声明；`host.rs:527-593` 是 Android 参照）——一帧 N 点一次 FFI | `ffi_calls_per_frame ≤ 1` |
-| **S1.5** | **Android `requestUnbufferedDispatch`** | 在 `ProteusHostView` 拿到 `ACTION_DOWN` 时调用，绕过输入批处理（Android 官方降输入延迟手段） | `gfxinfo` 的 High input latency 计数下降 |
+| **S1.5** | **Android `requestUnbufferedDispatch`** | ✅ **已交付（2026-10-10 · 判据 ㉛）**：`ProteusHostView.onTouchEvent` DOWN 时调用 + 计数探针 | 请求真的发生（判据 ㉛）；`gfxinfo` High input latency 前后对比 → S6 度量地基 |
 | **S1.6** | **触摸预测补偿**（可选） | Android `MotionEvent.getHistoricalX/Y` 历史采样点 + `androidx.input.motionprediction`（beta）；iOS `predictedTouches(for:)` | 跟手场景体感（人工验收项） |
 
 **风险**：S1.1 改变了"样式只由 JS 决定"的语义 → 必须定义清楚**优先级**（内核 pressStyle 与 JS 写回的同一属性冲突时，以"按下期间内核优先"为准，UP 后 JS 权威恢复），并在 IR 层给出编译期报错（对齐"宁可少合并，不可错合并"的既有纪律）。
