@@ -44,8 +44,8 @@
 | `text-decoration-color` | 诊断跳过 | ✅（text-decoration） | ✅ |
 | `text-indent` / `word-spacing` | 诊断跳过 | ❌ | ✅ |
 | `overflow-wrap` / `word-wrap` | 诊断跳过 | ❌ | ✅ |
-| `:hover/:active/:focus/:checked/:focus-visible/:disabled` | 诊断跳过 | ❌（触屏无 hover） | ✅ |
-| `::before/::after` + `content` | 诊断跳过 | ❌ | ✅ |
+| `:hover/:active/:focus/:checked/:focus-visible/:disabled` | `:active` 已支持（折 `press*`）；余诊断跳过 | ❌（触屏无 hover） | ✅ |
+| `::before/::after` + `content` | **✅ 已支持**（编译期物化装饰子节点 · Android 宿主先跑通 · 决策 #791） | ❌（触屏无 hover 伪元素） | ✅ |
 | `::placeholder` | 诊断跳过 | ❌ | ✅ |
 | `scroll-snap-type/-align` | excluded | ❌ | ✅ |
 | `overscroll-behavior` / `scroll-behavior` | excluded | ❌ | ✅ |

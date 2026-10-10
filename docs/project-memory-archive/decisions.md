@@ -2877,3 +2877,16 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 · **准绳（钉死）**：**视觉反馈必须由 Vue 端实现（页面真的写了）才给到；框架的职责是把这个 Vue 能力跨端实现**，**不是**在宿主里替页面发明默认反馈。宿主只提供**把 Vue 声明/样式渲染出来**的机制（如 `:active` 折 `press*`），**不新增**页面没写的视觉。
 · **待定**：涟漪的正确声明形态（CSS `:active` + `@keyframes` 折叠？组件？`hover-class` 扩展？）——需与用户对齐后再做，**在确认前不写任何宿主涟漪代码**。
 **⑧ 教训补充**：**"通用能力"不等于"可以塞进宿主"**——判据是「**这个 Vue 页面写了吗**」：写了 ⇒ 框架跨端实现（对）；没写 ⇒ 宿主不该无中生有（错，即便"所有端一致"也不对，因为**基准是 Web，而 Web 没有这个效果**）。
+
+791. **★★★CSS 伪元素 `::before`/`::after` 支持（编译期物化）+ `:active` 触发动画（Android 先跑通）**（2026-10-10）：
+**① 由来**：#790⑦ 后用户定夺——涟漪应是**页面写的纯 CSS**（`:active` + `@keyframes` + **伪元素**），框架把它跨端实现。取证确认 App 端缺**两块通用 CSS 能力**（均在 `docs/proteus-superapp-css-expansion-plan.md` F4 立项，本批落实）：**伪元素物化** + **`:active` 触发动画**（`@keyframes`/`absolute`/`scale` 内核已具备）。
+**② 交付（编译期物化伪元素节点）**：`template.ts` `ClassStyleSegment.pseudoElement` + `parseSelectorSegment` 剥尾部 `::before|::after`（仅末段）；`parseClassRules` 保留伪元素规则 + 提取 `content`（字符串⇒内容文本 / `none`/`normal`⇒不物化 / `attr()`等⇒诊断）；`resolvePseudoStyles`（复用同一层叠）算装饰节点样式 + `:active` 触发字段；walk 元素处**合成 `pseudo` 子节点**（`::before` 在真子前 / `::after` 在后）+ 强制 `pointer-events:none`。`:active{animation}` ⇒ `pressAnimation`（复用既有 press* 通道）。
+**③ 契约透传**：`LayoutNode.pseudo` + `InstantiatedNode.pseudo` + `screen-executor` + **`instantiate.ts` emit**。
+**④ Android 宿主**：`collectPressAnimations`/`collectPseudoChildren`/`collectAnimEntries` + `ProteusHostView` DOWN 把父按下传播到伪子 + 对有 `pressAnimation` 的节点 `kernelAnimStart`（**复用既有内核动画通道，零新内核能力**）+ UP `kernelAnimStop`；`resetPerTreeState` 连带清按下态。
+**⑤ 真机验证**：L1 `.pad::after{content:'';…}` + `.pad:active::after{animation:ripple}` ⇒ 按下磁块激起**纯 CSS 涟漪**（`::after` 位移/淡出**逐帧推进**，帧间 diff 非空）；L2/L3…五页无回归。
+**⑥ 两个真根因（血泪）**：
+· ★★★**"桩测/单测绿 ≠ 真机通"——demo 走的是**运行期**通路（`instantiateTemplate`），而我只补了**静态**通路（`screen-executor`）⇒ `pseudo` 标记在运行期**被 emit 丢弃** ⇒ 宿主收到的树 `pseudo=0`。**同一条语义有多条消费者（静态/运行期）时，必须逐条改**（本仓老坑第 N 次）。
+· ★★★**类型要与内核 serde 契约严格对齐**：我把伪元素 `pointer-events` 写成**字符串 `'none'`**，而内核 `NodeDto.pointer_events: Option<bool>` ⇒ serde 报 `invalid type: string, expected a boolean` ⇒ **整树 `create` 返回 0（全页空白）**。**宿主一个字段类型错 = 整棵树被拒**（内核输入图校验是"全有或全无"）——真机定位手段：把内核原始请求落盘（`ctx.getCacheDir()`）再离线喂内核，一步拿到 serde 原话。
+· ★★**定位"全页空白"的正确姿势**：① 先探"`create` 的 handle 是否 > 0"（内核拒收 = 空白根因）；② 落盘**实际请求体**离线复现内核报错（比"改代码→打包→装真机"快 10×）；③ ★AAR 重建后**必须重 scaffold 宿主**（`rm -rf dist/app/*/host`）——否则 `libs/proteus-runtime.aar` 是旧的、宿主改动根本没上机（本轮白排查了一轮）。
+· ★★**CSE 对账要对齐"合成节点"**：物化伪元素是**平台合成节点**（CSE 不产）⇒ `align.ts` 加 `synthetic` 标记跳过（否则报"IR 覆盖未对齐 N 节点"）。与既有 `p-text` 合成叶同族。
+**⑦ 诚实边界**：本批只做 **Android 宿主**（`:active` 触发动画 + 伪元素渲染）；**iOS/鸿蒙**的 press 路径 + `:active` 触发动画待补（内核动画通道三端共享 ⇒ 补驱动即可）；`::placeholder` / `content:attr()|url()` / `::first-line` / `:hover|:focus|:checked` / **百分比 inset** 未做（如实诊断，不静默）。
