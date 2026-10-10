@@ -22,14 +22,16 @@ const KERNEL = path.join(ROOT, 'packages/layout-core-rust/src/ffi.rs')
 /** 从内核 tick_bin 的字节写入推出记录宽度 */
 function kernelRecordBytes() {
   const src = fs.readFileSync(KERNEL, 'utf8')
-  const start = src.indexOf('fn proteus_layout_anim_tick_bin')
-  if (start < 0) return { error: '找不到 proteus_layout_anim_tick_bin（函数被改名/移动？）' }
+  // ★★2026-10-10：编码器抽成 `encode_visuals_bin`（anim tick 与 Dactyl 场跟手共用）——
+  //   门禁须指向**新家**（否则切片落到别的函数 ⇒ 假红/假绿；本仓纪律：解析器对着**实际形态**写）。
+  const start = src.indexOf('fn encode_visuals_bin')
+  if (start < 0) return { error: '找不到 encode_visuals_bin（编码器被改名/移动？）' }
   // ★切片边界：从**函数体开始**到**调用序列结束**——用"`let mut buf` 起 → `Ok(buf)` 止"，
   //   而不是"到下一个 `#[no_mangle]`"（首版这么写时，函数**内部**的 `unsafe` 块与注释里
   //   出现的 `#[no_mangle]` 文本让切片退化成空 ⇒ 解析恒失败；本仓纪律：解析器要对着**实际形态**写）。
   const bodyStart = src.indexOf('let mut buf = Vec::with_capacity', start)
   if (bodyStart < 0) return { error: '未找到 `let mut buf = Vec::with_capacity`（写入序列被重构？）' }
-  const bodyEnd = src.indexOf('Ok(buf)', bodyStart)
+  const bodyEnd = src.indexOf('\n    buf\n}', bodyStart)
   const body = src.slice(bodyStart, bodyEnd > 0 ? bodyEnd : bodyStart + 2000)
   // 捕获每个 `xxx.extend_from_slice(<EXPR>.to_le_bytes())`——`EXPR` 可能是
   //   `v.id`、`&v.bg.unwrap_or(u32::MAX)` 这类**含括号/逗号**的表达式 ⇒ 用非贪婪吃到 `)` 前

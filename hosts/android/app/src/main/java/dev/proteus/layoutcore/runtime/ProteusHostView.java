@@ -2529,6 +2529,10 @@ public class ProteusHostView extends ViewGroup {
     private int fieldPointerId = -1;
     /** 场跟手驱动帧数（判据核"场真的被驱动"）。 */
     int fieldMoves = 0;
+    /** ★L2 性能归因：场跟手**每帧耗时**（内核 FFI + 二进制解析）ms——最近/最大。 */
+    private float fieldMsLast = 0f, fieldMsMax = 0f;
+    /** ★帧格缓存位图（避免每帧 2000+ drawLine）。 */
+    private android.graphics.Bitmap dactylGridBmp = null;
     /** 由 `VaporRenderHost` 注入场规格（`followField=1` 的容器）。 */
     public void setFollowFields(java.util.Map<Integer, float[]> m) {
         if (m == null || m.isEmpty()) { fieldSpec = null; return; }
@@ -2540,20 +2544,49 @@ public class ProteusHostView extends ViewGroup {
         fieldPointerId = pointerId;
     }
 
-    /** MOVE ⇒ 焦点（当前指针内容坐标）驱动场（一次 FFI；返回合并 updates 落既有绘制真源）。 */
+    /** ★★合并到**每帧一次**（§2.3 "一帧一次 FFI"）：MOVE 只记焦点 + 标脏 + 重绘；
+     *   真正的内核调用在 onDraw 每帧**至多一次**（否则无缓冲分发下 MOVE 率 > 刷新率 ⇒ UI 线程被塞满 ⇒ 帧推迟 = 卡顿）。 */
+    private float fieldFocusX = 0f, fieldFocusY = 0f;
+    private boolean fieldDirty = false;
+
+    /** MOVE ⇒ 只记最新焦点（廉价）；实际 FFI 在 {@link #flushFieldFollow} 每帧一次。 */
     private void applyFieldFocus(android.view.MotionEvent ev) {
         if (fieldSpec == null || fieldPointerId < 0 || coreHandle == 0L) return;
         final int idx = ev.findPointerIndex(fieldPointerId);
         if (idx < 0) return;
-        final float fx = ev.getX(idx);
-        final float fy = ev.getY(idx) + scrollY;
-        fieldMoves++;
-        final String out = RustLayout.layoutFollowField(coreHandle,
-                (int) fieldSpec[0], fx, fy, fieldSpec[1], fieldSpec[2], fieldSpec[3], fieldSpec[4]);
-        applyAnimUpdates(out);
+        fieldFocusX = ev.getX(idx);
+        fieldFocusY = ev.getY(idx) + scrollY;
+        fieldDirty = true;
+        // 触发重绘（帧回调 onDraw 里 flushFieldFollow 每帧至多一次）——多次 MOVE 折叠为一次帧刷新。
+        postInvalidateOnAnimation();
     }
 
-    private void endField() { fieldPointerId = -1; }
+    /** 每帧一次（onDraw 早段）：脏则内核场求值一次 + 落绘制真源（**12B/条**精简记录，无 JSON）。 */
+    private void flushFieldFollow() {
+        if (!fieldDirty || fieldSpec == null || coreHandle == 0L) return;
+        fieldDirty = false;
+        fieldMoves++;
+        final long __t0 = System.nanoTime();
+        final byte[] bin = RustLayout.layoutFollowFieldBin(coreHandle,
+                (int) fieldSpec[0], fieldFocusX, fieldFocusY, fieldSpec[1], fieldSpec[2], fieldSpec[3], fieldSpec[4]);
+        // ★精简记录解析：id u32 + scale f32 + rotate f32 = 12B/条（场只改这两项）——比 236B 全记录小 20×。
+        if (bin != null && bin.length >= 12) {
+            java.nio.ByteBuffer bb = java.nio.ByteBuffer.wrap(bin).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+            final int n = bin.length / 12;
+            for (int i = 0; i < n; i++) {
+                final int id = bb.getInt();
+                final float sc = bb.getFloat(), rot = bb.getFloat();
+                float[] t = animTx.get(id);
+                if (t == null || t.length < 4) { animTx.put(id, new float[]{0f, 0f, sc, rot, 1f, 0f, 0f, 0f, 0f}); }
+                else { t[0] = 0f; t[1] = 0f; t[2] = sc; t[3] = rot; }   // 场不改 tx/ty（保持 0）
+            }
+            invalidate();
+        }
+        fieldMsLast = (System.nanoTime() - __t0) / 1e6f;
+        if (fieldMsLast > fieldMsMax) fieldMsMax = fieldMsLast;
+    }
+
+    private void endField() { fieldPointerId = -1; fieldDirty = false; }
 
     /** 命中某**内容坐标**所在节点 id（多指各自命中——与 `dispatchHit` 同一内核 `hitTest`，但不改手势态）。 */
     private int hitNodeAt(float viewX, float viewY) {
@@ -2791,19 +2824,30 @@ public class ProteusHostView extends ViewGroup {
     private void drawDactylOverlay(Canvas canvas) {
         final float d = dactylDensity;
         // ① 帧格（vsync 刻度；**丢帧格闪红**——来自真实帧回调 dctlFrameJank，非计时器伪造 §3.3）
+        //   ★缓存为 Bitmap：每帧 2000+ 条 drawLine 是 onDraw 的大头（实测 draw 10ms）——只在尺寸/网格变化时重画。
         final int step = (int) (40 * d);
         if (step > 0) {
+            final int gw = getWidth(), gh = getHeight();
+            if (dactylGridBmp == null || dactylGridBmp.getWidth() != gw || dactylGridBmp.getHeight() != gh) {
+                dactylGridBmp = android.graphics.Bitmap.createBitmap(Math.max(1, gw), Math.max(1, gh), android.graphics.Bitmap.Config.ARGB_8888);
+                final android.graphics.Canvas gc = new android.graphics.Canvas(dactylGridBmp);
+                dactylGridPaint.setStrokeWidth(Math.max(1f, 0.5f * d));
+                dactylGridPaint.setColor(0x1416FFDD);
+                for (int gx = 0; gx < gw; gx += step) gc.drawLine(gx, 0, gx, gh, dactylGridPaint);
+                for (int gy = 0; gy < gh; gy += step) gc.drawLine(0, gy, gw, gy, dactylGridPaint);
+            }
+            canvas.drawBitmap(dactylGridBmp, 0f, 0f, null);
+            // 丢帧格闪红（只需画少量红格——jank 帧数 ≤ 窗口大小）
+            dactylGridPaint.setColor(0x55FF4D4D);
             dactylGridPaint.setStrokeWidth(Math.max(1f, 0.5f * d));
             int cell = 0;
-            for (int gx = 0; gx < getWidth(); gx += step) {
-                for (int gy = 0; gy < getHeight(); gy += step) {
-                    // 该格是否命中"最近掉帧"（把 jank 帧按序铺到格上，溢出即回绕）
-                    boolean jank = dctlFrameN > 0 && cell < dctlFrameN && dctlFrameJank[(dctlFrameHead - 1 - cell + 2 * DACTYL_FRAME_MAX) % DACTYL_FRAME_MAX];
-                    dactylGridPaint.setColor(jank ? 0x55FF4D4D : 0x1416FFDD);
-                    canvas.drawLine(gx, gy, gx + step, gy, dactylGridPaint);
-                    canvas.drawLine(gx, gy, gx, gy + step, dactylGridPaint);
-                    cell++;
-                }
+            final int cols = Math.max(1, gw / step);
+            for (int cc = 0; cc < dctlFrameN; cc++) {
+                boolean jank = dctlFrameJank[(dctlFrameHead - 1 - cc + 2 * DACTYL_FRAME_MAX) % DACTYL_FRAME_MAX];
+                if (!jank) continue;
+                final int gx = (cc % cols) * step, gy = (cc / cols) * step;
+                canvas.drawLine(gx, gy, gx + step, gy, dactylGridPaint);
+                canvas.drawLine(gx, gy, gx, gy + step, dactylGridPaint);
             }
         }
         // ② 幽灵拖尾（历史越久越淡）
@@ -2866,6 +2910,7 @@ public class ProteusHostView extends ViewGroup {
                 + ",\"ptrs_last\":" + dactylPtrsLast + ",\"ptrs_max\":" + dactylPtrsMax
                 + ",\"follow_n\":" + followPtrs.size()
                 + ",\"field_moves\":" + fieldMoves + ",\"field_on\":" + (fieldSpec != null)
+                + ",\"field_ms_last\":" + dctlFmt(fieldMsLast) + ",\"field_ms_max\":" + dctlFmt(fieldMsMax)
                 + ",\"press_feedback_ms\":" + dctlFmt(dctlPressFeedbackMs) + "}";
     }
     private static String dctlFmt(float v) { return v < 0 ? "-1" : String.format(java.util.Locale.US, "%.2f", v); }
@@ -2976,6 +3021,8 @@ public class ProteusHostView extends ViewGroup {
             "lat p95 " + p95 + "ms" + (dctlLatencyPercentile(0.95f) > dctylBudgetWant() ? "  (OVER 1 frame)" : ""),
             "jank " + jankStr + " · visible_lag " + lag,
             "ptrs " + dactylPtrsLast + " · max " + dactylPtrsMax + " · follow " + followPtrs.size(),
+            "field last " + dctlFmt(fieldMsLast) + "ms · max " + dctlFmt(fieldMsMax) + "ms",
+            "draw " + dctlFmt((float) (lastFrameMs)) + "ms · avg " + dctlFmt((float) (frameMsAverage())) + "ms",
         };
         // 背板
         dactylHudBg.setColor(0xCC0A0C10);
@@ -3116,6 +3163,8 @@ public class ProteusHostView extends ViewGroup {
         long __dt0 = System.nanoTime();
         // ★Dactyl：帧间隔记账（vsync 帧格/掉帧率的真源——真实帧回调，非计时器伪造）
         if (dactylEnabled) tickDactylFrame();
+        // ★L2 场跟手：**每帧一次**（合并 MOVE；见 flushFieldFollow）——在录制本帧之前刷新
+        flushFieldFollow();
         // ★§4.2 press_feedback_ms：本帧反映按下态 = DOWN 之后的第一帧 ⇒ 对账
         if (dctlPressDownMs > 0L) {
             dctlPressFeedbackMs = (float) (android.os.SystemClock.uptimeMillis() - dctlPressDownMs);
