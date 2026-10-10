@@ -218,6 +218,28 @@ public final class VaporRenderHost {
     /** ★B4-T2b 探针：当前输入控件数（判据核"可编辑节点真的建了控件"）。 */
     public String inputControlCount() { return "{\"ok\":true,\"count\":" + inputControls.size() + "}"; }
 
+    /** ★S1.1 探针（QuickJS 绑本方法）：读视图按下态读数 `{pressed,applied,press_nodes}`。 */
+    public String pressProbe() {
+        return view != null ? view.pressProbe() : "{\"pressed\":-1,\"applied\":-1,\"press_nodes\":-1}";
+    }
+
+    /**
+     * ★★★S1.1（2026-10-10 · 输入延迟专项 #767）：从 specs 收集**按下态背景色**
+     *   （编译器把 `<style>.x:active{background-color:…}` 折成节点上的 `pressBackgroundColor`）。
+     *   ★只读 paint 通道（内核不消费）——DOWN 时由视图**原生立即**应用（零 JS 跨界）。
+     */
+    private java.util.Map<Integer, Integer> collectPressBg() {
+        java.util.Map<Integer, Integer> m = new java.util.HashMap<>();
+        for (JSONObject spec : specs) {
+            if (!spec.has("pressBackgroundColor")) continue;
+            int id = spec.optInt("id", -1);
+            if (id < 0) continue;
+            // 复用宿主既有的 parseColor（`#RRGGBB`/`#RRGGBBAA` → ARGB）；编译器已保证是合法 hex
+            m.put(id, parseColor(spec.optString("pressBackgroundColor", null)));
+        }
+        return m;
+    }
+
     /**
      * ★★把手势接到**命中链**上：`ProteusHostView.onTouchEvent` 已在 DOWN 时刻用内核
      *   `hitTest` 定下目标节点与冒泡链（`gestureTarget` / `gestureChain`）⇒ 这里只消费
@@ -458,6 +480,8 @@ public final class VaporRenderHost {
             double emitMs = (System.nanoTime() - te) / 1e6;
             // ★B4-T2b：为可编辑节点建原生输入控件（复用 native-host 机制；几何来自内核）
             syncInputControls();
+            // ★S1.1（#767）：把"按下态节点 → 背景色"注入视图（`<style>.x:active{}` 折出的 pressBackgroundColor）
+            if (view != null) view.setPressBgMap(collectPressBg());
             // ★批次 42（动效 · 对齐 Web）：**CSS animation**（编译期折叠）——挂载后启动
             //   （复用既有 animStart：内核 kernelAnimStart + Choreographer 帧循环）
             cssAnimNodes = startStaticAnimations();

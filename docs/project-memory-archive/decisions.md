@@ -2728,3 +2728,11 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **③ 验证**：量具 `--selftest` ✅（最近秩 p50 of [4..13]=**8**——★首版期望写成 9 是**我算错**：最近秩不取中位平均）；门禁绿（android：work_time 代理 5ms · jank 0.16% · **端到端 ◐ 无采样**）；gates-sync 绿。
 **④ ★诚实边界**：本批只到 **D0 量具+门禁**——**生产者（宿主按官方触摸事件时间戳采样 T0→T1）随 D1 接**（需 Dactyl app 与显影器）；故当前 `input_latency_*` 如实记 **null**（15 §3.3「反作弊第 2 条：无实测值显示 --，不假定 0」）。门禁**不分辨**"work_time 是 Perfetto 真值还是 gfxinfo 代理"——那是生产者的诚实边界（notes 注明）。
 **⑤ 教训**：a) ★★**"量具先行"= 先定契约 + 判据 + 门禁**（口径不统一，后面三端数据不可比）；b) ★**百分位口径要写死**（最近秩 vs 中位平均差 0.5ms——首版自测期望就栽在这：**自测期望错 ≠ 工具错**，先核口径再改代码）；c) ★**门禁对"缺数据"要 ◐ 而非判红**（无采样是"未采"不是"超预算"）。★下一步：**D1**（demos/dactyl 工程 + L1/L2 场景 + HUD + 显影器 + 宿主触摸时间戳生产者）。
+
+774. **★★★S1.1 交付（输入延迟专项 #767 第二条腿）：按下态内联 → 原生即时应用（零 JS 跨界）+ 判据 ㉝ 真机过**（2026-10-10）：
+**① 为什么先做它**：S1.1 是 §14 六腿里**独有点**（"输入不过桥"）——按压反馈**零次 JS 跨界**（对标 RN Pressable / Flutter InkWell 必过逻辑层）。且**复用既有节点样式透传**（style 扁平到节点顶层）⇒ **内核零改动**。
+**② 交付**：a) **编译期**（`template.ts`）：选择器解析支持 **`:active`**（此前直接 `return null`）⇒ 规则标记 `pressState`；`resolveClassStyles` 把按下态声明**改写成 `press<Cap>` 键**（`backgroundColor`⇒`pressBackgroundColor`）**独立收集**（**不并入常驻 styles**——否则常态色被按下色覆盖）；模板节点把 `pressStyles` 并入 `style`（随节点透传）。b) **宿主**（Android）：`VaporRenderHost` 建树时收集"按下态节点→背景色"注入视图；`ProteusHostView` DOWN 命中 ⇒ `applyPressAt` 丢弃静态帧重录（含按下色）、UP/CANCEL ⇒ `clearPress` 还原；绘制循环对**按下节点**覆盖背景色（`pressBgMap`）；`pressProbe` 探针（pressed/applied/press_nodes）。c) C 桥 `proteusHost.pressProbe()`（照 `textPolicy`）。
+**③ 判据 ㉝**：夹具 `s11`（`<p-view class="btn">` + `.btn:active{background-color:#ff0000}`）⇒ 真机 tap ⇒ `{press_nodes:1, applied:1}`（**按下态真的被原生应用**）。✅ **真机过**。
+**④ 验证**：编译器单测（`:active`⇒`press*`、进常驻=否、不产选择器诊断）· 真机 ㉝ ✅（Android 34 判据全过；三端 34/30/30，㉝ Android 专属其他端如实跳过）· 全量 **5670** · 门禁全绿 · AAR 随源再生。
+**⑤ 诚实边界**：只覆盖 **Android**（iOS/鸿蒙宿主未接；判据 ㉝ 本端专属）· 只做 **`:active`**（触屏无 hover；focus/checked 无宿主通道）· **仅背景色**覆盖（圆角等 press* 字段先编译出来、宿主按需扩）· `.x:active` 的**后代**（`.x:active .y`）按祖先链匹配但"按下"是运行期态 ⇒ 仅自匹配的有效（诚实边界）。★对外"press_feedback ≤ 1 帧"需 Dactyl D1 量具实测。
+**⑥ 教训**：a) ★★★**"输入不过桥"能复用既有样式透传**（App 把 style 扁平到节点顶层 ⇒ 编译期折 `press*` 字段即可，**内核零改**）——别默认要新建通路；b) ★★**按下态与常驻态必须分开收**（并入常驻 ⇒ 常态色被覆盖——本项 design 时就分开）；c) ★**探针方法要挂在 QuickJS 找的对象上**（首版挂 `ProteusHostView`，而 QuickJS 找 `VaporRenderHost` ⇒ `pressProbe` 探测为 undefined、判据"缺失"——同 B4-T2b 的"注入面"坑）。★下一步：S1.2/S1.3/S1.4（iOS 命中缓存/平台识别器/批量指针 ABI）或 Dactyl D1。

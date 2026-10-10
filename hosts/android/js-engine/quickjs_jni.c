@@ -105,6 +105,8 @@ static struct {
   /* ★★★B4-T2b（2026-10-10）：原生输入控件探针（`proteusHost.inputProbeSetText(text)` ⇒ 注入 EditText 文本
    *   ⇒ TextWatcher ⇒ inputSink ⇒ JS 回写；判据驱动用）。同一条件注入原则。 */
   jmethodID input_probe_set_text;
+  /* ★S1.1（#767）：按下态探针读（`proteusHost.pressProbe()`——无参返回串） */
+  jmethodID press_probe;
   /* ★★★长列表虚拟化（2026-10-01）：整树在内核、宿主只物化可见区。
    *   同一条件注入原则（Java 未实现 ⇒ 不注入 ⇒ JS 侧探测为 undefined）。 */
   jmethodID mount_virtual;
@@ -515,6 +517,12 @@ static JSValue js_host_input_probe_set_text(JSContext *ctx, JSValueConst this_va
   return host_call_impl(ctx, g_host_methods.input_probe_set_text, 1, this_val, argc, argv);
 }
 
+/** `proteusHost.pressProbe()` —— ★S1.1：读宿主按下态读数（无参返回串） */
+static JSValue js_host_press_probe(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+  (void)this_val; (void)argc; (void)argv;
+  return host_call_noarg_impl(ctx, g_host_methods.press_probe, 1);
+}
+
 /** `proteusHost.mountVirtual(treeJson)` —— ★★★**虚拟化挂载**（长列表：整树在内核、只物化可见区） */
 static JSValue js_host_mount_virtual(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
   return host_call_impl(ctx, g_host_methods.mount_virtual, 1, this_val, argc, argv);
@@ -641,6 +649,9 @@ static jstring eval_impl(JNIEnv *env, jstring source, jboolean with_host) {
     if (g_host_methods.input_probe_set_text != NULL) {
       JS_SetPropertyStr(g_ctx, host, "inputProbeSetText", JS_NewCFunction(g_ctx, js_host_input_probe_set_text, "inputProbeSetText", 1));
     }
+    if (g_host_methods.press_probe != NULL) {
+      JS_SetPropertyStr(g_ctx, host, "pressProbe", JS_NewCFunction(g_ctx, js_host_press_probe, "pressProbe", 0));
+    }
     // ★★★长列表虚拟化（条件注入——同 mount 原则）
     if (g_host_methods.mount_virtual != NULL) {
       JS_SetPropertyStr(g_ctx, host, "mountVirtual", JS_NewCFunction(g_ctx, js_host_mount_virtual, "mountVirtual", 1));
@@ -764,6 +775,7 @@ Java_dev_proteus_layoutcore_QuickJsEngine_nativeSetHostCallback(JNIEnv *env, jcl
   g_host_methods.apply_ops_bytes = NULL;
   g_host_methods.text_policy = NULL;
   g_host_methods.input_probe_set_text = NULL;
+  g_host_methods.press_probe = NULL;
   g_host_methods.mount_virtual = g_host_methods.scroll_rows = NULL;
   g_host_methods.probe_channels = NULL;
   g_host_methods.probe_gesture = g_host_methods.tap_at = NULL;
@@ -821,6 +833,8 @@ Java_dev_proteus_layoutcore_QuickJsEngine_nativeSetHostCallback(JNIEnv *env, jcl
     if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
     /* ★★★B4-T2b：原生输入控件探针（一参返回串） */
     g_host_methods.input_probe_set_text = (*env)->GetMethodID(env, c, "inputProbeSetText", "(Ljava/lang/String;)Ljava/lang/String;");
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+    g_host_methods.press_probe = (*env)->GetMethodID(env, c, "pressProbe", "()Ljava/lang/String;");
     if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
     /* ★★★长列表虚拟化（各一参返回串） */
     g_host_methods.mount_virtual = (*env)->GetMethodID(env, c, "mountVirtual", "(Ljava/lang/String;)Ljava/lang/String;");
