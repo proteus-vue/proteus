@@ -2423,6 +2423,9 @@ public class ProteusHostView extends ViewGroup {
         float sx = 1f, sy = 1f; // 按下凹陷（transform: scale）
         Integer glowColor;     // 按下发光色（ARGB；来自 box-shadow）
         float glowRadius;      // 按下发光半径（px）
+        /** ★按下 `z-index`（`:active{z-index:N}`）：> 0 ⇒ 按下时把**该节点子树**绘制序提升到末尾
+         *  （浮到相邻兄弟之上——涟漪完整显示不被下排遮挡；Web 里 `position+z-index` 同语义）。 */
+        float zIndex = 0f;
     }
     /** 节点 id → 按下态样式（来自编译器 `:active` 折出的 `press*` 字段）。 */
     private java.util.Map<Integer, PressStyle> pressStyles = java.util.Collections.emptyMap();
@@ -3087,7 +3090,32 @@ public class ProteusHostView extends ViewGroup {
 
     public void drawCmds(Canvas canvas) {
         // ★单次遍历下发全部指令（无 View 树、无递归 measure/layout）
-        final List<Cmd> list = cmds;
+        // ★★★按下 `z-index` 提升（2026-10-10 · 用户「涟漪下半被下排遮挡」）：被按节点若带 `:active{z-index:N}`
+        //   ⇒ 把**其子树**cmds 移到绘制末尾（浮到相邻兄弟之上——Web 里 `position+z-index` 同语义）。
+        //   ★仅当无 skip（载体行按**下标**跳过）且无 sticky（`cmdIndexByIdView`（视图下标→锚点）会错位）时启用
+        //     ——这两种场景与"按下提升"极少共存，保守关闭 ⇒ 零回归。
+        List<Cmd> list = cmds;
+        int[] ids = cmdNodeIds;
+        if (pressedNodeId >= 0) {
+            final PressStyle pps = pressStyles.get(pressedNodeId);
+            final boolean canPromote = (skipCmdIndices == null || skipCmdIndices.isEmpty()) && stickyTops.isEmpty();
+            if (pps != null && pps.zIndex > 0 && canPromote && ids != null && ids.length == list.size()) {
+                final java.util.Set<Integer> sub = new java.util.HashSet<>();
+                sub.add(pressedNodeId);
+                // 收集子树（含自身）：任一节点的父在 sub 中 ⇒ 属本子树（ids 顺序为树序 ⇒ 一趟即可）
+                for (int k = 0; k < ids.length; k++) {
+                    final Integer p = nodeParent.get(ids[k]);
+                    if (p != null && sub.contains(p)) sub.add(ids[k]);
+                }
+                final List<Cmd> nl = new java.util.ArrayList<>(list.size());
+                final int[] ni = new int[ids.length];
+                int w = 0;
+                for (int k = 0; k < ids.length; k++) if (!sub.contains(ids[k])) { nl.add(list.get(k)); ni[w++] = ids[k]; }
+                for (int k = 0; k < ids.length; k++) if (sub.contains(ids[k])) { nl.add(list.get(k)); ni[w++] = ids[k]; }
+                list = nl;
+                ids = ni;
+            }
+        }
         // ★字号只在**变化时**设置（同字号连排时零开销；见 Cmd.fontSize 注释）
         float lastSize = textPaint.getTextSize();
         int lastWeight = -1;   // ★批次 3：字重变化才重建 typeface（-1 = 首次必设，与默认 paint 对齐）
@@ -3097,7 +3125,6 @@ public class ProteusHostView extends ViewGroup {
         int lastAlign = -1;    // ★批次 4：文本对齐变化才设 Paint.Align
         boolean lastShadow = false;   // ★★★text-shadow 项（2026-10-08）：阴影状态变化才设/清 setShadowLayer
         final java.util.Set<Integer> skip = skipCmdIndices;   // ★被载体提升的指令：跳过（否则重影）
-        final int[] ids = cmdNodeIds;
         // ★★★父 transform 级联用：本帧 id → Cmd（取祖先的盒作 transform-origin 基准）
         final java.util.Map<Integer, Cmd> cmdById = new java.util.HashMap<>();
         if (ids != null) { for (int k = 0; k < ids.length && k < list.size(); k++) cmdById.put(ids[k], list.get(k)); }
