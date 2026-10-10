@@ -297,3 +297,49 @@ describe('★B1 · 壳级运行期驱动（createSuperappRuntime）', () => {
     expect(Object.keys(rt.profileStats()), '未启用 ⇒ 无采样').toHaveLength(0)
   })
 })
+
+describe('★★★B4-T2b · 壳级输入回写（SuperappRuntime.dispatchInput → 当前屏 dispatchInputValue）', () => {
+  function makeVModelProject(): string {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-sar-vm-'))
+    fs.mkdirSync(path.join(dir, 'router'), { recursive: true })
+    fs.mkdirSync(path.join(dir, 'pages'), { recursive: true })
+    fs.writeFileSync(
+      path.join(dir, 'pages', 'home.vue'),
+      `<template>
+  <input v-model="name" />
+  <text>{{ name }}</text>
+</template>
+<script setup lang="ts">
+import { ref } from 'vue'
+const name = ref('')
+</script>
+`,
+    )
+    fs.writeFileSync(
+      path.join(dir, 'router', 'auto-routes.ts'),
+      `export const routes = [{ name: "home", path: "pages/home", component: "../pages/home.vue" }]\n`,
+    )
+    fs.writeFileSync(path.join(dir, 'proteus.config.ts'), `export default { pagesDir: 'pages' }\n`)
+    return dir
+  }
+
+  it('dispatchInput 委派当前屏：写回源 + 经全局入口 __proteusSuperappInput 可达', async () => {
+    const dir = makeVModelProject()
+    const build = await buildAppRuntimeContent(dir, 'android')
+    const artifacts = JSON.parse(fs.readFileSync(build.outFile, 'utf-8')) as Record<string, ScreenRuntimeArtifact>
+    const rt = createSuperappRuntime({
+      artifacts,
+      host: { mount: () => '{"ok":true}', applyOps: () => '{"ok":true}' },
+      viewport: { width: 390, height: 844 },
+    })
+    rt.mountScreen('home')
+    const ev = artifacts['home']!.events.find((e) => e.event === 'input')!
+    expect(ev, 'v-model 应有 input 回写绑定').toBeTruthy()
+    // 直接调 dispatchInput（nodeId 恒等：无 contentIdBase ⇒ 内核 id === 内容局部 id）
+    const r = rt.dispatchInput(ev.nodeId, 'abc')
+    expect(r.handled, '应命中回写 handler').toBe(true)
+    expect(rt.snapshot()['home']?.['name'], '值应写回源').toBe('abc')
+    // ★全局入口 __proteusSuperappInput 注册在 JS 入口脚本（entry-superapp.ts，薄壳委派 dispatchInput）——
+    //   本测试只建**库运行期**（不加载入口）⇒ 不在此断言入口；入口↔库的连接由 bundle 编译 + 真机判据覆盖。
+  })
+})

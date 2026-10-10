@@ -75,6 +75,13 @@ export interface SuperappRuntime {
     fired: number[]
     firedHandlers?: Array<{ handler: string; nodeId: number; loc?: { line: number; column: number } }>
   }
+  /**
+   * ★★★**B4-T2b（2026-10-10）：派发一次输入事件**（宿主原生输入控件编辑 → `v-model` 回写）。
+   *   `nodeId` = 内核 id（宿主控件所在节点）；`value` = 编辑值。委派当前屏实例的
+   *   `dispatchInputValue`（`packages/render-backend/src/screen-runtime.ts`）。
+   *   宿主经全局入口 `__proteusSuperappInput` 调它（见 entry-superapp.ts）。
+   */
+  dispatchInput(nodeId: number, value: unknown): { handled: boolean; fired: string[] }
   /** 当前屏名 */
   current(): string
   /** ★DevTools 元素内省（决策 #674）：当前屏**已实例化节点**（Template 实例化产物：id/parentId/tag/style/text）——供面板"元素"树。
@@ -253,6 +260,16 @@ export function createSuperappRuntime(opts: SuperappRuntimeOptions): SuperappRun
       return true
     },
     dispatchGesture: dispatch,
+    dispatchInput(nodeId: number, value: unknown) {
+      // ★B4-T2b：委派当前屏实例（输入事件不冒泡、直接按 nodeId 查 input 绑定 → 跑 v-model 回写）。
+      if (!cur) return { handled: false, fired: [] }
+      try {
+        return rt.instance(cur).dispatchInputValue(nodeId, value)
+      } catch (e) {
+        note(`[superapp-runtime] dispatchInput 异常：${String((e as Error)?.message ?? e)}`)
+        return { handled: false, fired: [] }
+      }
+    },
     current: () => cur,
     // ★DevTools 元素内省（决策 #674）：当前屏已实例化节点（避免暴露整个 rt/instance 给桥）。
     currentContent: () => {
