@@ -801,6 +801,22 @@ public final class AppActivity extends Activity {
 
     // ────────────────────────── Tab 栏 ──────────────────────────
 
+    /**
+     * ★内容区底部预留（原生 tabBar 高度；0 = 无底栏）——决策 #780 续·安全区。
+     *   tabBar 在 `gravity=BOTTOM` 悬浮；不给内容区留底 ⇒ 内容会被底栏压住。
+     *   ★与页面 CSS 的分工：本预留只管**底栏本体**（app chrome）；系统手势条由页面 `--pf-inset-bottom` 管。
+     */
+    private void setContentBottomReserve(int px) {
+        if (contentHost == null) return;
+        try {
+            android.view.ViewGroup.LayoutParams lp = contentHost.getLayoutParams();
+            if (lp instanceof android.widget.FrameLayout.LayoutParams) {
+                android.widget.FrameLayout.LayoutParams flp = (android.widget.FrameLayout.LayoutParams) lp;
+                if (flp.bottomMargin != px) { flp.bottomMargin = px; contentHost.setLayoutParams(flp); }
+            }
+        } catch (Throwable ignored) { /* 布局参数不可写 ⇒ 不静默抛出 */ }
+    }
+
     private void buildTabBar() {
         String st = readState();
         try {
@@ -841,8 +857,12 @@ public final class AppActivity extends Activity {
             Log.w(TAG, "读 tab 注册表失败：" + e.getMessage());
         }
         tabBar.removeAllViews();
-        if (tabNames.length == 0) { tabBar.setVisibility(android.view.View.GONE); return; }
+        if (tabNames.length == 0) { tabBar.setVisibility(android.view.View.GONE); setContentBottomReserve(0); return; }
         tabBar.setVisibility(android.view.View.VISIBLE);
+        // ★★内容区为原生 tabBar 预留底部空间（决策 #780 续·安全区）：否则内容会被底栏压住。
+        //   底栏在 gravity=BOTTOM 占 56dp；内容区下沿抬到 tabBar 之上 ⇒ 页面 CSS 的 `--pf-inset-bottom`
+        //   只需负责系统手势条（Web/MP 同源语义），二者不重叠。
+        setContentBottomReserve(tabBarHeightPx);
         final int onColor = tbOn, offColor = tbOff, recColor = tbRec, lineColor = tbLine;
         tabBar.setBackgroundColor(tbSurface);
         if (root.findViewWithTag("sa-top-line") == null) {
