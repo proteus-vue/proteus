@@ -27,18 +27,11 @@
 
 ## 2. 逐项：根因（已探针核实）+ 依赖 + 估时
 
-### B3 · 动态 `:class` **布局字段**端上生效（最高价值 · 28 页）
-- **探针实证**：编译期 plan 产出字段值 = StyleIR 描述符（`width={kind:'absolute',dp:200}`、
-  `padding` **被摊平**成 `paddingTop/Right/Bottom/Left`）；运行期把每个字段经
-  `onPaintProp('paint.'+f)` 交给宿主 → 夹具走 `updatePatches`（内核 `PatchStyle`）——
-  但内核 `PatchStyle` 只认 `padding`（对象）/数值 `width`/**`display` 枚举**，且**不含**
-  `flexDirection/justifyContent/position/left/top/grid*/overflow*/min|maxWidth(px)/whiteSpace/wordBreak`
-  （33 个布局字段里内核现支持 ~16）。
-- **依赖**：① **运行期值规范化**（描述符→数值；padding 摊平→对象；枚举直传）② **内核 `PatchStyle` 扩字段**
-  （Rust）③ **三端宿主 applier**（Android Java / iOS Swift / 鸿蒙 C++）——把 `paint.<f>` 里的**布局键**
-  路由到内核布局补丁、**绘制键**路由到绘制通道（现两者混在一条 `updatePatches`）。
-- **估时**：**大（≈4–6 人日）**。★当前 App 壳 `screen-runtime` **未接 `onPaintProp`**（真机路径根本没有该通道），
-  只有 vapor 夹具接了 ⇒ 需先给 App 壳补宿主补丁原语。
+### B3 · 动态 `:class` **布局字段**端上生效（最高价值 · 28 页）——★**B3a 数值字段已交付（2026-10-10）**
+- **B3a 交付（判据 ㉕ · 三端全过）**：**数值型布局字段**（width/height/min|max/flex*/gap/top/left/right/bottom/margin*/padding*/aspectRatio——见 `slot-runtime` 的 `NUMERIC_LAYOUT_FIELDS`）改走**内核二进制 `SET_STYLE`**（host-agnostic：内核重排 ⇒ **三端零宿主改动**即生效）。含**清除回退**（plan 关闭返回 `null` ⇒ 发 UNSET）。内核 `ops_apply::apply_style_key` 补登记 right/bottom/padding 四向/aspectRatio。能力棘轮 28→18。
+- **B3b 待做（枚举 / grid 类）**：`display`/`flexDirection`/`position`/`justifyContent`/`alignItems`/`gridTemplateColumns` 等**枚举/字符串**字段——无二进制通道 ⇒ 需**新内核 op（字符串/枚举载荷）+ 三端宿主**（或扩展 `PatchStyle`）。**单独立项。**
+- 探针实证依据：plan 产出字段值为 **StyleIR 描述符**（`{kind:'absolute',dp:N}`）+ `padding` **被摊平**成 `paddingTop/…`；运行期此前误统一走 `onPaintProp`（宿主绘制补丁通道，不认布局/描述符）⇒ 端上不生效。
+- 估时：B3a **≈1.5 人日（已交付）**；B3b **≈3–4 人日（需内核 + 三端宿主）**。
 
 ### B4 · `v-model` 回写（22 页）
 - 依赖：宿主**输入通道**（Android EditText / iOS UITextField / 鸿蒙 TextInput）×3 + 双向协议（text→source）。

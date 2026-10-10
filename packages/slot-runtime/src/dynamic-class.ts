@@ -69,6 +69,38 @@ export function bitmapOfDynamicClasses(active: Set<string>, classes: string[]): 
   return b >>> 0
 }
 
+/**
+ * ★★★B3a（2026-10-10）：**有内核 `SET_STYLE`（f32 二进制）通道的数值布局字段**。
+ *
+ * 【为什么单列】动态 `:class` 命中的布局字段此前**端上不生效**（诊断 `DYNCLASS_LAYOUT_UNSUPPORTED`）：
+ *   运行期把字段值（plan 产出的 **StyleIR 描述符** `{kind:'absolute',dp:N}`）经 `onPaintProp` 交给
+ *   宿主补丁通道——而那是**绘制**通道（不认布局/描述符）。⇒ 数值布局字段改走**内核 `SET_STYLE`**
+ *   （与 `:width` 绑定同一通道、**host-agnostic**：内核重排 ⇒ 三端零宿主改动即生效）。
+ *   ★其余布局字段（枚举 `display`/`flexDirection`…、grid 模板）**无二进制通道** ⇒ 仍不支持（编译期诊断）。
+ *   ★与内核 `ops_apply.rs::apply_style_key` 的登记**必须一致**（改一处要同步另一处）。
+ */
+export const NUMERIC_LAYOUT_FIELDS: ReadonlySet<string> = new Set([
+  'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight',
+  'flexGrow', 'flexShrink', 'flexBasis', 'gap', 'rowGap', 'columnGap',
+  'top', 'left', 'right', 'bottom',
+  'marginTop', 'marginRight', 'marginBottom', 'marginLeft',
+  'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
+  'aspectRatio',
+])
+
+/** 从字段值取**数值**（plan 描述符 `{kind:'absolute',dp|px}` 或原始 number）；非数值 ⇒ null。 */
+export function layoutNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (value && typeof value === 'object') {
+    const o = value as { kind?: unknown; dp?: unknown; px?: unknown }
+    if (o.kind === 'absolute') {
+      const n = typeof o.dp === 'number' ? o.dp : typeof o.px === 'number' ? o.px : null
+      if (n !== null && Number.isFinite(n)) return n
+    }
+  }
+  return null
+}
+
 /** 互斥组状态：0 = 组内无活跃；i+1 = 组内第 i 个位活跃（按组内位序） */
 export function groupStateOf(bitmap: number, groupBits: number[]): number {
   for (let i = 0; i < groupBits.length; i++) if ((bitmap & (1 << groupBits[i]!)) !== 0) return i + 1
