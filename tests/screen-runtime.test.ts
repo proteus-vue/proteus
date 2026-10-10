@@ -205,3 +205,67 @@ onUnmounted(() => { w.value = 0 })
     expect(inst.data().w).toBe(0) // onUnmounted 生效
   })
 })
+
+describe('★★★B4-T2 · 输入回写（dispatchInput：v-model ⇒ input handler ⇒ 数据变 ⇒ 下行随之）', () => {
+  function makeVModelProject(): string {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-vm-'))
+    fs.mkdirSync(path.join(dir, 'router'), { recursive: true })
+    fs.mkdirSync(path.join(dir, 'pages'), { recursive: true })
+    fs.writeFileSync(
+      path.join(dir, 'pages', 'idx.vue'),
+      `<template>
+  <input v-model="name" />
+  <text>{{ name }}</text>
+</template>
+<script setup lang="ts">
+import { ref } from 'vue'
+const name = ref('')
+</script>
+`,
+    )
+    fs.writeFileSync(
+      path.join(dir, 'router', 'auto-routes.ts'),
+      `export const routes = [{ name: "idx", path: "pages/idx", component: "../pages/idx.vue" }]\n`,
+    )
+    fs.writeFileSync(path.join(dir, 'proteus.config.ts'), `export default { pagesDir: 'pages' }\n`)
+    return dir
+  }
+
+  it('v-model ⇒ input 回写：编辑值写回源（$event）+ 下行文本更新', async () => {
+    const dir = makeVModelProject()
+    const build = await buildAppRuntimeContent(dir, 'android')
+    const artifacts = JSON.parse(fs.readFileSync(build.outFile, 'utf-8')) as Record<string, ScreenRuntimeArtifact>
+    const rt = createScreenRuntime({ artifacts, applyOps: () => {}, viewport: { width: 390, height: 844 }, contentIdBase: 1000 })
+    const inst = rt.instance('idx')
+    const content = inst.content()
+
+    // v-model 编成一条 input 回写绑定
+    const ev = artifacts['idx']!.events.find((e) => e.event === 'input')!
+    expect(ev, 'v-model 必须产出 input 回写绑定').toBeTruthy()
+    const nodesArr = content.nodes as Array<{ id: number }>
+    const idx = nodesArr.findIndex((n) => n.id === ev.nodeId)
+    expect(idx, '输入节点应在实例化节点里').toBeGreaterThanOrEqual(0)
+    const kernelId = 1000 + idx
+
+    expect(inst.data()['name'], '初值为空').toBe('')
+    // 模拟宿主输入控件编辑 ⇒ dispatchInput（值 = 输入框内容）
+    const r = inst.dispatchInput(kernelId, 'hello 世界')
+    expect(r.handled, '应命中 input 回写 handler').toBe(true)
+    expect(inst.data()['name'], '输入值应写回源（$event）').toBe('hello 世界')
+
+    // 下行：{{ name }} 的文本槽位随之更新
+    const txt = (inst.content().nodes as Array<{ text?: string }>).map((n) => n.text ?? '').join('|')
+    expect(txt, '文本节点应反映新值（下行随之）').toContain('hello 世界')
+  })
+
+  it('无 input 绑定的节点 ⇒ dispatchInput 不误跑（handled=false）', async () => {
+    const dir = makeVModelProject()
+    const build = await buildAppRuntimeContent(dir, 'android')
+    const artifacts = JSON.parse(fs.readFileSync(build.outFile, 'utf-8')) as Record<string, ScreenRuntimeArtifact>
+    const rt = createScreenRuntime({ artifacts, applyOps: () => {}, viewport: { width: 390, height: 844 } })
+    const inst = rt.instance('idx')
+    const r = inst.dispatchInput(999999, 'x')
+    expect(r.handled).toBe(false)
+    expect(inst.data()['name']).toBe('')
+  })
+})

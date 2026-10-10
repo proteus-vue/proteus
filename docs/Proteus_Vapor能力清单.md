@@ -83,7 +83,7 @@ Teleport / KeepAlive / Suspense / Transition / TransitionGroup / v-memo / 自定
 | 7 | 动态 `:style` 对象 | ✓ 半 | 模板不解析（**由订阅表 `SET_STYLE` 逐键下发**——设计如此，非缺陷） |
 | 8 | 动态属性 `:[k]` | ⚠️ **静默** | 无诊断，槽位错标成 `prop:attr.fn`（**把表达式源码当属性名**） |
 | 9 | **v-show** | ✅ | 走 `visibility:visible` 槽位（与 v-if 同通道，语义不同） |
-| 10 | **v-model** | ✓ 半 | ◐ **下行 + 回写契约已通（B4-T1，2026-10-10）**：值→文本槽位（下行）+ `input` 回写动作（`set 源 = $event`，`v-model="x"` ⇒ 编译期编成）；★**仍缺三端原生输入控件**（键盘/编辑框：Android EditText · iOS UITextField · 鸿蒙 TextInput）⇒ 控件未接前输入无源、端上暂不生效 ⇒ 出现即诊断 `VAPOR_VMODEL_NO_INPUT_CONTROL`。组件 v-model / 成员路径 / 修饰符（`.lazy/.trim/.number`）为后续批次（各自诊断）。修饰符在 MP 路径（回写端转换）已实现 |
+| 10 | **v-model** | ✓ 半 | ◐ **下行 + 回写契约已通（B4-T1，2026-10-10）**：值→文本槽位（下行）+ `input` 回写动作（`set 源 = $event`，`v-model="x"` ⇒ 编译期编成）；★框架前置 `dispatchInput(nodeId, value)` 已交付（B4-T2a，宿主控件值→回写 handler）；**仍缺三端原生输入控件**（键盘/编辑框：Android EditText · iOS UITextField · 鸿蒙 TextInput）⇒ 控件未接前输入无源、端上暂不生效 ⇒ 出现即诊断 `VAPOR_VMODEL_NO_INPUT_CONTROL`。组件 v-model / 成员路径 / 修饰符（`.lazy/.trim/.number`）为后续批次（各自诊断）。修饰符在 MP 路径（回写端转换）已实现 |
 | 11 | v-html / v-text | ◐ | v-text ✅ **已支持（P2-6）**：与插值同槽位（覆盖子节点语义）；v-html ❌ 仍不支持——**富文本通道缺失**（内核文本单串、宿主单次 drawText），诊断写明真实原因 |
 | 12 | v-once | ✅ | ✅ **已支持（P2-5）**：槽位带 `once` 标记 ⇒ 首次写入后**永久冻结**（真机判据 ⑪）；行内 v-once（官方共享缓存槽语义）如实诊断 |
 | 13 | v-memo | ✅ | ✅ **已支持（P2-5）**：`v-memo="[a,b]"` ⇒ 依赖编成 `memoGroups`，运行时**按组比较**（依赖净 ⇒ 跳过子树更新；脏 ⇒ 放行）。非数组字面量形态如实诊断 |

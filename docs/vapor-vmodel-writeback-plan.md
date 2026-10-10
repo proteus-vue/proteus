@@ -14,8 +14,9 @@
 | 批次 | 内容 | 状态 |
 |---|---|---|
 | **B4-T1** | **回写契约（编译期 + 运行期）**：`v-model="x"` ⇒ 编译成 `input` 事件 + `set x = $event` 动作；`$event` 运行时语义 | ✅ **已交付（2026-10-10）** |
-| **B4-T2** | **三端宿主输入控件**：Android `EditText`/`TextView`(editable) · iOS `UITextField`/`UITextView` · 鸿蒙 `TextInput`——把编辑值经 `input` 事件源下发 | ❌ 未做 |
-| **B4-T3** | **修饰符 + 组件 v-model + 成员路径**：`.lazy/.trim/.number`（宿主值转换）· 组件 `v-model`（`update:modelValue`）· `v-model="o.x"`（成员写） | ❌ 未做 |
+| **B4-T2a** | **框架前置**：`ScreenRuntimeInstance.dispatchInput(nodeId, value)`——宿主编译控件值 → 查 `input` 绑定 → 跑回写 handler（`$event`=值）→ 数据变 → 下行随之。三端宿主共用、可 JSON 测 | ✅ **已交付（2026-10-10）** |
+| **B4-T2b** | **三端宿主原生输入控件**：Android `EditText`/`AppCompatEditText` · iOS `UITextField`/`UITextView` · 鸿蒙 `TextInput`——按可编辑节点创建控件、编辑值经 `dispatchInput` 下发 | ❌ 未做 |
+| **B4-T3**（原 T3） | **修饰符 + 组件 v-model + 成员路径**：`.lazy/.trim/.number`（宿主值转换）· 组件 `v-model`（`update:modelValue`）· `v-model="o.x"`（成员写） | ❌ 未做 |
 
 **诚实边界**：B4-T1 只交付**回写契约**（产物含 `input` 绑定 + 动作）；**控件未接前 `input` 事件无源 ⇒ 端上输入暂不生效**——故 `VAPOR_VMODEL_NO_INPUT_CONTROL` 诊断**保留**（如实标注缺口，不静默半支持）。
 
@@ -49,14 +50,22 @@
 
 ## 3. B4-T2 设计（宿主输入控件 · 待做）
 
-**需要**：三端宿主在按下可编辑文本节点时**唤起原生编辑控件**，编辑值经 `proteusHost` 的**输入事件源**下发 ⇒ 运行期转成 `event` 载荷 ⇒ 跑 `input` handler（`set x = $event`）⇒ 订阅链更新（下行值也随之变）。
+### B4-T2a（框架前置 · 已交付）
+`ScreenRuntimeInstance.dispatchInput(nodeId, value)`：入参**内核 id**（宿主在内核节点上建控件）→ 翻回**内容局部 id**
+→ 查 `input` 绑定（`indexEventBindings`）→ 跑 handler（`runHandlerActions`，`$event`=value）→ `refreshData()`（下行随之）。
+★不冒泡（输入事件无冒泡语义）。三端宿主共用、可 JSON 测（`screen-runtime.test.ts`：v-model ⇒ `dispatchInput` 写回源 + 下行文本更新）。
 
-**分工（与既有手势链同构）**：
-- 内核/编译期**不改**（回写契约已定）；宿主负责"编辑控件 ↔ 值"。
-- 宿主入口：新增 `proteusHost.input(nodeId, value)`（或复用 `onGesture` 加 `input` 类型）——**三端同形**。
-- 判据：真机编辑 ⇒ `set x = $event` 跑 ⇒ 数据变 ⇒ **下行文本随之变**（几何/文本可核）。
+### B4-T2b（三端原生控件 · 需要）
+**需要**：三端宿主在遇到**可编辑文本节点**时创建**原生编辑控件**（Android `EditText` · iOS `UITextField`/`UITextView` · 鸿蒙 `TextInput`），
+编辑值变化时调 `dispatchInput`（经 JS 侧 `proteusHost` 通道）。
 
-**估时**：≈ 3–5 人日（三端原生控件 + IME + 焦点/失焦 + 真机判据）。
+**分工（与既有 native-host / 手势链同构）**：
+- 内核/编译期**不改**（回写契约已定；输入节点可由 `semantic`/`kind` 或新的"editable"标记识别）。
+- 宿主：识别可编辑节点 → 建控件（复用既有 native-host View 机制 `addNativeHost`/`setNativeHostGeometry`）→ 文本/焦点/IME
+  → 编辑值经 `proteusHost.input(nodeId, value)`（新宿主入口，三端同形）→ JS 侧 `rt.instance(cur).dispatchInput(nodeId, value)`。
+- **判据**：真机编辑输入框 ⇒ 数据变（可核 `data`）+ **下行文本随之变**（几何/文本判据）。
+
+**估时**：≈ 3–5 人日（三端原生控件 + IME/焦点 + 真机判据）。
 
 ---
 

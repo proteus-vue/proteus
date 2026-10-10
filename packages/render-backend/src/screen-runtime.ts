@@ -141,6 +141,19 @@ export interface ScreenRuntimeInstance {
   /** 立即把脏槽位编成指令并交给 `applyOps`（确定性驱动入口） */
   flush(): void
   /**
+   * ★★★**B4-T2（2026-10-10）：派发一次「输入」事件**（宿主原生输入控件编辑 → 回写数据）。
+   *
+   * 【为什么单独一条（不与 dispatch 合并）】手势 `dispatch` 沿**冒泡链**跑（tap/longpress）；
+   *   而输入事件**不冒泡**、且**带值**：宿主（Android EditText / iOS UITextField / 鸿蒙 TextInput）
+   *   在编辑控件 value 变化时调本方法 ⇒ 查该节点的 `input` 绑定 ⇒ 跑 handler（`$event` = 输入值，
+   *   即 `v-model` 编译出的 `set 源 = $event`）⇒ 数据变 ⇒ `refreshData()`（下行文本随之更新）。
+   *
+   * @param nodeId 输入节点 id（内核/内容局部 id 空间——与 `dispatch` 入参同口径）
+   * @param value  输入值（`v-model` 的 `$event`；跨端由宿主归一为字符串）
+   * @returns `handled` = 是否跑了回写 handler；`fired` = 跑的 handler 名（字符串，与 `dispatch` 的节点 id 语义不同）
+   */
+  dispatchInput(nodeId: number, value: unknown): { handled: boolean; fired: string[] }
+  /**
    * ★★★**数据变更后重实例化**（2026-10-07）：用当前 `data` 重建节点树 + 重算槽位。
    *   给"`applyOps` 为 no-op"的宿主（鸿蒙一次性 VM，无驻留内核指令流）用——它们拿不到细粒度
    *   增量，只能整树重建。`content()` 之后即反映新数据。（有 applyOps 的宿主无需调本方法。）
@@ -363,6 +376,17 @@ export function createScreenRuntime(opts: CreateScreenRuntimeOptions): ScreenRun
         // ★★★页面处理器 source map（决策 #712）：把「跑了哪些 handler + 各自**模板源位置**」随派发结果带出——
         //   面板 Events 据此把"点了→跑了 h0"锚回 `page.vue:line:col`（调试生态链的数据支撑）。
         return { handled: r.fired.length > 0, fired: r.fired, firedHandlers: fired }
+      },
+      dispatchInput(nodeId, value) {
+        // ★B4-T2：查该节点的 `input` 绑定（`v-model` 编译产物）⇒ 跑 handler（`$event` = 输入值）⇒ 重建。
+        //   ★不冒泡（输入事件无冒泡语义）、不查链——直接按 nodeId 查表。
+        //   ★入参是**内核 id**（宿主在内核节点上建原生控件）⇒ 同 `dispatch` 一样翻译回**内容局部 id**。
+        const local = localIdOf(nodeId)
+        const b = byNodeEvent.get(`${local}:input`)
+        if (!b) return { handled: false, fired: [] }
+        const ok = prof.time('input', () => runHandler(b.handler, local, value))
+        if (ok) refreshData()
+        return { handled: ok, fired: ok ? [b.handler] : [] }
       },
       flush() { prof.time('flush', () => slotRt.flush()) },
       refresh() { refreshData() },
