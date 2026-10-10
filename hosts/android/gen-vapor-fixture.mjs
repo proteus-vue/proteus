@@ -346,6 +346,28 @@ const MIXED_SFC = `<template>
 const mixN = ref(4)
 </script>`
 
+/**
+ * ★★★T2 夹具（判据 ㉓，2026-10-10）：带参调用 `f(3)` + 方法内**局部变量** + **if/else**。
+ *   要点：`add(3)` 的实参降级为 `let n = 3`；方法内 `const step = n * 2` 为 `let step`；
+ *   `if (t2x.value > 10) … else …` 为 `if` 动作。判据核：**连续点两次**——
+ *   ① 第 1 次 t2x 从 0 → 6（else 臂：t2x += step=6）；② 第 2 次 6 → 12（仍 else）；
+ *   ③ 第 3 次 12 > 10 ⇒ **then 臂**：t2x = 0（★"if 真分支"因此可辨：值回退到 0）。
+ *   ★目标源用 `t2x`（专用，避免与主夹具 `padW/boxW` 的几何探针撞）；其宽度作几何锚。
+ */
+const T2_SFC = `<template>
+  <p-view style="flex-direction: column">
+    <p-view :width="t2x" @click="add(3)" style="height: 12px; background-color: #6a4bf0"></p-view>
+  </p-view>
+</template>
+
+<script setup lang="ts">
+const t2x = ref(0)
+function add(n: number) {
+  const step = n * 2
+  if (t2x.value > 10) { t2x.value = 0 } else { t2x.value += step }
+}
+</script>`
+
 /** 长列表夹具：**行高 100px**（视口 2400 ⇒ 可见 ~24 行；预加载 ±10 ⇒ 物化 ~34 行）
  *  ——判据的口径：1000 行都必须在内核树里（几何正确），但宿主只物化可见区。
  *  ★行内含 `:width` 绑定（L1 槽位）与插值文本（`{{ item.title }}`）。 */
@@ -510,6 +532,8 @@ process.stdout.write(JSON.stringify({
   directive: build(${JSON.stringify(DIRECTIVE_SFC)}, 'vapor-directive.vue'),
   // ★元素/文本混排（判据 ㉑）
   mixed: build(${JSON.stringify(MIXED_SFC)}, 'vapor-mixed.vue'),
+  // ★★T2：带参 + 局部变量 + if/else（判据 ㉓）
+  t2: build(${JSON.stringify(T2_SFC)}, 'vapor-t2.vue'),
   // ★:style 对象展开（判据 ㉒）
   styleObj: build(${JSON.stringify(STYLE_OBJ_SFC)}, 'vapor-style-obj.vue'),
   // ★★★六端 SFC 压力夹具：编译**共享 SFC 文件**（examples 页面）——与 Web/MP 同源
@@ -690,7 +714,7 @@ for (const [nm, def] of Object.entries(parsed.components)) {
       `父绑定 @${parentEmitBinds[0].event}（nodeId=${parentEmitBinds[0].nodeId}）`,
   )
 }
-fs.writeFileSync(OUT, JSON.stringify({ ...parsed.small, components: parsed.components, slot: parsed.slot, scoped: parsed.scoped, dyn: parsed.dyn, directive: parsed.directive, mixed: parsed.mixed, styleObj: parsed.styleObj }))
+fs.writeFileSync(OUT, JSON.stringify({ ...parsed.small, components: parsed.components, slot: parsed.slot, scoped: parsed.scoped, dyn: parsed.dyn, directive: parsed.directive, mixed: parsed.mixed, t2: parsed.t2, styleObj: parsed.styleObj }))
 console.log(`[gen-vapor-fixture] ✅ 组件注册表：${Object.keys(parsed.components).join(', ')}（随父产物下发）`)
 // ★P1-3 插槽分发夹具（判据 ⑮）：父产物必须带 slotFor 标记、子产物必须带 slotOutlet 标记
 //   （"生成器静默退化"是本仓重点拦的形态——标记缺了就是分发不可能发生）
@@ -815,6 +839,21 @@ console.log(`[gen-vapor-fixture] ✅ 组件注册表：${Object.keys(parsed.comp
     `[gen-vapor-fixture] ✅ 混排夹具：合成叶 ${totalLeaves} 段（静态 ${staticLeaves.map((n) => JSON.stringify(n.text)).join('/')} · ` +
       `段表 ${segLeaves.length}）· 空格叶保留`,
   )
+}
+// ★★★T2 夹具（判据 ㉓）：带参调用 ⇒ `let` 形参绑定；局部变量 ⇒ `let`；if/else ⇒ `if` 动作（含 else 臂）
+{
+  const t2acts = Object.values(parsed.t2?.handlers ?? {}).flat()
+  const hasParam = t2acts.some((a) => a.op === 'let' && a.name === 'n')
+  const hasLocal = t2acts.some((a) => a.op === 'let' && a.name === 'step')
+  const hasIf = t2acts.some((a) => a.op === 'if' && Array.isArray(a.else) && a.else.length > 0)
+  const evCount = (parsed.t2?.events ?? []).length
+  if (!parsed.t2?.ok || !hasParam || !hasLocal || !hasIf || evCount < 1) {
+    console.error(
+      `[gen-vapor-fixture] ✗ T2 夹具不完整（判据 ㉓ 将无证据）：let(n)=${hasParam} · let(step)=${hasLocal} · if/else=${hasIf} · 事件 ${evCount}`,
+    )
+    process.exit(1)
+  }
+  console.log(`[gen-vapor-fixture] ✅ T2 夹具：带参 let(n) + 局部 let(step) + if/else 动作（事件 ${evCount}）`)
 }
 // ★:style 对象展开（2026-10-03）：必须**逐键**（layout.width + paint.backgroundColor），不得有整键
 {

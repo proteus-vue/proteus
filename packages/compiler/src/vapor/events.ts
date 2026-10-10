@@ -29,7 +29,7 @@
 //   ★事件修饰符（2026-10-03 P2-3 起）：`.stop` / `.self` / `.once` **支持**（语义在运行时
 //     `slot-runtime/dispatch.ts` 的共享派发器）；`.prevent` / `.passive` / `.capture` /
 //     按键修饰符**产诊断但仍执行 handler**（没有对应语义，忽略是忠实的——见 splitModifiers）。
-import type { ExprProgram } from '@proteus-vue/slot-runtime'
+import type { ExprProgram, HandlerAction, EventHandlers } from '@proteus-vue/slot-runtime'
 import { compileExprNode, type RefNames } from './expr'
 import { parse as babelParse } from '@babel/parser'
 import { parse as sfcParse } from '@vue/compiler-sfc'
@@ -95,39 +95,11 @@ export interface EventBinding {
 }
 
 /**
- * ★★★**一个动作**（2026-10-03 · emits 批次增补 `emit`）——handler 跑起来时改什么。
+ * ★★★**一个动作**（handler 跑起来时改什么）——契约定义在**消费端** `@proteus-vue/slot-runtime`
+ *   （`handler.ts`）：编译器**发射**、运行期 `runHandlerActions` **执行**——两处 import 同一份。
+ *   ○ T1：`set`/`add`/`emit`/`nav`；★T2：`let`（局部变量）/`if`（条件动作）。
  */
-export type HandlerAction =
-  /** `source = program`（program 为纯表达式程序） */
-  | { op: 'set'; source: string; program: ExprProgram }
-  /** `source += program`（自增/自减/复合赋值统一归到这里；program 求值为数值） */
-  | { op: 'add'; source: string; program: ExprProgram }
-  /**
-   * ★★★**`$emit('name', payload?)`**（P1-3 emits）——子组件向父级发一条组件事件。
-   *
-   * 【语义（与 Vue 对齐的收窄形态）】payload 表达式在**子组件作用域**求值（props/data/父级 read），
-   *   结果作为父级 handler 里的 `$event`；父级绑定（`@name="..."`）按**边界节点 + 事件名**查表，
-   *   命中就跑其动作表。**不冒泡**（组件事件是直接通知——Vue 语义）。
-   * 【诚实边界】本版只支持模板里的 `$emit(...)`（script 里的 `defineEmits` 返回值不执行——
-   *   移动端不跑 script，见 entry-vapor 的分工）；payload 最多一个实参（Vue 的多实参形态为
-   *   后续批次，编译期诊断）。
-   */
-  | { op: 'emit'; event: string; program?: ExprProgram }
-  /**
-   * ★★★**导航动作 `$nav('目标屏')`**（B1 · 2026-10-09）——运行期把「导航」当一等动作。
-   *
-   * 【为什么需要（App 壳统一运行期）】Vapor 动作集原只有 set/add/emit（数据变更），
-   *   而「点首页某条 → 跳某屏」是**导航**、不是数据变更 ⇒ 无对等动作时模板里点不动。
-   *   ⇒ 增 `nav`：handler 跑它时由**运行期/宿主**执行导航（App = `router.push(target)`；
-   *     Web/MP = 原生路由）——与 `<navigator>` 同语义（本动作是其运行期形态）。
-   * 【目标形态】静态字符串（屏名/路由名）——动态目标（`$nav(expr)`）为后续批次（编译期诊断）。
-   */
-  | { op: 'nav'; target: string }
-
-/** handler 名 → 动作列表（按序执行 ⇒ "先算后写"的顺序语义保留） */
-export interface EventHandlers {
-  [handler: string]: HandlerAction[]
-}
+export type { HandlerAction, EventHandlers } from '@proteus-vue/slot-runtime'
 
 /**
  * ★★★**生命周期绑定**（P1-3 生命周期，2026-10-03）——模板 vnode 钩子 `@vue:mounted` 的编译产物。
@@ -240,7 +212,7 @@ function splitModifiers(rawName: string): { event: string; stop: boolean; self: 
  *   `count` 本身就是值 ⇒ 编译期把**已知 ref 源**上的 `.value` 解包为裸源（见 `expr.ts` 的 refNames）。
  */
 interface BNode { type: string; [k: string]: unknown }
-interface MethodDef { params: number; body: BNode[]; line: number; isAsync: boolean }
+interface MethodDef { params: string[]; body: BNode[]; line: number; isAsync: boolean }
 type MethodTable = Map<string, MethodDef>
 interface StmtCtx { methods: MethodTable; refNames: RefNames }
 
@@ -265,7 +237,7 @@ function collectScriptMethods(scriptContent: string): { methods: MethodTable; re
     if (st.type === 'FunctionDeclaration' && (st.id as BNode | undefined)?.name) {
       const body = (st.body as BNode | undefined)?.type === 'BlockStatement' ? ((st.body as BNode).body as BNode[] ?? []) : []
       methods.set(String((st.id as BNode).name), {
-        params: ((st.params as BNode[]) ?? []).length,
+        params: paramNames(st.params as BNode[]),
         body,
         line: (st.loc as { start?: { line?: number } })?.start?.line ?? 0,
         isAsync: Boolean(st.async),
@@ -286,7 +258,7 @@ function collectScriptMethods(scriptContent: string): { methods: MethodTable; re
           const ib = init.body as BNode
           const body = ib?.type === 'BlockStatement' ? ((ib.body as BNode[]) ?? []) : [{ type: 'ExpressionStatement', expression: ib }]
           methods.set(name, {
-            params: ((init.params as BNode[]) ?? []).length,
+            params: paramNames(init.params as BNode[]),
             body,
             line: (st.loc as { start?: { line?: number } })?.start?.line ?? 0,
             isAsync: Boolean(init.async),
@@ -296,6 +268,11 @@ function collectScriptMethods(scriptContent: string): { methods: MethodTable; re
     }
   }
   return { methods, refNames }
+}
+
+/** 取形参名（只认简单标识符；解构/默认值/rest 返回占位 '' 以触发"带参数形态"诊断） */
+function paramNames(params: BNode[]): string[] {
+  return (params ?? []).map((p) => (p.type === 'Identifier' && typeof p.name === 'string' ? String(p.name) : ''))
 }
 
 /** 赋值/自增**目标**的源名：`x` 或 `x.value`（ref 形态）→ `x`；其余返回 null（产诊断） */
@@ -341,22 +318,51 @@ function specialCallActions(e: BNode, diag: (m: string, h?: string) => void, ctx
   return null
 }
 
-/** 内联一个已注册方法（方法体降级）。带形参（$event/实参）与自递归为明确边界——产诊断，不静默。 */
-function inlineMethod(name: string, diag: (m: string, h?: string) => void, ctx: StmtCtx, depth: number): HandlerAction[] {
+/**
+ * 内联一个已注册方法（方法体降级）。★T2：支持**带形参**——形参在编译期降级为 `let` 绑定动作
+ *   （实参为 `<纯表达式>`，在**调用点作用域**求值）；自递归为明确边界——产诊断，不静默。
+ *   @param argNodes 调用处实参 AST（裸引用无参传空数组）；形参 > 实参 ⇒ 多余形参绑 `undefined` 之外
+ *     仍**拒**（实参个数须与形参一致，避免"以为传了其实没传"的静默）。
+ */
+function inlineMethod(name: string, argNodes: BNode[], diag: (m: string, h?: string) => void, ctx: StmtCtx, depth: number): HandlerAction[] {
   const m = ctx.methods.get(name)
   if (!m) return []
   if (depth > 8) {
     diag(`方法 ${name}() 递归展开过深（可能是自调用/循环引用）`, '请拆分方法或改用内联写法')
     return []
   }
-  if (m.params > 0) {
-    diag(
-      `方法 ${name}() 带形参（$event / 实参）——带参调用为后续批次`,
-      '把参数在模板里先算好（内联表达式），或把该方法改写为无参方法',
-    )
+  if (m.isAsync || m.body.some((s) => s.type === 'AwaitExpression')) {
+    // async/await 有**时序/微任务**语义（本运行期同步执行动作表，不建模 promise）⇒ 明确拒绝，不静默半支持。
+    diag(`方法 ${name}() 是 async / 含 await——本版不支持异步 handler`, '把异步逻辑移出事件处理器（如用 watch 派生），或改为同步方法')
     return []
   }
-  return degradeStatements(m.body, diag, ctx, depth + 1)
+  // ★T2：形参绑定（`let p = <实参>`）——先于方法体动作。
+  const bindings: HandlerAction[] = []
+  if (m.params.length > 0) {
+    if (m.params.some((p) => p === '')) {
+      diag(`方法 ${name}() 的形参含解构/默认值/rest——本版只支持简单形参`, '把形参改成简单标识符，或在调用点先算好')
+      return []
+    }
+    if (m.params.length !== argNodes.length) {
+      diag(
+        `方法 ${name}() 需要 ${m.params.length} 个实参，调用处给了 ${argNodes.length} 个`,
+        `调用处补足实参（如 @click="${name}(…)"），或把方法改成无参`,
+      )
+      return []
+    }
+    for (let i = 0; i < m.params.length; i++) {
+      const c = compileExprNode(argNodes[i], ctx.refNames)
+      if (!c.ok) {
+        diag(`方法 ${name}() 的第 ${i + 1} 个实参表达式不支持：${c.unsupported}`, '实参须为纯求值表达式（成员访问/算术/比较/逻辑/三元）')
+        return []
+      }
+      bindings.push({ op: 'let', name: m.params[i]!, program: c.program })
+    }
+  } else if (argNodes.length > 0) {
+    diag(`方法 ${name}() 无参，但调用处传了实参`, `去掉实参（写 @click="${name}"）`)
+    return []
+  }
+  return [...bindings, ...degradeStatements(m.body, diag, ctx, depth + 1)]
 }
 
 /** 降级**一条表达式语句**（内联模板语句 / 方法体语句共用） */
@@ -394,8 +400,8 @@ function degradeExpr(e: BNode, diag: (m: string, h?: string) => void, ctx: StmtC
     return []
   }
 
-  // ★方法引用（裸标识符）→ 内联方法体
-  if (e.type === 'Identifier' && ctx.methods.has(String(e.name))) return inlineMethod(String(e.name), diag, ctx, depth)
+  // ★方法引用（裸标识符）→ 内联方法体（无实参）
+  if (e.type === 'Identifier' && ctx.methods.has(String(e.name))) return inlineMethod(String(e.name), [], diag, ctx, depth)
   if (e.type === 'Identifier') {
     diag(
       `handler 里的 \`${String(e.name)}\` 不是本组件方法（本版不支持裸标识符 handler）`,
@@ -404,14 +410,10 @@ function degradeExpr(e: BNode, diag: (m: string, h?: string) => void, ctx: StmtC
     return []
   }
 
-  // ★方法调用 `name()`（无参）→ 内联方法体；带实参为后续批次（明确诊断，不静默）
+  // ★方法调用 `name(...)` → 内联方法体（★T2：带实参——实参降级为 `let` 形参绑定）
   if (e.type === 'CallExpression' && (e.callee as BNode | undefined)?.type === 'Identifier' && ctx.methods.has(String((e.callee as BNode).name))) {
     const name = String((e.callee as BNode).name)
-    if (((e.arguments as BNode[]) ?? []).length > 0) {
-      diag(`方法调用带实参（${name}(…)）——带参调用为后续批次`, '在模板里先把参数算好，或改用内联写法；无参方法可直接写 `@click="name"`')
-      return []
-    }
-    return inlineMethod(name, diag, ctx, depth)
+    return inlineMethod(name, (e.arguments as BNode[]) ?? [], diag, ctx, depth)
   }
 
   if (e.type === 'CallExpression') {
@@ -436,20 +438,60 @@ function degradeExpr(e: BNode, diag: (m: string, h?: string) => void, ctx: StmtC
   return []
 }
 
-/** 把**语句序列**逐条降级为动作（多语句 → 多动作，按序执行——"先算后写"语义保留） */
+/** 把**语句序列**逐条降级为动作（多语句 → 多动作，按序执行——"先算后写"语义保留）。
+ *  ★T2 扩展：`if (cond) {…} else {…}` → `{op:'if',…}`；`const y = <纯表达式>` → `{op:'let',…}`。 */
 function degradeStatements(stmts: BNode[], diag: (m: string, h?: string) => void, ctx: StmtCtx, depth: number): HandlerAction[] {
   const out: HandlerAction[] = []
   for (const st of stmts) {
-    if (st.type !== 'ExpressionStatement') {
-      diag(
-        `方法体含暂不支持的语句（${st.type === 'IfStatement' ? 'if/else' : String(st.type)}）`,
-        "本版支持：赋值 / 自增自减 / 复合赋值 / `$emit(...)` / `$nav('屏')`；if/局部变量/循环为后续批次",
-      )
+    // ① 表达式语句（自增/赋值/复合/$emit/$nav/调用）——T1 主干
+    if (st.type === 'ExpressionStatement') {
+      out.push(...degradeExpr(st.expression as BNode, diag, ctx, depth))
       continue
     }
-    out.push(...degradeExpr(st.expression as BNode, diag, ctx, depth))
+    // ② ★T2 **if / else**：两臂各自降级为动作子列表（条件为纯表达式）
+    if (st.type === 'IfStatement') {
+      const cond = compileExprNode(st.test, ctx.refNames)
+      if (!cond.ok) {
+        diag(`if 条件表达式不支持：${cond.unsupported}`, '条件须为纯求值表达式（成员访问/比较/逻辑）')
+        continue
+      }
+      const then = degradeStatements(blockBody(st.consequent as BNode | undefined), diag, ctx, depth)
+      const alt = st.alternate ? degradeStatements(blockBody(st.alternate as BNode | undefined), diag, ctx, depth) : undefined
+      out.push({ op: 'if', cond: cond.program, then, ...(alt && alt.length ? { else: alt } : {}) })
+      continue
+    }
+    // ③ ★T2 **局部变量**：`const y = <纯表达式>` / `let y = <纯表达式>` → `{op:'let'}`
+    if (st.type === 'VariableDeclaration') {
+      for (const d of (st.declarations as BNode[]) ?? []) {
+        const id = d.id as BNode | undefined
+        const init = d.init as BNode | undefined
+        if (id?.type !== 'Identifier' || !init) {
+          diag('局部变量须为「简单名 = 纯表达式」（不支持解构 / 无初值 / 多个声明混合）', '例：const n = count * 2')
+          continue
+        }
+        const c = compileExprNode(init, ctx.refNames)
+        if (!c.ok) {
+          diag(`局部变量 \`${String(id.name)}\` 的初值表达式不支持：${c.unsupported}`, '初值须为纯求值表达式')
+          continue
+        }
+        out.push({ op: 'let', name: String(id.name), program: c.program })
+      }
+      continue
+    }
+    // ④ 其余语句一律**明确诊断**（守封闭集：循环 / async / 任意 JS 不做）
+    diag(
+      `方法体含暂不支持的语句（${st.type === 'ForStatement' || st.type === 'WhileStatement' ? '循环' : String(st.type)}）`,
+      "本版支持：赋值 / 自增自减 / 复合赋值 / `$emit(...)` / `$nav('屏')` / `if/else` / 局部变量；循环 / async 为明确不做",
+    )
   }
   return out
+}
+
+/** 取语句的语句块体（`BlockStatement` → 其 body；单条语句 → [它]） */
+function blockBody(node: BNode | undefined): BNode[] {
+  if (!node) return []
+  if (node.type === 'BlockStatement') return (node.body as BNode[]) ?? []
+  return [node]
 }
 
 /**

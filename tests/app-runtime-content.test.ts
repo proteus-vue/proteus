@@ -99,4 +99,33 @@ function handleTap() { count.value++ }
     const acts = Object.values(page.handlers as Record<string, Array<{ op?: string }>>).flat()
     expect(acts.some((a) => a.op === 'add'), 'handleTap 的 count.value++ 降级为 add 动作').toBe(true)
   })
+
+  it('★④ T2：带参调用 + 方法内 if/局部变量 ⇒ App 产物**真的**编出 let/if 动作（决策 #740 T2）', async () => {
+    // 【回归锁】T2 新增带参/形参绑定/局部变量/if-else——走**真实 App 管线**断言其降级为 let/if 动作。
+    const dir = makeTempProject(
+      `<template>
+  <view class="box" @tap="add(3)">
+    <text>{{ count }}</text>
+  </view>
+</template>
+<script setup lang="ts">
+import { ref } from 'vue'
+const count = ref(0)
+function add(n: number) {
+  const step = n * 2
+  if (count.value > 10) { count.value = 0 } else { count.value += step }
+}
+</script>
+`,
+    )
+    const r = await buildAppRuntimeContent(dir, 'android')
+    expect(r.ok).toBe(true)
+    const art = JSON.parse(fs.readFileSync(r.outFile, 'utf-8'))
+    const page = art['idx']
+    expect(page.events.length, '带参方法调用必须产出事件').toBeGreaterThanOrEqual(1)
+    const acts = Object.values(page.handlers as Record<string, Array<{ op?: string }>>).flat()
+    expect(acts.some((a) => a.op === 'let' && (a as { name?: string }).name === 'n'), '形参 n 绑为 let').toBe(true)
+    expect(acts.some((a) => a.op === 'let' && (a as { name?: string }).name === 'step'), '局部变量 step 降级为 let').toBe(true)
+    expect(acts.some((a) => a.op === 'if' && (a as { else?: unknown[] }).else), 'if/else 降级为 if 动作（含 else 臂）').toBe(true)
+  })
 })

@@ -101,7 +101,7 @@ describe('★P1-3 emits · 端到端（$event 载荷求值 + 父级落点）', (
     for (const e of parent.events) if (e.componentEmit) emitIndex.set(`${e.nodeId}:${e.event}`, e.handler)
     const runParent = (name: string, payload: unknown): void => {
       for (const a of parent.handlers[name] ?? []) {
-        if (a.op === 'emit' || a.op === 'nav') continue
+        if (a.op !== 'set' && a.op !== 'add') continue // 只处理 set/add（let/if/emit/nav 跳过）
         const v = evalExprLocal(a.program, { $event: payload, ...store })
         store[a.source] = a.op === 'set' ? v : (Number(store[a.source]) || 0) + (Number(v) || 0)
       }

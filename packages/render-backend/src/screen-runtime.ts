@@ -27,6 +27,7 @@ import {
   indexEventBindings,
   createDispatchState,
   evalExpr,
+  runHandlerActions,
 } from '@proteus-vue/slot-runtime'
 import type {
   LayoutTemplate,
@@ -35,6 +36,7 @@ import type {
   EventIndex,
   DispatchState,
   EvalContext,
+  HandlerAction,
 } from '@proteus-vue/slot-runtime'
 // ★★★运行期阶段耗时自采样（CPU Profiler · 决策 #715）——dev-only 的框架级归因
 import { createRuntimeProfiler, NULL_PROFILER, type RuntimeProfiler, type ProfEntry } from './runtime-profiler'
@@ -44,7 +46,8 @@ export interface ScreenRuntimeArtifact {
   tpl: LayoutTemplate
   table: SubscriptionTable
   events: EventBinding[]
-  handlers: Record<string, Array<{ op: string; source?: string; program?: unknown; event?: string }>>
+  /** handler 动作表（★T2：含 `let`/`if`；见 slot-runtime 的 `HandlerAction`） */
+  handlers: Record<string, HandlerAction[]>
   data: Record<string, unknown>
   /**
    * ★★**源文件路径**（决策 #713 · 仅供 dev）：该屏对应的 `.vue`（相对项目根）——缺省省略（release 无）。
@@ -215,47 +218,43 @@ export function createScreenRuntime(opts: CreateScreenRuntimeOptions): ScreenRun
     /** 本屏运行期 handler 错误（排空式；宿主/dev server 取走即清——面板「错误」页消费） */
     const handlerErrors: string[] = []
 
-    /** 跑一个 handler（动作表：set/add/emit；emit 本版无去处 ⇒ 如实忽略） */
+    /**
+     * 跑一个 handler（★T2：动作表执行**下沉到 slot-runtime 的 `runHandlerActions`**——App 三端唯一实现）。
+     *
+     * 【保留的既有语义】① `$emit` 本版无去处 ⇒ **如实 note**（不静默）；② `$nav` 交 `opts.navigate`；
+     *   ③ **表达式求值出错** ⇒ 记 `handlerErrors` + `onError` 锚回**模板源行**（决策 #712），且
+     *   **不炸整次手势**（其余动作照常）；④ CPU Profiler（#715）对整体计时。
+     * 【T2 新增】`let`/`if` 由执行器用**局部作用域 + 递归**承接（$event 也由执行器 `event` 注入）。
+     */
     function runHandler(handlerName: string, _nodeId: number, payload?: unknown): boolean {
       const acts = art.handlers[handlerName]
       if (!acts) return false
-      for (const a of acts) {
-        if (a.op === 'emit') { note(`[screen-runtime] ${name}: handler「${handlerName}」含 $emit——本版无去处（已忽略）`); continue }
-        if (a.op === 'nav') {
-          const tgt = (a as { target?: string }).target
-          if (tgt && opts.navigate) opts.navigate(tgt)
-          else note(`[screen-runtime] ${name}: $nav('${tgt ?? ''}') 无 navigate 出口（未装配）`)
-          continue
-        }
-        const ctx2: EvalContext = { read: (n: string) => (n === '$event' ? payload : data[n]) }
-        // ★★页面处理器「源」定位（决策 #712）：handler 执行**出错时**把**handler 名 + 源表达式**
-        //   （`a.source` = 编译期保留的模板表达式原文，如 `count = count + 1`）+ 节点 id + **模板行** 一并报出——
-        //   否则端上栈只有解释器内部、**定位不到是模板哪一句**（"调试生态链没数据支撑"）。
-        // ★★CPU Profiler（决策 #715）：给**每个 handler 的表达式求值**计时 ⇒ 归因"哪个 @click 最贵"。
-        let v: unknown
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          v = prof.time(`handler「${handlerName}」`, () => evalExpr(a.program as any, ctx2 as any), locByHandler.get(handlerName))
-        } catch (e) {
-          const msg = String((e as Error)?.message ?? e)
-          const loc = locByHandler.get(handlerName)
-          const at = loc ? `（模板 ${name}.vue:${loc.line}:${loc.column}）` : ''
-          const detail = `[screen-runtime] ${name}: handler「${handlerName}」节点 #${_nodeId}${at} 表达式 \`${a.source ?? '(?)'}\` 求值失败：${msg}`
-          // ★不静默、也不炸掉整次手势：记为错误（面板可见）+ note，其余动作/其余 handler 照常——
-          //   一个坏表达式不该让页面"点了完全没反应"（那正是本项要消灭的形态）。
-          handlerErrors.push(detail)
-          if (handlerErrors.length > 50) handlerErrors.shift()
-          note(detail)
-          opts.onError?.(detail)
-          continue
-        }
-        if (!a.source) continue
-        if (a.op === 'add') {
-          const cur = data[a.source]
-          data[a.source] = (typeof cur === 'number' ? cur : 0) + (typeof v === 'number' ? v : 0)
-        } else if (a.op === 'set') {
-          data[a.source] = v
-        }
+      const ctx: Parameters<typeof runHandlerActions>[1] = {
+        read: (n: string) => data[n],
+        write: (n: string, v: unknown) => { data[n] = v },
+        event: payload,
+      }
+      try {
+        prof.time(`handler「${handlerName}」`, () => {
+          runHandlerActions(acts, ctx, {
+            onEmit: () => note(`[screen-runtime] ${name}: handler「${handlerName}」含 $emit——本版无去处（已忽略）`),
+            onNav: (tgt) => {
+              if (tgt && opts.navigate) opts.navigate(tgt)
+              else note(`[screen-runtime] ${name}: $nav('${tgt}') 无 navigate 出口（未装配）`)
+            },
+          })
+        }, locByHandler.get(handlerName))
+      } catch (e) {
+        // ★不静默、也不炸掉整次手势：记为错误（面板可见）+ note，其余 handler 照常——
+        //   一个坏表达式不该让页面"点了完全没反应"（那正是本项要消灭的形态）。
+        const msg = String((e as Error)?.message ?? e)
+        const loc = locByHandler.get(handlerName)
+        const at = loc ? `（模板 ${name}.vue:${loc.line}:${loc.column}）` : ''
+        const detail = `[screen-runtime] ${name}: handler「${handlerName}」节点 #${_nodeId}${at} 动作执行失败：${msg}`
+        handlerErrors.push(detail)
+        if (handlerErrors.length > 50) handlerErrors.shift()
+        note(detail)
+        opts.onError?.(detail)
       }
       return true
     }

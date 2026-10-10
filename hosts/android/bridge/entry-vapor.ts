@@ -37,11 +37,11 @@
 //
 // 【产物】hosts/android/bridge/dist/bundle-vapor.js（IIFE，QuickJS 直接 eval）
 // 【调用】Java：`__proteusVaporRun(argsJson)`（见 MainActivity 的 `vapor` 通路）
-import { instantiateTemplate, ListRegistry, PropKeyTable, StringPool, SlotRuntime, VaporRuntime, decodeOps, evalExpr, OpCode } from '@proteus-vue/slot-runtime'
+import { instantiateTemplate, ListRegistry, PropKeyTable, StringPool, SlotRuntime, VaporRuntime, decodeOps, evalExpr, OpCode, runHandlerActions } from '@proteus-vue/slot-runtime'
 // ★★P2-3（2026-10-03）：事件派发语义（含修饰符 .stop/.self/.once）下沉到共享实现——
 //   本桥不再内联"链序 + 修饰符"逻辑（iOS/Harmony 接同一份 ⇒ 不会漂移）
 import { dispatchGesture, indexEventBindings, createDispatchState, directiveShouldPlay } from '@proteus-vue/slot-runtime'
-import type { EventBinding, EventIndex, DispatchState } from '@proteus-vue/slot-runtime'
+import type { EventBinding, EventIndex, DispatchState, HandlerAction } from '@proteus-vue/slot-runtime'
 // ★★★A/B 对照（2026-10-01）：**同一份 SFC 的第二条路**——Vue 运行时渲染。
 //   `abRender` 由构建期用 **@vue/compiler-sfc** 从同一份 SFC 编出（见 gen-vapor-fixture.mjs）。
 import { createAppRenderer } from '@proteus-vue/renderer-app'
@@ -373,6 +373,20 @@ interface VaporReport {
     texts: string[]
     leaves: number
     geom: Array<{ id: number; text: string; width: number }>
+  }
+  /**
+   * ★★★**T2 探针**（2026-10-10 · 判据 ㉓）——带参调用 + 局部变量 + if/else 的**动作在端上真执行**：
+   *   用**共享执行器** `runHandlerActions` 连跑该 handler 3 次（t2x 初值 0），逐次读**内核几何宽度**：
+   *     ① else 臂：0 → 6（+= step=6）；② else：6 → 12；③ then 臂：12 > 10 ⇒ 0。
+   *   `widths` 即三次 tap 后的内核宽度读数（几何真值，不自报）——证明 let(形参)/let(局部)/if 都生效。
+   */
+  t2_probe: {
+    /** 目标节点 id（t2x 的宽度绑定节点） */
+    nodeId: number
+    /** 逐次执行后的内核宽度（[初始, 第1次, 第2次, 第3次]） */
+    widths: number[]
+    /** 逐次源值（t2x 快照） */
+    values: number[]
   }
   /**
    * ★★★**`:style` 对象展开探针**（2026-10-03）——两条通道各自的真值：
@@ -1735,7 +1749,7 @@ function runShort(args: VaporArgs): string {
     tpl_nodes: 0, tpl_ok: false, sub_l1: 0, sub_l0: 0, sub_l1_rate: 0, sub_sources: [],
     inst_ms: 0, inst_nodes: 0, inst_reused_ids: 0, inst_allocated_ids: 0, inst_rows: 0,
     inst_values_filled: 0, inst_virtual_rows: 0, inst_text_filled: 0, inst_width_filled: 0,
-    mix_text_probe: [], text_probe_rounds: [], gate_rounds: [], gate_text_nodes: [], once_node_id: -1, memo_node_id: -1, expr_probe: [], transition_started: 0, tpl_transition: [], component_mounts: 0, component_nodes: 0, component_kid_probe: {}, slot_probe: { texts: [], rects: [], fills: [], markers_left: -1 }, emit_probe: { emits: [], parent_source_after: undefined, geom_before: -1, geom_after: -1 }, scoped_probe: { texts: [], anchor_id: -1, anchor_width_field: -1, anchor_width_rect: -1, destr_text: '', destr_width_field: -1, destr_width_rect: -1 }, lifecycle_probe: { bindings: [], ran_handler: '', changed_sources: [], ops_bytes: 0, applied: 0, anchor_id: -1, geom_before: -1, geom_after: -1 }, dyn_probe: { texts: [], mounts: [], geom: [], dropped: -1, notes: [] }, directive_probe: { nodes: [], rounds: [], plays: [] }, mixed_probe: { texts: [], leaves: 0, geom: [] }, styleobj_probe: { anchor_id: -1, width_before: -1, width_after: -1, kernel_applied: 0, patch_calls: [] },
+    mix_text_probe: [], text_probe_rounds: [], gate_rounds: [], gate_text_nodes: [], once_node_id: -1, memo_node_id: -1, expr_probe: [], transition_started: 0, tpl_transition: [], component_mounts: 0, component_nodes: 0, component_kid_probe: {}, slot_probe: { texts: [], rects: [], fills: [], markers_left: -1 }, emit_probe: { emits: [], parent_source_after: undefined, geom_before: -1, geom_after: -1 }, scoped_probe: { texts: [], anchor_id: -1, anchor_width_field: -1, anchor_width_rect: -1, destr_text: '', destr_width_field: -1, destr_width_rect: -1 }, lifecycle_probe: { bindings: [], ran_handler: '', changed_sources: [], ops_bytes: 0, applied: 0, anchor_id: -1, geom_before: -1, geom_after: -1 }, dyn_probe: { texts: [], mounts: [], geom: [], dropped: -1, notes: [] }, directive_probe: { nodes: [], rounds: [], plays: [] }, mixed_probe: { texts: [], leaves: 0, geom: [] }, t2_probe: { nodeId: -1, widths: [], values: [] }, styleobj_probe: { anchor_id: -1, width_before: -1, width_after: -1, kernel_applied: 0, patch_calls: [] },
     mount_ms: 0, mount_nodes: 0,
     updates_run: 0, ops_bytes: 0, ops_ms: 0, apply_ms: 0, text_synced_total: 0, update_evidence: [], geom_probe: [], channels: [],
     ev_bindings: 0, ev_handlers: 0, ev_modifiers: 0, taps: 0, tap_evidence: [],
@@ -1984,7 +1998,7 @@ function runShort(args: VaporArgs): string {
      *   是**语句**（表达式编译器明确拒绝赋值），编译成 `{op:'set'|'add', source, program}`
      *   之后设备端只做**执行**（`evalExpr` 求值 + 写数据）——无 eval、无字符串解析。
      */
-    const handlers = (artifacts as unknown as { handlers?: Record<string, Array<{ op: string; source: string; program: unknown }>> }).handlers ?? {}
+    const handlers = (artifacts as unknown as { handlers?: Record<string, HandlerAction[]> }).handlers ?? {}
     const events = (artifacts as unknown as { events?: EventBinding[] }).events ?? []
     rep.ev_bindings = events.length
     rep.ev_handlers = Object.keys(handlers).length
@@ -2017,24 +2031,21 @@ function runShort(args: VaporArgs): string {
     const dispatchState = createDispatchState()
     rep.ev_modifiers = events.filter((e) => e.stop || e.self || e.once).length
 
-    /** 跑一个 handler：按序执行动作（先算后写 ⇒ 顺序语义保留）★`$event` 可被载荷注入 */
+    /** 跑一个 handler：按序执行动作（先算后写 ⇒ 顺序语义保留）★`$event` 可被载荷注入。
+     *  ★T2：执行**下沉到共享执行器** `runHandlerActions`（与 `screen-runtime` 同一实现）——
+     *   支持 `let`（局部变量/形参绑定）/`if`（条件动作）；仍无 eval（动作已编译为纯数据）。 */
     const runHandler = (name: string, _nodeId?: number, payload?: unknown): boolean => {
       const acts = handlers[name]
       if (!acts) return false
-      for (const a of acts) {
-        if ((a as { op: string }).op === 'emit') continue // 顶层 handler 里的 $emit 无处可去（如实 note，见 runChildHandler）
-        const ctx2 = { read: (n: string) => (n === '$event' ? payload : data[n]) }
-        const v = evalExpr(a.program as never, ctx2 as never)
-        const cur = data[a.source]
-        if (a.op === 'set') {
-          data[a.source] = v
-        } else {
-          // add：数值累加（非数以 0 起——与 JS 的 `+` 语义不同，这里刻意收窄到数值：见 compileEvents 的形态说明）
-          const base = typeof cur === 'number' && Number.isFinite(cur) ? cur : 0
-          const delta = typeof v === 'number' && Number.isFinite(v) ? v : 0
-          data[a.source] = base + delta
-        }
-      }
+      runHandlerActions(
+        acts,
+        { read: (n: string) => data[n], write: (n: string, v: unknown) => { data[n] = v }, event: payload },
+        {
+          // 顶层 handler 里的 $emit 无处可去（如实 note，见 runChildHandler）
+          onEmit: () => { /* 顶层事件处理器里的 $emit 无去处——与既有行为一致（跳过） */ },
+          onNav: (tgt) => notes.push(`$nav('${tgt}')：vapor 夹具未接导航出口（已忽略）`),
+        },
+      )
       return true
     }
     /**
@@ -2888,6 +2899,73 @@ function runShort(args: VaporArgs): string {
         } catch { /* 同上：重挂失败 ⇒ 判据按 host_nodes 不符判红 */ }
       } else {
         notes.push('混排探针：产物无 mixed 段（夹具未覆盖 ⇒ 判据 ㉑ 按缺失处理）')
+      }
+    }
+
+    /* ═══════════ ★★★T2 探针（2026-10-10 · 判据 ㉓）：带参 / 局部变量 / if-else ═══════════
+     *
+     * 【要证明什么】T2 新增的动作形态在**端上真执行**（编译期降级 → 运行期共享执行器
+     *   `runHandlerActions`）——不是"编出来了"，而是"**点了内核几何真的变**"。
+     *   t2x 初值 0，`add(3)` 方法体 `const step = n*2; if (t2x>10) t2x=0 else t2x+=step`：
+     *   第 1/2 次走 else（0→6→12），第 3 次 t2x>10 走 **then**（12→0）——三步覆盖形参 let +
+     *   局部变量 let + if 两臂。**逐次读内核宽度**（几何真值，见 readRects），不信任何自报。
+     *   ★与 ⑮/⑰/㉑/㉒ 同规：独立挂 t2 夹具树 → 跑动作 → 读几何 → 结束后重挂主树。
+     */
+    {
+      const t2Art = (artifacts as { t2?: { tpl: LayoutTemplate; table: SubscriptionTable; handlers?: Record<string, HandlerAction[]> } }).t2
+      if (t2Art?.tpl?.ok) {
+        const t2data: Record<string, unknown> = { t2x: 0 }
+        const t2Reg = new ListRegistry()
+        const t2Inst = instantiateTemplate(t2Art.tpl, {
+          viewport: args.viewport,
+          read: (n) => t2data[n],
+          table: t2Art.table,
+          registry: t2Reg,
+        })
+        // 运行时（订阅驱动）——动作改 t2x → relink → flush → applyOps → 内核重排
+        const t2Captured: number[][] = []
+        const t2SlotRt = new SlotRuntime(new PropKeyTable(), new StringPool(), (bytes) => t2Captured.push(Array.from(bytes)))
+        const t2Vapor = new VaporRuntime(t2Art.table, t2SlotRt, VaporRuntime.buildEvaluators(t2Art.table.evaluators), t2Reg)
+        const t2Ctx = { read: (n: string) => t2data[n] }
+        t2Vapor.load(t2Ctx, () => { /* 源变化靠显式 relink */ })
+        const t2HandlerName = Object.keys(t2Art.handlers ?? {})[0] ?? ''
+        const t2Acts = t2HandlerName ? t2Art.handlers![t2HandlerName]! : []
+        // t2x 的宽度绑定节点（订阅表里 propKey layout.width 的槽位 nodeId）
+        const t2NodeId = (t2Art.table as unknown as { sources?: Array<{ slots?: Array<{ nodeId?: number; propKey?: string }> }> }).sources
+          ?.flatMap((s) => s.slots ?? []).find((sl) => sl.propKey === 'layout.width' || sl.propKey === 'style.width')?.nodeId ?? -1
+        try {
+          const mOut = JSON.parse(proteusHost.mount(JSON.stringify({ viewport: t2Inst.viewport, nodes: t2Inst.nodes }))) as { ok?: boolean; error?: string }
+          if (mOut.ok === true && t2Acts.length > 0) {
+            const readW = (): number => {
+              try {
+                const rr = JSON.parse(proteusHost.readRects()) as { rects?: Record<string, { width?: number }> }
+                return rr.rects?.[String(t2NodeId)]?.width ?? -1
+              } catch { return -1 }
+            }
+            const widths: number[] = [readW()]
+            const values: number[] = [Number(t2data.t2x)]
+            for (let i = 0; i < 3; i++) {
+              runHandlerActions(t2Acts, { read: (n) => t2data[n], write: (n, v) => { t2data[n] = v } })
+              t2Captured.length = 0
+              t2Vapor.relink(t2Ctx)
+              t2SlotRt.flush()
+              const payload = t2Captured.length ? t2Captured[t2Captured.length - 1]! : []
+              if (payload.length > 0) { try { proteusHost.applyOps(JSON.stringify(payload)) } catch { /* 读数照常 */ } }
+              widths.push(readW())
+              values.push(Number(t2data.t2x))
+            }
+            rep.t2_probe = { nodeId: t2NodeId, widths, values }
+          } else {
+            notes.push(`T2 探针：mount/handler 缺失（mount.ok=${mOut.ok} handler=${t2HandlerName}）——判据 ㉓ 按缺失处理`)
+          }
+        } catch (e) {
+          notes.push(`T2 探针异常：${String((e as Error)?.message ?? e)}`)
+        }
+        try {
+          proteusHost.mount(JSON.stringify({ viewport: inst.viewport, nodes: inst.nodes }))
+        } catch { /* 重挂失败 ⇒ 判据按 host_nodes 不符判红 */ }
+      } else {
+        notes.push('T2 探针：产物无 t2 段（夹具未覆盖 ⇒ 判据 ㉓ 按缺失处理）')
       }
     }
 

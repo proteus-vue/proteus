@@ -67,6 +67,9 @@ export type { SourceSubscriber, EvalContext, LoadResult } from './runtime'
 // ★P2-3：手势派发语义（链序 + 事件修饰符 .stop/.self/.once）——各端宿主共用的唯一实现
 export { dispatchGesture, indexEventBindings, createDispatchState } from './dispatch'
 export type { EventBinding, EventIndex, DispatchState, DispatchResult } from './dispatch'
+// ★★★T1/T2：**事件动作表契约 + 执行器**（screen-runtime 与 entry-vapor 共用唯一实现；含 T2 的 `let`/`if`）
+export { runHandlerActions } from './handler'
+export type { HandlerAction, EventHandlers, HandlerRunContext, HandlerRunHooks } from './handler'
 // ★★★P3-5：宿主指令注册表（自定义指令的**闭集**落地——编译器诊断与桥执行共用这一张表）
 export { HOST_DIRECTIVE_SPECS, HOST_DIRECTIVE_NAMES, isHostDirective, directiveShouldPlay } from './directives'
 export type { HostDirectiveSpec } from './directives'

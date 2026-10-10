@@ -2495,3 +2495,16 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **③ 修法（最小）**：`verify` job 在 `pnpm test` **之前**补两步——`npx playwright install --with-deps chromium` + `pnpm run build:android`（产 `examples/dist/app/android/screen-content.json`，实测 ~2s、**无需 Android 工具链**）。★与同文件既有的"vapor-v3-e2e 需 `cargo build --example ops_roundtrip` 前置"**同源**（此前该红也是"装置没建、本地被残留掩盖"）——即"**测试需要的构建前置必须排在测试之前**"这条已写进文件注释，却被另两个测试漏了。
 **④ 验证**：本地 `consistency-web-probe`(5) + `app-screen-content-gate`(10) 前置就绪即过；`check:gates-sync` 绿；YAML 合法。
 **⑤ 教训**：a) ★★★**"测试前置必须排在测试之前"**——`pnpm test` 里混进了**需要真浏览器 / 需构建产物**的测试（不只 e2e），它们的依赖必须在同一 job 里**先建**；本地残留物会掩盖（同"干净克隆才暴露"族，本文件已记两次：vapor-v3-e2e、本次）；b) ★★**`pnpm install --ignore-scripts` ⇒ 任何"随装脚本产出的东西"都要显式步**（playwright 浏览器、codegen dist）；c) ★★**贴来的 CI 分析要逐条自判**——本份**大体正确**（前几份多错）：Issue 1（`Cannot find module '@proteus-vue/types/*'`）是**误读**（`build-packages.mjs` 设计内多轮，`round1 failed 5 → round2 failed 0` = 健康，实测 `--force` 44/0/exit0），Issue 2（e2e 超时）**上一轮已修**（#747）——报告把**两个 job 的事**混在了一起；d) **e2e 测试的两类**：`e2e-*`（排除，单独 `test:e2e:*`，需 build + Chromium）vs **非 e2e 但用 Playwright/产物的**（在 `pnpm test` 内，前置需同 job 提供）——两者都要前置，别只记着前者。
+
+749. **★★★Vapor 事件处理器「方法引用/方法体」T2 交付（带参 / 形参 / 局部变量 / if-else）——编译期降级 + 执行器下沉共享**（2026-10-10）：
+**① 承接**：按 `docs/vapor-event-methods-plan.md` T2 档动工（用户「继续 vapor 的 t2」）。
+**② 交付**：`packages/compiler/src/vapor/events.ts` 的降级器扩展——`convert`：
+  · **带实参调用** `add(2)`：实参（纯表达式）降级为 **`let` 形参绑定**（方法级作用域）；
+  · **方法形参**：`function add(n){…}` 的形参绑为 `let n = <实参>`（实参个数须与形参一致，否则诊断）；
+  · **方法内局部变量** `const step = n*2` ⇒ `let step`；
+  · **`if (cond) {…} else {…}`** ⇒ **`if` 条件动作**（两臂降级为动作子列表 + 条件程序）。
+  ★**仍「明确不做」**（编译期诊断、不静默）：循环 / `async`·`await`（有微任务时序语义，同步执行器不建模——`isAsync` 显式拒）/ 任意函数。
+**③ 契约 + 执行器**下沉到**消费端** `@proteus-vue/slot-runtime`（`handler.ts`）：`HandlerAction`（含 `let`/`if`）+ `runHandlerActions`——编译器 import 契约、`render-backend/screen-runtime` 与 `entry-vapor` **共用同一执行器**（此前两处各手写 set/add 循环=必然漂移源）。执行器用**作用域链**承接 `let`（方法级在外层、`if` 臂各成**子层**——与 JS 块级一致，`then` 里的 `let` 不外泄），`$event` 由 `event` 注入。★两处运行期 runHandler 改为薄壳（screen-runtime 保留 emit 无去处 note / nav 出口 / 出错锚回模板行；entry-vapor 保留 nav note）。
+**④ 三端真机判据 ㉓**（`hosts/android/check-vapor-device.py` + `gen-vapor-fixture.mjs` 的 t2 夹具 + `entry-vapor` 的 t2 探针）：独立挂 t2 夹具树 → 用**共享执行器**连跑 handler 3 次 → 逐次读**内核几何宽**；期望源值/几何 `[0,6,12,0]`（else `0→6` · else `6→12` · then `12>10⇒0`——三步覆盖形参 let + 局部 let + if 两臂）。**Android/鸿蒙/iOS 三端全过** + `check:vapor-three-end` 指纹一致（29 项 × 3 端）。
+**⑤ 验证**：`tests/handler-actions.test.ts`（执行器 8 例：set/add/let 遮蔽/if 两臂/$event/emit-nav）· `vapor-events`（+T2 6 例）· `app-runtime-content` ④（真实 App 管线编出 let/if）· 全量 **5646** · `test:coupled` 绿 · 三端真机 ㉓ 全过。
+**⑥ 教训**：a) ★★★**"契约 + 执行器"必须一处实现**——T1 时 `screen-runtime` 与 `entry-vapor` 各手写了一份 set/add 循环（当时侥幸一致）；T2 加 `let`/`if` 若两处各写必然漂移 ⇒ 趁 T2 **下沉到消费端 package**（本仓"同一语义一处实现"纪律）；b) ★★**`let` 要块级作用域**——首版执行器用单一 Map（`if` 臂内 `let` 会外泄）⇒ 改**作用域链**（方法级 + 每臂子层）与服务端 JS 语义一致（测试 ⑥ 抓到）；c) ★**"仍不做"的东西也要显式**（async 有微任务时序语义，同步执行器不建模 ⇒ **显式拒**而非"碰巧执行了 body"）；d) ★**夹具生成器的"白名单写出"易漏新段**——`gen-vapor-fixture.mjs` 的 `OUT` 用显式列名写出，加了 `t2:` 段却忘了加进白名单 ⇒ 产物里没有（第一次真机跑 ㉓ 直接"未见 t2 段"——**gen 自检抓到**：自检读的是内存 `parsed.t2`，写盘是白名单 ⇒ 自检过而产物缺；好在 ㉓ 的"缺失⇒跳过/红"暴露了）；e) ★**"$emit/导航动作在子/顶层"的既有边界保持**（顶层 handler 的 `$emit` 仍无去处——如实 note）。
