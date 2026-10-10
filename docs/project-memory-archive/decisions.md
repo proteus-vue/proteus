@@ -2628,3 +2628,11 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **⑥ 验证**：`cargo test` 全绿（+ `text_policy_apply_and_readback`）；`vapor-sfc-to-tree` ⑨（三字段走 SET_STYLE_STR + 池反查 + 不进 paint 通道）+ ⑤ 改断言（white-space 不再诊断/overflow-x 仍诊断）；能力棘轮 `VAPOR_DYNCLASS_LAYOUT_UNSUPPORTED` **8→4**（已 --update）；全量 **5661**；host-kernel-keys/ios-export-wiring/bridge-sync/harmony-prebuilt/aar-fresh/platform-layering/gates-sync 全绿。
 **⑦ 诚实边界**：① 内核**不解释**策略值（宿主引擎解释——"策略是否落地"是宿主侧）；② `text_align` 未并入（独立字段，另议）；③ 只做"策略层是否通"，**不声称**三端靠版式像素级一致；④ 判据核"内核回读值"（值精确），非"折行像素"（后者归 B-T3/宿主）。
 **⑧ 教训**：a) ★★★**"新增内核消费键 = 宿主白名单必须跟"**（`LAYOUT_KEYS`/`NodeDto`）——`check:host-kernel-keys` **当场抓出**三键漏登记（第 N 次同款：clipPath/glow/gridColumn…），**门禁比记忆可靠**；b) ★★**JS 侧调宿主方法的"注入面"要跟宿主能力走**——iOS vapor 探针经 `selfdraw-app.swift` 的 **shim**（显式列方法）调 `proteusHost.*`，只加 Swift JSExport **不够**（探针仍 `<no-host-textPolicy>`），**shim 也要补**（与 Android QuickJS 条件注入/鸿蒙 `fns[]` 同族——三端各有"注入面"）；c) ★**复用既有 op 优于新 op**（文本策略复用 B3d 的 `SET_STYLE_STR`，零协议新增）；d) ★**"策略进内核"与"策略生效"是两件事**（前者内核回读可判，后者归宿主/后续）；e) ★**沿用"不重排"语义**（`Ok(false)` 而非标脏——避免为"不改几何的字段"白重排）。
+
+761. **★★内核文本建模 B-T3 交付：度量缓存键并入文本策略（white-space/word-break/line-clamp）—— 修内容寻址的潜在错误合并**（2026-10-10）：
+**① 承接**：B-T2（#760）让内核持有文本策略 ⇒ B-T3 把策略并入度量缓存键。
+**② 问题（本仓潜在缺陷）**：内容寻址键 = `(text_hash, max_width)`，`text_hash = 文本 ⊕ style_key`；`style_key` 由宿主 `fontSignature(字号,字重,字族)` 生成、**不含**文本策略。而 `white-space/word-break/line-clamp` 影响同一文案在同一宽下的度量结果（wrap ⇒ 折行变高 / nowrap ⇒ 单行）。⇒ 在**内容寻址生效**（`style_key != 0`，真机现状）时，"同文案 + 同字体 + 同宽、策略不同"的两节点会**错误共用缓存项** ⇒ 后者取前者尺寸（窄但真，且宿主/编译器都无法察觉——静默错几何）。
+**③ 修**：`compute_text_hashes` 把 `style.white_space/word_break/line_clamp` 一并 `hash` 进内容键（缺省 None 与空串等价）。只动"内容寻址"分支；`style_key == 0` 仍回退节点寻址（本就不共享，不受影响）。
+**④ 破坏性验证**：a) 单测 `different_text_policy_does_not_share_cache_key`（同文案同字体签名、`nowrap` vs `normal` vs 缺省 ⇒ **不共用**；反证同策略仍共用=内容寻址收益不丢）；b) 引擎级 `kernel_text_cache_key.rs`（A 单行高 20 / B 折行高 30，同文案同字体同宽仅策略不同 ⇒ 各自几何正确 + `measure_calls≥2`——若缓存错误合并则 B 得 20）。`cargo test` 全绿（18 个测试二进制）。
+**⑤ 诚实边界**：只覆盖内容寻址分支（`style_key != 0`）；无真机判据（Rust 单测即正确层级——真机 ㉙ 已覆盖策略通道；本项是"同文案同字体"的缓存语义，夹具无此形态）。纯内核改动 ⇒ 重建鸿蒙自持核/prebuilt。
+**⑥ 教训**：a) ★★★**"影响度量的维度都必须在度量缓存键里"**——文本策略与字体/宽度同理（本仓第四次同款：key 漏维度 ⇒ 静默合并 ⇒ 错几何，前有 nodeId-寻址/字体签名/style_key）；b) ★★**"策略进内核（B-T2）"使 B-T3 成为可能**——先有数据（内核持有策略）再进键，顺序不能反；c) ★**保守兜底仍在**（`style_key==0` 回退节点寻址）——加维度不放松既有保守。
