@@ -139,24 +139,6 @@ body {
     opacity: 0;
   }
 }
-.pad:active::after {
-  animation: dactyl-ripple 0.5s ease-out;
-}
-@keyframes dactyl-ripple {
-  from {
-    background-color: #39d0ff;
-    opacity: 0;
-  }
-  to {
-    background-color: #39d0ff;
-    opacity: 1;
-  }
-}
-.pad:active {
-  background-color: #1b3550;
-  border-color: #39d0ff;
-  transform: scale(0.9);
-}
 
 /* 跟手轨道（L2/L3/L5）：穹顶平台整条随指迁移（v-follow ⇒ 内核合成平移，零 JS） */
 .lane {
