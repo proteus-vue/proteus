@@ -2171,7 +2171,45 @@ pub unsafe extern "C" fn proteus_layout_follow_batch(
     }
 }
 
-/// **从二进制 blob 建树**（★生产入口：方案 M0 计划「非 JSON，避免运行时解析开销」）。 【为什么需要它（本仓实测的量化依据）】
+/// ★★★**Dactyl L2·场跟手**（`15-dactyl-demo.md` §4.3）：一个手势焦点 → 一片尖峰的**高度/朝向**场求值。
+///   换算唯一实现在内核（`follow_field`）；返回合并 updates（宿主一次消费，零新增解析）。
+///
+/// # Safety
+/// 返回指针须用 `proteus_layout_free_string` 释放。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_layout_follow_field(
+    handle: u64,
+    container_id: u32,
+    focus_x: f32,
+    focus_y: f32,
+    falloff: f32,
+    min_scale: f32,
+    max_scale: f32,
+    max_rotate: f32,
+) -> *mut c_char {
+    let r = std::panic::catch_unwind(|| -> Result<String, String> {
+        let mut reg = registry().lock().map_err(|_| "注册表锁失败".to_string())?;
+        let entry = reg.get_mut(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?;
+        let touched = crate::anim::follow_field(
+            &mut entry.tree, container_id, focus_x, focus_y, falloff, min_scale, max_scale, max_rotate,
+        );
+        if touched.is_empty() {
+            return Ok("{\"ok\":true,\"applied\":0,\"updates\":[]}".to_string());
+        }
+        let vis = crate::anim::AnimEngine::collect_updates(&entry.tree, &touched);
+        let updates: Vec<serde_json::Value> = vis.iter().map(visual_to_json).collect();
+        Ok(serde_json::json!({"ok": true, "applied": updates.len(), "updates": updates}).to_string())
+    });
+    match r {
+        Ok(Ok(s)) => into_c_string(s),
+        Ok(Err(e)) => into_c_string(serde_json::json!({"ok": false, "error": e}).to_string()),
+        Err(_) => into_c_string("{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string()),
+    }
+}
+
+/// **从二进制 blob 建树**（★生产入口：方案 M0 计划「非 JSON，避免运行时解析开销」）。
+///
+/// 【为什么需要它（本仓实测的量化依据）】
 ///   iOS 真机 4051 节点：`create`（JSON）= 75.84ms，其中 95%+ 是 serde 解析 + 建树；
 ///   而**纯布局仅 ~2ms**。⇒ 通道成本必须靠二进制消除。
 ///

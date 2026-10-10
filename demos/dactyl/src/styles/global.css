@@ -138,6 +138,27 @@ body {
   border-radius: 10px 10px 4px 4px;
 }
 
+/* L2 尖峰穹顶（§4.3）：场容器的直接叶 = 尖峰；内核按距焦点逐个求 scale/rotate（近则高、倾角朝指）。
+   ★只动 transform（合成属性，§7.3）；针林密度 = 负载变量 N。 */
+.needle-field {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  width: 100%;
+  height: 620px;
+  padding: 16px;
+  background-color: #0e1520;
+  border-radius: 14px;
+}
+.needle {
+  width: 40px;
+  height: 96px;
+  margin: 6px;
+  background-color: #39d0ff;
+  border-radius: 8px;
+}
+
 /* L3 沸腾数据场（数字/光点的静态示意） */
 .boil {
   display: flex;

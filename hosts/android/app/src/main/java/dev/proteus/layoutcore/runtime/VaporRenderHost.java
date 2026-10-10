@@ -293,6 +293,27 @@ public final class VaporRenderHost {
     }
 
     /**
+     * ★★★Dactyl L2·场跟手（§4.3）：从 specs 收集 `v-follow={field:{…}}` 容器的**场参数**
+     *   （falloff / minScale / maxScale / rotate）——焦点 → 一片尖峰的高度/朝向场（内核 `follow_field`）。
+     */
+    private java.util.Map<Integer, float[]> collectFollowFields() {
+        java.util.Map<Integer, float[]> m = new java.util.HashMap<>();
+        for (JSONObject spec : specs) {
+            if (!spec.has("followField")) continue;
+            int id = spec.optInt("id", -1);
+            if (id < 0) continue;
+            m.put(id, new float[]{
+                    id,
+                    (float) spec.optDouble("followFieldFalloff", 300.0),
+                    (float) spec.optDouble("followFieldMinScale", 0.3),
+                    (float) spec.optDouble("followFieldMaxScale", 1.0),
+                    (float) spec.optDouble("followFieldRotate", 30.0),
+            });
+        }
+        return m;
+    }
+
+    /**
      * ★★把手势接到**命中链**上：`ProteusHostView.onTouchEvent` 已在 DOWN 时刻用内核
      *   `hitTest` 定下目标节点与冒泡链（`gestureTarget` / `gestureChain`）⇒ 这里只消费
      *   语义手势 + 目标 id + 链，转发给 JS 侧执行 handler。**宿主不做任何"哪个节点响应了"的
@@ -536,6 +557,8 @@ public final class VaporRenderHost {
             if (view != null) view.setPressStyles(collectPressStyles());
             // ★S3-T1（#767）：把"跟手节点 → (axis,gain)"注入视图（`v-follow` 折出的 followAxis/followGain）
             if (view != null) view.setFollowSpecs(collectFollow());
+            // ★Dactyl L2（#780）：场跟手参数（`v-follow={field:…}` 容器）
+            if (view != null) view.setFollowFields(collectFollowFields());
             // ★批次 42（动效 · 对齐 Web）：**CSS animation**（编译期折叠）——挂载后启动
             //   （复用既有 animStart：内核 kernelAnimStart + Choreographer 帧循环）
             cssAnimNodes = startStaticAnimations();
