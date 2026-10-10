@@ -21,7 +21,7 @@
     <div class="dactyl-title">L2 · 跟手</div>
     <div class="dactyl-hint">在针林里拖动 —— 针随指立起（尖峰贴上指尖）</div>
     <div class="needle-field" v-follow="{ field: { falloff: 260, minScale: 0.08, maxScale: 1.0, rotate: 22 } }">
-      <div v-for="i in Array.from({ length: 4000 }, (_, k) => k)" :key="i" class="needle" />
+      <div v-for="i in Array.from({ length: 1000 }, (_, k) => k)" :key="i" class="needle" />
     </div>
   </div>
 </template>

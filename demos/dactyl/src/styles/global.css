@@ -139,22 +139,23 @@ body {
 }
 
 /* L2 尖峰穹顶（§4.3）：场容器的直接叶 = 尖峰；内核按距焦点逐个求 scale/rotate（近则高、倾角朝指）。
-   ★只动 transform（合成属性，§7.3）；针林密度 = 负载变量 N。 */
+   ★只动 transform（合成属性，§7.3）。
+   ★★定版（不再改）：针 = **竖针形（宽<高）**；场 = **固定一屏高**（不滚）；N 只决定**密集度**（改 N 时**同步缩针**）。 */
 .needle-field {
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
   align-content: flex-start;
   width: 100%;
-  height: 720px;
+  height: 620px;          /* 一屏内（+头部/内边距仍 < 视口 ⇒ 不滚）；N=1000 针（9×17）正好装下不溢出 */
   padding: 4px;
   overflow: hidden;
   background-color: #0e1520;
   border-radius: 14px;
 }
 .needle {
-  width: 6px;
-  height: 9px;
+  width: 9px;            /* ★竖针形：宽 9 < 高 17（= 针点，不是方块）；N=1000 时填满一屏 */
+  height: 17px;
   margin: 1px;
   background-color: #39d0ff;
   border-radius: 2px;
