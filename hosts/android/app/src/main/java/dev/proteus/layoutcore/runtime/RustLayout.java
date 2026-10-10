@@ -96,6 +96,10 @@ public final class RustLayout {
     private static native String nativeLayoutFollowRelease(long handle, int nodeId, int axis, float stiffness, float damping, float mass, float snapThreshold, float snapTarget);
     /** ★★★S3-T3 批量跟手：一帧 M 指一次 FFI（nodeIds + 每节点 6 float：gain/dx/dy/min/max/axis） */
     private static native String nativeLayoutFollowBatch(long handle, int[] nodeIds, float[] params);
+    /** ★★★场跟手（通用 `v-follow={field:…}`）：一个焦点 → 容器子树一片叶节点的高度/朝向场 */
+    private static native String nativeLayoutFollowField(long handle, int containerId, float focusX, float focusY, float falloff, float minScale, float maxScale, float maxRotate);
+    /** ★★★场跟手（**二进制 12B/条**：id u32 + scale f32 + rotate f32——大 N 免 JSON 解析） */
+    private static native byte[] nativeLayoutFollowFieldBin(long handle, int containerId, float focusX, float focusY, float falloff, float minScale, float maxScale, float maxRotate);
     /** ★共享元素（几何原语：源矩形 + 目标节点 ⇒ dx/dy/scale，内核算） */
     private static native String nativeSharedElement(long handle, String json);
 
@@ -296,6 +300,16 @@ public final class RustLayout {
     /** ★★★S3-T3 批量跟手（一帧 M 指一次 FFI）——返回 `{ok,applied,updates}` */
     static String layoutFollowBatch(long handle, int[] nodeIds, float[] params) {
         return loaded ? nativeLayoutFollowBatch(handle, nodeIds, params) : NOT_LOADED;
+    }
+
+    /** ★★★场跟手（通用 `v-follow={field:…}`）：焦点 → 容器子树一片叶节点的高度/朝向场——返回 `{ok,applied,updates}` */
+    static String layoutFollowField(long handle, int containerId, float focusX, float focusY, float falloff, float minScale, float maxScale, float maxRotate) {
+        return loaded ? nativeLayoutFollowField(handle, containerId, focusX, focusY, falloff, minScale, maxScale, maxRotate) : NOT_LOADED;
+    }
+
+    /** ★★★场跟手（**二进制**）：返回 12B/条定长 `byte[]`（大 N 免 JSON 解析） */
+    static byte[] layoutFollowFieldBin(long handle, int containerId, float focusX, float focusY, float falloff, float minScale, float maxScale, float maxRotate) {
+        return loaded ? nativeLayoutFollowFieldBin(handle, containerId, focusX, focusY, falloff, minScale, maxScale, maxRotate) : new byte[0];
     }
 
     /** ★仍在推进的动画条数（0 = 全结束）——幕切换的权威判据 */
