@@ -99,6 +99,20 @@ jobs:
       - name: 构建 V3 端到端驱动（★必须在 pnpm test 之前：vapor-v3-e2e 需要该二进制）
         run: cargo build --manifest-path packages/layout-core-rust/Cargo.toml --example ops_roundtrip
 
+      # ★★★2026-10-10 补两处 `pnpm test` 前置（此前**必然红**，只在干净克隆/CI 暴露）：
+      #   ① Chromium——`tests/consistency-web-probe.test.ts` 等非 e2e 测试用 Playwright 起真浏览器
+      #      （`pnpm test` 只排除 `e2e-*.test.ts`，这些**不排除**）⇒ 缺浏览器报
+      #      `browserType.launch: Executable doesn't exist .../chrome-headless-shell`。
+      #   ② App 屏内容产物——`tests/app-screen-content-gate.test.ts` 读
+      #      `examples/dist/app/android/screen-content.json`，而 CI 里唯一构建它的 `build:android`
+      #      排在 `pnpm test` **之后**（旧顺序）⇒ 文件不存在 ⇒ `ENOENT` 崩。
+      #   ★与上方 vapor-v3-e2e 同源教训：**测试需要的前置必须排在测试之前**；本地被残留产物/已装浏览器掩盖。
+      - name: 安装 Chromium（★必须在 pnpm test 之前：consistency-web-probe 等非 e2e 测试用 Playwright）
+        run: npx playwright install --with-deps chromium
+
+      - name: 构建示例 App 屏内容产物（★必须在 pnpm test 之前：app-screen-content-gate 读它）
+        run: pnpm run build:android
+
       - name: 单元测试（router / router-plan / gen-routes / plugin / runtime / compiler / golden / pinia）
         run: pnpm test
 
