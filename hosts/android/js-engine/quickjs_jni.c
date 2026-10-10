@@ -107,6 +107,12 @@ static struct {
   jmethodID input_probe_set_text;
   /* ★S1.1（#767）：按下态探针读（`proteusHost.pressProbe()`——无参返回串） */
   jmethodID press_probe;
+  /* ★★★S3-T1（#767）：跟手探针读（`proteusHost.followProbe()`——无参返回串） */
+  jmethodID follow_probe;
+  /* ★★★S3-T1（#767）：进程内注入一次拖拽（`proteusHost.dragAt({x,y,dx,dy,steps})`——判据驱动） */
+  jmethodID drag_at;
+  /* ★★★S3-T1（#767）：读节点变换真源（`proteusHost.animTxProbe(idsJson)`——跟手几何核） */
+  jmethodID anim_tx_probe;
   /* ★★★长列表虚拟化（2026-10-01）：整树在内核、宿主只物化可见区。
    *   同一条件注入原则（Java 未实现 ⇒ 不注入 ⇒ JS 侧探测为 undefined）。 */
   jmethodID mount_virtual;
@@ -523,6 +529,22 @@ static JSValue js_host_press_probe(JSContext *ctx, JSValueConst this_val, int ar
   return host_call_noarg_impl(ctx, g_host_methods.press_probe, 1);
 }
 
+/** `proteusHost.followProbe()` —— ★S3-T1：读宿主跟手读数（无参返回串） */
+static JSValue js_host_follow_probe(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+  (void)this_val; (void)argc; (void)argv;
+  return host_call_noarg_impl(ctx, g_host_methods.follow_probe, 1);
+}
+
+/** `proteusHost.dragAt({x,y,dx,dy,steps})` —— ★S3-T1：进程内注入一次拖拽（判据驱动） */
+static JSValue js_host_drag_at(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+  return host_call_impl(ctx, g_host_methods.drag_at, 1, this_val, argc, argv);
+}
+
+/** `proteusHost.animTxProbe(idsJson)` —— ★S3-T1：读节点变换真源（跟手几何核） */
+static JSValue js_host_anim_tx_probe(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+  return host_call_impl(ctx, g_host_methods.anim_tx_probe, 1, this_val, argc, argv);
+}
+
 /** `proteusHost.mountVirtual(treeJson)` —— ★★★**虚拟化挂载**（长列表：整树在内核、只物化可见区） */
 static JSValue js_host_mount_virtual(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
   return host_call_impl(ctx, g_host_methods.mount_virtual, 1, this_val, argc, argv);
@@ -651,6 +673,17 @@ static jstring eval_impl(JNIEnv *env, jstring source, jboolean with_host) {
     }
     if (g_host_methods.press_probe != NULL) {
       JS_SetPropertyStr(g_ctx, host, "pressProbe", JS_NewCFunction(g_ctx, js_host_press_probe, "pressProbe", 0));
+    }
+    // ★★★S3-T1（条件注入——同 mount 原则）：跟手探针 + 进程内拖拽注入
+    if (g_host_methods.follow_probe != NULL) {
+      JS_SetPropertyStr(g_ctx, host, "followProbe", JS_NewCFunction(g_ctx, js_host_follow_probe, "followProbe", 0));
+    }
+    if (g_host_methods.drag_at != NULL) {
+      JS_SetPropertyStr(g_ctx, host, "dragAt", JS_NewCFunction(g_ctx, js_host_drag_at, "dragAt", 1));
+      LOGI("宿主已实现 dragAt ⇒ JS 侧可在进程内注入真拖拽（S3 跟手判据）");
+    }
+    if (g_host_methods.anim_tx_probe != NULL) {
+      JS_SetPropertyStr(g_ctx, host, "animTxProbe", JS_NewCFunction(g_ctx, js_host_anim_tx_probe, "animTxProbe", 1));
     }
     // ★★★长列表虚拟化（条件注入——同 mount 原则）
     if (g_host_methods.mount_virtual != NULL) {
@@ -835,6 +868,13 @@ Java_dev_proteus_layoutcore_QuickJsEngine_nativeSetHostCallback(JNIEnv *env, jcl
     g_host_methods.input_probe_set_text = (*env)->GetMethodID(env, c, "inputProbeSetText", "(Ljava/lang/String;)Ljava/lang/String;");
     if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
     g_host_methods.press_probe = (*env)->GetMethodID(env, c, "pressProbe", "()Ljava/lang/String;");
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+    /* ★★★S3-T1：跟手探针（无参返串）+ 进程内拖拽注入（一参返串） */
+    g_host_methods.follow_probe = (*env)->GetMethodID(env, c, "followProbe", "()Ljava/lang/String;");
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+    g_host_methods.drag_at = (*env)->GetMethodID(env, c, "dragAt", "(Ljava/lang/String;)Ljava/lang/String;");
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+    g_host_methods.anim_tx_probe = (*env)->GetMethodID(env, c, "animTxProbe", "(Ljava/lang/String;)Ljava/lang/String;");
     if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
     /* ★★★长列表虚拟化（各一参返回串） */
     g_host_methods.mount_virtual = (*env)->GetMethodID(env, c, "mountVirtual", "(Ljava/lang/String;)Ljava/lang/String;");

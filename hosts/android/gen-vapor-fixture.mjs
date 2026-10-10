@@ -515,6 +515,20 @@ const S11_SFC = `<template>
 .btn:active { background-color: #ff0000; }
 </style>`
 
+/**
+ * ★★★S3-T1 夹具（判据 ㉞，2026-10-10 · 输入延迟专项 #767）：**拖拽跟手零 JS 跨界**。
+ *   `<p-view v-follow="{ axis: 'x' }">` ⇒ 编译期折出 `followAxis:1`（随节点透传宿主）
+ *   ⇒ 宿主 MOVE **直接喂内核**（`RustLayout.layoutFollow`，换算在内核）⇒ 写 `translate_x`
+ *   ⇒ 帧回调采样绘制。**MOVE 期间一次 JS 都不调**（判据：`follow.moves>0` 且 `applied>0`，
+ *   且节点变换真的跟手 —— 拖 dx=120 ⇒ translateX≈120）。
+ *   ★轴掩码 1=x（与内核 `follow_translate` 同编码）；gain 缺省 1（1:1 跟手）。
+ */
+const S3_SFC = `<template>
+  <p-view style="width: 400px; height: 200px">
+    <p-view v-follow="{ axis: 'x' }" style="width: 120px; height: 60px; background-color: #2f6fed"></p-view>
+  </p-view>
+</template>`
+
 /** 长列表夹具：**行高 100px**（视口 2400 ⇒ 可见 ~24 行；预加载 ±10 ⇒ 物化 ~34 行）
  *  ——判据的口径：1000 行都必须在内核树里（几何正确），但宿主只物化可见区。
  *  ★行内含 `:width` 绑定（L1 槽位）与插值文本（`{{ item.title }}`）。 */
@@ -699,6 +713,8 @@ process.stdout.write(JSON.stringify({
   bt3: build(${JSON.stringify(BT3_SFC)}, 'vapor-bt3.vue'),
   // ★★S1.1：按下态原生即时应用（:active → press* 字段，判据 ㉝）
   s11: build(${JSON.stringify(S11_SFC)}, 'vapor-s11.vue'),
+  // ★★S3-T1：拖拽跟手零 JS 跨界（v-follow → followAxis，判据 ㉞）
+  s3: build(${JSON.stringify(S3_SFC)}, 'vapor-s3.vue'),
   // ★:style 对象展开（判据 ㉒）
   styleObj: build(${JSON.stringify(STYLE_OBJ_SFC)}, 'vapor-style-obj.vue'),
   // ★★★六端 SFC 压力夹具：编译**共享 SFC 文件**（examples 页面）——与 Web/MP 同源
@@ -879,7 +895,7 @@ for (const [nm, def] of Object.entries(parsed.components)) {
       `父绑定 @${parentEmitBinds[0].event}（nodeId=${parentEmitBinds[0].nodeId}）`,
   )
 }
-fs.writeFileSync(OUT, JSON.stringify({ ...parsed.small, components: parsed.components, slot: parsed.slot, scoped: parsed.scoped, dyn: parsed.dyn, directive: parsed.directive, mixed: parsed.mixed, t2: parsed.t2, b5: parsed.b5, b3a: parsed.b3a, b3b: parsed.b3b, b3d: parsed.b3d, bt1: parsed.bt1, bt2: parsed.bt2, bt3: parsed.bt3, s11: parsed.s11, styleObj: parsed.styleObj }))
+fs.writeFileSync(OUT, JSON.stringify({ ...parsed.small, components: parsed.components, slot: parsed.slot, scoped: parsed.scoped, dyn: parsed.dyn, directive: parsed.directive, mixed: parsed.mixed, t2: parsed.t2, b5: parsed.b5, b3a: parsed.b3a, b3b: parsed.b3b, b3d: parsed.b3d, bt1: parsed.bt1, bt2: parsed.bt2, bt3: parsed.bt3, s11: parsed.s11, s3: parsed.s3, styleObj: parsed.styleObj }))
 console.log(`[gen-vapor-fixture] ✅ 组件注册表：${Object.keys(parsed.components).join(', ')}（随父产物下发）`)
 // ★P1-3 插槽分发夹具（判据 ⑮）：父产物必须带 slotFor 标记、子产物必须带 slotOutlet 标记
 //   （"生成器静默退化"是本仓重点拦的形态——标记缺了就是分发不可能发生）
@@ -1088,6 +1104,17 @@ console.log(`[gen-vapor-fixture] ✅ 组件注册表：${Object.keys(parsed.comp
     process.exit(1)
   }
   console.log(`[gen-vapor-fixture] ✅ B-T2 夹具：动态 :class 文本策略（whiteSpace 在线性规则 · 无布局诊断）`)
+}
+// ★★★S3-T1 夹具（判据 ㉞）：`v-follow` 折出 `followAxis` 扁平字段（子节点 style 里 axis=1）
+{
+  const nodes = parsed.s3?.tpl?.nodes ?? []
+  const followNode = nodes.find((n) => n && n.style && typeof n.style.followAxis === 'number')
+  const diag = (parsed.s3?.diagnostics ?? []).filter((m) => /follow/i.test(String(m)))
+  if (!parsed.s3?.ok || !followNode || followNode.style.followAxis !== 1 || diag.length > 0) {
+    console.error(`[gen-vapor-fixture] ✗ S3-T1 夹具不完整（判据 ㉞ 将无证据）：节点=${nodes.length} · followAxis=${followNode?.style?.followAxis} · 诊断=${diag.join('|')}`)
+    process.exit(1)
+  }
+  console.log(`[gen-vapor-fixture] ✅ S3-T1 夹具：v-follow 折出 followAxis=${followNode.style.followAxis}（跟手零 JS 跨界）`)
 }
 // ★:style 对象展开（2026-10-03）：必须**逐键**（layout.width + paint.backgroundColor），不得有整键
 {

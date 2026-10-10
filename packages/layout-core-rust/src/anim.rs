@@ -2202,7 +2202,7 @@ impl AnimEngine {
     ///   ⇒ 动画会**停在倒数第二帧的位置**（几何/日志全对，只有肉眼能发现最后一步没走完）。
     ///   首版就是这么写的，被 `time_driven_anim_still_finishes_and_reports_final_value` 当场抓住。
     ///   ⇒ 正解：直接按 **node_id** 在树上取值（touched 里存的是 node_id，不是索引）。
-    fn collect_updates(
+    pub(crate) fn collect_updates(
         tree: &LayoutTree,
         touched: &std::collections::HashSet<u32>,
     ) -> Vec<NodeVisual> {
@@ -2323,6 +2323,49 @@ fn step(a: &mut Anim, dt_ms: f32) -> (f32, f32, bool) {
             (x, vel, false)
         }
     }
+}
+
+/* ──────────────────── ★★★S3-T1：编译期交互下沉 · 跟手（指针位移 → 节点平移） ──────────────────── */
+
+/// ★★★**S3-T1（2026-10-10 · 输入延迟专项 #767）**：**跟手**——指针位移 → 节点平移。
+///
+/// 【要证明什么（§14 §4 S3 Tier 2）】"拖拽跟手"这类高频交互**不过 JS**：宿主 MOVE ⇒ 直接喂指针给内核
+///   ⇒ 内核算平移（**换算唯一实现在此**，宿主零数学，与 `seek_scroll` 同一纪律）⇒ 宿主帧回调采样绘制。
+///   ⇒ `js_involved_gestures_ratio == 0`（手指数不变、延迟 ≤1 帧）。
+///
+/// 【语义】`translate_x = clamp(dx * gain, min, max)`（`axis_mask` 选轴：位0=x / 位1=y）。
+///   `dx/dy` = 相对**拖拽起点**的指针位移（宿主算，纯减法）；`min/max` = 夹取区间（swap-to-delete 等）。
+///   ★[S3-T2] 的夹取/回弹在此已具**夹取**；回弹（松手弹簧）由 `seek_velocity` 接管（另批）。
+///
+/// - Returns: 是否真的改了字段（供宿主判"要不要重绘"）。
+pub fn follow_translate(
+    tree: &mut LayoutTree,
+    node_id: u32,
+    dx: f32,
+    dy: f32,
+    axis_mask: u8,
+    gain: f32,
+    min: f32,
+    max: f32,
+) -> bool {
+    let Some(idx) = tree.index_of_id(node_id) else { return false };
+    let n = &mut tree.nodes[idx as usize];
+    let mut changed = false;
+    if axis_mask & 1 != 0 {
+        let v = (dx * gain).clamp(min, max);
+        if n.style.translate_x != v {
+            n.style.translate_x = v;
+            changed = true;
+        }
+    }
+    if axis_mask & 2 != 0 {
+        let v = (dy * gain).clamp(min, max);
+        if n.style.translate_y != v {
+            n.style.translate_y = v;
+            changed = true;
+        }
+    }
+    changed
 }
 
 #[cfg(test)]
@@ -4187,5 +4230,26 @@ mod tests {
         );
         e.seek_scroll(&mut t, 300.0);
         assert!((t.nodes[0].style.translate_y - 100.0).abs() < 1e-4, "窗口终点映射到声明的 to=100");
+    }
+
+    // ★★★S3-T1（2026-10-10）：跟手原语——指针位移 → 节点平移（内核算换算，宿主零数学）
+    #[test]
+    fn follow_translate_maps_pointer_delta_with_axis_mask_and_clamp() {
+        let mut t = tree_with(1);
+        // X 轴：dx=50 ⇒ translate_x=50
+        assert!(follow_translate(&mut t, 1, 50.0, 99.0, 1, 1.0, -1e9, 1e9));
+        assert!((t.nodes[0].style.translate_x - 50.0).abs() < 1e-4);
+        assert_eq!(t.nodes[0].style.translate_y, 0.0, "axis_mask=1 ⇒ 不动 Y");
+        // 夹取：dx=500 clamp 到 max=200
+        follow_translate(&mut t, 1, 500.0, 0.0, 1, 1.0, -200.0, 200.0);
+        assert!((t.nodes[0].style.translate_x - 200.0).abs() < 1e-4, "clamp 到 max");
+        // 双向：mask=3 + gain=0.5
+        follow_translate(&mut t, 1, 100.0, -40.0, 3, 0.5, -1e9, 1e9);
+        assert!((t.nodes[0].style.translate_x - 50.0).abs() < 1e-4);
+        assert!((t.nodes[0].style.translate_y - (-20.0)).abs() < 1e-4);
+        // 无变化 ⇒ 返回 false（值同 ⇒ 不重绘）
+        assert!(!follow_translate(&mut t, 1, 100.0, -40.0, 3, 0.5, -1e9, 1e9), "同值 ⇒ false");
+        // 未知节点 ⇒ false（不 panic）
+        assert!(!follow_translate(&mut t, 999, 10.0, 0.0, 1, 1.0, -1e9, 1e9));
     }
 }

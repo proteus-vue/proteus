@@ -223,6 +223,16 @@ public final class VaporRenderHost {
         return view != null ? view.pressProbe() : "{\"pressed\":-1,\"applied\":-1,\"press_nodes\":-1}";
     }
 
+    /** ★S3-T1 探针（QuickJS 绑本方法）：读视图跟手读数 `{follow_nodes,moves,applied}`。 */
+    public String followProbe() {
+        return view != null ? view.followProbe() : "{\"follow_nodes\":-1,\"moves\":-1,\"applied\":-1}";
+    }
+
+    /** ★S3-T1 探针（QuickJS 绑本方法）：读指定节点的**变换真源**（宿主 `animTx`）——跟手几何核。 */
+    public String animTxProbe(String idsJson) {
+        return view != null ? view.animTxProbe(idsJson) : "{\"ok\":false,\"error\":\"视图未建\"}";
+    }
+
     /**
      * ★★★S1.1（2026-10-10 · 输入延迟专项 #767）：从 specs 收集**按下态背景色**
      *   （编译器把 `<style>.x:active{background-color:…}` 折成节点上的 `pressBackgroundColor`）。
@@ -236,6 +246,25 @@ public final class VaporRenderHost {
             if (id < 0) continue;
             // 复用宿主既有的 parseColor（`#RRGGBB`/`#RRGGBBAA` → ARGB）；编译器已保证是合法 hex
             m.put(id, parseColor(spec.optString("pressBackgroundColor", null)));
+        }
+        return m;
+    }
+
+    /**
+     * ★★★S3-T1（2026-10-10 · 输入延迟专项 #767）：从 specs 收集**跟手规格**
+     *   （编译器把 `v-follow="{ axis:'x', gain:1 }"` 折成节点上的 `followAxis`/`followGain` 扁平字段）。
+     *   ★返回 `id → [axis, gain]`；宿主 MOVE 时**直接喂内核**（`RustLayout.layoutFollow`）——
+     *     换算在内核、**零 JS 跨界**（S3 判据 `js_involved_gestures_ratio == 0` 的机制面）。
+     */
+    private java.util.Map<Integer, float[]> collectFollow() {
+        java.util.Map<Integer, float[]> m = new java.util.HashMap<>();
+        for (JSONObject spec : specs) {
+            if (!spec.has("followAxis")) continue;
+            int id = spec.optInt("id", -1);
+            if (id < 0) continue;
+            int axis = spec.optInt("followAxis", 1);
+            float gain = (float) spec.optDouble("followGain", 1.0);
+            m.put(id, new float[]{axis, gain});
         }
         return m;
     }
@@ -482,6 +511,8 @@ public final class VaporRenderHost {
             syncInputControls();
             // ★S1.1（#767）：把"按下态节点 → 背景色"注入视图（`<style>.x:active{}` 折出的 pressBackgroundColor）
             if (view != null) view.setPressBgMap(collectPressBg());
+            // ★S3-T1（#767）：把"跟手节点 → (axis,gain)"注入视图（`v-follow` 折出的 followAxis/followGain）
+            if (view != null) view.setFollowSpecs(collectFollow());
             // ★批次 42（动效 · 对齐 Web）：**CSS animation**（编译期折叠）——挂载后启动
             //   （复用既有 animStart：内核 kernelAnimStart + Choreographer 帧循环）
             cssAnimNodes = startStaticAnimations();
@@ -1017,6 +1048,66 @@ public final class VaporRenderHost {
             //   B 相位 tap 没触发手势，而判据把 A 相位的 last 读成 B 的 hit；有本字段即可判定）
             out.put("gestures_fired", gestureDispatched - before);
             out.put("last", lastGestureProbe != null ? new JSONObject(lastGestureProbe) : JSONObject.NULL);
+            return out.toString();
+        } catch (Throwable t) {
+            return err(out, t.getClass().getSimpleName() + ": " + t.getMessage()).toString();
+        }
+    }
+
+    /**
+     * ★★★**S3-T1 拖拽注入**（2026-10-10 · 输入延迟专项 #767 · 判据 ㉞）：模拟一次真实拖拽
+     *   （DOWN → N×MOVE → UP），用**真 MotionEvent** 走 `onTouchEvent` 全链路——与真实手指
+     *   同一条代码路径（含 S1.5 无缓冲分发 / 命中 / S3 跟手）。
+     *
+     * 【要证明什么】MOVE 期间跟手**只走内核**（`RustLayout.layoutFollow`），**一次 JS 都不调**——
+     *   注入前后读 `followProbe` 的 `moves`/`applied` 与节点变换（`animTxProbe`）即可核。
+     *
+     * 【时间戳逐次前推】（同 `tapAt` 的纪律）：事件时间戳是纯属性，前推避免被 `GestureDetector`
+     *   判成双击/多击——**零等待**（不是 sleep）。
+     * @param argsJson `{x, y, dx, dy, steps}`——起点 + 总位移 + 步数（默认 6）。
+     */
+    public String dragAt(String argsJson) {
+        JSONObject out = new JSONObject();
+        try {
+            if (view == null) return err(out, "视图未建").toString();
+            JSONObject a = new JSONObject(argsJson);
+            final float x0 = (float) a.optDouble("x", 0);
+            final float y0 = (float) a.optDouble("y", 0);
+            final float dxTotal = (float) a.optDouble("dx", 0);
+            final float dyTotal = (float) a.optDouble("dy", 0);
+            final int steps = Math.max(1, a.optInt("steps", 6));
+            final int beforeGestures = gestureDispatched;
+            view.resetFollowCounters();
+            long age = 1000L * tapInjectSeq;
+            tapInjectSeq++;
+            final long t0 = android.os.SystemClock.uptimeMillis() + age;
+            android.view.MotionEvent down = android.view.MotionEvent.obtain(t0, t0,
+                    android.view.MotionEvent.ACTION_DOWN, x0, y0, 0);
+            view.dispatchTouchEvent(down);
+            down.recycle();
+            // MOVE 序列：位移**等分**（真实手指采样形态；每步一个真 MotionEvent）
+            for (int i = 1; i <= steps; i++) {
+                final float t = (float) i / steps;
+                final float mx = x0 + dxTotal * t;
+                final float my = y0 + dyTotal * t;
+                android.view.MotionEvent mv = android.view.MotionEvent.obtain(t0, t0 + i * 8,
+                        android.view.MotionEvent.ACTION_MOVE, mx, my, 0);
+                view.dispatchTouchEvent(mv);
+                mv.recycle();
+            }
+            android.view.MotionEvent up = android.view.MotionEvent.obtain(t0, t0 + (steps + 1) * 8,
+                    android.view.MotionEvent.ACTION_UP, x0 + dxTotal, y0 + dyTotal, 0);
+            view.dispatchTouchEvent(up);
+            up.recycle();
+            out.put("ok", true);
+            out.put("x", x0);
+            out.put("y", y0);
+            out.put("dx", dxTotal);
+            out.put("dy", dyTotal);
+            out.put("steps", steps);
+            out.put("gestures_fired", gestureDispatched - beforeGestures);
+            out.put("follow_moves", view.followMoves);
+            out.put("follow_applied", view.followApplied);
             return out.toString();
         } catch (Throwable t) {
             return err(out, t.getClass().getSimpleName() + ": " + t.getMessage()).toString();

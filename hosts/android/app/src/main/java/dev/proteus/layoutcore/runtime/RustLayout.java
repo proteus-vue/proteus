@@ -90,6 +90,8 @@ public final class RustLayout {
     private static native byte[] nativeSvgMorphPathBin(long handle, int nodeId);
     /** ★MA5：滚动驱动（滚动位置 → 全部窗口动画；换算在内核） */
     private static native String nativeAnimSeekScroll(long handle, String json);
+    /** ★★★S3-T1 跟手：指针位移 → 节点平移（换算在内核；返回 updates JSON，宿主零数学、零 JS 跨界） */
+    private static native String nativeLayoutFollow(long handle, int nodeId, float dx, float dy, int axis, float gain, float min, float max);
     /** ★共享元素（几何原语：源矩形 + 目标节点 ⇒ dx/dy/scale，内核算） */
     private static native String nativeSharedElement(long handle, String json);
 
@@ -275,6 +277,11 @@ public final class RustLayout {
     /** ★MA5：滚动驱动 */
     static String animSeekScroll(long handle, String json) {
         return loaded ? nativeAnimSeekScroll(handle, json) : NOT_LOADED;
+    }
+
+    /** ★★★S3-T1 跟手：指针位移 → 节点平移（换算在内核）——返回 `{ok,changed,updates}` */
+    static String layoutFollow(long handle, int nodeId, float dx, float dy, int axis, float gain, float min, float max) {
+        return loaded ? nativeLayoutFollow(handle, nodeId, dx, dy, axis, gain, min, max) : NOT_LOADED;
     }
 
     /** ★仍在推进的动画条数（0 = 全结束）——幕切换的权威判据 */
