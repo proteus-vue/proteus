@@ -1325,6 +1325,9 @@ pub(crate) struct TreeEntry {
     ///   ★它与树是**两个对象**（不是树的一部分）：动画只写 style 的绘制字段、不触发布局，
     ///   语义上更接近"宿主侧每帧驱动"，故独立持有。
     pub(crate) anim: crate::anim::AnimEngine,
+    /// ★★★**绝对矩形缓存**（Dactyl L2 场跟手大 N）：空 = 失效，非空 = 上次 `absolute_rects()` 结果。
+    ///   结构变更（update/splice/apply_ops/create）时必须清空——场跟手每 MOVE 复用，去掉 O(N) 重算。
+    pub(crate) abs_rects: Vec<Option<crate::style::Rect>>,
 }
 
 impl TreeEntry {
@@ -1335,7 +1338,7 @@ impl TreeEntry {
         }
         Self {
             last_scopes: Vec::new(), measures, baselines, tree, id_to_idx, orphans: 0,
-            anim: crate::anim::AnimEngine::new() }
+            anim: crate::anim::AnimEngine::new(), abs_rects: Vec::new() }
     }
 
     /// ★★**压实**：把可达节点重建进新数组，回收孤点内存（O(存活节点数)）
@@ -2207,6 +2210,68 @@ pub unsafe extern "C" fn proteus_layout_follow_field(
     }
 }
 
+/// ★★★**场跟手（二进制版）**（Dactyl L2 · §4.3 大 N）：与 `proteus_layout_follow_field` 同语义，
+///   但返回**每节点 236B 定长记录**（复用 anim 编码器）——避免大 N 下"1000 条 JSON"的编解码 +
+///   Java `org.json` 逐条解析（这正是 N=1000 卡顿的主因，与 S2 去 JSON 同源）。
+///   ★**绝对矩形缓存**：`tree.absolute_rects()` 只在首次/焦点变化时重算（若树未变则复用）——
+///     去掉每次 MOVE 的 O(N) 重新分配（N=1000 时每 MOVE 一次，无缓冲分发下 >120Hz）。
+///
+/// 返回：字节缓冲（236B/条；`out_len` 写字节数；0 = 无变化）。用 `proteus_rects_free` 释放。
+///
+/// # Safety
+/// `out_len` 须为有效指针。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_layout_follow_field_bin(
+    handle: u64,
+    container_id: u32,
+    focus_x: f32,
+    focus_y: f32,
+    falloff: f32,
+    min_scale: f32,
+    max_scale: f32,
+    max_rotate: f32,
+    out_len: *mut u32,
+) -> *mut u8 {
+    unsafe { *out_len = 0 };
+    let r = std::panic::catch_unwind(|| -> Result<Vec<u8>, String> {
+        let mut reg = registry().lock().map_err(|_| "注册表锁失败".to_string())?;
+        let entry = reg.get_mut(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?;
+        // 绝对矩形：树未变则复用缓存（仅首帧 / 结构变更后重算）
+        if entry.abs_rects.is_empty() {
+            entry.abs_rects = entry.tree.absolute_rects();
+        }
+        let touched = crate::anim::follow_field_cached(
+            &mut entry.tree, &entry.abs_rects, container_id,
+            focus_x, focus_y, falloff, min_scale, max_scale, max_rotate,
+        );
+        if touched.is_empty() {
+            return Ok(Vec::new());
+        }
+        // ★**精简记录**（12B/条 = id u32 + scale f32 + rotate f32）：场只改这两项 ⇒
+        //   比 236B 全记录小 20×（N=1000 时 12KB vs 236KB/帧）——这是"跟手流畅"的关键（带宽/解析）。
+        let vis = crate::anim::AnimEngine::collect_updates(&entry.tree, &touched);
+        let mut buf = Vec::with_capacity(vis.len() * 12);
+        for v in &vis {
+            buf.extend_from_slice(&v.id.to_le_bytes());
+            buf.extend_from_slice(&v.scale.to_le_bytes());
+            buf.extend_from_slice(&v.rotate.to_le_bytes());
+        }
+        Ok(buf)
+    });
+    match r {
+        Ok(Ok(buf)) => {
+            let n = buf.len();
+            let mut boxed = buf.into_boxed_slice();
+            let ptr = boxed.as_mut_ptr();
+            std::mem::forget(boxed);
+            unsafe { *out_len = n as u32 };
+            ptr
+        }
+        Ok(Err(e)) => { eprintln!("[proteus] follow_field_bin 失败：{e}"); std::ptr::null_mut() }
+        Err(_) => { eprintln!("[proteus] follow_field_bin 内部 panic（已捕获）"); std::ptr::null_mut() }
+    }
+}
+
 /// **从二进制 blob 建树**（★生产入口：方案 M0 计划「非 JSON，避免运行时解析开销」）。
 ///
 /// 【为什么需要它（本仓实测的量化依据）】
@@ -2962,6 +3027,7 @@ pub unsafe extern "C" fn proteus_layout_splice(handle: u64, splice_json: *const 
         };
         let t_rel = t_rel0.elapsed().as_secs_f64() * 1000.0;
         entry.last_scopes = if multi.scopes.is_empty() { dirty_roots.clone() } else { multi.scopes.clone() };
+        entry.abs_rects.clear();   // ★结构变更 ⇒ 绝对矩形缓存失效（场跟手用）
 
         // ── ④ 变化集（宿主据此更新层；与 update 路径同口径）──
         let t_col0 = std::time::Instant::now();
@@ -3135,6 +3201,7 @@ fn apply_ops_impl(handle: u64, ptr: *const u8, len: u32, with_rects: bool) -> Re
 
     // ★记下本次重排范围（供 `proteus_layout_rects_bin` 限定返回范围）
     entry.last_scopes = multi.scopes.clone();
+    entry.abs_rects.clear();   // ★结构变更 ⇒ 绝对矩形缓存失效（场跟手用）
 
     let mut out = serde_json::json!({
         "ok": true,
@@ -4208,83 +4275,7 @@ pub unsafe extern "C" fn proteus_layout_anim_tick_bin(handle: u64, dt_ms: f32, o
         let mut eng = std::mem::take(&mut entry.anim);
         let out = eng.tick(&mut entry.tree, dt_ms);
         entry.anim = eng;
-        // ★每帧通道：**112B/条**定长 = id u32 + 七值 f32（tx/ty/scale/rotate/opacity/rotateX/rotateY）
-        //   + bg u32 + textColor u32 + clipKind u32 + 16 个 clip 参数 f32 + **strokeProgress f32**
-        //   ★C1（2026-10-01）：裁剪形状在**末尾追加**（一切既有偏移保持不变——
-        //     消费端既有字段读取零改动；clipKind=0 = 无裁剪，参数全 0）。
-        //   ★为什么不量化：clip 参数含**负值语义**（inset 可负 = 外扩；polygon 顶点可越界）——
-        //     量化会引入符号/范围妥协，且 16 槽只有 64B（相对 800 节点 × 每帧仍是 MB/s 级可接受）。
-        //     如实标注：将来若要压带宽，可在**不动语义**的前提下把 f32 换成带偏移的定点。
-        //   ★2026-10-01 由 24B → 28B（底色）→ **32B**（文字色）：两个 u32 都是**打包色**
-        //     （0xAARRGGBB）；`u32::MAX` = **本节点无该基色**（宿主忽略该字段——
-        //     见 `NodeVisual.color_valid` / `text_color_valid`）。
-        //   ★改动须知：记录宽度是**跨语言契约**，两端宿主 + SDK + demo 的解析常量
-        //     （iOS `animUpdateRecordBytes` / Android `ANIM_RECORD_BYTES` / SDK `FRAME_UPDATE_BYTES` /
-        //     embed-demo 与 `proteus-jni::host`）必须**同批改**——
-        //     ★`scripts/check-anim-record-bytes.mjs` 会从本处的写入序列**推出**宽度并与各消费端对账。
-        let mut buf = Vec::with_capacity(out.updates.len() * 236);
-        for v in out.updates {
-            buf.extend_from_slice(&v.id.to_le_bytes());
-            buf.extend_from_slice(&v.tx.to_le_bytes());
-            buf.extend_from_slice(&v.ty.to_le_bytes());
-            buf.extend_from_slice(&v.scale.to_le_bytes());
-            buf.extend_from_slice(&v.rotate.to_le_bytes());
-            buf.extend_from_slice(&v.opacity.to_le_bytes());
-            buf.extend_from_slice(&v.bg.unwrap_or(u32::MAX).to_le_bytes());
-            buf.extend_from_slice(&v.text_color.unwrap_or(u32::MAX).to_le_bytes());
-            // ★B 批：3D 旋转（末尾追加——偏移 @32/@36）
-            buf.extend_from_slice(&v.rotate_x.to_le_bytes());
-            buf.extend_from_slice(&v.rotate_y.to_le_bytes());
-            // ★C1：裁剪形状（末尾追加——偏移 @40 起：kind u32 + 16×f32）
-            let (ck, cp) = v.clip.map(|(k, p)| (k as u32, p)).unwrap_or((0, [0.0; 16]));
-            buf.extend_from_slice(&ck.to_le_bytes());
-            for i in 0..16 {
-                buf.extend_from_slice(&cp[i].to_le_bytes());
-            }
-            // ★C2：描边进度（末尾追加——偏移 @108；无描边路径时写 u32::MAX 的位模式）
-            buf.extend_from_slice(&v.stroke_progress.unwrap_or(f32::NAN).to_le_bytes());
-            // ★★渐变 v2（末尾追加——偏移 @112 起）：kind u32 + n u32 + 8×colors u32 + 8×offsets f32
-            //   （kind=0 = 无渐变/未变化 ⇒ 宿主忽略；kind≠0 时 colors/offsets 是**已混合**结果）
-            let (gk, gn, gc, go) = v
-                .grad
-                .map(|(k, n, c, o, _geo)| (k as u32, n as u32, c, o))
-                .unwrap_or((0, 0, [0u32; 8], [0f32; 8]));
-            buf.extend_from_slice(&gk.to_le_bytes());
-            buf.extend_from_slice(&gn.to_le_bytes());
-            for i in 0..8 {
-                buf.extend_from_slice(&gc[i].to_le_bytes());
-            }
-            for i in 0..8 {
-                buf.extend_from_slice(&go[i].to_le_bytes());
-            }
-            // ★★路径变形 v1（末尾追加——偏移 @184）：当前变形因子（NaN = 本节点无 B 态）。
-            //   ★**只带因子**（4B）——段列表是变长数据、且只在因子变化时需要 ⇒ 宿主按需
-            //     调 `proteus_layout_svg_morph_path` 取（避免每帧搬运整条路径）。
-            buf.extend_from_slice(&v.path_morph.unwrap_or(f32::NAN).to_le_bytes());
-            // ★★发光强度（glow v1，末尾追加——偏移 @188；NaN = 本节点无发光，宿主保持静态）
-            buf.extend_from_slice(&v.glow_intensity.unwrap_or(f32::NAN).to_le_bytes());
-            // ★★渐变几何（渐变 v2 扩展，末尾追加——偏移 @192 起：4×f32 = angle/cx/cy/r；
-            //   渐变段的**续写**：kind=0 时写 0（宿主忽略）。★"光本身在动"的数据就在这）
-            let geo = v.grad.map(|(_, _, _, _, g)| g).unwrap_or([0f32; 4]);
-            for i in 0..4 {
-                buf.extend_from_slice(&geo[i].to_le_bytes());
-            }
-            // ★★遮罩（mask v1，末尾追加——偏移 @208：kind u32 + [oA,aA,oB,aB] 4×f32 = 20B）
-            //   ★色标是**内核已算好**的揭示结果（`MaskSpec::reveal_stops` 唯一实现）
-            let (mk, mo, ma) = v
-                .mask
-                .map(|(k, o, a)| (k as u32, o, a))
-                .unwrap_or((0, [0.0f32; 2], [0.0f32; 2]));
-            buf.extend_from_slice(&mk.to_le_bytes());
-            buf.extend_from_slice(&mo[0].to_le_bytes());
-            buf.extend_from_slice(&ma[0].to_le_bytes());
-            buf.extend_from_slice(&mo[1].to_le_bytes());
-            buf.extend_from_slice(&ma[1].to_le_bytes());
-            // ★★倾斜（skew v1，末尾追加——偏移 @228/@232：2×f32 = skewX/skewY 度）
-            buf.extend_from_slice(&v.skew_x.to_le_bytes());
-            buf.extend_from_slice(&v.skew_y.to_le_bytes());
-        }
-        Ok(buf)
+        Ok(encode_visuals_bin(&out.updates))
     });
     match r {
         Ok(Ok(buf)) => {
@@ -4304,6 +4295,61 @@ pub unsafe extern "C" fn proteus_layout_anim_tick_bin(handle: u64, dt_ms: f32, o
             std::ptr::null_mut()
         }
     }
+}
+
+/// ★★**每帧每节点定长记录（236B）编码器——唯一实现**（anim tick 与场跟手共用）。
+///   跨语言契约（记录宽度/字段顺序）= 下方写入序列 + 各消费端常量（Java `ANIM_RECORD_BYTES` 等）——
+///   `scripts/check-anim-record-bytes.mjs` 会从本处写入序列推出宽度并与各端对账。
+pub(crate) fn encode_visuals_bin(updates: &[crate::anim::NodeVisual]) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(updates.len() * 236);
+    for v in updates {
+        buf.extend_from_slice(&v.id.to_le_bytes());
+        buf.extend_from_slice(&v.tx.to_le_bytes());
+        buf.extend_from_slice(&v.ty.to_le_bytes());
+        buf.extend_from_slice(&v.scale.to_le_bytes());
+        buf.extend_from_slice(&v.rotate.to_le_bytes());
+        buf.extend_from_slice(&v.opacity.to_le_bytes());
+        buf.extend_from_slice(&v.bg.unwrap_or(u32::MAX).to_le_bytes());
+        buf.extend_from_slice(&v.text_color.unwrap_or(u32::MAX).to_le_bytes());
+        buf.extend_from_slice(&v.rotate_x.to_le_bytes());
+        buf.extend_from_slice(&v.rotate_y.to_le_bytes());
+        let (ck, cp) = v.clip.map(|(k, p)| (k as u32, p)).unwrap_or((0, [0.0; 16]));
+        buf.extend_from_slice(&ck.to_le_bytes());
+        for i in 0..16 {
+            buf.extend_from_slice(&cp[i].to_le_bytes());
+        }
+        buf.extend_from_slice(&v.stroke_progress.unwrap_or(f32::NAN).to_le_bytes());
+        let (gk, gn, gc, go) = v
+            .grad
+            .map(|(k, n, c, o, _geo)| (k as u32, n as u32, c, o))
+            .unwrap_or((0, 0, [0u32; 8], [0f32; 8]));
+        buf.extend_from_slice(&gk.to_le_bytes());
+        buf.extend_from_slice(&gn.to_le_bytes());
+        for i in 0..8 {
+            buf.extend_from_slice(&gc[i].to_le_bytes());
+        }
+        for i in 0..8 {
+            buf.extend_from_slice(&go[i].to_le_bytes());
+        }
+        buf.extend_from_slice(&v.path_morph.unwrap_or(f32::NAN).to_le_bytes());
+        buf.extend_from_slice(&v.glow_intensity.unwrap_or(f32::NAN).to_le_bytes());
+        let geo = v.grad.map(|(_, _, _, _, g)| g).unwrap_or([0f32; 4]);
+        for i in 0..4 {
+            buf.extend_from_slice(&geo[i].to_le_bytes());
+        }
+        let (mk, mo, ma) = v
+            .mask
+            .map(|(k, o, a)| (k as u32, o, a))
+            .unwrap_or((0, [0.0f32; 2], [0.0f32; 2]));
+        buf.extend_from_slice(&mk.to_le_bytes());
+        buf.extend_from_slice(&mo[0].to_le_bytes());
+        buf.extend_from_slice(&ma[0].to_le_bytes());
+        buf.extend_from_slice(&mo[1].to_le_bytes());
+        buf.extend_from_slice(&ma[1].to_le_bytes());
+        buf.extend_from_slice(&v.skew_x.to_le_bytes());
+        buf.extend_from_slice(&v.skew_y.to_le_bytes());
+    }
+    buf
 }
 
 /// ★★**当前变形后的段列表**（路径变形 v1）——入参 `{"nodeId":N}`；返回

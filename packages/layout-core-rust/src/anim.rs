@@ -2525,6 +2525,65 @@ pub fn follow_field(
     touched
 }
 
+/// ★★★**场跟手（复用已算绝对矩形）**（Dactyl L2 大 N 性能）：与 `follow_field` 同语义，但接受
+///   **外部传入的绝对矩形**（FFI 层缓存）——去掉每次调用的 `absolute_rects()` O(N) 重新分配。
+///   语义与 `follow_field` **一致**（同公式、同叶/子树判定）。
+pub fn follow_field_cached(
+    tree: &mut LayoutTree,
+    abs: &[Option<Rect>],
+    container_id: u32,
+    focus_x: f32,
+    focus_y: f32,
+    falloff: f32,
+    min_scale: f32,
+    max_scale: f32,
+    max_rotate: f32,
+) -> std::collections::HashSet<u32> {
+    let mut touched = std::collections::HashSet::new();
+    if falloff <= 0.0 {
+        return touched;
+    }
+    let Some(cidx) = tree.index_of_id(container_id) else { return touched };
+    let mut target_idx: Vec<usize> = Vec::new();
+    let mut stack: Vec<NodeIndex> = tree.get(cidx).children.clone();
+    while let Some(i) = stack.pop() {
+        let n = tree.get(i);
+        if n.children.is_empty() {
+            target_idx.push(i as usize);
+        } else {
+            stack.extend(n.children.iter().copied());
+        }
+    }
+    for idx in target_idx {
+        let Some(r) = abs.get(idx).and_then(|o| *o) else { continue };
+        if r.width <= 0.0 || r.height <= 0.0 {
+            continue;
+        }
+        let cx = r.x + r.width * 0.5;
+        let cy = r.y + r.height * 0.5;
+        let dx = focus_x - cx;
+        let dy = focus_y - cy;
+        let dist = (dx * dx + dy * dy).sqrt();
+        let t = (1.0 - dist / falloff).clamp(0.0, 1.0);
+        let scale = min_scale + (max_scale - min_scale) * t;
+        let rotate = (dx / falloff).clamp(-1.0, 1.0) * max_rotate;
+        let node = &mut tree.nodes[idx];
+        let mut changed = false;
+        if (node.style.scale - scale).abs() > 1e-4 {
+            node.style.scale = scale;
+            changed = true;
+        }
+        if (node.style.rotate - rotate).abs() > 1e-4 {
+            node.style.rotate = rotate;
+            changed = true;
+        }
+        if changed {
+            touched.insert(node.id);
+        }
+    }
+    touched
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
