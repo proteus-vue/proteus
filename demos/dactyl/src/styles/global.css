@@ -88,7 +88,9 @@ body {
   padding: 8px 0 12px;
 }
 
-/* L1 磁块：按下即凹陷发光（:active ⇒ 编译期折 press* 字段，宿主 DOWN 原生即时） */
+/* L1 磁块：按下即**凹陷 + 边缘发光**（§4.2）——
+   `:active` 折成节点 press* 字段（pressBackgroundColor / pressTransform.scale / pressBoxShadow）
+   ⇒ 宿主 DOWN 原生立即应用（零 JS）。★凹陷=scale(0.9)、发光=box-shadow(青晕)、描边=border-color。 */
 .pads {
   display: flex;
   flex-direction: row;
@@ -99,10 +101,14 @@ body {
   height: 46px;
   margin: 3px;
   background-color: #141a24;
+  border: 1px solid #24324a;
   border-radius: 10px;
 }
 .pad:active {
-  background-color: #39d0ff;
+  background-color: #1b3550;
+  border-color: #39d0ff;
+  transform: scale(0.9);
+  box-shadow: 0 0 14px #39d0ff;
 }
 
 /* 跟手轨道（L2/L3/L5）：穹顶平台整条随指迁移（v-follow ⇒ 内核合成平移，零 JS） */

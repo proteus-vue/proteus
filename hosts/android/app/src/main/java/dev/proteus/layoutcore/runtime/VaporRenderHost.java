@@ -234,18 +234,29 @@ public final class VaporRenderHost {
     }
 
     /**
-     * ★★★S1.1（2026-10-10 · 输入延迟专项 #767）：从 specs 收集**按下态背景色**
-     *   （编译器把 `<style>.x:active{background-color:…}` 折成节点上的 `pressBackgroundColor`）。
+     * ★★★S1.1 按下态样式（2026-10-10 · 输入延迟专项 #767 · `15-dactyl-demo.md` §4.2）：
+     *   从 specs 收集 `:active` 折出的 `press*` 字段——`pressBackgroundColor`（底色）·
+     *   `pressTransform`（sx/sy → **凹陷**）· `pressBorderColor`（描边）· `pressBoxShadow`（**边缘发光**）。
      *   ★只读 paint 通道（内核不消费）——DOWN 时由视图**原生立即**应用（零 JS 跨界）。
      */
-    private java.util.Map<Integer, Integer> collectPressBg() {
-        java.util.Map<Integer, Integer> m = new java.util.HashMap<>();
+    private java.util.Map<Integer, ProteusHostView.PressStyle> collectPressStyles() {
+        java.util.Map<Integer, ProteusHostView.PressStyle> m = new java.util.HashMap<>();
         for (JSONObject spec : specs) {
-            if (!spec.has("pressBackgroundColor")) continue;
+            if (!spec.has("pressBackgroundColor") && !spec.has("pressTransform")
+                    && !spec.has("pressBorderColor") && !spec.has("pressBoxShadow")) continue;
             int id = spec.optInt("id", -1);
             if (id < 0) continue;
-            // 复用宿主既有的 parseColor（`#RRGGBB`/`#RRGGBBAA` → ARGB）；编译器已保证是合法 hex
-            m.put(id, parseColor(spec.optString("pressBackgroundColor", null)));
+            ProteusHostView.PressStyle ps = new ProteusHostView.PressStyle();
+            if (spec.has("pressBackgroundColor")) ps.bg = parseColor(spec.optString("pressBackgroundColor", null));
+            if (spec.has("pressBorderColor")) ps.borderColor = parseColor(spec.optString("pressBorderColor", null));
+            JSONObject ptx = spec.optJSONObject("pressTransform");
+            if (ptx != null) { ps.sx = (float) ptx.optDouble("sx", 1.0); ps.sy = (float) ptx.optDouble("sy", 1.0); }
+            JSONObject psh = spec.optJSONObject("pressBoxShadow");
+            if (psh != null && psh.has("color")) {
+                ps.glowColor = parseColor(psh.optString("color", null));
+                ps.glowRadius = (float) psh.optDouble("blur", 0.0);
+            }
+            m.put(id, ps);
         }
         return m;
     }
@@ -521,8 +532,8 @@ public final class VaporRenderHost {
             double emitMs = (System.nanoTime() - te) / 1e6;
             // ★B4-T2b：为可编辑节点建原生输入控件（复用 native-host 机制；几何来自内核）
             syncInputControls();
-            // ★S1.1（#767）：把"按下态节点 → 背景色"注入视图（`<style>.x:active{}` 折出的 pressBackgroundColor）
-            if (view != null) view.setPressBgMap(collectPressBg());
+            // ★S1.1（#767 / §4.2）：把"按下态节点 → 样式（底色+凹陷+描边+发光）"注入视图
+            if (view != null) view.setPressStyles(collectPressStyles());
             // ★S3-T1（#767）：把"跟手节点 → (axis,gain)"注入视图（`v-follow` 折出的 followAxis/followGain）
             if (view != null) view.setFollowSpecs(collectFollow());
             // ★批次 42（动效 · 对齐 Web）：**CSS animation**（编译期折叠）——挂载后启动
@@ -1953,6 +1964,13 @@ public final class VaporRenderHost {
         if (shadow != null) {
             for (String k : new String[]{"dx", "dy", "blur", "spread"}) {
                 if (shadow.has(k) && shadow.get(k) instanceof Number) shadow.put(k, shadow.getDouble(k) * lengthScale);
+            }
+        }
+        // ★按下态发光（Dactyl §4.2）：`pressBoxShadow.blur` 也是长度 ⇒ 同 boxShadow 缩放（漏则发光半径 1/3）。
+        JSONObject pshadow = spec.optJSONObject("pressBoxShadow");
+        if (pshadow != null) {
+            for (String k : new String[]{"dx", "dy", "blur", "spread"}) {
+                if (pshadow.has(k) && pshadow.get(k) instanceof Number) pshadow.put(k, pshadow.getDouble(k) * lengthScale);
             }
         }
         // ★★★text-shadow 项（2026-10-08 · 真机用户抓出「安卓投影太轻/光晕太小」）：**文本阴影长度也必须 ×密度**——
