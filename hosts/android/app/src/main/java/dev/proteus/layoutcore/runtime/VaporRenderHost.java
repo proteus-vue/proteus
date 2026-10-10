@@ -314,6 +314,26 @@ public final class VaporRenderHost {
     }
 
     /**
+     * ★★★Dactyl L2 大 N（#785）：场容器的**子节点**（针林）→ 视图**批量绘制**（一条 Path）。
+     *   逐节点 save/matrix/drawRect（N=4000 达 4000 次）= draw 超预算的主因；批量后 = 1 次 drawPath。
+     *   ★批量色取该容器的 `backgroundColor`（针青 #39d0ff）。
+     */
+    private void applyFieldBatch() {
+        java.util.Set<Integer> ids = new java.util.HashSet<>();
+        int color = 0xFF39D0FF;
+        for (JSONObject spec : specs) {
+            if (!spec.has("followField")) continue;
+            final int cid = spec.optInt("id", -1);
+            if (cid < 0) continue;
+            color = parseColor(spec.optString("backgroundColor", "#39d0ff"));
+            for (JSONObject child : specs) {
+                if (child.optInt("parentId", -1) == cid) ids.add(child.optInt("id", -1));
+            }
+        }
+        if (view != null) view.setFieldBatch(ids, color);
+    }
+
+    /**
      * ★★把手势接到**命中链**上：`ProteusHostView.onTouchEvent` 已在 DOWN 时刻用内核
      *   `hitTest` 定下目标节点与冒泡链（`gestureTarget` / `gestureChain`）⇒ 这里只消费
      *   语义手势 + 目标 id + 链，转发给 JS 侧执行 handler。**宿主不做任何"哪个节点响应了"的
@@ -559,6 +579,8 @@ public final class VaporRenderHost {
             if (view != null) view.setFollowSpecs(collectFollow());
             // ★Dactyl L2（#780）：场跟手参数（`v-follow={field:…}` 容器）
             if (view != null) view.setFollowFields(collectFollowFields());
+            // ★Dactyl L2 大 N（#785）：场容器的子节点（针林）→ 批量绘制（一条 Path）
+            if (view != null) applyFieldBatch();
             // ★批次 42（动效 · 对齐 Web）：**CSS animation**（编译期折叠）——挂载后启动
             //   （复用既有 animStart：内核 kernelAnimStart + Choreographer 帧循环）
             cssAnimNodes = startStaticAnimations();

@@ -2533,6 +2533,15 @@ public class ProteusHostView extends ViewGroup {
     private float fieldMsLast = 0f, fieldMsMax = 0f;
     /** ★帧格缓存位图（避免每帧 2000+ drawLine）。 */
     private android.graphics.Bitmap dactylGridBmp = null;
+
+    /* ── ★L2 大 N 批量绘制（§4.3）：场容器的子节点（针林）**合成一条 Path、一次 drawPath** ——
+     *   逐节点 save/matrix/drawRect（4000 次）是 draw 超预算的主因；批量化后 = 1 次填充。*/
+    private java.util.Set<Integer> fieldBatchIds = java.util.Collections.emptySet();
+    private int fieldBatchColor = 0;
+    public void setFieldBatch(java.util.Set<Integer> ids, int color) {
+        fieldBatchIds = ids != null ? ids : java.util.Collections.emptySet();
+        fieldBatchColor = color;
+    }
     /** 由 `VaporRenderHost` 注入场规格（`followField=1` 的容器）。 */
     public void setFollowFields(java.util.Map<Integer, float[]> m) {
         if (m == null || m.isEmpty()) { fieldSpec = null; return; }
@@ -3022,7 +3031,7 @@ public class ProteusHostView extends ViewGroup {
             "jank " + jankStr + " · visible_lag " + lag,
             "ptrs " + dactylPtrsLast + " · max " + dactylPtrsMax + " · follow " + followPtrs.size(),
             "field last " + dctlFmt(fieldMsLast) + "ms · max " + dctlFmt(fieldMsMax) + "ms",
-            "draw " + dctlFmt((float) (lastFrameMs)) + "ms · avg " + dctlFmt((float) (frameMsAverage())) + "ms",
+            "draw " + dctlFmt((float) (lastFrameMs)) + "ms · avg " + dctlFmt((float) (frameMsAverage())) + "ms · batch " + fieldBatchIds.size(),
         };
         // 背板
         dactylHudBg.setColor(0xCC0A0C10);
@@ -3339,9 +3348,30 @@ public class ProteusHostView extends ViewGroup {
         // ★★★父 transform 级联用：本帧 id → Cmd（取祖先的盒作 transform-origin 基准）
         final java.util.Map<Integer, Cmd> cmdById = new java.util.HashMap<>();
         if (ids != null) { for (int k = 0; k < ids.length && k < list.size(); k++) cmdById.put(ids[k], list.get(k)); }
+        // ★L2 批量针林：合成一条 Path（一次 drawPath 取代 N 次 save/drawRect）
+        final android.graphics.Path fieldBatchPath = fieldBatchIds.isEmpty() ? null : new android.graphics.Path();
         for (int i = 0; i < list.size(); i++) {
             if (skip != null && skip.contains(i)) continue;
             final Cmd c = list.get(i);
+            // ★L2 批量：场容器子节点（针）——4 角按本节点动画（scale/rotate 关于中心）算好塞进一条 Path
+            if (fieldBatchPath != null && ids != null && i < ids.length && ids[i] >= 0 && fieldBatchIds.contains(ids[i])) {
+                float bs = 1f, br = 0f;
+                final float[] bt = animTx.get(ids[i]);
+                if (bt != null && bt.length >= 4) { bs = bt[2]; br = bt[3]; }
+                final float bcx = c.x + c.w * 0.5f, bcy = c.y + c.h * 0.5f;
+                final double rad = Math.toRadians(br);
+                final float cosr = (float) Math.cos(rad), sinr = (float) Math.sin(rad);
+                final float[] px = { c.x, c.x + c.w, c.x + c.w, c.x };
+                final float[] py = { c.y, c.y, c.y + c.h, c.y + c.h };
+                for (int k = 0; k < 4; k++) {
+                    final float vx = (px[k] - bcx) * bs, vy = (py[k] - bcy) * bs;
+                    final float rx = bcx + vx * cosr - vy * sinr;
+                    final float ry = bcy + vx * sinr + vy * cosr;
+                    if (k == 0) fieldBatchPath.moveTo(rx, ry); else fieldBatchPath.lineTo(rx, ry);
+                }
+                fieldBatchPath.close();
+                continue;
+            }
             // ★★逐节点变换（内核动画的**绘制落点**）：按并行表查该指令的节点变换
             //   变换语义与 iOS `applyTransform` **同构**：平移 → 以**元素中心**为锚旋转/缩放。
             float[] tf = (ids != null && i < ids.length && ids[i] >= 0) ? animTx.get(ids[i]) : null;
@@ -4165,6 +4195,15 @@ public class ProteusHostView extends ViewGroup {
                 canvas.restoreToCount(maskLayer);
             }
             if (xf || isFixed || isSticky) canvas.restoreToCount(save);
+        }
+        // ★L2 批量针林：一次填充整条 Path（N 针 → 1 drawPath）
+        if (fieldBatchPath != null && !fieldBatchPath.isEmpty()) {
+            bgPaint.setShader(null);
+            bgPaint.setStyle(android.graphics.Paint.Style.FILL);   // ★必须显式 FILL（复用 paint 残留 STROKE ⇒ 细线看不见）
+            bgPaint.setAlpha(255);
+            bgPaint.setColor(fieldBatchColor);
+            canvas.drawPath(fieldBatchPath, bgPaint);
+            bgPaint.setStyle(android.graphics.Paint.Style.FILL);   // 复位
         }
     }
 
