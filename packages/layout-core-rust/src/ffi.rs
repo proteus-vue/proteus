@@ -472,6 +472,11 @@ pub(crate) fn parse_css_color(raw: &str) -> Result<u32, String> {
 pub(crate) struct SizeDto {
     pub(crate) width: f32,
     pub(crate) height: f32,
+    /// ★★★B-T1（2026-10-10）：**文本基线**（盒内容顶 → 基线 距离）。可选——旧宿主不带此字段 ⇒ 缺省
+    ///   不提供 ⇒ 内核不做基线对齐（保守，既有行为逐位不变）。宿主（Android `FontMetrics.ascent` /
+    ///   iOS `CTFont` ascent / 鸿蒙字体 metrics）带此值 ⇒ `align-items: baseline` 对**文本**按真实基线对齐。
+    #[serde(default)]
+    pub(crate) baseline: Option<f32>,
 }
 
 /// 把 DTO 转成引擎就绪的扁平树
@@ -1287,6 +1292,9 @@ pub(crate) struct TreeEntry {
     ///   ⇒ 度量表必须**随句柄持久化**，并供所有重排引擎使用（update / splice / apply_ops）。
     ///   ★注入新文本的度量走 `proteus_layout_set_text_measures`（或 splice 的 textMeasures）。
     pub(crate) measures: std::collections::HashMap<u32, Size>,
+    /// ★★★B-T1（2026-10-10）：**文本基线表**（nodeId → 盒内容顶→基线）。随句柄持久化（同 `measures`），
+    ///   供所有重排引擎注入 ⇒ `align-items: baseline` 对文本按真实基线对齐。空 = 宿主未提供（不做对齐）。
+    pub(crate) baselines: std::collections::HashMap<u32, f32>,
     /// ★★**孤点数**（被摘除但仍在数组里的节点）——内存回收的触发依据
     ///
     /// 【为什么需要它（本仓实测的设计余项）】摘除只**断开父子链**（不搬数组）：
@@ -1304,13 +1312,13 @@ pub(crate) struct TreeEntry {
 }
 
 impl TreeEntry {
-    fn new(tree: LayoutTree, measures: std::collections::HashMap<u32, Size>) -> Self {
+    fn new(tree: LayoutTree, measures: std::collections::HashMap<u32, Size>, baselines: std::collections::HashMap<u32, f32>) -> Self {
         let mut id_to_idx = std::collections::HashMap::with_capacity(tree.len());
         for (i, n) in tree.nodes.iter().enumerate() {
             id_to_idx.insert(n.id, i as u32);
         }
         Self {
-            last_scopes: Vec::new(), measures, tree, id_to_idx, orphans: 0,
+            last_scopes: Vec::new(), measures, baselines, tree, id_to_idx, orphans: 0,
             anim: crate::anim::AnimEngine::new() }
     }
 
@@ -1339,6 +1347,7 @@ impl TreeEntry {
         // ★度量表按**稳定 id** 存 ⇒ 与下标无关；顺手清掉已不可达 id 的条目（避免泄漏）
         let idx = self.id_to_idx.clone();
         self.measures.retain(|id, _| idx.contains_key(id));
+        self.baselines.retain(|id, _| idx.contains_key(id));
         std::mem::swap(&mut self.tree, &mut new_tree);
         self.orphans = 0;
         (before, self.tree.len())
@@ -1398,19 +1407,20 @@ fn with_engine<R>(
     handle: u64,
     tree_len: usize,
     measures: &std::collections::HashMap<u32, Size>,
+    baselines: &std::collections::HashMap<u32, f32>,
     f: impl FnOnce(&mut TaffyEngine) -> R,
 ) -> R {
     ENGINES.with(|cell| {
         let mut map = cell.borrow_mut();
         let eng = map.entry(handle).or_insert_with(|| {
-            TaffyEngine::new().with_measurer(Box::new(TableTextMeasurer::new(measures.clone())))
+            TaffyEngine::new().with_measurer(Box::new(measurer_with_baselines(measures, baselines)))
         });
         let rebuilt = eng.taffy_id_len() != tree_len;
         let len_before = eng.taffy_id_len();
         if rebuilt {
-            *eng = TaffyEngine::new().with_measurer(Box::new(TableTextMeasurer::new(measures.clone())));
+            *eng = TaffyEngine::new().with_measurer(Box::new(measurer_with_baselines(measures, baselines)));
         } else {
-            eng.set_measurer(Box::new(TableTextMeasurer::new(measures.clone())));
+            eng.set_measurer(Box::new(measurer_with_baselines(measures, baselines)));
         }
         // ★侧信道诊断（判定"持久引擎是否真的被复用"——归因靠读数，不靠推理）
         let cache_len = eng.measure_cache_len();
@@ -1450,6 +1460,7 @@ pub unsafe extern "C" fn proteus_layout_create(request_json: *const c_char) -> u
         };
         let handle = NEXT_HANDLE.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         let measures = measure_map(&req);
+        let baselines = baseline_map(&req);
         // ★★**预建持久树**（本仓实测：消除"首轮更新"的整树重建成本）
         //
         // 【为什么在这里做（真机读数）】首轮增量更新时持久树为空 ⇒ 必须 `build_taffy` 整棵树
@@ -1459,7 +1470,7 @@ pub unsafe extern "C" fn proteus_layout_create(request_json: *const c_char) -> u
         //   把那份树留给后续复用，等于"首帧白送一棵持久树"，首轮更新即刻享到复用收益。
         {
             let mut eng = TaffyEngine::new()
-                .with_measurer(Box::new(TableTextMeasurer::new(measures.clone())));
+                .with_measurer(Box::new(measurer_with_baselines(&measures, &baselines)));
             // `layout` 内部会 `build_taffy` 并把 taffy 树**留在这个引擎里**（persistent_taffy）
             // —— 用与首帧相同的约束再跑一次，代价 = 一次整树求解（本来就是首帧成本）
             let constraint = match (req.viewport.width, req.viewport.height) {
@@ -1473,7 +1484,7 @@ pub unsafe extern "C" fn proteus_layout_create(request_json: *const c_char) -> u
             ENGINES.with(|cell| { cell.borrow_mut().insert(handle, eng); });
         }
         registry().lock().map_err(|_| "注册表锁失败".to_string())?
-            .insert(handle, TreeEntry::new(tree, measures));
+            .insert(handle, TreeEntry::new(tree, measures, baselines));
         Ok(handle)
     });
     match r {
@@ -1682,6 +1693,7 @@ pub unsafe extern "C" fn proteus_layout_update(handle: u64, patches_json: *const
         // ★度量表**先取出来**：下面 `tree` 要可变借用 `entry`，届时不能再借它的字段
         //   （见 TreeEntry::measures——无它则文本在增量重排后塌成 0 高）
         let measures = entry.measures.clone();
+        let baselines = entry.baselines.clone();
         let t_idmap0 = std::time::Instant::now();
         // ★直接借用**缓存的** id→索引表（建树时已建好）
         //   初版每次重建（O(n)）—— 实测 20501 节点 3.14ms，而真正重排仅 0.15ms ⇒ 95% 白花
@@ -1747,7 +1759,7 @@ pub unsafe extern "C" fn proteus_layout_update(handle: u64, patches_json: *const
         //   同形状 2001 节点基准 2.96ms → 复用 0.065ms，**45×**）
         // ★统一经 `with_engine`（本仓纪律：同一语义一处实现——此处曾有一份**内联副本**，
         //   它绕过了侧信道诊断 ⇒ 我连续三轮拿不到 `engine_diag`，白查）
-        let multi = with_engine(handle, tree.len(), &measures, |eng| {
+        let multi = with_engine(handle, tree.len(), &measures, &baselines, |eng| {
             crate::ops_apply::relayout_multi_in(eng, tree, &dirty_ids)
         });
         let t_engine_new = t_eng0.elapsed().as_secs_f64() * 1000.0;
@@ -2038,7 +2050,7 @@ pub unsafe extern "C" fn proteus_layout_create_blob(ptr: *const u8, len: u32) ->
         engine.layout(&mut tree, constraint);
         let handle = NEXT_HANDLE.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         registry().lock().map_err(|_| "注册表锁失败".to_string())?
-            .insert(handle, TreeEntry::new(tree, measure_map(&req)));
+            .insert(handle, TreeEntry::new(tree, measure_map(&req), baseline_map(&req)));
         Ok(handle)
     });
     match r {
@@ -2348,7 +2360,36 @@ fn measure_map(req: &LayoutRequest) -> std::collections::HashMap<u32, Size> {
 }
 
 fn to_measurer(req: &LayoutRequest) -> TableTextMeasurer {
-    TableTextMeasurer::new(measure_map(req))
+    let mut m = TableTextMeasurer::new(measure_map(req));
+    for (id, b) in baseline_map(req) {
+        m.set_baseline(id, b);
+    }
+    m
+}
+
+/// ★★B-T1（2026-10-10）：请求里的基线（`SizeDto.baseline`）→ id 化基线表（只留 > 0；缺省 = 不提供）。
+fn baseline_map(req: &LayoutRequest) -> std::collections::HashMap<u32, f32> {
+    let mut m = std::collections::HashMap::new();
+    for (k, v) in &req.text_measures {
+        if let (Ok(id), Some(b)) = (k.parse::<u32>(), v.baseline) {
+            if b > 0.0 {
+                m.insert(id, b);
+            }
+        }
+    }
+    m
+}
+
+/// ★★B-T1：按（尺寸表 + 基线表）造持久引擎用的度量器（`with_engine` 与建树路径共用——一处实现）。
+fn measurer_with_baselines(
+    measures: &std::collections::HashMap<u32, Size>,
+    baselines: &std::collections::HashMap<u32, f32>,
+) -> TableTextMeasurer {
+    let mut m = TableTextMeasurer::new(measures.clone());
+    for (id, b) in baselines {
+        m.set_baseline(*id, *b);
+    }
+    m
 }
 
 #[derive(serde::Serialize)]
@@ -2551,6 +2592,7 @@ pub unsafe extern "C" fn proteus_layout_splice(handle: u64, splice_json: *const 
                 entry.id_to_idx.remove(&nid);
                 // ★度量条目一并清（节点已不在树上 ⇒ 留着是纯泄漏；且若未来 id 复用会串味）
                 entry.measures.remove(&nid);
+                entry.baselines.remove(&nid);
                 entry.orphans += 1;   // ★计入孤点（节点体仍在数组里，待压实回收）
                 for &c in &entry.tree.get(i).children.clone() {
                     stack.push(c);
@@ -2707,6 +2749,10 @@ pub unsafe extern "C" fn proteus_layout_splice(handle: u64, splice_json: *const 
         for (k, v) in &req.text_measures {
             if let Ok(id) = k.parse::<u32>() {
                 entry.measures.insert(id, Size { width: v.width, height: v.height });
+                // ★B-T1：新文本的基线（可选；>0 才记，缺省视作不提供）
+                if let Some(b) = v.baseline {
+                    if b > 0.0 { entry.baselines.insert(id, b); }
+                }
             }
         }
         // ★★**splice 必须显式使持久 taffy 树失效**（本仓测试抓到的真缺陷）
@@ -2725,8 +2771,8 @@ pub unsafe extern "C" fn proteus_layout_splice(handle: u64, splice_json: *const 
         let multi = if dirty_roots.is_empty() {
             crate::ops_apply::MultiRelayout::default()
         } else {
-            let (em, tl) = (entry.measures.clone(), entry.tree.len());
-            with_engine(handle, tl, &em, |eng| {
+            let (em, bl, tl) = (entry.measures.clone(), entry.baselines.clone(), entry.tree.len());
+            with_engine(handle, tl, &em, &bl, |eng| {
                 crate::ops_apply::relayout_multi_in(eng, &mut entry.tree, &dirty_roots)
             })
         };
@@ -2822,12 +2868,16 @@ pub unsafe extern "C" fn proteus_layout_set_text_measures(handle: u64, measures_
         for (k, v) in &map {
             if let Ok(id) = k.parse::<u32>() {
                 entry.measures.insert(id, Size { width: v.width, height: v.height });
+                // ★B-T1：基线（可选；>0 才记；同尺寸一并注入——见 host 注入形态）
+                if let Some(b) = v.baseline {
+                    if b > 0.0 { entry.baselines.insert(id, b); }
+                }
                 updated += 1;
             }
         }
         // ★引擎里的度量器是**快照** ⇒ 同步（否则新文本按旧尺寸算：静默错几何）
-        let (ms, tl) = (entry.measures.clone(), entry.tree.len());
-        with_engine(handle, tl, &ms, |_eng| {});
+        let (ms, bl, tl) = (entry.measures.clone(), entry.baselines.clone(), entry.tree.len());
+        with_engine(handle, tl, &ms, &bl, |_eng| {});
         Ok(serde_json::json!({"ok": true, "updated": updated, "total": entry.measures.len()}).to_string())
     });
     match r {
@@ -2887,8 +2937,8 @@ fn apply_ops_impl(handle: u64, ptr: *const u8, len: u32, with_rects: bool) -> Re
     let t_rel0 = std::time::Instant::now();
     // ★复用**按句柄的持久引擎**（含持久 taffy 树；度量器随 with_engine 同步）
     let _ = &measures;
-    let (em, tl) = (entry.measures.clone(), entry.tree.len());
-    let multi = with_engine(handle, tl, &em, |eng| {
+    let (em, bl, tl) = (entry.measures.clone(), entry.baselines.clone(), entry.tree.len());
+    let multi = with_engine(handle, tl, &em, &bl, |eng| {
         crate::ops_apply::relayout_multi_in(eng, &mut entry.tree, &outcome.dirty)
     });
     let t_rel = t_rel0.elapsed().as_secs_f64() * 1000.0;
@@ -5545,6 +5595,32 @@ mod tests {
         assert_eq!(v["applied"].as_u64(), Some(0), "未知节点不应计入 applied");
         assert!(v["unsupported"].as_array().map(|a| !a.is_empty()).unwrap_or(false),
                 "★必须上报 unsupported（否则是静默不更新）：{out}");
+        assert!(unsafe { proteus_layout_destroy(handle) });
+    }
+
+    /// ★★★B-T1（2026-10-10）：**文本基线经 FFI 注入 ⇒ 端到端 `align-items:baseline` 生效**。
+    ///   证明"宿主在 `textMeasures` 里带 `baseline` ⇒ 内核 `rects` 按真实基线对齐"（非 taffy 盒底近似）。
+    #[test]
+    fn baseline_via_ffi_aligns_text() {
+        // row 容器 align-items:baseline；两文本 A(10,高20,基线12) / B(11,高30,基线30)
+        let req_json = r#"{"viewport":{"width":400.0,"height":100.0},"nodes":[
+            {"id":1,"parentId":null,"flexDirection":"row","alignItems":"baseline","width":400.0,"height":100.0},
+            {"id":10,"parentId":1,"text":"a","flexShrink":0.0},
+            {"id":11,"parentId":1,"text":"b","flexShrink":0.0}
+        ],"textMeasures":{"10":{"width":100.0,"height":20.0,"baseline":12.0},"11":{"width":100.0,"height":30.0,"baseline":30.0}}}"#;
+        let handle = unsafe {
+            let c = CString::new(req_json).unwrap();
+            proteus_layout_create(c.as_ptr())
+        };
+        assert!(handle > 0, "create 失败");
+        let v = rects_of(handle);
+        let rects = &v["rects"];
+        let ya = rects["10"]["y"].as_f64().unwrap();
+        let yb = rects["11"]["y"].as_f64().unwrap();
+        // 基线共线：ya + 12 == yb + 30
+        assert!((ya + 12.0 - (yb + 30.0)).abs() < 0.5, "★基线须共线（ya+12 vs yb+30）：ya={ya} yb={yb} rects={rects}");
+        // 反证：非"盒底对齐"（盒底：ya+20 == yb+30 ⇒ 差 10）
+        assert!((ya + 20.0 - (yb + 30.0)).abs() > 1.0, "★须为真基线对齐（非盒底）：ya={ya} yb={yb}");
         assert!(unsafe { proteus_layout_destroy(handle) });
     }
 
