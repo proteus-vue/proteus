@@ -75,6 +75,12 @@ interface VaporHost {
   updatePatches(patchesJson: string): string
   /** 核心几何读数（判据用：**从内核真源读**，不是从我们发下去的参数复述） */
   readRects(): string
+  /**
+   * ★★★B-T2（2026-10-10）：**文本策略回读**（`whiteSpace`/`wordBreak`/`lineClamp`；内核 = SSOT）。
+   *   入参 JSON 数组 id；返 `{ok,policy:{id:{whiteSpace,wordBreak,lineClamp}}}`。宿主在收到
+   *   `text_policy_updates` 回执后调它（不自己维护第二份策略表）。可选：宿主未实现 ⇒ 探测为 undefined。
+   */
+  textPolicy?(idsJson: string): string
   /** ★★绘制通道探针（读**宿主真源**：渐变/发光/遮罩/圆角/裁剪/描边建出来了没） */
   probeChannels(idsJson: string): string
   /**
@@ -434,6 +440,15 @@ interface VaporReport {
     textA_id: number
     textB_id: number
     residuals: number[]
+  }
+  /**
+   * ★★★**B-T2 探针**（2026-10-10 · 判据 ㉙）——**动态 `:class` 的文本策略走内核**（`white-space` via SET_STYLE_STR）。
+   *   `policy_seen` = [翻转前, class 开, class 关] 三次 `proteusHost.textPolicy([id])` 回读的内核策略
+   *   （内核 = SSOT；宿主不自己记）——期望：`` → `nowrap` → ``。
+   */
+  bt2_probe: {
+    nodeId: number
+    policy_seen: string[]
   }
   /**
    * ★★★**`:style` 对象展开探针**（2026-10-03）——两条通道各自的真值：
@@ -1796,7 +1811,7 @@ function runShort(args: VaporArgs): string {
     tpl_nodes: 0, tpl_ok: false, sub_l1: 0, sub_l0: 0, sub_l1_rate: 0, sub_sources: [],
     inst_ms: 0, inst_nodes: 0, inst_reused_ids: 0, inst_allocated_ids: 0, inst_rows: 0,
     inst_values_filled: 0, inst_virtual_rows: 0, inst_text_filled: 0, inst_width_filled: 0,
-    mix_text_probe: [], text_probe_rounds: [], gate_rounds: [], gate_text_nodes: [], once_node_id: -1, memo_node_id: -1, expr_probe: [], transition_started: 0, tpl_transition: [], component_mounts: 0, component_nodes: 0, component_kid_probe: {}, slot_probe: { texts: [], rects: [], fills: [], markers_left: -1 }, emit_probe: { emits: [], parent_source_after: undefined, geom_before: -1, geom_after: -1 }, scoped_probe: { texts: [], anchor_id: -1, anchor_width_field: -1, anchor_width_rect: -1, destr_text: '', destr_width_field: -1, destr_width_rect: -1 }, lifecycle_probe: { bindings: [], ran_handler: '', changed_sources: [], ops_bytes: 0, applied: 0, anchor_id: -1, geom_before: -1, geom_after: -1 }, dyn_probe: { texts: [], mounts: [], geom: [], dropped: -1, notes: [] }, directive_probe: { nodes: [], rounds: [], plays: [] }, mixed_probe: { texts: [], leaves: 0, geom: [] }, t2_probe: { nodeId: -1, widths: [], values: [], logs: [] }, b5_probe: { nodeId: -1, phases: [], widths: [], values: [] }, b3a_probe: { nodeId: -1, widths: [] }, b3b_probe: { childId: -1, child_xs: [] }, b3d_probe: { childId: -1, child_xs: [] }, bt1_probe: { textA_id: -1, textB_id: -1, residuals: [] }, styleobj_probe: { anchor_id: -1, width_before: -1, width_after: -1, kernel_applied: 0, patch_calls: [] },
+    mix_text_probe: [], text_probe_rounds: [], gate_rounds: [], gate_text_nodes: [], once_node_id: -1, memo_node_id: -1, expr_probe: [], transition_started: 0, tpl_transition: [], component_mounts: 0, component_nodes: 0, component_kid_probe: {}, slot_probe: { texts: [], rects: [], fills: [], markers_left: -1 }, emit_probe: { emits: [], parent_source_after: undefined, geom_before: -1, geom_after: -1 }, scoped_probe: { texts: [], anchor_id: -1, anchor_width_field: -1, anchor_width_rect: -1, destr_text: '', destr_width_field: -1, destr_width_rect: -1 }, lifecycle_probe: { bindings: [], ran_handler: '', changed_sources: [], ops_bytes: 0, applied: 0, anchor_id: -1, geom_before: -1, geom_after: -1 }, dyn_probe: { texts: [], mounts: [], geom: [], dropped: -1, notes: [] }, directive_probe: { nodes: [], rounds: [], plays: [] }, mixed_probe: { texts: [], leaves: 0, geom: [] }, t2_probe: { nodeId: -1, widths: [], values: [], logs: [] }, b5_probe: { nodeId: -1, phases: [], widths: [], values: [] }, b3a_probe: { nodeId: -1, widths: [] }, b3b_probe: { childId: -1, child_xs: [] }, b3d_probe: { childId: -1, child_xs: [] }, bt1_probe: { textA_id: -1, textB_id: -1, residuals: [] }, bt2_probe: { nodeId: -1, policy_seen: [] }, styleobj_probe: { anchor_id: -1, width_before: -1, width_after: -1, kernel_applied: 0, patch_calls: [] },
     mount_ms: 0, mount_nodes: 0,
     updates_run: 0, ops_bytes: 0, ops_ms: 0, apply_ms: 0, text_synced_total: 0, update_evidence: [], geom_probe: [], channels: [],
     ev_bindings: 0, ev_handlers: 0, ev_modifiers: 0, taps: 0, tap_evidence: [],
@@ -3283,6 +3298,61 @@ function runShort(args: VaporArgs): string {
         } catch { /* 重挂失败 ⇒ 判据按 host_nodes 不符判红 */ }
       } else {
         notes.push('B-T1 探针：产物无 bt1 段（夹具未覆盖 ⇒ 判据 ㉘ 按缺失处理）')
+      }
+    }
+
+    /* ═══════════ ★★★B-T2 探针（2026-10-10 · 判据 ㉙）：动态 :class 的文本策略走内核 ═══════════
+     *
+     * 【要证明什么】动态 `:class` 命中 `white-space` ⇒ 经 `SET_STYLE_STR` 写进**内核**（=SSOT），
+     *   宿主/探针可从内核**回读**（`proteusHost.textPolicy([id])`）——闭合 B3 的"内核无文本字段"边界。
+     *   翻转类 ⇒ 内核策略空→nowrap→空（三读数）。
+     */
+    {
+      const bt2Art = (artifacts as { bt2?: { tpl: LayoutTemplate; table: SubscriptionTable } }).bt2
+      if (bt2Art?.tpl?.ok) {
+        const bt2data: Record<string, unknown> = { bt2on: false }
+        const bt2Reg = new ListRegistry()
+        const bt2Inst = instantiateTemplate(bt2Art.tpl, { viewport: args.viewport, read: (n) => bt2data[n], table: bt2Art.table, registry: bt2Reg })
+        const bt2Cap: number[][] = []
+        const bt2SlotRt = new SlotRuntime(new PropKeyTable(), new StringPool(), (bytes) => bt2Cap.push(Array.from(bytes)))
+        const bt2Vapor = new VaporRuntime(bt2Art.table, bt2SlotRt, VaporRuntime.buildEvaluators(bt2Art.table.evaluators), bt2Reg)
+        const bt2Ctx = { read: (n: string) => bt2data[n] }
+        bt2Vapor.load(bt2Ctx, () => { /* 源变化靠显式 relink */ })
+        // 文本节点（承载动态 :class 的节点）——模板序：容器 id0、文本 id1
+        const bt2NodeId = bt2Inst.nodes.length >= 2 ? Number((bt2Inst.nodes[1] as { id: number }).id) : -1
+        const readPolicy = (): string => {
+          try {
+            if (typeof proteusHost.textPolicy !== 'function') return '<no-host-textPolicy>'
+            const r = JSON.parse(proteusHost.textPolicy(JSON.stringify([bt2NodeId]))) as { policy?: Record<string, { whiteSpace?: string }> }
+            return r.policy?.[String(bt2NodeId)]?.whiteSpace ?? ''
+          } catch { return '<err>' }
+        }
+        try {
+          const mOut = JSON.parse(proteusHost.mount(JSON.stringify({ viewport: bt2Inst.viewport, nodes: bt2Inst.nodes }))) as { ok?: boolean; error?: string }
+          if (mOut.ok === true && bt2NodeId >= 0) {
+            const flip = (on: boolean): void => {
+              bt2data.bt2on = on
+              bt2Cap.length = 0
+              bt2Vapor.relink(bt2Ctx)
+              bt2SlotRt.flush()
+              const payload = bt2Cap.length ? bt2Cap[bt2Cap.length - 1]! : []
+              if (payload.length > 0) { try { proteusHost.applyOps(JSON.stringify(payload)) } catch { /* 读数照常 */ } }
+            }
+            const seen: string[] = [readPolicy()]
+            flip(true); seen.push(readPolicy())
+            flip(false); seen.push(readPolicy())
+            rep.bt2_probe = { nodeId: bt2NodeId, policy_seen: seen }
+          } else {
+            notes.push(`B-T2 探针：mount/节点缺失（mount.ok=${mOut.ok} node=${bt2NodeId}）——判据 ㉙ 按缺失处理`)
+          }
+        } catch (e) {
+          notes.push(`B-T2 探针异常：${String((e as Error)?.message ?? e)}`)
+        }
+        try {
+          proteusHost.mount(JSON.stringify({ viewport: inst.viewport, nodes: inst.nodes }))
+        } catch { /* 重挂失败 ⇒ 判据按 host_nodes 不符判红 */ }
+      } else {
+        notes.push('B-T2 探针：产物无 bt2 段（夹具未覆盖 ⇒ 判据 ㉙ 按缺失处理）')
       }
     }
 

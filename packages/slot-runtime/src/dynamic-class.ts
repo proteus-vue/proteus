@@ -144,13 +144,18 @@ export function layoutEnumIndex(field: string, value: unknown): number | null {
 }
 
 /**
- * ★★★B3d（2026-10-10）：**字符串布局字段**（值 = token 串，如 `1fr 1fr 200px`）——
+ * ★★★B3d（2026-10-10）：**字符串值字段**（值 = token 串，如 `1fr 1fr 200px`）——
  *   走 `SET_STYLE_STR`（f32 的 SET_STYLE 装不下）。★与内核 `apply_style_str_key` 的登记一致。
  *   ★这些字段**不在 CSE 预计算计划里**（计划只分解数值/枚举）⇒ 运行期需从线性规则补（见 runtime）。
+ *   ★B-T2（2026-10-10）：并入**文本策略**（`whiteSpace`/`wordBreak`/`lineClamp`）——同为字符串值、
+ *     同走 `SET_STYLE_STR`（内核按 key 区分：grid ⇒ 重排/DirtyOk(true)；文本策略 ⇒ 只记变更
+ *     `text_policy_updates` 不重排，宿主据回执从内核重读并重度量/重绘）。
  */
 export const STRING_LAYOUT_FIELDS: ReadonlySet<string> = new Set([
   'gridTemplateColumns', 'gridTemplateRows', 'gridTemplateAreas',
   'gridAutoColumns', 'gridAutoRows', 'gridAutoFlow',
+  // ★B-T2：文本策略（字符串值）——内核持有 = SSOT；动态 :class 改它们走同一条 SET_STYLE_STR。
+  'whiteSpace', 'wordBreak', 'lineClamp',
 ])
 
 /** 互斥组状态：0 = 组内无活跃；i+1 = 组内第 i 个位活跃（按组内位序） */

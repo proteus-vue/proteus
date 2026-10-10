@@ -896,6 +896,20 @@ def main() -> int:
     else:
         print(f"  ✓ ㉘ ★B-T1 文本基线对齐：基线残差 {bt1r}（≈0）——align-items:baseline 走内核文本基线生效")
 
+    # ── ㉙ ★★★B-T2：**动态 :class 的文本策略走内核**（white-space via SET_STYLE_STR；内核=SSOT，2026-10-10）──
+    bt2 = rep.get("bt2_probe") or {}
+    seen = [str(x) for x in (bt2.get("policy_seen") or [])]
+    if not bt2 or len(seen) < 3:
+        print("  ◐ ㉙ B-T2 动态 :class 文本策略：本端夹具未覆盖（报告无 bt2_probe）——如实跳过")
+    elif seen[0] == "<no-host-textPolicy>" or any(s == "<err>" for s in seen):
+        fail(f"★B-T2 动态 :class 文本策略：宿主 textPolicy 未接/报错（期望内核回读 ['', 'nowrap', '']）：{seen}")
+        ok = False
+    elif seen[0] != "" or seen[1] != "nowrap" or seen[2] != "":
+        fail(f"★B-T2 动态 :class 文本策略内核回读不符（期望 ['', 'nowrap', '']：class 关→开→关）：{seen} —— 策略未进内核或回读通道没生效")
+        ok = False
+    else:
+        print(f"  ✓ ㉙ ★B-T2 动态 :class 文本策略：内核策略回读 {seen}（''→nowrap→''）——white-space 经 SET_STYLE_STR 进内核(=SSOT)生效")
+
     # 附加观测（不判红，只如实报）
     una = rep.get("uninstantiated_slots", 0)
     if una:

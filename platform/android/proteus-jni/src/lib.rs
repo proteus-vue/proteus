@@ -465,9 +465,40 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeApplyOps<'lo
     into_java_string(&mut env, out)
 }
 
-/* ────────────────────────── ★★MA0-RT：平台零参与路径（Android） ────────────────────────── */
+/// `RustLayout.nativeTextPolicy(handle: Long, nodeIdsJson: String): String`
+///
+/// ★★★B-T2（2026-10-10）：**文本策略回读**（`whiteSpace`/`wordBreak`/`lineClamp`；内核 = SSOT）。
+///   宿主在收到 `text_policy_updates`（apply_ops 回执）后调本入口，从内核读策略并据此重度量/重绘
+///   ——宿主不自己维护第二份策略表（单一来源）。
+#[no_mangle]
+pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeTextPolicy<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    handle: jni::sys::jlong,
+    node_ids: JString<'local>,
+) -> jstring {
+    let ids: String = match env.get_string(&node_ids) {
+        Ok(s) => s.into(),
+        Err(e) => return into_java_string(&mut env, format!("{{\"ok\":false,\"error\":\"ids 读取失败：{e}\"}}")),
+    };
+    let out = std::panic::catch_unwind(|| -> String {
+        let c = match std::ffi::CString::new(ids) {
+            Ok(c) => c,
+            Err(_) => return "{\"ok\":false,\"error\":\"ids 含 NUL\"}".to_string(),
+        };
+        let p = unsafe { ffi::proteus_layout_text_policy(handle as u64, c.as_ptr()) };
+        if p.is_null() {
+            return "{\"ok\":false,\"error\":\"null\"}".to_string();
+        }
+        let s = unsafe { std::ffi::CStr::from_ptr(p) }.to_string_lossy().into_owned();
+        unsafe { ffi::proteus_layout_free_string(p) };
+        s
+    })
+    .unwrap_or_else(|_| "{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string());
+    into_java_string(&mut env, out)
+}
 
-/// ★★**曲线的贝塞尔近似**（Android `PathInterpolator` 用）——曲线知识只在引擎一处
+/* ────────────────────────── ★★MA0-RT：平台零参与路径（Android） ────────────────────────── */
 #[no_mangle]
 pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeCurveBezier<'local>(
     mut env: JNIEnv<'local>,

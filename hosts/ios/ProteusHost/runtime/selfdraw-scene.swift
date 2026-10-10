@@ -83,6 +83,8 @@ func proteus_layout_svg_morph_path(_ handle: UInt64, _ json: UnsafePointer<CChar
 func proteus_layout_svg_morph_path_bin(_ handle: UInt64, _ nodeId: UInt32, _ outLen: UnsafeMutablePointer<UInt32>) -> UnsafeMutablePointer<UInt8>
 @_silgen_name("proteus_layout_text_color_nodes")
 func proteus_layout_text_color_nodes(_ handle: UInt64) -> UnsafeMutablePointer<CChar>
+@_silgen_name("proteus_layout_text_policy")
+func proteus_layout_text_policy(_ handle: UInt64, _ nodeIdsJson: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
 @_silgen_name("proteus_layout_shared_element")
 func proteus_layout_shared_element(_ handle: UInt64, _ json: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
 @_silgen_name("proteus_layout_anim_commit_spec")
@@ -328,6 +330,8 @@ func physFootprintMB() -> Double {
     func readRects() -> String
     /// ★★A/B：**绘制通道探针**（与 Android `probeChannels` 同族；从 **CALayer 真读**）
     func probeChannels(_ idsJson: String) -> String
+    /// ★★★B-T2（2026-10-10）：**文本策略回读**（whiteSpace/wordBreak/lineClamp；内核 = SSOT）——与 Android `textPolicy` 同形
+    func textPolicy(_ idsJson: String) -> String
     /// ★★A/B：**注册手势回调名**（宿主 tapAt 时经 JSContext 调它——与 Android JNI 反向调用同语义）
     func onGesture(_ name: String) -> String
     func layerTransformProbe(_ idsJson: String) -> String
@@ -5623,6 +5627,12 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         rects()
     }
 
+    /// ★★★B-T2（2026-10-10）：**文本策略回读**（内核 = SSOT）——与 Android `textPolicy` 同形。
+    func textPolicy(_ idsJson: String) -> String {
+        guard handle != 0 else { return "{\"ok\":false,\"error\":\"未建树\"}" }
+        return idsJson.withCString { takeCString(proteus_layout_text_policy(handle, $0)) }
+    }
+
     /// ★DevTools 元素高亮（决策 #701）：面板选中节点 ⇒ 在设备屏上给该节点 rect 描边覆盖
     func highlightNode(_ id: Int) { view?.highlightNode(id) }
 
@@ -6980,6 +6990,31 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         let textUpdates = (o?["text_updates"] as? [String: Any]) ?? [:]
         let textApplied = textUpdates.isEmpty ? 0 : view.applyTextUpdates(textUpdates)
 
+        // ★★★B-T2（2026-10-10）：**文本策略变更**（white-space/word-break/line-clamp 经 SET_STYLE_STR）——
+        //   从内核**回读**并补进 `lastNodes`，再走既有**重渲染**（策略影响折行/截断 ⇒ 必须重度量重绘；
+        //   iOS 无"单节点重度量"轻量路径 ⇒ 用全量重建，策略变更稀少，正确性优先）。
+        var policyApplied = 0
+        if let pu = o?["text_policy_updates"] as? [Int], !pu.isEmpty {
+            let idsJson = "[" + pu.map { String($0) }.joined(separator: ",") + "]"
+            let polStr = idsJson.withCString { takeCString(proteus_layout_text_policy(handle, $0)) }
+            if let pd = polStr.data(using: .utf8),
+               let po = (try? JSONSerialization.jsonObject(with: pd)) as? [String: Any],
+               let map = po["policy"] as? [String: [String: Any]] {
+                var touched = false
+                for id in pu {
+                    guard let p = map[String(id)] else { continue }
+                    guard let idx = lastNodes.firstIndex(where: { ($0["id"] as? Int) == id }) else { continue }
+                    if let v = p["whiteSpace"] as? String { lastNodes[idx]["whiteSpace"] = v; touched = true }
+                    if let v = p["wordBreak"] as? String { lastNodes[idx]["wordBreak"] = v; touched = true }
+                    if let v = p["lineClamp"] as? String { lastNodes[idx]["lineClamp"] = v; touched = true }
+                }
+                if touched {
+                    _ = render(treeJson: Self.treeJson(viewport: lastViewport, nodes: lastNodes), phase: "ops", force: true)
+                    policyApplied = pu.count
+                }
+            }
+        }
+
         // ★★几何变化量自检：与上一帧快照比对，统计**真的移动/改尺寸**的节点数
         //
         // 【判据意义】若这个数为 0，说明本次"更新"对几何无影响
@@ -7032,6 +7067,7 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         res["updated_layers"] = updated
         res["unsupported_count"] = unsupported.count
         res["text_updates"] = textUpdates.count
+        res["text_policy_synced"] = policyApplied
         res["text_layers_applied"] = textApplied
         // ★★A/B（矩阵 #14 续）：判据（与 Android 共用）读的键名别名——iOS 用 patch_count/
         //   text_layers_applied，而共享的 bundle-vapor.js 读 applied/text_synced/relayout/rects。

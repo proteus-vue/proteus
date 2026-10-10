@@ -40,6 +40,9 @@ pub struct ApplyOutcome {
     ///   （结构/几何全对，只有肉眼能发现）。全量重建路径不受影响（重建层时带上新文本），
     ///   故此前只改样式的用例发现不了——本仓 V6（SFC 端到端，含 `{{ item.title }}`）暴露。
     pub text_updates: Vec<(u32, String)>,
+    /// ★★★B-T2（2026-10-10）：**文本策略变更明细**（节点 id，去重）——`white-space`/`word-break`/`line-clamp`
+    ///   经 `SET_STYLE_STR` 变更时记录。宿主据此从内核**重读**该节点策略并重度量/重绘（对齐 B3d 字符串 op 的宿主回灌）。
+    pub text_policy_updates: Vec<u32>,
 }
 
 /// 把解码后的指令应用到树上（**不改几何，只改节点状态**；重排由调用方决定）
@@ -94,7 +97,15 @@ pub fn apply_ops_to_tree(tree: &mut LayoutTree, dec: &crate::ops::DecodedOps) ->
                         dirty_set.insert(idx as u32);
                         out.applied += 1;
                     }
-                    Ok(false) => out.applied += 1, // 非布局字符串键（宿主消费）⇒ 不重排
+                    Ok(false) => {
+                        out.applied += 1; // 非布局字符串键（宿主/文本消费）⇒ 不重排
+                        // ★B-T2：**文本策略**变更 ⇒ 记入明细（宿主据此从内核**重读**并重度量/重绘）；去重
+                        if key == "layout.whiteSpace" || key == "layout.wordBreak" || key == "layout.lineClamp" {
+                            if !out.text_policy_updates.contains(node_id) {
+                                out.text_policy_updates.push(*node_id);
+                            }
+                        }
+                    }
                     Err(msg) => out.unsupported.push((op.code(), msg)),
                 }
             }
@@ -472,6 +483,12 @@ pub fn apply_style_str_key(node: &mut LNode, key: &str, value: &str) -> Result<b
         "layout.gridAutoColumns" => { s.grid_auto_columns = v; Ok(true) }
         "layout.gridAutoRows" => { s.grid_auto_rows = v; Ok(true) }
         "layout.gridAutoFlow" => { s.grid_auto_flow = v; Ok(true) }
+        // ★★★B-T2（2026-10-10）：**文本策略**（内核持有 = SSOT；不参与 taffy 布局 ⇒ Ok(false)）。
+        //   动态 `:class` 改这三字段走本通道 + 字符串 op ⇒ 内核持有 + 宿主从内核读（单一来源）。
+        //   ★Ok(false) = 无需内核重排（策略影响**文本度量/绘制**，宿主据变更自行重度量/重绘）。
+        "layout.whiteSpace" => { s.white_space = v; Ok(false) }
+        "layout.wordBreak" => { s.word_break = v; Ok(false) }
+        "layout.lineClamp" => { s.line_clamp = v; Ok(false) }
         k if k.starts_with("paint.") || k.starts_with("text.") || k.starts_with("attr.") => Ok(false),
         other => Err(format!("本层不支持字符串布局键 `{other}`（若为几何属性，请在 apply_style_str_key 里登记）")),
     }
