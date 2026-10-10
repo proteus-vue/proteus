@@ -910,6 +910,16 @@ def main() -> int:
     else:
         print(f"  ✓ ㉙ ★B-T2 动态 :class 文本策略：内核策略回读 {seen}（''→nowrap→''）——white-space 经 SET_STYLE_STR 进内核(=SSOT)生效")
 
+    # ── ㉚ ★★★B4-T2b：**原生输入控件端上建成且是活的**（`<input v-model>` ⇒ 宿主 EditText，2026-10-10）──
+    bt3 = rep.get("bt3_probe") or {}
+    if not bt3 or bt3.get("nodeId", -1) < 0:
+        print("  ◐ ㉚ B4-T2b 原生输入控件：本端夹具未覆盖（报告无 bt3_probe）——如实跳过")
+    elif bt3.get("inputEvents", 0) < 1:
+        fail(f"★B4-T2b 原生输入控件：注入文本后 TextWatcher 未触发（inputEvents={bt3.get('inputEvents')}）——控件未建成/不活")
+        ok = False
+    else:
+        print(f"  ✓ ㉚ ★B4-T2b 原生输入控件：节点 #{bt3.get('nodeId')} 建了 EditText 且注入文本触发 {bt3.get('inputEvents')} 次输入事件——控件活")
+
     # 附加观测（不判红，只如实报）
     una = rep.get("uninstantiated_slots", 0)
     if una:

@@ -100,6 +100,9 @@ static struct {
   /* ★★★B-T2（2026-10-10）：文本策略回读（`proteusHost.textPolicy(idsJson)`——内核=SSOT）。
    *   同一条件注入原则（Java 未实现 ⇒ 不注入 ⇒ JS 侧探测为 undefined）。 */
   jmethodID text_policy;
+  /* ★★★B4-T2b（2026-10-10）：原生输入控件探针（`proteusHost.inputProbeSetText(text)` ⇒ 注入 EditText 文本
+   *   ⇒ TextWatcher ⇒ inputSink ⇒ JS 回写；判据驱动用）。同一条件注入原则。 */
+  jmethodID input_probe_set_text;
   /* ★★★长列表虚拟化（2026-10-01）：整树在内核、宿主只物化可见区。
    *   同一条件注入原则（Java 未实现 ⇒ 不注入 ⇒ JS 侧探测为 undefined）。 */
   jmethodID mount_virtual;
@@ -452,6 +455,11 @@ static JSValue js_host_text_policy(JSContext *ctx, JSValueConst this_val, int ar
   return host_call_impl(ctx, g_host_methods.text_policy, 1, this_val, argc, argv);
 }
 
+/** `proteusHost.inputProbeSetText(text)` —— ★★★B4-T2b：给原生输入控件注入文本（判据驱动回写） */
+static JSValue js_host_input_probe_set_text(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+  return host_call_impl(ctx, g_host_methods.input_probe_set_text, 1, this_val, argc, argv);
+}
+
 /** `proteusHost.mountVirtual(treeJson)` —— ★★★**虚拟化挂载**（长列表：整树在内核、只物化可见区） */
 static JSValue js_host_mount_virtual(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
   return host_call_impl(ctx, g_host_methods.mount_virtual, 1, this_val, argc, argv);
@@ -568,6 +576,10 @@ static jstring eval_impl(JNIEnv *env, jstring source, jboolean with_host) {
     // ★★★B-T2（条件注入——同 mount 原则）：文本策略回读
     if (g_host_methods.text_policy != NULL) {
       JS_SetPropertyStr(g_ctx, host, "textPolicy", JS_NewCFunction(g_ctx, js_host_text_policy, "textPolicy", 1));
+    }
+    // ★★★B4-T2b（条件注入）：原生输入控件探针（判据驱动回写）
+    if (g_host_methods.input_probe_set_text != NULL) {
+      JS_SetPropertyStr(g_ctx, host, "inputProbeSetText", JS_NewCFunction(g_ctx, js_host_input_probe_set_text, "inputProbeSetText", 1));
     }
     // ★★★长列表虚拟化（条件注入——同 mount 原则）
     if (g_host_methods.mount_virtual != NULL) {
@@ -690,6 +702,7 @@ Java_dev_proteus_layoutcore_QuickJsEngine_nativeSetHostCallback(JNIEnv *env, jcl
   g_host_methods.anim_control = NULL;
   g_host_methods.apply_ops = g_host_methods.read_rects = NULL;
   g_host_methods.text_policy = NULL;
+  g_host_methods.input_probe_set_text = NULL;
   g_host_methods.mount_virtual = g_host_methods.scroll_rows = NULL;
   g_host_methods.probe_channels = NULL;
   g_host_methods.probe_gesture = g_host_methods.tap_at = NULL;
@@ -741,6 +754,9 @@ Java_dev_proteus_layoutcore_QuickJsEngine_nativeSetHostCallback(JNIEnv *env, jcl
     if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
     /* ★★★B-T2：文本策略回读（一参返回串） */
     g_host_methods.text_policy = (*env)->GetMethodID(env, c, "textPolicy", "(Ljava/lang/String;)Ljava/lang/String;");
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+    /* ★★★B4-T2b：原生输入控件探针（一参返回串） */
+    g_host_methods.input_probe_set_text = (*env)->GetMethodID(env, c, "inputProbeSetText", "(Ljava/lang/String;)Ljava/lang/String;");
     if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
     /* ★★★长列表虚拟化（各一参返回串） */
     g_host_methods.mount_virtual = (*env)->GetMethodID(env, c, "mountVirtual", "(Ljava/lang/String;)Ljava/lang/String;");

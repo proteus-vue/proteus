@@ -138,6 +138,86 @@ public final class VaporRenderHost {
         if (view != null) attachGestureListener();
     }
 
+    /* ── ★★★B4-T2b（2026-10-10）：原生输入控件（`<input>`/`<textarea>`）──
+     *
+     * 【要证明什么】`v-model` 的**回写**半边端上真生效：宿主为可编辑节点建**原生 EditText**（复用
+     *   native-host 机制——几何来自内核），编辑值经 TextWatcher → `inputSink` → JS `dispatchInputValue`
+     *   ⇒ 数据变 ⇒ 下行文本随之更新（无宿主控件则 input 事件无源）。
+     */
+    interface InputSink { void onInput(int nodeId, String value); }
+    private InputSink inputSink;
+    /** 输入节点 id → EditText（树重建随之重建） */
+    private final java.util.Map<Integer, android.widget.EditText> inputControls = new java.util.HashMap<>();
+    /** 探针读数：累计输入事件（判据"输入真的到了宿主"的机器证据） */
+    int inputEvents = 0;
+
+    void setInputSink(InputSink sink) { this.inputSink = sink; }
+
+    /**
+     * ★B4-T2b：按 `tag==input/textarea` 的节点建原生 EditText（复用 native-host 机制）。
+     *   · 下行：EditText 初值 = spec.text（值→控件）；
+     *   · 上行：TextWatcher.afterTextChanged → `inputSink.onInput(id, text)`（编辑→源）。
+     *   ★几何来自内核 `readRects`（nativeRects = 内容坐标，与绘制指令同口径）。
+     */
+    private void syncInputControls() {
+        if (view == null || handle == 0L) return;
+        try {
+            // 清旧控件（树重建 ⇒ 控件重建；从视图与 map 都移除，不残留）
+            for (java.util.Map.Entry<Integer, android.widget.EditText> oldE : inputControls.entrySet()) {
+                try { view.removeNativeHost(oldE.getKey()); } catch (Throwable ignored) {}
+            }
+            inputControls.clear();
+            JSONObject rects = new JSONObject(RustLayout.readRects(handle)).optJSONObject("rects");
+            if (rects == null) return;
+            java.util.Map<Integer, RectF> geo = new java.util.HashMap<>();
+            for (JSONObject spec : specs) {
+                String tag = spec.optString("tag", "");
+                if (!"input".equals(tag) && !"textarea".equals(tag)) continue;
+                int id = spec.getInt("id");
+                JSONObject r = rects.optJSONObject(String.valueOf(id));
+                if (r == null) continue;
+                final android.widget.EditText et = new android.widget.EditText(ctx);
+                et.setText(spec.optString("text", ""));
+                et.setSingleLine(!"textarea".equals(tag));
+                // 值→控件（下行）后设 Watcher：避免初值触发回写
+                final int fid = id;
+                et.addTextChangedListener(new android.text.TextWatcher() {
+                    public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
+                    public void onTextChanged(CharSequence s, int a, int b, int c) {}
+                    public void afterTextChanged(android.text.Editable s) {
+                        inputEvents++;
+                        if (inputSink != null) inputSink.onInput(fid, s.toString());
+                    }
+                });
+                inputControls.put(id, et);
+                view.addNativeHost(id, et);
+                float x = (float) r.optDouble("x"), y = (float) r.optDouble("y");
+                float w = (float) r.optDouble("width"), h = (float) r.optDouble("height");
+                geo.put(id, new RectF(x, y, x + w, y + h));
+            }
+            if (!geo.isEmpty()) view.setNativeHostGeometry(geo);
+        } catch (Throwable t) {
+            // 非静默：失败也留下读数（判据可核）
+            android.util.Log.w("proteus", "syncInputControls 失败：" + t.getMessage());
+        }
+    }
+
+    /**
+     * ★B4-T2b 探针：为**首个**输入控件注入文本（走 TextWatcher ⇒ inputSink ⇒ JS 回写）。
+     *   返回 `{"ok":true,"nodeId":N}`（-1 = 无输入控件）。仅供判据/真机驱动，非生产路径。
+     */
+    public String inputProbeSetText(String text) {
+        for (java.util.Map.Entry<Integer, android.widget.EditText> e : inputControls.entrySet()) {
+            e.getValue().setText(text);
+            // inputEvents = TextWatcher 触发次数（≥1 ⇒ 控件是"活的"、编辑真的产生输入事件）
+            return "{\"ok\":true,\"nodeId\":" + e.getKey() + ",\"inputEvents\":" + inputEvents + "}";
+        }
+        return "{\"ok\":false,\"error\":\"无输入控件\"}";
+    }
+
+    /** ★B4-T2b 探针：当前输入控件数（判据核"可编辑节点真的建了控件"）。 */
+    public String inputControlCount() { return "{\"ok\":true,\"count\":" + inputControls.size() + "}"; }
+
     /**
      * ★★把手势接到**命中链**上：`ProteusHostView.onTouchEvent` 已在 DOWN 时刻用内核
      *   `hitTest` 定下目标节点与冒泡链（`gestureTarget` / `gestureChain`）⇒ 这里只消费
@@ -376,6 +456,8 @@ public final class VaporRenderHost {
             long te = System.nanoTime();
             emitAll();
             double emitMs = (System.nanoTime() - te) / 1e6;
+            // ★B4-T2b：为可编辑节点建原生输入控件（复用 native-host 机制；几何来自内核）
+            syncInputControls();
             // ★批次 42（动效 · 对齐 Web）：**CSS animation**（编译期折叠）——挂载后启动
             //   （复用既有 animStart：内核 kernelAnimStart + Choreographer 帧循环）
             cssAnimNodes = startStaticAnimations();
