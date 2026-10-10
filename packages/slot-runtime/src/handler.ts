@@ -40,6 +40,17 @@ export type HandlerAction =
    *   `cond` 求值为 truthy 走 `then`，否则走 `else`（可缺省 ⇒ 空跑）。
    */
   | { op: 'if'; cond: ExprProgram; then: HandlerAction[]; else?: HandlerAction[] }
+  /**
+   * ★★★**`console.<level>(a, b, …)`**（T3，2026-10-10）——事件处理器里的控制台日志。
+   *
+   * 【为什么需要】真实页面的 `@click="onTap"` 方法体几乎都会 `console.log(...)` 调试；
+   *   而 App 端**不执行 script**（端上只跑动作表）⇒ 此前整个调用被判"形态不支持"、**点了没反应**。
+   *   ⇒ 编译期把它降级为**纯数据动作** `log`：`programs` 是各实参的**求值程序**（运行期求值、
+   *     交 `onLog` 出口）——仍是"编译期产出纯数据、跨端禁 eval"同一套。
+   * 【封闭集】只认 `console.{log,info,warn,error,debug}`；其余（`console.table` / `time` / 等）产诊断。
+   * 【去处】由运行期/宿主决定：App 壳 → dev 面板 Console；无面板（release）→ 静默丢弃（如实）。
+   */
+  | { op: 'log'; level: 'log' | 'info' | 'warn' | 'error' | 'debug'; programs: ExprProgram[] }
 
 /** handler 名 → 动作列表（按序执行 ⇒ "先算后写"的顺序语义保留） */
 export interface EventHandlers {
@@ -62,6 +73,8 @@ export interface HandlerRunHooks {
   onEmit?(event: string, payload: unknown): void
   /** 遇 `nav` 动作：调用方执行导航 */
   onNav?(target: string): void
+  /** ★T3 遇 `log` 动作（`console.*`）：调用方决定去处（dev 面板 Console / 静默丢弃） */
+  onLog?(level: 'log' | 'info' | 'warn' | 'error' | 'debug', values: unknown[]): void
 }
 
 /** 数值化（`add` 的累加语义：非数按 0 起——与 JS `+` 刻意收窄，见 compileEvents 形态说明） */
@@ -117,6 +130,9 @@ export function runHandlerActions(
           break
         case 'nav':
           hooks.onNav?.(a.target)
+          break
+        case 'log':
+          hooks.onLog?.(a.level, a.programs.map((p) => evalp(p)))
           break
       }
     }

@@ -387,6 +387,8 @@ interface VaporReport {
     widths: number[]
     /** 逐次源值（t2x 快照） */
     values: number[]
+    /** ★T3：`console.*` 探针读数（逐次日志文本）——证明 console 动作端上真执行 */
+    logs: string[]
   }
   /**
    * ★★★**`:style` 对象展开探针**（2026-10-03）——两条通道各自的真值：
@@ -1749,7 +1751,7 @@ function runShort(args: VaporArgs): string {
     tpl_nodes: 0, tpl_ok: false, sub_l1: 0, sub_l0: 0, sub_l1_rate: 0, sub_sources: [],
     inst_ms: 0, inst_nodes: 0, inst_reused_ids: 0, inst_allocated_ids: 0, inst_rows: 0,
     inst_values_filled: 0, inst_virtual_rows: 0, inst_text_filled: 0, inst_width_filled: 0,
-    mix_text_probe: [], text_probe_rounds: [], gate_rounds: [], gate_text_nodes: [], once_node_id: -1, memo_node_id: -1, expr_probe: [], transition_started: 0, tpl_transition: [], component_mounts: 0, component_nodes: 0, component_kid_probe: {}, slot_probe: { texts: [], rects: [], fills: [], markers_left: -1 }, emit_probe: { emits: [], parent_source_after: undefined, geom_before: -1, geom_after: -1 }, scoped_probe: { texts: [], anchor_id: -1, anchor_width_field: -1, anchor_width_rect: -1, destr_text: '', destr_width_field: -1, destr_width_rect: -1 }, lifecycle_probe: { bindings: [], ran_handler: '', changed_sources: [], ops_bytes: 0, applied: 0, anchor_id: -1, geom_before: -1, geom_after: -1 }, dyn_probe: { texts: [], mounts: [], geom: [], dropped: -1, notes: [] }, directive_probe: { nodes: [], rounds: [], plays: [] }, mixed_probe: { texts: [], leaves: 0, geom: [] }, t2_probe: { nodeId: -1, widths: [], values: [] }, styleobj_probe: { anchor_id: -1, width_before: -1, width_after: -1, kernel_applied: 0, patch_calls: [] },
+    mix_text_probe: [], text_probe_rounds: [], gate_rounds: [], gate_text_nodes: [], once_node_id: -1, memo_node_id: -1, expr_probe: [], transition_started: 0, tpl_transition: [], component_mounts: 0, component_nodes: 0, component_kid_probe: {}, slot_probe: { texts: [], rects: [], fills: [], markers_left: -1 }, emit_probe: { emits: [], parent_source_after: undefined, geom_before: -1, geom_after: -1 }, scoped_probe: { texts: [], anchor_id: -1, anchor_width_field: -1, anchor_width_rect: -1, destr_text: '', destr_width_field: -1, destr_width_rect: -1 }, lifecycle_probe: { bindings: [], ran_handler: '', changed_sources: [], ops_bytes: 0, applied: 0, anchor_id: -1, geom_before: -1, geom_after: -1 }, dyn_probe: { texts: [], mounts: [], geom: [], dropped: -1, notes: [] }, directive_probe: { nodes: [], rounds: [], plays: [] }, mixed_probe: { texts: [], leaves: 0, geom: [] }, t2_probe: { nodeId: -1, widths: [], values: [], logs: [] }, styleobj_probe: { anchor_id: -1, width_before: -1, width_after: -1, kernel_applied: 0, patch_calls: [] },
     mount_ms: 0, mount_nodes: 0,
     updates_run: 0, ops_bytes: 0, ops_ms: 0, apply_ms: 0, text_synced_total: 0, update_evidence: [], geom_probe: [], channels: [],
     ev_bindings: 0, ev_handlers: 0, ev_modifiers: 0, taps: 0, tap_evidence: [],
@@ -2044,6 +2046,7 @@ function runShort(args: VaporArgs): string {
           // 顶层 handler 里的 $emit 无处可去（如实 note，见 runChildHandler）
           onEmit: () => { /* 顶层事件处理器里的 $emit 无去处——与既有行为一致（跳过） */ },
           onNav: (tgt) => notes.push(`$nav('${tgt}')：vapor 夹具未接导航出口（已忽略）`),
+          onLog: (level, values) => notes.push(`console.${level} ${values.map((v) => (v === undefined ? 'undefined' : String(v))).join(' ')}`),
         },
       )
       return true
@@ -2944,8 +2947,13 @@ function runShort(args: VaporArgs): string {
             }
             const widths: number[] = [readW()]
             const values: number[] = [Number(t2data.t2x)]
+            const logs: string[] = []
             for (let i = 0; i < 3; i++) {
-              runHandlerActions(t2Acts, { read: (n) => t2data[n], write: (n, v) => { t2data[n] = v } })
+              runHandlerActions(
+                t2Acts,
+                { read: (n) => t2data[n], write: (n, v) => { t2data[n] = v } },
+                { onLog: (_lv, vals) => logs.push(vals.map((v) => (v === undefined ? 'undefined' : String(v))).join(' ')) },
+              )
               t2Captured.length = 0
               t2Vapor.relink(t2Ctx)
               t2SlotRt.flush()
@@ -2954,7 +2962,7 @@ function runShort(args: VaporArgs): string {
               widths.push(readW())
               values.push(Number(t2data.t2x))
             }
-            rep.t2_probe = { nodeId: t2NodeId, widths, values }
+            rep.t2_probe = { nodeId: t2NodeId, widths, values, logs }
           } else {
             notes.push(`T2 探针：mount/handler 缺失（mount.ok=${mOut.ok} handler=${t2HandlerName}）——判据 ㉓ 按缺失处理`)
           }

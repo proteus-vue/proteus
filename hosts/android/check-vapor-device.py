@@ -816,14 +816,19 @@ def main() -> int:
     else:
         # ★三步语义：else(0→6) · else(6→12) · then(12→0)——后两步证明"局部变量 step 参与"与"if 两臂都走"
         want = [0, 6, 12, 0]
+        t2logs = t2.get("logs") or []
         if t2v != want:
             fail(f"★T2 源值序列不符（期望 {want}：else→else→then）：{t2v} —— 形参/局部变量/if 有一步没生效")
             ok = False
         elif t2w[1:] != t2v[1:]:
             fail(f"★T2 几何没跟上源值变化（宽 {t2w} vs 值 {t2v}）—— 动作改了源但内核没重排")
             ok = False
+        elif len(t2logs) < 3:
+            fail(f"★T3 console.* 动作没端上执行（logs={t2logs}，应 3 条）—— console 未降级/未执行")
+            ok = False
         else:
-            print(f"  ✓ ㉓ ★T2 带参/局部/if：t2x 值 {t2v}（else→else→then）· 内核几何宽 {t2w}（同步）")
+            print(f"  ✓ ㉓ ★T2 带参/局部/if：t2x 值 {t2v}（else→else→then）· 内核几何宽 {t2w}（同步）· "
+                  f"T3 console {len(t2logs)} 条（如 {t2logs[0]!r}）")
 
     # 附加观测（不判红，只如实报）
     una = rep.get("uninstantiated_slots", 0)

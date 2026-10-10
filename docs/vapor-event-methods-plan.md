@@ -1,8 +1,8 @@
 # Vapor 事件处理器「方法引用 / 方法体」支持 —— 立项与工作量评估
 
-> **状态**：**T1 + T2 已交付（2026-10-10）**——方法引用 / 带参调用 + 方法体（含 ref `.value`、
->   `$emit`/`$nav`、**形参绑定**、**局部变量**、**`if/else`**）在 **编译期降级为动作表**；三端共用同一
->   执行器（`slot-runtime` 的 `runHandlerActions`）。**明确不做**：循环 / async / 任意 JS（诊断，不静默）。
+> **状态**：**T1 + T2 + T3 已交付（2026-10-10）**——方法引用 / 带参调用 + 方法体（含 ref `.value`、
+>   `$emit`/`$nav`、**形参绑定**、**局部变量**、**`if/else`**、**`console.*`→面板**）在 **编译期降级为动作表**；
+>   三端共用同一执行器（`slot-runtime` 的 `runHandlerActions`）。**明确不做**：循环 / async / 任意 JS（诊断，不静默）。
 > **一句话**：App 端（Vapor）的事件处理器**只接受内联单语句**（`@click="count++"`），
 > **拒绝方法引用/调用**（`@click="handleTap"`/`handleTap()`）——真实业务页面几乎都用「方法」，
 > 于是模板之外的页面在 App 端**点了没反应**。本项把**方法体在编译期降级为动作列表**（守"纯数据、无 eval、
@@ -16,8 +16,8 @@
 |---|---|---|
 | **T1** | 方法引用/无参调用（`@click="handleTap"` / `handleTap()`）+ 多语句方法体（赋值/自增/复合赋值 + `$emit`/`$nav`，ref `.value` 自动解包） | ✅ **已交付**（`packages/compiler/src/vapor/events.ts` + `expr.ts`；判据 `tests/vapor-events.test.ts` · 真实 App 管线 `tests/app-runtime-content.test.ts`） |
 | **T2** | 带参调用 `add(2)` / 方法形参 / 方法内**局部变量** + `if/else` | ✅ **已交付**（`events.ts` 降级 `let`/`if`；**运行期执行器下沉到 `slot-runtime` 的 `runHandlerActions`**——`screen-runtime` 与 `entry-vapor` 共用；判据 `tests/handler-actions.test.ts` + `vapor-events` + 三端真机判据 ㉓） |
-| **T3** | 方法调方法、`console.*` 转面板日志、模板串拼接 | ⏳ 待做 |
-| **不做** | 循环 / async·await / 任意 JS / 动态事件名 `@[ev]` | 守"封闭集、无 eval、编译期可判定"（均有精确诊断） |
+| **T3** | `console.*` 转面板日志（方法调方法 / 模板串本已可用） | ✅ **`console.*` 已交付**（`log` 动作 + `onLog` 出口；`console.log/info/warn/error/debug`）；方法调方法（递归内联）/模板串**本已可用**，已加判据 |
+| **不做** | 循环 / async·await / 任意 JS / 其它 `console.*`（table/time）/ 动态事件名 `@[ev]` | 守"封闭集、无 eval、编译期可判定"（均有精确诊断） |
 
 **实现要点（T1）**：`<script setup>` 用 `@babel/parser` 抽**方法表**（`function` / `const fn = () => {}`）
 + **ref 源名集合**（`ref/shallowRef/computed/customRef/toRef/defineModel`）；`compileStatement` 改为
