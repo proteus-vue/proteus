@@ -28,3 +28,17 @@
     </div>
   </div>
 </template>
+
+<style>
+/* L3 沸腾：数据场持续跳变 —— 走**内核动画**（编译期折 animation ⇒ 逐通道 keyframe ⇒ 宿主帧循环驱动），
+   与跟手**同时**进行（"动画与数据更新打架"的压力源）。★只动 opacity（合成属性，§7.3 自洽红线）。 */
+@keyframes dactyl-boil {
+  0% { opacity: 1; }
+  50% { opacity: 0.2; }
+  100% { opacity: 1; }
+}
+.cell {
+  animation: dactyl-boil 0.7s linear infinite;
+}
+</style>
+
