@@ -37,6 +37,10 @@ pub enum OpCode {
     SetText = 0x03,
     SetAttrs = 0x04,
     ToggleVis = 0x05,
+    /// ★★★B3d（2026-10-10）：**字符串样式** `(nodeId, keyId, strRef)`——
+    ///   `grid-template-columns` 等值形如 `1fr 1fr 200px`（**字符串 token 串**），f32 的 SET_STYLE 装不下
+    ///   ⇒ 独立 op（值走**字符串池引用**）。★与 TS `OpCode.SET_STYLE_STR` **同号**（跨语言契约）。
+    SetStyleStr = 0x06,
     InsertBlock = 0x10,
     RemoveNode = 0x11,
     MoveNode = 0x12,
@@ -55,6 +59,7 @@ impl OpCode {
             0x03 => SetText,
             0x04 => SetAttrs,
             0x05 => ToggleVis,
+            0x06 => SetStyleStr,
             0x10 => InsertBlock,
             0x11 => RemoveNode,
             0x12 => MoveNode,
@@ -76,6 +81,7 @@ pub enum UpdateOp {
     SetProp { node_id: u32, key_id: u16, value: f32 },
     SetStyle { node_id: u32, key_id: u16, value: f32 },
     SetText { node_id: u32, text_ref: u32 },
+    SetStyleStr { node_id: u32, key_id: u16, value_ref: u32 },
     SetAttrs { node_id: u32, attrs: Vec<(u16, f32)> },
     ToggleVis { node_id: u32, visible: bool },
     InsertBlock { block_id: u32, ref_node_id: u32, pos: u8 },
@@ -94,6 +100,7 @@ impl UpdateOp {
             SetProp { .. } => OpCode::SetProp,
             SetStyle { .. } => OpCode::SetStyle,
             SetText { .. } => OpCode::SetText,
+            SetStyleStr { .. } => OpCode::SetStyleStr,
             SetAttrs { .. } => OpCode::SetAttrs,
             ToggleVis { .. } => OpCode::ToggleVis,
             InsertBlock { .. } => OpCode::InsertBlock,
@@ -112,6 +119,8 @@ impl UpdateOp {
         match self {
             SetProp { .. } | SetStyle { .. } => 11,
             SetText { .. } => 9,
+            // node_id(u32) + key_id(u16) + value_ref(u32) = 11（含 1 字节 opcode）
+            SetStyleStr { .. } => 11,
             SetAttrs { attrs, .. } => 7 + 6 * attrs.len(),
             ToggleVis { .. } => 6,
             InsertBlock { .. } => 10,
@@ -264,6 +273,7 @@ fn decode_op(c: &mut Cursor<'_>, code: OpCode) -> Result<UpdateOp, String> {
         SetProp => UpdateOp::SetProp { node_id: c.u32()?, key_id: c.u16()?, value: c.f32()? },
         SetStyle => UpdateOp::SetStyle { node_id: c.u32()?, key_id: c.u16()?, value: c.f32()? },
         SetText => UpdateOp::SetText { node_id: c.u32()?, text_ref: c.u32()? },
+        SetStyleStr => UpdateOp::SetStyleStr { node_id: c.u32()?, key_id: c.u16()?, value_ref: c.u32()? },
         SetAttrs => {
             let node_id = c.u32()?;
             let n = c.u16()? as usize;
@@ -333,6 +343,11 @@ mod tests {
                     out.extend_from_slice(&node_id.to_le_bytes());
                     out.extend_from_slice(&text_ref.to_le_bytes());
                 }
+                UpdateOp::SetStyleStr { node_id, key_id, value_ref } => {
+                    out.extend_from_slice(&node_id.to_le_bytes());
+                    out.extend_from_slice(&key_id.to_le_bytes());
+                    out.extend_from_slice(&value_ref.to_le_bytes());
+                }
                 UpdateOp::SetAttrs { node_id, attrs } => {
                     out.extend_from_slice(&node_id.to_le_bytes());
                     out.extend_from_slice(&(attrs.len() as u16).to_le_bytes());
@@ -387,11 +402,12 @@ mod tests {
 
     #[test]
     fn roundtrip_all_opcodes() {
-        let keys = vec!["layout.width", "paint.backgroundColor"];
-        let strings = vec!["hello 世界", "row-1"];
+        let keys = vec!["layout.width", "paint.backgroundColor", "layout.gridTemplateColumns"];
+        let strings = vec!["hello 世界", "row-1", "1fr 1fr 200px"];
         let ops = vec![
             UpdateOp::SetProp { node_id: 7, key_id: 0, value: 120.5 },
             UpdateOp::SetStyle { node_id: 8, key_id: 1, value: 255.0 },
+            UpdateOp::SetStyleStr { node_id: 8, key_id: 2, value_ref: 2 },
             UpdateOp::SetText { node_id: 9, text_ref: 0 },
             UpdateOp::SetAttrs { node_id: 10, attrs: vec![(0, 8.0)] },
             UpdateOp::ToggleVis { node_id: 11, visible: true },

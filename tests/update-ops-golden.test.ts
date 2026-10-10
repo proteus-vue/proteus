@@ -26,7 +26,7 @@ const JSON_PATH = path.join(GOLDEN_DIR, 'update-ops.json')
 const WRITE = process.env.UPDATE_OPS_GOLDEN_WRITE === '1'
 
 /**
- * golden 用例集：覆盖**全部 12 条指令**，且刻意包含三类边界
+ * golden 用例集：覆盖**全部 13 条指令**，且刻意包含三类边界
  *   ① 非 ASCII / emoji（UTF-8 变长与代理对）
  *   ② f32 精度（1/3）与负值/大数
  *   ③ 空 attrs、单元素 splice（计数为 0/1 的边界）
@@ -37,6 +37,8 @@ function buildFixtures(): { keys: PropKeyTable; pool: StringPool; ops: UpdateOp[
   const ops: UpdateOp[] = [
     { op: OpCode.SET_PROP, nodeId: 7, keyId: keys.intern('layout.width'), value: 120.5 },
     { op: OpCode.SET_STYLE, nodeId: 8, keyId: keys.intern('paint.backgroundColor'), value: -1.25 },
+    // ★B3d：字符串样式（grid 模板 token 串）——值走字符串池，f32 装不下
+    { op: OpCode.SET_STYLE_STR, nodeId: 8, keyId: keys.intern('layout.gridTemplateColumns'), valueRef: pool.intern('1fr 1fr 200px') },
     { op: OpCode.SET_TEXT, nodeId: 9, textRef: pool.intern('无线降噪耳机 Pro 🎧') },
     { op: OpCode.SET_TEXT, nodeId: 10, textRef: pool.intern('') }, // 空串边界
     { op: OpCode.SET_ATTRS, nodeId: 11, attrs: [] }, // 空 attrs 边界
@@ -116,7 +118,7 @@ describe('V1 · 更新指令 golden（TS 编码 ⇄ Rust 解码 的契约锚点�
     expect(onDiskJson.trim()).toBe(json.trim())
   })
 
-  it('★golden 覆盖全部 12 条指令（漏一条 = 该指令在 Rust 侧无人验证）', () => {
+  it('★golden 覆盖全部 13 条指令（漏一条 = 该指令在 Rust 侧无人验证）', () => {
     const { ops } = buildFixtures()
     const codes = new Set(ops.map((o) => o.op))
     const all = Object.values(OpCode).filter((v): v is OpCode => typeof v === 'number')
@@ -138,6 +140,7 @@ describe('V1 · 更新指令 golden（TS 编码 ⇄ Rust 解码 的契约锚点�
       if ('keyId' in op) expect(op.keyId).toBeLessThan(keyCount)
       if (op.op === OpCode.SET_ATTRS) for (const a of op.attrs) expect(a.keyId).toBeLessThan(keyCount)
       if (op.op === OpCode.SET_TEXT) expect(op.textRef).toBeLessThan(pool.toArray().length)
+      if (op.op === OpCode.SET_STYLE_STR) expect(op.valueRef).toBeLessThan(pool.toArray().length)
       if (op.op === OpCode.LIST_UPDATE) expect(op.itemKeyRef).toBeLessThan(pool.toArray().length)
     }
   })

@@ -74,6 +74,30 @@ pub fn apply_ops_to_tree(tree: &mut LayoutTree, dec: &crate::ops::DecodedOps) ->
                     Err(msg) => out.unsupported.push((op.code(), msg)),
                 }
             }
+            // ★★★B3d（2026-10-10）：**字符串样式**（`grid-template-columns` 等 token 串）——值走字符串池。
+            UpdateOp::SetStyleStr { node_id, key_id, value_ref } => {
+                let Some(key) = dec.key_of(*key_id) else {
+                    out.unsupported.push((op.code(), format!("keyId {key_id} 越界（键表 {} 项）", dec.keys.len())));
+                    continue;
+                };
+                let Some(val) = dec.string_of(*value_ref) else {
+                    out.unsupported.push((op.code(), format!("valueRef {value_ref} 越界")));
+                    continue;
+                };
+                let Some(idx) = node_index_of(tree, *node_id) else {
+                    out.unsupported.push((op.code(), format!("nodeId {node_id} 不在树上")));
+                    continue;
+                };
+                match apply_style_str_key(&mut tree.nodes[idx], key, val) {
+                    Ok(true) => {
+                        tree.nodes[idx].dirty = true;
+                        dirty_set.insert(idx as u32);
+                        out.applied += 1;
+                    }
+                    Ok(false) => out.applied += 1, // 非布局字符串键（宿主消费）⇒ 不重排
+                    Err(msg) => out.unsupported.push((op.code(), msg)),
+                }
+            }
             UpdateOp::SetText { node_id, text_ref } => {
                 let Some(text) = dec.string_of(*text_ref) else {
                     out.unsupported.push((op.code(), format!("textRef {text_ref} 越界")));
@@ -432,6 +456,24 @@ pub fn apply_style_key(node: &mut LNode, key: &str, value: f32) -> Result<bool, 
         }
         k if k.starts_with("paint.") || k.starts_with("text.") || k.starts_with("attr.") => Ok(false),
         other => Err(format!("本层不支持布局键 `{other}`（若为几何属性，请在 ops_apply 的映射表里登记）")),
+    }
+}
+
+/// ★★★B3d（2026-10-10）：**字符串布局键**（`grid-template-columns` 等 token 串；值走 `SET_STYLE_STR`）。
+///   `LStyle` 里这些字段本就是 `Option<String>`（taffy 由 `taffy_engine` 解析 token 串）⇒ 直接置值。
+///   `Ok(true)`=改了几何需重排；`Ok(false)`=非布局字符串键；`Err`=未知键。
+pub fn apply_style_str_key(node: &mut LNode, key: &str, value: &str) -> Result<bool, String> {
+    let s = &mut node.style;
+    let v = if value.is_empty() { None } else { Some(value.to_string()) };
+    match key {
+        "layout.gridTemplateColumns" => { s.grid_template_columns = v; Ok(true) }
+        "layout.gridTemplateRows" => { s.grid_template_rows = v; Ok(true) }
+        "layout.gridTemplateAreas" => { s.grid_template_areas = v; Ok(true) }
+        "layout.gridAutoColumns" => { s.grid_auto_columns = v; Ok(true) }
+        "layout.gridAutoRows" => { s.grid_auto_rows = v; Ok(true) }
+        "layout.gridAutoFlow" => { s.grid_auto_flow = v; Ok(true) }
+        k if k.starts_with("paint.") || k.starts_with("text.") || k.starts_with("attr.") => Ok(false),
+        other => Err(format!("本层不支持字符串布局键 `{other}`（若为几何属性，请在 apply_style_str_key 里登记）")),
     }
 }
 
@@ -1169,5 +1211,25 @@ mod tests {
         // 0=auto ⇒ 清空（回落父）
         assert!(apply_style_key(&mut n, "layout.alignSelf", 0.0).unwrap());
         assert_eq!(n.style.align_self, None);
+    }
+
+    #[test]
+    fn b3d_grid_string_fields_apply_via_str_channel() {
+        // ★★★B3d（2026-10-10）：grid 模板等**字符串**布局字段经 `apply_style_str_key` 落内核
+        //   （值经字符串池；f32 的 SET_STYLE 装不下 `1fr 1fr 200px`）。与 slot-runtime STRING_LAYOUT_FIELDS 同集。
+        let mut n = crate::node::LNode::new(1, crate::style::LStyle::default());
+        assert!(apply_style_str_key(&mut n, "layout.gridTemplateColumns", "1fr 1fr 200px").unwrap());
+        assert_eq!(n.style.grid_template_columns.as_deref(), Some("1fr 1fr 200px"));
+        assert!(apply_style_str_key(&mut n, "layout.gridTemplateRows", "80px auto").unwrap());
+        assert_eq!(n.style.grid_template_rows.as_deref(), Some("80px auto"));
+        assert!(apply_style_str_key(&mut n, "layout.gridAutoColumns", "minmax(0, 1fr)").unwrap());
+        assert_eq!(n.style.grid_auto_columns.as_deref(), Some("minmax(0, 1fr)"));
+        assert!(apply_style_str_key(&mut n, "layout.gridAutoFlow", "column dense").unwrap());
+        assert_eq!(n.style.grid_auto_flow.as_deref(), Some("column dense"));
+        // 空串 ⇒ 清空（None，与数值字段 NaN 同语义）
+        assert!(apply_style_str_key(&mut n, "layout.gridTemplateColumns", "").unwrap());
+        assert_eq!(n.style.grid_template_columns, None);
+        // 未登记的字符串键 ⇒ 显式 Err（不静默）
+        assert!(apply_style_str_key(&mut n, "layout.madeUp", "x").is_err());
     }
 }

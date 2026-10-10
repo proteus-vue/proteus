@@ -24,7 +24,7 @@ import type {
   SourceSubscription,
   EvaluatorSpec,
 } from '@proteus-vue/slot-runtime'
-import { isPureCallExprName, NUMERIC_LAYOUT_FIELDS, ENUM_LAYOUT_FIELDS } from '@proteus-vue/slot-runtime'
+import { isPureCallExprName, NUMERIC_LAYOUT_FIELDS, ENUM_LAYOUT_FIELDS, STRING_LAYOUT_FIELDS } from '@proteus-vue/slot-runtime'
 import { scanReactiveSources } from './sources'
 import { compileExpr } from './expr'
 import type { ReactiveSource } from './sources'
@@ -689,14 +689,16 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
   {
     const layoutKeys = new Set<string>(APP_LAYOUT_FIELDS as readonly string[])
     const bad = new Set<string>()
-    // ★★★B3a/B3b/B3c（2026-10-10）：**数值**布局字段（内核 SET_STYLE f32）· **枚举**布局字段
+    // ★★★B3a/B3b/B3c/B3d（2026-10-10）：**数值**布局字段（内核 SET_STYLE f32）· **枚举**布局字段
     //   （display/flexDirection/flexWrap/position/overflow/alignItems/justifyContent/alignContent/alignSelf
-    //   ——内核 SET_STYLE **索引编码**）均已支持 ⇒ 只对**其余**布局字段产诊断（各有明确阻塞，见 hint）。
+    //   ——内核 SET_STYLE **索引编码**）· **字符串**布局字段（grid 模板 —— 内核 SET_STYLE_STR）均已支持
+    //   ⇒ 只对**其余**布局字段产诊断（各有明确阻塞，见 hint）。
     const consider = (k: string): void => {
       if (!layoutKeys.has(k)) return
       if (k === 'padding' || k === 'margin') return       // 对象 ⇒ plan 摊平为数值四边 ⇒ 支持
       if (NUMERIC_LAYOUT_FIELDS.has(k)) return            // 数值 ⇒ 支持（B3a）
       if (ENUM_LAYOUT_FIELDS[k]) return                   // 枚举（白名单）⇒ 支持（B3b/B3c）
+      if (STRING_LAYOUT_FIELDS.has(k)) return             // 字符串（grid 模板）⇒ 支持（B3d）
       bad.add(k)
     }
     for (const r of tplDynamicClassRules ?? []) for (const k of Object.keys(r.decls)) consider(k)
@@ -704,7 +706,6 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
     if (bad.size > 0) {
       // ★B3 收口（决策 #756）：精确具名每类阻塞（不再是笼统"布局字段不支持"）。
       const cats: string[] = []
-      if ([...bad].some((k) => /^grid/i.test(k))) cats.push('grid 模板/放置（**字符串** —— 内核有字段但**无二进制字符串通道**，需新 op）')
       if ([...bad].some((k) => k === 'whiteSpace' || k === 'wordBreak')) cats.push('`whiteSpace`/`wordBreak`（内核**无文本布局字段**——需内核文本建模）')
       if ([...bad].some((k) => /^overflow[XY]$/.test(k))) cats.push('`overflowX`/`overflowY`（内核**无轴级 overflow 字段**——需内核+宿主）')
       if ([...bad].some((k) => k === 'lineClamp')) cats.push('`lineClamp`（内核无字段；文本截断——需宿主文本通道）')
@@ -712,13 +713,14 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
         severity: 'warn',
         code: 'VAPOR_DYNCLASS_LAYOUT_UNSUPPORTED',
         message:
-          '动态 :class 的自匹配类含**非数值/非枚举**布局字段（' +
+          '动态 :class 的自匹配类含**非数值/非枚举/非字符串**布局字段（' +
           [...bad].join(' / ') +
           '）——' + (cats.length ? '阻塞：' + cats.join('；') : '端上暂不生效') + (planned ? '' : '（且该节点计划未产出）'),
         hint:
-          '★B3a/B3b/B3c 起**数值型**（width/height/margin*/padding*/flex*/gap/top/left/right/bottom/aspectRatio…）'
-          + '与**枚举**（display/flexDirection/flexWrap/position/overflow/alignItems/justifyContent/alignContent/alignSelf）'
-          + '布局字段已支持（走内核 SET_STYLE）；上述剩余字段各有明确阻塞（见 message）——把它们放静态 style / 静态 class，'
+          '★B3a/B3b/B3c/B3d 起**数值型**（width/height/margin*/padding*/flex*/gap/top/left/right/bottom/aspectRatio…）'
+          + '、**枚举**（display/flexDirection/flexWrap/position/overflow/alignItems/justifyContent/alignContent/alignSelf）'
+          + '与**字符串**（grid-template-columns/rows/areas、grid-auto-*）布局字段已支持（走内核 SET_STYLE/SET_STYLE_STR）；'
+          + '上述剩余字段各有明确阻塞（见 message）——把它们放静态 style / 静态 class，'
           + '动态类用于已支持字段或状态色/字体/圆角',
       })
     }

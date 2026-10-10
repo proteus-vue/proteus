@@ -36,6 +36,7 @@ import { opSize, OPS_MAGIC, OPS_VERSION, OPS_HEADER_BYTES } from ${JSON.stringif
 const samples = {
   SET_PROP: { op: OpCode.SET_PROP, nodeId: 1, keyId: 2, value: 3 },
   SET_STYLE: { op: OpCode.SET_STYLE, nodeId: 1, keyId: 2, value: 3 },
+  SET_STYLE_STR: { op: OpCode.SET_STYLE_STR, nodeId: 1, keyId: 2, valueRef: 3 },
   SET_TEXT: { op: OpCode.SET_TEXT, nodeId: 1, textRef: 2 },
   SET_ATTRS: { op: OpCode.SET_ATTRS, nodeId: 1, attrs: [{ keyId: 2, value: 3 }] },
   TOGGLE_VIS: { op: OpCode.TOGGLE_VIS, nodeId: 1, visible: true },
@@ -46,6 +47,13 @@ const samples = {
   LIST_SPLICE: { op: OpCode.LIST_SPLICE, listId: 1, start: 0, delCount: 1, itemKeyRefs: [2, 3] },
   LIST_UPDATE: { op: OpCode.LIST_UPDATE, listId: 1, itemKeyRef: 2, slotId: 3, value: 4 },
   CALL_COMPONENT_UPDATE: { op: OpCode.CALL_COMPONENT_UPDATE, componentId: 1, slotId: 2, value: 3 },
+}
+// ★★完整性自检（防"新增 opcode 忘了加进 samples"⇒ 规格文档静默漏一条——本仓实测：
+//   B3d 加 SET_STYLE_STR 后 samples 未同步，check 模式仍绿而文档少一条）。
+const allOpcodes = Object.keys(OpCode).filter((k) => typeof OpCode[k] === 'number')
+const missing = allOpcodes.filter((k) => !(k in samples))
+if (missing.length) {
+  throw new Error('gen-instruction-spec：下列 opcode 缺样本（规格表会静默漏条）：' + missing.join(', '))
 }
 const out = []
 for (const [k, v] of Object.entries(samples)) {
@@ -129,6 +137,7 @@ lines.push('')
 lines.push('| opcode | 实现状态 |')
 lines.push('|---|---|')
 lines.push('| SET_PROP / SET_STYLE / SET_TEXT / SET_ATTRS / TOGGLE_VIS | ✅ 已实现并真机验证 |')
+lines.push('| SET_STYLE_STR | ✅ 已实现并真机验证（grid 模板等**字符串布局值**；B3d · 判据 ㉗ 三端） |')
 lines.push('| LIST_UPDATE / LIST_SPLICE / REMOVE_NODE | ✅ 已实现（含跨语言 golden） |')
 lines.push('| **INSERT_BLOCK** | ❌ **unsupported**（需编译期块实例）——**如实上报不静默** |')
 lines.push('| **MOVE_NODE** | ❌ **unsupported**（需宿主先解析目标父与位次）——如实上报 |')

@@ -24,7 +24,7 @@ import type { Slot } from './slot'
 import type { EvaluatorSpec, SubscriptionTable } from './table'
 import { resolveDynamicClasses } from './table'
 // ★★★G-61 B2：动态 :class 预计算计划（位图 O(1) 查表）
-import { applyDynamicClassPlan, NUMERIC_LAYOUT_FIELDS, layoutNumber, ENUM_LAYOUT_FIELDS, layoutEnumIndex } from './dynamic-class'
+import { applyDynamicClassPlan, NUMERIC_LAYOUT_FIELDS, layoutNumber, ENUM_LAYOUT_FIELDS, layoutEnumIndex, STRING_LAYOUT_FIELDS } from './dynamic-class'
 
 /** 源订阅钩子：源值变化时回调（由宿主注入；Vue 场景 = watch / effect） */
 export type SourceSubscriber = (sourceName: string, onChange: () => void) => void
@@ -104,6 +104,8 @@ export class VaporRuntime {
   private readonly onceWritten = new Set<number>()
   /** ★批次 30：每节点上次由动态 `:class` 施加的引擎字段（关掉类 ⇒ 需清除这些字段） */
   private readonly lastClassFields = new Map<number, Set<string>>()
+  /** ★B3d：本表是否有**字符串布局字段**（grid 模板）——有才从线性规则补（缺省零成本） */
+  private readonly hasStringClassFields: boolean
   /** v-memo：各组的**依赖基线**（上一次比较时的值；缺省 = 还没建过基线 ⇒ 首帧必脏） */
   private readonly memoBaseline = new Map<number, unknown[]>()
   /**
@@ -184,7 +186,12 @@ export class VaporRuntime {
      * 【缺省行为】无回调时**不发指令**（不静默送 0——那正是此前的失效形态）。
      */
     private readonly onPaintProp?: (nodeId: number, propKey: string, value: unknown) => void,
-  ) {}
+  ) {
+    // ★B3d：预判本表是否有字符串布局字段（grid 模板）——决定是否需从线性规则补（缺省零成本）。
+    this.hasStringClassFields = (table.classRules ?? []).some((r) =>
+      Object.keys(r.decls).some((k) => STRING_LAYOUT_FIELDS.has(k)),
+    )
+  }
 
   /**
    * 从订阅表重建求值函数（把**可序列化的声明**变成可执行函数）
@@ -385,6 +392,12 @@ export class VaporRuntime {
             if (plan) {
               fields = {}
               applyDynamicClassPlan(cv, plan, fields)
+              // ★★★B3d（2026-10-10）：**字符串布局字段**（grid 模板）**不在 CSE 计划里**（计划只分解
+              //   数值/枚举）⇒ 从**线性规则**补（仅当规则含字符串字段；避免平白付线性成本）。
+              if (this.hasStringClassFields) {
+                const linear = resolveDynamicClasses(cv, this.table.classRules ?? [])
+                for (const k of Object.keys(linear)) if (STRING_LAYOUT_FIELDS.has(k)) fields[k] = linear[k]
+              }
             } else {
               fields = resolveDynamicClasses(cv, this.table.classRules ?? [])
             }
@@ -401,6 +414,9 @@ export class VaporRuntime {
                 } else if (ENUM_LAYOUT_FIELDS[k]) {
                   // ★B3b：枚举字段清空 ⇒ 发该字段**内核默认**索引（回退到默认语义）
                   this.rt.buffer.push({ op: OpCode.SET_STYLE, nodeId: nid, keyId: this.rt.keys.intern(`layout.${k}`), value: ENUM_LAYOUT_FIELDS[k]!.default })
+                } else if (STRING_LAYOUT_FIELDS.has(k)) {
+                  // ★B3d：字符串布局字段清空 ⇒ 发空串（内核置 None）
+                  this.rt.buffer.push({ op: OpCode.SET_STYLE_STR, nodeId: nid, keyId: this.rt.keys.intern(`layout.${k}`), valueRef: this.rt.strings.intern('') })
                 } else {
                   this.onPaintProp?.(nid, `paint.${k}`, undefined)
                 }
@@ -421,6 +437,13 @@ export class VaporRuntime {
                 //   同一条内核二进制 SET_STYLE（host-agnostic）。值可能是 plan 的基线（null ⇒ 默认索引）。
                 const idx = layoutEnumIndex(fk, fv)
                 this.rt.buffer.push({ op: OpCode.SET_STYLE, nodeId: nid, keyId: this.rt.keys.intern(`layout.${fk}`), value: idx === null ? ENUM_LAYOUT_FIELDS[fk]!.default : idx })
+                continue
+              }
+              if (STRING_LAYOUT_FIELDS.has(fk)) {
+                // ★★★B3d（2026-10-10）：**字符串布局字段**（grid 模板，值 = `1fr 1fr 200px`）→
+                //   **SET_STYLE_STR**（值走字符串池；f32 的 SET_STYLE 装不下）——host-agnostic（内核重排）。
+                const sv = typeof fv === 'string' ? fv : fv == null ? '' : String(fv)
+                this.rt.buffer.push({ op: OpCode.SET_STYLE_STR, nodeId: nid, keyId: this.rt.keys.intern(`layout.${fk}`), valueRef: this.rt.strings.intern(sv) })
                 continue
               }
               // 其余字段（绘制色/字号/圆角…）仍走宿主绘制通道（无 onPaintProp 则跳过，如实）

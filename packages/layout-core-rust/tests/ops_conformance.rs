@@ -46,6 +46,9 @@ fn canonical_json(decoded: &proteus_layout_core::ops::DecodedOps) -> Value {
             UpdateOp::SetStyle { node_id, key_id, value } => {
                 json!({ "op": 0x02, "nodeId": node_id, "keyId": key_id, "value": value })
             }
+            UpdateOp::SetStyleStr { node_id, key_id, value_ref } => {
+                json!({ "op": 0x06, "nodeId": node_id, "keyId": key_id, "valueRef": value_ref })
+            }
             UpdateOp::SetText { node_id, text_ref } => {
                 json!({ "op": 0x03, "nodeId": node_id, "textRef": text_ref })
             }

@@ -22,6 +22,12 @@ export enum OpCode {
   SET_TEXT = 0x03,   // (nodeId, textRef)              文本内容（字符串池引用）
   SET_ATTRS = 0x04,  // (nodeId, *(keyId, value))      批量属性（v-bind 对象展开）
   TOGGLE_VIS = 0x05, // (nodeId, visible)              v-show / v-if
+  /**
+   * ★★★B3d（2026-10-10）：**字符串样式** `(nodeId, styleKeyId, strRef)`——
+   *   `grid-template-columns` 等值形如 `1fr 1fr 200px`（**字符串 token 串**），f32 的 SET_STYLE 装不下
+   *   ⇒ 独立 op（值走**字符串池引用**，与 SET_TEXT 同池）。解码端（Rust）逐字节等价。
+   */
+  SET_STYLE_STR = 0x06,
 
   // ── 结构 ──
   INSERT_BLOCK = 0x10, // (blockId, refNodeId, pos)    插入已编译块实例
@@ -99,6 +105,15 @@ export interface OpToggleVis {
   visible: boolean
 }
 
+/** ★B3d：字符串样式（值走字符串池引用——f32 装不下 `1fr 1fr` 这类 token 串） */
+export interface OpSetStyleStr {
+  op: OpCode.SET_STYLE_STR
+  nodeId: number
+  keyId: number
+  /** 字符串池下标（样式字符串值，如 `1fr 1fr 200px`） */
+  valueRef: number
+}
+
 export interface OpInsertBlock {
   op: OpCode.INSERT_BLOCK
   blockId: number
@@ -153,6 +168,7 @@ export interface OpCallComponentUpdate {
 
 export type UpdateOp =
   | OpSetProp
+  | OpSetStyleStr
   | OpSetText
   | OpSetAttrs
   | OpToggleVis
