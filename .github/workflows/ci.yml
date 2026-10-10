@@ -57,6 +57,9 @@ jobs:
       - name: 交互折叠契约棘轮（★S3-T4/#779：可折叠必折 · 不可折叠必诊 · 无静默——防 R1 折叠误判）
         run: node scripts/check-interaction-folding.mjs
 
+      - name: Dactyl 自洽性红线（★D1/#780 §7.3：装饰动效只许合成属性——防 demo 成为自身压力源）
+        run: node scripts/check-dactyl-visual-nonblocking.mjs
+
       - name: 安全编辑门禁（★用户纪律：程序化编辑必须走 safe-edit——临时文件 + diff + 校验，禁止直接改源文件）
         run: node scripts/check-safe-edit.mjs
 
