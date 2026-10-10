@@ -111,12 +111,14 @@ body {
   border-color: #39d0ff;
   transform: scale(0.9);
 }
-/* L1 涟漪：**纯页面 CSS**（`:active` 触发 + `@keyframes` + `::after` 伪元素）——
+/* L1 涟漪：**纯页面 CSS**（`:active` 触发 + `@keyframes` + `伪元素`）——
    框架把这段 CSS 跨端**物化**成装饰子节点（内核/宿主按普通节点渲染）；宿主不发明任何默认反馈。
-   ★**水波式**：`::after` 是比黑块**大**的**空心圆环**（160px，`left/top:-57px` 负偏移把它对到黑块中心）——
-   常态 `opacity:0` 不可见；`:active` 时 `scale 0→1` 由中心**向外扩散**（远超黑块边界）+ 淡出 ⇒ 水面涟漪。
+   ★**水波式 · 双圈错时**：`::before` + `::after` 两个**空心圆环**（比黑块大、`left/top:-57px` 居中），
+   同一条 `@keyframes`，`::after` 用 `animation-delay` 错开 0.18s ⇒ 形成**同心扩散的双环**（真实水波）。
+   ★常态 `opacity:0` 不可见；`:active` 时每个环 `scale 0→1` 由中心向外扩散 + 淡出。
    ★不用百分比 inset（App 内核不支持）——全用 px；`left/top` 负值内核支持。
    ★`.pad` **不设 `overflow:hidden`**——否则圆环被裁进黑块（看起来像"黑块自己闪"而非水波）。 */
+.pad::before,
 .pad::after {
   content: '';
   position: absolute;
@@ -131,6 +133,9 @@ body {
 }
 .pad:active::after {
   animation: dactyl-ripple 0.6s ease-out;
+}
+.pad:active::before {
+  animation: dactyl-ripple 0.6s ease-out 0.18s;
 }
 @keyframes dactyl-ripple {
   from {

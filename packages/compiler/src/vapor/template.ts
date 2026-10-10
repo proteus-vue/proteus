@@ -774,7 +774,7 @@ export function parseStaticStyle(
         if (spec === null) { pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 未解析（支持 \`<name> <dur> <timing?> …\`；需带时间单位）——已跳过`); continue }
         const stops = keyframes ? keyframes[spec.name] : undefined
         if (stops) {
-          const chans = resolveAnimationChannels(stops, spec.durMs, spec.curve)
+          const chans = resolveAnimationChannels(stops, spec.durMs, spec.curve, spec.delayMs)
           if (chans.length > 0) { out.animation = chans; markImportant('animation') }
           else pushDiag(`\`animation: ${rawVal}\` 的 @keyframes \`${spec.name}\` 无可动画通道（opacity / px 位移 / 等比缩放 / 旋转）——已跳过`)
         } else {
@@ -2439,8 +2439,9 @@ function resolveAnimationChannels(
   stops: KeyframeStop[],
   durMs: number,
   curve: number,
-): Array<{ kind: number; from: number; keyframes: Array<{ to: number; durMs: number; curve: number }> }> {
-  const chans: Array<{ kind: number; from: number; keyframes: Array<{ to: number; durMs: number; curve: number }> }> = []
+  delayMs = 0,
+): Array<{ kind: number; from: number; delayMs: number; keyframes: Array<{ to: number; durMs: number; curve: number }> }> {
+  const chans: Array<{ kind: number; from: number; delayMs: number; keyframes: Array<{ to: number; durMs: number; curve: number }> }> = []
   const build = (kind: number, get: (d: Record<string, unknown>) => number | undefined): void => {
     const pts: Array<[number, number]> = []
     for (const st of stops) {
@@ -2455,7 +2456,7 @@ function resolveAnimationChannels(
       if (d <= 0) continue
       segs.push({ to: pts[i]![1], durMs: d, curve })
     }
-    if (segs.length > 0) chans.push({ kind, from, keyframes: segs })
+    if (segs.length > 0) chans.push({ kind, from, delayMs, keyframes: segs })
   }
   const tfNum = (d: Record<string, unknown>, pick: (t: { txPx: number; tyPx: number; txPct: number; tyPct: number; sx: number; sy: number; rotate: number }) => number | undefined): number | undefined => {
     const t = d.transform as { txPx: number; tyPx: number; txPct: number; tyPct: number; sx: number; sy: number; rotate: number } | undefined
@@ -2488,23 +2489,26 @@ function cssTimingToCurve(t: string): number {
  *   取首 token 为名字（命中 @keyframes）、首个带时间单位的 token 为时长、timing 关键字 → curve。
  *   迭代/delay/direction/fill 暂忽略（诚实边界：App 端 animation 播**单次**、终态保持）。
  */
-function parseAnimationShorthand(val: string): { name: string; durMs: number; curve: number } | null {
+function parseAnimationShorthand(val: string): { name: string; durMs: number; curve: number; delayMs: number } | null {
   const toks = val.trim().split(/\s+/).filter(Boolean)
   if (toks.length === 0) return null
   const name = toks[0]!
   if (!/^[A-Za-z_][\w-]*$/.test(name)) return null
   let durMs: number | undefined
+  let delayMs = 0
   let curve: number | undefined
   for (const t of toks.slice(1)) {
     const s = t.toLowerCase()
     const sec = /^([\d.]+)s$/.exec(s)
     const ms = /^([\d.]+)ms$/.exec(s)
-    if (sec) { if (durMs === undefined) durMs = Number(sec[1]) * 1000 }
-    else if (ms) { if (durMs === undefined) durMs = Number(ms[1]) }
+    // ★第 1 个时间 token = 时长（durMs）；**第 2 个 = 延迟**（`animation-delay`——真实水波多圈错时的关键：
+    //   内核 `anim_start` 已支持 `delayMs`（`t_ms < delay_ms` 钉在起点），此前简写解析把它**丢弃**了）。
+    if (sec) { const v = Number(sec[1]) * 1000; if (durMs === undefined) durMs = v; else delayMs = v }
+    else if (ms) { const v = Number(ms[1]); if (durMs === undefined) durMs = v; else delayMs = v }
     else if (['linear', 'ease', 'ease-in', 'ease-out', 'ease-in-out'].includes(s)) { if (curve === undefined) curve = cssTimingToCurve(s) }
   }
   if (durMs === undefined) return null   // 无时长 ⇒ 不可静态化
-  return { name, durMs, curve: curve ?? 3 }
+  return { name, durMs, curve: curve ?? 3, delayMs }
 }
 /**
  * ★批次 38（对齐 Web）：CSS transform（**静态**）→ 引擎变换数值集。
