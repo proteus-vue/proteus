@@ -1196,8 +1196,9 @@ impl TaffyEngine {
 /// 计算每个节点的度量缓存键第一维（内容 hash 或节点寻址回退）
 ///
 /// ★抽为**纯函数**以便单测（缓存键的正确性是本仓实测踩过坑的地方）：
-///   ① 非空字面量 → 内容寻址（含字体签名）
+///   ① 非空字面量 **且字体签名非 0** → 内容寻址（含**字体签名 + 文本策略**维度）
 ///   ②/③ 无请求或空串 → 节点寻址（内容未知 ⇒ 不能假设"同文案"）
+///   ④ 有字面量但字体签名为 0 → 节点寻址（见下）
 pub(crate) fn compute_text_hashes(nodes: &[LNode]) -> Vec<u64> {
     let mut out = Vec::with_capacity(nodes.len());
     for n in nodes {
@@ -1221,6 +1222,13 @@ pub(crate) fn compute_text_hashes(nodes: &[LNode]) -> Vec<u64> {
                 let mut h = std::collections::hash_map::DefaultHasher::new();
                 t.text.hash(&mut h);
                 t.style_key.hash(&mut h);      // ★字体维度进键（调用方须真的填）
+                // ★★★B-T3（2026-10-10）：**文本策略维度进键**——`white-space`/`word-break`/`line-clamp`
+                //   影响同一文案在同一宽下的度量结果（wrap ⇒ 折行变高 / nowrap ⇒ 单行）⇒ 不进键会
+                //   **错误合并**（同文案同字体同宽、策略不同的两节点取到同一个尺寸 = 其中一个错）。
+                //   B-T2 已让内核持有这三字段（`LStyle`）⇒ 这里直接哈希。缺省（None）与空串等价。
+                n.style.white_space.hash(&mut h);
+                n.style.word_break.hash(&mut h);
+                n.style.line_clamp.hash(&mut h);
                 out.push(h.finish());
             }
             // ★节点寻址（键空间与内容 hash 隔离）——情形 ②③④
@@ -1720,5 +1728,28 @@ mod cache_key_tests {
         };
         let hashes = hash_for_tests(&[mk(10, 0), mk(20, 7)]);
         assert_ne!(hashes[0], hashes[1], "★字体签名必须参与缓存键（Profile §5.3）");
+    }
+
+    /// ★★★B-T3（2026-10-10）：**文本策略维度进键**——同文案同字体、`white-space` 不同必须**不共用**。
+    ///
+    /// 【为什么必须有（本仓潜在缺陷）】`white-space`/`word-break`/`line-clamp` 影响同一文案在同一宽下的
+    ///   度量结果（wrap ⇒ 折行变高 / nowrap ⇒ 单行）；若它们不进内容 hash，两个"同文案同字体同宽、
+    ///   策略不同"的节点会**错误共用缓存项** ⇒ 其中一个尺寸错（真机上 `style_key != 0` ⇒ 内容寻址生效 ⇒ 可达）。
+    #[test]
+    fn different_text_policy_does_not_share_cache_key() {
+        let mk = |id: u32, ws: Option<&str>| {
+            let mut st = LStyle::default();
+            st.white_space = ws.map(|s| s.to_string());
+            let mut n = LNode::new(id, st);
+            n.text = Some(TextMeasureRequest { text: "item".to_string(), style_key: 7 });
+            n
+        };
+        // 同文案 + 同字体签名（7）⇒ 仅策略不同
+        let hashes = hash_for_tests(&[mk(10, Some("nowrap")), mk(20, Some("normal")), mk(30, None)]);
+        assert_ne!(hashes[0], hashes[1], "★white-space nowrap vs normal 必须不共用缓存键");
+        assert_ne!(hashes[1], hashes[2], "★normal vs 缺省（None）也要区分（值不同即不同键）");
+        // 反证：策略**相同**仍共用（内容寻址收益保留）
+        let same = hash_for_tests(&[mk(40, Some("nowrap")), mk(50, Some("nowrap"))]);
+        assert_eq!(same[0], same[1], "★同文案同字体同策略仍应共用（内容寻址收益不丢）");
     }
 }

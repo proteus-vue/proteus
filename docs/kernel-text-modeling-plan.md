@@ -99,11 +99,14 @@
 **诚实边界**：内核**不解释**策略值（宿主引擎解释）；`text_align` 未并入（本就是独立字段，另议）；只做"是否策略层通"，
   不声称"三端靠版式像素级一致"。
 
-### B-T3 · 度量缓存键修正（潜在正确性，依赖 B-T2）—— ★**待做**
-**问题**：键 `(text_hash, max_width)`，`text_hash = 文本 ⊕ style_key`；`style_key` 由宿主 `fontSignature(字号,字重,字族)`
-  生成、**不含** white-space/word-break/line-clamp ⇒ 内容寻址在真机生效时，同文案同字体同宽、策略不同 ⇒ **错误命中同一缓存项**。
-**修**：内核把文本策略并入 `style_key`（或缓存键加策略位）——B-T2 已让内核持有策略，即可哈希。
-  **破坏性验证**：两节点同文案同宽、一 wrap 一 nowrap ⇒ 几何必须不同（当前可能相同 ⇒ 缺陷）。
+### B-T3 · 度量缓存键并入文本策略（正确性）—— ★**已交付（2026-10-10）**
+**问题**：内容寻址键 `(text_hash, max_width)`，`text_hash = 文本 ⊕ style_key`；`style_key` 由宿主
+  `fontSignature(字号,字重,字族)` 生成、**不含** white-space/word-break/line-clamp ⇒ 内容寻址在真机生效时
+  （`style_key != 0`），同文案同字体同宽、策略不同 ⇒ **错误命中同一缓存项**（后者取前者尺寸）。
+**修**：`compute_text_hashes` 把 `style.white_space/word_break/line_clamp` 一并哈希进内容键（B-T2 已让内核持有）。
+**破坏性验证**：`different_text_policy_does_not_share_cache_key`（同文案同字体、nowrap vs normal ⇒ 不共用）
+  + `kernel_text_cache_key.rs`（引擎级：A 单行 20 / B 折行 30，策略不同 ⇒ 各自正确，反证 measure_calls≥2）。
+**边界**：仅覆盖"内容寻址"分支（`style_key != 0`）；`style_key == 0` 仍回退节点寻址（保守，本就不共享）。
 
 ### B-T4（边界·不推进）
 - **CSS 内联富文本**（`<span>` 分段字形 / `v-html`）：内核分段文本 + 宿主分段绘制——**独立大课题**，见能力清单 #11/#168。
