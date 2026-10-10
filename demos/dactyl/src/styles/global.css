@@ -103,12 +103,59 @@ body {
   background-color: #141a24;
   border: 1px solid #24324a;
   border-radius: 10px;
+  position: relative;
+  overflow: hidden;
 }
 .pad:active {
   background-color: #1b3550;
   border-color: #39d0ff;
   transform: scale(0.9);
-  box-shadow: 0 0 14px #39d0ff;
+}
+/* L1 涟漪：**纯页面 CSS**（`:active` 触发 + `@keyframes` + `::after` 伪元素）——
+   框架把这段 CSS 跨端**物化**成装饰子节点（内核/宿主按普通节点渲染）；宿主不发明任何默认反馈。
+   ★静态 `opacity:0`（常态不可见）；`:active` 时播一次 keyframe（scale 0→1 + 淡出）。
+   ★`::after` 铺满 `.pad` 内边距盒；圆由 `border-radius:50%`（不使用百分比 inset）。 */
+.pad::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background-color: rgba(57, 208, 255, 0.45);
+  opacity: 0;
+}
+.pad:active::after {
+  animation: dactyl-ripple 0.5s ease-out;
+}
+@keyframes dactyl-ripple {
+  from {
+    transform: scale(0);
+    opacity: 0.8;
+  }
+  to {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+.pad:active::after {
+  animation: dactyl-ripple 0.5s ease-out;
+}
+@keyframes dactyl-ripple {
+  from {
+    background-color: #39d0ff;
+    opacity: 0;
+  }
+  to {
+    background-color: #39d0ff;
+    opacity: 1;
+  }
+}
+.pad:active {
+  background-color: #1b3550;
+  border-color: #39d0ff;
+  transform: scale(0.9);
 }
 
 /* 跟手轨道（L2/L3/L5）：穹顶平台整条随指迁移（v-follow ⇒ 内核合成平移，零 JS） */

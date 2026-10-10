@@ -198,6 +198,12 @@ export interface LayoutNode {
     /** 触发值源码（诊断/对账用） */
     valueSrc?: string
   }>
+  /**
+   * ★★★**伪元素标记**（本批 `::before`/`::after`）：该节点是编译期**合成的装饰子节点**（其样式来自
+   *   伪元素规则，`parentId` = 目标元素）。宿主据此把目标元素的**按下态**传播到该装饰节点
+   *   （如 `:active::after` 的涟漪动画）——渲染上它就是一个普通节点（内核/宿主零特殊处理）。
+   */
+  pseudo?: 'before' | 'after'
 }
 
 /** v-for 行模板元数据（供运行时展开与注册表回填） */
@@ -292,4 +298,9 @@ export interface InstantiatedNode {
   text?: string
   /** 样式字段（width / height / flexDirection / margin / …）——**平铺在节点顶层** */
   [styleKey: string]: unknown
+  /**
+   * ★★★**伪元素标记**（本批 `::before`/`::after`）：该节点是编译期**合成的装饰子节点**（见 `LayoutNode.pseudo`）。
+   *   必须随实例化**透传**给宿主（宿主据此把父元素的按下态传播到装饰子节点）——漏透传 = 静默丢失标记。
+   */
+  pseudo?: 'before' | 'after'
 }

@@ -19,6 +19,12 @@ export interface AlignNode {
   id: number | string
   tag: string
   children: AlignNode[]
+  /**
+   * ★★★**合成员标记**（旧侧专用）：该节点是**平台转换合成的**（非模板真元素）——CSE 侧不产，
+   *   对齐时**跳过不计未对齐**。用于两类：混合文本合成的 `p-text` 叶（tag 判定），
+   *   以及**物化的伪元素装饰节点**（`::before`/`::after`，由 `pseudo` 标记）。
+   */
+  synthetic?: boolean
 }
 
 export interface AlignResult {
@@ -44,20 +50,24 @@ function alignChildren(oldKids: AlignNode[], cseKids: AlignNode[]): { pairs: Arr
   while (i < oldKids.length && j < cseKids.length) {
     const o = oldKids[i]!
     const c = cseKids[j]!
-    if (o.tag === c.tag) {
-      pairs.push([i, j])
-      i++
-      j++
-      continue
-    }
-    if (o.tag === SYNTHETIC_TAG && c.tag !== SYNTHETIC_TAG) {
+    // ★合成节点判定**先于** tag 相等——否则物化伪元素（tag 可能与真元素同为 span/div）会错配、
+    //   消耗掉一个 CSE 节点槽（对齐位移）。旧侧合成节点（p-text 叶 / 物化伪元素）一律跳过。
+    const oSyn = o.synthetic === true || o.tag === SYNTHETIC_TAG
+    const cSyn = c.synthetic === true || c.tag === SYNTHETIC_TAG
+    if (oSyn && !cSyn) {
       i++
       skippedOld++
       continue
     }
-    if (c.tag === SYNTHETIC_TAG && o.tag !== SYNTHETIC_TAG) {
+    if (cSyn && !oSyn) {
       j++
       skippedCse++
+      continue
+    }
+    if (o.tag === c.tag) {
+      pairs.push([i, j])
+      i++
+      j++
       continue
     }
     // 其余错位：向前最多 3 个内找可对齐者（容错）；找不到 ⇒ 各自跳过并计数
@@ -85,7 +95,11 @@ function alignChildren(oldKids: AlignNode[], cseKids: AlignNode[]): { pairs: Arr
       j++
     }
   }
-  unaligned += oldKids.length - i + (cseKids.length - j)
+  // ★尾部余数：两侧各自剩余节点计未对齐，但**合成节点**（p-text 叶 / 物化伪元素）不计
+  //   （CSE 侧不产合成节点；旧侧多出的伪元素装饰节点在链表尾时不算未对齐）。
+  const isSyn = (n: AlignNode): boolean => n.synthetic === true || n.tag === SYNTHETIC_TAG
+  for (let k = i; k < oldKids.length; k++) if (!isSyn(oldKids[k]!)) unaligned++
+  for (let k = j; k < cseKids.length; k++) if (!isSyn(cseKids[k]!)) unaligned++
   return { pairs, skippedOld, skippedCse, unaligned }
 }
 

@@ -140,7 +140,7 @@ export type ScreenContentProvider = (
  *   已折叠的 `style`（来自 inline style / 结构化 paint 声明）。
  */
 export function screenContentFromLayoutTemplate(
-  template: { nodes: ReadonlyArray<{ id: number; parentId: number | null; style?: Record<string, unknown>; text?: string; tag?: string }> },
+  template: { nodes: ReadonlyArray<{ id: number; parentId: number | null; style?: Record<string, unknown>; text?: string; tag?: string; pseudo?: 'before' | 'after' }> },
   viewport?: { width: number; height: number },
 ): ScreenContent {
   const nodes: ScreenContentNode[] = template.nodes.map((n) => {
@@ -152,6 +152,7 @@ export function screenContentFromLayoutTemplate(
     }
     if (typeof n.text === 'string' && n.text.length > 0) out.text = n.text
     if (typeof n.tag === 'string' && n.tag.length > 0) out.semantic = n.tag // 标签→语义（诊断用）
+    if (n.pseudo) out.pseudo = n.pseudo   // ★伪元素标记（宿主据此把按下态传播到装饰子节点）
     return out as unknown as ScreenContentNode
   })
   return viewport ? { viewport, nodes } : { nodes }

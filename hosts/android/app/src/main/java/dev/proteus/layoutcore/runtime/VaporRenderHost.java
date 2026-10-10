@@ -262,6 +262,49 @@ public final class VaporRenderHost {
     }
 
     /**
+     * ★★★**按下触发动画**（本批伪元素）：从 specs 收集节点上的 `pressAnimation`（`:active{animation}` 或
+     *   `:active::after{animation}` 折出的通道数组）。DOWN 命中该节点（或该节点的父被按下）时，宿主调
+     *   `kernelAnimStart` **播一次**（复用既有内核动画通道，零新内核能力）。
+     *   ★返回 `id → 该节点的通道数组`（`[{kind,from,keyframes:[{to,durMs,curve}]}]`）。
+     */
+    private java.util.Map<Integer, JSONArray> collectPressAnimations() {
+        java.util.Map<Integer, JSONArray> m = new java.util.HashMap<>();
+        for (JSONObject spec : specs) {
+            JSONArray chans = spec.optJSONArray("pressAnimation");
+            if (chans == null || chans.length() == 0) continue;
+            int id = spec.optInt("id", -1);
+            if (id < 0) continue;
+            m.put(id, chans);
+        }
+        return m;
+    }
+
+    /**
+     * ★★★**伪装饰子节点映射**（本批伪元素）：从 specs 收集 `pseudo` 标记的节点 → 其父节点。
+     *   返回 `父 id → [伪子 id,…]`——DOWN 命中父节点时，宿主把**父的按下**传播到这些伪子
+     *   （伪子的 `pressAnimation` 随之启动 = `:active::after{animation}` 语义）。
+     *   ★伪子节点自身是普通节点（内核/渲染零特殊处理）。
+     */
+    private java.util.Map<Integer, int[]> collectPseudoChildren() {
+        java.util.Map<Integer, java.util.List<Integer>> tmp = new java.util.HashMap<>();
+        for (JSONObject spec : specs) {
+            if (!spec.has("pseudo")) continue;
+            int id = spec.optInt("id", -1);
+            int pid = spec.optInt("parentId", -1);
+            if (id < 0 || pid < 0) continue;
+            tmp.computeIfAbsent(pid, k -> new java.util.ArrayList<>()).add(id);
+        }
+        java.util.Map<Integer, int[]> m = new java.util.HashMap<>();
+        for (java.util.Map.Entry<Integer, java.util.List<Integer>> e : tmp.entrySet()) {
+            final java.util.List<Integer> v = e.getValue();
+            final int[] arr = new int[v.size()];
+            for (int i = 0; i < arr.length; i++) arr[i] = v.get(i);
+            m.put(e.getKey(), arr);
+        }
+        return m;
+    }
+
+    /**
      * ★★★S3（2026-10-10 · 输入延迟专项 #767）：从 specs 收集**跟手规格**
      *   （编译器把 `v-follow` 折成节点上的 `follow*` 扁平字段）。
      *   ★返回 `id → [axis, gain, clampMin, clampMax, springStiffness, springDamping, springMass, snapThreshold, snapTarget]`；
@@ -560,6 +603,10 @@ public final class VaporRenderHost {
             syncInputControls();
             // ★S1.1（#767）：把"按下态节点 → 样式（底色+凹陷+描边+发光）"注入视图（`:active` 折出的 press*）
             if (view != null) view.setPressStyles(collectPressStyles());
+            // ★伪元素（本批）：把"按下触发的动画"（`:active{animation}` / `:active::after{animation}`）注入视图
+            if (view != null) view.setPressAnimations(collectPressAnimations());
+            // ★伪元素（本批）：伪装饰子节点 → 父节点映射（DOWN 命中父时把 press 触发动画传播到伪子）
+            if (view != null) view.setPseudoChildren(collectPseudoChildren());
             // ★S3-T1（#767）：把"跟手节点 → (axis,gain)"注入视图（`v-follow` 折出的 followAxis/followGain）
             if (view != null) view.setFollowSpecs(collectFollow());
             // ★场跟手（通用 `v-follow={field:…}`）：把"场容器 → 场参数"注入视图（焦点 → 一片叶的高度/朝向场）
@@ -1324,31 +1371,10 @@ public final class VaporRenderHost {
                 if (chans == null) continue;
                 int id = spec.optInt("id", -1);
                 if (id < 0) continue;
-                boolean any = false;
-                for (int i = 0; i < chans.length(); i++) {
-                    JSONObject ch = chans.optJSONObject(i);
-                    if (ch == null) continue;
-                    JSONArray kf = ch.optJSONArray("keyframes");
-                    if (kf == null || kf.length() == 0) continue;
-                    double total = 0;
-                    double lastTo = ch.optDouble("from", 0);
-                    for (int k = 0; k < kf.length(); k++) {
-                        JSONObject seg = kf.optJSONObject(k);
-                        if (seg == null) continue;
-                        total += seg.optDouble("durMs", 0);
-                        lastTo = seg.optDouble("to", lastTo);
-                    }
-                    JSONObject one = new JSONObject();
-                    one.put("nodeId", id);
-                    one.put("kind", ch.optInt("kind"));
-                    one.put("from", ch.optDouble("from"));
-                    one.put("to", lastTo);
-                    one.put("durMs", total);
-                    one.put("keyframes", kf);
-                    anims.put(one);
-                    any = true;
-                }
-                if (any) nodes++;
+                JSONArray entries = collectAnimEntries(id, chans);
+                if (entries.length() == 0) continue;
+                for (int i = 0; i < entries.length(); i++) anims.put(entries.opt(i));
+                nodes++;
             }
             if (anims.length() == 0) return 0;
             JSONObject req = new JSONObject();
@@ -1358,6 +1384,37 @@ public final class VaporRenderHost {
         } catch (Throwable t) {
             return 0;
         }
+    }
+
+    /**
+     * ★★★把某节点的**通道数组**（`animation` / `pressAnimation` 同形）编成 `anim_start` 的**逐条条目**
+     *   （`{nodeId,kind,from,to,durMs,keyframes}`）。静态动画与**按下触发动画**共用（一处实现）。
+     */
+    static JSONArray collectAnimEntries(int id, JSONArray chans) throws Exception {
+        JSONArray anims = new JSONArray();
+        if (chans == null) return anims;
+        for (int i = 0; i < chans.length(); i++) {
+            JSONObject ch = chans.optJSONObject(i);
+            if (ch == null) continue;
+            JSONArray kf = ch.optJSONArray("keyframes");
+            if (kf == null || kf.length() == 0) continue;
+            double total = 0, lastTo = ch.optDouble("from", 0);
+            for (int k = 0; k < kf.length(); k++) {
+                JSONObject seg = kf.optJSONObject(k);
+                if (seg == null) continue;
+                total += seg.optDouble("durMs", 0);
+                lastTo = seg.optDouble("to", lastTo);
+            }
+            JSONObject one = new JSONObject();
+            one.put("nodeId", id);
+            one.put("kind", ch.optInt("kind"));
+            one.put("from", ch.optDouble("from"));
+            one.put("to", lastTo);
+            one.put("durMs", total);
+            one.put("keyframes", kf);
+            anims.put(one);
+        }
+        return anims;
     }
 
     public String animStart(String animsJson) {
