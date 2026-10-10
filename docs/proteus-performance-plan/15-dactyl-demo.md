@@ -3,9 +3,10 @@
 > 状态：**设计已定稿，待实现（D0 量具先行）**
 > 版本：v1 · 2026-10-10
 > 定位：`proteus-performance-plan/` C 批续篇——`14-input-bridge-latency.md` 的**可证伪实验场与对外演示形态**。
+> ★★★**身份（2026-10-10 用户定义）：本文件 = 「输入延迟 + 视觉反馈」专项的**全量验收标准**——专项「完成」的唯一判据 = Dactyl 的 D0–D4 DoD 全过（§10），而非 14 的 S1–S6 清单勾完。**
 > 一句话：**把"手指到像素"的延迟做成肉眼可见的几何量，再把负载一路推到框架崩裂的临界点。**
 > 关联：`14-input-bridge-latency.md`（S1–S6 六条腿）· `docs/Proteus_Benchmark案例规格.md`（主指标 work time / 三原则 / 三禁止）· `docs/对标Benchmark执行Checklist.md`（环境控制九条 / AOT 两组 / 5 次原始值）· `docs/Proteus_Playground设计方案.md`（IR 产物 + manifest 能力声明 + 扫码即玩）· `docs/Proteus_声明式动画引擎Morpheus方案.md`（合成属性走 RenderThread）
-> 相关决策：**#770**（Dactyl 立项）· #768 / #769（S1 / S2，本 demo 的直接验证对象）…（逐项登记）
+> 相关决策：**#772**（Dactyl 立项 + 采纳为专项验收标准；★原稿自编 #770 与"去 JSON 门禁 #770"撞号，重编 **#772**）· **#767**（专项立项）· #768/#769（S1/S2，本 demo 直接验证对象）…（逐项登记）
 > 批次：**C 批 · 编号 15 · 主攻 14 的验收载体**
 
 ---
