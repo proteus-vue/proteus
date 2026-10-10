@@ -16,21 +16,35 @@ import type { ExprProgram } from '@proteus-vue/slot-runtime'
 /** 编译结果：要么给出程序，要么给出**明确的不支持原因**（供上报） */
 export type ExprCompileResult = { ok: true; program: ExprProgram } | { ok: false; unsupported: string }
 
-/** babel AST 节点（只声明本文件用到的字段） */
-interface Node {
-  type: string
-  [k: string]: unknown
-}
+/** 二元运算符白名单（★刻意排除 `==` / `!=`——见 expr.ts 顶注的诚实边界） */
+const BIN_OPS = new Set(['+', '-', '*', '/', '%', '===', '!==', '<', '>', '<=', '>='])
 
 const UNSUPPORTED_CALL =
   '含**白名单外**的函数/方法调用（纯度无法证明，属 L1 准入条件 C1）——' +
   '内置纯函数（Math.* / String / Number / parseInt 等，见 slot-runtime 的 PURE_CALLS）可直接用；' +
   '业务函数请加 @proteus-pure 人工担保，或在 computed 里算好再绑定'
 
-/** 二元运算符白名单（★刻意排除 `==` / `!=`——见 expr.ts 顶注的诚实边界） */
-const BIN_OPS = new Set(['+', '-', '*', '/', '%', '===', '!==', '<', '>', '<=', '>='])
+/** babel AST 节点（只声明本文件用到的字段） */
+interface Node {
+  type: string
+  [k: string]: unknown
+}
 
-export function compileExpr(code: string): ExprCompileResult {
+/**
+ * ★★**ref `.value` 自动解包集合**（2026-10-10 · Vapor 事件方法体批次）
+ *
+ * 【为什么需要】`<script setup>` 里方法体访问 ref 走 `count.value++`；而 Vapor 端上的
+ *   数据模型里 `count` **本身就是值**（`data.count` 存快照、`read('count')` 直接给值——
+ *   见 `render-backend` 的 screen-runtime）。若把 `count.value` 原样编成 `mem(root('count'),'value')`，
+ *   运行时 `read('count')` 得到数值再取 `.value` ⇒ **undefined** ⇒ 静默算错值。
+ *   ⇒ 编译期把**已知 ref 源**上的 `.value` 成员访问**解包为裸源引用**（与模板里 `{{ count }}`
+ *     自动 unwrap 的语义一致）。
+ *   ★只有调用方**显式注入** ref 名集合时才解包（缺省 undefined ⇒ 既有行为逐字节不变）；
+ *     非 ref 对象上的 `.value` 属性**不受影响**（清单由调用方按源声明如实给出）。
+ */
+export type RefNames = ReadonlySet<string>
+
+export function compileExpr(code: string, refNames?: RefNames): ExprCompileResult {
   let ast: unknown
   const src = code.trim()
   try {
@@ -51,7 +65,18 @@ export function compileExpr(code: string): ExprCompileResult {
   } catch {
     return { ok: false, unsupported: 'AST 结构不符预期' }
   }
-  return compileNode(expr)
+  return compileNode(expr, refNames)
+}
+
+/**
+ * ★★**从已解析的 AST 节点编译**（2026-10-10 · 事件方法体批次）
+ *
+ * 【为什么需要】方法体语句来自 `<script setup>` 的 babel AST（已解析一次）——若再拼接文本
+ *   让 `compileExpr` 重解析，既要维护偏移又要多解析一遍。直接从节点编译 = **同一套表达式语义**
+ *   （单点实现），零重复解析。
+ */
+export function compileExprNode(node: unknown, refNames?: RefNames): ExprCompileResult {
+  return compileNode(node as Node, refNames)
 }
 
 /** 已知内置全局（其成员访问**不可**静默编成 `mem`——运行时 read() 取不到，会静默 undefined） */
@@ -73,7 +98,7 @@ function staticCalleeName(callee: Node): string | null {
   return staticGlobalName(callee)
 }
 
-function compileNode(n: Node): ExprCompileResult {
+function compileNode(n: Node, refNames?: RefNames): ExprCompileResult {
   // ★★★**TS 语法节点透明解包**（2026-10-03）——`x as T` / `x!` / `<T>x` / `x satisfies T`
   //   在**运行时没有语义**（纯编译期类型噪音；Vue 官方编译器同样剥掉它们）。
   //   此前它们落到 default 分支 ⇒ 整条表达式被拒（`('primary' as any)` 这类**真实页面里
@@ -110,7 +135,7 @@ function compileNode(n: Node): ExprCompileResult {
     //   即"**空值检查节点**"——正是 JS 规范 [[Get]] 对可选链的定义。
     //   ★这也是"编译期降级"（可读、可序列化），而非运行时特判（少一条执行器分支）。
     case 'OptionalMemberExpression': {
-      const obj = compileNode(n.object as Node)
+      const obj = compileNode(n.object as Node, refNames)
       if (!obj.ok) return obj
       const guard: ExprProgram = {
         k: 'logi',
@@ -120,7 +145,7 @@ function compileNode(n: Node): ExprCompileResult {
       }
       let access: ExprProgram
       if (n.computed === true) {
-        const key = compileNode(n.property as Node)
+        const key = compileNode(n.property as Node, refNames)
         if (!key.ok) return key
         access = { k: 'memdyn', obj: obj.program, key: key.program }
       } else {
@@ -133,16 +158,30 @@ function compileNode(n: Node): ExprCompileResult {
       return { ok: true, program: { k: 'cond', t: guard, c: { k: 'undef' }, a: access } }
     }
     case 'MemberExpression': {
+      // ★★**ref `.value` 解包**（2026-10-10 · 事件方法体批次）：`count.value`（count 为已知 ref 源）
+      //   ⇒ 裸源引用 `root('count')`。★只对调用方注入的 ref 名生效（非 ref 的 `.value` 不受影响）。
+      if (refNames && n.computed !== true) {
+        const objNode = n.object as Node
+        const propNode = n.property as Node
+        if (
+          (objNode.type === 'Identifier' || objNode.type === 'TSAsExpression' || objNode.type === 'TSNonNullExpression') &&
+          propNode?.type === 'Identifier' &&
+          propNode.name === 'value'
+        ) {
+          const base = compileNode(objNode, refNames)
+          if (base.ok && base.program.k === 'root' && refNames.has(base.program.name)) return base
+        }
+      }
       // ★P2-9：`Math.PI` 这类的**编译期常量内联**——见 GLOBAL_CONST_MEMBERS 头注
       //   （此前编成 `mem(root('Math'),'PI')` ⇒ 运行时 read('Math') = undefined ⇒ 静默渲染成空）
       const constName = staticGlobalName(n)
       if (constName && constName in GLOBAL_CONST_MEMBERS) {
         return { ok: true, program: { k: 'lit', v: GLOBAL_CONST_MEMBERS[constName]! } }
       }
-      const obj = compileNode(n.object as Node)
+      const obj = compileNode(n.object as Node, refNames)
       if (!obj.ok) return obj
       if (n.computed === true) {
-        const key = compileNode(n.property as Node)
+        const key = compileNode(n.property as Node, refNames)
         if (!key.ok) return key
         return { ok: true, program: { k: 'memdyn', obj: obj.program, key: key.program } }
       }
@@ -166,7 +205,7 @@ function compileNode(n: Node): ExprCompileResult {
       const op = n.operator as string
       // ★刻意排除 `typeof` / `void` / `delete`（语义与副作用都不适合模板层）
       if (op !== '!' && op !== '-' && op !== '+') return { ok: false, unsupported: `不支持一元运算符 ${op}` }
-      const arg = compileNode(n.argument as Node)
+      const arg = compileNode(n.argument as Node, refNames)
       if (!arg.ok) return arg
       return { ok: true, program: { k: 'un', op: op as '!' | '-' | '+', arg: arg.program } }
     }
@@ -182,9 +221,9 @@ function compileNode(n: Node): ExprCompileResult {
               : `不支持二元运算符 ${op}`,
         }
       }
-      const l = compileNode(n.left as Node)
+      const l = compileNode(n.left as Node, refNames)
       if (!l.ok) return l
-      const r = compileNode(n.right as Node)
+      const r = compileNode(n.right as Node, refNames)
       if (!r.ok) return r
       return { ok: true, program: { k: 'bin', op: op as never, l: l.program, r: r.program } }
     }
@@ -192,19 +231,19 @@ function compileNode(n: Node): ExprCompileResult {
     case 'LogicalExpression': {
       const op = n.operator as string
       if (op !== '&&' && op !== '||' && op !== '??') return { ok: false, unsupported: `不支持逻辑运算符 ${op}` }
-      const l = compileNode(n.left as Node)
+      const l = compileNode(n.left as Node, refNames)
       if (!l.ok) return l
-      const r = compileNode(n.right as Node)
+      const r = compileNode(n.right as Node, refNames)
       if (!r.ok) return r
       return { ok: true, program: { k: 'logi', op: op as '&&' | '||' | '??', l: l.program, r: r.program } }
     }
 
     case 'ConditionalExpression': {
-      const t = compileNode(n.test as Node)
+      const t = compileNode(n.test as Node, refNames)
       if (!t.ok) return t
-      const c = compileNode(n.consequent as Node)
+      const c = compileNode(n.consequent as Node, refNames)
       if (!c.ok) return c
-      const a = compileNode(n.alternate as Node)
+      const a = compileNode(n.alternate as Node, refNames)
       if (!a.ok) return a
       return { ok: true, program: { k: 'cond', t: t.program, c: c.program, a: a.program } }
     }
@@ -219,7 +258,7 @@ function compileNode(n: Node): ExprCompileResult {
         if (keyNode.type === 'Identifier') key = keyNode.name as string
         else if (keyNode.type === 'StringLiteral' || keyNode.type === 'NumericLiteral') key = String(keyNode.value)
         else return { ok: false, unsupported: '对象字面量的键不是静态字面量' }
-        const v = compileNode(raw.value as Node)
+        const v = compileNode(raw.value as Node, refNames)
         if (!v.ok) return v
         props.push({ key, value: v.program })
       }
@@ -231,7 +270,7 @@ function compileNode(n: Node): ExprCompileResult {
       for (const raw of (n.elements as Node[]) ?? []) {
         // 稀疏数组（`[a, , b]`）与展开（`[...a]`）都不支持
         if (!raw || raw.type === 'SpreadElement') return { ok: false, unsupported: '数组字面量含空缺或展开' }
-        const it = compileNode(raw)
+        const it = compileNode(raw, refNames)
         if (!it.ok) return it
         items.push(it.program)
       }
@@ -246,7 +285,7 @@ function compileNode(n: Node): ExprCompileResult {
       // 以首段起头；随后依次接「表达式」与「后续字面段」
       let acc: ExprProgram = { k: 'lit', v: quasis[0]?.value?.cooked ?? '' }
       for (let i = 0; i < exprs.length; i++) {
-        const e = compileNode(exprs[i]!)
+        const e = compileNode(exprs[i]!, refNames)
         if (!e.ok) return e
         acc = { k: 'bin', op: '+', l: acc, r: e.program }
         const seg = quasis[i + 1]?.value?.cooked
@@ -268,12 +307,12 @@ function compileNode(n: Node): ExprCompileResult {
         : ''
       if (methodName && isPureMethodName(methodName)) {
         // 方法形态：接收者单独编译（依赖分析按接收者建图）
-        const recv = compileNode(callee.object as Node)
+        const recv = compileNode(callee.object as Node, refNames)
         if (!recv.ok) return recv
         const args: ExprProgram[] = []
         for (const raw of (n.arguments as Node[]) ?? []) {
           if (raw.type === 'SpreadElement') return { ok: false, unsupported: '调用实参不支持展开运算符' }
-          const a = compileNode(raw)
+          const a = compileNode(raw, refNames)
           if (!a.ok) return a
           args.push(a.program)
         }
@@ -285,7 +324,7 @@ function compileNode(n: Node): ExprCompileResult {
       const args: ExprProgram[] = []
       for (const raw of (n.arguments as Node[]) ?? []) {
         if (raw.type === 'SpreadElement') return { ok: false, unsupported: '调用实参不支持展开运算符' }
-        const a = compileNode(raw)
+        const a = compileNode(raw, refNames)
         if (!a.ok) return a
         args.push(a.program)
       }

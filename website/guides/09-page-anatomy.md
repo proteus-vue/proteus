@@ -55,7 +55,7 @@ const count = ref(0)
 
 > ★**跨端一致性写法**（对齐仓库 `css-conformance` 全端验收基准）：**用原始标签**（`div / h1 / p / button`，不依赖内置组件）+ **静态 class + 设计令牌**（`var(--x)` 指向 `global.css` 的 `:root`，App 端编译期展开为具体值）。避免 `:hover` / 伪类等 App 端尚不支持的写法；`inline-block` 等 Skyline 不接受的取值会被门禁拦下。跨页复用的基线样式放 `src/styles/global.css`（小程序走 `globalStyle`、Web 在 `main.ts` import、App 编译期折叠——一份文件四端同源）。
 >
-> ★**事件写法**（影响 App 端可交互性）：App 的事件编译**只支持内联动作**（`@click="count++"` / `@click="count = count + 1"` / `@click="show = !show"`），**不支持方法引用**（`@click="handleTap"`）——后者在 Web/小程序可用、但 App 端**不产出事件**（看得见、点不动）。起步模板统一用内联写法，多端一致。
+> ★**事件写法**（影响 App 端可交互性）：App 的事件编译支持**内联动作**（`@click="count++"` / `@click="count = count + 1"` / `@click="show = !show"`）与**方法引用 / 无参调用**（`@click="handleTap"` / `@click="handleTap()"`——方法体在**编译期降级**为动作表，支持赋值/自增/复合赋值/`$emit`/`$nav`，ref 用 `.value`）。**仍不支持**（App 端会产编译期诊断、不产出事件）：带实参调用（`add(2)`）、方法形参（`$event`）、方法内局部变量与 `if/else`、循环 / async / 任意函数。起步模板用最简单的内联写法。
 
 ## 四个部分，一套语义 → 各端产物
 
