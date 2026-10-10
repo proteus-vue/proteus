@@ -54,12 +54,15 @@ static inline void applyTextFont(OH_Drawing_TextStyle* tstyle, int fontWeight, c
 }
 
 /// 单行度量（物理 px）：`*outW/*outH` = 最长行宽 / 行盒高（同 iOS `measureText` / Android `measureSingle`）。
+///   ★B-T1（2026-10-10）：`outBaseline` = 盒内容顶→**基线**（OH_Drawing AlphabeticBaseline），供内核
+///   `align-items: baseline` 对文本对齐；缺省 nullptr ⇒ 零影响（既有调用方不改也正确）。
 static inline void measureTextTypoPx(const std::string& text, double fontPx, double* outW, double* outH, double letterSpacingPx = 0,
                                      int fontWeight = 400, const std::string& fontFamily = "",
-                                     int* outLines = nullptr) {
+                                     int* outLines = nullptr, double* outBaseline = nullptr) {
     *outW = 0;
     *outH = 0;
     if (outLines != nullptr) *outLines = 0;
+    if (outBaseline != nullptr) *outBaseline = 0;
     if (text.empty() || fontPx <= 0) return;
     OH_Drawing_FontCollection* fc = OH_Drawing_CreateFontCollection();
     if (fc == nullptr) return;
@@ -79,6 +82,7 @@ static inline void measureTextTypoPx(const std::string& text, double fontPx, dou
             *outW = OH_Drawing_TypographyGetLongestLine(typo);
             *outH = OH_Drawing_TypographyGetHeight(typo);
             if (outLines != nullptr) *outLines = (int)OH_Drawing_TypographyGetLineCount(typo);
+            if (outBaseline != nullptr) *outBaseline = OH_Drawing_TypographyGetAlphabeticBaseline(typo);
             OH_Drawing_DestroyTypography(typo);
         }
         OH_Drawing_DestroyTypographyHandler(handler);

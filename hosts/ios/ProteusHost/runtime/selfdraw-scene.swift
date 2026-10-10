@@ -4615,7 +4615,9 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             let fw = (n["fontWeight"] as? Double).map { CGFloat($0) } ?? 400
             let fam = (n["fontFamily"] as? String) ?? "system"
             let sz = ProteusTextAdapter.measureText(text, fontSize: fs, fontWeight: fw, fontFamily: fam, letterSpacing: (n["letterSpacing"] as? Double).map { CGFloat($0) } ?? 0)
-            textMeasures["\(id)"] = ["width": Double(sz.width), "height": Double(sz.height)]
+            // ★B-T1：基线（盒内容顶→基线）
+            let baseline = ProteusTextAdapter.textBaseline(fontSize: fs, fontWeight: fw, fontFamily: fam)
+            textMeasures["\(id)"] = ["width": Double(sz.width), "height": Double(sz.height), "baseline": Double(baseline)]
         }
         let req: [String: Any] = [
             "viewport": root["viewport"] as? [String: Any] ?? ["width": 390, "height": 844],
@@ -7102,8 +7104,9 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             let sz = ProteusTextAdapter.measureTextWrapped(text, fontSize: fs, fontWeight: fw, fontFamily: fam,
                                                              lineWidth: CGFloat(boxW), lineHeight: lh, letterSpacing: ls, wordBreak: wb, maxLines: maxLines)
             let prevH = measures["\(id)"]?["height"] ?? 0
+            let prevBaseline = measures["\(id)"]?["baseline"] ?? 0   // ★B-T1：基线不随折行变（首行基线）
             if Double(sz.height) > prevH + 0.5 {
-                measures["\(id)"] = ["width": Double(min(boxW, Double(sz.width))), "height": Double(sz.height)]
+                measures["\(id)"] = ["width": Double(min(boxW, Double(sz.width))), "height": Double(sz.height), "baseline": prevBaseline]
                 changed = true
             }
         }
@@ -7225,7 +7228,9 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             let fam = (n["fontFamily"] as? String) ?? "system"
             let lh = n["lineHeight"] as? String
             let sz = ProteusTextAdapter.measureText(text, fontSize: fontSize, fontWeight: fw, fontFamily: fam, lineHeight: lh, letterSpacing: (n["letterSpacing"] as? Double).map { CGFloat($0) } ?? 0)
-            textMeasures["\(id)"] = ["width": Double(sz.width), "height": Double(sz.height)]
+            // ★B-T1：基线（盒内容顶→基线）——供内核 align-items:baseline 对文本对齐
+            let baseline = ProteusTextAdapter.textBaseline(fontSize: fontSize, fontWeight: fw, fontFamily: fam)
+            textMeasures["\(id)"] = ["width": Double(sz.width), "height": Double(sz.height), "baseline": Double(baseline)]
         }
         let measureMs = (CFAbsoluteTimeGetCurrent() - tMeasure0) * 1000
 

@@ -1283,8 +1283,11 @@ fn align_baselines_in(tree: &mut LayoutTree, baselines: &HashMap<u32, f32>, out:
             }
         }
         if parts.is_empty() { continue; }
-        // 参考基线 = max(子.y + 子.基线)；把各子项 y 调到「参考基线 − 自身基线」⇒ 基线共线
-        let ref_b = parts.iter().fold(f32::NEG_INFINITY, |m, (_, y, b)| m.max(*y + *b));
+        // ★参考基线 = max(各子项基线)（**只看基线值**，不看 taffy 已摆好的 y）——
+        //   taffy 对叶基线恒 NONE ⇒ 它已按"盒底"摆过一遍（y 是盒底对齐的结果）；
+        //   若拿那个 y 参与参考基线 ⇒ 大字号在后时会取错参考（把偏大的盒底当基准）。
+        //   CSS 语义：基线对齐时各子项**不参与盒对齐**，其交叉轴位置仅由基线决定 ⇒ y = 参考基线 − 自身基线。
+        let ref_b = parts.iter().fold(f32::NEG_INFINITY, |m, (_, _y, b)| m.max(*b));
         for (ci, _y, b) in &parts {
             adjustments.push((*ci, ref_b - *b));
         }

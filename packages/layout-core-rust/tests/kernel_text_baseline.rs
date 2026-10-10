@@ -13,22 +13,27 @@ use proteus_layout_core::{FlexDirection, LNode, LStyle, LayoutEngine, LayoutTree
 use std::collections::HashMap;
 
 fn build_baseline_case(measurer: TableTextMeasurer) -> (LayoutTree, u32, u32) {
+    build_baseline_case_order(measurer, false)
+}
+
+/// `swap=true` ⇒ 子项顺序反转（大字号在前）——用于锁"参考基线只看基线值，与 taffy 已摆的 y 无关"。
+fn build_baseline_case_order(_measurer: TableTextMeasurer, swap: bool) -> (LayoutTree, u32, u32) {
     let mut tree = LayoutTree::new();
     let mut root_style = LStyle { width: Some(400.0), height: Some(100.0), ..Default::default() };
     root_style.flex_direction = FlexDirection::Row;
     root_style.align_items = "baseline".to_string();
     let root = tree.push(LNode::new(1, root_style));
+    let order: [u32; 2] = if swap { [11, 10] } else { [10, 11] };
     let mut ids = vec![];
-    for i in 0..2u32 {
-        let mut n = LNode::new(10 + i, LStyle { flex_shrink: 0.0, ..Default::default() });
-        n.text = Some(proteus_layout_core::TextMeasureRequest { text: format!("t{i}"), style_key: 7 });
+    for id in order {
+        let mut n = LNode::new(id, LStyle { flex_shrink: 0.0, ..Default::default() });
+        n.text = Some(proteus_layout_core::TextMeasureRequest { text: format!("t{id}"), style_key: 7 });
         let idx = tree.push(n);
         tree.add_child(root, idx);
-        ids.push(10 + i);
+        ids.push(id);
     }
     tree.roots.push(root);
-    let _ = measurer;
-    (tree, ids[0], ids[1])
+    (tree, 10, 11)
 }
 
 #[test]
@@ -57,6 +62,31 @@ fn baseline_alignment_aligns_text_baselines() {
         (ya + 20.0 - (yb + 30.0)).abs() > 1.0,
         "★必须是**基线**对齐（非盒底）：ya={ya} yb={yb}",
     );
+}
+
+#[test]
+fn baseline_alignment_is_order_independent() {
+    // ★锁"参考基线只看基线值"：大字号子项**在前/在后**两种排布，基线对齐结果必须同（否则 taffy 的盒底 y 泄漏进了参考基线）。
+    let mut m = TableTextMeasurer::new(HashMap::new());
+    m.set(10, Size { width: 100.0, height: 20.0 });
+    m.set(11, Size { width: 100.0, height: 30.0 });
+    m.set_baseline(10, 12.0);
+    m.set_baseline(11, 30.0);
+    let measure = |swap: bool| -> (f32, f32) {
+        let (mut tree, _a, _b) = build_baseline_case_order(m.clone(), swap);
+        let mut engine = TaffyEngine::new().with_measurer(Box::new(m.clone()));
+        let out = engine.layout(&mut tree, RootConstraint::definite(400.0, 100.0));
+        (
+            out.rect_of(tree.index_of_id(10).unwrap()).unwrap().y,
+            out.rect_of(tree.index_of_id(11).unwrap()).unwrap().y,
+        )
+    };
+    let (a1, b1) = measure(false);
+    let (a2, b2) = measure(true);
+    assert!((a1 - a2).abs() < 0.5 && (b1 - b2).abs() < 0.5, "★基线对齐须与子项顺序无关（{a1},{b1} vs {a2},{b2}）——参考基线不得用 taffy 已摆的 y");
+    // 两排布都应满足基线共线（A.y+12 == B.y+30）
+    assert!((a1 + 12.0 - (b1 + 30.0)).abs() < 0.5);
+    assert!((a2 + 12.0 - (b2 + 30.0)).abs() < 0.5);
 }
 
 #[test]

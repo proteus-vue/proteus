@@ -1608,7 +1608,9 @@ pub unsafe extern "C" fn proteus_layout_geometry_snapshot(handle: u64) -> *mut c
 pub unsafe extern "C" fn proteus_layout_rects(handle: u64) -> *mut c_char {
     let r = std::panic::catch_unwind(|| -> Result<String, String> {
         let reg = registry().lock().map_err(|_| "注册表锁失败".to_string())?;
-        let tree = &reg.get(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?.tree;
+        let entry = reg.get(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?;
+        let tree = &entry.tree;
+        let baselines = &entry.baselines;   // ★B-T1：文本基线随 rects 一并暴露（供宿主/探针自算基线残差）
         let abs = tree.absolute_rects();
         // ★★★overflow-x 项（2026-10-06）：**有效裁剪矩形**（祖先链 overflow 非 visible 盒的交集）——
         //   复用 hit::geometry（命中测试的同一实现，单一事实源）；宿主按它裁子内容。
@@ -1619,6 +1621,12 @@ pub unsafe extern "C" fn proteus_layout_rects(handle: u64) -> *mut c_char {
         for (i, r) in abs.iter().enumerate() {
             if let Some(r) = r {
                 let mut obj = serde_json::json!({"x": r.x, "y": r.y, "width": r.width, "height": r.height});
+                // ★B-T1：文本叶的基线（盒内容顶→基线）。有基线才写（非文本/未提供 ⇒ 无此键，向后兼容）
+                if let Some(b) = baselines.get(&tree.nodes[i].id) {
+                    if let Some(m) = obj.as_object_mut() {
+                        m.insert("baseline".into(), serde_json::json!(b));
+                    }
+                }
                 if let Some(c) = geo[i].clip {
                     let sc = crate::snap::snap_rect(c);
                     // ★★扁平键（clipX/clipY/clipW/clipH）——**不得用嵌套对象**：

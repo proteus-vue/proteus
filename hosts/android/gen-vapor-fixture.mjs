@@ -449,6 +449,23 @@ const b3don = ref(false)
 .gcols { grid-template-columns: 80px 200px; }
 </style>`
 
+/**
+ * ★★★B-T1 夹具（判据 ㉘，2026-10-10）：**文本基线对齐**端上真生效（`align-items: baseline`）。
+ *   row 容器 + baseline；两个**不同字号**文本（14px / 30px）⇒ 基线不同 ⇒ 需真基线对齐才能共线。
+ *   判据核**基线残差** `(y_a+baseline_a) − (y_b+baseline_b) ≈ 0`（**字体无关不变量**——三端字体
+ *   不同但残差恒 0；taffy-only 盒底对齐下残差 = 字体差值 ≠ 0）。probe 从 `rects` 读各文本叶 baseline。
+ */
+const BT1_SFC = `<template>
+  <p-view style="flex-direction: row; align-items: baseline; width: 400px; height: 100px">
+    <p-text style="font-size: 14px; color: #3aa0ff">a</p-text>
+    <p-text style="font-size: 30px; color: #7c3aed">B</p-text>
+  </p-view>
+</template>
+
+<script setup lang="ts">
+const _bt1 = ref(0)
+</script>`
+
 /** 长列表夹具：**行高 100px**（视口 2400 ⇒ 可见 ~24 行；预加载 ±10 ⇒ 物化 ~34 行）
  *  ——判据的口径：1000 行都必须在内核树里（几何正确），但宿主只物化可见区。
  *  ★行内含 `:width` 绑定（L1 槽位）与插值文本（`{{ item.title }}`）。 */
@@ -625,6 +642,8 @@ process.stdout.write(JSON.stringify({
   b3b: build(${JSON.stringify(B3B_SFC)}, 'vapor-b3b.vue'),
   // ★★B3d：动态 :class 字符串布局字段（grid 模板，判据 ㉗）
   b3d: build(${JSON.stringify(B3D_SFC)}, 'vapor-b3d.vue'),
+  // ★★B-T1：文本基线对齐（align-items:baseline，判据 ㉘）
+  bt1: build(${JSON.stringify(BT1_SFC)}, 'vapor-bt1.vue'),
   // ★:style 对象展开（判据 ㉒）
   styleObj: build(${JSON.stringify(STYLE_OBJ_SFC)}, 'vapor-style-obj.vue'),
   // ★★★六端 SFC 压力夹具：编译**共享 SFC 文件**（examples 页面）——与 Web/MP 同源
@@ -805,7 +824,7 @@ for (const [nm, def] of Object.entries(parsed.components)) {
       `父绑定 @${parentEmitBinds[0].event}（nodeId=${parentEmitBinds[0].nodeId}）`,
   )
 }
-fs.writeFileSync(OUT, JSON.stringify({ ...parsed.small, components: parsed.components, slot: parsed.slot, scoped: parsed.scoped, dyn: parsed.dyn, directive: parsed.directive, mixed: parsed.mixed, t2: parsed.t2, b5: parsed.b5, b3a: parsed.b3a, b3b: parsed.b3b, b3d: parsed.b3d, styleObj: parsed.styleObj }))
+fs.writeFileSync(OUT, JSON.stringify({ ...parsed.small, components: parsed.components, slot: parsed.slot, scoped: parsed.scoped, dyn: parsed.dyn, directive: parsed.directive, mixed: parsed.mixed, t2: parsed.t2, b5: parsed.b5, b3a: parsed.b3a, b3b: parsed.b3b, b3d: parsed.b3d, bt1: parsed.bt1, styleObj: parsed.styleObj }))
 console.log(`[gen-vapor-fixture] ✅ 组件注册表：${Object.keys(parsed.components).join(', ')}（随父产物下发）`)
 // ★P1-3 插槽分发夹具（判据 ⑮）：父产物必须带 slotFor 标记、子产物必须带 slotOutlet 标记
 //   （"生成器静默退化"是本仓重点拦的形态——标记缺了就是分发不可能发生）
@@ -993,6 +1012,16 @@ console.log(`[gen-vapor-fixture] ✅ 组件注册表：${Object.keys(parsed.comp
     process.exit(1)
   }
   console.log(`[gen-vapor-fixture] ✅ B3d 夹具：动态 :class 字符串布局字段（gridTemplateColumns 在线性规则 · 无布局诊断）`)
+}
+// ★★★B-T1 夹具（判据 ㉘）：文本基线对齐（align-items:baseline + 两个不同字号文本）—— 需模板 3 节点（容器+2 文本）
+{
+  const nodes = parsed.bt1?.tpl?.nodes ?? []
+  const hasBaseline = JSON.stringify(nodes).includes('baseline')
+  if (!parsed.bt1?.ok || nodes.length < 3 || !hasBaseline) {
+    console.error(`[gen-vapor-fixture] ✗ B-T1 夹具不完整（判据 ㉘ 将无证据）：节点=${nodes.length} · align-items:baseline=${hasBaseline}`)
+    process.exit(1)
+  }
+  console.log(`[gen-vapor-fixture] ✅ B-T1 夹具：文本基线对齐（${nodes.length} 节点 · align-items:baseline）`)
 }
 // ★:style 对象展开（2026-10-03）：必须**逐键**（layout.width + paint.backgroundColor），不得有整键
 {
