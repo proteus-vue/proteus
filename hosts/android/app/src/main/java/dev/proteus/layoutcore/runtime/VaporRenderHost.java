@@ -2815,7 +2815,14 @@ public final class VaporRenderHost {
 
     private void pushToView(int[] ids) {
         if (view == null) return;
-        view.setCmds(cmds);
+        // ★★★**id 表必须先于指令设置**（2026-10-10 · 真机「切回首页整屏涟漪」根因）：
+        //   `setCmds` 在**尺寸就绪**时会**立即录制显示列表**（`rebuildPicture`），而录制时 `drawCmds`
+        //   用 `cmdNodeIds` 把每条指令映回节点（据此取每节点的 `animTx`/`opacity`）。若先 `setCmds`
+        //   再 `setCmdNodeIds` ⇒ 录制用的是**上一屏的旧 id 表**——当新屏指令数**多于**旧 id 表长度时，
+        //   尾部指令 `id=-1` ⇒ 其 `opacity` **不被施加** ⇒ `opacity:0` 的**伪元素装饰节点**
+        //   （`::before`/`::after`，如涟漪）以**满不透明**绘制（`op=1`）。
+        //   ★判别征：**旧屏节点少（如 L2=1004）时新屏尾部仍有 id ⇒ 正常；旧屏节点少（L3=33/L4=8/L5=6）
+        //     时新屏（首页 149）尾部全 `-1` ⇒ 整屏涟漪**——这解释了「只有 L2 切屏没这个问题」。
         if (ids != null) {
             view.setCmdNodeIds(ids);
         } else if (cmdIdsOf != null && cmdIdsOf.size() == cmds.size()) {
@@ -2824,6 +2831,7 @@ public final class VaporRenderHost {
             for (int i = 0; i < a.length; i++) a[i] = cmdIdsOf.get(i);
             view.setCmdNodeIds(a);
         }
+        view.setCmds(cmds);
         view.setFixedNodes(fixedIdsOf);   // ★★★批 A：fixed 节点集（滚动反向补偿）
         view.setStickyTops(stickyTopsOf); // ★★★批 A③：sticky 节点阈值（滚动吸附）
         view.invalidate();
