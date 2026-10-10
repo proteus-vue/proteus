@@ -529,6 +529,13 @@ pub struct LStyle {
     /// ★★**倾斜 Y**（度）——`y' = y + tan(skewY)·x`（CSS `skewY` 同式）
     #[serde(default)]
     pub skew_y: f32,
+    /// ★★★**力增益**（2026-10-10 · 通用原语）：宿主**每帧可设的标量**（缺省 1），内核把它**乘进发射的
+    ///   `scale`**（`collect_updates` 里 `scale = style.scale * scale_gain`）。用途：**按压力度/时长 → 外扩范围**
+    ///   ——同一个无限脉冲动画，按得越久增益越大、波扩得越远。
+    ///   【为什么在内核乘（宿主零数学）】与 follow 同一条纪律：宿主只报标量、内核算画面；
+    ///     `style.scale` 由动画每帧**绝对写**（不复合）⇒ 在此乘增益**不会累积**（安全）。
+    #[serde(default = "default_scale")]
+    pub scale_gain: f32,
     /// ★★**SVG 描边进度**（2026-10-01 · C2；0..1 = 画到哪——内核只存；路径本体见 `svg_d`）
     #[serde(default)]
     pub stroke_progress: f32,
@@ -736,6 +743,7 @@ impl Default for LStyle {
             translate_x: 0.0,
             translate_y: 0.0,
             scale: 1.0,
+            scale_gain: 1.0,
             rotate: 0.0,
             rotate_x: 0.0,
             rotate_y: 0.0,

@@ -513,6 +513,14 @@ describe('★C1 最小切片 · SFC <style> 单类规则 → class→节点样�
     // radial + background-image
     const g5 = parseStaticStyle('background-image: radial-gradient(circle, #fff, #000)', () => {}) as { fillGradient?: { kind: string } }
     expect(g5.fillGradient?.kind, 'radial').toBe('radial')
+    // ★shape 参数 + **带空格的 rgba**（标准 CSS）必须能解析（此前按空白切 token ⇒ 判不出色 ⇒ 整条渐变丢失）
+    const g6 = parseStaticStyle(
+      'background-image: radial-gradient(closest-side, rgba(57, 208, 255, 0.55), rgba(57, 208, 255, 0))',
+      () => {},
+    ) as { fillGradient?: { kind: string; stops: Array<{ alpha?: number }> } }
+    expect(g6.fillGradient?.kind, 'radial+closest-side+带空格 rgba').toBe('radial')
+    expect(g6.fillGradient?.stops[0]?.alpha, '首标 alpha≈0.549').toBeCloseTo(0.549, 2)
+    expect(g6.fillGradient?.stops[1]?.alpha, '末标 alpha=0').toBe(0)
     // 纯色仍走 backgroundColor（零行为变化）
     expect((parseStaticStyle('background: #fff', () => {}) as { backgroundColor?: string }).backgroundColor, '纯色').toBe('#fff')
   })

@@ -479,6 +479,12 @@ pub fn apply_style_key(node: &mut LNode, key: &str, value: f32) -> Result<bool, 
             s.margin.left = if v.is_finite() { v } else { 0.0 };
             Ok(true)
         }
+        // ★★★力增益（通用原语）：宿主每帧设的标量，乘进发射的 scale（按压力度/时长 → 外扩范围）。
+        //   ★标记**不改几何**（Ok(false)）⇒ 不触发重排（它只改 paint-only 的 scale 发射值）。
+        "layout.scaleGain" => {
+            s.scale_gain = if v.is_finite() && v >= 0.0 { v } else { 1.0 };
+            Ok(false)
+        }
         k if k.starts_with("paint.") || k.starts_with("text.") || k.starts_with("attr.") => Ok(false),
         other => Err(format!("本层不支持布局键 `{other}`（若为几何属性，请在 ops_apply 的映射表里登记）")),
     }
