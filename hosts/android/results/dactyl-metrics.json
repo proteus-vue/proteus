@@ -1,0 +1,19 @@
+{
+  "end": "android",
+  "source": "dactyl-measure-latency.py",
+  "generated_at": "2026-10-10T06:44:36.392971Z",
+  "metrics": {
+    "input_latency_p50_ms": null,
+    "input_latency_p95_ms": null,
+    "input_latency_p99_ms": null,
+    "samples_used": 0,
+    "samples_skipped": 0,
+    "work_time_p95_ms": 5,
+    "jank_rate": 0.16,
+    "high_input_latency_count": 2462
+  },
+  "notes": [
+    "无触摸采样（--samples 未提供）⇒ input_latency_* 记 null（如实，不假定 0）",
+    "帧侧读数为 gfxinfo 代理（work_time 真值需 Perfetto，见 15 §6.3）"
+  ]
+}

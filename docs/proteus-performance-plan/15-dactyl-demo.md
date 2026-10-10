@@ -462,7 +462,7 @@ scripts/check-dactyl-budget.mjs     ← 门禁（棘轮）
 
 | 批次 | 内容 | DoD（可证伪） |
 |---|---|---|
-| **D0 · 量具先行** | `hosts/shared/dactyl/measure-latency.py` + 显影器数据源打通（官方时间戳） | 三端能各产出一份 `dactyl-metrics.json`；Android `gfxinfo` 高延迟计数**有基线** |
+| **D0 · 量具先行** | ✅ **量具+门禁已交付（2026-10-10 · #773）**：`hosts/shared/dactyl/dactyl-metrics.schema.json`（指标契约 §6.1）+ `measure-latency.py`（原始采样→p50/p95/p99，自检）+ `scripts/check-dactyl-budget.mjs`（契约+预算门禁，接 CI）。◐ **生产者（宿主官方触摸时间戳采样）随 D1 接**（需 Dactyl app）——当前 `input_latency_*` 如实记 null | 门禁绿（android：work_time 代理 5ms · jank 0.16%）；端到端采样待 D1 |
 | **D1 · L1+L2** | 触即应 + 跟手 + HUD + 显影器（幽灵拖尾 / 延迟环 / 帧格） | `press_feedback_ms ≤ 1 帧` · `bridge_calls_per_tap == 1` · `visible_lag_px ≤ 12px` |
 | **D2 · L3** | 沸腾（高频数据叠加）+ 逐帧诊断接线 | `jank_rate ≤ 0.2%` · `gc_pause ≈ 0` · `bridge_wire_bytes == 0` |
 | **D3 · L4+L5** | 十指 + 崩裂旋钮 + 天花板刻度尺 + 崩裂回放 | `ffi_calls_per_frame ≤ 1`（M=5）· 产出 `dactyl-ceiling.json` |
