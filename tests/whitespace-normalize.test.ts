@@ -54,4 +54,13 @@ describe('★★★white-space 文本归一化（App 共享实例化）', () => 
   it('⑤ 连续空格与制表也折叠（normal）', () => {
     expect(instText('a    b\t\tc', 'normal')).toBe('a b c')
   })
+
+  it('⑥ ★混排合成叶：首尾空格**保留**（行内内容，不 trim）——判据 ㉑ 的共享实例化半边', () => {
+    // 【为什么必须锁】混排（`mix <b>MIXB</b> tail`）的合成叶 `"mix "` / `" tail"` / 独立空格叶 `" "`
+    //   的首尾空格是**行内内容**（Web 里与相邻 inline 之间存在一个空格）——逐叶 trim 会渲染成
+    //   `mixMIXBtail`、空格叶变空（实测：判据 ㉑ 在 iOS/共享实例化红）。★normal 折叠但**不 trim**。
+    expect(instText('mix ', 'normal')).toBe('mix ')
+    expect(instText(' tail', 'normal')).toBe(' tail')
+    expect(instText(' ', 'normal')).toBe(' ') // 独立空格叶必须**存活**（Vue condense：那是真内容）
+  })
 })
