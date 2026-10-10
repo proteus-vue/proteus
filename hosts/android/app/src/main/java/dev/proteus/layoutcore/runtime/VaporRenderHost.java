@@ -1416,6 +1416,12 @@ public final class VaporRenderHost {
             // ★动画延迟（`animation-delay` 折叠）：内核 `anim_start` 支持 `delayMs`（等待期钉在起点）。
             //   多圈错时（真实水波）靠它——非零才带（零值省略 ⇒ 既有产物逐字节不变）。
             if (ch.has("delayMs") && ch.optDouble("delayMs", 0) > 0) one.put("delayMs", ch.optDouble("delayMs"));
+            // ★迭代次数（`animation-iteration-count` 折叠）：内核 `repeat` 支持 `n` 或 `-1`(=infinite)。
+            //   **非 1 才带**（缺省 1 = 单次播放 ⇒ 既有产物逐字节不变）。`-1` 走数字哨兵（内核两种形态都认）。
+            if (ch.has("iterations")) {
+                double it = ch.optDouble("iterations", 1);
+                if (it != 1) one.put("repeat", it == -1 ? -1 : (int) it);
+            }
             one.put("keyframes", kf);
             anims.put(one);
         }
