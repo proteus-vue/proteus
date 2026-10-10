@@ -2848,3 +2848,15 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 · ★★★**不许把宿主和项目耦合**——宿主是通用运行时；我为了"Dactyl 禁滚"在宿主加了 `if (fieldSpec==null) detector()` / `setVerticalScrollRange(0) 特判` ⇒ 违反"宿主 ⊥ 项目"（用户当场纠正）。**禁滚应纯项目侧**（内容不超过视口）；若确需"页面级禁滚"这一**通用能力**，应做成**配置项**（app-config/route meta/`p-scroll-view`），而非 Dactyl 特判。
 · ★★**"观感"不许来回横跳**：我在 4×4 方点 ↔ 6×9 针形 之间改了多轮（为一个"看不见"的真因=填充色，反复改尺寸/高度）——**先定位真因再动手，别靠改参数试**。
 · ★★**"泳池高度"是症状不是根因**：N 大只是更密，**不该改高度**；高度应固定一屏。
+
+789. **★★★Dactyl demo 补丁宿主改动全部清零——宿主回归 S3 通用基线（用户终裁：「这种打补丁方式肯定不对」）**（2026-10-10）：
+**① 用户终裁**：「**把针对 demo 的打补丁宿主改动代码全部清零，这种打补丁方式肯定不对**」——承接 #788（"宿主不该和项目代码捆绑"，我当时只回退了"禁滚"那两处特判，其余 demo 特化仍在宿主里）。用户看穿了**根性问题**：不是"某次打补丁打歪了"，而是**"打补丁"这个方式本身**——只要还允许"为某个 demo 往宿主里加代码"，换一个 demo 同类问题必然再来一次。
+**② 清零范围（整体回退到 S3-T3 基线 `319fd936`）**：`ProteusHostView.java`（-596/+25）· `VaporRenderHost.java`（-91）· `RustLayout.java`（-14，去 `followField` JNI 绑定）· `platform/android/proteus-jni/src/lib.rs`（-71，去 `nativeLayoutFollowField[Bin]`）· `packages/cli/src/app-content.ts`（回退 `app-config.json` 的 `features` 透传）· `packages/cli/templates-host/.../AppActivity.java`（回退 `applyDactylOverlay`）· 预编译 AAR + `sources.sha256`（还原与基线一致的产物）。被清掉的 demo 特化面：延迟显影叠加层（幽灵拖尾/延迟环/帧格/HUD）· 场跟手宿主批绘 · 涟漪 · 富按下态样式（凹陷/描边/发光）· `dactylOverlay` 开关 · `setVerticalScrollRange(0)` 特判。
+**③ 保留（属通用能力，非 demo 补丁）**：内核 `anim.rs` 的 `follow_translate`/`follow_release`/`follow_translate_batch`/`follow_field`（声明式跟手原语，+ 单测）· 编译器 `template.ts` 的 `v-follow` 折叠（含 `field` 规格）· `hosts/shared/dactyl/measure-latency.py`（D0 量具工件）。判定标准：**"给任意 Vue 项目都会用到" = 通用（留）；"只有 Dactyl 这个 demo 用得上" = 补丁（清）**。
+**④ 验证**：`check:android-host-compile` ✅ · `check:android-runtime-aar-fresh` ✅（源指纹与 AAR 一致）· `test:coupled` ✅（app-host-cli 57 + host-scaffold 14）· `check:dactyl-visual-nonblocking` ✅ · `check:interaction-folding` ✅ · `git diff 319fd936 -- hosts/ platform/ packages/cli/src/app-content.ts` = **空**（清零证据）。`demos/dactyl` 仍能 `proteus build --target android`（编译 5 页，exit 0）。
+**⑤ 教训（架构级，钉死）**：
+· ★★★**"给 demo 打补丁"是反模式，必须整体清零而非逐处回退**——逐处回退会留下"看似合理"的残留（如 demo 专用的 HUD/叠加层），下次换个 demo 又要加一套。**判据 = 该代码是否只服务这一个 demo**（是 ⇒ 不该在宿主里）。
+· ★★★**宿主 ⊥ 项目**（#788 的具体化）：框架宿主只提供**通用运行时机制**；demo 的**可视化/表现/交互特化**必须落在**应用侧**（SFC/CSS/`v-follow` 等声明式能力）或**通用能力**（配置项），**不得**写进宿主。
+· ★★**"通用能力"与"demo 补丁"的边界要显式判定并记录**——本轮把"内核 follow 原语 / 编译器 v-follow 折叠 / 量具"（通用）与"显影器/HUD/场批绘"（补丁）分开，前者保留、后者清零；边界不显式化，下一轮会再次模糊。
+· ★★**用户连纠正两次同一类问题（#788 → #789）= 上一次的修复没触及根**——第①次只回退了两处特判（症状），第②次用户要求**整体清零**（根因）。**被同一问题纠正两次时，要升级到"根"处理**，别再做局部修补。
+**⑥ 诚实边界**：清零后 `demos/dactyl` 的 L1/L2 等交互仍走**通用通路**（`pressBackgroundColor` 单色按下态 + `v-follow` 单节点/场），但 demo 计划文档（`15-dactyl-demo.md` §3/§4.2/§4.3）里的**延迟显影器/HUD/涟漪/径向穹顶宿主通路**在 Android 上**暂不可见**——后续要么把它们做成**通用框架能力**（如可配置的"延迟可视化"debug 能力、`v-follow` 的多态表现），要么**在应用侧用声明式能力重建**，**不得**再往宿主里塞 demo 代码。
