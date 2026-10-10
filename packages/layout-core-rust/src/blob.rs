@@ -536,7 +536,7 @@ pub fn decode(buf: &[u8]) -> Result<LayoutRequest> {
         let id = r.u32()?;
         let w = r.f32()?;
         let h = r.f32()?;
-        text_measures.insert(id.to_string(), crate::ffi::SizeDto { width: w, height: h });
+        text_measures.insert(id.to_string(), crate::ffi::SizeDto { width: w, height: h, baseline: None });
     }
 
     Ok(LayoutRequest { viewport: crate::ffi::ViewportDto::default(), nodes, text_measures })
@@ -579,7 +579,7 @@ mod tests {
             }
         }
         let mut tm = std::collections::HashMap::new();
-        tm.insert("20".to_string(), SizeDto { width: 24.0, height: 14.0 });
+        tm.insert("20".to_string(), SizeDto { width: 24.0, height: 14.0, baseline: None });
         LayoutRequest { viewport: ViewportDto { width: 750.0, height: 2400.0 }, nodes, text_measures: tm }
     }
 
@@ -706,7 +706,7 @@ mod tests {
                 nodes.push(NodeDto { id, parent_id: Some(row_id), flex_shrink: Some(0.0), ..NodeDto::default_blob() });
                 id += 1;
                 nodes.push(NodeDto { id, parent_id: Some(item_id), flex_shrink: Some(0.0), is_text: true, ..NodeDto::default_blob() });
-                tm.insert(id.to_string(), SizeDto { width: 24.0, height: 14.0 });
+                tm.insert(id.to_string(), SizeDto { width: 24.0, height: 14.0, baseline: None });
                 id += 1;
             }
         }

@@ -110,6 +110,9 @@ pub struct TaffyEngine {
     measure_hits: usize,
     /// 最近一次全量布局的根约束（退化保护用：无边界时增量退回全量，须用**同一约束**）
     last_root_constraint: Option<RootConstraint>,
+    /// ★★B-T1（2026-10-10）：本轮采集到的**文本基线**（nodeId → 盒内容顶→基线 距离）。
+    ///   来源 = 注入 `TextMeasurer::baseline`（缺省 0 ⇒ 视为"无已知基线"）。用于 `align-items: baseline` 的对齐后处理。
+    pub text_baselines: HashMap<u32, f32>,
     /// 节点索引 → taffy NodeId（`build_taffy` 填充；`layout` 每次重建）
     taffy_ids: Vec<NodeId>,
 }
@@ -133,6 +136,7 @@ impl TaffyEngine {
             measure_calls: 0,
             measure_hits: 0,
             taffy_ids: Vec::new(),
+            text_baselines: HashMap::new(),
             // ★记下最近一次全量布局的根约束：增量在「无边界 ⇒ 退化为全量」时**精确复用**它
             //   （不自己猜约束——猜错会让退化路径静默改变语义，比慢更糟）
             last_root_constraint: None,
@@ -415,9 +419,10 @@ impl TaffyEngine {
         readback: bool,
     ) -> LayoutOutput {
         // ★字段级解构：让 `measurer` 与 `measure_cache` 同时可变借用（互不相交）
-        let TaffyEngine { measurer, measure_cache, measure_calls, measure_hits, taffy_ids, last_root_constraint: _, last_phases: _, last_changed_roots: _, translation_reject: _, phase_acc: _, persistent_taffy: _ } = self;
+        let TaffyEngine { measurer, measure_cache, measure_calls, measure_hits, taffy_ids, last_root_constraint: _, last_phases: _, last_changed_roots: _, translation_reject: _, phase_acc: _, persistent_taffy: _, text_baselines } = self;
         *measure_calls = 0;
         *measure_hits = 0;
+        text_baselines.clear();
 
         let avail = taffy::Size { width: to_taffy_space(constraint.width), height: to_taffy_space(constraint.height) };
         let nodes: &[LNode] = &tree.nodes;
@@ -487,6 +492,14 @@ impl TaffyEngine {
 
                                 // 度量可用的最大宽：已知宽优先，其次父宽，否则不限
                                 let max_w = known.width.or(avail.width.into_option()).unwrap_or(f32::INFINITY);
+                                // ★B-T1：采集**文本基线**（每文本节点一次；供收尾的基线对齐后处理）。
+                                //   基线只依赖字体（不依赖宽），故按 nodeId 缓存，避免每次回调重算。
+                                if !text_baselines.contains_key(&nid) {
+                                    if let Some(m) = measurer.as_mut() {
+                                        let b = m.baseline(node, &req.text, max_w);
+                                        if b > 0.0 { text_baselines.insert(nid, b); }
+                                    }
+                                }
                                 // ★内容寻址键：文本 hash（含字体签名）+ 宽度约束
                                 let key = measure_key(text_hashes[nidx as usize], max_w);
                                 if let Some(s) = measure_cache.get(&key) {
@@ -576,11 +589,11 @@ impl TaffyEngine {
         // ★借用顺序：`run_taffy` 需要 `&mut self` ⇒ 先把持久树**取出来**、用完放回
         //   （Rust 不允许同时可变借用 `self` 与 `self` 的字段）
         let mut taffy = self.persistent_taffy.take().expect("ensure_persistent 已建树");
-        let out = self.run_taffy(tree, &mut taffy, &roots, constraint);
+        let mut out = self.run_taffy(tree, &mut taffy, &roots, constraint);
         self.persistent_taffy = Some(taffy);
         let t_run = t_a0.elapsed().as_secs_f64() * 1000.0;
         let t_c0 = std::time::Instant::now();
-        self.write_back(tree, &out);
+        self.write_back(tree, &mut out);
         let t_wb = t_c0.elapsed().as_secs_f64() * 1000.0;
         *self.phases_mut("cached_ensure_ms") += t_ensure;
         *self.phases_mut("cached_sync_ms") += t_sync;
@@ -655,12 +668,20 @@ impl TaffyEngine {
     }
 
     /// 把 `out.rects` 回写进节点（`display:none` 的 `None` 保持零矩形）
-    fn write_back(&self, tree: &mut LayoutTree, out: &LayoutOutput) {
+    fn write_back(&self, tree: &mut LayoutTree, out: &mut LayoutOutput) {
         for (idx, r) in out.rects.iter().enumerate() {
             if let Some(r) = r {
                 tree.nodes[idx].rect = *r;
             }
             tree.nodes[idx].dirty = false;
+        }
+        // ★★★B-T1（2026-10-10）：**基线对齐后处理**（taffy 0.14 叶基线恒 `NONE`，见 `TextMeasurer::baseline` 注释）。
+        //   无基线（`text_baselines` 空）⇒ **零操作**（既有行为逐位不变）。
+        //   ★同时改 `tree.rect` 与 `out.rects`（后者是返回给调用方的视图——只改其一会让两条出口不一致）。
+        //   ★放在 `write_back` 里：全量 / 持久整树 / **拷贝子树增量**三条路径都会经此（后者的 rect 相对范围根，
+        //     在拷贝子树上就地调整后由调用方映射回主树 ⇒ 语义一致）。
+        if !self.text_baselines.is_empty() {
+            align_baselines_in(tree, &self.text_baselines, out);
         }
     }
 }
@@ -685,12 +706,12 @@ impl LayoutEngine for TaffyEngine {
         let mut taffy = self.build_taffy(tree);
         let t_build = t_b0.elapsed().as_secs_f64() * 1000.0;
         let t_r0 = std::time::Instant::now();
-        let out = self.run_taffy(tree, &mut taffy, &roots, constraint);
+        let mut out = self.run_taffy(tree, &mut taffy, &roots, constraint);
         let t_run = t_r0.elapsed().as_secs_f64() * 1000.0;
         // ★存下（含首帧算出的度量缓存 —— 这是"预建"的意义所在）
         self.persistent_taffy = Some(taffy);
         let t_w0 = std::time::Instant::now();
-        self.write_back(tree, &out);
+        self.write_back(tree, &mut out);
         let t_wb = t_w0.elapsed().as_secs_f64() * 1000.0;
         *self.phases_mut("full_build_ms") += t_build;
         *self.phases_mut("full_run_ms") += t_run;
@@ -1224,6 +1245,57 @@ fn hash_for_tests(nodes: &[LNode]) -> Vec<u64> {
 fn measure_key(text_hash: u64, max_w: f32) -> (u64, u32) {
     let w = if max_w.is_finite() { max_w.to_bits() } else { f32::INFINITY.to_bits() };
     (text_hash, w)
+}
+
+/// ★★★B-T1（2026-10-10）：**基线对齐后处理**——taffy 0.14 无法从度量回调拿叶基线（见 `TextMeasurer::baseline` 注释），
+///   故 `align-items/align-self: baseline` 的**文本**基线对齐必须由内核侧补。
+///
+/// 【做什么】对每个"基线对齐的**水平 flex 容器**"（`flex-direction: row/row-reverse` 且
+///   `align-items: baseline`，或有无 `align-self: baseline` 的子项），把其**有已知基线**的文本子项在交叉轴（y）
+///   上重摆，使**基线共线**（Web 语义）。
+///
+/// 【保守边界（不静默近似）】① 只调**有已知基线**的子项（`baselines` 命中）；其余保持 taffy 定位；
+///   ② 不改容器高度（taffy 已按"盒底近似"定行高——等比字号常见情形够用；跨字号行高扩增留后续）；
+///   ③ 只处理水平主轴（column 的基线对齐在行内轴，另批）；④ 无基线 ⇒ 调用方根本不调本函数。
+fn align_baselines_in(tree: &mut LayoutTree, baselines: &HashMap<u32, f32>, out: &mut LayoutOutput) {
+    // 本轮"被写过"的节点（增量范围外的不动）；全量（rects 满）⇒ 全部
+    let written = |idx: usize| out.rects.is_empty() || out.rects.get(idx).map(|r| r.is_some()).unwrap_or(false);
+    // 先收集调整（不可变扫描），再统一落盘（避免扫描中可变借用）
+    let mut adjustments: Vec<(usize, f32)> = Vec::new();
+    for (idx, node) in tree.nodes.iter().enumerate() {
+        if !written(idx) { continue; }
+        if !node.style.flex_direction.is_horizontal() { continue; }
+        let parent_baseline = node.style.align_items == "baseline";
+        let has_intent = parent_baseline
+            || node
+                .children
+                .iter()
+                .any(|&c| tree.nodes[c as usize].style.align_self.as_deref() == Some("baseline"));
+        if !has_intent { continue; }
+        // 参与项：(子索引, 当前 y（相对容器内容盒）, 基线)
+        let mut parts: Vec<(usize, f32, f32)> = Vec::new();
+        for &c in &node.children {
+            let child = &tree.nodes[c as usize];
+            let child_wants = parent_baseline || child.style.align_self.as_deref() == Some("baseline");
+            if !child_wants || !written(c as usize) { continue; }
+            if let Some(&b) = baselines.get(&child.id) {
+                parts.push((c as usize, child.rect.y, b));
+            }
+        }
+        if parts.is_empty() { continue; }
+        // 参考基线 = max(子.y + 子.基线)；把各子项 y 调到「参考基线 − 自身基线」⇒ 基线共线
+        let ref_b = parts.iter().fold(f32::NEG_INFINITY, |m, (_, y, b)| m.max(*y + *b));
+        for (ci, _y, b) in &parts {
+            adjustments.push((*ci, ref_b - *b));
+        }
+    }
+    for (ci, ny) in adjustments {
+        tree.nodes[ci].rect.y = ny;
+        // 返回视图同步（否则调用方从 `out.rects` 读到的是**未对齐**的 y）
+        if let Some(r) = out.rects.get_mut(ci).and_then(|r| r.as_mut()) {
+            r.y = ny;
+        }
+    }
 }
 
 /// 探针用：把 `LStyle` 转成 taffy `Style`（判定"包装层"成本归属；

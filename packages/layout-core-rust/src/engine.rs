@@ -47,6 +47,19 @@ impl LayoutOutput {
 ///   但平台需要它；② 测试侧要按 `node.id` 查 golden 度量值。平台实现可忽略该参数。
 pub trait TextMeasurer {
     fn measure(&mut self, node: &LNode, text: &str, max_width: f32) -> Size;
+
+    /// ★★★B-T1（2026-10-10）：**文本基线**（盒内容顶 → 基线 的距离，像素；用于基线对齐 / vertical-align）。
+    ///
+    /// 【为什么单独一个方法（而不是改 `measure` 的返回类型）】——**纯增量、零破坏**：
+    ///   既有实现（`NullTextMeasurer`/`TableTextMeasurer`/三端宿主适配）不改也能编译（缺省 0.0）。
+    /// 【为什么内核需要它（本仓 spike 取证）】taffy 0.14 的 `compute_leaf_layout` 度量回调**只返回 `Size<f32>`**、
+    ///   叶子基线恒为 `Baselines::NONE`（`taffy-0.14.0/src/compute/leaf.rs:24/105`）⇒ **taffy 无法从度量回调拿基线**，
+    ///   `align-items: baseline` 对文本会按"盒底"近似（对文本是**错的**）。⇒ 基线必须在**内核侧**采集并做对齐后处理。
+    ///
+    /// **缺省 0.0 = 不提供**（内核据此把该文本视为"无已知基线"，**不做**基线对齐——保守，不静默近似）。
+    fn baseline(&mut self, _node: &LNode, _text: &str, _max_width: f32) -> f32 {
+        0.0
+    }
 }
 
 /// 不实现文本度量的兜底（所有文本按零尺寸——仅用于无文本场景/测试）
@@ -64,15 +77,22 @@ impl TextMeasurer for NullTextMeasurer {
 #[derive(Debug, Default, Clone)]
 pub struct TableTextMeasurer {
     table: std::collections::HashMap<u32, Size>,
+    /// ★B-T1：节点 id → 基线（盒内容顶→基线）。缺省 0 = 不提供（不做基线对齐）。测试/golden 注入。
+    baselines: std::collections::HashMap<u32, f32>,
 }
 
 impl TableTextMeasurer {
     pub fn new(table: std::collections::HashMap<u32, Size>) -> Self {
-        Self { table }
+        Self { table, baselines: std::collections::HashMap::new() }
     }
 
     pub fn set(&mut self, id: u32, size: Size) {
         self.table.insert(id, size);
+    }
+
+    /// ★B-T1：登记某节点的文本基线（盒内容顶→基线）。
+    pub fn set_baseline(&mut self, id: u32, baseline: f32) {
+        self.baselines.insert(id, baseline);
     }
 
     pub fn len(&self) -> usize {
@@ -88,6 +108,10 @@ impl TextMeasurer for TableTextMeasurer {
     fn measure(&mut self, node: &LNode, _text: &str, _max_width: f32) -> Size {
         // 查不到 → 零尺寸（测试会因几何不符而失败，不会静默给出错误结果）
         self.table.get(&node.id).copied().unwrap_or_default()
+    }
+
+    fn baseline(&mut self, node: &LNode, _text: &str, _max_width: f32) -> f32 {
+        self.baselines.get(&node.id).copied().unwrap_or(0.0)
     }
 }
 

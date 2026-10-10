@@ -64,6 +64,17 @@
 **验收**：一行内两不同字号文本 `align-items: baseline` ⇒ 基线对齐（Web 真值比对）；`vertical-align: middle` 生效。
 **估时上修**：≈ 3–4 人日（taffy 不支持 ⇒ 需内核后处理 + 三端度量 + 真机）。
 
+**★进度（2026-10-10）：内核 + FFI 地基已交付并验证**（`crates` 内；三端宿主接入/Rust 端 vertical-align 留下一步）：
+- `engine.rs`：`TextMeasurer::baseline()`（**带默认实现 0.0 ⇒ 零破坏**——既有实现不改也能编译）；`TableTextMeasurer::set_baseline`。
+- `taffy_engine.rs`：度量回调采集基线到 `text_baselines`；`write_back` 末尾跑 `align_baselines_in()`
+  （**无基线 ⇒ 零操作**，全量/持久整树/拷贝子树三条路径都经 `write_back`）；同步改 `tree.rect` **与**返回的 `out.rects`。
+- `blob.rs`/`ffi.rs`：`SizeDto` 加 `baseline: Option<f32>`；`baseline_map`；`TreeEntry.baselines`（随句柄持久、
+  compact 时同步清理）；`with_engine(...)` 扩参注入带基线的度量器；create / blob-create / splice / set_text_measures / apply_ops 五条路径全接线。
+- **验证**：`cargo test` 全绿（215 主测 + 新 `kernel_text_baseline` 2 例 + `baseline_via_ffi_aligns_text` 端到端）；
+  无基线时既有行为**逐位不变**（`no_baseline_means_no_alignment_change` 锁 taffy-only 读数）。
+- **待接入（下一步）**：三端宿主在 `textMeasures` 里带 `baseline`（Android `Paint.FontMetrics.ascent` 等）
+  → 设备判据；`vertical-align` 编译期入集 + Rust 语义；Taffy 之上对 `vertical-align` 的文本盒内定位。
+
 ### B-T2 · 内核**文本策略 SSOT**（white_space/word_break/line_clamp/text_align 进内核树）
 **内核**：`LStyle`（或 `TextMeasureRequest`）加 `text_align: Option<String>` + 文本策略（wrap/break/clamp 紧凑编码）；
 `ffi.rs` 的 `NodeDto`/`StyleDto` 加对应字段 + 映射。**这是 B-T3 的前置**（内核要先"知道"策略，才能进缓存键）。
