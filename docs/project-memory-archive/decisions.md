@@ -2636,3 +2636,11 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **④ 破坏性验证**：a) 单测 `different_text_policy_does_not_share_cache_key`（同文案同字体签名、`nowrap` vs `normal` vs 缺省 ⇒ **不共用**；反证同策略仍共用=内容寻址收益不丢）；b) 引擎级 `kernel_text_cache_key.rs`（A 单行高 20 / B 折行高 30，同文案同字体同宽仅策略不同 ⇒ 各自几何正确 + `measure_calls≥2`——若缓存错误合并则 B 得 20）。`cargo test` 全绿（18 个测试二进制）。
 **⑤ 诚实边界**：只覆盖内容寻址分支（`style_key != 0`）；无真机判据（Rust 单测即正确层级——真机 ㉙ 已覆盖策略通道；本项是"同文案同字体"的缓存语义，夹具无此形态）。纯内核改动 ⇒ 重建鸿蒙自持核/prebuilt。
 **⑥ 教训**：a) ★★★**"影响度量的维度都必须在度量缓存键里"**——文本策略与字体/宽度同理（本仓第四次同款：key 漏维度 ⇒ 静默合并 ⇒ 错几何，前有 nodeId-寻址/字体签名/style_key）；b) ★★**"策略进内核（B-T2）"使 B-T3 成为可能**——先有数据（内核持有策略）再进键，顺序不能反；c) ★**保守兜底仍在**（`style_key==0` 回退节点寻址）——加维度不放松既有保守。
+
+762. **★★★Vapor B4-T1 交付：v-model 回写契约（编译期 `v-model` ⇒ `input` 事件 + `set 源 = $event` 动作）—— 双向绑定的"回写半边"打通；三端原生输入控件为下一步**（2026-10-10）：
+**① 承接**：内核文本线（B-T1/T2/T3 · #758–#761）收口后，转 B4（v-model 回写）。**取证**：下行（值→文本槽位）一直有；`$event`（`compileExpr` → `root('$event')`）+ `set` 动作 + `HandlerRunContext.event` 运行期语义**都已具备**（组件 emit 用过）——缺的只是"谁把输入值放进 event"（即**回写绑定**）与**输入控件**。三端宿主均无输入控件（iOS `ProteusTextInput` 是**度量结构**非编辑控件）。
+**② 交付（B4-T1 · 编译期增量，纯编译期 + 零运行期改动）**：`events.ts` 的 `collectEvents` 扫元素上的 `v-model` ⇒ 除下行（deps 负责）外**追加一条 `input` 事件绑定**，handler = `[{op:'set', source:<标识符>, program:{k:'root',name:'$event'}}]`（命名 `h<N>` 与既有事件同源、带 loc）。**形态限定**（其余诊断，不静默半支持）：只处理**原生元素 + 纯标识符 + 无修饰符**；组件 v-model（走组件事件通道）/ 成员路径 `o.x`（需成员写）/ 修饰符（需宿主值转换）⇒ 各产诊断。
+**③ 诊断更正**：`template.ts` 的 `VAPOR_VMODEL_NO_WRITEBACK` → 改名 **`VAPOR_VMODEL_NO_INPUT_CONTROL`**，措辞更正为"已编成**双向**（下行+回写动作），但**端上原生输入控件未接** ⇒ 输入暂无法写回"（缺口从"回写通道"精确到"输入控件"）。全仓引用（compiler/基线/mp-transform 测试/3 文档）同步改名，能力棘轮绿。
+**④ 验证**：`vapor-events.test.ts` +4（v-model ⇒ input 绑定 + `set name = $event`；组件/成员/修饰符 ⇒ 诊断不产回写）；`app-runtime-content` 端到端（产物 `events`/`handlers` 含回写）；`mp-transform` 改名对齐；能力棘轮 74 条不变（`VAPOR_VMODEL_NO_INPUT_CONTROL` 仍 22——有输入控件才减）。
+**⑤ 诚实边界**：B4-T1 只交付**回写契约**（产物含 `input` 绑定 + 动作）；**控件未接前 `input` 事件无源 ⇒ 端上输入暂不生效** ⇒ 故保留诊断（不静默半支持）。这是**前置批次**（不是"半成品"——契约与诊断边界都完整）。计划 `docs/vapor-vmodel-writeback-plan.md`。
+**⑥ 教训**：a) ★★★**"先取证已有能力"——回写半边的"$event/set/运行期"其实都具备了**（组件 emit 早跑通），缺的只是"编译期把 v-model 接到 input + 控件"；不取证会把整条线当"从零建"（低估可复用面）；b) ★★**诊断的"诚实措辞"要随能力演进更新**（"无回写通道"→"回写有了、缺输入控件"——否则诊断会失真、误导开发者）；c) ★**前置批次要"契约完整"而非"半做"**（编译期回写契约 + 精确诊断边界 = 可交付的完整增量；控件是下一步）。★下一步：**B4-T2 三端原生输入控件**（Android EditText / iOS UITextField / 鸿蒙 TextInput）。

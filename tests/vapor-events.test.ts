@@ -582,3 +582,33 @@ describe('★★P2-3 事件修饰符（2026-10-03）：.stop/.self/.once 真语�
     expect(r.diagnostics.map((d) => d.message).join(' | ')).toContain('未知修饰符')
   })
 })
+
+describe('Vapor 事件编译 · ★★★B4-T1（v-model 回写契约：v-model ⇒ input 绑定 + set 动作）', () => {
+  it('v-model="name" ⇒ input 事件 + `set name = $event` 动作（回写契约）', () => {
+    const r = compileEvents(sfc(`<input v-model="name" />`))
+    expect(r.events, 'v-model 必须产出**回写**绑定').toHaveLength(1)
+    expect(r.events[0]!.event, '回写走 input 事件').toBe('input')
+    const actions = r.handlers[r.events[0]!.handler]!
+    expect(actions, '回写动作为 set 源 = $event').toEqual([
+      { op: 'set', source: 'name', program: { k: 'root', name: '$event' } },
+    ])
+  })
+
+  it('组件上的 v-model ⇒ 诊断（走组件事件通道），不产出 input 回写', () => {
+    const r = compileEvents(sfc(`<Kid v-model="name" />`))
+    expect(r.diagnostics.map((d) => d.message).join(' | ')).toContain('组件上的 v-model 未支持')
+    expect(r.events.filter((e) => e.event === 'input')).toHaveLength(0)
+  })
+
+  it('成员路径 v-model="o.x" ⇒ 诊断（暂只支持纯标识符），不产出回写', () => {
+    const r = compileEvents(sfc(`<input v-model="o.x" />`))
+    expect(r.diagnostics.map((d) => d.message).join(' | ')).toContain('纯标识符')
+    expect(r.events.filter((e) => e.event === 'input')).toHaveLength(0)
+  })
+
+  it('修饰符 v-model.trim="name" ⇒ 诊断（需宿主值转换），不产出回写', () => {
+    const r = compileEvents(sfc(`<input v-model.trim="name" />`))
+    expect(r.diagnostics.map((d) => d.message).join(' | ')).toContain('修饰符')
+    expect(r.events.filter((e) => e.event === 'input')).toHaveLength(0)
+  })
+})

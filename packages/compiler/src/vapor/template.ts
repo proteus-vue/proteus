@@ -3399,21 +3399,21 @@ export function buildLayoutTemplate(
         if (p.type === 7 /* DIRECTIVE */ && typeof p.name === 'string' && UNSUPPORTED_DIRECTIVES[p.name]) {
           diag(`${tag}(id=${id}) ${UNSUPPORTED_DIRECTIVES[p.name]}!`)
         }
-        // ★★**v-model 的诚实边界诊断**（P2-4，2026-10-03）：Vapor 路目前只有**下行**（值 → 文本槽位），
-        //   **没有回写通道**（App 端输入法/键盘事件未接；宿主手势层只有 tap/longpress）。
-        //   ⇒ 元素上出现 v-model 时明确诊断——不静默半支持（"页面看着对、输入不生效"属最危险一类）。
-        //   ★`v-model` 的**修饰符**在 Vapor 路的语义（`.trim/.number` 作用于回写值）**依赖回写通道**，
-        //     通道缺失时修饰符一并如实标注（不假装生效）。
+        // ★★**v-model 的诚实边界诊断**（P2-4 / B4-T1，2026-10-10）：
+        //   下行（值 → 文本槽位）一直有；**回写（输入 → 源）已由 `compileEvents` 编成 `input` 动作**（B4-T1）。
+        //   仍缺的是**三端原生输入控件**（键盘/编辑框：Android EditText · iOS UITextField · 鸿蒙 TextInput）——
+        //   控件未接前 `input` 事件无源 ⇒ **端上输入暂不生效**。⇒ 保留诊断，如实标注此缺口（不静默半支持）。
+        //   ★`v-model` 的**修饰符**（`.trim/.number/.lazy`）语义（回写值转换）依赖宿主，通道缺失时一并标注。
         if (p.type === 7 && p.name === 'model') {
           const mods = (p.modifiers ?? [])
             .map((m) => (typeof m === 'string' ? m : (m?.content ?? '')))
             .filter(Boolean)
           diag(
-            `${tag}(id=${id}) v-model 在 Vapor 路只有**下行**（值→文本槽位），**无回写通道**` +
-              (mods.length ? `（修饰符 .${mods.join(' / .')} 依赖回写、同样无法生效）` : '') +
-              `——输入不会写回数据`,
-            '需要双向绑定时请保留 Vue 渲染路径（L0），或等 App 端输入通道批次',
-            'VAPOR_VMODEL_NO_WRITEBACK',
+            `${tag}(id=${id}) v-model 已编成**双向**（值→槽位下行 + 输入→源回写动作），` +
+              `但**端上原生输入控件未接**（宿主无键盘/编辑框）⇒ 输入暂无法写回数据` +
+              (mods.length ? `（修饰符 .${mods.join(' / .')} 依赖宿主的回写值转换、同样待接）` : ''),
+            'App 端输入控件为后续批次；需要立即可双向绑定时保留 Vue 渲染路径（L0）',
+            'VAPOR_VMODEL_NO_INPUT_CONTROL',
           )
         }
         // ★P2-5：v-memo 的**形态诊断**（只支持数组字面量——运行时按"逐项比较"建依赖表，

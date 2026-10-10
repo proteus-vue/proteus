@@ -1949,15 +1949,16 @@ describe('★★P2-4（2026-10-03）：v-model 修饰符 .trim / .number / .lazy
   })
 })
 
-describe('★★P2-4（Vapor 路）：v-model 无回写通道必须**可见**（不静默半支持）', () => {
+describe('★★P2-4/B4（Vapor 路）：v-model 回写契约 + 端上输入控件缺口必须**可见**（不静默半支持）', () => {
   it('v-model 产诊断（含修饰符时一并标注），普通插值不受影响', async () => {
     const { buildLayoutTemplate } = await import('@proteus-vue/compiler')
     const sfc = (tpl: string) => `<template>\n${tpl}\n</template>\n<script setup lang="ts">\nconst name = ref('')\n</script>\n`
     const r1 = buildLayoutTemplate(sfc(`<input v-model="name" />`), 'v.vue')
-    expect(r1.diagnostics.some((d) => d.code === 'VAPOR_VMODEL_NO_WRITEBACK'), 'v-model 必须诊断').toBe(true)
+    // ★B4-T1：回写已编成 input 动作；仍诊断的是「端上原生输入控件未接」
+    expect(r1.diagnostics.some((d) => d.code === 'VAPOR_VMODEL_NO_INPUT_CONTROL'), 'v-model 必须诊断输入控件缺口').toBe(true)
     const r2 = buildLayoutTemplate(sfc(`<input v-model.trim.number="name" />`), 'v.vue')
     const msg = r2.diagnostics.map((d) => d.message).join(' | ')
-    expect(msg, '修饰符应一并标注（依赖回写通道）').toContain('.trim / .number')
+    expect(msg, '修饰符应一并标注（依赖宿主回写值转换）').toContain('.trim / .number')
     // 反向：普通插值无诊断（防诊断噪声）
     const r3 = buildLayoutTemplate(sfc(`<p-text>{{ name }}</p-text>`), 'v.vue')
     expect(r3.diagnostics).toHaveLength(0)
