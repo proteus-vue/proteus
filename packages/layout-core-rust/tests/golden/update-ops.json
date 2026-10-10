@@ -3,9 +3,11 @@
   "keys": [
     "layout.width",
     "paint.backgroundColor",
+    "layout.gridTemplateColumns",
     "layout.gap"
   ],
   "strings": [
+    "1fr 1fr 200px",
     "无线降噪耳机 Pro 🎧",
     "",
     "new-a",
@@ -26,14 +28,20 @@
       "value": -1.25
     },
     {
+      "op": 6,
+      "nodeId": 8,
+      "keyId": 2,
+      "valueRef": 0
+    },
+    {
       "op": 3,
       "nodeId": 9,
-      "textRef": 0
+      "textRef": 1
     },
     {
       "op": 3,
       "nodeId": 10,
-      "textRef": 1
+      "textRef": 2
     },
     {
       "op": 4,
@@ -45,7 +53,7 @@
       "nodeId": 12,
       "attrs": [
         {
-          "keyId": 2,
+          "keyId": 3,
           "value": 8
         }
       ]
@@ -100,14 +108,14 @@
       "start": 5,
       "delCount": 2,
       "itemKeyRefs": [
-        2,
-        3
+        3,
+        4
       ]
     },
     {
       "op": 34,
       "listId": 3,
-      "itemKeyRef": 4,
+      "itemKeyRef": 5,
       "slotId": 7,
       "value": 0.3333333432674408
     },

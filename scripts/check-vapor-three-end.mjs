@@ -137,6 +137,8 @@ function fingerprint(rep) {
   fp.b3a_probe = JSON.stringify(rep.b3a_probe?.widths ?? [])
   // ★B3b（2026-10-10 · 判据 ㉖）：动态 :class 枚举布局字段的内核几何三端逐值一致（子2 x [0,120,0]）
   fp.b3b_probe = JSON.stringify(rep.b3b_probe?.child_xs ?? [])
+  // ★B3d（2026-10-10 · 判据 ㉗）：动态 :class 字符串布局字段（grid 模板）的内核几何三端逐值一致（子2 x [0,80,0]）
+  fp.b3d_probe = JSON.stringify(rep.b3d_probe?.child_xs ?? [])
   // ★`:style` 对象展开（2026-10-03）：双通道读数三端逐值一致（内核宽度 + 宿主补丁内容）
   fp.styleobj_probe = JSON.stringify([
     rep.styleobj_probe?.width_before,

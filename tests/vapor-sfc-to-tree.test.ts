@@ -245,20 +245,46 @@ describe('★批次 30 · 动态 :class（对齐 Web · 削减胶水）', () => 
     expect(byKey.get('layout.alignSelf'), 'align-self:end ⇒ 索引 4').toBe(4)
   })
 
-  it('⑤ 诚实边界：动态 :class 的**数值/枚举**布局字段已支持（B3a/B3b）；**grid/白空格**等仍诊断', () => {
+  it('⑧ ★B3d：动态 :class 的**字符串布局字段**（grid 模板）走内核 SET_STYLE_STR', () => {
+    // 该 class 同时含数值（gap）与字符串（grid-template-columns）字段：
+    //   · 数值字段进 CSE 计划（bitmap）；字符串字段不在计划里 ⇒ 运行期必须从**线性规则**补
+    //   断言：两条通道都下发（SET_STYLE_STR 带字符串池引用、值可反查）。
+    const SFC = "<template><view :class=\"{ on: x }\">x</view></template>\n<script setup>const x=ref(1)</script>\n<style>.on{grid-template-columns:1fr 200px;width:200px}</style>"
+    const { table } = buildVaporSubscriptions(SFC, 'b3d.vue')
+    const rt = new SlotRuntime(new PropKeyTable(), new StringPool(), () => {})
+    const vapor = new VaporRuntime(table, rt, VaporRuntime.buildEvaluators(table.evaluators), new ListRegistry())
+    const dataX = { x: true }
+    vapor.writeSlotsOfSource('x', { read: (n: string) => (dataX as Record<string, unknown>)[n] } as never)
+    const snap = rt.buffer.snapshot() as unknown as Array<{ op: number; keyId?: number; valueRef?: number; value?: number }>
+    const keyOf = (id: number | undefined) => (id === undefined ? undefined : rt.keys.keyOf(id))
+    // 数值通道：width 走 SET_STYLE（op=2，来自 CSE 计划）
+    const byKey = new Map(snap.filter((o) => o.op === 2).map((o) => [keyOf(o.keyId), o.value]))
+    expect(byKey.get('layout.width'), 'width 走数值 SET_STYLE(200)').toBe(200)
+    // 字符串通道：grid-template-columns 走 SET_STYLE_STR（op=0x06），值可反查
+    const strOps = snap.filter((o) => o.op === 6)
+    expect(strOps.length, 'grid 模板字段必须下发 SET_STYLE_STR').toBeGreaterThan(0)
+    const gridOp = strOps.find((o) => keyOf(o.keyId) === 'layout.gridTemplateColumns')!
+    expect(gridOp, 'SET_STYLE_STR 键应为 layout.gridTemplateColumns').toBeTruthy()
+    expect(rt.strings.valueOf(gridOp.valueRef!), '字符串池可反查 grid 模板值').toBe('1fr 200px')
+  })
+
+  it('⑤ 诚实边界：动态 :class 的**数值/枚举/字符串**布局字段已支持（B3a/B3b/B3d）；**白空格**等仍诊断', () => {
     const P = "<template><view :class=\"{ on: x }\">x</view></template>\n<script setup>const x=ref(1)</script>\n"
     const sfcPaint = P + '<style>.on{background-color:#f00}</style>'
     // ★B3a：数值布局字段（width/margin*/padding*/flex*…）走内核 SET_STYLE ⇒ 无诊断
     const sfcNum = P + '<style>.on{width:200px;padding-top:4px;flex-grow:1}</style>'
     // ★B3b：枚举布局字段（display/flexDirection/alignItems…）走内核 SET_STYLE 索引编码 ⇒ 无诊断
     const sfcEnum = P + '<style>.on{flex-direction:row;display:grid;align-items:center}</style>'
-    // 无二进制通道的布局字段（grid 模板 / white-space）⇒ 仍诊断
-    const sfcUnsup = P + '<style>.on{grid-template-columns:1fr 1fr}</style>'
+    // ★B3d：字符串布局字段（grid 模板 token 串）走内核 SET_STYLE_STR ⇒ 无诊断
+    const sfcStr = P + '<style>.on{grid-template-columns:1fr 1fr;grid-auto-rows:80px}</style>'
+    // 仍无二进制通道的布局字段（white-space 需内核文本建模）⇒ 仍诊断
+    const sfcUnsup = P + '<style>.on{white-space:nowrap}</style>'
     const codesOf = (sfc: string, f: string) => buildVaporSubscriptions(sfc, f).diagnostics.map((d) => d.code)
     expect(codesOf(sfcPaint, 'p.vue'), '绘制字段 ⇒ 无诊断').not.toContain('VAPOR_DYNCLASS_LAYOUT_UNSUPPORTED')
     expect(codesOf(sfcNum, 'n.vue'), '数值布局字段已支持（B3a）⇒ 无诊断').not.toContain('VAPOR_DYNCLASS_LAYOUT_UNSUPPORTED')
     expect(codesOf(sfcEnum, 'e.vue'), '枚举布局字段已支持（B3b）⇒ 无诊断').not.toContain('VAPOR_DYNCLASS_LAYOUT_UNSUPPORTED')
-    expect(codesOf(sfcUnsup, 'g.vue'), 'grid 模板 ⇒ 仍诊断').toContain('VAPOR_DYNCLASS_LAYOUT_UNSUPPORTED')
+    expect(codesOf(sfcStr, 's.vue'), 'grid 模板字段已支持（B3d）⇒ 无诊断').not.toContain('VAPOR_DYNCLASS_LAYOUT_UNSUPPORTED')
+    expect(codesOf(sfcUnsup, 'w.vue'), 'white-space ⇒ 仍诊断').toContain('VAPOR_DYNCLASS_LAYOUT_UNSUPPORTED')
   })
 })
 

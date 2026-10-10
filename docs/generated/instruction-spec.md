@@ -22,7 +22,7 @@ opcode/字节布局/语义达成一致。此前这些事实散在 4 处实现里
 
 两者的共同设计：**定长字段 + 顺序读**（无字符扫描、无 f32 文本解析）——因为都是热路径。
 
-## 2. Update 指令集（12 条 opcode）
+## 2. Update 指令集（13 条 opcode）
 
 ### 2.1 线上格式
 
@@ -44,6 +44,7 @@ Ops:            opCount 条（判别字节 + 定长字段）
 |---|---|---|---|
 | `0x01` | **SET_PROP** | 11 | `"op":1,"nodeId":1,"keyId":2,"value":3` |
 | `0x02` | **SET_STYLE** | 11 | `"op":2,"nodeId":1,"keyId":2,"value":3` |
+| `0x06` | **SET_STYLE_STR** | 11 | `"op":6,"nodeId":1,"keyId":2,"valueRef":3` |
 | `0x03` | **SET_TEXT** | 9 | `"op":3,"nodeId":1,"textRef":2` |
 | `0x04` | **SET_ATTRS** | 13 | `"op":4,"nodeId":1,"attrs":[{"keyId":2,"value":3}]` |
 | `0x05` | **TOGGLE_VIS** | 6 | `"op":5,"nodeId":1,"visible":true` |
@@ -64,6 +65,7 @@ Ops:            opCount 条（判别字节 + 定长字段）
 | opcode | 实现状态 |
 |---|---|
 | SET_PROP / SET_STYLE / SET_TEXT / SET_ATTRS / TOGGLE_VIS | ✅ 已实现并真机验证 |
+| SET_STYLE_STR | ✅ 已实现并真机验证（grid 模板等**字符串布局值**；B3d · 判据 ㉗ 三端） |
 | LIST_UPDATE / LIST_SPLICE / REMOVE_NODE | ✅ 已实现（含跨语言 golden） |
 | **INSERT_BLOCK** | ❌ **unsupported**（需编译期块实例）——**如实上报不静默** |
 | **MOVE_NODE** | ❌ **unsupported**（需宿主先解析目标父与位次）——如实上报 |

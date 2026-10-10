@@ -54,6 +54,9 @@ export function opSize(op: UpdateOp): number {
       return 11
     case OpCode.SET_TEXT:
       return 9
+    case OpCode.SET_STYLE_STR:
+      // nodeId(u32) + keyId(u16) + valueRef(u32) = 11（含 1 字节 opcode）
+      return 11
     case OpCode.SET_ATTRS:
       return 7 + 6 * op.attrs.length
     case OpCode.TOGGLE_VIS:
@@ -299,6 +302,10 @@ function collectRefs(ops: readonly UpdateOp[]): { keyIds: number[]; strRefs: num
       case OpCode.SET_TEXT:
         s.add(op.textRef)
         break
+      case OpCode.SET_STYLE_STR:
+        k.add(op.keyId)
+        s.add(op.valueRef)
+        break
       case OpCode.LIST_SPLICE:
         for (const r of op.itemKeyRefs) s.add(r)
         break
@@ -331,6 +338,8 @@ function remapOp(op: UpdateOp, kMap: Map<number, number>, sMap: Map<number, numb
       return { ...op, attrs: op.attrs.map((a) => ({ keyId: kMap.get(a.keyId) ?? 0, value: a.value })) }
     case OpCode.SET_TEXT:
       return { ...op, textRef: sMap.get(op.textRef) ?? 0 }
+    case OpCode.SET_STYLE_STR:
+      return { ...op, keyId: kMap.get(op.keyId) ?? 0, valueRef: sMap.get(op.valueRef) ?? 0 }
     case OpCode.LIST_SPLICE:
       return { ...op, itemKeyRefs: op.itemKeyRefs.map((r) => sMap.get(r) ?? 0) }
     case OpCode.LIST_UPDATE:
@@ -381,6 +390,11 @@ function encodeOp(w: ByteWriter, op: UpdateOp): void {
     case OpCode.SET_TEXT:
       w.u32(op.nodeId)
       w.u32(op.textRef)
+      return
+    case OpCode.SET_STYLE_STR:
+      w.u32(op.nodeId)
+      w.u16(op.keyId)
+      w.u32(op.valueRef)
       return
     case OpCode.SET_ATTRS:
       w.u32(op.nodeId)
@@ -473,6 +487,8 @@ function decodeOp(r: ByteReader): UpdateOp {
       return { op, nodeId: r.u32(), keyId: r.u16(), value: r.f32() }
     case OpCode.SET_TEXT:
       return { op, nodeId: r.u32(), textRef: r.u32() }
+    case OpCode.SET_STYLE_STR:
+      return { op, nodeId: r.u32(), keyId: r.u16(), valueRef: r.u32() }
     case OpCode.SET_ATTRS: {
       const nodeId = r.u32()
       const n = r.u16()

@@ -143,6 +143,16 @@ export function layoutEnumIndex(field: string, value: unknown): number | null {
   return i >= 0 ? i : null
 }
 
+/**
+ * ★★★B3d（2026-10-10）：**字符串布局字段**（值 = token 串，如 `1fr 1fr 200px`）——
+ *   走 `SET_STYLE_STR`（f32 的 SET_STYLE 装不下）。★与内核 `apply_style_str_key` 的登记一致。
+ *   ★这些字段**不在 CSE 预计算计划里**（计划只分解数值/枚举）⇒ 运行期需从线性规则补（见 runtime）。
+ */
+export const STRING_LAYOUT_FIELDS: ReadonlySet<string> = new Set([
+  'gridTemplateColumns', 'gridTemplateRows', 'gridTemplateAreas',
+  'gridAutoColumns', 'gridAutoRows', 'gridAutoFlow',
+])
+
 /** 互斥组状态：0 = 组内无活跃；i+1 = 组内第 i 个位活跃（按组内位序） */
 export function groupStateOf(bitmap: number, groupBits: number[]): number {
   for (let i = 0; i < groupBits.length; i++) if ((bitmap & (1 << groupBits[i]!)) !== 0) return i + 1

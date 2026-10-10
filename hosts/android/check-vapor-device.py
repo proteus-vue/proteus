@@ -871,6 +871,17 @@ def main() -> int:
     else:
         print(f"  ✓ ㉖ ★B3b/B3c 动态 :class 枚举布局：子2 x {b3bx}（column→row+居中→column）——flex-direction + justify-content 走内核 SET_STYLE 索引编码生效")
 
+    # ── ㉗ ★★★B3d：动态 :class 的**字符串布局字段**端上真生效（grid-template-columns 走内核 SET_STYLE_STR 字符串池，2026-10-10）──
+    b3d = rep.get("b3d_probe") or {}
+    b3dx = [int(v) for v in (b3d.get("child_xs") or [])]
+    if not b3d or len(b3dx) < 3:
+        print("  ◐ ㉗ B3d 动态 :class 字符串布局（grid 模板）：本端夹具未覆盖（报告无 b3d_probe）——如实跳过")
+    elif b3dx != [0, 80, 0]:
+        fail(f"★B3d 动态 :class 字符串布局字段（grid-template-columns）几何不符（期望 [0,80,0]：无模板→2列 子2 x）：{b3dx} —— 字符串池通道(SET_STYLE_STR)没生效")
+        ok = False
+    else:
+        print(f"  ✓ ㉗ ★B3d 动态 :class 字符串布局：子2 x {b3dx}（无模板→2列→无模板）——grid-template-columns 走内核 SET_STYLE_STR 字符串池生效")
+
     # 附加观测（不判红，只如实报）
     una = rep.get("uninstantiated_slots", 0)
     if una:

@@ -418,6 +418,14 @@ interface VaporReport {
     child_xs: number[]
   }
   /**
+   * ★★★**B3d 探针**（2026-10-10 · 判据 ㉗）——动态 `:class` 的**字符串布局字段**（grid 模板）端上真生效
+   *   （走内核二进制 SET_STYLE_STR，值经字符串池）。`child_xs` = [无模板, 2 列模板, 无模板] 下子2 的 x。
+   */
+  b3d_probe: {
+    childId: number
+    child_xs: number[]
+  }
+  /**
    * ★★★**`:style` 对象展开探针**（2026-10-03）——两条通道各自的真值：
    *   · 布局键 ⇒ `width_before/after`（**内核矩形**，真改几何）；
    *   · 绘制键 ⇒ `patch_calls`（提交给宿主的补丁内容——绘制**不进内核**，
@@ -1778,7 +1786,7 @@ function runShort(args: VaporArgs): string {
     tpl_nodes: 0, tpl_ok: false, sub_l1: 0, sub_l0: 0, sub_l1_rate: 0, sub_sources: [],
     inst_ms: 0, inst_nodes: 0, inst_reused_ids: 0, inst_allocated_ids: 0, inst_rows: 0,
     inst_values_filled: 0, inst_virtual_rows: 0, inst_text_filled: 0, inst_width_filled: 0,
-    mix_text_probe: [], text_probe_rounds: [], gate_rounds: [], gate_text_nodes: [], once_node_id: -1, memo_node_id: -1, expr_probe: [], transition_started: 0, tpl_transition: [], component_mounts: 0, component_nodes: 0, component_kid_probe: {}, slot_probe: { texts: [], rects: [], fills: [], markers_left: -1 }, emit_probe: { emits: [], parent_source_after: undefined, geom_before: -1, geom_after: -1 }, scoped_probe: { texts: [], anchor_id: -1, anchor_width_field: -1, anchor_width_rect: -1, destr_text: '', destr_width_field: -1, destr_width_rect: -1 }, lifecycle_probe: { bindings: [], ran_handler: '', changed_sources: [], ops_bytes: 0, applied: 0, anchor_id: -1, geom_before: -1, geom_after: -1 }, dyn_probe: { texts: [], mounts: [], geom: [], dropped: -1, notes: [] }, directive_probe: { nodes: [], rounds: [], plays: [] }, mixed_probe: { texts: [], leaves: 0, geom: [] }, t2_probe: { nodeId: -1, widths: [], values: [], logs: [] }, b5_probe: { nodeId: -1, phases: [], widths: [], values: [] }, b3a_probe: { nodeId: -1, widths: [] }, b3b_probe: { childId: -1, child_xs: [] }, styleobj_probe: { anchor_id: -1, width_before: -1, width_after: -1, kernel_applied: 0, patch_calls: [] },
+    mix_text_probe: [], text_probe_rounds: [], gate_rounds: [], gate_text_nodes: [], once_node_id: -1, memo_node_id: -1, expr_probe: [], transition_started: 0, tpl_transition: [], component_mounts: 0, component_nodes: 0, component_kid_probe: {}, slot_probe: { texts: [], rects: [], fills: [], markers_left: -1 }, emit_probe: { emits: [], parent_source_after: undefined, geom_before: -1, geom_after: -1 }, scoped_probe: { texts: [], anchor_id: -1, anchor_width_field: -1, anchor_width_rect: -1, destr_text: '', destr_width_field: -1, destr_width_rect: -1 }, lifecycle_probe: { bindings: [], ran_handler: '', changed_sources: [], ops_bytes: 0, applied: 0, anchor_id: -1, geom_before: -1, geom_after: -1 }, dyn_probe: { texts: [], mounts: [], geom: [], dropped: -1, notes: [] }, directive_probe: { nodes: [], rounds: [], plays: [] }, mixed_probe: { texts: [], leaves: 0, geom: [] }, t2_probe: { nodeId: -1, widths: [], values: [], logs: [] }, b5_probe: { nodeId: -1, phases: [], widths: [], values: [] }, b3a_probe: { nodeId: -1, widths: [] }, b3b_probe: { childId: -1, child_xs: [] }, b3d_probe: { childId: -1, child_xs: [] }, styleobj_probe: { anchor_id: -1, width_before: -1, width_after: -1, kernel_applied: 0, patch_calls: [] },
     mount_ms: 0, mount_nodes: 0,
     updates_run: 0, ops_bytes: 0, ops_ms: 0, apply_ms: 0, text_synced_total: 0, update_evidence: [], geom_probe: [], channels: [],
     ev_bindings: 0, ev_handlers: 0, ev_modifiers: 0, taps: 0, tap_evidence: [],
@@ -3170,6 +3178,61 @@ function runShort(args: VaporArgs): string {
         } catch { /* 重挂失败 ⇒ 判据按 host_nodes 不符判红 */ }
       } else {
         notes.push('B3b 探针：产物无 b3b 段（夹具未覆盖 ⇒ 判据 ㉖ 按缺失处理）')
+      }
+    }
+
+    /* ═══════════ ★★★B3d 探针（2026-10-10 · 判据 ㉗）：动态 :class 字符串布局字段端上真生效 ═══════════
+     *
+     * 【要证明什么】动态 `:class` 的**字符串布局字段**（`grid-template-columns`，值形如 `80px 200px`）
+     *   经内核二进制 **SET_STYLE_STR**（值走字符串池）生效——f32 的 SET_STYLE 装不下 token 串。
+     *   容器 display:grid、宽 400、两子项各宽 60：无模板 ⇒ 单列堆叠（子2 x=0）；
+     *   `.gcols{grid-template-columns:80px 200px}` ⇒ 两列（子2 落列2 起点 x=80）。核**子2 x 0→80→0**。
+     */
+    {
+      const b3dArt = (artifacts as { b3d?: { tpl: LayoutTemplate; table: SubscriptionTable } }).b3d
+      if (b3dArt?.tpl?.ok) {
+        const b3ddata: Record<string, unknown> = { b3don: false }
+        const b3dReg = new ListRegistry()
+        const b3dInst = instantiateTemplate(b3dArt.tpl, { viewport: args.viewport, read: (n) => b3ddata[n], table: b3dArt.table, registry: b3dReg })
+        const b3dCap: number[][] = []
+        const b3dSlotRt = new SlotRuntime(new PropKeyTable(), new StringPool(), (bytes) => b3dCap.push(Array.from(bytes)))
+        const b3dVapor = new VaporRuntime(b3dArt.table, b3dSlotRt, VaporRuntime.buildEvaluators(b3dArt.table.evaluators), b3dReg)
+        const b3dCtx = { read: (n: string) => b3ddata[n] }
+        b3dVapor.load(b3dCtx, () => { /* 源变化靠显式 relink */ })
+        // 子2 = 第 2 个子节点（模板序：容器 id0、子1 id1、子2 id2）
+        const b3dChildId = b3dInst.nodes.length >= 3 ? Number((b3dInst.nodes[2] as { id: number }).id) : -1
+        try {
+          const mOut = JSON.parse(proteusHost.mount(JSON.stringify({ viewport: b3dInst.viewport, nodes: b3dInst.nodes }))) as { ok?: boolean; error?: string }
+          if (mOut.ok === true && b3dChildId >= 0) {
+            const readX = (): number => {
+              try {
+                const rr = JSON.parse(proteusHost.readRects()) as { rects?: Record<string, { x?: number }> }
+                return Math.round(rr.rects?.[String(b3dChildId)]?.x ?? -1)
+              } catch { return -1 }
+            }
+            const flip = (on: boolean): void => {
+              b3ddata.b3don = on
+              b3dCap.length = 0
+              b3dVapor.relink(b3dCtx)
+              b3dSlotRt.flush()
+              const payload = b3dCap.length ? b3dCap[b3dCap.length - 1]! : []
+              if (payload.length > 0) { try { proteusHost.applyOps(JSON.stringify(payload)) } catch { /* 读数照常 */ } }
+            }
+            const xs: number[] = [readX()]
+            flip(true); xs.push(readX())
+            flip(false); xs.push(readX())
+            rep.b3d_probe = { childId: b3dChildId, child_xs: xs }
+          } else {
+            notes.push(`B3d 探针：mount/节点缺失（mount.ok=${mOut.ok} child=${b3dChildId}）——判据 ㉗ 按缺失处理`)
+          }
+        } catch (e) {
+          notes.push(`B3d 探针异常：${String((e as Error)?.message ?? e)}`)
+        }
+        try {
+          proteusHost.mount(JSON.stringify({ viewport: inst.viewport, nodes: inst.nodes }))
+        } catch { /* 重挂失败 ⇒ 判据按 host_nodes 不符判红 */ }
+      } else {
+        notes.push('B3d 探针：产物无 b3d 段（夹具未覆盖 ⇒ 判据 ㉗ 按缺失处理）')
       }
     }
 
