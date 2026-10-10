@@ -23,10 +23,20 @@ const REPO = join(dirname(fileURLToPath(import.meta.url)), '..')
 const CLI_DIST = join(REPO, 'packages', 'cli', 'dist', 'index.js')
 const MCP_DIST = join(REPO, 'packages', 'mcp', 'dist', 'index.js')
 
-/** 从 callTool 结果里取第一段 text（协议把负载包进 content[]） */
-function resultText(res: { content?: unknown }): string {
-  const c = res.content as Array<{ type: string; text: string }> | undefined
-  return c?.[0]?.text ?? ''
+/** 从 callTool 结果里取第一段 text（协议把负载包进 content[]）
+ *  ★形参用 `unknown`：SDK `CallToolResult` 带 `[x:string]:unknown` 索引签名 + `content` 内容类型联合，
+ *    任何结构化目标类型都会触发 TS2345（"无公共属性"/"不可分配"）；`unknown` 形参接受任意实参，
+ *    内部安全下钻取第一个 text 内容块。 */
+function resultText(res: unknown): string {
+  const arr = (res as { content?: Array<{ type?: string; text?: string }> } | null)?.content
+  return arr?.find((c) => c?.type === 'text')?.text ?? ''
+}
+
+/** 当前进程环境 → `Record<string, string>`（**过滤掉 undefined**）——
+ *  `StdioClientTransport.env` 要求 `Record<string, string>`，而 `process.env` 的值是 `string | undefined`
+ *  （TS 报 TS2322："Type 'string | undefined' is not assignable to type 'string'"）。 */
+function sanitizedEnv(): Record<string, string> {
+  return Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => e[1] !== undefined))
 }
 
 /** 把 SDK Client 连到我们的 server（in-memory 对），返回已 initialize 的 client */
@@ -173,7 +183,7 @@ describe('★#681 Tool 契约：inputSchema 必须是合法协议 Tool（SDK Too
 /** 用 SDK Client + 真实 stdio 子进程跑一次完整往返（listTools + callTool） */
 async function stdioRoundtrip(command: string, args: string[]): Promise<{ tools: number }> {
   const { StdioClientTransport } = await import('@modelcontextprotocol/sdk/client/stdio.js')
-  const transport = new StdioClientTransport({ command, args, env: { ...process.env }, stderr: 'pipe' })
+  const transport = new StdioClientTransport({ command, args, env: sanitizedEnv(), stderr: 'pipe' })
   const client = new Client({ name: 'vitest-stdio', version: '0.0.0' })
   try {
     await client.connect(transport)

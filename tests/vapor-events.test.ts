@@ -404,7 +404,7 @@ describe('★★P2-3 事件修饰符（2026-10-03）：.stop/.self/.once 真语�
   it('反向：裸事件**不得**带任何修饰符字段（既有模板产物逐字节不变）', () => {
     const r = compileEvents(sfc(`<p-view @click="count++"></p-view>`))
     // ★`loc` 是决策 #712 新增的**源位置**（非修饰符）——断言其余字段 + 无修饰符字段
-    const ev = r.events[0] as Record<string, unknown>
+    const ev = r.events[0] as unknown as Record<string, unknown>
     expect(ev.nodeId).toBe(0)
     expect(ev.event).toBe('tap')
     expect(ev.handler).toBe('h0')
