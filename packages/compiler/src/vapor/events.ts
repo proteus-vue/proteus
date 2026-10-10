@@ -131,8 +131,26 @@ export interface EventCompileResult {
   handlers: EventHandlers
   /** ★P1-3 生命周期（无 `@vue:mounted` ⇒ **不产出字段**——既有产物逐字节不变） */
   lifecycle?: LifecycleBinding[]
+  /**
+   * ★★★**脚本级生命周期钩子**（B5，2026-10-10）——`<script setup>` 顶层 `onMounted(() => {…})` /
+   *   `onUnmounted(() => {…})` 的**回调体降级为动作表**（与事件 handler 同族，复用同一执行器）。
+   *
+   * 【为什么需要】端上**不执行 script**（Vapor 分工）⇒ 此前 `onMounted` 里的逻辑永不运行
+   *   （只产 `VAPOR_SCRIPT_LIFECYCLE_NOT_RUN` 诊断）。B5 把**可降级**的钩子体编译成动作——
+   *   运行期在「**首帧 mount 之后**」（mounted）/「**宿主卸载时**」（unmounted）执行（与 `@vue:mounted` 同一时机链）。
+   * 【诚实边界】只支持**可静态降级为封闭动作集**的体（赋值/自增/复合/`$emit`/`$nav`/`if`/局部变量/`console`）；
+   *   其余（循环 / async / 宿主 API）⇒ **不产出** + 精确诊断（不静默）。★缺省省略字段 ⇒ 既有产物逐字节不变。
+   */
+  scriptLifecycle?: ScriptLifecycleBinding[]
   /** 不支持形态的诊断（带修法）——不静默 */
   diagnostics: Array<{ message: string; hint?: string }>
+}
+
+/** 脚本级生命周期绑定（无节点——作用于整屏） */
+export interface ScriptLifecycleBinding {
+  phase: 'mounted' | 'unmounted'
+  /** handler 名（指向 `handlers`——与事件共用同一张动作表） */
+  handler: string
 }
 
 /** 支持的语义事件（与宿主 GestureListener 的语义类型对齐：tap/longpress） */
@@ -223,17 +241,38 @@ const REF_FACTORIES = new Set(['ref', 'shallowRef', 'computed', 'customRef', 'to
  * 从 `<script setup>` 源码抽取**方法表**（函数声明 / const 箭头/函数表达式）与 **ref 源名集合**。
  * ★用已在用的 `@babel/parser` 解析（与 `script.ts` 同源），不引入新依赖。
  */
-function collectScriptMethods(scriptContent: string): { methods: MethodTable; refNames: Set<string> } {
+function collectScriptMethods(scriptContent: string): {
+  methods: MethodTable
+  refNames: Set<string>
+  lifecycle: Array<{ phase: 'mounted' | 'unmounted'; body: BNode[]; line: number }>
+} {
   const methods: MethodTable = new Map()
   const refNames = new Set<string>()
-  if (!scriptContent.trim()) return { methods, refNames }
+  const lifecycle: Array<{ phase: 'mounted' | 'unmounted'; body: BNode[]; line: number }> = []
+  if (!scriptContent.trim()) return { methods, refNames, lifecycle }
   let ast: { program?: { body?: BNode[] } }
   try {
     ast = babelParse(scriptContent, { sourceType: 'module', plugins: ['typescript'] }) as unknown as { program?: { body?: BNode[] } }
   } catch {
-    return { methods, refNames }
+    return { methods, refNames, lifecycle }
   }
   for (const st of ast.program?.body ?? []) {
+    // ★★★B5：顶层 `onMounted(() => {…})` / `onUnmounted(() => {…})` → 收集回调体（后续降级为动作）
+    if (st.type === 'ExpressionStatement') {
+      const ex = st.expression as BNode | undefined
+      if (ex?.type === 'CallExpression' && (ex.callee as BNode | undefined)?.type === 'Identifier') {
+        const hook = String((ex.callee as BNode).name)
+        if (hook === 'onMounted' || hook === 'onUnmounted') {
+          const arg0 = ((ex.arguments as BNode[]) ?? [])[0]
+          if (arg0 && (arg0.type === 'ArrowFunctionExpression' || arg0.type === 'FunctionExpression')) {
+            const ib = arg0.body as BNode
+            const body = ib?.type === 'BlockStatement' ? ((ib.body as BNode[]) ?? []) : [{ type: 'ExpressionStatement', expression: ib }]
+            lifecycle.push({ phase: hook === 'onMounted' ? 'mounted' : 'unmounted', body, line: (st.loc as { start?: { line?: number } })?.start?.line ?? 0 })
+          }
+        }
+      }
+      continue
+    }
     if (st.type === 'FunctionDeclaration' && (st.id as BNode | undefined)?.name) {
       const body = (st.body as BNode | undefined)?.type === 'BlockStatement' ? ((st.body as BNode).body as BNode[] ?? []) : []
       methods.set(String((st.id as BNode).name), {
@@ -267,7 +306,7 @@ function collectScriptMethods(scriptContent: string): { methods: MethodTable; re
       }
     }
   }
-  return { methods, refNames }
+  return { methods, refNames, lifecycle }
 }
 
 /** 取形参名（只认简单标识符；解构/默认值/rest 返回占位 '' 以触发"带参数形态"诊断） */
@@ -602,7 +641,7 @@ export function compileEvents(
   }
 
   // ★★★方法表 + ref 源名（决策 #740 T1）：`@click="handleTap"` 的方法体在此**编译期降级**为动作。
-  const { methods: scriptMethods, refNames } = collectScriptMethods(scriptContent)
+  const { methods: scriptMethods, refNames, lifecycle: scriptHooks } = collectScriptMethods(scriptContent)
   const ctx: StmtCtx = { methods: scriptMethods, refNames }
 
   type EvNode = {
@@ -803,5 +842,23 @@ export function compileEvents(
   }
   let nextId = 0
   walk(ast.children ?? [], false)
+  // ★★★B5（2026-10-10）：脚本级生命周期钩子（`onMounted`/`onUnmounted`）**回调体降级为动作表**。
+  //   ★放在 `walk` **之后**（handler 编号续在事件 handler 之后）⇒ 既有事件 handler 命名 h0/h1… **不变**。
+  //   可降级 ⇒ 进 `scriptLifecycle`（端上在 mounted/unmounted 时机执行）；不可降级 ⇒ **精确诊断**（不静默）。
+  for (const hook of scriptHooks) {
+    let errored = false
+    const hookDiag = (m: string, h?: string): void => { errored = true; diag(`on${hook.phase === 'mounted' ? 'Mounted' : 'Unmounted'}：${m}`, h) }
+    const acts = degradeStatements(hook.body, hookDiag, ctx, 0)
+    if (errored) continue // 体降级失败 ⇒ 不产出（诊断已给）
+    if (acts.length === 0) {
+      // 空体（`onMounted(() => {})`）——合法但无事可做；不产诊断、不产产物
+      continue
+    }
+    const handler = `h${handlerSeq.length}`
+    handlerSeq.push(handler)
+    out.handlers[handler] = acts
+    if (!out.scriptLifecycle) out.scriptLifecycle = []
+    out.scriptLifecycle.push({ phase: hook.phase, handler })
+  }
   return out
 }

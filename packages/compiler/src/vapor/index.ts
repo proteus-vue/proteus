@@ -29,5 +29,5 @@ export {
 } from './template'
 export { compileEvents } from './events'
 export { parsePaintDeclAttr, isPaintDeclAttr } from './template'
-export type { EventBinding, HandlerAction, EventHandlers, EventCompileResult } from './events'
+export type { EventBinding, HandlerAction, EventHandlers, EventCompileResult, ScriptLifecycleBinding } from './events'
 export type { LayoutTemplate, LayoutNode, ListTemplate } from './template'

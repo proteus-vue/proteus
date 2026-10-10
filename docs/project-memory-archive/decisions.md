@@ -2538,3 +2538,14 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **④ 交付**：`docs/vapor-vue-alignment-plan.md`（取证化推进计划 + 逐项依赖/估时/验收模板）+ 登记 `board-inventory`（并更新 `vapor-event-methods-plan` 行状态→T1+T2+T3 已交付）。
 **⑤ 建议顺序**：**B5 脚本钩子降级为动作表（≈2 人日，复用事件-方法线降级器，可先交付）→ B3 动态 class 布局（≈4–6 人日，价值最高，需内核+三端宿主，单独立项）→ B4 v-model 回写（≈4–5 人日，需三端输入通道）**。**永久边界（具名不做）**：Teleport 真传送 / v-html 富文本 / 自定义指令体 / `:hover` / async·循环事件体。
 **⑥ 教训**：a) ★★★**"继续推进"要先取证再定档**——按 `check:vapor-capability` 实测量排序，避免"按印象挑一个做"；b) ★★**探针深挖是"能不能做"的判据**——动态 class 表面"只是没接线"，深挖发现值形态（StyleIR 描述符）+ 内核字段子集 + 缺 applier 三重缺口 ⇒ 一轮做不完，**不硬塞**；c) ★★**"能不能纯 JS 闭环"是分档轴**——纯 JS（DYNCLASS_PLAN_UNMAPPED / 脚本钩子降级）可快速交付；跨内核/宿主（布局字段/v-model）必须单独立项；d) ★**架构边界要"永久具名"**（Teleport 传送 / v-html / 指令体），不当"待做"挂着。
+
+752. **★★★Vapor B5 交付：脚本级生命周期钩子 `onMounted`/`onUnmounted` 降级为动作表（端上真执行）+ 打通 App 壳 `@vue:mounted`**（2026-10-10）：
+**① 缘起**：承接 #751 推进计划，做 B5（脚本钩子，计划里唯一"能一轮完整交付"项）。
+**② 交付（编译期降级 + 运行期时序执行，复用事件-方法线）**：
+  · **编译期**（`compileEvents`）：`<script setup>` 顶层 `onMounted(() => {…})`/`onUnmounted(() => {…})` 的**回调体降级为动作表**（复用 `degradeStatements` + `runHandlerActions`），发射新产物 **`scriptLifecycle`**（`{phase,handler}`；缺省省略）；**放在 `walk` 之后**编号 ⇒ **既有事件 handler 命名 h0/h1… 逐字节不变**。可降级 ⇒ 端上真跑；**不可降级（循环/async/宿主 API）⇒ 精确诊断**；空体 ⇒ 不产出、无诊断。
+  · **运行期**（`render-backend`）：`ScreenRuntimeInstance` 增 `markMounted()`（**幂等**——mounted 只跑一次）/`markUnmounted()`（复用 `runHandler`，出错锚回模板行）；`superapp-runtime` 在 `mountScreen`/`mountScreenInto` **成功后**自动 `markMounted()`，并暴露 `markUnmounted(screen?)`（切屏不销毁实例 ⇒ 卸载钩子由宿主显式调）。
+  · ★**顺带补齐 App 壳的 `@vue:mounted`**（此前壳路径**完全没接 lifecycle**——只探针有）：产物带 `lifecycle` + 运行时 `markMounted` 一并处理（两条链在**首帧 mount 后**同点执行）。
+  · **诊断修正**：`onMounted`/`onUnmounted` 从 `VAPOR_SCRIPT_LIFECYCLE_NOT_RUN` 列表**移除**（现在会运行）；其余钩子（`onBeforeMount`/`onUpdated`/`onActivated`…）保留可见化。
+**③ 三端真机判据 ㉔**（`check-vapor-device.py` + gen 夹具 `b5` + entry-vapor 探针）：`b5x` 值/几何 `[0,88,0]`（挂载前→mounted→unmounted）——**Android/鸿蒙/iOS 全过** + `check:vapor-three-end` 指纹一致（30 项 × 3 端）。
+**④ 验证**：`vapor-events` B5 组（+5）· `vapor-lifecycle`（改写：不再报 NOT_RUN + 其余仍报）· `screen-runtime` ⑤（markMounted 0→99、幂等、markUnmounted 0）· 全量 **5657** · vue-tsc 0 · coupled 绿。
+**⑤ 教训**：a) ★★★**"降级为动作表"这套（事件-方法线）可复用**——B5 的脚本钩子体与事件 handler 是同一类东西，直接复用降级器 + 执行器，2 人日内交付（**基础设施的价值在复用时刻兑现**）；b) ★★**编号顺序要护"既有产物不变"**——脚本钩子的 handler 编号排在 `walk` 之后，事件 h0/h1 不动（golden 不失效）；c) ★★**"能跑"就要撤掉"不会跑"的诊断**——`onMounted` 从 NOT_RUN 列表移除（否则误报）；d) ★**顺带补既有缺口**——发现 App 壳根本没接 `@vue:mounted`（只探针有），B5 一并打通（与脚本钩子同"首帧 mount 后"点）；e) ★**幂等**——`markMounted` 只跑一次（与 Vue「mounted 只在挂载时一次」一致，切回不重跑）。

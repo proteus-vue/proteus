@@ -337,6 +337,51 @@ describe('Vapor 事件编译 · ★不支持形态必须产诊断（不静默）
   }
 })
 
+// ═══════════ ★★★B5：脚本级生命周期钩子（onMounted / onUnmounted）降级为动作 ═══════════
+describe('Vapor 事件编译 · ★★★B5（脚本 onMounted / onUnmounted）', () => {
+  const sfc2 = (script: string, tpl = `<p-view @click="count++"></p-view>`): string =>
+    `<template>\n${tpl}\n</template>\n\n<script setup lang="ts">\nconst count = ref(0)\n${script}\n</script>\n`
+
+  it('★`onMounted(() => { count.value = 99 })` ⇒ scriptLifecycle(mounted) 动作（事件 h0 不变）', () => {
+    const r = compileEvents(sfc2(`onMounted(() => { count.value = 99 })`))
+    expect(r.diagnostics, r.diagnostics.map((d) => d.message).join('|')).toHaveLength(0)
+    // 事件 handler 仍 h0（脚本钩子在 walk 之后编号 ⇒ 既有事件命名不变）
+    expect(r.events[0]!.handler).toBe('h0')
+    expect(r.scriptLifecycle).toEqual([{ phase: 'mounted', handler: 'h1' }])
+    expect(r.handlers.h1).toEqual([{ op: 'set', source: 'count', program: { k: 'lit', v: 99 } }])
+  })
+
+  it('★`onUnmounted(() => { count.value = 0 })` ⇒ scriptLifecycle(unmounted)', () => {
+    const r = compileEvents(sfc2(`onUnmounted(() => { count.value = 0 })`))
+    expect(r.scriptLifecycle).toEqual([{ phase: 'unmounted', handler: 'h1' }])
+  })
+
+  it('★两者并存 ⇒ 两条绑定（按源码序）；空体 ⇒ 不产出（无诊断）', () => {
+    const both = compileEvents(sfc2(`onMounted(() => { count.value = 1 })\nonUnmounted(() => { count.value = 0 })`))
+    expect(both.scriptLifecycle).toEqual([
+      { phase: 'mounted', handler: 'h1' },
+      { phase: 'unmounted', handler: 'h2' },
+    ])
+    const empty = compileEvents(sfc2(`onMounted(() => {})`))
+    expect(empty.scriptLifecycle).toBeUndefined()
+    expect(empty.diagnostics).toHaveLength(0)
+  })
+
+  it('★不可降级体（循环）⇒ 精确诊断 + 不产出（不静默）', () => {
+    const r = compileEvents(sfc2(`onMounted(() => { for (let i = 0; i < 3; i++) count.value++ })`))
+    expect(r.scriptLifecycle).toBeUndefined()
+    expect(r.diagnostics.map((d) => d.message).join(' | ')).toContain('循环')
+    expect(r.diagnostics.every((d) => (d.hint ?? '').length > 0)).toBe(true)
+  })
+
+  it('★两种钩子内容一致：`@vue:mounted` 与 `onMounted` 产出同一动作形态', () => {
+    const tmplHook = compileEvents(sfc2(``, `<p-view @vue:mounted="count = 99"></p-view>`))
+    const scriptHook = compileEvents(sfc2(`onMounted(() => { count.value = 99 })`))
+    // 模板钩子进 lifecycle；脚本钩子进 scriptLifecycle——但动作体一致
+    expect(tmplHook.handlers[tmplHook.lifecycle![0]!.handler]).toEqual(scriptHook.handlers.h1)
+  })
+})
+
 describe('Vapor 事件编译 · ★节点 id 与模板**同序**（分叉 ⇒ handler 挂错节点）', () => {
   it('嵌套结构下 id 对齐（`<p-view><p-view @click>` ⇒ 内层 id=1）', () => {
     const template = `<p-view><p-view @click="count++"></p-view></p-view>`

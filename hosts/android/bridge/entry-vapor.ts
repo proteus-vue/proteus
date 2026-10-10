@@ -391,6 +391,17 @@ interface VaporReport {
     logs: string[]
   }
   /**
+   * ★★★**B5 探针**（2026-10-10 · 判据 ㉔）——脚本级 `onMounted`/`onUnmounted` 降级为动作、端上真执行：
+   *   独立挂 b5 夹具树 → 跑 `mounted` 动作（b5x 0→88，读内核几何）→ 跑 `unmounted` 动作（b5x→0）。
+   *   `widths` = [初始, mounted 后, unmounted 后]（内核几何真值）；`phases` = scriptLifecycle 阶段名。
+   */
+  b5_probe: {
+    nodeId: number
+    phases: string[]
+    widths: number[]
+    values: number[]
+  }
+  /**
    * ★★★**`:style` 对象展开探针**（2026-10-03）——两条通道各自的真值：
    *   · 布局键 ⇒ `width_before/after`（**内核矩形**，真改几何）；
    *   · 绘制键 ⇒ `patch_calls`（提交给宿主的补丁内容——绘制**不进内核**，
@@ -1751,7 +1762,7 @@ function runShort(args: VaporArgs): string {
     tpl_nodes: 0, tpl_ok: false, sub_l1: 0, sub_l0: 0, sub_l1_rate: 0, sub_sources: [],
     inst_ms: 0, inst_nodes: 0, inst_reused_ids: 0, inst_allocated_ids: 0, inst_rows: 0,
     inst_values_filled: 0, inst_virtual_rows: 0, inst_text_filled: 0, inst_width_filled: 0,
-    mix_text_probe: [], text_probe_rounds: [], gate_rounds: [], gate_text_nodes: [], once_node_id: -1, memo_node_id: -1, expr_probe: [], transition_started: 0, tpl_transition: [], component_mounts: 0, component_nodes: 0, component_kid_probe: {}, slot_probe: { texts: [], rects: [], fills: [], markers_left: -1 }, emit_probe: { emits: [], parent_source_after: undefined, geom_before: -1, geom_after: -1 }, scoped_probe: { texts: [], anchor_id: -1, anchor_width_field: -1, anchor_width_rect: -1, destr_text: '', destr_width_field: -1, destr_width_rect: -1 }, lifecycle_probe: { bindings: [], ran_handler: '', changed_sources: [], ops_bytes: 0, applied: 0, anchor_id: -1, geom_before: -1, geom_after: -1 }, dyn_probe: { texts: [], mounts: [], geom: [], dropped: -1, notes: [] }, directive_probe: { nodes: [], rounds: [], plays: [] }, mixed_probe: { texts: [], leaves: 0, geom: [] }, t2_probe: { nodeId: -1, widths: [], values: [], logs: [] }, styleobj_probe: { anchor_id: -1, width_before: -1, width_after: -1, kernel_applied: 0, patch_calls: [] },
+    mix_text_probe: [], text_probe_rounds: [], gate_rounds: [], gate_text_nodes: [], once_node_id: -1, memo_node_id: -1, expr_probe: [], transition_started: 0, tpl_transition: [], component_mounts: 0, component_nodes: 0, component_kid_probe: {}, slot_probe: { texts: [], rects: [], fills: [], markers_left: -1 }, emit_probe: { emits: [], parent_source_after: undefined, geom_before: -1, geom_after: -1 }, scoped_probe: { texts: [], anchor_id: -1, anchor_width_field: -1, anchor_width_rect: -1, destr_text: '', destr_width_field: -1, destr_width_rect: -1 }, lifecycle_probe: { bindings: [], ran_handler: '', changed_sources: [], ops_bytes: 0, applied: 0, anchor_id: -1, geom_before: -1, geom_after: -1 }, dyn_probe: { texts: [], mounts: [], geom: [], dropped: -1, notes: [] }, directive_probe: { nodes: [], rounds: [], plays: [] }, mixed_probe: { texts: [], leaves: 0, geom: [] }, t2_probe: { nodeId: -1, widths: [], values: [], logs: [] }, b5_probe: { nodeId: -1, phases: [], widths: [], values: [] }, styleobj_probe: { anchor_id: -1, width_before: -1, width_after: -1, kernel_applied: 0, patch_calls: [] },
     mount_ms: 0, mount_nodes: 0,
     updates_run: 0, ops_bytes: 0, ops_ms: 0, apply_ms: 0, text_synced_total: 0, update_evidence: [], geom_probe: [], channels: [],
     ev_bindings: 0, ev_handlers: 0, ev_modifiers: 0, taps: 0, tap_evidence: [],
@@ -2974,6 +2985,66 @@ function runShort(args: VaporArgs): string {
         } catch { /* 重挂失败 ⇒ 判据按 host_nodes 不符判红 */ }
       } else {
         notes.push('T2 探针：产物无 t2 段（夹具未覆盖 ⇒ 判据 ㉓ 按缺失处理）')
+      }
+    }
+
+    /* ═══════════ ★★★B5 探针（2026-10-10 · 判据 ㉔）：脚本级生命周期钩子端上真执行 ═══════════
+     *
+     * 【要证明什么】`<script setup>` 的 `onMounted`/`onUnmounted` 回调体**编译期降级为动作**、
+     *   端上在"首帧 mount 后"/"卸载时"执行——不是"编出来了"，而是"**跑了内核几何真的变**"。
+     *   b5x 初值 0；`onMounted(() => { b5x = 88 })`、`onUnmounted(() => { b5x = 0 })`。
+     *   ★独立挂 b5 夹具树 → 跑 mounted 动作 → 读几何 → 跑 unmounted 动作 → 读几何 → 重挂主树。
+     */
+    {
+      const b5Art = (artifacts as { b5?: { tpl: LayoutTemplate; table: SubscriptionTable; handlers?: Record<string, HandlerAction[]>; scriptLifecycle?: Array<{ phase: string; handler: string }> } }).b5
+      if (b5Art?.tpl?.ok) {
+        const b5data: Record<string, unknown> = { b5x: 0 }
+        const b5Reg = new ListRegistry()
+        const b5Inst = instantiateTemplate(b5Art.tpl, { viewport: args.viewport, read: (n) => b5data[n], table: b5Art.table, registry: b5Reg })
+        const b5Captured: number[][] = []
+        const b5SlotRt = new SlotRuntime(new PropKeyTable(), new StringPool(), (bytes) => b5Captured.push(Array.from(bytes)))
+        const b5Vapor = new VaporRuntime(b5Art.table, b5SlotRt, VaporRuntime.buildEvaluators(b5Art.table.evaluators), b5Reg)
+        const b5Ctx = { read: (n: string) => b5data[n] }
+        b5Vapor.load(b5Ctx, () => { /* 源变化靠显式 relink */ })
+        const sl = b5Art.scriptLifecycle ?? []
+        const b5NodeId = (b5Art.table as unknown as { sources?: Array<{ slots?: Array<{ nodeId?: number; propKey?: string }> }> }).sources
+          ?.flatMap((s) => s.slots ?? []).find((x) => x.propKey === 'layout.width' || x.propKey === 'style.width')?.nodeId ?? -1
+        try {
+          const mOut = JSON.parse(proteusHost.mount(JSON.stringify({ viewport: b5Inst.viewport, nodes: b5Inst.nodes }))) as { ok?: boolean; error?: string }
+          if (mOut.ok === true && sl.length > 0) {
+            const readW = (): number => {
+              try {
+                const rr = JSON.parse(proteusHost.readRects()) as { rects?: Record<string, { width?: number }> }
+                return rr.rects?.[String(b5NodeId)]?.width ?? -1
+              } catch { return -1 }
+            }
+            const runPhase = (phase: string): void => {
+              const b = sl.find((x) => x.phase === phase)
+              const acts = b ? (b5Art.handlers ?? {})[b.handler] : undefined
+              if (!acts) return
+              runHandlerActions(acts, { read: (n) => b5data[n], write: (n, v) => { b5data[n] = v } })
+              b5Captured.length = 0
+              b5Vapor.relink(b5Ctx)
+              b5SlotRt.flush()
+              const payload = b5Captured.length ? b5Captured[b5Captured.length - 1]! : []
+              if (payload.length > 0) { try { proteusHost.applyOps(JSON.stringify(payload)) } catch { /* 读数照常 */ } }
+            }
+            const widths: number[] = [readW()]
+            const values: number[] = [Number(b5data.b5x)]
+            runPhase('mounted'); widths.push(readW()); values.push(Number(b5data.b5x))
+            runPhase('unmounted'); widths.push(readW()); values.push(Number(b5data.b5x))
+            rep.b5_probe = { nodeId: b5NodeId, phases: sl.map((b) => b.phase), widths, values }
+          } else {
+            notes.push(`B5 探针：mount/scriptLifecycle 缺失（mount.ok=${mOut.ok} lifecycle=${sl.length}）——判据 ㉔ 按缺失处理`)
+          }
+        } catch (e) {
+          notes.push(`B5 探针异常：${String((e as Error)?.message ?? e)}`)
+        }
+        try {
+          proteusHost.mount(JSON.stringify({ viewport: inst.viewport, nodes: inst.nodes }))
+        } catch { /* 重挂失败 ⇒ 判据按 host_nodes 不符判红 */ }
+      } else {
+        notes.push('B5 探针：产物无 b5 段（夹具未覆盖 ⇒ 判据 ㉔ 按缺失处理）')
       }
     }
 

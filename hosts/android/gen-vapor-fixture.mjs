@@ -369,6 +369,24 @@ function add(n: number) {
 }
 </script>`
 
+/**
+ * ★★★B5 夹具（判据 ㉔，2026-10-10）：脚本级生命周期 `onMounted` / `onUnmounted` **降级为动作**、
+ *   端上在时序点执行。要点：`onMounted(() => { b5x.value = 88 })`（⇒ set 动作）、
+ *   `onUnmounted(() => { b5x.value = 0 })`（⇒ set 动作）；其宽度作几何锚。
+ *   ★目标源用 `b5x`（专用，避免与主夹具撞）。
+ */
+const B5_SFC = `<template>
+  <p-view style="flex-direction: column">
+    <p-view :width="b5x" style="height: 12px; background-color: #3aa0ff"></p-view>
+  </p-view>
+</template>
+
+<script setup lang="ts">
+const b5x = ref(0)
+onMounted(() => { b5x.value = 88 })
+onUnmounted(() => { b5x.value = 0 })
+</script>`
+
 /** 长列表夹具：**行高 100px**（视口 2400 ⇒ 可见 ~24 行；预加载 ±10 ⇒ 物化 ~34 行）
  *  ——判据的口径：1000 行都必须在内核树里（几何正确），但宿主只物化可见区。
  *  ★行内含 `:width` 绑定（L1 槽位）与插值文本（`{{ item.title }}`）。 */
@@ -504,6 +522,8 @@ const build = (sfc, name) => {
     handlers: evRes.handlers,
     // ★P1-3 生命周期（2026-10-03）：vue:mounted 绑定（无 ⇒ 不产出字段——既有产物不变）
     ...(evRes.lifecycle ? { lifecycle: evRes.lifecycle } : {}),
+    // ★★★B5（2026-10-10）：脚本级生命周期（onMounted/onUnmounted 降级为动作；无 ⇒ 不产出字段）
+    ...(evRes.scriptLifecycle ? { scriptLifecycle: evRes.scriptLifecycle } : {}),
     eventDiagnostics: evRes.diagnostics.map((d) => d.message),
     sfc,
   }
@@ -535,6 +555,8 @@ process.stdout.write(JSON.stringify({
   mixed: build(${JSON.stringify(MIXED_SFC)}, 'vapor-mixed.vue'),
   // ★★T2：带参 + 局部变量 + if/else（判据 ㉓）
   t2: build(${JSON.stringify(T2_SFC)}, 'vapor-t2.vue'),
+  // ★★B5：脚本级生命周期 onMounted/onUnmounted（判据 ㉔）
+  b5: build(${JSON.stringify(B5_SFC)}, 'vapor-b5.vue'),
   // ★:style 对象展开（判据 ㉒）
   styleObj: build(${JSON.stringify(STYLE_OBJ_SFC)}, 'vapor-style-obj.vue'),
   // ★★★六端 SFC 压力夹具：编译**共享 SFC 文件**（examples 页面）——与 Web/MP 同源
@@ -715,7 +737,7 @@ for (const [nm, def] of Object.entries(parsed.components)) {
       `父绑定 @${parentEmitBinds[0].event}（nodeId=${parentEmitBinds[0].nodeId}）`,
   )
 }
-fs.writeFileSync(OUT, JSON.stringify({ ...parsed.small, components: parsed.components, slot: parsed.slot, scoped: parsed.scoped, dyn: parsed.dyn, directive: parsed.directive, mixed: parsed.mixed, t2: parsed.t2, styleObj: parsed.styleObj }))
+fs.writeFileSync(OUT, JSON.stringify({ ...parsed.small, components: parsed.components, slot: parsed.slot, scoped: parsed.scoped, dyn: parsed.dyn, directive: parsed.directive, mixed: parsed.mixed, t2: parsed.t2, b5: parsed.b5, styleObj: parsed.styleObj }))
 console.log(`[gen-vapor-fixture] ✅ 组件注册表：${Object.keys(parsed.components).join(', ')}（随父产物下发）`)
 // ★P1-3 插槽分发夹具（判据 ⑮）：父产物必须带 slotFor 标记、子产物必须带 slotOutlet 标记
 //   （"生成器静默退化"是本仓重点拦的形态——标记缺了就是分发不可能发生）
@@ -856,6 +878,19 @@ console.log(`[gen-vapor-fixture] ✅ 组件注册表：${Object.keys(parsed.comp
     process.exit(1)
   }
   console.log(`[gen-vapor-fixture] ✅ T2/T3 夹具：带参 let(n) + 局部 let(step) + if/else + console(log) 动作（事件 ${evCount}）`)
+}
+// ★★★B5 夹具（判据 ㉔）：脚本 onMounted/onUnmounted 降级为动作（scriptLifecycle 两条：mounted + unmounted）
+{
+  const sl = (parsed.b5?.scriptLifecycle ?? [])
+  const acts = Object.values(parsed.b5?.handlers ?? {}).flat()
+  const hasSet88 = acts.some((a) => a.op === 'set' && a.program?.k === 'lit' && a.program?.v === 88)
+  const hasSet0 = acts.some((a) => a.op === 'set' && a.program?.k === 'lit' && a.program?.v === 0)
+  const hasBoth = sl.some((b) => b.phase === 'mounted') && sl.some((b) => b.phase === 'unmounted')
+  if (!parsed.b5?.ok || !hasBoth || !hasSet88 || !hasSet0) {
+    console.error(`[gen-vapor-fixture] ✗ B5 夹具不完整（判据 ㉔ 将无证据）：scriptLifecycle=${JSON.stringify(sl)} · set88=${hasSet88} · set0=${hasSet0}`)
+    process.exit(1)
+  }
+  console.log(`[gen-vapor-fixture] ✅ B5 夹具：onMounted(set=88) + onUnmounted(set=0)（scriptLifecycle ${sl.length} 条）`)
 }
 // ★:style 对象展开（2026-10-03）：必须**逐键**（layout.width + paint.backgroundColor），不得有整键
 {

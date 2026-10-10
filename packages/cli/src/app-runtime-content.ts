@@ -140,6 +140,10 @@ export async function buildAppRuntimeContent(
       table: subRes.ok ? subRes.table : EMPTY_TABLE,
       events: (evRes.events ?? []) as unknown[],
       handlers: (evRes.handlers ?? {}) as Record<string, unknown[]>,
+      // ★★P1-3 / B5：生命周期绑定（模板 `@vue:mounted` + 脚本 `onMounted`/`onUnmounted`）——
+      //   运行期在"首帧 mount 后"（mounted）/ "宿主卸载时"（unmounted）跑其动作表。缺省省略（既有产物不变）。
+      ...(evRes.lifecycle ? { lifecycle: evRes.lifecycle } : {}),
+      ...(evRes.scriptLifecycle ? { scriptLifecycle: evRes.scriptLifecycle } : {}),
       data: statics,
       // ★dev：屏源文件（相对项目根）——面板据节点 loc 拼 `file:line:col`
       ...(dev ? { file: filename } : {}),
