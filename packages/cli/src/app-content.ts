@@ -220,17 +220,9 @@ export async function buildAppScreenContent(root: string, platform: AppPlatform 
     const appCfgPath = path.join(root, 'app.config.ts')
     if (fs.existsSync(appCfgPath)) {
       const { loadProjectConfig } = await import('./config-loader')
-      const appCfg = (await loadProjectConfig(appCfgPath)) as {
-        safeArea?: { statusBar?: string }
-        features?: Record<string, unknown>
-      } | undefined
+      const appCfg = (await loadProjectConfig(appCfgPath)) as { safeArea?: { statusBar?: string } } | undefined
       const statusBar = appCfg?.safeArea?.statusBar === 'hide' ? 'hide' : 'show'
-      // ★★★Dactyl（决策 #780）：把 `features` 一并带给宿主（此前只带 `safeArea`）——
-      //   宿主据此开关**运行时能力**（如 `features.dactylOverlay` ⇒ 延迟显影叠加层）。
-      //   ★只透传 `features` 子集，不带 api/theme 等（宿主当前不消费；按需再扩）。
-      const body: Record<string, unknown> = { safeArea: { statusBar } }
-      if (appCfg?.features && typeof appCfg.features === 'object') body.features = appCfg.features
-      fs.writeFileSync(path.join(outDir, 'app-config.json'), JSON.stringify(body, null, 2))
+      fs.writeFileSync(path.join(outDir, 'app-config.json'), JSON.stringify({ safeArea: { statusBar } }, null, 2))
     }
   } catch { /* 无 app.config / 加载失败 ⇒ 不写，宿主默认 show */ }
   if (compiled === 0) throw new Error('零页面编译成功——App 屏内容产物为空（路由格式/编译器有问题？）')

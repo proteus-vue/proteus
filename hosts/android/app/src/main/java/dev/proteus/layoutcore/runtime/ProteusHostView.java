@@ -2330,10 +2330,6 @@ public class ProteusHostView extends ViewGroup {
     public boolean onTouchEvent(android.view.MotionEvent ev) {
         touchEventCount++;
         final int action = ev.getActionMasked();
-        // ★Dactyl：官方事件时间戳采样（幽灵拖尾真源）——DOWN/MOVE 都记。
-        if (action == android.view.MotionEvent.ACTION_DOWN || action == android.view.MotionEvent.ACTION_MOVE) {
-            dactylNoteTouch(ev);
-        }
         if (action == android.view.MotionEvent.ACTION_DOWN) {
             // ★★★S1.5（2026-10-10 · 输入延迟专项 #767）：**请求无缓冲分发**——绕过 Android 输入批处理
             //   （`InputReader` 默认攒若干采样点再派发；`requestUnbufferedDispatch` 让本视图的触摸事件
@@ -2349,13 +2345,6 @@ public class ProteusHostView extends ViewGroup {
             // ★★触摸即刹停惯性（平台标准行为：上手就停）——不刹会"拖拽被旧抛滑顶掉"：
             //   每帧 `stepInertia` 会把 scrollX 拉回抛滑时间线，拖动量被静默吞掉。
             if (flingScroller != null && !flingScroller.isFinished()) flingScroller.forceFinished(true);
-            // ★★★多指跟手：**声明本视图独占手势序列**（不让父容器/滚动容器截断多指）。
-            //   ★诚实边界：这挡得住**父 View**，挡不住**系统级手势**（如 MIUI `three_gesture_down=screen_shot`
-            //     三指下滑截屏——它在 InputReader 层就把第 3 指截走，app 根本收不到；用户实测"最多 2 指"即此）。
-            try {
-                final android.view.ViewParent vp = getParent();
-                if (vp != null) vp.requestDisallowInterceptTouchEvent(true);
-            } catch (Throwable ignored) { /* 无父容器（独立 View）⇒ 无需 */ }
             // ★DOWN 时刻做命中 → 这一整个手势都归它（与平台语义一致）
             dispatchHit(ev.getX(), ev.getY());
             gestureTarget = lastHitTarget;
@@ -2369,17 +2358,11 @@ public class ProteusHostView extends ViewGroup {
             // ★★★S3-T1/T3（2026-10-10 · 输入延迟专项 #767）：**跟手启动**——命中节点若有 `v-follow`
             //   折出的 follow 规格，记下该指拖拽起点（后续 MOVE 直接喂内核，零 JS 跨界）。
             beginFollowAt(ev.getPointerId(0), gestureTarget, ev.getX(), ev.getY());
-            // ★Dactyl L2：本页若有场（`followField`）⇒ 该指驱动场（焦点 = 当前指针位置）
-            beginFieldAt(ev.getPointerId(0));
         }
         // ★★★S3-T1/T3：MOVE ⇒ 全部跟手指针**一帧一次批量**喂内核（换算在内核、宿主零数学、**零 JS 跨界**）。
         //   ★T3：多指 ⇒ `layoutFollowBatch`（每帧至多一次 FFI——`ffi_calls_per_frame ≤ 1`）。
         if (action == android.view.MotionEvent.ACTION_MOVE && !followPtrs.isEmpty()) {
             applyFollowBatch(ev);
-        }
-        // ★Dactyl L2：场跟手（焦点 → 一片尖峰的高度/朝向场）
-        if (action == android.view.MotionEvent.ACTION_MOVE) {
-            applyFieldFocus(ev);
         }
         // ★S3：多指场景的落点（POINTER_DOWN/UP）——命中该指所在节点则纳入/移出跟手表
         if (action == android.view.MotionEvent.ACTION_POINTER_DOWN) {
@@ -2396,7 +2379,6 @@ public class ProteusHostView extends ViewGroup {
         if (action == android.view.MotionEvent.ACTION_UP || action == android.view.MotionEvent.ACTION_CANCEL) {
             clearPress();
             endFollow();   // ★S3：抬指 ⇒ 松手（回弹/吸附在内核）
-            endField();    // ★Dactyl L2：场跟手结束
         }
         // ★交给平台识别器判定 tap / longpress / fling / scroll（不自研阈值与时间窗）
         detector().onTouchEvent(ev);
@@ -2404,49 +2386,27 @@ public class ProteusHostView extends ViewGroup {
     }
 
     /* ── ★★★S1.1 按下态（`:active` → press* 字段；DOWN 原生应用 / UP 还原，零 JS 跨界）── */
-    /**
-     * ★按下态样式（`15-dactyl-demo.md` §4.2：磁块**凹陷 + 边缘发光**；观感"按下即凹陷"）。
-     *   编译器把 `.x:active{…}` 折成节点 `press*` 字段（`pressBackgroundColor` / `pressTransform`(sx,sy)
-     *   / `pressBorderColor` / `pressBoxShadow`）——**任意声明都能折**；宿主这里全部消费 ⇒ 真正对齐计划。
-     */
-    static final class PressStyle {
-        Integer bg;            // pressBackgroundColor（ARGB；可空）
-        float sx = 1f, sy = 1f; // pressTransform 的缩放（凹陷 = <1）
-        Integer borderColor;   // pressBorderColor（可空）
-        Integer glowColor;     // pressBoxShadow.color（可空）——"边缘发光"
-        float glowRadius = 0f; // pressBoxShadow.blur
-        boolean hasScale() { return sx != 1f || sy != 1f; }
-    }
-    /** 节点 id → 按下态样式（来自编译器 `:active` 折出的 `press*` 字段） */
-    private java.util.Map<Integer, PressStyle> pressStyles = java.util.Collections.emptyMap();
+    /** 节点 id → 按下态背景色（ARGB；来自编译器 `:active` 折出的 `pressBackgroundColor`） */
+    private java.util.Map<Integer, Integer> pressBgMap = java.util.Collections.emptyMap();
     private int pressedNodeId = -1;
-    /** 按下态"边缘发光"绘制用（FILL + shadowLayer）。 */
-    private final android.graphics.Paint dactylGlowPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
     /** 累计"按下态真的被应用"次数（判据核"按下反馈真的发生过"） */
     int pressApplied = 0;
-    /** ★§4.2 判据量：DOWN 起，到**首个反映按下态的帧**的毫秒（`press_feedback_ms`，目标 ≤ 1 帧）。 */
-    private long dctlPressDownMs = 0L;
-    private float dctlPressFeedbackMs = -1f;
 
-    /** 由 `VaporRenderHost` 在建树时注入"哪些节点有按下态 + 其样式"。 */
-    public void setPressStyles(java.util.Map<Integer, PressStyle> m) {
-        this.pressStyles = m != null ? m : java.util.Collections.emptyMap();
+    /** 由 `VaporRenderHost` 在建树时注入"哪些节点有按下态 + 其背景色"。 */
+    public void setPressBgMap(java.util.Map<Integer, Integer> m) {
+        this.pressBgMap = m != null ? m : java.util.Collections.emptyMap();
     }
 
-    /** DOWN 命中节点 ⇒ 应用按下态（有 press 定义才动）+ 触发涟漪；重录帧以立即反映。 */
+    /** DOWN 命中节点 ⇒ 应用按下态（有 press 定义才动）；重录帧以立即反映。 */
     private void applyPressAt(int nodeId) {
-        if (nodeId < 0 || !pressStyles.containsKey(nodeId)) return;
+        if (nodeId < 0 || !pressBgMap.containsKey(nodeId)) return;
         pressedNodeId = nodeId;
         pressApplied++;
-        // ★§4.2 判据量：记 DOWN 时刻——下一帧（反映按下态的帧）在 onDraw 里对账 ⇒ press_feedback_ms。
-        dctlPressDownMs = android.os.SystemClock.uptimeMillis();
-        // ★涟漪（§4.2 观感"涟漪扩散与指尖同帧"）：以按下点为源，宿主叠加绘制（合成属性 scale+alpha，§7.3）。
-        startDactylRipple(dctlLastRawX, dctlLastRawY);
-        framePicture = null;   // 丢弃静态帧 ⇒ onDraw 重录（含按下态：凹陷/发光）
+        framePicture = null;   // 丢弃静态帧 ⇒ onDraw 重录（含按下色）
         invalidate();
     }
 
-    /** UP/CANCEL ⇒ 还原（清帧 ⇒ 重录回常态）。 */
+    /** UP/CANCEL ⇒ 还原（清帧 ⇒ 重录回常态色）。 */
     private void clearPress() {
         if (pressedNodeId < 0) return;
         pressedNodeId = -1;
@@ -2454,33 +2414,9 @@ public class ProteusHostView extends ViewGroup {
         invalidate();
     }
 
-    /** ★S1.1 探针：`{pressed, applied, press_nodes}`——判据核"按下态真的被原生应用"。 */
+    /** ★S1.1 探针：`{pressed, applied, hasPressNodes}`——判据核"按下态真的被原生应用"。 */
     public String pressProbe() {
-        return "{\"pressed\":" + pressedNodeId + ",\"applied\":" + pressApplied + ",\"press_nodes\":" + pressStyles.size() + "}";
-    }
-
-    /* ── ★Dactyl 涟漪（§4.2 L1"按下处激起涟漪"）——宿主叠加绘制；只动 scale+alpha（合成属性，§7.3）── */
-    private float dctlRippleX = -1f, dctlRippleY = -1f;
-    private long dctlRippleStartNs = 0L;
-    private static final float DCTL_RIPPLE_DUR_MS = 480f;
-    private final android.graphics.Paint dctlRipplePaint = makeStrokePaint(0xFF39D0FF, 3f);
-
-    private void startDactylRipple(float x, float y) {
-        if (!dactylEnabled) return;
-        dctlRippleX = x; dctlRippleY = y; dctlRippleStartNs = System.nanoTime();
-    }
-
-    /** 画涟漪（若在生命周期内）；返回是否仍在扩散（供帧循环续帧）。 */
-    private boolean drawDactylRipple(Canvas canvas) {
-        if (dctlRippleStartNs == 0L) return false;
-        final float el = (System.nanoTime() - dctlRippleStartNs) / 1e6f;
-        if (el >= DCTL_RIPPLE_DUR_MS) { dctlRippleStartNs = 0L; return false; }
-        final float t = el / DCTL_RIPPLE_DUR_MS;
-        final float r = (8f + 72f * t) * dactylDensity;
-        dctlRipplePaint.setAlpha((int) ((1f - t) * 180));
-        dctlRipplePaint.setStrokeWidth((2f + 2f * (1f - t)) * dactylDensity);
-        canvas.drawCircle(dctlRippleX, dctlRippleY, r, dctlRipplePaint);
-        return true;
+        return "{\"pressed\":" + pressedNodeId + ",\"applied\":" + pressApplied + ",\"press_nodes\":" + pressBgMap.size() + "}";
     }
 
     /** ★S1.5 探针：累计 `requestUnbufferedDispatch` 调用数（判据核"无缓冲分发真的被请求"）。 */
@@ -2519,93 +2455,6 @@ public class ProteusHostView extends ViewGroup {
     public void setFollowSpecs(java.util.Map<Integer, float[]> m) {
         this.followSpecs = m != null ? m : java.util.Collections.emptyMap();
     }
-
-    /* ── ★★★Dactyl L2·场跟手（§4.3）：一个手势焦点 → 一片尖峰的高度/朝向场 ──
-     *   ★与"整块平移"（S3-T1）不同：这里是**焦点位置**驱动**全片**叶尖峰（近则高、倾角朝指），
-     *     换算唯一实现在内核 `follow_field`，宿主零数学、零 JS。region = 内容全区（本页叶皆尖峰）。 */
-    /** 场参数（containerId, falloff, minScale, maxScale, rotate）——本页若有 `v-follow={field:…}` 容器则非空。 */
-    private float[] fieldSpec = null;
-    /** 当前由哪一指驱动场（-1 = 无）。 */
-    private int fieldPointerId = -1;
-    /** 场跟手驱动帧数（判据核"场真的被驱动"）。 */
-    int fieldMoves = 0;
-    /** ★L2 性能归因：场跟手**每帧耗时**（内核 FFI + 二进制解析）ms——最近/最大。 */
-    private float fieldMsLast = 0f, fieldMsMax = 0f;
-    /** ★帧格缓存位图（避免每帧 2000+ drawLine）。 */
-    private android.graphics.Bitmap dactylGridBmp = null;
-
-    /* ── ★L2 大 N 批量绘制（§4.3）：场容器的子节点（针林）**合成一条 Path、一次 drawPath** ——
-     *   逐节点 save/matrix/drawRect（4000 次）是 draw 超预算的主因；批量化后 = 1 次填充。*/
-    private java.util.Set<Integer> fieldBatchIds = java.util.Collections.emptySet();
-    private int fieldBatchColor = 0;
-    /** 针林填充画笔（FILL、无抗锯齿 = 快）——颜色随场容器底色，避免复用 bgPaint 的样式串扰。 */
-    private final android.graphics.Paint fieldBatchPaint = new android.graphics.Paint();
-    public void setFieldBatch(java.util.Set<Integer> ids, int color) {
-        fieldBatchIds = ids != null ? ids : java.util.Collections.emptySet();
-        fieldBatchColor = color;
-        fieldBatchPaint.setStyle(android.graphics.Paint.Style.FILL);
-        fieldBatchPaint.setAntiAlias(false);
-        fieldBatchPaint.setColor(color);
-        // ★★丢弃缓存显示列表（`framePicture`）——**否则静止回放旧画面**（录于批量生效之前 ⇒ 静止=正常路径/圆角，
-        //   拖拽=实时批量/尖角 ⇒ **两条路径两个形态**：用户实测"打开是方块、拖拽才是针"）。
-        //   ★通律：任何影响绘制的注入状态变化，都必须让 `framePicture` 失效（否则回放陈旧帧）。
-        framePicture = null;
-        invalidate();
-    }
-    /** 由 `VaporRenderHost` 注入场规格（`followField=1` 的容器）。 */
-    public void setFollowFields(java.util.Map<Integer, float[]> m) {
-        if (m == null || m.isEmpty()) { fieldSpec = null; return; }
-        fieldSpec = m.values().iterator().next();   // 一页一个场
-    }
-
-    private void beginFieldAt(int pointerId) {
-        if (fieldSpec == null) return;
-        fieldPointerId = pointerId;
-    }
-
-    /** ★★合并到**每帧一次**（§2.3 "一帧一次 FFI"）：MOVE 只记焦点 + 标脏 + 重绘；
-     *   真正的内核调用在 onDraw 每帧**至多一次**（否则无缓冲分发下 MOVE 率 > 刷新率 ⇒ UI 线程被塞满 ⇒ 帧推迟 = 卡顿）。 */
-    private float fieldFocusX = 0f, fieldFocusY = 0f;
-    private boolean fieldDirty = false;
-
-    /** MOVE ⇒ 只记最新焦点（廉价）；实际 FFI 在 {@link #flushFieldFollow} 每帧一次。 */
-    private void applyFieldFocus(android.view.MotionEvent ev) {
-        if (fieldSpec == null || fieldPointerId < 0 || coreHandle == 0L) return;
-        final int idx = ev.findPointerIndex(fieldPointerId);
-        if (idx < 0) return;
-        fieldFocusX = ev.getX(idx);
-        fieldFocusY = ev.getY(idx) + scrollY;
-        fieldDirty = true;
-        // 触发重绘（帧回调 onDraw 里 flushFieldFollow 每帧至多一次）——多次 MOVE 折叠为一次帧刷新。
-        postInvalidateOnAnimation();
-    }
-
-    /** 每帧一次（onDraw 早段）：脏则内核场求值一次 + 落绘制真源（**12B/条**精简记录，无 JSON）。 */
-    private void flushFieldFollow() {
-        if (!fieldDirty || fieldSpec == null || coreHandle == 0L) return;
-        fieldDirty = false;
-        fieldMoves++;
-        final long __t0 = System.nanoTime();
-        final byte[] bin = RustLayout.layoutFollowFieldBin(coreHandle,
-                (int) fieldSpec[0], fieldFocusX, fieldFocusY, fieldSpec[1], fieldSpec[2], fieldSpec[3], fieldSpec[4]);
-        // ★精简记录解析：id u32 + scale f32 + rotate f32 = 12B/条（场只改这两项）——比 236B 全记录小 20×。
-        if (bin != null && bin.length >= 12) {
-            java.nio.ByteBuffer bb = java.nio.ByteBuffer.wrap(bin).order(java.nio.ByteOrder.LITTLE_ENDIAN);
-            final int n = bin.length / 12;
-            for (int i = 0; i < n; i++) {
-                final int id = bb.getInt();
-                final float sc = bb.getFloat(), rot = bb.getFloat();
-                float[] t = animTx.get(id);
-                if (t == null || t.length < 4) { animTx.put(id, new float[]{0f, 0f, sc, rot, 1f, 0f, 0f, 0f, 0f}); }
-                else { t[0] = 0f; t[1] = 0f; t[2] = sc; t[3] = rot; }   // 场不改 tx/ty（保持 0）
-            }
-            invalidate();
-        }
-        fieldMsLast = (System.nanoTime() - __t0) / 1e6f;
-        if (fieldMsLast > fieldMsMax) fieldMsMax = fieldMsLast;
-    }
-
-    private void endField() { fieldPointerId = -1; fieldDirty = false; }
 
     /** 命中某**内容坐标**所在节点 id（多指各自命中——与 `dispatchHit` 同一内核 `hitTest`，但不改手势态）。 */
     private int hitNodeAt(float viewX, float viewY) {
@@ -2721,369 +2570,6 @@ public class ProteusHostView extends ViewGroup {
         followPtrs.clear();
     }
 
-    /* ═══════════ ★★★Dactyl 延迟显影（决策 #780 · `15-dactyl-demo.md` §3/§6）═══════════
-     *
-     * 【本块是"输入延迟 + 视觉反馈"专项的**显影器**】把不可见的 ms 变成**可见的像素**：
-     *   · 幽灵拖尾 Ghost Trail：用**官方触摸时间戳**（`MotionEvent.getEventTime()`，禁 JS 时钟）采样
-     *     手指历史位置，画半透明轨迹；
-     *   · 延迟环 Latency Ring：半径 ∝ 实测 `input_latency_ms`（0→0px，8.33ms@120Hz→满刻度），绿→黄→红；
-     *   · 帧格 Frame Grid：背景 vsync 刻度，错过一帧闪一格。
-     * ★自洽红线（§7.3）：显影器全部是**叠加绘制**（不进内核、不逐帧重排）——demo 自身不是压力源。
-     * ★反作弊（§3.3）：轨迹源 = 官方事件时间戳；延迟环半径 = 实测值（无实测显示 `--`）；帧格 = 真实帧回调。
-     * ★这是**运行时能力**（随 runtime AAR 进 App）——由 `app-config.json` 的 `features.dactylOverlay` 开关，
-     *   缺省关（对既有 App 零影响）。属"完整工程"路径，不是测试装置。
-     */
-    private boolean dactylEnabled = false;
-    /** 开/关显影器（由宿主读 app-config 的 features.dactylOverlay 后调用）。 */
-    public void setDactylEnabled(boolean on) {
-        this.dactylEnabled = on;
-        if (on) {
-            float d = 3f;
-            try { d = getResources().getDisplayMetrics().density; } catch (Throwable ignored) { }
-            dactylDensity = d > 0 ? d : 3f;
-        }
-        invalidate();
-    }
-    public boolean dactylEnabled() { return dactylEnabled; }
-
-    /** 幽灵拖尾采样点（环形缓冲，历史越久越淡）。 */
-    private static final int DACTYL_TRAIL_MAX = 24;
-    private final float[] dctlTrailX = new float[DACTYL_TRAIL_MAX];
-    private final float[] dctlTrailY = new float[DACTYL_TRAIL_MAX];
-    private int dctlTrailN = 0, dctlTrailHead = 0;
-    /** 最近一次触摸的**官方事件时间戳**与坐标（画光环用；未触摸 = -1）。 */
-    private long dctlLastEventTime = -1;
-    private float dctlLastRawX = 0f, dctlLastRawY = 0f;
-    /** 输入延迟样本（ms）——最近 120 个（约 2 秒@60Hz）。 */
-    private static final int DACTYL_LAT_MAX = 120;
-    private final float[] dctlLatency = new float[DACTYL_LAT_MAX];
-    private int dctlLatencyN = 0, dctlLatencyHead = 0;
-    /** 按下计数（L1：判据核"触即应真的发生了"）。 */
-    private int dactylTouches = 0;
-    /** ★系统实际派发的**指针数**最大值 / 最近值（诊断"多指上限在系统还是在我们"）。 */
-    private int dactylPtrsMax = 0;
-    private int dactylPtrsLast = 0;
-    /** 幽灵拖尾**真的被采样**的指针点数（判据核"轨迹来自官方时间戳采样"）。 */
-    private int dactylTrailSamples = 0;
-    /** 画布像素密度（屏幕坐标叠加用）。 */
-    private float dactylDensity = 3f;
-
-    /** 复位 Dactyl 读数（探针开始时调用）。 */
-    public void resetDactylCounters() {
-        dctlLatencyN = 0; dctlLatencyHead = 0;
-        dctlTrailN = 0; dctlTrailHead = 0;
-        dctlFrameN = 0; dctlFrameHead = 0; dctlLastFrameNs = 0;
-        dactylTouches = 0;
-        dactylTrailSamples = 0;
-        dactylPtrsMax = 0;
-        dactylPtrsLast = 0;
-        fieldMoves = 0;
-        fieldPointerId = -1;
-        dctlPressDownMs = 0L;
-        dctlPressFeedbackMs = -1f;
-        dctlLastEventTime = -1;
-        dctlVisibleLagPx = -1f;
-    }
-
-    /** DOWN/MOVE 时由 `onTouchEvent` 调用：记官方事件时间戳 + 历史采样（幽灵拖尾真源）。 */
-    private void dactylNoteTouch(android.view.MotionEvent ev) {
-        if (!dactylEnabled) return;
-        dactylTouches++;
-        dctlLastEventTime = ev.getEventTime();
-        dctlLastRawX = ev.getX();
-        dctlLastRawY = ev.getY();
-        // ★★多指诊断（用户实测"最多 2 指"）：记**系统实际派发**的指针数——区分"系统只给 2 指" vs "我们只跟了 2 个"。
-        final int pc = ev.getPointerCount();
-        dactylPtrsLast = pc;
-        if (pc > dactylPtrsMax) dactylPtrsMax = pc;
-        // ★历史采样（官方 API）：`getHistoricalX/Y` 是系统在两次派发间攒下的**真实采样点**——
-        //   幽灵轨迹的诚实来源（比"每帧记一次当前"更密、更真）。★**逐指**采样（多指各自成迹）。
-        final int hs = ev.getHistorySize();
-        for (int i = 0; i < hs; i++) {
-            for (int p = 0; p < pc; p++) dctlPushTrail(ev.getHistoricalX(p, i), ev.getHistoricalY(p, i));
-        }
-        for (int p = 0; p < pc; p++) dctlPushTrail(ev.getX(p), ev.getY(p));
-    }
-
-    private void dctlPushTrail(float x, float y) {
-        dctlTrailX[dctlTrailHead] = x;
-        dctlTrailY[dctlTrailHead] = y;
-        dctlTrailHead = (dctlTrailHead + 1) % DACTYL_TRAIL_MAX;
-        if (dctlTrailN < DACTYL_TRAIL_MAX) dctlTrailN++;
-        dactylTrailSamples++;
-    }
-
-    /** 每帧 onDraw 末尾：把"最近触摸的官方时间戳"与"本帧提交时刻"对账 ⇒ 输入延迟样本（ms）。 */
-    private void sampleDactylLatency() {
-        if (dctlLastEventTime < 0) return;
-        // ★用 uptimeMillis（与 MotionEvent.getEventTime 同一时钟域）；禁用墙钟。
-        final long now = android.os.SystemClock.uptimeMillis();
-        final float latMs = (float) (now - dctlLastEventTime);
-        if (latMs < 0f || latMs > 500f) return;   // 非法/异常跳过（不污染分位）
-        dctlLatency[dctlLatencyHead] = latMs;
-        dctlLatencyHead = (dctlLatencyHead + 1) % DACTYL_LAT_MAX;
-        if (dctlLatencyN < DACTYL_LAT_MAX) dctlLatencyN++;
-    }
-
-    /** 延迟分位（最近秩；对齐 `hosts/shared/dactyl/measure-latency.py` 的口径）。 */
-    private float dctlLatencyPercentile(float p) {
-        if (dctlLatencyN == 0) return -1f;
-        final float[] a = new float[dctlLatencyN];
-        for (int i = 0; i < dctlLatencyN; i++) {
-            a[i] = dctlLatency[(dctlLatencyHead - dctlLatencyN + i + DACTYL_LAT_MAX) % DACTYL_LAT_MAX];
-        }
-        java.util.Arrays.sort(a);
-        int idx = Math.round(p * (dctlLatencyN - 1));
-        if (idx < 0) idx = 0;
-        if (idx >= dctlLatencyN) idx = dctlLatencyN - 1;
-        return a[idx];
-    }
-
-    /** Dactyl 叠加绘制（屏幕坐标；内容之后）。帧格 + 幽灵拖尾 + 延迟环 + HUD。 */
-    private void drawDactylOverlay(Canvas canvas) {
-        final float d = dactylDensity;
-        // ① 帧格（vsync 刻度；**丢帧格闪红**——来自真实帧回调 dctlFrameJank，非计时器伪造 §3.3）
-        //   ★缓存为 Bitmap：每帧 2000+ 条 drawLine 是 onDraw 的大头（实测 draw 10ms）——只在尺寸/网格变化时重画。
-        final int step = (int) (40 * d);
-        if (step > 0) {
-            final int gw = getWidth(), gh = getHeight();
-            if (dactylGridBmp == null || dactylGridBmp.getWidth() != gw || dactylGridBmp.getHeight() != gh) {
-                dactylGridBmp = android.graphics.Bitmap.createBitmap(Math.max(1, gw), Math.max(1, gh), android.graphics.Bitmap.Config.ARGB_8888);
-                final android.graphics.Canvas gc = new android.graphics.Canvas(dactylGridBmp);
-                dactylGridPaint.setStrokeWidth(Math.max(1f, 0.5f * d));
-                dactylGridPaint.setColor(0x1416FFDD);
-                for (int gx = 0; gx < gw; gx += step) gc.drawLine(gx, 0, gx, gh, dactylGridPaint);
-                for (int gy = 0; gy < gh; gy += step) gc.drawLine(0, gy, gw, gy, dactylGridPaint);
-            }
-            canvas.drawBitmap(dactylGridBmp, 0f, 0f, null);
-            // 丢帧格闪红（只需画少量红格——jank 帧数 ≤ 窗口大小）
-            dactylGridPaint.setColor(0x55FF4D4D);
-            dactylGridPaint.setStrokeWidth(Math.max(1f, 0.5f * d));
-            int cell = 0;
-            final int cols = Math.max(1, gw / step);
-            for (int cc = 0; cc < dctlFrameN; cc++) {
-                boolean jank = dctlFrameJank[(dctlFrameHead - 1 - cc + 2 * DACTYL_FRAME_MAX) % DACTYL_FRAME_MAX];
-                if (!jank) continue;
-                final int gx = (cc % cols) * step, gy = (cc / cols) * step;
-                canvas.drawLine(gx, gy, gx + step, gy, dactylGridPaint);
-                canvas.drawLine(gx, gy, gx, gy + step, dactylGridPaint);
-            }
-        }
-        // ② 幽灵拖尾（历史越久越淡）
-        for (int i = 0; i < dctlTrailN - 1; i++) {
-            final int i0 = (dctlTrailHead - dctlTrailN + i + DACTYL_TRAIL_MAX) % DACTYL_TRAIL_MAX;
-            final int i1 = (dctlTrailHead - dctlTrailN + i + 1 + DACTYL_TRAIL_MAX) % DACTYL_TRAIL_MAX;
-            dactylTrailPaint.setAlpha((int) (0.9f * (i + 1) / dctlTrailN * 255));
-            dactylTrailPaint.setStrokeWidth(3f * d);
-            canvas.drawLine(dctlTrailX[i0], dctlTrailY[i0], dctlTrailX[i1], dctlTrailY[i1], dactylTrailPaint);
-        }
-        computeDactylVisibleLag();
-        if (dctlLastEventTime >= 0) {
-            // ③ 延迟环（半径 ∝ 实测 p95；无实测 ⇒ 不画环，只画指尖核心 —— 不美化）
-            final float latMs = dctlLatencyPercentile(0.95f);
-            if (latMs >= 0f) {
-                final float frac = Math.min(1f, latMs / 8.33f);   // 0ms→0px，8.33ms@120Hz→满刻度
-                final int col = latMs <= 4f ? 0xFF2ECC71 : (latMs <= 8.33f ? 0xFFF1C40F : 0xFFFF4D4D);
-                dactylRingPaint.setColor(col);
-                dactylRingPaint.setStrokeWidth(3f * d);
-                canvas.drawCircle(dctlLastRawX, dctlLastRawY, Math.max(2f * d, frac * 48f * d), dactylRingPaint);
-            }
-            // ④ 指尖核心（冷白）
-            dactylCorePaint.setColor(0xFFFFFFFF);
-            canvas.drawCircle(dctlLastRawX, dctlLastRawY, 5f * d, dactylCorePaint);
-            // ⑤ visible_lag 指示：跟手落点（浅色小环）——与指尖的像素偏差即 visible_lag_px
-            if (dctlFollowTipX >= 0f) {
-                dactylCorePaint.setColor(0xFF8FE3FF);
-                dactylCorePaint.setStyle(android.graphics.Paint.Style.STROKE);
-                dactylCorePaint.setStrokeWidth(2f * d);
-                canvas.drawCircle(dctlFollowTipX, dctlFollowTipY, 3f * d, dactylCorePaint);
-                dactylCorePaint.setStyle(android.graphics.Paint.Style.FILL);
-            }
-        }
-        // ⑥ HUD（实时仪表盘）
-        drawDactylHud(canvas);
-    }
-
-    private final android.graphics.Paint dactylGridPaint = makeStrokePaint(0x1416FFDD, 1f);
-    private final android.graphics.Paint dactylTrailPaint = makeStrokePaint(0xCCFFFFFF, 3f);
-    private final android.graphics.Paint dactylRingPaint = makeStrokePaint(0xFF2ECC71, 3f);
-    private final android.graphics.Paint dactylCorePaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-    private static android.graphics.Paint makeStrokePaint(int color, float w) {
-        final android.graphics.Paint p = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-        p.setStyle(android.graphics.Paint.Style.STROKE);
-        p.setColor(color);
-        p.setStrokeWidth(w);
-        return p;
-    }
-
-    /** ★Dactyl 探针：官方时间戳采样的延迟分位 + 帧/掉帧 + visible_lag + 按下数（判据核"显影诚实"）。 */
-    public String dactylProbe() {
-        return "{\"enabled\":" + dactylEnabled + ",\"level\":\"" + dactylLevel + "\",\"touches\":" + dactylTouches
-                + ",\"trail_samples\":" + dactylTrailSamples + ",\"latency_n\":" + dctlLatencyN
-                + ",\"p50\":" + dctlFmt(dctlLatencyPercentile(0.50f))
-                + ",\"p95\":" + dctlFmt(dctlLatencyPercentile(0.95f))
-                + ",\"p99\":" + dctlFmt(dctlLatencyPercentile(0.99f))
-                + ",\"frame_n\":" + dctlFrameN
-                + ",\"jank_rate\":" + dctlFmt(dctlJankRate() < 0 ? -1f : dctlJankRate() * 100f)
-                + ",\"visible_lag_px\":" + dctlFmt(dctlVisibleLagPx)
-                + ",\"ptrs_last\":" + dactylPtrsLast + ",\"ptrs_max\":" + dactylPtrsMax
-                + ",\"follow_n\":" + followPtrs.size()
-                + ",\"field_moves\":" + fieldMoves + ",\"field_on\":" + (fieldSpec != null)
-                + ",\"field_ms_last\":" + dctlFmt(fieldMsLast) + ",\"field_ms_max\":" + dctlFmt(fieldMsMax)
-                + ",\"press_feedback_ms\":" + dctlFmt(dctlPressFeedbackMs) + "}";
-    }
-    private static String dctlFmt(float v) { return v < 0 ? "-1" : String.format(java.util.Locale.US, "%.2f", v); }
-
-    /* ── Dactyl v2：HUD + 帧格（vsync）+ visible_lag + 度量导出（决策 #780 · 15 §6）── */
-
-    /** 最近帧间隔（ms）与"该帧是否掉帧"（interval > 1.5×预算）——环形。 */
-    private static final int DACTYL_FRAME_MAX = 60;
-    private final float[] dctlFrameMs = new float[DACTYL_FRAME_MAX];
-    private final boolean[] dctlFrameJank = new boolean[DACTYL_FRAME_MAX];
-    private int dctlFrameN = 0, dctlFrameHead = 0;
-    private long dctlLastFrameNs = 0;
-    /** 本帧 vsync 预算（ms）——按显示器刷新率（120Hz⇒8.33）估，缺省 8.33。 */
-    private float dctlVsyncBudgetMs = 8.33f;
-    /** 跟手节点的屏幕落点（visible_lag 用；由 updateDactylFollowTarget 写）。 */
-    private int dctlFollowNode = -1;
-    private float dctlFollowTipX = -1f, dctlFollowTipY = -1f;
-    /** 最近一次 visible_lag_px（幽灵拖尾最新点 − 跟手尖峰顶端的像素偏差）。 */
-    private float dctlVisibleLagPx = -1f;
-    /** HUD 文本画笔。 */
-    private final android.graphics.Paint dactylHudPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-    private final android.graphics.Paint dactylHudBg = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-    private float dactylHudTextSize = 0f;
-    /** 当前关卡名（HUD 显示 + 度量；由宿主探针设置 —— 判据/切换用）。 */
-    private String dactylLevel = "L2";
-
-    public void setDactylLevel(String level) { this.dactylLevel = level == null ? "" : level; }
-
-    /** 由宿主在跟手开始时调用：记跟手节点 id（visible_lag 需读它的绘制落点）。 */
-    public void setDactylFollowNode(int nodeId) { dctlFollowNode = nodeId; }
-
-    /** 每帧 onDraw 早段调用：记帧间隔 + 掉帧标记（真实帧回调，非计时器伪造——§3.3 反作弊）。 */
-    private void tickDactylFrame() {
-        final long now = System.nanoTime();
-        if (dctlLastFrameNs != 0) {
-            final float dtMs = (now - dctlLastFrameNs) / 1e6f;
-            // ★只统计**活跃期**帧（间隔 ≤ 200ms）——空闲静置的大间隔不是"掉帧"（是没帧）：
-            //   否则 HUD 会恒显 100%（本仓实测：静态页只在输入时 invalidate ⇒ 间隔上千 ms 全被误判为 jank）。
-            if (dtMs <= 200f) {
-                dctlFrameMs[dctlFrameHead] = dtMs;
-                dctlFrameJank[dctlFrameHead] = dtMs > dctlVsyncBudgetMs * 1.5f;
-                dctlFrameHead = (dctlFrameHead + 1) % DACTYL_FRAME_MAX;
-                if (dctlFrameN < DACTYL_FRAME_MAX) dctlFrameN++;
-            }
-        }
-        dctlLastFrameNs = now;
-    }
-
-    /** 掉帧率（近窗口）——jank 帧占比（0..1）。 */
-    private float dctlJankRate() {
-        if (dctlFrameN == 0) return -1f;
-        int j = 0;
-        for (int i = 0; i < dctlFrameN; i++) if (dctlFrameJank[i]) j++;
-        return (float) j / dctlFrameN;
-    }
-
-    /**
-     * 计算 `visible_lag_px`（§3.2）：**跟手节点绘制落点** 与 **手指当前位置** 的像素偏差。
-     * 尖峰（跟手节点）由内核按手指位移驱动 ⇒ 天然带 ≤1 帧滞后；偏差 ∝ 手指线速度 × 滞后时间。
-     * ★两侧都取自**宿主真源**（节点绘制落点 + 官方事件坐标），非美化常数。
-     */
-    private void computeDactylVisibleLag() {
-        if (dctlFollowNode < 0 && !followSpecs.isEmpty()) {
-            // 未显式指定 ⇒ 取第一个跟手节点（Dactyl L2 单跟手锚点）
-            dctlFollowNode = followSpecs.keySet().iterator().next();
-        }
-        // ★只在**跟手拖拽进行中**计算——否则（静止/普通点按）跟手节点不动，"落点 − 手指"会把
-        //   页面距离算进去（实测：点 tab 后报 visible_lag 1886px 的假值）。
-        //   ★跟手进行中 = 指针表非空（S3-T3 的 `followPtrs`）且该节点在表内。
-        if (followPtrs.isEmpty() || dctlFollowNode < 0 || dctlLastEventTime < 0) { dctlVisibleLagPx = -1f; return; }
-        boolean nodeTracked = false;
-        for (float[] st : followPtrs.values()) { if ((int) st[0] == dctlFollowNode) { nodeTracked = true; break; } }
-        if (!nodeTracked) { dctlVisibleLagPx = -1f; return; }
-        final int ci = indexOfNode(dctlFollowNode);
-        if (ci < 0 || cmds == null || ci >= cmds.size()) { dctlVisibleLagPx = -1f; return; }
-        final Cmd c = cmds.get(ci);
-        // 内容坐标（含滚动平移）
-        float bx = c.x + c.w / 2f;
-        float by = c.y + c.h / 2f;
-        final float[] tx = animTx.containsKey(dctlFollowNode) ? animTx.get(dctlFollowNode) : nodeStaticTx.get(dctlFollowNode);
-        if (tx != null) { bx += tx[0]; by += tx[1]; }
-        dctlFollowTipX = bx - scrollX;
-        dctlFollowTipY = by - scrollY;
-        if (dctlTrailN > 0) {
-            final int last = (dctlTrailHead - 1 + DACTYL_TRAIL_MAX) % DACTYL_TRAIL_MAX;
-            final float dx = dctlLastRawX - dctlFollowTipX;
-            final float dy = dctlLastRawY - dctlFollowTipY;
-            dctlVisibleLagPx = (float) Math.hypot(dx, dy);
-        }
-    }
-
-    /** Dactyl HUD（§7.4）：实时仪表盘——延迟分位 / 掉帧 / visible_lag / 关卡。 */
-    private void drawDactylHud(Canvas canvas) {
-        if (dactylHudTextSize == 0f) dactylHudTextSize = 11f * dactylDensity;
-        dactylHudPaint.setTextSize(dactylHudTextSize);
-        dactylHudPaint.setColor(0xFFB8C4D8);
-        final float lineH = dactylHudTextSize * 1.35f;
-        final float pad = 8f * dactylDensity;
-        // ★HUD 顶部避让系统状态栏（与页面同源：`--pf-inset-top` = 状态栏 ∪ 挖孔）；左侧避让挖孔。
-        final float safeTop = dactylInsetHudTop();
-        final float safeLeft = dactylInsetHudLeft();
-        final String p95 = dctlFmt(dctlLatencyPercentile(0.95f));
-        final float jank = dctlJankRate();
-        final String jankStr = jank < 0 ? "--" : String.format(java.util.Locale.US, "%.1f%%", jank * 100f);
-        final String lag = dctlVisibleLagPx < 0 ? "--" : String.format(java.util.Locale.US, "%.0fpx", dctlVisibleLagPx);
-        final String[] lines = new String[] {
-            "Dactyl HUD · " + dactylLevel,
-            "lat p95 " + p95 + "ms" + (dctlLatencyPercentile(0.95f) > dctylBudgetWant() ? "  (OVER 1 frame)" : ""),
-            "jank " + jankStr + " · visible_lag " + lag,
-            "ptrs " + dactylPtrsLast + " · max " + dactylPtrsMax + " · follow " + followPtrs.size(),
-            "field last " + dctlFmt(fieldMsLast) + "ms · max " + dctlFmt(fieldMsMax) + "ms",
-            "draw " + dctlFmt((float) (lastFrameMs)) + "ms · avg " + dctlFmt((float) (frameMsAverage())) + "ms · batch " + fieldBatchIds.size(),
-        };
-        // 背板
-        dactylHudBg.setColor(0xCC0A0C10);
-        float maxW = 0f;
-        for (String s : lines) maxW = Math.max(maxW, dactylHudPaint.measureText(s));
-        // ★HUD 置于**左下**（§7.4：底部仪表盘）——避开页面顶部标题；且视图底沿已抬到原生 tabBar 之上
-        //   （宿主 setContentBottomReserve）⇒ 不会压住底栏。
-        final float hudH = lineH * lines.length + pad * 2;
-        final float x0 = safeLeft + pad;
-        final float y0 = Math.max(safeTop + pad, getHeight() - hudH - pad);
-        canvas.drawRoundRect(x0, y0, x0 + maxW + pad, y0 + hudH, 8f * dactylDensity, 8f * dactylDensity, dactylHudBg);
-        for (int i = 0; i < lines.length; i++) {
-            dactylHudPaint.setColor(i == 0 ? 0xFF39D0FF : 0xFFB8C4D8);
-            canvas.drawText(lines[i], x0 + pad, y0 + pad + lineH * i + lineH * 0.7f, dactylHudPaint);
-        }
-    }
-    private float dctylBudgetWant() { return dctlVsyncBudgetMs; }
-
-    /** HUD 顶部避让量（状态栏 ∪ 挖孔，px）——读 WindowInsets，缺省 0（不美化）。 */
-    private float dactylInsetHudTop() {
-        try {
-            android.view.WindowInsets wi = getRootWindowInsets();
-            if (wi == null) return 0f;
-            int sb = wi.getInsets(android.view.WindowInsets.Type.statusBars()).top;
-            int cut = 0;
-            if (android.os.Build.VERSION.SDK_INT >= 28) {
-                android.view.DisplayCutout dc = wi.getDisplayCutout();
-                if (dc != null) cut = dc.getSafeInsetTop();
-            }
-            return Math.max(sb, cut);
-        } catch (Throwable ignored) { return 0f; }
-    }
-    /** HUD 左侧避让量（横屏挖孔，px）。 */
-    private float dactylInsetHudLeft() {
-        try {
-            android.view.WindowInsets wi = getRootWindowInsets();
-            if (wi == null || android.os.Build.VERSION.SDK_INT < 28) return 0f;
-            android.view.DisplayCutout dc = wi.getDisplayCutout();
-            return dc != null ? dc.getSafeInsetLeft() : 0f;
-        } catch (Throwable ignored) { return 0f; }
-    }
-
     /**
      * 按**屏幕/视图坐标**做命中派发（与 `onTouchEvent` 同一条代码路径）。
      *
@@ -3179,17 +2665,7 @@ public class ProteusHostView extends ViewGroup {
     @Override
     protected void onDraw(Canvas canvas) {
         onDrawCount++;
-        long __dt0 = System.nanoTime();
-        // ★Dactyl：帧间隔记账（vsync 帧格/掉帧率的真源——真实帧回调，非计时器伪造）
-        if (dactylEnabled) tickDactylFrame();
-        // ★L2 场跟手：**每帧一次**（合并 MOVE；见 flushFieldFollow）——在录制本帧之前刷新
-        flushFieldFollow();
-        // ★§4.2 press_feedback_ms：本帧反映按下态 = DOWN 之后的第一帧 ⇒ 对账
-        if (dctlPressDownMs > 0L) {
-            dctlPressFeedbackMs = (float) (android.os.SystemClock.uptimeMillis() - dctlPressDownMs);
-            dctlPressDownMs = 0L;
-        }
-        // ★★★惯性**自驱动**（2026-10-09 · 决策 #685 —— 用户「安卓滑了还是一样」的第二处根因）：
+        long __dt0 = System.nanoTime();        // ★★★惯性**自驱动**（2026-10-09 · 决策 #685 —— 用户「安卓滑了还是一样」的第二处根因）：
         //   此前 `stepInertia` **只在 `LightsHost`（dev 长卷场景）的 Choreographer 帧循环里调**
         //   ⇒ superapp（真实应用）路径的 fling **起动了却没人推进** ⇒ 松手仍 dead-stop。
         //   ⇒ 由视图**自己的绘制循环**驱动：fling 活跃时每帧推进（applyScroll* 会 invalidate）+
@@ -3244,10 +2720,6 @@ public class ProteusHostView extends ViewGroup {
             devHighlightPaint.setAntiAlias(true);
             canvas.drawRect(devHighlight, devHighlightPaint);
         }
-        // ★★★Dactyl 延迟显影叠加层（决策 #780 · 15 §3）：内容之后画在**屏幕坐标**（不随滚动平移）。
-        if (dactylEnabled) { drawDactylOverlay(canvas); sampleDactylLatency(); }
-        // ★Dactyl 涟漪（§4.2）：扩散中 ⇒ 每帧重绘（自持帧源，独立于惯性/fling）
-        if (dactylEnabled && drawDactylRipple(canvas)) postInvalidateOnAnimation();
         // ★DevTools 逐帧耗时（决策 #676）：整帧 onDraw 耗时（含 drawCmds/显示列表回放）
         long __dt = System.nanoTime() - __dt0;
         lastFrameMs = __dt / 1e6;
@@ -3358,31 +2830,9 @@ public class ProteusHostView extends ViewGroup {
         // ★★★父 transform 级联用：本帧 id → Cmd（取祖先的盒作 transform-origin 基准）
         final java.util.Map<Integer, Cmd> cmdById = new java.util.HashMap<>();
         if (ids != null) { for (int k = 0; k < ids.length && k < list.size(); k++) cmdById.put(ids[k], list.get(k)); }
-        // ★L2 批量针林：轻量逐针 drawRect（无 Path/save/matrix——见循环内注释）
         for (int i = 0; i < list.size(); i++) {
             if (skip != null && skip.contains(i)) continue;
             final Cmd c = list.get(i);
-            // ★L2 批量：场容器子节点（针）——**轻量逐针 drawRect**（只算缩放/旋转后的矩形，无 save/matrix/Path）。
-            //   ★为何不用一条 Path：Path（even-odd 纹理 + 4000 子路径）在硬件加速下填充常失效（实测拖拽期不出针）；
-            //     逐针 drawRect 的固定开销小，且**每次必然绘制**（不会因 Path 纹理问题整体消失）。
-            if (!fieldBatchIds.isEmpty() && ids != null && i < ids.length && ids[i] >= 0 && fieldBatchIds.contains(ids[i])) {
-                float bs = 1f, br = 0f;
-                final float[] bt = animTx.get(ids[i]);
-                if (bt != null && bt.length >= 4) { bs = bt[2]; br = bt[3]; }
-                final float bcx = c.x + c.w * 0.5f, bcy = c.y + c.h * 0.5f;
-                final float hw = c.w * 0.5f * bs, hh = c.h * 0.5f * bs;
-                if (br == 0f) {
-                    canvas.drawRect(bcx - hw, bcy - hh, bcx + hw, bcy + hh, fieldBatchPaint);
-                } else {
-                    final double rad = Math.toRadians(br);
-                    final float cosr = (float) Math.cos(rad), sinr = (float) Math.sin(rad);
-                    canvas.save();
-                    canvas.rotate(br, bcx, bcy);
-                    canvas.drawRect(bcx - hw, bcy - hh, bcx + hw, bcy + hh, fieldBatchPaint);
-                    canvas.restore();
-                }
-                continue;
-            }
             // ★★逐节点变换（内核动画的**绘制落点**）：按并行表查该指令的节点变换
             //   变换语义与 iOS `applyTransform` **同构**：平移 → 以**元素中心**为锚旋转/缩放。
             float[] tf = (ids != null && i < ids.length && ids[i] >= 0) ? animTx.get(ids[i]) : null;
@@ -3415,12 +2865,8 @@ public class ProteusHostView extends ViewGroup {
                 }
             }
             final boolean hasAncestorTx = ancIds != null;
-            // ★按下态（`:active` 折出的 pressTransform.scale）——凹陷：进入同一 save/transform 块
-            final int __nodeId = (ids != null && i < ids.length) ? ids[i] : -1;
-            final PressStyle __press = (__nodeId >= 0 && __nodeId == pressedNodeId) ? pressStyles.get(__nodeId) : null;
-            final boolean pressScale = __press != null && __press.hasScale();
             final boolean xf = (tf != null && (tfTx != 0f || tfTy != 0f || tf[2] != 1f || tf[3] != 0f || has3d))
-                    || pressScale || hasClip || ovfClip != null || hasAncestorTx;
+                    || hasClip || ovfClip != null || hasAncestorTx;
             // ★★★批 A：fixed 节点反向补偿内容滚动（净位移 0 ⇒ 钉在视口；见 fixedNodes 注释）
             //   ★用户实测修复（2026-10-08）：同 sticky——判据改为「本节点属某 fixed 锚点的子树」，
             //     否则徽标钉住了、**徽标上的文字**（子节点）留在原地（与"蓝条没文字"同源）。
@@ -3475,8 +2921,6 @@ public class ProteusHostView extends ViewGroup {
                 float cx = c.x + c.w * ox, cy = c.y + c.h * oy;
                 if (tf != null && tf[3] != 0f) canvas.rotate(tf[3], cx, cy);
                 if (tf != null && tf[2] != 1f) canvas.scale(tf[2], tf[2], cx, cy);
-                // ★按下态凹陷（`:active{transform:scale()}` 折出 pressTransform.sx/sy）——同原点，锚元素中心
-                if (pressScale) canvas.scale(__press.sx, __press.sy, cx, cy);
                 // ★★倾斜（skew v1）：`canvas.skew(tanSkewX, tanSkewY)` —— 与 iOS 的 shear 矩阵同式。
                 //   ★花括号包裹（本仓纪律：变量声明必须自带块——否则作用域会漏到外层）
                 if (tfSkewX != 0f || tfSkewY != 0f) {
@@ -3545,21 +2989,13 @@ public class ProteusHostView extends ViewGroup {
             // ★★颜色覆盖（2026-10-01）：该节点参与颜色动画时用内核值，否则用静态 `Cmd.color`
             //   （表里没有 ⇒ 零额外开销；与 `animTx` 的查表同一形态）
             final Integer animBg = (ids != null && i < ids.length && ids[i] >= 0) ? animColor.get(ids[i]) : null;
-            // ★S1.1：按下态背景色优先（DOWN 应用 / UP 还原；§4.2 磁块按下反馈）
-            final Integer pressBg = (__press != null && __press.bg != null) ? __press.bg : null;
+            // ★S1.1：按下态背景色优先（DOWN 应用 / UP 还原；下拉刷新式即时反馈）
+            final Integer pressBg = (pressedNodeId >= 0 && ids != null && i < ids.length && ids[i] == pressedNodeId)
+                    ? pressBgMap.get(pressedNodeId) : null;
             bgPaint.setColor(pressBg != null ? pressBg : (animBg != null ? animBg : c.color));
             if (op < 1f) {
                 int base = pressBg != null ? pressBg : (animBg != null ? animBg : c.color);
                 bgPaint.setAlpha(Math.max(0, Math.min(255, (int) (Color.alpha(base) * op))));
-            }
-            // ★S1.1：按下态"边缘发光"（`:active{box-shadow}` 折出 pressBoxShadow）——在本块背景外画辉光
-            if (__press != null && __press.glowColor != null && __press.glowRadius > 0f) {
-                dactylGlowPaint.setColor(__press.glowColor);
-                dactylGlowPaint.setAlpha(160);
-                dactylGlowPaint.setShadowLayer(__press.glowRadius, 0f, 0f, __press.glowColor);
-                canvas.drawRoundRect(new android.graphics.RectF(c.x, c.y, c.x + c.w, c.y + c.h),
-                        c.radius, c.radius, dactylGlowPaint);
-                dactylGlowPaint.clearShadowLayer();
             }
             // ★★渐变填充（v1 · 2026-10-01）：有规格 ⇒ 给 bgPaint 挂 shader（**矩形局部坐标**——
             //   shader 的坐标是画布绝对坐标，故按 cmd 的 x/y/w/h 建）。
