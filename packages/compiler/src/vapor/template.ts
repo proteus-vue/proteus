@@ -2120,6 +2120,78 @@ function interpretFollowSpec(src: string): {
   }
 }
 
+/**
+ * ★★★**数据泵规格解释**（通用原语 `v-pump`）：把 `v-pump="{ src:'p0', hz:50, gen:{ kind:'int', min:1, max:9999 } }"`
+ *   的**静态对象字面量**解释成一条「运行期数据泵」——页面声明一个**具名数据源** `src`，由**宿主**按频率 `hz`
+ *   周期性（内建生成器）产新值 ⇒ 走既有 slot-runtime「数据→槽位→指令」→ 内核。
+ *
+ * 【为什么是"数据源泵"而非"直接写字段"】写数据源 ⇒ 页面对它的**普通绑定**（`{{p0}}` / `:style` / `:class` /
+ *   `v-animate`）全部**天然联动**（文本/样式/类/动画一次覆盖）；且复用既有 slot-runtime，无新渲染通路。
+ *
+ * 【支持键（闭集）】`src`（数据源名，须合法标识符）· `hz`（频率，1..240）·
+ *   `gen`（内建生成器）：`{ kind:'int', min, max }` | `{ kind:'sin', min, max, period }` | `{ kind:'float', min, max }`。
+ *   非静态形态（变量/字符串）⇒ **诊断**（`VAPOR_PUMP_SHAPE`，all-or-nothing）。
+ */
+function interpretPumpSpec(src: string): {
+  src?: string
+  hz?: number
+  genKind?: string
+  genMin?: number
+  genMax?: number
+  genPeriod?: number
+  diag: string[]
+  hint?: string
+} {
+  const diag: string[] = []
+  const hint = "v-pump 支持 src: '名字' · hz: <1..240> · gen: { kind:'int'|'float'|'sin', min, max, period? }（均为静态字面量）"
+  if (!src) {
+    diag.push('缺对象字面量（如 v-pump="{ src: \'p0\', hz: 50, gen: { kind: \'int\', min: 1, max: 9 } }"）')
+    return { diag, hint }
+  }
+  const parsed = parseStyleObject(src)
+  if (!parsed) {
+    diag.push('值须为**静态对象字面量**——变量/字符串形态无法静态建泵规格')
+    return { diag, hint }
+  }
+  const KNOWN = new Set(['src', 'hz', 'gen'])
+  let name: string | undefined
+  let hz: number | undefined
+  for (const e of parsed.entries) {
+    if (e.key === 'src') {
+      if (typeof e.constValue === 'string' && /^[A-Za-z_$][\w$]*$/.test(e.constValue)) name = e.constValue
+      else diag.push('src 须为合法标识符字符串（数据源名）')
+    } else if (e.key === 'hz') {
+      if (typeof e.constValue === 'number' && Number.isFinite(e.constValue) && e.constValue >= 1 && e.constValue <= 240) hz = Math.round(e.constValue)
+      else diag.push('hz 须为 1..240 的数值常量')
+    } else if (e.key !== 'gen' && !KNOWN.has(e.key)) {
+      diag.push(`未知键 "${e.key}"（可用 src / hz / gen）`)
+    }
+  }
+  // 嵌套 `gen:{…}`：源码受限提取（复用 follow 范式，避免为单键引 JSON5 嵌套求值）
+  const genK = /\bgen\s*:\s*\{[^{}]*?kind\s*:\s*['"](int|float|sin)['"]/.exec(src)
+  const nums = (re: RegExp): number[] => { const m = re.exec(src); return m ? m.slice(1).map(Number) : [] }
+  const minmax = nums(/\bgen\s*:\s*\{[^{}]*?min\s*:\s*(-?[\d.]+)[^{}]*?max\s*:\s*(-?[\d.]+)/)
+  const period = nums(/\bgen\s*:\s*\{[^{}]*?period\s*:\s*([\d.]+)/)
+  if (/\bgen\s*:/.test(src) && !genK) diag.push('gen 须为 `{ kind: \'int\'|\'float\'|\'sin\', min, max }` 静态字面量（kind 须为三者之一）')
+  if (genK && minmax.length !== 2) diag.push('gen 须含数值 `min` 与 `max`')
+  if (minmax.length === 2 && minmax[0]! > minmax[1]!) diag.push(`gen 区间非法：[${minmax[0]}, ${minmax[1]}]（min 应 ≤ max）`)
+  if (genK && genK[1] === 'sin' && period.length !== 1) diag.push("sin 生成器须含 `period`（毫秒）")
+  if (diag.length > 0) return { diag, hint }   // all-or-nothing
+  if (name === undefined) { diag.push('缺 `src`（数据源名）'); return { diag, hint } }
+  if (hz === undefined) hz = 30   // 缺省频率 30Hz
+  if (!genK) { diag.push('缺 `gen`（生成器）'); return { diag, hint } }
+  return {
+    src: name,
+    hz,
+    genKind: genK[1]!,
+    genMin: minmax[0]!,
+    genMax: minmax[1]!,
+    ...(period.length === 1 ? { genPeriod: period[0]! } : {}),
+    diag,
+    hint,
+  }
+}
+
 export function resolveClassStyles(
   rules: ClassStyleRule[],
   ancestors: StyleMatchNode[],
@@ -3334,6 +3406,8 @@ export function buildLayoutTemplate(
   const nodes: LayoutNode[] = []
   const lists: ListTemplate[] = []
   const roots: number[] = []
+  /** ★★★`v-pump` 声明的**数据泵表**（页面级；`src` 去重——同名泵只保留首条，重复 ⇒ 诊断）。 */
+  const pumps: Array<{ src: string; hz: number; gen: { kind: string; min: number; max: number; period?: number } }> = []
   const diag = (message: string, hint?: string, code = 'VAPOR_TEMPLATE_UNSUPPORTED'): void => {
     diagnostics.push({ severity: 'warn', code, message, hint })
   }
@@ -3741,6 +3815,25 @@ export function buildLayoutTemplate(
           }
           for (const m of fo.diag) diag(`${tag}(id=${id}) v-follow：${m}`, fo.hint, 'VAPOR_FOLLOW_SHAPE')
         }
+        // ★★★**数据泵**（通用原语 `v-pump`）：声明一个**具名数据源**按频率 `hz` 运行期跳变（宿主内建生成器）。
+        //   折成**页面级泵表**（非节点字段——它是"源"，不是某个节点的样式）；页面对该源的普通绑定
+        //   （`{{src}}` / `:style` / `:class` / `v-animate`）由既有 slot-runtime 天然联动。
+        if (p.type === 7 && p.name === 'pump') {
+          const pumpSrc = (p.exp as { content?: string } | undefined)?.content?.trim() ?? ''
+          const po = interpretPumpSpec(pumpSrc)
+          if (po.src !== undefined && po.hz !== undefined && po.genKind !== undefined) {
+            if (pumps.some((x) => x.src === po.src)) {
+              diag(`${tag}(id=${id}) v-pump：数据源 \`${po.src}\` 重复声明（同名泵只保留首条）`, undefined, 'VAPOR_PUMP_DUP_SRC')
+            } else {
+              pumps.push({
+                src: po.src,
+                hz: po.hz,
+                gen: { kind: po.genKind, min: po.genMin!, max: po.genMax!, ...(po.genPeriod !== undefined ? { period: po.genPeriod } : {}) },
+              })
+            }
+          }
+          for (const m of po.diag) diag(`${tag}(id=${id}) v-pump：${m}`, po.hint, 'VAPOR_PUMP_SHAPE')
+        }
         // ★P2-5：v-memo 的**形态诊断**（只支持数组字面量——运行时按"逐项比较"建依赖表，
         //   动态形态（`v-memo="deps"` / 变量数组）无法静态建表 ⇒ 明确诊断，不静默按"总是更新"跑）
         if (p.type === 7 && p.name === 'memo') {
@@ -3779,7 +3872,7 @@ export function buildLayoutTemplate(
         //   指令收集成 `node.directives`；表外的走精确诊断（端上不执行 script ⇒ 指令体不会运行）。
         //   【为什么注册表在 slot-runtime】三端契约：编译器据此产诊断、桥据此执行（"一处实现"）。
         //   ★行内（v-for 内）指令本批不支持（需行作用域求值）——编译期诊断，不静默。
-        const KNOWN_DIRECTIVES = ['bind', 'on', 'for', 'if', 'else-if', 'else', 'show', 'model', 'slot', 'text', 'html', 'memo', 'once', 'cloak', 'pre', 'follow']
+        const KNOWN_DIRECTIVES = ['bind', 'on', 'for', 'if', 'else-if', 'else', 'show', 'model', 'slot', 'text', 'html', 'memo', 'once', 'cloak', 'pre', 'follow', 'pump']
         if (p.type === 7 && typeof p.name === 'string'
             && UNSUPPORTED_DIRECTIVES[p.name] === undefined
             && !KNOWN_DIRECTIVES.includes(p.name)) {
@@ -4251,5 +4344,11 @@ export function buildLayoutTemplate(
   }
   const ok = !diagnostics.some((d) => d.severity === 'error')
   // ★产物本身不带诊断（干净形状便于跨端序列化）；诊断放在包装层
-  return { template: { nodes, lists, roots, ok }, diagnostics, ok, dynamicClassRules: projectDynamicClassRules(classRules) }
+  //   ★`pumps` 仅在有声明时带上（可选字段 ⇒ 既有产物逐字节不变）。
+  return {
+    template: { nodes, lists, roots, ok, ...(pumps.length > 0 ? { pumps } : {}) },
+    diagnostics,
+    ok,
+    dynamicClassRules: projectDynamicClassRules(classRules),
+  }
 }

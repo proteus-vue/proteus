@@ -77,6 +77,12 @@ export interface VaporBuildOptions {
   compat?: import('./sources').VueCompatDeps
   /** ★批次 9：设计令牌表（`--name`→值）——SFC 内 `var()` 编译期折叠（与屏内容路径同源） */
   tokens?: Record<string, string>
+  /**
+   * ★★★**`v-pump` 声明的运行期数据源名**（通用原语，本批）：这些名字**不在 `<script setup>` 里**
+   *   （由 `v-pump` 声明），但页面对它们的绑定（`{{p0}}`/`:style`）必须建**订阅槽位**（源=泵）。
+   *   传入即把它们并入源扫描结果（`kind:'pump'`，与 ref 同为可订阅源）。缺省省略 ⇒ 既有行为不变。
+   */
+  pumpSources?: string[]
 }
 
 /**
@@ -156,6 +162,17 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
   }
 
   const bindings = collectTemplateBindings(source, filename, opts.compat)
+  // ★★★`v-pump` 运行期数据源并入（通用原语）：泵名不在 script 里 ⇒ 手动注入源扫描结果。
+  //   仅对**尚未声明**的名字注入（不覆盖同名 ref）；sourceId 续增 ⇒ 产物可复现。
+  if (opts.pumpSources && opts.pumpSources.length > 0) {
+    let nextId = srcScan.sources.reduce((m, s) => Math.max(m, s.sourceId + 1), 0)
+    for (const nm of opts.pumpSources) {
+      if (!/^[A-Za-z_$][\w$]*$/.test(nm) || srcScan.byName.has(nm)) continue
+      const src = { sourceId: nextId++, name: nm, kind: 'pump' as const }
+      srcScan.sources.push(src)
+      srcScan.byName.set(nm, src)
+    }
+  }
   // ★批次 30（对齐 Web · 削减胶水）：动态 `:class`——规则表（下面块内捕获）+ 是否真的用到
   let tplDynamicClassRules: import('./template').DynamicClassRule[] | undefined
   const hasDynamicClass = bindings.some((b) => b.propKey === 'paint.class')

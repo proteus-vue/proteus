@@ -34,6 +34,11 @@ export interface ScreenRuntimeArtifact {
   /** 初始数据快照（构建期从 SFC script 抽 `ref(<字面量>)`——端上不执行 script） */
   data: Record<string, unknown>
   /**
+   * ★★★**数据泵表**（通用原语 `v-pump`，本批）：该屏声明的运行期数据源（宿主按 `hz` 周期性产新值）。
+   *   缺省省略 ⇒ 既有产物不变。
+   */
+  pumps?: Array<{ src: string; hz: number; gen: { kind: string; min: number; max: number; period?: number } }>
+  /**
    * ★★**源文件路径**（决策 #713 · 仅供 dev）：该屏对应的 `.vue`（相对项目根）——
    *   节点 `loc` 只带行列、不带文件，面板据此拼出 `file:line:col` 并跳转源文件。缺省省略（release 无）。
    */
@@ -110,7 +115,13 @@ export async function buildAppRuntimeContent(
     const tplRes = buildLayoutTemplate(sfcSrc, filename, undefined, tokens, statics, globalCss, dev)
     if (!tplRes.ok) { diagnostics.push(`${r.name}: 模板编译失败`); skipped++; continue }
 
-    const subRes = buildVaporSubscriptions(sfcSrc, filename)
+    // ★★★`v-pump` 声明的运行期数据源名（通用原语）：不在 script 里 ⇒ 作为 `pumpSources` 注入订阅表，
+    //   使页面对泵源的绑定（`{{p0}}`/`:style`）建出**订阅槽位**（源=泵）。
+    const pumpList = (tplRes.template as { pumps?: Array<{ src: string; gen: { min: number } }> }).pumps ?? []
+    const pumpNames = pumpList.map((p) => p.src)
+    // ★泵源首帧初值：取 gen.min（有意义的起点；否则文本首帧显示 undefined）——进 `data`（源初值）。
+    for (const p of pumpList) if (statics[p.src] === undefined) statics[p.src] = p.gen.min
+    const subRes = buildVaporSubscriptions(sfcSrc, filename, pumpNames.length > 0 ? { pumpSources: pumpNames } : {})
     const evRes = compileEvents(sfcSrc)
 
     // ★★★批 A④（2026-10-08 · 决策 #658）：**z-index 层叠序重排**（运行期通路——与静态通路同源同实现）。
@@ -145,6 +156,10 @@ export async function buildAppRuntimeContent(
       ...(evRes.lifecycle ? { lifecycle: evRes.lifecycle } : {}),
       ...(evRes.scriptLifecycle ? { scriptLifecycle: evRes.scriptLifecycle } : {}),
       data: statics,
+      // ★★★数据泵表（`v-pump`）：随屏产物带出（宿主周期驱动）；无声明 ⇒ 省略（既有产物不变）。
+      ...((tplRes.template as { pumps?: ScreenRuntimeArtifact['pumps'] }).pumps
+        ? { pumps: (tplRes.template as { pumps: ScreenRuntimeArtifact['pumps'] }).pumps }
+        : {}),
       // ★dev：屏源文件（相对项目根）——面板据节点 loc 拼 `file:line:col`
       ...(dev ? { file: filename } : {}),
     }

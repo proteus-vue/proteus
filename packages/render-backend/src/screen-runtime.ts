@@ -61,6 +61,11 @@ export interface ScreenRuntimeArtifact {
    */
   scriptLifecycle?: Array<{ phase: 'mounted' | 'unmounted'; handler: string }>
   /**
+   * ★★★**数据泵表**（通用原语 `v-pump`，本批）：宿主按 `hz` 周期性用内建 `gen` 生成器产新值 ⇒ 写 `data[src]`
+   *   （页面对该源的绑定经既有 slot-runtime 联动）。缺省省略 ⇒ 既有产物不变。
+   */
+  pumps?: Array<{ src: string; hz: number; gen: { kind: string; min: number; max: number; period?: number } }>
+  /**
    * ★★**源文件路径**（决策 #713 · 仅供 dev）：该屏对应的 `.vue`（相对项目根）——缺省省略（release 无）。
    *   ★CLI 侧 `app-runtime-content.ts` 的 `ScreenRuntimeArtifact` 也带它；本接口"同形"必须一并带上，
    *     否则消费方（superapp-runtime / dev 面板 / 测试）读 `art.file` 报 `Property 'file' does not exist`。
@@ -161,6 +166,22 @@ export interface ScreenRuntimeInstance {
   refresh(): void
   /** 当前数据快照（诊断/判据读） */
   data(): Record<string, unknown>
+  /**
+   * ★★★**写入数据源**（通用原语配套，本批）：程序化改一个数据源的值 ⇒ 走既有 slot-runtime 增量
+   *   （`writeSlotsOfSource` → `setSlot` → `flush` → `applyOps`），**不整树重建**（O(源级)）。
+   *   ★供数据泵（`pumpTick`）与宿主程序化更新用；页面对该源的普通绑定（文本/样式/类/动画）自动联动。
+   */
+  writeSource(name: string, value: unknown): void
+  /**
+   * ★★★**数据泵推进一帧**（通用原语 `v-pump`，本批）：宿主按帧调用，传入真实帧间隔 `dtMs`；
+   *   本方法按各泵 `hz` **累加抽帧**判到期 ⇒ 用**内建生成器**产新值 ⇒ `writeSource`。返回本次实际触发的源数。
+   *   ★无泵声明 ⇒ 恒返回 0（零开销，宿主可无脑每帧调）。
+   */
+  pumpTick(dtMs: number): number
+  /** 本屏声明的泵数（宿主据此决定是否需起周期驱动）。 */
+  pumpCount(): number
+  /** 本屏各泵的频率列表（`hz`）——宿主据最小间隔起/停周期驱动。 */
+  pumpHzList(): number[]
   /** ★跨调用状态导出（浅拷贝）——供宿主（一次性 VM）在下次调用回灌为 `seedData`（见 CreateScreenRuntimeOptions.seedData） */
   snapshot(): Record<string, unknown>
   /**
@@ -325,6 +346,32 @@ export function createScreenRuntime(opts: CreateScreenRuntimeOptions): ScreenRun
       prof.time('flush', () => slotRt.flush())
     }
 
+    // ── ★★★数据泵（通用原语 `v-pump`）：宿主按帧驱动、内建生成器产新值 → 写数据源 ──
+    const pumps = art.pumps ?? []
+    const pumpAccum = pumps.map(() => 0)   // 各泵时长累加（ms）——按 1000/hz 抽帧判定期
+    const pumpPhase = pumps.map(() => 0)   // sin 生成器的相位（ms）
+    /** ★内建生成器：`int`/`float`（[min,max] 随机）· `sin`（[min,max] 正弦，按 period 相位）。 */
+    function genValue(i: number, dtMs: number): number {
+      const g = pumps[i]!.gen
+      if (g.kind === 'sin') {
+        const per = g.period && g.period > 0 ? g.period : 1000
+        pumpPhase[i] = (pumpPhase[i]! + dtMs) % per
+        const s = (Math.sin((pumpPhase[i]! / per) * Math.PI * 2) + 1) / 2   // 0..1
+        return g.min + (g.max - g.min) * s
+      }
+      const r = Math.random() * (g.max - g.min) + g.min
+      return g.kind === 'int' ? Math.round(r) : r
+    }
+    /** 写一个数据源并走增量（源在订阅表里 ⇒ O(源级)；否则退回全量重建，保证"改了就有反应"）。 */
+    function writeSource(name: string, value: unknown): void {
+      data[name] = value
+      const srcs = (art.table as { sources?: Array<{ sourceName?: string }> }).sources
+      const hasSrc = Array.isArray(srcs) && srcs.some((s) => s.sourceName === name)
+      if (hasSrc) prof.time('relink', () => vapor.writeSlotsOfSource(name, evalCtx))
+      else refreshData()
+      prof.time('flush', () => slotRt.flush())
+    }
+
     // ★★★B5（2026-10-10）：**生命周期钩子表**——首帧 mount 后跑 mounted（模板 @vue:mounted + 脚本 onMounted），
     //   宿主卸载该屏时跑 unmounted（脚本 onUnmounted）。均**复用同一 `runHandler`**（动作表 + 出错锚回模板行）。
     const mountedHooks: string[] = [
@@ -391,6 +438,25 @@ export function createScreenRuntime(opts: CreateScreenRuntimeOptions): ScreenRun
       flush() { prof.time('flush', () => slotRt.flush()) },
       refresh() { refreshData() },
       data() { return data },
+      writeSource(name, value) { writeSource(name, value) },
+      pumpCount() { return pumps.length },
+      pumpHzList() { return pumps.map((p) => p.hz) },
+      pumpTick(dtMs) {
+        if (pumps.length === 0) return 0
+        let fired = 0
+        for (let i = 0; i < pumps.length; i++) {
+          const hz = pumps[i]!.hz
+          const interval = 1000 / (hz > 0 ? hz : 30)
+          pumpAccum[i] = pumpAccum[i]! + dtMs
+          // 累加到期才触发（一帧最多补一次，防卡顿后"补很多帧"造成突发；不盲等）
+          if (pumpAccum[i]! >= interval) {
+            pumpAccum[i] = pumps[i]!.gen.kind === 'sin' ? 0 : pumpAccum[i]! - interval
+            writeSource(pumps[i]!.src, genValue(i, dtMs))
+            fired++
+          }
+        }
+        return fired
+      },
       snapshot() { return { ...data } },
       handlerErrors() { const out = handlerErrors.slice(); handlerErrors.length = 0; return out },
       profileStats() { return prof.drain() },
