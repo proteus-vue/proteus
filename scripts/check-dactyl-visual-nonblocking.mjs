@@ -58,6 +58,32 @@ function collect(dir, out = []) {
   return out
 }
 
+/** 递归收集 .css 文件（Dactyl 的全局样式表——`src/styles/*.css`）。 */
+function collectCss(dir, out = []) {
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (e.name === 'node_modules' || e.name === 'dist') continue
+    const p = path.join(dir, e.name)
+    if (e.isDirectory()) collectCss(p, out)
+    else if (e.name.endsWith('.css')) out.push(p)
+  }
+  return out
+}
+
+/**
+ * ★★★**同名 `@keyframes` 重复检测**（2026-10-10 · 决策 #791⑧ · 用户实测抓出的坑）：
+ *   CSS **同名 `@keyframes` 后者静默覆盖前者**（无任何报错）——人工复制粘贴极易留下重复块，
+ *   导致改的是"看起来对"的那份、**生效的却是另一份**（真机现象：涟漪"没效果"= 被调试版 opacity-only 覆盖）。
+ *   返回重复出现的 keyframes 名清单。
+ */
+function duplicateKeyframes(css) {
+  const names = new Map()
+  for (const m of css.matchAll(/@keyframes\s+([\w-]+)/gi)) {
+    const n = m[1].toLowerCase()
+    names.set(n, (names.get(n) ?? 0) + 1)
+  }
+  return [...names.entries()].filter(([, c]) => c > 1).map(([n, c]) => `${n}×${c}`)
+}
+
 /** 从 `<style>…</style>` 里取全部 CSS（含 scoped）。 */
 function stylesOf(src) {
   const out = []
@@ -131,6 +157,34 @@ function main() {
   // ③ 正向断言：Dactyl 的跟手运动走 v-follow（内核 translate，合成属性）
   if (!sawFollow) {
     fail('Dactyl 工程未使用 `v-follow`——跟手运动应走内核合成 translate（不是 CSS transition/JS 逐帧）')
+  }
+
+  // ④ ★★★全局样式表（`src/styles/*.css`）同样过 §7.3 + **同名 @keyframes 重复检测**（#791⑧）
+  const cssFiles = collectCss(path.join(PROJ, 'src', 'styles'))
+  for (const f of cssFiles) {
+    const rel = path.relative(ROOT, f)
+    const css = fs.readFileSync(f, 'utf-8')
+    for (const m of css.matchAll(/(?:^|[;{\s])transition\s*:\s*([^;}]+)/gi)) {
+      for (const p of propsInDecl(m[1])) {
+        if (p === 'none' || p === 'initial' || p === 'inherit') continue
+        if (COMPOSITED.has(p)) continue
+        if (p === 'all') { fail(`${rel}：\`transition\` 动 \`all\`（含非合成属性）`); continue }
+        if (NON_COMPOSITED.has(p)) fail(`${rel}：\`transition\` 动**非合成属性** \`${p}\`（§7.3）`)
+        else fail(`${rel}：\`transition\` 动未知属性 \`${p}\`（合成属性白名单外一律拒绝）`)
+      }
+    }
+    for (const m of css.matchAll(/@keyframes\s+[\w-]+\s*\{([\s\S]*?)\n\s*\}/g)) {
+      const body = m[1]
+      for (const p of NON_COMPOSITED) {
+        const re = new RegExp(`(?:^|[;{\\s])${p.replace(/[-]/g, '\\-')}\\s*:`, 'i')
+        if (re.test(body)) fail(`${rel}：@keyframes 改**非合成属性** \`${p}\`（§7.3）`)
+      }
+    }
+    const dups = duplicateKeyframes(css)
+    if (dups.length > 0) {
+      fail(`${rel}：**同名 @keyframes 重复**（${dups.join(' · ')}）——CSS 同名后者**静默覆盖**前者，` +
+        `极易"改的那份没生效"（#791⑧ 真机踩坑）；删重复块只留一处`)
+    }
   }
 
   if (failed) {
