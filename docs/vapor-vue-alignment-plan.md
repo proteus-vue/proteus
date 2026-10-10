@@ -31,8 +31,7 @@
 - **B3a 数值字段（判据 ㉕）**：width/height/min|max/flex*/gap/top/left/right/bottom/margin*/padding*/aspectRatio（`NUMERIC_LAYOUT_FIELDS`）→ 内核二进制 `SET_STYLE`（f32）。内核 `apply_style_key` 补登记 right/bottom/padding 四向/aspectRatio。
 - **B3b 枚举字段（判据 ㉖）**：`display`/`flexDirection`/`flexWrap`/`position`/`overflow`/`alignItems`（`ENUM_LAYOUT_FIELDS`）→ **索引编码**走同一条内核 `SET_STYLE`（host-agnostic）。内核解码臂（`apply_style_key`、与 JS 表同序）。
 - **清除回退**：plan 关闭返回 `null`/基线 ⇒ 数值发 UNSET（NaN）、枚举发**默认索引**。
-- **B3c 仍待做（无二进制通道）**：grid 模板（`gridTemplateColumns/Rows/Areas/…`）· `lineClamp` · `whiteSpace` · `wordBreak` · `overflowX/Y`（内核无轴级字段）· `justifyContent/alignContent/alignSelf`（内核字符串字段，未编码）——需**新内核 op 或把字符串字段也编码**。**独立小批次。**
-- 估时：B3a ≈1.5 · B3b ≈1.5（均已交付）· B3c ≈2–3 人日。
+- **B3c 部分已交付（2026-10-10）**：`justifyContent`/`alignContent`/`alignSelf`（内核字符串字段，**索引编码**走同一 SET_STYLE）。**仍待做**（真·无通道 / 需新协议）：grid 模板（`gridTemplateColumns/Rows/Areas/…`——**字符串 token 串**，需新内核 op 或编码）· `lineClamp` · `whiteSpace` · `wordBreak`（值透传宿主消费）· `overflowX/Y`（内核**无轴级字段**）——独立小批次（≈1–2 人日）。
 
 ### B4 · `v-model` 回写（22 页）
 - 依赖：宿主**输入通道**（Android EditText / iOS UITextField / 鸿蒙 TextInput）×3 + 双向协议（text→source）。

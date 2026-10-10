@@ -345,6 +345,26 @@ pub fn apply_style_key(node: &mut LNode, key: &str, value: f32) -> Result<bool, 
             s.align_items = AI[i].to_string();
             Ok(true)
         }
+        // ★★★B3c（2026-10-10）：justify-content / align-content / align-self 索引解码
+        //   （值为内核 `taffy_engine::parse_justify`/`parse_align_content`/`parse_align_items` 接受的字符串；
+        //    索引表与 JS `ENUM_LAYOUT_FIELDS` 同序）。
+        "layout.justifyContent" => {
+            const JC: [&str; 8] = ["flex-start", "start", "flex-end", "end", "center", "space-between", "space-around", "space-evenly"];
+            s.justify_content = JC[(v as i32).clamp(0, 7) as usize].to_string();
+            Ok(true)
+        }
+        "layout.alignContent" => {
+            const AC: [&str; 9] = ["stretch", "flex-start", "start", "flex-end", "end", "center", "space-between", "space-around", "space-evenly"];
+            s.align_content = AC[(v as i32).clamp(0, 8) as usize].to_string();
+            Ok(true)
+        }
+        "layout.alignSelf" => {
+            const AS: [&str; 8] = ["auto", "flex-start", "start", "flex-end", "end", "center", "baseline", "stretch"];
+            let i = (v as i32).clamp(0, 7) as usize;
+            // 0=auto ⇒ 清空（回落父 justify-items，CSS 语义）
+            s.align_self = if i == 0 { None } else { Some(AS[i].to_string()) };
+            Ok(true)
+        }
         // ★★2026-09-30 补登记（真缺口）：`LStyle` 一直有 `top`/`left`（position:absolute 的核心属性），
         //   但**指令映射表漏了它们** ⇒ 通过指令流改不了绝对定位偏移。
         //   发现路径：FLIP 的真机测试用 `updatePatches {top:40}` 改几何，结果 **位移恒 0**
@@ -1132,5 +1152,22 @@ mod tests {
         assert_eq!(n.style.align_items, "center");
         assert!(apply_style_key(&mut n, "layout.alignItems", 8.0).unwrap());
         assert_eq!(n.style.align_items, "stretch");
+    }
+
+    #[test]
+    fn b3c_justify_align_content_self_decode_by_index() {
+        // ★★★B3c（2026-10-10）：justify-content / align-content / align-self 索引解码。
+        let mut n = crate::node::LNode::new(1, crate::style::LStyle::default());
+        assert!(apply_style_key(&mut n, "layout.justifyContent", 4.0).unwrap());
+        assert_eq!(n.style.justify_content, "center");
+        assert!(apply_style_key(&mut n, "layout.justifyContent", 5.0).unwrap());
+        assert_eq!(n.style.justify_content, "space-between");
+        assert!(apply_style_key(&mut n, "layout.alignContent", 6.0).unwrap());
+        assert_eq!(n.style.align_content, "space-between");
+        assert!(apply_style_key(&mut n, "layout.alignSelf", 6.0).unwrap());
+        assert_eq!(n.style.align_self.as_deref(), Some("baseline"));
+        // 0=auto ⇒ 清空（回落父）
+        assert!(apply_style_key(&mut n, "layout.alignSelf", 0.0).unwrap());
+        assert_eq!(n.style.align_self, None);
     }
 }

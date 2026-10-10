@@ -228,8 +228,8 @@ describe('★批次 30 · 动态 :class（对齐 Web · 削减胶水）', () => 
     expect(paintLog.some(([, k]) => k === 'paint.width' || k === 'paint.paddingTop'), '数值布局字段不得走绘制通道').toBe(false)
   })
 
-  it('⑦ ★B3b：动态 :class 的**枚举布局字段**走内核 SET_STYLE（索引编码）', () => {
-    const SFC = "<template><view :class=\"{ on: x }\">x</view></template>\n<script setup>const x=ref(1)</script>\n<style>.on{display:grid;flex-direction:row;align-items:center}</style>"
+  it('⑦ ★B3b/B3c：动态 :class 的**枚举布局字段**走内核 SET_STYLE（索引编码）', () => {
+    const SFC = "<template><view :class=\"{ on: x }\">x</view></template>\n<script setup>const x=ref(1)</script>\n<style>.on{display:grid;flex-direction:row;align-items:center;justify-content:center;align-self:end}</style>"
     const { table } = buildVaporSubscriptions(SFC, 'b3b.vue')
     const rt = new SlotRuntime(new PropKeyTable(), new StringPool(), () => {})
     const vapor = new VaporRuntime(table, rt, VaporRuntime.buildEvaluators(table.evaluators), new ListRegistry())
@@ -237,10 +237,12 @@ describe('★批次 30 · 动态 :class（对齐 Web · 削减胶水）', () => 
     vapor.writeSlotsOfSource('x', { read: (n: string) => (dataX as Record<string, unknown>)[n] } as never)
     const snap = rt.buffer.snapshot() as unknown as Array<{ op: number; keyId?: number; value?: number }>
     const byKey = new Map(snap.filter((o) => o.op === 2).map((o) => [o.keyId === undefined ? undefined : rt.keys.keyOf(o.keyId), o.value]))
-    // 索引编码：display grid=1 · flexDirection row=0 · alignItems center=7
+    // 索引编码：display grid=1 · flexDirection row=0 · alignItems center=7 · justifyContent center=4 · alignSelf end=4
     expect(byKey.get('layout.display'), 'display:grid ⇒ 索引 1').toBe(1)
     expect(byKey.get('layout.flexDirection'), 'flex-direction:row ⇒ 索引 0').toBe(0)
     expect(byKey.get('layout.alignItems'), 'align-items:center ⇒ 索引 7').toBe(7)
+    expect(byKey.get('layout.justifyContent'), 'justify-content:center ⇒ 索引 4').toBe(4)
+    expect(byKey.get('layout.alignSelf'), 'align-self:end ⇒ 索引 4').toBe(4)
   })
 
   it('⑤ 诚实边界：动态 :class 的**数值/枚举**布局字段已支持（B3a/B3b）；**grid/白空格**等仍诊断', () => {
