@@ -2331,6 +2331,17 @@ public class ProteusHostView extends ViewGroup {
         touchEventCount++;
         final int action = ev.getActionMasked();
         if (action == android.view.MotionEvent.ACTION_DOWN) {
+            // ★★★S1.5（2026-10-10 · 输入延迟专项 #767）：**请求无缓冲分发**——绕过 Android 输入批处理
+            //   （`InputReader` 默认攒若干采样点再派发；`requestUnbufferedDispatch` 让本视图的触摸事件
+            //     **立即**送达 ⇒ 降低"手指→反馈"延迟，是 Android 官方降输入延迟的标准手段）。
+            //   ★幂等：同一次触摸手势只需在 DOWN 请求一次（框架内部记录，重复调无害）。
+            try {
+                requestUnbufferedDispatch(ev);
+                unbufferedDispatchCount++;
+            } catch (Throwable t) {
+                // 老平台/异常不静默：记错误计数（判据可核）
+                unbufferedDispatchErrors++;
+            }
             // ★★触摸即刹停惯性（平台标准行为：上手就停）——不刹会"拖拽被旧抛滑顶掉"：
             //   每帧 `stepInertia` 会把 scrollX 拉回抛滑时间线，拖动量被静默吞掉。
             if (flingScroller != null && !flingScroller.isFinished()) flingScroller.forceFinished(true);
@@ -2345,6 +2356,13 @@ public class ProteusHostView extends ViewGroup {
         detector().onTouchEvent(ev);
         return true;      // 消费，避免同一个手势被重复上报
     }
+
+    /** ★S1.5 探针：累计 `requestUnbufferedDispatch` 调用数（判据核"无缓冲分发真的被请求"）。 */
+    public int unbufferedDispatchCount() { return unbufferedDispatchCount; }
+    /** ★S1.5 探针：`requestUnbufferedDispatch` 失败次数（如实上报，不静默）。 */
+    public int unbufferedDispatchErrors() { return unbufferedDispatchErrors; }
+    private int unbufferedDispatchCount = 0;
+    private int unbufferedDispatchErrors = 0;
 
     /**
      * 按**屏幕/视图坐标**做命中派发（与 `onTouchEvent` 同一条代码路径）。

@@ -1569,6 +1569,10 @@ public class MainActivity extends Activity {
             out.put("host_applied", host.lastApplied);
             out.put("host_changed_nodes", host.lastChangedNodes);
             out.put("host_view_on_draw", host.view() != null ? host.view().onDrawCount() : -1);
+            // ★S1.5（输入延迟专项 #767）：无缓冲分发请求计数（判据核"触摸路径真的请求了无缓冲分发"）
+            out.put("host_unbuffered_dispatch", host.view() != null ? host.view().unbufferedDispatchCount() : -1);
+            out.put("host_unbuffered_dispatch_errors", host.view() != null ? host.view().unbufferedDispatchErrors() : -1);
+            out.put("host_touch_events", host.view() != null ? host.view().touchEventCount : -1);
 
             // ④ JS 侧报告（原样嵌入——判据读它，与宿主读数互为印证）
             out.put("report", r);

@@ -920,6 +920,21 @@ def main() -> int:
     else:
         print(f"  ✓ ㉚ ★B4-T2b 原生输入控件：节点 #{bt3.get('nodeId')} 建了 EditText 且注入文本触发 {bt3.get('inputEvents')} 次输入事件——控件活")
 
+    # ── ㉛ ★★★S1.5（输入延迟专项 #767）：**无缓冲分发真的被请求**（Android requestUnbufferedDispatch，2026-10-10）──
+    #   判据：主机无缓冲分发请求数 > 0 且 失败数 == 0（宿主读数 host_unbuffered_dispatch[_errors]）。
+    ub = d.get("host_unbuffered_dispatch", None)
+    ub_err = d.get("host_unbuffered_dispatch_errors", None)
+    if ub is None:
+        print("  ◐ ㉛ S1.5 无缓冲分发：本端未读该读数（按缺失处理）")
+    elif ub <= 0:
+        fail(f"★S1.5 无缓冲分发未被请求（host_unbuffered_dispatch={ub}）——DOWN 时未调 requestUnbufferedDispatch")
+        ok = False
+    elif ub_err and ub_err > 0:
+        fail(f"★S1.5 无缓冲分发有失败（errors={ub_err}）——requestUnbufferedDispatch 抛异常")
+        ok = False
+    else:
+        print(f"  ✓ ㉛ ★S1.5 无缓冲分发：触摸路径请求 {ub} 次（失败 0）——requestUnbufferedDispatch 生效（降输入延迟）")
+
     # 附加观测（不判红，只如实报）
     una = rep.get("uninstantiated_slots", 0)
     if una:
