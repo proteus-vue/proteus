@@ -214,6 +214,8 @@ hosts/android/results/gfxinfo.txt
 
 ### S3 · 编译期交互下沉（Compiled Interaction）—— **差异化护城河**
 
+> ★**落地设计见 `16-s3-interaction-folding.md`**（声明式 `v-follow` + 内核 `AnimDrive::Progress` + 宿主喂指针；最小切片 S3-T1 = Android 单指单节点 X 跟手）。
+
 > 这是 Proteus「一份源码，编译器化作千端形态」在**交互**上的正确延伸：把手势驱动的逻辑**折叠成内核可执行指令**，而不是运行时跑 JS。
 
 **三级下沉模型**：
