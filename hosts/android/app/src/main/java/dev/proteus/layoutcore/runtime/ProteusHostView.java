@@ -2397,27 +2397,49 @@ public class ProteusHostView extends ViewGroup {
     }
 
     /* ── ★★★S1.1 按下态（`:active` → press* 字段；DOWN 原生应用 / UP 还原，零 JS 跨界）── */
-    /** 节点 id → 按下态背景色（ARGB；来自编译器 `:active` 折出的 `pressBackgroundColor`） */
-    private java.util.Map<Integer, Integer> pressBgMap = java.util.Collections.emptyMap();
+    /**
+     * ★按下态样式（`15-dactyl-demo.md` §4.2：磁块**凹陷 + 边缘发光**；观感"按下即凹陷"）。
+     *   编译器把 `.x:active{…}` 折成节点 `press*` 字段（`pressBackgroundColor` / `pressTransform`(sx,sy)
+     *   / `pressBorderColor` / `pressBoxShadow`）——**任意声明都能折**；宿主这里全部消费 ⇒ 真正对齐计划。
+     */
+    static final class PressStyle {
+        Integer bg;            // pressBackgroundColor（ARGB；可空）
+        float sx = 1f, sy = 1f; // pressTransform 的缩放（凹陷 = <1）
+        Integer borderColor;   // pressBorderColor（可空）
+        Integer glowColor;     // pressBoxShadow.color（可空）——"边缘发光"
+        float glowRadius = 0f; // pressBoxShadow.blur
+        boolean hasScale() { return sx != 1f || sy != 1f; }
+    }
+    /** 节点 id → 按下态样式（来自编译器 `:active` 折出的 `press*` 字段） */
+    private java.util.Map<Integer, PressStyle> pressStyles = java.util.Collections.emptyMap();
     private int pressedNodeId = -1;
+    /** 按下态"边缘发光"绘制用（FILL + shadowLayer）。 */
+    private final android.graphics.Paint dactylGlowPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
     /** 累计"按下态真的被应用"次数（判据核"按下反馈真的发生过"） */
     int pressApplied = 0;
+    /** ★§4.2 判据量：DOWN 起，到**首个反映按下态的帧**的毫秒（`press_feedback_ms`，目标 ≤ 1 帧）。 */
+    private long dctlPressDownMs = 0L;
+    private float dctlPressFeedbackMs = -1f;
 
-    /** 由 `VaporRenderHost` 在建树时注入"哪些节点有按下态 + 其背景色"。 */
-    public void setPressBgMap(java.util.Map<Integer, Integer> m) {
-        this.pressBgMap = m != null ? m : java.util.Collections.emptyMap();
+    /** 由 `VaporRenderHost` 在建树时注入"哪些节点有按下态 + 其样式"。 */
+    public void setPressStyles(java.util.Map<Integer, PressStyle> m) {
+        this.pressStyles = m != null ? m : java.util.Collections.emptyMap();
     }
 
-    /** DOWN 命中节点 ⇒ 应用按下态（有 press 定义才动）；重录帧以立即反映。 */
+    /** DOWN 命中节点 ⇒ 应用按下态（有 press 定义才动）+ 触发涟漪；重录帧以立即反映。 */
     private void applyPressAt(int nodeId) {
-        if (nodeId < 0 || !pressBgMap.containsKey(nodeId)) return;
+        if (nodeId < 0 || !pressStyles.containsKey(nodeId)) return;
         pressedNodeId = nodeId;
         pressApplied++;
-        framePicture = null;   // 丢弃静态帧 ⇒ onDraw 重录（含按下色）
+        // ★§4.2 判据量：记 DOWN 时刻——下一帧（反映按下态的帧）在 onDraw 里对账 ⇒ press_feedback_ms。
+        dctlPressDownMs = android.os.SystemClock.uptimeMillis();
+        // ★涟漪（§4.2 观感"涟漪扩散与指尖同帧"）：以按下点为源，宿主叠加绘制（合成属性 scale+alpha，§7.3）。
+        startDactylRipple(dctlLastRawX, dctlLastRawY);
+        framePicture = null;   // 丢弃静态帧 ⇒ onDraw 重录（含按下态：凹陷/发光）
         invalidate();
     }
 
-    /** UP/CANCEL ⇒ 还原（清帧 ⇒ 重录回常态色）。 */
+    /** UP/CANCEL ⇒ 还原（清帧 ⇒ 重录回常态）。 */
     private void clearPress() {
         if (pressedNodeId < 0) return;
         pressedNodeId = -1;
@@ -2425,9 +2447,33 @@ public class ProteusHostView extends ViewGroup {
         invalidate();
     }
 
-    /** ★S1.1 探针：`{pressed, applied, hasPressNodes}`——判据核"按下态真的被原生应用"。 */
+    /** ★S1.1 探针：`{pressed, applied, press_nodes}`——判据核"按下态真的被原生应用"。 */
     public String pressProbe() {
-        return "{\"pressed\":" + pressedNodeId + ",\"applied\":" + pressApplied + ",\"press_nodes\":" + pressBgMap.size() + "}";
+        return "{\"pressed\":" + pressedNodeId + ",\"applied\":" + pressApplied + ",\"press_nodes\":" + pressStyles.size() + "}";
+    }
+
+    /* ── ★Dactyl 涟漪（§4.2 L1"按下处激起涟漪"）——宿主叠加绘制；只动 scale+alpha（合成属性，§7.3）── */
+    private float dctlRippleX = -1f, dctlRippleY = -1f;
+    private long dctlRippleStartNs = 0L;
+    private static final float DCTL_RIPPLE_DUR_MS = 480f;
+    private final android.graphics.Paint dctlRipplePaint = makeStrokePaint(0xFF39D0FF, 3f);
+
+    private void startDactylRipple(float x, float y) {
+        if (!dactylEnabled) return;
+        dctlRippleX = x; dctlRippleY = y; dctlRippleStartNs = System.nanoTime();
+    }
+
+    /** 画涟漪（若在生命周期内）；返回是否仍在扩散（供帧循环续帧）。 */
+    private boolean drawDactylRipple(Canvas canvas) {
+        if (dctlRippleStartNs == 0L) return false;
+        final float el = (System.nanoTime() - dctlRippleStartNs) / 1e6f;
+        if (el >= DCTL_RIPPLE_DUR_MS) { dctlRippleStartNs = 0L; return false; }
+        final float t = el / DCTL_RIPPLE_DUR_MS;
+        final float r = (8f + 72f * t) * dactylDensity;
+        dctlRipplePaint.setAlpha((int) ((1f - t) * 180));
+        dctlRipplePaint.setStrokeWidth((2f + 2f * (1f - t)) * dactylDensity);
+        canvas.drawCircle(dctlRippleX, dctlRippleY, r, dctlRipplePaint);
+        return true;
     }
 
     /** ★S1.5 探针：累计 `requestUnbufferedDispatch` 调用数（判据核"无缓冲分发真的被请求"）。 */
@@ -2637,6 +2683,8 @@ public class ProteusHostView extends ViewGroup {
         dactylTrailSamples = 0;
         dactylPtrsMax = 0;
         dactylPtrsLast = 0;
+        dctlPressDownMs = 0L;
+        dctlPressFeedbackMs = -1f;
         dctlLastEventTime = -1;
         dctlVisibleLagPx = -1f;
     }
@@ -2772,7 +2820,8 @@ public class ProteusHostView extends ViewGroup {
                 + ",\"jank_rate\":" + dctlFmt(dctlJankRate() < 0 ? -1f : dctlJankRate() * 100f)
                 + ",\"visible_lag_px\":" + dctlFmt(dctlVisibleLagPx)
                 + ",\"ptrs_last\":" + dactylPtrsLast + ",\"ptrs_max\":" + dactylPtrsMax
-                + ",\"follow_n\":" + followPtrs.size() + "}";
+                + ",\"follow_n\":" + followPtrs.size()
+                + ",\"press_feedback_ms\":" + dctlFmt(dctlPressFeedbackMs) + "}";
     }
     private static String dctlFmt(float v) { return v < 0 ? "-1" : String.format(java.util.Locale.US, "%.2f", v); }
 
@@ -3022,6 +3071,11 @@ public class ProteusHostView extends ViewGroup {
         long __dt0 = System.nanoTime();
         // ★Dactyl：帧间隔记账（vsync 帧格/掉帧率的真源——真实帧回调，非计时器伪造）
         if (dactylEnabled) tickDactylFrame();
+        // ★§4.2 press_feedback_ms：本帧反映按下态 = DOWN 之后的第一帧 ⇒ 对账
+        if (dctlPressDownMs > 0L) {
+            dctlPressFeedbackMs = (float) (android.os.SystemClock.uptimeMillis() - dctlPressDownMs);
+            dctlPressDownMs = 0L;
+        }
         // ★★★惯性**自驱动**（2026-10-09 · 决策 #685 —— 用户「安卓滑了还是一样」的第二处根因）：
         //   此前 `stepInertia` **只在 `LightsHost`（dev 长卷场景）的 Choreographer 帧循环里调**
         //   ⇒ superapp（真实应用）路径的 fling **起动了却没人推进** ⇒ 松手仍 dead-stop。
@@ -3079,6 +3133,8 @@ public class ProteusHostView extends ViewGroup {
         }
         // ★★★Dactyl 延迟显影叠加层（决策 #780 · 15 §3）：内容之后画在**屏幕坐标**（不随滚动平移）。
         if (dactylEnabled) { drawDactylOverlay(canvas); sampleDactylLatency(); }
+        // ★Dactyl 涟漪（§4.2）：扩散中 ⇒ 每帧重绘（自持帧源，独立于惯性/fling）
+        if (dactylEnabled && drawDactylRipple(canvas)) postInvalidateOnAnimation();
         // ★DevTools 逐帧耗时（决策 #676）：整帧 onDraw 耗时（含 drawCmds/显示列表回放）
         long __dt = System.nanoTime() - __dt0;
         lastFrameMs = __dt / 1e6;
@@ -3224,8 +3280,12 @@ public class ProteusHostView extends ViewGroup {
                 }
             }
             final boolean hasAncestorTx = ancIds != null;
+            // ★按下态（`:active` 折出的 pressTransform.scale）——凹陷：进入同一 save/transform 块
+            final int __nodeId = (ids != null && i < ids.length) ? ids[i] : -1;
+            final PressStyle __press = (__nodeId >= 0 && __nodeId == pressedNodeId) ? pressStyles.get(__nodeId) : null;
+            final boolean pressScale = __press != null && __press.hasScale();
             final boolean xf = (tf != null && (tfTx != 0f || tfTy != 0f || tf[2] != 1f || tf[3] != 0f || has3d))
-                    || hasClip || ovfClip != null || hasAncestorTx;
+                    || pressScale || hasClip || ovfClip != null || hasAncestorTx;
             // ★★★批 A：fixed 节点反向补偿内容滚动（净位移 0 ⇒ 钉在视口；见 fixedNodes 注释）
             //   ★用户实测修复（2026-10-08）：同 sticky——判据改为「本节点属某 fixed 锚点的子树」，
             //     否则徽标钉住了、**徽标上的文字**（子节点）留在原地（与"蓝条没文字"同源）。
@@ -3280,6 +3340,8 @@ public class ProteusHostView extends ViewGroup {
                 float cx = c.x + c.w * ox, cy = c.y + c.h * oy;
                 if (tf != null && tf[3] != 0f) canvas.rotate(tf[3], cx, cy);
                 if (tf != null && tf[2] != 1f) canvas.scale(tf[2], tf[2], cx, cy);
+                // ★按下态凹陷（`:active{transform:scale()}` 折出 pressTransform.sx/sy）——同原点，锚元素中心
+                if (pressScale) canvas.scale(__press.sx, __press.sy, cx, cy);
                 // ★★倾斜（skew v1）：`canvas.skew(tanSkewX, tanSkewY)` —— 与 iOS 的 shear 矩阵同式。
                 //   ★花括号包裹（本仓纪律：变量声明必须自带块——否则作用域会漏到外层）
                 if (tfSkewX != 0f || tfSkewY != 0f) {
@@ -3348,13 +3410,21 @@ public class ProteusHostView extends ViewGroup {
             // ★★颜色覆盖（2026-10-01）：该节点参与颜色动画时用内核值，否则用静态 `Cmd.color`
             //   （表里没有 ⇒ 零额外开销；与 `animTx` 的查表同一形态）
             final Integer animBg = (ids != null && i < ids.length && ids[i] >= 0) ? animColor.get(ids[i]) : null;
-            // ★S1.1：按下态背景色优先（DOWN 应用 / UP 还原；下拉刷新式即时反馈）
-            final Integer pressBg = (pressedNodeId >= 0 && ids != null && i < ids.length && ids[i] == pressedNodeId)
-                    ? pressBgMap.get(pressedNodeId) : null;
+            // ★S1.1：按下态背景色优先（DOWN 应用 / UP 还原；§4.2 磁块按下反馈）
+            final Integer pressBg = (__press != null && __press.bg != null) ? __press.bg : null;
             bgPaint.setColor(pressBg != null ? pressBg : (animBg != null ? animBg : c.color));
             if (op < 1f) {
                 int base = pressBg != null ? pressBg : (animBg != null ? animBg : c.color);
                 bgPaint.setAlpha(Math.max(0, Math.min(255, (int) (Color.alpha(base) * op))));
+            }
+            // ★S1.1：按下态"边缘发光"（`:active{box-shadow}` 折出 pressBoxShadow）——在本块背景外画辉光
+            if (__press != null && __press.glowColor != null && __press.glowRadius > 0f) {
+                dactylGlowPaint.setColor(__press.glowColor);
+                dactylGlowPaint.setAlpha(160);
+                dactylGlowPaint.setShadowLayer(__press.glowRadius, 0f, 0f, __press.glowColor);
+                canvas.drawRoundRect(new android.graphics.RectF(c.x, c.y, c.x + c.w, c.y + c.h),
+                        c.radius, c.radius, dactylGlowPaint);
+                dactylGlowPaint.clearShadowLayer();
             }
             // ★★渐变填充（v1 · 2026-10-01）：有规格 ⇒ 给 bgPaint 挂 shader（**矩形局部坐标**——
             //   shader 的坐标是画布绝对坐标，故按 cmd 的 x/y/w/h 建）。
