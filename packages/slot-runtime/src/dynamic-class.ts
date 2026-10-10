@@ -126,6 +126,12 @@ export const ENUM_LAYOUT_FIELDS: Record<string, { values: readonly string[]; def
   position: { values: ['static', 'relative', 'absolute', 'fixed', 'sticky'], default: 0 }, // static
   // overflow：Visible/Hidden/Scroll/Auto（内核 `Overflow`）
   overflow: { values: ['visible', 'hidden', 'scroll', 'auto'], default: 0 }, // visible
+  // ★B3c（2026-10-10）：justify-content / align-content / align-self（内核 `parse_justify`/`parse_align_content`/
+  //   `parse_align_items` 接受的字符串 **含 CSS 别名 start/end**；本表顺序 = 索引编码；内核解码臂逐字对齐）。
+  justifyContent: { values: ['flex-start', 'start', 'flex-end', 'end', 'center', 'space-between', 'space-around', 'space-evenly'], default: 0 },
+  alignContent: { values: ['stretch', 'flex-start', 'start', 'flex-end', 'end', 'center', 'space-between', 'space-around', 'space-evenly'], default: 0 },
+  // align-self：0=auto（⇒ 清空 None，回落父 justify-items，与 CSS 语义一致）
+  alignSelf: { values: ['auto', 'flex-start', 'start', 'flex-end', 'end', 'center', 'baseline', 'stretch'], default: 0 },
 }
 
 /** 枚举字段值 → 索引（大小写不敏感）；未识别 ⇒ null（调用方回退默认）。 */

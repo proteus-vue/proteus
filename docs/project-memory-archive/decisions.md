@@ -2568,3 +2568,10 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **⑤ 验证**：`vapor-sfc-to-tree` ⑦（display grid=1 / flexDirection row=0 / alignItems center=7）· Rust 单测（索引解码臂）· 全量 **5659** · vue-tsc 0。能力棘轮 `VAPOR_DYNCLASS_LAYOUT_UNSUPPORTED` **18→10**（已 --update）。
 **⑥ 教训**：a) ★★★**"枚举必须新协议"是未验证的假设**——字符串值可**索引编码**复用既有 f32 通道（本仓"同一通道装不同语义"的又一例；同 #753 教训"分层"）；b) ★★**跨语言索引表要"逐字同序"并写在两处注释里**（JS `ENUM_LAYOUT_FIELDS` ↔ Rust `apply_style_key`）；c) ★★**"默认值解码"是清除回退的另一半**（数值发 UNSET/None；枚举发默认索引——内核默认须与 JS 表 `default` 一致）；d) ★**旧二元映射（display 0/1）升级时要护回归**——`display` 旧编码 1=Flex 现为 Grid ⇒ 只改无 TS 发射方的遗留臂（已确认无发射方）。
 **⑦ 余下（B3c）**：grid 模板（`gridTemplateColumns/Rows/Areas`）· `lineClamp` · `whiteSpace` · `wordBreak` · `overflowX/Y`（内核无轴级字段）· `justifyContent/alignContent/alignSelf`（内核字符串字段，可同法索引编码）——独立小批次（≈2–3 人日）。
+
+755. **★★Vapor B3c 交付：动态 `:class` 补 `justifyContent`/`alignContent`/`alignSelf`（索引编码走内核 SET_STYLE）**（2026-10-10）：
+**① 承接**：B3a（数值）/B3b（枚举）后收口——剩余可做的内核**字符串布局字段**。
+**② 交付**：`ENUM_LAYOUT_FIELDS` 增 `justifyContent`/`alignContent`/`alignSelf`（含 CSS 别名 `start`/`end`；`alignSelf` 0=auto ⇒ 清空回落父）；内核 `apply_style_key` 加索引解码臂（值 = `taffy_engine::parse_justify`/`parse_align_content`/`parse_align_items` 接受的字符串）；编译诊断收窄（三者不再诊断）。
+**③ 验证**：`vapor-sfc-to-tree` ⑦（justify center=4 / alignSelf end=4）· Rust 单测 · **三端真机判据 ㉖ 扩展**（`.hrow{flex-direction:row; justify-content:center}` 子2 x `[0,200,0]`——含 justify-content 居中生效；Android/鸿蒙/iOS 全过 + `check:vapor-three-end` 指纹一致）· 全量 **5659** · vue-tsc 0。能力棘轮 `VAPOR_DYNCLASS_LAYOUT_UNSUPPORTED` **10→8**（已 --update）。
+**④ 教训**：a) ★★**"内核字符串字段"也能索引编码**（先查内核**接受的字符串集** = `taffy_engine::parse_*` 的 match 臂——**别猜 taffy 关键字**）；b) ★★**CSS 别名要收进值表**（`justify-content: end` 是 `flex-end` 别名——首版漏了 ⇒ 落默认；**枚举值表要看"别名形态"**，同 #748 教训族）；c) **同一条索引编码手法三连用**（B3b→B3c，`NUMERIC`/`ENUM` 两表 + 内核解码臂）。
+**⑤ 余下（B3 真·无通道）**：grid 模板（`gridTemplateColumns/Rows/Areas`——**字符串 token 串**）· `lineClamp` · `whiteSpace` · `wordBreak`（值透传宿主）· `overflowX/Y`（内核**无轴级字段**）≈1–2 人日。★动态 `:class` 布局缺口 **28→8 收口（B3a/B3b/B3c 三轮）**。

@@ -407,9 +407,10 @@ const b3on = ref(false)
 </style>`
 
 /**
- * ★★★B3b 夹具（判据 ㉖，2026-10-10）：**动态 `:class` 的枚举布局字段**端上真生效
- *   （`flex-direction` 走内核二进制 SET_STYLE 索引编码）。容器 column 默认；`.hrow{flex-direction:row}`。
- *   两子项各宽 120：column ⇒ 子2 x=0；row ⇒ 子2 x=120。判据核**子2 x 0→120→0**（几何真变）。
+ * ★★★B3b/B3c 夹具（判据 ㉖，2026-10-10）：**动态 `:class` 的枚举布局字段**端上真生效
+ *   （`flex-direction` + `justify-content` 走内核二进制 SET_STYLE 索引编码）。
+ *   容器宽 400、两子项各 120；默认 column（子2 x=0）；`.hrow{ flex-direction:row; justify-content:center }`
+ *   ⇒ row + 居中：自由空间 160 ⇒ 左留 80 ⇒ 子2 x=80+120=**200**。判据核**子2 x 0→200→0**。
  */
 const B3B_SFC = `<template>
   <p-view :class="{ hrow: b3bon }" style="width: 400px; height: 100px; flex-direction: column">
@@ -423,7 +424,7 @@ const b3bon = ref(false)
 </script>
 
 <style>
-.hrow { flex-direction: row; }
+.hrow { flex-direction: row; justify-content: center; }
 </style>`
 
 /** 长列表夹具：**行高 100px**（视口 2400 ⇒ 可见 ~24 行；预加载 ±10 ⇒ 物化 ~34 行）
@@ -951,11 +952,12 @@ console.log(`[gen-vapor-fixture] ✅ 组件注册表：${Object.keys(parsed.comp
   const hasPlan = !!(parsed.b3b?.table?.classPlans && Object.keys(parsed.b3b.table.classPlans).length > 0)
   const layoutDiag = (parsed.b3b?.diagnostics ?? []).some((m) => /布局字段/.test(String(m)))
   const hasFlexDir = parsed.b3b?.table?.classPlans && JSON.stringify(parsed.b3b.table.classPlans).includes('flexDirection')
-  if (!parsed.b3b?.ok || !hasPlan || layoutDiag || !hasFlexDir) {
-    console.error(`[gen-vapor-fixture] ✗ B3b 夹具不完整（判据 ㉖ 将无证据）：classPlans=${hasPlan} · flexDirection 在计划=${hasFlexDir} · 布局诊断=${layoutDiag}`)
+  const hasJustify = parsed.b3b?.table?.classPlans && JSON.stringify(parsed.b3b.table.classPlans).includes('justifyContent')
+  if (!parsed.b3b?.ok || !hasPlan || layoutDiag || !hasFlexDir || !hasJustify) {
+    console.error(`[gen-vapor-fixture] ✗ B3b/B3c 夹具不完整（判据 ㉖ 将无证据）：classPlans=${hasPlan} · flexDirection=${hasFlexDir} · justifyContent=${hasJustify} · 布局诊断=${layoutDiag}`)
     process.exit(1)
   }
-  console.log(`[gen-vapor-fixture] ✅ B3b 夹具：动态 :class 枚举布局字段（flexDirection 在计划 · 无布局诊断）`)
+  console.log(`[gen-vapor-fixture] ✅ B3b/B3c 夹具：动态 :class 枚举布局字段（flexDirection + justifyContent 在计划 · 无布局诊断）`)
 }
 // ★:style 对象展开（2026-10-03）：必须**逐键**（layout.width + paint.backgroundColor），不得有整键
 {
