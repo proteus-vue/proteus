@@ -2368,6 +2368,54 @@ pub fn follow_translate(
     changed
 }
 
+/// ★★★**S3-T2（2026-10-10 · 输入延迟专项 #767）**：**松手处理**——按当前位移决定「回弹归零」
+///   或「滑出吸附（swipe-to-delete）」，并以**弹簧**从当前位置接管（松手那帧起，值连续、速度归零）。
+///
+/// 【要证明什么（§16 §6 S3-T2）】跟手期**零 JS**（同 T1）；松手后由**内核弹簧**接管——宿主只报
+///   "手指抬起了"，不参与任何数学（换算/夹取/吸附判定/弹簧积分**全在内核**）。
+///
+/// 【语义（唯一实现在此）】对每个活动轴：`cur = style.translate_*`；
+///   · `cur.abs() >= snap_threshold`（>0 时）⇒ 目标 = `sign(cur) * |snap_target|`（**滑出吸附**——
+///     swipe-to-delete 的"过半即滑出"；`snap_target` 是**滑出幅度**，方向随拖拽方向）；
+///   · 否则 ⇒ 目标 = `0`（**回弹归零**）。
+///   以 `Spring` 从 `cur` → 目标启动（`drive=Time`，由既有帧循环 `animTick` 推进）。
+///
+/// - Returns: 每轴的目标值（供宿主/判据核"吸附判定真的在内核"）。
+pub fn follow_release(
+    engine: &mut AnimEngine,
+    tree: &LayoutTree,
+    node_id: u32,
+    axis_mask: u8,
+    stiffness: f32,
+    damping: f32,
+    mass: f32,
+    snap_threshold: f32,
+    snap_target: f32,
+) -> Vec<f32> {
+    let Some(idx) = tree.index_of_id(node_id) else { return Vec::new() };
+    let params = SpringParams { stiffness, damping, mass }.sanitized();
+    let mut targets = Vec::new();
+    let mut start = |kind: AnimKind, cur: f32| -> f32 {
+        let target = if snap_threshold > 0.0 && cur.abs() >= snap_threshold {
+            snap_target.abs() * if cur >= 0.0 { 1.0 } else { -1.0 }
+        } else {
+            0.0
+        };
+        let mut a = Anim::curve_anim(node_id, kind, cur, target, 0.0);
+        a.mode = AnimMode::Spring(params);
+        // start 仅校验 + 入表（树只读）；失败不 panic（节点消失等）——静默丢弃该轴回落
+        let _ = engine.start(tree, a);
+        target
+    };
+    if axis_mask & 1 != 0 {
+        targets.push(start(AnimKind::TranslateX, tree.nodes[idx as usize].style.translate_x));
+    }
+    if axis_mask & 2 != 0 {
+        targets.push(start(AnimKind::TranslateY, tree.nodes[idx as usize].style.translate_y));
+    }
+    targets
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -4251,5 +4299,39 @@ mod tests {
         assert!(!follow_translate(&mut t, 1, 100.0, -40.0, 3, 0.5, -1e9, 1e9), "同值 ⇒ false");
         // 未知节点 ⇒ false（不 panic）
         assert!(!follow_translate(&mut t, 999, 10.0, 0.0, 1, 1.0, -1e9, 1e9));
+    }
+
+    // ★★★S3-T2（2026-10-10）：松手回弹/吸附——按位移判「归零」或「滑出吸附」，弹簧接管
+    #[test]
+    fn follow_release_snaps_past_threshold_else_returns_to_zero() {
+        // 小位移（< 阈值）⇒ 回弹到 0
+        let mut t = tree_with(1);
+        let mut e = AnimEngine::new();
+        follow_translate(&mut t, 1, 30.0, 0.0, 1, 1.0, -1e9, 1e9);
+        let targets = follow_release(&mut e, &t, 1, 1, 300.0, 30.0, 1.0, 80.0, 200.0);
+        assert_eq!(targets, vec![0.0], "30 < 阈值 80 ⇒ 回弹归零");
+        // 由弹簧推进若干步 ⇒ 值向 0 收敛（不回弹到别处）
+        for _ in 0..240 { e.tick(&mut t, 16.7); }
+        assert!(t.nodes[0].style.translate_x.abs() < 1.0, "回弹后停在 ≈0（实际 {}）", t.nodes[0].style.translate_x);
+
+        // 大位移（≥ 阈值）⇒ 滑出吸附（`target` 是幅度，方向随拖拽方向：正方向 → +target）
+        let mut t2 = tree_with(1);
+        let mut e2 = AnimEngine::new();
+        follow_translate(&mut t2, 1, 150.0, 0.0, 1, 1.0, -1e9, 1e9);
+        let targets2 = follow_release(&mut e2, &t2, 1, 1, 300.0, 30.0, 1.0, 80.0, 200.0);
+        assert_eq!(targets2, vec![200.0], "150 ≥ 阈值 ⇒ 滑出吸附到 +200");
+        for _ in 0..240 { e2.tick(&mut t2, 16.7); }
+        assert!((t2.nodes[0].style.translate_x - 200.0).abs() < 1.0, "弹簧推到吸附目标（实际 {}）", t2.nodes[0].style.translate_x);
+
+        // 负方向 ⇒ 吸附到 -target（方向随拖拽：左滑滑出左侧）
+        let mut t3 = tree_with(1);
+        let mut e3 = AnimEngine::new();
+        follow_translate(&mut t3, 1, -150.0, 0.0, 1, 1.0, -1e9, 1e9);
+        assert_eq!(follow_release(&mut e3, &t3, 1, 1, 300.0, 30.0, 1.0, 80.0, 200.0), vec![-200.0]);
+
+        // 未知节点 ⇒ 空（不 panic）
+        let mut t4 = tree_with(1);
+        let mut e4 = AnimEngine::new();
+        assert!(follow_release(&mut e4, &t4, 999, 1, 300.0, 30.0, 1.0, 80.0, 200.0).is_empty());
     }
 }

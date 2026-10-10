@@ -977,12 +977,30 @@ def main() -> int:
         ok = False
     else:
         tx = s3.get("tx_after", 0)
-        # 拖 dx=120（axis:x，gain=1）⇒ translateX ≈ 120（容差 ±8：注入 MOVE 步进的浮点近似）
+        # 拖 dx=120（axis:x，gain=1，无 clamp）⇒ translateX ≈ 120（容差 ±8：注入 MOVE 步进的浮点近似）
         if abs(tx - 120) > 8:
             fail(f"★S3-T1 跟手：节点 translateX 未跟手（tx_after={tx}，期望≈120）——跟手未落到绘制真源")
             ok = False
         else:
             print(f"  ✓ ㉞ ★S3-T1 拖拽跟手零 JS 跨界：{s3.get('follow_nodes')} 个跟手节点 · MOVE {s3.get('moves')} 次进内核 · 变更 {s3.get('applied')} 次 · translateX={tx}（拖 120 ⇒ 跟手到位）")
+
+    # ── ㉟ ★★★S3-T2（输入延迟专项 #767）：**松手回弹 / 滑出吸附（swipe-to-delete）零 JS 跨界**
+    #   （2026-10-10）—— 判据：UP 真的驱动了内核松手（release_calls>0）+ 过阈值 ⇒ 吸附到目标（≈-200）
+    #   + 未过阈值 ⇒ 回弹归零（≈0）。★判定/弹簧全在内核，宿主零数学。
+    s3r = rep.get("s3_probe") or {}
+    if not s3r or s3r.get("snap_calls", -1) < 0:
+        print("  ◐ ㉟ S3-T2 松手回弹/吸附：本端夹具未覆盖（报告无 s3_probe 松手读数）——如实跳过")
+    elif s3r.get("snap_calls", 0) <= 0 or s3r.get("return_calls", 0) <= 0:
+        fail(f"★S3-T2 松手：UP 未驱动内核松手（snap_calls={s3r.get('snap_calls')} · return_calls={s3r.get('return_calls')}）—— endFollow 未调 followRelease")
+        ok = False
+    elif abs(s3r.get("snap_final", 0) - (-200)) > 8:
+        fail(f"★S3-T2 吸附：过阈值未滑出吸附到 -200（snap_final={s3r.get('snap_final')}）—— swipe-to-delete 判定/弹簧不在内核")
+        ok = False
+    elif abs(s3r.get("return_final", 0)) > 8:
+        fail(f"★S3-T2 回弹：未过阈值未回弹归零（return_final={s3r.get('return_final')}）—— 回弹弹簧不在内核")
+        ok = False
+    else:
+        print(f"  ✓ ㉟ ★S3-T2 松手回弹/吸附零 JS 跨界：UP 驱动内核松手 {s3r.get('snap_calls')} 次 · 过阈值吸附→{s3r.get('snap_final')}（swipe-to-delete）· 未过阈值回弹→{s3r.get('return_final')}（判定+弹簧均在内核）")
 
     # 附加观测（不判红，只如实报）
     una = rep.get("uninstantiated_slots", 0)

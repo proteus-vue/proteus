@@ -696,6 +696,46 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeLayoutFollow
     into_java_string(&mut env, out)
 }
 
+/// ★★★**松手回弹/吸附**（S3-T2，2026-10-10 · 输入延迟专项 #767）：宿主 UP 时调它，内核按当前位移
+///   决定「回弹归零」或「滑出吸附（swipe-to-delete）」，以**弹簧**接管推进（换算/判定全在内核）。
+///   返回 `{"ok":true,"started":N,"targets":[…]}`。
+#[no_mangle]
+pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeLayoutFollowRelease<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    handle: jni::sys::jlong,
+    node_id: jni::sys::jint,
+    axis: jni::sys::jint,
+    stiffness: jni::sys::jfloat,
+    damping: jni::sys::jfloat,
+    mass: jni::sys::jfloat,
+    snap_threshold: jni::sys::jfloat,
+    snap_target: jni::sys::jfloat,
+) -> jstring {
+    let out = std::panic::catch_unwind(|| -> String {
+        let p = unsafe {
+            ffi::proteus_layout_follow_release(
+                handle as u64,
+                node_id as u32,
+                axis as u8,
+                stiffness,
+                damping,
+                mass,
+                snap_threshold,
+                snap_target,
+            )
+        };
+        if p.is_null() {
+            return "{\"ok\":false,\"error\":\"null\"}".to_string();
+        }
+        let s = unsafe { std::ffi::CStr::from_ptr(p) }.to_string_lossy().into_owned();
+        unsafe { ffi::proteus_layout_free_string(p) };
+        s
+    })
+    .unwrap_or_else(|_| "{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string());
+    into_java_string(&mut env, out)
+}
+
 /// ★★**共享元素**（几何原语）：源矩形 + 目标节点 ⇒ dx/dy/scale（内核算，宿主零几何数学）
 #[no_mangle]
 pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeSharedElement<'local>(

@@ -503,17 +503,20 @@ interface VaporReport {
     pressed: number
   }
   /**
-   * ★★★**S3-T1 探针**（2026-10-10 · 判据 ㉞）——**拖拽跟手零 JS 跨界**（`v-follow` → followAxis）。
-   *   `{follow_nodes, moves, applied, tx_after}`：宿主读 `followProbe` + `animTxProbe`——
-   *   `follow_nodes`=有跟手规格的节点数（>0）、`moves`=MOVE 被路由进内核的次数（>0）、
-   *   `applied`=内核返回"真的改了变换"的次数（>0）、`tx_after`=拖拽后该节点的 translateX
-   *   （≈ 拖拽位移 ⇒ 几何可核——跟手真的落到绘制真源）。
+   * ★★★**S3 探针**（2026-10-10 · 判据 ㉞/㉟）——**拖拽跟手 + 松手回弹/吸附（零 JS 跨界）**。
+   *   `{follow_nodes, moves, applied, tx_after}`：跟手（拖 dx ⇒ tx_after 跟手）。
+   *   ★T2：`{snap_final, snap_calls, return_final, return_calls}`——swipe-to-delete 吸附落点 /
+   *     回弹归零落点 / UP 真的驱动了内核松手（`layoutFollowRelease`）。
    */
   s3_probe: {
     follow_nodes: number
     moves: number
     applied: number
     tx_after: number
+    snap_final: number
+    snap_calls: number
+    return_final: number
+    return_calls: number
   }
   /**
    * ★★★**`:style` 对象展开探针**（2026-10-03）——两条通道各自的真值：
@@ -1880,7 +1883,7 @@ function runShort(args: VaporArgs): string {
     tpl_nodes: 0, tpl_ok: false, sub_l1: 0, sub_l0: 0, sub_l1_rate: 0, sub_sources: [],
     inst_ms: 0, inst_nodes: 0, inst_reused_ids: 0, inst_allocated_ids: 0, inst_rows: 0,
     inst_values_filled: 0, inst_virtual_rows: 0, inst_text_filled: 0, inst_width_filled: 0,
-    mix_text_probe: [], text_probe_rounds: [], gate_rounds: [], gate_text_nodes: [], once_node_id: -1, memo_node_id: -1, expr_probe: [], transition_started: 0, tpl_transition: [], component_mounts: 0, component_nodes: 0, component_kid_probe: {}, slot_probe: { texts: [], rects: [], fills: [], markers_left: -1 }, emit_probe: { emits: [], parent_source_after: undefined, geom_before: -1, geom_after: -1 }, scoped_probe: { texts: [], anchor_id: -1, anchor_width_field: -1, anchor_width_rect: -1, destr_text: '', destr_width_field: -1, destr_width_rect: -1 }, lifecycle_probe: { bindings: [], ran_handler: '', changed_sources: [], ops_bytes: 0, applied: 0, anchor_id: -1, geom_before: -1, geom_after: -1 }, dyn_probe: { texts: [], mounts: [], geom: [], dropped: -1, notes: [] }, directive_probe: { nodes: [], rounds: [], plays: [] }, mixed_probe: { texts: [], leaves: 0, geom: [] }, t2_probe: { nodeId: -1, widths: [], values: [], logs: [] }, b5_probe: { nodeId: -1, phases: [], widths: [], values: [] }, b3a_probe: { nodeId: -1, widths: [] }, b3b_probe: { childId: -1, child_xs: [] }, b3d_probe: { childId: -1, child_xs: [] }, bt1_probe: { textA_id: -1, textB_id: -1, residuals: [] }, bt2_probe: { nodeId: -1, policy_seen: [] }, bt3_probe: { nodeId: -1, inputEvents: -1 }, s11_probe: { press_nodes: -1, applied: -1, pressed: -1 }, s3_probe: { follow_nodes: -1, moves: -1, applied: -1, tx_after: -1 }, styleobj_probe: { anchor_id: -1, width_before: -1, width_after: -1, kernel_applied: 0, patch_calls: [] },
+    mix_text_probe: [], text_probe_rounds: [], gate_rounds: [], gate_text_nodes: [], once_node_id: -1, memo_node_id: -1, expr_probe: [], transition_started: 0, tpl_transition: [], component_mounts: 0, component_nodes: 0, component_kid_probe: {}, slot_probe: { texts: [], rects: [], fills: [], markers_left: -1 }, emit_probe: { emits: [], parent_source_after: undefined, geom_before: -1, geom_after: -1 }, scoped_probe: { texts: [], anchor_id: -1, anchor_width_field: -1, anchor_width_rect: -1, destr_text: '', destr_width_field: -1, destr_width_rect: -1 }, lifecycle_probe: { bindings: [], ran_handler: '', changed_sources: [], ops_bytes: 0, applied: 0, anchor_id: -1, geom_before: -1, geom_after: -1 }, dyn_probe: { texts: [], mounts: [], geom: [], dropped: -1, notes: [] }, directive_probe: { nodes: [], rounds: [], plays: [] }, mixed_probe: { texts: [], leaves: 0, geom: [] }, t2_probe: { nodeId: -1, widths: [], values: [], logs: [] }, b5_probe: { nodeId: -1, phases: [], widths: [], values: [] }, b3a_probe: { nodeId: -1, widths: [] }, b3b_probe: { childId: -1, child_xs: [] }, b3d_probe: { childId: -1, child_xs: [] }, bt1_probe: { textA_id: -1, textB_id: -1, residuals: [] }, bt2_probe: { nodeId: -1, policy_seen: [] }, bt3_probe: { nodeId: -1, inputEvents: -1 }, s11_probe: { press_nodes: -1, applied: -1, pressed: -1 }, s3_probe: { follow_nodes: -1, moves: -1, applied: -1, tx_after: -1, snap_final: -1, snap_calls: -1, return_final: -1, return_calls: -1 }, styleobj_probe: { anchor_id: -1, width_before: -1, width_after: -1, kernel_applied: 0, patch_calls: [] },
     mount_ms: 0, mount_nodes: 0,
     updates_run: 0, ops_bytes: 0, ops_ms: 0, apply_ms: 0, text_synced_total: 0, update_evidence: [], geom_probe: [], channels: [],
     ev_bindings: 0, ev_handlers: 0, ev_modifiers: 0, taps: 0, tap_evidence: [],
@@ -3498,13 +3501,12 @@ function runShort(args: VaporArgs): string {
       }
     }
 
-    /* ═══════════ ★★★S3-T1 探针（2026-10-10 · 判据 ㉞）：拖拽跟手零 JS 跨界 ═══════════
+    /* ═══════════ ★★★S3 探针（2026-10-10 · 判据 ㉞/㉟）：拖拽跟手 + 松手回弹/吸附（零 JS 跨界）═══════════
      *
-     * 【要证明什么】`v-follow` 折出的 `followAxis` 随节点透传宿主 ⇒ 宿主 MOVE **直接喂内核**
-     *   （`RustLayout.layoutFollow`，换算在内核）⇒ 写 `translate_x` ⇒ 宿主帧回调采样绘制。
-     *   **MOVE 期间一次 JS 都不调**（本注入只走真 MotionEvent；宿主跟随代码与手势 JS 通道无关）。
-     *   独立挂 s3 夹具树 → 宿主 `dragAt` 注入真拖拽（DOWN→MOVE×N→UP）→ 读 `followProbe`
-     *   （`moves`>0 且 `applied`>0）+ `animTxProbe`（`tx_after` ≈ 拖拽位移 ⇒ 几何可核）。
+     * 【要证明什么】宿主 MOVE/UP **直接喂内核**（`layoutFollow`/`layoutFollowRelease`，
+     *   换算/夹取/吸附判定/弹簧全在内核）——**全程不过 JS**（本注入只走真 MotionEvent）。
+     *   · ㉞ 跟手：纯跟手节点拖 dx=120 ⇒ `moves>0`/`applied>0`/`tx_after≈120`（跟手到位）。
+     *   · ㉟ 松手：swipe 节点拖 dx=-120（过阈值）⇒ 吸附到 -200；拖 dx=-30（未过）⇒ 回弹 ≈0。
      */
     {
       const s3Art = (artifacts as { s3?: { tpl: LayoutTemplate; table: SubscriptionTable } }).s3
@@ -3513,39 +3515,68 @@ function runShort(args: VaporArgs): string {
         try {
           const mOut = JSON.parse(proteusHost.mount(JSON.stringify({ viewport: s3Inst.viewport, nodes: s3Inst.nodes }))) as { ok?: boolean; error?: string }
           if (mOut.ok === true) {
-            // 找到带 followAxis 的节点（编译器折出的跟手节点）
-            const node = s3Inst.nodes.find((n) => typeof (n as { followAxis?: unknown }).followAxis === 'number')
-            const nodeId = node ? Number((node as { id: number }).id) : -1
-            if (nodeId >= 0 && typeof proteusHost.animTxProbe === 'function') {
+            const followNodes = s3Inst.nodes.filter((n) => typeof (n as { followAxis?: unknown }).followAxis === 'number')
+            // 语义分工：无 snap ⇒ 纯跟手（A）；有 snap 且带 clamp ⇒ 吸附/回弹双场景（B）
+            const pure = followNodes.find((n) => !(n as { followSnapThreshold?: unknown }).followSnapThreshold)
+            const snapper = followNodes.find((n) => (n as { followClampMin?: unknown }).followClampMin !== undefined)
+            const rectOf = (id: number) => {
               const rr = JSON.parse(proteusHost.readRects()) as { rects?: Record<string, { x?: number; y?: number; width?: number; height?: number }> }
-              const b = rr.rects?.[String(nodeId)]
-              if (b) {
-                const cx = (b.x ?? 0) + (b.width ?? 0) / 2
-                const cy = (b.y ?? 0) + (b.height ?? 0) / 2
-                const dxDrag = 120
-                // 注入真拖拽：起点 = 节点中心，位移 dx=120（axis:x ⇒ translateX 应≈120）
-                proteusHost.dragAt(JSON.stringify({ x: cx, y: cy, dx: dxDrag, dy: 0, steps: 6 }))
-                const fp = JSON.parse(proteusHost.followProbe()) as { follow_nodes?: number; moves?: number; applied?: number }
-                const tx = JSON.parse(proteusHost.animTxProbe(JSON.stringify([nodeId]))) as { layers?: Array<{ tx?: number }> }
-                const txAfter = tx.layers?.[0]?.tx ?? -1
-                rep.s3_probe = { follow_nodes: fp.follow_nodes ?? -1, moves: fp.moves ?? -1, applied: fp.applied ?? -1, tx_after: txAfter }
-              } else {
-                notes.push('S3-T1 探针：节点矩形缺失（mount/readRects）——判据 ㉞ 按缺失处理')
+              return rr.rects?.[String(id)]
+            }
+            const centerOf = (id: number): { x: number; y: number } | null => {
+              const b = rectOf(id)
+              return b ? { x: (b.x ?? 0) + (b.width ?? 0) / 2, y: (b.y ?? 0) + (b.height ?? 0) / 2 } : null
+            }
+            const txOf = (id: number): number => {
+              if (typeof proteusHost.animTxProbe !== 'function') return -1
+              const tx = JSON.parse(proteusHost.animTxProbe(JSON.stringify([id]))) as { layers?: Array<{ tx?: number }> }
+              return tx.layers?.[0]?.tx ?? 0
+            }
+            let txAfter = -1, moves = -1, applied = -1
+            let snapFinal = -1, snapCalls = -1, returnFinal = -1, returnCalls = -1
+            // ── 纯跟手（判据 ㉞）：拖 dx=120（< 无 snap）⇒ 跟手不发 UP 之前读落地前 tx ──
+            if (pure) {
+              const c = centerOf(Number((pure as { id: number }).id))
+              if (c) {
+                // release:false ⇒ 停在拖拽终点（读跟手位姿，不受回弹影响）
+                const dr = JSON.parse(proteusHost.dragAt(JSON.stringify({ x: c.x, y: c.y, dx: 120, dy: 0, steps: 6, release: false }))) as { follow_moves?: number; follow_applied?: number }
+                moves = dr.follow_moves ?? -1
+                applied = dr.follow_applied ?? -1
+                txAfter = txOf(Number((pure as { id: number }).id))
               }
-            } else {
-              notes.push('S3-T1 探针：无 followAxis 节点 / 宿主无 animTxProbe——判据 ㉞ 按缺失处理')
+            }
+            // ── 吸附（swipe-to-delete）：拖 dx=-120（过阈值 60）⇒ 松手吸附到 -200 ──
+            if (snapper) {
+              const sid = Number((snapper as { id: number }).id)
+              const c = centerOf(sid)
+              if (c) {
+                const dr = JSON.parse(proteusHost.dragAt(JSON.stringify({ x: c.x, y: c.y, dx: -120, dy: 0, steps: 6, release: true, settleFrames: 200 }))) as { release_calls?: number; release_started?: number }
+                snapCalls = dr.release_calls ?? -1
+                snapFinal = txOf(sid)
+                // ── 回弹归零：拖 dx=-30（未过阈值 60）⇒ 松手弹回 ≈0 ──
+                const r0 = JSON.parse(proteusHost.dragAt(JSON.stringify({ x: c.x, y: c.y, dx: -30, dy: 0, steps: 6, release: true, settleFrames: 200 }))) as { release_calls?: number }
+                returnCalls = r0.release_calls ?? -1
+                returnFinal = txOf(sid)
+              }
+            }
+            const fp = JSON.parse(proteusHost.followProbe()) as { follow_nodes?: number }
+            rep.s3_probe = {
+              follow_nodes: fp.follow_nodes ?? -1,
+              moves, applied, tx_after: txAfter,
+              snap_final: snapFinal, snap_calls: snapCalls,
+              return_final: returnFinal, return_calls: returnCalls,
             }
           } else {
-            notes.push(`S3-T1 探针：mount 失败（${mOut.error ?? '?'}）——判据 ㉞ 按缺失处理`)
+            notes.push(`S3 探针：mount 失败（${mOut.error ?? '?'}）——判据 ㉞/㉟ 按缺失处理`)
           }
         } catch (e) {
-          notes.push(`S3-T1 探针异常：${String((e as Error)?.message ?? e)}`)
+          notes.push(`S3 探针异常：${String((e as Error)?.message ?? e)}`)
         }
         try {
           proteusHost.mount(JSON.stringify({ viewport: inst.viewport, nodes: inst.nodes }))
         } catch { /* 重挂失败 ⇒ 判据按 host_nodes 不符判红 */ }
       } else {
-        notes.push('S3-T1 探针：产物无 s3 段 / 宿主无 dragAt/followProbe（夹具未覆盖 ⇒ 判据 ㉞ 按缺失处理）')
+        notes.push('S3 探针：产物无 s3 段 / 宿主无 dragAt/followProbe（夹具未覆盖 ⇒ 判据 ㉞/㉟ 按缺失处理）')
       }
     }
 

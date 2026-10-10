@@ -1967,19 +1967,34 @@ function pressKeyOf(field: string): string {
 }
 
 /**
- * ★★★**S3-T1 跟手规格解释**（2026-10-10 · 输入延迟专项 #767）：把 `v-follow="{ axis: 'x', gain: 1 }"`
- *   的**静态对象字面量**解释成内核跟随参数（轴掩码 + 增益）。
+ * ★★★**S3 跟手规格解释**（2026-10-10 · 输入延迟专项 #767）：把 `v-follow="{ axis:'x', clamp:[…], spring:{…} }"`
+ *   的**静态对象字面量**解释成内核跟随参数（轴掩码 + 增益 + 夹取 + 松手弹簧/吸附）。
  *
  * 【为什么复用 `parseStyleObject`】它就是"对象字面量 → 静态键 + 字面量值"的**唯一实现**（同一 babel 解析、
- *   同一常量折叠口径）——本处不另造一套解析（避免两份漂移）。
+ *   同一常量折叠口径）——本处不另造一套解析。★`clamp`（数组）/`spring`·`snap`（对象）是 `parseStyleObject`
+ *   明确拒绝的"嵌套"形态，故只对这三个键做**受限的源码级提取**（仍是静态字面量——见下）。
  *
- * 【T1 边界（诚实）】只认 `axis`（`'x'`/`'y'`/`'both'` 或 0..3）与 `gain`（数值常量）；
- *   `clamp`（夹取）/ `spring`（回弹）/ 非字面量值 ⇒ **诊断**（属 S3-T2，未接前不静默当已支持）。
+ * 【支持键（T1+T2）】`axis`（'x'/'y'/'both' 或 0..3）· `gain`（数值）·
+ *   `clamp: [min, max]`（跟手夹取区间）· `spring: { stiffness, damping, mass }`（松手回弹弹簧）·
+ *   `snap: { threshold, target }`（松手吸附：|位移|≥threshold ⇒ 滑到 ±target，否则回弹 0 = swipe-to-delete）。
  *   轴掩码：0=none / 1=x / 2=y / 3=both（与内核 `follow_translate` 的 `axis_mask` 同编码）。
+ *   非静态形态（变量/字符串）⇒ **诊断**（不静默当已支持）。
  */
-function interpretFollowSpec(src: string): { axis?: number; gain?: number; diag: string[]; hint?: string } {
+function interpretFollowSpec(src: string): {
+  axis?: number
+  gain?: number
+  clampMin?: number
+  clampMax?: number
+  springStiffness?: number
+  springDamping?: number
+  springMass?: number
+  snapThreshold?: number
+  snapTarget?: number
+  diag: string[]
+  hint?: string
+} {
   const diag: string[] = []
-  const hint = "v-follow 目前支持 axis: 'x'|'y'|'both'（或 0..3）与 gain（数值）；clamp/spring 属后续批次（S3-T2）"
+  const hint = "v-follow 支持 axis: 'x'|'y'|'both' · gain · clamp: [min, max] · spring: { stiffness, damping, mass } · snap: { threshold, target }（均为静态字面量）"
   if (!src) {
     diag.push('缺对象字面量（如 v-follow="{ axis: \'x\' }"）')
     return { diag, hint }
@@ -1990,7 +2005,7 @@ function interpretFollowSpec(src: string): { axis?: number; gain?: number; diag:
     return { diag, hint }
   }
   const AXIS: Record<string, number> = { x: 1, y: 2, both: 3, none: 0 }
-  const KNOWN = new Set(['axis', 'gain', 'clamp', 'spring', 'source'])
+  const KNOWN = new Set(['axis', 'gain', 'clamp', 'spring', 'snap', 'source'])
   let axis: number | undefined
   let gain: number | undefined
   for (const e of parsed.entries) {
@@ -2007,20 +2022,37 @@ function interpretFollowSpec(src: string): { axis?: number; gain?: number; diag:
     } else if (e.key === 'gain') {
       if (typeof e.constValue === 'number') gain = e.constValue
       else diag.push('gain 须为数值常量')
-    } else if (!KNOWN.has(e.key)) {
-      diag.push(`未知键 "${e.key}"（可用 axis / gain）`)
+    } else if (e.key !== 'clamp' && e.key !== 'spring' && e.key !== 'snap' && e.key !== 'source' && !KNOWN.has(e.key)) {
+      diag.push(`未知键 "${e.key}"（可用 axis / gain / clamp / spring / snap）`)
     }
   }
-  for (const pr of parsed.problems) {
-    if (pr.kind === 'nested' && (pr.key === 'clamp' || pr.key === 'spring')) {
-      diag.push(`${pr.key}（${pr.key === 'clamp' ? '夹取' : '松手回弹'}）属 S3-T2，本批未接`)
-    } else {
-      diag.push(`成员 \`${pr.key ?? pr.kind}\` 形态不支持（${pr.kind}）`)
-    }
+  // 嵌套字面量（clamp 数组 / spring·snap 对象）——从源码受限提取（避免为三个键引 JSON5）
+  const extractNums = (re: RegExp): number[] => {
+    const m = re.exec(src)
+    return m ? m.slice(1).map((x) => Number(x)) : []
   }
+  const clamp = extractNums(/clamp\s*:\s*\[\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*\]/)
+  if (clamp.length === 2 && clamp.every(Number.isFinite)) {
+    if (clamp[0]! > clamp[1]!) diag.push(`clamp 区间非法：[${clamp[0]}, ${clamp[1]}]（min 应 ≤ max）`)
+    else { /* 合法：下方返回 */ }
+  }
+  const spring = extractNums(/spring\s*:\s*\{[^{}]*?stiffness\s*:\s*(-?[\d.]+)[^{}]*?damping\s*:\s*(-?[\d.]+)[^{}]*?mass\s*:\s*(-?[\d.]+)/)
+  const snap = extractNums(/snap\s*:\s*\{[^{}]*?threshold\s*:\s*(-?[\d.]+)[^{}]*?target\s*:\s*(-?[\d.]+)/)
+  // 若源码里出现 clamp:/spring:/snap: 但正则没提到 ⇒ 形态不支持（如变量）——诊断（不静默）
+  if (/\bclamp\s*:/.test(src) && clamp.length !== 2) diag.push('clamp 须为 `[min, max]` 数值数组字面量')
+  if (/\bspring\s*:/.test(src) && spring.length !== 3) diag.push('spring 须为 `{ stiffness, damping, mass }` 数值对象字面量')
+  if (/\bsnap\s*:/.test(src) && snap.length !== 2) diag.push('snap 须为 `{ threshold, target }` 数值对象字面量')
   // axis 缺省 ⇒ 'x'（T1 最常见轴；显式给错则 axis 未设，仍报诊断）
   if (axis === undefined && diag.length === 0) axis = 1
-  return { ...(axis !== undefined ? { axis } : {}), ...(gain !== undefined ? { gain } : {}), diag, hint }
+  return {
+    ...(axis !== undefined ? { axis } : {}),
+    ...(gain !== undefined ? { gain } : {}),
+    ...(clamp.length === 2 && clamp[0]! <= clamp[1]! ? { clampMin: clamp[0]!, clampMax: clamp[1]! } : {}),
+    ...(spring.length === 3 ? { springStiffness: spring[0]!, springDamping: spring[1]!, springMass: spring[2]! } : {}),
+    ...(snap.length === 2 ? { snapThreshold: snap[0]!, snapTarget: snap[1]! } : {}),
+    diag,
+    hint,
+  }
 }
 
 export function resolveClassStyles(
@@ -3521,18 +3553,23 @@ export function buildLayoutTemplate(
             'VAPOR_VMODEL_NO_INPUT_CONTROL',
           )
         }
-        // ★★★**S3-T1 跟手**（2026-10-10 · 输入延迟专项 #767 · `v-follow`）：
-        //   `v-follow="{ axis: 'x' }"` ⇒ 折进节点样式的 `followAxis`/`followGain` 扁平字段
-        //   （与 `press*` 同一条通道：随节点透传宿主，宿主 DOWN/MOVE **原生**驱动内核 `follow`，
-        //   **零 JS 跨界**——这是 S3 判据 `js_involved_gestures_ratio == 0` 的编译期起点）。
-        //   ★T1 只认 `axis`（'x'/'y'/'both' 或 0..3）与 `gain`（数值）；`clamp`（夹取）/`spring`（回弹）
-        //     属 S3-T2，未接前**明确诊断**（不静默当成已支持）。
+        // ★★★**S3 跟手**（2026-10-10 · 输入延迟专项 #767 · `v-follow`）：
+        //   `v-follow="{ axis:'x', clamp:[…], spring:{…}, snap:{…} }"` ⇒ 折进节点样式的
+        //   `follow*` 扁平字段（与 `press*` 同一条通道：随节点透传宿主，宿主 DOWN/MOVE **原生**
+        //   驱动内核 `follow`、UP 驱动 `followRelease`，**零 JS 跨界**——S3 判据 `js_involved_gestures_ratio == 0` 的编译期起点）。
         if (p.type === 7 && p.name === 'follow') {
           const followSrc = (p.exp as { content?: string } | undefined)?.content?.trim() ?? ''
           const fo = interpretFollowSpec(followSrc)
           if (fo.axis !== undefined) {
             style.followAxis = fo.axis
             if (fo.gain !== undefined) style.followGain = fo.gain
+            if (fo.clampMin !== undefined) { style.followClampMin = fo.clampMin; style.followClampMax = fo.clampMax }
+            if (fo.springStiffness !== undefined) {
+              style.followSpringStiffness = fo.springStiffness
+              style.followSpringDamping = fo.springDamping
+              style.followSpringMass = fo.springMass
+            }
+            if (fo.snapThreshold !== undefined) { style.followSnapThreshold = fo.snapThreshold; style.followSnapTarget = fo.snapTarget }
           }
           for (const m of fo.diag) diag(`${tag}(id=${id}) v-follow：${m}`, fo.hint, 'VAPOR_FOLLOW_SHAPE')
         }
