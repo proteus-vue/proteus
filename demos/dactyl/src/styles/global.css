@@ -146,17 +146,19 @@ body {
   flex-wrap: wrap;
   align-content: flex-start;
   width: 100%;
-  height: 620px;
-  padding: 16px;
+  /* ★一屏放满：针林高 = 视口高 − 头部（标题+提示）⇒ 内容不溢出 ⇒ 不滚动（§4.3 单指拖拽，无滚动）。 */
+  height: calc(var(--pf-vh, 640px) - 172px);
+  padding: 4px;
+  overflow: hidden;
   background-color: #0e1520;
   border-radius: 14px;
 }
 .needle {
-  width: 40px;
-  height: 96px;
-  margin: 6px;
+  width: 20px;
+  height: 30px;
+  margin: 1px;
   background-color: #39d0ff;
-  border-radius: 8px;
+  border-radius: 4px;
 }
 
 /* L3 沸腾数据场（数字/光点的静态示意） */
