@@ -2042,12 +2042,15 @@ function interpretFollowSpec(src: string): {
   if (/\bclamp\s*:/.test(src) && clamp.length !== 2) diag.push('clamp 须为 `[min, max]` 数值数组字面量')
   if (/\bspring\s*:/.test(src) && spring.length !== 3) diag.push('spring 须为 `{ stiffness, damping, mass }` 数值对象字面量')
   if (/\bsnap\s*:/.test(src) && snap.length !== 2) diag.push('snap 须为 `{ threshold, target }` 数值对象字面量')
-  // axis 缺省 ⇒ 'x'（T1 最常见轴；显式给错则 axis 未设，仍报诊断）
-  if (axis === undefined && diag.length === 0) axis = 1
+  // ★★★**全有或全无（all-or-nothing）**：有任何诊断 ⇒ **不折任何字段**（宁可少合并不错合并，§2.2）。
+  //   否则会出现"半应用"（折了 axis、丢了 gain）——作者以为生效、实际只对了一半（静默语义偏差）。
+  if (diag.length > 0) return { diag, hint }
+  // 无诊断 ⇒ axis 缺省 'x'（T1 最常见轴）
+  if (axis === undefined) axis = 1
   return {
-    ...(axis !== undefined ? { axis } : {}),
+    axis,
     ...(gain !== undefined ? { gain } : {}),
-    ...(clamp.length === 2 && clamp[0]! <= clamp[1]! ? { clampMin: clamp[0]!, clampMax: clamp[1]! } : {}),
+    ...(clamp.length === 2 ? { clampMin: clamp[0]!, clampMax: clamp[1]! } : {}),
     ...(spring.length === 3 ? { springStiffness: spring[0]!, springDamping: spring[1]!, springMass: spring[2]! } : {}),
     ...(snap.length === 2 ? { snapThreshold: snap[0]!, snapTarget: snap[1]! } : {}),
     diag,
