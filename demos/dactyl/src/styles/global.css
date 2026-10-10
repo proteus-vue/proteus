@@ -1,0 +1,57 @@
+/* src/styles/global.css —— 全局样式（设计令牌 + 页面骨架）
+   ═══════════════════════════════════════════════════════════════════════════════
+   【四端消费同一份】
+     · Web   —— src/main.ts 里 `import './styles/global.css'`
+     · 小程序 —— proteus.config.ts 的 targets.mp.globalStyle（→ app.wxss）
+     · App   —— 构建期把这里的 `:root` 令牌与 `.class` 规则**折进**各节点样式
+                （App 端无运行时 CSS 引擎，`var()` 在编译期展开为具体值）
+   ⇒ 一份文件、四端一致，无需为任何端分叉。
+
+   本写法（`:root` 令牌 + 静态 class + var()）与仓库 css-conformance（全端对齐验收项目）
+   同一套，已在四端验证。改主题：只改下面 :root 的值。
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+/* 根重置：浏览器 body 默认 margin 8px 会让灰底四周露白（App / 小程序无此概念）——统一清零。 */
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+/* 设计令牌（全局主题变量）——改这里即可全局换肤 */
+:root {
+  --brand: #4f46e5;
+  --brand-soft: #ede9fe;
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --line: #e6e8ec;
+  --text: #16181d;
+  --text-2: #5b616e;
+  --text-3: #8b909c;
+}
+
+/* 页面骨架：满宽 + 安全区避让（App 端状态栏/手势条由 --pf-inset-* 提供，Web/小程序取 0）。 */
+.page {
+  width: 100%;
+  min-height: 100vh;
+  box-sizing: border-box;
+  background-color: var(--bg);
+  padding: calc(var(--pf-inset-top, 0px) + 20px) 16px calc(var(--pf-inset-bottom, 0px) + 40px);
+}
+
+/* 卡片：真实业务里最常见的容器形态（列表项 / 面板 / 区块） */
+.card {
+  background-color: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px;
+}
+
+/* 区块小标题 */
+.section-title {
+  display: block;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 24px 0 12px;
+}

@@ -257,6 +257,7 @@ public final class AppActivity extends Activity {
         contentHost.post(new Runnable() {
             @Override public void run() {
                 renderCurrent(readState());
+                applyDactylOverlay();   // ★Dactyl 延迟显影（app-config features.dactylOverlay；缺省关）
                 Log.i(TAG, "PROTEUS_APP_READY screen=" + currentName(readState()));
                 // ★内容已上屏 ⇒ 撤启动占位（决策 #724，对齐 iOS）：黑底/白底不再可见。
                 if (placeholder != null) { placeholder.remove(); placeholder = null; }
@@ -1063,6 +1064,25 @@ public final class AppActivity extends Activity {
             JSONObject sa = o.optJSONObject("safeArea");
             return "hide".equals(sa != null ? sa.optString("statusBar", "show") : "show");
         } catch (Throwable t) { return false; }
+    }
+
+    /**
+     * ★★★Dactyl 延迟显影开关（决策 #780 · `15-dactyl-demo.md` §3）：读 `app-config.json` 的
+     *   `features.dactylOverlay`（缺省 false ⇒ 对既有 App 零影响）。开启后宿主叠加绘制
+     *   幽灵拖尾 / 延迟环 / 帧格（官方触摸时间戳采样），供「输入延迟 + 视觉反馈」专项验收。
+     */
+    private void applyDactylOverlay() {
+        if (draw == null || draw.view() == null) return;
+        boolean on = false;
+        try {
+            String sc = readAsset("app-config.json");
+            if (sc != null) {
+                JSONObject o = new JSONObject(sc);
+                JSONObject f = o.optJSONObject("features");
+                if (f != null) on = f.optBoolean("dactylOverlay", false);
+            }
+        } catch (Throwable ignored) { /* 无配置/解析失败 ⇒ 保持关（不静默开启） */ }
+        draw.view().setDactylEnabled(on);
     }
 
     private String readAsset(String name) {

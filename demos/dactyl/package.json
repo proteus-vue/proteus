@@ -1,0 +1,36 @@
+{
+  "name": "demos-dactyl",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Dactyl · 触感穹顶 —— 输入延迟 + 视觉反馈专项的验收 Demo（15-dactyl-demo.md）",
+  "scripts": {
+    "dev:web": "proteus dev --target web",
+    "build:web": "proteus build --target web",
+    "build:mp": "proteus build --target skyline",
+    "build:android": "proteus build --target android",
+    "package:android": "proteus build --target android --package",
+    "build:ios": "proteus build --target ios",
+    "package:ios": "proteus build --target ios --package",
+    "build:harmony": "proteus build --target harmony",
+    "package:harmony": "proteus build --target harmony --package"
+  },
+  "dependencies": {
+    "@proteus-vue/router": "workspace:*",
+    "@proteus-vue/runtime": "workspace:*",
+    "@proteus-vue/shared": "workspace:*",
+    "@proteus-vue/web": "workspace:*",
+    "vue": "^3.4.0"
+  },
+  "devDependencies": {
+    "@proteus-vue/cli": "workspace:*",
+    "@proteus-vue/compiler": "workspace:*",
+    "@proteus-vue/plugin-vite": "workspace:*",
+    "@types/node": "^20.0.0",
+    "@vitejs/plugin-vue": "^5.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.4.0",
+    "vite": "^5.0.0",
+    "vue-tsc": "^2.0.0"
+  }
+}
