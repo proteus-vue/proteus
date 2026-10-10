@@ -292,7 +292,57 @@ pub fn apply_style_key(node: &mut LNode, key: &str, value: f32) -> Result<bool, 
             Ok(true)
         }
         "layout.display" => {
-            s.display = if v == 0.0 { crate::style::Display::None } else { crate::style::Display::Flex };
+            // ★★★B3b（2026-10-10）：display 由"旧二元映射"升级为**索引编码**（与 slot-runtime
+            //   `ENUM_LAYOUT_FIELDS.display` 逐字一致）：0=flex 1=grid 2=none（默认 flex）。
+            s.display = match v as i32 {
+                1 => crate::style::Display::Grid,
+                2 => crate::style::Display::None,
+                _ => crate::style::Display::Flex,
+            };
+            Ok(true)
+        }
+        // ★★★B3b（2026-10-10）：**枚举布局字段索引解码**（值为 f32 索引；与 JS `ENUM_LAYOUT_FIELDS` 同序）。
+        "layout.flexDirection" => {
+            s.flex_direction = match v as i32 {
+                0 => crate::style::FlexDirection::Row,
+                2 => crate::style::FlexDirection::RowReverse,
+                3 => crate::style::FlexDirection::ColumnReverse,
+                _ => crate::style::FlexDirection::Column, // 1 / 默认
+            };
+            Ok(true)
+        }
+        "layout.flexWrap" => {
+            s.flex_wrap = match v as i32 {
+                1 => crate::style::FlexWrap::Wrap,
+                2 => crate::style::FlexWrap::WrapReverse,
+                _ => crate::style::FlexWrap::Nowrap, // 0 / 默认
+            };
+            Ok(true)
+        }
+        "layout.position" => {
+            s.position = match v as i32 {
+                1 => crate::style::Position::Relative,
+                2 => crate::style::Position::Absolute,
+                3 => crate::style::Position::Fixed,
+                4 => crate::style::Position::Sticky,
+                _ => crate::style::Position::Static, // 0 / 默认
+            };
+            Ok(true)
+        }
+        "layout.overflow" => {
+            s.overflow = match v as i32 {
+                1 => crate::style::Overflow::Hidden,
+                2 => crate::style::Overflow::Scroll,
+                3 => crate::style::Overflow::Auto,
+                _ => crate::style::Overflow::Visible, // 0 / 默认
+            };
+            Ok(true)
+        }
+        "layout.alignItems" => {
+            // 内核 `align_items` 是 String（taffy 消费）——索引表与 JS `ENUM_LAYOUT_FIELDS.alignItems` 同序。
+            const AI: [&str; 10] = ["normal", "start", "end", "flex-start", "flex-end", "self-start", "self-end", "center", "stretch", "baseline"];
+            let i = (v as i32).clamp(0, 9) as usize;
+            s.align_items = AI[i].to_string();
             Ok(true)
         }
         // ★★2026-09-30 补登记（真缺口）：`LStyle` 一直有 `top`/`left`（position:absolute 的核心属性），
@@ -1055,5 +1105,32 @@ mod tests {
         // 非有限 ⇒ 清空（与 width/height 同策略）
         assert!(apply_style_key(&mut n, "layout.right", f32::NAN).unwrap());
         assert_eq!(n.style.right, None);
+    }
+
+    #[test]
+    fn b3b_enum_layout_fields_decode_by_index() {
+        // ★★★B3b（2026-10-10）：枚举布局字段按**索引**解码（与 slot-runtime ENUM_LAYOUT_FIELDS 同序）。
+        use crate::style::{Display, FlexDirection, FlexWrap, Overflow, Position};
+        let mut n = crate::node::LNode::new(1, crate::style::LStyle::default());
+        assert!(apply_style_key(&mut n, "layout.display", 1.0).unwrap());
+        assert_eq!(n.style.display, Display::Grid);
+        assert!(apply_style_key(&mut n, "layout.display", 2.0).unwrap());
+        assert_eq!(n.style.display, Display::None);
+        assert!(apply_style_key(&mut n, "layout.display", 0.0).unwrap());
+        assert_eq!(n.style.display, Display::Flex);
+        assert!(apply_style_key(&mut n, "layout.flexDirection", 0.0).unwrap());
+        assert_eq!(n.style.flex_direction, FlexDirection::Row);
+        assert!(apply_style_key(&mut n, "layout.flexDirection", 3.0).unwrap());
+        assert_eq!(n.style.flex_direction, FlexDirection::ColumnReverse);
+        assert!(apply_style_key(&mut n, "layout.flexWrap", 1.0).unwrap());
+        assert_eq!(n.style.flex_wrap, FlexWrap::Wrap);
+        assert!(apply_style_key(&mut n, "layout.position", 2.0).unwrap());
+        assert_eq!(n.style.position, Position::Absolute);
+        assert!(apply_style_key(&mut n, "layout.overflow", 3.0).unwrap());
+        assert_eq!(n.style.overflow, Overflow::Auto);
+        assert!(apply_style_key(&mut n, "layout.alignItems", 7.0).unwrap());
+        assert_eq!(n.style.align_items, "center");
+        assert!(apply_style_key(&mut n, "layout.alignItems", 8.0).unwrap());
+        assert_eq!(n.style.align_items, "stretch");
     }
 }

@@ -101,6 +101,42 @@ export function layoutNumber(value: unknown): number | null {
   return null
 }
 
+/**
+ * ★★★B3b（2026-10-10）：**可数字编码的枚举布局字段**（→ 同一条内核二进制 `SET_STYLE`）。
+ *
+ * 【为什么单列】枚举字段（`display`/`flexDirection`/…）的 plan 值是**字符串**（如 `"flex"`/`"row"`），
+ *   而二进制 `SET_STYLE` 载荷是 f32 ⇒ 用**索引编码**（本表顺序即编码；内核 `apply_style_key` 同表顺序解码）。
+ *   `default` = 该字段的**内核默认**索引（类关闭/无基线时回退到它——"清除回退"）。
+ *   ★本表顺序与内核 `ops_apply.rs::apply_style_key` 的对应臂**必须逐字一致**（跨语言契约，同 `NUMERIC_LAYOUT_FIELDS`）。
+ *   ★`overflowX`/`overflowY` **不在此表**（内核 `LStyle` 无轴级 overflow 字段）⇒ 仍不支持（诊断）。
+ */
+export const ENUM_LAYOUT_FIELDS: Record<string, { values: readonly string[]; default: number }> = {
+  // display：Flex/Grid/None（内核 `Display`）
+  display: { values: ['flex', 'grid', 'none'], default: 0 },
+  // alignItems：内核 `align_items`（String → taffy）
+  alignItems: {
+    values: ['normal', 'start', 'end', 'flex-start', 'flex-end', 'self-start', 'self-end', 'center', 'stretch', 'baseline'],
+    default: 8, // stretch（内核 default_align）
+  },
+  // flexDirection：Row/Column/RowReverse/ColumnReverse（内核 `FlexDirection`）
+  flexDirection: { values: ['row', 'column', 'row-reverse', 'column-reverse'], default: 1 }, // column
+  // flexWrap：Nowrap/Wrap/WrapReverse（内核 `FlexWrap`）
+  flexWrap: { values: ['nowrap', 'wrap', 'wrap-reverse'], default: 0 }, // nowrap
+  // position：Static/Relative/Absolute/Fixed/Sticky（内核 `Position`）
+  position: { values: ['static', 'relative', 'absolute', 'fixed', 'sticky'], default: 0 }, // static
+  // overflow：Visible/Hidden/Scroll/Auto（内核 `Overflow`）
+  overflow: { values: ['visible', 'hidden', 'scroll', 'auto'], default: 0 }, // visible
+}
+
+/** 枚举字段值 → 索引（大小写不敏感）；未识别 ⇒ null（调用方回退默认）。 */
+export function layoutEnumIndex(field: string, value: unknown): number | null {
+  const spec = ENUM_LAYOUT_FIELDS[field]
+  if (!spec || typeof value !== 'string') return null
+  const v = value.trim().toLowerCase()
+  const i = spec.values.indexOf(v)
+  return i >= 0 ? i : null
+}
+
 /** 互斥组状态：0 = 组内无活跃；i+1 = 组内第 i 个位活跃（按组内位序） */
 export function groupStateOf(bitmap: number, groupBits: number[]): number {
   for (let i = 0; i < groupBits.length; i++) if ((bitmap & (1 << groupBits[i]!)) !== 0) return i + 1

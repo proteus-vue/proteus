@@ -79,7 +79,7 @@ Teleport / KeepAlive / Suspense / Transition / TransitionGroup / v-memo / 自定
 | 3 | **v-if / v-else-if / v-else 链** | ✅ | 三个节点全建 + 槽位 `visibility:visible`（源 `[a,b]`） |
 | 4 | **v-for 单层** + `:key` + 行内绑定 | ✅ | `listId:0` + 槽位 `list-data:list.items` / `list-item:layout.width` |
 | 5 | v-for **嵌套** | ❌ **诊断拒绝** | `"i(id=2) 嵌套 v-for 未支持（本版只支持单层）"` |
-| 6 | 动态绑定 `:width` / `:show` / `:class` | ✅ | 槽位 `style:layout.width` / `prop:attr.show` |
+| 6 | 动态绑定 `:width` / `:show` / `:class` | ✅ | 槽位 `style:layout.width` / `prop:attr.show`。★**动态 `:class` 的布局字段（B3a/B3b，2026-10-10）**：**数值**（width/margin*/padding*/flex*/gap/top/left/right/bottom/aspectRatio…）+ **枚举**（display/flexDirection/flexWrap/position/overflow/alignItems）经**内核二进制 SET_STYLE**（数值=f32 / 枚举=索引编码，host-agnostic）**端上真重排**（三端判据 ㉕/㉖）；其余（grid 模板 / whiteSpace / wordBreak / overflowX-Y / justify* / alignContent / alignSelf）仍诊断。 |
 | 7 | 动态 `:style` 对象 | ✓ 半 | 模板不解析（**由订阅表 `SET_STYLE` 逐键下发**——设计如此，非缺陷） |
 | 8 | 动态属性 `:[k]` | ⚠️ **静默** | 无诊断，槽位错标成 `prop:attr.fn`（**把表达式源码当属性名**） |
 | 9 | **v-show** | ✅ | 走 `visibility:visible` 槽位（与 v-if 同通道，语义不同） |

@@ -406,6 +406,26 @@ const b3on = ref(false)
 .wide { width: 200px; }
 </style>`
 
+/**
+ * ★★★B3b 夹具（判据 ㉖，2026-10-10）：**动态 `:class` 的枚举布局字段**端上真生效
+ *   （`flex-direction` 走内核二进制 SET_STYLE 索引编码）。容器 column 默认；`.hrow{flex-direction:row}`。
+ *   两子项各宽 120：column ⇒ 子2 x=0；row ⇒ 子2 x=120。判据核**子2 x 0→120→0**（几何真变）。
+ */
+const B3B_SFC = `<template>
+  <p-view :class="{ hrow: b3bon }" style="width: 400px; height: 100px; flex-direction: column">
+    <p-view style="width: 120px; height: 20px; background-color: #3aa0ff"></p-view>
+    <p-view style="width: 120px; height: 20px; background-color: #7c3aed"></p-view>
+  </p-view>
+</template>
+
+<script setup lang="ts">
+const b3bon = ref(false)
+</script>
+
+<style>
+.hrow { flex-direction: row; }
+</style>`
+
 /** 长列表夹具：**行高 100px**（视口 2400 ⇒ 可见 ~24 行；预加载 ±10 ⇒ 物化 ~34 行）
  *  ——判据的口径：1000 行都必须在内核树里（几何正确），但宿主只物化可见区。
  *  ★行内含 `:width` 绑定（L1 槽位）与插值文本（`{{ item.title }}`）。 */
@@ -578,6 +598,8 @@ process.stdout.write(JSON.stringify({
   b5: build(${JSON.stringify(B5_SFC)}, 'vapor-b5.vue'),
   // ★★B3a：动态 :class 数值布局字段（判据 ㉕）
   b3a: build(${JSON.stringify(B3A_SFC)}, 'vapor-b3a.vue'),
+  // ★★B3b：动态 :class 枚举布局字段（判据 ㉖）
+  b3b: build(${JSON.stringify(B3B_SFC)}, 'vapor-b3b.vue'),
   // ★:style 对象展开（判据 ㉒）
   styleObj: build(${JSON.stringify(STYLE_OBJ_SFC)}, 'vapor-style-obj.vue'),
   // ★★★六端 SFC 压力夹具：编译**共享 SFC 文件**（examples 页面）——与 Web/MP 同源
@@ -758,7 +780,7 @@ for (const [nm, def] of Object.entries(parsed.components)) {
       `父绑定 @${parentEmitBinds[0].event}（nodeId=${parentEmitBinds[0].nodeId}）`,
   )
 }
-fs.writeFileSync(OUT, JSON.stringify({ ...parsed.small, components: parsed.components, slot: parsed.slot, scoped: parsed.scoped, dyn: parsed.dyn, directive: parsed.directive, mixed: parsed.mixed, t2: parsed.t2, b5: parsed.b5, b3a: parsed.b3a, styleObj: parsed.styleObj }))
+fs.writeFileSync(OUT, JSON.stringify({ ...parsed.small, components: parsed.components, slot: parsed.slot, scoped: parsed.scoped, dyn: parsed.dyn, directive: parsed.directive, mixed: parsed.mixed, t2: parsed.t2, b5: parsed.b5, b3a: parsed.b3a, b3b: parsed.b3b, styleObj: parsed.styleObj }))
 console.log(`[gen-vapor-fixture] ✅ 组件注册表：${Object.keys(parsed.components).join(', ')}（随父产物下发）`)
 // ★P1-3 插槽分发夹具（判据 ⑮）：父产物必须带 slotFor 标记、子产物必须带 slotOutlet 标记
 //   （"生成器静默退化"是本仓重点拦的形态——标记缺了就是分发不可能发生）
@@ -923,6 +945,17 @@ console.log(`[gen-vapor-fixture] ✅ 组件注册表：${Object.keys(parsed.comp
     process.exit(1)
   }
   console.log(`[gen-vapor-fixture] ✅ B3a 夹具：动态 :class 数值布局字段（classPlans 有 · 无布局诊断）`)
+}
+// ★★★B3b 夹具（判据 ㉖）：动态 :class 枚举布局字段（flex-direction）+ classPlans + 无 DYNCLASS_LAYOUT 诊断
+{
+  const hasPlan = !!(parsed.b3b?.table?.classPlans && Object.keys(parsed.b3b.table.classPlans).length > 0)
+  const layoutDiag = (parsed.b3b?.diagnostics ?? []).some((m) => /布局字段/.test(String(m)))
+  const hasFlexDir = parsed.b3b?.table?.classPlans && JSON.stringify(parsed.b3b.table.classPlans).includes('flexDirection')
+  if (!parsed.b3b?.ok || !hasPlan || layoutDiag || !hasFlexDir) {
+    console.error(`[gen-vapor-fixture] ✗ B3b 夹具不完整（判据 ㉖ 将无证据）：classPlans=${hasPlan} · flexDirection 在计划=${hasFlexDir} · 布局诊断=${layoutDiag}`)
+    process.exit(1)
+  }
+  console.log(`[gen-vapor-fixture] ✅ B3b 夹具：动态 :class 枚举布局字段（flexDirection 在计划 · 无布局诊断）`)
 }
 // ★:style 对象展开（2026-10-03）：必须**逐键**（layout.width + paint.backgroundColor），不得有整键
 {

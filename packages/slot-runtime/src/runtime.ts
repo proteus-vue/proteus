@@ -24,7 +24,7 @@ import type { Slot } from './slot'
 import type { EvaluatorSpec, SubscriptionTable } from './table'
 import { resolveDynamicClasses } from './table'
 // ★★★G-61 B2：动态 :class 预计算计划（位图 O(1) 查表）
-import { applyDynamicClassPlan, NUMERIC_LAYOUT_FIELDS, layoutNumber } from './dynamic-class'
+import { applyDynamicClassPlan, NUMERIC_LAYOUT_FIELDS, layoutNumber, ENUM_LAYOUT_FIELDS, layoutEnumIndex } from './dynamic-class'
 
 /** 源订阅钩子：源值变化时回调（由宿主注入；Vue 场景 = watch / effect） */
 export type SourceSubscriber = (sourceName: string, onChange: () => void) => void
@@ -398,6 +398,9 @@ export class VaporRuntime {
                 if (NUMERIC_LAYOUT_FIELDS.has(k)) {
                   // B3a：数值布局字段清空 ⇒ 发 UNSET（NaN ⇒ 内核置 None）
                   this.rt.buffer.push({ op: OpCode.SET_STYLE, nodeId: nid, keyId: this.rt.keys.intern(`layout.${k}`), value: Number.NaN })
+                } else if (ENUM_LAYOUT_FIELDS[k]) {
+                  // ★B3b：枚举字段清空 ⇒ 发该字段**内核默认**索引（回退到默认语义）
+                  this.rt.buffer.push({ op: OpCode.SET_STYLE, nodeId: nid, keyId: this.rt.keys.intern(`layout.${k}`), value: ENUM_LAYOUT_FIELDS[k]!.default })
                 } else {
                   this.onPaintProp?.(nid, `paint.${k}`, undefined)
                 }
@@ -411,6 +414,13 @@ export class VaporRuntime {
                 //     （NaN ⇒ 内核 `None` ⇒ 回退 auto/stretch——这正是"关掉类 ⇒ 样式回退"）。
                 const n = layoutNumber(fv)
                 this.rt.buffer.push({ op: OpCode.SET_STYLE, nodeId: nid, keyId: this.rt.keys.intern(`layout.${fk}`), value: n === null ? Number.NaN : n })
+                continue
+              }
+              if (ENUM_LAYOUT_FIELDS[fk]) {
+                // ★★★B3b（2026-10-10）：**枚举布局字段**（display/flexDirection/…）→ **索引编码**走
+                //   同一条内核二进制 SET_STYLE（host-agnostic）。值可能是 plan 的基线（null ⇒ 默认索引）。
+                const idx = layoutEnumIndex(fk, fv)
+                this.rt.buffer.push({ op: OpCode.SET_STYLE, nodeId: nid, keyId: this.rt.keys.intern(`layout.${fk}`), value: idx === null ? ENUM_LAYOUT_FIELDS[fk]!.default : idx })
                 continue
               }
               // 其余字段（绘制色/字号/圆角…）仍走宿主绘制通道（无 onPaintProp 则跳过，如实）

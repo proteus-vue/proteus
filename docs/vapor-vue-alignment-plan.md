@@ -27,11 +27,12 @@
 
 ## 2. 逐项：根因（已探针核实）+ 依赖 + 估时
 
-### B3 · 动态 `:class` **布局字段**端上生效（最高价值 · 28 页）——★**B3a 数值字段已交付（2026-10-10）**
-- **B3a 交付（判据 ㉕ · 三端全过）**：**数值型布局字段**（width/height/min|max/flex*/gap/top/left/right/bottom/margin*/padding*/aspectRatio——见 `slot-runtime` 的 `NUMERIC_LAYOUT_FIELDS`）改走**内核二进制 `SET_STYLE`**（host-agnostic：内核重排 ⇒ **三端零宿主改动**即生效）。含**清除回退**（plan 关闭返回 `null` ⇒ 发 UNSET）。内核 `ops_apply::apply_style_key` 补登记 right/bottom/padding 四向/aspectRatio。能力棘轮 28→18。
-- **B3b 待做（枚举 / grid 类）**：`display`/`flexDirection`/`position`/`justifyContent`/`alignItems`/`gridTemplateColumns` 等**枚举/字符串**字段——无二进制通道 ⇒ 需**新内核 op（字符串/枚举载荷）+ 三端宿主**（或扩展 `PatchStyle`）。**单独立项。**
-- 探针实证依据：plan 产出字段值为 **StyleIR 描述符**（`{kind:'absolute',dp:N}`）+ `padding` **被摊平**成 `paddingTop/…`；运行期此前误统一走 `onPaintProp`（宿主绘制补丁通道，不认布局/描述符）⇒ 端上不生效。
-- 估时：B3a **≈1.5 人日（已交付）**；B3b **≈3–4 人日（需内核 + 三端宿主）**。
+### B3 · 动态 `:class` **布局字段**端上生效（最高价值 · 28 页）——★**B3a 数值 + B3b 枚举 均已交付（2026-10-10）**
+- **B3a 数值字段（判据 ㉕）**：width/height/min|max/flex*/gap/top/left/right/bottom/margin*/padding*/aspectRatio（`NUMERIC_LAYOUT_FIELDS`）→ 内核二进制 `SET_STYLE`（f32）。内核 `apply_style_key` 补登记 right/bottom/padding 四向/aspectRatio。
+- **B3b 枚举字段（判据 ㉖）**：`display`/`flexDirection`/`flexWrap`/`position`/`overflow`/`alignItems`（`ENUM_LAYOUT_FIELDS`）→ **索引编码**走同一条内核 `SET_STYLE`（host-agnostic）。内核解码臂（`apply_style_key`、与 JS 表同序）。
+- **清除回退**：plan 关闭返回 `null`/基线 ⇒ 数值发 UNSET（NaN）、枚举发**默认索引**。
+- **B3c 仍待做（无二进制通道）**：grid 模板（`gridTemplateColumns/Rows/Areas/…`）· `lineClamp` · `whiteSpace` · `wordBreak` · `overflowX/Y`（内核无轴级字段）· `justifyContent/alignContent/alignSelf`（内核字符串字段，未编码）——需**新内核 op 或把字符串字段也编码**。**独立小批次。**
+- 估时：B3a ≈1.5 · B3b ≈1.5（均已交付）· B3c ≈2–3 人日。
 
 ### B4 · `v-model` 回写（22 页）
 - 依赖：宿主**输入通道**（Android EditText / iOS UITextField / 鸿蒙 TextInput）×3 + 双向协议（text→source）。
