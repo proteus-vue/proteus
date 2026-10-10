@@ -47,6 +47,17 @@ export interface EventBinding {
    *   emit 路由按「边界节点 + 事件名」**直接查表**（不沿链）。
    */
   componentEmit?: boolean
+  /**
+   * ★★**绑定处的源位置**（决策 #712 · source map）——`@click="…"` 在**整份 `.vue`** 里的
+   *   `{ line, column }`（**1 基**；行已含模板块之前的前导行偏移，可直接对照文件行号）。
+   *   App 端页面逻辑不打包（无 esbuild sourcemap）⇒ 这是把"运行期事件/handler"映射回
+   *   **模板源行**的唯一桥（调试生态链的地基）。★缺省省略 ⇒ 既有产物逐字节不变。
+   *
+   * 【为什么运行期契约也要带它】编译器 `compileEvents` 会发射 `loc`（见 `vapor/events.ts`），
+   *   运行期 `screen-runtime` 也**读取**它（`locByHandler`，用于把 handler 出错锚回模板行）。
+   *   ⇒ 类型面必须带上，否则（旧写法靠 `as` 强转）消费方类型检查报 `Property 'loc' does not exist`。
+   */
+  loc?: { line: number; column: number }
 }
 
 /**

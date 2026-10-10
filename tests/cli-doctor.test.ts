@@ -23,6 +23,9 @@ function fakeCtx(over: Partial<DoctorContext> = {}): DoctorContext {
     runCmd: () => ({ command: 'x', exitCode: 0, stdout: '', stderr: '' }),
     portFree: async () => true,
     projectPackage: () => null,
+    // ★DoctorContext 的 required 原语（#688 签名工具加入）——假 ctx 必须实现。
+    //   测试只看注入的探测原语，本项返回 null = "本机无匹配描述文件"，对被测检查无害。
+    findIosProfile: () => null,
     timeoutMs: 5000,
   }
   // 暴露注入点

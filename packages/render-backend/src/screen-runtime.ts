@@ -39,13 +39,19 @@ import type {
 // ★★★运行期阶段耗时自采样（CPU Profiler · 决策 #715）——dev-only 的框架级归因
 import { createRuntimeProfiler, NULL_PROFILER, type RuntimeProfiler, type ProfEntry } from './runtime-profiler'
 
-/** 一屏的运行期产物（与 `packages/cli/src/app-runtime-content.ts` 的 `ScreenRuntimeArtifact` 同形） */
+/** 一屏的运行期产物（与 `packages/cli/src/app-runtime-content.ts` 的 `ScreenRuntimeArtifact` **同形**） */
 export interface ScreenRuntimeArtifact {
   tpl: LayoutTemplate
   table: SubscriptionTable
   events: EventBinding[]
   handlers: Record<string, Array<{ op: string; source?: string; program?: unknown; event?: string }>>
   data: Record<string, unknown>
+  /**
+   * ★★**源文件路径**（决策 #713 · 仅供 dev）：该屏对应的 `.vue`（相对项目根）——缺省省略（release 无）。
+   *   ★CLI 侧 `app-runtime-content.ts` 的 `ScreenRuntimeArtifact` 也带它；本接口"同形"必须一并带上，
+   *     否则消费方（superapp-runtime / dev 面板 / 测试）读 `art.file` 报 `Property 'file' does not exist`。
+   */
+  file?: string
 }
 
 export interface CreateScreenRuntimeOptions {
