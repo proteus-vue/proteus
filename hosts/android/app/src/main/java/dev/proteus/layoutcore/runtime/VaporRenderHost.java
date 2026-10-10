@@ -272,6 +272,9 @@ public final class VaporRenderHost {
         java.util.Map<Integer, float[]> m = new java.util.HashMap<>();
         for (JSONObject spec : specs) {
             if (!spec.has("followAxis")) continue;
+            // ★场容器（`v-follow={field:…}`）**不进入单节点跟手表**——否则它被当"可平移节点"整体平移
+            //   （针林被拖走 = 用户实测"拖拽时针林消失/漂移"）。它只作**场源**（驱动其子节点）。
+            if (spec.has("followField")) continue;
             int id = spec.optInt("id", -1);
             if (id < 0) continue;
             m.put(id, new float[]{
@@ -325,9 +328,16 @@ public final class VaporRenderHost {
             if (!spec.has("followField")) continue;
             final int cid = spec.optInt("id", -1);
             if (cid < 0) continue;
-            color = parseColor(spec.optString("backgroundColor", "#39d0ff"));
             for (JSONObject child : specs) {
-                if (child.optInt("parentId", -1) == cid) ids.add(child.optInt("id", -1));
+                if (child.optInt("parentId", -1) == cid) {
+                    final int kid = child.optInt("id", -1);
+                    if (kid < 0) continue;
+                    if (ids.isEmpty()) {
+                        // ★针色取**子节点**（针）的底色，不是容器色（容器是深底 ⇒ 用容器色会把针画成深色=看不见）
+                        color = parseColor(child.optString("backgroundColor", "#39d0ff"));
+                    }
+                    ids.add(kid);
+                }
             }
         }
         if (view != null) view.setFieldBatch(ids, color);

@@ -20,7 +20,7 @@
   <div class="page">
     <div class="dactyl-title">L2 · 跟手</div>
     <div class="dactyl-hint">在针林里拖动 —— 针随指立起（尖峰贴上指尖）</div>
-    <div class="needle-field" v-follow="{ field: { falloff: 260, minScale: 0.06, maxScale: 1.0, rotate: 26 } }">
+    <div class="needle-field" v-follow="{ field: { falloff: 320, minScale: 1, maxScale: 6, rotate: 18 } }">
       <div v-for="i in Array.from({ length: 4000 }, (_, k) => k)" :key="i" class="needle" />
     </div>
   </div>

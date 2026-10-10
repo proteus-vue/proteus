@@ -2538,9 +2538,14 @@ public class ProteusHostView extends ViewGroup {
      *   逐节点 save/matrix/drawRect（4000 次）是 draw 超预算的主因；批量化后 = 1 次填充。*/
     private java.util.Set<Integer> fieldBatchIds = java.util.Collections.emptySet();
     private int fieldBatchColor = 0;
+    /** 针林填充画笔（FILL、无抗锯齿 = 快）——颜色随场容器底色，避免复用 bgPaint 的样式串扰。 */
+    private final android.graphics.Paint fieldBatchPaint = new android.graphics.Paint();
     public void setFieldBatch(java.util.Set<Integer> ids, int color) {
         fieldBatchIds = ids != null ? ids : java.util.Collections.emptySet();
         fieldBatchColor = color;
+        fieldBatchPaint.setStyle(android.graphics.Paint.Style.FILL);
+        fieldBatchPaint.setAntiAlias(false);
+        fieldBatchPaint.setColor(color);
     }
     /** 由 `VaporRenderHost` 注入场规格（`followField=1` 的容器）。 */
     public void setFollowFields(java.util.Map<Integer, float[]> m) {
@@ -3348,28 +3353,29 @@ public class ProteusHostView extends ViewGroup {
         // ★★★父 transform 级联用：本帧 id → Cmd（取祖先的盒作 transform-origin 基准）
         final java.util.Map<Integer, Cmd> cmdById = new java.util.HashMap<>();
         if (ids != null) { for (int k = 0; k < ids.length && k < list.size(); k++) cmdById.put(ids[k], list.get(k)); }
-        // ★L2 批量针林：合成一条 Path（一次 drawPath 取代 N 次 save/drawRect）
-        final android.graphics.Path fieldBatchPath = fieldBatchIds.isEmpty() ? null : new android.graphics.Path();
+        // ★L2 批量针林：轻量逐针 drawRect（无 Path/save/matrix——见循环内注释）
         for (int i = 0; i < list.size(); i++) {
             if (skip != null && skip.contains(i)) continue;
             final Cmd c = list.get(i);
-            // ★L2 批量：场容器子节点（针）——4 角按本节点动画（scale/rotate 关于中心）算好塞进一条 Path
-            if (fieldBatchPath != null && ids != null && i < ids.length && ids[i] >= 0 && fieldBatchIds.contains(ids[i])) {
+            // ★L2 批量：场容器子节点（针）——**轻量逐针 drawRect**（只算缩放/旋转后的矩形，无 save/matrix/Path）。
+            //   ★为何不用一条 Path：Path（even-odd 纹理 + 4000 子路径）在硬件加速下填充常失效（实测拖拽期不出针）；
+            //     逐针 drawRect 的固定开销小，且**每次必然绘制**（不会因 Path 纹理问题整体消失）。
+            if (!fieldBatchIds.isEmpty() && ids != null && i < ids.length && ids[i] >= 0 && fieldBatchIds.contains(ids[i])) {
                 float bs = 1f, br = 0f;
                 final float[] bt = animTx.get(ids[i]);
                 if (bt != null && bt.length >= 4) { bs = bt[2]; br = bt[3]; }
                 final float bcx = c.x + c.w * 0.5f, bcy = c.y + c.h * 0.5f;
-                final double rad = Math.toRadians(br);
-                final float cosr = (float) Math.cos(rad), sinr = (float) Math.sin(rad);
-                final float[] px = { c.x, c.x + c.w, c.x + c.w, c.x };
-                final float[] py = { c.y, c.y, c.y + c.h, c.y + c.h };
-                for (int k = 0; k < 4; k++) {
-                    final float vx = (px[k] - bcx) * bs, vy = (py[k] - bcy) * bs;
-                    final float rx = bcx + vx * cosr - vy * sinr;
-                    final float ry = bcy + vx * sinr + vy * cosr;
-                    if (k == 0) fieldBatchPath.moveTo(rx, ry); else fieldBatchPath.lineTo(rx, ry);
+                final float hw = c.w * 0.5f * bs, hh = c.h * 0.5f * bs;
+                if (br == 0f) {
+                    canvas.drawRect(bcx - hw, bcy - hh, bcx + hw, bcy + hh, fieldBatchPaint);
+                } else {
+                    final double rad = Math.toRadians(br);
+                    final float cosr = (float) Math.cos(rad), sinr = (float) Math.sin(rad);
+                    canvas.save();
+                    canvas.rotate(br, bcx, bcy);
+                    canvas.drawRect(bcx - hw, bcy - hh, bcx + hw, bcy + hh, fieldBatchPaint);
+                    canvas.restore();
                 }
-                fieldBatchPath.close();
                 continue;
             }
             // ★★逐节点变换（内核动画的**绘制落点**）：按并行表查该指令的节点变换
@@ -4195,15 +4201,6 @@ public class ProteusHostView extends ViewGroup {
                 canvas.restoreToCount(maskLayer);
             }
             if (xf || isFixed || isSticky) canvas.restoreToCount(save);
-        }
-        // ★L2 批量针林：一次填充整条 Path（N 针 → 1 drawPath）
-        if (fieldBatchPath != null && !fieldBatchPath.isEmpty()) {
-            bgPaint.setShader(null);
-            bgPaint.setStyle(android.graphics.Paint.Style.FILL);   // ★必须显式 FILL（复用 paint 残留 STROKE ⇒ 细线看不见）
-            bgPaint.setAlpha(255);
-            bgPaint.setColor(fieldBatchColor);
-            canvas.drawPath(fieldBatchPath, bgPaint);
-            bgPaint.setStyle(android.graphics.Paint.Style.FILL);   // 复位
         }
     }
 
