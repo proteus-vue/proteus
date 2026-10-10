@@ -174,7 +174,7 @@
 .proteus-web-image-menu-mask {
   position: fixed;
   inset: 0;
-  z-index: 3000;
+  z-index: 2000100; /* ★2026-10-10：迁 overlay 域（原 3000 < 页面层 1e6 ⇒ 被盖住） */
   background: rgba(0, 0, 0, 0.35);
   display: flex;
   align-items: center;
@@ -280,7 +280,7 @@
   padding: 28px 20px; /* ★WeUI padding */
   border-radius: 8px; /* ★WeUI 圆角 */
   line-height: 1.4; /* ★WeUI 行高 */
-  z-index: 99999;
+  z-index: 2000199; /* ★2026-10-10：迁 overlay 域（原 99999 < 页面层 1e6） */
   font-size: 14px;
   display: flex;
   flex-direction: column;
@@ -333,7 +333,7 @@
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.5);
-  z-index: 99990;
+  z-index: 2000190; /* ★2026-10-10：迁 overlay 域（原 99990 < 页面层 1e6） */
 }
 .proteus-web-modal {
   position: fixed;
@@ -344,7 +344,7 @@
   max-width: 90vw; /* 小屏兜底：320 视口下 288px 防溢出（微信 rpx 在小屏等比缩小） */
   background: var(--pwu-bg-2);
   border-radius: 12px;
-  z-index: 99991;
+  z-index: 2000191; /* ★2026-10-10：迁 overlay 域（原 99991 < 页面层 1e6） */
   overflow: hidden;
 }
 /* ★对齐 WeUI 官方 dialog（weui.io/#dialog 实测）：
@@ -445,7 +445,7 @@
   right: 0;
   bottom: 0;
   background: var(--pwu-bg-1); /* --weui-BG-1 弹层背景 */
-  z-index: 99991;
+  z-index: 2000191; /* ★2026-10-10：迁 overlay 域（原 99991 < 页面层 1e6） */
   border-radius: 12px 12px 0 0;
   overflow: hidden;
 }
@@ -521,7 +521,7 @@
   right: 0;
   bottom: 0;
   background: var(--pwp-bg);
-  z-index: 99992;
+  z-index: 2000192; /* ★2026-10-10：迁 overlay 域（原 99992 < 页面层 1e6） */
   border-radius: 12px 12px 0 0;
   overflow: hidden;
   transform: translate3d(0, 100%, 0); /* 初始在屏外（官方 .weui-picker transform） */

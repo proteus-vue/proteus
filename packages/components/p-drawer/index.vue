@@ -81,7 +81,12 @@ function onMaskAreaTap(): void {
   visibility: hidden;
   /* 关闭方向：延迟到抽屉滑出动画（.25s）结束后再隐藏，保留退出动画 */
   transition: visibility 0s linear 0.25s;
-  z-index: 999;
+  /* ★★★2026-10-10 修（Web 抽屉被页面盖住/点不到遮罩）：本组件 `<teleport to="body">`（标准 Vue 跨端）
+     ⇒ 逃出**三层挂载**（`@proteus-vue/web` mount-layers：global=0 / page=1_000_000 / overlay=2_000_000）
+     ⇒ 落在根层叠上下文里；裸 z-index 必须 ≥ **overlay 域**，否则被 page 层（1_000_000）压住
+     （症状：抽屉"看得见、点不到遮罩、关不掉"——真机/CI e2e 实测）。
+     ★值 = 契约 `mountLayerDomainOffset('overlay')`（`@proteus-vue/contracts` 单点定义）。 */
+  z-index: 2000000;
 }
 .p-drawer-root--open {
   visibility: visible;

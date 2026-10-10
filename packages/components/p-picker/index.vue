@@ -279,7 +279,9 @@ onUnmounted(() => {
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 9990;
+  /* ★★★2026-10-10：组件 `<teleport to="body">` 逃出三层挂载 ⇒ 裸 z-index 须 ≥ overlay 域（页面层=1e6），
+     否则被页面盖住（同 p-drawer/p-popover；原 9990 < 1e6）。值 = 契约 mountLayerDomainOffset('overlay')。 */
+  z-index: 2000200;
   visibility: hidden; /* 常驻隐藏：不拦截页面点击/滚动（对齐 p-drawer） */
 }
 .p-picker-root--open {
