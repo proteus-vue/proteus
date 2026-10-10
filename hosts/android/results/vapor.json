@@ -1,14 +1,14 @@
 {
   "bundle_chars": 585943,
-  "run_ms": 321,
+  "run_ms": 471,
   "host_mount_calls": 29,
   "host_apply_calls": 30,
   "host_update_patch_calls": 1,
   "host_nodes": 47,
   "host_text_nodes": 19,
   "host_cmds": 47,
-  "host_layout_ms": 0.280312,
-  "host_measure_ms": 0.248281,
+  "host_layout_ms": 0.314791,
+  "host_measure_ms": 0.241042,
   "host_painted_samples": 12060,
   "host_painted_colors": 234,
   "host_applied": 1,
@@ -43,7 +43,7 @@
       "bumpTotal",
       "lifeW"
     ],
-    "inst_ms": 1,
+    "inst_ms": 0,
     "inst_nodes": 47,
     "inst_reused_ids": 2,
     "inst_allocated_ids": 14,
@@ -630,12 +630,12 @@
         ]
       ]
     },
-    "mount_ms": 25,
+    "mount_ms": 58,
     "mount_nodes": 47,
     "updates_run": 3,
     "ops_bytes": 204,
     "ops_ms": 0,
-    "apply_ms": 3,
+    "apply_ms": 6,
     "text_synced_total": 3,
     "update_evidence": [
       {
@@ -825,7 +825,7 @@
       "tap@13 自身宽度 120 → 150",
       "实例树 47 节点 \/ 行 47 \/ 虚拟化行 8 \/ 增量 3 轮"
     ],
-    "host_layout_ms": 0.5,
+    "host_layout_ms": 1.819,
     "host_cmds": 47
   },
   "ok": true
