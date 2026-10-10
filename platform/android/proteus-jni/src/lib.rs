@@ -795,6 +795,28 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeLayoutFollow
     into_java_string(&mut env, out)
 }
 
+/// ★★★**力增益**（通用）：设置某节点 `scale_gain`（宿主每帧可调——按压力度/时长 → 外扩范围）。
+#[no_mangle]
+pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeLayoutSetScaleGain<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    handle: jni::sys::jlong,
+    node_id: jni::sys::jint,
+    gain: jni::sys::jfloat,
+) -> jstring {
+    let out = std::panic::catch_unwind(|| -> String {
+        let p = unsafe { ffi::proteus_layout_set_scale_gain(handle as u64, node_id as u32, gain) };
+        if p.is_null() {
+            return "{\"ok\":false,\"error\":\"null\"}".to_string();
+        }
+        let s = unsafe { std::ffi::CStr::from_ptr(p) }.to_string_lossy().into_owned();
+        unsafe { ffi::proteus_layout_free_string(p) };
+        s
+    })
+    .unwrap_or_else(|_| "{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string());
+    into_java_string(&mut env, out)
+}
+
 /// ★★★**场跟手**（通用 `v-follow={field:…}`）：一个手势焦点 → 容器子树**一片叶节点**的高度/朝向场
 ///   （内核 `follow_field`：逐叶按距焦点 `t=clamp(1−dist/falloff,0,1)` 求 `scale`/`rotate`）。
 ///   与 `nativeLayoutFollow` 同族（同一条 updates 线格式），只是"一片节点由**一个焦点**驱动"。

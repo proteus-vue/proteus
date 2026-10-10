@@ -100,6 +100,8 @@ public final class RustLayout {
     private static native String nativeLayoutFollowField(long handle, int containerId, float focusX, float focusY, float falloff, float minScale, float maxScale, float maxRotate);
     /** ★★★场跟手（**二进制 12B/条**：id u32 + scale f32 + rotate f32——大 N 免 JSON 解析） */
     private static native byte[] nativeLayoutFollowFieldBin(long handle, int containerId, float focusX, float focusY, float falloff, float minScale, float maxScale, float maxRotate);
+    /** ★★★力增益（通用）：设置某节点 `scale_gain`（宿主每帧可调——按压力度/时长 → 外扩范围） */
+    private static native String nativeLayoutSetScaleGain(long handle, int nodeId, float gain);
     /** ★共享元素（几何原语：源矩形 + 目标节点 ⇒ dx/dy/scale，内核算） */
     private static native String nativeSharedElement(long handle, String json);
 
@@ -310,6 +312,11 @@ public final class RustLayout {
     /** ★★★场跟手（**二进制**）：返回 12B/条定长 `byte[]`（大 N 免 JSON 解析） */
     static byte[] layoutFollowFieldBin(long handle, int containerId, float focusX, float focusY, float falloff, float minScale, float maxScale, float maxRotate) {
         return loaded ? nativeLayoutFollowFieldBin(handle, containerId, focusX, focusY, falloff, minScale, maxScale, maxRotate) : new byte[0];
+    }
+
+    /** ★★★力增益（通用）：设置某节点 `scale_gain`（宿主每帧可调）——返回 `{ok,gain}` */
+    static String layoutSetScaleGain(long handle, int nodeId, float gain) {
+        return loaded ? nativeLayoutSetScaleGain(handle, nodeId, gain) : NOT_LOADED;
     }
 
     /** ★仍在推进的动画条数（0 = 全结束）——幕切换的权威判据 */

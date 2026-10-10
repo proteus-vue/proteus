@@ -1727,6 +1727,7 @@ public class ProteusHostView extends ViewGroup {
                 trLastNs = now;
                 if (dtMs > 100f) dtMs = 100f;   // 首帧/卡顿保护
                 if (dtMs <= 0f) dtMs = 16.7f;
+                updatePressGain();   // ★按压力增益：先设（本帧 tick 的 collect_updates 即用它）；按住越久 ⇒ 波外扩越大
                 applyTickBin(RustLayout.animTickBin(coreHandle, dtMs));
                 trFrames++;
                 // 停判据：内核自报活跃数（权威）——0 = 全结束
@@ -2442,6 +2443,12 @@ public class ProteusHostView extends ViewGroup {
     private final java.util.HashSet<Integer> pressedAnimTargets = new java.util.HashSet<>();
     /** ★本次按下触发的动画里是否有**无限循环**（`animation-iteration-count:infinite`）——帧循环据此不设 3s 上限。 */
     private boolean pressAnimInfinite = false;
+    /** 按下起始时刻（wall-clock）——按压力增益 = f(按住时长)。 */
+    private long pressDownNs = 0L;
+    /** ★力增益上限（按住最久时的外扩倍率；`1` = 无增益）。GENERIC：按压力度 → 外扩范围的封顶。 */
+    private static final float PRESS_GAIN_MAX = 2.2f;
+    /** 到达满增益所需按住时长（ms）。 */
+    private static final float PRESS_GAIN_RAMP_MS = 700f;
 
     /** 由 `VaporRenderHost` 在建树时注入"哪些节点有按下态 + 其样式"（底色/描边/凹陷/发光）。 */
     public void setPressStyles(java.util.Map<Integer, PressStyle> m) {
@@ -2485,6 +2492,7 @@ public class ProteusHostView extends ViewGroup {
             framePicture = null;   // 丢弃静态帧 ⇒ onDraw 重录（含按下色/凹陷/发光）
             invalidate();
         }
+        pressDownNs = System.nanoTime();   // ★按压力增益计时起点（见 updatePressGain）
         startPressAnims();
     }
 
@@ -2521,9 +2529,31 @@ public class ProteusHostView extends ViewGroup {
         } catch (Throwable ignored) { /* 启动失败不崩；读数由 pressProbe 暴露 */ }
     }
 
+    /**
+     * ★★★**按压力增益**（每帧，帧循环内）：按住越久 ⇒ 增益越大 ⇒ 脉冲波外扩越远。
+     *   `gain = 1 + min(holdMs / RAMP, 1) × (MAX−1)`；对本次按下**动画目标**逐个 `setScaleGain`
+     *   （内核把它乘进 `scale` 发射值——宿主零数学、零 JS）。
+     *   【通用性】标量原语（`proteus_layout_set_scale_gain`）是框架能力；这里把它接到"按压"语义
+     *   （本 demo 用**按住时长**驱动；真实压感/触点面积只需换这一处取值来源）。仅在增益变化时下发（省 FFI）。
+     */
+    private void updatePressGain() {
+        if (pressedAnimTargets.isEmpty() || coreHandle == 0L || pressDownNs == 0L) return;
+        final float holdMs = (System.nanoTime() - pressDownNs) / 1e6f;
+        final float t = Math.min(1f, holdMs / PRESS_GAIN_RAMP_MS);
+        final float gain = 1f + t * (PRESS_GAIN_MAX - 1f);
+        if (Math.abs(gain - lastPressGain) < 0.01f) return;   // 变化才下发（节流 FFI）
+        lastPressGain = gain;
+        for (Integer id : pressedAnimTargets) {
+            RustLayout.layoutSetScaleGain(coreHandle, id, gain);
+        }
+    }
+    private float lastPressGain = 1f;
+
     /** 停本次按下的触发动画（UP 还原）。 */
     private void stopPressAnims() {
         pressAnimInfinite = false;
+        pressDownNs = 0L;
+        lastPressGain = 1f;
         if (pressedAnimTargets.isEmpty() || coreHandle == 0L) { pressedAnimTargets.clear(); return; }
         try {
             org.json.JSONArray ids = new org.json.JSONArray();

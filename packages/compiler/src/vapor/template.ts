@@ -3173,8 +3173,10 @@ function parseCssGradient(raw: string): Record<string, unknown> | null {
     if (am) { angle = Number(am[1]); start = 1 }
     else if (/^to\s+/i.test(first)) { const d = dirToDeg(first); if (d !== undefined) { angle = d; start = 1 } }
   } else {
-    // radial：跳过 shape/preposition 参数（`circle` / `at 50% 50%` / `closest-side` …）直到首个颜色
-    while (start < args.length && !normalizeCssColor(args[start]!.trim().split(/\s+/)[0] ?? '')) start++
+    // radial：跳过 shape/preposition 参数（`circle` / `at 50% 50%` / `closest-side` …）直到首个颜色。
+    //   ★判色必须用**整段 token**（`normalizeCssColor(args[start].trim())`）——此前按空白 `split(/\s+/)[0]`
+    //     会切碎带空格的 `rgba(57, 208, 255, 0.55)`（标准 CSS 写法）⇒ 判不出色 ⇒ 跳过整条渐变（真缺陷）。
+    while (start < args.length && !normalizeCssColor(args[start]!.trim())) start++
   }
   const stops = parseGradientStops(args.slice(start))
   if (!stops || stops.length < 2) return null

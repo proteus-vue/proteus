@@ -2215,7 +2215,8 @@ impl AnimEngine {
                 id: node.id,
                 tx: node.style.translate_x,
                 ty: node.style.translate_y,
-                scale: node.style.scale,
+                // ★力增益：宿主每帧可设的标量乘进 scale（按压力度/时长 → 外扩范围）；缺省 1 ⇒ 零行为变化
+                scale: node.style.scale * node.style.scale_gain,
                 rotate: node.style.rotate,
                 rotate_x: node.style.rotate_x,
                 rotate_y: node.style.rotate_y,

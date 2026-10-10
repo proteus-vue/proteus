@@ -116,34 +116,45 @@ body {
 }
 /* L1 涟漪：**纯页面 CSS**（`:active` 触发 + `@keyframes` + `伪元素`）——
    框架把这段 CSS 跨端**物化**成装饰子节点（内核/宿主按普通节点渲染）；宿主不发明任何默认反馈。
-   ★**水波式 · 双圈错时**：`::before` + `::after` 两个**空心圆环**（比黑块大、`left/top:-57px` 居中），
-   同一条 `@keyframes`，`::after` 用 `animation-delay` 错开 0.18s ⇒ 形成**同心扩散的双环**（真实水波）。
-   ★常态 `opacity:0` 不可见；`:active` 时每个环 `scale 0→1` 由中心向外扩散 + 淡出。
+   ★**中心圆点 + 实心扩散波**（地图定位点形态）：
+     · `::before` = **中心圆点**（小实心圆，按下显形、不扩散）；
+     · `::after`  = **实心扩散波**（`radial-gradient` 内实外透的圆盘，`scale 0.15→1` 由中心向外扩散 + 淡出，无限脉冲）。
    ★不用百分比 inset（App 内核不支持）——全用 px；`left/top` 负值内核支持。
-   ★`.pad` **不设 `overflow:hidden`**——否则圆环被裁进黑块（看起来像"黑块自己闪"而非水波）。 */
+   ★`.pad` **不设 `overflow:hidden`**——否则波被裁进黑块（看起来像"黑块自己闪"）。
+   ★按下时 `.pad:active{z-index:20}` 让波浮到相邻磁块之上（否则下半被下一排遮挡）。 */
 .pad::before,
 .pad::after {
   content: '';
   position: absolute;
+  border-radius: 50%;
+  opacity: 0;
+}
+.pad::before {
+  /* 中心圆点：12px 实心圆居中（(46-12)/2 = 17） */
+  left: 17px;
+  top: 17px;
+  width: 12px;
+  height: 12px;
+  background-color: #39d0ff;
+}
+.pad::after {
+  /* 实心扩散波：160px 圆盘居中（(160-46)/2 = 57，故 -57）；径向渐变内实外透 */
   left: -57px;
   top: -57px;
   width: 160px;
   height: 160px;
-  border-radius: 50%;
-  border: 3px solid rgba(57, 208, 255, 0.85);
-  background-color: transparent;
-  opacity: 0;
+  background-image: radial-gradient(closest-side, rgba(57, 208, 255, 0.55), rgba(57, 208, 255, 0));
+}
+.pad:active::before {
+  opacity: 0.95;
 }
 .pad:active::after {
   animation: dactyl-ripple 1.2s ease-out infinite;
 }
-.pad:active::before {
-  animation: dactyl-ripple 1.2s ease-out 0.6s infinite;
-}
 @keyframes dactyl-ripple {
   from {
-    transform: scale(0);
-    opacity: 0.8;
+    transform: scale(0.12);
+    opacity: 1;
   }
   to {
     transform: scale(1);

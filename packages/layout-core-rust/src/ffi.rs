@@ -2135,6 +2135,34 @@ pub unsafe extern "C" fn proteus_layout_follow_release(
     }
 }
 
+/// ★★★**力增益**（2026-10-10 · 通用原语）：设置某节点的 `scale_gain`（宿主每帧可调）。
+///   内核把它**乘进发射的 `scale`**（`collect_updates`）——用于"按压力度/时长 → 外扩范围"：
+///   同一个无限脉冲动画，按得越久/越重 ⇒ 增益越大 ⇒ 波扩得越远。
+///   ★**不改几何**（只改 paint-only 的 scale 发射值）⇒ 不触发重排；`style.scale` 由动画每帧绝对写 ⇒ 不累积。
+///   返回 `{"ok":true,"gain":g}`。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_layout_set_scale_gain(
+    handle: u64,
+    node_id: u32,
+    gain: f32,
+) -> *mut c_char {
+    let r = std::panic::catch_unwind(|| -> Result<String, String> {
+        let mut reg = registry().lock().map_err(|_| "注册表锁失败".to_string())?;
+        let entry = reg.get_mut(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?;
+        let Some(idx) = entry.tree.index_of_id(node_id) else {
+            return Err(format!("节点 {node_id} 不在树上"));
+        };
+        let g = if gain.is_finite() && gain >= 0.0 { gain } else { 1.0 };
+        entry.tree.nodes[idx as usize].style.scale_gain = g;
+        Ok(serde_json::json!({"ok": true, "gain": g}).to_string())
+    });
+    match r {
+        Ok(Ok(s)) => into_c_string(s),
+        Ok(Err(e)) => into_c_string(serde_json::json!({"ok": false, "error": e}).to_string()),
+        Err(_) => into_c_string("{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string()),
+    }
+}
+
 /// ★★★**S3-T3（2026-10-10 · 输入延迟专项 #767）**：**批量跟手**入口——宿主一帧内 M 个指针
 ///   **一次 FFI**（`ffi_calls_per_frame ≤ 1`）⇒ 内核逐条目算平移 ⇒ 返回**合并** updates（宿主一次消费）。
 ///
