@@ -2355,7 +2355,7 @@ public class ProteusHostView extends ViewGroup {
             // ★★★S1.1（2026-10-10 · 输入延迟专项 #767）：**按下态原生即时应用**——命中节点若有
             //   `:active` 折出的 press* 字段，立即（同一 DOWN 内、零 JS 跨界）改绘制属性并重录帧。
             //   ⇒ "输入不过桥"：按下反馈延迟 = 0 个 JS 往返（对标 RN Pressable / Flutter InkWell 必过逻辑层）。
-            applyPressAt(gestureTarget);
+            applyPressAt(gestureTarget, ev.getX(), ev.getY());
             // ★★★S3-T1/T3（2026-10-10 · 输入延迟专项 #767）：**跟手启动**——命中节点若有 `v-follow`
             //   折出的 follow 规格，记下该指拖拽起点（后续 MOVE 直接喂内核，零 JS 跨界）。
             beginFollowAt(ev.getPointerId(0), gestureTarget, ev.getX(), ev.getY());
@@ -2427,11 +2427,13 @@ public class ProteusHostView extends ViewGroup {
         return pressedNodeId >= 0 ? pressStyles.get(pressedNodeId) : null;
     }
 
-    /** DOWN 命中节点 ⇒ 应用按下态（有 press 定义才动）；重录帧以立即反映。 */
-    private void applyPressAt(int nodeId) {
+    /** DOWN 命中节点 ⇒ 应用按下态（有 press 定义才动）+ 在指尖激起涟漪；重录帧以立即反映。 */
+    private void applyPressAt(int nodeId, float x, float y) {
         if (nodeId < 0 || !pressStyles.containsKey(nodeId)) return;
         pressedNodeId = nodeId;
         pressApplied++;
+        // ★按下涟漪（`:active` 的通用反馈，"与指尖同帧"）：源=按下点，颜色取该节点按下色。
+        startPressRipple(x, y, pressedStyle());
         framePicture = null;   // 丢弃静态帧 ⇒ onDraw 重录（含按下色/凹陷/发光）
         invalidate();
     }
@@ -2447,6 +2449,48 @@ public class ProteusHostView extends ViewGroup {
     /** ★S1.1 探针：`{pressed, applied, press_nodes}`——判据核"按下态真的被原生应用"。 */
     public String pressProbe() {
         return "{\"pressed\":" + pressedNodeId + ",\"applied\":" + pressApplied + ",\"press_nodes\":" + pressStyles.size() + "}";
+    }
+
+    /* ── ★★★按下涟漪（通用 `:active` 反馈的一部分）──
+     *
+     * 【是什么】任意有按下态样式的节点被按下时，在**指尖**激起一圈扩散的描边环——"按下即响应"的可视化。
+     *   颜色取自该节点自己的按下色（`box-shadow` 发光色 → `border-color` → 底色），**不引入任何 demo 专用常量**。
+     *   ★只动**半径与 alpha**（合成/叠加层，§7.3 自洽红线：装饰不自成布局压力源）。
+     *   ★在**屏幕坐标**绘制（内容之后、不随滚动平移）——源即触点，与指尖同帧。
+     */
+    private float rippleX = -1f, rippleY = -1f;
+    private long rippleStartNs = 0L;
+    private int rippleColor = 0;
+    private static final float PRESS_RIPPLE_DUR_MS = 480f;
+    private final android.graphics.Paint ripplePaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+
+    /** 激起涟漪：颜色按 发光→描边→底色 回落；无任何颜色源（如只改了 scale）⇒ 不起涟漪。 */
+    private void startPressRipple(float x, float y, PressStyle ps) {
+        final Integer c = ps == null ? null
+                : (ps.glowColor != null ? ps.glowColor : (ps.borderColor != null ? ps.borderColor : ps.bg));
+        if (c == null) return;
+        rippleX = x; rippleY = y; rippleColor = c; rippleStartNs = System.nanoTime();
+    }
+
+    /** 画涟漪（若在生命周期内）；返回是否仍在扩散（供帧循环续帧）。 */
+    private boolean drawPressRipple(Canvas canvas) {
+        if (rippleStartNs == 0L) return false;
+        final float el = (System.nanoTime() - rippleStartNs) / 1e6f;
+        if (el >= PRESS_RIPPLE_DUR_MS) { rippleStartNs = 0L; return false; }
+        final float d = getResources().getDisplayMetrics().density;
+        final float t = el / PRESS_RIPPLE_DUR_MS;
+        final float r = (8f + 72f * t) * d;
+        ripplePaint.setStyle(android.graphics.Paint.Style.STROKE);
+        ripplePaint.setColor(rippleColor);
+        ripplePaint.setAlpha((int) ((1f - t) * 180));
+        ripplePaint.setStrokeWidth((2f + 2f * (1f - t)) * d);
+        canvas.drawCircle(rippleX, rippleY, r, ripplePaint);
+        return true;
+    }
+
+    /** ★涟漪探针：`{active, x, y}`（判据核"涟漪真的被激起"）。 */
+    public String rippleProbe() {
+        return "{\"active\":" + (rippleStartNs != 0L ? 1 : 0) + ",\"x\":" + rippleX + ",\"y\":" + rippleY + "}";
     }
 
     /** ★S1.5 探针：累计 `requestUnbufferedDispatch` 调用数（判据核"无缓冲分发真的被请求"）。 */
@@ -2913,6 +2957,8 @@ public class ProteusHostView extends ViewGroup {
             devHighlightPaint.setAntiAlias(true);
             canvas.drawRect(devHighlight, devHighlightPaint);
         }
+        // ★按下涟漪（`:active` 通用反馈）：扩散中 ⇒ 每帧重绘（自持帧源，独立于惯性/fling）
+        if (drawPressRipple(canvas)) postInvalidateOnAnimation();
         // ★DevTools 逐帧耗时（决策 #676）：整帧 onDraw 耗时（含 drawCmds/显示列表回放）
         long __dt = System.nanoTime() - __dt0;
         lastFrameMs = __dt / 1e6;
