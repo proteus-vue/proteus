@@ -774,7 +774,9 @@ export function parseStaticStyle(
         if (spec === null) { pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 未解析（支持 \`<name> <dur> <timing?> …\`；需带时间单位）——已跳过`); continue }
         const stops = keyframes ? keyframes[spec.name] : undefined
         if (stops) {
-          const chans = resolveAnimationChannels(stops, spec.durMs, spec.curve, spec.delayMs)
+          // ★`animation-iteration-count: 0` = 不播（CSS 语义）；内核 `repeat` 拒 0 ⇒ 直接不发射（不静默当 1）。
+          if (spec.iterations === 0) { pushDiag(`\`animation: ${rawVal}\` 迭代次数 0（= 不播放）——已跳过`); continue }
+          const chans = resolveAnimationChannels(stops, spec.durMs, spec.curve, spec.delayMs, spec.iterations)
           if (chans.length > 0) { out.animation = chans; markImportant('animation') }
           else pushDiag(`\`animation: ${rawVal}\` 的 @keyframes \`${spec.name}\` 无可动画通道（opacity / px 位移 / 等比缩放 / 旋转）——已跳过`)
         } else {
@@ -2440,8 +2442,9 @@ function resolveAnimationChannels(
   durMs: number,
   curve: number,
   delayMs = 0,
-): Array<{ kind: number; from: number; delayMs: number; keyframes: Array<{ to: number; durMs: number; curve: number }> }> {
-  const chans: Array<{ kind: number; from: number; delayMs: number; keyframes: Array<{ to: number; durMs: number; curve: number }> }> = []
+  iterations = 1,
+): Array<{ kind: number; from: number; delayMs: number; iterations: number; keyframes: Array<{ to: number; durMs: number; curve: number }> }> {
+  const chans: Array<{ kind: number; from: number; delayMs: number; iterations: number; keyframes: Array<{ to: number; durMs: number; curve: number }> }> = []
   const build = (kind: number, get: (d: Record<string, unknown>) => number | undefined): void => {
     const pts: Array<[number, number]> = []
     for (const st of stops) {
@@ -2456,7 +2459,7 @@ function resolveAnimationChannels(
       if (d <= 0) continue
       segs.push({ to: pts[i]![1], durMs: d, curve })
     }
-    if (segs.length > 0) chans.push({ kind, from, delayMs, keyframes: segs })
+    if (segs.length > 0) chans.push({ kind, from, delayMs, iterations, keyframes: segs })
   }
   const tfNum = (d: Record<string, unknown>, pick: (t: { txPx: number; tyPx: number; txPct: number; tyPct: number; sx: number; sy: number; rotate: number }) => number | undefined): number | undefined => {
     const t = d.transform as { txPx: number; tyPx: number; txPct: number; tyPct: number; sx: number; sy: number; rotate: number } | undefined
@@ -2489,7 +2492,7 @@ function cssTimingToCurve(t: string): number {
  *   取首 token 为名字（命中 @keyframes）、首个带时间单位的 token 为时长、timing 关键字 → curve。
  *   迭代/delay/direction/fill 暂忽略（诚实边界：App 端 animation 播**单次**、终态保持）。
  */
-function parseAnimationShorthand(val: string): { name: string; durMs: number; curve: number; delayMs: number } | null {
+function parseAnimationShorthand(val: string): { name: string; durMs: number; curve: number; delayMs: number; iterations: number } | null {
   const toks = val.trim().split(/\s+/).filter(Boolean)
   if (toks.length === 0) return null
   const name = toks[0]!
@@ -2497,6 +2500,7 @@ function parseAnimationShorthand(val: string): { name: string; durMs: number; cu
   let durMs: number | undefined
   let delayMs = 0
   let curve: number | undefined
+  let iterations = 1
   for (const t of toks.slice(1)) {
     const s = t.toLowerCase()
     const sec = /^([\d.]+)s$/.exec(s)
@@ -2506,9 +2510,14 @@ function parseAnimationShorthand(val: string): { name: string; durMs: number; cu
     if (sec) { const v = Number(sec[1]) * 1000; if (durMs === undefined) durMs = v; else delayMs = v }
     else if (ms) { const v = Number(ms[1]); if (durMs === undefined) durMs = v; else delayMs = v }
     else if (['linear', 'ease', 'ease-in', 'ease-out', 'ease-in-out'].includes(s)) { if (curve === undefined) curve = cssTimingToCurve(s) }
+    // ★迭代次数（`animation-iteration-count`）：`infinite` ⇒ -1（无限，内核哨兵）；**无单位整数** ⇒ n。
+    //   （CSS 简写里唯一"无单位数字"就是迭代次数；时间 token 必带 s/ms ⇒ 不歧义。）
+    else if (s === 'infinite') { iterations = -1 }
+    else if (/^\d+$/.test(s)) { iterations = Number(s) }
+    // 其余（direction/fill/play-state：normal/forwards/both/paused…）——忽略（诚实边界）
   }
   if (durMs === undefined) return null   // 无时长 ⇒ 不可静态化
-  return { name, durMs, curve: curve ?? 3, delayMs }
+  return { name, durMs, curve: curve ?? 3, delayMs, iterations }
 }
 /**
  * ★批次 38（对齐 Web）：CSS transform（**静态**）→ 引擎变换数值集。

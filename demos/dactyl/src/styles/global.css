@@ -135,10 +135,10 @@ body {
   opacity: 0;
 }
 .pad:active::after {
-  animation: dactyl-ripple 0.6s ease-out;
+  animation: dactyl-ripple 1.2s ease-out infinite;
 }
 .pad:active::before {
-  animation: dactyl-ripple 0.6s ease-out 0.18s;
+  animation: dactyl-ripple 1.2s ease-out 0.6s infinite;
 }
 @keyframes dactyl-ripple {
   from {

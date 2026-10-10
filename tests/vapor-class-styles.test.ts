@@ -1511,6 +1511,28 @@ describe('★批次 42 · CSS @keyframes + animation（对齐 Web 动效）', ()
     }
     expect(o2.animation!.every((c) => c.delayMs === 0)).toBe(true)
   })
+
+  it('⑦ animation-iteration-count：infinite ⇒ iterations=-1（持续脉冲）；n ⇒ n；0 ⇒ 不发射', () => {
+    const kfm = kf('@keyframes pulse { from { transform: scale(0); opacity: 0.6 } to { transform: scale(1); opacity: 0 } }')
+    const inf = parseStaticStyle('animation: pulse 1.2s ease-out infinite', () => {}, undefined, undefined, kfm) as {
+      animation?: Array<{ iterations: number }>
+    }
+    expect(inf.animation!.every((c) => c.iterations === -1), 'infinite ⇒ -1').toBe(true)
+    const n3 = parseStaticStyle('animation: pulse 1.2s 3', () => {}, undefined, undefined, kfm) as {
+      animation?: Array<{ iterations: number }>
+    }
+    expect(n3.animation!.every((c) => c.iterations === 3), '数字 3 ⇒ 3').toBe(true)
+    // delay + infinite 同行（第 2 个时间 token = delay，无单位整数 = iterations）
+    const both = parseStaticStyle('animation: pulse 1.2s ease-out 0.6s infinite', () => {}, undefined, undefined, kfm) as {
+      animation?: Array<{ delayMs: number; iterations: number }>
+    }
+    expect(both.animation!.every((c) => c.delayMs === 600 && c.iterations === -1), 'delay 600 + infinite').toBe(true)
+    // 迭代 0 ⇒ 不发射（CSS：不播放；内核拒 0）
+    const d: string[] = []
+    const z = parseStaticStyle('animation: pulse 1.2s 0', (m) => d.push(m), undefined, undefined, kfm) as { animation?: unknown }
+    expect(z.animation, 'iteration-count 0 ⇒ 不发射').toBeUndefined()
+    expect(d.length, 'iteration-count 0 ⇒ 有诊断').toBeGreaterThan(0)
+  })
 })
 
 // ★★★flex-direction 项（2026-10-08 · 用户抓出 Web 分歧）：display:flex 容器补初值 row（CSS 初值）——

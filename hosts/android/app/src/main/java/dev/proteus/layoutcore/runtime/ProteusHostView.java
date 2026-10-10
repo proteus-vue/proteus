@@ -1715,7 +1715,9 @@ public class ProteusHostView extends ViewGroup {
         trRunning = true;
         trFrames = 0;
         trLastNs = 0;            // 新循环：首帧用标称帧长起步
-        final long hardStopAtNs = System.nanoTime() + 3_000_000_000L;   // 硬上限 3s
+        // ★无限循环动画（`animation-iteration-count: infinite`，如地图定位点脉冲）合法地"永远活跃"
+        //   ⇒ 此时用**无上限**（靠 `animActive==0` 停）；否则 3s 硬上限（防内核 bug 说永远活跃时盲转）。
+        final long hardStopAtNs = pressAnimInfinite ? Long.MAX_VALUE : (System.nanoTime() + 3_000_000_000L);
         android.view.Choreographer.getInstance().postFrameCallback(new android.view.Choreographer.FrameCallback() {
             @Override public void doFrame(long frameTimeNanos) {
                 if (!trRunning) return;
@@ -2438,6 +2440,8 @@ public class ProteusHostView extends ViewGroup {
     private java.util.Map<Integer, int[]> pseudoChildren = java.util.Collections.emptyMap();
     /** 本次按下**已启动动画**的节点（UP 时逐个停）——空 = 无按下触发动画。 */
     private final java.util.HashSet<Integer> pressedAnimTargets = new java.util.HashSet<>();
+    /** ★本次按下触发的动画里是否有**无限循环**（`animation-iteration-count:infinite`）——帧循环据此不设 3s 上限。 */
+    private boolean pressAnimInfinite = false;
 
     /** 由 `VaporRenderHost` 在建树时注入"哪些节点有按下态 + 其样式"（底色/描边/凹陷/发光）。 */
     public void setPressStyles(java.util.Map<Integer, PressStyle> m) {
@@ -2498,12 +2502,18 @@ public class ProteusHostView extends ViewGroup {
         if (pressedAnimTargets.isEmpty() || coreHandle == 0L) return;
         try {
             org.json.JSONArray anims = new org.json.JSONArray();
+            boolean infinite = false;
             for (Integer id : pressedAnimTargets) {
                 org.json.JSONArray chans = pressAnims.get(id);
+                if (chans != null) for (int c = 0; c < chans.length(); c++) {
+                    org.json.JSONObject ch = chans.optJSONObject(c);
+                    if (ch != null && ch.optDouble("iterations", 1) == -1) infinite = true;
+                }
                 org.json.JSONArray entries = VaporRenderHost.collectAnimEntries(id, chans);
                 for (int i = 0; i < entries.length(); i++) anims.put(entries.opt(i));
             }
             if (anims.length() == 0) return;
+            pressAnimInfinite = infinite;
             org.json.JSONObject req = new org.json.JSONObject();
             req.put("anims", anims);
             kernelAnimStart(req.toString());
@@ -2513,6 +2523,7 @@ public class ProteusHostView extends ViewGroup {
 
     /** 停本次按下的触发动画（UP 还原）。 */
     private void stopPressAnims() {
+        pressAnimInfinite = false;
         if (pressedAnimTargets.isEmpty() || coreHandle == 0L) { pressedAnimTargets.clear(); return; }
         try {
             org.json.JSONArray ids = new org.json.JSONArray();
