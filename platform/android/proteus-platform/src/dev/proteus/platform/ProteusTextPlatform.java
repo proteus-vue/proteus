@@ -175,13 +175,21 @@ public final class ProteusTextPlatform {
         return tp;
     }
 
-    /** 单行度量：`{width, glyphHeight}`（**未取整**；glyphHeight = 字体度量 descent−ascent）。
-     *  调用方按测量子系统口径取整（`Math.ceil`）。 */
+    /** 单行度量：`{width, glyphHeight, baseline}`（**未取整**；glyphHeight = descent−ascent；baseline = −ascent）。
+     *  调用方按测量子系统口径取整（`Math.ceil`）。
+     *  ★B-T1（2026-10-10）：第 3 项 **baseline**（盒内容顶 → 基线）供内核 `align-items: baseline` 对文本对齐；
+     *    既有调用方只取 [0]/[1] ⇒ 零影响。 */
     public static float[] measureSingle(float sizePx, int weight, String familyRole, float letterSpacingPx, String text) {
         android.text.TextPaint tp = paintFor(sizePx, weight, familyRole, letterSpacingPx);
         float w = tp.measureText(text);
         android.graphics.Paint.FontMetrics fm = tp.getFontMetrics();
-        return new float[]{ w, fm.descent - fm.ascent };
+        return new float[]{ w, fm.descent - fm.ascent, -fm.ascent };
+    }
+
+    /** ★B-T1：文本基线（盒内容顶 → 基线；Android = −ascent）。与 `measureSingle` 同源（同一 paintFor）。 */
+    public static float baseline(float sizePx, int weight, String familyRole, float letterSpacingPx) {
+        android.text.TextPaint tp = paintFor(sizePx, weight, familyRole, letterSpacingPx);
+        return -tp.getFontMetrics().ascent;
     }
 
     /**

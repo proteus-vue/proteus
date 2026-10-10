@@ -882,6 +882,20 @@ def main() -> int:
     else:
         print(f"  ✓ ㉗ ★B3d 动态 :class 字符串布局：子2 x {b3dx}（无模板→2列→无模板）——grid-template-columns 走内核 SET_STYLE_STR 字符串池生效")
 
+    # ── ㉘ ★★★B-T1：**文本基线对齐**端上真生效（align-items:baseline 对文本按真实基线，非 taffy 盒底近似，2026-10-10）──
+    bt1 = rep.get("bt1_probe") or {}
+    bt1r = [float(v) for v in (bt1.get("residuals") or [])]
+    if not bt1 or len(bt1r) < 2:
+        print("  ◐ ㉘ B-T1 文本基线对齐：本端夹具未覆盖（报告无 bt1_probe）——如实跳过")
+    elif any((r != r) for r in bt1r):  # NaN ⇒ 报告缺 baseline 键（内核未暴露/宿主未注入）
+        fail(f"★B-T1 文本基线对齐：读数含 NaN（rects 未带 baseline？宿主未注入 baseline？）：{bt1r}")
+        ok = False
+    elif any(abs(r) > 0.6 for r in bt1r):
+        fail(f"★B-T1 文本基线对齐残差非零（期望 ≈0：align-items:baseline 对文本按真实基线）：{bt1r} —— 基线通道没生效（或仍是盒底对齐）")
+        ok = False
+    else:
+        print(f"  ✓ ㉘ ★B-T1 文本基线对齐：基线残差 {bt1r}（≈0）——align-items:baseline 走内核文本基线生效")
+
     # 附加观测（不判红，只如实报）
     una = rep.get("uninstantiated_slots", 0)
     if una:

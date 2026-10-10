@@ -389,17 +389,18 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
         double id = -1, fs = 14;
         jnum(it.c_str(), it.size(), "id", &id);
         jnum(it.c_str(), it.size(), "fontSize", &fs);
-        double wpx = 0, hpx = 0;
+        double wpx = 0, hpx = 0, basepx = 0;
         double fwd = 400; jnum(it.c_str(), it.size(), "fontWeight", &fwd); int fw = (int)(fwd + 0.5);
         std::string ff; jstr(it.c_str(), it.size(), "fontFamily", &ff);
         double lsDesign = 0; jnum(it.c_str(), it.size(), "letterSpacing", &lsDesign);   // ★批次 20：字距（设计 px）
-        measureTextTypoPx(tx, fs * density, &wpx, &hpx, lsDesign * density, fw, ff);
+        measureTextTypoPx(tx, fs * density, &wpx, &hpx, lsDesign * density, fw, ff, nullptr, &basepx);
         // ★批次 13：line-height ⇒ 行盒高覆盖字形高
         std::string lhTok; jstr(it.c_str(), it.size(), "lineHeight", &lhTok);
         double lhDesign = lineHeightDesignPx(lhTok, fs);
         if (lhDesign > 0) hpx = lhDesign * density;
         firstHpx[(int)id] = hpx;
-        char mb[160]; snprintf(mb, sizeof(mb), "%s\"%d\":{\"width\":%.2f,\"height\":%.2f}", mc > 0 ? "," : "", (int)id, std::ceil(wpx / density), hpx / density);
+        // ★B-T1：baseline（设计单位；盒内容顶→基线）供内核 align-items:baseline 对文本对齐
+        char mb[240]; snprintf(mb, sizeof(mb), "%s\"%d\":{\"width\":%.2f,\"height\":%.2f,\"baseline\":%.4f}", mc > 0 ? "," : "", (int)id, std::ceil(wpx / density), hpx / density, basepx / density);
         measures += mb; mc++;
     }
     measures += "}";

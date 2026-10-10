@@ -341,11 +341,13 @@ static uint64_t layoutSfcFixture(const std::string& fixture, double vpW, double 
     int mCount = 0;
     for (const auto& kv : stylesForMeasure) {
         if (kv.second.text.empty()) continue;
-        double wpx = 0, hpx = 0;
-        measureTextTypoPx(kv.second.text, kv.second.fontSize * density, &wpx, &hpx, kv.second.letterSpacing * density);
-        char mb[160];
-        snprintf(mb, sizeof(mb), "%s\"%d\":{\"width\":%.4f,\"height\":%.4f}",
-                 mCount > 0 ? "," : "", kv.first, wpx / density, hpx / density);
+        double wpx = 0, hpx = 0, basepx = 0;
+        measureTextTypoPx(kv.second.text, kv.second.fontSize * density, &wpx, &hpx, kv.second.letterSpacing * density,
+                          400, "", nullptr, &basepx);
+        char mb[200];
+        // ★B-T1：baseline（设计单位；供内核 align-items:baseline 对文本对齐）
+        snprintf(mb, sizeof(mb), "%s\"%d\":{\"width\":%.4f,\"height\":%.4f,\"baseline\":%.4f}",
+                 mCount > 0 ? "," : "", kv.first, wpx / density, hpx / density, basepx / density);
         measures += mb;
         mCount++;
     }
@@ -1522,11 +1524,13 @@ static std::string vaporMountImpl(const std::string& treeJson) {
     int mc = 0;
     for (const auto& kv : styles) {
         if (kv.second.text.empty()) continue;
-        double wpx = 0, hpx = 0;
-        measureTextTypoPx(kv.second.text, kv.second.fontSize * g_vaporDensity, &wpx, &hpx, kv.second.letterSpacing * g_vaporDensity);
-        char mb[200];
-        snprintf(mb, sizeof(mb), "%s\"%d\":{\"width\":%.4f,\"height\":%.4f}",
-                 mc > 0 ? "," : "", kv.first, wpx / g_vaporDensity, hpx / g_vaporDensity);
+        double wpx = 0, hpx = 0, basepx = 0;
+        measureTextTypoPx(kv.second.text, kv.second.fontSize * g_vaporDensity, &wpx, &hpx, kv.second.letterSpacing * g_vaporDensity,
+                          400, "", nullptr, &basepx);
+        char mb[240];
+        // ★B-T1：baseline（设计单位）
+        snprintf(mb, sizeof(mb), "%s\"%d\":{\"width\":%.4f,\"height\":%.4f,\"baseline\":%.4f}",
+                 mc > 0 ? "," : "", kv.first, wpx / g_vaporDensity, hpx / g_vaporDensity, basepx / g_vaporDensity);
         measures += mb;
         mc++;
     }
@@ -1759,11 +1763,12 @@ static std::string vaporUpdatePatchesImpl(const std::string& patchesJson) {
                 auto sit = g_vaporStyles.find((int)id);
                 fs = (sit != g_vaporStyles.end()) ? sit->second.fontSize : 14.0;
             }
-            double wpx = 0, hpx = 0;
-            measureTextTypoPx(text, fs * g_vaporDensity, &wpx, &hpx);
-            char mb[200];
-            snprintf(mb, sizeof(mb), "%s\"%d\":{\"width\":%.4f,\"height\":%.4f}",
-                     mCount > 0 ? "," : "", (int)id, wpx / g_vaporDensity, hpx / g_vaporDensity);
+            double wpx = 0, hpx = 0, basepx = 0;
+            measureTextTypoPx(text, fs * g_vaporDensity, &wpx, &hpx, 0, 400, "", nullptr, &basepx);
+            char mb[240];
+            // ★B-T1：baseline（设计单位）
+            snprintf(mb, sizeof(mb), "%s\"%d\":{\"width\":%.4f,\"height\":%.4f,\"baseline\":%.4f}",
+                     mCount > 0 ? "," : "", (int)id, wpx / g_vaporDensity, hpx / g_vaporDensity, basepx / g_vaporDensity);
             measures += mb;
             mCount++;
         }

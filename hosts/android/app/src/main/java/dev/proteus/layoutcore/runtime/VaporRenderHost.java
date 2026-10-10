@@ -1627,6 +1627,8 @@ public final class VaporRenderHost {
             JSONObject sz = new JSONObject();
             sz.put("width", m2[0]);
             sz.put("height", m2[1]);
+            // ★B-T1：折行度量同样带基线（基线是首行字体度量，与是否折行无关）
+            sz.put("baseline", ProteusTextPlatform.baseline(fs, mw, spec.optString("fontFamily", null), ls));
             measures.put(String.valueOf(spec.getInt("id")), sz);
             changed = true;
         }
@@ -1688,6 +1690,7 @@ public final class VaporRenderHost {
             float[] m2 = ProteusTextPlatform.measureSingle(fs, mw, spec.optString("fontFamily", null), ls, t);
             float w = m2[0];
             float glyphH = m2[1];   // ★真实字体度量（descent−ascent）
+            float baseline = m2[2]; // ★B-T1：盒内容顶→基线（−ascent）——供内核 align-items:baseline 对文本对齐
             // ★批次 13（line-height）：行盒高 = 行高（倍数×fs 或绝对 px）；缺省 = 字形度量高
             float lh = lineHeightPxOf(spec, fs);
             float h = lh > 0 ? lh : glyphH;
@@ -1695,6 +1698,8 @@ public final class VaporRenderHost {
             // I2-ALLOW: 文本**测量**结果的取整（测量子系统，非几何换算——度量值交给内核后由内核统一 `snap`）
             sz.put("width", Math.ceil(w));
             sz.put("height", Math.ceil(h));
+            // ★B-T1：基线（不取整——它是字体度量，用于对齐运算；取整会引入偏差）
+            sz.put("baseline", baseline);
             m.put(String.valueOf(spec.getInt("id")), sz);
         }
         return m;

@@ -525,6 +525,7 @@ public class ProteusHostView extends ViewGroup {
         double[] r = new double[]{
             Math.round(fps * 10) / 10.0,
             Math.round(avgMs * 100) / 100.0,
+            // I2-ALLOW: dev 逐帧统计的**最大帧耗 ms**（报告值，非几何换算——本行含内层括号，门禁"报告取整"正则未识别）
             Math.round((devIntervalMaxNs / 1e6) * 100) / 100.0,
             (double) devDropped,
             (double) n,

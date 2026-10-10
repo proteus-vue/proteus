@@ -222,6 +222,13 @@ final class ProteusTextAdapter {
     private(set) static var fontFamilyFallbackCount = 0
     private(set) static var lastUnknownFontFamily = ""
 
+    /// ★★★B-T1（2026-10-10）：**文本基线**（盒内容顶 → 基线）。CoreText ascent = 基线到顶 ⇒ 基线 = ascent。
+    ///   供内核 `align-items: baseline` 对文本对齐（taffy 叶基线恒缺，内核侧后处理消费此值）。
+    static func textBaseline(fontSize: CGFloat, fontWeight: CGFloat = 400, fontFamily: String = "system") -> CGFloat {
+        let font = ProteusTextAdapter.font(size: fontSize, weight: fontWeight, family: fontFamily)
+        return CTFontGetAscent(font as CTFont)
+    }
+
     static func measureText(_ text: String, fontSize: CGFloat, fontWeight: CGFloat = 400,
                             fontFamily: String = "system", lineHeight: String? = nil, letterSpacing: CGFloat = 0) -> CGSize {
         if text.isEmpty { return .zero }

@@ -426,6 +426,16 @@ interface VaporReport {
     child_xs: number[]
   }
   /**
+   * ★★★**B-T1 探针**（2026-10-10 · 判据 ㉘）——**文本基线对齐**端上真生效（`align-items: baseline`）。
+   *   `residuals` = [翻转前, 翻转后] 的**基线残差** `(y_a+base_a) − (y_b+base_b)`（字体无关不变量，对齐后恒 ≈0）；
+   *   各文本叶的 `baseline` 由 probe 从内核 `rects` 读出（内核随 rects 暴露文本基线）。
+   */
+  bt1_probe: {
+    textA_id: number
+    textB_id: number
+    residuals: number[]
+  }
+  /**
    * ★★★**`:style` 对象展开探针**（2026-10-03）——两条通道各自的真值：
    *   · 布局键 ⇒ `width_before/after`（**内核矩形**，真改几何）；
    *   · 绘制键 ⇒ `patch_calls`（提交给宿主的补丁内容——绘制**不进内核**，
@@ -1786,7 +1796,7 @@ function runShort(args: VaporArgs): string {
     tpl_nodes: 0, tpl_ok: false, sub_l1: 0, sub_l0: 0, sub_l1_rate: 0, sub_sources: [],
     inst_ms: 0, inst_nodes: 0, inst_reused_ids: 0, inst_allocated_ids: 0, inst_rows: 0,
     inst_values_filled: 0, inst_virtual_rows: 0, inst_text_filled: 0, inst_width_filled: 0,
-    mix_text_probe: [], text_probe_rounds: [], gate_rounds: [], gate_text_nodes: [], once_node_id: -1, memo_node_id: -1, expr_probe: [], transition_started: 0, tpl_transition: [], component_mounts: 0, component_nodes: 0, component_kid_probe: {}, slot_probe: { texts: [], rects: [], fills: [], markers_left: -1 }, emit_probe: { emits: [], parent_source_after: undefined, geom_before: -1, geom_after: -1 }, scoped_probe: { texts: [], anchor_id: -1, anchor_width_field: -1, anchor_width_rect: -1, destr_text: '', destr_width_field: -1, destr_width_rect: -1 }, lifecycle_probe: { bindings: [], ran_handler: '', changed_sources: [], ops_bytes: 0, applied: 0, anchor_id: -1, geom_before: -1, geom_after: -1 }, dyn_probe: { texts: [], mounts: [], geom: [], dropped: -1, notes: [] }, directive_probe: { nodes: [], rounds: [], plays: [] }, mixed_probe: { texts: [], leaves: 0, geom: [] }, t2_probe: { nodeId: -1, widths: [], values: [], logs: [] }, b5_probe: { nodeId: -1, phases: [], widths: [], values: [] }, b3a_probe: { nodeId: -1, widths: [] }, b3b_probe: { childId: -1, child_xs: [] }, b3d_probe: { childId: -1, child_xs: [] }, styleobj_probe: { anchor_id: -1, width_before: -1, width_after: -1, kernel_applied: 0, patch_calls: [] },
+    mix_text_probe: [], text_probe_rounds: [], gate_rounds: [], gate_text_nodes: [], once_node_id: -1, memo_node_id: -1, expr_probe: [], transition_started: 0, tpl_transition: [], component_mounts: 0, component_nodes: 0, component_kid_probe: {}, slot_probe: { texts: [], rects: [], fills: [], markers_left: -1 }, emit_probe: { emits: [], parent_source_after: undefined, geom_before: -1, geom_after: -1 }, scoped_probe: { texts: [], anchor_id: -1, anchor_width_field: -1, anchor_width_rect: -1, destr_text: '', destr_width_field: -1, destr_width_rect: -1 }, lifecycle_probe: { bindings: [], ran_handler: '', changed_sources: [], ops_bytes: 0, applied: 0, anchor_id: -1, geom_before: -1, geom_after: -1 }, dyn_probe: { texts: [], mounts: [], geom: [], dropped: -1, notes: [] }, directive_probe: { nodes: [], rounds: [], plays: [] }, mixed_probe: { texts: [], leaves: 0, geom: [] }, t2_probe: { nodeId: -1, widths: [], values: [], logs: [] }, b5_probe: { nodeId: -1, phases: [], widths: [], values: [] }, b3a_probe: { nodeId: -1, widths: [] }, b3b_probe: { childId: -1, child_xs: [] }, b3d_probe: { childId: -1, child_xs: [] }, bt1_probe: { textA_id: -1, textB_id: -1, residuals: [] }, styleobj_probe: { anchor_id: -1, width_before: -1, width_after: -1, kernel_applied: 0, patch_calls: [] },
     mount_ms: 0, mount_nodes: 0,
     updates_run: 0, ops_bytes: 0, ops_ms: 0, apply_ms: 0, text_synced_total: 0, update_evidence: [], geom_probe: [], channels: [],
     ev_bindings: 0, ev_handlers: 0, ev_modifiers: 0, taps: 0, tap_evidence: [],
@@ -3233,6 +3243,46 @@ function runShort(args: VaporArgs): string {
         } catch { /* 重挂失败 ⇒ 判据按 host_nodes 不符判红 */ }
       } else {
         notes.push('B3d 探针：产物无 b3d 段（夹具未覆盖 ⇒ 判据 ㉗ 按缺失处理）')
+      }
+    }
+
+    /* ═══════════ ★★★B-T1 探针（2026-10-10 · 判据 ㉘）：文本基线对齐端上真生效 ═══════════
+     *
+     * 【要证明什么】`align-items: baseline` 对**文本**按真实基线对齐（非 taffy 的盒底近似）。
+     *   row 容器 + baseline + 两个不同字号文本（14px/30px）⇒ 基线不同。
+     *   读内核 `rects` 里两文本叶的 y 与 baseline（内核随 rects 暴露文本基线）⇒ 残差
+     *   `(y_a+base_a) − (y_b+base_b)` **恒 ≈ 0**（字体无关不变量；taffy-only 盒底对齐下 ≠ 0）。
+     */
+    {
+      const bt1Art = (artifacts as { bt1?: { tpl: LayoutTemplate; table: SubscriptionTable } }).bt1
+      if (bt1Art?.tpl?.ok) {
+        const bt1Inst = instantiateTemplate(bt1Art.tpl, { viewport: args.viewport, read: () => 0, table: bt1Art.table, registry: new ListRegistry() })
+        // 两文本叶 = 除容器外的前 2 个节点（模板序：容器 id0、文本 id1、文本 id2）
+        const idA = bt1Inst.nodes.length >= 3 ? Number((bt1Inst.nodes[1] as { id: number }).id) : -1
+        const idB = bt1Inst.nodes.length >= 3 ? Number((bt1Inst.nodes[2] as { id: number }).id) : -1
+        try {
+          const mOut = JSON.parse(proteusHost.mount(JSON.stringify({ viewport: bt1Inst.viewport, nodes: bt1Inst.nodes }))) as { ok?: boolean; error?: string }
+          if (mOut.ok === true && idA >= 0 && idB >= 0) {
+            const residual = (): number => {
+              try {
+                const rr = JSON.parse(proteusHost.readRects()) as { rects?: Record<string, { y?: number; baseline?: number }> }
+                const a = rr.rects?.[String(idA)]; const b = rr.rects?.[String(idB)]
+                if (!a || !b || a.baseline === undefined || b.baseline === undefined) return Number.NaN
+                return Math.round(((a.y ?? 0) + a.baseline - ((b.y ?? 0) + b.baseline)) * 100) / 100
+              } catch { return Number.NaN }
+            }
+            rep.bt1_probe = { textA_id: idA, textB_id: idB, residuals: [residual(), residual()] }
+          } else {
+            notes.push(`B-T1 探针：mount/节点缺失（mount.ok=${mOut.ok} a=${idA} b=${idB}）——判据 ㉘ 按缺失处理`)
+          }
+        } catch (e) {
+          notes.push(`B-T1 探针异常：${String((e as Error)?.message ?? e)}`)
+        }
+        try {
+          proteusHost.mount(JSON.stringify({ viewport: inst.viewport, nodes: inst.nodes }))
+        } catch { /* 重挂失败 ⇒ 判据按 host_nodes 不符判红 */ }
+      } else {
+        notes.push('B-T1 探针：产物无 bt1 段（夹具未覆盖 ⇒ 判据 ㉘ 按缺失处理）')
       }
     }
 
