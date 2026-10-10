@@ -1543,6 +1543,44 @@ describe('★批次 42 · CSS @keyframes + animation（对齐 Web 动效）', ()
   })
 })
 
+// ★★★v-pump（通用原语 · 运行期数据泵）：页面声明 `v-pump` ⇒ 折出**页面级泵表**（非节点字段）。
+describe('★v-pump · 声明式数据泵（页面级泵表）', () => {
+  const pumpsOf = (sfc: string) => (buildLayoutTemplate(sfc, 'pump.vue').template as unknown as { pumps?: unknown[] }).pumps
+  const SFC = (val: string) => `<template><view class="boil" v-pump="${val}">{{ p0 }}</view></template>`
+
+  it('① 合法 → 折出泵表（src/hz/gen）', () => {
+    const p = pumpsOf(SFC("{ src: 'p0', hz: 50, gen: { kind: 'int', min: 1, max: 99 } }"))
+    expect(p).toHaveLength(1)
+    expect(p![0]).toEqual({ src: 'p0', hz: 50, gen: { kind: 'int', min: 1, max: 99 } })
+  })
+  it('② sin 生成器带 period；hz 缺省 30', () => {
+    const p = pumpsOf(SFC("{ src: 'h', gen: { kind: 'sin', min: 180, max: 320, period: 1200 } }")) as Array<{ hz: number; gen: { kind: string; period?: number } }>
+    expect(p[0]!.hz).toBe(30)
+    expect(p[0]!.gen).toEqual({ kind: 'sin', min: 180, max: 320, period: 1200 })
+  })
+  it('③ 非法形态 ⇒ 诊断 + 不产泵（不静默）', () => {
+    for (const bad of [
+      "{ hz: 50, gen: { kind: 'int', min: 1, max: 9 } }",          // 缺 src
+      "{ src: 'p0', hz: 0, gen: { kind: 'int', min: 1, max: 9 } }", // hz 越界
+      "{ src: 'p0', hz: 50, gen: { kind: 'rand', min: 1, max: 9 } }", // 未知 kind
+      "{ src: 'p0', hz: 50, gen: { kind: 'int', min: 1 } }",       // gen 缺 max
+      "{ src: 'p0', hz: 50 }",                                     // 缺 gen
+      'pumpSpec',                                                  // 变量（非静态）
+    ]) {
+      const r = buildLayoutTemplate(SFC(bad), 'pump.vue')
+      expect((r.template as unknown as { pumps?: unknown[] }).pumps, `非法「${bad}」不产泵`).toBeUndefined()
+      expect(r.diagnostics.some((d) => d.code === 'VAPOR_PUMP_SHAPE'), `非法「${bad}」有诊断`).toBe(true)
+    }
+  })
+  it('④ 同名泵重复 ⇒ 保留首条 + 诊断', () => {
+    const sfc = `<template><view v-pump="{ src: 'p0', hz: 10, gen: { kind: 'int', min: 1, max: 9 } }"><view v-pump="{ src: 'p0', hz: 20, gen: { kind: 'int', min: 1, max: 9 } }"/></view></template>`
+    const r = buildLayoutTemplate(sfc, 'pump.vue')
+    expect((r.template as unknown as { pumps?: Array<{ hz: number }> }).pumps).toHaveLength(1)
+    expect((r.template as unknown as { pumps: Array<{ hz: number }> }).pumps[0]!.hz).toBe(10)
+    expect(r.diagnostics.some((d) => d.code === 'VAPOR_PUMP_DUP_SRC')).toBe(true)
+  })
+})
+
 // ★★★flex-direction 项（2026-10-08 · 用户抓出 Web 分歧）：display:flex 容器补初值 row（CSS 初值）——
 //   内核只有 flex（未声明 display 的 block 近似走 column）；显式 display:flex + 未写 flex-direction
 //   ⇒ 补 row（让 Web 标准写法在 App 直接成立，无需胶水补 flex-direction:row）。

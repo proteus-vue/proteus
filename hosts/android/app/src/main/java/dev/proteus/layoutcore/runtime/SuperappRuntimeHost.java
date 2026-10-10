@@ -116,4 +116,68 @@ public final class SuperappRuntimeHost {
     public void post(String json) {
         // 运行期走同步链（无 post 需求）；保留以兼容桥探测
     }
+
+    /* ══════════ ★★★v-pump 周期驱动（通用原语，2026-10-10）══════════
+     * 【做什么】页面用 `v-pump` 声明的**运行期数据源**（按 hz 跳变）——JS 侧 `superapp-runtime` 在
+     *   挂载每屏后调本类 `setPumps(hzListJson)`（仅带频率，不带数据）；宿主据此起一个 **Choreographer
+     *   帧回调**，按"最小间隔"到期才 `eval(__proteusSuperappPump({dtMs}))`（**不是每帧一次**——省跨界）。
+     * 【为什么在宿主】App 端**不跑页面脚本**、也**无 JS 定时器** ⇒ 周期驱动由宿主提供（合法帧源，
+     *   无 sleep/盲等）。JS 只负责"按 dt 产新值 → 写数据源 → 既有 slot-runtime 增量"。
+     * 【诚实边界】泵驱动的更新走**数据通路（Vapor/applyOps）**；**手势路径仍零 JS**（不受影响）。 */
+    private long pumpIntervalNs = 0L;      // 最小泵间隔（ns）；0 = 无泵（循环不跑）
+    private long pumpLastNs = 0L;
+    private boolean pumpLoopOn = false;
+
+    /** JS 侧 `superapp-runtime` 挂载每屏后调：传该屏泵的频率列表（`[]`/空 ⇒ 停泵循环）。 */
+    @SuppressWarnings("unused")
+    public void setPumps(String hzListJson) {
+        long minNs = 0L;
+        try {
+            org.json.JSONArray arr = new org.json.JSONArray(hzListJson == null ? "[]" : hzListJson);
+            for (int i = 0; i < arr.length(); i++) {
+                double hz = arr.optDouble(i, 0);
+                if (hz > 0) { long ns = (long) (1_000_000_000.0 / hz); if (minNs == 0L || ns < minNs) minNs = ns; }
+            }
+        } catch (Throwable ignored) { minNs = 0L; }
+        pumpIntervalNs = minNs;
+        if (minNs > 0L) { pumpLastNs = 0L; startPumpLoop(); }
+    }
+
+    /** ★宿主每屏渲染后抽一次泵频率（调 JS `__proteusSuperappPumpHz()` ⇒ `setPumps`）——起/停周期驱动。 */
+    @SuppressWarnings("unused")
+    public void pullPumps() {
+        try {
+            QuickJsEngine.EvalResult r = QuickJsEngine.eval("__proteusSuperappPumpHz()");
+            if (r != null && r.ok && r.value != null) setPumps(r.value);
+            else setPumps("[]");
+        } catch (Throwable ignored) { setPumps("[]"); }
+    }
+
+    private final android.view.Choreographer.FrameCallback pumpCb =
+            new android.view.Choreographer.FrameCallback() {
+        @Override public void doFrame(long frameTimeNanos) {
+            if (!pumpLoopOn) return;
+            if (pumpIntervalNs <= 0L) { pumpLoopOn = false; return; }
+            final long now = System.nanoTime();
+            long dt = pumpLastNs == 0L ? pumpIntervalNs : (now - pumpLastNs);
+            if (dt < pumpIntervalNs) {   // 未到最小间隔 ⇒ 不解 JS（省跨界）
+                android.view.Choreographer.getInstance().postFrameCallback(this);
+                return;
+            }
+            pumpLastNs = now;
+            try {
+                final double dtMs = dt / 1e6;
+                QuickJsEngine.EvalResult r = QuickJsEngine.eval("__proteusSuperappPump(" + org.json.JSONObject.quote("{\"dtMs\":" + dtMs + "}") + ")");
+                // JS 回 `{ok,fired,pumps}`——pumps==0 ⇒ 当前屏无泵 ⇒ 自停（等下次 setPumps 再起）
+                if (r != null && r.value != null && r.value.contains("\"pumps\":0")) { pumpLoopOn = false; return; }
+            } catch (Throwable ignored) { /* 单帧失败不停循环；下次照常 */ }
+            android.view.Choreographer.getInstance().postFrameCallback(this);
+        }
+    };
+
+    private void startPumpLoop() {
+        if (pumpLoopOn) return;
+        pumpLoopOn = true;
+        android.view.Choreographer.getInstance().postFrameCallback(pumpCb);
+    }
 }

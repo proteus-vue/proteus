@@ -268,4 +268,44 @@ const name = ref('')
     expect(r.handled).toBe(false)
     expect(inst.data()['name']).toBe('')
   })
+
+  it('★★v-pump：数据泵（宿主按帧驱动 → 内建生成器 → 写数据源 → 文本增量）', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-pump-'))
+    fs.mkdirSync(path.join(dir, 'router'), { recursive: true })
+    fs.mkdirSync(path.join(dir, 'pages'), { recursive: true })
+    fs.writeFileSync(
+      path.join(dir, 'pages', 'idx.vue'),
+      `<template>
+  <view class="boil" v-pump="{ src: 'p0', hz: 100, gen: { kind: 'int', min: 1, max: 99 } }">
+    <text class="cell">{{ p0 }}</text>
+  </view>
+</template>
+`,
+    )
+    fs.writeFileSync(path.join(dir, 'router', 'auto-routes.ts'), `export const routes = [{ name: "idx", path: "pages/idx", component: "../pages/idx.vue" }]\n`)
+    fs.writeFileSync(path.join(dir, 'proteus.config.ts'), `export default { pagesDir: 'pages' }\n`)
+    const build = await buildAppRuntimeContent(dir, 'android')
+    const artifacts = JSON.parse(fs.readFileSync(build.outFile, 'utf-8')) as Record<string, ScreenRuntimeArtifact>
+    // ① 产物带泵表 + 泵源（kind:'pump'）
+    expect(artifacts['idx']!.pumps, '屏产物带泵表').toHaveLength(1)
+    const srcs = (artifacts['idx']!.table as { sources: Array<{ sourceName: string; sourceKind: string }> }).sources
+    expect(srcs.some((s) => s.sourceName === 'p0' && s.sourceKind === 'pump'), 'p0 是 pump 源').toBe(true)
+
+    const ops: string[] = []
+    const rt = createScreenRuntime({ artifacts, applyOps: (o) => ops.push(o), viewport: { width: 390, height: 844 } })
+    const inst = rt.instance('idx')
+    expect(inst.pumpCount(), '泵数 1').toBe(1)
+    expect(inst.pumpHzList()).toEqual([100])
+    expect(inst.data()['p0'], '首帧初值 = gen.min').toBe(1)
+
+    // ② 驱动：100Hz ⇒ 间隔 10ms。首帧累加不足 ⇒ 不触发；跨过 10ms ⇒ 触发一次并写数据源。
+    const fired0 = inst.pumpTick(5)
+    expect(fired0, '5ms < 10ms 间隔 ⇒ 未触发').toBe(0)
+    const fired1 = inst.pumpTick(8)   // 累计 13ms ≥ 10ms ⇒ 触发
+    expect(fired1, '13ms ≥ 10ms ⇒ 触发一次').toBe(1)
+    const v = inst.data()['p0']
+    expect(typeof v === 'number' && v >= 1 && v <= 99, `泵值在 [1,99]：${String(v)}`).toBe(true)
+    // ③ 增量：泵写入触发 applyOps（既有 slot-runtime 通路）——★O(1) 源级增量，不整树重建
+    expect(ops.length, '泵写入产生增量指令').toBeGreaterThan(0)
+  })
 })

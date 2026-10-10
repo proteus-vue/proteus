@@ -22,6 +22,7 @@ export type SourceKind =
   | 'computed'   // computed(() => …) —— ★只读派生；求值期间**不得**写其它源
   | 'props'      // defineProps —— 订阅 props.xxx
   | 'model'      // defineModel —— props + emit 双向
+  | 'pump'       // ★★★`v-pump` 声明的**运行期数据源**（宿主按 hz 周期产新值）——与 ref 同为"可订阅源"
   | 'unknown'    // 识别不出（保守：一律判 L0，不订阅）
 
 export interface ReactiveSource {

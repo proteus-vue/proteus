@@ -82,6 +82,15 @@ export interface SuperappRuntime {
    *   宿主经全局入口 `__proteusSuperappInput` 调它（见 entry-superapp.ts）。
    */
   dispatchInput(nodeId: number, value: unknown): { handled: boolean; fired: string[] }
+  /**
+   * ★★★**数据泵推进一帧**（通用原语 `v-pump`，本批）：宿主按帧调（传真实 dtMs）——当前屏的泵按 hz
+   *   累加抽帧产新值 ⇒ 写数据源 ⇒ 既有增量通路。返回触发的源数；当前屏无泵 ⇒ 0。
+   */
+  pumpTick(dtMs: number): number
+  /** 当前屏声明的泵数（宿主据此决定是否起周期驱动）。 */
+  pumpCount(): number
+  /** 当前屏各泵频率列表 JSON（宿主据最小间隔起/停 Choreographer 帧循环；无泵 ⇒ `[]`）。 */
+  pumpHzJson(): string
   /** 当前屏名 */
   current(): string
   /** ★DevTools 元素内省（决策 #674）：当前屏**已实例化节点**（Template 实例化产物：id/parentId/tag/style/text）——供面板"元素"树。
@@ -238,6 +247,7 @@ export function createSuperappRuntime(opts: SuperappRuntimeOptions): SuperappRun
       // 挂载后再设滚动（树已重建；宿主按此值定位）
       if (typeof opts.host.setScroll === 'function') opts.host.setScroll(restore)
       cur = name
+      // ★★★v-pump：把该屏泵频率报给宿主（起/停周期驱动）——仅带 hz，不带数据（数据在 JS 侧产出）。
       // ★★★B5（2026-10-10）：**首帧 mount 成功后**跑该屏的 mounted 钩子（@vue:mounted + onMounted）。
       //   一次性（`markMounted` 幂等）——切回不重跑（与 Vue「mounted 只在挂载时一次」语义一致）。
       try { rt.instance(name).markMounted() } catch (e) { note(`[superapp-runtime] mounted 钩子异常：${String((e as Error)?.message ?? e)}`) }
@@ -260,6 +270,32 @@ export function createSuperappRuntime(opts: SuperappRuntimeOptions): SuperappRun
       return true
     },
     dispatchGesture: dispatch,
+    pumpTick(dtMs: number): number {
+      // ★v-pump：委派当前屏实例（泵表在屏产物里）；无屏/无泵 ⇒ 0。
+      if (!cur) return 0
+      try {
+        return rt.instance(cur).pumpTick(dtMs)
+      } catch (e) {
+        note(`[superapp-runtime] pumpTick 异常：${String((e as Error)?.message ?? e)}`)
+        return 0
+      }
+    },
+    pumpCount(): number {
+      if (!cur) return 0
+      try {
+        return rt.instance(cur).pumpCount()
+      } catch {
+        return 0
+      }
+    },
+    pumpHzJson(): string {
+      if (!cur) return '[]'
+      try {
+        return JSON.stringify(rt.instance(cur).pumpHzList())
+      } catch {
+        return '[]'
+      }
+    },
     dispatchInput(nodeId: number, value: unknown) {
       // ★B4-T2b：委派当前屏实例（输入事件不冒泡、直接按 nodeId 查 input 绑定 → 跑 v-model 回写）。
       if (!cur) return { handled: false, fired: [] }

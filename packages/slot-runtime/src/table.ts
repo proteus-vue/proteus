@@ -109,7 +109,7 @@ export interface MemoGroup {
 export interface SourceSubscription {
   sourceId: number
   sourceName: string
-  sourceKind: 'ref' | 'reactive' | 'computed' | 'props' | 'model' | 'unknown'
+  sourceKind: 'ref' | 'reactive' | 'computed' | 'props' | 'model' | 'pump' | 'unknown'
   /** ★该源变化时要直写的槽位（L1）；L0 槽位不出现在这里（走 Vue 渲染） */
   slots: SlotSubscription[]
 }

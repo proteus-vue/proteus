@@ -275,6 +275,12 @@ export interface LayoutTemplate {
   roots: number[]
   /** 结构上可用（false ⇒ 调用方应退回标准渲染路径） */
   ok: boolean
+  /**
+   * ★★★**数据泵表**（通用原语 `v-pump`，本批）：页面声明的运行期数据源——宿主按 `hz` 周期性
+   *   用内建 `gen` 生成器产新值，写入 `data[src]` ⇒ 页面对该源的普通绑定（`{{src}}`/`:style`/`:class`/
+   *   `v-animate`）由既有 slot-runtime 联动。缺省省略（无声明 ⇒ 既有产物逐字节不变）。
+   */
+  pumps?: Array<{ src: string; hz: number; gen: { kind: string; min: number; max: number; period?: number } }>
 }
 
 /** 引擎就绪的节点规格（实例化产物）

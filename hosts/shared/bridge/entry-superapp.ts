@@ -331,6 +331,30 @@ interface SuperappRuntimeHostShape {
     }
   }
 
+/**
+ * ★★★**v-pump 推进一帧**（通用原语，本批）：宿主按帧调（`tickJson = {dtMs}`）——当前屏的泵按 hz
+ *   累加抽帧、用内建生成器产新值 ⇒ 写数据源 ⇒ 既有 slot-runtime 增量通路。
+ *   返回 `{ok, fired, pumps}`（`fired` = 本次触发的源数；`pumps` = 当前屏泵数，宿主据此决定是否续帧）。
+ */
+;(globalThis as unknown as { __proteusSuperappPump?: (tickJson: string) => string })
+  .__proteusSuperappPump = (tickJson: string) => {
+    const g = globalThis as unknown as { __SUPERAPP_RUNTIME__?: SuperappRuntime }
+    if (!g.__SUPERAPP_RUNTIME__) return JSON.stringify({ ok: false, error: '运行期未启动' })
+    try {
+      const a = JSON.parse(tickJson || '{}') as { dtMs?: number }
+      const fired = g.__SUPERAPP_RUNTIME__.pumpTick(typeof a.dtMs === 'number' ? a.dtMs : 16.7)
+      return JSON.stringify({ ok: true, fired, pumps: g.__SUPERAPP_RUNTIME__.pumpCount() })
+    } catch (e) {
+      return JSON.stringify({ ok: false, error: String((e as Error)?.message ?? e) })
+    }
+  }
+
+/** ★★★**读当前屏泵频率列表**（v-pump）：宿主每次挂载后调一次，据最小间隔起/停自己的帧循环。 */
+;(globalThis as unknown as { __proteusSuperappPumpHz?: () => string }).__proteusSuperappPumpHz = () => {
+  const g = globalThis as unknown as { __SUPERAPP_RUNTIME__?: SuperappRuntime }
+  return g.__SUPERAPP_RUNTIME__ ? g.__SUPERAPP_RUNTIME__.pumpHzJson() : '[]'
+}
+
 /** ★B1 判据用：读运行期调试读数（当前屏 / nav 日志 / notes）。 */
 ;(globalThis as unknown as { __proteusSuperappDebug?: () => string }).__proteusSuperappDebug = () => {
   const g = globalThis as unknown as {
