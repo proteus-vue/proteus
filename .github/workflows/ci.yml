@@ -45,6 +45,9 @@ jobs:
       - name: 盲等门禁（★用户红线：脚本内 sleep 一律禁止——要么 App/被测对象主动上报，要么 wait_for.sh 条件等待）
         run: node scripts/check-no-blind-wait.mjs
 
+      - name: 逐帧通道去 JSON 门禁（★S2/#769：指令字节必须走 applyOpsBytes 字节直传，禁 number[] JSON——防静默回退）
+        run: node scripts/check-no-json-wire.mjs
+
       - name: 安全编辑门禁（★用户纪律：程序化编辑必须走 safe-edit——临时文件 + diff + 校验，禁止直接改源文件）
         run: node scripts/check-safe-edit.mjs
 

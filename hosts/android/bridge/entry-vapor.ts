@@ -127,7 +127,7 @@ function sendOps(payload: Uint8Array): string {
     return proteusHost.applyOpsBytes(payload)
   }
   _lastOpsWire = 'json'
-  return sendOps(payload)
+  return proteusHost.applyOps(JSON.stringify(Array.from(payload)))
 }
 
 /* ══════════════════ 入参 ══════════════════ */
