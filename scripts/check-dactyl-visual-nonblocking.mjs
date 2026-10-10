@@ -101,23 +101,24 @@ function main() {
     const rel = path.relative(ROOT, f)
     if (/v-follow\b/.test(src)) sawFollow = true
 
-    // ① transition / animation 声明：动非合成属性 ⇒ 违规
+    // ① transition 声明：动非合成属性 ⇒ 违规（property 列表在值里）
     const css = stylesOf(src)
-    for (const m of css.matchAll(/(?:^|[;{\s])(transition|animation)\s*:\s*([^;}]+)/gi)) {
-      const kind = m[1].toLowerCase()
-      const value = m[2]
-      for (const p of propsInDecl(value)) {
+    for (const m of css.matchAll(/(?:^|[;{\s])transition\s*:\s*([^;}]+)/gi)) {
+      for (const p of propsInDecl(m[1])) {
         if (p === 'none' || p === 'initial' || p === 'inherit') continue
         if (COMPOSITED.has(p)) continue
-        if (p === 'all') { fail(`${rel}：\`${kind}\` 动 \`all\`（含非合成属性）——只允许显式列合成属性（transform/opacity…）`); continue }
+        if (p === 'all') { fail(`${rel}：\`transition\` 动 \`all\`（含非合成属性）——只允许显式列合成属性（transform/opacity…）`); continue }
         if (NON_COMPOSITED.has(p)) {
-          fail(`${rel}：\`${kind}\` 动**非合成属性** \`${p}\`——逐帧重排/重绘会让装饰成为压力源（§7.3）`)
+          fail(`${rel}：\`transition\` 动**非合成属性** \`${p}\`——逐帧重排/重绘会让装饰成为压力源（§7.3）`)
         } else {
-          fail(`${rel}：\`${kind}\` 动未知属性 \`${p}\`——合成属性白名单外一律拒绝（拿不准就不动它）`)
+          fail(`${rel}：\`transition\` 动未知属性 \`${p}\`——合成属性白名单外一律拒绝（拿不准就不动它）`)
         }
       }
     }
-    // ② @keyframes 里出现非合成属性（关键帧动画若改布局属性同样违规）
+    // ② `animation` 简写：属性不在简写里（是 name/duration/timing/iteration）——其动的是哪个属性
+    //    由被引用的 `@keyframes` 决定（下一段的 @keyframes 扫描覆盖）。只需**不把 name 当属性**。
+    //    （若引用的是别处定义的 keyframes，本门禁看不到其体——诚实边界：Dactyl 的 keyframes 均同文件。）
+    // ③ @keyframes 里出现非合成属性（关键帧动画若改布局属性同样违规）
     for (const m of css.matchAll(/@keyframes\s+[\w-]+\s*\{([\s\S]*?)\n\s*\}/g)) {
       const body = m[1]
       for (const p of NON_COMPOSITED) {
