@@ -44,11 +44,11 @@
 |---|---|
 | `docs/project-memory-archive/2026-10.md` | 2026-10 里程碑详细叙事 + 状态速览历史栈（约 4.5k 行）|
 | `docs/project-memory-archive/2026-09.md` | 09 月全部叙事 + 柔性系统重组历史 + 2026-08 进度快照 + 已落地文件 + 09-19 验证状态（约 6.5k 行） |
-| `docs/project-memory-archive/decisions.md` | 决策链全文 #1–#747——按号检索（`grep -n "^736\." …`）|
+| `docs/project-memory-archive/decisions.md` | 决策链全文 #1–#748——按号检索（`grep -n "^736\." …`）|
 
 检索示例：`grep -n "2026-09-29\|判据建错靶" docs/project-memory-archive/2026-09.md`
 
-## 关键决策与文档偏差（#1–#747 → 归档速查）
+## 关键决策与文档偏差（#1–#748 → 归档速查）
 
 **全文在 `docs/project-memory-archive/decisions.md`**（按号检索：`grep -n "^290\." docs/project-memory-archive/decisions.md`）。
 决策号**只增不改号**（外部文档按号引用）；新决策追加到该文件末尾（号 +1）。
@@ -75,10 +75,9 @@
   · **iOS/鸿蒙的滚动锚定像素证据待补**（批 A⑤ 欠账；装置问题：iOS superapp 空跑起的是 `bundle-superapp.js` 而非 css-conformance ⇒ `--screen=` 无处可去；鸿蒙 `superapp-screen-*` 无滚动参数）。fixed/sticky 的 iOS/鸿蒙**实现已编译验证**（swiftc/HAP），仅缺滚动像素。
   · **批 B–E（F2 filter/backdrop-filter · F3 排版增强 · F4 状态伪类与伪元素 · F5 滚动增强）全部待做**。
   · **z-index v1 边界（#658 具名）**：负值 / stacking context 完整语义 / relative·sticky·flex·grid item 的 z 不生效——后续如需扩展从此处接。
-- **★★（2026-10-10 发现·iOS 真机重跑）三端 vapor 待收口：判据 ㉑（元素/文本混排）在 iOS 真机失败** —— 决策 #743。
-- **现象**：iOS 真机 `run-selfdraw.sh --vapor` 23 项过 22，唯 **㉑ 混排**失败——混排叶子（`mix <b>MIXB</b> tail` 等）**全为满宽 390**（应内容宽）、正文**空格被吞**（`mix`/`tail`）。**提交版 iOS 证据 ㉑ 是过的**（内容宽 38）⇒ **iOS 证据陈旧**，三端门禁 `check:vapor-three-end` 此前**倚旧证据**（Android 提交版同为内容宽）。编译器路径（`vapor-mixed-content`/`whitespace-normalize`/`vapor-v3-e2e`）全绿 ⇒ **iOS 设备运行期**问题。
-- **待办**：① 查清 iOS ㉑ 满宽根因（对比 `hosts/ios/ProteusHost/runtime/*` 文本/空白居中逻辑）；② 修后**三端重跑** `check:vapor-three-end` 并提交 `results/vapor.json`（Android/鸿蒙/iOS 各跑 `run-vapor.sh` / `run-selfdraw.sh --vapor`）。
+- **★★（2026-10-10 · 已解决 #745）判据 ㉑（元素/文本混排）iOS 真机红** —— 根因 = `slot-runtime/instantiate.ts` 的 `normalizeWhiteSpace` **逐叶 `.trim()`** 吞混排行内空格（共享路径 ⇒ 三端都中）；修法 = collapse-only（不 trim）；三端真机重跑 ㉑ 全绿 + `check:vapor-three-end` 真机新证据（详见决策 #745）。
 - **★环境更正**：iOS 一直可用（Xcode **26.5** 在 `/Volumes/data1/work/office-applications/Xcode.app`，iPhone 12 在线）；用 `source hosts/ios/lib/xcode-env.sh`（自动选 26.5）。
+- **（2026-10-10 · 已修 #748）CI `verify` job 缺两处测试前置**：`pnpm test` 里的非 e2e 测试硬依赖 **Chromium**（consistency-web-probe）+ **`examples/dist/app/android/screen-content.json`**（app-screen-content-gate），而 verify job 未装浏览器、App 产物构建排在 `pnpm test` 之后 ⇒ 干净克隆/CI 必红（本地被残留掩盖）。已补：`pnpm test` 前加 `npx playwright install --with-deps chromium` + `pnpm run build:android`。
 
 **★★（2026-10-10 发现·pre-existing）两条待修（不在 #742 的 5 红内）**：① **鸿蒙 executor 腿**真机复跑得 `app-stack-executor.json` `exec_content_nodes:0`（提交版为 114——已**保留提交版已知好证据**，未覆盖）⇒ 待查该腿真机为何零节点。② `check:host-invoke-contract` 报 harmony 未知方法 `dev.console`（**干净树同样红**）⇒ 登记表与实现漂移，待收口。
 - **多端逐页视觉验收（长欠账）**：css-conformance **31 页** × 4 端逐页截图 + 独立子代理终评（现只覆盖代表页）。
