@@ -13,7 +13,7 @@
   <div class="page">
     <div class="dactyl-title">L4 · 十指</div>
     <div class="dactyl-sub">同时拖动多股液柱</div>
-    <div class="dactyl-hint">多指同时按住几股 —— 延迟不随触点翻倍</div>
+    <div class="dactyl-hint">多指同时按住几股 —— 延迟不随触点翻倍（★设备系统的三指手势可能截走第 3 指）</div>
     <div class="multi">
       <div class="pillar" v-follow="{ axis: 'x' }" />
       <div class="pillar" v-follow="{ axis: 'x' }" />

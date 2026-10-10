@@ -137,23 +137,26 @@ body {
   border-radius: 6px;
 }
 
-/* L4 多指液柱（每个独立跟手锚点 ⇒ 多指同时） */
+/* L4 多指液柱（每个独立跟手锚点 ⇒ 多指同时）
+   ★铺满整条带（flex-grow 等分 + align-items:stretch 满高）⇒ **任意落指位置都有跟手锚点**，
+     否则手指落在柱间空白/带边缘 ⇒ 该指不被跟踪（用户实测"最多 2 指"的隐患之一）。 */
 .multi {
   display: flex;
   flex-direction: row;
-  align-items: flex-end;
+  align-items: stretch;
   width: 100%;
-  height: 170px;
-  padding: 0 12px;
+  height: 190px;
+  padding: 10px;
+  gap: 8px;
   background-color: #0e1520;
   border-radius: 14px;
 }
 .pillar {
-  width: 46px;
-  height: 110px;
-  margin: 0 10px;
+  flex-grow: 1;
+  flex-shrink: 1;
+  flex-basis: 0;
   background-color: #7c5cff;
-  border-radius: 12px 12px 4px 4px;
+  border-radius: 12px;
 }
 
 /* L5 崩裂旋钮（滑动滑出：过阈值吸附 / 未过回弹） */

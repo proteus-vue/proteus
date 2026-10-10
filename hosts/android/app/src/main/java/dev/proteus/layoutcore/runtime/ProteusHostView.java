@@ -2349,6 +2349,13 @@ public class ProteusHostView extends ViewGroup {
             // ★★触摸即刹停惯性（平台标准行为：上手就停）——不刹会"拖拽被旧抛滑顶掉"：
             //   每帧 `stepInertia` 会把 scrollX 拉回抛滑时间线，拖动量被静默吞掉。
             if (flingScroller != null && !flingScroller.isFinished()) flingScroller.forceFinished(true);
+            // ★★★多指跟手：**声明本视图独占手势序列**（不让父容器/滚动容器截断多指）。
+            //   ★诚实边界：这挡得住**父 View**，挡不住**系统级手势**（如 MIUI `three_gesture_down=screen_shot`
+            //     三指下滑截屏——它在 InputReader 层就把第 3 指截走，app 根本收不到；用户实测"最多 2 指"即此）。
+            try {
+                final android.view.ViewParent vp = getParent();
+                if (vp != null) vp.requestDisallowInterceptTouchEvent(true);
+            } catch (Throwable ignored) { /* 无父容器（独立 View）⇒ 无需 */ }
             // ★DOWN 时刻做命中 → 这一整个手势都归它（与平台语义一致）
             dispatchHit(ev.getX(), ev.getY());
             gestureTarget = lastHitTarget;
@@ -2613,6 +2620,9 @@ public class ProteusHostView extends ViewGroup {
     private int dctlLatencyN = 0, dctlLatencyHead = 0;
     /** 按下计数（L1：判据核"触即应真的发生了"）。 */
     private int dactylTouches = 0;
+    /** ★系统实际派发的**指针数**最大值 / 最近值（诊断"多指上限在系统还是在我们"）。 */
+    private int dactylPtrsMax = 0;
+    private int dactylPtrsLast = 0;
     /** 幽灵拖尾**真的被采样**的指针点数（判据核"轨迹来自官方时间戳采样"）。 */
     private int dactylTrailSamples = 0;
     /** 画布像素密度（屏幕坐标叠加用）。 */
@@ -2625,6 +2635,8 @@ public class ProteusHostView extends ViewGroup {
         dctlFrameN = 0; dctlFrameHead = 0; dctlLastFrameNs = 0;
         dactylTouches = 0;
         dactylTrailSamples = 0;
+        dactylPtrsMax = 0;
+        dactylPtrsLast = 0;
         dctlLastEventTime = -1;
         dctlVisibleLagPx = -1f;
     }
@@ -2636,13 +2648,17 @@ public class ProteusHostView extends ViewGroup {
         dctlLastEventTime = ev.getEventTime();
         dctlLastRawX = ev.getX();
         dctlLastRawY = ev.getY();
+        // ★★多指诊断（用户实测"最多 2 指"）：记**系统实际派发**的指针数——区分"系统只给 2 指" vs "我们只跟了 2 个"。
+        final int pc = ev.getPointerCount();
+        dactylPtrsLast = pc;
+        if (pc > dactylPtrsMax) dactylPtrsMax = pc;
         // ★历史采样（官方 API）：`getHistoricalX/Y` 是系统在两次派发间攒下的**真实采样点**——
-        //   幽灵轨迹的诚实来源（比"每帧记一次当前"更密、更真）。
+        //   幽灵轨迹的诚实来源（比"每帧记一次当前"更密、更真）。★**逐指**采样（多指各自成迹）。
         final int hs = ev.getHistorySize();
         for (int i = 0; i < hs; i++) {
-            dctlPushTrail(ev.getHistoricalX(i), ev.getHistoricalY(i));
+            for (int p = 0; p < pc; p++) dctlPushTrail(ev.getHistoricalX(p, i), ev.getHistoricalY(p, i));
         }
-        dctlPushTrail(ev.getX(), ev.getY());
+        for (int p = 0; p < pc; p++) dctlPushTrail(ev.getX(p), ev.getY(p));
     }
 
     private void dctlPushTrail(float x, float y) {
@@ -2754,7 +2770,9 @@ public class ProteusHostView extends ViewGroup {
                 + ",\"p99\":" + dctlFmt(dctlLatencyPercentile(0.99f))
                 + ",\"frame_n\":" + dctlFrameN
                 + ",\"jank_rate\":" + dctlFmt(dctlJankRate() < 0 ? -1f : dctlJankRate() * 100f)
-                + ",\"visible_lag_px\":" + dctlFmt(dctlVisibleLagPx) + "}";
+                + ",\"visible_lag_px\":" + dctlFmt(dctlVisibleLagPx)
+                + ",\"ptrs_last\":" + dactylPtrsLast + ",\"ptrs_max\":" + dactylPtrsMax
+                + ",\"follow_n\":" + followPtrs.size() + "}";
     }
     private static String dctlFmt(float v) { return v < 0 ? "-1" : String.format(java.util.Locale.US, "%.2f", v); }
 
@@ -2860,6 +2878,7 @@ public class ProteusHostView extends ViewGroup {
             "Dactyl HUD · " + dactylLevel,
             "lat p95 " + p95 + "ms" + (dctlLatencyPercentile(0.95f) > dctylBudgetWant() ? "  (OVER 1 frame)" : ""),
             "jank " + jankStr + " · visible_lag " + lag,
+            "ptrs " + dactylPtrsLast + " · max " + dactylPtrsMax + " · follow " + followPtrs.size(),
         };
         // 背板
         dactylHudBg.setColor(0xCC0A0C10);
