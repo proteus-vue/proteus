@@ -558,8 +558,10 @@ public final class VaporRenderHost {
     /**
      * **二进制指令流**（订阅驱动更新的唯一入口）：`number[]`（0..255）→ byte[] → 内核。
      *
-     * @param opsJson `[137,1,0,0,…]` 形态（QuickJS 无 ArrayBuffer 直传，走数组——与 iOS 侧
-     *                的 JSON 数组约定同形，见 hosts/ios 的 `applyOps`）
+     * @param opsJson `[137,1,0,0,…]` 形态（**旧通道**：QuickJS 无 ArrayBuffer 直传时走数组——
+     *                ★S2「去 JSON」（#769）：**新通道为 {@link #applyOpsBytes(byte[])}**，直接传字节数组，
+     *                免掉「number[] 文本 → JSONArray 解析 → 逐元素装箱」。本方法保留作回退（宿主未接
+     *                新通道 / 老产物）。
      */
     public String applyOps(String opsJson) {
         applyCalls++;
@@ -569,7 +571,35 @@ public final class VaporRenderHost {
             JSONArray arr = new JSONArray(opsJson);
             byte[] bytes = new byte[arr.length()];
             for (int i = 0; i < arr.length(); i++) bytes[i] = (byte) (arr.optInt(i) & 0xFF);
+            return applyOpsCore(bytes, out);
+        } catch (Throwable t) {
+            return err(out, t.getClass().getSimpleName() + ": " + t.getMessage()).toString();
+        }
+    }
 
+    /**
+     * ★★★**S2「去 JSON」新通道**（2026-10-10 · #769）：指令字节**直接**传入（JS `Uint8Array` → JNI `byte[]`），
+     *   不经 `number[]` 文本 + `JSONArray` 解析 + 逐元素 `Integer` 装箱。
+     *   —— 这是"跨边界一律 JSON"（方案 B2）在 **per-frame 更新通道**上的第一刀。
+     */
+    public String applyOpsBytes(byte[] bytes) {
+        applyCalls++;
+        bytesOpsCalls++;
+        JSONObject out = new JSONObject();
+        try {
+            if (handle == 0L) return err(out, "尚未 mount（无树可改）").toString();
+            return applyOpsCore(bytes, out);
+        } catch (Throwable t) {
+            return err(out, t.getClass().getSimpleName() + ": " + t.getMessage()).toString();
+        }
+    }
+
+    /** ★S2「去 JSON」探针：走**字节直传**通道的次数（判据 ㉜ 核"字节直传真的生效"，宿主真源）。 */
+    public int bytesOpsCalls = 0;
+
+    /** 指令字节 → 内核 · 回执解析 · 文本落层 · 重绘（`applyOps` / `applyOpsBytes` 共用体）。 */
+    private String applyOpsCore(byte[] bytes, JSONObject out) {
+        try {
             long tl = System.nanoTime();
             String upd = RustLayout.applyOps(handle, bytes);
             double layoutMs = (System.nanoTime() - tl) / 1e6;

@@ -198,7 +198,7 @@ hosts/android/results/gfxinfo.txt
 | **Harmony** | `napi_create_external_arraybuffer`（外部内存零拷贝）/ `OH_JSVM_CreateArraybuffer` | `napi_create_external_arraybuffer` · `napi_get_arraybuffer_info` |
 
 **顺带修掉三处已知浪费**：
-1. Android `applyOps` 的 `number[]` JSON → 直接传 `jbyteArray`（JNI 签名 `([B)Ljava/lang/String;` 已经支持，`platform/android/proteus-jni/src/lib.rs:438-443`）；
+1. ✅ **已交付（2026-10-10 · 判据 ㉜）**：Android `applyOps` 的 `number[]` JSON → **字节直传** `applyOpsBytes(Uint8Array)`（JS `Uint8Array`→QuickJS `JS_GetTypedArrayBuffer`→JNI `SetByteArrayRegion`→Java `byte[]`；旧通道留作回退）。真机 `host_bytes_ops=30`。★**注意**：此前"二进制指令流"其实是 `number[]` JSON（每字节膨胀 3~4× + JSONArray 逐元素装箱）；
 2. Android 动画 tick 的 `to_vec()` 拷贝（`lib.rs:626`）→ direct buffer；
 3. **iOS `build_layers` 全量重建**（占宿主 50%+）：`mount` 恒 `force:true`（`:4574-4576`）→ 首帧后必须走增量；`updateLayersIncremental` 遇缺层退回全量（`:2460`）→ 改为"补齐缺失层"而非整树重建。
 

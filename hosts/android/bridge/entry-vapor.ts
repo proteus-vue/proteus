@@ -58,6 +58,12 @@ interface VaporHost {
   /** 二进制指令流（`number[]` JSON 形态——JNI 侧转 byte[]，见 JsRenderHost.applyOps） */
   applyOps(opsJson: string): string
   /**
+   * ★★★**S2「去 JSON」新通道**（#769）：**字节直传**——`Uint8Array`（JS）→ `byte[]`（Java），
+   *   免掉 `number[]` 文本 + `JSONArray` 解析 + `Integer` 装箱（旧通道每字节膨胀 3~4×）。可选：
+   *   宿主未实现 ⇒ 回退 `applyOps`（见 sendOps）。
+   */
+  applyOpsBytes?(bytes: Uint8Array): string
+  /**
    * ★★★**宿主动画入口**（P3-3 · `<Transition>` 桥接）：`{anims:[{nodeId,kind,from,to,durMs,curve}]}`
    *   → 内核 `proteus_layout_anim_start`（宿主每帧 tick、采样回绘制层）。
    *
@@ -108,6 +114,21 @@ interface VaporHost {
 }
 
 declare const proteusHost: VaporHost
+
+/**
+ * ★★★**S2「去 JSON」发指令**（#769）：优先**字节直传**（`applyOpsBytes`），宿主未实现 ⇒ 回退
+ *   `applyOps(number[] JSON)`。全仓 flush 出口统一走它（同一条线两个通道，替换点只有这里）。
+ *   ★诚实边界：新旧通道**语义完全一致**（同一批字节）——只是传输形态不同；回退不静默（_lastOpsWire 记录）。
+ */
+export let _lastOpsWire: 'bytes' | 'json' = 'json'
+function sendOps(payload: Uint8Array): string {
+  if (typeof proteusHost.applyOpsBytes === 'function') {
+    _lastOpsWire = 'bytes'
+    return proteusHost.applyOpsBytes(payload)
+  }
+  _lastOpsWire = 'json'
+  return sendOps(payload)
+}
 
 /* ══════════════════ 入参 ══════════════════ */
 
@@ -626,6 +647,8 @@ function runStress(args: VaporArgs): string {
     ok: boolean
     error?: string
     src?: string
+    /** ★S2「去 JSON」（#769）：指令实际走了哪条通道（`bytes`=字节直传 / `json`=number[] 回退） */
+    ops_wire?: string
     tpl_nodes: number
     sub_l1: number
     inst_nodes: number
@@ -726,6 +749,8 @@ function runStress(args: VaporArgs): string {
       : null
 
     rep.ok = rep.inst_nodes > 0 && rep.data_rows > 0
+    // ★S2「去 JSON」：记录本次 run 实际用的指令通道（判据 ㉜ 核"字节直传真的生效"）
+    rep.ops_wire = _lastOpsWire
     notes.push('六端 SFC 压力夹具（Android）：渲染 examples/pages/consistency-stress.vue 的编译产物')
     notes.push('数据来自构建期快照（extractStressData）——与 Web/MP 端 script 字面量同源')
     return JSON.stringify(rep)
@@ -862,7 +887,7 @@ function runAb(args: VaporArgs): string {
         let layoutMs = -1
         const ta = t()
         if (payload.length > 0) {
-          const ao = JSON.parse(proteusHost.applyOps(JSON.stringify(Array.from(payload)))) as {
+          const ao = JSON.parse(sendOps(payload)) as {
             ok?: boolean; applied?: number; changed?: number; rects?: Record<string, unknown>
             relayout?: number; text_synced?: number; layout_ms?: number; error?: string
             unsupported?: unknown[]
@@ -982,7 +1007,7 @@ function runAb(args: VaporArgs): string {
         let relayout = -1
         let changed = 0
         if (payload.length > 0) {
-          const ao = JSON.parse(proteusHost.applyOps(JSON.stringify(Array.from(payload)))) as {
+          const ao = JSON.parse(sendOps(payload)) as {
             ok?: boolean; applied?: number; relayout?: number; relayout_count?: number
             rects?: Record<string, unknown>; error?: string
           }
@@ -2200,7 +2225,7 @@ function runShort(args: VaporArgs): string {
       let changedN = 0
       if (payload.length > 0) {
         try {
-          const ao = JSON.parse(proteusHost.applyOps(JSON.stringify(Array.from(payload)))) as {
+          const ao = JSON.parse(sendOps(payload)) as {
             ok?: boolean; applied?: number; relayout_count?: number; rects?: Record<string, unknown>; error?: string
           }
           applied = ao.ok ? (ao.applied ?? -1) : -2
@@ -2265,7 +2290,7 @@ function runShort(args: VaporArgs): string {
         continue
       }
       const ta = t()
-      const applyOut = proteusHost.applyOps(JSON.stringify(Array.from(payload)))
+      const applyOut = sendOps(payload)
       rep.apply_ms += t() - ta
       const ao = JSON.parse(applyOut) as {
         ok?: boolean; applied?: number; rects?: Record<string, unknown>
@@ -2419,7 +2444,7 @@ function runShort(args: VaporArgs): string {
             }
           }
           try {
-            proteusHost.applyOps(JSON.stringify(Array.from(payload)))
+            sendOps(payload)
           } catch {
             /* 回执失败不阻断（判据看 JS 侧的"发了什么"） */
           }
@@ -2478,7 +2503,7 @@ function runShort(args: VaporArgs): string {
       captured.length = 0
       for (const pl of kidPayloads) {
         if (pl.length === 0) continue
-        try { proteusHost.applyOps(JSON.stringify(Array.from(pl))) } catch { /* 回执失败不阻断 */ }
+        try { sendOps(pl) } catch { /* 回执失败不阻断 */ }
       }
       // ★上行后从**全部本轮指令**里读子节点的新宽度（实例树是首帧快照，不会自己变）。
       //   ★必须遍历 `captured` **全部条目**（本仓实测的坑）：父级 relink 与子运行时各自 flush
@@ -2590,7 +2615,7 @@ function runShort(args: VaporArgs): string {
         for (const pl of lifePayloads) {
           if (pl.length === 0) continue
           try {
-            const ao = JSON.parse(proteusHost.applyOps(JSON.stringify(Array.from(pl)))) as { ok?: boolean; applied?: number }
+            const ao = JSON.parse(sendOps(pl)) as { ok?: boolean; applied?: number }
             appliedTotal += ao.applied ?? 0
           } catch { /* 回执失败不阻断（判据按几何真值判） */ }
         }
@@ -2621,7 +2646,7 @@ function runShort(args: VaporArgs): string {
       const payloadTr = captured.length ? captured[captured.length - 1]! : new Uint8Array(0)
       captured.length = 0
       if (payloadTr.length > 0) {
-        try { proteusHost.applyOps(JSON.stringify(Array.from(payloadTr))) } catch { /* 回执失败不阻断 */ }
+        try { sendOps(payloadTr) } catch { /* 回执失败不阻断 */ }
       }
       // ★过渡驱动（可见性翻转 → 查模板声明 → animStart）
       rep.transition_started = beforeTr + drainTransitions(tpl, vapor, notes)
@@ -3031,7 +3056,7 @@ function runShort(args: VaporArgs): string {
               t2Vapor.relink(t2Ctx)
               t2SlotRt.flush()
               const payload = t2Captured.length ? t2Captured[t2Captured.length - 1]! : []
-              if (payload.length > 0) { try { proteusHost.applyOps(JSON.stringify(payload)) } catch { /* 读数照常 */ } }
+              if (payload.length > 0) { try { sendOps(payload instanceof Uint8Array ? payload : new Uint8Array(payload)) } catch { /* 读数照常 */ } }
               widths.push(readW())
               values.push(Number(t2data.t2x))
             }
@@ -3089,7 +3114,7 @@ function runShort(args: VaporArgs): string {
               b5Vapor.relink(b5Ctx)
               b5SlotRt.flush()
               const payload = b5Captured.length ? b5Captured[b5Captured.length - 1]! : []
-              if (payload.length > 0) { try { proteusHost.applyOps(JSON.stringify(payload)) } catch { /* 读数照常 */ } }
+              if (payload.length > 0) { try { sendOps(payload instanceof Uint8Array ? payload : new Uint8Array(payload)) } catch { /* 读数照常 */ } }
             }
             const widths: number[] = [readW()]
             const values: number[] = [Number(b5data.b5x)]
@@ -3145,7 +3170,7 @@ function runShort(args: VaporArgs): string {
               b3Vapor.relink(b3Ctx)
               b3SlotRt.flush()
               const payload = b3Cap.length ? b3Cap[b3Cap.length - 1]! : []
-              if (payload.length > 0) { try { proteusHost.applyOps(JSON.stringify(payload)) } catch { /* 读数照常 */ } }
+              if (payload.length > 0) { try { sendOps(payload instanceof Uint8Array ? payload : new Uint8Array(payload)) } catch { /* 读数照常 */ } }
             }
             const widths: number[] = [readW()]
             flip(true); widths.push(readW())
@@ -3199,7 +3224,7 @@ function runShort(args: VaporArgs): string {
               b3bVapor.relink(b3bCtx)
               b3bSlotRt.flush()
               const payload = b3bCap.length ? b3bCap[b3bCap.length - 1]! : []
-              if (payload.length > 0) { try { proteusHost.applyOps(JSON.stringify(payload)) } catch { /* 读数照常 */ } }
+              if (payload.length > 0) { try { sendOps(payload instanceof Uint8Array ? payload : new Uint8Array(payload)) } catch { /* 读数照常 */ } }
             }
             const xs: number[] = [readX()]
             flip(true); xs.push(readX())
@@ -3254,7 +3279,7 @@ function runShort(args: VaporArgs): string {
               b3dVapor.relink(b3dCtx)
               b3dSlotRt.flush()
               const payload = b3dCap.length ? b3dCap[b3dCap.length - 1]! : []
-              if (payload.length > 0) { try { proteusHost.applyOps(JSON.stringify(payload)) } catch { /* 读数照常 */ } }
+              if (payload.length > 0) { try { sendOps(payload instanceof Uint8Array ? payload : new Uint8Array(payload)) } catch { /* 读数照常 */ } }
             }
             const xs: number[] = [readX()]
             flip(true); xs.push(readX())
@@ -3349,7 +3374,7 @@ function runShort(args: VaporArgs): string {
               bt2Vapor.relink(bt2Ctx)
               bt2SlotRt.flush()
               const payload = bt2Cap.length ? bt2Cap[bt2Cap.length - 1]! : []
-              if (payload.length > 0) { try { proteusHost.applyOps(JSON.stringify(payload)) } catch { /* 读数照常 */ } }
+              if (payload.length > 0) { try { sendOps(payload instanceof Uint8Array ? payload : new Uint8Array(payload)) } catch { /* 读数照常 */ } }
             }
             const seen: string[] = [readPolicy()]
             flip(true); seen.push(readPolicy())
@@ -3462,7 +3487,7 @@ function runShort(args: VaporArgs): string {
             let kernelApplied = 0
             for (const pl of soCaptured) {
               if (pl.length === 0) continue
-              const ao = JSON.parse(proteusHost.applyOps(JSON.stringify(Array.from(pl)))) as { ok?: boolean; applied?: number; unsupported?: unknown[] }
+              const ao = JSON.parse(sendOps(pl)) as { ok?: boolean; applied?: number; unsupported?: unknown[] }
               kernelApplied += ao.applied ?? 0
               if (ao.unsupported && ao.unsupported.length > 0) notes.push(`:style 探针内核拒收：${JSON.stringify(ao.unsupported).slice(0, 160)}`)
             }

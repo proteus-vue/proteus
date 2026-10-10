@@ -96,6 +96,8 @@ static struct {
    *   ——「真实 SFC 编译产物 → 设备端实例化 → 订阅驱动更新」那条链的宿主入口。
    *   同一条件注入原则（Java 未实现 ⇒ 不注入 ⇒ JS 侧探测为 undefined，走诚实降级）。 */
   jmethodID apply_ops;
+  /* ★★★S2「去 JSON」（#769）：JS Uint8Array → Java byte[] 直传（免 number[] JSON） */
+  jmethodID apply_ops_bytes;
   jmethodID read_rects;
   /* ★★★B-T2（2026-10-10）：文本策略回读（`proteusHost.textPolicy(idsJson)`——内核=SSOT）。
    *   同一条件注入原则（Java 未实现 ⇒ 不注入 ⇒ JS 侧探测为 undefined）。 */
@@ -423,6 +425,59 @@ static JSValue js_host_apply_ops(JSContext *ctx, JSValueConst this_val, int argc
 }
 
 /**
+ * `proteusHost.applyOpsBytes(bytes)` —— ★★★**S2「去 JSON」新通道**（2026-10-10 · #769）。
+ *
+ * 【为什么（方案 B2）】旧通道 `applyOps` 把指令编成 **`number[]` JSON 文本**（`JSON.stringify(Array.from(bytes))`）
+ *   ⇒ 每字节膨胀 3~4 字符 + JS 侧长串 + Java 侧 `JSONArray` 逐元素解析 + `Integer` 逐元素装箱。
+ *   `Uint8Array` → `byte[]` 直传**一步到位**（QuickJS `JS_GetTypedArrayBuffer` 拿裸指针，
+ *   与 iOS `JSObjectGetArrayBufferBytesPtr` / 鸿蒙 `napi_get_arraybuffer_info` 同形态）。
+ *   ★回退：入参不是 `Uint8Array`/`ArrayBuffer` ⇒ 转字符串走旧 `applyOps`（老产物兼容，不静默丢）。
+ */
+static JSValue js_host_apply_ops_bytes(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+  (void)this_val;
+  if (g_host_methods.apply_ops_bytes == NULL || g_host_obj == NULL || g_vm == NULL) return JS_UNDEFINED;
+  if (argc < 1) return JS_UNDEFINED;
+  size_t off = 0, blen = 0, bpe = 0;
+  uint8_t *ptr = NULL;
+  size_t nbytes = 0;
+  JSValue ab = JS_GetTypedArrayBuffer(ctx, argv[0], &off, &blen, &bpe);
+  if (JS_IsException(ab) || JS_IsUndefined(ab) || JS_IsNull(ab)) {
+    JS_FreeValue(ctx, ab);
+    // 回退：当作字符串走旧通道（老产物 / 传了 JSON 串）
+    return js_host_apply_ops(ctx, this_val, argc, argv);
+  }
+  size_t absize = 0;
+  ptr = JS_GetArrayBuffer(ctx, &absize, ab);
+  if (ptr != NULL) nbytes = blen;  // TypedArray 视图：长度用 byte_length（含 offset）
+  JNIEnv *env = NULL;
+  int attached = 0;
+  if ((*g_vm)->GetEnv(g_vm, (void **)&env, JNI_VERSION_1_6) != JNI_OK) {
+    if ((*g_vm)->AttachCurrentThread(g_vm, (void **)&env, NULL) == JNI_OK) attached = 1;
+  }
+  JSValue out = JS_UNDEFINED;
+  if (env != NULL && ptr != NULL && nbytes > 0) {
+    jbyteArray ja = (*env)->NewByteArray(env, (jsize)nbytes);
+    if (ja != NULL) {
+      (*env)->SetByteArrayRegion(env, ja, 0, (jsize)nbytes, (const jbyte *)(ptr + off));
+      jstring ret = (jstring)(*env)->CallObjectMethod(env, g_host_obj, g_host_methods.apply_ops_bytes, ja);
+      if ((*env)->ExceptionCheck(env)) {
+        (*env)->ExceptionDescribe(env);
+        (*env)->ExceptionClear(env);
+      } else if (ret != NULL) {
+        const char *rs = (*env)->GetStringUTFChars(env, ret, NULL);
+        out = JS_NewString(ctx, rs != NULL ? rs : "");
+        if (rs != NULL) (*env)->ReleaseStringUTFChars(env, ret, rs);
+        (*env)->DeleteLocalRef(env, ret);
+      }
+      (*env)->DeleteLocalRef(env, ja);
+    }
+  }
+  JS_FreeValue(ctx, ab);
+  if (attached) (*g_vm)->DetachCurrentThread(g_vm);
+  return out;
+}
+
+/**
  * `proteusHost.onGesture(cbName)` —— ★★**注册手势回调**（反向通道的注册端，JS 调）。
  * 记录函数名（≤127 字符）；宿主分发时按名查全局函数并调用。
  */
@@ -570,6 +625,11 @@ static jstring eval_impl(JNIEnv *env, jstring source, jboolean with_host) {
       JS_SetPropertyStr(g_ctx, host, "applyOps", JS_NewCFunction(g_ctx, js_host_apply_ops, "applyOps", 1));
       LOGI("宿主已实现 applyOps ⇒ JS 侧可发**二进制指令流**（订阅驱动增量）");
     }
+    // ★★★S2「去 JSON」：字节直传通道（宿主实现才注入）
+    if (g_host_methods.apply_ops_bytes != NULL) {
+      JS_SetPropertyStr(g_ctx, host, "applyOpsBytes", JS_NewCFunction(g_ctx, js_host_apply_ops_bytes, "applyOpsBytes", 1));
+      LOGI("宿主已实现 applyOpsBytes ⇒ JS 侧可**字节直传**（免 number[] JSON，S2 去 JSON）");
+    }
     if (g_host_methods.read_rects != NULL) {
       JS_SetPropertyStr(g_ctx, host, "readRects", JS_NewCFunction(g_ctx, js_host_read_rects, "readRects", 0));
     }
@@ -701,6 +761,7 @@ Java_dev_proteus_layoutcore_QuickJsEngine_nativeSetHostCallback(JNIEnv *env, jcl
   g_host_methods.now_us = g_host_methods.rects = g_host_methods.probe = g_host_methods.report = NULL;
   g_host_methods.anim_control = NULL;
   g_host_methods.apply_ops = g_host_methods.read_rects = NULL;
+  g_host_methods.apply_ops_bytes = NULL;
   g_host_methods.text_policy = NULL;
   g_host_methods.input_probe_set_text = NULL;
   g_host_methods.mount_virtual = g_host_methods.scroll_rows = NULL;
@@ -749,6 +810,9 @@ Java_dev_proteus_layoutcore_QuickJsEngine_nativeSetHostCallback(JNIEnv *env, jcl
     if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
     /* ★★★Vapor 设备端（applyOps 一参返回串；readRects 无参返回串） */
     g_host_methods.apply_ops = (*env)->GetMethodID(env, c, "applyOps", "(Ljava/lang/String;)Ljava/lang/String;");
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+    /* ★★★S2「去 JSON」（#769）：([B) → String（byte[] 直传） */
+    g_host_methods.apply_ops_bytes = (*env)->GetMethodID(env, c, "applyOpsBytes", "([B)Ljava/lang/String;");
     if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
     g_host_methods.read_rects = (*env)->GetMethodID(env, c, "readRects", "()Ljava/lang/String;");
     if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
