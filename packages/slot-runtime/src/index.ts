@@ -73,3 +73,6 @@ export type { HandlerAction, EventHandlers, HandlerRunContext, HandlerRunHooks }
 // ★★★P3-5：宿主指令注册表（自定义指令的**闭集**落地——编译器诊断与桥执行共用这一张表）
 export { HOST_DIRECTIVE_SPECS, HOST_DIRECTIVE_NAMES, isHostDirective, directiveShouldPlay } from './directives'
 export type { HostDirectiveSpec } from './directives'
+// ★★★数据变化→播放动画 的共享触发逻辑（<Transition> 可见性 + v-animate 指令）——App 壳运行期与装置桥共用唯一实现
+export { collectTransitionAnims, collectDirectiveAnims } from './anim-trigger'
+export type { PendingAnim, DirectiveTriggerState } from './anim-trigger'

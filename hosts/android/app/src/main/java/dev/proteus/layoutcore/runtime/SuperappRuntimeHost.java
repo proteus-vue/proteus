@@ -45,6 +45,29 @@ public final class SuperappRuntimeHost {
     }
 
     /**
+     * ★★★**"跳变驱动动画"宿主动画入口**（本批）：`v-animate` / `<Transition>` 触发时，运行期
+     *   把 `{anims:[{nodeId,kind,from,to,durMs,curve}]}` 交本方法 ⇒ 转发 `VaporRenderHost.animStart`
+     *   （内核动画通道 + 帧循环）。★与装置桥的 `animStart` 同一条内核路径（零新增内核能力）。
+     *   ★条件注入：JS 侧仅在**本方法存在**时把 `animStart` 挂给运行期（缺省 ⇒ 运行期如实记 note）。
+     */
+    @SuppressWarnings("unused")
+    public String animStart(String animsJson) {
+        return draw.animStart(animsJson);
+    }
+
+    /**
+     * ★★★**推进一帧**（动画桥的**必需配套**，见 `quickjs_jni.c` 的注入判据——`animStart` 与
+     *   `animTick` **同时存在**才把 `animStart` 暴露给 JS）。本类里 `animStart` 已由
+     *   `VaporRenderHost.driveKernelAnimFrames()` 自驱帧循环，故本方法只作**契约占位**（转发内核 tick，
+     *   供 JS 显式单步用）；★若不加它 ⇒ `GetMethodID("animTick")` 失败 ⇒ **`proteusHost.animStart`
+     *   整体不注入** ⇒ 运行期探测为 undefined ⇒ 动画静默不播（本仓在装置桥踩过同一坑）。
+     */
+    @SuppressWarnings("unused")
+    public String animTick(String dtMsJson) {
+        return draw.animTick(dtMsJson);
+    }
+
+    /**
      * ★★★**每屏滚动进度记忆**（用户：「返回去的页面滚动进度应保留，前进的才重置」——系统 App 语义）。
      *   `scrollY/scrollX` 是**视图状态**（非树状态）；统一运行期用导航历史判断方向：
      *   返回（pop）⇒ `getScroll` 读旧值 → `setScroll` 恢复；前进（push）⇒ `setScroll(0)`。
