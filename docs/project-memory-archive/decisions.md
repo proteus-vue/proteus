@@ -2897,3 +2897,15 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 · **★附带教训**：**CSS 里同名 `@keyframes` 静默覆盖**（后者胜）——人工编辑/复制粘贴极易留下重复块且**无任何报错**；改样式表后应 `grep -c` 确认关键块唯一。
 · **修复**：`b3d737e59`（删重复块，保正版 `@keyframes`＝`scale(0→1)+opacity(0.8→0)`；重建+重 scaffold+装机；录屏抽帧 19→26 确认中心扩散恢复）。
 
+792. **★★★`v-pump` 声明式「运行期数据泵」通用原语（页面声明**具名数据源**按频率跳变，普通绑定天然联动 ⇒ **文本/样式/动画**一次覆盖）+ 「数据变化→动画」接线（Dactyl D2 / L3 沸腾）**（2026-10-10）：
+**① 由来**：用户「这个设计不错，能扩充这个能力吗？跳变可能涉及比如样式变化，动画形式等等」。把"Dactyl L3 沸腾"要的**高频数据更新**做成**框架通用原语**（不是 demo 特化补丁——承 #789/#790 纪律：demo 暴露的基座缺口要在基座以通用能力修）。
+**② 形态**：`v-pump="{ src:'p0', hz:30, gen:{kind:'int',min:1,max:99} }"` 声明**具名数据源**按 `hz` 跳变；页面**普通绑定**（`{{src}}` / `:style` / `:class` / `v-animate`）**天然联动**——复用既有「数据→槽位→ops→内核」链，**不新增**动画/样式通路。
+**③ 编译器**（`template.ts`）：`interpretPumpSpec`（复用 `parseStyleObject` + 受限正则提嵌套 `gen`；all-or-nothing；非静态⇒诊断 `VAPOR_PUMP_SHAPE`）；折成**页面级泵表** `template.pumps`（**非节点字段**——它是"源"）；`KNOWN_DIRECTIVES` 加 `pump`；★`buildVaporSubscriptions` 加 **`opts.pumpSources`**（`sources.ts` 加 `SourceKind:'pump'`）——**泵名不在 `<script setup>` 里**，不手动并入源扫描则**订阅槽位建不出**（这是"源不在脚本中"的结构性坑）。
+**④ 契约/产物**：`LayoutTemplate.pumps` + `ScreenRuntimeArtifact.pumps` + `app-runtime-content` 发射（**可选字段 ⇒ 既有产物逐字节不变**）+ 泵源首帧初值=`gen.min` 进 `data`。
+**⑤ 运行期**（`screen-runtime.ts`）：`writeSource(name,value)`（写 `data` → 复用 `vapor.writeSlotsOfSource` **O(1) 源级增量** → `flush`；源不在表则全量重建兜底）+ `pumpTick(dtMs)`（按 `hz` **累加抽帧**判到期，**内建生成器** `int`/`float`/`sin` 产新值——框架内建、非页面脚本）+ `pumpCount/pumpHzList`。
+**⑥ 入口/驱动**：`superapp-runtime` 加 `pumpTick/pumpCount/pumpHzJson`；`entry-superapp` 加 `__proteusSuperappPump(tickJson)`/`__proteusSuperappPumpHz()`；**Android 宿主** `SuperappRuntimeHost`（Choreographer 帧回调按**最小间隔**到期才 eval `__proteusSuperappPump`，**非每帧**——省跨界；无泵自停）+ `AppActivity.pullPumps()`（每帧渲染后抽一次泵频率起/停循环）。★**合法帧源、无 sleep**（本仓红线）。
+**⑦ 数据变化→动画接线（既有缺口，一处实现）**：把 `entry-vapor.ts` 的 `drainTransitions`（`takeVisibilityChanges`）+ `directiveShouldPlay`（`v-animate`）**下沉进 `screen-runtime.ts`** ⇒ `v-animate` / `<Transition>` 在 **App 壳运行期**真正生效（此前只在测试装置路径有）。
+**⑧ 真机验证（Android·`cn.proteus.dactyl`）**：L3 数字场 18 格绑 `p0`（`hz:30`，int 1..99）**持续跳变**（61→9…）。
+**⑨ 诚实边界**：泵走**数据通路**（Vapor/`applyOps`）；**手势路径仍零 JS**（S3 不受影响）。高频**文本**更新走 cmds 重建（≈5ms/次）——**正是 L3 要暴露的成本，不打补丁掩盖**。组件内部模板的 `v-pump`/`v-animate` 不支持（与既有 directive 边界一致，如实诊断）。**iOS/鸿蒙驱动 + Web/MP 对齐另批**（用户顺序：先 Android 跑通）。
+**⑩ 门禁**：`vapor-class-styles` +4（折叠：合法/hz 缺省+sin/非法形态/同名去重）· `screen-runtime` +1（泵表 + pumpTick 抽帧 + 增量）· `check:bridge-sync` · `coupled` · `host-compile` · `AAR-fresh` · `gates-sync` · `style-ir-golden` · `compile-baseline` · `app-css-surface` · `dactyl-visual` 全绿。
+
