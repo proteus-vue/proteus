@@ -700,6 +700,7 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
       if (ENUM_LAYOUT_FIELDS[k]) return                   // 枚举（白名单）⇒ 支持（B3b/B3c）
       if (STRING_LAYOUT_FIELDS.has(k)) return             // 字符串（grid 模板）⇒ 支持（B3d）
       if (k === 'whiteSpace' || k === 'wordBreak' || k === 'lineClamp') return  // 文本策略 ⇒ 支持（B-T2）
+      if (k === 'justifySelf' || k === 'justifyItems') return  // 网格项/容器行内轴对齐（枚举索引编码，B3c 补）
       bad.add(k)
     }
     for (const r of tplDynamicClassRules ?? []) for (const k of Object.keys(r.decls)) consider(k)

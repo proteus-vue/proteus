@@ -400,6 +400,20 @@ pub fn apply_style_key(node: &mut LNode, key: &str, value: f32) -> Result<bool, 
             s.align_self = if i == 0 { None } else { Some(AS[i].to_string()) };
             Ok(true)
         }
+        // ★★★B3c 补（2026-10-10）：justify-self / justify-items 索引解码（内核 `parse_justify_self`/
+        //   `parse_justify_items` 接受的字符串；索引表与 JS `ENUM_LAYOUT_FIELDS` 同序）。
+        "layout.justifySelf" => {
+            const JS_: [&str; 10] = ["auto", "normal", "start", "end", "flex-start", "flex-end", "self-start", "self-end", "center", "stretch"];
+            let i = (v as i32).clamp(0, 9) as usize;
+            // 0=auto ⇒ 清空（回落父 justify-items，CSS 语义）
+            s.justify_self = if i == 0 { None } else { Some(JS_[i].to_string()) };
+            Ok(true)
+        }
+        "layout.justifyItems" => {
+            const JI: [&str; 9] = ["normal", "start", "end", "flex-start", "flex-end", "self-start", "self-end", "center", "stretch"];
+            s.justify_items = Some(JI[(v as i32).clamp(0, 8) as usize].to_string());
+            Ok(true)
+        }
         // ★★2026-09-30 补登记（真缺口）：`LStyle` 一直有 `top`/`left`（position:absolute 的核心属性），
         //   但**指令映射表漏了它们** ⇒ 通过指令流改不了绝对定位偏移。
         //   发现路径：FLIP 的真机测试用 `updatePatches {top:40}` 改几何，结果 **位移恒 0**
@@ -1228,6 +1242,26 @@ mod tests {
         // 0=auto ⇒ 清空（回落父）
         assert!(apply_style_key(&mut n, "layout.alignSelf", 0.0).unwrap());
         assert_eq!(n.style.align_self, None);
+    }
+
+    #[test]
+    fn b3c_supp_justify_self_items_decode_by_index() {
+        // ★★★B3c 补（2026-10-10）：justify-self / justify-items 索引解码（B3c 漏登记，本批补齐）。
+        let mut n = crate::node::LNode::new(1, crate::style::LStyle::default());
+        // justifySelf：0=auto ⇒ None（清空回落父）；4=flex-start；3=end
+        assert!(apply_style_key(&mut n, "layout.justifySelf", 4.0).unwrap());
+        assert_eq!(n.style.justify_self.as_deref(), Some("flex-start"));
+        assert!(apply_style_key(&mut n, "layout.justifySelf", 3.0).unwrap());
+        assert_eq!(n.style.justify_self.as_deref(), Some("end"));
+        assert!(apply_style_key(&mut n, "layout.justifySelf", 0.0).unwrap());
+        assert_eq!(n.style.justify_self, None);
+        // justifyItems：0=normal；8=stretch；5=self-start
+        assert!(apply_style_key(&mut n, "layout.justifyItems", 0.0).unwrap());
+        assert_eq!(n.style.justify_items.as_deref(), Some("normal"));
+        assert!(apply_style_key(&mut n, "layout.justifyItems", 8.0).unwrap());
+        assert_eq!(n.style.justify_items.as_deref(), Some("stretch"));
+        assert!(apply_style_key(&mut n, "layout.justifyItems", 5.0).unwrap());
+        assert_eq!(n.style.justify_items.as_deref(), Some("self-start"));
     }
 
     #[test]

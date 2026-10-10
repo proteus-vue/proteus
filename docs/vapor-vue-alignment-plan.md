@@ -39,7 +39,7 @@
   | `whiteSpace` / `wordBreak` / `lineClamp` | ✅ **已交付（B-T2 · 判据 ㉙）**：策略进内核（=SSOT）经 `SET_STYLE_STR`；宿主回读（`text_policy_updates`→`textPolicy`）重度量重绘 |
   | `overflowX` / `overflowY` | 内核**无**轴级 overflow 字段（只有单 `overflow`） | 内核加轴字段 + taffy `overflow.x/y` + 宿主裁剪 |
   | `gridColumn` / `gridRow` / `gridArea` | 值是**线号/命名线**（非模板串），运行期动态改需再一条通道 | 内核线号字段 + 通道 |
-  | `justifySelf` / `justifyItems` | 内核有字段但（动态类路径）未登记 | 登记索引解码臂（小） |
+  | `justifySelf` / `justifyItems` | ✅ **已交付（B3c 补 · 2026-10-10）**：枚举索引编码（同 B3c），内核 `parse_justify_self`/`parse_justify_items`；`irFieldCandidatesOf` 补 `justify-items` |
   | `pointerEvents` | 非布局（命中测试），不属几何重排 | 命中层通道 |
   - ⇒ **不在一轮硬塞**（会成"半做"）；每项**单独立项**。诊断已**逐类具名**（`build.ts` 的 `VAPOR_DYNCLASS_LAYOUT_UNSUPPORTED` message 列出阻塞类别）。
 - **B3 账**：能力棘轮 `VAPOR_DYNCLASS_LAYOUT_UNSUPPORTED` 由 B3a/b/c **28→8**，B-T2（文本策略）再 **8→4**（样例页命中；B3a/b/c 零宿主/零协议、B3d 加一条 opcode、B-T2 复用该 op）；余字段（overflowX-Y / gridColumn-Row-Area / justifySelf-Items / pointerEvents）需内核轴/线号建模。
