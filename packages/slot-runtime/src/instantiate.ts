@@ -239,8 +239,15 @@ function normalizeWhiteSpace(text: string, ws: string | undefined): string {
         .map((l) => l.trim())
         .join('\n')
     default:
-      // normal / nowrap / 缺省：所有空白（含 \n）折叠为单空格；去首尾
-      return text.replace(/\s+/g, ' ').trim()
+      // normal / nowrap / 缺省：所有空白（含 \n）折叠为**单个空格**。
+      //   ★★★**不 trim**（2026-10-10 修 · 决策 #745）：混排（`mix <b>MIXB</b> tail`）的合成叶
+      //     `"mix "` / `" tail"` / 独立空格叶 `" "` 的**首尾空格是行内内容**（Web 里它们与相邻
+      //     inline 之间存在一个空格）——**逐叶 trim 会把它删掉** ⇒ 渲染成 `mixMIXBtail`、空格叶变空
+      //     （实测：判据 ㉑「混排」在 iOS/共享实例化红，`"mix "`→`"mix"`、`" "`→`""`）。
+      //   编译期已按 Vue `condense` 归一过**模板**空白（并把它切成有意保留的合成叶）⇒ 运行期只需
+      //     **折叠**（数据里的 `\n`/连续空格/制表 → 单空格），**无需再 trim**：Web 的"行首尾空白移除"
+      //     是**行级**语义（依赖整行 inline 上下文），不该由**逐节点**归一化承担（错误的责任层级）。
+      return text.replace(/\s+/g, ' ')
   }
 }
 
