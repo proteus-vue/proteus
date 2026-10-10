@@ -313,6 +313,24 @@ interface SuperappRuntimeHostShape {
     }
   }
 
+/**
+ * ★★★**B4-T2b（2026-10-10）：派发一次输入事件**（宿主原生输入控件编辑 → `v-model` 回写）。
+ *   `argsJson = {nodeId, value}`；委派 `SuperappRuntime.dispatchInput`（当前屏 `input` 绑定 → 回写 handler）。
+ *   ★与 `__proteusSuperappGesture` 同形（宿主→JS 的驱动入口）；三端宿主建控件后调它。
+ */
+;(globalThis as unknown as { __proteusSuperappInput?: (argsJson: string) => string })
+  .__proteusSuperappInput = (argsJson: string) => {
+    const g = globalThis as unknown as { __SUPERAPP_RUNTIME__?: SuperappRuntime }
+    if (!g.__SUPERAPP_RUNTIME__) return JSON.stringify({ ok: false, handled: false, error: '运行期未启动' })
+    try {
+      const a = JSON.parse(argsJson) as { nodeId: number; value: unknown }
+      const r = g.__SUPERAPP_RUNTIME__.dispatchInput(a.nodeId, a.value)
+      return JSON.stringify({ ok: true, ...r })
+    } catch (e) {
+      return JSON.stringify({ ok: false, error: String((e as Error)?.message ?? e) })
+    }
+  }
+
 /** ★B1 判据用：读运行期调试读数（当前屏 / nav 日志 / notes）。 */
 ;(globalThis as unknown as { __proteusSuperappDebug?: () => string }).__proteusSuperappDebug = () => {
   const g = globalThis as unknown as {
