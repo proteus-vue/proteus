@@ -2575,3 +2575,16 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **③ 验证**：`vapor-sfc-to-tree` ⑦（justify center=4 / alignSelf end=4）· Rust 单测 · **三端真机判据 ㉖ 扩展**（`.hrow{flex-direction:row; justify-content:center}` 子2 x `[0,200,0]`——含 justify-content 居中生效；Android/鸿蒙/iOS 全过 + `check:vapor-three-end` 指纹一致）· 全量 **5659** · vue-tsc 0。能力棘轮 `VAPOR_DYNCLASS_LAYOUT_UNSUPPORTED` **10→8**（已 --update）。
 **④ 教训**：a) ★★**"内核字符串字段"也能索引编码**（先查内核**接受的字符串集** = `taffy_engine::parse_*` 的 match 臂——**别猜 taffy 关键字**）；b) ★★**CSS 别名要收进值表**（`justify-content: end` 是 `flex-end` 别名——首版漏了 ⇒ 落默认；**枚举值表要看"别名形态"**，同 #748 教训族）；c) **同一条索引编码手法三连用**（B3b→B3c，`NUMERIC`/`ENUM` 两表 + 内核解码臂）。
 **⑤ 余下（B3 真·无通道）**：grid 模板（`gridTemplateColumns/Rows/Areas`——**字符串 token 串**）· `lineClamp` · `whiteSpace` · `wordBreak`（值透传宿主）· `overflowX/Y`（内核**无轴级字段**）≈1–2 人日。★动态 `:class` 布局缺口 **28→8 收口（B3a/B3b/B3c 三轮）**。
+
+756. **★★Vapor B3 收口：余 8 条动态 `:class` 布局字段**具名边界**（各需不同基础设施，逐类诊断）**（2026-10-10）：
+**① 缘起**：用户「继续收尾 B3」。逐条取证余 8 条的**真实阻塞**（不硬塞一轮——否则"半做"）。
+**② 逐条具名（取证）**：
+| 字段 | 阻塞 | 所需 |
+|---|---|---|
+| `gridTemplateColumns/Rows/Areas` · `gridAuto*` · `gridColumn/Row/Area` | 内核**有**字段，但值是**字符串 token 串**（`1fr 1fr 200px`）⇒ **无二进制字符串通道** | **新 opcode**（字符串载荷）或扩 `PatchStyle`+宿主通道 |
+| `whiteSpace` / `wordBreak` | 内核**无**文本布局字段（影响换行 ⇒ 影响几何） | 内核**文本建模** + 宿主 |
+| `overflowX` / `overflowY` | 内核**无**轴级 overflow 字段（只有单 `overflow`） | 内核加轴字段 + taffy `overflow.x/y` + 宿主裁剪 |
+| `lineClamp` | 内核无字段；文本截断属**宿主绘制** | 宿主文本通道 |
+**③ 交付**：① 诊断**逐类具名**（`vapor/build` 的 `VAPOR_DYNCLASS_LAYOUT_UNSUPPORTED` message 现列出"grid 无字符串通道 / whiteSpace·wordBreak 内核无文本字段 / overflowX-Y 内核无轴字段 / lineClamp 宿主文本"四类阻塞）；② 计划 `vapor-vue-alignment-plan.md` B3 收口表（同②）+ B3 账 **28→8**。
+**④ 边界判断依据**：**只有 grid 是"通道"问题**（内核有字段）；其余是**内核缺字段/文本语义**——**各需单独立项**，不属"补一条臂"能解。故 B3 以具名边界**正式收口**（B3a/b/c 零宿主/零协议改动已交付 20/28）。
+**⑤ 教训**：a) ★★★**"收尾"不等于"再硬塞一轮"**——余下各项**阻塞不同类**（op 协议 / 内核字段 / 文本语义），**硬塞会成半做**；**具名边界 + 逐类诊断**是诚实的收口（本仓"能靠隔离/澄清消除的模糊，不要靠硬做"）；b) ★★**先给每一条找出"最小阻塞"**（是通道？是缺字段？是语义？）——不同阻塞 ⇒ 不同批次，别混为一轮；c) ★**B3a/b/c 的价值来自"复用既有 f32 通道 + 索引编码"**（零宿主/零协议）——这才是"零风险快速收口 71% 缺口"的关键（28→8）。

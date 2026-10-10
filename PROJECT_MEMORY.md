@@ -15,9 +15,9 @@
 - **包规模**：**45 个 @proteus-vue/* npm 包**（+ `packages/layout-core-rust` = **cargo crate，非 npm 包**，故不计数）（★2026-09-29 layout-core = App 排版核心）（check:pkg 0 error · `pnpm check:stats` 校验 ✓；31→38 修正 → G-07 glass 39 → Skyline 收口 worklet 40 → ★2026-09-14 组件库拆包 `@proteus-vue/components` 41 → ★Vapor 线新增 `@proteus-vue/slot-runtime` 42 + `@proteus-vue/layout-core` 43 → ★2026-09-30 MA1 新增 `@proteus-vue/animation` 44；版本统一 0.3.0-beta.8，见「当前状态速览」）
 - **文档**：`docs/proteus-architecture.md`（L0 规约·真理来源）→ `docs/board-inventory.md`（全景索引）→ `docs/roadmap.md`（版本线）→ `roadmap-2-plan`（里程碑线）→ 各 plan
 
+## 当前状态速览（最近一次更新：**2026-10-10·（三九七）· ★★Vapor B3 收口：余 8 条动态 `:class` 布局字段**具名边界**（各需不同基础设施，逐类诊断）· 决策 #756**——用户「继续收尾 B3」。★**逐条取证阻塞**（不硬塞一轮=半做）：**grid 模板/放置**（内核**有**字段但值是**字符串 token 串** ⇒ 无二进制字符串通道，需**新 opcode**）· **`whiteSpace`/`wordBreak`**（内核**无**文本布局字段 ⇒ 需内核**文本建模**）· **`overflowX/Y`**（内核**无**轴级字段 ⇒ 加轴字段 + taffy + 宿主裁剪）· **`lineClamp`**（内核无字段，属宿主文本）。★**交付**：① 诊断**逐类具名**（`VAPOR_DYNCLASS_LAYOUT_UNSUPPORTED` message 现列出四类阻塞）；② 计划 B3 收口表 + B3 账 **28→8**。★**判断**：**只有 grid 是"通道"问题**（内核有字段），其余是**内核缺字段/文本语义** ⇒ **各需单独立项**（grid-op ≈1 天；文本/轴 overflow 更大）。★教训：**"收尾"≠"再硬塞一轮"**（余项阻塞不同类：op 协议 / 内核字段 / 文本语义）；**先给每条找出"最小阻塞"**（通道？缺字段？语义？）；**B3a/b/c 的价值=复用既有 f32 通道 + 索引编码**（零宿主/零协议，快速收口 71% 缺口）。★**B3 收官（20/28 已交付）**。★下一步：grid-op 小批次 / **B4 v-model 回写**（22 页·需三端输入通道）。★新会话以此为准。
 ## 当前状态速览（最近一次更新：**2026-10-10·（三九六）· ★★Vapor B3c 交付：动态 `:class` 补 `justifyContent`/`alignContent`/`alignSelf`（索引编码走内核 SET_STYLE）—— B3 布局缺口 28→8 收口 · 决策 #755**——承接 B3a/B3b。★**交付**：`ENUM_LAYOUT_FIELDS` 增三项（含 CSS 别名 `start`/`end`；`alignSelf` 0=auto⇒清空回落父）；内核 `apply_style_key` 加索引解码臂（值=内核 `parse_justify`/`parse_align_content`/`parse_align_items` 接受的字符串）；编译诊断收窄。★**三端真机判据 ㉖ 扩展**（`.hrow{flex-direction:row; justify-content:center}`）：子2 x `[0,200,0]`（含 justify-content 居中）——**Android/鸿蒙/iOS 全过** + 指纹一致（32 项 × 3 端）。★验证：`vapor-sfc-to-tree` ⑦ · Rust 单测 · 全量 **5659** · vue-tsc 0；能力棘轮 **10→8**（落账）。★教训：**内核字符串字段也能索引编码**（先查内核**接受的字符串集** `taffy_engine::parse_*`，别猜）；**CSS 别名要收进值表**（`end`→`flex-end` 首版漏了）；**同一手法三连用（B3b→B3c）**。★**动态 `:class` 布局缺口 28→8**。★**余下 B3 真·无通道**：grid 模板（字符串 token 串）· lineClamp · whiteSpace · wordBreak · overflowX/Y（内核无轴级字段），≈1–2 人日；或转 **B4 v-model 回写**（22 页 · 需三端输入通道）。★新会话以此为准。
 ## 当前状态速览（最近一次更新：**2026-10-10·（三九五）· ★★★Vapor B3b 交付：动态 `:class` 的枚举布局字段端上真生效（索引编码走内核二进制 SET_STYLE）· 决策 #754**——承接 B3a，做余下最高价值项（枚举：display 50 · alignItems 25 · flexDirection 18 · position 11 · flexWrap 10 · overflow 9）。★**关键洞察**：**枚举（字符串）值也能走同一条 host-agnostic 二进制 SET_STYLE**——**索引编码为 f32**（不必"新内核 op + 三端宿主"）⇒ 仍**零宿主改动**。★**交付**：① JS `ENUM_LAYOUT_FIELDS`（值表 + 默认索引）；② 运行期分流加枚举臂 → `SET_STYLE`(index)，**清除回退＝发默认索引**；③ 内核 `apply_style_key` 加**索引解码臂**（与 JS 表**逐字同序**；display 由旧二元升级为 0=flex/1=grid/2=none）；④ 编译诊断收窄（数值+枚举不诊断）。★**三端真机判据 ㉖**（`.hrow{flex-direction:row}` 容器 column↔row）：子2 x `[0,120,0]`——**Android/鸿蒙/iOS 全过** + 指纹一致（32 项 × 3 端）。★验证：`vapor-sfc-to-tree` ⑦ · Rust 单测 · 全量 **5659** · vue-tsc 0；能力棘轮 **18→10**（落账）。★教训：**"枚举必须新协议"是未验证假设**（可索引编码复用 f32 通道）；**跨语言索引表逐字同序**；**"默认值解码"是清除回退另一半**；**升级旧二元映射要护回归**。★**余下 B3c**（grid 模板/whiteSpace/wordBreak/overflowX-Y/justify*/alignContent/alignSelf，≈2–3 人日）。★新会话以此为准。
-## 当前状态速览（最近一次更新：**2026-10-10·（三九三）· ★★★Vapor B5 交付：脚本级生命周期钩子 `onMounted`/`onUnmounted` 降级为动作表（端上真执行）+ 打通 App 壳 `@vue:mounted` · 决策 #752**——承接 #751 推进计划，做 B5。★**交付（编译期降级 + 运行期时序执行，复用事件-方法线）**：① **编译期**（`compileEvents`）：`<script setup>` 顶层 `onMounted(()=>{…})`/`onUnmounted(()=>{…})` 回调体**降级为动作表**（复用 `degradeStatements`+`runHandlerActions`），发射 `scriptLifecycle`（**排在 walk 之后** ⇒ 既有事件 h0/h1 逐字节不变）；可降级 ⇒ 端上真跑，**循环/async/宿主 API ⇒ 精确诊断**，空体 ⇒ 不产出。② **运行期**（`render-backend`）：`instance.markMounted()`（**幂等**）/ `markUnmounted()`；`superapp-runtime` 在 mount 成功后自动 `markMounted()`。③ ★**顺带补齐 App 壳 `@vue:mounted`**（此前壳路径完全没接 lifecycle——只探针有）。④ 诊断修正：`onMounted`/`onUnmounted` 移出 `NOT_RUN` 列表。★**三端真机判据 ㉔**（b5 夹具 `b5x` 值/几何 `[0,88,0]`）：**Android/鸿蒙/iOS 全过** + 指纹一致（30 项 × 3 端）。★验证：全量 **5657** · vue-tsc 0。★教训：**"降级为动作表"基础设施可复用**；**编号顺序要护"既有产物不变"**；**"能跑"就撤掉"不会跑"的诊断**；**markMounted 幂等**。★新会话以此为准。
 
 ## ★《收纳规范》（2026-10-03 立 · 门禁 `pnpm check:memory`）
 
@@ -44,11 +44,11 @@
 |---|---|
 | `docs/project-memory-archive/2026-10.md` | 2026-10 里程碑详细叙事 + 状态速览历史栈（约 4.5k 行）|
 | `docs/project-memory-archive/2026-09.md` | 09 月全部叙事 + 柔性系统重组历史 + 2026-08 进度快照 + 已落地文件 + 09-19 验证状态（约 6.5k 行） |
-| `docs/project-memory-archive/decisions.md` | 决策链全文 #1–#755——按号检索（`grep -n "^736\." …`）|
+| `docs/project-memory-archive/decisions.md` | 决策链全文 #1–#756——按号检索（`grep -n "^736\." …`）|
 
 检索示例：`grep -n "2026-09-29\|判据建错靶" docs/project-memory-archive/2026-09.md`
 
-## 关键决策与文档偏差（#1–#755 → 归档速查）
+## 关键决策与文档偏差（#1–#756 → 归档速查）
 
 **全文在 `docs/project-memory-archive/decisions.md`**（按号检索：`grep -n "^290\." docs/project-memory-archive/decisions.md`）。
 决策号**只增不改号**（外部文档按号引用）；新决策追加到该文件末尾（号 +1）。
