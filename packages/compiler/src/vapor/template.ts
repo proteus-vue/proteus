@@ -1656,6 +1656,14 @@ export interface ClassStyleSegment {
   pseudo?: { kind: 'first-child' | 'last-child' | 'nth-child'; a: number; b: number }
   /** ★批次 37：`:not(<简单选择器>)` 的取反段（当前支持单段：类/标签/通配/结构伪类） */
   not?: ClassStyleSegment
+  /**
+   * ★★★S1.1（2026-10-10 · 输入延迟专项 #768）：**状态伪类** `:active`（按下态）——编译进
+   *   **节点级 `press*` 字段**（paint-only），由宿主在 DOWN 时**原生立即**应用、UP 还原（**零 JS 跨界**＝
+   *   "输入不过桥"）。这是 App 端唯一有语义的状态伪类（触屏无 hover；focus/checked 无宿主通道 ⇒ 仍不支持）。
+   *   【落点】`resolveClassStyles` 把带 `state` 的规则声明改写成 `press<Cap>` 键（如 `backgroundColor`
+   *   ⇒ `pressBackgroundColor`），随节点样式**扁平透传**给宿主（内核不消费——纯绘制通道）。
+   */
+  state?: 'active'
 }
 
 export interface ClassStyleRule {
@@ -1671,6 +1679,12 @@ export interface ClassStyleRule {
   important: Set<string>
   /** ★批次 1：**源序**（样式表里的出现序；相同 (importance, specificity) 时后写的胜） */
   order: number
+  /**
+   * ★★★S1.1（2026-10-10）：该规则含 `:active`（按下态）——其声明在 `resolveClassStyles` 里
+   *   改写成 **`press*` 键**（`backgroundColor` ⇒ `pressBackgroundColor`），随节点样式透传给宿主，
+   *   由宿主 DOWN 应用 / UP 还原（零 JS 跨界）。★按下态规则**不并入常驻 `styles`**（否则常态色被按下色覆盖）。
+   */
+  pressState?: boolean
 }
 
 /** 计算选择器链的特异性 `(id, class, tag)`——只统计 class 段与 tag 段（id 选择器不支持 ⇒ 恒 0） */
@@ -1717,6 +1731,8 @@ export function parseClassRules(css: string, tokens?: Record<string, string>, ke
       const important = new Set<string>()
       const style = parseStaticStyle(decls, () => {}, important, tokens, keyframes)
       if (Object.keys(style).length === 0) continue
+      // ★S1.1：`:active` 规则标记为"按下态"（其声明将改写成 `press*` 键——见 resolveClassStyles）
+      const isPress = parsed.segments.some((s) => s.state === 'active')
       rules.push({
         segments: parsed.segments,
         combinators: parsed.combinators,
@@ -1724,6 +1740,7 @@ export function parseClassRules(css: string, tokens?: Record<string, string>, ke
         specificity: specificityOf(parsed.segments),
         important,
         order: order++,
+        ...(isPress ? { pressState: true as const } : {}),
       })
     }
   }
@@ -1838,7 +1855,9 @@ function parseSelectorSegment(part: string): ClassStyleSegment | null {
   let universal = false
   let pseudo: ClassStyleSegment['pseudo']
   let not: ClassStyleSegment | undefined
+  let state: ClassStyleSegment['state']
   for (const p of pseudos) {
+    if (p.name === 'active') { if (state) return null; state = 'active'; continue } // ★S1.1：按下态
     if (p.name === 'first-child') { if (pseudo) return null; pseudo = { kind: 'first-child', a: 0, b: 1 }; continue }
     if (p.name === 'last-child') { if (pseudo) return null; pseudo = { kind: 'last-child', a: 0, b: 1 }; continue }
     if (p.name === 'nth-child') {
@@ -1865,12 +1884,13 @@ function parseSelectorSegment(part: string): ClassStyleSegment | null {
     if (!/^[A-Za-z][\w-]*$/.test(rest)) return null // 类型名合法形态：单标识符
     tag = rest
   }
-  if (!universal && !tag && classes.length === 0 && !pseudo && !not) return null // 空段
+  if (!universal && !tag && classes.length === 0 && !pseudo && !not && !state) return null // 空段
   const seg: ClassStyleSegment = { classes }
   if (tag) seg.tag = tag
   if (universal) seg.universal = true
   if (pseudo) seg.pseudo = pseudo
   if (not) seg.not = not
+  if (state) seg.state = state
   return seg
 }
 
@@ -1934,6 +1954,16 @@ export interface ResolvedClassStyles {
    *   供模板侧判断"行内（v-for）结构伪类"（运行期每行克隆同一模板 ⇒ 静态求值会作用于**所有行**，非 Web 语义）⇒ 诊断。
    */
   structural: boolean
+  /**
+   * ★★★S1.1（2026-10-10）：**按下态字段**（`:active` 规则的声明改写成 `press<Cap>` 键）；
+   *   随节点样式透传宿主 ⇒ DOWN 原生应用 / UP 还原（零 JS 跨界）。无按下规则 ⇒ 缺省省略。
+   */
+  pressStyles?: Record<string, unknown>
+}
+
+/** 引擎字段名 → 按下态键（`backgroundColor` ⇒ `pressBackgroundColor`；首字母大写） */
+function pressKeyOf(field: string): string {
+  return `press${field.charAt(0).toUpperCase()}${field.slice(1)}`
 }
 
 export function resolveClassStyles(
@@ -1953,15 +1983,28 @@ export function resolveClassStyles(
   const normal: Record<string, unknown> = {}
   const important: Record<string, unknown> = {}
   const importantKeys = new Set<string>()
+  // ★S1.1：按下态字段（`press*`）——**独立收集**（不并入常驻 styles，否则常态被按下色覆盖）
+  const press: Record<string, unknown> = {}
   // ★批次 37：命中规则里是否含**结构伪类**（行内 v-for 需诊断——见 ResolvedClassStyles.structural）
   const structural = matched.some((rule) => rule.segments.some((seg) => seg.pseudo !== undefined))
   for (const rule of matched) {
+    if (rule.pressState) {
+      // 按下态：声明改写成 `press<Cap>` 键（宿主 DOWN 应用 / UP 还原）
+      for (const [k, v] of Object.entries(rule.decls)) press[pressKeyOf(k)] = v
+      continue
+    }
     for (const [k, v] of Object.entries(rule.decls)) {
       if (rule.important.has(k)) { important[k] = v; importantKeys.add(k) }
       else normal[k] = v
     }
   }
-  return { styles: { ...normal, ...important }, important: importantKeys, structural } // important 优先
+  const hasPress = Object.keys(press).length > 0
+  return {
+    styles: { ...normal, ...important },   // important 优先
+    important: importantKeys,
+    structural,
+    ...(hasPress ? { pressStyles: press } : {}),
+  }
 }
 
 /**
@@ -3385,6 +3428,9 @@ export function buildLayoutTemplate(
               'VAPOR_STRUCTURAL_PSEUDO_IN_LIST',
             )
           }
+          // ★★★S1.1（2026-10-10）：**按下态**（`:active` 规则）的 `press*` 字段并入节点样式——
+          //   随节点透传宿主 ⇒ DOWN 原生应用 / UP 还原（零 JS 跨界）。
+          if (resolved.pressStyles) Object.assign(style, resolved.pressStyles)
         }
       }
       // 本元素并入祖先链（tag+classes），供子节点组合匹配（`.a .b` / `h3 .x` / `.a > .b`）

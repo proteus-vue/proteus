@@ -167,7 +167,7 @@ hosts/android/results/gfxinfo.txt
 
 | 编号 | 做法 | 关键实现 | 判据 |
 |---|---|---|---|
-| **S1.1** | **按压态内联**：`:active` / `pressStyle` / `hover` 编译进内核样式表，DOWN 时由原生立即改该节点绘制属性，UP 时还原 | 内核 style 表扩 `pressStyle` 字段；三端宿主在 `touchesBegan`/`ACTION_DOWN` 里直接改绘制属性（不经 JS）。样式已在内核，**零新增通路** | `press_feedback_latency ≤ 1 帧`；`bridge_calls_per_tap == 1` |
+| **S1.1** | ✅ **已交付（2026-10-10 · #774 · 判据 ㉝）**：`<style>.x:active{}` 编译期折成节点 `press*` 字段（`pressBackgroundColor`…），随节点扁平透传宿主 ⇒ **Android 宿主 DOWN 原生应用 / UP 还原**（零 JS 跨界）；`:active` 不再诊断 | `press_feedback` = 0 JS 往返（判据 ㉝：press_nodes>0 且 tap 后 applied≥1）；`bridge_calls_per_tap == 1` |
 | **S1.2** | **命中缓存**：DOWN 命中一次，MOVE/UP 复用 `target`/`chain` | iOS 补缓存（Android 已有 `gestureTarget`/`gestureChain`，`ProteusHostView.java:2330-2333`） | `hit_test_calls_per_gesture == 1` |
 | **S1.3** | **手势识别下沉到平台识别器** | iOS 补 `UITapGestureRecognizer` / `UILongPressGestureRecognizer` / `UIPanGestureRecognizer`（`delaysTouchesBegan=false`，`cancelsTouchesInView` 精确控制）；**保留自研分类器仅作兜底** | 三端 `check:scroll-fling` 式结构门禁 |
 | **S1.4** | **iOS 接批量指针 ABI** | `proteus_dispatch_pointers`（`hosts/ios/.../selfdraw-scene.swift:177-224` 已有 vtable 声明；`host.rs:527-593` 是 Android 参照）——一帧 N 点一次 FFI | `ffi_calls_per_frame ≤ 1` |

@@ -1584,3 +1584,25 @@ describe('★App 页根「块级满宽」（对齐 Web · 用户实测「text-al
     }
   })
 })
+
+// ★★★S1.1（2026-10-10 · 输入延迟专项 #767）：`:active` → 节点 `press*` 字段（按下态原生即时应用）
+describe('★S1.1 · `<style> .x:active{}` → 节点 press* 字段（按下态交宿主原生应用）', () => {
+  const SFC = `<template>\n  <view class="btn">x</view>\n</template>\n<style>\n.btn { background-color: #112233 }\n.btn:active { background-color: #ff0000; border-radius: 8 }\n</style>\n`
+  const r = buildLayoutTemplate(SFC, 'press.vue')
+  const btn = r.template.nodes.find((n) => (n.tag === 'view'))!
+  it('① 按下态声明折成 press* 键（不进常驻 styles）', () => {
+    const s = btn.style as Record<string, unknown>
+    expect(s.backgroundColor, '常驻背景色仍是常态值（未被按下色覆盖）').toBe('#112233')
+    expect(s.pressBackgroundColor, ':active 背景 → pressBackgroundColor').toBe('#ff0000')
+    expect(s.pressBorderRadius, ':active 圆角 → pressBorderRadius').toBe(8)
+    expect(s.borderRadius, '按下态圆角不进常驻').toBeUndefined()
+  })
+  it('② 无 :active ⇒ 无 press* 字段（零行为变化）', () => {
+    const r2 = buildLayoutTemplate(`<template><view class="p">x</view></template><style>.p{color:#000}</style>`, 'p2.vue')
+    const s = (r2.template.nodes.find((n) => n.tag === 'view')!.style) as Record<string, unknown>
+    expect(Object.keys(s).some((k) => k.startsWith('press')), '无 :active ⇒ 无 press*').toBe(false)
+  })
+  it('③ :active 不再产"选择器不支持"诊断', () => {
+    expect(r.diagnostics.map((d) => d.code)).not.toContain('VAPOR_STYLE_SELECTOR_UNSUPPORTED')
+  })
+})

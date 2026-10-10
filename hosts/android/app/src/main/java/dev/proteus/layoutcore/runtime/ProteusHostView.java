@@ -2351,10 +2351,52 @@ public class ProteusHostView extends ViewGroup {
             gestureChain = lastHitChain;
             gestureStartX = lastHitX;
             gestureStartY = lastHitY;
+            // ★★★S1.1（2026-10-10 · 输入延迟专项 #767）：**按下态原生即时应用**——命中节点若有
+            //   `:active` 折出的 press* 字段，立即（同一 DOWN 内、零 JS 跨界）改绘制属性并重录帧。
+            //   ⇒ "输入不过桥"：按下反馈延迟 = 0 个 JS 往返（对标 RN Pressable / Flutter InkWell 必过逻辑层）。
+            applyPressAt(gestureTarget);
+        }
+        // ★S1.1：UP/CANCEL ⇒ 还原按下态（与触碰开始时同一帧）
+        if (action == android.view.MotionEvent.ACTION_UP || action == android.view.MotionEvent.ACTION_CANCEL) {
+            clearPress();
         }
         // ★交给平台识别器判定 tap / longpress / fling / scroll（不自研阈值与时间窗）
         detector().onTouchEvent(ev);
         return true;      // 消费，避免同一个手势被重复上报
+    }
+
+    /* ── ★★★S1.1 按下态（`:active` → press* 字段；DOWN 原生应用 / UP 还原，零 JS 跨界）── */
+    /** 节点 id → 按下态背景色（ARGB；来自编译器 `:active` 折出的 `pressBackgroundColor`） */
+    private java.util.Map<Integer, Integer> pressBgMap = java.util.Collections.emptyMap();
+    private int pressedNodeId = -1;
+    /** 累计"按下态真的被应用"次数（判据核"按下反馈真的发生过"） */
+    int pressApplied = 0;
+
+    /** 由 `VaporRenderHost` 在建树时注入"哪些节点有按下态 + 其背景色"。 */
+    public void setPressBgMap(java.util.Map<Integer, Integer> m) {
+        this.pressBgMap = m != null ? m : java.util.Collections.emptyMap();
+    }
+
+    /** DOWN 命中节点 ⇒ 应用按下态（有 press 定义才动）；重录帧以立即反映。 */
+    private void applyPressAt(int nodeId) {
+        if (nodeId < 0 || !pressBgMap.containsKey(nodeId)) return;
+        pressedNodeId = nodeId;
+        pressApplied++;
+        framePicture = null;   // 丢弃静态帧 ⇒ onDraw 重录（含按下色）
+        invalidate();
+    }
+
+    /** UP/CANCEL ⇒ 还原（清帧 ⇒ 重录回常态色）。 */
+    private void clearPress() {
+        if (pressedNodeId < 0) return;
+        pressedNodeId = -1;
+        framePicture = null;
+        invalidate();
+    }
+
+    /** ★S1.1 探针：`{pressed, applied, hasPressNodes}`——判据核"按下态真的被原生应用"。 */
+    public String pressProbe() {
+        return "{\"pressed\":" + pressedNodeId + ",\"applied\":" + pressApplied + ",\"press_nodes\":" + pressBgMap.size() + "}";
     }
 
     /** ★S1.5 探针：累计 `requestUnbufferedDispatch` 调用数（判据核"无缓冲分发真的被请求"）。 */
@@ -2783,9 +2825,12 @@ public class ProteusHostView extends ViewGroup {
             // ★★颜色覆盖（2026-10-01）：该节点参与颜色动画时用内核值，否则用静态 `Cmd.color`
             //   （表里没有 ⇒ 零额外开销；与 `animTx` 的查表同一形态）
             final Integer animBg = (ids != null && i < ids.length && ids[i] >= 0) ? animColor.get(ids[i]) : null;
-            bgPaint.setColor(animBg != null ? animBg : c.color);
+            // ★S1.1：按下态背景色优先（DOWN 应用 / UP 还原；下拉刷新式即时反馈）
+            final Integer pressBg = (pressedNodeId >= 0 && ids != null && i < ids.length && ids[i] == pressedNodeId)
+                    ? pressBgMap.get(pressedNodeId) : null;
+            bgPaint.setColor(pressBg != null ? pressBg : (animBg != null ? animBg : c.color));
             if (op < 1f) {
-                int base = animBg != null ? animBg : c.color;
+                int base = pressBg != null ? pressBg : (animBg != null ? animBg : c.color);
                 bgPaint.setAlpha(Math.max(0, Math.min(255, (int) (Color.alpha(base) * op))));
             }
             // ★★渐变填充（v1 · 2026-10-01）：有规格 ⇒ 给 bgPaint 挂 shader（**矩形局部坐标**——

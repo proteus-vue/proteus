@@ -92,6 +92,8 @@ interface VaporHost {
    *   入参 `{text}`；返 `{ok,nodeId,inputEvents}`。可选：宿主未实现 ⇒ 探测为 undefined（判据 ㉚ 如实跳过）。
    */
   inputProbeSetText?(text: string): string
+  /** ★S1.1 探针：读宿主按下态读数 `{pressed,applied,press_nodes}` */
+  pressProbe?(): string
   /** ★★绘制通道探针（读**宿主真源**：渐变/发光/遮罩/圆角/裁剪/描边建出来了没） */
   probeChannels(idsJson: string): string
   /**
@@ -483,6 +485,16 @@ interface VaporReport {
   bt3_probe: {
     nodeId: number
     inputEvents: number
+  }
+  /**
+   * ★★★**S1.1 探针**（2026-10-10 · 判据 ㉝）——**按下态原生即时应用**（`:active` → press* 字段）。
+   *   `{press_nodes, applied, pressed}`：宿主读 `pressProbe`——`press_nodes`=有按下态的节点数、
+   *   `applied`=按下态被应用次数（tap 后应 ≥1）、`pressed`=当前按下节点（UP 后 -1）。
+   */
+  s11_probe: {
+    press_nodes: number
+    applied: number
+    pressed: number
   }
   /**
    * ★★★**`:style` 对象展开探针**（2026-10-03）——两条通道各自的真值：
@@ -1849,7 +1861,7 @@ function runShort(args: VaporArgs): string {
     tpl_nodes: 0, tpl_ok: false, sub_l1: 0, sub_l0: 0, sub_l1_rate: 0, sub_sources: [],
     inst_ms: 0, inst_nodes: 0, inst_reused_ids: 0, inst_allocated_ids: 0, inst_rows: 0,
     inst_values_filled: 0, inst_virtual_rows: 0, inst_text_filled: 0, inst_width_filled: 0,
-    mix_text_probe: [], text_probe_rounds: [], gate_rounds: [], gate_text_nodes: [], once_node_id: -1, memo_node_id: -1, expr_probe: [], transition_started: 0, tpl_transition: [], component_mounts: 0, component_nodes: 0, component_kid_probe: {}, slot_probe: { texts: [], rects: [], fills: [], markers_left: -1 }, emit_probe: { emits: [], parent_source_after: undefined, geom_before: -1, geom_after: -1 }, scoped_probe: { texts: [], anchor_id: -1, anchor_width_field: -1, anchor_width_rect: -1, destr_text: '', destr_width_field: -1, destr_width_rect: -1 }, lifecycle_probe: { bindings: [], ran_handler: '', changed_sources: [], ops_bytes: 0, applied: 0, anchor_id: -1, geom_before: -1, geom_after: -1 }, dyn_probe: { texts: [], mounts: [], geom: [], dropped: -1, notes: [] }, directive_probe: { nodes: [], rounds: [], plays: [] }, mixed_probe: { texts: [], leaves: 0, geom: [] }, t2_probe: { nodeId: -1, widths: [], values: [], logs: [] }, b5_probe: { nodeId: -1, phases: [], widths: [], values: [] }, b3a_probe: { nodeId: -1, widths: [] }, b3b_probe: { childId: -1, child_xs: [] }, b3d_probe: { childId: -1, child_xs: [] }, bt1_probe: { textA_id: -1, textB_id: -1, residuals: [] }, bt2_probe: { nodeId: -1, policy_seen: [] }, bt3_probe: { nodeId: -1, inputEvents: -1 }, styleobj_probe: { anchor_id: -1, width_before: -1, width_after: -1, kernel_applied: 0, patch_calls: [] },
+    mix_text_probe: [], text_probe_rounds: [], gate_rounds: [], gate_text_nodes: [], once_node_id: -1, memo_node_id: -1, expr_probe: [], transition_started: 0, tpl_transition: [], component_mounts: 0, component_nodes: 0, component_kid_probe: {}, slot_probe: { texts: [], rects: [], fills: [], markers_left: -1 }, emit_probe: { emits: [], parent_source_after: undefined, geom_before: -1, geom_after: -1 }, scoped_probe: { texts: [], anchor_id: -1, anchor_width_field: -1, anchor_width_rect: -1, destr_text: '', destr_width_field: -1, destr_width_rect: -1 }, lifecycle_probe: { bindings: [], ran_handler: '', changed_sources: [], ops_bytes: 0, applied: 0, anchor_id: -1, geom_before: -1, geom_after: -1 }, dyn_probe: { texts: [], mounts: [], geom: [], dropped: -1, notes: [] }, directive_probe: { nodes: [], rounds: [], plays: [] }, mixed_probe: { texts: [], leaves: 0, geom: [] }, t2_probe: { nodeId: -1, widths: [], values: [], logs: [] }, b5_probe: { nodeId: -1, phases: [], widths: [], values: [] }, b3a_probe: { nodeId: -1, widths: [] }, b3b_probe: { childId: -1, child_xs: [] }, b3d_probe: { childId: -1, child_xs: [] }, bt1_probe: { textA_id: -1, textB_id: -1, residuals: [] }, bt2_probe: { nodeId: -1, policy_seen: [] }, bt3_probe: { nodeId: -1, inputEvents: -1 }, s11_probe: { press_nodes: -1, applied: -1, pressed: -1 }, styleobj_probe: { anchor_id: -1, width_before: -1, width_after: -1, kernel_applied: 0, patch_calls: [] },
     mount_ms: 0, mount_nodes: 0,
     updates_run: 0, ops_bytes: 0, ops_ms: 0, apply_ms: 0, text_synced_total: 0, update_evidence: [], geom_probe: [], channels: [],
     ev_bindings: 0, ev_handlers: 0, ev_modifiers: 0, taps: 0, tap_evidence: [],
@@ -3424,6 +3436,46 @@ function runShort(args: VaporArgs): string {
         } catch { /* 重挂失败 ⇒ 判据按 host_nodes 不符判红 */ }
       } else {
         notes.push('B4-T2b 探针：产物无 bt3 段 / 宿主无 inputProbeSetText（夹具未覆盖 ⇒ 判据 ㉚ 按缺失处理）')
+      }
+    }
+
+    /* ═══════════ ★★★S1.1 探针（2026-10-10 · 判据 ㉝）：按下态原生即时应用 ═══════════
+     *
+     * 【要证明什么】`:active` 折成节点 `press*` 字段 ⇒ 宿主 DOWN 时**原生立即**应用（零 JS 跨界）。
+     *   独立挂 s11 夹具树 → 宿主报告 `pressProbe`：`press_nodes`（有按下态节点数，>0）、
+     *   `applied`（tap 注入后 ≥1，证"按下态真的被应用"）。
+     */
+    {
+      const s11Art = (artifacts as { s11?: { tpl: LayoutTemplate; table: SubscriptionTable } }).s11
+      if (s11Art?.tpl?.ok && typeof proteusHost.pressProbe === 'function') {
+        const s11Inst = instantiateTemplate(s11Art.tpl, { viewport: args.viewport, read: () => 0, table: s11Art.table, registry: new ListRegistry() })
+        try {
+          const mOut = JSON.parse(proteusHost.mount(JSON.stringify({ viewport: s11Inst.viewport, nodes: s11Inst.nodes }))) as { ok?: boolean; error?: string }
+          if (mOut.ok === true) {
+            // 注入一次 tap 打在按钮节点上（宿主 DOWN ⇒ applyPressAt 原生应用；UP ⇒ 还原）
+            const btnId = s11Inst.nodes.length >= 2 ? Number((s11Inst.nodes[1] as { id: number }).id) : -1
+            if (btnId >= 0 && typeof proteusHost.tapAt === 'function') {
+              const rr = JSON.parse(proteusHost.readRects()) as { rects?: Record<string, { x?: number; y?: number; width?: number; height?: number }> }
+              const b = rr.rects?.[String(btnId)]
+              if (b) {
+                const cx = (b.x ?? 0) + (b.width ?? 0) / 2
+                const cy = (b.y ?? 0) + (b.height ?? 0) / 2
+                proteusHost.tapAt(JSON.stringify({ x: cx, y: cy }))   // DOWN→applyPressAt→UP→clearPress
+              }
+            }
+            const pr = JSON.parse(proteusHost.pressProbe()) as { pressed?: number; applied?: number; press_nodes?: number }
+            rep.s11_probe = { press_nodes: pr.press_nodes ?? -1, applied: pr.applied ?? -1, pressed: pr.pressed ?? -1 }
+          } else {
+            notes.push(`S1.1 探针：mount 失败（${mOut.error ?? '?'}）——判据 ㉝ 按缺失处理`)
+          }
+        } catch (e) {
+          notes.push(`S1.1 探针异常：${String((e as Error)?.message ?? e)}`)
+        }
+        try {
+          proteusHost.mount(JSON.stringify({ viewport: inst.viewport, nodes: inst.nodes }))
+        } catch { /* 重挂失败 ⇒ 判据按 host_nodes 不符判红 */ }
+      } else {
+        notes.push('S1.1 探针：产物无 s11 段 / 宿主无 pressProbe（夹具未覆盖 ⇒ 判据 ㉝ 按缺失处理）')
       }
     }
 

@@ -946,6 +946,19 @@ def main() -> int:
     else:
         print(f"  ✓ ㉜ ★S2 去 JSON：指令走**字节直传**（host_bytes_ops={bytes_ops}，Uint8Array→byte[]，免 number[] JSON）")
 
+    # ── ㉝ ★★★S1.1（#767）：**按下态原生即时应用**（`:active` → press* 字段；DOWN 应用 / UP 还原，零 JS 跨界）──
+    s11 = rep.get("s11_probe") or {}
+    if not s11 or s11.get("press_nodes", -1) < 0:
+        print("  ◐ ㉝ S1.1 按下态：本端夹具未覆盖（报告无 s11_probe）——如实跳过")
+    elif s11.get("press_nodes", 0) <= 0:
+        fail(f"★S1.1 按下态：无按下态节点（press_nodes={s11.get('press_nodes')}）——`:active` 未折成 press* 字段")
+        ok = False
+    elif s11.get("applied", 0) < 1:
+        fail(f"★S1.1 按下态：tap 注入后未被应用（applied={s11.get('applied')}）—— DOWN 未触发原生按下态")
+        ok = False
+    else:
+        print(f"  ✓ ㉝ ★S1.1 按下态原生即时应用：{s11.get('press_nodes')} 个按下态节点 · 应用 {s11.get('applied')} 次（tap ⇒ DOWN 原生应用 / UP 还原，零 JS 跨界）")
+
     # 附加观测（不判红，只如实报）
     una = rep.get("uninstantiated_slots", 0)
     if una:
