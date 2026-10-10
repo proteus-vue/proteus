@@ -243,6 +243,26 @@
         "why": "★批次 37（对齐 Web）：元素兄弟序在编译期树遍历里已知 ⇒ 结构伪类**编译期算一次**（:first-child/:last-child/:nth-child + :not 单段简单选择器）；节点无祖先 CSS 引擎。"
       },
       {
+        "css": "伪元素 ::before / ::after（+ content）",
+        "id": "selector-pseudo-element",
+        "ends": {
+          "web": "—",
+          "skyline": "—",
+          "app": "supported"
+        },
+        "why": "★#791（2026-10-10 · 伪元素支持）：`::before`/`::after` 在**编译期物化**为合成的装饰子节点（`content` 字符串→内容文本；`pointer-events:none`）——内核/宿主按普通节点渲染，零特殊处理。与 `:active` 组合（`:active::after{animation}`）即纯 CSS 涟漪/反馈；CSE 对账按合成节点跳过。诚实边界：`content:attr()|url()` / `::first-line|::marker|::placeholder` 未做（如实诊断）。"
+      },
+      {
+        "css": "状态伪类 :active（按下态）",
+        "id": "selector-pseudo-state-active",
+        "ends": {
+          "web": "—",
+          "skyline": "—",
+          "app": "supported"
+        },
+        "why": "★#790/#791（2026-10-10 · 按下态 = 通用能力）：`:active` 折成节点 `press*` 字段（底色 / transform.scale 凹陷 / border-color / box-shadow 发光 / z-index 提升），宿主 DOWN 同帧原生应用、UP 还原（零 JS）；`:active{animation}` 折成 `pressAnimation`（按下触发内核动画通道，`:active::after` 亦经伪子传播）。★诚实边界：`transform:scale` 按 Web 语义级联到子树。"
+      },
+      {
         "css": "Vue 作用域穿透 :deep() / ::v-deep() / >>>",
         "id": "selector-deep",
         "ends": {
@@ -310,7 +330,7 @@
           "skyline": "—",
           "app": "supported"
         },
-        "why": "★批次 42（对齐 Web）：animation 简写 → 命中同文件 @keyframes → 逐通道 keyframe 动画（内核 anim_start）；单次播放、终态保持（iters/delay/direction/fill 暂忽略，诊断）。可动画通道限 opacity / px 位移 / 等比缩放 / 旋转"
+        "why": "★批次 42（对齐 Web）：animation 简写 → 命中同文件 @keyframes → 逐通道 keyframe 动画（内核 anim_start）；★#791/本批：**animation-delay**（第 2 个时间 token，内核 `delayMs`）与 **animation-iteration-count**（数字 / `infinite`→内核 `repeat:-1`）已支持；`direction`/`fill`/多动画逗号列表暂忽略（诊断）。可动画通道限 opacity / px 位移 / 等比缩放 / 旋转"
       },
       {
         "css": "CSS 自定义属性（design tokens）var(--x)",
@@ -1392,8 +1412,34 @@
       "supportTier": "conditional"
     },
     {
+      "id": "selector-pseudo-element",
+      "css": "伪元素 ::before / ::after（+ content）",
+      "category": "selector",
+      "compilerFields": [],
+      "web": "—",
+      "skyline": "—",
+      "app": "supported",
+      "tier": "L0",
+      "strategy": "编译期折叠",
+      "note": "★#791（2026-10-10 · 伪元素支持）：`::before`/`::after` 在**编译期物化**为合成的装饰子节点（`content` 字符串→内容文本；`pointer-events:none`）——内核/宿主按普通节点渲染，零特殊处理。与 `:active` 组合（`:active::after{animation}`）即纯 CSS 涟漪/反馈；CSE 对账按合成节点跳过。诚实边界：`content:attr()|url()` / `::first-line|::marker|::placeholder` 未做（如实诊断）。",
+      "supportTier": "conditional"
+    },
+    {
+      "id": "selector-pseudo-state-active",
+      "css": "状态伪类 :active（按下态）",
+      "category": "selector",
+      "compilerFields": [],
+      "web": "—",
+      "skyline": "—",
+      "app": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "note": "★#790/#791（2026-10-10 · 按下态 = 通用能力）：`:active` 折成节点 `press*` 字段（底色 / transform.scale 凹陷 / border-color / box-shadow 发光 / z-index 提升），宿主 DOWN 同帧原生应用、UP 还原（零 JS）；`:active{animation}` 折成 `pressAnimation`（按下触发内核动画通道，`:active::after` 亦经伪子传播）。★诚实边界：`transform:scale` 按 Web 语义级联到子树。",
+      "supportTier": "conditional"
+    },
+    {
       "id": "selector-pseudo-state",
-      "css": "状态伪类 :hover / :active / :focus / :checked",
+      "css": "状态伪类 :hover / :focus / :checked",
       "category": "selector",
       "compilerFields": [],
       "web": "—",
@@ -1401,7 +1447,7 @@
       "app": "absent",
       "tier": "L2",
       "strategy": "降级",
-      "note": "★批次 37：需**运行时状态通道**（App 自绘手势层无 hover 概念）；状态切换改用动态 :class 或语义组件。",
+      "note": "★批次 37：需**运行时状态通道**（App 自绘手势层无 hover 概念）；状态切换改用动态 :class 或语义组件。★`:active` 已于 #790/#791 落地（见本表 `selector-pseudo-state-active`）。",
       "supportTier": "unsupported"
     },
     {
@@ -1518,7 +1564,7 @@
       "app": "supported",
       "tier": "L1",
       "strategy": "编译期折叠",
-      "note": "★批次 42（对齐 Web）：animation 简写 → 命中同文件 @keyframes → 逐通道 keyframe 动画（内核 anim_start）；单次播放、终态保持（iters/delay/direction/fill 暂忽略，诊断）。可动画通道限 opacity / px 位移 / 等比缩放 / 旋转",
+      "note": "★批次 42（对齐 Web）：animation 简写 → 命中同文件 @keyframes → 逐通道 keyframe 动画（内核 anim_start）；★#791/本批：**animation-delay**（第 2 个时间 token，内核 `delayMs`）与 **animation-iteration-count**（数字 / `infinite`→内核 `repeat:-1`）已支持；`direction`/`fill`/多动画逗号列表暂忽略（诊断）。可动画通道限 opacity / px 位移 / 等比缩放 / 旋转",
       "supportTier": "conditional"
     },
     {
