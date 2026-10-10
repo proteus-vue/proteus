@@ -1,19 +1,19 @@
 {
-  "bundle_chars": 561151,
-  "run_ms": 267,
-  "host_mount_calls": 15,
-  "host_apply_calls": 20,
+  "bundle_chars": 564523,
+  "run_ms": 208,
+  "host_mount_calls": 17,
+  "host_apply_calls": 22,
   "host_update_patch_calls": 1,
   "host_nodes": 47,
   "host_text_nodes": 19,
   "host_cmds": 47,
-  "host_layout_ms": 0.259063,
-  "host_measure_ms": 0.394739,
+  "host_layout_ms": 0.286146,
+  "host_measure_ms": 0.387448,
   "host_painted_samples": 12060,
   "host_painted_colors": 234,
   "host_applied": 1,
   "host_changed_nodes": 2,
-  "host_view_on_draw": 30,
+  "host_view_on_draw": 34,
   "report": {
     "ok": true,
     "tpl_nodes": 30,
@@ -554,6 +554,23 @@
         "t2 tick 6"
       ]
     },
+    "b5_probe": {
+      "nodeId": 1,
+      "phases": [
+        "mounted",
+        "unmounted"
+      ],
+      "widths": [
+        0,
+        88,
+        0
+      ],
+      "values": [
+        0,
+        88,
+        0
+      ]
+    },
     "styleobj_probe": {
       "anchor_id": 1,
       "width_before": 120,
@@ -565,12 +582,12 @@
         ]
       ]
     },
-    "mount_ms": 61,
+    "mount_ms": 24,
     "mount_nodes": 47,
     "updates_run": 3,
     "ops_bytes": 204,
-    "ops_ms": 0,
-    "apply_ms": 6,
+    "ops_ms": 1,
+    "apply_ms": 2,
     "text_synced_total": 3,
     "update_evidence": [
       {
@@ -760,7 +777,7 @@
       "tap@13 自身宽度 120 → 150",
       "实例树 47 节点 \/ 行 47 \/ 虚拟化行 8 \/ 增量 3 轮"
     ],
-    "host_layout_ms": 1.832,
+    "host_layout_ms": 0.454,
     "host_cmds": 47
   },
   "ok": true

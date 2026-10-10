@@ -61,19 +61,21 @@ describe('★P1-3 生命周期 · 脚本级钩子可见化（不执行 ⇒ 必�
       .diagnostics.map((d) => `${d.code}:${d.message}`)
       .join(' | ')
 
-  it('onMounted（脚本级）⇒ VAPOR_SCRIPT_LIFECYCLE_NOT_RUN（带替代路径修法）', () => {
-    const s = diagsOf(`const lifeW = ref(0)\nonMounted(() => { lifeW.value = 99 })`)
-    expect(s).toContain('VAPOR_SCRIPT_LIFECYCLE_NOT_RUN')
-    expect(s).toContain('onMounted')
-    // 修法指向模板钩子（真支持的替代路径）
-    const hint = buildVaporSubscriptions(sfc(`<p-view :width="lifeW" />`, `const lifeW = ref(0)\nonMounted(() => {})`), 'p.vue')
-      .diagnostics.find((d) => d.code === 'VAPOR_SCRIPT_LIFECYCLE_NOT_RUN')?.hint ?? ''
-    expect(hint).toContain('@vue:mounted')
+  // ★★★B5（2026-10-10）：`onMounted`/`onUnmounted` 现由 `compileEvents` 降级为**动作表**
+  //   （可降级体 ⇒ 端上真运行，不再产 NOT_RUN）；不再可见化的两个钩子须**不该报** NOT_RUN。
+  it('★B5：onMounted / onUnmounted 不再产「不会运行」诊断（它们现在会运行）', () => {
+    expect(diagsOf(`const lifeW = ref(0)\nonMounted(() => { lifeW.value = 99 })`)).not.toContain('VAPOR_SCRIPT_LIFECYCLE_NOT_RUN')
+    expect(diagsOf(`onUnmounted(() => { count.value = 0 })`)).not.toContain('VAPOR_SCRIPT_LIFECYCLE_NOT_RUN')
   })
 
-  it('onUnmounted / onUpdated 同样可见（各自的替代路径说明）', () => {
-    expect(diagsOf(`onUnmounted(() => {})`)).toContain('VAPOR_SCRIPT_LIFECYCLE_NOT_RUN')
+  it('其余脚本钩子（onUpdated / onBeforeMount / onActivated）仍可见化（不支持 ⇒ 必须说）', () => {
     expect(diagsOf(`onUpdated(() => {})`)).toContain('VAPOR_SCRIPT_LIFECYCLE_NOT_RUN')
+    expect(diagsOf(`onBeforeMount(() => {})`)).toContain('VAPOR_SCRIPT_LIFECYCLE_NOT_RUN')
+    expect(diagsOf(`onActivated(() => {})`)).toContain('VAPOR_SCRIPT_LIFECYCLE_NOT_RUN')
+    // 修法指向模板钩子 + 说明 onMounted/onUnmounted 支持脚本级（B5）
+    const hint = buildVaporSubscriptions(sfc(`<p-view :width="lifeW" />`, `onUpdated(() => {})`), 'p.vue')
+      .diagnostics.find((d) => d.code === 'VAPOR_SCRIPT_LIFECYCLE_NOT_RUN')?.hint ?? ''
+    expect(hint).toContain('@vue:mounted')
   })
 
   it('★反向：没有脚本钩子 ⇒ 不产该诊断（防诊断噪声；且不误报同名前缀）', () => {

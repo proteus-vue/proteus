@@ -135,7 +135,7 @@ Teleport / KeepAlive / Suspense / Transition / TransitionGroup / v-memo / 自定
 |---|---|---|---|
 | **P1-1** | **组件边界标记**：原先只有 `tag:"MyComp"` 字符串（当普通元素） | 宿主无法识别"这里是组件位" | ✅ **已完成（第一批，2026-10-03）**：`LayoutNode.component` 字段（PascalCase 判据，与 Vue 约定同）；template.ts 与 deps.ts **两处判据同源** |
 | **P1-2** | **组件 props 响应式通道** | 父→子传值无通路 | ✅ **已完成（第一批）**：props 走 `component.<name>` propKey → `component-prop` 槽位 → **`CALL_COMPONENT_UPDATE` 指令**（opcode/编解码**早已存在**，缺的只是发射端）；内核明确拒收并上报（"需组件边界调度"——**预期形态**：组件指令归宿主/组件运行时，不归内核几何） |
-| **P1-3** | **组件内部渲染** / 生命周期 / 插槽分发 / emits | 组件无法真正"跑起来" | ✅ **全项已完成（2026-10-03 · 三端同步）**：① 内部渲染（判据 ⑭）② 插槽分发（⑮）③ 作用域插槽（⑰）④ emits 子→父（⑯）⑤ **生命周期**——`@vue:mounted` 成为**一等产物**（`lifecycle` 绑定 + 动作表；挂载完成后触发 → 订阅链 → 内核几何，判据 ⑱ 四证）；★修出静默缺陷：`@vue:mounted` 此前落成"永不触发的 componentEmit 监听"；脚本级钩子（`onMounted` 等）产 `VAPOR_SCRIPT_LIFECYCLE_NOT_RUN` 可见化（端上不跑 script ⇒ 以前完全静默）。**`@vue:unmounted` / 脚本钩子真执行 / v-if 结构摘除为后续批次**（各有精确诊断） |
+| **P1-3** | **组件内部渲染** / 生命周期 / 插槽分发 / emits | 组件无法真正"跑起来" | ✅ **全项已完成（2026-10-03 · 三端同步）**：① 内部渲染（判据 ⑭）② 插槽分发（⑮）③ 作用域插槽（⑰）④ emits 子→父（⑯）⑤ **生命周期**——`@vue:mounted` 成为**一等产物**（`lifecycle` 绑定 + 动作表；挂载完成后触发 → 订阅链 → 内核几何，判据 ⑱ 四证）；★修出静默缺陷：`@vue:mounted` 此前落成"永不触发的 componentEmit 监听"。★**脚本级钩子（B5，2026-10-10）已支持**：`onMounted`/`onUnmounted` 回调体**编译期降级为动作表**（`scriptLifecycle`），端上在「首帧 mount 后」/「宿主卸载时」执行（判据 ㉔ 三端全过）；运行期 `instance.markMounted()/markUnmounted()`。**其余脚本钩子**（`onBeforeMount`/`onUpdated`/`onActivated` 等）仍产 `VAPOR_SCRIPT_LIFECYCLE_NOT_RUN` 可见化。**`@vue:unmounted` / v-if 结构摘除为后续批次**（各有精确诊断） |
 
 **★P1 增量说明（本批做/不做，如实标注）**
 

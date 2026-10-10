@@ -131,6 +131,8 @@ function fingerprint(rep) {
   // ★T2（2026-10-10 · 判据 ㉓）：带参/局部变量/if 三端逐值一致（值序列 + 内核几何宽 ——
   //   同一份产物 + 共享执行器 ⇒ 三端必须同结果；不一致即"有一端没重跑"）
   fp.t2_probe = JSON.stringify([rep.t2_probe?.values ?? [], rep.t2_probe?.widths ?? [], rep.t2_probe?.logs ?? []])
+  // ★B5（2026-10-10 · 判据 ㉔）：脚本生命周期钩子三端逐值一致（阶段 + 值序列 + 内核几何 —— 同一份产物 + 共享执行器）
+  fp.b5_probe = JSON.stringify([rep.b5_probe?.phases ?? [], rep.b5_probe?.values ?? [], rep.b5_probe?.widths ?? []])
   // ★`:style` 对象展开（2026-10-03）：双通道读数三端逐值一致（内核宽度 + 宿主补丁内容）
   fp.styleobj_probe = JSON.stringify([
     rep.styleobj_probe?.width_before,

@@ -171,7 +171,10 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
    *     "钩子体语句 → 动作"的编译通道（与 handler 动作表同族，但生命周期顺序语义更复杂）。
    */
   {
-    const SCRIPT_HOOKS = ['onMounted', 'onUnmounted', 'onBeforeMount', 'onBeforeUnmount', 'onUpdated', 'onActivated', 'onDeactivated']
+    // ★★★B5（2026-10-10）：`onMounted` / `onUnmounted` 现由 `compileEvents` 的 **scriptLifecycle**
+    //   处理（回调体**可降级为动作集** ⇒ 端上真运行；不可降级 ⇒ 由 compileEvents 产精确诊断）。
+    //   ⇒ 从本表**移除**（否则会误报"不会运行"——它们现在会运行）。其余钩子仍不支持（保留诊断）。
+    const SCRIPT_HOOKS = ['onBeforeMount', 'onBeforeUnmount', 'onUpdated', 'onActivated', 'onDeactivated']
     let scriptSrc = ''
     try {
       // 复用唯一的 SFC 解析入口（与 sources.ts 同一处置；解析失败已在上游拦下）
@@ -184,16 +187,13 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
       // 词边界匹配（防 `myonMounted` 误报）；`import { onMounted }` 单独出现不算调用
       const re = new RegExp(`(^|[^\\w$.])${hook}\\s*\\(`)
       if (!re.test(scriptSrc)) continue
-      const supported = hook === 'onMounted'
       diagnostics.push({
         severity: 'warn',
         code: 'VAPOR_SCRIPT_LIFECYCLE_NOT_RUN',
         message: `脚本级 \`${hook}\` 不会在端上运行（Vapor 不执行 script——见端上分工）`,
         hint:
           `把该钩子的逻辑改写为**模板 vnode 钩子**（如 \`<p-view @vue:mounted="..." />\`）` +
-          (supported
-            ? '——`@vue:mounted` 已真支持（动作表 + 首帧 mount 后触发）'
-            : '（本版只支持 @vue:mounted）'),
+          '——`@vue:mounted` 已真支持（动作表 + 首帧 mount 后触发）；`onMounted`/`onUnmounted` 支持脚本级（B5，可降级体）',
       })
     }
   }

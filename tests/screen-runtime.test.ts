@@ -168,4 +168,40 @@ describe('★B1 · 统一运行期（createScreenRuntime）', () => {
     // 排空式：再取为空
     expect(inst.handlerErrors()).toHaveLength(0)
   })
+
+  it('★⑤ B5：脚本钩子 onMounted/onUnmounted 经 markMounted/markUnmounted 真改数据', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-srt-b5-'))
+    fs.mkdirSync(path.join(dir, 'router'), { recursive: true })
+    fs.mkdirSync(path.join(dir, 'pages'), { recursive: true })
+    fs.writeFileSync(
+      path.join(dir, 'pages', 'idx.vue'),
+      `<template>
+  <view class="box" :width="w"><text>{{ w }}</text></view>
+</template>
+<script setup lang="ts">
+import { ref } from 'vue'
+const w = ref(10)
+onMounted(() => { w.value = 99 })
+onUnmounted(() => { w.value = 0 })
+</script>
+`,
+    )
+    fs.writeFileSync(path.join(dir, 'router', 'auto-routes.ts'), `export const routes = [{ name: "idx", path: "pages/idx", component: "../pages/idx.vue" }]\n`)
+    fs.writeFileSync(path.join(dir, 'proteus.config.ts'), `export default { pagesDir: 'pages' }\n`)
+
+    const build = await buildAppRuntimeContent(dir, 'android')
+    const artifacts = JSON.parse(fs.readFileSync(build.outFile, 'utf-8')) as Record<string, ScreenRuntimeArtifact>
+    // 产物带 scriptLifecycle（mounted + unmounted）
+    expect((artifacts['idx'] as { scriptLifecycle?: unknown[] }).scriptLifecycle, 'B5 产物须带 scriptLifecycle').toHaveLength(2)
+
+    const rt = createScreenRuntime({ artifacts, applyOps: () => {}, viewport: { width: 390, height: 844 } })
+    const inst = rt.instance('idx')
+    expect(inst.data().w).toBe(10) // 初始（script 不执行；data 快照）
+    expect(inst.markMounted(), 'mounted 钩子应跑 1 条').toBe(1)
+    expect(inst.data().w).toBe(99) // onMounted 生效
+    expect(inst.markMounted(), 'mounted 幂等（不重跑）').toBe(0)
+    expect(inst.data().w).toBe(99)
+    expect(inst.markUnmounted(), 'unmounted 钩子应跑 1 条').toBe(1)
+    expect(inst.data().w).toBe(0) // onUnmounted 生效
+  })
 })

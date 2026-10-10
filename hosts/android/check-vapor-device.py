@@ -830,6 +830,23 @@ def main() -> int:
             print(f"  ✓ ㉓ ★T2 带参/局部/if：t2x 值 {t2v}（else→else→then）· 内核几何宽 {t2w}（同步）· "
                   f"T3 console {len(t2logs)} 条（如 {t2logs[0]!r}）")
 
+    # ── ㉔ ★★★B5：脚本级生命周期钩子 `onMounted`/`onUnmounted` 端上真执行（2026-10-10）──
+    #   【要证明什么】`onMounted(() => { x = 88 })` / `onUnmounted(() => { x = 0 })` 的**回调体降级为动作**、
+    #     端上在时序点跑（不是"编出来了"）。判据核：b5x 值序列 [0,88,0]（mounted→unmounted）+ 内核几何同步。
+    b5 = rep.get("b5_probe") or {}
+    b5v = [int(v) for v in (b5.get("values") or [])]
+    b5w = [int(v) for v in (b5.get("widths") or [])]
+    if not b5 or len(b5v) < 3:
+        print("  ◐ ㉔ B5 脚本生命周期：本端夹具未覆盖（报告无 b5_probe）——如实跳过")
+    elif b5v != [0, 88, 0]:
+        fail(f"★B5 脚本钩子源值序列不符（期望 [0,88,0]：挂载前→mounted→unmounted）：{b5v} —— onMounted/onUnmounted 有一步没跑")
+        ok = False
+    elif b5w[1:] != b5v[1:]:
+        fail(f"★B5 几何没跟上（宽 {b5w} vs 值 {b5v}）—— 脚本钩子改了源但内核没重排")
+        ok = False
+    else:
+        print(f"  ✓ ㉔ ★B5 脚本生命周期：{b5.get('phases')} · b5x 值 {b5v}（挂载前→mounted→unmounted）· 内核几何宽 {b5w}（同步）")
+
     # 附加观测（不判红，只如实报）
     una = rep.get("uninstantiated_slots", 0)
     if una:

@@ -50,6 +50,17 @@ export interface ScreenRuntimeArtifact {
   handlers: Record<string, HandlerAction[]>
   data: Record<string, unknown>
   /**
+   * ★★**模板 vnode 钩子**（`@vue:mounted`，P1-3）——`{nodeId, phase:'mounted', handler}`。
+   *   缺省省略 ⇒ 既有产物不变。运行期在**首帧 mount 后**跑 `markMounted()` 时执行。
+   */
+  lifecycle?: Array<{ nodeId: number; phase: 'mounted'; handler: string }>
+  /**
+   * ★★★**脚本级生命周期钩子**（B5，2026-10-10）——`onMounted`/`onUnmounted` 回调体降级为动作表
+   *   （`{phase, handler}`）。运行期：`mounted` 在**首帧 mount 后**跑、`unmounted` 在**宿主卸载该屏时**跑。
+   *   缺省省略 ⇒ 既有产物不变。
+   */
+  scriptLifecycle?: Array<{ phase: 'mounted' | 'unmounted'; handler: string }>
+  /**
    * ★★**源文件路径**（决策 #713 · 仅供 dev）：该屏对应的 `.vue`（相对项目根）——缺省省略（release 无）。
    *   ★CLI 侧 `app-runtime-content.ts` 的 `ScreenRuntimeArtifact` 也带它；本接口"同形"必须一并带上，
    *     否则消费方（superapp-runtime / dev 面板 / 测试）读 `art.file` 报 `Property 'file' does not exist`。
@@ -112,6 +123,14 @@ export interface CreateScreenRuntimeOptions {
 export interface ScreenRuntimeInstance {
   /** 供 `screen.mount` 的内容载荷（`{viewport,nodes}`，节点已实例化） */
   content(): { viewport: { width: number; height: number }; nodes: unknown[] }
+  /**
+   * ★★★B5（2026-10-10）：**首帧 mount 完成后**调用——跑该屏的 `mounted` 钩子
+   *   （模板 `@vue:mounted` + 脚本 `onMounted`）；**一次性**（重复调返回 0，无副作用）。
+   *   ★时机由宿主/编排掌握（宿主 `mount` 成功之后）——运行期不猜测"何时挂上了"。
+   */
+  markMounted(): number
+  /** ★B5：宿主**卸载**该屏时调用——跑 `onUnmounted` 钩子。返回跑成的条数。 */
+  markUnmounted(): number
   /** 派发一次语义手势（宿主 collected 命中链 → 这里）；返回是否跑了 handler */
   dispatch(type: string, chain: readonly number[], state?: DispatchState): {
     handled: boolean
@@ -293,9 +312,41 @@ export function createScreenRuntime(opts: CreateScreenRuntimeOptions): ScreenRun
       prof.time('flush', () => slotRt.flush())
     }
 
+    // ★★★B5（2026-10-10）：**生命周期钩子表**——首帧 mount 后跑 mounted（模板 @vue:mounted + 脚本 onMounted），
+    //   宿主卸载该屏时跑 unmounted（脚本 onUnmounted）。均**复用同一 `runHandler`**（动作表 + 出错锚回模板行）。
+    const mountedHooks: string[] = [
+      ...(art.lifecycle ?? []).filter((b) => b.phase === 'mounted').map((b) => b.handler),
+      ...(art.scriptLifecycle ?? []).filter((b) => b.phase === 'mounted').map((b) => b.handler),
+    ]
+    const unmountedHooks: string[] = (art.scriptLifecycle ?? [])
+      .filter((b) => b.phase === 'unmounted')
+      .map((b) => b.handler)
+    let mountedRan = false
+    /** 跑一组钩子（按序）；任一改了数据 ⇒ 走重建链（与 dispatch 同一套）。返回跑成的条数。 */
+    function runHooks(handlers: string[]): number {
+      let fired = 0
+      for (const h of handlers) {
+        try { if (runHandler(h, -1)) fired++ } catch (e) {
+          note(`[screen-runtime] ${name}: 生命周期 handler「${h}」执行失败：${String((e as Error)?.message ?? e)}`)
+        }
+      }
+      if (fired > 0) refreshData()
+      return fired
+    }
+
     return {
       content() {
         return { viewport: inst.viewport, nodes: inst.nodes as unknown[] }
+      },
+      /** ★B5：首帧 mount 完成后由宿主/编排调用（一次性——重复调无副作用）。 */
+      markMounted() {
+        if (mountedRan) return 0
+        mountedRan = true
+        return prof.time('mounted', () => runHooks(mountedHooks))
+      },
+      /** ★B5：宿主卸载该屏时调用（跑 onUnmounted 钩子）。 */
+      markUnmounted() {
+        return prof.time('unmounted', () => runHooks(unmountedHooks))
       },
       dispatch(type, chain) {
         // ★把链从内核 id 空间**翻译回内容局部 id 空间**（`events` 索引是 local 空间）

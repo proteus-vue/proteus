@@ -103,6 +103,11 @@ export interface SuperappRuntime {
    *   同源：**没有回执校验 = 失败不可观测**。宿主持有本值即可在报告里如实落盘失败原因。
    */
   lastHostReply(): string | null
+  /**
+   * ★★★B5（2026-10-10）：宿主**卸载**某屏（缺省=当前屏）时调用——跑该屏 `onUnmounted` 钩子。
+   *   返回跑成的钩子条数。★App 壳当前无"屏卸载"事件（切屏不销毁实例）⇒ 由宿主/dev 显式调用。
+   */
+  markUnmounted(screenName?: string): number
 }
 
 /**
@@ -226,6 +231,9 @@ export function createSuperappRuntime(opts: SuperappRuntimeOptions): SuperappRun
       // 挂载后再设滚动（树已重建；宿主按此值定位）
       if (typeof opts.host.setScroll === 'function') opts.host.setScroll(restore)
       cur = name
+      // ★★★B5（2026-10-10）：**首帧 mount 成功后**跑该屏的 mounted 钩子（@vue:mounted + onMounted）。
+      //   一次性（`markMounted` 幂等）——切回不重跑（与 Vue「mounted 只在挂载时一次」语义一致）。
+      try { rt.instance(name).markMounted() } catch (e) { note(`[superapp-runtime] mounted 钩子异常：${String((e as Error)?.message ?? e)}`) }
       return true
     },
     mountScreenInto(name: string): boolean {
@@ -239,6 +247,9 @@ export function createSuperappRuntime(opts: SuperappRuntimeOptions): SuperappRun
         return false
       }
       cur = name
+      // ★B5：重挂也视作"挂载"（一次性 VM 宿主每次从 content() 取新树）——但 `markMounted` 幂等，
+      //   仅首次真跑（与切屏同：mounted 只在首次挂载跑一次）。
+      try { rt.instance(name).markMounted() } catch (e) { note(`[superapp-runtime] mounted 钩子异常：${String((e as Error)?.message ?? e)}`) }
       return true
     },
     dispatchGesture: dispatch,
@@ -261,5 +272,11 @@ export function createSuperappRuntime(opts: SuperappRuntimeOptions): SuperappRun
     profileStats: () => rt.profileStats(),
     snapshot: () => rt.snapshot(),
     lastHostReply: () => lastHostReply,
+    // ★★★B5（2026-10-10）：宿主**卸载**某屏（缺省当前屏）时调用——跑该屏 `onUnmounted` 钩子。
+    markUnmounted: (screenName?: string) => {
+      const n = screenName ?? cur
+      if (!n || !rt.has(n)) return 0
+      try { return rt.instance(n).markUnmounted() } catch (e) { note(`[superapp-runtime] onUnmounted 异常：${String((e as Error)?.message ?? e)}`); return 0 }
+    },
   }
 }
