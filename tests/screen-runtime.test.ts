@@ -249,7 +249,7 @@ const name = ref('')
 
     expect(inst.data()['name'], '初值为空').toBe('')
     // 模拟宿主输入控件编辑 ⇒ dispatchInput（值 = 输入框内容）
-    const r = inst.dispatchInput(kernelId, 'hello 世界')
+    const r = inst.dispatchInputValue(kernelId, 'hello 世界')
     expect(r.handled, '应命中 input 回写 handler').toBe(true)
     expect(inst.data()['name'], '输入值应写回源（$event）').toBe('hello 世界')
 
@@ -264,7 +264,7 @@ const name = ref('')
     const artifacts = JSON.parse(fs.readFileSync(build.outFile, 'utf-8')) as Record<string, ScreenRuntimeArtifact>
     const rt = createScreenRuntime({ artifacts, applyOps: () => {}, viewport: { width: 390, height: 844 } })
     const inst = rt.instance('idx')
-    const r = inst.dispatchInput(999999, 'x')
+    const r = inst.dispatchInputValue(999999, 'x')
     expect(r.handled).toBe(false)
     expect(inst.data()['name']).toBe('')
   })
