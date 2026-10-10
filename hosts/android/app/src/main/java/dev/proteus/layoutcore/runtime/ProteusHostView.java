@@ -1690,7 +1690,13 @@ public class ProteusHostView extends ViewGroup {
 
     private boolean trRunning = false;
     private int trFrames = 0;
-    private float trLastDtMs = 16.7f;
+    /**
+     * ★★★上一帧的**真实时刻**（wall-clock）——本帧 `dt = now - trLastNs`。
+     *   【为什么必须真实（2026-10-10 修 · 用户实测「安卓涟漪外扩比 Web 快多了」）】此前用**固定** `16.7f`
+     *   ⇒ 在 120Hz 屏（vsync≈8.33ms）上每帧仍推进 16.7ms ⇒ 动画约 **2× 速**（Web 为真实时间轴）。
+     *   `0` = 无上一帧（新循环首帧，用一个标称帧长 16.7ms 起步）。与 `ktCallback`（基准循环）同口径。
+     */
+    private long trLastNs = 0;
 
     /**
      * ★★**过渡动画驱动**（与 `kernelTickStart` 的区别：**时长未知**——由"内核还有没有活跃动画"
@@ -1708,12 +1714,17 @@ public class ProteusHostView extends ViewGroup {
         if (trRunning) return;   // 已在驱动（多次可见性切换合并到同一循环）
         trRunning = true;
         trFrames = 0;
+        trLastNs = 0;            // 新循环：首帧用标称帧长起步
         final long hardStopAtNs = System.nanoTime() + 3_000_000_000L;   // 硬上限 3s
         android.view.Choreographer.getInstance().postFrameCallback(new android.view.Choreographer.FrameCallback() {
             @Override public void doFrame(long frameTimeNanos) {
                 if (!trRunning) return;
-                float dtMs = trLastDtMs;
-                if (dtMs > 100f) dtMs = 100f;
+                // ★★★真实帧间隔（wall-clock）：不能再用固定 16.7ms——120Hz 屏上那会 2× 速（见 trLastNs 注释）
+                final long now = System.nanoTime();
+                float dtMs = trLastNs == 0 ? 16.7f : (now - trLastNs) / 1e6f;
+                trLastNs = now;
+                if (dtMs > 100f) dtMs = 100f;   // 首帧/卡顿保护
+                if (dtMs <= 0f) dtMs = 16.7f;
                 applyTickBin(RustLayout.animTickBin(coreHandle, dtMs));
                 trFrames++;
                 // 停判据：内核自报活跃数（权威）——0 = 全结束
