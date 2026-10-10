@@ -3,6 +3,7 @@
 > 状态：**设计已定稿，待度量基线**
 > 版本：v1 · 2026-10-10
 > 定位：`proteus-performance-plan/` 的**输入延迟专项**——`00-baseline-and-roadmap.md` 攻的是「启动 + 批处理 + 拍平」（P0-a/P0-b **已兑现**，见 §1.1），本篇攻**触摸 → 视觉反馈这条链路**。
+> ★★★**验收标准 = `15-dactyl-demo.md`（Dactyl 触感穹顶）**——本文件是方法论/判据母体；「专项完成」的判据是 Dactyl 的 D0–D4 DoD 全过（用户 2026-10-10 定义）。
 > 关联：`07-benchmark-baseline.md`（JSI P99 < 0.5ms 口径）· `docs/Proteus_Benchmark案例规格.md`（输入延迟 P95 ≤ 1 帧）· `docs/对标Benchmark执行Checklist.md`（量法口径）· `packages/host-abi`（批处理红线）· `docs/Proteus_JS引擎选型与可插拔方案.md`
 > 相关决策：**#767**（立项）· #768（S1 输入旁路）· #769（S2 零拷贝）…（逐腿登记）
 > 批次：**C 批（`11`–`14`）· 编号 14 · 当前主攻**（`README.md` 索引已登记）
