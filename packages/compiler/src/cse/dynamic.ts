@@ -579,6 +579,9 @@ function irFieldCandidatesOf(prop: string): string[] {
     'align-self': 'alignSelf',
     // ★★★justify-self 项（2026-10-06）：网格项行内轴自对齐（动态类字段候选——与 compute.ts 对齐）
     'justify-self': 'justifySelf',
+    // ★★★justify-items 项（2026-10-08 / 2026-10-10 补）：网格容器内子项行内轴对齐
+    //   （动态类字段候选——compute.ts 早有此映射，本表此前漏 ⇒ 动态 :class 的 justify-items 静默不下发）。
+    'justify-items': 'justifyItems',
     // ★★★word-break 项（2026-10-06）：行内断词策略（动态类字段候选）
     'word-break': 'wordBreak',
     'box-sizing': 'boxSizing',

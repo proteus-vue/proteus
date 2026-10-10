@@ -132,6 +132,12 @@ export const ENUM_LAYOUT_FIELDS: Record<string, { values: readonly string[]; def
   alignContent: { values: ['stretch', 'flex-start', 'start', 'flex-end', 'end', 'center', 'space-between', 'space-around', 'space-evenly'], default: 0 },
   // align-self：0=auto（⇒ 清空 None，回落父 justify-items，与 CSS 语义一致）
   alignSelf: { values: ['auto', 'flex-start', 'start', 'flex-end', 'end', 'center', 'baseline', 'stretch'], default: 0 },
+  // ★★★B3c 补（2026-10-10）：justify-self / justify-items（网格项/容器行内轴自对齐；内核
+  //   `parse_justify_self`/`parse_justify_items` 已支持，B3c 漏登记动态类索引臂 ⇒ 本批补齐）。
+  //   justify-self：0=auto（⇒ 清空 None，回落父 justify-items）；其余为闭集。
+  justifySelf: { values: ['auto', 'normal', 'start', 'end', 'flex-start', 'flex-end', 'self-start', 'self-end', 'center', 'stretch'], default: 0 },
+  // justify-items：容器级（0=normal ⇒ stretch，Web 对 grid 项的 computed 语义）
+  justifyItems: { values: ['normal', 'start', 'end', 'flex-start', 'flex-end', 'self-start', 'self-end', 'center', 'stretch'], default: 0 },
 }
 
 /** 枚举字段值 → 索引（大小写不敏感）；未识别 ⇒ null（调用方回退默认）。 */

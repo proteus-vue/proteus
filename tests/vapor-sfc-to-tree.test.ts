@@ -245,6 +245,21 @@ describe('★批次 30 · 动态 :class（对齐 Web · 削减胶水）', () => 
     expect(byKey.get('layout.alignSelf'), 'align-self:end ⇒ 索引 4').toBe(4)
   })
 
+  it('⑦b ★B3c 补：动态 :class 的 justify-self / justify-items（枚举索引编码，2026-10-10）', () => {
+    const SFC = "<template><view :class=\"{ on: x }\">x</view></template>\n<script setup>const x=ref(1)</script>\n<style>.on{justify-self:center;justify-items:end}</style>"
+    const { table, diagnostics } = buildVaporSubscriptions(SFC, 'b3c-supp.vue')
+    expect(diagnostics.map((d) => d.code)).not.toContain('VAPOR_DYNCLASS_LAYOUT_UNSUPPORTED')
+    const rt = new SlotRuntime(new PropKeyTable(), new StringPool(), () => {})
+    const vapor = new VaporRuntime(table, rt, VaporRuntime.buildEvaluators(table.evaluators), new ListRegistry())
+    vapor.writeSlotsOfSource('x', { read: (n: string) => ({ x: true } as Record<string, unknown>)[n] } as never)
+    const snap = rt.buffer.snapshot() as unknown as Array<{ op: number; keyId?: number; value?: number }>
+    const byKey = new Map(snap.filter((o) => o.op === 2).map((o) => [o.keyId === undefined ? undefined : rt.keys.keyOf(o.keyId), o.value]))
+    // justifySelf: auto0 normal1 start2 end3 flex-start4 flex-end5 self-start6 self-end7 center8 stretch9
+    expect(byKey.get('layout.justifySelf'), 'justify-self:center ⇒ 索引 8').toBe(8)
+    // justifyItems: normal0 start1 end2 flex-start3 flex-end4 self-start5 self-end6 center7 stretch8
+    expect(byKey.get('layout.justifyItems'), 'justify-items:end ⇒ 索引 2').toBe(2)
+  })
+
   it('⑧ ★B3d：动态 :class 的**字符串布局字段**（grid 模板）走内核 SET_STYLE_STR', () => {
     // 该 class 同时含数值（gap）与字符串（grid-template-columns）字段：
     //   · 数值字段进 CSE 计划（bitmap）；字符串字段不在计划里 ⇒ 运行期必须从**线性规则**补
