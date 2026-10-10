@@ -77,10 +77,16 @@
       <div class="pad" />
     </div>
 
-    <!-- L2 · 跟手：拖动穹顶旋钮（尖峰随指迁移由宿主叠加绘制；本元素是跟手锚点） -->
+    <!-- L2 · 跟手：拖动穹顶平台（整条随指迁移 = 尖峰场随指；本元素是跟手锚点，宽条好命中） -->
     <div class="section-title">L2 · 跟手（拖我）</div>
     <div class="track-wrap">
-      <div class="dome-knob" v-follow="{ axis: 'x' }" />
+      <div class="dome-knob" v-follow="{ axis: 'x' }">
+        <div class="dome-peak"></div>
+        <div class="dome-peak"></div>
+        <div class="dome-peak"></div>
+        <div class="dome-peak"></div>
+        <div class="dome-peak"></div>
+      </div>
     </div>
   </div>
 </template>
@@ -136,10 +142,22 @@
   border-radius: 14px;
 }
 .dome-knob {
-  width: 56px;
-  height: 56px;
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  width: 220px;
+  height: 70px;
   margin: 0 8px;
+  padding: 0 10px;
+  background-color: #10202e;
+  border-radius: 14px;
+}
+/* 铁磁流体尖峰（静态造型；跟手 = 整条随指迁移，纯合成平移） */
+.dome-peak {
+  width: 28px;
+  height: 46px;
+  margin: 0 3px;
   background-color: #39D0FF;
-  border-radius: 28px;
+  border-radius: 10px 10px 4px 4px;
 }
 </style>
