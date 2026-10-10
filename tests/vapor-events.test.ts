@@ -594,10 +594,14 @@ describe('Vapor 事件编译 · ★★★B4-T1（v-model 回写契约：v-model 
     ])
   })
 
-  it('组件上的 v-model ⇒ 诊断（走组件事件通道），不产出 input 回写', () => {
+  it('★B4-T3a：组件 v-model 脱糖 ⇒ @update:modelValue（componentEmit）+ set 动作（不产 input）', () => {
     const r = compileEvents(sfc(`<Kid v-model="name" />`))
-    expect(r.diagnostics.map((d) => d.message).join(' | ')).toContain('组件上的 v-model 未支持')
-    expect(r.events.filter((e) => e.event === 'input')).toHaveLength(0)
+    expect(r.diagnostics, '组件 v-model 已支持，零诊断').toHaveLength(0)
+    const ev = r.events.find((e) => e.event === 'update:modelValue')!
+    expect(ev, '组件 v-model ⇒ @update:modelValue 绑定').toBeTruthy()
+    expect(ev.componentEmit, '走组件 emit 路由（子→父）').toBe(true)
+    expect(r.handlers[ev.handler]).toEqual([{ op: 'set', source: 'name', program: { k: 'root', name: '$event' } }])
+    expect(r.events.filter((e) => e.event === 'input'), '组件不产 input 回写（那是原生元素）').toHaveLength(0)
   })
 
   it('成员路径 v-model="o.x" ⇒ 诊断（暂只支持纯标识符），不产出回写', () => {
@@ -612,3 +616,13 @@ describe('Vapor 事件编译 · ★★★B4-T1（v-model 回写契约：v-model 
     expect(r.events.filter((e) => e.event === 'input')).toHaveLength(0)
   })
 })
+
+  it('★B4-T3a：命名 v-model:foo / 成员路径 / 修饰符 ⇒ 诊断（本批只做默认纯标识符）', () => {
+    const r1 = compileEvents(sfc(`<Kid v-model:foo="name" />`))
+    expect(r1.diagnostics.map((d) => d.message).join(' | ')).toContain('命名 v-model')
+    const r2 = compileEvents(sfc(`<Kid v-model="o.x" />`))
+    expect(r2.diagnostics.map((d) => d.message).join(' | ')).toContain('纯标识符')
+    const r3 = compileEvents(sfc(`<Kid v-model.trim="name" />`))
+    expect(r3.diagnostics.map((d) => d.message).join(' | ')).toContain('修饰符')
+    for (const r of [r1, r2, r3]) expect(r.events.filter((e) => e.event === 'update:modelValue')).toHaveLength(0)
+  })

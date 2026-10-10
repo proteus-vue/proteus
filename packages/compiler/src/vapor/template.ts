@@ -3404,7 +3404,9 @@ export function buildLayoutTemplate(
         //   仍缺的是**三端原生输入控件**（键盘/编辑框：Android EditText · iOS UITextField · 鸿蒙 TextInput）——
         //   控件未接前 `input` 事件无源 ⇒ **端上输入暂不生效**。⇒ 保留诊断，如实标注此缺口（不静默半支持）。
         //   ★`v-model` 的**修饰符**（`.trim/.number/.lazy`）语义（回写值转换）依赖宿主，通道缺失时一并标注。
-        if (p.type === 7 && p.name === 'model') {
+        //   ★B4-T3a（2026-10-10）：**组件 `v-model` 不在此诊断**——它脱糖为 `:model-value` + `@update:modelValue`
+        //     走**组件 emit 路由**（已支持），不依赖宿主输入控件（见 events.ts 组件 v-model 分支）。
+        if (p.type === 7 && p.name === 'model' && !/^[A-Z]/.test(tag)) {
           const mods = (p.modifiers ?? [])
             .map((m) => (typeof m === 'string' ? m : (m?.content ?? '')))
             .filter(Boolean)

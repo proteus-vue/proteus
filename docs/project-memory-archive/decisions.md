@@ -2659,3 +2659,10 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **③ 验证**：`superapp-runtime.test.ts` +1（真编译产物：`<input v-model="name"/><text>{{name}}</text>` ⇒ `rt.dispatchInput(ev.nodeId,'abc')` ⇒ `snapshot().home.name`='abc'=**回写**）；`entry-superapp` 副本经 `sync-host-bridge` 同步（`check:bridge-sync` 绿）；bundle-superapp 编译绿（600.2 KB）；vue-tsc 0。
 **④ 诚实边界**：本轮交付的是 **JS/框架半**（宿主→JS 的驱动入口，三端同形、可 JSON 测）。**三端宿主建原生输入控件（Android EditText / iOS UITextField / 鸿蒙 TextInput）为 B4-T2b-host（需设备）**——未接前 `__proteusSuperappInput` 无调用方、端上输入仍无源（`VAPOR_VMODEL_NO_INPUT_CONTROL` 保留）。
 **⑤ 教训**：a) ★★**"库运行期"与"入口脚本"要分层测**（全局 `__proteusSuperappInput` 注册在入口脚本，库级测试不加载它——首版测试误在库级断言全局入口 ⇒ 删掉，入口↔库连接归 bundle 编译/真机判据）；b) ★**宿主驱动入口三端同形**（`__proteusSuperappGesture` 已有先例，`__proteusSuperappInput` 照抄形态——宿主只需"建控件 + 调它"）；c) ★**可 JSON/真编译产物验证的"框架半"先落**，把"需设备"的宿主半明确标注。★下一步：**B4-T2b-host 三端原生输入控件**（需设备）。计划 `docs/vapor-vmodel-writeback-plan.md`（T1/T2a/T2b-JS/T2b-host/T3）。
+
+765. **★★Vapor B4-T3a 交付：组件 `v-model` 脱糖（`<Kid v-model="x">` ⇒ `:model-value` 下行 + `@update:modelValue` 上行，走**已实现**的组件 emit 路由；**不依赖宿主输入控件**）**（2026-10-10）：
+**① 承接**：B4 的 T1（回写契约）/T2a（屏实例派发）/T2b-JS（壳级入口+全局）后，T3 里**组件 v-model**这一项可**纯编译期 + 复用既有 emit 路由**闭环（与原生元素 v-model 不同：上行是"子→父"直接通知，已支持）。
+**② 交付**：a) `events.ts` 的 `collectEvents` 把组件上的 `v-model="x"` 编成 **`update:modelValue` 事件绑定**（`componentEmit:true`），handler = `set x = $event`（下行 `:model-value` 由 deps 已发 `component.modelValue`）；b) `template.ts` 的 `VAPOR_VMODEL_NO_INPUT_CONTROL` 诊断**只对原生元素**（组件 v-model 不再诊断——它不需要宿主输入控件）。**形态限定**（其余诊断）：命名 `v-model:foo` / 成员路径 `o.x` / 修饰符 ⇒ 各产诊断。
+**③ 验证**：`vapor-events.test.ts`（组件 v-model ⇒ `@update:modelValue`+`componentEmit`+`set name=$event`，零诊断；命名/成员/修饰符 ⇒ 诊断）；`test:coupled` 绿。★组件 emit 路由本身由判据 ⑯（子→父 `$emit`）早已三端验证 ⇒ 本项端上**真生效**（不依赖后续宿主控件）。
+**④ 诚实边界**：本项只做**默认 `v-model="x"`（纯标识符、无修饰符）**的组件形态；命名 v-model、成员路径、修饰符仍诊断（另批）。组件内是否含原生输入控件由子组件决定（若含，仍需 B4-T2b-host）。
+**⑤ 教训**：a) ★★**"组件 v-model"与"原生 v-model"是两条通道**——组件走 emit（已支持，可纯编译期闭环），原生走宿主输入控件（需设备）⇒ **别把两者当一件事**（前者立即可交付且真生效）；b) ★**能复用既有路由（组件 emit）就不新造**（组件 v-model 的上行 = `@update:modelValue` = 组件自定义事件绑定）。★余：B4-T2b-host（三端原生控件·需设备）· B4-T3 余项（修饰符/成员路径）。
