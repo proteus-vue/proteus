@@ -28,6 +28,8 @@ import {
   createDispatchState,
   evalExpr,
   runHandlerActions,
+  collectTransitionAnims,
+  collectDirectiveAnims,
 } from '@proteus-vue/slot-runtime'
 import type {
   LayoutTemplate,
@@ -37,6 +39,7 @@ import type {
   DispatchState,
   EvalContext,
   HandlerAction,
+  DirectiveTriggerState,
 } from '@proteus-vue/slot-runtime'
 // ★★★运行期阶段耗时自采样（CPU Profiler · 决策 #715）——dev-only 的框架级归因
 import { createRuntimeProfiler, NULL_PROFILER, type RuntimeProfiler, type ProfEntry } from './runtime-profiler'
@@ -116,6 +119,16 @@ export interface CreateScreenRuntimeOptions {
    *   缺省 ⇒ 转 `onNote`（面板可据前缀归类）；dev 面板可另接本出口到 Console 页（保留 level）。
    */
   onLog?: (level: 'log' | 'info' | 'warn' | 'error' | 'debug', values: unknown[], line: string) => void
+  /**
+   * ★★★**宿主动画入口**（"跳变驱动动画"的最后一环，本批）——`{anims:[{nodeId,kind,from,to,durMs,curve}]}`
+   *   → 宿主交给内核动画通道（`kernelAnimStart` + 帧循环）。
+   *   【触发时机】① `<Transition>`：`v-show` 等**可见性翻转**（`VaporRuntime.takeVisibilityChanges`）；
+   *   ② `v-animate`：指令**值表达式变化**（或首评 truthy）。两段触发逻辑收敛在
+   *   `@proteus-vue/slot-runtime` 的 `collectTransitionAnims`/`collectDirectiveAnims`（一处实现）。
+   *   【缺省行为】未接 ⇒ **不静默**：记一次 note（"有 N 条动画待播但宿主未实现 animStart"由消费方在
+   *   首次触发时如实提示）；同时仍**排空**可见性日志（防无界增长）。
+   */
+  animStart?: (animsJson: string) => void
   /**
    * ★★★**运行期阶段耗时自采样**（CPU Profiler · 决策 #715）——dev 构建开启：给 `instantiate` /
    *   `flush` / `dispatch` / 每个 handler 计时，归因"卡在哪一段"。缺省 false ⇒ **零开销**（空实现）。
@@ -344,6 +357,7 @@ export function createScreenRuntime(opts: CreateScreenRuntimeOptions): ScreenRun
       rebuild()
       prof.time('relink', () => vapor.relink(evalCtx))
       prof.time('flush', () => slotRt.flush())
+      drainAnims()
     }
 
     // ── ★★★数据泵（通用原语 `v-pump`）：宿主按帧驱动、内建生成器产新值 → 写数据源 ──
@@ -370,6 +384,34 @@ export function createScreenRuntime(opts: CreateScreenRuntimeOptions): ScreenRun
       if (hasSrc) prof.time('relink', () => vapor.writeSlotsOfSource(name, evalCtx))
       else refreshData()
       prof.time('flush', () => slotRt.flush())
+      drainAnims()
+    }
+
+    // ── ★★★"跳变驱动动画"（本批，App 壳运行期）──────────────────────────────────
+    //   两段触发（`<Transition>` 可见性 + `v-animate` 指令值变化）由共享的 `collectTransitionAnims`/
+    //   `collectDirectiveAnims`（@proteus-vue/slot-runtime，唯一实现）产出"该播哪些" ⇒ 交 `opts.animStart`。
+    //   ★此前 App 壳**从未接线** ⇒ `v-animate`/`<Transition>` 在真机（App 运行期）不播（只在装置桥播）。
+    const directiveState = new Map<string, DirectiveTriggerState>()
+    let animStartNoteDedup = false
+    /** 排空可见性变化 + 扫指令 ⇒ 待播动画 ⇒ `opts.animStart`（无实现/无动画 ⇒ 静默且无副作用）。 */
+    function drainAnims(): void {
+      const anims = [
+        ...collectTransitionAnims(art.tpl.nodes, vapor.takeVisibilityChanges()),
+        ...collectDirectiveAnims(art.tpl.nodes, read, directiveState),
+      ]
+      if (anims.length === 0) return
+      if (typeof opts.animStart !== 'function') {
+        if (!animStartNoteDedup) {
+          animStartNoteDedup = true
+          note(`[screen-runtime] ${name}: 有 ${anims.length} 条动画待播，但宿主未实现 animStart（过渡/指令动画不会发生）`)
+        }
+        return
+      }
+      try {
+        opts.animStart(JSON.stringify({ anims }))
+      } catch (e) {
+        note(`[screen-runtime] ${name}: animStart 调用失败：${String((e as Error)?.message ?? e)}`)
+      }
     }
 
     // ★★★B5（2026-10-10）：**生命周期钩子表**——首帧 mount 后跑 mounted（模板 @vue:mounted + 脚本 onMounted），
@@ -402,7 +444,11 @@ export function createScreenRuntime(opts: CreateScreenRuntimeOptions): ScreenRun
       markMounted() {
         if (mountedRan) return 0
         mountedRan = true
-        return prof.time('mounted', () => runHooks(mountedHooks))
+        const n = prof.time('mounted', () => runHooks(mountedHooks))
+        // ★"跳变驱动动画"挂载时机（v-animate 的 mounted 语义：首评 truthy ⇒ 播一次）——
+        //   此时该屏数据已就绪，指令值表达式求值有效；无指令/无可播 ⇒ 零副作用。
+        drainAnims()
+        return n
       },
       /** ★B5：宿主卸载该屏时调用（跑 onUnmounted 钩子）。 */
       markUnmounted() {

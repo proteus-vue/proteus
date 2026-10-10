@@ -230,6 +230,9 @@ interface SuperappRuntimeHostShape {
   mount(treeJson: string): string
   applyOps(opsJson: string): string
   onGesture?(cbName: string): void
+  /** ★★★"跳变驱动动画"（本批）：`v-animate`/`<Transition>` 触发 ⇒ 宿主 `animStart`（内核动画通道）。
+   *  宿主未实现 ⇒ 不传（运行期如实记 note，不静默）。 */
+  animStart?(animsJson: string): string
 }
 ;(globalThis as unknown as { __proteusSuperappRender?: (argsJson: string) => string })
   .__proteusSuperappRender = (argsJson: string) => {

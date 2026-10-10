@@ -40,7 +40,7 @@
 import { instantiateTemplate, ListRegistry, PropKeyTable, StringPool, SlotRuntime, VaporRuntime, decodeOps, evalExpr, OpCode, runHandlerActions } from '@proteus-vue/slot-runtime'
 // ★★P2-3（2026-10-03）：事件派发语义（含修饰符 .stop/.self/.once）下沉到共享实现——
 //   本桥不再内联"链序 + 修饰符"逻辑（iOS/Harmony 接同一份 ⇒ 不会漂移）
-import { dispatchGesture, indexEventBindings, createDispatchState, directiveShouldPlay } from '@proteus-vue/slot-runtime'
+import { dispatchGesture, indexEventBindings, createDispatchState, directiveShouldPlay, collectTransitionAnims } from '@proteus-vue/slot-runtime'
 import type { EventBinding, EventIndex, DispatchState, HandlerAction } from '@proteus-vue/slot-runtime'
 // ★★★A/B 对照（2026-10-01）：**同一份 SFC 的第二条路**——Vue 运行时渲染。
 //   `abRender` 由构建期用 **@vue/compiler-sfc** 从同一份 SFC 编出（见 gen-vapor-fixture.mjs）。
@@ -1602,16 +1602,8 @@ function drainTransitions(
 ): number {
   const changes = vapor.takeVisibilityChanges()
   if (changes.length === 0) return 0
-  const anims: Array<Record<string, unknown>> = []
-  for (const ch of changes) {
-    const node = tpl.nodes.find((n) => n.id === ch.nodeId)
-    const tr = node?.transition
-    if (!tr) continue   // 无过渡声明 ⇒ 只有可见性切换（正常路径，不记 note——否则每次 v-show 都刷屏）
-    const channels = ch.visible ? tr.enter : tr.leave
-    for (const c of channels) {
-      anims.push({ nodeId: ch.nodeId, kind: c.kind, from: c.from, to: c.to, durMs: tr.durMs, curve: tr.curve })
-    }
-  }
+  // ★共享实现（唯一）：可见性变化 + 模板声明 → 待播动画（与 App 壳运行期同一份 `collectTransitionAnims`）
+  const anims = collectTransitionAnims(tpl.nodes as never, changes)
   if (anims.length === 0) return 0
   if (typeof proteusHost.animStart !== 'function') {
     notes.push(`<Transition> 有 ${anims.length} 条动画待播，但宿主未实现 animStart（过渡不会发生）`)

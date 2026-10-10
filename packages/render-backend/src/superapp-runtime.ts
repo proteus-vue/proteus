@@ -32,6 +32,12 @@ export interface SuperappHostPorts {
   getScroll?(): number
   /** 设置滚动偏移（逻辑像素；前进=0 / 返回=该页上次的值）。 */
   setScroll?(offset: number): void
+  /**
+   * ★★★**宿主动画入口**（"跳变驱动动画"的最后一环）——`v-animate` / `<Transition>` 触发时，
+   *   运行期把 `{anims:[{nodeId,kind,from,to,durMs,curve}]}` 交宿主 → 内核动画通道 + 帧循环。
+   *   可选：宿主未实现 ⇒ 运行期**如实记 note**（动画不播，但不静默）；三端逐一接（先 Android）。
+   */
+  animStart?(animsJson: string): string
 }
 
 export interface SuperappRuntimeOptions {
@@ -150,6 +156,9 @@ export function createSuperappRuntime(opts: SuperappRuntimeOptions): SuperappRun
     ...(opts.onError ? { onError: opts.onError } : {}),
     ...(opts.onLog ? { onLog: opts.onLog } : {}),
     ...(opts.profile ? { profile: true } : {}),   // ★CPU Profiler（决策 #715）
+    // ★★★"跳变驱动动画"（本批）：`v-animate`/`<Transition>` 触发 ⇒ 交宿主 `animStart`（内核动画通道）。
+    //   宿主未实现 ⇒ 不传（运行期据此如实记 note；三端逐一接，先 Android）。
+    ...(opts.host.animStart ? { animStart: (j: string) => { opts.host.animStart!(j) } } : {}),
   })
   let cur = ''
   // ★最近一次宿主 mount 回执（见 lastHostReply 注释——失败必须可观测，不得静默）

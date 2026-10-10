@@ -309,3 +309,112 @@ const name = ref('')
     expect(ops.length, '泵写入产生增量指令').toBeGreaterThan(0)
   })
 })
+
+describe('★★★"跳变驱动动画"（App 壳运行期：v-animate / <Transition> → opts.animStart）', () => {
+  /** 一页含两段触发：`v-animate`（值变化）+ `<Transition>`（v-show 可见性翻转）。 */
+  function makeAnimProject(): string {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-anim-'))
+    fs.mkdirSync(path.join(dir, 'router'), { recursive: true })
+    fs.mkdirSync(path.join(dir, 'pages'), { recursive: true })
+    fs.writeFileSync(
+      path.join(dir, 'pages', 'idx.vue'),
+      `<template>
+  <view class="box">
+    <text class="pulse" v-animate:fade="lit">{{ n }}</text>
+    <view class="toggle" @tap="flip">flip</view>
+    <Transition name="fade">
+      <text class="panel" v-show="shown">panel</text>
+    </Transition>
+  </view>
+</template>
+<script setup lang="ts">
+import { ref } from 'vue'
+const n = ref(0)
+const lit = ref(false)
+const shown = ref(false)
+function flip() { shown.value = !shown.value }
+</script>
+`,
+    )
+    fs.writeFileSync(path.join(dir, 'router', 'auto-routes.ts'), `export const routes = [{ name: "idx", path: "pages/idx", component: "../pages/idx.vue" }]\n`)
+    fs.writeFileSync(path.join(dir, 'proteus.config.ts'), `export default { pagesDir: 'pages' }\n`)
+    return dir
+  }
+
+  it('① v-animate：值变化 ⇒ 报 animStart（通道来自编译产物）', async () => {
+    const dir = makeAnimProject()
+    const build = await buildAppRuntimeContent(dir, 'android')
+    const artifacts = JSON.parse(fs.readFileSync(build.outFile, 'utf-8')) as Record<string, ScreenRuntimeArtifact>
+    // 产物：指令节点带 channels（预设 → 通道在编译期解析）
+    const animNodes = artifacts['idx']!.tpl.nodes.filter((n) => (n as { directives?: unknown[] }).directives?.length)
+    expect(animNodes.length, '模板应有 v-animate 指令节点').toBeGreaterThan(0)
+
+    const calls: Array<{ anims: Array<{ nodeId: number; kind: number; from: number; to: number }> }> = []
+    const rt = createScreenRuntime({
+      artifacts,
+      applyOps: () => {},
+      viewport: { width: 390, height: 844 },
+      animStart: (j) => calls.push(JSON.parse(j)),
+    })
+    const inst = rt.instance('idx')
+    inst.markMounted()
+    // `lit` 首值 false（falsy）⇒ 首评不播
+    expect(calls.length, 'falsy 首评 ⇒ 不播').toBe(0)
+
+    // 改 lit=true（走数据变更出口 dispatch 的同类通路——用 writeSource 直接驱动源，等价于页面数据变化）
+    inst.writeSource('lit', true)
+    expect(calls.length, '值变化(true) ⇒ 播一次').toBe(1)
+    expect(calls[0]!.anims.length, 'fade 预设至少一条通道').toBeGreaterThan(0)
+    expect(calls[0]!.anims[0]!.nodeId, '动画打在指令节点上').toBe(animNodes[0]!.id)
+
+    // 再改回 false（falsy）⇒ 不播
+    inst.writeSource('lit', false)
+    expect(calls.length, 'falsy ⇒ 不播').toBe(1)
+    // 再改回 true ⇒ 又播
+    inst.writeSource('lit', true)
+    expect(calls.length, '再次变化 ⇒ 再播').toBe(2)
+  })
+
+  it('② <Transition>：v-show 可见性翻转 ⇒ 报 animStart（enter/leave 通道）', async () => {
+    const dir = makeAnimProject()
+    const build = await buildAppRuntimeContent(dir, 'android')
+    const artifacts = JSON.parse(fs.readFileSync(build.outFile, 'utf-8')) as Record<string, ScreenRuntimeArtifact>
+    // 产物：可见性槽位（v-show）+ 过渡声明的节点
+    const trNodes = artifacts['idx']!.tpl.nodes.filter((n) => (n as { transition?: unknown }).transition)
+    expect(trNodes.length, '模板应有 <Transition> 规格节点').toBeGreaterThan(0)
+
+    const calls: Array<{ anims: Array<{ nodeId: number; kind: number }> }> = []
+    const rt = createScreenRuntime({
+      artifacts,
+      applyOps: () => {},
+      viewport: { width: 390, height: 844 },
+      animStart: (j) => calls.push(JSON.parse(j)),
+    })
+    const inst = rt.instance('idx')
+    inst.markMounted()
+    calls.length = 0   // 清掉挂载期的任何触发（本用例只看可见性翻转）
+
+    // shown: false→true ⇒ 可见性翻转 ⇒ enter 通道
+    inst.writeSource('shown', true)
+    expect(calls.length, '可见性翻转 ⇒ 播一次').toBe(1)
+    expect(calls[0]!.anims.length, 'enter 至少一条通道').toBeGreaterThan(0)
+
+    // true→false ⇒ leave 通道
+    const before = calls.length
+    inst.writeSource('shown', false)
+    expect(calls.length, '再次翻转 ⇒ 再播（leave）').toBe(before + 1)
+  })
+
+  it('③ 未接 animStart ⇒ 如实 note（不静默），且不炸', async () => {
+    const dir = makeAnimProject()
+    const build = await buildAppRuntimeContent(dir, 'android')
+    const artifacts = JSON.parse(fs.readFileSync(build.outFile, 'utf-8')) as Record<string, ScreenRuntimeArtifact>
+    const notes: string[] = []
+    const rt = createScreenRuntime({ artifacts, applyOps: () => {}, viewport: { width: 390, height: 844 }, onNote: (n) => notes.push(n) })
+    const inst = rt.instance('idx')
+    inst.markMounted()
+    expect(() => inst.writeSource('lit', true)).not.toThrow()
+    expect(notes.join('\n'), '未接 animStart ⇒ 记 note').toContain('animStart')
+  })
+})
+

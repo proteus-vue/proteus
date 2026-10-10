@@ -8,9 +8,11 @@
 </route>
 
 <!-- Dactyl L3 · 沸腾（§4.4，最锋利的一关）：跟手**同时**后台高频数据更新。
-     数字场用 `v-pump` 声明的**运行期数据源**（宿主按 hz 周期产新值）驱动——每格绑同一个泵源数字，
-     与跟手（`v-follow`，内核合成平移，零 JS）**同时**进行 = "数据更新 / 动画打架"的压力源。
-     ★泵走**数据通路**（宿主按频率 → 数据源 → 既有 slot-runtime 增量）；跟手仍**零 JS**。 -->
+     ① 数字场用 `v-pump` 声明的**运行期数据源**（宿主按 hz 周期产新值）驱动——每格绑同一个泵源数字，
+        与跟手（`v-follow`，内核合成平移，零 JS）**同时**进行 = "数据更新 / 动画打架"的压力源。
+     ② 节奏心用**第二个泵**（低频）+ `v-animate:zoom` —— **数据跳变驱动动画**（跳变→播内核动画）：
+        这是"跳变驱动动画"在 App 壳运行期的落地（触发逻辑在共享层，宿主只提供 animStart 通道）。
+     ★泵走**数据通路**（宿主按频率 → 数据源 → 既有 slot-runtime 增量）；跟手仍**零 JS**；动画走内核动画通道。 -->
 <template>
   <div class="page">
     <div class="dactyl-title">L3 · 沸腾</div>
@@ -25,6 +27,9 @@
       <div class="cell">{{ p0 }}</div><div class="cell">{{ p0 }}</div><div class="cell">{{ p0 }}</div><div class="cell">{{ p0 }}</div><div class="cell">{{ p0 }}</div><div class="cell">{{ p0 }}</div>
       <div class="cell">{{ p0 }}</div><div class="cell">{{ p0 }}</div><div class="cell">{{ p0 }}</div><div class="cell">{{ p0 }}</div><div class="cell">{{ p0 }}</div><div class="cell">{{ p0 }}</div>
       <div class="cell">{{ p0 }}</div><div class="cell">{{ p0 }}</div><div class="cell">{{ p0 }}</div><div class="cell">{{ p0 }}</div><div class="cell">{{ p0 }}</div><div class="cell">{{ p0 }}</div>
+    </div>
+    <div class="throb" v-pump="{ src: 'beat', hz: 3, gen: { kind: 'int', min: 1, max: 2 } }">
+      <div class="core" v-animate:zoom="beat"></div>
     </div>
   </div>
 </template>
@@ -46,5 +51,17 @@
   color: #9fe8ff;
   font-size: 15px;
   text-align: center;
+}
+/* 节奏心：第二个泵（3Hz）驱动 `v-animate:zoom` —— 每次数据跳变播一次内核缩放动画。 */
+.throb {
+  display: flex;
+  justify-content: center;
+  margin-top: 14px;
+}
+.core {
+  width: 44px;
+  height: 44px;
+  background-color: #39d0ff;
+  border-radius: 22px;
 }
 </style>
