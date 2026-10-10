@@ -2822,3 +2822,10 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **③ 交付·全链**：`ffi.rs` `proteus_layout_follow_field`（容器 id + 场参 → 合并 updates，复用 `collect_updates`）· JNI `nativeLayoutFollowField` + `RustLayout.layoutFollowField` · 编译器 `v-follow={field:{falloff,minScale,maxScale,rotate}}`（在既有 `interpretFollowSpec` 内扩展，复用 all-or-nothing）⇒ 折 `followField*` 字段 · 宿主 `ProteusHostView` 场跟手（DOWN 记驱动指 / MOVE 焦点直喂内核 / UP 结束）+ `VaporRenderHost.collectFollowFields` 注入 · L2 页 = 48 根尖峰（场容器直接叶）+ `v-follow={field:…}`。
 **④ 真机验证**：针林内拖动 ⇒ **指尖附近尖峰变高变大、远处变小并倾斜**（尖峰贴指尖 = §4.3 观感）。门禁全绿。
 **⑤ 教训**：★★★**"逐条对照文档"要落到"语义单位"，不能停在"名字对得上"**——§4.3 的关键词是"**每根尖峰**由手指**距离**决定"，而我做的是"一个元素整体跟手"（**把"场"读成了"位移"**）⇒ L2–L5 全偏。**先读清"规格的语义单位"再动手**。★**"根"不对则"枝叶"全不对**（L2 的场是 L3/L4/L5 的共同底座——先修根）。★**"功能没生效"三连问**（本专项反复用）：① 折了吗（编译器）② 消费了吗（宿主读没读该字段）③ 换算在哪（应在内核）。
+
+785. **★★★Dactyl L2 N=1000 跟手性能修复（用户报「不跟手、非常卡顿」）+ 内核场跟手二进制化**（2026-10-10）：
+**① 用户反馈**：「1000 根就有问题了，拖动时不跟手了，非常卡顿」。**② 取证（加 field/draw 每帧耗时度量到 HUD）**：原场跟手每 MOVE 调 `follow_field`（JSON，1000 条 updates ≈200KB）⇒ `field 6.4ms` + 每帧 `draw 10ms`。
+**③ 逐项修复**：· **JSON→二进制**：新增 `proteus_layout_follow_field_bin`——**12B/条精简记录**（id u32 + scale f32 + rotate f32；场只改两项）⇒ 12KB/帧（20× 小），宿主按偏移直读、无 `org.json`；· **每帧一次**（§2.3 "一帧一次 FFI"）：MOVE 只记焦点 + 标脏 + `postInvalidateOnAnimation`，内核调用在 onDraw 每帧**至多一次**（无缓冲分发下 MOVE 率 > 刷新率 ⇒ 原"每 MOVE 一次"把 UI 线程塞满 = 卡顿主因之一）；· **绝对矩形缓存** `TreeEntry.abs_rects` + `follow_field_cached`（树未变则复用；结构变更清空）；· **帧格缓存 Bitmap**（每帧 2000+ drawLine → 一次性；丢帧红格单独画）；· 编码器抽 `encode_visuals_bin`（anim tick 与场跟手共用），`check-anim-record-bytes` 门禁**指向新家**（236B 一致）。
+**④ 实测**：`field 0.83ms`（曾 6.4）+ `draw 4.76ms`（曾 10）≈ 帧内 <6ms（< 8.33ms 预算）。门禁全绿。
+**⑤ 诚实边界**：跟手**延迟**仍偏高（`lat p95 ~120ms`）——这是 **N=1000 负载态**（正是 Dactyl 要暴露的"崩裂前的压力"，§4.6 天花板：帧格/复合/注入节奏的整屏成本）。**Dactyl 的价值恰是把这暴露出来**；进一步压需 GPU/复合层优化（属渲染侧批次，非本专项）。
+**⑥ 教训**：★★★**"卡顿"要按帧内阶段归因（field ms + draw ms），别猜**——先加度量（本例 field+draw），再逐项砍（JSON→binary / 每 MOVE→每帧 / O(N) 重算→缓存 / 逐条 draw→位图）。★**"一帧一次 FFI"是硬指标**——无缓冲分发让 MOVE 率 > 刷新率，**任何"每 MOVE 一次内核调用"都会把 UI 线程塞满**（S1.5 无缓冲与 S3 跟手在此耦合）。★**大 N 下 JSON 文本通道是致命瓶颈**（200KB/帧 vs 12KB 二进制）——**S2 去 JSON 在大 N 场场景是必需而非优化**。
