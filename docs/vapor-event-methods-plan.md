@@ -137,10 +137,13 @@ Vapor 事件模型的既定纪律是「**编译期产出纯数据（动作列表
 - ✅ ② 真实 App 管线：`tests/app-runtime-content.test.ts` ③（方法引用 ⇒ `runtime-content.json` **真产出** `events` + `add` 动作）。
 - ✅ ③ golden：既有内联写法产物未动（`tests/golden.test.ts` / `update-ops-golden` 全绿）+ `pnpm test:coupled` 290 全绿。
 - ✅ ④ 文档：能力清单 #16 / 模板注释 / guides 09（中英）。
-- ⏳ ⑤ 真机三端：**本机仅 Android + 鸿蒙**（iOS 无 Xcode——已取证 `xcode-select -p` / `xcrun --find devicectl`
-  均失败）。★**且共享设备夹具 `hosts/android/gen-vapor-fixture.mjs` 未改**（其事件全为内联形态 ⇒ 编译产物**逐字节不变**
+- ⏳ ⑤ 真机三端：★**更正（#743）**——"iOS 无 Xcode"是**错的**：iOS 一直可用（Xcode 26.5 在非默认位，设备在线），
+  我此前查错安装位（`find /Volumes/data1/applications` 少一层 `work/` + 未设 `DEVELOPER_DIR` 的 `xcrun`）。
+  **原始理由仍成立**：共享设备夹具 `hosts/android/gen-vapor-fixture.mjs` 未改（事件全为内联 ⇒ 编译产物**逐字节不变**
   ⇒ 三端 `results/vapor.json` 不失效）；方法引用属**编译期**新增能力，端上执行的动作集**不变**（`set/add/emit/nav`），
-  故 T1 不引入端侧行为变更。⇒ **未重跑三端夹具**（若为"显式跑方法引用形态"再单独扩展夹具，届时须三端同跑）。
+  故 T1 不引入端侧行为变更 ⇒ **未重跑三端夹具**（理由不是"iOS 不可用"）。
+  ★**但随之暴露真问题**：iOS 真机重跑 23 项中 **㉑ 混排判据失败**（叶子满宽 390、空格被吞），而**提交版 iOS 证据该项是过的**
+  ⇒ 三端门禁此前**倚陈旧 iOS 证据**。**待办**：三端重跑 `check:vapor-three-end` 收口 + 查清 iOS ㉑ 混排为何满宽（见决策 #743）。
 
 ## 7. 排期（T1 已按此完成）
 
