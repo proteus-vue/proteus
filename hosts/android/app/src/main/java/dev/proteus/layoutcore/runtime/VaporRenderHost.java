@@ -242,7 +242,8 @@ public final class VaporRenderHost {
         java.util.Map<Integer, ProteusHostView.PressStyle> m = new java.util.HashMap<>();
         for (JSONObject spec : specs) {
             if (!spec.has("pressBackgroundColor") && !spec.has("pressTransform")
-                    && !spec.has("pressBorderColor") && !spec.has("pressBoxShadow")) continue;
+                    && !spec.has("pressBorderColor") && !spec.has("pressBoxShadow")
+                    && !spec.has("pressZIndex")) continue;
             int id = spec.optInt("id", -1);
             if (id < 0) continue;
             ProteusHostView.PressStyle ps = new ProteusHostView.PressStyle();
@@ -256,6 +257,7 @@ public final class VaporRenderHost {
                 ps.glowColor = parseColor(psh.optString("color", null));
                 ps.glowRadius = (float) psh.optDouble("blur", 0.0);
             }
+            if (spec.has("pressZIndex")) ps.zIndex = (float) spec.optDouble("pressZIndex", 0.0);
             m.put(id, ps);
         }
         return m;

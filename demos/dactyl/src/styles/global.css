@@ -110,6 +110,9 @@ body {
   background-color: #1b3550;
   border-color: #39d0ff;
   transform: scale(0.9);
+  /* ★涟漪要浮在**相邻磁块之上**（否则下半被下一排盖住，见 §4.2 水波观感）——
+     按下时把整块（含环）提升到绘制序末尾。Web 里 `position:relative + z-index` 即可；App 端折成 `pressZIndex`。 */
+  z-index: 20;
 }
 /* L1 涟漪：**纯页面 CSS**（`:active` 触发 + `@keyframes` + `伪元素`）——
    框架把这段 CSS 跨端**物化**成装饰子节点（内核/宿主按普通节点渲染）；宿主不发明任何默认反馈。
