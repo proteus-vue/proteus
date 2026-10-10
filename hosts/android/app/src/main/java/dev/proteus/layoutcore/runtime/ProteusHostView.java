@@ -2369,11 +2369,17 @@ public class ProteusHostView extends ViewGroup {
             // ★★★S3-T1/T3（2026-10-10 · 输入延迟专项 #767）：**跟手启动**——命中节点若有 `v-follow`
             //   折出的 follow 规格，记下该指拖拽起点（后续 MOVE 直接喂内核，零 JS 跨界）。
             beginFollowAt(ev.getPointerId(0), gestureTarget, ev.getX(), ev.getY());
+            // ★Dactyl L2：本页若有场（`followField`）⇒ 该指驱动场（焦点 = 当前指针位置）
+            beginFieldAt(ev.getPointerId(0));
         }
         // ★★★S3-T1/T3：MOVE ⇒ 全部跟手指针**一帧一次批量**喂内核（换算在内核、宿主零数学、**零 JS 跨界**）。
         //   ★T3：多指 ⇒ `layoutFollowBatch`（每帧至多一次 FFI——`ffi_calls_per_frame ≤ 1`）。
         if (action == android.view.MotionEvent.ACTION_MOVE && !followPtrs.isEmpty()) {
             applyFollowBatch(ev);
+        }
+        // ★Dactyl L2：场跟手（焦点 → 一片尖峰的高度/朝向场）
+        if (action == android.view.MotionEvent.ACTION_MOVE) {
+            applyFieldFocus(ev);
         }
         // ★S3：多指场景的落点（POINTER_DOWN/UP）——命中该指所在节点则纳入/移出跟手表
         if (action == android.view.MotionEvent.ACTION_POINTER_DOWN) {
@@ -2390,6 +2396,7 @@ public class ProteusHostView extends ViewGroup {
         if (action == android.view.MotionEvent.ACTION_UP || action == android.view.MotionEvent.ACTION_CANCEL) {
             clearPress();
             endFollow();   // ★S3：抬指 ⇒ 松手（回弹/吸附在内核）
+            endField();    // ★Dactyl L2：场跟手结束
         }
         // ★交给平台识别器判定 tap / longpress / fling / scroll（不自研阈值与时间窗）
         detector().onTouchEvent(ev);
@@ -2512,6 +2519,41 @@ public class ProteusHostView extends ViewGroup {
     public void setFollowSpecs(java.util.Map<Integer, float[]> m) {
         this.followSpecs = m != null ? m : java.util.Collections.emptyMap();
     }
+
+    /* ── ★★★Dactyl L2·场跟手（§4.3）：一个手势焦点 → 一片尖峰的高度/朝向场 ──
+     *   ★与"整块平移"（S3-T1）不同：这里是**焦点位置**驱动**全片**叶尖峰（近则高、倾角朝指），
+     *     换算唯一实现在内核 `follow_field`，宿主零数学、零 JS。region = 内容全区（本页叶皆尖峰）。 */
+    /** 场参数（containerId, falloff, minScale, maxScale, rotate）——本页若有 `v-follow={field:…}` 容器则非空。 */
+    private float[] fieldSpec = null;
+    /** 当前由哪一指驱动场（-1 = 无）。 */
+    private int fieldPointerId = -1;
+    /** 场跟手驱动帧数（判据核"场真的被驱动"）。 */
+    int fieldMoves = 0;
+    /** 由 `VaporRenderHost` 注入场规格（`followField=1` 的容器）。 */
+    public void setFollowFields(java.util.Map<Integer, float[]> m) {
+        if (m == null || m.isEmpty()) { fieldSpec = null; return; }
+        fieldSpec = m.values().iterator().next();   // 一页一个场
+    }
+
+    private void beginFieldAt(int pointerId) {
+        if (fieldSpec == null) return;
+        fieldPointerId = pointerId;
+    }
+
+    /** MOVE ⇒ 焦点（当前指针内容坐标）驱动场（一次 FFI；返回合并 updates 落既有绘制真源）。 */
+    private void applyFieldFocus(android.view.MotionEvent ev) {
+        if (fieldSpec == null || fieldPointerId < 0 || coreHandle == 0L) return;
+        final int idx = ev.findPointerIndex(fieldPointerId);
+        if (idx < 0) return;
+        final float fx = ev.getX(idx);
+        final float fy = ev.getY(idx) + scrollY;
+        fieldMoves++;
+        final String out = RustLayout.layoutFollowField(coreHandle,
+                (int) fieldSpec[0], fx, fy, fieldSpec[1], fieldSpec[2], fieldSpec[3], fieldSpec[4]);
+        applyAnimUpdates(out);
+    }
+
+    private void endField() { fieldPointerId = -1; }
 
     /** 命中某**内容坐标**所在节点 id（多指各自命中——与 `dispatchHit` 同一内核 `hitTest`，但不改手势态）。 */
     private int hitNodeAt(float viewX, float viewY) {
@@ -2683,6 +2725,8 @@ public class ProteusHostView extends ViewGroup {
         dactylTrailSamples = 0;
         dactylPtrsMax = 0;
         dactylPtrsLast = 0;
+        fieldMoves = 0;
+        fieldPointerId = -1;
         dctlPressDownMs = 0L;
         dctlPressFeedbackMs = -1f;
         dctlLastEventTime = -1;
@@ -2821,6 +2865,7 @@ public class ProteusHostView extends ViewGroup {
                 + ",\"visible_lag_px\":" + dctlFmt(dctlVisibleLagPx)
                 + ",\"ptrs_last\":" + dactylPtrsLast + ",\"ptrs_max\":" + dactylPtrsMax
                 + ",\"follow_n\":" + followPtrs.size()
+                + ",\"field_moves\":" + fieldMoves + ",\"field_on\":" + (fieldSpec != null)
                 + ",\"press_feedback_ms\":" + dctlFmt(dctlPressFeedbackMs) + "}";
     }
     private static String dctlFmt(float v) { return v < 0 ? "-1" : String.format(java.util.Locale.US, "%.2f", v); }

@@ -795,6 +795,39 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeLayoutFollow
     into_java_string(&mut env, out)
 }
 
+/// ★★★**场跟手**（Dactyl L2，§4.3）：一个手势焦点 → 一片尖峰的高度/朝向场（内核 `follow_field`）。
+///   返回 `{"ok":true,"applied":N,"updates":[…]}`（宿主一次 `applyAnimUpdates` 消费）。
+#[no_mangle]
+pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeLayoutFollowField<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    handle: jni::sys::jlong,
+    container_id: jni::sys::jint,
+    focus_x: jni::sys::jfloat,
+    focus_y: jni::sys::jfloat,
+    falloff: jni::sys::jfloat,
+    min_scale: jni::sys::jfloat,
+    max_scale: jni::sys::jfloat,
+    max_rotate: jni::sys::jfloat,
+) -> jstring {
+    let out = std::panic::catch_unwind(|| -> String {
+        let p = unsafe {
+            ffi::proteus_layout_follow_field(
+                handle as u64, container_id as u32,
+                focus_x, focus_y, falloff, min_scale, max_scale, max_rotate,
+            )
+        };
+        if p.is_null() {
+            return "{\"ok\":false,\"error\":\"null\"}".to_string();
+        }
+        let s = unsafe { std::ffi::CStr::from_ptr(p) }.to_string_lossy().into_owned();
+        unsafe { ffi::proteus_layout_free_string(p) };
+        s
+    })
+    .unwrap_or_else(|_| "{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string());
+    into_java_string(&mut env, out)
+}
+
 /// ★★**共享元素**（几何原语）：源矩形 + 目标节点 ⇒ dx/dy/scale（内核算，宿主零几何数学）
 #[no_mangle]
 pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeSharedElement<'local>(

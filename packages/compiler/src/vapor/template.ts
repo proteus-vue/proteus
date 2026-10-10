@@ -1990,6 +1990,11 @@ function interpretFollowSpec(src: string): {
   springMass?: number
   snapThreshold?: number
   snapTarget?: number
+  /** ★Dactyl L2·场跟手：容器声明 `field:{falloff,minScale,maxScale,rotate}`（焦点→一片尖峰的高度/朝向场） */
+  fieldFalloff?: number
+  fieldMinScale?: number
+  fieldMaxScale?: number
+  fieldRotate?: number
   diag: string[]
   hint?: string
 } {
@@ -2005,7 +2010,7 @@ function interpretFollowSpec(src: string): {
     return { diag, hint }
   }
   const AXIS: Record<string, number> = { x: 1, y: 2, both: 3, none: 0 }
-  const KNOWN = new Set(['axis', 'gain', 'clamp', 'spring', 'snap', 'source'])
+  const KNOWN = new Set(['axis', 'gain', 'clamp', 'spring', 'snap', 'source', 'field'])
   let axis: number | undefined
   let gain: number | undefined
   for (const e of parsed.entries) {
@@ -2022,8 +2027,8 @@ function interpretFollowSpec(src: string): {
     } else if (e.key === 'gain') {
       if (typeof e.constValue === 'number') gain = e.constValue
       else diag.push('gain 须为数值常量')
-    } else if (e.key !== 'clamp' && e.key !== 'spring' && e.key !== 'snap' && e.key !== 'source' && !KNOWN.has(e.key)) {
-      diag.push(`未知键 "${e.key}"（可用 axis / gain / clamp / spring / snap）`)
+    } else if (e.key !== 'clamp' && e.key !== 'spring' && e.key !== 'snap' && e.key !== 'source' && e.key !== 'field' && !KNOWN.has(e.key)) {
+      diag.push(`未知键 "${e.key}"（可用 axis / gain / clamp / spring / snap / field）`)
     }
   }
   // 嵌套字面量（clamp 数组 / spring·snap 对象）——从源码受限提取（避免为三个键引 JSON5）
@@ -2038,10 +2043,13 @@ function interpretFollowSpec(src: string): {
   }
   const spring = extractNums(/spring\s*:\s*\{[^{}]*?stiffness\s*:\s*(-?[\d.]+)[^{}]*?damping\s*:\s*(-?[\d.]+)[^{}]*?mass\s*:\s*(-?[\d.]+)/)
   const snap = extractNums(/snap\s*:\s*\{[^{}]*?threshold\s*:\s*(-?[\d.]+)[^{}]*?target\s*:\s*(-?[\d.]+)/)
-  // 若源码里出现 clamp:/spring:/snap: 但正则没提到 ⇒ 形态不支持（如变量）——诊断（不静默）
+  // ★Dactyl L2·场跟手：`field:{ falloff, minScale, maxScale, rotate }`
+  const field = extractNums(/field\s*:\s*\{[^{}]*?falloff\s*:\s*(-?[\d.]+)[^{}]*?minScale\s*:\s*(-?[\d.]+)[^{}]*?maxScale\s*:\s*(-?[\d.]+)[^{}]*?rotate\s*:\s*(-?[\d.]+)/)
+  // 若源码里出现 clamp:/spring:/snap:/field: 但正则没提到 ⇒ 形态不支持（如变量）——诊断（不静默）
   if (/\bclamp\s*:/.test(src) && clamp.length !== 2) diag.push('clamp 须为 `[min, max]` 数值数组字面量')
   if (/\bspring\s*:/.test(src) && spring.length !== 3) diag.push('spring 须为 `{ stiffness, damping, mass }` 数值对象字面量')
   if (/\bsnap\s*:/.test(src) && snap.length !== 2) diag.push('snap 须为 `{ threshold, target }` 数值对象字面量')
+  if (/\bfield\s*:/.test(src) && field.length !== 4) diag.push('field 须为 `{ falloff, minScale, maxScale, rotate }` 数值对象字面量')
   // ★★★**全有或全无（all-or-nothing）**：有任何诊断 ⇒ **不折任何字段**（宁可少合并不错合并，§2.2）。
   //   否则会出现"半应用"（折了 axis、丢了 gain）——作者以为生效、实际只对了一半（静默语义偏差）。
   if (diag.length > 0) return { diag, hint }
@@ -2053,6 +2061,7 @@ function interpretFollowSpec(src: string): {
     ...(clamp.length === 2 ? { clampMin: clamp[0]!, clampMax: clamp[1]! } : {}),
     ...(spring.length === 3 ? { springStiffness: spring[0]!, springDamping: spring[1]!, springMass: spring[2]! } : {}),
     ...(snap.length === 2 ? { snapThreshold: snap[0]!, snapTarget: snap[1]! } : {}),
+    ...(field.length === 4 ? { fieldFalloff: field[0]!, fieldMinScale: field[1]!, fieldMaxScale: field[2]!, fieldRotate: field[3]! } : {}),
     diag,
     hint,
   }
@@ -3573,6 +3582,14 @@ export function buildLayoutTemplate(
               style.followSpringMass = fo.springMass
             }
             if (fo.snapThreshold !== undefined) { style.followSnapThreshold = fo.snapThreshold; style.followSnapTarget = fo.snapTarget }
+            // ★Dactyl L2·场跟手：`field:{…}` ⇒ 容器标记为"场源"（焦点 → 其内叶尖峰的高度/朝向场）
+            if (fo.fieldFalloff !== undefined) {
+              style.followField = 1
+              style.followFieldFalloff = fo.fieldFalloff
+              style.followFieldMinScale = fo.fieldMinScale
+              style.followFieldMaxScale = fo.fieldMaxScale
+              style.followFieldRotate = fo.fieldRotate
+            }
           }
           for (const m of fo.diag) diag(`${tag}(id=${id}) v-follow：${m}`, fo.hint, 'VAPOR_FOLLOW_SHAPE')
         }

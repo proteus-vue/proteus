@@ -31,7 +31,7 @@
 //   ④ 内核**不做值域钳制**（如 opacity 只信调用方给的 0..1）——钳制在编译期/宿主层（单一职责）；
 //   ⑤ 单位：位移 px · 旋转 度 · 弹簧速度（单位/秒）。
 
-use crate::node::LayoutTree;
+use crate::node::{LayoutTree, NodeIndex};
 use crate::style::Rect;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -2454,6 +2454,77 @@ pub fn follow_translate_batch(
     touched
 }
 
+/* ──────────────────── ★★★Dactyl L2：场跟手（一手势焦点驱动一片节点） ──────────────────── */
+
+/// ★★★**Dactyl L2·场跟手**（`15-dactyl-demo.md` §4.3）：一个手势焦点驱动**一片**尖峰——
+///   每根尖峰的**高度(scale)与朝向(rotate)**由**距焦点的距离**求值（近则高、倾角朝指）。
+///
+/// 【为什么是"场"而不是"整块平移"（本批修正）】§4.3 明写「N 根尖峰的穹顶；每根尖峰朝向与高度**由手指位置决定**
+///   （距离越近越高、倾角越朝向手指）」——单个节点整体平移**不符规格**。场语义：**一次指针位置 → 全片求值**。
+///
+/// 【换算唯一实现在此（宿主零数学）】逐**叶节点**（=尖峰）：`t = clamp(1 − dist/falloff, 0, 1)`；
+///   `scale = min_scale + (max_scale − min_scale)·t`（高度）；`rotate = clamp(dx/falloff)·max_rotate`（朝向）。
+///   写 `style.scale` / `style.rotate`（**合成属性**，§7.3 合成层——装饰不自成压力源）。
+///
+/// - Returns: 真的改值的节点 id 集（供 `collect_updates` 出合并 updates）。
+/// - `container_id`: **场容器**节点 id——只作用于其**子树内的叶节点**（尖峰），不误伤标题/其它文本。
+pub fn follow_field(
+    tree: &mut LayoutTree,
+    container_id: u32,
+    focus_x: f32,
+    focus_y: f32,
+    falloff: f32,
+    min_scale: f32,
+    max_scale: f32,
+    max_rotate: f32,
+) -> std::collections::HashSet<u32> {
+    let mut touched = std::collections::HashSet::new();
+    if falloff <= 0.0 {
+        return touched;
+    }
+    let Some(cidx) = tree.index_of_id(container_id) else { return touched };
+    // 收集容器子树内的**叶节点**索引（尖峰）
+    let mut target_idx: Vec<usize> = Vec::new();
+    let mut stack: Vec<NodeIndex> = tree.get(cidx).children.clone();
+    while let Some(i) = stack.pop() {
+        let n = tree.get(i);
+        if n.children.is_empty() {
+            target_idx.push(i as usize);
+        } else {
+            stack.extend(n.children.iter().copied());
+        }
+    }
+    let abs = tree.absolute_rects(); // 绝对坐标（一次算好，避免与可变借用冲突）
+    for idx in target_idx {
+        let Some(r) = abs.get(idx).and_then(|o| *o) else { continue };
+        if r.width <= 0.0 || r.height <= 0.0 {
+            continue;
+        }
+        let cx = r.x + r.width * 0.5;
+        let cy = r.y + r.height * 0.5;
+        let dx = focus_x - cx;
+        let dy = focus_y - cy;
+        let dist = (dx * dx + dy * dy).sqrt();
+        let t = (1.0 - dist / falloff).clamp(0.0, 1.0);
+        let scale = min_scale + (max_scale - min_scale) * t;
+        let rotate = (dx / falloff).clamp(-1.0, 1.0) * max_rotate;
+        let node = &mut tree.nodes[idx];
+        let mut changed = false;
+        if (node.style.scale - scale).abs() > 1e-4 {
+            node.style.scale = scale;
+            changed = true;
+        }
+        if (node.style.rotate - rotate).abs() > 1e-4 {
+            node.style.rotate = rotate;
+            changed = true;
+        }
+        if changed {
+            touched.insert(node.id);
+        }
+    }
+    touched
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -4395,5 +4466,34 @@ mod tests {
 
         // `FollowEntry` 布局：7×4B = 28B（宿主机按此步长填充——错位会致静默错值）
         assert_eq!(std::mem::size_of::<FollowEntry>(), 28, "FollowEntry 无填充：7×4B");
+    }
+
+    // ★★★Dactyl L2（§4.3）：场跟手——焦点距离 → 尖峰高度(scale)/朝向(rotate)；近则高、倾角朝指
+    #[test]
+    fn follow_field_scales_near_leaf_and_rotates_toward_focus() {
+        let mut t = LayoutTree::new();
+        // 场容器（id=1，父）
+        let root = t.push(LNode::new(1, LStyle::default()));
+        t.roots.push(root);
+        // 三个叶尖峰（id 2/3/4），水平排开（相对容器 x：0/100/200；各 20×20）
+        for i in 0..3u32 {
+            let mut n = LNode::new(i + 2, LStyle::default());
+            n.rect = crate::style::Rect { x: (i as f32) * 100.0, y: 0.0, width: 20.0, height: 20.0 };
+            let idx = t.push(n);
+            t.add_child(root, idx);
+        }
+        // 焦点在叶1中心 (10,10)：叶1 t=1（最高）、叶2/3 远离（t 低）
+        let touched = follow_field(&mut t, 1, 10.0, 10.0, 200.0, 0.3, 1.0, 30.0);
+        assert!(touched.len() >= 2, "至少近端两节点变值");
+        let s0 = t.nodes[1].style.scale;
+        let s2 = t.nodes[3].style.scale;
+        assert!((s0 - 1.0).abs() < 1e-3, "焦点正中 ⇒ 满高 scale=1.0（实得 {s0}）");
+        assert!(s2 < s0, "远端更矮（{s2} < {s0}）");
+        // 朝向：焦点在叶3（右侧）的**左方** ⇒ dx=focus-cx<0 ⇒ rotate<0（尖峰朝指倾斜）
+        assert!(t.nodes[3].style.rotate < 0.0, "焦点在左 ⇒ 右侧尖峰朝左倾（rotate<0，实得 {}）", t.nodes[3].style.rotate);
+        // 同焦点重复 ⇒ 空集（不重绘）
+        assert!(follow_field(&mut t, 1, 10.0, 10.0, 200.0, 0.3, 1.0, 30.0).is_empty(), "同值 ⇒ 无变化");
+        // 容器自身（有子）不参与场
+        assert_eq!(t.nodes[0].style.scale, 1.0, "容器不缩放");
     }
 }
