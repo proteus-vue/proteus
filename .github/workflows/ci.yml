@@ -48,6 +48,9 @@ jobs:
       - name: 逐帧通道去 JSON 门禁（★S2/#769：指令字节必须走 applyOpsBytes 字节直传，禁 number[] JSON——防静默回退）
         run: node scripts/check-no-json-wire.mjs
 
+      - name: 输入延迟门禁（★S6/#767：帧 p95 ≤ 1 帧预算 + High input latency 对基线宽棘轮）
+        run: node scripts/check-input-latency.mjs
+
       - name: 安全编辑门禁（★用户纪律：程序化编辑必须走 safe-edit——临时文件 + diff + 校验，禁止直接改源文件）
         run: node scripts/check-safe-edit.mjs
 

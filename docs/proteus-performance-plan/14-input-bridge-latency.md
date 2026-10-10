@@ -288,8 +288,8 @@ Harmony 的渲染 ratio（0.106）看着最好，但那是"提交级/光栅级"�
 
 | 编号 | 内容 |
 |---|---|
-| **S6.1** | 新增 `hosts/shared/input-latency.py`：三端**共同判据**（对齐 `check-cross-end-geometry.py` / `check-host-runtime.py` 的"三端同一判据"范式） |
-| **S6.2** | 新增门禁 `check:input-latency`：棘轮，读写 `hosts/*/results/input-latency.json`（基线只减不增，对齐 `check:profile-baseline` / `check:no-blind-wait` 的棘轮纪律） |
+| **S6.1** | ✅ **已交付（2026-10-10）**：`scripts/gen-input-latency.mjs`（`dumpsys gfxinfo` → `hosts/android/results/input-latency.json`，接 acceptance.sh）；判据共用于门禁 |
+| **S6.2** | ✅ **已交付（2026-10-10）**：`scripts/check-input-latency.mjs`——**分硬/宽两档**（硬：p95≤8.3ms + 报告齐备；宽：`high_input_latency ≤ 基线×2`，抗抖动）+ 基线 `scripts/input-latency-baseline.json`；接 verify+CI |
 | **S6.3** | **口径**：沿用 `docs/对标Benchmark执行Checklist.md` —— **触摸时间戳 → 提交时间戳**；4050 四组 × 每组 5 次；禁止跨设备比绝对值 |
 | **S6.4** | **外部取证（禁止自证）**：Android `gfxinfo`（High input latency 计数）+ Perfetto（`InputReader` / `Choreographer#doFrame`）；iOS Instruments（Animation Hitches / Time Profiler）；Harmony DevEco Profiler |
 | **S6.5** | 指标全集（命名对齐既有风格）：`input_latency_p50/p95/p99` · `press_feedback_ms` · `hit_test_us` · `bridge_calls_per_gesture` · `bridge_wire_bytes` · `bridge_copy_count` · `js_block_main_ms` · `main_thread_frame_work_ms` |

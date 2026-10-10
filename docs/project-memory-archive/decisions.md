@@ -2704,3 +2704,11 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **② ★★★修一个自伤 bug（门禁当场逼出来）**：S2 首刀（#769）批量替换 `proteusHost.applyOps(JSON.stringify(Array.from(payload)))` → `sendOps(payload)` 时，**该模式也出现在 `sendOps` 自身回退体内** ⇒ 被一并替换成 `return sendOps(payload)` = **无限递归**！（真机没炸 = 宿主有 `applyOpsBytes`、从没走回退，bug 潜伏。）本项修回 `proteusHost.applyOps(JSON.stringify(Array.from(payload)))`。⇒ 门禁的 `sendOps 回退体` 精确规则**正是**逼出这处潜伏递归的机制（"回退体 0 处"的异常提示）。
 **③ 验证**：门禁绿 + 破坏性 rc=1/rc=0；真机重跑 ㉜ 通过（`host_bytes_ops=30`，修递归后仍全过）；全量 **5670**；gates-sync 绿；AAR 随源再生。
 **④ 教训**：a) ★★★**"批量替换会命中被替换代码自身"**——`sendOps` 的回退体与所有 flush 出口**同形** ⇒ 一刀切会自伤（**新增 helper 时要把它自己的合法用法排除在替换之外**；本仓 `safe-edit` 有 diff 但我当时没逐行看）；b) ★★**门禁的"意外读数"是信号**（`回退体 0 处` 与预期不符 ⇒ 顺藤抓出潜伏递归）——别把门禁输出当"过了就行"；c) ★**静态门禁能逼出运行时潜伏 bug**（宿主实现了新通道 ⇒ 老回退路径永不执行 ⇒ 递归不被触发，只有静态检查/替换规则校验能发现）。★下一步：**整树 mount 接 blob**（最大载荷）+ iOS/鸿蒙字节通道 + S6 度量地基。
+
+771. **★★★S6 度量地基交付：输入延迟报告生产者 `gen:input-latency` + 门禁 `check:input-latency`（分硬/宽两档）**（2026-10-10）：
+**① 为什么先做**：方案 §6 S6 是**前置**（"性能项没有门禁等于没做"），也是 S1.5/S2 收益**可证伪**的前提。
+**② 交付**：a) 生产者 `scripts/gen-input-latency.mjs`（S6.1/S6.5）——把 `dumpsys gfxinfo` 解析成结构化报告 `hosts/android/results/input-latency.json`（帧 p50/p90/p95/p99 · janky · **High input latency** · missed vsync · slow UI）；接进 `acceptance.sh`（真机跑完自动重生成）。b) 门禁 `scripts/check-input-latency.mjs`（S6.2）——**分硬/宽两档**（对齐方案 §7 R5「区分回归阻断与机器抖动」）：**硬**：报告格式齐备（end/frame_p95_ms/high_input_latency）+ `frame_p95_ms ≤ 8.3ms`（1 帧预算）；**宽**：`high_input_latency ≤ 基线 × 2.0`（只拦粗暴回归，不误伤抖动）；◐ 无报告 ⇒ 如实跳过。基线 `scripts/input-latency-baseline.json`。接 package.json + verify + CI。
+**③ 口径（对齐对标 Checklist）**：帧百分位 = gfxinfo 的 "Nth percentile"（**帧渲染**代理）；`high_input_latency` = gfxinfo 官方计数（**端到端输入延迟**，本机基线、**跨设备不可比**）。
+**④ ★诚实边界**：**真正的"触摸时间戳→提交时间戳"端到端延迟**需 Perfetto/Instruments（S6.4 外部工具）——本批只落**可离线复算**的 gfxinfo 口径；`high_input_latency` 受设备/系统/时长影响 ⇒ **宽棘轮（不严格）**（严格会随机红 ⇒ 比没门禁更糟，逼人 --update 假绿）。
+**⑤ 基线（第一次真机读数）**：Android 帧 p50/p95/p99 = **5/5/5ms** · janky **1(0.08%)** · **High input latency 2431** · missed vsync 1（本机，跨设备不可比）。
+**⑥ 教训**：a) ★★**"端到端延迟"与"帧耗时"是两个量**（gfxinfo p50=5ms 看着好，而 High input latency 计数是帧数 2×）——别用一个冒充另一个（方案把两个并排打印正是为此）；b) ★**度量门禁的"松紧"要按噪声定**（机器负载相关的量用宽棘轮，确定性量才卡硬阈值）；c) ★**生产者/判据分离**（外部读数 → 结构化报告 → 门禁消费），让门禁可离线跑、可对账。

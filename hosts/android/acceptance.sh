@@ -632,6 +632,9 @@ echo "    → gfxinfo 已 reset；触发滚动验收…"
 wait_report "layout-scroll.json" 40 >/dev/null 2>&1 || true
 sleep 1
 "$ADB" shell "dumpsys gfxinfo $PKG" 2>/dev/null | tr -d '\r' > "$GFX"
+# ★S6（输入延迟专项 #767）：gfxinfo → 结构化输入延迟报告（hosts/android/results/input-latency.json），
+#   供 check:input-latency 门禁消费；失败不阻断验收（报告缺失门禁如实 ◐ 跳过）
+node "$ROOT/scripts/gen-input-latency.mjs" --gfxinfo "$GFX" --out "$ROOT/hosts/android/results/input-latency.json" >/dev/null 2>&1 || true
 echo "    ── Proteus（虚拟化滚动）──"
 grep -E "Total frames rendered|Janky frames \(|50th percentile|90th percentile|95th percentile|99th percentile|Slow UI thread|Slow issue draw commands|Slow bitmap uploads" "$GFX" | sed 's/^/      /'
 

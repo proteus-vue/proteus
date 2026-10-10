@@ -1,0 +1,7 @@
+{
+  "android": {
+    "high_input_latency": 2431,
+    "frame_p95_ms": 5,
+    "source": "dumpsys-gfxinfo"
+  }
+}
