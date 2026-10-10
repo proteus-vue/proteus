@@ -308,6 +308,37 @@ pub fn apply_style_key(node: &mut LNode, key: &str, value: f32) -> Result<bool, 
             s.left = if v.is_finite() { Some(v) } else { None };
             Ok(true)
         }
+        // ★★★B3a（2026-10-10）：`right` / `bottom` 绝对定位偏移（`LStyle` 一直有，指令映射表此前漏登记）。
+        "layout.right" => {
+            s.right = if v.is_finite() { Some(v) } else { None };
+            Ok(true)
+        }
+        "layout.bottom" => {
+            s.bottom = if v.is_finite() { Some(v) } else { None };
+            Ok(true)
+        }
+        // ★★★B3a（2026-10-10）：`aspect-ratio`（宽高比，`LStyle.aspect_ratio` 存在；映射表此前漏登记）。
+        "layout.aspectRatio" => {
+            s.aspect_ratio = if v.is_finite() && v > 0.0 { Some(v) } else { None };
+            Ok(true)
+        }
+        // ★★★B3a（2026-10-10）：padding 四方向（`LStyle.padding: Edges` 存在；映射表此前只有 margin 四向）。
+        "layout.paddingTop" => {
+            s.padding.top = if v.is_finite() { v } else { 0.0 };
+            Ok(true)
+        }
+        "layout.paddingRight" => {
+            s.padding.right = if v.is_finite() { v } else { 0.0 };
+            Ok(true)
+        }
+        "layout.paddingBottom" => {
+            s.padding.bottom = if v.is_finite() { v } else { 0.0 };
+            Ok(true)
+        }
+        "layout.paddingLeft" => {
+            s.padding.left = if v.is_finite() { v } else { 0.0 };
+            Ok(true)
+        }
         // ★★2026-09-30 补登记（同批第二个真缺口）：margin 四方向。
         //   `LStyle.margin` 一直存在（流动布局最常用的位移手段），但指令映射表**逐个方向都没登记**
         //   ⇒ 通过指令流无法改外边距 ⇒ 布局动画（FLIP 的"让位"效果）在 in-flow 布局上无法触发。
@@ -1000,5 +1031,29 @@ mod tests {
         assert!(apply_style_key(&mut n, "layout.marginLeft", 4.0).unwrap());
         assert_eq!(n.style.margin.top, 8.0);
         assert_eq!(n.style.margin.left, 4.0);
+    }
+
+    #[test]
+    fn b3a_right_bottom_padding_aspect_are_mapped() {
+        // ★★★B3a（2026-10-10）：动态 `:class` 的数值布局字段走本二进制通道 ⇒ 补登记四组此前漏项。
+        let mut n = crate::node::LNode::new(1, crate::style::LStyle::default());
+        // right / bottom（绝对定位偏移，此前只有 top/left）
+        assert!(apply_style_key(&mut n, "layout.right", 6.0).unwrap());
+        assert_eq!(n.style.right, Some(6.0));
+        assert!(apply_style_key(&mut n, "layout.bottom", 9.0).unwrap());
+        assert_eq!(n.style.bottom, Some(9.0));
+        // padding 四方向（此前只有 margin 四向）
+        assert!(apply_style_key(&mut n, "layout.paddingTop", 3.0).unwrap());
+        assert!(apply_style_key(&mut n, "layout.paddingBottom", 5.0).unwrap());
+        assert_eq!(n.style.padding.top, 3.0);
+        assert_eq!(n.style.padding.bottom, 5.0);
+        // aspectRatio（>0 才生效；非正/非有限 ⇒ 清空）
+        assert!(apply_style_key(&mut n, "layout.aspectRatio", 1.5).unwrap());
+        assert_eq!(n.style.aspect_ratio, Some(1.5));
+        assert!(apply_style_key(&mut n, "layout.aspectRatio", 0.0).unwrap());
+        assert_eq!(n.style.aspect_ratio, None);
+        // 非有限 ⇒ 清空（与 width/height 同策略）
+        assert!(apply_style_key(&mut n, "layout.right", f32::NAN).unwrap());
+        assert_eq!(n.style.right, None);
     }
 }

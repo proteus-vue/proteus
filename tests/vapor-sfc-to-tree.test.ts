@@ -205,12 +205,40 @@ describe('★批次 30 · 动态 :class（对齐 Web · 削减胶水）', () => 
     expect(log.some(([, k, v]) => k === 'paint.backgroundColor' && v === undefined), 'open=false ⇒ 清除背景').toBe(true)
   })
 
-  it('⑤ 诚实边界：动态 :class 设**布局字段** ⇒ 如实诊断（绘制字段无诊断）', () => {
+  it('⑥ ★B3a：动态 :class 的**数值布局字段**走内核 SET_STYLE（非 onPaintProp）', () => {
+    const SFC = "<template><view :class=\"{ on: x }\">x</view></template>\n<script setup>const x=ref(1)</script>\n<style>.on{width:200px;padding-top:4px;flex-grow:1}</style>"
+    const { table } = buildVaporSubscriptions(SFC, 'b3a.vue')
+    const rt = new SlotRuntime(new PropKeyTable(), new StringPool(), () => {})
+    const paintLog: Array<[number, string, unknown]> = []
+    const vapor = new VaporRuntime(
+      table, rt, VaporRuntime.buildEvaluators(table.evaluators), new ListRegistry(),
+      undefined, 0, undefined, (id, key, val) => paintLog.push([id, key, val]),
+    )
+    const dataX = { x: true }
+    vapor.writeSlotsOfSource('x', { read: (n: string) => (dataX as Record<string, unknown>)[n] } as never)
+    // 内核指令（缓冲快照）里应有 layout.width / layout.paddingTop / layout.flexGrow（数值来自 plan 描述符）
+    const snap = rt.buffer.snapshot() as Array<{ op: number; nodeId?: number; keyId?: number; value?: number }>
+    const keyOf = (id: number | undefined) => (id === undefined ? undefined : rt.keys.keyOf(id))
+    const styleOps = snap.filter((o) => o.op === 2 /* SET_STYLE */)
+    const byKey = new Map(styleOps.map((o) => [keyOf(o.keyId), o.value]))
+    expect(byKey.get('layout.width'), '数值布局字段 width ⇒ 内核 SET_STYLE(200)').toBe(200)
+    expect(byKey.get('layout.paddingTop'), 'padding-top ⇒ SET_STYLE(4)').toBe(4)
+    expect(byKey.get('layout.flexGrow'), 'flex-grow ⇒ SET_STYLE(1)').toBe(1)
+    // ★反证：数值布局字段**不进** onPaintProp（此前误走绘制通道 ⇒ 端上不生效）
+    expect(paintLog.some(([, k]) => k === 'paint.width' || k === 'paint.paddingTop'), '数值布局字段不得走绘制通道').toBe(false)
+  })
+
+  it('⑤ 诚实边界：动态 :class 的**枚举/对象**布局字段 ⇒ 如实诊断；**数值**布局字段已支持（B3a）', () => {
     const P = "<template><view :class=\"{ on: x }\">x</view></template>\n<script setup>const x=ref(1)</script>\n"
     const sfcPaint = P + '<style>.on{background-color:#f00}</style>'
-    const sfcLayout = P + '<style>.on{width:200px}</style>'
-    expect(buildVaporSubscriptions(sfcPaint, 'p.vue').diagnostics.map((d) => d.code), '绘制字段 ⇒ 无诊断').not.toContain('VAPOR_DYNCLASS_LAYOUT_UNSUPPORTED')
-    expect(buildVaporSubscriptions(sfcLayout, 'l.vue').diagnostics.map((d) => d.code), '布局字段 ⇒ 诊断').toContain('VAPOR_DYNCLASS_LAYOUT_UNSUPPORTED')
+    // ★B3a（2026-10-10）：数值布局字段（width/margin*/padding*/flex*…）走内核 SET_STYLE ⇒ **不再诊断**
+    const sfcNum = P + '<style>.on{width:200px;padding-top:4px;flex-grow:1}</style>'
+    // 无二进制通道的布局字段（枚举/对象/grid）⇒ 仍诊断
+    const sfcEnum = P + '<style>.on{flex-direction:row}</style>'
+    const codesOf = (sfc: string, f: string) => buildVaporSubscriptions(sfc, f).diagnostics.map((d) => d.code)
+    expect(codesOf(sfcPaint, 'p.vue'), '绘制字段 ⇒ 无诊断').not.toContain('VAPOR_DYNCLASS_LAYOUT_UNSUPPORTED')
+    expect(codesOf(sfcNum, 'n.vue'), '★数值布局字段已支持（B3a）⇒ 无诊断').not.toContain('VAPOR_DYNCLASS_LAYOUT_UNSUPPORTED')
+    expect(codesOf(sfcEnum, 'e.vue'), '枚举布局字段 ⇒ 仍诊断').toContain('VAPOR_DYNCLASS_LAYOUT_UNSUPPORTED')
   })
 })
 

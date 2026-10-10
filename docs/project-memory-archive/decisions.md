@@ -2549,3 +2549,13 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **③ 三端真机判据 ㉔**（`check-vapor-device.py` + gen 夹具 `b5` + entry-vapor 探针）：`b5x` 值/几何 `[0,88,0]`（挂载前→mounted→unmounted）——**Android/鸿蒙/iOS 全过** + `check:vapor-three-end` 指纹一致（30 项 × 3 端）。
 **④ 验证**：`vapor-events` B5 组（+5）· `vapor-lifecycle`（改写：不再报 NOT_RUN + 其余仍报）· `screen-runtime` ⑤（markMounted 0→99、幂等、markUnmounted 0）· 全量 **5657** · vue-tsc 0 · coupled 绿。
 **⑤ 教训**：a) ★★★**"降级为动作表"这套（事件-方法线）可复用**——B5 的脚本钩子体与事件 handler 是同一类东西，直接复用降级器 + 执行器，2 人日内交付（**基础设施的价值在复用时刻兑现**）；b) ★★**编号顺序要护"既有产物不变"**——脚本钩子的 handler 编号排在 `walk` 之后，事件 h0/h1 不动（golden 不失效）；c) ★★**"能跑"就要撤掉"不会跑"的诊断**——`onMounted` 从 NOT_RUN 列表移除（否则误报）；d) ★**顺带补既有缺口**——发现 App 壳根本没接 `@vue:mounted`（只探针有），B5 一并打通（与脚本钩子同"首帧 mount 后"点）；e) ★**幂等**——`markMounted` 只跑一次（与 Vue「mounted 只在挂载时一次」一致，切回不重跑）。
+
+753. **★★★Vapor B3a 交付：动态 `:class` 的**数值布局字段**端上真生效（走内核二进制 SET_STYLE · 零宿主改动）**（2026-10-10）：
+**① 缘起**：承接 #751 推进会计划，做 B3（动态 `:class` 布局字段，28 页最高价值）。
+**② 决策性取证（关键——定"切多小一刀"）**：读内核 `ops_apply::apply_style_key`（二进制 SET_STYLE 的字段分发）+ `PatchStyle`（JSON 补丁）——发现**数值字段走二进制 `SET_STYLE`（f32，直达内核、host-agnostic）**，而枚举/对象/grid 字段**无二进制通道**。字段分布实测：数值 142 + 对象(padding/margin)262 + 枚举 123 → **数值+对象可归约**。⇒ 切 **B3a＝数值布局字段**（可完整交付、零宿主改动）。
+**③ 真根因（探针实证）**：plan 产出的字段值是 **StyleIR 描述符**（`{kind:'absolute',dp:N}`，padding **被摊平**成 `paddingTop/…`）；运行期把它们**统一经 `onPaintProp`** 交宿主**绘制**补丁通道——该通道不认布局/描述符 ⇒ **不重排**。
+**④ 交付**：① 运行期（`slot-runtime/runtime`）：`paint.class` 字段**分流**——数值布局字段（`NUMERIC_LAYOUT_FIELDS`）→ **内核 `SET_STYLE` 二进制**；其余 → `onPaintProp`；★**清除回退**（plan 关闭返回 `null` ⇒ 发 UNSET/NaN ⇒ 内核 None）；class 块守卫**不再要求 `onPaintProp`**（壳无补丁通道也能重排）。② 内核 `apply_style_key` 补登记 right/bottom/padding 四向/aspectRatio（`LStyle` 早有字段，映射表漏登）。③ 编译器诊断收窄（数值不再诊断；仅枚举/grid 类诊断）。
+**⑤ 三端真机判据 ㉕**（gen 夹具 `b3a`：`.wide{width:200px}` 开关）：内核几何宽 `[0,200,0]`（关→开→关，**含清除回退**）——**Android/鸿蒙/iOS 全过** + `check:vapor-three-end` 指纹一致（31 项 × 3 端）。
+**⑥ 验证**：`vapor-sfc-to-tree` ⑥（发内核 SET_STYLE、不进 onPaintProp）· Rust 单测（新映射臂）· 全量 **5658** · vue-tsc 0。能力棘轮 `VAPOR_DYNCLASS_LAYOUT_UNSUPPORTED` **28→18**（已 --update）。
+**⑦ 教训**：a) ★★★**"布局字段不支持"≠"整块不支持"，先分层**——**数值字段有 host-agnostic 的内核二进制通道**（零宿主改动），枚举/对象/grid 才要新协议；按"数值 vs 枚举"切档，一轮即交付一半（142+262 字段）；b) ★★★**"绕了远路"是根因**——运行期把**布局**字段也塞进**绘制**补丁通道（通道语义不符）⇒ 不重排；**同一数据要按语义分流到正确通道**（与建 A④ z-index"按语义层映射"同族）；c) ★★**清除/回退要显式**——plan 关闭类返回该字段**基线/null** ⇒ 必须发 **UNSET**（否则样式残留）；探针 `[1200,200,200]` 一眼看出"清了没回退"；d) ★**flex 容器的初始尺寸**会干扰几何锚（stretch）——夹具用 `align-items:flex-start` 让子节点内容宽（0）; e) ★**"零宿主改动"是可追求的目标**：借内核既有的 f32 通道绕开三端 applier。
+**⑧ 余下（B3b）**：枚举/grid 类布局字段（`display`/`flexDirection`/`position`/`grid*`…）——需**新内核 op（字符串/枚举载荷）+ 三端宿主**（或扩 `PatchStyle`），**单独立项**（≈3–4 人日）。

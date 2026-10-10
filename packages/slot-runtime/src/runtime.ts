@@ -24,7 +24,7 @@ import type { Slot } from './slot'
 import type { EvaluatorSpec, SubscriptionTable } from './table'
 import { resolveDynamicClasses } from './table'
 // ★★★G-61 B2：动态 :class 预计算计划（位图 O(1) 查表）
-import { applyDynamicClassPlan } from './dynamic-class'
+import { applyDynamicClassPlan, NUMERIC_LAYOUT_FIELDS, layoutNumber } from './dynamic-class'
 
 /** 源订阅钩子：源值变化时回调（由宿主注入；Vue 场景 = watch / effect） */
 export type SourceSubscriber = (sourceName: string, onChange: () => void) => void
@@ -371,9 +371,11 @@ export class VaporRuntime {
         //   颜色/字号等（字符串或数值），内核的 f32 通道**装不下**（送进去必被洗成 0 ⇒ 静默变黑）。
         //   ⇒ 报给宿主（它重建绘制指令），不进二进制指令流（见 onPaintProp 注释）。
         // ★批次 30（对齐 Web · 削减胶水）：**动态 `:class`** —— `paint.class` 的值是类名形态
-        //   （对象/数组/字符串）⇒ 解析活跃类名集 → 匹配自匹配规则 → 逐字段（paint.<f> 等）下发。
-        //   ★通道复用：算出的字段仍走 onPaintProp（与 :style 绘制键同一条出口）。
-        if (spec.propKey === 'paint.class' && this.onPaintProp) {
+        //   （对象/数组/字符串）⇒ 解析活跃类名集 → 匹配自匹配规则 → 逐字段下发。
+        //   ★通道分流（B3a，2026-10-10）：**数值布局字段走内核 SET_STYLE**（host-agnostic）；
+        //     其余（绘制色/字号/圆角…）走 onPaintProp（宿主绘制通道，缺省则跳过）。
+        //   ★守卫**不再要求 onPaintProp**（App 壳无该补丁通道，但内核 SET_STYLE 仍可用）。
+        if (spec.propKey === 'paint.class') {
           const implC = this.evaluators.get(spec.evaluatorId)
           if (implC) {
             const cv = implC(ctx)
@@ -390,8 +392,30 @@ export class VaporRuntime {
             const nextKeys = new Set(Object.keys(fields))
             // ★批次 30：**关掉的类的字段要清除**（否则切走仍残留旧样式——Vue 语义：类移除 ⇒ 样式移除）
             const prev = this.lastClassFields.get(nid)
-            if (prev) { for (const k of prev) if (!nextKeys.has(k)) this.onPaintProp(nid, `paint.${k}`, undefined) }
-            for (const [fk, fv] of Object.entries(fields)) this.onPaintProp(nid, `paint.${fk}`, fv)
+            if (prev) {
+              for (const k of prev) {
+                if (nextKeys.has(k)) continue
+                if (NUMERIC_LAYOUT_FIELDS.has(k)) {
+                  // B3a：数值布局字段清空 ⇒ 发 UNSET（NaN ⇒ 内核置 None）
+                  this.rt.buffer.push({ op: OpCode.SET_STYLE, nodeId: nid, keyId: this.rt.keys.intern(`layout.${k}`), value: Number.NaN })
+                } else {
+                  this.onPaintProp?.(nid, `paint.${k}`, undefined)
+                }
+              }
+            }
+            for (const [fk, fv] of Object.entries(fields)) {
+              if (NUMERIC_LAYOUT_FIELDS.has(fk)) {
+                // ★★★B3a（2026-10-10）：**数值布局字段走内核 SET_STYLE**（host-agnostic：内核重排 ⇒
+                //   三端零宿主改动即生效）。值可能是 plan 描述符 `{kind:'absolute',dp:N}` ⇒ 取数。
+                //   ★plan 在"该类未激活"时返回该字段的**基线值**（无基线 ⇒ null）⇒ **null 发 UNSET**
+                //     （NaN ⇒ 内核 `None` ⇒ 回退 auto/stretch——这正是"关掉类 ⇒ 样式回退"）。
+                const n = layoutNumber(fv)
+                this.rt.buffer.push({ op: OpCode.SET_STYLE, nodeId: nid, keyId: this.rt.keys.intern(`layout.${fk}`), value: n === null ? Number.NaN : n })
+                continue
+              }
+              // 其余字段（绘制色/字号/圆角…）仍走宿主绘制通道（无 onPaintProp 则跳过，如实）
+              this.onPaintProp?.(nid, `paint.${fk}`, fv)
+            }
             this.lastClassFields.set(nid, nextKeys)
             const eC = this.slotById.get(spec.slotId)
             if (eC) eC.slot.value = cv as never

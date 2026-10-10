@@ -847,6 +847,19 @@ def main() -> int:
     else:
         print(f"  ✓ ㉔ ★B5 脚本生命周期：{b5.get('phases')} · b5x 值 {b5v}（挂载前→mounted→unmounted）· 内核几何宽 {b5w}（同步）")
 
+    # ── ㉕ ★★★B3a：动态 :class 的**数值布局字段**端上真生效（走内核 SET_STYLE，2026-10-10）──
+    #   【要证明什么】动态 `:class` 命中的数值布局字段（width…）经**内核二进制通道**重排 ⇒ 几何真变
+    #     （此前误走宿主绘制通道 ⇒ 不重排 ⇒ 端上不生效）。
+    b3 = rep.get("b3a_probe") or {}
+    b3w = [int(v) for v in (b3.get("widths") or [])]
+    if not b3 or len(b3w) < 3:
+        print("  ◐ ㉕ B3a 动态 :class 数值布局：本端夹具未覆盖（报告无 b3a_probe）——如实跳过")
+    elif b3w != [0, 200, 0]:
+        fail(f"★B3a 动态 :class 数值布局字段几何不符（期望 [0,200,0]：关→开→关）：{b3w} —— 内核 SET_STYLE 通道没生效")
+        ok = False
+    else:
+        print(f"  ✓ ㉕ ★B3a 动态 :class 数值布局：内核几何宽 {b3w}（关→开→关）——走内核二进制 SET_STYLE 生效")
+
     # 附加观测（不判红，只如实报）
     una = rep.get("uninstantiated_slots", 0)
     if una:

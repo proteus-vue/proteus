@@ -402,6 +402,14 @@ interface VaporReport {
     values: number[]
   }
   /**
+   * ★★★**B3a 探针**（2026-10-10 · 判据 ㉕）——动态 `:class` 的**数值布局字段**端上真生效
+   *   （走内核二进制 SET_STYLE，而非宿主绘制通道）。`widths` = [翻转前, wide 开, wide 关]（内核几何真值）。
+   */
+  b3a_probe: {
+    nodeId: number
+    widths: number[]
+  }
+  /**
    * ★★★**`:style` 对象展开探针**（2026-10-03）——两条通道各自的真值：
    *   · 布局键 ⇒ `width_before/after`（**内核矩形**，真改几何）；
    *   · 绘制键 ⇒ `patch_calls`（提交给宿主的补丁内容——绘制**不进内核**，
@@ -1762,7 +1770,7 @@ function runShort(args: VaporArgs): string {
     tpl_nodes: 0, tpl_ok: false, sub_l1: 0, sub_l0: 0, sub_l1_rate: 0, sub_sources: [],
     inst_ms: 0, inst_nodes: 0, inst_reused_ids: 0, inst_allocated_ids: 0, inst_rows: 0,
     inst_values_filled: 0, inst_virtual_rows: 0, inst_text_filled: 0, inst_width_filled: 0,
-    mix_text_probe: [], text_probe_rounds: [], gate_rounds: [], gate_text_nodes: [], once_node_id: -1, memo_node_id: -1, expr_probe: [], transition_started: 0, tpl_transition: [], component_mounts: 0, component_nodes: 0, component_kid_probe: {}, slot_probe: { texts: [], rects: [], fills: [], markers_left: -1 }, emit_probe: { emits: [], parent_source_after: undefined, geom_before: -1, geom_after: -1 }, scoped_probe: { texts: [], anchor_id: -1, anchor_width_field: -1, anchor_width_rect: -1, destr_text: '', destr_width_field: -1, destr_width_rect: -1 }, lifecycle_probe: { bindings: [], ran_handler: '', changed_sources: [], ops_bytes: 0, applied: 0, anchor_id: -1, geom_before: -1, geom_after: -1 }, dyn_probe: { texts: [], mounts: [], geom: [], dropped: -1, notes: [] }, directive_probe: { nodes: [], rounds: [], plays: [] }, mixed_probe: { texts: [], leaves: 0, geom: [] }, t2_probe: { nodeId: -1, widths: [], values: [], logs: [] }, b5_probe: { nodeId: -1, phases: [], widths: [], values: [] }, styleobj_probe: { anchor_id: -1, width_before: -1, width_after: -1, kernel_applied: 0, patch_calls: [] },
+    mix_text_probe: [], text_probe_rounds: [], gate_rounds: [], gate_text_nodes: [], once_node_id: -1, memo_node_id: -1, expr_probe: [], transition_started: 0, tpl_transition: [], component_mounts: 0, component_nodes: 0, component_kid_probe: {}, slot_probe: { texts: [], rects: [], fills: [], markers_left: -1 }, emit_probe: { emits: [], parent_source_after: undefined, geom_before: -1, geom_after: -1 }, scoped_probe: { texts: [], anchor_id: -1, anchor_width_field: -1, anchor_width_rect: -1, destr_text: '', destr_width_field: -1, destr_width_rect: -1 }, lifecycle_probe: { bindings: [], ran_handler: '', changed_sources: [], ops_bytes: 0, applied: 0, anchor_id: -1, geom_before: -1, geom_after: -1 }, dyn_probe: { texts: [], mounts: [], geom: [], dropped: -1, notes: [] }, directive_probe: { nodes: [], rounds: [], plays: [] }, mixed_probe: { texts: [], leaves: 0, geom: [] }, t2_probe: { nodeId: -1, widths: [], values: [], logs: [] }, b5_probe: { nodeId: -1, phases: [], widths: [], values: [] }, b3a_probe: { nodeId: -1, widths: [] }, styleobj_probe: { anchor_id: -1, width_before: -1, width_after: -1, kernel_applied: 0, patch_calls: [] },
     mount_ms: 0, mount_nodes: 0,
     updates_run: 0, ops_bytes: 0, ops_ms: 0, apply_ms: 0, text_synced_total: 0, update_evidence: [], geom_probe: [], channels: [],
     ev_bindings: 0, ev_handlers: 0, ev_modifiers: 0, taps: 0, tap_evidence: [],
@@ -3045,6 +3053,61 @@ function runShort(args: VaporArgs): string {
         } catch { /* 重挂失败 ⇒ 判据按 host_nodes 不符判红 */ }
       } else {
         notes.push('B5 探针：产物无 b5 段（夹具未覆盖 ⇒ 判据 ㉔ 按缺失处理）')
+      }
+    }
+
+    /* ═══════════ ★★★B3a 探针（2026-10-10 · 判据 ㉕）：动态 :class 数值布局字段端上真生效 ═══════════
+     *
+     * 【要证明什么】动态 `:class` 命中的**数值布局字段**（如 `width`）经**内核二进制 SET_STYLE** 生效
+     *   （此前误走宿主绘制通道 ⇒ 不重排）。独立挂 b3a 夹具树 → 改 b3on=true → relink+flush+applyOps
+     *   → 读**内核几何宽**（0→200）；再 b3on=false → 读回（→0）。
+     */
+    {
+      const b3Art = (artifacts as { b3a?: { tpl: LayoutTemplate; table: SubscriptionTable } }).b3a
+      if (b3Art?.tpl?.ok) {
+        const b3data: Record<string, unknown> = { b3on: false }
+        const b3Reg = new ListRegistry()
+        const b3Inst = instantiateTemplate(b3Art.tpl, { viewport: args.viewport, read: (n) => b3data[n], table: b3Art.table, registry: b3Reg })
+        const b3Cap: number[][] = []
+        const b3SlotRt = new SlotRuntime(new PropKeyTable(), new StringPool(), (bytes) => b3Cap.push(Array.from(bytes)))
+        const b3Vapor = new VaporRuntime(b3Art.table, b3SlotRt, VaporRuntime.buildEvaluators(b3Art.table.evaluators), b3Reg)
+        const b3Ctx = { read: (n: string) => b3data[n] }
+        b3Vapor.load(b3Ctx, () => { /* 源变化靠显式 relink */ })
+        // 承载动态 :class 的节点（订阅表里 paint.class 槽位）
+        const b3NodeId = (b3Art.table as unknown as { sources?: Array<{ slots?: Array<{ nodeId?: number; propKey?: string }> }> }).sources
+          ?.flatMap((s) => s.slots ?? []).find((x) => x.propKey === 'paint.class')?.nodeId ?? -1
+        try {
+          const mOut = JSON.parse(proteusHost.mount(JSON.stringify({ viewport: b3Inst.viewport, nodes: b3Inst.nodes }))) as { ok?: boolean; error?: string }
+          if (mOut.ok === true && b3NodeId >= 0) {
+            const readW = (): number => {
+              try {
+                const rr = JSON.parse(proteusHost.readRects()) as { rects?: Record<string, { width?: number }> }
+                return rr.rects?.[String(b3NodeId)]?.width ?? -1
+              } catch { return -1 }
+            }
+            const flip = (on: boolean): void => {
+              b3data.b3on = on
+              b3Cap.length = 0
+              b3Vapor.relink(b3Ctx)
+              b3SlotRt.flush()
+              const payload = b3Cap.length ? b3Cap[b3Cap.length - 1]! : []
+              if (payload.length > 0) { try { proteusHost.applyOps(JSON.stringify(payload)) } catch { /* 读数照常 */ } }
+            }
+            const widths: number[] = [readW()]
+            flip(true); widths.push(readW())
+            flip(false); widths.push(readW())
+            rep.b3a_probe = { nodeId: b3NodeId, widths }
+          } else {
+            notes.push(`B3a 探针：mount/节点缺失（mount.ok=${mOut.ok} node=${b3NodeId}）——判据 ㉕ 按缺失处理`)
+          }
+        } catch (e) {
+          notes.push(`B3a 探针异常：${String((e as Error)?.message ?? e)}`)
+        }
+        try {
+          proteusHost.mount(JSON.stringify({ viewport: inst.viewport, nodes: inst.nodes }))
+        } catch { /* 重挂失败 ⇒ 判据按 host_nodes 不符判红 */ }
+      } else {
+        notes.push('B3a 探针：产物无 b3a 段（夹具未覆盖 ⇒ 判据 ㉕ 按缺失处理）')
       }
     }
 

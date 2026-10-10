@@ -24,7 +24,7 @@ import type {
   SourceSubscription,
   EvaluatorSpec,
 } from '@proteus-vue/slot-runtime'
-import { isPureCallExprName } from '@proteus-vue/slot-runtime'
+import { isPureCallExprName, NUMERIC_LAYOUT_FIELDS } from '@proteus-vue/slot-runtime'
 import { scanReactiveSources } from './sources'
 import { compileExpr } from './expr'
 import type { ReactiveSource } from './sources'
@@ -689,22 +689,37 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
   {
     const layoutKeys = new Set<string>(APP_LAYOUT_FIELDS as readonly string[])
     const bad = new Set<string>()
-    for (const r of tplDynamicClassRules ?? []) for (const k of Object.keys(r.decls)) if (layoutKeys.has(k)) bad.add(k)
-    // 计划已生成 ⇒ 布局字段已**编译期可算**，缺的是宿主通道 ⇒ 提示语区分两件事
+    // ★★★B3a（2026-10-10）：**数值布局字段已支持**（走内核 SET_STYLE 二进制通道，见 slot-runtime
+    //   `NUMERIC_LAYOUT_FIELDS`）⇒ 只对其余布局字段（枚举 display/flexDirection… · grid 模板 ·
+    //   whiteSpace/wordBreak…）产诊断。
+    //   ★关键：判据看**运行期真正发射的字段名**——plan 把 `padding`/`margin` 对象**摊平**为
+    //     `paddingTop`（数值）；故先展开这两类对象，再判数值。
+    const consider = (k: string): void => {
+      if (!layoutKeys.has(k)) return
+      if (k === 'padding' || k === 'margin') {
+        // 对象形态：plan 摊平为四边数值 ⇒ 支持（不诊断）；linear 回退形态少用，此处按"已支持"从宽
+        return
+      }
+      if (!NUMERIC_LAYOUT_FIELDS.has(k)) bad.add(k)
+    }
+    for (const r of tplDynamicClassRules ?? []) for (const k of Object.keys(r.decls)) consider(k)
+    // 计划已生成 ⇒ 布局字段已**编译期可算**，缺的是通道 ⇒ 提示语区分两件事
     const planned = tplClassPlans !== undefined
     if (bad.size > 0) {
       diagnostics.push({
         severity: 'warn',
         code: 'VAPOR_DYNCLASS_LAYOUT_UNSUPPORTED',
         message:
-          '动态 :class 的自匹配类含**布局字段**（' +
+          '动态 :class 的自匹配类含**无二进制通道的布局字段**（' +
           [...bad].join(' / ') +
           '）——' +
           (planned
-            ? 'B2 预计算计划已含这些字段（编译期可算），但宿主**布局重建通道**尚未接线（B3 applier 范围）⇒ 端上暂不生效'
+            ? 'B2 预计算计划已含这些字段（编译期可算），但这些字段**无内核二进制通道**（枚举/对象/grid 类）⇒ 端上暂不生效'
             : '本节点计划未产出（见其他诊断）⇒ 端上不生效'),
         hint:
-          '布局类动态不可用的这段时间：把布局样式放静态 style / 静态 class；动态类用于状态色/字体/圆角等**绘制**属性（该通道已端到端可用）',
+          '★B3a 起**数值型布局字段**（width/height/margin*/padding*/flex*/gap/top/left/right/bottom/aspectRatio…）'
+          + '已支持（走内核 SET_STYLE）；**枚举/对象/grid 类**布局字段（如 display/flexDirection）尚不支持——'
+          + '把它们放静态 style / 静态 class，动态类用于数值布局字段或状态色/字体/圆角（绘制通道已可用）',
       })
     }
   }
