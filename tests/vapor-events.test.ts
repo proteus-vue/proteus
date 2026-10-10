@@ -149,9 +149,10 @@ describe('Vapor 事件编译 · ★★★方法引用 / 方法体（决策 #740 
   })
 
   // ★不支持形态：必须**诊断 + 不产出事件**（不静默——与 §"不支持形态"同纪律）
-  //   ★T2 起：带参/形参/if-else/局部变量已**支持**（见下方 T2 describe）；此处只留**仍不支持**的任意函数。
+  //   ★T2/T3 起：带参/形参/if-else/局部变量/`console.*` 均已**支持**（见下方 T2/T3 describe）；
+  //   此处只留**仍不支持**的任意函数（非 console、非组件方法的裸调用）。
   const unsupported: Array<[string, string, string, string]> = [
-    ['任意函数 console.log', ``, `<p-view @click="console.log(1)"></p-view>`, 'handler 形态不支持'],
+    ['任意未知函数 foo()', ``, `<p-view @click="foo()"></p-view>`, 'handler 形态不支持'],
   ]
   for (const [label, fn, tpl, expectMsg] of unsupported) {
     it(`${label} ⇒ 诊断（含修法）+ 不产出事件`, () => {
@@ -230,6 +231,45 @@ describe('Vapor 事件编译 · ★★★T2（带参 / 形参 / 局部变量 / i
       expect(r.diagnostics.length, body).toBeGreaterThan(0)
       expect(r.diagnostics.map((d) => d.message).join(' | ')).toContain(key)
     }
+  })
+})
+
+// ═══════════ ★★★T3：`console.*` → 面板日志（新 op `log`）═══════════
+describe('Vapor 事件编译 · ★★★T3（console.* → 面板日志）', () => {
+  const withScript = (body: string, tpl: string): string =>
+    `<template>\n${tpl}\n</template>\n\n<script setup lang="ts">\nconst count = ref(0)\n${body}\n</script>\n`
+
+  it('★`console.log(a, b)` ⇒ log 动作（level=log，实参各为求值程序）', () => {
+    const r = compileEvents(withScript(`function h() { console.log('hit', count.value); count.value++ }`, `<p-view @click="h"></p-view>`))
+    expect(r.diagnostics, r.diagnostics.map((d) => d.message).join('|')).toHaveLength(0)
+    expect(r.handlers.h0![0]).toEqual({
+      op: 'log',
+      level: 'log',
+      programs: [{ k: 'lit', v: 'hit' }, { k: 'root', name: 'count' }], // count.value 解包为 root count
+    })
+    expect(r.handlers.h0![1]).toMatchObject({ op: 'add', source: 'count' }) // 后续动作保留
+  })
+
+  it('★各 level 都认（info/warn/error/debug）', () => {
+    for (const lv of ['info', 'warn', 'error', 'debug'] as const) {
+      const r = compileEvents(withScript(`function h() { console.${lv}(count.value) }`, `<p-view @click="h"></p-view>`))
+      expect(r.handlers.h0![0], lv).toMatchObject({ op: 'log', level: lv })
+    }
+  })
+
+  it('★其它 console.*（table/time）⇒ 明确诊断（封闭集）', () => {
+    const r = compileEvents(withScript(`function h() { console.table(count.value) }`, `<p-view @click="h"></p-view>`))
+    expect(r.events).toHaveLength(0)
+    expect(r.diagnostics.map((d) => d.message).join(' | ')).toContain('console.table')
+  })
+
+  it('★方法调方法（已可用）：递归内联为动作（含带参）', () => {
+    const r = compileEvents(withScript(`function a() { b(3) }\nfunction b(n: number) { count.value += n }`, `<p-view @click="a"></p-view>`))
+    expect(r.diagnostics, r.diagnostics.map((d) => d.message).join('|')).toHaveLength(0)
+    expect(r.handlers.h0).toEqual([
+      { op: 'let', name: 'n', program: { k: 'lit', v: 3 } },
+      { op: 'add', source: 'count', program: { k: 'root', name: 'n' } },
+    ])
   })
 })
 

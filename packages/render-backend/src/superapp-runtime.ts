@@ -54,6 +54,8 @@ export interface SuperappRuntimeOptions {
   onNote?: (note: string) => void
   /** ★页面处理器运行期错误出口（决策 #712·source map）——转发给 `createScreenRuntime.onError`。 */
   onError?: (error: string) => void
+  /** ★T3 `console.*` 出口——转发给 `createScreenRuntime.onLog`（dev 面板 Console）。 */
+  onLog?: (level: 'log' | 'info' | 'warn' | 'error' | 'debug', values: unknown[], line: string) => void
   /** ★★★**运行期阶段耗时自采样**（CPU Profiler · 决策 #715）——dev 构建开启；缺省零开销。 */
   profile?: boolean
 }
@@ -125,6 +127,7 @@ export function createSuperappRuntime(opts: SuperappRuntimeOptions): SuperappRun
     ...(opts.seedData ? { seedData: opts.seedData } : {}),
     onNote: note,
     ...(opts.onError ? { onError: opts.onError } : {}),
+    ...(opts.onLog ? { onLog: opts.onLog } : {}),
     ...(opts.profile ? { profile: true } : {}),   // ★CPU Profiler（决策 #715）
   })
   let cur = ''

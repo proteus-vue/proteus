@@ -364,6 +364,7 @@ const T2_SFC = `<template>
 const t2x = ref(0)
 function add(n: number) {
   const step = n * 2
+  console.log('t2 tick', step)
   if (t2x.value > 10) { t2x.value = 0 } else { t2x.value += step }
 }
 </script>`
@@ -846,14 +847,15 @@ console.log(`[gen-vapor-fixture] ✅ 组件注册表：${Object.keys(parsed.comp
   const hasParam = t2acts.some((a) => a.op === 'let' && a.name === 'n')
   const hasLocal = t2acts.some((a) => a.op === 'let' && a.name === 'step')
   const hasIf = t2acts.some((a) => a.op === 'if' && Array.isArray(a.else) && a.else.length > 0)
+  const hasLog = t2acts.some((a) => a.op === 'log')
   const evCount = (parsed.t2?.events ?? []).length
-  if (!parsed.t2?.ok || !hasParam || !hasLocal || !hasIf || evCount < 1) {
+  if (!parsed.t2?.ok || !hasParam || !hasLocal || !hasIf || !hasLog || evCount < 1) {
     console.error(
-      `[gen-vapor-fixture] ✗ T2 夹具不完整（判据 ㉓ 将无证据）：let(n)=${hasParam} · let(step)=${hasLocal} · if/else=${hasIf} · 事件 ${evCount}`,
+      `[gen-vapor-fixture] ✗ T2/T3 夹具不完整（判据 ㉓ 将无证据）：let(n)=${hasParam} · let(step)=${hasLocal} · if/else=${hasIf} · console(log)=${hasLog} · 事件 ${evCount}`,
     )
     process.exit(1)
   }
-  console.log(`[gen-vapor-fixture] ✅ T2 夹具：带参 let(n) + 局部 let(step) + if/else 动作（事件 ${evCount}）`)
+  console.log(`[gen-vapor-fixture] ✅ T2/T3 夹具：带参 let(n) + 局部 let(step) + if/else + console(log) 动作（事件 ${evCount}）`)
 }
 // ★:style 对象展开（2026-10-03）：必须**逐键**（layout.width + paint.backgroundColor），不得有整键
 {

@@ -419,6 +419,30 @@ function degradeExpr(e: BNode, diag: (m: string, h?: string) => void, ctx: StmtC
   if (e.type === 'CallExpression') {
     const callee = e.callee as BNode | undefined
     const label = callee?.type === 'Identifier' ? `${String(callee.name)}(…)` : '调用表达式'
+    // ★★★T3（2026-10-10）：`console.<level>(…)` ⇒ `log` 动作（端上→面板 Console）。
+    //   真实方法体几乎都带 console 调试；端上不执行 script ⇒ 此前调用被整条拒（点了没反应）。
+    //   注意：`console.log` 的 callee 是 **MemberExpression**（object=console / property=log）。
+    if (callee?.type === 'MemberExpression' && callee.computed !== true) {
+      const obj = callee.object as BNode | undefined
+      const prop = callee.property as BNode | undefined
+      if (obj?.type === 'Identifier' && obj.name === 'console' && prop?.type === 'Identifier') {
+        const lv = String(prop.name)
+        if (lv === 'log' || lv === 'info' || lv === 'warn' || lv === 'error' || lv === 'debug') {
+          const progs: ExprProgram[] = []
+          for (const raw of (e.arguments as BNode[]) ?? []) {
+            const c = compileExprNode(raw, ctx.refNames)
+            if (!c.ok) {
+              diag(`console.${lv} 的实参表达式不支持：${c.unsupported}`, '日志实参须为纯求值表达式（成员访问/算术/比较/逻辑/三元/模板串）')
+              return []
+            }
+            progs.push(c.program)
+          }
+          return [{ op: 'log', level: lv as 'log' | 'info' | 'warn' | 'error' | 'debug', programs: progs }]
+        }
+        diag(`不支持 \`console.${lv}\``, '本版只认 console.log/info/warn/error/debug（其余 console.* 见封闭集纪律）')
+        return []
+      }
+    }
     // ★`emit(...)`（script 局部名，非 `$emit`）的变体误用——给专门的修法（而不是笼统"形态不支持"）
     if (callee?.type === 'Identifier' && /^(?:emit|\$emits?)$/.test(String(callee.name))) {
       diag(
@@ -429,7 +453,7 @@ function degradeExpr(e: BNode, diag: (m: string, h?: string) => void, ctx: StmtC
     }
     diag(
       `handler 形态不支持：\`${label}\``,
-      '在 <script setup> 里定义同名方法（`function name() {…}`）后写 `@click="name"` / `name()` 即可；不支持任意函数（如 console.log(...)）',
+      '在 <script setup> 里定义同名方法（`function name() {…}`）后写 `@click="name"` / `name()` 即可；不支持任意函数',
     )
     return []
   }

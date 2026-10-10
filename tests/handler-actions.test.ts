@@ -118,4 +118,15 @@ describe('★★★T2 动作执行器（App 三端共享）', () => {
     expect(e.emitted).toEqual([['bump', 9]])
     expect(e.navs).toEqual(['detail'])
   })
+
+  it('⑦ ★T3 log：`console.log(实参…)` 求值后交 onLog（多实参按序求值）', () => {
+    const data: Record<string, unknown> = { n: 7 }
+    const logs: Array<[string, unknown[]]> = []
+    runHandlerActions(
+      [{ op: 'log', level: 'warn', programs: [lit('hit'), root('n'), bin('*', root('n'), lit(2))] }],
+      { read: (k) => data[k], write: (k, v) => { data[k] = v } },
+      { onLog: (level, values) => logs.push([level, values]) },
+    )
+    expect(logs).toEqual([['warn', ['hit', 7, 14]]])
+  })
 })

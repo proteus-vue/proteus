@@ -95,6 +95,12 @@ export interface CreateScreenRuntimeOptions {
    */
   navigate?: (target: string) => void
   /**
+   * ★★★**页面处理器 `console.*` 出口**（T3，2026-10-10）——handler 里的 `console.log(...)` 动作
+   *   （编译期降级为 `{op:'log'}`）求值后逐条调用（`values` 为已求值的实参）。
+   *   缺省 ⇒ 转 `onNote`（面板可据前缀归类）；dev 面板可另接本出口到 Console 页（保留 level）。
+   */
+  onLog?: (level: 'log' | 'info' | 'warn' | 'error' | 'debug', values: unknown[], line: string) => void
+  /**
    * ★★★**运行期阶段耗时自采样**（CPU Profiler · 决策 #715）——dev 构建开启：给 `instantiate` /
    *   `flush` / `dispatch` / 每个 handler 计时，归因"卡在哪一段"。缺省 false ⇒ **零开销**（空实现）。
    *   采样经 `profileStats()` 排空 ⇒ 宿主每 tick 取走（随 `/ping?perf=` 上报面板）。
@@ -159,6 +165,14 @@ export interface ScreenRuntime {
  * // 每帧：rt.instance(cur).flush()（或在数据变更后调）
  * ```
  */
+/** `console.*` 实参 → 一行的可读文本（T3；对象/数组用 JSON，其余 `String`） */
+function fmtLog(v: unknown): string {
+  if (typeof v === 'string') return v
+  if (v === null) return 'null'
+  if (typeof v === 'object') { try { return JSON.stringify(v) } catch { return String(v) } }
+  return String(v)
+}
+
 export function createScreenRuntime(opts: CreateScreenRuntimeOptions): ScreenRuntime {
   const base = opts.contentIdBase // undefined ⇒ 恒等（VaporRenderHost 直用节点 id）
   const instances = new Map<string, ScreenRuntimeInstance>()
@@ -241,6 +255,12 @@ export function createScreenRuntime(opts: CreateScreenRuntimeOptions): ScreenRun
             onNav: (tgt) => {
               if (tgt && opts.navigate) opts.navigate(tgt)
               else note(`[screen-runtime] ${name}: $nav('${tgt}') 无 navigate 出口（未装配）`)
+            },
+            // ★T3：`console.*` ⇒ onLog（缺省转 note；dev 面板可另接 onLog 到 Console 页）
+            onLog: (level, values) => {
+              const line = `${name}: handler「${handlerName}」console.${level} ${values.map((v) => fmtLog(v)).join(' ')}`
+              if (opts.onLog) opts.onLog(level, values, line)
+              else note(`[screen-runtime] ${line}`)
             },
           })
         }, locByHandler.get(handlerName))
