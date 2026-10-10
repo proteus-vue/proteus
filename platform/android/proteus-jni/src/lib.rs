@@ -656,6 +656,46 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeAnimSeekScro
     forward_cstr(env, json, move |p| unsafe { ffi::proteus_layout_anim_seek_scroll(handle as u64, p) })
 }
 
+/// ★★★**跟手**（S3-T1，2026-10-10 · 输入延迟专项 #767）：宿主 MOVE 直接喂指针位移给内核 ⇒
+///   内核算平移（`follow_translate`，换算唯一实现在内核）⇒ 返回 `updates`（宿主用既有
+///   `applyAnimUpdates` 消费）。**全程不过 JS** —— 这是 S3 判据 `js_involved_gestures_ratio == 0` 的机制面。
+#[no_mangle]
+pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeLayoutFollow<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    handle: jni::sys::jlong,
+    node_id: jni::sys::jint,
+    dx: jni::sys::jfloat,
+    dy: jni::sys::jfloat,
+    axis: jni::sys::jint,
+    gain: jni::sys::jfloat,
+    min: jni::sys::jfloat,
+    max: jni::sys::jfloat,
+) -> jstring {
+    let out = std::panic::catch_unwind(|| -> String {
+        let p = unsafe {
+            ffi::proteus_layout_follow(
+                handle as u64,
+                node_id as u32,
+                dx,
+                dy,
+                axis as u8,
+                gain,
+                min,
+                max,
+            )
+        };
+        if p.is_null() {
+            return "{\"ok\":false,\"error\":\"null\"}".to_string();
+        }
+        let s = unsafe { std::ffi::CStr::from_ptr(p) }.to_string_lossy().into_owned();
+        unsafe { ffi::proteus_layout_free_string(p) };
+        s
+    })
+    .unwrap_or_else(|_| "{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string());
+    into_java_string(&mut env, out)
+}
+
 /// ★★**共享元素**（几何原语）：源矩形 + 目标节点 ⇒ dx/dy/scale（内核算，宿主零几何数学）
 #[no_mangle]
 pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeSharedElement<'local>(

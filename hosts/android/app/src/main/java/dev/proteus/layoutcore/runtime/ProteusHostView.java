@@ -2355,10 +2355,19 @@ public class ProteusHostView extends ViewGroup {
             //   `:active` 折出的 press* 字段，立即（同一 DOWN 内、零 JS 跨界）改绘制属性并重录帧。
             //   ⇒ "输入不过桥"：按下反馈延迟 = 0 个 JS 往返（对标 RN Pressable / Flutter InkWell 必过逻辑层）。
             applyPressAt(gestureTarget);
+            // ★★★S3-T1（2026-10-10 · 输入延迟专项 #767）：**跟手启动**——命中节点若有 `v-follow`
+            //   折出的 follow 规格，记下拖拽起点（后续 MOVE 直接喂内核，零 JS 跨界）。
+            beginFollowAt(gestureTarget, ev.getX(), ev.getY());
+        }
+        // ★★★S3-T1：MOVE ⇒ 指针位移直接喂内核跟随（换算在内核、宿主零数学、**零 JS 跨界**）。
+        //   ★放在 GestureDetector 之前：跟随只关心"手指在哪"，与平台识别器（tap/fling）互不依赖。
+        if (action == android.view.MotionEvent.ACTION_MOVE && followActive) {
+            applyFollowAt(ev.getX(), ev.getY());
         }
         // ★S1.1：UP/CANCEL ⇒ 还原按下态（与触碰开始时同一帧）
         if (action == android.view.MotionEvent.ACTION_UP || action == android.view.MotionEvent.ACTION_CANCEL) {
             clearPress();
+            endFollow();   // ★S3-T1：结束跟随（T1 停在终点；回弹属 S3-T2）
         }
         // ★交给平台识别器判定 tap / longpress / fling / scroll（不自研阈值与时间窗）
         detector().onTouchEvent(ev);
@@ -2405,6 +2414,66 @@ public class ProteusHostView extends ViewGroup {
     public int unbufferedDispatchErrors() { return unbufferedDispatchErrors; }
     private int unbufferedDispatchCount = 0;
     private int unbufferedDispatchErrors = 0;
+
+    /* ── ★★★S3-T1 跟手（`v-follow` → followAxis；MOVE 原生驱动内核，**零 JS 跨界**）──
+     *
+     * 【要证明什么（输入延迟专项 #767 · S3 §3）】"拖拽跟手"不进 JS：宿主 MOVE ⇒ 直接喂指针位移
+     *   给内核（`RustLayout.layoutFollow`，换算唯一实现在内核、宿主零数学）⇒ 内核写 `translate_x`
+     *   ⇒ 宿主帧回调采样绘制。⇒ MOVE 期间**一次 JS 都不调**（本类与手势 JS 通道无关）。
+     *   ★与 S1.1 按下态同族（"输入不过桥"）——都是"编译期折出字段 + 宿主原生即时应用"。
+     */
+    private java.util.Map<Integer, float[]> followSpecs = java.util.Collections.emptyMap();
+    private int followTarget = -1;
+    private float followStartX = 0f, followStartY = 0f;
+    private boolean followActive = false;
+    /** MOVE 事件被路由进内核跟随的次数（判据核"移动真的走了这条原生通路"）。 */
+    int followMoves = 0;
+    /** 内核返回"真的有字段变化"的次数（判据核"跟随真的改了变换"）。 */
+    int followApplied = 0;
+
+    /** 由 `VaporRenderHost` 建树时注入"哪些节点有跟手规格 + (axis,gain)"。 */
+    public void setFollowSpecs(java.util.Map<Integer, float[]> m) {
+        this.followSpecs = m != null ? m : java.util.Collections.emptyMap();
+    }
+
+    /** DOWN 命中节点 ⇒ 记跟随起点（有 follow 规格才启动；零 JS 跨界）。 */
+    private void beginFollowAt(int nodeId, float x, float y) {
+        if (nodeId < 0 || !followSpecs.containsKey(nodeId)) { followActive = false; followTarget = -1; return; }
+        followActive = true;
+        followTarget = nodeId;
+        followStartX = x;
+        followStartY = y;
+    }
+
+    /** MOVE ⇒ 指针位移（相对拖拽起点）喂内核（内核写字段 + 回 updates ⇒ 既有 animTx 通道重绘）。 */
+    private void applyFollowAt(float x, float y) {
+        if (!followActive || followTarget < 0 || coreHandle == 0L) return;
+        final float[] spec = followSpecs.get(followTarget);
+        if (spec == null) return;
+        final float dx = x - followStartX;
+        final float dy = y - followStartY;
+        final int axis = spec.length > 0 ? (int) spec[0] : 1;
+        final float gain = spec.length > 1 ? spec[1] : 1f;
+        followMoves++;
+        // ★换算唯一实现在内核（宿主零数学、无平方根/无缓动）；返回 updates 直接落既有绘制真源。
+        final String out = RustLayout.layoutFollow(coreHandle, followTarget, dx, dy, axis, gain, -1e9f, 1e9f);
+        if (applyAnimUpdates(out) > 0) followApplied++;
+    }
+
+    /** UP/CANCEL ⇒ 结束跟随（T1 无回弹——停在拖拽终点；回弹属 S3-T2）。 */
+    private void endFollow() {
+        followActive = false;
+        followTarget = -1;
+    }
+
+    /** ★S3-T1 探针：`{follow_nodes,moves,applied}`——判据核"跟手真的走了原生通路且改了变换"。 */
+    public String followProbe() {
+        return "{\"follow_nodes\":" + followSpecs.size() + ",\"moves\":" + followMoves
+                + ",\"applied\":" + followApplied + "}";
+    }
+
+    /** 复位跟随计数（探针开始时调用 ⇒ 读数只反映本次拖拽）。 */
+    public void resetFollowCounters() { followMoves = 0; followApplied = 0; }
 
     /**
      * 按**屏幕/视图坐标**做命中派发（与 `onTouchEvent` 同一条代码路径）。

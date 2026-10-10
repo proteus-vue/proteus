@@ -2047,6 +2047,53 @@ pub unsafe extern "C" fn proteus_layout_hit_test(handle: u64, x: f32, y: f32) ->
     }
 }
 
+/// ★★★**S3-T1（2026-10-10 · 输入延迟专项 #767）**：**跟手**入口——宿主 MOVE 直接喂指针给内核
+///   ⇒ 内核算平移（`follow_translate`）⇒ 返回是否变值（宿主据此重绘）。**全程不过 JS**。
+///
+/// 入参：`axis`（0=none/1=x/2=y/3=both）· `gain`（位移增益）· `min`/`max`（夹取区间）。
+/// 出参（JSON 字符串，与 `anim_seek` 同形）：`{"ok":true,"changed":N,"updates":[[id,tx,ty,…],…]}`
+///   —— 宿主用**既有** `applyAnimUpdates` 消费（同一条真源 `animTx`）；无变化时 `updates:[]`。
+///
+/// 【为什么走 FFI 而不是让宿主算】与 `seek_scroll` 同一纪律——**换算唯一实现在内核**（宿主零数学，
+///   三端同源）；且宿主 MOVE 期间**零次 JS 跨界**（这正是 S3 的判据 `js_involved_gestures_ratio == 0`）。
+///
+/// # Safety
+/// 返回指针须用 `proteus_layout_free_string` 释放。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_layout_follow(
+    handle: u64,
+    node_id: u32,
+    dx: f32,
+    dy: f32,
+    axis: u8,
+    gain: f32,
+    min: f32,
+    max: f32,
+) -> *mut c_char {
+    let r = std::panic::catch_unwind(|| -> Result<String, String> {
+        let mut reg = registry().lock().map_err(|_| "注册表锁失败".to_string())?;
+        let entry = reg.get_mut(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?;
+        let changed = crate::anim::follow_translate(
+            &mut entry.tree, node_id, dx, dy, axis, gain, min, max,
+        );
+        if !changed {
+            return Ok("{\"ok\":true,\"changed\":0,\"updates\":[]}".to_string());
+        }
+        // ★复用 `applyAnimUpdates` 的**既有 updates 线格式** ⇒ 宿主零新增解析（同一条真源 animTx）。
+        //   记录用**权威构建器** `collect_updates`（不手搓 JSON —— 字段与动画路径逐字段同源）。
+        let mut touched = std::collections::HashSet::new();
+        touched.insert(node_id);
+        let vis = crate::anim::AnimEngine::collect_updates(&entry.tree, &touched);
+        let updates: Vec<serde_json::Value> = vis.iter().map(visual_to_json).collect();
+        Ok(serde_json::json!({"ok": true, "changed": 1, "updates": updates}).to_string())
+    });
+    match r {
+        Ok(Ok(s)) => into_c_string(s),
+        Ok(Err(e)) => into_c_string(serde_json::json!({"ok": false, "error": e}).to_string()),
+        Err(_) => into_c_string("{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string()),
+    }
+}
+
 /// **从二进制 blob 建树**（★生产入口：方案 M0 计划「非 JSON，避免运行时解析开销」）。
 ///
 /// 【为什么需要它（本仓实测的量化依据）】

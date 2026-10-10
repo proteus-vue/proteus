@@ -1966,6 +1966,63 @@ function pressKeyOf(field: string): string {
   return `press${field.charAt(0).toUpperCase()}${field.slice(1)}`
 }
 
+/**
+ * ★★★**S3-T1 跟手规格解释**（2026-10-10 · 输入延迟专项 #767）：把 `v-follow="{ axis: 'x', gain: 1 }"`
+ *   的**静态对象字面量**解释成内核跟随参数（轴掩码 + 增益）。
+ *
+ * 【为什么复用 `parseStyleObject`】它就是"对象字面量 → 静态键 + 字面量值"的**唯一实现**（同一 babel 解析、
+ *   同一常量折叠口径）——本处不另造一套解析（避免两份漂移）。
+ *
+ * 【T1 边界（诚实）】只认 `axis`（`'x'`/`'y'`/`'both'` 或 0..3）与 `gain`（数值常量）；
+ *   `clamp`（夹取）/ `spring`（回弹）/ 非字面量值 ⇒ **诊断**（属 S3-T2，未接前不静默当已支持）。
+ *   轴掩码：0=none / 1=x / 2=y / 3=both（与内核 `follow_translate` 的 `axis_mask` 同编码）。
+ */
+function interpretFollowSpec(src: string): { axis?: number; gain?: number; diag: string[]; hint?: string } {
+  const diag: string[] = []
+  const hint = "v-follow 目前支持 axis: 'x'|'y'|'both'（或 0..3）与 gain（数值）；clamp/spring 属后续批次（S3-T2）"
+  if (!src) {
+    diag.push('缺对象字面量（如 v-follow="{ axis: \'x\' }"）')
+    return { diag, hint }
+  }
+  const parsed = parseStyleObject(src)
+  if (!parsed) {
+    diag.push('值须为**静态对象字面量**（如 v-follow="{ axis: \'x\' }"）——变量/字符串形态无法静态建规格')
+    return { diag, hint }
+  }
+  const AXIS: Record<string, number> = { x: 1, y: 2, both: 3, none: 0 }
+  const KNOWN = new Set(['axis', 'gain', 'clamp', 'spring', 'source'])
+  let axis: number | undefined
+  let gain: number | undefined
+  for (const e of parsed.entries) {
+    if (e.key === 'axis') {
+      if (typeof e.constValue === 'string') {
+        const m = AXIS[e.constValue.toLowerCase()]
+        if (m === undefined) diag.push(`axis "${e.constValue}" 未知（可用 'x' / 'y' / 'both'）`)
+        else axis = m
+      } else if (typeof e.constValue === 'number' && Number.isInteger(e.constValue) && e.constValue >= 0 && e.constValue <= 3) {
+        axis = e.constValue
+      } else {
+        diag.push('axis 须为字符串 \'x\'/\'y\'/\'both\' 或 0..3 的整数常量')
+      }
+    } else if (e.key === 'gain') {
+      if (typeof e.constValue === 'number') gain = e.constValue
+      else diag.push('gain 须为数值常量')
+    } else if (!KNOWN.has(e.key)) {
+      diag.push(`未知键 "${e.key}"（可用 axis / gain）`)
+    }
+  }
+  for (const pr of parsed.problems) {
+    if (pr.kind === 'nested' && (pr.key === 'clamp' || pr.key === 'spring')) {
+      diag.push(`${pr.key}（${pr.key === 'clamp' ? '夹取' : '松手回弹'}）属 S3-T2，本批未接`)
+    } else {
+      diag.push(`成员 \`${pr.key ?? pr.kind}\` 形态不支持（${pr.kind}）`)
+    }
+  }
+  // axis 缺省 ⇒ 'x'（T1 最常见轴；显式给错则 axis 未设，仍报诊断）
+  if (axis === undefined && diag.length === 0) axis = 1
+  return { ...(axis !== undefined ? { axis } : {}), ...(gain !== undefined ? { gain } : {}), diag, hint }
+}
+
 export function resolveClassStyles(
   rules: ClassStyleRule[],
   ancestors: StyleMatchNode[],
@@ -3464,6 +3521,21 @@ export function buildLayoutTemplate(
             'VAPOR_VMODEL_NO_INPUT_CONTROL',
           )
         }
+        // ★★★**S3-T1 跟手**（2026-10-10 · 输入延迟专项 #767 · `v-follow`）：
+        //   `v-follow="{ axis: 'x' }"` ⇒ 折进节点样式的 `followAxis`/`followGain` 扁平字段
+        //   （与 `press*` 同一条通道：随节点透传宿主，宿主 DOWN/MOVE **原生**驱动内核 `follow`，
+        //   **零 JS 跨界**——这是 S3 判据 `js_involved_gestures_ratio == 0` 的编译期起点）。
+        //   ★T1 只认 `axis`（'x'/'y'/'both' 或 0..3）与 `gain`（数值）；`clamp`（夹取）/`spring`（回弹）
+        //     属 S3-T2，未接前**明确诊断**（不静默当成已支持）。
+        if (p.type === 7 && p.name === 'follow') {
+          const followSrc = (p.exp as { content?: string } | undefined)?.content?.trim() ?? ''
+          const fo = interpretFollowSpec(followSrc)
+          if (fo.axis !== undefined) {
+            style.followAxis = fo.axis
+            if (fo.gain !== undefined) style.followGain = fo.gain
+          }
+          for (const m of fo.diag) diag(`${tag}(id=${id}) v-follow：${m}`, fo.hint, 'VAPOR_FOLLOW_SHAPE')
+        }
         // ★P2-5：v-memo 的**形态诊断**（只支持数组字面量——运行时按"逐项比较"建依赖表，
         //   动态形态（`v-memo="deps"` / 变量数组）无法静态建表 ⇒ 明确诊断，不静默按"总是更新"跑）
         if (p.type === 7 && p.name === 'memo') {
@@ -3502,7 +3574,7 @@ export function buildLayoutTemplate(
         //   指令收集成 `node.directives`；表外的走精确诊断（端上不执行 script ⇒ 指令体不会运行）。
         //   【为什么注册表在 slot-runtime】三端契约：编译器据此产诊断、桥据此执行（"一处实现"）。
         //   ★行内（v-for 内）指令本批不支持（需行作用域求值）——编译期诊断，不静默。
-        const KNOWN_DIRECTIVES = ['bind', 'on', 'for', 'if', 'else-if', 'else', 'show', 'model', 'slot', 'text', 'html', 'memo', 'once', 'cloak', 'pre']
+        const KNOWN_DIRECTIVES = ['bind', 'on', 'for', 'if', 'else-if', 'else', 'show', 'model', 'slot', 'text', 'html', 'memo', 'once', 'cloak', 'pre', 'follow']
         if (p.type === 7 && typeof p.name === 'string'
             && UNSUPPORTED_DIRECTIVES[p.name] === undefined
             && !KNOWN_DIRECTIVES.includes(p.name)) {

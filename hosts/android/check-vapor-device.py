@@ -959,6 +959,31 @@ def main() -> int:
     else:
         print(f"  ✓ ㉝ ★S1.1 按下态原生即时应用：{s11.get('press_nodes')} 个按下态节点 · 应用 {s11.get('applied')} 次（tap ⇒ DOWN 原生应用 / UP 还原，零 JS 跨界）")
 
+    # ── ㉞ ★★★S3-T1（输入延迟专项 #767）：**拖拽跟手零 JS 跨界**（`v-follow` → 宿主 MOVE 喂内核，
+    #   2026-10-10）── 判据：宿主 MOVE 被路由进内核跟随（moves>0）+ 内核真的改了变换（applied>0）
+    #   + 节点 translateX 跟手（拖 dx=120 ⇒ tx_after ≈ 120）。★这是 S3 判据 `js_involved_gestures_ratio == 0`
+    #   的设备端证据（跟随通路在宿主原生代码里，不经 JS）。
+    s3 = rep.get("s3_probe") or {}
+    if not s3 or s3.get("follow_nodes", -1) < 0:
+        print("  ◐ ㉞ S3-T1 跟手：本端夹具未覆盖（报告无 s3_probe）——如实跳过")
+    elif s3.get("follow_nodes", 0) <= 0:
+        fail(f"★S3-T1 跟手：无跟手节点（follow_nodes={s3.get('follow_nodes')}）——`v-follow` 未折出 followAxis")
+        ok = False
+    elif s3.get("moves", 0) <= 0:
+        fail(f"★S3-T1 跟手：拖拽 MOVE 未进入内核跟随（moves={s3.get('moves')}）——宿主 MOVE 未喂内核")
+        ok = False
+    elif s3.get("applied", 0) <= 0:
+        fail(f"★S3-T1 跟手：内核未报告变换变化（applied={s3.get('applied')}）——跟随未改字段")
+        ok = False
+    else:
+        tx = s3.get("tx_after", 0)
+        # 拖 dx=120（axis:x，gain=1）⇒ translateX ≈ 120（容差 ±8：注入 MOVE 步进的浮点近似）
+        if abs(tx - 120) > 8:
+            fail(f"★S3-T1 跟手：节点 translateX 未跟手（tx_after={tx}，期望≈120）——跟手未落到绘制真源")
+            ok = False
+        else:
+            print(f"  ✓ ㉞ ★S3-T1 拖拽跟手零 JS 跨界：{s3.get('follow_nodes')} 个跟手节点 · MOVE {s3.get('moves')} 次进内核 · 变更 {s3.get('applied')} 次 · translateX={tx}（拖 120 ⇒ 跟手到位）")
+
     # 附加观测（不判红，只如实报）
     una = rep.get("uninstantiated_slots", 0)
     if una:
