@@ -7,6 +7,8 @@
 //   分叉的后果是 handler 挂到别的节点上，症状伪装成"点错地方"）。
 import { describe, it, expect } from 'vitest'
 import { compileEvents, buildLayoutTemplate, buildVaporSubscriptions } from '@proteus-vue/compiler'
+import { evalExpr } from '@proteus-vue/slot-runtime'
+import type { ExprProgram } from '@proteus-vue/slot-runtime'
 
 const sfc = (template: string, script = `const count = ref(0)\nconst toggle = ref(false)\nconst boxW = ref(120)\nconst list = ref([{ id: 1, w: 10 }])\n`): string =>
   `<template>\n${template}\n</template>\n\n<script setup lang="ts">\n${script}</script>\n`
@@ -88,10 +90,130 @@ describe('Vapor 事件编译 · 支持形态', () => {
   })
 })
 
+// ═══════════ ★★★决策 #740 T1：事件处理器「方法引用 / 方法体」（2026-10-10）═══════════
+// 【为什么单列一组】App 端此前只认**内联单语句**；真实页面写 `@click="handleTap"` ⇒
+//   App 编不出事件（点了没反应），而 Web/小程序照常 ⇒ **三端分叉**（劝退级）。
+//   本组判据锁：方法引用/无参调用 ⇒ 内联方法体降级为**同一套动作**；多语句 ⇒ 多动作按序；
+//   ref `.value` 解包；不支持形态（带参/局部变量/if）⇒ **明确诊断**（不静默、不产出事件）。
+describe('Vapor 事件编译 · ★★★方法引用 / 方法体（决策 #740 T1）', () => {
+  const withScript = (body: string, tpl: string): string =>
+    `<template>\n${tpl}\n</template>\n\n<script setup lang="ts">\nconst count = ref(0)\nconst show = ref(false)\n${body}\n</script>\n`
+
+  it('方法引用 `@click="handleTap"`（方法体 count.value++）⇒ add 动作（ref .value 解包）', () => {
+    const r = compileEvents(withScript(`function handleTap() { count.value++ }`, `<p-view @click="handleTap"></p-view>`))
+    expect(r.diagnostics).toHaveLength(0)
+    expect(r.events).toHaveLength(1)
+    expect(r.handlers.h0).toEqual([{ op: 'add', source: 'count', program: { k: 'lit', v: 1 } }])
+  })
+
+  it('无参调用 `@click="handleTap()"` 与方法引用等价（同产物）', () => {
+    const a = compileEvents(withScript(`function handleTap() { count.value++ }`, `<p-view @click="handleTap"></p-view>`))
+    const b = compileEvents(withScript(`function handleTap() { count.value++ }`, `<p-view @click="handleTap()"></p-view>`))
+    expect(b.handlers.h0).toEqual(a.handlers.h0)
+  })
+
+  it('箭头函数方法表也识别（`const handleTap = () => {…}`）', () => {
+    const r = compileEvents(withScript(`const handleTap = () => { count.value++ }`, `<p-view @click="handleTap"></p-view>`))
+    expect(r.handlers.h0).toEqual([{ op: 'add', source: 'count', program: { k: 'lit', v: 1 } }])
+  })
+
+  it('★多语句方法体 ⇒ 多动作按序（"先算后写"）', () => {
+    const r = compileEvents(
+      withScript(`function handleTap() { count.value++; show.value = !show.value }`, `<p-view @click="handleTap"></p-view>`),
+    )
+    expect(r.diagnostics).toHaveLength(0)
+    expect(r.handlers.h0).toHaveLength(2)
+    expect(r.handlers.h0![0]).toEqual({ op: 'add', source: 'count', program: { k: 'lit', v: 1 } })
+    expect(r.handlers.h0![1]).toMatchObject({ op: 'set', source: 'show' })
+  })
+
+  it('★内联多语句 `@click="count++; show = !show"` ⇒ 两动作按序（此前诊断拒绝）', () => {
+    const r = compileEvents(sfc(`<p-view @click="count++; toggle = !toggle"></p-view>`))
+    expect(r.diagnostics).toHaveLength(0)
+    expect(r.handlers.h0).toHaveLength(2)
+    expect(r.handlers.h0![0]).toEqual({ op: 'add', source: 'count', program: { k: 'lit', v: 1 } })
+  })
+
+  it('方法体里的 `$nav` / `$emit` ⇒ 同内联动作（单点实现）', () => {
+    const nav = compileEvents(withScript(`function go() { $nav('detail') }`, `<p-view @tap="go"></p-view>`))
+    expect(nav.handlers.h0).toEqual([{ op: 'nav', target: 'detail' }])
+    const em = compileEvents(withScript(`function bump() { $emit('bump', count) }`, `<p-view><p-text @tap="bump">t</p-text></p-view>`))
+    // $emit 的载荷是 ref 源（count）⇒ 解包为 root
+    expect(em.handlers.h0).toEqual([{ op: 'emit', event: 'bump', program: { k: 'root', name: 'count' } }])
+  })
+
+  it('`this`-free 成员写法定态：非 ref 的 `.value` 属性**不**解包（只解包已知 ref）', () => {
+    // `obj` 不是 ref 工厂产物 ⇒ `obj.value` 保留为成员访问
+    const r = compileEvents(withScript(`const obj = { value: 1 }\nfunction h() { count.value = obj.value }`, `<p-view @click="h"></p-view>`))
+    expect(r.handlers.h0).toEqual([{ op: 'set', source: 'count', program: { k: 'mem', obj: { k: 'root', name: 'obj' }, key: 'value' } }])
+  })
+
+  // ★不支持形态：必须**诊断 + 不产出事件**（不静默——与 §"不支持形态"同纪律）
+  const unsupported: Array<[string, string, string, string]> = [
+    ['带参调用 add(2)', `function add(n: number) { count.value += n }`, `<p-view @click="add(2)"></p-view>`, '带实参'],
+    ['方法带形参', `function bump(e) { count.value++ }`, `<p-view @click="bump"></p-view>`, '带形参'],
+    ['if/else 语句', `function h() { if (show.value) { count.value++ } }`, `<p-view @click="h"></p-view>`, '暂不支持的语句'],
+    ['局部变量声明', `function h() { const y = 1; count.value = y }`, `<p-view @click="h"></p-view>`, '暂不支持的语句'],
+    ['任意函数 console.log', ``, `<p-view @click="console.log(1)"></p-view>`, 'handler 形态不支持'],
+  ]
+  for (const [label, fn, tpl, expectMsg] of unsupported) {
+    it(`${label} ⇒ 诊断（含修法）+ 不产出事件`, () => {
+      const r = compileEvents(withScript(fn, tpl))
+      expect(r.events, `${label} 不应产出事件`).toHaveLength(0)
+      expect(r.diagnostics.map((d) => d.message).join(' | ')).toContain(expectMsg)
+      expect(r.diagnostics.every((d) => (d.hint ?? '').length > 0), '每条诊断都要有修法').toBe(true)
+    })
+  }
+})
+
+// ═══════════ ★★★决策 #740 T1 · 端到端（编译 → 执行 → 数据变更）═══════════
+// 【为什么必须有】上面的判据只到"动作表编对了"；**真正的验收 = 点了数据真的变**。
+//   本组用设备端 `screen-runtime.runHandler` 的**同一套动作语义**（add/set + evalExpr）跑一遍，
+//   证明方法引用降级出的动作**真的改数据**（否则"编出来了"却"没效果"，等于没修）。
+describe('★★★决策 #740 T1 · 端到端（编译 → 执行 → 数据变更）', () => {
+  // 设备端 runHandler 的动作语义（与 render-backend/screen-runtime.ts 一致：add 累加 / set 赋值）
+  function runHandler(handlers: Record<string, unknown[]>, name: string, data: Record<string, unknown>): void {
+    for (const raw of handlers[name] ?? []) {
+      const a = raw as { op: string; source?: string; program?: ExprProgram }
+      const read = (n: string): unknown => data[n]
+      if (!a.source) continue
+      if (a.op === 'add') {
+        const cur = data[a.source]
+        const v = evalExpr(a.program!, { read })
+        data[a.source] = (typeof cur === 'number' ? cur : 0) + (typeof v === 'number' ? v : 0)
+      } else if (a.op === 'set') {
+        data[a.source] = evalExpr(a.program!, { read })
+      }
+    }
+  }
+  const withScript = (body: string, tpl: string): string =>
+    `<template>\n${tpl}\n</template>\n\n<script setup lang="ts">\nconst count = ref(0)\nconst show = ref(false)\n${body}\n</script>\n`
+
+  it('`@click="handleTap"`（方法体 count.value++）→ 点击后 count 递增（App 端不再"点了没反应"）', () => {
+    const r = compileEvents(withScript(`function handleTap() { count.value++ }`, `<p-view @click="handleTap"></p-view>`))
+    const data: Record<string, unknown> = { count: 0, show: false }
+    runHandler(r.handlers, r.events[0]!.handler, data)
+    expect(data.count).toBe(1)
+    runHandler(r.handlers, r.events[0]!.handler, data)
+    expect(data.count).toBe(2)
+  })
+
+  it('★多语句方法体（count.value++; show.value = !show.value）→ 两处都生效', () => {
+    const r = compileEvents(
+      withScript(`function handleTap() { count.value++; show.value = !show.value }`, `<p-view @click="handleTap"></p-view>`),
+    )
+    const data: Record<string, unknown> = { count: 0, show: false }
+    runHandler(r.handlers, r.events[0]!.handler, data)
+    expect(data.count).toBe(1)
+    expect(data.show).toBe(true)
+    runHandler(r.handlers, r.events[0]!.handler, data)
+    expect(data.show).toBe(false)
+  })
+})
+
 describe('Vapor 事件编译 · ★不支持形态必须产诊断（不静默）', () => {
   const cases: Array<[string, string, string]> = [
-    ['调用表达式', `<p-view @click="submit()"></p-view>`, 'handler 形态不支持'],
-    ['多语句', `<p-view @click="count++; toggle = !toggle"></p-view>`, '多条语句'],
+    ['调用表达式（任意函数）', `<p-view @click="submit()"></p-view>`, 'handler 形态不支持'],
     ['未支持事件', `<p-view @input="count++"></p-view>`, '事件未支持'],
     ['空 handler', `<p-view @click=""></p-view>`, 'handler 为空'],
   ]

@@ -18,7 +18,8 @@
 import { ref } from 'vue'
 
 // 唯一的动态状态：交互演示的计数。
-// ★四端一致：点击实时更新（App 端走内联动作 → 运行期 handler；方法引用 @click="fn" 在 App 端不产出事件）。
+// ★点击实时更新（App 端：内联动作 `@click="count++"` 与方法引用 `@click="handleTap"` 都支持；
+//   见 packages/compiler/src/vapor/events.ts——方法体在编译期降级为动作表）。
 const count = ref(0)
 </script>
 

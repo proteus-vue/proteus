@@ -20,12 +20,18 @@
 //   · `count = <纯表达式>`                                → `{op:'set', program}`
 //   · `toggle = !toggle`（一元非）                         → `{op:'set', program}`（程序里有 unary）
 //   · `show = item.id === 2`（含比较/逻辑）                → `{op:'set', program}`
-//   不支持：多语句块（`{ a++; b++ }`）、调用表达式（`foo()`）——一律**产诊断**（带修法）。
+//   · `$emit('e', expr)` / `$nav('屏')`                   → `{op:'emit'/'nav'}`（见下）
+//   · ★★★**多语句**（`a++; b++`）→ 多动作按序（决策 #740 T1）
+//   · ★★★**方法引用 / 无参调用**（`@click="handleTap"` / `handleTap()`）→
+//     **编译期内联** `<script setup>` 方法体并降级为动作（决策 #740 T1；ref `.value` 自动解包）。
+//   不支持（明确诊断，带修法）：带实参调用、方法内局部变量、if/else、循环、async、任意函数——
+//   一律**产诊断**（守"封闭集、无 eval"纪律，**不引入解释器**）。
 //   ★事件修饰符（2026-10-03 P2-3 起）：`.stop` / `.self` / `.once` **支持**（语义在运行时
 //     `slot-runtime/dispatch.ts` 的共享派发器）；`.prevent` / `.passive` / `.capture` /
 //     按键修饰符**产诊断但仍执行 handler**（没有对应语义，忽略是忠实的——见 splitModifiers）。
 import type { ExprProgram } from '@proteus-vue/slot-runtime'
-import { compileExpr } from './expr'
+import { compileExprNode, type RefNames } from './expr'
+import { parse as babelParse } from '@babel/parser'
 import { parse as sfcParse } from '@vue/compiler-sfc'
 import { parse as domParse } from '@vue/compiler-dom'
 import type { VueCompatDeps } from './sources'
@@ -222,117 +228,264 @@ function splitModifiers(rawName: string): { event: string; stop: boolean; self: 
   return { event, stop, self, once, notes }
 }
 
-const isIdent = (s: string): boolean => /^[A-Za-z_$][\w$]*$/.test(s)
+/* ══════════ ★★★事件处理器「方法引用 / 方法体」支持（2026-10-10 · 决策 #740 T1）══════════
+ *
+ * 【为什么单列这一层】此前 `compileStatement` 只认**内联单语句**（`@click="count++"`）；
+ *   真实页面几乎都写方法引用 `@click="handleTap"` ⇒ App 端编不出事件（`events:[]`）⇒
+ *   **点了没反应**（Web/小程序照常 ⇒ 三端分叉、劝退级）。本层把 `<script setup>` 里的
+ *   **方法体**在**编译期**降级为**动作列表**——与内联语句**同一套动作集**，运行期零改动地执行。
+ *   ★守纪律：只做"可静态降级为封闭动作集"的子集，其余**明确诊断**（不静默），**不引入解释器**。
+ *
+ * 【ref `.value` 解包】方法体写 `count.value++`（script 里 ref 走 .value）；而 Vapor 数据模型里
+ *   `count` 本身就是值 ⇒ 编译期把**已知 ref 源**上的 `.value` 解包为裸源（见 `expr.ts` 的 refNames）。
+ */
+interface BNode { type: string; [k: string]: unknown }
+interface MethodDef { params: number; body: BNode[]; line: number; isAsync: boolean }
+type MethodTable = Map<string, MethodDef>
+interface StmtCtx { methods: MethodTable; refNames: RefNames }
+
+/** 产生「带 `.value` 的 ref」的工厂（script 里这些名字是 ref，方法体访问走 `.value`） */
+const REF_FACTORIES = new Set(['ref', 'shallowRef', 'computed', 'customRef', 'toRef', 'defineModel'])
 
 /**
- * 编译 `@event="statement"` 的语句部分 → 动作列表。
- *
- * 【实现取向】只认**单条赋值/自增语句**（模板里 `@click` 的绝大多数写法）；
- *   其余形态产诊断。★不引入通用 JS 解释器（那是另一套语言工程，且违背"封闭集"的既有决策）。
+ * 从 `<script setup>` 源码抽取**方法表**（函数声明 / const 箭头/函数表达式）与 **ref 源名集合**。
+ * ★用已在用的 `@babel/parser` 解析（与 `script.ts` 同源），不引入新依赖。
  */
-function compileStatement(code: string, diag: (m: string, h?: string) => void): HandlerAction[] {
+function collectScriptMethods(scriptContent: string): { methods: MethodTable; refNames: Set<string> } {
+  const methods: MethodTable = new Map()
+  const refNames = new Set<string>()
+  if (!scriptContent.trim()) return { methods, refNames }
+  let ast: { program?: { body?: BNode[] } }
+  try {
+    ast = babelParse(scriptContent, { sourceType: 'module', plugins: ['typescript'] }) as unknown as { program?: { body?: BNode[] } }
+  } catch {
+    return { methods, refNames }
+  }
+  for (const st of ast.program?.body ?? []) {
+    if (st.type === 'FunctionDeclaration' && (st.id as BNode | undefined)?.name) {
+      const body = (st.body as BNode | undefined)?.type === 'BlockStatement' ? ((st.body as BNode).body as BNode[] ?? []) : []
+      methods.set(String((st.id as BNode).name), {
+        params: ((st.params as BNode[]) ?? []).length,
+        body,
+        line: (st.loc as { start?: { line?: number } })?.start?.line ?? 0,
+        isAsync: Boolean(st.async),
+      })
+      continue
+    }
+    if (st.type === 'VariableDeclaration') {
+      for (const d of (st.declarations as BNode[]) ?? []) {
+        const id = d.id as BNode | undefined
+        const init = d.init as BNode | undefined
+        if (id?.type !== 'Identifier' || !init) continue
+        const name = String(id.name)
+        if (init.type === 'CallExpression' && (init.callee as BNode | undefined)?.type === 'Identifier' && REF_FACTORIES.has(String((init.callee as BNode).name))) {
+          refNames.add(name)
+          continue
+        }
+        if (init.type === 'ArrowFunctionExpression' || init.type === 'FunctionExpression') {
+          const ib = init.body as BNode
+          const body = ib?.type === 'BlockStatement' ? ((ib.body as BNode[]) ?? []) : [{ type: 'ExpressionStatement', expression: ib }]
+          methods.set(name, {
+            params: ((init.params as BNode[]) ?? []).length,
+            body,
+            line: (st.loc as { start?: { line?: number } })?.start?.line ?? 0,
+            isAsync: Boolean(init.async),
+          })
+        }
+      }
+    }
+  }
+  return { methods, refNames }
+}
+
+/** 赋值/自增**目标**的源名：`x` 或 `x.value`（ref 形态）→ `x`；其余返回 null（产诊断） */
+function targetSourceName(node: BNode | undefined): string | null {
+  if (!node) return null
+  if (node.type === 'Identifier' && typeof node.name === 'string') return node.name
+  if ((node.type === 'MemberExpression' || node.type === 'OptionalMemberExpression') && node.computed !== true) {
+    const obj = node.object as BNode | undefined
+    const prop = node.property as BNode | undefined
+    if (obj?.type === 'Identifier' && prop?.type === 'Identifier' && prop.name === 'value') return String(obj.name)
+  }
+  return null
+}
+
+/** 方法体里 `$emit('name', payload?)` / `$nav('target')`——与内联模板同一套动作（单点实现） */
+function specialCallActions(e: BNode, diag: (m: string, h?: string) => void, ctx: StmtCtx): HandlerAction[] | null {
+  if (e.type !== 'CallExpression' || (e.callee as BNode | undefined)?.type !== 'Identifier') return null
+  const fn = String((e.callee as BNode).name)
+  const args = (e.arguments as BNode[]) ?? []
+  if (fn === '$nav' || fn === '$navigate') {
+    if (args.length === 1 && args[0]!.type === 'StringLiteral') return [{ op: 'nav', target: String(args[0]!.value) }]
+    diag('$nav 的目标须为静态字符串字面量', "例：@tap=\"$nav('detail')\"（动态目标/表达式为后续批次）")
+    return []
+  }
+  if (fn === '$emit') {
+    if (args.length < 1 || args[0]!.type !== 'StringLiteral') {
+      diag('$emit 的事件名须为静态字符串字面量', "例：$emit('bump', expr)")
+      return []
+    }
+    const event = String(args[0]!.value)
+    if (args.length === 1) return [{ op: 'emit', event }]
+    if (args.length === 2) {
+      const c = compileExprNode(args[1], ctx.refNames)
+      if (!c.ok) {
+        diag(`$emit 载荷表达式不支持：${c.unsupported}`, '载荷须为纯求值表达式（成员访问/算术/比较/逻辑/三元）')
+        return []
+      }
+      return [{ op: 'emit', event, program: c.program }]
+    }
+    diag('$emit 的载荷只支持一个实参', "把多个值合成一个对象/数组再传")
+    return []
+  }
+  return null
+}
+
+/** 内联一个已注册方法（方法体降级）。带形参（$event/实参）与自递归为明确边界——产诊断，不静默。 */
+function inlineMethod(name: string, diag: (m: string, h?: string) => void, ctx: StmtCtx, depth: number): HandlerAction[] {
+  const m = ctx.methods.get(name)
+  if (!m) return []
+  if (depth > 8) {
+    diag(`方法 ${name}() 递归展开过深（可能是自调用/循环引用）`, '请拆分方法或改用内联写法')
+    return []
+  }
+  if (m.params > 0) {
+    diag(
+      `方法 ${name}() 带形参（$event / 实参）——带参调用为后续批次`,
+      '把参数在模板里先算好（内联表达式），或把该方法改写为无参方法',
+    )
+    return []
+  }
+  return degradeStatements(m.body, diag, ctx, depth + 1)
+}
+
+/** 降级**一条表达式语句**（内联模板语句 / 方法体语句共用） */
+function degradeExpr(e: BNode, diag: (m: string, h?: string) => void, ctx: StmtCtx, depth: number): HandlerAction[] {
+  const sp = specialCallActions(e, diag, ctx)
+  if (sp !== null) return sp
+
+  if (e.type === 'UpdateExpression') {
+    const name = targetSourceName(e.argument as BNode)
+    if (!name) {
+      diag('自增/自减的目标须为源或 `源.value`', '例：count++ / count.value++')
+      return []
+    }
+    return [{ op: 'add', source: name, program: { k: 'lit', v: e.operator === '--' ? -1 : 1 } }]
+  }
+
+  if (e.type === 'AssignmentExpression') {
+    const name = targetSourceName(e.left as BNode)
+    if (!name) {
+      diag('赋值左侧须为源或 `源.value`', '只支持改一个顶层源（如 `count = …` / `count.value = …`）')
+      return []
+    }
+    const op = String(e.operator)
+    if (op === '=' || op === '+=' || op === '-=') {
+      const c = compileExprNode(e.right, ctx.refNames)
+      if (!c.ok) {
+        diag(`handler 右侧表达式不支持：${c.unsupported}`, '本版支持纯求值表达式（成员访问/算术/比较/逻辑/三元）')
+        return []
+      }
+      if (op === '=') return [{ op: 'set', source: name, program: c.program }]
+      const program: ExprProgram = op === '+=' ? c.program : { k: 'bin', op: '*', l: { k: 'lit', v: -1 }, r: c.program }
+      return [{ op: 'add', source: name, program }]
+    }
+    diag(`不支持的赋值运算符 \`${op}\``, '本版支持 = / += / -=')
+    return []
+  }
+
+  // ★方法引用（裸标识符）→ 内联方法体
+  if (e.type === 'Identifier' && ctx.methods.has(String(e.name))) return inlineMethod(String(e.name), diag, ctx, depth)
+  if (e.type === 'Identifier') {
+    diag(
+      `handler 里的 \`${String(e.name)}\` 不是本组件方法（本版不支持裸标识符 handler）`,
+      '在 <script setup> 里用 `function 名字() {…}` 定义该方法，或改用内联表达式（如 `@click="count++"`）',
+    )
+    return []
+  }
+
+  // ★方法调用 `name()`（无参）→ 内联方法体；带实参为后续批次（明确诊断，不静默）
+  if (e.type === 'CallExpression' && (e.callee as BNode | undefined)?.type === 'Identifier' && ctx.methods.has(String((e.callee as BNode).name))) {
+    const name = String((e.callee as BNode).name)
+    if (((e.arguments as BNode[]) ?? []).length > 0) {
+      diag(`方法调用带实参（${name}(…)）——带参调用为后续批次`, '在模板里先把参数算好，或改用内联写法；无参方法可直接写 `@click="name"`')
+      return []
+    }
+    return inlineMethod(name, diag, ctx, depth)
+  }
+
+  if (e.type === 'CallExpression') {
+    const callee = e.callee as BNode | undefined
+    const label = callee?.type === 'Identifier' ? `${String(callee.name)}(…)` : '调用表达式'
+    // ★`emit(...)`（script 局部名，非 `$emit`）的变体误用——给专门的修法（而不是笼统"形态不支持"）
+    if (callee?.type === 'Identifier' && /^(?:emit|\$emits?)$/.test(String(callee.name))) {
+      diag(
+        `handler 里的 \`${label}\` 不是受支持的 $emit 形态`,
+        "模板里请写 `$emit('事件名')` 或 `$emit('事件名', 表达式)`（静态名 + 最多一个实参）",
+      )
+      return []
+    }
+    diag(
+      `handler 形态不支持：\`${label}\``,
+      '在 <script setup> 里定义同名方法（`function name() {…}`）后写 `@click="name"` / `name()` 即可；不支持任意函数（如 console.log(...)）',
+    )
+    return []
+  }
+
+  diag(`handler 形态不支持：\`${String(e.type)}\``, "本版支持：`x++` / `x = <纯表达式>` / `x += n` / `$emit(...)` / `$nav('屏')` / 方法引用")
+  return []
+}
+
+/** 把**语句序列**逐条降级为动作（多语句 → 多动作，按序执行——"先算后写"语义保留） */
+function degradeStatements(stmts: BNode[], diag: (m: string, h?: string) => void, ctx: StmtCtx, depth: number): HandlerAction[] {
+  const out: HandlerAction[] = []
+  for (const st of stmts) {
+    if (st.type !== 'ExpressionStatement') {
+      diag(
+        `方法体含暂不支持的语句（${st.type === 'IfStatement' ? 'if/else' : String(st.type)}）`,
+        "本版支持：赋值 / 自增自减 / 复合赋值 / `$emit(...)` / `$nav('屏')`；if/局部变量/循环为后续批次",
+      )
+      continue
+    }
+    out.push(...degradeExpr(st.expression as BNode, diag, ctx, depth))
+  }
+  return out
+}
+
+/**
+ * 编译 `@event="statement"` 的语句部分 → 动作列表（整串 babel 解析）。
+ *   · 单条表达式语句（自增/赋值/复合/$emit/$nav）→ 既有形态；
+ *   · **多语句**（`a++; b++`）→ 多动作按序；
+ *   · **方法引用 / 无参调用**（`handleTap` / `handleTap()`）→ 内联该方法体降级后的动作。
+ *   ★不引入通用 JS 解释器（违背"封闭集"决策）；不支持形态**产诊断**（不静默）。
+ */
+function compileStatement(code: string, diag: (m: string, h?: string) => void, ctx: StmtCtx): HandlerAction[] {
   const src = code.trim()
   if (!src) {
     diag('handler 为空', '例：@click="count++"')
     return []
   }
-  // 多语句（含分号 / 花括号块）⇒ 不支持（明确说清）
-  if (src.includes(';') || src.includes('{')) {
-    diag(
-      `handler 含多条语句或代码块（本版只支持单条赋值/自增）：\`${src.slice(0, 40)}\``,
-      '请拆成多个独立 handler（如 @click="a++" 与另一个事件），或用计算属性收敛为一条赋值',
-    )
+  let ast: { program?: { body?: BNode[] } }
+  try {
+    ast = babelParse(src, { sourceType: 'module', plugins: ['typescript'] }) as unknown as { program?: { body?: BNode[] } }
+  } catch {
+    diag(`handler 解析失败（语法无法识别）：\`${src.slice(0, 40)}\``, '请检查写法（本版支持赋值/自增/复合赋值/$emit/$nav/方法引用）')
     return []
   }
-
-  // ① 自增 / 自减：`x++` `x--` `++x` `--x`
-  const upd = /^(?:([A-Za-z_$][\w$]*)(\+\+|--))|(?:(?:\+\+|--)([A-Za-z_$][\w$]*))$/.exec(src)
-  if (upd) {
-    const name = upd[1] ?? upd[3]!
-    const delta = (upd[2] ?? src.slice(0, 2)) === '++' ? 1 : -1
-    return [{ op: 'add', source: name, program: { k: 'lit', v: delta } }]
+  const stmts = ast.program?.body ?? []
+  if (stmts.length === 0) {
+    diag('handler 为空', '例：@click="count++"')
+    return []
   }
-
-  // ② 复合赋值：`x += expr` / `x -= expr`
-  const comp = /^([A-Za-z_$][\w$]*)\s*([+-])=\s*(.+)$/.exec(src)
-  if (comp) {
-    const name = comp[1]!
-    const sign = comp[2] === '-' ? -1 : 1
-    const e = compileExpr(comp[3]!.trim())
-    if (!e.ok) {
-      diag(`handler 右侧表达式不支持：${e.unsupported}`, '本版支持纯求值表达式（成员访问/算术/比较/逻辑/三元）')
-      return []
-    }
-    const program: ExprProgram = sign === 1 ? e.program : { k: 'bin', op: '*', l: { k: 'lit', v: -1 }, r: e.program }
-    return [{ op: 'add', source: name, program }]
+  // ★★**整条拒绝**（关键纪律）：任一条语句降级失败 ⇒ **整条 handler 不产出动作**
+  //   （绝不执行"部分动作"——那会用错值静默跑，正是本仓最忌的形态；与"宁可拒绝不可静默错"同源）。
+  let errored = false
+  const countingDiag = (m: string, h?: string): void => {
+    errored = true
+    diag(m, h)
   }
-
-  // ②.4 ★★★**导航动作 `$nav('目标')` / `$navigate('目标')`**（B1，2026-10-09）——
-  //   运行期一等动作（与 `<navigator>` 同语义）：handler 跑它时由运行期/宿主执行导航。
-  //   目标须为**静态字符串字面量**（屏名/路由名）——动态目标为后续批次（明确诊断）。
-  {
-    const nm = /^\$(?:nav|navigate)\(\s*(['"])([\w:/.$-]+)\1\s*\)$/.exec(src)
-    if (nm) return [{ op: 'nav', target: nm[2]! }]
-    const wrong = /^\$(?:nav|navigate)\s*\(/.exec(src)
-    if (wrong) {
-      diag(`$nav 的目标须为静态字符串字面量：\`${src.slice(0, 40)}\``, "例：@tap=\"$nav('detail')\"（动态目标/表达式为后续批次）")
-      return []
-    }
-  }
-
-  // ②.5 ★★★**`$emit('name', payload?)`**（P1-3 emits，2026-10-03）——子组件 → 父级组件事件。
-  //   形态：`$emit('bump')` / `$emit('bump', expr)`（单引号/双引号都认）。
-  //   ★为什么在赋值分支**之前**：`$emit(...)` 含逗号/括号，后面几个赋值正则不会误吃它，
-  //     但顺序上先判更清晰（也防未来正则放宽时被误匹配）。
-  {
-    const em = /^\$emit\(\s*(['"])([\w:-]+)\1\s*(?:,\s*([\s\S]+?))?\s*\)$/.exec(src)
-    if (em) {
-      const event = em[2]!
-      const payloadSrc = (em[3] ?? '').trim()
-      if (!payloadSrc) return [{ op: 'emit', event }]
-      if (payloadSrc.includes(',')) {
-        diag(`$emit 的载荷只支持一个实参：\`${src.slice(0, 48)}\``, '把多个值合成一个对象/数组再传（如 $emit(\'x\', {a, b}) 为后续批次，可用单个表达式先算）')
-        return []
-      }
-      const e = compileExpr(payloadSrc)
-      if (!e.ok) {
-        diag(`$emit 载荷表达式不支持：${e.unsupported}`, '载荷须为纯求值表达式（成员访问/算术/比较/逻辑/三元）')
-        return []
-      }
-      return [{ op: 'emit', event, program: e.program }]
-    }
-    // 变体误用诊断：`emit(...)`（script 局部名）/ 动态事件名
-    const wrong = /^(?:emit|\$emits?)\s*\(/.exec(src)
-    if (wrong) {
-      diag(
-        `handler 里的 \`${src.slice(0, 32)}…\` 不是受支持的 $emit 形态`,
-        '模板里请写 `$emit(\'事件名\')` 或 `$emit(\'事件名\', 表达式)`（静态名 + 最多一个实参）',
-      )
-      return []
-    }
-  }
-
-  // ③ 赋值：`x = expr`
-  const asg = /^([A-Za-z_$][\w$]*)\s*=\s*(.+)$/.exec(src)
-  if (asg) {
-    const name = asg[1]!
-    if (!isIdent(name)) {
-      diag(`handler 左侧不是简单标识符：\`${name}\``, '只支持改一个顶层源（如 `count = …`）')
-      return []
-    }
-    const e = compileExpr(asg[2]!.trim())
-    if (!e.ok) {
-      diag(`handler 右侧表达式不支持：${e.unsupported}`, '本版支持纯求值表达式（成员访问/算术/比较/逻辑/三元）')
-      return []
-    }
-    return [{ op: 'set', source: name, program: e.program }]
-  }
-
-  diag(
-    `handler 形态不支持：\`${src.slice(0, 40)}\``,
-    '本版支持：`x++` / `x--` / `x += n` / `x = <纯表达式>`；调用（如 `submit()`）与多语句待后续批次',
-  )
-  return []
+  const acts = degradeStatements(stmts, countingDiag, ctx, 0)
+  return errored ? [] : acts
 }
 
 /**
@@ -359,10 +512,13 @@ export function compileEvents(
   // ★事件源位置换算（决策 #712）：`domParse` 的 loc 是**模板内容**相对行——
   //   要锚回**整份 `.vue`** 的行号，须加上"内容起点之前的行数"（唯一实现在 source-loc.ts）。
   let bodyLineOffset = 0
+  // ★★★`<script setup>` 源码（方法体降级用；决策 #740 T1）——与 template 同一次 SFC 解析取出
+  let scriptContent = ''
   try {
     const parsed = vueParse(source, { filename: 'anonymous.vue' }).descriptor
     body = parsed.template?.content ?? ''
     bodyLineOffset = templateContentLineOffset(source, parsed)
+    scriptContent = [parsed.scriptSetup?.content, parsed.script?.content].filter((s): s is string => Boolean(s)).join('\n')
   } catch {
     diag('SFC 解析失败（事件编译跳过）', '请检查 SFC 形态')
     return out
@@ -378,6 +534,10 @@ export function compileEvents(
     diag(`模板解析失败（事件编译跳过）：${String((e as Error)?.message ?? e)}`, '请检查模板语法')
     return out
   }
+
+  // ★★★方法表 + ref 源名（决策 #740 T1）：`@click="handleTap"` 的方法体在此**编译期降级**为动作。
+  const { methods: scriptMethods, refNames } = collectScriptMethods(scriptContent)
+  const ctx: StmtCtx = { methods: scriptMethods, refNames }
 
   type EvNode = {
     type: number
@@ -427,7 +587,7 @@ export function compileEvents(
           diag(`@${vueHook} 不支持修饰符 \`.${mods.join('.')}\``, 'vnode 钩子没有修饰符语义——请去掉修饰符')
         }
         if (phase === 'mounted') {
-          const actions = compileStatement(String(p.exp?.content ?? '').trim(), diag)
+          const actions = compileStatement(String(p.exp?.content ?? '').trim(), diag, ctx)
           if (actions.length > 0) {
             const handler = `h${handlerSeq.length}`
             handlerSeq.push(handler)
@@ -457,7 +617,7 @@ export function compileEvents(
         //   = 监听子组件的 `$emit`（Vue 语义）⇒ 产 **componentEmit 绑定**（不冒泡、不 hitTest）。
         //   ★非组件元素上的自定义事件名仍走"事件未支持"诊断（原生元素没有自定义事件源）。
         if (isComponentTag) {
-          const actions = compileStatement(value, diag)
+          const actions = compileStatement(value, diag, ctx)
           if (actions.length === 0) continue
           if (stop || self) {
             diag(
@@ -484,7 +644,7 @@ export function compileEvents(
       }
       // 修饰符诊断（`.prevent` 等无对应语义 / 按键修饰符 / 未知）——**不阻碍绑定**
       for (const note of modNotes) diag(`@${rawName}：${note}`, '语义修饰符见 packages/slot-runtime/src/dispatch.ts（.stop/.self/.once）')
-      const actions = compileStatement(value, diag)
+      const actions = compileStatement(value, diag, ctx)
       if (actions.length === 0) continue
       // handler 命名：`h<序号>`（确定性——同一份源码每次编译同名，便于对账）
       const handler = `h${handlerSeq.length}`

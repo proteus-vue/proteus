@@ -13,14 +13,15 @@ import path from 'node:path'
 import { buildAppRuntimeContent } from '../packages/cli/src/app-runtime-content'
 
 /** 造一个最小 App 工程（router/auto-routes.ts + pages/*.vue + proteus.config.ts） */
-function makeTempProject(): string {
+function makeTempProject(pageSource?: string): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-rt-'))
   fs.mkdirSync(path.join(dir, 'router'), { recursive: true })
   fs.mkdirSync(path.join(dir, 'pages'), { recursive: true })
   // 页面：`count` 初值 + `@tap` 自增 + 插值显示（⇒ 事件 + handler + L1 订阅源都应被编出）
   fs.writeFileSync(
     path.join(dir, 'pages', 'idx.vue'),
-    `<template>
+    pageSource ??
+      `<template>
   <view class="box" @tap="count++">
     <text>{{ count }}</text>
   </view>
@@ -70,5 +71,32 @@ describe('★B1 · App 运行期屏内容产物（buildAppRuntimeContent）', ()
   it('② 缺 router/auto-routes.ts ⇒ 明确报错（不静默）', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-rt-empty-'))
     await expect(buildAppRuntimeContent(dir, 'android')).rejects.toThrow(/auto-routes/)
+  })
+
+  it('★③ 方法引用 `@tap="handleTap"` ⇒ App 产物**真的**编出事件 + 动作（决策 #740 T1）', async () => {
+    // 【回归锁】此前 App 端只认内联单语句 ⇒ 方法引用**不产出事件**（events:[]）⇒ 点了没反应。
+    //   本判据走**真实 App 管线**（buildAppRuntimeContent → runtime-content.json），
+    //   断言 method 引用被降级为动作、产出 events + handlers（不再是空）。
+    const dir = makeTempProject(
+      `<template>
+  <view class="box" @tap="handleTap">
+    <text>{{ count }}</text>
+  </view>
+</template>
+<script setup lang="ts">
+import { ref } from 'vue'
+const count = ref(0)
+function handleTap() { count.value++ }
+</script>
+`,
+    )
+    const r = await buildAppRuntimeContent(dir, 'android')
+    expect(r.ok).toBe(true)
+    const art = JSON.parse(fs.readFileSync(r.outFile, 'utf-8'))
+    const page = art['idx']
+    expect(page.events.length, '方法引用必须产出事件（不是 []）').toBeGreaterThanOrEqual(1)
+    expect(page.events[0].event).toBe('tap')
+    const acts = Object.values(page.handlers as Record<string, Array<{ op?: string }>>).flat()
+    expect(acts.some((a) => a.op === 'add'), 'handleTap 的 count.value++ 降级为 add 动作').toBe(true)
   })
 })

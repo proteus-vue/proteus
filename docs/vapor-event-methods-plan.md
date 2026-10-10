@@ -1,13 +1,33 @@
 # Vapor 事件处理器「方法引用 / 方法体」支持 —— 立项与工作量评估
 
-> **状态**：**立项评估（2026-10-09 · 决策 #740）。本轮未动工**——按用户决定「大的话今天先不用动工，
-> 写入明天的计划」。
+> **状态**：**T1 已交付（2026-10-10）**——方法引用 / 无参调用 + 多语句方法体（含 ref `.value`、
+>   `$emit`/`$nav`）在 **编译期降级为动作表**；三端共用同一套（Web/MP 本来支持）。T2（带参 / `$event` /
+>   局部变量 / `if-else`）待做（各有精确诊断，不静默）。
 > **一句话**：App 端（Vapor）的事件处理器**只接受内联单语句**（`@click="count++"`），
-> **拒绝方法引用/调用**（`@click="handleTap"`/`handleTap()`）、**多语句**、**调函数**——
-> 而真实业务页面几乎都用「方法 + 多语句」，所以模板之外的页面在 App 端**点了没反应**。
-> 本项要把它补上（**编译期把方法体降级为动作列表**，仍守"纯数据、无 eval、封闭集"纪律）。
+> **拒绝方法引用/调用**（`@click="handleTap"`/`handleTap()`）——真实业务页面几乎都用「方法」，
+> 于是模板之外的页面在 App 端**点了没反应**。本项把**方法体在编译期降级为动作列表**（守"纯数据、无 eval、
+> 封闭集"纪律，**不引入解释器**）补齐。
 
 ---
+
+## 0. 交付状态（2026-10-10）
+
+| 档 | 内容 | 状态 |
+|---|---|---|
+| **T1** | 方法引用/无参调用（`@click="handleTap"` / `handleTap()`）+ 多语句方法体（赋值/自增/复合赋值 + `$emit`/`$nav`，ref `.value` 自动解包） | ✅ **已交付**（`packages/compiler/src/vapor/events.ts` + `expr.ts`；判据 `tests/vapor-events.test.ts` · 真实 App 管线 `tests/app-runtime-content.test.ts`） |
+| **T2** | 带参调用 `add(2)` / `$event` / 方法内**局部变量** + `if/else` | ⏳ 待做（**均有精确诊断**：`带实参` / `带形参` / `暂不支持的语句`，带修法） |
+| **T3** | 方法调方法、`console.*` 转面板日志、模板串拼接 | ⏳ 待做 |
+| **不做** | 循环 / async / 任意 JS / 动态事件名 `@[ev]` | 守"封闭集、无 eval、编译期可判定" |
+
+**实现要点（T1）**：`<script setup>` 用 `@babel/parser` 抽**方法表**（`function` / `const fn = () => {}`）
++ **ref 源名集合**（`ref/shallowRef/computed/customRef/toRef/defineModel`）；`compileStatement` 改为
+babel 解析整串 → 逐语句降级为动作（多语句 ⇒ 多动作按序）；方法引用/无参调用 ⇒ **内联方法体**降级。
+`expr.ts` 增 `refNames` 注入 ⇒ **已知 ref 上的 `.value` 解包为裸源**（否则 `count.value` 在端上
+`read('count')` 得数值再取 `.value` = undefined，静默算错）。**整条拒绝**纪律：任一语句降级失败 ⇒
+整条 handler 不产出动作（绝不"部分动作"用错值静默跑）。
+
+---
+
 
 ## 1. 现象与精确边界（先取证，别扩大也别缩小）
 
@@ -24,21 +44,27 @@
   | `@tap="$nav('detail')"` | ✅ `{op:'nav', target}` |
   | `@bump="$emit('x', expr)"`（组件事件） | ✅ `{op:'emit'}` |
   | 事件修饰符 `.stop` / `.self` / `.once` | ✅ 真语义（共享派发器） |
-- ❌ **不支持（本项要补）**：
+- ✅ **T1 后新支持（2026-10-10）**：
+  | 写法 | 结果 |
+  |---|---|
+  | `@click="handleTap"`（方法引用） | ✅ 内联方法体 → 动作列表（`tests/vapor-events.test.ts`） |
+  | `@click="handleTap()"`（无参调用） | ✅ 同方法引用 |
+  | `@click="a++; b++"`（多语句） | ✅ 多动作按序 |
+  | 方法体 `count.value++` / `count.value = expr` / `$emit` / `$nav` | ✅（ref `.value` 自动解包） |
+- ❌ **仍不支持（T2/T3；均有精确诊断 + 修法，不静默）**：
   | 写法 | 现状 |
   |---|---|
-  | `@click="handleTap"`（方法引用） | ❌ 诊断 `handler 形态不支持`；**App 端不产出事件** ⇒ 点了没反应 |
-  | `@click="handleTap()"`（方法调用） | ❌ 同上 |
-  | `@click="add(2)"`（带参调用） | ❌ 同上 |
-  | `@click="a++; b++"`（多语句） | ❌ 诊断 `含多条语句或代码块` |
-  | `@click="submit()"`（调业务函数） | ❌ 同上 |
+  | `@click="add(2)"`（带参调用） | ❌ 诊断 `带实参` ⇒ 不产出事件（T2） |
+  | 方法带形参（`$event`） | ❌ 诊断 `带形参`（T2） |
+  | 方法内**局部变量** / `if/else` | ❌ 诊断 `暂不支持的语句`（T2） |
+  | `@click="submit()"`（任意函数） | ❌ 诊断 `handler 形态不支持`（围栏外） |
 
 **为什么"劝退"**：Web/小程序端**能跑真实方法**（真 Vue / 完整 JS）——于是**同一份 `.vue`**，
 Web 点了有用、App 点了没反应。对第一次跑模板/写页面的人，这就是"跨端框架点不动"。
 
-**证据**：`packages/compiler/src/vapor/events.ts` 的 `compileStatement`（只认单条赋值/自增/`$emit`/`$nav`）；
-运行期 `packages/render-backend/src/screen-runtime.ts` 的 `runHandler`（只执行 `set/add/emit/nav` 动作）。
-能力清单 `docs/Proteus_Vapor能力清单.md` #16 已如实登记为「诊断拒绝」。
+**证据**：`packages/compiler/src/vapor/events.ts` 的 `compileStatement`（T1 起走 babel 解析 +
+方法体降级）；运行期 `packages/render-backend/src/screen-runtime.ts` 的 `runHandler`（执行 `set/add/emit/nav` 动作——
+**T1 未改运行期**，方法体降级出的就是同一套动作）。能力清单 `docs/Proteus_Vapor能力清单.md` #16 已更新。
 
 ---
 
@@ -83,7 +109,6 @@ Vapor 事件模型的既定纪律是「**编译期产出纯数据（动作列表
 > **附带必做**（不单列工时，但别漏）：Vapor 面改动 ⇒ **必须三端重跑** `check:vapor-three-end`
 > （Android/鸿蒙/iOS 各重跑 `run-vapor.sh`/`run-selfdraw.sh --vapor` 并提交 `results/vapor.json`）；
 > 能力清单 #16 / 模板 / 官网 guides/09 事件写法段同步；`tests/vapor-events.test.ts` 扩判据。
-
 ## 5. 影响面 / 风险
 
 - **仅 App（Vapor）路径**——Web/小程序走真实 Vue/JS，本来就支持方法；本项让三端**行为对齐**。
@@ -105,19 +130,33 @@ Vapor 事件模型的既定纪律是「**编译期产出纯数据（动作列表
 4. `check:vapor-three-end` 三端重跑通过（指纹一致）。
 5. 单测：`vapor-events` 扩（方法引用/调用/多语句/带参/if-else 的正反判据）+ golden 不变性。
 
-## 7. 建议排期（明天可开工）
+### T1 验收落点（2026-10-10）
 
-- **D1**：`<script setup>` 方法表发现 + 方法体 AST 降级骨架（T1 ①②）+ 单测。
-- **D2**：`compileEvents` 接方法引用/调用（T1 ③）+ 运行期核对 + 真机（Android 起）。
-- **D3**：三端重跑 `check:vapor-three-end` + 文档/清单同步 + 收尾（T1 交付）。
+- ✅ ① 编译期：`tests/vapor-events.test.ts`（方法引用/无参/箭头/多语句/ref `.value` 解包/`$emit`/`$nav` +
+  不支持形态正反判据 + 端到端 runHandler 语义）。
+- ✅ ② 真实 App 管线：`tests/app-runtime-content.test.ts` ③（方法引用 ⇒ `runtime-content.json` **真产出** `events` + `add` 动作）。
+- ✅ ③ golden：既有内联写法产物未动（`tests/golden.test.ts` / `update-ops-golden` 全绿）+ `pnpm test:coupled` 290 全绿。
+- ✅ ④ 文档：能力清单 #16 / 模板注释 / guides 09（中英）。
+- ⏳ ⑤ 真机三端：**本机仅 Android + 鸿蒙**（iOS 无 Xcode——已取证 `xcode-select -p` / `xcrun --find devicectl`
+  均失败）。★**且共享设备夹具 `hosts/android/gen-vapor-fixture.mjs` 未改**（其事件全为内联形态 ⇒ 编译产物**逐字节不变**
+  ⇒ 三端 `results/vapor.json` 不失效）；方法引用属**编译期**新增能力，端上执行的动作集**不变**（`set/add/emit/nav`），
+  故 T1 不引入端侧行为变更。⇒ **未重跑三端夹具**（若为"显式跑方法引用形态"再单独扩展夹具，届时须三端同跑）。
+
+## 7. 排期（T1 已按此完成）
+
+- ~~D1~~：`<script setup>` 方法表发现 + 方法体 AST 降级骨架（T1 ①②）+ 单测。 ✅
+- ~~D2~~：`compileEvents` 接方法引用/调用（T1 ③）+ 单测 + 真实 App 管线判据。 ✅
+- ~~D3~~：文档/清单同步 + 收尾（**T1 交付**）。 ✅
 - **D4–D6**：T2（带参 / `$event` / 局部变量 / `if-else` 条件 op）+ 三端重跑。
 - **D7**：缓冲 / 边界诊断打磨 / 官网 guides 更新。
 
 ---
 
-## 8. 现状缓解（本轮已做的过渡，用户不必等本项）
+## 8. 现状缓解（已随 T1 更新）
 
-- 起步模板已改用**内联写法** `@click="count++"`（四端一致、真机验证）——见决策 #739。
-- 官网 guides/09「页面构成」已加**事件写法提示**（App 端只认内联，方法引用在 App 端不产出事件）。
+- 起步模板保留**内联写法** `@click="count++"`（最简单、四端已验证）——见决策 #739；注释已说明
+  方法引用现也支持。
+- 官网 guides/09（中英）事件写法段已更新：列出 App 端**现支持**（内联 + 方法引用/无参调用）
+  与**仍不支持**（带参/`$event`/局部变量/`if-else`/循环/async/任意函数）的边界。
 
-> ⇒ 本项做完后，这两处过渡说明可回收（方法引用将四端一致可用）。
+> 注：模板保持内联是**风格选择**（最小示例），不再因为"App 不支持方法引用"而被迫——#739 的过渡说明已回收。

@@ -76,9 +76,9 @@ describe('create-proteus copyTemplate', () => {
     expect(page).not.toMatch(/<p-[a-z]/)
     // ★跨端安全写法：静态 class + 令牌；无 :hover/伪类选择器
     expect(page).not.toMatch(/:hover\s*[,{]/)
-    // ★事件用**内联动作**（App 事件编译只支持内联，不支持方法引用 @click="fn"——否则 App 端不产出事件，按钮点不动）
+    // ★事件用**内联动作**（最小、四端已验证的写法）——App 事件编译现同时支持方法引用
+    //   `@click="handleTap"`（决策 #740 T1，编译期内联方法体），但起步模板保持最简形态。
     expect(page).toMatch(/@click="count\+\+"/)
-    expect(page).not.toMatch(/@click="handleTap"/)
   })
 
   it('★全局样式四端同源：global.css 存在 + config.globalStyle 指向 + main.ts import', () => {
