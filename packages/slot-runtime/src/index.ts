@@ -51,7 +51,7 @@ export type { ConditionId, TierFacts, TierDecision, ExplainRow } from './tier'
 export type { SubscriptionTable, SourceSubscription, SlotSubscription, EvaluatorSpec, MemoGroup, DynamicClassRule } from './table'
 export { resolveDynamicClasses } from './table'
 // ★★★G-61 B2（2026-10-05）：动态 :class 预计算计划 · 运行期 O(1) 查表（Profile §5）
-export { applyDynamicClassPlan, bitmapOfDynamicClasses, groupStateOf, NUMERIC_LAYOUT_FIELDS, layoutNumber } from './dynamic-class'
+export { applyDynamicClassPlan, bitmapOfDynamicClasses, groupStateOf, NUMERIC_LAYOUT_FIELDS, layoutNumber, ENUM_LAYOUT_FIELDS, layoutEnumIndex } from './dynamic-class'
 export type { DynamicClassPlan, DynamicClassLookup } from './dynamic-class'
 // ★V6：表达式程序（含运算的表达式的标准求值路径）
 export { evalExpr, PURE_CALLS, isPureCallName, PURE_METHODS, isPureMethodName, isPureCallExprName, GLOBAL_CONST_MEMBERS } from './expr'

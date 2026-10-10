@@ -2559,3 +2559,12 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **⑥ 验证**：`vapor-sfc-to-tree` ⑥（发内核 SET_STYLE、不进 onPaintProp）· Rust 单测（新映射臂）· 全量 **5658** · vue-tsc 0。能力棘轮 `VAPOR_DYNCLASS_LAYOUT_UNSUPPORTED` **28→18**（已 --update）。
 **⑦ 教训**：a) ★★★**"布局字段不支持"≠"整块不支持"，先分层**——**数值字段有 host-agnostic 的内核二进制通道**（零宿主改动），枚举/对象/grid 才要新协议；按"数值 vs 枚举"切档，一轮即交付一半（142+262 字段）；b) ★★★**"绕了远路"是根因**——运行期把**布局**字段也塞进**绘制**补丁通道（通道语义不符）⇒ 不重排；**同一数据要按语义分流到正确通道**（与建 A④ z-index"按语义层映射"同族）；c) ★★**清除/回退要显式**——plan 关闭类返回该字段**基线/null** ⇒ 必须发 **UNSET**（否则样式残留）；探针 `[1200,200,200]` 一眼看出"清了没回退"；d) ★**flex 容器的初始尺寸**会干扰几何锚（stretch）——夹具用 `align-items:flex-start` 让子节点内容宽（0）; e) ★**"零宿主改动"是可追求的目标**：借内核既有的 f32 通道绕开三端 applier。
 **⑧ 余下（B3b）**：枚举/grid 类布局字段（`display`/`flexDirection`/`position`/`grid*`…）——需**新内核 op（字符串/枚举载荷）+ 三端宿主**（或扩 `PatchStyle`），**单独立项**（≈3–4 人日）。
+
+754. **★★★Vapor B3b 交付：动态 `:class` 的**枚举布局字段**端上真生效（索引编码走内核二进制 SET_STYLE）**（2026-10-10）：
+**① 承接**：B3a 后余下最高价值项——枚举布局字段（`display` 50 · `alignItems` 25 · `flexDirection` 18 · `position` 11 · `flexWrap` 10 · `overflow` 9）。
+**② 关键洞察**：**枚举（字符串）字段也能走同一条 host-agnostic 二进制 `SET_STYLE`**——把值**索引编码**为 f32（与数值字段同通道）⇒ 仍**零宿主改动**。不必像先前估计的"需新内核 op（字符串载荷）+ 三端宿主"。
+**③ 交付**：① JS `ENUM_LAYOUT_FIELDS`（`display`/`flexDirection`/`flexWrap`/`position`/`overflow`/`alignItems`，各含**值表 + 默认索引**）；`layoutEnumIndex`（大小写不敏感）。② 运行期 `paint.class` 分流加枚举臂 → `SET_STYLE`(index)；**清除回退**＝发**默认索引**。③ 内核 `apply_style_key` 加**索引解码臂**（与 JS 表**逐字同序**——跨语言契约；`display` 由旧二元映射升级为 0=flex/1=grid/2=none）。④ 编译器诊断收窄（数值 + 枚举白名单不诊断；仅 grid/whiteSpace/wordBreak/overflowX-Y/justify*/alignContent/alignSelf 诊断）。
+**④ 三端真机判据 ㉖**（`.hrow{flex-direction:row}` 容器 column↔row）：子2 x `[0,120,0]`（column→row→column）——**Android/鸿蒙/iOS 全过** + `check:vapor-three-end` 指纹一致（32 项 × 3 端）。
+**⑤ 验证**：`vapor-sfc-to-tree` ⑦（display grid=1 / flexDirection row=0 / alignItems center=7）· Rust 单测（索引解码臂）· 全量 **5659** · vue-tsc 0。能力棘轮 `VAPOR_DYNCLASS_LAYOUT_UNSUPPORTED` **18→10**（已 --update）。
+**⑥ 教训**：a) ★★★**"枚举必须新协议"是未验证的假设**——字符串值可**索引编码**复用既有 f32 通道（本仓"同一通道装不同语义"的又一例；同 #753 教训"分层"）；b) ★★**跨语言索引表要"逐字同序"并写在两处注释里**（JS `ENUM_LAYOUT_FIELDS` ↔ Rust `apply_style_key`）；c) ★★**"默认值解码"是清除回退的另一半**（数值发 UNSET/None；枚举发默认索引——内核默认须与 JS 表 `default` 一致）；d) ★**旧二元映射（display 0/1）升级时要护回归**——`display` 旧编码 1=Flex 现为 Grid ⇒ 只改无 TS 发射方的遗留臂（已确认无发射方）。
+**⑦ 余下（B3c）**：grid 模板（`gridTemplateColumns/Rows/Areas`）· `lineClamp` · `whiteSpace` · `wordBreak` · `overflowX/Y`（内核无轴级字段）· `justifyContent/alignContent/alignSelf`（内核字符串字段，可同法索引编码）——独立小批次（≈2–3 人日）。

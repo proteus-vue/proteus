@@ -860,6 +860,17 @@ def main() -> int:
     else:
         print(f"  ✓ ㉕ ★B3a 动态 :class 数值布局：内核几何宽 {b3w}（关→开→关）——走内核二进制 SET_STYLE 生效")
 
+    # ── ㉖ ★★★B3b：动态 :class 的**枚举布局字段**端上真生效（flex-direction 走内核 SET_STYLE 索引编码，2026-10-10）──
+    b3b = rep.get("b3b_probe") or {}
+    b3bx = [int(v) for v in (b3b.get("child_xs") or [])]
+    if not b3b or len(b3bx) < 3:
+        print("  ◐ ㉖ B3b 动态 :class 枚举布局：本端夹具未覆盖（报告无 b3b_probe）——如实跳过")
+    elif b3bx != [0, 120, 0]:
+        fail(f"★B3b 动态 :class 枚举布局字段几何不符（期望 [0,120,0]：column→row→column 子2 x）：{b3bx} —— 枚举索引编码通道没生效")
+        ok = False
+    else:
+        print(f"  ✓ ㉖ ★B3b 动态 :class 枚举布局：子2 x {b3bx}（column→row→column）——flex-direction 走内核 SET_STYLE 索引编码生效")
+
     # 附加观测（不判红，只如实报）
     una = rep.get("uninstantiated_slots", 0)
     if una:
