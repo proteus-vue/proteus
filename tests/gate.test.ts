@@ -39,8 +39,8 @@ describe('Gate 注册表（★#453 单一来源）', () => {
 
   it('#454 专项全部接线（○ 仅剩写型/诊断/多旗标/耗时型工具）', () => {
     const notWired = GATES.filter((g) => !g.run).map((g) => g.id)
-    // 写型（manifest/module-duplicates）/ 诊断（health）/ 多旗标（conformance/audit-module/host-push）/ 耗时（bench）保持独立命令形态
-    expect(notWired.sort()).toEqual(['audit-module', 'bench', 'capabilities-manifest', 'conformance', 'health', 'host-push', 'module-duplicates'])
+    // 写型（manifest/module-duplicates）/ 诊断（health/doctor）/ 多旗标·工具（conformance/audit-module/host-push/host-signing）/ 耗时（bench）保持独立命令形态
+    expect(notWired.sort()).toEqual(['audit-module', 'bench', 'capabilities-manifest', 'conformance', 'doctor', 'health', 'host-push', 'host-signing', 'module-duplicates'])
   })
 
   it('B4-lite：HELP「检查与门禁」组与 GATES 目录 usage 集一致（仓库治理族为 npm/脚本面——守卫排除）', () => {

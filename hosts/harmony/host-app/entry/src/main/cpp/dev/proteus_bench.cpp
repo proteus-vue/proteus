@@ -3463,6 +3463,17 @@ static napi_value ScreenContentProbe(napi_env env, napi_callback_info info) {
     jstr(argsJson.c_str(), argsJson.size(), "filesDir", &filesDir);
     jnum(argsJson.c_str(), argsJson.size(), "vpW", &vpW);
     jnum(argsJson.c_str(), argsJson.size(), "vpH", &vpH);
+    // ★★★env token 解析（2026-10-10）：App 屏内容里的 `"minHeight":"env:--pf-vh"` / `"bottom":"env:--pf-inset-bottom+136~0"`
+    //   等字符串必须**解析成数值**再喂内核——否则内核 serde「expected f32」⇒ `proteus_layout_create` 返 0
+    //   ⇒ 本探针 `ok:false`（现象：`pages_mounted:0`、App 屏内容整体挂载失败）。
+    //   ★与 `AppScreenCommands`（proteus_render）**同一 helper**（`substituteEnvTokens`/`parseEnvObject`，
+    //     单一实现）——同一语义一处实现，不在此另写解析。
+    //   （#658 2026-10-08 把 App 屏内容切到 css-conformance 展示页后引入 env token；本 dev 探针此前漏接解析。）
+    {
+        std::map<std::string, double> envTable;
+        parseEnvObject(argsJson, envTable);
+        substituteEnvTokens(nodes, envTable);
+    }
     std::string out;
     if (nodes.empty()) {
         out = "{\"ok\":false,\"error\":\"缺 nodes\"}";

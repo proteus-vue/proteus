@@ -1062,6 +1062,9 @@ importers:
       '@proteus-vue/test-ir':
         specifier: 0.3.0-beta.28
         version: link:../packages/test-ir
+      '@vue/compiler-sfc':
+        specifier: ^3.5.42
+        version: 3.5.42
       miniprogram-api-typings:
         specifier: ^3.12.2
         version: 3.12.3
