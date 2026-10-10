@@ -2644,3 +2644,11 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **④ 验证**：`vapor-events.test.ts` +4（v-model ⇒ input 绑定 + `set name = $event`；组件/成员/修饰符 ⇒ 诊断不产回写）；`app-runtime-content` 端到端（产物 `events`/`handlers` 含回写）；`mp-transform` 改名对齐；能力棘轮 74 条不变（`VAPOR_VMODEL_NO_INPUT_CONTROL` 仍 22——有输入控件才减）。
 **⑤ 诚实边界**：B4-T1 只交付**回写契约**（产物含 `input` 绑定 + 动作）；**控件未接前 `input` 事件无源 ⇒ 端上输入暂不生效** ⇒ 故保留诊断（不静默半支持）。这是**前置批次**（不是"半成品"——契约与诊断边界都完整）。计划 `docs/vapor-vmodel-writeback-plan.md`。
 **⑥ 教训**：a) ★★★**"先取证已有能力"——回写半边的"$event/set/运行期"其实都具备了**（组件 emit 早跑通），缺的只是"编译期把 v-model 接到 input + 控件"；不取证会把整条线当"从零建"（低估可复用面）；b) ★★**诊断的"诚实措辞"要随能力演进更新**（"无回写通道"→"回写有了、缺输入控件"——否则诊断会失真、误导开发者）；c) ★**前置批次要"契约完整"而非"半做"**（编译期回写契约 + 精确诊断边界 = 可交付的完整增量；控件是下一步）。★下一步：**B4-T2 三端原生输入控件**（Android EditText / iOS UITextField / 鸿蒙 TextInput）。
+
+763. **★★★Vapor B4-T2a 交付：输入回写**框架前置** `ScreenRuntimeInstance.dispatchInput(nodeId, value)`（三端宿主共用）—— v-model 回写端到端可跑（编译→派发→数据→下行）**（2026-10-10）：
+**① 承接**：B4-T1（#762）交付**回写契约**（编译期 `v-model` ⇒ `input` 绑定 + `set 源 = $event`）。缺"**宿主把编辑值送进来**"的运行期入口。
+**② 问题**：手势 `dispatch` 沿**冒泡链**跑（tap/longpress）；**输入事件不冒泡、且带值** ⇒ 不能复用 `dispatch`。且宿主在内核节点上建控件 ⇒ 报的是**内核 id**（同 `dispatch`）。
+**③ 交付**：`render-backend` 的 `ScreenRuntimeInstance` 加 **`dispatchInput(nodeId, value)`**——内核 id **翻回内容局部 id**（与 `dispatch` 同 `localIdOf`）→ 查该节点 `input` 绑定（`indexEventBindings`）→ 跑 handler（`runHandlerActions`，`$event`=value）→ `refreshData()`（**下行随之更新**）。不冒泡、不查链（直接按 nodeId）。
+**④ 验证**：`screen-runtime.test.ts` +2（真编译产物：`<input v-model="name"/><text>{{name}}</text>` ⇒ `dispatchInput(kernelId,'hello 世界')` ⇒ `data.name`='hello 世界' + 文本节点内容随之为新值=**下行**；无 input 绑定节点 ⇒ handled=false 不误跑）。
+**⑤ 诚实边界**：B4-T2a 是**框架前置**（三端宿主共用的派发入口，可 JSON 测）——**三端原生控件（B4-T2b：Android EditText / iOS UITextField / 鸿蒙 TextInput）仍未做**，控件未接前 `dispatchInput` 无调用方 ⇒ 端上输入暂不生效（`VAPOR_VMODEL_NO_INPUT_CONTROL` 诊断保留）。计划 `docs/vapor-vmodel-writeback-plan.md` 分 B4-T1/T2a/T2b/T3。
+**⑥ 教训**：a) ★★**"带值/不冒泡"的事件与手势派发**不是一回事**（`dispatchInput` 独立入口，非复用 `dispatch`）；b) ★**框架前置要与三端宿主共用**（`ScreenRuntimeInstance` 是 App 壳统一运行期 ⇒ 三端宿主只负责"建控件 + 调 `dispatchInput`"，派发语义零分叉）；c) ★**可在无设备时先落"框架半边"并 JSON 验证**（`screen-runtime.test.ts` 用真编译产物端到端跑通回写链），把"需设备"的宿主半边留作下一步。★下一步：**B4-T2b 三端原生输入控件**（需设备）。
