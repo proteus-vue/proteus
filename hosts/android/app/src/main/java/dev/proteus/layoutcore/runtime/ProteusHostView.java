@@ -2870,6 +2870,9 @@ public class ProteusHostView extends ViewGroup {
         dactylHudPaint.setColor(0xFFB8C4D8);
         final float lineH = dactylHudTextSize * 1.35f;
         final float pad = 8f * dactylDensity;
+        // ★HUD 顶部避让系统状态栏（与页面同源：`--pf-inset-top` = 状态栏 ∪ 挖孔）；左侧避让挖孔。
+        final float safeTop = dactylInsetHudTop();
+        final float safeLeft = dactylInsetHudLeft();
         final String p95 = dctlFmt(dctlLatencyPercentile(0.95f));
         final float jank = dctlJankRate();
         final String jankStr = jank < 0 ? "--" : String.format(java.util.Locale.US, "%.1f%%", jank * 100f);
@@ -2884,13 +2887,42 @@ public class ProteusHostView extends ViewGroup {
         dactylHudBg.setColor(0xCC0A0C10);
         float maxW = 0f;
         for (String s : lines) maxW = Math.max(maxW, dactylHudPaint.measureText(s));
-        canvas.drawRoundRect(pad, pad, pad + maxW + pad, pad + lineH * lines.length + pad, 8f * dactylDensity, 8f * dactylDensity, dactylHudBg);
+        // ★HUD 置于**左下**（§7.4：底部仪表盘）——避开页面顶部标题；且视图底沿已抬到原生 tabBar 之上
+        //   （宿主 setContentBottomReserve）⇒ 不会压住底栏。
+        final float hudH = lineH * lines.length + pad * 2;
+        final float x0 = safeLeft + pad;
+        final float y0 = Math.max(safeTop + pad, getHeight() - hudH - pad);
+        canvas.drawRoundRect(x0, y0, x0 + maxW + pad, y0 + hudH, 8f * dactylDensity, 8f * dactylDensity, dactylHudBg);
         for (int i = 0; i < lines.length; i++) {
             dactylHudPaint.setColor(i == 0 ? 0xFF39D0FF : 0xFFB8C4D8);
-            canvas.drawText(lines[i], pad * 2, pad * 2 + lineH * (i + 1) - lineH * 0.3f, dactylHudPaint);
+            canvas.drawText(lines[i], x0 + pad, y0 + pad + lineH * i + lineH * 0.7f, dactylHudPaint);
         }
     }
     private float dctylBudgetWant() { return dctlVsyncBudgetMs; }
+
+    /** HUD 顶部避让量（状态栏 ∪ 挖孔，px）——读 WindowInsets，缺省 0（不美化）。 */
+    private float dactylInsetHudTop() {
+        try {
+            android.view.WindowInsets wi = getRootWindowInsets();
+            if (wi == null) return 0f;
+            int sb = wi.getInsets(android.view.WindowInsets.Type.statusBars()).top;
+            int cut = 0;
+            if (android.os.Build.VERSION.SDK_INT >= 28) {
+                android.view.DisplayCutout dc = wi.getDisplayCutout();
+                if (dc != null) cut = dc.getSafeInsetTop();
+            }
+            return Math.max(sb, cut);
+        } catch (Throwable ignored) { return 0f; }
+    }
+    /** HUD 左侧避让量（横屏挖孔，px）。 */
+    private float dactylInsetHudLeft() {
+        try {
+            android.view.WindowInsets wi = getRootWindowInsets();
+            if (wi == null || android.os.Build.VERSION.SDK_INT < 28) return 0f;
+            android.view.DisplayCutout dc = wi.getDisplayCutout();
+            return dc != null ? dc.getSafeInsetLeft() : 0f;
+        } catch (Throwable ignored) { return 0f; }
+    }
 
     /**
      * 按**屏幕/视图坐标**做命中派发（与 `onTouchEvent` 同一条代码路径）。

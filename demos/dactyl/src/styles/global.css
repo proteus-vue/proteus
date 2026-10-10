@@ -30,13 +30,23 @@ body {
   --text-3: #8b909c;
 }
 
-/* 页面骨架：满宽 + 安全区避让（App 端状态栏/手势条由 --pf-inset-* 提供，Web/小程序取 0）。 */
+/* 页面骨架：满宽 + **安全区避让**（用框架内置 `--pf-inset-*` 变量 · 运行期实测 · 逻辑像素；
+   Web/小程序取 0 由浏览器/原生导航承载）。★这是"用内置 CSS 变量做安全区避让"的唯一入口——
+   四端同语义，无平台分支：
+     · `--pf-inset-top`   = 状态栏 ∪ 挖孔（iPhone 刘海 / 安卓状态栏）
+     · `--pf-inset-bottom`= 导航栏 ∪ 手势条（三键机 = 导航栏高；手势机 = 手势条高）
+     · `--pf-inset-left/right` = 横屏挖孔
+   ★原生底栏（tabBar）的 56dp 空间由**宿主**预留（`AppActivity.setContentBottomReserve`）——
+     故此处 `--pf-inset-bottom` 只负责**系统手势条**，与底栏不重叠。 */
 .page {
+  box-sizing: border-box;
   width: 100%;
   min-height: 100vh;
-  box-sizing: border-box;
   background-color: var(--bg);
-  padding: calc(var(--pf-inset-top, 0px) + 20px) 16px calc(var(--pf-inset-bottom, 0px) + 40px);
+  padding-top: calc(var(--pf-inset-top, 0px) + 16px);
+  padding-right: calc(var(--pf-inset-right, 0px) + 16px);
+  padding-bottom: calc(var(--pf-inset-bottom, 0px) + 20px);
+  padding-left: calc(var(--pf-inset-left, 0px) + 16px);
 }
 
 /* 卡片：真实业务里最常见的容器形态（列表项 / 面板 / 区块） */
