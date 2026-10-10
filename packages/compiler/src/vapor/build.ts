@@ -689,37 +689,37 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
   {
     const layoutKeys = new Set<string>(APP_LAYOUT_FIELDS as readonly string[])
     const bad = new Set<string>()
-    // ★★★B3a/B3b（2026-10-10）：**数值**布局字段（走内核 SET_STYLE f32）与**枚举**布局字段
-    //   （display/flexDirection/flexWrap/position/overflow/alignItems——走内核 SET_STYLE **索引编码**）
-    //   均已支持 ⇒ 只对**无二进制通道**的布局字段（grid 模板 · lineClamp · whiteSpace/wordBreak ·
-    //   overflowX/Y（内核无轴级字段）· justify*/alignContent/alignSelf（内核字符串字段，暂未编码））产诊断。
-    //   ★关键：判据看**运行期真正发射的字段名**——plan 把 `padding`/`margin` 对象**摊平**为数值四边。
+    // ★★★B3a/B3b/B3c（2026-10-10）：**数值**布局字段（内核 SET_STYLE f32）· **枚举**布局字段
+    //   （display/flexDirection/flexWrap/position/overflow/alignItems/justifyContent/alignContent/alignSelf
+    //   ——内核 SET_STYLE **索引编码**）均已支持 ⇒ 只对**其余**布局字段产诊断（各有明确阻塞，见 hint）。
     const consider = (k: string): void => {
       if (!layoutKeys.has(k)) return
       if (k === 'padding' || k === 'margin') return       // 对象 ⇒ plan 摊平为数值四边 ⇒ 支持
       if (NUMERIC_LAYOUT_FIELDS.has(k)) return            // 数值 ⇒ 支持（B3a）
-      if (ENUM_LAYOUT_FIELDS[k]) return                   // 枚举（白名单）⇒ 支持（B3b）
-      bad.add(k)                                          // 其余（grid/lineClamp/whiteSpace/wordBreak/overflowX/Y…）⇒ 诊断
+      if (ENUM_LAYOUT_FIELDS[k]) return                   // 枚举（白名单）⇒ 支持（B3b/B3c）
+      bad.add(k)
     }
     for (const r of tplDynamicClassRules ?? []) for (const k of Object.keys(r.decls)) consider(k)
-    // 计划已生成 ⇒ 布局字段已**编译期可算**，缺的是通道 ⇒ 提示语区分两件事
     const planned = tplClassPlans !== undefined
     if (bad.size > 0) {
+      // ★B3 收口（决策 #756）：精确具名每类阻塞（不再是笼统"布局字段不支持"）。
+      const cats: string[] = []
+      if ([...bad].some((k) => /^grid/i.test(k))) cats.push('grid 模板/放置（**字符串** —— 内核有字段但**无二进制字符串通道**，需新 op）')
+      if ([...bad].some((k) => k === 'whiteSpace' || k === 'wordBreak')) cats.push('`whiteSpace`/`wordBreak`（内核**无文本布局字段**——需内核文本建模）')
+      if ([...bad].some((k) => /^overflow[XY]$/.test(k))) cats.push('`overflowX`/`overflowY`（内核**无轴级 overflow 字段**——需内核+宿主）')
+      if ([...bad].some((k) => k === 'lineClamp')) cats.push('`lineClamp`（内核无字段；文本截断——需宿主文本通道）')
       diagnostics.push({
         severity: 'warn',
         code: 'VAPOR_DYNCLASS_LAYOUT_UNSUPPORTED',
         message:
-          '动态 :class 的自匹配类含**无二进制通道的布局字段**（' +
+          '动态 :class 的自匹配类含**非数值/非枚举**布局字段（' +
           [...bad].join(' / ') +
-          '）——' +
-          (planned
-            ? 'B2 预计算计划已含这些字段（编译期可算），但这些字段**无内核二进制通道**（grid 模板 / whiteSpace / overflowX/Y 等）⇒ 端上暂不生效'
-            : '本节点计划未产出（见其他诊断）⇒ 端上不生效'),
+          '）——' + (cats.length ? '阻塞：' + cats.join('；') : '端上暂不生效') + (planned ? '' : '（且该节点计划未产出）'),
         hint:
-          '★B3a/B3b 起**数值型**布局字段（width/height/margin*/padding*/flex*/gap/top/left/right/bottom/aspectRatio…）'
-          + '与**枚举**布局字段（display/flexDirection/flexWrap/position/overflow/alignItems）已支持（走内核 SET_STYLE）；'
-          + '其余（grid 模板 / lineClamp / whiteSpace / wordBreak / overflowX/Y / justify* / alignContent / alignSelf）尚不支持——'
-          + '把它们放静态 style / 静态 class，动态类用于已支持字段或状态色/字体/圆角',
+          '★B3a/B3b/B3c 起**数值型**（width/height/margin*/padding*/flex*/gap/top/left/right/bottom/aspectRatio…）'
+          + '与**枚举**（display/flexDirection/flexWrap/position/overflow/alignItems/justifyContent/alignContent/alignSelf）'
+          + '布局字段已支持（走内核 SET_STYLE）；上述剩余字段各有明确阻塞（见 message）——把它们放静态 style / 静态 class，'
+          + '动态类用于已支持字段或状态色/字体/圆角',
       })
     }
   }

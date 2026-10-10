@@ -31,7 +31,16 @@
 - **B3a 数值字段（判据 ㉕）**：width/height/min|max/flex*/gap/top/left/right/bottom/margin*/padding*/aspectRatio（`NUMERIC_LAYOUT_FIELDS`）→ 内核二进制 `SET_STYLE`（f32）。内核 `apply_style_key` 补登记 right/bottom/padding 四向/aspectRatio。
 - **B3b 枚举字段（判据 ㉖）**：`display`/`flexDirection`/`flexWrap`/`position`/`overflow`/`alignItems`（`ENUM_LAYOUT_FIELDS`）→ **索引编码**走同一条内核 `SET_STYLE`（host-agnostic）。内核解码臂（`apply_style_key`、与 JS 表同序）。
 - **清除回退**：plan 关闭返回 `null`/基线 ⇒ 数值发 UNSET（NaN）、枚举发**默认索引**。
-- **B3c 部分已交付（2026-10-10）**：`justifyContent`/`alignContent`/`alignSelf`（内核字符串字段，**索引编码**走同一 SET_STYLE）。**仍待做**（真·无通道 / 需新协议）：grid 模板（`gridTemplateColumns/Rows/Areas/…`——**字符串 token 串**，需新内核 op 或编码）· `lineClamp` · `whiteSpace` · `wordBreak`（值透传宿主消费）· `overflowX/Y`（内核**无轴级字段**）——独立小批次（≈1–2 人日）。
+- **B3c（2026-10-10 交付）**：`justifyContent`/`alignContent`/`alignSelf`（内核字符串字段，**索引编码**走同一 SET_STYLE）。
+- **★B3 收口（2026-10-10 · 决策 #756）——余 8 条**具名边界**（各需不同基础设施，非"通道"可解）**：
+  | 字段 | 阻塞 | 所需 |
+  |---|---|---|
+  | `gridTemplateColumns/Rows/Areas` · `gridAuto*` · `gridColumn/Row/Area` | 内核**有**字段，但值是**字符串 token 串**（`1fr 1fr 200px`），**无二进制字符串通道** | 新 opcode（字符串载荷）或扩 `PatchStyle`+宿主通道 |
+  | `whiteSpace` / `wordBreak` | 内核**无**文本布局字段（影响换行 ⇒ 影响几何） | 内核**文本建模**（度量层）+ 宿主 |
+  | `overflowX` / `overflowY` | 内核**无**轴级 overflow 字段（只有单 `overflow`） | 内核加轴字段 + taffy `overflow.x/y` + 宿主裁剪 |
+  | `lineClamp` | 内核无字段；文本截断属**宿主绘制** | 宿主文本通道 |
+  - ⇒ **不在一轮硬塞**（会成"半做"）；每项**单独立项**（grid-op ≈1 天；文本/轴 overflow 更大）。诊断已**逐类具名**（`build.ts` 的 `VAPOR_DYNCLASS_LAYOUT_UNSUPPORTED` message 列出阻塞类别）。
+- **B3 账**：动态 `:class` 布局缺口 **28 → 8**（B3a/b/c 三轮**零宿主/零协议改动**——借内核既有 f32 通道 + 索引编码）。
 
 ### B4 · `v-model` 回写（22 页）
 - 依赖：宿主**输入通道**（Android EditText / iOS UITextField / 鸿蒙 TextInput）×3 + 双向协议（text→source）。
