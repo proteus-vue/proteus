@@ -152,7 +152,7 @@ export interface ScreenRuntimeInstance {
    * @param value  输入值（`v-model` 的 `$event`；跨端由宿主归一为字符串）
    * @returns `handled` = 是否跑了回写 handler；`fired` = 跑的 handler 名（字符串，与 `dispatch` 的节点 id 语义不同）
    */
-  dispatchInput(nodeId: number, value: unknown): { handled: boolean; fired: string[] }
+  dispatchInputValue(nodeId: number, value: unknown): { handled: boolean; fired: string[] }
   /**
    * ★★★**数据变更后重实例化**（2026-10-07）：用当前 `data` 重建节点树 + 重算槽位。
    *   给"`applyOps` 为 no-op"的宿主（鸿蒙一次性 VM，无驻留内核指令流）用——它们拿不到细粒度
@@ -377,7 +377,7 @@ export function createScreenRuntime(opts: CreateScreenRuntimeOptions): ScreenRun
         //   面板 Events 据此把"点了→跑了 h0"锚回 `page.vue:line:col`（调试生态链的数据支撑）。
         return { handled: r.fired.length > 0, fired: r.fired, firedHandlers: fired }
       },
-      dispatchInput(nodeId, value) {
+      dispatchInputValue(nodeId, value) {
         // ★B4-T2：查该节点的 `input` 绑定（`v-model` 编译产物）⇒ 跑 handler（`$event` = 输入值）⇒ 重建。
         //   ★不冒泡（输入事件无冒泡语义）、不查链——直接按 nodeId 查表。
         //   ★入参是**内核 id**（宿主在内核节点上建原生控件）⇒ 同 `dispatch` 一样翻译回**内容局部 id**。
