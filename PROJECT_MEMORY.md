@@ -45,7 +45,7 @@
 |---|---|
 | `docs/project-memory-archive/2026-10.md` | 2026-10 里程碑详细叙事 + 状态速览历史栈（约 4.5k 行）|
 | `docs/project-memory-archive/2026-09.md` | 09 月全部叙事 + 柔性系统重组历史 + 2026-08 进度快照 + 已落地文件 + 09-19 验证状态（约 6.5k 行） |
-| `docs/project-memory-archive/decisions.md` | 决策链全文 #1–#779——按号检索（`grep -n "^736\." …`）|
+| `docs/project-memory-archive/decisions.md` | 决策链全文 #1–#781——按号检索（`grep -n "^736\." …`）|
 
 检索示例：`grep -n "2026-09-29\|判据建错靶" docs/project-memory-archive/2026-09.md`
 
