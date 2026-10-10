@@ -154,11 +154,11 @@ body {
   border-radius: 14px;
 }
 .needle {
-  width: 20px;
-  height: 30px;
+  width: 12px;
+  height: 15px;
   margin: 1px;
   background-color: #39d0ff;
-  border-radius: 4px;
+  border-radius: 3px;
 }
 
 /* L3 沸腾数据场（数字/光点的静态示意） */
