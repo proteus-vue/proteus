@@ -35,8 +35,21 @@ const RESULTS = path.join(HERE, 'results/acceptance')
 // ── 解析 ①：Java 侧的写入点（报告名 → 谁写、在哪个方法、哪一行）──────────────
 /** @type {Map<string, {file: string, line: number, method: string, isErrorPath: boolean}[]>} */
 const writers = new Map()
-for (const f of fs.readdirSync(JAVA_DIR).filter((x) => x.endsWith('.java'))) {
-  const lines = fs.readFileSync(path.join(JAVA_DIR, f), 'utf8').split('\n')
+// ★★递归收集 .java（2026-10-10 修）：此前只 `readdirSync(JAVA_DIR)` **一层**，而 `.java` 全在
+//   `runtime/` `dev/` `shell/` 子目录里 ⇒ 扫到 **0 个** ⇒ 「Java 产出 0 个报告名」⇒
+//   下游「读而无写 / 拉了无写」**全部误报**（21 处假红），真机验收被预检**拦死**。
+//   ★这是"验收门禁自己坏了"（不是项目缺产物）——递归收集后误报消失。
+const javaFiles = []
+;(function walkJava(d) {
+  for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+    const p = path.join(d, e.name)
+    if (e.isDirectory()) walkJava(p)
+    else if (e.name.endsWith('.java')) javaFiles.push(p)
+  }
+})(JAVA_DIR)
+for (const full of javaFiles) {
+  const f = path.relative(JAVA_DIR, full)
+  const lines = fs.readFileSync(full, 'utf8').split('\n')
   let method = '(top-level)'
   lines.forEach((l, i) => {
     // 方法边界：`private/public <ret> name(` —— 只取定义行（缩进 ≤4 且带访问修饰符）
