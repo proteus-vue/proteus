@@ -139,12 +139,12 @@ function build(lang) {
   L.push(zh ? '## 本组导航' : '## Section navigation')
   L.push('')
   if (zh) {
-    L.push('- [快速开始](/docs/guides/01-intro)：从零跑起来')
-    L.push('- [渲染与能力](/docs/guides/12-components-intro)：组件与能力体系')
+    L.push('- [快速开始](/docs/01-intro)：从零跑起来')
+    L.push('- [渲染与能力](/docs/12-components-intro)：组件与能力体系')
     L.push('- [Vapor 更新路径](/docs/framework/43-vapor-update-path)：更新机制与自研理由')
   } else {
-    L.push('- [Introduction](/docs/guides/01-intro): get something running')
-    L.push('- [Components intro](/docs/guides/12-components-intro): components and capabilities')
+    L.push('- [Introduction](/docs/01-intro): get something running')
+    L.push('- [Components intro](/docs/12-components-intro): components and capabilities')
     L.push('- [Vapor update path](/docs/framework/43-vapor-update-path): update mechanism and why it is in-house')
   }
   L.push('')
