@@ -2416,6 +2416,44 @@ pub fn follow_release(
     targets
 }
 
+/// ★★★**S3-T3（2026-10-10 · 输入延迟专项 #767）**：**多指跟手的一帧一条目**（与 `proteus_dispatch_pointers`
+///   同一"批量指针"精神，但落在**布局内核**的 follow 语义上）。`#[repr(C)]` 布局 = 7×4B 无填充
+///   （与 Android JNI/Java 侧逐字段对齐；★顺序纪律：改字段必须两侧同改）。
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FollowEntry {
+    /// 目标节点 id
+    pub node_id: u32,
+    /// 位移增益（1 = 1:1）
+    pub gain: f32,
+    /// 相对**该指**拖拽起点的位移（物理 px；宿主纯减法，无数学）
+    pub dx: f32,
+    pub dy: f32,
+    /// 夹取区间（[min, max]）
+    pub min: f32,
+    pub max: f32,
+    /// 轴掩码（0..3；以 f32 传递避免结构体填充——内核内转 u8）
+    pub axis: f32,
+}
+
+/// ★★★**S3-T3**：**批量跟手**——一帧内 M 个指针一次 FFI（`ffi_calls_per_frame ≤ 1`）。
+///   逐条目调 `follow_translate`（换算唯一实现仍在此），收集**真的变值的节点**并返回
+///   ⇒ 调用方用 `collect_updates` 出**一次**合并 updates（宿主一次 `applyAnimUpdates`）。
+///
+/// - Returns: 本次真的改了字段的节点 id 集合（供 FFI 构建 updates）。
+pub fn follow_translate_batch(
+    tree: &mut LayoutTree,
+    entries: &[FollowEntry],
+) -> std::collections::HashSet<u32> {
+    let mut touched = std::collections::HashSet::new();
+    for e in entries {
+        if follow_translate(tree, e.node_id, e.dx, e.dy, e.axis as u8, e.gain, e.min, e.max) {
+            touched.insert(e.node_id);
+        }
+    }
+    touched
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -4333,5 +4371,29 @@ mod tests {
         let mut t4 = tree_with(1);
         let mut e4 = AnimEngine::new();
         assert!(follow_release(&mut e4, &t4, 999, 1, 300.0, 30.0, 1.0, 80.0, 200.0).is_empty());
+    }
+
+    // ★★★S3-T3（2026-10-10）：批量跟手——一帧 M 指一次调用，逐条算平移，返回真变值的节点集
+    #[test]
+    fn follow_translate_batch_touches_multiple_nodes_in_one_call() {
+        let mut t = tree_with(3);
+        let entries = [
+            FollowEntry { node_id: 1, gain: 1.0, dx: 30.0, dy: 0.0, min: -1e9, max: 1e9, axis: 1.0 },
+            FollowEntry { node_id: 2, gain: 1.0, dx: 0.0, dy: -40.0, min: -1e9, max: 1e9, axis: 2.0 },
+            // 越界夹取：dx=500 clamp 到 max=100
+            FollowEntry { node_id: 3, gain: 1.0, dx: 500.0, dy: 0.0, min: -100.0, max: 100.0, axis: 1.0 },
+        ];
+        let touched = follow_translate_batch(&mut t, &entries);
+        assert_eq!(touched.len(), 3, "三指各自变值 ⇒ 三个节点");
+        assert!((t.nodes[0].style.translate_x - 30.0).abs() < 1e-4);
+        assert!((t.nodes[1].style.translate_y - (-40.0)).abs() < 1e-4);
+        assert!((t.nodes[2].style.translate_x - 100.0).abs() < 1e-4, "clamp 到 max=100");
+
+        // 重复同样条目 ⇒ 值同 ⇒ 空集（不重绘——与单指"同值 false"一致）
+        let again = follow_translate_batch(&mut t, &entries);
+        assert!(again.is_empty(), "同值 ⇒ 无变化（不重绘）");
+
+        // `FollowEntry` 布局：7×4B = 28B（宿主机按此步长填充——错位会致静默错值）
+        assert_eq!(std::mem::size_of::<FollowEntry>(), 28, "FollowEntry 无填充：7×4B");
     }
 }

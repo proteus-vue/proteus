@@ -516,17 +516,19 @@ const S11_SFC = `<template>
 </style>`
 
 /**
- * ★★★S3 夹具（判据 ㉞/㉟，2026-10-10 · 输入延迟专项 #767）：**拖拽跟手 + 松手回弹/吸附（零 JS 跨界）**。
- *   三个跟手节点（编译期折 `followAxis` 等扁平字段，随节点透传宿主）：
+ * ★★★S3 夹具（判据 ㉞/㉟/㊱，2026-10-10 · 输入延迟专项 #767）：**拖拽跟手 + 松手回弹/吸附 + 多指（零 JS 跨界）**。
+ *   四个跟手节点（编译期折 `followAxis` 等扁平字段，随节点透传宿主）：
  *   · A（#1）`v-follow="{ axis:'x' }"` ⇒ **纯跟手**（无夹取/无吸附）：拖动 dx ⇒ translateX 跟手（判据 ㉞）。
- *   · B（#2）`clamp:[-200,0] + snap:{threshold:60,target:200}` ⇒ **swipe-to-delete**：拖过阈值松手 ⇒ 滑出吸附到 -200（判据 ㉟）。
- *   · C（#3）`snap:{threshold:80,target:200}` ⇒ **松手回弹归零**：未过阈值 ⇒ 弹回 0（判据 ㉟）。
+ *   · D（#2）`v-follow="{ axis:'x' }"` ⇒ **多指第二指**（与 A 同时跟手·一帧一次批量 FFI，判据 ㊱）。
+ *   · B（#3）`clamp:[-200,0] + snap:{threshold:60,target:200}` ⇒ **swipe-to-delete**：拖过阈值松手 ⇒ 滑出吸附到 -200（判据 ㉟）。
+ *   · C（#4）`snap:{threshold:80,target:200}` ⇒ **松手回弹归零**：未过阈值 ⇒ 弹回 0（判据 ㉟）。
  *   ★`snap.target` 是**滑出幅度**（≥0），方向随拖拽方向（swipe-to-delete：左滑滑出左侧）。
- *   ★全程宿主 MOVE/UP **直接喂内核**（`layoutFollow`/`layoutFollowRelease`）——**零 JS 回调**。
+ *   ★全程宿主 MOVE/UP **直接喂内核**（`layoutFollow`/`layoutFollowBatch`/`layoutFollowRelease`）——**零 JS 回调**。
  */
 const S3_SFC = `<template>
-  <p-view style="width: 400px; height: 300px; flex-direction: column">
+  <p-view style="width: 400px; height: 400px; flex-direction: column">
     <p-view v-follow="{ axis: 'x' }" style="width: 120px; height: 50px; background-color: #2f6fed"></p-view>
+    <p-view v-follow="{ axis: 'x' }" style="width: 120px; height: 50px; margin-top: 10px; background-color: #22c55e"></p-view>
     <p-view v-follow="{ axis: 'x', clamp: [-200, 0], snap: { threshold: 60, target: 200 } }" style="width: 120px; height: 50px; margin-top: 10px; background-color: #e2483d"></p-view>
     <p-view v-follow="{ axis: 'x', snap: { threshold: 80, target: 200 } }" style="width: 120px; height: 50px; margin-top: 10px; background-color: #3aa0ff"></p-view>
   </p-view>

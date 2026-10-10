@@ -2769,3 +2769,15 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **④ 验证**：`cargo test follow_` 3 绿 · `test:coupled` 501 绿 · `vue-tsc` 0 · `check:android-host-compile` 绿 · `check:vapor-three-end` 绿（android ✓36）· `check:host-kernel-keys`/`check:no-json-wire`/`check:android-runtime-aar-fresh`（重建 AAR）全绿。
 **⑤ 诚实边界**：仅 Android · 单指 · X 轴 · 吸附"滑出"后**未接删除业务回调**（§2.3 的"松手回一条 JS"留待接入真实 swipe 场景）· Y/both 未测；`spring` 参数未做曲线级打磨（用临界阻尼缺省）。
 **⑥ 教训**：★★★**"带符号方向"要算清"输入本身带不带符号"**——`snap.target` 语义模糊（幅度 vs 带符号）导致**双重负号**，是真机读数（不是单测）抓出的（单测当时也用带符号 target 写、与实现同错 ⇒ **同源写错会互相掩护**；真机是唯一真实消费方）。★**松手也归内核**（判定+弹簧一处实现，宿主零数学，与 T1 同纪律）。★**确定性步进**（`settleFrames` 跑到内核自报静止）替代"等若干 ms"——与全仓"禁止盲等"同源。★下一步：**S3-T3**（多指 · 接 S1.4 批量指针 ABI）或三端同形收口 S3-T4。
+
+778. **★★★S3-T3 交付（输入延迟专项 #767 第五条腿）：多指跟手「一帧一次 FFI」（`ffi_calls_per_frame ≤ 1`）+ 判据 ㊱ 真机过**（2026-10-10）：
+**① 承接**：#776/#777（单指跟手 + 松手）⇒ 本项把跟手从**单指**扩到**多指**，且**不放大跨界**（§16 S3-T3 DoD）。
+**② 交付**：
+· **内核** `anim.rs`：`#[repr(C)] pub struct FollowEntry { node_id:u32, gain,dx,dy,min,max,axis:f32 }`（7×4B 无填充——与 JNI/Java 逐字段对齐，单测断言 `size_of == 28`）；`pub fn follow_translate_batch(tree, entries) -> HashSet<u32>`（逐条调 `follow_translate`，收集**真变值**节点 ⇒ 一次合并 updates）。+ 单测（三指各自变值·越界夹取·同值空集·布局 28B）。
+· **FFI/JNI**：`ffi.rs` `proteus_layout_follow_batch(handle, *const FollowEntry, count)`（复用 `collect_updates` 出**一次**合并 updates）；`proteus-jni` `nativeLayoutFollowBatch(handle, int[] nodeIds, float[] params)`（Java 无结构体 ⇒ **并行数组**：每节点 6 float `[gain,dx,dy,min,max,axis]`；等长契约不满足 ⇒ 明确失败不截断）；`RustLayout.layoutFollowBatch`。
+· **宿主** `ProteusHostView`：跟手从"单指标量态"改为**指针表**（`followPtrs: pointerId → {nodeId,startX,startY}`）——DOWN 入表、`ACTION_POINTER_DOWN` 各指命中自纳入、MOVE **一帧一次** `layoutFollowBatch`、`ACTION_POINTER_UP`/UP 各自松手（`releaseFollowNode`）。命中用**内容坐标**（`+scrollY`，与 `dispatchHit` 同源）。探针加 `batch_calls`/`ptrs_max`。
+· **宿主桥 + 注入**：`VaporRenderHost.dragMulti({points:[{x,y,dx,dy}],steps})`——**真多指 MotionEvent**（`PointerProperties`/`PointerCoords`：DOWN→POINTER_DOWN…→批量 MOVE→POINTER_UP…→UP）；`quickjs_jni.c` 条件注入 `dragMulti`。
+**③ 判据 ㊱（新）**：夹具 `s3` 加第 4 个纯跟手节点（A/D 供多指）；桥 `s3_probe` 加 `multi_batch_calls/multi_ptrs_max/multi_moves`。真机注入 **2 指同时**（各拖 +80/-80）⇒ `multi_ptrs_max=2` · `multi_batch_calls=6 ≤ multi_moves=6`（**一帧一次跨界**）⇒ **✅ 真机过**。
+**④ 验证**：`cargo test follow_` 4 绿 · `test:coupled` 501 绿 · `vue-tsc` 0 · `check:android-host-compile` 绿 · `check:vapor-three-end` 绿（android ✓37）· `check:host-kernel-keys`/`check:no-json-wire`/`check:android-runtime-aar-fresh`（重建 AAR）全绿。
+**⑤ 诚实边界**：仅 Android · 各指**独立跟手各自节点**（未做"同一节点多指合力"——那属手势识别层）· 多指命中按各指 DOWN 时刻（与单指同语义）· 未接多指**旋转/缩放**（pitch/zoom，属后续）。
+**⑥ 教训**：★★★**批量 ABI 的"一次跨界"是 S3-T3 的全部价值**——`ffi_calls_per_frame ≤ 1`（M 指也只是一次）必须**可证**：探针让 `batch_calls ≤ moves`（一帧一调）与 `ptrs_max`（多指真的同时）成为机器判据，而非"看着像批量"。★**并行数组替代结构体**（Java 无 value type ⇒ `int[] + float[]`；JNI 端重组成 `#[repr(C)]` 结构体）时，**长度契约**（`params == n×6`）与**字段顺序**（两侧同源）都要显式——错位会静默错值。★**指针表**（不是"单指标量"）是"跟手"支持多指的最小正确形态（`ACTION_POINTER_UP` 才能各指独立松手）。★下一步：**S3-T4**（三端同形 + worklet 收口 + `check:interaction-folding` 门禁）——S3 Tier 2（Android）已完整。

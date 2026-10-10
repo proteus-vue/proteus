@@ -1150,6 +1150,113 @@ public final class VaporRenderHost {
     }
 
     /**
+     * ★★★**S3-T3 多指拖拽注入**（2026-10-10 · 输入延迟专项 #767 · 判据 ㊱）：`N` 个指针**同时**按下并按
+     *   各自位移拖动，用**真多指 MotionEvent**（DOWN → POINTER_DOWN… → 批量 MOVE → [POINTER_UP… → UP]）
+     *   走 `onTouchEvent` 全链路。要证明：**一帧一次 FFI**（`batch_calls`/`moves ≈ 1`——M 指也只是一次跨界）
+     *   + `ptrs_max = N`（多指真的同时跟手）。
+     * @param argsJson `{points:[{x,y,dx,dy},…], steps, release?, settleFrames?}`
+     */
+    public String dragMulti(String argsJson) {
+        JSONObject out = new JSONObject();
+        try {
+            if (view == null) return err(out, "视图未建").toString();
+            JSONObject a = new JSONObject(argsJson);
+            org.json.JSONArray pts = a.optJSONArray("points");
+            if (pts == null || pts.length() < 2) return err(out, "points 至少 2 指").toString();
+            final int n = pts.length();
+            final float[] x0 = new float[n], y0 = new float[n], dxT = new float[n], dyT = new float[n];
+            for (int i = 0; i < n; i++) {
+                JSONObject p = pts.getJSONObject(i);
+                x0[i] = (float) p.optDouble("x", 0);
+                y0[i] = (float) p.optDouble("y", 0);
+                dxT[i] = (float) p.optDouble("dx", 0);
+                dyT[i] = (float) p.optDouble("dy", 0);
+            }
+            final int steps = Math.max(1, a.optInt("steps", 6));
+            final boolean release = a.optBoolean("release", true);
+            final int settleFrames = Math.max(0, a.optInt("settleFrames", 0));
+            final int beforeGestures = gestureDispatched;
+            view.resetFollowCounters();
+            long age = 1000L * tapInjectSeq;
+            tapInjectSeq++;
+            final long t0 = android.os.SystemClock.uptimeMillis() + age;
+            // 指针属性（id = i，工具 = 手指）与坐标缓冲（批量 MOVE 复用）
+            android.view.MotionEvent.PointerProperties[] props = new android.view.MotionEvent.PointerProperties[n];
+            android.view.MotionEvent.PointerCoords[] coords = new android.view.MotionEvent.PointerCoords[n];
+            for (int i = 0; i < n; i++) {
+                props[i] = new android.view.MotionEvent.PointerProperties();
+                props[i].id = i;
+                props[i].toolType = android.view.MotionEvent.TOOL_TYPE_FINGER;
+                coords[i] = new android.view.MotionEvent.PointerCoords();
+                coords[i].x = x0[i];
+                coords[i].y = y0[i];
+                coords[i].pressure = 1f;
+                coords[i].size = 1f;
+            }
+            long t = t0;
+            // DOWN（仅第 0 指在集合内）
+            view.dispatchTouchEvent(android.view.MotionEvent.obtain(t0, t0,
+                    android.view.MotionEvent.ACTION_DOWN, 1, props, coords, 0, 0, 0f, 0f, 0, 0, 0, 0));
+            // POINTER_DOWN（第 1..n-1 指依次加入）
+            for (int i = 1; i < n; i++) {
+                t += 4;
+                final int action = android.view.MotionEvent.ACTION_POINTER_DOWN
+                        | (i << android.view.MotionEvent.ACTION_POINTER_INDEX_SHIFT);
+                view.dispatchTouchEvent(android.view.MotionEvent.obtain(t0, t,
+                        action, i + 1, props, coords, 0, 0, 0f, 0f, 0, 0, 0, 0));
+            }
+            // 批量 MOVE（全部 n 指同时；每步一个真 MotionEvent ⇒ 宿主每步一次 batch FFI）
+            for (int s = 1; s <= steps; s++) {
+                final float frac = (float) s / steps;
+                for (int i = 0; i < n; i++) {
+                    coords[i].x = x0[i] + dxT[i] * frac;
+                    coords[i].y = y0[i] + dyT[i] * frac;
+                }
+                t += 8;
+                view.dispatchTouchEvent(android.view.MotionEvent.obtain(t0, t,
+                        android.view.MotionEvent.ACTION_MOVE, n, props, coords, 0, 0, 0f, 0f, 0, 0, 0, 0));
+            }
+            if (release) {
+                // POINTER_UP（第 n-1..1 指依次抬起 ⇒ 各自松手）
+                for (int i = n - 1; i >= 1; i--) {
+                    t += 4;
+                    final int action = android.view.MotionEvent.ACTION_POINTER_UP
+                            | (i << android.view.MotionEvent.ACTION_POINTER_INDEX_SHIFT);
+                    view.dispatchTouchEvent(android.view.MotionEvent.obtain(t0, t,
+                            action, n, props, coords, 0, 0, 0f, 0f, 0, 0, 0, 0));
+                }
+                // UP（第 0 指）
+                t += 4;
+                view.dispatchTouchEvent(android.view.MotionEvent.obtain(t0, t,
+                        android.view.MotionEvent.ACTION_UP, 1, props, coords, 0, 0, 0f, 0f, 0, 0, 0, 0));
+            }
+            int settledFrames = 0;
+            if (release && settleFrames > 0) {
+                for (int f = 0; f < settleFrames; f++) {
+                    view.kernelAnimTick(16.7f);
+                    settledFrames++;
+                    try {
+                        JSONObject ao = new JSONObject(view.kernelAnimActive());
+                        if (ao.optBoolean("ok") && ao.optInt("active", -1) == 0) break;
+                    } catch (Throwable ignored) { /* 读数失败 ⇒ 跑满上限（有界） */ }
+                }
+            }
+            out.put("ok", true);
+            out.put("pointers", n);
+            out.put("steps", steps);
+            out.put("settled_frames", settledFrames);
+            out.put("gestures_fired", gestureDispatched - beforeGestures);
+            out.put("follow_moves", view.followMoves);
+            out.put("follow_applied", view.followApplied);
+            out.put("batch_calls", view.followBatchCalls);
+            out.put("ptrs_max", view.followPointersMax);
+            return out.toString();
+        } catch (Throwable t) {
+            return err(out, t.getClass().getSimpleName() + ": " + t.getMessage()).toString();
+        }
+    }
+
+    /**
      * ★★★**宿主动画入口**（P3-3 · `<Transition>` 桥接，2026-10-03）：
      *   `{anims:[{nodeId,kind,from,to,durMs,curve}]}` → 内核 `proteus_layout_anim_start`
      *   → **启帧循环**（`ProteusHostView.kernelAnimTick` 由 Choreographer 驱动、逐帧 tick

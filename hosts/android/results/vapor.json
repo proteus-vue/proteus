@@ -1,22 +1,22 @@
 {
-  "bundle_chars": 591874,
-  "run_ms": 364,
+  "bundle_chars": 592936,
+  "run_ms": 363,
   "host_mount_calls": 33,
   "host_apply_calls": 30,
   "host_update_patch_calls": 1,
   "host_nodes": 47,
   "host_text_nodes": 19,
   "host_cmds": 47,
-  "host_layout_ms": 0.308333,
-  "host_measure_ms": 0.235937,
+  "host_layout_ms": 0.283334,
+  "host_measure_ms": 0.239167,
   "host_painted_samples": 12060,
   "host_painted_colors": 234,
   "host_applied": 1,
   "host_changed_nodes": 2,
   "host_view_on_draw": 66,
-  "host_unbuffered_dispatch": 9,
+  "host_unbuffered_dispatch": 10,
   "host_unbuffered_dispatch_errors": 0,
-  "host_touch_events": 35,
+  "host_touch_events": 43,
   "host_bytes_ops": 30,
   "report": {
     "ok": true,
@@ -625,14 +625,17 @@
       "pressed": -1
     },
     "s3_probe": {
-      "follow_nodes": 3,
+      "follow_nodes": 4,
       "moves": 6,
       "applied": 6,
       "tx_after": 120,
       "snap_final": -200,
       "snap_calls": 1,
       "return_final": 0,
-      "return_calls": 1
+      "return_calls": 1,
+      "multi_batch_calls": 6,
+      "multi_ptrs_max": 2,
+      "multi_moves": 6
     },
     "styleobj_probe": {
       "anchor_id": 1,
@@ -645,7 +648,7 @@
         ]
       ]
     },
-    "mount_ms": 25,
+    "mount_ms": 26,
     "mount_nodes": 47,
     "updates_run": 3,
     "ops_bytes": 204,
@@ -840,7 +843,7 @@
       "tap@13 自身宽度 120 → 150",
       "实例树 47 节点 \/ 行 47 \/ 虚拟化行 8 \/ 增量 3 轮"
     ],
-    "host_layout_ms": 0.492,
+    "host_layout_ms": 0.499,
     "host_cmds": 47
   },
   "ok": true

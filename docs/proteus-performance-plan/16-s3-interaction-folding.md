@@ -116,5 +116,5 @@
 |---|---|---|
 | **S3-T1 ✅** | Android 单指单节点 X 跟手（本方案 §3）——**已交付（决策 #776，判据 ㉞ 真机过）** | `js_involved_gestures_ratio == 0`（拖拽期）+ 节点 transform 跟手 |
 | **S3-T2 ✅** | 夹取（`clamp`）+ 松手回弹（`spring`）+ swipe-to-delete（`snap`）——**已交付（决策 #777，判据 ㉟ 真机过）** | 跟手仍零 JS；松手后**内核弹簧**接管（过阈值滑出吸附 / 未过回弹归零）|
-| **S3-T3** | 多指（接 S1.4 批量指针 ABI） | `ffi_calls_per_frame ≤ 1`（M 指） |
+| **S3-T3 ✅** | 多指（接 S1.4 批量指针 ABI）——**已交付（决策 #778，判据 ㊱ 真机过）** | `ffi_calls_per_frame ≤ 1`（M 指） |
 | **S3-T4** | 三端同形 + worklet 收口 + 门禁 `check:interaction-folding`（折叠率棘轮） | 三端同一份 `v-follow` 同结果 |

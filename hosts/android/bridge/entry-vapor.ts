@@ -100,6 +100,8 @@ interface VaporHost {
   animTxProbe?(idsJson: string): string
   /** ★★★S3-T1：进程内注入一次真拖拽（`{x,y,dx,dy,steps}`——判据驱动，零 JS 跨界跟手） */
   dragAt?(argsJson: string): string
+  /** ★★★S3-T3：进程内注入一次**多指**真拖拽（`{points:[{x,y,dx,dy}]}`——判据 ㊱） */
+  dragMulti?(argsJson: string): string
   /** ★★绘制通道探针（读**宿主真源**：渐变/发光/遮罩/圆角/裁剪/描边建出来了没） */
   probeChannels(idsJson: string): string
   /**
@@ -503,10 +505,12 @@ interface VaporReport {
     pressed: number
   }
   /**
-   * ★★★**S3 探针**（2026-10-10 · 判据 ㉞/㉟）——**拖拽跟手 + 松手回弹/吸附（零 JS 跨界）**。
+   * ★★★**S3 探针**（2026-10-10 · 判据 ㉞/㉟/㊱）——**拖拽跟手 + 松手回弹/吸附 + 多指（零 JS 跨界）**。
    *   `{follow_nodes, moves, applied, tx_after}`：跟手（拖 dx ⇒ tx_after 跟手）。
    *   ★T2：`{snap_final, snap_calls, return_final, return_calls}`——swipe-to-delete 吸附落点 /
    *     回弹归零落点 / UP 真的驱动了内核松手（`layoutFollowRelease`）。
+   *   ★T3：`{multi_batch_calls, multi_ptrs_max, multi_moves}`——多指一帧一次批量 FFI
+   *     （`batch_calls ≈ moves` ⇒ ffi_calls_per_frame ≤ 1，M 指）；`ptrs_max` = 同时跟手指针数峰值。
    */
   s3_probe: {
     follow_nodes: number
@@ -517,6 +521,9 @@ interface VaporReport {
     snap_calls: number
     return_final: number
     return_calls: number
+    multi_batch_calls: number
+    multi_ptrs_max: number
+    multi_moves: number
   }
   /**
    * ★★★**`:style` 对象展开探针**（2026-10-03）——两条通道各自的真值：
@@ -1883,7 +1890,7 @@ function runShort(args: VaporArgs): string {
     tpl_nodes: 0, tpl_ok: false, sub_l1: 0, sub_l0: 0, sub_l1_rate: 0, sub_sources: [],
     inst_ms: 0, inst_nodes: 0, inst_reused_ids: 0, inst_allocated_ids: 0, inst_rows: 0,
     inst_values_filled: 0, inst_virtual_rows: 0, inst_text_filled: 0, inst_width_filled: 0,
-    mix_text_probe: [], text_probe_rounds: [], gate_rounds: [], gate_text_nodes: [], once_node_id: -1, memo_node_id: -1, expr_probe: [], transition_started: 0, tpl_transition: [], component_mounts: 0, component_nodes: 0, component_kid_probe: {}, slot_probe: { texts: [], rects: [], fills: [], markers_left: -1 }, emit_probe: { emits: [], parent_source_after: undefined, geom_before: -1, geom_after: -1 }, scoped_probe: { texts: [], anchor_id: -1, anchor_width_field: -1, anchor_width_rect: -1, destr_text: '', destr_width_field: -1, destr_width_rect: -1 }, lifecycle_probe: { bindings: [], ran_handler: '', changed_sources: [], ops_bytes: 0, applied: 0, anchor_id: -1, geom_before: -1, geom_after: -1 }, dyn_probe: { texts: [], mounts: [], geom: [], dropped: -1, notes: [] }, directive_probe: { nodes: [], rounds: [], plays: [] }, mixed_probe: { texts: [], leaves: 0, geom: [] }, t2_probe: { nodeId: -1, widths: [], values: [], logs: [] }, b5_probe: { nodeId: -1, phases: [], widths: [], values: [] }, b3a_probe: { nodeId: -1, widths: [] }, b3b_probe: { childId: -1, child_xs: [] }, b3d_probe: { childId: -1, child_xs: [] }, bt1_probe: { textA_id: -1, textB_id: -1, residuals: [] }, bt2_probe: { nodeId: -1, policy_seen: [] }, bt3_probe: { nodeId: -1, inputEvents: -1 }, s11_probe: { press_nodes: -1, applied: -1, pressed: -1 }, s3_probe: { follow_nodes: -1, moves: -1, applied: -1, tx_after: -1, snap_final: -1, snap_calls: -1, return_final: -1, return_calls: -1 }, styleobj_probe: { anchor_id: -1, width_before: -1, width_after: -1, kernel_applied: 0, patch_calls: [] },
+    mix_text_probe: [], text_probe_rounds: [], gate_rounds: [], gate_text_nodes: [], once_node_id: -1, memo_node_id: -1, expr_probe: [], transition_started: 0, tpl_transition: [], component_mounts: 0, component_nodes: 0, component_kid_probe: {}, slot_probe: { texts: [], rects: [], fills: [], markers_left: -1 }, emit_probe: { emits: [], parent_source_after: undefined, geom_before: -1, geom_after: -1 }, scoped_probe: { texts: [], anchor_id: -1, anchor_width_field: -1, anchor_width_rect: -1, destr_text: '', destr_width_field: -1, destr_width_rect: -1 }, lifecycle_probe: { bindings: [], ran_handler: '', changed_sources: [], ops_bytes: 0, applied: 0, anchor_id: -1, geom_before: -1, geom_after: -1 }, dyn_probe: { texts: [], mounts: [], geom: [], dropped: -1, notes: [] }, directive_probe: { nodes: [], rounds: [], plays: [] }, mixed_probe: { texts: [], leaves: 0, geom: [] }, t2_probe: { nodeId: -1, widths: [], values: [], logs: [] }, b5_probe: { nodeId: -1, phases: [], widths: [], values: [] }, b3a_probe: { nodeId: -1, widths: [] }, b3b_probe: { childId: -1, child_xs: [] }, b3d_probe: { childId: -1, child_xs: [] }, bt1_probe: { textA_id: -1, textB_id: -1, residuals: [] }, bt2_probe: { nodeId: -1, policy_seen: [] }, bt3_probe: { nodeId: -1, inputEvents: -1 }, s11_probe: { press_nodes: -1, applied: -1, pressed: -1 }, s3_probe: { follow_nodes: -1, moves: -1, applied: -1, tx_after: -1, snap_final: -1, snap_calls: -1, return_final: -1, return_calls: -1, multi_batch_calls: -1, multi_ptrs_max: -1, multi_moves: -1 }, styleobj_probe: { anchor_id: -1, width_before: -1, width_after: -1, kernel_applied: 0, patch_calls: [] },
     mount_ms: 0, mount_nodes: 0,
     updates_run: 0, ops_bytes: 0, ops_ms: 0, apply_ms: 0, text_synced_total: 0, update_evidence: [], geom_probe: [], channels: [],
     ev_bindings: 0, ev_handlers: 0, ev_modifiers: 0, taps: 0, tap_evidence: [],
@@ -3516,8 +3523,11 @@ function runShort(args: VaporArgs): string {
           const mOut = JSON.parse(proteusHost.mount(JSON.stringify({ viewport: s3Inst.viewport, nodes: s3Inst.nodes }))) as { ok?: boolean; error?: string }
           if (mOut.ok === true) {
             const followNodes = s3Inst.nodes.filter((n) => typeof (n as { followAxis?: unknown }).followAxis === 'number')
-            // 语义分工：无 snap ⇒ 纯跟手（A）；有 snap 且带 clamp ⇒ 吸附/回弹双场景（B）
-            const pure = followNodes.find((n) => !(n as { followSnapThreshold?: unknown }).followSnapThreshold)
+            // 语义分工（按节点顺序，与夹具同源）：无 snap ⇒ 纯跟手；前两个纯跟手节点（A/D）供多指；
+            // 带 clamp ⇒ 吸附/回弹双场景（B）
+            const pureNodes = followNodes.filter((n) => !(n as { followSnapThreshold?: unknown }).followSnapThreshold)
+            const pure = pureNodes[0]
+            const second = pureNodes[1]
             const snapper = followNodes.find((n) => (n as { followClampMin?: unknown }).followClampMin !== undefined)
             const rectOf = (id: number) => {
               const rr = JSON.parse(proteusHost.readRects()) as { rects?: Record<string, { x?: number; y?: number; width?: number; height?: number }> }
@@ -3534,6 +3544,7 @@ function runShort(args: VaporArgs): string {
             }
             let txAfter = -1, moves = -1, applied = -1
             let snapFinal = -1, snapCalls = -1, returnFinal = -1, returnCalls = -1
+            let multiBatchCalls = -1, multiPtrsMax = -1, multiMoves = -1
             // ── 纯跟手（判据 ㉞）：拖 dx=120（< 无 snap）⇒ 跟手不发 UP 之前读落地前 tx ──
             if (pure) {
               const c = centerOf(Number((pure as { id: number }).id))
@@ -3543,6 +3554,20 @@ function runShort(args: VaporArgs): string {
                 moves = dr.follow_moves ?? -1
                 applied = dr.follow_applied ?? -1
                 txAfter = txOf(Number((pure as { id: number }).id))
+              }
+            }
+            // ── 多指（判据 ㊱）：A + D 同时各拖 dx=+80/dx=-80 ⇒ 一帧一次批量 FFI ──
+            if (pure && second && typeof proteusHost.dragMulti === 'function') {
+              const ca = centerOf(Number((pure as { id: number }).id))
+              const cd = centerOf(Number((second as { id: number }).id))
+              if (ca && cd) {
+                const mr = JSON.parse(proteusHost.dragMulti(JSON.stringify({
+                  points: [{ x: ca.x, y: ca.y, dx: 80, dy: 0 }, { x: cd.x, y: cd.y, dx: -80, dy: 0 }],
+                  steps: 6, release: false,
+                }))) as { batch_calls?: number; ptrs_max?: number; follow_moves?: number }
+                multiBatchCalls = mr.batch_calls ?? -1
+                multiPtrsMax = mr.ptrs_max ?? -1
+                multiMoves = mr.follow_moves ?? -1
               }
             }
             // ── 吸附（swipe-to-delete）：拖 dx=-120（过阈值 60）⇒ 松手吸附到 -200 ──
@@ -3565,6 +3590,7 @@ function runShort(args: VaporArgs): string {
               moves, applied, tx_after: txAfter,
               snap_final: snapFinal, snap_calls: snapCalls,
               return_final: returnFinal, return_calls: returnCalls,
+              multi_batch_calls: multiBatchCalls, multi_ptrs_max: multiPtrsMax, multi_moves: multiMoves,
             }
           } else {
             notes.push(`S3 探针：mount 失败（${mOut.error ?? '?'}）——判据 ㉞/㉟ 按缺失处理`)
