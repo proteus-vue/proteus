@@ -779,7 +779,28 @@ export function compileEvents(
         .map((m) => (typeof m === 'string' ? m : (m?.content ?? '')))
         .filter(Boolean)
       if (isComponentTag) {
-        diag(`组件上的 v-model 未支持（组件 v-model 走组件事件通道，为后续批次）`, '暂用 `:model-value` + `@update:model-value` 显式写法')
+        // ★★★B4-T3a（2026-10-10）：**组件 v-model 脱糖**——`<Kid v-model="x">` 等价于
+        //   `:model-value="x"`（下行，deps 已发 `component.modelValue`）+ `@update:modelValue="x = $event"`
+        //   （上行，走**已有的**组件 emit 路由：子 `$emit('update:modelValue', v)` → 父 handler）。
+        //   ★与原生元素 v-model 不同：这里**不需要宿主输入控件**（上行是"子→父"直接通知，已支持）。
+        //   ★成员路径/修饰符仍不在此批（组件 v-model 的 arg=自定义名如 `v-model:foo` 亦然）——本批只做默认 `x`。
+        if (p.arg != null && String(p.arg.content ?? '') !== '' && String(p.arg.content ?? '') !== 'modelValue') {
+          diag(`组件命名 v-model:${String(p.arg.content)} 未支持（本批只做默认 v-model）`, '暂用 `:foo` + `@update:foo` 显式写法')
+          continue
+        }
+        if (!/^[A-Za-z_$][\w$]*$/.test(expStr)) {
+          diag(`组件 v-model="${expStr}" 暂只支持纯标识符（成员路径需成员写通道）`, '改用标识符，或手写 @update:modelValue 处理器')
+          continue
+        }
+        if (mods.length > 0) {
+          diag(`组件 v-model 修饰符 .${mods.join('.')} 未支持`, '去掉修饰符，或手写 @update:modelValue 处理器做转换')
+          continue
+        }
+        const handler = `h${handlerSeq.length}`
+        handlerSeq.push(handler)
+        out.handlers[handler] = [{ op: 'set', source: expStr, program: { k: 'root', name: '$event' } }]
+        const loc = locOf(p)
+        out.events.push({ nodeId: id, event: 'update:modelValue', handler, componentEmit: true, ...(loc ? { loc } : {}) })
         continue
       }
       if (!/^[A-Za-z_$][\w$]*$/.test(expStr)) {
