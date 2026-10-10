@@ -51,6 +51,9 @@ jobs:
       - name: 输入延迟门禁（★S6/#767：帧 p95 ≤ 1 帧预算 + High input latency 对基线宽棘轮）
         run: node scripts/check-input-latency.mjs
 
+      - name: Dactyl 预算门禁（★D0/#772：dactyl-metrics 契约 + work_time_p95/jank 预算；无采样则如实 ◐）
+        run: python3 hosts/shared/dactyl/measure-latency.py --selftest && node scripts/check-dactyl-budget.mjs
+
       - name: 安全编辑门禁（★用户纪律：程序化编辑必须走 safe-edit——临时文件 + diff + 校验，禁止直接改源文件）
         run: node scripts/check-safe-edit.mjs
 

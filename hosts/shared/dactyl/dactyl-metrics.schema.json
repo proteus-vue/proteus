@@ -1,0 +1,37 @@
+{
+  "$comment": "Dactyl 输入延迟指标契约（15-dactyl-demo.md §6.1）——唯一口径：生产者(宿主)、量具(measure-latency.py)、门禁(check:dactyl-budget)三方共用。字段名对齐 14/Checklist，不新造同义名。",
+  "version": 1,
+  "required": ["end", "source", "generated_at", "metrics"],
+  "metrics": {
+    "input_latency_p50_ms": "触摸 → 提交（ms）。T0=官方触摸事件时间戳(getEventTime/UITouch.timestamp)，T1=首帧提交时间戳；禁 JS 侧时钟（bench spec §2.5）",
+    "input_latency_p95_ms": "同上 P95（主判据：≤ 8.33ms = 1 帧@120Hz）",
+    "input_latency_p99_ms": "同上 P99",
+    "visible_lag_px": "幽灵拖尾与尖峰顶端的像素偏差（显影器；须同报 finger_speed_px_per_ms）",
+    "finger_speed_px_per_ms": "触摸线速度（visible_lag_px 的归因伴随量，禁只报偏移）",
+    "press_feedback_ms": "DOWN → 被按节点首个可见变化（S1.1 核心判据）",
+    "hit_test_us": "单次命中耗时（内核打点）",
+    "bridge_calls_per_gesture": "每次手势跨边界调用数（S1 判据）",
+    "bridge_wire_bytes": "文本通道字节数（目标 0，S2）",
+    "bridge_copy_count": "跨边界拷贝次数（目标 0，S2）",
+    "ffi_calls_per_frame": "每帧 FFI 次数（多指下不得随触点增长，S1.4）",
+    "work_time_p50_ms": "每帧真实工作时长 P50（主指标，Perfetto）",
+    "work_time_p95_ms": "同上 P95（主预算 ≤ 8.0ms，沿用 FRAME_WORK_BUDGET_MS）",
+    "work_time_p99_ms": "同上 P99",
+    "jank_rate": "错过 vsync 帧占比（≤ 0.2%）",
+    "gc_pause_count": "GC 暂停次数（≈ 0，对 Flutter 的杀手锏）",
+    "gc_pause_total_ms": "GC 暂停总时长",
+    "js_block_main_ms": "JS 阻塞主线程时长",
+    "main_thread_frame_work_ms": "主线程每帧工作量",
+    "js_involved_gestures_ratio": "交互进 JS 比例（L2 目标 0，S3）",
+    "ceiling_load": "本关天花板档位（§5）",
+    "rupture_load": "崩裂档位（§5）",
+    "interaction_boot_ms": "Harmony：一次交互的 VM 建立 + eval 耗时（目标 ≈0；现状一次性 VM 会先崩）"
+  },
+  "ends": ["android", "ios", "harmony", "skyline", "web", "native", "flutter", "rn"],
+  "honesty": [
+    "所有目标档位为设计目标，未真机实测前不得对外宣称（15 §12 / 14 §8）",
+    "iOS 须真机（模拟器口径不作数）；Harmony 交互数据以 interaction_boot_ms 为主",
+    "visible_lag_px 必须与 finger_speed 同报（速度-延迟-偏移强相关）",
+    "对外「打穿所有框架」必须分端 + 带外部取证（尤其高速摄影）"
+  ]
+}
