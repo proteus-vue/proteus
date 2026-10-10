@@ -2666,3 +2666,11 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **③ 验证**：`vapor-events.test.ts`（组件 v-model ⇒ `@update:modelValue`+`componentEmit`+`set name=$event`，零诊断；命名/成员/修饰符 ⇒ 诊断）；`test:coupled` 绿。★组件 emit 路由本身由判据 ⑯（子→父 `$emit`）早已三端验证 ⇒ 本项端上**真生效**（不依赖后续宿主控件）。
 **④ 诚实边界**：本项只做**默认 `v-model="x"`（纯标识符、无修饰符）**的组件形态；命名 v-model、成员路径、修饰符仍诊断（另批）。组件内是否含原生输入控件由子组件决定（若含，仍需 B4-T2b-host）。
 **⑤ 教训**：a) ★★**"组件 v-model"与"原生 v-model"是两条通道**——组件走 emit（已支持，可纯编译期闭环），原生走宿主输入控件（需设备）⇒ **别把两者当一件事**（前者立即可交付且真生效）；b) ★**能复用既有路由（组件 emit）就不新造**（组件 v-model 的上行 = `@update:modelValue` = 组件自定义事件绑定）。★余：B4-T2b-host（三端原生控件·需设备）· B4-T3 余项（修饰符/成员路径）。
+
+766. **★★★Vapor B4-T2b（宿主半 · Android）交付：原生输入控件（`<input v-model>` ⇒ 宿主 EditText，复用 native-host 机制）+ 判据 ㉚**（2026-10-10）：
+**① 承接**：B4-T2b-JS（#764）已给宿主`→`JS 的回写入口（`__proteusSuperappInput`）。本轮做**宿主建原生输入控件**（先 Android）。
+**② 交付（Android）**：a) `VaporRenderHost.syncInputControls()`——扫 `tag==input/textarea` 的节点，用**既有 native-host 机制**（`addNativeHost` + `setNativeHostGeometry`，几何来自内核 `readRects`）建 `EditText`；下行初值 = `spec.text`；上行 = `TextWatcher.afterTextChanged → inputSink.onInput(id, text)`；b) `ProteusHostView.removeNativeHost`（树重建清旧控件，不残留）；c) 探针 `inputProbeSetText`/`inputControlCount`；d) QuickJS 绑定 `proteusHost.inputProbeSetText`（照 `textPolicy` 四处：struct/JS fn/注册/null/GetMethodID）；e) 夹具 `bt3`（`<input v-model="x">`）；f) 探针 `bt3_probe` + 判据 **㉚**（节点建了 EditText 且注入文本触发 TextWatcher ≥1 ⇒ 控件"活"）。
+**③ ★实测约束（重要）**：`EditText.setText` → `TextWatcher` → JS 回调会**重入 QuickJS**（宿主在当前 native 调用内未返回时再 Call JS ⇒ 栈不平衡/崩）⇒ **watcher→live JS 回写桥**不能同步直调，须 post 到主线程下一轮（或回调返回后 drain）。本批探针只证"控件建成 + 活的（能产输入事件）"；**回写链本身由 B4-T2a 单测覆盖**（数据/下行都验过）。
+**④ 判据 ㉚ 跨端注意**：该判据**仅 Android**（其他端无 `inputProbeSetText` ⇒ 如实 ◐ 跳过）⇒ **不进三端跨端指纹**（`check-vapor-three-end` 的指纹逐项一致要求三端同源；㉚ 是本端专属，跳过计数已如实列出）。
+**⑤ 诚实边界**：iOS/鸿蒙原生控件未做（判据 ㉚ 在本端 ◐ 跳过）；watcher→live JS 回写桥（跨重入）未做（探针证"活"即可）；`v-model` 修饰符/成员路径未做。
+**⑥ 教训**：a) ★★★**"原生控件回调里再 Call JS" = 重入**（`setText`→watcher→JS 若同步，崩）——宿主回调必须**异步回灌**（post 主线程）；b) ★**复用 native-host 机制**（几何/measure/layout/scroll 全现成，输入控件只是"另一种原生 View"）；c) ★**探针证"控件活"（watcher 触发）+ 单测证"回写链"（B4-T2a）**分工——避免为"跨重入"阻塞本批交付。

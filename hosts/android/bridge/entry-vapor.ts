@@ -81,6 +81,11 @@ interface VaporHost {
    *   `text_policy_updates` 回执后调它（不自己维护第二份策略表）。可选：宿主未实现 ⇒ 探测为 undefined。
    */
   textPolicy?(idsJson: string): string
+  /**
+   * ★★★B4-T2b（2026-10-10）：**原生输入控件探针**——给宿主建的 EditText 注入文本（走 TextWatcher ⇒ 回写）。
+   *   入参 `{text}`；返 `{ok,nodeId,inputEvents}`。可选：宿主未实现 ⇒ 探测为 undefined（判据 ㉚ 如实跳过）。
+   */
+  inputProbeSetText?(text: string): string
   /** ★★绘制通道探针（读**宿主真源**：渐变/发光/遮罩/圆角/裁剪/描边建出来了没） */
   probeChannels(idsJson: string): string
   /**
@@ -449,6 +454,14 @@ interface VaporReport {
   bt2_probe: {
     nodeId: number
     policy_seen: string[]
+  }
+  /**
+   * ★★★**B4-T2b 探针**（2026-10-10 · 判据 ㉚）——**原生输入控件端上建成且是活的**。
+   *   `nodeId` = 建了 EditText 的节点；`inputEvents` = 注入文本后 TextWatcher 触发次数（≥1 ⇒ 控件活）。
+   */
+  bt3_probe: {
+    nodeId: number
+    inputEvents: number
   }
   /**
    * ★★★**`:style` 对象展开探针**（2026-10-03）——两条通道各自的真值：
@@ -1811,7 +1824,7 @@ function runShort(args: VaporArgs): string {
     tpl_nodes: 0, tpl_ok: false, sub_l1: 0, sub_l0: 0, sub_l1_rate: 0, sub_sources: [],
     inst_ms: 0, inst_nodes: 0, inst_reused_ids: 0, inst_allocated_ids: 0, inst_rows: 0,
     inst_values_filled: 0, inst_virtual_rows: 0, inst_text_filled: 0, inst_width_filled: 0,
-    mix_text_probe: [], text_probe_rounds: [], gate_rounds: [], gate_text_nodes: [], once_node_id: -1, memo_node_id: -1, expr_probe: [], transition_started: 0, tpl_transition: [], component_mounts: 0, component_nodes: 0, component_kid_probe: {}, slot_probe: { texts: [], rects: [], fills: [], markers_left: -1 }, emit_probe: { emits: [], parent_source_after: undefined, geom_before: -1, geom_after: -1 }, scoped_probe: { texts: [], anchor_id: -1, anchor_width_field: -1, anchor_width_rect: -1, destr_text: '', destr_width_field: -1, destr_width_rect: -1 }, lifecycle_probe: { bindings: [], ran_handler: '', changed_sources: [], ops_bytes: 0, applied: 0, anchor_id: -1, geom_before: -1, geom_after: -1 }, dyn_probe: { texts: [], mounts: [], geom: [], dropped: -1, notes: [] }, directive_probe: { nodes: [], rounds: [], plays: [] }, mixed_probe: { texts: [], leaves: 0, geom: [] }, t2_probe: { nodeId: -1, widths: [], values: [], logs: [] }, b5_probe: { nodeId: -1, phases: [], widths: [], values: [] }, b3a_probe: { nodeId: -1, widths: [] }, b3b_probe: { childId: -1, child_xs: [] }, b3d_probe: { childId: -1, child_xs: [] }, bt1_probe: { textA_id: -1, textB_id: -1, residuals: [] }, bt2_probe: { nodeId: -1, policy_seen: [] }, styleobj_probe: { anchor_id: -1, width_before: -1, width_after: -1, kernel_applied: 0, patch_calls: [] },
+    mix_text_probe: [], text_probe_rounds: [], gate_rounds: [], gate_text_nodes: [], once_node_id: -1, memo_node_id: -1, expr_probe: [], transition_started: 0, tpl_transition: [], component_mounts: 0, component_nodes: 0, component_kid_probe: {}, slot_probe: { texts: [], rects: [], fills: [], markers_left: -1 }, emit_probe: { emits: [], parent_source_after: undefined, geom_before: -1, geom_after: -1 }, scoped_probe: { texts: [], anchor_id: -1, anchor_width_field: -1, anchor_width_rect: -1, destr_text: '', destr_width_field: -1, destr_width_rect: -1 }, lifecycle_probe: { bindings: [], ran_handler: '', changed_sources: [], ops_bytes: 0, applied: 0, anchor_id: -1, geom_before: -1, geom_after: -1 }, dyn_probe: { texts: [], mounts: [], geom: [], dropped: -1, notes: [] }, directive_probe: { nodes: [], rounds: [], plays: [] }, mixed_probe: { texts: [], leaves: 0, geom: [] }, t2_probe: { nodeId: -1, widths: [], values: [], logs: [] }, b5_probe: { nodeId: -1, phases: [], widths: [], values: [] }, b3a_probe: { nodeId: -1, widths: [] }, b3b_probe: { childId: -1, child_xs: [] }, b3d_probe: { childId: -1, child_xs: [] }, bt1_probe: { textA_id: -1, textB_id: -1, residuals: [] }, bt2_probe: { nodeId: -1, policy_seen: [] }, bt3_probe: { nodeId: -1, inputEvents: -1 }, styleobj_probe: { anchor_id: -1, width_before: -1, width_after: -1, kernel_applied: 0, patch_calls: [] },
     mount_ms: 0, mount_nodes: 0,
     updates_run: 0, ops_bytes: 0, ops_ms: 0, apply_ms: 0, text_synced_total: 0, update_evidence: [], geom_probe: [], channels: [],
     ev_bindings: 0, ev_handlers: 0, ev_modifiers: 0, taps: 0, tap_evidence: [],
@@ -3353,6 +3366,39 @@ function runShort(args: VaporArgs): string {
         } catch { /* 重挂失败 ⇒ 判据按 host_nodes 不符判红 */ }
       } else {
         notes.push('B-T2 探针：产物无 bt2 段（夹具未覆盖 ⇒ 判据 ㉙ 按缺失处理）')
+      }
+    }
+
+    /* ═══════════ ★★★B4-T2b 探针（2026-10-10 · 判据 ㉚）：原生输入控件端上建成且是活的 ═══════════
+     *
+     * 【要证明什么】宿主为 `<input v-model>` 节点建**原生 EditText**（复用 native-host 机制），
+     *   注入文本 ⇒ TextWatcher 触发（≥1）⇒ 控件"活的"（能产生输入事件）。回写链由 B4-T2a 单测覆盖。
+     *   ★诚实边界：本探针只证"控件建成 + 活的"；watcher→live JS 回写桥（跨重入）为后续。
+     */
+    {
+      const bt3Art = (artifacts as { bt3?: { tpl: LayoutTemplate; table: SubscriptionTable } }).bt3
+      if (bt3Art?.tpl?.ok && typeof proteusHost.inputProbeSetText === 'function') {
+        const bt3Inst = instantiateTemplate(bt3Art.tpl, { viewport: args.viewport, read: () => '', table: bt3Art.table, registry: new ListRegistry() })
+        try {
+          const mOut = JSON.parse(proteusHost.mount(JSON.stringify({ viewport: bt3Inst.viewport, nodes: bt3Inst.nodes }))) as { ok?: boolean; error?: string }
+          if (mOut.ok === true) {
+            const ins = JSON.parse(proteusHost.inputProbeSetText('typed-by-probe')) as { ok?: boolean; nodeId?: number; inputEvents?: number }
+            if (ins.ok === true) {
+              rep.bt3_probe = { nodeId: ins.nodeId ?? -1, inputEvents: ins.inputEvents ?? -1 }
+            } else {
+              notes.push(`B4-T2b 探针：无输入控件（inputProbeSetText 返 ${JSON.stringify(ins)}）——判据 ㉚ 按缺失处理`)
+            }
+          } else {
+            notes.push(`B4-T2b 探针：mount 失败（${mOut.error ?? '?'}）——判据 ㉚ 按缺失处理`)
+          }
+        } catch (e) {
+          notes.push(`B4-T2b 探针异常：${String((e as Error)?.message ?? e)}`)
+        }
+        try {
+          proteusHost.mount(JSON.stringify({ viewport: inst.viewport, nodes: inst.nodes }))
+        } catch { /* 重挂失败 ⇒ 判据按 host_nodes 不符判红 */ }
+      } else {
+        notes.push('B4-T2b 探针：产物无 bt3 段 / 宿主无 inputProbeSetText（夹具未覆盖 ⇒ 判据 ㉚ 按缺失处理）')
       }
     }
 

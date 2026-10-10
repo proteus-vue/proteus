@@ -16,7 +16,7 @@
 | **B4-T1** | **回写契约（编译期 + 运行期）**：`v-model="x"` ⇒ 编译成 `input` 事件 + `set x = $event` 动作；`$event` 运行时语义 | ✅ **已交付（2026-10-10）** |
 | **B4-T2a** | **框架前置**：`ScreenRuntimeInstance.dispatchInputValue(nodeId, value)`——宿主编译控件值 → 查 `input` 绑定 → 跑回写 handler（`$event`=值）→ 数据变 → 下行随之。三端宿主共用、可 JSON 测 | ✅ **已交付（2026-10-10）** |
 | **B4-T2b-JS** | **回写宿主入口（JS/框架）**：`SuperappRuntime.dispatchInput`（委派当前屏 `dispatchInputValue`）+ 全局入口 `__proteusSuperappInput`（宿主→JS，三端同形） | ✅ **已交付（2026-10-10）** |
-| **B4-T2b-host** | **三端宿主原生输入控件**：Android `EditText`/`AppCompatEditText` · iOS `UITextField`/`UITextView` · 鸿蒙 `TextInput`——按可编辑节点建控件、编辑值经 `__proteusSuperappInput` 下发 | ❌ 未做（**需设备**） |
+| **B4-T2b-host** | **三端宿主原生输入控件**：Android `EditText`（✅ **已交付，判据 ㉚**）· iOS `UITextField`/`UITextView` · 鸿蒙 `TextInput`（❌ 未做）——按可编辑节点建控件、编辑值经 `__proteusSuperappInput` 下发 | ◐ Android 已交付 |
 | **B4-T3**（原 T3） | **修饰符 + 组件 v-model + 成员路径**：`.lazy/.trim/.number`（宿主值转换）· 组件 `v-model`（`update:modelValue`）· `v-model="o.x"`（成员写） | ◐ **T3a 已交付（组件 v-model）；余修饰符/成员路径** |
 
 **诚实边界**：B4-T1 只交付**回写契约**（产物含 `input` 绑定 + 动作）；**控件未接前 `input` 事件无源 ⇒ 端上输入暂不生效**——故 `VAPOR_VMODEL_NO_INPUT_CONTROL` 诊断**保留**（如实标注缺口，不静默半支持）。

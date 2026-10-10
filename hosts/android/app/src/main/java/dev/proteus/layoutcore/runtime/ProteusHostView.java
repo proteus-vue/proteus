@@ -1893,6 +1893,13 @@ public class ProteusHostView extends ViewGroup {
         requestLayout();
     }
 
+    /** ★B4-T2b：移除某 native-host 节点（树重建时清旧输入控件；不残留 map 引用）。 */
+    public void removeNativeHost(int nodeId) {
+        View v = nativeHosts.remove(nodeId);
+        if (v != null) removeView(v);
+        nativeRects.remove(nodeId);
+    }
+
     /**
      * 设置 native-host 节点的几何（**必须来自 Rust 排版核心**）。
      *

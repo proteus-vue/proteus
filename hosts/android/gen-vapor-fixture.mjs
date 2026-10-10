@@ -486,6 +486,21 @@ const bt2on = ref(false)
 .ws { white-space: nowrap; }
 </style>`
 
+/**
+ * ★★★B4-T2b 夹具（判据 ㉚，2026-10-10）：**原生输入控件**（`<input v-model>` 端上建 EditText）。
+ *   宿主为 `tag==input` 的节点建原生 EditText（复用 native-host 机制）⇒ 探针注入文本 ⇒ TextWatcher 触发
+ *   ⇒ 证"控件建成且是活的"。
+ */
+const BT3_SFC = `<template>
+  <p-view style="width: 400px; height: 100px">
+    <input v-model="x" style="width: 300px; height: 40px" />
+  </p-view>
+</template>
+
+<script setup lang="ts">
+const x = ref('')
+</script>`
+
 /** 长列表夹具：**行高 100px**（视口 2400 ⇒ 可见 ~24 行；预加载 ±10 ⇒ 物化 ~34 行）
  *  ——判据的口径：1000 行都必须在内核树里（几何正确），但宿主只物化可见区。
  *  ★行内含 `:width` 绑定（L1 槽位）与插值文本（`{{ item.title }}`）。 */
@@ -666,6 +681,8 @@ process.stdout.write(JSON.stringify({
   bt1: build(${JSON.stringify(BT1_SFC)}, 'vapor-bt1.vue'),
   // ★★B-T2：动态 :class 的文本策略走内核（white-space，判据 ㉙）
   bt2: build(${JSON.stringify(BT2_SFC)}, 'vapor-bt2.vue'),
+  // ★★B4-T2b：原生输入控件（<input v-model>，判据 ㉚）
+  bt3: build(${JSON.stringify(BT3_SFC)}, 'vapor-bt3.vue'),
   // ★:style 对象展开（判据 ㉒）
   styleObj: build(${JSON.stringify(STYLE_OBJ_SFC)}, 'vapor-style-obj.vue'),
   // ★★★六端 SFC 压力夹具：编译**共享 SFC 文件**（examples 页面）——与 Web/MP 同源
@@ -846,7 +863,7 @@ for (const [nm, def] of Object.entries(parsed.components)) {
       `父绑定 @${parentEmitBinds[0].event}（nodeId=${parentEmitBinds[0].nodeId}）`,
   )
 }
-fs.writeFileSync(OUT, JSON.stringify({ ...parsed.small, components: parsed.components, slot: parsed.slot, scoped: parsed.scoped, dyn: parsed.dyn, directive: parsed.directive, mixed: parsed.mixed, t2: parsed.t2, b5: parsed.b5, b3a: parsed.b3a, b3b: parsed.b3b, b3d: parsed.b3d, bt1: parsed.bt1, bt2: parsed.bt2, styleObj: parsed.styleObj }))
+fs.writeFileSync(OUT, JSON.stringify({ ...parsed.small, components: parsed.components, slot: parsed.slot, scoped: parsed.scoped, dyn: parsed.dyn, directive: parsed.directive, mixed: parsed.mixed, t2: parsed.t2, b5: parsed.b5, b3a: parsed.b3a, b3b: parsed.b3b, b3d: parsed.b3d, bt1: parsed.bt1, bt2: parsed.bt2, bt3: parsed.bt3, styleObj: parsed.styleObj }))
 console.log(`[gen-vapor-fixture] ✅ 组件注册表：${Object.keys(parsed.components).join(', ')}（随父产物下发）`)
 // ★P1-3 插槽分发夹具（判据 ⑮）：父产物必须带 slotFor 标记、子产物必须带 slotOutlet 标记
 //   （"生成器静默退化"是本仓重点拦的形态——标记缺了就是分发不可能发生）
