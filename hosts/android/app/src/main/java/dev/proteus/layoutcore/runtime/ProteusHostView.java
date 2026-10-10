@@ -941,6 +941,11 @@ public class ProteusHostView extends ViewGroup {
         java.util.Map<Integer, Integer> m = new java.util.HashMap<>();
         if (ids != null) for (int k = 0; k < ids.length; k++) if (ids[k] >= 0) m.put(ids[k], k);
         this.cmdIndexByIdView = m;
+        // ★★★显示列表必须与新 id 表**同源重录**（2026-10-10 · 真机「切回首页整屏涟漪」根因）：
+        //   `drawCmds` 用 `cmdNodeIds` 把每条指令映回节点（据此施加 `opacity`/`animTx`）。
+        //   录制（`rebuildPicture`）若发生在**旧 id 表**下 ⇒ 尾部的 `opacity:0` 伪元素（涟漪）会以满不透明录进显示列表。
+        //   ⇒ id 表变更时一并作废已录制的显示列表（顺序无关 = 防御：即便调用方先 `setCmds` 后 `setCmdNodeIds` 也正确）。
+        framePicture = null;
         invalidate();
     }
 

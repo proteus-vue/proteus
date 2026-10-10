@@ -2919,3 +2919,15 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **⑦ 诚实边界**：只接 **Android 宿主**；iOS/鸿蒙的 `animStart` 宿主驱动待补（内核动画通道三端共享 ⇒ 补驱动即全端生效）；组件内部模板的 `v-animate` 不支持（与既有 directive 边界一致，如实诊断）；App 壳 `animStart` 缺省未接时**如实 note**（不静默把"没播"当"播了"）。
 **⑧ 门禁**：`screen-runtime` +3（v-animate 值变→播 · `<Transition>` 可见性翻转→播 · 未接 animStart→如实 note）· `vapor-directives` 11 · `vapor-class-styles` 143 · `coupled` 100 · `android-host-compile` · `AAR-fresh` · `bridge-sync` · `vapor-three-end`✓（指纹逐项一致，改动对这些夹具行为中性）· `vue-tsc` 0 全绿。★`check:host-invoke-contract` 报 harmony `dev.console`——**pre-existing**（干净树同样红，非本轮引入，已在记忆待办具名）。
 
+
+794. **★★★Android 宿主显示列表**录制用了「上一屏的节点 id 表」⇒ 伪元素涟漪以满不透明录进缓存（切回首页整屏涟漪）——**通用宿主缺陷（非 demo 补丁）**（2026-10-10）：
+**① 现象（用户真机抓出）**：Dactyl **从 L3/L4/L5 切回首页（L1）**时，首页所有磁块都浮起一个个**满不透明的蓝色圆盘**（正是 L1 涟漪 `::after` 的"扩散到底"终态）；**但从 L2 切回没有这个问题**。用户追问：① 为什么只有 L2 没有？② 是否又回到了"对单个 demo 打补丁"的老路？③ 是否是"伪元素切屏没清空"？
+**② 根因（通用宿主缺陷，与 demo 无关）**：`VaporRenderHost.pushToView()` 原先 **先 `setCmds(cmds)` 再 `setCmdNodeIds(ids)`**；而 `ProteusHostView.setCmds` 在**尺寸就绪**时会**立即录制显示列表**（`rebuildPicture`→`drawCmds`），`drawCmds` 用 `cmdNodeIds` 把每条指令映回节点（据此施加每节点 `opacity`/`animTx`）。⇒ 录制用的是**上一屏遗留的 id 表**：
+  · 上一屏 **L2（1004 节点）** ⇒ 旧 id 表长 **1004** > 首页 149 条指令 ⇒ 首页**每条指令都能在旧表前段找到自己的 id** ⇒ `opacity` 正常施加 ⇒ **干净**；
+  · 上一屏 **L3(33)/L4(8)/L5(6)** ⇒ 旧 id 表**短于**首页 149 条 ⇒ **尾部指令（即全部 96 个伪元素节点）`id=-1`** ⇒ `op==1`（默认，不施加 opacity）⇒ `opacity:0` 的 `::after` 涟漪**以满不透明**录进显示列表 ⇒ **整屏涟漪**（缓存 Picture 每帧回放）。
+  · ★**确证**：加桩 log 出 `FILL_DBG id=-1 op=1.0 shader=true paintAlpha=255`（脉冲盘正是这些 `id=-1` 指令）；且**临时禁用显示列表回放（强制走 `drawCmds`）后立刻干净**（blue px 1.16M→0）——精确锁定"录制期用错 id 表"。
+**③ 修复（两处·通用）**：`VaporRenderHost.pushToView` **先 `setCmdNodeIds` 后 `setCmds`**（录制时 id 表已是本屏的）；`ProteusHostView.setCmdNodeIds` **作废已录制的显示列表**（`framePicture=null`）——**顺序无关的防御**（即便调用方反向也正确）。
+**④ 回答用户三问**：① **为什么只有 L2**——因为 L2 节点数(1004) **多于**首页(149)，旧 id 表"够长"⇒尾部仍有 id；L3/L4/L5 节点数(33/8/6) **少于**首页 ⇒ 尾部全 `-1`。**这是"旧屏节点数 vs 新屏指令数"的比较关系**，不是"某个 demo 特判"。② **不是打补丁**——缺陷与修复**都在通用宿主代码**（`VaporRenderHost`/`ProteusHostView`，与 Dactyl 无关），恰是 **demo 压测暴露出的基座缺陷**（与 #790/#793 同源纪律：demo 暴露 ⇒ 在基座修 ⇒ 全端受益）。③ **不是"伪元素没清空"**——内核每屏已 `destroy`+`create` 重建整树，伪元素是**新树**里的普通节点、`opacity:0` 基态**正确**；错的只是**宿主显示列表录制时用了旧 id 表**，导致该基态**没被施加到录进缓存的那一版**。
+**⑤ 真机验证**：L4/L3/L5/L2 **四路切回首页全部 blue px=0（干净）**；**按下磁块涟漪照旧**（`kernelAnimStart` 走 `drawCmds` 全量路径，与显示列表缓存无关，`mid-press blue px=769`）；五页无回归。
+**⑥ 门禁**：`android-host-compile` · `AAR-fresh` · `coupled` 100 · `dactyl-visual-nonblocking` 全绿。
+**⑦ 教训**：**"缓存显示列表"必须与其"每节点状态表"同源同版本录制**——`setCmds` 与 `setCmdNodeIds` 是一对**必须原子更新**的输入（先录后换表 = 录进错表）；★**判别征**：「**切换源/目标节点数的大小关系**决定症状」是"靠下标/表长对齐"的经典破绽（旧表够长就"恰好对"、不够长就错位）——**凡按位置对齐的表，都要一次原子更新**。★**定位手段**：显示列表缓存类 bug 的"金判据"= **临时禁用回放（强制直绘）看是否复现**（一次性把范围缩到"录制期"）；再桩 `id=-1` 即锁定"表未同步"。
