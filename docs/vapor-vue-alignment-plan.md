@@ -12,7 +12,7 @@
 |---|---|---|---|
 | `VAPOR_DYNCLASS_LAYOUT_UNSUPPORTED` | **28** | 动态 `:class` 命中**布局字段**（width/padding/display…）端上不重排 | ❌ 需内核 + 宿主 |
 | `VAPOR_KEY_IS_ROW_IDENTITY` | 22 | `:key` 非可更新属性（**info 级，非缺口**） | —（正常） |
-| `VAPOR_VMODEL_NO_WRITEBACK` | **22** | App 端 `v-model` **无回写通道**（输入→源） | ❌ 需宿主输入通道 |
+| `VAPOR_VMODEL_NO_INPUT_CONTROL` | **22** | App 端 `v-model`：回写契约已通（B4-T1），**端上原生输入控件未接**（输入无源） | ❌ 需三端宿主输入控件 |
 | `VAPOR_SCRIPT_LIFECYCLE_NOT_RUN` | 8 | `onMounted` 等**脚本钩子端上不跑**（端上不执行 script） | ◐ 部分（可降级简单钩子体） |
 | `VAPOR_DIRECTIVE_NOT_REGISTERED` | 6 | 自定义指令体不执行（架构边界） | ❌ 架构 |
 | `VAPOR_DYNCLASS_PLAN_UNMAPPED` | 5 | 动态类计划未映射（**退化到线性回退**，非正确性） | ✅（JS，但仅提速） |

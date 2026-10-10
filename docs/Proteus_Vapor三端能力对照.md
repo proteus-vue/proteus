@@ -505,7 +505,7 @@ suspense），不引入一般大小写转换（那会误伤用户的 kebab 自�
   与真欠账；棘轮让前者如实存在、后者只减不增。
 
 **实测分布（27 个真实样例页 · 11 个零缺口）**：`VAPOR_TEMPLATE_UNSUPPORTED` 26 ·
-`VAPOR_KEY_IS_ROW_IDENTITY` 22（info）· `VAPOR_VMODEL_NO_WRITEBACK` 22 · 脚本钩子 8 ·
+`VAPOR_KEY_IS_ROW_IDENTITY` 22（info）· `VAPOR_VMODEL_NO_INPUT_CONTROL` 22 · 脚本钩子 8 ·
 表外指令 6 · 表达式 3 · 作用域解构 1 · 内置边界 1。
 
 **单测**：`tests/explain-vapor-gaps.test.ts` 9 组（模板侧必现 / 归类计数 / severity 取高 /

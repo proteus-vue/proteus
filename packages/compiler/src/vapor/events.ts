@@ -766,6 +766,37 @@ export function compileEvents(
         ...(once ? { once: true } : {}),
       })
     }
+    // ★★★B4-T1（2026-10-10）：**v-model 回写**——把 `v-model="x"` 编成「下行值槽位（deps 已发 text.content）+
+    //   **回写动作**（`input` 事件 ⇒ `set x = $event`）」。此前只有下行、无回写 ⇒ 输入不写回数据。
+    //   ★缺省只处理**原生元素 + 纯标识符 + 无修饰符**（其余产诊断，不静默半支持）：
+    //     · 组件上的 v-model ⇒ 组件事件通道（另批）；成员路径（`o.x`）⇒ 需成员写（另批）；
+    //     · `.lazy`（改 change 事件）/`.trim`/`.number`（值转换）⇒ 需宿主转换（另批）。
+    //   ★诚实边界：本批产出**回写契约**（产物含 input 绑定）；**三端原生输入控件（键盘/编辑框）为下一步**——
+    //     控件未接前 `input` 事件无源 ⇒ 端上输入暂不生效（故 template.ts 仍保留"输入控件待接"诊断）。
+    for (const p of (n.props ?? []).filter((pp) => pp.type === 7 && pp.name === 'model')) {
+      const expStr = String(p.exp?.content ?? '').trim()
+      const mods = (p.modifiers ?? [])
+        .map((m) => (typeof m === 'string' ? m : (m?.content ?? '')))
+        .filter(Boolean)
+      if (isComponentTag) {
+        diag(`组件上的 v-model 未支持（组件 v-model 走组件事件通道，为后续批次）`, '暂用 `:model-value` + `@update:model-value` 显式写法')
+        continue
+      }
+      if (!/^[A-Za-z_$][\w$]*$/.test(expStr)) {
+        diag(`v-model="${expStr}" 的回写暂只支持纯标识符（成员路径需成员写通道）`, '改用标识符，或在 change 处理器里手写赋值')
+        continue
+      }
+      if (mods.length > 0) {
+        diag(`v-model 修饰符 .${mods.join('.')} 暂未支持（.lazy/.trim/.number 需宿主值转换）`, '去掉修饰符，或手写 @input 处理器做转换')
+        continue
+      }
+      const handler = `h${handlerSeq.length}`
+      handlerSeq.push(handler)
+      // `x = $event`：运行期 `$event` = 输入控件抛出的值（见 HandlerRunContext.event）
+      out.handlers[handler] = [{ op: 'set', source: expStr, program: { k: 'root', name: '$event' } }]
+      const loc = locOf(p)
+      out.events.push({ nodeId: id, event: 'input', handler, ...(loc ? { loc } : {}) })
+    }
   }
   /** 跳过子树前先检查是否藏了事件（藏了就诊断——"静默丢事件"比"诊断拒绝"更危险） */
   const hasEventHandler = (n: EvNode): boolean =>

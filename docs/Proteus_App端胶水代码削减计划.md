@@ -41,7 +41,7 @@
 
 ## 二、`v-model` 只有下行、无回写（表单类超级应用硬伤）
 
-**现象**：`<input v-model="x">` 在 App 端**值→文本下行**，但**输入不回写**（`VAPOR_VMODEL_NO_WRITEBACK`）
+**现象**：`<input v-model="x">` 在 App 端**值→文本下行**，但**输入不回写**（`VAPOR_VMODEL_NO_INPUT_CONTROL`）
   ⇒ 开发者为表单手写事件 + 手动 `x = e.detail.value`，或整页保留 Web 渲染。
 
 **证据**：`packages/compiler/src/vapor/template.ts:1958`（诚实诊断）；用量：examples `forms` / `devtools-open-api-demo` /
