@@ -1,19 +1,19 @@
 {
-  "bundle_chars": 556292,
-  "run_ms": 171,
-  "host_mount_calls": 13,
-  "host_apply_calls": 17,
+  "bundle_chars": 560673,
+  "run_ms": 264,
+  "host_mount_calls": 15,
+  "host_apply_calls": 20,
   "host_update_patch_calls": 1,
   "host_nodes": 47,
   "host_text_nodes": 19,
   "host_cmds": 47,
-  "host_layout_ms": 0.246927,
-  "host_measure_ms": 0.34724,
+  "host_layout_ms": 0.306562,
+  "host_measure_ms": 0.35625,
   "host_painted_samples": 12060,
   "host_painted_colors": 234,
   "host_applied": 1,
   "host_changed_nodes": 2,
-  "host_view_on_draw": 26,
+  "host_view_on_draw": 30,
   "report": {
     "ok": true,
     "tpl_nodes": 30,
@@ -39,7 +39,7 @@
       "bumpTotal",
       "lifeW"
     ],
-    "inst_ms": 0,
+    "inst_ms": 1,
     "inst_nodes": 47,
     "inst_reused_ids": 2,
     "inst_allocated_ids": 14,
@@ -534,6 +534,21 @@
         }
       ]
     },
+    "t2_probe": {
+      "nodeId": 1,
+      "widths": [
+        0,
+        6,
+        12,
+        0
+      ],
+      "values": [
+        0,
+        6,
+        12,
+        0
+      ]
+    },
     "styleobj_probe": {
       "anchor_id": 1,
       "width_before": 120,
@@ -545,12 +560,12 @@
         ]
       ]
     },
-    "mount_ms": 26,
+    "mount_ms": 62,
     "mount_nodes": 47,
     "updates_run": 3,
     "ops_bytes": 204,
     "ops_ms": 0,
-    "apply_ms": 3,
+    "apply_ms": 2,
     "text_synced_total": 3,
     "update_evidence": [
       {
@@ -740,7 +755,7 @@
       "tap@13 自身宽度 120 → 150",
       "实例树 47 节点 \/ 行 47 \/ 虚拟化行 8 \/ 增量 3 轮"
     ],
-    "host_layout_ms": 0.453,
+    "host_layout_ms": 3.645,
     "host_cmds": 47
   },
   "ok": true

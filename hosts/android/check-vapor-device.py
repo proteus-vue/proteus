@@ -803,6 +803,28 @@ def main() -> int:
             print(f"  ✓ ㉒ ★:style 对象逐键展开：布局键内核宽度 {wb}→{wa}（applied={ka}）· "
                   f"绘制键提交宿主 {patches[0][0] if patches and patches[0] else ''}")
 
+    # ── ㉓ ★★★T2：带参调用 + 方法内局部变量 + if/else 的**动作端上真执行**（2026-10-10）──
+    #   【为什么单独判】T2 的动作（`let` 形参绑定 / `let` 局部变量 / `if` 两臂）必须**端上真跑**——
+    #     编译期产出"看起来对"的动作不算数；判据核：连跑 handler 3 次的**内核几何宽度**
+    #     是否走过 else→else→then 三步（0→6→12→0）。几何是内核真值（readRects），非自报。
+    t2 = rep.get("t2_probe") or {}
+    #   ① 期望源值序列（t2x：0 → 6 → 12 → 0）；② 期望几何：与源值同（宽度绑定 t2x）
+    t2v = [int(v) for v in (t2.get("values") or [])]
+    t2w = [int(v) for v in (t2.get("widths") or [])]
+    if not t2 or len(t2v) < 4:
+        print("  ◐ ㉓ T2：本端夹具未覆盖（报告无 t2_probe）——如实跳过")
+    else:
+        # ★三步语义：else(0→6) · else(6→12) · then(12→0)——后两步证明"局部变量 step 参与"与"if 两臂都走"
+        want = [0, 6, 12, 0]
+        if t2v != want:
+            fail(f"★T2 源值序列不符（期望 {want}：else→else→then）：{t2v} —— 形参/局部变量/if 有一步没生效")
+            ok = False
+        elif t2w[1:] != t2v[1:]:
+            fail(f"★T2 几何没跟上源值变化（宽 {t2w} vs 值 {t2v}）—— 动作改了源但内核没重排")
+            ok = False
+        else:
+            print(f"  ✓ ㉓ ★T2 带参/局部/if：t2x 值 {t2v}（else→else→then）· 内核几何宽 {t2w}（同步）")
+
     # 附加观测（不判红，只如实报）
     una = rep.get("uninstantiated_slots", 0)
     if una:

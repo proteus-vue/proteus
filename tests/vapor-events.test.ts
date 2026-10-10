@@ -94,7 +94,7 @@ describe('Vapor 事件编译 · 支持形态', () => {
 // 【为什么单列一组】App 端此前只认**内联单语句**；真实页面写 `@click="handleTap"` ⇒
 //   App 编不出事件（点了没反应），而 Web/小程序照常 ⇒ **三端分叉**（劝退级）。
 //   本组判据锁：方法引用/无参调用 ⇒ 内联方法体降级为**同一套动作**；多语句 ⇒ 多动作按序；
-//   ref `.value` 解包；不支持形态（带参/局部变量/if）⇒ **明确诊断**（不静默、不产出事件）。
+//   ref `.value` 解包；不支持形态（任意函数）⇒ **明确诊断**（不静默、不产出事件）。T2 见下组。
 describe('Vapor 事件编译 · ★★★方法引用 / 方法体（决策 #740 T1）', () => {
   const withScript = (body: string, tpl: string): string =>
     `<template>\n${tpl}\n</template>\n\n<script setup lang="ts">\nconst count = ref(0)\nconst show = ref(false)\n${body}\n</script>\n`
@@ -149,11 +149,8 @@ describe('Vapor 事件编译 · ★★★方法引用 / 方法体（决策 #740 
   })
 
   // ★不支持形态：必须**诊断 + 不产出事件**（不静默——与 §"不支持形态"同纪律）
+  //   ★T2 起：带参/形参/if-else/局部变量已**支持**（见下方 T2 describe）；此处只留**仍不支持**的任意函数。
   const unsupported: Array<[string, string, string, string]> = [
-    ['带参调用 add(2)', `function add(n: number) { count.value += n }`, `<p-view @click="add(2)"></p-view>`, '带实参'],
-    ['方法带形参', `function bump(e) { count.value++ }`, `<p-view @click="bump"></p-view>`, '带形参'],
-    ['if/else 语句', `function h() { if (show.value) { count.value++ } }`, `<p-view @click="h"></p-view>`, '暂不支持的语句'],
-    ['局部变量声明', `function h() { const y = 1; count.value = y }`, `<p-view @click="h"></p-view>`, '暂不支持的语句'],
     ['任意函数 console.log', ``, `<p-view @click="console.log(1)"></p-view>`, 'handler 形态不支持'],
   ]
   for (const [label, fn, tpl, expectMsg] of unsupported) {
@@ -164,6 +161,76 @@ describe('Vapor 事件编译 · ★★★方法引用 / 方法体（决策 #740 
       expect(r.diagnostics.every((d) => (d.hint ?? '').length > 0), '每条诊断都要有修法').toBe(true)
     })
   }
+})
+
+// ═══════════ ★★★决策 #740 T2：带参调用 / 方法形参 / 方法内局部变量 / if-else ═══════════
+// 【T2 补什么】T1 只到"方法引用/无参 + 平铺多语句"；真实页面还常写 `add(2)`（带参）、
+//   方法内 `const y = …`（局部变量）、`if (cond) {…} else {…}`（条件分支）。
+//   T2 在**编译期**把实参降级为 `let` 形参绑定、局部变量降级为 `let`、if 降级为 `if` 动作
+//   （两臂子动作列表）——运行期 `runHandlerActions` 用**局部作用域 + 递归**执行（仍无 eval）。
+describe('Vapor 事件编译 · ★★★T2（带参 / 形参 / 局部变量 / if-else）', () => {
+  const withScript = (body: string, tpl: string): string =>
+    `<template>\n${tpl}\n</template>\n\n<script setup lang="ts">\nconst count = ref(0)\nconst show = ref(false)\n${body}\n</script>\n`
+
+  it('★带参调用 `add(2)` ⇒ 方法形参绑为 `let n = 2` + 方法体用 n', () => {
+    const r = compileEvents(withScript(`function add(n: number) { count.value += n }`, `<p-view @click="add(2)"></p-view>`))
+    expect(r.diagnostics, r.diagnostics.map((d) => d.message).join('|')).toHaveLength(0)
+    expect(r.events).toHaveLength(1)
+    // 先 let 绑形参（program = lit 2），再 add（program = root n）
+    expect(r.handlers.h0).toEqual([
+      { op: 'let', name: 'n', program: { k: 'lit', v: 2 } },
+      { op: 'add', source: 'count', program: { k: 'root', name: 'n' } },
+    ])
+  })
+
+  it('★`$event` 形参：`@click="onTap($event)"` 只是把事件载荷透传（编译期允许；运行时 event 注入）', () => {
+    // 方法体引用 `$event`（形参名），实参就是 `$event`（root 名 '$event'）
+    const r = compileEvents(withScript(`function setFrom(e: number) { count.value = e }`, `<p-view @click="setFrom(5)"></p-view>`))
+    expect(r.handlers.h0).toEqual([
+      { op: 'let', name: 'e', program: { k: 'lit', v: 5 } },
+      { op: 'set', source: 'count', program: { k: 'root', name: 'e' } },
+    ])
+  })
+
+  it('★方法内局部变量 `const y = count * 2` ⇒ `let y` 动作', () => {
+    const r = compileEvents(withScript(`function h() { const y = count.value * 2; show.value = y }`, `<p-view @click="h"></p-view>`))
+    expect(r.diagnostics, r.diagnostics.map((d) => d.message).join('|')).toHaveLength(0)
+    expect(r.handlers.h0![0]).toMatchObject({ op: 'let', name: 'y' })
+    expect(r.handlers.h0![1]).toMatchObject({ op: 'set', source: 'show' })
+  })
+
+  it('★`if (cond) {…} else {…}` ⇒ if 动作（两臂子动作列表 + 条件程序）', () => {
+    const r = compileEvents(
+      withScript(`function h() { if (count.value > 0) { show.value = true } else { show.value = false } }`, `<p-view @click="h"></p-view>`),
+    )
+    expect(r.diagnostics, r.diagnostics.map((d) => d.message).join('|')).toHaveLength(0)
+    const act = r.handlers.h0![0] as { op: string; then: unknown[]; else: unknown[] }
+    expect(act.op).toBe('if')
+    expect(act.then).toHaveLength(1)
+    expect(act.else).toHaveLength(1)
+  })
+
+  it('★内联 `@click="add(2)"` 也可（模板里直接调方法，带实参）', () => {
+    const r = compileEvents(withScript(`function add(n: number) { count.value += n }`, `<p-view @click="add(2)"></p-view>`))
+    expect(r.handlers.h0![0]).toEqual({ op: 'let', name: 'n', program: { k: 'lit', v: 2 } })
+  })
+
+  it('★实参个数不符 ⇒ 诊断（不静默）', () => {
+    const r = compileEvents(withScript(`function add(a: number, b: number) { count.value = a + b }`, `<p-view @click="add(1)"></p-view>`))
+    expect(r.events).toHaveLength(0)
+    expect(r.diagnostics.map((d) => d.message).join(' | ')).toContain('需要 2 个实参')
+  })
+
+  it('★循环 / async 仍**明确不做**（诊断 + 修法）', () => {
+    for (const [body, key] of [
+      [`function h() { for (let i = 0; i < 3; i++) { count.value++ } }`, '循环'],
+      [`async function h() { count.value++ }`, 'async'],
+    ] as const) {
+      const r = compileEvents(withScript(body, `<p-view @click="h"></p-view>`))
+      expect(r.diagnostics.length, body).toBeGreaterThan(0)
+      expect(r.diagnostics.map((d) => d.message).join(' | ')).toContain(key)
+    }
+  })
 })
 
 // ═══════════ ★★★决策 #740 T1 · 端到端（编译 → 执行 → 数据变更）═══════════
