@@ -95,10 +95,10 @@
 | 项 | 落地设计 |
 |---|---|
 | 状态伪类 `:hover/:active/:focus/:focus-visible/:checked/:disabled` | **已有运行时动态类通道**（B2 的 `:class` 静态枚举 + O(1) 位图）⇒ 把伪类**降级**为运行时状态位（`pressed`/`focused`/`disabled`），编译期产出「状态 → 样式」表；App 自绘手势层给 pressed/focused，MP 由天生态提供 |
-| `::before/::after` + `content` | 编译期**物化伪元素节点**（在模板树里插入一个装饰节点，样式用伪元素规则）；`content` 折为文本或引擎装饰。★这是**大工程**（涉及树结构）——建议**单独立项**，不混在本批 |
+| `::before/::after` + `content` | ★**已落地**（决策 #791 · 2026-10-10）：编译期**物化伪元素节点**（合成装饰子节点，`:active` 触发动画 `:active::after{animation}`）；Android 宿主先跑通，iOS/鸿蒙待补 |
 | `::placeholder` | 输入组件（`p-input`）通道内交付（非通用伪元素） |
 
-**诚实边界**：`::before/::after` 物化是**结构性**能力（改树），成本高——建议**先做状态伪类**（复用现有动态类位图，零树改动），伪元素独立立项。触屏无 `:hover`（App 端 `:hover` 语义 = 无效，须具名）。
+**诚实边界**：`::before/::after` 物化是**结构性**能力（改树）但**已完成**（决策 #791：合成装饰子节点，非改原树）；`:active` 已支持（折 `press*` + 按下触发动画）；其余状态伪类（`:hover/:focus/:checked`）仍待做。触屏无 `:hover`（App 端 `:hover` 语义 = 无效，须具名）。
 
 ### F5 · 滚动容器增强（P1/P2）
 
@@ -121,7 +121,7 @@
 | **批 C（P0）** | **F2 特效**（filter/backdrop-filter） | 毛玻璃是超级应用 UI 标志；Skyline 官方已支持 | **高**（三端 GPU 滤镜/合成层，各端 API 差异大） |
 | **批 D（P1）** | **F4 状态伪类**（:hover/:active/:focus/:checked/:disabled） | 富交互核心；**复用现有动态类位图**（零树改动） | 中 |
 | **批 E（P1/P2）** | **F5 滚动增强**（snap/overscroll/smooth） | 首页 banner/宫格/弹层 | 中高（宿主滚动层） |
-| （独立立项） | `::before/::after` + `content` | **结构性**（改模板树），单列 | 高 |
+| ★已落地（#791） | `::before/::after` + `content` | **结构性**（改模板树），单列 | 高 |
 
 **建议**：先做 **批 A（定位）**——它是真缺陷（静默错处理）+ 语料在用 + 成本可控；再做 **批 B（排版）**收用户点名的"文本太简单"。
 
@@ -132,7 +132,7 @@
 - `mix-blend-mode` / `isolation` / `background-blend-mode`（合成层，成本高）
 - `writing-mode` / `direction` / `unicode-bidi`（竖排/BiDi——复用平台，L4）
 - `columns` / `column-count`（多列，三端成本极高）
-- 伪元素 `::before/::after`（结构性，独立立项；本批只做状态伪类）
+- `::before/::after` 已落地（决策 #791）——不属本「不做」清单
 - `object-fit`（走组件通道，非 CSS 属性）
 - `scroll-snap` / sticky 的 **MP 端**（Skyline 引擎锁死，具名豁免）
 

@@ -7,12 +7,12 @@ generated: true
 
 # CSS 多端支持参考
 
-> 79 项 CSS 能力在 **Web / Skyline / App 三端**的支持现状与可扩展档位。**每项能力均带独立锚点**（右侧页内导航可逐项跳转、可被外链深链引用），支持度以 **Web 真值为基准**，App 端自研引擎按 **L0–L5 成本分级**。
+> 81 项 CSS 能力在 **Web / Skyline / App 三端**的支持现状与可扩展档位。**每项能力均带独立锚点**（右侧页内导航可逐项跳转、可被外链深链引用），支持度以 **Web 真值为基准**，App 端自研引擎按 **L0–L5 成本分级**。
 > ★自动生成（`scripts/gen-css-support.mjs`），SSOT = `docs/generated/css-capability-alignment.json`；漂移门禁 `--check`。
 
 ## 概览
 
-共 **79** 项：三端全支持（universal）**32** 项 · 条件支持（conditional）**43** 项 · 三端不可用（unsupported）**4** 项。App 端当前**已支持 71 项**、**暂缺 8 项**（候选特性按 L 档扩展）。
+共 **81** 项：三端全支持（universal）**32** 项 · 条件支持（conditional）**45** 项 · 三端不可用（unsupported）**4** 项。App 端当前**已支持 73 项**、**暂缺 8 项**（候选特性按 L 档扩展）。
 
 ### 端模型
 
@@ -52,7 +52,7 @@ generated: true
 | [单位](#cat-unit) | [width/height 百分比](#width-ratio) · [min() / max() / clamp()](#math-functions) · [em / rem / vw / vh / calc / clamp](#unit-relative) |
 | [特殊](#cat-special) | [box-sizing](#box-sizing) |
 | [动效](#cat-motion) | [transform（2D：translate / scale / rotate）](#transform) · [transform-origin](#transform-origin) |
-| [选择器](#cat-selector) | [类选择器 .a / .a.b](#selector-class) · [元素/类型选择器 h3 / p.foo](#selector-type) · [后代 / 子组合 .a .b / .a > .b](#selector-combinator) · [静态结构伪类 :first-child / :last-child / :nth-child(An+B\|odd\|even) / :not(简单选择器)](#selector-pseudo-structural) · [状态伪类 :hover / :active / :focus / :checked](#selector-pseudo-state) · [属性选择器 data-x](#selector-attr) · [Vue 作用域穿透 :deep() / ::v-deep() / >>>](#selector-deep) · [兄弟组合 + / ~](#selector-sibling) · [通配 *](#selector-wildcard) |
+| [选择器](#cat-selector) | [类选择器 .a / .a.b](#selector-class) · [元素/类型选择器 h3 / p.foo](#selector-type) · [后代 / 子组合 .a .b / .a > .b](#selector-combinator) · [静态结构伪类 :first-child / :last-child / :nth-child(An+B\|odd\|even) / :not(简单选择器)](#selector-pseudo-structural) · [伪元素 ::before / ::after（+ content）](#selector-pseudo-element) · [状态伪类 :active（按下态）](#selector-pseudo-state-active) · [状态伪类 :hover / :focus / :checked](#selector-pseudo-state) · [属性选择器 data-x](#selector-attr) · [Vue 作用域穿透 :deep() / ::v-deep() / >>>](#selector-deep) · [兄弟组合 + / ~](#selector-sibling) · [通配 *](#selector-wildcard) |
 | [层叠](#cat-cascade) | [特异性 / 继承 / !important](#specificity-inheritance) · [CSS 自定义属性（design tokens）var(--x)](#css-vars) |
 | [@ 规则](#cat-at-rule) | [@media（响应式 / 环境条件）](#at-media) · [@supports（特性检测）](#at-supports) · [@keyframes（关键帧动画）](#keyframes) · [animation（简写：name duration timing delay …）](#animation) |
 | [文本](#cat-text) | [word-break（行内断词策略）](#word-break) · [font-weight](#font-weight) · [text-decoration](#text-decoration) · [text-align](#text-align) · [line-height](#line-height) · [text-overflow](#text-overflow) · [-webkit-line-clamp: <integer>](#-webkit-line-clamp) · [letter-spacing](#letter-spacing) · [font-family](#font-family) · [white-space](#text-attrs) |
@@ -390,7 +390,7 @@ generated: true
 
 > ★批次 40（2026-10-04 · 补齐批 39）：编译期折成盒分数 {x,y}（关键字 left/center/right/top/bottom 1–2 值 / 百分比 / 0）⇒ 三端宿主变换锚点（Android injectTransformOrigin · iOS 建层快照 + applyTransform · 鸿蒙 SetPivot 规范化坐标）。非零 px 需盒尺寸 ⇒ 诊断跳过；默认中心不发射
 
-## 选择器 · 9 项 {#cat-selector}
+## 选择器 · 11 项 {#cat-selector}
 
 ### 类选择器 .a / .a.b {#selector-class}
 
@@ -416,11 +416,23 @@ generated: true
 
 > ★批次 37（对齐 Web）：元素兄弟序在编译期树遍历里已知 ⇒ 结构伪类**编译期算一次**（:first-child/:last-child/:nth-child + :not 单段简单选择器）；节点无祖先 CSS 引擎。
 
-### 状态伪类 :hover / :active / :focus / :checked {#selector-pseudo-state}
+### 伪元素 ::before / ::after（+ content） {#selector-pseudo-element}
+
+**Web** — · **Skyline** — · **App** ✅ 支持 · **App 可扩展** L0 · **策略** 编译期折叠 · **对齐** conditional
+
+> ★#791（2026-10-10 · 伪元素支持）：`::before`/`::after` 在**编译期物化**为合成的装饰子节点（`content` 字符串→内容文本；`pointer-events:none`）——内核/宿主按普通节点渲染，零特殊处理。与 `:active` 组合（`:active::after{animation}`）即纯 CSS 涟漪/反馈；CSE 对账按合成节点跳过。诚实边界：`content:attr()|url()` / `::first-line|::marker|::placeholder` 未做（如实诊断）。
+
+### 状态伪类 :active（按下态） {#selector-pseudo-state-active}
+
+**Web** — · **Skyline** — · **App** ✅ 支持 · **App 可扩展** L1 · **策略** 编译期折叠 · **对齐** conditional
+
+> ★#790/#791（2026-10-10 · 按下态 = 通用能力）：`:active` 折成节点 `press*` 字段（底色 / transform.scale 凹陷 / border-color / box-shadow 发光 / z-index 提升），宿主 DOWN 同帧原生应用、UP 还原（零 JS）；`:active{animation}` 折成 `pressAnimation`（按下触发内核动画通道，`:active::after` 亦经伪子传播）。★诚实边界：`transform:scale` 按 Web 语义级联到子树。
+
+### 状态伪类 :hover / :focus / :checked {#selector-pseudo-state}
 
 **Web** — · **Skyline** — · **App** ✗ 无 · **App 可扩展** L2 · **策略** 降级 · **对齐** unsupported
 
-> ★批次 37：需**运行时状态通道**（App 自绘手势层无 hover 概念）；状态切换改用动态 :class 或语义组件。
+> ★批次 37：需**运行时状态通道**（App 自绘手势层无 hover 概念）；状态切换改用动态 :class 或语义组件。★`:active` 已于 #790/#791 落地（见本表 `selector-pseudo-state-active`）。
 
 ### 属性选择器 [data-x] {#selector-attr}
 
@@ -484,7 +496,7 @@ generated: true
 
 **Web** — · **Skyline** — · **App** ✅ 支持 · **App 可扩展** L1 · **策略** 编译期折叠 · **对齐** conditional
 
-> ★批次 42（对齐 Web）：animation 简写 → 命中同文件 @keyframes → 逐通道 keyframe 动画（内核 anim_start）；单次播放、终态保持（iters/delay/direction/fill 暂忽略，诊断）。可动画通道限 opacity / px 位移 / 等比缩放 / 旋转
+> ★批次 42（对齐 Web）：animation 简写 → 命中同文件 @keyframes → 逐通道 keyframe 动画（内核 anim_start）；★#791/本批：**animation-delay**（第 2 个时间 token，内核 `delayMs`）与 **animation-iteration-count**（数字 / `infinite`→内核 `repeat:-1`）已支持；`direction`/`fill`/多动画逗号列表暂忽略（诊断）。可动画通道限 opacity / px 位移 / 等比缩放 / 旋转
 
 ## 文本 · 10 项 {#cat-text}
 

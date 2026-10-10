@@ -7,12 +7,12 @@ generated: true
 
 # CSS cross-end support reference
 
-> How 79 CSS capabilities are supported across **Web / Skyline / App**, with App extensibility tier. **Every capability has its own anchor** (jump from the on-page outline; deep-linkable from anywhere), measured against the **Web baseline**, with the in-house Rust engine graded **L0–L5**.
+> How 81 CSS capabilities are supported across **Web / Skyline / App**, with App extensibility tier. **Every capability has its own anchor** (jump from the on-page outline; deep-linkable from anywhere), measured against the **Web baseline**, with the in-house Rust engine graded **L0–L5**.
 > ★Auto-generated (`scripts/gen-css-support.mjs`), SSOT = `docs/generated/css-capability-alignment.json`; drift gate `--check`.
 
 ## Overview
 
-**79** capabilities: **32** universal · **43** conditional · **4** unsupported. App currently supports **71**, with **8** not present yet (candidates graded by tier).
+**81** capabilities: **32** universal · **45** conditional · **4** unsupported. App currently supports **73**, with **8** not present yet (candidates graded by tier).
 
 ### End model
 
@@ -52,7 +52,7 @@ generated: true
 | [单位](#cat-unit) | [width/height 百分比](#width-ratio) · [min() / max() / clamp()](#math-functions) · [em / rem / vw / vh / calc / clamp](#unit-relative) |
 | [特殊](#cat-special) | [box-sizing](#box-sizing) |
 | [动效](#cat-motion) | [transform（2D：translate / scale / rotate）](#transform) · [transform-origin](#transform-origin) |
-| [选择器](#cat-selector) | [类选择器 .a / .a.b](#selector-class) · [元素/类型选择器 h3 / p.foo](#selector-type) · [后代 / 子组合 .a .b / .a > .b](#selector-combinator) · [静态结构伪类 :first-child / :last-child / :nth-child(An+B\|odd\|even) / :not(简单选择器)](#selector-pseudo-structural) · [状态伪类 :hover / :active / :focus / :checked](#selector-pseudo-state) · [属性选择器 data-x](#selector-attr) · [Vue 作用域穿透 :deep() / ::v-deep() / >>>](#selector-deep) · [兄弟组合 + / ~](#selector-sibling) · [通配 *](#selector-wildcard) |
+| [选择器](#cat-selector) | [类选择器 .a / .a.b](#selector-class) · [元素/类型选择器 h3 / p.foo](#selector-type) · [后代 / 子组合 .a .b / .a > .b](#selector-combinator) · [静态结构伪类 :first-child / :last-child / :nth-child(An+B\|odd\|even) / :not(简单选择器)](#selector-pseudo-structural) · [伪元素 ::before / ::after（+ content）](#selector-pseudo-element) · [状态伪类 :active（按下态）](#selector-pseudo-state-active) · [状态伪类 :hover / :focus / :checked](#selector-pseudo-state) · [属性选择器 data-x](#selector-attr) · [Vue 作用域穿透 :deep() / ::v-deep() / >>>](#selector-deep) · [兄弟组合 + / ~](#selector-sibling) · [通配 *](#selector-wildcard) |
 | [层叠](#cat-cascade) | [特异性 / 继承 / !important](#specificity-inheritance) · [CSS 自定义属性（design tokens）var(--x)](#css-vars) |
 | [@ 规则](#cat-at-rule) | [@media（响应式 / 环境条件）](#at-media) · [@supports（特性检测）](#at-supports) · [@keyframes（关键帧动画）](#keyframes) · [animation（简写：name duration timing delay …）](#animation) |
 | [文本](#cat-text) | [word-break（行内断词策略）](#word-break) · [font-weight](#font-weight) · [text-decoration](#text-decoration) · [text-align](#text-align) · [line-height](#line-height) · [text-overflow](#text-overflow) · [-webkit-line-clamp: <integer>](#-webkit-line-clamp) · [letter-spacing](#letter-spacing) · [font-family](#font-family) · [white-space](#text-attrs) |
@@ -390,7 +390,7 @@ generated: true
 
 > compile-time fold · universal
 
-## 选择器 · 9 {#cat-selector}
+## 选择器 · 11 {#cat-selector}
 
 ### 类选择器 .a / .a.b {#selector-class}
 
@@ -416,7 +416,19 @@ generated: true
 
 > compile-time fold · conditional
 
-### 状态伪类 :hover / :active / :focus / :checked {#selector-pseudo-state}
+### 伪元素 ::before / ::after（+ content） {#selector-pseudo-element}
+
+**Web** — · **Skyline** — · **App** ✅ yes · **App extensible** L0 · **Strategy** compile-time fold · **Alignment** conditional
+
+> compile-time fold · conditional
+
+### 状态伪类 :active（按下态） {#selector-pseudo-state-active}
+
+**Web** — · **Skyline** — · **App** ✅ yes · **App extensible** L1 · **Strategy** compile-time fold · **Alignment** conditional
+
+> compile-time fold · conditional
+
+### 状态伪类 :hover / :focus / :checked {#selector-pseudo-state}
 
 **Web** — · **Skyline** — · **App** no · **App extensible** L2 · **Strategy** degrade · **Alignment** unsupported
 
