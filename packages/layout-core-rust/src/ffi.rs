@@ -2132,8 +2132,46 @@ pub unsafe extern "C" fn proteus_layout_follow_release(
     }
 }
 
-/// **从二进制 blob 建树**（★生产入口：方案 M0 计划「非 JSON，避免运行时解析开销」）。
-/// 【为什么需要它（本仓实测的量化依据）】
+/// ★★★**S3-T3（2026-10-10 · 输入延迟专项 #767）**：**批量跟手**入口——宿主一帧内 M 个指针
+///   **一次 FFI**（`ffi_calls_per_frame ≤ 1`）⇒ 内核逐条目算平移 ⇒ 返回**合并** updates（宿主一次消费）。
+///
+/// 入参：`entries`（`FollowEntry` 连续数组，7×4B/条）· `count`。出参：`{"ok":true,"applied":N,"updates":[…]}`。
+///
+/// 【为什么批量（§16 S3-T3）】逐指各调一次 FFI ⇒ 每帧 M 次跨界（M 指放大）；批量 = **一次**跨界。
+///   换算/夹取仍全在内核（与单指 `proteus_layout_follow` 同一实现）——只是把 M 条合到一次调用。
+///
+/// # Safety
+/// `entries` 须指向 `count` 个连续 `FollowEntry`（由宿主按 `#[repr(C)]` 布局填充）。返回指针须 `free`。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_layout_follow_batch(
+    handle: u64,
+    entries: *const crate::anim::FollowEntry,
+    count: u32,
+) -> *mut c_char {
+    let r = std::panic::catch_unwind(|| -> Result<String, String> {
+        if entries.is_null() || count == 0 {
+            return Ok("{\"ok\":true,\"applied\":0,\"updates\":[]}".to_string());
+        }
+        let list = unsafe { std::slice::from_raw_parts(entries, count as usize) };
+        let mut reg = registry().lock().map_err(|_| "注册表锁失败".to_string())?;
+        let entry = reg.get_mut(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?;
+        let touched = crate::anim::follow_translate_batch(&mut entry.tree, list);
+        if touched.is_empty() {
+            return Ok("{\"ok\":true,\"applied\":0,\"updates\":[]}".to_string());
+        }
+        // ★一次合并 updates（复用权威构建器——与动画/单指同形，宿主零新增解析）
+        let vis = crate::anim::AnimEngine::collect_updates(&entry.tree, &touched);
+        let updates: Vec<serde_json::Value> = vis.iter().map(visual_to_json).collect();
+        Ok(serde_json::json!({"ok": true, "applied": updates.len(), "updates": updates}).to_string())
+    });
+    match r {
+        Ok(Ok(s)) => into_c_string(s),
+        Ok(Err(e)) => into_c_string(serde_json::json!({"ok": false, "error": e}).to_string()),
+        Err(_) => into_c_string("{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string()),
+    }
+}
+
+/// **从二进制 blob 建树**（★生产入口：方案 M0 计划「非 JSON，避免运行时解析开销」）。 【为什么需要它（本仓实测的量化依据）】
 ///   iOS 真机 4051 节点：`create`（JSON）= 75.84ms，其中 95%+ 是 serde 解析 + 建树；
 ///   而**纯布局仅 ~2ms**。⇒ 通道成本必须靠二进制消除。
 ///

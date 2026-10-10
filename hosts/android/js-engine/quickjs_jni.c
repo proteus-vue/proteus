@@ -111,6 +111,8 @@ static struct {
   jmethodID follow_probe;
   /* ★★★S3-T1（#767）：进程内注入一次拖拽（`proteusHost.dragAt({x,y,dx,dy,steps})`——判据驱动） */
   jmethodID drag_at;
+  /* ★★★S3-T3（#767）：进程内注入一次多指拖拽（`proteusHost.dragMulti({points:[…]})`——判据驱动） */
+  jmethodID drag_multi;
   /* ★★★S3-T1（#767）：读节点变换真源（`proteusHost.animTxProbe(idsJson)`——跟手几何核） */
   jmethodID anim_tx_probe;
   /* ★★★长列表虚拟化（2026-10-01）：整树在内核、宿主只物化可见区。
@@ -540,6 +542,11 @@ static JSValue js_host_drag_at(JSContext *ctx, JSValueConst this_val, int argc, 
   return host_call_impl(ctx, g_host_methods.drag_at, 1, this_val, argc, argv);
 }
 
+/** `proteusHost.dragMulti({points:[…]})` —— ★S3-T3：进程内注入一次多指拖拽（判据驱动） */
+static JSValue js_host_drag_multi(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+  return host_call_impl(ctx, g_host_methods.drag_multi, 1, this_val, argc, argv);
+}
+
 /** `proteusHost.animTxProbe(idsJson)` —— ★S3-T1：读节点变换真源（跟手几何核） */
 static JSValue js_host_anim_tx_probe(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
   return host_call_impl(ctx, g_host_methods.anim_tx_probe, 1, this_val, argc, argv);
@@ -681,6 +688,10 @@ static jstring eval_impl(JNIEnv *env, jstring source, jboolean with_host) {
     if (g_host_methods.drag_at != NULL) {
       JS_SetPropertyStr(g_ctx, host, "dragAt", JS_NewCFunction(g_ctx, js_host_drag_at, "dragAt", 1));
       LOGI("宿主已实现 dragAt ⇒ JS 侧可在进程内注入真拖拽（S3 跟手判据）");
+    }
+    if (g_host_methods.drag_multi != NULL) {
+      JS_SetPropertyStr(g_ctx, host, "dragMulti", JS_NewCFunction(g_ctx, js_host_drag_multi, "dragMulti", 1));
+      LOGI("宿主已实现 dragMulti ⇒ JS 侧可在进程内注入真多指拖拽（S3-T3 多指判据）");
     }
     if (g_host_methods.anim_tx_probe != NULL) {
       JS_SetPropertyStr(g_ctx, host, "animTxProbe", JS_NewCFunction(g_ctx, js_host_anim_tx_probe, "animTxProbe", 1));
@@ -873,6 +884,8 @@ Java_dev_proteus_layoutcore_QuickJsEngine_nativeSetHostCallback(JNIEnv *env, jcl
     g_host_methods.follow_probe = (*env)->GetMethodID(env, c, "followProbe", "()Ljava/lang/String;");
     if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
     g_host_methods.drag_at = (*env)->GetMethodID(env, c, "dragAt", "(Ljava/lang/String;)Ljava/lang/String;");
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+    g_host_methods.drag_multi = (*env)->GetMethodID(env, c, "dragMulti", "(Ljava/lang/String;)Ljava/lang/String;");
     if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
     g_host_methods.anim_tx_probe = (*env)->GetMethodID(env, c, "animTxProbe", "(Ljava/lang/String;)Ljava/lang/String;");
     if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);

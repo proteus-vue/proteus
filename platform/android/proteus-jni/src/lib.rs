@@ -25,7 +25,7 @@
 //   静态链接内核（rlib），所以**一个 .so 里既有内核代码也有 JNI 符号**。
 #![cfg(target_os = "android")]
 
-use jni::objects::{JClass, JString};
+use jni::objects::{JClass, JFloatArray, JIntArray, JString};
 use jni::sys::jstring;
 use jni::JNIEnv;
 
@@ -725,6 +725,65 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeLayoutFollow
                 snap_target,
             )
         };
+        if p.is_null() {
+            return "{\"ok\":false,\"error\":\"null\"}".to_string();
+        }
+        let s = unsafe { std::ffi::CStr::from_ptr(p) }.to_string_lossy().into_owned();
+        unsafe { ffi::proteus_layout_free_string(p) };
+        s
+    })
+    .unwrap_or_else(|_| "{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string());
+    into_java_string(&mut env, out)
+}
+
+/// ★★★**批量跟手**（S3-T3，2026-10-10 · 输入延迟专项 #767）：宿主一帧 M 个指针**一次 FFI**
+///   （`ffi_calls_per_frame ≤ 1`）。Java 无结构体 ⇒ 并行数组：`int[] nodeIds` + 每节点 6 个 float 的
+///   `float[] params`（gain, dx, dy, min, max, axis）⇒ JNI 组 `FollowEntry[]` ⇒ 内核 `follow_translate_batch`。
+///   返回 `{"ok":true,"applied":N,"updates":[…]}`（宿主一次 `applyAnimUpdates` 消费）。
+#[no_mangle]
+pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeLayoutFollowBatch<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    handle: jni::sys::jlong,
+    node_ids: JIntArray<'local>,
+    params: JFloatArray<'local>,
+) -> jstring {
+    // 读数组（JNIEnv 非 UnwindSafe ⇒ 先在闭包外取成纯 Rust 数据）
+    let n = match env.get_array_length(&node_ids) {
+        Ok(v) => v as usize,
+        Err(_) => return into_java_string(&mut env, "{\"ok\":false,\"error\":\"nodeIds 读取失败\"}".to_string()),
+    };
+    if n == 0 {
+        return into_java_string(&mut env, "{\"ok\":true,\"applied\":0,\"updates\":[]}".to_string());
+    }
+    let pn = match env.get_array_length(&params) {
+        Ok(v) => v as usize,
+        Err(_) => return into_java_string(&mut env, "{\"ok\":false,\"error\":\"params 读取失败\"}".to_string()),
+    };
+    // 契约：每节点 6 个 float（不等长 ⇒ 明确失败，不按最短截断）
+    if pn != n * 6 {
+        return into_java_string(&mut env, format!("{{\"ok\":false,\"error\":\"params 长度 {pn} ≠ {n}×6\"}}"));
+    }
+    let mut ids_v = vec![0i32; n];
+    let mut prm_v = vec![0f32; pn];
+    if env.get_int_array_region(&node_ids, 0, &mut ids_v).is_err()
+        || env.get_float_array_region(&params, 0, &mut prm_v).is_err()
+    {
+        return into_java_string(&mut env, "{\"ok\":false,\"error\":\"数组拷贝失败\"}".to_string());
+    }
+    let entries: Vec<proteus_layout_core::anim::FollowEntry> = (0..n)
+        .map(|i| proteus_layout_core::anim::FollowEntry {
+            node_id: ids_v[i] as u32,
+            gain: prm_v[i * 6],
+            dx: prm_v[i * 6 + 1],
+            dy: prm_v[i * 6 + 2],
+            min: prm_v[i * 6 + 3],
+            max: prm_v[i * 6 + 4],
+            axis: prm_v[i * 6 + 5],
+        })
+        .collect();
+    let out = std::panic::catch_unwind(|| -> String {
+        let p = unsafe { ffi::proteus_layout_follow_batch(handle as u64, entries.as_ptr(), n as u32) };
         if p.is_null() {
             return "{\"ok\":false,\"error\":\"null\"}".to_string();
         }

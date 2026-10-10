@@ -94,6 +94,8 @@ public final class RustLayout {
     private static native String nativeLayoutFollow(long handle, int nodeId, float dx, float dy, int axis, float gain, float min, float max);
     /** ★★★S3-T2 松手：回弹归零 / 滑出吸附（弹簧接管；判定在内核） */
     private static native String nativeLayoutFollowRelease(long handle, int nodeId, int axis, float stiffness, float damping, float mass, float snapThreshold, float snapTarget);
+    /** ★★★S3-T3 批量跟手：一帧 M 指一次 FFI（nodeIds + 每节点 6 float：gain/dx/dy/min/max/axis） */
+    private static native String nativeLayoutFollowBatch(long handle, int[] nodeIds, float[] params);
     /** ★共享元素（几何原语：源矩形 + 目标节点 ⇒ dx/dy/scale，内核算） */
     private static native String nativeSharedElement(long handle, String json);
 
@@ -289,6 +291,11 @@ public final class RustLayout {
     /** ★★★S3-T2 松手：回弹/吸附（弹簧接管，判定在内核）——返回 `{ok,started,targets}` */
     static String layoutFollowRelease(long handle, int nodeId, int axis, float stiffness, float damping, float mass, float snapThreshold, float snapTarget) {
         return loaded ? nativeLayoutFollowRelease(handle, nodeId, axis, stiffness, damping, mass, snapThreshold, snapTarget) : NOT_LOADED;
+    }
+
+    /** ★★★S3-T3 批量跟手（一帧 M 指一次 FFI）——返回 `{ok,applied,updates}` */
+    static String layoutFollowBatch(long handle, int[] nodeIds, float[] params) {
+        return loaded ? nativeLayoutFollowBatch(handle, nodeIds, params) : NOT_LOADED;
     }
 
     /** ★仍在推进的动画条数（0 = 全结束）——幕切换的权威判据 */

@@ -1002,6 +1002,23 @@ def main() -> int:
     else:
         print(f"  ✓ ㉟ ★S3-T2 松手回弹/吸附零 JS 跨界：UP 驱动内核松手 {s3r.get('snap_calls')} 次 · 过阈值吸附→{s3r.get('snap_final')}（swipe-to-delete）· 未过阈值回弹→{s3r.get('return_final')}（判定+弹簧均在内核）")
 
+    # ── ㊱ ★★★S3-T3（输入延迟专项 #767）：**多指跟手「一帧一次 FFI」**（2026-10-10）──
+    #   判据：多指同时跟手（ptrs_max ≥ 2）+ **一帧一次批量 FFI**（batch_calls ≤ moves ⇒ 每帧至多一次跨界，
+    #   M 指不再放大跨界）；且跟手真的走了（moves>0）。★对齐 §16 S3-T3 DoD `ffi_calls_per_frame ≤ 1`。
+    if not s3r or s3r.get("multi_batch_calls", -1) < 0:
+        print("  ◐ ㊱ S3-T3 多指：本端夹具未覆盖（报告无多指读数）——如实跳过")
+    elif s3r.get("multi_ptrs_max", 0) < 2:
+        fail(f"★S3-T3 多指：同时跟手指针数 < 2（multi_ptrs_max={s3r.get('multi_ptrs_max')}）——多指未同时跟进 follow")
+        ok = False
+    elif s3r.get("multi_moves", 0) <= 0:
+        fail(f"★S3-T3 多指：多指拖拽未进内核（multi_moves={s3r.get('multi_moves')}）")
+        ok = False
+    elif s3r.get("multi_batch_calls", 0) > s3r.get("multi_moves", 0):
+        fail(f"★S3-T3 多指：批量 FFI 调用数 > MOVE 帧数（batch_calls={s3r.get('multi_batch_calls')} > moves={s3r.get('multi_moves')}）——非一帧一次")
+        ok = False
+    else:
+        print(f"  ✓ ㊱ ★S3-T3 多指跟手一帧一次 FFI：同时跟手 {s3r.get('multi_ptrs_max')} 指 · 批量 FFI {s3r.get('multi_batch_calls')} 次 ≤ MOVE {s3r.get('multi_moves')} 帧（ffi_calls_per_frame ≤ 1，M 指不放大跨界）")
+
     # 附加观测（不判红，只如实报）
     una = rep.get("uninstantiated_slots", 0)
     if una:

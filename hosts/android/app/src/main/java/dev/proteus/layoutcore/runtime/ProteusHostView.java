@@ -2355,19 +2355,30 @@ public class ProteusHostView extends ViewGroup {
             //   `:active` 折出的 press* 字段，立即（同一 DOWN 内、零 JS 跨界）改绘制属性并重录帧。
             //   ⇒ "输入不过桥"：按下反馈延迟 = 0 个 JS 往返（对标 RN Pressable / Flutter InkWell 必过逻辑层）。
             applyPressAt(gestureTarget);
-            // ★★★S3-T1（2026-10-10 · 输入延迟专项 #767）：**跟手启动**——命中节点若有 `v-follow`
-            //   折出的 follow 规格，记下拖拽起点（后续 MOVE 直接喂内核，零 JS 跨界）。
-            beginFollowAt(gestureTarget, ev.getX(), ev.getY());
+            // ★★★S3-T1/T3（2026-10-10 · 输入延迟专项 #767）：**跟手启动**——命中节点若有 `v-follow`
+            //   折出的 follow 规格，记下该指拖拽起点（后续 MOVE 直接喂内核，零 JS 跨界）。
+            beginFollowAt(ev.getPointerId(0), gestureTarget, ev.getX(), ev.getY());
         }
-        // ★★★S3-T1：MOVE ⇒ 指针位移直接喂内核跟随（换算在内核、宿主零数学、**零 JS 跨界**）。
-        //   ★放在 GestureDetector 之前：跟随只关心"手指在哪"，与平台识别器（tap/fling）互不依赖。
-        if (action == android.view.MotionEvent.ACTION_MOVE && followActive) {
-            applyFollowAt(ev.getX(), ev.getY());
+        // ★★★S3-T1/T3：MOVE ⇒ 全部跟手指针**一帧一次批量**喂内核（换算在内核、宿主零数学、**零 JS 跨界**）。
+        //   ★T3：多指 ⇒ `layoutFollowBatch`（每帧至多一次 FFI——`ffi_calls_per_frame ≤ 1`）。
+        if (action == android.view.MotionEvent.ACTION_MOVE && !followPtrs.isEmpty()) {
+            applyFollowBatch(ev);
+        }
+        // ★S3：多指场景的落点（POINTER_DOWN/UP）——命中该指所在节点则纳入/移出跟手表
+        if (action == android.view.MotionEvent.ACTION_POINTER_DOWN) {
+            final int ai = ev.getActionIndex();
+            final int pid = ev.getPointerId(ai);
+            final float px = ev.getX(ai), py = ev.getY(ai);
+            final int hit = hitNodeAt(px, py);
+            beginFollowAt(pid, hit, px, py);
+        }
+        if (action == android.view.MotionEvent.ACTION_POINTER_UP) {
+            endFollowPointer(ev.getPointerId(ev.getActionIndex()));
         }
         // ★S1.1：UP/CANCEL ⇒ 还原按下态（与触碰开始时同一帧）
         if (action == android.view.MotionEvent.ACTION_UP || action == android.view.MotionEvent.ACTION_CANCEL) {
             clearPress();
-            endFollow();   // ★S3-T1：结束跟随（T1 停在终点；回弹属 S3-T2）
+            endFollow();   // ★S3：抬指 ⇒ 松手（回弹/吸附在内核）
         }
         // ★交给平台识别器判定 tap / longpress / fling / scroll（不自研阈值与时间窗）
         detector().onTouchEvent(ev);
@@ -2415,84 +2426,137 @@ public class ProteusHostView extends ViewGroup {
     private int unbufferedDispatchCount = 0;
     private int unbufferedDispatchErrors = 0;
 
-    /* ── ★★★S3-T1 跟手（`v-follow` → followAxis；MOVE 原生驱动内核，**零 JS 跨界**）──
+    /* ── ★★★S3-T1/T2/T3 跟手（`v-follow` → followAxis；宿主原生驱动内核，**零 JS 跨界**）──
      *
      * 【要证明什么（输入延迟专项 #767 · S3 §3）】"拖拽跟手"不进 JS：宿主 MOVE ⇒ 直接喂指针位移
-     *   给内核（`RustLayout.layoutFollow`，换算唯一实现在内核、宿主零数学）⇒ 内核写 `translate_x`
+     *   给内核（`RustLayout.layoutFollow(Batch)`，换算唯一实现在内核、宿主零数学）⇒ 内核写 `translate_x`
      *   ⇒ 宿主帧回调采样绘制。⇒ MOVE 期间**一次 JS 都不调**（本类与手势 JS 通道无关）。
      *   ★与 S1.1 按下态同族（"输入不过桥"）——都是"编译期折出字段 + 宿主原生即时应用"。
+     *   ★T3（多指）：指针进 `followPtrs`（pointerId → {nodeId,startX,startY}）；MOVE 时**一帧一次**
+     *     `layoutFollowBatch`（`ffi_calls_per_frame ≤ 1`，M 指也只是一次跨界）。
      */
     private java.util.Map<Integer, float[]> followSpecs = java.util.Collections.emptyMap();
-    private int followTarget = -1;
-    private float followStartX = 0f, followStartY = 0f;
-    private boolean followActive = false;
-    /** MOVE 事件被路由进内核跟随的次数（判据核"移动真的走了这条原生通路"）。 */
+    /** pointerId → {nodeId, startX, startY}（多指各自跟手；单指即 1 项） */
+    private final java.util.HashMap<Integer, float[]> followPtrs = new java.util.HashMap<>();
+    /** 批量 MOVE 帧数（判据核"移动真的走了这条原生通路"）。 */
     int followMoves = 0;
-    /** 内核返回"真的有字段变化"的次数（判据核"跟随真的改了变换"）。 */
+    /** 内核返回"真的有字段变化"的批量帧数（判据核"跟随真的改了变换"）。 */
     int followApplied = 0;
     /** ★S3-T2：松手 `followRelease` 调用次数（判据核"UP 真的驱动了回弹/吸附"）。 */
     int followReleaseCalls = 0;
     /** ★S3-T2：松手弹簧**真的启动**的轴数累计（判据核"回弹/吸附弹簧真的被内核接管"）。 */
     int followReleaseStarted = 0;
+    /** ★S3-T3：批量跟手 FFI 调用次数（判据核 `ffi_calls_per_frame ≤ 1`——M 指也只 +1/帧）。 */
+    int followBatchCalls = 0;
+    /** ★S3-T3：同时跟手的指针数峰值（判据核"多指真的同时跟手"）。 */
+    int followPointersMax = 0;
 
-    /** 由 `VaporRenderHost` 建树时注入"哪些节点有跟手规格 + (axis,gain)"。 */
+    /** 由 `VaporRenderHost` 建树时注入"哪些节点有跟手规格 + 参数"。 */
     public void setFollowSpecs(java.util.Map<Integer, float[]> m) {
         this.followSpecs = m != null ? m : java.util.Collections.emptyMap();
     }
 
-    /** DOWN 命中节点 ⇒ 记跟随起点（有 follow 规格才启动；零 JS 跨界）。 */
-    private void beginFollowAt(int nodeId, float x, float y) {
-        if (nodeId < 0 || !followSpecs.containsKey(nodeId)) { followActive = false; followTarget = -1; return; }
-        followActive = true;
-        followTarget = nodeId;
-        followStartX = x;
-        followStartY = y;
+    /** 命中某**内容坐标**所在节点 id（多指各自命中——与 `dispatchHit` 同一内核 `hitTest`，但不改手势态）。 */
+    private int hitNodeAt(float viewX, float viewY) {
+        if (coreHandle == 0L) return -1;
+        try {
+            final float contentY = viewY + scrollY;
+            final String json = RustLayout.hitTest(coreHandle, viewX, contentY);
+            final org.json.JSONObject o = new org.json.JSONObject(json);
+            if (o.optBoolean("ok", false) && !o.isNull("target")) return o.getInt("target");
+        } catch (Throwable ignored) { /* 命中失败 ⇒ 该指不跟手（不静默 panic） */ }
+        return -1;
     }
 
-    /** MOVE ⇒ 指针位移（相对拖拽起点）喂内核（内核写字段 + 回 updates ⇒ 既有 animTx 通道重绘）。 */
-    private void applyFollowAt(float x, float y) {
-        if (!followActive || followTarget < 0 || coreHandle == 0L) return;
-        final float[] spec = followSpecs.get(followTarget);
-        if (spec == null) return;
-        final float dx = x - followStartX;
-        final float dy = y - followStartY;
-        final int axis = spec.length > 0 ? (int) spec[0] : 1;
-        final float gain = spec.length > 1 ? spec[1] : 1f;
-        final float clampMin = spec.length > 3 ? spec[2] : -1e9f;
-        final float clampMax = spec.length > 3 ? spec[3] : 1e9f;
+    /** DOWN/POINTER_DOWN 命中节点 ⇒ 记该指跟随起点（有 follow 规格才纳入；零 JS 跨界）。 */
+    private void beginFollowAt(int pointerId, int nodeId, float x, float y) {
+        if (nodeId < 0 || !followSpecs.containsKey(nodeId)) return;
+        followPtrs.put(pointerId, new float[]{nodeId, x, y});
+        if (followPtrs.size() > followPointersMax) followPointersMax = followPtrs.size();
+    }
+
+    /**
+     * MOVE ⇒ **一帧一次批量**喂内核：把当前所有跟手指针的位移（相对各自起点）编成并行数组，
+     * 一次 `layoutFollowBatch`（换算/夹取在内核，宿主零数学；返回合并 updates 落既有绘制真源）。
+     */
+    private void applyFollowBatch(android.view.MotionEvent ev) {
+        if (followPtrs.isEmpty() || coreHandle == 0L) return;
+        final int n = followPtrs.size();
+        final int[] ids = new int[n];
+        final float[] params = new float[n * 6];
+        int k = 0;
+        for (java.util.Map.Entry<Integer, float[]> e : followPtrs.entrySet()) {
+            final int pid = e.getKey();
+            final float[] st = e.getValue();
+            final int idx = ev.findPointerIndex(pid);
+            if (idx < 0) continue;   // 该指本帧无位置（已抬起）⇒ 跳过
+            final int nodeId = (int) st[0];
+            final float[] spec = followSpecs.get(nodeId);
+            if (spec == null) continue;
+            final float dx = ev.getX(idx) - st[1];
+            final float dy = ev.getY(idx) - st[2];
+            final float axis = spec.length > 0 ? spec[0] : 1f;
+            final float gain = spec.length > 1 ? spec[1] : 1f;
+            final float clampMin = spec.length > 3 ? spec[2] : -1e9f;
+            final float clampMax = spec.length > 3 ? spec[3] : 1e9f;
+            // params 顺序（与 JNI `nativeLayoutFollowBatch` 的 FollowEntry 组装同源）：
+            //   [gain, dx, dy, min, max, axis]
+            ids[k] = nodeId;
+            params[k * 6] = gain;
+            params[k * 6 + 1] = dx;
+            params[k * 6 + 2] = dy;
+            params[k * 6 + 3] = clampMin;
+            params[k * 6 + 4] = clampMax;
+            params[k * 6 + 5] = axis;
+            k++;
+        }
+        if (k == 0) return;
+        // ★一帧一次 FFI（`ffi_calls_per_frame ≤ 1`）——M 指也只是一次跨界。
+        followBatchCalls++;
         followMoves++;
-        // ★换算/夹取唯一实现在内核（宿主零数学、无平方根/无缓动）；返回 updates 直接落既有绘制真源。
-        final String out = RustLayout.layoutFollow(coreHandle, followTarget, dx, dy, axis, gain, clampMin, clampMax);
+        final int[] idsN = k == n ? ids : java.util.Arrays.copyOf(ids, k);
+        final float[] paramsN = k == n ? params : java.util.Arrays.copyOf(params, k * 6);
+        final String out = RustLayout.layoutFollowBatch(coreHandle, idsN, paramsN);
         if (applyAnimUpdates(out) > 0) followApplied++;
     }
 
-    /** UP/CANCEL ⇒ 松手（T2）：内核按当前位移决定回弹归零 / 滑出吸附，弹簧接管推进（零 JS）。 */
-    private void endFollow() {
-        if (followActive && followTarget >= 0 && coreHandle != 0L) {
-            final float[] spec = followSpecs.get(followTarget);
-            if (spec != null && spec.length >= 9) {
-                final int axis = (int) spec[0];
-                final float stiffness = spec[4], damping = spec[5], mass = spec[6];
-                final float snapThreshold = spec[7], snapTarget = spec[8];
-                followReleaseCalls++;
-                final String out = RustLayout.layoutFollowRelease(coreHandle, followTarget, axis, stiffness, damping, mass, snapThreshold, snapTarget);
-                try {
-                    org.json.JSONObject o = new org.json.JSONObject(out);
-                    if (o.optBoolean("ok", false)) followReleaseStarted += o.optInt("started", 0);
-                } catch (Throwable ignored) { /* 读数失败不静默吞掉"松手未启动"——计数器已 +1 */ }
-                // ★弹簧由既有帧循环推进（与 <Transition> 同一驱动：到"内核无活跃动画"止）
-                driveKernelAnimFrames();
-            }
-        }
-        followActive = false;
-        followTarget = -1;
+    /** 单个指针抬起（POINTER_UP）：移出跟随表 + 对该节点松手（回弹/吸附在内核，零 JS）。 */
+    private void endFollowPointer(int pointerId) {
+        final float[] st = followPtrs.remove(pointerId);
+        if (st == null) return;
+        releaseFollowNode((int) st[0]);
     }
 
-    /** ★S3-T1/T2 探针：`{follow_nodes,moves,applied,release_calls,release_started}`。 */
+    /** UP/CANCEL ⇒ 全部指针松手（T2：内核按当前位移决定回弹归零 / 滑出吸附，弹簧接管推进）。 */
+    private void endFollow() {
+        for (float[] st : followPtrs.values()) releaseFollowNode((int) st[0]);
+        followPtrs.clear();
+    }
+
+    /** 对某节点启松手（回弹/吸附）——判定+弹簧全在内核；由既有帧循环推进。 */
+    private void releaseFollowNode(int nodeId) {
+        if (nodeId < 0 || coreHandle == 0L) return;
+        final float[] spec = followSpecs.get(nodeId);
+        if (spec == null || spec.length < 9) return;
+        final int axis = (int) spec[0];
+        final float stiffness = spec[4], damping = spec[5], mass = spec[6];
+        final float snapThreshold = spec[7], snapTarget = spec[8];
+        followReleaseCalls++;
+        final String out = RustLayout.layoutFollowRelease(coreHandle, nodeId, axis, stiffness, damping, mass, snapThreshold, snapTarget);
+        try {
+            final org.json.JSONObject o = new org.json.JSONObject(out);
+            if (o.optBoolean("ok", false)) followReleaseStarted += o.optInt("started", 0);
+        } catch (Throwable ignored) { /* 读数失败不静默吞掉"松手未启动"——计数器已 +1 */ }
+        // ★弹簧由既有帧循环推进（与 <Transition> 同一驱动：到"内核无活跃动画"止）
+        driveKernelAnimFrames();
+    }
+
+    /** ★S3 探针：`{follow_nodes,moves,applied,release_calls,release_started,batch_calls,ptrs_max}`。 */
     public String followProbe() {
         return "{\"follow_nodes\":" + followSpecs.size() + ",\"moves\":" + followMoves
                 + ",\"applied\":" + followApplied + ",\"release_calls\":" + followReleaseCalls
-                + ",\"release_started\":" + followReleaseStarted + "}";
+                + ",\"release_started\":" + followReleaseStarted + ",\"batch_calls\":" + followBatchCalls
+                + ",\"ptrs_max\":" + followPointersMax + "}";
     }
 
     /** 复位跟随计数（探针开始时调用 ⇒ 读数只反映本次拖拽）。 */
@@ -2501,6 +2565,9 @@ public class ProteusHostView extends ViewGroup {
         followApplied = 0;
         followReleaseCalls = 0;
         followReleaseStarted = 0;
+        followBatchCalls = 0;
+        followPointersMax = 0;
+        followPtrs.clear();
     }
 
     /**
