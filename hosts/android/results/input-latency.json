@@ -1,15 +1,15 @@
 {
   "end": "android",
   "source": "dumpsys-gfxinfo",
-  "generated_at": "2026-10-10T06:37:40.491Z",
+  "generated_at": "2026-10-10T07:09:35.955Z",
   "frame_p50_ms": 5,
   "frame_p90_ms": 5,
   "frame_p95_ms": 5,
-  "frame_p99_ms": 9,
-  "total_frames": 1233,
+  "frame_p99_ms": 7,
+  "total_frames": 1231,
   "janky_frames": 2,
   "janky_pct": 0.16,
-  "high_input_latency": 2462,
+  "high_input_latency": 2459,
   "missed_vsync": 2,
   "slow_ui_thread": 2
 }
