@@ -88,6 +88,20 @@
         <div class="dome-peak"></div>
       </div>
     </div>
+
+    <!-- L4 · 十指：多股液柱同时跟手（一帧一次批量 FFI，触点翻倍而延迟不翻倍——S3-T3） -->
+    <div class="section-title">L4 · 十指（同时拖动多股）</div>
+    <div class="multi-wrap">
+      <div class="pillar" v-follow="{ axis: 'x' }"></div>
+      <div class="pillar" v-follow="{ axis: 'x' }"></div>
+      <div class="pillar" v-follow="{ axis: 'x' }"></div>
+    </div>
+
+    <!-- L5 · 崩裂：滑动滑出（swipe-to-delete 语义——过阈值吸附滑出，未过回弹；S3-T2） -->
+    <div class="section-title">L5 · 崩裂（左右滑动）</div>
+    <div class="track-wrap">
+      <div class="rupt-knob" v-follow="{ axis: 'x', clamp: [-260, 260], snap: { threshold: 100, target: 260 } }"></div>
+    </div>
   </div>
 </template>
 
@@ -159,5 +173,34 @@
   margin: 0 3px;
   background-color: #39D0FF;
   border-radius: 10px 10px 4px 4px;
+}
+
+/* L4：多股液柱（每个都是独立跟手锚点 ⇒ 多指同时） */
+.multi-wrap {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  width: 100%;
+  height: 130px;
+  margin-top: 8px;
+  padding: 0 12px;
+  background-color: #0e1520;
+  border-radius: 14px;
+}
+.pillar {
+  width: 44px;
+  height: 90px;
+  margin: 0 8px;
+  background-color: #7c5cff;
+  border-radius: 12px 12px 4px 4px;
+}
+
+/* L5：崩裂旋钮（滑动滑出 / 回弹） */
+.rupt-knob {
+  width: 70px;
+  height: 70px;
+  margin: 0 12px;
+  background-color: #ff9a6c;
+  border-radius: 16px;
 }
 </style>
