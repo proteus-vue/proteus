@@ -8,3 +8,5 @@ packages:
   - superapp
   # ★css-conformance：CSS 一致性验收项目（G-61 续）——真实 Vue 页面 → 真实编译渲染 → 逐特性全端视觉验收
   - css-conformance
+  # ★demos/*：终极限压 Demo（Dactyl 触感穹顶 = 输入延迟 + 视觉反馈专项的验收载体，15-dactyl-demo.md）
+  - demos/*

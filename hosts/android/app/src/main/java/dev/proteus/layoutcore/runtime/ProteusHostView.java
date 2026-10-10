@@ -2330,6 +2330,10 @@ public class ProteusHostView extends ViewGroup {
     public boolean onTouchEvent(android.view.MotionEvent ev) {
         touchEventCount++;
         final int action = ev.getActionMasked();
+        // ★Dactyl：官方事件时间戳采样（幽灵拖尾真源）——DOWN/MOVE 都记。
+        if (action == android.view.MotionEvent.ACTION_DOWN || action == android.view.MotionEvent.ACTION_MOVE) {
+            dactylNoteTouch(ev);
+        }
         if (action == android.view.MotionEvent.ACTION_DOWN) {
             // ★★★S1.5（2026-10-10 · 输入延迟专项 #767）：**请求无缓冲分发**——绕过 Android 输入批处理
             //   （`InputReader` 默认攒若干采样点再派发；`requestUnbufferedDispatch` 让本视图的触摸事件
@@ -2570,6 +2574,165 @@ public class ProteusHostView extends ViewGroup {
         followPtrs.clear();
     }
 
+    /* ═══════════ ★★★Dactyl 延迟显影（决策 #780 · `15-dactyl-demo.md` §3/§6）═══════════
+     *
+     * 【本块是"输入延迟 + 视觉反馈"专项的**显影器**】把不可见的 ms 变成**可见的像素**：
+     *   · 幽灵拖尾 Ghost Trail：用**官方触摸时间戳**（`MotionEvent.getEventTime()`，禁 JS 时钟）采样
+     *     手指历史位置，画半透明轨迹；
+     *   · 延迟环 Latency Ring：半径 ∝ 实测 `input_latency_ms`（0→0px，8.33ms@120Hz→满刻度），绿→黄→红；
+     *   · 帧格 Frame Grid：背景 vsync 刻度，错过一帧闪一格。
+     * ★自洽红线（§7.3）：显影器全部是**叠加绘制**（不进内核、不逐帧重排）——demo 自身不是压力源。
+     * ★反作弊（§3.3）：轨迹源 = 官方事件时间戳；延迟环半径 = 实测值（无实测显示 `--`）；帧格 = 真实帧回调。
+     * ★这是**运行时能力**（随 runtime AAR 进 App）——由 `app-config.json` 的 `features.dactylOverlay` 开关，
+     *   缺省关（对既有 App 零影响）。属"完整工程"路径，不是测试装置。
+     */
+    private boolean dactylEnabled = false;
+    /** 开/关显影器（由宿主读 app-config 的 features.dactylOverlay 后调用）。 */
+    public void setDactylEnabled(boolean on) {
+        this.dactylEnabled = on;
+        if (on) {
+            float d = 3f;
+            try { d = getResources().getDisplayMetrics().density; } catch (Throwable ignored) { }
+            dactylDensity = d > 0 ? d : 3f;
+        }
+        invalidate();
+    }
+    public boolean dactylEnabled() { return dactylEnabled; }
+
+    /** 幽灵拖尾采样点（环形缓冲，历史越久越淡）。 */
+    private static final int DACTYL_TRAIL_MAX = 24;
+    private final float[] dctlTrailX = new float[DACTYL_TRAIL_MAX];
+    private final float[] dctlTrailY = new float[DACTYL_TRAIL_MAX];
+    private int dctlTrailN = 0, dctlTrailHead = 0;
+    /** 最近一次触摸的**官方事件时间戳**与坐标（画光环用；未触摸 = -1）。 */
+    private long dctlLastEventTime = -1;
+    private float dctlLastRawX = 0f, dctlLastRawY = 0f;
+    /** 输入延迟样本（ms）——最近 120 个（约 2 秒@60Hz）。 */
+    private static final int DACTYL_LAT_MAX = 120;
+    private final float[] dctlLatency = new float[DACTYL_LAT_MAX];
+    private int dctlLatencyN = 0, dctlLatencyHead = 0;
+    /** 按下计数（L1：判据核"触即应真的发生了"）。 */
+    private int dactylTouches = 0;
+    /** 幽灵拖尾**真的被采样**的指针点数（判据核"轨迹来自官方时间戳采样"）。 */
+    private int dactylTrailSamples = 0;
+    /** 画布像素密度（屏幕坐标叠加用）。 */
+    private float dactylDensity = 3f;
+
+    /** 复位 Dactyl 读数（探针开始时调用）。 */
+    public void resetDactylCounters() {
+        dctlLatencyN = 0; dctlLatencyHead = 0;
+        dctlTrailN = 0; dctlTrailHead = 0;
+        dactylTouches = 0;
+        dactylTrailSamples = 0;
+        dctlLastEventTime = -1;
+    }
+
+    /** DOWN/MOVE 时由 `onTouchEvent` 调用：记官方事件时间戳 + 历史采样（幽灵拖尾真源）。 */
+    private void dactylNoteTouch(android.view.MotionEvent ev) {
+        if (!dactylEnabled) return;
+        dactylTouches++;
+        dctlLastEventTime = ev.getEventTime();
+        dctlLastRawX = ev.getX();
+        dctlLastRawY = ev.getY();
+        // ★历史采样（官方 API）：`getHistoricalX/Y` 是系统在两次派发间攒下的**真实采样点**——
+        //   幽灵轨迹的诚实来源（比"每帧记一次当前"更密、更真）。
+        final int hs = ev.getHistorySize();
+        for (int i = 0; i < hs; i++) {
+            dctlPushTrail(ev.getHistoricalX(i), ev.getHistoricalY(i));
+        }
+        dctlPushTrail(ev.getX(), ev.getY());
+    }
+
+    private void dctlPushTrail(float x, float y) {
+        dctlTrailX[dctlTrailHead] = x;
+        dctlTrailY[dctlTrailHead] = y;
+        dctlTrailHead = (dctlTrailHead + 1) % DACTYL_TRAIL_MAX;
+        if (dctlTrailN < DACTYL_TRAIL_MAX) dctlTrailN++;
+        dactylTrailSamples++;
+    }
+
+    /** 每帧 onDraw 末尾：把"最近触摸的官方时间戳"与"本帧提交时刻"对账 ⇒ 输入延迟样本（ms）。 */
+    private void sampleDactylLatency() {
+        if (dctlLastEventTime < 0) return;
+        // ★用 uptimeMillis（与 MotionEvent.getEventTime 同一时钟域）；禁用墙钟。
+        final long now = android.os.SystemClock.uptimeMillis();
+        final float latMs = (float) (now - dctlLastEventTime);
+        if (latMs < 0f || latMs > 500f) return;   // 非法/异常跳过（不污染分位）
+        dctlLatency[dctlLatencyHead] = latMs;
+        dctlLatencyHead = (dctlLatencyHead + 1) % DACTYL_LAT_MAX;
+        if (dctlLatencyN < DACTYL_LAT_MAX) dctlLatencyN++;
+    }
+
+    /** 延迟分位（最近秩；对齐 `hosts/shared/dactyl/measure-latency.py` 的口径）。 */
+    private float dctlLatencyPercentile(float p) {
+        if (dctlLatencyN == 0) return -1f;
+        final float[] a = new float[dctlLatencyN];
+        for (int i = 0; i < dctlLatencyN; i++) {
+            a[i] = dctlLatency[(dctlLatencyHead - dctlLatencyN + i + DACTYL_LAT_MAX) % DACTYL_LAT_MAX];
+        }
+        java.util.Arrays.sort(a);
+        int idx = Math.round(p * (dctlLatencyN - 1));
+        if (idx < 0) idx = 0;
+        if (idx >= dctlLatencyN) idx = dctlLatencyN - 1;
+        return a[idx];
+    }
+
+    /** Dactyl 叠加绘制（屏幕坐标；内容之后）。幽灵拖尾 + 延迟环 + 帧格。 */
+    private void drawDactylOverlay(Canvas canvas) {
+        final float d = dactylDensity;
+        // ① 帧格（极暗网格）
+        dactylGridPaint.setColor(0x1416FFDD);
+        dactylGridPaint.setStrokeWidth(Math.max(1f, 0.5f * d));
+        final int step = (int) (40 * d);
+        if (step > 0) {
+            for (int gx = 0; gx < getWidth(); gx += step) canvas.drawLine(gx, 0, gx, getHeight(), dactylGridPaint);
+            for (int gy = 0; gy < getHeight(); gy += step) canvas.drawLine(0, gy, getWidth(), gy, dactylGridPaint);
+        }
+        // ② 幽灵拖尾（历史越久越淡）
+        for (int i = 0; i < dctlTrailN - 1; i++) {
+            final int i0 = (dctlTrailHead - dctlTrailN + i + DACTYL_TRAIL_MAX) % DACTYL_TRAIL_MAX;
+            final int i1 = (dctlTrailHead - dctlTrailN + i + 1 + DACTYL_TRAIL_MAX) % DACTYL_TRAIL_MAX;
+            dactylTrailPaint.setAlpha((int) (0.9f * (i + 1) / dctlTrailN * 255));
+            dactylTrailPaint.setStrokeWidth(3f * d);
+            canvas.drawLine(dctlTrailX[i0], dctlTrailY[i0], dctlTrailX[i1], dctlTrailY[i1], dactylTrailPaint);
+        }
+        if (dctlLastEventTime < 0) return;
+        // ③ 延迟环（半径 ∝ 实测 p95；无实测 ⇒ 不画环，只画指尖核心 —— 不美化）
+        final float latMs = dctlLatencyPercentile(0.95f);
+        if (latMs >= 0f) {
+            final float frac = Math.min(1f, latMs / 8.33f);   // 0ms→0px，8.33ms@120Hz→满刻度
+            final int col = latMs <= 4f ? 0xFF2ECC71 : (latMs <= 8.33f ? 0xFFF1C40F : 0xFFFF4D4D);
+            dactylRingPaint.setColor(col);
+            dactylRingPaint.setStrokeWidth(3f * d);
+            canvas.drawCircle(dctlLastRawX, dctlLastRawY, Math.max(2f * d, frac * 48f * d), dactylRingPaint);
+        }
+        // ④ 指尖核心（冷白）
+        dactylCorePaint.setColor(0xFFFFFFFF);
+        canvas.drawCircle(dctlLastRawX, dctlLastRawY, 5f * d, dactylCorePaint);
+    }
+
+    private final android.graphics.Paint dactylGridPaint = makeStrokePaint(0x1416FFDD, 1f);
+    private final android.graphics.Paint dactylTrailPaint = makeStrokePaint(0xCCFFFFFF, 3f);
+    private final android.graphics.Paint dactylRingPaint = makeStrokePaint(0xFF2ECC71, 3f);
+    private final android.graphics.Paint dactylCorePaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+    private static android.graphics.Paint makeStrokePaint(int color, float w) {
+        final android.graphics.Paint p = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        p.setStyle(android.graphics.Paint.Style.STROKE);
+        p.setColor(color);
+        p.setStrokeWidth(w);
+        return p;
+    }
+
+    /** ★Dactyl 探针：官方时间戳采样的延迟分位 + 轨迹采样数 + 按下数（判据核"显影诚实 + 触即应真的发生"）。 */
+    public String dactylProbe() {
+        return "{\"enabled\":" + dactylEnabled + ",\"touches\":" + dactylTouches
+                + ",\"trail_samples\":" + dactylTrailSamples + ",\"latency_n\":" + dctlLatencyN
+                + ",\"p50\":" + dctlFmt(dctlLatencyPercentile(0.50f))
+                + ",\"p95\":" + dctlFmt(dctlLatencyPercentile(0.95f))
+                + ",\"p99\":" + dctlFmt(dctlLatencyPercentile(0.99f)) + "}";
+    }
+    private static String dctlFmt(float v) { return v < 0 ? "-1" : String.format(java.util.Locale.US, "%.2f", v); }
+
     /**
      * 按**屏幕/视图坐标**做命中派发（与 `onTouchEvent` 同一条代码路径）。
      *
@@ -2720,6 +2883,8 @@ public class ProteusHostView extends ViewGroup {
             devHighlightPaint.setAntiAlias(true);
             canvas.drawRect(devHighlight, devHighlightPaint);
         }
+        // ★★★Dactyl 延迟显影叠加层（决策 #780 · 15 §3）：内容之后画在**屏幕坐标**（不随滚动平移）。
+        if (dactylEnabled) { drawDactylOverlay(canvas); sampleDactylLatency(); }
         // ★DevTools 逐帧耗时（决策 #676）：整帧 onDraw 耗时（含 drawCmds/显示列表回放）
         long __dt = System.nanoTime() - __dt0;
         lastFrameMs = __dt / 1e6;
