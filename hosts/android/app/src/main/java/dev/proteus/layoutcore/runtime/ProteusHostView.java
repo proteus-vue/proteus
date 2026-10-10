@@ -3131,11 +3131,16 @@ public class ProteusHostView extends ViewGroup {
             //   ★进入 save/restore 判定（不 restore 会泄漏到后面所有指令——与 clipPath 同款纪律）。
             final float[] ovfClip = (ids != null && i < ids.length && ids[i] >= 0) ? nodeClipRects.get(ids[i]) : null;
             // ★★★CSS **父 transform 级联**（2026-10-08）：收集本节点的祖先链（须在自身变换前施加）。
+            //   ★并入**按下态 scale**（2026-10-10 · 用户实测「安卓环扩得比 Web 大」）：Web 里 `:active` 的
+            //     `transform:scale()` 会**级联到全部后代**（层叠到子树）；此前安卓只在被按节点**自身绘制块**
+            //     应用 ⇒ 子节点（如伪元素环）不跟着缩 ⇒ 环相对更大。
             java.util.List<Integer> ancIds = null;
             if (ids != null && i < ids.length && ids[i] >= 0) {
                 for (Integer a = nodeParent.get(ids[i]); a != null; a = nodeParent.get(a)) {
                     final float[] atf = animTx.containsKey(a) ? animTx.get(a) : nodeStaticTx.get(a);
-                    if (atf != null) { if (ancIds == null) ancIds = new java.util.ArrayList<>(); ancIds.add(a); }
+                    final PressStyle pa = (a == pressedNodeId) ? pressStyles.get(a) : null;
+                    final boolean pressHere = pa != null && (pa.sx != 1f || pa.sy != 1f);
+                    if (atf != null || pressHere) { if (ancIds == null) ancIds = new java.util.ArrayList<>(); ancIds.add(a); }
                 }
             }
             final boolean hasAncestorTx = ancIds != null;
@@ -3183,6 +3188,14 @@ public class ProteusHostView extends ViewGroup {
                     final float[] atf = animTx.containsKey(a) ? animTx.get(a) : nodeStaticTx.get(a);
                     final Cmd ac = cmdById.get(a);
                     if (atf != null && ac != null) applyTransformAbout(canvas, a, atf, ac.x, ac.y, ac.w, ac.h);
+                    // ★按下态 scale 级联到子树（Web：`transform` 级联；本节点自身在下方 hasPressScale 块应用）
+                    final PressStyle pa = (a == pressedNodeId) ? pressStyles.get(a) : null;
+                    if (pa != null && (pa.sx != 1f || pa.sy != 1f) && ac != null) {
+                        final float[] org = nodeTransformOrigin.get(a);
+                        final float ox = org != null ? org[0] : 0.5f;
+                        final float oy = org != null ? org[1] : 0.5f;
+                        canvas.scale(pa.sx, pa.sy, ac.x + ac.w * ox, ac.y + ac.h * oy);
+                    }
                 }
             }
             if (xf) {
