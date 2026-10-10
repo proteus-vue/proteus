@@ -1573,6 +1573,8 @@ public class MainActivity extends Activity {
             out.put("host_unbuffered_dispatch", host.view() != null ? host.view().unbufferedDispatchCount() : -1);
             out.put("host_unbuffered_dispatch_errors", host.view() != null ? host.view().unbufferedDispatchErrors() : -1);
             out.put("host_touch_events", host.view() != null ? host.view().touchEventCount : -1);
+            // ★S2「去 JSON」（#769）：字节直传通道调用数（判据 ㉜ 核"字节直传真的生效"，宿主真源）
+            out.put("host_bytes_ops", host.bytesOpsCalls);
 
             // ④ JS 侧报告（原样嵌入——判据读它，与宿主读数互为印证）
             out.put("report", r);

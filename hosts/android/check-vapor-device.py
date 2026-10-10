@@ -935,6 +935,17 @@ def main() -> int:
     else:
         print(f"  ✓ ㉛ ★S1.5 无缓冲分发：触摸路径请求 {ub} 次（失败 0）——requestUnbufferedDispatch 生效（降输入延迟）")
 
+    # ── ㉜ ★★★S2「去 JSON」（#769）：指令走**字节直传**（applyOpsBytes：Uint8Array→byte[]）而非 number[] JSON ──
+    #   ★读**宿主真源**（host_bytes_ops，字节直传通道调用数）——比 JS live-binding 可靠。
+    bytes_ops = d.get("host_bytes_ops", None)
+    if bytes_ops is None:
+        print("  ◐ ㉜ S2 去 JSON：本端未读 host_bytes_ops（按缺失处理）")
+    elif bytes_ops <= 0:
+        fail(f"★S2 去 JSON：字节直传通道调用数=0（host_bytes_ops={bytes_ops}）—— 指令仍走 number[] JSON（回退）")
+        ok = False
+    else:
+        print(f"  ✓ ㉜ ★S2 去 JSON：指令走**字节直传**（host_bytes_ops={bytes_ops}，Uint8Array→byte[]，免 number[] JSON）")
+
     # 附加观测（不判红，只如实报）
     una = rep.get("uninstantiated_slots", 0)
     if una:
