@@ -374,6 +374,12 @@ func physFootprintMB() -> Double {
     func animStartFrameLoop() -> String
     func animStopFrameLoop() -> String
     func animFrameStats() -> String
+    /// ★★★交互视觉反馈探针（Dactyl 专项）：按下态 / 场跟手 / 伪元素动画的原生计数（判据读它）
+    func interactionProbe() -> String
+    /// ★注入三段（与真触摸同一钩子链）：判据注入按下/拖拽/抬指
+    func driveTouchDown(_ x: Double, _ y: Double) -> Bool
+    func driveTouchMove(_ x: Double, _ y: Double) -> Bool
+    func driveTouchUp() -> Bool
     /// ★仍在推进的动画条数（0 = 全部结束）——"这一幕演完了吗"的权威判据（弹簧时长由物理决定，
     ///   调用方按名义 durMs 推算会早切或多等，见内核 `proteus_layout_anim_active` 注释）
     func animActiveCount() -> String
@@ -559,6 +565,20 @@ final class SelfDrawView: UIView {
     private var absOriginByNodeId: [Int: CGPoint] = [:]
     /// ★节点 id → 已建好的 CALayer（**增量更新的前提**：有它才能只改frame、不重建）
     private var layersById: [Int: CALayer] = [:]
+
+    /* ══════════ ★★★交互视觉反馈（Dactyl 专项 · 与 Android ProteusHostView 同语义）══════════
+     * 【三条能力在此共用的"写层基线"】场跟手只覆盖 scale/rotate、按下态只覆盖底色/描边/缩放/发光
+     *   ——而 iOS 的 applyTransform 是**全量重建**矩阵（从单位阵起）⇒ 覆盖前必须知道**当前** tx/ty/opacity
+     *   （否则会把节点的静态变换/动画位移抹掉）。⇒ 在 applyTransform 落值处**顺手记基线**（零额外读层）。
+     * 【为什么不像 Android 走统一 animTx 表】iOS 的层属性就是真源（applyTransform 直写 CALayer），
+     *   再养一张并行表 = 两份真源（本仓纪律：同一事实只认一个来源）。如实记录这处形态差异。 */
+    private var fbLastTx: [Int: CGFloat] = [:]
+    private var fbLastTy: [Int: CGFloat] = [:]
+    private var fbLastOpacity: [Int: CGFloat] = [:]
+    /// 按下态备份（还原用）：底色 / 描边色 / zPosition / 是否本就有阴影
+    private var fbPressBackup: [Int: (bg: CGColor?, border: CGColor?, z: CGFloat, glow: Float)] = [:]
+    /// 场跟手帧循环（仅在有焦点时启动；抬指自停）
+    private var fbFieldLink: CADisplayLink?
     /// 节点 id → 层深度（建层时预计算，供增量更新的父序排序 O(1) 查询）
     private var depthById: [Int: Int] = [:]
     /// 节点 id → 父 id（增量更新时判断父子关系用）
@@ -1671,6 +1691,10 @@ final class SelfDrawView: UIView {
             shape.strokeEnd = CGFloat(Swift.max(0, Swift.min(1, sp)))
             CATransaction.commit()
         }
+        // ★★交互反馈基线（场跟手/按下态覆盖层用；见 fbLastTx 注释）——顺手记，零额外读层
+        fbLastTx[nodeId] = tx
+        fbLastTy[nodeId] = ty
+        fbLastOpacity[nodeId] = opacity
         return true
     }
 
@@ -2568,22 +2592,162 @@ final class SelfDrawView: UIView {
     /// swipe 的最小释放速度（px/ms——与 `packages/gesture` 的 swipeVelocity 默认 0.3 同口径）
     private let swipeMinVelocity: Double = 0.3
 
+    /* ══════════ ★★★交互视觉反馈（Dactyl 专项）：触摸钩子 + 层应用 ══════════
+     * 【为什么钩子在 View、实现在 runtime 类】View 只做"触摸 → 坐标 + 转发"（与既有分工一致：
+     *   View 不碰核心/JS——见 emitGesture 注释）；按下态/场跟手的**算法与表**在 InteractionFeedback。
+     * 【内容坐标】核心的 rects/hit_test 都在**内容坐标系**（视口 + 滚动偏移）⇒ 钩子传出前换算
+     *   （与 classifyAndEmit 的 ax/ay 同款换算，单一换算点）。 */
+    /// ★★★判据注入三段（与真触摸**同一钩子链**——不是第二条通路；本仓纪律：注入要对准生产路径）。
+    ///   【为什么必须有】既有 `feedTouchSequence` 只走**语义分流器**（tap/longpress/swipe），
+    ///   不触发按下态/场跟手钩子（它们是"触摸生命周期"而非"语义手势"）⇒ 判据注入需要显式三段。
+    @discardableResult
+    func driveTouchDown(x: Double, y: Double) -> Bool {
+        guard let h = onTouchDown else { return false }
+        h(x, y)
+        return true
+    }
+    @discardableResult
+    func driveTouchMove(x: Double, y: Double) -> Bool {
+        guard let h = onTouchMoveXY else { return false }
+        h(x, y)
+        return true
+    }
+    @discardableResult
+    func driveTouchUp() -> Bool {
+        guard let h = onTouchUp else { return false }
+        h()
+        return true
+    }
+
+    var onTouchDown: ((Double, Double) -> Void)?
+    var onTouchMoveXY: ((Double, Double) -> Void)?
+    var onTouchUp: (() -> Void)?
+
+    /// 按下态应用（同帧）：底色 / 描边 / 凹陷（transform 缩放，CALayer 层级天然级联到后代）/ 发光 / z。
+    ///   ★备份原值（首次应用时记）——还原时精确回原位（与 Android pressBackup 同款）。
+    func applyPressAppearance(nodeId: Int, bg: UIColor?, borderColor: UIColor?,
+                              scaleX: CGFloat, scaleY: CGFloat,
+                              glowColor: UIColor?, glowRadius: CGFloat, zIndex: CGFloat) {
+        guard let layer = layersById[nodeId] else { return }
+        if fbPressBackup[nodeId] == nil {
+            fbPressBackup[nodeId] = (layer.backgroundColor, layer.borderColor, layer.zPosition, layer.shadowOpacity)
+        }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)   // 同帧生效（禁用隐式动画——否则按下是"渐入"）
+        if let c = bg { layer.backgroundColor = c.cgColor }
+        if let bc = borderColor { layer.borderColor = bc.cgColor }
+        if zIndex > 0 { layer.zPosition = zIndex }
+        if let g = glowColor, glowRadius > 0 {
+            layer.shadowColor = g.cgColor
+            layer.shadowRadius = glowRadius
+            layer.shadowOpacity = 0.9
+            layer.shadowOffset = .zero
+        }
+        if scaleX != 1 || scaleY != 1 {
+            // 凹陷：等比取两轴较小值（iOS CATransform3D 支持非等比，但 applyTransform 接口为等比——
+            //   与 Android 的 canvas.scale(sx,sy) 略有差异，如实记录：Dactyl 的凹陷两轴同值，无实际差别）
+            let s = min(scaleX, scaleY)
+            _ = applyTransform(nodeId: nodeId, tx: fbLastTx[nodeId] ?? 0, ty: fbLastTy[nodeId] ?? 0,
+                               scale: s, rotate: 0, opacity: fbLastOpacity[nodeId] ?? 1)
+        }
+        CATransaction.commit()
+    }
+
+    /// 还原按下态（精确回备份值；与 Android clearPress 同语义）。
+    func clearPressAppearance(nodeId: Int) {
+        guard let layer = layersById[nodeId], let b = fbPressBackup[nodeId] else { return }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        layer.backgroundColor = b.bg
+        layer.borderColor = b.border
+        layer.zPosition = b.z
+        layer.shadowOpacity = b.glow
+        if b.glow == 0 { layer.shadowRadius = 0 }
+        CATransaction.commit()
+        fbPressBackup.removeValue(forKey: nodeId)
+        // 凹陷还原：重放静态变换（若有）或回单位
+        clearFieldVisual(nodeId: nodeId)
+    }
+
+    /// 场跟手写层（只覆盖 scale/rotate；tx/ty/opacity 取基线 ⇒ 不抹掉静态变换与动画位移）。
+    func applyFieldVisual(nodeId: Int, scale: CGFloat, rotate: CGFloat) {
+        _ = applyTransform(nodeId: nodeId, tx: fbLastTx[nodeId] ?? 0, ty: fbLastTy[nodeId] ?? 0,
+                           scale: scale, rotate: rotate, opacity: fbLastOpacity[nodeId] ?? 1)
+    }
+
+    /// 场叶回声明基态（抬指/换树）：优先重放**静态变换**；无则回单位（与 Android 回落 nodeStaticTx 同义）。
+    func clearFieldVisual(nodeId: Int) {
+        guard layersById[nodeId] != nil else { return }
+        if let style = metaByNodeId[nodeId], let t = Self.staticTransform(style: style) {
+            let w = layersById[nodeId]?.bounds.width ?? 0
+            let h = layersById[nodeId]?.bounds.height ?? 0
+            let tx = CGFloat(t.txPx) + CGFloat(t.txPct) * w
+            let ty = CGFloat(t.tyPx) + CGFloat(t.tyPct) * h
+            _ = applyTransform(nodeId: nodeId, tx: tx, ty: ty,
+                               scale: CGFloat(t.scale), rotate: CGFloat(t.rotate),
+                               opacity: fbLastOpacity[nodeId] ?? 1)
+        } else {
+            _ = applyTransform(nodeId: nodeId, tx: 0, ty: 0, scale: 1, rotate: 0,
+                               opacity: fbLastOpacity[nodeId] ?? 1)
+        }
+    }
+
+    /// 场/动画帧循环（幂等）：每 vsync 交给桥（按压力增益 + 场跟手 FFI 都在那里）。
+    ///   ★与 displayLink（动画帧循环）分开：场跟手要在**没有动画**时也逐帧推（手指还在场里）。
+    var onInteractionFrame: ((CFTimeInterval) -> Void)?
+    func startFieldFrameLoop() {
+        if fbFieldLink != nil { return }
+        let link = CADisplayLink(target: self, selector: #selector(stepInteractionFrame(_:)))
+        link.add(to: .main, forMode: .common)
+        fbFieldLink = link
+    }
+
+    func stopFieldFrameLoop() {
+        fbFieldLink?.invalidate()
+        fbFieldLink = nil
+    }
+
+    var fieldFrameLoopRunning: Bool { fbFieldLink != nil }
+    private(set) var fieldFrameCount = 0
+
+    @objc private func stepInteractionFrame(_ link: CADisplayLink) {
+        _ = link
+        fieldFrameCount += 1
+        onInteractionFrame?(link.timestamp)
+    }
+
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let t = touches.first else { return }
         let p = t.location(in: self)
         touchStart = (Double(p.x), Double(p.y), CFAbsoluteTimeGetCurrent())
         // ★手指按下 ⇒ 停掉惯性（与 UIScrollView/Android 同语义：新触摸打断动量）
         stopMomentum()
+        // ★★★交互视觉反馈（Dactyl 专项）：内容坐标 = 视口坐标 + 滚动偏移（与 classifyAndEmit 同款换算）
+        let cx = Double(p.x) + Double(contentOffset.x)
+        let cy = Double(p.y) + Double(contentOffset.y)
+        onTouchDown?(cx, cy)
+    }
+
+    /// ★新增（Dactyl 专项）：触摸移动 → 场焦点更新（**不派发语义手势**——拖动由 pan 识别器负责滚动）。
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard let t = touches.first else { return }
+        let p = t.location(in: self)
+        let cx = Double(p.x) + Double(contentOffset.x)
+        let cy = Double(p.y) + Double(contentOffset.y)
+        onTouchMoveXY?(cx, cy)
     }
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
         defer { touchStart = nil }
+        onTouchUp?()
         guard let t = touches.first, let start = touchStart else { return }
         let p = t.location(in: self)
         let dt = CFAbsoluteTimeGetCurrent() - start.t
         classifyAndEmit(startX: start.x, startY: start.y,
                         endX: Double(p.x), endY: Double(p.y), dt: dt)
     }
+
+
 
     /// ★★★触摸分流器（tap / longpress / swipe）——**真触摸与宿主注入共用同一实现**（一处逻辑）。
     ///
@@ -2648,6 +2812,7 @@ final class SelfDrawView: UIView {
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
         touchStart = nil
+        onTouchUp?()
     }
 
     /// 发一次语义手势（内容坐标）——桥接层在此回调里做**核心命中测试 + JS 派发**
@@ -4488,6 +4653,10 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     weak var view: SelfDrawView? {
         didSet { if view != nil { SelfDrawBridge.current = self } }
     }
+    /* ══════════ ★★★交互视觉反馈（Dactyl 专项 · runtime 归属 · 决策 #796/#797）══════════
+     * 按下态 / 场跟手 / `:active` 动画的**唯一实现**（InteractionFeedback，runtime 单元）——
+     * 壳与生成宿主零接线：本桥在 view 绑定时自带钩子。 */
+    private var interactionFeedback: InteractionFeedback?
     var jsReport: [String: Any] = [:]
     /// ★句柄常驻：Vue 的后续更新复用同一棵 Rust 树（与 §5.1「节点树页面存活期间常驻」一致）
     private var handle: UInt64 = 0
@@ -7238,6 +7407,122 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         for i in nodes.indices { resolveEnvTokens(inNode: &nodes[i], table: table) }
     }
 
+    /* ══════════ ★★★交互视觉反馈接线（Dactyl 专项）══════════ */
+
+    /// 收集三张表 + 首次接钩子（每轮渲染后调；幂等）。
+    private func installInteractionFeedback(nodes: [[String: Any]]) {
+        guard let v = view else { return }
+        let fb: InteractionFeedback
+        if let cur = interactionFeedback { fb = cur } else {
+            let created = InteractionFeedback()
+            interactionFeedback = created
+            // ★钩子只接一次（View 侧纯转发；算法在 runtime 类）
+            v.onTouchDown = { [weak self] cx, cy in self?.handleTouchDown(cx: cx, cy: cy) }
+            v.onTouchMoveXY = { [weak self] cx, cy in self?.interactionFeedback?.move(x: cx, y: cy) }
+            v.onTouchUp = { [weak self] in self?.handleTouchUp() }
+            v.onInteractionFrame = { [weak self] _ in self?.interactionFeedback?.tick(handle: self?.handle ?? 0) }
+            fb = created
+        }
+        fb.install(nodes: nodes, view: v)
+    }
+
+    /// DOWN：内核 hitTest 拿 target+chain（内容坐标）→ 按下态 + 场焦点。
+    private func handleTouchDown(cx: Double, cy: Double) {
+        guard handle != 0, let fb = interactionFeedback else { return }
+        let out = takeCString(proteus_layout_hit_test(handle, Float(cx), Float(cy)))
+        var target = -1
+        var chain: [Int] = []
+        if let d = out.data(using: .utf8),
+           let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any],
+           (o["ok"] as? Bool) == true {
+            target = (o["target"] as? Int) ?? -1
+            chain = (o["chain"] as? [Int]) ?? (target >= 0 ? [target] : [])
+        }
+        // ★命中可能落在**子/伪子**节点上（L1 磁块的 ::after 等）⇒ 沿冒泡链找第一个带按下态的祖先
+        //   （与 Android applyPressAt 的"父按下传播"同义；内核 chain 已是 target→祖先序）。
+        var pressTarget = -1
+        for id in chain where fb.hasPressStyle(nodeId: id) { pressTarget = id; break }
+        fb.down(x: cx, y: cy, target: pressTarget >= 0 ? pressTarget : target, chain: chain, handle: handle)
+        NSLog("[proteus] SUPERAPP_PRESS_DIAG cx=%f cy=%f target=%d chain=%d diag=%@", cx, cy, target, chain.count, fb.diagIds)
+        fb.noteTarget(target)
+        // ★场跟手需要逐帧推（即便没有动画）⇒ DOWN 即启帧循环；UP 停（见 handleTouchUp）
+        if !chain.isEmpty { view?.startFieldFrameLoop() }
+    }
+
+    private func handleTouchUp() {
+        interactionFeedback?.up(handle: handle)
+        view?.stopFieldFrameLoop()
+    }
+
+    /// ★★**自动定位并注入一次按下**（判据用——**不猜坐标**：取按下态表的 id → 问内核 rect → 用其中心）。
+    ///   【为什么（本轮实测）】判据注入写死坐标落到了容器（target=4）⇒ 顺链找不到按下态 ⇒ 误判"DOWN 未生效"。
+    ///   几何随页面/机型变化，**唯一稳的定位是内核自己的几何**（本仓纪律：命中点用真实 rects 的中心）。
+    /// - Returns: `{ok,node_id,rect:{x,y,w,h},hit}`（hit = 该点 hitTest 的 target）。
+    func pressAuto(holdMs: Double = 400) -> String {
+        guard handle != 0, let fb = interactionFeedback, let v = view else {
+            return "{\"ok\":false,\"error\":\"未安装（未渲染过）\"}"
+        }
+        let ids = fb.pressStyleIds()
+        for id in ids {
+            let out = takeCString(proteus_layout_node_rect(handle, UInt32(id)))
+            guard let d = out.data(using: .utf8),
+                  let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] else { continue }
+            let x = (o["x"] as? Double) ?? 0, y = (o["y"] as? Double) ?? 0
+            let w = (o["width"] as? Double) ?? 0, h = (o["height"] as? Double) ?? 0
+            if w <= 0 || h <= 0 { continue }
+            let cx = x + w / 2, cy = y + h / 2
+            // 命中自检（该点应命中本身或其子树）
+            let hitOut = takeCString(proteus_layout_hit_test(handle, Float(cx), Float(cy)))
+            var hitTarget = -1
+            if let hd = hitOut.data(using: .utf8),
+               let ho = (try? JSONSerialization.jsonObject(with: hd)) as? [String: Any] {
+                hitTarget = (ho["target"] as? Int) ?? -1
+            }
+            // 注入（内容坐标；与真触摸同一钩子链）
+            _ = v.driveTouchDown(x: cx, y: cy)
+            _ = v.driveTouchMove(x: cx, y: cy)
+            // 保持 holdMs 后抬起（由场景的 asyncAfter 完成——此处不阻塞）
+            return jsonString(["ok": true, "node_id": id, "x": cx, "y": cy,
+                               "w": w, "h": h, "hit": hitTarget, "hold_ms": holdMs])
+        }
+        return "{\"ok\":false,\"error\":\"按下态表为空\"}"
+    }
+
+    /// ★自动定位并拖拽（场跟手判据用）：找**场容器**的 rect 中心 → down → 逐段 move（不猜坐标）。
+    func fieldAuto(dx: Double = 40, dy: Double = 40, steps: Int = 8) -> String {
+        guard handle != 0, let fb = interactionFeedback, let v = view else {
+            return "{\"ok\":false,\"error\":\"未安装（未渲染过）\"}"
+        }
+        let ids = fb.fieldSpecIds()
+        guard let cid = ids.first else { return "{\"ok\":false,\"error\":\"场表为空\"}" }
+        let out = takeCString(proteus_layout_node_rect(handle, UInt32(cid)))
+        guard let d = out.data(using: .utf8),
+              let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] else {
+            return "{\"ok\":false,\"error\":\"rect 读取失败\"}"
+        }
+        let x = (o["x"] as? Double) ?? 0, y = (o["y"] as? Double) ?? 0
+        let w = (o["width"] as? Double) ?? 0, h = (o["height"] as? Double) ?? 0
+        let cx = x + w / 2, cy = y + h / 2
+        _ = v.driveTouchDown(x: cx, y: cy)
+        var i = 0
+        while i < steps {
+            i += 1
+            let t = Double(i) / Double(steps)
+            _ = v.driveTouchMove(x: cx + dx * t, y: cy + dy * t)
+        }
+        return jsonString(["ok": true, "container_id": cid, "x": cx, "y": cy, "dx": dx, "dy": dy, "steps": steps])
+    }
+
+    /// ★探针（判据读数）：三条能力的原生真源计数（与 Android pressProbe/fieldProbe 同口径）。
+    func interactionProbe() -> String {
+        interactionFeedback?.probeJson ?? "{\"error\":\"未安装（未渲染过）\"}"
+    }
+
+    /// ★注入三段（协议要求落在 Bridge；转发到 View 的同一钩子链——判据注入对准生产路径）。
+    func driveTouchDown(_ x: Double, _ y: Double) -> Bool { view?.driveTouchDown(x: x, y: y) ?? false }
+    func driveTouchMove(_ x: Double, _ y: Double) -> Bool { view?.driveTouchMove(x: x, y: y) ?? false }
+    func driveTouchUp() -> Bool { view?.driveTouchUp() ?? false }
+
     private func render(treeJson: String, phase: String, force: Bool = false) -> String {
         guard let view = view else { return "{\"ok\":false,\"error\":\"view 未设置\"}" }
         let t0 = CFAbsoluteTimeGetCurrent()
@@ -7443,6 +7728,9 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             layoutMs = (CFAbsoluteTimeGetCurrent() - tLayout0) * 1000
         }
         lastNodes = nodes
+        // ★★★交互视觉反馈（Dactyl 专项）：每轮渲染收集三张表（按下态/场/伪子）——
+        //   与 Android「VaporRenderHost 注入 setPressStyles/…」同款时机（建树后、上屏前）。
+        installInteractionFeedback(nodes: nodes)
         if !rectsJsonStr.contains("\"ok\":true") {
             return "{\"ok\":false,\"error\":\"rects 读取失败\",\"raw\":\(jsonEscape(String(rectsJsonStr.prefix(200))))}"
         }

@@ -13,6 +13,10 @@ export const renderCommands: (json: string) => number;
  *  RenderNode（SetTransform 平移+缩放 / SetScale / SetOpacity；tx/ty 为设计单位，内部 ×density）；
  *  返回 `{ok,applied,nodes}`——applied = 实际写了几个节点（判据证明"真的落到了渲染层"） */
 export const applyNodeVisuals: (updatesJson: string) => string;
+/** ★★★Dactyl 专项（按下态）：把 `:active` 折出的 press* 字段直写 RenderNode
+ *  （底色/描边/缩放/发光；入参 `{"<id>":{...}}`；传空对象 `{}` 为该节点 ⇒ 还原为建树静态值）。
+ *  返回 `{ok,applied}`；**同帧生效**（O(1) 属性直写，不重建整棵指令流）。 */
+export const applyPressVisual: (json: string) => string;
 /** 宿主记账读数（机器判据读它） */
 export const stats: () => ProteusRenderStats;
 /** ★矩阵 #15：平台零参与动画——记基线 + 取目标节点（根的第一个子节点）；返回 {ok, on_draw_count} */

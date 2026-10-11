@@ -42,7 +42,7 @@ for a in "$@"; do
     # ★★★v-pump/跳变驱动动画（本批）：`--superapp`（真实应用壳）+ `--pump=<page>[,<ms>]`/`--drive`/`--tap=x,y`
     #   ——模拟器**无需签名** ⇒ 真机签名不可用时的**接线验证旁路**（本脚本定位：验接线正确、判据有区分力）。
     --superapp) MODE="superapp" ;;
-    --pump=*|--drive|--tap=*) APP_ARGS+=("$a") ;;
+    --pump=*|--drive|--tap=*|--press=*|--field=*) APP_ARGS+=("$a") ;;
     *) SIM_NAME="$a" ;;
   esac
 done
@@ -82,7 +82,7 @@ PLATFORM_SRC="$(ls "$ROOT"/platform/ios/ProteusPlatform/*.swift 2>/dev/null | tr
 [ -n "$PLATFORM_SRC" ] || { echo "✗ 找不到 platform/ios 平台适配源码（HA0.5 抽取后被删？）"; exit 3; }
 xcrun --sdk iphonesimulator swiftc -O -target arm64-apple-ios15.0-simulator \
   -framework UIKit -framework CoreText -framework JavaScriptCore -framework AVFoundation -parse-as-library \
-  -o "$APP/ProteusSelfDraw" $PLATFORM_SRC "$HERE/ProteusHost/runtime/selfdraw-scene.swift" "$HERE/ProteusHost/runtime/host-runtime-bridge.swift" "$HERE/ProteusHost/runtime/superapp-runtime-host.swift" "$HERE/ProteusHost/runtime/proteus-host-controller.swift" "$HERE/ProteusHost/runtime/host-capabilities.swift" "$HERE/ProteusHost/runtime/host-lifecycle-events.swift" "$HERE/ProteusHost/runtime/screen-host.swift" "$HERE/ProteusHost/dev/host-runtime-scene.swift" "$HERE/ProteusHost/dev/app-stack-scene.swift" "$HERE/ProteusHost/dev/showcase-scene.swift" "$HERE/ProteusHost/shell/superapp-scene.swift" "$HERE/ProteusHost/shell/selfdraw-app.swift" "$ABI_LIB" "$LIB" 2>&1 | grep -E "error:" | head -5
+  -o "$APP/ProteusSelfDraw" $PLATFORM_SRC "$HERE/ProteusHost/runtime/selfdraw-scene.swift" "$HERE/ProteusHost/runtime/host-runtime-bridge.swift" "$HERE/ProteusHost/runtime/interaction-feedback.swift" "$HERE/ProteusHost/runtime/superapp-runtime-host.swift" "$HERE/ProteusHost/runtime/proteus-host-controller.swift" "$HERE/ProteusHost/runtime/host-capabilities.swift" "$HERE/ProteusHost/runtime/host-lifecycle-events.swift" "$HERE/ProteusHost/runtime/screen-host.swift" "$HERE/ProteusHost/dev/host-runtime-scene.swift" "$HERE/ProteusHost/dev/app-stack-scene.swift" "$HERE/ProteusHost/dev/showcase-scene.swift" "$HERE/ProteusHost/shell/superapp-scene.swift" "$HERE/ProteusHost/shell/selfdraw-app.swift" "$ABI_LIB" "$LIB" 2>&1 | grep -E "error:" | head -5
 [ -f "$APP/ProteusSelfDraw" ] || { echo "✗ Swift 编译未产出可执行文件"; exit 3; }
 
 echo "==> ⑤ 组装 .app（★无需签名/描述文件——模拟器不校验）"
@@ -182,6 +182,27 @@ p = d.get('pump') or {}
 print('    pump：running=%s interval_ms=%s calls=%s fire_ticks=%s pumps=%s' % (
     p.get('running'), p.get('interval_ms'), p.get('calls'), p.get('fire_ticks'), p.get('pumps')))
 print('    anim：anim_start_calls=%s stopped_total=%s' % (p.get('anim_start_calls'), p.get('anim_started_total')))
+    # ★★★Dactyl 专项（本批）：交互反馈判据——按注入模式分派
+ip_raw = d.get('interaction_probe')
+if ip_raw is not None:
+    ip = ip_raw if isinstance(ip_raw, dict) else json.loads(ip_raw)
+    print('    interaction：styles=%s applied=%s anim_starts=%s field_specs=%s field_ticks=%s touched=%s pseudo=%s' % (
+        ip.get('press_styles'), ip.get('press_applied'), ip.get('press_anim_starts'),
+        ip.get('field_specs'), ip.get('field_ticks'), ip.get('field_nodes_touched'), ip.get('pseudo_parents')))
+    sl = d.get('switch_log') or []
+    mode = ''
+    for row in sl:
+        if row.get('via') == 'press-inject': mode = 'press'
+        if row.get('via') == 'field-inject': mode = 'field'
+    if mode == 'press':
+        if int(ip.get('press_styles') or 0) <= 0: print('✗ 按下态表为空'); sys.exit(7)
+        if int(ip.get('press_applied') or 0) <= 0: print('✗ 按下态未应用（DOWN 未生效）'); sys.exit(7)
+        print('✅ iOS 按下态接线通过（styles=%s applied=%s）' % (ip.get('press_styles'), ip.get('press_applied'))); sys.exit(0)
+    if mode == 'field':
+        if int(ip.get('field_specs') or 0) <= 0: print('✗ 场表为空'); sys.exit(7)
+        if int(ip.get('field_ticks') or 0) <= 0: print('✗ 场帧循环未推（ticks=0）'); sys.exit(7)
+        if int(ip.get('field_nodes_touched') or 0) <= 0: print('✗ 场未改写任何叶'); sys.exit(7)
+        print('✅ iOS 场跟手接线通过（specs=%s ticks=%s touched=%s）' % (ip.get('field_specs'), ip.get('field_ticks'), ip.get('field_nodes_touched'))); sys.exit(0)
 calls = int(p.get('calls') or 0); fires = int(p.get('fire_ticks') or 0); anims = int(p.get('anim_start_calls') or 0)
 if calls <= 0 or fires <= 0:
     print('✗ 泵周期驱动未生效（calls=%s fire_ticks=%s）——接线失败' % (calls, fires)); sys.exit(7)

@@ -13,7 +13,7 @@
 //   重挂），批内中间帧不上屏 ⇒ 可见刷新率低于 Android 逐帧驱动；批大小按实测 `eval_ms` 自适应。
 //   ★动画规格/原子钟在 native 侧持有（`hostAppAnimAttach` 重放到当前相位），本类只做"何时调"。
 import { hilog } from '@kit.PerformanceAnalysisKit';
-import { applyNodeVisuals, hostAppPumpTick, hostAppPumpHzSet, hostAppAnimAttach, hostAppAnimTick, hostAppAnimStats } from './Index';
+import { applyNodeVisuals, applyPressVisual, appScreenFollowField, hostAppPumpTick, hostAppPumpHzSet, hostAppAnimAttach, hostAppAnimTick, hostAppAnimStats } from './Index';
 
 const DOMAIN = 0x0003;
 const TAG = 'ProteusAppRuntime';
@@ -32,6 +32,12 @@ interface ZDriverStats {
 }
 /** 读数 JSON 包装（本地不导出）。 */
 interface ZDriverStatsJson { host: ZDriverStats; native: Record<string, Object> }
+/** 含交互反馈探针的读数包装（Dactyl 专项）。 */
+interface ZDriverStatsJson3 { host: ZDriverStats; native: Record<string, Object>; probe: Record<string, Object> }
+/** 交互反馈探针（ArkTS 禁未型字面量）。 */
+interface InteractionProbe {
+  press_styles: number; press_applied: number; field_specs: number; field_ticks: number; field_nodes_touched: number;
+}
 
 /**
  * ★★★**应用运行期驱动**（一个实例挂在一个页面壳上）。
@@ -219,6 +225,161 @@ export class AppRuntimeDriver {
     }
   }
 
+  /* ══════════ ★★★Dactyl 专项：按下态 + 场跟手（与 Android/iOS 同一职责）══════════
+   * 【为什么在这（决策 #796 能力归属）】平台无关的宿主动力 ⇒ 归 runtime：任何鸿蒙壳零接线受益。
+   * 【按下态】DOWN 时从**当前树**的 press* 字段收集（与 iOS InteractionFeedback.install 同源）
+   *   ⇒ 调 applyPressVisual 直写 RenderNode（O(1) 同帧）；UP ⇒ applyPressVisual({}) 还原。
+   * 【场跟手】MOVE 只记焦点（零 FFI）；帧循环每帧一次 appScreenFollowField ⇒ 写 RenderNode 缩放。
+   *   ★与泵定时器分开：场跟手要**逐帧**（手指在场里），泵按屏频率。 */
+
+  private pressStyles: Map<number, Record<string, number>> = new Map<number, Record<string, number>>()
+  private fieldSpecs: Map<number, Record<string, number>> = new Map<number, Record<string, number>>()
+  private fieldFocus: Map<number, number[]> = new Map<number, number[]>()
+  private touchFieldCid: number = -1
+  private pressNodeId: number = -1
+  private interactionLink: number = -1
+  private pressAppliedCount: number = 0
+  private fieldTickCount: number = 0
+  private fieldTouchedTotal: number = 0
+  private currentNodes: Record<string, Object>[] = []
+
+  /** 收集两张表（每次回执带 tree 时调）——与 iOS InteractionFeedback.install 同源口径。 */
+  private installInteraction(nodes: Record<string, Object>[]): void {
+    this.currentNodes = nodes
+    this.pressStyles.clear()
+    this.fieldSpecs.clear()
+    for (const n of nodes) {
+      const id = n['id'] as number | undefined
+      if (id === undefined) { continue }
+      const ps: Record<string, number> = {}
+      let has = false
+      const bg = n['pressBackgroundColor'] as string | undefined
+      if (bg !== undefined) { ps['bg'] = hexToArgbNum(bg); has = true }
+      const bc = n['pressBorderColor'] as string | undefined
+      if (bc !== undefined) { ps['borderColor'] = hexToArgbNum(bc); has = true }
+      const tf = n['pressTransform'] as Record<string, Object> | undefined
+      if (tf !== undefined) {
+        const sx = (tf['sx'] as number | undefined) ?? 1
+        const sy = (tf['sy'] as number | undefined) ?? 1
+        if (sx !== 1 || sy !== 1) { ps['sx'] = sx; ps['sy'] = sy; has = true }
+      }
+      const sh = n['pressBoxShadow'] as Record<string, Object> | undefined
+      if (sh !== undefined) {
+        const gc = sh['color'] as string | undefined
+        const gr = (sh['blur'] as number | undefined) ?? 0
+        if (gc !== undefined && gr > 0) { ps['glowColor'] = hexToArgbNum(gc); ps['glowRadius'] = gr; ps['glowAlpha'] = 0.9; has = true }
+      }
+      if (has) { this.pressStyles.set(id, ps) }
+      if (n['followField'] !== undefined) {
+        // ★ArkTS 禁 Record 字面量 ⇒ 逐步赋值（与 pressStyles 的 ps 同法）
+        const spec: Record<string, number> = {}
+        spec['falloff'] = (n['followFieldFalloff'] as number | undefined) ?? 300
+        spec['minScale'] = (n['followFieldMinScale'] as number | undefined) ?? 0.3
+        spec['maxScale'] = (n['followFieldMaxScale'] as number | undefined) ?? 1.0
+        spec['rotate'] = (n['followFieldRotate'] as number | undefined) ?? 30
+        this.fieldSpecs.set(id, spec)
+      }
+    }
+  }
+
+  /** ★DOWN（壳的 .onTouch Down 调）：命中链已有（壳给 chain）⇒ 按下态 + 场焦点。 */
+  onTouchDown(cx: number, cy: number, chain: number[]): void {
+    this.touchFieldCid = -1
+    for (const id of chain) { if (this.fieldSpecs.has(id)) { this.touchFieldCid = id; break } }
+    if (this.touchFieldCid >= 0) {
+      this.fieldFocus.set(this.touchFieldCid, [cx, cy])
+      this.startInteractionLoop()
+    }
+    const target = chain.length > 0 ? chain[0] : -1
+    if (target >= 0 && this.pressStyles.has(target)) {
+      this.pressNodeId = target
+      this.applyPress([target])
+    }
+  }
+
+  /** ★MOVE：只记焦点（零 FFI）。 */
+  onTouchMove(cx: number, cy: number): void {
+    if (this.touchFieldCid >= 0) { this.fieldFocus.set(this.touchFieldCid, [cx, cy]) }
+  }
+
+  /** ★UP/CANCEL：还原按下态 + 清场（叶回基态）。 */
+  onTouchUp(): void {
+    if (this.pressNodeId >= 0) { this.applyPress([]); this.pressNodeId = -1 }
+    this.fieldFocus.clear()
+    this.touchFieldCid = -1
+    this.stopInteractionLoop()
+  }
+
+  /** 应用/还原按下态：传 ids 列表（含伪子传播）⇒ 写 RenderNode；传 [] ⇒ 全还原。 */
+  private applyPress(ids: number[]): void {
+    const obj: Record<string, Object> = {}
+    for (const id of ids) {
+      const ps = this.pressStyles.get(id)
+      obj[String(id)] = (ps !== undefined ? ps : EMPTY_PRESS) as Object
+      for (const n of this.currentNodes) {
+        if ((n['parentId'] as number | undefined) === id && n['pseudo'] !== undefined) {
+          const nid = n['id'] as number
+          const pps = this.pressStyles.get(nid)
+          obj[String(nid)] = (pps !== undefined ? pps : EMPTY_PRESS) as Object
+        }
+      }
+    }
+    try {
+      applyPressVisual(JSON.stringify(obj))
+      if (ids.length > 0) { this.pressAppliedCount++ }
+    } catch (e) {
+      hilog.error(DOMAIN, TAG, 'APP_RT_PRESS_ERROR %{public}s', JSON.stringify(e) ?? '')
+    }
+  }
+
+  private startInteractionLoop(): void {
+    if (this.interactionLink >= 0) { return }
+    this.interactionLink = setInterval(() => { this.interactionBeat() }, 16)
+  }
+
+  private stopInteractionLoop(): void {
+    if (this.interactionLink >= 0) { clearInterval(this.interactionLink); this.interactionLink = -1 }
+  }
+
+  private interactionBeat(): void {
+    if (this.fieldFocus.size === 0) { this.stopInteractionLoop(); return }
+    this.fieldTickCount++
+    for (const entry of Array.from(this.fieldFocus.entries())) {
+      const cid: number = entry[0]
+      const xy: number[] = entry[1]
+      const spec = this.fieldSpecs.get(cid)
+      if (spec === undefined) { continue }
+      try {
+        const req: Record<string, Object> = {
+          'containerId': cid, 'x': xy[0], 'y': xy[1],
+          'falloff': spec['falloff'], 'minScale': spec['minScale'], 'maxScale': spec['maxScale'],
+          'rotate': spec['rotate'],
+        }
+        const out = appScreenFollowField(JSON.stringify(req))
+        const o = JSON.parse(out) as Record<string, Object>
+        const nodes = o['nodes'] as Record<string, Object>[] | undefined
+        if (nodes !== undefined && nodes.length > 0) {
+          const arr: Object[] = []
+          for (const nd of nodes) { arr.push([nd['id'], 0, 0, nd['scale'], nd['rotate'], 1] as Object) }
+          applyNodeVisuals(JSON.stringify(arr))
+          this.fieldTouchedTotal += nodes.length
+        }
+      } catch (e) {
+        hilog.error(DOMAIN, TAG, 'APP_RT_FIELD_ERROR %{public}s', JSON.stringify(e) ?? '')
+      }
+    }
+  }
+
+  /** ★交互反馈探针（判据）：与 iOS interactionProbe / Android fieldProbe 同口径。 */
+  interactionProbeJson(): string {
+    const p: InteractionProbe = {
+      press_styles: this.pressStyles.size, press_applied: this.pressAppliedCount,
+      field_specs: this.fieldSpecs.size, field_ticks: this.fieldTickCount,
+      field_nodes_touched: this.fieldTouchedTotal,
+    };
+    return JSON.stringify(p)
+  }
+
   /** ★页面销毁时调（停定时器；防泄漏）。 */
   stop(): void {
     this.stopPumpLoop();
@@ -227,6 +388,8 @@ export class AppRuntimeDriver {
 
   /** ★读数（判据/报告）：宿主侧真源 + native 会话真源**分开报**。 */
   statsJson(): string {
+    // ★★★Dactyl 专项：并列报交互反馈读数（按下态/场跟手——与 iOS interactionProbe 同口径）
+    const probe = this.interactionProbeJson();
     let native = '{}';
     try { native = hostAppAnimStats(); } catch (e) { native = '{"error":"stats 调用失败"}'; }
     const host: ZDriverStats = {
@@ -235,7 +398,25 @@ export class AppRuntimeDriver {
       anim_attaches: this.animAttaches, anim_ticks: this.animTicks, anim_applied: this.animAppliedTotal,
       anim_starts: this.animStarts, anim_active_last: this.animActiveLast,
     };
-    const body: ZDriverStatsJson = { host: host, native: JSON.parse(native) as Record<string, Object> };
+    const body: ZDriverStatsJson3 = { host: host, native: JSON.parse(native) as Record<string, Object>, probe: JSON.parse(probe) as Record<string, Object> };
     return JSON.stringify(body);
   }
+}
+
+/** 空按下态（= 还原该节点；ArkTS 禁裸 {} 字面量 ⇒ 具名常量）。 */
+const EMPTY_PRESS: Record<string, number> = {}
+
+/** `#RRGGBB[AA]` → ARGB uint32（RenderNode 的 SetBackgroundColor 口径；与 C++ hexToArgb 同序）。 */
+function hexToArgbNum(hex: string): number {
+  const s = hex.startsWith('#') ? hex.slice(1) : hex
+  if (s.length === 8) {
+    const r = parseInt(s.slice(0, 2), 16), g = parseInt(s.slice(2, 4), 16)
+    const b = parseInt(s.slice(4, 6), 16), a = parseInt(s.slice(6, 8), 16)
+    return ((a << 24) | (r << 16) | (g << 8) | b) >>> 0
+  }
+  if (s.length === 6) {
+    const r = parseInt(s.slice(0, 2), 16), g = parseInt(s.slice(2, 4), 16), b = parseInt(s.slice(4, 6), 16)
+    return (0xFF000000 | (r << 16) | (g << 8) | b) >>> 0
+  }
+  return 0
 }
