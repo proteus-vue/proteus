@@ -727,6 +727,11 @@ struct MainPage {
       // ★左缘起手 ⇒ 进入"边缘滑返"跟踪（见 Up 分支：明确右滑才触发返回；否则照常滚动）
       this.edgeTracking = this.touchStartX <= 20;
       this.edgeStartX = this.touchStartX; this.edgeStartY = this.touchStartY;
+      // ★★★Dactyl 专项（决策 #797）：按下态 + 场跟手焦点（内容坐标；命中链来自内核 hitTest=单一真源）
+      if (this.driver !== null) {
+        const chain: number[] = this.hitAndChainAt(t.windowX, t.windowY);
+        this.driver.onTouchDown(t.windowX, t.windowY + this.scrollOffset, chain);
+      }
       return;
     }
     if (e.type === TouchType.Move) {
@@ -741,6 +746,8 @@ struct MainPage {
       if (this.edgeTracking && Math.abs(t.windowX - this.edgeStartX) > Math.abs(t.windowY - this.edgeStartY)) {
         return;
       }
+      // ★★★Dactyl 专项：场跟手 MOVE 只记焦点（零 FFI——推帧在 driver 帧循环里）
+      if (this.driver !== null) { this.driver.onTouchMove(t.windowX, t.windowY + this.scrollOffset); }
       this.edgeTracking = false;   // 起手在边缘但纵向拖动 ⇒ 转为普通滚动
       const step: number = this.applyScrollBy(-dy);   // 手指上滑（windowY 减小）⇒ offset 增大
       // 速度采样：本步**实际内容位移**（钳制后）累计，≥24ms 算一次瞬时速度
@@ -749,6 +756,8 @@ struct MainPage {
       return;
     }
     if (e.type === TouchType.Up) {
+      // ★★★Dactyl 专项：抬起 ⇒ 还原按下态 + 清场（与 iOS handleTouchUp 同语义）
+      if (this.driver !== null) { this.driver.onTouchUp(); }
       const dx: number = t.windowX - this.edgeStartX;
       const dyAbs: number = Math.abs(t.windowY - this.edgeStartY);
       if (this.edgeTracking && dx > 60 && dyAbs < 60) {
@@ -763,7 +772,20 @@ struct MainPage {
       this.touchLastY = -1; this.touchMoved = false; this.edgeTracking = false;
       return;
     }
-    if (e.type === TouchType.Cancel) { this.stopMomentum(); this.touchLastY = -1; this.touchMoved = false; this.edgeTracking = false; }
+    if (e.type === TouchType.Cancel) { this.stopMomentum(); this.touchLastY = -1; this.touchMoved = false; this.edgeTracking = false; if (this.driver !== null) { this.driver.onTouchUp(); } }
+  }
+
+  /** ★Dactyl 专项：内核命中链（按下态/场跟手用；与 onTapAt 同一内核入口——单一真源）。 */
+  private hitAndChainAt(vpX: number, vpY: number): number[] {
+    try {
+      const contentY: number = vpY + this.scrollOffset;
+      const hitJson: string = appScreenHitAt(vpX, contentY);
+      const hit = JSON.parse(hitJson) as Record<string, Object>;
+      const chain = hit['chain'] as number[] | undefined;
+      return chain ?? [];
+    } catch (err) {
+      return [];
+    }
   }
 
   /** 点击命中 → 运行期派发（$nav 导航 / 数据变更）→ 重绘（与 Android/iOS 同一条命中链） */
