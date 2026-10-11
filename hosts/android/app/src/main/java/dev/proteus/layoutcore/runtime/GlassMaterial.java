@@ -72,8 +72,8 @@ public final class GlassMaterial {
             + "    float2 sp = coord + n * bend;\n"                              // ★向外采样（卷边界外内容进边缘）
             // ③ 模糊**按 e 键控**：边缘锐、中心糊（先折后糊）——加权核（归一保亮度）
             + "    float br = max(blur, 0.0) * e;\n"
-            + "    half4 acc = content.eval(sp) * 0.16;\n"
-            + "    float w1 = 0.07, w2 = 0.04, w3 = 0.015;\n"
+            + "    half4 acc = content.eval(sp) * 0.12;\n"
+            + "    float w1 = 0.062, w2 = 0.036, w3 = 0.012;\n"                   // 中心+8向×(w1+w2+w3)：总权重 = 1.0（保亮度）
             + "    for (int k = 0; k < 8; k++) {\n"
             + "        float a = float(k) * 0.7853981;\n"
             + "        float2 dir = float2(cos(a), sin(a));\n"
@@ -138,8 +138,9 @@ public final class GlassMaterial {
             sh.setFloatUniform("radius", radius);
             sh.setFloatUniform("blur", spec.blur);
             sh.setFloatUniform("saturation", spec.saturation);
-            // ★边缘峰值位移：调研守恒 refractionAmount ≈ 2×倒角带宽（带宽由 shader 内 band=min(w,h)*0.22 定）
-            sh.setFloatUniform("refractDepthPx", Math.max(6.0f, Math.min(w, h) * 0.22f * 2.0f));
+            // ★边缘峰值位移：调研守恒 refractionAmount ≈ 2×倒角带宽；带宽 in-shader = min(size)*0.11
+            //   ⇒ 深度 = min(size)*0.22（此前多乘一个 2 ⇒ 位移过大、糊成一片）
+            sh.setFloatUniform("refractDepthPx", Math.min(w, h) * 0.22f);
             sh.setFloatUniform("specular", 0.5f);         // 边缘高光（法线点乘光源）
             sh.setFloatUniform("contrast", 1.0f);         // 中性
             sh.setFloatUniform("lightDir", -0.35f, -0.94f); // 光来自上偏左
