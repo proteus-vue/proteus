@@ -49,5 +49,11 @@
             android:exported="true"
             android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|uiMode" />
+        <!-- ★★★自研液态玻璃独立夹具（决策 #818 P2 验收）：手写 Cmd（彩色背景 + glass 节点）→ 看 AGSL 玻璃面。 -->
+        <activity
+            android:name=".GlassActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|uiMode" />
     </application>
 </manifest>
