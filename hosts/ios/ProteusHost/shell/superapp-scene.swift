@@ -622,6 +622,11 @@ final class SuperappScene: NSObject {
         if let ip = evalJs?("proteusSelfDraw.interactionProbe()") { o["interaction_probe"] = ip }
         // ★★★Dactyl D0：触摸延迟采样探针 + 全量导出（量具从 Documents 取 dactyl-samples.json）
         if let sp = evalJs?("proteusSelfDraw.dactylSampleProbe()") { o["dactyl_samples"] = sp }
+        // ★★★显影器数据出口（决策 #797 · 通用能力）：触摸轨迹（应用侧画"幽灵拖尾"）
+        if let tr = evalJs?("proteusSelfDraw.dactylTouchTrailJson()") {
+            o["dactyl_trail"] = tr
+            if let d = tr.data(using: .utf8) { try? d.write(to: reportDir.appendingPathComponent("dactyl-trail.json")) }
+        }
         if let dm = evalJs?("proteusSelfDraw.dactylMetricsJson()") {
             o["dactyl_metrics"] = dm
             // 落盘（量具/取回脚本读 Documents/dactyl-samples.json——与 Android filesDir 同款）

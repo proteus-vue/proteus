@@ -2966,3 +2966,22 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **⑤ 破坏性验证（五向全过）**：① 鸿蒙 runtime 删 `AppRuntimeDriver` ⇒ 红（"缺实现"）；② 鸿蒙壳注入 `hostAppPumpTick` ⇒ 红；③ Android **模板壳**注入 `pullPumps()` ⇒ 红；④ iOS **模板壳**注入 `startPumpLoop()` ⇒ 红；⑤ 还原 ⇒ 绿。
 **⑥ 真机验证（iOS 收官）**：签名档过期 ⇒ `provision.sh` 自动重签（新档 `cn.shxuxi.proteus.experiments`）→ 设备需**手动信任证书**（用户完成）→ 真机跑通：Dactyl **L3 泵 `calls=78 fire_ticks=78`（间隔 33.7ms ≈ 30Hz 泵源，精确对上）+ `anim_start_calls=5`（v-animate 内核受理）**。★**Android 复验（壳零接线版）**：Dactyl L3 数字场持续跳变（75 → 14 …）⇒ **泵由 runtime 自拉成立**。
 **⑦ 教训**：① **"同一能力多消费者"的判据是"所有消费者都不含实现、且实现只有一份"**——"某个壳能用"是局部观察，不构成结构保证；② **模板壳是"未来所有宿主"**——门禁与验证都必须把它当第一公民（只扫 `hosts/` 是结构性盲区）；③ **能力下沉的正确姿势 = 分解回调**（跨模块接口字面量在 ArkTS 会被拒；回调 + 本地接口是通用解法）；④ 用户一句话点出了我连续四批（#790/#791/#792/#793）都在同一条"逐条接线"的滑梯上——**关注点分离的价值就在"接线次数从 N 降到 1"**，否则分层只搬了目录、没消除成本。
+
+797. **★★★Dactyl 专项续：交互视觉反馈三腿落地 iOS runtime（按下态 / 场跟手 / `:active` 动画）+ D0 生产者（官方触摸时间戳端到端采样，iOS 实测 0.31ms）**（2026-10-11）：
+**① 背景（用户的判断被证实）**：用户问「现在 iOS 和鸿蒙的交互延迟专项是不是还没做」——取证确认：**连基座三条腿都只有 Android**（`press*`/`followField*`/`pseudo` 三组编译器字段在 iOS/鸿蒙**零消费**），显影器/量具生产者也全缺。⇒ 本轮把这份清单做掉。
+**② iOS 三腿（已交付·判据全过）**：新建 runtime 单元 `interaction-feedback.swift` + 桥/视图接线：
+  · **按下态**：DOWN 命中 → 同帧改底色/描边/缩放/发光/z（CATransaction 禁隐式动画）；UP 精确还原。★**命中常落在子/伪子** ⇒ 沿冒泡链找**第一个带按下态的祖先**（实测坑：写死坐标落到容器 ⇒ 误判"DOWN 未生效"）。
+  · **场跟手**：MOVE 只记焦点（零 FFI）→ **每帧一次** `follow_field_bin`（12B/条）→ 写层 scale/rotate；抬指清 override 回声明基态；换树清场态。
+  · **`:active` 动画**：按下合并自身+伪子通道 ⇒ **一次** `anim_start`（支持 infinite）；UP `anim_stop`；帧循环 + 按压力增益（700ms 1→2.2，与 Android 同参数）。
+  · **基线纪律**：applyTransform 落值处顺手记 tx/ty/opacity ⇒ 覆盖层不抹掉静态变换与动画位移。
+  · **判据装置**：`--press=auto[,ms]` / `--field=auto[,screen]`——**自动定位不猜坐标**（表里取 id → 内核 `node_rect` → 取中心做 hitTest）；★此坑实证：写死 (60,250) 落到 `.pads` 容器（target=4）而按下态在 5/8/11…。
+**③ 鸿蒙三腿（代码已交付·编译通过）**：`applyPressVisual`（press* 直写 RenderNode：底色/描边/变换/阴影；`{}` 还原；建树时快照静态底色）+ `appScreenFollowField`（内核 12B/条 → JSON）+ `AppRuntimeDriver` 内的按下/场驱动（ArkTS 侧，**壳零接线**——决策 #796 能力归属）。★ArkTS 教训：`Record<string,Object>` 字面量、裸 `{}`、跨 HAR 接口字面量**全被拒**（`arkts-no-untyped-obj-literals`）⇒ 逐步赋值 + 具名常量 + 回调分解。
+**④ D0 生产者（端到端延迟采样，本轮补上——此前 `input_latency_*` 恒 null）**：
+  · 口径（15 §6.1）：T0=**官方触摸事件时间戳**（Android `getEventTime` / iOS `UITouch.timestamp`——**禁 JS 时钟**）；T1=**该触摸引起的首帧提交**（Android onDraw 尾 / iOS 按下态提交后）；只记首帧（旧待配对记 `dropped`）；倒挂记丢。
+  · Android：`ProteusHostView.dactyl*` 一族（环形缓冲 4096 + 导出/探针/清空）+ `VaporRenderHost` 转发 + CLI 宿主每屏落盘 `dactyl-samples.json`。
+  · iOS：`SelfDrawView.dactyl*`（touchesBegan **与注入三段都记 T0**——判据对准生产同一时点）+ 协议/桥三入口 + 参考宿主落盘 + 报告带探针。
+  · **实测（iOS 17 sim）**：`T0=10045300.694ms → T1=10045301.004ms` ⇒ **0.31ms** ⇒ `measure-latency.py --end ios` ⇒ `input_latency_p50/p95/p99=0.31ms` ⇒ `check:dactyl-budget` **识别为实测值**（此前 ◐）。
+**⑤ 显影器（D1 · 应用侧声明式 · #789 裁定）**：新增**通用数据通路** `__proteusSuperappMetrics({source,value})`（宿主把原生指标喂进运行期数据源 ⇒ 页面**普通绑定**消费；`SuperappRuntime.writeSource` 透传）——⇒ 显影器**由页面画**（宿主零视觉发明）。Dactyl 新增 `l6.vue`（D1 显影页）：**延迟环**（半径 ∝ lag）· **帧格**（60Hz 泵 + 缺帧闪格）· **幽灵拖尾**（渐隐点）· 读数条。★过 `check:dactyl-visual-nonblocking`（装饰只走合成属性）。
+**⑥ 门禁**：`check:dactyl-budget`（含 iOS 实测）· `check:dactyl-visual-nonblocking` · `check:interaction-folding` · `android-host-compile` · `AAR-fresh` · `check-selfdraw-compile` · `coupled` · `bridge-sync` 全绿。
+**⑦ 诚实边界**：① 三腿真机取证 **iOS/Android 待跑**（Android 设备侧安装被 MIUI 拦——需手机确认；鸿蒙待签名）；② T1 是"**提交**"非"**上屏**"（真值仍以高速摄影为外部真值）；③ 采样样本数少（注入次数决定）；④ 鸿蒙的**按下传播/动画**分支未真机验。
+**⑧ 教训**：① **"某能力只有一端有"要以"编译器字段有没有被消费"来查**（比查代码更快：grep `press*`/`followField*`/`pseudo`）；② **判据注入必须"自动定位 + 对准生产路径的同一时点"**（猜坐标与绕过钩子都会产生假红/假绿）；③ **ArkTS 的字面量限制会让"直接抄 Android 写法"连续失败**——具名常量/逐步赋值/回调分解是通用解法。

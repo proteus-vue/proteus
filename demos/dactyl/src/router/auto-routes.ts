@@ -11,6 +11,7 @@ export const routes: RouteRecord[] = [
   { name: "l3", path: "pages/l3", component: "../pages/l3.vue", parent: "index", meta: {"title":"L3 沸腾","isTab":true} },
   { name: "l4", path: "pages/l4", component: "../pages/l4.vue", parent: "index", meta: {"title":"L4 十指","isTab":true} },
   { name: "l5", path: "pages/l5", component: "../pages/l5.vue", parent: "index", meta: {"title":"L5 崩裂","isTab":true} },
+  { name: "l6", path: "pages/l6", component: "../pages/l6.vue", parent: "index", meta: {"title":"D1 显影","isTab":true} },
 ]
 
 export const tabRoutes: RouteRecord[] = routes.filter(r => r.meta?.isTab)
@@ -38,14 +39,18 @@ export const screens: Record<string, AppScreenSpec> = {
   "l5": {
     "name": "l5",
     "path": "pages/l5"
+  },
+  "l6": {
+    "name": "l6",
+    "path": "pages/l6"
   }
 }
 
 /** 路由名数组（App 深栈/压测按它循环取屏——顺序与 routes 一致） */
-export const screenNames: string[] = ["index","l2","l3","l4","l5"]
+export const screenNames: string[] = ["index","l2","l3","l4","l5","l6"]
 
 /** tab 根屏（meta.isTab）—— App 端 tab 语义（switchTab/reset）的合法目标 */
-export const tabNames: string[] = ["index","l2","l3","l4","l5"]
+export const tabNames: string[] = ["index","l2","l3","l4","l5","l6"]
 
 // ─── ③ 类型提示：按路由名索引的参数类型表（来源：<route> 块 params 声明）───
 declare module '@proteus-vue/router/types' {
@@ -55,5 +60,6 @@ declare module '@proteus-vue/router/types' {
     'l3': {  },
     'l4': {  },
     'l5': {  },
+    'l6': {  },
   }
 }
