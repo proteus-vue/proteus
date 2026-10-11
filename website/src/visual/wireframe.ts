@@ -19,6 +19,9 @@ export interface WireframeOptions {
   still?: boolean
   /** 投影缩放（几何体在画布内的占比；默认 0.82） */
   scale?: number
+  /** ★首帧**已真就绪**回调（首个 `gl.finish()` 之后触发）——调用方据此把 canvas 由隐藏转为可见
+   *  （比 rAF 计时更可靠的"内容已提交"信号，防 WebGL canvas 首帧白闪）。 */
+  onReady?: () => void
 }
 
 export interface WireframeHandle {
@@ -156,6 +159,7 @@ export function createWireframeCore(canvas: HTMLCanvasElement, opts: WireframeOp
   let visible = true
   let raf = 0
   let t0 = performance.now()
+  let readyFired = false
   let tSec = 0
   let tilt = -0.5 // 固定倾角（俯视一点，立体感更好）
 
@@ -195,6 +199,12 @@ export function createWireframeCore(canvas: HTMLCanvasElement, opts: WireframeOp
     t0 = now
     if (visible) tSec += dt
     draw()
+    // ★首个**真实 rAF 帧**绘制完成 = canvas 内容确已交给合成器（比"同步 draw 后立刻"更可信，
+    //   因为这一帧发生在浏览器的帧时序里）⇒ 通知调用方可以显示 canvas 了。
+    if (!readyFired) {
+      readyFired = true
+      opts.onReady?.()
+    }
     raf = requestAnimationFrame(frame)
   }
 
@@ -210,14 +220,12 @@ export function createWireframeCore(canvas: HTMLCanvasElement, opts: WireframeOp
   if (still) {
     draw() // 静态单帧（reduced-motion）
     if (typeof gl.finish === 'function') gl.finish()
+    readyFired = true
+    opts.onReady?.()
   } else {
-    // ★★★2026-10-11 首帧白闪修复（用户实测「加载过程闪白」）：WebGL canvas 在**首次 gl 绘制之前**，
-    //   加速合成器会把它合成成**不透明的白色**（Chromium 已知行为）——此前动画分支把首帧清屏推到
-    //   下一次 rAF ⇒ 存在一帧"白块"窗口（首页 Hero 右侧大 canvas ⇒ 闪白明显）。
-    //   ⇒ 建好 context/尺寸后**同步绘制首帧一次**（立即 clear 成透明），再起 rAF 循环。
+    // ★首帧**同步**绘制一次（清成透明）——减小"入 DOM 但未绘制"的白窗口；真正的"可显示"信号
+    //   由 `frame()` 首个真实 rAF 帧发（见上——比同步更贴合合成时序）。
     draw()
-    // ★首帧强制光栅化完成（`gl.finish` 阻塞到 GPU 执行完）——配合 Vue 侧"双 rAF 后再显示 canvas"
-    //   ⇒ 保证 canvas 显示时 GL 内容**已真实就绪**（否则可见时仍可能是一帧白）。
     if (typeof gl.finish === 'function') gl.finish()
     t0 = performance.now()
     raf = requestAnimationFrame(frame)
