@@ -2348,9 +2348,76 @@ public class ProteusHostView extends ViewGroup {
         invalidate();
     }
 
+    /* ══════════ ★★★Dactyl D0 生产者：**官方触摸时间戳 → 首帧提交**采样（2026-10-11 · 决策 #797）══════════
+     * 【它测什么（15 §6.1 契约）】`input_latency_ms = T1 − T0`：
+     *   · T0 = **官方触摸事件时间戳**（`MotionEvent.getEventTime()`，`SystemClock.uptimeMillis` 基准）
+     *     ——**禁用 JS 时钟**（bench spec §2.5 明令；JS `Date.now()` 与事件时间不同基准、且经引擎调度）；
+     *   · T1 = **首帧提交时间戳**（该触摸引起的首个可见变化被提交的时刻）= 紧随其后的 `onDraw` 结束
+     *     （`SystemClock.uptimeMillis` 同基准）——即"手指到像素"的宿主侧可测上界。
+     * 【为什么在宿主（不能在 JS/内核）】官方时间戳只有平台事件对象有（`getEventTime`）；且本采样要覆盖
+     *   **零 JS 路径**（按下态/跟手都是原生即时）——若只测 JS 往返，测的就不是"这条链"了。
+     * 【诚实边界】T1 取"首个 onDraw 完成"：显示面板还有 VSync 后置（≈1 帧）——本值是**上界内**的
+     *   提交时刻，与 `dactyl-metrics.schema.json` 的口径一致（真值以高速摄影为外部真值，15 §6.3）。
+     * 【采样纪律】每条 = 一次"DOWN→首帧"或"MOVE→首帧"；**只记首帧**（后续帧不挂同一触摸）；
+     *   环形缓冲上限 4096（防无界；导出后清）。 */
+    private final java.util.ArrayDeque<long[]> dactylSamples = new java.util.ArrayDeque<long[]>();
+    private long dactylPendingT0 = -1;      // 待配对的事件时间戳（uptimeMillis 基准）
+    private String dactylPendingKind = "";
+    private int dactylSampledCount = 0;     // 采样条数（判据：证明"采样真的跑了"）
+    private int dactylDroppedCount = 0;     // 未配对丢弃（同一次触摸的后续帧——如实计数）
+
+    /** 触摸入口调：记下事件时间戳（T0）+ 类型（DOWN/MOVE——只记按压与拖拽，POINTER_* 不单独记）。 */
+    private void dactylNoteTouch(android.view.MotionEvent ev) {
+        final int action = ev.getActionMasked();
+        if (action == android.view.MotionEvent.ACTION_DOWN
+                || action == android.view.MotionEvent.ACTION_MOVE) {
+            // ★同一次触摸已有待配对 ⇒ 旧的丢弃（只测"首帧"——15 §6.1 口径）
+            if (dactylPendingT0 >= 0) { dactylDroppedCount++; }
+            dactylPendingT0 = ev.getEventTime();
+            dactylPendingKind = action == android.view.MotionEvent.ACTION_DOWN ? "down" : "move";
+        }
+    }
+
+    /** onDraw 收尾调：若有待配对触摸 ⇒ 记一条样本（T1 = 本帧提交时刻，同基准）。 */
+    private void dactylCommitFrame() {
+        if (dactylPendingT0 < 0) { return; }
+        final long t1 = android.os.SystemClock.uptimeMillis();
+        // ★合法性（倒挂 ⇒ 记丢并跳过——不静默混入；量具侧同样会跳）
+        if (t1 < dactylPendingT0) { dactylDroppedCount++; dactylPendingT0 = -1; return; }
+        dactylSamples.addLast(new long[]{ dactylPendingT0, t1 });
+        if (dactylSamples.size() > 4096) { dactylSamples.removeFirst(); }
+        dactylSampledCount++;
+        dactylPendingT0 = -1;
+    }
+
+    /** ★导出（判据/量具消费）：`{end,samples:[{t0_touch_ms,t1_commit_ms,kind}]}`（与 measure-latency.py 契约同形）。 */
+    public String dactylMetricsJson() {
+        StringBuilder sb = new StringBuilder("{\"end\":\"android\",\"samples\":[");
+        boolean first = true;
+        for (long[] s : dactylSamples) {
+            if (!first) { sb.append(','); }
+            first = false;
+            sb.append("{\"t0_touch_ms\":").append(s[0]).append(",\"t1_commit_ms\":").append(s[1]).append('}');
+        }
+        sb.append("],\"sampled\":").append(dactylSampledCount)
+          .append(",\"dropped\":").append(dactylDroppedCount).append('}');
+        return sb.toString();
+    }
+
+    /** ★清空采样（导出后调——防跨轮混入）。 */
+    public void dactylResetSamples() { dactylSamples.clear(); dactylSampledCount = 0; dactylDroppedCount = 0; }
+
+    /** 探针（判据）：采样/丢弃计数（不导出全量——省报告体积）。 */
+    public String dactylSampleProbe() {
+        return "{\"sampled\":" + dactylSampledCount + ",\"pending\":" + (dactylSamples.size())
+                + ",\"dropped\":" + dactylDroppedCount + "}";
+    }
+
     @Override
     public boolean onTouchEvent(android.view.MotionEvent ev) {
         touchEventCount++;
+        // ★★★Dactyl D0：官方触摸时间戳采样（T0=事件时间戳；T1=本触摸引起的首帧提交——见 sampler 注释）
+        dactylNoteTouch(ev);
         final int action = ev.getActionMasked();
         if (action == android.view.MotionEvent.ACTION_DOWN) {
             // ★★★S1.5（2026-10-10 · 输入延迟专项 #767）：**请求无缓冲分发**——绕过 Android 输入批处理

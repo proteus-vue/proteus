@@ -195,6 +195,8 @@ static int g_appTouchTransformCount = 0; // ★批次 39：带静态变换的节
 static int g_appTouchOriginCount = 0;    // ★批次 40：带 transform-origin 的节点数
 static int g_appTouchCssAnimNodes = 0;   // ★批次 42：带 CSS animation 的节点数（编译期折叠）
 static int g_appTouchHitFirst = -1;
+static int AppScreenFollowCount = 0;      // ★Dactyl 专项：场跟手 FFI 调用数（判据）
+static int AppScreenFollowNodeTotal = 0;  // ★累计改写叶数
 static int g_appTouchRealCount = 0;     // ★真实触摸事件数（.onTouch → appScreenHitAt）
 static int g_appTouchRealHits = 0;      // ★真实触摸命中数
 static int g_appTouchRealFirst = -1;    // ★首个真实命中目标
@@ -814,6 +816,58 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
     napi_value out; napi_create_string_utf8(env, arr.c_str(), arr.size(), &out); return out;
 }
 
+/**
+ * ★★★appScreenFollowField(json {containerId,x,y,falloff,minScale,maxScale,rotate}): string(JSON)
+ *   —— **场跟手一步**（Dactyl 专项 · 与 Android `layoutFollowFieldBin` / iOS `follow_field_bin` 同源）：
+ *   对保留的内核树（g_appTouchTree）调内核 proteus_layout_follow_field_bin ⇒ 12B/条
+ *   （id u32 + scale f32 + rotate f32）⇒ 转成 {"ok":true,"nodes":[{id,scale,rotate}]} 交 ArkTS。
+ *   【为什么在 runtime】与 Android/iOS 同一条内核原语；ArkTS 侧只做"每帧调一次 + 写 RenderNode"。
+ *   【频率纪律】调用方（AppRuntimeDriver）**每帧最多一次**（MOVE 只记焦点——与 Android fieldDirty 同）。
+ */
+static napi_value AppScreenFollowField(napi_env env, napi_callback_info info) {
+    size_t argc = 1; napi_value args[1] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    std::string js;
+    if (argc >= 1 && args[0] != nullptr) {
+        size_t len = 0; napi_get_value_string_utf8(env, args[0], nullptr, 0, &len);
+        js.resize(len + 1); napi_get_value_string_utf8(env, args[0], &js[0], len + 1, &len); js.resize(len);
+    }
+    double cid = -1, fx = 0, fy = 0, falloff = 300, minS = 0.3, maxS = 1.0, rot = 30;
+    jnum(js.c_str(), js.size(), "containerId", &cid);
+    jnum(js.c_str(), js.size(), "x", &fx);
+    jnum(js.c_str(), js.size(), "y", &fy);
+    jnum(js.c_str(), js.size(), "falloff", &falloff);
+    jnum(js.c_str(), js.size(), "minScale", &minS);
+    jnum(js.c_str(), js.size(), "maxScale", &maxS);
+    jnum(js.c_str(), js.size(), "rotate", &rot);
+    if (g_appTouchTree == 0 || cid < 0) {
+        napi_value o; napi_create_string_utf8(env, "{\"ok\":false,\"nodes\":[]}", NAPI_AUTO_LENGTH, &o); return o;
+    }
+    uint32_t outLen = 0;
+    uint8_t* ptr = (uint8_t*)proteus_layout_follow_field_bin(
+        g_appTouchTree, (uint32_t)cid, (float)fx, (float)fy,
+        (float)falloff, (float)minS, (float)maxS, (float)rot, &outLen);
+    std::string arr = "[";
+    int n = 0;
+    if (ptr != nullptr && outLen >= 12) {
+        n = (int)(outLen / 12);
+        for (int i = 0; i < n; i++) {
+            uint32_t id; float sc, ro;
+            memcpy(&id, ptr + i * 12, 4);
+            memcpy(&sc, ptr + i * 12 + 4, 4);
+            memcpy(&ro, ptr + i * 12 + 8, 4);
+            char b[96]; snprintf(b, sizeof(b), "%s{\"id\":%u,\"scale\":%.6f,\"rotate\":%.6f}", i ? "," : "", id, sc, ro);
+            arr += b;
+        }
+        proteus_rects_free(ptr, outLen);
+    }
+    arr += "]";
+    std::string out = "{\"ok\":true,\"nodes\":" + arr + "}";
+    // 判据记账
+    AppScreenFollowCount++; AppScreenFollowNodeTotal += n;
+    napi_value r; napi_create_string_utf8(env, out.c_str(), out.size(), &r); return r;
+}
+
 static napi_value AppScreenContentHeight(napi_env env, napi_callback_info info) {
     napi_value out;
     napi_create_double(env, g_appContentHeightVp, &out);
@@ -825,6 +879,8 @@ static napi_value HostBridgeInit(napi_env env, napi_value exports) {
     napi_property_descriptor desc[] = {
         {"appScreenCommands", nullptr, AppScreenCommands, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"appScreenContentHeight", nullptr, AppScreenContentHeight, nullptr, nullptr, nullptr, napi_default, nullptr},
+        // ★★★Dactyl 专项：场跟手一步（内核 follow_field_bin → 12B/条 → JSON）
+        {"appScreenFollowField", nullptr, AppScreenFollowField, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"appScreenHitAt", nullptr, AppScreenHitAt, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"appScreenNodeRect", nullptr, AppScreenNodeRect, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"appScreenAnimTick", nullptr, AppScreenAnimTick, nullptr, nullptr, nullptr, napi_default, nullptr},

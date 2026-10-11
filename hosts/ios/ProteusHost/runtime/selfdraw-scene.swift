@@ -376,6 +376,10 @@ func physFootprintMB() -> Double {
     func animFrameStats() -> String
     /// ★★★交互视觉反馈探针（Dactyl 专项）：按下态 / 场跟手 / 伪元素动画的原生计数（判据读它）
     func interactionProbe() -> String
+    /// ★★★Dactyl D0（决策 #797）：触摸延迟采样（导出/探针/清空——量具契约同形）
+    func dactylMetricsJson() -> String
+    func dactylSampleProbe() -> String
+    func dactylResetSamples()
     /// ★注入三段（与真触摸同一钩子链）：判据注入按下/拖拽/抬指
     func driveTouchDown(_ x: Double, _ y: Double) -> Bool
     func driveTouchMove(_ x: Double, _ y: Double) -> Bool
@@ -2603,6 +2607,8 @@ final class SelfDrawView: UIView {
     @discardableResult
     func driveTouchDown(x: Double, y: Double) -> Bool {
         guard let h = onTouchDown else { return false }
+        // ★★★Dactyl D0：注入路径也要记 T0（与真触摸同口径——判据注入必须对准生产路径的**同一时点**）
+        dactylNoteTouch(CACurrentMediaTime())
         h(x, y)
         return true
     }
@@ -2651,6 +2657,8 @@ final class SelfDrawView: UIView {
                                scale: s, rotate: 0, opacity: fbLastOpacity[nodeId] ?? 1)
         }
         CATransaction.commit()
+        // ★★★Dactyl D0：按下态已提交 ⇒ 记 T1（"手指 → 首个可见变化提交"；与 Android onDraw 收尾同语义）
+        dactylCommitFrame()
     }
 
     /// 还原按下态（精确回备份值；与 Android clearPress 同语义）。
@@ -2720,6 +2728,7 @@ final class SelfDrawView: UIView {
         guard let t = touches.first else { return }
         let p = t.location(in: self)
         touchStart = (Double(p.x), Double(p.y), CFAbsoluteTimeGetCurrent())
+        dactylNoteTouch(t.timestamp)
         // ★手指按下 ⇒ 停掉惯性（与 UIScrollView/Android 同语义：新触摸打断动量）
         stopMomentum()
         // ★★★交互视觉反馈（Dactyl 专项）：内容坐标 = 视口坐标 + 滚动偏移（与 classifyAndEmit 同款换算）
@@ -2814,6 +2823,54 @@ final class SelfDrawView: UIView {
         touchStart = nil
         onTouchUp?()
     }
+
+    /* ══════════ ★★★Dactyl D0 生产者：官方触摸时间戳 → 首帧提交 采样（决策 #797）══════════
+     * 【口径（15 §6.1 · 与 Android 同一契约）】`input_latency_ms = T1 − T0`：
+     *   · T0 = **官方触摸时间戳**（`UITouch.timestamp`——系统事件时间，**禁用 JS 时钟**）；
+     *   · T1 = **首帧提交时间戳**（该触摸引起的首个可见变化被提交）——iOS 侧取"下一次 layer 提交完成"
+     *     （`drawCmds` 收尾 / `animTickApply` 收尾——都是提交路径；见 dactylCommitFrame 调用点）。
+     * 【单位】`UITouch.timestamp` 与 `CACurrentMediaTime()` **同基准（mach 绝对时钟秒）** ⇒ 差值 ×1000 = ms。
+     * 【诚实边界】同 Android：T1 是"提交"不是"上屏"（面板后置 ≈1 帧）；真值以高速摄影为外部真值。 */
+    private var dactylSamples: [(t0: Double, t1: Double)] = []
+    private var dactylPendingT0: Double = -1
+    private var dactylSampledCount = 0
+    private var dactylDroppedCount = 0
+
+    /// 触摸入口调：记官方时间戳（同一次触摸已有待配对 ⇒ 旧的丢——只测首帧口径）。
+    func dactylNoteTouch(_ timestamp: TimeInterval) {
+        if dactylPendingT0 >= 0 { dactylDroppedCount += 1 }
+        dactylPendingT0 = timestamp
+    }
+
+    /// 提交路径调（每帧一次）：有待配对 ⇒ 记一条样本。
+    func dactylCommitFrame() {
+        guard dactylPendingT0 >= 0 else { return }
+        let t1 = CACurrentMediaTime()
+        if t1 < dactylPendingT0 { dactylDroppedCount += 1; dactylPendingT0 = -1; return }
+        dactylSamples.append((dactylPendingT0, t1))
+        if dactylSamples.count > 4096 { dactylSamples.removeFirst() }
+        dactylSampledCount += 1
+        dactylPendingT0 = -1
+    }
+
+    /// 导出（量具契约同形）：`{end,samples:[{t0_touch_ms,t1_commit_ms}]}`（单位 ms）。
+    func dactylMetricsJson() -> String {
+        var arr: [String] = []
+        for s in dactylSamples {
+            arr.append("{\"t0_touch_ms\":" + String(format: "%.3f", s.t0 * 1000)
+                       + ",\"t1_commit_ms\":" + String(format: "%.3f", s.t1 * 1000) + "}")
+        }
+        return "{\"end\":\"ios\",\"samples\":[" + arr.joined(separator: ",")
+            + "],\"sampled\":" + String(dactylSampledCount) + ",\"dropped\":" + String(dactylDroppedCount) + "}"
+    }
+
+    func dactylSampleProbe() -> String {
+        "{\"sampled\":" + String(dactylSampledCount) + ",\"pending\":" + String(dactylSamples.count)
+            + ",\"dropped\":" + String(dactylDroppedCount) + "}"
+    }
+
+    func dactylResetSamples() { dactylSamples.removeAll(keepingCapacity: true); dactylSampledCount = 0; dactylDroppedCount = 0 }
+
 
     /// 发一次语义手势（内容坐标）——桥接层在此回调里做**核心命中测试 + JS 派发**
     func emitGesture(x: Double, y: Double, type: String) {
@@ -7443,8 +7500,6 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         var pressTarget = -1
         for id in chain where fb.hasPressStyle(nodeId: id) { pressTarget = id; break }
         fb.down(x: cx, y: cy, target: pressTarget >= 0 ? pressTarget : target, chain: chain, handle: handle)
-        NSLog("[proteus] SUPERAPP_PRESS_DIAG cx=%f cy=%f target=%d chain=%d diag=%@", cx, cy, target, chain.count, fb.diagIds)
-        fb.noteTarget(target)
         // ★场跟手需要逐帧推（即便没有动画）⇒ DOWN 即启帧循环；UP 停（见 handleTouchUp）
         if !chain.isEmpty { view?.startFieldFrameLoop() }
     }
@@ -7522,6 +7577,11 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     func driveTouchDown(_ x: Double, _ y: Double) -> Bool { view?.driveTouchDown(x: x, y: y) ?? false }
     func driveTouchMove(_ x: Double, _ y: Double) -> Bool { view?.driveTouchMove(x: x, y: y) ?? false }
     func driveTouchUp() -> Bool { view?.driveTouchUp() ?? false }
+
+    /// ★★★Dactyl D0（决策 #797）：采样三入口（转发到 View——采样在触摸/提交路径上）
+    func dactylMetricsJson() -> String { view?.dactylMetricsJson() ?? "{\"end\":\"ios\",\"samples\":[]}" }
+    func dactylSampleProbe() -> String { view?.dactylSampleProbe() ?? "{}" }
+    func dactylResetSamples() { view?.dactylResetSamples() }
 
     private func render(treeJson: String, phase: String, force: Bool = false) -> String {
         guard let view = view else { return "{\"ok\":false,\"error\":\"view 未设置\"}" }

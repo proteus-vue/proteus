@@ -413,6 +413,22 @@ public final class VaporRenderHost {
     }
 
     public ProteusHostView view() { return view; }
+    /** ★★★Dactyl D0 生产者（决策 #797）：导出触摸延迟采样（`{end,samples:[…]}`——量具契约同形）。
+     *  壳按需调（dev 通道落盘 / 判据读）；无视图/无采样 ⇒ 空采样（如实，不假定）。 */
+    public String dactylMetricsJson() {
+        return view != null ? view.dactylMetricsJson() : "{\"end\":\"android\",\"samples\":[],\"sampled\":0,\"dropped\":0}";
+    }
+
+    /** ★采样探针（计数——判据证明"采样真的跑了"）。 */
+    public String dactylSampleProbe() {
+        return view != null ? view.dactylSampleProbe() : "{\"sampled\":0,\"pending\":0,\"dropped\":0}";
+    }
+
+    /** ★清空采样（导出后调——防跨轮混入）。 */
+    public void dactylResetSamples() {
+        if (view != null) view.dactylResetSamples();
+    }
+
 
     /** ★DevTools 元素高亮（决策 #701 安卓腿）：读该节点内核矩形（内容坐标）⇒ 视图转屏幕坐标画描边；id<=0 清除。 */
     public void highlightNode(int id) {

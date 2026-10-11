@@ -620,6 +620,15 @@ final class SuperappScene: NSObject {
         // ★★★Dactyl 专项（本批）：三条交互反馈能力的**原生计数**（按下态/场跟手/伪元素动画）——
         //   判据读它证明"通路真的走过"（与 Android pressProbe/fieldProbe 同口径，不看截屏像素）。
         if let ip = evalJs?("proteusSelfDraw.interactionProbe()") { o["interaction_probe"] = ip }
+        // ★★★Dactyl D0：触摸延迟采样探针 + 全量导出（量具从 Documents 取 dactyl-samples.json）
+        if let sp = evalJs?("proteusSelfDraw.dactylSampleProbe()") { o["dactyl_samples"] = sp }
+        if let dm = evalJs?("proteusSelfDraw.dactylMetricsJson()") {
+            o["dactyl_metrics"] = dm
+            // 落盘（量具/取回脚本读 Documents/dactyl-samples.json——与 Android filesDir 同款）
+            if let d = dm.data(using: .utf8) {
+                try? d.write(to: reportDir.appendingPathComponent("dactyl-samples.json"))
+            }
+        }
         if let st = evalJs?("__proteusSuperappState()"),
            let d = st.data(using: .utf8),
            let so = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] {
