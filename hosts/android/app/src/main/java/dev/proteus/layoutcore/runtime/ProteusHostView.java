@@ -3255,7 +3255,7 @@ public class ProteusHostView extends ViewGroup {
                     android.graphics.Path.Direction.CW);
             canvas.clipPath(clip);
         }
-        android.graphics.Paint p = GlassMaterial.buildPaint(glassBackdrop, c.x, c.y, c.w, c.h, spec);
+        android.graphics.Paint p = GlassMaterial.buildPaint(glassBackdrop, c.x, c.y, c.w, c.h, spec.radius, spec);
         if (p != null) {
             canvas.drawRect(c.x, c.y, c.x + c.w, c.y + c.h, p);
         } else {
