@@ -33,6 +33,9 @@ final class ProteusTabChrome {
     /// 壳提供的切屏出口（点 tab → 由壳走 `__proteusSuperappNav` + 重渲）。
     var onTap: ((String) -> Void)?
 
+    /** ★★壳侧探针（决策 #802）：当前 tab 名列表——"点击命中了谁"的取证入口。 */
+    var itemNames: [String] { items.map { $0.name } }
+
     private weak var host: UIView?
     private(set) var bar: UIView?
     private var spec: [String: Any] = [:]
@@ -131,12 +134,12 @@ final class ProteusTabChrome {
             cell.accessibilityIdentifier = item.name
             // 图标（可无——没声明 glyph 就不画）
             if let glyphView = makeGlyphView(item: item, width: bw) {
-                glyphView.tag = 771003
+                glyphView.tag = 771193   // ★移出 cell 段（cell = 771000..771099；同 #799 族坑）
                 cell.addSubview(glyphView)
             }
             // 文案
             let tx = UILabel(frame: CGRect(x: 0, y: 30, width: bw, height: 14))
-            tx.tag = 771004
+            tx.tag = 771194   // ★移出 cell 段
             tx.text = item.label
             tx.font = UIFont.systemFont(ofSize: CGFloat((spec["labelSize"] as? NSNumber)?.doubleValue ?? 10))
             tx.textAlignment = .center
@@ -144,7 +147,7 @@ final class ProteusTabChrome {
             // 角标（声明了 badge>0 才画；规格几何取自 tabSpec.badge）
             if item.badge > 0 {
                 let bd = UILabel(frame: CGRect(x: bw / 2 + 4, y: 4, width: 16, height: 16))
-                bd.tag = 771005
+                bd.tag = 771195   // ★移出 cell 段
                 bd.text = item.badge > 99 ? "99+" : "\(item.badge)"
                 bd.font = UIFont.systemFont(ofSize: CGFloat(badgeSpecNum("fontSize", 11)), weight: .semibold)
                 bd.textColor = .white
@@ -196,11 +199,11 @@ final class ProteusTabChrome {
         for (i, item) in items.enumerated() {
             guard let cell = bar.viewWithTag(771000 + i) else { continue }
             let tint = (item.name == current) ? on : off
-            if let ic = cell.viewWithTag(771003) {
+            if let ic = cell.viewWithTag(771193) {
                 if let iv = ic as? UIImageView { iv.tintColor = tint }
                 if let lb = ic as? UILabel { lb.textColor = tint }
             }
-            (cell.viewWithTag(771004) as? UILabel)?.textColor = tint
+            (cell.viewWithTag(771194) as? UILabel)?.textColor = tint
         }
     }
 
@@ -222,6 +225,9 @@ final class ProteusTabChrome {
         guard let cell = g.view else { return }
         let idx = cell.tag - 771000
         guard idx >= 0, idx < items.count else { return }
+        // ★★点击接收判据（决策 #802）："点 tab 不切屏"必须能当场归因——点击是否被接收（本行）
+        //   vs 接收后导航是否生效（壳的 CLI_TAB_NAV 行）。
+        NSLog("[proteus] CLI_TAB_TAP idx=%d name=%@", idx, items[idx].name)
         onTap?(items[idx].name)
     }
 

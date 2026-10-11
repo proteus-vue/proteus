@@ -244,17 +244,45 @@ static JSVM_Value AnimTickProbeCb(JSVM_Env env, JSVM_CallbackInfo info) {
     (void)info;
     int active = -1;
     if (g_scAnimHandle != 0) {
-        char* rp = proteus_layout_anim_active(g_scAnimHandle);
-        if (rp) { std::string a(rp); size_t q = a.find("\"active\":"); if (q != std::string::npos) active = atoi(a.c_str() + q + 9); proteus_layout_free_string(rp); }
+        // ★★u64 直读（2026-10-11 真机修复）：内核返回在飞动画数（非 JSON 字符串）
+        active = (int)proteus_layout_anim_active(g_scAnimHandle);
     }
     char buf[96]; snprintf(buf, sizeof(buf), "{\"ok\":true,\"active\":%d}", active);
     JSVM_Value r = nullptr; OH_JSVM_CreateStringUtf8(env, buf, JSVM_AUTO_LENGTH, &r); return r;
 }
 
+/**
+ * hostAppAnimReset(): string(JSON) —— ★★★（2026-10-11 · 真机"切页残留动画"修复）**清动画会话**。
+ *
+ * 【为什么必须由壳在每轮渲染前调（真机取证）】动画 spec 的 `nodeId` 属**该页的编号空间**；
+ *   而会话（spec/原子钟）是 **C++ 静态 = 跨页不灭**。实测故障：L3 有**无限循环动画**（圆脉冲 id=32）
+ *   ⇒ 切到 L1/L2 后，壳 `attachAnimations` 仍把 **L3 的 spec 重放到新页树** ⇒ 新页 id=32
+ *   （完全不同的元素）被施加 L3 的 scale/transform ⇒ L1 页根缩到 0.92（右缘 104px 黑带）、
+ *   L2 内容被放大（三端截图对比抓出，addr2line+像素扫描双证）。
+ * 【语义】重置后**本轮渲染内**的 `animStart`（VM 重建 ⇒ 首评即播）会重新捕获 spec ⇒
+ *   目标页自己的动画照常播放（相位从 0——与"一次性 VM 首评估即播"的既有语义一致）。
+ *   同页 pump 重挂（AppRuntimeDriver 逐拍）不经本入口 ⇒ 不打断（pump 路径的 VM 重建本就重捕获）。
+ */
+static napi_value HostAppAnimReset(napi_env env, napi_callback_info info) {
+    (void)info;
+    g_scAnimSpec.clear();
+    g_scAnimHaveSpec = false;
+    g_scAnimPending = false;
+    g_scAnimActive = false;
+    g_scAnimElapsedMs = 0;
+    OH_LOG_Print(LOG_APP, LOG_INFO, PROTEUS_APP_RT_DOMAIN, PROTEUS_APP_RT_TAG,
+                 "PROTEUS_APP_ANIM_RESET（换页/新渲染轮 ⇒ 清会话，防旧页 spec 错打新页节点）");
+    char buf[32]; snprintf(buf, sizeof(buf), "{\"ok\":true}");
+    napi_value r; napi_create_string_utf8(env, buf, NAPI_AUTO_LENGTH, &r); return r;
+}
+
 /** 从内核 tick 回执里提取 `"updates":[...]` 原文（找不到 ⇒ `[]`）。 */
 static std::string animUpdatesArray(const std::string& tickJson) {
     std::string arr = extractValueAfterKey(tickJson, "updates", '[', ']');
-    return arr.empty() ? "[]" : ("[" + arr + "]");
+    // ★★★2026-10-11 黑带 root cause 修复：extractValueAfterKey **已返回含首尾括号的完整数组**，
+    //   此前再包一层 ⇒ 三层嵌套 ⇒ ApplyNodeVisuals 把行首 "[[32" 用 strtod 读成 0
+    //   ⇒ 动画 scale 被打到 id=0（页根）⇒ L3 右缘 104px 黑带。⇒ 直接透传。
+    return arr.empty() ? "[]" : arr;
 }
 
 /**
@@ -278,8 +306,9 @@ static napi_value HostAppAnimAttach(napi_env env, napi_callback_info info) {
             char* rt = proteus_layout_anim_tick(g_scAnimHandle, 0.0f);
             if (rt) { updates = animUpdatesArray(std::string(rt)); proteus_layout_free_string(rt); }
         }
-        char* ra = proteus_layout_anim_active(g_scAnimHandle);
-        if (ra) { std::string a(ra); size_t q = a.find("\"active\":"); if (q != std::string::npos) active = atoi(a.c_str() + q + 9); proteus_layout_free_string(ra); }
+        // ★★u64 直读（2026-10-11 真机修复）：内核返回在飞动画数（非 JSON 字符串）——
+        //   此前当 char* ⇒ active>0（仅点击带在飞动画的屏）时 std::string(0x1) ⇒ SIGSEGV@0x1。
+        active = (int)proteus_layout_anim_active(g_scAnimHandle);
         if (started > 0) g_scAnimStarts += started;
         g_scAnimActive = active > 0;
         g_scAnimLastActive = active;
@@ -312,6 +341,9 @@ static napi_value HostAppAnimTick(napi_env env, napi_callback_info info) {
         char* end = nullptr; double v = strtod(p, &end); if (end != p) dt = v;
     }
     std::string updates = "[]"; int active = -1; int changed = 0;
+    // ★★无在飞（但已建树）⇒ 明确回 0（ArkTS 帧循环停判据是 active===0；-1 只表示"未建树"）——
+    //   2026-10-11：reset 之后帧循环须能停（否则空转 16ms 定时器）。
+    if (g_scAnimHandle != 0 && !g_scAnimActive) { active = 0; }
     if (g_scAnimHandle != 0 && g_scAnimActive) {
         char* rt = proteus_layout_anim_tick(g_scAnimHandle, (float)dt);
         if (rt) {

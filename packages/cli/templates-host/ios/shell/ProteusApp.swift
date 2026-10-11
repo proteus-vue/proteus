@@ -316,7 +316,11 @@ final class ProteusHostDriver {
         }
         // ★★★B（决策 #800）：tab 栏 = runtime ProteusTabChrome（本壳仅装配 + 出口）
         chrome.onTap = { [weak self] name in self?.navigate(to: name) }
-        chrome.attach(in: embedView)
+        // ★★★（决策 #802 · 真机反馈"点击切屏只有安卓正确"）：栏必须挂**自绘视图的父视图**——
+        //   加在自绘视图内部时，栏的触摸也进 **SelfDrawView 的触摸链**（它用 touchesBegan/Ended
+        //   做按下态/命中判定）⇒ 点 tab 时内核 hitTest 用栏坐标参与、干扰点击。参考壳的
+        //   `tabBarParent() = container.superview` 正是此经验（其注释记录"加 container 上被自绘层盖住"）。
+        chrome.attach(in: embedView.superview ?? embedView)
         refreshChrome()
         // ④ 上屏当前屏
         let out = renderCurrent(ctx)
@@ -364,10 +368,52 @@ final class ProteusHostDriver {
     /// 导航到指定屏（dev 重载后保留屏幕 / tab 点击）
     func navigate(to name: String) {
         guard let ctx else { return }
+        let before = currentName(ctx)
         _ = ctx.evaluateScript("__proteusSuperappNav(\(jsonEscape(name)))")
         DispatchQueue.main.async { [weak self] in
-            _ = self?.renderCurrent(ctx)
-            self?.refreshChrome()
+            guard let self else { return }
+            _ = self.renderCurrent(ctx)
+            self.refreshChrome()
+            // ★★导航判据（决策 #802）：切屏是否生效当场可归因（点击接收日志在 chrome 的 CLI_TAB_TAP）
+            NSLog("[proteus] CLI_TAB_NAV name=%@ before=%@ after=%@", name, before, self.currentName(ctx))
+        }
+    }
+
+    /// ★★命中探针（决策 #802）：对栏内每个 tab 中心做 UIKit hitTest——"点 tab 会命中的是谁"
+    ///   （命中 cell = 接收链正确；命中自绘视图/他物 = 触摸被拦）。env PROTEUS_TAB_HIT=1 触发。
+    func tabHitProbe() {
+        guard let ctx else { return }
+        guard let bar = chrome.bar else {
+            NSLog("[proteus] CLI_TAB_HIT bar_missing（tab 栏未建——state 无 tabItems？）")
+            return
+        }
+        let win = bar.window
+        let names = chrome.itemNames
+        for (i, name) in names.enumerated() {
+            guard let cell = bar.viewWithTag(771000 + i) else { continue }
+            let center = cell.convert(CGPoint(x: cell.bounds.midX, y: cell.bounds.midY), to: win)
+            var hitDesc = "nil"
+            if let h = win?.hitTest(center, with: nil) {
+                var up: UIView? = h
+                var cellHit = false
+                while let u = up, u !== win {
+                    if u.tag >= 771000 && u.tag < 771010 { cellHit = true; break }
+                    up = u.superview
+                }
+                hitDesc = "cls=\(String(describing: type(of: h))) tag=\(h.tag) cellHit=\(cellHit)"
+            }
+            NSLog("[proteus] CLI_TAB_HIT tab=%@ pt=(%.0f,%.0f) hit=%@", name, center.x, center.y, hitDesc)
+        }
+        // ★ 直调 navigate（等价于点击接收后的处理段）：验证"导航+渲染"通路本身
+        if names.count > 1 {
+            let target = names[1]
+            let before = currentName(ctx)
+            navigate(to: target)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                let after = self.map { $0.currentName(ctx) } ?? ""
+                NSLog("[proteus] CLI_TAB_DIRECT name=%@ before=%@ after=%@ ok=%@", target, before, after, after == target ? "true" : "false")
+                if ProcessInfo.processInfo.environment["PROTEUS_TAB_EXIT"] == "1" { exit(0) }
+            }
         }
     }
 
@@ -711,6 +757,13 @@ final class ProteusSceneDelegate: UIResponder, UIWindowSceneDelegate {
                     NSLog("[proteus] CLI_SNAPSHOT_READY %dx%d", Int(win.bounds.width), Int(win.bounds.height))
                 }
                 if ProcessInfo.processInfo.environment["PROTEUS_PROBE_EXIT"] == "1" { exit(0) }
+            }
+        }
+        // ★★tab 命中探针（决策 #802 · 真机反馈"点击切屏只有安卓正确"）：env 触发 ⇒ 对栏内每个 tab
+        //   中心做 UIKit hitTest（命中 cell = 接收链正确）+ 直调 navigate 验证导航通路，取日志后自退。
+        if ProcessInfo.processInfo.environment["PROTEUS_TAB_HIT"] == "1" {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
+                self?.driver?.tabHitProbe()
             }
         }
         // ★探测模式（PROTEUS_INTERACTION_PROBE=1）⇒ **不在此退**（探针异步，需等它跑完并自行退出）

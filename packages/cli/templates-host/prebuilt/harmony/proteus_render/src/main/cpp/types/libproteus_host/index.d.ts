@@ -43,3 +43,6 @@ export const hostAppAnimAttach: () => string;
 export const hostAppAnimTick: (json: string) => string;
 /** ★动画/泵会话读数（判据/报告）：`{starts,attaches,ticks,changed,active,elapsed_ms,have_spec,pump:{…}}` */
 export const hostAppAnimStats: () => string;
+/** ★★★切页残留动画修复（2026-10-11）：清动画会话（旧页 spec 的 nodeId 属旧页编号空间——
+ *   不清会把旧页动画错打到新页同 id 节点）。壳每轮渲染/点按导航前调；返回 `{"ok":true}`。 */
+export const hostAppAnimReset: () => string;

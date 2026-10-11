@@ -35,6 +35,8 @@ import {
   // ★★★B · 能力归 runtime（决策 #800）：**tab 栏 chrome 唯一实现**——任何鸿蒙壳装配一次即得
   //   （此前本壳**整个没有 tab 栏**——"换壳丢能力"的实证；签约一打通就会撞上）。
   ProteusTabChrome,
+  // ★★★切页残留动画修复（2026-10-11）：每轮渲染前清动画会话（旧页 spec 错打新页节点）
+  hostAppAnimReset,
 } from 'proteus_render';
 // ★★★dev 通道（决策 #728）：变体常量 + dev-watch/角标（**dev 调试件**，release 门控不创建——守宿主定位 #727）。
 import { DEV, DEV_URL } from './ProteusBuildConfig';
@@ -611,6 +613,11 @@ struct MainPage {
   /** 把**当前页**真画到屏上（运行期实例化 → appScreenCommands → renderCommands） */
   private renderCurrent(): void {
     const t0: number = Date.now();
+    // ★★★切页残留动画修复（2026-10-11 · 真机"切页后右缘黑带/内容放大"）：动画会话的 spec 带
+    //   **旧页的 nodeId**（编号空间随页重排）——不清会把旧页动画错打到新页同 id 节点
+    //   （实测 L3 圆脉冲 id=32 切到 L1 后把 L1 的 id=32 缩到 0.92）。本轮渲染内 VM 重建
+    //   （首评即播）会重新捕获目标页自己的 spec ⇒ 目标页动画照常。
+    try { hostAppAnimReset(); } catch (e) { /* 复位失败不阻断渲染 */ }
     const page: string = this.current;
     let nodes: string = this.nodesByPage.get(page) ?? '[]';
     const disp = display.getDefaultDisplaySync();
@@ -814,10 +821,16 @@ struct MainPage {
       const o = JSON.parse(out) as Record<string, Object>;
       const dr = o['drive'] as Record<string, Object> | undefined;
       if (dr !== undefined) {
+        // ★★字段修正（决策 #802 · 真机反馈"点击切屏只有安卓正确"）：drive 状态形如
+        //   `{pending,log,state}`——**current 在 state 里**（dr['current'] 不存在 ⇒ 此前 this.current
+        //   永不更新 ⇒ 点 tab 后仍渲染旧屏）。chromeStateJson 与 current 都从 state 取。
         const st = dr['state'] as Record<string, Object> | undefined;
-        if (st !== undefined && st !== null) { this.chromeStateJson = JSON.stringify(st); }
-        const cur = dr['current'] as string | undefined;
-        if (cur !== undefined && cur.length > 0) { this.current = cur; }
+        if (st !== undefined && st !== null) {
+          this.chromeStateJson = JSON.stringify(st);
+          const cur = st['current'] as string | undefined;
+          if (cur !== undefined && cur.length > 0) { this.current = cur; }
+        }
+        hilog.info(DOMAIN, TAG, 'SWITCH_TAB tab=%{public}s current=%{public}s', tabName, this.current);
       }
       this.renderCurrent();
     } catch (e) {
@@ -827,6 +840,8 @@ struct MainPage {
 
   private onTapAt(vpX: number, vpY: number): void {
     if (this.bundle.length === 0) return;
+    // ★★★切页残留动画修复（2026-10-11）：点内容也可能触发导航/动画 ⇒ 同 renderCurrent 清会话
+    try { hostAppAnimReset(); } catch (e) { /* 不阻断 */ }
     this.stopMomentum();
     try {
       const contentY: number = vpY + this.scrollOffset;
