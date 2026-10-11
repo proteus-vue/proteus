@@ -29,6 +29,9 @@ import { bundleManager } from '@kit.AbilityKit';
 import {
   attach, renderCommands, scrollRoot, clearRoot,
   appScreenCommands, appScreenContentHeight, appScreenHitAt, appScreenNodeRect, hostAppRender, hostAppEval,
+  // ★★★v-pump / 跳变驱动动画（决策 #796）：唯一实现在 runtime HAR 的 `AppRuntimeDriver`——
+  //   本壳**零驱动代码**（装配一次即得全部能力；换壳不漏接）。
+  AppRuntimeDriver,
 } from 'proteus_render';
 // ★★★dev 通道（决策 #728）：变体常量 + dev-watch/角标（**dev 调试件**，release 门控不创建——守宿主定位 #727）。
 import { DEV, DEV_URL } from './ProteusBuildConfig';
@@ -88,6 +91,12 @@ struct MainPage {
   private scrollByScreen: Map<string, number> = new Map<string, number>();
   /** 上次 hostAppRender 返回的 snapshot（`{屏名:{变量:值}}`）——下次新 VM 回灌 state */
   private runtimeState: Record<string, Object> | null = null;
+  /* ══════════ ★★★v-pump / 跳变驱动动画（决策 #796：**归 runtime——壳内零驱动代码**）══════════
+   * 唯一实现在 runtime HAR 的 `AppRuntimeDriver`（`proteus_render` 导出）：泵周期驱动（按 pumpHz 起
+   * 定时器 + 批大小自适应）+ 动画挂树/帧循环。**任何鸿蒙壳（本模板壳 / 参考宿主 / 未来新壳）
+   * 装配一次即得全部能力**——不再各壳各写一份（"同一能力多消费者逐条接线"的反模式，用户点名）。
+   * 本壳只：① 装配 driver（给最小上下文 + 回执出口）② 回执后 `onRenderReply` ③ 销毁 `stop()`。 */
+  private driver: AppRuntimeDriver | null = null;
   /** ★内置环境变量表（决策 #593）：安全区避免区（vp）——`appScreenCommands` 的 env token 替换用。 */
   private envVars: Record<string, number> = {};
   /** ★vsync 帧源（`displaySync`，CADisplayLink/Choreographer 同族）——惯性逐帧驱动；不对齐 vsync 会攒批跳变。 */
@@ -537,6 +546,7 @@ struct MainPage {
 
   aboutToDisappear(): void {
     this.stopMomentum();
+    if (this.driver !== null) { this.driver.stop(); }   // ★v-pump/动画（决策 #796）：driver 自停定时器
     if (this.dSync !== null) { try { this.dSync.stop(); } catch (e) { /* 无 */ } }
     if (this.devWatch !== null) { this.devWatch.stop(); }
     if (this.devFrameSync !== null) { try { this.devFrameSync.stop(); } catch (e) { /* 无 */ } }
@@ -556,6 +566,39 @@ struct MainPage {
     const snap = rt['snapshot'];
     if (snap !== undefined && snap !== null) {
       try { this.runtimeState = snap as Record<string, Object>; } catch (e) { /* 保持旧态（不静默） */ }
+    }
+  }
+
+  /* ══════════ ★★★v-pump / 跳变驱动动画（决策 #796：**壳内零驱动代码**）══════════
+   * 唯一实现在 runtime HAR 的 `AppRuntimeDriver`（见其文件头）。本壳只装配 + 转发回执。 */
+
+  /** 装配 driver（惰性一次）。★构造 = **回调分解**（ArkTS 禁跨模块接口字面量）。 */
+  private ensureDriver(): AppRuntimeDriver {
+    if (this.driver === null) {
+      this.driver = new AppRuntimeDriver(
+        (): string => this.bundle,
+        (): string => this.current,
+        (): number => MainPage.vpW,
+        (): number => MainPage.vpH,
+        (): Record<string, Object> | null => this.runtimeState,
+        (rt: Record<string, Object>): void => this.onRuntimeReply(rt),
+      );
+    }
+    return this.driver;
+  }
+
+  /** ★driver 的回执出口（宿主自有逻辑：存 snapshot / 项目 console / 拿新树上屏 + dev 树）。 */
+  private onRuntimeReply(rt: Record<string, Object>): void {
+    this.saveSnapshot(rt);
+    this.drainProjectConsole(rt);
+    const tree = rt['tree'] as Record<string, Object> | undefined;
+    const cur = rt['current'] as string | undefined;
+    if (cur !== undefined && cur.length > 0) { this.current = cur; }
+    if (tree && Array.isArray(tree['nodes'])) {
+      const nodes: string = JSON.stringify(tree['nodes']);
+      this.nodesByPage.set(this.current, nodes);
+      if (this.devWatch !== null) { this.pendingTreeJson = JSON.stringify(tree); }
+      this.paintTree(this.current, nodes);
     }
   }
 
@@ -593,12 +636,16 @@ struct MainPage {
           // 屏名以**实际渲染的 current** 为准（boot 后路由 current 恒为 index，会盖掉真实当前屏）
           const cur = rt['current'] as string;
           if (cur !== undefined && cur.length > 0) { this.current = cur; }
+          // ★★★v-pump / 动画（决策 #796）：**归 runtime** 的 driver 接棒（起/停泵 + 动画挂树重放）
+          this.ensureDriver().onRenderReply(rt);
         } catch (re) {
           hilog.error(DOMAIN, TAG, 'HOST_PAGE_RUNTIME_ERROR %{public}s', JSON.stringify(re) ?? '');
           this.devLog('error', 'runtime error: ' + (JSON.stringify(re) ?? ''));
         }
       }
       this.paintTree(this.current, nodes);
+      // ★★★跳变驱动动画（决策 #796：归 runtime）——挂树 + 重放（规格在 native 会话里）
+      this.ensureDriver().onRenderReply({});
     } catch (e) {
       hilog.error(DOMAIN, TAG, 'HOST_PAGE_RENDER_ERROR %{public}s', JSON.stringify(e) ?? '');
     }
@@ -750,6 +797,8 @@ struct MainPage {
         if (this.devWatch !== null) { this.pendingTreeJson = JSON.stringify(tree); }
       }
       this.paintTree(this.current, nodes);
+      // ★★★v-pump / 跳变驱动动画（决策 #796：归 runtime）：tap 后同步（可能切到有泵/无泵的屏）+ 动画挂树
+      this.ensureDriver().onRenderReply(rt);
       // ★dev 事件 trace（决策 #728 → 面板 Events）：命中 → 导航。`handled`/`fired` 由运行期返回（本批最简：handled=导航是否发生）。
       if (this.devWatch !== null) {
         const handled: boolean = target !== undefined && target.length > 0 && target !== prev;
