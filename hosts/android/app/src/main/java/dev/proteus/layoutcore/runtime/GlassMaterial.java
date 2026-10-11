@@ -58,24 +58,18 @@ public final class GlassMaterial {
             + "    float gy = glassH(uv + float2(0.0, e)) - glassH(uv - float2(0.0, e));\n"
             + "    float2 disp = float2(gx, gy) * refractAmt;\n"
             + "    float2 c = rectOrigin + (uv - disp) * size;\n"
-            + "    // ② 环形模糊（13 点）——半径 ~blur，frosted 而不发白\n"
-            + "    float r = max(blur, 0.0) * 0.75;\n"
-            + "    half4 acc = content.eval(c);\n"
-            + "    acc += content.eval(c + float2(r, 0.0));\n"
-            + "    acc += content.eval(c + float2(-r, 0.0));\n"
-            + "    acc += content.eval(c + float2(0.0, r));\n"
-            + "    acc += content.eval(c + float2(0.0, -r));\n"
-            + "    float d = r * 0.7071;\n"
-            + "    acc += content.eval(c + float2(d, d));\n"
-            + "    acc += content.eval(c + float2(-d, d));\n"
-            + "    acc += content.eval(c + float2(d, -d));\n"
-            + "    acc += content.eval(c + float2(-d, -d));\n"
-            + "    float r2 = r * 0.5;\n"
-            + "    acc += content.eval(c + float2(r2, r2));\n"
-            + "    acc += content.eval(c + float2(-r2, r2));\n"
-            + "    acc += content.eval(c + float2(r2, -r2));\n"
-            + "    acc += content.eval(c + float2(-r2, -r2));\n"
-            + "    half4 col = acc / 13.0;\n"
+            + "    // ② 加权高斯核（多环 + 权重；总权重归一 ⇒ 亮度不变，比等权盒式平滑，消条痕）\n"
+            + "    float r = max(blur, 0.0) * 0.5;\n"
+            + "    half4 acc = content.eval(c) * 0.12;\n"
+            + "    float w1 = 0.06, w2 = 0.035, w3 = 0.015;\n"
+            + "    for (int k = 0; k < 8; k++) {\n"
+            + "        float a = float(k) * 0.7853981;\n"                       // 45 度步进
+            + "        float2 dir = float2(cos(a), sin(a));\n"
+            + "        acc += content.eval(c + dir * r) * w1;\n"
+            + "        acc += content.eval(c + dir * (r * 2.0)) * w2;\n"
+            + "        acc += content.eval(c + dir * (r * 3.0)) * w3;\n"
+            + "    }\n"
+            + "    half4 col = acc;\n"
             + "    // ③ 饱和提彩 + 微对比\n"
             + "    half lum = dot(col.rgb, half3(0.299, 0.587, 0.114));\n"
             + "    col.rgb = mix(half3(lum), col.rgb, half(saturation));\n"
@@ -126,9 +120,9 @@ public final class GlassMaterial {
             sh.setFloatUniform("size", w, h);
             sh.setFloatUniform("blur", spec.blur);
             sh.setFloatUniform("saturation", spec.saturation);
-            sh.setFloatUniform("refractAmt", 0.5f);   // 法线折射强度（按高度场梯度位移）
-            sh.setFloatUniform("specular", 0.16f); // 镜面高光边
-            sh.setFloatUniform("contrast", 1.06f); // 微对比（更"透亮"）
+            sh.setFloatUniform("refractAmt", 0.09f);  // 法线折射强度（★极克制——iOS 几乎不扭背景）
+            sh.setFloatUniform("specular", 0.10f);    // 镜面高光边（subtle）
+            sh.setFloatUniform("contrast", 1.0f);     // 中性（iOS 不加强对比）
             float a = ((spec.tint >>> 24) & 0xFF) / 255f;
             float r = ((spec.tint >> 16) & 0xFF) / 255f;
             float g = ((spec.tint >> 8) & 0xFF) / 255f;
