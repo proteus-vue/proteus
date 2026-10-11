@@ -1,19 +1,14 @@
 <template>
-  <!-- ★★★内联样式（2026-10-11）：WebGL canvas 在**首次绘制提交合成之前**，HTML 解析到的那一瞬、
-       某些内核（QQ浏览器 X5 / 部分 Chromium）会把它合成成**白色块**（刷新闪白）。
-       两层防护（都走内联 style——不依赖外部 CSS 加载时序）：
-         ① `visibility:hidden`：canvas **初始即隐藏**（不参与绘制/不提升合成层）；`onReady`（首个真实
-            rAF 帧 = 内容已交合成器）后再置 visible（见 script）。★用 visibility 而非 opacity：
-            opacity 仍会让元素参与合成（部分内核先铺白底再上透明度）+ transition 有半透明中间态。
-         ② `background: var(--bg,#0b0b0f)`：兜底——即使某内核把"未绘制 canvas"显示出来，透出的也是
-            **深色**（与页面底色同），而非白；WebGL 内容绘制后覆盖其上（透明处透出深色 = 无缝）。 -->
-  <canvas
-    ref="cv"
-    class="wf-canvas"
-    :class="{ 'is-off': off }"
-    style="visibility: hidden; background: var(--bg, #0b0b0f)"
-    aria-hidden="true"
-  />
+  <!-- ★★★2026-10-11「刷新瞬间 canvas 闪白」**根治（第二轮）**：
+       第一轮用 `visibility:hidden` + 深色 `background` 隐藏，但**部分内核**（QQ 浏览器 X5 / 部分旧 Chromium）
+       会**无视 CSS** 把「未绘制的 WebGL canvas」直接合成成**白块** ⇒ 只要 canvas 在 HTML 里（哪怕 hidden），
+       从「元素入 DOM」到「GL 内容提交合成器」之间仍会闪白。
+       ⇒ **治本 = canvas 在绘出首帧之前根本不进 DOM**：本组件只渲染一个**尺寸占位盒**（下面的 <div>），
+          canvas 由脚本 createElement、待 GL 首帧就绪（`onReady`）后才 appendChild 进来 —— DOM 生命周期内
+          **不存在「未绘制 canvas」这一状态**，白块从根上不再可能。占位盒 = 原 canvas 的定位盒（沿用外层类）。
+       ★canvas 保持**透明**（不设 background）——恢复 2026-09-11 原始设计：线框发光叠在页面/容器渐变之上，
+         而不是一块实底色（第一轮的深色 background 会盖住 chan-stage / cta-panel 的紫色渐变，属回归）。 -->
+  <div ref="host" class="wf-host" :class="{ 'is-off': off }" aria-hidden="true" />
 </template>
 
 <script setup lang="ts">
@@ -21,16 +16,11 @@
 //   ★2026-09-11：官网「炫技」元素回归——旧版是粒子场 + 3D 萌宠（AI 感重）；改为**工程精确风**的
 //   线框几何体（icosahedron）：单色品牌紫、慢速旋转、深度衰减、边缘流光——零第三方依赖（无 three.js）。
 //   价值主张：官网即框架编译产物，这块手写 WebGL 是「同一套工程标准」的自证（参见 visual/wireframe.ts）。
-//   降级链：WebGL 不可用 → 引擎返回 null → canvas 隐藏；prefers-reduced-motion → 静态单帧。
+//   降级链：WebGL 不可用 → 引擎返回 null → 占位盒隐藏（布局不受影响）；prefers-reduced-motion → 静态单帧。
 //
-//   ★★★2026-10-11「刷新一瞬间 canvas 闪白」**根治**：WebGL canvas 在"首次绘制内容提交合成器"之前，
-//   浏览器（尤其国产内核）会把它合成成**白色块**。★**为什么用 visibility 而非 opacity**：
-//     · `opacity:0` 仍会让元素**参与合成**（部分内核先给它铺一层白底再应用透明度）+ 带 transition 时有
-//       半透明**中间态**（就是用户看到的"闪一下"）；`visibility:hidden` **完全不绘制**该元素，最强。
-//     · 且用**内联 style**（HTML 属性）而非 CSS 类——类要等样式表加载才生效，内联在 HTML 解析时即隐藏，
-//       覆盖"样式表到达前"的窗口（FOUC 同源）。
-//   ★就绪信号 = `createWireframeCore` 的 `onReady`（**首个真实 rAF 帧**回调——已进入浏览器帧时序、内容已交
-//     合成器，比"同步 draw 后立刻显示"更可信）。★兜底 `setTimeout`：后台标签页 rAF 被节流时仍能显示。
+//   ★★★2026-10-11 白闪治理（见上方模板注释）：**canvas 首帧就绪后才插入 DOM**。就绪信号 = `onReady`
+//   （`createWireframeCore` 在「首个真实 rAF 帧」或「still 静态帧」时回调；且引擎创建时已同步 draw +
+//   gl.finish 一帧 ⇒ 即便走 setTimeout 兜底插入，也已是有内容的一帧，不是空白）。
 import { onMounted, onUnmounted, ref } from 'vue'
 import { createWireframeCore, type WireframeHandle } from '../visual/wireframe'
 
@@ -45,9 +35,10 @@ const props = defineProps({
   scale: { type: Number, default: 0.82 },
 })
 
-const cv = ref<HTMLCanvasElement | null>(null)
+const host = ref<HTMLDivElement | null>(null)
 const off = ref(false)
 let handle: WireframeHandle | null = null
+let canvas: HTMLCanvasElement | null = null
 
 /** hex → 0..1 三元组（容错：非 hex 回退品牌紫） */
 function hexToRgb01(hex: string): [number, number, number] {
@@ -58,43 +49,57 @@ function hexToRgb01(hex: string): [number, number, number] {
 }
 
 onMounted(() => {
-  const el = cv.value
+  const el = host.value
   if (!el) return
-  // 就绪 ⇒ 由隐藏转可见（直接改内联 style，不经响应式延迟）。幂等。
+
+  // 创建 canvas（**暂不入 DOM**）——按占位盒的真实像素尺寸量好，传给引擎绘首帧（入 DOM 前 clientWidth=0，
+  // 引擎用 opts.width/height 兜底，见 visual/wireframe.ts 的 resize()）。
+  const rect = el.getBoundingClientRect()
+  // 无框架原语：须创建**游离（未挂载）** canvas 元素（治白闪的关键——首帧前不进 DOM）。
+  const cv = document.createElement('canvas') // d2-exempt: 无框架原语——须创建游离（未挂载）元素，框架无此举原语
+  cv.setAttribute('aria-hidden', 'true')
+  cv.style.display = 'block'
+  cv.style.width = '100%'
+  cv.style.height = '100%'
+  cv.style.pointerEvents = 'none'
+  canvas = cv
+
+  // 幂等：仅当占位盒仍在文档中、且 canvas 尚未插入时插入。
   const reveal = (): void => {
-    if (el.style.visibility !== 'visible') el.style.visibility = 'visible'
+    if (!host.value || !canvas || canvas.parentNode) return
+    host.value.appendChild(canvas)
   }
+
   const reduce = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
-  handle = createWireframeCore(el, {
+  handle = createWireframeCore(cv, {
     color: hexToRgb01(props.color),
     alpha: props.alpha,
     speed: props.speed,
     scale: props.scale,
     still: reduce,
+    width: rect.width,
+    height: rect.height,
     onReady: reveal,
   })
   if (!handle) {
-    // WebGL 不可用 → 隐藏 canvas（布局不受影响；装饰层缺失可接受）
+    // WebGL 不可用 → 隐藏占位盒（布局不受影响；装饰层缺失可接受）
     off.value = true
-    el.style.visibility = 'visible' // off 走 display:none，无需再藏
     return
   }
-  // ★兜底：后台标签页 rAF 被节流 ⇒ 若迟迟不触发 onReady，超时后也显示（避免装饰永久缺失）。
+  // 兜底：后台标签页 rAF 被节流 ⇒ 迟迟不触发 onReady 时也要把 canvas 放进来（避免装饰永久缺失）。
+  // 此时引擎创建时已**同步绘制过一帧**（createWireframeCore 内 draw() + gl.finish()），故插入的不是空白。
   setTimeout(reveal, 700)
 })
 
 onUnmounted(() => {
   handle?.destroy()
   handle = null
+  canvas?.remove()
+  canvas = null
 })
 </script>
 
 <style scoped>
-.wf-canvas {
-  display: block;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-}
-.wf-canvas.is-off { display: none; }
+/* canvas 由脚本在 GL 首帧就绪后插入本占位盒；WebGL 不可用 ⇒ 整盒隐藏（布局不受影响）。 */
+.wf-host.is-off { display: none; }
 </style>

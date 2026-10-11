@@ -19,9 +19,13 @@ export interface WireframeOptions {
   still?: boolean
   /** 投影缩放（几何体在画布内的占比；默认 0.82） */
   scale?: number
-  /** ★首帧**已真就绪**回调（首个 `gl.finish()` 之后触发）——调用方据此把 canvas 由隐藏转为可见
-   *  （比 rAF 计时更可靠的"内容已提交"信号，防 WebGL canvas 首帧白闪）。 */
+  /** ★首帧**已真就绪**回调（首个真实 rAF 帧后触发）——调用方据此把 canvas **插入 DOM**（见下）。
+   *  ★★2026-10-11 治本：部分内核（X5/旧 WebView）会把"未绘制的 WebGL canvas"**画成白色**（忽略 CSS 背景）
+   *    ⇒ 治本 = **canvas 绘制首帧后才插入 DOM**（DOM 里永不出现未绘制 canvas）。故本回调用于"插入"时机。 */
   onReady?: () => void
+  /** 初始尺寸（canvas **尚未入 DOM** 时 `clientWidth` 为 0 ⇒ 用它兜底，保证首帧按真实尺寸绘制）。 */
+  width?: number
+  height?: number
 }
 
 export interface WireframeHandle {
@@ -165,8 +169,13 @@ export function createWireframeCore(canvas: HTMLCanvasElement, opts: WireframeOp
 
   const resize = (): void => {
     const dpr = Math.min((typeof window !== 'undefined' && window.devicePixelRatio) || 1, maxDpr)
-    const w = Math.max(1, Math.round(canvas.clientWidth * dpr))
-    const h = Math.max(1, Math.round(canvas.clientHeight * dpr))
+    // ★canvas **尚未入 DOM** 时 `clientWidth/clientHeight` 为 0 ⇒ 回退到 opts 传入的初始尺寸
+    //   （保证"入 DOM 前的首帧"按真实尺寸绘制，而不是被压成 1×1 —— 那会在插入 DOM 的第一帧
+    //   闪出一个错误纵横比的小画面）。入 DOM 后 clientWidth 恢复真实值，自动接管。
+    const cw = canvas.clientWidth || opts.width || 0
+    const ch = canvas.clientHeight || opts.height || 0
+    const w = Math.max(1, Math.round(cw * dpr))
+    const h = Math.max(1, Math.round(ch * dpr))
     if (canvas.width !== w || canvas.height !== h) {
       canvas.width = w
       canvas.height = h

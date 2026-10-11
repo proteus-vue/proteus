@@ -116,7 +116,7 @@ Preset builders registry: name → preset source file.
 
 ### `router.tabBar`
 
-- **Type**: `{ color?: string selectedColor?: string list: Array<{ name: string text: string icon?: string }> }`
+- **Type**: `{ color?: string selectedColor?: string list: Array<{ name: string text?: string icon?: string glyph?: string badge?: number }> }`
 - **Required**: No
 
 Native tabBar declaration (`color` / `selectedColor` / `list`).
@@ -137,7 +137,7 @@ Selected text color (e.g. `#7c5cff`).
 
 ### `router.tabBar.list`
 
-- **Type**: `Array<{ name: string text: string icon?: string }>`
+- **Type**: `Array<{ name: string text?: string icon?: string glyph?: string badge?: number }>`
 - **Required**: Yes
 
 The tab list (order = display order; `name` = route name).
@@ -152,7 +152,7 @@ Route name (matches the page name).
 ### `router.tabBar.list.<entry>.text`
 
 - **Type**: `string`
-- **Required**: Yes
+- **Required**: No
 
 Tab label.
 
@@ -162,6 +162,20 @@ Tab label.
 - **Required**: No
 
 Icon path (optional).
+
+### `router.tabBar.list.<entry>.glyph`
+
+- **Type**: `string`
+- **Required**: No
+
+App 端字形：符号字符（如 `⌂`）或 `sym:<name>` 系统符号语义名（各端 runtime 自带映射）。Web/MP 不消费
+
+### `router.tabBar.list.<entry>.badge`
+
+- **Type**: `number`
+- **Required**: No
+
+App 端静态角标数（>0 显示；如未读数 3）。动态更新（运行期 setBadge）为后续通道
 
 ### `router.pages`
 
