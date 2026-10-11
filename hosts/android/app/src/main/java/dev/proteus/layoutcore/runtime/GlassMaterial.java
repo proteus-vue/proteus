@@ -70,35 +70,33 @@ public final class GlassMaterial {
             + "    float bend = circleMap(1.0 - ec) * refractDepthPx;\n"
             + "    bend *= smoothstep(1.0, 0.75, e);\n"                          // 内缘 C1 淡出（防环痕）
             + "    float2 sp = coord + n * bend;\n"                              // ★向外采样（卷边界外内容进边缘）
-            // ③ 模糊**按 e 键控**：边缘锐、中心糊（先折后糊）——加权核（归一保亮度）
-            + "    float br = max(blur, 0.0) * e;\n"
-            + "    half4 acc = content.eval(sp) * 0.12;\n"
-            + "    float w1 = 0.062, w2 = 0.036, w3 = 0.012;\n"                   // 中心+8向×(w1+w2+w3)：总权重 = 1.0（保亮度）
+            // ③ 模糊**按 e 键控**（边缘锐、中心糊）——★核最大半径 = blur（此前 3×blur≈84px ⇒ 内容全糊没）
+            + "    float br = max(blur, 0.0) * e * 0.55;\n"
+            + "    half4 acc = content.eval(sp) * 0.20;\n"
+            + "    float w1 = 0.058, w2 = 0.030, w3 = 0.012;\n"                   // 中心0.20 + 8向×(w1+w2+w3)=0.80：总权重 = 1.0
             + "    for (int k = 0; k < 8; k++) {\n"
             + "        float a = float(k) * 0.7853981;\n"
             + "        float2 dir = float2(cos(a), sin(a));\n"
-            + "        acc += content.eval(sp + dir * br) * w1;\n"
-            + "        acc += content.eval(sp + dir * (br * 2.0)) * w2;\n"
-            + "        acc += content.eval(sp + dir * (br * 3.0)) * w3;\n"
+            + "        acc += content.eval(sp + dir * (br * 0.5)) * w1;\n"
+            + "        acc += content.eval(sp + dir * br) * w2;\n"
+            + "        acc += content.eval(sp + dir * (br * 1.6)) * w3;\n"
             + "    }\n"
             + "    half4 col = acc;\n"
-            // ④ 磨砂去饱和 + 提彩 + 微对比
+            // ④ 去饱和（frost 冲淡色彩）+ 提彩 + 微对比
             + "    half lum = dot(col.rgb, half3(0.299, 0.587, 0.114));\n"
-            + "    col.rgb = mix(col.rgb, half3(lum), half(0.62));\n"
+            + "    col.rgb = mix(col.rgb, half3(lum), half(0.30));\n"
             + "    col.rgb = mix(half3(lum), col.rgb, half(saturation));\n"
             + "    col.rgb = (col.rgb - 0.5) * half(contrast) + 0.5;\n"
-            // ⑤ tint + 磨砂白 frost（iOS 更奶白去饱和）
+            // ⑤ tint + 少量磨砂白（★iOS 内容仍**可辨认**——frost 只轻提亮不透死）
             + "    col.rgb = mix(col.rgb, col.rgb * half3(tint.rgb) * 2.0, half(tint.a));\n"
-            + "    col.rgb = mix(col.rgb, half3(0.99, 0.995, 1.0), half(0.62 + tint.a * 0.3));\n"
-            // ⑥ 光照：Fresnel + 法线·光源（双瓣）；★顶部加权（光来自上方——侧/底几乎不亮 = iOS）
-            + "    float uvTop = clamp((coord.y - rectOrigin.y) / size.y, 0.0, 1.0);\n"
-            + "    float topW = 0.15 + 0.85 * (1.0 - uvTop);\n"
+            + "    col.rgb = mix(col.rgb, half3(0.99, 0.995, 1.0), half(0.16 + tint.a * 0.2));\n"
+            // ⑥ 光照：Fresnel + 法线·光源（双瓣）；**四周对称**（无顶部加权）
             + "    float cosI = inversesqrt(1.0 + slope * slope);\n"
             + "    float f0 = (1.5 - 1.0) / (1.5 + 1.0); f0 *= f0;\n"
             + "    float fres = f0 + (1.0 - f0) * pow(max(1.0 - cosI, 0.0), 5.0);\n"
             + "    float facing = max(dot(n, normalize(lightDir)), 0.0);\n"
             + "    float bevelMask = 1.0 - smoothstep(0.0, 0.35, e);\n"           // 亮带仅在外缘
-            + "    float rim = (pow(facing, 6.0) * specular + fres * 0.22) * bevelMask * topW;\n"
+            + "    float rim = (pow(facing, 6.0) * specular + fres * 0.12) * bevelMask;\n"
             + "    col.rgb = min(col.rgb + half3(rim), half3(1.0));\n"
             + "    col.a = 1.0;\n"
             + "    return col;\n"
