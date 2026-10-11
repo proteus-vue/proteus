@@ -5,6 +5,7 @@
 //   ② 正常字号下 = height（即 52，零视觉回归）；③ 字号变大 ⇒ contentHeight 随之变大（撑高不裁切）。
 import { describe, it, expect } from 'vitest'
 import { TAB_BAR_SPEC } from '../packages/render-backend/src/tab-bar-spec'
+import { getGlassPreset } from '../packages/glass/src/index'
 
 describe('★★TAB_BAR_SPEC：内容区有效高 contentHeight（字号可变 ⇒ 内容区自适应）', () => {
   it('contentHeight ≥ height（内容区最小高语义）', () => {
@@ -34,5 +35,17 @@ describe('★★TAB_BAR_SPEC：内容区有效高 contentHeight（字号可变 �
     const big = max52(blockH(TAB_BAR_SPEC.iconSize * 2, TAB_BAR_SPEC.labelSize * 2))
     expect(base).toBe(TAB_BAR_SPEC.contentHeight)   // 正常字号 = 规格值
     expect(big).toBeGreaterThan(TAB_BAR_SPEC.contentHeight) // 字号大 ⇒ 撑高
+  })
+})
+
+describe('★★TAB_BAR_SPEC.glass：值 == @proteus-vue/glass 的 tabBar preset（单一真源，防漂移）', () => {
+  it('glass 规格非空且与玻璃 SSOT 的 tabBar preset 逐字段一致', () => {
+    // ★#803 教训：「规格自述基准」≠「规格等于基准」——门禁须钉 `值 == 基准源`。
+    const preset = getGlassPreset('tabBar')
+    expect(TAB_BAR_SPEC.glass, 'glass 规格应存在（期 B 起 tab 栏玻璃）').toBeTruthy()
+    expect(TAB_BAR_SPEC.glass!.blur).toBe(preset.blur)
+    expect(TAB_BAR_SPEC.glass!.tint).toBe(preset.tint)
+    expect(TAB_BAR_SPEC.glass!.border).toBe(preset.border)
+    expect(TAB_BAR_SPEC.glass!.borderSide).toBe(preset.borderSide)
   })
 })

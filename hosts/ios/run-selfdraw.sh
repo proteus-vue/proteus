@@ -69,7 +69,7 @@ elif [ -z "${PROTEUS_BUNDLE_ID:-}" ]; then
     rm -f "$_tmp_pl"
     # 过期检查（_exp 形如 "2026-10-08 01:41:55 +0000"；用 date 比较）
     if [ -n "$_appid" ]; then
-      _epoch="$(date -j -f "%Y-%m-%d %H:%M:%S %z" "$_exp" +%s 2>/dev/null || echo 0)"
+      _epoch="$(date -j -f "%a %b %d %H:%M:%S %Z %Y" "$_exp" +%s 2>/dev/null || echo 0)"
       if [ "$_epoch" -gt "$(date +%s)" ]; then
         _AUTO_ID="${_appid#*.}"      # 去 TEAM. 前缀
         : > /tmp/proteus-ios-autoid-log; echo "auto: $_appid (exp $_exp)" >> /tmp/proteus-ios-autoid-log

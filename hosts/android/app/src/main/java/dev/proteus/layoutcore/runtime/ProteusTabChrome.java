@@ -198,6 +198,13 @@ public final class ProteusTabChrome {
         final int onColor = specColor("brand", 0xFF5B5BD6);
         final int offColor = specColor("text3", 0xFF5F6673);
         final int surface = specColor("surface", 0xFFFFFFFF);
+        // ★★★OS 级悬浮玻璃（期 B / 决策 #816）：有 `glass` 规格 ⇒ tab 栏用**半透明面**（内容透出）。
+        //   ★诚实边界：Android 对**容器级实时背景模糊**没有 UIVisualEffectView 等价物（`RenderEffect`
+        //     只作用于 View 自身内容、非"背后像素"；`Window.setBackgroundBlurRadius` 是全屏窗口级、
+        //     非任意子 View）。按玻璃方案 06 的降级：**半透明实色**（content 透出、无模糊）。
+        //   → iOS（UIVisualEffectView）/鸿蒙（.backdropBlur）为真模糊，Android 为降级半透明。
+        final boolean hasGlass = spec.opt("glass") != null;
+        final int glassSurface = hasGlass ? ((surface & 0x00FFFFFF) | 0xE6000000) : surface;   // 0.9 alpha
         final int lineColor = specColor("line", 0xFFDCDFE5);
         final int recColor = specColor("badgeBg", 0xFFD64545);
 
@@ -208,7 +215,7 @@ public final class ProteusTabChrome {
         wrapper.setLayoutParams(wlp);
         // ★★安全区（inset）也是栏白底——否则内容区移到顶后，下方 inset 区露父容器底色（真机取证：
         //   露 #f5f6f8 灰），Web `.sa-tabbar` 的 padding-bottom 区是同色白底。
-        wrapper.setBackgroundColor(surface);
+        wrapper.setBackgroundColor(glassSurface);
 
         // 顶边框（Web: border-top 1px --sa-line）——含在 chrome 容器内（自持，不碰父级子视图）
         android.view.View line = new android.view.View(ctx);
@@ -221,7 +228,7 @@ public final class ProteusTabChrome {
 
         bar = new android.widget.LinearLayout(ctx);
         bar.setOrientation(android.widget.LinearLayout.HORIZONTAL);
-        bar.setBackgroundColor(surface);
+        bar.setBackgroundColor(glassSurface);
         android.widget.FrameLayout.LayoutParams blp = new android.widget.FrameLayout.LayoutParams(
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT, barH);
         blp.gravity = android.view.Gravity.TOP;   // ★内容区在顶（安全区在下方作底色）
