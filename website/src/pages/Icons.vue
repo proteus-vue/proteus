@@ -226,6 +226,12 @@ async function copyName(name: string): Promise<void> {
   justify-content: center;
   gap: 8px;
   flex: 0 0 104px;
+  /* ★★★2026-10-11 方块统一：flex 项默认 `min-width:auto` ⇒ 长名字（nowrap）的 min-content 会把
+     方块**撑宽**（实测 success_no_circle 127px vs 其余 104px = 用户报「标题长度撑开了」）。
+     `min-width:0` 令方块严格用 flex-basis 的 104px；`overflow:hidden` 兜底任何内容不外溢。
+     名字的省略号由 .ic-name 的 nowrap+ellipsis 承担。height 固定 ⇒ 长名也不会撑高。 */
+  min-width: 0;
+  overflow: hidden;
   height: 116px;
   border-radius: 12px;
   border: 1px solid var(--line-soft);
