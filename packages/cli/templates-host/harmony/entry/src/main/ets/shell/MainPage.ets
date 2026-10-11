@@ -28,10 +28,13 @@ import { deviceInfo } from '@kit.BasicServicesKit';
 import { bundleManager } from '@kit.AbilityKit';
 import {
   attach, renderCommands, scrollRoot, clearRoot,
-  appScreenCommands, appScreenContentHeight, appScreenHitAt, appScreenNodeRect, hostAppRender, hostAppEval,
+  appScreenCommands, appScreenContentHeight, appScreenHitAt, appScreenNodeRect, hostAppRender, hostAppEval, hostAppDrive,
   // ★★★v-pump / 跳变驱动动画（决策 #796）：唯一实现在 runtime HAR 的 `AppRuntimeDriver`——
   //   本壳**零驱动代码**（装配一次即得全部能力；换壳不漏接）。
   AppRuntimeDriver,
+  // ★★★B · 能力归 runtime（决策 #800）：**tab 栏 chrome 唯一实现**——任何鸿蒙壳装配一次即得
+  //   （此前本壳**整个没有 tab 栏**——"换壳丢能力"的实证；签约一打通就会撞上）。
+  ProteusTabChrome,
 } from 'proteus_render';
 // ★★★dev 通道（决策 #728）：变体常量 + dev-watch/角标（**dev 调试件**，release 门控不创建——守宿主定位 #727）。
 import { DEV, DEV_URL } from './ProteusBuildConfig';
@@ -91,6 +94,8 @@ struct MainPage {
   private scrollByScreen: Map<string, number> = new Map<string, number>();
   /** 上次 hostAppRender 返回的 snapshot（`{屏名:{变量:值}}`）——下次新 VM 回灌 state */
   private runtimeState: Record<string, Object> | null = null;
+  /** ★★★B（决策 #800）：tab 栏渲染数据（state JSON 串）——喂给 runtime chrome；本壳零 tab 逻辑。 */
+  @State chromeStateJson: string = '';
   /* ══════════ ★★★v-pump / 跳变驱动动画（决策 #796：**归 runtime——壳内零驱动代码**）══════════
    * 唯一实现在 runtime HAR 的 `AppRuntimeDriver`（`proteus_render` 导出）：泵周期驱动（按 pumpHz 起
    * 定时器 + 批大小自适应）+ 动画挂树/帧循环。**任何鸿蒙壳（本模板壳 / 参考宿主 / 未来新壳）
@@ -591,6 +596,7 @@ struct MainPage {
   private onRuntimeReply(rt: Record<string, Object>): void {
     this.saveSnapshot(rt);
     this.drainProjectConsole(rt);
+    this.syncChrome(rt);
     const tree = rt['tree'] as Record<string, Object> | undefined;
     const cur = rt['current'] as string | undefined;
     if (cur !== undefined && cur.length > 0) { this.current = cur; }
@@ -633,6 +639,7 @@ struct MainPage {
           }
           this.saveSnapshot(rt);
           this.drainProjectConsole(rt);   // ★dev 项目 console（决策 #730）
+          this.syncChrome(rt);
           // 屏名以**实际渲染的 current** 为准（boot 后路由 current 恒为 index，会盖掉真实当前屏）
           const cur = rt['current'] as string;
           if (cur !== undefined && cur.length > 0) { this.current = cur; }
@@ -789,6 +796,35 @@ struct MainPage {
   }
 
   /** 点击命中 → 运行期派发（$nav 导航 / 数据变更）→ 重绘（与 Android/iOS 同一条命中链） */
+  /** ★★★B（决策 #800）：把运行期回包里的 state 转发给 tab chrome（本壳零 tab 解析）。 */
+  private syncChrome(rt: Record<string, Object>): void {
+    const st = rt['state'] as Record<string, Object> | undefined;
+    if (st !== undefined && st !== null) {
+      this.chromeStateJson = JSON.stringify(st);
+    }
+  }
+
+  /** ★★★B（决策 #800）：切 tab（runtime `hostAppDrive` 驱动：导航到目标屏 + 返回新 state）→ 重绘。 */
+  private switchTab(tabName: string): void {
+    if (this.bundle.length === 0) return;
+    try {
+      const out: string = hostAppDrive(JSON.stringify({
+        'bundle': this.bundle, 'filesDir': this.filesDir, 'tabs': [tabName],
+      } as Record<string, Object>));
+      const o = JSON.parse(out) as Record<string, Object>;
+      const dr = o['drive'] as Record<string, Object> | undefined;
+      if (dr !== undefined) {
+        const st = dr['state'] as Record<string, Object> | undefined;
+        if (st !== undefined && st !== null) { this.chromeStateJson = JSON.stringify(st); }
+        const cur = dr['current'] as string | undefined;
+        if (cur !== undefined && cur.length > 0) { this.current = cur; }
+      }
+      this.renderCurrent();
+    } catch (e) {
+      hilog.error(DOMAIN, TAG, 'SWITCH_TAB_ERROR %{public}s', JSON.stringify(e) ?? '');
+    }
+  }
+
   private onTapAt(vpX: number, vpY: number): void {
     if (this.bundle.length === 0) return;
     this.stopMomentum();
@@ -821,6 +857,7 @@ struct MainPage {
       this.paintTree(this.current, nodes);
       // ★★★v-pump / 跳变驱动动画（决策 #796：归 runtime）：tap 后同步（可能切到有泵/无泵的屏）+ 动画挂树
       this.ensureDriver().onRenderReply(rt);
+      this.syncChrome(rt);
       // ★dev 事件 trace（决策 #728 → 面板 Events）：命中 → 导航。`handled`/`fired` 由运行期返回（本批最简：handled=导航是否发生）。
       if (this.devWatch !== null) {
         const handled: boolean = target !== undefined && target.length > 0 && target !== prev;
@@ -911,6 +948,15 @@ struct MainPage {
       }
       .width('100%')
       .height('100%')
+
+      // ★★★B（决策 #800）：底部 Tab 栏 = runtime `ProteusTabChrome`（唯一实现）——本壳只喂
+      //   state JSON + 安全区 + 切屏出口（解析/合并在 chrome 内；tabItems 已由生成期合并）。
+      //   无 tab 的应用 chrome 内部不渲染（与 MP「未声明 tabBar 就无 tabBar」同源）。
+      ProteusTabChrome({
+        stateJson: this.chromeStateJson,
+        safeBottom: this.envVars['--pf-inset-bottom'] ?? 0,
+        onTab: (name: string) => { this.switchTab(name); },
+      })
 
       // ② ★dev 胶囊（决策 #731/#732，对齐 Android/iOS DevOverlay）——**右上角**：
       //   ★容器只占**顶部一条**（`width 100%` + **高度自适应**，不 `height('100%')`）⇒ 只有这条(含胶囊)可点、

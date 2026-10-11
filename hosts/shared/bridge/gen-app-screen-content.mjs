@@ -49,7 +49,7 @@ const runtimeContent = JSON.parse(fs.readFileSync(rt.outFile, 'utf-8'))
 //     唯一实现 = CLI 的 `resolveAppRoutes`（#664 起它已是 routesOutput 的唯一解析处——不许第二份）。
 const { resolveAppRoutes } = await import(pathToFileURL(path.join(ROOT, 'packages/cli/src/app-routes.ts')).href)
 const autoRoutesPath = (await resolveAppRoutes(PROJECT)).file
-let registry = { screens: {}, tabNames: [], tabLabels: {}, indexName: '', routes: [] }
+let registry = { screens: {}, tabNames: [], tabLabels: {}, tabItems: [], indexName: '', routes: [] }
 try {
   const arMod = await import(pathToFileURL(autoRoutesPath).href)
   const screens = arMod.screens ?? {}
@@ -63,7 +63,8 @@ try {
   const indexName = (screens && screens['index']) ? 'index'
     : (Object.keys(screens)[0] ?? ((arMod.routes && arMod.routes[0] && arMod.routes[0].name) || ''))
   // ★真实应用入口用 createRouter(routes, { adapter })（与 Web/MP 同形）⇒ 共带 routes
-  registry = { screens, tabNames, tabLabels, indexName, routes: arMod.routes ?? [] }
+  // ★★B（生成期最终值）：tabItems（名字/文案/字形/角标已合并完）——宿主只渲染，不合并
+  registry = { screens, tabNames, tabLabels, tabItems: arMod.tabItems ?? [], indexName, routes: arMod.routes ?? [] }
 } catch (e) {
   console.log('[gen-app-screen-content] ⚠ 屏注册表提取失败（跳过）：' + String(e))
 }

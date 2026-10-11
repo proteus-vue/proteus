@@ -19,7 +19,7 @@ import { NodeContent } from '@kit.ArkUI';
 import { display, window } from '@kit.ArkUI';
 import { util } from '@kit.ArkTS';
 import { fileIo } from '@kit.CoreFileKit';
-import { attach, renderCommands, scrollRoot, clearRoot, appScreenCommands, appScreenContentHeight, appScreenHitAt, hostRtShellInstall, hostRtShellEvent, hostAppDrive, hostAppRender, AppRuntimeDriver } from 'proteus_render';
+import { attach, renderCommands, scrollRoot, clearRoot, appScreenCommands, appScreenContentHeight, appScreenHitAt, hostRtShellInstall, hostRtShellEvent, hostAppDrive, hostAppRender, AppRuntimeDriver, ProteusTabChrome } from 'proteus_render';
 
 const DOMAIN = 0x0002;
 const TAG = 'ProteusSuperapp';
@@ -27,7 +27,6 @@ const TAG = 'ProteusSuperapp';
 /** ★B1：统一运行期渲染入参（ArkTS 禁未型字面量 ⇒ 用接口声明） */
 interface RtViewport { width: number; height: number }
 interface RtArgs { bundle: string; filesDir: string; page: string; viewport: RtViewport; chain?: number[]; state?: Record<string, Object>; remount?: boolean }
-const TAB_H = 56;   // 底部 Tab 栏高度（vp）
 /** 惯性减速速率（= iOS UIScrollView normal 0.998/ms；平台标准值，不自造曲线）+ 停止阈值（vp/ms）。 */
 const DECEL_RATE = 0.998;
 const MOMENTUM_STOP = 0.02;
@@ -55,28 +54,15 @@ struct Superapp {
    *   （消费式：只注入一次，晚到的渲染也能补上——顺序无关）。
    */
   private pendingScrollInject: number = 0;
-  @State tabKeys: string[] = [];
-  // ★★B2（G1）：tab 栏视觉规格（共享 state.tabSpec）——宿主读规格建视图（不再硬编码）。
-  //   缺省值与 render-backend 的 TAB_BAR_SPEC 同（基准 = superapp/App.vue .sa-tabbar + token）。
-  private tbBrand: string = '#5B5BD6';
-  private tbText3: string = '#5F6673';
-  private tbSurface: string = '#FFFFFF';
-  private tbLine: string = '#DCDFE5';
-  private tbBadge: string = '#D64545';
-  private tbIconSize: number = 13;
-  private tbLabelSize: number = 10;
-  private tbBadgeFont: number = 11;
-  private tbBadgeRadius: number = 8;
-  private tbIconsMap: Map<string, string> = new Map<string, string>();
-  private tbLabelsMap: Map<string, string> = new Map<string, string>();
-  @State tabItems: string[] = [];
+  /** ★★★B（决策 #800）：tab 栏渲染数据（state JSON 串）——喂给 runtime chrome 组件；本壳零 tab 逻辑。 */
+  @State chromeStateJson: string = '';
+  /** 报告用：tab 名列表（drive 记账/落盘读它，与渲染无关）。 */
+  private tabNamesForReport: string[] = [];
   @State current: string = '';
   @State booted: boolean = false;
   /** drive 记账（脚本判据读 switch_log） */
   private switchLog: string[] = [];
-  /** IM 未读角标初值（与 App.vue 壳同源；后续接实时运行时改由状态驱动） */
-  private imUnread: number = 3;
-  /** 底部安全区高度（vp；手势条）——并入 Tab 栏高度（见 build），白底铺到屏底 */
+  /** 底部安全区高度（vp；手势条）——转发给 runtime chrome（栏高 = 视觉高 + 安全区），白底铺到屏底 */
   private safeBottom: number = 0;
   /** ★★★内置环境变量表（2026-10-08 · 决策 #593）：--pf-* → vp（逻辑像素），由 avoidArea 采集。 */
   private envVars: Record<string, number> = {};
@@ -120,20 +106,6 @@ struct Superapp {
   /** ★★★Dactyl D0（决策 #797）：官方触摸时间戳（ms，TouchEvent.timestamp）+ 采样/T1 记录。 */
   private dactylT0Ms: number = -1;
   private dactylSamplesArr: number[][] = [];
-
-  /** Tab 图标（鸿蒙系统符号资源；三端语义同：首页/消息/我的） */
-  private tabSymbol(name: string): Resource {
-    if (name === 'index') return $r('sys.symbol.house')
-    if (name === 'messages') return $r('sys.symbol.message')
-    return $r('sys.symbol.person')
-  }
-
-  /** Tab 短标签（首页/消息/我的） */
-  private tabShortLabelOf(name: string): string {
-    const v = this.tbLabelsMap.get(name);
-    if (v !== undefined && v.length > 0) return v;
-    return name;   // 缺规格 ⇒ 用键名（与 iOS/Android 一致：规格 → tabLabels → 键名）
-  }
 
   aboutToAppear(): void {
     hilog.info(DOMAIN, TAG, 'SUPERAPP_PAGE_APPEAR scene=%{public}s', this.scene);
@@ -223,7 +195,7 @@ struct Superapp {
         //   C++ 收到空 env 表 ⇒ env token 替换为 fallback 0）。取到后**重渲染一次**（env 生效）。
         this.renderCurrent();
         // I2-ALLOW: **日志读数**取整（安全区高度写进 hilog 供人核对——不是几何换算；几何值
-        //   this.safeBottom 保持 vp 原值，进 Tab 栏高度 .height(TAB_H + this.safeBottom)）。
+        //   this.safeBottom 保持 vp 原值，转发给 runtime chrome 并入栏高）。
         hilog.info(DOMAIN, TAG, 'SUPERAPP_SAFE_BOTTOM %{public}d', Math.round(this.safeBottom));
       }).catch((err: Error) => {
         hilog.error(DOMAIN, TAG, 'SUPERAPP_SAFE_BOTTOM_ERR %{public}s', String(err?.message ?? err));
@@ -336,39 +308,18 @@ struct Superapp {
       st = state as Record<string, Object>;
     }
     if (st === null) return;
-    const tabs = st['tabs'];
-    if (Array.isArray(tabs)) {
-      const keys: string[] = [];
-      const labels: string[] = [];
-      const labelMap = st['tabLabels'] as Record<string, string> | undefined;
-      for (const t of tabs as string[]) {
-        keys.push(t);
-        labels.push(labelMap && labelMap[t] ? labelMap[t] : t);
-      }
-      this.tabKeys = keys;
-      this.tabItems = labels;
+    // ★★★B（决策 #800）：tab 栏渲染数据整包转发给 runtime chrome——解析/合并/兜底全在 chrome 内
+    //   （tabItems 已在**生成期**合并成最终值；本壳不再逐字段解析 tab 内容/样式）。
+    this.chromeStateJson = JSON.stringify(st);
+    // 报告用：tab 名列表（drive 记账/落盘读它；渲染仍全在 chrome）
+    const tabsForReport = st['tabs'];
+    if (Array.isArray(tabsForReport)) {
+      const keysR: string[] = [];
+      for (const t of tabsForReport as string[]) keysR.push(t);
+      this.tabNamesForReport = keysR;
     }
     const cur = st['current'];
     if (typeof cur === 'string') this.current = cur;
-    const sp = st['tabSpec'] as Record<string, Object> | undefined;
-    if (sp) {
-      if (typeof sp['brand'] === 'string') this.tbBrand = sp['brand'] as string;
-      if (typeof sp['text3'] === 'string') this.tbText3 = sp['text3'] as string;
-      if (typeof sp['surface'] === 'string') this.tbSurface = sp['surface'] as string;
-      if (typeof sp['line'] === 'string') this.tbLine = sp['line'] as string;
-      if (typeof sp['badgeBg'] === 'string') this.tbBadge = sp['badgeBg'] as string;
-      if (typeof sp['iconSize'] === 'number') this.tbIconSize = sp['iconSize'] as number;
-      if (typeof sp['labelSize'] === 'number') this.tbLabelSize = sp['labelSize'] as number;
-      const bd = sp['badge'] as Record<string, Object> | undefined;
-      if (bd) {
-        if (typeof bd['fontSize'] === 'number') this.tbBadgeFont = bd['fontSize'] as number;
-        if (typeof bd['radius'] === 'number') this.tbBadgeRadius = bd['radius'] as number;
-      }
-      const ic = sp['icons'] as Record<string, Object> | undefined;
-      if (ic) { for (const k of Object.keys(ic)) this.tbIconsMap.set(k, String(ic[k])); }
-      const lb = sp['labels'] as Record<string, Object> | undefined;
-      if (lb) { for (const k of Object.keys(lb)) this.tbLabelsMap.set(k, String(lb[k])); }
-    }
   }
 
   /** ★B1：统一运行期渲染入参 → JSON（用接口声明，避 ArkTS 未型字面量） */
@@ -764,7 +715,7 @@ struct Superapp {
 
   private writeReport(): void {
     try {
-      const body: string = '{"ok":true,"host_id":"harmony","tabs":' + JSON.stringify(this.tabKeys)
+      const body: string = '{"ok":true,"host_id":"harmony","tabs":' + JSON.stringify(this.tabNamesForReport)
         + ',"current":"' + this.current + '"'
         + ',"switch_log":[' + this.switchLog.join(',') + ']}'
         // ★★★滚动对齐（2026-10-05）：滚动读数（范围/当前偏移）——与 Android/iOS 的 scroll 读数同语义
@@ -810,51 +761,15 @@ struct Superapp {
       .clip(true)   // ★★★滚动对齐：越界内容裁剪（与 Android 视图裁剪同语义）
       .onTouch((e: TouchEvent) => { this.onScrollTouch(e); })
 
-      // ★★全端对齐批（2026-10-05 · css-conformance 视觉验收抓出）：**无 tab 的应用不渲染 tab 栏**——
-      //   此前无条件留白底柱（tabs=[] 时 ForEach 空转但容器仍在）⇒ 底部白带与 Web 基准不符。
-      if (this.tabKeys.length > 0) {
-      // 底部 Tab 栏（原生 chrome）——★样式取自 **Web 真值**（App.vue `.sa-tabbar` + global.css token）：
-      //   白底 #ffffff · 顶边框 #dcdfe5 · 选中 brand #5b5bd6 · 未选中 text-3 #5f6673 · 角标 rec #d64545。
-      //   图标加 U+FE0E（变体选择符）强制**文本呈现**——否则 ☺/✉ 会被渲染成彩色 emoji（与 Web 线稿不符）。
-      Column() {
-        Divider().strokeWidth(1).color(this.tbLine)
-        Row() {
-          ForEach(this.tabKeys, (k: string, i: number) => {
-            Column() {
-              Stack() {
-                // ★★图标用鸿蒙 **SymbolGlyph 系统矢量符号**（单色、可着色、尺寸可控）：
-                //   · 彩色 emoji（U+2709/U+263A 默认 emoji 呈现；FE0E/字体族都压不住——实测）
-                //   · Shape+Path 实测被渲染成**实心**且不随 viewPort 缩放
-                //   ⇒ 两者都不满足「与 Web 线稿一致」。系统符号是本机唯一的**原生单色矢量**通道。
-                // ★尺寸对齐 Web（图标墨高 ≈11.5dp；系统符号字号 20 时墨高约 20dp=1.7×，独立验收抓出）⇒ 13
-                SymbolGlyph(this.tabSymbol(k))
-                  .fontSize(13)
-                  .fontColor([this.current === k ? this.tbBrand : this.tbText3])
-                if (k === 'messages' && this.imUnread > 0) {
-                  Text(this.imUnread > 99 ? '99+' : String(this.imUnread))
-                    .fontSize(this.tbBadgeFont).fontWeight(FontWeight.Bold).fontColor('#FFFFFF').textAlign(TextAlign.Center)
-                    .constraintSize({ minWidth: 16 }).height(16).padding({ left: 4, right: 4 })
-                    .borderRadius(this.tbBadgeRadius).backgroundColor(this.tbBadge)
-                    .position({ x: 24, y: -2 })
-                }
-              }
-              Text(this.tabShortLabelOf(k)).fontSize(this.tbLabelSize)
-                .fontColor(this.current === k ? this.tbBrand : this.tbText3)
-            }
-            .layoutWeight(1)
-            .height('100%')
-            .justifyContent(FlexAlign.Center)
-            .onClick(() => { this.switchTab(k); })
-          }, (k: string) => k)
-        }
-        .width('100%')
-        .layoutWeight(1)
-      }
-      .width('100%')
-      // ★高度 = 视觉高 + 底部安全区（内容仍居中于 TAB_H 内；白底延伸到屏底）
-      .height(TAB_H + this.safeBottom)
-      .backgroundColor('#FFFFFF')
-      }
+      // ★★★B（决策 #800）：底部 Tab 栏 = runtime `ProteusTabChrome`（**唯一实现**）——
+      //   本壳只喂 state JSON（含生成期已合并的 tabItems + tabSpec）+ 安全区 + 切屏出口；
+      //   解析/合并/兜底/高亮/角标/字形（SymbolGlyph vs 文本）全在 runtime（换壳不漏接）。
+      //   无 tab 的应用不渲染 tab 栏（chrome 内部判 items.length，与 MP「未声明 tabBar 就无 tabBar」同源）。
+      ProteusTabChrome({
+        stateJson: this.chromeStateJson,
+        safeBottom: this.safeBottom,
+        onTab: (name: string) => { this.switchTab(name); },
+      })
     }
     .width('100%')
     .height('100%')

@@ -44,6 +44,19 @@ const config: ProteusConfig = {
   router: {
     // 路由表产物路径（编译期 gen-routes 生成）
     routesOutput: 'src/router/auto-routes.ts',
+    // ★★B（决策 #800）：tab 声明——App 端**字形/角标**在此声明，文案可省（回退各页 meta.title）。
+    //   此前宿主只能吃框架缺省（index/messages/mine 三键）⇒ l2..l6 全变 "•"（真机取证）。
+    //   字形为**文本字形**（非 sym:）——与 superapp 的 sym: 系统符号形态互补覆盖。
+    tabBar: {
+      list: [
+        { name: 'index', glyph: '◉' },
+        { name: 'l2', glyph: '≡' },
+        { name: 'l3', glyph: '✦' },
+        { name: 'l4', glyph: '✚' },
+        { name: 'l5', glyph: '⌁' },
+        { name: 'l6', glyph: '◫' },
+      ],
+    },
     // wx.router 自定义路由：内置预设 builders（随 @proteus-vue/router 包发布源码，插件读取后内联进 app.js 注册）
     customRoute: {
       registerPresets: true,

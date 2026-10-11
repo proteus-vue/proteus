@@ -34,7 +34,9 @@ export interface RouterSection {
   subPackages?: Array<SubPackageDecl>
   /** wx.router 自定义路由（转场 builders） */
   customRoute?: CustomRouteConfig
-  /** tabBar 声明（list.name 对应路由名；缺省按 meta.isTab 推导） */
+  /** tabBar 声明（list.name 对应路由名；缺省按 meta.isTab 推导）——**全端 tab 唯一声明面**：
+   *   App 端由 gen-routes 在**生成期算成最终值**（auto-routes 的 `tabItems`：名字/文案/字形），
+   *   宿主只渲染、不再合并（B · 能力归 runtime——合并/缺省的单一计算点在生成期）。 */
   tabBar?: {
     /** 未选中文字颜色（如 `#8a8a99`） */
     color?: string
@@ -44,10 +46,14 @@ export interface RouterSection {
     list: Array<{ 
       /** 路由名（对应页面 name） */
       name: string
-      /** tab 文案 */
-      text: string
-      /** 图标路径（可选） */
+      /** tab 文案（可省 ⇒ 回退该页 meta.title ⇒ 路由名）——App 端最终值由 gen-routes 生成期算完 */
+      text?: string
+      /** MP 图标路径（app.json 的 iconPath，图片文件；如 `/static/tab-home.png`） */
       icon?: string
+      /** App 端字形：符号字符（如 `⌂`）或 `sym:<name>` 系统符号语义名（各端 runtime 自带映射）。Web/MP 不消费 */
+      glyph?: string
+      /** App 端静态角标数（>0 显示；如未读数 3）。动态更新（运行期 setBadge）为后续通道 */
+      badge?: number
     }>
   }
   /**

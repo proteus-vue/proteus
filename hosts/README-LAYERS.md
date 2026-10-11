@@ -59,6 +59,14 @@ hosts/shared/bridge/            ← 跨端共享的**运行时入口**（entry-h
      后者才是"以后所有宿主"的来源——只扫 hosts/ 会漏判，本轮实测）。
    - **破坏性验证（改这条规则或这套判据后必跑）**：在任一**壳**里注入实现特征 ⇒ 门禁必红；
      把 runtime 的实现换成注释 ⇒ 门禁必红。五向都已实测通过。
+   - ★★★**样板案例（2026-10-11 · 决策 #800 · B 方向首块）**：**tab 栏**——能力按四层各算一次收口：
+     **① 声明**（项目唯一入口）`router.tabBar.list` 的 `text/glyph/badge`；**② 生成期合并**
+     （唯一计算点）gen-routes `computeTabItems` → 产物 `tabItems` 最终值（文案/字形/角标已算完）；
+     **③ 透传** 注册表 → 桥 `state().tabItems`；**④ runtime 唯一实现** 三端 `TabChrome`
+     （iOS `runtime/tab-chrome.swift` · Android `runtime/ProteusTabChrome.java` · 鸿蒙 HAR `TabChrome.ets`）
+     ——**输入 = state JSON，不做合并/兜底**（未声明 glyph 就不画图标；"•" 静默兜底已禁）。
+     **六壳只装配**（onTap 出口 + 喂 state）。★判据：`check:host-tab-spec`（重写：runtime 必须有实现 +
+     六壳不得重实现 + 必须装配）+ `check:host-layering` ④ `tab-bar` 能力——**双向破坏性四向全过**。
 
 3. **不得把构建产物提交入库**——`hosts/**` 下被 git 跟踪的文件里，不得出现"由 `hosts/*/*.mjs` /
    `.sh` 在构建期生成"的产物（bundle / 夹具 json / 生成代码）。**豁免白名单**（`TRACKED_ARTIFACT_ALLOW`，
