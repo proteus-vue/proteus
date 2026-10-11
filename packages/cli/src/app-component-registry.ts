@@ -1,0 +1,134 @@
+// packages/cli/src/app-component-registry.ts —— ★★★App 组件实例化（构建期产出组件注册表）
+//
+// 【它补什么（决策 #811）】App 链此前**不展开 Vue 组件**——`p-*` 组件标签只作不透明原生标签下发，
+//   组件内部（`p-icon` 的 `<svg><path>` 等）在端上永不渲染。真正的组件实例化引擎（`slot-runtime` 的
+//   `instantiateTemplate` + `opts.components`）早已就绪（还带 props/插槽/递归），**缺的是生产者**：
+//   没有任何构建步骤把子组件的 `.vue` 编译成 `ComponentDef`（`{template, table, data}`）。
+//   ⇒ 本模块 = 那个生产者：扫描页面用到的 `p-*` 组件 → 定位源码（框架组件库 / 应用 components/）→
+//     用 `buildLayoutTemplate` + `buildVaporSubscriptions` 编译 → 产出 `Record<tag, ComponentDef>`。
+//
+// 【形态对齐】与设备夹具 `hosts/android/gen-vapor-fixture.mjs` 同范式（构建期编译，端上不跑 script）；
+//   产物形状 = `slot-runtime` 的 `ComponentDef`（`template`/`table`/`data`），随 `runtime-content.json`
+//   下发，运行期由 `screen-runtime` 喂给 `instantiateTemplate` 的 `opts.components`。
+//
+// 【为什么在 cli】构建期 `buildLayoutTemplate` 依赖 `@vue/compiler-sfc`（Node API）⇒ 端上跑不了
+//   （同 app-runtime-content.ts）。组件源码定位复用 plugin-vite 的 `resolveComponentsRoot`（唯一实现）。
+import fs from 'node:fs'
+import path from 'node:path'
+import { buildLayoutTemplate, buildVaporSubscriptions } from '@proteus-vue/compiler'
+import { resolveComponentsRoot } from '@proteus-vue/plugin-vite'
+
+/** 一个组件的构建期快照（= slot-runtime 的 `ComponentDef` 形态，可直接序列化跨端） */
+export interface AppComponentDef {
+  /** 该组件 `<template>` 的编译产物（`buildLayoutTemplate` 结果） */
+  tpl: unknown
+  /** props → 槽位 的订阅表（有它 props 才能下行） */
+  table: unknown
+  /** `<script setup>` 的构建期数据快照（端上不执行 script） */
+  data: Record<string, unknown>
+}
+
+/** 标签 → 源码绝对路径。tag 为 kebab（`p-icon`）。 */
+const tagRegex = (tpl: string): string[] => {
+  const used = new Set<string>()
+  // 去掉注释块（示例文本里的 <p-xxx> 不应误当使用）
+  const body = tpl.replace(/<!--[\s\S]*?-->/g, '')
+  const re = /<([A-Za-z][\w-]*)/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(body))) {
+    const raw = m[1]
+    // PascalCase → kebab（与 MP collectComponents 同口径）
+    const tag = /[A-Z]/.test(raw) ? raw.replace(/\B([A-Z])/g, '-$1').toLowerCase() : raw
+    if (/^p-[a-z]/.test(tag)) used.add(tag)
+  }
+  return [...used]
+}
+
+/** 从 SFC 源码抽 `<script setup>` 里的 `const NAME = ref(<字面量>)` 初值（同 app-content 的简化版）。 */
+function extractRefLiterals(sfc: string): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  const bodyM = /<script[^>]*setup[^>]*>([\s\S]*?)<\/script>/.exec(sfc)
+  const body = bodyM ? bodyM[1] : ''
+  const re = /const\s+([A-Za-z_$][\w$]*)\s*=\s*(?:ref|shallowRef)\s*\(\s*([^)]*?)\s*\)/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(body))) {
+    const v = m[2].trim()
+    try {
+      if (/^-?\d+(\.\d+)?$/.test(v)) out[m[1]] = Number(v)
+      else if (/^'(?:[^'\\]|\\.)*'$/.test(v) || /^"(?:[^"\\]|\\.)*"$/.test(v)) out[m[1]] = JSON.parse(v.replace(/'/g, '"'))
+      else if (v === 'true' || v === 'false') out[m[1]] = v === 'true'
+    } catch {
+      /* 非字面量初值：跳过（端上不执行 script，无法求值） */
+    }
+  }
+  return out
+}
+
+/** 解析某组件标签的 `.vue` 源码绝对路径（应用 `components/` 优先，再框架组件库）。未找到 ⇒ null。 */
+function resolveComponentSource(tag: string, root: string, fwRoot: string): string | null {
+  const candidates = [
+    path.join(root, 'components', tag, 'index.vue'),
+    path.join(root, 'components', `${tag}.vue`),
+    path.join(fwRoot, tag, 'index.vue'),
+    path.join(fwRoot, `${tag}.vue`),
+  ]
+  return candidates.find((c) => fs.existsSync(c)) ?? null
+}
+
+/**
+ * 解析若干页面用到的、**有 .vue 源码**的 `p-*` 组件标签集——供 `buildLayoutTemplate` 的
+ * `opts.componentTags`（据此标记组件边界）。**无源码的标签不入集**（不产边界 ⇒ 不退化为空占位）。
+ */
+export function resolveComponentTags(sfcSources: Array<{ name: string; src: string }>, root: string): Set<string> {
+  const fwRoot = resolveComponentsRoot(root)
+  const used = new Set<string>()
+  for (const s of sfcSources) for (const t of tagRegex(s.src)) used.add(t)
+  const out = new Set<string>()
+  for (const tag of used) if (resolveComponentSource(tag, root, fwRoot)) out.add(tag)
+  return out
+}
+
+/**
+ * 收集若干页面源码里用到的 `p-*` 组件，编译成注册表。
+ * @param sfcSources 页面 SFC 源码（用于扫描用到的组件标签）
+ * @param root 项目根（用于解析应用组件目录 + 相对路径）
+ * @param tokens/globalCss 与页面**同一份**设计令牌/全局样式（保证组件内样式折叠同源）
+ * @returns `Record<tag, AppComponentDef>`（仅含**找到源码**的组件）
+ */
+export function buildAppComponentRegistry(
+  sfcSources: Array<{ name: string; src: string }>,
+  root: string,
+  opts: { tokens?: Record<string, string>; globalCss?: string } = {},
+): { components: Record<string, AppComponentDef>; diagnostics: string[] } {
+  const diagnostics: string[] = []
+  const fwRoot = resolveComponentsRoot(root)
+  const usedTags = new Set<string>()
+  for (const s of sfcSources) for (const t of tagRegex(s.src)) usedTags.add(t)
+
+  const components: Record<string, AppComponentDef> = {}
+  for (const tag of [...usedTags].sort()) {
+    // 源码解析顺序：应用 components/<tag>/index.vue → 框架组件库 <tag>/index.vue（与 MP collectComponents 同序）
+    const found = resolveComponentSource(tag, root, fwRoot)
+    if (!found) {
+      // 无源码（宿主注入的宿主组件等）⇒ 如实记、不注册（运行期保留边界、内部留空 = 既有行为，不回归）
+      diagnostics.push(`组件 <${tag}> 无源码（应用 components/ 与框架组件库均未找到）——本版不展开`)
+      continue
+    }
+    const src = fs.readFileSync(found, 'utf-8')
+    const filename = path.relative(root, found)
+    const statics = extractRefLiterals(src)
+    const tplRes = buildLayoutTemplate(src, filename, undefined, opts.tokens, statics, opts.globalCss, false)
+    if (!tplRes.ok) {
+      diagnostics.push(`组件 <${tag}> 模板编译失败（${filename}）`)
+      continue
+    }
+    const subRes = buildVaporSubscriptions(src, filename)
+    components[tag] = {
+      tpl: tplRes.template,
+      table: subRes.ok ? subRes.table : { version: 1, sources: [], evaluators: [], l0Slots: [], stats: { l1: 0, l0: 0, l1Rate: 0 } },
+      data: statics,
+    }
+    for (const d of tplRes.diagnostics) diagnostics.push(`组件 <${tag}>: ${d.code} ${d.message}`)
+  }
+  return { components, diagnostics }
+}

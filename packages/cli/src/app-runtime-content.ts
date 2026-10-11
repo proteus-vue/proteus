@@ -17,6 +17,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { buildLayoutTemplate, buildVaporSubscriptions, compileEvents, parseCssVarTokens } from '@proteus-vue/compiler'
 import { extractRefLiterals, reorderNodesByZ } from './app-content'
+import { buildAppComponentRegistry, resolveComponentTags, type AppComponentDef } from './app-component-registry'
 import type { AppPlatform } from './targets'
 import { resolveAppRoutes } from './app-routes'
 import { loadTsModule } from './config-loader'
@@ -33,6 +34,12 @@ export interface ScreenRuntimeArtifact {
   handlers: Record<string, unknown[]>
   /** 初始数据快照（构建期从 SFC script 抽 `ref(<字面量>)`——端上不执行 script） */
   data: Record<string, unknown>
+  /**
+   * ★★★**组件注册表**（App 组件实例化，决策 #811）：该屏用到的 `p-*` 组件的构建期编译产物
+   *   （`{tpl, table, data}`）——运行期由 `screen-runtime` 喂给 `instantiateTemplate` 的 `opts.components`
+   *   ⇒ 组件内部被**展开**。缺省省略 ⇒ 既有产物不变（无组件时不产该字段）。
+   */
+  components?: Record<string, AppComponentDef>
   /**
    * ★★★**数据泵表**（通用原语 `v-pump`，本批）：该屏声明的运行期数据源（宿主按 `hz` 周期性产新值）。
    *   缺省省略 ⇒ 既有产物不变。
@@ -100,19 +107,42 @@ export async function buildAppRuntimeContent(
   if (routes.length === 0) throw new Error(`${path.relative(root, autoRoutes)} 无 routes——格式变了？`)
 
   const out: Record<string, ScreenRuntimeArtifact> = {}
+  // ★★★App 组件实例化（决策 #811）：**预读所有页面源码**——① 供组件标签扫描（算可展开集合）
+  //   ② 主循环复用（避免重复读盘）。必须在编译页面前算好 `expandableTags`（供边界标记）。
+  const pageSources: Array<{ name: string; src: string }> = []
+  const srcByName = new Map<string, { src: string; abs: string }>()
+  for (const r of routes) {
+    if (!r.component) continue
+    const abs = path.resolve(routerDir, r.component)
+    if (!fs.existsSync(abs)) continue
+    const src = fs.readFileSync(abs, 'utf-8')
+    pageSources.push({ name: r.name, src })
+    srcByName.set(r.name, { src, abs })
+  }
+  // ★可展开的 `p-*` 组件标签（有 .vue 源码者）——编译器据此把它们标为组件边界（见 buildLayoutTemplate opts）
+  const expandableTags = resolveComponentTags(pageSources, root)
   let compiled = 0
   let skipped = 0
   for (const r of routes) {
     const rel = r.component
     if (!rel) { diagnostics.push(`${r.name}: 无 component 字段`); skipped++; continue }
-    const abs = path.resolve(routerDir, rel)
-    if (!fs.existsSync(abs)) { diagnostics.push(`${r.name}: 缺 SFC（${rel}）`); skipped++; continue }
-    const sfcSrc = fs.readFileSync(abs, 'utf-8')
+    const pre = srcByName.get(r.name)
+    if (!pre) { diagnostics.push(`${r.name}: 缺 SFC（${rel}）`); skipped++; continue }
+    const { src: sfcSrc, abs } = pre
     const filename = path.relative(root, abs)
 
     // 静态初值（`ref(<字面量>)`）——作模板 `statics`（编译期折常量插值）+ `data` 运行期源初值
     const statics = { ...extractRefLiterals(sfcSrc) }
-    const tplRes = buildLayoutTemplate(sfcSrc, filename, undefined, tokens, statics, globalCss, dev)
+    const tplRes = buildLayoutTemplate(
+      sfcSrc,
+      filename,
+      undefined,
+      tokens,
+      statics,
+      globalCss,
+      dev,
+      expandableTags.size > 0 ? { componentTags: expandableTags } : undefined,
+    )
     if (!tplRes.ok) { diagnostics.push(`${r.name}: 模板编译失败`); skipped++; continue }
 
     // ★★★`v-pump` 声明的运行期数据源名（通用原语）：不在 script 里 ⇒ 作为 `pumpSources` 注入订阅表，
@@ -167,6 +197,28 @@ export async function buildAppRuntimeContent(
     for (const d of tplRes.diagnostics) diagnostics.push(`${r.name}: ${d.code} ${d.message}`)
     if (!subRes.ok) diagnostics.push(`${r.name}: 订阅表编译未就绪（降级空表——无响应式）`)
     for (const d of (evRes.diagnostics ?? [])) diagnostics.push(`${r.name}[ev]: ${d.message}`)
+  }
+
+  // ★★★App 组件实例化（决策 #811）：把页面用到的 `p-*` 组件编译成注册表，**按屏挂载**（该屏用到的组件）。
+  //   ⇒ 运行期 `instantiateTemplate` 据此展开组件内部。无组件 ⇒ 各屏不产 `components` 字段（既有产物不变）。
+  {
+    const { components, diagnostics: compDiags } = buildAppComponentRegistry(pageSources, root, { tokens, globalCss })
+    for (const d of compDiags) diagnostics.push(`[components] ${d}`)
+    const tags = Object.keys(components)
+    if (tags.length > 0) {
+      // 该屏的模板里是否用到某组件标签（粗匹配：标签出现即挂——注册表可共用，多余键不影响实例化）
+      const usedBy = (src: string): Record<string, AppComponentDef> => {
+        const sub: Record<string, AppComponentDef> = {}
+        for (const t of tags) if (new RegExp(`<${t}[\\s/>]`).test(src)) sub[t] = components[t]
+        return sub
+      }
+      for (const r of routes) {
+        const art = out[r.name]
+        if (!art) continue
+        const sub = usedBy(srcByName.get(r.name)?.src ?? '')
+        if (Object.keys(sub).length > 0) (art as ScreenRuntimeArtifact).components = sub
+      }
+    }
   }
 
   const outDir = path.join(root, 'dist', 'app', platform)

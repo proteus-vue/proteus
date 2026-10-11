@@ -74,6 +74,13 @@ export interface ScreenRuntimeArtifact {
    *     否则消费方（superapp-runtime / dev 面板 / 测试）读 `art.file` 报 `Property 'file' does not exist`。
    */
   file?: string
+  /**
+   * ★★★**组件注册表**（App 组件实例化，决策 #811）：该屏用到的 `p-*` 组件的构建期编译产物
+   *   （`{tpl, table, data}`，同 slot-runtime 的 `ComponentDef` 形态）——运行期喂给 `instantiateTemplate`
+   *   的 `opts.components` ⇒ 组件内部被**展开**。★CLI 侧 `app-runtime-content.ts` 同形一并带此字段。
+   *   缺省省略 ⇒ 既有产物不变（无组件时不产）。
+   */
+  components?: Record<string, { tpl: LayoutTemplate; table: unknown; data?: Record<string, unknown> }>
 }
 
 export interface CreateScreenRuntimeOptions {
@@ -259,14 +266,20 @@ export function createScreenRuntime(opts: CreateScreenRuntimeOptions): ScreenRun
 
     // ── ② 实例化（模板 + 数据 → 节点树）——★可重建（`refresh()`：数据变后重实例化，供"applyOps 为 no-op"
     //   的宿主（鸿蒙一次性 VM）拿到反映新数据的整树）──
-    let inst = prof.time('instantiate', () =>
-      instantiateTemplate(art.tpl, { viewport: opts.viewport, read, table: art.table, registry: new ListRegistry() }))
+    // ★★★App 组件实例化（决策 #811）：有组件注册表 ⇒ 翻成运行期 `ComponentDef`（`{template, table, data}`）
+    //   喂给 `instantiateTemplate` ⇒ 组件内部**展开**（无 ⇒ 保留边界标记、内部留空 + note）。
+    const componentDefs = art.components
+      ? Object.fromEntries(
+          Object.entries(art.components).map(([nm, def]) => [nm, { template: def.tpl, table: def.table as never, data: def.data }]),
+        )
+      : undefined
+    const instOpts = { viewport: opts.viewport, read, table: art.table, registry: new ListRegistry(), ...(componentDefs ? { components: componentDefs } : {}) }
+    let inst = prof.time('instantiate', () => instantiateTemplate(art.tpl, instOpts))
     // ★R6：内容局部 id 的**有序表**（index → localId）——手势反查用
     let localIdsOrdered = inst.nodes.map((n) => n.id)
     /** 用**当前 data** 重实例化（节点 id 由 tpl 的 slot 序决定 ⇒ 与初实例化逐位一致，id 映射稳定） */
     function rebuild(): void {
-      inst = prof.time('instantiate', () =>
-        instantiateTemplate(art.tpl, { viewport: opts.viewport, read, table: art.table, registry: new ListRegistry() }))
+      inst = prof.time('instantiate', () => instantiateTemplate(art.tpl, instOpts))
       localIdsOrdered = inst.nodes.map((n) => n.id)
     }
     // 组件未展开 ⇒ 如实记（不静默）
