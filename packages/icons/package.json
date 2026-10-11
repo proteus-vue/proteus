@@ -1,0 +1,24 @@
+{
+  "name": "@proteus-vue/icons",
+  "version": "0.3.0-beta.28",
+  "description": "Proteus OS 级图标库（Keryx）：SVG path 单一真源（图标即数据，非字体）——语义名 → { d, viewBox }，三端（Web 内联 svg / MP Path2D / App 内核 svg_path）同源渲染。含 A/S/T→C/Q 归一化转换器（内核 svg_path.rs 拒 A/S/T）。零依赖。",
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=neutral --outfile=dist/index.js"
+  }
+}

@@ -38,6 +38,8 @@
     "@proteus-vue/fluid": "0.3.0-beta.28",
     "@proteus-vue/gesture": "0.3.0-beta.28",
     "@proteus-vue/glass": "0.3.0-beta.28",
+    "@proteus-vue/icons": "0.3.0-beta.28",
+    "@proteus-vue/tokens": "0.3.0-beta.28",
     "@proteus-vue/runtime": "0.3.0-beta.28",
     "@proteus-vue/shared": "0.3.0-beta.28",
     "@proteus-vue/worklet": "0.3.0-beta.28"
