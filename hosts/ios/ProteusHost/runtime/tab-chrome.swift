@@ -149,7 +149,8 @@ final class ProteusTabChrome {
             cell.accessibilityIdentifier = item.name
             let stack = UIStackView()
             stack.axis = .vertical
-            stack.alignment = .center
+            // ★fill（不是 center）：子视图宽 = stack 宽 ⇒ 文案可**截断**而非按 intrinsic 撑破 cell
+            stack.alignment = .fill
             stack.spacing = gapY
             stack.translatesAutoresizingMaskIntoConstraints = false
             var iconView: UIView? = nil
@@ -166,11 +167,18 @@ final class ProteusTabChrome {
             tx.text = item.label
             tx.font = UIFont.systemFont(ofSize: labelSize)
             tx.textAlignment = .center
+            // ★★单行 + 尾部省略（2026-10-11 边界修复）：tab 宽 = 屏宽/n（定宽）——标签超宽时
+            //   **不换行/不裁切/不溢出**（此前 UILabel 按 intrinsic 撑破 cell，或换行致高度失控）。
+            //   与 Android/鸿蒙同策略（也令 contentHeight 的"图标+一行文案"公式自洽）。
+            tx.numberOfLines = 1
+            tx.lineBreakMode = .byTruncatingTail
             stack.addArrangedSubview(tx)
             cell.addSubview(stack)
             NSLayoutConstraint.activate([
                 stack.centerXAnchor.constraint(equalTo: cell.centerXAnchor),
                 stack.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+                // 内容块宽 ≤ tab 宽 − 8（两侧各 4pt）——超长文案由 label 尾部省略兜住
+                stack.widthAnchor.constraint(equalTo: cell.widthAnchor, constant: -8),
             ])
             // 角标（声明了 badge>0 才画）：锚到图标右上——随内容块**一起移动**（块居中后不脱位）
             if item.badge > 0 {
