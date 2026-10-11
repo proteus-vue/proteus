@@ -56,7 +56,7 @@ import { runGlassAudit, formatGlassAudit } from './glass-audit'
 import { parseMcpArgs, runMcpServe } from './mcp'
 import { runGate, formatGateList } from './gate'
 import { planMpE2E, diagnoseMpE2EEnv, formatMpE2EDiagnosis, prepareMpE2EProject } from './mp-e2e'
-import { warnIfDistStale } from './dist-freshness'
+import { warnIfDistStale, assertDistFreshForDeviceBuild } from './dist-freshness'
 import * as ui from './ui'
 import { formatDiagnostics, diagnosticsToJson, type ProteusDiagnostic } from './diag'
 
@@ -89,6 +89,15 @@ async function main(): Promise<void> {
   //   而本地 tsx src 手测正常（假绿）。实测事故：`proteus dev --target android` 仍启动 web（dist 停在 2.5h 前）。
   //   ★只在**从 dist 运行**时检查、只告警不阻断（详见 dist-freshness.ts 的诚实边界）。
   warnIfDistStale(cmd)
+  // ★★★设备产物命令**硬化门**（决策 #801）：dev / build 会把"此刻 dist 里的框架代码"固化进
+  //   设备产物（bundle 直供设备 / 烤进安装包）——陈旧 dist 在这两条命令下是**错误级**（实测：
+  //   dev server 拿前一天 dist 发无 tabItems 的 bundle ⇒ 真机图标全缺）。抛错 → 显式修复或绕过。
+  try {
+    assertDistFreshForDeviceBuild(cmd)
+  } catch (e) {
+    console.error(`[proteus] ${(e as Error).message}`)
+    process.exit(1)
+  }
 
   // ★★★单命令 help（决策 #689）：`proteus <cmd...> --help` / `-h` 与 `proteus help <cmd...>`
   //   在**命令分发之前**拦截——此前 `proteus build --help` 报「未知选项」、`proteus doctor --help` 报

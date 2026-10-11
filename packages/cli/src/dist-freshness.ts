@@ -116,6 +116,32 @@ export function repoRootFromHere(metaUrl: string = import.meta.url): string {
 }
 
 /**
+ * ★★★设备产物命令**硬化门**（2026-10-11 · 决策 #801 · 三端截图对比实证）：
+ *   `dev` 与 `build` 是**把当前框架代码固化进设备产物**的两条命令——
+ *   · `dev --target <app>`：设备拉的 bundle 就是此刻 dist 里的代码（实测事故：CLI dist 停在前一天，
+ *     dev server 持续发**无 tabItems 数据**的 bundle ⇒ 真机 Android/鸿蒙 tab 图标全缺，
+ *     而用 tsx src 构建的 iOS 产物正常——**"两条通路"的第 N 次复现**）；
+ *   · `build --target <app> --package`：bundle 直接**烤进 APK/HAP/app**。
+ *   ⇒ 这两条命令下陈旧 dist **不是告警级而是错误级**（产物静默携带旧框架代码 = 反黑盒）。
+ *   修法：抛错阻断（`PROTEUS_ALLOW_STALE_DIST=1` 显式绕过）。仅从 dist 运行时生效（tsx src 下
+ *   "src 比 dist 新"是预期）；CI/发布形态无 packages/ ⇒ findStalePackages 返回空 ⇒ 零影响。
+ */
+export function assertDistFreshForDeviceBuild(cmd: string | undefined, metaUrl: string = import.meta.url): void {
+  if (cmd !== 'dev' && cmd !== 'build') return
+  if (!isRunningFromDist(metaUrl)) return
+  if (process.env.PROTEUS_ALLOW_STALE_DIST === '1') return
+  const stale = findStalePackages(repoRootFromHere(metaUrl))
+  if (!stale.length) return
+  const names = stale.map((s) => s.pkg).join(', ')
+  throw new Error(
+    `dist 陈旧：${names} —— 「${cmd}」会把**旧框架代码**固化进设备产物` +
+      `（dev = 设备拉取的 bundle；build --package = 安装包）。` +
+      `\n  修复：node scripts/build-packages.mjs（dev server 若已在跑，重建后须**重启**它）` +
+      `\n  确需用旧产物：PROTEUS_ALLOW_STALE_DIST=1 显式绕过`,
+  )
+}
+
+/**
  * 启动期守卫：陈旧则把告警打到 stderr（**不阻断**）。
  * @param cmd 当前子命令（help/version/未给 = 不检查——与产物语义无关）
  */
