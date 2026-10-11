@@ -884,9 +884,18 @@ export function packageAndroidHost(opts: PackageAndroidOptions): PackageAndroidR
   }
 
   // ⑩ apksigner（自生成 debug.keystore）
-  const ks = path.join(build, 'debug.keystore')
+  // ★★keystore 放 **hostDir 根**（不是 build/——build/ 每轮被 rmSync 清空 ⇒ 放那里必被删、必重生成）。
+  const ks = path.join(hostDir, 'debug.keystore')
   try {
-    run(path.join(jdk, 'bin', 'keytool'), ['-genkeypair', '-keystore', ks, '-storepass', 'android', '-keypass', 'android', '-alias', 'androiddebugkey', '-dname', 'CN=Android Debug,O=Android,C=US', '-keyalg', 'RSA', '-keysize', '2048', '-validity', '10000'], { encoding: 'utf-8', env })
+    // ★★keystore **存在即复用**（2026-10-11 真机取证修复）：此前无条件 -genkeypair ⇒ 已存在 alias
+    //   时报错/被覆盖 ⇒ **每次构建签名都变** ⇒ adb install -r 永 INSTALL_FAILED_UPDATE_INCOMPATIBLE
+    //   （必须卸载重装；真机上是"同一 app 两个包"的隐患）。与 Android 官方 debug.keystore 语义一致：一经生成、永久复用。
+    if (!fs.existsSync(ks)) {
+      run(path.join(jdk, 'bin', 'keytool'), ['-genkeypair', '-keystore', ks, '-storepass', 'android', '-keypass', 'android', '-alias', 'androiddebugkey', '-dname', 'CN=Android Debug,O=Android,C=US', '-keyalg', 'RSA', '-keysize', '2048', '-validity', '10000'], { encoding: 'utf-8', env })
+      log.push('ℹ 已生成 debug.keystore（首次；后续构建复用）')
+    } else {
+      log.push('ℹ 复用已有 debug.keystore（签名稳定 ⇒ 支持覆盖安装）')
+    }
     run(path.join(buildTools, 'apksigner'), ['sign', '--ks', ks, '--ks-pass', 'pass:android', '--key-pass', 'pass:android', '--v1-signing-enabled', 'true', '--v2-signing-enabled', 'true', apk], { encoding: 'utf-8', maxBuffer: 32 * 1024 * 1024, env })
     run(path.join(buildTools, 'apksigner'), ['verify', '--print-certs', apk], { encoding: 'utf-8', env })
   } catch (e) {

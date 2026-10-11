@@ -11,7 +11,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { findStalePackages, formatStaleWarning, isRunningFromDist, repoRootFromHere } from '../packages/cli/src/dist-freshness'
+import { findStalePackages, formatStaleWarning, isRunningFromDist, repoRootFromHere, assertDistFreshForDeviceBuild } from '../packages/cli/src/dist-freshness'
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-distfresh-'))
 afterAll(() => fs.rmSync(TMP, { recursive: true, force: true }))
@@ -78,6 +78,69 @@ describe('★陈旧 dist 守卫 · 「是否从 dist 运行」判别（tsx src �
   it('repoRootFromHere：先取模块所在目录（<root>/packages/cli/★）再上三级 = 仓库根', () => {
     expect(repoRootFromHere(pathToFileURL('/x/repo/packages/cli/dist/index.js').href)).toBe('/x/repo')
     expect(repoRootFromHere(pathToFileURL('/x/repo/packages/cli/src/index.ts').href)).toBe('/x/repo')
+  })
+})
+
+describe('★★设备产物命令硬化门（#801）：dev/build 从 dist 运行且陈旧 ⇒ 抛错阻断；其余命令/显式绕过放行', () => {
+  /** 造 fixture 仓库：一个有 build 脚本的包，src 比 dist 新（陈旧） */
+  function mkStaleRepo(tag: string): string {
+    const root = path.join(TMP, 'devgate-' + tag)
+    const dir = path.join(root, 'packages', 'cli', 'dist')
+    fs.mkdirSync(dir, { recursive: true })
+    mkPkg(root, 'somepkg', { srcMtime: Date.now() + 60_000, distMtime: Date.now() })
+    return root
+  }
+  // assertDistFreshForDeviceBuild 用 metaUrl 推导 repoRoot：把 dist/index.js 摆进 fixture 再传其 URL
+  function metaUrlOf(root: string): string {
+    const f = path.join(root, 'packages', 'cli', 'dist', 'index.js')
+    fs.mkdirSync(path.dirname(f), { recursive: true })
+    fs.writeFileSync(f, '// fixture\n')
+    return pathToFileURL(f).href
+  }
+
+  it('dev（陈旧 + 从 dist 运行）⇒ 抛错（不再是告警级——产物会静默携带旧框架代码）', () => {
+    const root = mkStaleRepo('dev')
+    expect(() => assertDistFreshForDeviceBuild('dev', metaUrlOf(root))).toThrow(/dist 陈旧/)
+  })
+
+  it('build（同上）⇒ 抛错', () => {
+    const root = mkStaleRepo('build')
+    expect(() => assertDistFreshForDeviceBuild('build', metaUrlOf(root))).toThrow(/dist 陈旧/)
+  })
+
+  it('显式绕过 PROTEUS_ALLOW_STALE_DIST=1 ⇒ 放行', () => {
+    const root = mkStaleRepo('bypass')
+    const prev = process.env.PROTEUS_ALLOW_STALE_DIST
+    process.env.PROTEUS_ALLOW_STALE_DIST = '1'
+    try {
+      expect(() => assertDistFreshForDeviceBuild('dev', metaUrlOf(root))).not.toThrow()
+    } finally {
+      if (prev === undefined) delete process.env.PROTEUS_ALLOW_STALE_DIST
+      else process.env.PROTEUS_ALLOW_STALE_DIST = prev
+    }
+  })
+
+  it('无关命令（doctor / help）⇒ 不检查、不抛', () => {
+    const root = mkStaleRepo('other')
+    const meta = metaUrlOf(root)
+    expect(() => assertDistFreshForDeviceBuild('doctor', meta)).not.toThrow()
+    expect(() => assertDistFreshForDeviceBuild('help', meta)).not.toThrow()
+    expect(() => assertDistFreshForDeviceBuild(undefined, meta)).not.toThrow()
+  })
+
+  it('★从 src 运行（tsx 形态）⇒ 不检查（"src 比 dist 新"是预期，不是陈旧）', () => {
+    const root = mkStaleRepo('srccase')
+    const f = path.join(root, 'packages', 'cli', 'src', 'index.ts')
+    fs.mkdirSync(path.dirname(f), { recursive: true })
+    fs.writeFileSync(f, '// fixture\n')
+    expect(() => assertDistFreshForDeviceBuild('dev', pathToFileURL(f).href)).not.toThrow()
+  })
+
+  it('新鲜（dist 比 src 新）⇒ 放行', () => {
+    const root = path.join(TMP, 'devgate-fresh')
+    fs.mkdirSync(path.join(root, 'packages', 'cli', 'dist'), { recursive: true })
+    mkPkg(root, 'somepkg', { srcMtime: Date.now() - 60_000, distMtime: Date.now() })
+    expect(() => assertDistFreshForDeviceBuild('dev', metaUrlOf(root))).not.toThrow()
   })
 })
 

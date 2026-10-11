@@ -952,11 +952,18 @@ struct MainPage {
       // ★★★B（决策 #800）：底部 Tab 栏 = runtime `ProteusTabChrome`（唯一实现）——本壳只喂
       //   state JSON + 安全区 + 切屏出口（解析/合并在 chrome 内；tabItems 已由生成期合并）。
       //   无 tab 的应用 chrome 内部不渲染（与 MP「未声明 tabBar 就无 tabBar」同源）。
-      ProteusTabChrome({
-        stateJson: this.chromeStateJson,
-        safeBottom: this.envVars['--pf-inset-bottom'] ?? 0,
-        onTab: (name: string) => { this.switchTab(name); },
-      })
+      //   ★★贴底容器（真机截图取证）：chrome **不能直接作根 Stack 子节点**——Stack 默认 TopStart
+      //     ⇒ 栏会跑到屏幕顶部并盖住页面标题。照 dev sheet 同款范式：贴底 Stack + hitTestBehavior(None)
+      //     （容器自身不拦触摸、页面其余区域触摸穿透；栏体点击由 chrome 子节点照常响应）。
+      Stack() {
+        ProteusTabChrome({
+          stateJson: this.chromeStateJson,
+          safeBottom: this.envVars['--pf-inset-bottom'] ?? 0,
+          onTab: (name: string) => { this.switchTab(name); },
+        })
+      }
+      .width('100%').height('100%').alignContent(Alignment.Bottom)
+      .hitTestBehavior(HitTestMode.None)
 
       // ② ★dev 胶囊（决策 #731/#732，对齐 Android/iOS DevOverlay）——**右上角**：
       //   ★容器只占**顶部一条**（`width 100%` + **高度自适应**，不 `height('100%')`）⇒ 只有这条(含胶囊)可点、
