@@ -3207,3 +3207,14 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **② 验证（部分）**：`check:android-host-compile` 绿（实现可编译）；runtime-content 产物含 `glass` 字段。
 **③ ★诚实边界（真机视觉验证未完成）**：**未取得"内容透过玻璃模糊"的真机截图**——`SuperappActivity` 单独拉起**显示空白**（需 device superapp 完整运行流程/夹具，非裸 Activity 启动），我**未打通 Android superapp UI 的截图路径** ⇒ **AGSL 玻璃面是否真渲染、观感如何，未证**。这是 P2 的**待完成项**（下一步：查明 Android superapp UI 的启动+截图通路，或写独立 glass 夹具页）。
 **④ 教训**：① **本仓 Android Java 的目录名 ≠ 包名**（`.../layoutcore/runtime/ProteusHostView.java` 的包是 `dev.proteus.layoutcore`）——新文件放同目录**必须用同包名**，否则"程序包不存在"（本轮真实踩坑，耗数轮）；② **"编译通过" ≠ "渲染正确"**——AGSL 实现编译过，但真机是否出玻璃面**未证**（该仓铁律：视觉证据不可省）；③ 自绘 backdrop 的完整性（z-order/性能/捕获时机）是真机迭代活。
+
+820. **★★★玻璃自研 P2 验证成功：Android AGSL 自绘玻璃**真机渲染 + 模糊像素判据**（2026-10-11）**：
+**① 用户**：「好的」（继续 P2 真机验证）。
+**② 交付**：**独立夹具 `dev/GlassActivity`**（复用 L4Activity 全屏模式，绕开 superapp 启动/截图复杂度）——手写 Cmd（15 块彩色背景 + 中行白字）+ **一块带 `glass` 规格的节点**（blur 24 / tint `#ffffff26` / radius 24 / border / saturation 1.8）→ 宿主捕获"无玻璃面"内容帧 + AGSL 采样画玻璃面。AndroidManifest 注册 `.GlassActivity`（exported/fullscreen）。
+**③ ★真机验证（截图为证 `hosts/android/results/glass-fixture.png` + `-zoom.png`）**：小米真机 `am start .GlassActivity` → screencap：
+  · 玻璃卡**圆角 + tint 可见**，背后彩色块与白字**透出**；
+  · **像素判据证模糊**（关键——排除"降级半透明"）：玻璃内色块边界**被抹平（值域<8 近均匀）**，玻璃外同边缘**过渡宽 36px** ⇒ **AGSL blur 真生效**（降级半透明不会模糊）。
+  · 无 shader 编译/运行错误日志。
+**④ 意义**：**「即使系统没有玻璃能力也能自绘近似系统的液态玻璃」在 Android 上跑通了**——AGSL 采样背后内容做 blur+tint，原生 chrome/自绘节点都能承接（页面中段自绘节点亦可，因采样源是宿主自身已画内容）。
+**⑤ 诚实边界**：① 夹具是**验证载体**（手写 Cmd），非真实业务页（业务页要 pg-glass 折叠 + 真机跑 superapp，主截图为空是 superapp 启动问题，与玻璃无关）；② 观感（tint/饱和/边缘高光的精细度）需进一步调 shader 参数对齐系统；③ 性能（每帧重捕离屏位图）需真机评测；④ iOS/鸿蒙自研 shader 未做（**P3**）；⑤ 液体融合未做（**P4**）。
+**⑥ 教训**：**独立夹具是"绕开复杂宿主跑通单能力"的最省成本形态**（#811 同源经验）——superapp 启动/截图链路重且易卡，一个裸 Activity 手写 Cmd 就把玻璃面验了；**且必须像素判据**（肉眼看"有模糊感"不够，"过渡宽 36px→抹平"才是硬证据）。
