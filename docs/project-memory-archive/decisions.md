@@ -3085,3 +3085,16 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **④ 破坏性验证（6 条法全咬）**：注入 camelCase 主名 / 越界类别 / 重复路径 / 别名指向不存在 / 别名撞主名 / 字面 hex ⇒ 门禁**逐条红**；还原后绿（`diff` 确认 set.ts 与备份一致）。
 **⑤ 诚实边界（P1/P2）**：**outline/stroke 线性体系未建**（需线性源 SVG——**填充路径变不出线性**），duotone 双色槽 P2。**不硬凑**（无素材硬做 = 假 OS 级）。
 **⑥ 教训**：**"规范写了" ≠ "机器守着"**——§6 早已写 kebab/类别/双体系，但 `check:icons` 只查内核可吃 ⇒ 命名/类别/重复漂移数轮无人知（与 deny-blind "形态变了门禁就失效"同源）。**官方 type 的"合法例外"形态 = 显式别名表 + 单一解析点**，不是硬塞进主名（污染 kebab 契约）。
+
+808. **★★★Keryx 图标库彻底收编——OS 级图标库（238 枚 · outline/filled 双体系 · Material Symbols 生成管线 · 全端）P1+P2**（2026-10-11）：
+**① 用户点名**：「图标库可以单独做下去……以 **Proteus Music 超级应用（150 页）**场景完善补充我们的图标库做成**真正的 OS 级图标库**，先彻底把图标库收掉」。用户批准：**200+ 枚**（§6 P2 全量）+ **outline 默认/filled 选中**（§6 标准）+ **本轮全收**（含淘汰存量第二套实现 + App p-icon 通内核）。
+**② 关键尽调（决定架构）**：① **网格**——Material Symbols 源是 **960 网格**（`viewBox="0 -960 960 960"`）；而 **App 内核 `svg_path.rs` 与三端宿主不读 viewBox**（把 path 坐标当节点局部 px 直接画）⇒ **必须在数据侧把 960 缩放到 24 网格**（Web/MP 天然自适应，但为三端一致统一到 24）；② **源可用**——Material Symbols（Apache-2.0）对每枚同时提供 `default`（outline）+ `fill1`（filled）⇒ §6 双体系由单源产出；③ **`normalizePath` 只归命令（A/S/T/H/V→绝对 M/L/C/Q/Z）、**不缩放坐标** ⇒ 缩放须另写。
+**③ 交付（P1 数据管线）**：
+  · `packages/icons/icon-manifest.mjs`（**词汇表 SSOT**）：238 条 `[ms, category]`，按 Proteus Music 场景（播放器/歌词/歌单/专辑/电台/发现/搜索、交易/会员/购物车/订单/物流、社交/会话/联系人/动态、内容/视频/播客、账户/设置、运营/活动 + 框架自用）覆盖 **7 类别**；命名 = **kebab(Material Symbol 名)**（`arrow_back`→`arrow-back`）。
+  · `scripts/gen-icons.mjs`（**生成器**，范式同 `gen-css-capability-alignment`）：`--collect`（联网拉源 + **源工件缓存** `icons.source.json`，并发 8、有界重试、无 sleep）→ 无参生成 → `--check` 漂移门禁。**缩放 960→24**（`x'=0.025x, y'=0.025y+24`）+ `normalizePath`，写 `src/generated/icons.generated.ts`（幂等、排序、无时间戳）。补齐了"内核拒绝的语法"之外的"**内核不读的 viewBox**"这一半。
+  · `packages/icons/src/transform.ts`：`scalePath`（纯函数，网格缩放/平移）。
+  · **数据模型**：`IconDef { d /*outline 默认*/, filled?, viewBox: '0 0 24 24', category }`；命名 `star`=outline / `star-filled`=filled；`iconByName` 解析变体（无 filled 回退 outline）；别名表 22 条（官方 type + 语义等价 + camel）。
+**④ 交付（P2 门禁/测试/预览）**：`check-icons.mjs` **扩到 11 条法**（+⑨viewBox 统一 +⑩**坐标域 [0,24]** +⑪filled 亦内核可吃/在域 + 别名/变体自洽；②⑧扫描面扩到 `src/generated/`）；`check:icons` 脚本内联 `gen-icons --check`（防漂移）；**接入 CI**（ci.yml，同时补接被 `check:gates-sync` 漏掉的 `check:tokens`）。`tests/icons.test.ts` 扩 **29 条**（规模≥200/7 类全覆盖/坐标域/双体系/变体解析/别名）。`/icons` 页 238 枚 + **outline/filled 切换** + 7 分类 + 搜索 + 尺寸。
+**⑤ 破坏性/实测**：门禁抓出并修 **20 组同义重复 glyph**（audiotrack=music-note、call=phone… Material Symbols 有大量同义字形）+ `cancel` 与旧别名撞车（cancel 现为真图标，别名删除）。生成物 **238 主名 + 22 别名 + 238 filled**，**全坐标域 [0,24]**（精确），门禁 + 29 单测 + d2 + gates-sync + website build 全绿；浏览器实测 238 枚清晰、filled 切换正确。
+**⑥ 诚实边界（本决策内未做，P3/P4）**：**P3** 淘汰存量第二套实现（`built-in-components/icon.ts` 微信 shim 硬编码 hex + `ComponentGlyph.vue` 手绘）；**P4** App 端 p-icon 通内核（`svg-path` attr + 内核 viewBox→节点盒缩放）+ 三端真机。**不做** duotone 双色槽 / 真 stroke 1.5-2px（MS outline 是填充式轮廓，不假装真描边）。
+**⑦ 教训**：① **上游图标源的坐标网格常与自研渲染器不符**——Material Symbols 960 网格 + App 内核不读 viewBox ⇒ "拉来即用"会**跨端失配**（Web/MP 正常、App 坐标溢出 40×）；**生成期必须显式缩放到消费端网格**（门禁加**坐标域**判据才能拦住"忘了缩放"）；② **同名路径 = 同义图标**（Material Symbols 大量 synonym）——"零重复主名路径"门禁把它们逼出来，去重后 259→238；③ **"图标即数据"的完整形态 = 一条生成管线**（源 → 缓存 → 缩放 → 归一化 → 生成物 → 漂移门禁），不是手写数据文件——手写 238 条不可维护、不可复现、会漂移。
