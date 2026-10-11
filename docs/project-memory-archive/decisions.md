@@ -3198,3 +3198,12 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
   · **测试**：`tests/glass-ir.test.ts`（4：preset 折出/tint 转 hex/custom 兜底/无 resolver 不折）。
 **④ 诚实边界**：① 本轮是 **P1 地基**（IR + 折叠 + 门禁）——**还没画真玻璃**；② **P2**（Android AGSL 自绘真玻璃，宿主 `onDraw` 捕获背后内容 + RuntimeShader）是旗舰、必须真机；③ **P3**（iOS/鸿蒙自研 shader 补齐；iOS 无 layer-filter 捷径须叠 CAMetalLayer）；④ **P4**（液体融合：iOS `UIGlassContainerEffect`、Android/Harmony shader 内 SDF 自研）；⑤ **页面中段自绘节点**承接 backdrop 有性能代价（每节点离屏捕获）。
 **⑤ 教训**：① **新材料能力 = 新 IR 字段，非新节点类型**（本仓扁平树 + 字段平铺的构造决定的通用判据——节点类型会多建盒、破坏与 Web 的几何等价）；② **参数模型复用既有 SSOT**（`@proteus-vue/glass` 的 `ResolvedGlass`），不另起；③ **新字段必同步全部跨语言接缝**（编译器键表/适配器/内核 DTO/宿主白名单）——`check:glass-capability` 把这条从"靠记忆"变"靠门禁"（沿用 #812 glass 字段漏登记的真实教训）；④ **`level` 是运行期能力决策**（系统材质 vs 自绘，宿主据 OS 定），**不该构建期下发**。
+
+819. **★★★玻璃自研 P2：Android 自绘玻璃面（AGSL 采样实现，真机验证未完成）**（2026-10-11）：
+**① 交付（实现层，零设备可编译）**：
+  · **`GlassMaterial.java`（原 GlassRenderer 改名）**：框架自研 AGSL 玻璃材质——`buildPaint(背后位图, spec)` → `Paint(RuntimeShader)`（blur 9 点盒式 + 饱和提彩 + tint）；`isAvailable()` API 31+ 门。★**踩坑**：初版包名写成 `dev.proteus.layoutcore.runtime`，而 `ProteusHostView` 的**真实包名是 `dev.proteus.layoutcore`**（**目录名 runtime ≠ 包名**——本仓历史遗留）⇒ javac 报"程序包不存在" 9 处；修正包名后通过。
+  · **宿主接入**：`ProteusHostView` 加 `glassByNode`（id→规格）+ `setGlassNodes`；`onDraw` 有玻璃节点时 `captureGlassBackdrop()`（把"无玻璃面"的内容帧捕获成离屏位图作采样源）+ `drawCmds` 里每玻璃节点 `drawGlassFace`（AGSL 采样 blur+tint，裁剪圆角；不可用则**半透明实色回退**——不白屏/黑块）。`VaporRenderHost` 加 `parseGlass` + `mkCmd` 记 `glassByNode` + `pushToView.setGlassNodes`。
+  · **验证载体**：`superapp/pages/mine.vue` 加 `<pg-glass preset=card>`（dogfooding）；**runtime-content mine 屏 `glass:1` 已证折叠通路**。
+**② 验证（部分）**：`check:android-host-compile` 绿（实现可编译）；runtime-content 产物含 `glass` 字段。
+**③ ★诚实边界（真机视觉验证未完成）**：**未取得"内容透过玻璃模糊"的真机截图**——`SuperappActivity` 单独拉起**显示空白**（需 device superapp 完整运行流程/夹具，非裸 Activity 启动），我**未打通 Android superapp UI 的截图路径** ⇒ **AGSL 玻璃面是否真渲染、观感如何，未证**。这是 P2 的**待完成项**（下一步：查明 Android superapp UI 的启动+截图通路，或写独立 glass 夹具页）。
+**④ 教训**：① **本仓 Android Java 的目录名 ≠ 包名**（`.../layoutcore/runtime/ProteusHostView.java` 的包是 `dev.proteus.layoutcore`）——新文件放同目录**必须用同包名**，否则"程序包不存在"（本轮真实踩坑，耗数轮）；② **"编译通过" ≠ "渲染正确"**——AGSL 实现编译过，但真机是否出玻璃面**未证**（该仓铁律：视觉证据不可省）；③ 自绘 backdrop 的完整性（z-order/性能/捕获时机）是真机迭代活。
