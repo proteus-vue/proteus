@@ -32,6 +32,9 @@ final class ProteusTabChrome {
 
     /// 壳提供的切屏出口（点 tab → 由壳走 `__proteusSuperappNav` + 重渲）。
     var onTap: ((String) -> Void)?
+    /// 底部安全区（pt）——**chrome 自读父视图 `safeAreaInsets.bottom`**（= Web `env(safe-area-inset-bottom)`；
+    ///   壳零接线）。栏总高 = 内容区 + 此值；安全区是内容区**下方**的纯底色。
+    private var safeBottom: CGFloat = 0
 
     /** ★★壳侧探针（决策 #802）：当前 tab 名列表——"点击命中了谁"的取证入口。 */
     var itemNames: [String] { items.map { $0.name } }
@@ -47,6 +50,7 @@ final class ProteusTabChrome {
     /// 上次建栏时的父宽——★布局前首建（bounds 零宽）会把格子/标签/图标**以零宽定过位**，
     ///   layoutBar 只修正栏与格子外框、修不回格内子视图 ⇒ 宽度变化必须**整栏重建**（真机截图取证）。
     private var builtWidth: CGFloat = -1
+    private var builtSafeBottom: CGFloat = -1
 
     // ────────────────────────── 状态解析（唯一入口） ──────────────────────────
 
@@ -81,6 +85,8 @@ final class ProteusTabChrome {
 
     /// 每次渲染/导航后由壳调用：解析 state → 差异重建/重着色 + 置顶。items 为空 ⇒ 撤栏（无 tab 即无栏）。
     func applyState(_ state: [String: Any]) {
+        // ★自读安全区（2026-10-11 · 问题1）：= Web `env(safe-area-inset-bottom)`——布局后有效。
+        safeBottom = host?.safeAreaInsets.bottom ?? 0
         spec = Self.specFromState(state)
         items = Self.itemsFromState(state)
         current = (state["current"] as? String) ?? ""
@@ -109,24 +115,34 @@ final class ProteusTabChrome {
         let specDict = spec as NSDictionary
         let width = parent.bounds.width
         let same = (builtItems == items) && (builtSpec?.isEqual(specDict) ?? false) && bar != nil
-            && abs(width - builtWidth) < 0.5
+            && abs(width - builtWidth) < 0.5 && abs(safeBottom - builtSafeBottom) < 0.5
         if same { return }
         bar?.removeFromSuperview()
         bar = build(in: parent)
         builtItems = items
         builtSpec = specDict
         builtWidth = width
+        builtSafeBottom = safeBottom
     }
 
     private func build(in parent: UIView) -> UIView {
-        let h = CGFloat((spec["height"] as? NSNumber)?.doubleValue ?? 56)
+        let h = CGFloat((spec["height"] as? NSNumber)?.doubleValue ?? 52)   // 内容区高
+        let total = h + safeBottom                                          // 栏总高（含安全区底色）
         let w = parent.bounds.width
-        let bar = UIView(frame: CGRect(x: 0, y: parent.bounds.height - h, width: w, height: h))
+        let bar = UIView(frame: CGRect(x: 0, y: parent.bounds.height - total, width: w, height: total))
         bar.backgroundColor = specColor("surface", 0xFFFFFF)
         // 顶边框（Web: border-top 1px --sa-line）
         let line = UIView(frame: CGRect(x: 0, y: 0, width: w, height: 1.0 / UIScreen.main.scale))
         line.backgroundColor = specColor("line", 0xDCDFE5)
         bar.addSubview(line)
+        // ★★内容块几何（2026-10-11 · 问题1 修复）：图标+间距+文字**整体在内容区（h）内垂直居中**——
+        //   对齐 Web `.sa-tabbar__item`（height:52 + flex column + justify-content:center）。
+        //   此前 iOS 用硬编码 y=6/30（不居中）⇒ 与另两端三种间距。
+        let iconH: CGFloat = 22
+        let gapY: CGFloat = 2
+        let labelH: CGFloat = 14
+        let blockH = iconH + gapY + labelH
+        let blockTop = max(0, (h - blockH) / 2)
         for (i, item) in items.enumerated() {
             let bw = w / CGFloat(max(1, items.count))
             let cell = UIView(frame: CGRect(x: bw * CGFloat(i), y: 0, width: bw, height: h))
@@ -135,10 +151,11 @@ final class ProteusTabChrome {
             // 图标（可无——没声明 glyph 就不画）
             if let glyphView = makeGlyphView(item: item, width: bw) {
                 glyphView.tag = 771193   // ★移出 cell 段（cell = 771000..771099；同 #799 族坑）
+                glyphView.frame = CGRect(x: 0, y: blockTop, width: bw, height: iconH)
                 cell.addSubview(glyphView)
             }
             // 文案
-            let tx = UILabel(frame: CGRect(x: 0, y: 30, width: bw, height: 14))
+            let tx = UILabel(frame: CGRect(x: 0, y: blockTop + iconH + gapY, width: bw, height: labelH))
             tx.tag = 771194   // ★移出 cell 段
             tx.text = item.label
             tx.font = UIFont.systemFont(ofSize: CGFloat((spec["labelSize"] as? NSNumber)?.doubleValue ?? 10))
@@ -170,7 +187,7 @@ final class ProteusTabChrome {
     private func makeGlyphView(item: Item, width bw: CGFloat) -> UIView? {
         guard let glyph = item.glyph, !glyph.isEmpty else { return nil }
         let size = CGFloat((spec["iconSize"] as? NSNumber)?.doubleValue ?? 19)
-        let frame = CGRect(x: 0, y: 6, width: bw, height: 22)
+        let frame = CGRect(x: 0, y: 0, width: bw, height: 22)   // ★frame 由 build 统一设（内容块居中）
         if glyph.hasPrefix("sym:") {
             let sysName = String(glyph.dropFirst(4))
             if let img = UIImage(systemName: sysName) {
@@ -210,10 +227,11 @@ final class ProteusTabChrome {
     /// 尺寸校正（父视图 bounds 变化后——如布局/安全区就绪的二次渲染）。
     private func layoutBar() {
         guard let bar = bar, let parent = host else { return }
-        let h = CGFloat((spec["height"] as? NSNumber)?.doubleValue ?? 56)
+        let h = CGFloat((spec["height"] as? NSNumber)?.doubleValue ?? 52)
+        let total = h + safeBottom
         let w = parent.bounds.width
-        if bar.frame.width != w || bar.frame.height != h || bar.frame.origin.y != parent.bounds.height - h {
-            bar.frame = CGRect(x: 0, y: parent.bounds.height - h, width: w, height: h)
+        if bar.frame.width != w || bar.frame.height != total || bar.frame.origin.y != parent.bounds.height - total {
+            bar.frame = CGRect(x: 0, y: parent.bounds.height - total, width: w, height: total)
             let bw = w / CGFloat(max(1, items.count))
             for (i, _) in items.enumerated() {
                 bar.viewWithTag(771000 + i)?.frame = CGRect(x: bw * CGFloat(i), y: 0, width: bw, height: h)

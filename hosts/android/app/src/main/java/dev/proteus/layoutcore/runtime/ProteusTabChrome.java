@@ -54,6 +54,8 @@ public final class ProteusTabChrome {
 
     private android.widget.FrameLayout wrapper;      // 自持容器（顶线 + 横排项）
     private android.widget.LinearLayout bar;
+    /** 内容区高（dp→px）——安全区变化时重算 wrapper 总高（内容区 + 安全区）。 */
+    private int barHeightPx = 0;
     private Listener listener;
 
     private JSONObject spec = new JSONObject();
@@ -70,10 +72,17 @@ public final class ProteusTabChrome {
 
     public void setListener(Listener l) { this.listener = l; }
 
-    /** 底部安全区（导航条）内边距——壳从 WindowInsets 转发（窗口属壳，几何归属不变）。 */
+    /** 底部安全区（导航条）——壳从 WindowInsets 转发（窗口属壳，几何归属不变）。
+     *  ★★修复（2026-10-11 · 问题1）：安全区是内容区**下方**的纯底色，**不**吃进内容区——
+     *   此前 `bar.setPadding(bottom=inset)` 把内容挤进 (56−inset) 区 ⇒ 内容偏上
+     *   （实测上 gap 3.7dp / 下 22.7dp，另两端又是别的值）。现只把 wrapper 总高加成
+     *   内容区 + 安全区，内容仍在内容区内垂直居中（对齐 Web `.sa-tabbar`）。 */
     public void setBottomInsetPx(int px) {
         this.bottomInsetPx = Math.max(0, px);
-        if (bar != null) bar.setPadding(0, 0, 0, bottomInsetPx);
+        if (wrapper != null && barHeightPx > 0) {
+            android.view.ViewGroup.LayoutParams lp = wrapper.getLayoutParams();
+            if (lp != null) { lp.height = barHeightPx + bottomInsetPx; wrapper.setLayoutParams(lp); }
+        }
     }
 
     // ────────────────────────── 状态解析（唯一入口） ──────────────────────────
@@ -183,7 +192,8 @@ public final class ProteusTabChrome {
 
     private void rebuild() {
         if (wrapper != null) { parent.removeView(wrapper); wrapper = null; }
-        int barH = dp((float) specNum("height", 56));
+        int barH = dp((float) specNum("height", 52));
+        barHeightPx = barH;
         final int onColor = specColor("brand", 0xFF5B5BD6);
         final int offColor = specColor("text3", 0xFF5F6673);
         final int surface = specColor("surface", 0xFFFFFFFF);
@@ -192,9 +202,12 @@ public final class ProteusTabChrome {
 
         wrapper = new android.widget.FrameLayout(ctx);
         android.widget.FrameLayout.LayoutParams wlp = new android.widget.FrameLayout.LayoutParams(
-                android.view.ViewGroup.LayoutParams.MATCH_PARENT, barH);
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT, barH + bottomInsetPx);
         wlp.gravity = android.view.Gravity.BOTTOM;
         wrapper.setLayoutParams(wlp);
+        // ★★安全区（inset）也是栏白底——否则内容区移到顶后，下方 inset 区露父容器底色（真机取证：
+        //   露 #f5f6f8 灰），Web `.sa-tabbar` 的 padding-bottom 区是同色白底。
+        wrapper.setBackgroundColor(surface);
 
         // 顶边框（Web: border-top 1px --sa-line）——含在 chrome 容器内（自持，不碰父级子视图）
         android.view.View line = new android.view.View(ctx);
@@ -208,10 +221,9 @@ public final class ProteusTabChrome {
         bar = new android.widget.LinearLayout(ctx);
         bar.setOrientation(android.widget.LinearLayout.HORIZONTAL);
         bar.setBackgroundColor(surface);
-        bar.setPadding(0, 0, 0, bottomInsetPx);
         android.widget.FrameLayout.LayoutParams blp = new android.widget.FrameLayout.LayoutParams(
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT, barH);
-        blp.gravity = android.view.Gravity.BOTTOM;
+        blp.gravity = android.view.Gravity.TOP;   // ★内容区在顶（安全区在下方作底色）
         bar.setLayoutParams(blp);
         wrapper.addView(bar);
 
