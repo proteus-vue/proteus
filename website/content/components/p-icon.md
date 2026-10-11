@@ -33,8 +33,8 @@ order: 1008
 
 | 属性 | 说明 | 类型 | 默认值 | 必填 |
 |---|---|---|---|---|
-| `name` | 图标名（内置字形表；未知 → '?'）。框架名，优先于官方 type | `String` | `''` | 否 |
-| `type` | ★官方 <icon> type（success/info/warn/waiting/cancel/download/clear…）——name 的官方别名 | `String` | `''` | 否 |
+| `name` | 图标语义名（Keryx 名称；未知 → 显式占位图标，非 '?'）。框架名，优先于官方 type | `String` | `''` | 否 |
+| `type` | ★官方 <icon> type（success/info/warn/…）——name 的官方别名 | `String` | `''` | 否 |
 | `size` | 尺寸 px | `Number` | `16` | 否 |
 | `color` | 颜色 | `String` | `'currentColor'` | 否 |
 | `spin` | 旋转动画 | `Boolean` | `false` | 否 |
@@ -44,12 +44,12 @@ order: 1008
 #### `name`
 
 - **类型**：`String`　**默认值**：`''`　**必填**：否
-- **说明**：图标名（内置字形表；未知 → '?'）。框架名，优先于官方 type
+- **说明**：图标语义名（Keryx 名称；未知 → 显式占位图标，非 '?'）。框架名，优先于官方 type
 
 #### `type`
 
 - **类型**：`String`　**默认值**：`''`　**必填**：否
-- **说明**：★官方 <icon> type（success/info/warn/waiting/cancel/download/clear…）——name 的官方别名
+- **说明**：★官方 <icon> type（success/info/warn/…）——name 的官方别名
 
 #### `size`
 
@@ -68,11 +68,14 @@ order: 1008
 
 ## 实现要点
 
-- 矢量优先：内置字形映射（unicode 自包含，零资源）；name/size/color/spin 约束
-- ★2026-09-14 官方属性对齐（批次 2）：新增官方 `type`（取值 success/info/warn/…）——与 name 同义（name 优先）。
-- ★★真机修复（2026-09-14）：根节点由 `<text>` 改 **`<view>`**——Skyline 下 `<text>` 不支持 `inline-flex`
-- （尺寸/居中/transform 全失效 → 图标整体不显示、旋转中心也不对）；改为 view 盒 + 内层 text 承载字形，
-- 尺寸/居中/旋转都作用在 view 盒上（两块图标演示均恢复正常）。
+- ★★2026-10-11 重写：**图标即数据（SVG path 单一真源，非字体）**——此前用 unicode 字形表
+- （`✓★♥⌕…`）跨端字体依赖、可渲染成 tofu（违宪：图标库方案 §4 判"三套实现全部违宪"）。
+- 现从 `@proteus-vue/icons`（Keryx 数据包）取 path，三端同源渲染：
+- · Web：内联 `<svg><path d>`（真矢量，随 currentColor 着色）
+- · MP/Skyline：`<svg>` 走 svg-lower 编译期 lowering（G-62），或 p-svg-canvas 兜底
+- · App：内核 `svg_path.rs`（`path d` → CGPath/Path 描边填充）
+- API 向后兼容：`name`（含旧字形名如 success/home，映射到同名 path）+ 官方 `type` 别名 + size/color/spin。
+- ★淘汰棘轮：旧 `GLYPHS` unicode 字形表移除（`check:icons` 禁止数据侧出现字形字面量）。
 
 ## 用法
 

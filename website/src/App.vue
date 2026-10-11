@@ -42,6 +42,8 @@ const links: NavLink[] = [
   { to: '/consistency', label: '一致性标准', key: 'consistency' },
   // ★★★Themis 编译期 CSS 引擎（招牌产品页——写一次样式，所有端长一个样，并可被证明）
   { to: '/themis', label: 'CSS 引擎', key: 'themis' },
+  // ★Keryx 图标库（Proteus UI 方言层——全量预览 / 质量审查）
+  { to: '/icons', label: '图标库', key: 'icons' },
 ]
 /** 导航文案（双语 key） */
 function navText(l: { key: string; label: string }): string {
@@ -51,6 +53,7 @@ function navText(l: { key: string; label: string }): string {
   if (l.key === 'animation') return t('app.animation')
   if (l.key === 'consistency') return t('app.consistency')
   if (l.key === 'themis') return t('app.themis')
+  if (l.key === 'icons') return t('app.icons')
   return l.label
 }
 
