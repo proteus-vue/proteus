@@ -9,6 +9,10 @@ export interface ProteusRenderStats {
 export const attach: (content: object, density: number, screenWvp: number, screenHvp: number) => number;
 /** 消费 Proteus 指令流（RenderCmd 同形 JSON）；返回实际建出的渲染节点数 */
 export const renderCommands: (json: string) => number;
+/** ★★★"跳变驱动动画"（本批）：把内核逐帧视觉（`anim_tick` 回执的 `updates` 数组原文）写到
+ *  RenderNode（SetTransform 平移+缩放 / SetScale / SetOpacity；tx/ty 为设计单位，内部 ×density）；
+ *  返回 `{ok,applied,nodes}`——applied = 实际写了几个节点（判据证明"真的落到了渲染层"） */
+export const applyNodeVisuals: (updatesJson: string) => string;
 /** 宿主记账读数（机器判据读它） */
 export const stats: () => ProteusRenderStats;
 /** ★矩阵 #15：平台零参与动画——记基线 + 取目标节点（根的第一个子节点）；返回 {ok, on_draw_count} */

@@ -189,8 +189,11 @@ export interface ScreenRuntimeInstance {
    * ★★★**数据泵推进一帧**（通用原语 `v-pump`，本批）：宿主按帧调用，传入真实帧间隔 `dtMs`；
    *   本方法按各泵 `hz` **累加抽帧**判到期 ⇒ 用**内建生成器**产新值 ⇒ `writeSource`。返回本次实际触发的源数。
    *   ★无泵声明 ⇒ 恒返回 0（零开销，宿主可无脑每帧调）。
+   *   ★`rebuild`（鸿蒙一次性 VM 等 `applyOps` 为 no-op 的宿主持有）：触发后**重实例化节点树**
+   *     （`refreshData()`）——它们拿不到 O(1) 增量、只能整树重建（`content()` 才反映新值）。
+   *     有 applyOps 的宿主（Android/iOS）**不要传**（白付整树重建成本）。
    */
-  pumpTick(dtMs: number): number
+  pumpTick(dtMs: number, rebuild?: boolean): number
   /** 本屏声明的泵数（宿主据此决定是否需起周期驱动）。 */
   pumpCount(): number
   /** 本屏各泵的频率列表（`hz`）——宿主据最小间隔起/停周期驱动。 */
@@ -487,7 +490,7 @@ export function createScreenRuntime(opts: CreateScreenRuntimeOptions): ScreenRun
       writeSource(name, value) { writeSource(name, value) },
       pumpCount() { return pumps.length },
       pumpHzList() { return pumps.map((p) => p.hz) },
-      pumpTick(dtMs) {
+      pumpTick(dtMs, rebuild) {
         if (pumps.length === 0) return 0
         let fired = 0
         for (let i = 0; i < pumps.length; i++) {
@@ -501,6 +504,9 @@ export function createScreenRuntime(opts: CreateScreenRuntimeOptions): ScreenRun
             fired++
           }
         }
+        // ★`rebuild`（no-applyOps 宿主）：泵源写入走的是 O(1) 槽位增量，**节点树不重建**——
+        //   而这类宿主只能整树重取（`content()`）⇒ 重建一次让新值真的反映进节点（诚实路径，不假装增量）。
+        if (rebuild && fired > 0) refreshData()
         return fired
       },
       snapshot() { return { ...data } },

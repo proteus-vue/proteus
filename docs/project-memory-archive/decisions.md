@@ -2931,3 +2931,22 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **⑤ 真机验证**：L4/L3/L5/L2 **四路切回首页全部 blue px=0（干净）**；**按下磁块涟漪照旧**（`kernelAnimStart` 走 `drawCmds` 全量路径，与显示列表缓存无关，`mid-press blue px=769`）；五页无回归。
 **⑥ 门禁**：`android-host-compile` · `AAR-fresh` · `coupled` 100 · `dactyl-visual-nonblocking` 全绿。
 **⑦ 教训**：**"缓存显示列表"必须与其"每节点状态表"同源同版本录制**——`setCmds` 与 `setCmdNodeIds` 是一对**必须原子更新**的输入（先录后换表 = 录进错表）；★**判别征**：「**切换源/目标节点数的大小关系**决定症状」是"靠下标/表长对齐"的经典破绽（旧表够长就"恰好对"、不够长就错位）——**凡按位置对齐的表，都要一次原子更新**。★**定位手段**：显示列表缓存类 bug 的"金判据"= **临时禁用回放（强制直绘）看是否复现**（一次性把范围缩到"录制期"）；再桩 `id=-1` 即锁定"表未同步"。
+
+795. **★★★v-pump / `v-animate`/`<Transition>` 的 iOS + 鸿蒙宿主驱动接线（#792/#793 的"诚实边界"收口）——iOS 已真机验；鸿蒙到编译通过（签名是环境态阻塞）**（2026-10-11）：
+**① 本轮要解决的（记忆待办第 1 条）**：#792/#793 只在 **Android** 接了「数据泵周期驱动 + 跳变驱动动画入口」；iOS/鸿蒙缺宿主驱动 ⇒ "通用能力全端受益"未兑现。
+**② iOS（已交付·真机验）**：
+  · `SuperappRuntimeHost`（**runtime 单元**，CLI 生成宿主与参考宿主共用同一份）补 `animStart(animsJson)`/`animTick(dtMsJson)`（对齐 Android 的**两端口成对**契约）+ **泵 CADisplayLink 驱动**（`pullPumps` 在 `mount` 成功后**异步**（下一 runloop）读 `__proteusHostAppPumpHz()`——**为什么异步**：mount 是 JS→native 调用，栈内再 eval 是**嵌套重入**；排到下一 runloop 零重入）+ `pumpStats()`（native 判据读数）。
+  · `superapp-scene` 加 `--pump=<page>[,<ms>]` 探针（导航→让泵跑→读数+截图+报告自退）+ 报告带 `pump` 段（`calls/fire_ticks/anim_start_calls`——**看内核受理/宿主真写，不看截屏像素**，同 #793⑧ 判据纪律）。
+  · **`gen-app-screen-content.mjs` 修（通用缺陷）**：屏注册表路径**硬编码** `PROJECT/router/auto-routes.ts`，而工程可配 `router.routesOutput` 为 `src/router/auto-routes.ts`（**create-proteus 模板缺省形态**；demos/dactyl 即此）⇒ 注册表**静默提取失败**（只打一行 ⚠ 后继续）⇒ boot 报「屏注册表为空」⇒ **整机白屏**。修：改调 CLI 的 `resolveAppRoutes`（#664 起它就是 routesOutput 的**唯一解析处**——不许第二份）。
+  · **验证**：模拟器（接线旁路·无需签名）**全过**（`calls=53 fire_ticks=53 anim_start_calls=6`，`rendered=l3`）；顺带补齐模拟器脚本缺的两处源集（`superapp-runtime-host.swift` + `platform/ios` 适配层——**源码列表落后于真机脚本**的既有缺口）。真机签名材料过期 ⇒ 用 `provision.sh` **自动重签**（新档 `cn.shxuxi.proteus.experiments`）真机复跑。
+**③ 鸿蒙（已交付代码·编译通过；签名环境态阻塞真机）**：
+  · **跨 VM 会话层**（`host_app_runtime_impl.h`）：鸿蒙是**一次性 VM**（#540）⇒ 动画引擎/树随 VM 销毁 ⇒ 把**动画规格 + 原子钟**搬到 **C++ static**（随 .so 存活）；`animStart` **只记录**（此刻新树未建）⇒ `hostAppAnimAttach`（ArkTS **每次建树后**调）把规格挂到新树 + **按已流逝重放到当前相位**。`hostAppAnimTick`（帧循环）+ `hostAppAnimStats`（判据读数）。
+  · **`hostAppPumpTick`**：一拍 = **一个一次性 VM** 内 boot + 渲染 + **N 帧泵**（`frames`，批内中间帧不上屏——一次性 VM 的诚实代价，回执带 `eval_ms` 供宿主调批大小）+ 重挂取新树。`pumpTick(dtMs, rebuild)`（**新增 rebuild 选项**：no-applyOps 宿主拿不到 O(1) 增量，只能整树重建）。
+  · **`applyNodeVisuals`**（渲染层 `proteus_render.cpp`）：内核逐帧视觉（`anim_tick` 的 `updates`）→ RenderNode（`SetTransform` 平移+缩放，**绕局部原点** SetPivot(0,0) 与静态变换同口径 / `SetScale` / `SetOpacity`；tx 设计单位 ×density）。
+  · **`Superapp.ets`**：泵定时器（`setInterval`，最小间隔 = 1000/maxHz）+ 批大小自适应（`eval_ms>80` 减半 / `<20` 加倍）+ 动画帧循环（`hostAppAnimAttach` 挂树 → `hostAppAnimTick` 逐帧 → `applyNodeVisuals`，内核 `active==0` 自停）；报告带 `anim_pump`（宿主侧 + native 会话**两源分开报**）。`run-superapp.sh --pump=<page>[,<ms>]` 判据。
+  · **中性别名**：`__proteusHostAppPump/PumpHz`（runtime 侧按中性名调——分层门禁禁 runtime 出现 `superapp` 专名）。
+**④ Android**：`build-batch.mjs` **补 superapp 进 assets 同步清单**（此前只重建 dist 不同步 assets ⇒ 参考宿主跑旧 bundle——正是该脚本注释上方警告过的陈旧产物陷阱，superapp 是唯一漏网者）；Dactyl L3 真机复验：数字场 1→75 持续跳变 + 核心圆脉冲（设备自证 `core_scene:ANIMATION`）。
+**⑤ 附带收口（pre-existing）**：`check:host-invoke-contract` 报 harmony 未知方法 `dev.console` ⇒ 把 `dev.console`（**dev 通道·项目 console 回收**，决策 #730，仅鸿蒙 runtime 实现——一次性 VM 无法用 `post` 反向通道）**补进契约** ⇒ 门禁从红转绿（各端覆盖率如实报缺，非漂移）。
+**⑥ 门禁**：`check:coupled`(29) · `check:host-layering` · `check:bridge-sync` · `check:harmony-runtime-prebuilt` · `check:android-runtime-aar-fresh` · `check:android-host-compile` · `check-selfdraw-compile` · `check:ios-cli-host-compile` · `check:host-invoke-contract`(转绿) · `check:vapor-three-end` · `check:gates-sync` · `check:host-kernel-keys` · `check:no-json-wire` 全绿。
+**⑦ 诚实边界**：① **鸿蒙真机未验**——签名材料（p12 口令）是**另一台机（kags）加密**的密文，本机无法解密（`Unsupported state or unable to authenticate data`）；需在 DevEco 里**重新自动签名一次**（勾 "Automatically generate signature"）才能装机验证 ⇒ 鸿蒙侧只到"**编译通过 + 装机待签名**"；② 鸿蒙泵是**批式**（一拍 N 帧、批内中间帧不上屏）——受一次性 VM 约束，**可见刷新率低于 Android 的逐帧 Choreographer 驱动**，如实记不假装同频；③ 鸿蒙一次性 VM ⇒ JS 侧 `directiveState` **每 tick 重建** ⇒ "同值不重播"的抑制跨 tick 不生效（首评即播 = Vue mounted 语义，已如实注释）。
+**⑧ 教训**：① **"通用能力"的判据是"三端都接了"**——只在 Android 接 = 诚实边界未收口（本仓 #790/#791/#792/#793 连续四批同一条边界，本轮才补两端）；② **一次性 VM 端要"会话化"**——跨调用的状态（动画规格/原子钟）必须**搬到能存活的地方**（C++ static），并**按已流逝重放**（否则每次重建回相位 0）；③ **同一"源码列表"两处维护必分叉**（iOS 模拟器脚本落后真机脚本 ⇒ 编译直接报缺类型）；④ **"dist 新 ≠ assets 新"**（Android 构建脚本同步清单漏项 ⇒ 参考宿主跑旧 bundle；同 #666/#663 的"两条通路"病）；⑤ **路径类事实源必须呼应配置**（routesOutput 硬编码 ⇒ 模板形态工程白屏——**修在唯一解析处**，不许第二份）。

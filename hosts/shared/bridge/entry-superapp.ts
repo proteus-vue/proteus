@@ -286,7 +286,7 @@ interface SuperappRuntimeHostShape {
     const ok = args.remount ? runtime.mountScreenInto(args.name) : runtime.mountScreen(args.name)
     // ★★★宿主回执如实回传（2026-10-08）：`mountScreen` 现在校验 `host.mount` 回执（ok:false ⇒ false）
     //   ——把**宿主原话**一并带上，使"渲染失败"在宿主日志/报告里可见（此前被丢弃 ⇒ 整屏保持旧内容
-    //   却报 ok:true，用户看到的是"点背景还是首页"）。
+    //   却报 ok:true，用户看到的是"点返回还是首页"）。
     return JSON.stringify({ ok, current: runtime.current(), snapshot: runtime.snapshot(), hostReply: runtime.lastHostReply() })
   }
 
@@ -335,18 +335,23 @@ interface SuperappRuntimeHostShape {
   }
 
 /**
- * ★★★**v-pump 推进一帧**（通用原语，本批）：宿主按帧调（`tickJson = {dtMs}`）——当前屏的泵按 hz
+ * ★★★**v-pump 推进一帧**（通用原语，本批）：宿主按帧调（`tickJson = {dtMs, rebuild?}`）——当前屏的泵按 hz
  *   累加抽帧、用内建生成器产新值 ⇒ 写数据源 ⇒ 既有 slot-runtime 增量通路。
  *   返回 `{ok, fired, pumps}`（`fired` = 本次触发的源数；`pumps` = 当前屏泵数，宿主据此决定是否续帧）。
+ *   ★`rebuild:true`（鸿蒙一次性 VM 等 no-applyOps 宿主传它）：泵值变化后**整树重建**——返回里带
+ *   `tree`（重建后的当前屏节点），宿主可直接重画（它们拿不到 O(1) 增量、只能整树重取）。
  */
 ;(globalThis as unknown as { __proteusSuperappPump?: (tickJson: string) => string })
   .__proteusSuperappPump = (tickJson: string) => {
     const g = globalThis as unknown as { __SUPERAPP_RUNTIME__?: SuperappRuntime }
     if (!g.__SUPERAPP_RUNTIME__) return JSON.stringify({ ok: false, error: '运行期未启动' })
     try {
-      const a = JSON.parse(tickJson || '{}') as { dtMs?: number }
-      const fired = g.__SUPERAPP_RUNTIME__.pumpTick(typeof a.dtMs === 'number' ? a.dtMs : 16.7)
-      return JSON.stringify({ ok: true, fired, pumps: g.__SUPERAPP_RUNTIME__.pumpCount() })
+      const a = JSON.parse(tickJson || '{}') as { dtMs?: number; rebuild?: boolean }
+      const fired = g.__SUPERAPP_RUNTIME__.pumpTick(typeof a.dtMs === 'number' ? a.dtMs : 16.7, a.rebuild === true)
+      const pumps = g.__SUPERAPP_RUNTIME__.pumpCount()
+      // ★rebuild 模式返回重建后的树（与 `__proteusSuperappTree` 同形）——宿主一次调用拿到"新值 + 新树"。
+      const tree = a.rebuild === true ? g.__SUPERAPP_RUNTIME__.currentContent() : null
+      return JSON.stringify({ ok: true, fired, pumps, ...(tree ? { current: g.__SUPERAPP_RUNTIME__.current(), tree } : {}) })
     } catch (e) {
       return JSON.stringify({ ok: false, error: String((e as Error)?.message ?? e) })
     }
@@ -410,6 +415,15 @@ __HOSTAPP.__proteusHostAppRender = __HOSTAPP.__proteusSuperappRender
 __HOSTAPP.__proteusHostAppSnapshot = __HOSTAPP.__proteusSuperappSnapshot
 __HOSTAPP.__proteusHostAppRuntimeCurrent = __HOSTAPP.__proteusSuperappRuntimeCurrent
 __HOSTAPP.__proteusHostAppGesture = __HOSTAPP.__proteusSuperappGesture
+// ★★★v-pump（本批）：runtime 侧**泵驱动**按中性名调（iOS `SuperappRuntimeHost.pullPumps` /
+//   鸿蒙 `hostAppPump`）——与上面其它别名同法：同一实现，两个名字。
+__HOSTAPP.__proteusHostAppPump = __HOSTAPP.__proteusSuperappPump
+__HOSTAPP.__proteusHostAppPumpHz = __HOSTAPP.__proteusSuperappPumpHz
+// ★★★"跳变驱动动画"（本批）：iOS/鸿蒙宿主做完动画帧循环后用中性别名读"在飞动画数"（停判据真源）。
+__HOSTAPP.__proteusHostAppAnimActive = (): string => {
+  const g = globalThis as unknown as { proteusHost?: { animActive?: () => string } }
+  try { return g.proteusHost?.animActive ? g.proteusHost.animActive() : '{"active":-1}' } catch { return '{"active":-1}' }
+}
 // ★dev 元素树（决策 #732）：含 `file`/`screen`（面板据节点 loc 拼 file:line:col → 跳编辑器）——
 //   鸿蒙壳取它作 `/tree` body（比 mount 捕获树多 `file` 字段）。
 __HOSTAPP.__proteusHostAppTree = __HOSTAPP.__proteusSuperappTree

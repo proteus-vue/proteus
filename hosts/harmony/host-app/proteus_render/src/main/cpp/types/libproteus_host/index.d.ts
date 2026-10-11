@@ -26,3 +26,16 @@ export const hostAppDrive: (json: string) => string;
 export const hostAppRender: (json: string) => string;
 /** ★dev REPL（决策 #729）：一次性 VM 求值 JS 表达式；入参 {bundle,filesDir,expr} → {ok,value/error} */
 export const hostAppEval: (json: string) => string;
+/** ★★★v-pump 批量节拍（本批）：一次性 VM 内 boot + 渲染 + N 帧泵推进 + 重挂；
+ *  入参 {bundle,page,viewport:{width,height},state?,dtMs?,frames?,chain?:[],gestureOnly?:bool}
+ *  → {ok,fired,frames,eval_ms,pumpHz,current,state,snapshot,tree} */
+export const hostAppPumpTick: (json: string) => string;
+/** ★记录当前屏泵频率（判据/报告读数）；入参 = 频率列表 JSON（`[]` ⇒ 无泵） */
+export const hostAppPumpHzSet: (hzJson: string) => string;
+/** ★★★动画挂树（本批）：ArkTS 在**每次 appScreenCommands 建树后**调——把动画规格挂到新树 +
+ *  重放到当前相位（一次性 VM ⇒ 树每次重建）；返回 `{ok,active,started,updates}`（updates 喂 applyNodeVisuals） */
+export const hostAppAnimAttach: () => string;
+/** ★★★动画帧推进（本批）：帧循环每 vsync 调；入参 `{"dtMs":n}` → `{ok,active,changed,updates}` */
+export const hostAppAnimTick: (json: string) => string;
+/** ★动画/泵会话读数（判据/报告）：`{starts,attaches,ticks,changed,active,elapsed_ms,have_spec,pump:{…}}` */
+export const hostAppAnimStats: () => string;

@@ -22,12 +22,25 @@ ROOT="$(cd "$HERE/../.." && pwd)"
 HDC() { bash "$HERE/hdc.sh" "$@"; }
 
 CSS=0
+PUMP=""
+PUMP_MS=2500
 for arg in "$@"; do
   case "$arg" in
     --css) CSS=1 ;;
-    *) echo "✗ 未知参数：${arg}（只支持 --css）"; exit 2 ;;
+    # ★★★v-pump / 跳变驱动动画判据（本批）：`--pump=<page>[,<ms>]`——导航到该屏让泵跑一段 →
+    #   报告里带 `anim_pump` 读数（宿主侧 pump_ticks/fired + native 会话 stats）+ 截屏。
+    #   与 iOS `--pump=` / Android L3 检查同判据（★看内核受理/宿主真写，不看截屏像素——#793 纪律）。
+    --pump=*) PUMP="${arg#--pump=}" ;;
+    *) echo "✗ 未知参数：${arg}（支持 --css / --pump=<page>[,<ms>]）"; exit 2 ;;
   esac
 done
+if [ -n "$PUMP" ]; then
+  _parts="${PUMP%%,*}"
+  _rest="${PUMP#*,}"
+  PUMP_PAGE="$_parts"
+  [ "$_rest" != "$PUMP" ] && [ -n "$_rest" ] && PUMP_MS="$_rest"
+  PUMP=1
+fi
 
 if [ "$CSS" = "1" ]; then
   BUNDLE="dev.proteus.cssconf"
@@ -78,7 +91,13 @@ if HDC shell "test -f $REPORT_DEV && echo STILL_EXISTS" 2>/dev/null | grep -q ST
 fi
 
 echo "==> 2. 启动（drive 模式：切遍 tab 后落 ${REPORT_NAME}）"
-HDC shell "aa start -a EntryAbility -b $BUNDLE --ps scene superapp-drive" 2>&1 | grep -qi "successfully" || { echo "✗ 启动失败"; exit 1; }
+if [ "${PUMP:-}" = "1" ]; then
+  # ★★★v-pump 场景（本批）：导航到 `<page>` → 泵/动画驱动跑 `PUMP_MS` → 落报告 + 截屏
+  echo "    （pump 模式：page=${PUMP_PAGE} ms=${PUMP_MS}）"
+  HDC shell "aa start -a EntryAbility -b $BUNDLE --ps scene superapp-pump-$PUMP_PAGE --ps ms $PUMP_MS" 2>&1 | grep -qi "successfully" || { echo "✗ 启动失败"; exit 1; }
+else
+  HDC shell "aa start -a EntryAbility -b $BUNDLE --ps scene superapp-drive" 2>&1 | grep -qi "successfully" || { echo "✗ 启动失败"; exit 1; }
+fi
 
 echo "==> 3. 等**报告落盘**（完成信号 = 文件存在；零盲等）"
 if ! bash "$WAIT" --cmd "bash '$HERE/hdc.sh' shell 'test -f $REPORT_DEV && echo PROTEUS_REPORT_READY' | grep -q PROTEUS_REPORT_READY" --timeout 90 --interval 3; then
@@ -107,11 +126,37 @@ if HDC shell "snapshot_display -f /data/local/tmp/$SHOT_NAME.jpeg" >/dev/null 2>
 else
   echo "    ⚠ 截图未取到"
 fi
-python3 - "$RESULTS/$REPORT_NAME" <<'PY'
+python3 - "$RESULTS/$REPORT_NAME" "${PUMP:-0}" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1]))
+pump_mode = sys.argv[2] == '1'
 log = d.get('switch_log', [])
 print(f"    ok={d.get('ok')} host={d.get('host_id')} current={d.get('current')} tabs={d.get('tabs')}")
+if pump_mode:
+    # ★★★v-pump / 跳变驱动动画判据（本批）：宿主侧 pump_ticks/fired > 0（泵真的在跑且真写数据源）
+    #   + native 会话 anim.starts > 0（v-animate/<Transition> 真的交给宿主动画通道）
+    #   ★判据纪律（同 #793）：看**内核受理 / 宿主真写**，不看截屏像素。
+    ap = d.get('anim_pump') or {}
+    host = ap.get('host') or {}
+    native = ap.get('native') or {}
+    pump_s = native.get('pump') or {}
+    print(f"    pump：host_ticks={host.get('pump_ticks')} fired={host.get('pump_fired')} "
+          f"interval={host.get('pump_interval_ms')} batch={host.get('batch_frames')} eval_ms={host.get('last_eval_ms')}")
+    print(f"    native：pump_ticks={pump_s.get('ticks')} fired={pump_s.get('fired')} "
+          f"anim.starts={native.get('starts')} attaches={native.get('attaches')} ticks={native.get('ticks')}")
+    print(f"    anim：host_attaches={host.get('anim_attaches')} host_ticks={host.get('anim_ticks')} "
+          f"host_applied={host.get('anim_applied')} host_starts={host.get('anim_starts')}")
+    ok = True
+    if not (host.get('pump_ticks', 0) and host.get('pump_fired', 0)):
+        print('✗ 泵驱动未生效（宿主 pump_ticks/pump_fired）——接线失败'); ok = False
+    if not (pump_s.get('fired', 0) or pump_s.get('ticks', 0)):
+        print('✗ native 会话未记录泵节拍——接线失败'); ok = False
+    if not native.get('starts', 0):
+        print('✗ v-animate/<Transition> 未走到宿主 animStart（native.starts=0）——接线失败'); ok = False
+    if not host.get('anim_applied', 0):
+        print('✗ 动画视觉未写到渲染层（anim_applied=0）——接线失败'); ok = False
+    if ok: print('✅ 泵驱动 + 跳变驱动动画（鸿蒙）判据通过')
+    sys.exit(0 if ok else 1)
 allok = True
 for row in log:
     flag = '✓' if row.get('ok') else '✗'
@@ -120,4 +165,8 @@ for row in log:
 sys.exit(0 if (d.get('ok') and allok and len(log) > 0) else 1)
 PY
 RC=$?
-[ "$RC" = "0" ] && echo "  ✓ 鸿蒙 $LABEL 桌面入口验证通过" || { echo "  ✗ 断言失败"; exit "$RC"; }
+if [ "${PUMP:-}" = "1" ]; then
+  [ "$RC" = "0" ] && echo "  ✓ 鸿蒙 v-pump / 跳变驱动动画验证通过" || { echo "  ✗ v-pump 判据失败"; exit "$RC"; }
+else
+  [ "$RC" = "0" ] && echo "  ✓ 鸿蒙 $LABEL 桌面入口验证通过" || { echo "  ✗ 断言失败"; exit "$RC"; }
+fi

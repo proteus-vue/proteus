@@ -42,7 +42,13 @@ const runtimeContent = JSON.parse(fs.readFileSync(rt.outFile, 'utf-8'))
 
 // 批次 43（superapp 独立应用）：从项目统一导航产物提取**屏注册表**（screens/tabNames + tab 标题）——
 //   供 App 端**真实应用入口**（路由栈 + tab）消费。共一份路由树（与 Web/MP 同源）。
-const autoRoutesPath = path.join(PROJECT, 'router', 'auto-routes.ts')
+//   ★★★修（本批 · 决策 #795）：路径必须 honor `proteus.config.ts` 的 `router.routesOutput`——
+//     此前硬编码 `PROJECT/router/auto-routes.ts`，而工程可配为 `src/router/auto-routes.ts`
+//     （demos/dactyl 即此形态；create-proteus 模板缺省也是 `src/router/`）⇒ 注册表静默提取失败
+//     （只打一行 ⚠ 后继续）⇒ boot 报「屏注册表为空」、整机白屏（本轮真机在模拟器上抓到）。
+//     唯一实现 = CLI 的 `resolveAppRoutes`（#664 起它已是 routesOutput 的唯一解析处——不许第二份）。
+const { resolveAppRoutes } = await import(pathToFileURL(path.join(ROOT, 'packages/cli/src/app-routes.ts')).href)
+const autoRoutesPath = (await resolveAppRoutes(PROJECT)).file
 let registry = { screens: {}, tabNames: [], tabLabels: {}, indexName: '', routes: [] }
 try {
   const arMod = await import(pathToFileURL(autoRoutesPath).href)

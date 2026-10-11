@@ -314,10 +314,14 @@ for (const [src, dstName] of [
   [OUT_HOST_RT, 'bundle-host-runtime.js'],
   [OUT_LIGHTS, 'bundle-lights.js'],
   [OUT_VAPOR, 'bundle-vapor.js'],
+  // ★★★补（本批）：superapp 在本脚本上半段重建，却**漏在同步清单外** ⇒ dist 新、assets 旧
+  //   ⇒ 参考宿主（run-superapp-launcher.sh / SuperappActivity）跑旧 bundle——正是上方注释
+  //   警告的陈旧产物陷阱，superapp 是唯一漏网者。
+  [OUT_SUPERAPP, 'bundle-superapp.js'],
 ]) {
   if (!fs.existsSync(src)) continue
   const dst = path.join(ROOT, 'hosts/android/app/src/main/assets', dstName)
   fs.mkdirSync(path.dirname(dst), { recursive: true })
   fs.copyFileSync(src, dst)
 }
-console.log('[android-bundle] ✅ 5 个产物已同步到 assets（设备读的是 assets——同步即构建的一部分）')
+console.log('[android-bundle] ✅ 6 个产物已同步到 assets（设备读的是 assets——同步即构建的一部分）')

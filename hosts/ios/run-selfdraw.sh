@@ -103,6 +103,7 @@ RECORD=0
 #   不带 = 常驻（真·桌面点开形态）。
 DRIVE=0
 TAP=""
+PUMP=""
 for a in "$@"; do
   case "$a" in
     --record) RECORD=1 ;;
@@ -117,6 +118,8 @@ for a in "$@"; do
     --drive) DRIVE=1 ;;
     # ★B1 交互判据（2026-10-07）：`--tap=x,y`（内容坐标 vp）——注入合成 tap 走与真触摸同链 → 落报告自退
     --tap=*) TAP="${a#--tap=}" ;;
+    # ★★★v-pump/动画判据（本批）：`--pump=<page>[,<ms>]`——导航到屏后让泵周期驱动跑一段 → 读数+截图+报告自退
+    --pump=*) PUMP="${a#--pump=}" ;;
     # ★★★批 A⑤（2026-10-08 · 决策 #656）：`--screen=<name>` + `--scroll=<dy>`——导航到屏 + 注入滚动
     #   → 截图 → 落报告自退（fixed/sticky 滚动锚定证据；与 Android `--es screen`/`--es scroll` 同语义）
     --screen=*) SCREEN_ARG="${a#--screen=}" ;;
@@ -569,11 +572,12 @@ elif [ "$MODE" = "superapp" ]; then
   SA_ARGS=(--superapp)
   if [ "$DRIVE" = "1" ]; then SA_ARGS+=(--drive); fi
   if [ -n "$TAP" ]; then SA_ARGS+=("--tap=$TAP"); fi
+  if [ -n "${PUMP:-}" ]; then SA_ARGS+=("--pump=$PUMP"); fi
   if [ -n "${SCREEN_ARG:-}" ]; then SA_ARGS+=("--screen=$SCREEN_ARG"); fi
   if [ -n "${SCROLL_ARG:-}" ]; then SA_ARGS+=("--scroll=$SCROLL_ARG"); fi
   # ★B1：`--drive` 或 `--tap` 都是**自动化验证**（落报告后自退）⇒ 用 `--console` 阻塞到退出；
   #   两者皆无 = 常驻给人看（App 不退 ⇒ 绝不能加 `--console`，见上注释）。
-  if [ "$DRIVE" = "1" ] || [ -n "$TAP" ] || [ -n "${SCROLL_ARG:-}" ]; then
+  if [ "$DRIVE" = "1" ] || [ -n "$TAP" ] || [ -n "${PUMP:-}" ] || [ -n "${SCROLL_ARG:-}" ]; then
     xcrun devicectl device process launch --console --terminate-existing \
       --environment-variables '{"PROTEUS_EXIT_AFTER_REPORT":"1"}' \
       --device "$UDID" "$BUNDLE_ID" "${SA_ARGS[@]}" > "$LAUNCH_LOG" 2>&1 || LAUNCH_RC=$?

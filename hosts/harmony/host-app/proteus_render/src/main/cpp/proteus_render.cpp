@@ -1627,6 +1627,85 @@ static napi_value RenderCommands(napi_env env, napi_callback_info info) {
     return out;
 }
 
+/**
+ * ★★★`applyNodeVisuals(json)` —— **把内核逐帧视觉写到 RenderNode**（本批·"跳变驱动动画"的
+ *   落点，与 Android `applyTickBin`/iOS `animTickApply` 同一职责）。
+ *
+ * 【输入】内核 `anim_tick` 回执里的 `updates` 数组原文（`[[id,tx,ty,scale,rotate,opacity,…],…]`，
+ *   JSON 形态见内核 `visual_to_json`——前 6 项 = id/tx/ty/scale/rotate/opacity，其后为颜色/裁剪/…）。
+ * 【做什么】对每条：`SetTransform`（平移 + 缩放矩阵，**物理 px = 设计值 × density**，
+ *   绕**节点局部原点**——先 `SetPivot(0,0)`，与静态变换路径同口径）+ `SetScale` + `SetOpacity`。
+ * 【与静态变换的关系】静态变换在建树时一次写入（`renderCommands`）；本入口是**动画覆盖层**——
+ *   每帧调用，覆盖同一节点（内核是唯一计算方，宿主不算第二份数学）。动画结束后内核不再发该节点
+ *   ⇒ 宿主保留末值（与 Android `animTx` 表同语义；下次建树由静态值复位）。
+ * 【为什么绕局部原点】与静态路径同一条根因修复（见 renderCommandsImpl 的 SetPivot(0,0) 注释）。
+ * 【返回】`{ok, applied, nodes}`——applied = 实际写了几个节点（判据读它证明"真的落到了渲染层"）。
+ */
+static napi_value ApplyNodeVisuals(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    std::string js;
+    if (argc >= 1 && args[0] != nullptr) {
+        size_t len = 0;
+        napi_get_value_string_utf8(env, args[0], nullptr, 0, &len);
+        js.resize(len + 1);
+        napi_get_value_string_utf8(env, args[0], &js[0], len + 1, &len);
+        js.resize(len);
+    }
+    int applied = 0;
+    // 逐条 `[...]` 数组解析（每条形如 [id,tx,ty,scale,rotate,opacity,…]）
+    size_t pos = 0;
+    while (pos < js.size()) {
+        size_t open = js.find('[', pos);
+        if (open == std::string::npos) break;
+        size_t close = js.find(']', open);
+        if (close == std::string::npos) break;
+        std::string row = js.substr(open + 1, close - open - 1);
+        pos = close + 1;
+        // 逗号分隔的前 6 个数值
+        double vals[6] = {0, 0, 0, 1, 0, 1};
+        int vi = 0; size_t p2 = 0;
+        while (vi < 6) {
+            size_t comma = row.find(',', p2);
+            std::string tok = (comma == std::string::npos) ? row.substr(p2) : row.substr(p2, comma - p2);
+            if (tok.empty()) break;
+            vals[vi++] = strtod(tok.c_str(), nullptr);
+            if (comma == std::string::npos) break;
+            p2 = comma + 1;
+        }
+        if (vi < 3) continue;
+        int id = (int)vals[0];
+        double tx = vals[1] * g_density, ty = vals[2] * g_density;   // 设计单位 → 物理 px
+        float sc = (float)vals[3];
+        float op = (float)vals[5];
+        auto nit = g_nodeById.find(id);
+        if (nit == g_nodeById.end() || nit->second == nullptr) continue;
+        ArkUI_RenderNodeHandle node = nit->second;
+        // 平移 + 等比缩放（列主序 4×4；绕节点局部原点——SetPivot(0,0) 后矩阵作用于局部坐标）
+        float m[16] = {
+            sc, 0, 0, 0,
+            0, sc, 0, 0,
+            0, 0, 1, 0,
+            (float)tx, (float)ty, 0, 1
+        };
+        OH_ArkUI_RenderNodeUtils_SetPivot(node, 0.0f, 0.0f);
+        OH_ArkUI_RenderNodeUtils_SetTransform(node, m);
+        OH_ArkUI_RenderNodeUtils_SetScale(node, sc, sc);
+        OH_ArkUI_RenderNodeUtils_SetOpacity(node, op < 0 ? 0.0f : (op > 1 ? 1.0f : op));
+        applied++;
+    }
+    if (applied > 0 && g_rootHost != nullptr) {
+        // ★请求一帧（与 renderCommands 收尾同法：node 属性变了不会自动合成）
+        //   ★Invalidate 只接受 **host 句柄**（ArkUI_NodeHandle）——不是 RenderNode 句柄（类型不同，实测编译期即红）。
+        OH_ArkUI_RenderNodeUtils_Invalidate(g_rootHost);
+    }
+    char buf[160];
+    snprintf(buf, sizeof(buf), "{\"ok\":true,\"applied\":%d,\"nodes\":%zu}", applied, g_nodeById.size());
+    PROTEUS_LOG("PROTEUS_APPLY_VISUALS applied=%{public}d total=%{public}zu", applied, g_nodeById.size());
+    napi_value out; napi_create_string_utf8(env, buf, NAPI_AUTO_LENGTH, &out); return out;
+}
+
 /* ── 矩阵 #15：平台零参与动画的四个入口 ── */
 
 /** platformAnimBegin(): {ok, on_draw_count} —— 记录窗口基线 + 取目标节点（根的第一个子节点） */
@@ -2011,6 +2090,8 @@ static napi_value Init(napi_env env, napi_value exports) {
     napi_property_descriptor desc[] = {
         {"attach", nullptr, Attach, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"renderCommands", nullptr, RenderCommands, nullptr, nullptr, nullptr, napi_default, nullptr},
+        // ★★★"跳变驱动动画"（本批）：把内核逐帧视觉（anim_tick 的 updates）写到 RenderNode
+        {"applyNodeVisuals", nullptr, ApplyNodeVisuals, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"stats", nullptr, Stats, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"platformAnimBegin", nullptr, PlatformAnimBegin, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"platformAnimStep", nullptr, PlatformAnimStep, nullptr, nullptr, nullptr, napi_default, nullptr},
