@@ -2985,3 +2985,16 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **⑥ 门禁**：`check:dactyl-budget`（含 iOS 实测）· `check:dactyl-visual-nonblocking` · `check:interaction-folding` · `android-host-compile` · `AAR-fresh` · `check-selfdraw-compile` · `coupled` · `bridge-sync` 全绿。
 **⑦ 诚实边界**：① 三腿真机取证 **iOS/Android 待跑**（Android 设备侧安装被 MIUI 拦——需手机确认；鸿蒙待签名）；② T1 是"**提交**"非"**上屏**"（真值仍以高速摄影为外部真值）；③ 采样样本数少（注入次数决定）；④ 鸿蒙的**按下传播/动画**分支未真机验。
 **⑧ 教训**：① **"某能力只有一端有"要以"编译器字段有没有被消费"来查**（比查代码更快：grep `press*`/`followField*`/`pseudo`）；② **判据注入必须"自动定位 + 对准生产路径的同一时点"**（猜坐标与绕过钩子都会产生假红/假绿）；③ **ArkTS 的字面量限制会让"直接抄 Android 写法"连续失败**——具名常量/逐步赋值/回调分解是通用解法。
+
+798. **★★★Dactyl D3 天花板刻度尺（容量数=档位号）+ L5 总负载旋钮 + 一键跑批入口**（2026-10-11）：
+**① 用户指令**：「对接着做，把这个延迟专项全部做掉」⇒ 承接 #797，把 Dactyl 的 **D3/D1 收口件**做掉。
+**② D3 天花板刻度尺**（`scripts/dactyl-ceiling.mjs` · 15 §5）：
+  · **定义**（可证伪）：负载向量 `L=(N节点,M触点,f数据频率,K动画通道,D嵌套)`，按**升档序**（先 N→f→M→K）逐档加码；**天花板** = 满足全预算（`input_latency_p95 ≤ 8.33ms` ∧ `jank_rate ≤ 0.2%` ∧ `gc_pause ≈ 0`）的最大可行档；**崩裂点** = 首次违约档。
+  · **对外是容量数不是耗时数**（§5 设计要点）：输出 `ceiling_level`/`rupture_level`（档位号）——"我们第 N 档 vs 对手第 M 档"比"P95=3ms"更难被质疑、更能说明代差。
+  · **诚实边界**：无实测输入 ⇒ 写 ◐ 占位（"未标定"≠"不达标"）+ exit 0；缺任一读数 ⇒ 该档判不达标并**列出缺项**（不假定 0）。
+  · **破坏性自测**：4 档合成输入（1/2 过、3/4 违约）⇒ 精确 `ceiling=2 / rupture=3`。
+  · **接线**：`check:dactyl-ceiling` + 并入 `check:dactyl-budget` + CI（★`check:gates-sync` 当场抓出"新门禁未接线"——工具层红线正常工作）。
+**③ L5 总负载旋钮**（§4.6 崩裂关）：`l5.vue` 在 swipe-to-delete 上叠加 **`v-pump` 负载源**（`load` 0–100 @60Hz）——24 根负载针 opacity/scale 随档位放大（全合成属性）+ 过载档 RUPTURE ZONE；过 `check:dactyl-visual-nonblocking`。
+**④ 一键跑批**（`hosts/shared/dactyl/run-dactyl.sh`）：把"专项验收"变成**一条命令**——构建→装真机→跑判据→取采样→量具→天花板→汇总（三端同形：`run-dactyl.sh <android|ios|harmony>`）。
+**⑤ 诚实边界**：① **Android 真机取证待设备侧确认**（MIUI `INSTALL_FAILED_USER_RESTRICTED`——需手机点允许）；② **鸿蒙真机待签名**（p12 跨机加密）；③ 天花板**尚未真机标定**（输入文件为空 ⇒ ◐，如实）；④ 显影页真机视觉截图待补。
+**⑥ 教训**：① **"把专项做完"= 把判据链做成一条命令**（`run-dactyl.sh`）——否则每次验收都要人肉拼接 6 步；② **新门禁必须接线**（`check:gates-sync` 的设计目标：接线不靠记忆——当场生效）。
