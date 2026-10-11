@@ -134,6 +134,10 @@ function closeMusic(): void {
     </view>
 
     <text class="sa-section">外观</text>
+    <!-- ★★★自研液态玻璃（决策 #818）验证载体：App 端经构建期折成 style.glass → 宿主自绘玻璃面 -->
+    <pg-glass preset="card" :radius="12" style="height: 64px; margin: 0 12px 12px">
+      <view class="mine-glass-in"><text class="mine-glass-t">液态玻璃 · 自研材质</text></view>
+    </pg-glass>
     <view class="sa-list">
       <view id="mine-row-dark" class="sa-item sa-item--tap" @click="toggleDark">
         <view class="mine-ico"><p-icon name="dark-mode" :size="18" color="#4a4ab8" /></view>
