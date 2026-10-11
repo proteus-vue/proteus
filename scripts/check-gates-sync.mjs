@@ -134,6 +134,9 @@ const LOCAL_ONLY = {
   // ★Android 宿主编译检查（2026-09-29，与 check:ios-selfdraw-compile 同源盲区）：
   //   编译宿主需 Android SDK（android.jar）+ JDK；CI 为 ubuntu-latest，不装 Android SDK ⇒ 跑不了。
   'check:android-host-compile': '需 Android SDK（android.jar）+ JDK 17；CI 为 ubuntu-latest，未装 Android SDK',
+  // ★鸿蒙宿主编译检查（2026-10-11，android-host-compile 的鸿蒙姊妹）：用 DevEco 自带 OHOS clang
+  //   做 -fsyntax-only；CI 为 ubuntu-latest，无 DevEco/OHOS SDK ⇒ 跑不了（本地有则真检查，无则跳过 0）。
+  'check:harmony-host-compile': '需 DevEco Studio 自带 OHOS clang（aarch64-linux-ohos）；CI 为 ubuntu-latest，未装 DevEco',
   // ★平台动画判据（容器级 + 逐节点）：**输入是真机产物**（platform-anim*.json，由 adb pull 取回）
   //   且 App 是**广播触发**（需真机 + adb）⇒ CI 无法执行。它的配套是"零设备也能守"的
   //   `check:android-host-compile`（宿主代码可编译）+ `check:acceptance-stub`（装置可用），

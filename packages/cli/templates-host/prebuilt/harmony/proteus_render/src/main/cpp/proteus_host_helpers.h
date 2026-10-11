@@ -26,6 +26,9 @@
 extern "C" {
 uint64_t proteus_layout_create(const char* request_json);
 char* proteus_layout_rects(uint64_t handle);
+/// ★★App 图标/SVG 渲染（2026-10-11）：导出有 svgPath 的节点（`{segs, d, strokeColor, strokeWidth, fill, ...}`）——
+///   鸿蒙宿主据此画图标（填充）与描边路径。返回的 JSON 须 `proteus_layout_free_string` 释放。
+char* proteus_layout_svg_nodes(uint64_t handle);
 char* proteus_layout_hit_test(uint64_t handle, float x, float y);
 // ★★二进制指令流（矩阵 #14）：SFC 订阅驱动更新 → 内核增量重排（与 Android JNI 同一 ABI）
 char* proteus_layout_apply_ops(uint64_t handle, const uint8_t* ptr, uint32_t len);

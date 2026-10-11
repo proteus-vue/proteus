@@ -355,6 +355,7 @@ struct TextDrawSpec {
     int clipKind = 0;                          // 1=inset
     double clipTop = 0, clipRight = 0, clipBottom = 0, clipLeft = 0;  // 物理 px
     bool hasStroke = false;
+    bool strokeFill = false;   // ★App 图标渲染（2026-10-11）：true ⇒ 填充 path（图标是填充形状）
     std::string strokeD;
     uint32_t strokeColor = 0;
     double strokeWidth = 0;
@@ -643,18 +644,29 @@ static void drawChannelsAndText(OH_Drawing_Canvas* canvas, const TextDrawSpec* s
         }
         OH_Drawing_PenDestroy(pen);
     }
-    // ④ 描边（SVG path：`d` 交给 OH_Drawing_PathBuildFromSvgString 解析）
-    if (spec->hasStroke && !spec->strokeD.empty() && spec->strokeWidth > 0) {
+    // ④ 描边/填充（SVG path：`d` 交给 OH_Drawing_PathBuildFromSvgString 解析）
+    if (spec->hasStroke && !spec->strokeD.empty()) {
         OH_Drawing_Path* path = OH_Drawing_PathCreate();
         if (path != nullptr && OH_Drawing_PathBuildFromSvgString(path, spec->strokeD.c_str())) {
-            OH_Drawing_Pen* pen = OH_Drawing_PenCreate();
-            OH_Drawing_PenSetAntiAlias(pen, true);
-            OH_Drawing_PenSetColor(pen, spec->strokeColor);
-            OH_Drawing_PenSetWidth(pen, (float)spec->strokeWidth);
-            OH_Drawing_CanvasAttachPen(canvas, pen);
-            OH_Drawing_CanvasDrawPath(canvas, path);
-            OH_Drawing_CanvasDetachPen(canvas);
-            OH_Drawing_PenDestroy(pen);
+            if (spec->strokeFill) {
+                // ★App 图标渲染：填充（图标是填充形状）
+                OH_Drawing_Brush* brush = OH_Drawing_BrushCreate();
+                OH_Drawing_BrushSetAntiAlias(brush, true);
+                OH_Drawing_BrushSetColor(brush, spec->strokeColor);
+                OH_Drawing_CanvasAttachBrush(canvas, brush);
+                OH_Drawing_CanvasDrawPath(canvas, path);
+                OH_Drawing_CanvasDetachBrush(canvas);
+                OH_Drawing_BrushDestroy(brush);
+            } else {
+                OH_Drawing_Pen* pen = OH_Drawing_PenCreate();
+                OH_Drawing_PenSetAntiAlias(pen, true);
+                OH_Drawing_PenSetColor(pen, spec->strokeColor);
+                OH_Drawing_PenSetWidth(pen, (float)spec->strokeWidth);
+                OH_Drawing_CanvasAttachPen(canvas, pen);
+                OH_Drawing_CanvasDrawPath(canvas, path);
+                OH_Drawing_CanvasDetachPen(canvas);
+                OH_Drawing_PenDestroy(pen);
+            }
         }
         if (path != nullptr) OH_Drawing_PathDestroy(path);
     }
@@ -1499,7 +1511,9 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
                 jsonNumber(ssub, "width", &wid);
                 spec->strokeColor = (uint32_t)col;
                 spec->strokeWidth = wid;
-                spec->hasStroke = !spec->strokeD.empty() && wid > 0;
+                // ★App 图标渲染：`strokeFill` ⇒ 填充（宽度可为 0）
+                spec->strokeFill = it.find("\"strokeFill\":true") != std::string::npos;
+                spec->hasStroke = !spec->strokeD.empty() && (wid > 0 || spec->strokeFill);
                 if (spec->hasStroke) {
                     // 弧长：真建 path 后量（判据读它证明"路径层真的建出来了"）
                     OH_Drawing_Path* pp = OH_Drawing_PathCreate();

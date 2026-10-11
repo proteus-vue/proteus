@@ -4746,6 +4746,8 @@ pub unsafe extern "C" fn proteus_layout_svg_nodes(handle: u64) -> *mut c_char {
                     n.id.to_string(),
                     serde_json::json!({
                         "segs": segs.segs,
+                        // ★★重建的 `d` 字符串（供"吃 d"的宿主——鸿蒙 `OH_Drawing_PathBuildFromSvgString`）
+                        "d": segs.to_d(),
                         "strokeColor": n.style.stroke_color,
                         "strokeWidth": n.style.stroke_width,
                         // ★★填充模式（App 图标渲染）：宿主据此填充（而非描边）——缺省 false（描边，既有行为）

@@ -3147,3 +3147,13 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **③ 验证**：`tests/app-icon-lowering.test.ts`（5：静态名降级齐字段/缺 size 默认16/动态名诊断/未知名诊断/无 resolver 不降级）；Rust 224 · coupled(354) · `check:host-kernel-keys` · `check:android-host-compile` · `check:ios-selfdraw-compile` · `check:app-screen-content` · `check:content` 全绿。
 **④ 诚实边界**：① **p-icon 现在能在 iOS/Android 渲染**（静态名 + 尺寸 + 颜色），但**真机截图验收未做**（无设备；标 🟡）；② **鸿蒙未接**——其宿主只吃 bench 的 `strokeD`、未消费内核 `svg_nodes` segs 通道（单列）；③ **动态 `:name` 不支持**（`d` 是 computed，静态 JSON 塞不下；需运行期 path 通道 + 内核 patch 解析 svgPath）；④ 未知名/动态名只在构建期诊断，端上不显形（诚实）。
 **⑤ 教训**：① **路径渲染有"描边 vs 填充"两条道**——Material 图标是**填充**形状，砸进默认**描边**的 svgPath 通道会"画出来是一堆轮廓线/或根本不显示"；加 `fill` 开关是必须的（不是可选）；② **静态属性 vs 绑定在 AST 里值形态不同**（属性值已去引号、绑定是表达式）——`literalProp` 类 helper 必须分开处理（本轮实测踩坑）；③ **生文成物**（`website/content/**`）改它会被 `check:content` 判漂移——改**源**（ends.ts/gen 规则），或如本轮（App 状态是端级通用、🟡 仍准确）**不改生成页**，把状态记进决策。
+
+814. **★★★P4-续 鸿蒙侧：`svg_nodes` 通道接入 + 填充渲染 + 新增鸿蒙宿主零设备编译检查**（2026-10-11）：
+**① 背景**：#813 让 p-icon 在 iOS/Android 渲染，但**鸿蒙未接**——其宿主只吃 bench 的 `strokeD`，不消费内核 `svg_nodes`。尽调发现：**DevEco Studio 6.1 在本机**（`/Volumes/data1/work/office-applications/DevEco-Studio.app`）+ 其自带 OHOS clang ⇒ 可做**零设备 C++ 编译检查**（此前鸿蒙没有，改宿主代码只能等 assembleHap/真机）。
+**② 交付**：
+  · **内核**：`svg_path.rs` 加 `to_d()`（`segs → "M x y L … Z"`，对称 `parse_svg_path`，含 roundtrip 单测）+ `ffi.rs` 导出 svg_nodes 时新增 `d` 字符串（供"吃 d"的宿主 OH_Drawing_PathBuildFromSvgString 直接消费）。
+  · **鸿蒙宿主**：`proteus_host.cpp` 的 `AppScreenCommands` 建树后调 `proteus_layout_svg_nodes(handle)` → 按节点 id 预建"描边/填充 cmd 尾缀"（`strokeD`+`stroke{color,width}`[+`strokeFill`]）→ 在节点循环里并进该节点 cmd（**复用既有 strokeD 通道**，零新渲染入口）；`proteus_render.cpp` spec 加 `strokeFill` + 解析 `"strokeFill":true` + 绘制切 **Brush 填充**（否则 Pen 描边）；`proteus_host_helpers.h` 加 FFI 声明。
+  · **新增零设备编译检查** `scripts/check-harmony-host-compile.sh`（OHOS clang `-fsyntax-only`，DevEco 缺失则跳过退出 0）+ 接 `verify` + `check:gates-sync` 的 LOCAL_ONLY 具名（CI 无 DevEco）。★这是 **android-host-compile / ios-selfdraw-compile 的鸿蒙姊妹**（补上"改鸿蒙宿主无本地检查"的盲区）。
+**③ 验证**：`check:harmony-host-compile` ✅ · Rust 225（含 to_d roundtrip）· coupled 354 · `check:harmony-runtime-prebuilt`（含 arm64 核 `.a` 重建 + 真源⇄prebuilt 逐字节）· `check:app-screen-content` · `check:gates-sync` 全绿。
+**④ 诚实边界**：① **三端真机截图验收仍未做**（无设备）——p-icon 在 iOS/Android/鸿蒙的渲染链路**代码齐**，但 🟡 未验收；② 鸿蒙走的是"重建 d 字符串 + OH_Drawing 解析"，与 iOS/Android "segs→平台 Path"是两条通路（都正确，但形态不同——`d` 往返由内核单测保证等价）；③ 动态 `:name` 仍不支持（需运行期 path 通道）。
+**⑤ 教训**：① **"没有本地编译检查"是可发现的缺口**——本仓 android/ios 都有零设备编译门禁，鸿蒙没有；**先探测工具链在不在（DevEco），在就补门禁、不在就跳过**（`check:*` 找不到工具链退出 0 的形态，与 ios/android 同）。★"先取证再断言"：我没假设"本机无 DevEco"，`mdfind` 一查就在。② **能复用既有渲染通道就别开新入口**——鸿蒙图标渲染直接并进既有 `strokeD`（节点局部坐标画），零新 NAPI/零新绘制路径；只加一个 `strokeFill` 开关。③ **跨宿主形态差异要如实记**（segs vs d 字符串）。

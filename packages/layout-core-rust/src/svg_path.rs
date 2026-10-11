@@ -103,6 +103,32 @@ impl SvgPath {
         SvgPath { segs, prefix_len, total_len }
     }
 
+    /// ★★**重建 `d` 字符串**（`segs` → `"M x y L … C … Q … Z"`）——供使用 `OH_Drawing_PathBuildFromSvgString`
+    ///   这类"吃 `d` 字符串"的宿主（鸿蒙）直接消费（避免宿主再写一份段→path 的解析）。
+    ///   ★对称于 `parse_svg_path`（往返：`parse(d).to_d()` 语义等价）。
+    pub fn to_d(&self) -> String {
+        let mut s = String::new();
+        let f = |v: f32| {
+            let r = (v * 1000.0).round() / 1000.0;
+            if r.fract() == 0.0 { format!("{}", r as i64) } else { format!("{}", r) }
+        };
+        for sg in &self.segs {
+            if !s.is_empty() {
+                s.push(' ');
+            }
+            match *sg {
+                PathSeg::MoveTo(x, y) => s.push_str(&format!("M {} {}", f(x), f(y))),
+                PathSeg::LineTo(x, y) => s.push_str(&format!("L {} {}", f(x), f(y))),
+                PathSeg::CubicTo(x1, y1, x2, y2, x, y) => {
+                    s.push_str(&format!("C {} {} {} {} {} {}", f(x1), f(y1), f(x2), f(y2), f(x), f(y)))
+                }
+                PathSeg::QuadTo(x1, y1, x, y) => s.push_str(&format!("Q {} {} {} {}", f(x1), f(y1), f(x), f(y))),
+                PathSeg::Close => s.push('Z'),
+            }
+        }
+        s
+    }
+
     /// ★★**均匀弧长重采样**为恰好 `n` 个三次贝塞尔段（+ 可选 Close）——**异构路径变形的前提**。
     ///
     /// 【为什么需要（MorphSVG 的核心难点）】两条路径段数/段型不同时"逐点插值"没有定义
@@ -575,8 +601,16 @@ mod tests {
     use super::*;
 
     #[test]
+    fn to_d_roundtrip() {
+        // `d` → 段 → `d` 往返语义等价（宿主拿重建的 `d` 喂 PathBuildFromSvgString）
+        let p = parse_svg_path("M4 21 L4 9 L12 3 L20 9 L20 21 Z").unwrap();
+        let d = p.to_d();
+        let p2 = parse_svg_path(&d).unwrap();
+        assert_eq!(p.segs, p2.segs, "往返不等价：{d}");
+    }
+
+    #[test]
     fn scales_view_box_to_node_box() {
-        // 24 网格路径（如 Material 图标 `home` 的近似）：`M0 0 L24 0 L24 24 L0 24 Z`
         let p = parse_svg_path("M0 0 L24 0 L24 24 L0 24 Z").unwrap();
         // 缩放到 48×48 盒：s=2 ⇒ 坐标翻倍（无居中偏移）
         let s = p.scaled_to_box([0.0, 0.0, 24.0, 24.0], 48.0, 48.0);
