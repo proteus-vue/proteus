@@ -4209,12 +4209,15 @@ export function buildLayoutTemplate(
             const colorV = literalProp('color')
             style.width = size
             style.height = size
+            // 着色：显式 `color` 字面量 优先；否则回退**节点继承色** `style.color`（CSS 继承/声明——
+            //   App 端 svgPath 不吃 CSS，颜色必须显式落到 stroke）。都是 hex 才回填。
+            const hexOf = (v: unknown): string | undefined => (typeof v === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(v) ? v : undefined)
+            const strokeColor = hexOf(colorV) ?? hexOf(style.color)
             // ★填充 + 生来已画成（`progress:1`——否则描边进度门 `prog>0` 判为未画 ⇒ 不显形）
             const decl: Record<string, unknown> = { d: resolved.d, progress: 1, fill: true }
-            if (typeof colorV === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(colorV)) decl.stroke = colorV
+            if (strokeColor) { decl.stroke = strokeColor; style.color = strokeColor }
             style.svgPath = decl
             style.svgViewBox = (resolved.viewBox ?? '0 0 24 24').trim().split(/\s+/).map(Number)
-            if (typeof colorV === 'string' && colorV) style.color = colorV
             iconLeaf = true
           } else {
             diag(

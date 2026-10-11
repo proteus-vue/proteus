@@ -108,6 +108,7 @@ export default [
   ['comment', 'communication'],
   ['contacts', 'communication'],
   ['person', 'communication'],
+  ['support_agent', 'communication'],
   ['group', 'communication'],
   ['groups', 'communication'],
   ['group_add', 'communication'],

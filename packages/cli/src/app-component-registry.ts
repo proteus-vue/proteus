@@ -17,6 +17,19 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { buildLayoutTemplate, buildVaporSubscriptions } from '@proteus-vue/compiler'
 import { resolveComponentsRoot } from '@proteus-vue/plugin-vite'
+import { iconByName, hasIcon } from '@proteus-vue/icons'
+
+/**
+ * ★★★App p-icon 图标降级（P4-续 phase B · 决策 #813）：静态语义名 → `{d, viewBox}`。
+ *   构建期注入 `buildLayoutTemplate` 的 `opts.iconResolver`——**静态** `<p-icon name="home">` 在编译期
+ *   解析为 path（降级为叶子盒）。返回 null ⇒ 未知名（不降级 + 诊断）。**所有** App 编译通路（静态
+ *   `screen-content` + 运行期 `runtime-content`）共用本解析器（同源同口径）。
+ */
+export const iconResolver = (name: string): { d: string; viewBox?: string } | null => {
+  if (!hasIcon(name)) return null
+  const def = iconByName(name)
+  return { d: def.d, viewBox: def.viewBox ?? '0 0 24 24' }
+}
 
 /** 一个组件的构建期快照（= slot-runtime 的 `ComponentDef` 形态，可直接序列化跨端） */
 export interface AppComponentDef {
