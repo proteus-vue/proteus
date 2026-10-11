@@ -3180,3 +3180,21 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
   · **顺带修 iOS 真机签名**（`run-selfdraw.sh`）：描述文件过期日期解析的 `date -j -f "%Y-%m-%d %H:%M:%S %z"` 与实际格式（`Sun Oct 18 11:13:18 CST 2026`）不符 ⇒ 自动扫描**永远失败**、回退到未 provision 的 `dev.proteus.experiments` ⇒ **iOS 真机构建静默不可用**（须显式 `PROTEUS_BUNDLE_ID`）。修为 `%a %b %d %H:%M:%S %Z %Y` ⇒ 自动选中可用描述文件（cn.shxuxi.proteus.experiments）。
 **④ 诚实边界**：① **Android 为降级半透明（非真模糊）**——非偷懒，是平台约束（方案 06 已写明），门禁据此判红/绿；② **鸿蒙 `.backdropBlur` 待接**（ArkUI 组件，下一步）；③ **页面中段自绘节点不承接 backdrop**（自绘模型限制，须 native-host 提升视图才可能，代价 z-order/内存）；④ iOS 真机已验证，Android/鸿蒙真机截图待补。
 **⑤ 教训**：① **backdrop 模糊 ≠ 可选特性**——它需要"背后像素"，自绘扁平树给不了；**只有真实原生视图层次（chrome）能承接**——这是"OS 级玻璃"到底能落在哪的根本判据；② **平台能力有真边界**（Android 容器级背景模糊没有），**降级要诚实标注**（半透明 ≠ 模糊，不假装）；③ **"工具一直在但静默不可用"**（签名自动扫描坏）——同 `check:hook-wiring` 族：接线/前置坏了要能被发现，别默认"真机不可用"；④ **规格单源**（tab 玻璃值 == glass preset）靠门禁钉，不靠注释。
+
+817. **★★★玻璃档位修正：iOS Liquid Glass `.regular`→`.clear`（"带底色/磨砂"根因）**（2026-10-11）：
+**① 用户**（真机对比系统 Photos 后）：「根本不是形态问题，iOS 系统自带的液态玻璃是**没有任何背景色**的，真正的液态透明，我们的明显不是」。
+**② 根因 = `UIGlassEffect` 档位用错**：`.regular` = 自适应档，**带较实的填充底色**（看着像磨砂面板）；`.clear` = **真·清透液态玻璃（无底色）**，系统 Photos/Music tab 栏用的就是它。改 `.clear` 后 tab 栏无底色填充、背后内容清晰透出。★**"用对了 API" ≠ "用对了档位"**——观感差异就在这一档。
+**③ 交付**：`tab-chrome.swift` iOS26 分支 `UIGlassEffect(style:.regular)` → `.clear`（并去 tint——`.clear` 已含清透，tint 会令其发闷）。真机截图 `hosts/ios/results/sim-superapp-glass-device.png` 更新。
+**④ 教训**：**系统材质 API 常有"档位"语义**（regular 带填充/clear 通透）——查档位再下结论，别把档位错当"API 不支持/形态不对"。
+
+818. **★★★框架自研液态玻璃材质体系（P1：IR 字段 + 构建期折叠 + 门禁）**（2026-10-11）：
+**① 用户目标**：「把**着色器建立新的 IR 体系**，目的就是为了**即使手机系统没有液态玻璃能力也能提供近似最新系统的液态玻璃能力**」。
+**② recon 关键结论**：① **三端底层能力**——iOS `UIGlassEffect`(公开) + `UIGlassContainerEffect.spacing`(公开融合)；鸿蒙 `backgroundEffect`+`BlurStyle.COMPONENT_*`(公开材质)、`EffectComponent`+`useEffect`(**系统私有**)；Android 公开只有 `RenderEffect`(模糊)、**无玻璃材质/融合**，但**有 `RuntimeShader`(AGSL)** + `RenderEffect.createRuntimeShaderEffect`(把背后内容作采样器) + `RenderNode.setRenderEffect` ⇒ **国产 ROM 那种"自研液态玻璃"= AGSL 着色器，底层公开可用**。② **IR 现实**——本仓 IR 是「扁平 `LayoutNode[]` + `style` 字段包」（无节点 `type`；`InstantiatedNode` 强制字段平铺），glass-plan 的 `GlassNode extends ElementNode` 是给"另一套多 backend codegen 编译器"写的、与本仓自绘现实不符。⇒ **玻璃 = 新的 IR「字段」`glass`（不是新节点类型）**（`svgPath`/`glow`/`mask` 同范式）。
+**③ 交付（P1 地基 + 门禁，CI 全程可验）**：
+  · **内核**：`style.rs` 加 `pub struct GlassSpec { blur, tint, radius, border, border_side, noise, saturation, level }` + `LStyle.glass: Option<GlassSpec>`（仿 MaskSpec/GlowSpec）；`ffi.rs` NodeDto 加 `glass: Option<Value>` + `style_from_dto` 解析校验（缺 blur/tint 拒绝）+ `default_blob`；Rust 单测 `glass_spec_parses_and_defaults`。
+  · **TS 透传**：`selfdraw.ts` `LAYOUT_KEYS` 加 `glass`；编译器 `PAINT_DECL_ATTRS`/`PAINT_DECL_KEY` 加 `glass`（可 JSON 声明）。
+  · **构建期折叠**（对齐 #811 iconResolver 范式）：`buildLayoutTemplate` `opts.glassResolver` —— `<pg-glass preset intensity tint radius border noise fallback>` 经 `@proteus-vue/glass` 的 **`resolveGlass`（材质参数唯一真源）** 折成 `style.glass`（tint 转内核可吃的 `#RRGGBBAA`），`pg-glass` 当普通盒保留子内容、**不展开组件**；两条 App 通路（`app-runtime-content` / `app-content`）同源注入。Web/Skyline 仍走 CSS（不变）。
+  · **门禁**：新 `check:glass-capability`（**值一致**：`TAB_BAR_SPEC.glass` == `@proteus-vue/glass` 的 tabBar preset；**接缝齐**：`glass` 字段在编译器键表/selfdraw/内核 NodeDto/Android 白名单都在——仿 check-svg-path-shape）——接 verify + CI + gates-sync；`check:host-kernel-keys`（glass 进 Android `LAYOUT_KEYS`）；`check:ios-style-keys`。
+  · **测试**：`tests/glass-ir.test.ts`（4：preset 折出/tint 转 hex/custom 兜底/无 resolver 不折）。
+**④ 诚实边界**：① 本轮是 **P1 地基**（IR + 折叠 + 门禁）——**还没画真玻璃**；② **P2**（Android AGSL 自绘真玻璃，宿主 `onDraw` 捕获背后内容 + RuntimeShader）是旗舰、必须真机；③ **P3**（iOS/鸿蒙自研 shader 补齐；iOS 无 layer-filter 捷径须叠 CAMetalLayer）；④ **P4**（液体融合：iOS `UIGlassContainerEffect`、Android/Harmony shader 内 SDF 自研）；⑤ **页面中段自绘节点**承接 backdrop 有性能代价（每节点离屏捕获）。
+**⑤ 教训**：① **新材料能力 = 新 IR 字段，非新节点类型**（本仓扁平树 + 字段平铺的构造决定的通用判据——节点类型会多建盒、破坏与 Web 的几何等价）；② **参数模型复用既有 SSOT**（`@proteus-vue/glass` 的 `ResolvedGlass`），不另起；③ **新字段必同步全部跨语言接缝**（编译器键表/适配器/内核 DTO/宿主白名单）——`check:glass-capability` 把这条从"靠记忆"变"靠门禁"（沿用 #812 glass 字段漏登记的真实教训）；④ **`level` 是运行期能力决策**（系统材质 vs 自绘，宿主据 OS 定），**不该构建期下发**。

@@ -1895,6 +1895,9 @@ public final class VaporRenderHost {
             //   作基准）；宿主此前不转发 ⇒ 内核 glow 恒 None ⇒ glow 强度动画无声失效。转发非行为变更
             //   （静态渲染 glow 仍由宿主自绘 Cmd.glow；无 glow 动画的节点 `glow_intensity==1.0` ⇒ 零影响）。
             "glow",
+            // ★★★玻璃材质（自研液态玻璃，决策 #818）：内核 `style_from_dto` 读 `dto.glass`（进 LStyle.glass）
+            //   ⇒ 必须经白名单转发（否则内核恒 None、check:host-kernel-keys 抓出）。宿主据 LStyle 自绘玻璃面。
+            "glass",
             // ★★★B-T2（2026-10-10）：**文本策略**（内核持有 = SSOT；不参与 taffy 布局）——内核
             //   `style_from_dto` 读 `dto.white_space/word_break/line_clamp` ⇒ 必须经白名单转发，否则
             //   内核恒 None（同款漏项，check:host-kernel-keys 抓出）。宿主据此重度量/重绘（读回见 textPolicy）。

@@ -237,6 +237,35 @@ fn default_glow_intensity() -> f32 {
     1.0
 }
 
+/// ★★★**玻璃材质规格**（自研液态玻璃 · 新材料 IR，决策 #818）。
+///
+/// 【它解决什么（用户目标）】「即使手机系统**没有**液态玻璃能力，也能**自绘**出近似最新系统的液态玻璃」。
+///   三端（iOS Metal / Android AGSL / 鸿蒙 native）各据此**自绘**玻璃材质；参数模型 = `@proteus-vue/glass`
+///   的 `ResolvedGlass`（唯一真源，本处是内核侧的结构承载，构建期由 `glassResolver` 折出）。
+///
+/// 【消费】宿主对带 `glass` 的节点：把**该节点背后已绘内容**采样 → 按 `blur` 模糊 + `tint` 着色 +
+///   `saturation` 提彩 + 边缘高光（`border`）→ 画玻璃面。★自绘模型下"背后像素"只有**宿主自身已绘
+///   内容**可采（页面中段需离屏捕获，壳 chrome 最自然——见决策 #816 诚实边界）。
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct GlassSpec {
+    /// 模糊半径（px；backdrop blur 的核大小——0 = 不模糊只 tint）
+    pub blur: f32,
+    /// 着色 tint（打包 `0xAARRGGBB`；alpha 参与合成）
+    pub tint: u32,
+    /// 玻璃面圆角（px；0 = 直角——Liquid Glass 多用于胶囊/圆角面）
+    pub radius: f32,
+    /// 是否玻璃高光边
+    pub border: bool,
+    /// 边方向：0=all · 1=top · 2=bottom · 3=right（与 TS `GlassBorderSide` 对齐）
+    pub border_side: u8,
+    /// 噪点强度 0..1（L2 质感细节）
+    pub noise: f32,
+    /// 饱和度增益（1.0 = 不变；系统玻璃常"提彩"，如 1.8）
+    pub saturation: f32,
+    /// 材质层级：0=solid（降级实色）1=l1 2=l2 3=l3（系统级）——宿主据此选渲染档
+    pub level: u8,
+}
+
 fn default_origin() -> f32 {
     0.5
 }
@@ -592,6 +621,10 @@ pub struct LStyle {
     ///   ★若节点有 `svg_path`：发光随**画线进度**走（画到哪、光到哪——PathMeasure 截断）。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub glow: Option<GlowSpec>,
+    /// ★★★**玻璃材质**（自研液态玻璃 · 新材料 IR，决策 #818）：见 `GlassSpec`。
+    ///   `Some` ⇒ 宿主对该节点画玻璃面（采样背后内容 → blur/tint/saturation/edge）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub glass: Option<GlassSpec>,
     /// ★★**发光强度**（0..1 乘子；基态 = 1 = 按声明的 alpha 全额发光）。
     ///   `glowIntensity` 通道（34）驱动——呼吸/渐亮/渐隐都走它（曲线/弹簧/序列/循环全复用）。
     #[serde(default = "default_glow_intensity")]
@@ -771,6 +804,7 @@ impl Default for LStyle {
             svg_path_to: None,
             path_morph: 0.0,
             glow: None,
+            glass: None,
             glow_intensity: 1.0,
             mask: None,
             mask_progress: 1.0,

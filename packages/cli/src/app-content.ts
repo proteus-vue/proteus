@@ -22,7 +22,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { buildLayoutTemplate, parseCssVarTokens, extractFromSfc, computeTree, overlayIrValues, SWITCH_BATCHES, APP_ENUM_VALUES } from '@proteus-vue/compiler'
-import { iconResolver } from './app-component-registry'
+import { iconResolver, glassResolver } from './app-component-registry'
 import type { AlignNode } from '@proteus-vue/compiler'
 import { screenContentFromLayoutTemplate } from '@proteus-vue/render-backend'
 import { APP_PLATFORMS, type AppPlatform } from './targets'
@@ -116,7 +116,7 @@ export async function buildAppScreenContent(root: string, platform: AppPlatform 
     // ★批次 46：页面自身的 `ref(<字面量>)` 初值 → 构建期静态实例化（App 端无运行时，页面数据
     //   取初值快照）——KPI 卡（`stats`）/状态值（`themeLabel`…）由此在 App 端显示。
     const pageStatics = { ...extractRefLiterals(sfcSrc) }
-    const res = buildLayoutTemplate(sfcSrc, path.relative(root, abs), undefined, tokens, pageStatics, globalCss, undefined, { iconResolver })
+    const res = buildLayoutTemplate(sfcSrc, path.relative(root, abs), undefined, tokens, pageStatics, globalCss, undefined, { iconResolver, glassResolver })
     if (!res.ok) {
       diagnostics.push(`${r.name}: 模板编译失败`)
       skipped++
@@ -147,7 +147,7 @@ export async function buildAppScreenContent(root: string, platform: AppPlatform 
     if (fs.existsSync(shellPath) && fs.existsSync(appVue)) {
       const shellMod = loadTsModule(shellPath) as { statics?: Record<string, unknown> }
       const statics = shellMod.statics ?? {}
-      const shellRes = buildLayoutTemplate(fs.readFileSync(appVue, 'utf-8'), path.relative(root, appVue), undefined, tokens, statics, globalCss, undefined, { iconResolver })
+      const shellRes = buildLayoutTemplate(fs.readFileSync(appVue, 'utf-8'), path.relative(root, appVue), undefined, tokens, statics, globalCss, undefined, { iconResolver, glassResolver })
       if (shellRes.ok) {
         // ★★★G-61 后批：壳（App.vue）同样走 IR 覆盖（与页面同判据——global/overlay 层也有样式）
         applyIrOverlay(

@@ -249,6 +249,9 @@ const LAYOUT_KEYS = new Set([
   'mask',
   // ★★变换原点 v1（transformOrigin）：漏放 ⇒ 所有旋转绕中心（"绕错点转"最难查）
   'transformOrigin',
+  // ★★★玻璃材质（自研液态玻璃，决策 #818）：静态规格（blur/tint/radius/border/saturation/level）——
+  //   漏放 ⇒ 内核不解析 glass + 宿主画不出玻璃且静默
+  'glass',
 ])
 
 /**

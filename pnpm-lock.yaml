@@ -444,6 +444,9 @@ importers:
       '@proteus-vue/fluid':
         specifier: 0.3.0-beta.28
         version: link:../fluid
+      '@proteus-vue/glass':
+        specifier: 0.3.0-beta.28
+        version: link:../glass
       '@proteus-vue/icons':
         specifier: 0.3.0-beta.28
         version: link:../icons
