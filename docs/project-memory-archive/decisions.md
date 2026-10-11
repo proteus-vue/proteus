@@ -3105,3 +3105,13 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **③ 门禁**：`check-icons.mjs` 加**判据 ⑫**——built-in Web `<icon>` shim 必须 `import '@proteus-vue/icons'` + 零字面 hex（破坏性验证：注入 hex ⇒ 当场红，还原绿）。
 **④ 诚实边界（具名，非"跳过"）**：① `website/src/components/ComponentGlyph.vue` 是**组件总览画廊**（73 个**手绘组件微缩示意** `viewBox 0 0 120 80`，如 p-grid 画成九宫格），**不是图标集**——其 `p-icon` 条目是画"图标组件长啥样"，替换为单枚 icon 会破坏画廊图示语义 ⇒ **不属第二套图标实现**，不动；② `packages/web/src/wx.ts` 的 `showToast` 内联 glyph 是**组件内部视觉处理**（微信 toast 白色细勾/白底黑叹号——依赖 toast 黑底上下文的非图标集配色），改走 Keryx 会**改变微信语义** ⇒ 具名保留（真要收另起「组件内部 glyph」批）。
 **⑤ 教训**：**"第二套实现"要按"语义是否相同"判**，不按"是否含 SVG"判——手绘的**组件示意图**与**图标集**是两回事；收口前先 grep 消费上下文，避免把画廊/组件内视觉误当图标重复。
+
+810. **★★★Keryx P4 尽调结论：App 端 p-icon 渲染受阻于「App 组件展开」这一非图标前置**（2026-10-11 · 先取证再断言）：
+**① 背景**：用户批准 P4「App 端 p-icon 通内核（svg-path attr + 内核 viewBox→节点盒缩放）+ 三端真机」。开工前按纪律先尽调（very thorough），结论**推翻了 plan 的乐观假设**（plan 以为可"复用既有编译器通路"）。
+**② 取证（三层全缺，缺一不可）**：
+  · **编译器**：App 链 `packages/compiler/src/vapor/template.ts`（`buildLayoutTemplate`）**完全没有 `<svg><path>`→`svgPath` 降级通路**（`vapor/` 不 import `svg-lower`；`d`/`viewBox` 被静默忽略）。而 `p-icon` 的 `d="icon.d"` 是**运行期 computed** ⇒ 静态 JSON 属性装不下，需新增「动态 svgPath 的 patch 通道」（内核 `ops_apply.rs` 对 patch 不解析 `svg_path`）。**且**：App 管线**没有任何地方填充 `opts.components`**（`slot-runtime/src/instantiate.ts:835`）⇒ **p-icon 组件在 App 里连内部都不展开**——这是"隐藏的最大工作量"，且**属「App 组件实例化」能力，不是图标库**。
+  · **内核**：`style.rs`/`ffi.rs` 无 `viewBox` 概念（全仓内核 0 命中）；`svg_nodes` 导出**不带节点盒尺寸**；**无任何坐标缩放工具/先例**。
+  · **宿主**：三端**都不缩放**（iOS `cgPathFromSegs` 裸坐标；Android `drawPath` 裸坐标；**鸿蒙连 segs 通道都没接**——只吃 bench 的 `strokeD`）⇒ 24 网格 path 画进 16px 盒会**溢出成 24px**。
+**③ 判断（为什么本轮不硬做 P4）**：P4 端到端 = 编译器（动态 svgPath 通道 + **App 组件展开**）+ 内核（viewBox 字段 + 按 rect 缩放 segs/strokeWidth）+ 鸿蒙（补 segs 通道）+ 三端真机。其中**「App 组件实例化」是独立于图标库的能力**（影响所有 Vue 组件在 App 的渲染，不只 p-icon）；单独做「内核 viewBox 缩放」在本轮是**无生产者的死代码 + 无法端到端验证**（无 device）。⇒ **按纪律不半做**（不产不可验证的改动）。
+**④ 边界/落点**：Web/MP 的 p-icon **已可用**（本仓 `/icons` 页 + 组件库）；**App 端 p-icon 仍是 🟡「组件级接线未开始」**（`website/content/components/p-icon.md` 原文）。P4 应作为**独立批次**，且其真正的前置是「**App 组件实例化**」（比图标更基础的能力缺口）。
+**⑤ 教训**：① **plan 的"复用既有通路"假设必须用尽调证伪或证实**——本轮若直接开工会撞上三重缺口；② **区分"图标库能力"与"承载它的宿主能力"**——p-icon 在 App 渲染不了，主因不在图标（数据/几何已备），而在 **App 还不实例化 Vue 组件**；③ **"先用最小改动打通一条端到端链路"比"逐层补内部"更能暴露真实前置**。
