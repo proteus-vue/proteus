@@ -117,6 +117,9 @@ struct Superapp {
    *   现唯一实现在 **runtime HAR** 的 `AppRuntimeDriver`（`proteus_render` 导出）——本壳只提供
    *   **最小上下文**（bundle/当前屏/视口/实例态 + 回执出口）并在渲染/命中出口调 `onRenderReply`。 */
   private driver: AppRuntimeDriver | null = null;
+  /** ★★★Dactyl D0（决策 #797）：官方触摸时间戳（ms，TouchEvent.timestamp）+ 采样/T1 记录。 */
+  private dactylT0Ms: number = -1;
+  private dactylSamplesArr: number[][] = [];
 
   /** Tab 图标（鸿蒙系统符号资源；三端语义同：首页/消息/我的） */
   private tabSymbol(name: string): Resource {
@@ -454,6 +457,28 @@ struct Superapp {
    *   （JS 共享运行期派发 tap → $nav 动作 → 导航 → 挂载目标屏）→ applyState + 重绘。
    *   ★内容坐标 = 视口坐标 + scrollOffset（命中树在内容坐标系）。
    */
+  /** ★★★Dactyl D0（决策 #797）：提交时刻记 T1（有待配对触摸 ⇒ 落一条样本）。
+   *   与 Android onDraw 尾 / iOS 按下态提交后同口径（只记**首帧**——同触摸后续帧记 dropped）。 */
+  private dactylCommitFrame(): void {
+    if (this.dactylT0Ms < 0) { return }
+    const t1 = Date.now()
+    if (t1 >= this.dactylT0Ms) {
+      this.dactylSamplesArr.push([this.dactylT0Ms, t1])
+      if (this.dactylSamplesArr.length > 4096) { this.dactylSamplesArr.shift() }
+    }
+    this.dactylT0Ms = -1
+  }
+
+  /** ★导出（量具契约同形）：`{end,samples:[{t0_touch_ms,t1_commit_ms}]}`（鸿蒙以 ms 直存）。 */
+  dactylMetricsJson(): string {
+    const parts: string[] = []
+    for (const s of this.dactylSamplesArr) {
+      parts.push('{"t0_touch_ms":' + s[0] + ',"t1_commit_ms":' + s[1] + '}')
+    }
+    return '{"end":"harmony","samples":[' + parts.join(',') + '],"sampled":' + this.dactylSamplesArr.length + '}'
+  }
+
+
   /** ★Dactyl 专项：内核命中链（按下态/场跟手用；与 onTapAt 同一内核入口——单一真源）。 */
   private hitAndChainAt(vpX: number, vpY: number): number[] {
     try {
@@ -520,6 +545,9 @@ struct Superapp {
       this.stopMomentum();   // ★手指按下 ⇒ 停掉上一段惯性（与 iOS/Android 同语义）
       this.touchLastY = t.windowY; this.touchStartX = t.windowX; this.touchStartY = t.windowY; this.touchMoved = false;
       this.touchLastTs = Date.now(); this.touchVelSum = 0; this.touchVelDt = 0; this.velOffset = 0;
+      // ★★★Dactyl D0：官方触摸时间戳（TouchEvent.timestamp——**系统事件时间，非 JS 时钟**；
+      //   与 Android getEventTime / iOS UITouch.timestamp 同口径。单位 ns ⇒ /1e6 = ms。）
+      this.dactylT0Ms = e.timestamp > 0 ? e.timestamp / 1e6 : Date.now()
       // ★★★Dactyl 专项：按下态 + 场跟手焦点（内容坐标；命中链来自内核 hitTest——单一真源）
       if (this.driver !== null) {
         const chain: number[] = this.hitAndChainAt(t.windowX, t.windowY);
@@ -572,6 +600,8 @@ struct Superapp {
       const actual: number = next - this.scrollOffset;
       this.scrollOffset = next;
       scrollRoot(this.scrollOffset);
+      // ★★★Dactyl D0：本屏已提交 ⇒ 有待配对触摸则记一条样本（T1=提交时刻；与 Android onDraw 尾同语义）
+      this.dactylCommitFrame();
       return actual;
     }
     return 0;
@@ -744,12 +774,26 @@ struct Superapp {
           + ',"momentum_frames":' + this.momentumFrames + ',"momentum_moved":' + this.momentumMovedFrames + '}}')
         // ★★★v-pump / 跳变驱动动画（本批·判据）：泵节拍与动画受理读数（宿主侧真源 + native 会话真源）。
         //   ★判据纪律（同 #793）：判"动画在播"看**内核受理 / 宿主真写**（anim_starts / anim_applied），不看截屏像素。
-        .replace(/\}$/, ',"anim_pump":' + this.animPumpStats() + '}');
+        .replace(/\}$/, ',"anim_pump":' + this.animPumpStats() + '}')
+        // ★★★Dactyl D0（决策 #797）：触摸延迟采样（真源在壳——TouchEvent.timestamp 只有壳有）+ 落盘
+        //   ★串接式（body 是 const：追加而非重赋——本仓实测 ArkTS 无值重赋语义差异）
+        + '\u0000DACTYL:' + this.dactylMetricsJson();
       const path: string = this.filesDir + '/superapp.json';
       const fd = fileIo.openSync(path, fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE | fileIo.OpenMode.TRUNC);
-      fileIo.writeSync(fd.fd, body);
+      // 拆出 DACTYL 段再落盘（量具从 dactyl-samples.json 取——与本报告分离，互不污染）
+      const dactylIdx: number = body.indexOf('\u0000DACTYL:');
+      const reportBody: string = dactylIdx >= 0 ? body.slice(0, dactylIdx) : body;
+      const dactylJson: string = dactylIdx >= 0 ? body.slice(dactylIdx + '\u0000DACTYL:'.length) : '{}';
+      if (dactylIdx >= 0) {
+        try {
+          const dfd = fileIo.openSync(this.filesDir + '/dactyl-samples.json', fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE | fileIo.OpenMode.TRUNC);
+          fileIo.writeSync(dfd.fd, dactylJson);
+          fileIo.closeSync(dfd.fd);
+        } catch (de) { hilog.warn(DOMAIN, TAG, 'DACTYL_SAMPLES_WRITE_FAIL'); }
+      }
+      fileIo.writeSync(fd.fd, reportBody);
       fileIo.closeSync(fd.fd);
-      hilog.info(DOMAIN, TAG, 'SUPERAPP_REPORT_READY %{public}s', body);
+      hilog.info(DOMAIN, TAG, 'SUPERAPP_REPORT_READY %{public}s', reportBody);
     } catch (e) {
       hilog.error(DOMAIN, TAG, 'SUPERAPP_REPORT_ERROR %{public}s', JSON.stringify(e) ?? '');
     }
