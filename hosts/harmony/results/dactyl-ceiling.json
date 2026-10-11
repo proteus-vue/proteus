@@ -1,0 +1,12 @@
+{
+  "end": "harmony",
+  "device": null,
+  "ladder_size": 0,
+  "ceiling_level": null,
+  "rupture_level": null,
+  "ceiling_load": null,
+  "notes": [
+    "◐ 无实测输入（hosts/harmony/results/dactyl-ceiling-input.json 不存在）——天花板未标定（如实，不假定）",
+    "标定方法：在真机上按升档序（先 N 再 f 再 M 再 K，§5.1）逐档加码，每档采 input_latency_p95/jank_rate/gc_pause，写入本输入文件后重跑本脚本"
+  ]
+}
