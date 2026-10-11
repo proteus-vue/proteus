@@ -729,7 +729,38 @@ final class ProteusSceneDelegate: UIResponder, UIWindowSceneDelegate {
         if ProteusBuildConfig.DEV, ProcessInfo.processInfo.environment["PROTEUS_DEV_SNAPSHOT"] == "1" {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in self?.writeDevSnapshot(to: "proteus-dev-snapshot.png") }
         }
-        if ProcessInfo.processInfo.environment["PROTEUS_EXIT_AFTER_REPORT"] == "1" { exit(0) }
+        // ★★★Dactyl 专项（决策 #797 · 通用判据入口）：env 触发 ⇒ 注入一次"按下 + pan 拖拽"，
+        //   读三腿原生计数并落 Documents/interaction-probe.json（量具/判据从设备取回）。
+        //   ★为什么在壳（而不是 runtime）：这是**判据装置**（走 shell/dev 层），不是产品能力；
+        //     release 无 env ⇒ 零副作用（与 PROTEUS_DEV_SNAPSHOT 同款门控）。
+        if ProcessInfo.processInfo.environment["PROTEUS_INTERACTION_PROBE"] == "1" {
+            let screen = ProcessInfo.processInfo.environment["PROTEUS_PROBE_SCREEN"] ?? ""
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+                guard let self, let d = self.driver else { return }
+                if !screen.isEmpty { d.navigate(to: screen) }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                    // ① 按下（自动定位：按按下态表的 id → 内核 rect 中心——不猜坐标）
+                    let pr = d.bridge.pressAuto(holdMs: 300)
+                    NSLog("[proteus] CLI_PROBE_PRESS %@", pr)
+                    // ② pan 拖拽（真机拖拽路径：pan 取消 touches → pan 续喂）
+                    d.bridge.panFieldDragAsync(dx: 90, dy: 60, steps: 8, stepMs: 40) {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            let ip = d.bridge.interactionProbe()
+                            let dm = d.bridge.dactylMetricsJson()
+                            let body = "{\"interaction\":" + ip + ",\"metrics\":" + dm + "}"
+                            NSLog("[proteus] CLI_PROBE_READY %@", ip)
+                            if let data = body.data(using: .utf8) {
+                                try? data.write(to: FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("interaction-probe.json"))
+                            }
+                            if ProcessInfo.processInfo.environment["PROTEUS_EXIT_AFTER_REPORT"] == "1" { exit(0) }
+                        }
+                    }
+                }
+            }
+        }
+        // ★探测模式（PROTEUS_INTERACTION_PROBE=1）⇒ **不在此退**（探针异步，需等它跑完并自行退出）
+        if ProcessInfo.processInfo.environment["PROTEUS_EXIT_AFTER_REPORT"] == "1"
+            && ProcessInfo.processInfo.environment["PROTEUS_INTERACTION_PROBE"] != "1" { exit(0) }
     }
 
     /// 把整窗渲染成 PNG 落 Documents（决策 #693 启动截图 / #704 面板**按需**截图 `type=snapshot`）。
