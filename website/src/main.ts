@@ -27,3 +27,13 @@ for (const [name, dir] of Object.entries(createDesktopDirectives())) {
 
 app.use(router)
 app.mount('#proteus-app')
+
+// ★★★2026-10-11 移除暗色启动遮罩（index.html 的 #proteus-boot）：应用挂载后其下已是深色页面 ⇒ 移除无感。
+//   时机 = 挂载后下一帧（首帧已提交）；`load` 兜底（挂载异常时也解除，避免遮罩永久挡住页面）。
+const dropBoot = (): void => {
+  const el = document.getElementById('proteus-boot')
+  if (el) el.remove()
+}
+requestAnimationFrame(dropBoot)
+if (document.readyState === 'complete') dropBoot()
+else window.addEventListener('load', dropBoot, { once: true })

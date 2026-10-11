@@ -13,6 +13,9 @@
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta name="twitter:card" content="summary" />
+    <!-- ★★★2026-10-11 暗色主题色：部分移动/国产内核用 theme-color 绘制浏览器 UI 与导航初始背板——
+         声明深色可减少「加载瞬间白底」（与 color-scheme:dark 同源）。 -->
+    <meta name="theme-color" content="#0b0b0f" />
     <meta name="description" content="Proteus：语义收敛的跨端应用框架。一套语义内核，任意渲染引擎，任意原生能力——渲染底座、编译器、宿主容器、执行载体全部可插拔。" />
     <!-- ★2026-09-12 站点图标 = 品牌立方体（与导航 brand-mark / 小程序头像同源） -->
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
@@ -32,6 +35,11 @@
     </style>
   </head>
   <body>
+    <!-- ★★★2026-10-11 暗色启动遮罩（boot cover）：用**真实 DOM 元素**（而非只靠 html/body 背景）钉住
+         整个「HTML→应用挂载」窗口为深色。部分内核（QQ/360 等国产 X5）对 html 背景的初始视口绘制不可靠，
+         会露出默认白底；一个 fixed 全屏深色 div 作为内容被合成器绘制，比背景色更可靠地覆盖首帧窗口。
+         由 src/main.ts 在应用挂载后移除（其下已是深色页面，无感）；`load` 事件兜底（挂载失败也不挡住）。 -->
+    <div id="proteus-boot" style="position:fixed;inset:0;z-index:2147483647;background:#0b0b0f"></div>
     <!-- ★★★2026-10-08：挂载根 id 由裸词 `app` 改为命名空间 `proteus-app`——
          文档内容里出现同名标题（如配置参考的 app 字段）时，其锚点 id 会**与挂载根撞车**：
          `#app { min-height:100vh }` 会把那个标题撑成整屏（用户实测「点 app 看到大片空白」），
