@@ -40,3 +40,8 @@ export {
   hostAppAnimTick,
   hostAppAnimStats,
 } from 'libproteus_host.so'
+
+// ★★★应用运行期驱动（v-pump 周期驱动 + 跳变驱动动画）——**runtime 归属的唯一实现**（决策 #796）：
+//   任何鸿蒙壳 `import { AppRuntimeDriver } from 'proteus_render'` 一次装配即得全部能力（壳内零驱动代码）。
+//   ★构造参数 = **回调分解**（实测：ArkTS 拒收"跨 HAR 接口 + 对象字面量"⇒ 不用 host 对象形态）。
+export { AppRuntimeDriver } from './AppRuntimeDriver'

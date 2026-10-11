@@ -2950,3 +2950,19 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **⑥ 门禁**：`check:coupled`(29) · `check:host-layering` · `check:bridge-sync` · `check:harmony-runtime-prebuilt` · `check:android-runtime-aar-fresh` · `check:android-host-compile` · `check-selfdraw-compile` · `check:ios-cli-host-compile` · `check:host-invoke-contract`(转绿) · `check:vapor-three-end` · `check:gates-sync` · `check:host-kernel-keys` · `check:no-json-wire` 全绿。
 **⑦ 诚实边界**：① **鸿蒙真机未验**——签名材料（p12 口令）是**另一台机（kags）加密**的密文，本机无法解密（`Unsupported state or unable to authenticate data`）；需在 DevEco 里**重新自动签名一次**（勾 "Automatically generate signature"）才能装机验证 ⇒ 鸿蒙侧只到"**编译通过 + 装机待签名**"；② 鸿蒙泵是**批式**（一拍 N 帧、批内中间帧不上屏）——受一次性 VM 约束，**可见刷新率低于 Android 的逐帧 Choreographer 驱动**，如实记不假装同频；③ 鸿蒙一次性 VM ⇒ JS 侧 `directiveState` **每 tick 重建** ⇒ "同值不重播"的抑制跨 tick 不生效（首评即播 = Vue mounted 语义，已如实注释）。
 **⑧ 教训**：① **"通用能力"的判据是"三端都接了"**——只在 Android 接 = 诚实边界未收口（本仓 #790/#791/#792/#793 连续四批同一条边界，本轮才补两端）；② **一次性 VM 端要"会话化"**——跨调用的状态（动画规格/原子钟）必须**搬到能存活的地方**（C++ static），并**按已流逝重放**（否则每次重建回相位 0）；③ **同一"源码列表"两处维护必分叉**（iOS 模拟器脚本落后真机脚本 ⇒ 编译直接报缺类型）；④ **"dist 新 ≠ assets 新"**（Android 构建脚本同步清单漏项 ⇒ 参考宿主跑旧 bundle；同 #666/#663 的"两条通路"病）；⑤ **路径类事实源必须呼应配置**（routesOutput 硬编码 ⇒ 模板形态工程白屏——**修在唯一解析处**，不许第二份）。
+
+796. **★★★宿主动力「能力归属」铁律——运行时驱动归 runtime，壳只装配（用户点名"做一次所有宿主都收益"）+ iOS 真机泵/动画验证收官**（2026-10-11）：
+**① 用户点名（本决策的由来）**：「这个同一能力多消费者逐条接线感觉有隐患，我们做宿主关注点分离不就是要规避这种问题吗？宿主能力应该是做一次所有宿主都收益啊，比如安卓宿主对以后所有安卓的宿主都生效，鸿蒙如此，iOS 也如此」。
+**② 取证：这不是隐患，是本轮已发生的** —— 泵/动画驱动我一开始写在**壳**里，当场就分叉了：
+  · **Android**：只写进 **CLI 模板壳**（`AppActivity.renderCurrent` 尾部 `pullPumps()`），**框架参考壳 `SuperappActivity` 从未接** ⇒ **框架壳上泵从不跑**，且无人发现；
+  · **鸿蒙**：我**抄进两个壳**（`Superapp.ets` 参考宿主 + `MainPage.ets` CLI 模板）——同一能力两份实现，改一处必漏另一处；
+  · **iOS**：是三者唯一"本来就对"的（驱动写在 **runtime 单元** `SuperappRuntimeHost`，壳零接线——因它只有一份单元、无处可抄）。
+**③ 更正后形态（平台无关动力归 runtime）**：
+  · **Android**：`SuperappRuntimeHost.mount` **自拉**泵频率（`pullPumpsDeferred` → `view.post` 排下一 UI message——**为什么不栈内直调**：mount 由 JS→native 调用进来，栈内再 `eval` 是嵌套重入）⇒ **任何 Android 壳零接线受益**；壳侧删 `lastRuntimeHost` 字段与调用。
+  · **iOS**：沿用已验形态（`SuperappRuntimeHost` = runtime 单元，内含 `animStart/animTick` + CADisplayLink 泵驱动 + `pumpStats`）。
+  · **鸿蒙**：**新建 HAR 模块级驱动** `proteus_render/AppRuntimeDriver.ets`（`Index.ets` 导出）——内含泵定时器（按 `pumpHz` 起停）+ **批大小自适应**（`eval_ms>80` 减半 / `<20` 加倍）+ 动画挂树（`hostAppAnimAttach` 重放相位）+ 帧循环（`hostAppAnimTick` → `applyNodeVisuals`，内核 `active==0` 自停）+ `statsJson`。**两个壳都删光驱动代码**，只剩：`new AppRuntimeDriver(bundle, page, vpW, vpH, state, onReply)` + `onRenderReply(rt)` + `stop()`。★**构造参数 = 回调分解**（实测：ArkTS 拒收"跨 HAR 导入的接口 + 对象字面量"——`arkts-no-untyped-obj-literals`；本地接口不导出即可）。
+**④ 机器判据（不靠记忆）**：`check:host-layering` 新增 **④ 能力归属（双向）**——① runtime **必须**有实现锚点（缺 ⇒ 红："能力根本没落地"）；② **壳不得出现实现特征**（具名登记 `SHELL_OWNERSHIP_GAPS` 兜底）。
+  ★**首次实现时踩的坑（诚实记录）**：判据只扫 `hosts/**` ⇒ **漏掉 CLI 模板壳**（而模板才是"以后所有宿主"的来源！）——注入破坏**没红**才发现 ⇒ 扩 `TEMPLATE_SHELL_FILES` 把模板壳纳入；`filesUnder` 同时补 `SKIP_DIRS`（harmony runtime 根含 `oh_modules/build`，扫进去会误报）。
+**⑤ 破坏性验证（五向全过）**：① 鸿蒙 runtime 删 `AppRuntimeDriver` ⇒ 红（"缺实现"）；② 鸿蒙壳注入 `hostAppPumpTick` ⇒ 红；③ Android **模板壳**注入 `pullPumps()` ⇒ 红；④ iOS **模板壳**注入 `startPumpLoop()` ⇒ 红；⑤ 还原 ⇒ 绿。
+**⑥ 真机验证（iOS 收官）**：签名档过期 ⇒ `provision.sh` 自动重签（新档 `cn.shxuxi.proteus.experiments`）→ 设备需**手动信任证书**（用户完成）→ 真机跑通：Dactyl **L3 泵 `calls=78 fire_ticks=78`（间隔 33.7ms ≈ 30Hz 泵源，精确对上）+ `anim_start_calls=5`（v-animate 内核受理）**。★**Android 复验（壳零接线版）**：Dactyl L3 数字场持续跳变（75 → 14 …）⇒ **泵由 runtime 自拉成立**。
+**⑦ 教训**：① **"同一能力多消费者"的判据是"所有消费者都不含实现、且实现只有一份"**——"某个壳能用"是局部观察，不构成结构保证；② **模板壳是"未来所有宿主"**——门禁与验证都必须把它当第一公民（只扫 `hosts/` 是结构性盲区）；③ **能力下沉的正确姿势 = 分解回调**（跨模块接口字面量在 ArkTS 会被拒；回调 + 本地接口是通用解法）；④ 用户一句话点出了我连续四批（#790/#791/#792/#793）都在同一条"逐条接线"的滑梯上——**关注点分离的价值就在"接线次数从 N 降到 1"**，否则分层只搬了目录、没消除成本。

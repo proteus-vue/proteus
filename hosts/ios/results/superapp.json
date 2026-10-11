@@ -1,66 +1,55 @@
 {
   "host_id" : "ios",
-  "host_stats" : "{\"ok\":true,\"data\":{\"live_screens\":0,\"screens\":[],\"mount_calls\":0,\"anim_hook_missing\":0,\"visible_calls\":0,\"calls\":[\"screen.mount\",\"screen.stats\"],\"anim_completed\":0,\"rect_calls\":0,\"shared_calls\":0,\"destroy_calls\":0,\"anim_calls\":0,\"content_node_total\":0}}",
+  "host_stats" : "{\"ok\":true,\"data\":{\"anim_hook_missing\":0,\"visible_calls\":2,\"mount_calls\":2,\"anim_completed\":0,\"rect_calls\":0,\"content_node_total\":182,\"live_screens\":1,\"destroy_calls\":1,\"screens\":[{\"screenId\":\"l3#2\",\"visible\":true,\"rootNodeId\":100}],\"anim_calls\":0,\"calls\":[\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.stats\"],\"shared_calls\":0}}",
   "ok" : true,
-  "rendered_page" : "position-scroll",
-  "run_ts" : 1791430517.129925,
+  "pump" : {
+    "anim_start_calls" : 5,
+    "anim_started_total" : 5,
+    "calls" : 78,
+    "fire_ticks" : 78,
+    "interval_ms" : 33.333333333333336,
+    "last_dt_ms" : 33.726166642736644,
+    "last_fired" : 1,
+    "pumps" : 2,
+    "running" : true
+  },
+  "rendered_page" : "l3",
+  "run_ts" : 1791688946.9192851,
   "scroll_probe" : {
-    "after_drag_down_100k" : 1369,
+    "after_drag_down_100k" : 0,
     "after_drag_left_100k_x" : 0,
     "after_drag_right_100k_x" : 0,
     "after_drag_up_100k" : 0,
-    "ok" : false,
-    "range" : 1369,
+    "ok" : true,
+    "range" : 0,
     "range_set" : true
   },
   "state" : {
-    "current" : "position-scroll",
-    "depth" : 2,
+    "current" : "l3",
+    "depth" : 1,
     "screens" : [
-      "animation",
-      "at-rules",
-      "background-position",
-      "background",
-      "border-style",
-      "border",
-      "box-model",
-      "effects",
-      "flex",
-      "font",
-      "grid-auto-flow",
-      "grid-auto",
-      "grid-template-areas",
-      "grid-tracks",
       "index",
-      "justify-self",
-      "line-clamp",
-      "math-functions",
-      "misc",
-      "outline",
-      "overflow-page",
-      "overflow",
-      "place-items",
-      "position-scroll",
-      "position",
-      "safe-area",
-      "text-shadow",
-      "text",
-      "units",
-      "vw-vh",
-      "word-break"
+      "l2",
+      "l3",
+      "l4",
+      "l5"
     ],
     "stack" : [
-      "index",
-      "position-scroll"
+      "l3"
     ],
     "tabLabels" : {
-      "border" : "CSS 验收 · 边框",
-      "justify-self" : "CSS 验收 · 网格自对齐",
-      "text" : "CSS 验收 · 文本",
-      "word-break" : "CSS 验收 · 断词"
+      "index" : "L1 触即应",
+      "l2" : "L2 跟手",
+      "l3" : "L3 沸腾",
+      "l4" : "L4 十指",
+      "l5" : "L5 崩裂"
     },
     "tabs" : [
-
+      "index",
+      "l2",
+      "l3",
+      "l4",
+      "l5"
     ],
     "tabSpec" : {
       "badge" : {
@@ -92,15 +81,18 @@
   },
   "switch_log" : [
     {
-      "current" : "position-scroll",
-      "dy" : 400,
-      "offset" : 400,
+      "current" : "l3",
+      "hold_ms" : 2500,
       "ok" : true,
-      "scroll" : "position-scroll",
-      "via" : "scroll-inject"
+      "pump" : "l3",
+      "via" : "pump-probe"
     }
   ],
   "tabs" : [
-
+    "index",
+    "l2",
+    "l3",
+    "l4",
+    "l5"
   ]
 }

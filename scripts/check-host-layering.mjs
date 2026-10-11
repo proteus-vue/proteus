@@ -55,7 +55,9 @@ const ENDS = {
     },
     ext: ['.ets', '.ts', '.cpp', '.h'],
     extra: {
-      runtime: ['hosts/harmony/host-app/proteus_render/src/main/cpp'],
+      // ★决策 #796：runtime 的 ArkTS 层（Index.ets / AppRuntimeDriver.ets）在 **HAR 根**——
+      //   只扫 src/main/cpp 会漏掉"能力是否真归 runtime"（本轮实测：门禁正确报缺，是范围没到）。
+      runtime: ['hosts/harmony/host-app/proteus_render/src/main/cpp', 'hosts/harmony/host-app/proteus_render'],
       shell: ['hosts/harmony/host-app/entry/src/main/ets/shell'],
       dev: ['hosts/harmony/host-app/entry/src/main/ets/dev', 'hosts/harmony/host-app/entry/src/main/cpp/dev'],
     },
@@ -141,9 +143,12 @@ const root = (rel) => path.join(ROOT, rel)
 const filesUnder = (rel, exts) => {
   const d = root(rel)
   if (!fs.existsSync(d)) return []
+  // ★跳过构建/依赖目录（决策 #796：harmony 的 runtime 根含 oh_modules/build——扫进去会误报且慢）
+  const SKIP_DIRS = new Set(['build', 'oh_modules', 'node_modules', '.hvigor', '.cxx', '.idea', '.preview', 'thirdparty'])
   const out = []
   const walk = (dir) => {
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (e.isDirectory() && SKIP_DIRS.has(e.name)) continue
       const p = path.join(dir, e.name)
       if (e.isDirectory()) walk(p)
       else if (exts.some((x) => e.name.endsWith(x))) out.push(p)
@@ -204,6 +209,84 @@ for (const [end, cfg] of Object.entries(ENDS)) {
       }
       for (const { why } of hits) {
         problems.push(`②b ${rel}: shell 出现禁依赖「${why}」——应移到 runtime(HAR) 或壳内自持`)
+      }
+    }
+  }
+}
+
+/* ── ④ **能力归属**（2026-10-11 · 决策 #796 · 用户点名）──
+ * 【为什么有它】用户：「宿主能力应该是做一次所有宿主都收益啊，比如安卓宿主对以后所有安卓的宿主都生效」。
+ *   反模式实证（本轮）：泵/动画驱动写在**壳**里 ⇒ ① Android 只写在 CLI 模板壳、框架参考壳从未接
+ *   （**框架壳上泵从不跑**）；② 鸿蒙被抄进两个壳（参考 + 模板）——同一能力多处实现，换壳必漏。
+ *   规则：**平台无关的宿主动力（能力）归 runtime**；壳只提供"最小上下文 + 回执出口"。
+ * 【判据（双向）】
+ *   ① runtime **必须**给出该能力的实现锚点（正则命中）——否则"能力根本没落地"；
+ *   ② **壳不得再出现**该能力的实现特征（驱动循环/状态字段）——否则就是"壳内重实现"（漏接源头）。
+ *   ★已知合法例外走 KNOWN_GAPS 具名登记（附理由），不静默豁免。 */
+/** ★★各端**壳文件全集**（能力归属检查用）——两张来源都算"壳"：
+ *   ① 框架参考宿主（`hosts/<端>/`，见 ENDS.layers.shell / extra.shell）；
+ *   ② **CLI 模板壳**（`packages/cli/templates-host/<端>/`）——★它才是"以后所有<端>宿主"的来源：
+ *      只扫 hosts/ 会漏掉模板壳里偷偷重实现的能力（本轮实测：门禁漏判模板壳的注入破坏）。
+ *   ★文件名锚点（清单形式）：新增壳文件时加到这里（漏加 ⇒ 该文件不被能力归属检查覆盖）。 */
+const TEMPLATE_SHELL_FILES = {
+  android: ['packages/cli/templates-host/android/src/dev/proteus/layoutcore/AppActivity.java'],
+  ios: ['packages/cli/templates-host/ios/shell/ProteusApp.swift'],
+  harmony: ['packages/cli/templates-host/harmony/entry/src/main/ets/shell/MainPage.ets'],
+}
+
+/** ★壳内重实现的**具名登记**（键 `${end}:${cap.id}:shell`；补齐后删登记）。 */
+const SHELL_OWNERSHIP_GAPS = {
+  // （当前无：三端驱动均已归 runtime——Android SuperappRuntimeHost / iOS superapp-runtime-host.swift / 鸿蒙 AppRuntimeDriver）
+}
+
+const OWNERSHIP = [
+  {
+    id: 'v-pump',
+    name: 'v-pump 周期驱动',
+    // runtime 必须实现（每端给出实现锚点正则）
+    runtimeMust: {
+      android: /pullPumpsDeferred|startPumpLoop/,                       // SuperappRuntimeHost
+      ios: /func pullPumps|startPumpLoop/,                              // superapp-runtime-host.swift
+      harmony: /class AppRuntimeDriver[\s\S]*startPumpLoop/,          // AppRuntimeDriver.ets（HAR）
+    },
+    // 壳**不得**再出现（实现特征；注释剥离后判）
+    shellForbidden: {
+      android: /pullPumps\(\s*\)/,
+      ios: /pumpLink\s*=|startPumpLoop\(/,
+      harmony: /hostAppPumpTick\s*\(|attachAnimations\s*\(/,
+    },
+  },
+]
+for (const cap of OWNERSHIP) {
+  for (const [end, cfg] of Object.entries(ENDS)) {
+    // ① runtime 必须实现
+    const rtDirs = [cfg.layers.runtime, ...(cfg.extra?.runtime ?? [])]
+    let found = false
+    for (const d of rtDirs) {
+      for (const f of filesUnder(d, cfg.ext)) {
+        const src = stripComments(fs.readFileSync(f, 'utf-8'), path.extname(f))
+        if (cap.runtimeMust[end].test(src)) { found = true; break }
+      }
+      if (found) break
+    }
+    // iOS 的 runtime 单元还含 platform 目录（host-capabilities 等）——若上面没命中，再扫 runtime 目录
+    if (!found) problems.push(`④ ${cfg.label}: runtime 缺「${cap.name}」实现——能力未落地（不许只写在壳里）`)
+    // ② 壳不得重实现（**两类壳都查**：框架参考宿主 + CLI 模板壳——后者是"未来所有宿主"的来源）
+    const shDirs = [...new Set([cfg.layers.shell, ...(cfg.extra?.shell ?? [])])]
+    const shellFiles = []
+    for (const d of shDirs) for (const f of filesUnder(d, cfg.ext)) shellFiles.push(f)
+    for (const rel of (TEMPLATE_SHELL_FILES[end] ?? [])) {
+      const abs = root(rel)
+      if (fs.existsSync(abs)) shellFiles.push(abs)
+    }
+    {
+      for (const f of shellFiles) {
+        const rel = path.relative(ROOT, f)
+        const src = stripComments(fs.readFileSync(f, 'utf-8'), path.extname(f))
+        if (!cap.shellForbidden[end].test(src)) continue
+        const gapKey = `${end}:${cap.id}:shell`
+        if (SHELL_OWNERSHIP_GAPS[gapKey]) { notes.push(`④ ${rel}: 壳内「${cap.name}」已具名登记：${SHELL_OWNERSHIP_GAPS[gapKey]}`); continue }
+        problems.push(`④ ${rel}: 壳内重实现了「${cap.name}」——应归 runtime（能力做一次全壳受益；本仓实测漏接源头）`)
       }
     }
   }

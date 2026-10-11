@@ -432,15 +432,13 @@ public final class AppActivity extends Activity {
     }
 
     /** 建运行期宿主（唯一入口）。★dev 变体接**桥调用日志**（决策 #679）⇒ 面板 Network·项目通道。 */
-    private SuperappRuntimeHost lastRuntimeHost;   // ★v-pump：持最近宿主（renderCurrent 后拉泵频率）
     private SuperappRuntimeHost buildRuntimeHost() {
         HostBridge bridge = new HostBridge(caps, screenHost);
         if (ProteusBuildConfig.DEV) {
             bridge.setInvokeLogger((method, ok, ms) ->
                 bridgeOutbox.add(new String[]{ method == null ? "?" : method, ok ? "1" : "0", String.valueOf(ms) }));
         }
-        lastRuntimeHost = new SuperappRuntimeHost(draw, bridge);
-        return lastRuntimeHost;
+        return new SuperappRuntimeHost(draw, bridge);
     }
 
     /** 记一次渲染的性能读数（决策 #675/#676）：渲染耗时 + mount 次数 + 逐帧耗时 + 重排/patch 计数。
@@ -1045,8 +1043,9 @@ public final class AppActivity extends Activity {
             if (remount) args.put("remount", true);   // ★强制重挂（reset 用）
             QuickJsEngine.EvalResult rr = QuickJsEngine.eval("__proteusSuperappRender(" + JSONObject.quote(args.toString()) + ")");
             if (draw.view() != null) draw.view().invalidate();
-            // ★★★v-pump：渲染后抽该屏泵频率 ⇒ 起/停宿主周期驱动（Choreographer 帧循环 → __proteusSuperappPump）。
-            if (rr != null && rr.ok && lastRuntimeHost != null) lastRuntimeHost.pullPumps();
+            // ★★★v-pump（决策 #796「能力归 runtime」）：泵频率**由 runtime 在 mount 内自拉**
+            //   （`SuperappRuntimeHost.mount` → `pullPumpsDeferred`）——壳不再接线（此前写在这里的
+            //   `lastRuntimeHost.pullPumps()` 已删：同一能力多消费者逐条接线 ⇒ 换壳就漏接）。
             Log.i(TAG, "PROTEUS_RENDER page=" + page + " viewport=" + (vwPx / density) + "x" + (vhPx / density) + (remount ? " remount" : ""));
             // ★切屏自动刷树（决策 #675 · 修 bug1：此前只有 boot/hotReload 推树 ⇒ 切屏后面板树不更新）
             //   + 性能读数（renderMs/mount/relayout）。★renderCurrent 只在 UI 线程调 ⇒ eval 安全。

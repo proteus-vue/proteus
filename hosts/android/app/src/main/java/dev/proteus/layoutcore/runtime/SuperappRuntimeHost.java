@@ -32,10 +32,31 @@ public final class SuperappRuntimeHost {
 
     /* ── 运行期四原语（JS `proteusHost.*`）── */
 
-    /** 建树 + 上屏（运行期实例化后的 `{viewport,nodes}`）。 */
+    /**
+     * 建树 + 上屏（运行期实例化后的 `{viewport,nodes}`）。
+     *   ★★★**每屏挂载后自拉泵频率**（本批 · 决策 #796「能力归 runtime」）：此前该调用写在**壳**里
+     *   （`AppActivity.renderCurrent` 尾部 `lastRuntimeHost.pullPumps()`）——同一能力多消费者逐条接线，
+     *   换一个壳就漏接（实测：框架参考壳 `SuperappActivity` 从未接 ⇒ 泵在框架壳上从不跑）。
+     *   现在由 runtime 在 `mount`（= 每屏挂载的唯一入口）后**自发**补齐 ⇒ **任何 Android 壳零接线受益**。
+     */
     @SuppressWarnings("unused")
     public String mount(String treeJson) {
-        return draw.mount(treeJson);
+        String r = draw.mount(treeJson);
+        pullPumpsDeferred();
+        return r;
+    }
+
+    /**
+     * ★★把 `pullPumps` 排到**下一 UI message**（`view.post`）——【为什么不能栈内直调】
+     *   `mount` 由 JS→native 调用进来（此刻 QuickJS 正在 eval 栈上），栈内再 `QuickJsEngine.eval`
+     *   是**嵌套 eval 重入**（本仓在装置桥踩过：同上下文嵌套 eval 不可控）⇒ 只是排一帧，非盲等。
+     */
+    private void pullPumpsDeferred() {
+        ProteusHostView v = draw.view();
+        if (v == null) { return; }
+        v.post(new Runnable() {
+            @Override public void run() { pullPumps(); }
+        });
     }
 
     /** 应用二进制指令流（`number[]` JSON）——增量更新。 */
