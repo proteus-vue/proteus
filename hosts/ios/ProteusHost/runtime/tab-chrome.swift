@@ -131,26 +131,40 @@ final class ProteusTabChrome {
         let total = h + safeBottom                                          // 栏总高（含安全区底色）
         let w = parent.bounds.width
         let bar = UIView(frame: CGRect(x: 0, y: parent.bounds.height - total, width: w, height: total))
-        // ★★★OS 级悬浮液态玻璃（期 B / 决策 #816）：tab 栏 = **系统玻璃面**（模糊背后内容 + tint）。
+        // ★★★OS 级**液态玻璃**（期 B / 决策 #816/#817）：tab 栏 = **系统玻璃面**。
         //   tab 栏是**壳原生 UIView**（非自绘节点）⇒ 系统材质天生可用（页面中段自绘节点不行——诚实边界）。
-        //   有 `glass` 规格 ⇒ 用 `UIVisualEffectView`（blur 背后）+ tint 叠层替代不透明底色；否则沿用 surface。
+        //   ★iOS 26+ ⇒ `UIGlassEffect`（**Apple Liquid Glass** 系统材质，非基础高斯模糊——质感对齐系统）；
+        //     旧版 ⇒ `UIBlurEffect(.systemMaterial)`（系统材质模糊）降级。
         if let glass = spec["glass"] as? [String: Any] {
             bar.backgroundColor = .clear
             let blur = (glass["blur"] as? NSNumber)?.doubleValue ?? 20
-            let style: UIBlurEffect.Style = blur <= 15 ? .systemThinMaterial : (blur >= 30 ? .systemThickMaterial : .systemMaterial)
-            let bg = UIVisualEffectView(effect: UIBlurEffect(style: style))
-            bg.frame = bar.bounds
-            bg.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-            bg.tag = 771196   // ★移出 cell/badge 段（同 #799 族坑）
-            bar.addSubview(bg)
-            // tint 叠层（CSS rgba —— 如 rgba(255,255,255,0.15)）
-            if let tint = glass["tint"] as? String, let tc = Self.cssColor(tint) {
-                let overlay = UIView(frame: bar.bounds)
-                overlay.backgroundColor = tc
-                overlay.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-                overlay.isUserInteractionEnabled = false
-                overlay.tag = 771197
-                bar.addSubview(overlay)
+            let tintColor: UIColor? = (glass["tint"] as? String).flatMap { Self.cssColor($0) }
+            if #available(iOS 26.0, *) {
+                // ★Liquid Glass（系统材质）：interactive（tab 栏响应触摸）。
+                //   ★不叠 tint——系统 Liquid Glass 栏默认**清透**（tint 会令其发闷、离系统质感远）。
+                let ge = UIGlassEffect(style: .regular)
+                ge.isInteractive = true
+                let gv = UIVisualEffectView(effect: ge)
+                gv.frame = bar.bounds
+                gv.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+                gv.tag = 771196
+                bar.addSubview(gv)
+            } else {
+                let style: UIBlurEffect.Style = blur <= 15 ? .systemThinMaterial : (blur >= 30 ? .systemThickMaterial : .systemMaterial)
+                let bg = UIVisualEffectView(effect: UIBlurEffect(style: style))
+                bg.frame = bar.bounds
+                bg.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+                bg.tag = 771196   // ★移出 cell/badge 段（同 #799 族坑）
+                bar.addSubview(bg)
+                // 旧版：tint 叠层（Liquid Glass 已含 tint，不叠）
+                if let tc = tintColor {
+                    let overlay = UIView(frame: bar.bounds)
+                    overlay.backgroundColor = tc
+                    overlay.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+                    overlay.isUserInteractionEnabled = false
+                    overlay.tag = 771197
+                    bar.addSubview(overlay)
+                }
             }
         } else {
             bar.backgroundColor = specColor("surface", 0xFFFFFF)
