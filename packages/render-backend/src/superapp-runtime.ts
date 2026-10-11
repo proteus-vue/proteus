@@ -95,6 +95,12 @@ export interface SuperappRuntime {
    *     （它们拿不到 O(1) 增量，只能重取 content()）；Android/iOS 不传（零额外成本）。
    */
   pumpTick(dtMs: number, rebuild?: boolean): number
+  /**
+   * ★★★**写入当前屏的运行期数据源**（决策 #797 · 通用能力 · 显影器数据通路）：宿主把原生测得的
+   *   指标（延迟/速度/帧数…）喂进数据源 ⇒ 页面用**普通绑定**消费（视觉由应用侧声明式画）。
+   *   ★走既有「源 → 槽位 → ops」增量链（O(源级)）；源不存在 ⇒ 运行期内部退回重建（保证"写了就有反应"）。
+   */
+  writeSource(name: string, value: unknown): void
   /** 当前屏声明的泵数（宿主据此决定是否起周期驱动）。 */
   pumpCount(): number
   /** 当前屏各泵频率列表 JSON（宿主据最小间隔起/停 Choreographer 帧循环；无泵 ⇒ `[]`）。 */
@@ -289,6 +295,12 @@ export function createSuperappRuntime(opts: SuperappRuntimeOptions): SuperappRun
       } catch (e) {
         note(`[superapp-runtime] pumpTick 异常：${String((e as Error)?.message ?? e)}`)
         return 0
+      }
+    },
+    writeSource(name: string, value: unknown): void {
+      if (!cur) return
+      try { rt.instance(cur).writeSource(name, value) } catch (e) {
+        note(`[superapp-runtime] writeSource 异常：${String((e as Error)?.message ?? e)}`)
       }
     },
     pumpCount(): number {

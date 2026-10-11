@@ -806,6 +806,16 @@ fi
 
 # ★★★批次 44/47：superapp 桌面入口——取回**视觉证据 PNG** + 打印摘要（切 tab 记账 + 宿主建树）
 if [ "$MODE" = "superapp" ]; then
+  # ★★★Dactyl 专项（决策 #797）：取回触摸延迟采样 + 量具聚合（三端同形：采样→measure-latency.py→metrics）
+  rm -f "$HERE/results/dactyl-samples.json"
+  if xcrun devicectl device copy from --device "$UDID" --domain-type appDataContainer \
+      --domain-identifier "$BUNDLE_ID" --source "Documents/dactyl-samples.json" \
+      --destination "$HERE/results/dactyl-samples.json" >/dev/null 2>&1; then
+    python3 "$ROOT/hosts/shared/dactyl/measure-latency.py" --end ios --samples "$HERE/results/dactyl-samples.json" 2>&1 | sed 's/^/    /' || true
+  else
+    echo "    ◐ 无触摸采样（dactyl-samples.json 未取到）——量具按无采样如实记 null"
+    python3 "$ROOT/hosts/shared/dactyl/measure-latency.py" --end ios 2>&1 | sed 's/^/    /' || true
+  fi
   rm -f "$HERE/results/superapp.png"
   if xcrun devicectl device copy from --device "$UDID" --domain-type appDataContainer \
       --domain-identifier "$BUNDLE_ID" --source "Documents/superapp.png" \

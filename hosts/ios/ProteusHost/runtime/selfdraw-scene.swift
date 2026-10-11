@@ -380,6 +380,9 @@ func physFootprintMB() -> Double {
     func dactylMetricsJson() -> String
     func dactylSampleProbe() -> String
     func dactylResetSamples()
+    /// ★★★显影器数据出口（决策 #797 · 通用能力）：触摸轨迹（官方时间戳 + 内容坐标）
+    func dactylTouchTrailJson() -> String
+    func dactylResetTrail()
     /// ★注入三段（与真触摸同一钩子链）：判据注入按下/拖拽/抬指
     func driveTouchDown(_ x: Double, _ y: Double) -> Bool
     func driveTouchMove(_ x: Double, _ y: Double) -> Bool
@@ -2729,6 +2732,7 @@ final class SelfDrawView: UIView {
         let p = t.location(in: self)
         touchStart = (Double(p.x), Double(p.y), CFAbsoluteTimeGetCurrent())
         dactylNoteTouch(t.timestamp)
+        dactylNoteTrail(cx: Double(p.x), cy: Double(p.y), t: t.timestamp)
         // ★手指按下 ⇒ 停掉惯性（与 UIScrollView/Android 同语义：新触摸打断动量）
         stopMomentum()
         // ★★★交互视觉反馈（Dactyl 专项）：内容坐标 = 视口坐标 + 滚动偏移（与 classifyAndEmit 同款换算）
@@ -2743,6 +2747,7 @@ final class SelfDrawView: UIView {
         let p = t.location(in: self)
         let cx = Double(p.x) + Double(contentOffset.x)
         let cy = Double(p.y) + Double(contentOffset.y)
+        dactylNoteTrail(cx: cx, cy: cy, t: t.timestamp)
         onTouchMoveXY?(cx, cy)
     }
 
@@ -2863,6 +2868,33 @@ final class SelfDrawView: UIView {
         return "{\"end\":\"ios\",\"samples\":[" + arr.joined(separator: ",")
             + "],\"sampled\":" + String(dactylSampledCount) + ",\"dropped\":" + String(dactylDroppedCount) + "}"
     }
+
+    /* ══════════ ★★★Dactyl 显影器数据出口：触摸轨迹（决策 #797 · 通用能力）══════════
+     * 【它是什么】最近 N 个触摸点的（内容坐标 x,y + **官方时间戳**）——供**应用侧**画"幽灵拖尾"
+     *   （延迟显影 §3：指尖历史轨迹 vs 视觉响应的偏差像素）。
+     * 【为什么在宿主/为什么通用】轨迹只有平台事件能有（`UITouch.timestamp`）；且"输入轨迹可视化"是
+     *   **任何应用都可能要的调试能力**（非 Dactyl 专有）⇒ 归 runtime（决策 #796 能力归属）。
+     *   ★渲染**不在宿主**——应用侧用声明式能力画（#789 裁定：宿主不发明视觉）。
+     * 【诚实边界】ring buffer 上限 256 点（≈手指 2-4 秒）；坐标为内容坐标（与内核同系）。 */
+    private var dactylTrail: [(x: Double, y: Double, t: Double)] = []
+
+    func dactylNoteTrail(cx: Double, cy: Double, t: Double) {
+        dactylTrail.append((cx, cy, t))
+        if dactylTrail.count > 256 { dactylTrail.removeFirst() }
+    }
+
+    /// 导出：`{points:[{x,y,t_ms}], count}`（t 为官方时间戳 ms——应用侧据它画"延迟偏差"）。
+    func dactylTouchTrailJson() -> String {
+        var arr: [String] = []
+        for p in dactylTrail {
+            arr.append("{\"x\":" + String(format: "%.2f", p.x) + ",\"y\":" + String(format: "%.2f", p.y)
+                       + ",\"t_ms\":" + String(format: "%.3f", p.t * 1000) + "}")
+        }
+        return "{\"points\":[" + arr.joined(separator: ",") + "],\"count\":" + String(dactylTrail.count) + "}"
+    }
+
+    func dactylResetTrail() { dactylTrail.removeAll(keepingCapacity: true) }
+
 
     func dactylSampleProbe() -> String {
         "{\"sampled\":" + String(dactylSampledCount) + ",\"pending\":" + String(dactylSamples.count)
@@ -7582,6 +7614,9 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     func dactylMetricsJson() -> String { view?.dactylMetricsJson() ?? "{\"end\":\"ios\",\"samples\":[]}" }
     func dactylSampleProbe() -> String { view?.dactylSampleProbe() ?? "{}" }
     func dactylResetSamples() { view?.dactylResetSamples() }
+    /// ★★★显影器数据出口（转发到 View——轨迹在触摸路径上）
+    func dactylTouchTrailJson() -> String { view?.dactylTouchTrailJson() ?? "{\"points\":[]}" }
+    func dactylResetTrail() { view?.dactylResetTrail() }
 
     private func render(treeJson: String, phase: String, force: Bool = false) -> String {
         guard let view = view else { return "{\"ok\":false,\"error\":\"view 未设置\"}" }

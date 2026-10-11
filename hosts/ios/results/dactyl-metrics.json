@@ -1,11 +1,11 @@
 {
   "end": "ios",
   "source": "dactyl-measure-latency.py",
-  "generated_at": "2026-10-11T05:01:11.371423+00:00",
+  "generated_at": "2026-10-11T05:06:15.988330+00:00",
   "metrics": {
-    "input_latency_p50_ms": 0.31,
-    "input_latency_p95_ms": 0.31,
-    "input_latency_p99_ms": 0.31,
+    "input_latency_p50_ms": 0.861,
+    "input_latency_p95_ms": 0.861,
+    "input_latency_p99_ms": 0.861,
     "samples_used": 1,
     "samples_skipped": 0
   },

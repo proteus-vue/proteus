@@ -365,6 +365,32 @@ interface SuperappRuntimeHostShape {
     }
   }
 
+/**
+ * ★★★**喂入触摸指标 → 运行期数据源**（决策 #797 · 通用能力 · 显影器数据通路）。
+ *
+ * 【它是什么】宿主把**原生测得的触摸指标**（如 `{ lag: 3.2, speed: 0.8 }`——来自官方时间戳采样/
+ *   轨迹出口）写进运行期数据源 ⇒ 页面用**普通绑定**（`{{lag}}` / `:style` / `v-animate`）消费
+ *   ——**显影器由应用侧声明式画**（#789 裁定：宿主不发明视觉），宿主只提供数据。
+ *   ⇒ "把 ms 映射成像素"的全部美学留给页面 CSS（延迟环半径 / 颜色阈值 / 拖尾长度都是页面的事）。
+ *
+ * 入参：`{source: '<数据源名>', value: <any>}`（缺 source 或运行期未启动 ⇒ `{ok:false}` 如实）。
+ * 【为什么走 writeSource 而不是新通道】复用既有「源 → 槽位 → ops → 内核」增量链（O(源级)）；
+ *   页面侧对普通绑定的支持是**现成**的（无需新 DSL/新指令）。
+ */
+;(globalThis as unknown as { __proteusSuperappMetrics?: (json: string) => string })
+  .__proteusSuperappMetrics = (json: string) => {
+    const g = globalThis as unknown as { __SUPERAPP_RUNTIME__?: SuperappRuntime }
+    if (!g.__SUPERAPP_RUNTIME__) return JSON.stringify({ ok: false, error: '运行期未启动' })
+    try {
+      const a = JSON.parse(json || '{}') as { source?: string; value?: unknown }
+      if (!a.source) return JSON.stringify({ ok: false, error: '缺 source' })
+      g.__SUPERAPP_RUNTIME__.writeSource(a.source, a.value)
+      return JSON.stringify({ ok: true, source: a.source })
+    } catch (e) {
+      return JSON.stringify({ ok: false, error: String((e as Error)?.message ?? e) })
+    }
+  }
+
 /** ★★★**读当前屏泵频率列表**（v-pump）：宿主每次挂载后调一次，据最小间隔起/停自己的帧循环。 */
 ;(globalThis as unknown as { __proteusSuperappPumpHz?: () => string }).__proteusSuperappPumpHz = () => {
   const g = globalThis as unknown as { __SUPERAPP_RUNTIME__?: SuperappRuntime }
