@@ -174,10 +174,13 @@ export struct ProteusTabChrome {
           }, (item: TabItemFinal) => item.name)
         }
         .width('100%')
-        .height('100%')
+        // ★★修复（2026-10-11 · 问题1）：内容块**只在内容区（tbHeight）内居中**——此前 height('100%')
+        //   使其在 内容区+安全区 全高居中 ⇒ 内容偏下（实测上 gap 29vp / 下 23vp）。
+        //   安全区改为内容区**下方**的纯底色（对齐 Web `.sa-tabbar`）。
+        .height(this.tbHeight)
       }
       .width('100%')
-      // ★高度 = 视觉高 + 底部安全区（内容仍居中于视觉高内；白底延伸到屏底）
+      // 总高 = 内容区 + 底部安全区（安全区为下方白底；内容在内容区内居中）
       .height(this.tbHeight + this.safeBottom)
       .backgroundColor(this.tbSurface)
     }

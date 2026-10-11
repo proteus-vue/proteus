@@ -806,9 +806,14 @@ struct MainPage {
   /** ★★★B（决策 #800）：把运行期回包里的 state 转发给 tab chrome（本壳零 tab 解析）。 */
   private syncChrome(rt: Record<string, Object>): void {
     const st = rt['state'] as Record<string, Object> | undefined;
-    if (st !== undefined && st !== null) {
-      this.chromeStateJson = JSON.stringify(st);
-    }
+    if (st === undefined || st === null) { return; }
+    // ★★★修复（2026-10-11 · 问题2"切屏后 tabbar 高亮不更新"）：高亮依据 = **实际渲染的屏**
+    //   （回执 `rt.current` = `__proteusHostAppRuntimeCurrent()` = 已挂载屏名），**不是** `state.current`。
+    //   为什么：鸿蒙一次性 VM 每拍（render/pumpTick）**重新 boot** ⇒ 路由栈恒为入口 index ⇒
+    //   `state.current` 恒 index（直渲他屏不动路由栈）⇒ 高亮永远停首项。回执 current 是唯一真值。
+    const rendered = rt['current'] as string | undefined;
+    if (rendered !== undefined && rendered.length > 0) { st['current'] = rendered; }
+    this.chromeStateJson = JSON.stringify(st);
   }
 
   /** ★★★B（决策 #800）：切 tab（runtime `hostAppDrive` 驱动：导航到目标屏 + 返回新 state）→ 重绘。 */
@@ -826,9 +831,12 @@ struct MainPage {
         //   永不更新 ⇒ 点 tab 后仍渲染旧屏）。chromeStateJson 与 current 都从 state 取。
         const st = dr['state'] as Record<string, Object> | undefined;
         if (st !== undefined && st !== null) {
+          // ★★★修复（2026-10-11 · 问题2）：drive 回执的 `state.current` 是**路由栈**值（一次性 VM
+          //   每次重新 boot ⇒ 恒 index），不代表实际切到哪屏。用户点 tab 的**意图屏 = tabName**，
+          //   且下句 `renderCurrent()` 正是渲染 `this.current` ⇒ 二者都用 tabName（高亮即跟随）。
+          st['current'] = tabName;
           this.chromeStateJson = JSON.stringify(st);
-          const cur = st['current'] as string | undefined;
-          if (cur !== undefined && cur.length > 0) { this.current = cur; }
+          this.current = tabName;
         }
         hilog.info(DOMAIN, TAG, 'SWITCH_TAB tab=%{public}s current=%{public}s', tabName, this.current);
       }

@@ -17,7 +17,10 @@
 // 【诚实边界】Web/MP **不消费本常量**（它们用各自 CSS 引擎渲染 `.sa-tabbar`）；本常量是**App 自绘端的
 //   共享规格**。Web CSS 是基准，本常量须与它一致（门禁比对 `.sa-tabbar` 的字面值）。
 export interface TabBarSpec {
-  /** 栏高（逻辑像素；不含底部安全区——宿主自行叠加 safeBottom） */
+  /** **内容区**栏高（逻辑像素）——图标/文字作为一个内容块在**此高度内垂直居中**。
+   *  ★不含底部安全区：各端渲染高度 = height + safeBottom，安全区是内容区**下方**的纯底色
+   *  （Web 基准 `.sa-tabbar`：`height: calc(52px + safe)` + `padding-bottom: safe` +
+   *  `__item`（52px）居中 ⇒ 内容只在 52 内居中，safe 只是底色延伸）。 */
   height: number
   /** 底色（CSS 颜色字面量） */
   surface: string
@@ -39,7 +42,7 @@ export interface TabBarSpec {
 
 /** App 壳 tab 栏视觉规格（基准 = superapp/App.vue `.sa-tabbar` + global.css token）。 */
 export const TAB_BAR_SPEC: TabBarSpec = {
-  height: 56,
+  height: 52,
   surface: '#ffffff',
   line: '#dcdfe5',
   brand: '#5b5bd6',
