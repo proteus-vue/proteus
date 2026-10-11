@@ -288,7 +288,14 @@ public final class ProteusTabChrome {
             lab.setGravity(android.view.Gravity.CENTER);
             lab.setTextColor(onColor);
             lab.setIncludeFontPadding(false);   // ★去字体上下留白（居中对称——见图标处说明）
-            col.addView(lab);
+            // ★★单行 + 尾部省略 + 固定宽 = tab 宽（2026-10-11 边界修复）：标签超宽时**不换行/
+            //   不裁切/不溢出**（此前单行但被屏右缘裁掉尾部；Web/鸿蒙则会换行——三端统一为省略）。
+            //   宽度 0dp + weight 1 ⇒ 撑满 col 宽但不超出（Ellipsize 才会生效）。
+            lab.setSingleLine(true);
+            lab.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            lab.setMaxLines(1);
+            col.addView(lab, new android.widget.LinearLayout.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT));
             col.setLayoutParams(new android.widget.LinearLayout.LayoutParams(
                     0, android.view.ViewGroup.LayoutParams.MATCH_PARENT, 1f));
             col.setOnClickListener(new android.view.View.OnClickListener() {

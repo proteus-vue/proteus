@@ -145,6 +145,10 @@ export struct ProteusTabChrome {
           ForEach(this.items, (item: TabItemFinal) => {
             Column() {
               Stack() {
+                // ★★图标行高**固定** = iconSize×1.2（2026-10-11 基线修复）：鸿蒙 Text(glyph) 高度随
+                //   **字形墨迹**变（◉ 大 / ⌁ 扁）⇒ 各 tab 内容块高不等 ⇒ 居中后图标+标签基线不齐
+                //   （真机测量：图标墨迹 94px vs 30px，标签底最多差 81px）。固定行高对齐 Web
+                //   `.sa-tabbar__ic{line-height:1}`（行盒高 = 字号，与字形无关）。
                 if (this.glyphTextOf(item).length > 0) {
                   // 文本字形 + U+FE0E（强制文本呈现，防彩色 emoji）
                   Text(this.glyphTextOf(item) + '\uFE0E')
@@ -166,8 +170,18 @@ export struct ProteusTabChrome {
                     .position({ x: 24, y: -2 })
                 }
               }
+              .height(Math.round(this.tbIconSize * 1.2))
               Text(item.label).fontSize(this.tbLabelSize)
                 .fontColor(this.current === item.name ? this.tbBrand : this.tbText3)
+                // ★★单行 + 尾部省略 + 占满 tab 宽（2026-10-11 边界修复）：标签超宽时**不换行/
+                //   不溢出**（此前默认换行 ⇒ "L1 触即应"折成两行、块高失控）。三端统一省略策略。
+                .maxLines(1)
+                .textOverflow({ overflow: TextOverflow.Ellipsis })
+                .width('100%')
+                .textAlign(TextAlign.Center)
+                // ★行高固定（= labelSize×1.2，与截断与否无关）+ 图标间距 2（= contentHeight 公式）
+                .lineHeight(Math.round(this.tbLabelSize * 1.2))
+                .margin({ top: 2 })
             }
             .layoutWeight(1)
             .height('100%')
