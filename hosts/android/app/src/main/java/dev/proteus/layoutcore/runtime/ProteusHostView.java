@@ -783,6 +783,8 @@ public class ProteusHostView extends ViewGroup {
      *   ⇒ 映射在宿主侧；绘制时按下标查表套变换。
      */
     private int[] cmdNodeIds = null;
+    /** ★★★玻璃材质（自研液态玻璃，决策 #818）：节点 id → 玻璃规格（宿主自绘玻璃面；空 ⇒ 无玻璃）。 */
+    private java.util.Map<Integer, GlassMaterial.Spec> glassByNode = java.util.Collections.emptyMap();
     /**
      * ★★★批 A（2026-10-08 · 决策 #653）：**position:fixed 的节点 id 集**——绘制时反向补偿内容滚动。
      *   语义：fixed 层**不随内容滚动**（相对视口固定）。本视图的内容滚动 = `canvas.translate(-scrollX,-scrollY)`
@@ -955,10 +957,15 @@ public class ProteusHostView extends ViewGroup {
         invalidate();
     }
 
+    /** ★★★玻璃材质（自研液态玻璃，决策 #818）：注入「节点 id → 玻璃规格」——宿主绘制时把它们画成玻璃面。 */
+    public void setGlassNodes(java.util.Map<Integer, GlassMaterial.Spec> s) {
+        this.glassByNode = (s == null) ? java.util.Collections.<Integer, GlassMaterial.Spec>emptyMap() : s;
+        invalidate();
+    }
+
     /** ★★★批 A：注入 position:fixed 的节点 id 集（绘制时反向补偿内容滚动，见 fixedNodes 注释）。 */
     public void setFixedNodes(java.util.Set<Integer> s) {
-        this.fixedNodes = (s == null) ? java.util.Collections.emptySet() : s;
-        invalidate();
+        this.fixedNodes = (s == null) ? java.util.Collections.emptySet() : s;        invalidate();
     }
 
     /** ★批 A③：注入 sticky 节点吸附阈值（绘制时按 scrollY 钳制）。 */
@@ -3066,6 +3073,8 @@ public class ProteusHostView extends ViewGroup {
         }
         super.onDraw(canvas);
         ensurePicture();   // ★首帧补建（setCmds 早于布局时）
+        // ★★★玻璃材质（决策 #818）：本屏有玻璃节点 ⇒ 先捕获"无玻璃面"的内容帧作背后内容采样源。
+        if (!glassByNode.isEmpty()) captureGlassBackdrop();
         // ★★★场跟手（通用 `v-follow={field:…}`）：每帧**至多一次**内核调用（MOVE 只记焦点 + 标脏）——
         //   结果落 `animTx` ⇒ 后续 `drawCmds` 与显示列表失效判定（`hasFrameOverrides`）自然生效。
         flushFieldFollow();
@@ -3207,8 +3216,55 @@ public class ProteusHostView extends ViewGroup {
         };
     }
 
-    public void drawCmds(Canvas canvas) {
-        // ★单次遍历下发全部指令（无 View 树、无递归 measure/layout）
+    /* ══════════ ★★★框架自研液态玻璃材质（决策 #818）：AGSL 玻璃面绘制 ══════════
+     * 自绘模型下"背后像素" = 宿主自身已画内容。策略：把**不含玻璃面**的内容帧捕获到离屏位图
+     * （`glassBackdrop`），玻璃节点绘制时用 AGSL `RuntimeShader` 采样该位图做 blur+tint+提彩。
+     * ★诚实边界：内容帧为"本帧内容"，玻璃面随内容实时更新（每帧重捕，仅当本屏有玻璃节点时）。
+     * 无 AGSL（API<31）⇒ `GlassMaterial.buildPaint` 返 null ⇒ 回退半透明实色（`glassFallback`）。 */
+    private android.graphics.Bitmap glassBackdrop;
+    private boolean capturingGlass = false;
+
+    /** 捕获"无玻璃面"的内容帧（作玻璃采样的背后内容）；调用方须保证本屏有玻璃节点。 */
+    private void captureGlassBackdrop() {
+        final int w = getWidth(), h = getHeight();
+        if (w <= 0 || h <= 0) return;
+        if (glassBackdrop == null || glassBackdrop.getWidth() != w || glassBackdrop.getHeight() != h) {
+            if (glassBackdrop != null) glassBackdrop.recycle();
+            glassBackdrop = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888);
+        }
+        final Canvas bc = new Canvas(glassBackdrop);
+        bc.drawColor(0, android.graphics.PorterDuff.Mode.CLEAR);
+        capturingGlass = true;
+        try {
+            drawCmds(bc);   // 无玻璃面（capturingGlass 时跳过玻璃分支）⇒ 纯内容
+        } finally {
+            capturingGlass = false;
+        }
+    }
+
+    /** 画一个玻璃面（节点盒 c）：AGSL 采样背后内容 → blur+tint；不可用 ⇒ 半透明实色回退。 */
+    private void drawGlassFace(Canvas canvas, Cmd c, GlassMaterial.Spec spec) {
+        if (c.w <= 0 || c.h <= 0) return;
+        final int save = canvas.save();
+        if (spec.radius > 0) {
+            android.graphics.Path clip = new android.graphics.Path();
+            clip.addRoundRect(new android.graphics.RectF(c.x, c.y, c.x + c.w, c.y + c.h), spec.radius, spec.radius,
+                    android.graphics.Path.Direction.CW);
+            canvas.clipPath(clip);
+        }
+        android.graphics.Paint p = GlassMaterial.buildPaint(glassBackdrop, spec);
+        if (p != null) {
+            canvas.drawRect(c.x, c.y, c.x + c.w, c.y + c.h, p);
+        } else {
+            // ★降级（API<31 或着色器失败）：半透明实色——绝不白屏/黑块（玻璃方案铁律 3）
+            android.graphics.Paint fp = new android.graphics.Paint();
+            fp.setColor(((spec.tint & 0x00FFFFFF) | 0xE6000000)); // tint 提不透明（0.9 alpha）
+            canvas.drawRect(c.x, c.y, c.x + c.w, c.y + c.h, fp);
+        }
+        canvas.restoreToCount(save);
+    }
+
+    public void drawCmds(Canvas canvas) {        // ★单次遍历下发全部指令（无 View 树、无递归 measure/layout）
         // ★★★按下 `z-index` 提升（2026-10-10 · 用户「涟漪下半被下排遮挡」）：被按节点若带 `:active{z-index:N}`
         //   ⇒ 把**其子树**cmds 移到绘制末尾（浮到相邻兄弟之上——Web 里 `position+z-index` 同语义）。
         //   ★仅当无 skip（载体行按**下标**跳过）且无 sticky（`cmdIndexByIdView`（视图下标→锚点）会错位）时启用
@@ -3250,6 +3306,12 @@ public class ProteusHostView extends ViewGroup {
         for (int i = 0; i < list.size(); i++) {
             if (skip != null && skip.contains(i)) continue;
             final Cmd c = list.get(i);
+            // ★★★玻璃材质（自研液态玻璃，决策 #818）：本节点带 glass ⇒ 先画**玻璃面**（背后内容模糊），
+            //   再画节点自身（底色/文本/子节点随后）——玻璃面在内容**之下**、在其子内容之上。
+            //   ★capturingGlass 时跳过（捕获"无玻璃面"的内容帧作背景，避免自采样递归）。
+            if (!capturingGlass && ids != null && i < ids.length && glassByNode.containsKey(ids[i])) {
+                drawGlassFace(canvas, c, glassByNode.get(ids[i]));
+            }
             // ★S1.1：本指令节点的按下态样式（仅在 DOWN 命中的那一条上非空）——底色/描边/凹陷/发光统一走这一份
             final PressStyle ps = (pressedNodeId >= 0 && ids != null && i < ids.length && ids[i] == pressedNodeId)
                     ? pressStyles.get(pressedNodeId) : null;
