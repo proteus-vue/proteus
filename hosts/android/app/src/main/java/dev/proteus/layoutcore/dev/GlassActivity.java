@@ -5,19 +5,39 @@ import android.os.Bundle;
 import android.widget.FrameLayout;
 
 /**
- * ★★★自研液态玻璃的**独立真机夹具**（决策 #818 P2 验收）：手写几条 Cmd 当"背后内容"（彩色块），
- *   再用一块带 `glass` 规格的节点量玻璃面 —— 宿主 `ProteusHostView` 会捕获"无玻璃面"的内容帧，
- *   用 AGSL( RuntimeShader ) 采样做 blur+tint，画玻璃面。`adb screencap` 看"内容透过玻璃模糊"即通过。
+ * ★★★自研液态玻璃的**独立真机夹具**（决策 #818 P2 验收 · #831 滚动/胶囊）：
+ *   · **模拟页面内容**（可滚动的一列卡片）——用来观察"内容滑过玻璃"的观感；
+ *   · **两种玻璃对比**：① 底部**圆角胶囊**（pill，radius=h/2，类 tab 栏）；② 中部**圆形**（circle，radius=min/2）；
+ *   · 每帧让内容缓慢上滚 → 玻璃下的内容随之变化（背后内容经模糊/边缘折射）。
  *
- * <p>独立 Activity（非 superapp 全流程）——绕开 superapp 启动/截图复杂度，最小成本验 AGSL 玻璃面。
+ * <p>独立 Activity（非 superapp 全流程）——绕开 superapp 启动/截图复杂度，最小成本验 AGSL 玻璃。
  *   全屏模式复刻 L4Activity（同类问题一处一种解法）。</p>
  */
 public class GlassActivity extends Activity {
 
-    private static final float U = 3f; // 声明单位 → 设备 px（本机 density 3.0）
-    private static final int BG = 0xFF101018;
+    private static final float U = 3f;
+    private static final int BG = 0xFF0E0E14;
 
     private boolean glassFullscreenPending = false;
+    private ProteusHostView scene;
+    private int W, H;
+    /** 滚动偏移（每帧递增，让内容滑过玻璃） */
+    private float scrollOff = 0f;
+    private static final int ROW_H = 150;
+    private static final int ROW_GAP = 14;
+    private static final int ROWS = 24;
+    private static final int[] PALETTE = {0xFF3B6FE0, 0xFFE0577B, 0xFF2FB98A, 0xFFE0A93B, 0xFF7B57E0, 0xFF2FA0E0, 0xFFD2694A, 0xFF4AC2B0};
+
+    private final Runnable tick = new Runnable() {
+        @Override public void run() {
+            scrollOff += 2.2f;
+            float cycle = ROWS * (ROW_H + ROW_GAP);
+            if (scrollOff > cycle) scrollOff -= cycle;
+            render();
+            scene.postInvalidateOnAnimation();
+            scene.postOnAnimation(this);
+        }
+    };
 
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
@@ -50,47 +70,66 @@ public class GlassActivity extends Activity {
 
         android.graphics.Point sz = new android.graphics.Point();
         getWindowManager().getDefaultDisplay().getRealSize(sz);
-        final int W = sz.x, H = sz.y;
+        W = sz.x; H = sz.y;
 
+        scene = new ProteusHostView(this);
+        scene.setBackgroundColor(BG);
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(W, H);
+        root.addView(scene, lp);
+
+        render();
+        scene.postOnAnimation(tick);
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (scene != null) scene.removeCallbacks(tick);
+    }
+
+    /** 重建 cmds：滚动内容 + 固定的两块玻璃（胶囊 pill + 圆形 circle）。 */
+    private void render() {
         java.util.List<ProteusHostView.Cmd> cmds = new java.util.ArrayList<>();
         java.util.List<Integer> ids = new java.util.ArrayList<>();
         int nid = 0;
 
-        // ── ① "背后内容"：满屏彩色块（供玻璃模糊）──
-        int[] palette = {0xFF3B6FE0, 0xFFE0577B, 0xFF2FB98A, 0xFFE0A93B, 0xFF7B57E0, 0xFF2FA0E0};
-        final float cellW = W / 3f, cellH = H / 5f;
-        for (int r = 0; r < 5; r++) {
-            for (int c = 0; c < 3; c++) {
-                cmds.add(new ProteusHostView.Cmd(c * cellW, r * cellH, cellW, cellH,
-                        palette[(r * 3 + c) % palette.length], null, 0f, 0, 0f));
-                ids.add(nid++);
-            }
+        // ── 模拟页面内容：一列卡片（随 scrollOff 上滚）──
+        int contentH = ROWS * (ROW_H + ROW_GAP);
+        for (int i = 0; i < ROWS; i++) {
+            float y = i * (ROW_H + ROW_GAP) - scrollOff;
+            // 循环：滚出顶部后从底部接上（无缝长列表观感）
+            if (y < -ROW_H) y += contentH;
+            if (y > H + ROW_H) continue;
+            float x = 20 * U, w = W - 40 * U, h = ROW_H;
+            int col = PALETTE[i % PALETTE.length];
+            cmds.add(new ProteusHostView.Cmd(x, y, w, h, col, "行 " + (i + 1) + " · 模拟页面内容", 15 * U, 0xFFFFFFFF, 18 * U));
+            ids.add(nid++);
         }
-        // 中央一行白字（透明底——`0x00000000`；文字用白色 0xFFFFFFFF）
-        cmds.add(new ProteusHostView.Cmd(24 * U, H / 2f - 40 * U, W - 48 * U, 40 * U, 0x00000000,
-                "玻璃背后的内容 CONTENT BEHIND GLASS", 22 * U, 0xFFFFFFFF, 0f));
+
+        // ── 玻璃 ①：底部**圆角胶囊 pill**（radius = h/2，类 tab 栏）──
+        float pillX = 18 * U, pillW = W - 36 * U, pillH = 116, pillY = H - pillH - 60 * U, pillR = pillH / 2f;
+        cmds.add(new ProteusHostView.Cmd(pillX, pillY, pillW, pillH, 0x00000000, null, 0f, 0, pillR));
+        int pillId = nid++; ids.add(pillId);
+
+        // ── 玻璃 ②：中部**圆形**（radius = min/2）──
+        float circ = 300 * U, circX = (W - circ) / 2f, circY = H * 0.30f - circ / 2f, circR = circ / 2f;
+        cmds.add(new ProteusHostView.Cmd(circX, circY, circ, circ, 0x00000000, null, 0f, 0, circR));
+        int circId = nid++; ids.add(circId);
+
+        // ── 圆形玻璃内的文字（在玻璃之上，证明玻璃在文字下）──
+        cmds.add(new ProteusHostView.Cmd(circX, circY + circ / 2f - 20 * U, circ, 40 * U, 0, "圆形玻璃", 20 * U, 0xFFFFFFFF, 0f));
         ids.add(nid++);
 
-        // ── ② 玻璃面：一块带 glass 规格的节点（悬浮在内容之上）──
-        final int glassId = nid++;
-        cmds.add(new ProteusHostView.Cmd(32 * U, H / 3f, W - 64 * U, H / 4f, 0x00000000, null, 0f, 0, 24 * U));
-        ids.add(glassId);
-        // 玻璃面内的白字（画在玻璃之上——玻璃在其下）
-        cmds.add(new ProteusHostView.Cmd(32 * U, H / 3f, W - 64 * U, 40 * U, 0, "自研液态玻璃 · AGSL", 26 * U, 0xFFFFFFFF, 0f));
-        ids.add(nid++);
-
-        final ProteusHostView scene = new ProteusHostView(this);
         int[] idArr = new int[ids.size()];
         for (int i = 0; i < idArr.length; i++) idArr[i] = ids.get(i);
         scene.setCmdNodeIds(idArr);
         scene.setCmds(cmds);
-        // ★玻璃规格（= 内核 GlassSpec 同形）：blur 24 / tint #ffffff26 / radius 24 / border / saturation 1.8
-        java.util.Map<Integer, GlassMaterial.Spec> glassMap = new java.util.HashMap<>();
-        glassMap.put(glassId, new GlassMaterial.Spec(24f, 0x26FFFFFF, 24f, true, 1.8f));
-        scene.setGlassNodes(glassMap);
-        scene.setBackgroundColor(BG);
 
-        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(W, H);
-        root.addView(scene, lp);
+        java.util.Map<Integer, GlassMaterial.Spec> glassMap = new java.util.HashMap<>();
+        // 胶囊（类 tab 栏）：blur 20 / tint #ffffff26 / border / sat 1.0
+        glassMap.put(pillId, new GlassMaterial.Spec(20f, 0x26FFFFFF, pillR, true, 1.0f));
+        // 圆形：blur 16 / 稍厚
+        glassMap.put(circId, new GlassMaterial.Spec(16f, 0x33FFFFFF, circR, true, 1.0f));
+        scene.setGlassNodes(glassMap);
     }
 }

@@ -89,7 +89,7 @@ public final class GlassMaterial {
             + "    col.rgb = (col.rgb - 0.5) * half(contrast) + 0.5;\n"
             // ⑤ tint + 少量磨砂白（★iOS 内容仍**可辨认**——frost 只轻提亮不透死）
             + "    col.rgb = mix(col.rgb, col.rgb * half3(tint.rgb) * 2.0, half(tint.a));\n"
-            + "    col.rgb = mix(col.rgb, half3(0.99, 0.995, 1.0), half(0.16 + tint.a * 0.2));\n"
+            + "    col.rgb = mix(col.rgb, half3(0.99, 0.995, 1.0), half(0.28 + tint.a * 0.25));\n"
             // ⑥ 光照：Fresnel + 法线·光源（双瓣）；**四周对称**（无顶部加权）
             + "    float cosI = inversesqrt(1.0 + slope * slope);\n"
             + "    float f0 = (1.5 - 1.0) / (1.5 + 1.0); f0 *= f0;\n"
