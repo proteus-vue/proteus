@@ -46,6 +46,8 @@ final class SuperappScene: NSObject {
     private static var swipeBackTarget: SwipeBackTarget?
 
     private static weak var bridgeRef: SelfDrawBridge?
+    /// ★★★v-pump/动画判据（本批）：宿主持有运行时桥 ⇒ 报告里直读泵/动画计数（native 真源，不经 JS）。
+    private static weak var rtHostRef: SuperappRuntimeHost?
     private static var container: UIView?
     private static var tabNames: [String] = []
     // ★★B2（G1）：tab 栏视觉规格（共享，state.tabSpec）——宿主只读规格建视图（不再硬编码）。
@@ -82,6 +84,7 @@ final class SuperappScene: NSObject {
         //   原语，交互/响应式/导航全在共享 JS 层）；旧静态屏内容改由 JS 侧 __proteusSuperappRender 实例化。
         let rtHost = SuperappRuntimeHost(draw: bridge, caps: hostBridge)
         rtHost.jsContext = ctx
+        rtHostRef = rtHost
         ctx.setObject(rtHost, forKeyedSubscript: "proteusHost" as NSString)
         // ★手势命中链 → JS 运行期（SelfDrawBridge 命中后反向调 JS 注册的 `__proteusRuntimeGesture`）。
         bridge.onDispatchToJS = { target, chain, type, _, _ in
@@ -187,6 +190,32 @@ final class SuperappScene: NSObject {
                         switchLog.append(["scroll": sName, "dy": dy, "offset": offY, "current": currentName(), "ok": true, "via": "scroll-inject"])
                         writeReport(reportBody())
                         NSLog("[proteus] SUPERAPP_SCROLL_REPORT_READY page=%@ dy=%f offset=%f", sName, dy, offY)
+                        if ProcessInfo.processInfo.environment["PROTEUS_EXIT_AFTER_REPORT"] == "1" { exit(0) }
+                    }
+                }
+            }
+        }
+        // ★★★v-pump / 跳变驱动动画判据（本批）：`--pump=<page>[,<ms>]`——导航到指定屏，让**泵周期驱动**
+        //   跑一段（默认 1500ms），读宿主 native 计数（pump.calls/fire_ticks + anim_start_calls）→
+        //   截图 + 落报告 + 自退。与 Android 的「L3 数字场持续跳变」判据同口径：
+        //   ★判"动画在播"看**内核受理**（anim_start_calls / started），不看截屏像素（#793 判据纪律）。
+        if let pa = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--pump=") }) {
+            Self.tapMode = true
+            let body = String(pa.dropFirst("--pump=".count))
+            let parts = body.split(separator: ",")
+            let pName = parts.isEmpty ? "index" : String(parts[0])
+            let holdMs = parts.count >= 2 ? (Double(parts[1]) ?? 1500) : 1500
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                _ = evalJs?("__proteusSuperappNav(\(jsonQuote(pName)))")
+                DispatchQueue.main.async {
+                    renderCurrent()   // 挂载（→ 泵驱动随 mount 起）
+                    // 让泵跑 `holdMs`（确定性事件：定时读取，不是轮询）→ 读数 + 截图 + 报告 + 自退
+                    DispatchQueue.main.asyncAfter(deadline: .now() + holdMs / 1000.0) {
+                        takeSnapshot()
+                        switchLog.append(["pump": pName, "hold_ms": holdMs, "current": currentName(), "ok": true, "via": "pump-probe"])
+                        writeReport(reportBody())
+                        let stats = rtHostRef?.pumpStats() ?? [:]
+                        NSLog("[proteus] SUPERAPP_PUMP_REPORT_READY page=%@ %@", pName, String(describing: stats))
                         if ProcessInfo.processInfo.environment["PROTEUS_EXIT_AFTER_REPORT"] == "1" { exit(0) }
                     }
                 }
@@ -489,6 +518,10 @@ final class SuperappScene: NSObject {
         var o: [String: Any] = ["ok": true, "host_id": "ios", "tabs": tabNames, "switch_log": switchLog,
                                 "scroll_probe": scrollProbe(),
                                 "run_ts": Date().timeIntervalSince1970]
+        // ★★★v-pump / 跳变驱动动画（本批·判据）：泵驱动与动画受理的 **native 计数**（真源，不经 JS）——
+        //   `calls`/`fire_ticks` > 0 证明周期驱动真的在跑且真的写进了数据源；`anim_start_calls` 证明
+        //   `v-animate`/`<Transition>` 走到了宿主动画入口（同 #793 判据纪律：看内核受理，不看截屏像素）。
+        if let rt = rtHostRef { o["pump"] = rt.pumpStats() }
         if let st = evalJs?("__proteusSuperappState()"),
            let d = st.data(using: .utf8),
            let so = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] {

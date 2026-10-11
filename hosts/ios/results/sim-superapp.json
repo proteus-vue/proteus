@@ -1,0 +1,98 @@
+{
+  "host_id" : "ios",
+  "host_stats" : "{\"ok\":true,\"data\":{\"screens\":[{\"screenId\":\"l3#2\",\"visible\":true,\"rootNodeId\":100}],\"destroy_calls\":1,\"visible_calls\":2,\"anim_calls\":0,\"shared_calls\":0,\"mount_calls\":2,\"calls\":[\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.stats\"],\"anim_hook_missing\":0,\"rect_calls\":0,\"anim_completed\":0,\"content_node_total\":182,\"live_screens\":1}}",
+  "ok" : true,
+  "pump" : {
+    "anim_start_calls" : 6,
+    "anim_started_total" : 6,
+    "calls" : 53,
+    "fire_ticks" : 53,
+    "interval_ms" : 33.333333333333336,
+    "last_dt_ms" : 50.000000000181899,
+    "last_fired" : 1,
+    "pumps" : 2,
+    "running" : true
+  },
+  "rendered_page" : "l3",
+  "run_ts" : 1791687299.633991,
+  "scroll_probe" : {
+    "after_drag_down_100k" : 0,
+    "after_drag_left_100k_x" : 0,
+    "after_drag_right_100k_x" : 0,
+    "after_drag_up_100k" : 0,
+    "ok" : true,
+    "range" : 0,
+    "range_set" : true
+  },
+  "state" : {
+    "current" : "l3",
+    "depth" : 1,
+    "screens" : [
+      "index",
+      "l2",
+      "l3",
+      "l4",
+      "l5"
+    ],
+    "stack" : [
+      "l3"
+    ],
+    "tabLabels" : {
+      "index" : "L1 触即应",
+      "l2" : "L2 跟手",
+      "l3" : "L3 沸腾",
+      "l4" : "L4 十指",
+      "l5" : "L5 崩裂"
+    },
+    "tabs" : [
+      "index",
+      "l2",
+      "l3",
+      "l4",
+      "l5"
+    ],
+    "tabSpec" : {
+      "badge" : {
+        "fontSize" : 11,
+        "offsetX" : 4,
+        "offsetY" : 4,
+        "padX" : 4,
+        "radius" : 8
+      },
+      "badgeBg" : "#d64545",
+      "brand" : "#5b5bd6",
+      "height" : 56,
+      "icons" : {
+        "index" : "⌂",
+        "messages" : "✉",
+        "mine" : "☺"
+      },
+      "iconSize" : 19,
+      "labels" : {
+        "index" : "首页",
+        "messages" : "消息",
+        "mine" : "我的"
+      },
+      "labelSize" : 10,
+      "line" : "#dcdfe5",
+      "surface" : "#ffffff",
+      "text3" : "#5f6673"
+    }
+  },
+  "switch_log" : [
+    {
+      "current" : "l3",
+      "hold_ms" : 2500,
+      "ok" : true,
+      "pump" : "l3",
+      "via" : "pump-probe"
+    }
+  ],
+  "tabs" : [
+    "index",
+    "l2",
+    "l3",
+    "l4",
+    "l5"
+  ]
+}

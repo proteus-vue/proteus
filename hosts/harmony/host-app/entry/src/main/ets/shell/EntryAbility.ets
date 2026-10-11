@@ -35,7 +35,13 @@ export default class EntryAbility extends UIAbility {
     //   （含 `bench` = 原缺省的全套装置路径）⇒ 落 dev/Index。
     //   ★语义同 iOS（Info.plist 缺省场景 = superapp；脚本显式 `--selfdraw/--app-stack/…`）。
     // ★★★逐屏截图装置（2026-10-05）：`superapp-screen-<name>` 也落 shell/Superapp（启动后导航到该屏）。
-    if (sceneStr === '' || sceneStr === 'superapp' || sceneStr === 'superapp-drive' || sceneStr.startsWith('superapp-screen-')) {
+    // ★★★v-pump 判据（本批）：`superapp-pump-<name>` 同落 Shell（启动后导航 + 让泵跑 `--ps ms`）。
+    //   ★泵保持时长（本批）：`--ps ms 2500` ⇒ AppStorage（`superapp-pump-` 场景读它）。
+    const ms = want?.parameters?.['ms'];
+    const msStr: string = typeof ms === 'string' ? ms : (typeof ms === 'number' ? String(ms) : '');
+    AppStorage.setOrCreate('proteusPumpMs', msStr);
+    if (sceneStr === '' || sceneStr === 'superapp' || sceneStr === 'superapp-drive'
+        || sceneStr.startsWith('superapp-screen-') || sceneStr.startsWith('superapp-pump-')) {
       this.pageToLoad = 'shell/Superapp';
     } else {
       this.pageToLoad = 'dev/Index';

@@ -91,8 +91,10 @@ export interface SuperappRuntime {
   /**
    * ★★★**数据泵推进一帧**（通用原语 `v-pump`，本批）：宿主按帧调（传真实 dtMs）——当前屏的泵按 hz
    *   累加抽帧产新值 ⇒ 写数据源 ⇒ 既有增量通路。返回触发的源数；当前屏无泵 ⇒ 0。
+   *   ★`rebuild`：`applyOps` 为 no-op 的宿主（鸿蒙一次性 VM）传 true ⇒ 泵值变化后整树重建
+   *     （它们拿不到 O(1) 增量，只能重取 content()）；Android/iOS 不传（零额外成本）。
    */
-  pumpTick(dtMs: number): number
+  pumpTick(dtMs: number, rebuild?: boolean): number
   /** 当前屏声明的泵数（宿主据此决定是否起周期驱动）。 */
   pumpCount(): number
   /** 当前屏各泵频率列表 JSON（宿主据最小间隔起/停 Choreographer 帧循环；无泵 ⇒ `[]`）。 */
@@ -279,11 +281,11 @@ export function createSuperappRuntime(opts: SuperappRuntimeOptions): SuperappRun
       return true
     },
     dispatchGesture: dispatch,
-    pumpTick(dtMs: number): number {
+    pumpTick(dtMs: number, rebuild?: boolean): number {
       // ★v-pump：委派当前屏实例（泵表在屏产物里）；无屏/无泵 ⇒ 0。
       if (!cur) return 0
       try {
-        return rt.instance(cur).pumpTick(dtMs)
+        return rt.instance(cur).pumpTick(dtMs, rebuild)
       } catch (e) {
         note(`[superapp-runtime] pumpTick 异常：${String((e as Error)?.message ?? e)}`)
         return 0

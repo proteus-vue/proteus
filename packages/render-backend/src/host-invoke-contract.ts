@@ -47,6 +47,10 @@ export const HOST_CAPABILITY_METHODS = [
   'webassembly.release',
   // 宿主自报调用记账（判据"能力经壳执行"）
   'native.calls',
+  // ★★dev 通道 · 项目 console 回收（决策 #730）：页面 `console.*` 经垫片 → `invoke('dev.console', {level,text})`
+  //   ⇒ 宿主回收，渲染收尾带走（面板 Console·项目通道）。★当前仅鸿蒙 runtime 声明（一次性 VM 无法用
+  //   `post` 反向通道；Android/iOS 走 `proteusHost.post`）——他端不实现 ⇒ 覆盖率如实报缺（非漂移）。
+  'dev.console',
 ] as const
 
 /** **合法省略**（某端不实现但非漂移——由引擎/平台提供）。键 = 端名（`android`/`ios`/`harmony`）。 */

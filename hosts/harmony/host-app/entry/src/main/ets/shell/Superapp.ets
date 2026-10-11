@@ -19,7 +19,7 @@ import { NodeContent } from '@kit.ArkUI';
 import { display, window } from '@kit.ArkUI';
 import { util } from '@kit.ArkTS';
 import { fileIo } from '@kit.CoreFileKit';
-import { attach, renderCommands, scrollRoot, clearRoot, appScreenCommands, appScreenContentHeight, appScreenHitAt, hostRtShellInstall, hostRtShellEvent, hostAppDrive, hostAppRender } from 'proteus_render';
+import { attach, renderCommands, applyNodeVisuals, scrollRoot, clearRoot, appScreenCommands, appScreenContentHeight, appScreenHitAt, hostRtShellInstall, hostRtShellEvent, hostAppDrive, hostAppRender, hostAppPumpTick, hostAppPumpHzSet, hostAppAnimAttach, hostAppAnimTick, hostAppAnimStats } from 'proteus_render';
 
 const DOMAIN = 0x0002;
 const TAG = 'ProteusSuperapp';
@@ -27,6 +27,17 @@ const TAG = 'ProteusSuperapp';
 /** ★B1：统一运行期渲染入参（ArkTS 禁未型字面量 ⇒ 用接口声明） */
 interface RtViewport { width: number; height: number }
 interface RtArgs { bundle: string; filesDir: string; page: string; viewport: RtViewport; chain?: number[]; state?: Record<string, Object>; remount?: boolean }
+/** ★★★v-pump/动画会话读数（本批）：宿主侧真源（ArkTS 禁未型字面量 ⇒ 显式接口）。 */
+interface AnimPumpHostStats {
+  pump_ticks: number; pump_fired: number; pump_interval_ms: number; batch_frames: number; last_eval_ms: number;
+  anim_attaches: number; anim_ticks: number; anim_applied: number; anim_starts: number; anim_active_last: number;
+}
+interface AnimPumpStats { host: AnimPumpHostStats; native: Record<string, Object> }
+/** ★v-pump 节拍入参（hostAppPumpTick）——ArkTS 禁未型字面量。 */
+interface PumpTickArgs {
+  bundle: string; page: string; viewport: RtViewport; dtMs: number; frames: number;
+  state?: Record<string, Object>;
+}
 const TAB_H = 56;   // 底部 Tab 栏高度（vp）
 /** 惯性减速速率（= iOS UIScrollView normal 0.998/ms；平台标准值，不自造曲线）+ 停止阈值（vp/ms）。 */
 const DECEL_RATE = 0.998;
@@ -112,6 +123,25 @@ struct Superapp {
   /** 视口高/宽（vp；renderCurrent 处记录——与 contentH 同源）。 */
   private static vpH: number = 844;
   private static vpW: number = 390;
+  /* ══════════ ★★★v-pump 周期驱动 + 跳变驱动动画（本批 · 通用原语，宿主只做驱动）══════════
+   * 【v-pump】运行期把当前屏泵频率报给宿主（`__proteusHostAppPumpHz()`）；宿主按**最小间隔**
+   *   起一个 setInterval 定时器，到点调 `hostAppPumpTick`（一拍 = 一个一次性 VM：boot + N 帧泵 + 重挂）。
+   *   ★与 Android Choreographer / iOS CADisplayLink 同职责（合法周期源，非 sleep 盲等）；
+   *   ★批大小自适应：按上一拍实测 `eval_ms` 调（目标 ≈ 每拍 80ms 内跑完）——不隐瞒鸿蒙的批式形态。
+   * 【动画】`v-animate`/`<Transition>` 的 animStart 由 C++ 会话记录（跨 VM）；宿主每次建树后调
+   *   `hostAppAnimAttach`（挂树 + 重放），帧循环按内核自报 active 停（同 TransitionFrameCallback 语义）。 */
+  private pumpTimer: number = -1;
+  private pumpIntervalMs: number = 0;
+  private pumpFramesPerBatch: number = 4;
+  private pumpLastEvalMs: number = 0;
+  private pumpTicks: number = 0;
+  private pumpFired: number = 0;
+  private animTimer: number = -1;
+  private animTicks: number = 0;
+  private animAttaches: number = 0;
+  private animAppliedTotal: number = 0;
+  private animStarts: number = 0;
+  private animActiveLast: number = -1;
 
   /** Tab 图标（鸿蒙系统符号资源；三端语义同：首页/消息/我的） */
   private tabSymbol(name: string): Resource {
@@ -235,7 +265,27 @@ struct Superapp {
       // ★★★逐屏截图装置（2026-10-05 · 拆页后每页需独立截图与 Web 基准可比）：
       //   `scene=superapp-screen-<name>` ⇒ 启动后**导航到该屏**（验收跑器逐页调用 + 截图）。
       //   与 Android `--es screen <name>` / iOS drive 遍历同法（三端同语义）。
-      if (this.scene.startsWith('superapp-screen-')) {
+      // ★★★v-pump / 跳变驱动动画判据（本批）：`scene=superapp-pump-<name>`——导航到该屏 →
+      //   渲染（泵驱动随 mount 起）→ 让泵跑 `holdMs`（AppStorage proteusPumpMs，缺省 2500）→
+      //   落报告（含 `anim_pump` 读数）+ 截屏（脚本侧）。与 Android「L3 数字场持续跳变」/iOS
+      //   `--pump=` 同判据（★看内核受理/宿主真写，不看截屏像素——#793 判据纪律）。
+      if (this.scene.startsWith('superapp-pump-')) {
+        const want: string = this.scene.slice('superapp-pump-'.length);
+        const out2: string = hostAppDrive(JSON.stringify({ 'bundle': bundle, 'filesDir': this.filesDir, 'tabs': [want] } as Record<string, Object>));
+        const o2 = JSON.parse(out2) as Record<string, Object>;
+        const dr2 = o2['drive'] as Record<string, Object> | undefined;
+        if (dr2) this.applyState(dr2['state'] as Object);
+        this.renderCurrent();   // 泵驱动 + 动画挂树都在其内（syncPumpFromReply / attachAnimations）
+        this.booted = true;
+        const holdArg: string = AppStorage.get<string>('proteusPumpMs') ?? '';
+        const holdMs: number = holdArg.length > 0 ? (Number.parseInt(holdArg, 10) || 2500) : 2500;
+        hilog.info(DOMAIN, TAG, 'SUPERAPP_PUMP_SCENE start page=%{public}s holdMs=%{public}d', want, holdMs);
+        setTimeout(() => {
+          // 到时落报告（泵/动画计数已在跑）——脚本以文件出现为完成信号（零盲等）
+          this.writeReport();
+          hilog.info(DOMAIN, TAG, 'SUPERAPP_PUMP_SCENE_DONE page=%{public}s stats=%{public}s', this.current, this.animPumpStats());
+        }, holdMs);
+      } else if (this.scene.startsWith('superapp-screen-')) {
         const want: string = this.scene.slice('superapp-screen-'.length);
         const out2: string = hostAppDrive(JSON.stringify({ 'bundle': bundle, 'filesDir': this.filesDir, 'tabs': [want] } as Record<string, Object>));
         hilog.info(DOMAIN, TAG, 'SUPERAPP_SCREEN_DRIVE %{public}s', out2.substring(0, 200));
@@ -359,6 +409,152 @@ struct Superapp {
     if (snap !== undefined && snap !== null) {
       try { this.runtimeState = snap as Record<string, Object>; } catch (e) { /* 保持旧态（不静默） */ }
     }
+  }
+
+  /* ══════════ ★★★v-pump 驱动（本批）══════════ */
+
+  /** 从 hostAppRender/hostAppPumpTick 回执里读泵频率（`pumpHz`）→ 起/停/调周期驱动。 */
+  private syncPumpFromReply(rt: Record<string, Object>): void {
+    let hz: number[] = [];
+    const raw = rt['pumpHz'];
+    if (Array.isArray(raw)) { hz = raw as number[]; }
+    try { hostAppPumpHzSet(JSON.stringify(hz)); } catch (e) { /* 读数记录失败不阻断驱动 */ }
+    let maxHz = 0;
+    for (const v of hz) { if (typeof v === 'number' && v > 0 && v > maxHz) { maxHz = v; } }
+    if (maxHz > 0) {
+      this.pumpIntervalMs = Math.max(8, Math.round(1000 / maxHz));
+      this.startPumpLoop();
+    } else {
+      this.stopPumpLoop();
+    }
+  }
+
+  private startPumpLoop(): void {
+    if (this.pumpTimer >= 0) { return; }   // 已在跑（频率变化由 pumpIntervalMs 生效——每拍现读）
+    this.pumpTimer = setInterval(() => { this.pumpBeat(); }, Math.max(8, this.pumpIntervalMs));
+    hilog.info(DOMAIN, TAG, 'SUPERAPP_PUMP_START interval=%{public}dms frames=%{public}d', this.pumpIntervalMs, this.pumpFramesPerBatch);
+  }
+
+  private stopPumpLoop(): void {
+    if (this.pumpTimer >= 0) { clearInterval(this.pumpTimer); this.pumpTimer = -1; }
+  }
+
+  /** 一拍：一个一次性 VM 里跑 N 帧泵（批大小按上一拍实测耗时自适应——目标 ≈ 80ms/拍）。 */
+  private pumpBeat(): void {
+    if (!this.bundle) { return; }
+    try {
+      const vp: RtViewport = { width: Superapp.vpW, height: Superapp.vpH };
+      const args: PumpTickArgs = {
+        bundle: this.bundle,
+        page: this.current,
+        viewport: vp,
+        dtMs: 1000 / 60,
+        frames: this.pumpFramesPerBatch,
+      };
+      if (this.runtimeState !== null && Object.keys(this.runtimeState).length > 0) { args.state = this.runtimeState; }
+      const rtOut: string = hostAppPumpTick(JSON.stringify(args));
+      const rt = JSON.parse(rtOut) as Record<string, Object>;
+      this.pumpTicks++;
+      const fired = rt['fired'] as number | undefined;
+      if (fired !== undefined) { this.pumpFired += fired; }
+      const evalMs = rt['eval_ms'] as number | undefined;
+      if (evalMs !== undefined) {
+        this.pumpLastEvalMs = evalMs;
+        // 批大小自适应：>80ms ⇒ 减半（保 UI 线程）；<20ms ⇒ 加倍（提高可见刷新率），上限 32
+        if (evalMs > 80 && this.pumpFramesPerBatch > 1) { this.pumpFramesPerBatch = Math.max(1, Math.floor(this.pumpFramesPerBatch / 2)); }
+        else if (evalMs < 20 && this.pumpFramesPerBatch < 32) { this.pumpFramesPerBatch = this.pumpFramesPerBatch * 2; }
+      }
+      this.saveSnapshot(rt);
+      const st = rt['state'] as Record<string, Object> | undefined;
+      if (st) { this.applyState(st); }
+      const tree = rt['tree'] as Record<string, Object> | undefined;
+      const cur = rt['current'] as string | undefined;
+      if (cur !== undefined && cur.length > 0) { this.current = cur; }
+      if (tree && Array.isArray(tree['nodes'])) {
+        let nodes: string = JSON.stringify(tree['nodes']);
+        this.nodesByPage.set(this.current, nodes);
+        this.paintTree(this.current, nodes);
+        this.attachAnimations();   // 树重建后补挂动画 + 重放到当前相位（动画与泵同拍推进）
+      }
+      if (this.pumpTicks <= 3 || this.pumpTicks % 30 === 0) {
+        hilog.info(DOMAIN, TAG, 'SUPERAPP_PUMP tick=%{public}d fired=%{public}d frames=%{public}d evalMs=%{public}d',
+          this.pumpTicks, fired ?? -1, this.pumpFramesPerBatch, Math.round(evalMs ?? 0));
+      }
+    } catch (e) {
+      hilog.error(DOMAIN, TAG, 'SUPERAPP_PUMP_ERROR %{public}s', JSON.stringify(e) ?? '');
+    }
+  }
+
+  /* ══════════ ★★★跳变驱动动画（本批）══════════ */
+
+  /** 每次建树后调：把动画规格挂到新树 + 重放到当前相位，返回首帧 updates（立即写视觉）。 */
+  private attachAnimations(): void {
+    try {
+      const out = hostAppAnimAttach();
+      const o = JSON.parse(out) as Record<string, Object>;
+      const active = o['active'] as number | undefined;
+      const started = o['started'] as number | undefined;
+      if (started !== undefined && started > 0) { this.animStarts += started; }
+      this.animAttaches++;
+      this.applyVisuals(o);
+      if (active !== undefined && active > 0) { this.startAnimLoop(); }
+      this.animActiveLast = active ?? -1;
+    } catch (e) {
+      hilog.error(DOMAIN, TAG, 'SUPERAPP_ANIM_ATTACH_ERROR %{public}s', JSON.stringify(e) ?? '');
+    }
+  }
+
+  /** 帧循环：`hostAppAnimTick` → applyNodeVisuals；内核 active==0 ⇒ 自停（同 TransitionFrameCallback）。 */
+  private startAnimLoop(): void {
+    if (this.animTimer >= 0) { return; }
+    this.animTimer = setInterval(() => {
+      try {
+        const out = hostAppAnimTick('{"dtMs":16.7}');
+        const o = JSON.parse(out) as Record<string, Object>;
+        this.animTicks++;
+        this.applyVisuals(o);
+        const active = o['active'] as number | undefined;
+        this.animActiveLast = active ?? -1;
+        if (active !== undefined && active === 0) {
+          clearInterval(this.animTimer); this.animTimer = -1;
+          hilog.info(DOMAIN, TAG, 'SUPERAPP_ANIM_LOOP_DONE ticks=%{public}d applied=%{public}d', this.animTicks, this.animAppliedTotal);
+        }
+      } catch (e) {
+        hilog.error(DOMAIN, TAG, 'SUPERAPP_ANIM_TICK_ERROR %{public}s', JSON.stringify(e) ?? '');
+        clearInterval(this.animTimer); this.animTimer = -1;
+      }
+    }, 16);
+  }
+
+  /** 把回执里的 `updates`（内核逐帧视觉）写到渲染层。 */
+  private applyVisuals(o: Record<string, Object>): void {
+    const updates = o['updates'];
+    if (updates === undefined || updates === null) { return; }
+    const json: string = JSON.stringify(updates);
+    if (json.length <= 2) { return; }
+    try {
+      const r = applyNodeVisuals(json);
+      const ro = JSON.parse(r) as Record<string, Object>;
+      const applied = ro['applied'] as number | undefined;
+      if (applied !== undefined) { this.animAppliedTotal += applied; }
+    } catch (e) {
+      hilog.error(DOMAIN, TAG, 'SUPERAPP_ANIM_APPLY_ERROR %{public}s', JSON.stringify(e) ?? '');
+    }
+  }
+
+  /** ★动画/泵会话读数（报告用；native 真源 + 宿主真源分开报——不互相掩盖）。 */
+  private animPumpStats(): string {
+    let native = '{}';
+    try { native = hostAppAnimStats(); } catch (e) { native = '{"error":"stats 调用失败"}'; }
+    // ★ArkTS 严格模式（arkts-no-untyped-obj-literals）：字面量须有**显式声明**的接口 ⇒ 具名接口。
+    const host: AnimPumpHostStats = {
+      pump_ticks: this.pumpTicks, pump_fired: this.pumpFired, pump_interval_ms: this.pumpIntervalMs,
+      batch_frames: this.pumpFramesPerBatch, last_eval_ms: this.pumpLastEvalMs,
+      anim_attaches: this.animAttaches, anim_ticks: this.animTicks, anim_applied: this.animAppliedTotal,
+      anim_starts: this.animStarts, anim_active_last: this.animActiveLast,
+    };
+    const body: AnimPumpStats = { host: host, native: JSON.parse(native) as Record<string, Object> };
+    return JSON.stringify(body);
   }
 
   /**
@@ -559,10 +755,14 @@ struct Superapp {
         // ★修：屏名以**实际渲染的 current** 为准（boot 后路由 current 恒为 index，会盖掉真实当前屏）
         const cur = rt['current'] as string;
         if (cur !== undefined && cur.length > 0) { this.current = cur; }
+        // ★★★v-pump（本批）：读该屏泵频率 → 起/停周期驱动（无泵 ⇒ 不起；切到无泵屏 ⇒ 自停）
+        this.syncPumpFromReply(rt);
       } catch (re) {
         hilog.error(DOMAIN, TAG, 'SUPERAPP_RUNTIME_ERROR %{public}s', JSON.stringify(re) ?? '');
       }
       this.paintTree(page, nodes);
+      // ★★★跳变驱动动画（本批）：树建好后挂动画 + 重放（`v-animate`/`<Transition>` 的规格在 C++ 会话里）
+      this.attachAnimations();
     } catch (e) {
       hilog.error(DOMAIN, TAG, 'SUPERAPP_RENDER_ERROR %{public}s', JSON.stringify(e) ?? '');
     }
@@ -650,7 +850,10 @@ struct Superapp {
         //   ★惯性读数（2026-10-09）：momentum_frames/moved = **"惯性真的接线了"的机器证据**（本仓纪律：
         //     "报告有、通路无"只能靠计数现形——Android 曾有 startFlingX 声明但无人调的先例）。
         .replace(/\}$/, ',"scroll":{"max":' + this.maxScroll.toFixed(1) + ',"offset":' + this.scrollOffset.toFixed(1)
-          + ',"momentum_frames":' + this.momentumFrames + ',"momentum_moved":' + this.momentumMovedFrames + '}}');
+          + ',"momentum_frames":' + this.momentumFrames + ',"momentum_moved":' + this.momentumMovedFrames + '}}')
+        // ★★★v-pump / 跳变驱动动画（本批·判据）：泵节拍与动画受理读数（宿主侧真源 + native 会话真源）。
+        //   ★判据纪律（同 #793）：判"动画在播"看**内核受理 / 宿主真写**（anim_starts / anim_applied），不看截屏像素。
+        .replace(/\}$/, ',"anim_pump":' + this.animPumpStats() + '}');
       const path: string = this.filesDir + '/superapp.json';
       const fd = fileIo.openSync(path, fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE | fileIo.OpenMode.TRUNC);
       fileIo.writeSync(fd.fd, body);

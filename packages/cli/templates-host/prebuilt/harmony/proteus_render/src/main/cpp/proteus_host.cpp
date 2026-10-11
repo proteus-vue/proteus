@@ -477,6 +477,10 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
     //   （旧版此处 `proteus_layout_destroy` ⇒ 句柄释放后无法由真触摸驱动命中）。
     if (g_appTouchTree != 0) proteus_layout_destroy(g_appTouchTree);
     g_appTouchTree = handle;
+    // ★★★"跳变驱动动画"（本批）：把新句柄交给**跨 VM 动画会话**（`host_app_runtime_impl.h`）——
+    //   ArkTS 建树后会调 `hostAppAnimAttach()` 把规格挂到本树（一次性 VM ⇒ 树每次重建，
+    //   动画须重放，见该会话的注释）。
+    scAnimSetHandle(handle);
     g_appScreenDensity = density;   // ★dev 高亮（appScreenNodeRect）换算用
     g_appTouchPage = page;
     g_appTouchFilesDir = filesDir;
@@ -832,6 +836,17 @@ static napi_value HostBridgeInit(napi_env env, napi_value exports) {
         {"hostAppDrive", nullptr, HostAppDrive, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"hostAppRender", nullptr, HostAppRender, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"hostAppEval", nullptr, HostAppEval, nullptr, nullptr, nullptr, napi_default, nullptr},
+        // ★★★"跳变驱动动画" + "v-pump"（本批）：一次性 VM 会话的四个入口（见 host_app_runtime_impl.h）
+        //   · hostAppPumpTick：泵节拍（一拍 = 一个一次性 VM：boot + render(pumpTick rebuild) + 取树）
+        //   · hostAppPumpHzSet：记录当前屏泵频率（判据/报告读数）
+        //   · hostAppAnimAttach：建树后把动画规格挂到新树 + 重放到当前相位（返回首帧 updates）
+        //   · hostAppAnimTick：帧循环逐帧推进（返回 updates 供 render 层写视觉）
+        //   · hostAppAnimStats：会话读数（判据/报告）
+        {"hostAppPumpTick", nullptr, HostAppPumpTick, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"hostAppPumpHzSet", nullptr, HostAppPumpHzSet, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"hostAppAnimAttach", nullptr, HostAppAnimAttach, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"hostAppAnimTick", nullptr, HostAppAnimTick, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"hostAppAnimStats", nullptr, HostAppAnimStats, nullptr, nullptr, nullptr, napi_default, nullptr},
     };
     napi_define_properties(env, exports, sizeof(desc) / sizeof(desc[0]), desc);
     return exports;

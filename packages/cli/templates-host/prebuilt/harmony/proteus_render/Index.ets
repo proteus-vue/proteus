@@ -6,6 +6,8 @@
 export {
   attach,
   renderCommands,
+  // ★★★"跳变驱动动画"（本批）：内核逐帧视觉 → RenderNode
+  applyNodeVisuals,
   stats,
   platformAnimBegin,
   platformAnimStep,
@@ -31,4 +33,10 @@ export {
   hostAppDrive,
   hostAppRender,
   hostAppEval,
+  // ★★★"跳变驱动动画" + "v-pump"（本批）：一次性 VM 会话四入口 + 读数
+  hostAppPumpTick,
+  hostAppPumpHzSet,
+  hostAppAnimAttach,
+  hostAppAnimTick,
+  hostAppAnimStats,
 } from 'libproteus_host.so'
