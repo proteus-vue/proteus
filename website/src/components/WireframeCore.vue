@@ -51,44 +51,52 @@ function hexToRgb01(hex: string): [number, number, number] {
 onMounted(() => {
   const el = host.value
   if (!el) return
-
-  // 创建 canvas（**暂不入 DOM**）——按占位盒的真实像素尺寸量好，传给引擎绘首帧（入 DOM 前 clientWidth=0，
-  // 引擎用 opts.width/height 兜底，见 visual/wireframe.ts 的 resize()）。
   const rect = el.getBoundingClientRect()
-  // 无框架原语：须创建**游离（未挂载）** canvas 元素（治白闪的关键——首帧前不进 DOM）。
-  const cv = document.createElement('canvas') // d2-exempt: 无框架原语——须创建游离（未挂载）元素，框架无此举原语
-  cv.setAttribute('aria-hidden', 'true')
-  cv.style.display = 'block'
-  cv.style.width = '100%'
-  cv.style.height = '100%'
-  cv.style.pointerEvents = 'none'
-  canvas = cv
-
-  // 幂等：仅当占位盒仍在文档中、且 canvas 尚未插入时插入。
-  const reveal = (): void => {
-    if (!host.value || !canvas || canvas.parentNode) return
-    host.value.appendChild(canvas)
-  }
-
   const reduce = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
-  handle = createWireframeCore(cv, {
-    color: hexToRgb01(props.color),
-    alpha: props.alpha,
-    speed: props.speed,
-    scale: props.scale,
-    still: reduce,
-    width: rect.width,
-    height: rect.height,
-    onReady: reveal,
-  })
-  if (!handle) {
-    // WebGL 不可用 → 隐藏占位盒（布局不受影响；装饰层缺失可接受）
-    off.value = true
-    return
+
+  // ★★★2026-10-11（第二轮·追加）：canvas 的创建 + WebGL 上下文初始化是**重活**，若排在组件挂载的
+  //   同步路径上会进入「首屏绘制」的关键路径 ⇒ 部分内核在该窗口让初始视口短暂呈现**默认白底**（整屏白闪）。
+  //   ⇒ 推迟到**首帧已绘制之后**（挂载后双 rAF）再建 canvas + 上下文。配合「canvas 首帧就绪才入 DOM」，
+  //   把 canvas 相关的一切工作彻底移出加载关键路径。
+  let started = false
+  const start = (): void => {
+    if (started || !host.value) return
+    started = true
+    // 无框架原语：须创建**游离（未挂载）** canvas 元素（治白闪的关键——首帧前不进 DOM）。
+    const cv = document.createElement('canvas') // d2-exempt: 无框架原语——须创建游离（未挂载）元素，框架无此举原语
+    cv.setAttribute('aria-hidden', 'true')
+    cv.style.display = 'block'
+    cv.style.width = '100%'
+    cv.style.height = '100%'
+    cv.style.pointerEvents = 'none'
+    canvas = cv
+    // 幂等：仅当占位盒仍在文档中、且 canvas 尚未插入时插入。
+    const reveal = (): void => {
+      if (!host.value || !canvas || canvas.parentNode) return
+      host.value.appendChild(canvas)
+    }
+    handle = createWireframeCore(cv, {
+      color: hexToRgb01(props.color),
+      alpha: props.alpha,
+      speed: props.speed,
+      scale: props.scale,
+      still: reduce,
+      width: rect.width,
+      height: rect.height,
+      onReady: reveal,
+    })
+    if (!handle) {
+      // WebGL 不可用 → 隐藏占位盒（布局不受影响；装饰层缺失可接受）
+      off.value = true
+      return
+    }
+    // 兜底：后台标签页 rAF 被节流 ⇒ 迟迟不触发 onReady 时也要把 canvas 放进来（避免装饰永久缺失）。
+    // 此时引擎创建时已**同步绘制过一帧**（createWireframeCore 内 draw() + gl.finish()），故插入的不是空白。
+    setTimeout(reveal, 700)
   }
-  // 兜底：后台标签页 rAF 被节流 ⇒ 迟迟不触发 onReady 时也要把 canvas 放进来（避免装饰永久缺失）。
-  // 此时引擎创建时已**同步绘制过一帧**（createWireframeCore 内 draw() + gl.finish()），故插入的不是空白。
-  setTimeout(reveal, 700)
+  // 首屏帧已提交后启动（双 rAF）；兜底 setTimeout（幂等）——后台标签页 rAF 被节流时仍会启动一次。
+  requestAnimationFrame(() => requestAnimationFrame(start))
+  setTimeout(start, 1200)
 })
 
 onUnmounted(() => {
