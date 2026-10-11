@@ -8,65 +8,82 @@ import android.graphics.Shader;
 import android.os.Build;
 
 /**
- * ★★★框架自研**液态玻璃材质**着色器（AGSL · 决策 #818）——即使 OS 没有玻璃能力也能自绘近似系统的液态玻璃。
+ * ★★★框架自研**液态玻璃材质**着色器（AGSL · 决策 #818/#821）——即使 OS 没有玻璃能力也能自绘近似系统的液态玻璃。
  *
- * <p>【为什么自研（用户目标）】Android 公开 API **没有**容器级背景玻璃（`RenderEffect` 只作用于 View 自身内容，
- * 非"背后像素"）——国产 ROM（华为/小米/OPPO）的"液态玻璃"都是**自研着色器**。本类即框架侧那一份：
- * 用 **AGSL `RuntimeShader`** 把"背后内容"位图作采样器，做 **blur + 饱和提彩 + tint + 边缘高光**。</p>
+ * <p>【液态玻璃 vs 磨砂玻璃（用户 2026-10-11 指出"远远不是液态玻璃"）】磨砂 = 模糊 + 白罩（本类 v1 的问题）；
+ * 液态玻璃的**核心是光学**：① **边缘折射**（凸透镜——玻璃边缘把背后内容压/扩，产生"厚玻璃"感）；
+ * ② **镜面高光边**（rim）；③ 透亮不泛白（少白罩、高饱和 + 微对比）。本类 v2 补齐这三点。</p>
  *
- * <p>【怎么用（宿主）】`ProteusHostView` 对带 `style.glass` 的节点：先把"背后已绘内容"画进离屏
- * `Bitmap`（`backdrop`）→ {@link #buildPaint} 得到玻璃 `Paint` → `canvas.drawRect(节点盒, paint)`（裁剪到圆角）。
- * 模糊采 `backdrop` 同坐标像素（`BitmapShader` 恒等映射）。</p>
+ * <p>【怎么用（宿主）】`ProteusHostView` 对带 `style.glass` 的节点：把"背后已绘内容"画进离屏 `Bitmap` →
+ * {@link #buildPaint} → `canvas.drawRect(节点盒, paint)`（裁剪圆角）。采样源 = 背后内容帧。</p>
  *
- * <p>【版本门】AGSL 需 **API 31+**；`isAvailable()` 假 ⇒ 调用方回退半透明实色。</p>
- *
- * <p>【无设备可编译】`javac + android.jar` 即可编译（`check:android-host-compile`）。</p>
+ * <p>【版本门】AGSL 需 **API 31+**；不可用 ⇒ 调用方回退半透明实色。</p>
  */
 public final class GlassMaterial {
 
     private GlassMaterial() {}
 
-    /** AGSL 是否可用（API 31+ = Android 12，`RuntimeShader` 起点）。 */
     public static boolean isAvailable() {
         return Build.VERSION.SDK_INT >= Build.VERSION_CODES.S;
     }
 
     /**
-     * 玻璃着色器源码（AGSL）。uniform：`content`（背后内容采样器）· `blur`（模糊半径 px）·
-     * `tint`（straight-alpha `vec4`）· `saturation`（提彩增益，1=不变）。
-     * 采样 = 9 点盒式模糊（低成本、确定性）；再叠饱和提彩 + tint。
+     * 液态玻璃 AGSL。uniform：`content`（背后内容）· `rectOrigin`/`size`（玻璃面盒）· `blur` ·
+     * `tint`(vec4) · `saturation` · `refractAmt`（边缘折射强度 0..1）· `specular`（高光边强度）· `contrast`。
+     * 采样 = 13 点环形模糊 + 边缘凸透镜折射 + 饱和/对比 + 镜面 rim。
      */
     public static final String GLASS_AGSL =
             "uniform shader content;\n"
+            + "uniform float2 rectOrigin;\n"
+            + "uniform float2 size;\n"
             + "uniform float blur;\n"
             + "uniform float4 tint;\n"
             + "uniform float saturation;\n"
+            + "uniform float refractAmt;\n"
+            + "uniform float specular;\n"
+            + "uniform float contrast;\n"
             + "half4 main(float2 coord) {\n"
-            + "    float s = max(blur, 0.0) * 0.5;\n"
-            + "    half4 acc = half4(0.0);\n"
-            + "    acc += content.eval(coord + float2(-s, -s));\n"
-            + "    acc += content.eval(coord + float2( 0.0, -s));\n"
-            + "    acc += content.eval(coord + float2( s, -s));\n"
-            + "    acc += content.eval(coord + float2(-s,  0.0));\n"
-            + "    acc += content.eval(coord);\n"
-            + "    acc += content.eval(coord + float2( s,  0.0));\n"
-            + "    acc += content.eval(coord + float2(-s,  s));\n"
-            + "    acc += content.eval(coord + float2( 0.0,  s));\n"
-            + "    acc += content.eval(coord + float2( s,  s));\n"
-            + "    half4 c = acc / 9.0;\n"
-            + "    // 饱和提彩（系统玻璃常提彩：saturation>1 增艳）\n"
-            + "    half lum = dot(c.rgb, half3(0.299, 0.587, 0.114));\n"
-            + "    c.rgb = mix(half3(lum), c.rgb, half(saturation));\n"
-            + "    // tint（straight alpha 叠加）\n"
-            + "    c.rgb = mix(c.rgb, half3(tint.rgb), half(tint.a));\n"
-            + "    c.a = 1.0;\n"
-            + "    return c;\n"
+            + "    float2 uv = (coord - rectOrigin) / size;\n"
+            + "    float2 dE = min(uv, 1.0 - uv);\n"
+            + "    float edge = min(dE.x, dE.y);\n"                        // 0=边, 0.5=心
+            + "    // ① 边缘凸透镜：uv 向中心收缩（边缘压缩背后内容 → 厚玻璃感）\n"
+            + "    float lens = (1.0 - smoothstep(0.0, 0.13, edge)) * refractAmt;\n"
+            + "    float2 uv2 = (uv - 0.5) * (1.0 - lens * 0.16) + 0.5;\n"
+            + "    float2 c = rectOrigin + uv2 * size;\n"
+            + "    // ② 环形模糊（13 点：中心 + 两圈——半径 ~blur，frosted 而不发白）\n"
+            + "    float r = max(blur, 0.0) * 0.75;\n"
+            + "    half4 acc = content.eval(c);\n"
+            + "    acc += content.eval(c + float2(r, 0.0));\n"
+            + "    acc += content.eval(c + float2(-r, 0.0));\n"
+            + "    acc += content.eval(c + float2(0.0, r));\n"
+            + "    acc += content.eval(c + float2(0.0, -r));\n"
+            + "    float d = r * 0.7071;\n"
+            + "    acc += content.eval(c + float2(d, d));\n"
+            + "    acc += content.eval(c + float2(-d, d));\n"
+            + "    acc += content.eval(c + float2(d, -d));\n"
+            + "    acc += content.eval(c + float2(-d, -d));\n"
+            + "    float r2 = r * 0.5;\n"
+            + "    acc += content.eval(c + float2(r2, r2));\n"
+            + "    acc += content.eval(c + float2(-r2, r2));\n"
+            + "    acc += content.eval(c + float2(r2, -r2));\n"
+            + "    acc += content.eval(c + float2(-r2, -r2));\n"
+            + "    half4 col = acc / 13.0;\n"
+            + "    // ③ 饱和提彩 + 微对比\n"
+            + "    half lum = dot(col.rgb, half3(0.299, 0.587, 0.114));\n"
+            + "    col.rgb = mix(half3(lum), col.rgb, half(saturation));\n"
+            + "    col.rgb = (col.rgb - 0.5) * half(contrast) + 0.5;\n"
+            + "    // ④ tint（逐通道，少量——液态玻璃透亮不泛白）\n"
+            + "    col.rgb = mix(col.rgb, col.rgb * half3(tint.rgb) * 2.0, half(tint.a));\n"
+            + "    // ⑤ 镜面高光边（rim：贴边最亮，向内快速衰减）\n"
+            + "    float rim = pow(1.0 - smoothstep(0.0, 0.075, edge), 1.6) * specular;\n"
+            + "    col.rgb = min(col.rgb + half3(rim), half3(1.0));\n"
+            + "    col.a = 1.0;\n"
+            + "    return col;\n"
             + "}\n";
 
-    /** 一份玻璃材质参数（由内核 `style.glass` 折出）。 */
+    /** 玻璃材质参数（由内核 `style.glass` 折出）。 */
     public static final class Spec {
         public final float blur;
-        /** tint（ARGB int） */
         public final int tint;
         public final float radius;
         public final boolean border;
@@ -82,16 +99,26 @@ public final class GlassMaterial {
     }
 
     /**
-     * 用"背后内容"位图 + 规格构建玻璃 `Paint`（null = 不可用/失败 ⇒ 调用方降级半透明实色）。
+     * 用"背后内容"位图 + 盒 + 规格构建玻璃 `Paint`（null = 不可用/失败 ⇒ 调用方降级半透明实色）。
      * 画布坐标 = 位图坐标（`BitmapShader` 恒等映射）⇒ `content.eval(coord)` 取该像素背后内容。
      */
-    public static Paint buildPaint(Bitmap backdrop, Spec spec) {
-        if (!isAvailable() || backdrop == null || backdrop.isRecycled() || spec == null) return null;
+    public static Paint buildPaint(Bitmap backdrop, float ox, float oy, float w, float h, Spec spec) {
+        if (!isAvailable() || backdrop == null || backdrop.isRecycled() || spec == null || w <= 0f || h <= 0f) {
+            android.util.Log.w("proteus-glass", "buildPaint early-null: avail=" + isAvailable()
+                    + " backdrop=" + (backdrop == null ? "null" : backdrop.getWidth() + "x" + backdrop.getHeight())
+                    + " spec=" + (spec == null ? "null" : "ok") + " w=" + w + " h=" + h);
+            return null;
+        }
         try {
             RuntimeShader sh = new RuntimeShader(GLASS_AGSL);
             sh.setInputShader("content", new BitmapShader(backdrop, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP));
+            sh.setFloatUniform("rectOrigin", ox, oy);
+            sh.setFloatUniform("size", w, h);
             sh.setFloatUniform("blur", spec.blur);
             sh.setFloatUniform("saturation", spec.saturation);
+            sh.setFloatUniform("refractAmt", 0.28f);  // 边缘折射强度（subtle——过强会"融化"）
+            sh.setFloatUniform("specular", 0.16f); // 镜面高光边
+            sh.setFloatUniform("contrast", 1.06f); // 微对比（更"透亮"）
             float a = ((spec.tint >>> 24) & 0xFF) / 255f;
             float r = ((spec.tint >> 16) & 0xFF) / 255f;
             float g = ((spec.tint >> 8) & 0xFF) / 255f;
@@ -99,9 +126,11 @@ public final class GlassMaterial {
             sh.setFloatUniform("tint", r, g, b, a);
             Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
             p.setShader(sh);
-            // ★关键：RuntimeShader 是「按背景采样」的，**关闭** paint 自身对 BitmapShader 的重复
+            android.util.Log.i("proteus-glass", "buildPaint: AGSL OK");
             return p;
         } catch (Throwable t) {
+            // ★诚实：不吞异常——把真因打出来（此前吞掉 ⇒ 误以为"AGSL 成功"，实为一直降级）
+            android.util.Log.w("proteus-glass", "buildPaint: AGSL FAIL " + t + " :: " + android.util.Log.getStackTraceString(t));
             return null; // 着色器编译/构建失败 ⇒ 降级（不崩）
         }
     }

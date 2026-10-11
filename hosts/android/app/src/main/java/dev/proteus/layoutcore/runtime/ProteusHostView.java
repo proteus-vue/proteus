@@ -3106,6 +3106,9 @@ public class ProteusHostView extends ViewGroup {
         } else {
             drawCmds(canvas);
         }
+        // ★★★玻璃独立遍（决策 #821）：内容画完后再实时画玻璃面（在内容之上、采样背后内容）——
+        //   不进显示列表（Picture 录一次回放多帧，玻璃需每帧实时）。★在滚动 transform 内（玻璃随内容）。
+        drawGlassPass(canvas);
         if (scrolled) canvas.restoreToCount(save);
         // ★DevTools 元素高亮（决策 #701/#722）：**屏幕坐标**画——**填充 + 描边**（对齐 iOS #706 的
         //   `fillColor systemBlue alpha 0.18` + `stroke systemBlue`）。此前只有描边 ⇒ Android/iOS 视觉不一致
@@ -3252,16 +3255,29 @@ public class ProteusHostView extends ViewGroup {
                     android.graphics.Path.Direction.CW);
             canvas.clipPath(clip);
         }
-        android.graphics.Paint p = GlassMaterial.buildPaint(glassBackdrop, spec);
+        android.graphics.Paint p = GlassMaterial.buildPaint(glassBackdrop, c.x, c.y, c.w, c.h, spec);
         if (p != null) {
             canvas.drawRect(c.x, c.y, c.x + c.w, c.y + c.h, p);
         } else {
             // ★降级（API<31 或着色器失败）：半透明实色——绝不白屏/黑块（玻璃方案铁律 3）
+            android.util.Log.w("proteus-glass", "drawGlassFace: 走降级半透明（AGSL 不可用）");
             android.graphics.Paint fp = new android.graphics.Paint();
             fp.setColor(((spec.tint & 0x00FFFFFF) | 0xE6000000)); // tint 提不透明（0.9 alpha）
             canvas.drawRect(c.x, c.y, c.x + c.w, c.y + c.h, fp);
         }
         canvas.restoreToCount(save);
+    }
+
+    /** ★★★玻璃独立绘制遍（实时，不进显示列表）：遍历本屏 cmds，对带 glass 的节点画玻璃面（背后内容采样）。 */
+    private void drawGlassPass(Canvas canvas) {
+        if (glassByNode.isEmpty()) return;
+        final List<Cmd> list = cmds;
+        final int[] ids = cmdNodeIds;
+        if (ids == null) return;
+        for (int i = 0; i < list.size() && i < ids.length; i++) {
+            GlassMaterial.Spec g = glassByNode.get(ids[i]);
+            if (g != null) drawGlassFace(canvas, list.get(i), g);
+        }
     }
 
     public void drawCmds(Canvas canvas) {        // ★单次遍历下发全部指令（无 View 树、无递归 measure/layout）
@@ -3306,12 +3322,9 @@ public class ProteusHostView extends ViewGroup {
         for (int i = 0; i < list.size(); i++) {
             if (skip != null && skip.contains(i)) continue;
             final Cmd c = list.get(i);
-            // ★★★玻璃材质（自研液态玻璃，决策 #818）：本节点带 glass ⇒ 先画**玻璃面**（背后内容模糊），
-            //   再画节点自身（底色/文本/子节点随后）——玻璃面在内容**之下**、在其子内容之上。
-            //   ★capturingGlass 时跳过（捕获"无玻璃面"的内容帧作背景，避免自采样递归）。
-            if (!capturingGlass && ids != null && i < ids.length && glassByNode.containsKey(ids[i])) {
-                drawGlassFace(canvas, c, glassByNode.get(ids[i]));
-            }
+            // ★★★玻璃材质（决策 #818/#821）：**不在 drawCmds 里画玻璃**——玻璃面依"背后内容"且**不能进
+            //   显示列表**（Picture 录一次回放多帧；录制时 backdrop 尚未捕获 ⇒ 降级被烤进 Picture）。
+            //   ⇒ 玻璃由 onDraw 的**独立一遍**（drawGlassPass）实时画（见下）。
             // ★S1.1：本指令节点的按下态样式（仅在 DOWN 命中的那一条上非空）——底色/描边/凹陷/发光统一走这一份
             final PressStyle ps = (pressedNodeId >= 0 && ids != null && i < ids.length && ids[i] == pressedNodeId)
                     ? pressStyles.get(pressedNodeId) : null;
