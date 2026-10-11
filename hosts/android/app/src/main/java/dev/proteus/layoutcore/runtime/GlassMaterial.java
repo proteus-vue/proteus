@@ -1,4 +1,4 @@
-package dev.proteus.layoutcore.runtime;
+package dev.proteus.layoutcore;
 
 import android.graphics.Bitmap;
 import android.graphics.BitmapShader;
@@ -22,9 +22,9 @@ import android.os.Build;
  *
  * <p>【无设备可编译】`javac + android.jar` 即可编译（`check:android-host-compile`）。</p>
  */
-public final class GlassRenderer {
+public final class GlassMaterial {
 
-    private GlassRenderer() {}
+    private GlassMaterial() {}
 
     /** AGSL 是否可用（API 31+ = Android 12，`RuntimeShader` 起点）。 */
     public static boolean isAvailable() {

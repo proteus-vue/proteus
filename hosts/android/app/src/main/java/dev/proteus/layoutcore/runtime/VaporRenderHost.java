@@ -54,6 +54,8 @@ public final class VaporRenderHost {
     /** 绘制指令与 id → 指令下标（增量补丁用；与 JsRenderHost 同款） */
     private final List<ProteusHostView.Cmd> cmds = new ArrayList<>();
     private final Map<Integer, Integer> cmdIndexById = new HashMap<>();
+    /** ★★★玻璃材质（自研液态玻璃，决策 #818）：节点 id → 玻璃规格（供宿主自绘玻璃面）。 */
+    private final Map<Integer, GlassMaterial.Spec> glassByNode = new HashMap<>();
 
     private ProteusHostView view;
     private long handle = 0L;
@@ -2322,6 +2324,16 @@ public final class VaporRenderHost {
     }
 
     private ProteusHostView.Cmd mkCmd(JSONObject spec, JSONObject r) throws Exception {
+        // ★★★玻璃材质（自研液态玻璃，决策 #818）：本节点带 `glass` ⇒ 记入玻璃表（供宿主自绘玻璃面）。
+        {
+            int gid = spec.optInt("id", -1);
+            if (gid >= 0) {
+                JSONObject gspec = spec.optJSONObject("glass");
+                GlassMaterial.Spec gsp = (gspec != null) ? parseGlass(gspec) : null;
+                if (gsp != null) glassByNode.put(gid, gsp);
+                else glassByNode.remove(gid);
+            }
+        }
         float x = (float) r.optDouble("x");
         float y = (float) r.optDouble("y");
         float w = (float) r.optDouble("width");
@@ -2623,6 +2635,20 @@ public final class VaporRenderHost {
     }
 
     /** 发光声明 → `[color, radius, alpha]`（坏色 ⇒ null，不静默画错色） */
+    /** ★★★玻璃材质（自研液态玻璃，决策 #818）：节点 `glass` JSON → `GlassMaterial.Spec`（无/非法 ⇒ null）。 */
+    private GlassMaterial.Spec parseGlass(JSONObject g) {
+        if (g == null) return null;
+        String t = g.optString("tint", "");
+        if (!t.startsWith("#")) return null;
+        int tint = parseColor(t); // #RRGGBBAA / #RRGGBB / #RGB → ARGB int
+        return new GlassMaterial.Spec(
+                (float) g.optDouble("blur", 0),
+                tint,
+                (float) g.optDouble("radius", 0),
+                g.optBoolean("border", false),
+                (float) g.optDouble("saturation", 1.0));
+    }
+
     private float[] parseGlow(JSONObject glo) {
         if (glo == null) return null;
         String gcolS = glo.optString("color", "");
@@ -2854,6 +2880,8 @@ public final class VaporRenderHost {
         view.setCmds(cmds);
         view.setFixedNodes(fixedIdsOf);   // ★★★批 A：fixed 节点集（滚动反向补偿）
         view.setStickyTops(stickyTopsOf); // ★★★批 A③：sticky 节点阈值（滚动吸附）
+        // ★★★玻璃材质（决策 #818）：节点 id → 玻璃规格（宿主据此自绘玻璃面）。
+        view.setGlassNodes(glassByNode);
         view.invalidate();
     }
 
