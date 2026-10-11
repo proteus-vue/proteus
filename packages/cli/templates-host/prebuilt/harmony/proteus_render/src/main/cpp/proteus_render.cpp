@@ -1765,8 +1765,19 @@ static napi_value ApplyNodeVisuals(napi_env env, napi_callback_info info) {
         js.resize(len);
     }
     int applied = 0;
-    // 逐条 `[...]` 数组解析（每条形如 [id,tx,ty,scale,rotate,opacity,…]）
+    // ★★★逐行解析（2026-10-11 黑带 root cause 修复）：内核 updates 契约 = **数组套数组**
+    //   `[[id,tx,ty,scale,rotate,opacity,…],…]` ⇒ 先跳过**外层容器** `[`，再逐行解析 `[…]`。
+    //   此前从首个 `[`（外层）直接找 `]` ⇒ 首行 row = `[32,…`（行首多一个 `[`）⇒ strtod 读成 0
+    //   ⇒ 首行的 id 变 0 ⇒ 动画值错打到页根（L3 黑带实证）。兼容：外层后非 `[` ⇒ 视为单层直传。
     size_t pos = 0;
+    {
+        size_t outer = js.find('[');
+        if (outer != std::string::npos) {
+            size_t peek = outer + 1;
+            while (peek < js.size() && (js[peek] == ' ' || js[peek] == '\n' || js[peek] == '\t')) peek++;
+            pos = (peek < js.size() && js[peek] == '[') ? outer + 1 : outer;   // 有容器层 ⇒ 跳它
+        }
+    }
     while (pos < js.size()) {
         size_t open = js.find('[', pos);
         if (open == std::string::npos) break;

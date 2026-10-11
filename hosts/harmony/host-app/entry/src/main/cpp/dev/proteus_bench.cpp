@@ -69,7 +69,9 @@ char* proteus_layout_update(uint64_t handle, const char* patches_json);
 //   与 Android/iOS 同一套 `anim.rs` 入口（跨语言契约，见 anim.rs 头注）
 char* proteus_layout_anim_start(uint64_t handle, const char* json);
 char* proteus_layout_anim_tick(uint64_t handle, float dt_ms);
-char* proteus_layout_anim_active(uint64_t handle);
+// ★★返回**在飞动画数（u64）**——不是 JSON 字符串（2026-10-11 真机修复：此前误声明为 char*
+//   ⇒ active>0 时把整数当指针解引用 ⇒ SIGSEGV@0x1）
+uint64_t proteus_layout_anim_active(uint64_t handle);
 char* proteus_layout_anim_stop(uint64_t handle, const char* json);
 char* proteus_layout_set_text_measures(uint64_t handle, const char* measures_json);
 // ★复用池（长列表）——与 Android JNI / iOS @_silgen_name 同一组 C ABI
@@ -2388,9 +2390,9 @@ static JSVM_Value VaporAnimActiveCb(JSVM_Env env, JSVM_CallbackInfo info) {
     (void)info;
     std::string out = "{\"ok\":false}";
     if (g_vaporHandle != 0) {
-        char* rp = proteus_layout_anim_active(g_vaporHandle);
-        out = rp ? rp : "{\"ok\":false}";
-        if (rp) proteus_layout_free_string(rp);
+        // ★★u64 直读（2026-10-11 真机修复）：内核返回在飞动画数；JS 侧消费格式为 {"active":N}
+        char ab[64]; snprintf(ab, sizeof(ab), "{\"ok\":true,\"active\":%llu}", (unsigned long long)proteus_layout_anim_active(g_vaporHandle));
+        out = ab;
     }
     JSVM_Value r = nullptr;
     OH_JSVM_CreateStringUtf8(env, out.c_str(), out.size(), &r);

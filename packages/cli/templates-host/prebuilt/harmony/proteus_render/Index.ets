@@ -43,6 +43,8 @@ export {
   hostAppAnimAttach,
   hostAppAnimTick,
   hostAppAnimStats,
+  // ★★★切页残留动画修复（2026-10-11）：壳每轮渲染前清动画会话（旧页 spec 错打新页节点）
+  hostAppAnimReset,
 } from 'libproteus_host.so'
 
 // ★★★应用运行期驱动（v-pump 周期驱动 + 跳变驱动动画）——**runtime 归属的唯一实现**（决策 #796）：

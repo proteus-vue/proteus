@@ -35,7 +35,9 @@ char* proteus_layout_update(uint64_t handle, const char* patches_json);
 //   与 Android/iOS 同一套 `anim.rs` 入口（跨语言契约，见 anim.rs 头注）
 char* proteus_layout_anim_start(uint64_t handle, const char* json);
 char* proteus_layout_anim_tick(uint64_t handle, float dt_ms);
-char* proteus_layout_anim_active(uint64_t handle);
+// ★★返回**在飞动画数（u64）**——不是 JSON 字符串（Rust 侧 `-> u64`；iOS @_silgen_name 同）。
+  //   2026-10-11 真机修复：此前误声明为 char* ⇒ active>0 时把整数当指针解引用 ⇒ SIGSEGV@0x1。
+  uint64_t proteus_layout_anim_active(uint64_t handle);
 char* proteus_layout_anim_stop(uint64_t handle, const char* json);
 char* proteus_layout_set_text_measures(uint64_t handle, const char* measures_json);
 // ★复用池（长列表）——与 Android JNI / iOS @_silgen_name 同一组 C ABI

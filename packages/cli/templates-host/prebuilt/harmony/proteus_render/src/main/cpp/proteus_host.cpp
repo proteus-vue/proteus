@@ -258,9 +258,8 @@ static napi_value AppScreenAnimTick(napi_env env, napi_callback_info info) {
     } else {
         char* rt = proteus_layout_anim_tick(g_appTouchTree, (float)dt);
         if (rt) proteus_layout_free_string(rt);
-        char* ra = proteus_layout_anim_active(g_appTouchTree);
-        int active = -1;
-        if (ra) { std::string a(ra); size_t q = a.find("\"active\":"); if (q != std::string::npos) active = atoi(a.c_str() + q + 9); proteus_layout_free_string(ra); }
+        // ★★u64 直读（2026-10-11 真机修复）：内核返回在飞动画数（非 JSON 字符串）
+        int active = (int)proteus_layout_anim_active(g_appTouchTree);
         snprintf(buf, sizeof(buf), "{\"ok\":true,\"active\":%d}", active);
     }
     napi_value out; napi_create_string_utf8(env, buf, NAPI_AUTO_LENGTH, &out); return out;
@@ -901,6 +900,8 @@ static napi_value HostBridgeInit(napi_env env, napi_value exports) {
         {"hostAppPumpTick", nullptr, HostAppPumpTick, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"hostAppPumpHzSet", nullptr, HostAppPumpHzSet, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"hostAppAnimAttach", nullptr, HostAppAnimAttach, nullptr, nullptr, nullptr, napi_default, nullptr},
+        // ★★★切页残留动画修复（2026-10-11）：壳每轮渲染前清会话（旧页 spec 的 nodeId 属旧页编号空间）
+        {"hostAppAnimReset", nullptr, HostAppAnimReset, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"hostAppAnimTick", nullptr, HostAppAnimTick, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"hostAppAnimStats", nullptr, HostAppAnimStats, nullptr, nullptr, nullptr, napi_default, nullptr},
     };
