@@ -136,7 +136,7 @@ function closeMusic(): void {
     <text class="sa-section">外观</text>
     <view class="sa-list">
       <view id="mine-row-dark" class="sa-item sa-item--tap" @click="toggleDark">
-        <view class="mine-ico mine-ico--theme"><text class="mine-ico__t">◐</text></view>
+        <view class="mine-ico"><p-icon name="dark-mode" :size="18" color="#4a4ab8" /></view>
         <view class="sa-item__main">
           <text class="sa-item__label">深色模式</text>
           <text class="sa-item__desc">全应用即时生效（无需刷新）</text>
@@ -152,7 +152,7 @@ function closeMusic(): void {
     <text class="sa-section">全局能力</text>
     <view class="sa-list">
       <view id="mine-row-fab" class="sa-item sa-item--tap" @click="toggleFab">
-        <view class="mine-ico"><text class="mine-ico__t">◉</text></view>
+        <view class="mine-ico"><p-icon name="support-agent" :size="18" color="#4a4ab8" /></view>
         <view class="sa-item__main">
           <text class="sa-item__label">客服悬浮球</text>
           <text class="sa-item__desc">常驻入口，关闭后全部页面隐藏</text>
@@ -162,7 +162,7 @@ function closeMusic(): void {
         </view>
       </view>
       <view class="sa-item sa-item--tap" @click="closeMusic">
-        <view class="mine-ico"><text class="mine-ico__t">♪</text></view>
+        <view class="mine-ico"><p-icon name="music-note" :size="18" color="#4a4ab8" /></view>
         <view class="sa-item__main">
           <text class="sa-item__label">音乐播放条</text>
           <text class="sa-item__desc">当前状态：{{ musicOn ? '播放中' : '未播放' }}</text>

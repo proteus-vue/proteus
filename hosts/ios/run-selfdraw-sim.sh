@@ -82,7 +82,7 @@ PLATFORM_SRC="$(ls "$ROOT"/platform/ios/ProteusPlatform/*.swift 2>/dev/null | tr
 [ -n "$PLATFORM_SRC" ] || { echo "✗ 找不到 platform/ios 平台适配源码（HA0.5 抽取后被删？）"; exit 3; }
 xcrun --sdk iphonesimulator swiftc -O -target arm64-apple-ios15.0-simulator \
   -framework UIKit -framework CoreText -framework JavaScriptCore -framework AVFoundation -parse-as-library \
-  -o "$APP/ProteusSelfDraw" $PLATFORM_SRC "$HERE/ProteusHost/runtime/selfdraw-scene.swift" "$HERE/ProteusHost/runtime/host-runtime-bridge.swift" "$HERE/ProteusHost/runtime/interaction-feedback.swift" "$HERE/ProteusHost/runtime/superapp-runtime-host.swift" "$HERE/ProteusHost/runtime/proteus-host-controller.swift" "$HERE/ProteusHost/runtime/host-capabilities.swift" "$HERE/ProteusHost/runtime/host-lifecycle-events.swift" "$HERE/ProteusHost/runtime/screen-host.swift" "$HERE/ProteusHost/dev/host-runtime-scene.swift" "$HERE/ProteusHost/dev/app-stack-scene.swift" "$HERE/ProteusHost/dev/showcase-scene.swift" "$HERE/ProteusHost/shell/superapp-scene.swift" "$HERE/ProteusHost/shell/selfdraw-app.swift" "$ABI_LIB" "$LIB" 2>&1 | grep -E "error:" | head -5
+  -o "$APP/ProteusSelfDraw" $PLATFORM_SRC "$HERE/ProteusHost/runtime/selfdraw-scene.swift" "$HERE/ProteusHost/runtime/tab-chrome.swift" "$HERE/ProteusHost/runtime/host-runtime-bridge.swift" "$HERE/ProteusHost/runtime/interaction-feedback.swift" "$HERE/ProteusHost/runtime/superapp-runtime-host.swift" "$HERE/ProteusHost/runtime/proteus-host-controller.swift" "$HERE/ProteusHost/runtime/host-capabilities.swift" "$HERE/ProteusHost/runtime/host-lifecycle-events.swift" "$HERE/ProteusHost/runtime/screen-host.swift" "$HERE/ProteusHost/dev/host-runtime-scene.swift" "$HERE/ProteusHost/dev/app-stack-scene.swift" "$HERE/ProteusHost/dev/showcase-scene.swift" "$HERE/ProteusHost/shell/superapp-scene.swift" "$HERE/ProteusHost/shell/selfdraw-app.swift" "$ABI_LIB" "$LIB" 2>&1 | grep -E "error:" | head -5
 [ -f "$APP/ProteusSelfDraw" ] || { echo "✗ Swift 编译未产出可执行文件"; exit 3; }
 
 echo "==> ⑤ 组装 .app（★无需签名/描述文件——模拟器不校验）"
@@ -146,7 +146,8 @@ REPORT="selfdraw-report.json"
 # ★★★superapp 模式：显式 `--superapp`（+ `--pump` 等透传）——与真机 run-selfdraw.sh 同参数契约；
 #   无参数时也落 superapp 场景（selfdraw-app 的缺省场景已是 superapp）。
 if [ "$MODE" = "superapp" ]; then
-  SIMCTL_CHILD_PROTEUS_EXIT_AFTER_REPORT=1 xcrun simctl launch --console booted "$BUNDLE_ID" --superapp "${APP_ARGS[@]}" >/dev/null 2>&1 || true
+  # ★bash 3.2 + `set -u`：空数组展开 `${APP_ARGS[@]}` 会 unbound ⇒ 用 `${APP_ARGS[@]+"${APP_ARGS[@]}"}` 安全展开
+  SIMCTL_CHILD_PROTEUS_EXIT_AFTER_REPORT=1 xcrun simctl launch --console booted "$BUNDLE_ID" --superapp ${APP_ARGS[@]+"${APP_ARGS[@]}"} >/dev/null 2>&1 || true
 else
   SIMCTL_CHILD_PROTEUS_EXIT_AFTER_REPORT=1 xcrun simctl launch --console booted "$BUNDLE_ID" >/dev/null 2>&1 || true
 fi

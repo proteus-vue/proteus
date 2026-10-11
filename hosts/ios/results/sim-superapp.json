@@ -1,9 +1,10 @@
 {
-  "dactyl_metrics" : "{\"end\":\"ios\",\"samples\":[{\"t0_touch_ms\":10045300.694,\"t1_commit_ms\":10045301.004}],\"sampled\":1,\"dropped\":0}",
-  "dactyl_samples" : "{\"sampled\":1,\"pending\":1,\"dropped\":0}",
+  "dactyl_metrics" : "{\"end\":\"ios\",\"samples\":[],\"sampled\":0,\"dropped\":0}",
+  "dactyl_samples" : "{\"sampled\":0,\"pending\":0,\"dropped\":0}",
+  "dactyl_trail" : "{\"points\":[],\"count\":0}",
   "host_id" : "ios",
-  "host_stats" : "{\"ok\":true,\"data\":{\"anim_calls\":0,\"visible_calls\":1,\"anim_hook_missing\":0,\"live_screens\":1,\"calls\":[\"screen.mount\",\"screen.visible\",\"screen.stats\"],\"anim_completed\":0,\"screens\":[{\"screenId\":\"index#1\",\"visible\":true,\"rootNodeId\":100}],\"rect_calls\":0,\"destroy_calls\":0,\"mount_calls\":1,\"content_node_total\":149,\"shared_calls\":0}}",
-  "interaction_probe" : "{\"press_styles\":48,\"press_applied\":1,\"press_anim_starts\":1,\"press_anim_stops\":1,\"field_specs\":0,\"field_ticks\":0,\"field_nodes_touched\":0,\"field_touched_now\":0,\"pseudo_parents\":48,\"last_field_ids\":[]}",
+  "host_stats" : "{\"ok\":true,\"data\":{\"live_screens\":1,\"destroy_calls\":3,\"mount_calls\":4,\"anim_hook_missing\":0,\"visible_calls\":4,\"calls\":[\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.stats\"],\"screens\":[{\"visible\":true,\"screenId\":\"mine#4\",\"rootNodeId\":100}],\"anim_calls\":0,\"anim_completed\":0,\"shared_calls\":0,\"rect_calls\":0,\"content_node_total\":253}}",
+  "interaction_probe" : "{\"press_styles\":6,\"press_applied\":0,\"press_anim_starts\":0,\"press_anim_stops\":0,\"field_specs\":0,\"field_ticks\":0,\"field_nodes_touched\":0,\"field_touched_now\":0,\"pseudo_parents\":0,\"last_field_ids\":[]}",
   "ok" : true,
   "pump" : {
     "anim_start_calls" : 0,
@@ -16,8 +17,8 @@
     "pumps" : 0,
     "running" : false
   },
-  "rendered_page" : "index",
-  "run_ts" : 1791694848.9332471,
+  "rendered_page" : "mine",
+  "run_ts" : 1791723934.775739,
   "scroll_probe" : {
     "after_drag_down_100k" : 0,
     "after_drag_left_100k_x" : 0,
@@ -28,31 +29,45 @@
     "range_set" : true
   },
   "state" : {
-    "current" : "index",
+    "current" : "mine",
     "depth" : 1,
     "screens" : [
       "index",
-      "l2",
-      "l3",
-      "l4",
-      "l5"
+      "messages",
+      "mine",
+      "verify"
     ],
     "stack" : [
-      "index"
+      "mine"
+    ],
+    "tabItems" : [
+      {
+        "glyph" : "sym:house",
+        "label" : "首页",
+        "name" : "index"
+      },
+      {
+        "badge" : 3,
+        "glyph" : "sym:message",
+        "label" : "消息",
+        "name" : "messages"
+      },
+      {
+        "glyph" : "sym:person",
+        "label" : "我的",
+        "name" : "mine"
+      }
     ],
     "tabLabels" : {
-      "index" : "L1 触即应",
-      "l2" : "L2 跟手",
-      "l3" : "L3 沸腾",
-      "l4" : "L4 十指",
-      "l5" : "L5 崩裂"
+      "index" : "Proteus 超级应用",
+      "messages" : "消息",
+      "mine" : "我的",
+      "verify" : "验收控制台"
     },
     "tabs" : [
       "index",
-      "l2",
-      "l3",
-      "l4",
-      "l5"
+      "messages",
+      "mine"
     ],
     "tabSpec" : {
       "badge" : {
@@ -64,18 +79,9 @@
       },
       "badgeBg" : "#d64545",
       "brand" : "#5b5bd6",
-      "height" : 56,
-      "icons" : {
-        "index" : "⌂",
-        "messages" : "✉",
-        "mine" : "☺"
-      },
+      "contentHeight" : 52,
+      "height" : 52,
       "iconSize" : 19,
-      "labels" : {
-        "index" : "首页",
-        "messages" : "消息",
-        "mine" : "我的"
-      },
       "labelSize" : 10,
       "line" : "#dcdfe5",
       "surface" : "#ffffff",
@@ -84,18 +90,21 @@
   },
   "switch_log" : [
     {
-      "current" : "index",
-      "held_ms" : 400,
+      "current" : "messages",
+      "ok" : false,
+      "tap" : "index",
+      "via" : "drive"
+    },
+    {
+      "current" : "messages",
       "ok" : true,
-      "press" : "auto",
-      "via" : "press-inject"
+      "tap" : "messages",
+      "via" : "drive"
     }
   ],
   "tabs" : [
     "index",
-    "l2",
-    "l3",
-    "l4",
-    "l5"
+    "messages",
+    "mine"
   ]
 }

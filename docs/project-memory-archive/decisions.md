@@ -3157,3 +3157,14 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **③ 验证**：`check:harmony-host-compile` ✅ · Rust 225（含 to_d roundtrip）· coupled 354 · `check:harmony-runtime-prebuilt`（含 arm64 核 `.a` 重建 + 真源⇄prebuilt 逐字节）· `check:app-screen-content` · `check:gates-sync` 全绿。
 **④ 诚实边界**：① **三端真机截图验收仍未做**（无设备）——p-icon 在 iOS/Android/鸿蒙的渲染链路**代码齐**，但 🟡 未验收；② 鸿蒙走的是"重建 d 字符串 + OH_Drawing 解析"，与 iOS/Android "segs→平台 Path"是两条通路（都正确，但形态不同——`d` 往返由内核单测保证等价）；③ 动态 `:name` 仍不支持（需运行期 path 通道）。
 **⑤ 教训**：① **"没有本地编译检查"是可发现的缺口**——本仓 android/ios 都有零设备编译门禁，鸿蒙没有；**先探测工具链在不在（DevEco），在就补门禁、不在就跳过**（`check:*` 找不到工具链退出 0 的形态，与 ios/android 同）。★"先取证再断言"：我没假设"本机无 DevEco"，`mdfind` 一查就在。② **能复用既有渲染通道就别开新入口**——鸿蒙图标渲染直接并进既有 `strokeD`（节点局部坐标画），零新 NAPI/零新绘制路径；只加一个 `strokeFill` 开关。③ **跨宿主形态差异要如实记**（segs vs d 字符串）。
+
+815. **★★★P4-续 收官：p-icon 三端渲染链路闭环 + **iOS 模拟器实测验收**（首次看到图标真渲染）**（2026-10-11）：
+**① 用户**：「1」（继续 P4-续）。
+**② 交付**：
+  · **静态通路也降级**：`app-content.ts`（`buildAppScreenContent`，sim + 降级兜底用）此前编译模板**不带 iconResolver** ⇒ 不在静态通路降级。补上（与运行期通路同源，共用 `app-component-registry.ts` 新导出的 `iconResolver`）。
+  · **着色回退**（真机抓出）：p-icon 降级首版**只在显式 `color` prop 时才设 `stroke`** ⇒ 无 `color` 的图标（如 mine 页）、或 `:color="var(--sa-x)"` 的**继承色**图标，`stroke=0` ⇒ iOS 端 `fillColor=黑` 或不可见（**首测三图标全不可见**）。修：`stroke` = 显式 color(hex) 优先，否则回退**节点继承色 `style.color`**（App 端 svgPath 不吃 CSS ⇒ 颜色必须显式落 `stroke`）。
+  · **`support_agent` 入词表**（dogfooding：mine 页需要客服图标 ⇒ `icon-manifest` 加一条 ⇒ 258→259 源码 / 238→239 生成）。**p-icon 换 unicode 占位**：mine 页三个 `◐`/`◉`/`♪` 文字占位**换成 Keryx `<p-icon>`**（真图标 + 真验收入口）。
+  · **修两个 iOS 宿主脚本缺 `tab-chrome.swift`**（历史缺陷）：`ProteusTabChrome`（渲染 tab 栏）在 `runtime/tab-chrome.swift`，但 `run-selfdraw.sh`（真机）与 `run-selfdraw-sim.sh`（模拟器）的 swift 源列表**都没列它** ⇒ **自绘/超级应用的 iOS 构建必失败**（`cannot find ProteusTabChrome`）。补列（**否则 P4 无从真机验收**）。+ 修 sim 脚本 `set -u` 下 `APP_ARGS[@]` 空数组 unbound（bash 3.2）。
+**③ ★★验收（模拟器实测截图为证）**：`bash hosts/ios/run-selfdraw-sim.sh "iPhone 17" --superapp` 构建+安装+运行；`--screen=mine --scroll=0` 导航到「我的」屏截图 —— **三个 Keryx 图标（crescent=moon/客服耳机/音符）真实渲染**（`#4a4ab8` 填充、18px 正确尺寸），链路读数 `attachSvgStroke: 收到 3 个 SVG 路径`。**首次在 App 端亲眼确认 p-icon 渲染**（不再是空 box）。
+**④ 诚实边界**：① 只验了 **iOS 模拟器**（Android 无 adb、鸿蒙 hdc 有设备但未跑——渲染链路代码齐，鸿蒙走 to_d/OH_Drawing 未实机）；② 动态 `:name` 仍不支持。
+**⑤ 教训**：① **不截图就不知道"接线对不对"**——控制台 `收到 3 个 SVG 路径` 看似成功，**实际三图标全不可见**（无色 `stroke=0`）；"通路读数非零" ≠ "画出来了"（视觉证据不可省）。② **继承色在 App 端要显式化**——Web/MP 靠 CSS 继承 `color`，App 的 svgPath/path 不吃 CSS ⇒ 降级时须把 `style.color`（含继承/声明）**显式写进 `stroke`**。③ **"必失败"的构建缺口是验收前置**——`tab-chrome.swift` 缺失让 iOS 自绘构建一直失败（真机 sim 都），**先修前置才能验收**（否则会误判成"p-icon 没接通"）。④ **dogfooding 闭环**：真实页面需要某个图标 ⇒ 补进词表 ⇒ 顺带验证生成管线（support_agent 259 枚）。
