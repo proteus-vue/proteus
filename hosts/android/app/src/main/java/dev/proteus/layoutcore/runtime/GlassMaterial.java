@@ -45,12 +45,11 @@ public final class GlassMaterial {
             + "half4 main(float2 coord) {\n"
             + "    float2 uv = (coord - rectOrigin) / size;\n"
             + "    float2 dE = min(uv, 1.0 - uv);\n"
-            + "    float edge = min(dE.x, dE.y);\n"                        // 0=边, 0.5=心
-            + "    // ① 边缘凸透镜：uv 向中心收缩（边缘压缩背后内容 → 厚玻璃感）\n"
-            + "    float lens = (1.0 - smoothstep(0.0, 0.13, edge)) * refractAmt;\n"
-            + "    float2 uv2 = (uv - 0.5) * (1.0 - lens * 0.16) + 0.5;\n"
-            + "    float2 c = rectOrigin + uv2 * size;\n"
-            + "    // ② 环形模糊（13 点：中心 + 两圈——半径 ~blur，frosted 而不发白）\n"
+            + "    // ① 边缘折射：**柔和全局透镜**（边缘向中心轻微收缩——连续无跳变 ⇒ 无条纹/水波）\n"
+            + "    float band = 1.0 - smoothstep(0.0, 0.20, min(dE.x, dE.y));\n"       // 1=贴边, 0=内（宽过渡=柔）
+            + "    float lens = band * refractAmt;\n"
+            + "    float2 c = rectOrigin + ((uv - 0.5) * (1.0 - lens * 0.09) + 0.5) * size;\n"
+            + "    // ② 环形模糊（13 点）——半径 ~blur，frosted 而不发白\n"
             + "    float r = max(blur, 0.0) * 0.75;\n"
             + "    half4 acc = content.eval(c);\n"
             + "    acc += content.eval(c + float2(r, 0.0));\n"
@@ -74,8 +73,9 @@ public final class GlassMaterial {
             + "    col.rgb = (col.rgb - 0.5) * half(contrast) + 0.5;\n"
             + "    // ④ tint（逐通道，少量——液态玻璃透亮不泛白）\n"
             + "    col.rgb = mix(col.rgb, col.rgb * half3(tint.rgb) * 2.0, half(tint.a));\n"
-            + "    // ⑤ 镜面高光边（rim：贴边最亮，向内快速衰减）\n"
-            + "    float rim = pow(1.0 - smoothstep(0.0, 0.075, edge), 1.6) * specular;\n"
+            + "    // ⑤ 边缘：内阴影（subtle darken）+ 镜面高光带（贴边亮，向内柔衰减）——对齐系统的柔和厚边\n"
+            + "    col.rgb *= (1.0 - band * 0.05);\n"
+            + "    float rim = band * specular * (0.35 + 0.65 * (1.0 - uv.y));\n"        // 顶部更亮
             + "    col.rgb = min(col.rgb + half3(rim), half3(1.0));\n"
             + "    col.a = 1.0;\n"
             + "    return col;\n"
@@ -116,7 +116,7 @@ public final class GlassMaterial {
             sh.setFloatUniform("size", w, h);
             sh.setFloatUniform("blur", spec.blur);
             sh.setFloatUniform("saturation", spec.saturation);
-            sh.setFloatUniform("refractAmt", 0.28f);  // 边缘折射强度（subtle——过强会"融化"）
+            sh.setFloatUniform("refractAmt", 1.0f);   // 边缘折射带强度（幅度内含 ×0.08 px 级）
             sh.setFloatUniform("specular", 0.16f); // 镜面高光边
             sh.setFloatUniform("contrast", 1.06f); // 微对比（更"透亮"）
             float a = ((spec.tint >>> 24) & 0xFF) / 255f;
