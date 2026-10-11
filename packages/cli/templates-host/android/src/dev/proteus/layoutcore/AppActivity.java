@@ -443,6 +443,22 @@ public final class AppActivity extends Activity {
 
     /** 记一次渲染的性能读数（决策 #675/#676）：渲染耗时 + mount 次数 + 逐帧耗时 + 重排/patch 计数。
      *  ★数据源全为宿主/内核原子上抛（不自造第二份数学）。 */
+    /** ★★★Dactyl D0 生产者（决策 #797）：把触摸延迟采样落盘（filesDir/dactyl-samples.json）。
+     *  【为什么在这（职责边界）】采样在 runtime（ProteusHostView 的 dactyl* 一族）；本壳只负责"按需落盘"
+     *   ——Dactyl 判据/量具从设备取该文件（run-superapp-launcher.sh 同款取回）。 */
+    private void dumpDactylSamples() {
+        try {
+            String json = draw.dactylMetricsJson();
+            java.io.File f = new java.io.File(getFilesDir(), "dactyl-samples.json");
+            try (java.io.FileOutputStream fo = new java.io.FileOutputStream(f)) {
+                fo.write(json.getBytes("UTF-8"));
+            }
+            Log.i(TAG, "DACTYL_SAMPLES " + draw.dactylSampleProbe());
+        } catch (Throwable t) {
+            Log.w(TAG, "DACTYL_SAMPLES_WRITE_FAIL " + t.getMessage());
+        }
+    }
+
     private void recordPerf(long renderStartMs) {
         if (!ProteusBuildConfig.DEV) return;
         try {
@@ -1050,6 +1066,8 @@ public final class AppActivity extends Activity {
             // ★切屏自动刷树（决策 #675 · 修 bug1：此前只有 boot/hotReload 推树 ⇒ 切屏后面板树不更新）
             //   + 性能读数（renderMs/mount/relayout）。★renderCurrent 只在 UI 线程调 ⇒ eval 安全。
             if (ProteusBuildConfig.DEV) { pushDevTree(); recordPerf(t0); }
+            // ★Dactyl D0：每屏渲染后落盘一次触摸采样（覆盖"切屏后累计"）
+            dumpDactylSamples();
         } catch (Throwable t) {
             Log.w(TAG, "renderCurrent 失败：" + t.getMessage());
         }

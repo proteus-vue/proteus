@@ -13,6 +13,10 @@ export const appScreenHitAt: (x: number, y: number) => string;
 export const appScreenNodeRect: (id: number) => string;
 /** 屏转场动画推进一帧（缺省 16.7ms）；入参可选 `{"dtMs":n}` → 返回 JSON（与 proteus_host.cpp 的 AppScreenAnimTick 一致） */
 export const appScreenAnimTick: (json?: string) => string;
+/** ★★★Dactyl 专项（场跟手）：对保留的内核树调 `follow_field_bin`（12B/条）→
+ *  `{"ok":true,"nodes":[{id,scale,rotate}]}`；入参 `{containerId,x,y,falloff,minScale,maxScale,rotate}`。
+ *  ★调用频率纪律：**每帧最多一次**（MOVE 只记焦点——与 Android fieldDirty 同）。 */
+export const appScreenFollowField: (json: string) => string;
 /** 建立持久壳 VM（注入 proteusHost + 平台全局 → eval bundle → 探测生命周期钩子） */
 export const hostRtShellInstall: (json: string) => string;
 /** 真事件转发：__proteusHostShellLifecycle('pause'|'resume') + 泵 job + 读回 + 落盘 */
