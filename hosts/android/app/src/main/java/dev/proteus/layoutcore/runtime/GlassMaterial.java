@@ -42,13 +42,22 @@ public final class GlassMaterial {
             + "uniform float refractAmt;\n"
             + "uniform float specular;\n"
             + "uniform float contrast;\n"
+            // ★真实玻璃投射（决策 #823）：玻璃面 = **有起伏的曲面**——中心平、边缘倒角。
+            //   高度场 h：圆角矩形 SDF 的 smoothstep（中心 h=1、边缘 h→0）。
+            + "float glassH(float2 u) {\n"
+            + "    float2 dE = min(u, 1.0 - u);\n"
+            + "    return smoothstep(0.0, 0.16, min(dE.x, dE.y));\n"
+            + "}\n"
             + "half4 main(float2 coord) {\n"
             + "    float2 uv = (coord - rectOrigin) / size;\n"
             + "    float2 dE = min(uv, 1.0 - uv);\n"
-            + "    // ① 边缘折射：**柔和全局透镜**（边缘向中心轻微收缩——连续无跳变 ⇒ 无条纹/水波）\n"
-            + "    float band = 1.0 - smoothstep(0.0, 0.20, min(dE.x, dE.y));\n"       // 1=贴边, 0=内（宽过渡=柔）
-            + "    float lens = band * refractAmt;\n"
-            + "    float2 c = rectOrigin + ((uv - 0.5) * (1.0 - lens * 0.09) + 0.5) * size;\n"
+            + "    float edge = min(dE.x, dE.y);\n"
+            // ① 表面法线（高度场梯度）→ 按法线**折射**采样背景（中心平 ⇒ 不弯；边缘倒角 ⇒ 强弯；无跳变）
+            + "    float e = 0.006;\n"
+            + "    float gx = glassH(uv + float2(e, 0.0)) - glassH(uv - float2(e, 0.0));\n"
+            + "    float gy = glassH(uv + float2(0.0, e)) - glassH(uv - float2(0.0, e));\n"
+            + "    float2 disp = float2(gx, gy) * refractAmt;\n"
+            + "    float2 c = rectOrigin + (uv - disp) * size;\n"
             + "    // ② 环形模糊（13 点）——半径 ~blur，frosted 而不发白\n"
             + "    float r = max(blur, 0.0) * 0.75;\n"
             + "    half4 acc = content.eval(c);\n"
@@ -74,8 +83,9 @@ public final class GlassMaterial {
             + "    // ④ tint（逐通道，少量——液态玻璃透亮不泛白）\n"
             + "    col.rgb = mix(col.rgb, col.rgb * half3(tint.rgb) * 2.0, half(tint.a));\n"
             + "    // ⑤ 边缘：内阴影（subtle darken）+ 镜面高光带（贴边亮，向内柔衰减）——对齐系统的柔和厚边\n"
+            + "    float band = 1.0 - smoothstep(0.0, 0.16, edge);\n"
             + "    col.rgb *= (1.0 - band * 0.05);\n"
-            + "    float rim = band * specular * (0.35 + 0.65 * (1.0 - uv.y));\n"        // 顶部更亮
+            + "    float rim = band * specular * (0.35 + 0.65 * (1.0 - uv.y));\n"
             + "    col.rgb = min(col.rgb + half3(rim), half3(1.0));\n"
             + "    col.a = 1.0;\n"
             + "    return col;\n"
@@ -116,7 +126,7 @@ public final class GlassMaterial {
             sh.setFloatUniform("size", w, h);
             sh.setFloatUniform("blur", spec.blur);
             sh.setFloatUniform("saturation", spec.saturation);
-            sh.setFloatUniform("refractAmt", 1.0f);   // 边缘折射带强度（幅度内含 ×0.08 px 级）
+            sh.setFloatUniform("refractAmt", 0.5f);   // 法线折射强度（按高度场梯度位移）
             sh.setFloatUniform("specular", 0.16f); // 镜面高光边
             sh.setFloatUniform("contrast", 1.06f); // 微对比（更"透亮"）
             float a = ((spec.tint >>> 24) & 0xFF) / 255f;
