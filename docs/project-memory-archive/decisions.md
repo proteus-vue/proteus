@@ -3026,3 +3026,18 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **⑤ 防复发（工具层，不靠记忆）：**设备产物命令「硬化门」**——既有 `warnIfDistStale`（#663，只告警）升级：新增 `assertDistFreshForDeviceBuild(cmd)`——`dev`/`build` 是**把此刻 dist 里的框架代码固化进设备产物**的两条命令（dev = 设备拉的 bundle；build --package = 烤进安装包），陈旧 dist 在这两条命令下从**告警级升为错误级**（抛错阻断，`PROTEUS_ALLOW_STALE_DIST=1` 显式绕过）；仅从 dist 运行时生效。★**破坏性验证六向**：新鲜放行 / touch src ⇒ dev 拦 / build 拦 / 绕过开关放行 / 无关命令（doctor）放行 / 从 src 运行（tsx）不检查；测试 +6（`tests/dist-freshness.test.ts` 13 条全绿）。
 **⑥ 三端真机复验（全绿）**：Android 新 APK（签名稳定后覆盖安装成功）——**六字形 + 真值标签 + 贴底 + 首项高亮**全对；鸿蒙新 HAP——同款全对（截图对比：修复前栏在顶部且无图标 → 修复后贴底且全图标）；iOS 前轮已验。★**三端截图并排终态一致**（字形 ◉≡✦✚⌁◫ / 标签 L1 触即应…D1 显影 / 贴底 / 首项高亮）。
 **⑦ 教训**：① **"能力归一"之后还有"产物归一"**——实现收到 runtime 只保证了**源码级**一致；设备吃的是**构建产物**，而产物有**多条生成通路**（tsx src / dist CLI / dev server）⇒ 任一条路上的陈旧 dist 都会让"归一"在真机上失效（本轮三端三样正是如此）；② **截图对比是最便宜的三端一致性判据**——一行代码没跑，两个真缺陷当场现形（同 #800 的"首轮截图暴露零宽建栏"）；③ **布局容器语义是平台事实**——ArkUI Stack 默认 TopStart / Android FrameLayout 默认左上 / iOS 手工 frame——「贴底」各端都要显式做，写进 runtime 组件的契约里（safeBottom 参数即此）；④ **凡"每次构建都生成"的密钥材料必是缺陷**——签名/key 类产物必须**持久复用**，且放**不被清理的路径**（`build/` 被 rmSync 是隐蔽杀手）。
+
+802. **★★★tab 点击切屏三端修复：iOS 触摸链 + tag 冲突 / 鸿蒙三缺陷（字段名 / ABI 签名错→SIGSEGV / updates 三层嵌套→黑带）**（2026-10-11）：
+**① 由来（用户：「tabbar 点击切屏只有安卓是正确的」）**：三端截图与真机点击逐端取证，各端缺陷全部现形且互不重样——印证"多变体逐条接线"的固有形态（#796 家族）。
+**② iOS 两处**：
+  · **挂载点错**：chrome 挂 `embedView`（自绘视图**内部**）⇒ 栏的触摸也进 SelfDrawView 触摸链（它用 touchesBegan/Ended 做内核 hitTest/按下态）⇒ 干挠点击。改挂 `embedView.superview`（参考壳 tabBarParent()=container.superview 的同款经验——其注释早有记录"加 container 上会被自绘层盖住"）。
+  · **内部 tag 冲突**（同 #799 族坑再犯）：glyph/label/badge 的 771003/4/5 落在 cell 段 771000+i 里 ⇒ `viewWithTag` 深度优先查到 cell0 的子标签 ⇒ 探针/restyle 取错视图（实测 l4/l5 命中坐标错位到 index cell）。内部 tag 移 771193~771195。
+  · **新增 tab 命中探针**（`PROTEUS_TAB_HIT=1`）：栏内各 tab 中心 UIKit hitTest + 直调 navigate——"点击命中了谁/导航通不通"一次取证（修复后实测六项全命中自身 cell + `CLI_TAB_NAV before=index after=l2`）。
+**③ 鸿蒙三处（每处都真机复现→修复→复验）**：
+  · **① 壳读错字段**：switchTab 读 `dr['current']`，而 drive 状态结构是 `{pending,log,state}`（current 在 state 里）⇒ `this.current` 永不更新 ⇒ 点 tab 后仍渲染旧屏。⇒ 改 `dr['state'].current`。
+  · **② ABI 签名不匹配 → SIGSEGV（最险）**：`proteus_layout_anim_active` 在 Rust 是 `-> u64`（返回**在飞动画数**），C++ 侧 5 处声明/消费当 `char*`（JSON 串）⇒ active>0 时把整数 `1` 当指针 ⇒ `std::string(0x1)` ⇒ SIGSEGV@0x1。★**只在点击"有在飞动画的屏"时崩**（此前所有测试从未踩到——L3 有无限循环 v-animate）；addr2line 定位到 `HostAppAnimAttach:282`。⇒ 全部改 u64 直读（helpers.h / impl.h×2 / host.cpp / bench.cpp）+ d.ts 声明。★**教训**：C ABI 的返回类型是**跨语言契约**——值型别不一致（u64 vs char*）静默把数值当指针，且只在特定取值时崩。
+  · **③ updates 三层嵌套 → 右缘 104px 黑带（最隐蔽）**：内核 tick 的 updates 契约是**数组套数组** `[[id,tx,…],…]`；而 `extractValueAfterKey` **已返回含首尾括号**的数组，`animUpdatesArray` 又包一层 ⇒ 三层嵌套 ⇒ 消费方（`ApplyNodeVisuals`）从首个 `[` 找 `]` ⇒ 首行 `row = "[32,…"` ⇒ strtod 读成 **0** ⇒ 动画 scale 错打到 **id=0（页根）** ⇒ 页根缩到 0.9 ⇒ 右缘 1320×0.92≈1215 = **104px 黑带**（像素扫描与计算值精确吻合）。★**为什么此前没发现**：无动画的页面 tick 返回空 updates ⇒ 不触发；只有"点击进有动画的页"才现形。⇒ 修 `animUpdatesArray` 直接透传 + `ApplyNodeVisuals` 解析器跳外层容器（兼容单层直传）。
+  · **④ 附带：动画会话跨页残留**（黑带排查中发现）：`hostAppAnimReset`——壳每轮渲染/点按导航前清 C++ 静态会话（旧页 spec 的 nodeId 属**旧页编号空间**，不清会重放到新页把同 id 的不同元素改了——实测 L3→L2 时 L2 内容被放大）。目标页自己的动画经本轮 VM 重建（首评即播）重新捕获，不受影响。
+**④ 验证（全部真机）**：鸿蒙全 tab 轮询（L1→L2→L3→L4→L5→回 L1）**像素带 band=0 全通** + L3 数字场在跳 + 进程存活 + 高亮跟随；清理调试日志后复验同过。iOS 探针六项全命中 + 导航通路 ok。（Android 本就正确，未动。）
+**⑤ 方法：像素级带扫描（band 数字）**——"切页视觉异常"的最便宜判据：`snapshot_display → BMP → 逐行扫右缘暗色宽度`，比肉眼看截图精确得多（104px 黑带 = 1320×0.92−1320 的理论值精确对上，当场区分"缩放" vs "裁剪" vs "平移"）。已留 `/tmp/scanbmp.mjs` 与 `/tmp/band-probe.sh`（本次会话工具，形态记入教训）。
+**⑥ 教训**：① ABI 值型别错误是**只在特定值域崩**的隐蔽类——跨语言契约要用"签名与实现同查"（本次 5 处声明全错但从不崩，直到 active>0）；② JSON 解析"谁负责包括号"必须单一（两层各包一次=三层嵌套，症状是"首元素变 0"这类偏移）；③ 真机点击类缺陷的最小判据链 = 命中探针（点了谁）+ 状态日志（导航没导航）+ 像素扫描（画面变没变）——三者缺一会把归因带偏（本次先怀疑触摸链、再怀疑缩放，最后靠 `ANIM_SPEC/VISUAL_ROW` 两行日志+像素宽度对上才锁定）。
