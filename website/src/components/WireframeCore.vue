@@ -1,5 +1,5 @@
 <template>
-  <canvas ref="cv" class="wf-canvas" :class="{ 'is-off': off }" aria-hidden="true" />
+  <canvas ref="cv" class="wf-canvas" :class="{ 'is-off': off, 'is-pending': pending }" aria-hidden="true" />
 </template>
 
 <script setup lang="ts">
@@ -24,6 +24,8 @@ const props = defineProps({
 
 const cv = ref<HTMLCanvasElement | null>(null)
 const off = ref(false)
+/** ★首帧未合成前隐藏（防白闪）——GL 出帧 + 双 rAF（确保已提交合成）后置 false ⇒ 淡入。 */
+const pending = ref(true)
 let handle: WireframeHandle | null = null
 
 /** hex → 0..1 三元组（容错：非 hex 回退品牌紫） */
@@ -44,7 +46,21 @@ onMounted(() => {
     scale: props.scale,
     still: reduce,
   })
-  if (!handle) off.value = true // WebGL 不可用 → 隐藏 canvas（布局不受影响）
+  if (!handle) {
+    off.value = true // WebGL 不可用 → 隐藏 canvas（布局不受影响）
+    pending.value = false
+    return
+  }
+  // ★★★2026-10-11 首帧白闪根治（用户实测「间歇性白屏」）：WebGL canvas 在**首次 GL 内容提交合成之前**，
+  //   浏览器加速合成器可能把它合成成**不透明白块**（Chromium 已知行为，时机随 GPU/HMR 波动 ⇒ 间歇复现）。
+  //   「同步 draw 首帧」不足——canvas 入 DOM→GL 首帧**提交合成**之间仍可能有窗口。
+  //   ⇒ GL 出帧 + **双 rAF**（第一帧提交、第二帧已合成）后再显示 canvas（CSS opacity 淡入兜住）。
+  //   ★兜底：后台标签页 rAF 会被节流 ⇒ 加 setTimeout 保险（幂等，二者取先到者）。
+  const reveal = (): void => {
+    pending.value = false
+  }
+  requestAnimationFrame(() => requestAnimationFrame(reveal))
+  setTimeout(reveal, 700)
 })
 
 onUnmounted(() => {
@@ -59,6 +75,9 @@ onUnmounted(() => {
   width: 100%;
   height: 100%;
   pointer-events: none;
+  /* ★防白闪：GL 首帧合成前 opacity:0（见 script 的 pending）；就绪后淡入 */
+  transition: opacity 0.4s ease;
 }
+.wf-canvas.is-pending { opacity: 0; }
 .wf-canvas.is-off { display: none; }
 </style>
