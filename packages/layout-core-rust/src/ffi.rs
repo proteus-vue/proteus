@@ -250,6 +250,10 @@ pub(crate) struct NodeDto {
     ///   （见 `style::GlowSpec` 的"为什么不用平台原生"论证）。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) glow: Option<serde_json::Value>,
+    /// ★★★**玻璃材质**（自研液态玻璃，决策 #818）：`{blur, tint, radius?, border?, borderSide?, noise?, saturation?, level?}`
+    ///   —— 见 `style::GlassSpec`。构建期由 `glassResolver` 折出；宿主据此自绘玻璃面。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) glass: Option<serde_json::Value>,
     /// ★★**路径变形的 B 态**（2026-10-01 · 路径变形 v1）：与 `svg_path` 同形
     ///   （`{d, stroke, strokeWidth}`）；两态必须**同构**（同命令序列）才能逐点插值。
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -375,6 +379,7 @@ impl NodeDto {
             fill_gradient_to: None,
             svg_path_to: None,
             glow: None,
+            glass: None,
             mask: None,
             transform_origin: None,
             text: None,
@@ -718,6 +723,41 @@ pub(crate) fn style_from_dto(dto: &NodeDto) -> Result<LStyle, String> {
             return Err(format!("glow.alpha 非法：{alpha}（应为 0..1）"));
         }
         style.glow = Some(crate::style::GlowSpec { color, radius, alpha });
+    }
+    // ★★★玻璃材质（自研液态玻璃，决策 #818）：`glass: {blur, tint, radius?, border?, borderSide?, noise?, saturation?, level?}`
+    if let Some(g) = dto.glass.as_ref() {
+        let blur = g
+            .get("blur")
+            .and_then(|x| x.as_f64())
+            .ok_or_else(|| "glass 缺少 `blur`（模糊半径 px）".to_string())? as f32;
+        if !blur.is_finite() || blur < 0.0 {
+            return Err(format!("glass.blur 非法：{blur}（应为 ≥0 的 px）"));
+        }
+        let tint_s = g
+            .get("tint")
+            .and_then(|x| x.as_str())
+            .ok_or_else(|| "glass 缺少 `tint`（着色色，如 '#ffffff26' 或 'rgba(...)'）".to_string())?;
+        let tint = parse_css_color(tint_s)?;
+        let num = |k: &str, d: f32| g.get(k).and_then(|x| x.as_f64()).map(|v| v as f32).unwrap_or(d);
+        let radius = num("radius", 0.0);
+        let border = g.get("border").and_then(|x| x.as_bool()).unwrap_or(false);
+        // borderSide：'all'|'top'|'bottom'|'right' → 0..3
+        let border_side = match g.get("borderSide").and_then(|x| x.as_str()) {
+            Some("top") => 1u8,
+            Some("bottom") => 2,
+            Some("right") => 3,
+            _ => 0,
+        };
+        let noise = num("noise", 0.0).clamp(0.0, 1.0);
+        let saturation = num("saturation", 1.0).max(0.0);
+        // level：'solid'|'l1'|'l2'|'l3' → 0..3
+        let level = match g.get("level").and_then(|x| x.as_str()) {
+            Some("l1") => 1u8,
+            Some("l2") => 2,
+            Some("l3") => 3,
+            _ => 0,
+        };
+        style.glass = Some(crate::style::GlassSpec { blur, tint, radius, border, border_side, noise, saturation, level });
     }
     // ★★裁剪形状（C1）：结构形态 → (kind, [f32; 16])。类型静态、参数进基态（复位目标）。
     // ★★渐变（v2）：A 态必需配套 B 态才有"混合"——两态都在时校验结构一致（kind/色标数）。
@@ -5426,6 +5466,38 @@ mod tests {
                 assert!(got.is_err(), "颜色 {input} 应被拒绝，却解析出 {:#010X}", got.unwrap());
             }
         }
+    }
+
+    #[test]
+    fn glass_spec_parses_and_defaults() {
+        // 自研液态玻璃（决策 #818）：glass 折进 LStyle.glass（blur/tint/radius/border/saturation/level）
+        let dto: NodeDto = serde_json::from_str(
+            r##"{"id":1,"glass":{"blur":20,"tint":"#ffffff26","radius":16,"border":true,"borderSide":"top","noise":0.05,"saturation":1.8,"level":"l2"}}"##,
+        )
+        .expect("DTO 应可解析");
+        let s = style_from_dto(&dto).expect("glass 合法应通过");
+        let g = s.glass.expect("glass 应存在");
+        assert_eq!(g.blur, 20.0);
+        assert_eq!(g.tint, 0x26FF_FFFF, "tint #ffffff26 → 0x26FFFFFF（CSS4 alpha 低 8 位）");
+        assert_eq!(g.radius, 16.0);
+        assert!(g.border);
+        assert_eq!(g.border_side, 1, "top → 1");
+        assert!((g.noise - 0.05).abs() < 1e-6);
+        assert!((g.saturation - 1.8).abs() < 1e-6);
+        assert_eq!(g.level, 2, "l2 → 2");
+        // 缺省：可选字段默认（radius 0/border false/borderSide all/saturation 1/level solid）
+        let dto2: NodeDto =
+            serde_json::from_str(r##"{"id":2,"glass":{"blur":10,"tint":"#00000080"}}"##).expect("DTO 应可解析");
+        let g2 = style_from_dto(&dto2).unwrap().glass.unwrap();
+        assert_eq!(g2.radius, 0.0);
+        assert!(!g2.border);
+        assert_eq!(g2.border_side, 0);
+        assert_eq!(g2.saturation, 1.0);
+        assert_eq!(g2.level, 0);
+        // 缺 blur / tint ⇒ 明确拒绝（不静默造坏玻璃）
+        assert!(serde_json::from_str::<NodeDto>(r##"{"id":3,"glass":{"tint":"#00000080"}}"##).is_ok());
+        let dto3: NodeDto = serde_json::from_str(r##"{"id":3,"glass":{"tint":"#00000080"}}"##).unwrap();
+        assert!(style_from_dto(&dto3).is_err(), "缺 blur 应被拒");
     }
 
     #[test]

@@ -18,7 +18,7 @@ import path from 'node:path'
 import { buildLayoutTemplate, buildVaporSubscriptions, compileEvents, parseCssVarTokens } from '@proteus-vue/compiler'
 import { iconByName, hasIcon } from '@proteus-vue/icons'
 import { extractRefLiterals, reorderNodesByZ } from './app-content'
-import { buildAppComponentRegistry, resolveComponentTags, type AppComponentDef } from './app-component-registry'
+import { buildAppComponentRegistry, resolveComponentTags, glassResolver, type AppComponentDef } from './app-component-registry'
 import type { AppPlatform } from './targets'
 import { resolveAppRoutes } from './app-routes'
 import { loadTsModule } from './config-loader'
@@ -131,6 +131,7 @@ export async function buildAppRuntimeContent(
   const compileOpts = {
     ...(expandableTags.size > 0 ? { componentTags: expandableTags } : {}),
     iconResolver,
+    glassResolver,
   }
   let compiled = 0
   let skipped = 0

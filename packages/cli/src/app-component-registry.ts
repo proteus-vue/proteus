@@ -18,6 +18,59 @@ import path from 'node:path'
 import { buildLayoutTemplate, buildVaporSubscriptions } from '@proteus-vue/compiler'
 import { resolveComponentsRoot } from '@proteus-vue/plugin-vite'
 import { iconByName, hasIcon } from '@proteus-vue/icons'
+import { resolveGlass } from '@proteus-vue/glass'
+
+/**
+ * ★★★玻璃材质折叠（自研液态玻璃，决策 #818）：`<pg-glass …props>` → 引擎 `glass` 字段。
+ *   复用 `@proteus-vue/glass` 的 `resolveGlass`（**材质参数唯一真源**）解析 preset+props →
+ *   折成内核 `GlassSpec` 形态（hex tint 而非 rgba——内核 `parse_css_color` 只吃 #RRGGBBAA）。
+ *   返回 null = 无法解析（缺 preset 等）⇒ 不折（`pg-glass` 保持普通盒）。
+ */
+export function glassResolver(props: Record<string, string | undefined>): Record<string, unknown> | null {
+  const preset = props.preset ?? 'custom'
+  const num = (v: string | undefined): number | undefined => {
+    if (v === undefined) return undefined
+    const n = Number(v)
+    return Number.isFinite(n) ? n : undefined
+  }
+  const bool = (v: string | undefined): boolean | undefined => (v === undefined ? undefined : v === 'true' || v === '')
+  const r = resolveGlass({
+    preset: preset as never,
+    intensity: props.intensity === undefined ? undefined : (Number.isFinite(Number(props.intensity)) ? Number(props.intensity) : (props.intensity as never)),
+    tint: props.tint,
+    radius: num(props.radius),
+    border: bool(props.border),
+    noise: num(props.noise),
+    fallback: props.fallback as never,
+  })
+  const sideMap: Record<string, string> = { all: 'all', top: 'top', bottom: 'bottom', right: 'right' }
+  return {
+    blur: r.blurPx,
+    // 内核只吃 #RRGGBBAA：rgba(r,g,b,a) → #RRGGBBAA（alpha 0..1 → 0..255）
+    tint: rgbaToHex8(r.tint),
+    radius: r.radiusPx,
+    border: r.border,
+    borderSide: sideMap[r.borderSide ?? 'all'] ?? 'all',
+    noise: r.noise,
+    saturation: 1.0,
+    // ★level 是**运行期能力决策**（系统材质 vs 自绘），由宿主据自身 OS 能力定，非构建期 —— 此处不下发。
+  }
+}
+
+/** CSS 颜色 → 内核可吃的 `#RRGGBBAA`（rgba(...) / #rgb / #rrggbb / #rrggbbaa）。不可解析 ⇒ 透明黑。 */
+function rgbaToHex8(css: string): string {
+  const hex = (n: number) => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, '0')
+  const s = css.trim().toLowerCase()
+  const m = /^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*(?:,\s*([\d.]+)\s*)?\)$/.exec(s)
+  if (m) {
+    const a = m[4] === undefined ? 1 : Number(m[4])
+    return `#${hex(Number(m[1]))}${hex(Number(m[2]))}${hex(Number(m[3]))}${hex(a * 255)}`
+  }
+  if (/^#[0-9a-f]{3}$/.test(s)) return `#${s[1]}${s[1]}${s[2]}${s[2]}${s[3]}${s[3]}ff`
+  if (/^#[0-9a-f]{6}$/.test(s)) return `${s}ff`
+  if (/^#[0-9a-f]{8}$/.test(s)) return s
+  return '#00000000'
+}
 
 /**
  * ★★★App p-icon 图标降级（P4-续 phase B · 决策 #813）：静态语义名 → `{d, viewBox}`。

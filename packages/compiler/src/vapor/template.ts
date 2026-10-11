@@ -177,7 +177,7 @@ const INHERIT_KEY_SET = new Set<string>([...APP_INHERITABLE_FIELDS, 'visibility'
  *   五元 mask 规格）——拆成扁平属性会把"一份声明"打散成十几个键，且无法表达数组。
  *   JSON 串是**编译期可校验**的最小形态（解析失败 ⇒ 诊断，不静默丢）。
  */
-const PAINT_DECL_ATTRS = new Set(['fill-gradient', 'fill-gradient-to', 'clip-path', 'glow', 'mask', 'svg-path', 'svg-path-to', 'svg-view-box'])
+const PAINT_DECL_ATTRS = new Set(['fill-gradient', 'fill-gradient-to', 'clip-path', 'glow', 'mask', 'svg-path', 'svg-path-to', 'svg-view-box', 'glass'])
 
 /**
  * ★★★**未支持特性的「可见化」探测**（2026-10-03 · P0 能力清单批次）。
@@ -355,6 +355,7 @@ const PAINT_DECL_KEY: Record<string, string> = {
   'svg-path': 'svgPath',
   'svg-path-to': 'svgPathTo',
   'svg-view-box': 'svgViewBox',
+  glass: 'glass',
 }
 /** 四边缩写属性（`margin-left` ⇒ `margin.left`） */
 const EDGE_FIELDS = new Set<string>(APP_EDGE_FIELDS)
@@ -3415,6 +3416,11 @@ export function buildLayoutTemplate(
      *   的叶子盒（内核据此缩放到节点盒渲染）。返回 null ⇒ 未知名（不降级 + 诊断）。
      */
     iconResolver?: (name: string) => { d: string; viewBox?: string } | null
+    /**
+     * ★★★玻璃材质折叠（自研液态玻璃，决策 #818）：`<pg-glass …props>` → 引擎 `style.glass` 规格的解析器
+     *   （**构建期注入**，编译器不直接依赖玻璃包）。给定则 `pg-glass` 折成带 `glass` 字段的普通盒（保留子内容）。
+     */
+    glassResolver?: (props: Record<string, string | undefined>) => Record<string, unknown> | null
   },
 ): LayoutTemplateResult {
   const diagnostics: VaporDiagnostic[] = []
@@ -4232,6 +4238,37 @@ export function buildLayoutTemplate(
             '图标名用静态字面量（name="home"）；动态图标为后续批次（需运行期 path 通道）',
             'VAPOR_ICON_DYNAMIC',
           )
+        }
+      }
+      // ★★★玻璃材质折叠（自研液态玻璃，决策 #818）：`<pg-glass preset intensity tint radius border noise fallback>`
+      //   在**构建期**经 `opts.glassResolver` 解析成 `style.glass`（= ResolvedGlass），`pg-glass` 当**普通盒**
+      //   （保留尺寸/子内容，不展开组件内部）——与 #811 iconResolver 同范式。Web/Skyline 仍走组件 CSS（不变）。
+      let glassLeaf = false
+      if ((tag === 'pg-glass' || tag === 'p-glass') && opts?.glassResolver) {
+        const strProp = (pn: string): string | undefined => {
+          const a = (n.props ?? []).find(
+            (p) => (p.type === 6 && p.name === pn) || (p.type === 7 && p.name === 'bind' && p.arg?.content === pn),
+          )
+          if (!a) return undefined
+          const raw = a.type === 6 ? a.value?.content : a.exp?.content
+          const s = typeof raw === 'string' ? raw.trim() : undefined
+          if (s === undefined || s === '') return undefined
+          if (a.type === 6) return s
+          const m = /^['"](.*)['"]$/.exec(s)
+          return m ? m[1] : undefined
+        }
+        const spec = opts.glassResolver({
+          preset: strProp('preset'),
+          intensity: strProp('intensity'),
+          tint: strProp('tint'),
+          radius: strProp('radius'),
+          border: strProp('border'),
+          noise: strProp('noise'),
+          fallback: strProp('fallback'),
+        })
+        if (spec) {
+          style.glass = spec
+          glassLeaf = true
         }
       }
       const node: LayoutNode = { id, parentId, tag: iconLeaf ? 'view' : tag, style }
