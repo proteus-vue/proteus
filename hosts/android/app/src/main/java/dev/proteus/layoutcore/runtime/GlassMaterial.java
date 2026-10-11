@@ -8,14 +8,15 @@ import android.graphics.Shader;
 import android.os.Build;
 
 /**
- * ★★★框架自研**液态玻璃材质**着色器（AGSL · 决策 #818/#821）——即使 OS 没有玻璃能力也能自绘近似系统的液态玻璃。
+ * ★★★框架自研**液态玻璃材质**着色器（AGSL · 决策 #818/#827）——即使 OS 没有玻璃能力也能自绘近似系统的液态玻璃。
  *
- * <p>【液态玻璃 vs 磨砂玻璃（用户 2026-10-11 指出"远远不是液态玻璃"）】磨砂 = 模糊 + 白罩（本类 v1 的问题）；
- * 液态玻璃的**核心是光学**：① **边缘折射**（凸透镜——玻璃边缘把背后内容压/扩，产生"厚玻璃"感）；
- * ② **镜面高光边**（rim）；③ 透亮不泛白（少白罩、高饱和 + 微对比）。本类 v2 补齐这三点。</p>
+ * <p>【模型（决策 #827 调研：iOS Liquid Glass = "边缘带倒角的厚板"）】玻璃表面是**高度场**：**中心平坦**
+ * （法线正对视线、`dh/ds=0` ⇒ **不折射**），**只在最外一圈倒角带（bevel band）**法线偏离视线 ⇒ **只有边缘折射**
+ * （把玻璃**边界之外**的内容沿**外法线**压卷进来 = 厚玻璃/凸透镜）。**模糊按离边距离键控**（边缘锐、中心糊）。</p>
  *
  * <p>【怎么用（宿主）】`ProteusHostView` 对带 `style.glass` 的节点：把"背后已绘内容"画进离屏 `Bitmap` →
- * {@link #buildPaint} → `canvas.drawRect(节点盒, paint)`（裁剪圆角）。采样源 = 背后内容帧。</p>
+ * {@link #buildPaint} → `canvas.drawRect(节点盒, paint)`（裁剪圆角）。★采样坐标 = 画布坐标 ⇒ 背后位图须
+ * **覆盖节点边界之外**（全屏 backdrop 天然满足）。</p>
  *
  * <p>【版本门】AGSL 需 **API 31+**；不可用 ⇒ 调用方回退半透明实色。</p>
  */
@@ -28,60 +29,74 @@ public final class GlassMaterial {
     }
 
     /**
-     * 液态玻璃 AGSL。uniform：`content`（背后内容）· `rectOrigin`/`size`（玻璃面盒）· `blur` ·
-     * `tint`(vec4) · `saturation` · `refractAmt`（边缘折射强度 0..1）· `specular`（高光边强度）· `contrast`。
-     * 采样 = 13 点环形模糊 + 边缘凸透镜折射 + 饱和/对比 + 镜面 rim。
+     * 液态玻璃 AGSL（模型见类注释）。uniform：`content`·`rectOrigin`/`size`/`radius`（玻璃盒）· `blur` ·
+     * `tint`(vec4) · `saturation` · `refractDepthPx`（边缘峰值位移 px）· `specular` · `contrast` · `lightDir`。
      */
     public static final String GLASS_AGSL =
             "uniform shader content;\n"
             + "uniform float2 rectOrigin;\n"
             + "uniform float2 size;\n"
+            + "uniform float radius;\n"
             + "uniform float blur;\n"
             + "uniform float4 tint;\n"
             + "uniform float saturation;\n"
-            + "uniform float refractAmt;\n"
+            + "uniform float refractDepthPx;\n"
             + "uniform float specular;\n"
             + "uniform float contrast;\n"
-            // ★真实玻璃投射（决策 #823）：玻璃面 = **有起伏的曲面**——中心平、边缘倒角。
-            //   高度场 h：圆角矩形 SDF 的 smoothstep（中心 h=1、边缘 h→0）。
-            + "float glassH(float2 u) {\n"
-            + "    float2 dE = min(u, 1.0 - u);\n"
-            + "    return smoothstep(0.0, 0.05, min(dE.x, dE.y));\n"
+            + "uniform float2 lightDir;\n"
+            // 圆角矩形 SDF（真欧氏距离；内部为负）
+            + "float sdRoundRect(float2 p, float2 hs, float r) {\n"
+            + "    float2 q = abs(p) - hs + r;\n"
+            + "    return min(max(q.x, q.y), 0.0) + length(max(q, 0.0)) - r;\n"
             + "}\n"
+            // 圆弧倒角映射（Kyant）：e=0 外缘 → 0，e=1 内侧 → 1（斜率边缘最陡、内侧为 0）
+            + "float circleMap(float x) { return 1.0 - sqrt(max(1.0 - x * x, 0.0)); }\n"
             + "half4 main(float2 coord) {\n"
-            + "    float2 uv = (coord - rectOrigin) / size;\n"
-            + "    float2 dE = min(uv, 1.0 - uv);\n"
-            + "    float edge = min(dE.x, dE.y);\n"
-            // ① 表面法线（高度场梯度）→ 按法线**折射**采样背景（中心平 ⇒ 不弯；边缘倒角 ⇒ 强弯；无跳变）
-            + "    float e = 0.006;\n"
-            + "    float gx = glassH(uv + float2(e, 0.0)) - glassH(uv - float2(e, 0.0));\n"
-            + "    float gy = glassH(uv + float2(0.0, e)) - glassH(uv - float2(0.0, e));\n"
-            + "    float2 disp = float2(gx, gy) * refractAmt;\n"
-            + "    float2 c = rectOrigin + (uv - disp) * size;\n"
-            + "    // ② 加权高斯核（多环 + 权重；总权重归一 ⇒ 亮度不变，比等权盒式平滑，消条痕）\n"
-            + "    float r = max(blur, 0.0) * 0.5;\n"
-            + "    half4 acc = content.eval(c) * 0.12;\n"
-            + "    float w1 = 0.06, w2 = 0.035, w3 = 0.015;\n"
+            + "    float2 hs = size * 0.5;\n"
+            + "    float2 p = (coord - rectOrigin) - hs;\n"
+            + "    float r = min(radius, min(hs.x, hs.y));\n"
+            + "    float sd = sdRoundRect(p, hs, r);\n"
+            + "    float d = max(-sd, 0.0);\n"                                     // 离边深度
+            + "    float band = max(min(hs.x, hs.y) * 0.22, 6.0);\n"              // 倒角带宽（px）
+            + "    float e = clamp(d / band, 0.0, 1.0);\n"                        // 0=边, 1=内
+            // ① 外法线 n（SDF 梯度；宽 eps 防药丸中轴裂缝）
+            + "    float eps = clamp(band * 0.3, 1.0, 16.0);\n"
+            + "    float2 g = float2(sdRoundRect(p + float2(eps, 0.0), hs, r) - sdRoundRect(p - float2(eps, 0.0), hs, r),\n"
+            + "                       sdRoundRect(p + float2(0.0, eps), hs, r) - sdRoundRect(p - float2(0.0, eps), hs, r));\n"
+            + "    float2 n = g / max(length(g), 1e-5);\n"
+            // ② 倒角斜率（圆弧 h=sqrt(1-(1-e)^2)）→ 位移量（圆心映射 × 峰值；中心 e→1 ⇒ 0）
+            + "    float ec = clamp(e, 0.004, 0.996); float u1 = 1.0 - ec;\n"
+            + "    float slope = u1 / sqrt(max(1.0 - u1 * u1, 1e-4));\n"
+            + "    float bend = circleMap(1.0 - ec) * refractDepthPx;\n"
+            + "    bend *= smoothstep(1.0, 0.75, e);\n"                          // 内缘 C1 淡出（防环痕）
+            + "    float2 sp = coord + n * bend;\n"                              // ★向外采样（卷边界外内容进边缘）
+            // ③ 模糊**按 e 键控**：边缘锐、中心糊（先折后糊）——加权核（归一保亮度）
+            + "    float br = max(blur, 0.0) * e;\n"
+            + "    half4 acc = content.eval(sp) * 0.16;\n"
+            + "    float w1 = 0.07, w2 = 0.04, w3 = 0.015;\n"
             + "    for (int k = 0; k < 8; k++) {\n"
-            + "        float a = float(k) * 0.7853981;\n"                       // 45 度步进
+            + "        float a = float(k) * 0.7853981;\n"
             + "        float2 dir = float2(cos(a), sin(a));\n"
-            + "        acc += content.eval(c + dir * r) * w1;\n"
-            + "        acc += content.eval(c + dir * (r * 2.0)) * w2;\n"
-            + "        acc += content.eval(c + dir * (r * 3.0)) * w3;\n"
+            + "        acc += content.eval(sp + dir * br) * w1;\n"
+            + "        acc += content.eval(sp + dir * (br * 2.0)) * w2;\n"
+            + "        acc += content.eval(sp + dir * (br * 3.0)) * w3;\n"
             + "    }\n"
             + "    half4 col = acc;\n"
-            + "    // ③ 磨砂去饱和（★iOS 背后色彩被明显冲淡）+ 提彩 + 微对比\n"
+            // ④ 磨砂去饱和 + 提彩 + 微对比
             + "    half lum = dot(col.rgb, half3(0.299, 0.587, 0.114));\n"
-            + "    col.rgb = mix(col.rgb, half3(lum), half(0.50));\n"                  // 去饱和（frost 冲淡色彩）
+            + "    col.rgb = mix(col.rgb, half3(lum), half(0.50));\n"
             + "    col.rgb = mix(half3(lum), col.rgb, half(saturation));\n"
             + "    col.rgb = (col.rgb - 0.5) * half(contrast) + 0.5;\n"
-            + "    // ④ tint（逐通道）+ **磨砂白 frost**（★iOS 玻璃是奶白磨砂、不是清玻璃——按用户实测）\n"
+            // ⑤ tint + 磨砂白 frost
             + "    col.rgb = mix(col.rgb, col.rgb * half3(tint.rgb) * 2.0, half(tint.a));\n"
             + "    col.rgb = mix(col.rgb, half3(0.99, 0.995, 1.0), half(0.30 + tint.a * 0.6));\n"
-            + "    // ⑤ 边缘：内阴影（subtle darken）+ 镜面高光带（贴边亮，向内柔衰减）——对齐系统的柔和厚边\n"
-            + "    float band = 1.0 - smoothstep(0.0, 0.05, edge);\n"
-            + "    col.rgb *= (1.0 - band * 0.05);\n"
-            + "    float rim = band * specular * (0.35 + 0.65 * (1.0 - uv.y));\n"
+            // ⑥ 光照：Fresnel + 法线点乘光源（双瓣）—— 贴边亮，向内衰减
+            + "    float cosI = inversesqrt(1.0 + slope * slope);\n"
+            + "    float f0 = (1.5 - 1.0) / (1.5 + 1.0); f0 *= f0;\n"
+            + "    float fres = f0 + (1.0 - f0) * pow(max(1.0 - cosI, 0.0), 5.0);\n"
+            + "    float facing = max(dot(n, normalize(lightDir)), 0.0);\n"
+            + "    float bevelMask = 1.0 - smoothstep(0.0, 0.35, e);\n"           // 亮带仅在外缘
+            + "    float rim = (pow(facing, 6.0) * specular + fres * 0.6) * bevelMask;\n"
             + "    col.rgb = min(col.rgb + half3(rim), half3(1.0));\n"
             + "    col.a = 1.0;\n"
             + "    return col;\n"
@@ -108,7 +123,7 @@ public final class GlassMaterial {
      * 用"背后内容"位图 + 盒 + 规格构建玻璃 `Paint`（null = 不可用/失败 ⇒ 调用方降级半透明实色）。
      * 画布坐标 = 位图坐标（`BitmapShader` 恒等映射）⇒ `content.eval(coord)` 取该像素背后内容。
      */
-    public static Paint buildPaint(Bitmap backdrop, float ox, float oy, float w, float h, Spec spec) {
+    public static Paint buildPaint(Bitmap backdrop, float ox, float oy, float w, float h, float radius, Spec spec) {
         if (!isAvailable() || backdrop == null || backdrop.isRecycled() || spec == null || w <= 0f || h <= 0f) {
             android.util.Log.w("proteus-glass", "buildPaint early-null: avail=" + isAvailable()
                     + " backdrop=" + (backdrop == null ? "null" : backdrop.getWidth() + "x" + backdrop.getHeight())
@@ -120,22 +135,24 @@ public final class GlassMaterial {
             sh.setInputShader("content", new BitmapShader(backdrop, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP));
             sh.setFloatUniform("rectOrigin", ox, oy);
             sh.setFloatUniform("size", w, h);
+            sh.setFloatUniform("radius", radius);
             sh.setFloatUniform("blur", spec.blur);
             sh.setFloatUniform("saturation", spec.saturation);
-            sh.setFloatUniform("refractAmt", 0.14f);  // 窄带内折射强度（带仅 5% 极窄 ⇒ 中心不折射、只边缘弯）
-            sh.setFloatUniform("specular", 0.10f);    // 镜面高光边（subtle）
-            sh.setFloatUniform("contrast", 1.0f);     // 中性（iOS 不加强对比）
+            // ★边缘峰值位移：调研守恒 refractionAmount ≈ 2×倒角带宽（带宽由 shader 内 band=min(w,h)*0.22 定）
+            sh.setFloatUniform("refractDepthPx", Math.max(6.0f, Math.min(w, h) * 0.22f * 2.0f));
+            sh.setFloatUniform("specular", 0.5f);         // 边缘高光（法线点乘光源）
+            sh.setFloatUniform("contrast", 1.0f);         // 中性
+            sh.setFloatUniform("lightDir", -0.35f, -0.94f); // 光来自上偏左
             float a = ((spec.tint >>> 24) & 0xFF) / 255f;
-            float r = ((spec.tint >> 16) & 0xFF) / 255f;
-            float g = ((spec.tint >> 8) & 0xFF) / 255f;
-            float b = (spec.tint & 0xFF) / 255f;
-            sh.setFloatUniform("tint", r, g, b, a);
+            float cr = ((spec.tint >> 16) & 0xFF) / 255f;
+            float cg = ((spec.tint >> 8) & 0xFF) / 255f;
+            float cb = (spec.tint & 0xFF) / 255f;
+            sh.setFloatUniform("tint", cr, cg, cb, a);
             Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
             p.setShader(sh);
             android.util.Log.i("proteus-glass", "buildPaint: AGSL OK");
             return p;
         } catch (Throwable t) {
-            // ★诚实：不吞异常——把真因打出来（此前吞掉 ⇒ 误以为"AGSL 成功"，实为一直降级）
             android.util.Log.w("proteus-glass", "buildPaint: AGSL FAIL " + t + " :: " + android.util.Log.getStackTraceString(t));
             return null; // 着色器编译/构建失败 ⇒ 降级（不崩）
         }
