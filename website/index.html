@@ -20,6 +20,13 @@
     <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
     <link rel="mask-icon" href="favicon.svg" color="#8b5cf6" />
+    <!-- ★★★2026-10-11 首屏白闪修复（FOUC）：html/body 深色底原**只在外部样式表**（src/style.css）
+         ⇒ 样式表加载/应用前浏览器用**默认白底**首绘 ⇒ 打开站点**闪白一下**（用户实测）。
+         此处内联最小关键样式：首帧即深色底（与 src/style.css 的 --bg 同值），样式表到达后自然接管。
+         ★只放"首屏必需"（底色 + 文本色 + 去边距）——不复制设计 token（那是样式表职责，避免两处漂移）。 -->
+    <style>
+      html, body { margin: 0; background: #0b0b0f; color: #f4f4f7; }
+    </style>
   </head>
   <body>
     <!-- ★★★2026-10-08：挂载根 id 由裸词 `app` 改为命名空间 `proteus-app`——
