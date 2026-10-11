@@ -3098,3 +3098,10 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **⑤ 破坏性/实测**：门禁抓出并修 **20 组同义重复 glyph**（audiotrack=music-note、call=phone… Material Symbols 有大量同义字形）+ `cancel` 与旧别名撞车（cancel 现为真图标，别名删除）。生成物 **238 主名 + 22 别名 + 238 filled**，**全坐标域 [0,24]**（精确），门禁 + 29 单测 + d2 + gates-sync + website build 全绿；浏览器实测 238 枚清晰、filled 切换正确。
 **⑥ 诚实边界（本决策内未做，P3/P4）**：**P3** 淘汰存量第二套实现（`built-in-components/icon.ts` 微信 shim 硬编码 hex + `ComponentGlyph.vue` 手绘）；**P4** App 端 p-icon 通内核（`svg-path` attr + 内核 viewBox→节点盒缩放）+ 三端真机。**不做** duotone 双色槽 / 真 stroke 1.5-2px（MS outline 是填充式轮廓，不假装真描边）。
 **⑦ 教训**：① **上游图标源的坐标网格常与自研渲染器不符**——Material Symbols 960 网格 + App 内核不读 viewBox ⇒ "拉来即用"会**跨端失配**（Web/MP 正常、App 坐标溢出 40×）；**生成期必须显式缩放到消费端网格**（门禁加**坐标域**判据才能拦住"忘了缩放"）；② **同名路径 = 同义图标**（Material Symbols 大量 synonym）——"零重复主名路径"门禁把它们逼出来，去重后 259→238；③ **"图标即数据"的完整形态 = 一条生成管线**（源 → 缓存 → 缩放 → 归一化 → 生成物 → 漂移门禁），不是手写数据文件——手写 238 条不可维护、不可复现、会漂移。
+
+809. **★★★Keryx P3：淘汰存量第二套图标实现（微信 `<icon>` Web shim 并入 Keryx）**（2026-10-11）：
+**① 背景（§8 P1 收口项）**：`packages/built-in-components/src/components/icon.ts`（微信 `<icon type>` 的 **Web 模拟**）此前是**手绘仿微信 SVG**（`ICON_SVG` 表 + 字面 hex `#09BB07`/`#10AEFF`…）——与 Keryx 并存的**第二视觉体系**，且违 CHARITES-001「零字面 hex」。
+**② 交付**：该 shim 改为经 **Keryx** 渲染（`normalizedIcon(TYPE_TO_KERYX[type])`）——几何取同一份 SVG path（三端同源、非手绘副本）；着色用 **token**（`--sa-ok/warn/rec/info`，微信彩色状态语义）+ `currentColor`；`color` 属性覆盖保持微信语义；API（`type/size/color`）零迁移。`built-in-components` 新增依赖 `@proteus-vue/icons`（esbuild `--external` + pnpm 链接 + lockfile）。
+**③ 门禁**：`check-icons.mjs` 加**判据 ⑫**——built-in Web `<icon>` shim 必须 `import '@proteus-vue/icons'` + 零字面 hex（破坏性验证：注入 hex ⇒ 当场红，还原绿）。
+**④ 诚实边界（具名，非"跳过"）**：① `website/src/components/ComponentGlyph.vue` 是**组件总览画廊**（73 个**手绘组件微缩示意** `viewBox 0 0 120 80`，如 p-grid 画成九宫格），**不是图标集**——其 `p-icon` 条目是画"图标组件长啥样"，替换为单枚 icon 会破坏画廊图示语义 ⇒ **不属第二套图标实现**，不动；② `packages/web/src/wx.ts` 的 `showToast` 内联 glyph 是**组件内部视觉处理**（微信 toast 白色细勾/白底黑叹号——依赖 toast 黑底上下文的非图标集配色），改走 Keryx 会**改变微信语义** ⇒ 具名保留（真要收另起「组件内部 glyph」批）。
+**⑤ 教训**：**"第二套实现"要按"语义是否相同"判**，不按"是否含 SVG"判——手绘的**组件示意图**与**图标集**是两回事；收口前先 grep 消费上下文，避免把画廊/组件内视觉误当图标重复。

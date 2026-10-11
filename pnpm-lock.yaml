@@ -379,6 +379,9 @@ importers:
 
   packages/built-in-components:
     dependencies:
+      '@proteus-vue/icons':
+        specifier: 0.3.0-beta.28
+        version: link:../icons
       '@proteus-vue/shared':
         specifier: 0.3.0-beta.28
         version: link:../shared

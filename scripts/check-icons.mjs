@@ -117,6 +117,19 @@ for (const name of ICON_NAMES) {
   if (iconByName(`${name}-filled`).d !== ICON_SET[name].filled) problems.push(`图标 ${name} 的 -filled 变体解析错误`)
 }
 
+// 判据 ⑫：微信 <icon> Web shim **单源**（§8 P1 收口——淘汰"手绘仿微信 SVG"第二套实现）
+{
+  const shim = path.join(ROOT, 'packages/built-in-components/src/components/icon.ts')
+  if (fs.existsSync(shim)) {
+    const s = fs.readFileSync(shim, 'utf-8')
+    const code = s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
+    if (!/from\s+['"]@proteus-vue\/icons['"]/.test(code)) problems.push('built-in Web <icon> shim 未经 `@proteus-vue/icons` 渲染（第二套实现未收口）')
+    const shimHex = code.match(/#[0-9a-fA-F]{3,8}\b/g)
+    if (shimHex && shimHex.length) problems.push(`built-in Web <icon> shim 出现字面 hex（§6：只允许 token/currentColor）：${shimHex.slice(0, 6).join(' ')}`)
+    if (/stroke-width\s*[:=]/.test(code) && !/from\s+['"]@proteus-vue\/icons['"]/.test(code)) problems.push('built-in Web <icon> shim 含手绘描边（第二套实现）')
+  }
+}
+
 if (problems.length) {
   console.error(`✗ Keryx 图标门禁未过（${problems.length}）：`)
   for (const p of problems.slice(0, 40)) console.error(`  - ${p}`)
