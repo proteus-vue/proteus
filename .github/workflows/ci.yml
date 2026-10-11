@@ -33,6 +33,12 @@ jobs:
       - name: 类型检查（vue-tsc 全项目，含 packages/*）
         run: npx vue-tsc --noEmit
 
+      - name: 宪法 token 门禁（★Proteus UI：token 单源一致 + 工程无私增 + 浅/深 AA）
+        run: pnpm run check:tokens
+
+      - name: Keryx 图标库门禁（★数据法则 + 生成物漂移：内核可吃/24 网格 [0,24]/kebab/类别/双体系/零 hex）
+        run: pnpm run check:icons
+
       - name: 示例工程类型检查（examples 独立 tsconfig，完整工程形态）
         run: cd examples && npx vue-tsc --noEmit -p tsconfig.json
 
