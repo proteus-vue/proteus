@@ -126,7 +126,8 @@ final class ProteusTabChrome {
     }
 
     private func build(in parent: UIView) -> UIView {
-        let h = CGFloat((spec["height"] as? NSNumber)?.doubleValue ?? 52)   // 内容区高
+        // 内容区高：优先 contentHeight（= max(height, 内容块高)；字号大时撑高）——问题1/字号可变
+        let h = CGFloat((spec["contentHeight"] as? NSNumber)?.doubleValue ?? (spec["height"] as? NSNumber)?.doubleValue ?? 52)
         let total = h + safeBottom                                          // 栏总高（含安全区底色）
         let w = parent.bounds.width
         let bar = UIView(frame: CGRect(x: 0, y: parent.bounds.height - total, width: w, height: total))
@@ -135,35 +136,45 @@ final class ProteusTabChrome {
         let line = UIView(frame: CGRect(x: 0, y: 0, width: w, height: 1.0 / UIScreen.main.scale))
         line.backgroundColor = specColor("line", 0xDCDFE5)
         bar.addSubview(line)
-        // ★★内容块几何（2026-10-11 · 问题1 修复）：图标+间距+文字**整体在内容区（h）内垂直居中**——
-        //   对齐 Web `.sa-tabbar__item`（height:52 + flex column + justify-content:center）。
-        //   此前 iOS 用硬编码 y=6/30（不居中）⇒ 与另两端三种间距。
-        let iconH: CGFloat = 22
+        // ★★内容块 = 垂直 UIStackView（图标 + 间距 + 文案）**整体在内容区内居中**——
+        //   用 **intrinsic 尺寸 + centerY 约束**（不是硬编码块高）：图标/文案**字号变大时块高自适应**，
+        //   上下间距保持相等（对齐 Web `.sa-tabbar__item`：flex column + justify-content:center）。
+        //   ★为什么不用硬编码 blockH：字号可变 ⇒ 硬编码块高会导致"块位置按旧高算 ⇒ 不居中 + 视觉溢出"。
         let gapY: CGFloat = 2
-        let labelH: CGFloat = 14
-        let blockH = iconH + gapY + labelH
-        let blockTop = max(0, (h - blockH) / 2)
+        let labelSize = CGFloat((spec["labelSize"] as? NSNumber)?.doubleValue ?? 10)
         for (i, item) in items.enumerated() {
             let bw = w / CGFloat(max(1, items.count))
             let cell = UIView(frame: CGRect(x: bw * CGFloat(i), y: 0, width: bw, height: h))
             cell.tag = 771000 + i
             cell.accessibilityIdentifier = item.name
+            let stack = UIStackView()
+            stack.axis = .vertical
+            stack.alignment = .center
+            stack.spacing = gapY
+            stack.translatesAutoresizingMaskIntoConstraints = false
+            var iconView: UIView? = nil
             // 图标（可无——没声明 glyph 就不画）
             if let glyphView = makeGlyphView(item: item, width: bw) {
                 glyphView.tag = 771193   // ★移出 cell 段（cell = 771000..771099；同 #799 族坑）
-                glyphView.frame = CGRect(x: 0, y: blockTop, width: bw, height: iconH)
-                cell.addSubview(glyphView)
+                glyphView.translatesAutoresizingMaskIntoConstraints = false
+                stack.addArrangedSubview(glyphView)
+                iconView = glyphView
             }
-            // 文案
-            let tx = UILabel(frame: CGRect(x: 0, y: blockTop + iconH + gapY, width: bw, height: labelH))
+            // 文案（UILabel 用 intrinsic 行高——字号变 ⇒ 块高随之变）
+            let tx = UILabel()
             tx.tag = 771194   // ★移出 cell 段
             tx.text = item.label
-            tx.font = UIFont.systemFont(ofSize: CGFloat((spec["labelSize"] as? NSNumber)?.doubleValue ?? 10))
+            tx.font = UIFont.systemFont(ofSize: labelSize)
             tx.textAlignment = .center
-            cell.addSubview(tx)
-            // 角标（声明了 badge>0 才画；规格几何取自 tabSpec.badge）
+            stack.addArrangedSubview(tx)
+            cell.addSubview(stack)
+            NSLayoutConstraint.activate([
+                stack.centerXAnchor.constraint(equalTo: cell.centerXAnchor),
+                stack.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+            ])
+            // 角标（声明了 badge>0 才画）：锚到图标右上——随内容块**一起移动**（块居中后不脱位）
             if item.badge > 0 {
-                let bd = UILabel(frame: CGRect(x: bw / 2 + 4, y: 4, width: 16, height: 16))
+                let bd = UILabel()
                 bd.tag = 771195   // ★移出 cell 段
                 bd.text = item.badge > 99 ? "99+" : "\(item.badge)"
                 bd.font = UIFont.systemFont(ofSize: CGFloat(badgeSpecNum("fontSize", 11)), weight: .semibold)
@@ -172,7 +183,15 @@ final class ProteusTabChrome {
                 bd.backgroundColor = specColor("badgeBg", 0xD64545)
                 bd.layer.cornerRadius = CGFloat(badgeSpecNum("radius", 8))
                 bd.layer.masksToBounds = true
+                bd.translatesAutoresizingMaskIntoConstraints = false
                 cell.addSubview(bd)
+                let anchor = iconView ?? stack
+                NSLayoutConstraint.activate([
+                    bd.centerXAnchor.constraint(equalTo: anchor.trailingAnchor, constant: -6),
+                    bd.centerYAnchor.constraint(equalTo: anchor.topAnchor, constant: 4),
+                    bd.heightAnchor.constraint(equalToConstant: 16),
+                    bd.widthAnchor.constraint(greaterThanOrEqualToConstant: 16),
+                ])
             }
             let tap = UITapGestureRecognizer(target: self, action: #selector(onItemTap(_:)))
             cell.addGestureRecognizer(tap)
@@ -190,11 +209,13 @@ final class ProteusTabChrome {
         let frame = CGRect(x: 0, y: 0, width: bw, height: 22)   // ★frame 由 build 统一设（内容块居中）
         if glyph.hasPrefix("sym:") {
             let sysName = String(glyph.dropFirst(4))
-            if let img = UIImage(systemName: sysName) {
+            let cfg = UIImage.SymbolConfiguration(pointSize: size)
+            // ★用 withConfiguration 建图：UIImageView 的 **intrinsicContentSize 随字号**（stack 居中才自适应）
+            if let img = UIImage(systemName: sysName, withConfiguration: cfg) {
                 let iv = UIImageView(image: img)
                 iv.frame = frame
                 iv.contentMode = .center
-                iv.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: size)
+                iv.preferredSymbolConfiguration = cfg
                 return iv
             }
             // 系统符号名无效 ⇒ 不画（不静默画点——旧漂移形态已禁）
@@ -227,7 +248,7 @@ final class ProteusTabChrome {
     /// 尺寸校正（父视图 bounds 变化后——如布局/安全区就绪的二次渲染）。
     private func layoutBar() {
         guard let bar = bar, let parent = host else { return }
-        let h = CGFloat((spec["height"] as? NSNumber)?.doubleValue ?? 52)
+        let h = CGFloat((spec["contentHeight"] as? NSNumber)?.doubleValue ?? (spec["height"] as? NSNumber)?.doubleValue ?? 52)
         let total = h + safeBottom
         let w = parent.bounds.width
         if bar.frame.width != w || bar.frame.height != total || bar.frame.origin.y != parent.bounds.height - total {

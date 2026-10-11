@@ -96,7 +96,9 @@ export struct ProteusTabChrome {
         if (typeof sp['line'] === 'string') this.tbLine = sp['line'] as string;
         if (typeof sp['surface'] === 'string') this.tbSurface = sp['surface'] as string;
         if (typeof sp['badgeBg'] === 'string') this.tbBadge = sp['badgeBg'] as string;
-        if (typeof sp['height'] === 'number') this.tbHeight = sp['height'] as number;
+        // 内容区高：优先 contentHeight（= max(height, 内容块高)；字号大时撑高）——问题1/字号可变
+        if (typeof sp['contentHeight'] === 'number') this.tbHeight = sp['contentHeight'] as number;
+        else if (typeof sp['height'] === 'number') this.tbHeight = sp['height'] as number;
         if (typeof sp['iconSize'] === 'number') this.tbIconSize = sp['iconSize'] as number;
         if (typeof sp['labelSize'] === 'number') this.tbLabelSize = sp['labelSize'] as number;
         const bd = sp['badge'] as Record<string, Object> | undefined;

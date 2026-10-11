@@ -17,11 +17,14 @@
 // 【诚实边界】Web/MP **不消费本常量**（它们用各自 CSS 引擎渲染 `.sa-tabbar`）；本常量是**App 自绘端的
 //   共享规格**。Web CSS 是基准，本常量须与它一致（门禁比对 `.sa-tabbar` 的字面值）。
 export interface TabBarSpec {
-  /** **内容区**栏高（逻辑像素）——图标/文字作为一个内容块在**此高度内垂直居中**。
-   *  ★不含底部安全区：各端渲染高度 = height + safeBottom，安全区是内容区**下方**的纯底色
-   *  （Web 基准 `.sa-tabbar`：`height: calc(52px + safe)` + `padding-bottom: safe` +
-   *  `__item`（52px）居中 ⇒ 内容只在 52 内居中，safe 只是底色延伸）。 */
+  /** **内容区最小高**（逻辑像素）——内容块（图标 + 间距 + 文案）**至少**占这么高。
+   *  ★不含底部安全区：各端渲染高度 = 内容区高 + safeBottom，安全区是内容区**下方**的纯底色
+   *  （Web 基准 `.sa-tabbar`：`height: calc(52px + safe)` + `padding-bottom: safe` + 内容居中）。 */
   height: number
+  /** **内容区有效高** = `max(height, 内容块自然高)`——**唯一计算点**（三端读同一值，不各算各的）。
+   *  ★字号/图标可变（用户 2026-10-11「不可能固定文字和图标大小」）：实际用此值作内容区高，
+   *    正常字号 = height（零视觉变化）；字号大时撑高 ⇒ 内容不裁切、上下间距仍相等。 */
+  contentHeight: number
   /** 底色（CSS 颜色字面量） */
   surface: string
   /** 顶边线色 */
@@ -40,15 +43,31 @@ export interface TabBarSpec {
   badge: { radius: number; fontSize: number; offsetX: number; offsetY: number; padX: number }
 }
 
+/** 内容区基准高（Web `.sa-tabbar` 的 52px 内容区）。 */
+const CONTENT_MIN = 52
+/** 图标字号（逻辑像素）。 */
+const ICON_SIZE = 19
+/** 文案字号（逻辑像素）。 */
+const LABEL_SIZE = 10
+/** 图标/文案行高系数（通用）：图标行高 ≈ 1.2×字号；文案行高 ≈ 1.2×字号。 */
+const LINE_FACTOR = 1.2
+/** 图标行与文案行之间的间距（逻辑像素）——与三端 chrome 的 stack spacing 一致。 */
+const ICON_LABEL_GAP = 2
+
 /** App 壳 tab 栏视觉规格（基准 = superapp/App.vue `.sa-tabbar` + global.css token）。 */
 export const TAB_BAR_SPEC: TabBarSpec = {
-  height: 52,
+  height: CONTENT_MIN,
   surface: '#ffffff',
   line: '#dcdfe5',
   brand: '#5b5bd6',
   text3: '#5f6673',
   badgeBg: '#d64545',
-  iconSize: 19,
-  labelSize: 10,
+  iconSize: ICON_SIZE,
+  labelSize: LABEL_SIZE,
   badge: { radius: 8, fontSize: 11, offsetX: 4, offsetY: 4, padX: 4 },
+  // 内容区有效高：正常字号 = 52；字号/图标变大 ⇒ 撑高（保证不裁切 + 上下对称）。**唯一计算点**。
+  contentHeight: Math.max(
+    CONTENT_MIN,
+    Math.round(ICON_SIZE * LINE_FACTOR + ICON_LABEL_GAP + LABEL_SIZE * LINE_FACTOR),
+  ),
 }
