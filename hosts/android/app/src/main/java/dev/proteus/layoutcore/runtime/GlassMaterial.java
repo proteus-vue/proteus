@@ -84,19 +84,21 @@ public final class GlassMaterial {
             + "    half4 col = acc;\n"
             // ④ 磨砂去饱和 + 提彩 + 微对比
             + "    half lum = dot(col.rgb, half3(0.299, 0.587, 0.114));\n"
-            + "    col.rgb = mix(col.rgb, half3(lum), half(0.50));\n"
+            + "    col.rgb = mix(col.rgb, half3(lum), half(0.62));\n"
             + "    col.rgb = mix(half3(lum), col.rgb, half(saturation));\n"
             + "    col.rgb = (col.rgb - 0.5) * half(contrast) + 0.5;\n"
-            // ⑤ tint + 磨砂白 frost
+            // ⑤ tint + 磨砂白 frost（iOS 更奶白去饱和）
             + "    col.rgb = mix(col.rgb, col.rgb * half3(tint.rgb) * 2.0, half(tint.a));\n"
-            + "    col.rgb = mix(col.rgb, half3(0.99, 0.995, 1.0), half(0.30 + tint.a * 0.6));\n"
-            // ⑥ 光照：Fresnel + 法线点乘光源（双瓣）—— 贴边亮，向内衰减
+            + "    col.rgb = mix(col.rgb, half3(0.99, 0.995, 1.0), half(0.62 + tint.a * 0.3));\n"
+            // ⑥ 光照：Fresnel + 法线·光源（双瓣）；★顶部加权（光来自上方——侧/底几乎不亮 = iOS）
+            + "    float uvTop = clamp((coord.y - rectOrigin.y) / size.y, 0.0, 1.0);\n"
+            + "    float topW = 0.15 + 0.85 * (1.0 - uvTop);\n"
             + "    float cosI = inversesqrt(1.0 + slope * slope);\n"
             + "    float f0 = (1.5 - 1.0) / (1.5 + 1.0); f0 *= f0;\n"
             + "    float fres = f0 + (1.0 - f0) * pow(max(1.0 - cosI, 0.0), 5.0);\n"
             + "    float facing = max(dot(n, normalize(lightDir)), 0.0);\n"
             + "    float bevelMask = 1.0 - smoothstep(0.0, 0.35, e);\n"           // 亮带仅在外缘
-            + "    float rim = (pow(facing, 6.0) * specular + fres * 0.6) * bevelMask;\n"
+            + "    float rim = (pow(facing, 6.0) * specular + fres * 0.22) * bevelMask * topW;\n"
             + "    col.rgb = min(col.rgb + half3(rim), half3(1.0));\n"
             + "    col.a = 1.0;\n"
             + "    return col;\n"
@@ -141,7 +143,7 @@ public final class GlassMaterial {
             // ★边缘峰值位移：调研守恒 refractionAmount ≈ 2×倒角带宽；带宽 in-shader = min(size)*0.11
             //   ⇒ 深度 = min(size)*0.22（此前多乘一个 2 ⇒ 位移过大、糊成一片）
             sh.setFloatUniform("refractDepthPx", Math.min(w, h) * 0.22f);
-            sh.setFloatUniform("specular", 0.5f);         // 边缘高光（法线点乘光源）
+            sh.setFloatUniform("specular", 0.18f);        // 边缘高光（subtle，顶部加权）
             sh.setFloatUniform("contrast", 1.0f);         // 中性
             sh.setFloatUniform("lightDir", -0.35f, -0.94f); // 光来自上偏左
             float a = ((spec.tint >>> 24) & 0xFF) / 255f;
