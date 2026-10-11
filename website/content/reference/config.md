@@ -118,10 +118,10 @@ wx.router 自定义路由（转场 builders）
 
 ### `router.tabBar`
 
-- **类型**：`{ color?: string selectedColor?: string list: Array<{ name: string text: string icon?: string }> }`
+- **类型**：`{ color?: string selectedColor?: string list: Array<{ name: string text?: string icon?: string glyph?: string badge?: number }> }`
 - **必填**：否
 
-tabBar 声明（list.name 对应路由名；缺省按 meta.isTab 推导）
+tabBar 声明（list.name 对应路由名；缺省按 meta.isTab 推导）——**全端 tab 唯一声明面**： App 端由 gen-routes 在**生成期算成最终值**（auto-routes 的 `tabItems`：名字/文案/字形）， 宿主只渲染、不再合并（B · 能力归 runtime——合并/缺省的单一计算点在生成期）。
 
 ### `router.tabBar.color`
 
@@ -139,7 +139,7 @@ tabBar 声明（list.name 对应路由名；缺省按 meta.isTab 推导）
 
 ### `router.tabBar.list`
 
-- **类型**：`Array<{ name: string text: string icon?: string }>`
+- **类型**：`Array<{ name: string text?: string icon?: string glyph?: string badge?: number }>`
 - **必填**：是
 
 tab 列表（顺序即展示顺序；`name` 对应路由名）
@@ -154,16 +154,30 @@ tab 列表（顺序即展示顺序；`name` 对应路由名）
 ### `router.tabBar.list.<entry>.text`
 
 - **类型**：`string`
-- **必填**：是
+- **必填**：否
 
-tab 文案
+tab 文案（可省 ⇒ 回退该页 meta.title ⇒ 路由名）——App 端最终值由 gen-routes 生成期算完
 
 ### `router.tabBar.list.<entry>.icon`
 
 - **类型**：`string`
 - **必填**：否
 
-图标路径（可选）
+MP 图标路径（app.json 的 iconPath，图片文件；如 `/static/tab-home.png`）
+
+### `router.tabBar.list.<entry>.glyph`
+
+- **类型**：`string`
+- **必填**：否
+
+App 端字形：符号字符（如 `⌂`）或 `sym:<name>` 系统符号语义名（各端 runtime 自带映射）。Web/MP 不消费
+
+### `router.tabBar.list.<entry>.badge`
+
+- **类型**：`number`
+- **必填**：否
+
+App 端静态角标数（>0 显示；如未读数 3）。动态更新（运行期 setBadge）为后续通道
 
 ### `router.pages`
 
