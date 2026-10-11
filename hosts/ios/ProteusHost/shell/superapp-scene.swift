@@ -50,14 +50,11 @@ final class SuperappScene: NSObject {
     private static weak var rtHostRef: SuperappRuntimeHost?
     private static var container: UIView?
     private static var tabNames: [String] = []
-    // ★★B2（G1）：tab 栏视觉规格（共享，state.tabSpec）——宿主只读规格建视图（不再硬编码）。
-    //   缺省值与 render-backend 的 TAB_BAR_SPEC 同（基准 = superapp/App.vue .sa-tabbar + token）。
-    private static var tb: [String: Any] = [:]
-    private static var tbIcons: [String: String] = [:]
-    private static var tbLabels: [String: String] = [:]
+    // ★★★B · 能力归 runtime（决策 #800）：**tab 栏 chrome 唯一实现在 runtime**——本壳只喂 state、
+    //   提供切屏出口（tabNames 仅剩 drive/报告用途；内容/样式/角标全由 chrome 从 state 解析）。
+    private static var chrome = ProteusTabChrome()
     /** ★★★逐屏截图：全部屏名（boot 回包 / registry.screens 的键——验收项目无 tab 时用）。 */
     private static var allScreenNames: [String] = []
-    private static var tabLabels: [String: String] = [:]
     private static var switchLog: [[String: Any]] = []
     private static var driveLog: [[String: Any]] = []
     /// ★B1 判据（2026-10-07）：`--tap=x,y` 注入模式（走注入链后落报告自退，不走 drive 时间链）
@@ -113,7 +110,7 @@ final class SuperappScene: NSObject {
         readTabRegistry()
         // ⑥ 上屏入口页 + 建 Tab 栏
         renderCurrent()
-        buildTabBar()
+        setupTabChrome()
         // ★★★安全区修复（用户抓出 iOS 首页未避开状态栏）：`run` 在**布局前**同步调用 ⇒ 此刻
         //   `view.safeAreaInsets` 尚未就绪 ⇒ `--pf-inset-top`=0 ⇒ 内容压状态栏。
         //   ⇒ 下一 runloop（布局完成后）**重渲一次**（与 Android `contentHost.post` 同义；非盲等——
@@ -357,12 +354,8 @@ final class SuperappScene: NSObject {
               let d = st.data(using: .utf8),
               let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] else { return }
         tabNames = (o["tabs"] as? [String]) ?? []
-        tabLabels = (o["tabLabels"] as? [String: String]) ?? [:]
-        if let sp = o["tabSpec"] as? [String: Any] {
-            tb = sp
-            tbIcons = (sp["icons"] as? [String: String]) ?? [:]
-            tbLabels = (sp["labels"] as? [String: String]) ?? [:]
-        }
+        // ★★★B（决策 #800）：tab 渲染数据（tabItems/tabSpec/current）由 runtime 的 ProteusTabChrome
+        //   从 state 解析并渲染——壳不再持有任何 tab 内容/样式字段（合并已在生成期完成）。
         // ★★★逐屏截图：全部屏名（boot 回包 `screens`——验收项目无 tab 时用）
         if let scr = o["screens"] as? [String], !scr.isEmpty {
             Self.allScreenNames = scr
@@ -410,8 +403,8 @@ final class SuperappScene: NSObject {
             renderOut = String(out.prefix(160))
         }
         NSLog("[proteus] SUPERAPP_RENDER page=%@ runtime=%@", usePage, renderOut)
-        // ★重绘后把 tab 栏提到最上层（自绘每次重建层树，可能压住它——见 buildTabBar 层级注释）
-        if let p = tabBarParent(), let bar = p.viewWithTag(771001) { p.bringSubviewToFront(bar) }
+        // ★重绘后刷新 tab 栏（chrome 内部 bringToFront——自绘每次重建层树，可能压住它）
+        refreshChrome()
     }
 
     // ── Tab 栏（真实 UIButton · iOS 原生 chrome） ──
@@ -423,99 +416,21 @@ final class SuperappScene: NSObject {
     ///     tab 栏（实测：iOS 截图完全无 tab 栏）。加到 superview ⇒ 层级永远在自绘层之上。
     private static func tabBarParent() -> UIView? { container?.superview ?? container }
 
-    private static func buildTabBar() {
+    /// ★★★B（决策 #800）：tab 栏 = runtime `ProteusTabChrome`（**唯一实现**）——本壳只做两件事：
+    ///   ① 提供父视图（`container.superview`——自绘层之上）；② 提供切屏出口（onTap → switchTab）。
+    private static func setupTabChrome() {
         guard let parent = tabBarParent() else { return }
-        // ★★全端对齐批（2026-10-05 · css-conformance 视觉验收抓出）：**无 tab 的应用不建 tab 栏**——
-        //   此前无条件建 52pt 白底条 ⇒ 验收项目（tabs=[]）底部出现一条与 Web 基准不符的白带
-        //   （"页面未铺满"的真相）。空 tab 语义 = 无 tabBar（与 MP 端"未声明 tabBar 就无 tabBar"同源）。
-        guard !tabNames.isEmpty else { return }
-        let h = CGFloat((tb["height"] as? NSNumber)?.doubleValue ?? 56)
-        let w = parent.bounds.width
-        let barY = parent.bounds.height - h
-        let bar = UIView(frame: CGRect(x: 0, y: barY, width: w, height: h))
-        bar.backgroundColor = specColor("surface", 0xFFFFFF)
-        bar.tag = 771001
-        // 顶边框（Web: border-top 1px --sa-line）
-        let line = UIView(frame: CGRect(x: 0, y: 0, width: w, height: 1.0 / UIScreen.main.scale))
-        line.backgroundColor = specColor("line", 0xDCDFE5)
-        bar.addSubview(line)
-        let current = currentName()
-        let unread = imUnreadValue()
-        for (i, name) in tabNames.enumerated() {
-            let bw = w / CGFloat(max(1, tabNames.count))
-            let item = UIView(frame: CGRect(x: bw * CGFloat(i), y: 0, width: bw, height: h))
-            item.tag = 771000 + i
-            let on = (current == name)
-            let tint = on ? specColor("brand", 0x5B5BD6) : specColor("text3", 0x5F6673)
-            // 图标（19px，文本呈现——加 U+FE0E 变体选择符，避免渲染成彩色 emoji）
-            let ic = UILabel(frame: CGRect(x: 0, y: 8, width: bw, height: 22))
-            ic.text = tabIcon(name) + "\u{FE0E}"
-            ic.font = UIFont.systemFont(ofSize: CGFloat((tb["iconSize"] as? NSNumber)?.doubleValue ?? 19))
-            ic.textColor = tint
-            ic.textAlignment = .center
-            item.addSubview(ic)
-            // 文字（10px）
-            let tx = UILabel(frame: CGRect(x: 0, y: 30, width: bw, height: 14))
-            tx.text = tabShortLabel(name)
-            tx.font = UIFont.systemFont(ofSize: CGFloat((tb["labelSize"] as? NSNumber)?.doubleValue ?? 10))
-            tx.textColor = tint
-            tx.textAlignment = .center
-            item.addSubview(tx)
-            // IM 角标（Web: rec #d64545，min-width 16、高 16、圆角 8、白字 11）
-            if name == "messages" && unread > 0 {
-                let badge = UILabel(frame: CGRect(x: bw / 2 + 4, y: 4, width: 16, height: 16))
-                badge.text = unread > 99 ? "99+" : "\(unread)"
-                badge.font = UIFont.systemFont(ofSize: 11, weight: .semibold)
-                badge.textColor = .white
-                badge.textAlignment = .center
-                badge.backgroundColor = specColor("badgeBg", 0xD64545)
-                badge.layer.cornerRadius = CGFloat(badgeSpecNum("radius", 8))
-                badge.layer.masksToBounds = true
-                item.addSubview(badge)
-            }
-            let tap = UITapGestureRecognizer(target: self, action: #selector(onTabItemTap(_:)))
-            item.addGestureRecognizer(tap)
-            item.isUserInteractionEnabled = true
-            bar.addSubview(item)
-        }
-        parent.addSubview(bar)
+        chrome.onTap = { name in switchTab(name, via: "user-tap") }
+        chrome.attach(in: parent)
+        refreshChrome()
     }
 
-    @objc private static func onTabItemTap(_ g: UITapGestureRecognizer) {
-        guard let item = g.view else { return }
-        let idx = item.tag - 771000
-        guard idx >= 0, idx < tabNames.count else { return }
-        switchTab(tabNames[idx], via: "user-tap")
-    }
-
-    // ★B2（G1）：图标字形来自共享规格（state.tabSpec.icons），缺省回退。
-    private static func tabIcon(_ name: String) -> String {
-        let v = tbIcons[name]
-        return (v?.isEmpty == false) ? v! : "•"
-    }
-    // 规格色（#rrggbb → UIColor）；缺省 = fallback。
-    private static func specColor(_ key: String, _ fallback: UInt32) -> UIColor {
-        if let hex = tb[key] as? String, let c = parseHexColor(hex) { return c }
-        return UIColor(red: CGFloat((fallback >> 16) & 0xFF) / 255.0,
-                       green: CGFloat((fallback >> 8) & 0xFF) / 255.0,
-                       blue: CGFloat(fallback & 0xFF) / 255.0, alpha: 1)
-    }
-    // 规格数（badge 子对象）；缺省 fallback。
-    private static func badgeSpecNum(_ key: String, _ fallback: Double) -> Double {
-        guard let bd = tb["badge"] as? [String: Any] else { return fallback }
-        return (bd[key] as? NSNumber)?.doubleValue ?? fallback
-    }
-    private static func tabShortLabel(_ name: String) -> String {
-        if let v = tbLabels[name], !v.isEmpty { return v }
-        if let v = tabLabels[name], !v.isEmpty { return v }
-        return name
-    }
-    /** IM 未读角标初值（与 App.vue 壳同源；后续接实时运行时改由状态驱动） */
-    private static func imUnreadValue() -> Int { 3 }
-
-    @objc private static func onTabTap(_ sender: UIButton) {
-        guard let name = sender.accessibilityIdentifier else { return }
-        switchTab(name, via: "user-tap")
+    /// 从 JS state 取运行期数据 → chrome 渲染（解析/合并/兜底全在 runtime；本壳零 tab 逻辑）。
+    private static func refreshChrome() {
+        guard let st = evalJs?("__proteusSuperappState()"),
+              let d = st.data(using: .utf8),
+              let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] else { return }
+        chrome.applyState(o)
     }
 
     // ── drive（验证脚本用：host 驱动切 tab） ──
@@ -526,7 +441,7 @@ final class SuperappScene: NSObject {
         DispatchQueue.main.async {
             let cur = currentName()
             renderCurrent()
-            highlightTab(cur)
+            refreshChrome()
             switchLog.append(["tap": name, "current": cur, "ok": cur == name, "via": "drive"])
             // 末屏（或每屏）截图——snapshotName 由调用方按屏名设置
             SelfDrawBridge.snapshotName = "shot-\(name)"
@@ -547,7 +462,7 @@ final class SuperappScene: NSObject {
         DispatchQueue.main.async {
             let cur = currentName()
             renderCurrent()
-            highlightTab(cur)
+            refreshChrome()
             switchLog.append(["tap": name, "current": cur, "ok": cur == name, "via": via])
         }
     }
@@ -557,21 +472,8 @@ final class SuperappScene: NSObject {
         _ = evalJs?("__proteusSuperappBack()")
         DispatchQueue.main.async {
             renderCurrent()
-            highlightTab(currentName())
+            refreshChrome()
             switchLog.append(["tap": "back", "current": currentName(), "ok": true, "via": "swipe-back"])
-        }
-    }
-
-    private static func highlightTab(_ current: String) {
-        guard let bar = tabBarParent()?.viewWithTag(771001) else { return }
-        let onC = UIColor(red: 0x5B/255.0, green: 0x5B/255.0, blue: 0xD6/255.0, alpha: 1)
-        let offC = UIColor(red: 0x5F/255.0, green: 0x66/255.0, blue: 0x73/255.0, alpha: 1)
-        for (i, name) in tabNames.enumerated() {
-            guard let item = bar.viewWithTag(771000 + i) else { continue }
-            let c = (name == current) ? onC : offC
-            for sub in item.subviews {
-                if let l = sub as? UILabel, sub.tag != 771002 { l.textColor = c }
-            }
         }
     }
 

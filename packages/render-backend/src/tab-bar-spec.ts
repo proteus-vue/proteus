@@ -4,6 +4,12 @@
 //   ⇒ 改一处要改三处，且必然漂移。本模块把该规格收敛成**一份共享常量**，随运行期 `state` 下发给宿主，
 //   宿主只"读规格 → 建原生视图"（不再各写一遍语义）。
 //
+// 【★★B · 能力归 runtime（2026-10-11 · 决策 #800）】本规格**只含视觉面**（颜色/尺寸/角标几何）。
+//   每项的**内容**（名字/文案/字形/角标数）不在这里——那是项目声明（`router.tabBar.list` 的
+//   text/glyph/badge），由 gen-routes 在**生成期合并成最终值**（auto-routes 的 `tabItems`），
+//   宿主只渲染。历史教训：icons/labels 曾硬编码 `index/messages/mine` 三键 ⇒ dactyl 的
+//   l2..l6 全部退化成 "•"，且"首页"压过项目真值（真机截图取证）。
+//
 // 【★基准 = Web（决策 #508）】规格值取自 Web 真源 `superapp/App.vue` 的 `.sa-tabbar` + `global.css` token：
 //   surface #ffffff · 顶线 #dcdfe5 · 选中 brand #5b5bd6 · 未选中 text-3 #5f6673 · 角标 rec #d64545。
 //   门禁 `check:host-tab-spec` 钉住"本常量 == 三端宿主读的值"（防漂移）。
@@ -29,13 +35,6 @@ export interface TabBarSpec {
   labelSize: number
   /** IM 角标规格 */
   badge: { radius: number; fontSize: number; offsetX: number; offsetY: number; padX: number }
-  /**
-   * 图标字形（符号/emoji；宿主按名字查）。★Web 用 SVG/字体图标——此处给 App 端的**字形回退**。
-   *   （U+FE0E 变体选择符让 emoji 走文本呈现——见各宿主实现。）
-   */
-  icons: Record<string, string>
-  /** 标签文案（符号键 → 文案；缺省用 tabLabels 或键名） */
-  labels: Record<string, string>
 }
 
 /** App 壳 tab 栏视觉规格（基准 = superapp/App.vue `.sa-tabbar` + global.css token）。 */
@@ -49,6 +48,4 @@ export const TAB_BAR_SPEC: TabBarSpec = {
   iconSize: 19,
   labelSize: 10,
   badge: { radius: 8, fontSize: 11, offsetX: 4, offsetY: 4, padX: 4 },
-  icons: { index: '⌂', messages: '✉', mine: '☺' },
-  labels: { index: '首页', messages: '消息', mine: '我的' },
 }

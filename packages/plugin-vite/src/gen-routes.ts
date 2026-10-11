@@ -477,6 +477,12 @@ function writeAutoRoutes(routes: RouteRecord[]): void {
   const screens = screensFromRoutes(appRoutes as never) // ★复用 app-adapter 的同一转换（铁律 #9 同源）
   const screenNames = appRoutes.map((r) => r.name)
   const tabNames = appRoutes.filter((r) => r.meta?.isTab).map((r) => r.name)
+  // ★★★B · 能力归 runtime（2026-10-11）：**tab 最终值在生成期算完**（合并/缺省的单一计算点）——
+  //   App 三端宿主只渲染 tabItems，不再各自合并（此前 iOS/Android/鸿蒙 + 参考/模板共六份实现漂移）。
+  //   优先级：router.tabBar.list[i].text > 该页 meta.title > 路由名；glyph 只在声明处。
+  //   顺序：声明了 list ⇒ 以 list 为序（并集追加未声明 isTab — 防"声明了却不显示"的静默）；
+  //   未声明 ⇒ 按 meta.isTab 推导（兼容旧工程）。
+  const tabItemsFinal = computeTabItems(appRoutes as never, rc.tabBar?.list)
 
   // ★NB3（导航体系）：`branch` 仅对 `isTab: true` 的页面有意义——写在非 tab 页 =
   //   声明了**不生效的配置**（静默失效是本仓反复抓到的缺陷形态）。登记不阻断，但要可见。
@@ -513,6 +519,9 @@ function writeAutoRoutes(routes: RouteRecord[]): void {
     '/** tab 根屏（meta.isTab）—— App 端 tab 语义（switchTab/reset）的合法目标 */',
     `export const tabNames: string[] = ${JSON.stringify(tabNames)}`,
     '',
+    '/** ★★tab 渲染最终值（App 三端宿主**只渲染**：名字/文案/字形在这里已合并完——B · 能力归 runtime） */',
+    `export const tabItems: Array<{ name: string; label: string; glyph?: string; badge?: number }> = ${JSON.stringify(tabItemsFinal, null, 2)}`,
+    '',
   ]
   // ③ 类型提示全链路：按路由名生成参数类型表（<route>.params 声明，未声明为 {}）
   // ★工厂化：改为模块扩充注入 @proteus-vue/router/types 的 RouteParamsByName 基接口（vue-router 同款模式）
@@ -535,6 +544,35 @@ function writeAutoRoutes(routes: RouteRecord[]): void {
     `[gen-routes] 已生成 ${path.relative(ROOT, outFile)}（全端统一导航产物：${routes.length} 路由 · ` +
       `${screenNames.length} App 屏 · ${tabNames.length} tab + RouteParamsByName）`,
   )
+}
+
+/**
+ * ★★★B（生成期合并）：tab 渲染最终值——**唯一计算点**（App 三端宿主只渲染）。
+ *   优先级：list[i].text > 该页 meta.title > 路由名；glyph 只在声明处（无声明 ⇒ 不产字段）。
+ *   顺序：声明 list ⇒ 按 list（并集追加"已标 isTab 但漏声明"的页，防静默丢弃）；未声明 ⇒ 按 meta.isTab。
+ */
+function computeTabItems(
+  appRoutes: Array<{ name: string; meta?: { title?: string; isTab?: boolean } }>,
+  declList: Array<{ name: string; text?: string; glyph?: string; badge?: number }> | undefined,
+): Array<{ name: string; label: string; glyph?: string; badge?: number }> {
+  const byName = new Map(appRoutes.map((r) => [r.name, r]))
+  const ordered: Array<{ name: string; text?: string; glyph?: string; badge?: number }> = []
+  if (declList && declList.length > 0) {
+    for (const it of declList) if (byName.has(it.name)) ordered.push(it)
+    for (const r of appRoutes) {
+      if (r.meta?.isTab && !ordered.some((o) => o.name === r.name)) ordered.push({ name: r.name })
+    }
+  } else {
+    for (const r of appRoutes) if (r.meta?.isTab) ordered.push({ name: r.name })
+  }
+  return ordered.map((it) => {
+    const r = byName.get(it.name)!
+    const label = it.text ?? ((r.meta?.title as string | undefined) ?? r.name)
+    const item: { name: string; label: string; glyph?: string; badge?: number } = { name: it.name, label }
+    if (it.glyph) item.glyph = it.glyph
+    if (typeof it.badge === 'number' && it.badge > 0) item.badge = it.badge
+    return item
+  })
 }
 
 /** <route>.params 类型名 → TS 类型（string/number/boolean；其他 → string + 警告） */
@@ -645,7 +683,8 @@ function writeAppJson(allPages: PageInfo[], routes: RouteRecord[]): void {
           .filter(item => byName.has(item.name))
           .map(item => {
             const r = byName.get(item.name)!
-            const entry: { pagePath: string; text: string; iconPath?: string } = { pagePath: r.path, text: item.text }
+            // ★B：text 可省 ⇒ 与 App 端**同一优先级**（meta.title > 名）——两端合并口径一处算（铁律同源）
+            const entry: { pagePath: string; text: string; iconPath?: string } = { pagePath: r.path, text: item.text ?? ((r.meta?.title as string) ?? r.name) }
             if (item.icon) entry.iconPath = item.icon
             return entry
           }),

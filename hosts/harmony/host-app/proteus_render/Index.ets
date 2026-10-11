@@ -49,3 +49,8 @@ export {
 //   任何鸿蒙壳 `import { AppRuntimeDriver } from 'proteus_render'` 一次装配即得全部能力（壳内零驱动代码）。
 //   ★构造参数 = **回调分解**（实测：ArkTS 拒收"跨 HAR 接口 + 对象字面量"⇒ 不用 host 对象形态）。
 export { AppRuntimeDriver } from './AppRuntimeDriver'
+
+// ★★★B · 能力归 runtime（决策 #800）：**tab 栏 chrome**（唯一实现）——任何鸿蒙壳
+//   `ProteusTabChrome({ stateJson, onTab })` 一次装配即得（壳零 tab 逻辑；含解析/着色/角标/字形）。
+export { ProteusTabChrome } from './TabChrome'
+export type { TabItemFinal } from './TabChrome'

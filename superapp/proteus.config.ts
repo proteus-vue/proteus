@@ -41,9 +41,11 @@ const config: ProteusConfig = {
       color: '#9a9aa5',
       selectedColor: '#5b5bd6',
       list: [
-        { name: 'index', text: '首页' },
-        { name: 'messages', text: '消息' },
-        { name: 'mine', text: '我的' },
+        // ★B（决策 #800）：App 端字形 = "sym:<name>" 系统符号语义名（iOS SF Symbols / 鸿蒙 SymbolGlyph；
+        //   Android 由 runtime 自带映射为文本字形——三端同"语义名"一份声明）。badge = 静态角标数。
+        { name: 'index', text: '首页', glyph: 'sym:house' },
+        { name: 'messages', text: '消息', glyph: 'sym:message', badge: 3 },
+        { name: 'mine', text: '我的', glyph: 'sym:person' },
       ],
     },
     // wx.router 自定义路由预设（内联进 app.js 注册）

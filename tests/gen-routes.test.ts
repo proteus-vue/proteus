@@ -207,6 +207,45 @@ describe('runGenRoutes：路由表生成全链路', () => {
     expect(tabNames).toContain('"mine"')
   })
 
+  it('★★B（#800）：tabItems 生成期合并——声明 > meta.title > 路由名；glyph/badge 透传；并集补漏', () => {
+    const root = path.join(TMP, 'tabitems-merge')
+    // 三页 isTab：index 有 meta.title；l2 有 meta.title；l3 无 title（回退路由名）
+    writeFixture(root, 'src/pages/index.vue', '<template><view>a</view></template>\n<route>\n{\n  "meta": { "title": "触即应", "isTab": true }\n}\n</route>\n')
+    writeFixture(root, 'src/pages/l2.vue', '<template><view>b</view></template>\n<route>\n{\n  "meta": { "title": "跟手", "isTab": true }\n}\n</route>\n')
+    writeFixture(root, 'src/pages/l3.vue', '<template><view>c</view></template>\n<route>\n{\n  "meta": { "isTab": true }\n}\n</route>\n')
+
+    runGenRoutes({
+      config: makeConfig({
+        router: {
+          tabBar: {
+            list: [
+              { name: 'index', glyph: '◉' },                        // 文案省 ⇒ meta.title（"触即应"）
+              { name: 'l2', text: '显式文案', glyph: '≡', badge: 3 }, // 声明优先 + 角标
+            ],
+          },
+        },
+      }),
+      root,
+    })
+
+    const auto = fs.readFileSync(path.join(root, 'src/router/auto-routes.ts'), 'utf-8')
+    const items = JSON.parse(
+      (auto.match(/export const tabItems[^=]*= (\[[\s\S]*?\])\n/) ?? ['', '[]'])[1],
+    ) as Array<{ name: string; label: string; glyph?: string; badge?: number }>
+    // 顺序：list 声明序（index/l2）+ 并集补漏（l3 已标 isTab 但漏声明 ⇒ 追加，防静默丢弃）
+    expect(items.map((i) => i.name)).toEqual(['index', 'l2', 'l3'])
+    // 优先级：声明 text > meta.title > 路由名
+    expect(items[0].label).toBe('触即应')          // list 无 text ⇒ meta.title
+    expect(items[0].glyph).toBe('◉')               // glyph 透传
+    expect(items[1].label).toBe('显式文案')        // list text 优先于 meta.title("跟手")
+    expect(items[1].badge).toBe(3)
+    expect(items[2].label).toBe('l3')              // 无 title ⇒ 路由名
+
+    // MP app.json 与 App 端同口径（text 缺失回退 meta.title）
+    const appJson = JSON.parse(fs.readFileSync(path.join(root, 'dist/mp-weixin/app.json'), 'utf-8'))
+    expect(appJson.tabBar.list[0].text).toBe('触即应')
+  })
+
   it('★NB3：branch 写在非 tab 页 ⇒ 构建期警告（登记不静默——配置了却永不生效是本仓抓过的缺陷形态）', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     try {

@@ -28,7 +28,7 @@
 
 | ID | 项 | 状态 | 判据（命令 / 文件 / 文档） | 范围 |
 |---|---|---|---|---|
-| G1 | **tab 栏视觉规格**（颜色/图标/标签映射/角标规则/高亮）共享，三端只"读规格建原生视图" | 已落地 | `file:packages/render-backend/src/tab-bar-spec.ts` | 本轮 |
+| G1 | **tab 栏能力**：视觉规格共享（颜色/尺寸/角标几何）+ **实现归各端 runtime TabChrome**（决策 #800；建栏/高亮/角标）——内容（文案/字形/角标数）由 gen-routes **生成期合并成 tabItems 最终值**，六壳只装配、零 tab 逻辑；防回归 = `pnpm check:host-tab-spec`（runtime 一实现 × 六壳零重实现，双向破坏性已验证） | 已落地 | `file:packages/render-backend/src/tab-bar-spec.ts` | 本轮 |
 | G2 | **insets → `--pf-*` 名归一**：三端实例的 `--pf-*` 字面量须 ⊆ 契约闭集（防拼错/私增） | 已落地 | `cmd:pnpm check:env-vars`（扩展：扫描 hosts/** 的 --pf-* 字面量 ⊆ 超集；破坏性验证：注入 --pf-bogus ⇒ 红） | 本轮 |
 | G3 | **手势分类**收敛到 `packages/gesture`（iOS 停止自研复刻）；各端只喂原始 down/move/up + 时间戳 | 范围外 | `file:packages/slot-runtime/src/dispatch.ts`（共享事件派发已落地） | **触摸采集/分类 = 平台原语**（目标定义里的"触摸采集"）——Android/iOS/鸿蒙触控 API 各异；跨语言事件协议属过度设计。共享层（冒泡派发 dispatch.ts）已落地。 |
 | G4 | **能力桥契约**（方法名清单 + 结果封装）抽成机器可读契约 + 薄分发器；补鸿蒙 `invoke`/能力注册 | 已落地 | `cmd:pnpm check:host-invoke-contract` | 本轮 |

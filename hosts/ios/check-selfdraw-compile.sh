@@ -32,6 +32,9 @@ HOST_SRCS=(
   "$HERE/ProteusHost/runtime/selfdraw-scene.swift"
   "$HERE/ProteusHost/runtime/host-runtime-bridge.swift"
   "$HERE/ProteusHost/runtime/interaction-feedback.swift" "$HERE/ProteusHost/runtime/superapp-runtime-host.swift"
+  # ★★★B（决策 #800）：tab 栏 chrome（runtime 唯一实现）——新文件必须进检查清单（G-39 教训：
+  #   写死清单会让新文件**悄悄不参与类型检查**）
+  "$HERE/ProteusHost/runtime/tab-chrome.swift"
   "$HERE/ProteusHost/runtime/proteus-host-controller.swift"
   "$HERE/ProteusHost/runtime/host-capabilities.swift"
   "$HERE/ProteusHost/runtime/host-lifecycle-events.swift"

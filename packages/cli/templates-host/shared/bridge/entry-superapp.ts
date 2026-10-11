@@ -63,13 +63,16 @@ interface BootResult {
   error?: string
 }
 
+/** ★★★B（生成期最终值，决策 #800）：tab 项终态（名字/文案/字形/角标已合并完；宿主只渲染）。 */
+interface TabItemFinal { name: string; label: string; glyph?: string; badge?: number }
+
 interface SuperappApp {
   router: RouterInstance
   nav: AppNavigation
   /** 进入某屏（与 Web/MP 同形：`router.push({name})`；isTab ⇒ 自动 switchTab） */
   navigate(name: string): Promise<void>
   back(): void
-  state(): { depth: number; current: string; stack: string[]; tabs: string[]; tabLabels: Record<string, string> }
+  state(): { depth: number; current: string; stack: string[]; tabs: string[]; tabLabels: Record<string, string>; tabItems: TabItemFinal[] }
   /** ★批次 44：启动（进入入口 tab）的 promise——驱动链先 await 它，避免与后续导航重入 */
   booted?: Promise<void>
 }
@@ -82,6 +85,7 @@ export function bootSuperapp(host?: SuperappHost): BootResult {
     screens: Record<string, { name: string; path: string }>
     tabNames: string[]
     tabLabels: Record<string, string>
+    tabItems?: TabItemFinal[]
     indexName: string
     routes: RouteRecord[]
   }
@@ -116,7 +120,10 @@ export function bootSuperapp(host?: SuperappHost): BootResult {
           stack: nav.stack.stack.map((s) => s.name),
           tabs: reg.tabNames,
           tabLabels: reg.tabLabels,
-          // ★B2（G1）：tab 栏视觉规格（共享）——宿主读它建原生 tab（不再各写一遍）
+          // ★★★B（决策 #800）：tab 项**最终值**（生成期合并完）——宿主唯一输入（不合并/不兜底）。
+          //   兼容：老产物无 tabItems ⇒ 由 tabNames+tabLabels 现场折（同一优先级，行为与前一致）。
+          tabItems: reg.tabItems ?? reg.tabNames.map((n) => ({ name: n, label: reg.tabLabels[n] ?? n })),
+          // ★B2（G1）：tab 栏**视觉规格**（共享）——宿主读它建原生 tab（不再各写一遍）
           tabSpec: TAB_BAR_SPEC,
           // ★★★逐屏截图装置（2026-10-05 · 拆页后每页需独立截图）：**全部屏名**——
           //   验收项目常无 tab ⇒ 宿主靠它遍历全部屏（iOS drive / Android --es screen / 鸿蒙同源）。

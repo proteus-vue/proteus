@@ -75,12 +75,9 @@ final class ProteusHostDriver {
     private var ctx: JSContext?
     /// 当前屏名（渲染后由 JS 回读；用于重载后保留屏幕）
     private(set) var currentPage = "index"
-    /// 底部 Tab 栏状态
-    private var tabNames: [String] = []
-    private var tabLabels: [String: String] = [:]
-    private var tabSpec: [String: Any] = [:]
-    private var tabIcons: [String: String] = [:]
-    private var tabBar: UIView?
+    /// ★★★B · 能力归 runtime（决策 #800）：tab 栏 chrome（解析/合并/渲染/高亮/角标**唯一实现**）——
+    ///   本壳只装配它与切屏出口；不再持有任何 tab 内容/样式字段（合并已在**生成期**算完）。
+    private var chrome = ProteusTabChrome()
 
     // ★dev DevTools 上报缓冲（决策 #693）：页面 console.* → /log；手势 → /trace；渲染后 → /tree。
     //   仅 DEV 变体产生（installDevConsoleShim / 手势回调里判 DEV）；主线程写、dev-watch 线程读（串行队列保护）。
@@ -317,10 +314,12 @@ final class ProteusHostDriver {
             NSLog("[proteus] PROTEUS_HOST_BOOT_FAIL %@", String(boot.prefix(240)))
             return "{\"ok\":false,\"error\":\"boot 失败\",\"raw\":\(jsonEscape(String(boot.prefix(240))))}"
         }
-        readTabRegistry(ctx)
-        // ④ 上屏当前屏 + 建 tab 栏
+        // ★★★B（决策 #800）：tab 栏 = runtime ProteusTabChrome（本壳仅装配 + 出口）
+        chrome.onTap = { [weak self] name in self?.navigate(to: name) }
+        chrome.attach(in: embedView)
+        refreshChrome()
+        // ④ 上屏当前屏
         let out = renderCurrent(ctx)
-        buildTabBar(in: embedView)
         // ★安全区：`start` 在布局前同步调用 ⇒ `view.safeAreaInsets` 尚未就绪 ⇒ 下一 runloop 重渲一次
         //   （"布局后重渲"是确定性事件，非盲等）。★primary:false ⇒ 不覆盖"渲染耗时"读数（决策 #698）。
         DispatchQueue.main.async { [weak self] in self?.renderCurrent(ctx, primary: false) }
@@ -356,6 +355,9 @@ final class ProteusHostDriver {
         if ProteusBuildConfig.DEV {
             if primary { lastRenderMs = Date().timeIntervalSince(t0) * 1000 }
         }
+        // ★★★B（决策 #800 · 真机截图取证）：每次渲染后刷新 tab 栏——① 修正几何（首次渲染在 layout 前，
+        //   栏以零宽 bounds 建成 ⇒ 必须每轮 layoutBar 校正）；② 高亮跟随 current；③ bringToFront。
+        refreshChrome()
         return out
     }
 
@@ -365,7 +367,7 @@ final class ProteusHostDriver {
         _ = ctx.evaluateScript("__proteusSuperappNav(\(jsonEscape(name)))")
         DispatchQueue.main.async { [weak self] in
             _ = self?.renderCurrent(ctx)
-            self?.highlightTab()
+            self?.refreshChrome()
         }
     }
 
@@ -375,7 +377,7 @@ final class ProteusHostDriver {
         _ = ctx.evaluateScript("__proteusSuperappBack()")
         DispatchQueue.main.async { [weak self] in
             _ = self?.renderCurrent(ctx)
-            self?.highlightTab()
+            self?.refreshChrome()
         }
     }
 
@@ -392,104 +394,17 @@ final class ProteusHostDriver {
         (superappState(ctx)["current"] as? String) ?? currentPage
     }
 
-    private func readTabRegistry(_ ctx: JSContext) {
+    /// ★★★B（决策 #800）：从 JS state 取运行期数据 → runtime chrome 渲染（本壳零 tab 逻辑）。
+    ///   `tabItems`（名字/文案/字形/角标）已在**生成期**由 gen-routes 合并成最终值。
+    private func refreshChrome() {
+        guard let ctx else { return }
         let o = superappState(ctx)
-        tabNames = (o["tabs"] as? [String]) ?? []
-        tabLabels = (o["tabLabels"] as? [String: String]) ?? [:]
         // ★★判据/取证（决策 #799）：tabs 读取结果——"tab 栏少了/多了"必须能当场归因（不靠猜）
-        NSLog("[proteus] CLI_TABS n=%d %@", tabNames.count, tabNames.joined(separator: ","))
-
-        if let sp = o["tabSpec"] as? [String: Any] {
-            tabSpec = sp
-            tabIcons = (sp["icons"] as? [String: String]) ?? [:]
-            // ★★★`spec.labels` 是**通用缺省**（`index/messages/mine` → 首页/消息/我的）；
-            //   应用自己的 `state.tabLabels` 才是**该项真值**（来自路由 meta）⇒ **合并而非覆盖**
-            //   （决策 #799：覆盖会丢应用标签——dactyl 的 l2..l6 全退化成裸名 "l2"，真机截图取证）。
-            //   优先级与参考宿主 `tabShortLabel` 同：spec 有该项 ⇒ 用 spec；否则用应用标签；再否则键名。
-            if let l = sp["labels"] as? [String: String] {
-                for (k, v) in l where tabLabels[k] == nil { tabLabels[k] = v }
-            }
-        }
+        let items = ProteusTabChrome.itemsFromState(o)
+        NSLog("[proteus] CLI_TABS n=%d %@", items.count, items.map { $0.name }.joined(separator: ","))
+        chrome.applyState(o)
     }
 
-    /// ★tab 文案（优先级与参考宿主同：spec.labels > 应用 state.tabLabels > 键名）。
-    private func tabShortLabel(_ name: String) -> String {
-        if let v = (tabSpec["labels"] as? [String: String])?[name], !v.isEmpty { return v }
-        if let v = tabLabels[name], !v.isEmpty { return v }
-        return name
-    }
-
-    // ── Tab 栏（原生 UIButton；无 tab 不建 —— 与 Web/MP「未声明 tabBar 即无 tabBar」同源）──
-
-    private func buildTabBar(in host: UIView) {
-        tabBar?.removeFromSuperview()
-        tabBar = nil
-        guard !tabNames.isEmpty else { return }
-        let h = CGFloat((tabSpec["height"] as? NSNumber)?.doubleValue ?? 56)
-        let w = host.bounds.width
-        let bar = UIView(frame: CGRect(x: 0, y: host.bounds.height - h, width: w, height: h))
-        bar.backgroundColor = specColor("surface", 0xFFFFFF)
-        // ★★★tag 必须脱离 771000..7710xx 段（决策 #799 根因）：highlightTab 用 viewWithTag(771000+i)
-        //   查 tab 项——而 viewWithTag **先匹配自身**；旧值 771001 恰是 i==1 的项 tag ⇒ 命中 bar 自身
-        //   ⇒ `item.subviews.forEach { removeFromSuperview() }` 把**整个 tab 栏的子视图删光**，
-        //   再只贴一个标签 ⇒ 真机只见一个居中 "l2"（数据明明是 6 个 tab；本轮真机截图+日志双证）。
-        bar.tag = 771999
-        let line = UIView(frame: CGRect(x: 0, y: 0, width: w, height: 1.0 / UIScreen.main.scale))
-        line.backgroundColor = specColor("line", 0xDCDFE5)
-        bar.addSubview(line)
-        for (i, name) in tabNames.enumerated() {
-            let bw = w / CGFloat(max(1, tabNames.count))
-            let item = UIButton(frame: CGRect(x: bw * CGFloat(i), y: 0, width: bw, height: h))
-            item.tag = 771000 + i
-            item.accessibilityIdentifier = name
-            item.addTarget(self, action: #selector(onTabTap(_:)), for: .touchUpInside)
-            bar.addSubview(item)
-        }
-        // ★★★诊断（决策 #799）：tab 栏尺寸与项数——"只画出一个 tab"要能当场归因
-        NSLog("[proteus] CLI_TABBAR_DIAG w=%f h=%f n=%d hostW=%f hostH=%f",
-              Double(w), Double(h), tabNames.count, Double(host.bounds.width), Double(host.bounds.height))
-        host.addSubview(bar)
-        tabBar = bar
-        highlightTab()
-    }
-
-    @objc private func onTabTap(_ sender: UIButton) {
-        guard let name = sender.accessibilityIdentifier else { return }
-        navigate(to: name)
-    }
-
-    /// 逐 tab 上下色（选中品牌色 / 未选中灰）；字形与文案用 UILabel 叠在按钮上。
-    private func highlightTab() {
-        guard let bar = tabBar, let ctx else { return }
-        let cur = currentName(ctx)
-        let on = specColor("brand", 0x5B5BD6)
-        let off = specColor("text3", 0x5F6673)
-        for (i, name) in tabNames.enumerated() {
-            guard let item = bar.viewWithTag(771000 + i) else { continue }
-            item.subviews.forEach { $0.removeFromSuperview() }
-            let bw = item.bounds.width
-            let tint = (name == cur) ? on : off
-            let ic = UILabel(frame: CGRect(x: 0, y: 6, width: bw, height: 22))
-            ic.text = (tabIcons[name].flatMap { $0.isEmpty ? nil : $0 } ?? "•") + "\u{FE0E}"
-            ic.font = UIFont.systemFont(ofSize: CGFloat((tabSpec["iconSize"] as? NSNumber)?.doubleValue ?? 19))
-            ic.textColor = tint
-            ic.textAlignment = .center
-            item.addSubview(ic)
-            let tx = UILabel(frame: CGRect(x: 0, y: 29, width: bw, height: 14))
-            tx.text = tabShortLabel(name)   // ★优先级 spec.labels > 应用 tabLabels > 键名（见其注释）
-            tx.font = UIFont.systemFont(ofSize: CGFloat((tabSpec["labelSize"] as? NSNumber)?.doubleValue ?? 10))
-            tx.textColor = tint
-            tx.textAlignment = .center
-            item.addSubview(tx)
-        }
-    }
-
-    private func specColor(_ key: String, _ fallback: UInt32) -> UIColor {
-        if let hex = tabSpec[key] as? String, let c = parseHexColor(hex) { return c }
-        return UIColor(red: CGFloat((fallback >> 16) & 0xFF) / 255.0,
-                       green: CGFloat((fallback >> 8) & 0xFF) / 255.0,
-                       blue: CGFloat(fallback & 0xFF) / 255.0, alpha: 1)
-    }
 }
 
 /* ────────────────────────── bundle 源（dev/release 的唯一分叉点） ────────────────────────── */

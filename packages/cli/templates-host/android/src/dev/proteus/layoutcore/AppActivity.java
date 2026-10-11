@@ -30,24 +30,18 @@ public final class AppActivity extends Activity {
 
     private android.widget.FrameLayout root;
     private android.widget.FrameLayout contentHost;
-    private android.widget.LinearLayout tabBar;
+    /** ★★★B（决策 #800）：tab 栏 chrome——**唯一实现在 runtime**（ProteusTabChrome）；本壳只装配 + 出口。 */
+    private ProteusTabChrome chrome;
     private VaporRenderHost draw;
     private ScreenHost screenHost;
     private HostCapabilities caps;
 
     private float density = 1f;
-    private int tabBarHeightPx = 0;
     private int physWidthPx = 0, physHeightPx = 0;
 
-    /** Tab 栏数据（boot 后从 superapp 注册表读回——与 Web/MP 同一套 tabNames/tabLabels） */
+    /** tab 名（报告/落盘用——内容/样式/角标全在 runtime chrome，从 state.tabItems 解析） */
     private String[] tabNames = new String[0];
-    private final java.util.Map<String, String> tabLabels = new java.util.HashMap<>();
     // tab 栏视觉规格（共享 state.tabSpec；基准 = Web App.vue .sa-tabbar + token）
-    private int tbOn = 0xFF5B5BD6, tbOff = 0xFF5F6673, tbRec = 0xFFD64545, tbLine = 0xFFDCDFE5, tbSurface = 0xFFFFFFFF;
-    private float tbIcon = 19f, tbLabel = 10f;
-    private int tbBadgeRadius = 8, tbBadgeFont = 11, tbBadgePadX = 4, tbBadgeOffX = 10, tbBadgeOffY = 2;
-    private final java.util.Map<String, String> tbIcons = new java.util.HashMap<>();
-    private final java.util.Map<String, String> tbLabels = new java.util.HashMap<>();
 
     /** dev 变体的热刷线程（DEV=false 时始终 null） */
     private Thread devWatch;
@@ -131,8 +125,6 @@ public final class AppActivity extends Activity {
         density = dm.density;
         physWidthPx = dm.widthPixels;
         physHeightPx = dm.heightPixels;
-        // I2-ALLOW: 宿主自绘 chrome（底部 Tab 栏）的像素高度，非内核几何（同 hosts 壳）。
-        tabBarHeightPx = Math.round(56f * dm.density);
 
         root = new android.widget.FrameLayout(this);
         // ★根容器底色 = 页面同族浅色（对齐占位层/内容底色）：此前是深色 `0xFF101020` ⇒ 占位层就绪前的
@@ -170,14 +162,11 @@ public final class AppActivity extends Activity {
         // ★屏切换通路的 env 解析器（决策 #677）：`ScreenHost.mount` 须把 `env:…` 解析成数值再喂内核。
         screenHost.setEnvResolver(draw::resolveEnvInSpec);
 
-        tabBar = new android.widget.LinearLayout(this);
-        tabBar.setOrientation(android.widget.LinearLayout.HORIZONTAL);
-        tabBar.setBackgroundColor(0xFF1B1B2A);
-        android.widget.FrameLayout.LayoutParams tlp = new android.widget.FrameLayout.LayoutParams(
-                android.view.ViewGroup.LayoutParams.MATCH_PARENT, tabBarHeightPx);
-        tlp.gravity = android.view.Gravity.BOTTOM;
-        tabBar.setLayoutParams(tlp);
-        root.addView(tabBar);
+        // ★★★B · 决策 #800：tab 栏 chrome **唯一实现在 runtime**——本壳只装配 + 切屏出口
+        chrome = new ProteusTabChrome(this, root);
+        chrome.setListener(new ProteusTabChrome.Listener() {
+            @Override public void onTab(String name) { switchTab(name); }
+        });
 
         // ★★启动占位（决策 #724，对齐 iOS #694）：内容就绪前遮黑底（App 名 + 转圈 + 状态文案）。
         //   首帧渲染完成即移除 ⇒ 启动到首帧是"浅色 → 内容"，而非"黑 → 内容"。
@@ -245,7 +234,7 @@ public final class AppActivity extends Activity {
             fail("superapp boot 失败：" + (bootRes.value != null ? bootRes.value : bootRes.error));
             return;
         }
-        buildTabBar();
+        refreshChrome();
         // ★dev 可视化层（决策 #671）：叠加在内容/tab 之上——DEV 角标（release 不创建）。挂起后短暂提示"dev 模式"。
         devOverlay = new DevOverlay(this, root);
         devOverlay.attach();
@@ -631,7 +620,7 @@ public final class AppActivity extends Activity {
             QuickJsEngine.EvalResult bootRes = QuickJsEngine.eval("__proteusSuperappBootJson()");
             QuickJsEngine.nativeRunPendingJobs();
             if (!bootRes.ok) { Log.w(TAG, "PROTEUS_DEV_RELOAD_BOOT_FAIL " + bootRes.error); return; }
-            buildTabBar();
+            refreshChrome();
             if (wantPage != null && !wantPage.isEmpty() && !wantPage.equals(currentName(readState()))) {
                 QuickJsEngine.eval("__proteusSuperappNav(" + org.json.JSONObject.quote(wantPage) + ")");
                 QuickJsEngine.nativeRunPendingJobs();
@@ -816,119 +805,19 @@ public final class AppActivity extends Activity {
 
     // ────────────────────────── Tab 栏 ──────────────────────────
 
-    private void buildTabBar() {
+    /** ★★★B（决策 #800）：把 state 交给 runtime chrome 渲染（本壳零 tab 逻辑）+ 同步 tabNames（报告用）。 */
+    private void refreshChrome() {
         String st = readState();
         try {
-            JSONObject o = new JSONObject(st);
-            JSONArray tabs = o.optJSONArray("tabs");
+            JSONArray tabs = new JSONObject(st).optJSONArray("tabs");
             if (tabs != null) {
                 tabNames = new String[tabs.length()];
                 for (int i = 0; i < tabs.length(); i++) tabNames[i] = tabs.getString(i);
             }
-            JSONObject labels = o.optJSONObject("tabLabels");
-            if (labels != null) {
-                java.util.Iterator<String> it = labels.keys();
-                while (it.hasNext()) { String k = it.next(); tabLabels.put(k, labels.optString(k, k)); }
-            }
-            JSONObject sp = o.optJSONObject("tabSpec");
-            if (sp != null) {
-                tbSurface = parseHex(sp.optString("surface", "#ffffff"));
-                tbLine = parseHex(sp.optString("line", "#dcdfe5"));
-                tbOn = parseHex(sp.optString("brand", "#5b5bd6"));
-                tbOff = parseHex(sp.optString("text3", "#5f6673"));
-                tbRec = parseHex(sp.optString("badgeBg", "#d64545"));
-                tbIcon = (float) sp.optDouble("iconSize", 19);
-                tbLabel = (float) sp.optDouble("labelSize", 10);
-                JSONObject bd = sp.optJSONObject("badge");
-                if (bd != null) {
-                    tbBadgeRadius = bd.optInt("radius", 8);
-                    tbBadgeFont = bd.optInt("fontSize", 11);
-                    tbBadgePadX = bd.optInt("padX", 4);
-                    tbBadgeOffY = bd.optInt("offsetY", 2);
-                    tbBadgeOffX = bd.optInt("offsetX", 4) + 6;
-                }
-                JSONObject ic = sp.optJSONObject("icons");
-                if (ic != null) { java.util.Iterator<String> it = ic.keys(); while (it.hasNext()) { String k = it.next(); tbIcons.put(k, ic.optString(k, "")); } }
-                JSONObject lb = sp.optJSONObject("labels");
-                if (lb != null) { java.util.Iterator<String> it = lb.keys(); while (it.hasNext()) { String k = it.next(); tbLabels.put(k, lb.optString(k, "")); } }
-            }
         } catch (Exception e) {
-            Log.w(TAG, "读 tab 注册表失败：" + e.getMessage());
+            Log.w(TAG, "读 tabNames 失败：" + e.getMessage());
         }
-        tabBar.removeAllViews();
-        if (tabNames.length == 0) { tabBar.setVisibility(android.view.View.GONE); return; }
-        tabBar.setVisibility(android.view.View.VISIBLE);
-        final int onColor = tbOn, offColor = tbOff, recColor = tbRec, lineColor = tbLine;
-        tabBar.setBackgroundColor(tbSurface);
-        if (root.findViewWithTag("sa-top-line") == null) {
-            android.view.View top = new android.view.View(this);
-            // I2-ALLOW: 宿主原生 chrome 尺寸（顶分隔线 1dp→px），非内核几何。
-            int h1 = Math.max(1, Math.round(density));
-            android.widget.FrameLayout.LayoutParams tlp2 = new android.widget.FrameLayout.LayoutParams(
-                    android.view.ViewGroup.LayoutParams.MATCH_PARENT, h1);
-            tlp2.gravity = android.view.Gravity.BOTTOM;
-            tlp2.bottomMargin = tabBarHeightPx;
-            top.setLayoutParams(tlp2);
-            top.setBackgroundColor(lineColor);
-            top.setTag("sa-top-line");
-            root.addView(top);
-        }
-        String current = currentName(readState());
-        for (final String name : tabNames) {
-            final boolean on = name.equals(current);
-            android.widget.LinearLayout col = new android.widget.LinearLayout(this);
-            col.setOrientation(android.widget.LinearLayout.VERTICAL);
-            col.setGravity(android.view.Gravity.CENTER);
-            col.setTag(name);
-            col.setClickable(true);
-            android.widget.FrameLayout icWrap = new android.widget.FrameLayout(this);
-            // I2-ALLOW: 宿主原生 chrome 尺寸（图标行 44×22dp→px），非内核几何。
-            int iw = Math.round(44 * density), ih = Math.round(22 * density);
-            icWrap.setLayoutParams(new android.widget.LinearLayout.LayoutParams(iw, ih));
-            android.widget.TextView ic = new android.widget.TextView(this);
-            ic.setText(tabIcon(name) + "\uFE0E");   // 变体选择符：强制文本呈现（与 Web 线稿一致）
-            ic.setTextSize(tbIcon);
-            ic.setGravity(android.view.Gravity.CENTER);
-            ic.setTextColor(on ? onColor : offColor);
-            icWrap.addView(ic, new android.widget.FrameLayout.LayoutParams(
-                    android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT));
-            col.addView(icWrap);
-            android.widget.TextView lab = new android.widget.TextView(this);
-            lab.setText(tabShortLabel(name));
-            lab.setTextSize(tbLabel);
-            lab.setGravity(android.view.Gravity.CENTER);
-            lab.setTextColor(on ? onColor : offColor);
-            col.addView(lab);
-            col.setLayoutParams(new android.widget.LinearLayout.LayoutParams(
-                    0, android.view.ViewGroup.LayoutParams.MATCH_PARENT, 1f));
-            col.setOnClickListener(new android.view.View.OnClickListener() {
-                @Override public void onClick(android.view.View v) { switchTab(name); }
-            });
-            tabBar.addView(col);
-        }
-    }
-
-    private String tabIcon(String name) {
-        String v = tbIcons.get(name);
-        return (v != null && !v.isEmpty()) ? v : "•";
-    }
-
-    private String tabShortLabel(String name) {
-        String v = tbLabels.get(name);
-        if (v != null && !v.isEmpty()) return v;
-        String t = tabLabels.get(name);
-        return (t != null && !t.isEmpty()) ? t : name;
-    }
-
-    private static int parseHex(String css) {
-        try {
-            String h = css.startsWith("#") ? css.substring(1) : css;
-            if (h.length() == 3) h = "" + h.charAt(0) + h.charAt(0) + h.charAt(1) + h.charAt(1) + h.charAt(2) + h.charAt(2) + "ff";
-            if (h.length() == 6) h = h + "ff";
-            long v = Long.parseLong(h, 16);
-            long a = v & 0xFF, rgb = v >>> 8;
-            return (int) ((a << 24) | rgb);
-        } catch (Exception e) { return 0xFF000000; }
+        if (chrome != null) chrome.applyState(st);
     }
 
     /** 切 tab（与 Web 的 switchTab / MP 同形）→ 重绘当前屏 → 刷新高亮 */
@@ -941,31 +830,7 @@ public final class AppActivity extends Activity {
         }
         String st = readState();
         renderCurrent(st);
-        highlightTab(currentName(st));
-    }
-
-    private void highlightTab(String current) {
-        final int onColor = tbOn, offColor = tbOff;
-        for (int i = 0; i < tabBar.getChildCount(); i++) {
-            android.view.View col = tabBar.getChildAt(i);
-            boolean on = current.equals(col.getTag());
-            int c = on ? onColor : offColor;
-            if (col instanceof android.view.ViewGroup) {
-                android.view.ViewGroup g = (android.view.ViewGroup) col;
-                for (int j = 0; j < g.getChildCount(); j++) {
-                    android.view.View ch = g.getChildAt(j);
-                    if (ch instanceof android.widget.TextView) ((android.widget.TextView) ch).setTextColor(c);
-                    else if (ch instanceof android.view.ViewGroup) {
-                        android.view.ViewGroup gg = (android.view.ViewGroup) ch;
-                        for (int k = 0; k < gg.getChildCount(); k++) {
-                            android.view.View gch = gg.getChildAt(k);
-                            if ("sa-badge".equals(gch.getTag())) continue;   // 角标恒语义色，不随选中态变
-                            if (gch instanceof android.widget.TextView) ((android.widget.TextView) gch).setTextColor(c);
-                        }
-                    }
-                }
-            }
-        }
+        refreshChrome();
     }
 
     // ────────────────────────── 返回 ──────────────────────────
@@ -979,7 +844,7 @@ public final class AppActivity extends Activity {
                 QuickJsEngine.eval("__proteusSuperappBack()");
                 QuickJsEngine.nativeRunPendingJobs();
                 renderCurrent(readState());
-                highlightTab(currentName(readState()));
+                refreshChrome();
                 return;
             }
         } catch (Throwable t) {
@@ -1110,9 +975,9 @@ public final class AppActivity extends Activity {
                 }
             }
             android.view.WindowInsets wi = getWindow().getDecorView().getRootWindowInsets();
-            if (wi != null && tabBar != null) {
+            if (wi != null && chrome != null) {
                 int nav = wi.getInsets(android.view.WindowInsets.Type.navigationBars()).bottom;
-                tabBar.setPadding(0, 0, 0, nav);
+                chrome.setBottomInsetPx(nav);
             }
         }
     }

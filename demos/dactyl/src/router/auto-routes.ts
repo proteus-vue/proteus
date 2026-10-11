@@ -52,6 +52,40 @@ export const screenNames: string[] = ["index","l2","l3","l4","l5","l6"]
 /** tab 根屏（meta.isTab）—— App 端 tab 语义（switchTab/reset）的合法目标 */
 export const tabNames: string[] = ["index","l2","l3","l4","l5","l6"]
 
+/** ★★tab 渲染最终值（App 三端宿主**只渲染**：名字/文案/字形在这里已合并完——B · 能力归 runtime） */
+export const tabItems: Array<{ name: string; label: string; glyph?: string; badge?: number }> = [
+  {
+    "name": "index",
+    "label": "L1 触即应",
+    "glyph": "◉"
+  },
+  {
+    "name": "l2",
+    "label": "L2 跟手",
+    "glyph": "≡"
+  },
+  {
+    "name": "l3",
+    "label": "L3 沸腾",
+    "glyph": "✦"
+  },
+  {
+    "name": "l4",
+    "label": "L4 十指",
+    "glyph": "✚"
+  },
+  {
+    "name": "l5",
+    "label": "L5 崩裂",
+    "glyph": "⌁"
+  },
+  {
+    "name": "l6",
+    "label": "D1 显影",
+    "glyph": "◫"
+  }
+]
+
 // ─── ③ 类型提示：按路由名索引的参数类型表（来源：<route> 块 params 声明）───
 declare module '@proteus-vue/router/types' {
   interface RouteParamsByName {

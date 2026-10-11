@@ -103,7 +103,7 @@ export async function buildAppContentModuleSource(opts: AppContentModuleOptions)
   // ★honor `router.routesOutput`（唯一实现 app-routes.ts）——此前硬编码 ⇒ 新工程（模板缺省
   //   `src/router/auto-routes.ts`）注册表读空 ⇒ 运行期 `app-navigation: 屏注册表为空`（用户实测）。
   const autoRoutesPath = (await resolveAppRoutes(projectRoot)).file
-  let registry: unknown = { screens: {}, tabNames: [], tabLabels: {}, indexName: '', routes: [] }
+  let registry: unknown = { screens: {}, tabNames: [], tabLabels: {}, tabItems: [], indexName: '', routes: [] }
   try {
     if (!fs.existsSync(autoRoutesPath)) throw new Error(`缺 ${path.relative(projectRoot, autoRoutesPath)}`)
     // ★经 config-loader 的 TS 加载器：Node 的 ESM `import()` 不认 `.ts` ⇒ 此前这里抛错被 catch 吞掉
@@ -111,6 +111,7 @@ export async function buildAppContentModuleSource(opts: AppContentModuleOptions)
     const arMod = loadTsModule(autoRoutesPath) as {
       screens?: Record<string, unknown>
       tabNames?: string[]
+      tabItems?: Array<{ name: string; label: string; glyph?: string; badge?: number }>
       routes?: Array<{ name: string; meta?: { title?: string } }>
     }
     const screens = arMod.screens ?? {}
@@ -121,7 +122,7 @@ export async function buildAppContentModuleSource(opts: AppContentModuleOptions)
       screens && Object.prototype.hasOwnProperty.call(screens, 'index')
         ? 'index'
         : Object.keys(screens)[0] ?? arMod.routes?.[0]?.name ?? ''
-    registry = { screens, tabNames, tabLabels, indexName, routes: arMod.routes ?? [] }
+    registry = { screens, tabNames, tabLabels, tabItems: arMod.tabItems ?? [], indexName, routes: arMod.routes ?? [] }
   } catch {
     /* 注册表提取失败 ⇒ 保持空（与 gen 脚本同——不阻断构建） */
   }

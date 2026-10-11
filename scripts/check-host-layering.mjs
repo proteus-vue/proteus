@@ -241,6 +241,22 @@ const SHELL_OWNERSHIP_GAPS = {
 
 const OWNERSHIP = [
   {
+    id: 'tab-bar',
+    name: 'tab 栏 chrome（建栏/内容合并/高亮/角标）',
+    // runtime 必须实现（每端给出实现锚点正则）——★B（决策 #800）：唯一实现归各端 runtime 的 TabChrome
+    runtimeMust: {
+      android: /class ProteusTabChrome/,
+      ios: /final class ProteusTabChrome/,
+      harmony: /export struct ProteusTabChrome/,
+    },
+    // 壳**不得**再出现（实现特征；注释剥离后判）——建栏/高亮/图标标签合并/旧兜底皆属实现
+    shellForbidden: {
+      android: /buildTabBar|highlightTab|\btabIcons\b|tabShortLabel/,
+      ios: /buildTabBar|highlightTab|\btabIcons\b|tabShortLabel/,
+      harmony: /tabSymbol\s*\(|tabShortLabelOf|buildTabBar|highlightTab/,
+    },
+  },
+  {
     id: 'v-pump',
     name: 'v-pump 周期驱动',
     // runtime 必须实现（每端给出实现锚点正则）
