@@ -3106,10 +3106,10 @@ public class ProteusHostView extends ViewGroup {
         } else {
             drawCmds(canvas);
         }
-        // ★★★玻璃独立遍（决策 #821）：内容画完后再实时画玻璃面（在内容之上、采样背后内容）——
-        //   不进显示列表（Picture 录一次回放多帧，玻璃需每帧实时）。★在滚动 transform 内（玻璃随内容）。
-        drawGlassPass(canvas);
         if (scrolled) canvas.restoreToCount(save);
+        // ★★★玻璃独立遍（决策 #821/#832）：**出滚动 transform 后**画玻璃 ⇒ 玻璃**钉在屏上**（只有内容滚）。
+        //   采样源 `glassBackdrop` 已含滚动（见 captureGlassBackdrop）⇒ 玻璃采样"当前屏上内容"。
+        drawGlassPass(canvas);
         // ★DevTools 元素高亮（决策 #701/#722）：**屏幕坐标**画——**填充 + 描边**（对齐 iOS #706 的
         //   `fillColor systemBlue alpha 0.18` + `stroke systemBlue`）。此前只有描边 ⇒ Android/iOS 视觉不一致
         //   （用户实测"高亮样式和 iOS 没对齐"）。用**两个 Paint**：填充一层 + 描边一层。
@@ -3237,12 +3237,25 @@ public class ProteusHostView extends ViewGroup {
         }
         final Canvas bc = new Canvas(glassBackdrop);
         bc.drawColor(0, android.graphics.PorterDuff.Mode.CLEAR);
+        // ★★背景捕获**带上滚动 transform**（与 onDraw 同口径）⇒ `glassBackdrop` = **当前屏上**内容。
+        //   玻璃在 onDraw 出滚动 transform 后按**屏幕坐标**画 ⇒ 采样到"玻璃所在屏幕位置背后"的内容。
+        final boolean cScrolled = offsetScroll
+                ? (scrollX != 0 || scrollY != 0 || scrollViewport != null)
+                : (!horizontalScroll && (scrollX != 0 || scrollY != 0 || scrollViewport != null));
+        final int cSave = cScrolled ? bc.save() : -1;
+        if (cScrolled) {
+            if (scrollViewport != null) {
+                bc.clipRect(scrollViewport.left, scrollViewport.top, scrollViewport.right, scrollViewport.bottom);
+            }
+            bc.translate(-scrollX, -scrollY);
+        }
         capturingGlass = true;
         try {
             drawCmds(bc);   // 无玻璃面（capturingGlass 时跳过玻璃分支）⇒ 纯内容
         } finally {
             capturingGlass = false;
         }
+        if (cScrolled) bc.restoreToCount(cSave);
     }
 
     /** 画一个玻璃面（节点盒 c）：AGSL 采样背后内容 → blur+tint；不可用 ⇒ 半透明实色回退。 */
