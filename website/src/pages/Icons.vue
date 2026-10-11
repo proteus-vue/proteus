@@ -37,11 +37,13 @@ const CATS = computed(() => {
 })
 const CAT_LABEL: Record<string, [string, string]> = {
   all: ['全部', 'All'],
-  nav: ['导航', 'Navigation'],
+  navigation: ['导航', 'Navigation'],
+  communication: ['通信', 'Communication'],
   action: ['操作', 'Action'],
   status: ['状态', 'Status'],
-  mark: ['标记', 'Mark'],
-  arrow: ['箭头', 'Arrow'],
+  media: ['媒体', 'Media'],
+  file: ['文件', 'File'],
+  form: ['表单', 'Form'],
   other: ['其他', 'Other'],
 }
 const catText = (c: string) => (CAT_LABEL[c] ?? [c, c])[isEn.value ? 1 : 0]
