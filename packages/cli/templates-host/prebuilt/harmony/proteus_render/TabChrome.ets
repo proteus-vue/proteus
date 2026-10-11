@@ -48,6 +48,9 @@ export struct ProteusTabChrome {
   @State tbBadgeFont: number = 11;
   @State tbBadgeRadius: number = 8;
   @State tbHeight: number = 56;
+  // ★★★OS 级悬浮玻璃（期 B / 决策 #816）：有 `glass` 规格 ⇒ ArkUI `.backdropBlur`（真模糊）。
+  @State tbGlass: boolean = false;
+  @State tbGlassBlur: number = 0;
 
   onStateChanged(): void {
     this.applyJson(this.stateJson);
@@ -105,6 +108,14 @@ export struct ProteusTabChrome {
         if (bd !== undefined) {
           if (typeof bd['fontSize'] === 'number') this.tbBadgeFont = bd['fontSize'] as number;
           if (typeof bd['radius'] === 'number') this.tbBadgeRadius = bd['radius'] as number;
+        }
+        // ★玻璃（期 B）：有 glass ⇒ ArkUI backdropBlur（真模糊）
+        const gl = sp['glass'] as Record<string, Object> | undefined;
+        if (gl !== undefined) {
+          this.tbGlass = true;
+          if (typeof gl['blur'] === 'number') this.tbGlassBlur = gl['blur'] as number;
+        } else {
+          this.tbGlass = false;
         }
       }
     } catch (e) {
@@ -198,7 +209,11 @@ export struct ProteusTabChrome {
       .width('100%')
       // 总高 = 内容区 + 底部安全区（安全区为下方白底；内容在内容区内居中）
       .height(this.tbHeight + this.safeBottom)
-      .backgroundColor(this.tbSurface)
+      // ★★★OS 级**系统材质玻璃**（期 B / 决策 #816/#817）：有 glass ⇒ ArkUI `backgroundBlurStyle`
+      //   （`BlurStyle.COMPONENT_THICK` = **系统组件材质**——模糊 + tint + 高光，质感对齐系统栏；
+      //    非裸 `backdropBlur(数值)`，后者只是高斯模糊、离系统材质远）。无 ⇒ 沿用不透明 surface。
+      .backgroundColor(this.tbGlass ? 'rgba(255,255,255,0.15)' : this.tbSurface)
+      .backgroundBlurStyle(this.tbGlass ? BlurStyle.COMPONENT_THICK : BlurStyle.NONE)
     }
   }
 }
