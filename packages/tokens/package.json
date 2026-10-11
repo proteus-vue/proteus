@@ -1,0 +1,24 @@
+{
+  "name": "@proteus-vue/tokens",
+  "version": "0.3.0-beta.28",
+  "description": "Proteus UI 宪法（Charites Design Tokens）：--sa-* 视觉 token 单一真源（浅/深两套）+ 汇总 --pf-* 环境变量 = 三套命名空间收口。纯数据 + CSS 生成，零依赖。",
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=neutral --outfile=dist/index.js"
+  }
+}

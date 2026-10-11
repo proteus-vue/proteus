@@ -578,12 +578,18 @@ importers:
       '@proteus-vue/glass':
         specifier: 0.3.0-beta.28
         version: link:../glass
+      '@proteus-vue/icons':
+        specifier: 0.3.0-beta.28
+        version: link:../icons
       '@proteus-vue/runtime':
         specifier: 0.3.0-beta.28
         version: link:../runtime
       '@proteus-vue/shared':
         specifier: 0.3.0-beta.28
         version: link:../shared
+      '@proteus-vue/tokens':
+        specifier: 0.3.0-beta.28
+        version: link:../tokens
       '@proteus-vue/worklet':
         specifier: 0.3.0-beta.28
         version: link:../worklet
@@ -690,6 +696,8 @@ importers:
       '@types/node':
         specifier: ^20.0.0
         version: 20.19.43
+
+  packages/icons: {}
 
   packages/layout-core:
     dependencies:
@@ -879,6 +887,8 @@ importers:
         version: 3.5.42(typescript@5.9.3)
 
   packages/test-ir: {}
+
+  packages/tokens: {}
 
   packages/types:
     dependencies:

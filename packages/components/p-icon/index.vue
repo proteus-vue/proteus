@@ -1,23 +1,37 @@
-<!-- src/components/p-icon/index.vue —— 图标（★G-32 B2：ui.icon U4）
-     矢量优先：内置字形映射（unicode 自包含，零资源）；name/size/color/spin 约束
-     ★2026-09-14 官方属性对齐（批次 2）：新增官方 `type`（取值 success/info/warn/…）——与 name 同义（name 优先）。
-     ★★真机修复（2026-09-14）：根节点由 `<text>` 改 **`<view>`**——Skyline 下 `<text>` 不支持 `inline-flex`
-       （尺寸/居中/transform 全失效 → 图标整体不显示、旋转中心也不对）；改为 view 盒 + 内层 text 承载字形，
-       尺寸/居中/旋转都作用在 view 盒上（两块图标演示均恢复正常）。 -->
+<!-- packages/components/p-icon/index.vue —— 图标（★Keryx 渲染器 · 图标库方案 §5）
+     ★★2026-10-11 重写：**图标即数据（SVG path 单一真源，非字体）**——此前用 unicode 字形表
+       （`✓★♥⌕…`）跨端字体依赖、可渲染成 tofu（违宪：图标库方案 §4 判"三套实现全部违宪"）。
+       现从 `@proteus-vue/icons`（Keryx 数据包）取 path，三端同源渲染：
+         · Web：内联 `<svg><path d>`（真矢量，随 currentColor 着色）
+         · MP/Skyline：`<svg>` 走 svg-lower 编译期 lowering（G-62），或 p-svg-canvas 兜底
+         · App：内核 `svg_path.rs`（`path d` → CGPath/Path 描边填充）
+     API 向后兼容：`name`（含旧字形名如 success/home，映射到同名 path）+ 官方 `type` 别名 + size/color/spin。
+     ★淘汰棘轮：旧 `GLYPHS` unicode 字形表移除（`check:icons` 禁止数据侧出现字形字面量）。 -->
 <template>
   <view class="p-icon" :class="{ 'p-icon-spin': spin }" :style="boxStyle">
-    <text class="p-icon__glyph">{{ glyph }}</text>
+    <svg
+      class="p-icon__svg"
+      :viewBox="icon.viewBox"
+      :width="size"
+      :height="size"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <path :d="icon.d" />
+    </svg>
   </view>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { CSSProperties } from 'vue'
+// ★Keryx 数据包（path 单一真源；`normalizedIcon` 产出内核可吃的绝对 M/L/C/Q/Z）
+import { normalizedIcon, hasIcon } from '@proteus-vue/icons'
 
 const props = defineProps({
-  /** 图标名（内置字形表；未知 → '?'）。框架名，优先于官方 type */
+  /** 图标语义名（Keryx 名称；未知 → 显式占位图标，非 '?'）。框架名，优先于官方 type */
   name: { type: String, default: '' },
-  /** ★官方 <icon> type（success/info/warn/waiting/cancel/download/clear…）——name 的官方别名 */
+  /** ★官方 <icon> type（success/info/warn/…）——name 的官方别名 */
   type: { type: String, default: '' },
   /** 尺寸 px */
   size: { type: Number, default: 16 },
@@ -27,43 +41,22 @@ const props = defineProps({
   spin: { type: Boolean, default: false },
 })
 
-/** 内置字形表（自包含零资源——语义图标最小集，扩展走 slot/字体图标后续批次）
- *  取值对齐官方 <icon> type：success / success_no_circle / info / warn / waiting / cancel / download / clear */
-const GLYPHS: Record<string, string> = {
-  success: '✓',
-  success_no_circle: '✓',
-  error: '✕',
-  info: 'i',
-  warn: '!',
-  waiting: '◷',
-  cancel: '✕',
-  download: '⤓',
-  clear: '✕',
-  back: '‹',
-  close: '✕',
-  search: '⌕',
-  star: '★',
-  heart: '♥',
-  arrowDown: '↓',
-  arrowUp: '↑',
-  arrowLeft: '←',
-  arrowRight: '→',
-  plus: '+',
-  minus: '−',
-  check: '✓',
-  menu: '☰',
-  user: '👤',
-  home: '⌂',
-  more: '⋯',
-}
+/** 语义名（name 优先，回退 type）。 */
+const iconName = computed(() => props.name || props.type || 'info')
 
-const glyph = computed(() => GLYPHS[props.name || props.type || 'info'] ?? '?')
+/** ★数据侧保证：未知名的显式占位 + dev 警告（反黑盒——静默 '?' 变静默 path）。 */
+const icon = computed(() => {
+  const n = iconName.value
+  if (import.meta.env?.DEV && !hasIcon(n)) {
+    // eslint-disable-next-line no-console
+    console.warn(`[p-icon] 未知图标名 "${n}"——已用占位图标。可用名见 @proteus-vue/icons`)
+  }
+  return normalizedIcon(n)
+})
 
-/** 盒尺寸/居中/颜色（作用在 view 盒上——旋转中心即盒中心，不随字形墨迹偏移） */
+/** 盒尺寸/居中/颜色（作用在 view 盒上——旋转中心即盒中心，不随 path 墨迹偏移）。 */
 const boxStyle = computed(() => {
   const style: CSSProperties = {
-    fontSize: props.size + 'px',
-    lineHeight: `${props.size}px`,
     width: props.size + 'px',
     height: props.size + 'px',
     display: 'inline-flex',
@@ -71,7 +64,6 @@ const boxStyle = computed(() => {
     justifyContent: 'center',
     color: props.color,
     fontStyle: 'normal',
-    // 旋转围绕盒中心（显式声明，避免继承/默认差异）
     transformOrigin: '50% 50%',
   }
   return style as CSSProperties
@@ -79,10 +71,8 @@ const boxStyle = computed(() => {
 </script>
 
 <style scoped>
-.p-icon__glyph {
+.p-icon__svg {
   display: block;
-  line-height: 1;
-  text-align: center;
 }
 .p-icon-spin {
   animation: p-icon-rotate 1s linear infinite;

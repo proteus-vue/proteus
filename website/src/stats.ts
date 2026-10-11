@@ -25,11 +25,11 @@ export interface StatItem {
 export const STATS: StatItem[] = [
   {
     id: 'packages',
-    value: '45',
+    value: '47',
     label: '@proteus-vue/* 包',
     labelEn: '@proteus-vue/* packages',
-    source: 'pnpm check:pkg（45 包 0 error；45 个 packages/* 目录——含 @proteus-vue/consistency，多端一致性校验与像素观测）',
-    sourceEn: 'pnpm check:pkg (45 packages, 0 errors; 45 packages/* dirs — incl. @proteus-vue/consistency, the cross-end consistency verification & pixel observation suite)',
+    source: 'pnpm check:pkg（47 包 0 error；47 个 packages/* 目录——含 @proteus-vue/consistency 与 @proteus-vue/tokens（Proteus UI 宪法）+ @proteus-vue/icons（Keryx 图标库））',
+    sourceEn: 'pnpm check:pkg (47 packages, 0 errors; 47 packages/* dirs — incl. @proteus-vue/consistency, @proteus-vue/tokens (Proteus UI constitution) and @proteus-vue/icons (Keryx icons))',
   },
   {
     id: 'tests',
