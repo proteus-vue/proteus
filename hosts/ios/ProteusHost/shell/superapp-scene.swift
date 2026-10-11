@@ -240,6 +240,33 @@ final class SuperappScene: NSObject {
                 NSLog("[proteus] SUPERAPP_PRESS_ARG_INVALID %@", pa)
             }
         }
+        // ★★★（决策 #797 修）`--pan=auto[,screen]`：走 **pan 接管路径**（真机拖拽的真实分工：
+        //   取消 touches → pan 每步续喂）——判据必须走这条路，driveTouch* 直调钩子是假绿。
+        if let pn = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--pan=") }) {
+            Self.tapMode = true
+            let body = String(pn.dropFirst("--pan=".count))
+            let parts = body.split(separator: ",")
+            let navTo = parts.count >= 2 ? String(parts[1]) : ""
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                if !navTo.isEmpty {
+                    _ = evalJs?("__proteusSuperappNav(\(jsonQuote(navTo)))")
+                    DispatchQueue.main.async { renderCurrent() }
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                    // ★异步分步（每步 50ms ⇒ 帧循环真的推 ~25 帧；同步循环里一帧都跑不了——已实测）
+                    bridgeRef?.panFieldDragAsync(dx: 90, dy: 60, steps: 8, stepMs: 50) {
+                        NSLog("[proteus] SUPERAPP_PAN_DRAG done")
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                        takeSnapshot()
+                        switchLog.append(["pan": "auto", "screen": navTo, "current": currentName(), "ok": true, "via": "pan-inject"])
+                        writeReport(reportBody())
+                        NSLog("[proteus] SUPERAPP_PAN_REPORT_READY %@", evalJs?("proteusSelfDraw.interactionProbe()") ?? "null")
+                        if ProcessInfo.processInfo.environment["PROTEUS_EXIT_AFTER_REPORT"] == "1" { exit(0) }
+                    }
+                }
+            }
+        }
         // ★★`--field=x,y,dx,dy`：按下 → 拖拽（MOVE 多次）→ 读场探针（证明每帧一次 FFI 真的推了）→ 抬指自退。
         if let fa = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--field=") }) {
             Self.tapMode = true

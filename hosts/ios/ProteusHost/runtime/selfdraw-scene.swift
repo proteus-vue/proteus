@@ -2631,6 +2631,60 @@ final class SelfDrawView: UIView {
     var onTouchDown: ((Double, Double) -> Void)?
     var onTouchMoveXY: ((Double, Double) -> Void)?
     var onTouchUp: (() -> Void)?
+    /// ★★★（决策 #797 修）**pan 路径注入（异步分步）**：每步之间让出 runloop ⇒ **CADisplayLink 帧循环
+    ///   真的推几帧**（同步 for 循环里帧循环一次也跑不了 ⇒ field_ticks 恒 0——真机/模拟器同坑）。
+    ///   流程：down → 取消（pan 接管）→ 分步 move（`step` ms 间隔）→ done()。
+    func panFieldDragAsync(dx: Double, dy: Double, steps: Int, stepMs: Double, done: @escaping () -> Void) {
+        let n = max(1, steps)
+        let mid = CGPoint(x: Double(bounds.midX), y: Double(bounds.midY))
+        var i = 0
+        func one() {
+            i += 1
+            let t = Double(i) / Double(n)
+            let pcx = mid.x + dx * t + Double(contentOffset.x)
+            let pcy = mid.y + dy * t + Double(contentOffset.y)
+            if i == 1 {
+                onTouchDown?(pcx, pcy)
+                onTouchCancel?()   // ★模拟 pan 接管
+            }
+            onTouchMoveXY?(pcx, pcy)
+            dactylNoteTrail(cx: pcx, cy: pcy, t: CACurrentMediaTime())
+            if i < n {
+                DispatchQueue.main.asyncAfter(deadline: .now() + stepMs / 1000.0) { one() }
+            } else {
+                onTouchUp?()
+                done()
+            }
+        }
+        one()
+    }
+
+    /// ★★★（决策 #797 修）**pan 路径注入**（判据用）：模拟 pan 接管后的真实分工——
+    ///   down → **取消**（pan 接管 ⇒ touchesCancelled）→ **pan 每步续喂** → 收场。
+    ///   ★这条路才是真机拖拽的路径（driveTouch* 直调钩子绕过了"pan 取消"这一环 ⇒ 假绿）。
+    @discardableResult
+    func panFieldDrag(dx: Double, dy: Double, steps: Int) -> String {
+        do {
+            let n = max(1, steps)
+            let mid = CGPoint(x: Double(bounds.midX), y: Double(bounds.midY))
+            for i in 1...n {
+                let t = Double(i) / Double(n)
+                let pcx = mid.x + dx * t + Double(contentOffset.x)
+                let pcy = mid.y + dy * t + Double(contentOffset.y)
+                if i == 1 {
+                    onTouchDown?(pcx, pcy)
+                    onTouchCancel?()   // ★关键：模拟 pan 接管（真机 UIPanGestureRecognizer 会取消 touches）
+                }
+                onTouchMoveXY?(pcx, pcy)
+                dactylNoteTrail(cx: pcx, cy: pcy, t: CACurrentMediaTime())
+            }
+            onTouchUp?()
+        }
+        return "{\"ok\":true,\"dx\":\(dx),\"dy\":\(dy),\"steps\":\(steps)}"
+    }
+
+    /// ★★★pan 接管时的**取消**出口（决策 #797 修：pan 会取消 touches ⇒ 只清按下态、场交 pan 续喂）。
+    var onTouchCancel: (() -> Void)?
 
     /// 按下态应用（同帧）：底色 / 描边 / 凹陷（transform 缩放，CALayer 层级天然级联到后代）/ 发光 / z。
     ///   ★备份原值（首次应用时记）——还原时精确回原位（与 Android pressBackup 同款）。
@@ -2826,7 +2880,9 @@ final class SelfDrawView: UIView {
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
         touchStart = nil
-        onTouchUp?()
+        // ★★★（决策 #797 修）pan 识别器接管 ⇒ 本回调先到。**只清按下态**——场交给 pan 续喂
+        //   （此前走 onTouchUp ⇒ 场焦点清空 + 叶复位 ⇒ **真机拖拽一动手场就断**："场跟手怎么都无效"）。
+        onTouchCancel?()
     }
 
     /* ══════════ ★★★Dactyl D0 生产者：官方触摸时间戳 → 首帧提交 采样（决策 #797）══════════
@@ -2929,6 +2985,16 @@ final class SelfDrawView: UIView {
         let t = g.translation(in: self)
         g.setTranslation(.zero, in: self)
         driveScrollDrag(dx: -t.x, dy: -t.y)
+        // ★★★（决策 #797 修）**场跟手焦点由 pan 续喂**：pan 接管后视图收不到 touchesMoved
+        //   （见 touchesCancelled 注释）⇒ 这里按当前指尖位置喂（内容坐标换算与 touchesMoved 同款）。
+        //   ★同时记轨迹点（显影器"幽灵拖尾"须反映**真手指**轨迹——pan 路径此前完全不记）。
+        do {
+            let loc = g.location(in: self)
+            let pcx = Double(loc.x) + Double(contentOffset.x)
+            let pcy = Double(loc.y) + Double(contentOffset.y)
+            onTouchMoveXY?(pcx, pcy)
+            dactylNoteTrail(cx: pcx, cy: pcy, t: CACurrentMediaTime())
+        }
         // ★★★松手惯性（2026-10-09 · 用户「App 三端滚动松手就顿住，没有大厂那种惯性」）：
         //   拖拽开始 ⇒ 停掉上一段惯性；松手（ended/cancelled）⇒ 按**松手速度**启动减速。
         //   ★速度取 `g.velocity(in:)`（点/秒，**手指速度**）；出口参数空间是**内容位移**
@@ -2937,6 +3003,9 @@ final class SelfDrawView: UIView {
         case .began:
             stopMomentum()
         case .ended, .cancelled:
+            // ★★★（决策 #797 修）pan 结束 = 手指抬起（touchesEnded 已被取消、不会再来）⇒ 此处收场：
+            //   还原按下态 + 场叶回基态 + 停帧循环（与 touchesEnded 的收场同语义）。
+            onTouchUp?()
             let v = g.velocity(in: self)
             startMomentum(vx: -v.x, vy: -v.y)
         default:
@@ -7507,8 +7576,13 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             interactionFeedback = created
             // ★钩子只接一次（View 侧纯转发；算法在 runtime 类）
             v.onTouchDown = { [weak self] cx, cy in self?.handleTouchDown(cx: cx, cy: cy) }
-            v.onTouchMoveXY = { [weak self] cx, cy in self?.interactionFeedback?.move(x: cx, y: cy) }
+            v.onTouchMoveXY = { [weak self] cx, cy in self?.handleFieldMove(cx: cx, cy: cy) }
             v.onTouchUp = { [weak self] in self?.handleTouchUp() }
+            // ★★★（决策 #797 修）pan 接管时的**取消**：只清按下态；场交给 pan 续喂（见 fieldMove 注释）。
+            v.onTouchCancel = { [weak self] in
+                guard let self, let fb = self.interactionFeedback else { return }
+                fb.cancelPressOnly(handle: self.handle)
+            }
             v.onInteractionFrame = { [weak self] _ in self?.interactionFeedback?.tick(handle: self?.handle ?? 0) }
             fb = created
         }
@@ -7532,8 +7606,17 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         var pressTarget = -1
         for id in chain where fb.hasPressStyle(nodeId: id) { pressTarget = id; break }
         fb.down(x: cx, y: cy, target: pressTarget >= 0 ? pressTarget : target, chain: chain, handle: handle)
-        // ★场跟手需要逐帧推（即便没有动画）⇒ DOWN 即启帧循环；UP 停（见 handleTouchUp）
-        if !chain.isEmpty { view?.startFieldFrameLoop() }
+        // ★场跟手需要逐帧推（即便没有动画）⇒ 命中落在场里才启帧循环；UP/pan 结束停（见 handleTouchUp）
+        if fb.hasFieldFocus { view?.startFieldFrameLoop() }
+    }
+
+    /// ★★★场焦点喂入（决策 #797 修）：`touchesMoved` 与 **pan 处理器**两路共用——
+    ///   pan 接管后视图无 touchesMoved ⇒ 由 pan 每步调本入口；焦点被取消清掉时**按需重启帧循环**
+    ///   （否则"焦点回来了但没人推帧"——静默无效，本仓已踩过同族）。
+    private func handleFieldMove(cx: Double, cy: Double) {
+        guard let fb = interactionFeedback else { return }
+        fb.fieldMove(x: cx, y: cy)
+        if fb.hasFieldFocus, let v = view, !v.fieldFrameLoopRunning { v.startFieldFrameLoop() }
     }
 
     private func handleTouchUp() {
@@ -7610,6 +7693,15 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     func driveTouchMove(_ x: Double, _ y: Double) -> Bool { view?.driveTouchMove(x: x, y: y) ?? false }
     func driveTouchUp() -> Bool { view?.driveTouchUp() ?? false }
 
+    /// ★★★（决策 #797 修）**pan 路径场跟手判据**：注入一次**真 UIPanGestureRecognizer 序列**
+    ///   （began→changed×N→ended，走 pan 处理器的生产路径——非 driveTouch* 直调钩子）。
+    ///   返回读数（场探针 + 帧循环状态）。★为什么必须走 pan：真手指拖动时 pan 会取消 touches，
+    ///   driveTouch* 注入绕过 UIKit ⇒ 一直是绿（假绿），本轮真机"场跟手无效"正是此坑。
+    func panFieldDrag(dx: Double, dy: Double, steps: Int) -> String { view?.panFieldDrag(dx: dx, dy: dy, steps: steps) ?? "{}" }
+    /// ★异步分步 pan 注入（判据用；让出 runloop ⇒ 帧循环能推——见 View 侧注释）
+    func panFieldDragAsync(dx: Double, dy: Double, steps: Int, stepMs: Double, done: @escaping () -> Void) {
+        view?.panFieldDragAsync(dx: dx, dy: dy, steps: steps, stepMs: stepMs, done: done)
+    }
     /// ★★★Dactyl D0（决策 #797）：采样三入口（转发到 View——采样在触摸/提交路径上）
     func dactylMetricsJson() -> String { view?.dactylMetricsJson() ?? "{\"end\":\"ios\",\"samples\":[]}" }
     func dactylSampleProbe() -> String { view?.dactylSampleProbe() ?? "{}" }

@@ -62,6 +62,8 @@ final class InteractionFeedback {
     private var fieldFocus: [Int: CGPoint] = [:]              // containerId → 焦点（内容坐标）
     private var fieldPtrContainer: [Int: Int] = [:]           // pointerId → containerId
     private var fieldTouched: Set<Int> = []                   // 被场改写的叶 id（抬指要复位）
+    /// ★跨 up() 保留的场容器 id（pan 接管后续喂用——见 fieldMove/cancelPressOnly 注释）。
+    private var lastFieldCid = -1
     private var fieldDirty = false
 
     /* ── 记数（机器判据：证明"通路真的走过"——本仓纪律）── */
@@ -146,11 +148,14 @@ final class InteractionFeedback {
         // ① 按下态：命中 target 自身
         if target >= 0 { applyPressAt(nodeId: target, handle: handle) }
         // ② 场焦点：冒泡链里**第一个**场容器（与 Android fieldContainerInChain 同语义）
+        //   ★lastFieldCid 跨 up() **保留**——pan 取消 touches 后要能续喂（见 fieldMove 注释）。
+        lastFieldCid = -1
         for id in chain {
             if fieldSpecs[id] != nil {
                 fieldPtrContainer[0] = id
                 fieldFocus[id] = CGPoint(x: x, y: y)   // ★传入即**内容坐标**（见 down 调用方的换算）
                 fieldDirty = true
+                lastFieldCid = id
                 break
             }
         }
@@ -161,6 +166,33 @@ final class InteractionFeedback {
         guard let cid = fieldPtrContainer[0] else { return }
         fieldFocus[cid] = CGPoint(x: x, y: y)
         fieldDirty = true
+    }
+
+    /// ★★场焦点是否在场（判据/续喂用）。
+    var hasFieldFocus: Bool { !fieldFocus.isEmpty }
+
+    /// ★★★**续喂场焦点**（决策 #797 修：iOS 真机拖拽——pan 识别器**取消视图 touches**
+    ///   （`cancelsTouchesInView` 默认 true）⇒ `touchesMoved` 不再送达 ⇒ 场焦点停在按下点、
+    ///   **场跟手真机"怎么都无效"**（注入测试走 driveTouch* 直调钩子，绕过 UIKit ⇒ 一直是绿——假绿）。
+    ///   ⇒ 由 pan 处理器每步调本方法：焦点在场 ⇒ 更新；被取消清掉 ⇒ 用 lastFieldCid **重建**。
+    func fieldMove(x: Double, y: Double) {
+        if let cid = fieldPtrContainer[0] {
+            fieldFocus[cid] = CGPoint(x: x, y: y)
+            fieldDirty = true
+            return
+        }
+        guard lastFieldCid >= 0, fieldSpecs[lastFieldCid] != nil else { return }
+        fieldPtrContainer[0] = lastFieldCid
+        fieldFocus[lastFieldCid] = CGPoint(x: x, y: y)
+        fieldDirty = true
+    }
+
+    /// ★★取消（系统/pan 接管）时**只清按下态**——场交给 pan 续喂（不 reset 叶、不停帧循环）。
+    ///   【为什么分开】此前取消走 `up()` ⇒ 场焦点清空 + 叶复位 ⇒ 一拖就断（真机症状）。
+    func cancelPressOnly(handle: UInt64) {
+        stopPressAnims(handle: handle)   // 真句柄：把按下动画也从内核停掉（树仍在用，只停它）
+        clearPress()
+        pressDownNs = 0
     }
 
     /// UP / CANCEL：还原按下态 + 停按下动画 + 场叶回基态。
