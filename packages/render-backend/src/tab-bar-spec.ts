@@ -41,6 +41,23 @@ export interface TabBarSpec {
   labelSize: number
   /** IM 角标规格 */
   badge: { radius: number; fontSize: number; offsetX: number; offsetY: number; padX: number }
+  /**
+   * ★★★**玻璃（OS 级悬浮液态玻璃，期 B / 决策 #816）**：tab 栏 = 系统级玻璃面（模糊背后内容 + tint
+   *   + 顶边线）。**只 App 端消费**（Web/MP 走 CSS `backdrop-filter`）。值 = `@proteus-vue/glass` 的
+   *   `tabBar` preset（单一真源，测试钉 `值==基准源`）。缺省省略 ⇒ 各端沿用不透明 `surface`（既有行为）。
+   *   ★为什么 tab 栏能真玻璃：它是**壳原生 chrome**（真实 UIView/Android View/ArkUI 组件）——非自绘节点，
+   *     系统材质天生可用；页面中段自绘节点因"扁平树无背后像素采样点"不承接 backdrop（诚实边界）。
+   */
+  glass?: {
+    /** 模糊半径（逻辑像素；映射各端：iOS systemMaterial / 鸿蒙 backdropBlur / Android RenderEffect） */
+    blur: number
+    /** 着色（tint，CSS rgba）。 */
+    tint: string
+    /** 是否玻璃边（tab 栏 = 顶边线）。 */
+    border: boolean
+    /** 边的方向（tab 栏 = top）。 */
+    borderSide: 'top' | 'bottom' | 'all'
+  }
 }
 
 /** 内容区基准高（Web `.sa-tabbar` 的 52px 内容区）。 */
@@ -65,6 +82,9 @@ export const TAB_BAR_SPEC: TabBarSpec = {
   iconSize: ICON_SIZE,
   labelSize: LABEL_SIZE,
   badge: { radius: 8, fontSize: 11, offsetX: 4, offsetY: 4, padX: 4 },
+  // ★玻璃（期 B）：= @proteus-vue/glass 的 `tabBar` preset（blur 20 / tint rgba(255,255,255,0.15) /
+  //   border top）。App 端据此建系统玻璃面。★值由测试钉 `==` glass preset（防漂移，同 #803 教训）。
+  glass: { blur: 20, tint: 'rgba(255, 255, 255, 0.15)', border: true, borderSide: 'top' },
   // 内容区有效高：正常字号 = 52；字号/图标变大 ⇒ 撑高（保证不裁切 + 上下对称）。**唯一计算点**。
   contentHeight: Math.max(
     CONTENT_MIN,

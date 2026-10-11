@@ -131,7 +131,30 @@ final class ProteusTabChrome {
         let total = h + safeBottom                                          // 栏总高（含安全区底色）
         let w = parent.bounds.width
         let bar = UIView(frame: CGRect(x: 0, y: parent.bounds.height - total, width: w, height: total))
-        bar.backgroundColor = specColor("surface", 0xFFFFFF)
+        // ★★★OS 级悬浮液态玻璃（期 B / 决策 #816）：tab 栏 = **系统玻璃面**（模糊背后内容 + tint）。
+        //   tab 栏是**壳原生 UIView**（非自绘节点）⇒ 系统材质天生可用（页面中段自绘节点不行——诚实边界）。
+        //   有 `glass` 规格 ⇒ 用 `UIVisualEffectView`（blur 背后）+ tint 叠层替代不透明底色；否则沿用 surface。
+        if let glass = spec["glass"] as? [String: Any] {
+            bar.backgroundColor = .clear
+            let blur = (glass["blur"] as? NSNumber)?.doubleValue ?? 20
+            let style: UIBlurEffect.Style = blur <= 15 ? .systemThinMaterial : (blur >= 30 ? .systemThickMaterial : .systemMaterial)
+            let bg = UIVisualEffectView(effect: UIBlurEffect(style: style))
+            bg.frame = bar.bounds
+            bg.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            bg.tag = 771196   // ★移出 cell/badge 段（同 #799 族坑）
+            bar.addSubview(bg)
+            // tint 叠层（CSS rgba —— 如 rgba(255,255,255,0.15)）
+            if let tint = glass["tint"] as? String, let tc = Self.cssColor(tint) {
+                let overlay = UIView(frame: bar.bounds)
+                overlay.backgroundColor = tc
+                overlay.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+                overlay.isUserInteractionEnabled = false
+                overlay.tag = 771197
+                bar.addSubview(overlay)
+            }
+        } else {
+            bar.backgroundColor = specColor("surface", 0xFFFFFF)
+        }
         // 顶边框（Web: border-top 1px --sa-line）
         let line = UIView(frame: CGRect(x: 0, y: 0, width: w, height: 1.0 / UIScreen.main.scale))
         line.backgroundColor = specColor("line", 0xDCDFE5)
@@ -299,5 +322,20 @@ final class ProteusTabChrome {
         return UIColor(red: CGFloat((v >> 16) & 0xFF) / 255.0,
                        green: CGFloat((v >> 8) & 0xFF) / 255.0,
                        blue: CGFloat(v & 0xFF) / 255.0, alpha: 1)
+    }
+
+    /// CSS 颜色解析（`#rgb`/`#rrggbb` + `rgba(r,g,b,a)`——玻璃 tint 用后者）；不能解析 ⇒ nil。
+    static func cssColor(_ css: String) -> UIColor? {
+        let s = css.trimmingCharacters(in: .whitespaces)
+        if s.hasPrefix("#") { return colorFromHex(s) }
+        if s.lowercased().hasPrefix("rgba(") || s.lowercased().hasPrefix("rgb(") {
+            let inner = s[s.firstIndex(of: "(")!..<s.lastIndex(of: ")")!]
+            let parts = inner.dropFirst().split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+            guard parts.count >= 3,
+                  let r = Double(parts[0]), let g = Double(parts[1]), let b = Double(parts[2]) else { return nil }
+            let a = parts.count >= 4 ? (Double(parts[3]) ?? 1) : 1
+            return UIColor(red: CGFloat(r) / 255.0, green: CGFloat(g) / 255.0, blue: CGFloat(b) / 255.0, alpha: CGFloat(a))
+        }
+        return nil
     }
 }

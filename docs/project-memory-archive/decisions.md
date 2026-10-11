@@ -3168,3 +3168,15 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **③ ★★验收（模拟器实测截图为证）**：`bash hosts/ios/run-selfdraw-sim.sh "iPhone 17" --superapp` 构建+安装+运行；`--screen=mine --scroll=0` 导航到「我的」屏截图 —— **三个 Keryx 图标（crescent=moon/客服耳机/音符）真实渲染**（`#4a4ab8` 填充、18px 正确尺寸），链路读数 `attachSvgStroke: 收到 3 个 SVG 路径`。**首次在 App 端亲眼确认 p-icon 渲染**（不再是空 box）。
 **④ 诚实边界**：① 只验了 **iOS 模拟器**（Android 无 adb、鸿蒙 hdc 有设备但未跑——渲染链路代码齐，鸿蒙走 to_d/OH_Drawing 未实机）；② 动态 `:name` 仍不支持。
 **⑤ 教训**：① **不截图就不知道"接线对不对"**——控制台 `收到 3 个 SVG 路径` 看似成功，**实际三图标全不可见**（无色 `stroke=0`）；"通路读数非零" ≠ "画出来了"（视觉证据不可省）。② **继承色在 App 端要显式化**——Web/MP 靠 CSS 继承 `color`，App 的 svgPath/path 不吃 CSS ⇒ 降级时须把 `style.color`（含继承/声明）**显式写进 `stroke`**。③ **"必失败"的构建缺口是验收前置**——`tab-chrome.swift` 缺失让 iOS 自绘构建一直失败（真机 sim 都），**先修前置才能验收**（否则会误判成"p-icon 没接通"）。④ **dogfooding 闭环**：真实页面需要某个图标 ⇒ 补进词表 ⇒ 顺带验证生成管线（support_agent 259 枚）。
+
+816. **★★★期 B 起步：tab 栏 OS 级悬浮玻璃（iOS 真机验证成功 · Android 降级半透明 · 规格归 runtime 单源）**（2026-10-11）：
+**① 用户**：继续（接 #815 后）→ 期 B「内核 backdropBlur + 三端真模糊」。中途用户纠正：「**别用模拟器了，App 三端真机一直在线**」——改用真机（诚实记录：我之前默认用模拟器是错的）。
+**② 尽调关键结论（决定路线）**：**backdrop 模糊在自绘模型下对"页面中段节点"三端都做不到**——扁平 CALayer / Canvas / RenderNode 树**没有"背后已渲染像素的采样点"**（Web `backdrop-filter` 语义无法对等）。**但 tab 栏/导航栏是"壳原生 chrome"（真实 UIView/Android View/ArkUI 组件）——全项目唯一已具备"真实视图层次"的落点，系统玻璃天生可用**。⇒ 期 B 的 MVP = **tab 栏玻璃**。
+**③ 交付（iOS 真玻璃 / Android 降级 / 规格单源）**：
+  · **规格**（`render-backend/src/tab-bar-spec.ts`）：`TAB_BAR_SPEC.glass = { blur:20, tint:'rgba(255,255,255,0.15)', border:true, borderSide:'top' }`——值 = `@proteus-vue/glass` 的 **`tabBar` preset**（单一真源）；随 state 下发（能力归 runtime，同 #800）。
+  · **iOS**（`tab-chrome.swift`）：有 `glass` ⇒ `UIVisualEffectView`（`systemMaterial`/thin/thick 按 blur 选）+ tint 叠层替代不透明底；否则沿用 surface。**真机验证成功**（截图为证：tab 栏渐变玻璃、内容透过模糊）。
+  · **Android**（`ProteusTabChrome.java`）：**诚实降级半透明**——Android 对"容器级实时背景模糊"**无 `UIVisualEffectView` 等价物**（`RenderEffect` 只作用于 View 自身内容、非背后；`Window.setBackgroundBlurRadius` 是全屏窗口级）⇒ 按方案 06 用半透明实色（`surface` 0.9 alpha，内容透出、无模糊）。门禁钉"iOS 真模糊 / Android 半透明"口径。
+  · **测试**（`tests/tab-bar-spec.test.ts`）：钉 `TAB_BAR_SPEC.glass == getGlassPreset('tabBar')` 逐字段（#803 教训：门禁钉"值==基准源"）。
+  · **顺带修 iOS 真机签名**（`run-selfdraw.sh`）：描述文件过期日期解析的 `date -j -f "%Y-%m-%d %H:%M:%S %z"` 与实际格式（`Sun Oct 18 11:13:18 CST 2026`）不符 ⇒ 自动扫描**永远失败**、回退到未 provision 的 `dev.proteus.experiments` ⇒ **iOS 真机构建静默不可用**（须显式 `PROTEUS_BUNDLE_ID`）。修为 `%a %b %d %H:%M:%S %Z %Y` ⇒ 自动选中可用描述文件（cn.shxuxi.proteus.experiments）。
+**④ 诚实边界**：① **Android 为降级半透明（非真模糊）**——非偷懒，是平台约束（方案 06 已写明），门禁据此判红/绿；② **鸿蒙 `.backdropBlur` 待接**（ArkUI 组件，下一步）；③ **页面中段自绘节点不承接 backdrop**（自绘模型限制，须 native-host 提升视图才可能，代价 z-order/内存）；④ iOS 真机已验证，Android/鸿蒙真机截图待补。
+**⑤ 教训**：① **backdrop 模糊 ≠ 可选特性**——它需要"背后像素"，自绘扁平树给不了；**只有真实原生视图层次（chrome）能承接**——这是"OS 级玻璃"到底能落在哪的根本判据；② **平台能力有真边界**（Android 容器级背景模糊没有），**降级要诚实标注**（半透明 ≠ 模糊，不假装）；③ **"工具一直在但静默不可用"**（签名自动扫描坏）——同 `check:hook-wiring` 族：接线/前置坏了要能被发现，别默认"真机不可用"；④ **规格单源**（tab 玻璃值 == glass preset）靠门禁钉，不靠注释。
