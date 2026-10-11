@@ -1109,6 +1109,9 @@ importers:
       '@proteus-vue/i18n':
         specifier: 0.3.0-beta.28
         version: link:../packages/i18n
+      '@proteus-vue/icons':
+        specifier: 0.3.0-beta.28
+        version: link:../packages/icons
       '@proteus-vue/render-backend':
         specifier: 0.3.0-beta.31
         version: link:../packages/render-backend
@@ -1118,6 +1121,9 @@ importers:
       '@proteus-vue/test-ir':
         specifier: 0.3.0-beta.28
         version: link:../packages/test-ir
+      '@proteus-vue/tokens':
+        specifier: 0.3.0-beta.28
+        version: link:../packages/tokens
       '@vue/compiler-sfc':
         specifier: ^3.5.42
         version: 3.5.42

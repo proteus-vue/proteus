@@ -14,6 +14,7 @@ import Animation from './pages/Animation.vue'
 import Consistency from './pages/Consistency.vue'
 import CssEngine from './pages/CssEngine.vue'
 import Changelog from './pages/Changelog.vue'
+import Icons from './pages/Icons.vue'
 
 export const router = createRouter({
   // ★GitHub Pages 子路径部署：base 跟随 vite（import.meta.env.BASE_URL——Vercel 根路径 = '/' 行为不变）
@@ -30,6 +31,8 @@ export const router = createRouter({
     // ★★★Themis 编译期 CSS 引擎产品页（招牌产品页——叙事来自白皮书 + 全机器数字 + 四端真渲染）
     { path: '/themis', name: 'themis', component: CssEngine },
     { path: '/changelog', name: 'changelog', component: Changelog },
+    // ★Keryx 图标库预览 / 审查（Proteus UI 的"方言层"——全量可视化 + 点击复制名）
+    { path: '/icons', name: 'icons', component: Icons },
     { path: '/docs', redirect: '/docs/01-intro' },
     { path: '/docs/:slug', name: 'guide', component: DocsPage },
     { path: '/docs/component/:slug', name: 'doc-component', component: DocsPage },
