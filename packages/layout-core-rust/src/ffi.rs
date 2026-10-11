@@ -550,6 +550,10 @@ pub(crate) fn style_from_dto(dto: &NodeDto) -> Result<LStyle, String> {
         if let Some(col) = sp.get("stroke").and_then(|x| x.as_str()) {
             style.stroke_color = parse_css_color(col)?;
         }
+        // ★★填充模式（App 图标渲染，2026-10-11）：`svgPath.fill: true` ⇒ 宿主填充 path（而非描边）。
+        if let Some(f) = sp.get("fill").and_then(|x| x.as_bool()) {
+            style.svg_fill = f;
+        }
         if let Some(w) = sp.get("strokeWidth").and_then(|x| x.as_f64()) {
             let w = w as f32;
             if !w.is_finite() || w <= 0.0 {
@@ -4744,6 +4748,8 @@ pub unsafe extern "C" fn proteus_layout_svg_nodes(handle: u64) -> *mut c_char {
                         "segs": segs.segs,
                         "strokeColor": n.style.stroke_color,
                         "strokeWidth": n.style.stroke_width,
+                        // ★★填充模式（App 图标渲染）：宿主据此填充（而非描边）——缺省 false（描边，既有行为）
+                        "fill": n.style.svg_fill,
                         "totalLen": segs.total_len,
                         // ★声明基态（2026-10-01）：宿主建层时按它初始化描边进度
                         //   （`progress:1` 的静态路径生来已画成——见 LStyle::stroke_progress_base）

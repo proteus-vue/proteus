@@ -1743,14 +1743,23 @@ final class SelfDrawView: UIView {
             let sw = CGFloat((info["strokeWidth"] as? Double) ?? 2)
             let shape = CAShapeLayer()
             shape.path = self.cgPathFromSegs(segs)
-            shape.strokeColor = strokeColor
-            shape.fillColor = nil
-            shape.lineWidth = sw
+            // ★App 图标渲染（2026-10-11）：`fill:true` ⇒ **填充**（图标是填充形状，非描边）；
+            //   否则沿用描边（既有行为）。填充时 lineWidth 置 0（避免描边叠加）。
+            let isFill = (info["fill"] as? Bool) ?? false
+            if isFill {
+                shape.fillColor = strokeColor
+                shape.strokeColor = nil
+                shape.lineWidth = 0
+            } else {
+                shape.strokeColor = strokeColor
+                shape.fillColor = nil
+                shape.lineWidth = sw
+            }
             shape.lineCap = .round
             shape.lineJoin = .round
-            // ★基态 = **声明的** `svgPath.progress`（缺省 0 = 未画；浏览模式 1 = 已画成）
+            // ★基态 = **声明的** `svgPath.progress`（缺省 0 = 未画；浏览模式 1 = 已画成）——填充态恒显
             let pbase = Float((info["progressBase"] as? Double) ?? 0)
-            shape.strokeEnd = CGFloat(Swift.max(0, Swift.min(1, pbase)))
+            shape.strokeEnd = isFill ? 1.0 : CGFloat(Swift.max(0, Swift.min(1, pbase)))
             layerStrokeBase[id] = pbase
             shape.contentsScale = UIScreen.main.scale
             layer.addSublayer(shape)

@@ -3407,7 +3407,15 @@ export function buildLayoutTemplate(
    *   （如 `p-auth-gate`）。在此集合内的 kebab 标签被标记为组件边界（`node.component`）。
    *   缺省 undefined ⇒ **零 kebab 边界**（既有产物逐字节不变）。PascalCase 组件不受此参数影响。
    */
-  opts?: { componentTags?: ReadonlySet<string> },
+  opts?: {
+    componentTags?: ReadonlySet<string>
+    /**
+     * ★★★App p-icon 图标降级（P4-续 phase B）：静态语义名 → path 的解析器（**构建期注入**，保持编译器
+     *   不直接依赖图标库）。给定则 `<p-icon name="home">`（静态名）被降级为一个带 `svgPath`+`svgViewBox`
+     *   的叶子盒（内核据此缩放到节点盒渲染）。返回 null ⇒ 未知名（不降级 + 诊断）。
+     */
+    iconResolver?: (name: string) => { d: string; viewBox?: string } | null
+  },
 ): LayoutTemplateResult {
   const diagnostics: VaporDiagnostic[] = []
   const nodes: LayoutNode[] = []
@@ -4171,7 +4179,59 @@ export function buildLayoutTemplate(
       normalizeOverflowFields(style)
       // ★★★flex-direction 项（2026-10-08）：display:flex 容器补 flex-direction 初值 row（级联后归一）
       normalizeFlexDirection(style)
-      const node: LayoutNode = { id, parentId, tag, style }
+      // ★★★App p-icon 图标降级（P4-续 phase B，2026-10-11）：`<p-icon name="home" :size="20">` 把**静态
+      //   语义名**在构建期经 `opts.iconResolver` 解析为 path，降级成一个带 `svgPath`+`svgViewBox` 的**叶子盒**
+      //   （内核据此缩放到节点盒渲染）——**不走组件展开**（组件的 `<svg>` 在 App 无降级通路）。
+      //   ★只做**静态 name**；动态 `:name` 需运行期 path 通道（单列，本版诊断）；未解析到 ⇒ 不降级。
+      let iconLeaf = false
+      if (tag === 'p-icon' && opts?.iconResolver) {
+        // 取静态字面量 prop：属性（`name="home"`，值已去引号）直接取；绑定（`:size="20"`）须为数字/带引号字面量
+        const literalProp = (pn: string): string | number | undefined => {
+          const a = (n.props ?? []).find(
+            (p) => (p.type === 6 && p.name === pn) || (p.type === 7 && p.name === 'bind' && p.arg?.content === pn),
+          )
+          if (!a) return undefined
+          const raw = a.type === 6 ? a.value?.content : a.exp?.content
+          const s = typeof raw === 'string' ? raw.trim() : undefined
+          if (s === undefined || s === '') return undefined
+          if (a.type === 6) return s // 静态属性：值已是字面量
+          if (/^-?\d+(\.\d+)?$/.test(s)) return Number(s)
+          const m = /^['"](.*)['"]$/.exec(s) // 绑定：仅接受数字或带引号字符串字面量
+          return m ? m[1] : undefined
+        }
+        const iconName = literalProp('name')
+        const hasDynName = (n.props ?? []).some((p) => p.type === 7 && p.name === 'bind' && p.arg?.content === 'name')
+        if (typeof iconName === 'string' && iconName) {
+          const resolved = opts.iconResolver(iconName)
+          if (resolved) {
+            const sizeN = literalProp('size')
+            const size = typeof sizeN === 'number' && sizeN > 0 ? sizeN : 16
+            const colorV = literalProp('color')
+            style.width = size
+            style.height = size
+            // ★填充 + 生来已画成（`progress:1`——否则描边进度门 `prog>0` 判为未画 ⇒ 不显形）
+            const decl: Record<string, unknown> = { d: resolved.d, progress: 1, fill: true }
+            if (typeof colorV === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(colorV)) decl.stroke = colorV
+            style.svgPath = decl
+            style.svgViewBox = (resolved.viewBox ?? '0 0 24 24').trim().split(/\s+/).map(Number)
+            if (typeof colorV === 'string' && colorV) style.color = colorV
+            iconLeaf = true
+          } else {
+            diag(
+              `p-icon(id=${id}) 未知图标名 "${iconName}"——未降级（App 端不渲染）`,
+              '用 @proteus-vue/icons 登记的名字（含别名）；或检查拼写',
+              'VAPOR_ICON_UNKNOWN',
+            )
+          }
+        } else if (hasDynName) {
+          diag(
+            `p-icon(id=${id}) \`:name\` 为**动态值**——App 构建期无法解析（本版不支持动态图标名）`,
+            '图标名用静态字面量（name="home"）；动态图标为后续批次（需运行期 path 通道）',
+            'VAPOR_ICON_DYNAMIC',
+          )
+        }
+      }
+      const node: LayoutNode = { id, parentId, tag: iconLeaf ? 'view' : tag, style }
       // ★★★批次 54（决策 #713）：dev 构建发射模板源位置（面板 Elements 选中/就地编辑 → 跳源行）。
       //   非 dev ⇒ `dev` 为 false、此处根本不进 ⇒ 产物逐字节不变。
       if (dev) {
@@ -4179,7 +4239,7 @@ export function buildLayoutTemplate(
         if (loc) node.loc = loc
       }
       if (nodeListId !== undefined) node.listId = nodeListId
-      if (isComponentTag) node.component = tag
+      if (isComponentTag && !iconLeaf) node.component = tag
       // ★静态 `is="Name"` ⇒ 当静态组件（与 `<Name>` 完全等价——组件标记指向真名）
       if (staticIsName !== undefined) node.component = staticIsName
       // ★P3 动态组件：`:is` 表达式标记（实例化期解析——见 LayoutNode.componentIs 边界）
