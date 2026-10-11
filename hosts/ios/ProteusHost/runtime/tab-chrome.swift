@@ -141,8 +141,10 @@ final class ProteusTabChrome {
             let tintColor: UIColor? = (glass["tint"] as? String).flatMap { Self.cssColor($0) }
             if #available(iOS 26.0, *) {
                 // ★Liquid Glass（系统材质）：interactive（tab 栏响应触摸）。
-                //   ★不叠 tint——系统 Liquid Glass 栏默认**清透**（tint 会令其发闷、离系统质感远）。
-                let ge = UIGlassEffect(style: .regular)
+                //   ★★★档位 = **`.clear`（真·液态透明）**——非 `.regular`。`.regular` 是"自适应档"，
+                //     带较实的填充底色（看着像磨砂面板）；`.clear` 才是系统那种**无底色的通透液态玻璃**。
+                //   （用户真机对比系统 Photos/Music 后指出"没有任何背景色/真正液态透明"——档位用错。）
+                let ge = UIGlassEffect(style: .clear)
                 ge.isInteractive = true
                 let gv = UIVisualEffectView(effect: ge)
                 gv.frame = bar.bounds
