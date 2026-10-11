@@ -221,6 +221,10 @@ pub(crate) struct NodeDto {
     ///   静态样式（非动画属性）：宿主建层时读取用于组 3D 矩阵。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) perspective: Option<f32>,
+    /// ★★**SVG 源视口**（`viewBox`，`[x,y,w,h]`；2026-10-11 · App 图标渲染）：给定则内核导出段时
+    ///   把 path 等比缩放到节点盒（见 `style::LStyle::svg_view_box`）。缺省 ⇒ 段按节点局部坐标（既有行为）。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) svg_view_box: Option<serde_json::Value>,
     /// ★★**SVG 路径声明**（2026-10-01 · C2）：`{d, stroke, strokeWidth}`——
     ///   `d` 由**内核解析**（单一实现，见 `svg_path` 模块）；`stroke` 是描边色（CSS hex）。
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -366,6 +370,7 @@ impl NodeDto {
             perspective: None,
             clip_path: None,
             svg_path: None,
+            svg_view_box: None,
             fill_gradient: None,
             fill_gradient_to: None,
             svg_path_to: None,
@@ -526,6 +531,22 @@ pub(crate) fn style_from_dto(dto: &NodeDto) -> Result<LStyle, String> {
             .ok_or_else(|| "svgPath 缺少 `d`（路径数据字符串，如 'M0 0 L10 10 Z'）".to_string())?;
         let parsed = crate::svg_path::parse_svg_path(d)?;
         style.svg_path = Some(parsed);
+        // ★★SVG 源视口（App 图标渲染，2026-10-11）：`svgViewBox: [x,y,w,h]` ⇒ 内核导出时缩放到节点盒。
+        if let Some(vb) = dto.svg_view_box.as_ref() {
+            let arr = vb.as_array().ok_or_else(|| "svgViewBox 应为 [x,y,w,h] 数组".to_string())?;
+            if arr.len() != 4 {
+                return Err(format!("svgViewBox 应有 4 个元素（x,y,w,h），实得 {}", arr.len()));
+            }
+            let mut out = [0.0f32; 4];
+            for (i, v) in arr.iter().enumerate() {
+                let n = v.as_f64().ok_or_else(|| format!("svgViewBox[{i}] 非数字"))? as f32;
+                if !n.is_finite() {
+                    return Err(format!("svgViewBox[{i}] 非有限数：{n}"));
+                }
+                out[i] = n;
+            }
+            style.svg_view_box = Some(out);
+        }
         if let Some(col) = sp.get("stroke").and_then(|x| x.as_str()) {
             style.stroke_color = parse_css_color(col)?;
         }
@@ -4708,13 +4729,22 @@ pub unsafe extern "C" fn proteus_layout_svg_nodes(handle: u64) -> *mut c_char {
                     break;
                 }
                 ids.push(n.id);
+                // ★★App 图标/SVG 渲染（2026-10-11）：声明了 `svgViewBox` ⇒ 把 path 等比缩放到**节点盒**
+                //   （内核唯一实现——宿主只翻译已缩放段）。未声明 ⇒ 用原始段（既有行为，逐字节不变）。
+                let scaled;
+                let segs = if let Some(vb) = n.style.svg_view_box {
+                    scaled = sp.scaled_to_box(vb, n.rect.width, n.rect.height);
+                    &scaled
+                } else {
+                    sp
+                };
                 paths.insert(
                     n.id.to_string(),
                     serde_json::json!({
-                        "segs": sp.segs,
+                        "segs": segs.segs,
                         "strokeColor": n.style.stroke_color,
                         "strokeWidth": n.style.stroke_width,
-                        "totalLen": sp.total_len,
+                        "totalLen": segs.total_len,
                         // ★声明基态（2026-10-01）：宿主建层时按它初始化描边进度
                         //   （`progress:1` 的静态路径生来已画成——见 LStyle::stroke_progress_base）
                         "progressBase": n.style.stroke_progress_base,

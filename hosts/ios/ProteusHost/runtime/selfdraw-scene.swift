@@ -3783,6 +3783,8 @@ final class SelfDrawView: UIView {
         if let fg2 = n["fillGradientTo"] as? [String: Any] { style["fillGradientTo"] = fg2 }
         // ★★C2：SVG 描边三键（路径段列表 / 描边色 / 线宽）——同"必须透传"纪律
         if let sp = n["svgPath"] as? [String: Any] { style["svgPath"] = sp }
+        // ★App 图标渲染（2026-10-11）：源视口（内核据此把 path 缩放到节点盒）——漏 ⇒ 图标按 24px 溢出
+        if let vb = n["svgViewBox"] as? [Any] { style["svgViewBox"] = vb }
         // ★★路径变形 v1：B 态（`svgPathTo`）——同"必须透传"纪律（漏 ⇒ 内核拒变形且静默）
         if let sp2 = n["svgPathTo"] as? [String: Any] { style["svgPathTo"] = sp2 }
         if let sc = n["strokeColor"] as? NSNumber { style["strokeColor"] = sc }
