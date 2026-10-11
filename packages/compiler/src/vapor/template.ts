@@ -3401,6 +3401,12 @@ export function buildLayoutTemplate(
    *   【为什么必须 gate 在 dev】非 dev 产物**逐字节不变**（否则 golden / app-ir-shadow / 产物体积全动）。
    */
   dev = false,
+  /**
+   * ★★★App 组件实例化（决策 #811）：**kebab 组件标签集**——该构建会注册为组件并随之展开的标签
+   *   （如 `p-auth-gate`）。在此集合内的 kebab 标签被标记为组件边界（`node.component`）。
+   *   缺省 undefined ⇒ **零 kebab 边界**（既有产物逐字节不变）。PascalCase 组件不受此参数影响。
+   */
+  opts?: { componentTags?: ReadonlySet<string> },
 ): LayoutTemplateResult {
   const diagnostics: VaporDiagnostic[] = []
   const nodes: LayoutNode[] = []
@@ -4105,7 +4111,16 @@ export function buildLayoutTemplate(
       // ★逻辑容器（KeepAlive/Teleport/Suspense/Transition）虽是 PascalCase，但**不是**组件边界
       //   （它们已被透传分支 `continue` 掉了 ⇒ 此处本就走不到；判据保留以防未来顺序调整）
       // ★动态组件的**静态形态**（`is="Name"`）等价于静态组件——在此统一打标记（零新机制）
-      const isComponentTag = /^[A-Z]/.test(tag) && !UNSUPPORTED_BUILTINS[tag] && !(tag in LOGICAL_CONTAINERS)
+      // ★★★App 组件实例化（kebab 组件边界，2026-10-11 · 决策 #811）：Vue 约定 PascalCase=组件、
+      //   kebab=原生标签；但 **Proteus 组件库用 `p-` 命名空间**，且 `p-` 下**既有布局原语**（p-view/p-text
+      //   ——引擎直接当盒/文本渲染）**又有富组件**（p-auth-gate/p-toast-host——视觉由 .vue 结构定义）。
+      //   ⇒ 不能按前缀一刀切（会把 p-view 也当边界 ⇒ 其子节点在无注册表时被丢）。
+      //   判据 = **由构建期声明**：`opts.componentTags`（该构建会注册为组件、并随之展开的标签集）。
+      //   未声明 ⇒ 无 kebab 边界（向后兼容：既有产物逐字节不变）。PascalCase 仍自动为组件（既有约定）。
+      const isComponentTag =
+        (/^[A-Z]/.test(tag) || (opts?.componentTags?.has(tag) ?? false)) &&
+        !UNSUPPORTED_BUILTINS[tag] &&
+        !(tag in LOGICAL_CONTAINERS)
       // ★★插槽出口 `<slot>`（P1-3 插槽分发，2026-10-03）：打 `slotOutlet` 标记——
       //   实例化期把父级内容**分发到出口位置**（出口自身**不产元素**，见 LayoutNode.slotOutlet）。
       //   ★静态名（`<slot name="header">`）/ 缺省（`default`）都支持；动态名（`:name`）
