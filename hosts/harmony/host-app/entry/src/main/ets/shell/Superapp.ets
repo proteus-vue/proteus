@@ -454,6 +454,19 @@ struct Superapp {
    *   （JS 共享运行期派发 tap → $nav 动作 → 导航 → 挂载目标屏）→ applyState + 重绘。
    *   ★内容坐标 = 视口坐标 + scrollOffset（命中树在内容坐标系）。
    */
+  /** ★Dactyl 专项：内核命中链（按下态/场跟手用；与 onTapAt 同一内核入口——单一真源）。 */
+  private hitAndChainAt(vpX: number, vpY: number): number[] {
+    try {
+      const contentY: number = vpY + this.scrollOffset;
+      const hitJson: string = appScreenHitAt(vpX, contentY);
+      const hit = JSON.parse(hitJson) as Record<string, Object>;
+      const chain = hit['chain'] as number[] | undefined;
+      return chain ?? [];
+    } catch (e) {
+      return [];
+    }
+  }
+
   private onTapAt(vpX: number, vpY: number): void {
     this.stopMomentum();   // ★点按 ⇒ 停掉惯性（与 iOS/Android：tap 打断动量）
     try {
@@ -507,6 +520,11 @@ struct Superapp {
       this.stopMomentum();   // ★手指按下 ⇒ 停掉上一段惯性（与 iOS/Android 同语义）
       this.touchLastY = t.windowY; this.touchStartX = t.windowX; this.touchStartY = t.windowY; this.touchMoved = false;
       this.touchLastTs = Date.now(); this.touchVelSum = 0; this.touchVelDt = 0; this.velOffset = 0;
+      // ★★★Dactyl 专项：按下态 + 场跟手焦点（内容坐标；命中链来自内核 hitTest——单一真源）
+      if (this.driver !== null) {
+        const chain: number[] = this.hitAndChainAt(t.windowX, t.windowY);
+        this.driver.onTouchDown(t.windowX, t.windowY + this.scrollOffset, chain);
+      }
       return;
     }
     if (e.type === TouchType.Move) {
@@ -521,9 +539,13 @@ struct Superapp {
       const step: number = this.applyScrollBy(-dy);
       if (dt > 0) { this.touchVelSum += step; this.touchVelDt += dt; }
       if (this.touchVelDt >= 24) { this.velOffset = this.touchVelSum / this.touchVelDt; this.touchVelSum = 0; this.touchVelDt = 0; }
+      // ★★★Dactyl 专项：场跟手 MOVE 只记焦点（零 FFI——推帧在 driver 的帧循环里）
+      if (this.driver !== null) { this.driver.onTouchMove(t.windowX, t.windowY + this.scrollOffset); }
       return;
     }
     if (e.type === TouchType.Up) {
+      // ★★★Dactyl 专项：抬起 ⇒ 还原按下态 + 清场（与 iOS handleTouchUp 同语义）
+      if (this.driver !== null) { this.driver.onTouchUp(); }
       if (!this.touchMoved && this.touchStartX >= 0) {
         // ★B1：几乎没动 ⇒ tap → 命中 → 导航（与 Android hitTest→gesture→JS 同语义）
         this.onTapAt(this.touchStartX, this.touchStartY);

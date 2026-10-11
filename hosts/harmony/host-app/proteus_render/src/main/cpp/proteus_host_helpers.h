@@ -52,6 +52,13 @@ char* proteus_layout_anim_start(uint64_t handle, const char* json);
 char* proteus_layout_anim_tick(uint64_t handle, float dt_ms);
 char* proteus_layout_anim_stop(uint64_t handle, const char* json);
 char* proteus_layout_anim_seek_scroll(uint64_t handle, const char* json);
+// ★★★Dactyl 专项（场跟手）：与 Android/iOS 同一内核原语（12B/条：id u32 + scale f32 + rotate f32）
+char* proteus_layout_follow_field_bin(uint64_t handle, uint32_t container_id, float focus_x, float focus_y,
+                                      float falloff, float min_scale, float max_scale, float max_rotate, uint32_t* out_len);
+// ★★二进制返回缓冲的释放（与 anim_tick_bin / rects_bin 同一释放入口）
+void proteus_rects_free(uint8_t* ptr, uint32_t len);
+// ★按压力增益标量（涟漪外扩；与 Android/iOS 同一条内核原语）
+char* proteus_layout_set_scale_gain(uint64_t handle, uint32_t node_id, float gain);
 char* proteus_layout_anim_seek(uint64_t handle, const char* json);
 char* proteus_layout_shared_element(uint64_t handle, const char* json);
 char* proteus_anim_curve_bezier(uint32_t curve);

@@ -160,6 +160,8 @@ static std::vector<std::array<double, 5>> g_stickyNodes;
 ///   ⇒ 真机现象「蓝条吸顶了、**条上的文字没跟过去**」（与 Android 同源缺陷）。⇒ 按 parentId 链
 ///   找出锚点子树、整体加同一位移（子节点基准位置 + 锚点位移）。
 static std::unordered_map<int, ArkUI_RenderNodeHandle> g_nodeById;
+/// ★按下态还原基线：节点 id → 建树时的静态底色（Dactyl 专项；与 iOS fbPressBackup 同款）
+static std::unordered_map<int, uint32_t> g_nodeStaticBg;
 static std::unordered_map<int, int> g_parentOfHost;          // id → parentId（-1 = 根）
 static std::unordered_map<int, std::array<double, 2>> g_basePos;   // id → {baseX, baseY}（物理 px）
 /// ★★建树序（json = 前序）：sticky 子树**按此序重挂** ⇒ 保持"条先、其子文字后"的相对绘制序。
@@ -1112,6 +1114,7 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
                          "PROTEUS_RENDER_NODE %{public}s", gbuf);
         }
         OH_ArkUI_RenderNodeUtils_SetBackgroundColor(node, static_cast<uint32_t>(color));
+        g_nodeStaticBg[(int)nodeId] = (uint32_t)color;   // ★按下态还原用（Dactyl 专项）
         // ★★★静态透明度（2026-10-08 · 子代理审 effects 案例 A）：读指令的 opacity（默认 1）→ RenderNode.SetOpacity。
         {
             double opv = 1; jsonNumber(it, "opacity", &opv);
@@ -1628,6 +1631,114 @@ static napi_value RenderCommands(napi_env env, napi_callback_info info) {
 }
 
 /**
+ * ★★★`applyPressVisual(json)` —— **按下态直接写 RenderNode**（Dactyl 专项 · 与 iOS/Android 同语义）。
+ *
+ * 【输入】`{id: {bg?, borderColor?, sx?, sy?, glowColor?, glowRadius?}}`（ArkTS driver 从**当前树**的
+ *   `press*` 字段收集而来——与 Android collectPressStyles / iOS InteractionFeedback.install 同源）。
+ * 【做什么】逐节点：`SetBackgroundColor` / `SetBorderColor`（option 形态）/ `SetTransform`（缩放矩阵，
+ *   绕局部原点——与静态变换同口径）/ 阴影（发光：SetShadowColor/Radius/Alpha/Offset）。
+ *   `{}`（空对象）⇒ **还原**：把该节点的底色/描边/变换/阴影恢复为**建树时的静态值**（本层自持快照）。
+ * 【为什么在渲染层（不是 ArkTS 重建）】重建整棵 cmds（appScreenCommands）在按下路径上是 O(N) 毫秒级；
+ *   属性直写是 O(1) 且**同帧**（与 Android "同帧生效"、iOS CATransaction 同款目标）。
+ * 【级联】鸿蒙的 RenderNode 是**真子树**（AddChild）⇒ 变换天然级联到后代（与 CSS 父 transform 同语义）——
+ *   这是与 Android（canvas 需显式收集祖先链）的形态差异，如实记录。
+ * 【备份/还原】首次改写时把静态快照存进 g_pressBackup；还原时写回（与 iOS fbPressBackup 同款）。
+ */
+struct PressBackup { uint32_t bg; bool hasBorder; uint32_t borderColor; double sx, sy; float shadowAlpha; };
+static std::unordered_map<int, PressBackup> g_pressBackup;
+
+static napi_value ApplyPressVisual(napi_env env, napi_callback_info info) {
+    size_t argc = 1; napi_value args[1] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    std::string js;
+    if (argc >= 1 && args[0] != nullptr) {
+        size_t len = 0; napi_get_value_string_utf8(env, args[0], nullptr, 0, &len);
+        js.resize(len + 1); napi_get_value_string_utf8(env, args[0], &js[0], len + 1, &len); js.resize(len);
+    }
+    int applied = 0;
+    // 逐节点：形态 `"<id>":{...}`（对象键值对——与 applyNodeVisuals 的数组形态不同，这里按键取）
+    size_t pos = 0;
+    while (pos < js.size()) {
+        size_t q1 = js.find('"', pos); if (q1 == std::string::npos) break;
+        size_t q2 = js.find('"', q1 + 1); if (q2 == std::string::npos) break;
+        std::string key = js.substr(q1 + 1, q2 - q1 - 1);
+        size_t colon = js.find(':', q2); if (colon == std::string::npos) break;
+        size_t open = js.find('{', colon); size_t close = js.find('}', colon);
+        if (open == std::string::npos || close == std::string::npos || close < open) break;
+        std::string obj = js.substr(open + 1, close - open - 1);
+        pos = close + 1;
+        int id = -1;
+        { char* end = nullptr; id = (int)strtol(key.c_str(), &end, 10); if (end == key.c_str()) continue; }
+        auto nit = g_nodeById.find(id);
+        if (nit == g_nodeById.end() || nit->second == nullptr) continue;
+        ArkUI_RenderNodeHandle node = nit->second;
+        // 备份（首次改写时记静态快照）
+        if (!g_pressBackup.count(id)) {
+            PressBackup b{}; b.bg = 0; b.hasBorder = false; b.borderColor = 0; b.sx = 1; b.sy = 1; b.shadowAlpha = -1;
+            b.bg = 0;   // 还原走 g_nodeStaticBg（建树时快照）
+            g_pressBackup[id] = b;
+        }
+        // 空对象 ⇒ 还原
+        bool restore = obj.find_first_not_of(" \t\r\n") == std::string::npos;
+        if (restore) {
+            // 还原：底色/描边/变换回**建树时的静态值**（从 g_nodeStatic 快照取；缺 ⇒ 仅清变换）
+            auto sit = g_nodeStaticBg.find(id);
+            if (sit != g_nodeStaticBg.end()) OH_ArkUI_RenderNodeUtils_SetBackgroundColor(node, sit->second);
+            float m[16] = {1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1};
+            OH_ArkUI_RenderNodeUtils_SetPivot(node, 0.0f, 0.0f);
+            OH_ArkUI_RenderNodeUtils_SetTransform(node, m);
+            if (g_pressBackup.count(id)) {
+                auto& b = g_pressBackup[id];
+                if (b.shadowAlpha >= 0) OH_ArkUI_RenderNodeUtils_SetShadowAlpha(node, b.shadowAlpha);
+            }
+            g_pressBackup.erase(id);
+            applied++;
+            continue;
+        }
+        double bgd = 0, bcd = 0, sx = 1, sy = 1, ga = 0, gr = 0;
+        bool hasBg = jsonNumber(obj, "bg", &bgd);
+        bool hasBc = jsonNumber(obj, "borderColor", &bcd);
+        bool hasSx = jsonNumber(obj, "sx", &sx);
+        bool hasSy = jsonNumber(obj, "sy", &sy);
+        bool hasGa = jsonNumber(obj, "glowAlpha", &ga);
+        bool hasGr = jsonNumber(obj, "glowRadius", &gr);
+        if (hasBg) { OH_ArkUI_RenderNodeUtils_SetBackgroundColor(node, (uint32_t)bgd); g_pressBackup[id].bg = (uint32_t)bgd; }
+        if (hasBc) {
+            ArkUI_NodeBorderColorOption* opt = OH_ArkUI_RenderNodeUtils_CreateNodeBorderColorOption();
+            if (opt != nullptr) {
+                OH_ArkUI_RenderNodeUtils_SetNodeBorderColorOptionEdgeColor(opt, (uint32_t)bcd, ARKUI_EDGE_DIRECTION_ALL);
+                OH_ArkUI_RenderNodeUtils_SetBorderColor(node, opt);
+                OH_ArkUI_RenderNodeUtils_DisposeNodeBorderColorOption(opt);
+            }
+        }
+        if ((hasSx || hasSy) && (sx != 1 || sy != 1)) {
+            double sp = sx;   // 等比（与 iOS 同：两轴取小；Dactyl 两轴同值）
+            if (sy < sp) sp = sy;
+            float m[16] = {
+                (float)sp, 0, 0, 0,
+                0, (float)sp, 0, 0,
+                0, 0, 1, 0,
+                0, 0, 0, 1
+            };
+            OH_ArkUI_RenderNodeUtils_SetPivot(node, 0.0f, 0.0f);
+            OH_ArkUI_RenderNodeUtils_SetTransform(node, m);
+        }
+        if (hasGa && hasGr && gr > 0) {
+            OH_ArkUI_RenderNodeUtils_SetShadowColor(node, (uint32_t)0xFF000000);
+            OH_ArkUI_RenderNodeUtils_SetShadowRadius(node, (float)gr);
+            OH_ArkUI_RenderNodeUtils_SetShadowAlpha(node, (float)ga);
+            OH_ArkUI_RenderNodeUtils_SetShadowOffset(node, 0, 0);
+            g_pressBackup[id].shadowAlpha = (float)ga;
+        }
+        applied++;
+    }
+    if (applied > 0 && g_rootHost != nullptr) OH_ArkUI_RenderNodeUtils_Invalidate(g_rootHost);
+    char buf[128]; snprintf(buf, sizeof(buf), "{\"ok\":true,\"applied\":%d}", applied);
+    PROTEUS_LOG("PROTEUS_APPLY_PRESS applied=%{public}d", applied);
+    napi_value out; napi_create_string_utf8(env, buf, NAPI_AUTO_LENGTH, &out); return out;
+}
+
+/**
  * ★★★`applyNodeVisuals(json)` —— **把内核逐帧视觉写到 RenderNode**（本批·"跳变驱动动画"的
  *   落点，与 Android `applyTickBin`/iOS `animTickApply` 同一职责）。
  *
@@ -1958,7 +2069,9 @@ static napi_value ClearRoot(napi_env env, napi_callback_info info) {
     (void)info;
     g_fixedNodes.clear();   // ★★★批 A：重建内容 ⇒ 清 fixed 登记（旧句柄失效）
     g_stickyNodes.clear();  // ★★★批 A③：同清 sticky 登记
-    g_nodeById.clear();         // ★★用户实测修复：同清 id→句柄/父/基准位（旧句柄随 ClearChildren 失效）
+    g_nodeById.clear();
+    g_nodeStaticBg.clear();
+    g_pressBackup.clear();   // ★换树连清按下备份（叶 id 重分配——与场态清同因）         // ★★用户实测修复：同清 id→句柄/父/基准位（旧句柄随 ClearChildren 失效）
     g_parentOfHost.clear();
     g_basePos.clear();
     g_buildOrder.clear();       // ★★同清建树序
@@ -2092,6 +2205,8 @@ static napi_value Init(napi_env env, napi_value exports) {
         {"renderCommands", nullptr, RenderCommands, nullptr, nullptr, nullptr, napi_default, nullptr},
         // ★★★"跳变驱动动画"（本批）：把内核逐帧视觉（anim_tick 的 updates）写到 RenderNode
         {"applyNodeVisuals", nullptr, ApplyNodeVisuals, nullptr, nullptr, nullptr, napi_default, nullptr},
+        // ★★★Dactyl 专项：按下态直写 RenderNode（底色/描边/缩放/发光；{} ⇒ 还原）
+        {"applyPressVisual", nullptr, ApplyPressVisual, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"stats", nullptr, Stats, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"platformAnimBegin", nullptr, PlatformAnimBegin, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"platformAnimStep", nullptr, PlatformAnimStep, nullptr, nullptr, nullptr, napi_default, nullptr},

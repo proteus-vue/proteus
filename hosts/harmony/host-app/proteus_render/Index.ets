@@ -8,6 +8,8 @@ export {
   renderCommands,
   // ★★★"跳变驱动动画"（本批）：内核逐帧视觉 → RenderNode
   applyNodeVisuals,
+  // ★★★Dactyl 专项：按下态直写 RenderNode（{} ⇒ 还原）
+  applyPressVisual,
   stats,
   platformAnimBegin,
   platformAnimStep,
@@ -27,6 +29,8 @@ export {
   appScreenHitAt,
   appScreenNodeRect,
   appScreenAnimTick,
+  // ★★★Dactyl 专项：场跟手一步（内核 follow_field_bin → 12B/条 → JSON）
+  appScreenFollowField,
   hostRtShellInstall,
   hostRtShellEvent,
   hostAppBoot,

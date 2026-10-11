@@ -199,6 +199,101 @@ final class SuperappScene: NSObject {
         //   跑一段（默认 1500ms），读宿主 native 计数（pump.calls/fire_ticks + anim_start_calls）→
         //   截图 + 落报告 + 自退。与 Android 的「L3 数字场持续跳变」判据同口径：
         //   ★判"动画在播"看**内核受理**（anim_start_calls / started），不看截屏像素（#793 判据纪律）。
+        // ★★★Dactyl 专项（本批）：`--press=x,y`（内容坐标 vp）——注入 down→(hold)→up 真触摸序列，
+        //   读交互反馈探针（按下态/场/动画计数）→ 报告 + 自退。★走 feedTouchSequence（与真触摸同分流器）。
+        if let pa = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--press=") }) {
+            Self.tapMode = true
+            let body = String(pa.dropFirst("--press=".count))
+            let parts = body.split(separator: ",")
+            if parts.count >= 1 && parts[0] == "auto" {
+                // ★自动定位（不猜坐标：按内核 rect 中心命中——本轮判据踩过"写死坐标落到容器"）
+                let holdMs = parts.count >= 2 ? (Double(parts[1]) ?? 400) : 400
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                    let r = bridgeRef?.pressAuto(holdMs: holdMs) ?? "{}"
+                    NSLog("[proteus] SUPERAPP_PRESS_AUTO %@", r)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + holdMs / 1000.0) {
+                        _ = bridgeRef?.driveTouchUp()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                            takeSnapshot()
+                            switchLog.append(["press": "auto", "held_ms": holdMs, "current": currentName(), "ok": true, "via": "press-inject"])
+                            writeReport(reportBody())
+                            NSLog("[proteus] SUPERAPP_PRESS_REPORT_READY %@", evalJs?("proteusSelfDraw.interactionProbe()") ?? "null")
+                            if ProcessInfo.processInfo.environment["PROTEUS_EXIT_AFTER_REPORT"] == "1" { exit(0) }
+                        }
+                    }
+                }
+            } else if parts.count >= 2, let x = Double(parts[0]), let y = Double(parts[1]) {
+                let heldMs = parts.count >= 3 ? (Double(parts[2]) ?? 400) : 400
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                    // ★注入三段（与真触摸同一钩子链）：down 立即应用按下态 → 保持 → up 还原
+                    _ = bridgeRef?.view?.driveTouchDown(x: x, y: y)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + heldMs / 1000.0) { _ = bridgeRef?.view?.driveTouchUp() }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        takeSnapshot()
+                        switchLog.append(["press": body, "held_ms": heldMs, "current": currentName(), "ok": true, "via": "press-inject"])
+                        writeReport(reportBody())
+                        NSLog("[proteus] SUPERAPP_PRESS_REPORT_READY %@", evalJs?("proteusSelfDraw.interactionProbe()") ?? "null")
+                        if ProcessInfo.processInfo.environment["PROTEUS_EXIT_AFTER_REPORT"] == "1" { exit(0) }
+                    }
+                }
+            } else {
+                NSLog("[proteus] SUPERAPP_PRESS_ARG_INVALID %@", pa)
+            }
+        }
+        // ★★`--field=x,y,dx,dy`：按下 → 拖拽（MOVE 多次）→ 读场探针（证明每帧一次 FFI 真的推了）→ 抬指自退。
+        if let fa = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--field=") }) {
+            Self.tapMode = true
+            let body = String(fa.dropFirst("--field=".count))
+            let parts = body.split(separator: ",")
+            if parts.count >= 1 && parts[0] == "auto" {
+                // ★可带屏名：`--field=auto,l2`（先导航到该屏再注入——场在 L2 上，不在入口屏）
+                let navTo = parts.count >= 2 ? String(parts[1]) : ""
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                    if !navTo.isEmpty {
+                        _ = evalJs?("__proteusSuperappNav(\(jsonQuote(navTo)))")
+                        DispatchQueue.main.async { renderCurrent() }
+                    }
+                    // ★自动定位场容器（按内核 rect 中心——不猜坐标）
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                        let r = bridgeRef?.fieldAuto() ?? "{}"
+                        NSLog("[proteus] SUPERAPP_FIELD_AUTO %@", r)
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                            takeSnapshot()
+                            switchLog.append(["field": "auto", "screen": navTo, "current": currentName(), "ok": true, "via": "field-inject"])
+                            writeReport(reportBody())
+                            NSLog("[proteus] SUPERAPP_FIELD_REPORT_READY %@", evalJs?("proteusSelfDraw.interactionProbe()") ?? "null")
+                            if ProcessInfo.processInfo.environment["PROTEUS_EXIT_AFTER_REPORT"] == "1" { exit(0) }
+                        }
+                    }
+                }
+            } else if parts.count >= 4, let x = Double(parts[0]), let y = Double(parts[1]),
+               let dx = Double(parts[2]), let dy = Double(parts[3]) {
+                let steps = parts.count >= 5 ? (Int(parts[4]) ?? 8) : 8
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                    guard let v = bridgeRef?.view else { return }
+                    // down（内容坐标）→ 逐段 MOVE（每段间隔一拍，让帧循环推几次）
+                    _ = v.driveTouchDown(x: x, y: y)
+                    var i = 0
+                    func step() {
+                        i += 1
+                        let t = Double(i) / Double(steps)
+                        v.driveTouchMove(x: x + dx * t, y: y + dy * t)
+                        if i < steps {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { step() }
+                        } else {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                takeSnapshot()
+                                switchLog.append(["field": body, "steps": steps, "current": currentName(), "ok": true, "via": "field-inject"])
+                                writeReport(reportBody())
+                                NSLog("[proteus] SUPERAPP_FIELD_REPORT_READY %@", evalJs?("proteusSelfDraw.interactionProbe()") ?? "null")
+                                if ProcessInfo.processInfo.environment["PROTEUS_EXIT_AFTER_REPORT"] == "1" { exit(0) }
+                            }
+                        }
+                    }
+                    step()
+                }
+            }
+        }
         if let pa = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--pump=") }) {
             Self.tapMode = true
             let body = String(pa.dropFirst("--pump=".count))
@@ -522,6 +617,9 @@ final class SuperappScene: NSObject {
         //   `calls`/`fire_ticks` > 0 证明周期驱动真的在跑且真的写进了数据源；`anim_start_calls` 证明
         //   `v-animate`/`<Transition>` 走到了宿主动画入口（同 #793 判据纪律：看内核受理，不看截屏像素）。
         if let rt = rtHostRef { o["pump"] = rt.pumpStats() }
+        // ★★★Dactyl 专项（本批）：三条交互反馈能力的**原生计数**（按下态/场跟手/伪元素动画）——
+        //   判据读它证明"通路真的走过"（与 Android pressProbe/fieldProbe 同口径，不看截屏像素）。
+        if let ip = evalJs?("proteusSelfDraw.interactionProbe()") { o["interaction_probe"] = ip }
         if let st = evalJs?("__proteusSuperappState()"),
            let d = st.data(using: .utf8),
            let so = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] {
