@@ -493,6 +493,42 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
     std::string rects = rp ? rp : "{}";
     if (rp) proteus_layout_free_string(rp);
     std::unordered_map<int, Rect> rectMap; parseRects(rects, rectMap);
+    // ★★App 图标/SVG 渲染（2026-10-11）：内核导出有 svgPath 的节点（含**已按节点盒缩放**的 `d`）——
+    //   预建"描边/填充 cmd 尾缀"（按节点 id），在节点循环里并进该节点的 cmd（复用既有 strokeD 通道）。
+    std::unordered_map<int, std::string> svgTail;
+    {
+        char* sp = proteus_layout_svg_nodes(handle);
+        if (sp) {
+            std::string sj = sp;
+            proteus_layout_free_string(sp);
+            size_t pathsAt = sj.find("\"paths\":{");
+            if (pathsAt != std::string::npos) {
+                size_t p = sj.find('{', pathsAt + 8);
+                p = (p == std::string::npos) ? sj.size() : p + 1;
+                while (p < sj.size()) {
+                    size_t q = sj.find("\":{", p);
+                    if (q == std::string::npos) break;
+                    size_t e = q, b = e;
+                    while (b > 0 && isdigit((unsigned char)sj[b - 1])) b--;
+                    if (b == e) { p = q + 1; continue; }  // 非数字键（segs 里的 MoveTo 等）跳过
+                    int id = atoi(sj.substr(b, e - b).c_str());
+                    size_t nextq = sj.find("\":{", q + 1);
+                    size_t wlen = (nextq == std::string::npos ? sj.size() : nextq) - q;
+                    std::string d;
+                    if (jstr(sj.c_str() + q, wlen, "d", &d) && !d.empty()) {
+                        double col = 0; jnum(sj.c_str() + q, wlen, "strokeColor", &col);
+                        double wid = 1; jnum(sj.c_str() + q, wlen, "strokeWidth", &wid);
+                        bool fill = sj.find("\"fill\":true", q) < q + wlen;
+                        std::string tail = ",\"strokeD\":\"" + jsonEscape(d) + "\",\"stroke\":{\"color\":" +
+                                           std::to_string((unsigned long long)col) + ",\"width\":" + std::to_string(wid) + "}";
+                        if (fill) tail += ",\"strokeFill\":true";
+                        svgTail[id] = tail;
+                    }
+                    p = q + 1;
+                }
+            }
+        }
+    }
     // ★★★鸿蒙滚动对齐：内容高 = 内核 rects 的 maxBottom（设计单位；与 Android applyContentScrollRange 同口径）
     {
         double maxBottom = 0;
@@ -803,6 +839,8 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
             }
             arr += ",\"text\":\"" + jsonEscape(text) + "\"";
         }
+        // ★★App 图标/SVG 渲染：本节点若有 svgPath（内核已缩放）⇒ 并入描边/填充 cmd（复用 strokeD 通道）
+        { auto svgi = svgTail.find((int)id); if (svgi != svgTail.end()) arr += svgi->second; }
         arr += "}"; emitted++;
     }
     arr += "]";
