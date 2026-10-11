@@ -46,7 +46,7 @@ public final class GlassMaterial {
             //   高度场 h：圆角矩形 SDF 的 smoothstep（中心 h=1、边缘 h→0）。
             + "float glassH(float2 u) {\n"
             + "    float2 dE = min(u, 1.0 - u);\n"
-            + "    return smoothstep(0.0, 0.16, min(dE.x, dE.y));\n"
+            + "    return smoothstep(0.0, 0.05, min(dE.x, dE.y));\n"
             + "}\n"
             + "half4 main(float2 coord) {\n"
             + "    float2 uv = (coord - rectOrigin) / size;\n"
@@ -77,7 +77,7 @@ public final class GlassMaterial {
             + "    // ④ tint（逐通道，少量——液态玻璃透亮不泛白）\n"
             + "    col.rgb = mix(col.rgb, col.rgb * half3(tint.rgb) * 2.0, half(tint.a));\n"
             + "    // ⑤ 边缘：内阴影（subtle darken）+ 镜面高光带（贴边亮，向内柔衰减）——对齐系统的柔和厚边\n"
-            + "    float band = 1.0 - smoothstep(0.0, 0.16, edge);\n"
+            + "    float band = 1.0 - smoothstep(0.0, 0.05, edge);\n"
             + "    col.rgb *= (1.0 - band * 0.05);\n"
             + "    float rim = band * specular * (0.35 + 0.65 * (1.0 - uv.y));\n"
             + "    col.rgb = min(col.rgb + half3(rim), half3(1.0));\n"
@@ -120,7 +120,7 @@ public final class GlassMaterial {
             sh.setFloatUniform("size", w, h);
             sh.setFloatUniform("blur", spec.blur);
             sh.setFloatUniform("saturation", spec.saturation);
-            sh.setFloatUniform("refractAmt", 0.09f);  // 法线折射强度（★极克制——iOS 几乎不扭背景）
+            sh.setFloatUniform("refractAmt", 0.14f);  // 窄带内折射强度（带仅 5% 极窄 ⇒ 中心不折射、只边缘弯）
             sh.setFloatUniform("specular", 0.10f);    // 镜面高光边（subtle）
             sh.setFloatUniform("contrast", 1.0f);     // 中性（iOS 不加强对比）
             float a = ((spec.tint >>> 24) & 0xFF) / 255f;
