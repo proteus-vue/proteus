@@ -192,7 +192,8 @@ public final class ProteusTabChrome {
 
     private void rebuild() {
         if (wrapper != null) { parent.removeView(wrapper); wrapper = null; }
-        int barH = dp((float) specNum("height", 52));
+        // 内容区高：优先 contentHeight（= max(height, 内容块高)；字号大时撑高）——问题1/字号可变
+        int barH = dp((float) specNum("contentHeight", specNum("height", 52)));
         barHeightPx = barH;
         final int onColor = specColor("brand", 0xFF5B5BD6);
         final int offColor = specColor("text3", 0xFF5F6673);
@@ -244,7 +245,10 @@ public final class ProteusTabChrome {
             col.setClickable(true);
 
             android.widget.FrameLayout icWrap = new android.widget.FrameLayout(ctx);
-            icWrap.setLayoutParams(new android.widget.LinearLayout.LayoutParams(dp(44), dp(22)));
+            // ★★自适应（2026-10-11 · 用户："文字和图标变大，内容区上下间距也要保持一致"）：图标行高
+            //   **由字号决定**（WRAP_CONTENT——此前硬编码 22dp，字号变大即裁切且块高不跟随）；
+            //   col 仍 setGravity(CENTER) ⇒ 行高变化时上下间距自动保持相等（对齐 Web flex column）。
+            icWrap.setLayoutParams(new android.widget.LinearLayout.LayoutParams(dp(44), android.view.ViewGroup.LayoutParams.WRAP_CONTENT));
             String glyphText = glyphToText(it.glyph);
             if (glyphText != null) {
                 android.widget.TextView ic = new android.widget.TextView(ctx);
@@ -252,8 +256,10 @@ public final class ProteusTabChrome {
                 ic.setTextSize(iconSize);
                 ic.setGravity(android.view.Gravity.CENTER);
                 ic.setTextColor(onColor);
+                // ★关字体上下留白（默认 true 的 includeFontPadding 会让文字块上下不对称 ⇒ 居中偏差）
+                ic.setIncludeFontPadding(false);
                 icWrap.addView(ic, new android.widget.FrameLayout.LayoutParams(
-                        android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT));
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT));
             }
             if (it.badge > 0) {
                 android.widget.TextView badge = new android.widget.TextView(ctx);
@@ -281,6 +287,7 @@ public final class ProteusTabChrome {
             lab.setTextSize(labelSize);
             lab.setGravity(android.view.Gravity.CENTER);
             lab.setTextColor(onColor);
+            lab.setIncludeFontPadding(false);   // ★去字体上下留白（居中对称——见图标处说明）
             col.addView(lab);
             col.setLayoutParams(new android.widget.LinearLayout.LayoutParams(
                     0, android.view.ViewGroup.LayoutParams.MATCH_PARENT, 1f));
