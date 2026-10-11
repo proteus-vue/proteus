@@ -2496,7 +2496,8 @@ public final class VaporRenderHost {
                     int col = packed >= 0 && packed < 4294967295L ? (int) packed : 0xFFFFFFFF;
                     float sw = (float) info.optDouble("strokeWidth", 2);
                     float pb = (float) info.optDouble("progressBase", 0);
-                    view.setNodeSvgStroke(id, segs, col, sw, pb);
+                    boolean fill = info.optBoolean("fill", false);
+                    view.setNodeSvgStroke(id, segs, col, sw, pb, fill);
                 }
             }
         } catch (Throwable ex) {

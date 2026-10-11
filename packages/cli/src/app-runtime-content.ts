@@ -16,6 +16,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { buildLayoutTemplate, buildVaporSubscriptions, compileEvents, parseCssVarTokens } from '@proteus-vue/compiler'
+import { iconByName, hasIcon } from '@proteus-vue/icons'
 import { extractRefLiterals, reorderNodesByZ } from './app-content'
 import { buildAppComponentRegistry, resolveComponentTags, type AppComponentDef } from './app-component-registry'
 import type { AppPlatform } from './targets'
@@ -121,6 +122,16 @@ export async function buildAppRuntimeContent(
   }
   // ★可展开的 `p-*` 组件标签（有 .vue 源码者）——编译器据此把它们标为组件边界（见 buildLayoutTemplate opts）
   const expandableTags = resolveComponentTags(pageSources, root)
+  // ★★App p-icon 图标降级（P4-续 phase B）：静态 `<p-icon name="home">` 在编译期解析为 path（内核据此渲染）。
+  const iconResolver = (name: string): { d: string; viewBox?: string } | null => {
+    if (!hasIcon(name)) return null
+    const def = iconByName(name)
+    return { d: def.d, viewBox: def.viewBox ?? '0 0 24 24' }
+  }
+  const compileOpts = {
+    ...(expandableTags.size > 0 ? { componentTags: expandableTags } : {}),
+    iconResolver,
+  }
   let compiled = 0
   let skipped = 0
   for (const r of routes) {
@@ -141,7 +152,7 @@ export async function buildAppRuntimeContent(
       statics,
       globalCss,
       dev,
-      expandableTags.size > 0 ? { componentTags: expandableTags } : undefined,
+      compileOpts,
     )
     if (!tplRes.ok) { diagnostics.push(`${r.name}: 模板编译失败`); skipped++; continue }
 

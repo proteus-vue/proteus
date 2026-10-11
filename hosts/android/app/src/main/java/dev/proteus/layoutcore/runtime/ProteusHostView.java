@@ -873,6 +873,12 @@ public class ProteusHostView extends ViewGroup {
      */
     public void setNodeSvgStroke(int nodeId, org.json.JSONArray segs, int strokeColor, float strokeWidth,
                                  float progressBase) {
+        setNodeSvgStroke(nodeId, segs, strokeColor, strokeWidth, progressBase, false);
+    }
+
+    /** ★App 图标渲染（2026-10-11）：`fill=true` ⇒ 填充（图标是填充形状，非描边）；否则描边。 */
+    public void setNodeSvgStroke(int nodeId, org.json.JSONArray segs, int strokeColor, float strokeWidth,
+                                 float progressBase, boolean fill) {
         android.graphics.Path path = new android.graphics.Path();
         for (int i = 0; i < segs.length(); i++) {
             Object raw = segs.opt(i);
@@ -899,7 +905,7 @@ public class ProteusHostView extends ViewGroup {
                 }
             }
         }
-        nodeSvgStroke.put(nodeId, new Object[]{path, strokeColor, strokeWidth, progressBase});
+        nodeSvgStroke.put(nodeId, new Object[]{path, strokeColor, strokeWidth, progressBase, fill});
     }
 
     /** 每帧下发的裁剪参数（16 槽；空 = 本帧该节点无裁剪更新） */
@@ -3623,8 +3629,18 @@ public class ProteusHostView extends ViewGroup {
                     // ★回落**声明基态**（2026-10-01）：表无该节点 ⇒ 用 `svgPath.progress` 声明的
                     //   "生来画到哪"（缺省 0 = 未画）；此前硬编码 0 ⇒ 静态 `progress:1` 的路径永不显形。
                     final float strokeBase = (Float) svg[3];
+                    final boolean svgFill = svg.length > 4 && Boolean.TRUE.equals(svg[4]);
                     final float prog = animStroke.containsKey(ids[i]) ? animStroke.get(ids[i]) : strokeBase;
-                    if (prog > 0f) {
+                    // ★填充态（图标）：直接填充 path（无描边进度门）——图标是填充形状，非画线。
+                    if (svgFill) {
+                        final int svgSaveF = canvas.save();
+                        canvas.translate(c.x, c.y);
+                        android.graphics.Paint fillPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                        fillPaint.setStyle(android.graphics.Paint.Style.FILL);
+                        fillPaint.setColor(scol);
+                        canvas.drawPath(sp, fillPaint);
+                        canvas.restoreToCount(svgSaveF);
+                    } else if (prog > 0f) {
                         strokePaint.setColor(scol);
                         strokePaint.setStrokeWidth(swid);
                         final int svgSave = canvas.save();

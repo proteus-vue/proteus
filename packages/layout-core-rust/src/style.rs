@@ -599,6 +599,11 @@ pub struct LStyle {
     /// ★★**描边颜色**（打包 `0xAARRGGBB`；0 = 未声明）
     #[serde(default)]
     pub stroke_color: u32,
+    /// ★★**填充模式**（`svgPath.fill`；2026-10-11 · App 图标渲染）——true 表示把 path **填充**
+    ///   （用 `stroke_color` 作填充色），而非描边。图标（Material Symbols）是**填充**形状，
+    ///   而 svgPath 通道默认描边 ⇒ 需此开关。缺省 false（既有描边路径零变化）。
+    #[serde(default)]
+    pub svg_fill: bool,
     /// ★★**描边宽度**（px；0 = 未声明）
     #[serde(default)]
     pub stroke_width: f32,
@@ -775,6 +780,7 @@ impl Default for LStyle {
             transform_origin_y: 0.5,
             svg_morph_resampled: false,
             stroke_color: 0,
+            svg_fill: false,
             stroke_width: 0.0,
             opacity: 1.0,
             bg: None,
