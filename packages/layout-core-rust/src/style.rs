@@ -552,6 +552,13 @@ pub struct LStyle {
     ///   **单一实现**：宿主不做第二份 SVG 解析器，只把段列表翻译成平台 path）
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub svg_path: Option<crate::svg_path::SvgPath>,
+    /// ★★**SVG 源视口**（`svgPath.viewBox`，`[x,y,w,h]`；2026-10-11 · App 图标渲染）——
+    ///   声明 path 的源网格（缺省 = 节点局部坐标，不缩放）。给定时，内核在**导出**该节点的段时
+    ///   用 `SvgPath::scaled_to_box` 把 path 从 viewBox **等比缩放到节点盒**（三端同形，
+    ///   宿主只翻译已缩放段）。为什么需它：图标 path 是 24 网格（`0 0 24 24`），而宿主把段坐标
+    ///   当**节点局部 px** 直接画（不读 viewBox）⇒ 不缩放会画成 24px 溢出。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub svg_view_box: Option<[f32; 4]>,
     /// ★★**路径变形的 B 态**（2026-10-01 · 路径变形 v1）：`svgPathTo` 的解析结果。
     ///   【能力本质】CSS **完全不能做**这件事（`d` 属性不可过渡——网页端要靠 GSAP MorphSVG /
     ///   flubber 这类库逐点重算）。本引擎把它做进内核：`pathMorph` 通道 0..1 驱动
@@ -755,6 +762,7 @@ impl Default for LStyle {
             stroke_progress: 0.0,
             stroke_progress_base: 0.0,
             svg_path: None,
+            svg_view_box: None,
             svg_path_to: None,
             path_morph: 0.0,
             glow: None,

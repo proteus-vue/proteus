@@ -3125,3 +3125,15 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **③ 验证**：superapp `build` → `runtime-content.json` 的 `verify` 屏现含 `components:["p-auth-gate"]` + `tpl` 里 `p-auth-gate` 带 `component` 边界；运行期 `instantiateTemplate` 展开出 **7 个 internal 节点**（componentNodes=7）。**35 个 vapor/superapp 测试 + golden + coupled(354) + `check:app-screen-content` 全绿**；新增 `tests/app-component-instantiation.test.ts`（5 条：无 componentTags 零边界 / 有则标边界 / PascalCase 不受影响 / 喂注册表展开 / 未喂保留边界）。
 **④ 诚实边界**：① 这只打通**实例化（组件节点树被展开）**；`p-icon` 的 `<svg><path>` 在 App **仍画不出**（编译器无 svg 降级 + p-icon 的 `d` 是运行期 computed + 内核无 viewBox 缩放 + 鸿蒙无 segs 通道 —— #810 的第二层），属**下一步 P4-续**；② 布局原语（p-view/p-text 等）**刻意不进组件展开**（只需透传 tag，引擎当盒/文本渲染）；③ 宿主侧**零改动**（实例化产扁平节点树，组件内部已并入同树）。
 **⑤ 教训**：① **"kebab 边界"不能按前缀判**——`p-*` 命名空间里原语与富组件混居，唯一可靠判据是"**构建期会不会为它注册可展开的 .vue**"（数据驱动，非命名约定）；② **改编译器一律先跑 `pnpm test:coupled`**——本轮第一版 3 红在 coupled 里 10 秒暴露，省下全量数分钟；③ **"能力已有但未接线"是本仓反复出现的形态**（实例化引擎早就在 slot-runtime，长期堵在"没有构建期生产者"——同 tab 栏壳绕过管线）。
+
+812. **★★★P4-续 内核侧：SVG path「viewBox → 节点盒」缩放（全链打通 · CI 可测核心）**（2026-10-11）：
+**① 背景**：#810 判定的 P4 第二层（App 图标/`<svg>` 渲染）。关键约束：**App 内核 `svg_path.rs` 与三端宿主都不读 viewBox**，把 path 坐标当节点局部 px 直接画 ⇒ 24 网格图标会画成 24px 溢出。**决策：把缩放放内核**（唯一 path 实现，纪律 #22；宿主只翻译已缩放段 ⇒ 三端必然同形）。
+**② 交付（端到端管道，核心 CI 可测）**：
+  · **内核算法**（`layout-core-rust/src/svg_path.rs`）：新增 `SvgPath::scaled_to_box(vb[X,Y,W,H], bw, bh)`——等比缩放 + 居中（`s=min(bw/vw,bh/vh)`），弧长随几何重算（`compute_arc_lengths`，唯一实现）；退化入参原样返回。**Rust 单测** `scales_view_box_to_node_box`（翻倍/折半/非方形居中/弧长重算/退化）。
+  · **IR 字段**：`style.rs` 加 `svg_view_box: Option<[f32;4]>`（+ default None）；`ffi.rs` DTO 加 `svg_view_box` + 解析校验（4 元素/有限数）+ `default_blob` 补 None。
+  · **导出缩放**：`proteus_layout_svg_nodes` 导出时若节点有 `svg_view_box` ⇒ `sp.scaled_to_box(vb, n.rect.width, n.rect.height)`（用节点盒），否则用原始段（**既有路径零变化**）。
+  · **TS 透传**：`renderer-app/adapters/selfdraw.ts` `LAYOUT_KEYS` + 复合键直通 加 `svgViewBox`；`vapor/template.ts` `PAINT_DECL_ATTRS`/`PAINT_DECL_KEY` 加 `svg-view-box`→`svgViewBox`（组件作者可写 `svg-view-box="[0,0,24,24]"`）。
+  · **宿主白名单**：Android `VaporRenderHost.LAYOUT_KEYS` + iOS `selfdraw-scene.swift` `styleOf` 补 `svgViewBox`（`check:host-kernel-keys` 抓出——漏登记 ⇒ 请求树不带 ⇒ 内核静默用默认）。
+**③ 验证**：Rust 224 测试 + `scales_view_box_to_node_box` 全绿；`test:coupled`(354) · `check:host-kernel-keys`（62 消费键全覆盖）· `check:android-host-compile` · `check:ios-selfdraw-compile` · `check:ios-style-keys` 全绿。
+**④ 诚实边界（P4-续 剩余 · phase B）**：本文只做**内核缩放 + 全链管道**（组件作者写 `svg-path`+`svg-view-box` 即可在 App 渲染图标）。★**p-icon 自动产 svgPath 仍缺**——需 ① 编译器把每处 `<p-icon name=...>` **降级**为该节点带 `svgPath`/`svgViewBox`（须**提取每处用法的 props**——而现有**组件边界+注册表**机制只传 props、不降边界标签 ⇒ 两者不匹配）；② props 要被捕获为 `component-prop` 槽位（`buildVaporSubscriptions` 现对 kebab 标签**不捕获**，需扩）；③ **运行期 d 通道**（`d` 是 `icon.d` computed ⇒ 静态 JSON 塞不下；内核 `ops_apply` 对 patch 不解析 `svg_path`）；④ **鸿蒙补 segs 通道**（现只吃 bench 的 `strokeD`）。⑤ 三端真机验收。⇒ p-icon 的「自动产 path」= 一条**独立的图标降级管线**（比实例化更专），单列。
+**⑤ 教训**：① **"数据侧缩放"与"内核缩放"要按场景分**——编译期已知尺寸（如 p-icon 的 size）用数据侧（更早、更省）；**运行期才知盒尺寸**（弹性布局里的图标）只能内核缩放（本文）——两者都在内核补一个 `scaled_to_box` 备着，不互相阻塞；② **新增 IR 字段必跑 `check:host-kernel-keys`**——Android 宿主白名单漏登记是"静默不生效"（内核用默认），门禁当场抓出（本轮真实发生）。

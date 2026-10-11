@@ -68,6 +68,41 @@ impl SvgPath {
             .count()
     }
 
+    /// ★★**按 `viewBox` 缩放到节点盒**（App 图标/SVG 渲染，2026-10-11 · 组件实例化续）。
+    ///
+    /// 【为什么在内核】内核是唯一 path 实现（纪律 #22）——"24 网格图标路径 → 节点盒"的缩放
+    ///   也只在这里做一次；宿主只把**已缩放**的段翻译成 CGPath/Path（三端必然同形）。
+    ///
+    /// 【变换】均匀缩放 + 居中：`s = min(bw/vw, bh/vh)`；
+    ///   `(x,y) → ((x-vx)·s + (bw - vw·s)/2, (y-vy)·s + (bh - vh·s)/2)`。弧长随几何重算。
+    ///   退化入参（vw/vh/bw/bh ≤ 0）⇒ 原样返回（不静默产出坏路径）。
+    pub fn scaled_to_box(&self, vb: [f32; 4], bw: f32, bh: f32) -> SvgPath {
+        let [vx, vy, vw, vh] = vb;
+        if vw <= 0.0 || vh <= 0.0 || bw <= 0.0 || bh <= 0.0 {
+            return self.clone();
+        }
+        let s = (bw / vw).min(bh / vh);
+        let ox = (bw - vw * s) / 2.0;
+        let oy = (bh - vh * s) / 2.0;
+        let mx = |x: f32| (x - vx) * s + ox;
+        let my = |y: f32| (y - vy) * s + oy;
+        let segs: Vec<PathSeg> = self
+            .segs
+            .iter()
+            .map(|sg| match *sg {
+                PathSeg::MoveTo(x, y) => PathSeg::MoveTo(mx(x), my(y)),
+                PathSeg::LineTo(x, y) => PathSeg::LineTo(mx(x), my(y)),
+                PathSeg::CubicTo(x1, y1, x2, y2, x, y) => {
+                    PathSeg::CubicTo(mx(x1), my(y1), mx(x2), my(y2), mx(x), my(y))
+                }
+                PathSeg::QuadTo(x1, y1, x, y) => PathSeg::QuadTo(mx(x1), my(y1), mx(x), my(y)),
+                PathSeg::Close => PathSeg::Close,
+            })
+            .collect();
+        let (prefix_len, total_len) = compute_arc_lengths(&segs);
+        SvgPath { segs, prefix_len, total_len }
+    }
+
     /// ★★**均匀弧长重采样**为恰好 `n` 个三次贝塞尔段（+ 可选 Close）——**异构路径变形的前提**。
     ///
     /// 【为什么需要（MorphSVG 的核心难点）】两条路径段数/段型不同时"逐点插值"没有定义
@@ -538,6 +573,29 @@ fn seg_len_cubic(x0: f32, y0: f32, x1: f32, y1: f32, x2: f32, y2: f32, x3: f32, 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn scales_view_box_to_node_box() {
+        // 24 网格路径（如 Material 图标 `home` 的近似）：`M0 0 L24 0 L24 24 L0 24 Z`
+        let p = parse_svg_path("M0 0 L24 0 L24 24 L0 24 Z").unwrap();
+        // 缩放到 48×48 盒：s=2 ⇒ 坐标翻倍（无居中偏移）
+        let s = p.scaled_to_box([0.0, 0.0, 24.0, 24.0], 48.0, 48.0);
+        assert_eq!(s.segs[0], PathSeg::MoveTo(0.0, 0.0));
+        assert_eq!(s.segs[1], PathSeg::LineTo(48.0, 0.0));
+        assert_eq!(s.segs[2], PathSeg::LineTo(48.0, 48.0));
+        // 缩放到 12×12：s=0.5 ⇒ 折半
+        let h = p.scaled_to_box([0.0, 0.0, 24.0, 24.0], 12.0, 12.0);
+        assert_eq!(h.segs[2], PathSeg::LineTo(12.0, 12.0));
+        // 非方形盒（48×24）：等比取 min(48/24,24/24)=1 ⇒ 24×24 居中于 48 宽 ⇒ 水平偏移 (48-24)/2=12
+        let c = p.scaled_to_box([0.0, 0.0, 24.0, 24.0], 48.0, 24.0);
+        assert_eq!(c.segs[0], PathSeg::MoveTo(12.0, 0.0));
+        assert_eq!(c.segs[1], PathSeg::LineTo(36.0, 0.0));
+        // 弧长随几何重算（边长和 4×24×s... 取 s=2：4 段各 48 ⇒ 192）
+        assert!((s.total_len - 192.0).abs() < 1e-3, "total_len={}", s.total_len);
+        // 退化入参 ⇒ 原样（不产出坏路径）
+        let d = p.scaled_to_box([0.0, 0.0, 0.0, 24.0], 48.0, 48.0);
+        assert_eq!(d.segs, p.segs);
+    }
 
     #[test]
     fn parses_common_icon_path() {

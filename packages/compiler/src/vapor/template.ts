@@ -177,7 +177,7 @@ const INHERIT_KEY_SET = new Set<string>([...APP_INHERITABLE_FIELDS, 'visibility'
  *   五元 mask 规格）——拆成扁平属性会把"一份声明"打散成十几个键，且无法表达数组。
  *   JSON 串是**编译期可校验**的最小形态（解析失败 ⇒ 诊断，不静默丢）。
  */
-const PAINT_DECL_ATTRS = new Set(['fill-gradient', 'fill-gradient-to', 'clip-path', 'glow', 'mask', 'svg-path', 'svg-path-to'])
+const PAINT_DECL_ATTRS = new Set(['fill-gradient', 'fill-gradient-to', 'clip-path', 'glow', 'mask', 'svg-path', 'svg-path-to', 'svg-view-box'])
 
 /**
  * ★★★**未支持特性的「可见化」探测**（2026-10-03 · P0 能力清单批次）。
@@ -354,6 +354,7 @@ const PAINT_DECL_KEY: Record<string, string> = {
   mask: 'mask',
   'svg-path': 'svgPath',
   'svg-path-to': 'svgPathTo',
+  'svg-view-box': 'svgViewBox',
 }
 /** 四边缩写属性（`margin-left` ⇒ `margin.left`） */
 const EDGE_FIELDS = new Set<string>(APP_EDGE_FIELDS)
