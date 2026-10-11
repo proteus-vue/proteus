@@ -66,8 +66,8 @@ public class GlassActivity extends Activity {
                 ids.add(nid++);
             }
         }
-        // 中央一行白字（模糊后仍在，证明"内容在玻璃后"）
-        cmds.add(new ProteusHostView.Cmd(24 * U, H / 2f - 40 * U, W - 48 * U, 40 * U, 0xFF000000,
+        // 中央一行白字（透明底——`0x00000000`；文字用白色 0xFFFFFFFF）
+        cmds.add(new ProteusHostView.Cmd(24 * U, H / 2f - 40 * U, W - 48 * U, 40 * U, 0x00000000,
                 "玻璃背后的内容 CONTENT BEHIND GLASS", 22 * U, 0xFFFFFFFF, 0f));
         ids.add(nid++);
 
