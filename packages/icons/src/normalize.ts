@@ -121,6 +121,7 @@ export function normalizePath(d: string): string {
   const num = (): number => Number(tk[i++])
   while (i < tk.length) {
     const t0 = tk[i]
+    const iBefore = i   // ★死锁/无界修复（与 path-parser.ts 同款）：记本轮入口下标
     if (typeof t0 === 'string') {
       cmd = t0
       i++
@@ -209,6 +210,12 @@ export function normalizePath(d: string): string {
         throw new Error(`normalizePath: 不支持的 SVG 命令 \`${cmd}\``)
     }
     prevCmd = C
+    // ★★★死锁/无界修复（真机实证 · 与 path-parser.ts #865 同款）：本轮**未消费任何 token** ⇒
+    //   强制推进 i，否则无限循环。触发面：`Z` 后跟数字（如 `M0 0Z5`）——`case 'Z'` 既不 i++
+    //   也不调 num() ⇒ 状态零变化 ⇒ while 原地空转且每轮 `out.push('Z')` ⇒ **内存爆炸 OOM**
+    //   （真实源码实测：`normalizePath('M0 0Z5')` → FATAL ERROR: heap out of memory）。
+    //   非法输入多产一个 `Z`（幂等无害）；合法路径输出逐字节不变。
+    if (i === iBefore) i++
   }
   return out.join(' ')
 }

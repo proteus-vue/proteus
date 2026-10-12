@@ -3548,3 +3548,11 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **⑤ 修复（path-parser.ts 三处）**：① **主修**——循环体记入口下标 `iBefore`，循环尾**兜底推进** `if (i === iBefore) i++`（结构性免疫：任何将来新增的"无参数命令"分支都受益）；② 健壮性——`num()` 改为"非数字 ⇒ 返回 0 且不消费 token"（消除截断路径 `Number(undefined)=NaN` 灌进绘制指令；`M0 0 L` 由 NaN → len=0）；③ 健壮性——`arcTo` 加"起终点重合则省略该弧段"（SVG 规范 F.6.2；消除 `x1p=y1p=0` 分母 0 的 NaN 椭圆参数）。
 **⑥ 验证**：修复后探针——非法输入 **4/4 终止**；十条合法路径（含 `C/S/Q/T/A/Z`、负数、科学计数）输出**逐字节不变**；截断路径 NaN 消除；退化弧不再产 NaN。回归测试见 `tests/svg-canvas.test.ts`（+4 例：守卫终止 ×2 / 截断 NaN / 退化弧 NaN）。**定向 86 测试全绿**（svg-canvas/aním/hit/to-image/compiler-ir-svg）。
 **⑦ 诚实边界**：非法输入会**多调一次 `closePath`**（幂等，canvas 语义无副作用）；`num()` 缺失即返回 0（值无意义但不再崩，且后续真命令仍被处理）。
+
+866. **★★★OOM 彻查——又揪出两个真实缺陷（icons/normalize 同款挂死 OOM + setDataBridge 环引用栈溢出）**（2026-10-12）：
+**① 背景**：用户「彻查有没有其他 OOM」。系统扫描（`packages/*/src`）全部 `while`/`for(;;)`/`while(true)` + 循环内 push/concat/map.set + 自递归 + 无淘汰缓存。
+**② ★真风险 1（CRITICAL，已修）**：`packages/icons/src/normalize.ts:122` `normalizePath` —— **与 `path-parser.ts` 同款克隆**：`case 'Z'`（203-207）既不 `i++` 也不调 `num()` ⇒ `Z` 后跟数字时 `while` 原地空转 + 每轮 `out.push('Z')` ⇒ **内存爆炸**。**真实源码实测**（`node --max-old-space-size=96`）：`normalizePath('M0 0Z5')` → **`FATAL ERROR: JavaScript heap out of memory`**（硬证）。可达性：`normalizedIcon`（`p-icon` / built-in icon 用）+ **公开导出**。修：同款循环尾兜底 `if (i === iBefore) i++`。
+**③ ★真风险 2（HIGH，已修）**：`packages/runtime/src/setDataBridge.ts` —— `collectDiff`/`flattenPaths` 递归 **无环检测**（`isDiffable` 接受任意对象、无 visited 集）⇒ 用户响应式数据含**环**（自引用 / 双向 parent↔child）时无限递归。**真实源码实测**：环对象 `markDirty` → **`RangeError: Maximum call stack size exceeded`**。修：加 `seen: Set` 祖先集（命中即整体替换为叶子；与 `shared/storage/serialize.ts` 的环处理同源）。
+**④ 已查但受控（抽样核实，列关键）**：`compiler/calc-fold.ts` `for(;;)`（每分支 i++ 或 return）；`compiler/script.ts:2828` 平衡扫描（`skip()`/深度扫描必推进，且 `assignRe` 无 g 标志无死循环）；`docs/highlight.ts` 主循环（每分支/尾部必 `i++`）；`slot-runtime` 缓存 key 有限（`list-registry.clearList` 已有但未接线——**记为后续跟进，非缺陷**）；`runtime/setDataBridge.lastValues` 陈旧 key（有界于页面×数据键）。
+**⑤ 验证**：探针——`normalizePath` 非法输入终止（不再 OOM）+ 合法输出不变；环对象不再 RangeError。回归测试：`tests/icons.test.ts` +2 例（Z 后跟数字终止 / 合法不变）、`tests/runtime.test.ts` +1 例（环引用不崩）。**定向 82 测试全绿**；`test:coupled` 50 全绿；盲等/门禁接线门禁绿。
+**⑥ 诚实边界**：全量 vitest 未跑（本机 Node 18.16.1 < 要求 22，jsdom 27 ESM-only 会假红）——只跑定向。`slot-runtime` 缓存淘汰未接线列为**后续跟进**（非本项缺陷；当前 key 有限不触发）。

@@ -52,6 +52,19 @@ describe('setDataBridge 批量桥接', () => {
     expect(mockPage.setData).toHaveBeenCalledWith({ 'a.x': 99 })
   })
 
+  // ★★★决策 #865：环引用防护回归——用户响应式数据可能含环（自引用 / 双向 parent↔child）。
+  //   修复前无 visited 集 ⇒ 无限递归 → RangeError: Maximum call stack（真实源码实测）。
+  it('★环引用对象不崩（不 RangeError，不再无限递归）', () => {
+    const cyc: Record<string, unknown> = { name: 'a' }
+    cyc.self = cyc   // 自引用
+    expect(() => setDataBridge.markDirty('pages/cyc', 'state', cyc)).not.toThrow()
+    // 双向父子在 flattenPaths（首次推送）路径下同样不崩
+    const parent: Record<string, unknown> = { id: 1 }
+    const child: Record<string, unknown> = { p: parent }
+    parent.child = child
+    expect(() => setDataBridge.markDirty('pages/cyc2', 'root', { parent, child })).not.toThrow()
+  })
+
   it('路径合并：新路径为祖先 → 移除被覆盖的子路径（叶路径补丁语义）', () => {
     setDataBridge.markDirty('pages/index', 'list[0].name', 'n')
     setDataBridge.markDirty('pages/index', 'list', [{ name: 'new' }])

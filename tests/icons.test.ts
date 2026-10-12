@@ -15,6 +15,7 @@ import {
   hasIcon,
   hasFilled,
   resolveIconName,
+  normalizePath,
 } from '../packages/icons/src'
 
 const KEBAB = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/
@@ -148,3 +149,19 @@ describe('★★内核可吃（svg_path.rs 只认绝对 M/L/C/Q/Z）', () => {
     }
   })
 })
+
+// ★★★决策 #865：`normalizePath` 挂死/OOM 回归——与 path-parser.ts 同款 `Z` 后跟数字缺陷。
+//   修复前真实源码实测 `normalizePath('M0 0Z5')` ⇒ FATAL ERROR: heap out of memory（无界 out.push）。
+describe('★★★normalizePath 鲁棒性（Z 后跟数字 / 非法输入不挂死）', () => {
+  it('Z 后跟数字（非法 d）终止且不 OOM', () => {
+    // 修复前会无限循环并每轮 push('Z') ⇒ 内存爆炸。修复后应正常返回。
+    expect(() => normalizePath('M0 0Z5')).not.toThrow()
+    expect(() => normalizePath('M0 0h10v10z5')).not.toThrow()
+    expect(() => normalizePath('m0,0 l10,0 z0')).not.toThrow()
+  })
+  it('合法路径输出不变（零回归）', () => {
+    expect(normalizePath('M0 0 L10 10 Z')).toBe('M 0 0 L 10 10 Z')
+    expect(normalizePath('M0 0 h10 v10 z')).toBe('M 0 0 L 10 0 L 10 10 Z')
+  })
+})
+
