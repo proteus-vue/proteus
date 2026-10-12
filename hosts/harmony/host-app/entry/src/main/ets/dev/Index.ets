@@ -116,7 +116,31 @@ class GlassShotFrameCallback extends FrameCallback {
   onIdle(): void {}
 }
 
-/** 平台动画步进读数（ArkTS 严格模式：显式接口——字段与 platformAnimStep 的 JSON 对应） */
+/**
+ * ★★★玻璃演示：**连续自动滚动**帧循环（决策 #843 观感取证 · 供录屏）。
+ *   每帧 `scrollRoot(offset)` 让内容在**固定玻璃**下滑过（offset 单调增，到末尾回绕循环）。
+ *   用于录"内容经过玻璃"的动态折射视频——静态截图看不出折射的滚动观感。
+ *   ★零盲等：由 postFrameCallback 自驱；`stop()` 停（或硬上限帧数兜底）。
+ */
+class GlassAutoScrollCallback extends FrameCallback {
+  private uiCtx: UIContext;
+  private offset: number = 0;
+  private readonly stepVp: number;      // 每帧位移（vp）
+  private readonly maxVp: number;       // 到该位移回绕
+  private maxFrames: number;            // 硬上限（≈ 帧数；0 = 不限）
+  constructor(uiCtx: UIContext, stepVp: number, maxVp: number, maxFrames: number) {
+    super(); this.uiCtx = uiCtx; this.stepVp = stepVp; this.maxVp = maxVp; this.maxFrames = maxFrames;
+  }
+  onFrame(_frameTimeInNano: number): void {
+    this.offset += this.stepVp;
+    if (this.offset > this.maxVp) this.offset = 0;   // 回绕（无缝循环）
+    scrollRoot(this.offset);
+    if (this.maxFrames > 0) { this.maxFrames--; if (this.maxFrames === 0) { hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_GLASS_AUTOSCROLL_DONE'); return; } }
+    this.uiCtx.postFrameCallback(this);
+  }
+  onIdle(): void {}
+}
+
 interface AnimStepReading {
   tx: number;
   scale: number;
@@ -528,6 +552,9 @@ struct Index {
   /** ★★★玻璃夹具场景（决策 #838 · `--ps scene glass`）：与 Android `GlassActivity` 同形——
    *  滚动内容 + 圆形/胶囊玻璃面（验鸿蒙自绘玻璃：磨砂面 + 圆角 + 高光边）。 */
   private glassScene: boolean = (AppStorage.get<string>('proteusScene') ?? '') === 'glass';
+  /** ★★★决策 #843：**玻璃演示（自动滚动）**场景（`--ps scene glass-demo`）——连续滚动内容经过固定玻璃，
+   *  供**录屏**（内容折射的动态观感；静态截图看不出）。 */
+  private glassDemoScene: boolean = (AppStorage.get<string>('proteusScene') ?? '') === 'glass-demo';
   /** ★★★Vulkan 能力探针场景（决策 #841 · `--ps scene vk`）：只跑 vkProbe 并上报，不建树/不跑 bench。
    *  ★为什么单独成场景：探针要在**无内容干扰**下采集，避免被 bench 的多次建树日志挤掉。 */
   private vkScene: boolean = (AppStorage.get<string>('proteusScene') ?? '') === 'vk';
@@ -1004,6 +1031,25 @@ struct Index {
           hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_VKGLASS_RUN %{public}s', g);
         } catch (ge) {
           hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_VKGLASS_ERROR %{public}s', JSON.stringify(ge) ?? '');
+        }
+        return;
+      }
+      // ── ★★★玻璃演示（自动滚动）场景（决策 #843 · `--ps scene glass-demo`）：连续滚动供录屏 ──
+      if (this.glassDemoScene) {
+        try {
+          const dispD = display.getDefaultDisplaySync();
+          const vpWD = px2vp(dispD.width);
+          const vpHD = px2vp(dispD.height);
+          attach(this.content, vp2px(1), vpWD, vpHD);
+          setContentMode('self-draw');
+          const nD = renderCommands(buildGlassCommands(vpWD, vpHD));
+          this.rendered = nD;
+          // 连续自动滚动：每帧 +1vp（≈120vp/s），0..1500vp 回绕循环——★放慢到"每采样帧位移小"，
+          //   配合宿主端 ~2.6fps 连拍（snapshot_display ≈0.38s/帧）⇒ 录出的视频帧间位移 ~45vp、平滑。
+          this.getUIContext().postFrameCallback(new GlassAutoScrollCallback(this.getUIContext(), 1, 1500, 0));
+          hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_GLASS_DEMO nodes=%{public}d', nD);
+        } catch (de) {
+          hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_GLASS_DEMO_ERROR %{public}s', JSON.stringify(de) ?? '');
         }
         return;
       }
