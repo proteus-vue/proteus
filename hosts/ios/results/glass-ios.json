@@ -2,14 +2,14 @@
   "glass_faces" : 2,
   "glass_nodes" : 2,
   "host_id" : "ios",
-  "host_total_ms" : 429.00999999999999,
-  "layer_count" : 52,
+  "host_total_ms" : 78.799999999999997,
+  "layer_count" : 55,
   "mount_ok" : true,
-  "node_count" : 52,
+  "node_count" : 55,
   "ok" : true,
-  "run_ts" : 1791769540,
+  "run_ts" : 1791772384,
   "scroll_raw" : "{\"ok\":true,\"offsetY\":220.0,\"changed\":0,\"applied\":0}",
   "snapshot_after" : "glass-ios-scrolled.png",
   "snapshot_before" : "glass-ios.png",
-  "tree_bytes" : 7348
+  "tree_bytes" : 7945
 }

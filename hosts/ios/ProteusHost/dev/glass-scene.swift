@@ -99,6 +99,24 @@ final class GlassScene: NSObject {
                       "width": 130, "height": 130, "borderRadius": 65,
                       "glass": ["blur": 16, "tint": "#ffffff26", "radius": 65, "border": true,
                                 "saturation": 1.0, "level": "L2"]])
+        id += 1
+        // ★B4 前景材质验证（决策 #834）：gradient / glow / mask 各一块（固定位，验内核单源渲染）
+        // ① 渐变砖（45° 线性——验 CSS 端点式；固定左上）
+        nodes.append(["id": id, "parentId": 0, "position": "fixed", "left": 16, "top": 96,
+                      "width": 120, "height": 80, "borderRadius": 8,
+                      "fillGradient": ["kind": "linear", "angle": 45.0,
+                                       "stops": [["offset": 0.0, "color": "#ff5a3c"],
+                                                 ["offset": 1.0, "color": "#3c78ff"]]]])
+        id += 1
+        // ② 发光块（glow——验分层曲线；固定右上）
+        nodes.append(["id": id, "parentId": 0, "position": "fixed", "left": 270, "top": 96,
+                      "width": 96, "height": 60, "borderRadius": 12, "backgroundColor": "#20b0c0",
+                      "glow": ["color": "#66ffcc", "radius": 18.0, "alpha": 0.9]])
+        id += 1
+        // ③ 软边遮罩块（mask——验揭示色标单源；固定中部偏下）
+        nodes.append(["id": id, "parentId": 0, "position": "fixed", "left": 200, "top": 380,
+                      "width": 150, "height": 90, "backgroundColor": "#c83c78",
+                      "mask": ["kind": "linear", "angle": 90.0, "softness": 0.5, "progress": 0.5]])
         return ["viewport": ["width": 390, "height": 844], "nodes": nodes]
     }
 
