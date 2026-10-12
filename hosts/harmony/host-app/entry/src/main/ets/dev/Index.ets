@@ -18,10 +18,11 @@ import { NodeContent, FrameCallback, UIContext } from '@kit.ArkUI';
 import { util } from '@kit.ArkTS';
 import { fileIo } from '@kit.CoreFileKit';
 import { display } from '@kit.ArkUI';
+import { window } from '@kit.ArkUI';
 import { hidebug } from '@kit.PerformanceAnalysisKit';
 // ★矩阵 #17：App 路由栈场景探针（移植副本，与 Android/iOS 同口径）
 import { runAppStackProbe } from './app-stack-probe';
-import { attach, renderCommands, stats, ProteusRenderStats, platformAnimBegin, platformAnimStep, platformAnimEnd, platformAnimSave, clearRoot, scrollRoot, setContentMode, gestureInstall, gestureSample, snapshotProbe, vkGlassProbe, glassPass, glassStats, appScreenCommands, appScreenHitAt, appScreenAnimTick } from 'proteus_render';
+import { attach, renderCommands, stats, ProteusRenderStats, platformAnimBegin, platformAnimStep, platformAnimEnd, platformAnimSave, clearRoot, scrollRoot, setContentMode, setTopInset, gestureInstall, gestureSample, snapshotProbe, vkGlassProbe, glassPass, glassStats, appScreenCommands, appScreenHitAt, appScreenAnimTick } from 'proteus_render';
 // ★P3-3：宿主动画入口（`<Transition>` 桥的鸿蒙腿——与 Android/iOS 同形）
 import { animTick, animActive } from 'libproteus_bench.so';
 import { bench4050, hitProbe, recycleProbe, spliceProbe, textProbe, kernelAnimProbe, memProbe, sfcStressProbe, sfcStressCommands, jsvmProbe, vaporProbe, animCurveBezier, hostRuntimeProbe, hostRtShellInstall, mountVirtualProbe, gestureHitPrepare, gestureHitAt, fontFamilyProbe, nodeRect, vkProbe, screenContentProbe, appStackExecutorProbe, version as rustVersion } from 'libproteus_bench.so';
@@ -798,6 +799,23 @@ struct Index {
     this.getUIContext().postFrameCallback(new TransitionFrameCallback(this.getUIContext()));
   }
 
+  /** ★决策 #847：取状态栏避让区高（物理 px）⇒ `setTopInset`（内容裁到其下，防滚进状态栏区）。
+   *  异步（`getLastWindow` 是 promise）；失败静默（不阻断）。 */
+  private applyTopInset(): void {
+    try {
+      window.getLastWindow(getContext(this)).then((win: window.Window) => {
+        try {
+          const avoid: window.AvoidArea = win.getWindowAvoidArea(window.AvoidAreaType.TYPE_SYSTEM);
+          const topPx: number = avoid.topRect.height;   // 物理 px
+          setTopInset(topPx);
+          hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_TOP_INSET_APPLY px=%{public}d', Math.round(topPx));
+        } catch (e) { /* 旧版本/失败 ⇒ 保持 0 */ }
+      }).catch((e: Error) => {
+        hilog.warn(DOMAIN, BENCH_TAG, 'PROTEUS_TOPLNSET_WIN_ERR %{public}s', String(e?.message ?? e));
+      });
+    } catch (e) { /* ignore */ }
+  }
+
   aboutToAppear(): void {
     hilog.info(DOMAIN, TAG, 'PROTEUS_PAGE_APPEAR');
   }
@@ -1116,6 +1134,7 @@ struct Index {
           const vpHD = px2vp(dispD.height);
           attach(this.content, vp2px(1), vpWD, vpHD);
           setContentMode('self-draw');
+          this.applyTopInset();   // ★决策 #847：取状态栏避让区 ⇒ 内容裁到其下（防滚进状态栏区）
           const nD = renderCommands(buildGlassCommands(vpWD, vpHD));
           this.rendered = nD;
           // ★★★决策 #844：**手动拖拽滚动**（同 Android GlassActivity）——手指上下拖 ⇒ 内容滚动、玻璃固定。

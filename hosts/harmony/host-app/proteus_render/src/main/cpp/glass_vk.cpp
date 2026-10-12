@@ -26,6 +26,7 @@
 #include <string>
 #include <unordered_map>
 #include <cstdio>
+#include <chrono>
 
 #define GLASS_VK_TAG "ProteusGlassVk"
 #define GLASS_VK_DOMAIN 0x0002
@@ -43,6 +44,7 @@ struct SizeCache {
     VkBuffer texStaging = VK_NULL_HANDLE; VkDeviceMemory texStagingMem = VK_NULL_HANDLE; void* texMap = nullptr;
     VkImage outImg = VK_NULL_HANDLE; VkDeviceMemory outMem = VK_NULL_HANDLE; VkImageView outView = VK_NULL_HANDLE;
     VkBuffer outStaging = VK_NULL_HANDLE; VkDeviceMemory outStagingMem = VK_NULL_HANDLE; void* outMap = nullptr;
+    size_t outBytes = 0;
     VkBuffer ubo = VK_NULL_HANDLE; VkDeviceMemory uboMem = VK_NULL_HANDLE; void* uboMap = nullptr;
     VkFramebuffer fb = VK_NULL_HANDLE;
     VkDescriptorPool pool = VK_NULL_HANDLE; VkDescriptorSet dset = VK_NULL_HANDLE;
@@ -214,11 +216,18 @@ SizeCache* getSizeCache(uint32_t texW, uint32_t texH, uint32_t outW, uint32_t ou
     VkPhysicalDevice phys = g_ctx.phys;
     SizeCache sc; sc.texW = texW; sc.texH = texH; sc.outW = outW; sc.outH = outH;
     auto failMem = [&](VkDeviceMemory m) { if (m) vkFreeMemory(dev, m, nullptr); };
-    auto hostBuf = [&](VkDeviceSize size, VkBufferUsageFlags use, VkBuffer* buf, VkDeviceMemory* mem, void** map) -> bool {
+    // hostBuf：cachedRead=true ⇒ 优先用 **HOST_CACHED**（CPU 读快；回读场景必需——HOST_COHERENT 是
+    //   write-combined，CPU 读极慢，真机实测 6MB 回读要 ~70ms）。非 cached 读场景（纹理上传=只写）用 COHERENT。
+    auto hostBuf = [&](VkDeviceSize size, VkBufferUsageFlags use, VkBuffer* buf, VkDeviceMemory* mem, void** map, bool cachedRead) -> bool {
         VkBufferCreateInfo bci{VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO}; bci.size = size; bci.usage = use; bci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
         if (vkCreateBuffer(dev, &bci, nullptr, buf) != VK_SUCCESS) return false;
         VkMemoryRequirements mr{}; vkGetBufferMemoryRequirements(dev, *buf, &mr);
-        uint32_t mt = findMemoryType(phys, mr.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+        VkMemoryPropertyFlags props = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+        if (cachedRead) {
+            VkMemoryPropertyFlags cp = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
+            if (findMemoryType(phys, mr.memoryTypeBits, cp) != UINT32_MAX) props = cp;
+        }
+        uint32_t mt = findMemoryType(phys, mr.memoryTypeBits, props);
         if (mt == UINT32_MAX) return false;
         VkMemoryAllocateInfo mai{VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO}; mai.allocationSize = mr.size; mai.memoryTypeIndex = mt;
         if (vkAllocateMemory(dev, &mai, nullptr, mem) != VK_SUCCESS) return false;
@@ -245,11 +254,12 @@ SizeCache* getSizeCache(uint32_t texW, uint32_t texH, uint32_t outW, uint32_t ou
         return true;
     };
     size_t texBytes = (size_t)texW * texH * 4, outBytes = (size_t)outW * outH * 4;
-    if (!hostBuf(texBytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, &sc.texStaging, &sc.texStagingMem, &sc.texMap)) { failMem(sc.texStagingMem); return nullptr; }
+    if (!hostBuf(texBytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, &sc.texStaging, &sc.texStagingMem, &sc.texMap, false)) { failMem(sc.texStagingMem); return nullptr; }
     if (!image(texW, texH, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, &sc.texImg, &sc.texMem, &sc.texView)) { failMem(sc.texMem); return nullptr; }
     if (!image(outW, outH, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, &sc.outImg, &sc.outMem, &sc.outView)) { failMem(sc.outMem); return nullptr; }
-    if (!hostBuf(outBytes, VK_BUFFER_USAGE_TRANSFER_DST_BIT, &sc.outStaging, &sc.outStagingMem, &sc.outMap)) { failMem(sc.outStagingMem); return nullptr; }
-    if (!hostBuf(80, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &sc.ubo, &sc.uboMem, &sc.uboMap)) { failMem(sc.uboMem); return nullptr; }
+    if (!hostBuf(outBytes, VK_BUFFER_USAGE_TRANSFER_DST_BIT, &sc.outStaging, &sc.outStagingMem, &sc.outMap, true /*cached 回读*/)) { failMem(sc.outStagingMem); return nullptr; }
+    if (!hostBuf(80, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &sc.ubo, &sc.uboMem, &sc.uboMap, false)) { failMem(sc.uboMem); return nullptr; }
+    sc.outBytes = outBytes;
     { VkImageView atts[1] = {sc.outView};
       VkFramebufferCreateInfo fci{VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
       fci.renderPass = g_ctx.renderPass; fci.attachmentCount = 1; fci.pAttachments = atts; fci.width = outW; fci.height = outH; fci.layers = 1;
@@ -301,8 +311,10 @@ std::vector<uint8_t> renderRgba8(const std::vector<uint8_t>& backdrop, int texW,
     if (texW <= 0 || texH <= 0 || outW <= 0 || outH <= 0) return {};
     if ((size_t)texW * texH * 4 != backdrop.size()) { GLOG(LOG_ERROR, "GLASS_VK_BAD_BACKDROP"); return {}; }
     VkDevice dev = g_ctx.device;
+    auto T0 = std::chrono::steady_clock::now();
     SizeCache* sc = getSizeCache((uint32_t)texW, (uint32_t)texH, (uint32_t)outW, (uint32_t)outH);
     if (sc == nullptr) { GLOG(LOG_ERROR, "GLASS_VK_CACHE_FAIL"); return {}; }
+    auto T1 = std::chrono::steady_clock::now();
 
     // 更新输入：背景纹理 staging + uniform（两者都是持久映射，直接 memcpy）
     memcpy(sc->texMap, backdrop.data(), backdrop.size());
@@ -359,15 +371,24 @@ std::vector<uint8_t> renderRgba8(const std::vector<uint8_t>& backdrop, int texW,
     bb.offset = 0; bb.size = VK_WHOLE_SIZE;
     vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0, 0, nullptr, 1, &bb, 0, nullptr);
     if (vkEndCommandBuffer(cmd) != VK_SUCCESS) { GLOG(LOG_ERROR, "GLASS_VK_FAIL endCmd"); return {}; }
+    auto T2 = std::chrono::steady_clock::now();
     // 提交 + 等待（围栏复用；先复位）
     vkResetFences(dev, 1, &g_ctx.fence);
     VkSubmitInfo si{VK_STRUCTURE_TYPE_SUBMIT_INFO};
     si.commandBufferCount = 1; si.pCommandBuffers = &cmd;
     if (vkQueueSubmit(g_ctx.queue, 1, &si, g_ctx.fence) != VK_SUCCESS) { GLOG(LOG_ERROR, "GLASS_VK_FAIL submit"); return {}; }
     if (vkWaitForFences(dev, 1, &g_ctx.fence, VK_TRUE, 1000000000ull) != VK_SUCCESS) { GLOG(LOG_ERROR, "GLASS_VK_FAIL waitFence"); return {}; }
-    // 读回（持久映射）
+    auto T3 = std::chrono::steady_clock::now();
+    // 读回（持久映射）。★cached 内存（非 COHERENT）须先 invalidate 才读到 GPU 写入。
+    { VkMappedMemoryRange rng{VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE};
+      rng.memory = sc->outStagingMem; rng.offset = 0; rng.size = VK_WHOLE_SIZE;
+      vkInvalidateMappedMemoryRanges(dev, 1, &rng); }
     std::vector<uint8_t> out((size_t)outW * outH * 4, 0);
     memcpy(out.data(), sc->outMap, out.size());
+    auto T4 = std::chrono::steady_clock::now();
+    { static int lg = 0; lg++; if (lg <= 8) { auto ms = [](auto a, auto b) { return std::chrono::duration<double, std::milli>(b - a).count(); };
+      char pb[128]; snprintf(pb, sizeof(pb), "%dx%d write=%.1f record=%.1f submitWait=%.1f read=%.1f", outW, outH, ms(T0,T1), ms(T1,T2), ms(T2,T3), ms(T3,T4));
+      OH_LOG_Print(LOG_APP, LOG_INFO, GLASS_VK_DOMAIN, GLASS_VK_TAG, "GLASS_VK_T %{public}s", pb); } }
     return out;
 }
 
