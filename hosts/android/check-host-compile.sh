@@ -72,3 +72,44 @@ if [ ! -f "$OUT/dev/proteus/layoutcore/ProteusHostView.class" ]; then
 fi
 
 echo "✅ Android 宿主编译通过（改动 layoutcore/*.java 后先跑本脚本，再上真机）"
+
+# ★★★Rust JNI 绑定层的 **Android target 编译检查**（决策 #834 暴露的门禁盲区）
+#
+# 【为什么单列一步（本仓真实踩坑）】B2/B4 给 JNI 加了材质查询包装后，**javac 全绿**——
+#   但 `cargo build --target aarch64-linux-android` 其实**报错**（用 `impl Fn` 传进 catch_unwind
+#   ⇒ 不满足 UnwindSafe，`E0277`）。而**当时没有任何门禁构建它**（CI 无 NDK；本脚本只 javac）
+#   ⇒ 断代码被提交、直到真机打包才暴露。⇒ 与"改宿主必须先过零设备编译检查"同一条纪律。
+#
+# 【判据】能给 Android target 编出 .so（含内核 + JNI 符号）即通过；缺 target/NDK ⇒ 诚实跳过并提示。
+JNI_CRATE="$ROOT/platform/android/proteus-jni"
+if [ -f "$JNI_CRATE/Cargo.toml" ]; then
+  echo "==> 编译检查 Rust JNI（aarch64-linux-android · 零设备）"
+  CARGO="$HOME/.cargo/bin/cargo"; [ -x "$CARGO" ] || CARGO="cargo"
+  if rustup target list --installed 2>/dev/null | grep -q aarch64-linux-android; then
+    NDK_DIR="$(ls -d "$SDK/ndk/"* 2>/dev/null | sort -V | tail -1)"
+    if [ -n "$NDK_DIR" ] && [ -d "$NDK_DIR/toolchains/llvm/prebuilt" ]; then
+      TC="$NDK_DIR/toolchains/llvm/prebuilt/$(ls "$NDK_DIR/toolchains/llvm/prebuilt" | head -1)"
+      CLANG="$TC/bin/aarch64-linux-android24-clang"
+      if [ -x "$CLANG" ]; then
+        JNI_LOG="$OUT/jni.log"
+        if CC_aarch64_linux_android="$CLANG" \
+           CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$CLANG" \
+           PATH="$HOME/.cargo/bin:$PATH" \
+           "$CARGO" build --release --target aarch64-linux-android \
+             --manifest-path "$JNI_CRATE/Cargo.toml" > "$JNI_LOG" 2>&1; then
+          echo "    ✅ JNI .so 编译通过（aarch64-linux-android）"
+        else
+          grep -E "^error" "$JNI_LOG" | head -12 || tail -25 "$JNI_LOG"
+          echo "✗ Rust JNI 未通过 Android target 编译（见上方）"
+          exit 1
+        fi
+      else
+        echo "    ◐ 略过：未找到 NDK clang（$CLANG）"
+      fi
+    else
+      echo "    ◐ 略过：未找到 NDK（$SDK/ndk/*）"
+    fi
+  else
+    echo "    ◐ 略过：未装 rust target aarch64-linux-android（rustup target add aarch64-linux-android）"
+  fi
+fi

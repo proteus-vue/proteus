@@ -60,6 +60,9 @@ describe('★★G-62 ShaderBackend（材质着色器可插拔落地）', () => {
     expect(s.includes('std140')).toBe(false)
     expect(s.includes('backdrop_tex.eval(')).toBe(true)
     expect(s.includes('uniform vec4 tint;')).toBe(true)
+    // ★★★AGSL 不支持 while（真机实测踩过：玻璃静默降级）——生成物**不得含 while**（固定循环须展开）
+    expect(s.includes('while'), 'AGSL 不得含 while（须展开循环）').toBe(false)
+    expect(SHADER_SOURCES['backdropBlur.agsl.frag.glsl'].includes('while')).toBe(false)
   })
 
   it('④b MSL 落地不变量', () => {
