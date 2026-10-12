@@ -1,0 +1,80 @@
+// packages/shader-codegen-rust/src/materials/mod.rs
+// ★★★材质目录 —— 每个材质 = 一份 WGSL（算法真源）+ 一个 uniform 布局（宿主设值的契约）。
+//
+// 【为什么用目录而不是散落的文件】宿主/TS 侧需要知道"有哪些材质、各自的 uniform 怎么填"；
+//   把它集中在一处，并由 `proteus-shader-gen --list`（JSON）导出 ⇒ 单一事实源、可被脚本消费。
+//
+// 【扩容】B4 会把 gradient/glow/mask/blur 也加进来——加一个 `MaterialSpec` 条目 + 一份 .wgsl 即可。
+
+/// 一种材质的 WGSL 源 + 元信息。
+pub struct MaterialSpec {
+    /// 稳定标识（宿主/TS 侧按此引用；亦是与 `<pg-glass>` 等编译期折叠结果对接的键）。
+    pub id: &'static str,
+    /// 片元入口名（naga 落地时用）。
+    pub entry: &'static str,
+    /// WGSL 源码（`include_str!` 于编译期嵌入——无需运行时读盘）。
+    pub wgsl: &'static str,
+    /// uniform 结构体名（各端落地后以此为常量缓冲名）。
+    pub uniform_struct: &'static str,
+    /// uniform 字节布局（字段名, 字节偏移, 字节长度）——宿主按此写常量缓冲。
+    pub uniform_layout: &'static [(&'static str, u32, u32)],
+    /// uniform 结构总字节长。
+    pub uniform_size: u32,
+}
+
+/// ★共享的四边形顶点着色器 WGSL（所有材质复用；见 quad.wgsl）。
+pub const QUAD_WGSL: &str = include_str!("quad.wgsl");
+
+/// ★液态玻璃材质（当前唯一；B4 扩容）。
+pub const GLASS: MaterialSpec = MaterialSpec {
+    id: "glass",
+    entry: "fs_glass",
+    wgsl: include_str!("glass.wgsl"),
+    uniform_struct: "GlassUniforms",
+    // 与 glass.wgsl 顶部 struct 注释逐行对应（vec4 先放，避免 std140/16 字节对齐陷阱）。
+    uniform_layout: &[
+        ("tint", 0, 16),
+        ("size_px", 16, 8),
+        ("origin", 24, 8),
+        ("tex_bias", 32, 8),
+        ("tex_scale", 40, 8),
+        ("light_dir", 48, 8),
+        ("radius", 56, 4),
+        ("blur", 60, 4),
+        ("refract_depth", 64, 4),
+        ("specular", 68, 4),
+        ("saturation", 72, 4),
+        ("_pad", 76, 4),
+    ],
+    uniform_size: 80,
+};
+
+/// 全部材质（顺序即 `--list` 输出顺序）。
+pub const MATERIALS: &[MaterialSpec] = &[GLASS];
+
+/// 按 id 查材质。
+pub fn material(id: &str) -> Option<&'static MaterialSpec> {
+    MATERIALS.iter().find(|m| m.id == id)
+}
+
+/// 导出材质目录为 JSON（供 `proteus-shader-gen --list` 与 TS 侧消费）。
+pub fn catalog_json() -> String {
+    let items: Vec<serde_json::Value> = MATERIALS
+        .iter()
+        .map(|m| {
+            let layout: Vec<serde_json::Value> = m
+                .uniform_layout
+                .iter()
+                .map(|(n, o, l)| serde_json::json!({ "name": n, "offset": o, "size": l }))
+                .collect();
+            serde_json::json!({
+                "id": m.id,
+                "entry": m.entry,
+                "uniformStruct": m.uniform_struct,
+                "uniformSize": m.uniform_size,
+                "uniformLayout": layout,
+            })
+        })
+        .collect();
+    serde_json::to_string_pretty(&serde_json::json!({ "materials": items })).unwrap()
+}

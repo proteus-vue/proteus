@@ -1,0 +1,24 @@
+{
+  "name": "@proteus-vue/shader",
+  "version": "0.3.0-beta.28",
+  "description": "Proteus ShaderBackend（G-62）：材质着色器的可插拔落地层——算法真源 = Rust WGSL（proteus-shader-gen），本包定义落地后端 SPI + 材质目录 + conformance，宿主只做落地不写算法",
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=browser --outfile=dist/index.js"
+  }
+}

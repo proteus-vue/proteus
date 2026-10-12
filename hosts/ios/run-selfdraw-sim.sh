@@ -42,6 +42,8 @@ for a in "$@"; do
     # ★★★v-pump/跳变驱动动画（本批）：`--superapp`（真实应用壳）+ `--pump=<page>[,<ms>]`/`--drive`/`--tap=x,y`
     #   ——模拟器**无需签名** ⇒ 真机签名不可用时的**接线验证旁路**（本脚本定位：验接线正确、判据有区分力）。
     --superapp) MODE="superapp" ;;
+    # ★★★玻璃夹具（决策 #833）：模拟器验玻璃遍接线（CoreImage 在模拟器可用；无需签名/设备）
+    --glass) MODE="glass" ;;
     --pump=*|--drive|--tap=*|--press=*|--field=*) APP_ARGS+=("$a") ;;
     *) SIM_NAME="$a" ;;
   esac
@@ -82,7 +84,7 @@ PLATFORM_SRC="$(ls "$ROOT"/platform/ios/ProteusPlatform/*.swift 2>/dev/null | tr
 [ -n "$PLATFORM_SRC" ] || { echo "✗ 找不到 platform/ios 平台适配源码（HA0.5 抽取后被删？）"; exit 3; }
 xcrun --sdk iphonesimulator swiftc -O -target arm64-apple-ios15.0-simulator \
   -framework UIKit -framework CoreText -framework JavaScriptCore -framework AVFoundation -parse-as-library \
-  -o "$APP/ProteusSelfDraw" $PLATFORM_SRC "$HERE/ProteusHost/runtime/selfdraw-scene.swift" "$HERE/ProteusHost/runtime/tab-chrome.swift" "$HERE/ProteusHost/runtime/host-runtime-bridge.swift" "$HERE/ProteusHost/runtime/interaction-feedback.swift" "$HERE/ProteusHost/runtime/superapp-runtime-host.swift" "$HERE/ProteusHost/runtime/proteus-host-controller.swift" "$HERE/ProteusHost/runtime/host-capabilities.swift" "$HERE/ProteusHost/runtime/host-lifecycle-events.swift" "$HERE/ProteusHost/runtime/screen-host.swift" "$HERE/ProteusHost/dev/host-runtime-scene.swift" "$HERE/ProteusHost/dev/app-stack-scene.swift" "$HERE/ProteusHost/dev/showcase-scene.swift" "$HERE/ProteusHost/shell/superapp-scene.swift" "$HERE/ProteusHost/shell/selfdraw-app.swift" "$ABI_LIB" "$LIB" 2>&1 | grep -E "error:" | head -5
+  -o "$APP/ProteusSelfDraw" $PLATFORM_SRC "$HERE/ProteusHost/runtime/selfdraw-scene.swift" "$HERE/ProteusHost/runtime/tab-chrome.swift" "$HERE/ProteusHost/runtime/glass-metal.swift" "$HERE/ProteusHost/runtime/generated-materials.swift" "$HERE/ProteusHost/runtime/host-runtime-bridge.swift" "$HERE/ProteusHost/runtime/interaction-feedback.swift" "$HERE/ProteusHost/runtime/superapp-runtime-host.swift" "$HERE/ProteusHost/runtime/proteus-host-controller.swift" "$HERE/ProteusHost/runtime/host-capabilities.swift" "$HERE/ProteusHost/runtime/host-lifecycle-events.swift" "$HERE/ProteusHost/runtime/screen-host.swift" "$HERE/ProteusHost/dev/host-runtime-scene.swift" "$HERE/ProteusHost/dev/app-stack-scene.swift" "$HERE/ProteusHost/dev/showcase-scene.swift" "$HERE/ProteusHost/dev/glass-scene.swift" "$HERE/ProteusHost/shell/superapp-scene.swift" "$HERE/ProteusHost/shell/selfdraw-app.swift" "$ABI_LIB" "$LIB" 2>&1 | grep -E "error:" | head -5
 [ -f "$APP/ProteusSelfDraw" ] || { echo "✗ Swift 编译未产出可执行文件"; exit 3; }
 
 echo "==> ⑤ 组装 .app（★无需签名/描述文件——模拟器不校验）"
@@ -143,11 +145,16 @@ REPORT="selfdraw-report.json"
 [ "$MODE" = "bench" ] && REPORT="logic-bench-report.json"
 [ "$MODE" = "showcase" ] && REPORT="showcase.json"
 [ "$MODE" = "superapp" ] && REPORT="superapp.json"
+# ★★★玻璃夹具（决策 #833）：报告 = glass-ios.json（与真机同名同形）
+[ "$MODE" = "glass" ] && REPORT="glass-ios.json"
 # ★★★superapp 模式：显式 `--superapp`（+ `--pump` 等透传）——与真机 run-selfdraw.sh 同参数契约；
 #   无参数时也落 superapp 场景（selfdraw-app 的缺省场景已是 superapp）。
 if [ "$MODE" = "superapp" ]; then
   # ★bash 3.2 + `set -u`：空数组展开 `${APP_ARGS[@]}` 会 unbound ⇒ 用 `${APP_ARGS[@]+"${APP_ARGS[@]}"}` 安全展开
   SIMCTL_CHILD_PROTEUS_EXIT_AFTER_REPORT=1 xcrun simctl launch --console booted "$BUNDLE_ID" --superapp ${APP_ARGS[@]+"${APP_ARGS[@]}"} >/dev/null 2>&1 || true
+elif [ "$MODE" = "glass" ]; then
+  # ★★★玻璃夹具：显式 `--glass`（无需 bundle；自退由场景内 PROTEUS_EXIT_AFTER_REPORT 保证）
+  SIMCTL_CHILD_PROTEUS_EXIT_AFTER_REPORT=1 xcrun simctl launch --console booted "$BUNDLE_ID" --glass >/dev/null 2>&1 || true
 else
   SIMCTL_CHILD_PROTEUS_EXIT_AFTER_REPORT=1 xcrun simctl launch --console booted "$BUNDLE_ID" >/dev/null 2>&1 || true
 fi

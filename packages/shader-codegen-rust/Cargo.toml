@@ -1,0 +1,29 @@
+[package]
+name = "proteus-shader-codegen"
+version = "0.1.0"
+edition = "2021"
+description = "★★★Proteus ShaderBackend 算法真源（决策 #834）：材质以 WGSL 单源表达，naga 落地到 iOS Metal(MSL) / Android AGSL；框架不再各端手写着色器。"
+license = "Apache-2.0"
+
+# 【为什么这里是独立 crate、不进 layout-core-rust】
+#   `layout-core-rust` 被 check-platform-layering.mjs 钉为**零平台条件、依赖精简**（只 taffy/serde），
+#   且链进每个宿主 staticlib；naga 是重量级着色器工具链 ⇒ 不能进内核。
+#   本 crate 是**构建期**工具（bin proteus-shader-gen），不进任何宿主产物。
+[dependencies]
+# ★naga 30（WGSL 前端 + MSL/GLSL 后端）——已在本机 cargo registry 缓存 ⇒ 可 --offline 构建。
+naga = { version = "30.0.1", features = ["wgsl-in", "msl-out", "glsl-out"] }
+serde_json = "1"
+
+[lib]
+name = "proteus_shader_codegen"
+path = "src/lib.rs"
+
+[[bin]]
+name = "proteus-shader-gen"
+path = "src/main.rs"
+
+[profile.release]
+opt-level = 3
+
+# 独立 crate（仓内无根 workspace —— 与 layout-core-rust 同构）
+[workspace]

@@ -42,6 +42,16 @@ jobs:
       - name: 玻璃材质能力门禁（★自研液态玻璃：TAB_BAR_SPEC.glass == glass 包预设单源 + glass 字段跨端接缝齐）
         run: pnpm run check:glass-capability
 
+      # ★★★G-62 ShaderBackend（决策 #834）：材质算法真源在 Rust（WGSL + naga 落地）。
+      #   本步校验"生成物与真源不漂移"（重跑 Rust 发生器比对入库产物）——纯静态 + cargo，CI 可跑。
+      #   ★CI 首次需联网拉 crates.io ⇒ 关掉离线优先（PROTEUS_CARGO_OFFLINE=0）。
+      - name: 着色器生成物漂移门禁（★材质算法真源 = Rust WGSL；生成物须与真源一致）
+        run: PROTEUS_CARGO_OFFLINE=0 pnpm run check:shader-generated
+
+      #   ★能力门禁：真源可落地 + 生成物无漂移 + **宿主无残留手写算法**（防复辟到"各端手写"旧形态）。
+      - name: ShaderBackend 能力门禁（★真源可落地 · 无漂移 · 宿主无残留手写算法）
+        run: PROTEUS_CARGO_OFFLINE=0 pnpm run check:shader-capability
+
       - name: 示例工程类型检查（examples 独立 tsconfig，完整工程形态）
         run: cd examples && npx vue-tsc --noEmit -p tsconfig.json
 

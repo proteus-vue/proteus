@@ -187,6 +187,8 @@ final class SelfDrawViewController: UIViewController {
         let isHostRuntime = ProcessInfo.processInfo.arguments.contains("--host-runtime")
         // ★★M5：执行器场景（`--app-stack`）——同上，独立模式
         let isAppStack = ProcessInfo.processInfo.arguments.contains("--app-stack")
+        // ★★★玻璃夹具（`--glass` · 决策 #833）——独立模式（手写树 + 玻璃遍 + 截图），无 JS bundle
+        let isGlass = ProcessInfo.processInfo.arguments.contains("--glass")
         // ★★Morpheus 炫技场（`--showcase`）——整场节目单编舞（开场语 → 演出 → 谢幕语）
         //
         // 【判定规则（"点开即演示"的落地）】显式参数 > Info.plist 缺省场景。
@@ -250,6 +252,13 @@ final class SelfDrawViewController: UIViewController {
             //   三端产物同形（本仓同款坑：名字不一致会让"取报告"静默失败，排查成本高）。
             SelfDrawBridge.reportFileName = "vapor"
             SelfDrawBridge.snapshotName = "vapor"
+        }
+        // ★★★玻璃夹具（`--glass` · 决策 #833）：**不需要 JS bundle**（手写渲染树经
+        //   `proteusSelfDraw.mount` 直挂）⇒ 在 bundle 守卫之前分派，避免"缺 bundle 直接 return"。
+        if isGlass {
+            NSLog("[proteus] 玻璃夹具启动（iOS 自绘玻璃遍）")
+            GlassScene.run(ctx: ctx, view: host)
+            return
         }
         // ★stress 也走 bench bundle（它含 renderStress 入口——同一份 vapor-stress.json 产物）
         // ★三端对齐（2026-10-03）：vapor 与 vapor-ab 都吃 **bundle-vapor.js**（含 runShort 与 abRender）

@@ -35,6 +35,10 @@ HOST_SRCS=(
   # ★★★B（决策 #800）：tab 栏 chrome（runtime 唯一实现）——新文件必须进检查清单（G-39 教训：
   #   写死清单会让新文件**悄悄不参与类型检查**）
   "$HERE/ProteusHost/runtime/tab-chrome.swift"
+  # ★★★玻璃自绘材质（决策 #834）：Metal 落地（算法真源 = Rust WGSL 生成物）——新文件必须进检查清单
+  "$HERE/ProteusHost/runtime/glass-metal.swift"
+  # ★★★着色器生成物（由 scripts/gen-shaders.mjs 产出；含 MSL 源码常量）
+  "$HERE/ProteusHost/runtime/generated-materials.swift"
   "$HERE/ProteusHost/runtime/proteus-host-controller.swift"
   "$HERE/ProteusHost/runtime/host-capabilities.swift"
   "$HERE/ProteusHost/runtime/host-lifecycle-events.swift"
@@ -42,6 +46,8 @@ HOST_SRCS=(
   "$HERE/ProteusHost/dev/host-runtime-scene.swift"
   "$HERE/ProteusHost/dev/app-stack-scene.swift"
   "$HERE/ProteusHost/dev/showcase-scene.swift"
+  # ★★★玻璃夹具（决策 #833）：手写树 + 玻璃遍 + 截图——同上，新文件必须进清单
+  "$HERE/ProteusHost/dev/glass-scene.swift"
   "$HERE/ProteusHost/shell/superapp-scene.swift"
   "$HERE/ProteusHost/shell/selfdraw-app.swift"
 )
