@@ -498,6 +498,72 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeTextPolicy<'
     into_java_string(&mut env, out)
 }
 
+/* ══════════ ★★★B4（决策 #834）：材质几何/曲线内核单源查询（Android 腿） ══════════
+ *   gradient 端点 / glow 分层 / mask 色标——宿主读内核结果，不再各写一份公式。 */
+#[no_mangle]
+pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeGradientEndpoints<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    handle: jni::sys::jlong,
+    json: JString<'local>,
+) -> jstring {
+    native_query(&mut env, json, |c| unsafe {
+        ffi::proteus_layout_gradient_endpoints(handle as u64, c)
+    })
+}
+
+#[no_mangle]
+pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeGlowLayers<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    handle: jni::sys::jlong,
+    json: JString<'local>,
+) -> jstring {
+    native_query(&mut env, json, |c| unsafe {
+        ffi::proteus_layout_glow_layers(handle as u64, c)
+    })
+}
+
+#[no_mangle]
+pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeMaskStops<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    handle: jni::sys::jlong,
+    json: JString<'local>,
+) -> jstring {
+    native_query(&mut env, json, |c| unsafe {
+        ffi::proteus_layout_mask_stops(handle as u64, c)
+    })
+}
+
+/// 公共：读 JString(json) + 调 C ABI（返回 *mut c_char）+ 拷回 JString（含错误兜底）。
+#[inline]
+fn native_query<'local>(
+    env: &mut JNIEnv<'local>,
+    json: JString<'local>,
+    call: impl Fn(*const std::os::raw::c_char) -> *mut std::os::raw::c_char,
+) -> jstring {
+    let s: String = match env.get_string(&json) {
+        Ok(s) => s.into(),
+        Err(e) => return into_java_string(env, format!("{{\"ok\":false,\"error\":\"json 读取失败：{e}\"}}")),
+    };
+    let out = std::panic::catch_unwind(|| -> String {
+        let c = match std::ffi::CString::new(s) {
+            Ok(c) => c,
+            Err(_) => return "{\"ok\":false,\"error\":\"json 含 NUL\"}".to_string(),
+        };
+        let p = call(c.as_ptr());
+        if p.is_null() {
+            return "{\"ok\":false,\"error\":\"null\"}".to_string();
+        }
+        let r = unsafe { std::ffi::CStr::from_ptr(p) }.to_string_lossy().into_owned();
+        unsafe { ffi::proteus_layout_free_string(p) };
+        r
+    })
+    .unwrap_or_else(|_| "{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string());
+    into_java_string(env, out)
+}
+
 /* ────────────────────────── ★★MA0-RT：平台零参与路径（Android） ────────────────────────── */
 #[no_mangle]
 pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeCurveBezier<'local>(

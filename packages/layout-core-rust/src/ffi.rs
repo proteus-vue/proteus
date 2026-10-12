@@ -4565,6 +4565,123 @@ pub unsafe extern "C" fn proteus_layout_mask_stops(handle: u64, json: *const c_c
     }
 }
 
+/// ★★**发光分层参数**（glow v1）——入参 `{"nodeId":N,"intensity":0..1}`；
+///   返回 `{"ok":true,"layers":[[boostPx,alpha],…]}`（由内到外）。
+///
+/// 【为什么单列入口（与 mask_stops 同一条纪律）】glow 的分层曲线（`GlowSpec::layers`）是**唯一实现**；
+///   宿主在"建层初值 / 发光明暗"时机需要逐层参数，但不该重写那份公式（第 N 份手写副本 = 下一个静默缺陷）。
+///
+/// # Safety
+/// 返回指针须用 `proteus_layout_free_string` 释放。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_layout_glow_layers(handle: u64, json: *const c_char) -> *mut c_char {
+    let r = std::panic::catch_unwind(|| -> Result<String, String> {
+        if json.is_null() {
+            return Err("入参为空指针".into());
+        }
+        let raw = unsafe { CStr::from_ptr(json) }
+            .to_str()
+            .map_err(|e| format!("入参非 UTF-8：{e}"))?;
+        let v: serde_json::Value =
+            serde_json::from_str(raw).map_err(|e| format!("入参解析失败：{e}"))?;
+        let node_id = v
+            .get("nodeId")
+            .and_then(|x| x.as_u64())
+            .ok_or_else(|| "缺少 nodeId".to_string())? as u32;
+        // intensity 缺省 1.0（静态基态）
+        let intensity = v.get("intensity").and_then(|x| x.as_f64()).unwrap_or(1.0) as f32;
+        let reg = registry().lock().map_err(|_| "注册表锁失败".to_string())?;
+        let entry = reg.get(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?;
+        let node = entry
+            .tree
+            .nodes
+            .iter()
+            .find(|n| n.id == node_id)
+            .ok_or_else(|| format!("节点 {node_id} 不在树上"))?;
+        let g = node
+            .style
+            .glow
+            .as_ref()
+            .ok_or_else(|| format!("节点 {node_id} 没有发光声明（glow）"))?;
+        let layers = g.layers(intensity);
+        let arr: Vec<serde_json::Value> = layers
+            .iter()
+            .map(|(b, a)| serde_json::json!([b, a]))
+            .collect();
+        Ok(serde_json::json!({ "ok": true, "layers": arr }).to_string())
+    });
+    match r {
+        Ok(Ok(s)) => into_c_string(s),
+        Ok(Err(e)) => into_c_string(format!(
+            "{{\"ok\":false,\"error\":{}}}",
+            serde_json::to_string(&e).unwrap_or_else(|_| "\"?\"".into())
+        )),
+        Err(_) => into_c_string("{\"ok\":false,\"error\":\"内部 panic（已捕获）\"}".to_string()),
+    }
+}
+
+/// ★★**线性渐变端点**（单位空间 · CSS 规范式）——入参 `{"nodeId":N}`；
+///   返回 `{"ok":true,"x0":..,"y0":..,"x1":..,"y1":..}`。
+///
+/// 【为什么单列入口】端点式（`style::linear_endpoints`，CSS 投影跨度）是**唯一实现**；
+///   宿主（CAGradientLayer / LinearGradient）需要单位空间端点，但不该各自手写那份公式
+///   （既有 4 份副本 TS/Swift/Kotlin/鸿蒙——本入口把它们收敛到内核单源）。盒尺寸取自内核几何。
+///
+/// # Safety
+/// 返回指针须用 `proteus_layout_free_string` 释放。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_layout_gradient_endpoints(handle: u64, json: *const c_char) -> *mut c_char {
+    let r = std::panic::catch_unwind(|| -> Result<String, String> {
+        if json.is_null() {
+            return Err("入参为空指针".into());
+        }
+        let raw = unsafe { CStr::from_ptr(json) }
+            .to_str()
+            .map_err(|e| format!("入参非 UTF-8：{e}"))?;
+        let v: serde_json::Value =
+            serde_json::from_str(raw).map_err(|e| format!("入参解析失败：{e}"))?;
+        let node_id = v
+            .get("nodeId")
+            .and_then(|x| x.as_u64())
+            .ok_or_else(|| "缺少 nodeId".to_string())? as u32;
+        let reg = registry().lock().map_err(|_| "注册表锁失败".to_string())?;
+        let entry = reg.get(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?;
+        let idx = entry
+            .tree
+            .nodes
+            .iter()
+            .position(|n| n.id == node_id)
+            .ok_or_else(|| format!("节点 {node_id} 不在树上"))?;
+        let g = entry.tree.nodes[idx]
+            .style
+            .grad
+            .as_ref()
+            .ok_or_else(|| format!("节点 {node_id} 没有渐变声明（fillGradient）"))?;
+        // 盒宽高（绝对矩形；渐变几何按**盒尺寸**换算——与 CSS 一致）
+        let (w, h) = match entry.tree.absolute_rects().get(idx).and_then(|o| *o) {
+            Some(rect) => (rect.width, rect.height),
+            None => (1.0, 1.0),
+        };
+        let (angle, cx, cy, r) = g.mixed_geometry();
+        let (x0, y0, x1, y1) = crate::style::linear_endpoints(angle, w, h);
+        Ok(serde_json::json!({
+            "ok": true,
+            "kind": g.kind,
+            "x0": x0, "y0": y0, "x1": x1, "y1": y1,
+            "cx": cx, "cy": cy, "r": r,
+        })
+        .to_string())
+    });
+    match r {
+        Ok(Ok(s)) => into_c_string(s),
+        Ok(Err(e)) => into_c_string(format!(
+            "{{\"ok\":false,\"error\":{}}}",
+            serde_json::to_string(&e).unwrap_or_else(|_| "\"?\"".into())
+        )),
+        Err(_) => into_c_string("{\"ok\":false,\"error\":\"内部 panic（已捕获）\"}".to_string()),
+    }
+}
+
 /// ★★**当前变形后的段列表（二进制）**（2026-10-01 · 性能修正）——每帧路径。
 ///
 /// 【为什么必须有（真机读数）】JSON 版（`proteus_layout_svg_morph_path`）在 moonGlow 幕

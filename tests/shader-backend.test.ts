@@ -95,4 +95,21 @@ describe('★★G-62 ShaderBackend（材质着色器可插拔落地）', () => {
   it('⑧ ALL_BACKENDS ≥2 参考实现（原则 #13）', () => {
     expect(ALL_BACKENDS.length).toBeGreaterThanOrEqual(2)
   })
+
+  it('⑨ 多材质：glass + backdropBlur 全端生成物齐（B4）', () => {
+    for (const id of ['glass', 'backdropBlur']) {
+      expect(generatedReady(id), `${id} 生成物不齐`).toBe(true)
+      for (const tgt of ['agsl.frag.glsl', 'msl.frag.metal', 'glsl.frag.glsl']) {
+        expect((SHADER_SOURCES[`${id}.${tgt}`] ?? '').length, `${id}.${tgt}`).toBeGreaterThan(50)
+      }
+      // 后端能 land
+      const out = backendById('shader-agsl')!.land(id)
+      expect(out.fragment.includes('half4 main(float2 coord)'), `${id} AGSL 入口`).toBe(true)
+    }
+    // 目录里有两种材质
+    expect(MATERIALS.map((m) => m.id).sort()).toEqual(['backdropBlur', 'glass'])
+    // backdropBlur uniform = 64（glass = 80）
+    expect(material('backdropBlur')!.uniformSize).toBe(64)
+    expect(material('glass')!.uniformSize).toBe(80)
+  })
 })

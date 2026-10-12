@@ -233,6 +233,49 @@ pub struct GlowSpec {
     pub alpha: f32,
 }
 
+/// ★★**发光分层数**（glow 的**跨语言常数**：TS `GLOW_LAYERS` = Swift `glowLayerCount` = Kotlin `GLOW_LAYERS`）。
+///   ★改它必须三处同批——本常量是**唯一实现位置**（宿主经 `proteus_layout_glow_layers` 读它，不再各自写死）。
+pub const GLOW_LAYERS: usize = 5;
+
+impl GlowSpec {
+    /// ★★**分层描边的层参数**（`[(boostPx, alpha); GLOW_LAYERS]`）——glow 的**唯一实现**（宿主零数学）。
+    ///
+    /// 由内到外：`boostPx = radius × k/N`（k=1..N）、`alpha = (alpha × intensity) × (1-(k-1)/N)²`
+    /// （外圈衰减更快 ⇒ 读起来像"光晕"而不是"描边叠影"）。与 TS `glowLayers` 逐式一致。
+    pub fn layers(&self, intensity: f32) -> [(f32, f32); GLOW_LAYERS] {
+        let n = GLOW_LAYERS;
+        let a0 = self.alpha.clamp(0.0, 1.0) * intensity.clamp(0.0, 1.0);
+        let mut out = [(0.0f32, 0.0f32); GLOW_LAYERS];
+        for k in 1..=n {
+            let t = (k - 1) as f32 / n as f32;
+            out[k - 1] = (self.radius * (k as f32 / n as f32), a0 * (1.0 - t) * (1.0 - t));
+        }
+        out
+    }
+}
+
+/// ★★★**线性渐变的端点**（单位空间；CSS 规范式）——渐变几何的**唯一实现**（宿主零数学）。
+///
+/// 【CSS 规范式（本仓既有修正）】渐变线长度 `L = |w·sinθ| + |h·cosθ|`（起始角→结束角的投影跨度），
+///   单位空间端点 `(0.5 ∓ L/(2w)·s, 0.5 ± L/(2h)·c)`（`s=sinθ, c=cosθ`）。
+///   ★旧式 `hypot(w·s, h·c)` 只在 0/90/180/270° 与 CSS 一致（对角下偏短、色带偏粗）——本轮起统一走本式。
+///   ★与 TS `linearGradientEndpoints` / 旧宿主同式；现由内核**单源**（宿主不再各写一份）。
+pub fn linear_endpoints(angle_deg: f32, width: f32, height: f32) -> (f32, f32, f32, f32) {
+    let w = if width > 0.0 { width } else { 1.0 };
+    let h = if height > 0.0 { height } else { 1.0 };
+    let rad = angle_deg * std::f32::consts::PI / 180.0;
+    let s = rad.sin();
+    let c = rad.cos();
+    let l = (w * s).abs() + (h * c).abs();
+    (
+        0.5 - (l / (2.0 * w)) * s, // x0
+        0.5 + (l / (2.0 * h)) * c, // y0
+        0.5 + (l / (2.0 * w)) * s, // x1
+        0.5 - (l / (2.0 * h)) * c, // y1
+    )
+}
+
+
 fn default_glow_intensity() -> f32 {
     1.0
 }
@@ -963,6 +1006,109 @@ mod tests {
         let m = unsafe { std::ffi::CStr::from_ptr(r) }.to_string_lossy().to_string();
         assert!(m.contains("没有遮罩声明"), "应明确拒绝并指原因：{m}");
         assert!(m.contains("mask"), "应给修法（声明 mask）：{m}");
+        unsafe { crate::ffi::proteus_layout_destroy(h) };
+    }
+
+    /// ★★发光分层曲线（glow v1）：**唯一实现**钉值（层数 / boost / alpha 平方衰减）。
+    #[test]
+    fn glow_layers_pins_curve() {
+        let g = GlowSpec { color: 0xFF_FF_CC_66, radius: 10.0, alpha: 0.8 };
+        let ls = g.layers(1.0);
+        assert_eq!(ls.len(), GLOW_LAYERS, "层数应 = GLOW_LAYERS");
+        // k=1: boost=10×(1/5)=2, alpha=0.8×1²=0.8
+        assert!((ls[0].0 - 2.0).abs() < 1e-6 && (ls[0].1 - 0.8).abs() < 1e-6, "首层 {ls:?}");
+        // k=N: boost=10, alpha=0.8×(1-4/5)²=0.8×0.04=0.032
+        assert!((ls[4].0 - 10.0).abs() < 1e-6, "末层 boost 应 = radius");
+        assert!((ls[4].1 - 0.032).abs() < 1e-5, "末层 alpha 应 = 0.032（平方衰减）");
+        // intensity 缩放（envelope）
+        let half = g.layers(0.5);
+        assert!((half[0].1 - 0.4).abs() < 1e-6, "intensity 0.5 ⇒ 首层 alpha 减半");
+        // 越界钳位
+        assert!((g.layers(9.0)[0].1 - 0.8).abs() < 1e-6, "intensity 越界应钳到 1");
+    }
+
+    /// ★★线性渐变端点（CSS 规范式）：**唯一实现**钉值——45° 正方 = 对角；0°/90° 与 CSS 一致。
+    #[test]
+    fn linear_endpoints_pins_css_form() {
+        // 0°（向上）：x0=x1=0.5，y 从 1 到 0（下→上）
+        let (x0, y0, x1, y1) = crate::style::linear_endpoints(0.0, 1.0, 1.0);
+        assert!((x0 - 0.5).abs() < 1e-6 && (x1 - 0.5).abs() < 1e-6, "0° 应竖直");
+        assert!((y0 - 1.0).abs() < 1e-6 && (y1 - 0.0).abs() < 1e-6, "0° 应下→上");
+        // 90°（向右）：y0=y1=0.5，x 从 0 到 1
+        let (x0, _, x1, _) = crate::style::linear_endpoints(90.0, 1.0, 1.0);
+        assert!((x0 - 0.0).abs() < 1e-6 && (x1 - 1.0).abs() < 1e-6, "90° 应左→右");
+        // 45° 正方：L=|w·s|+|h·c|=√2 ⇒ 端点 = 对角（0,1)-(1,0)
+        let (x0, y0, x1, y1) = crate::style::linear_endpoints(45.0, 1.0, 1.0);
+        assert!((x0 - 0.0).abs() < 1e-6 && (y0 - 1.0).abs() < 1e-6, "45° 起点应对角 ({x0},{y0})");
+        assert!((x1 - 1.0).abs() < 1e-6 && (y1 - 0.0).abs() < 1e-6, "45° 终点应对角 ({x1},{y1})");
+    }
+
+    /// ★★glow 查询入口端到端：树里 `glow` ⇒ `proteus_layout_glow_layers` 回层参数；无声明 ⇒ 明确拒绝。
+    #[test]
+    fn glow_layers_entry_roundtrip() {
+        use crate::ffi::{proteus_layout_create, proteus_layout_glow_layers};
+        let req = serde_json::json!({
+            "viewport": {"width": 100.0, "height": 100.0},
+            "nodes": [
+                {"id": 1, "width": 100.0, "height": 100.0},
+                {"id": 7, "parentId": 1, "width": 40.0, "height": 40.0,
+                 "glow": {"color": "#ffcc66", "radius": 10.0, "alpha": 0.8}}
+            ]
+        });
+        let h = unsafe {
+            proteus_layout_create(std::ffi::CString::new(req.to_string()).unwrap().as_ptr())
+        };
+        assert!(h > 0, "带 glow 声明应建树成功");
+        let q = serde_json::json!({"nodeId": 7, "intensity": 1.0});
+        let r = unsafe {
+            proteus_layout_glow_layers(h, std::ffi::CString::new(q.to_string()).unwrap().as_ptr())
+        };
+        let js = unsafe { std::ffi::CStr::from_ptr(r) }.to_string_lossy().to_string();
+        unsafe { crate::ffi::proteus_layout_free_string(r) };
+        let v: serde_json::Value = serde_json::from_str(&js).expect("应回 JSON");
+        assert_eq!(v["ok"], true, "{js}");
+        assert_eq!(v["layers"].as_array().unwrap().len(), GLOW_LAYERS, "应回 N 层");
+        assert!((v["layers"][0][0].as_f64().unwrap() - 2.0).abs() < 1e-6, "首层 boost");
+        // 无声明节点 ⇒ 明确拒绝
+        let q2 = serde_json::json!({"nodeId": 1});
+        let r2 = unsafe {
+            proteus_layout_glow_layers(h, std::ffi::CString::new(q2.to_string()).unwrap().as_ptr())
+        };
+        let js2 = unsafe { std::ffi::CStr::from_ptr(r2) }.to_string_lossy().to_string();
+        unsafe { crate::ffi::proteus_layout_free_string(r2) };
+        assert!(js2.contains("没有发光声明"), "无声明应明确拒绝：{js2}");
+        unsafe { crate::ffi::proteus_layout_destroy(h) };
+    }
+
+    /// ★★渐变端点入口端到端：树里 `fillGradient` ⇒ `proteus_layout_gradient_endpoints` 回端点。
+    #[test]
+    fn gradient_endpoints_entry_roundtrip() {
+        use crate::ffi::{proteus_layout_create, proteus_layout_gradient_endpoints};
+        let req = serde_json::json!({
+            "viewport": {"width": 100.0, "height": 100.0},
+            "nodes": [
+                {"id": 1, "width": 100.0, "height": 100.0},
+                {"id": 5, "parentId": 1, "width": 80.0, "height": 40.0,
+                 "fillGradient": {"kind": "linear", "angle": 90.0,
+                                  "stops": [{"offset": 0.0, "color": "#ff0000"}, {"offset": 1.0, "color": "#0000ff"}]}}
+            ]
+        });
+        let h = unsafe {
+            proteus_layout_create(std::ffi::CString::new(req.to_string()).unwrap().as_ptr())
+        };
+        assert!(h > 0, "带渐变声明应建树成功");
+        let q = serde_json::json!({"nodeId": 5});
+        let r = unsafe {
+            proteus_layout_gradient_endpoints(h, std::ffi::CString::new(q.to_string()).unwrap().as_ptr())
+        };
+        let js = unsafe { std::ffi::CStr::from_ptr(r) }.to_string_lossy().to_string();
+        unsafe { crate::ffi::proteus_layout_free_string(r) };
+        let v: serde_json::Value = serde_json::from_str(&js).expect("应回 JSON");
+        assert_eq!(v["ok"], true, "{js}");
+        // 90° 向右：x0→0, x1→1；y 恒 0.5（盒 80×40 不影响轴向）
+        assert!((v["x0"].as_f64().unwrap() - 0.0).abs() < 1e-6, "90° x0 应 0");
+        assert!((v["x1"].as_f64().unwrap() - 1.0).abs() < 1e-6, "90° x1 应 1");
+        assert!((v["y0"].as_f64().unwrap() - 0.5).abs() < 1e-6, "90° y 应 0.5");
         unsafe { crate::ffi::proteus_layout_destroy(h) };
     }
 }

@@ -49,8 +49,27 @@ pub const GLASS: MaterialSpec = MaterialSpec {
     uniform_size: 80,
 };
 
+/// ★★★背板模糊材质（backdropBlur）——玻璃的基座（只模糊 + tint，无折射/高光）。
+pub const BACKDROP_BLUR: MaterialSpec = MaterialSpec {
+    id: "backdropBlur",
+    entry: "fs_backdrop_blur",
+    wgsl: include_str!("backdrop_blur.wgsl"),
+    uniform_struct: "BlurUniforms",
+    uniform_layout: &[
+        ("tint", 0, 16),
+        ("size_px", 16, 8),
+        ("origin", 24, 8),
+        ("tex_bias", 32, 8),
+        ("tex_scale", 40, 8),
+        ("blur", 48, 4),
+        ("saturation", 52, 4),
+        ("_pad", 56, 8),
+    ],
+    uniform_size: 64,
+};
+
 /// 全部材质（顺序即 `--list` 输出顺序）。
-pub const MATERIALS: &[MaterialSpec] = &[GLASS];
+pub const MATERIALS: &[MaterialSpec] = &[GLASS, BACKDROP_BLUR];
 
 /// 按 id 查材质。
 pub fn material(id: &str) -> Option<&'static MaterialSpec> {

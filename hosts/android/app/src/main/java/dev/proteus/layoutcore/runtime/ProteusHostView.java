@@ -1271,6 +1271,46 @@ public class ProteusHostView extends ViewGroup {
      */
     private static final int GLOW_LAYERS = 5;
 
+    /* ══════════ ★★★B4（决策 #834）：材质几何/曲线**内核单源**查询（宿主不再各写一份公式）══════════
+     *   gradient 端点 / glow 分层 / mask 色标——由内核 `proteus_layout_*` 算出，宿主只读结果。
+     *   ★按 nodeId 缓存（同一帧内多次绘制/重建只查一次）；失败/无声明 ⇒ 回退宿主内联式（零回归）。 */
+    private final java.util.HashMap<Integer, float[]> kernelGradEnd = new java.util.HashMap<>();
+    private final java.util.HashMap<Integer, float[]> kernelGlowLayers = new java.util.HashMap<>();
+    private final java.util.HashMap<Integer, float[]> kernelMaskStops = new java.util.HashMap<>();
+
+    /** 每帧/每次重建前清缓存（几何或动画可能变）。 */
+    public void clearMaterialQueryCache() {
+        kernelGradEnd.clear();
+        kernelGlowLayers.clear();
+        kernelMaskStops.clear();
+    }
+
+    /** 发光分层参数（内核单源 · **按 nodeId 缓存@intensity=1**）：`float[2*N]` = [boost0,a0,…]；无 ⇒ null。
+     *  ★alpha 与 intensity **线性**（内核 `alpha×clamp(intensity)`）⇒ 缓存在 intensity=1、绘制时乘 intensity 精确等价
+     *    （避免每帧每节点一次 JNI+JSON——"每帧 O(N) 走 JSON 是白付"同一条纪律）。 */
+    private float[] glowLayersFor(int nodeId) {
+        float[] cached = kernelGlowLayers.get(nodeId);
+        if (cached != null) return cached.length == 0 ? null : cached;
+        if (coreHandle == 0L) return null;
+        String out = RustLayout.nativeGlowLayers(coreHandle, "{\"nodeId\":" + nodeId + ",\"intensity\":1.0}");
+        try {
+            org.json.JSONObject o = new org.json.JSONObject(out);
+            org.json.JSONArray arr = o.optBoolean("ok", false) ? o.optJSONArray("layers") : null;
+            if (arr == null || arr.length() == 0) { kernelGlowLayers.put(nodeId, new float[0]); return null; }
+            float[] r = new float[arr.length() * 2];
+            for (int i = 0; i < arr.length(); i++) {
+                org.json.JSONArray pair = arr.optJSONArray(i);
+                if (pair == null || pair.length() < 2) { kernelGlowLayers.put(nodeId, new float[0]); return null; }
+                r[i * 2] = (float) pair.optDouble(0);
+                r[i * 2 + 1] = (float) pair.optDouble(1);
+            }
+            kernelGlowLayers.put(nodeId, r);
+            return r;
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
     /** 直接推进一帧（确定性步进：判据用它做"固定 dt"读数，与 iOS 的 JS 驱动 probe 同形） */
     public int kernelAnimTick(float dtMs) {
         return applyTickBin(RustLayout.animTickBin(coreHandle, dtMs));
@@ -1890,6 +1930,7 @@ public class ProteusHostView extends ViewGroup {
 
     public void setCmds(List<Cmd> value) {
         this.cmds = value;
+        clearMaterialQueryCache();   // ★B4：指令重建 ⇒ 材质几何/曲线缓存失效（重查内核）
         // ★★★显示列表随指令变更重建（脏时一次 5ms；此后每帧回放 2ms）。
         //   ★尺寸未知时（未布局）先置空——onSizeChanged/首次 onDraw 时补建（见 ensurePicture）。
         if (getWidth() > 0 && getHeight() > 0 && value != null && !value.isEmpty()) {
@@ -3771,12 +3812,21 @@ public class ProteusHostView extends ViewGroup {
                         final float prog2 = animStroke.containsKey(ids[i]) ? animStroke.get(ids[i]) : strokeBase2;
                         // 基准线宽：有描边路径用它的 strokeWidth；否则用发光半径的一小撮（纯色块的"边缘光"）
                         final float baseW = svg2 != null ? (Float) svg2[2] : Math.max(1f, grad * 0.12f);
+                        // ★B4（决策 #834）：分层参数优先取**内核单源**（`glowLayersFor`，缓存@1）；无 ⇒ 内联式兜底。
+                        final float[] kLayers = glowLayersFor(ids[i]);
                         // 由内到外（同式：boost = radius×k/N · alpha = a0×(1-(k-1)/N)²）
                         for (int k = 1; k <= GLOW_LAYERS; k++) {
-                            final float t = (k - 1f) / GLOW_LAYERS;
-                            final float a = galpha * (1 - t) * (1 - t);
+                            final float a;
+                            final float boost;
+                            if (kLayers != null && (k - 1) * 2 + 1 < kLayers.length) {
+                                boost = kLayers[(k - 1) * 2];
+                                a = kLayers[(k - 1) * 2 + 1] * gi0;   // 缓存@1 ⇒ 乘当前 intensity（线性）
+                            } else {
+                                final float t = (k - 1f) / GLOW_LAYERS;
+                                a = galpha * (1 - t) * (1 - t);
+                                boost = grad * (k / (float) GLOW_LAYERS);
+                            }
                             if (a <= 0.003f) continue;
-                            final float boost = grad * (k / (float) GLOW_LAYERS);
                             strokePaint.setColor((gcol & 0x00FFFFFF) | (((int) (a * 255)) << 24));
                             strokePaint.setStrokeWidth(baseW + boost * 2f);
                             if (svg2 != null) {
