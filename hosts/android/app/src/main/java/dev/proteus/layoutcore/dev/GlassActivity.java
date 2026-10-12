@@ -2,6 +2,8 @@ package dev.proteus.layoutcore;
 
 import android.app.Activity;
 import android.os.Bundle;
+import android.util.Log;
+import android.view.Choreographer;
 import android.view.MotionEvent;
 import android.widget.FrameLayout;
 
@@ -26,6 +28,48 @@ public class GlassActivity extends Activity {
     private static final int ROW_H = 150, ROW_GAP = 14, ROWS = 24;
     private static final int[] PALETTE = {0xFF3B6FE0, 0xFFE0577B, 0xFF2FB98A, 0xFFE0A93B, 0xFF7B57E0, 0xFF2FA0E0, 0xFFD2694A, 0xFF4AC2B0};
     private float contentH() { return ROWS * (ROW_H + ROW_GAP); }
+
+    // ★★★决策 #861：**性能基线**（`--ez bench true`）——程序化滚动 N 帧 + Choreographer 真 vsync 采样，
+    //   与鸿蒙 glass-bench 同口径（真 vsync 间隔 framediff ⇒ 实际交付帧率）。零外部依赖、结果 logcat 上报。
+    private boolean benchMode = false;
+    private static final String TAG = "ProteusGlassBench";
+    private static final int BENCH_FRAMES = 120;
+    private int benchN = 0;
+    private float benchOff = 0f;
+    private long benchFirstNs = 0, benchLastNs = 0;
+    private long benchSumNs = 0, benchMaxNs = 0;
+    private int benchDropped = 0;
+    private final Choreographer.FrameCallback benchCb = new Choreographer.FrameCallback() {
+        @Override public void doFrame(long frameTimeNanos) {
+            // 先记本帧时刻（真实 vsync 时刻）
+            if (benchN == 12) { benchFirstNs = frameTimeNanos; benchSumNs = 0; benchMaxNs = 0; benchDropped = 0; }
+            if (benchN >= 12 && benchLastNs != 0) {
+                long dt = frameTimeNanos - benchLastNs; benchSumNs += dt; if (dt > benchMaxNs) benchMaxNs = dt;
+                if (dt > 16.67e6 * 1.5) benchDropped++;   // 掉帧 = 跳过 ≥1 个 vsync
+            }
+            benchLastNs = frameTimeNanos;
+            // 程序化滚动（每帧 +6px，回绕）
+            benchOff += 6f;
+            float max = Math.max(0, contentH() - H);
+            if (benchOff > max) benchOff = 0;
+            scrollY = benchOff;
+            scene.setContentScrollY((int) benchOff);
+            benchN++;
+            if (benchN < BENCH_FRAMES) { Choreographer.getInstance().postFrameCallback(this); return; }
+            // 上报：帧数按真实 vsync 间隔算交付帧率 + onDraw 成本均值
+            int n = benchN - 12;
+            double spanMs = (benchLastNs - benchFirstNs) / 1e6;
+            double fps = (benchLastNs > benchFirstNs) ? n * 1e9 / (double)(benchLastNs - benchFirstNs) : -1;
+            double onDrawAvg = scene.frameMsAverage();   // onDraw 每帧绘制成本均值（ms）
+            Log.i(TAG, "PROTEUS_ANDROID_GLASS_BENCH {\"scene\":\"glass-bench\",\"frames\":" + BENCH_FRAMES
+                    + ",\"delivered_fps\":" + Math.round(fps * 10) / 10.0
+                    + ",\"avg_interval_ms\":" + Math.round((benchSumNs / 1e6 / n) * 100) / 100.0
+                    + ",\"max_interval_ms\":" + Math.round((benchMaxNs / 1e6) * 100) / 100.0
+                    + ",\"dropped\":" + benchDropped
+                    + ",\"span_ms\":" + Math.round(spanMs * 10) / 10.0
+                    + ",\"ondraw_avg_ms\":" + (Math.round(onDrawAvg * 100) / 100.0) + "}");
+        }
+    };
 
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
@@ -141,5 +185,16 @@ public class GlassActivity extends Activity {
         glassMap.put(pillId, new GlassMaterial.Spec(20f, 0x26FFFFFF, pillR, true, 1.0f));
         glassMap.put(circId, new GlassMaterial.Spec(16f, 0x33FFFFFF, circR, true, 1.0f));
         scene.setGlassNodes(glassMap);
+
+        // ★决策 #861：性能基线模式（`--ez bench true`）⇒ 建树后延迟自启动程序化滚动基准。
+        benchMode = getIntent() != null && getIntent().getBooleanExtra("bench", false);
+        if (benchMode) {
+            scene.postDelayed(new Runnable() {
+                @Override public void run() {
+                    benchN = 0; benchOff = 0; benchFirstNs = 0; benchLastNs = 0;
+                    Choreographer.getInstance().postFrameCallback(benchCb);
+                }
+            }, 400);   // 400ms 预热（等首帧光栅化稳定；仅 dev 基准，非盲等——由 postDelayed 定时器驱动）
+        }
     }
 }
