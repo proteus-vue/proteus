@@ -1146,7 +1146,10 @@ static void drawSelfContentCore(OH_Drawing_Canvas* rsCanvas, SelfDrawSpec* sd) {
                 //   S==1 用全分辨率。两者都用**持久 scratch**（避免每帧分配）。
                 std::vector<uint8_t>& bdUse2 = (S > 1) ? g_sdScratchDown : g_sdScratchCrop;
                 const int bw = (S > 1) ? iw2 : iw, bh = (S > 1) ? ih2 : ih;
-                bdUse2.assign((size_t)bw * bh * 4, 0);
+                // ★★★决策 #846 修复「玻璃两侧黑块」：玻璃盒外扩 pad 超出**屏幕**的部分，原来填 0（透明黑）
+                //   ⇒ 折射把它当背景采样 ⇒ 玻璃左/右边缘出现黑块（真机「滚动到看不到内容时两个黑块」）。
+                //   改为填**页面底色**（不透明白）——与自绘位图的 clear 色一致。
+                bdUse2.assign((size_t)bw * bh * 4, 0xFF);
                 {
                     // 有效区间（目标缓冲坐标 = 全分辨率坐标 / S）
                     int y0 = (S > 1) ? (cY0 + S - 1) / S : cY0, y1 = (S > 1) ? cY1 / S : cY1;

@@ -14,7 +14,8 @@ import android.widget.FrameLayout;
 public class GlassActivity extends Activity {
 
     private static final float U = 3f;
-    private static final int BG = 0xFF0E0E14;
+    // ★决策 #846：页面底色改为**白色**（用户要求：与鸿蒙夹具同口径，并核验玻璃两侧黑块问题）。
+    private static final int BG = 0xFFFFFFFF;
 
     private boolean glassFullscreenPending = false;
     private ProteusHostView scene;
