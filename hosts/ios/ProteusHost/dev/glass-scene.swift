@@ -111,16 +111,19 @@ final class GlassScene: NSObject {
             id += 1
         }
         // 玻璃节点（★ position:fixed ⇒ 钉在屏上；滚动时内容滑过）
-        // ① 胶囊 pill（类 tab 栏）：底部
-        nodes.append(["id": id, "parentId": 0, "position": "fixed", "left": 24, "top": 620,
-                      "width": 342, "height": 84, "borderRadius": 42,
-                      "glass": ["blur": 20, "tint": "#ffffff26", "radius": 42, "border": true,
+        // ★★★决策 #864：**物理尺寸对齐 Android 夹具**（同形原则）——此前 iOS 圆 130pt(=390px)、
+        //   胶囊 84pt 高，比 Android（圆 900px、胶囊 116px）小 2.3 倍 ⇒ 相对模糊偏大 ⇒ 25 抽摊太开
+        //   ⇒ 文字重影。对齐后模糊核相对盒子与 Android 同（blur 现为**物理 px**，见 glass-metal.swift）。
+        // ① 胶囊 pill（类 tab 栏）：底部（= Android pillH 116px→39pt、宽 W−36*3px→354pt）
+        nodes.append(["id": id, "parentId": 0, "position": "fixed", "left": 18, "top": 770,
+                      "width": 354, "height": 39, "borderRadius": 20,
+                      "glass": ["blur": 20, "tint": "#ffffff26", "radius": 20, "border": true,
                                 "saturation": 1.0, "level": "L2"]])
         id += 1
-        // ② 圆形 circle：中上（圆曲率均匀，折射"卷边"最明显——决策 #831 教训）
-        nodes.append(["id": id, "parentId": 0, "position": "fixed", "left": 130, "top": 200,
-                      "width": 130, "height": 130, "borderRadius": 65,
-                      "glass": ["blur": 16, "tint": "#ffffff26", "radius": 65, "border": true,
+        // ② 圆形 circle：中上（= Android circ 300*U=900px→300pt、blur 16）
+        nodes.append(["id": id, "parentId": 0, "position": "fixed", "left": 45, "top": 95,
+                      "width": 300, "height": 300, "borderRadius": 150,
+                      "glass": ["blur": 16, "tint": "#ffffff26", "radius": 150, "border": true,
                                 "saturation": 1.0, "level": "L2"]])
         id += 1
         // ★B4 前景材质验证（决策 #834）：gradient / glow / mask 各一块（固定位，验内核单源渲染）

@@ -1,26 +1,26 @@
 {
   "bench" : {
-    "delivered_fps" : 58.899999999999999,
-    "dropped" : 1,
-    "elapsed_ms" : 2698.0900000000001,
+    "delivered_fps" : 59.299999999999997,
+    "dropped" : 0,
+    "elapsed_ms" : 2681.2199999999998,
     "frames" : 160,
     "ok" : true,
     "timed_out" : false,
-    "vsync_max_ms" : 31.041,
+    "vsync_max_ms" : 16.863,
     "vsync_p50_ms" : 16.863,
-    "work_max_ms" : 22.91,
-    "work_p50_ms" : 15.452,
-    "work_p95_ms" : 16.588999999999999
+    "work_max_ms" : 15.942,
+    "work_p50_ms" : 11.791,
+    "work_p95_ms" : 15.311
   },
   "glass_faces" : 2,
   "glass_nodes" : 2,
   "host_id" : "ios",
-  "host_total_ms" : 62.359999999999999,
+  "host_total_ms" : 55.590000000000003,
   "layer_count" : 55,
   "mount_ok" : true,
   "node_count" : 55,
   "ok" : true,
-  "run_ts" : 1791803266,
-  "snapshot_after" : "\/var\/mobile\/Containers\/Data\/Application\/4E1D19FE-6127-4B4D-9885-9233AF49C049\/Documents\/glass-ios-bench.png",
+  "run_ts" : 1791804148,
+  "snapshot_after" : "\/var\/mobile\/Containers\/Data\/Application\/65F557AA-1869-49CB-A010-98BF2DC7AA8E\/Documents\/glass-ios-bench.png",
   "tree_bytes" : 7945
 }
