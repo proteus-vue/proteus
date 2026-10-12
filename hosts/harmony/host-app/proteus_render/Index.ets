@@ -17,8 +17,16 @@ export {
   platformAnimSave,
   clearRoot,
   scrollRoot,
+  // ★★★决策 #842：内容渲染模式切换（"render-node" 缺省 / "self-draw" 进程内自绘 ⇒ 玻璃同帧）
+  setContentMode,
   gestureInstall,
   gestureSample,
+  // ★★★决策 #840/#841：节点快照能力探针（玻璃背景捕获来源取证）
+  snapshotProbe,
+  // ★★★决策 #841：离屏 Vulkan 玻璃 pass 探针（GPU 单源取证）
+  vkGlassProbe,
+  // ★★★决策 #841：玻璃 GPU pass 集成（内容快照 → 离屏 Vulkan → 落覆盖节点背景图）
+  glassPass,
 } from 'libproteus_render.so'
 export type { ProteusRenderStats } from 'libproteus_render.so'
 

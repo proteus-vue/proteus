@@ -22,6 +22,7 @@ const CRATE = path.join(ROOT, 'packages/shader-codegen-rust')
 const OUT_TS = path.join(ROOT, 'packages/shader/src/generated/materials.ts')
 const ANDROID_JAVA = path.join(ROOT, 'hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/GeneratedMaterials.java')
 const IOS_SWIFT = path.join(ROOT, 'hosts/ios/ProteusHost/runtime/generated-materials.swift')
+const HARMONY_HEADER = path.join(ROOT, 'hosts/harmony/host-app/proteus_render/src/main/cpp/generated_materials_spirv.h')
 const CHECK = process.argv.includes('--check')
 
 /** 找 cargo（rustup 默认位） */
@@ -47,18 +48,20 @@ function generate() {
     })
     const catalog = JSON.parse(fs.readFileSync(path.join(tmp, 'catalog.json'), 'utf8'))
     const files = {}
+    const binaries = {}   // ★决策 #841：SPIR-V 是**二进制** ⇒ 单独收集（不入文本 TS 模块）
     for (const f of fs.readdirSync(tmp)) {
       if (f === 'catalog.json' || f === 'README.md') continue
-      files[f] = fs.readFileSync(path.join(tmp, f), 'utf8')
+      if (f.endsWith('.spv')) { binaries[f] = fs.readFileSync(path.join(tmp, f)) }
+      else files[f] = fs.readFileSync(path.join(tmp, f), 'utf8')
     }
-    return { catalog, files }
+    return { catalog, files, binaries }
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true })
   }
 }
 
 /** 把 catalog + files 组装成 TS 模块文本（稳定的确定性输出——键排序）。 */
-function toTsModule(catalog, files) {
+function toTsModule(catalog, files, binaries) {
   const fileKeys = Object.keys(files).sort()
   const lines = []
   lines.push('// packages/shader/src/generated/materials.ts')
@@ -72,6 +75,13 @@ function toTsModule(catalog, files) {
   lines.push('export const SHADER_SOURCES: Readonly<Record<string, string>> = {')
   for (const k of fileKeys) {
     lines.push(`  ${JSON.stringify(k)}: ${JSON.stringify(files[k])},`)
+  }
+  lines.push('}')
+  lines.push('')
+  lines.push('/** ★★★SPIR-V 二进制（base64；键形如 `glass.spirv.frag.spv`）——Vulkan 载体（决策 #841）。 */')
+  lines.push('export const SHADER_SPIRV: Readonly<Record<string, string>> = {')
+  for (const k of Object.keys(binaries).sort()) {
+    lines.push(`  ${JSON.stringify(k)}: ${JSON.stringify(binaries[k].toString('base64'))},`)
   }
   lines.push('}')
   lines.push('')
@@ -132,11 +142,65 @@ function toSwiftModule(catalog, files) {
   return lines.join('\n')
 }
 
-const { catalog, files } = generate()
+/**
+ * ★★★鸿蒙：生成 `generated_materials_spirv.h`（SPIR-V 二进制 → C 数组常量；决策 #841）。
+ *
+ * 【为什么是 C 头而不是源码】SPIR-V 是**二进制**（`vkCreateShaderModule` 吃字节流）——
+ *   嵌成 `static const uint32_t[]`（每元素 4 字节，小端对齐 Vulkan 契约）。宿主 Vulkan pass
+ *   直接引用这两个数组，**不手写着色器算法**（与 Android/iOS 同源：同一份 WGSL 落地）。
+ */
+function toHarmonyHeader(catalog, binaries) {
+  const lines = []
+  lines.push('// hosts/harmony/host-app/proteus_render/src/main/cpp/generated_materials_spirv.h')
+  lines.push('// ★★★本文件由 `node scripts/gen-shaders.mjs` **自动生成**——请勿手改。')
+  lines.push('//   算法真源 = packages/shader-codegen-rust/src/materials/*.wgsl（Rust WGSL + naga 落地 SPIR-V）。')
+  lines.push('//   鸿蒙宿主离屏 Vulkan pass 只引用本常量（编译管线 + 设 uniform + 跑 pass），不写算法。')
+  lines.push('//   ★真机取证（决策 #841）：鸿蒙 libvulkan 1.3 + 计算/图形队列（Maleoon 920C）⇒ 可跑本 SPIR-V。')
+  lines.push('#pragma once')
+  lines.push('#include <cstdint>')
+  lines.push('#include <cstddef>')
+  lines.push('')
+  lines.push('namespace proteus_shaders {')
+  for (const m of catalog.materials) {
+    const vName = `${m.id}.spirv.vert.spv`
+    const fName = `${m.id}.spirv.frag.spv`
+    const vert = binaries[vName]
+    const frag = binaries[fName]
+    if (!vert || !frag) continue
+    const toWords = (buf) => {
+      const words = []
+      for (let i = 0; i < buf.length; i += 4) {
+        // 小端 4 字节 → uint32（SPIR-V magic 应成 0x07230203）
+        words.push(buf.readUInt32LE(i) >>> 0)
+      }
+      return words
+    }
+    const vw = toWords(vert)
+    const fw = toWords(frag)
+    const name = m.id.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toUpperCase()
+    lines.push(`// ${m.id} 顶点 SPIR-V（${vert.length} 字节）`)
+    lines.push(`static const uint32_t ${name}_VERT_SPV[] = {`)
+    lines.push('    ' + vw.map((w) => '0x' + w.toString(16).padStart(8, '0')).join(', '))
+    lines.push('};')
+    lines.push(`static const size_t ${name}_VERT_SPV_LEN = sizeof(${name}_VERT_SPV);`)
+    lines.push(`// ${m.id} 片元 SPIR-V（${frag.length} 字节）`)
+    lines.push(`static const uint32_t ${name}_FRAG_SPV[] = {`)
+    lines.push('    ' + fw.map((w) => '0x' + w.toString(16).padStart(8, '0')).join(', '))
+    lines.push('};')
+    lines.push(`static const size_t ${name}_FRAG_SPV_LEN = sizeof(${name}_FRAG_SPV);`)
+  }
+  lines.push('}  // namespace proteus_shaders')
+  lines.push('')
+  return lines.join('\n').replace(/\n+$/, '\n')
+}
+
+const { catalog, files, binaries } = generate()
+const writes = binaries ? Object.keys(binaries).length : 0
 const outputs = [
-  [OUT_TS, toTsModule(catalog, files)],
+  [OUT_TS, toTsModule(catalog, files, binaries)],
   [ANDROID_JAVA, toJavaModule(catalog, files)],
   [IOS_SWIFT, toSwiftModule(catalog, files)],
+  [HARMONY_HEADER, toHarmonyHeader(catalog, binaries)],
 ]
 
 if (CHECK) {
@@ -152,7 +216,7 @@ if (CHECK) {
     console.error('  ⇒ 跑 `node scripts/gen-shaders.mjs` 重生成并提交')
     process.exit(1)
   }
-  console.log('✓ 着色器生成物与 Rust 真源一致（无漂移：TS + Android + iOS）')
+  console.log('✓ 着色器生成物与 Rust 真源一致（无漂移：TS + Android + iOS + 鸿蒙 SPIR-V）')
   process.exit(0)
 }
 
@@ -161,4 +225,4 @@ for (const [f, content] of outputs) {
   fs.writeFileSync(f, content)
   console.log(`✓ 已生成 ${path.relative(ROOT, f)}`)
 }
-console.log(`  （${Object.keys(files).length} 个着色器源）`)
+console.log(`  （${Object.keys(files).length} 个着色器源 + ${writes} 个 SPIR-V 二进制）`)

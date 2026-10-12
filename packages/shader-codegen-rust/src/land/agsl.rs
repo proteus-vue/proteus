@@ -31,7 +31,7 @@ pub fn emit(module: &naga::Module, info: &naga::valid::ModuleInfo, fragment_entr
     if agsl.contains("while") {
         return Err("AGSL 落地物含 `while`（AGSL 不支持）——请把算法中的循环展开（见 materials/*.wgsl 注释）".into());
     }
-    Ok(crate::Emitted { vertex: None, fragment: agsl })
+    Ok(crate::Emitted { vertex: None, fragment: agsl, spirv: None })
 }
 
 /// GLSL-ES-3.10 → AGSL 机械改写（规则见文件头）。

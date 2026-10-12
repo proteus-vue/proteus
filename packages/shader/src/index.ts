@@ -22,7 +22,8 @@ export {
   agslBackend,
   mslBackend,
   glslBackend,
+  vulkanBackend,
   headlessBackend,
 } from './backends'
 export { runShaderConformance, type ConformanceCheck, type ConformanceResult } from './conformance'
-export { SHADER_SOURCES } from './generated/materials'
+export { SHADER_SOURCES, SHADER_SPIRV } from './generated/materials'

@@ -37,7 +37,7 @@ ARCH_INC="$(ls "$SYSROOT/usr/include" 2>/dev/null | grep -iE 'aarch64|aarch' | h
 
 echo "==> 编译检查鸿蒙宿主 C++（OHOS clang -fsyntax-only，零设备）"
 fail=0
-for f in proteus_host.cpp proteus_render.cpp; do
+for f in proteus_host.cpp proteus_render.cpp glass_vk.cpp; do
   if "$CLANG" --target=aarch64-linux-ohos --sysroot="$SYSROOT" -fsyntax-only \
       -I"$SYSROOT/usr/include" -I"$SYSROOT/usr/include/$ARCH_INC" -I"$CPP_DIR" \
       "$CPP_DIR/$f" 2>/tmp/harmony_cc_$f.log; then

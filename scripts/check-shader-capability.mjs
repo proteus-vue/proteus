@@ -66,6 +66,8 @@ const ALGO_FINGERPRINTS = ['sd_round_rect', 'sdRoundRect', 'circle_map(', 'circl
 const GENERATED_WHITELIST = new Set([
   'hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/GeneratedMaterials.java',
   'hosts/ios/ProteusHost/runtime/generated-materials.swift',
+  // ★决策 #841：鸿蒙 SPIR-V 生成物（C 头）——落地本身（由漂移门禁守），非手写算法。
+  'hosts/harmony/host-app/proteus_render/src/main/cpp/generated_materials_spirv.h',
 ])
 function noHandwrittenCheck() {
   const hosts = path.join(ROOT, 'hosts')
@@ -96,6 +98,10 @@ function packageCheck() {
   const src = fs.readFileSync(gen, 'utf8')
   for (const key of ['glass.agsl.frag.glsl', 'glass.msl.frag.metal', 'glass.glsl.frag.glsl']) {
     if (!src.includes(key)) problems.push(`生成物缺 ${key}`)
+  }
+  // ★决策 #841：SPIR-V 生成物（鸿蒙 Vulkan 载体）—— base64 键须在生成物里（`SHADER_SPIRV`）
+  for (const key of ['glass.spirv.vert.spv', 'glass.spirv.frag.spv']) {
+    if (!src.includes(key)) problems.push(`生成物缺 ${key}（SPIR-V / 鸿蒙 Vulkan 载体）`)
   }
 }
 

@@ -21,10 +21,10 @@ import { display } from '@kit.ArkUI';
 import { hidebug } from '@kit.PerformanceAnalysisKit';
 // ★矩阵 #17：App 路由栈场景探针（移植副本，与 Android/iOS 同口径）
 import { runAppStackProbe } from './app-stack-probe';
-import { attach, renderCommands, stats, ProteusRenderStats, platformAnimBegin, platformAnimStep, platformAnimEnd, platformAnimSave, clearRoot, scrollRoot, gestureInstall, gestureSample, appScreenCommands, appScreenHitAt, appScreenAnimTick } from 'proteus_render';
+import { attach, renderCommands, stats, ProteusRenderStats, platformAnimBegin, platformAnimStep, platformAnimEnd, platformAnimSave, clearRoot, scrollRoot, setContentMode, gestureInstall, gestureSample, snapshotProbe, vkGlassProbe, glassPass, appScreenCommands, appScreenHitAt, appScreenAnimTick } from 'proteus_render';
 // ★P3-3：宿主动画入口（`<Transition>` 桥的鸿蒙腿——与 Android/iOS 同形）
 import { animTick, animActive } from 'libproteus_bench.so';
-import { bench4050, hitProbe, recycleProbe, spliceProbe, textProbe, kernelAnimProbe, memProbe, sfcStressProbe, sfcStressCommands, jsvmProbe, vaporProbe, animCurveBezier, hostRuntimeProbe, hostRtShellInstall, mountVirtualProbe, gestureHitPrepare, gestureHitAt, fontFamilyProbe, nodeRect, screenContentProbe, appStackExecutorProbe, version as rustVersion } from 'libproteus_bench.so';
+import { bench4050, hitProbe, recycleProbe, spliceProbe, textProbe, kernelAnimProbe, memProbe, sfcStressProbe, sfcStressCommands, jsvmProbe, vaporProbe, animCurveBezier, hostRuntimeProbe, hostRtShellInstall, mountVirtualProbe, gestureHitPrepare, gestureHitAt, fontFamilyProbe, nodeRect, vkProbe, screenContentProbe, appStackExecutorProbe, version as rustVersion } from 'libproteus_bench.so';
 
 const DOMAIN = 0x0002;
 const TAG = 'ProteusRender';
@@ -61,6 +61,57 @@ class SfcFrameCallback extends FrameCallback {
     if (this.fired) return;
     this.fired = true;
     hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_SFCSTRESS_FRAME');
+  }
+  onIdle(): void {}
+}
+
+/**
+ * ★★★玻璃背景捕获探针上报（决策 #840/#841）：等**首帧合成完成**后再截图（建树当帧 RS 未必已合成）。
+ *   只报一次——`OH_ArkUI_GetNodeSnapshot` 同步读 RS 已渲染像素，若成功且非全黑 ⇒ 背景捕获可行。
+ */
+class GlassSnapFrameCallback extends FrameCallback {
+  private uiCtx: UIContext;
+  private n: number = 0;
+  // ★等 2 帧（onFrame 是**合成前**回调；首帧 RS 未必已把自绘内容光栅化）。★尽量小 —— 快照+玻璃
+  //   是**内容之后**才可能（玻璃需先有背景），故玻璃总会比内容晚 ≥1 帧；这里只做"够截图"的最小等待。
+  private readonly wait: number = 2;
+  constructor(uiCtx: UIContext) {
+    super();
+    this.uiCtx = uiCtx;
+  }
+  onFrame(_frameTimeInNano: number): void {
+    this.n++;
+    if (this.n < this.wait) {
+      this.uiCtx.postFrameCallback(this);
+      return;
+    }
+    try {
+      // target=2：同时截「自绘 customNode」与「外层 Stack」⇒ 分辨时序 vs 节点类型
+      const s: string = snapshotProbe(2);
+      hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_SNAPSHOT_PROBE_RUN %{public}s', s);
+      // ★★★决策 #841：跑玻璃 GPU pass（快照 → 离屏 Vulkan → 覆盖节点背景图 = 真边缘折射）
+      const gp: string = glassPass();
+      hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_GLASS_PASS_RUN %{public}s', gp);
+      // 玻璃图像落节点后需一帧重绘 ⇒ 再等一帧截图（观感取证）
+      this.uiCtx.postFrameCallback(new GlassShotFrameCallback(this.uiCtx));
+    } catch (se) {
+      hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_SNAPSHOT_PROBE_ERR %{public}s', JSON.stringify(se) ?? '');
+    }
+  }
+  onIdle(): void {}
+}
+
+/** 玻璃图像落地后等数帧再上报"可截图"（观感取证：让被测对象主动报告，零盲等）。
+ *  ★用户实测：液态玻璃效果**有延迟**（背景图属性落到合成有一拍）⇒ 等久一点，否则截图拍到落地前的帧。 */
+class GlassShotFrameCallback extends FrameCallback {
+  private uiCtx: UIContext;
+  private n: number = 0;
+  private readonly wait: number = 10;   // 落地后再等 ~10 帧（≈160ms）；已 markDirty 主动请求帧，无需久等
+  constructor(uiCtx: UIContext) { super(); this.uiCtx = uiCtx; }
+  onFrame(_frameTimeInNano: number): void {
+    this.n++;
+    if (this.n < this.wait) { this.uiCtx.postFrameCallback(this); return; }
+    hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_GLASS_SHOT_READY');
   }
   onIdle(): void {}
 }
@@ -472,6 +523,11 @@ struct Index {
   /** ★★★玻璃夹具场景（决策 #838 · `--ps scene glass`）：与 Android `GlassActivity` 同形——
    *  滚动内容 + 圆形/胶囊玻璃面（验鸿蒙自绘玻璃：磨砂面 + 圆角 + 高光边）。 */
   private glassScene: boolean = (AppStorage.get<string>('proteusScene') ?? '') === 'glass';
+  /** ★★★Vulkan 能力探针场景（决策 #841 · `--ps scene vk`）：只跑 vkProbe 并上报，不建树/不跑 bench。
+   *  ★为什么单独成场景：探针要在**无内容干扰**下采集，避免被 bench 的多次建树日志挤掉。 */
+  private vkScene: boolean = (AppStorage.get<string>('proteusScene') ?? '') === 'vk';
+  /** ★★★Vulkan 玻璃 pass 场景（决策 #841 · `--ps scene vkglass`）：只跑 vkGlassProbe（离屏 GPU 玻璃）+ 上报。 */
+  private vkGlassScene: boolean = (AppStorage.get<string>('proteusScene') ?? '') === 'vkglass';
   /**
    * `.position` 的参照系修正 = **状态栏高度（48vp）**。
    * ★根因（`uitest dumpLayout` 取证）：页面 Stack 的 bounds 是 `[0,168][1320,2758]`——
@@ -925,6 +981,27 @@ struct Index {
       }
       // ── ⓪ ★★压力场景分支（矩阵 #21 六端采集）：只渲染 SFC 夹具 + 主动上报，不跑探针 ──
       //   触发：`aa start ... --ps scene stress`（EntryAbility 写入 AppStorage；缺省场景不受影响）
+      // ── ★★Vulkan 能力探针场景（决策 #841 · `--ps scene vk`）：只跑探针 + 上报 ──
+      if (this.vkScene) {
+        try {
+          const vkOut: string = vkProbe();
+          hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_VK_PROBE_RUN %{public}s', vkOut);
+        } catch (ve) {
+          hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_VK_PROBE_ERROR %{public}s', JSON.stringify(ve) ?? '');
+        }
+        return;
+      }
+      // ── ★★Vulkan 玻璃 pass 场景（决策 #841 · `--ps scene vkglass`）：离屏 GPU 玻璃取证 ──
+      if (this.vkGlassScene) {
+        try {
+          const ctxG = getContext(this);
+          const g: string = vkGlassProbe(ctxG.filesDir);
+          hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_VKGLASS_RUN %{public}s', g);
+        } catch (ge) {
+          hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_VKGLASS_ERROR %{public}s', JSON.stringify(ge) ?? '');
+        }
+        return;
+      }
       // ── ★★★玻璃夹具分支（决策 #838 · `--ps scene glass`）：只渲染同形玻璃夹具 + 上报 + 截图；
       //   与 stressScene 同构（早退，不跑 bench——否则 bench 的多次 renderCommands 会覆盖本夹具）──
       if (this.glassScene) {
@@ -933,6 +1010,8 @@ struct Index {
           const vpWG = px2vp(dispG.width);
           const vpHG = px2vp(dispG.height);
           const rcG = attach(this.content, vp2px(1), vpWG, vpHG);
+          // ★★★决策 #842：玻璃场景切到**自绘内容通道**（进程内位图 ⇒ 玻璃与内容同帧）
+          setContentMode('self-draw');
           const cmdsG: string = buildGlassCommands(vpWG, vpHG);
           const nG = renderCommands(cmdsG);
           this.rendered = nG;
@@ -941,6 +1020,8 @@ struct Index {
           hilog.info(DOMAIN, BENCH_TAG,
             'PROTEUS_GLASS_FIXTURE nodes=%{public}d attach_rc=%{public}d vp=%{public}sx%{public}s',
             nG, rcG, vpWG.toFixed(2), vpHG.toFixed(2));
+          // ★★★决策 #840/#841：建树后**等几帧**再截图取证（探针 RS 已合成像素 → 玻璃背景捕获来源）
+          this.getUIContext().postFrameCallback(new GlassSnapFrameCallback(this.getUIContext()));
         } catch (ge) {
           hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_GLASS_FIXTURE_ERROR %{public}s', JSON.stringify(ge) ?? '');
         }

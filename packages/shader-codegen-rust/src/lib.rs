@@ -19,6 +19,8 @@ pub enum Target {
     Agsl,
     /// 标准 GLSL-ES-3.10（GLES3 承载/调试用；也是 AGSL 改写的中间形态）。
     Glsl,
+    /// ★★★SPIR-V 二进制（Vulkan 载体 —— 鸿蒙腿 · 决策 #841）。
+    Spirv,
 }
 
 impl Target {
@@ -27,7 +29,8 @@ impl Target {
             "msl" => Ok(Target::Msl),
             "agsl" => Ok(Target::Agsl),
             "glsl" => Ok(Target::Glsl),
-            other => Err(format!("未知 target：{other}（可选 msl/agsl/glsl）")),
+            "spirv" | "spv" => Ok(Target::Spirv),
+            other => Err(format!("未知 target：{other}（可选 msl/agsl/glsl/spirv）")),
         }
     }
     pub fn id(&self) -> &'static str {
@@ -35,16 +38,19 @@ impl Target {
             Target::Msl => "msl",
             Target::Agsl => "agsl",
             Target::Glsl => "glsl",
+            Target::Spirv => "spirv",
         }
     }
 }
 
-/// 落地产物：一个材质的着色器源码。
+/// 落地产物：一个材质的着色器源码 / 二进制。
 pub struct Emitted {
     /// 顶点着色器源码（MSL/GLSL 需要；AGSL 由框架提供几何 ⇒ None）。
     pub vertex: Option<String>,
-    /// 片元着色器源码（主产物）。
+    /// 片元着色器源码（主产物；SPIR-V 目标下为空字符串——二进制走 `spirv` 字段）。
     pub fragment: String,
+    /// ★★★SPIR-V 二进制（顶点, 片元）——仅 `Target::Spirv` 有值（小端字节流）。
+    pub spirv: Option<(Vec<u8>, Vec<u8>)>,
 }
 
 /// 把某材质落地到某目标（核心 API）。
@@ -53,11 +59,12 @@ pub fn emit(material_id: &str, target: Target) -> Result<Emitted, String> {
         .ok_or_else(|| format!("未知材质：{material_id}"))?;
     // ★组合成**单一 WGSL 模块**（quad 顶点 + 材质片元）——naga 在同一模块内统一 varying 契约，
     //   MSL 才能产出**顶点/片元可对接**的一份程序（分模块编译会各自发明 varying 结构体名 ⇒ 对不上）。
+    //   ★SPIR-V 同理：同模块各取一个 entry point ⇒ 两份 module 共享 binding 编号（管线可对接）。
     let combined = format!("{}\n\n{}", materials::QUAD_WGSL, m.wgsl);
     land::emit(&combined, m.entry, target)
 }
 
-/// 便捷：只要片元源码（AGSL / 多数场景）。
+/// 便捷：只要片元源码（AGSL / 多数场景）。★SPIR-V 目标不适用（二进制）——调用方用 `emit`。
 pub fn emit_fragment(material_id: &str, target: Target) -> Result<String, String> {
     Ok(emit(material_id, target)?.fragment)
 }

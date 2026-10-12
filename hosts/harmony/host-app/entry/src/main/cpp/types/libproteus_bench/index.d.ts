@@ -43,6 +43,9 @@ export const gestureHitAt: (xDesign: number, yDesign: number) => string;
 export const fontFamilyProbe: () => string;
 /** ★矩阵 #10：读核心真源的单节点几何（设计单位）——ArkUI 原生组件按此定位 */
 export const nodeRect: (nodeId: number) => string;
+/** ★★★Vulkan 能力探针（决策 #841）：真机确认是否有 libvulkan 运行时 + 物理设备 + 计算队列。
+ *  返回 JSON 串（available/loaded/devices/device/api/has_compute_queue/dev_ext_*）。 */
+export const vkProbe: () => string;
 /** Rust 排版核版本（仪器自检） */
 export const version: () => string;
 /* ── ★★★P3-3（2026-10-03）：`<Transition>` 宿主动画入口（三端同形）── */

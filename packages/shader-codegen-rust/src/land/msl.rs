@@ -36,5 +36,5 @@ pub fn emit(module: &naga::Module, info: &naga::valid::ModuleInfo) -> Result<cra
             _ => {}
         }
     }
-    Ok(crate::Emitted { vertex, fragment: fragment.unwrap() })
+    Ok(crate::Emitted { vertex, fragment: fragment.unwrap(), spirv: None })
 }
