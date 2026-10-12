@@ -3426,3 +3426,9 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **② 根因（#851 异步回读的必然边界）**：异步双缓冲回读**本帧只读上一 parity** ⇒ **首帧（启动/重建/尺寸变）无上一批可读** ⇒ 回读全空 ⇒ 玻璃图像为空；而静止时 `ON_DRAW` 不再产帧 ⇒ **玻璃一直空**，直到滑动触发新帧、才读到"上一批"。
 **③ 修法（`renderBatch` 首帧兜底）**：提交本帧后，对**仍未拿到结果**的 slot，**同步等待本帧 fence 并读当前 parity**（一次性同步回读）。仅首帧发生（此后每帧都有上批可读）⇒ **不影响稳态性能**。真机验证：启动后**未滑动即显示玻璃**（圆+胶囊、折射正常）。
 **④ 教训**：**异步/双缓冲的"首帧空洞"是通用陷阱**——只要有"读上一帧"的优化，就必须问"**第一帧读什么**"，并在无历史时给同步兜底（本仓同族：content-modifier 首帧、Vulkan barrier 首帧读回）。
+
+853. **★★鸿蒙宿主场景切换装置缺口：`aa start --ps scene X` 换场景不生效 → 补 `onNewWant`**（2026-10-12）：
+**① 现象（用户）**：「我现在看到的不是测试页」——真机截图是**默认页**（`native nodes = -1`），而用户以为是玻璃演示页。
+**② 根因（取证）**：应用**已在运行时**再 `aa start --ps scene glass-demo` ⇒ Ability 被**复用**（走 `onNewWant`，**不重跑 `onCreate`**），而场景参数只在 `onCreate` 读 ⇒ **仍是上一个场景**（日志 `PROTEUS_HOST_ONCREATE scene=vkglass`，即上一轮测试残留）。
+**③ 修法**：EntryAbility 抽 `applyWant(want)`（解析 scene/scroll/ms → AppStorage + pageToLoad）；`onCreate` 与**新增的 `onNewWant`** 都调它；`onNewWant` 里若 scene **变化** ⇒ **`windowStage.loadContent(pageToLoad)` 重载页面**。⇒ 运行中换场景不再需要先 `aa force-stop`。真机验证：`aa start --ps scene bench` → `--ps scene glass-demo` ⇒ `PROTEUS_HOST_NEWWANT changed=1` + `PROTEUS_GLASS_DEMO`（成功切换）。
+**④ 教训**：**装置缺口会伪装成产品 bug**——"不是测试页"一度像渲染问题，实为**启动装置只覆盖冷启动**（`onCreate`），漏了**热启动**（`onNewWant`）。这与"提交≠交付""门禁覆盖面要跟着形态走"同族：**换了输入形态（冷/热启动），旧路径就不全覆盖**。
