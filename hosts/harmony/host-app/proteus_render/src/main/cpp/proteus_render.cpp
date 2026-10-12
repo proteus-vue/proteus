@@ -222,8 +222,14 @@ static OH_Drawing_Bitmap* g_sdBitmap = nullptr;
 static OH_Drawing_Canvas* g_sdCanvas = nullptr;
 static int g_sdW = 0, g_sdH = 0;
 static SelfDrawSpec* g_sdSpec = nullptr;     // 挂在 g_rootNode 的 content-modifier 上（生命周期 = 建树）
+static ArkUI_RenderContentModifierHandle g_sdMod = nullptr;   // 保留字段（历史：content-modifier 路径）
+static bool g_sdDrawEventReg = false;   // ON_DRAW 事件是否已注册（防重复）
 static int g_rootWpx = 0, g_rootHpx = 0;     // 根 RenderNode 尺寸（物理 px）——自绘位图尺寸
 static bool g_sdHasGlass = false;            // 本帧自绘内容含玻璃面 ⇒ 走同帧玻璃 pass
+// ★决策 #845：玻璃 pass 的**持久 scratch**（避免每帧 new/free 大向量 ⇒ mmap+缺页，真机实测 ~150ms/帧）
+static std::vector<uint8_t> g_sdScratchCrop;   // 全分辨率裁剪缓冲
+static std::vector<uint8_t> g_sdScratchDown;   // 半分辨率降采样缓冲
+static std::vector<uint8_t> g_sdScratchU;      // GlassUniforms buffer
 // 前置声明：RGBA8 → PixelMap（定义见后；自绘玻璃分支要用）
 static OH_PixelmapNative* pixelMapFromRgba8(const std::vector<uint8_t>& rgba, int w, int h);
 /// ★★★批 A（2026-10-08 · 决策 #654）：**position:fixed 节点登记表** {baseX, baseY, node}。
@@ -1063,12 +1069,8 @@ static void sdDrawText(OH_Drawing_Canvas* canvas, const SDNode& n) {
  *     画完即可读回（玻璃阶段 3 直接用）⇒ 不依赖跨进程快照 ⇒ 玻璃与内容**同帧**。
  *   【坐标系】位图 = 屏幕物理 px（与元素绝对坐标一致）；滚动 = 画布 translate(-scrollY)。
  */
-static void DrawSelfContent(ArkUI_DrawContext* context, void* userData) {
-    auto* sd = static_cast<SelfDrawSpec*>(userData);
-    void* canvasRaw = OH_ArkUI_DrawContext_GetCanvas(context);
-    if (canvasRaw == nullptr) return;
-    auto* rsCanvas = static_cast<OH_Drawing_Canvas*>(canvasRaw);
-    if (sd == nullptr) return;
+static void drawSelfContentCore(OH_Drawing_Canvas* rsCanvas, SelfDrawSpec* sd) {
+    if (rsCanvas == nullptr || sd == nullptr) return;
     const int W = (int)std::lround(sd->screenW), H = (int)std::lround(sd->screenH);
     if (W <= 0 || H <= 0) return;
     // ① 惰性建/复用自持位图（尺寸变才重建）
@@ -1131,66 +1133,112 @@ static void DrawSelfContent(ArkUI_DrawContext* context, void* userData) {
                 const int iw = (int)n.w + 2 * pad, ih = (int)n.h + 2 * pad;
                 if (iw <= 0 || ih <= 0) continue;
                 const int bx = (int)cx - pad, by = (int)cy - pad;
-                // 裁背景（越界填 0；与快照路径同口径）
-                std::vector<uint8_t> bd((size_t)iw * ih * 4, 0);
-                for (int yy = 0; yy < ih; yy++) for (int xx = 0; xx < iw; xx++) {
-                    int sx = bx + xx, sy = by + yy;
-                    if (sx >= 0 && sy >= 0 && sx < g_sdW && sy < g_sdH) {
-                        size_t so = (size_t)sy * stride + (size_t)sx * 4;
-                        size_t o = ((size_t)yy * iw + xx) * 4;
-                        bd[o] = px[so]; bd[o + 1] = px[so + 1]; bd[o + 2] = px[so + 2]; bd[o + 3] = px[so + 3];
+                // 与快照求交的有效行/列区间（全分辨率坐标）
+                const int cY0 = std::max(0, -by), cY1 = std::min(ih, g_sdH - by);
+                const int cX0 = std::max(0, -bx), cX1 = std::min(iw, g_sdW - bx);
+                // ★决策 #845：**半分辨率渲染**（大玻璃 S=2）。玻璃是模糊材质 ⇒ 分辨率减半视觉无损，
+                //   而裁剪/GPU/回读按 S² 降本。小玻璃 S=1（不缩）。
+                const int S = ((int)n.w >= 512 || (int)n.h >= 512) ? 2 : 1;
+                const int iw2 = std::max(1, iw / S), ih2 = std::max(1, ih / S);
+                const int ow2 = std::max(1, (int)n.w / S), oh2 = std::max(1, (int)n.h / S);
+                const int pad2 = pad / S;
+                // 背景缓冲：S>1 直接在**半分辨率**下从快照取样（跳过全分辨率中间缓冲，省一半内存拷贝）；
+                //   S==1 用全分辨率。两者都用**持久 scratch**（避免每帧分配）。
+                std::vector<uint8_t>& bdUse2 = (S > 1) ? g_sdScratchDown : g_sdScratchCrop;
+                const int bw = (S > 1) ? iw2 : iw, bh = (S > 1) ? ih2 : ih;
+                bdUse2.assign((size_t)bw * bh * 4, 0);
+                {
+                    // 有效区间（目标缓冲坐标 = 全分辨率坐标 / S）
+                    int y0 = (S > 1) ? (cY0 + S - 1) / S : cY0, y1 = (S > 1) ? cY1 / S : cY1;
+                    int x0 = (S > 1) ? (cX0 + S - 1) / S : cX0, x1 = (S > 1) ? cX1 / S : cX1;
+                    if (y1 > y0 && x1 > x0) {
+                        for (int yy = y0; yy < y1; yy++) {
+                            const uint8_t* src = px + (size_t)(by + yy * S) * stride + (size_t)(bx + x0 * S) * 4;
+                            uint8_t* dstp = bdUse2.data() + ((size_t)yy * bw + x0) * 4;
+                            if (S == 1) {
+                                memcpy(dstp, src, (size_t)(x1 - x0) * 4);
+                            } else {
+                                // 水平方向每 S 个取 1（与纵向抽样一致）
+                                const uint8_t* s2 = src;
+                                for (int xx = x0; xx < x1; xx++, s2 += S * 4) {
+                                    uint8_t* d2 = dstp + (size_t)(xx - x0) * 4;
+                                    d2[0] = s2[0]; d2[1] = s2[1]; d2[2] = s2[2]; d2[3] = s2[3];
+                                }
+                            }
+                        }
                     }
                 }
-                // GlassUniforms（80B，与 materials/mod.rs 布局一致）
-                std::vector<uint8_t> u(80, 0);
+                const std::vector<uint8_t>* bdUse = &bdUse2;
+                // GlassUniforms（80B，与 materials/mod.rs 布局一致；★按渲染分辨率 S 折算）
+                std::vector<uint8_t>& u = g_sdScratchU;
+                u.assign(80, 0);
                 auto putF = [&](int off, float v) { memcpy(&u[off], &v, 4); };
                 auto putV2 = [&](int off, float a2, float b2) { putF(off, a2); putF(off + 4, b2); };
                 float ta = ((n.gTint >> 24) & 0xFF) / 255.0f, tr = ((n.gTint >> 16) & 0xFF) / 255.0f,
                       tg = ((n.gTint >> 8) & 0xFF) / 255.0f, tb = (n.gTint & 0xFF) / 255.0f;
                 putF(0, tr); putF(4, tg); putF(8, tb); putF(12, ta);
-                putV2(16, (float)n.w, (float)n.h);
+                putV2(16, (float)ow2, (float)oh2);
                 putV2(24, 0.0f, 0.0f);
-                putV2(32, (float)pad / iw, (float)pad / ih);
-                putV2(40, (float)n.w / iw, (float)n.h / ih);
+                putV2(32, (float)pad2 / iw2, (float)pad2 / ih2);
+                putV2(40, (float)ow2 / iw2, (float)oh2 / ih2);
                 { float lx = -0.35f, ly = -0.94f, ll = sqrtf(lx * lx + ly * ly); putV2(48, lx / ll, ly / ll); }
-                putF(56, (float)n.gRadius);
-                putF(60, (float)n.gBlur);
-                putF(64, (n.w < n.h ? (float)n.w : (float)n.h) * 0.22f);
+                putF(56, (float)n.gRadius / S);
+                putF(60, (float)n.gBlur / S);
+                putF(64, (n.w < n.h ? (float)ow2 : (float)oh2) * 0.22f);
                 putF(68, 0.18f);
                 putF(72, (float)n.gSat);
-                std::vector<uint8_t> gout = proteus_glass_vk::renderRgba8(bd, iw, ih, (int)n.w, (int)n.h, u);
-                if (gout.size() != (size_t)n.w * n.h * 4) continue;
-                // 结果画回玻璃盒（圆角裁剪）；就地插到内容之上（同一位图内）
-                OH_PixelmapNative* pm2 = pixelMapFromRgba8(gout, (int)n.w, (int)n.h);
-                if (pm2 == nullptr) continue;
-                OH_Drawing_PixelMap* dpm = OH_Drawing_PixelMapGetFromOhPixelMapNative(pm2);
-                if (dpm != nullptr) {
-                    OH_Drawing_CanvasSave(c);
-                    OH_Drawing_CanvasTranslate(c, (float)cx, (float)cy);
-                    if (n.gRadius > 0) {
-                        OH_Drawing_Rect* cr2 = OH_Drawing_RectCreate(0, 0, (float)n.w, (float)n.h);
-                        OH_Drawing_RoundRect* rr2 = OH_Drawing_RoundRectCreate(cr2, (float)n.gRadius, (float)n.gRadius);
-                        OH_Drawing_Path* cp2 = OH_Drawing_PathCreate();
-                        OH_Drawing_PathAddRoundRect(cp2, rr2, OH_Drawing_PathDirection::PATH_DIRECTION_CW);
-                        OH_Drawing_CanvasClipPath(c, cp2, OH_Drawing_CanvasClipOp::INTERSECT, true);
-                        OH_Drawing_PathDestroy(cp2); OH_Drawing_RoundRectDestroy(rr2); OH_Drawing_RectDestroy(cr2);
+                std::vector<uint8_t> gout = proteus_glass_vk::renderRgba8(*bdUse, iw2, ih2, ow2, oh2, u);
+                if (gout.size() != (size_t)ow2 * oh2 * 4) continue;
+                // ★决策 #845：贴回改**零拷贝**（`BitmapCreateFromPixels` 直接包 gout 内存 → Image），
+                //   避开每帧 `CreatePixelmap`（含 BGRA 重排）~150ms。gout 为 RGBA8888 连续内存。
+                {
+                    OH_Drawing_Image_Info ii{(int32_t)ow2, (int32_t)oh2, COLOR_FORMAT_RGBA_8888, ALPHA_FORMAT_PREMUL};
+                    OH_Drawing_Bitmap* bmp = OH_Drawing_BitmapCreateFromPixels(&ii, gout.data(), (uint32_t)ow2 * 4);
+                    if (bmp != nullptr) {
+                        OH_Drawing_Image* img = OH_Drawing_ImageCreate();
+                        if (img != nullptr && OH_Drawing_ImageBuildFromBitmap(img, bmp)) {
+                            OH_Drawing_CanvasSave(c);
+                            OH_Drawing_CanvasTranslate(c, (float)cx, (float)cy);
+                            if (n.gRadius > 0) {
+                                OH_Drawing_Rect* cr2 = OH_Drawing_RectCreate(0, 0, (float)n.w, (float)n.h);
+                                OH_Drawing_RoundRect* rr2 = OH_Drawing_RoundRectCreate(cr2, (float)n.gRadius, (float)n.gRadius);
+                                OH_Drawing_Path* cp2 = OH_Drawing_PathCreate();
+                                OH_Drawing_PathAddRoundRect(cp2, rr2, OH_Drawing_PathDirection::PATH_DIRECTION_CW);
+                                OH_Drawing_CanvasClipPath(c, cp2, OH_Drawing_CanvasClipOp::INTERSECT, true);
+                                OH_Drawing_PathDestroy(cp2); OH_Drawing_RoundRectDestroy(rr2); OH_Drawing_RectDestroy(cr2);
+                            }
+                            OH_Drawing_SamplingOptions* so2 = OH_Drawing_SamplingOptionsCreate(
+                                OH_Drawing_FilterMode::FILTER_MODE_LINEAR, OH_Drawing_MipmapMode::MIPMAP_MODE_NONE);
+                            OH_Drawing_Rect* dst2 = OH_Drawing_RectCreate(0, 0, (float)n.w, (float)n.h);   // 半分辨率图放大到全盒
+                            OH_Drawing_CanvasDrawImageRect(c, img, dst2, so2);
+                            OH_Drawing_RectDestroy(dst2);
+                            OH_Drawing_SamplingOptionsDestroy(so2);
+                            OH_Drawing_CanvasRestore(c);
+                        }
+                        if (img != nullptr) OH_Drawing_ImageDestroy(img);
+                        OH_Drawing_BitmapDestroy(bmp);
                     }
-                    OH_Drawing_SamplingOptions* so2 = OH_Drawing_SamplingOptionsCreate(
-                        OH_Drawing_FilterMode::FILTER_MODE_LINEAR, OH_Drawing_MipmapMode::MIPMAP_MODE_NONE);
-                    OH_Drawing_Rect* dst2 = OH_Drawing_RectCreate(0, 0, (float)n.w, (float)n.h);
-                    OH_Drawing_CanvasDrawPixelMapRect(c, dpm, nullptr, dst2, so2);
-                    OH_Drawing_RectDestroy(dst2);
-                    OH_Drawing_SamplingOptionsDestroy(so2);
-                    OH_Drawing_CanvasRestore(c);
-                    OH_Drawing_PixelMapDissolve(dpm);
                 }
-                OH_PixelmapNative_Release(pm2);
             }
         }
     }
     OH_Drawing_CanvasRestore(c);
     // ④ 一次贴回 RS 画布（同帧）
     OH_Drawing_CanvasDrawBitmap(rsCanvas, g_sdBitmap, 0.0f, 0.0f);
+}
+
+/**
+ * ★★★决策 #845：**节点自定义绘制事件**接收器（`ARKUI_NODE_CUSTOM_EVENT_ON_DRAW`）。
+ *   【为什么换这个（真机实测根因）】content-modifier 的 onDraw **只在挂载时跑一次**——
+ *     改 FloatProperty / FloatAnimatableProperty / `Invalidate` **都不重跑它** ⇒ 滚动后画面不更新。
+ *   而本事件接收器**每次节点绘制都被回调**（给 `DrawContext`）⇒ 是"每帧重画"的正确钩子。
+ */
+static void OnRootDrawEvent(ArkUI_NodeCustomEvent* event) {
+    if (OH_ArkUI_NodeCustomEvent_GetEventType(event) != ARKUI_NODE_CUSTOM_EVENT_ON_DRAW) return;
+    ArkUI_DrawContext* dc = OH_ArkUI_NodeCustomEvent_GetDrawContextInDraw(event);
+    if (dc == nullptr) return;
+    void* canvasRaw = OH_ArkUI_DrawContext_GetCanvas(dc);
+    drawSelfContentCore(static_cast<OH_Drawing_Canvas*>(canvasRaw), g_sdSpec);
 }
 
 /**
@@ -2047,10 +2095,15 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
     //   根 RenderNode 全屏、无子节点 ⇒ onDraw 回调收到全屏 canvas ⇒ 我们把整屏内容画进自持位图再贴回。
     //   ★与内容**同一次绘制** ⇒ 玻璃阶段（阶段 3）可在同帧读到背景位图。
     if (g_selfDraw && g_sdSpec != nullptr && g_rootNode != nullptr) {
-        ArkUI_RenderContentModifierHandle sm = OH_ArkUI_RenderNodeUtils_CreateContentModifier();
-        if (sm != nullptr) {
-            OH_ArkUI_RenderNodeUtils_SetContentModifierOnDraw(sm, g_sdSpec, DrawSelfContent);
-            OH_ArkUI_RenderNodeUtils_AttachContentModifier(g_rootNode, sm);
+        // ★★决策 #845：**只用节点 ON_DRAW 事件**绘制（不再挂 content-modifier）——两者同时挂时
+        //   content-modifier 那次 onDraw（挂载时的旧 scrollY）会覆盖 ON_DRAW 的新内容 ⇒ 画面不更新。
+        //   单一绘制源 = 无覆盖、每帧重画。
+        if (g_rootHost != nullptr && g_nodeApi != nullptr) {
+            if (!g_sdDrawEventReg) {
+                g_nodeApi->registerNodeCustomEvent(g_rootHost, ARKUI_NODE_CUSTOM_EVENT_ON_DRAW, 0, nullptr);
+                g_nodeApi->addNodeCustomEventReceiver(g_rootHost, OnRootDrawEvent);
+                g_sdDrawEventReg = true;
+            }
         }
         OH_LOG_Print(LOG_APP, LOG_INFO, LOG_DOMAIN, LOG_TAG,
                      "PROTEUS_SELF_DRAW nodes=%{public}d w=%{public}d h=%{public}d", built, g_sdW, g_sdH);
@@ -2943,6 +2996,7 @@ static napi_value ClearRoot(napi_env env, napi_callback_info info) {
     g_stickyNodes.clear();  // ★★★批 A③：同清 sticky 登记
     // ★决策 #842：清自绘 spec（其挂在旧 modifier 上、随 ClearChildren 失效）；位图复用（尺寸不变则不重建）
     if (g_sdSpec != nullptr) { delete g_sdSpec; g_sdSpec = nullptr; }
+    if (g_sdMod != nullptr) { OH_ArkUI_RenderNodeUtils_DisposeContentModifier(g_sdMod); g_sdMod = nullptr; }
     // ★决策 #841：清玻璃 GPU 登记 + 像素/像素图缓存（重建内容 ⇒ 旧玻璃盒/像素失效）。
     //   节点画布持有 OH_Drawing_PixelMap ⇒ 先释放（Dissolve + Release），再清空登记（旧句柄随重建失效）。
     for (auto& kv : g_glassDpm) { if (kv.second) OH_Drawing_PixelMapDissolve(kv.second); }
@@ -2983,20 +3037,16 @@ static napi_value ScrollRoot(napi_env env, napi_callback_info info) {
     double y = 0;
     if (argc >= 1) napi_get_value_double(env, args[0], &y);
     int32_t rc = -1;
-    // ★决策 #842：自绘通道 —— 滚动 = 改 spec 的 scrollY + **重挂 content-modifier**（触发重绘）。
+    // ★决策 #842：自绘通道 —— 滚动 = 改 spec 的 scrollY + **改触发器值触发重绘**（不重挂）。
     if (g_selfDraw) {
         if (g_sdSpec != nullptr) {
             g_sdSpec->scrollY = y * g_density;
-            // ★实测：content-modifier 的 onDraw 只在**挂载时**调一次，`Invalidate` 不重跑它 ⇒
-            //   滚动后必须**重挂** modifier 才能重画（与玻璃 pass 的 reattach 同因）。
-            if (g_rootNode != nullptr) {
-                ArkUI_RenderContentModifierHandle sm = OH_ArkUI_RenderNodeUtils_CreateContentModifier();
-                if (sm != nullptr) {
-                    OH_ArkUI_RenderNodeUtils_SetContentModifierOnDraw(sm, g_sdSpec, DrawSelfContent);
-                    OH_ArkUI_RenderNodeUtils_AttachContentModifier(g_rootNode, sm);   // 重挂 ⇒ 触发重画
-                }
+            // ★决策 #845：滚动 = 改 scrollY + **请求一帧** —— 重画由**节点 ON_DRAW 事件**承担
+            //   （每次绘制回调）。不再重挂 modifier（会崩）、不依赖 FloatProperty（不触发重跑）。
+            if (g_rootHost != nullptr) {
+                if (g_nodeApi != nullptr) g_nodeApi->markDirty(g_rootHost, NODE_NEED_RENDER);
+                OH_ArkUI_RenderNodeUtils_Invalidate(g_rootHost);
             }
-            if (g_rootHost != nullptr) OH_ArkUI_RenderNodeUtils_Invalidate(g_rootHost);
             rc = 0;
         }
         napi_value out2; napi_create_int32(env, rc, &out2); return out2;
