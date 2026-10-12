@@ -534,6 +534,23 @@ std::vector<std::vector<uint8_t>> renderBatch(const std::vector<BatchItem>& item
             outs[i] = std::move(o);
         }
     }
+    // ★决策 #852：**首帧兜底**——上一 parity 无可读结果（启动/重建/尺寸变）⇒ 无异步可复用 ⇒
+    //   同步等待本帧提交并读当前 parity。仅发生一次（此后每帧都有上帧可读）⇒ 不影响稳态性能。
+    //   【为什么必须】用户实测「启动后没有液态玻璃，滑动才出现」：首帧无上批 ⇒ 回读全空 ⇒ 玻璃空；
+    //   滑动才触发出帧、才有上批可读。
+    vkWaitForFences(dev, 1, &g_bFence[p], VK_TRUE, 1000000000ull);
+    for (size_t i = 0; i < items.size(); i++) {
+        if (!outs[i].empty()) continue;
+        auto sit = g_slotCache.find(items[i].id);
+        if (sit == g_slotCache.end() || !sit->second.inited[p]) continue;
+        SizeCache& sc = sit->second.sc[p];
+        VkMappedMemoryRange rng{VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE};
+        rng.memory = sc.outStagingMem; rng.offset = 0; rng.size = VK_WHOLE_SIZE;
+        vkInvalidateMappedMemoryRanges(dev, 1, &rng);
+        std::vector<uint8_t> o(sc.outBytes);
+        memcpy(o.data(), sc.outMap, o.size());
+        outs[i] = std::move(o);
+    }
     g_bParity ^= 1;   // 下一帧换缓冲
     return outs;
 }
