@@ -3479,3 +3479,11 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **④ 判定**：**当前 OHOS 公开 API 无法把 Vulkan 离屏结果以 GPU 内存直供 ArkUI(OH_Drawing/RS) 画布**——这是一条**平台边界**（非我们的实现缺陷）。真正零拷贝需要 OH_Drawing 的 GPU 上下文/EGL 纹理路径（`OH_Drawing_GpuContextCreateFromGL` / `OH_NativeImage` EGL 纹理），与现有 RS 画布模型接不上，属另一次大改且收益未知。
 **⑤ 处置**：回退零拷贝实现（不留半成品/死代码），**保留 #856 的 CPU 回读路径**（fps 40→59，已是当前最优可达）。残留 `blit≈26ms`（重算帧 1/3）为**具名边界**：要再降需平台提供「GPU 纹理直绘画布」入口。
 **⑥ 净结果**：本轮玻璃性能 = **avg 16.99ms / p50 3.43 / p95 45.48 / fps 58.9**（60Hz 屏满帧）；重算帧 68→32ms。若后续要冲 120fps，仍建议先做「App 主动请求高刷」，再评估 GPU 画布路径。
+
+859. **★鸿蒙高刷请求（第 1 步）——请求生效（activeMode 60→120），但重负载玻璃基准下 120Hz 反而不划算**（2026-10-12）：
+**① 取证**：鸿蒙用 `@ohos.graphics.displaySync` 的 `DisplaySync.setExpectedFrameRateRange({min,max,expected})` 申请帧率（`@ohos.display` 只有只读 `refreshRate`，无 setter）；组件通用属性 `expectedFrameRateRange` 只对动画/转场有效。
+**② 实现**：`Index.requestHighRefreshRate()`——`displaySync.create()` → `setExpectedFrameRateRange({min:30,max:120,expected:120})` → `on('frame')`（空回调，仅为持有）→ `start()`；**持有 `DisplaySync` 引用防 GC**（GC 会让请求失效）。三个玻璃场景（glass / glass-demo / glass-bench）启动时调用。开关 `--ps refresh off|60`（对照用）。
+**③ 真机验证**：`hidumper -s RenderService -a screen` 的 `activeMode` 从 **`refreshRate=60` → `refreshRate=120`**；玻璃渲染正常（截图确认折射/高光无变化）。⇒ **请求确实生效**（能力已接线）。
+**④ ★关键实测（delivered_fps）**：给基准加「跳前 12 帧预热、按首末帧时间戳算**实际交付帧率**」（旧的 `fps` 字段是 `1000/avg_ms` 反推，非真值）。120Hz 面板下 glass-bench **交付仅 ~40-47fps**——因**重算帧 ~37ms 远超 120Hz 的 8.3ms 预算**（一帧要等 4-5 个 vsync）。⇒ 对**重负载**玻璃，120Hz 不划算甚至更差。
+**⑤ 诚实边界**：面板**粘性**——一旦请求到 120，`aa force-stop` 后仍保持 120（本会话拿不到干净的 60Hz 对照，需重启设备）；故「120 比 60 差多少」未做严苛 A/B，只有 120 侧的 ~40fps 实测。
+**⑥ 结论**：第 1 步（请求高刷）**已交付且生效**；玻璃在 120Hz 下正确渲染。但**要真在 120 下跑满，必须先降重算成本**（每 3 帧一次的 ~37ms，其中 ~26ms 是平台边界的 blit/纹理重上传，见 #858）——否则 120Hz 对重负载无益。留给下一步：降 payload（S=2→3）或平台 GPU 直绘。
