@@ -490,8 +490,10 @@ std::vector<std::vector<uint8_t>> renderBatch(const std::vector<BatchItem>& item
     VkDevice dev = g_ctx.device;
 
     const int p = g_bParity;
+    auto __tb0 = std::chrono::steady_clock::now();
     // ① 等本 parity 缓冲上一次提交（上一轮，早已在跑 ⇒ 等待≈0）
     if (g_bSubmitted[p]) { vkWaitForFences(dev, 1, &g_bFence[p], VK_TRUE, 1000000000ull); }
+    auto __tb1 = std::chrono::steady_clock::now();
 
     // ② 逐 item：取/建双缓冲资源、写 staging+ubo、录制
     vkResetCommandBuffer(g_bCmd[p], 0);
@@ -518,9 +520,11 @@ std::vector<std::vector<uint8_t>> renderBatch(const std::vector<BatchItem>& item
     si.commandBufferCount = 1; si.pCommandBuffers = &g_bCmd[p];
     if (vkQueueSubmit(g_ctx.queue, 1, &si, g_bFence[p]) != VK_SUCCESS) { g_bParity ^= 1; return outs; }
     g_bSubmitted[p] = true;
+    auto __tb2 = std::chrono::steady_clock::now();
 
     // ④ 回读**上一 parity** 缓冲（已完成）⇒ 无本帧同步等待
     const int q = p ^ 1;
+    double __invMs = 0, __copyMs = 0;
     if (g_bSubmitted[q]) {
         for (size_t i = 0; i < items.size(); i++) {
             auto sit = g_slotCache.find(items[i].id);
@@ -528,16 +532,22 @@ std::vector<std::vector<uint8_t>> renderBatch(const std::vector<BatchItem>& item
             SizeCache& sc = sit->second.sc[q];
             VkMappedMemoryRange rng{VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE};
             rng.memory = sc.outStagingMem; rng.offset = 0; rng.size = VK_WHOLE_SIZE;
-            vkInvalidateMappedMemoryRanges(dev, 1, &rng);
-            std::vector<uint8_t> o(sc.outBytes);
-            memcpy(o.data(), sc.outMap, o.size());
-            outs[i] = std::move(o);
+            { auto t0 = std::chrono::steady_clock::now();
+              vkInvalidateMappedMemoryRanges(dev, 1, &rng);
+              auto t1 = std::chrono::steady_clock::now();
+              std::vector<uint8_t> o(sc.outBytes);
+              memcpy(o.data(), sc.outMap, o.size());
+              auto t2 = std::chrono::steady_clock::now();
+              auto ms = [](auto a, auto b) { return std::chrono::duration<double, std::milli>(b - a).count(); };
+              __invMs += ms(t0, t1); __copyMs += ms(t1, t2);
+              outs[i] = std::move(o); }
         }
     }
     // ★决策 #852：**首帧兜底**——上一 parity 无可读结果（启动/重建/尺寸变）⇒ 无异步可复用 ⇒
     //   同步等待本帧提交并读当前 parity。仅发生一次（此后每帧都有上帧可读）⇒ 不影响稳态性能。
     //   【为什么必须】用户实测「启动后没有液态玻璃，滑动才出现」：首帧无上批 ⇒ 回读全空 ⇒ 玻璃空；
     //   滑动才触发出帧、才有上批可读。
+    auto __tb3 = std::chrono::steady_clock::now();
     vkWaitForFences(dev, 1, &g_bFence[p], VK_TRUE, 1000000000ull);
     for (size_t i = 0; i < items.size(); i++) {
         if (!outs[i].empty()) continue;
@@ -550,6 +560,17 @@ std::vector<std::vector<uint8_t>> renderBatch(const std::vector<BatchItem>& item
         std::vector<uint8_t> o(sc.outBytes);
         memcpy(o.data(), sc.outMap, o.size());
         outs[i] = std::move(o);
+    }
+    auto __tb4 = std::chrono::steady_clock::now();
+    // ★决策 #855：分段计时（定位 70ms 尖峰来源；连续前若干批打印，便于统计稳态尖峰）
+    { static int lg = 0; lg++;
+      if (lg <= 400) {
+        auto ms = [](auto a, auto b) { return std::chrono::duration<double, std::milli>(b - a).count(); };
+        char pb[160];
+        snprintf(pb, sizeof(pb), "n=%d waitPrev=%.2f recordSubmit=%.2f readPrev=%.2f(inv=%.2f copy=%.2f) syncFallback=%.2f",
+                 (int)items.size(), ms(__tb0, __tb1), ms(__tb1, __tb2), ms(__tb2, __tb3), __invMs, __copyMs, ms(__tb3, __tb4));
+        GLOG(LOG_INFO, "GLASS_VK_BATCH_T %{public}s", pb);
+      }
     }
     g_bParity ^= 1;   // 下一帧换缓冲
     return outs;

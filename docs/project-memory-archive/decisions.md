@@ -3439,3 +3439,11 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **③ ★取证踩坑（值得记）**：先用 `PersistentStorage.persistProp`——**扛不住 `aa force-stop`**（未刷盘，重启读到旧值）⇒ 改 `fileIo` **同步写文件**（抗强杀）。
 **④ 真机验证**：带场景冷启动（记录 glass-demo）→ `force-stop` → **无参数冷启动** ⇒ `PROTEUS_HOST_ONCREATE scene=glass-demo page=dev/Index`（**成功恢复**）。
 **⑤ 配合 #853**：`onNewWant`（运行中换场景）+ #854（重启恢复场景）⇒ 测试宿主场景切换**冷热启动都可靠**，且**默认停在用户上次用的场景**。
+
+855. **★★鸿蒙玻璃 70ms 尖峰**定位**（取证）**——重算帧是**纯 CPU↔GPU 像素搬运**，非算法/GPU 计算**（2026-10-12）**：
+**① 背景**：用户问「继续冲击 120 帧有可能吗」→ 先查清 70ms 尖峰。基线（`--ps scene glass-bench`）：p50 **4.46ms** / p95 **70.11** / avg 24.99 / fps 40；每 3 帧 1 帧重算（`g_sdGlassDiv=3`）。
+**② 仪表**（决策 #855 落地）：`renderBatch` 内部分段（waitPrev / recordSubmit / readPrev{invalidate,copy} / syncFallback）+ 重算帧分段（collect / renderBatch / buildImg）+ 慢帧（>25ms）全段（content/collect/batch/buildImg/blit/tail）。
+**③ 取证结论**（真机 1320×2856 · Maleoon 920C）：稳态重算帧 **≈68ms** = content 4.3 + collect 2.6 + **renderBatch 17.5** + **buildImg 13.8** + **blit 30.1**；其中 **renderBatch 17.5 里 16.5 是 `readPrev` 的 `memcpy`**（`invalidate=0.00`、`waitPrev≈0`、GPU 提交 `recordSubmit<1ms`）。
+**④ ★关键判断**：**玻璃算法本身 sub-ms（GPU 完全不等）**；70ms **100% 是数据搬运**——GPU 算完 → `copyImageToBuffer` → **CPU memcpy 回读 16.5ms** → 建 `OH_Drawing` 位图/Image **13.8ms** → 贴回 RS 画布（新图首发 **30ms**）。同一块 ~1.5MB 输出在 CPU↔GPU 间**来回搬三趟**（~4.6MB @ ~77MB/s ⇒ 明显未走缓存快路）。
+**⑤ 首帧**：141ms（batch 100ms 含资源初始化 + syncFallback 一次性），仅一次。
+**⑥ 通往 120fps 的三步（按依赖）**：⓪ 先**请求高刷**（当前 `activeMode=60`，全仓无 `setExpectedFrameRateRange`——不请求就**封顶 60**）；① **去掉 CPU 往返**（GPU 纹理直供画布 / dma-buf 零拷贝，省掉回读 16.5 + 建图 13.8）；② 若仍超预算再**降 payload**（S=2→3 / 裁区域）。**结论：120fps 可能，但当前"回读→建图→再上传"架构每重算帧≈68ms，必须先消掉这 60ms 搬运。**

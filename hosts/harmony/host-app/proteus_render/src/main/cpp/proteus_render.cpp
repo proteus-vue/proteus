@@ -1142,6 +1142,8 @@ static void drawSelfContentCore(OH_Drawing_Canvas* rsCanvas, SelfDrawSpec* sd) {
       OH_Drawing_RectDestroy(vp); }
     drawContentNodes(rsCanvas, sd);
     auto __tContent = std::chrono::steady_clock::now();
+    auto __tbContentPre = __tContent, __tf0 = __tContent, __tf1 = __tContent, __tf2 = __tContent;
+    auto __tBlitStart = __tContent, __tBlitEnd = __tContent;   // ★决策 #855：分段计时标记
     // ③ 玻璃：为**每个玻璃节点**建一张「盒+pad」小位图当折射背景（只画与盒相交的内容），
     //   跑离屏 Vulkan（SPIR-V，算法 0 行），把结果画回 RS 画布的玻璃盒（圆角裁剪）。
     if (g_sdHasGlass) {
@@ -1219,9 +1221,11 @@ static void drawSelfContentCore(OH_Drawing_Canvas* rsCanvas, SelfDrawSpec* sd) {
             }
             gi++;
         }
+        __tf0 = std::chrono::steady_clock::now();   // 收集段终点
         // ★ 一次提交本批 + 异步回读上一批（无本帧同步等待）
         if (!batch.empty()) {
             auto outs = proteus_glass_vk::renderBatch(batch);
+            __tf1 = std::chrono::steady_clock::now();   // renderBatch 终点
             for (size_t k = 0; k < outs.size() && k < batchGi.size(); k++) {
                 if (outs[k].empty()) continue;
                 GlassCache& gc = g_sdGlassCache[batchGi[k]];
@@ -1240,8 +1244,17 @@ static void drawSelfContentCore(OH_Drawing_Canvas* rsCanvas, SelfDrawSpec* sd) {
                 }
                 g_sdGlassFresh = true;
             }
+            __tf2 = std::chrono::steady_clock::now();   // 建图终点
+            // ★决策 #855：重算帧分段计时（nbatch / renderBatch / 建图）
+            { auto ms = [](auto a, auto b) { return std::chrono::duration<double, std::milli>(b - a).count(); };
+              size_t tb = 0, to = 0; for (const auto& it : batch) { tb += (size_t)it.texW * it.texH * 4; to += (size_t)it.outW * it.outH * 4; }
+              char pb[200];
+              snprintf(pb, sizeof(pb), "nbatch=%d texKB=%zu outKB=%zu collect=%.2f renderBatch=%.2f buildImg=%.2f",
+                       (int)batch.size(), tb / 1024, to / 1024, ms(__tContent, __tf0), ms(__tf0, __tf1), ms(__tf1, __tf2));
+              OH_LOG_Print(LOG_APP, LOG_INFO, LOG_DOMAIN, LOG_TAG, "PROTEUS_GLASS_RECOMP %{public}s", pb); }
         }
         // 每帧贴回（位置随滚动变；像素来自最近一次异步回读结果）
+        __tBlitStart = std::chrono::steady_clock::now();
         gi = 0;
         for (const auto& n : sd->nodes) {
             if (!n.glass || n.w <= 0 || n.h <= 0) continue;
@@ -1269,6 +1282,7 @@ static void drawSelfContentCore(OH_Drawing_Canvas* rsCanvas, SelfDrawSpec* sd) {
         }
     }
     OH_Drawing_CanvasRestore(rsCanvas);   // 恢复视口裁剪（见上）
+    __tBlitEnd = std::chrono::steady_clock::now();
     // ★决策 #847：记录本帧耗时（自绘玻璃性能基线）
     { auto __tEnd = std::chrono::steady_clock::now();
       auto ms = [](auto a, auto b) { return std::chrono::duration<double, std::milli>(b - a).count(); };
@@ -1278,7 +1292,15 @@ static void drawSelfContentCore(OH_Drawing_Canvas* rsCanvas, SelfDrawSpec* sd) {
       if (g_sdFrameSamples.size() < 4096) g_sdFrameSamples.push_back(total);
       g_sdContentSumMs += ms(__t0, __tContent);
       g_sdGlassSumMs += ms(__tContent, __tEnd);   // 玻璃整块 = tContent→tEnd（含 bdbuild+vk+draw）
-      g_sdBlitSumMs = 0; }
+      g_sdBlitSumMs = 0;
+      // ★决策 #855：慢帧（>25ms）内部全段分解——直接看 70ms 尖峰落在哪一段
+      if (total > 25.0) {
+        char pb[240];
+        snprintf(pb, sizeof(pb), "total=%.1f content=%.2f collect=%.2f batch=%.2f buildImg=%.2f blit=%.2f tail=%.2f",
+                 total, ms(__t0, __tContent), ms(__tContent, __tf0), ms(__tf0, __tf1), ms(__tf1, __tf2),
+                 ms(__tBlitStart, __tBlitEnd), ms(__tBlitEnd, __tEnd));
+        OH_LOG_Print(LOG_APP, LOG_INFO, LOG_DOMAIN, LOG_TAG, "PROTEUS_GLASS_SLOW %{public}s", pb);
+      } }
 }
 
 /** glassStats(): string —— ★决策 #847：自绘玻璃性能基线读数（帧数/均值/最大/p50/p95，ms）。
