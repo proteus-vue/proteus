@@ -3517,3 +3517,14 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **④ 实测（iPhone 12 · **60Hz** 屏）**：`work_p50 88→16-22ms`、`fps 10→44-51`。画质与改前**逐像素一致**（截图对比：内容行/圆形折射/胶囊均正确）。
 **⑤ 诚实边界**：仍**未满 60fps**——玻璃滚动 `work≈16-22ms` 略超 60Hz 的 16.67ms 预算 ⇒ 掉帧（44-51fps）。剩余成本：每重算帧「capture bbox 光栅化 + 每玻璃一次 Metal 离屏 + `waitUntilCompleted` 同步 + `getBytes` 回读 + CGImage」。**再优化需**：① 玻璃 pass 增量（视口相交才重算）② 索引/分片减同步。**注**：本设备 iPhone 12 是 60Hz（非 ProMotion），天花板即 60。
 **⑥ 三端对照（真机·各自屏）**：Android 121fps/零掉帧（120Hz）· 鸿蒙 121fps（120Hz）· **iOS 44-51fps（60Hz，未满帧）**。⇒ iOS 玻璃滚动是**三端里唯一未满帧**的，列为后续优化项。
+
+863. **★★★iOS 玻璃滚动优化——批量渲染 + 半分辨率背景捕获：44-51fps → 59.3fps 满帧（60Hz 屏）**（2026-10-12）：
+**① 由来**：#862 基线暴露 iOS 玻璃滚动 `work≈16-22ms` 超 60Hz 预算（44-51fps）。本项优化。
+**② 三处改动（均不改算法/观感）**：
+   · **批量渲染**（`GlassMetalRenderer.renderFaces`）：`applyGlassPass` 一次调用渲染全部玻璃面——**共用一份 backdrop 纹理 + 一条命令缓冲 + 一次 `waitUntilCompleted`**（原来每块玻璃各上传一次纹理 + 各建缓冲 + 各等一次）。抽出 `makeImage(from:)`。
+   · **背景半分辨率捕获**（`capturePxPerPoint = scale/2`）：玻璃被模糊/折射，背景采样不必全分辨率 ⇒ 捕获栅格化 + 纹理上传的像素量降到 1/4。`makeUniforms` 拆出 `outScale`（输出=节点盒，全分辨率）与 `texPxPerPoint`（背景纹理）**两个尺度解耦**。
+   · （#862 已有）**按并集 bbox 捕获**（非整屏）。
+**③ 实测（iPhone 12 · 60Hz）**：`work_p50 16-22ms → 15.4ms`（< 16.67ms 预算）、`delivered_fps 44-51 → 59.3`、**`dropped=0`**、`vsync_max=16.86ms`（纹丝不动 = 满帧）。
+**④ 验证**：① 截图核验（内容/圆形折射/胶囊**完好**，半分辨率无块状/变糊）② **像素等价门禁**（`check-glass-pixel-parity.sh`）绿——Metal 落地 == Rust 算法真源（最大差 44/255、平均 0.33、超差 1.02%，均在容差内）⇒ 半分辨率未破坏算法一致性。
+**⑤ 三端对齐（真机·各自屏）**：Android 121fps(120Hz) · 鸿蒙 121fps(120Hz) · **iOS 59.3fps(60Hz) —— 三端均满帧**。
+**⑥ 诚实边界**：iOS 剩 ~15.4ms 仍贴着 60Hz 预算（`dropped` 偶发 0-1）；120Hz 设备（ProMotion）下仍未验（本机 iPhone 12 为 60Hz）。若上 ProMotion 需再降（玻璃 pass 增量/减同步）。
