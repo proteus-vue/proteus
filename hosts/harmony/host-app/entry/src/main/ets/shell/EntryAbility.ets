@@ -8,6 +8,7 @@ import { AbilityConstant, UIAbility, Want } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window } from '@kit.ArkUI';
 import { deviceInfo } from '@kit.BasicServicesKit';
+import { fileIo } from '@kit.CoreFileKit';
 // ★矩阵 #18 C 组：真生命周期 → JS 运行时转发（G-39"壳把生命周期交给 runtime"的端上证据）
 import { hostRtShellEvent } from 'proteus_render';
 
@@ -20,10 +21,38 @@ export default class EntryAbility extends UIAbility {
   /** ★决策 #853：窗口级 stage 缓存（`onNewWant` 重载用）。 */
   private windowStageRef: window.WindowStage | null = null;
 
-  /** 解析 Want 的场景参数（scene/scroll/ms）→ AppStorage + pageToLoad；返回 scene 是否变化。 */
+  /** ★决策 #854：上次场景的**文件持久化**（同步写，抗 force-stop；PersistentStorage 不刷盘不可靠）。 */
+  private lastScenePath(): string { return this.context.filesDir + '/proteus-last-scene.txt'; }
+  private readLastScene(): string {
+    try {
+      const fd = fileIo.openSync(this.lastScenePath(), fileIo.OpenMode.READ_ONLY);
+      const buf = new ArrayBuffer(256);
+      const n = fileIo.readSync(fd.fd, buf);
+      fileIo.closeSync(fd);
+      const bytes = new Uint8Array(buf).slice(0, n);
+      let s = ''; for (let i = 0; i < bytes.length; i++) { if (bytes[i] === 0) break; s += String.fromCharCode(bytes[i]); }
+      return s.trim();
+    } catch (e) { return ''; }
+  }
+  private writeLastScene(s: string): void {
+    try {
+      const fd = fileIo.openSync(this.lastScenePath(), fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE | fileIo.OpenMode.TRUNC);
+      fileIo.writeSync(fd.fd, s);
+      fileIo.closeSync(fd);
+    } catch (e) { /* 写失败不阻断 */ }
+  }
+
+  /** 解析 Want 的场景参数（scene/scroll/ms）→ AppStorage + pageToLoad；返回 scene 是否变化。
+   *  ★决策 #854：**记住上次场景**——无 `scene` 参数（桌面点开/重启）时**恢复上次场景**（文件持久化），
+   *   便于反复测试（用户：「重启后想停在玻璃演示页」）。首次安装无记录 ⇒ 空 ⇒ superapp。 */
   private applyWant(want: Want): boolean {
     const scene = want?.parameters?.['scene'];
-    const sceneStr: string = typeof scene === 'string' ? scene : '';
+    let sceneStr: string = typeof scene === 'string' ? scene : '';
+    if (sceneStr === '') {
+      sceneStr = this.readLastScene();   // 无参数 ⇒ 恢复上次场景
+    } else {
+      this.writeLastScene(sceneStr);      // 记录本次（供下次无参恢复）
+    }
     const changed: boolean = AppStorage.get<string>('proteusScene') !== sceneStr;
     AppStorage.setOrCreate('proteusScene', sceneStr);
     const scroll = want?.parameters?.['scroll'];
