@@ -226,6 +226,12 @@ static bool buildSizeCache(SizeCache& sc) {
         }
         uint32_t mt = findMemoryType(phys, mr.memoryTypeBits, props);
         if (mt == UINT32_MAX) return false;
+        // ★决策 #855：记录实际选中的内存类型与属性（定位回读慢的根因：是否真拿到 HOST_CACHED）
+        { VkPhysicalDeviceMemoryProperties mp{}; vkGetPhysicalDeviceMemoryProperties(phys, &mp);
+          static int lg = 0; lg++;
+          if (lg <= 16) GLOG(LOG_INFO, "GLASS_VK_MEM cached=%{public}d type=%{public}u flags=%{public}u heap=%{public}u",
+                              cachedRead ? 1 : 0, mt, (unsigned)mp.memoryTypes[mt].propertyFlags,
+                              (unsigned)mp.memoryTypes[mt].heapIndex); }
         VkMemoryAllocateInfo mai{VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO}; mai.allocationSize = mr.size; mai.memoryTypeIndex = mt;
         if (vkAllocateMemory(dev, &mai, nullptr, mem) != VK_SUCCESS) return false;
         if (vkBindBufferMemory(dev, *buf, *mem, 0) != VK_SUCCESS) return false;
@@ -524,7 +530,7 @@ std::vector<std::vector<uint8_t>> renderBatch(const std::vector<BatchItem>& item
 
     // ④ 回读**上一 parity** 缓冲（已完成）⇒ 无本帧同步等待
     const int q = p ^ 1;
-    double __invMs = 0, __copyMs = 0;
+    double __invMs = 0, __allocMs = 0, __copyMs = 0;
     if (g_bSubmitted[q]) {
         for (size_t i = 0; i < items.size(); i++) {
             auto sit = g_slotCache.find(items[i].id);
@@ -535,12 +541,18 @@ std::vector<std::vector<uint8_t>> renderBatch(const std::vector<BatchItem>& item
             { auto t0 = std::chrono::steady_clock::now();
               vkInvalidateMappedMemoryRanges(dev, 1, &rng);
               auto t1 = std::chrono::steady_clock::now();
-              std::vector<uint8_t> o(sc.outBytes);
-              memcpy(o.data(), sc.outMap, o.size());
+              // ★决策 #856：有持久 dst ⇒ 直接 resize（复用容量，零 alloc）+ memcpy；否则退回新 vector
+              std::vector<uint8_t>* d = items[i].dst;
+              if (d != nullptr) {
+                  d->resize(sc.outBytes);           // 同尺寸时无 realloc ⇒ 零分配
+              } else {
+                  d = &(outs[i] = std::vector<uint8_t>(sc.outBytes));
+              }
+              auto t1b = std::chrono::steady_clock::now();
+              memcpy(d->data(), sc.outMap, d->size());
               auto t2 = std::chrono::steady_clock::now();
               auto ms = [](auto a, auto b) { return std::chrono::duration<double, std::milli>(b - a).count(); };
-              __invMs += ms(t0, t1); __copyMs += ms(t1, t2);
-              outs[i] = std::move(o); }
+              __invMs += ms(t0, t1); __allocMs += ms(t1, t1b); __copyMs += ms(t1b, t2); }
         }
     }
     // ★决策 #852：**首帧兜底**——上一 parity 无可读结果（启动/重建/尺寸变）⇒ 无异步可复用 ⇒
@@ -550,16 +562,16 @@ std::vector<std::vector<uint8_t>> renderBatch(const std::vector<BatchItem>& item
     auto __tb3 = std::chrono::steady_clock::now();
     vkWaitForFences(dev, 1, &g_bFence[p], VK_TRUE, 1000000000ull);
     for (size_t i = 0; i < items.size(); i++) {
-        if (!outs[i].empty()) continue;
+        std::vector<uint8_t>* d = items[i].dst;
+        if (d == nullptr && !outs[i].empty()) continue;
         auto sit = g_slotCache.find(items[i].id);
         if (sit == g_slotCache.end() || !sit->second.inited[p]) continue;
         SizeCache& sc = sit->second.sc[p];
         VkMappedMemoryRange rng{VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE};
         rng.memory = sc.outStagingMem; rng.offset = 0; rng.size = VK_WHOLE_SIZE;
         vkInvalidateMappedMemoryRanges(dev, 1, &rng);
-        std::vector<uint8_t> o(sc.outBytes);
-        memcpy(o.data(), sc.outMap, o.size());
-        outs[i] = std::move(o);
+        if (d != nullptr) { d->resize(sc.outBytes); memcpy(d->data(), sc.outMap, sc.outBytes); }
+        else { std::vector<uint8_t> o(sc.outBytes); memcpy(o.data(), sc.outMap, o.size()); outs[i] = std::move(o); }
     }
     auto __tb4 = std::chrono::steady_clock::now();
     // ★决策 #855：分段计时（定位 70ms 尖峰来源；连续前若干批打印，便于统计稳态尖峰）
@@ -567,8 +579,8 @@ std::vector<std::vector<uint8_t>> renderBatch(const std::vector<BatchItem>& item
       if (lg <= 400) {
         auto ms = [](auto a, auto b) { return std::chrono::duration<double, std::milli>(b - a).count(); };
         char pb[160];
-        snprintf(pb, sizeof(pb), "n=%d waitPrev=%.2f recordSubmit=%.2f readPrev=%.2f(inv=%.2f copy=%.2f) syncFallback=%.2f",
-                 (int)items.size(), ms(__tb0, __tb1), ms(__tb1, __tb2), ms(__tb2, __tb3), __invMs, __copyMs, ms(__tb3, __tb4));
+        snprintf(pb, sizeof(pb), "n=%d waitPrev=%.2f recordSubmit=%.2f readPrev=%.2f(inv=%.2f alloc=%.2f copy=%.2f) syncFallback=%.2f",
+                 (int)items.size(), ms(__tb0, __tb1), ms(__tb1, __tb2), ms(__tb2, __tb3), __invMs, __allocMs, __copyMs, ms(__tb3, __tb4));
         GLOG(LOG_INFO, "GLASS_VK_BATCH_T %{public}s", pb);
       }
     }

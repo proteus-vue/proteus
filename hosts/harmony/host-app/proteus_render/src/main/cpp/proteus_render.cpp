@@ -1215,6 +1215,7 @@ static void drawSelfContentCore(OH_Drawing_Canvas* rsCanvas, SelfDrawSpec* sd) {
                     putF(68, 0.18f);
                     putF(72, (float)n.gSat);
                     gc.pendW = ow2; gc.pendH = oh2;
+                    bi.dst = &gc.bytes;   // ★决策 #856：回读直接进持久缓冲（跨帧复用容量 ⇒ 零 alloc/free）
                     batch.push_back(std::move(bi));
                     batchGi.push_back(gi);
                 }
@@ -1227,11 +1228,17 @@ static void drawSelfContentCore(OH_Drawing_Canvas* rsCanvas, SelfDrawSpec* sd) {
             auto outs = proteus_glass_vk::renderBatch(batch);
             __tf1 = std::chrono::steady_clock::now();   // renderBatch 终点
             for (size_t k = 0; k < outs.size() && k < batchGi.size(); k++) {
-                if (outs[k].empty()) continue;
                 GlassCache& gc = g_sdGlassCache[batchGi[k]];
                 const int ow2 = gc.pendW, oh2 = gc.pendH;
-                if ((size_t)ow2 * oh2 * 4 != outs[k].size()) continue;
-                gc.bytes = std::move(outs[k]);
+                // ★决策 #856：像素已在 gc.bytes（dst 路径）；仅非 dst 兜底时才搬 outs[k]
+                if (!outs[k].empty()) {
+                    if ((size_t)ow2 * oh2 * 4 != outs[k].size()) continue;
+                    gc.bytes = std::move(outs[k]);
+                }
+                if ((size_t)ow2 * oh2 * 4 != gc.bytes.size()) continue;
+                // ★决策 #856：每重算帧重建 Bitmap/Image（bmpCreate+imgBuild 实测仅 ~0.2ms，可忽略）；
+                //   ★实测：图只建一次（同尺寸不重建、仅更新像素）**对 blit 无改善**（blit 仍 ~26ms）——
+                //   因为 26ms 在帧刷新时的**纹理重上传**（CPU 像素→GPU），与图像对象是否新建无关。故不省。
                 if (gc.img) { OH_Drawing_ImageDestroy(gc.img); gc.img = nullptr; }
                 if (gc.bmp) { OH_Drawing_BitmapDestroy(gc.bmp); gc.bmp = nullptr; }
                 OH_Drawing_Image_Info ii{(int32_t)ow2, (int32_t)oh2, COLOR_FORMAT_RGBA_8888, ALPHA_FORMAT_PREMUL};
@@ -1262,6 +1269,7 @@ static void drawSelfContentCore(OH_Drawing_Canvas* rsCanvas, SelfDrawSpec* sd) {
             const GGeo& g = geos[gi];
             gi++;
             if (gc.img == nullptr) continue;
+            auto __tg0 = std::chrono::steady_clock::now();
             OH_Drawing_CanvasSave(rsCanvas);
             OH_Drawing_CanvasTranslate(rsCanvas, (float)g.cx, (float)g.cy);
             if (g.radius > 0) {
@@ -1279,7 +1287,17 @@ static void drawSelfContentCore(OH_Drawing_Canvas* rsCanvas, SelfDrawSpec* sd) {
             OH_Drawing_RectDestroy(dst2);
             OH_Drawing_SamplingOptionsDestroy(so2);
             OH_Drawing_CanvasRestore(rsCanvas);
+            auto __tg1 = std::chrono::steady_clock::now();
+            { auto ms = [](auto a, auto b) { return std::chrono::duration<double, std::milli>(b - a).count(); };
+              static int lgb = 0; lgb++;
+              if (lgb <= 24) { char pb[128]; snprintf(pb, sizeof(pb), "gi=%d %.0fx%.0f blit=%.2f", gi - 1, g.w, g.h, ms(__tg0, __tg1));
+                OH_LOG_Print(LOG_APP, LOG_INFO, LOG_DOMAIN, LOG_TAG, "PROTEUS_GLASS_BLIT %{public}s", pb); } }
         }
+        // ★决策 #855：拆「循环 vs 尾部 canvas restore」——测循环本身是否只是记录（真 GPU 上传在 flush）
+        { auto ms = [](auto a, auto b) { return std::chrono::duration<double, std::milli>(b - a).count(); };
+          static int lgc = 0; lgc++;
+          if (lgc <= 20) { char pb[128]; snprintf(pb, sizeof(pb), "blitLoop=%.2f", ms(__tBlitStart, std::chrono::steady_clock::now()));
+            OH_LOG_Print(LOG_APP, LOG_INFO, LOG_DOMAIN, LOG_TAG, "PROTEUS_GLASS_BLITLOOP %{public}s", pb); } }
     }
     OH_Drawing_CanvasRestore(rsCanvas);   // 恢复视口裁剪（见上）
     __tBlitEnd = std::chrono::steady_clock::now();
