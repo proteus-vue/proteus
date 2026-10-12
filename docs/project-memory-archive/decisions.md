@@ -3337,3 +3337,12 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **③ 真机验证（REDMI K100 Pro Max）**：局部玻璃（底部胶囊=真实产品形态）位图 **1200×2608 → 1188×212**（像素 **−91%**）、捕获 **~1.5ms → ~0.55ms**、整帧 **~2ms → ~0.95ms**；视觉（模糊/边缘折射/glow/gradient）**完全一致**（区域偏移换算正确）。
 **④ 教训**：**"软件栅格化的区域"要按需收窄**——背景捕获的成本 ∝ 栅格像素数，而非屏幕尺寸；**局部玻璃（tab/nav bar）收益最大，分散玻璃（并集≈全屏）收益小**（夹具的圆+胶囊即后者，故夹具读数改善有限——**要按真实产品形态评估**）。**⑤ 诚实边界**：pad 按着色器采样最远可达取（保守）；若加更宽折射/模糊，pad 公式须同步；`BitmapShader` 仍每帧重建（廉价，可再缓存 `Paint`）。
 
+838. **★★★鸿蒙腿落地：内容节点玻璃（cmd 发射 + 渲染层解析 + OH_Drawing 磨砂面）——★真机实测「自绘画布读不到背后像素」⇒ 无法真 backdrop 模糊**（2026-10-12）：
+**① 用户**：「签好了」（鸿蒙签名解除）→ 把玻璃三端跑通（iOS/Android 已落地，鸿蒙为唯一缺端）。
+**② 取证**：鸿蒙内容节点 = ArkUI RenderNode（真 OS 渲染节点）+ OH_Drawing（Skia）画文字/通道；**无自定义片段着色器绑定**、**无 XComponent/GLES**（`docs/Proteus_鸿蒙宿主落地与方舟引擎能力开放方案.md` 禁 XComponent 自绘主路径）⇒「落 GLSL 玻璃着色器」被项目约束堵死；`glass` 键此前**鸿蒙 cmd 不发、渲染层不解析**（静默丢失，且 `check-glass-capability` 接缝表**不含鸿蒙**）。
+**③ 交付（三处接缝）**：① `proteus_host.cpp` `AppScreenCommands` 发 `glass` 键（blur/radius ×density 转物理 px）；② `proteus_render.cpp` 解析 → `TextDrawSpec` → 画布上 `drawGlassFace`（圆角裁剪 + 磨砂半透明面 + 高光边）；③ `check-glass-capability.mjs` SEAMS 补**鸿蒙两处**（发射 + 解析）。
+**④ 真机验证（HUAWEI KLE-AL00U · build+sign+install 全通）**：日志 `GLASS_PARSE node=8 blur=35 radius=56` → `GLASS_DRAW w=1123 h=224`；截图 `hosts/harmony/results/superapp.png`：mine 页「液态玻璃·自研材质」呈**圆角磨砂面板 + 高光边**。
+**⑤ ★关键诚实边界（真机实测）**：`GLASS_BACKDROP got=0`——content-modifier 画布**读不到背后像素**（`OH_Drawing_CanvasReadPixels` 与 `ReadPixelsToBitmap` **两路均失败**；光栅在 RenderService 进程）⇒ 鸿蒙自绘节点**无法做真 backdrop 模糊**（与 Android AGSL/iOS Metal 有"真实背后内容"的本质差异；与 Android API<31 同族约束）。**当前落地 = 磨砂半透明面（L1.5 近似）**：有玻璃面、内容半透出、圆角+高光边，**非真模糊**。真 OS 级模糊只能落在**真实组件节点**（`NODE_BACKGROUND_BLUR_STYLE`，如已跑通的 tab 栏 chrome）——自绘 RenderNode 不支持（平台约束）。
+**⑥ 教训**：① **"三端一致"要诚实分级**——iOS(系统真材质+Metal)/Android(AGSL 自绘)可做**真模糊**；鸿蒙自绘节点只能**近似**（结构约束，非实现偷懒）；② **接缝门禁的覆盖面要跟着"端"走**——`check-glass-capability` 从"四接缝"补到"六接缝"（+鸿蒙发射+解析），否则新端漏接不报红（同 #835 门禁盲区同族）；③ **读回"已绘像素"是自绘玻璃的前提**——某端不提供该能力（鸿蒙自绘/RenderNode 光栅在 RS 进程）⇒ 该端玻璃**上限就是半透明面**（设计前先取证，别假设）。
+**⑦ 诚实边界**：鸿蒙玻璃是 **L1.5 近似**（非 L2 真模糊）；若产品需要鸿蒙真模糊，路径是**把玻璃从自绘 RenderNode 改为真实 ArkUI 组件节点**（`NODE_BACKGROUND_BLUR_STYLE`，需评估与扁平绝对定位建树的兼容性）——独立批次。
+
