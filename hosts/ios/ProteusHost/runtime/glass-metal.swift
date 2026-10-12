@@ -195,7 +195,11 @@ final class GlassMetalRenderer {
             tex_scale: tscale,
             light_dir: SIMD2<Float>(-0.35, -0.94),
             radius: Float(spec.radius * outScale),
-            blur: Float(spec.blur * outScale),
+            // ★★★决策 #864：`blur` 单位 = **物理像素**（与 Android `GlassMaterial` 直传 / 鸿蒙 `gBlur/S`
+            //   同口径）。★此前误乘 `outScale`（把 pt 再 ×3）⇒ 模糊核相对盒子大 ~3 倍 ⇒ 25 抽摊太开
+            //   ⇒ 文字出现**离散回声（重影）**（用户实测抓出）。着色器里 `br/u.size_px`，size_px 已是
+            //   像素 ⇒ blur 必须是像素，**不再乘 scale**。
+            blur: Float(spec.blur),
             refract_depth: min(w, h) * 0.22,   // 与 Android 同守恒
             specular: 0.18,
             saturation: Float(spec.saturation),

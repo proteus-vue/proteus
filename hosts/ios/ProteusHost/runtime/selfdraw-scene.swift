@@ -1105,7 +1105,7 @@ final class SelfDrawView: UIView {
         // ② 只栅格化 cropRect 区域（translate 使 cropRect 原点映射到 (0,0)）
         //   ★决策 #863：背景按**半分辨率**捕获（玻璃被模糊/折射，背景采样不必全分辨率）——
         //   捕获栅格化与纹理上传的像素量都降到 1/4（`capturePxPerPoint = scale/2`）。
-        let capturePxPerPoint = max(1, scale / 2)
+        let capturePxPerPoint = max(1, scale / 3)
         let fmt = UIGraphicsImageRendererFormat()
         fmt.scale = capturePxPerPoint
         let renderer = UIGraphicsImageRenderer(size: cropRect.size, format: fmt)
@@ -1120,6 +1120,9 @@ final class SelfDrawView: UIView {
 
         // ③ 逐玻璃节点装玻璃面（★作为**节点层的子层**：与节点同变换空间 ⇒ 自动跟随，含 fixed 钉住）
         //   ★决策 #863：**批量渲染**——一次 `renderFaces`（共用 backdrop 纹理 + 一条命令缓冲 + 一次等待）。
+        //   ★决策 #864：**输出也半分辨率**（`glassOutScale = scale/2`）——玻璃被模糊/折射，放大无损观感
+        //     （与 Android `S=2` / 鸿蒙降采样同法）⇒ 每帧 Metal 渲染 + 回读像素量降到 1/4。
+        let glassOutScale = max(1, scale / 2)
         var order: [Int] = []
         var reqs: [(nodeRect: CGRect, spec: GlassMetalRenderer.Spec)] = []
         for (id, spec) in glassSpecByNodeId {
@@ -1129,7 +1132,7 @@ final class SelfDrawView: UIView {
             reqs.append((nodeLayer.convert(nodeLayer.bounds, to: self.layer), spec))
         }
         let faces = GlassMetalRenderer.shared.renderFaces(backdrop: backdrop, requests: reqs,
-                                                          scale: scale, cropOrigin: cropRect.origin,
+                                                          scale: glassOutScale, cropOrigin: cropRect.origin,
                                                           texPxPerPoint: capturePxPerPoint)
         CATransaction.begin()
         CATransaction.setDisableActions(true)
@@ -1139,7 +1142,7 @@ final class SelfDrawView: UIView {
             let fl = CALayer()
             fl.frame = nodeLayer.bounds        // 与节点**同本地坐标**（随节点变换）
             fl.contents = face
-            fl.contentsScale = scale
+            fl.contentsScale = glassOutScale   // 半分辨率图 → CA 放大到节点尺寸（玻璃模糊 ⇒ 无损）
             fl.cornerRadius = spec.radius
             fl.masksToBounds = true
             fl.zPosition = 5000                // 盖在节点自身底色与其子层之上（玻璃是覆盖材质）
