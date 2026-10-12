@@ -3432,3 +3432,10 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **② 根因（取证）**：应用**已在运行时**再 `aa start --ps scene glass-demo` ⇒ Ability 被**复用**（走 `onNewWant`，**不重跑 `onCreate`**），而场景参数只在 `onCreate` 读 ⇒ **仍是上一个场景**（日志 `PROTEUS_HOST_ONCREATE scene=vkglass`，即上一轮测试残留）。
 **③ 修法**：EntryAbility 抽 `applyWant(want)`（解析 scene/scroll/ms → AppStorage + pageToLoad）；`onCreate` 与**新增的 `onNewWant`** 都调它；`onNewWant` 里若 scene **变化** ⇒ **`windowStage.loadContent(pageToLoad)` 重载页面**。⇒ 运行中换场景不再需要先 `aa force-stop`。真机验证：`aa start --ps scene bench` → `--ps scene glass-demo` ⇒ `PROTEUS_HOST_NEWWANT changed=1` + `PROTEUS_GLASS_DEMO`（成功切换）。
 **④ 教训**：**装置缺口会伪装成产品 bug**——"不是测试页"一度像渲染问题，实为**启动装置只覆盖冷启动**（`onCreate`），漏了**热启动**（`onNewWant`）。这与"提交≠交付""门禁覆盖面要跟着形态走"同族：**换了输入形态（冷/热启动），旧路径就不全覆盖**。
+
+854. **★★鸿蒙「重启后回到上次场景」（记住场景）——文件持久化（PersistentStorage 不刷盘，改用同步文件）**（2026-10-12）：
+**① 用户**（选「记住上次场景」）：「重启 App 后希望停在玻璃演示页」。
+**② 实现**：EntryAbility `applyWant` 抽参数解析；**带 `--ps scene X` 启动 ⇒ 把 X 写文件**（`filesDir/proteus-last-scene.txt`，`fileIo` 同步写）；**无参数（桌面点开/重启）⇒ 读该文件恢复场景**。首次安装无记录 ⇒ 空 ⇒ 落 superapp 默认（产品语义不变）。
+**③ ★取证踩坑（值得记）**：先用 `PersistentStorage.persistProp`——**扛不住 `aa force-stop`**（未刷盘，重启读到旧值）⇒ 改 `fileIo` **同步写文件**（抗强杀）。
+**④ 真机验证**：带场景冷启动（记录 glass-demo）→ `force-stop` → **无参数冷启动** ⇒ `PROTEUS_HOST_ONCREATE scene=glass-demo page=dev/Index`（**成功恢复**）。
+**⑤ 配合 #853**：`onNewWant`（运行中换场景）+ #854（重启恢复场景）⇒ 测试宿主场景切换**冷热启动都可靠**，且**默认停在用户上次用的场景**。
