@@ -3312,7 +3312,15 @@ public class ProteusHostView extends ViewGroup {
         glassBackdropX = bx;
         glassBackdropY = by;
         final Canvas bc = new Canvas(glassBackdrop);
-        bc.drawColor(0, android.graphics.PorterDuff.Mode.CLEAR);
+        // ★★★决策 #846 修复「玻璃两侧黑块」：原来 `CLEAR`（透明）⇒ 玻璃盒外扩 pad 超出**内容**的部分
+        //   为透明黑 ⇒ AGSL 折射把它当背景采样 ⇒ 玻璃左/右边缘黑块（真机「滚动到看不到内容时两个黑块」）。
+        //   改为填**页面底色**（取 View 的背景色；无背景色 ⇒ 白）。与鸿蒙自绘位图 clear 色同口径。
+        int pageBg = 0xFFFFFFFF;
+        android.graphics.drawable.Drawable bgd = getBackground();
+        if (bgd instanceof android.graphics.drawable.ColorDrawable) {
+            pageBg = ((android.graphics.drawable.ColorDrawable) bgd).getColor();
+        }
+        bc.drawColor(pageBg);
         // ③ 画内容：位图坐标 = 屏幕坐标 −(bx,by)；屏幕坐标 = 内容坐标 −(scrollX,scrollY)
         //    ⇒ 一次 translate(−scrollX−bx, −scrollY−by)；视口裁剪按位图坐标平移。
         final boolean cScrolled = offsetScroll
