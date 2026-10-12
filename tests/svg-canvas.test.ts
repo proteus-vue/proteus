@@ -155,6 +155,62 @@ describe('SVG path 解析器（真机 createPath2D 不可用 → 自写解析）
     tracePath(t, 'M-1.5 -2.5 L1e2 3.5')
     expect(t.calls).toEqual(['M-1.5,-2.5', 'L100,3.5'])
   })
+
+  // ★★★决策 #865：**挂死点回归**（真机实证）——`Z`/`z` 后跟数字（非法 yet 常见：
+  //   设计工具导出 / LLM 生成 / 手写 SVG）此前让 `while` 原地空转（`case 'Z/z'` 既不消费
+  //   token 也不推进 i）⇒ 直绘=JS 线程永久卡死、animateMotion 采样=内存爆炸 OOM。
+  //   修复：循环尾「本轮未消费任何 token ⇒ 强制推进 i」。这里用**计数守卫**证明终止。
+  it('★Z/z 后跟数字（非法输入）不挂死——计数守卫', () => {
+    const d = 'M0 0Z 5'
+    let close = 0
+    const guard = {
+      beginPath() {}, moveTo() {}, lineTo() {}, bezierCurveTo() {}, quadraticCurveTo() {},
+      closePath() { if (++close > 1000) throw new Error('UNBOUNDED: closePath') },
+    }
+    expect(() => tracePath(guard, d)).not.toThrow()
+  })
+  it('★多种 Z 后跟数字的非法输入均终止 + 合法兄弟路径输出不变', () => {
+    const guard = (limit: number) => {
+      let close = 0
+      return {
+        beginPath() {}, moveTo() {}, lineTo() {}, bezierCurveTo() {}, quadraticCurveTo() {},
+        closePath() { if (++close > limit) throw new Error('UNBOUNDED') },
+      }
+    }
+    for (const d of ['M0 0Z 5', 'M0 0h10v10z5', 'm0,0 l10,0 z0', 'M0 0 L10 10 Z 5 5']) {
+      expect(() => tracePath(guard(1000), d)).not.toThrow()
+    }
+    // 合法路径输出保持不变（修复零回归）
+    const t = mockTarget()
+    tracePath(t, 'M10 10 L30 10 H50 V40 Z')
+    expect(t.calls).toEqual(['M10,10', 'L30,10', 'L50,10', 'L50,40', 'Z'])
+  })
+
+  // ★决策 #865 健壮性：截断路径不应产生 NaN（此前 Number(undefined)=NaN 一路灌进绘制指令）
+  it('截断路径不产生 NaN（缺失参数按 0）', () => {
+    const calls: string[] = []
+    const t = {
+      beginPath() {}, moveTo: (x: number, y: number) => calls.push(`M${x},${y}`),
+      lineTo: (x: number, y: number) => calls.push(`L${x},${y}`),
+      bezierCurveTo() {}, quadraticCurveTo() {}, closePath() {},
+    }
+    tracePath(t, 'M0 0 L')
+    expect(calls.some((c) => /NaN/.test(c))).toBe(false)
+  })
+
+  // ★决策 #865 健壮性：arcTo 起终点重合（退化弧）不应产生 NaN（规范 F.6.2 省略该弧段）
+  it('弧起终点重合（退化）不产生 NaN', () => {
+    const out: string[] = []
+    const t = {
+      beginPath() {}, moveTo() {},
+      lineTo: (x: number, y: number) => out.push(`L${x},${y}`),
+      bezierCurveTo() {}, quadraticCurveTo() {},
+      arc: (cx: number, cy: number, r: number) => out.push(`A${cx},${cy},${r}`),
+      closePath() {},
+    }
+    tracePath(t, 'M10 10 A20 20 0 0 1 10 10')
+    expect(out.some((c) => /NaN/.test(c))).toBe(false)
+  })
 })
 
 describe('描边动画（stroke-dasharray / stroke-dashoffset）', () => {
