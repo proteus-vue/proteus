@@ -231,7 +231,7 @@ static std::unordered_map<long long, std::pair<OH_Drawing_Bitmap*, OH_Drawing_Ca
  *   其余帧复用上次结果（停在某 scrollY 时**立即收到本 Y 的结果**）。key = 玻璃序号。
  *   【为什么必须】每玻璃节点一次「CPU 位图 + 同步 Vulkan 提交+回读」≈ 55ms/节点 ⇒ 单帧 ~110ms（8fps）；
  *   复用后重算帧数降到 1/N。 */
-struct GlassCache { std::vector<uint8_t> bytes; OH_Drawing_Bitmap* bmp = nullptr; OH_Drawing_Image* img = nullptr; int ow2 = 0, oh2 = 0; };
+struct GlassCache { std::vector<uint8_t> bytes; OH_Drawing_Bitmap* bmp = nullptr; OH_Drawing_Image* img = nullptr; int ow2 = 0, oh2 = 0, pendW = 0, pendH = 0; };
 static std::unordered_map<int, GlassCache> g_sdGlassCache;
 static int g_sdGlassTick = 0;                 // 帧序号（自绘通道每帧 +1）
 static int g_sdGlassDiv = 3;                  // 重算步长（1=每帧；>1=每 N 帧，滚动中复用）
@@ -1148,22 +1148,29 @@ static void drawSelfContentCore(OH_Drawing_Canvas* rsCanvas, SelfDrawSpec* sd) {
         // ★决策 #849：时间复用判定（滚动中每 N 帧重算；停下立即收敛到本 Y 的结果）
         const bool yChanged = (sd->scrollY != g_sdLastGlassY);
         if (yChanged) { g_sdLastGlassY = sd->scrollY; g_sdGlassFresh = false; }
+        // ★决策 #851：本帧需重算的玻璃 → 收进**一批**（合并一次提交）；
+        //   同时记下每个玻璃的当前几何（用于每帧贴回，像素可能来自上一批的异步回读结果）。
+        struct GGeo { double cx, cy, w, h, radius; };
+        std::vector<GGeo> geos;
+        std::vector<proteus_glass_vk::BatchItem> batch;
+        std::vector<int> batchGi;
         int gi = 0;
         for (const auto& n : sd->nodes) {
             if (!n.glass || n.w <= 0 || n.h <= 0) continue;
-            GlassCache& gc = g_sdGlassCache[gi++];
             const double dyf = n.fixed ? 0.0 : sd->scrollY;
             const double cx = n.x, cy = n.y - dyf;
-            const int pad = (int)((n.w < n.h ? n.w : n.h) * 0.22 + n.gBlur * 0.55 * 1.6 + 4);
-            const int S = ((int)n.w >= 512 || (int)n.h >= 512) ? 2 : 1;   // 半分辨率（模糊材质视觉无损）
-            const int iw2 = std::max(1, ((int)n.w + 2 * pad) / S), ih2 = std::max(1, ((int)n.h + 2 * pad) / S);
-            const int ow2 = std::max(1, (int)n.w / S), oh2 = std::max(1, (int)n.h / S);
-            const int pad2 = pad / S;
-            const int bx = (int)cx - pad, by = (int)cy - pad;
+            geos.push_back({cx, cy, n.w, n.h, n.gRadius});
+            GlassCache& gc = g_sdGlassCache[gi];
             const bool recompute = (gc.img == nullptr) || (g_sdGlassDiv <= 1)
                         || (yChanged ? (g_sdGlassTick % g_sdGlassDiv == 0) : !g_sdGlassFresh);
             if (recompute) {
-                // 复用/建背景位图（按尺寸缓存；小位图 = 玻璃盒，不再全屏）
+                const int pad = (int)((n.w < n.h ? n.w : n.h) * 0.22 + n.gBlur * 0.55 * 1.6 + 4);
+                const int S = ((int)n.w >= 512 || (int)n.h >= 512) ? 2 : 1;
+                const int iw2 = std::max(1, ((int)n.w + 2 * pad) / S), ih2 = std::max(1, ((int)n.h + 2 * pad) / S);
+                const int ow2 = std::max(1, (int)n.w / S), oh2 = std::max(1, (int)n.h / S);
+                const int pad2 = pad / S;
+                const int bx = (int)cx - pad, by = (int)cy - pad;
+                // 背景小位图（按尺寸缓存）
                 OH_Drawing_Bitmap** bmpSlot = nullptr; OH_Drawing_Canvas** canSlot = nullptr;
                 { long long key = ((long long)iw2 << 32) ^ ih2; auto& pr = g_sdBackdrops[key];
                   bmpSlot = &pr.first; canSlot = &pr.second; }
@@ -1176,74 +1183,89 @@ static void drawSelfContentCore(OH_Drawing_Canvas* rsCanvas, SelfDrawSpec* sd) {
                 }
                 OH_Drawing_Canvas* bc = *canSlot;
                 auto __tb0 = std::chrono::steady_clock::now();
-                OH_Drawing_CanvasClear(bc, 0xFFFFFFFFu);           // 页面底色（防 pad 越界透明黑）
+                OH_Drawing_CanvasClear(bc, 0xFFFFFFFFu);
                 OH_Drawing_CanvasSave(bc);
-                OH_Drawing_CanvasScale(bc, 1.0f / S, 1.0f / S);    // 屏幕坐标 → 半分辨率位图坐标
+                OH_Drawing_CanvasScale(bc, 1.0f / S, 1.0f / S);
                 OH_Drawing_CanvasTranslate(bc, (float)(-bx), (float)(-by));
-                // ★相交剔除：只画与该玻璃盒（+pad）相交的内容
                 drawContentNodes(bc, sd, bx, by, bx + (double)iw2 * S, by + (double)ih2 * S);
                 OH_Drawing_CanvasRestore(bc);
                 const uint8_t* bpx = static_cast<const uint8_t*>(OH_Drawing_BitmapGetPixels(*bmpSlot));
-                if (bpx == nullptr) continue;
-                std::vector<uint8_t> bd((size_t)iw2 * ih2 * 4);
-                memcpy(bd.data(), bpx, bd.size());
                 g_sdBackdropBuildMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - __tb0).count();
-                // GlassUniforms（80B；按渲染分辨率 S 折算）
-                std::vector<uint8_t> u(80, 0);
-                auto putF = [&](int off, float v) { memcpy(&u[off], &v, 4); };
-                auto putV2 = [&](int off, float a2, float b2) { putF(off, a2); putF(off + 4, b2); };
-                float ta = ((n.gTint >> 24) & 0xFF) / 255.0f, tr = ((n.gTint >> 16) & 0xFF) / 255.0f,
-                      tg = ((n.gTint >> 8) & 0xFF) / 255.0f, tb = (n.gTint & 0xFF) / 255.0f;
-                putF(0, tr); putF(4, tg); putF(8, tb); putF(12, ta);
-                putV2(16, (float)ow2, (float)oh2);
-                putV2(24, 0.0f, 0.0f);
-                putV2(32, (float)pad2 / iw2, (float)pad2 / ih2);
-                putV2(40, (float)ow2 / iw2, (float)oh2 / ih2);
-                { float lx = -0.35f, ly = -0.94f, ll = sqrtf(lx * lx + ly * ly); putV2(48, lx / ll, ly / ll); }
-                putF(56, (float)n.gRadius / S);
-                putF(60, (float)n.gBlur / S);
-                putF(64, (n.w < n.h ? (float)ow2 : (float)oh2) * 0.22f);
-                putF(68, 0.18f);
-                putF(72, (float)n.gSat);
-                auto __tc1 = std::chrono::steady_clock::now();
-                std::vector<uint8_t> gout = proteus_glass_vk::renderRgba8(bd, iw2, ih2, ow2, oh2, u);
-                if (gout.size() == (size_t)ow2 * oh2 * 4) {
-                    gc.bytes = std::move(gout);
-                    if (gc.img) { OH_Drawing_ImageDestroy(gc.img); gc.img = nullptr; }
-                    if (gc.bmp) { OH_Drawing_BitmapDestroy(gc.bmp); gc.bmp = nullptr; }
-                    OH_Drawing_Image_Info ii{(int32_t)ow2, (int32_t)oh2, COLOR_FORMAT_RGBA_8888, ALPHA_FORMAT_PREMUL};
-                    gc.bmp = OH_Drawing_BitmapCreateFromPixels(&ii, gc.bytes.data(), (uint32_t)ow2 * 4);
-                    if (gc.bmp != nullptr) {
-                        gc.img = OH_Drawing_ImageCreate();
-                        if (gc.img == nullptr || !OH_Drawing_ImageBuildFromBitmap(gc.img, gc.bmp)) {
-                            if (gc.img) { OH_Drawing_ImageDestroy(gc.img); gc.img = nullptr; }
-                        }
+                if (bpx != nullptr) {
+                    proteus_glass_vk::BatchItem bi;
+                    bi.id = gi;
+                    bi.texW = iw2; bi.texH = ih2; bi.outW = ow2; bi.outH = oh2;
+                    bi.backdrop.assign(bpx, bpx + (size_t)iw2 * ih2 * 4);
+                    bi.uniform80.assign(80, 0);
+                    auto putF = [&](int off, float v) { memcpy(&bi.uniform80[off], &v, 4); };
+                    auto putV2 = [&](int off, float a2, float b2) { putF(off, a2); putF(off + 4, b2); };
+                    float ta = ((n.gTint >> 24) & 0xFF) / 255.0f, tr = ((n.gTint >> 16) & 0xFF) / 255.0f,
+                          tg = ((n.gTint >> 8) & 0xFF) / 255.0f, tb = (n.gTint & 0xFF) / 255.0f;
+                    putF(0, tr); putF(4, tg); putF(8, tb); putF(12, ta);
+                    putV2(16, (float)ow2, (float)oh2);
+                    putV2(24, 0.0f, 0.0f);
+                    putV2(32, (float)pad2 / iw2, (float)pad2 / ih2);
+                    putV2(40, (float)ow2 / iw2, (float)oh2 / ih2);
+                    { float lx = -0.35f, ly = -0.94f, ll = sqrtf(lx * lx + ly * ly); putV2(48, lx / ll, ly / ll); }
+                    putF(56, (float)n.gRadius / S);
+                    putF(60, (float)n.gBlur / S);
+                    putF(64, (n.w < n.h ? (float)ow2 : (float)oh2) * 0.22f);
+                    putF(68, 0.18f);
+                    putF(72, (float)n.gSat);
+                    gc.pendW = ow2; gc.pendH = oh2;
+                    batch.push_back(std::move(bi));
+                    batchGi.push_back(gi);
+                }
+            }
+            gi++;
+        }
+        // ★ 一次提交本批 + 异步回读上一批（无本帧同步等待）
+        if (!batch.empty()) {
+            auto outs = proteus_glass_vk::renderBatch(batch);
+            for (size_t k = 0; k < outs.size() && k < batchGi.size(); k++) {
+                if (outs[k].empty()) continue;
+                GlassCache& gc = g_sdGlassCache[batchGi[k]];
+                const int ow2 = gc.pendW, oh2 = gc.pendH;
+                if ((size_t)ow2 * oh2 * 4 != outs[k].size()) continue;
+                gc.bytes = std::move(outs[k]);
+                if (gc.img) { OH_Drawing_ImageDestroy(gc.img); gc.img = nullptr; }
+                if (gc.bmp) { OH_Drawing_BitmapDestroy(gc.bmp); gc.bmp = nullptr; }
+                OH_Drawing_Image_Info ii{(int32_t)ow2, (int32_t)oh2, COLOR_FORMAT_RGBA_8888, ALPHA_FORMAT_PREMUL};
+                gc.bmp = OH_Drawing_BitmapCreateFromPixels(&ii, gc.bytes.data(), (uint32_t)ow2 * 4);
+                if (gc.bmp != nullptr) {
+                    gc.img = OH_Drawing_ImageCreate();
+                    if (gc.img == nullptr || !OH_Drawing_ImageBuildFromBitmap(gc.img, gc.bmp)) {
+                        if (gc.img) { OH_Drawing_ImageDestroy(gc.img); gc.img = nullptr; }
                     }
-                    gc.ow2 = ow2; gc.oh2 = oh2;
-                    g_sdGlassFresh = true;
                 }
-                g_sdVkDrawSumMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - __tc1).count();
+                g_sdGlassFresh = true;
             }
-            // 贴回 RS 画布（每帧都贴：位置随滚动变；像素可能复用上次重算的结果）
-            if (gc.img != nullptr) {
-                OH_Drawing_CanvasSave(rsCanvas);
-                OH_Drawing_CanvasTranslate(rsCanvas, (float)cx, (float)cy);
-                if (n.gRadius > 0) {
-                    OH_Drawing_Rect* cr2 = OH_Drawing_RectCreate(0, 0, (float)n.w, (float)n.h);
-                    OH_Drawing_RoundRect* rr2 = OH_Drawing_RoundRectCreate(cr2, (float)n.gRadius, (float)n.gRadius);
-                    OH_Drawing_Path* cp2 = OH_Drawing_PathCreate();
-                    OH_Drawing_PathAddRoundRect(cp2, rr2, OH_Drawing_PathDirection::PATH_DIRECTION_CW);
-                    OH_Drawing_CanvasClipPath(rsCanvas, cp2, OH_Drawing_CanvasClipOp::INTERSECT, true);
-                    OH_Drawing_PathDestroy(cp2); OH_Drawing_RoundRectDestroy(rr2); OH_Drawing_RectDestroy(cr2);
-                }
-                OH_Drawing_SamplingOptions* so2 = OH_Drawing_SamplingOptionsCreate(
-                    OH_Drawing_FilterMode::FILTER_MODE_LINEAR, OH_Drawing_MipmapMode::MIPMAP_MODE_NONE);
-                OH_Drawing_Rect* dst2 = OH_Drawing_RectCreate(0, 0, (float)n.w, (float)n.h);
-                OH_Drawing_CanvasDrawImageRect(rsCanvas, gc.img, dst2, so2);
-                OH_Drawing_RectDestroy(dst2);
-                OH_Drawing_SamplingOptionsDestroy(so2);
-                OH_Drawing_CanvasRestore(rsCanvas);
+        }
+        // 每帧贴回（位置随滚动变；像素来自最近一次异步回读结果）
+        gi = 0;
+        for (const auto& n : sd->nodes) {
+            if (!n.glass || n.w <= 0 || n.h <= 0) continue;
+            GlassCache& gc = g_sdGlassCache[gi];
+            const GGeo& g = geos[gi];
+            gi++;
+            if (gc.img == nullptr) continue;
+            OH_Drawing_CanvasSave(rsCanvas);
+            OH_Drawing_CanvasTranslate(rsCanvas, (float)g.cx, (float)g.cy);
+            if (g.radius > 0) {
+                OH_Drawing_Rect* cr2 = OH_Drawing_RectCreate(0, 0, (float)g.w, (float)g.h);
+                OH_Drawing_RoundRect* rr2 = OH_Drawing_RoundRectCreate(cr2, (float)g.radius, (float)g.radius);
+                OH_Drawing_Path* cp2 = OH_Drawing_PathCreate();
+                OH_Drawing_PathAddRoundRect(cp2, rr2, OH_Drawing_PathDirection::PATH_DIRECTION_CW);
+                OH_Drawing_CanvasClipPath(rsCanvas, cp2, OH_Drawing_CanvasClipOp::INTERSECT, true);
+                OH_Drawing_PathDestroy(cp2); OH_Drawing_RoundRectDestroy(rr2); OH_Drawing_RectDestroy(cr2);
             }
+            OH_Drawing_SamplingOptions* so2 = OH_Drawing_SamplingOptionsCreate(
+                OH_Drawing_FilterMode::FILTER_MODE_LINEAR, OH_Drawing_MipmapMode::MIPMAP_MODE_NONE);
+            OH_Drawing_Rect* dst2 = OH_Drawing_RectCreate(0, 0, (float)g.w, (float)g.h);
+            OH_Drawing_CanvasDrawImageRect(rsCanvas, gc.img, dst2, so2);
+            OH_Drawing_RectDestroy(dst2);
+            OH_Drawing_SamplingOptionsDestroy(so2);
+            OH_Drawing_CanvasRestore(rsCanvas);
         }
     }
     OH_Drawing_CanvasRestore(rsCanvas);   // 恢复视口裁剪（见上）
@@ -3082,6 +3104,8 @@ static napi_value ClearRoot(napi_env env, napi_callback_info info) {
     // ★决策 #849：清玻璃输出缓存
     for (auto& kv : g_sdGlassCache) { if (kv.second.img) OH_Drawing_ImageDestroy(kv.second.img); if (kv.second.bmp) OH_Drawing_BitmapDestroy(kv.second.bmp); }
     g_sdGlassCache.clear(); g_sdGlassFresh = false; g_sdLastGlassY = -1e18;
+    // ★决策 #851：释放批量 Vulkan 资源（重建内容 ⇒ 玻璃数/尺寸可能变）
+    { std::vector<int> ids; for (int i = 0; i < 256; i++) ids.push_back(i); proteus_glass_vk::releaseBatch(ids); }
     // ★决策 #841：清玻璃 GPU 登记 + 像素/像素图缓存（重建内容 ⇒ 旧玻璃盒/像素失效）。
     //   节点画布持有 OH_Drawing_PixelMap ⇒ 先释放（Dissolve + Release），再清空登记（旧句柄随重建失效）。
     for (auto& kv : g_glassDpm) { if (kv.second) OH_Drawing_PixelMapDissolve(kv.second); }

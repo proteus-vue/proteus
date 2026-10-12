@@ -35,4 +35,18 @@ std::string info();
 std::vector<uint8_t> renderRgba8(const std::vector<uint8_t>& backdrop, int texW, int texH,
                                  int outW, int outH, const std::vector<uint8_t>& uniform80);
 
+/**
+ * ★★★决策 #851：**批量渲染**（多玻璃合并一次提交 + 异步双缓冲回读）。
+ *   每个 slot 由调用方给稳定 id（如 0/1…）；内部给每 slot 维护两套资源 + 双命令缓冲 + 双围栏。
+ *   每次调用：① 若 parity 缓冲仍有未完成的上次提交 ⇒ 等待它（通常上一次提交早已在跑/完成）；
+ *   ② 把本批所有 item 录进该缓冲、**一次提交**；③ **立即回读上一 parity 缓冲的 outStaging**
+ *   （已完成）⇒ 无本帧同步等待（消除每节点同步等待）。
+ * @return 与 items 等长；失败项为空 vector（首帧/尺寸变化时无上帧数据 ⇒ 返回空，调用方用上帧缓存兜底）。
+ */
+struct BatchItem { int id; std::vector<uint8_t> backdrop; int texW, texH, outW, outH; std::vector<uint8_t> uniform80; };
+std::vector<std::vector<uint8_t>> renderBatch(const std::vector<BatchItem>& items);
+
+/** 释放某尺寸场景的批量资源（重建内容时调用；`id` 为用过的 slot id）。 */
+void releaseBatch(const std::vector<int>& ids);
+
 }  // namespace proteus_glass_vk

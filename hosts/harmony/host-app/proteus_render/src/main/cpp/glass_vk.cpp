@@ -207,14 +207,11 @@ void initOnce() {
     g_ctx.why = "ok";
 }
 
-/** 创建（或复用）某尺寸的全套资源。 */
-SizeCache* getSizeCache(uint32_t texW, uint32_t texH, uint32_t outW, uint32_t outH) {
-    long long key = ((long long)texW << 42) ^ ((long long)texH << 28) ^ ((long long)outW << 14) ^ (long long)outH;
-    auto it = g_ctx.cache.find(key);
-    if (it != g_ctx.cache.end()) return &it->second;
+/** 为某尺寸分配全套资源（`sc` 的尺寸字段须已设）。★决策 #851：抽出以便批量/缓存复用。 */
+static bool buildSizeCache(SizeCache& sc) {
+    const uint32_t texW = sc.texW, texH = sc.texH, outW = sc.outW, outH = sc.outH;
     VkDevice dev = g_ctx.device;
     VkPhysicalDevice phys = g_ctx.phys;
-    SizeCache sc; sc.texW = texW; sc.texH = texH; sc.outW = outW; sc.outH = outH;
     auto failMem = [&](VkDeviceMemory m) { if (m) vkFreeMemory(dev, m, nullptr); };
     // hostBuf：cachedRead=true ⇒ 优先用 **HOST_CACHED**（CPU 读快；回读场景必需——HOST_COHERENT 是
     //   write-combined，CPU 读极慢，真机实测 6MB 回读要 ~70ms）。非 cached 读场景（纹理上传=只写）用 COHERENT。
@@ -254,24 +251,24 @@ SizeCache* getSizeCache(uint32_t texW, uint32_t texH, uint32_t outW, uint32_t ou
         return true;
     };
     size_t texBytes = (size_t)texW * texH * 4, outBytes = (size_t)outW * outH * 4;
-    if (!hostBuf(texBytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, &sc.texStaging, &sc.texStagingMem, &sc.texMap, false)) { failMem(sc.texStagingMem); return nullptr; }
-    if (!image(texW, texH, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, &sc.texImg, &sc.texMem, &sc.texView)) { failMem(sc.texMem); return nullptr; }
-    if (!image(outW, outH, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, &sc.outImg, &sc.outMem, &sc.outView)) { failMem(sc.outMem); return nullptr; }
-    if (!hostBuf(outBytes, VK_BUFFER_USAGE_TRANSFER_DST_BIT, &sc.outStaging, &sc.outStagingMem, &sc.outMap, true /*cached 回读*/)) { failMem(sc.outStagingMem); return nullptr; }
-    if (!hostBuf(80, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &sc.ubo, &sc.uboMem, &sc.uboMap, false)) { failMem(sc.uboMem); return nullptr; }
+    if (!hostBuf(texBytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, &sc.texStaging, &sc.texStagingMem, &sc.texMap, false)) { failMem(sc.texStagingMem); return false; }
+    if (!image(texW, texH, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, &sc.texImg, &sc.texMem, &sc.texView)) { failMem(sc.texMem); return false; }
+    if (!image(outW, outH, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, &sc.outImg, &sc.outMem, &sc.outView)) { failMem(sc.outMem); return false; }
+    if (!hostBuf(outBytes, VK_BUFFER_USAGE_TRANSFER_DST_BIT, &sc.outStaging, &sc.outStagingMem, &sc.outMap, true /*cached 回读*/)) { failMem(sc.outStagingMem); return false; }
+    if (!hostBuf(80, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &sc.ubo, &sc.uboMem, &sc.uboMap, false)) { failMem(sc.uboMem); return false; }
     sc.outBytes = outBytes;
     { VkImageView atts[1] = {sc.outView};
       VkFramebufferCreateInfo fci{VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
       fci.renderPass = g_ctx.renderPass; fci.attachmentCount = 1; fci.pAttachments = atts; fci.width = outW; fci.height = outH; fci.layers = 1;
-      if (vkCreateFramebuffer(dev, &fci, nullptr, &sc.fb) != VK_SUCCESS) return nullptr; }
+      if (vkCreateFramebuffer(dev, &fci, nullptr, &sc.fb) != VK_SUCCESS) return false; }
     { VkDescriptorPoolSize ps[3] = {
         {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1}, {VK_DESCRIPTOR_TYPE_SAMPLER, 1}, {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1}};
       VkDescriptorPoolCreateInfo dpci{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
       dpci.maxSets = 1; dpci.poolSizeCount = 3; dpci.pPoolSizes = ps;
-      if (vkCreateDescriptorPool(dev, &dpci, nullptr, &sc.pool) != VK_SUCCESS) return nullptr;
+      if (vkCreateDescriptorPool(dev, &dpci, nullptr, &sc.pool) != VK_SUCCESS) return false;
       VkDescriptorSetAllocateInfo dsai{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
       dsai.descriptorPool = sc.pool; dsai.descriptorSetCount = 1; dsai.pSetLayouts = &g_ctx.setLayout;
-      if (vkAllocateDescriptorSets(dev, &dsai, &sc.dset) != VK_SUCCESS) return nullptr;
+      if (vkAllocateDescriptorSets(dev, &dsai, &sc.dset) != VK_SUCCESS) return false;
       VkDescriptorImageInfo bgInfo{}; bgInfo.imageView = sc.texView; bgInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
       VkDescriptorImageInfo smpInfo{}; smpInfo.sampler = g_ctx.sampler;
       VkDescriptorBufferInfo ubInfo{}; ubInfo.buffer = sc.ubo; ubInfo.offset = 0; ubInfo.range = 80;
@@ -283,8 +280,101 @@ SizeCache* getSizeCache(uint32_t texW, uint32_t texH, uint32_t outW, uint32_t ou
       wr[2] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET}; wr[2].dstSet = sc.dset; wr[2].dstBinding = 2; wr[2].descriptorCount = 1;
       wr[2].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER; wr[2].pBufferInfo = &ubInfo;
       vkUpdateDescriptorSets(dev, 3, wr, 0, nullptr); }
-    auto ins = g_ctx.cache.emplace(key, sc);
-    return &ins.first->second;
+    return true;
+}
+
+/** 复用/建某尺寸缓存（单节点路径）。 */
+SizeCache* getSizeCache(uint32_t texW, uint32_t texH, uint32_t outW, uint32_t outH) {
+    long long key = ((long long)texW << 42) ^ ((long long)texH << 28) ^ ((long long)outW << 14) ^ (long long)outH;
+    auto it = g_ctx.cache.find(key);
+    if (it != g_ctx.cache.end()) return &it->second;
+    SizeCache sc; sc.texW = texW; sc.texH = texH; sc.outW = outW; sc.outH = outH;
+    if (!buildSizeCache(sc)) return nullptr;
+    return &g_ctx.cache.emplace(key, sc).first->second;
+}
+
+/** 释放某缓存的全部资源。 */
+void disposeSizeCache(SizeCache& sc) {
+    VkDevice dev = g_ctx.device;
+    if (sc.fb) vkDestroyFramebuffer(dev, sc.fb, nullptr);
+    if (sc.pool) vkDestroyDescriptorPool(dev, sc.pool, nullptr);
+    if (sc.texView) vkDestroyImageView(dev, sc.texView, nullptr);
+    if (sc.texImg) vkDestroyImage(dev, sc.texImg, nullptr);
+    if (sc.texMem) vkFreeMemory(dev, sc.texMem, nullptr);
+    if (sc.texStaging) vkDestroyBuffer(dev, sc.texStaging, nullptr);
+    if (sc.texStagingMem) vkFreeMemory(dev, sc.texStagingMem, nullptr);
+    if (sc.outView) vkDestroyImageView(dev, sc.outView, nullptr);
+    if (sc.outImg) vkDestroyImage(dev, sc.outImg, nullptr);
+    if (sc.outMem) vkFreeMemory(dev, sc.outMem, nullptr);
+    if (sc.outStaging) vkDestroyBuffer(dev, sc.outStaging, nullptr);
+    if (sc.outStagingMem) vkFreeMemory(dev, sc.outStagingMem, nullptr);
+    if (sc.ubo) vkDestroyBuffer(dev, sc.ubo, nullptr);
+    if (sc.uboMem) vkFreeMemory(dev, sc.uboMem, nullptr);
+    sc = SizeCache{};
+}
+
+/** 在命令缓冲上录一段玻璃绘制（纹理 upload → 渲染 → 拷出到 outStaging）。 */
+void recordGlassDraw(VkCommandBuffer cmd, SizeCache& sc) {
+    const uint32_t texW = sc.texW, texH = sc.texH, outW = sc.outW, outH = sc.outH;
+    VkImageMemoryBarrier b1{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+    b1.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED; b1.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    b1.srcQueueFamilyIndex = b1.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    b1.image = sc.texImg; b1.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    b1.srcAccessMask = 0; b1.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &b1);
+    VkBufferImageCopy bic{}; bic.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+    bic.imageExtent = {texW, texH, 1};
+    vkCmdCopyBufferToImage(cmd, sc.texStaging, sc.texImg, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &bic);
+    VkImageMemoryBarrier b2{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+    b2.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL; b2.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    b2.srcQueueFamilyIndex = b2.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    b2.image = sc.texImg; b2.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    b2.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT; b2.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &b2);
+    VkClearValue clear{}; clear.color = {{1.0f, 0.0f, 1.0f, 1.0f}};
+    VkRenderPassBeginInfo rbi{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
+    rbi.renderPass = g_ctx.renderPass; rbi.framebuffer = sc.fb;
+    rbi.renderArea = {{0, 0}, {outW, outH}}; rbi.clearValueCount = 1; rbi.pClearValues = &clear;
+    vkCmdBeginRenderPass(cmd, &rbi, VK_SUBPASS_CONTENTS_INLINE);
+    VkViewport vp{}; vp.x = 0; vp.y = 0; vp.width = (float)outW; vp.height = (float)outH; vp.minDepth = 0; vp.maxDepth = 1;
+    vkCmdSetViewport(cmd, 0, 1, &vp);
+    VkRect2D sc2{{0, 0}, {outW, outH}};
+    vkCmdSetScissor(cmd, 0, 1, &sc2);
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, g_ctx.pipeline);
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, g_ctx.pipeLayout, 0, 1, &sc.dset, 0, nullptr);
+    vkCmdDraw(cmd, 6, 1, 0, 0);
+    vkCmdEndRenderPass(cmd);
+    VkImageMemoryBarrier b3{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+    b3.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL; b3.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    b3.srcQueueFamilyIndex = b3.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    b3.image = sc.outImg; b3.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    b3.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT; b3.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &b3);
+    VkBufferImageCopy bic2{}; bic2.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+    bic2.imageExtent = {outW, outH, 1};
+    vkCmdCopyImageToBuffer(cmd, sc.outImg, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, sc.outStaging, 1, &bic2);
+    VkBufferMemoryBarrier bb{VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER};
+    bb.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT; bb.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
+    bb.srcQueueFamilyIndex = bb.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED; bb.buffer = sc.outStaging;
+    bb.offset = 0; bb.size = VK_WHOLE_SIZE;
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0, 0, nullptr, 1, &bb, 0, nullptr);
+}
+
+// ★决策 #851：批量资源（每 slot 双缓冲） + 批量命令/围栏
+struct SlotBuf { SizeCache sc[2]; bool inited[2] = {false, false}; };
+std::unordered_map<int, SlotBuf> g_slotCache;
+VkCommandBuffer g_bCmd[2] = {VK_NULL_HANDLE, VK_NULL_HANDLE};
+VkFence g_bFence[2] = {VK_NULL_HANDLE, VK_NULL_HANDLE};
+bool g_bSubmitted[2] = {false, false};
+int g_bParity = 0;
+bool ensureBatchInit() {
+    if (g_bCmd[0] != VK_NULL_HANDLE) return true;
+    VkCommandBufferAllocateInfo cbai{VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
+    cbai.commandPool = g_ctx.cmdPool; cbai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY; cbai.commandBufferCount = 2;
+    if (vkAllocateCommandBuffers(g_ctx.device, &cbai, g_bCmd) != VK_SUCCESS) return false;
+    VkFenceCreateInfo fci{VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
+    for (int i = 0; i < 2; i++) if (vkCreateFence(g_ctx.device, &fci, nullptr, &g_bFence[i]) != VK_SUCCESS) return false;
+    return true;
 }
 
 }  // namespace
@@ -390,6 +480,72 @@ std::vector<uint8_t> renderRgba8(const std::vector<uint8_t>& backdrop, int texW,
       char pb[128]; snprintf(pb, sizeof(pb), "%dx%d write=%.1f record=%.1f submitWait=%.1f read=%.1f", outW, outH, ms(T0,T1), ms(T1,T2), ms(T2,T3), ms(T3,T4));
       OH_LOG_Print(LOG_APP, LOG_INFO, GLASS_VK_DOMAIN, GLASS_VK_TAG, "GLASS_VK_T %{public}s", pb); } }
     return out;
+}
+
+// ── ★决策 #851：批量渲染（多玻璃合并一次提交 + 异步双缓冲回读）──────────────────
+std::vector<std::vector<uint8_t>> renderBatch(const std::vector<BatchItem>& items) {
+    std::vector<std::vector<uint8_t>> outs(items.size());
+    if (!available() || items.empty()) return outs;
+    if (!ensureBatchInit()) return outs;
+    VkDevice dev = g_ctx.device;
+
+    const int p = g_bParity;
+    // ① 等本 parity 缓冲上一次提交（上一轮，早已在跑 ⇒ 等待≈0）
+    if (g_bSubmitted[p]) { vkWaitForFences(dev, 1, &g_bFence[p], VK_TRUE, 1000000000ull); }
+
+    // ② 逐 item：取/建双缓冲资源、写 staging+ubo、录制
+    vkResetCommandBuffer(g_bCmd[p], 0);
+    VkCommandBufferBeginInfo bi{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO}; bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    vkBeginCommandBuffer(g_bCmd[p], &bi);
+    for (const auto& it : items) {
+        if (it.texW <= 0 || it.texH <= 0 || it.outW <= 0 || it.outH <= 0) continue;
+        if ((size_t)it.texW * it.texH * 4 != it.backdrop.size()) continue;
+        SlotBuf& sb = g_slotCache[it.id];
+        SizeCache& sc = sb.sc[p];
+        if (!sb.inited[p]) {
+            sc.texW = (uint32_t)it.texW; sc.texH = (uint32_t)it.texH; sc.outW = (uint32_t)it.outW; sc.outH = (uint32_t)it.outH;
+            if (!buildSizeCache(sc)) continue;
+            sb.inited[p] = true;
+        }
+        memcpy(sc.texMap, it.backdrop.data(), it.backdrop.size());
+        memcpy(sc.uboMap, it.uniform80.data(), it.uniform80.size() < 80 ? it.uniform80.size() : 80);
+        recordGlassDraw(g_bCmd[p], sc);
+    }
+    if (vkEndCommandBuffer(g_bCmd[p]) != VK_SUCCESS) { g_bParity ^= 1; return outs; }
+    // ③ 提交本缓冲
+    vkResetFences(dev, 1, &g_bFence[p]);
+    VkSubmitInfo si{VK_STRUCTURE_TYPE_SUBMIT_INFO};
+    si.commandBufferCount = 1; si.pCommandBuffers = &g_bCmd[p];
+    if (vkQueueSubmit(g_ctx.queue, 1, &si, g_bFence[p]) != VK_SUCCESS) { g_bParity ^= 1; return outs; }
+    g_bSubmitted[p] = true;
+
+    // ④ 回读**上一 parity** 缓冲（已完成）⇒ 无本帧同步等待
+    const int q = p ^ 1;
+    if (g_bSubmitted[q]) {
+        for (size_t i = 0; i < items.size(); i++) {
+            auto sit = g_slotCache.find(items[i].id);
+            if (sit == g_slotCache.end() || !sit->second.inited[q]) continue;
+            SizeCache& sc = sit->second.sc[q];
+            VkMappedMemoryRange rng{VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE};
+            rng.memory = sc.outStagingMem; rng.offset = 0; rng.size = VK_WHOLE_SIZE;
+            vkInvalidateMappedMemoryRanges(dev, 1, &rng);
+            std::vector<uint8_t> o(sc.outBytes);
+            memcpy(o.data(), sc.outMap, o.size());
+            outs[i] = std::move(o);
+        }
+    }
+    g_bParity ^= 1;   // 下一帧换缓冲
+    return outs;
+}
+
+void releaseBatch(const std::vector<int>& ids) {
+    if (!available()) return;
+    for (int id : ids) {
+        auto it = g_slotCache.find(id);
+        if (it == g_slotCache.end()) continue;
+        for (int k = 0; k < 2; k++) if (it->second.inited[k]) disposeSizeCache(it->second.sc[k]);
+        g_slotCache.erase(it);
+    }
 }
 
 }  // namespace proteus_glass_vk
