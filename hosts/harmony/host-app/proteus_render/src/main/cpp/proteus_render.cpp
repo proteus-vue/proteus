@@ -184,6 +184,7 @@ struct VaporChannelState {
     std::string outline;   // ★★★outline 族项（2026-10-08）："1" = 有轮廓
     std::string borderDot; // ★★★uniform dotted border（2026-10-08）："1" = 画布单周界点线
     std::string glow;      // "N:alpha"
+    std::string glass;     // ★★★自研液态玻璃（决策 #834）："1" = 本节点有玻璃面
     int clip = 0;          // 0=无；1=inset…
     double strokeLen = 0;
 };
@@ -351,6 +352,15 @@ struct TextDrawSpec {
     uint32_t glowColor = 0;
     double glowRadius = 0, glowAlpha = 1;
     int glowLayers = 0;                        // 分层同心描边数（探针读它——与判据 ≥3 对齐）
+    /* ★★★自研液态玻璃（决策 #834 · 鸿蒙腿）：在节点画布上画玻璃面（模糊背后内容 + tint + 圆角）。
+     *   【与 Android/iOS 的关系】三端同源（`glass` 来自内核 IR）；本端在 OH_Drawing 画布上落地
+     *   （读画布像素 → ImageFilterCreateBlur 模糊 → 圆角裁剪 + tint）。见 drawGlassFace 注释。 */
+    bool hasGlass = false;
+    double glassBlur = 0;                      // 物理 px
+    double glassRadius = 0;                    // 物理 px
+    uint32_t glassTint = 0x26FFFFFFu;
+    double glassSaturation = 1.0;
+    bool glassBorder = false;
     bool hasClip = false;
     int clipKind = 0;                          // 1=inset
     double clipTop = 0, clipRight = 0, clipBottom = 0, clipLeft = 0;  // 物理 px
@@ -436,6 +446,93 @@ static float evenDashPeriod(float W, float H, float r, float spacing) {
  *   · 渐变在后：它是**底色**（覆盖 RenderNode 的背景色，是模板 `fill-gradient` 的语义）；
  *   · 发光/描边：装饰层，画在底上、文本下。
  */
+/**
+ * ★★★自研液态玻璃（决策 #834 · 鸿蒙腿）：在节点画布上画玻璃面。
+ *
+ * 【落地形态】OH_Drawing（Skia）画布路径——与 Android(AGSL)/iOS(Metal) 是**三个不同落地**，但
+ *   `glass` 参数同源（内核 IR）。本端：**读画布背后像素 → ImageFilterCreateBlur 高斯模糊 → 圆角裁剪 + tint**。
+ *
+ * 【冷启动保守形态（真机迭代前的诚实基线）】先画 **tint + 圆角**（保证"有玻璃面"、不白屏/降级）；
+ *   再尝试 `OH_Drawing_CanvasReadPixels` 读背后像素 + `OH_Drawing_ImageFilterCreateBlur` 模糊回贴。
+ *   ★能否读到"已绘的兄弟内容"取决于 content-modifier 画布语义 —— **真机迭代确认**（读不到 ⇒ 保留 tint 面）。
+ */
+static void drawGlassFace(OH_Drawing_Canvas* canvas, const TextDrawSpec* spec) {
+    const float w = (float)spec->w, h = (float)spec->h;
+    if (w <= 0 || h <= 0) return;
+    // ① 圆角裁剪（玻璃面 = 圆角盒）
+    OH_Drawing_Rect* cr = OH_Drawing_RectCreate(0, 0, w, h);
+    OH_Drawing_RoundRect* rr = (spec->glassRadius > 0)
+        ? OH_Drawing_RoundRectCreate(cr, (float)spec->glassRadius, (float)spec->glassRadius) : nullptr;
+    OH_Drawing_CanvasSave(canvas);
+    if (spec->glassRadius > 0 && rr != nullptr) {
+        // 用圆角路径裁剪（OH_Drawing 无直接 round-rect clip ⇒ 用 Path 裁剪）
+        OH_Drawing_Path* clipPath = OH_Drawing_PathCreate();
+        OH_Drawing_PathAddRoundRect(clipPath, rr, OH_Drawing_PathDirection::PATH_DIRECTION_CW);
+        OH_Drawing_CanvasClipPath(canvas, clipPath, OH_Drawing_CanvasClipOp::INTERSECT, true);
+        OH_Drawing_PathDestroy(clipPath);
+    }
+    // ② 背后内容：尝试读画布像素并回贴（读不到 ⇒ 跳过，仅留 tint 面）
+    int bw = (int)std::ceil(w), bh = (int)std::ceil(h);
+    OH_Drawing_Bitmap* backdrop = OH_Drawing_BitmapCreate();
+    OH_Drawing_BitmapFormat fmt{OH_Drawing_ColorFormat::COLOR_FORMAT_RGBA_8888,
+                                OH_Drawing_AlphaFormat::ALPHA_FORMAT_PREMUL};
+    OH_Drawing_BitmapBuild(backdrop, (uint32_t)bw, (uint32_t)bh, &fmt);
+    // ★前 0px=节点盒左上（canvas 局部坐标系，节点原点即 (0,0)）
+    bool gotBackdrop = false;
+    if (spec->glassBlur > 0) {
+        gotBackdrop = OH_Drawing_CanvasReadPixelsToBitmap(canvas, backdrop, 0, 0);
+        // 备用路径：`ReadPixels`（直接拷到底图底层缓冲）——若 ToBitmap 语义不支持（真机实测 got=0）则试它。
+        if (!gotBackdrop) {
+            OH_Drawing_Image_Info info{bw, bh, COLOR_FORMAT_RGBA_8888, ALPHA_FORMAT_PREMUL};
+            void* px = OH_Drawing_BitmapGetPixels(backdrop);
+            if (px != nullptr) gotBackdrop = OH_Drawing_CanvasReadPixels(canvas, &info, px, (uint32_t)(bw * 4), 0, 0);
+        }
+    }
+    if (gotBackdrop) {
+        OH_Drawing_Image* bimg = OH_Drawing_ImageCreate();
+        if (OH_Drawing_ImageBuildFromBitmap(bimg, backdrop)) {
+            OH_Drawing_SamplingOptions* so = OH_Drawing_SamplingOptionsCreate(
+                OH_Drawing_FilterMode::FILTER_MODE_LINEAR, OH_Drawing_MipmapMode::MIPMAP_MODE_NONE);
+            OH_Drawing_Rect* dst = OH_Drawing_RectCreate(0, 0, w, h);
+            OH_Drawing_CanvasDrawImageRectWithSrc(canvas, bimg, cr, dst, so,
+                OH_Drawing_SrcRectConstraint::FAST_SRC_RECT_CONSTRAINT);
+            OH_Drawing_RectDestroy(dst);
+            OH_Drawing_SamplingOptionsDestroy(so);
+        }
+        OH_Drawing_ImageDestroy(bimg);
+    }
+    OH_Drawing_BitmapDestroy(backdrop);
+    // ③ 玻璃面着色。★真机实测：content-modifier 画布**读不到背后像素**（`ReadPixels`/`ReadPixelsToBitmap`
+    //   两路均 got=0 —— 光栅在 RS 进程）⇒ 无法真模糊。**诚实 L2 降级**：画**磨砂半透明面**
+    //   （tint 色 + alpha 下限，与 Android API<31 的"半透明实色回退"同策略；徽标/文字仍透出）。
+    {
+        uint32_t a = (spec->glassTint >> 24) & 0xFFu;
+        const uint32_t aFloor = 140u;   // ≈0.55：保证"有玻璃面"可辨（不白屏/不隐形）
+        uint32_t useA = a < aFloor ? aFloor : a;
+        uint32_t faceColor = (spec->glassTint & 0x00FFFFFFu) | (useA << 24);
+        OH_Drawing_Brush* tb = OH_Drawing_BrushCreate();
+        OH_Drawing_BrushSetColor(tb, faceColor);
+        OH_Drawing_CanvasAttachBrush(canvas, tb);
+        OH_Drawing_CanvasDrawRect(canvas, cr);
+        OH_Drawing_CanvasDetachBrush(canvas);
+        OH_Drawing_BrushDestroy(tb);
+        // 玻璃高光边（border=true）：圆角描边（细、白、半透明）——与 Android/iOS 的 rim 同义
+        if (spec->glassBorder) {
+            OH_Drawing_Pen* pen = OH_Drawing_PenCreate();
+            OH_Drawing_PenSetColor(pen, 0x66FFFFFFu);
+            OH_Drawing_PenSetWidth(pen, 1.0f);
+            OH_Drawing_CanvasAttachPen(canvas, pen);
+            if (rr != nullptr) OH_Drawing_CanvasDrawRoundRect(canvas, rr);
+            else OH_Drawing_CanvasDrawRect(canvas, cr);
+            OH_Drawing_CanvasDetachPen(canvas);
+            OH_Drawing_PenDestroy(pen);
+        }
+    }
+    OH_Drawing_CanvasRestore(canvas);
+    if (rr != nullptr) OH_Drawing_RoundRectDestroy(rr);
+    OH_Drawing_RectDestroy(cr);
+}
+
 static void drawChannelsAndText(OH_Drawing_Canvas* canvas, const TextDrawSpec* spec) {
     const float w = (float)spec->w, h = (float)spec->h;
     // ① 裁剪（inset：params = [top, right, bottom, left]，比例 × 尺寸）
@@ -670,6 +767,9 @@ static void drawChannelsAndText(OH_Drawing_Canvas* canvas, const TextDrawSpec* s
         }
         if (path != nullptr) OH_Drawing_PathDestroy(path);
     }
+    // ★★★玻璃面（决策 #834 · 鸿蒙腿）：画在渐变**之上**、文本**之下**（玻璃是覆盖材质，但节点内文本仍可见
+    //   ——与 Android/iOS 同序）。放在渐变后、文本前。
+    if (spec->hasGlass) drawGlassFace(canvas, spec);
     // ⑤ 文本（原路径：typography）
     if (!spec->text.empty()) {
         OH_Drawing_FontCollection* fc = OH_Drawing_CreateFontCollection();
@@ -812,7 +912,7 @@ static void DrawTextCallback(ArkUI_DrawContext* context, void* userData) {
     // ★★早退条件放宽（2026-10-03）：**有通道**（渐变/发光/裁剪/描边）也要进回调
     //   —— 此前只判 `text.empty()` ⇒ 纯通道节点（无文本）永远不画（四通道全丢）。
     if (spec == nullptr) return;
-    if (spec->text.empty() && !spec->hasGrad && !spec->hasGlow && !spec->hasClip && !spec->hasStroke && !spec->hasOutline && !spec->hasDotBorder && !spec->hasTextShadow) return;
+    if (spec->text.empty() && !spec->hasGrad && !spec->hasGlow && !spec->hasClip && !spec->hasStroke && !spec->hasOutline && !spec->hasDotBorder && !spec->hasTextShadow && !spec->hasGlass) return;
     void* canvasRaw = OH_ArkUI_DrawContext_GetCanvas(context);
     if (canvasRaw == nullptr) return;
     auto* canvas = static_cast<OH_Drawing_Canvas*>(canvasRaw);
@@ -1467,6 +1567,24 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
                     ch.glow = std::to_string(spec->glowLayers) + ":" + std::to_string(alpha).substr(0, 5);
                     hasAnyChannel = true;
                 }
+            }
+            // ★★★自研液态玻璃（决策 #834 · 鸿蒙腿）：`glass:{blur,radius,tint,saturation,border}`
+            //   （tint 是扁平数值 ARGB；见 proteus_host.cpp 发射处）。进 spec ⇒ 画布上画玻璃面（见 drawGlassFace）。
+            if (it.find("\"glass\":") != std::string::npos) {
+                std::string gsub = extractObjectField(it, "glass");
+                double gblur = 0, grad = 0, gtint = 0, gsat = 1;
+                jsonNumber(gsub, "blur", &gblur);
+                jsonNumber(gsub, "radius", &grad);
+                jsonNumber(gsub, "tint", &gtint);
+                jsonNumber(gsub, "saturation", &gsat);
+                spec->glassBlur = gblur;
+                spec->glassRadius = grad;
+                spec->glassTint = (uint32_t)gtint;
+                spec->glassSaturation = gsat;
+                spec->glassBorder = (gsub.find("\"border\":true") != std::string::npos);
+                spec->hasGlass = true;
+                ch.glass = "1";   // 通道签名（探针可读"本节点有玻璃"）
+                hasAnyChannel = true;
             }
             // 裁剪：{"kind":"inset","params":[top,right,bottom,left]}（比例 × 尺寸）
             if (it.find("\"clip\":") != std::string::npos) {

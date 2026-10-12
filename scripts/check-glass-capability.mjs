@@ -49,6 +49,10 @@ const SEAMS = [
   { label: '自绘适配器（LAYOUT_KEYS）', file: 'packages/renderer-app/src/adapters/selfdraw.ts', needle: "'glass'" },
   { label: '内核 NodeDto（serde）', file: 'packages/layout-core-rust/src/ffi.rs', needle: 'glass' },
   { label: 'Android 宿主白名单（LAYOUT_KEYS）', file: 'hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/VaporRenderHost.java', needle: '"glass"' },
+  // ★★★鸿蒙腿（决策 #838）：cmd 发射（proteus_host.cpp 里 snprintf 的 `,\"glass\":{...}` 模板）
+  //   + 渲染层解析（proteus_render.cpp 的 `extractObjectField(it, "glass")`）——miss 任一 ⇒ 鸿蒙玻璃静默丢失。
+  { label: '鸿蒙 cmd 发射（proteus_host.cpp）', file: 'hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_host.cpp', needle: '\\"glass\\":{' },
+  { label: '鸿蒙渲染层解析（proteus_render.cpp）', file: 'hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_render.cpp', needle: 'extractObjectField(it, "glass")' },
 ]
 function seamCheck() {
   for (const s of SEAMS) {
