@@ -478,11 +478,13 @@ function buildGlassCommands(vpW: number, vpH: number): string {
   const cols: string[] = ['#3B6FE0', '#E0577B', '#2FB98A', '#E0A93B', '#7B57E0', '#2FA0E0', '#D2694A', '#4AC2B0'];
   const cmds: GlassCmdFixture[] = [];
   let id = 0;
-  // 24 行彩色内容（高 150×D + gap 14×D；模拟页面，滚动交给 scrollRoot）
-  const ROW_H = 150, ROW_GAP = 14, ROWS = 24;
+  // 24 行彩色内容（★行高/间距 = **物理 px**，与 Android 夹具同口径：`ROW_H=150` 不乘缩放
+  //   —— 早期我误乘 D 得 525px，圆内只压 2 条粗色块 ⇒ 折射"看着弱"；对齐后圆内 ~6 条细条纹，
+  //   折射弯曲与 Android 同观感。这是「夹具差异」不是「算法差异」，见决策 #843。）
+  const ROW_H = 150, ROW_GAP = 14, ROWS = 30;
   for (let i = 0; i < ROWS; i++) {
-    const y = i * (ROW_H + ROW_GAP) * D + 20 * D;
-    cmds.push({ kind: 'background', id: id++, x: 20 * D, y: y, w: (vpW - 40) * D, h: ROW_H * D,
+    const y = i * (ROW_H + ROW_GAP) + 20 * D;
+    cmds.push({ kind: 'background', id: id++, x: 20 * D, y: y, w: (vpW - 40) * D, h: ROW_H,
       color: cssToArgb(cols[i % cols.length]), radius: 18 * D,
       text: '行 ' + (i + 1) + ' · 模拟页面内容', fontSize: 15 * D, textColor: cssToArgb('#FFFFFF') });
   }
@@ -496,6 +498,9 @@ function buildGlassCommands(vpW: number, vpH: number): string {
   cmds.push({ kind: 'background', id: id++, x: circX, y: circY, w: circ, h: circ, color: 0,
     radius: circR, position: 'fixed',
     glass: { blur: 16 * D, tint: '#ffffff33', radius: circR, border: true, saturation: 1.0 } });
+  // 圆形玻璃上的文字（与 Android 夹具同形——验"玻璃下内容随滚动/玻璃内文字仍可辨"）
+  cmds.push({ kind: 'background', id: id++, x: circX, y: circY + circ / 2 - 20 * D, w: circ, h: 40 * D,
+    color: 0, radius: 0, text: '圆形玻璃', fontSize: 20 * D, textColor: cssToArgb('#FFFFFF') });
   return JSON.stringify(cmds);
 }
 
@@ -1015,8 +1020,8 @@ struct Index {
           const cmdsG: string = buildGlassCommands(vpWG, vpHG);
           const nG = renderCommands(cmdsG);
           this.rendered = nG;
-          // 玻璃 = fixed 钉屏；内容 24 行 ⇒ 滚一段让"内容滑过玻璃"可见（scrollRoot 参数 = 设计单位 vp）
-          scrollRoot(100);
+          // 玻璃 = fixed 钉屏；内容 24 行 ⇒ 滚到"多条细条纹穿过圆"（与 Android 夹具截图同位，便于并排对比折射）
+          scrollRoot(760);
           hilog.info(DOMAIN, BENCH_TAG,
             'PROTEUS_GLASS_FIXTURE nodes=%{public}d attach_rc=%{public}d vp=%{public}sx%{public}s',
             nG, rcG, vpWG.toFixed(2), vpHG.toFixed(2));
