@@ -55,7 +55,7 @@
 | 目标 | 端 | 承载 | 备注 |
 |---|---|---|---|
 | `msl` | iOS（+ 鸿蒙 Metal，若可达） | `MTLDevice` 离屏渲染 | 版本无关（Metal 平台稳定） |
-| `agsl` | Android | `android.graphics.RuntimeShader` | 需 API 31+；<31 框架降级 |
+| `agsl` | Android | `android.graphics.RuntimeShader` | 需 API 31+；<31 框架降级。★**AGSL 不支持 `while`**（只支持 `for`）⇒ 算法中固定次数的循环**必须展开**（naga 会把 WGSL 循环出成 `while`；landers 有"输出不得含 while"断言）。 |
 | `glsl` | GLES3（鸿蒙承载 / 调试） | GLSurfaceView | 鸿蒙待接 |
 | `headless` | 无 GPU（CI / 参考） | — | 不出可编译源（不假装成功） |
 
@@ -83,8 +83,9 @@
 ## 诚实边界
 
 - **鸿蒙未落地**（B5）：无自定义片段着色器运行时，需 XComponent+GLES/Vulkan 承载（工作量最大）。
-- **像素等价门禁**（B6）：CI 无 GPU ⇒ 属**设备/模拟器**门禁（本机 macOS Metal 可作为离线上位校验）。
+- **像素等价门禁**（B6）：CI 无 GPU ⇒ 属**设备/模拟器**门禁（本机 macOS Metal 可作为离线上位校验）；**AGSL 侧**目前靠真机日志+截图旁证（尚无 AGSL 离线等比）。
 - **性能**：每玻璃节点一次离屏渲染（Metal）/ 每帧 backdrop 捕获——待真机性能基线核。
+- ★★**教训（#835，真机复验才暴露）**：**"OS 级" = 真机验，不是 javac 验**——B2 的"Android 玻璃已验"实为仅在 javac 层；AGSL 因 `while` 一直编译失败、玻璃静默降级成半透明实色。⇒ 涉及宿主/着色器的改动**必须以真机截图 + 日志为准**。且**新接缝（Rust 写 → 宿主用的 JNI/AGSL）需要新门禁**（javac-only 覆盖不到）。
 
 ## 工具链
 
