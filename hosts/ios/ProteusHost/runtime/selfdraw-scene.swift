@@ -111,6 +111,17 @@ func proteus_layout_rects_bin(_ handle: UInt64, _ outLen: UnsafeMutablePointer<U
 @_silgen_name("proteus_rects_free")
 func proteus_rects_free(_ ptr: UnsafeMutablePointer<UInt8>, _ len: UInt32)
 
+/* ★★★B4（决策 #834）：材质几何/曲线的**内核单源**查询——宿主不再各写一份公式 */
+/// 线性渐变端点（单位空间；CSS 规范式）——入参 `{"nodeId":N}` ⇒ `{ok,x0,y0,x1,y1,cx,cy,r}`
+@_silgen_name("proteus_layout_gradient_endpoints")
+func proteus_layout_gradient_endpoints(_ handle: UInt64, _ json: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
+/// 发光分层参数——入参 `{"nodeId":N,"intensity":0..1}` ⇒ `{ok,layers:[[boostPx,alpha],…]}`
+@_silgen_name("proteus_layout_glow_layers")
+func proteus_layout_glow_layers(_ handle: UInt64, _ json: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
+/// 遮罩揭示色标——入参 `{"nodeId":N}` ⇒ `{ok,kind,stops:[oA,aA,oB,aB]}`
+@_silgen_name("proteus_layout_mask_stops")
+func proteus_layout_mask_stops(_ handle: UInt64, _ json: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
+
 /* ★★列表复用池（§12.6）：核心给**决策**（哪些行该 acquire/release），宿主执行**动作** */
 
 @_silgen_name("proteus_recycle_create")
@@ -800,7 +811,8 @@ final class SelfDrawView: UIView {
                 let g = CAGradientLayer()
                 g.contentsScale = UIScreen.main.scale
                 clip.addSublayer(g)
-                if Self.applyGradient(g, spec: fg, bounds: layer.bounds) {
+                if Self.applyGradient(g, spec: fg, bounds: layer.bounds,
+                                      epOverride: style["_gradEnd"] as? [Double]) {
                     layer.addSublayer(clip)
                     layerGradients[nodeId] = g
                 }
@@ -837,10 +849,16 @@ final class SelfDrawView: UIView {
                         gm.startPoint = CGPoint(x: cx, y: cy)
                         gm.endPoint = CGPoint(x: cx + r, y: cy)
                     }
-                    // 基态揭示色标（与内核 `reveal_stops` 同式——静态初值；动画期由内核逐帧下发）
+                    // 基态揭示色标（★B4：优先内核 `reveal_stops` 的结果 `_maskStops`；无则宿主内联式兜底）
                     let soft = (mk["softness"] as? Double) ?? 0.25
                     let p0 = (mk["progress"] as? Double) ?? 1.0
-                    let (oa, aa, ob, ab) = Self.maskStopsLocal(softness: soft, progress: p0)
+                    let inj = style["_maskStops"] as? [Double]
+                    let (oa, aa, ob, ab): (Double, Double, Double, Double)
+                    if let s = inj, s.count == 4 {
+                        (oa, aa, ob, ab) = (s[0], s[1], s[2], s[3])
+                    } else {
+                        (oa, aa, ob, ab) = Self.maskStopsLocal(softness: soft, progress: p0)
+                    }
                     gm.colors = [
                         UIColor.white.withAlphaComponent(CGFloat(aa)).cgColor,
                         UIColor.white.withAlphaComponent(CGFloat(ab)).cgColor,
@@ -864,10 +882,21 @@ final class SelfDrawView: UIView {
            let baseColor = parseHexColor(colorHex), radius > 0, alpha > 0 {
             var shapes: [CAShapeLayer] = []
             let n = Self.glowLayerCount
+            let kRadius = (style["borderRadius"] as? CGFloat) ?? 0
+            // ★B4（决策 #834）：优先用**内核算好的**分层参数（`_glowLayers` = [[boost,alpha],…]）；
+            //   无则回退宿主内联式（零回归）。两式同源（内核算 `GlowSpec::layers`）。
+            let injected = style["_glowLayers"] as? [[Double]]
             for k in 1...n {
-                let t = Double(k - 1) / Double(n)
-                let a = alpha * (1 - t) * (1 - t)
-                let boost = radius * (Double(k) / Double(n))
+                let boost: Double
+                let a: Double
+                if let inj = injected, k - 1 < inj.count, inj[k - 1].count >= 2 {
+                    boost = inj[k - 1][0]
+                    a = inj[k - 1][1]
+                } else {
+                    let t = Double(k - 1) / Double(n)
+                    a = alpha * (1 - t) * (1 - t)
+                    boost = radius * (Double(k) / Double(n))
+                }
                 let sh = CAShapeLayer()
                 sh.fillColor = nil
                 sh.strokeColor = baseColor.withAlphaComponent(CGFloat(a)).cgColor
@@ -876,8 +905,8 @@ final class SelfDrawView: UIView {
                 sh.lineJoin = .round
                 // 形状在"发光明暗/draw 时"按内容设（线条用 svg path + 进度；色块用圆角矩形）
                 sh.path = CGPath(
-                    roundedRect: layer.bounds, cornerWidth: (style["borderRadius"] as? CGFloat) ?? 0,
-                    cornerHeight: (style["borderRadius"] as? CGFloat) ?? 0, transform: nil)
+                    roundedRect: layer.bounds, cornerWidth: kRadius,
+                    cornerHeight: kRadius, transform: nil)
                 sh.contentsScale = UIScreen.main.scale
                 layer.addSublayer(sh)
                 shapes.append(sh)
@@ -1936,7 +1965,8 @@ final class SelfDrawView: UIView {
                 CGFloat(0.5 + (L / (2 * w)) * s), CGFloat(0.5 - (L / (2 * h)) * c))
     }
 
-    static func applyGradient(_ layer: CAGradientLayer, spec: [String: Any], bounds: CGRect) -> Bool {
+    static func applyGradient(_ layer: CAGradientLayer, spec: [String: Any], bounds: CGRect,
+                              epOverride: [Double]? = nil) -> Bool {
         guard let kind = spec["kind"] as? String,
               let stops = spec["stops"] as? [[String: Any]], stops.count >= 2 else { return false }
         var colors: [CGColor] = []
@@ -1955,9 +1985,15 @@ final class SelfDrawView: UIView {
         if kind == "linear" {
             guard let angle = (spec["angle"] as? Double) ?? (spec["angle"] as? CGFloat).map(Double.init) else { return false }
             // ★单位空间端点 = CSS 规范式（见 linearEndpoints；bounds 供宽高比——正方时 45°=角到角）
-            let ep = Self.linearEndpoints(angleDeg: angle, width: Double(bounds.width), height: Double(bounds.height))
-            layer.startPoint = CGPoint(x: ep.x0, y: ep.y0)
-            layer.endPoint = CGPoint(x: ep.x1, y: ep.y1)
+            // ★★B4：优先用**内核算好的**端点（epOverride，决策 #834 单源）；无则回退宿主内联式（零回归）。
+            if let ep = epOverride, ep.count >= 4 {
+                layer.startPoint = CGPoint(x: ep[0], y: ep[1])
+                layer.endPoint = CGPoint(x: ep[2], y: ep[3])
+            } else {
+                let e = Self.linearEndpoints(angleDeg: angle, width: Double(bounds.width), height: Double(bounds.height))
+                layer.startPoint = CGPoint(x: e.x0, y: e.y0)
+                layer.endPoint = CGPoint(x: e.x1, y: e.y1)
+            }
             layer.type = .axial
         } else if kind == "radial" {
             let cx = (spec["cx"] as? Double) ?? (spec["cx"] as? CGFloat).map(Double.init) ?? 0.5
@@ -3950,7 +3986,7 @@ final class SelfDrawView: UIView {
             let ih = Self.bgLenOf(st?["backgroundSize"] as? String, axis: 1, base: element.height)
             guard iw > 0, ih > 0 else { continue }
             let pos = Self.bgOffsetOf(st?["backgroundPosition"] as? String, box: element.size, img: CGSize(width: iw, height: ih))
-            let img = Self.rasterTile(spec: st?["fillGradient"] as? [String: Any] ?? [:], size: CGSize(width: iw, height: ih), scale: UIScreen.main.scale)
+            let img = Self.rasterTile(spec: st?["fillGradient"] as? [String: Any] ?? [:], size: CGSize(width: iw, height: ih), scale: UIScreen.main.scale, epOverride: st?["_gradEnd"] as? [Double])
             UIGraphicsBeginImageContextWithOptions(element.size, false, UIScreen.main.scale)
             if let ctx = UIGraphicsGetCurrentContext(), let tileImg = img, let cg = tileImg.cgImage {
                 // 相位 = position 偏移（CTM 平移后从原点平铺 ⇒ 砖栅格对齐到偏移处，铺满 clip 区）
@@ -3996,13 +4032,13 @@ final class SelfDrawView: UIView {
         return CGPoint(x: one(x, box.width, img.width), y: one(y, box.height, img.height))
     }
     /// 把渐变栅格化成一张 `size`(pt) 的图（tile 源；applyGradient 复用同一几何公式）
-    static func rasterTile(spec: [String: Any], size: CGSize, scale: CGFloat) -> UIImage? {
+    static func rasterTile(spec: [String: Any], size: CGSize, scale: CGFloat, epOverride: [Double]? = nil) -> UIImage? {
         guard size.width > 0, size.height > 0 else { return nil }
         UIGraphicsBeginImageContextWithOptions(size, false, scale)
         defer { UIGraphicsEndImageContext() }
         let gl = CAGradientLayer()
         gl.frame = CGRect(origin: .zero, size: size)
-        if applyGradient(gl, spec: spec, bounds: gl.bounds) {
+        if applyGradient(gl, spec: spec, bounds: gl.bounds, epOverride: epOverride) {
             let c = UIGraphicsGetCurrentContext()!
             // ★★★必须翻转 CTM 再 render（2026-10-08 · 用户抓出「App 案例 C：iOS 平铺方向反了」）：
             //   CoreGraphics 原点在**左下**（y 向上），UIKit/图层坐标在**左上**（y 向下）——
@@ -8092,6 +8128,35 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             guard let id = n["id"] as? Int else { return nil }
             return (id, n["parentId"] as? Int, n)
         }
+        // ★★★B4（决策 #834）：材质几何/曲线的**内核单源**——gradient 端点 / glow 分层 / mask 色标
+        //   由内核算出（`proteus_layout_*` 查询），宿主只读取结果，**不再各写一份公式**。
+        //   注入了就优先用（回退：注入失败/缺键 ⇒ 宿主内联式兜底，零回归）。
+        func enrichMaterial(_ style: inout [String: Any], _ id: Int) {
+            guard handle != 0 else { return }
+            let q = "{\"nodeId\":\(id)}"
+            if style["fillGradient"] != nil {
+                let s = q.withCString { takeCString(proteus_layout_gradient_endpoints(handle, $0)) }
+                if let d = s.data(using: .utf8), let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any],
+                   (o["ok"] as? Bool) == true {
+                    style["_gradEnd"] = [o["x0"] ?? 0.5, o["y0"] ?? 0.5, o["x1"] ?? 0.5, o["y1"] ?? 0.5,
+                                         o["cx"] ?? 0.5, o["cy"] ?? 0.5, o["r"] ?? 1.0]
+                }
+            }
+            if style["glow"] != nil {
+                let s = q.withCString { takeCString(proteus_layout_glow_layers(handle, $0)) }
+                if let d = s.data(using: .utf8), let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any],
+                   (o["ok"] as? Bool) == true, let layers = o["layers"] as? [[Double]] {
+                    style["_glowLayers"] = layers
+                }
+            }
+            if style["mask"] != nil {
+                let s = q.withCString { takeCString(proteus_layout_mask_stops(handle, $0)) }
+                if let d = s.data(using: .utf8), let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any],
+                   (o["ok"] as? Bool) == true, let st = o["stops"] as? [Double], st.count == 4 {
+                    style["_maskStops"] = st
+                }
+            }
+        }
         for (id, pid, n) in sortedNodes {
             guard let r = rects["\(id)"] else { continue }
             let rect = CGRect(x: r["x"] ?? 0, y: r["y"] ?? 0, width: r["width"] ?? 0, height: r["height"] ?? 0)
@@ -8099,7 +8164,9 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             //   此前这里是**第三份手写副本**（只认 backgroundColor/color/text/fontSize/fontWeight/
             //   borderRadius）⇒ 新增 `fontFamily` 时**必然漏改这里** ⇒ 全量挂载的文本没有字族，
             //   而增量/虚拟化路径有 —— 分叉且静默（本仓纪律：同一语义一处实现）。
-            flat.append((id: id, parentId: pid, rect: rect, style: SelfDrawView.styleOf(n)))
+            var style = SelfDrawView.styleOf(n)
+            enrichMaterial(&style, id)      // ★B4：注入内核算好的材质几何/曲线
+            flat.append((id: id, parentId: pid, rect: rect, style: style))
         }
         // ★★★切换页面"闪一下"的根因（2026-10-08 · 用户「iOS 每次导航切换页面都会闪下，安卓/鸿蒙丝滑」）：
         //   `clearLayers` 与 `buildLayers` **各自** begin/commit 一个 CATransaction —— 而

@@ -60,6 +60,13 @@ public final class RustLayout {
     private static native String nativeApplyOps(long handle, byte[] opsBytes);
     /** ★B-T2：文本策略回读（node_ids JSON → policy） */
     private static native String nativeTextPolicy(long handle, String nodeIdsJson);
+    /* ★★★B4（决策 #834）：材质几何/曲线**内核单源**查询——gradient 端点 / glow 分层 / mask 色标 */
+    /** 线性渐变端点（单位空间，CSS 规范式）——`{"nodeId":N}` ⇒ `{ok,x0,y0,x1,y1,cx,cy,r}` */
+    public static native String nativeGradientEndpoints(long handle, String json);
+    /** 发光分层参数——`{"nodeId":N,"intensity":0..1}` ⇒ `{ok,layers:[[boostPx,alpha],…]}` */
+    public static native String nativeGlowLayers(long handle, String json);
+    /** 遮罩揭示色标——`{"nodeId":N}` ⇒ `{ok,kind,stops:[oA,aA,oB,aB]}` */
+    public static native String nativeMaskStops(long handle, String json);
     /** ★★MA0-RT：曲线贝塞尔近似（供 PathInterpolator 用；曲线知识只在引擎一处） */
     private static native String nativeCurveBezier(int curve);
     /** ★★MA0-RT：提交规格（合成属性判定 + 节点级采样） */

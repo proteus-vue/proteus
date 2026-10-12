@@ -13,6 +13,8 @@ export type {
   UniformField,
 } from './spi'
 export { MATERIALS, material, type MaterialInfo } from './catalog'
+/** 材质 id 常量（与 Rust `materials::MaterialSpec.id` 同源）。 */
+export { GLASS_ID, BACKDROP_BLUR_ID } from './catalog'
 export {
   ALL_BACKENDS,
   backendById,

@@ -82,43 +82,51 @@ function toTsModule(catalog, files) {
 }
 
 /** Android：生成 `GeneratedMaterials.java`（AGSL 常量；宿主 `GlassMaterial` 引用它，不再手写算法）。 */
-function toJavaModule(files) {
+function toJavaModule(catalog, files) {
   const agsl = files['glass.agsl.frag.glsl'] ?? ''
   const esc = (s) => JSON.stringify(s) // JSON 转义对 Java 字符串字面量同样合法（无 \u 例外）
   const lines = []
   lines.push('package dev.proteus.layoutcore;')
   lines.push('')
   lines.push('// ★★★本文件由 `node scripts/gen-shaders.mjs` **自动生成**——请勿手改。')
-  lines.push('//   算法真源 = packages/shader-codegen-rust/src/materials/glass.wgsl（Rust WGSL + naga 落地 AGSL）。')
-  lines.push('//   宿主 GlassMaterial 只引用本常量做落地（编译 + 设 uniform + 跑 pass），不写算法。')
+  lines.push('//   算法真源 = packages/shader-codegen-rust/src/materials/*.wgsl（Rust WGSL + naga 落地 AGSL）。')
+  lines.push('//   宿主只引用本常量做落地（编译 + 设 uniform + 跑 pass），不写算法。')
   lines.push('final class GeneratedMaterials {')
   lines.push('    private GeneratedMaterials() {}')
   lines.push('')
-  lines.push('    /** glass 材质片元（AGSL · 由 WGSL 真源落地）。 */')
-  lines.push(`    static final String GLASS_AGSL = ${esc(agsl)};`)
+  for (const m of catalog.materials) {
+    const src = files[`${m.id}.agsl.frag.glsl`] ?? ''
+    // 常量名：glass → GLASS_AGSL；backdropBlur → BACKDROP_BLUR_AGSL（驼峰→下划线大写）
+    const constName = m.id.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toUpperCase() + '_AGSL'
+    lines.push(`    /** ${m.id} 材质片元（AGSL · 由 WGSL 真源落地）。 */`)
+    lines.push(`    static final String ${constName} = ${esc(src)};`)
+  }
   lines.push('}')
   lines.push('')
   return lines.join('\n')
 }
 
 /** iOS：生成 `generated-materials.swift`（MSL 片元 + 顶点常量；宿主 Metal pass 引用它）。 */
-function toSwiftModule(files) {
+function toSwiftModule(catalog, files) {
   const esc = (s) => JSON.stringify(s) // Swift 普通字符串字面量的转义与 JSON 一致（本处无 \u）
-  const frag = files['glass.msl.frag.metal'] ?? ''
-  const vert = files['glass.msl.vert.metal'] ?? ''
   const lines = []
   lines.push('// hosts/ios/ProteusHost/runtime/generated-materials.swift')
   lines.push('// ★★★本文件由 `node scripts/gen-shaders.mjs` **自动生成**——请勿手改。')
-  lines.push('//   算法真源 = packages/shader-codegen-rust/src/materials/glass.wgsl（Rust WGSL + naga 落地 MSL）。')
-  lines.push('//   宿主 Metal 玻璃 pass 只编译本常量（不再手写 CoreImage/Metal 着色器）。')
+  lines.push('//   算法真源 = packages/shader-codegen-rust/src/materials/*.wgsl（Rust WGSL + naga 落地 MSL）。')
+  lines.push('//   宿主 Metal pass 只编译本常量（不手写 CoreImage/Metal 着色器）。')
   lines.push('')
   lines.push('import Foundation')
   lines.push('')
   lines.push('enum GeneratedMaterials {')
-  lines.push('    /// glass 材质片元（MSL）。')
-  lines.push(`    static let glassFragmentMSL = ${esc(frag)}`)
-  lines.push('    /// glass 材质顶点（MSL）。')
-  lines.push(`    static let glassVertexMSL = ${esc(vert)}`)
+  for (const m of catalog.materials) {
+    const frag = files[`${m.id}.msl.frag.metal`] ?? ''
+    const vert = files[`${m.id}.msl.vert.metal`] ?? ''
+    // 属性名：glass → glassFragmentMSL；backdropBlur → backdropBlurFragmentMSL
+    lines.push(`    /// ${m.id} 材质片元（MSL）。`)
+    lines.push(`    static let ${m.id}FragmentMSL = ${esc(frag)}`)
+    lines.push(`    /// ${m.id} 材质顶点（MSL）。`)
+    lines.push(`    static let ${m.id}VertexMSL = ${esc(vert)}`)
+  }
   lines.push('}')
   lines.push('')
   return lines.join('\n')
@@ -127,8 +135,8 @@ function toSwiftModule(files) {
 const { catalog, files } = generate()
 const outputs = [
   [OUT_TS, toTsModule(catalog, files)],
-  [ANDROID_JAVA, toJavaModule(files)],
-  [IOS_SWIFT, toSwiftModule(files)],
+  [ANDROID_JAVA, toJavaModule(catalog, files)],
+  [IOS_SWIFT, toSwiftModule(catalog, files)],
 ]
 
 if (CHECK) {

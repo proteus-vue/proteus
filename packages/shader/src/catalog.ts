@@ -27,3 +27,7 @@ export const MATERIALS: readonly MaterialInfo[] = MATERIAL_CATALOG.materials.map
 export function material(id: MaterialId): MaterialInfo | undefined {
   return MATERIALS.find((m) => m.id === id)
 }
+
+/** 材质 id 常量（避免散落字面量；与 Rust 真源同源）。 */
+export const GLASS_ID = 'glass'
+export const BACKDROP_BLUR_ID = 'backdropBlur'

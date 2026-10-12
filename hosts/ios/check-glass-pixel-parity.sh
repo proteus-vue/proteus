@@ -23,25 +23,7 @@ node "$ROOT/scripts/extract-generated-shader.mjs" ts glass msl.vert.metal "$WORK
 
 echo "==> ② 合成 backdrop + spec（固定样例，两端同输入）"
 # 300x300 backdrop：横竖彩色条带（含高对比边界——最能暴露采样/坐标错位）
-node - "$WORK/spec.json" <<'NODE'
-const fs = require('fs')
-const out = process.argv[2]
-const W = 180, H = 180            // backdrop = 盒(130) + 2*pad(25)
-const rgba = []
-for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-  const band = Math.floor(y / 20) % 3
-  const c = [[220,60,60],[60,200,110],[70,120,230]][band]
-  rgba.push(c[0], c[1], c[2], 255)
-}
-const spec = {
-  backdrop: { width: W, height: H, rgba },
-  params: { size_px: [130,130], pad: 25, radius: 65, blur: 16, refract_depth: 28.6,
-            specular: 0.18, saturation: 1.0, tint: [1,1,1,0.149], light_dir: [-0.35,-0.94] },
-  out: { width: 130, height: 130 },
-}
-fs.writeFileSync(out, JSON.stringify(spec))
-console.log('  spec: backdrop 180x180, out 130x130')
-NODE
+node "$ROOT/hosts/ios/lib/gen-parity-spec.mjs" "$WORK/spec.json" || exit 2
 
 echo "==> ③ Rust CPU 参考渲染（oracle）"
 ( cd "$ROOT/packages/shader-codegen-rust" && cargo run --release --offline --quiet -- --render-ref "$WORK/spec.json" > "$WORK/ref.json" ) || { echo "✗ CPU 参考渲染失败"; exit 3; }
