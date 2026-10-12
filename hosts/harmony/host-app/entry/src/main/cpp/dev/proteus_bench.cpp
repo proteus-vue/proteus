@@ -50,6 +50,12 @@
 #include <native_drawing/drawing_rect.h>
 #include <native_drawing/drawing_round_rect.h>
 #include <arkui/native_node_napi.h>
+// ★★★Vulkan 能力探针（决策 #841 · 真机取证）：鸿蒙 SDK 随装载了 libvulkan + 全量 Vulkan 1.4 头
+//   （`vulkan_ohos.h` 有 VK_OHOS_surface / VK_OHOS_native_buffer）。本探针在**真机**上确认运行时是否
+//   真有 libvulkan + 物理设备 + 计算队列 ⇒ 决定鸿蒙玻璃走「GPU 计算（跑我们的 SPIR-V 单源）」还是
+//   退「CPU 移植」。用 dlopen（不在链接期硬依赖；缺库则优雅报告 available=0，不崩）。
+#include <dlfcn.h>
+#include <vulkan/vulkan.h>
 
 #define PROTEUS_BENCH_DOMAIN 0x0003
 #define PROTEUS_BENCH_TAG "ProteusBench"
@@ -3687,6 +3693,144 @@ static napi_value SuperappBoot(napi_env env, napi_callback_info info) { return H
 static napi_value SuperappDrive(napi_env env, napi_callback_info info) { return HostAppDrive(env, info); }
 static napi_value SuperappScreen(napi_env env, napi_callback_info info) { return HostAppRender(env, info); }
 
+/**
+ * ★★★`vkProbe()` —— **鸿蒙 Vulkan 运行时能力探针**（决策 #841 · 真机取证）。
+ *
+ * 【为什么需要】"鸿蒙支持 Native Vulkan" 要用**真机证据**回答，而不是猜（本仓纪律：先取证再断言）：
+ *   SDK sysroot 里确有 `libvulkan.so`（arm64/x86_64/arm）+ 全量 `vulkan_ohos.h`（VK_OHOS_surface /
+ *   VK_OHOS_native_buffer），但**设备运行时**是否装载了 loader + ICD 驱动、有无可用物理设备与计算队列，
+ *   应用态 shell 查不到（/vendor 无权限）⇒ 唯一可靠判据 = **在 App 内 dlopen 并枚举**。
+ *
+ * 【探什么】① libvulkan 可加载？② 能否建 instance？③ 物理设备名 / API 版本 / 类型 / 是否支持计算队列？
+ *   ④ 设备扩展里有无 `VK_OHOS_native_buffer`（与 OH_NativeBuffer 零拷贝互操作）/ 外部内存族。
+ *   ⇒ 结果决定鸿蒙玻璃落地路线：**GPU compute（跑 naga 产出的 SPIR-V 单源）** vs **CPU 移植**。
+ *
+ * 【实现约束】用 `dlopen`+`vkGetInstanceProcAddr`（**不在链接期硬依赖 libvulkan**）——
+ *   缺库时 available=0 正常返回，绝不因为探针把宿主带崩。仅用 instance 级查询（枚举物理设备/扩展
+ *   /队列族都不需要建 device）。
+ */
+static napi_value VkProbe(napi_env env, napi_callback_info info) {
+    (void)info;
+    std::string result = "{";
+    const char* libNames[] = {"libvulkan.so.1", "libvulkan.so", "libvulkan_enc.so"};
+    void* lib = nullptr;
+    const char* libUsed = "";
+    for (const char* n : libNames) {
+        lib = dlopen(n, RTLD_NOW | RTLD_GLOBAL);
+        if (lib != nullptr) { libUsed = n; break; }
+    }
+    if (lib == nullptr) {
+        result += "\"loaded\":0,\"available\":0,\"err\":\"" + std::string(dlerror() ? dlerror() : "dlopen failed") + "\"}";
+        OH_LOG_Print(LOG_APP, LOG_ERROR, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG, "PROTEUS_VK_PROBE %{public}s", result.c_str());
+        napi_value out; napi_create_string_utf8(env, result.c_str(), NAPI_AUTO_LENGTH, &out); return out;
+    }
+    result += "\"loaded\":1,\"lib\":\"" + std::string(libUsed) + "\"";
+
+    auto pfnGetInstanceProcAddr = reinterpret_cast<PFN_vkGetInstanceProcAddr>(dlsym(lib, "vkGetInstanceProcAddr"));
+    if (pfnGetInstanceProcAddr == nullptr) {
+        result += ",\"available\":0,\"err\":\"no vkGetInstanceProcAddr\"}";
+        OH_LOG_Print(LOG_APP, LOG_ERROR, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG, "PROTEUS_VK_PROBE %{public}s", result.c_str());
+        napi_value out; napi_create_string_utf8(env, result.c_str(), NAPI_AUTO_LENGTH, &out); return out;
+    }
+    auto pfnCreateInstance = reinterpret_cast<PFN_vkCreateInstance>(pfnGetInstanceProcAddr(nullptr, "vkCreateInstance"));
+
+    // ① 实例扩展（在 instance 之前查）——看有无 VK_OHOS_surface / 外部内存能力
+    auto pfnEnumInstExt = reinterpret_cast<PFN_vkEnumerateInstanceExtensionProperties>(pfnGetInstanceProcAddr(nullptr, "vkEnumerateInstanceExtensionProperties"));
+    std::string instExts;
+    if (pfnEnumInstExt != nullptr) {
+        uint32_t n = 0;
+        if (pfnEnumInstExt(nullptr, &n, nullptr) == VK_SUCCESS && n > 0) {
+            std::vector<VkExtensionProperties> exts(n);
+            pfnEnumInstExt(nullptr, &n, exts.data());
+            for (auto& e : exts) instExts += e.extensionName + std::string(" ");
+        }
+    }
+    auto has = [&](const std::string& hay, const char* needle) {
+        return hay.find(needle) != std::string::npos;
+    };
+    result += ",\"inst_ext_ohos_surface\":" + std::string(has(instExts, "VK_OHOS_surface") ? "1" : "0");
+    result += ",\"inst_ext_ext_mem_caps\":" + std::string(has(instExts, "VK_KHR_external_memory_capabilities") ? "1" : "0");
+
+    if (pfnCreateInstance == nullptr) {
+        result += ",\"available\":0,\"err\":\"no vkCreateInstance\"}";
+        OH_LOG_Print(LOG_APP, LOG_ERROR, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG, "PROTEUS_VK_PROBE %{public}s", result.c_str());
+        napi_value out; napi_create_string_utf8(env, result.c_str(), NAPI_AUTO_LENGTH, &out); return out;
+    }
+    VkApplicationInfo app{VK_STRUCTURE_TYPE_APPLICATION_INFO};
+    app.pApplicationName = "proteus-vkprobe";
+    app.applicationVersion = 1;
+    app.pEngineName = "proteus";
+    app.engineVersion = 1;
+    app.apiVersion = VK_API_VERSION_1_1;
+    VkInstanceCreateInfo ci{VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
+    ci.pApplicationInfo = &app;
+    VkInstance inst = VK_NULL_HANDLE;
+    VkResult rc = pfnCreateInstance(&ci, nullptr, &inst);
+    result += ",\"create_instance\":" + std::to_string((int)rc);
+    if (rc != VK_SUCCESS || inst == VK_NULL_HANDLE) {
+        result += "}";
+        OH_LOG_Print(LOG_APP, LOG_ERROR, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG, "PROTEUS_VK_PROBE %{public}s", result.c_str());
+        napi_value out; napi_create_string_utf8(env, result.c_str(), NAPI_AUTO_LENGTH, &out); return out;
+    }
+    auto pfnEnumPhys = reinterpret_cast<PFN_vkEnumeratePhysicalDevices>(pfnGetInstanceProcAddr(inst, "vkEnumeratePhysicalDevices"));
+    auto pfnGetProps = reinterpret_cast<PFN_vkGetPhysicalDeviceProperties>(pfnGetInstanceProcAddr(inst, "vkGetPhysicalDeviceProperties"));
+    auto pfnGetQfProps = reinterpret_cast<PFN_vkGetPhysicalDeviceQueueFamilyProperties>(pfnGetInstanceProcAddr(inst, "vkGetPhysicalDeviceQueueFamilyProperties"));
+    auto pfnEnumDevExt = reinterpret_cast<PFN_vkEnumerateDeviceExtensionProperties>(pfnGetInstanceProcAddr(inst, "vkEnumerateDeviceExtensionProperties"));
+
+    uint32_t dn = 0;
+    if (pfnEnumPhys != nullptr && pfnEnumPhys(inst, &dn, nullptr) == VK_SUCCESS && dn > 0) {
+        std::vector<VkPhysicalDevice> devs(dn);
+        pfnEnumPhys(inst, &dn, devs.data());
+        result += ",\"devices\":" + std::to_string((int)dn);
+        // 取第一个设备的属性 + 计算队列 + 扩展
+        if (pfnGetProps != nullptr) {
+            VkPhysicalDeviceProperties props{};
+            pfnGetProps(devs[0], &props);
+            char api[32]; snprintf(api, sizeof(api), "%u.%u.%u",
+                VK_VERSION_MAJOR(props.apiVersion), VK_VERSION_MINOR(props.apiVersion), VK_VERSION_PATCH(props.apiVersion));
+            char dv[32]; snprintf(dv, sizeof(dv), "%u.%u.%u",
+                VK_VERSION_MAJOR(props.driverVersion), VK_VERSION_MINOR(props.driverVersion), VK_VERSION_PATCH(props.driverVersion));
+            result += ",\"device\":\"" + std::string(props.deviceName) + "\"";
+            result += ",\"api\":\"" + std::string(api) + "\"";
+            result += ",\"driver\":\"" + std::string(dv) + "\"";
+            result += ",\"device_type\":" + std::to_string((int)props.deviceType);
+        }
+        if (pfnGetQfProps != nullptr) {
+            uint32_t qn = 0;
+            pfnGetQfProps(devs[0], &qn, nullptr);
+            std::vector<VkQueueFamilyProperties> qs(qn);
+            pfnGetQfProps(devs[0], &qn, qs.data());
+            int computeFamily = -1, graphicsFamily = -1;
+            for (uint32_t i = 0; i < qn; i++) {
+                if ((qs[i].queueFlags & VK_QUEUE_COMPUTE_BIT) && computeFamily < 0) computeFamily = (int)i;
+                if ((qs[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) && graphicsFamily < 0) graphicsFamily = (int)i;
+            }
+            result += ",\"has_compute_queue\":" + std::string(computeFamily >= 0 ? "1" : "0");
+            result += ",\"has_graphics_queue\":" + std::string(graphicsFamily >= 0 ? "1" : "0");
+        }
+        if (pfnEnumDevExt != nullptr) {
+            uint32_t en = 0;
+            pfnEnumDevExt(devs[0], nullptr, &en, nullptr);
+            std::vector<VkExtensionProperties> exts(en);
+            pfnEnumDevExt(devs[0], nullptr, &en, exts.data());
+            std::string devExts;
+            for (auto& e : exts) devExts += e.extensionName + std::string(" ");
+            result += ",\"dev_ext_ohos_native_buffer\":" + std::string(has(devExts, "VK_OHOS_native_buffer") ? "1" : "0");
+            result += ",\"dev_ext_external_memory\":" + std::string(has(devExts, "VK_KHR_external_memory") ? "1" : "0");
+            result += ",\"dev_ext_ext_mem_dmabuf\":" + std::string(has(devExts, "VK_EXT_external_memory_dma_buf") ? "1" : "0");
+            result += ",\"dev_ext_external_semaphore\":" + std::string(has(devExts, "VK_KHR_external_semaphore") ? "1" : "0");
+            result += ",\"dev_ext_count\":" + std::to_string((int)en);
+        }
+    } else {
+        result += ",\"devices\":0";
+    }
+    result += ",\"available\":1}";
+    OH_LOG_Print(LOG_APP, LOG_INFO, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG, "PROTEUS_VK_PROBE %{public}s", result.c_str());
+    napi_value out;
+    napi_create_string_utf8(env, result.c_str(), NAPI_AUTO_LENGTH, &out);
+    return out;
+}
+
 static napi_value BenchInit(napi_env env, napi_value exports) {
     napi_property_descriptor desc[] = {
         {"bench4050", nullptr, Bench4050, nullptr, nullptr, nullptr, napi_default, nullptr},
@@ -3713,6 +3857,8 @@ static napi_value BenchInit(napi_env env, napi_value exports) {
         {"gestureHitAt", nullptr, GestureHitAt, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"fontFamilyProbe", nullptr, FontFamilyProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"nodeRect", nullptr, NodeRect, nullptr, nullptr, nullptr, napi_default, nullptr},
+        // ★★★Vulkan 能力探针（决策 #841）：真机确认鸿蒙运行时是否有 libvulkan + 计算队列
+        {"vkProbe", nullptr, VkProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"version", nullptr, BenchVersion, nullptr, nullptr, nullptr, napi_default, nullptr},
     };
     napi_define_properties(env, exports, sizeof(desc) / sizeof(desc[0]), desc);

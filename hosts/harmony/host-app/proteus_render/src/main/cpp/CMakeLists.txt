@@ -37,10 +37,28 @@ else()
 endif()
 
 # 渲染模块（直绘）——NAPI 模块名 `proteus_render`（ArkTS 侧 import 'libproteus_render.so'）
-add_library(proteus_render SHARED proteus_render.cpp)
+# ★★★决策 #841（路线修正）：鸿蒙玻璃**不再做 CPU 移植**——真机取证鸿蒙原生支持 Vulkan
+#   （libvulkan 1.3 + 计算/图形队列）⇒ 玻璃走**离屏 Vulkan 跑 naga 产出的 SPIR-V**（同一份 WGSL 单源）。
+#   ★为何弃 CPU 移植：它是"无 GPU 着色器 API"错误前提下的退路，且会在宿主**再写一份算法**
+#     （违反铁律"算法只在 WGSL 真源"——`check:shader-capability` 会当场红）。
+add_library(proteus_render SHARED proteus_render.cpp glass_vk.cpp)
 target_link_libraries(proteus_render PUBLIC libace_napi.z.so libace_ndk.z.so libhilog_ndk.z.so)
 # ★文本上屏：ArkGraphics2D typography（content modifier 回调里绘制）
 target_link_libraries(proteus_render PUBLIC libnative_drawing.so)
+# ★决策 #840/#841：玻璃"背景捕获"用节点快照（OH_ArkUI_GetNodeSnapshot → PixelMap）+ 读写像素
+#   ★实测（真机链接期取证）：`OH_PixelmapNative_*` 新 API 符号在 **libpixelmap.so**（image_framework），
+#     而 `libpixelmap_ndk.z.so` 只导出旧 `OH_PixelMap_*`（大写 M）——链错库 ⇒ undefined symbol（已踩）。
+target_link_libraries(proteus_render PUBLIC libpixelmap.so)
+# ★决策 #841：离屏 Vulkan 玻璃 pass（跑 SPIR-V 生成物）——Vulkan 是**底层图形 API**（与 Metal/AGSL 同类），
+#   非"平台原生材质 API"（UIGlassEffect/BlurStyle 那种高层，铁律禁依赖的是后者）⇒ 直接链 libvulkan。
+#   可用性另由运行时 vkCreateInstance 判定（失败 ⇒ 玻璃降级半透明面，不崩；见 glass_vk.cpp 的 available）。
+find_library(VULKAN_LIB vulkan)
+if(VULKAN_LIB)
+  target_link_libraries(proteus_render PUBLIC ${VULKAN_LIB})
+  message(STATUS "proteus: 玻璃 Vulkan 腿已接线（${VULKAN_LIB}）")
+else()
+  message(WARNING "proteus: 缺 libvulkan —— 鸿蒙玻璃将降级为半透明面（先装含 Vulkan 的 SDK）")
+endif()
 
 # ★★宿主桥模块（appScreen 桥 + 壳生命周期桥）——NAPI 模块名 `proteus_host`（import 'libproteus_host.so'）
 #   与 render 同属 HAR runtime（项目无关）；用内核建树/动画（Rust 核），经 render 的绘制通道上屏。

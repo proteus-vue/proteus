@@ -14,7 +14,7 @@
 //   本层。宿主拿到 `land()` 的产物后编译、设 uniform、跑 pass。
 
 /** 落地目标端（= 真实 GPU 语言/承载）。 */
-export type ShaderTarget = 'msl' | 'agsl' | 'glsl' | 'harmony'
+export type ShaderTarget = 'msl' | 'agsl' | 'glsl' | 'spirv' | 'harmony'
 
 /** 材质 id（与 Rust `materials::MaterialSpec.id` 同源；见 catalog）。 */
 export type MaterialId = string
@@ -30,10 +30,13 @@ export interface UniformField {
 
 /** 一种材质在某目标的**落地产物**（宿主据此编译 + 设值）。 */
 export interface LandedShader {
-  /** 片元着色器源码（AGSL 必填；MSL/GLSL 亦有）。 */
+  /** 片元着色器源码（AGSL 必填；MSL/GLSL 亦有）。SPIR-V 目标下为空串。 */
   fragment: string
   /** 顶点着色器源码（MSL/GLSL 需要；AGSL 由框架提供几何 ⇒ 可空）。 */
   vertex?: string
+  /** ★★★SPIR-V 二进制（base64）——Vulkan 载体（决策 #841）；仅 `spirv` 目标有值。 */
+  spirvVertex?: string
+  spirvFragment?: string
   /** 片元入口名（MSL/GLSL）。 */
   entry: string
   /** uniform 结构名 + 布局（宿主据此设值）。 */

@@ -48,7 +48,7 @@ fn main() {
         return;
     }
 
-    let targets = ["msl", "agsl", "glsl"];
+    let targets = ["msl", "agsl", "glsl", "spirv"];
 
     if verify {
         let mut fail = 0;
@@ -57,8 +57,15 @@ fn main() {
                 let tg = Target::parse(t).unwrap();
                 match emit(m.id, tg) {
                     Ok(e) => {
-                        // 额外断言：产物非空、含预期标记
-                        if e.fragment.is_empty() { eprintln!("✗ {}/{} 片元为空", m.id, t); fail += 1; }
+                        // 额外断言：产物非空、含预期标记（SPIR-V 是二进制，检查字节）
+                        if t == "spirv" {
+                            match &e.spirv {
+                                Some((v, f)) if !v.is_empty() && !f.is_empty() => {
+                                    println!("✓ {}/{} 落地 OK（vert {} B / frag {} B）", m.id, t, v.len(), f.len());
+                                }
+                                _ => { eprintln!("✗ {}/{} SPIR-V 为空", m.id, t); fail += 1; }
+                            }
+                        } else if e.fragment.is_empty() { eprintln!("✗ {}/{} 片元为空", m.id, t); fail += 1; }
                         else { println!("✓ {}/{} 落地 OK（{} 字节）", m.id, t, e.fragment.len()); }
                     }
                     Err(err) => { eprintln!("✗ {}/{} 落地失败：{err}", m.id, t); fail += 1; }
@@ -77,6 +84,15 @@ fn main() {
             for t in targets {
                 let tg = Target::parse(t).unwrap();
                 let e = emit(m.id, tg).expect("落地失败");
+                if t == "spirv" {
+                    // ★★★SPIR-V 二进制（决策 #841）：`.vert.spv` / `.frag.spv`（Vulkan 载入用）
+                    let (vert, frag) = e.spirv.expect("SPIR-V 缺失");
+                    let base = format!("{dir}/{}.{}", m.id, t);
+                    std::fs::write(format!("{base}.vert.spv"), &vert).expect("写顶点失败");
+                    std::fs::write(format!("{base}.frag.spv"), &frag).expect("写片元失败");
+                    println!("→ {base}.vert.spv / {base}.frag.spv");
+                    continue;
+                }
                 let ext = if t == "msl" { "metal" } else { "glsl" };
                 let base = format!("{dir}/{}.{}", m.id, t);
                 std::fs::write(format!("{base}.frag.{ext}"), &e.fragment).expect("写片元失败");

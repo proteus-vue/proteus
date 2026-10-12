@@ -6,6 +6,7 @@ pub fn emit(module: &naga::Module, info: &naga::valid::ModuleInfo, fragment_entr
     Ok(crate::Emitted {
         vertex: Some(emit_stage(module, info, naga::ShaderStage::Vertex, vertex_entry(module)?)?),
         fragment: emit_stage(module, info, naga::ShaderStage::Fragment, fragment_entry)?,
+        spirv: None,
     })
 }
 

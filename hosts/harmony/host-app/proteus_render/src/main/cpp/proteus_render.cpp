@@ -24,6 +24,7 @@
 #include <cstdint>
 #include <cmath>
 #include <cstdio>
+#include <chrono>   // ★决策 #840：快照耗时取证
 #include <array>   // ★★★批 A：fixed 节点登记表 {baseX, baseY, node}
 #include <vector>
 #include <hilog/log.h>
@@ -57,6 +58,15 @@
 #include <native_drawing/drawing_image.h>
 #include <native_drawing/drawing_sampling_options.h>
 #include <native_drawing/drawing_matrix.h>
+// ★决策 #841：玻璃像素 → OH_Drawing_PixelMap（content-modifier 画布 OH_Drawing_CanvasDrawPixelMapRect）
+#include <native_drawing/drawing_pixel_map.h>
+// ★★★决策 #840/#841：节点快照（OH_ArkUI_GetNodeSnapshot → PixelMap）+ 读写像素
+//   —— 玻璃的"背景捕获"来源（快照 RS 已合成像素），CPU/GPU 两条路线共用此捕获取数。
+#include <multimedia/image_framework/image/pixelmap_native.h>
+// ★决策 #841：把玻璃像素封成 DrawableDescriptor 作覆盖节点的背景图（NODE_BACKGROUND_IMAGE）
+#include <arkui/drawable_descriptor.h>
+// ★★★决策 #841：离屏 Vulkan 玻璃腿（跑 SPIR-V 生成物，算法 0 行）
+#include "glass_vk.h"
 #include <unordered_map>
 #include <unordered_set>
 
@@ -158,9 +168,64 @@ static ArkUI_NodeHandle g_outerStack = nullptr;
 ///   ⇒ 无法自绘模糊。而**真实组件节点**的系统材质（`BlurStyle.COMPONENT_THICK`，同 tab 栏玻璃）
 ///   **能模糊其后方已渲染内容**（含同容器的 RenderNode 输出）⇒ 玻璃节点改走组件节点 ⇒ 真模糊。
 ///   登记表供 ClearRoot / scrollRoot（随内容滚动的那类）维护其生命周期与位移。
-struct GlassOverlay { double baseX, baseY, w, h; bool fixed; ArkUI_NodeHandle node; };
-static std::vector<GlassOverlay> g_glassOverlays;
+/// ★★★玻璃真模糊（决策 #839）：**真实 ArkUI 组件节点**（`ARKUI_NODE_STACK` + `NODE_BACKGROUND_BLUR_STYLE`）。
+///   【历史】此路径（磨砂近似）已被决策 #841 的**自绘 Vulkan 玻璃**取代（见 g_glassRoot）；保留 g_nodeApi
+///   供其它组件节点用途（markDirty 等）。g_glassOverlays 组件节点表已废弃（改用 g_glassReg 的 RenderNode 表）。
 static ArkUI_NativeNodeAPI_1* g_nodeApi = nullptr;   // ArkUI 组件节点 API（与 RenderNode 各为其接口）
+/// ★★★玻璃 GPU pass（决策 #841）：**玻璃节点登记表**（节点盒 + 参数）+ **算好的像素缓存**。
+///   glassPass() 从内容快照裁剪每个玻璃节点的区域 → 离屏 Vulkan（生成物 SPIR-V）→ 存 g_glassPixels[id]；
+///   DrawTextCallback 在玻璃节点画布上把该像素画回（真边缘折射，与 Android/iOS 同算法）。
+struct GlassReg {
+    int id = -1;
+    double x = 0, y = 0, w = 0, h = 0;     // 物理 px（屏幕坐标）
+    double radius = 0, blur = 0, sat = 1.0;
+    uint32_t tint = 0x26FFFFFFu;
+    bool fixed = false;
+    ArkUI_RenderNodeHandle node = nullptr;   // ★本元素 RenderNode（玻璃画在它的 content-modifier 上）
+    void* drawSpec = nullptr;                // ★该元素的 TextDrawSpec*（glassPass 后重挂 modifier 需原 spec）
+};
+static std::vector<GlassReg> g_glassReg;
+/** ★glassPass 算好的玻璃像素（nodeId → 盒尺寸 RGBA8）——探针/调试读。 */
+static std::unordered_map<int, std::vector<uint8_t>> g_glassPixels;
+/** ★nodeId → 已封好的 OH_Drawing_PixelMap（DrawTextCallback 画回）——**保持存活**（节点画布持有期间）。 */
+static std::unordered_map<int, OH_Drawing_PixelMap*> g_glassDpm;
+static std::unordered_map<int, OH_PixelmapNative*> g_glassPm;   // 与 dpm 配对（释放时一起放）
+
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+// ★★★决策 #842：**自绘内容通道**（对齐 Android `onDraw` 模型）——解决鸿蒙玻璃「延迟」的根本架构。
+//   【为什么】鸿蒙内容由 RenderNode 在 RS 进程画，宿主读不到其像素 ⇒ 玻璃只能跨进程快照（慢 + 晚一帧）。
+//     Android 内容在**自己进程的 Canvas** 上画 ⇒ 玻璃能同步读背景 ⇒ 同帧。
+//   【怎么做】把整屏内容画进**宿主自持的 `OH_Drawing_Bitmap`（CPU，可读回）**，玻璃在该位图上做，
+//     再把位图**一次贴回** RenderNode 画布。全程在 onDraw 一次绘制内 ⇒ 内容与玻璃**严格同帧**。
+//   【门控】`g_selfDraw`（由 `setContentMode` 设置）——默认关，旧 RenderNode 路径零影响；逐步收敛。
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+struct SDNode {
+    double x = 0, y = 0, w = 0, h = 0;      // 物理 px（屏幕坐标，未含滚动）
+    uint32_t color = 0;                      // 背景 ARGB（alpha=0 ⇒ 不画底）
+    double radius = 0;                       // 圆角（物理 px）
+    double opacity = 1.0;
+    std::string text;                        // 文本（空 ⇒ 无）
+    double fontSize = 0;                     // 物理 px
+    uint32_t textColor = 0xFFFFFFFFu;
+    int textAlign = 0;                       // 0=left/1=right/2=center
+    bool fixed = false;                      // position:fixed ⇒ 不随滚动位移（钉屏）
+    bool glass = false;                      // ★本元素是玻璃面（阶段 3 同帧接入）
+    double gBlur = 0, gRadius = 0, gSat = 1.0; uint32_t gTint = 0x26FFFFFFu;
+};
+struct SelfDrawSpec {
+    double screenW = 0, screenH = 0;         // 物理 px（位图尺寸）
+    double scrollY = 0;                      // 滚动位移（物理 px；画布 translate -scrollY）
+    std::vector<SDNode> nodes;
+};
+static bool g_selfDraw = false;              // ★门控：true ⇒ 走自绘通道（旧 RenderNode 路径不建）
+static OH_Drawing_Bitmap* g_sdBitmap = nullptr;
+static OH_Drawing_Canvas* g_sdCanvas = nullptr;
+static int g_sdW = 0, g_sdH = 0;
+static SelfDrawSpec* g_sdSpec = nullptr;     // 挂在 g_rootNode 的 content-modifier 上（生命周期 = 建树）
+static int g_rootWpx = 0, g_rootHpx = 0;     // 根 RenderNode 尺寸（物理 px）——自绘位图尺寸
+static bool g_sdHasGlass = false;            // 本帧自绘内容含玻璃面 ⇒ 走同帧玻璃 pass
+// 前置声明：RGBA8 → PixelMap（定义见后；自绘玻璃分支要用）
+static OH_PixelmapNative* pixelMapFromRgba8(const std::vector<uint8_t>& rgba, int w, int h);
 /// ★★★批 A（2026-10-08 · 决策 #654）：**position:fixed 节点登记表** {baseX, baseY, node}。
 ///   扁平建树（每节点绝对 SetPosition 挂 g_rootNode）；滚动 = 平移 g_rootNode（-y）。
 ///   ⇒ fixed 节点须在 scrollRoot 时把自身 y 加回 +y（净位移 0 ⇒ 钉在视口）。ClearRoot 时清。
@@ -372,6 +437,8 @@ struct TextDrawSpec {
     double glassBlur = 0;                      // 物理 px
     double glassRadius = 0;                    // 物理 px
     uint32_t glassTint = 0x26FFFFFFu;
+    /** ★★★决策 #841：节点 id —— 玻璃 GPU pass 据此把算好的像素（g_glassPixels[id]）画回本节点画布。 */
+    int nodeId = -1;
     double glassSaturation = 1.0;
     bool glassBorder = false;
     bool hasClip = false;
@@ -758,11 +825,34 @@ static void drawChannelsAndText(OH_Drawing_Canvas* canvas, const TextDrawSpec* s
         }
         if (path != nullptr) OH_Drawing_PathDestroy(path);
     }
-    // ★★★玻璃面（决策 #834 · 鸿蒙腿）：画在渐变**之上**、文本**之下**（玻璃是覆盖材质，但节点内文本仍可见
-    //   ——与 Android/iOS 同序）。放在渐变后、文本前。
-    // ★★★玻璃（决策 #839）：**不再在画布上画**——改由**真实组件节点**（系统材质 backdrop 模糊）落地
-    //   （见 renderCommandsImpl 的 GLASS_OVERLAY；自绘画布读不到背后像素，做不了真模糊）。
-    //   注：drawGlassFace 保留（作低版本/组件节点不可用时的降级路径，当前不调用）。
+    // ★★★玻璃面（决策 #841）：画在渐变**之上**、文本**之下**（与 Android/iOS 同序）。
+    //   ★像素来源 = glassPass（离屏 Vulkan 跑生成物 SPIR-V，算法 0 行）；本回调只做 `DrawPixelMapRect`。
+    //   ★为什么画在本元素画布（用户实测「很晚才出现」的根因修复）：本画布与内容**同一同步快路径** ⇒ 同帧；
+    //     而组件节点载图/NODE_IMAGE_SRC 是**异步** ⇒ 滞后数秒。
+    if (spec->hasGlass && spec->nodeId >= 0) {
+        auto dit = g_glassDpm.find(spec->nodeId);
+        { static int gn = 0; gn++; if (gn <= 20)
+            OH_LOG_Print(LOG_APP, LOG_INFO, LOG_DOMAIN, LOG_TAG, "PROTEUS_GLASS_DRAWBR n=%{public}d id=%{public}d has_dpm=%{public}d r=%{public}d",
+              gn, (int)spec->nodeId, dit != g_glassDpm.end() ? 1 : 0, (int)spec->radius); }
+        if (dit != g_glassDpm.end() && dit->second != nullptr && spec->w > 0 && spec->h > 0) {
+            OH_Drawing_CanvasSave(canvas);
+            if (spec->radius > 0) {
+                OH_Drawing_Rect* cr = OH_Drawing_RectCreate(0, 0, (float)spec->w, (float)spec->h);
+                OH_Drawing_RoundRect* rr = OH_Drawing_RoundRectCreate(cr, (float)spec->radius, (float)spec->radius);
+                OH_Drawing_Path* cp = OH_Drawing_PathCreate();
+                OH_Drawing_PathAddRoundRect(cp, rr, OH_Drawing_PathDirection::PATH_DIRECTION_CW);
+                OH_Drawing_CanvasClipPath(canvas, cp, OH_Drawing_CanvasClipOp::INTERSECT, true);
+                OH_Drawing_PathDestroy(cp); OH_Drawing_RoundRectDestroy(rr); OH_Drawing_RectDestroy(cr);
+            }
+            OH_Drawing_SamplingOptions* so = OH_Drawing_SamplingOptionsCreate(
+                OH_Drawing_FilterMode::FILTER_MODE_LINEAR, OH_Drawing_MipmapMode::MIPMAP_MODE_NONE);
+            OH_Drawing_Rect* dst = OH_Drawing_RectCreate(0, 0, (float)spec->w, (float)spec->h);
+            OH_Drawing_CanvasDrawPixelMapRect(canvas, dit->second, nullptr, dst, so);
+            OH_Drawing_RectDestroy(dst);
+            OH_Drawing_SamplingOptionsDestroy(so);
+            OH_Drawing_CanvasRestore(canvas);
+        }
+    }
     // ⑤ 文本（原路径：typography）
     if (!spec->text.empty()) {
         OH_Drawing_FontCollection* fc = OH_Drawing_CreateFontCollection();
@@ -937,6 +1027,172 @@ static void DrawTextCallback(ArkUI_DrawContext* context, void* userData) {
     drawChannelsAndText(canvas, spec);
 }
 
+/** 自绘通道：单元素文本（阶段 0 精简版；画布已平移到节点原点）。 */
+static void sdDrawText(OH_Drawing_Canvas* canvas, const SDNode& n) {
+    OH_Drawing_FontCollection* fc = OH_Drawing_CreateFontCollection();
+    if (fc == nullptr) return;
+    OH_Drawing_TypographyStyle* ts = OH_Drawing_CreateTypographyStyle();
+    OH_Drawing_TextStyle* tstyle = OH_Drawing_CreateTextStyle();
+    if (n.textAlign == 2) OH_Drawing_SetTypographyTextAlign(ts, 2);
+    else if (n.textAlign == 1) OH_Drawing_SetTypographyTextAlign(ts, 1);
+    else OH_Drawing_SetTypographyTextAlign(ts, 0);
+    OH_Drawing_SetTextStyleColor(tstyle, n.textColor);
+    OH_Drawing_SetTextStyleFontSize(tstyle, n.fontSize);
+    OH_Drawing_SetTypographyTextWordBreakType(ts, 0);   // NORMAL（与旧路径一致，防数字边界断词）
+    OH_Drawing_TypographyCreate* handler = OH_Drawing_CreateTypographyHandler(ts, fc);
+    if (handler != nullptr) {
+        OH_Drawing_TypographyHandlerPushTextStyle(handler, tstyle);
+        OH_Drawing_TypographyHandlerAddText(handler, n.text.c_str());
+        OH_Drawing_Typography* typo = OH_Drawing_CreateTypography(handler);
+        if (typo != nullptr) {
+            const double layoutW = n.w > 1.0 ? n.w : 10000.0;
+            OH_Drawing_TypographyLayout(typo, layoutW);
+            OH_Drawing_TypographyPaint(typo, canvas, 0, 0);
+            OH_Drawing_DestroyTypography(typo);
+        }
+        OH_Drawing_DestroyTypographyHandler(handler);
+    }
+    OH_Drawing_DestroyTextStyle(tstyle);
+    OH_Drawing_DestroyTypographyStyle(ts);
+    OH_Drawing_DestroyFontCollection(fc);
+}
+
+/**
+ * ★★★决策 #842：自绘内容通道的 onDraw —— **把整屏内容画进宿主自持位图，再一次贴回**。
+ *   【同帧的关键】content-modifier 的 onDraw 与内容在同一次绘制内；位图是**进程内 CPU 画布**，
+ *     画完即可读回（玻璃阶段 3 直接用）⇒ 不依赖跨进程快照 ⇒ 玻璃与内容**同帧**。
+ *   【坐标系】位图 = 屏幕物理 px（与元素绝对坐标一致）；滚动 = 画布 translate(-scrollY)。
+ */
+static void DrawSelfContent(ArkUI_DrawContext* context, void* userData) {
+    auto* sd = static_cast<SelfDrawSpec*>(userData);
+    void* canvasRaw = OH_ArkUI_DrawContext_GetCanvas(context);
+    if (canvasRaw == nullptr) return;
+    auto* rsCanvas = static_cast<OH_Drawing_Canvas*>(canvasRaw);
+    if (sd == nullptr) return;
+    const int W = (int)std::lround(sd->screenW), H = (int)std::lround(sd->screenH);
+    if (W <= 0 || H <= 0) return;
+    // ① 惰性建/复用自持位图（尺寸变才重建）
+    if (g_sdBitmap == nullptr || g_sdW != W || g_sdH != H) {
+        if (g_sdBitmap != nullptr) { OH_Drawing_BitmapDestroy(g_sdBitmap); g_sdBitmap = nullptr; }
+        if (g_sdCanvas != nullptr) { OH_Drawing_CanvasDestroy(g_sdCanvas); g_sdCanvas = nullptr; }
+        g_sdBitmap = OH_Drawing_BitmapCreate();
+        OH_Drawing_BitmapFormat fmt{OH_Drawing_ColorFormat::COLOR_FORMAT_RGBA_8888,
+                                    OH_Drawing_AlphaFormat::ALPHA_FORMAT_PREMUL};
+        OH_Drawing_BitmapBuild(g_sdBitmap, (uint32_t)W, (uint32_t)H, &fmt);
+        g_sdCanvas = OH_Drawing_CanvasCreate();
+        OH_Drawing_CanvasBind(g_sdCanvas, g_sdBitmap);
+        g_sdW = W; g_sdH = H;
+    }
+    OH_Drawing_Canvas* c = g_sdCanvas;
+    // ★清成**不透明页面底色**（白）——与屏幕一致：真机上玻璃背后是页面底（白），若保持透明(0,0,0,0)
+    //   则玻璃盒外扩 pad 区被折射采样成**黑色**（真机实测「玻璃边缘暗环」）。★具名边界：底色调白
+    //   （与当前夹具/宿主默认底一致）；后续可由指令带根背景色（阶段 1 补）。
+    OH_Drawing_CanvasClear(c, 0xFFFFFFFFu);
+    // ② 逐元素：背景（圆角矩形）+ 文本。★fixed 节点不随滚动位移（钉屏），其余按 scrollY 平移。
+    for (const auto& n : sd->nodes) {
+        const double dy = n.fixed ? 0.0 : sd->scrollY;
+        OH_Drawing_CanvasSave(c);
+        OH_Drawing_CanvasTranslate(c, (float)n.x, (float)(n.y - dy));
+        uint32_t a = (n.color >> 24) & 0xFFu;
+        if (a > 0 && n.w > 0 && n.h > 0) {
+            double op = n.opacity < 0 ? 0 : (n.opacity > 1 ? 1 : n.opacity);
+            uint32_t useA = (uint32_t)(a * op + 0.5);
+            uint32_t fill = (useA << 24) | (n.color & 0x00FFFFFFu);
+            OH_Drawing_Brush* br = OH_Drawing_BrushCreate();
+            OH_Drawing_BrushSetAntiAlias(br, true);
+            OH_Drawing_BrushSetColor(br, fill);
+            OH_Drawing_CanvasAttachBrush(c, br);
+            OH_Drawing_Rect* r = OH_Drawing_RectCreate(0, 0, (float)n.w, (float)n.h);
+            if (n.radius > 0) {
+                OH_Drawing_RoundRect* rr = OH_Drawing_RoundRectCreate(r, (float)n.radius, (float)n.radius);
+                OH_Drawing_CanvasDrawRoundRect(c, rr);
+                OH_Drawing_RoundRectDestroy(rr);
+            } else {
+                OH_Drawing_CanvasDrawRect(c, r);
+            }
+            OH_Drawing_RectDestroy(r);
+            OH_Drawing_CanvasDetachBrush(c);
+            OH_Drawing_BrushDestroy(br);
+        }
+        if (!n.text.empty() && n.fontSize > 0) sdDrawText(c, n);
+        OH_Drawing_CanvasRestore(c);
+    }
+    // ③ ★★★玻璃同帧（决策 #842）：内容已在 selfBitmap 上 ⇒ 从**本进程位图**裁玻璃区做背景，
+    //   跑离屏 Vulkan（SPIR-V，算法 0 行），把结果画回玻璃盒。全程同一 onDraw ⇒ 与内容同帧。
+    if (g_sdHasGlass && g_rootWpx > 0 && g_rootHpx > 0) {
+        const uint8_t* px = static_cast<const uint8_t*>(OH_Drawing_BitmapGetPixels(g_sdBitmap));
+        if (px != nullptr) {
+            const int stride = g_sdW * 4;   // RGBA_8888 连续
+            for (const auto& n : sd->nodes) {
+                if (!n.glass || n.w <= 0 || n.h <= 0) continue;
+                const double dyf = n.fixed ? 0.0 : sd->scrollY;
+                const double cx = n.x, cy = n.y - dyf;
+                const int pad = (int)((n.w < n.h ? n.w : n.h) * 0.22 + n.gBlur * 0.55 * 1.6 + 4);
+                const int iw = (int)n.w + 2 * pad, ih = (int)n.h + 2 * pad;
+                if (iw <= 0 || ih <= 0) continue;
+                const int bx = (int)cx - pad, by = (int)cy - pad;
+                // 裁背景（越界填 0；与快照路径同口径）
+                std::vector<uint8_t> bd((size_t)iw * ih * 4, 0);
+                for (int yy = 0; yy < ih; yy++) for (int xx = 0; xx < iw; xx++) {
+                    int sx = bx + xx, sy = by + yy;
+                    if (sx >= 0 && sy >= 0 && sx < g_sdW && sy < g_sdH) {
+                        size_t so = (size_t)sy * stride + (size_t)sx * 4;
+                        size_t o = ((size_t)yy * iw + xx) * 4;
+                        bd[o] = px[so]; bd[o + 1] = px[so + 1]; bd[o + 2] = px[so + 2]; bd[o + 3] = px[so + 3];
+                    }
+                }
+                // GlassUniforms（80B，与 materials/mod.rs 布局一致）
+                std::vector<uint8_t> u(80, 0);
+                auto putF = [&](int off, float v) { memcpy(&u[off], &v, 4); };
+                auto putV2 = [&](int off, float a2, float b2) { putF(off, a2); putF(off + 4, b2); };
+                float ta = ((n.gTint >> 24) & 0xFF) / 255.0f, tr = ((n.gTint >> 16) & 0xFF) / 255.0f,
+                      tg = ((n.gTint >> 8) & 0xFF) / 255.0f, tb = (n.gTint & 0xFF) / 255.0f;
+                putF(0, tr); putF(4, tg); putF(8, tb); putF(12, ta);
+                putV2(16, (float)n.w, (float)n.h);
+                putV2(24, 0.0f, 0.0f);
+                putV2(32, (float)pad / iw, (float)pad / ih);
+                putV2(40, (float)n.w / iw, (float)n.h / ih);
+                { float lx = -0.35f, ly = -0.94f, ll = sqrtf(lx * lx + ly * ly); putV2(48, lx / ll, ly / ll); }
+                putF(56, (float)n.gRadius);
+                putF(60, (float)n.gBlur);
+                putF(64, (n.w < n.h ? (float)n.w : (float)n.h) * 0.22f);
+                putF(68, 0.18f);
+                putF(72, (float)n.gSat);
+                std::vector<uint8_t> gout = proteus_glass_vk::renderRgba8(bd, iw, ih, (int)n.w, (int)n.h, u);
+                if (gout.size() != (size_t)n.w * n.h * 4) continue;
+                // 结果画回玻璃盒（圆角裁剪）；就地插到内容之上（同一位图内）
+                OH_PixelmapNative* pm2 = pixelMapFromRgba8(gout, (int)n.w, (int)n.h);
+                if (pm2 == nullptr) continue;
+                OH_Drawing_PixelMap* dpm = OH_Drawing_PixelMapGetFromOhPixelMapNative(pm2);
+                if (dpm != nullptr) {
+                    OH_Drawing_CanvasSave(c);
+                    OH_Drawing_CanvasTranslate(c, (float)cx, (float)cy);
+                    if (n.gRadius > 0) {
+                        OH_Drawing_Rect* cr2 = OH_Drawing_RectCreate(0, 0, (float)n.w, (float)n.h);
+                        OH_Drawing_RoundRect* rr2 = OH_Drawing_RoundRectCreate(cr2, (float)n.gRadius, (float)n.gRadius);
+                        OH_Drawing_Path* cp2 = OH_Drawing_PathCreate();
+                        OH_Drawing_PathAddRoundRect(cp2, rr2, OH_Drawing_PathDirection::PATH_DIRECTION_CW);
+                        OH_Drawing_CanvasClipPath(c, cp2, OH_Drawing_CanvasClipOp::INTERSECT, true);
+                        OH_Drawing_PathDestroy(cp2); OH_Drawing_RoundRectDestroy(rr2); OH_Drawing_RectDestroy(cr2);
+                    }
+                    OH_Drawing_SamplingOptions* so2 = OH_Drawing_SamplingOptionsCreate(
+                        OH_Drawing_FilterMode::FILTER_MODE_LINEAR, OH_Drawing_MipmapMode::MIPMAP_MODE_NONE);
+                    OH_Drawing_Rect* dst2 = OH_Drawing_RectCreate(0, 0, (float)n.w, (float)n.h);
+                    OH_Drawing_CanvasDrawPixelMapRect(c, dpm, nullptr, dst2, so2);
+                    OH_Drawing_RectDestroy(dst2);
+                    OH_Drawing_SamplingOptionsDestroy(so2);
+                    OH_Drawing_CanvasRestore(c);
+                    OH_Drawing_PixelMapDissolve(dpm);
+                }
+                OH_PixelmapNative_Release(pm2);
+            }
+        }
+    }
+    OH_Drawing_CanvasRestore(c);
+    // ④ 一次贴回 RS 画布（同帧）
+    OH_Drawing_CanvasDrawBitmap(rsCanvas, g_sdBitmap, 0.0f, 0.0f);
+}
+
 /**
  * attach(content: NodeContent): number
  *   把 ArkTS 侧的 NodeContent 句柄交给本模块（页面里的 ContentSlot 挂载点）。
@@ -1012,6 +1268,8 @@ static napi_value Attach(napi_env env, napi_callback_info info) {
                 //   ★同时 ArkTS 侧视口已补 +1px（Superapp.ets renderCurrent）——两处相同取向。
                 OH_ArkUI_RenderNodeUtils_SetSize(g_rootNode,
                     (int32_t)std::ceil(screenWvp * g_density), (int32_t)std::ceil(screenHvp * g_density));
+                g_rootWpx = (int32_t)std::ceil(screenWvp * g_density);
+                g_rootHpx = (int32_t)std::ceil(screenHvp * g_density);
                 int32_t rc = OH_ArkUI_RenderNodeUtils_AddRenderNode(g_rootHost, g_rootNode);
                 if (rc == ARKUI_ERROR_CODE_NO_ERROR) {
                     // ★把 customNode 挂进外层 Stack（若没有 Stack 则退化为直挂 NodeContent——零回归）
@@ -1116,6 +1374,16 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
     }
     int32_t built = 0;
     int32_t textCount = 0;
+    // ★决策 #842：自绘通道 —— 新建/复用一个 SelfDrawSpec（元素入其 nodes；收尾挂到根 RenderNode 画布）
+    if (g_selfDraw) {
+        delete g_sdSpec;   // 上次的（其挂在旧 modifier 上，随 ClearChildren 失效）
+        g_sdSpec = new SelfDrawSpec();
+        g_sdSpec->screenW = (double)g_rootWpx;
+        g_sdSpec->screenH = (double)g_rootHpx;
+        g_sdHasGlass = false;
+    } else if (g_sdSpec != nullptr) {
+        delete g_sdSpec; g_sdSpec = nullptr;   // 旧路径：不保留
+    }
     for (const auto& it : items) {
         double x = 0, y = 0, w = 0, h = 0, color = 0, radius = 0, nodeId = -1;
         int radiusMask = 0;   // ★批次 34：逐角圆角掩码（0/15=统一 ALL）
@@ -1158,6 +1426,35 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
         jsonNumber(it, "shadowDy", &shadowDy);
         jsonNumber(it, "shadowBlur", &shadowRadius);
         jsonNumber(it, "shadowColor", &shadowColor);
+
+        // ═══ ★决策 #842：自绘通道分支（`g_selfDraw`）——本元素只入 SDNode 列表，不建 RenderNode 属性 ▲
+        if (g_selfDraw) {
+            SDNode sn;
+            sn.x = x; sn.y = y; sn.w = w; sn.h = h;
+            sn.color = (uint32_t)color;
+            sn.radius = radius;
+            sn.opacity = 1.0; { double opv = 1; jsonNumber(it, "opacity", &opv); sn.opacity = opv; }
+            std::string tv; jsonString(it, "text", &tv); sn.text = tv;
+            { double fs = 0; jsonNumber(it, "fontSize", &fs); sn.fontSize = fs; }
+            { double tc = 0; if (jsonNumber(it, "textColor", &tc)) sn.textColor = (uint32_t)tc; }
+            { std::string ta; if (jsonString(it, "textAlign", &ta)) sn.textAlign = ta == "center" ? 2 : (ta == "right" ? 1 : 0); }
+            { std::string posV; if (jsonString(it, "position", &posV) && posV == "fixed") sn.fixed = true; }
+            // 玻璃面（阶段 3 在同一位图上做；此处先登记，绘制仍由旧 glass 逻辑暂管——阶段 3 迁入）
+            if (g_sdSpec != nullptr) {
+                if (it.find("\"glass\":") != std::string::npos) {
+                    sn.glass = true;
+                    g_sdHasGlass = true;
+                    std::string gsub = extractObjectField(it, "glass");
+                    jsonNumber(gsub, "blur", &sn.gBlur);
+                    jsonNumber(gsub, "radius", &sn.gRadius);
+                    jsonNumber(gsub, "saturation", &sn.gSat);
+                    { double gt = 0; if (jsonNumber(gsub, "tint", &gt)) sn.gTint = (uint32_t)gt; }
+                }
+                g_sdSpec->nodes.push_back(sn);
+            }
+            built++;
+            continue;   // 跳过全部 RenderNode 属性建树
+        }
 
         ArkUI_RenderNodeHandle node = OH_ArkUI_RenderNodeUtils_CreateNode();
         if (node == nullptr) {
@@ -1499,6 +1796,7 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
             spec->w = w;
             spec->h = h;
             spec->radius = radius;
+            spec->nodeId = (int)nodeId;   // ★决策 #841：玻璃 GPU pass 回填像素据此定位
             // ★★★text 内间距批（2026-10-09）：读文本内缩（物理 px；缺省 0 ⇒ 零行为变化）
             { jsonNumber(it, "padL", &spec->padL); jsonNumber(it, "padT", &spec->padT);
               jsonNumber(it, "padR", &spec->padR); jsonNumber(it, "padB", &spec->padB); }
@@ -1600,50 +1898,17 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
                 spec->hasGlass = true;
                 ch.glass = "1";   // 通道签名（探针可读"本节点有玻璃"）
                 hasAnyChannel = true;
-                // ★★★玻璃真模糊（决策 #839）：**改走真实 ArkUI 组件节点**（系统材质 backdrop 模糊）。
-                //   自绘画布读不到背后像素（两次取证）⇒ 无法自绘模糊；真实组件节点的
-                //   `NODE_BACKGROUND_BLUR_STYLE`（= tab 栏玻璃同款）能模糊其后方已渲染内容（含 RenderNode 输出）。
-                //   ⇒ 本节点**不再在画布上画玻璃面**（见 drawGlassFace 调用处的 hasGlass 分支），改由组件节点落地。
-                if (g_nodeApi != nullptr && g_outerStack != nullptr) {
-                    ArkUI_NodeHandle gn = g_nodeApi->createNode(ARKUI_NODE_STACK);
-                    if (gn != nullptr) {
-                        ArkUI_NumberValue gv[6] = {};
-                        gv[0].i32 = ARKUI_BLUR_STYLE_COMPONENT_THICK;   // 系统组件材质（模糊 + tint + 高光）
-                        ArkUI_AttributeItem gii{gv, 6, nullptr, nullptr};
-                        int32_t rcBlur = g_nodeApi->setAttribute(gn, NODE_BACKGROUND_BLUR_STYLE, &gii);
-                        // ★半透明底色（tab 栏 chrome 同款：blur + 极淡底一起给；只给 blur 几乎不可见）
-                        uint32_t ta = (spec->glassTint >> 24) & 0xFFu;
-                        if (ta < 40u) ta = 40u;   // alpha 下限（可辨）
-                        uint32_t tintArgb = (ta << 24) | (spec->glassTint & 0x00FFFFFFu);
-                        ArkUI_NumberValue gcv[1] = {}; gcv[0].u32 = tintArgb;
-                        ArkUI_AttributeItem gci{gcv, 1, nullptr, nullptr};
-                        g_nodeApi->setAttribute(gn, NODE_BACKGROUND_COLOR, &gci);
-                        // 尺寸 + 位置：★★★组件节点属性用 **vp**（物理 px ÷ density）——
-                        //   与自绘 RenderNode（用物理 px）**不同口径**（基线 g_rootHost 亦用 vp；实测坑）。
-                        const float d = (float)(g_density > 0 ? g_density : 1.0);
-                        ArkUI_NumberValue gw[1] = {}; gw[0].f32 = (float)(w / d);
-                        ArkUI_AttributeItem gwi{gw, 1, nullptr, nullptr};
-                        g_nodeApi->setAttribute(gn, NODE_WIDTH, &gwi);
-                        ArkUI_NumberValue ghv[1] = {}; ghv[0].f32 = (float)(h / d);
-                        ArkUI_AttributeItem ghi{ghv, 1, nullptr, nullptr};
-                        g_nodeApi->setAttribute(gn, NODE_HEIGHT, &ghi);
-                        if (grad > 0) {
-                            ArkUI_NumberValue gr[1] = {}; gr[0].f32 = (float)(grad / d);
-                            ArkUI_AttributeItem gri{gr, 1, nullptr, nullptr};
-                            g_nodeApi->setAttribute(gn, NODE_BORDER_RADIUS, &gri);
-                        }
-                        ArkUI_NumberValue gp[2] = {}; gp[0].f32 = (float)(x / d); gp[1].f32 = (float)(y / d);
-                        ArkUI_AttributeItem gpi{gp, 2, nullptr, nullptr};
-                        g_nodeApi->setAttribute(gn, NODE_POSITION, &gpi);
-                        g_nodeApi->addChild(g_outerStack, gn);
-                        std::string posV2;
-                        bool isFixed = jsonString(it, "position", &posV2) && posV2 == "fixed";
-                        g_glassOverlays.push_back({ x, y, w, h, isFixed, gn });
-                        OH_LOG_Print(LOG_APP, LOG_INFO, LOG_DOMAIN, LOG_TAG,
-                            "PROTEUS_RENDER_GLASS_OVERLAY node=%{public}d rc=%{public}d x=%{public}.1f y=%{public}.1f w=%{public}.1f h=%{public}.1f fixed=%{public}d",
-                            (int)nodeId, rcBlur, x, y, w, h, isFixed ? 1 : 0);
-                    }
-                }
+                // ★★★决策 #841：登记玻璃节点盒 + 参数 ⇒ glassPass 裁剪内容快照 + 跑离屏 Vulkan 玻璃。
+                std::string posV2;
+                bool isFixed = jsonString(it, "position", &posV2) && posV2 == "fixed";
+                g_glassReg.push_back({ (int)nodeId, x, y, w, h, grad, gblur, gsat, (uint32_t)gtint, isFixed });
+                // ★★★决策 #841（**延迟修复**）：玻璃**画在本元素自己的 content-modifier 画布上**——
+                //   与内容**同一条同步快路径**（同帧出现），不是组件节点载图（那是异步 ⇒ 用户实测「很晚才出现」）。
+                //   像素由 glassPass 算好存 g_glassDpm[nodeId]，DrawTextCallback 里画回（见该回调 glass 分支）。
+                //   ★无反馈：glassPass 在第一帧（尚无玻璃像素）快照内容 ⇒ 快照不含玻璃；且只快照一次。
+                OH_LOG_Print(LOG_APP, LOG_INFO, LOG_DOMAIN, LOG_TAG,
+                    "PROTEUS_RENDER_GLASS_RN node=%{public}d x=%{public}.1f y=%{public}.1f w=%{public}.1f h=%{public}.1f fixed=%{public}d",
+                    (int)nodeId, x, y, w, h, isFixed ? 1 : 0);
             }
             // 裁剪：{"kind":"inset","params":[top,right,bottom,left]}（比例 × 尺寸）
             if (it.find("\"clip\":") != std::string::npos) {
@@ -1714,6 +1979,10 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
                         delete spec;
                     } else {
                         textCount++;
+                        // ★决策 #841：玻璃节点记下 RenderNode + spec（glassPass 后重挂 modifier 触发重绘）
+                        if (spec->hasGlass) {
+                            for (auto& gr : g_glassReg) if (gr.id == (int)nodeId) { gr.node = node; gr.drawSpec = spec; }
+                        }
                     }
                 } else {
                     delete spec;
@@ -1774,6 +2043,18 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
         }
     }
     g_nodeCount = built;
+    // ★★★决策 #842：自绘通道收尾——把 SelfDrawSpec 挂到**根 RenderNode** 的 content-modifier。
+    //   根 RenderNode 全屏、无子节点 ⇒ onDraw 回调收到全屏 canvas ⇒ 我们把整屏内容画进自持位图再贴回。
+    //   ★与内容**同一次绘制** ⇒ 玻璃阶段（阶段 3）可在同帧读到背景位图。
+    if (g_selfDraw && g_sdSpec != nullptr && g_rootNode != nullptr) {
+        ArkUI_RenderContentModifierHandle sm = OH_ArkUI_RenderNodeUtils_CreateContentModifier();
+        if (sm != nullptr) {
+            OH_ArkUI_RenderNodeUtils_SetContentModifierOnDraw(sm, g_sdSpec, DrawSelfContent);
+            OH_ArkUI_RenderNodeUtils_AttachContentModifier(g_rootNode, sm);
+        }
+        OH_LOG_Print(LOG_APP, LOG_INFO, LOG_DOMAIN, LOG_TAG,
+                     "PROTEUS_SELF_DRAW nodes=%{public}d w=%{public}d h=%{public}d", built, g_sdW, g_sdH);
+    }
     // ★★MA0-RT 计数只对**绘制指令构建**（`renderCommands` 的 JS 路径）有意义——
     //   `proteus_render_commands_cstr` 是**探针的建树入口**（vapor 场景，为让通道真建出来），
     //   它与"动画窗口内应用层是否重发绘制指令"无关 ⇒ 不计数。
@@ -2266,19 +2547,410 @@ static napi_value GestureSample(napi_env env, napi_callback_info info) {
     return out;
 }
 
+/**
+ * ★★★`snapshotProbe()` —— **节点快照能力探针**（决策 #840/#841 · 真机取证）。
+ *
+ * 【为什么需要】玻璃的"背景捕获"要么靠 CPU 读回（`OH_ArkUI_GetNodeSnapshot`），要么靠 GPU 采样
+ *   （离屏 Vulkan 读 OH_NativeBuffer）。两条路线都依赖同一前提：**能拿到已渲染像素**。
+ *   此前（决策 #838）取证过：content-modifier 画布**读不到背后像素**（RS 进程），但那是 `CanvasReadPixels`；
+ *   `OH_ArkUI_GetNodeSnapshot` 是 **RS 侧合成快照**（不同通路）⇒ 必须**单独取证**它对自绘内容节点是否可用。
+ *
+ * 【探什么】对 `g_rootHost`（承载 RenderNode 自绘内容的 customNode）截图：
+ *   ① API 返回码；② 拿到的 PixelMap 宽高（应为物理 px = 屏宽×密度）；③ 采样若干像素看是否**非全黑**
+ *   （证明真有内容，而非空帧）；④ 读回耗时（快照是同步、开销敏感）。
+ *   结论决定：背景捕获可行 ⇒ 可做真折射；不可行 ⇒ 另寻捕获源（整窗/外层 Stack）。
+ *
+ * 【诚实边界】探针失败只记日志、不崩（返回 JSON 里带 rc/err）。
+ */
+static napi_value SnapshotProbe(napi_env env, napi_callback_info info) {
+    // 可选参数 target：0 = g_rootHost（自绘 customNode，缺省）/ 1 = g_outerStack（外层 Stack）/
+    //   2 = 两者都试。★为什么要换节点：真机首测对 customNode 返 100001（INTERNAL_ERROR）——
+    //   需分辨「时序未合成」还是「customNode+RenderNode 不可截」，故加外层 Stack 对照。
+    size_t argc = 1;
+    napi_value args[1] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    int target = 0;
+    if (argc >= 1 && args[0] != nullptr) { int32_t tv = 0; if (napi_get_value_int32(env, args[0], &tv) == napi_ok) target = tv; }
+
+    std::string out = "{\"api\":\"OH_ArkUI_GetNodeSnapshot\"";
+    // 单节点快照 → 追加字段到 out（含 rc/ms/w/h/read_rc/采样）
+    auto snapOne = [&](ArkUI_NodeHandle node, const char* label) {
+        out += std::string(",\"") + label + "\":{";
+        if (node == nullptr) { out += "\"ok\":0,\"err\":\"null-node\"}"; return; }
+        auto t0 = std::chrono::steady_clock::now();
+        OH_PixelmapNative* pm = nullptr;
+        int32_t rc = OH_ArkUI_GetNodeSnapshot(node, nullptr, &pm);
+        double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+        out += "\"rc\":" + std::to_string((int)rc) + ",\"ms\":" + std::to_string((int)(ms + 0.5));
+        if (rc != 0 || pm == nullptr) {
+            out += ",\"ok\":0}";
+            if (pm != nullptr) OH_PixelmapNative_Release(pm);
+            return;
+        }
+        OH_Pixelmap_ImageInfo* info2 = nullptr;
+        uint32_t iw = 0, ih = 0, stride = 0; int32_t pf = 0;
+        if (OH_PixelmapImageInfo_Create(&info2) == IMAGE_SUCCESS) {
+            OH_PixelmapNative_GetImageInfo(pm, info2);
+            OH_PixelmapImageInfo_GetWidth(info2, &iw);
+            OH_PixelmapImageInfo_GetHeight(info2, &ih);
+            OH_PixelmapImageInfo_GetPixelFormat(info2, &pf);
+            OH_PixelmapImageInfo_GetRowStride(info2, &stride);
+            OH_PixelmapImageInfo_Release(info2);
+        }
+        out += ",\"w\":" + std::to_string((int)iw) + ",\"h\":" + std::to_string((int)ih);
+        out += ",\"pxfmt\":" + std::to_string((int)pf) + ",\"stride\":" + std::to_string((int)stride);
+        size_t bufSz = (size_t)stride * (size_t)ih;
+        if (bufSz == 0) bufSz = (size_t)iw * (size_t)ih * 4;
+        std::vector<uint8_t> buf(bufSz, 0);
+        size_t got = bufSz;
+        Image_ErrorCode re = OH_PixelmapNative_ReadPixels(pm, buf.data(), &got);
+        out += ",\"read_rc\":" + std::to_string((int)re);
+        if (re == IMAGE_SUCCESS && iw > 0 && ih > 0 && bufSz >= 4) {
+            unsigned long long sumB = 0, sumG = 0, sumR = 0, nonzero = 0, n = 0;
+            for (int gy = 1; gy <= 5; gy++) for (int gx = 1; gx <= 5; gx++) {
+                uint32_t x = (uint32_t)(iw * gx / 6), y = (uint32_t)(ih * gy / 6);
+                size_t off = (size_t)y * (size_t)stride + (size_t)x * 4;
+                if (off + 3 < bufSz) {
+                    uint8_t b = buf[off], g = buf[off + 1], r = buf[off + 2];
+                    sumB += b; sumG += g; sumR += r; if (b || g || r) nonzero++; n++;
+                }
+            }
+            out += ",\"sample_nonzero\":" + std::to_string((int)nonzero) + "/" + std::to_string((int)n);
+            out += ",\"avg_bgr\":[" + std::to_string(n ? (int)(sumB / n) : 0) + ","
+                 + std::to_string(n ? (int)(sumG / n) : 0) + "," + std::to_string(n ? (int)(sumR / n) : 0) + "]";
+        }
+        OH_PixelmapNative_Release(pm);
+        out += ",\"ok\":1}";
+    };
+
+    if (target == 1) {
+        snapOne(g_outerStack, "stack");
+    } else if (target == 2) {
+        snapOne(g_rootHost, "root");   // 自绘 customNode
+        snapOne(g_outerStack, "stack"); // 外层 Stack（含 customNode）
+    } else {
+        snapOne(g_rootHost, "root");
+    }
+    out += "}";
+    OH_LOG_Print(LOG_APP, LOG_INFO, LOG_DOMAIN, LOG_TAG, "PROTEUS_SNAPSHOT_PROBE %{public}s", out.c_str());
+    napi_value r;
+    napi_create_string_utf8(env, out.c_str(), NAPI_AUTO_LENGTH, &r);
+    return r;
+}
+
+/**
+ * ★决策 #841：把 RGBA8 像素封成 PixelMap（供覆盖节点作背景图）。**CreatePixelmap 期望 BGRA_8888 输入**
+ *   ⇒ 先把 RGBA 转成 BGRA。返回的 PixelMap 由调用方决定何时释放（节点持有 DrawableDescriptor 期间不可放）。
+ */
+static OH_PixelmapNative* pixelMapFromRgba8(const std::vector<uint8_t>& rgba, int w, int h) {
+    if (w <= 0 || h <= 0 || rgba.size() != (size_t)w * h * 4) return nullptr;
+    std::vector<uint8_t> bgra(rgba.size());
+    for (size_t i = 0; i < rgba.size(); i += 4) { bgra[i] = rgba[i + 2]; bgra[i + 1] = rgba[i + 1]; bgra[i + 2] = rgba[i]; bgra[i + 3] = rgba[i + 3]; }
+    OH_Pixelmap_InitializationOptions* opt = nullptr;
+    if (OH_PixelmapInitializationOptions_Create(&opt) != IMAGE_SUCCESS) return nullptr;
+    OH_PixelmapInitializationOptions_SetWidth(opt, (uint32_t)w);
+    OH_PixelmapInitializationOptions_SetHeight(opt, (uint32_t)h);
+    OH_PixelmapInitializationOptions_SetPixelFormat(opt, 3 /* RGBA_8888 */);
+    OH_PixelmapInitializationOptions_SetAlphaType(opt, 1 /* OPAQUE */);
+    OH_PixelmapNative* pm = nullptr;
+    Image_ErrorCode rc = OH_PixelmapNative_CreatePixelmap(bgra.data(), bgra.size(), opt, &pm);
+    OH_PixelmapInitializationOptions_Release(opt);
+    return rc == IMAGE_SUCCESS ? pm : nullptr;
+}
+
+/**
+ * ★★★`glassPass()` —— **玻璃 GPU pass 集成**（决策 #841）。
+ *
+ * 【做什么】① `OH_ArkUI_GetNodeSnapshot(g_rootHost)` 取**内容帧**（自绘内容；玻璃像素由本 pass 回贴
+ *   ⇒ 快照天然是"无玻璃的内容"）；② 对每个玻璃节点：裁剪其外扩 pad 区域 → 打包 GlassUniforms →
+ *   `proteus_glass_vk::renderRgba8`（离屏 Vulkan，跑生成物 SPIR-V）→ 存 `g_glassPixels[id]`；
+ *   ③ 触发重绘 ⇒ `DrawTextCallback` 在玻璃节点画布上把像素画回（真边缘折射）。
+ *
+ * 【为什么"等一帧后再调"】快照是 **RS 侧合成**（本仓实测：建树当帧取 ⇒ rc 失败；等数帧 ⇒ 成功）。
+ *   由 ArkTS 侧在 `postFrameCallback` 里调用（见 Index.ets 的 GlassSnapFrameCallback）。
+ * 【pad】与 Android 同式：`min(w,h)*0.22 + blur*0.55*1.6 + 4`（边缘折射要采到盒外内容）。
+ */
+static std::string runGlassPassImpl() {
+    std::string out = "{\"glassPass\":1";
+    // ★决策 #842：自绘通道下玻璃已在 onDraw 内**同帧**完成 ⇒ 跨进程快照路径不再需要（避免白跑）
+    if (g_selfDraw) { out += ",\"ok\":1,\"reason\":\"self-draw\"}"; return out; }
+    if (!proteus_glass_vk::available()) { out += ",\"ok\":0,\"reason\":\"vk-unavailable\"}"; return out; }
+    if (g_glassReg.empty()) { out += ",\"ok\":1,\"nodes\":0}"; return out; }
+    if (g_rootHost == nullptr) { out += ",\"ok\":0,\"reason\":\"no-root\"}"; return out; }
+    OH_PixelmapNative* pm = nullptr;
+    int32_t rc = OH_ArkUI_GetNodeSnapshot(g_rootHost, nullptr, &pm);
+    if (rc != 0 || pm == nullptr) { out += ",\"ok\":0,\"reason\":\"snapshot\",\"rc\":" + std::to_string((int)rc) + "}"; if (pm) OH_PixelmapNative_Release(pm); return out; }
+    OH_Pixelmap_ImageInfo* ii = nullptr;
+    uint32_t sw = 0, sh = 0, stride = 0; int32_t pf = 0;
+    if (OH_PixelmapImageInfo_Create(&ii) == IMAGE_SUCCESS) {
+        OH_PixelmapNative_GetImageInfo(pm, ii);
+        OH_PixelmapImageInfo_GetWidth(ii, &sw); OH_PixelmapImageInfo_GetHeight(ii, &sh);
+        OH_PixelmapImageInfo_GetRowStride(ii, &stride); OH_PixelmapImageInfo_GetPixelFormat(ii, &pf);
+        OH_PixelmapImageInfo_Release(ii);
+    }
+    if (sw == 0 || sh == 0 || stride == 0) { out += ",\"ok\":0,\"reason\":\"bad-snapshot\"}"; OH_PixelmapNative_Release(pm); return out; }
+    size_t bufSz = (size_t)stride * sh;
+    std::vector<uint8_t> snap(bufSz, 0);
+    size_t got = bufSz;
+    if (OH_PixelmapNative_ReadPixels(pm, snap.data(), &got) != IMAGE_SUCCESS) { out += ",\"ok\":0,\"reason\":\"read\"}"; OH_PixelmapNative_Release(pm); return out; }
+    OH_PixelmapNative_Release(pm);
+    // 快照像素是 BGRA_8888（本仓实测 pxfmt=3 = RGBA_8888? 用采样判色序；此处按 BGRA 读并转 RGBA）
+    // ★实测：PixelMap 默认 BGRA_8888 ⇒ 读取为 b,g,r,a。glass 的 GLSL 采样纹理期望 RGBA ⇒ 转序。
+    auto done = 0; int totalMs = 0; int imgOk = 0;
+    for (auto& g : g_glassReg) {
+        int bx = (int)(g.x - ((g.w < g.h ? g.w : g.h) * 0.22 + g.blur * 0.55 * 1.6 + 4));
+        int by = (int)(g.y - ((g.w < g.h ? g.w : g.h) * 0.22 + g.blur * 0.55 * 1.6 + 4));
+        int pad = (int)((g.w < g.h ? g.w : g.h) * 0.22 + g.blur * 0.55 * 1.6 + 4);
+        int iw = (int)g.w + 2 * pad, ih = (int)g.h + 2 * pad;
+        if (iw <= 0 || ih <= 0) continue;
+        // 从快照裁剪（clamp；越界部分填黑 —— 与 GPU 采样 clamp 口径近似）
+        std::vector<uint8_t> bd((size_t)iw * ih * 4, 0);
+        for (int y = 0; y < ih; y++) for (int x = 0; x < iw; x++) {
+            int sx = bx + x, sy = by + y;
+            size_t o = ((size_t)y * iw + x) * 4;
+            if (sx >= 0 && sy >= 0 && sx < (int)sw && sy < (int)sh) {
+                size_t so = (size_t)sy * stride + (size_t)sx * 4;
+                // BGRA → RGBA（快照字节序）
+                bd[o + 0] = snap[so + 2]; bd[o + 1] = snap[so + 1]; bd[o + 2] = snap[so + 0]; bd[o + 3] = snap[so + 3];
+            }
+        }
+        // GlassUniforms（80B），尺寸/纹理同 pwgen 口径
+        std::vector<uint8_t> u(80, 0);
+        auto putF = [&](int off, float v) { memcpy(&u[off], &v, 4); };
+        auto putV2 = [&](int off, float a, float b) { putF(off, a); putF(off + 4, b); };
+        float ta = ((g.tint >> 24) & 0xFF) / 255.0f, tr = ((g.tint >> 16) & 0xFF) / 255.0f,
+              tg = ((g.tint >> 8) & 0xFF) / 255.0f, tb = (g.tint & 0xFF) / 255.0f;
+        putF(0, tr); putF(4, tg); putF(8, tb); putF(12, ta);
+        putV2(16, (float)g.w, (float)g.h);
+        putV2(24, 0.0f, 0.0f);
+        putV2(32, (float)pad / iw, (float)pad / ih);
+        putV2(40, (float)g.w / iw, (float)g.h / ih);
+        { float lx = -0.35f, ly = -0.94f; float ll = sqrtf(lx * lx + ly * ly); putV2(48, lx / ll, ly / ll); }
+        putF(56, (float)g.radius);
+        putF(60, (float)g.blur);
+        putF(64, (g.w < g.h ? (float)g.w : (float)g.h) * 0.22f);   // refract_depth（与 Android 同式）
+        putF(68, 0.18f);
+        putF(72, (float)g.sat);
+        std::vector<uint8_t> px = proteus_glass_vk::renderRgba8(bd, iw, ih, (int)g.w, (int)g.h, u);
+        if (px.size() == (size_t)g.w * g.h * 4) {
+            g_glassPixels[g.id] = px;   // 缓存（探针/调试可读）
+            done++;
+            // ★★★落像素（决策 #841 · 延迟修复）：封成 OH_Drawing_PixelMap 存 g_glassDpm[nodeId]，
+            //   由**本元素自己的 content-modifier 画布**（DrawTextCallback → drawChannelsAndText）同帧画回。
+            //   ★保持存活（节点画布持有期间不可释放）⇒ 存在 g_glassDpm/g_glassPm，替换时释放旧的。
+            OH_PixelmapNative* pm2 = pixelMapFromRgba8(px, (int)g.w, (int)g.h);
+            if (pm2 != nullptr) {
+                OH_Drawing_PixelMap* dpm = OH_Drawing_PixelMapGetFromOhPixelMapNative(pm2);
+                if (dpm != nullptr) {
+                    auto oldD = g_glassDpm.find(g.id); auto oldP = g_glassPm.find(g.id);
+                    if (oldD != g_glassDpm.end() && oldD->second) OH_Drawing_PixelMapDissolve(oldD->second);
+                    if (oldP != g_glassPm.end() && oldP->second) OH_PixelmapNative_Release(oldP->second);
+                    g_glassDpm[g.id] = dpm;
+                    g_glassPm[g.id] = pm2;
+                    imgOk++;
+                    // ★★★关键（延迟修复）：设完像素后**重挂 content-modifier + markDirty 宿主流**触发重绘——
+                    //   实测：content-modifier 的 onDraw 只在挂载时调一次，`RenderNodeUtils_Invalidate` 不重跑它；
+                    //   而 g_rootHost 是 **custom 组件节点** ⇒ `markDirty(NODE_NEED_RENDER)` 能请求 RS 重绘。
+                    if (g.node != nullptr && g.drawSpec != nullptr) {
+                        ArkUI_RenderContentModifierHandle nm = OH_ArkUI_RenderNodeUtils_CreateContentModifier();
+                        if (nm != nullptr) {
+                            OH_ArkUI_RenderNodeUtils_SetContentModifierOnDraw(nm, g.drawSpec, DrawTextCallback);
+                            int32_t rca = OH_ArkUI_RenderNodeUtils_AttachContentModifier(g.node, nm);
+                            OH_LOG_Print(LOG_APP, LOG_INFO, LOG_DOMAIN, LOG_TAG, "PROTEUS_GLASS_REATTACH id=%{public}d rc=%{public}d", g.id, rca);
+                        }
+                    }
+                    if (g_rootHost != nullptr) {
+                        OH_ArkUI_RenderNodeUtils_Invalidate(g_rootHost);
+                        if (g_nodeApi != nullptr) {
+                            g_nodeApi->markDirty(g_rootHost, NODE_NEED_RENDER);
+                            OH_ArkUI_NativeModule_InvalidateAttributes(g_rootHost);
+                        }
+                    }
+                } else {
+                    OH_LOG_Print(LOG_APP, LOG_ERROR, LOG_DOMAIN, LOG_TAG, "PROTEUS_GLASS_DPM_FAIL id=%{public}d", g.id);
+                    OH_PixelmapNative_Release(pm2);
+                }
+            } else {
+                OH_LOG_Print(LOG_APP, LOG_ERROR, LOG_DOMAIN, LOG_TAG, "PROTEUS_GLASS_PM_FAIL id=%{public}d w=%{public}d h=%{public}d", g.id, (int)g.w, (int)g.h);
+            }
+        }
+    }
+    out += ",\"ok\":1,\"nodes\":" + std::to_string(done) + ",\"imgOk\":" + std::to_string(imgOk)
+         + ",\"snap_w\":" + std::to_string((int)sw) + ",\"snap_h\":" + std::to_string((int)sh) + "}";
+    // ★建树收尾的"请求帧"（与 renderCommandsImpl 同款）：让玻璃图像尽快合成
+    if (g_rootHost != nullptr) OH_ArkUI_RenderNodeUtils_Invalidate(g_rootHost);
+    if (g_outerStack != nullptr && g_nodeApi != nullptr) {
+        g_nodeApi->markDirty(g_outerStack, NODE_NEED_RENDER);
+        OH_ArkUI_NativeModule_InvalidateAttributes(g_outerStack);
+    }
+    return out;
+}
+
+static napi_value GlassPass(napi_env env, napi_callback_info info) {
+    (void)info;
+    std::string res = runGlassPassImpl();
+    OH_LOG_Print(LOG_APP, LOG_INFO, LOG_DOMAIN, LOG_TAG, "PROTEUS_GLASS_PASS %{public}s", res.c_str());
+    napi_value r;
+    napi_create_string_utf8(env, res.c_str(), NAPI_AUTO_LENGTH, &r);
+    return r;
+}
+
+/**
+ * ★★★`vkGlassProbe()` —— **离屏 Vulkan 玻璃 pass 探针**（决策 #841 · 真机取证）。
+ *
+ * 【做什么】用**合成背景**（三色带，与 Rust oracle 门禁同一形态）跑 Vulkan 离屏玻璃（生成物 SPIR-V），
+ *   读回像素并报告：可用性、耗时、采样像素、非平凡性（非全黑/非全同色）。证明"鸿蒙 GPU 真能跑同一份
+ *   WGSL 落地的 SPIR-V"——这是鸿蒙腿从"CPU 移植"改判"GPU 单源"的**机器判据**。
+ *   （算法 0 行：本函数只填 GlassUniforms 并按字节布局打包，其余全在 glass_vk.cpp + SPIR-V 生成物。）
+ */
+static napi_value VkGlassProbe(napi_env env, napi_callback_info info) {
+    // 可选参数 filesDir：给了就把完整输出写 <filesDir>/vkglass-gpu.json（{"width","height","rgba"}）
+    //   —— 供 hdc pull 后与 Rust `--render-ref` oracle 做**像素等价门禁**（决策 #841）。
+    size_t argc = 1;
+    napi_value args[1] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    std::string filesDir;
+    if (argc >= 1 && args[0] != nullptr) {
+        size_t len = 0;
+        napi_get_value_string_utf8(env, args[0], nullptr, 0, &len);
+        filesDir.resize(len + 1);
+        napi_get_value_string_utf8(env, args[0], &filesDir[0], len + 1, &len);
+        filesDir.resize(len);
+    }
+    std::string out = "{\"probe\":\"vkGlass\"";
+    if (!proteus_glass_vk::available()) {
+        out += ",\"ok\":0,\"info\":" + std::string(proteus_glass_vk::info()) + "}";
+        OH_LOG_Print(LOG_APP, LOG_ERROR, LOG_DOMAIN, LOG_TAG, "PROTEUS_VKGLASS_PROBE %{public}s", out.c_str());
+        napi_value r; napi_create_string_utf8(env, out.c_str(), NAPI_AUTO_LENGTH, &r); return r;
+    }
+    // 合成背景：180×180 三色带（与 gen-parity-spec 同形态）
+    const int TW = 180, TH = 180, PAD = 25;
+    const int SW = 130, SH = 130;   // 盒尺寸；纹理 = 盒 + 2*pad = 180
+    std::vector<uint8_t> bd((size_t)TW * TH * 4);
+    const uint8_t cols[3][3] = {{220, 60, 60}, {60, 200, 110}, {70, 120, 230}};
+    for (int y = 0; y < TH; y++) for (int x = 0; x < TW; x++) {
+        const uint8_t* c = cols[(y / 20) % 3];
+        size_t o = ((size_t)y * TW + x) * 4;
+        bd[o] = c[0]; bd[o + 1] = c[1]; bd[o + 2] = c[2]; bd[o + 3] = 255;
+    }
+    // GlassUniforms（80B；与 materials/mod.rs 布局逐字节对应）：
+    //  tint(0,16) size_px(16,8) origin(24,8) tex_bias(32,8) tex_scale(40,8) light_dir(48,8)
+    //  radius(56,4) blur(60,4) refract_depth(64,4) specular(68,4) saturation(72,4) _pad(76,4)
+    std::vector<uint8_t> u(80, 0);
+    auto putF = [&](int off, float v) { memcpy(&u[off], &v, 4); };
+    auto putV2 = [&](int off, float a, float b) { putF(off, a); putF(off + 4, b); };
+    // tint = [1,1,1,0.149]
+    putF(0, 1.0f); putF(4, 1.0f); putF(8, 1.0f); putF(12, 0.149f);
+    putV2(16, (float)SW, (float)SH);                 // size_px
+    putV2(24, 0.0f, 0.0f);                           // origin（离屏：盒左上 = 0,0）
+    putV2(32, (float)PAD / TW, (float)PAD / TH);     // tex_bias = pad/tex
+    putV2(40, (float)SW / TW, (float)SH / TH);       // tex_scale = size/tex
+    { float lx = -0.35f, ly = -0.94f; float ll = sqrtf(lx * lx + ly * ly); putV2(48, lx / ll, ly / ll); }
+    putF(56, 65.0f);                                 // radius
+    putF(60, 16.0f);                                 // blur
+    putF(64, 28.6f);                                 // refract_depth
+    putF(68, 0.18f);                                 // specular
+    putF(72, 1.0f);                                  // saturation
+
+    auto t0 = std::chrono::steady_clock::now();
+    std::vector<uint8_t> px = proteus_glass_vk::renderRgba8(bd, TW, TH, SW, SH, u);
+    double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    out += ",\"info\":" + std::string(proteus_glass_vk::info());
+    out += ",\"ms\":" + std::to_string((int)(ms + 0.5));
+    if (px.size() != (size_t)SW * SH * 4) { out += ",\"ok\":0,\"err\":\"render empty\"}"; 
+        OH_LOG_Print(LOG_APP, LOG_ERROR, LOG_DOMAIN, LOG_TAG, "PROTEUS_VKGLASS_PROBE %{public}s", out.c_str());
+        napi_value r; napi_create_string_utf8(env, out.c_str(), NAPI_AUTO_LENGTH, &r); return r; }
+    // 采样 5×5 + 统计非平凡性（GPU 生成的玻璃应有内容：中心 vs 边缘不同）
+    unsigned long long sumB = 0, sumG = 0, sumR = 0, nonzero = 0, n = 0; unsigned combos = 0; uint32_t lastPx = 0xFFFFFFFF;
+    for (int gy = 1; gy <= 5; gy++) for (int gx = 1; gx <= 5; gx++) {
+        int x = SW * gx / 6, y = SH * gy / 6; size_t o = ((size_t)y * SW + x) * 4;
+        sumB += px[o]; sumG += px[o + 1]; sumR += px[o + 2]; if (px[o] | px[o + 1] | px[o + 2]) nonzero++;
+        uint32_t cur = (px[o] << 16) | (px[o + 1] << 8) | px[o + 2]; if (cur != lastPx) combos++; lastPx = cur; n++;
+    }
+    // ★全图统计（诊断：区分"渲染只覆盖部分" vs "读回错"）
+    unsigned long long nzAll = 0; int minY = 1 << 30, maxY = -1, minX = 1 << 30, maxX = -1; unsigned long long sumA = 0;
+    for (int y = 0; y < SH; y++) for (int x = 0; x < SW; x++) {
+        size_t o = ((size_t)y * SW + x) * 4;
+        sumA += px[o + 3];
+        if (px[o] | px[o + 1] | px[o + 2]) { nzAll++; if (y < minY) minY = y; if (y > maxY) maxY = y; if (x < minX) minX = x; if (x > maxX) maxX = x; }
+    }
+    out += ",\"w\":" + std::to_string(SW) + ",\"h\":" + std::to_string(SH);
+    out += ",\"nonzero\":" + std::to_string((int)nonzero) + "/" + std::to_string((int)n);
+    out += ",\"distinct\":" + std::to_string((int)combos);
+    out += ",\"avg_rgb\":[" + std::to_string(n ? (int)(sumR / n) : 0) + "," + std::to_string(n ? (int)(sumG / n) : 0)
+         + "," + std::to_string(n ? (int)(sumB / n) : 0) + "]";
+    out += ",\"nzAll\":" + std::to_string((int)nzAll) + "/" + std::to_string((size_t)SW * SH);
+    out += ",\"bbox\":[" + std::to_string(minX) + "," + std::to_string(minY) + "," + std::to_string(maxX) + "," + std::to_string(maxY) + "]";
+    out += ",\"sumA\":" + std::to_string((int)sumA);
+    out += ",\"corners\":[" + std::to_string(px[0]) + "," + std::to_string(px[(size_t)(SW - 1) * 4])
+         + "," + std::to_string(px[(size_t)(SH - 1) * SW * 4]) + "," + std::to_string(px[((size_t)SW * SH - 1) * 4]) + "]";
+    // ★哨兵计数：清屏色 = 品红(255,0,255,255)。magenta = 未绘制像素数 → 判覆盖。
+    unsigned long long magenta = 0;
+    for (int y = 0; y < SH; y++) for (int x = 0; x < SW; x++) {
+        size_t o = ((size_t)y * SW + x) * 4;
+        if (px[o] >= 250 && px[o + 1] <= 5 && px[o + 2] >= 250) magenta++;
+    }
+    out += ",\"magenta\":" + std::to_string((int)magenta) + "/" + std::to_string((size_t)SW * SH);
+    out += ",\"row0_rgba\":[" + std::to_string(px[0]) + "," + std::to_string(px[1]) + "," + std::to_string(px[2]) + "," + std::to_string(px[3]) + "]";
+    { size_t co = ((size_t)(SH / 2) * SW + SW / 2) * 4;
+      out += ",\"ctr_rgba\":[" + std::to_string(px[co]) + "," + std::to_string(px[co + 1]) + "," + std::to_string(px[co + 2]) + "," + std::to_string(px[co + 3]) + "]"; }
+    out += ",\"ok\":1}";
+    OH_LOG_Print(LOG_APP, LOG_INFO, LOG_DOMAIN, LOG_TAG, "PROTEUS_VKGLASS_PROBE %{public}s", out.c_str());
+    // ★像素等价门禁：把完整 RGBA 落盘（{"width","height","rgba"}，与 Rust --render-ref 同形）
+    if (!filesDir.empty()) {
+        std::string path = filesDir + "/vkglass-gpu.json";
+        FILE* f = fopen(path.c_str(), "w");
+        if (f != nullptr) {
+            fprintf(f, "{\"width\":%d,\"height\":%d,\"rgba\":[", SW, SH);
+            for (size_t i = 0; i < px.size(); i++) {
+                if (i) fputc(',', f);
+                fprintf(f, "%d", (int)px[i]);
+            }
+            fputs("]}", f);
+            fclose(f);
+        } else {
+            OH_LOG_Print(LOG_APP, LOG_ERROR, LOG_DOMAIN, LOG_TAG, "PROTEUS_VKGLASS_DUMP_FAIL %{public}s", path.c_str());
+        }
+    }
+    napi_value r;
+    napi_create_string_utf8(env, out.c_str(), NAPI_AUTO_LENGTH, &r);
+    return r;
+}
+
 /** clearRoot(): number —— 清空根的所有子节点（重建内容前调用；返回剩余子节点数） */
+/** setContentMode(mode): number —— ★决策 #842：切换内容渲染模式（"render-node" 缺省 / "self-draw"）。
+ *   自绘通道把内容画进宿主自持位图（同帧可读背景 ⇒ 玻璃同帧）。返回 0。 */
+static napi_value SetContentMode(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    std::string mode = "render-node";
+    if (argc >= 1 && args[0] != nullptr) {
+        size_t len = 0;
+        napi_get_value_string_utf8(env, args[0], nullptr, 0, &len);
+        mode.resize(len + 1);
+        napi_get_value_string_utf8(env, args[0], &mode[0], len + 1, &len);
+        mode.resize(len);
+    }
+    g_selfDraw = (mode == "self-draw");
+    OH_LOG_Print(LOG_APP, LOG_INFO, LOG_DOMAIN, LOG_TAG, "PROTEUS_CONTENT_MODE %{public}s self=%{public}d", mode.c_str(), g_selfDraw ? 1 : 0);
+    napi_value out; napi_create_int32(env, 0, &out); return out;
+}
+
 static napi_value ClearRoot(napi_env env, napi_callback_info info) {
     (void)info;
     g_fixedNodes.clear();   // ★★★批 A：重建内容 ⇒ 清 fixed 登记（旧句柄失效）
     g_stickyNodes.clear();  // ★★★批 A③：同清 sticky 登记
-    // ★★★玻璃真模糊（#839）：清玻璃组件节点（从 host 摘除 + 销毁）——重建内容时旧玻璃节点失效。
-    for (auto& go : g_glassOverlays) {
-        if (go.node != nullptr && g_nodeApi != nullptr) {
-            if (g_outerStack != nullptr) g_nodeApi->removeChild(g_outerStack, go.node);
-            g_nodeApi->disposeNode(go.node);
-        }
-    }
-    g_glassOverlays.clear();
+    // ★决策 #842：清自绘 spec（其挂在旧 modifier 上、随 ClearChildren 失效）；位图复用（尺寸不变则不重建）
+    if (g_sdSpec != nullptr) { delete g_sdSpec; g_sdSpec = nullptr; }
+    // ★决策 #841：清玻璃 GPU 登记 + 像素/像素图缓存（重建内容 ⇒ 旧玻璃盒/像素失效）。
+    //   节点画布持有 OH_Drawing_PixelMap ⇒ 先释放（Dissolve + Release），再清空登记（旧句柄随重建失效）。
+    for (auto& kv : g_glassDpm) { if (kv.second) OH_Drawing_PixelMapDissolve(kv.second); }
+    for (auto& kv : g_glassPm) { if (kv.second) OH_PixelmapNative_Release(kv.second); }
+    g_glassDpm.clear();
+    g_glassPm.clear();
+    g_glassReg.clear();
+    g_glassPixels.clear();
     g_nodeById.clear();
     g_nodeStaticBg.clear();
     g_pressBackup.clear();   // ★换树连清按下备份（叶 id 重分配——与场态清同因）         // ★★用户实测修复：同清 id→句柄/父/基准位（旧句柄随 ClearChildren 失效）
@@ -2311,6 +2983,15 @@ static napi_value ScrollRoot(napi_env env, napi_callback_info info) {
     double y = 0;
     if (argc >= 1) napi_get_value_double(env, args[0], &y);
     int32_t rc = -1;
+    // ★决策 #842：自绘通道 —— 滚动 = 改 spec 的 scrollY + 请求重绘（不再位移 RenderNode）。
+    if (g_selfDraw) {
+        if (g_sdSpec != nullptr) {
+            g_sdSpec->scrollY = y * g_density;
+            if (g_rootHost != nullptr) OH_ArkUI_RenderNodeUtils_Invalidate(g_rootHost);
+            rc = 0;
+        }
+        napi_value out2; napi_create_int32(env, rc, &out2); return out2;
+    }
     if (g_rootNode != nullptr) {
         rc = OH_ArkUI_RenderNodeUtils_SetPosition(g_rootNode, 0, (int32_t)(-y * g_density));
         // ★★★用户实测修复（2026-10-08）：**平移整棵子树**（此前只 SetPosition 锚点本身 ⇒
@@ -2351,19 +3032,9 @@ static napi_value ScrollRoot(napi_env env, napi_callback_info info) {
             if (snode != nullptr) OH_ArkUI_RenderNodeUtils_SetPosition(snode, (int32_t)sn[0], (int32_t)newY);
             shiftSubtree((int)sn[4], newY);
         }
-        // ★★★玻璃真模糊（#839）：玻璃**组件节点**跟随滚动——非 fixed（随内容）之 y = baseY + dy；
-        //   fixed（钉屏）之 y 不变（与 g_fixedNodes 同语义）。★组件节点属性用 **vp**（÷density）。
-        if (g_nodeApi != nullptr) {
-            const double dy = y * g_density;   // 滚动位移（物理 px）
-            const double dd = (g_density > 0 ? g_density : 1.0);
-            for (auto& go : g_glassOverlays) {
-                if (go.node == nullptr) continue;
-                double gy = go.fixed ? go.baseY : (go.baseY + dy);
-                ArkUI_NumberValue gp[2] = {}; gp[0].f32 = (float)(go.baseX / dd); gp[1].f32 = (float)(gy / dd);
-                ArkUI_AttributeItem gpi{gp, 2, nullptr, nullptr};
-                g_nodeApi->setAttribute(go.node, NODE_POSITION, &gpi);
-            }
-        }
+        // ★决策 #841：玻璃画在**本元素自己的 RenderNode** 上（见 DrawTextCallback 的 glass 分支）——
+        //   滚动 = 平移 g_rootNode（内容整体位移）⇒ 玻璃随之位移；fixed 节点由 g_fixedNodes 补偿。
+        //   ⇒ 这里**无需**单独处理玻璃（旧组件节点/独立玻璃树的位移逻辑已废弃）。
     }
     napi_value out;
     napi_create_int32(env, rc, &out);
@@ -2436,6 +3107,13 @@ static napi_value Init(napi_env env, napi_value exports) {
         {"platformAnimEnd", nullptr, PlatformAnimEnd, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"platformAnimSave", nullptr, PlatformAnimSave, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"clearRoot", nullptr, ClearRoot, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"setContentMode", nullptr, SetContentMode, nullptr, nullptr, nullptr, napi_default, nullptr},
+        // ★★★决策 #840/#841：节点快照能力探针（玻璃背景捕获来源取证）
+        {"snapshotProbe", nullptr, SnapshotProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
+        // ★★★决策 #841：离屏 Vulkan 玻璃 pass 探针（GPU 单源取证）
+        {"vkGlassProbe", nullptr, VkGlassProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
+        // ★★★决策 #841：玻璃 GPU pass 集成（内容快照 → 离屏 Vulkan → 落覆盖节点背景图）
+        {"glassPass", nullptr, GlassPass, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"gestureInstall", nullptr, GestureInstall, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"gestureSample", nullptr, GestureSample, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"scrollRoot", nullptr, ScrollRoot, nullptr, nullptr, nullptr, napi_default, nullptr},

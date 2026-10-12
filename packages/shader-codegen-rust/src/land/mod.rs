@@ -6,6 +6,7 @@
 pub mod agsl;
 pub mod glsl;
 pub mod msl;
+pub mod spirv;
 
 use crate::Target;
 
@@ -29,5 +30,10 @@ pub fn emit(combined_wgsl: &str, fragment_entry: &str, target: Target) -> Result
         Target::Msl => msl::emit(&module, &info),
         Target::Glsl => glsl::emit(&module, &info, fragment_entry),
         Target::Agsl => agsl::emit(&module, &info, fragment_entry),
+        Target::Spirv => {
+            // ★★★SPIR-V 目标是**二进制**：文本字段留空，二进制走 `spirv` 字段（决策 #841）。
+            let (vert, frag) = spirv::emit(&module, &info)?;
+            Ok(crate::Emitted { vertex: None, fragment: String::new(), spirv: Some((vert, frag)) })
+        }
     }
 }

@@ -42,6 +42,9 @@ const LOCAL_ONLY = {
   // ★玻璃像素等价门禁（决策 #834 · B6）：需 macOS Metal（xcrun swift 编译生成物 MSL 并渲染）——
   //   CI 为 ubuntu-latest、无 Metal ⇒ 归开发机（真机端另有 iOS --glass 截图取证）。
   'check:glass-pixel-parity': '需 macOS Metal（本机渲染生成物 MSL 与 Rust CPU oracle 逐像素比对）；CI 为 ubuntu-latest 无 Metal',
+  // ★★鸿蒙玻璃像素等价门禁（决策 #841）：需**真机**（鸿蒙无本机 Vulkan ⇒ 只能真机渲染后拉回比对）；
+  //   无设备时脚本自身**跳过并退出 0**（不假红）——与 check:harmony-host-compile 同策略。
+  'check:glass-parity-harmony': '需鸿蒙真机（离屏 Vulkan 渲染生成物 SPIR-V 与 Rust CPU oracle 逐像素比对）；CI/无设备自动跳过',
   // ★CLI iOS 宿主模板编译检查（2026-10-08，check:ios-selfdraw-compile 的姊妹盲区）：
   //   它检查**框架参考宿主**；CLI 生成宿主的**壳模板**（templates-host/ios/shell/*.swift）此前无任何本地判据
   //   ⇒ 改模板只能等真机打包才发现编译错。同样需 macOS + Xcode。

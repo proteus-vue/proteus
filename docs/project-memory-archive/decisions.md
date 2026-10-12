@@ -3354,3 +3354,24 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **⑤ 教训**：① **"读不到背后像素"不是死路——换承载层即可**：自绘（RenderNode/画布）不给 backdrop，**真实组件节点给**（系统材质按定义模糊其后方）⇒ **能力缺口先问"换个层能不能实现"，别停在"本层做不到"**；② **平台硬约束要读头文件**（`customNode cannot mount other ArkUI_NodeHandle`）——顺手挂组件节点会让**整棵自绘内容消失**（实测），须**外层容器**；③ **跨接口的单位口径不同**——Component 属性(**vp**) vs RenderNode(物理 px) 混用 ⇒ 玻璃跑偏（实测坑）；④ **Stack 默认居中对齐**会改 `.position` 语义 ⇒ 显式 `TOP_START`。
 **⑥ 诚实边界**：① `COMPONENT_ULTRA_THICK`（最强档）真机**黑屏**（疑似崩溃）⇒ 用 `COMPONENT_THICK`；② 观感=**系统材质**（模糊+tint+高光），**无 Android 那种边缘折射**（折射需自绘 shader 采样外法线；鸿蒙自绘读不到背后像素 ⇒ 做不了）——"真模糊"已对齐 Android，但**折射/倒角厚度无**；③ 玻璃节点改组件节点后与**自绘层的 z 序 / 命中测试**关系待后续批次细核（当前视觉正确）。
 
+840. **★★★鸿蒙玻璃路线修正：鸿蒙原生支持 Vulkan（SDK + 真机双取证）⇒ 弃 CPU 移植，改「同一份 WGSL 经 naga 落 SPIR-V，宿主离屏 Vulkan 跑」**（2026-10-12）：
+**① 用户**：「不对啊我看鸿蒙支持 Native Vulkan 啊」——推翻我此前「鸿蒙无自定义 GPU 着色器 API」的前提。
+**② 取证（先取证再断言）**：① **SDK 侧**：`find` 到 `usr/include/vulkan/{vulkan,vulkan_ohos}.h`（vulkan core = **1.4**，含 `VK_OHOS_surface`/`VK_OHOS_native_buffer`）+ `lib/{aarch64,arm,x86_64}-linux-ohos/libvulkan.so`。② **真机侧**（应用态无法 stat `/vendor`，唯一可靠判据 = App 内 dlopen 枚举）：新增探针 `vkProbe`（`proteus_bench.cpp`）真机输出 `{loaded:1, lib:"libvulkan.so", inst_ext_ohos_surface:1, create_instance:0, devices:1, device:"Maleoon 920C", api:"1.3.309", driver:"740.267.1641", has_compute_queue:1, has_graphics_queue:1, dev_ext_ohos_native_buffer:1, dev_ext_count:98}` ⇒ **运行时真有 libvulkan + 计算/图形队列**。
+**③ 定案**：鸿蒙腿**不做 CPU 移植**（那是"无 GPU 着色器 API"错误前提下的退路，且会在宿主**再写一份算法**，违反铁律"算法只在 WGSL 真源"——`check:shader-capability` 当场咬 `glass_cpu.cpp` 的 `sdRoundRect/circleMap`）。正确形态 = **Rust 单源 WGSL → naga 落 SPIR-V → 宿主离屏 Vulkan 跑**（与 Android AGSL / iOS MSL 同源）。删除 B1 的 `glass_cpu.{h,cpp}` + CLI + parity 三件套（未落地即废弃）。
+**④ 交付（决策 #841 实现）**：codegen 加 `Target::Spirv`（naga `spv-out`）+ 生成器产出 `.spv`（TS base64 键 `SHADER_SPIRV` + 鸿蒙 C 头 `generated_materials_spirv.h`）+ SPI `vulkanBackend`（第 3 参考实现）。
+**⑤ 教训**：① **"某平台不支持能力 X"必须先查 SDK 头 + 真机，别停在印象**——本端 SDK 里有全量 Vulkan 头与库，真机 GPU 是 Vulkan 1.3，我此前"无 GPU 着色器 API"的判断**错**；② **应用态查不到 `/vendor` 不等于没有**——唯一判据是 App 内 dlopen/枚举（探针法）；③ **"XComponent 禁用" ≠ "Vulkan 禁用"**——项目方案禁的是「XComponent 自绘作主路径」，离屏 Vulkan（不出 surface）不受此限（合规）。
+
+841. **★★★鸿蒙玻璃 GPU 单源落地：glass_vk（离屏 Vulkan 跑生成物 SPIR-V，算法 0 行）+ 像素等价门禁 1/255**（2026-10-12）：
+**① 交付**：① 新 `glass_vk.{h,cpp}`——离屏 Vulkan 图形 pass：`vkCreateInstance`→物理设备/队列→逻辑设备→`vkCreateShaderModule(生成物 SPIR-V)`→离屏 `VkImage`(颜色附件)→全屏三角形（`vs_quad`）→`fs_glass`→`vkCmdCopyImageToBuffer` 读回 RGBA8。**算法 0 行**（全在 SPIR-V 生成物）。CMake `find_library(VULKAN_LIB vulkan)` 接线。② 探针 `vkGlassProbe`（合成三色带背景跑 Vulkan，报告 nonzero/distinct/avg）。
+**② ★真机抓出并修复的关键 bug（读回全 0 / 半幅）**：`vkCmdEndRenderPass` 后**缺 `COLOR_ATTACHMENT_OUTPUT → TRANSFER` 的 image memory barrier**——`finalLayout` 只保证**布局转换**，不保证**执行顺序** ⇒ `vkCmdCopyImageToBuffer` 早于渲染完成，读到**未初始化内存**（真机实测：清屏色都没读回）。补一条 `vkCmdPipelineBarrier(srcStage=COLOR_ATTACHMENT_OUTPUT, dstStage=TRANSFER, srcAccess=COLOR_ATTACHMENT_WRITE, dstAccess=TRANSFER_READ)` ⇒ 16900/16900 全非零、确定性通过。
+**③ 像素等价门禁**：新 `hosts/harmony/check-glass-parity.sh`（真机渲染生成物 SPIR-V → `hdc file recv` 拉回 → 与 Rust oracle 逐像素比）；真机结果 **最大差 1/255、平均差 0.00、超差 0 像素**（vs iOS Metal 门禁 0.33/255 同档）。无设备自动 skip 退 0（`check-gates-sync` 记 LOCAL_ONLY）。接线 `pnpm check:glass-parity-harmony` + verify 链。
+**④ 教训**：**GPU 读回必须显式同步**——"写完就拷"在 Vulkan 里不成立（layout barrier ≠ execution barrier）；这类 bug 只表现为"偶发全 0/半幅"，真机复现 + 哨兵清屏色定位最快。
+
+842. **★★★鸿蒙玻璃"延迟"根治：自绘内容通道（对齐 Android onDraw）——内容与玻璃严格同帧**（2026-10-12）：
+**① 用户（红线）**：「延迟肯定不行，这是底线……一定要 OS 级标准体验」；并否决 A（接受延迟）/C（先模糊后升级）两个折中 ⇒ 必须**严格同帧（0 帧差）**。
+**② 根因（对比 Android 取证）**：Android 内容由**自己的 Canvas** 在 `onDraw` 画（同进程），要背景时把显示列表**同步回放**进自建 Bitmap（`captureGlassBackdrop`）⇒ 玻璃与内容**同一次绘制**。鸿蒙内容由 **RenderNode 在 RS 进程**画，宿主**读不到其像素**（#838 取证）⇒ 唯一取像素靠 `OH_ArkUI_GetNodeSnapshot` **跨进程回读已合成帧** ⇒ 天生 ≥1 帧 + 夹具里被空闲帧循环拖到 ~1.8s。**延迟是平台机制的必然，不是折射算法 bug**（算法 GPU 已 1/255 达标）。
+**③ 定案（唯一解 = 把内容绘制搬回进程内 = Android 模型）**：宿主用**自持 `OH_Drawing_Bitmap`(RGBA_8888, CPU)** 画全部内容 → 玻璃在**这张位图**上做（裁玻璃区→离屏 Vulkan→贴回）→ 一次性贴回 RS 画布。**全在一次 onDraw 内** ⇒ 严格同帧、零跨进程、零快照。
+**④ 交付（门控渐进）**：`setContentMode("self-draw")` 开关（默认关 ⇒ 旧路径零影响）；`SDNode`+`SelfDrawSpec`+`DrawSelfContent`（content-modifier onDraw：清页面白→逐元素画 bg/圆角/opacity/文本→**同帧玻璃**：`BitmapGetPixels` 裁玻璃区→`proteus_glass_vk::renderRgba8`→`DrawPixelMapRect` 贴回圆角盒→`DrawBitmap` 贴回 RS）；`scrollRoot` 改 `spec->scrollY`+重绘（fixed 不位移）。玻璃夹具切自绘。
+**⑤ 真机验证（HUAWEI KLE-AL00U）**：日志 `PROTEUS_CONTENT_MODE self-draw self=1` → `PROTEUS_SELF_DRAW nodes=26`；截图 `hosts/harmony/results/glass-selfdraw.png`：**玻璃与内容同帧出现 + 真实边缘折射**（圆卷红/蓝、胶囊卷紫、磨砂白+高光边，与 Android 观感一致）。🪧用户当场确认「**现在是同时出现了**」。
+**⑥ 抓出的坑**：① **玻璃盒外扩 pad 区透明被折射成黑边**（真机"玻璃边缘暗环"）⇒ 自绘位图清成**不透明页面白**（与屏幕底一致）；② 冷启动有**启动界面** ⇒ 截图须等 App 就绪（我两次截到启动页，用户点出"你截图太早了"）。
+**⑦ 诚实边界/未完成**：① 自绘通道现为**门控启用（玻璃场景）**，全场景收敛（stress/superapp/css/vapor/app-screen）+ 图元补齐（clip/border/shadow/transform/渐变/四通道）+ 动画/按压态迁移 = **阶段 1/2/4/5 待续**；② 每帧重画 CPU 位图（性能）待**真机性能基线**；③ 命中测试在内核（`proteus_host.cpp`）不受影响，但须保持坐标一致（已一致）。
