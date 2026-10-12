@@ -3556,3 +3556,14 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **④ 已查但受控（抽样核实，列关键）**：`compiler/calc-fold.ts` `for(;;)`（每分支 i++ 或 return）；`compiler/script.ts:2828` 平衡扫描（`skip()`/深度扫描必推进，且 `assignRe` 无 g 标志无死循环）；`docs/highlight.ts` 主循环（每分支/尾部必 `i++`）；`slot-runtime` 缓存 key 有限（`list-registry.clearList` 已有但未接线——**记为后续跟进，非缺陷**）；`runtime/setDataBridge.lastValues` 陈旧 key（有界于页面×数据键）。
 **⑤ 验证**：探针——`normalizePath` 非法输入终止（不再 OOM）+ 合法输出不变；环对象不再 RangeError。回归测试：`tests/icons.test.ts` +2 例（Z 后跟数字终止 / 合法不变）、`tests/runtime.test.ts` +1 例（环引用不崩）。**定向 82 测试全绿**；`test:coupled` 50 全绿；盲等/门禁接线门禁绿。
 **⑥ 诚实边界**：全量 vitest 未跑（本机 Node 18.16.1 < 要求 22，jsdom 27 ESM-only 会假红）——只跑定向。`slot-runtime` 缓存淘汰未接线列为**后续跟进**（非本项缺陷；当前 key 有限不触发）。
+
+867. **★★外部审查响应：加 engines + 「命令机循环推进兜底」门禁 + 全量测试实证（顺带发现仓库既有 8 项失败）**（2026-10-12）：
+**① 背景**：一份外部审查（硬指标型）建议：拆巨型文件、补 lint、修 path-parser。核实其数字**准确**（capability.ts 8987 / script.ts 4768 / template.ts 4470 / entry-vapor.ts 3712 逐条吻合；零 eslint/prettier；无 `noUncheckedIndexedAccess`；无 `engines`），但**建议顺序 ROI 排反**，且「修 path-parser」**已过期**（写作于 #863，此后我已 #865/#866 修了三处同类）。
+**② 落地 1（一行）**：`package.json` 加 `"engines": {"node": ">=22", "pnpm": ">=9"}`——本机长期 Node 18（<要求 22）导致全量 vitest 假红/不敢跑，此字段让工具链直接拦。
+**③ 落地 2（新门禁 · 决策 #867）**：`scripts/check-loop-guard.mjs`——**静态扫「命令机 while 循环是否有推进兜底」**。判据收窄到低误报：只扫 `while` 体内含 `switch` 的循环（**全仓仅 2 处**，正是 #865/#866 修的两个解析器；regex-exec 那类无 switch 天然排除）。视「有兜底」为满足任一：① 顶层无条件推进；② 顶层**进度守卫**（`if (i === iBefore) i++`）；③ 每个 case 都推进/转出。**棘轮基线**（`scripts/loop-guard-baseline.json` 当前空 = 零容忍）。
+   · **自测（双向）**：现状绿（0 违规）；用 `safe-edit` 移除 `path-parser` 兜底 ⇒ **当场红**（rc=1 精确点到 `path-parser.ts:140`）；还原 ⇒ 绿。★首版 heuristic 漏报（把 `if (typeof t0==='string'){i++}` 这类单分支当兜底）——收紧 B 只认「等号比较 `i`」后修复。
+   · **接线**：`check:loop-guard` 接进 `verify` 链（紧邻 `check:no-blind-wait`）+ CI（`.github/workflows/ci.yml` 新增步骤）；`check:gates-sync` 绿（接线不靠记忆）。
+**④ 落地 3（全量实证）**：用 **Node 22.22.0** 跑全量 `PROTEUS_ALLOW_FULL_SUITE=1 pnpm test` ⇒ **5756 通过 / 8 失败（444 文件，127s）**。⇒ 审查那句「5,540 全绿是**未验证宣称**」被证实：**不是全绿**。
+**⑤ ★8 项失败 = 仓库既有漂移，非本会话引入**（归因证据）：`git stash` 到干净 HEAD(#866) 复跑同样 8 项 ⇒ **全部复现**。两类：① **数字/快照漂移**（`check:stats` 官网数字 packages 声明 47≠实际 48、conformance 11≠12、plans 86≠87；`css-capability-alignment` 幂等；`router-project-driven` 路由产物；`compiler-ir-m3/m4` 快照）——新增包/能力/plan 后未同步；② `p-batch2-contract`（p-icon：`Cannot use import.meta outside a module`——校验器/Node 版本相关）。
+**⑥ 结论/建议**：审查的**高价值项已落地**（engines + 类门禁）；**「拆 capability.ts」排最后**（9 千行、周边无行为测试，先补 characterization 再拆）；`noUncheckedIndexedAccess` 是**迁移项目**（仅 2 个包开启即 **47 错**，全仓数千条，须棘轮式）；**既有 8 项失败是独立收口项**（非本会话引入，需另行修——含官网数字漂移，正是审查担心的"数字过时静默上线"）。
+**⑦ 诚实边界**：本轮只跑**一次**全量（Node 22）；既有 8 项失败**未修**（属独立批次，且部分需 build 产物/官网数字核对）。
