@@ -659,6 +659,10 @@ final class SelfDrawView: UIView {
         layerClipShape.removeAll(keepingCapacity: true)
         layerClipBase.removeAll(keepingCapacity: true)
         layerTransformOrigin.removeAll(keepingCapacity: true)
+        // ★★★玻璃同款成对清理（决策 #833 · 与描边/渐变/发光/遮罩/裁剪同一教训）：
+        //   玻璃面层与规格簿记必须随层树一起清——只清一份 ⇒ 重建后幂等检查命中旧层/旧规格。
+        glassFaceByNodeId.removeAll(keepingCapacity: true)
+        glassSpecByNodeId.removeAll(keepingCapacity: true)
         parentById.removeAll(keepingCapacity: true)
         childrenById.removeAll(keepingCapacity: true)
         builtFrames.removeAll(keepingCapacity: true)
@@ -905,6 +909,11 @@ final class SelfDrawView: UIView {
             }
         }
         applyVisibility(layer, style: style)
+        // ★★★玻璃（决策 #833）：登记规格——玻璃面**不在建层时装**（须先捕获"无玻璃内容帧"），
+        //   由建层后的 `applyGlassPass()` 统一装（与 Android "捕获无玻璃帧 → 玻璃遍"同序）。
+        if let g = style["glass"] as? [String: Any], let spec = SelfDrawView.glassSpec(from: g) {
+            glassSpecByNodeId[nodeId] = spec
+        }
         return layer
     }
 
@@ -995,6 +1004,89 @@ final class SelfDrawView: UIView {
         syncAllSideBorders()
         syncGradientFrames()
     }
+
+    /* ═══════════════════ ★★★玻璃自绘遍（决策 #833 · 与 Android 同模型）═══════════════════ */
+
+    /// 从风格里的 `glass` 规格折出材质参数（与内核 `GlassSpec` 字段同源）。
+    ///
+    /// 【为什么在宿主折】与 Android `VaporRenderHost.parseGlass` 同位——内核只透传 `glass` 对象，
+    ///   具体的 px 换算/降级门在宿主（平台能力决策）。
+    static func glassSpec(from g: [String: Any]) -> GlassMetalRenderer.Spec? {
+        // blur / tint 是必需（内核 `style_from_dto` 亦要求）；缺则视为无效玻璃（不画、不崩）
+        guard let blur = (g["blur"] as? NSNumber)?.doubleValue else { return nil }
+        let radius = (g["radius"] as? NSNumber)?.doubleValue ?? 0
+        let sat = (g["saturation"] as? NSNumber)?.doubleValue ?? 1.0
+        var tr: CGFloat = 1, tg: CGFloat = 1, tb: CGFloat = 1, ta: CGFloat = 0
+        if let tintHex = g["tint"] as? String, let c = parseHexColor(tintHex) {
+            var r: CGFloat = 0, gg: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+            c.getRed(&r, green: &gg, blue: &b, alpha: &a)
+            tr = r; tg = gg; tb = b; ta = a
+        } else {
+            return nil   // 与内核同：缺 tint 拒绝
+        }
+        return GlassMetalRenderer.Spec(blur: CGFloat(blur), tint: (tr, tg, tb, ta),
+                                       radius: CGFloat(radius), saturation: CGFloat(sat))
+    }
+
+    /// ★★★玻璃遍：捕获"无玻璃面"的内容帧 → 对每个玻璃节点装玻璃面层。
+    ///
+    /// 【与 Android 的模型对照（决策 #832 教训："背景采样"与"绘制位置"须同一变换空间）】
+    ///   Android 单画布：玻璃在 `onDraw` 出滚动 transform 后按**屏幕坐标**画（钉住）。iOS 是 CALayer 树：
+    ///   **玻璃面 = 节点层的子层** ⇒ 它天然与节点**同变换空间**（节点滚/节点被 fixed 钉住，玻璃都跟随）
+    ///   ——无需坐标补偿（这正是"层树"相对"单画布"的结构优势）。
+    ///   ★采样源：`self.layer.render(in:)` 渲染的是**当前屏上内容**（已含 `sublayerTransform` 滚动）
+    ///     ⇒ 玻璃采样"其屏幕位置背后"的内容；滚动后由 `applyContentOffset` 再触发本方法刷新 ⇒ 内容滑过玻璃。
+    ///
+    /// 【为什么必须"先摘旧玻璃面再捕获"】否则 backdrop 会把"上一帧玻璃面自身"也录进去 ⇒ 反复叠加
+    ///   （越滚越糊/越白）。⇒ 每帧先 `removeFromSuperlayer` 全部玻璃面，再捕获、再装。
+    func applyGlassPass() {
+        guard !glassSpecByNodeId.isEmpty else { return }
+        // ① 摘掉上一帧玻璃面（保证 backdrop = 纯内容；顺带清簿记，稍后重建）
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for (_, l) in glassFaceByNodeId { l.removeFromSuperlayer() }
+        glassFaceByNodeId.removeAll(keepingCapacity: true)
+        CATransaction.commit()
+
+        // ② 捕获当前内容帧（★含滚动 transform——`self.layer.render(in:)` 渲染的是"屏上内容"）
+        let size = bounds.size
+        guard size.width > 0, size.height > 0 else { return }
+        let scale = UIScreen.main.scale
+        let renderer = UIGraphicsImageRenderer(size: size)
+        let img = renderer.image { ctx in self.layer.render(in: ctx.cgContext) }
+        guard let backdrop = img.cgImage else {
+            NSLog("[proteus-glass] backdrop 捕获失败——玻璃跳过")
+            return
+        }
+
+        // ③ 逐玻璃节点装玻璃面（★作为**节点层的子层**：与节点同变换空间 ⇒ 自动跟随，含 fixed 钉住）
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for (id, spec) in glassSpecByNodeId {
+            guard let nodeLayer = layersById[id] else { continue }
+            // 节点在**屏幕**上的矩形（`convert(to:)` 穿过 sublayerTransform ⇒ 给出渲染位置）——采样用
+            let screenRect = nodeLayer.convert(nodeLayer.bounds, to: self.layer)
+            guard let face = GlassMetalRenderer.shared.renderFace(backdrop: backdrop, nodeRect: screenRect,
+                                                                  scale: scale, spec: spec) else {
+                continue   // 材质不可用 ⇒ 不装玻璃面（保持下层内容可见，绝不白屏/黑块）
+            }
+            let fl = CALayer()
+            fl.frame = nodeLayer.bounds        // 与节点**同本地坐标**（随节点变换）
+            fl.contents = face
+            fl.contentsScale = scale
+            fl.cornerRadius = spec.radius
+            fl.masksToBounds = true
+            fl.zPosition = 5000                // 盖在节点自身底色与其子层之上（玻璃是覆盖材质）
+            nodeLayer.addSublayer(fl)
+            glassFaceByNodeId[id] = fl
+        }
+        CATransaction.commit()
+    }
+
+    /// 玻璃节点数（判据用：证明"玻璃遍真的接管了节点"）。
+    var glassNodeCount: Int { glassSpecByNodeId.count }
+    /// 已装玻璃面数（判据用：>0 证明材质真出图、非降级跳过）。
+    var glassFaceCount: Int { glassFaceByNodeId.count }
 
     /* ────────────────────────── ★V7：结构变更的层维护 ────────────────────────── */
 
@@ -1396,6 +1488,16 @@ final class SelfDrawView: UIView {
     private var layerGlowSpec: [Int: (color: UIColor, alpha: CGFloat)] = [:]
     /** ★★软边遮罩层（mask v1）：节点 id → CAGradientLayer（作 `layer.mask`；动画期只改 colors/locations） */
     private var layerMasks: [Int: CAGradientLayer] = [:]
+
+    /* ══════════ ★★★玻璃自绘材质（决策 #834 · 与 Android 同源：算法真源 = Rust WGSL）══════════
+     * 自绘节点的玻璃面 = 采样"背后内容帧"的 **Metal 着色器**（边缘倒角厚板：真圆角 SDF + 外法线
+     *   边缘折射 + 边键控模糊 + Fresnel 高光 + 磨砂白）。着色器由 `GlassMetalRenderer` 用生成物 MSL
+     *   编译（不手写算法）。与 Android AGSL 同源（同一份 WGSL 落地）。
+     * ★两张簿记必须与层树成对清理（本文件反复记的教训：新增一份层簿记就要在 clearLayers 里清）。 */
+    /// 节点 id → 玻璃规格（`makeLayer` 登记；玻璃面在内容画完后由 `applyGlassPass()` 装）
+    private var glassSpecByNodeId: [Int: GlassMetalRenderer.Spec] = [:]
+    /// 节点 id → 玻璃面层（`contents` = 采样背景得到的玻璃图）
+    private var glassFaceByNodeId: [Int: CALayer] = [:]
 
     /// ★★本地揭示色标（**仅用于建层静态初值**——动画期由内核逐帧下发；与内核 `reveal_stops` 同式）
     static func maskStopsLocal(softness: Double, progress: Double) -> (Double, Double, Double, Double) {
@@ -2293,6 +2395,9 @@ final class SelfDrawView: UIView {
             }
             CATransaction.commit()
         }
+        // ★★★玻璃（决策 #833 · 同 #832 教训）：玻璃面**钉在屏上**（挂在视图层，不在滚动变换下），
+        //   但其**采样源**（背后内容）随滚动变化 ⇒ 每步滚动后重捕背景、刷新玻璃面（"内容滑过玻璃"）。
+        if !glassSpecByNodeId.isEmpty { applyGlassPass() }
         return contentOffset
     }
 
@@ -3808,6 +3913,9 @@ final class SelfDrawView: UIView {
         //   keyframe 规格数组）被 startCssAnimations 读却未透传 ⇒ CSS animation 在 iOS superapp 路径
         //   静默不启动（唯一启动路径读的是 styleOf 产物）。Android 读原始 spec 故不受影响。
         if let an = n["animation"] as? [[String: Any]] { style["animation"] = an }
+        // ★★★玻璃（决策 #833）：`glass` 必须透传（本函数=建层必经之路；漏 ⇒ 宿主读不到 ⇒
+        //   静默不画玻璃——与 clipPath/glow/mask/animation 同款教训，本文件已复发多次）。
+        if let g = n["glass"] as? [String: Any] { style["glass"] = g }
         return style
     }
 
@@ -7861,6 +7969,8 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                     lastTiming = t
                     lastNodeCount = nodes.count
                     lastTreeHash = String(format: "%08x", treeJson.hashValue)
+                    // ★★★玻璃遍（决策 #833）：增量路径同样刷新玻璃面（节点几何变了 ⇒ 采样/落位要跟上）
+                    view.applyGlassPass()
                     return jsonString([
                         "ok": true, "path": phase, "node_count": nodes.count,
                         "layer_count": view.builtLayerCount, "request_bytes": reqJson.count,
@@ -8018,6 +8128,8 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         // ★★C2：全量挂载后，按**内核解析好的段列表**补建 SVG 描边子层（见 attachSvgStroke 注释）
         let svgJson = handle != 0 ? takeCString(proteus_layout_svg_nodes(handle)) : "{}"
         view.attachSvgStroke(fromKernelPaths: svgJson)
+        // ★★★玻璃遍（决策 #833）：内容帧就位后装玻璃面（采样"无玻璃内容帧"；须在全部绘制/落位之后）
+        view.applyGlassPass()
         let buildMs = (CFAbsoluteTimeGetCurrent() - tBuild0) * 1000
         let totalMs = (CFAbsoluteTimeGetCurrent() - t0) * 1000
 
@@ -8062,6 +8174,9 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             //   ★只在有 native_host 时带（无 host 的场景零开销：不塞 3500 条几何进回执）。
             "native_hosts": nativeHostIds,
             "rects": nativeHostIds.isEmpty ? [:] : rectsOut,
+            // ★★★玻璃读数（决策 #833）：玻璃节点数 / 已装玻璃面数（面数 >0 = 材质真出图，非降级跳过）
+            "glass_nodes": view.glassNodeCount,
+            "glass_faces": view.glassFaceCount,
         ]
         return jsonString(out)
     }
