@@ -3447,3 +3447,14 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **④ ★关键判断**：**玻璃算法本身 sub-ms（GPU 完全不等）**；70ms **100% 是数据搬运**——GPU 算完 → `copyImageToBuffer` → **CPU memcpy 回读 16.5ms** → 建 `OH_Drawing` 位图/Image **13.8ms** → 贴回 RS 画布（新图首发 **30ms**）。同一块 ~1.5MB 输出在 CPU↔GPU 间**来回搬三趟**（~4.6MB @ ~77MB/s ⇒ 明显未走缓存快路）。
 **⑤ 首帧**：141ms（batch 100ms 含资源初始化 + syncFallback 一次性），仅一次。
 **⑥ 通往 120fps 的三步（按依赖）**：⓪ 先**请求高刷**（当前 `activeMode=60`，全仓无 `setExpectedFrameRateRange`——不请求就**封顶 60**）；① **去掉 CPU 往返**（GPU 纹理直供画布 / dma-buf 零拷贝，省掉回读 16.5 + 建图 13.8）；② 若仍超预算再**降 payload**（S=2→3 / 裁区域）。**结论：120fps 可能，但当前"回读→建图→再上传"架构每重算帧≈68ms，必须先消掉这 60ms 搬运。**
+
+856. **★★鸿蒙玻璃第 2 步:持久回读缓冲——消除每帧 1.5MB 的分配/释放抖动（fps 40→59）**（2026-10-12）**：
+**① 背景**:#855 定位 70ms 尖峰后,深挖发现真正的搬运成本不是 memcpy,而是**每重算帧 `new`/`free` 一块 1.5MB 的 `std::vector`**:
+   · `readPrev` 14.4ms 里 `alloc=14.26`(那行 `std::vector<uint8_t>(outBytes)` 的 mmap+缺页)、`copy=0.13`(真 memcpy,11GB/s);
+   · `buildImg` 12.5ms 里 `moveFree=12.2`(`gc.bytes = std::move()` 释放上一帧 1.5MB,munmap);
+   · staging 内存**确实拿到了 HOST_CACHED**(`cached=1 type=1 flags=11`)——所以拷贝很快,**慢的纯粹是内存生命周期**。
+**② 改法(决策 #856)**:`BatchItem` 增可选 `std::vector<uint8_t>* dst`;回读时**直接 `resize`(复用容量,同尺寸零 realloc)+ memcpy 进持久缓冲**,不再每帧新 vector。调用方传 `&gc.bytes`。
+**③ 实测**:重算帧 68→32ms;`alloc 14.3→0`、`moveFree 12.2→0`;**fps 从 40→59**(设备当前 60Hz),avg 26.09→16.99,p95 70.78→45.48,p50 4.12→3.43。
+**④ ★踩过的回归(记录)**:首版忘了删旧的 `if (outs[k].empty()) continue;`——dst 路径下 `outs[k]` 恒空 ⇒ 建图全跳过 ⇒ `gc.img` 恒空 ⇒ **时间复用门恒真(每帧重算)**,p50 反而涨到 38.65。删掉该守卫后恢复。**教训:改了"谁产出数据"的路径,要同步改"谁消费"的守卫条件。**
+**⑤ 否决的实验**:图只建一次(同尺寸不重建、仅更新像素)——**对 blit 无改善**(blit 仍 ~26ms),证明那 26ms 是帧刷新时的**纹理重上传**(CPU 像素→GPU),与图像对象是否新建无关 ⇒ 回退该实验(避免过期缓存风险)。
+**⑥ 剩余瓶颈**:重算帧的 `blit≈26-29ms`(纹理重上传)。需要**零拷贝**(`VK_OHOS_external_memory` + `vkGetMemoryBufferOHOS` 导出 dma-buf + `OH_Drawing_PixelMap`)——将另开一步本项内解决。

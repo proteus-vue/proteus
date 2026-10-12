@@ -43,7 +43,12 @@ std::vector<uint8_t> renderRgba8(const std::vector<uint8_t>& backdrop, int texW,
  *   （已完成）⇒ 无本帧同步等待（消除每节点同步等待）。
  * @return 与 items 等长；失败项为空 vector（首帧/尺寸变化时无上帧数据 ⇒ 返回空，调用方用上帧缓存兜底）。
  */
-struct BatchItem { int id; std::vector<uint8_t> backdrop; int texW, texH, outW, outH; std::vector<uint8_t> uniform80; };
+struct BatchItem {
+    int id; std::vector<uint8_t> backdrop; int texW, texH, outW, outH; std::vector<uint8_t> uniform80;
+    /** ★决策 #856：**可选的持久回读缓冲**。非空时，回读直接 resize+memcpy 进它（跨帧复用容量 ⇒
+     *   零 alloc/零 free；否则每帧 new/free 一块 1.5MB 会触发 mmap/munmap 抖动，实测 ~26ms）。 */
+    std::vector<uint8_t>* dst = nullptr;
+};
 std::vector<std::vector<uint8_t>> renderBatch(const std::vector<BatchItem>& items);
 
 /** 释放某尺寸场景的批量资源（重建内容时调用；`id` 为用过的 slot id）。 */
