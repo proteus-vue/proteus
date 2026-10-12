@@ -3458,3 +3458,12 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **④ ★踩过的回归(记录)**:首版忘了删旧的 `if (outs[k].empty()) continue;`——dst 路径下 `outs[k]` 恒空 ⇒ 建图全跳过 ⇒ `gc.img` 恒空 ⇒ **时间复用门恒真(每帧重算)**,p50 反而涨到 38.65。删掉该守卫后恢复。**教训:改了"谁产出数据"的路径,要同步改"谁消费"的守卫条件。**
 **⑤ 否决的实验**:图只建一次(同尺寸不重建、仅更新像素)——**对 blit 无改善**(blit 仍 ~26ms),证明那 26ms 是帧刷新时的**纹理重上传**(CPU 像素→GPU),与图像对象是否新建无关 ⇒ 回退该实验(避免过期缓存风险)。
 **⑥ 剩余瓶颈**:重算帧的 `blit≈26-29ms`(纹理重上传)。需要**零拷贝**(`VK_OHOS_external_memory` + `vkGetMemoryBufferOHOS` 导出 dma-buf + `OH_Drawing_PixelMap`)——将另开一步本项内解决。
+
+857. **★鸿蒙玻璃零拷贝通路——真机取证「两端 API 齐备」，实现留待专门一步**（2026-10-12）：
+**① 动机**：#856 后重算帧仅剩大头 `blit≈26-29ms`（不是图像对象新建——否决实验已证；是**帧刷新时的纹理重上传** CPU像素→GPU）。要根除须**零拷贝**：让 Vulkan 离屏结果以 dma-buf 直供画布，不上 CPU 再传回。
+**② 真机取证（`--ps scene vk` ⇒ vkProbe）**：`Maleoon 920C` · `Vulkan 1.3` · `dev_ext_ohos_native_buffer=1`（导出 OH_NativeBuffer）· `dev_ext_external_memory=1` · `dev_ext_external_semaphore=1` · `dev_ext_ext_mem_dmabuf=0`（**无** VK_EXT_external_memory_dma_buf，但**不需要**——OHOS 用自有句柄类型）。
+**③ 通路两端（SDK 已确认）**：
+   · Vulkan 侧：`VkExportMemoryAllocateInfo{handleTypes=VK_EXTERNAL_MEMORY_HANDLE_TYPE_OH_NATIVE_BUFFER_BIT_OHOS(0x8000)}` 链进 outImg 内存分配 ⇒ `vkGetMemoryNativeBufferOHOS(dev,{memory},&OH_NativeBuffer*)`。
+   · 画布侧：`OH_PixelmapNative_CreatePixelmapFromNativeBuffer(OH_NativeBuffer*,&OH_PixelmapNative*)`（`@since 22`，本机 API 26）⇒ `OH_Drawing_PixelMapGetFromOhPixelMapNative` ⇒ `OH_Drawing_CanvasDrawPixelMapRect` 直绘。
+**④ ★为什么不本轮落地**：该路径引入 **Vulkan ↔ RenderService 的跨组件同步**（OH_NativeBuffer 的 acquire/release fence 必须正确传递，否则撕裂/闪烁/挂死）——比 #856 大得多，且需专门真机验证同步语义。半成版本比现状更糟 ⇒ **单开一步**本项内解决。
+**⑤ 计划（下一步）**：① outImg 分配改导出内存 + 取 native buffer + 包 PixelMap（每 parity 一份）；② 画布改绘 PixelMap；③ **同步**：Vulkan 提交后用信号量/围栏串联到 PixelMap 的 fence（或 `OH_NativeBuffer_MapWaitFence`）；④ 真机验：无撕裂、p95 显著下降、`blit` 消失；⑤ 有 fallback（导出失败退当前 CPU 回读路径）。
