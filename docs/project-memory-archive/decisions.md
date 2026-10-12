@@ -3539,3 +3539,12 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **④ 连带性能**：玻璃变大 + 全分辨率输出 ⇒ iOS 浮动到 18.8ms（掉帧 27）。再优化：**输出半分辨率**（`out = scale/2`）+ **背景捕获三分之一分辨率**（`capture = scale/3`，散玻璃并集≈全屏 ⇒ 捕获栅格化是主成本）⇒ **work_p50 18.8→11.8ms、dropped=0（60Hz 满帧）**。
 **⑤ 验证**：截图——圆形玻璃**平滑磨砂 + 折射弯曲**（重影消除）、胶囊正常；像素等价门禁绿（`check-glass-pixel-parity.sh`，Metal==Rust 真源，平均差 0.33）。
 **⑥ 遗留（待 ② 端到端处理）**：树里 `glass` 的 **`radius` 单位在 iOS 仍按 pt 乘 scale**，而 `resolveGlass` 产出的是 `radiusPx`（物理 px）——**真实 `<pg-glass>` 应用会踩到半径单位不一致**（夹具手写 radius 为 pt 掩盖了它）。⇒ 端到端样例（真 `.vue`）必须一并校正。
+
+865. **★★★p-svg-canvas 路径解析器「挂死点」修复——`Z`/`z` 后跟数字致无限循环（直绘卡死 / animateMotion OOM）**（2026-10-12）：
+**① 由来**：用户指出 `packages/components/p-svg-canvas/path-parser.ts` 有挂死点并要求实证。
+**② 独立复现（真实源码 node/tsx 直跑，计数守卫）**：`tracePath` 主循环里 `case 'Z'/'z'` 既不 `i++` 也不调 `num()` ⇒ 当 `cmd` 已是 `Z/z` 且**下一个 token 是数字**时本轮**状态零变化** ⇒ `while` 原地空转。4/4 非法输入（`M0 0Z 5` / `M0 0h10v10z5` / `m0,0 l10,0 z0` / `M0 0 L10 10 Z 5 5`）不终止（closePath 无界调用）。
+**③ 两种崩溃形态**（同一根因，看调用链）：直绘（`engine.drawScene` → `tracePath(ctx,d)`）⇒ **JS 线程永久卡死**；animateMotion 采样（`path-parser.collectPoints.closePath` 每轮 `pts.push`）⇒ **内存爆炸 OOM**。
+**④ 输入可控性**：`d` 来自 SVG 源（`engine` 的 `node.d` = `<path d>` / `animateMotion path`）⇒ 设计工具导出 / LLM 生成 / 手写 SVG 易产出 `z` 后跟数字。**仓库现有数据全仓 grep 未命中**（潜伏未触发）。
+**⑤ 修复（path-parser.ts 三处）**：① **主修**——循环体记入口下标 `iBefore`，循环尾**兜底推进** `if (i === iBefore) i++`（结构性免疫：任何将来新增的"无参数命令"分支都受益）；② 健壮性——`num()` 改为"非数字 ⇒ 返回 0 且不消费 token"（消除截断路径 `Number(undefined)=NaN` 灌进绘制指令；`M0 0 L` 由 NaN → len=0）；③ 健壮性——`arcTo` 加"起终点重合则省略该弧段"（SVG 规范 F.6.2；消除 `x1p=y1p=0` 分母 0 的 NaN 椭圆参数）。
+**⑥ 验证**：修复后探针——非法输入 **4/4 终止**；十条合法路径（含 `C/S/Q/T/A/Z`、负数、科学计数）输出**逐字节不变**；截断路径 NaN 消除；退化弧不再产 NaN。回归测试见 `tests/svg-canvas.test.ts`（+4 例：守卫终止 ×2 / 截断 NaN / 退化弧 NaN）。**定向 86 测试全绿**（svg-canvas/aním/hit/to-image/compiler-ir-svg）。
+**⑦ 诚实边界**：非法输入会**多调一次 `closePath`**（幂等，canvas 语义无副作用）；`num()` 缺失即返回 0（值无意义但不再崩，且后续真命令仍被处理）。

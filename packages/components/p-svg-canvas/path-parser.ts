@@ -44,6 +44,8 @@ function arcTo(
     t.lineTo(x2, y2)
     return
   }
+  // ★SVG 规范 F.6.2：起终点重合 ⇒ **省略该弧段**（此前 x1p=y1p=0 ⇒ 分母 0 ⇒ coef=NaN ⇒ 椭圆参数全 NaN）
+  if (x1 === x2 && y1 === y2) return
   rx = Math.abs(rx)
   ry = Math.abs(ry)
   const phi = (xRotDeg * Math.PI) / 180
@@ -125,9 +127,19 @@ export function tracePath(t: PathTarget, d: string): void {
   let prevCtrlX = 0
   let prevCtrlY = 0
   let prevCmd = ''
-  const num = (): number => Number(tk[i++])
+  // ★健壮性：非数字（截断路径 / 缺失参数）⇒ 返回 0 且**不消费 token**（避免 Number(undefined)=NaN
+  //   一路灌进 canvas 绘制指令；不消费使后续真命令仍被处理）。
+  const num = (): number => {
+    const v = tk[i]
+    if (typeof v === 'number') {
+      i++
+      return v
+    }
+    return 0
+  }
   while (i < tk.length) {
     const t0 = tk[i]
+    const iBefore = i   // ★死锁修复：记本轮入口下标（见循环尾兜底推进）
     if (typeof t0 === 'string') {
       cmd = t0
       i++
@@ -262,6 +274,13 @@ export function tracePath(t: PathTarget, d: string): void {
         i++
     }
     prevCmd = cmd
+    // ★★★死锁修复（真机实证）：本轮**未消费任何 token** ⇒ 强制推进 i，否则无限循环。
+    //   触发面：`Z`/`z` 分支（无参数命令）当**下一个 token 是数字**时（如 `M0 0Z 5`、`…z5`、
+    //   `z0`）——`case 'Z/z'` 既不 i++ 也不调 num() ⇒ 状态零变化 ⇒ `while` 原地空转。
+    //   两种崩溃形态：直绘路径（engine.drawScene）→ JS 线程永久卡死；animateMotion 采样
+    //   （path-parser.collectPoints）→ 每轮 `closePath` 都 `pts.push` ⇒ 内存爆炸 OOM。
+    //   非法输入下多调一次 `closePath`（幂等，canvas 语义无副作用）；合法路径输出逐字节不变。
+    if (i === iBefore) i++
   }
 }
 
