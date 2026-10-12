@@ -84,46 +84,71 @@ final class GlassMetalRenderer {
     ///   - spec: 玻璃规格（点单位）
     /// - Returns: 节点盒尺寸（像素）的玻璃图；失败返 nil ⇒ 调用方降级。
     func renderFace(backdrop: CGImage, nodeRect: CGRect, scale: CGFloat, spec: Spec,
-                    cropOrigin: CGPoint = .zero) -> CGImage? {
-        guard let device = device, let queue = commandQueue, let pipeline = fragmentPipeline else { return nil }
-        let w = Int((nodeRect.width * scale).rounded())
-        let h = Int((nodeRect.height * scale).rounded())
-        guard w > 0, h > 0 else { return nil }
+                    cropOrigin: CGPoint = .zero, texPxPerPoint: CGFloat? = nil) -> CGImage? {
+        return renderFaces(backdrop: backdrop, requests: [(nodeRect, spec)], scale: scale,
+                           cropOrigin: cropOrigin, texPxPerPoint: texPxPerPoint).first ?? nil
+    }
 
-        // ① 背景纹理（★决策 #863：仅「玻璃并集 bbox + pad」的小图，非整屏——与 Android #837 同口径）。
-        guard let backdropTex = makeTexture(from: backdrop, device: device) else { return nil }
-
-        // ② 输出纹理（节点盒）。
-        let outDesc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm, width: w, height: h, mipmapped: false)
-        outDesc.usage = [.renderTarget, .shaderRead]
-        outDesc.storageMode = .shared   // 便于 CPU 读回
-        guard let outTex = device.makeTexture(descriptor: outDesc) else { return nil }
-
-        // ③ uniform（与 Rust `GlassUniforms` 布局逐字段对应；总 80 字节）。
-        var u = makeUniforms(nodeRect: nodeRect, scale: scale, backdrop: backdrop, spec: spec, cropOrigin: cropOrigin)
-
-        // ④ 编码一帧。
-        let pass = MTLRenderPassDescriptor()
-        pass.colorAttachments[0].texture = outTex
-        pass.colorAttachments[0].loadAction = .clear
-        pass.colorAttachments[0].storeAction = .store
-        pass.colorAttachments[0].clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 0)
-        guard let cb = queue.makeCommandBuffer(), let enc = cb.makeRenderCommandEncoder(descriptor: pass) else { return nil }
-        enc.setRenderPipelineState(pipeline)
-        enc.setFragmentTexture(backdropTex, index: 0)
-        enc.setFragmentBytes(&u, length: MemoryLayout<GlassUniforms>.stride, index: 0)
-        enc.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
-        enc.endEncoding()
+    /// ★★★决策 #863：**批量渲染**多块玻璃面——**共用一份 backdrop 纹理 + 一条命令缓冲 + 一次 fence 等待**。
+    ///   【为什么（性能）】此前每块玻璃各上传一次 backdrop 纹理 + 各建命令缓冲 + 各自 `waitUntilCompleted`
+    ///   ⇒ N 倍冗余上传 + N 次 GPU 同步。两处都是滚动每帧的开销（真机实测 work_p50 ~16ms）。
+    ///   【不改变算法】着色器/uniform 逐字段与单块路径同（同一 `makeUniforms`）。
+    ///   - texPxPerPoint: 背景纹理的**每点像素数**（缺省 = `scale`）。可低于 `scale`（半分辨率背景）——
+    ///     玻璃被模糊/折射，背景采样不必全分辨率 ⇒ 省捕获栅格化与纹理上传。
+    /// - Returns: 与 `requests` **等长**的数组（失败项为 nil ⇒ 调用方降级）。
+    func renderFaces(backdrop: CGImage, requests: [(nodeRect: CGRect, spec: Spec)],
+                     scale: CGFloat, cropOrigin: CGPoint, texPxPerPoint: CGFloat? = nil) -> [CGImage?] {
+        let n = requests.count
+        guard n > 0 else { return [] }
+        let texPx = texPxPerPoint ?? scale
+        guard let device = device, let queue = commandQueue, let pipeline = fragmentPipeline else {
+            return Array(repeating: nil, count: n)
+        }
+        // ① 背景纹理（★上传一次，N 块玻璃共用）
+        guard let backdropTex = makeTexture(from: backdrop, device: device) else {
+            return Array(repeating: nil, count: n)
+        }
+        var outTexs = [MTLTexture?](repeating: nil, count: n)
+        // ② 一条命令缓冲，逐块编码（各自输出纹理；顶点/片元管线同一）
+        guard let cb = queue.makeCommandBuffer() else { return Array(repeating: nil, count: n) }
+        for (i, req) in requests.enumerated() {
+            let w = Int((req.nodeRect.width * scale).rounded())
+            let h = Int((req.nodeRect.height * scale).rounded())
+            guard w > 0, h > 0 else { continue }
+            let outDesc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm, width: w, height: h, mipmapped: false)
+            outDesc.usage = [.renderTarget, .shaderRead]
+            outDesc.storageMode = .shared   // 便于 CPU 读回
+            guard let outTex = device.makeTexture(descriptor: outDesc) else { continue }
+            var u = makeUniforms(nodeRect: req.nodeRect, outScale: scale, texPxPerPoint: texPx,
+                                 backdrop: backdrop, spec: req.spec, cropOrigin: cropOrigin)
+            let pass = MTLRenderPassDescriptor()
+            pass.colorAttachments[0].texture = outTex
+            pass.colorAttachments[0].loadAction = .clear
+            pass.colorAttachments[0].storeAction = .store
+            pass.colorAttachments[0].clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 0)
+            guard let enc = cb.makeRenderCommandEncoder(descriptor: pass) else { continue }
+            enc.setRenderPipelineState(pipeline)
+            enc.setFragmentTexture(backdropTex, index: 0)
+            enc.setFragmentBytes(&u, length: MemoryLayout<GlassUniforms>.stride, index: 0)
+            enc.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
+            enc.endEncoding()
+            outTexs[i] = outTex
+        }
+        // ③ ★一次提交 + 一次等待（替代每玻璃一次同步）
         cb.commit()
         cb.waitUntilCompleted()
+        // ④ 逐块读回 → CGImage
+        return outTexs.map { $0.flatMap { self.makeImage(from: $0) } }
+    }
 
-        // ⑤ 读回 → CGImage。
+    /// 输出纹理 → CGImage（bgra8Unorm ⇒ premultipliedFirst | byteOrder32Little）。
+    private func makeImage(from outTex: MTLTexture) -> CGImage? {
+        let w = outTex.width, h = outTex.height
         let bytesPerRow = w * 4
         var bytes = [UInt8](repeating: 0, count: bytesPerRow * h)
         outTex.getBytes(&bytes, bytesPerRow: bytesPerRow, from: MTLRegionMake2D(0, 0, w, h), mipmapLevel: 0)
         guard let provider = CGDataProvider(data: Data(bytes) as CFData) else { return nil }
         let colorSpace = CGColorSpaceCreateDeviceRGB()
-        // bgra8Unorm ⇒ little-endian: BGRA in memory = .byteOrder32Little | .premultipliedFirst
         let bmpInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)
         return CGImage(width: w, height: h, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: bytesPerRow,
                        space: colorSpace, bitmapInfo: bmpInfo, provider: provider, decode: nil,
@@ -148,18 +173,20 @@ final class GlassMetalRenderer {
         var _pad: Float              // 76
     }
 
-    private func makeUniforms(nodeRect: CGRect, scale: CGFloat, backdrop: CGImage, spec: Spec,
-                              cropOrigin: CGPoint) -> GlassUniforms {
-        let w = Float(nodeRect.width * scale)
-        let h = Float(nodeRect.height * scale)
-        // 背景纹理 = **cropRect 区域**（决策 #863：非整屏）；节点 uv → 纹理 uv：
-        //   bias = (节点左上角 − crop 原点)(px)/纹理宽；scale = 盒尺寸/纹理宽。
+    private func makeUniforms(nodeRect: CGRect, outScale: CGFloat, texPxPerPoint: CGFloat,
+                              backdrop: CGImage, spec: Spec, cropOrigin: CGPoint) -> GlassUniforms {
+        let w = Float(nodeRect.width * outScale)
+        let h = Float(nodeRect.height * outScale)
+        // 背景纹理 = **cropRect 区域**（决策 #863：非整屏，且可按更低分辨率捕获）；节点 uv → 纹理 uv：
+        //   bias = (节点左上 − crop 原点)(纹理px)/纹理宽；scale = 盒尺寸(纹理px)/纹理宽。
+        //   ★输出(节点盒)与背景纹理**分辨率解耦**（`texPxPerPoint` ≠ `outScale`）——玻璃被模糊/折射，
+        //   背景可按半分辨率采样而不损观感，同时省下捕获栅格化与纹理上传的像素量。
         let tw = Float(backdrop.width)
         let th = Float(backdrop.height)
-        let relX = Float((nodeRect.minX - cropOrigin.x) * scale)
-        let relY = Float((nodeRect.minY - cropOrigin.y) * scale)
+        let relX = Float((nodeRect.minX - cropOrigin.x) * texPxPerPoint)
+        let relY = Float((nodeRect.minY - cropOrigin.y) * texPxPerPoint)
         let bias = SIMD2<Float>(relX / tw, relY / th)
-        let tscale = SIMD2<Float>(w / tw, h / th)
+        let tscale = SIMD2<Float>(Float(nodeRect.width * texPxPerPoint) / tw, Float(nodeRect.height * texPxPerPoint) / th)
         return GlassUniforms(
             tint: SIMD4<Float>(Float(spec.tint.r), Float(spec.tint.g), Float(spec.tint.b), Float(spec.tint.a)),
             size_px: SIMD2<Float>(w, h),
@@ -167,8 +194,8 @@ final class GlassMetalRenderer {
             tex_bias: bias,
             tex_scale: tscale,
             light_dir: SIMD2<Float>(-0.35, -0.94),
-            radius: Float(spec.radius * scale),
-            blur: Float(spec.blur * scale),
+            radius: Float(spec.radius * outScale),
+            blur: Float(spec.blur * outScale),
             refract_depth: min(w, h) * 0.22,   // 与 Android 同守恒
             specular: 0.18,
             saturation: Float(spec.saturation),

@@ -1103,7 +1103,12 @@ final class SelfDrawView: UIView {
         let cropRect = unionRect.insetBy(dx: -padPts, dy: -padPts).intersection(bounds)
 
         // ② 只栅格化 cropRect 区域（translate 使 cropRect 原点映射到 (0,0)）
-        let renderer = UIGraphicsImageRenderer(size: cropRect.size)
+        //   ★决策 #863：背景按**半分辨率**捕获（玻璃被模糊/折射，背景采样不必全分辨率）——
+        //   捕获栅格化与纹理上传的像素量都降到 1/4（`capturePxPerPoint = scale/2`）。
+        let capturePxPerPoint = max(1, scale / 2)
+        let fmt = UIGraphicsImageRendererFormat()
+        fmt.scale = capturePxPerPoint
+        let renderer = UIGraphicsImageRenderer(size: cropRect.size, format: fmt)
         let img = renderer.image { ctx in
             ctx.cgContext.translateBy(x: -cropRect.minX, y: -cropRect.minY)
             self.layer.render(in: ctx.cgContext)
@@ -1114,17 +1119,23 @@ final class SelfDrawView: UIView {
         }
 
         // ③ 逐玻璃节点装玻璃面（★作为**节点层的子层**：与节点同变换空间 ⇒ 自动跟随，含 fixed 钉住）
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
+        //   ★决策 #863：**批量渲染**——一次 `renderFaces`（共用 backdrop 纹理 + 一条命令缓冲 + 一次等待）。
+        var order: [Int] = []
+        var reqs: [(nodeRect: CGRect, spec: GlassMetalRenderer.Spec)] = []
         for (id, spec) in glassSpecByNodeId {
             guard let nodeLayer = layersById[id] else { continue }
             // 节点在**屏幕**上的矩形（`convert(to:)` 穿过 sublayerTransform ⇒ 给出渲染位置）——采样用
-            let screenRect = nodeLayer.convert(nodeLayer.bounds, to: self.layer)
-            guard let face = GlassMetalRenderer.shared.renderFace(backdrop: backdrop, nodeRect: screenRect,
-                                                                  scale: scale, spec: spec,
-                                                                  cropOrigin: cropRect.origin) else {
-                continue   // 材质不可用 ⇒ 不装玻璃面（保持下层内容可见，绝不白屏/黑块）
-            }
+            order.append(id)
+            reqs.append((nodeLayer.convert(nodeLayer.bounds, to: self.layer), spec))
+        }
+        let faces = GlassMetalRenderer.shared.renderFaces(backdrop: backdrop, requests: reqs,
+                                                          scale: scale, cropOrigin: cropRect.origin,
+                                                          texPxPerPoint: capturePxPerPoint)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for (i, id) in order.enumerated() {
+            guard i < faces.count, let face = faces[i], let nodeLayer = layersById[id] else { continue }
+            let spec = glassSpecByNodeId[id]!
             let fl = CALayer()
             fl.frame = nodeLayer.bounds        // 与节点**同本地坐标**（随节点变换）
             fl.contents = face
