@@ -49,8 +49,9 @@ struct Backdrop<'a> {
 
 impl<'a> Backdrop<'a> {
     fn sample(&self, u: f32, v: f32) -> [f32; 4] {
-        let x = (u * self.w as f32).clamp(0.0, (self.w - 1) as f32);
-        let y = (v * self.h as f32).clamp(0.0, (self.h - 1) as f32);
+        // ★半纹素偏移（与 GPU 一致）：归一化 uv 的 texel 中心在 (i+0.5)/N ⇒ 位置 = u*N - 0.5。
+        let x = (u * self.w as f32 - 0.5).clamp(0.0, (self.w - 1) as f32);
+        let y = (v * self.h as f32 - 0.5).clamp(0.0, (self.h - 1) as f32);
         let xi = x.floor() as usize;
         let yi = y.floor() as usize;
         let xi1 = (xi + 1).min(self.w - 1);
