@@ -60,12 +60,13 @@ public final class GlassMaterial {
      * 每帧只**更新输入纹理 + uniform**（廉价），不再重建。</p>
      *
      * @param nodeId   玻璃节点 id（缓存键——同一节点的着色器跨帧复用）
-     * @param backdrop 全屏"无玻璃内容帧"（像素坐标 = 画布坐标）
-     * @param ox,oy    节点盒在画布内的左上角（设备像素）
+     * @param backdrop 背景位图（**只覆盖玻璃并集包围盒**，见 #837 优化——不再是整屏）
+     * @param ox,oy    节点盒在**画布**内的左上角（设备像素；AGSL `origin` uniform）
+     * @param bdX,bdY  `backdrop` 在其覆盖屏幕区域中的左上角（画布坐标）——采样位图须减去它
      * @param w,h      节点盒尺寸（设备像素）
      * @param radius   圆角（设备像素）
      */
-    public static Paint buildPaint(int nodeId, Bitmap backdrop, float ox, float oy, float w, float h, float radius, Spec spec) {
+    public static Paint buildPaint(int nodeId, Bitmap backdrop, float ox, float oy, float bdX, float bdY, float w, float h, float radius, Spec spec) {
         if (!isAvailable() || backdrop == null || backdrop.isRecycled() || spec == null || w <= 0f || h <= 0f) {
             android.util.Log.w("proteus-glass", "buildPaint early-null: avail=" + isAvailable()
                     + " backdrop=" + (backdrop == null ? "null" : backdrop.getWidth() + "x" + backdrop.getHeight())
@@ -89,11 +90,11 @@ public final class GlassMaterial {
             float cb = (spec.tint & 0xFF) / 255f;
             sh.setFloatUniform("tint", cr, cg, cb, a);
             sh.setFloatUniform("size_px", w, h);
-            // ★AGSL 采样空间 = 画布像素（BitmapShader.eval 取位图像素）：tex_scale=盒尺寸、tex_bias=盒左上角
-            //   ⇒ sample = (local/size_px)*size_px + origin = 片元画布坐标（+ 折射位移）。见 WGSL 契约注释。
+            // ★AGSL 采样空间 = 画布像素：tex_scale=盒尺寸、tex_bias=节点左上角（**减去背景位图原点** ⇒
+            //   采样落到该位图坐标）。render target 仍是整画布（玻璃画在主画布上），故 `origin` 用画布坐标。
             sh.setFloatUniform("origin", ox, oy);
             sh.setFloatUniform("tex_scale", w, h);
-            sh.setFloatUniform("tex_bias", ox, oy);
+            sh.setFloatUniform("tex_bias", ox - bdX, oy - bdY);
             sh.setFloatUniform("light_dir", -0.35f, -0.94f);
             sh.setFloatUniform("radius", radius);
             sh.setFloatUniform("blur", spec.blur);
