@@ -1931,6 +1931,7 @@ public class ProteusHostView extends ViewGroup {
     public void setCmds(List<Cmd> value) {
         this.cmds = value;
         clearMaterialQueryCache();   // ★B4：指令重建 ⇒ 材质几何/曲线缓存失效（重查内核）
+        GlassMaterial.clearShaderCache();  // ★#836：指令重建 ⇒ 玻璃着色器缓存失效（旧节点 id 不再用）
         // ★★★显示列表随指令变更重建（脏时一次 5ms；此后每帧回放 2ms）。
         //   ★尺寸未知时（未布局）先置空——onSizeChanged/首次 onDraw 时补建（见 ensurePicture）。
         if (getWidth() > 0 && getHeight() > 0 && value != null && !value.isEmpty()) {
@@ -3300,7 +3301,7 @@ public class ProteusHostView extends ViewGroup {
     }
 
     /** 画一个玻璃面（节点盒 c）：AGSL 采样背后内容 → blur+tint；不可用 ⇒ 半透明实色回退。 */
-    private void drawGlassFace(Canvas canvas, Cmd c, GlassMaterial.Spec spec) {
+    private void drawGlassFace(Canvas canvas, int nodeId, Cmd c, GlassMaterial.Spec spec) {
         if (c.w <= 0 || c.h <= 0) return;
         final int save = canvas.save();
         if (spec.radius > 0) {
@@ -3309,7 +3310,7 @@ public class ProteusHostView extends ViewGroup {
                     android.graphics.Path.Direction.CW);
             canvas.clipPath(clip);
         }
-        android.graphics.Paint p = GlassMaterial.buildPaint(glassBackdrop, c.x, c.y, c.w, c.h, spec.radius, spec);
+        android.graphics.Paint p = GlassMaterial.buildPaint(nodeId, glassBackdrop, c.x, c.y, c.w, c.h, spec.radius, spec);
         if (p != null) {
             canvas.drawRect(c.x, c.y, c.x + c.w, c.y + c.h, p);
         } else {
@@ -3330,7 +3331,7 @@ public class ProteusHostView extends ViewGroup {
         if (ids == null) return;
         for (int i = 0; i < list.size() && i < ids.length; i++) {
             GlassMaterial.Spec g = glassByNode.get(ids[i]);
-            if (g != null) drawGlassFace(canvas, list.get(i), g);
+            if (g != null) drawGlassFace(canvas, ids[i], list.get(i), g);
         }
     }
 

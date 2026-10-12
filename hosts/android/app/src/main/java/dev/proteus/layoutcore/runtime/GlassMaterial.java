@@ -53,12 +53,19 @@ public final class GlassMaterial {
     /**
      * 用"背后内容"位图 + 盒 + 规格构建玻璃 {@code Paint}（null = 不可用/失败 ⇒ 调用方降级半透明实色）。
      *
+     * <p>★★★【为什么必须缓存（真机"滚动闪烁"的根因 · 决策 #836）】{@code new RuntimeShader} 会
+     * **编译 AGSL**——而旧版**每帧每玻璃节点都新建一次**（真机实测 3 次滑动 = 94 次编译）⇒ 编译未就绪
+     * 的那一帧玻璃面画不出 ⇒ **滚动时玻璃闪烁**。着色器**源码是静态的**（生成物常量）⇒ 只为「编译」缓存：
+     * 按 **nodeId** 缓存 {@code RuntimeShader}（每个玻璃节点一份，避免同帧多节点互相覆盖 uniform），
+     * 每帧只**更新输入纹理 + uniform**（廉价），不再重建。</p>
+     *
+     * @param nodeId   玻璃节点 id（缓存键——同一节点的着色器跨帧复用）
      * @param backdrop 全屏"无玻璃内容帧"（像素坐标 = 画布坐标）
      * @param ox,oy    节点盒在画布内的左上角（设备像素）
      * @param w,h      节点盒尺寸（设备像素）
      * @param radius   圆角（设备像素）
      */
-    public static Paint buildPaint(Bitmap backdrop, float ox, float oy, float w, float h, float radius, Spec spec) {
+    public static Paint buildPaint(int nodeId, Bitmap backdrop, float ox, float oy, float w, float h, float radius, Spec spec) {
         if (!isAvailable() || backdrop == null || backdrop.isRecycled() || spec == null || w <= 0f || h <= 0f) {
             android.util.Log.w("proteus-glass", "buildPaint early-null: avail=" + isAvailable()
                     + " backdrop=" + (backdrop == null ? "null" : backdrop.getWidth() + "x" + backdrop.getHeight())
@@ -66,8 +73,14 @@ public final class GlassMaterial {
             return null;
         }
         try {
-            // ★算法来自 Rust 真源落地（GeneratedMaterials.GLASS_AGSL）——本类不写着色器。
-            RuntimeShader sh = new RuntimeShader(GeneratedMaterials.GLASS_AGSL);
+            // ★★★只为「编译」缓存（源码静态）：每节点一份 RuntimeShader，跨帧复用 ⇒ 不再每帧重编（滚动不闪）。
+            RuntimeShader sh = SHADER_CACHE.get(nodeId);
+            if (sh == null) {
+                sh = new RuntimeShader(GeneratedMaterials.GLASS_AGSL);
+                SHADER_CACHE.put(nodeId, sh);
+                android.util.Log.i("proteus-glass", "buildPaint: 编译 AGSL（一次，节点 " + nodeId + "，真源=WGSL）");
+            }
+            // 每帧只更新输入纹理 + uniform（廉价）
             sh.setInputShader("backdrop_tex", new BitmapShader(backdrop, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP));
 
             float a = ((spec.tint >>> 24) & 0xFF) / 255f;
@@ -92,11 +105,18 @@ public final class GlassMaterial {
 
             Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
             p.setShader(sh);
-            android.util.Log.i("proteus-glass", "buildPaint: 生成 AGSL OK（真源=WGSL）");
             return p;
         } catch (Throwable t) {
             android.util.Log.w("proteus-glass", "buildPaint: AGSL FAIL " + t + " :: " + android.util.Log.getStackTraceString(t));
             return null; // 着色器编译/构建失败 ⇒ 降级（不崩）
         }
+    }
+
+    /** 节点 id → 已编译的 AGSL 着色器（源码静态 ⇒ 只编译一次；见 buildPaint 注释）。 */
+    private static final java.util.HashMap<Integer, RuntimeShader> SHADER_CACHE = new java.util.HashMap<>();
+
+    /** 清空着色器缓存（重挂载/换场景时调用——旧节点的着色器不再需要）。 */
+    public static void clearShaderCache() {
+        SHADER_CACHE.clear();
     }
 }
