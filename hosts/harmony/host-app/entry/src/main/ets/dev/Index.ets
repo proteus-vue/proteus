@@ -160,10 +160,49 @@ class GlassBenchFrameCallback extends FrameCallback {
 }
 
 /**
+ * ★★★决策 #850：**滚动惯性（fling）** 帧循环——手指松手后按**估计速度**继续滑、逐帧衰减到停。
+ *   【为什么】原拖拽只在 Move 时 `scrollRoot` ⇒ 松手**立即停**（用户「很涩 / 每次滚动立即停止」）；
+ *     原生滚动手感 = 松手后**惯性滑行**。
+ *   【算法】`off' = off + v·(dt/16.7)`；`v' = v·decel^(dt/16.7)`（速度按实际帧长缩放 ⇒ 帧长变化不改变观感）；
+ *     `|v| < 阈值` 或触边界 ⇒ 停。由 `postFrameCallback` 自驱（零盲等）。
+ */
+class GlassInertiaCallback extends FrameCallback {
+  private uiCtx: UIContext;
+  private off: number;
+  private vel: number;                 // vp/帧
+  private lastTs: number = 0;
+  private readonly decel: number = 0.94;   // 每帧衰减（0.94 ≈ 顺滑减速 ~0.5s）
+  private readonly minVel: number = 0.4;   // 停判据（vp/帧）
+  private readonly maxOff: number;
+  private readonly onTick: (off: number) => void;
+  private readonly shouldStop: () => boolean;
+  constructor(uiCtx: UIContext, startOff: number, startVel: number, maxOff: number,
+              onTick: (off: number) => void, shouldStop: () => boolean) {
+    super();
+    this.uiCtx = uiCtx; this.off = startOff; this.vel = startVel; this.maxOff = maxOff;
+    this.onTick = onTick; this.shouldStop = shouldStop;
+  }
+  onFrame(frameTimeInNano: number): void {
+    if (this.shouldStop()) return;   // ★新触摸到来 ⇒ 立即中止惯性
+    let dt = 16.7;
+    if (this.lastTs > 0) { const d = (frameTimeInNano - this.lastTs) / 1e6; if (d > 0.5) dt = Math.min(d, 64); }
+    this.lastTs = frameTimeInNano;
+    const steps = dt / 16.7;
+    this.off += this.vel * steps;
+    this.vel *= Math.pow(this.decel, steps);
+    if (this.off <= 0) { this.off = 0; this.vel = 0; }
+    if (this.off >= this.maxOff) { this.off = this.maxOff; this.vel = 0; }
+    this.onTick(this.off);
+    if (Math.abs(this.vel) < this.minVel) return;   // 停
+    this.uiCtx.postFrameCallback(this);
+  }
+  onIdle(): void {}
+}
+
+/**
  * ★★★玻璃演示场景（`--ps scene glass-demo`）：玻璃固定 + 内容**手动拖拽滚动**（同 Android GlassActivity）。
- *   拖拽处理见下方根 Stack 的 `.onTouch`（glassDemoScene 分支）——手指 ΔY → scrollRoot。
- *   （历史：曾用 `GlassAutoScrollCallback` 自动滚动录屏；改手动后由宿主端**边注入拖拽边连拍**录屏，
- *    见 `hosts/harmony/shoot-glass-scroll.sh`。决策 #843/#844。）
+ *   拖拽处理见下方根 Stack 的 `.onTouch`（glassDemoScene 分支）——手指 ΔY → scrollRoot；
+ *   松手惯性见 `GlassInertiaCallback`（决策 #850）。
  */
 
 interface AnimStepReading {
@@ -588,6 +627,10 @@ struct Index {
   /** 手动拖拽滚动的累计位移（物理 px；glass-demo 场景专用）。 */
   private dragOff: number = 0;
   private dragLastY: number = 0;
+  private dragLastTs: number = 0;      // ★决策 #850：上次 Move 时间戳（算速度）
+  private dragVel: number = 0;         // ★决策 #850：估计速度（vp/帧，EMA 平滑）
+  private dragMaxOff: number = 30 * (150 + 14) / DENSITY;   // 内容高（vp）
+  private inertiaStop: boolean = true;   // ★决策 #850：惯性中止标志（新触摸置 true）
   /** ★★★Vulkan 能力探针场景（决策 #841 · `--ps scene vk`）：只跑 vkProbe 并上报，不建树/不跑 bench。
    *  ★为什么单独成场景：探针要在**无内容干扰**下采集，避免被 bench 的多次建树日志挤掉。 */
   private vkScene: boolean = (AppStorage.get<string>('proteusScene') ?? '') === 'vk';
@@ -910,19 +953,34 @@ struct Index {
       //   与 Android GlassActivity 同款（`scene.setContentScrollY`）；用户手动测动态折射。
       if (this.glassDemoScene) {
         if (e.type === TouchType.Down) {
+          this.inertiaStop = true;   // ★停止上一段惯性
           this.dragLastY = e.touches.length > 0 ? e.touches[0].y : 0;
+          this.dragLastTs = e.timestamp;
+          this.dragVel = 0;
         } else if (e.type === TouchType.Move) {
           if (e.touches.length > 0) {
             const cy = e.touches[0].y;
             const dy = this.dragLastY - cy;      // 手指上移 ⇒ 内容上移（自然滚动方向）
+            const dt = Math.max(1, (e.timestamp - this.dragLastTs) / 1e6);   // ns→ms
             this.dragLastY = cy;
+            this.dragLastTs = e.timestamp;
             this.dragOff += dy;
             if (this.dragOff < 0) this.dragOff = 0;
-            // 内容 30 行 ×(150+14) 物理 px ÷ 密度 ≈ 1406vp（拖到末尾为止）
-            const maxOff = 30 * (150 + 14) / DENSITY;
-            if (this.dragOff > maxOff) this.dragOff = maxOff;
+            if (this.dragOff > this.dragMaxOff) this.dragOff = this.dragMaxOff;
+            // ★决策 #850：估计速度（vp/帧 = dy/ms×16.7），EMA 平滑（0.7 新值权重）
+            const instVel = (dy / dt) * 16.7;
+            this.dragVel = this.dragVel * 0.3 + instVel * 0.7;
             scrollRoot(this.dragOff);   // 入参 = 设计单位（vp），scrollRoot 内部 ×密度
           }
+        } else if (e.type === TouchType.Up || e.type === TouchType.Cancel) {
+          // ★决策 #850：松手 ⇒ **惯性滑行**（按估计速度继续、逐帧衰减）；Cancel 不滑。
+          if (e.type === TouchType.Up && Math.abs(this.dragVel) > 1.0) {
+            this.inertiaStop = false;
+            this.getUIContext().postFrameCallback(
+              new GlassInertiaCallback(this.getUIContext(), this.dragOff, this.dragVel, this.dragMaxOff,
+                (o: number) => { this.dragOff = o; scrollRoot(o); }, () => this.inertiaStop));
+          }
+          this.dragVel = 0;
         }
         return;
       }
@@ -1141,6 +1199,8 @@ struct Index {
           //   见 `.onTouch` 的 glassDemoScene 分支。（自动滚动录屏另见 `--ps scene glass-demo` 的历史参数，
           //   当前改为手动：用户手动测动态折射。）
           this.dragOff = 0;
+          this.dragVel = 0;
+          this.inertiaStop = true;
           hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_GLASS_DEMO nodes=%{public}d (manual-drag)', nD);
         } catch (de) {
           hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_GLASS_DEMO_ERROR %{public}s', JSON.stringify(de) ?? '');
