@@ -117,29 +117,11 @@ class GlassShotFrameCallback extends FrameCallback {
 }
 
 /**
- * ★★★玻璃演示：**连续自动滚动**帧循环（决策 #843 观感取证 · 供录屏）。
- *   每帧 `scrollRoot(offset)` 让内容在**固定玻璃**下滑过（offset 单调增，到末尾回绕循环）。
- *   用于录"内容经过玻璃"的动态折射视频——静态截图看不出折射的滚动观感。
- *   ★零盲等：由 postFrameCallback 自驱；`stop()` 停（或硬上限帧数兜底）。
+ * ★★★玻璃演示场景（`--ps scene glass-demo`）：玻璃固定 + 内容**手动拖拽滚动**（同 Android GlassActivity）。
+ *   拖拽处理见下方根 Stack 的 `.onTouch`（glassDemoScene 分支）——手指 ΔY → scrollRoot。
+ *   （历史：曾用 `GlassAutoScrollCallback` 自动滚动录屏；改手动后由宿主端**边注入拖拽边连拍**录屏，
+ *    见 `hosts/harmony/shoot-glass-scroll.sh`。决策 #843/#844。）
  */
-class GlassAutoScrollCallback extends FrameCallback {
-  private uiCtx: UIContext;
-  private offset: number = 0;
-  private readonly stepVp: number;      // 每帧位移（vp）
-  private readonly maxVp: number;       // 到该位移回绕
-  private maxFrames: number;            // 硬上限（≈ 帧数；0 = 不限）
-  constructor(uiCtx: UIContext, stepVp: number, maxVp: number, maxFrames: number) {
-    super(); this.uiCtx = uiCtx; this.stepVp = stepVp; this.maxVp = maxVp; this.maxFrames = maxFrames;
-  }
-  onFrame(_frameTimeInNano: number): void {
-    this.offset += this.stepVp;
-    if (this.offset > this.maxVp) this.offset = 0;   // 回绕（无缝循环）
-    scrollRoot(this.offset);
-    if (this.maxFrames > 0) { this.maxFrames--; if (this.maxFrames === 0) { hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_GLASS_AUTOSCROLL_DONE'); return; } }
-    this.uiCtx.postFrameCallback(this);
-  }
-  onIdle(): void {}
-}
 
 interface AnimStepReading {
   tx: number;
@@ -513,15 +495,17 @@ function buildGlassCommands(vpW: number, vpH: number): string {
       text: '行 ' + (i + 1) + ' · 模拟页面内容', fontSize: 15 * D, textColor: cssToArgb('#FFFFFF') });
   }
   // 玻璃 ①：底部圆角胶囊（fixed ⇒ 钉在屏上）
+  // ★blur/tint 与 Android 夹具**同口径（物理 px，不乘 D）**——早期我乘 D 得 70px（Android 20），
+  //   模糊量 3.5× ⇒ 稀疏模糊核采样点间距被拉大 ⇒ 文字"离散回声"看着像重影（见决策 #844）。
   const pillH = 116 * D, pillW = (vpW - 36) * D, pillX = 18 * D, pillY = vpH * D - pillH - 60 * D, pillR = pillH / 2;
   cmds.push({ kind: 'background', id: id++, x: pillX, y: pillY, w: pillW, h: pillH, color: 0,
     radius: pillR, position: 'fixed',
-    glass: { blur: 20 * D, tint: '#ffffff26', radius: pillR, border: true, saturation: 1.0 } });
+    glass: { blur: 20, tint: '#ffffff26', radius: pillR, border: true, saturation: 1.0 } });
   // 玻璃 ②：中部圆形
   const circ = 300 * D, circX = (vpW * D - circ) / 2, circY = vpH * D * 0.29 - circ / 2, circR = circ / 2;
   cmds.push({ kind: 'background', id: id++, x: circX, y: circY, w: circ, h: circ, color: 0,
     radius: circR, position: 'fixed',
-    glass: { blur: 16 * D, tint: '#ffffff33', radius: circR, border: true, saturation: 1.0 } });
+    glass: { blur: 16, tint: '#ffffff33', radius: circR, border: true, saturation: 1.0 } });
   // 圆形玻璃上的文字（与 Android 夹具同形——验"玻璃下内容随滚动/玻璃内文字仍可辨"）
   cmds.push({ kind: 'background', id: id++, x: circX, y: circY + circ / 2 - 20 * D, w: circ, h: 40 * D,
     color: 0, radius: 0, text: '圆形玻璃', fontSize: 20 * D, textColor: cssToArgb('#FFFFFF') });
@@ -555,6 +539,9 @@ struct Index {
   /** ★★★决策 #843：**玻璃演示（自动滚动）**场景（`--ps scene glass-demo`）——连续滚动内容经过固定玻璃，
    *  供**录屏**（内容折射的动态观感；静态截图看不出）。 */
   private glassDemoScene: boolean = (AppStorage.get<string>('proteusScene') ?? '') === 'glass-demo';
+  /** 手动拖拽滚动的累计位移（物理 px；glass-demo 场景专用）。 */
+  private dragOff: number = 0;
+  private dragLastY: number = 0;
   /** ★★★Vulkan 能力探针场景（决策 #841 · `--ps scene vk`）：只跑 vkProbe 并上报，不建树/不跑 bench。
    *  ★为什么单独成场景：探针要在**无内容干扰**下采集，避免被 bench 的多次建树日志挤掉。 */
   private vkScene: boolean = (AppStorage.get<string>('proteusScene') ?? '') === 'vk';
@@ -856,6 +843,26 @@ struct Index {
     .height('100%')
     .backgroundColor('#F7F7F9')
     .onTouch((e: TouchEvent) => {
+      // ★★★决策 #844：玻璃演示场景——**手动拖拽滚动**（手指上下拖 ⇒ 内容滚动，玻璃固定）。
+      //   与 Android GlassActivity 同款（`scene.setContentScrollY`）；用户手动测动态折射。
+      if (this.glassDemoScene) {
+        if (e.type === TouchType.Down) {
+          this.dragLastY = e.touches.length > 0 ? e.touches[0].y : 0;
+        } else if (e.type === TouchType.Move) {
+          if (e.touches.length > 0) {
+            const cy = e.touches[0].y;
+            const dy = this.dragLastY - cy;      // 手指上移 ⇒ 内容上移（自然滚动方向）
+            this.dragLastY = cy;
+            this.dragOff += dy;
+            if (this.dragOff < 0) this.dragOff = 0;
+            // 内容 30 行 ×(150+14) 物理 px ÷ 密度 ≈ 1406vp（拖到末尾为止）
+            const maxOff = 30 * (150 + 14) / DENSITY;
+            if (this.dragOff > maxOff) this.dragOff = maxOff;
+            scrollRoot(this.dragOff);   // 入参 = 设计单位（vp），scrollRoot 内部 ×密度
+          }
+        }
+        return;
+      }
       // ★矩阵 #7：手势场景——真触摸样本落盘（标准触摸链；uitest uiInput 真注入驱动）
       if (this.gestureScene) {
         try {
@@ -1044,10 +1051,11 @@ struct Index {
           setContentMode('self-draw');
           const nD = renderCommands(buildGlassCommands(vpWD, vpHD));
           this.rendered = nD;
-          // 连续自动滚动：每帧 +1vp（≈120vp/s），0..1500vp 回绕循环——★放慢到"每采样帧位移小"，
-          //   配合宿主端 ~2.6fps 连拍（snapshot_display ≈0.38s/帧）⇒ 录出的视频帧间位移 ~45vp、平滑。
-          this.getUIContext().postFrameCallback(new GlassAutoScrollCallback(this.getUIContext(), 1, 1500, 0));
-          hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_GLASS_DEMO nodes=%{public}d', nD);
+          // ★★★决策 #844：**手动拖拽滚动**（同 Android GlassActivity）——手指上下拖 ⇒ 内容滚动、玻璃固定。
+          //   见 `.onTouch` 的 glassDemoScene 分支。（自动滚动录屏另见 `--ps scene glass-demo` 的历史参数，
+          //   当前改为手动：用户手动测动态折射。）
+          this.dragOff = 0;
+          hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_GLASS_DEMO nodes=%{public}d (manual-drag)', nD);
         } catch (de) {
           hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_GLASS_DEMO_ERROR %{public}s', JSON.stringify(de) ?? '');
         }
