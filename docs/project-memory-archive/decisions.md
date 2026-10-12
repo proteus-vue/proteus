@@ -3467,3 +3467,15 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
    · 画布侧：`OH_PixelmapNative_CreatePixelmapFromNativeBuffer(OH_NativeBuffer*,&OH_PixelmapNative*)`（`@since 22`，本机 API 26）⇒ `OH_Drawing_PixelMapGetFromOhPixelMapNative` ⇒ `OH_Drawing_CanvasDrawPixelMapRect` 直绘。
 **④ ★为什么不本轮落地**：该路径引入 **Vulkan ↔ RenderService 的跨组件同步**（OH_NativeBuffer 的 acquire/release fence 必须正确传递，否则撕裂/闪烁/挂死）——比 #856 大得多，且需专门真机验证同步语义。半成版本比现状更糟 ⇒ **单开一步**本项内解决。
 **⑤ 计划（下一步）**：① outImg 分配改导出内存 + 取 native buffer + 包 PixelMap（每 parity 一份）；② 画布改绘 PixelMap；③ **同步**：Vulkan 提交后用信号量/围栏串联到 PixelMap 的 fence（或 `OH_NativeBuffer_MapWaitFence`）；④ 真机验：无撕裂、p95 显著下降、`blit` 消失；⑤ 有 fallback（导出失败退当前 CPU 回读路径）。
+
+858. **★鸿蒙玻璃零拷贝——取证后判定「当前 OHOS API 到不了」**（平台边界；已回退实现，保留 #856 CPU 路径）**（2026-10-12）**：
+**① 目标**：消掉 #856 后重算帧仅剩的 `blit≈26ms`（CPU 像素→GPU 纹理重上传）。计划走「Vulkan 离屏结果 → OH_NativeBuffer → PixelMap → 画布直绘」。
+**② 已实现并全部真机测通的部分**（构建/链接/扩展加载均 OK）：设备扩展 `VK_OHOS_native_buffer` + `vkGetMemoryNativeBufferOHOS` 取得；`VkExternalMemoryImageCreateInfo` + `VkExportMemoryAllocateInfo{OH_NATIVE_BUFFER_BIT_OHOS}` + `VkMemoryDedicatedAllocateInfo` 分配通过；导出 `OH_NativeBuffer` 成功（属性完全正常 `597x203 RGBA_8888 usage=0x300`）；`OH_Drawing_PixelMapGetFromOhPixelMapNative`/`OH_Drawing_CanvasDrawPixelMapRect` 接线就绪。
+**③ ★决定性取证（自检探针，逐配置问 API）**：`OH_PixelmapNative_CreatePixelmapFromNativeBuffer` 的接受条件 ——
+   · `CPU_READ|CPU_WRITE` ⇒ **err=0（成功）**；
+   · `HW_RENDER|HW_TEXTURE`（Vulkan 导出/GPU 目标）⇒ **err=401 BAD_PARAMETER**；
+   · `HW_RENDER|HW_TEXTURE|CPU_READ` ⇒ 401；`MEM_DMA|HW_RENDER|HW_TEXTURE` ⇒ 401。
+   ⇒ **该 API 只接受 CPU 可读的 native buffer**（buffer 的宽度/步长/格式都正常也被拒，性质是 usage 不符）。它**做不了零拷贝**：GPU-only buffer 进不去；而 CPU buffer 必须先 `vkCmdCopyImageToBuffer`（= #856 已经在做的那步），等于没省。
+**④ 判定**：**当前 OHOS 公开 API 无法把 Vulkan 离屏结果以 GPU 内存直供 ArkUI(OH_Drawing/RS) 画布**——这是一条**平台边界**（非我们的实现缺陷）。真正零拷贝需要 OH_Drawing 的 GPU 上下文/EGL 纹理路径（`OH_Drawing_GpuContextCreateFromGL` / `OH_NativeImage` EGL 纹理），与现有 RS 画布模型接不上，属另一次大改且收益未知。
+**⑤ 处置**：回退零拷贝实现（不留半成品/死代码），**保留 #856 的 CPU 回读路径**（fps 40→59，已是当前最优可达）。残留 `blit≈26ms`（重算帧 1/3）为**具名边界**：要再降需平台提供「GPU 纹理直绘画布」入口。
+**⑥ 净结果**：本轮玻璃性能 = **avg 16.99ms / p50 3.43 / p95 45.48 / fps 58.9**（60Hz 屏满帧）；重算帧 68→32ms。若后续要冲 120fps，仍建议先做「App 主动请求高刷」，再评估 GPU 画布路径。
