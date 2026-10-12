@@ -59,6 +59,9 @@ export default class EntryAbility extends UIAbility {
     AppStorage.setOrCreate('proteusScroll', typeof scroll === 'string' ? scroll : '');
     const ms = want?.parameters?.['ms'];
     AppStorage.setOrCreate('proteusPumpMs', typeof ms === 'string' ? ms : (typeof ms === 'number' ? String(ms) : ''));
+    // ★决策 #859：高刷请求开关（`--ps refresh off` ⇒ 玻璃场景不请求 120Hz，用于 A/B 对照）。
+    const refresh = want?.parameters?.['refresh'];
+    AppStorage.setOrCreate('proteusRefresh', typeof refresh === 'string' ? refresh : '');
     if (sceneStr === '' || sceneStr === 'superapp' || sceneStr === 'superapp-drive'
         || sceneStr.startsWith('superapp-screen-') || sceneStr.startsWith('superapp-pump-')) {
       this.pageToLoad = 'shell/Superapp';

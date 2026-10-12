@@ -19,6 +19,7 @@ import { util } from '@kit.ArkTS';
 import { fileIo } from '@kit.CoreFileKit';
 import { display } from '@kit.ArkUI';
 import { window } from '@kit.ArkUI';
+import { displaySync } from '@kit.ArkGraphics2D';
 import { hidebug } from '@kit.PerformanceAnalysisKit';
 // ★矩阵 #17：App 路由栈场景探针（移植副本，与 Android/iOS 同口径）
 import { runAppStackProbe } from './app-stack-probe';
@@ -131,11 +132,16 @@ class GlassBenchFrameCallback extends FrameCallback {
   private frames: number;
   private offset: number = 0;
   private n: number = 0;
+  private firstTs: number = 0;   // ★决策 #859：首帧时间戳（算**实际交付** vsync 间隔）
+  private lastTs: number = 0;
   constructor(uiCtx: UIContext, filesDir: string, pssBefore: number, stepVp: number, maxVp: number, frames: number) {
     super(); this.uiCtx = uiCtx; this.filesDir = filesDir; this.pssBefore = pssBefore;
     this.stepVp = stepVp; this.maxVp = maxVp; this.frames = frames;
   }
-  onFrame(_frameTimeInNano: number): void {
+  onFrame(frameTimeInNano: number): void {
+    // ★决策 #859：跳过前 12 帧预热（首帧含资源初始化 ~150ms，会污染交付帧率）
+    if (this.n === 12) this.firstTs = frameTimeInNano;
+    this.lastTs = frameTimeInNano;
     this.offset += this.stepVp;
     if (this.offset > this.maxVp) this.offset = 0;
     scrollRoot(this.offset);
@@ -143,7 +149,12 @@ class GlassBenchFrameCallback extends FrameCallback {
     if (this.n < this.frames) { this.uiCtx.postFrameCallback(this); return; }
     const gs: string = glassStats();
     const pssAfter: number = Number(hidebug.getPss());   // KB
+    // ★决策 #859：实际交付帧率 = (帧数-1) / (末帧-首帧) 秒——判 displaySync 是否真把 App 提到 120
+    const spanNs = this.lastTs - this.firstTs;
+    const deliveredFps = spanNs > 0 ? (this.frames - 12) * 1e9 / spanNs : -1;
     const report: string = '{"scene":"glass-bench","nodes":33,"bench_frames":' + this.frames +
+      ',"delivered_fps":' + deliveredFps.toFixed(1) +
+      ',"span_ms":' + (spanNs / 1e6).toFixed(1) +
       ',"stats":' + gs + ',"pss_before_kb":' + this.pssBefore + ',"pss_after_kb":' + pssAfter +
       ',"pss_delta_kb":' + (pssAfter - this.pssBefore) + '}';
     hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_GLASS_BENCH_DONE %{public}s', report);
@@ -624,6 +635,8 @@ struct Index {
   /** ★★★决策 #847：**玻璃性能基线**场景（`--ps scene glass-bench`）——程序化滚动 N 帧采集
    *  自绘玻璃帧耗时（`glassStats`）+ PSS（`hidebug.getPss`），落 `glass-bench.json` 并上报。 */
   private glassBenchScene: boolean = (AppStorage.get<string>('proteusScene') ?? '') === 'glass-bench';
+  /** ★决策 #859：持有 DisplaySync 引用（否则被 GC ⇒ 帧率请求随即失效）。 */
+  private refreshSync: displaySync.DisplaySync | null = null;
   /** 手动拖拽滚动的累计位移（物理 px；glass-demo 场景专用）。 */
   private dragOff: number = 0;
   private dragLastY: number = 0;
@@ -861,6 +874,27 @@ struct Index {
 
   aboutToAppear(): void {
     hilog.info(DOMAIN, TAG, 'PROTEUS_PAGE_APPEAR');
+  }
+
+  /** ★★★决策 #859：**请求高刷**（玻璃/动画场景）——鸿蒙默认 60Hz（activeMode=60），须显式申请才上 120。
+   *   用 `displaySync.setExpectedFrameRateRange({min,max,expected})`（本设备支持 120Hz）。
+   *   真机判据：日志 `PROTEUS_REFRESH_REQ` + `hidumper -s RenderService -a screen` 的 activeMode。 */
+  private requestHighRefreshRate(): void {
+    try {
+      // ★决策 #859：开关/档位——`--ps refresh off` 不请求；`--ps refresh 60` 请求 60Hz（干净对照）；
+      //   缺省/`on` 请求 120Hz。用于 A/B 定位「120Hz 是否真更快」。
+      const arg: string = AppStorage.get<string>('proteusRefresh') ?? '';
+      if (arg === 'off') { hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_REFRESH_REQ skipped(off)'); return; }
+      const rate: number = (arg === '60') ? 60 : 120;
+      const ds = displaySync.create();
+      ds.setExpectedFrameRateRange({ min: 30, max: rate, expected: rate });
+      ds.on('frame', () => { /* 仅需持续持有请求；回调空转 */ });
+      ds.start();
+      this.refreshSync = ds;   // 持有引用防 GC（GC 会让请求失效）
+      hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_REFRESH_REQ rate=%{public}d', rate);
+    } catch (e) {
+      hilog.warn(DOMAIN, BENCH_TAG, 'PROTEUS_REFRESH_REQ_ERR %{public}s', JSON.stringify(e) ?? '');
+    }
   }
 
   build() {
@@ -1166,6 +1200,7 @@ struct Index {
       // ── ★★★玻璃性能基线场景（决策 #847 · `--ps scene glass-bench`）：程序化滚动 N 帧，采帧耗时 + PSS ──
       if (this.glassBenchScene) {
         try {
+          this.requestHighRefreshRate();   // ★决策 #859：基准/玻璃场景请求 120Hz（否则封顶 60）
           const dispB = display.getDefaultDisplaySync();
           const vpWB = px2vp(dispB.width);
           const vpHB = px2vp(dispB.height);
@@ -1187,6 +1222,7 @@ struct Index {
       }
       if (this.glassDemoScene) {
         try {
+          this.requestHighRefreshRate();   // ★决策 #859：玻璃演示页请求 120Hz（手动滚动观感更顺）
           const dispD = display.getDefaultDisplaySync();
           const vpWD = px2vp(dispD.width);
           const vpHD = px2vp(dispD.height);
@@ -1211,6 +1247,7 @@ struct Index {
       //   与 stressScene 同构（早退，不跑 bench——否则 bench 的多次 renderCommands 会覆盖本夹具）──
       if (this.glassScene) {
         try {
+          this.requestHighRefreshRate();   // ★决策 #859：玻璃夹具场景请求 120Hz
           const dispG = display.getDefaultDisplaySync();
           const vpWG = px2vp(dispG.width);
           const vpHG = px2vp(dispG.height);
