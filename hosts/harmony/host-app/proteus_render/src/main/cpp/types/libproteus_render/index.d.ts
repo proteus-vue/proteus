@@ -31,7 +31,7 @@ export const platformAnimSave: (content: string, path: string) => number;
 export const clearRoot: () => number;
 /** ★★★决策 #842：切换内容渲染模式：`"render-node"`（缺省，RenderNode 属性树）/ `"self-draw"`
  *  （进程内自绘位图 ⇒ 玻璃可与内容同帧）。返回 0。 */
-export const setContentMode: (mode: string) => number;
+export const setContentMode: (mode: string, topInsetPx?: number) => number;
 /** ★矩阵 #5：平移根 RenderNode（yDesign 设计单位）——Proteus 渲染路径的滚动；返回错误码（0=OK） */
 export const scrollRoot: (yDesign: number) => number;
 /** ★矩阵 #7：在根节点装真触摸接收器（uitest uiInput 注入 → touch-samples.jsonl + PROTEUS_TOUCH）；
@@ -53,3 +53,5 @@ export const glassPass: () => string;
 /** ★★★决策 #847：自绘玻璃性能基线读数（`{"frames","avg_ms","max_ms","p50_ms","p95_ms","fps"}`）。
  *  传 `"reset"` 归零。 */
 export const glassStats: (mode?: string) => string;
+/** ★★★决策 #847：设置顶部避让区高度（物理 px，状态栏高）——内容裁到其下，防滚进状态栏区。返回 0。 */
+export const setTopInset: (px: number) => number;

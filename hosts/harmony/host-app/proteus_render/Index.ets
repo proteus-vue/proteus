@@ -29,6 +29,8 @@ export {
   glassPass,
   // ★★★决策 #847：自绘玻璃性能基线读数（帧数/均值/最大/p50/p95 ms）
   glassStats,
+  // ★★★决策 #847：设置顶部避让区（状态栏高，物理 px）——内容裁到其下（防滚进状态栏区）
+  setTopInset,
 } from 'libproteus_render.so'
 export type { ProteusRenderStats } from 'libproteus_render.so'
 
