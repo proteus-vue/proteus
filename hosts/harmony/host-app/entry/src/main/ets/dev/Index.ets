@@ -21,7 +21,7 @@ import { display } from '@kit.ArkUI';
 import { hidebug } from '@kit.PerformanceAnalysisKit';
 // ★矩阵 #17：App 路由栈场景探针（移植副本，与 Android/iOS 同口径）
 import { runAppStackProbe } from './app-stack-probe';
-import { attach, renderCommands, stats, ProteusRenderStats, platformAnimBegin, platformAnimStep, platformAnimEnd, platformAnimSave, clearRoot, scrollRoot, setContentMode, gestureInstall, gestureSample, snapshotProbe, vkGlassProbe, glassPass, appScreenCommands, appScreenHitAt, appScreenAnimTick } from 'proteus_render';
+import { attach, renderCommands, stats, ProteusRenderStats, platformAnimBegin, platformAnimStep, platformAnimEnd, platformAnimSave, clearRoot, scrollRoot, setContentMode, gestureInstall, gestureSample, snapshotProbe, vkGlassProbe, glassPass, glassStats, appScreenCommands, appScreenHitAt, appScreenAnimTick } from 'proteus_render';
 // ★P3-3：宿主动画入口（`<Transition>` 桥的鸿蒙腿——与 Android/iOS 同形）
 import { animTick, animActive } from 'libproteus_bench.so';
 import { bench4050, hitProbe, recycleProbe, spliceProbe, textProbe, kernelAnimProbe, memProbe, sfcStressProbe, sfcStressCommands, jsvmProbe, vaporProbe, animCurveBezier, hostRuntimeProbe, hostRtShellInstall, mountVirtualProbe, gestureHitPrepare, gestureHitAt, fontFamilyProbe, nodeRect, vkProbe, screenContentProbe, appStackExecutorProbe, version as rustVersion } from 'libproteus_bench.so';
@@ -112,6 +112,48 @@ class GlassShotFrameCallback extends FrameCallback {
     this.n++;
     if (this.n < this.wait) { this.uiCtx.postFrameCallback(this); return; }
     hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_GLASS_SHOT_READY');
+  }
+  onIdle(): void {}
+}
+
+/**
+ * ★★★决策 #847：**玻璃性能基线**帧循环——程序化滚动 N 帧（逐帧 `scrollRoot` 驱动自绘玻璃重画），
+ *   结束后读 `glassStats`（帧耗时）+ `hidebug.getPss`（内存），落 `glass-bench.json` 并上报。
+ *   ★零盲等：postFrameCallback 自驱，帧数上限兜底。
+ */
+class GlassBenchFrameCallback extends FrameCallback {
+  private uiCtx: UIContext;
+  private filesDir: string;
+  private pssBefore: number;
+  private stepVp: number;
+  private maxVp: number;
+  private frames: number;
+  private offset: number = 0;
+  private n: number = 0;
+  constructor(uiCtx: UIContext, filesDir: string, pssBefore: number, stepVp: number, maxVp: number, frames: number) {
+    super(); this.uiCtx = uiCtx; this.filesDir = filesDir; this.pssBefore = pssBefore;
+    this.stepVp = stepVp; this.maxVp = maxVp; this.frames = frames;
+  }
+  onFrame(_frameTimeInNano: number): void {
+    this.offset += this.stepVp;
+    if (this.offset > this.maxVp) this.offset = 0;
+    scrollRoot(this.offset);
+    this.n++;
+    if (this.n < this.frames) { this.uiCtx.postFrameCallback(this); return; }
+    const gs: string = glassStats();
+    const pssAfter: number = Number(hidebug.getPss());   // KB
+    const report: string = '{"scene":"glass-bench","nodes":33,"bench_frames":' + this.frames +
+      ',"stats":' + gs + ',"pss_before_kb":' + this.pssBefore + ',"pss_after_kb":' + pssAfter +
+      ',"pss_delta_kb":' + (pssAfter - this.pssBefore) + '}';
+    hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_GLASS_BENCH_DONE %{public}s', report);
+    try {
+      const path: string = this.filesDir + '/glass-bench.json';
+      const fd = fileIo.openSync(path, fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE | fileIo.OpenMode.TRUNC);
+      fileIo.writeSync(fd.fd, report);
+      fileIo.closeSync(fd);
+    } catch (we) {
+      hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_GLASS_BENCH_WRITE_FAIL %{public}s', JSON.stringify(we) ?? '');
+    }
   }
   onIdle(): void {}
 }
@@ -539,6 +581,9 @@ struct Index {
   /** ★★★决策 #843：**玻璃演示（自动滚动）**场景（`--ps scene glass-demo`）——连续滚动内容经过固定玻璃，
    *  供**录屏**（内容折射的动态观感；静态截图看不出）。 */
   private glassDemoScene: boolean = (AppStorage.get<string>('proteusScene') ?? '') === 'glass-demo';
+  /** ★★★决策 #847：**玻璃性能基线**场景（`--ps scene glass-bench`）——程序化滚动 N 帧采集
+   *  自绘玻璃帧耗时（`glassStats`）+ PSS（`hidebug.getPss`），落 `glass-bench.json` 并上报。 */
+  private glassBenchScene: boolean = (AppStorage.get<string>('proteusScene') ?? '') === 'glass-bench';
   /** 手动拖拽滚动的累计位移（物理 px；glass-demo 场景专用）。 */
   private dragOff: number = 0;
   private dragLastY: number = 0;
@@ -1042,6 +1087,28 @@ struct Index {
         return;
       }
       // ── ★★★玻璃演示（自动滚动）场景（决策 #843 · `--ps scene glass-demo`）：连续滚动供录屏 ──
+      // ── ★★★玻璃性能基线场景（决策 #847 · `--ps scene glass-bench`）：程序化滚动 N 帧，采帧耗时 + PSS ──
+      if (this.glassBenchScene) {
+        try {
+          const dispB = display.getDefaultDisplaySync();
+          const vpWB = px2vp(dispB.width);
+          const vpHB = px2vp(dispB.height);
+          attach(this.content, vp2px(1), vpWB, vpHB);
+          setContentMode('self-draw');
+          const nB = renderCommands(buildGlassCommands(vpWB, vpHB));
+          this.rendered = nB;
+          glassStats('reset');
+          const ctxB = getContext(this);
+          const pssBefore: number = Number(hidebug.getPss());   // KB
+          hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_GLASS_BENCH nodes=%{public}d pss_before_kb=%{public}d', nB, pssBefore);
+          // 程序化滚动 120 帧（每帧 +6vp，回绕循环）；帧率由落地耗时决定
+          this.getUIContext().postFrameCallback(
+            new GlassBenchFrameCallback(this.getUIContext(), ctxB.filesDir, pssBefore, 6, 1600, 120));
+        } catch (be) {
+          hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_GLASS_BENCH_ERROR %{public}s', JSON.stringify(be) ?? '');
+        }
+        return;
+      }
       if (this.glassDemoScene) {
         try {
           const dispD = display.getDefaultDisplaySync();
