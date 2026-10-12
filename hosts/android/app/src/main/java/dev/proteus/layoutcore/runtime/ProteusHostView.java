@@ -3267,37 +3267,71 @@ public class ProteusHostView extends ViewGroup {
      * ★诚实边界：内容帧为"本帧内容"，玻璃面随内容实时更新（每帧重捕，仅当本屏有玻璃节点时）。
      * 无 AGSL（API<31）⇒ `GlassMaterial.buildPaint` 返 null ⇒ 回退半透明实色（`glassFallback`）。 */
     private android.graphics.Bitmap glassBackdrop;
+    /** `glassBackdrop` 在其覆盖的**屏幕区域**中的左上角（屏幕坐标）——玻璃采样按它把"屏幕坐标"折算到位图坐标。 */
+    private float glassBackdropX = 0f, glassBackdropY = 0f;
     private boolean capturingGlass = false;
+
+    /** ★★★#837 捕获优化：只栅格化**玻璃节点并集包围盒（+外扩 pad）**，不再整屏（真机实测整屏捕获 ~1.5–2ms）。
+     *  ★pad = 边缘折射位移 + 模糊核最大采样半径 + 余量（覆盖着色器会采到的所有背景像素）。
+     *  包围盒钳到屏幕；位图随之变小 ⇒ 像素填充成正比下降（玻璃集中于局部时收益最大）。 */
+    private static float glassPad(Cmd c, GlassMaterial.Spec g) {
+        // 折射峰值位移 = min(w,h)*0.22（与 buildPaint/shader 同式）；模糊最远采样 ≈ blur*0.55*1.6
+        return Math.min(c.w, c.h) * 0.22f + g.blur * 0.55f * 1.6f + 4f;
+    }
 
     /** 捕获"无玻璃面"的内容帧（作玻璃采样的背后内容）；调用方须保证本屏有玻璃节点。 */
     private void captureGlassBackdrop() {
-        final int w = getWidth(), h = getHeight();
-        if (w <= 0 || h <= 0) return;
-        if (glassBackdrop == null || glassBackdrop.getWidth() != w || glassBackdrop.getHeight() != h) {
-            if (glassBackdrop != null) glassBackdrop.recycle();
-            glassBackdrop = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888);
+        final int W = getWidth(), H = getHeight();
+        if (W <= 0 || H <= 0) return;
+        final List<Cmd> list = cmds;
+        final int[] ids = cmdNodeIds;
+        if (list == null || ids == null) return;
+        // ① 玻璃节点并集包围盒（屏幕坐标）+ 外扩 pad
+        float minX = Float.MAX_VALUE, minY = Float.MAX_VALUE, maxX = -Float.MAX_VALUE, maxY = -Float.MAX_VALUE;
+        for (int i = 0; i < list.size() && i < ids.length; i++) {
+            GlassMaterial.Spec g = glassByNode.get(ids[i]);
+            if (g == null) continue;
+            final Cmd c = list.get(i);
+            if (c.w <= 0f || c.h <= 0f) continue;
+            final float pad = glassPad(c, g);
+            minX = Math.min(minX, c.x - pad);
+            minY = Math.min(minY, c.y - pad);
+            maxX = Math.max(maxX, c.x + c.w + pad);
+            maxY = Math.max(maxY, c.y + c.h + pad);
         }
+        if (minX > maxX) return;   // 无有效玻璃盒
+        // ② 钳到屏幕 ⇒ 位图尺寸
+        final int bx = Math.max(0, (int) Math.floor(minX));
+        final int by = Math.max(0, (int) Math.floor(minY));
+        final int bw = Math.max(1, Math.min(W, (int) Math.ceil(maxX)) - bx);
+        final int bh = Math.max(1, Math.min(H, (int) Math.ceil(maxY)) - by);
+        if (glassBackdrop == null || glassBackdrop.getWidth() != bw || glassBackdrop.getHeight() != bh) {
+            if (glassBackdrop != null) glassBackdrop.recycle();
+            glassBackdrop = android.graphics.Bitmap.createBitmap(bw, bh, android.graphics.Bitmap.Config.ARGB_8888);
+        }
+        glassBackdropX = bx;
+        glassBackdropY = by;
         final Canvas bc = new Canvas(glassBackdrop);
         bc.drawColor(0, android.graphics.PorterDuff.Mode.CLEAR);
-        // ★★背景捕获**带上滚动 transform**（与 onDraw 同口径）⇒ `glassBackdrop` = **当前屏上**内容。
-        //   玻璃在 onDraw 出滚动 transform 后按**屏幕坐标**画 ⇒ 采样到"玻璃所在屏幕位置背后"的内容。
+        // ③ 画内容：位图坐标 = 屏幕坐标 −(bx,by)；屏幕坐标 = 内容坐标 −(scrollX,scrollY)
+        //    ⇒ 一次 translate(−scrollX−bx, −scrollY−by)；视口裁剪按位图坐标平移。
         final boolean cScrolled = offsetScroll
                 ? (scrollX != 0 || scrollY != 0 || scrollViewport != null)
                 : (!horizontalScroll && (scrollX != 0 || scrollY != 0 || scrollViewport != null));
-        final int cSave = cScrolled ? bc.save() : -1;
-        if (cScrolled) {
-            if (scrollViewport != null) {
-                bc.clipRect(scrollViewport.left, scrollViewport.top, scrollViewport.right, scrollViewport.bottom);
-            }
-            bc.translate(-scrollX, -scrollY);
+        final boolean cClipViewport = cScrolled && scrollViewport != null;
+        final int cSave = (cScrolled || bx != 0 || by != 0) ? bc.save() : -1;
+        if (cClipViewport) {
+            bc.clipRect(scrollViewport.left - bx, scrollViewport.top - by,
+                    scrollViewport.right - bx, scrollViewport.bottom - by);
         }
+        bc.translate(-bx - (cScrolled ? scrollX : 0), -by - (cScrolled ? scrollY : 0));
         capturingGlass = true;
         try {
             drawCmds(bc);   // 无玻璃面（capturingGlass 时跳过玻璃分支）⇒ 纯内容
         } finally {
             capturingGlass = false;
         }
-        if (cScrolled) bc.restoreToCount(cSave);
+        if (cSave != -1) bc.restoreToCount(cSave);
     }
 
     /** 画一个玻璃面（节点盒 c）：AGSL 采样背后内容 → blur+tint；不可用 ⇒ 半透明实色回退。 */
@@ -3310,7 +3344,7 @@ public class ProteusHostView extends ViewGroup {
                     android.graphics.Path.Direction.CW);
             canvas.clipPath(clip);
         }
-        android.graphics.Paint p = GlassMaterial.buildPaint(nodeId, glassBackdrop, c.x, c.y, c.w, c.h, spec.radius, spec);
+        android.graphics.Paint p = GlassMaterial.buildPaint(nodeId, glassBackdrop, c.x, c.y, glassBackdropX, glassBackdropY, c.w, c.h, spec.radius, spec);
         if (p != null) {
             canvas.drawRect(c.x, c.y, c.x + c.w, c.y + c.h, p);
         } else {
