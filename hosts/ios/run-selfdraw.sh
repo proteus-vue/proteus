@@ -113,6 +113,8 @@ for a in "$@"; do
     --app-stack) MODE="app-stack" ;;
     # ★★★玻璃夹具（决策 #833）：iOS 自绘玻璃遍真机取证（--glass）——手写树，无 bundle，截图 + 报告
     --glass) MODE="glass" ;;
+    # ★★★玻璃滚动性能基线（决策 #862）：--glass + 程序化滚动 160 帧 + CADisplayLink 真 vsync 采样
+    --glass-bench) MODE="glass-bench" ;;
     --showcase) MODE="showcase" ;;
     # ★★★批次 44（2026-10-05）：superapp 真实应用（桌面点开形态）——`--drive` = 验证模式（脚本
     #   驱动切 tab + 落 superapp.json 后自退）；不带 `--drive` = 常驻（真·桌面点开形态，不退出）。
@@ -411,7 +413,10 @@ if [ "$MODE" = "host-runtime" ]; then REPORT_FILE="host-runtime.json"; SNAP_FILE
 # ★M5：执行器场景两份报告（主 + 执行器；判据合并读）
 if [ "$MODE" = "app-stack" ]; then REPORT_FILE="app-stack.json"; SNAP_FILE="app-stack-executor.json"; fi
 # ★★★玻璃夹具（决策 #833）：报告 + 两张截图（滚动前/后）
+# ★★★玻璃夹具（决策 #833）：报告 + 两张截图（滚动前/后）
 if [ "$MODE" = "glass" ]; then REPORT_FILE="glass-ios.json"; SNAP_FILE="glass-ios.png"; fi
+# ★★★玻璃滚动性能基线（决策 #862）：同一报告文件（含 bench 段）+ 滚动后截图
+if [ "$MODE" = "glass-bench" ]; then REPORT_FILE="glass-ios.json"; SNAP_FILE="glass-ios-bench.png"; fi
 # ★★★批次 44：superapp 真实应用——驱动模式落 `superapp.json`（与 Android SuperappActivity 同名）
 if [ "$MODE" = "superapp" ]; then REPORT_FILE="superapp.json"; SNAP_FILE="superapp.json"; fi
 # ★Morpheus 炫技场（一份报告 + 一张收尾截图）
@@ -611,6 +616,11 @@ elif [ "$MODE" = "glass" ]; then
   xcrun devicectl device process launch --console --terminate-existing \
     --environment-variables '{"PROTEUS_EXIT_AFTER_REPORT":"1"}' \
     --device "$UDID" "$BUNDLE_ID" --glass > "$LAUNCH_LOG" 2>&1 || LAUNCH_RC=$?
+elif [ "$MODE" = "glass-bench" ]; then
+  # ★★★玻璃滚动性能基线（决策 #862）：程序化滚动 160 帧 + CADisplayLink 真 vsync ⇒ 报告含 bench 段 → 自退。
+  xcrun devicectl device process launch --console --terminate-existing \
+    --environment-variables '{"PROTEUS_EXIT_AFTER_REPORT":"1"}' \
+    --device "$UDID" "$BUNDLE_ID" --glass-bench > "$LAUNCH_LOG" 2>&1 || LAUNCH_RC=$?
 else
   # ★自绘模式**显式传参**：从桌面点开（无参数）走 Info.plist 的缺省场景 = showcase，
   #   而脚本要的是自绘 ⇒ 必须显式声明（否则脚本跑起来的是演示）
@@ -704,7 +714,7 @@ print('ok' if d.get('build_id')=='$BUILD_ID' else 'build_id 不符：报告=%r �
     echo "✗ ${BID_OK}——设备上跑的不是本次构建；不等待，直接失败"
     exit 7
   fi
-elif [ "$MODE" = "app-stack" ] || [ "$MODE" = "native-mix" ] || [ "$MODE" = "vapor-ab" ] || [ "$MODE" = "vapor" ] || [ "$MODE" = "superapp" ] || [ "$MODE" = "glass" ]; then
+elif [ "$MODE" = "app-stack" ] || [ "$MODE" = "native-mix" ] || [ "$MODE" = "vapor-ab" ] || [ "$MODE" = "vapor" ] || [ "$MODE" = "superapp" ] || [ "$MODE" = "glass" ] || [ "$MODE" = "glass-bench" ]; then
   # ★M5：app-stack 报告是 `__proteusAppStackRun` 的**原样输出**（无 build_id 字段——它不是
   #   编译期注入的 bundle，而是纯逻辑读数）⇒ build_id 断言不适用；新鲜度由 run_ts 断言兜底。
   # ★矩阵 #10：native-mix 报告由 Swift 侧组装（含 run_ts；无 bundle 注入的 build_id）——同处理。
@@ -862,6 +872,24 @@ if [ "$MODE" = "glass" ]; then
     --destination "$HERE/results/glass-ios-scrolled.png" >/dev/null 2>&1 \
     && echo "    滚动后截图：$HERE/results/glass-ios-scrolled.png" \
     || echo "    ⚠ 滚动后截图未取到"
+fi
+# ★★★玻璃滚动性能基线（决策 #862）：打印 bench 段（delivered_fps / 帧间隔 / 掉帧 / 工作成本）
+if [ "$MODE" = "glass-bench" ]; then
+  echo "==> ⑩ 玻璃滚动性能基线（决策 #862 · 与 Android Choreographer / 鸿蒙 displaySync 同口径）"
+  python3 - "$HERE/results/$REPORT_FILE" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1]))
+b = d.get("bench") or {}
+if not b.get("ok"):
+    print("  ✗ 未见 bench 段（基准未运行）:", b); sys.exit(1)
+print("  delivered_fps=%.1f  frames=%d  vsync_p50=%.2fms  vsync_max=%.2fms"
+      % (b.get("delivered_fps", -1), b.get("frames", 0), b.get("vsync_p50_ms", -1), b.get("vsync_max_ms", -1)))
+print("  work(p50/p95/max)=%.2f/%.2f/%.2f ms  dropped=%d  timed_out=%s"
+      % (b.get("work_p50_ms", -1), b.get("work_p95_ms", -1), b.get("work_max_ms", -1),
+         b.get("dropped", -1), b.get("timed_out")))
+print("  判据：delivered_fps 应接近屏幕刷新率；dropped=0 = 零掉帧（满帧）")
+PY
+  exit 0
 fi
 if [ "${NATIVE_MIX_CHECK:-0}" = "1" ]; then
   echo "==> ⑩ 判据（scripts/check-native-mix-ios.mjs）"

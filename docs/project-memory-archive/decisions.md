@@ -3509,3 +3509,11 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **③ 与鸿蒙对照**：安卓 = 真 vsync 时间戳采样（标准）；鸿蒙 = `displaySync`/主线程墙钟（近似，120Hz 下 ~3-5% 误差）。两端都达 120fps 级。安卓此负载下 `onDraw` 仅 1.7ms（`RuntimeShader` AGSL 逐帧重绘玻璃**很便宜**）——与鸿蒙「重算帧受 CPU↔GPU 搬运拖累」（#855/#860，靠降 payload 才达 120）形成对照：**同为 WGSL 单源，安卓 AGSL 的逐帧成本天然低**。
 **④ 启动前需注意**：`mActiveModeId` 须指向 fps=120 的 mode（否则 `delivered_fps` 会被显示模式封顶；本机 `userPreferredModeId=-1` 时默认落在 id=1 @120）。
 **⑤ 产出**：`hosts/android/run-glass-bench.sh`（可复现 runner）· `hosts/android/results/glass-bench-android.png`（截图：圆形玻璃折射正常）。
+
+862. **★★★iOS 玻璃滚动性能基线——建基准抓出真瓶颈（每帧全屏光栅化+每玻璃全屏纹理），按 bbox 捕获修复：88→16ms/帧**（2026-10-12）：
+**① 装置**：`--glass-bench`（`hosts/ios/run-selfdraw.sh --glass-bench`）——玻璃夹具 + 程序化滚动 160 帧 + **CADisplayLink 真 vsync 间隔**（`SelfDrawView.lastFrameMs`）⇒ 上报 `delivered_fps` / `vsync_p50/max` / `work(p50/p95/max)` / `dropped`。**与 Android `Choreographer` / 鸿蒙 `displaySync` 同口径**；事件驱动续链 + 看门狗（与 `animBench` 同法）。
+**② ★基线暴露真瓶颈（未修前）**：`work_p50=88ms`、`delivered_fps=10`、`vsync_p50=96.9ms`。根因（读码取证）：`applyGlassPass()`（滚动每帧调用）做 **① 整屏 `layer.render(in:)` 软件光栅化**（3M 像素 CPU 化）+ **② 每块玻璃 `renderFace` 都把整屏 backdrop 上传成 Metal 纹理**——**全屏成本 × 每玻璃 × 每帧**。
+**③ 修复（对齐 Android #837）**：`applyGlassPass` 背景捕获改**「玻璃并集 bbox + 外扩 pad」**（pad = min(w,h)*0.22 折射位移 + blur*0.88 模糊半径 + 4px，钳到屏幕）；`renderFace`/`makeUniforms` 加 `cropOrigin`，寻址 = (节点左上−crop原点)/纹理宽。
+**④ 实测（iPhone 12 · **60Hz** 屏）**：`work_p50 88→16-22ms`、`fps 10→44-51`。画质与改前**逐像素一致**（截图对比：内容行/圆形折射/胶囊均正确）。
+**⑤ 诚实边界**：仍**未满 60fps**——玻璃滚动 `work≈16-22ms` 略超 60Hz 的 16.67ms 预算 ⇒ 掉帧（44-51fps）。剩余成本：每重算帧「capture bbox 光栅化 + 每玻璃一次 Metal 离屏 + `waitUntilCompleted` 同步 + `getBytes` 回读 + CGImage」。**再优化需**：① 玻璃 pass 增量（视口相交才重算）② 索引/分片减同步。**注**：本设备 iPhone 12 是 60Hz（非 ProMotion），天花板即 60。
+**⑥ 三端对照（真机·各自屏）**：Android 121fps/零掉帧（120Hz）· 鸿蒙 121fps（120Hz）· **iOS 44-51fps（60Hz，未满帧）**。⇒ iOS 玻璃滚动是**三端里唯一未满帧**的，列为后续优化项。

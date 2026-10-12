@@ -83,13 +83,14 @@ final class GlassMetalRenderer {
     ///   - scale: 屏幕缩放
     ///   - spec: 玻璃规格（点单位）
     /// - Returns: 节点盒尺寸（像素）的玻璃图；失败返 nil ⇒ 调用方降级。
-    func renderFace(backdrop: CGImage, nodeRect: CGRect, scale: CGFloat, spec: Spec) -> CGImage? {
+    func renderFace(backdrop: CGImage, nodeRect: CGRect, scale: CGFloat, spec: Spec,
+                    cropOrigin: CGPoint = .zero) -> CGImage? {
         guard let device = device, let queue = commandQueue, let pipeline = fragmentPipeline else { return nil }
         let w = Int((nodeRect.width * scale).rounded())
         let h = Int((nodeRect.height * scale).rounded())
         guard w > 0, h > 0 else { return nil }
 
-        // ① 背景纹理（整屏）。
+        // ① 背景纹理（★决策 #863：仅「玻璃并集 bbox + pad」的小图，非整屏——与 Android #837 同口径）。
         guard let backdropTex = makeTexture(from: backdrop, device: device) else { return nil }
 
         // ② 输出纹理（节点盒）。
@@ -99,7 +100,7 @@ final class GlassMetalRenderer {
         guard let outTex = device.makeTexture(descriptor: outDesc) else { return nil }
 
         // ③ uniform（与 Rust `GlassUniforms` 布局逐字段对应；总 80 字节）。
-        var u = makeUniforms(nodeRect: nodeRect, scale: scale, backdrop: backdrop, spec: spec)
+        var u = makeUniforms(nodeRect: nodeRect, scale: scale, backdrop: backdrop, spec: spec, cropOrigin: cropOrigin)
 
         // ④ 编码一帧。
         let pass = MTLRenderPassDescriptor()
@@ -147,13 +148,17 @@ final class GlassMetalRenderer {
         var _pad: Float              // 76
     }
 
-    private func makeUniforms(nodeRect: CGRect, scale: CGFloat, backdrop: CGImage, spec: Spec) -> GlassUniforms {
+    private func makeUniforms(nodeRect: CGRect, scale: CGFloat, backdrop: CGImage, spec: Spec,
+                              cropOrigin: CGPoint) -> GlassUniforms {
         let w = Float(nodeRect.width * scale)
         let h = Float(nodeRect.height * scale)
-        // 背景纹理 = 整屏（像素）；节点 uv → 纹理 uv：bias = 节点左上角(px)/整屏(px)，scale = 盒尺寸/整屏。
+        // 背景纹理 = **cropRect 区域**（决策 #863：非整屏）；节点 uv → 纹理 uv：
+        //   bias = (节点左上角 − crop 原点)(px)/纹理宽；scale = 盒尺寸/纹理宽。
         let tw = Float(backdrop.width)
         let th = Float(backdrop.height)
-        let bias = SIMD2<Float>(Float(nodeRect.minX * scale) / tw, Float(nodeRect.minY * scale) / th)
+        let relX = Float((nodeRect.minX - cropOrigin.x) * scale)
+        let relY = Float((nodeRect.minY - cropOrigin.y) * scale)
+        let bias = SIMD2<Float>(relX / tw, relY / th)
         let tscale = SIMD2<Float>(w / tw, h / th)
         return GlassUniforms(
             tint: SIMD4<Float>(Float(spec.tint.r), Float(spec.tint.g), Float(spec.tint.b), Float(spec.tint.a)),

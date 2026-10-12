@@ -365,6 +365,9 @@ func physFootprintMB() -> Double {
     /// ★★**帧率测席**（§9 指标测量）：启动 / 取结果
     func animBenchStart(_ json: String) -> String
     func animBenchResults() -> String
+    /// ★★★**玻璃滚动性能基线**（决策 #862）：程序化滚动 N 帧 + CADisplayLink 真 vsync 间隔采样
+    func glassBenchStart(_ json: String) -> String
+    func glassBenchResults() -> String
     /// ★★**主线程零唤醒实测**（OS 级 CPU 会计 + 阳性对照）：启动 / 取结果
     ///
     /// 【为什么不用 Instruments/xctrace（2026-09-30 取证）】本机 Xcode 26.5 的 `xctrace` **无法录制
@@ -1077,12 +1080,34 @@ final class SelfDrawView: UIView {
         glassFaceByNodeId.removeAll(keepingCapacity: true)
         CATransaction.commit()
 
-        // ② 捕获当前内容帧（★含滚动 transform——`self.layer.render(in:)` 渲染的是"屏上内容"）
         let size = bounds.size
         guard size.width > 0, size.height > 0 else { return }
         let scale = UIScreen.main.scale
-        let renderer = UIGraphicsImageRenderer(size: size)
-        let img = renderer.image { ctx in self.layer.render(in: ctx.cgContext) }
+
+        // ★★★决策 #863（对齐 Android #837）：**背景捕获改为「玻璃并集包围盒」**——不再每帧整屏软件栅格化。
+        //   捕获成本 ∝ 栅格像素数；局部玻璃（tab/nav）收益最大。pad = 着色器会采到的最大背景位移 +
+        //   模糊采样半径 + 4px（与 Android 同一公式，保守：覆盖折射 + 模糊）。
+        var unionRect = CGRect.null
+        for (id, _) in glassSpecByNodeId {
+            guard let nodeLayer = layersById[id] else { continue }
+            unionRect = unionRect.union(nodeLayer.convert(nodeLayer.bounds, to: self.layer))
+        }
+        guard !unionRect.isNull, unionRect.width > 0, unionRect.height > 0 else { return }
+        // 每个玻璃按自身盒算 pad（更精确）：minDim*0.22（折射位移）+ blur*0.88（模糊采样）+ 4px
+        var padPts: CGFloat = 0
+        for (id, spec) in glassSpecByNodeId {
+            guard let nodeLayer = layersById[id] else { continue }
+            let r = nodeLayer.convert(nodeLayer.bounds, to: self.layer)
+            padPts = max(padPts, min(r.width, r.height) * 0.22 + spec.blur * 0.55 * 1.6 + 4)
+        }
+        let cropRect = unionRect.insetBy(dx: -padPts, dy: -padPts).intersection(bounds)
+
+        // ② 只栅格化 cropRect 区域（translate 使 cropRect 原点映射到 (0,0)）
+        let renderer = UIGraphicsImageRenderer(size: cropRect.size)
+        let img = renderer.image { ctx in
+            ctx.cgContext.translateBy(x: -cropRect.minX, y: -cropRect.minY)
+            self.layer.render(in: ctx.cgContext)
+        }
         guard let backdrop = img.cgImage else {
             NSLog("[proteus-glass] backdrop 捕获失败——玻璃跳过")
             return
@@ -1096,7 +1121,8 @@ final class SelfDrawView: UIView {
             // 节点在**屏幕**上的矩形（`convert(to:)` 穿过 sublayerTransform ⇒ 给出渲染位置）——采样用
             let screenRect = nodeLayer.convert(nodeLayer.bounds, to: self.layer)
             guard let face = GlassMetalRenderer.shared.renderFace(backdrop: backdrop, nodeRect: screenRect,
-                                                                  scale: scale, spec: spec) else {
+                                                                  scale: scale, spec: spec,
+                                                                  cropOrigin: cropRect.origin) else {
                 continue   // 材质不可用 ⇒ 不装玻璃面（保持下层内容可见，绝不白屏/黑块）
             }
             let fl = CALayer()
@@ -6917,6 +6943,110 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     /// 帧率测席结果（供 finalize2 带进报告）
     func animBenchResults() -> String {
         guard let r = benchResult else { return "{\"ok\":false,\"error\":\"未运行测席\"}" }
+        return (try? JSONSerialization.data(withJSONObject: r))
+            .flatMap { String(data: $0, encoding: .utf8) } ?? "{\"ok\":false}"
+    }
+
+    /* ────────────────── ★★★玻璃滚动性能基线（决策 #862 · 与 Android Choreographer / 鸿蒙 displaySync 同口径） ────────────────── */
+
+    /// 玻璃基准运行状态（跨帧累积；由 CADisplayLink 驱动）
+    private struct GlassBenchRun {
+        let targetFrames: Int
+        let stepPx: Double
+        var frames: Int = 0
+        var dir: Double = 1
+        var lastOff: Double = -1
+        var elapsedMs: Double = 0
+        var workMs: [Double] = []      // 每帧被测工作（scrollDragBy=内容偏移+内核联动+刷层）成本
+        var vsyncMs: [Double] = []     // CADisplayLink 真实帧间隔（= SelfDrawView.lastFrameMs）
+        var timedOut = false
+    }
+    private var glassBenchRun: GlassBenchRun?
+    private var glassBenchResult: [String: Any]?
+    /// 测量完成回调（事件驱动续链——由玻璃夹具装上，跑满即续，不轮询）
+    var glassBenchPhaseDone: (() -> Void)?
+
+    /// 启动玻璃滚动基准：程序化滚动 targetFrames 帧，逐帧驱动玻璃滚动通路 + 采真实 vsync 间隔。
+    func glassBenchStart(_ json: String) -> String {
+        guard handle != 0, let view else { return "{\"ok\":false,\"error\":\"未接入\"}" }
+        let o = (json.data(using: .utf8).flatMap { try? JSONSerialization.jsonObject(with: $0) }) as? [String: Any] ?? [:]
+        let frames = (o["frames"] as? NSNumber)?.intValue ?? 120
+        let step = (o["step"] as? NSNumber)?.doubleValue ?? 6
+        view.stopFrameLoop()
+        glassBenchRun = GlassBenchRun(targetFrames: frames, stepPx: step)
+        glassBenchResult = nil
+        view.onFrame = { [weak self] dtMs in self?.glassBenchFrame(dtMs) }
+        view.startFrameLoop()
+        // 看门狗（**不是盲等**）：只在"测量卡死"（如屏幕熄灭致 DisplayLink 停摆）时兜底，正常由跑满自行收尾。
+        let wdMs = Double(frames) * 10.0 + 3000.0
+        DispatchQueue.main.asyncAfter(deadline: .now() + wdMs / 1000.0) { [weak self] in
+            guard let self, self.glassBenchRun != nil else { return }
+            self.glassBenchRun?.timedOut = true
+            self.glassBenchFinish()
+        }
+        return "{\"ok\":true,\"frames\":\(frames),\"step\":\(step)}"
+    }
+
+    /// 每帧：驱动滚动（= 被测工作）+ 记录帧间隔
+    private func glassBenchFrame(_ dtMs: Double) {
+        guard var b = glassBenchRun, let view else { return }
+        let t0 = CACurrentMediaTime()
+        // 被测工作：滚动 → 内容偏移 + 内核滚动联动 + 刷层（与手指拖拽同一出口 scrollDragBy）
+        let res = scrollDragBy(dx: 0, dy: b.stepPx * b.dir)
+        // 到边界（偏移不再推进）⇒ 反向（夹具来回滚，避免停在端头）
+        if let d = res.data(using: .utf8),
+           let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any],
+           let off = (o["offsetY"] as? NSNumber)?.doubleValue {
+            if b.lastOff >= 0 && abs(off - b.lastOff) < 0.5 { b.dir = -b.dir }
+            b.lastOff = off
+        }
+        b.workMs.append((CACurrentMediaTime() - t0) * 1000)
+        b.frames += 1
+        if b.frames > 1 { b.vsyncMs.append(view.lastFrameMs) }
+        b.elapsedMs += dtMs
+        glassBenchRun = b
+        if b.frames >= b.targetFrames || b.timedOut { glassBenchFinish() }
+    }
+
+    /// 收尾：统计 → 存结果 → 事件驱动续链（与 animBench 同法）
+    private func glassBenchFinish() {
+        guard let b = glassBenchRun, let view else { return }
+        view.stopFrameLoop()
+        view.onFrame = nil
+        func pct(_ arr: [Double], _ p: Double) -> Double {
+            guard !arr.isEmpty else { return 0 }
+            let s = arr.sorted()
+            if s.count == 1 { return s[0] }
+            let pos = p * Double(s.count - 1)
+            let lo = Int(pos.rounded(.down)), hi = min(lo + 1, s.count - 1)
+            return s[lo] * (1 - (pos - Double(lo))) + s[hi] * (pos - Double(lo))
+        }
+        let vsyncSorted = b.vsyncMs.sorted()
+        let nominal = vsyncSorted.isEmpty ? 0 : vsyncSorted[vsyncSorted.count / 2]   // p50 帧间隔（= 实际刷新周期）
+        let dropped = nominal > 0 ? b.vsyncMs.filter { $0 > nominal * 1.5 }.count : 0
+        let totalVsync = b.vsyncMs.reduce(0, +)
+        let fps = totalVsync > 0 ? Double(max(b.frames - 1, 0)) * 1000.0 / totalVsync : 0
+        let out: [String: Any] = [
+            "ok": true,
+            "frames": b.frames,
+            "delivered_fps": (fps * 10).rounded() / 10,
+            "vsync_p50_ms": (nominal * 1000).rounded() / 1000,
+            "vsync_max_ms": ((vsyncSorted.last ?? 0) * 1000).rounded() / 1000,
+            "work_p50_ms": (pct(b.workMs, 0.5) * 1000).rounded() / 1000,
+            "work_p95_ms": (pct(b.workMs, 0.95) * 1000).rounded() / 1000,
+            "work_max_ms": (pct(b.workMs, 1.0) * 1000).rounded() / 1000,
+            "dropped": dropped,
+            "elapsed_ms": (b.elapsedMs * 100).rounded() / 100,
+            "timed_out": b.timedOut,
+        ]
+        glassBenchResult = out
+        glassBenchRun = nil
+        glassBenchPhaseDone?()
+    }
+
+    /// 玻璃基准结果（供玻璃夹具带进报告）
+    func glassBenchResults() -> String {
+        guard let r = glassBenchResult else { return "{\"ok\":false,\"error\":\"未运行基准\"}" }
         return (try? JSONSerialization.data(withJSONObject: r))
             .flatMap { String(data: $0, encoding: .utf8) } ?? "{\"ok\":false}"
     }

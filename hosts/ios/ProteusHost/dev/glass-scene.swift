@@ -22,7 +22,10 @@ final class GlassScene: NSObject {
     private static let rowColors = ["#e0483c", "#3cc86a", "#3c78e0", "#e0c83c", "#b448c8",
                                     "#38c0c0", "#e07830", "#7850d0"]
 
-    static func run(ctx: JSContext, view: UIView?) {
+    static func run(ctx: JSContext, view: UIView?, bridge: SelfDrawBridge, bench: Bool) {
+        // ★决策 #862：基准模式开**内容滚动范围钳制**（与 Android/Harmony 夹具同口径；内容页"装不下才滚"）
+        //   ——mount 前设，否则滚动无界、内容被滚出屏（截图黑屏）。
+        if bench { SelfDrawBridge.contentScrollRangeEnabled = true }
         // ① 手写渲染树：root(flex column) → rows(内容) + 两块 fixed 玻璃（钉在屏上）
         let tree = buildTree()
         guard let td = try? JSONSerialization.data(withJSONObject: tree),
@@ -43,6 +46,26 @@ final class GlassScene: NSObject {
             report["mount_ok"] = (m["ok"] as? Bool) ?? false
         } else {
             report["mount_raw"] = mountOut
+        }
+
+        // ★★★决策 #862：**性能基线模式**（`--glass-bench`）——挂载后跑程序化滚动基准（异步，CADisplayLink 驱动）。
+        //   与 Android `GlassActivity --ez bench` / 鸿蒙 `glass-bench` 同口径（真 vsync 间隔）。
+        if bench {
+            bridge.glassBenchPhaseDone = {
+                DispatchQueue.main.async {
+                    let benchJson = bridge.glassBenchResults()
+                    if let bd = benchJson.data(using: .utf8),
+                       let bo = (try? JSONSerialization.jsonObject(with: bd)) as? [String: Any] {
+                        report["bench"] = bo
+                    }
+                    report["snapshot_after"] = snapshot(ctx, "glass-ios-bench")
+                    writeReport(report)
+                    NSLog("[proteus] GLASS_BENCH_READY %@", benchJson)
+                    if ProcessInfo.processInfo.environment["PROTEUS_EXIT_AFTER_REPORT"] == "1" { exit(0) }
+                }
+            }
+            _ = bridge.glassBenchStart("{\"frames\":160,\"step\":6}")
+            return
         }
 
         // ③ 截图 A：滚动前（应见玻璃面 + 内容透出）
