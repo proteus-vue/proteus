@@ -2,7 +2,7 @@
 
 > 归属：基建层 / 横切能力（与 RenderBackend / CompilerBackend / HostRuntime 并列的**第五类可插拔层**）
 > 执行位：G-29 邻域（材质着色器）——★**不占 G 序**（沿 G-08/G-22/G-61 领域引擎先例；G 表编号由 `check-consistency.js` 守，本 plan 为"方法论第 24 次泛化"，见 `docs/spi-first-methodology/`）
-> 状态：**B1–B3 已落地（真机取证）；B6 像素等价门禁已落地**；B4–B5 规划中
+> 状态：**B1–B4 已落地（真机取证）；B6 像素等价门禁已落地**；B5 规划中
 > 决策：#833（立项）
 
 ## 一句话定位
@@ -64,25 +64,26 @@
 | 材质 | 状态 | 说明 |
 |---|---|---|
 | `glass` | ✅ 已迁（B2/B3） | 边缘倒角厚板：真圆角 SDF + 外法线边缘折射 + 边键控模糊 + Fresnel 高光 + 磨砂白 |
-| `backdropBlur` | 📋 待迁（B4） | 玻璃基座（纯模糊 + tint）——玻璃的特例 |
-| `gradient` | 📋 待迁（B4） | 线性/径向/平铺填充 |
-| `glow` | 📋 待迁（B4） | 分层描边泛光 |
-| `mask` | 📋 待迁（B4） | 软边揭示（线性/径向） |
+| `backdropBlur` | ✅ 入材质（B4） | 玻璃基座（纯高斯近似模糊 + tint，无折射）——已落 MSL/AGSL/GLSL |
+| `gradient` | ✅ 几何单源（B4） | **保留原生图元**（CAGradientLayer / LinearGradient）；**CSS 端点式下沉内核** `proteus_layout_gradient_endpoints`（此前 4 份手写副本） |
+| `glow` | ✅ 曲线单源（B4） | **保留分层描边**（形状跟随，不适用盒填充 shader）；**分层曲线下沉内核** `proteus_layout_glow_layers`（此前 TS/Swift/Kotlin 手写） |
+| `mask` | ✅ 曲线单源（B4） | **保留原生遮罩**（CAGradientLayer-as-mask / PorterDuff）；**揭示色标**已在内核 `reveal_stops`（宿主改用 `proteus_layout_mask_stops`） |
+
+> ★B4 的关键判断（**已取证**）：gradient/mask 已是**原生图元**（强行做自定义 shader = 向下降级）；glow 是**形状跟随**（不适用盒填充 shader）。⇒ 真正需要"单一真源"的是**重复的几何/曲线数学**，它下沉到**内核**（`GlowSpec::layers` / `style::linear_endpoints` / `MaskSpec::reveal_stops` = 唯一实现），宿主读结果——这可能比塞进 WGSL 更贴"一处实现"。
 
 ## 分批
 
 - **B1 基建** ✅：crate + naga 落地(MSL/AGSL/GLSL) + CPU oracle + SPI 包 + 生成器 + `check:shader-capability`/`check:shader-generated` + CI/verify 接线。
 - **B2 Android 竖切** ✅：`GlassMaterial` 改引生成物 AGSL；真机（真机 glass 面 + 滚动钉住）。
 - **B3 iOS 竖切** ✅：删 CoreImage；`glass-metal.swift`（Metal）；真机 `Metal 管线就绪（真源=WGSL）`。
-- **B4 前景材质** 📋：backdropBlur / gradient / glow / mask 迁入（三端齐）。
+- **B4 前景材质** ✅：backdropBlur 入 WGSL；gradient/glow/mask 的**几何/曲线数学下沉内核单源**（宿主读结果）；真机验证三块渲染（`hosts/ios/results/glass-ios.png`）。
 - **B5 鸿蒙** 📋：XComponent+GLES/Vulkan 承载研究 → 实现。
 - **B6 收口** ✅（像素等价部分）：**玻璃像素等价门禁** `check:glass-pixel-parity`——本机 macOS Metal 渲染生成物 MSL vs Rust CPU oracle 逐像素比对（半纹素对齐后平均差 0.33/255、超差 <3% 上限；**破坏性验证**：故意错 20px 折射深度 ⇒ 11.5% 超差判红）。性能基线待补。
 
 ## 诚实边界
 
-- **前景材质尚未迁入**（B4）：当前只有 `glass` 走新管线；gradient/glow/mask 仍各端原生实现。
 - **鸿蒙未落地**（B5）：无自定义片段着色器运行时，需 XComponent+GLES/Vulkan 承载（工作量最大）。
-- **像素等价门禁未落地**（B6）：CI 无 GPU ⇒ 属**设备/模拟器**门禁（本机 macOS Metal 可作为离线上位校验）。
+- **像素等价门禁**（B6）：CI 无 GPU ⇒ 属**设备/模拟器**门禁（本机 macOS Metal 可作为离线上位校验）。
 - **性能**：每玻璃节点一次离屏渲染（Metal）/ 每帧 backdrop 捕获——待真机性能基线核。
 
 ## 工具链
