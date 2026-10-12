@@ -2983,10 +2983,19 @@ static napi_value ScrollRoot(napi_env env, napi_callback_info info) {
     double y = 0;
     if (argc >= 1) napi_get_value_double(env, args[0], &y);
     int32_t rc = -1;
-    // ★决策 #842：自绘通道 —— 滚动 = 改 spec 的 scrollY + 请求重绘（不再位移 RenderNode）。
+    // ★决策 #842：自绘通道 —— 滚动 = 改 spec 的 scrollY + **重挂 content-modifier**（触发重绘）。
     if (g_selfDraw) {
         if (g_sdSpec != nullptr) {
             g_sdSpec->scrollY = y * g_density;
+            // ★实测：content-modifier 的 onDraw 只在**挂载时**调一次，`Invalidate` 不重跑它 ⇒
+            //   滚动后必须**重挂** modifier 才能重画（与玻璃 pass 的 reattach 同因）。
+            if (g_rootNode != nullptr) {
+                ArkUI_RenderContentModifierHandle sm = OH_ArkUI_RenderNodeUtils_CreateContentModifier();
+                if (sm != nullptr) {
+                    OH_ArkUI_RenderNodeUtils_SetContentModifierOnDraw(sm, g_sdSpec, DrawSelfContent);
+                    OH_ArkUI_RenderNodeUtils_AttachContentModifier(g_rootNode, sm);   // 重挂 ⇒ 触发重画
+                }
+            }
             if (g_rootHost != nullptr) OH_ArkUI_RenderNodeUtils_Invalidate(g_rootHost);
             rc = 0;
         }
