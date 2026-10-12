@@ -50,3 +50,6 @@ export const vkGlassProbe: (filesDir?: string) => string;
 /** ★★★决策 #841：玻璃 GPU pass 集成 —— 内容快照 → 裁剪每玻璃节点外扩区域 → 离屏 Vulkan（SPIR-V）
  *   → 覆盖节点背景图（真边缘折射）。返回 JSON（ok/nodes/snap_w/snap_h）。应在**建树后等一帧**再调。 */
 export const glassPass: () => string;
+/** ★★★决策 #847：自绘玻璃性能基线读数（`{"frames","avg_ms","max_ms","p50_ms","p95_ms","fps"}`）。
+ *  传 `"reset"` 归零。 */
+export const glassStats: (mode?: string) => string;

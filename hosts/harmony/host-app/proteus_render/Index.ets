@@ -27,6 +27,8 @@ export {
   vkGlassProbe,
   // ★★★决策 #841：玻璃 GPU pass 集成（内容快照 → 离屏 Vulkan → 落覆盖节点背景图）
   glassPass,
+  // ★★★决策 #847：自绘玻璃性能基线读数（帧数/均值/最大/p50/p95 ms）
+  glassStats,
 } from 'libproteus_render.so'
 export type { ProteusRenderStats } from 'libproteus_render.so'
 

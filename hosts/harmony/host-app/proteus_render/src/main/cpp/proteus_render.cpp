@@ -23,6 +23,7 @@
 #include <map>
 #include <cstdint>
 #include <cmath>
+#include <algorithm>
 #include <cstdio>
 #include <chrono>   // ★决策 #840：快照耗时取证
 #include <array>   // ★★★批 A：fixed 节点登记表 {baseX, baseY, node}
@@ -232,6 +233,12 @@ static std::vector<uint8_t> g_sdScratchDown;   // 半分辨率降采样缓冲
 static std::vector<uint8_t> g_sdScratchU;      // GlassUniforms buffer
 // 前置声明：RGBA8 → PixelMap（定义见后；自绘玻璃分支要用）
 static OH_PixelmapNative* pixelMapFromRgba8(const std::vector<uint8_t>& rgba, int w, int h);
+
+// ★决策 #847：**自绘玻璃性能基线**累计器（每次 onDraw 记一帧耗时；`glassStats` 出口读）。
+static double g_sdFrameSumMs = 0;          // 累计耗时（ms）
+static int g_sdFrameCount = 0;             // 帧数
+static double g_sdFrameMaxMs = 0;          // 单帧最大耗时（ms）
+static std::vector<double> g_sdFrameSamples;   // 采样（供 p50/p95；上限 4096）
 /// ★★★批 A（2026-10-08 · 决策 #654）：**position:fixed 节点登记表** {baseX, baseY, node}。
 ///   扁平建树（每节点绝对 SetPosition 挂 g_rootNode）；滚动 = 平移 g_rootNode（-y）。
 ///   ⇒ fixed 节点须在 scrollRoot 时把自身 y 加回 +y（净位移 0 ⇒ 钉在视口）。ClearRoot 时清。
@@ -1070,6 +1077,7 @@ static void sdDrawText(OH_Drawing_Canvas* canvas, const SDNode& n) {
  *   【坐标系】位图 = 屏幕物理 px（与元素绝对坐标一致）；滚动 = 画布 translate(-scrollY)。
  */
 static void drawSelfContentCore(OH_Drawing_Canvas* rsCanvas, SelfDrawSpec* sd) {
+    auto __t0 = std::chrono::steady_clock::now();
     if (rsCanvas == nullptr || sd == nullptr) return;
     const int W = (int)std::lround(sd->screenW), H = (int)std::lround(sd->screenH);
     if (W <= 0 || H <= 0) return;
@@ -1228,6 +1236,35 @@ static void drawSelfContentCore(OH_Drawing_Canvas* rsCanvas, SelfDrawSpec* sd) {
     OH_Drawing_CanvasRestore(c);
     // ④ 一次贴回 RS 画布（同帧）
     OH_Drawing_CanvasDrawBitmap(rsCanvas, g_sdBitmap, 0.0f, 0.0f);
+    // ★决策 #847：记录本帧耗时（自绘玻璃性能基线）
+    { double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - __t0).count();
+      g_sdFrameSumMs += ms; g_sdFrameCount++;
+      if (ms > g_sdFrameMaxMs) g_sdFrameMaxMs = ms;
+      if (g_sdFrameSamples.size() < 4096) g_sdFrameSamples.push_back(ms); }
+}
+
+/** glassStats(): string —— ★决策 #847：自绘玻璃性能基线读数（帧数/均值/最大/p50/p95，ms）。
+ *   归零用 `glassStats("reset")`。 */
+static napi_value GlassStats(napi_env env, napi_callback_info info) {
+    size_t argc = 1; napi_value args[1] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    std::string mode;
+    if (argc >= 1 && args[0] != nullptr) {
+        size_t len = 0; napi_get_value_string_utf8(env, args[0], nullptr, 0, &len);
+        mode.resize(len + 1); napi_get_value_string_utf8(env, args[0], &mode[0], len + 1, &len); mode.resize(len);
+    }
+    if (mode == "reset") {
+        g_sdFrameSumMs = 0; g_sdFrameCount = 0; g_sdFrameMaxMs = 0; g_sdFrameSamples.clear();
+        napi_value r; napi_create_string_utf8(env, "{\"reset\":1}", NAPI_AUTO_LENGTH, &r); return r;
+    }
+    double avg = g_sdFrameCount ? g_sdFrameSumMs / g_sdFrameCount : -1;
+    std::vector<double> s = g_sdFrameSamples; std::sort(s.begin(), s.end());
+    auto pct = [&](double q) { return s.empty() ? -1.0 : s[(size_t)std::min((double)(s.size() - 1), std::floor(q * s.size()))]; };
+    char pb[256];
+    snprintf(pb, sizeof(pb), "{\"frames\":%d,\"avg_ms\":%.2f,\"max_ms\":%.2f,\"p50_ms\":%.2f,\"p95_ms\":%.2f,\"fps\":%.1f}",
+             g_sdFrameCount, avg, g_sdFrameMaxMs, pct(0.50), pct(0.95), avg > 0 ? 1000.0 / avg : -1);
+    OH_LOG_Print(LOG_APP, LOG_INFO, LOG_DOMAIN, LOG_TAG, "PROTEUS_GLASS_STATS %{public}s", pb);
+    napi_value r; napi_create_string_utf8(env, pb, NAPI_AUTO_LENGTH, &r); return r;
 }
 
 /**
@@ -3176,6 +3213,8 @@ static napi_value Init(napi_env env, napi_value exports) {
         {"vkGlassProbe", nullptr, VkGlassProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
         // ★★★决策 #841：玻璃 GPU pass 集成（内容快照 → 离屏 Vulkan → 落覆盖节点背景图）
         {"glassPass", nullptr, GlassPass, nullptr, nullptr, nullptr, napi_default, nullptr},
+        // ★★★决策 #847：自绘玻璃性能基线读数（帧数/均值/最大/p50/p95）
+        {"glassStats", nullptr, GlassStats, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"gestureInstall", nullptr, GestureInstall, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"gestureSample", nullptr, GestureSample, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"scrollRoot", nullptr, ScrollRoot, nullptr, nullptr, nullptr, napi_default, nullptr},
