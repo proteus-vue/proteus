@@ -40,21 +40,28 @@ function isDiffable(v: unknown): boolean {
  */
 function diffPaths(base: string, oldVal: unknown, newVal: unknown): Array<{ path: string; value: unknown }> {
   const out: Array<{ path: string; value: unknown }> = []
-  collectDiff(out, base, oldVal, newVal)
+  collectDiff(out, base, oldVal, newVal, new Set())   // ★环引用防护：已访问祖先集
   return out
 }
 
-function collectDiff(out: Array<{ path: string; value: unknown }>, base: string, oldVal: unknown, newVal: unknown): void {
+function collectDiff(out: Array<{ path: string; value: unknown }>, base: string, oldVal: unknown, newVal: unknown, seen: Set<unknown>): void {
   if (oldVal === newVal) return
+  // ★★★环引用防护（真机实证）：用户响应式数据可能含**环**（自引用 / 双向 parent↔child）。
+  //   此前 `isDiffable` 接受任意对象且无 visited 集 ⇒ 无限递归 → `RangeError: Maximum call stack`
+  //   （浅层数据无感，一旦成环即崩）。命中已访问对象 ⇒ 视为叶子整体替换（不再下钻），与
+  //   `shared/src/storage/serialize.ts` 的环处理同源。
+  if (isDiffable(newVal) && seen.has(newVal)) { out.push({ path: base, value: newVal }); return }
   if (isDiffable(oldVal) && isDiffable(newVal)) {
+    seen.add(newVal)
     if (Array.isArray(oldVal) && Array.isArray(newVal)) {
       const max = Math.max(oldVal.length, newVal.length)
       for (let i = 0; i < max; i++) {
         const ov = oldVal[i]
         const nv = newVal[i]
         if (ov === nv) continue
-        collectDiff(out, base + '[' + i + ']', ov, nv)
+        collectDiff(out, base + '[' + i + ']', ov, nv, seen)
       }
+      seen.delete(newVal)
       return
     }
     if (!Array.isArray(oldVal) && !Array.isArray(newVal)) {
@@ -65,32 +72,39 @@ function collectDiff(out: Array<{ path: string; value: unknown }>, base: string,
         const ov = oldObj[k]
         const nv = newObj[k]
         if (ov === nv) continue
-        collectDiff(out, base + '.' + k, ov, nv)
+        collectDiff(out, base + '.' + k, ov, nv, seen)
       }
       // ② 旧值独有键：已删除 → 补 undefined（语义与原 Set 联合一致，顺序不影响路径级补丁结果）
       for (const k of Object.keys(oldObj)) {
         if (Object.prototype.hasOwnProperty.call(newObj, k)) continue
-        collectDiff(out, base + '.' + k, oldObj[k], undefined)
+        collectDiff(out, base + '.' + k, oldObj[k], undefined, seen)
       }
+      seen.delete(newVal)
       return
     }
+    seen.delete(newVal)
   }
   // 类型变化 / 标量 / 混合：整体替换
   out.push({ path: base, value: newVal })
 }
 
 /** 展开对象/数组为全部叶路径（首次推送 / 无旧值基准时：无 diff 可做，直接叶路径补丁） */
-function flattenPaths(base: string, value: unknown): Array<{ path: string; value: unknown }> {
+function flattenPaths(base: string, value: unknown, seen: Set<unknown>): Array<{ path: string; value: unknown }> {
   if (isDiffable(value)) {
+    // ★环引用防护（同 collectDiff）：命中祖先对象 ⇒ 不再下钻，整体替换为叶子
+    if (seen.has(value)) return [{ path: base, value }]
+    seen.add(value)
     if (Array.isArray(value)) {
       const out: Array<{ path: string; value: unknown }> = []
-      value.forEach((item, i) => out.push(...flattenPaths(`${base}[${i}]`, item)))
+      value.forEach((item, i) => out.push(...flattenPaths(`${base}[${i}]`, item, seen)))
+      seen.delete(value)
       return out.length ? out : [{ path: base, value }]
     }
     const out: Array<{ path: string; value: unknown }> = []
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      out.push(...flattenPaths(`${base}.${k}`, v))
+      out.push(...flattenPaths(`${base}.${k}`, v, seen))
     }
+    seen.delete(value)
     return out.length ? out : [{ path: base, value }]
   }
   return [{ path: base, value }]
@@ -114,7 +128,7 @@ class SetDataBridge {
     // 深层 diff（v0.4）：对象/数组变更递归出叶路径补丁（只推送变化子路径）
     let patches: Array<{ path: string; value: unknown }>
     if (isDiffable(value)) {
-      patches = isDiffable(last) ? diffPaths(dataPath, last, value) : flattenPaths(dataPath, value)
+      patches = isDiffable(last) ? diffPaths(dataPath, last, value) : flattenPaths(dataPath, value, new Set())
     } else {
       // 标量：值比较去重
       if (last === value) return
