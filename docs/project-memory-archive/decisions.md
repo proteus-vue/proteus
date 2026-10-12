@@ -3346,3 +3346,11 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **⑥ 教训**：① **"三端一致"要诚实分级**——iOS(系统真材质+Metal)/Android(AGSL 自绘)可做**真模糊**；鸿蒙自绘节点只能**近似**（结构约束，非实现偷懒）；② **接缝门禁的覆盖面要跟着"端"走**——`check-glass-capability` 从"四接缝"补到"六接缝"（+鸿蒙发射+解析），否则新端漏接不报红（同 #835 门禁盲区同族）；③ **读回"已绘像素"是自绘玻璃的前提**——某端不提供该能力（鸿蒙自绘/RenderNode 光栅在 RS 进程）⇒ 该端玻璃**上限就是半透明面**（设计前先取证，别假设）。
 **⑦ 诚实边界**：鸿蒙玻璃是 **L1.5 近似**（非 L2 真模糊）；若产品需要鸿蒙真模糊，路径是**把玻璃从自绘 RenderNode 改为真实 ArkUI 组件节点**（`NODE_BACKGROUND_BLUR_STYLE`，需评估与扁平绝对定位建树的兼容性）——独立批次。
 
+839. **★★★鸿蒙玻璃「真模糊」落地——改用真实 ArkUI 组件节点（系统材质 backdrop blur），取代自绘近似**（2026-10-12）：
+**① 用户**：「鸿蒙这个效果肯定不行，要做成安卓那种效果」——磨砂半透明（#838 的 L1.5）不行，必须**真 backdrop 模糊**。
+**② 根因沿用 #838 取证**：自绘 RenderNode 的 content-modifier 画布**读不到背后像素**（两路 ReadPixels 均失败，光栅在 RS 进程）⇒ 自绘**做不了**模糊。而**真实 ArkUI 组件节点**的系统材质（`BlurStyle.COMPONENT_*`，同已跑通的 tab 栏玻璃）**能模糊其后方已渲染内容（含同容器的 RenderNode 输出）** ⇒ 玻璃节点改走组件节点即得真模糊。
+**③ 交付（宿主结构 + 渲染路径）**：① **外层 Stack 容器** `g_outerStack`——`native_render.h` 硬约束「customNode **不能挂**其他 ArkUI_NodeHandle」⇒ 必须套一层 Stack，同时承载 `g_rootHost`(customNode+RenderNode 自绘内容) 与玻璃组件节点（更后 ⇒ 在上 ⇒ 模糊其后方）；设 `NODE_STACK_ALIGN_CONTENT=TOP_START` 使 `.position`=屏幕绝对坐标（否则 Stack 默认居中、玻璃跑偏）。② 玻璃节点 `createNode(ARKUI_NODE_STACK)` + `NODE_BACKGROUND_BLUR_STYLE(COMPONENT_THICK)` + `NODE_BACKGROUND_COLOR(tint)` + 圆角 + `NODE_POSITION`，`addChild(g_outerStack, ·)`；不再走画布。③ `ClearRoot` 摘除+销毁玻璃节点；`scrollRoot` 同步位移（fixed 钉屏 / 非 fixed 随内容）。④ 夹具 `--ps scene glass`（`dev/Index.ets`，与 Android GlassActivity 同形）。
+**④ 真机验证（HUAWEI KLE-AL00U）**：日志 `GLASS_OVERLAY node=24/25 rc=0 fixed=1`；截图 `hosts/harmony/results/glass-blur-h.jpeg` 呈**真 backdrop 模糊**（圆内背后"行 3"文字被抹平、色带柔化）；**边缘清晰度实测：玻璃内横向最大跃变 310→14（被模糊）、玻璃外 310（清晰）**；**无回归**（superapp 全链 drive 通过，mine 页玻璃卡成真磨砂模糊面板）。
+**⑤ 教训**：① **"读不到背后像素"不是死路——换承载层即可**：自绘（RenderNode/画布）不给 backdrop，**真实组件节点给**（系统材质按定义模糊其后方）⇒ **能力缺口先问"换个层能不能实现"，别停在"本层做不到"**；② **平台硬约束要读头文件**（`customNode cannot mount other ArkUI_NodeHandle`）——顺手挂组件节点会让**整棵自绘内容消失**（实测），须**外层容器**；③ **跨接口的单位口径不同**——Component 属性(**vp**) vs RenderNode(物理 px) 混用 ⇒ 玻璃跑偏（实测坑）；④ **Stack 默认居中对齐**会改 `.position` 语义 ⇒ 显式 `TOP_START`。
+**⑥ 诚实边界**：① `COMPONENT_ULTRA_THICK`（最强档）真机**黑屏**（疑似崩溃）⇒ 用 `COMPONENT_THICK`；② 观感=**系统材质**（模糊+tint+高光），**无 Android 那种边缘折射**（折射需自绘 shader 采样外法线；鸿蒙自绘读不到背后像素 ⇒ 做不了）——"真模糊"已对齐 Android，但**折射/倒角厚度无**；③ 玻璃节点改组件节点后与**自绘层的 z 序 / 命中测试**关系待后续批次细核（当前视觉正确）。
+
