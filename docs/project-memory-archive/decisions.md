@@ -3500,3 +3500,12 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
    · 截图对比 S=2/S=3/S=4：磨砂玻璃下**画质差异细微**（折射/高光/文字均清晰）⇒ 1/4 分辨率可接受。
 **⑤ 交付**：鸿蒙玻璃在 120Hz 面板上达 **120fps**（含自绘内容同帧 + 玻璃固定的手动滚动演示页）。这是「OS 级标准体验」目标的达标点。
 **⑥ 工具链教训（本次踩到、值得记）**：`hdc shell` **恒返回 0**（不传远端退出码）⇒ `wait_for.sh --cmd` 用远端 grep 的门**永远立即"通过"**，导致大量采样读到**上一轮旧数据/旧日志**（一度以为性能不稳定，实为读错）。修法：**把 grep 放本地侧**（`hdc shell 'cat F' | local grep`，管道退出码来自本地 grep）。
+
+861. **★安卓玻璃性能基线——建立并实测达 120fps（delivered 121 / 零掉帧）**（2026-10-12）：
+**① 装置**：`GlassActivity --ez bench true`（`hosts/android/run-glass-bench.sh [--runs N]`）——程序化滚动 120 帧 + `Choreographer` 采**真实 vsync 间隔**（frameTimeNanos 差，非"花了多久画一帧"）⇒ 上报**实际交付帧率** / 平均·最大帧间隔 / 掉帧数 / `onDraw` 成本均值。**与鸿蒙 glass-bench 同口径**（真 vsync 间隔 framediff）；`delivered_fps=(N-12)/(末帧-首帧)`（跳前 12 帧预热），`dropped`=间隔>1.5×预算。
+**② 真机实测（Redmi · 1200×2608 · activeModeId=1 @120Hz，3 次一致）**：
+   · `delivered_fps=121.1`、`avg_interval 8.33ms`、`max 8.34ms`、**`dropped=0`**、`onDraw 1.69ms`。
+   · **满帧 + 零掉帧 + 帧间隔无抖动**（avg=max）——即**滚动玻璃时每帧都稳在 8.33ms**（120Hz 预算）。
+**③ 与鸿蒙对照**：安卓 = 真 vsync 时间戳采样（标准）；鸿蒙 = `displaySync`/主线程墙钟（近似，120Hz 下 ~3-5% 误差）。两端都达 120fps 级。安卓此负载下 `onDraw` 仅 1.7ms（`RuntimeShader` AGSL 逐帧重绘玻璃**很便宜**）——与鸿蒙「重算帧受 CPU↔GPU 搬运拖累」（#855/#860，靠降 payload 才达 120）形成对照：**同为 WGSL 单源，安卓 AGSL 的逐帧成本天然低**。
+**④ 启动前需注意**：`mActiveModeId` 须指向 fps=120 的 mode（否则 `delivered_fps` 会被显示模式封顶；本机 `userPreferredModeId=-1` 时默认落在 id=1 @120）。
+**⑤ 产出**：`hosts/android/run-glass-bench.sh`（可复现 runner）· `hosts/android/results/glass-bench-android.png`（截图：圆形玻璃折射正常）。
