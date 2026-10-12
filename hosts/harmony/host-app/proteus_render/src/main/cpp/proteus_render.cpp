@@ -148,6 +148,19 @@ static bool jsonNum(const char* s, const char* key, double* out) {
  */
 static ArkUI_NodeHandle g_rootHost = nullptr;
 static ArkUI_RenderNodeHandle g_rootNode = nullptr;
+/// ★★★玻璃真模糊（#839）：**外层 Stack 容器**。约束（native_render.h）：「customNode **不能挂**其他
+///   ArkUI_NodeHandle」⇒ 玻璃组件节点**必须挂在 customNode 之外**。⇒ 外层 Stack 同时承载：
+///   ① `g_rootHost`（customNode + RenderNode 自绘内容）② 玻璃组件节点（`NODE_BACKGROUND_BLUR_STYLE`，
+///   更后 ⇒ z 序在上 ⇒ **模糊其后方内容**）。Stack 挂进 NodeContent。
+static ArkUI_NodeHandle g_outerStack = nullptr;
+/// ★★★玻璃真模糊（决策 #839）：**真实 ArkUI 组件节点**（`ARKUI_NODE_STACK` + `NODE_BACKGROUND_BLUR_STYLE`）。
+///   【为什么必须这么干】自绘 RenderNode 的 content-modifier 画布**读不到背后像素**（真机两次取证）
+///   ⇒ 无法自绘模糊。而**真实组件节点**的系统材质（`BlurStyle.COMPONENT_THICK`，同 tab 栏玻璃）
+///   **能模糊其后方已渲染内容**（含同容器的 RenderNode 输出）⇒ 玻璃节点改走组件节点 ⇒ 真模糊。
+///   登记表供 ClearRoot / scrollRoot（随内容滚动的那类）维护其生命周期与位移。
+struct GlassOverlay { double baseX, baseY, w, h; bool fixed; ArkUI_NodeHandle node; };
+static std::vector<GlassOverlay> g_glassOverlays;
+static ArkUI_NativeNodeAPI_1* g_nodeApi = nullptr;   // ArkUI 组件节点 API（与 RenderNode 各为其接口）
 /// ★★★批 A（2026-10-08 · 决策 #654）：**position:fixed 节点登记表** {baseX, baseY, node}。
 ///   扁平建树（每节点绝对 SetPosition 挂 g_rootNode）；滚动 = 平移 g_rootNode（-y）。
 ///   ⇒ fixed 节点须在 scrollRoot 时把自身 y 加回 +y（净位移 0 ⇒ 钉在视口）。ClearRoot 时清。
@@ -450,11 +463,15 @@ static float evenDashPeriod(float W, float H, float r, float spacing) {
  * ★★★自研液态玻璃（决策 #834 · 鸿蒙腿）：在节点画布上画玻璃面。
  *
  * 【落地形态】OH_Drawing（Skia）画布路径——与 Android(AGSL)/iOS(Metal) 是**三个不同落地**，但
- *   `glass` 参数同源（内核 IR）。本端：**读画布背后像素 → ImageFilterCreateBlur 高斯模糊 → 圆角裁剪 + tint**。
+ *   `glass` 参数同源（内核 IR）。
  *
- * 【冷启动保守形态（真机迭代前的诚实基线）】先画 **tint + 圆角**（保证"有玻璃面"、不白屏/降级）；
- *   再尝试 `OH_Drawing_CanvasReadPixels` 读背后像素 + `OH_Drawing_ImageFilterCreateBlur` 模糊回贴。
- *   ★能否读到"已绘的兄弟内容"取决于 content-modifier 画布语义 —— **真机迭代确认**（读不到 ⇒ 保留 tint 面）。
+ * 【★真机实测边界（两次取证）】content-modifier 画布**读不到"背后已绘像素"**——
+ *   `OH_Drawing_CanvasReadPixelsToBitmap` 返 0；备用 `OH_Drawing_CanvasReadPixels` 虽返真但**内容是未初始化
+ *   垃圾**（曾画出一块**暗色盘**，实为把垃圾当图像回贴）⇒ **本端无法做真 backdrop 模糊**（光栅在 RS 进程）。
+ *   ⇒ 诚实的 L1.5 形态：**磨砂半透明面**（tint 与白混合 + alpha 下限）+ 圆角 + 高光边；内容仍半透出。
+ *
+ * 【与 tab 栏 chrome 的区别】真 OS 级模糊（`NODE_BACKGROUND_BLUR_STYLE`）只能落在**真实 ArkUI 组件节点**
+ *   （如已跑通的 tab 栏）；自绘 RenderNode 不支持——平台约束（详见决策 #838）。
  */
 static void drawGlassFace(OH_Drawing_Canvas* canvas, const TextDrawSpec* spec) {
     const float w = (float)spec->w, h = (float)spec->h;
@@ -471,62 +488,36 @@ static void drawGlassFace(OH_Drawing_Canvas* canvas, const TextDrawSpec* spec) {
         OH_Drawing_CanvasClipPath(canvas, clipPath, OH_Drawing_CanvasClipOp::INTERSECT, true);
         OH_Drawing_PathDestroy(clipPath);
     }
-    // ② 背后内容：尝试读画布像素并回贴（读不到 ⇒ 跳过，仅留 tint 面）
-    int bw = (int)std::ceil(w), bh = (int)std::ceil(h);
-    OH_Drawing_Bitmap* backdrop = OH_Drawing_BitmapCreate();
-    OH_Drawing_BitmapFormat fmt{OH_Drawing_ColorFormat::COLOR_FORMAT_RGBA_8888,
-                                OH_Drawing_AlphaFormat::ALPHA_FORMAT_PREMUL};
-    OH_Drawing_BitmapBuild(backdrop, (uint32_t)bw, (uint32_t)bh, &fmt);
-    // ★前 0px=节点盒左上（canvas 局部坐标系，节点原点即 (0,0)）
-    bool gotBackdrop = false;
-    if (spec->glassBlur > 0) {
-        gotBackdrop = OH_Drawing_CanvasReadPixelsToBitmap(canvas, backdrop, 0, 0);
-        // 备用路径：`ReadPixels`（直接拷到底图底层缓冲）——若 ToBitmap 语义不支持（真机实测 got=0）则试它。
-        if (!gotBackdrop) {
-            OH_Drawing_Image_Info info{bw, bh, COLOR_FORMAT_RGBA_8888, ALPHA_FORMAT_PREMUL};
-            void* px = OH_Drawing_BitmapGetPixels(backdrop);
-            if (px != nullptr) gotBackdrop = OH_Drawing_CanvasReadPixels(canvas, &info, px, (uint32_t)(bw * 4), 0, 0);
-        }
-    }
-    if (gotBackdrop) {
-        OH_Drawing_Image* bimg = OH_Drawing_ImageCreate();
-        if (OH_Drawing_ImageBuildFromBitmap(bimg, backdrop)) {
-            OH_Drawing_SamplingOptions* so = OH_Drawing_SamplingOptionsCreate(
-                OH_Drawing_FilterMode::FILTER_MODE_LINEAR, OH_Drawing_MipmapMode::MIPMAP_MODE_NONE);
-            OH_Drawing_Rect* dst = OH_Drawing_RectCreate(0, 0, w, h);
-            OH_Drawing_CanvasDrawImageRectWithSrc(canvas, bimg, cr, dst, so,
-                OH_Drawing_SrcRectConstraint::FAST_SRC_RECT_CONSTRAINT);
-            OH_Drawing_RectDestroy(dst);
-            OH_Drawing_SamplingOptionsDestroy(so);
-        }
-        OH_Drawing_ImageDestroy(bimg);
-    }
-    OH_Drawing_BitmapDestroy(backdrop);
-    // ③ 玻璃面着色。★真机实测：content-modifier 画布**读不到背后像素**（`ReadPixels`/`ReadPixelsToBitmap`
-    //   两路均 got=0 —— 光栅在 RS 进程）⇒ 无法真模糊。**诚实 L2 降级**：画**磨砂半透明面**
-    //   （tint 色 + alpha 下限，与 Android API<31 的"半透明实色回退"同策略；徽标/文字仍透出）。
+    // ② 玻璃面 = 磨砂半透明面（tint 与白混合 + alpha 下限；让内容半透出、呈现"磨砂白"观感）。
     {
         uint32_t a = (spec->glassTint >> 24) & 0xFFu;
-        const uint32_t aFloor = 140u;   // ≈0.55：保证"有玻璃面"可辨（不白屏/不隐形）
+        const uint32_t aFloor = 120u;   // ≈0.47：保证"有玻璃面"可辨
         uint32_t useA = a < aFloor ? aFloor : a;
-        uint32_t faceColor = (spec->glassTint & 0x00FFFFFFu) | (useA << 24);
-        OH_Drawing_Brush* tb = OH_Drawing_BrushCreate();
-        OH_Drawing_BrushSetColor(tb, faceColor);
-        OH_Drawing_CanvasAttachBrush(canvas, tb);
+        uint32_t tr = (spec->glassTint >> 16) & 0xFFu;
+        uint32_t tg = (spec->glassTint >> 8) & 0xFFu;
+        uint32_t tb = spec->glassTint & 0xFFu;
+        // 与白混合 60%（磨砂白；tint 偏白时几乎纯白 —— 与 iOS/Android 玻璃"奶白磨砂"观感对齐）
+        uint32_t nr = (uint32_t)(tr * 0.4 + 255 * 0.6);
+        uint32_t ng = (uint32_t)(tg * 0.4 + 255 * 0.6);
+        uint32_t nb = (uint32_t)(tb * 0.4 + 255 * 0.6);
+        uint32_t faceColor = (useA << 24) | (nr << 16) | (ng << 8) | nb;
+        OH_Drawing_Brush* tb2 = OH_Drawing_BrushCreate();
+        OH_Drawing_BrushSetColor(tb2, faceColor);
+        OH_Drawing_CanvasAttachBrush(canvas, tb2);
         OH_Drawing_CanvasDrawRect(canvas, cr);
         OH_Drawing_CanvasDetachBrush(canvas);
-        OH_Drawing_BrushDestroy(tb);
-        // 玻璃高光边（border=true）：圆角描边（细、白、半透明）——与 Android/iOS 的 rim 同义
-        if (spec->glassBorder) {
-            OH_Drawing_Pen* pen = OH_Drawing_PenCreate();
-            OH_Drawing_PenSetColor(pen, 0x66FFFFFFu);
-            OH_Drawing_PenSetWidth(pen, 1.0f);
-            OH_Drawing_CanvasAttachPen(canvas, pen);
-            if (rr != nullptr) OH_Drawing_CanvasDrawRoundRect(canvas, rr);
-            else OH_Drawing_CanvasDrawRect(canvas, cr);
-            OH_Drawing_CanvasDetachPen(canvas);
-            OH_Drawing_PenDestroy(pen);
-        }
+        OH_Drawing_BrushDestroy(tb2);
+    }
+    // ③ 玻璃高光边（border=true）：圆角描边（细、白、半透明）——与 Android/iOS 的 rim 同义
+    if (spec->glassBorder) {
+        OH_Drawing_Pen* pen = OH_Drawing_PenCreate();
+        OH_Drawing_PenSetColor(pen, 0x66FFFFFFu);
+        OH_Drawing_PenSetWidth(pen, 1.0f);
+        OH_Drawing_CanvasAttachPen(canvas, pen);
+        if (rr != nullptr) OH_Drawing_CanvasDrawRoundRect(canvas, rr);
+        else OH_Drawing_CanvasDrawRect(canvas, cr);
+        OH_Drawing_CanvasDetachPen(canvas);
+        OH_Drawing_PenDestroy(pen);
     }
     OH_Drawing_CanvasRestore(canvas);
     if (rr != nullptr) OH_Drawing_RoundRectDestroy(rr);
@@ -769,7 +760,9 @@ static void drawChannelsAndText(OH_Drawing_Canvas* canvas, const TextDrawSpec* s
     }
     // ★★★玻璃面（决策 #834 · 鸿蒙腿）：画在渐变**之上**、文本**之下**（玻璃是覆盖材质，但节点内文本仍可见
     //   ——与 Android/iOS 同序）。放在渐变后、文本前。
-    if (spec->hasGlass) drawGlassFace(canvas, spec);
+    // ★★★玻璃（决策 #839）：**不再在画布上画**——改由**真实组件节点**（系统材质 backdrop 模糊）落地
+    //   （见 renderCommandsImpl 的 GLASS_OVERLAY；自绘画布读不到背后像素，做不了真模糊）。
+    //   注：drawGlassFace 保留（作低版本/组件节点不可用时的降级路径，当前不调用）。
     // ⑤ 文本（原路径：typography）
     if (!spec->text.empty()) {
         OH_Drawing_FontCollection* fc = OH_Drawing_CreateFontCollection();
@@ -984,9 +977,25 @@ static napi_value Attach(napi_env env, napi_callback_info info) {
     //   会触发 CAPI 初始化 ⇒ **必须在任何 RenderNode API 调用之前**完成（放在 attach 阶段最稳）。
     ArkUI_NativeNodeAPI_1* probeApi = nullptr;
     OH_ArkUI_GetModuleInterface(ARKUI_NATIVE_NODE, ArkUI_NativeNodeAPI_1, probeApi);
+    g_nodeApi = probeApi;   // ★玻璃真模糊（#839）：组件节点 API（建 NODE_BACKGROUND_BLUR_STYLE 用）
 
-    // ★建全屏 host + 根 RenderNode（见 g_rootHost 注释的架构修正）——只建一次（attach 幂等）
+    // ★建外层 Stack → 全屏 host（customNode + RenderNode）→ 玻璃组件节点（见 g_outerStack 注释）
     if (g_rootHost == nullptr && probeApi != nullptr && screenWvp > 0 && screenHvp > 0) {
+        // ① 外层 Stack（全屏；承载 customNode 与后续玻璃组件节点）
+        g_outerStack = probeApi->createNode(ARKUI_NODE_STACK);
+        if (g_outerStack != nullptr) {
+            ArkUI_NumberValue ow[1] = {}; ow[0].f32 = (float)screenWvp;
+            ArkUI_AttributeItem owi{ow, 1, nullptr, nullptr};
+            probeApi->setAttribute(g_outerStack, NODE_WIDTH, &owi);
+            ArkUI_NumberValue ohv[1] = {}; ohv[0].f32 = (float)screenHvp;
+            ArkUI_AttributeItem ohi{ohv, 1, nullptr, nullptr};
+            probeApi->setAttribute(g_outerStack, NODE_HEIGHT, &ohi);
+            // ★★★Stack 子项对齐 = TopStart（决策 #839）：否则 Stack 默认**居中**子项 ⇒ `.position`
+            //   从居中位起算 ⇒ 玻璃节点偏移（实测：大圆跑偏）。对齐 TopStart 后 `.position` = 屏幕绝对坐标。
+            ArkUI_NumberValue sav[1] = {}; sav[0].i32 = ARKUI_ALIGNMENT_TOP_START;
+            ArkUI_AttributeItem sai{sav, 1, nullptr, nullptr};
+            probeApi->setAttribute(g_outerStack, NODE_STACK_ALIGN_CONTENT, &sai);
+        }
         g_rootHost = probeApi->createNode(ARKUI_NODE_CUSTOM);
         if (g_rootHost != nullptr) {
             ArkUI_NumberValue wv[1] = {}; wv[0].f32 = (float)screenWvp;
@@ -1005,7 +1014,13 @@ static napi_value Attach(napi_env env, napi_callback_info info) {
                     (int32_t)std::ceil(screenWvp * g_density), (int32_t)std::ceil(screenHvp * g_density));
                 int32_t rc = OH_ArkUI_RenderNodeUtils_AddRenderNode(g_rootHost, g_rootNode);
                 if (rc == ARKUI_ERROR_CODE_NO_ERROR) {
-                    OH_ArkUI_NodeContent_AddNode(g_content, g_rootHost);
+                    // ★把 customNode 挂进外层 Stack（若没有 Stack 则退化为直挂 NodeContent——零回归）
+                    if (g_outerStack != nullptr) {
+                        probeApi->addChild(g_outerStack, g_rootHost);
+                        OH_ArkUI_NodeContent_AddNode(g_content, g_outerStack);
+                    } else {
+                        OH_ArkUI_NodeContent_AddNode(g_content, g_rootHost);
+                    }
                 } else {
                     OH_LOG_Print(LOG_APP, LOG_ERROR, LOG_DOMAIN, LOG_TAG,
                                  "PROTEUS_RENDER_ROOT_ADD_FAIL rc=%{public}d", rc);
@@ -1585,6 +1600,50 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
                 spec->hasGlass = true;
                 ch.glass = "1";   // 通道签名（探针可读"本节点有玻璃"）
                 hasAnyChannel = true;
+                // ★★★玻璃真模糊（决策 #839）：**改走真实 ArkUI 组件节点**（系统材质 backdrop 模糊）。
+                //   自绘画布读不到背后像素（两次取证）⇒ 无法自绘模糊；真实组件节点的
+                //   `NODE_BACKGROUND_BLUR_STYLE`（= tab 栏玻璃同款）能模糊其后方已渲染内容（含 RenderNode 输出）。
+                //   ⇒ 本节点**不再在画布上画玻璃面**（见 drawGlassFace 调用处的 hasGlass 分支），改由组件节点落地。
+                if (g_nodeApi != nullptr && g_outerStack != nullptr) {
+                    ArkUI_NodeHandle gn = g_nodeApi->createNode(ARKUI_NODE_STACK);
+                    if (gn != nullptr) {
+                        ArkUI_NumberValue gv[6] = {};
+                        gv[0].i32 = ARKUI_BLUR_STYLE_COMPONENT_THICK;   // 系统组件材质（模糊 + tint + 高光）
+                        ArkUI_AttributeItem gii{gv, 6, nullptr, nullptr};
+                        int32_t rcBlur = g_nodeApi->setAttribute(gn, NODE_BACKGROUND_BLUR_STYLE, &gii);
+                        // ★半透明底色（tab 栏 chrome 同款：blur + 极淡底一起给；只给 blur 几乎不可见）
+                        uint32_t ta = (spec->glassTint >> 24) & 0xFFu;
+                        if (ta < 40u) ta = 40u;   // alpha 下限（可辨）
+                        uint32_t tintArgb = (ta << 24) | (spec->glassTint & 0x00FFFFFFu);
+                        ArkUI_NumberValue gcv[1] = {}; gcv[0].u32 = tintArgb;
+                        ArkUI_AttributeItem gci{gcv, 1, nullptr, nullptr};
+                        g_nodeApi->setAttribute(gn, NODE_BACKGROUND_COLOR, &gci);
+                        // 尺寸 + 位置：★★★组件节点属性用 **vp**（物理 px ÷ density）——
+                        //   与自绘 RenderNode（用物理 px）**不同口径**（基线 g_rootHost 亦用 vp；实测坑）。
+                        const float d = (float)(g_density > 0 ? g_density : 1.0);
+                        ArkUI_NumberValue gw[1] = {}; gw[0].f32 = (float)(w / d);
+                        ArkUI_AttributeItem gwi{gw, 1, nullptr, nullptr};
+                        g_nodeApi->setAttribute(gn, NODE_WIDTH, &gwi);
+                        ArkUI_NumberValue ghv[1] = {}; ghv[0].f32 = (float)(h / d);
+                        ArkUI_AttributeItem ghi{ghv, 1, nullptr, nullptr};
+                        g_nodeApi->setAttribute(gn, NODE_HEIGHT, &ghi);
+                        if (grad > 0) {
+                            ArkUI_NumberValue gr[1] = {}; gr[0].f32 = (float)(grad / d);
+                            ArkUI_AttributeItem gri{gr, 1, nullptr, nullptr};
+                            g_nodeApi->setAttribute(gn, NODE_BORDER_RADIUS, &gri);
+                        }
+                        ArkUI_NumberValue gp[2] = {}; gp[0].f32 = (float)(x / d); gp[1].f32 = (float)(y / d);
+                        ArkUI_AttributeItem gpi{gp, 2, nullptr, nullptr};
+                        g_nodeApi->setAttribute(gn, NODE_POSITION, &gpi);
+                        g_nodeApi->addChild(g_outerStack, gn);
+                        std::string posV2;
+                        bool isFixed = jsonString(it, "position", &posV2) && posV2 == "fixed";
+                        g_glassOverlays.push_back({ x, y, w, h, isFixed, gn });
+                        OH_LOG_Print(LOG_APP, LOG_INFO, LOG_DOMAIN, LOG_TAG,
+                            "PROTEUS_RENDER_GLASS_OVERLAY node=%{public}d rc=%{public}d x=%{public}.1f y=%{public}.1f w=%{public}.1f h=%{public}.1f fixed=%{public}d",
+                            (int)nodeId, rcBlur, x, y, w, h, isFixed ? 1 : 0);
+                    }
+                }
             }
             // 裁剪：{"kind":"inset","params":[top,right,bottom,left]}（比例 × 尺寸）
             if (it.find("\"clip\":") != std::string::npos) {
@@ -2212,6 +2271,14 @@ static napi_value ClearRoot(napi_env env, napi_callback_info info) {
     (void)info;
     g_fixedNodes.clear();   // ★★★批 A：重建内容 ⇒ 清 fixed 登记（旧句柄失效）
     g_stickyNodes.clear();  // ★★★批 A③：同清 sticky 登记
+    // ★★★玻璃真模糊（#839）：清玻璃组件节点（从 host 摘除 + 销毁）——重建内容时旧玻璃节点失效。
+    for (auto& go : g_glassOverlays) {
+        if (go.node != nullptr && g_nodeApi != nullptr) {
+            if (g_outerStack != nullptr) g_nodeApi->removeChild(g_outerStack, go.node);
+            g_nodeApi->disposeNode(go.node);
+        }
+    }
+    g_glassOverlays.clear();
     g_nodeById.clear();
     g_nodeStaticBg.clear();
     g_pressBackup.clear();   // ★换树连清按下备份（叶 id 重分配——与场态清同因）         // ★★用户实测修复：同清 id→句柄/父/基准位（旧句柄随 ClearChildren 失效）
@@ -2283,6 +2350,19 @@ static napi_value ScrollRoot(napi_env env, napi_callback_info info) {
             double newY = std::max(sn[1], (y + sn[2]) * g_density);
             if (snode != nullptr) OH_ArkUI_RenderNodeUtils_SetPosition(snode, (int32_t)sn[0], (int32_t)newY);
             shiftSubtree((int)sn[4], newY);
+        }
+        // ★★★玻璃真模糊（#839）：玻璃**组件节点**跟随滚动——非 fixed（随内容）之 y = baseY + dy；
+        //   fixed（钉屏）之 y 不变（与 g_fixedNodes 同语义）。★组件节点属性用 **vp**（÷density）。
+        if (g_nodeApi != nullptr) {
+            const double dy = y * g_density;   // 滚动位移（物理 px）
+            const double dd = (g_density > 0 ? g_density : 1.0);
+            for (auto& go : g_glassOverlays) {
+                if (go.node == nullptr) continue;
+                double gy = go.fixed ? go.baseY : (go.baseY + dy);
+                ArkUI_NumberValue gp[2] = {}; gp[0].f32 = (float)(go.baseX / dd); gp[1].f32 = (float)(gy / dd);
+                ArkUI_AttributeItem gpi{gp, 2, nullptr, nullptr};
+                g_nodeApi->setAttribute(go.node, NODE_POSITION, &gpi);
+            }
         }
     }
     napi_value out;

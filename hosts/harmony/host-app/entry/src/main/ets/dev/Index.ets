@@ -391,6 +391,63 @@ function buildTestCommands(): string {
   return JSON.stringify(cmds);
 }
 
+/**
+ * ★★★玻璃夹具（决策 #838 · 与 Android `GlassActivity` 同形）。
+ *
+ * 【同形要点（便于三端并排）】① 24 行彩色内容（模拟长页面，滚动滑过玻璃）；② 底部**圆角胶囊** + 中部**圆形**
+ *   两块玻璃（`position:fixed` ⇒ 钉在屏上）；③ 玻璃参数与 Android 夹具同（blur 20/16、tint 白、radius）。
+ * 【真源】`glass` 是**内核 IR 字段**（三端同源）；本夹具手写 cmd 直接给渲染层，验鸿蒙自绘玻璃的**落地效果**。
+ * 【ArkTS 约束】对象字面量必须对应显式声明的 interface（`arkts-no-untyped-obj-literals`）⇒ 见下方两 interface。
+ */
+interface GlassSpecFixture {
+  blur: number;
+  tint: string;
+  radius: number;
+  border: boolean;
+  saturation: number;
+}
+interface GlassCmdFixture {
+  kind: string;
+  id: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  color: number;
+  radius: number;
+  position?: string;
+  text?: string;
+  fontSize?: number;
+  textColor?: number;
+  glass?: GlassSpecFixture;
+}
+
+function buildGlassCommands(vpW: number, vpH: number): string {
+  const D = DENSITY;
+  const cols: string[] = ['#3B6FE0', '#E0577B', '#2FB98A', '#E0A93B', '#7B57E0', '#2FA0E0', '#D2694A', '#4AC2B0'];
+  const cmds: GlassCmdFixture[] = [];
+  let id = 0;
+  // 24 行彩色内容（高 150×D + gap 14×D；模拟页面，滚动交给 scrollRoot）
+  const ROW_H = 150, ROW_GAP = 14, ROWS = 24;
+  for (let i = 0; i < ROWS; i++) {
+    const y = i * (ROW_H + ROW_GAP) * D + 20 * D;
+    cmds.push({ kind: 'background', id: id++, x: 20 * D, y: y, w: (vpW - 40) * D, h: ROW_H * D,
+      color: cssToArgb(cols[i % cols.length]), radius: 18 * D,
+      text: '行 ' + (i + 1) + ' · 模拟页面内容', fontSize: 15 * D, textColor: cssToArgb('#FFFFFF') });
+  }
+  // 玻璃 ①：底部圆角胶囊（fixed ⇒ 钉在屏上）
+  const pillH = 116 * D, pillW = (vpW - 36) * D, pillX = 18 * D, pillY = vpH * D - pillH - 60 * D, pillR = pillH / 2;
+  cmds.push({ kind: 'background', id: id++, x: pillX, y: pillY, w: pillW, h: pillH, color: 0,
+    radius: pillR, position: 'fixed',
+    glass: { blur: 20 * D, tint: '#ffffff26', radius: pillR, border: true, saturation: 1.0 } });
+  // 玻璃 ②：中部圆形
+  const circ = 300 * D, circX = (vpW * D - circ) / 2, circY = vpH * D * 0.29 - circ / 2, circR = circ / 2;
+  cmds.push({ kind: 'background', id: id++, x: circX, y: circY, w: circ, h: circ, color: 0,
+    radius: circR, position: 'fixed',
+    glass: { blur: 16 * D, tint: '#ffffff33', radius: circR, border: true, saturation: 1.0 } });
+  return JSON.stringify(cmds);
+}
+
 @Entry
 @Component
 struct Index {
@@ -412,6 +469,9 @@ struct Index {
   /** ★原生混用场景（`--ps scene native-mix`，矩阵 #10）：SFC 夹具自绘 + **ArkUI 原生组件**
    *  按核心几何定位（重叠在锚块上——z-order 像素实测） */
   private nativeMixScene: boolean = (AppStorage.get<string>('proteusScene') ?? '') === 'native-mix';
+  /** ★★★玻璃夹具场景（决策 #838 · `--ps scene glass`）：与 Android `GlassActivity` 同形——
+   *  滚动内容 + 圆形/胶囊玻璃面（验鸿蒙自绘玻璃：磨砂面 + 圆角 + 高光边）。 */
+  private glassScene: boolean = (AppStorage.get<string>('proteusScene') ?? '') === 'glass';
   /**
    * `.position` 的参照系修正 = **状态栏高度（48vp）**。
    * ★根因（`uitest dumpLayout` 取证）：页面 Stack 的 bounds 是 `[0,168][1320,2758]`——
@@ -865,6 +925,27 @@ struct Index {
       }
       // ── ⓪ ★★压力场景分支（矩阵 #21 六端采集）：只渲染 SFC 夹具 + 主动上报，不跑探针 ──
       //   触发：`aa start ... --ps scene stress`（EntryAbility 写入 AppStorage；缺省场景不受影响）
+      // ── ★★★玻璃夹具分支（决策 #838 · `--ps scene glass`）：只渲染同形玻璃夹具 + 上报 + 截图；
+      //   与 stressScene 同构（早退，不跑 bench——否则 bench 的多次 renderCommands 会覆盖本夹具）──
+      if (this.glassScene) {
+        try {
+          const dispG = display.getDefaultDisplaySync();
+          const vpWG = px2vp(dispG.width);
+          const vpHG = px2vp(dispG.height);
+          const rcG = attach(this.content, vp2px(1), vpWG, vpHG);
+          const cmdsG: string = buildGlassCommands(vpWG, vpHG);
+          const nG = renderCommands(cmdsG);
+          this.rendered = nG;
+          // 玻璃 = fixed 钉屏；内容 24 行 ⇒ 滚一段让"内容滑过玻璃"可见（scrollRoot 参数 = 设计单位 vp）
+          scrollRoot(100);
+          hilog.info(DOMAIN, BENCH_TAG,
+            'PROTEUS_GLASS_FIXTURE nodes=%{public}d attach_rc=%{public}d vp=%{public}sx%{public}s',
+            nG, rcG, vpWG.toFixed(2), vpHG.toFixed(2));
+        } catch (ge) {
+          hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_GLASS_FIXTURE_ERROR %{public}s', JSON.stringify(ge) ?? '');
+        }
+        return;
+      }
       if (this.stressScene) {
         try {
           const ctx2 = getContext(this);
