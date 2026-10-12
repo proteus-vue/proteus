@@ -879,6 +879,15 @@ struct Index {
   /** ★★★决策 #859：**请求高刷**（玻璃/动画场景）——鸿蒙默认 60Hz（activeMode=60），须显式申请才上 120。
    *   用 `displaySync.setExpectedFrameRateRange({min,max,expected})`（本设备支持 120Hz）。
    *   真机判据：日志 `PROTEUS_REFRESH_REQ` + `hidumper -s RenderService -a screen` 的 activeMode。 */
+  /** ★决策 #860：应用玻璃调优旋钮（`--ps glassS <n>` 分辨率 / `--ps glassDiv <n>` 重算步长）。
+   *   降 S ⇒ 离屏纹理/输出按面积变小 ⇒ 回读+建图+纹理上传成本线性下降（消 blit 尖峰）。 */
+  private applyGlassTuning(): void {
+    const gsArg: string = AppStorage.get<string>('proteusGlassS') ?? '';
+    if (gsArg !== '') glassStats('s' + gsArg);
+    const gdArg: string = AppStorage.get<string>('proteusGlassDiv') ?? '';
+    if (gdArg !== '') glassStats('div' + gdArg);
+  }
+
   private requestHighRefreshRate(): void {
     try {
       // ★决策 #859：开关/档位——`--ps refresh off` 不请求；`--ps refresh 60` 请求 60Hz（干净对照）；
@@ -1208,6 +1217,8 @@ struct Index {
           setContentMode('self-draw');
           const nB = renderCommands(buildGlassCommands(vpWB, vpHB));
           this.rendered = nB;
+          // ★决策 #860：玻璃分辨率/重算步长旋钮（应用后再 reset 计分）
+          this.applyGlassTuning();
           glassStats('reset');
           const ctxB = getContext(this);
           const pssBefore: number = Number(hidebug.getPss());   // KB
@@ -1223,6 +1234,7 @@ struct Index {
       if (this.glassDemoScene) {
         try {
           this.requestHighRefreshRate();   // ★决策 #859：玻璃演示页请求 120Hz（手动滚动观感更顺）
+          this.applyGlassTuning();         // ★决策 #860
           const dispD = display.getDefaultDisplaySync();
           const vpWD = px2vp(dispD.width);
           const vpHD = px2vp(dispD.height);
@@ -1248,6 +1260,7 @@ struct Index {
       if (this.glassScene) {
         try {
           this.requestHighRefreshRate();   // ★决策 #859：玻璃夹具场景请求 120Hz
+          this.applyGlassTuning();         // ★决策 #860：分辨率/重算步长旋钮
           const dispG = display.getDefaultDisplaySync();
           const vpWG = px2vp(dispG.width);
           const vpHG = px2vp(dispG.height);

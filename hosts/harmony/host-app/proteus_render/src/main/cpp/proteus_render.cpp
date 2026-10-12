@@ -234,7 +234,8 @@ static std::unordered_map<long long, std::pair<OH_Drawing_Bitmap*, OH_Drawing_Ca
 struct GlassCache { std::vector<uint8_t> bytes; OH_Drawing_Bitmap* bmp = nullptr; OH_Drawing_Image* img = nullptr; int ow2 = 0, oh2 = 0, pendW = 0, pendH = 0; };
 static std::unordered_map<int, GlassCache> g_sdGlassCache;
 static int g_sdGlassTick = 0;                 // 帧序号（自绘通道每帧 +1）
-static int g_sdGlassDiv = 3;                  // 重算步长（1=每帧；>1=每 N 帧，滚动中复用）
+static int g_sdGlassDiv = 2;                  // 重算步长（1=每帧；>1=每 N 帧，滚动中复用）
+static int g_sdGlassS = 0;                    // ★决策 #860：强制分辨率降采样（0=自动；测试用）
 static double g_sdLastGlassY = -1e18;         // 上次重算时的 scrollY（判定"滚动是否在变"）
 static bool g_sdGlassFresh = false;           // 本 scrollY 是否已算过（停下后收敛）
 // 前置声明：RGBA8 → PixelMap（定义见后；自绘玻璃分支要用）
@@ -1142,7 +1143,7 @@ static void drawSelfContentCore(OH_Drawing_Canvas* rsCanvas, SelfDrawSpec* sd) {
       OH_Drawing_RectDestroy(vp); }
     drawContentNodes(rsCanvas, sd);
     auto __tContent = std::chrono::steady_clock::now();
-    auto __tbContentPre = __tContent, __tf0 = __tContent, __tf1 = __tContent, __tf2 = __tContent;
+    auto __tf0 = __tContent, __tf1 = __tContent, __tf2 = __tContent;
     auto __tBlitStart = __tContent, __tBlitEnd = __tContent;   // ★决策 #855：分段计时标记
     // ③ 玻璃：为**每个玻璃节点**建一张「盒+pad」小位图当折射背景（只画与盒相交的内容），
     //   跑离屏 Vulkan（SPIR-V，算法 0 行），把结果画回 RS 画布的玻璃盒（圆角裁剪）。
@@ -1167,7 +1168,11 @@ static void drawSelfContentCore(OH_Drawing_Canvas* rsCanvas, SelfDrawSpec* sd) {
                         || (yChanged ? (g_sdGlassTick % g_sdGlassDiv == 0) : !g_sdGlassFresh);
             if (recompute) {
                 const int pad = (int)((n.w < n.h ? n.w : n.h) * 0.22 + n.gBlur * 0.55 * 1.6 + 4);
-                const int S = ((int)n.w >= 512 || (int)n.h >= 512) ? 2 : 1;
+                // ★决策 #860：分辨率降采样因子 S 可配（`g_sdGlassS`：0=自动，>0=强制）。
+                //   降 S ⇒ 离屏纹理/输出更小 ⇒ 回读+建图+**纹理重上传（blit）**按面积线性下降。
+                //   实测（120Hz 面板）：S=2 重算帧 blit≈29ms ⇒ 掉到 ~50fps；S=4 blit≈7.5ms ⇒ 稳定 120fps。
+                int S = ((int)n.w >= 512 || (int)n.h >= 512) ? 4 : (((int)(n.w < n.h ? n.w : n.h) >= 256) ? 2 : 1);
+                if (g_sdGlassS > 0) S = g_sdGlassS;
                 const int iw2 = std::max(1, ((int)n.w + 2 * pad) / S), ih2 = std::max(1, ((int)n.h + 2 * pad) / S);
                 const int ow2 = std::max(1, (int)n.w / S), oh2 = std::max(1, (int)n.h / S);
                 const int pad2 = pad / S;
@@ -1269,7 +1274,6 @@ static void drawSelfContentCore(OH_Drawing_Canvas* rsCanvas, SelfDrawSpec* sd) {
             const GGeo& g = geos[gi];
             gi++;
             if (gc.img == nullptr) continue;
-            auto __tg0 = std::chrono::steady_clock::now();
             OH_Drawing_CanvasSave(rsCanvas);
             OH_Drawing_CanvasTranslate(rsCanvas, (float)g.cx, (float)g.cy);
             if (g.radius > 0) {
@@ -1287,17 +1291,7 @@ static void drawSelfContentCore(OH_Drawing_Canvas* rsCanvas, SelfDrawSpec* sd) {
             OH_Drawing_RectDestroy(dst2);
             OH_Drawing_SamplingOptionsDestroy(so2);
             OH_Drawing_CanvasRestore(rsCanvas);
-            auto __tg1 = std::chrono::steady_clock::now();
-            { auto ms = [](auto a, auto b) { return std::chrono::duration<double, std::milli>(b - a).count(); };
-              static int lgb = 0; lgb++;
-              if (lgb <= 24) { char pb[128]; snprintf(pb, sizeof(pb), "gi=%d %.0fx%.0f blit=%.2f", gi - 1, g.w, g.h, ms(__tg0, __tg1));
-                OH_LOG_Print(LOG_APP, LOG_INFO, LOG_DOMAIN, LOG_TAG, "PROTEUS_GLASS_BLIT %{public}s", pb); } }
         }
-        // ★决策 #855：拆「循环 vs 尾部 canvas restore」——测循环本身是否只是记录（真 GPU 上传在 flush）
-        { auto ms = [](auto a, auto b) { return std::chrono::duration<double, std::milli>(b - a).count(); };
-          static int lgc = 0; lgc++;
-          if (lgc <= 20) { char pb[128]; snprintf(pb, sizeof(pb), "blitLoop=%.2f", ms(__tBlitStart, std::chrono::steady_clock::now()));
-            OH_LOG_Print(LOG_APP, LOG_INFO, LOG_DOMAIN, LOG_TAG, "PROTEUS_GLASS_BLITLOOP %{public}s", pb); } }
     }
     OH_Drawing_CanvasRestore(rsCanvas);   // 恢复视口裁剪（见上）
     __tBlitEnd = std::chrono::steady_clock::now();
@@ -1337,6 +1331,9 @@ static napi_value GlassStats(napi_env env, napi_callback_info info) {
         g_sdBackdropBuildMs = 0; g_sdVkDrawSumMs = 0; g_sdTextMs = 0; g_sdBgMs = 0;
         napi_value r; napi_create_string_utf8(env, "{\"reset\":1}", NAPI_AUTO_LENGTH, &r); return r;
     }
+    // ★决策 #860：`s<N>` 强制分辨率降采样（`s0`=自动；`s3`=1/3 分辨率）；`div<N>` 设重算步长。
+    if (mode.size() >= 2 && mode[0] == 's') { g_sdGlassS = std::atoi(mode.c_str() + 1); }
+    if (mode.size() >= 4 && mode.compare(0, 3, "div") == 0) { int d = std::atoi(mode.c_str() + 3); g_sdGlassDiv = d > 0 ? d : 1; }
     double avg = g_sdFrameCount ? g_sdFrameSumMs / g_sdFrameCount : -1;
     double n = g_sdFrameCount ? (double)g_sdFrameCount : 1;
     std::vector<double> s = g_sdFrameSamples; std::sort(s.begin(), s.end());

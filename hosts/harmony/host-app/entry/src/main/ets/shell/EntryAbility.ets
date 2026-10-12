@@ -62,6 +62,12 @@ export default class EntryAbility extends UIAbility {
     // ★决策 #859：高刷请求开关（`--ps refresh off` ⇒ 玻璃场景不请求 120Hz，用于 A/B 对照）。
     const refresh = want?.parameters?.['refresh'];
     AppStorage.setOrCreate('proteusRefresh', typeof refresh === 'string' ? refresh : '');
+    // ★决策 #860：玻璃分辨率降采样（`--ps glassS 3` ⇒ S=3，降 blit 尖峰成本）。
+    const gs = want?.parameters?.['glassS'];
+    AppStorage.setOrCreate('proteusGlassS', typeof gs === 'string' ? gs : (typeof gs === 'number' ? String(gs) : ''));
+    // ★决策 #860：重算步长（`--ps glassDiv 6` ⇒ 每 6 帧重算一次，其余复用）。
+    const gd = want?.parameters?.['glassDiv'];
+    AppStorage.setOrCreate('proteusGlassDiv', typeof gd === 'string' ? gd : (typeof gd === 'number' ? String(gd) : ''));
     if (sceneStr === '' || sceneStr === 'superapp' || sceneStr === 'superapp-drive'
         || sceneStr.startsWith('superapp-screen-') || sceneStr.startsWith('superapp-pump-')) {
       this.pageToLoad = 'shell/Superapp';
