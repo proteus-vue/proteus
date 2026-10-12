@@ -17,39 +17,54 @@ const TAG = 'ProteusHost';
 export default class EntryAbility extends UIAbility {
   /** 本 Ability 要加载的页面（onCreate 决定，onWindowStageCreate 读取） */
   private pageToLoad: string = 'shell/Superapp';
+  /** ★决策 #853：窗口级 stage 缓存（`onNewWant` 重载用）。 */
+  private windowStageRef: window.WindowStage | null = null;
 
-  onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
-    // ★场景参数（`aa start ... --ps scene stress`）→ AppStorage（页面读取后走对应场景分支）
+  /** 解析 Want 的场景参数（scene/scroll/ms）→ AppStorage + pageToLoad；返回 scene 是否变化。 */
+  private applyWant(want: Want): boolean {
     const scene = want?.parameters?.['scene'];
     const sceneStr: string = typeof scene === 'string' ? scene : '';
+    const changed: boolean = AppStorage.get<string>('proteusScene') !== sceneStr;
     AppStorage.setOrCreate('proteusScene', sceneStr);
-    // ★★★批 A⑤ 补齐（2026-10-08）：**滚动注入参数**（`--ps scroll 400`，vp）——逐屏截图装置用。
-    //   对齐 Android `--es scroll "0,400"` / iOS `--scroll=400` 的语义（三端同法）。
-    //   ★为什么必须有：fixed/sticky 的语义**只在滚动后可见**，没有滚动注入就采不到"吸附"证据
-    //   （批 A⑤ 记过这条装置缺口：「鸿蒙无滚动注入参数」）。
     const scroll = want?.parameters?.['scroll'];
-    const scrollStr: string = typeof scroll === 'string' ? scroll : '';
-    AppStorage.setOrCreate('proteusScroll', scrollStr);
-    // ★★★批次 44（2026-10-05）：**桌面点开（无 scene）= superapp 真实应用**（用户原话
-    //   「手机主屏图标点开 App 就能测完整体验」）；脚本要跑装置/探针 ⇒ 显式传 `--ps scene <名>`
-    //   （含 `bench` = 原缺省的全套装置路径）⇒ 落 dev/Index。
-    //   ★语义同 iOS（Info.plist 缺省场景 = superapp；脚本显式 `--selfdraw/--app-stack/…`）。
-    // ★★★逐屏截图装置（2026-10-05）：`superapp-screen-<name>` 也落 shell/Superapp（启动后导航到该屏）。
-    // ★★★v-pump 判据（本批）：`superapp-pump-<name>` 同落 Shell（启动后导航 + 让泵跑 `--ps ms`）。
-    //   ★泵保持时长（本批）：`--ps ms 2500` ⇒ AppStorage（`superapp-pump-` 场景读它）。
+    AppStorage.setOrCreate('proteusScroll', typeof scroll === 'string' ? scroll : '');
     const ms = want?.parameters?.['ms'];
-    const msStr: string = typeof ms === 'string' ? ms : (typeof ms === 'number' ? String(ms) : '');
-    AppStorage.setOrCreate('proteusPumpMs', msStr);
+    AppStorage.setOrCreate('proteusPumpMs', typeof ms === 'string' ? ms : (typeof ms === 'number' ? String(ms) : ''));
     if (sceneStr === '' || sceneStr === 'superapp' || sceneStr === 'superapp-drive'
         || sceneStr.startsWith('superapp-screen-') || sceneStr.startsWith('superapp-pump-')) {
       this.pageToLoad = 'shell/Superapp';
     } else {
       this.pageToLoad = 'dev/Index';
     }
-    hilog.info(DOMAIN, TAG, 'PROTEUS_HOST_ONCREATE bundle=dev.proteus.host scene=%{public}s page=%{public}s', sceneStr, this.pageToLoad);
+    return changed;
+  }
+
+  onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
+    // ★场景参数（`aa start ... --ps scene stress`）→ AppStorage（页面读取后走对应场景分支）
+    this.applyWant(want);
+    hilog.info(DOMAIN, TAG, 'PROTEUS_HOST_ONCREATE bundle=dev.proteus.host scene=%{public}s page=%{public}s',
+      AppStorage.get<string>('proteusScene') ?? '', this.pageToLoad);
+  }
+
+  /**
+   * ★决策 #853：**应用已在运行时再次 `aa start`（带新场景参数）** —— 此前只在 `onCreate` 读场景，
+   *   而运行中的 Ability 被 `aa start` 拉起时走的是 `onNewWant`（复用实例、不重跑 `onCreate`）
+   *   ⇒ **新场景不生效**（真机实测：`aa start --ps scene glass-demo` 后仍是上一个场景 vkglass，
+   *   用户「我现在看到的不是测试页」）。修 = `onNewWant` 里**重读场景并重载页面**。
+   */
+  onNewWant(want: Want, launchParam: AbilityConstant.LaunchParam): void {
+    const changed = this.applyWant(want);
+    hilog.info(DOMAIN, TAG, 'PROTEUS_HOST_NEWWANT scene=%{public}s page=%{public}s changed=%{public}d',
+      AppStorage.get<string>('proteusScene') ?? '', this.pageToLoad, changed ? 1 : 0);
+    if (changed && this.windowStageRef !== null) {
+      this.windowStageRef.loadContent(this.pageToLoad, (err) => {
+        if (err.code) hilog.error(DOMAIN, TAG, 'PROTEUS_HOST_NEWWANT_ERR %{public}s', JSON.stringify(err) ?? '');
+      });
+    }
   }
 
   onWindowStageCreate(windowStage: window.WindowStage): void {
+    this.windowStageRef = windowStage;
     // ★机器判据：此行即"宿主已启动"信号（验证脚本 grep 它——见 hosts/harmony/run-host-app.sh）
     hilog.info(DOMAIN, TAG,
       'PROTEUS_HOST_READY model=%{public}s os=%{public}s api=%{public}d display=%{public}s',
