@@ -555,23 +555,31 @@ std::vector<std::vector<uint8_t>> renderBatch(const std::vector<BatchItem>& item
               __invMs += ms(t0, t1); __allocMs += ms(t1, t1b); __copyMs += ms(t1b, t2); }
         }
     }
-    // ★决策 #852：**首帧兜底**——上一 parity 无可读结果（启动/重建/尺寸变）⇒ 无异步可复用 ⇒
-    //   同步等待本帧提交并读当前 parity。仅发生一次（此后每帧都有上帧可读）⇒ 不影响稳态性能。
-    //   【为什么必须】用户实测「启动后没有液态玻璃，滑动才出现」：首帧无上批 ⇒ 回读全空 ⇒ 玻璃空；
-    //   滑动才触发出帧、才有上批可读。
-    auto __tb3 = std::chrono::steady_clock::now();
-    vkWaitForFences(dev, 1, &g_bFence[p], VK_TRUE, 1000000000ull);
+    // ★决策 #852/#860：**首帧兜底**——仅当"上一 parity 无可复用结果"（启动/重建/尺寸变）时才
+    //   同步等待本帧提交并读当前 parity。★修复 #860：此前**每帧无条件**跑这段 ⇒ 每重算帧都
+    //   `vkWaitForFences(p)` 等**刚提交**的 buffer 完成 = 全 GPU 同步（实测 batch 段数十 ms）！
+    //   现改为先判"异步是否已覆盖全部 item"，覆盖则整段跳过（稳态零同步）。
+    bool needFallback = false;
     for (size_t i = 0; i < items.size(); i++) {
-        std::vector<uint8_t>* d = items[i].dst;
-        if (d == nullptr && !outs[i].empty()) continue;
         auto sit = g_slotCache.find(items[i].id);
-        if (sit == g_slotCache.end() || !sit->second.inited[p]) continue;
-        SizeCache& sc = sit->second.sc[p];
-        VkMappedMemoryRange rng{VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE};
-        rng.memory = sc.outStagingMem; rng.offset = 0; rng.size = VK_WHOLE_SIZE;
-        vkInvalidateMappedMemoryRanges(dev, 1, &rng);
-        if (d != nullptr) { d->resize(sc.outBytes); memcpy(d->data(), sc.outMap, sc.outBytes); }
-        else { std::vector<uint8_t> o(sc.outBytes); memcpy(o.data(), sc.outMap, o.size()); outs[i] = std::move(o); }
+        if (!(g_bSubmitted[q] && sit != g_slotCache.end() && sit->second.inited[q])) { needFallback = true; break; }
+    }
+    auto __tb3 = std::chrono::steady_clock::now();
+    if (needFallback) {
+        vkWaitForFences(dev, 1, &g_bFence[p], VK_TRUE, 1000000000ull);
+        for (size_t i = 0; i < items.size(); i++) {
+            auto sit = g_slotCache.find(items[i].id);
+            if (sit == g_slotCache.end() || !sit->second.inited[p]) continue;
+            if (g_bSubmitted[q] && sit->second.inited[q]) continue;   // 异步已覆盖
+            std::vector<uint8_t>* d = items[i].dst;
+            if (d == nullptr && !outs[i].empty()) continue;
+            SizeCache& sc = sit->second.sc[p];
+            VkMappedMemoryRange rng{VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE};
+            rng.memory = sc.outStagingMem; rng.offset = 0; rng.size = VK_WHOLE_SIZE;
+            vkInvalidateMappedMemoryRanges(dev, 1, &rng);
+            if (d != nullptr) { d->resize(sc.outBytes); memcpy(d->data(), sc.outMap, sc.outBytes); }
+            else { std::vector<uint8_t> o(sc.outBytes); memcpy(o.data(), sc.outMap, o.size()); outs[i] = std::move(o); }
+        }
     }
     auto __tb4 = std::chrono::steady_clock::now();
     // ★决策 #855：分段计时（定位 70ms 尖峰来源；连续前若干批打印，便于统计稳态尖峰）
