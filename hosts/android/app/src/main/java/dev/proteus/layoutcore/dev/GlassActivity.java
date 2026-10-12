@@ -115,6 +115,17 @@ public class GlassActivity extends Activity {
         cmds.add(new ProteusHostView.Cmd(circX, circY + circ / 2f - 20 * U, circ, 40 * U, 0, "圆形玻璃", 20 * U, 0xFFFFFFFF, 0f));
         int circTextId = nid++; ids.add(circTextId);
 
+        // ★B4 前景材质验证（决策 #834）：与 iOS 夹具同形——发光块（验分层曲线内核单源）
+        //   + 渐变砖（验 CSS 端点式）。放在滚动内容的顶层，随内容滚（玻璃钉住）。
+        cmds.add(new ProteusHostView.Cmd(20 * U, 20 * U, 96 * U, 60 * U, 0xFF20B0C0, null, 0f, 0, 12 * U,
+                null, new float[]{0xFF66FFCC, 18 * U, 0.9f}, null));
+        ids.add(nid++);
+        cmds.add(new ProteusHostView.Cmd(130 * U, 20 * U, 120 * U, 60 * U, 0xFF000000, null, 0f, 0, 8 * U,
+                new ProteusHostView.GradSpec(1, 45.0f, 0.5f, 0.5f, 1.0f,
+                        new int[]{0xFFFF5A3C, 0xFF3C78FF}, new float[]{0.0f, 1.0f}, null, null, null),
+                null, null));
+        ids.add(nid++);
+
         int[] idArr = new int[ids.size()];
         for (int i = 0; i < idArr.length; i++) idArr[i] = ids.get(i);
         scene.setCmdNodeIds(idArr);

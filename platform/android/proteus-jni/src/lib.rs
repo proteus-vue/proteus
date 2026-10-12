@@ -507,9 +507,7 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeGradientEndp
     handle: jni::sys::jlong,
     json: JString<'local>,
 ) -> jstring {
-    native_query(&mut env, json, |c| unsafe {
-        ffi::proteus_layout_gradient_endpoints(handle as u64, c)
-    })
+    native_query(&mut env, json, ffi::proteus_layout_gradient_endpoints, handle as u64)
 }
 
 #[no_mangle]
@@ -519,9 +517,7 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeGlowLayers<'
     handle: jni::sys::jlong,
     json: JString<'local>,
 ) -> jstring {
-    native_query(&mut env, json, |c| unsafe {
-        ffi::proteus_layout_glow_layers(handle as u64, c)
-    })
+    native_query(&mut env, json, ffi::proteus_layout_glow_layers, handle as u64)
 }
 
 #[no_mangle]
@@ -531,17 +527,17 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeMaskStops<'l
     handle: jni::sys::jlong,
     json: JString<'local>,
 ) -> jstring {
-    native_query(&mut env, json, |c| unsafe {
-        ffi::proteus_layout_mask_stops(handle as u64, c)
-    })
+    native_query(&mut env, json, ffi::proteus_layout_mask_stops, handle as u64)
 }
 
-/// 公共：读 JString(json) + 调 C ABI（返回 *mut c_char）+ 拷回 JString（含错误兜底）。
+/// 公共：读 JString(json) + 调 C ABI（**函数指针**，UnwindSafe——`impl Fn` 不满足 catch_unwind）
+///   + 拷回 JString（含错误兜底）。三个查询同签名 `unsafe extern "C" fn(u64, *const c_char) -> *mut c_char`。
 #[inline]
 fn native_query<'local>(
     env: &mut JNIEnv<'local>,
     json: JString<'local>,
-    call: impl Fn(*const std::os::raw::c_char) -> *mut std::os::raw::c_char,
+    call: unsafe extern "C" fn(u64, *const std::os::raw::c_char) -> *mut std::os::raw::c_char,
+    handle: u64,
 ) -> jstring {
     let s: String = match env.get_string(&json) {
         Ok(s) => s.into(),
@@ -552,7 +548,7 @@ fn native_query<'local>(
             Ok(c) => c,
             Err(_) => return "{\"ok\":false,\"error\":\"json 含 NUL\"}".to_string(),
         };
-        let p = call(c.as_ptr());
+        let p = unsafe { call(handle, c.as_ptr()) };
         if p.is_null() {
             return "{\"ok\":false,\"error\":\"null\"}".to_string();
         }

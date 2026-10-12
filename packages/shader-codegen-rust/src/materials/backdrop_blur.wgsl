@@ -33,20 +33,43 @@ fn fs_backdrop_blur(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32
     let local = frag.xy - u.origin;
     let uv = local / u.size_px;
     // 加权高斯近似（8 方向 × 3 环；权重和 = 1.0）——与 glass 同一核（跨端一致）
+    // ★★★固定 8 次**展开**（不用循环）：AGSL 不支持 `while`（naga 会把循环出成 while）——
+    //   详见 glass.wgsl 同注与 land/agsl.rs 的"输出不得含 while"断言。
     let br = max(u.blur, 0.0);
-    var acc = sample_backdrop(uv) * 0.20;
     let w1 = 0.058; let w2 = 0.030; let w3 = 0.012;
-    var k = 0;
-    loop {
-        if k >= 8 { break; }
-        let a = f32(k) * 0.7853981;
-        let dir = vec2<f32>(cos(a), sin(a));
-        let dpx = dir * br;
-        acc += sample_backdrop(uv + (dpx * 0.5) / u.size_px) * w1;
-        acc += sample_backdrop(uv + dpx / u.size_px) * w2;
-        acc += sample_backdrop(uv + (dpx * 1.6) / u.size_px) * w3;
-        k = k + 1;
-    }
+    var acc = sample_backdrop(uv) * 0.20;
+    { let d = vec2<f32>(br, 0.0);
+      acc += sample_backdrop(uv + (d * 0.5) / u.size_px) * w1;
+      acc += sample_backdrop(uv + d / u.size_px) * w2;
+      acc += sample_backdrop(uv + (d * 1.6) / u.size_px) * w3; }
+    { let d = vec2<f32>(br * 0.70710678, br * 0.70710678);
+      acc += sample_backdrop(uv + (d * 0.5) / u.size_px) * w1;
+      acc += sample_backdrop(uv + d / u.size_px) * w2;
+      acc += sample_backdrop(uv + (d * 1.6) / u.size_px) * w3; }
+    { let d = vec2<f32>(0.0, br);
+      acc += sample_backdrop(uv + (d * 0.5) / u.size_px) * w1;
+      acc += sample_backdrop(uv + d / u.size_px) * w2;
+      acc += sample_backdrop(uv + (d * 1.6) / u.size_px) * w3; }
+    { let d = vec2<f32>(-br * 0.70710678, br * 0.70710678);
+      acc += sample_backdrop(uv + (d * 0.5) / u.size_px) * w1;
+      acc += sample_backdrop(uv + d / u.size_px) * w2;
+      acc += sample_backdrop(uv + (d * 1.6) / u.size_px) * w3; }
+    { let d = vec2<f32>(-br, 0.0);
+      acc += sample_backdrop(uv + (d * 0.5) / u.size_px) * w1;
+      acc += sample_backdrop(uv + d / u.size_px) * w2;
+      acc += sample_backdrop(uv + (d * 1.6) / u.size_px) * w3; }
+    { let d = vec2<f32>(-br * 0.70710678, -br * 0.70710678);
+      acc += sample_backdrop(uv + (d * 0.5) / u.size_px) * w1;
+      acc += sample_backdrop(uv + d / u.size_px) * w2;
+      acc += sample_backdrop(uv + (d * 1.6) / u.size_px) * w3; }
+    { let d = vec2<f32>(0.0, -br);
+      acc += sample_backdrop(uv + (d * 0.5) / u.size_px) * w1;
+      acc += sample_backdrop(uv + d / u.size_px) * w2;
+      acc += sample_backdrop(uv + (d * 1.6) / u.size_px) * w3; }
+    { let d = vec2<f32>(br * 0.70710678, -br * 0.70710678);
+      acc += sample_backdrop(uv + (d * 0.5) / u.size_px) * w1;
+      acc += sample_backdrop(uv + d / u.size_px) * w2;
+      acc += sample_backdrop(uv + (d * 1.6) / u.size_px) * w3; }
     var col = acc;
     // 去饱和 + tint（与 glass 同式）
     let lum = dot(col.rgb, vec3<f32>(0.299, 0.587, 0.114));

@@ -24,6 +24,13 @@ use crate::land::glsl;
 pub fn emit(module: &naga::Module, info: &naga::valid::ModuleInfo, fragment_entry: &str) -> Result<crate::Emitted, String> {
     let glsl_frag = glsl::emit_stage(module, info, naga::ShaderStage::Fragment, fragment_entry)?;
     let agsl = rewrite_glsl_to_agsl(&glsl_frag);
+    // ★★★门禁（无设备可跑）：**AGSL 不支持 `while`**（只支持 `for`）——naga 会把任何 WGSL 循环出成
+    //   GLSL `while(true){…}` ⇒ 若算法里出现循环，此断言**当场报错**（否则真机编译失败、玻璃**静默降级**
+    //   为半透明实色——本仓实测踩过：B2 声称"Android 玻璃已验"，实际 AGSL 一直编译失败）。
+    //   修法：把固定次数循环**展开**（见 materials/*.wgsl 同注）。
+    if agsl.contains("while") {
+        return Err("AGSL 落地物含 `while`（AGSL 不支持）——请把算法中的循环展开（见 materials/*.wgsl 注释）".into());
+    }
     Ok(crate::Emitted { vertex: None, fragment: agsl })
 }
 

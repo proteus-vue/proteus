@@ -84,19 +84,45 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
 
     // ③ 模糊按 e 键控（边缘锐、中心糊）；核最大半径 = blur*e*0.55
     let br = max(u.blur, 0.0) * e * 0.55;
+    // 加权高斯近似：中心 1 抽 + 8 方向 × 3 环（权重和 = 1.0）。
+    // ★★★**固定 8 次必须展开（不用循环）**：naga 会把 WGSL 循环出成 GLSL `while(true){…}`，
+    //   而 **AGSL 不支持 `while`**（只支持 `for`）⇒ 循环会让 Android AGSL 编译失败、玻璃降级。
+    //   展开是固定核的标准做法（零分支、各端一致；land/agsl.rs 有"输出不得含 while"的断言）。
+    let w1 = 0.058; let w2 = 0.030; let w3 = 0.012;
     var acc = sample_backdrop(sp_uv) * 0.20;
-    let w1 = 0.058; let w2 = 0.030; let w3 = 0.012;   // 中心0.20 + 8向×(w1+w2+w3)=0.80 ⇒ 权重和 1.0
-    var k = 0;
-    loop {
-        if k >= 8 { break; }
-        let a = f32(k) * 0.7853981;
-        let dir = vec2<f32>(cos(a), sin(a));
-        let dpx = dir * br;
-        acc += sample_backdrop(sp_uv + (dpx * 0.5) / u.size_px) * w1;
-        acc += sample_backdrop(sp_uv + dpx / u.size_px) * w2;
-        acc += sample_backdrop(sp_uv + (dpx * 1.6) / u.size_px) * w3;
-        k = k + 1;
-    }
+    // 每方向一次（dir 按 k×π/8 预计算为常量；dpx = dir × br）
+    { let d = vec2<f32>(br, 0.0);
+      acc += sample_backdrop(sp_uv + (d * 0.5) / u.size_px) * w1;
+      acc += sample_backdrop(sp_uv + d / u.size_px) * w2;
+      acc += sample_backdrop(sp_uv + (d * 1.6) / u.size_px) * w3; }
+    { let d = vec2<f32>(br * 0.70710678, br * 0.70710678);
+      acc += sample_backdrop(sp_uv + (d * 0.5) / u.size_px) * w1;
+      acc += sample_backdrop(sp_uv + d / u.size_px) * w2;
+      acc += sample_backdrop(sp_uv + (d * 1.6) / u.size_px) * w3; }
+    { let d = vec2<f32>(0.0, br);
+      acc += sample_backdrop(sp_uv + (d * 0.5) / u.size_px) * w1;
+      acc += sample_backdrop(sp_uv + d / u.size_px) * w2;
+      acc += sample_backdrop(sp_uv + (d * 1.6) / u.size_px) * w3; }
+    { let d = vec2<f32>(-br * 0.70710678, br * 0.70710678);
+      acc += sample_backdrop(sp_uv + (d * 0.5) / u.size_px) * w1;
+      acc += sample_backdrop(sp_uv + d / u.size_px) * w2;
+      acc += sample_backdrop(sp_uv + (d * 1.6) / u.size_px) * w3; }
+    { let d = vec2<f32>(-br, 0.0);
+      acc += sample_backdrop(sp_uv + (d * 0.5) / u.size_px) * w1;
+      acc += sample_backdrop(sp_uv + d / u.size_px) * w2;
+      acc += sample_backdrop(sp_uv + (d * 1.6) / u.size_px) * w3; }
+    { let d = vec2<f32>(-br * 0.70710678, -br * 0.70710678);
+      acc += sample_backdrop(sp_uv + (d * 0.5) / u.size_px) * w1;
+      acc += sample_backdrop(sp_uv + d / u.size_px) * w2;
+      acc += sample_backdrop(sp_uv + (d * 1.6) / u.size_px) * w3; }
+    { let d = vec2<f32>(0.0, -br);
+      acc += sample_backdrop(sp_uv + (d * 0.5) / u.size_px) * w1;
+      acc += sample_backdrop(sp_uv + d / u.size_px) * w2;
+      acc += sample_backdrop(sp_uv + (d * 1.6) / u.size_px) * w3; }
+    { let d = vec2<f32>(br * 0.70710678, -br * 0.70710678);
+      acc += sample_backdrop(sp_uv + (d * 0.5) / u.size_px) * w1;
+      acc += sample_backdrop(sp_uv + d / u.size_px) * w2;
+      acc += sample_backdrop(sp_uv + (d * 1.6) / u.size_px) * w3; }
     var col = acc;
 
     // ④ 去饱和（frost 冲淡色彩）+ 提彩 + 中性对比
