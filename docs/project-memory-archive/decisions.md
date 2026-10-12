@@ -3567,3 +3567,13 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **⑤ ★8 项失败 = 仓库既有漂移，非本会话引入**（归因证据）：`git stash` 到干净 HEAD(#866) 复跑同样 8 项 ⇒ **全部复现**。两类：① **数字/快照漂移**（`check:stats` 官网数字 packages 声明 47≠实际 48、conformance 11≠12、plans 86≠87；`css-capability-alignment` 幂等；`router-project-driven` 路由产物；`compiler-ir-m3/m4` 快照）——新增包/能力/plan 后未同步；② `p-batch2-contract`（p-icon：`Cannot use import.meta outside a module`——校验器/Node 版本相关）。
 **⑥ 结论/建议**：审查的**高价值项已落地**（engines + 类门禁）；**「拆 capability.ts」排最后**（9 千行、周边无行为测试，先补 characterization 再拆）；`noUncheckedIndexedAccess` 是**迁移项目**（仅 2 个包开启即 **47 错**，全仓数千条，须棘轮式）；**既有 8 项失败是独立收口项**（非本会话引入，需另行修——含官网数字漂移，正是审查担心的"数字过时静默上线"）。
 **⑦ 诚实边界**：本轮只跑**一次**全量（Node 22）；既有 8 项失败**未修**（属独立批次，且部分需 build 产物/官网数字核对）。
+
+868. **★★补 lint 工具链层（ESLint 10 flat config + bulk suppressions 棘轮）——顺带抓到 1 个真 bug**（2026-10-12）：
+**① 背景**：外部审查点名的唯一"缺层"= 全仓**零 eslint/prettier**（146 道点状门禁，缺面状坏味道基线）。本项落地。
+**② 选型**：`eslint@10.12` + `typescript-eslint@8.71`（**非 type-aware**，避免 51 包 `parserOptions.project` 的高代价/假红）+ `eslint-plugin-vue@10.11`；**不引入 prettier 冲突**（本轮只做**正确性+坏味道**，不做格式 bikeshedding）。
+**③ 规则集**：js recommended + tseslint recommended（语法级）+ 手选"易错/坏味道"（`no-unmodified-loop-condition`/`no-constant-condition`/`no-fallthrough`/`no-unreachable-loop`/`no-dupe-*`/`no-self-*`/`array-callback-return`/`eqeqeq`(warn) 等）。关/降级：`no-unused-vars`(warn)、`no-explicit-any`(warn)、`no-undef`(TS 关闭——typescript-eslint 官方建议，TS 类型会假阳性)。
+**④ 忽略面（关键——清了 6.7k 生成物噪音）**：`.tools/**`（NDK/quickjs 第三方）、`**/.proteus/**`（编译器产物 → 6.7k 条）、`hosts/**/build-*/**`（打包产物）、`**/assets|rawfile|fixtures/bundle-*.js`、`spike/tools/**`（vendored yoga/skyline）。清理后真实源码 **ERRORS 274 / WARN 1431**（从 8549/3362 降）。
+**⑤ 棘轮（ESLint 10 原生 bulk suppressions）**：`eslint-suppressions.json` 锁存量（166 条 error 类 / 138 文件）。`pnpm lint` 只报**新增** error；修掉后 `--prune-suppressions` 降钉（实测：修 check-host-layering 后 lint rc=2 提示 prune ⇒ prune 后 rc=0）。**与本仓 baseline.json 棘轮文化同源**。
+**⑥ ★lint 立刻抓到 1 个真 bug（证明这一层的价值）**：`scripts/check-host-layering.mjs:304` 用了**从未声明**的 `notes`（`no-undef`）⇒ 一旦命中"已具名登记"分支即 `ReferenceError` 崩溃（gate 自身崩，而非判红）。本项补 `notes` 声明 + 末尾打印。修后该文件剩余 `no-undef` 真实命中 **0**。
+**⑦ 接线**：`lint`/`lint:fix` 脚本 + CI（`ci.yml` 新增步骤）+ `verify` 链（紧邻 `check:loop-guard`）；`check:gates-sync` 绿。**双向自测**：新建含 `no-constant-condition` 的文件 ⇒ `pnpm lint` **rc=1 精确报错**；删除 ⇒ rc=0。
+**⑧ 诚实边界**：① 仅语法级规则（type-aware 如 `no-floating-promises`/`no-misused-promises` 列后续——需配 project，另批）。② warning 未纳入 gate（1431 条，属"清理"非"缺陷"，走后续批次）。③ tsconfig 的 `noUncheckedIndexedAccess` 是**独立线**（实测 2 包即 47 错，全仓数千条），本项未动。

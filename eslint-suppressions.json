@@ -1,0 +1,776 @@
+{
+  "docs/proteus-compiler-backend-spi-plan/conformance-runner.js": {
+    "preserve-caught-error": {
+      "count": 1
+    }
+  },
+  "docs/proteus-developer-platform-plan/selfcheck.cjs": {
+    "@typescript-eslint/no-require-imports": {
+      "count": 3
+    }
+  },
+  "docs/proteus-devtools-landing-plan/reference-impl.cjs": {
+    "@typescript-eslint/no-this-alias": {
+      "count": 1
+    }
+  },
+  "docs/proteus-execution-carrier-plan/carrier-reference.js": {
+    "@typescript-eslint/no-unused-expressions": {
+      "count": 1
+    }
+  },
+  "docs/proteus-inspector-plan/reference-impl.cjs": {
+    "@typescript-eslint/no-this-alias": {
+      "count": 1
+    }
+  },
+  "docs/proteus-miniprogram-runtime-plan/reference-impl.cjs": {
+    "prefer-promise-reject-errors": {
+      "count": 3
+    }
+  },
+  "docs/proteus-ownership-plan/ownership-reference.cjs": {
+    "no-useless-assignment": {
+      "count": 1
+    }
+  },
+  "docs/proteus-sandbox-isolation-plan/reference-impl.cjs": {
+    "no-throw-literal": {
+      "count": 9
+    }
+  },
+  "docs/proteus-website-v3/shot.js": {
+    "@typescript-eslint/no-require-imports": {
+      "count": 1
+    }
+  },
+  "docs/proteus-website-v3/test-flexible.js": {
+    "@typescript-eslint/no-require-imports": {
+      "count": 3
+    }
+  },
+  "docs/proteus-website-v3/test-logic.js": {
+    "@typescript-eslint/no-require-imports": {
+      "count": 1
+    },
+    "no-dupe-keys": {
+      "count": 2
+    }
+  },
+  "docs/proteus-website-v3/verify-llm.cjs": {
+    "@typescript-eslint/no-require-imports": {
+      "count": 2
+    }
+  },
+  "examples/pages/docs-engine-demo.vue": {
+    "vue/no-v-text-v-html-on-component": {
+      "count": 1
+    }
+  },
+  "examples/pages/vue-compat-demo.vue": {
+    "vue/no-v-text-v-html-on-component": {
+      "count": 1
+    }
+  },
+  "examples/subpackages/svg-lab/pages/svg-canvas-probe.vue": {
+    "no-useless-assignment": {
+      "count": 1
+    }
+  },
+  "examples/subpackages/svg-lab/pages/svg-spike.vue": {
+    "no-useless-assignment": {
+      "count": 1
+    }
+  },
+  "hosts/android/acceptance-stub.mjs": {
+    "no-template-curly-in-string": {
+      "count": 2
+    }
+  },
+  "hosts/android/bridge/entry-batch.ts": {
+    "prefer-const": {
+      "count": 1
+    }
+  },
+  "hosts/android/bridge/entry-lights.ts": {
+    "no-useless-assignment": {
+      "count": 1
+    }
+  },
+  "hosts/android/bridge/entry-vapor.ts": {
+    "no-constant-condition": {
+      "count": 1
+    },
+    "no-useless-assignment": {
+      "count": 1
+    },
+    "vue/prefer-import-from-vue": {
+      "count": 1
+    }
+  },
+  "hosts/harmony/host-app/entry/src/main/ets/dev/app-stack-probe.ts": {
+    "@typescript-eslint/no-wrapper-object-types": {
+      "count": 1
+    }
+  },
+  "hosts/ios/bridge/bench-app.ts": {
+    "vue/prefer-import-from-vue": {
+      "count": 1
+    }
+  },
+  "hosts/ios/bridge/entry-bench.ts": {
+    "@typescript-eslint/no-unsafe-function-type": {
+      "count": 1
+    },
+    "@typescript-eslint/no-wrapper-object-types": {
+      "count": 5
+    },
+    "no-dupe-keys": {
+      "count": 4
+    },
+    "no-useless-assignment": {
+      "count": 2
+    },
+    "prefer-const": {
+      "count": 3
+    },
+    "vue/prefer-import-from-vue": {
+      "count": 1
+    }
+  },
+  "hosts/ios/bridge/entry-selfdraw.ts": {
+    "no-useless-assignment": {
+      "count": 4
+    },
+    "vue/prefer-import-from-vue": {
+      "count": 1
+    }
+  },
+  "hosts/ios/bridge/entry-v0-probe.ts": {
+    "vue/prefer-import-from-vue": {
+      "count": 1
+    }
+  },
+  "hosts/ios/bridge/entry.ts": {
+    "vue/prefer-import-from-vue": {
+      "count": 1
+    }
+  },
+  "hosts/ios/lib/ios-signing.mjs": {
+    "no-useless-assignment": {
+      "count": 1
+    }
+  },
+  "hosts/shared/bridge/entry-app-stack.ts": {
+    "no-useless-assignment": {
+      "count": 2
+    }
+  },
+  "hosts/shared/bridge/entry-host-runtime.ts": {
+    "prefer-const": {
+      "count": 1
+    }
+  },
+  "hosts/shared/bridge/entry-showcase.ts": {
+    "no-useless-assignment": {
+      "count": 1
+    }
+  },
+  "packages/animation/src/choreography.ts": {
+    "preserve-caught-error": {
+      "count": 1
+    }
+  },
+  "packages/api/src/capability.ts": {
+    "no-unreachable": {
+      "count": 1
+    },
+    "no-useless-assignment": {
+      "count": 3
+    }
+  },
+  "packages/cli/src/conformance.ts": {
+    "preserve-caught-error": {
+      "count": 1
+    }
+  },
+  "packages/cli/src/d2-audit.ts": {
+    "no-useless-assignment": {
+      "count": 1
+    }
+  },
+  "packages/cli/src/doctor/checks/toolchain.ts": {
+    "no-template-curly-in-string": {
+      "count": 1
+    }
+  },
+  "packages/cli/src/fluid-check.ts": {
+    "prefer-spread": {
+      "count": 2
+    }
+  },
+  "packages/cli/src/signing.ts": {
+    "no-useless-assignment": {
+      "count": 1
+    }
+  },
+  "packages/compiler-backend/src/conformance.ts": {
+    "prefer-const": {
+      "count": 1
+    }
+  },
+  "packages/compiler-backend/src/g38-conformance.ts": {
+    "preserve-caught-error": {
+      "count": 1
+    }
+  },
+  "packages/compiler-backend/src/g38.ts": {
+    "no-useless-assignment": {
+      "count": 1
+    }
+  },
+  "packages/compiler/src/calc-fold.ts": {
+    "prefer-const": {
+      "count": 1
+    }
+  },
+  "packages/compiler/src/cse/dynamic.ts": {
+    "no-useless-assignment": {
+      "count": 1
+    }
+  },
+  "packages/compiler/src/cse/extract.ts": {
+    "no-unreachable-loop": {
+      "count": 1
+    },
+    "no-useless-assignment": {
+      "count": 1
+    }
+  },
+  "packages/compiler/src/cse/parse.ts": {
+    "prefer-const": {
+      "count": 1
+    }
+  },
+  "packages/compiler/src/index.ts": {
+    "import/no-named-as-default": {
+      "count": 1
+    }
+  },
+  "packages/compiler/src/script.ts": {
+    "no-irregular-whitespace": {
+      "count": 3
+    },
+    "no-useless-assignment": {
+      "count": 3
+    },
+    "prefer-const": {
+      "count": 1
+    }
+  },
+  "packages/compiler/src/template.ts": {
+    "no-case-declarations": {
+      "count": 2
+    }
+  },
+  "packages/compiler/src/vapor/build.ts": {
+    "no-useless-assignment": {
+      "count": 1
+    }
+  },
+  "packages/compiler/src/vapor/deps.ts": {
+    "no-fallthrough": {
+      "count": 1
+    },
+    "no-useless-assignment": {
+      "count": 1
+    }
+  },
+  "packages/compiler/src/vapor/events.ts": {
+    "no-useless-assignment": {
+      "count": 2
+    }
+  },
+  "packages/compiler/src/vapor/sources.ts": {
+    "no-constant-condition": {
+      "count": 1
+    },
+    "no-useless-assignment": {
+      "count": 1
+    }
+  },
+  "packages/compiler/src/vapor/template.ts": {
+    "no-useless-assignment": {
+      "count": 1
+    },
+    "prefer-const": {
+      "count": 2
+    }
+  },
+  "packages/component-ir/src/validate.ts": {
+    "prefer-spread": {
+      "count": 3
+    }
+  },
+  "packages/components/p-formfactor/index.vue": {
+    "vue/no-dupe-keys": {
+      "count": 1
+    }
+  },
+  "packages/components/p-page-container/index.vue": {
+    "no-useless-assignment": {
+      "count": 1
+    }
+  },
+  "packages/components/p-rich-text/index.vue": {
+    "vue/no-v-text-v-html-on-component": {
+      "count": 1
+    }
+  },
+  "packages/components/p-scroll-view/index.vue": {
+    "vue/require-valid-default-prop": {
+      "count": 1
+    }
+  },
+  "packages/components/p-slider/index.vue": {
+    "no-irregular-whitespace": {
+      "count": 7
+    }
+  },
+  "packages/components/p-svg-canvas/index.vue": {
+    "no-useless-assignment": {
+      "count": 1
+    }
+  },
+  "packages/desktop/src/cursor-glow.ts": {
+    "prefer-const": {
+      "count": 1
+    }
+  },
+  "packages/desktop/src/deeplink.ts": {
+    "prefer-const": {
+      "count": 1
+    }
+  },
+  "packages/dev-host/src/dev-host.ts": {
+    "prefer-spread": {
+      "count": 1
+    }
+  },
+  "packages/devtools-runtime/src/index.ts": {
+    "prefer-const": {
+      "count": 2
+    }
+  },
+  "packages/devtools/src/snapshot-io.ts": {
+    "prefer-spread": {
+      "count": 1
+    }
+  },
+  "packages/devtools/src/ws-bridge.ts": {
+    "no-useless-assignment": {
+      "count": 1
+    }
+  },
+  "packages/gesture/src/use-gesture.ts": {
+    "prefer-const": {
+      "count": 1
+    }
+  },
+  "packages/plugin-vite/src/devtools-relay.ts": {
+    "no-useless-assignment": {
+      "count": 1
+    }
+  },
+  "packages/plugin-vite/src/plugin.ts": {
+    "no-useless-assignment": {
+      "count": 2
+    }
+  },
+  "packages/render-backend/src/basic-containers.ts": {
+    "no-useless-assignment": {
+      "count": 1
+    },
+    "prefer-const": {
+      "count": 1
+    }
+  },
+  "packages/render-backend/src/conformance.ts": {
+    "no-useless-assignment": {
+      "count": 1
+    }
+  },
+  "packages/render-backend/src/container-conformance.ts": {
+    "no-empty-pattern": {
+      "count": 2
+    }
+  },
+  "packages/render-backend/src/host-conformance.ts": {
+    "no-empty-pattern": {
+      "count": 7
+    }
+  },
+  "packages/render-backend/src/ownership.ts": {
+    "no-useless-assignment": {
+      "count": 1
+    }
+  },
+  "packages/render-backend/src/screen-executor-host.ts": {
+    "preserve-caught-error": {
+      "count": 1
+    }
+  },
+  "packages/render-backend/src/stack-container.ts": {
+    "prefer-const": {
+      "count": 1
+    }
+  },
+  "packages/render-backend/src/superapp-runtime.ts": {
+    "no-useless-assignment": {
+      "count": 1
+    }
+  },
+  "packages/render-backend/src/vue-bridge.ts": {
+    "vue/prefer-import-from-vue": {
+      "count": 2
+    }
+  },
+  "packages/renderer-app/src/adapters/selfdraw.ts": {
+    "@typescript-eslint/no-unsafe-function-type": {
+      "count": 2
+    }
+  },
+  "packages/renderer-app/src/host.ts": {
+    "vue/prefer-import-from-vue": {
+      "count": 1
+    }
+  },
+  "packages/renderer-app/src/index.ts": {
+    "vue/prefer-import-from-vue": {
+      "count": 1
+    }
+  },
+  "packages/runtime/src/pageLifecycle.ts": {
+    "@typescript-eslint/no-unsafe-function-type": {
+      "count": 2
+    }
+  },
+  "packages/runtime/src/style-safety/platform-narrowing.ts": {
+    "no-fallthrough": {
+      "count": 5
+    }
+  },
+  "packages/test-core/src/mount.ts": {
+    "prefer-const": {
+      "count": 1
+    }
+  },
+  "scripts/check-anim-record-bytes.mjs": {
+    "no-useless-assignment": {
+      "count": 1
+    }
+  },
+  "scripts/check-host-layering.mjs": {
+    "no-useless-assignment": {
+      "count": 1
+    }
+  },
+  "scripts/check-secret-scan.mjs": {
+    "no-useless-assignment": {
+      "count": 1
+    }
+  },
+  "scripts/check-shell-i18n-vars.mjs": {
+    "no-template-curly-in-string": {
+      "count": 1
+    }
+  },
+  "scripts/check-vapor-three-end.mjs": {
+    "no-useless-assignment": {
+      "count": 1
+    }
+  },
+  "scripts/gen-consistency-metrics.mjs": {
+    "no-useless-assignment": {
+      "count": 1
+    }
+  },
+  "scripts/gen-css-capability-alignment.mjs": {
+    "no-useless-assignment": {
+      "count": 1
+    }
+  },
+  "scripts/gen-docs.ts": {
+    "prefer-const": {
+      "count": 1
+    }
+  },
+  "scripts/gen-mp-spec.mjs": {
+    "preserve-caught-error": {
+      "count": 1
+    }
+  },
+  "scripts/gen-style-ir-golden.mjs": {
+    "no-loss-of-precision": {
+      "count": 1
+    }
+  },
+  "scripts/shoot-stress-web.mjs": {
+    "no-useless-assignment": {
+      "count": 1
+    }
+  },
+  "scripts/vapor-capability-probe.mts": {
+    "no-template-curly-in-string": {
+      "count": 1
+    }
+  },
+  "spike/vc0-skyline-geom/app.js": {
+    "no-undef": {
+      "count": 3
+    }
+  },
+  "spike/vc0-skyline-geom/components/css-probe/index.js": {
+    "@typescript-eslint/no-require-imports": {
+      "count": 1
+    },
+    "no-undef": {
+      "count": 4
+    }
+  },
+  "spike/vc0-skyline-geom/components/geom-probe/index.js": {
+    "@typescript-eslint/no-require-imports": {
+      "count": 1
+    },
+    "no-undef": {
+      "count": 1
+    }
+  },
+  "spike/vc0-skyline-geom/pages/l4-skyline/index.js": {
+    "no-undef": {
+      "count": 1
+    }
+  },
+  "spike/vc0-skyline-geom/pages/l4-webview/index.js": {
+    "no-undef": {
+      "count": 1
+    }
+  },
+  "spike/vc0-skyline-geom/pages/skyline-geom/index.js": {
+    "@typescript-eslint/no-require-imports": {
+      "count": 2
+    },
+    "@typescript-eslint/no-this-alias": {
+      "count": 1
+    },
+    "no-undef": {
+      "count": 4
+    }
+  },
+  "spike/vc0-skyline-geom/pages/view-default/index.js": {
+    "no-undef": {
+      "count": 2
+    }
+  },
+  "spike/vc0-skyline-geom/pages/webview-geom/index.js": {
+    "@typescript-eslint/no-require-imports": {
+      "count": 2
+    },
+    "@typescript-eslint/no-this-alias": {
+      "count": 1
+    },
+    "no-undef": {
+      "count": 3
+    }
+  },
+  "spike/vc0-skyline-geom/utils/collect-consistency.js": {
+    "@typescript-eslint/no-require-imports": {
+      "count": 1
+    },
+    "no-undef": {
+      "count": 1
+    }
+  },
+  "spike/vc0-skyline-geom/utils/computed.js": {
+    "no-undef": {
+      "count": 4
+    }
+  },
+  "spike/vc0-skyline-geom/utils/consistency-snapshot.js": {
+    "no-undef": {
+      "count": 1
+    }
+  },
+  "spike/vc0-skyline-geom/utils/probe.js": {
+    "no-undef": {
+      "count": 7
+    }
+  },
+  "tests/capability-hooks.test.ts": {
+    "@typescript-eslint/prefer-as-const": {
+      "count": 1
+    }
+  },
+  "tests/compiler-validate-wxml-platform.test.ts": {
+    "no-template-curly-in-string": {
+      "count": 2
+    }
+  },
+  "tests/cse-dynamic.test.ts": {
+    "no-template-curly-in-string": {
+      "count": 1
+    }
+  },
+  "tests/desktop-b4.test.ts": {
+    "prefer-const": {
+      "count": 1
+    }
+  },
+  "tests/devtools-panel.test.ts": {
+    "vue/multi-word-component-names": {
+      "count": 3
+    }
+  },
+  "tests/e2e-layout-core-pixel.test.ts": {
+    "prefer-const": {
+      "count": 1
+    }
+  },
+  "tests/e2e-mp-gp5.test.ts": {
+    "prefer-const": {
+      "count": 1
+    }
+  },
+  "tests/e2e-mp-popover.test.ts": {
+    "no-useless-assignment": {
+      "count": 1
+    }
+  },
+  "tests/e2e-mp-smoke.test.ts": {
+    "preserve-caught-error": {
+      "count": 2
+    }
+  },
+  "tests/engineering.test.ts": {
+    "prefer-const": {
+      "count": 1
+    }
+  },
+  "tests/fluid-formfactor-render.test.ts": {
+    "no-misleading-character-class": {
+      "count": 1
+    }
+  },
+  "tests/lifecycle-callback.test.ts": {
+    "no-regex-spaces": {
+      "count": 2
+    }
+  },
+  "tests/mp-transform.test.ts": {
+    "no-regex-spaces": {
+      "count": 1
+    }
+  },
+  "tests/plain-const-bare-ref.test.ts": {
+    "no-template-curly-in-string": {
+      "count": 1
+    }
+  },
+  "tests/screen-executor-host.test.ts": {
+    "no-useless-assignment": {
+      "count": 1
+    }
+  },
+  "tests/selfdraw-event-dispatch.test.ts": {
+    "vue/prefer-import-from-vue": {
+      "count": 1
+    }
+  },
+  "tests/selfdraw-paint-patch.test.ts": {
+    "vue/prefer-import-from-vue": {
+      "count": 1
+    }
+  },
+  "tests/selfdraw-structural-diff.test.ts": {
+    "vue/prefer-import-from-vue": {
+      "count": 1
+    }
+  },
+  "tests/selfdraw-text-patch.test.ts": {
+    "vue/prefer-import-from-vue": {
+      "count": 1
+    }
+  },
+  "tests/svg-canvas.test.ts": {
+    "prefer-const": {
+      "count": 1
+    }
+  },
+  "tests/svg-hit.test.ts": {
+    "no-regex-spaces": {
+      "count": 1
+    }
+  },
+  "tests/svg-spike-compiler-gaps.test.ts": {
+    "no-template-curly-in-string": {
+      "count": 1
+    }
+  },
+  "tests/v0-probe-mechanism.test.ts": {
+    "vue/prefer-import-from-vue": {
+      "count": 1
+    }
+  },
+  "tests/vapor-expr-program.test.ts": {
+    "no-template-curly-in-string": {
+      "count": 1
+    }
+  },
+  "tests/vapor-v2.test.ts": {
+    "no-template-curly-in-string": {
+      "count": 1
+    }
+  },
+  "website/scripts/gen-content-en.mjs": {
+    "no-dupe-keys": {
+      "count": 1
+    },
+    "no-template-curly-in-string": {
+      "count": 2
+    }
+  },
+  "website/scripts/gen-content.mjs": {
+    "no-dupe-keys": {
+      "count": 1
+    },
+    "no-irregular-whitespace": {
+      "count": 4
+    },
+    "no-template-curly-in-string": {
+      "count": 2
+    },
+    "no-useless-assignment": {
+      "count": 2
+    }
+  },
+  "website/src/components/anim/AnimWorkbench.vue": {
+    "vue/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "website/src/components/anim/SigilSvg.vue": {
+    "vue/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "website/src/pages/DocsPage.vue": {
+    "vue/no-v-text-v-html-on-component": {
+      "count": 2
+    }
+  },
+  "website/src/visual/wireframe.ts": {
+    "prefer-const": {
+      "count": 1
+    }
+  }
+}

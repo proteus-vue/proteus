@@ -67,6 +67,9 @@ jobs:
       - name: 命令机循环推进兜底门禁（★决策 #867：手写解析 while+switch 循环必须有推进兜底——否则非法输入卡死/OOM）
         run: node scripts/check-loop-guard.mjs
 
+      - name: ESLint 基线（★决策 #868：面状坏味道基线——error 类存量已 suppressions 锁定，只报新增）
+        run: pnpm run lint
+
       - name: 逐帧通道去 JSON 门禁（★S2/#769：指令字节必须走 applyOpsBytes 字节直传，禁 number[] JSON——防静默回退）
         run: node scripts/check-no-json-wire.mjs
 

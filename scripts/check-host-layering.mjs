@@ -131,6 +131,9 @@ const isArtifact = (rel) => {
 }
 
 const problems = []
+// ★修复（决策 #868 · lint 抓到）：此前 304 行 `notes.push(...)` 用的是**从未声明**的 `notes`
+//   ⇒ 一旦命中"已具名登记"分支即 `ReferenceError` 崩溃（gate 自身崩，而非判红）。补声明 + 末尾打印。
+const notes = []
 
 /* ── ★混装登记（诚实边界）：已知"壳+引擎混装"的文件——本轮整文件归位、不拆段（见 README-LAYERS §4）。 ──
  *   对这些文件，禁止名检查降级为 **命中数棘轮**（不得超过登记值；新增即红 ⇒ 逼着拆分或显式更新登记）。
@@ -324,4 +327,5 @@ if (problems.length) {
   for (const p of problems) console.error(`    - ${p}`)
   process.exit(1)
 }
+for (const n of notes) console.log(`ℹ ${n}`)
 console.log('✅ hosts 分层合规（三端 runtime/shell/dev 齐备 · runtime 无反向依赖 · 无被跟踪产物）')
