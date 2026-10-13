@@ -20,7 +20,7 @@
 //   这是刻意选择（「数据源缺失 = 硬失败」），与本仓「不静默」纪律一致；改名时同步本文件常量即可。
 
 import fs from 'node:fs'
-import { maskNonCode, findFunctionBody, findTopReturnObject, matchBrace, topLevelMemberNames } from './ts-source-scan.mjs'
+import { maskNonCode, returnObjectMembers } from './ts-source-scan.mjs'
 
 /**
  * 契约常量：App 桥的两个工厂函数（`packages/api/src/capability-app.ts`）。
@@ -38,22 +38,13 @@ export function extractAppBridgeKeys(src, functions = APP_BRIDGE_FACTORIES) {
   const perFn = {}
   const misses = []
   for (const fn of functions) {
-    const body = findFunctionBody(masked, fn)
-    if (!body) {
-      misses.push(`${fn}（函数未找到）`)
+    // 「函数 → 顶层 `return {` → 成员名」收在 ts-source-scan 一份（本仓禁止第二份手写副本）
+    const { names, miss } = returnObjectMembers(masked, fn)
+    if (miss) {
+      misses.push(miss)
       continue
     }
-    const retOpen = findTopReturnObject(masked, body)
-    if (retOpen < 0) {
-      misses.push(`${fn}（未找到顶层 \`return {\`）`)
-      continue
-    }
-    const close = matchBrace(masked, retOpen)
-    if (close < 0) {
-      misses.push(`${fn}（返回对象花括号不配对）`)
-      continue
-    }
-    const names = topLevelMemberNames(masked, retOpen, close)
+    // App 桥工厂**必须**有成员（空返回对象 = 数据源被破坏，不静默）
     if (!names.length) {
       misses.push(`${fn}（返回对象未解析出成员）`)
       continue

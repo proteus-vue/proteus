@@ -37,3 +37,13 @@ export function topLevelEntries(masked: string, open: number, close: number): To
 
 /** 对象体顶层成员名序列（`topLevelEntries` 的薄封装） */
 export function topLevelMemberNames(masked: string, open: number, close: number): string[]
+
+/** `export function <name>` 的顶层 `return {` 成员名抽取结果（`miss` 非空即结构失败，不抛错） */
+export interface ReturnObjectMembers {
+  /** 顶层成员名；为空且 `miss` == null = 合法空集（`return {}`），非失败 */
+  names: string[]
+  miss: string | null
+}
+
+/** `export function <name>` → 顶层 `return {` → 顶层成员名（失败信息放 `miss`，不抛错） */
+export function returnObjectMembers(masked: string, name: string): ReturnObjectMembers

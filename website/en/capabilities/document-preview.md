@@ -44,8 +44,8 @@ Param,Type,Required,Doc
 
 | Target | Status | Notes |
 |---|---|---|
-| Web SPA | ⚠️ | vue-dom · webBridge missing openDocument → explicit Err degradation (no direct platform API) |
-| WeChat Mini Program | ⚠️ | skyline (WebView fallback) · wx bridge missing openDocument → explicit Err degradation |
+| Web SPA | ✅ | vue-dom · webBridge implementation (direct platform API) |
+| WeChat Mini Program | ✅ | skyline (WebView fallback) · wx bridge → (wx-native equivalent; exact mapping in the zh version) |
 | Headless (SSR / testing) | ✅ | headless · mock bridge injected (testing / SSR tier) |
 | iOS native | 🟡 | native-ios (UIKit + CoreAnimation) · render core shipped — capability bridge not wired |
 | Android native | 🟡 | native-android (self-drawn Canvas) · render core shipped — capability bridge not wired |

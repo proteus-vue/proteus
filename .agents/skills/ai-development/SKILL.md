@@ -88,7 +88,7 @@ description: 执行多 AI 协作开发框架的规范（Proteus A 链：开发�
 ```
 commit 遵循 `<type>(<scope>): <desc> · 决策 #NNN`。
 
-### 3.5 两个实操坑（实测踩过 · 规范文本未写）
+### 3.5 实操坑（实测踩过 · 规范文本未写）
 
 1. **scope 必须先落地、再登记**：`check-ai-tasks.mjs` 校验每个 scope 的**静态前缀在磁盘真实存在**
    ⇒ 新增文件（新模块 / 新测试）要**先把文件建出来，再把它写进 scope**；顺序反了会报
@@ -97,6 +97,17 @@ commit 遵循 `<type>(<scope>): <desc> · 决策 #NNN`。
    编号在多会话并行下**不独占**。实测：按 `#881` 立项，实施期间**异会话已提交 `#881/#882/#883`**
    ⇒ 本单只得改号 `#884`。**定号前看两处**：`git log -1 --oneline`（最新提交带的号）+ 归档文件尾部
    （`tail` 一次）；改号只改自己新增的那条，**已入库的号不得回改**。
+3. ★★**共享文档"正被别人占用"时不要抢着写**：`decisions.md` 允许并行追加，但若 `git status` 显示它
+   **正被异会话改动（未提交）**，此时 `git add` 会把别人的在途内容一并卷进你的提交（`git add` 只能整文件）。
+   实测：等到对方提交、文件转干净后再追加即可（同一天内先后两次遇到）。
+   ★同理 **`PROJECT_MEMORY.md` 不在 §3.2「共享可写」清单内 ⇒ 并发时视为独占**，别并行改（速览交给主线）。
+4. ★**写多行正文到文件：一律用真实换行，别在参数里写 `\n`**：`Edit`/`Write` 的参数里若出现**转义形式的
+   `\n`**，会被当**字面量**写进文件（整条挤成一行）。实测：决策条目写成一整行 ⇒ 事后用 node 把 `\`n` 换回换行才修好。
+5. ★**跑门禁的姿势**（本环境实测）：① `pnpm` 常不在 PATH ⇒ 用 `corepack pnpm`，或**直接用等价命令**
+   （`node scripts/check-xxx.mjs` / `cd website && npx tsx scripts/gen-content.mjs --check`）——
+   `pnpm check:*` 批跑可能触发沙箱对 `node_modules/.cache/**` 的**删除授权**而被打断；
+   ② zsh **不对变量做分词**（`for c in "node a.mjs"; do $c ...` ⇒ `no such file or directory`）⇒ 用 `eval $c`；
+   ③ macOS 是 **BSD grep**，`\|` **不是**交替（`grep -E` 也不支持 `\s`）⇒ 用 Grep 工具（ripgrep）或 node 脚本。
 
 ---
 
