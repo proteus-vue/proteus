@@ -99,7 +99,7 @@ export async function runTargetedBuildProgrammatic(
       runGenRoutes({ config: config as never, root, webOnly: true })
       const { buildAppScreenContent } = await import('./app-content')
       const r = await buildAppScreenContent(root, p)
-      console.log(`[proteus] ✅ App 屏内容（${p}）→ ${path.relative(root, r.outFile)}（编译 ${r.compiled} 页 / 跳过 ${r.skipped}）`)
+      console.log(`[proteus] ✅ App 屏内容（${p}）→ ${path.relative(root, r.outFile)}（编译 ${r.compiled} 页 / 跳过 ${r.skipped}${r.glassNodes ? ` / 玻璃节点 ${r.glassNodes}` : ''}）`)
       if (r.diagnostics.length) {
         // ★只打一行**摘要 + 2 例**（此前打 6 例 ×「节点 N 字段 …」= 长列表刷屏，用户实测"终端很吵"）；
         //   完整清单属调试信息 ⇒ 需要时置 PROTEUS_DEBUG=1 全量打印。

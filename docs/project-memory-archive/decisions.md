@@ -3692,6 +3692,19 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **⑤ 诚实边界**：本批**只做 M5 治理**（一个门禁）——**M3（trace-glass）/ M6（演示）/ 端到端**未动；`check:glass-audit` 是静态源扫描（不覆盖产物层）。
 **⑥ 教训**：★**"引擎"要从"散件"收口成"产品"**——玻璃此前是包+组件+宿主遍+shader 的**散件集合**，没有任何"引擎"统一门禁；**产品化的第一块应是"治理"**（把已有命令接成门禁），而非继续加功能。★**"能力提供方"要明确下游两类消费者**（业务 `<pg-glass>` / Aether `lg-*`）——引擎的 API 面（`resolveGlass` 等）为二者共用，`lg-*` **复用不重造**（否则又生一套玻璃实现）。
 
+881. **★落地液态玻璃引擎产品 · M3 产物快照（`glass-manifest.json` + build 报告玻璃计数）**（2026-10-13）：
+**① 承接 #880**：用户「继续落地液态玻璃引擎产品」。引擎产品化第二块 = **M3（产物自省/快照）**——此前 `<pg-glass>` 折叠成 `style.glass` 后**无任何可观测产物**（构建完不知道折了几个玻璃、在哪、什么 spec）。
+**② 交付**：
+   · `packages/cli/src/app-content.ts`：从折叠结果（每个 `LayoutNode.style.glass`）收集，写 **`dist/app/<platform>/glass-manifest.json`**（`{platform,count,nodes:[{screen,nodeId,spec}]}`；无玻璃 ⇒ 不写）；`AppScreenContentResult` 加 `glassNodes` 计数。
+   · `packages/cli/src/build.ts`：构建报文加 ` / 玻璃节点 N`（如 `编译 4 页 / 跳过 0 / 玻璃节点 1`）。
+   · `tests/glass-ir.test.ts`：保留既有折叠断言（快照改测消费方，不再依赖内核新字段）。
+**③ ★设计修正（关键 · 撞了自设的反巨型化棘轮）**：初版把快照做进**编译器内核** `vapor/template.ts`（`LayoutTemplateResult.glass`）——`template.ts` 4471 行**已超 1000 行**，新增 8 行触发 **`check:file-size`「存量只减不增」红**。⇒ **撤销内核改动**，改为**在消费方（`app-content.ts`）遍历 `res.template.nodes` 的 `style.glass` 收集**（`style.glass` 本就由折叠写入节点，消费方扫一下即可）——**同样能力、内核零改动、不破棘轮**。
+**④ 验证**：superapp ios 构建 ⇒ `玻璃节点 1` + `glass-manifest.json`（`{screen:mine,nodeId:8,spec:{blur:10,tint:#ffffff14,radius:16,…}}`）；`glass-ir`（4）· `app-content-cli`（6）· `app-screen-content-gate`（10）全绿；`check:file-size`/`glass-audit`/`gates-sync` 绿；cli tsc 0 错。
+**⑤ ★★踩坑（真实代价 · 值得记）**：改完内核后 CLI 构建**仍报玻璃节点 0**，我一度以为快照逻辑错——**根因是 CLI 跑的是 `packages/*/dist`（陈旧）**，而我探针直接 import `src`（AGENTS.md 决策 #663 的"陈旧 dist"坑**原样复现**）。**修法**：改 `packages/**/src` 后必须 `node scripts/build-packages.mjs` 重建（否则跑旧代码）。→ **重建后 1 成功**。
+**⑥ 诚实边界**：本批只做 **M3 产物快照**（不涉 `--trace-glass` 交互/IR 更细）；manifest 是**构建期静态**（不覆盖运行期）；写文件仅在**有玻璃**时（无玻璃工程零新增产物）。
+**⑦ 教训**：★**反巨型化棘轮会咬"合理的"内核改动**——当能力可放内核或消费方时，**优先放消费方**（数据已在手，何必改内核）；**"内核最小化"也是反巨型化的一种**。★**"陈旧 dist"是复现率极高的坑**（#663 立规、本轮又踩）——凡"改了 src 但行为没变"，**第一嫌疑是没重建包**（`node scripts/build-packages.mjs`）。
+
+
 
 
 
