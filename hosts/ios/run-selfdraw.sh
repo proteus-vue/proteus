@@ -113,6 +113,9 @@ for a in "$@"; do
     --app-stack) MODE="app-stack" ;;
     # ★★★玻璃夹具（决策 #833）：iOS 自绘玻璃遍真机取证（--glass）——手写树，无 bundle，截图 + 报告
     --glass) MODE="glass" ;;
+    # ★★★玻璃**常驻可拖拽演示**（决策 #873）：对齐 Android GlassActivity / 鸿蒙 glass-demo——
+    #   挂载后常驻，手指拖拽滚动看玻璃动态折射（给人上手；不截图不自退）
+    --glass-demo) MODE="glass-demo" ;;
     # ★★★玻璃滚动性能基线（决策 #862）：--glass + 程序化滚动 160 帧 + CADisplayLink 真 vsync 采样
     --glass-bench) MODE="glass-bench" ;;
     --showcase) MODE="showcase" ;;
@@ -616,6 +619,17 @@ elif [ "$MODE" = "glass" ]; then
   xcrun devicectl device process launch --console --terminate-existing \
     --environment-variables '{"PROTEUS_EXIT_AFTER_REPORT":"1"}' \
     --device "$UDID" "$BUNDLE_ID" --glass > "$LAUNCH_LOG" 2>&1 || LAUNCH_RC=$?
+elif [ "$MODE" = "glass-demo" ]; then
+  # ★★★玻璃**常驻可拖拽演示**（决策 #873）：对齐 Android GlassActivity / 鸿蒙 glass-demo。
+  #   挂载后**常驻**（不截图/不自退）⇒ 与 superapp 常驻同款：**绝不能加 `--console`**（会挂到 App 退出）。
+  #   手指在设备上拖拽滚动，玻璃为 fixed 节点钉在屏上、内容在其下滑过（真 UIPanGestureRecognizer）。
+  xcrun devicectl device process launch --terminate-existing \
+    --device "$UDID" "$BUNDLE_ID" --glass-demo > "$LAUNCH_LOG" 2>&1 || LAUNCH_RC=$?
+  if [ "$LAUNCH_RC" = "0" ]; then
+    echo "    ✓ 玻璃演示已常驻启动（App 留在设备上，可手指拖拽滚动；脚本不再阻塞）"
+    rm -f "$LAUNCH_LOG"
+    exit 0
+  fi
 elif [ "$MODE" = "glass-bench" ]; then
   # ★★★玻璃滚动性能基线（决策 #862）：程序化滚动 160 帧 + CADisplayLink 真 vsync ⇒ 报告含 bench 段 → 自退。
   xcrun devicectl device process launch --console --terminate-existing \

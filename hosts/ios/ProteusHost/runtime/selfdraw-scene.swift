@@ -1073,13 +1073,6 @@ final class SelfDrawView: UIView {
     ///   （越滚越糊/越白）。⇒ 每帧先 `removeFromSuperlayer` 全部玻璃面，再捕获、再装。
     func applyGlassPass() {
         guard !glassSpecByNodeId.isEmpty else { return }
-        // ① 摘掉上一帧玻璃面（保证 backdrop = 纯内容；顺带清簿记，稍后重建）
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        for (_, l) in glassFaceByNodeId { l.removeFromSuperlayer() }
-        glassFaceByNodeId.removeAll(keepingCapacity: true)
-        CATransaction.commit()
-
         let size = bounds.size
         guard size.width > 0, size.height > 0 else { return }
         let scale = UIScreen.main.scale
@@ -1102,6 +1095,15 @@ final class SelfDrawView: UIView {
         }
         let cropRect = unionRect.insetBy(dx: -padPts, dy: -padPts).intersection(bounds)
 
+        // ★★★决策 #873 修（用户实测「玻璃不断闪烁」）：摘旧面/捕背景/渲面/装新面**全在一次 `CATransaction`**
+        //   （原子换面）。此前分两次 commit——中间那帧渲染服务器会刷出"无玻璃"态 ⇒ 闪。
+        //   `defer` 保证任何早退都 commit；`removeFromSuperlayer` 同步改模型树 ⇒ 下面 render 捕到的仍是纯内容。
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+        // ① 摘掉上一帧玻璃面（保证 backdrop = 纯内容；顺带清簿记，稍后重建）
+        for (_, l) in glassFaceByNodeId { l.removeFromSuperlayer() }
+        glassFaceByNodeId.removeAll(keepingCapacity: true)
         // ② 只栅格化 cropRect 区域（translate 使 cropRect 原点映射到 (0,0)）
         //   ★决策 #863：背景按**半分辨率**捕获（玻璃被模糊/折射，背景采样不必全分辨率）——
         //   捕获栅格化与纹理上传的像素量都降到 1/4（`capturePxPerPoint = scale/2`）。
@@ -1134,8 +1136,6 @@ final class SelfDrawView: UIView {
         let faces = GlassMetalRenderer.shared.renderFaces(backdrop: backdrop, requests: reqs,
                                                           scale: glassOutScale, cropOrigin: cropRect.origin,
                                                           texPxPerPoint: capturePxPerPoint)
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
         for (i, id) in order.enumerated() {
             guard i < faces.count, let face = faces[i], let nodeLayer = layersById[id] else { continue }
             let spec = glassSpecByNodeId[id]!
@@ -1149,7 +1149,6 @@ final class SelfDrawView: UIView {
             nodeLayer.addSublayer(fl)
             glassFaceByNodeId[id] = fl
         }
-        CATransaction.commit()
     }
 
     /// 玻璃节点数（判据用：证明"玻璃遍真的接管了节点"）。
@@ -2429,6 +2428,7 @@ final class SelfDrawView: UIView {
     /// - Returns: 新的内容偏移
     @discardableResult
     func applyContentOffset(dx: CGFloat, dy: CGFloat) -> CGPoint {
+        let before = contentOffset   // ★决策 #873：用于判定"偏移是否真的变了"（钳制到边界时不变）
         contentOffset.x += dx
         contentOffset.y += dy
         // ★★垂直**范围钳制**（2026-10-02 —— 与 Android `scrollDragBy` 同源的修复）：
@@ -2471,9 +2471,9 @@ final class SelfDrawView: UIView {
             }
             CATransaction.commit()
         }
-        // ★★★玻璃（决策 #833 · 同 #832 教训）：玻璃面**钉在屏上**（挂在视图层，不在滚动变换下），
-        //   但其**采样源**（背后内容）随滚动变化 ⇒ 每步滚动后重捕背景、刷新玻璃面（"内容滑过玻璃"）。
-        if !glassSpecByNodeId.isEmpty { applyGlassPass() }
+        // ★★★玻璃（决策 #833）：玻璃面**钉在屏上**，采样源随滚动变 ⇒ 滚动后重捕背景刷新玻璃面。
+        //   ★决策 #873：**仅当偏移真变了才重渲**（钳制到边界时 offset 不变，避免每次手指移动白跑 ~10ms Metal）。
+        if !glassSpecByNodeId.isEmpty && contentOffset != before { applyGlassPass() }
         return contentOffset
     }
 

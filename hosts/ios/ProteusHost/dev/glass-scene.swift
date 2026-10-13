@@ -9,6 +9,8 @@
 //   ③ 滚动时**玻璃钉住、内容滑过**（决策 #831/#832 的核心观感——夹具做成可滚页面）。
 //
 // 【运行】bash hosts/ios/run-selfdraw.sh --glass（真机；模拟器见 run-selfdraw-sim.sh 帮助）
+//   ★决策 #873：`--glass-demo` = **常驻可拖拽演示**（对齐 Android `GlassActivity` / 鸿蒙 `glass-demo`）
+//   ——挂载后常驻，手指拖拽滚动看玻璃动态折射；区别于 `--glass`（截图即自退的夹具）。
 import Foundation
 import JavaScriptCore
 import UIKit
@@ -22,10 +24,14 @@ final class GlassScene: NSObject {
     private static let rowColors = ["#e0483c", "#3cc86a", "#3c78e0", "#e0c83c", "#b448c8",
                                     "#38c0c0", "#e07830", "#7850d0"]
 
-    static func run(ctx: JSContext, view: UIView?, bridge: SelfDrawBridge, bench: Bool) {
+    static func run(ctx: JSContext, view: UIView?, bridge: SelfDrawBridge, bench: Bool, demo: Bool = false) {
         // ★决策 #862：基准模式开**内容滚动范围钳制**（与 Android/Harmony 夹具同口径；内容页"装不下才滚"）
         //   ——mount 前设，否则滚动无界、内容被滚出屏（截图黑屏）。
-        if bench { SelfDrawBridge.contentScrollRangeEnabled = true }
+        // ★决策 #873：**演示模式（`--glass-demo`）**同样开钳制——对齐 Android `GlassActivity` / 鸿蒙
+        //   `glass-demo`：常驻 + **手指拖拽滚动**（宿主的 `UIPanGestureRecognizer` 已装在视图上），
+        //   玻璃为 fixed 节点钉在屏上、内容在其下滑过。此前 `--glass` 只截图即自退（夹具），
+        //   三端"同形"里 iOS 缺的正是这个可上手的演示形态。
+        if bench || demo { SelfDrawBridge.contentScrollRangeEnabled = true }
         // ① 手写渲染树：root(flex column) → rows(内容) + 两块 fixed 玻璃（钉在屏上）
         let tree = buildTree()
         guard let td = try? JSONSerialization.data(withJSONObject: tree),
@@ -46,6 +52,16 @@ final class GlassScene: NSObject {
             report["mount_ok"] = (m["ok"] as? Bool) ?? false
         } else {
             report["mount_raw"] = mountOut
+        }
+
+        // ★★★决策 #873：**演示模式（`--glass-demo`）**——挂载后**常驻**，不截图、不自退。
+        //   对齐 Android `GlassActivity`（可手动拖拽滚动）/ 鸿蒙 `glass-demo`：用户可在设备上
+        //   手指拖拽内容、观察玻璃（fixed 节点）随内容滑过的动态折射（真 UIPanGestureRecognizer，
+        //   见 selfdraw-scene.swift init 的手势接线）。
+        if demo {
+            NSLog("[proteus] 玻璃演示已挂载（常驻·手指拖拽滚动）GLASS_DEMO_READY mount_ok=%@",
+                  String(describing: report["mount_ok"] ?? "?"))
+            return
         }
 
         // ★★★决策 #862：**性能基线模式**（`--glass-bench`）——挂载后跑程序化滚动基准（异步，CADisplayLink 驱动）。
@@ -101,7 +117,11 @@ final class GlassScene: NSObject {
         for i in 0..<rowCount {
             let color = rowColors[i % rowColors.count]
             // 行盒（高度 rowH）
-            nodes.append(["id": id, "parentId": 1, "height": rowH, "widthRatio": 1,
+            //   ★★★决策 #873 修：**必须 `flexShrink: 0`**——否则列向 flex 容器（node 1）空间不足时，
+            //   24 行会被内核**收缩到塞进视口**（默认 flex-shrink=1）⇒ 内容高 ≈ 视口高 ⇒ 滚动范围≈0
+            //   ⇒ 开了钳制后"页面无法滚动"（用户实测）。Android `GlassActivity` 用**绝对 y 定位**
+            //   （非 flex）故无此问题；此处对齐其"每行固定高、内容可溢出"语义。
+            nodes.append(["id": id, "parentId": 1, "height": rowH, "widthRatio": 1, "flexShrink": 0,
                           "backgroundColor": color, "display": "flex", "flexDirection": "column",
                           "justifyContent": "center", "padding": ["left": 20, "right": 20]])
             let rowId = id; id += 1
