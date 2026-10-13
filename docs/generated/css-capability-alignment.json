@@ -764,7 +764,9 @@
       "glow",
       "mask",
       "svg-path",
-      "svg-path-to"
+      "svg-path-to",
+      "svg-view-box",
+      "glass"
     ]
   },
   "structural": {
@@ -831,6 +833,16 @@
     {
       "field": "svg-path-to",
       "attr": "svg-path-to",
+      "note": "引擎扩展通道（JSON 属性载体，非 CSS 属性）——App 宿主真源探针已验证（A/B 批次 probeChannels）；Web/小程序端由编译器映射"
+    },
+    {
+      "field": "svg-view-box",
+      "attr": "svg-view-box",
+      "note": "引擎扩展通道（JSON 属性载体，非 CSS 属性）——App 宿主真源探针已验证（A/B 批次 probeChannels）；Web/小程序端由编译器映射"
+    },
+    {
+      "field": "glass",
+      "attr": "glass",
       "note": "引擎扩展通道（JSON 属性载体，非 CSS 属性）——App 宿主真源探针已验证（A/B 批次 probeChannels）；Web/小程序端由编译器映射"
     }
   ],

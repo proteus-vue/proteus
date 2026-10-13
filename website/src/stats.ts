@@ -25,11 +25,11 @@ export interface StatItem {
 export const STATS: StatItem[] = [
   {
     id: 'packages',
-    value: '47',
+    value: '48',
     label: '@proteus-vue/* 包',
     labelEn: '@proteus-vue/* packages',
-    source: 'pnpm check:pkg（47 包 0 error；47 个 packages/* 目录——含 @proteus-vue/consistency 与 @proteus-vue/tokens（Proteus UI 宪法）+ @proteus-vue/icons（Keryx 图标库））',
-    sourceEn: 'pnpm check:pkg (47 packages, 0 errors; 47 packages/* dirs — incl. @proteus-vue/consistency, @proteus-vue/tokens (Proteus UI constitution) and @proteus-vue/icons (Keryx icons))',
+    source: 'pnpm check:pkg（48 包 0 error；48 个 packages/* 目录——含 @proteus-vue/consistency 与 @proteus-vue/tokens（Proteus UI 宪法）+ @proteus-vue/icons（Keryx 图标库）+ @proteus-vue/animation（MA1 动画原语））',
+    sourceEn: 'pnpm check:pkg (48 packages, 0 errors; 48 packages/* dirs — incl. @proteus-vue/consistency, @proteus-vue/tokens (Proteus UI constitution), @proteus-vue/icons (Keryx icons) and @proteus-vue/animation (MA1 animation primitives))',
   },
   {
     id: 'tests',
@@ -76,16 +76,16 @@ export const STATS: StatItem[] = [
   },
   {
     id: 'conformance',
-    value: '11',
+    value: '12',
     label: 'conformance 套件入口',
     labelEn: 'conformance suite entry modules',
     // 计数规则明确化（原「8」无对应规则且与实际不符）：packages/*/src/*conformance*.ts 文件数
-    source: 'packages/*/src/*conformance*.ts（RND/H/C/CMP/ABI/NAT-C 系列）',
-    sourceEn: 'packages/*/src/*conformance*.ts (RND/H/C/CMP/ABI/NAT-C series)',
+    source: 'packages/*/src/*conformance*.ts（RND/H/C/CMP/ABI/NAT-C 系列 + animation（MA1））',
+    sourceEn: 'packages/*/src/*conformance*.ts (RND/H/C/CMP/ABI/NAT-C series + animation (MA1))',
   },
   {
     id: 'plans',
-    value: '86',
+    value: '87',
     label: 'plan 文档',
     labelEn: 'plan documents',
     source: 'docs/*-plan 目录（board-inventory 全景索引）',

@@ -7,6 +7,7 @@ import { describe, it, expect } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
 import { compileVueSfc } from '@proteus-vue/compiler'
+import { hasIcon } from '../packages/icons/src'
 
 const ROOT = path.resolve(__dirname, '..')
 const read = (rel: string) => fs.readFileSync(path.join(ROOT, rel), 'utf-8')
@@ -91,12 +92,17 @@ describe('★批次2 · p-text（官方 <text> 7 属性）', () => {
 })
 
 describe('★批次2 · p-icon（官方 <icon> type 别名）', () => {
-  it('type 为 name 的官方别名（name 优先），字形表含官方取值', () => {
+  it('type 为 name 的官方别名（name 优先），官方取值经 @proteus-vue/icons 解析', () => {
     const { src } = compile('p-icon')
     expect(src).toMatch(/type:\s*\{\s*type:\s*String/)
     expect(src).toContain("props.name || props.type")
+    // ★#804（2026-10-11）重写：p-icon 由 unicode 字形表改为 **SVG path 数据单一真源**——
+    //   官方 `<icon type>` 取值（success/info/warn/…）不再本地硬编码字形，而是经
+    //   `@proteus-vue/icons`（Keryx 数据包）的别名表解析为同名 path。故契约改为：
+    //   组件委派给数据包（不本地持有字形表），且官方取值在该包内均可解析。
+    expect(src, '不再本地持有 unicode 字形表（#804 淘汰棘轮）').not.toMatch(/\bsuccess:\s*'[^']*[✓★✗]\s*'/)
     for (const g of ['success', 'success_no_circle', 'info', 'warn', 'waiting', 'cancel', 'download', 'clear']) {
-      expect(src, `字形表应含官方 type=${g}`).toMatch(new RegExp(`\\b${g}:\\s*'`))
+      expect(hasIcon(g), `官方 type=${g} 应经 @proteus-vue/icons 解析为可用图标`).toBe(true)
     }
   })
 })
