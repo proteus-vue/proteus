@@ -47,8 +47,12 @@ pub const GLASS: MaterialSpec = MaterialSpec {
         ("specular", 68, 4),
         ("saturation", 72, 4),
         ("_pad", 76, 4),
+        // ★★★决策 #905：触控形变（touch 盒局部 px / press 0..1）
+        ("touch", 80, 8),
+        ("press", 88, 4),
+        ("_pad2", 92, 4),
     ],
-    uniform_size: 80,
+    uniform_size: 96,
 };
 
 /// ★★★背板模糊材质（backdropBlur）——玻璃的基座（只模糊 + tint，无折射/高光）。

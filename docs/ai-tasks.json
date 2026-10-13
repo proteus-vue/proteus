@@ -116,6 +116,28 @@
       "note": "根因：drawContentNodes 裁剪矩形换算用屏幕坐标 clipY-ny（ny=n.y-scrollY）⇒ 多减一个 scrollY，scrollY>0 时裁剪下推、卡片子行全被裁；scrollY=0 恰好 ny==n.y 故未暴露。修：clipY-n.y（内容坐标）。证据 superapp-scroll-fixed.jpeg。"
     },
     {
+      "id": "T-glass-interactive",
+      "title": "玻璃触控形变流动（对齐 Apple UIGlassEffect.isInteractive；WGSL+三端宿主）",
+      "type": "end-alignment",
+      "status": "done",
+      "owner": null,
+      "scope": [
+        "packages/shader-codegen-rust/src/materials/**",
+        "packages/glass/src/**",
+        "packages/cli/src/app-component-registry.ts",
+        "packages/compiler/src/vapor/template.ts",
+        "packages/components/pg-glass/**",
+        "hosts/ios/**",
+        "hosts/android/**",
+        "hosts/harmony/**"
+      ],
+      "decision": 905,
+      "verification": "pnpm check:glass-pixel-parity && npx vitest run tests/glass-ir.test.ts && 真机按住玻璃形变截图",
+      "branch": null,
+      "related": [],
+      "note": "GlassUniforms 80→96B（touch/press）+ fs_glass 触点局部形变；pg-glass interactive prop→style.glass.interactive；三端喂触点+每帧 lerp+重渲；Web/MP :active 近似。踩坑：AGSL 把 _pad2 改名 _pad2_ ⇒ setFloatUniform 抛异常静默降级（已修：不设 _pad2）。Android 真机取证 glass-interactive-{idle,press}.png。"
+    },
+    {
       "id": "T-no-unchecked-indexed-access",
       "title": "tsconfig noUncheckedIndexedAccess 棘轮式迁移",
       "type": "governance",

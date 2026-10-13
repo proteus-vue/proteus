@@ -4252,8 +4252,10 @@ export function buildLayoutTemplate(
           if (!a) return undefined
           const raw = a.type === 6 ? a.value?.content : a.exp?.content
           const s = typeof raw === 'string' ? raw.trim() : undefined
+          // ★★★#905：**裸静态布尔属性**（`<pg-glass interactive>`）在 Vue AST 里是 type=6 且 value 为空串
+          //   ⇒ 必须当"存在=true"折入（此前空串被当缺失丢弃、回落预设）。绑定的空 `:x=""` 仍视为缺失。
+          if (a.type === 6) return s ?? ''
           if (s === undefined || s === '') return undefined
-          if (a.type === 6) return s
           const m = /^['"](.*)['"]$/.exec(s)
           if (m) return m[1]
           // ★★★#889：绑定**数字字面量** `:radius="12"` / `:noise="0.03"` / `:intensity="1.4"` → 折成字面量。
@@ -4275,6 +4277,7 @@ export function buildLayoutTemplate(
           noise: strProp('noise'),
           fallback: strProp('fallback'),
           material: strProp('material'),   // ★#900：材质 id（glass/backdropBlur/frosted/vibrancy）
+          interactive: strProp('interactive'),   // ★#905：触控形变
         })
         if (spec) {
           style.glass = spec

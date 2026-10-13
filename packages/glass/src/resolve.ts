@@ -50,7 +50,7 @@ export function resolveGlass(props: GlassProps = {}): ResolvedGlass {
     border: props.border !== undefined ? Boolean(props.border) : preset.border,
     borderSide: preset.borderSide ?? 'all',
     noise,
-    interactive: Boolean(preset.interactive),
+    interactive: props.interactive !== undefined ? Boolean(props.interactive) : Boolean(preset.interactive),
     solid,
     fallback: props.fallback === 'flat' ? 'flat' : 'solid',
     // ★#900：材质 id 归一（未知 ⇒ 'glass'——`@proteus-vue/glass` 不依赖 shader 包，故此处内联白名单）。

@@ -72,6 +72,21 @@ describe('★★玻璃材质 IR 折叠（pg-glass → style.glass）', () => {
     })
   })
 
+  // ★★★决策 #905：触控形变（interactive）折入——宿主据此接触摸喂 touch/press uniform。
+  describe('★★★触控形变（interactive · 决策 #905）', () => {
+    it('缺省随预设：floating=true / card=false', () => {
+      expect(glassOf(build(`<view><pg-glass preset="floating" /></view>`, { glassResolver }))!.interactive).toBe(true)
+      expect(glassOf(build(`<view><pg-glass preset="card" /></view>`, { glassResolver }))!.interactive).toBe(false)
+    })
+    it('裸静态属性 <pg-glass interactive> 折入（此前空串被丢弃）', () => {
+      expect(glassOf(build(`<view><pg-glass preset="card" interactive /></view>`, { glassResolver }))!.interactive).toBe(true)
+    })
+    it('绑定 :interactive="true" / "false" 折入（false 可关掉 floating 预设的默认）', () => {
+      expect(glassOf(build(`<view><pg-glass preset="card" :interactive="true" /></view>`, { glassResolver }))!.interactive).toBe(true)
+      expect(glassOf(build(`<view><pg-glass preset="floating" :interactive="false" /></view>`, { glassResolver }))!.interactive).toBe(false)
+    })
+  })
+
   // ★★★#898：文档 Props 用法端到端（每种写法都折进 IR）——防「文档写了、实现不认」的静默缺口。
   describe('★★★文档 Props 用法全覆盖（指南 31-liquid-glass）', () => {
     it('intensity：档位字符串 / 绑定数字 / 静态数字 ⇒ 同一 blur', () => {

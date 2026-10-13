@@ -142,8 +142,8 @@ function closeMusic(): void {
         <view class="mine-glass-canvas__blk" />
         <view class="mine-glass-canvas__dot" />
       </view>
-      <pg-glass class="mine-glass-card" preset="card" :radius="12">
-        <view class="mine-glass-in"><text class="mine-glass-t">液态玻璃 · 自研材质</text></view>
+      <pg-glass class="mine-glass-card" preset="card" :radius="12" interactive>
+        <view class="mine-glass-in"><text class="mine-glass-t">液态玻璃 · 按住流动</text></view>
       </pg-glass>
     </view>
     <view class="sa-list">

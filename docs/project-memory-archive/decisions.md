@@ -3948,3 +3948,17 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 
 
 
+905. **★★★玻璃内核补「触控形变流动」——对齐 Apple `UIGlassEffect.isInteractive`（WGSL+三端宿主，`interactive` 从死数据到落地）**（2026-10-13 · 用户「玻璃胶囊点击时是真实的玻璃流动，按住不动拖动也会有这样的效果」）：
+**① 缘起**：用户指出玻璃缺一个「真实玻璃流动」——点按/按住拖动的玻璃块应在触点产生液态形变。取证：`GlassPreset.interactive`（仅 `floating:true`）**是死数据**——`<pg-glass>` 无此 prop、`resolveGlass` 只从 preset 读、`glassResolver` 不折、宿主零消费、WGSL **无任何触控/时间输入**。本单补全整条链 + 三端真实 shader 形变。
+**② 内核（WGSL 真源）**：`glass.wgsl` 的 `GlassUniforms` 扩 **80→96B**：`touch: vec2<f32>`@80（触点在**玻璃盒局部设备像素**；未激活=(-1e6,-1e6)）+ `press: f32`@88（0..1）+ `_pad2`@92。`fs_glass` 加**触点局部形变**：`tg = exp(-‖local−touch‖²/(2R²))·press`（R∝盒最小边），折射采样点 `sp += normalize(local−touch)·(min(hs)·0.28·tg)`（触点处把背后内容"推"开 = 液态流动观感）+ `rim += tg·0.30`（触点点亮）。`press==0` ⇒ 完全退化到既有算法（**像素等价门禁不变：0.49/255**）。`mod.rs` 同步布局 + size；`gen-shaders` 重生成。
+**③ 契约打通**：`pg-glass` 加 `interactive` prop（Boolean）→ `GlassProps.interactive` → `resolveGlass`（`props.interactive ?? Boolean(preset.interactive)`）→ `glassResolver` 折 `style.glass.interactive` → `template.ts` 传 `strProp('interactive')`。
+**④ 三端宿主（喂触点 + 每帧 lerp + 重渲）**：
+ · **iOS**：`glass-metal.swift` Spec 加 `interactive`、`GlassUniforms` 加 touch/press、`renderFaces` 加 `touchPress` 并行数组；`selfdraw-scene.swift` 加 `interactStateById`（touch 盒局部点 + press），`touchesBegan/Moved` 命中交互玻璃 ⇒ 记触点，`touchesEnded` 松手，专用 CADisplayLink（`stepGlassInteract` → `interactionStep`）逐帧 lerp press + `applyGlassPass()` 重渲，收敛自停。
+ · **Android**：`GlassMaterial.Spec` 加 `interactive`、`buildPaint` 重载写 touch/press；`ProteusHostView` 加 `glassInteractNodeId/touch/press`、`onTouchEvent` DOWN/MOVE 命中记触点 + UP 释放、`onDraw` 逐帧 lerp（`postInvalidateOnAnimation`），`drawGlassFace` 传 touch/press。
+ · **鸿蒙**：`SDNode` 加 `gInteractive`；`proteus_host.cpp` cmd 发 `interactive`；`proteus_render.cpp` 加全局 `g_sdGlassActiveId/Touch/Press`、`glassTouch(x,y,down)`（命中交互玻璃记触点）/`glassStep(target)`（逐帧 lerp，返 1=续帧）两个 napi；活动交互玻璃**强制每帧重算**（绕缓存门控 `g_sdGlassFresh`）；uniform 布局 @80/88；UBO 80→96B（`glass_vk` alloc + 拷贝上限）。`Superapp.ets` onTouch DOWN/MOVE/UP → glassTouch/glassStep（`setInterval(16)` 帧循环，收敛自停）。
+**⑤ Web/MP（诚实近似）**：`glassClassList` 加 `pg-glass--interactive`；CSS `:active` 微下沉 `scale(0.98)+brightness(1.06)`（CSS 无 GPU warp，边界同 #877）。
+**⑥ ★★踩坑（AGSL uniform 名 mangle · 静默降级）**：Android 首版 `sh.setFloatUniform("_pad2", 0f)` —— 而 naga 落 AGSL 时把**尾随数字的标识符 `_pad2` 改名 `_pad2_`** ⇒ 用原名设值**抛异常** ⇒ `buildPaint` 返 null ⇒ 玻璃**静默降级为半透明实色**（CPU 侧 press=1.0/touch 都对、像素却零变化——这正是"命中成功但画面不动"的真因）。修：**不设** `_pad2`（纯填充、着色器不读）。★教训：**给生成物着色器设 uniform 前，先核对该端实际字符名**（AGSL 会 mangle 尾随数字）——**"设了未知 uniform 抛异常被 catch 成降级"会静默吞掉整个材质**（与 #835「AGSL while 编译失败静默降级」同源）。
+**⑦ ★另一坑（形变在"均匀区"看不出）**：触点落在玻璃背后**纯色均匀区**时，warps 采样同色 ⇒ 视觉无变化——与 #888/#894「深色背景 blur 无信号」同理；**验证须把触点放在有结构处**（如背后圆点/边界）。
+**⑧ 判据**：门禁 `check:shader-generated`/`shader-capability`/`glass-capability`/`glass-audit`/`glass-pixel-parity`（0.49 不变）/三端零设备编译全绿；`tests/glass-ir`（+3 interactive 用例）/`glass`/`shader-backend`（glass uniformSize 96）全绿；**真机 Android 取证**：`hosts/android/results/glass-interactive-{idle,press}.png`——空闲=正圆、按住=**蛋形（朝触点流动）+ 触点高光**。iOS/鸿蒙（编译过 + 逻辑同源）待补真机截图。
+**⑨ 边界**：首版是**单点触觉**（触点局部凸起 + 高光 + 回弹），非多点流体/真实表面张力物理；Web/MP 无 GPU warp。iOS 真机本轮被异会话共享文件竞态阻塞（`invoke-bytes-bridge.swift` 构建期被改写）——代码已过类型检查，真机截图待补。
+

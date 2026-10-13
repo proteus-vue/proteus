@@ -1058,7 +1058,8 @@ final class SelfDrawView: UIView {
         }
         return GlassMetalRenderer.Spec(blur: CGFloat(blur), tint: (tr, tg, tb, ta),
                                        radius: CGFloat(radius), saturation: CGFloat(sat),
-                                       material: (g["material"] as? String) ?? "glass")   // ★#900：材质 id
+                                       material: (g["material"] as? String) ?? "glass",   // ★#900：材质 id
+                                       interactive: (g["interactive"] as? Bool) ?? false)  // ★#905：触控形变
     }
 
     /// ★★★玻璃遍：捕获"无玻璃面"的内容帧 → 对每个玻璃节点装玻璃面层。
@@ -1140,15 +1141,20 @@ final class SelfDrawView: UIView {
         let glassOutScale = max(1, scale / 2)
         var order: [Int] = []
         var reqs: [(nodeRect: CGRect, spec: GlassMetalRenderer.Spec)] = []
+        var touchPress: [(t: CGPoint, press: CGFloat)] = []
         for (id, spec) in glassSpecByNodeId {
             guard let nodeLayer = layersById[id] else { continue }
             // 节点在**屏幕**上的矩形（`convert(to:)` 穿过 sublayerTransform ⇒ 给出渲染位置）——采样用
             order.append(id)
             reqs.append((nodeLayer.convert(nodeLayer.bounds, to: self.layer), spec))
+            // ★★★决策 #905：交互玻璃的 touch/press——touch 记的是**盒局部逻辑点**（已由触摸路换算），
+            //   press 由帧循环 lerp。非交互玻璃恒 (0,0)（着色器钟形因子≈0，无影响）。
+            let st = interactStateById[id]
+            touchPress.append((st?.touch ?? CGPoint(x: -1e6, y: -1e6), st?.press ?? 0))
         }
         let faces = GlassMetalRenderer.shared.renderFaces(backdrop: backdrop, requests: reqs,
                                                           scale: glassOutScale, cropOrigin: cropRect.origin,
-                                                          texPxPerPoint: capturePxPerPoint)
+                                                          texPxPerPoint: capturePxPerPoint, touchPress: touchPress)
         for (i, id) in order.enumerated() {
             guard i < faces.count, let face = faces[i], let nodeLayer = layersById[id] else { continue }
             let spec = glassSpecByNodeId[id]!
@@ -1171,6 +1177,69 @@ final class SelfDrawView: UIView {
     var glassNodeCount: Int { glassSpecByNodeId.count }
     /// 已装玻璃面数（判据用：>0 证明材质真出图、非降级跳过）。
     var glassFaceCount: Int { glassFaceByNodeId.count }
+
+    /* ══════════ ★★★决策 #905：玻璃触控形变（对齐 Apple `UIGlassEffect.isInteractive`）══════════
+     *   【模型】交互玻璃（`style.glass.interactive==true`）响应点按/拖动：触点处的玻璃产生**液态流动**
+     *     （局部凸起 + 折射被推开的观感 + 触点点亮），松手回弹。共享算法 = WGSL `fs_glass` 的 touch/press uniform。
+     *   【驱动】触摸 DOWN/MOVE ⇒ 记触点在**该玻璃盒的局部逻辑点** + 目标 press=1；UP ⇒ 目标 0；
+     *     帧循环里对 press 做指数逼近（回弹），只要 |press - 目标|>阈值就持续重渲玻璃面。
+     */
+    struct GlassInteract { var touch: CGPoint; var press: CGFloat }
+    /// 触点必须命中某个交互玻璃的盒（局部逻辑点）；press 由目标 lerp。
+    private var interactStateById: [Int: GlassInteract] = [:]
+    private var interactPressTarget: CGFloat = 0
+    private var interactActiveId: Int = -1
+
+    /// 触摸 DOWN/MOVE：`p` = **内容坐标点**。命中交互玻璃盒 ⇒ 记为活动 + 触点（盒局部逻辑点）。
+    /// 返回是否有交互玻璃被命中（调用方可据此决定是否起帧循环）。
+    @discardableResult
+    func interactionTouch(at p: CGPoint, down: Bool) -> Bool {
+        // 命中：遍历交互玻璃，取包含 p 的盒（内容坐标；含滚动 → 用节点本地盒 + scrollY 抵消）
+        var hit: Int = -1
+        var local = CGPoint.zero
+        for (id, spec) in glassSpecByNodeId where spec.interactive {
+            guard let l = layersById[id] else { continue }
+            // 节点在内容坐标下的盒：l.frame（父坐标）+ 父链偏移；用 convert 到 self.layer 得屏幕盒更稳。
+            let b = l.convert(l.bounds, to: self.layer)   // 屏幕盒（含 sublayerTransform 滚动）
+            if b.contains(p) { hit = id; local = CGPoint(x: p.x - b.minX, y: p.y - b.minY); break }
+        }
+        if hit >= 0 {
+            interactActiveId = hit
+            interactStateById[hit] = GlassInteract(touch: local, press: interactStateById[hit]?.press ?? 0)
+            interactPressTarget = down ? 1 : interactPressTarget
+            return true
+        }
+        return false
+    }
+    /// UP：清目标（回弹到 0），但保留 press 让它 lerp 回弹完再清 active。
+    func interactionRelease() { interactPressTarget = 0 }
+
+    /// 帧循环调用：press 指数逼近目标；返回是否需要继续（未收敛）。交互玻璃变化时重渲玻璃面。
+    @discardableResult
+    func interactionStep() -> Bool {
+        guard interactActiveId >= 0, var st = interactStateById[interactActiveId] else { return false }
+        let target = interactPressTarget
+        let np = st.press + (target - st.press) * 0.28   // 指数逼近（回弹）
+        let settled = abs(np - target) < 0.01
+        st.press = settled ? target : np
+        interactStateById[interactActiveId] = st
+        applyGlassPass()   // 每帧重渲玻璃（含 touch/press）
+        if settled && target == 0 { interactStateById[interactActiveId] = nil; interactActiveId = -1; return false }
+        return true
+    }
+
+    /// ★#905：玻璃交互帧循环（自持——按下时起，收敛（松手回弹完）后自停）。
+    private var glassInteractLink: CADisplayLink?
+    func startInteractionLoopIfNeeded() {
+        if glassInteractLink != nil { return }
+        let link = CADisplayLink(target: self, selector: #selector(stepGlassInteract(_:)))
+        link.add(to: .main, forMode: .common)
+        glassInteractLink = link
+    }
+    @objc private func stepGlassInteract(_ link: CADisplayLink) {
+        _ = link
+        if !interactionStep() { glassInteractLink?.invalidate(); glassInteractLink = nil }
+    }
 
     /* ────────────────────────── ★V7：结构变更的层维护 ────────────────────────── */
 
@@ -2999,6 +3068,8 @@ final class SelfDrawView: UIView {
         let cx = Double(p.x) + Double(contentOffset.x)
         let cy = Double(p.y) + Double(contentOffset.y)
         onTouchDown?(cx, cy)
+        // ★★★决策 #905：玻璃触控形变——命中交互玻璃 ⇒ 记触点（`p` 即 self.layer 空间，与本类玻璃盒同空间）
+        if interactionTouch(at: p, down: true) { startInteractionLoopIfNeeded() }
     }
 
     /// ★新增（Dactyl 专项）：触摸移动 → 场焦点更新（**不派发语义手势**——拖动由 pan 识别器负责滚动）。
@@ -3009,11 +3080,14 @@ final class SelfDrawView: UIView {
         let cy = Double(p.y) + Double(contentOffset.y)
         dactylNoteTrail(cx: cx, cy: cy, t: t.timestamp)
         onTouchMoveXY?(cx, cy)
+        // ★#905：拖动跟随——更新触点（玻璃流动跟着手指走）
+        _ = interactionTouch(at: p, down: true)
     }
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
         defer { touchStart = nil }
         onTouchUp?()
+        interactionRelease()   // ★#905：松手 ⇒ press 目标归 0（回弹）
         guard let t = touches.first, let start = touchStart else { return }
         let p = t.location(in: self)
         let dt = CFAbsoluteTimeGetCurrent() - start.t

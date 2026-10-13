@@ -47,7 +47,7 @@ interface GlassProps {
   radius?: number
   border?: boolean | { width: number; color: string }
   noise?: number          // 0-1，噪点强度（L2）
-  interactive?: boolean   // 是否响应滚动/手势形变（L2）
+  interactive?: boolean   // ★#905 已落地：触控形变流动（点按/拖动 ⇒ 触点液态流动，App 三端自绘真实形变；Web/MP :active 近似）
   fallback?: 'solid' | 'flat'   // 降级策略
 }
 ```
