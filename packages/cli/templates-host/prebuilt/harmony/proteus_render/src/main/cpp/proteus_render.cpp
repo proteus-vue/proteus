@@ -52,6 +52,7 @@
 #include <native_drawing/drawing_path_effect.h>
 #include <native_drawing/drawing_path.h>
 #include <native_drawing/drawing_rect.h>
+#include <native_drawing/drawing_shadow_layer.h>   // ★决策 #895：盒阴影（自绘路径）
 #include <native_drawing/drawing_round_rect.h>
 #include <native_drawing/drawing_shader_effect.h>
 #include <native_drawing/drawing_point.h>
@@ -214,6 +215,14 @@ struct SDNode {
     bool fixed = false;                      // position:fixed ⇒ 不随滚动位移（钉屏）
     bool glass = false;                      // ★本元素是玻璃面（阶段 3 同帧接入）
     double gBlur = 0, gRadius = 0, gSat = 1.0; uint32_t gTint = 0x26FFFFFFu;
+    // ★★★决策 #895（superapp 收敛自绘）：补齐 superapp 用到的图元——边框/阴影/SVG/变换/裁剪/层序/字距
+    double borderWidth = 0; uint32_t borderColor = 0;   // 边框（物理 px；ARGB）
+    double shDx = 0, shDy = 0, shBlur = 0; uint32_t shColor = 0;   // 盒阴影
+    std::string svgD; uint32_t svgColor = 0; bool svgFill = false;   // SVG 图标（d + 色 + 填/描）
+    double tfTx = 0, tfTy = 0, tfScale = 1, tfRotate = 0, toX = 0.5, toY = 0.5;   // 静态 transform + pivot
+    double zIndex = 0;                       // 同父兄弟层序（默认 0）
+    bool hasClip = false; double clipX = 0, clipY = 0, clipW = 0, clipH = 0;     // 裁剪矩形（物理 px）
+    double letterSpacing = 0;                // 字距（物理 px）
 };
 struct SelfDrawSpec {
     double screenW = 0, screenH = 0;         // 物理 px（位图尺寸）
@@ -1097,7 +1106,14 @@ static void drawContentNodes(OH_Drawing_Canvas* c, SelfDrawSpec* sd,
                             double ex0 = 0, double ey0 = 0, double ex1 = -1, double ey1 = -1,
                             const std::set<int>* skipIds = nullptr, const std::set<int>* onlyIds = nullptr) {
     const bool cull = (ex1 > ex0 && ey1 > ey0);
-    for (const auto& n : sd->nodes) {
+    // ★★★决策 #895：按 zIndex 稳定排序（同父兄弟层序——Web `z-index` 语义；相等保树序）
+    std::vector<const SDNode*> order;
+    order.reserve(sd->nodes.size());
+    for (const auto& n : sd->nodes) order.push_back(&n);
+    std::stable_sort(order.begin(), order.end(),
+                     [](const SDNode* a, const SDNode* b) { return a->zIndex < b->zIndex; });
+    for (const SDNode* np : order) {
+        const SDNode& n = *np;
         // ★★★决策 #893（对齐 iOS 液态玻璃基准）：按 id 过滤——
         //   · skipIds：建玻璃背景位图时**跳过该玻璃节点自身子树**（背景只含"玻璃背后"的内容）；
         //   · onlyIds：玻璃面之上**只重画该玻璃节点自身子树**（自身内容清晰，不被糊）。
@@ -1109,13 +1125,36 @@ static void drawContentNodes(OH_Drawing_Canvas* c, SelfDrawSpec* sd,
         if (cull && (n.x >= ex1 || n.x + n.w <= ex0 || ny >= ey1 || ny + n.h <= ey0)) continue;
         OH_Drawing_CanvasSave(c);
         OH_Drawing_CanvasTranslate(c, (float)n.x, (float)ny);
+        // ★#895：裁剪（overflow）——cmd 里是**绝对屏幕坐标**（祖先链有效裁剪矩形交集）；本节点已在
+        //   局部原点（translate n.x/ny）⇒ 裁剪矩形换算到局部（减自身 x/ny）。此前直接用绝对值 ⇒
+        //   局部原点下把整个节点裁没（superapp 全屏白屏的根因）。
+        if (n.hasClip) {
+            OH_Drawing_Rect* cr = OH_Drawing_RectCreate((float)(n.clipX - n.x), (float)(n.clipY - ny),
+                                                        (float)(n.clipX - n.x + n.clipW), (float)(n.clipY - ny + n.clipH));
+            if (cr != nullptr) { OH_Drawing_CanvasClipRect(c, cr, OH_Drawing_CanvasClipOp::INTERSECT, true); OH_Drawing_RectDestroy(cr); }
+        }
+        // ★#895：静态变换（绕 pivot 的平移+等比缩放+旋转——与内核/CSS transform 同构）
+        const bool selfTf = (n.tfTx != 0 || n.tfTy != 0 || n.tfScale != 1 || n.tfRotate != 0);
+        if (selfTf) {
+            const float px = (float)(n.toX * n.w), py = (float)(n.toY * n.h);
+            OH_Drawing_CanvasTranslate(c, px + (float)n.tfTx, py + (float)n.tfTy);
+            if (n.tfRotate != 0) OH_Drawing_CanvasRotate(c, (float)n.tfRotate, 0, 0);
+            if (n.tfScale != 1) OH_Drawing_CanvasScale(c, (float)n.tfScale, (float)n.tfScale);
+            OH_Drawing_CanvasTranslate(c, -px, -py);
+        }
+        const double op = n.opacity < 0 ? 0 : (n.opacity > 1 ? 1 : n.opacity);
         uint32_t a = (n.color >> 24) & 0xFFu;
         if (a > 0 && n.w > 0 && n.h > 0) {
-            double op = n.opacity < 0 ? 0 : (n.opacity > 1 ? 1 : n.opacity);
             uint32_t useA = (uint32_t)(a * op + 0.5);
             uint32_t fill = (useA << 24) | (n.color & 0x00FFFFFFu);
             OH_Drawing_Brush* br = OH_Drawing_BrushCreate();
             OH_Drawing_BrushSetAntiAlias(br, true);
+            // ★#895：盒阴影（挂到刷子的 ShadowLayer——负 spread 无，直接用 blur/offset/color）
+            OH_Drawing_ShadowLayer* shl = nullptr;
+            if (n.shBlur > 0 && n.shColor > 0) {
+                shl = OH_Drawing_ShadowLayerCreate((float)n.shBlur, (float)n.shDx, (float)n.shDy, n.shColor);
+                if (shl != nullptr) OH_Drawing_BrushSetShadowLayer(br, shl);
+            }
             OH_Drawing_BrushSetColor(br, fill);
             OH_Drawing_CanvasAttachBrush(c, br);
             OH_Drawing_Rect* r = OH_Drawing_RectCreate(0, 0, (float)n.w, (float)n.h);
@@ -1128,7 +1167,53 @@ static void drawContentNodes(OH_Drawing_Canvas* c, SelfDrawSpec* sd,
             }
             OH_Drawing_RectDestroy(r);
             OH_Drawing_CanvasDetachBrush(c);
+            if (shl != nullptr) OH_Drawing_ShadowLayerDestroy(shl);
             OH_Drawing_BrushDestroy(br);
+        }
+        // ★#895：边框（描边路径；物理 px）
+        if (n.borderWidth > 0 && n.borderColor > 0 && n.w > 0 && n.h > 0) {
+            OH_Drawing_Pen* pen = OH_Drawing_PenCreate();
+            OH_Drawing_PenSetAntiAlias(pen, true);
+            OH_Drawing_PenSetColor(pen, n.borderColor);
+            OH_Drawing_PenSetWidth(pen, (float)n.borderWidth);
+            OH_Drawing_Rect* br2 = OH_Drawing_RectCreate((float)(n.borderWidth / 2), (float)(n.borderWidth / 2),
+                                                         (float)(n.w - n.borderWidth / 2), (float)(n.h - n.borderWidth / 2));
+            OH_Drawing_CanvasAttachPen(c, pen);
+            if (n.radius > 0) {
+                OH_Drawing_RoundRect* rr = OH_Drawing_RoundRectCreate(br2, (float)n.radius, (float)n.radius);
+                OH_Drawing_CanvasDrawRoundRect(c, rr);
+                OH_Drawing_RoundRectDestroy(rr);
+            } else {
+                OH_Drawing_CanvasDrawRect(c, br2);
+            }
+            OH_Drawing_CanvasDetachPen(c);
+            OH_Drawing_RectDestroy(br2);
+            OH_Drawing_PenDestroy(pen);
+        }
+        // ★#895：SVG 图标（填充或描边路径）
+        if (!n.svgD.empty()) {
+            OH_Drawing_Path* path = OH_Drawing_PathCreate();
+            if (path != nullptr && OH_Drawing_PathBuildFromSvgString(path, n.svgD.c_str())) {
+                if (n.svgFill) {
+                    OH_Drawing_Brush* sb = OH_Drawing_BrushCreate();
+                    OH_Drawing_BrushSetAntiAlias(sb, true);
+                    OH_Drawing_BrushSetColor(sb, n.svgColor);
+                    OH_Drawing_CanvasAttachBrush(c, sb);
+                    OH_Drawing_CanvasDrawPath(c, path);
+                    OH_Drawing_CanvasDetachBrush(c);
+                    OH_Drawing_BrushDestroy(sb);
+                } else {
+                    OH_Drawing_Pen* sp = OH_Drawing_PenCreate();
+                    OH_Drawing_PenSetAntiAlias(sp, true);
+                    OH_Drawing_PenSetColor(sp, n.svgColor);
+                    OH_Drawing_PenSetWidth(sp, 2.0f);
+                    OH_Drawing_CanvasAttachPen(c, sp);
+                    OH_Drawing_CanvasDrawPath(c, path);
+                    OH_Drawing_CanvasDetachPen(c);
+                    OH_Drawing_PenDestroy(sp);
+                }
+            }
+            if (path != nullptr) OH_Drawing_PathDestroy(path);
         }
         if (!n.text.empty() && n.fontSize > 0) sdDrawText(c, n);
         OH_Drawing_CanvasRestore(c);
@@ -1318,12 +1403,11 @@ static void drawSelfContentCore(OH_Drawing_Canvas* rsCanvas, SelfDrawSpec* sd) {
             OH_Drawing_SamplingOptionsDestroy(so2);
             OH_Drawing_CanvasRestore(rsCanvas);
             // ★★★决策 #893（对齐 iOS 液态玻璃基准）：玻璃面**之上**重画**该玻璃节点自身子树**（文本/子内容）
-            //   ——背景已排除自身子树（只含"背后"），此处把自身内容**清晰**盖回玻璃面上（同变换=盒局部坐标）。
+            //   ——背景已排除自身子树（只含"背后"），此处把自身内容**清晰**盖回玻璃面上。
+            //   ★#895 修：`drawContentNodes` 自身按**绝对屏幕坐标**定位（内部 translate n.x/ny）⇒ 外层**不再**
+            //     额外 translate（此前重复平移 = 双倍偏移，dev 夹具自身子树为空故未暴露）。
             { auto selfSub = sdSubtreeIds(sd, n.id);
-              OH_Drawing_CanvasSave(rsCanvas);
-              OH_Drawing_CanvasTranslate(rsCanvas, (float)g.cx, (float)g.cy);
-              drawContentNodes(rsCanvas, sd, 0, 0, -1, -1, nullptr, &selfSub);
-              OH_Drawing_CanvasRestore(rsCanvas); }
+              drawContentNodes(rsCanvas, sd, 0, 0, -1, -1, nullptr, &selfSub); }
         }
     }
     OH_Drawing_CanvasRestore(rsCanvas);   // 恢复视口裁剪（见上）
@@ -1355,7 +1439,8 @@ static napi_value GlassStats(napi_env env, napi_callback_info info) {
     napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
     std::string mode;
     if (argc >= 1 && args[0] != nullptr) {
-        size_t len = 0; napi_get_value_string_utf8(env, args[0], nullptr, 0, &len);
+        size_t len = 0;
+        napi_get_value_string_utf8(env, args[0], nullptr, 0, &len);
         mode.resize(len + 1); napi_get_value_string_utf8(env, args[0], &mode[0], len + 1, &len); mode.resize(len);
     }
     if (mode == "reset") {
@@ -1642,6 +1727,25 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
             { double tc = 0; if (jsonNumber(it, "textColor", &tc)) sn.textColor = (uint32_t)tc; }
             { std::string ta; if (jsonString(it, "textAlign", &ta)) sn.textAlign = ta == "center" ? 2 : (ta == "right" ? 1 : 0); }
             { std::string posV; if (jsonString(it, "position", &posV) && posV == "fixed") sn.fixed = true; }
+            // ★★★决策 #895（superapp 收敛自绘）：补齐图元——边框/阴影/SVG/变换/裁剪/字距（数据已在 cmd 里）
+            { double v = 0; if (jsonNumber(it, "borderWidth", &v)) sn.borderWidth = v; if (jsonNumber(it, "borderColor", &v)) sn.borderColor = (uint32_t)v; }
+            { double v = 0; if (jsonNumber(it, "shadowDx", &v)) sn.shDx = v; if (jsonNumber(it, "shadowDy", &v)) sn.shDy = v;
+              if (jsonNumber(it, "shadowBlur", &v)) sn.shBlur = v; if (jsonNumber(it, "shadowColor", &v)) sn.shColor = (uint32_t)v; }
+            { double v = 0; if (jsonNumber(it, "tx", &v)) sn.tfTx = v; if (jsonNumber(it, "ty", &v)) sn.tfTy = v;
+              if (jsonNumber(it, "scale", &v)) sn.tfScale = v; if (jsonNumber(it, "rotate", &v)) sn.tfRotate = v;
+              if (jsonNumber(it, "toX", &v)) sn.toX = v; if (jsonNumber(it, "toY", &v)) sn.toY = v;
+              if (jsonNumber(it, "zIndex", &v)) sn.zIndex = v;
+              if (jsonNumber(it, "letterSpacing", &v)) sn.letterSpacing = v; }
+            { double cx = 0, cy = 0, cw = 0, ch = 0;
+              if (jsonNumber(it, "clipX", &cx)) { jsonNumber(it, "clipY", &cy); jsonNumber(it, "clipW", &cw); jsonNumber(it, "clipH", &ch);
+                sn.hasClip = true; sn.clipX = cx; sn.clipY = cy; sn.clipW = cw; sn.clipH = ch; } }
+            // SVG 图标（strokeD 通道）——cmd 里透传；解析填充/描边 + 色
+            { std::string d; if (jsonString(it, "strokeD", &d) && !d.empty()) {
+                sn.svgD = d;
+                std::string sub = extractObjectField(it, "stroke");
+                double c = 0; if (jsonNumber(sub, "color", &c)) sn.svgColor = (uint32_t)c;
+                sn.svgFill = (it.find("\"strokeFill\":true") != std::string::npos);
+              } }
             // 玻璃面（阶段 3 在同一位图上做；此处先登记，绘制仍由旧 glass 逻辑暂管——阶段 3 迁入）
             if (g_sdSpec != nullptr) {
                 if (it.find("\"glass\":") != std::string::npos) {

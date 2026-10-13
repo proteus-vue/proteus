@@ -19,7 +19,7 @@ import { NodeContent } from '@kit.ArkUI';
 import { display, window } from '@kit.ArkUI';
 import { util } from '@kit.ArkTS';
 import { fileIo } from '@kit.CoreFileKit';
-import { attach, renderCommands, scrollRoot, clearRoot, appScreenCommands, appScreenContentHeight, appScreenHitAt, hostRtShellInstall, hostRtShellEvent, hostAppDrive, hostAppRender, AppRuntimeDriver, ProteusTabChrome } from 'proteus_render';
+import { attach, renderCommands, scrollRoot, clearRoot, appScreenCommands, appScreenContentHeight, appScreenHitAt, hostRtShellInstall, hostRtShellEvent, hostAppDrive, hostAppRender, AppRuntimeDriver, ProteusTabChrome, setContentMode } from 'proteus_render';
 
 const DOMAIN = 0x0002;
 const TAG = 'ProteusSuperapp';
@@ -657,6 +657,10 @@ struct Superapp {
       //   两套 sticky 登记 ⇒ 两条蓝条错位可见（截图确认 y≈261 与 y≈430 各一条）。
       //   ⇒ 每次上屏前先 `clearRoot()`（清子节点 + 清 fixed/sticky/id 登记；dev/Index 早有同款纪律）。
       clearRoot();
+      // ★★★决策 #895（superapp 收敛自绘路径）：切到自绘通道——内容 + **玻璃** 由宿主在自持画布上一次绘制
+      //   （此前 superapp 走 RS RenderNode 树 ⇒ 玻璃不画，是 #842 未到期项）。切后 `renderCommands` 只
+      //   填 SDNode 列表、不建 RenderNode 子树；玻璃由 drawSelfContentCore 同帧合成。
+      setContentMode('self-draw');   // ★决策 #895：superapp 收敛自绘（内容 + 玻璃同帧；见 #842）
       const n: number = renderCommands(cmds);
       hilog.info(DOMAIN, TAG, 'SUPERAPP_RENDER page=%{public}s nodes_rendered=%{public}d', page, n);
       // ★★★鸿蒙滚动对齐：重算滚动范围 + 重放偏移（renderCommands 重建指令后根位置归零）。
