@@ -3372,10 +3372,11 @@ public class ProteusHostView extends ViewGroup {
             capturingGlass = false;
         }
         if (cSave != -1) bc.restoreToCount(cSave);
-        // ★★★决策 #906：**轻度模糊**（对齐 iOS「模糊只为压掉高频干扰，内容仍可见」）——
-        //   全分辨率 → 2× 双线性降采样（= 一次轻盒式低通）⇒ 消硬边锯齿/高频、内容仍清晰可辨。
-        //   着色器对这张轻糊图**单次采样**（无离散核，零条带）。2× 足够轻（内容不糊）。
-        final int DIV = 8;
+        // ★★★决策 #907：背板**轻降采样**（不重糊）——对齐 iOS：折射的视觉冲击来自把**高频内容**
+        //   （线稿/文字/发丝）压弯成漩涡 ⇒ **输入必须保留高频**。此前误用 8×（注释却写 2×，漂移）⇒
+        //   68px 条背板只剩 ~28 texel、高频全灭 ⇒ 位移场只能输出**灰糊色团**（真机"糊成一团"的真因）。
+        //   ⇒ 降到 **2×**（一次轻盒式低通，够霜感、不灭高频）。真机 A/B：1（锐）↔ 2（轻霜）。
+        final int DIV = 2;
         final int sw = Math.max(1, Math.round((float) bw / DIV));
         final int sh = Math.max(1, Math.round((float) bh / DIV));
         if (glassBackdrop == null || glassBackdrop.getWidth() != sw || glassBackdrop.getHeight() != sh) {
