@@ -3737,6 +3737,18 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
    · **已立项未修**：独立验证抓出 `mini-program`（C47）**仍漏判**（应 ✅ 却 🟡）——**另一根因**：生成器抽 `refs` 用 `/bridge\.(\w+)\(/`（**只认直接调用**），而 `capability.ts` 的 `useMiniProgram` 写的是 `if(!bridge.navigateMiniProgram) … const nav = bridge.navigateMiniProgram; nav(options)` ⇒ **从不出现** `bridge.navigateMiniProgram(`。实测**放宽该正则不安全**：波及 5 个 hook，且 `useWebAssembly` 的切片会吞进**整个桥面（80+ 名）** ⇒ Web/MP 列会被误降级。⇒ 立独立任务单元 **`T-app-bridge-refs`**（不塞进本单）。
 **⑥ 教训**：★**"文本隐式契约"要连治两处**——本单只修了 `APP_BRIDGE_KEYS`（桥方法集），而 `refs`（hook→桥方法引用）是**同一类契约**且**已真实咬人**；修一处 ≠ 治一类。★**"数量对"不等于"集合对"**——测试若只断言 `✅≥11`，`mini-program` 这类漏判**完全看不见**；异会话独立验证的价值正在此（**自测通过 ≠ 契约成立**，与 hook 退出码契约那次同型）。★**生成器扩了分档，必须复核它引用的每个门禁的真实覆盖面**——`check:host-runtime` ≠「App 端真机验证」的同义词（它只覆盖生命周期）。★**共享可写文件上的"编号"必须临提交前复核**：本轮原按 #881 立项，期间**异会话已占用 #881/#882/#883**（玻璃 M3/M6/profile-boundary），改号 #884 方可避免追溯链撞号。
 
+885. **★★液态玻璃引擎产品化收口：正式产品页重做 + 开发者接入文档 + Playground 实时调参**（2026-10-13）：
+**① 起因（用户）**：「这个液态玻璃引擎的落地和我的想法好像不太一样，现在**只有一个总览产品页，而且是文档风格，不是正式产品页风格**，没有**具体的开发者怎么使用怎么接入的详细文档**」。
+**② 三步交付（用户选定 + 签名主张「一份声明，各端最强玻璃」）**：
+   · **A 重做正式产品页** `website/src/pages/LiquidGlass.vue`——从"文档风功能总览"重做成 **Themis/Animation 同款旗舰产品页形态**：**Hero（一句主张「一份声明。各端最强玻璃。」+ lead + CTA + 定位 pills + 签名视觉「四端并排」）+ §01 缘起 … §10 边界与禁语 + 证据链 + CTA**（共 11 节）。签名视觉 = 同一份 `<pg-glass preset="card">` 在 iOS/Android/鸿蒙/Web·小程序 四端并排（原生真折射 vs Web 模糊）。**全部真渲染、数据全来自 `@proteus-vue/glass`（零硬编码）**。
+   · **B 开发者接入文档** `website/guides/31-liquid-glass.md`（+ EN 镜像）——从 94 行薄的 Web-only 说明扩成**完整接入文档**：一份声明各端映射表 / 三层承诺 / **快速开始（三种工程引入：Web 自动注册 · MP gen-routes 解析 · App 构建期折叠）** / 全 props 表 / 预设数值表 / 真实示例（官网导航栏 + superapp 我的页）/ 定位归消费方 / 降级 + `resolveGlassLevel` / **`proteus audit glass` 门禁** / `lg-*`（Aether 规划中，诚实标注未落地）/ **FAQ**。
+   · **C Playground 实时调参** `website/src/components/GlassPlayground.vue`（嵌入 `/playground`）——preset/intensity/radius/noise/tint/border/fallback 实时调 → 右侧真渲染 `<pg-glass>` + **等价源码（Vue 片段 + 纯逻辑 `resolveGlass` 调用）**可复制。
+**③ 验证（CDP 实跑 + 门禁）**：产品页 11 节 · Playground `.gp-glass`=1 + 等价源码正确 · **零 console 报错**；官网构建 `✓ built`；`check:doc-links`（补 `/icons`/`/liquid-glass` 进静态路由白名单 + 新建页面链接可解析）· `check:en-drift`（中英结构对齐）· `check:docs-stats`/`file-size`/`content` 全绿。
+**④ 构建期踩坑**：产品页背景光晕初版用 `filter: blur(80px)` ⇒ 撞 `[proteus-cse-lint]` **E-CSS-002（L3 特性未 opt-in，114 条）** ⇒ 改纯 `radial-gradient`（无 filter）；页面 CSS 全程按 skyline 子集（`display:flex` 非 grid、`justify-content:flex-start`）——**官网是多端 profile 验证场**（承 #883：现在是"风格要求"，非硬约束）。
+**⑤ 诚实边界**：产品页为 **Web 端真渲染**（CSS，**无边缘折射**，页面已明写）；原生真折射真机截图属 G0 端到端；`lg-*`（Aether）**在文档里标注"规划中未落地"**（尚未实现，不冒称已完成）。
+**⑥ 教训**：★**"产品页"≠"文档页"**——旗舰产品页有**固定叙事形态**（Hero 主张 + 分节 + 签名视觉 + 证据 + 禁语，对齐 /themis），我首版交付成"文档风功能总览"是**形态判断错**（对照既有旗舰页即可发现）。★**交付前先看"同类既有产物的形态"**——仓里已有 `/themis`/`/animation` 两个成熟范式，**开工前对照它们**比事后返工便宜。★**"引擎/能力"要对"两类消费者"各给一份文档**（业务 `<pg-glass>` 接入 + 框架 `lg-*` 消费），并由产品页 + 接入文档 + Playground **三者互为入口**。
+
+
 
 
 
