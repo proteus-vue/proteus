@@ -3808,6 +3808,13 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
  · **⑧b 鸿蒙部分文本偏大（~1.6×）**：三端 `.vue` 同一节点 `fontSize` 数值一致（内容 JSON `运营同学=16 / 深色模式=14`），但鸿蒙上**由 CSS `var(--sa-font-*)` 派生的文本（运营同学/运/玻璃内文）明显偏大**，而字面 px 文本正常。**待取证根因**（疑：鸿蒙 `appScreenCommands` 对 var 派生字号或某类节点的默认字号换算与 iOS/Android 不一致）——与本轮玻璃单位无关，另立项 `T-harmony-superapp-text`。
  ★**纪律**：**"三端全过"不得假绿**——本轮 iOS/Android 玻璃单位修复**已真机验证**，鸿蒙的玻璃缺口/文本偏大**如实标注为 pre-existing 未收口**（AGENTS.md #2026-10-07 铁律：不得以"别批次未落地"跳过，但也**不得**把未验的改声称已过）；⑧ 两条各有真机截图坐标（`hosts/{ios,android}/results/superapp*.png` vs `hosts/harmony/results/superapp.png`）。
 
+891. **★★修 Android 宿主「缺省字号未乘密度」——无显式 `font-size` 的文本渲染成应显的 1/density（用户抓出「安卓液态玻璃下面的文字那么小」）**（2026-10-13）：
+**① 症状（用户）**：「为什么安卓我看**液态玻璃下面的文字那么小**呢？」——真机对比 `superapp mine` 页玻璃卡：**iOS 内文正常**（量得 ink 宽 358px），**Android 内文极小**（同区 ink 仅 ~1/3 宽）。
+**② 根因（先取证：量真机像素 + 追代码链）**：玻璃内文 `<text class="mine-glass-t">液态玻璃 · 自研材质</text>`（`superapp/pages/mine.vue`）**无字体样式** ⇒ 内容 JSON 三端该节点 `fontSize` **均缺省**。宿主读取时：**iOS `fontSize ?? 14`（14 **pt**，语义即逻辑/点尺寸）⇒ 正常**；**Android `spec.optDouble("fontSize", 14)`（默认 14 当**物理 px**）**，而 `physicalizeSpec` 只缩放**已存在**的 `fontSize`（`LEN_SCALARS` 命中才有值）⇒ **缺省文本停在逻辑 14**（渲染 = 应显 42 的 1/3，实测 ink 宽 ~1/3、且因字小抗锯齿发「淡」）。★**对照铁证**：同屏**显式** `fontSize:14` 的「深色模式」两端墨迹 bbox **341×50 vs 342×50 完全一致** ⇒ 缺陷**只在"缺省字号"这一条路径**。
+**③ 修**：`VaporRenderHost` 增 `fontSizePx(spec)` = `optDouble("fontSize", 14 * lengthScale)`（**缺省同样 ×密度**，与显式值同口径、与 iOS `?? 14`(pt) 语义对齐），替换 4 处 `optDouble("fontSize", 14)` 读取点（度量/绘制全路径）。
+**④ ★教训**：**默认值也是"值"，也要过同一套单位换算**——`physicalizeSpec` 的 LEN_SCALARS 只改造**存在**的键，**缺省分支（`optDouble(k, DEFAULT)` 的 DEFAULT）从未进过换算**；凡"某属性缺省"的文本/几何，默认值必须与显式值同一单位口径（本案：默认 14 是**逻辑** px，就必须 ×密度）。★**这类缺陷只在"真业务数据走缺省"时才现形**——宿主夹具/演示几乎都给显式字号 ⇒ 与 #890 同族（**端到端必须用真 `.vue`**）。
+
+
 
 
 

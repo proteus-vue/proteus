@@ -1940,6 +1940,15 @@ public final class VaporRenderHost {
     /** 设置长度缩放（缺省 1 = 既有场景零行为变化） */
     public void setLengthScale(float s) { if (s > 0) lengthScale = s; }
 
+    /** 文本字号（物理 px）：显式 `fontSize` 已在入口物理化 ×密度（见 physicalizeTree）；
+     *  **缺省**时 Android 默认 14 是**逻辑** px ⇒ 此处必须同样 ×lengthScale。
+     *  ★此前缺省读裸 `14`（逻辑值）⇒ **无显式 font-size 的文本渲染成应显的 1/density**（实测：
+     *  「我的」页 `<pg-glass>` 内文 `<text class="mine-glass-t">` 无 font-size ⇒ Android 只有 iOS 的 1/3，
+     *  用户抓出「安卓液态玻璃下面的文字那么小」）。与 iOS `fontSize ?? 14`(pt，语义即逻辑) 对齐，见 #890。 */
+    private float fontSizePx(JSONObject spec) {
+        return (float) spec.optDouble("fontSize", 14 * lengthScale);
+    }
+
     /* ───────── ★★★内置环境变量表（2026-10-08 · 决策 #593）：`--pf-*` → 逻辑像素（dp）─────────
      * 宿主采集平台 insets（WindowInsets）→ 归一为 dp → 本表；`physicalizeSpec` 把编译期发射的
      * `env:<name>` token 解析成 dp（再 ×density），Stage 1 宿主侧解析（Stage 2 迁内核 env 表）。 */
@@ -2194,7 +2203,7 @@ public final class VaporRenderHost {
             if (r == null) continue;
             float boxW = (float) r.optDouble("width");
             if (boxW <= 1f) continue;
-            float fs = (float) spec.optDouble("fontSize", 14);
+            float fs = fontSizePx(spec);
             int mw = (int) spec.optDouble("fontWeight", 400);
             float ls = (float) spec.optDouble("letterSpacing", 0);
             final int clamp = (int) spec.optDouble("lineClamp", 0);
@@ -2261,7 +2270,7 @@ public final class VaporRenderHost {
             String t = spec.optString("text", null);
             if (t == null || t.isEmpty()) continue;
             // ★字号**不在这里缩放**：spec 已在入口物理化（physicalizeTree）⇒ 此处即物理字号
-            float fs = (float) spec.optDouble("fontSize", 14);
+            float fs = fontSizePx(spec);
             int mw = (int) spec.optDouble("fontWeight", 400);
             float ls = (float) spec.optDouble("letterSpacing", 0);
             // ★HA0.5：单行度量抽到**平台适配层**（`ProteusTextPlatform.measureSingle`，与 iOS `measureText` 对称）
@@ -2393,7 +2402,7 @@ public final class VaporRenderHost {
 
         String t = spec.optString("text", null);
         if (t != null && !t.isEmpty()) {
-            float fs = (float) spec.optDouble("fontSize", 14);
+            float fs = fontSizePx(spec);
             String tc = spec.optString("color", null);
             // ★★★CSS 初值 `color`（2026-10-08 · 以 Web 为基准）：缺省 **黑**（Web 未声明 color 时
             //   computed 即黑）。此前缺省 **白** ⇒ 未声明颜色的页面（如 create-proteus 模板首屏
@@ -2719,7 +2728,7 @@ public final class VaporRenderHost {
         final int color = bg != null ? parseColor(bg) : prev.color;
         String t = spec.optString("text", null);
         if (t != null && !t.isEmpty()) {
-            final float fs = (float) spec.optDouble("fontSize", 14);
+            final float fs = fontSizePx(spec);
             String tc = spec.optString("color", null);
             final int textColor = tc != null ? parseColor(tc) : prev.textColor;
             final int fw = (int) spec.optDouble("fontWeight", prev.fontWeight);
