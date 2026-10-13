@@ -3755,6 +3755,8 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **④ 验证**：CDP 复现（`radius=48`）——修复后 computed `glassRadius: 48px` / `noiseRadius: 48px`（噪点层已继承圆角）、**截图四角方块消失**；新增回归锁 `tests/pg-glass-layers.test.ts`（源码断言三处 `border-radius: inherit` 存在——删掉即红）；`glass.test`/`component-audit`/`p-batch2-contract` 80 测试全绿；`check:file-size`/`doc-links`/`content`/`mp-attrs`/`degradation` 绿。
 **⑤ 诚实边界**：修的是 **Web/CSS 端**（`backdrop-filter` 路径）；**App 端自绘玻璃的圆角由宿主裁剪（本就有 4 个 `glass_faces` 面 + 内核圆角），不受此 CSS 缺陷影响**（但 App 端圆角正确性属 G0 端到端核验）。
 **⑥ 教训**：★**"用户上手才暴露的视觉缺陷"要尽快定位到"组件级 vs 页面级"**——本例表面是"产品页 §05 调参暴露"，实为 **`pg-glass` 组件缺陷**（大圆角普遍问题）；**先在组件层修，全站一起好**（对比 #869 的 p-icon 同族：修组件 ≠ 修页面）。★**"装饰层"必须随宿主圆角裁剪**——凡是 `position:absolute; inset:0` 的**方形覆盖层**（噪点/遮罩/高光条/扫描线）叠在**圆角容器**上，都要 `border-radius: inherit`（或父级 `overflow:hidden`）；这是 CSS 覆盖层的通用坑。★**验收"圆角"不能只看小圆角**——**大圆角**才会把"方角覆盖层戳出"暴露出来（视觉验收应含极端参数：radius 拉满）。
+**⑦ ★补修（同日 · 用户复测仍溢出「上面的这个线」）**：首版给装饰层加 `border-radius: inherit` **不够**——① **高光条是 1px 高、`left:0;right:0` 全宽**，`border-radius:48px` 会被 CSS 夹到 ~0.5px ⇒ **等于没裁**，两端水平线仍在大圆角处**溢出**；② 噪点层同理（背景是**正方形 tile**，`border-radius` 只圆了容器边界、未裁背景 tile 的角）。★**根治**：**装饰层包一层裁剪容器 `.pg-glass__deco`（`position:absolute; inset:0; overflow:hidden; border-radius:inherit`）**——`overflow:hidden` 把噪点/高光边**整体裁剪**到玻璃圆角内；`.pg-glass__in` 不再直接含装饰层（**slot 内容不受裁剪**，只有 deco 被裁）。★**教训升级**：**"给元素加 border-radius" ≠ "裁剪其内容"**——圆角不会裁掉**子元素/背景 tile 超出圆角的部分**，那是 `overflow:hidden` 的职责；**1px 条**尤其隐蔽（圆角被夹成亚像素 ⇒ 看似加了实则没裁）。★**验证**：CDP 复现 radius=48——`.pg-glass__deco` computed `overflow:hidden` + `border-radius:48px`，**截图高光条/噪点均不再溢出四角**；回归锁更新为「deco 容器存在 + overflow:hidden + border-radius:inherit」。
+
 
 
 

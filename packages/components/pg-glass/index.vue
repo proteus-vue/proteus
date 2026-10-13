@@ -6,8 +6,12 @@
   >
     <!-- ★#389 定位上下文归内层：根元素不写 position（消费方自由 sticky/absolute），noise/highlight 相对 __in 定位 -->
     <div class="pg-glass__in">
-      <span v-if="showNoise" class="pg-glass__noise" aria-hidden="true" />
-      <span v-if="showBorder" class="pg-glass__highlight" aria-hidden="true" />
+      <!-- ★决策 #886：装饰层包一层**裁剪容器**（overflow:hidden + 圆角），令噪点/高光边被玻璃圆角裁掉，
+           不戳出圆角外（大圆角时高光条水平线曾在四角溢出）；slot 内容不受此裁剪影响。 -->
+      <span class="pg-glass__deco" aria-hidden="true">
+        <span v-if="showNoise" class="pg-glass__noise" />
+        <span v-if="showBorder" class="pg-glass__highlight" />
+      </span>
       <slot />
     </div>
   </div>
@@ -105,6 +109,15 @@ const showBorder = computed(() => resolved.value.border && level.value !== 'soli
 <style scoped>
 /* ★#389 根元素不设 position/display——定位与布局归消费方；定位上下文归 __in（noise/highlight 锚点） */
 .pg-glass__in { position: relative; border-radius: inherit; }
+/* ★决策 #886：装饰层裁剪容器——把噪点/高光边裁到玻璃圆角内（`overflow:hidden` + 随圆角）；
+   只裁装饰，slot 内容不受影响。 */
+.pg-glass__deco {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
 @supports not (backdrop-filter: blur(1px)) {
   .pg-glass { background: #121216; }
 }
@@ -112,9 +125,6 @@ const showBorder = computed(() => resolved.value.border && level.value !== 'soli
   position: absolute;
   inset: 0;
   pointer-events: none;
-  /* ★决策 #886：装饰层随玻璃圆角裁剪——此前方角 noise/highlight 在大圆角时**戳出圆角外**
-     （4 个角残留噪点矩形 = 深色方块）。`border-radius: inherit` 令噪点背景按圆角裁切。 */
-  border-radius: inherit;
   opacity: var(--pg-noise-opacity, 0);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
 }
@@ -125,7 +135,6 @@ const showBorder = computed(() => resolved.value.border && level.value !== 'soli
   right: 0;
   height: 1px;
   pointer-events: none;
-  border-radius: inherit;
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
 }
 .pg-glass--border { box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.12); }
