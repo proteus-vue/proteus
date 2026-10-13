@@ -88,11 +88,20 @@ subscribe(cb: (token: string | null) => void): () => void
 | `token` | `string \| null` | 是 | 当前令牌（未登录 null；响应式——UI 直接绑定） |
 | `isAuthenticated` | `boolean` | 是 | 是否已登录（token 非空即真） |
 
+## 错误码
+
+| code | 说明 |
+|---|---|
+| `login.unsupported` | wx.login 缺失 |
+| `login.failed` | wx.login 失败 |
+
+> 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。
+
 ## 兼容进度
 
 | 端 | 兼容 | 说明 |
 |---|---|---|
-| Web SPA | ✅ | vue-dom · webBridge 实现（平台 API 直连） |
+| Web SPA | ⚠️ | vue-dom · webBridge 未提供 login → Err 显式降级（平台无直通 API） |
 | 微信小程序 | ✅ | skyline（WebView 降级） · wx 桥 → 组合 |
 | Headless（SSR / 测试） | ✅ | headless · mock 桥注入（测试 / SSR 档） |
 | iOS 原生 | 🟡 | native-ios（UIKit + CoreAnimation） · 渲染核心已落地——能力桥未接线 |

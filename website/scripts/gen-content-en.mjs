@@ -1844,10 +1844,9 @@ export const CAP_EN = {
   },
   auth: {
     desc: 'useAuth: authentication state composition (token custody + login/logout + subscription) — business code never reads the raw token (iron rule 2)',
-    directProps: {
-      token: 'Current token (null when not logged in; reactive — bind directly in the UI)',
-      isAuthenticated: 'Whether the user is logged in (true when the token is non-empty)',
-    },
+    directProps: { token: 'Current token (null when not logged in; reactive — bind directly in the UI)', isAuthenticated: 'Whether the user is logged in (true when the token is non-empty)' },
+    // ★refs 修正随行：`useAuth` 现引用 `login` ⇒ 桥体 CapError 带出两条 code（此前 refs 恒空 ⇒ 本页无错误码表）
+    errors: { 'login.unsupported': 'wx.login is unavailable on this platform (useAuth login degraded to Err)', 'login.failed': 'wx.login failed' },
   },
   biometric: {
     desc: 'useBiometric: biometric support detection',

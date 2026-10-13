@@ -11,6 +11,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { COMP_EN, DOMAIN_EN, MP_STATUS_EN, ENDS_EN, END_NOTE_EN, COMP_LEGEND_EN, SHARED_EN, OVERVIEW_EN, CAP_SHARED_EN, CAP_USAGE_EN, CAP_ARGS_EN, CAP_DATA_HINTS_EN, CAP_METHODS_EN, CAP_EN, CAP_CAT_EN, CAP_OVERVIEW_EN, LIFECYCLE_EVENT_EN, LIFECYCLE_EVENT_NOTE_EN, LIFECYCLE_SRC_EN } from './gen-content-en.mjs'
 // ★决策 #881：App 桥方法集抽取抽成独立模块（锚定式解析 + 符号缺失硬失败）——详见该模块头注释
 import { loadAppBridgeKeys } from './lib/app-bridge-keys.mjs'
+// ★hook→桥方法引用抽取同法抽成独立模块（锚定式 + 硬失败）；两条契约共用 lib/ts-source-scan.mjs 原语
+import { extractHookBridgeRefs, HOOK_FACTORY } from './lib/hook-bridge-refs.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 // ★组件库已拆包（2026-09-14）：@proteus-vue/components → packages/components（原仓库根 src/components）
@@ -1224,16 +1226,12 @@ function capContext(ir) {
   const bridgeDocs = {}
   const reBridge = new RegExp(`${JSDOC}\\s*\\n\\s*(\\w+)\\??\\s*\\(`, 'g')
   while ((m = reBridge.exec(bridgeIface))) bridgeDocs[m[2]] = cleanDoc(m[1])
-  const keyHits = [...hooksBody.matchAll(/\b(use[A-Z]\w*|set[A-Z]\w*):/g)]
-  const hookRefs = {}
-  for (let k = 0; k < keyHits.length; k++) {
-    const hook = keyHits[k][1]
-    const end = k + 1 < keyHits.length ? keyHits[k + 1].index : hooksBody.length
-    const refs = [...hooksBody.slice(keyHits[k].index, end).matchAll(/bridge\.(\w+)\(/g)].map((x) => x[1])
-    hookRefs[hook] = [...new Set(refs)]
+  // ★refs：锚定式解析（原语 lib/ts-source-scan.mjs；旧盲区两条见 lib/hook-bridge-refs.mjs 头注释）
+  const { refs: hookRefs, misses: refMisses } = extractHookBridgeRefs(apiSrc, HOOK_FACTORY)
+  if (refMisses.length) throw new Error(`[gen-content] hook→bridge refs 解析失败：${refMisses.join('；')}`)
+  for (const [hook, refs] of Object.entries(hookRefs)) {
     if (hookDocs[hook]) continue
-    const bm = refs[0]
-    if (bm && bridgeDocs[bm]) hookDocs[hook] = bridgeDocs[bm].replace(/^C\d+\s+/, '')
+    if (refs[0] && bridgeDocs[refs[0]]) hookDocs[hook] = bridgeDocs[refs[0]].replace(/^C\d+\s+/, '')
   }
   const catOf = {}
   for (const c of caps) {
