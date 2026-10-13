@@ -322,6 +322,18 @@ struct Superapp {
     if (typeof cur === 'string') this.current = cur;
   }
 
+  /** ★决策 #897：把 chrome 数据的 `current` 同步为**实际渲染屏**（tab 高亮的唯一真源）。
+   *   根因见 paintTree 注释（applyState 用路由 current 写 chrome，与实际渲染屏脱节）。 */
+  private setChromeCurrent(name: string): void {
+    if (this.chromeStateJson.length === 0) return;
+    try {
+      const o = JSON.parse(this.chromeStateJson) as Record<string, Object>;
+      if (o['current'] === name) return;   // 无变化不触发 @Watch
+      o['current'] = name;
+      this.chromeStateJson = JSON.stringify(o);
+    } catch (e) { /* 解析失败保持旧态（不静默崩溃） */ }
+  }
+
   /** ★B1：统一运行期渲染入参 → JSON（用接口声明，避 ArkTS 未型字面量） */
   private static rtArgsJson(page: string, bundle: string, filesDir: string, vpW: number, vpH: number, chain?: number[], state?: Record<string, Object> | null): string {
     const vp: RtViewport = { width: vpW, height: vpH };
@@ -646,6 +658,11 @@ struct Superapp {
    *   视口取 Superapp.vpW/vpH（由 renderCurrent 设定）。 */
   private paintTree(page: string, nodes: string): void {
     try {
+      // ★★★决策 #897：tab 栏高亮的 current 以**实际渲染屏**为准。根因 = `applyState` 用**路由 current**
+      //   （boot 后恒为 index）写 chromeStateJson，而 `renderCurrent` 随后把 `this.current` 修正为真实屏
+      //   （rt['current']）却**未回写 chrome** ⇒ 切屏后 tab 高亮恒停在「首页」（真机实测：drive 到 mine，
+      //   current=mine 但高亮仍首页）。此处按最终渲染屏补齐 chrome 的 current。
+      this.setChromeCurrent(page);
       const cmds: string = appScreenCommands(JSON.stringify({
         'nodes': nodes, 'density': vp2px(1), 'vpW': Superapp.vpW, 'vpH': Superapp.vpH,
         'page': page, 'filesDir': this.filesDir,
