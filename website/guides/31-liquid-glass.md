@@ -42,7 +42,7 @@ group: 专题深入
 
 - **Web**：`<pg-glass>` 由框架注册表自动注册（`@proteus-vue/components`），无需手动 import。
 - **小程序（Skyline）**：`gen-routes` 自动解析框架组件（`/proteus/pg-glass`），无需 `usingComponents`。
-- **App（iOS/Android/鸿蒙）**：构建期由编译器把 `<pg-glass …>` 折叠为带 `glass` 字段的普通盒，宿主自绘玻璃面（产物见 `dist/app/<平台>/glass-manifest.json`）。
+- **App（iOS/Android/鸿蒙）**：构建期由编译器把 `<pg-glass …>` 折叠为带 `glass` 字段的普通盒，宿主自绘玻璃面（产物见 `dist/app/<平台>/glass-manifest.json`）。折叠**只认可静态求值的值**——静态字面量、以及 `v-for` 遍历**字面量数组/常量**时**逐项展开并折入**（`v-for="p in presets" :preset="p"` ⇒ 每项折叠为该预设；`presets` 需为可静态取得的值）。运行期动态值（响应式变量）不折，回落预设默认。
 
 ## Props
 

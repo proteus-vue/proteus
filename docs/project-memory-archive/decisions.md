@@ -3882,7 +3882,32 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
  · `test:coupled` 全绿（7.7s）· `check:ai-tasks`（任务卡闭合）。
 **⑤ 任务卡**：`T-glass-end2end`（端到端样例，含 radius 单位校验）**收口**为 `done`（decision 898）——其验收含 #890（真 .vue→三端渲染 + radius 单位）+ 本轮（文档 Props 用法全覆盖）。
 **⑥ ★教训**：**「字面量类型」要一次补齐，别一种一种补**——#889 补了**数字**字面量，本轮才发现**布尔**还没补（`strProp` 的白名单是"值的形态"，形态空间 = 字符串/数字/布尔/…，漏一类就有一类写法静默回落）。★**文档与实现的契约必须有机器判据**：文档 Props 表写 `border: Boolean`，而实现只认静态字符串 ⇒ 惯用绑定写法静默失效——这类"文档承诺 vs 实现接受面"的缺口，**只有按文档逐写法探针才能抓到**（与 #888「UI 需求先确认容器还是单元」同族：**先对文档/契约，再对实现**）。
-**⑦ 边界（诚实）**：`v-for` 动态表达式（`:preset="p"` / `:intensity="i"`）**不折**（回落类默认）——文档已声明"App 端构建期折叠只认静态值"，属**设计边界**非缺陷（本轮 examples 探针复现：id 8–26 回落 custom 默认）。
+**⑦ 边界（诚实）**：`v-for` 动态表达式（`:preset="p"` / `:intensity="i"`）**不折**（回落类默认）——文档已声明"App 端构建期折叠只认静态值"，属**设计边界**非缺陷（本轮 examples 探针复现：id 8–26 回落 custom 默认）。**★此边界已在 #899 收掉。**
+
+899. **★★★收掉液态玻璃「v-for 静态列表」边界——静态实例化逐项特化标量绑定（`:preset="p"` 等，`:class` 折入的同族泛化）**（2026-10-13 · 承接 #898 ⑦）：
+**① 缘起（用户「先把这个设计边界收掉」）**：#898 ⑦ 记录的边界——`<pg-glass v-for="p in presets" :preset="p">`（文档「七预设一览」的**标准写法**）在 App 端**不折**（各节点回落 custom 默认）。本单收掉。
+**② 取证（先查真实形态，别改错地方）**：查明 App 端 **v-for 已由 `static-instantiate.ts` 构建期展开**（`presets` 若是**普通 const 数组**，`extractRefLiterals` 已抽取、v-for 会逐项克隆）；**缺的一环**：展开后循环体**仍是"绑定表达式"**（`:preset="p"` 未被求值特化），而下游**静态消费方**（玻璃 `glassResolver.strProp`、图标解析器）**只认字面量** ⇒ 读不到值、回落默认。探针实证：`v-for :preset="p"`（statics=card/modal）⇒ 两节点都是 `radius:0`（custom 默认）。
+**③ 修**：`static-instantiate.ts` 增 **`foldScalarBinds`**——把**可静态求值的标量绑定**（string/number/boolean）折成**静态属性**（`:preset="p"` ⇒ `preset="card"`）；覆盖**全部** bind 参数（`class` 归既有 `foldClass`、`style` 跳过），在 v-if 分支与普通元素两处调用。**这是 `:class` 折入的泛化**：`:class` 只是"绑定 prop"里的一种。
+**④ 判据**：
+ · 单元：`tests/vapor-static-instantiate.test.ts` 新增 `④b`（v-for+`:preset` ⇒ 下游玻璃折出**每项不同** spec：card `radius16` / modal `radius24`）+ `④c`（不可求值绑定保留、不误折）。
+ · **端到端（真 .vue）**：`examples/pages/glass-demo.vue`（含 `v-for="p in presets"` 七预设 + `v-for="i in intensities"`）重构建 ⇒ `glass-manifest` 折出**逐项不同**的 spec（modal `24/24`、card `16`、intensity none `0`/thin/regular/thick `17/22/28`…），**不再是 7 个同一 custom 默认**；**三端 manifest 逐字节一致**。
+ · `test:coupled` / `check:app-screen-content` / `check:glass-capability` / `check:glass-audit` / `check:en-drift` / `check:doc-links` 全绿。
+**⑤ 文档**：`website/{,en/}guides/31-liquid-glass.md` 的「App 端」一句补精确口径——折叠认**静态可求值**值，含 **`v-for` 遍历字面量数组/常量（逐项展开并折入）**；运行期动态值不折。（en 镜像同步，`check:en-drift` 绿。）
+**⑥ ★教训**：**"静态实例化"必须**逐项特化绑定**，不能只折 `:class`——展开 v-for 只是第一步，**展开后的值要一级级求值**才能被下游静态消费方（玻璃/图标等**只认字面量**的折叠面）看见**。★与 #889/#898 同族：**折叠的"接受面"要覆盖到每一层**（字面量类型 → 绑定形态 → v-for 逐项），漏一层就有一类写法静默回落。
+
+899. **★★★立项「App 三端宿主运行时能力对齐」专项（84 能力 × iOS/Android/鸿蒙 = 255 格 🟡）+ 首单 useFetch（C26）**（2026-10-13 · 用户指定「端能力对齐先从最开始的 useFetch 开始，立项端能力对齐的 App 端专项，然后按照清单逐个落地到 App 三端宿主运行时」）：
+**① 现状取证（本轮四层逐层核实，均为一手证据）**：
+ · **清单规模**：App 三端共 **255 格 🟡**（iOS/Android 各 81 + 鸿蒙 84）；已在位真接线仅 **11 项**（`host.context`/`update.*`/`window.setSize`/`worker.*`/`idle.*`/`preload.assets`/`extension.load`/`mini-program.navigate`/`navigation-guard`）——见 `docs/native-capability-crossend-progress.md` §3。
+ · **落地链路四层**（每项能力都须齐）：① 宿主壳原生实现（Swift / Java / ArkTS）② 契约登记（`packages/render-backend/src/host-invoke-contract.ts` 的 `HOST_CAPABILITY_METHODS`，现 18 项）③ JS 桥（`packages/api/src/capability-app.ts`：`APP_NATIVE_METHODS` + `createAppNativeCapabilities`，现 13 方法）④ Hook（`capability.ts` 的 `createCapabilityHooks`——多数已在，缺的是桥那一层）。
+ · **useFetch 的四个位置**：Hook **已就位**（`capability.ts:266` → `bridge.request`，缺桥即 `fetch.unsupported`）；MP/Web 桥**已就位**（`capability-bridges.ts:500` `wx.request` / `:2675` `fetch`，签名 `RequestConfig → RequestResponse<unknown>`，载荷放 `.data`、状态码放 `.status`）；**App 侧三层全缺**——`APP_NATIVE_METHODS` 无 `request`、`createAppNativeCapabilities` 无 `request`、契约无网络方法、`hosts/` 下搜 `URLSession|HttpURLConnection|@ohos.net` **零命中**（网络能力从未在 App 三端实现过）。
+**② 两条**待拍板**的架构决策（阻塞首单，不自行决定）**：
+ · **(a) HTTP 的 invoke 形态**：`invoke(method, argsJson) -> String` 是**同步**契约（iOS `HostRuntimeBridge.invoke -> String`、Android `quickjs_jni.c` 同构；`post` 只是宿主导向 JS 的单向日志通道）——而 HTTP 天然异步 ⇒ 要么「同步阻塞等响应」（贴合现契约、三端皆可实现，但会阻塞 JS 线程；Android 若 JS 在 UI 线程会撞 `NetworkOnMainThreadException`），要么「新增异步回推通道」（`invoke` 只派发 `requestId`，宿主完成后经 JS 全局回调 resolve；更贴 HTTP 语义，但要新建请求↔响应关联 + 超时/取消）。
+ · **(b) Android INTERNET 权限**：`hosts/android/app/src/main/AndroidManifest.xml` 当前**零 `uses-permission`**，且门禁 `check:host-variant-parity` 明确校验「android release 无 INTERNET」（有意的**最小权限**设计）——网络能力必然需要 `android.permission.INTERNET`，须明确是否放行、以及是否**只在 debug 变体**放行。
+**③ 立项（任务板，`check:ai-tasks` 已绿 · 12 任务）**：
+ · **专项** `T-app-runtime-capabilities`（`type: end-alignment`，scope 覆盖四层 + `hosts/**` + 契约门禁；note 记路线图与上述两条决策）。
+ · **首单** `T-app-fetch`（`related: [T-app-runtime-capabilities]`；兼作后续 83 项的**落地样板**——理由：最基础的能力 + 同时压到三条最难的形态：异步 vs 同步 invoke、平台权限、三端原生 HTTP 惯用法）。
+**④ 纪律（本仓既有精神，逐项适用）**：每项能力**先建真机可观察判据再写实现**（`PROTEUS_EXIT_AFTER_REPORT=1` 报告落盘即进程自退 ⇒ 返回即完成信号，零轮询/零 sleep）；宿主未实现必须仍是 `*.unsupported`（**不伪造成功**）；三端语义差异如实写进页面说明，**不粉饰为「三端一致」**。
+
 
 
 

@@ -122,6 +122,34 @@ function transformChildren(children: AstNode[], scope: Scope, diags: string[]): 
   return out
 }
 
+/**
+ * ★★★决策 #899：把**可静态求值的标量绑定**折成静态属性——`:preset="p"`（`p` 由 v-for 作用域/常量给定）
+ *   ⇒ `preset="card"`。**为什么必须**：静态 v-for 展开后，循环体仍是"绑定表达式"（`:preset="p"`），
+ *   而下游**静态消费方**（如玻璃 `glassResolver` 的 `strProp`、图标解析器）**只认字面量** ⇒ 读不到值、
+ *   回落默认（真机实测：`<pg-glass v-for="p in presets" :preset="p">` 两节点都渲染成 custom 默认，非 card/modal）。
+ *   ⇒ 这是 `:class` 折入（既有）的**同族泛化**：`:class` 只是"绑定 prop"里的一种，其余标量绑定同理可折。
+ *   仅折 **primitive**（string/number/boolean）；object/array 保持绑定（转静态串会丢失类型，交既有路径）。
+ */
+function foldScalarBinds(node: AstNode, scope: Scope): AstNode {
+  const props = (node.props as AstNode[] | undefined) ?? []
+  let changed = false
+  const next = props.map((p) => {
+    if (p.type !== 7 || p.name !== 'bind') return p
+    const arg = (p.arg as { content?: string } | undefined)?.content
+    if (!arg || arg === 'class' || arg === 'style') return p   // class 归 foldClass；style 太复杂（对象/数组）
+    const code = (p.exp as { content?: string } | undefined)?.content ?? ''
+    const e = evalStatic(code, scope)
+    if (!e.ok) return p
+    const v = e.value
+    if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
+      changed = true
+      return { type: 6 as const, name: arg, value: { content: String(v) }, loc: p.loc } as AstNode
+    }
+    return p
+  })
+  return changed ? { ...node, props: next } : node
+}
+
 function transformNode(node: AstNode, scope: Scope, diags: string[]): AstNode[] {
   // 插值：可求值（原始值）⇒ 折成静态文本
   if (node.type === 5 /* INTERPOLATION */) {
@@ -164,14 +192,14 @@ function transformNode(node: AstNode, scope: Scope, diags: string[]): AstNode[] 
     if (e.ok) {
       if (!e.value) return []
       const s = stripped(node, 'if')
-      return [{ ...foldClass(s, scope), children: transformChildren((s.children as AstNode[]) ?? [], scope, diags) }]
+      return [{ ...foldScalarBinds(foldClass(s, scope), scope), children: transformChildren((s.children as AstNode[]) ?? [], scope, diags) }]
     }
     diags.push(`v-if="${code}" 不可构建期静态求值 ⇒ 已丢弃该分支（App 壳需可求值的条件；业务函数请预置到构建期状态）`)
     return []
   }
 
-  // ③ 普通元素：折 :class + 递归子节点
-  const folded = foldClass(node, scope)
+  // ③ 普通元素：折 :class + 折标量绑定 + 递归子节点
+  const folded = foldScalarBinds(foldClass(node, scope), scope)
   return [{ ...folded, children: transformChildren((folded.children as AstNode[]) ?? [], scope, diags) }]
 }
 
