@@ -275,7 +275,7 @@ function wrapViewportRoot(tpl: unknown): unknown {
     id: newId,
     parentId: null,
     tag: 'view',
-    style: { widthRatio: 1, heightRatio: 1, position: 'relative', overflow: 'hidden' },
+    style: { widthRatio: 1, heightRatio: 1, position: 'relative' },
   })
   t.roots = [newId]
   return t

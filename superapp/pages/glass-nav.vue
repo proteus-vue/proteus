@@ -86,6 +86,20 @@
       </view>
     </view>
 
+    <!-- ★#907：**高频纹理墙**（密集色块网格）——玻璃折射的真正素材是**高频内容**（色彩每格翻转）。
+         ★App 端无图片通路（无 imageResolver）+ 布局只有单类选择器 ⇒ 用**固定网格单元 + 8 个色类循环**造高频。 -->
+    <view class="gna-wall">
+      <view class="gna-wall__r">
+        <view class="gna-c c0" /><view class="gna-c c3" /><view class="gna-c c6" /><view class="gna-c c1" /><view class="gna-c c4" /><view class="gna-c c7" /><view class="gna-c c2" /><view class="gna-c c5" /><view class="gna-c c0" /><view class="gna-c c6" />
+      </view>
+      <view class="gna-wall__r">
+        <view class="gna-c c5" /><view class="gna-c c2" /><view class="gna-c c7" /><view class="gna-c c4" /><view class="gna-c c1" /><view class="gna-c c6" /><view class="gna-c c3" /><view class="gna-c c0" /><view class="gna-c c7" /><view class="gna-c c2" />
+      </view>
+      <view class="gna-wall__r">
+        <view class="gna-c c1" /><view class="gna-c c6" /><view class="gna-c c2" /><view class="gna-c c5" /><view class="gna-c c0" /><view class="gna-c c4" /><view class="gna-c c7" /><view class="gna-c c3" /><view class="gna-c c6" /><view class="gna-c c1" />
+      </view>
+    </view>
+
     <!-- 卡片流 2 -->
     <view class="gna-list">
       <view class="gna-row">
@@ -104,6 +118,69 @@
         </view>
         <view class="gna-row__btn"><text class="gna-row__btn-t">获取</text></view>
       </view>
+      <view class="gna-row">
+        <view class="gna-row__ico gna-row__ico--b" />
+        <view class="gna-row__main">
+          <text class="gna-row__t">明日方舟</text>
+          <text class="gna-row__d">策略塔防 · 全新活动</text>
+        </view>
+        <view class="gna-row__btn"><text class="gna-row__btn-t">获取</text></view>
+      </view>
+      <view class="gna-row">
+        <view class="gna-row__ico gna-row__ico--r" />
+        <view class="gna-row__main">
+          <text class="gna-row__t">暗区突围</text>
+          <text class="gna-row__d">硬核战术射击</text>
+        </view>
+        <view class="gna-row__btn"><text class="gna-row__btn-t">获取</text></view>
+      </view>
+      <view class="gna-row">
+        <view class="gna-row__ico gna-row__ico--o" />
+        <view class="gna-row__main">
+          <text class="gna-row__t">光遇</text>
+          <text class="gna-row__d">温暖治愈的社交冒险</text>
+        </view>
+        <view class="gna-row__btn"><text class="gna-row__btn-t">获取</text></view>
+      </view>
+      <view class="gna-row">
+        <view class="gna-row__ico gna-row__ico--t" />
+        <view class="gna-row__main">
+          <text class="gna-row__t">使命召唤手游</text>
+          <text class="gna-row__d">3A 级枪战体验</text>
+        </view>
+        <view class="gna-row__btn"><text class="gna-row__btn-t">获取</text></view>
+      </view>
+      <view class="gna-row">
+        <view class="gna-row__ico gna-row__ico--g" />
+        <view class="gna-row__main">
+          <text class="gna-row__t">蛋仔派对</text>
+          <text class="gna-row__d">休闲竞技 · 全新赛季</text>
+        </view>
+        <view class="gna-row__btn"><text class="gna-row__btn-t">获取</text></view>
+      </view>
+      <view class="gna-row">
+        <view class="gna-row__ico gna-row__ico--p" />
+        <view class="gna-row__main">
+          <text class="gna-row__t">率土之滨</text>
+          <text class="gna-row__d">东方战略 · 一统天下</text>
+        </view>
+        <view class="gna-row__btn"><text class="gna-row__btn-t">获取</text></view>
+      </view>
+    </view>
+
+    <!-- ★又一段高频纹理（滚动到此处时玻璃压其上 ⇒ 折射漩涡最明显） -->
+    <view class="gna-wall">
+      <view class="gna-wall__r">
+        <view class="gna-c c7" /><view class="gna-c c2" /><view class="gna-c c0" /><view class="gna-c c5" /><view class="gna-c c3" /><view class="gna-c c6" /><view class="gna-c c1" /><view class="gna-c c4" /><view class="gna-c c2" /><view class="gna-c c7" />
+      </view>
+      <view class="gna-wall__r">
+        <view class="gna-c c4" /><view class="gna-c c0" /><view class="gna-c c6" /><view class="gna-c c1" /><view class="gna-c c7" /><view class="gna-c c3" /><view class="gna-c c5" /><view class="gna-c c2" /><view class="gna-c c0" /><view class="gna-c c5" />
+      </view>
+    </view>
+
+    <!-- 尾部说明（保证滑到底仍有余量） -->
+    <view class="gna-footer">
+      <text class="gna-footer__t">按住/拖动玻璃条 → 玻璃表面流动；上滑 → 内容从玻璃底下经过</text>
     </view>
 
     <!-- ★★悬浮玻璃导航：**fixed** 钉在视口底部（内容从玻璃底下滑过）。bottom 抬到 App 壳 tab 栏之上。 -->
@@ -150,10 +227,40 @@ function setActive(idx: number): void {
 .gna-page {
   /* ★不写 position：否则它成为内部 fixed 的 containing block（=整页高）⇒ fixed 的 bottom 落到页底屏外。
      保持 static ⇒ fixed 相对根的初始包含块（≈视口），bottom 才落到视口底（对齐 iOS）。 */
-  min-height: 1400px;      /* 内容够长 ⇒ 可滚动（内容从悬浮玻璃下滑过） */
-  padding: var(--sa-4, 16px) 12px 200px;
+  min-height: 2600px;      /* 内容够长 ⇒ 上滑到底仍有内容（内容从悬浮玻璃下滑过） */
+  padding: var(--sa-4, 16px) 12px 220px;
   box-sizing: border-box;
   background: var(--sa-bg, #f4f5f7);
+}
+/* ★#907 高频纹理墙：密集色块网格（每格换色 ⇒ 玻璃折射/漩涡的素材）。 */
+.gna-wall {
+  margin: 14px 0;
+  border-radius: 14px;
+  overflow: hidden;
+}
+.gna-wall__r {
+  display: flex;
+  flex-direction: row;
+  height: 56px;
+}
+.gna-c {
+  flex: 1;
+}
+.c0 { background: #e2504a; }
+.c1 { background: #2f9d67; }
+.c2 { background: #2f6bd8; }
+.c3 { background: #e8a03c; }
+.c4 { background: #8a5cf0; }
+.c5 { background: #d63d6a; }
+.c6 { background: #1fb6c9; }
+.c7 { background: #b7c22f; }
+.gna-footer {
+  margin-top: 16px;
+  padding: 20px 0;
+}
+.gna-footer__t {
+  font-size: 13px;
+  color: var(--sa-text-3, #8a8f99);
 }
 .gna-head__t {
   display: block;
