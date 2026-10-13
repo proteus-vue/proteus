@@ -17,6 +17,8 @@ import BrandMark from './components/BrandMark.vue'
 import { createScrollObserver, type ScrollState } from '@proteus-vue/desktop'
 // ★#472 语言切换（全局顶栏——chrome 双语状态）
 import { locale, setLocale, t } from './i18n'
+// ★★★决策 #887：导航项 = 玻璃胶囊（iOS 26 那种）——胶囊样式由引擎 `resolveGlass` 派生（dogfood）。
+import { resolveGlass, glassStyleFor } from '@proteus-vue/glass'
 
 const route = useRoute()
 const isDocs = computed(() => route.path.startsWith('/docs'))
@@ -56,6 +58,13 @@ function navText(l: { key: string; label: string }): string {
   return l.label
 }
 const engineText = (e: EngineLink): string => t(e.labelKey)
+
+// ★★★决策 #887：导航项的**玻璃胶囊**样式——由引擎派生（`resolveGlass` + `glassStyleFor`，dogfood）。
+//   iOS 26 的导航项是圆角玻璃胶囊（毛玻璃 + saturate 通透）。非激活=淡玻璃、激活=品牌色玻璃。
+const glassPill = (tint: string): Record<string, string | undefined> =>
+  glassStyleFor(resolveGlass({ preset: 'custom', intensity: 'thin', tint, radius: 999 }), 'l1')
+const navPill = glassPill('rgba(255, 255, 255, 0.06)')
+const navPillActive = glassPill('rgba(124, 92, 255, 0.34)')
 
 // ★引擎▾ 下拉开合：**click 切换** + **鼠标离开关闭**（确定性、键盘可达；Escape / 路由变化亦关）。
 //   ★不用 hover-**open**：hover 开 + click 切会打架（悬停已开、click 又关）——实测踩过。
@@ -100,12 +109,12 @@ watch(() => route.fullPath, () => {
     <!-- ★无障碍：跳转到主内容（键盘首个 Tab 即可达；WCAG 2.4.1 Bypass Blocks） -->
     <a class="skip-link" href="#main-content">{{ locale === 'zh' ? '跳到主内容' : 'Skip to content' }}</a>
     <!-- ★★★决策 #887：导航栏 = 液态玻璃（`<pg-glass preset="navigationBar">`）——
-         导航条与「引擎▾」下拉面板都用玻璃，顺带在真实站点验证自研玻璃引擎（回收旧 d2-exempt）。 -->
+         导航条与「引擎▾」下拉面板都用玻璃，顺带在真实站点验证自研玻璃引擎（回收旧 d2-exempt）。
+         ★不覆盖 tint：用 navigationBar 预设的白色 15% 霜感（此前误传 72% 不透明深色 ⇒ 看着像实底黑条、模糊被盖住）。 -->
     <pg-glass
       preset="navigationBar"
       :radius="0"
       border
-      tint="rgba(11, 11, 15, 0.72)"
       class="nav-shell"
       :class="{ 'is-scrolled': scrolled, 'is-open': menuOpen, 'is-docs': isDocs, 'engines-open': enginesOpen }"
     >
@@ -141,7 +150,7 @@ watch(() => route.fullPath, () => {
           </button>
 
           <!-- 首页 -->
-          <router-link to="/" class="nav-link" :class="{ active: route.name === 'home' }">
+          <router-link to="/" class="nav-link" :class="{ active: route.name === 'home' }" :style="route.name === 'home' ? navPillActive : navPill">
             <p-text class="nav-text">{{ t('app.home') }}</p-text>
           </router-link>
 
@@ -151,6 +160,7 @@ watch(() => route.fullPath, () => {
               type="button"
               class="nav-link nav-drop-trigger"
               :class="{ active: isEngineActive }"
+              :style="isEngineActive ? navPillActive : navPill"
               :aria-expanded="enginesOpen ? 'true' : 'false'"
               @click="toggleEngines"
             >
@@ -179,18 +189,19 @@ watch(() => route.fullPath, () => {
               :to="e.to"
               class="nav-link nav-link--sub"
               :class="{ active: route.name === e.key }"
+              :style="route.name === e.key ? navPillActive : navPill"
             >
               <p-text class="nav-text">{{ engineText(e) }}</p-text>
             </router-link>
           </div>
 
-          <router-link v-for="l in links.slice(1)" :key="l.key" :to="l.to ?? '/'" class="nav-link" :class="{ active: route.name === l.key }">
+          <router-link v-for="l in links.slice(1)" :key="l.key" :to="l.to ?? '/'" class="nav-link" :class="{ active: route.name === l.key }" :style="route.name === l.key ? navPillActive : navPill">
             <p-text class="nav-text">{{ navText(l) }}</p-text>
           </router-link>
-          <router-link to="/docs/01-intro" class="nav-link" :class="{ active: isDocs }">
+          <router-link to="/docs/01-intro" class="nav-link" :class="{ active: isDocs }" :style="isDocs ? navPillActive : navPill">
             <p-text class="nav-text">{{ t('app.docs') }}</p-text>
           </router-link>
-          <a class="nav-link nav-github" href="https://github.com/proteus-vue/proteus" target="_blank" rel="noreferrer">
+          <a class="nav-link nav-github" href="https://github.com/proteus-vue/proteus" target="_blank" rel="noreferrer" :style="navPill">
             <p-text class="nav-text">GitHub ↗</p-text>
           </a>
         </div>
@@ -257,8 +268,6 @@ watch(() => route.fullPath, () => {
 }
 /* 滚动后加投影区分层级（玻璃本身由 <pg-glass> 出；投影是导航的层级语言，非玻璃参数） */
 .nav-shell.is-scrolled { box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); }
-/* 文档页：导航与分区横条融为一体（导航底部细边透明，由横条出统一分隔线） */
-.nav-shell.is-docs { border-bottom-color: transparent; }
 /* ★#389c 滚动进度条（品牌色细线） */
 .scroll-progress {
   position: absolute;
@@ -388,25 +397,14 @@ watch(() => route.fullPath, () => {
   .nav-menu .nav-link { padding: 7px 12px; }
   .nav-menu .nav-link.active::after { left: 12px; right: 12px; width: auto; }
 }
-.nav-link { text-decoration: none; padding: 7px 12px; border-radius: var(--radius-sm); position: relative; background: none; border: none; font: inherit; cursor: pointer; }
+.nav-link { text-decoration: none; padding: 7px 14px; border-radius: 999px; position: relative; background: none; border: none; font: inherit; cursor: pointer; transition: background 0.15s ease; }
+/* ★#887：激活态 = 品牌色玻璃胶囊（由 :style 绑定 navPillActive 出——不再用底部下划线） */
 /* ★#381：链接文字禁折字（首/页 竖排两字的根因）——窄屏整链接换行 */
 .nav-text { color: var(--muted); font-size: 14px; transition: color 0.15s; white-space: nowrap; }
 .nav-link:hover .nav-text { color: var(--ink); }
-/* active：品牌色文字 + 底部短下划线（替代大药丸） */
 .nav-link.active .nav-text { color: var(--ink); font-weight: 600; }
-.nav-link.active::after {
-  content: '';
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: 2px;
-  height: 2px;
-  border-radius: 2px;
-  background: var(--brand);
-}
-/* GitHub：描边按钮形态（与页面内 CTA 同语言） */
-.nav-github { border: 1px solid var(--line); margin-left: 6px; }
-.nav-github:hover { border-color: var(--brand); }
+/* GitHub：与其它项同为玻璃胶囊（:style 已给玻璃），此处只加外距区分 */
+.nav-github { margin-left: 6px; }
 .main { max-width: 1180px; margin: 0 auto; width: 100%; flex: 1; }
 /* ★#489 全宽演示页：通栏全屏（max-width 放开 + 水平 padding 清零，内边距交给 .six-root） */
 .main.is-wide { max-width: none; width: 100%; padding-left: 0 !important; padding-right: 0 !important; }

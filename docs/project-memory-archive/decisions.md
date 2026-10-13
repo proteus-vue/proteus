@@ -3769,6 +3769,20 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **⑥ 诚实边界**：`check:content`/`check:file-size` 本地红——**经取证为异会话（`wb-appbridge`）未提交的 `gen-content*.mjs`/`mini-program.md` 改动**（HEAD 上 `gen-content.mjs`=2817 ≤ 基线 2818 ✓，工作树被其改为 2824）**非本轮**；本提交不含这些文件，推送后 CI（跑 HEAD）不受影响。
 **⑦ 教训**：★**"内容增长"必然逼出"信息架构"**——导航从 4 项长到 11 项平铺就是信号；**分组（下拉）比"再删几个"更治本**（删了还得再删）。★**`container-type` 会改变 `position:fixed` 的包含块**——凡是"container query 容器"内放 fixed 覆盖层（scrim/toast），都要意识到它被**限制在容器盒内**（本仓 `App.vue` nav 实证）。★**"顺带验证自家引擎"是最低成本的 dogfooding**——导航用 `<pg-glass>` 既**收敛了视觉**又**在真实高频入口验了玻璃引擎**（比专门演示更有说服力），并顺手**清掉一个 `d2-exempt` 技术债**。
 
+888. **★★玻璃引擎 Web 路径补 `saturate`（对齐 iOS 通透感）+ 导航项做成玻璃胶囊**（2026-10-13）：
+**① 起因（用户，承接 #887）**：「玻璃导航好像没生效或者没做出来，我想的效果可能是 **iOS 那种玻璃导航**。现在的还是纯文字」→ 追加澄清：「**我说的不是整个导航条，是导航上的导航块是纯文字，不是 iOS 那种玻璃导航胶囊**」。
+**② 诊断（先取证）**：CDP 实测导航 `backdrop-filter: blur(20px)` **确实在渲染**，但**肉眼像实底黑条**——根因两层：
+   · **（我造成的）tint 覆盖太实**：#887 我给导航传了 `tint="rgba(11,11,15,0.72)"`（**72% 不透明深色**），盖住了模糊；`navigationBar` 预设本是 `rgba(255,255,255,0.15)`（白色 15% 霜感）。
+   · **（引擎缺口，★真问题）Web 玻璃只有 `blur`、没有 `saturate`**——iOS 的 `.regular` 材质是 **`blur + saturate(~1.8)`**，**saturate 是"iOS 那种玻璃"通透有感的关键**；深色背景下只 blur ⇒ 玻璃与实底难辨。
+   · **③ 需求误读**：#887 我把"导航做成玻璃"理解成**整条导航条背景玻璃**，用户要的是**每个导航项 = 玻璃胶囊**（iOS 26 导航项形态）。
+**③ 修（两层）**：
+   · **引擎（`packages/glass/src/degrade.ts`）**：`glassStyleFor` 的 CSS 输出由 `blur(${b}px)` 改为 **`blur(${b}px) saturate(${CSS_SATURATE})`**（新导出常量 `CSS_SATURATE = 1.8`）；与原生端 WGSL `u.saturation`（#875）**对齐**——Web/小程序 CSS 路径补齐对应项。**一处改，全端玻璃（导航/卡片/弹层/降级演示…）通透感一起提升**。
+   · **导航项（`website/src/App.vue`）**：每个 `.nav-link` 绑 **玻璃胶囊样式**——由**引擎派生**（`glassStyleFor(resolveGlass({ preset:'custom', intensity:'thin', tint, radius:999 }), 'l1')`，**dogfood**）：非激活 = `rgba(255,255,255,0.06)` 淡玻璃、激活 = `rgba(124,92,255,0.34)` 品牌色玻璃、`radius:999px`；去掉旧"底部下划线"激活样式。
+**④ 验证（CDP）**：导航项 computed `backdrop-filter: blur(12px) saturate(1.8)` + `radius:999px`、激活项品牌色玻璃；截图 = **iOS 那味**（磨砂导航 + 圆角玻璃胶囊）；`glass` 单测更新（`blur(...) saturate(1.8)`）· D-2 audit PASS · `glass-capability`/`glass-audit`/`file-size`/`doc-links`/`en-drift` 绿。
+**⑤ 诚实边界**：`saturate` 是 **Web/CSS 路径**的补齐（原生端自绘的饱和由 WGSL 承担，不受影响）；小程序 Skyline 对 `backdrop-filter` 的 `saturate()` 支持视基础库——不支持时按 `@supports`/降级链回落（不崩溃）。导航胶囊样式由引擎派生（非硬编码），改预设即全站跟随。
+**⑥ 教训**：★**"做了但看着没做"要查"是不是被不透明层盖住"**——玻璃"没生效"的真因是 **tint 0.72 盖了 blur**（不是没渲染）；**深色背景下 `blur` 单独存在≈实底**（**`saturate` 才是通透的关键**）。★**"iOS 玻璃"要对齐苹果的材质定义**（`.regular` = blur + saturate），不能只做 blur 就宣称"iOS 玻璃"（与 #875 同族：对齐某平台语义要对着它的定义逐项核）。★**同一句话我理解错了方向**——用户说"导航做成玻璃"，我做了**条**、用户要的是**块（胶囊）**；**UI 需求先确认"容器还是单元"再动手**（本轮靠用户追加澄清才对齐，多耗一轮）。★**dogfood 要"真用引擎 API"**（导航胶囊样式由 `resolveGlass` 派生，非手写 CSS）——否则"验证"名不副实。
+
+
 
 
 
