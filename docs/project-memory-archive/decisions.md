@@ -3817,9 +3817,21 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 892. **★★★基准纠正（用户指定）：App 液态玻璃引擎的三端对齐基准 = iOS 液态玻璃（**不是** Web/CSS）**（2026-10-13）：
 **① 用户原话**：「App 三端对齐标准应该是 **iOS 的液态玻璃**，不是 web 的那个，因为这个和 css 实现出发点不一样，这个参考来源本身就是 iOS 的液态玻璃」。
 **② 规则**：`packages/glass`（WGSL 材质单源）+ 三端 App 宿主（iOS Metal / Android AGSL / 鸿蒙 Vulkan）构成的**自研液态玻璃引擎**，其**观感/正确性基准 = iOS 液态玻璃**（引擎的参考来源）——逐端对照时**以 iOS 渲染为真值**，Android/鸿蒙向 iOS 对齐。**Web/MP 的 `backdrop-filter`（CSS）是另一条通路**（出发点 = 浏览器 CSS，见 #877/#888），**不构成 App 玻璃引擎的基准**。
-**③ 与既有纪律的关系（划清边界）**：AGENTS.md「CSS 多端一致性基准 = Web」（#508 等）**只适用于 CSS 特性**；**App 自绘玻璃不是 CSS** ⇒ **不适用**该基准。★此前 #890 收尾我误把 Web 当 App 玻璃基准去推「排除子树/文字应清晰」，**方向错**——按 iOS 基准，App 玻璃对其自身承载内容本就该被材质处理（iOS 端即如此），不以 Web「backdrop-filter 不糊自身子元素」为准。
-**④ 当前偏离（真机 8× 取证 · 按 iOS 基准）**：`superapp`「我的」页玻璃卡内文——**iOS = 均匀柔化**（笔画糊为一体），**Android = 笔画清晰 + 淡重影**（清晰副本叠模糊副本）。⇒ **Android 的玻璃对自身内容"糊得不够"**，偏离 iOS 材质观感。（WGSL 材质算法已单源，偏离在宿主层：**背景捕获分辨率 + 玻璃面分辨率/模糊量换算**——iOS `capturePxPerPoint=scale/3`、`glassOutScale=scale/2`、`blur=spec.blur×outScale`；Android 捕获与面均**全分辨率**、`blur=spec.blur×density` ⇒ 同 `blur` 等效屏幕模糊不同。）
+**③ 与既有纪律的关系（划清边界）**：AGENTS.md「CSS 多端一致性基准 = Web」（#508 等）**只适用于 CSS 特性**；**App 自绘玻璃不是 CSS** ⇒ **不适用**该基准。★此前 #890 收尾我误把 Web 当 App 玻璃基准去推「排除子树/文字应清晰」，方向错——**正解见 #893**（用户真机 App Store 照片取证：iOS 材质**只糊「背后」内容、玻璃自身内容保持清晰**）。
+**④ 当前偏离（真机 8× 取证）**：`superapp`「我的」页玻璃卡内文——**iOS 呈均匀柔化 / Android 笔画清晰 + 淡重影**。★**#893 复核更正**：此处当时把「iOS 均匀柔化」当成基准，**实为我们宿主的 bug**（把玻璃节点自身子树也录进背景糊了）——真 iOS 自身内容本就清晰；两条真因见 #893。
 **⑤ 待办**：把 Android/鸿蒙的「背景捕获分辨率 + 玻璃面分辨率 + 模糊量换算」对齐 iOS（iOS 为基准），三端真机逐端复验。**验收判据 = 与 iOS 目视一致（非"三端彼此一致"）**。
+
+893. **★★★App 液态玻璃合成层对齐 iOS 基准：玻璃自身内容排除出背景 + 清晰画在玻璃面之上（三端共享 runtime）**（2026-10-13）：
+**① 用户规格（真机 App Store 照片取证，权威）**：iOS 液态玻璃 = **① 边缘一圈折射/高光带；② 过折射区后是**淡淡的模糊**（作用于「**背后**」内容）；③ 卡片自身内容保持原样清晰**。
+**② 根因（三端同源）**：三端玻璃遍都**把玻璃节点自身子树（含其文本子内容）一起录进了"背景/背板"** ⇒ 自身内容被糊进材质；且玻璃面盖在自身内容之上。真 iOS `UIVisualEffectView` 语义 = 材质**只作用于背后**、`contentView` 内容**原样清晰**。★**这是合成层的错，不是着色器**（WGSL 材质算法已单源、`check:glass-pixel-parity` 平均差 0.49）。
+**③ 修（统一为「背景排除自身子树 + 自身内容清晰盖上」，改在**共享 runtime 源** ⇒ CLI 所有项目继承）**：
+ · **iOS**（基准）`selfdraw-scene.swift` `applyGlassPass`：捕获 backdrop 前把玻璃节点层 `isHidden=true`（排除自身整棵子树）→ `self.layer.render` → 恢复（同一 `CATransaction`）；玻璃面 `fl.zPosition` **5000→-1**（降到自身子层之下 ⇒ 自身内容清晰浮于玻璃面之上）。
+ · **Android** `ProteusHostView.java`：用 `nodeParent` 算玻璃节点子树 id 集；`captureGlassBackdrop` 的 `drawCmds` **排除该集合**（新增 `drawCmds(canvas, skipIds, onlyIds)` 过滤能力，真正接线，替换死标志 `capturingGlass`）；`drawGlassPass` 对每个玻璃节点画完面后 `drawCmds(canvas, null, subtreeIdsOf(id))` **重画自身子树**于玻璃面之上。
+ · **鸿蒙**（自绘路径）`proteus_render.cpp`：`SDNode` 补 `id/parentId`；`drawContentNodes` 增 `skipIds/onlyIds`；`drawSelfContentCore` 建玻璃背景位图时传 `&glassSubtree`（排除自身），贴回玻璃面后 `drawContentNodes(…, &selfSub)` 重画自身子树。
+**④ 产物同步**：Android 重打 `hosts/android/build-runtime-aar.sh`（AAR + `packages/cli/templates-host/prebuilt/android/proteus-runtime.aar` + 源指纹）；鸿蒙 `node scripts/harmony-runtime-prebuilt.mjs`（同步 prebuilt）。
+**⑤ 判据**：三端零设备编译（iOS swiftc / Android javac+JNI / 鸿蒙 OHOS clang）全绿 · `check:glass-capability` / `check:glass-pixel-parity`(0.49) / `check:glass-audit` / `check:android-runtime-aar-fresh` / `check:harmony-runtime-prebuilt --check` 全绿 · **iOS 真机 `superapp mine` 页复验**：玻璃卡内文由"均匀柔化"变为**完全清晰**（对齐基准），材质/边缘保留。
+**⑥ ★教训**：**「材质只作用于背后」是玻璃合成的一般语义**（iOS `UIVisualEffectView` / CSS `backdrop-filter` 一致）——宿主若把**自身子树**也录进背景，就把"材质"错误地施加到了自身内容上。★三端同源同 bug（都录了自身子树），**证明"合成顺序"这类不变量必须一次定死**（本轮补齐：背景=背后∪排除自身，自身内容=清晰盖于面上）。
+**⑦ 边界**：鸿蒙**仅自绘路径**（dev 演示场景）适用；superapp 走 RS 树不画玻璃 = #842 未到期项，**单列**（用户已确认本轮不做）。Android `nodeParent` 目前仅 Vapor 路径填充。
 
 
 

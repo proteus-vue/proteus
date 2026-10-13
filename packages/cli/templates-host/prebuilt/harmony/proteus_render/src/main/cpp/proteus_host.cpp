@@ -700,6 +700,27 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
                 if (!bv.empty()) arr += std::string(",\"") + bgKeys[bi] + "\":\"" + jsonEscape(bv) + "\"";
             }
         }
+        // ★★★自研液态玻璃（决策 #834 · 鸿蒙腿）：`glass` 键进 cmd（渲染层据其在节点画布上画玻璃面）。
+        //   形态与 Android/iOS 同源：`{"blur":N物理px,"radius":N物理px,"tint":ARGB,"saturation":N,"border":bool}`。
+        //   ★此前鸿蒙 cmd **既不发 glow 也不发 glass** ⇒ 内容节点玻璃静默丢失（接缝表无鸿蒙）。
+        {
+            std::string glSub = extractValueAfterKey(it, "glass", '{', '}');
+            if (!glSub.empty()) {
+                double gblur = 0, grad = 0, gsat = 1.0; std::string gtk;
+                jnum(glSub.c_str(), glSub.size(), "blur", &gblur);
+                jnum(glSub.c_str(), glSub.size(), "radius", &grad);
+                jnum(glSub.c_str(), glSub.size(), "saturation", &gsat);
+                jstr(glSub.c_str(), glSub.size(), "tint", &gtk);
+                uint32_t gtint = gtk.empty() ? 0x26FFFFFFu : hexToArgb(gtk);
+                bool gborder = (glSub.find("\"border\":true") != std::string::npos);
+                // blur/radius 是 CSS 逻辑 px ⇒ ×density 转物理 px（与节点几何同口径，见 grad/outline 同法）。
+                char gbuf[220];
+                snprintf(gbuf, sizeof(gbuf),
+                         ",\"glass\":{\"blur\":%.2f,\"radius\":%.2f,\"tint\":%u,\"saturation\":%.3f,\"border\":%s}",
+                         gblur * density, grad * density, gtint, gsat, gborder ? "true" : "false");
+                arr += gbuf;
+            }
+        }
         if (bw > 0 && bc > 0) {
             char bb[96]; snprintf(bb, sizeof(bb), ",\"borderWidth\":%.2f,\"borderColor\":%u", bw * density, bc);
             arr += bb;

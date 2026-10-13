@@ -3336,7 +3336,11 @@ public class ProteusHostView extends ViewGroup {
         bc.translate(-bx - (cScrolled ? scrollX : 0), -by - (cScrolled ? scrollY : 0));
         capturingGlass = true;
         try {
-            drawCmds(bc);   // 无玻璃面（capturingGlass 时跳过玻璃分支）⇒ 纯内容
+            // ★★★决策 #893（对齐 iOS 液态玻璃基准）：背板**排除所有玻璃节点自身子树** ⇒ 只含"玻璃背后"的内容，
+            //   自身内容不被糊进材质（真 iOS：材质只糊背后）。自身内容随后由 drawGlassPass 在玻璃面之上清晰重画。
+            java.util.Set<Integer> glassSubtree = new java.util.HashSet<>();
+            for (Integer gid : glassByNode.keySet()) glassSubtree.addAll(subtreeIdsOf(gid));
+            drawCmds(bc, glassSubtree, null);   // 跳过玻璃节点自身子树 ⇒ 纯背景
         } finally {
             capturingGlass = false;
         }
@@ -3374,11 +3378,37 @@ public class ProteusHostView extends ViewGroup {
         if (ids == null) return;
         for (int i = 0; i < list.size() && i < ids.length; i++) {
             GlassMaterial.Spec g = glassByNode.get(ids[i]);
-            if (g != null) drawGlassFace(canvas, ids[i], list.get(i), g);
+            if (g != null) {
+                drawGlassFace(canvas, ids[i], list.get(i), g);
+                // ★★★决策 #893（对齐 iOS 液态玻璃基准）：玻璃面**之上**重画**该玻璃节点自身子树**（其文本/子视图）
+                //   ——背景已在 captureGlassBackdrop 排除自身子树（只含"背后"），此处把自身内容**清晰**盖回玻璃面上。
+                //   真 iOS `UIVisualEffectView` 语义：材质只糊背后、`contentView` 内容原样清晰。
+                drawCmds(canvas, null, subtreeIdsOf(ids[i]));
+            }
         }
     }
 
-    public void drawCmds(Canvas canvas) {        // ★单次遍历下发全部指令（无 View 树、无递归 measure/layout）
+    /** ★决策 #893：某节点（含自身）的子树 id 集合——用 `nodeParent` 表；`cmdNodeIds` 为树序（父在子前）⇒ 一趟即成
+     *  （与 drawCmds 的按下提升收敛同一算法）。用于：背景捕获排除玻璃自身子树 / 玻璃面之上重画自身子树。 */
+    private java.util.Set<Integer> subtreeIdsOf(int rootId) {
+        final java.util.Set<Integer> sub = new java.util.HashSet<>();
+        sub.add(rootId);
+        final int[] ids = cmdNodeIds;
+        if (ids == null) return sub;
+        for (int k = 0; k < ids.length; k++) {
+            final Integer p = nodeParent.get(ids[k]);
+            if (p != null && sub.contains(p)) sub.add(ids[k]);
+        }
+        return sub;
+    }
+
+    public void drawCmds(Canvas canvas) { drawCmds(canvas, null, null); }
+
+    /** ★★★决策 #893（对齐 iOS 液态玻璃基准）：按节点 id 过滤绘制。
+     *   · `skipIds`：跳过这些 id——**背景捕获**时排除玻璃节点自身子树（⇐ 背景只含"玻璃背后"内容）；
+     *   · `onlyIds`：只画这些 id——玻璃面**之上重画**玻璃节点自身子树（⇐ 自身内容清晰，不被糊）；
+     *   二者皆 null = 全量（既有行为，零变化）。 */
+    public void drawCmds(Canvas canvas, java.util.Set<Integer> skipIds, java.util.Set<Integer> onlyIds) {        // ★单次遍历下发全部指令（无 View 树、无递归 measure/layout）
         // ★★★按下 `z-index` 提升（2026-10-10 · 用户「涟漪下半被下排遮挡」）：被按节点若带 `:active{z-index:N}`
         //   ⇒ 把**其子树**cmds 移到绘制末尾（浮到相邻兄弟之上——Web 里 `position+z-index` 同语义）。
         //   ★仅当无 skip（载体行按**下标**跳过）且无 sticky（`cmdIndexByIdView`（视图下标→锚点）会错位）时启用
@@ -3419,6 +3449,12 @@ public class ProteusHostView extends ViewGroup {
         if (ids != null) { for (int k = 0; k < ids.length && k < list.size(); k++) cmdById.put(ids[k], list.get(k)); }
         for (int i = 0; i < list.size(); i++) {
             if (skip != null && skip.contains(i)) continue;
+            // ★★★决策 #893：节点 id 过滤（skipIds=捕获时排除玻璃自身子树 / onlyIds=玻璃面上只重画自身子树）
+            if (ids != null && i < ids.length) {
+                final int nid = ids[i];
+                if (skipIds != null && skipIds.contains(nid)) continue;
+                if (onlyIds != null && !onlyIds.contains(nid)) continue;
+            }
             final Cmd c = list.get(i);
             // ★★★玻璃材质（决策 #818/#821）：**不在 drawCmds 里画玻璃**——玻璃面依"背后内容"且**不能进
             //   显示列表**（Picture 录一次回放多帧；录制时 backdrop 尚未捕获 ⇒ 降级被烤进 Picture）。

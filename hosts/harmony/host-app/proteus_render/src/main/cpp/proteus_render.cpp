@@ -21,6 +21,7 @@
 #include <cstdlib>
 #include <vector>
 #include <map>
+#include <set>    // ★决策 #893：玻璃节点自身子树 id 集合（自绘背景剔除/自身内容重画）
 #include <cstdint>
 #include <cmath>
 #include <algorithm>
@@ -202,6 +203,7 @@ static std::unordered_map<int, OH_PixelmapNative*> g_glassPm;   // 与 dpm 配�
 // ═══════════════════════════════════════════════════════════════════════════════════════════════
 struct SDNode {
     double x = 0, y = 0, w = 0, h = 0;      // 物理 px（屏幕坐标，未含滚动）
+    int id = -1, parentId = -1;              // ★决策 #893：树关系（用于「玻璃节点自身子树」集合，自绘背景剔除/自身内容重画）
     uint32_t color = 0;                      // 背景 ARGB（alpha=0 ⇒ 不画底）
     double radius = 0;                       // 圆角（物理 px）
     double opacity = 1.0;
@@ -1092,9 +1094,16 @@ static void sdDrawText(OH_Drawing_Canvas* canvas, const SDNode& n) {
 /** 把内容画到给定画布（不含清屏）。★决策 #847：可选**相交剔除**——只画与 [ex0,ey0,ex1,ey1]（屏幕坐标）
  *  相交的节点（玻璃背景位图只覆盖盒+pad，画全部节点是浪费；真机实测占 ~80ms/帧）。ex0<ex1 才启用剔除。 */
 static void drawContentNodes(OH_Drawing_Canvas* c, SelfDrawSpec* sd,
-                            double ex0 = 0, double ey0 = 0, double ex1 = -1, double ey1 = -1) {
+                            double ex0 = 0, double ey0 = 0, double ex1 = -1, double ey1 = -1,
+                            const std::set<int>* skipIds = nullptr, const std::set<int>* onlyIds = nullptr) {
     const bool cull = (ex1 > ex0 && ey1 > ey0);
     for (const auto& n : sd->nodes) {
+        // ★★★决策 #893（对齐 iOS 液态玻璃基准）：按 id 过滤——
+        //   · skipIds：建玻璃背景位图时**跳过该玻璃节点自身子树**（背景只含"玻璃背后"的内容）；
+        //   · onlyIds：玻璃面之上**只重画该玻璃节点自身子树**（自身内容清晰，不被糊）。
+        //   二者皆 nullptr = 不过滤（既有行为，零变化）。
+        if (skipIds != nullptr && skipIds->count(n.id)) continue;
+        if (onlyIds != nullptr && !onlyIds->count(n.id)) continue;
         const double dy = n.fixed ? 0.0 : sd->scrollY;
         const double ny = n.y - dy;
         if (cull && (n.x >= ex1 || n.x + n.w <= ex0 || ny >= ey1 || ny + n.h <= ey0)) continue;
@@ -1126,6 +1135,16 @@ static void drawContentNodes(OH_Drawing_Canvas* c, SelfDrawSpec* sd,
     }
 }
 
+/** ★★★决策 #893：某节点（含自身）的子树 id 集合——用 SDNode 的 id/parentId（nodes 为树序，父在子前 ⇒ 一趟即成）。
+ *  用于玻璃合成：建背景时排除自身子树（只糊背后）/ 玻璃面之上重画自身子树（自身内容清晰）。 */
+static std::set<int> sdSubtreeIds(const SelfDrawSpec* sd, int rootId) {
+    std::set<int> sub; sub.insert(rootId);
+    if (sd != nullptr) for (const auto& n : sd->nodes) {
+        if (n.parentId >= 0 && sub.count(n.parentId)) sub.insert(n.id);
+    }
+    return sub;
+}
+
 static void drawSelfContentCore(OH_Drawing_Canvas* rsCanvas, SelfDrawSpec* sd) {
     auto __t0 = std::chrono::steady_clock::now();
     g_sdGlassTick++;   // ★决策 #849：帧序号（玻璃时间复用判据）
@@ -1148,6 +1167,13 @@ static void drawSelfContentCore(OH_Drawing_Canvas* rsCanvas, SelfDrawSpec* sd) {
     // ③ 玻璃：为**每个玻璃节点**建一张「盒+pad」小位图当折射背景（只画与盒相交的内容），
     //   跑离屏 Vulkan（SPIR-V，算法 0 行），把结果画回 RS 画布的玻璃盒（圆角裁剪）。
     if (g_sdHasGlass) {
+        // ★★★决策 #893（对齐 iOS 液态玻璃基准）：全部玻璃节点"自身子树"的并集——建背景位图时排除
+        //   ⇒ 背景只含"玻璃背后"的内容（真 iOS：材质只糊背后，自身内容原样清晰）。
+        std::set<int> glassSubtree;
+        for (const auto& n : sd->nodes) if (n.glass) {
+            auto s = sdSubtreeIds(sd, n.id);
+            glassSubtree.insert(s.begin(), s.end());
+        }
         // ★决策 #849：时间复用判定（滚动中每 N 帧重算；停下立即收敛到本 Y 的结果）
         const bool yChanged = (sd->scrollY != g_sdLastGlassY);
         if (yChanged) { g_sdLastGlassY = sd->scrollY; g_sdGlassFresh = false; }
@@ -1194,7 +1220,7 @@ static void drawSelfContentCore(OH_Drawing_Canvas* rsCanvas, SelfDrawSpec* sd) {
                 OH_Drawing_CanvasSave(bc);
                 OH_Drawing_CanvasScale(bc, 1.0f / S, 1.0f / S);
                 OH_Drawing_CanvasTranslate(bc, (float)(-bx), (float)(-by));
-                drawContentNodes(bc, sd, bx, by, bx + (double)iw2 * S, by + (double)ih2 * S);
+                drawContentNodes(bc, sd, bx, by, bx + (double)iw2 * S, by + (double)ih2 * S, &glassSubtree);
                 OH_Drawing_CanvasRestore(bc);
                 const uint8_t* bpx = static_cast<const uint8_t*>(OH_Drawing_BitmapGetPixels(*bmpSlot));
                 g_sdBackdropBuildMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - __tb0).count();
@@ -1291,6 +1317,13 @@ static void drawSelfContentCore(OH_Drawing_Canvas* rsCanvas, SelfDrawSpec* sd) {
             OH_Drawing_RectDestroy(dst2);
             OH_Drawing_SamplingOptionsDestroy(so2);
             OH_Drawing_CanvasRestore(rsCanvas);
+            // ★★★决策 #893（对齐 iOS 液态玻璃基准）：玻璃面**之上**重画**该玻璃节点自身子树**（文本/子内容）
+            //   ——背景已排除自身子树（只含"背后"），此处把自身内容**清晰**盖回玻璃面上（同变换=盒局部坐标）。
+            { auto selfSub = sdSubtreeIds(sd, n.id);
+              OH_Drawing_CanvasSave(rsCanvas);
+              OH_Drawing_CanvasTranslate(rsCanvas, (float)g.cx, (float)g.cy);
+              drawContentNodes(rsCanvas, sd, 0, 0, -1, -1, nullptr, &selfSub);
+              OH_Drawing_CanvasRestore(rsCanvas); }
         }
     }
     OH_Drawing_CanvasRestore(rsCanvas);   // 恢复视口裁剪（见上）
@@ -1598,6 +1631,8 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
         // ═══ ★决策 #842：自绘通道分支（`g_selfDraw`）——本元素只入 SDNode 列表，不建 RenderNode 属性 ▲
         if (g_selfDraw) {
             SDNode sn;
+            sn.id = (int)nodeId;
+            { double pidD = -1; jsonNumber(it, "parentId", &pidD); sn.parentId = (int)pidD; }   // ★#893：树关系
             sn.x = x; sn.y = y; sn.w = w; sn.h = h;
             sn.color = (uint32_t)color;
             sn.radius = radius;

@@ -1111,10 +1111,22 @@ final class SelfDrawView: UIView {
         let fmt = UIGraphicsImageRendererFormat()
         fmt.scale = capturePxPerPoint
         let renderer = UIGraphicsImageRenderer(size: cropRect.size, format: fmt)
+        // ★★★决策 #893（对齐 **iOS 液态玻璃基准** · 真机 App Store tab 栏取证）：**背景只取"玻璃背后"的内容**——
+        //   捕获前把**玻璃节点自身层（含其文本子层）临时隐藏** ⇒ backdrop 不含玻璃自身子树。
+        //   真 iOS `UIVisualEffectView` 语义：材质**只模糊背后**，`contentView` 里的内容**原样清晰**；
+        //   此前 `self.layer.render` 把玻璃节点自身子树也录进 backdrop ⇒ **自身文字被糊进材质**（8× 真机
+        //   取证：iOS 内文呈"均匀柔化"，偏离参照）。隐藏再捕获 = 从背景里精确剔除自身（CALayer.render 无跳过谓词）。
+        let glassNodeIds = Array(glassSpecByNodeId.keys)
+        var hiddenForCapture: [CALayer] = []
+        for id in glassNodeIds {
+            guard let l = layersById[id], !l.isHidden else { continue }
+            hiddenForCapture.append(l); l.isHidden = true
+        }
         let img = renderer.image { ctx in
             ctx.cgContext.translateBy(x: -cropRect.minX, y: -cropRect.minY)
             self.layer.render(in: ctx.cgContext)
         }
+        for l in hiddenForCapture { l.isHidden = false }   // 恢复（与 CATransaction 同帧，无闪）
         guard let backdrop = img.cgImage else {
             NSLog("[proteus-glass] backdrop 捕获失败——玻璃跳过")
             return
@@ -1145,7 +1157,10 @@ final class SelfDrawView: UIView {
             fl.contentsScale = glassOutScale   // 半分辨率图 → CA 放大到节点尺寸（玻璃模糊 ⇒ 无损）
             fl.cornerRadius = spec.radius
             fl.masksToBounds = true
-            fl.zPosition = 5000                // 盖在节点自身底色与其子层之上（玻璃是覆盖材质）
+            // ★★★决策 #893（对齐 iOS 液态玻璃基准）：玻璃面画在**自身内容之下**（zPosition < 自身子层默认 0）
+            //   ⇒ 玻璃节点自己的文本/子视图**清晰地浮在玻璃面之上**（真 iOS：材质只糊背后，自身内容原样）。
+            //   此前 `zPosition = 5000` 把自身子层盖住 ⇒ 自身文字被玻璃面糊掉（8× 真机取证偏离参照）。
+            fl.zPosition = -1
             nodeLayer.addSublayer(fl)
             glassFaceByNodeId[id] = fl
         }
