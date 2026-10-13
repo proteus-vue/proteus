@@ -944,6 +944,23 @@ impl TaffyEngine {
         let mut sub = LayoutTree::new();
         let root_new = copy_subtree(tree, scope, &mut sub, NO_PARENT);
         sub.roots.push(root_new);
+        // ★★★增量重排正确性修复（2026-10-13 · 台账/真机实测）：**范围根若是 stretch（无显式尺寸）**，
+        //   隔离求解会把它的尺寸算成「内容的尺寸」⇒ auto 宽 + flex:1 子项（flex-basis:0）撑不出宽
+        //   ⇒ **范围根塌成内容尺寸、子项塌成 0**（真机：悬浮玻璃 dock 的行项宽 231→0）。
+        //   范围根是「布局边界」⇒ 其**对外尺寸与内容无关**（定义），本次重排不该改它 ⇒ 把**上次解析出的
+        //   实际尺寸**钉到拷贝子树的根上（stretch 用父撑开的宽、height 同理），隔离求解即与在整树里一致。
+        //   ★只钉缺失轴（显式声明者保持，避免覆盖声明语义）。
+        {
+            let src_root = tree.get(scope);
+            let resolved = src_root.rect;
+            let sub_root = &mut sub.nodes[root_new as usize];
+            if sub_root.style.width.is_none() && resolved.width > 0.0 {
+                sub_root.style.width = Some(resolved.width);
+            }
+            if sub_root.style.height.is_none() && resolved.height > 0.0 {
+                sub_root.style.height = Some(resolved.height);
+            }
+        }
         let t_copy = t_copy0.elapsed().as_secs_f64() * 1000.0;
 
         let t_sub0 = std::time::Instant::now();

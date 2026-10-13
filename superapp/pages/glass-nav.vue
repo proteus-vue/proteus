@@ -187,22 +187,27 @@
     <view class="gna-dock">
       <pg-glass class="gna-bar" preset="floating" :radius="30" interactive interactive-effect="surface">
         <view class="gna-bar__inner">
-          <view class="gna-highlight" :style="{ left: hlLeft }" />
-          <view class="gna-item" @click="setActive(0)">
-            <view class="gna-item__glyph"><p-icon name="home" :size="22" /></view>
-            <text class="gna-item__label">Today</text>
-          </view>
-          <view class="gna-item" @click="setActive(1)">
-            <view class="gna-item__glyph"><p-icon name="apps" :size="22" /></view>
-            <text class="gna-item__label">游戏</text>
-          </view>
-          <view class="gna-item" @click="setActive(2)">
-            <view class="gna-item__glyph"><p-icon name="apps" :size="22" /></view>
-            <text class="gna-item__label">App</text>
-          </view>
-          <view class="gna-item" @click="setActive(3)">
-            <view class="gna-item__glyph"><p-icon name="search" :size="22" /></view>
-            <text class="gna-item__label">搜索</text>
+          <!-- ★★★决策 #908：激活胶囊 = **第二层玻璃**（对齐 iOS App Store 选中胶囊 = 同材质的更亮规格），
+               不再是 `rgba(255,255,255,0.55)` 白平铺。真机像素实证两处 artifact 都出自它：
+                 ① 深色/复杂背景上是一团**无锚定的脏白斑**（白平铺不采样背景 ⇒ 与背后内容无关）；
+                 ② 高亮盒盖到相邻图标 ⇒ icon 上出现月牙状裁切边。
+               本处改为**同 preset 的玻璃实例**（`preset="floating"` 与条同材质，仅用 tint 提亮规格）；
+               嵌套合法性见 `docs/proteus-glass-plan/11-audit-performance.md`（`<pg-glass>` 嵌套 ≤ 2 层 ⇒ 本处 1 层）。
+               宿主侧：背板捕获**排除所有玻璃子树** ⇒ 胶囊采到的是**原始内容** ⇒ 观感 = "更亮的玻璃窗口"（与 iOS 同语义）。 -->
+          <!-- ★`preset="floating"` 自带 `interactive: true` ⇒ 必须显式关掉：否则玻璃盒里出现**第二个可交互玻璃**，
+               触点命中被胶囊抢走（原先流动的是整条 bar）——行为回归。胶囊是**静态更亮规格**（同 iOS 选中胶囊）。 -->
+          <pg-glass class="gna-highlight" preset="floating" :radius="24" :interactive="false" tint="rgba(255,255,255,0.30)" :style="{ left: hlLeft }" />
+          <!-- ★★★决策 #907 端到端：**v-for 行 + 行参 handler + 行内动态 `:class`**——
+               正是本轮修的两面墙：B1（`pick(item.key)` 行参）+ B2（`:class` 引用外层 `active`）。
+               此前这两写法在 App 端**静默失效**（点不动 + 高亮不动）。 -->
+          <view
+            v-for="item in navItems"
+            :key="item.key"
+            class="gna-item"
+            @click="pick(item.key, item.pos)"
+          >
+            <view class="gna-item__glyph" :class="{ 'gna-item__glyph--on': active === item.key }"><p-icon :name="item.icon" :size="22" /></view>
+            <text class="gna-item__label" :class="{ 'gna-item__label--on': active === item.key }">{{ item.label }}</text>
           </view>
         </view>
       </pg-glass>
@@ -213,13 +218,22 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 
-const activeIdx = ref(1)
+/** ★#907 端到端：导航项（**ref 数组**——普通 const 不被当响应式源，见缺口台账 A3）。 */
+const navItems = ref([
+  { key: 'today', pos: 0, label: 'Today', icon: 'home' },
+  { key: 'games', pos: 1, label: '游戏', icon: 'apps' },
+  { key: 'apps', pos: 2, label: 'App', icon: 'apps' },
+  { key: 'search', pos: 3, label: '搜索', icon: 'search' },
+])
+/** 当前激活项 key（→ 行内 `:class` 高亮）。用 `===`（执行器只认严格相等）。 */
+const active = ref('games')
 /** 高亮胶囊左偏移 px（★px 数值：App 端布局只吃数值）。条内宽 320、4 项、各 77px。 */
 const hlLeft = ref(6 + 1 * 77)
 
-function setActive(idx: number): void {
-  activeIdx.value = idx
-  hlLeft.value = 6 + idx * 77
+/** ★#907 行参 handler（B1）：两个行参 `item.key` / `item.pos` 均折进行内读取（此前静默失效）。 */
+function pick(key: string, pos: number): void {
+  active.value = key
+  hlLeft.value = 6 + pos * 77
 }
 </script>
 
@@ -343,13 +357,14 @@ function setActive(idx: number): void {
   padding: 6px;
   box-sizing: border-box;
 }
+/* ★★★决策 #908：激活胶囊 = 玻璃实例 ⇒ **不再有 background 平铺**（白斑 artifact 的来源）。
+   仅保留几何（绝对定位 + 尺寸 + 圆角）；材质/着色由 `<pg-glass preset="floating">` + tint 决定。 */
 .gna-highlight {
   position: absolute;
   top: 6px;
   bottom: 6px;
   width: 77px;
   border-radius: 24px;
-  background: rgba(255, 255, 255, 0.55);
 }
 .gna-item {
   flex: 1;
@@ -362,4 +377,8 @@ function setActive(idx: number): void {
 }
 .gna-item__glyph { display: flex; align-items: center; justify-content: center; height: 24px; color: var(--sa-text-2, #5f6673); }
 .gna-item__label { font-size: 11px; font-weight: 600; line-height: 1; color: var(--sa-text-2, #5f6673); }
+/* ★#907 行内动态 :class（B2）可见落点：激活项图标/文字提亮（此前该绑定静默失效）。
+   ★就地直接声明（**不能**用后代选择器——运行期动态类计划只解析节点自身类的直接声明，见台账）。 */
+.gna-item__glyph--on { color: #2b2f7a; }
+.gna-item__label--on { color: #2b2f7a; font-weight: 700; }
 </style>

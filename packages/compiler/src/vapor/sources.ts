@@ -69,8 +69,8 @@ export interface SourceScanResult {
 export function scanReactiveSources(
   source: string,
   filename = 'anonymous.vue',
-  /** ★可注入（缺省用本仓锁定的 Vue 版本）；兼容性测试传 3.4 / 3.6 的解析器 */
-  compat?: Pick<VueCompatDeps, 'sfcParse' | 'compileScript'>,
+  /** ★可注入（缺省用本仓锁定的 Vue 版本）；兼容性测试传 3.4 / 3.6 的解析器。★只给部分字段亦可（各自缺省回退）。 */
+  compat?: Partial<Pick<VueCompatDeps, 'sfcParse' | 'compileScript'>>,
 ): SourceScanResult {
   const vueParse = compat?.sfcParse ?? sfcParse
   const vueCompileScript = compat?.compileScript ?? compileScript

@@ -38,6 +38,13 @@ export interface SuperappHostPorts {
    *   可选：宿主未实现 ⇒ 运行期**如实记 note**（动画不播，但不静默）；三端逐一接（先 Android）。
    */
   animStart?(animsJson: string): string
+  /**
+   * ★★★**绘制键批量更新**（2026-10-13 · 台账 B2 落点）：动态 `:class`/`:style` 的颜色/字号等**非几何**
+   *   字段（`paint.*`）不能走内核 f32 通道（颜色字符串会被洗成 0）⇒ 交给宿主 `updatePatches` 更新绘制指令。
+   *   与设备夹具桥 `entry-vapor.ts` 的 `proteusHost.updatePatches` 同一条通道（本仓"两端同构"纪律）。
+   *   可选：宿主未实现 ⇒ 运行期如实记一次 note（动态 `:class` 的颜色/字号不会变，但不静默）。
+   */
+  updatePatches?(patchesJson: string): string
 }
 
 export interface SuperappRuntimeOptions {
@@ -167,6 +174,8 @@ export function createSuperappRuntime(opts: SuperappRuntimeOptions): SuperappRun
     // ★★★"跳变驱动动画"（本批）：`v-animate`/`<Transition>` 触发 ⇒ 交宿主 `animStart`（内核动画通道）。
     //   宿主未实现 ⇒ 不传（运行期据此如实记 note；三端逐一接，先 Android）。
     ...(opts.host.animStart ? { animStart: (j: string) => { opts.host.animStart!(j) } } : {}),
+    // ★★★绘制键出口（2026-10-13 · 台账 B2 落点）：动态 :class/:style 的颜色/字号交宿主 updatePatches。
+    ...(opts.host.updatePatches ? { updatePatches: (j: string) => opts.host.updatePatches!(j) } : {}),
   })
   let cur = ''
   // ★最近一次宿主 mount 回执（见 lastHostReply 注释——失败必须可观测，不得静默）

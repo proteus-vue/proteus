@@ -520,3 +520,118 @@ describe('★行级失效 relinkRow（2026-09-29：把"全表重扫"降为 O(改
     expect(rt.getStats().flushes - before).toBe(N)
   })
 })
+
+// ★★★决策 #907/B1：**行内 handler 的端到端接线**——`v-for` 行内 `@click="pick(item.key)"`
+//   在运行时按**行实例节点**命中 handler，且 handler 里 `item`（行参）读到**当前行**。
+//   【缺口】此前实例节点 id 直接查 events（模板级）⇒ 查不到 ⇒ **静默失效**（缺口台账 B1）。
+import { buildLayoutTemplate, compileEvents } from '@proteus-vue/compiler'
+import { instantiateTemplate, makeScopedRead, dispatchGesture, indexEventBindings, createDispatchState } from '@proteus-vue/slot-runtime'
+
+describe('★★★B1 行内 handler 端到端（决策 #907）', () => {
+  it('行实例节点派发 → 折回模板 id 命中 + 行作用域 read(item) 取当前行', () => {
+    const LIST = [{ id: 1, key: 'a', title: 'A' }, { id: 2, key: 'b', title: 'B' }]
+    const baseRead = (n: string): unknown => (n === 'list' ? LIST : undefined)
+    // 方法体用受支持形态（`console.log`，编译为 log 动作）——避免 `void`/UnaryExpression 触发诊断
+    const page = `<template>\n<view>\n<view v-for="item in list" :key="item.id" @click="pick(item.key)"><text>{{ item.title }}</text></view>\n</view>\n</template>\n<script setup lang="ts">\nconst list = ref([{ id: 1, key: 'a', title: 'A' }, { id: 2, key: 'b', title: 'B' }])\nfunction pick(k: string): void { console.log(k) }\n</script>`
+    const tpl = buildLayoutTemplate(page, 'p.vue').template
+    const table = buildVaporSubscriptions(page, 'p.vue').table
+    const ev = compileEvents(page)
+    expect(ev.events.length, '编译器应为行内 @click 产出事件绑定').toBeGreaterThan(0)
+    const inst = instantiateTemplate(tpl, { viewport: { width: 300, height: 500 }, read: baseRead, table, registry: new ListRegistry() })
+
+    const i2t = new Map<number, number>()
+    const rowScope = new Map<number, (n: string) => unknown>()
+    for (const rs of inst.rowScopes ?? []) {
+      const rd = makeScopedRead(rs.scope, rs.row, rs.ancestors, rs.ancestorScopes, { read: baseRead })
+      for (let k = 0; k < rs.iids.length; k++) { i2t.set(rs.iids[k]!, rs.tids[k]!); rowScope.set(rs.iids[k]!, rd.read) }
+    }
+    expect(inst.rowScopes, '实例化应给出 rowScopes').toBeTruthy()
+    expect(inst.rowScopes!.length, '两个 v-for 行').toBe(2)
+
+    const row1 = inst.rowScopes![0]!
+    const rowNodeId = row1.iids[0]!
+    const index = indexEventBindings(ev.events)
+    const state = createDispatchState()
+    const seen: Record<string, unknown> = {}
+    let ranHandler = false
+    const r = dispatchGesture([rowNodeId], 'tap', index, state, (h, id) => {
+      const acts = ev.handlers[h]
+      if (!acts) return false
+      ranHandler = true
+      const rf = rowScope.get(id)
+      seen['item'] = rf ? rf('item') : undefined
+      return true
+    }, (iid) => i2t.get(iid))
+
+    expect(ranHandler, '行实例节点应命中 handler（此前查不到 ⇒ 静默失效）').toBe(true)
+    expect(r.fired, '命中并派发').toEqual([rowNodeId])
+    expect((seen['item'] as { key: string }).key, 'handler 里 read(item) 取到第 1 行的 key').toBe('a')
+    const rd2 = rowScope.get(inst.rowScopes![1]!.iids[0]!)!
+    expect((rd2('item') as { key: string }).key, '第 2 行 read(item) 取到 b').toBe('b')
+  })
+})
+
+// ★★★决策 #907/B2：**行内绑定引用外层源**——`:class="{ on: active === row.key }"`
+//   在 `active` 变化时**按行重算**（此前只挂列表源 ⇒ active 变 ⇒ 永不重算，静默失效；台账 B2）。
+describe('★★★B2 行内跨源绑定（决策 #907）', () => {
+  it('外层源 active 变化 ⇒ 行内 paint.class 槽位按行重算并下发', () => {
+    const src = `<template>\n<view v-for="row in list" :key="row.id" :class="{ on: active === row.key }"><text>{{ row.label }}</text></view>\n</template>\n<script setup lang="ts">\nconst list = ref([{ id: 1, key: 'a', label: 'A' }, { id: 2, key: 'b', label: 'B' }])\nconst active = ref('a')\n</script>\n<style>\n.on { width: 100px; }\n</style>`
+    const { table } = buildVaporSubscriptions(src, 'b2.vue')
+    const activeSrc = table.sources.find((s) => s.sourceName === 'active')
+    expect(activeSrc, 'active 应成为订阅源').toBeTruthy()
+    const onActive = activeSrc!.slots.filter((x) => x.kind === 'list-item' && x.propKey === 'paint.class')
+    expect(onActive.length, 'paint.class 行内槽位挂到 active').toBeGreaterThan(0)
+    expect(onActive[0]!.listSource, '带 listSource=list（外层源触发时用它取行）').toBe('list')
+
+    const keys = new PropKeyTable(); const strings = new StringPool()
+    const ops: UpdateOp[] = []
+    const rt = new SlotRuntime(keys, strings, (b) => ops.push(...decodeOps(b).ops))
+    const registry = new ListRegistry()
+    const data: Record<string, unknown> = { list: [{ id: 1, key: 'a', label: 'A' }, { id: 2, key: 'b', label: 'B' }], active: 'a' }
+    const read = (n: string) => data[n]
+    const vapor = new VaporRuntime(table, rt, VaporRuntime.buildEvaluators(table.evaluators), registry)
+    registry.registerItem(0, '1', { 0: 101 })
+    registry.registerItem(0, '2', { 0: 102 })
+    const subs: Array<[string, () => void]> = []
+    vapor.load({ read }, (name, cb) => { subs.push([name, cb]); return () => {} })
+    vapor.relink({ read })
+    rt.flush()
+    ops.length = 0
+    data['active'] = 'b'
+    for (const [nm, cb] of subs) if (nm === 'active') cb()
+    rt.flush()
+    const hit = ops.some((o: { nodeId?: number }) => o.nodeId === 101 || o.nodeId === 102)
+    expect(hit, 'active 变化 ⇒ 行内槽位按行重算并指向行节点').toBe(true)
+  })
+})
+
+
+// ★★★决策 #907/台账 A1：**运行期通路的 v-for 不得被静态展开**（keepReactiveStructure）
+//   【缺口】App 壳统一运行期通路此前也给 buildLayoutTemplate 传 statics => staticInstantiate
+//   把响应式 v-for 静态展开成死节点（tpl.lists 清空）=> 运行期订阅表/列表被整条架空
+//   （点不动、行内绑定不更新——与 B1/B2 同源墙）。修法：运行期通路开 keepReactiveStructure。
+describe('★★★A1 运行期列表保持（决策 #907）', () => {
+  const page = [
+    '<template>',
+    '<view><view v-for="row in rows" :key="row.id" class="r">{{ row.label }}</view></view>',
+    '</template>',
+    '<script setup lang="ts">',
+    "import { ref } from 'vue'",
+    "const rows = ref([{ id: 1, label: 'A' }, { id: 2, label: 'B' }])",
+    '</script>',
+  ].join('\n')
+
+  it('运行期通路（keepReactiveStructure）保留响应式 v-for => tpl.lists 非空', () => {
+    const statics = { rows: [{ id: 1, label: 'A' }, { id: 2, label: 'B' }] }
+    const rt = buildLayoutTemplate(page, 'p.vue', undefined, undefined, statics, undefined, false, { keepReactiveStructure: true })
+    expect(rt.ok).toBe(true)
+    expect(rt.template.lists.length, '运行期通路保留 v-for => 有列表模板').toBeGreaterThan(0)
+  })
+
+  it('静态通路（无 keepReactiveStructure）仍静态展开 => tpl.lists 清空（旧行为不回归）', () => {
+    const statics = { rows: [{ id: 1, label: 'A' }, { id: 2, label: 'B' }] }
+    const st = buildLayoutTemplate(page, 'p.vue', undefined, undefined, statics)
+    expect(st.ok).toBe(true)
+    expect(st.template.lists.length, '静态通路展开后无运行期列表').toBe(0)
+  })
+})

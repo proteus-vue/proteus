@@ -147,6 +147,27 @@ export interface InstantiateResult {
   /** ★P1-3：实例化备注（如"组件未注册 / 超出深度上限"——不静默） */
   notes?: string[]
   /**
+   * ★★★决策 #907/B1：**行作用域登记**——每个 v-for 行记下「模板节点 id ↔ 实例节点 id」的对应
+   *   与「行上下文（别名 / 当前行 / 祖先行）」。供运行期：
+   *   ① 事件派发时把**实例节点**映射回**模板节点**去查 handler（events 是模板级的，行实例共用）；
+   *   ② handler 引用行参（`@click="pick(row.key)"`）时 `read(row)` 取到**当前行**。
+   *   （此前二者皆缺 ⇒ 行内 handler 带行参**静默失效**——缺口台账 B1。）
+   */
+  rowScopes?: Array<{
+    /** 该行子树内每个节点的**模板 id**（与 `iids` 一一对应） */
+    tids: number[]
+    /** 该行子树内每个节点的**实例 id**（最终 id 空间；与 `tids` 一一对应） */
+    iids: number[]
+    /** v-for 别名（`row in rows` ⇒ `row`） */
+    scope: string
+    /** 当前行数据对象 */
+    row: Record<string, unknown>
+    /** 祖先行链（自外向内；不含自身） */
+    ancestors: Array<Record<string, unknown>>
+    /** 各层祖先的别名（自外向内；与 `ancestors` 按位置对齐） */
+    ancestorScopes: string[]
+  }>
+  /**
    * ★★**虚拟化描述**（宿主据此按行物化/回收层——方案 §12.6 / §12.7 P1）
    *
    * 【为什么必须由本函数给出（宿主自己推不出来）】"哪些节点属于第 i 行"只有**实例化**知道：
@@ -382,6 +403,13 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
   }
   /** ★虚拟化：行号 → {行键, 行根 id, 整行节点 id}（见 InstantiateResult.virtual 注释） */
   const virtualRows: NonNullable<InstantiateResult['virtual']>['rows'] = []
+  /**
+   * ★★★决策 #907/B1：**行作用域登记**——每行记下「实例节点 id → 模板节点 id」+「行作用域（别名/行/祖先）」。
+   *   供运行期：① 事件派发按**模板节点 id** 查 handler（行实例的 events 是模板级的）；
+   *   ② handler 里引用行参（`@click="pick(row.key)"`）时，`read('row')` 能取到**当前行**。
+   *   （此前二者皆缺 ⇒ 行内 handler 带行参**静默失效**，见缺口台账 B1。）
+   */
+  const rowScopes: NonNullable<InstantiateResult['rowScopes']> = []
 
   /**
    * @param ctx ★文本段求值用的**行作用域上下文**（2026-10-03 P2-2）——**行内节点必须传行作用域读取**
@@ -516,6 +544,18 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
       root: rowRootId + idOffset,
       ids: myIds.map((x) => x + idOffset),
     });
+    // ★★★决策 #907/B1：登记本行**实例 id → 模板 id** 与**行作用域**（供事件派发用当前行）
+    {
+      const tids: number[] = []
+      const iids: number[] = []
+      for (const tplId of meta.subtreeIds) {
+        const eid = idMap.get(tplId)
+        if (eid === undefined) continue
+        tids.push(tplId)
+        iids.push(eid + idOffset)
+      }
+      rowScopes.push({ tids, iids, scope: meta.scope ?? '', row, ancestors, ancestorScopes: ancestorScopesOf(listId) })
+    }
     // ★本行完整 id 集并入**上层行**（最外层调用无 collect ⇒ 不产生额外开销）
     if (collect) collect.push(...myIds)
     // ④ **回填初始值**（见 engineFieldOf 注释：不回填 ⇒ 首帧文本为空 / 几何错）
@@ -1103,6 +1143,8 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
     },
     // ★只有**恰好一个**列表时才给虚拟化描述（多个列表 ⇒ 行号空间不同源，宿主按行号二分会错配）
     virtual: virtualRows.length > 0 && tpl.lists.length === 1 ? { rows: virtualRows } : undefined,
+    // ★★★决策 #907/B1：行作用域登记（实例 id→模板 id + 行上下文）——多列表/嵌套都记（事件派发用）
+    ...(rowScopes.length > 0 ? { rowScopes } : {}),
     ...(componentMounts.length > 0 ? { componentMounts } : {}),
     ...(slotMounts.length > 0 ? { slotMounts } : {}),
     ...(instNotes.length > 0 ? { notes: instNotes } : {}),

@@ -61,6 +61,13 @@ function evalStatic(code: string, scope: Scope): { ok: boolean; value: unknown }
   }
 }
 
+/** 抽取表达式里的标识符 token（判"是否引用运行时源"用——粗粒度：属性名也算，宁可多保留不可错折） */
+function identTokens(expr: string): string[] {
+  const out: string[] = []
+  for (const m of expr.matchAll(/[A-Za-z_$][\w$]*/g)) out.push(m[0])
+  return out
+}
+
 function dirOf(node: AstNode, name: string): { exp?: { content?: string } } | undefined {
   const props = (node.props as AstNode[] | undefined) ?? []
   return props.find((p) => p.type === 7 && p.name === name) as { exp?: { content?: string } } | undefined
@@ -116,9 +123,9 @@ function foldClass(node: AstNode, scope: Scope): AstNode {
   return { ...node, props: next }
 }
 
-function transformChildren(children: AstNode[], scope: Scope, diags: string[]): AstNode[] {
+function transformChildren(children: AstNode[], scope: Scope, diags: string[], rt: ReadonlySet<string> | undefined): AstNode[] {
   const out: AstNode[] = []
-  for (const child of children) for (const n of transformNode(child, scope, diags)) out.push(n)
+  for (const child of children) for (const n of transformNode(child, scope, diags, rt)) out.push(n)
   return out
 }
 
@@ -150,7 +157,7 @@ function foldScalarBinds(node: AstNode, scope: Scope): AstNode {
   return changed ? { ...node, props: next } : node
 }
 
-function transformNode(node: AstNode, scope: Scope, diags: string[]): AstNode[] {
+function transformNode(node: AstNode, scope: Scope, diags: string[], rt: ReadonlySet<string> | undefined): AstNode[] {
   // 插值：可求值（原始值）⇒ 折成静态文本
   if (node.type === 5 /* INTERPOLATION */) {
     const code = (((node.content as { content?: string })?.content) ?? '').trim()
@@ -169,6 +176,9 @@ function transformNode(node: AstNode, scope: Scope, diags: string[]): AstNode[] 
   if (forDir?.exp?.content) {
     const parsed = parseFor(forDir.exp.content)
     if (parsed) {
+      // ★★★运行时列表（2026-10-13）：源为响应式源 => 不静态展开，保留 v-for 交运行期列表路径
+      //   （子树整块不动——行内插值/动态 class/v-if/handler 全由订阅表+运行期驱动；台账 A1/B1/B2 同源墙）。
+      if (rt && rt.has(parsed.src.split('.')[0]!.trim())) return [node]
       const e = evalStatic(parsed.src, scope)
       if (e.ok && Array.isArray(e.value)) {
         const base = stripped(node, 'for', 'key') // 静态展开后 :key 无意义
@@ -176,7 +186,7 @@ function transformNode(node: AstNode, scope: Scope, diags: string[]): AstNode[] 
         ;(e.value as unknown[]).forEach((item, i) => {
           const inner: Scope = { ...scope, [parsed.alias]: item }
           if (parsed.index) inner[parsed.index] = i
-          for (const n of transformNode(base, inner, diags)) expanded.push(n)
+          for (const n of transformNode(base, inner, diags, rt)) expanded.push(n)
         })
         return expanded
       }
@@ -188,11 +198,17 @@ function transformNode(node: AstNode, scope: Scope, diags: string[]): AstNode[] 
   const ifDir = dirOf(node, 'if')
   if (ifDir?.exp?.content) {
     const code = ifDir.exp.content.trim()
+    // ★★★运行时条件（2026-10-13）：条件式引用响应式源 => 保留节点（运行期 visibility 槽位切换可见性），
+    //   不静态折死（折死 => 运行期翻不回来，正是"编译折叠 vs 运行时"的墙）。
+    if (rt && identTokens(code).some((t) => rt.has(t))) {
+      const sIf = stripped(node, 'if')
+      return [{ ...foldScalarBinds(foldClass(sIf, scope), scope), children: transformChildren((sIf.children as AstNode[]) ?? [], scope, diags, rt) }]
+    }
     const e = evalStatic(code, scope)
     if (e.ok) {
       if (!e.value) return []
       const s = stripped(node, 'if')
-      return [{ ...foldScalarBinds(foldClass(s, scope), scope), children: transformChildren((s.children as AstNode[]) ?? [], scope, diags) }]
+      return [{ ...foldScalarBinds(foldClass(s, scope), scope), children: transformChildren((s.children as AstNode[]) ?? [], scope, diags, rt) }]
     }
     diags.push(`v-if="${code}" 不可构建期静态求值 ⇒ 已丢弃该分支（App 壳需可求值的条件；业务函数请预置到构建期状态）`)
     return []
@@ -200,7 +216,7 @@ function transformNode(node: AstNode, scope: Scope, diags: string[]): AstNode[] 
 
   // ③ 普通元素：折 :class + 折标量绑定 + 递归子节点
   const folded = foldScalarBinds(foldClass(node, scope), scope)
-  return [{ ...folded, children: transformChildren((folded.children as AstNode[]) ?? [], scope, diags) }]
+  return [{ ...folded, children: transformChildren((folded.children as AstNode[]) ?? [], scope, diags, rt) }]
 }
 
 /**
@@ -208,8 +224,13 @@ function transformNode(node: AstNode, scope: Scope, diags: string[]): AstNode[] 
  * @param ast vue compiler-dom 的 RootNode
  * @param statics 已知初值（应用构建期状态；名称 → 值，可含函数）。未提供的名称 ⇒ 不可求值。
  */
-export function staticInstantiate(ast: AstNode, statics: Scope): StaticInstantiateResult {
+export function staticInstantiate(
+  ast: AstNode,
+  statics: Scope,
+  opts?: { runtimeSources?: ReadonlySet<string> },
+): StaticInstantiateResult {
   const diagnostics: string[] = []
-  const children = transformChildren((ast.children as AstNode[]) ?? [], statics, diagnostics)
+  const rt = opts?.runtimeSources
+  const children = transformChildren((ast.children as AstNode[]) ?? [], statics, diagnostics, rt)
   return { ast: { ...ast, children }, diagnostics }
 }

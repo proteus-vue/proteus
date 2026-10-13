@@ -23,6 +23,7 @@ import {
   PropKeyTable,
   StringPool,
   ListRegistry,
+  makeScopedRead,
   dispatchGesture,
   indexEventBindings,
   createDispatchState,
@@ -90,6 +91,14 @@ export interface CreateScreenRuntimeOptions {
   applyOps: (opsJson: string) => void
   /** 视口（实例化用；宿主在挂载时给真实尺寸） */
   viewport: { width: number; height: number }
+  /**
+   * ★★★**绘制键出口**（2026-10-13 · 台账 B2 落点）：`paint.*` 槽位（动态 `:class`/`:style` 的颜色、
+   *   字号等**非几何**字段）走此通道——内核 `SET_STYLE` 载荷是 f32，装不下颜色字符串
+   *   （会静默变 0），故交给宿主 `updatePatches([{id, style:{color}}])` 更新绘制指令。
+   *   【缺省】未接 ⇒ 运行期**如实记一次 note**（绘制键不会变——不静默假装生效）。
+   *   与设备夹具桥 `entry-vapor.ts` 的 `onPaintProp` 逐条同构（本仓"两端同构"纪律）。
+   */
+  updatePatches?: (patchesJson: string) => string
   /**
    * 手势命中的**内核 id → 内容 local id** 的映射基址。两条宿主路径口径不同：
    *   · **不传（缺省）** = 恒等：`VaporRenderHost.mount` **直接用节点 id** 建树（App 壳走这条）⇒
@@ -273,14 +282,38 @@ export function createScreenRuntime(opts: CreateScreenRuntimeOptions): ScreenRun
           Object.entries(art.components).map(([nm, def]) => [nm, { template: def.tpl, table: def.table as never, data: def.data }]),
         )
       : undefined
-    const instOpts = { viewport: opts.viewport, read, table: art.table, registry: new ListRegistry(), ...(componentDefs ? { components: componentDefs } : {}) }
+    // ★★★共享列表注册表（2026-10-13 · 台账 B2 落点）：**实例化**填它（(listId,key,slot)→行节点 id），
+    //   **运行期**（VaporRuntime）读它把 list-item 槽位解析到具体行节点。此前两处各自 `new ListRegistry()`
+    //   ⇒ 运行期读到空表 ⇒ 行内文本/动态 class 更新**静默丢**（求值了但找不到节点）。
+    const listRegistry = new ListRegistry()
+    const instOpts = { viewport: opts.viewport, read, table: art.table, registry: listRegistry, ...(componentDefs ? { components: componentDefs } : {}) }
     let inst = prof.time('instantiate', () => instantiateTemplate(art.tpl, instOpts))
     // ★R6：内容局部 id 的**有序表**（index → localId）——手势反查用
     let localIdsOrdered = inst.nodes.map((n) => n.id)
+    // ★★★决策 #907/B1：**行内节点映射**（每次实例化重建）
+    //   · instToTemplate：实例节点 id → 模板节点 id（事件索引是**模板级**的，行实例共用）
+    //   · rowScopeOf：实例节点 id → 该节点的**行作用域读取**（handler 里 `read(row)` 取当前行）
+    let instToTemplate = new Map<number, number>()
+    let rowScopeOf = new Map<number, (n: string) => unknown>()
+    /** 由 `inst.rowScopes` 建两张表（实例化/重建后调用）。 */
+    function indexRowScopes(): void {
+      instToTemplate = new Map()
+      rowScopeOf = new Map()
+      for (const rs of inst.rowScopes ?? []) {
+        const readScoped = makeScopedRead(rs.scope, rs.row, rs.ancestors, rs.ancestorScopes, { read })
+        for (let k = 0; k < rs.iids.length; k++) {
+          const iid = rs.iids[k]!
+          instToTemplate.set(iid, rs.tids[k]!)
+          rowScopeOf.set(iid, readScoped.read)
+        }
+      }
+    }
+    indexRowScopes()
     /** 用**当前 data** 重实例化（节点 id 由 tpl 的 slot 序决定 ⇒ 与初实例化逐位一致，id 映射稳定） */
     function rebuild(): void {
       inst = prof.time('instantiate', () => instantiateTemplate(art.tpl, instOpts))
       localIdsOrdered = inst.nodes.map((n) => n.id)
+      indexRowScopes()
     }
     // 组件未展开 ⇒ 如实记（不静默）
     if (inst.stats.componentNodes === 0 && inst.nodes.some((n) => n.component)) {
@@ -290,16 +323,65 @@ export function createScreenRuntime(opts: CreateScreenRuntimeOptions): ScreenRun
     // ── ③ 运行期（订阅驱动增量）：SlotRuntime + VaporRuntime ──
     const keys = new PropKeyTable()
     const strings = new StringPool()
+    // ★★★绘制键批量出口（2026-10-13 · 台账 B2 落点）：动态 `:class`/`:style` 的颜色等**非几何**字段
+    //   不能走内核 f32 通道（颜色字符串会被洗成 0）⇒ 批量交宿主 `updatePatches`（与 entry-vapor 同构）。
+    const pendingPaint = new Map<number, Record<string, unknown>>()
+    let paintUnwiredNoted = false
+    const onPaintProp = (nodeId: number, propKey: string, value: unknown): void => {
+      const field = propKey.slice('paint.'.length)
+      const rec = pendingPaint.get(nodeId) ?? {}
+      rec[field] = value
+      pendingPaint.set(nodeId, rec)
+    }
+    /** 把累积的绘制键交给宿主（`updatePatches` 合并进 spec 并重建绘制指令）；返回提交条数。 */
+    const flushPaint = (): number => {
+      if (pendingPaint.size === 0) return 0
+      const patches = [...pendingPaint.entries()].map(([id, style]) => ({ id, style }))
+      pendingPaint.clear()
+      if (typeof opts.updatePatches !== 'function') {
+        if (!paintUnwiredNoted) {
+          paintUnwiredNoted = true
+          note(`[screen-runtime] ${name}: 有 ${patches.length} 条绘制键待更新，但宿主未实现 updatePatches（动态 :class/:style 的颜色/字号不会变）`)
+        }
+        return 0
+      }
+      let raw: unknown
+      try {
+        raw = opts.updatePatches(JSON.stringify(patches))
+      } catch (e) {
+        note(`[screen-runtime] ${name}: 绘制键 updatePatches 抛错：${String((e as Error)?.message ?? e)}`)
+        return 0
+      }
+      // ★宿主桩存在但未真正实现（C 桥按 mount 存在就注入，宿主类可能无该方法）⇒ 返回 undefined/非串。
+      //   如实记一次（不静默、也不当 JSON 解析错——那是误导）。
+      if (typeof raw !== 'string' || raw.length === 0) {
+        if (!paintUnwiredNoted) {
+          paintUnwiredNoted = true
+          note(`[screen-runtime] ${name}: 有 ${patches.length} 条绘制键待更新，但宿主 updatePatches 无回执（未真正实现；动态 :class/:style 的颜色/字号不会变）`)
+        }
+        return 0
+      }
+      try {
+        const out = JSON.parse(raw) as { ok?: boolean; error?: string }
+        if (out.ok !== true) { note(`[screen-runtime] ${name}: 绘制键 updatePatches 失败：${out.error ?? '未知'}`); return 0 }
+        return patches.length
+      } catch (e) {
+        note(`[screen-runtime] ${name}: 绘制键 updatePatches 回执非法 JSON：${String((e as Error)?.message ?? e)}`)
+        return 0
+      }
+    }
     // ★指令出口 = 宿主 applyOps（二进制指令的 number[] JSON 形态——与 entry-vapor 同式）
     const slotRt = new SlotRuntime(keys, strings, (bytes) => {
       opts.applyOps(JSON.stringify(Array.from(bytes)))
     })
-    const vapor = new VaporRuntime(art.table, slotRt, VaporRuntime.buildEvaluators(art.table.evaluators), new ListRegistry())
+    const vapor = new VaporRuntime(art.table, slotRt, VaporRuntime.buildEvaluators(art.table.evaluators), listRegistry, undefined, 0, undefined, onPaintProp)
+    /** ★一次「落盘」= 编指令（slotRt.flush）+ 提交绘制键（flushPaint）——**凡 flush 处都走它**（不漏绘制键）。 */
+    const flushAll = (): void => { prof.time('flush', () => slotRt.flush()); flushPaint() }
     const evalCtx: EvalContext = { read }
     vapor.load(evalCtx, () => { /* 源变化回调：本版无响应式框架，靠 dispatch 后显式 relink */ })
     // 首帧：建订阅并写一遍全部 L1 槽位（此时树已由 content() 挂载；这些指令幂等——把初值落到内核）
     prof.time('relink', () => vapor.relink(evalCtx))
-    prof.time('flush', () => slotRt.flush())
+    flushAll()
 
     // ── ④ 事件索引（nodeId:event → handler）──
     const byNodeEvent: EventIndex = indexEventBindings(art.events)
@@ -322,11 +404,13 @@ export function createScreenRuntime(opts: CreateScreenRuntimeOptions): ScreenRun
      *   **不炸整次手势**（其余动作照常）；④ CPU Profiler（#715）对整体计时。
      * 【T2 新增】`let`/`if` 由执行器用**局部作用域 + 递归**承接（$event 也由执行器 `event` 注入）。
      */
-    function runHandler(handlerName: string, _nodeId: number, payload?: unknown): boolean {
+    function runHandler(handlerName: string, _nodeId: number, payload?: unknown, rowScopeRead?: (n: string) => unknown): boolean {
       const acts = art.handlers[handlerName]
       if (!acts) return false
       const ctx: Parameters<typeof runHandlerActions>[1] = {
-        read: (n: string) => data[n],
+        // ★★★决策 #907/B1：行内 handler 的 `read` 先走**行作用域**（`read('row')` ⇒ 当前行），
+        //   再回退数据源——否则行参（`pick(row.key)`）取到 undefined（此前静默失效的根因）。
+        read: (n: string) => (rowScopeRead ? rowScopeRead(n) : data[n]),
         write: (n: string, v: unknown) => { data[n] = v },
         event: payload,
       }
@@ -372,7 +456,7 @@ export function createScreenRuntime(opts: CreateScreenRuntimeOptions): ScreenRun
     function refreshData(): void {
       rebuild()
       prof.time('relink', () => vapor.relink(evalCtx))
-      prof.time('flush', () => slotRt.flush())
+      flushAll()
       drainAnims()
     }
 
@@ -399,7 +483,7 @@ export function createScreenRuntime(opts: CreateScreenRuntimeOptions): ScreenRun
       const hasSrc = Array.isArray(srcs) && srcs.some((s) => s.sourceName === name)
       if (hasSrc) prof.time('relink', () => vapor.writeSlotsOfSource(name, evalCtx))
       else refreshData()
-      prof.time('flush', () => slotRt.flush())
+      flushAll()
       drainAnims()
     }
 
@@ -476,10 +560,12 @@ export function createScreenRuntime(opts: CreateScreenRuntimeOptions): ScreenRun
         const fired: Array<{ handler: string; nodeId: number; loc?: { line: number; column: number } }> = []
         // ★★CPU Profiler（决策 #715）：整次派发计时（含 handler + 重建）——"点一下总花多久"。
         const r = prof.time('dispatch', () => dispatchGesture(localChain, type, byNodeEvent, dispatchState, (h, id) => {
-          const ok = runHandler(h, id)
+          // ★#907/B1：命中行内节点 ⇒ 传入该节点的**行作用域读取**（handler 里 `read(row)` 取当前行）
+          const ok = runHandler(h, id, undefined, rowScopeOf.get(id))
           if (ok) fired.push({ handler: h, nodeId: id, ...(locByHandler.has(h) ? { loc: locByHandler.get(h)! } : {}) })
           return ok
-        }))
+        // ★#907/B1：行内实例节点 ⇒ 折回**模板 id** 查 handler（events 索引是模板级的）
+        }, (iid) => instToTemplate.get(iid)))
         // handler 改了数据 ⇒ 重建（无 applyOps 的宿主靠 content() 重挂；有 applyOps 的宿主拿增量——两种都覆盖）
         if (r.fired.length > 0) refreshData()
         // ★★★页面处理器 source map（决策 #712）：把「跑了哪些 handler + 各自**模板源位置**」随派发结果带出——
@@ -497,7 +583,7 @@ export function createScreenRuntime(opts: CreateScreenRuntimeOptions): ScreenRun
         if (ok) refreshData()
         return { handled: ok, fired: ok ? [b.handler] : [] }
       },
-      flush() { prof.time('flush', () => slotRt.flush()) },
+      flush() { flushAll() },
       refresh() { refreshData() },
       data() { return data },
       writeSource(name, value) { writeSource(name, value) },

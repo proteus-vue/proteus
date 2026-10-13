@@ -501,3 +501,61 @@ fn incremental_equals_full_after_multiple_sequential_changes() {
 
     assert_equivalent("连续 5 次增量", &inc, &full);
 }
+
+/// ★★★2026-10-13（真机悬浮玻璃 dock 实测 · 台账 B2 落点）：**范围根为 stretch（无显式宽）时
+///   增量重排把子项塌成 0** —— 增量 ≠ 全量（本文件的存在意义）。
+///
+/// 【真机现象】悬浮玻璃导航（`position:fixed` dock）里 4 个 `flex:1` 行项，改高亮胶囊的
+///   `layout.left`（一条指令）后，行项宽从 231 物理像素**塌成 0**（文字/图标消失）。
+///
+/// 【根因】范围根（`row` 容器：`display:flex; flexDirection:row`）**无显式宽**（宽由父撑开 = stretch）
+///   ⇒ 隔离求解该子树时，taffy 按「auto 宽」= 内容宽算 ⇒ 子项 `flex-basis:0` 撑不出宽
+///   ⇒ 范围根塌成内容尺寸、子项塌成 0。而范围根是**布局边界**（对外尺寸与内容无关）——
+///   本次重排本不该改它 ⇒ 修法：把范围根**上次解析出的实际尺寸**钉到拷贝子树的根上。
+///
+/// 【为何本文件既有用例没抓到】它们的范围根都带显式尺寸（`width:Some`）⇒ 隔离求解与整树一致。
+#[test]
+fn incremental_equals_full_when_scope_root_is_stretch_sized() {
+    // root(column) → row(无显式宽、align-items:stretch 由父撑开) → 4×flex:1 子项；改其一子项的 margin
+    let build = || {
+        let mut t = LayoutTree::new();
+        let root = t.push(mk(1, NO_PARENT, LStyle { display: Display::Flex, flex_direction: FlexDirection::Column, width: Some(400.0), height: Some(869.0), align_items: "stretch".into(), ..Default::default() }));
+        t.roots.push(root);
+        // row：**无 width**（stretch 撑开），显式高 ⇒ 交叉轴 stretch、主轴显式 ⇒ 是布局边界
+        let row = t.push(mk(2, root, LStyle { display: Display::Flex, flex_direction: FlexDirection::Row, height: Some(68.0), justify_content: "space-around".into(), align_items: "center".into(), ..Default::default() }));
+        t.nodes[root as usize].children.push(row);
+        let mut items = Vec::new();
+        for id in [3u32, 4, 5, 6] {
+            let it = t.push(mk(id, row, LStyle { display: Display::Flex, flex_direction: FlexDirection::Column, flex_grow: 1.0, flex_shrink: 1.0, flex_basis: Some(0.0), height: Some(56.0), ..Default::default() }));
+            t.nodes[row as usize].children.push(it);
+            items.push(it);
+        }
+        (t, row, items)
+    };
+
+    let (mut tree, row, items) = build();
+    let mut eng = TaffyEngine::new().with_measurer(Box::new(proteus_layout_core::NullTextMeasurer));
+    eng.layout(&mut tree, RootConstraint::definite(400.0, 869.0));
+    let scope = eng.relayout_scope_of(&tree, items[0]);
+    assert_eq!(scope, row, "范围应为 row（带显式高、stretch 宽 ⇒ 布局边界）");
+
+    // 改首子项的 margin（触发其自身重排；范围 = row）
+    tree.nodes[items[0] as usize].style.margin = edges(0.0, 0.0, 0.0, 8.0);
+    tree.nodes[items[0] as usize].dirty = true;
+    eng.layout_incremental(&mut tree, &[items[0]]);
+    let inc = snapshot_abs(&tree);
+
+    let (mut fresh, _r2, fresh_items) = build();
+    fresh.nodes[fresh_items[0] as usize].style.margin = edges(0.0, 0.0, 0.0, 8.0);
+    let mut eng2 = TaffyEngine::new().with_measurer(Box::new(proteus_layout_core::NullTextMeasurer));
+    eng2.layout(&mut fresh, RootConstraint::definite(400.0, 869.0));
+    let full = snapshot_abs(&fresh);
+
+    // 强判据：子项不得塌成 0（真机就是塌成 0）
+    for (i, it) in items.iter().enumerate() {
+        let w = inc.get(&fresh.get(fresh_items[i]).id).map(|r| r.2).unwrap_or(0.0);
+        assert!(w > 1.0, "子项 {i} 增量后宽 {w}（应约 100）——范围根 stretch 塌陷回归");
+    }
+    assert_equivalent("范围根 stretch 时增量", &inc, &full);
+    let _ = fresh_items;
+}
