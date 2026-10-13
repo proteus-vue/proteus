@@ -8,6 +8,7 @@
 | **像素级三端统一** | Web/Skyline 无系统 API，不可行 | L1 统一 + L2/L3 尽力 |
 | **跨版本系统 API 兼容保证** | 系统 API 随时废弃 | 版本守门 + 回退链 |
 | **Flutter / React Native 端** | 超出 Proteus 范围 | 未来扩展（见 Roadmap） |
+| **Web/Skyline 自绘玻璃（WebGL/WebGPU 玻璃遍）**（决策 #877） | 玻璃最贵的一步是"背后内容→纹理"；DOM 模型**无廉价背景纹理通道**（#862/#863/#864 证明该步是瓶颈）⇒ 帧率保证不了（WebGL 改变不了）。整页 canvas(②) 原理上可行但=放弃 DOM 的架构分叉，MP 跟不了 | Web/Skyline 固定走 **纯 CSS**（`backdrop-filter` + L2）；**边缘折射 = 原生端专属**（见 07 §边界声明） |
 
 ## 边界说明
 

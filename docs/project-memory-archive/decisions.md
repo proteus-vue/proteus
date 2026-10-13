@@ -3655,6 +3655,15 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
    · **`packages/api/**` 不在 `test:coupled` 触发面内**（现只含 compiler/runtime/plugin-vite）⇒ 拆 `capability.ts` 时 `test:coupled` 不提示、`check:content` 要到 `verify`（≈10 分钟）才暴露。**记为后续评估**：把 `packages/api/**`（及其他被生成器按路径读的包）纳入 coupled 的"改动→建议门禁"面（注：`COUPLING` 现只映射 vitest 测试文件，要纳入"命令类门禁"需先扩展工具模型）。
    · **本次能秒级收敛靠"重生成 diff 为空"判据**——修好后立刻重生成并与提交版比对：**diff 空 = 完全重建 = 修对了**（比读代码猜快且硬）。
 
+877. **★Web/Skyline 液态玻璃定案：纯 CSS，不做自绘玻璃；边界写入引擎文档**（2026-10-13）：
+**① 起因（用户）**：「App 三端液态玻璃全部落地+性能优化，是不是可以扩展到 web 和小程序端了？」→ 追问「web 用 WebGL/WebGPU 能保证性能基线吗？」→ 定夺「**还是走 CSS 比较靠谱，引擎文档注明边界即可**」。
+**② 取证（三端对照）**：App = 自绘（`<pg-glass>` 折 `style.glass` → Rust 内核算几何 → 宿主 Metal/Vulkan/AGSL 玻璃遍，WGSL 单源）→ **真折射**；Web/MP = `pg-glass/index.vue` 的 CSS `backdrop-filter`（L1）→ 匀质模糊，**无折射**。★**关键事实**：Web 渲染纯 DOM/CSS（`packages/web/src/` 零 canvas/webgl）；`@proteus-vue/shader` 消费者只有 `hosts/{ios,android,harmony}`；App 的性能是**优化"背景捕获"换来的**（#862–#864：10fps → 59.3fps 的瓶颈正是"每帧整屏软件光栅化+每玻璃重复上传整屏 backdrop"，不是着色器）。
+**③ 定案（三路线裁决）**：③ **CSS `backdrop-filter`（采用）**——走浏览器合成器原生快路径、JS 零成本、性能最稳、MP 同构；① **DOM + 叠 WebGL 玻璃（否决）**——玻璃最贵一步是"背后内容→纹理"，DOM 下**无廉价纹理通道**（`captureStream` 只管 canvas/media；`html2canvas` 软件栅格极慢且脆）⇒ 帧率保证不了，**WebGL/WebGPU 都改变不了**（堵在背景捕获）；② **整页 canvas（不做）**——原理可达标+真折射，但=放弃 DOM/CSS 的架构分叉（≈Flutter-Web），MP 跟不了、ROI 低。**结论**：能守住基线的是"走浏览器原生快路径（CSS）"，不是"用 WebGL"；折射 = 原生端专属。
+**④ 交付（边界写入引擎文档，用户要求的最小落地）**：`docs/proteus-glass-plan/` 四处——`07-mapping-web-skyline.md` 加 **§边界声明**（标题由"CSS + Shader 模拟"改为"纯 CSS"；三路线裁决表 + 对业务的承诺 + 性能判据 + "禁手写 WebGL 层"纪律）；`13-migration-boundary.md` 明确不做项 + Web/Skyline 自绘玻璃；`README.md` 定位句 + 文档清单；`01-research-report.md` Web 行去"Shader"。删临时草案 `docs/proteus-glass-web-feasibility.md`（其内容已并入本决策与 07）。
+**⑤ 诚实边界**：性能判断是**工程推理 + 仓库事实**（Web 纯 DOM、shader 消费者只有三端、SPI 有 glsl target）；**未实测量**"② 整页 canvas 能否守住基线""③ L2 观感上限"——若未来要碰 ② 须先 spike。本次**不写代码**（CSS 是既有的，仅裁边界）。
+**⑥ 教训**：★**"既然 A 端做成了，铺到 B 端"要按"实现范式"判、不能按"功能同名"判**——App 玻璃=自绘（需自绘面+背景纹理），Web=DOM/CSS（无自绘面）⇒ 不是"扩展"是"另一条路线"。★**性能瓶颈常不在你以为的那层**——"用 WebGL/WebGPU"听着解决性能，但真瓶颈是"背景纹理"（与 App #862 同源教训：先定位瓶颈，别假设在着色器）。★**边界要落在"引擎文档"而非散在对话里**——用户点名"引擎文档注明边界即可"（规范和边界要落在会被读到的地方）。
+
+
 
 
 
