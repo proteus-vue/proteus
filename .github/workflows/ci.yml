@@ -39,6 +39,9 @@ jobs:
       - name: Keryx 图标库门禁（★数据法则 + 生成物漂移：内核可吃/24 网格 [0,24]/kebab/类别/双体系/零 hex）
         run: pnpm run check:icons
 
+      - name: 玻璃治理门禁（★G-07 M5：裸 backdrop-filter 即红——单入口铁律 GLS001）
+        run: pnpm run check:glass-audit
+
       - name: 玻璃材质能力门禁（★自研液态玻璃：TAB_BAR_SPEC.glass == glass 包预设单源 + glass 字段跨端接缝齐）
         run: pnpm run check:glass-capability
 
