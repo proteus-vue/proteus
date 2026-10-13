@@ -59,12 +59,21 @@ function navText(l: { key: string; label: string }): string {
 }
 const engineText = (e: EngineLink): string => t(e.labelKey)
 
-// ★★★决策 #887：导航项的**玻璃胶囊**样式——由引擎派生（`resolveGlass` + `glassStyleFor`，dogfood）。
-//   iOS 26 的导航项是圆角玻璃胶囊（毛玻璃 + saturate 通透）。非激活=淡玻璃、激活=品牌色玻璃。
-const glassPill = (tint: string): Record<string, string | undefined> =>
-  glassStyleFor(resolveGlass({ preset: 'custom', intensity: 'thin', tint, radius: 999 }), 'l1')
-const navPill = glassPill('rgba(255, 255, 255, 0.06)')
-const navPillActive = glassPill('rgba(124, 92, 255, 0.34)')
+// ★★★决策 #887/#888：导航项的**玻璃胶囊**样式 = 引擎材质（`resolveGlass`+`glassStyleFor`：blur+saturate+半径）
+//   ＋ **光泽高光 + 斜面**。★关键（两处实测）：① 玻璃与"色块"的区别**不在模糊**——导航条背后是**均匀深色**，
+//   blur 采样不到变化 ⇒ 看不出玻璃；② 深色背景上表达"玻璃"要靠 **顶亮→底透的光泽渐变 + specular 顶边 + 发丝环**
+//   （`background-image` 光泽叠在引擎 tint 上 + `box-shadow` inset 高光/斜面）。
+const glassPill = (tint: string, active = false): Record<string, string | undefined> => ({
+  ...glassStyleFor(resolveGlass({ preset: 'custom', intensity: 'thin', tint, radius: 999 }), 'l1'),
+  backgroundImage: active
+    ? 'linear-gradient(180deg, rgba(255,255,255,0.26), rgba(255,255,255,0.02))'
+    : 'linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0.015))',
+  boxShadow: active
+    ? 'inset 0 1px 0 0 rgba(255,255,255,0.5), inset 0 0 0 1px rgba(255,255,255,0.2), 0 2px 10px -2px rgba(124,92,255,0.6)'
+    : 'inset 0 1px 0 0 rgba(255,255,255,0.30), inset 0 0 0 1px rgba(255,255,255,0.11), inset 0 -8px 14px -10px rgba(0,0,0,0.5)',
+})
+const navPill = glassPill('rgba(255, 255, 255, 0.07)')
+const navPillActive = glassPill('rgba(124, 92, 255, 0.28)', true)
 
 // ★引擎▾ 下拉开合：**click 切换** + **鼠标离开关闭**（确定性、键盘可达；Escape / 路由变化亦关）。
 //   ★不用 hover-**open**：hover 开 + click 切会打架（悬停已开、click 又关）——实测踩过。
