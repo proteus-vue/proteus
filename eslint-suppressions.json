@@ -181,7 +181,7 @@
       "count": 1
     }
   },
-  "packages/api/src/capability.ts": {
+  "packages/api/src/capability-bridges.ts": {
     "no-unreachable": {
       "count": 1
     },

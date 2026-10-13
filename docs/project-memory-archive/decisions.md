@@ -3587,3 +3587,19 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **⑥ E · check:stats 官网数字漂移**：packages 47→48（新增 `@proteus-vue/animation`）· conformance 11→12（`animation/conformance.ts`）· plans 86→87。**修**：回填 `website/src/stats.ts`（数字与源码同源，门禁重算口径）。
 **⑦ 验证**：Node 22 全量 **5764 passed / 0 failed**（此前 5756/8）；`check:stats` ✓；`check:pkg` 48 包 0 error ✓。
 **⑧ 教训（工具化缺口）**：#867 的门禁（loop-guard/lint/engines）**未能覆盖**这些"数字/快照/契约随能力演进漂移"——它们是**存量债务**，只有全量跑才暴露。★但 `p-icon import.meta` 是**真缺陷**（编译即崩），说明"改组件要跑一次该组件的编译门禁"仍是弱环节：`test:coupled` 的映射表以 `packages/{compiler,runtime,plugin-vite}/src/**` 为触发面，**改 `packages/components/**` 不在其内** ⇒ 未触发定向。**记为后续**：`components/**` 改动是否纳入 coupled 触发面待评估。
+
+870. **★★巨型文件拆分（capability.ts 8987 行 → 三层）——纯机械搬迁，行为零变化**（2026-10-13）：
+**① 背景**：收尾清单第 4 项（外部审查点名的"拆巨型文件"）。`packages/api/src/capability.ts` 曾 **8987 行**（全仓最大源文件）。★纪律：**先补 characterization 测试再拆**——实测已有 `capability-hooks.test.ts`(1616) + `capability-granularity.test.ts`(1940) + 另 8 个 capability 测试，**共 242 用例**覆盖（比计划预期好），故可直接拆。
+**② 拆分方案（按依赖方向分层，严格无环）**：
+   · `capability-types.ts`（3849 行）——**全部 interface/type 契约** + `CapResult`/`CapError`/`capOk`/`capErr` + `wrap`（纯形状 + 结果原语，零平台依赖）；
+   · `capability-bridges.ts`（4040 行）——`wxBridge`/`webBridge` 两套平台实现 + 私有助手（存储/文件系统/NFC/性能归一/进度句柄）；
+   · `capability.ts`（1096 行）——`createCapabilityBridge`/`createCapabilityHooks`/`createReactiveStorage` + `export * from './capability-types'`（公共面不变）。
+   依赖链：`types ← bridges ← main`（main 另扇出 app/auth/generated）。
+**③ 两个必须处理的"拆分陷阱"（都不改行为，只调归属）**：
+   · **`wrap` 前向引用**：原文件里 `const wrap`（原 8125 行，main 区）被 `wxBridge`（原 5268 行，bridges 区）**前向引用**——单模块靠运行时序成立，拆成两文件即变 `bridges→main` 跨模块依赖（与 main→bridges 成环）⇒ `wrap` 上移到 types 层（它只依赖 CapError/capOk/capErr）。
+   · **`idleSeq` 共享可变状态**：唯一跨桥可变状态（`++idleSeq`）由 wxBridge/webBridge 共享——**ES 模块 import 绑定只读** ⇒ 两桥**不可再拆**，同文件是硬约束。
+**④ 方法（可复现）**：一次性机械脚本（区界 = 按顶层声明行切分）→ 自动推导每层 import（值/类型分开，避免 esbuild 不能擦除的类型被当运行时值）→ 非 export 的契约声明加 `export`（供 bridges 引用；公开面仍由 `index.ts` 显式把关）→ 写入**临时目录**逐处 diff 后落盘（遵 2026-10-04「先临时文件后 diff」纪律）。
+**⑤ 验证（全绿）**：api 包 `tsc -p tsconfig.build.json` **0 错**；根 `vue-tsc --noEmit` **0 新增错**（唯一 4 条 `@proteus-vue/shader` 在干净 HEAD **同样存在**，`git stash` 取证）；能力测试 **242/242**；`build-packages` + `check:publish-contents` ✓；`pnpm lint` **rc=0**（4 条随代码搬迁的存量 suppression 移到新文件路径）；`check:capability-golden`/`check:bridge-ext`/`check:capability-priority`/`check:layer`/`check:deps` ✓；**Node 22 全量 5764/0**（与拆分前一致 = 行为零变化）。
+**⑥ 诚实边界**：① 仍按"文件"组织（非按能力域再细分）——bridges 4040 行仍偏大，但它是一个**内聚平台实现面**（wx 与 web 两套桥 + 私有助手），再拆需处理 `idleSeq` 共享态（列后续可评估）。② 拆分不引入新抽象、不改任何函数体（纯搬迁）——**收益是"可导航 + 单文件可审"**，非性能。③ `capability-app.ts`（2100 行）未动（另一文件，非本项）。
+**⑦ 教训**：★**"巨型文件拆分"的第一障碍不是行数而是隐式耦合**——本次两处（`wrap` 前向引用 + `let` 共享态）都是"单文件里合法、跨文件即非法"的形态，**先画依赖图再切**。★机械拆分的自动 import 推导要**值/类型分离**（`import type` 必须能被 esbuild 擦除，否则打包报错）。★扫描**别删字符串**（模板字面量反引号不配对会吞真实代码 → 漏 import，本项实测 `MediaQueryResult` 一度漏加）。
+
