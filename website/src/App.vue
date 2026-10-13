@@ -60,20 +60,20 @@ function navText(l: { key: string; label: string }): string {
 const engineText = (e: EngineLink): string => t(e.labelKey)
 
 // ★★★决策 #887/#888：导航项的**玻璃胶囊**样式 = 引擎材质（`resolveGlass`+`glassStyleFor`：blur+saturate+半径）
-//   ＋ **光泽高光 + 斜面**。★关键（两处实测）：① 玻璃与"色块"的区别**不在模糊**——导航条背后是**均匀深色**，
-//   blur 采样不到变化 ⇒ 看不出玻璃；② 深色背景上表达"玻璃"要靠 **顶亮→底透的光泽渐变 + specular 顶边 + 发丝环**
-//   （`background-image` 光泽叠在引擎 tint 上 + `box-shadow` inset 高光/斜面）。
+//   ＋ **光泽高光 + 斜面**（玻璃感来自材质暗示，不是模糊——nav 背后是均匀深色，blur 采样不到变化）。
+//   ★#888 A：**深色霜**——胶囊底 tint 走深色（贴合深色站），只留一点**柔和高光**表达玻璃（不用白底 tint）。
 const glassPill = (tint: string, active = false): Record<string, string | undefined> => ({
   ...glassStyleFor(resolveGlass({ preset: 'custom', intensity: 'thin', tint, radius: 999 }), 'l1'),
   backgroundImage: active
-    ? 'linear-gradient(180deg, rgba(255,255,255,0.26), rgba(255,255,255,0.02))'
-    : 'linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0.015))',
+    ? 'linear-gradient(180deg, rgba(255,255,255,0.13), rgba(255,255,255,0.01))'
+    : 'linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.005))',
   boxShadow: active
-    ? 'inset 0 1px 0 0 rgba(255,255,255,0.5), inset 0 0 0 1px rgba(255,255,255,0.2), 0 2px 10px -2px rgba(124,92,255,0.6)'
-    : 'inset 0 1px 0 0 rgba(255,255,255,0.30), inset 0 0 0 1px rgba(255,255,255,0.11), inset 0 -8px 14px -10px rgba(0,0,0,0.5)',
+    ? 'inset 0 1px 0 0 rgba(255,255,255,0.34), inset 0 0 0 1px rgba(255,255,255,0.14), 0 2px 10px -2px rgba(124,92,255,0.55)'
+    : 'inset 0 1px 0 0 rgba(255,255,255,0.1), inset 0 0 0 1px rgba(255,255,255,0.05)',
 })
-const navPill = glassPill('rgba(255, 255, 255, 0.07)')
-const navPillActive = glassPill('rgba(124, 92, 255, 0.28)', true)
+// 非激活：深色霜（近底色的深）+ 极淡高光；激活：品牌色玻璃（稍提亮）
+const navPill = glassPill('rgba(255, 255, 255, 0.028)')
+const navPillActive = glassPill('rgba(124, 92, 255, 0.30)', true)
 
 // ★引擎▾ 下拉开合：**click 切换** + **鼠标离开关闭**（确定性、键盘可达；Escape / 路由变化亦关）。
 //   ★不用 hover-**open**：hover 开 + click 切会打架（悬停已开、click 又关）——实测踩过。
@@ -117,13 +117,14 @@ watch(() => route.fullPath, () => {
   <p-page ref="siteEl" class="site">
     <!-- ★无障碍：跳转到主内容（键盘首个 Tab 即可达；WCAG 2.4.1 Bypass Blocks） -->
     <a class="skip-link" href="#main-content">{{ locale === 'zh' ? '跳到主内容' : 'Skip to content' }}</a>
-    <!-- ★★★决策 #887：导航栏 = 液态玻璃（`<pg-glass preset="navigationBar">`）——
-         导航条与「引擎▾」下拉面板都用玻璃，顺带在真实站点验证自研玻璃引擎（回收旧 d2-exempt）。
-         ★不覆盖 tint：用 navigationBar 预设的白色 15% 霜感（此前误传 72% 不透明深色 ⇒ 看着像实底黑条、模糊被盖住）。 -->
+    <!-- ★★★决策 #887/#888：导航栏 = 液态玻璃（`<pg-glass preset="navigationBar">`）。
+         ★#888 A：**深色霜**（贴合深色站）——预设默认白 15% 在近黑底上成"灰白横带"（用户实测"加了白底"）；
+         改暗色 tint（更透更亮一点，与深色内容融合）+ 保留 blur/saturate。 -->
     <pg-glass
       preset="navigationBar"
       :radius="0"
       border
+      tint="rgba(18, 18, 24, 0.55)"
       class="nav-shell"
       :class="{ 'is-scrolled': scrolled, 'is-open': menuOpen, 'is-docs': isDocs, 'engines-open': enginesOpen }"
     >
