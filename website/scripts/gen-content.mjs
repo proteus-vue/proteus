@@ -9,6 +9,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { COMP_EN, DOMAIN_EN, MP_STATUS_EN, ENDS_EN, END_NOTE_EN, COMP_LEGEND_EN, SHARED_EN, OVERVIEW_EN, CAP_SHARED_EN, CAP_USAGE_EN, CAP_ARGS_EN, CAP_DATA_HINTS_EN, CAP_METHODS_EN, CAP_EN, CAP_CAT_EN, CAP_OVERVIEW_EN, LIFECYCLE_EVENT_EN, LIFECYCLE_EVENT_NOTE_EN, LIFECYCLE_SRC_EN } from './gen-content-en.mjs'
+// ★决策 #881：App 桥方法集抽取抽成独立模块（锚定式解析 + 符号缺失硬失败）——详见该模块头注释
+import { loadAppBridgeKeys } from './lib/app-bridge-keys.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 // ★组件库已拆包（2026-09-14）：@proteus-vue/components → packages/components（原仓库根 src/components）
@@ -203,24 +205,15 @@ function endSupportLine(m, labels) {
   return parts.join(' · ')
 }
 
-/**
- * ★★App 宿主桥（`packages/api/src/capability-app.ts`）提供的方法集——**从源码推导**，不硬编码。
- *
- * 【为什么需要（2026-09-30 用户指出「官网文档好像没更新」）】能力页的端表对 native 端**硬编码**
- *   写「渲染核心已落地——能力桥未接线」。此前对多数能力是准确的，但**生命周期三能力（C23/C24/C25）
- *   的 App 腿已落地并真机双端验证**（`capability-app.ts` + `check:host-runtime` ①~⑤）
- *   ⇒ 页面与源码事实脱节（与 wx/web 列早已用 `wxMissing`/`webMissing` 推导同构，只有 native 列是写死的）。
- *   ⇒ 本函数读 `capability-app.ts` 的返回对象，抽出它真正提供的方法名（如 getAppLifecycle）。
- *   于是「接线与否」由**源码**决定：桥里加了方法，页面自动跟着变（`gen:content --check` 守漂移）。
- */
-function loadAppBridgeKeys() {
-  const src = fs.readFileSync(path.join(ROOT, 'packages', 'api', 'src', 'capability-app.ts'), 'utf8')
-  // 返回对象形如 `return { getAppLifecycle(): …, getPageLifecycle(): …, getBackground(): … }`
-  const keys = new Set()
-  for (const m of src.matchAll(/^\s{4}(get[A-Z]\w*)\(/gm)) keys.add(m[1])
-  return keys
-}
-const APP_BRIDGE_KEYS = loadAppBridgeKeys()
+// ★★App 宿主桥方法集（`packages/api/src/capability-app.ts`）——从源码推导，决定能力页 App 端 ✅/🟡。
+//   【为什么在生成器里】原有实现硬编码「能力桥未接线」，而生命周期三能力的 App 腿早已落地并真机验证 ⇒
+//   页面与源码事实脱节（wx/web 列早已用 wxMissing/webMissing 推导，只有 native 列写死）。
+//   【决策 #881】解析抽到 `lib/app-bridge-keys.mjs`（锚定式：export function → 顶层 return 对象 → 深度 0
+//   成员名，方法简写/属性箭头两种风格都收）；旧窄正则 `/^\s{4}(get[A-Z]\w*)\(/` 只认简写 ⇒ 13 个只抽到 3 个。
+//   数据源文件/工厂符号/返回对象缺失 ⇒ 硬失败抛错（不静默得空集）。细节见该模块头注释。
+const APP_BRIDGE_KEYS = loadAppBridgeKeys(path.join(ROOT, 'packages', 'api', 'src', 'capability-app.ts')).keys
+// ★真机双端验证的覆盖范围（SSOT = check:host-runtime 的 results/*.json——当前只含生命周期组）：
+const HOST_RUNTIME_VERIFIED_CAPS = new Set(['app-lifecycle', 'page-lifecycle', 'background'])
 const MP_STATUS_LABEL = { ok: 'L1 原语', compat: 'L2 兼容层', private: '平台私有', missing: '缺失' }
 
 // ★能力侧栏分组：按 10 类归组——★2026-09-30 已抽为 **component-ir 的共享事实源**
@@ -2012,7 +2005,7 @@ function genCapabilities(ir, ends) {
         case 'app-android':
           if (refs.length && refs.every((r) => APP_BRIDGE_KEYS.has(r))) {
             status = '✅'
-            note = 'App 宿主桥（capability-app.ts）· 真机双端验证（check:host-runtime）'
+            note = `App 宿主桥（capability-app.ts）· ${HOST_RUNTIME_VERIFIED_CAPS.has(capSlug) ? '真机双端验证（check:host-runtime）' : '桥方法已接入'}`
           } else {
             note = '渲染核心已落地——能力桥未接线'
           }
@@ -2611,7 +2604,7 @@ async function genCapabilitiesEn(ir, ends) {
         case 'app-android':
           if (refs.length && refs.every((r) => APP_BRIDGE_KEYS.has(r))) {
             status = '✅'
-            note = 'App host bridge (capability-app.ts) · device-verified on both ends (check:host-runtime)'
+            note = `App host bridge (capability-app.ts) · ${HOST_RUNTIME_VERIFIED_CAPS.has(capSlug) ? 'device-verified on both ends (check:host-runtime)' : 'bridge method wired'}`
           } else {
             note = CAP_SHARED_EN.endNote.prototype
           }

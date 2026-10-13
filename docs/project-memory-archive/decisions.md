@@ -3723,6 +3723,20 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **⑤ 诚实边界**：`cse-lint` 插件**本就**按 target 分流（`web`/`skyline` 两目标）——只有 `profile-boundary` 有此错靶；`SKYLINE_BOUNDARY_RULES` 规则集本身（Skyline 官方白名单）**正确、不动**（只是不该套 web）。`proteus explain CSS-PB-<prop>` 是"解释某条 Skyline 规则"的显式查询，不受影响。
 **⑥ 教训**：★**端专属规则必须按"当前编译目标"分流**——`SKYLINE_BOUNDARY_RULES` 名字里就写着"Skyline"，却在 web 链执行 = **判据与目标端脱节**（本仓反复教训的同一族：门禁/判据的**作用域**必须跟着实际形态/目标走）。★**"防延迟暴露"不能靠"过宽的约束"**——正解是**在正确的目标端约束**（MP 链拦 Skyline 违规），而非"所有链都套 Skyline 白名单"（那会误伤 web 合法值）。★**平台自动判定优于配置硬编码**（用户点出）：`--target`→vite `mode` 已有映射，**复用即可**，不需要在 `proteus.config` 再传一遍平台。★**M6/`#882` 的"grid 改 flex"实为绕过 bug 的 workaround**——修复后 grid 在 web 本就合法；页面保持 flex 是风格选择（非必需），但**真正的修法是 #883**。
 
+884. **★修官网 App 端能力分档漏判——生成器「桥方法集」抽取改锚定式 + 数据源缺失硬失败（审查报告 P1+P2）**（2026-10-13）：
+**① 起因（用户）**：「按照 AI 协作开发规范继续原生能力对齐」。承接 2026-10-13 审查报告（`docs/native-capability-crossend-progress.md`）§3：官网能力页 iOS/Android 只承认 **3 项** ✅，而源码事实是 **13 个**桥方法 ⇒ **8+ 能力被误标**「渲染核心已落地——能力桥未接线」（对外谎报）。
+**② 根因（同一形态第二次）**：`website/scripts/gen-content.mjs` 的 `loadAppBridgeKeys()` 用**一条窄正则** `/^\s{4}(get[A-Z]\w*)\(/gm` 从 `capability-app.ts` 抽桥方法名——**只认"方法简写"风格**（`getXxx(): T {…}`）；而该文件**两种风格混用**（属性箭头 `getXxx: () => …` 不认），且 `loadExtension`/`createWorker`/`navigateMiniProgram` **无 `get` 前缀**（该正则**永远**抓不到）⇒ 实测只抽到 **3/13**。与 #870→#876（拆文件断生成器数据源）**同一类型**：生成器用**文本解析源码 = 隐式契约**，改对了代码反而静默打断它，且**无门禁盯这个契约**。
+**③ 交付**：
+   · 新模块 **`website/scripts/lib/app-bridge-keys.mjs`**（+ `.d.mts` 类型声明）：**锚定式**解析——按 `export function` 定位工厂函数体（括号配对 + 字符串/注释**等长遮罩**）→ 函数体顶层 `return {` 对象 → 取对象体**深度 0** 成员名（`name:` 与 `name(` 两种写法都收）。**文件/符号/返回对象缺失，或抽到 0 个 ⇒ 抛错**（不静默得空集）。
+   · `gen-content.mjs`：删掉窄正则，改为调用新模块（**净减行**，反巨型化棘轮随之下钉 `2825 → 2818`）。
+   · **重生成 8 个能力页**（zh + en）：iOS/Android 由 🟡 → ✅，App 端 ✅ **3 → 11**。
+   · 新测试 `tests/gen-content-app-bridge.test.ts`（**6 条断言**）：真实源码抽全集 + **两种声明风格都收** + 3 条破坏性（函数改名 / 空源码 / 文件缺失 ⇒ 报错）+ **显式 11 项逐项落页**（防"数量对但集合错"）。
+**④ 验证**：`check:content` ✅（components 78 · capabilities 84）· 新测试 **6/6** ✅ · `check:ai-tasks` ✅ · `check:file-size` ✅（2817 ≤ 2818）· `check:en-drift` ✅ · `check:doc-links` ✅ · `npx vue-tsc --noEmit` 无新增错误（仅 4 条**既存** shader 报错，与本次无关）· ★**独立验证**（异会话子代理）：真值 13 项**逐项相等**、破坏性 3/3 报错、组件页**零改动**、抽查 2 页确认改动**只落在 App 那 3 行**。
+**⑤ 诚实边界（独立验证提出：本轮处置 1 项 + 立项登记 1 项）**：
+   · **已处置**（本单波及面）：✅ 的说明文案原为「真机双端验证（check:host-runtime）」——而该门禁的 `results/*.json` **只覆盖生命周期组**（实测内含 `cap_app_phase`/`cap_bg_events` 等、**零 App 桥方法**）⇒ 一旦从 3 项扩到 11 项即**过度声明**。改为**诚实两档**：生命周期三能力保留真机口径，其余（`worker/update/preload/extension/embedded/idle/window/navigation-guard`）只说「**桥方法已接入**」；覆盖范围注册为 `HOST_RUNTIME_VERIFIED_CAPS`（SSOT = check:host-runtime 结果）。
+   · **已立项未修**：独立验证抓出 `mini-program`（C47）**仍漏判**（应 ✅ 却 🟡）——**另一根因**：生成器抽 `refs` 用 `/bridge\.(\w+)\(/`（**只认直接调用**），而 `capability.ts` 的 `useMiniProgram` 写的是 `if(!bridge.navigateMiniProgram) … const nav = bridge.navigateMiniProgram; nav(options)` ⇒ **从不出现** `bridge.navigateMiniProgram(`。实测**放宽该正则不安全**：波及 5 个 hook，且 `useWebAssembly` 的切片会吞进**整个桥面（80+ 名）** ⇒ Web/MP 列会被误降级。⇒ 立独立任务单元 **`T-app-bridge-refs`**（不塞进本单）。
+**⑥ 教训**：★**"文本隐式契约"要连治两处**——本单只修了 `APP_BRIDGE_KEYS`（桥方法集），而 `refs`（hook→桥方法引用）是**同一类契约**且**已真实咬人**；修一处 ≠ 治一类。★**"数量对"不等于"集合对"**——测试若只断言 `✅≥11`，`mini-program` 这类漏判**完全看不见**；异会话独立验证的价值正在此（**自测通过 ≠ 契约成立**，与 hook 退出码契约那次同型）。★**生成器扩了分档，必须复核它引用的每个门禁的真实覆盖面**——`check:host-runtime` ≠「App 端真机验证」的同义词（它只覆盖生命周期）。★**共享可写文件上的"编号"必须临提交前复核**：本轮原按 #881 立项，期间**异会话已占用 #881/#882/#883**（玻璃 M3/M6/profile-boundary），改号 #884 方可避免追溯链撞号。
+
 
 
 
