@@ -137,12 +137,20 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     }
     let mut col = acc;
     let lum = col[0] * 0.299 + col[1] * 0.587 + col[2] * 0.114;
-    for c in 0..3 { col[c] = col[c] + (lum - col[c]) * 0.30; }
+    // ★决策 #875：去饱和 0.30 → 0.12（保留背后颜色；与 glass.wgsl ④ 同源）
+    for c in 0..3 { col[c] = col[c] + (lum - col[c]) * 0.12; }
     for c in 0..3 { col[c] = lum + (col[c] - lum) * p.saturation; }
     for c in 0..3 { col[c] = col[c] + (col[c] * p.tint[c] * 2.0 - col[c]) * p.tint[3]; }
-    let white = [0.99f32, 0.995, 1.0];
-    let fw = 0.28 + p.tint[3] * 0.25;
-    for c in 0..3 { col[c] = col[c] + (white[c] - col[c]) * fw; }
+    // ★★决策 #875：明暗自适应（对齐 Apple Liquid Glass「无固有颜色 + 随背景自适应」；
+    //    与 glass.wgsl ⑤ 同源）——亮背景(adapt→1)微奶白、暗背景(adapt→0)压深，替换此前恒定掺白。
+    let adapt = smoothstep(0.35, 0.70, lum);
+    let dark = [0.12f32, 0.13, 0.16];
+    let light = [0.99f32, 0.995, 1.0];
+    let fw = 0.20 + p.tint[3] * 0.25;
+    for c in 0..3 {
+        let glass_tint = dark[c] + (light[c] - dark[c]) * adapt;
+        col[c] = col[c] + (glass_tint - col[c]) * fw;
+    }
 
     let cos_i = 1.0 / (1.0 + slope * slope).sqrt();
     let f0 = 0.04f32;

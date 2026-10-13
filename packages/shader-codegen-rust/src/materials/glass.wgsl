@@ -125,14 +125,23 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
       acc += sample_backdrop(sp_uv + (d * 1.6) / u.size_px) * w3; }
     var col = acc;
 
-    // ④ 去饱和（frost 冲淡色彩）+ 提彩 + 中性对比
+    // ④ 去饱和（**轻微**：保留背后颜色——对齐 Apple「玻璃取其正后方之色」）+ 饱和旋钮
+    //   ★决策 #875：0.30 → 0.12。此前固定 30% 去饱和把背后颜色冲淡成"灰玻璃"，与 Apple 语义相悖。
     let lum = dot(col.rgb, vec3<f32>(0.299, 0.587, 0.114));
-    col = vec4<f32>(mix(col.rgb, vec3<f32>(lum), 0.30), col.a);
+    col = vec4<f32>(mix(col.rgb, vec3<f32>(lum), 0.12), col.a);
     col = vec4<f32>(mix(vec3<f32>(lum), col.rgb, u.saturation), col.a);
 
-    // ⑤ tint + 少量磨砂白（内容仍可辨认——frost 只轻提亮不透死）
+    // ⑤ tint（作者语义着色，可选）+ ★★**明暗自适应**（决策 #875 · 对齐 Apple Liquid Glass）
+    //   【为什么改】Apple：Liquid Glass **无固有颜色**，色取自正后方内容，并**随背景在浅/深之间自适应**。
+    //   此前是 `mix(col, vec3(0.99,0.995,1.0), 0.28+tint.a*0.25)`——**恒定掺白**（固有颜色），
+    //   在暗背景下发灰白、不符语义。现改为按**背景亮度 lum** 自适应：亮背景→微奶白、暗背景→压深。
+    //   ★lum 此处 = 模糊后背景的亮度（正后方内容的代表色），正是"响应背景"的判据。
     col = vec4<f32>(mix(col.rgb, col.rgb * u.tint.rgb * 2.0, u.tint.a), col.a);
-    col = vec4<f32>(mix(col.rgb, vec3<f32>(0.99, 0.995, 1.0), 0.28 + u.tint.a * 0.25), col.a);
+    let adapt = smoothstep(0.35, 0.70, lum);            // 0=暗背景 → 1=亮背景
+    let glass_tint = mix(vec3<f32>(0.12, 0.13, 0.16),   // 暗背景：压深（近中性深，不发灰白）
+                         vec3<f32>(0.99, 0.995, 1.0),    // 亮背景：微奶白（保留原奶白观感）
+                         adapt);
+    col = vec4<f32>(mix(col.rgb, glass_tint, 0.20 + u.tint.a * 0.25), col.a);
 
     // ⑥ 光照：Fresnel + 法线·光源（双瓣）；四周对称（无顶部加权）
     let cos_i = inverseSqrt(1.0 + slope * slope);

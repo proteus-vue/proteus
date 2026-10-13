@@ -190,7 +190,9 @@ final class SelfDrawViewController: UIViewController {
         // ★★★玻璃夹具（`--glass` · 决策 #833）——独立模式（手写树 + 玻璃遍 + 截图），无 JS bundle
         //   ★决策 #862：`--glass-bench` = 玻璃夹具 + 程序化滚动性能基线（Choreographer 等价：CADisplayLink 真 vsync）
         let isGlassBench = ProcessInfo.processInfo.arguments.contains("--glass-bench")
-        let isGlass = ProcessInfo.processInfo.arguments.contains("--glass") || isGlassBench
+        //   ★决策 #873：`--glass-demo` = 玻璃**常驻可拖拽演示**（对齐 Android GlassActivity / 鸿蒙 glass-demo）
+        let isGlassDemo = ProcessInfo.processInfo.arguments.contains("--glass-demo")
+        let isGlass = ProcessInfo.processInfo.arguments.contains("--glass") || isGlassBench || isGlassDemo
         // ★★Morpheus 炫技场（`--showcase`）——整场节目单编舞（开场语 → 演出 → 谢幕语）
         //
         // 【判定规则（"点开即演示"的落地）】显式参数 > Info.plist 缺省场景。
@@ -258,8 +260,9 @@ final class SelfDrawViewController: UIViewController {
         // ★★★玻璃夹具（`--glass` · 决策 #833）：**不需要 JS bundle**（手写渲染树经
         //   `proteusSelfDraw.mount` 直挂）⇒ 在 bundle 守卫之前分派，避免"缺 bundle 直接 return"。
         if isGlass {
-            NSLog("[proteus] 玻璃夹具启动（iOS 自绘玻璃遍）%@", isGlassBench ? "· 性能基线模式" : "")
-            GlassScene.run(ctx: ctx, view: host, bridge: bridge, bench: isGlassBench)
+            NSLog("[proteus] 玻璃夹具启动（iOS 自绘玻璃遍）%@",
+                  isGlassBench ? "· 性能基线模式" : (isGlassDemo ? "· 常驻可拖拽演示" : ""))
+            GlassScene.run(ctx: ctx, view: host, bridge: bridge, bench: isGlassBench, demo: isGlassDemo)
             return
         }
         // ★stress 也走 bench bundle（它含 renderStress 入口——同一份 vapor-stress.json 产物）
