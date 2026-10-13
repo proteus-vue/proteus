@@ -3645,6 +3645,17 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **④ 验证**：frontmatter 合法（`name`=目录名）；`check:safe-edit`/`check:no-blind-wait` 扫 `.agents/**` 无违规（新 skill 不含 sleep/就地编辑）。
 **⑤ 教训**：★**"规范落在哪"要和"AI 从哪找"对齐**——AI 的行为入口是 **skill 列表 + AGENTS.md**，规范正文落 `docs/` 只对"已经知道路径的人"有效；**新规范必须同时以 skill（可发现）+ 路由指针（习惯入口）两处登记**，否则"写了 = 没写"。★**多链路口诀**：一个问题里"AI 协作"其实是三条链路（用框架/修框架缺陷/开发框架），**入口必须按链路分流**，不能一个 skill 通吃。
 
+876. **★修 #870 拆分引入的官网内容回归（`check:content` 爆红 162 页）——生成器按路径读源码的耦合**（2026-10-13）：
+**① 症状**：用户「看看 check:content，好像有爆红 162 个」。实测 `check:content` 报 **162 个生成页与源不一致**（`camera.md`/`share.md`/… 能力页的属性表/方法表/兼容表整段丢失或退化）。
+**② 根因**：`website/scripts/gen-content.mjs` 的能力页生成器**按路径读单个源码文件** `packages/api/src/capability.ts` 解析全部接口（属性/方法表 SSOT）。**#870 拆分**把 184 个接口搬到了 `capability-types.ts`（`capability.ts` 只剩 `CapabilityHooks`/`ReactiveStorage`）⇒ 生成器读不到接口 ⇒ 182 接口的表整段丢失。★这是**拆分的隐藏耦合**：拆分时同步了 tsc/tests/build/lint，但漏了"**按路径读源码**的生成器"这一消费面（`git diff` 看不出来——文件内容搬走了，读它的脚本没改）。
+**③ 修（一行）**：数据源改为**三文件拼接** `['capability-types.ts', 'capability.ts', 'capability-bridges.ts']`（接口在 types；CapabilityHooks 在 capability；桥私有接口在 bridges）。★**顺序敏感**：types 必须在前——下游 `bridgeIface = slice(indexOf('export interface CapabilityBridge'), indexOf('export interface CapabilityHooks'))` 靠此序成立（CapabilityBridge 在 types、CapabilityHooks 在 capability.ts；反序 ⇒ slice 空串 ⇒ 9 个 hook 丢描述）。零改解析器，只补数据源（同本文件 #481/2026-09-30 的别名补法）。修后**重生成内容与提交版逐字节一致**（`git diff` 空）。
+**④ 验证**：`check:content` 162→**CHECK OK**；`check:docs-stats`/`check:en-drift`/`check:script-compile`/`check:capability-priority`/`check:gates-sync` ✓；`check:file-size` ✓（gen-content 净增 0——我加的注释用尾注释+合并，棘轮不破）。
+**⑤ 教训（★工具化缺口，比 bug 更重要）**：
+   · **"按路径读源码"的生成器/脚本是拆分的隐藏依赖**——移动接口/类型时，`tsc`/测试/build **全绿也不代表没坏**（那些走 import，脚本走路径字符串）。**拆分包内的公共源文件后，必须 grep`文件名`找所有按路径读它的消费面**（本例 `grep -rn "api/src/capability.ts" scripts/ website/`）。
+   · **`packages/api/**` 不在 `test:coupled` 触发面内**（现只含 compiler/runtime/plugin-vite）⇒ 拆 `capability.ts` 时 `test:coupled` 不提示、`check:content` 要到 `verify`（≈10 分钟）才暴露。**记为后续评估**：把 `packages/api/**`（及其他被生成器按路径读的包）纳入 coupled 的"改动→建议门禁"面（注：`COUPLING` 现只映射 vitest 测试文件，要纳入"命令类门禁"需先扩展工具模型）。
+   · **本次能秒级收敛靠"重生成 diff 为空"判据**——修好后立刻重生成并与提交版比对：**diff 空 = 完全重建 = 修对了**（比读代码猜快且硬）。
+
+
 
 
 

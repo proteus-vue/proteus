@@ -1175,7 +1175,7 @@ function emitComponentIndex(byDomain, total, DOMAIN_ORDER) {
 // ★#481 数据准备抽共享（zh 路径行为不变——同一函数输出必须与重构前逐字节一致）：zh 与 EN pass 同源
 function capContext(ir) {
   const caps = ir.PRIMITIVE_CATALOG.filter((p) => p.kind === 'capability')
-  let apiSrc = fs.readFileSync(path.join(ROOT, 'packages', 'api', 'src', 'capability.ts'), 'utf8')
+  let apiSrc = ['capability-types.ts', 'capability.ts', 'capability-bridges.ts'].map((f) => fs.readFileSync(path.join(ROOT, 'packages', 'api', 'src', f), 'utf8')).join('\n') // ★#876 三文件拼接（#870 拆分）；types 在前——下游 bridgeIface=slice(CapabilityBridge,CapabilityHooks) 靠此序
   // ★★类型别名解析（2026-09-30）：句柄类型已**收口**到 `capability-app.ts`（单一事实源），
   //   `capability.ts` 里只剩 `export type AppLifecycle = AppLifecycleHandle` 这类别名 ⇒
   //   只解析本文件会**抽不到方法列表**（页面会显示旧方法集——用户实测"搜不到新事件"即此形态）。
