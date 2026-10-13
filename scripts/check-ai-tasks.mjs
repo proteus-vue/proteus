@@ -121,8 +121,10 @@ for (const t of tasks) {
   }
 }
 
-// scope 顶级路径存在
+// scope 顶级路径存在（★仅对 in_progress/done——planned/blocked 可指向**尚待新建**的路径，
+//   否则"新建组件目录"类任务永远无法立项；typo 防呆在认领时（in_progress）才生效）
 for (const t of tasks) {
+  if (t.status !== 'in_progress' && t.status !== 'done') continue
   for (const g of t.scope ?? []) {
     const pre = staticPrefix(g).replace(/\/+$/, '')
     if (!pre) continue // 纯通配（"**"）不判存在
