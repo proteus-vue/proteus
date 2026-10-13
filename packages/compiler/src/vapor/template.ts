@@ -4260,6 +4260,10 @@ export function buildLayoutTemplate(
           //   此前只认字符串字面量 ⇒ 绑定数字**静默丢弃**、回落 preset 默认（superapp `:radius="12"` 实测踩到：
           //   清单显示 card 预设的 16）。仅折静态数字字面量；动态表达式（ref/成员）仍不折（诚实边界）。
           if (/^-?\d+(?:\.\d+)?$/.test(s)) return s
+          // ★★★#898：绑定**布尔字面量** `:border="true"` / `:border="false"` → 折成字面量。
+          //   文档 Props 表说 `border` 是 **Boolean**（缺省用预设）⇒ 惯用写法 `:border="false"` 此前**静默丢弃**
+          //   （回落预设 border:true，关闭高光边失效）。这是 #889「数字字面量」的同族遗漏——**布尔字面量**。
+          if (s === 'true' || s === 'false') return s
           return undefined
         }
         const spec = opts.glassResolver({

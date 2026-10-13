@@ -55,4 +55,43 @@ describe('★★玻璃材质 IR 折叠（pg-glass → style.glass）', () => {
     const g = glassOf(build(`<view><pg-glass preset="card" :radius="r" /></view>`, { glassResolver }))!
     expect(g.radius).toBe(16) // card 预设
   })
+
+  // ★★★#898：文档 Props 用法端到端（每种写法都折进 IR）——防「文档写了、实现不认」的静默缺口。
+  describe('★★★文档 Props 用法全覆盖（指南 31-liquid-glass）', () => {
+    it('intensity：档位字符串 / 绑定数字 / 静态数字 ⇒ 同一 blur', () => {
+      const card = getGlassPreset('card').blur // 16
+      const want = Math.round(card * 1.4) // thick / 1.4
+      expect(glassOf(build(`<view><pg-glass preset="card" intensity="thick" /></view>`, { glassResolver }))!.blur).toBe(want)
+      expect(glassOf(build(`<view><pg-glass preset="card" :intensity="1.4" /></view>`, { glassResolver }))!.blur).toBe(want)
+      expect(glassOf(build(`<view><pg-glass preset="card" intensity="1.4" /></view>`, { glassResolver }))!.blur).toBe(want)
+    })
+    it('tint：覆盖预设并转内核 #RRGGBBAA', () => {
+      const g = glassOf(build(`<view><pg-glass preset="card" tint="rgba(0,0,0,0.4)" /></view>`, { glassResolver }))!
+      expect(g.tint).toBe('#00000066') // 0.4*255≈102=0x66
+    })
+    it('radius：绑定数字 / 静态数字 都覆盖预设', () => {
+      expect(glassOf(build(`<view><pg-glass preset="card" :radius="16" /></view>`, { glassResolver }))!.radius).toBe(16)
+      expect(glassOf(build(`<view><pg-glass preset="card" radius="16" /></view>`, { glassResolver }))!.radius).toBe(16)
+    })
+    it('★#898：border：绑定布尔 :border="false" 折入（此前静默丢弃、回落预设 true）', () => {
+      expect(glassOf(build(`<view><pg-glass preset="card" :border="false" /></view>`, { glassResolver }))!.border).toBe(false)
+      expect(glassOf(build(`<view><pg-glass preset="card" :border="true" /></view>`, { glassResolver }))!.border).toBe(true)
+      expect(glassOf(build(`<view><pg-glass preset="card" border="false" /></view>`, { glassResolver }))!.border).toBe(false)
+    })
+    it('noise：绑定数字 / 静态数字 都覆盖预设', () => {
+      expect(glassOf(build(`<view><pg-glass preset="card" :noise="0.05" /></view>`, { glassResolver }))!.noise).toBe(0.05)
+      expect(glassOf(build(`<view><pg-glass preset="card" noise="0.05" /></view>`, { glassResolver }))!.noise).toBe(0.05)
+    })
+    it('fallback：合法取值不炸（App 折叠面不透传——降级是运行时/端决策）', () => {
+      const g = glassOf(build(`<view><pg-glass preset="card" fallback="flat" /></view>`, { glassResolver }))!
+      expect(g).toBeTruthy()
+    })
+    it('缺省写法（仅 preset）⇒ 全部回落该预设', () => {
+      const p = getGlassPreset('card')
+      const g = glassOf(build(`<view><pg-glass preset="card" /></view>`, { glassResolver }))!
+      expect(g.radius).toBe(p.radius)
+      expect(g.border).toBe(p.border)
+      expect(g.noise).toBe(p.noise)
+    })
+  })
 })

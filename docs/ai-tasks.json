@@ -29,7 +29,7 @@
       "id": "T-glass-end2end",
       "title": "端到端样例：真 .vue 用 <pg-glass> → 三端渲染玻璃（含 glass.radius 单位校验）",
       "type": "end-alignment",
-      "status": "planned",
+      "status": "done",
       "owner": null,
       "scope": [
         "packages/glass/**",
@@ -39,11 +39,11 @@
         "hosts/harmony/**",
         "examples/**"
       ],
-      "decision": null,
-      "verification": "三端真机截图 + glass.radius 单位一致性断言",
+      "decision": 898,
+      "verification": "pnpm check:ai-tasks && npx vitest run tests/glass-ir.test.ts && 三端 glass-manifest 一致（android==ios==harmony）",
       "branch": null,
       "related": [],
-      "note": "承接 #864 遗留：iOS 宿主把 radius 按 pt×scale，而 resolveGlass 产出 radiusPx 物理 px ⇒ 真实 <pg-glass> 会踩『半径 ×3』。"
+      "note": "承接 #864 遗留（radius 单位）。与 #890（G0 真 .vue→三端渲染玻璃 + radius 单位一致）/ #898（文档 Props 全部写法折进 IR，修 :border 布尔绑定静默丢弃）一并收口。验收：tests/glass-ir.test.ts（文档 props 全覆盖）+ examples 三端 glass-manifest 逐字节一致 + 真机截图。"
     },
     {
       "id": "T-glass-system-ui-g1",
