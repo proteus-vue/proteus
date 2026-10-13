@@ -1126,12 +1126,13 @@ static void drawContentNodes(OH_Drawing_Canvas* c, SelfDrawSpec* sd,
         if (cull && (n.x >= ex1 || n.x + n.w <= ex0 || ny >= ey1 || ny + n.h <= ey0)) continue;
         OH_Drawing_CanvasSave(c);
         OH_Drawing_CanvasTranslate(c, (float)n.x, (float)ny);
-        // ★#895：裁剪（overflow）——cmd 里是**绝对屏幕坐标**（祖先链有效裁剪矩形交集）；本节点已在
-        //   局部原点（translate n.x/ny）⇒ 裁剪矩形换算到局部（减自身 x/ny）。此前直接用绝对值 ⇒
-        //   局部原点下把整个节点裁没（superapp 全屏白屏的根因）。
+        // ★#895：裁剪（overflow）——cmd 里是**内容坐标**（祖先链有效裁剪矩形交集，未含滚动）。
+        //   本节点已画在局部原点 (n.x, ny)（ny = n.y - scrollY）⇒ 裁切换到局部应减**内容坐标 (n.x, n.y)**，
+        //   不是屏幕坐标 ny。★#901 修：此前用 `clipY - ny` ⇒ 多减了一个 scrollY ⇒ scrollY>0 时裁剪矩形
+        //   被下推 scrollY ⇒ **卡片全部子行被裁掉**（真机：长页滚动后卡片变空白；scrollY=0 恰好 ny==n.y 故未暴露）。
         if (n.hasClip) {
-            OH_Drawing_Rect* cr = OH_Drawing_RectCreate((float)(n.clipX - n.x), (float)(n.clipY - ny),
-                                                        (float)(n.clipX - n.x + n.clipW), (float)(n.clipY - ny + n.clipH));
+            OH_Drawing_Rect* cr = OH_Drawing_RectCreate((float)(n.clipX - n.x), (float)(n.clipY - n.y),
+                                                        (float)(n.clipX - n.x + n.clipW), (float)(n.clipY - n.y + n.clipH));
             if (cr != nullptr) { OH_Drawing_CanvasClipRect(c, cr, OH_Drawing_CanvasClipOp::INTERSECT, true); OH_Drawing_RectDestroy(cr); }
         }
         // ★#895：静态变换（绕 pivot 的平移+等比缩放+旋转——与内核/CSS transform 同构）

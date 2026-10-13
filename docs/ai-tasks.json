@@ -104,16 +104,16 @@
       "id": "T-harmony-selfdraw-scroll",
       "title": "鸿蒙自绘 scrollRoot（内容溢出 + 滚动 offset>0）整屏空白",
       "type": "end-alignment",
-      "status": "planned",
+      "status": "done",
       "owner": null,
       "scope": [
         "hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_render.cpp"
       ],
-      "decision": null,
-      "verification": "真机：superapp 内容溢出屏（如 index 屏）+ 滚动 ⇒ 内容正常显示（非空白）",
+      "decision": 901,
+      "verification": "真机：superapp 内容溢出（加高占位）+ drive 滚动 ⇒ 子行全渲染（hosts/harmony/results/superapp-scroll-fixed.jpeg）",
       "branch": null,
       "related": [],
-      "note": "【Handoff】做到哪：#900 端到端验证时发现——鸿蒙 superapp 若内容溢出视口且发生滚动（scrollRoot offset>0），整屏渲染为空白。已取证：① 内容不溢出/offset=0 ⇒ 正常（#896 基线恰为此态，故未暴露）；② 全部鸿蒙 cpp 还原 HEAD 亦然 ⇒ **pre-existing，非 #900 引入**。已改：无（仅定位）。未做：修复。下一步：查 drawSelfContentCore 的滚动位移（n.y - scrollY）与画布裁剪/玻璃背板捕获在 offset>0 时的坐标。坑：玻璃背板捕获区 cy=n.y-scrollY 会变负。判据：溢出屏滚动后内容可见。"
+      "note": "根因：drawContentNodes 裁剪矩形换算用屏幕坐标 clipY-ny（ny=n.y-scrollY）⇒ 多减一个 scrollY，scrollY>0 时裁剪下推、卡片子行全被裁；scrollY=0 恰好 ny==n.y 故未暴露。修：clipY-n.y（内容坐标）。证据 superapp-scroll-fixed.jpeg。"
     },
     {
       "id": "T-no-unchecked-indexed-access",
