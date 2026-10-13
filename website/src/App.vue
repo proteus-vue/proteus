@@ -44,6 +44,8 @@ const links: NavLink[] = [
   { to: '/themis', label: 'CSS 引擎', key: 'themis' },
   // ★Keryx 图标库（Proteus UI 方言层——全量预览 / 质量审查）
   { to: '/icons', label: '图标库', key: 'icons' },
+  // ★★★液态玻璃引擎（代号 Aether——真跑演示：预设/交互/端矩阵/降级）
+  { to: '/liquid-glass', label: '液态玻璃', key: 'liquid-glass' },
 ]
 /** 导航文案（双语 key） */
 function navText(l: { key: string; label: string }): string {
@@ -54,6 +56,7 @@ function navText(l: { key: string; label: string }): string {
   if (l.key === 'consistency') return t('app.consistency')
   if (l.key === 'themis') return t('app.themis')
   if (l.key === 'icons') return t('app.icons')
+  if (l.key === 'liquid-glass') return t('app.liquidGlass')
   return l.label
 }
 
