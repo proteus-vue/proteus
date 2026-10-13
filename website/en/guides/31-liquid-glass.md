@@ -42,7 +42,7 @@ The same `<pg-glass>` declaration maps to the strongest implementation per termi
 
 - **Web**: `<pg-glass>` is auto-registered by the framework registry (`@proteus-vue/components`) — no manual import.
 - **Mini Program (Skyline)**: `gen-routes` resolves framework components automatically (`/proteus/pg-glass`) — no `usingComponents`.
-- **App (iOS/Android/HarmonyOS)**: at build time the compiler folds `<pg-glass …>` into a plain box carrying a `glass` field; the host self-draws the glass surface (artifact: `dist/app/<platform>/glass-manifest.json`).
+- **App (iOS/Android/HarmonyOS)**: at build time the compiler folds `<pg-glass …>` into a plain box carrying a `glass` field; the host self-draws the glass surface (artifact: `dist/app/<platform>/glass-manifest.json`). Folding only accepts **statically evaluable** values — literals, and `v-for` over a **literal array / constant**, which is **expanded per item and folded** (`v-for="p in presets" :preset="p"` ⇒ each item folds to that preset; `presets` must be statically obtainable). Runtime-dynamic values (reactive variables) are not folded and fall back to the preset default.
 
 ## Props
 

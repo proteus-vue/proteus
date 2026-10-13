@@ -14,10 +14,16 @@
 import { describe, it, expect } from 'vitest'
 import { buildLayoutTemplate, parseCssVarTokens } from '@proteus-vue/compiler'
 import type { LayoutTemplate } from '@proteus-vue/slot-runtime'
+import { glassResolver } from '../packages/cli/src/app-component-registry'
 
 function build(src: string, statics?: Record<string, unknown>): { tpl: LayoutTemplate; codes: string[] } {
   const r = buildLayoutTemplate(src, 't.vue', undefined, undefined, statics)
   return { tpl: r.template, codes: (r.diagnostics ?? []).map((d) => d.code) }
+}
+/** ★#899：带 glassResolver 构建（验「v-for 展开 + 绑定特化 ⇒ 下游玻璃折对」）。 */
+function buildGlass(src: string, statics?: Record<string, unknown>): { tpl: LayoutTemplate } {
+  const r = buildLayoutTemplate(src, 't.vue', undefined, undefined, statics, undefined, false, { glassResolver })
+  return { tpl: r.template }
 }
 const texts = (tpl: LayoutTemplate): string[] => tpl.nodes.map((n) => n.text ?? '').filter(Boolean)
 
@@ -48,6 +54,27 @@ describe('构建期静态实例化（App 壳）', () => {
     )
     const t = texts(tpl)
     expect(t).toEqual(['首页', '消息', '3'])
+  })
+
+  // ★★★决策 #899：v-for 展开后**逐项特化标量绑定**（不止折类）——下游静态消费方（玻璃/图标）只认字面量。
+  it('④b v-for + 逐项特化绑定 :preset="p" ⇒ 下游玻璃折出**每项不同**的 spec（此前全部回落默认）', () => {
+    const { tpl } = buildGlass(
+      `<template><view><pg-glass v-for="p in presets" :key="p" :preset="p" /></view></template>`,
+      { presets: ['card', 'modal'] },
+    )
+    const specs = tpl.nodes.filter((n) => n.style?.glass).map((n) => n.style!.glass as Record<string, unknown>)
+    expect(specs).toHaveLength(2)
+    expect(specs[0].radius).toBe(16) // card
+    expect(specs[1].radius).toBe(24) // modal（此前两项都是 custom 默认 0）
+  })
+
+  it('④c 不可静态求值的绑定 ⇒ 保留（不误折，交既有运行时路径）', () => {
+    const { tpl } = buildGlass(
+      `<template><view><pg-glass :preset="runtimeVar" /></view></template>`,
+      {},
+    )
+    const g = tpl.nodes.find((n) => n.style?.glass)?.style?.glass as Record<string, unknown>
+    expect(g.radius).toBe(0) // custom 默认（runtimeVar 不可求值 ⇒ 不折预设）
   })
 
   it('⑤ 插值求值：字面/三元/statics 提供的函数', () => {
