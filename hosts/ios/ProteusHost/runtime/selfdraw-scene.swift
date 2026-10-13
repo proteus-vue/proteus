@@ -1057,7 +1057,8 @@ final class SelfDrawView: UIView {
             return nil   // 与内核同：缺 tint 拒绝
         }
         return GlassMetalRenderer.Spec(blur: CGFloat(blur), tint: (tr, tg, tb, ta),
-                                       radius: CGFloat(radius), saturation: CGFloat(sat))
+                                       radius: CGFloat(radius), saturation: CGFloat(sat),
+                                       material: (g["material"] as? String) ?? "glass")   // ★#900：材质 id
     }
 
     /// ★★★玻璃遍：捕获"无玻璃面"的内容帧 → 对每个玻璃节点装玻璃面层。

@@ -53,6 +53,8 @@ export function resolveGlass(props: GlassProps = {}): ResolvedGlass {
     interactive: Boolean(preset.interactive),
     solid,
     fallback: props.fallback === 'flat' ? 'flat' : 'solid',
+    // ★#900：材质 id 归一（未知 ⇒ 'glass'——`@proteus-vue/glass` 不依赖 shader 包，故此处内联白名单）。
+    material: (props.material === 'backdropBlur' || props.material === 'frosted' || props.material === 'vibrancy') ? props.material : 'glass',
   }
 }
 

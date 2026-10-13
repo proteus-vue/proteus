@@ -56,6 +56,22 @@ describe('★★玻璃材质 IR 折叠（pg-glass → style.glass）', () => {
     expect(g.radius).toBe(16) // card 预设
   })
 
+  // ★★★决策 #900：材质 id 折入（宿主按此派发 GPU 管线）。
+  describe('★★★材质 id（material · 决策 #900）', () => {
+    it('缺省 ⇒ glass', () => {
+      expect(glassOf(build(`<view><pg-glass preset="card" /></view>`, { glassResolver }))!.material).toBe('glass')
+    })
+    it('显式 material="backdropBlur" 折入', () => {
+      expect(glassOf(build(`<view><pg-glass preset="card" material="backdropBlur" /></view>`, { glassResolver }))!.material).toBe('backdropBlur')
+    })
+    it('绑定字符串字面量 :material="\'frosted\'" 折入', () => {
+      expect(glassOf(build(`<view><pg-glass preset="card" :material="'frosted'" /></view>`, { glassResolver }))!.material).toBe('frosted')
+    })
+    it('未知材质 ⇒ 回落 glass（不静默给未知 id）', () => {
+      expect(glassOf(build(`<view><pg-glass preset="card" material="nope" /></view>`, { glassResolver }))!.material).toBe('glass')
+    })
+  })
+
   // ★★★#898：文档 Props 用法端到端（每种写法都折进 IR）——防「文档写了、实现不认」的静默缺口。
   describe('★★★文档 Props 用法全覆盖（指南 31-liquid-glass）', () => {
     it('intensity：档位字符串 / 绑定数字 / 静态数字 ⇒ 同一 blur', () => {

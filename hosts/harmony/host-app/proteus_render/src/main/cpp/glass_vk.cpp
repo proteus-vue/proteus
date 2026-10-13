@@ -66,7 +66,10 @@ struct VkCtx {
     VkDescriptorSetLayout setLayout = VK_NULL_HANDLE;
     VkPipelineLayout pipeLayout = VK_NULL_HANDLE;
     VkRenderPass renderPass = VK_NULL_HANDLE;
-    VkPipeline pipeline = VK_NULL_HANDLE;       // ★动态 viewport ⇒ 尺寸无关，一次建好复用
+    VkPipeline pipeline = VK_NULL_HANDLE;       // 兼容：= pipelines["glass"]（旧调用点）
+    /** ★★★决策 #900：**每材质一条管线**（数据驱动——遍历 `proteus_shaders::MATERIALS` 建；加材质零改本文件）。 */
+    std::unordered_map<std::string, VkPipeline> pipelines;
+    std::unordered_map<std::string, const proteus_shaders::MaterialDef*> materialDefs;
     VkSampler sampler = VK_NULL_HANDLE;
     VkCommandPool cmdPool = VK_NULL_HANDLE;
     VkCommandBuffer cmd = VK_NULL_HANDLE;
@@ -134,30 +137,41 @@ bool buildPipeline() {
       rpci.attachmentCount = 1; rpci.pAttachments = &col; rpci.subpassCount = 1; rpci.pSubpasses = &sp;
       rpci.dependencyCount = 1; rpci.pDependencies = &dep;
       if (vkCreateRenderPass(dev, &rpci, nullptr, &g_ctx.renderPass) != VK_SUCCESS) { g_ctx.why = "renderPass"; return false; } }
-    // 图形管线（★动态 viewport/scissor）
-    { VkPipelineShaderStageCreateInfo st[2] = {};
-      st[0] = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO}; st[0].stage = VK_SHADER_STAGE_VERTEX_BIT; st[0].module = g_ctx.vs; st[0].pName = "vs_quad";
-      st[1] = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO}; st[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT; st[1].module = g_ctx.fs; st[1].pName = "fs_glass";
-      VkPipelineVertexInputStateCreateInfo vi{VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
-      VkPipelineInputAssemblyStateCreateInfo ia{VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
-      ia.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-      VkPipelineViewportStateCreateInfo vsi{VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO};
-      vsi.viewportCount = 1; vsi.scissorCount = 1;   // 动态：pViewports/pScissors 忽略
-      VkPipelineRasterizationStateCreateInfo rs{VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
-      rs.polygonMode = VK_POLYGON_MODE_FILL; rs.cullMode = VK_CULL_MODE_NONE; rs.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE; rs.lineWidth = 1.0f;
-      VkPipelineMultisampleStateCreateInfo ms{VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
-      ms.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-      VkPipelineColorBlendAttachmentState cba{}; cba.colorWriteMask = 0xF; cba.blendEnable = VK_FALSE;
-      VkPipelineColorBlendStateCreateInfo cb{VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
-      cb.attachmentCount = 1; cb.pAttachments = &cba;
-      VkDynamicState dyn[2] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
-      VkPipelineDynamicStateCreateInfo dy{VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};
-      dy.dynamicStateCount = 2; dy.pDynamicStates = dyn;
-      VkGraphicsPipelineCreateInfo gpci{VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
-      gpci.stageCount = 2; gpci.pStages = st; gpci.pVertexInputState = &vi; gpci.pInputAssemblyState = &ia;
-      gpci.pViewportState = &vsi; gpci.pRasterizationState = &rs; gpci.pMultisampleState = &ms;
-      gpci.pColorBlendState = &cb; gpci.pDynamicState = &dy; gpci.layout = g_ctx.pipeLayout; gpci.renderPass = g_ctx.renderPass; gpci.subpass = 0;
-      if (vkCreateGraphicsPipelines(dev, VK_NULL_HANDLE, 1, &gpci, nullptr, &g_ctx.pipeline) != VK_SUCCESS) { g_ctx.why = "graphicsPipeline"; return false; } }
+    // ★★★决策 #900：**每材质一条管线**（数据驱动——遍历材质字典，各建 vs/fs 模块 + pipeline）。
+    for (size_t mi = 0; mi < proteus_shaders::MATERIALS_COUNT; mi++) {
+        const proteus_shaders::MaterialDef& md = proteus_shaders::MATERIALS[mi];
+        VkShaderModule vsm = makeShaderModule(dev, md.vert, md.vertLen);
+        VkShaderModule fsm = makeShaderModule(dev, md.frag, md.fragLen);
+        if (vsm == VK_NULL_HANDLE || fsm == VK_NULL_HANDLE) { g_ctx.why = std::string("shader module ") + md.id; return false; }
+        VkPipelineShaderStageCreateInfo st[2] = {};
+        st[0] = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO}; st[0].stage = VK_SHADER_STAGE_VERTEX_BIT; st[0].module = vsm; st[0].pName = "vs_quad";
+        st[1] = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO}; st[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT; st[1].module = fsm;
+        st[1].pName = md.entry;
+        VkPipelineVertexInputStateCreateInfo vi{VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
+        VkPipelineInputAssemblyStateCreateInfo ia{VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
+        ia.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+        VkPipelineViewportStateCreateInfo vsi{VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO};
+        vsi.viewportCount = 1; vsi.scissorCount = 1;   // 动态：pViewports/pScissors 忽略
+        VkPipelineRasterizationStateCreateInfo rs{VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
+        rs.polygonMode = VK_POLYGON_MODE_FILL; rs.cullMode = VK_CULL_MODE_NONE; rs.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE; rs.lineWidth = 1.0f;
+        VkPipelineMultisampleStateCreateInfo ms{VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
+        ms.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+        VkPipelineColorBlendAttachmentState cba{}; cba.colorWriteMask = 0xF; cba.blendEnable = VK_FALSE;
+        VkPipelineColorBlendStateCreateInfo cb{VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
+        cb.attachmentCount = 1; cb.pAttachments = &cba;
+        VkDynamicState dyn[2] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+        VkPipelineDynamicStateCreateInfo dy{VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};
+        dy.dynamicStateCount = 2; dy.pDynamicStates = dyn;
+        VkGraphicsPipelineCreateInfo gpci{VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
+        gpci.stageCount = 2; gpci.pStages = st; gpci.pVertexInputState = &vi; gpci.pInputAssemblyState = &ia;
+        gpci.pViewportState = &vsi; gpci.pRasterizationState = &rs; gpci.pMultisampleState = &ms;
+        gpci.pColorBlendState = &cb; gpci.pDynamicState = &dy; gpci.layout = g_ctx.pipeLayout; gpci.renderPass = g_ctx.renderPass; gpci.subpass = 0;
+        VkPipeline pl = VK_NULL_HANDLE;
+        if (vkCreateGraphicsPipelines(dev, VK_NULL_HANDLE, 1, &gpci, nullptr, &pl) != VK_SUCCESS) { g_ctx.why = std::string("graphicsPipeline ") + md.id; return false; }
+        g_ctx.pipelines[md.id] = pl;
+        g_ctx.materialDefs[md.id] = &md;
+        if (std::string(md.id) == "glass") g_ctx.pipeline = pl;   // 兼容旧调用点
+    }
     // 采样器（线性 + clamp）
     { VkSamplerCreateInfo si{VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
       si.magFilter = VK_FILTER_LINEAR; si.minFilter = VK_FILTER_LINEAR;
@@ -199,9 +213,7 @@ void initOnce() {
     dci.queueCreateInfoCount = 1; dci.pQueueCreateInfos = &qci;
     if (vkCreateDevice(g_ctx.phys, &dci, nullptr, &g_ctx.device) != VK_SUCCESS) { g_ctx.why = "vkCreateDevice failed"; return; }
     vkGetDeviceQueue(g_ctx.device, g_ctx.queueFamily, 0, &g_ctx.queue);
-    g_ctx.vs = makeShaderModule(g_ctx.device, proteus_shaders::GLASS_VERT_SPV, proteus_shaders::GLASS_VERT_SPV_LEN);
-    g_ctx.fs = makeShaderModule(g_ctx.device, proteus_shaders::GLASS_FRAG_SPV, proteus_shaders::GLASS_FRAG_SPV_LEN);
-    if (g_ctx.vs == VK_NULL_HANDLE || g_ctx.fs == VK_NULL_HANDLE) { g_ctx.why = "shader module"; return; }
+    // ★#900：着色器模块与管线的创建移到 buildPipeline（**逐材质**建五/64B 各一套）。
     if (!buildPipeline()) return;
     g_ctx.ok = true;
     g_ctx.why = "ok";
@@ -320,7 +332,7 @@ void disposeSizeCache(SizeCache& sc) {
 }
 
 /** 在命令缓冲上录一段玻璃绘制（纹理 upload → 渲染 → 拷出到 outStaging）。 */
-void recordGlassDraw(VkCommandBuffer cmd, SizeCache& sc) {
+void recordGlassDraw(VkCommandBuffer cmd, SizeCache& sc, VkPipeline pipeline) {
     const uint32_t texW = sc.texW, texH = sc.texH, outW = sc.outW, outH = sc.outH;
     VkImageMemoryBarrier b1{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
     b1.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED; b1.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
@@ -346,7 +358,7 @@ void recordGlassDraw(VkCommandBuffer cmd, SizeCache& sc) {
     vkCmdSetViewport(cmd, 0, 1, &vp);
     VkRect2D sc2{{0, 0}, {outW, outH}};
     vkCmdSetScissor(cmd, 0, 1, &sc2);
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, g_ctx.pipeline);
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, g_ctx.pipeLayout, 0, 1, &sc.dset, 0, nullptr);
     vkCmdDraw(cmd, 6, 1, 0, 0);
     vkCmdEndRenderPass(cmd);
@@ -517,7 +529,11 @@ std::vector<std::vector<uint8_t>> renderBatch(const std::vector<BatchItem>& item
         }
         memcpy(sc.texMap, it.backdrop.data(), it.backdrop.size());
         memcpy(sc.uboMap, it.uniform80.data(), it.uniform80.size() < 80 ? it.uniform80.size() : 80);
-        recordGlassDraw(g_bCmd[p], sc);
+        // ★★★决策 #900：按材质 id 选管线（未知 ⇒ 回落 glass）。
+        VkPipeline pl = g_ctx.pipeline;
+        auto pit = g_ctx.pipelines.find(it.material ? it.material : "glass");
+        if (pit != g_ctx.pipelines.end()) pl = pit->second;
+        recordGlassDraw(g_bCmd[p], sc, pl);
     }
     if (vkEndCommandBuffer(g_bCmd[p]) != VK_SUCCESS) { g_bParity ^= 1; return outs; }
     // ③ 提交本缓冲

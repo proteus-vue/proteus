@@ -4,7 +4,9 @@
 // 【为什么用目录而不是散落的文件】宿主/TS 侧需要知道"有哪些材质、各自的 uniform 怎么填"；
 //   把它集中在一处，并由 `proteus-shader-gen --list`（JSON）导出 ⇒ 单一事实源、可被脚本消费。
 //
-// 【扩容】B4 会把 gradient/glow/mask/blur 也加进来——加一个 `MaterialSpec` 条目 + 一份 .wgsl 即可。
+// 【扩容】加一个 `MaterialSpec` 条目 + 一份 `.wgsl`，再跑 `node scripts/gen-shaders.mjs` 即可（下游数据驱动：
+//   TS 目录 / conformance / 三端生成物 / 宿主管线派发**全自动**纳入）。现有：glass · backdropBlur · frosted · vibrancy。
+//   （gradient/glow/mask 不作为 WGSL 材质——保留原生图元，只把几何/曲线数学下沉内核，见 shader-backend-plan B4。）
 
 /// 一种材质的 WGSL 源 + 元信息。
 pub struct MaterialSpec {
@@ -68,8 +70,46 @@ pub const BACKDROP_BLUR: MaterialSpec = MaterialSpec {
     uniform_size: 64,
 };
 
+/// ★★★磨砂材质（frosted · 决策 #900）——模糊 + 程序化颗粒（同 `BlurUniforms` 布局 ⇒ 宿主零改）。
+pub const FROSTED: MaterialSpec = MaterialSpec {
+    id: "frosted",
+    entry: "fs_frosted",
+    wgsl: include_str!("frosted.wgsl"),
+    uniform_struct: "BlurUniforms",
+    uniform_layout: &[
+        ("tint", 0, 16),
+        ("size_px", 16, 8),
+        ("origin", 24, 8),
+        ("tex_bias", 32, 8),
+        ("tex_scale", 40, 8),
+        ("blur", 48, 4),
+        ("saturation", 52, 4),
+        ("_pad", 56, 8),
+    ],
+    uniform_size: 64,
+};
+
+/// ★★★通透材质（vibrancy · 决策 #900）——模糊 + 大幅提饱和（同 `BlurUniforms` 布局 ⇒ 宿主零改）。
+pub const VIBRANCY: MaterialSpec = MaterialSpec {
+    id: "vibrancy",
+    entry: "fs_vibrancy",
+    wgsl: include_str!("vibrancy.wgsl"),
+    uniform_struct: "BlurUniforms",
+    uniform_layout: &[
+        ("tint", 0, 16),
+        ("size_px", 16, 8),
+        ("origin", 24, 8),
+        ("tex_bias", 32, 8),
+        ("tex_scale", 40, 8),
+        ("blur", 48, 4),
+        ("saturation", 52, 4),
+        ("_pad", 56, 8),
+    ],
+    uniform_size: 64,
+};
+
 /// 全部材质（顺序即 `--list` 输出顺序）。
-pub const MATERIALS: &[MaterialSpec] = &[GLASS, BACKDROP_BLUR];
+pub const MATERIALS: &[MaterialSpec] = &[GLASS, BACKDROP_BLUR, FROSTED, VIBRANCY];
 
 /// 按 id 查材质。
 pub fn material(id: &str) -> Option<&'static MaterialSpec> {

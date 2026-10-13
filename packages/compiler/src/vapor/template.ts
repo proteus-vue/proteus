@@ -4274,6 +4274,7 @@ export function buildLayoutTemplate(
           border: strProp('border'),
           noise: strProp('noise'),
           fallback: strProp('fallback'),
+          material: strProp('material'),   // ★#900：材质 id（glass/backdropBlur/frosted/vibrancy）
         })
         if (spec) {
           style.glass = spec

@@ -3907,6 +3907,14 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
  · **专项** `T-app-runtime-capabilities`（`type: end-alignment`，scope 覆盖四层 + `hosts/**` + 契约门禁；note 记路线图与上述两条决策）。
  · **首单** `T-app-fetch`（`related: [T-app-runtime-capabilities]`；兼作后续 83 项的**落地样板**——理由：最基础的能力 + 同时压到三条最难的形态：异步 vs 同步 invoke、平台权限、三端原生 HTTP 惯用法）。
 **④ 纪律（本仓既有精神，逐项适用）**：每项能力**先建真机可观察判据再写实现**（`PROTEUS_EXIT_AFTER_REPORT=1` 报告落盘即进程自退 ⇒ 返回即完成信号，零轮询/零 sleep）；宿主未实现必须仍是 `*.unsupported`（**不伪造成功**）；三端语义差异如实写进页面说明，**不粉饰为「三端一致」**。
+900. **★★★材质系统落地：三端宿主按材质 id 派发 + 材质扩容（backdropBlur 接活 · 新增 frosted/vibrancy）**（2026-10-13 · 用户「1、2、3 逐个落地」）：
+**① 缘起**：用户问「材质这个我们也做了？好像只有一种材质」——取证发现：ShaderBackend（材质着色器层）**基建做了且为多材质设计**（materials 目录 + naga codegen + conformance + 门禁），但**只落 `glass` 一个**——`backdropBlur` 自 B4 起**已生成却无任何宿主消费**（死代码）；gradient/glow/mask 是原生图元不算 shader 材质。⇒ 落地三项：① 接活 backdropBlur；② 扩材质库（frosted+vibrancy）；③ 登记补齐。
+**② 机制（item 1 —— 数据驱动派发，item 2 因此零改宿主）**：① 契约：`<pg-glass material="...">` → `glassResolver` 折 `style.glass.material`（缺省/未知回退 `glass`；`glass` 包 `ResolvedGlass.material` + `cssSaturateForMaterial` Web 近似）；② codegen：`gen-shaders.mjs` 从材质目录产**材质字典**（id → 源码/入口/uniform），三端各一份（Swift `GeneratedMaterials.materials` / Java `MATERIALS` / C++ `proteus_shaders::MATERIALS`）；③ 宿主：iOS 遍历字典建**每材质一 pipeline**（`renderFaces` 按 `spec.material` 选管线 + uniform：GlassUniforms 80B / BlurUniforms 64B）；Android `GlassMaterial.buildPaint` 按 id 选 AGSL 源 + uniform 分支；鸿蒙 `glass_vk.cpp` 遍历 `MATERIALS` 建**每材质一 VkPipeline**（`BatchItem.material`），`proteus_render.cpp` 按材质分派 uniform 布局。
+**③ 扩容（item 2）**：新增 `materials/frosted.wgsl`（模糊 + 程序化颗粒噪声）、`materials/vibrancy.wgsl`（模糊 + 2.5× 提饱和）——**复用 `BlurUniforms` 布局 ⇒ 三端宿主零改**（字典自动多两条管线）。`mod.rs` 加 2 条目 → `gen-shaders.mjs` 自动产 20 源 + 8 SPIR-V。
+**④ 登记（item 3）**：`docs/proteus-material-plan/README.md`（材质目录/选用/加材质步骤，SSOT 指向自动生成 catalog）· `shader-backend-plan/README` 材质表补 frosted/vibrancy + B7 分批 + 如实标注"backdropBlur 曾生成未消费" · 任务卡 `T-material-dispatch`(done) · 门禁 `check-shader-capability` 键表扩全材质 + `check-glass-capability` 加材质派发接缝。
+**⑤ 判据**：`check:shader-generated`/`shader-capability`/`glass-capability`/`glass-audit`/`app-screen-content`/`harmony-runtime-prebuilt`/`android-runtime-aar-fresh` 全绿 · 三端零设备编译 · `tests/shader-backend`(4 材质) + `tests/glass-ir`(material 折入) 绿 · **真机**：iOS/Android **四材质并排**（glass 折射 / backdropBlur 纯模糊 / frosted 颗粒 / vibrancy 鲜艳）· 鸿蒙单材质（frosted）渲染正确。
+**⑥ ★★发现 pre-existing 鸿蒙 bug（非本单引入 · 已另立卡 `T-harmony-selfdraw-scroll`）**：鸿蒙 superapp 若**内容溢出视口且发生滚动**（`scrollRoot` offset>0）⇒ **整屏空白**。取证：① 内容不溢出 / offset=0 ⇒ 正常（**#896 基线图恰为此态，故从未暴露**——用户敏锐指出"单/双节点不溢出所以没事"）；② 把**全部鸿蒙 cpp 还原 HEAD 仍空白** ⇒ **pre-existing，与本轮改动无关**。根因在 `proteus_render.cpp` 自绘的滚动位移（`n.y - scrollY`）在 offset>0 时的画布裁剪/玻璃背板捕获坐标。**本单不修**（独立范围），立卡 handoff。
+**⑦ 教训**：**"多材质设计" ≠ "多材质落地"**——基建数据驱动只保证"能加"，**真落地要有消费者**（backdropBlur 生成 5 个月无人用 = 假绿）。★**设备/页面态覆盖要足**：#896 的三端验证**只跑了不溢出的短页**，长页滚动这条最基础路径**从未压过** ⇒ 鸿蒙自绘滚动 bug 潜伏至今（与"真 .vue 才暴露单位分叉 #890"同族：**验证样本必须覆盖真实使用形态**）。
 
 
 

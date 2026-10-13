@@ -2,8 +2,8 @@
 
 > 归属：基建层 / 横切能力（与 RenderBackend / CompilerBackend / HostRuntime 并列的**第五类可插拔层**）
 > 执行位：G-29 邻域（材质着色器）——★**不占 G 序**（沿 G-08/G-22/G-61 领域引擎先例；G 表编号由 `check-consistency.js` 守，本 plan 为"方法论第 24 次泛化"，见 `docs/spi-first-methodology/`）
-> 状态：**B1–B4 已落地（真机取证）；B6 像素等价门禁已落地**；B5 规划中
-> 决策：#833（立项）
+> 状态：**B1–B4 已落地（真机取证）；B6 像素等价门禁已落地**；**B7 材质派发 + 扩容（#900：三端按 id 派发 · frosted/vibrancy 新增 · backdropBlur 接活）**；B5 鸿蒙承载规划中
+> 决策：#833（立项）· #900（材质派发 + 扩容）
 
 ## 一句话定位
 
@@ -63,11 +63,17 @@
 
 | 材质 | 状态 | 说明 |
 |---|---|---|
-| `glass` | ✅ 已迁（B2/B3） | 边缘倒角厚板：真圆角 SDF + 外法线边缘折射 + 边键控模糊 + Fresnel 高光 + 磨砂白 |
-| `backdropBlur` | ✅ 入材质（B4） | 玻璃基座（纯高斯近似模糊 + tint，无折射）——已落 MSL/AGSL/GLSL |
+| `glass` | ✅ 已迁（B2/B3） | 边缘倒角厚板：真圆角 SDF + 外法线边缘折射 + 边键控模糊 + Fresnel 高光 + 磨砂白（`GlassUniforms` 80B） |
+| `backdropBlur` | ✅ 入材质（B4）+ 已**接活**（#900） | 玻璃基座（纯高斯近似模糊 + tint，无折射）；已落 MSL/AGSL/GLSL/SPIR-V 且**三端宿主真渲染**（`BlurUniforms` 64B） |
+| `frosted` | ✅ 新增（#900） | 模糊 + **程序化颗粒噪点**（磨砂质感）；同 `BlurUniforms` 布局 ⇒ 宿主零改 |
+| `vibrancy` | ✅ 新增（#900） | 模糊 + **大幅提饱和**（通透有颜色）；同 `BlurUniforms` 布局 ⇒ 宿主零改 |
 | `gradient` | ✅ 几何单源（B4） | **保留原生图元**（CAGradientLayer / LinearGradient）；**CSS 端点式下沉内核** `proteus_layout_gradient_endpoints`（此前 4 份手写副本） |
 | `glow` | ✅ 曲线单源（B4） | **保留分层描边**（形状跟随，不适用盒填充 shader）；**分层曲线下沉内核** `proteus_layout_glow_layers`（此前 TS/Swift/Kotlin 手写） |
 | `mask` | ✅ 曲线单源（B4） | **保留原生遮罩**（CAGradientLayer-as-mask / PorterDuff）；**揭示色标**已在内核 `reveal_stops`（宿主改用 `proteus_layout_mask_stops`） |
+
+> ★**材质派发（#900）**：三端宿主**不再写死 glass**——`gen-shaders.mjs` 产出**材质字典**（id → 源码/入口/uniform），宿主**按 `style.glass.material` 选管线**（数据驱动 ⇒ 加材质零改宿主）。`glassResolver` 折 `<pg-glass material="...">` → `style.glass.material`（缺省/未知回退 `glass`）。
+> ★**如实边界（#900 修正）**：`backdropBlur` 自 B4 起**已生成但长期无宿主消费**（三端生成物=死代码）——#900 接活（宿主派发），**非新增能力**。
+
 
 > ★B4 的关键判断（**已取证**）：gradient/mask 已是**原生图元**（强行做自定义 shader = 向下降级）；glow 是**形状跟随**（不适用盒填充 shader）。⇒ 真正需要"单一真源"的是**重复的几何/曲线数学**，它下沉到**内核**（`GlowSpec::layers` / `style::linear_endpoints` / `MaskSpec::reveal_stops` = 唯一实现），宿主读结果——这可能比塞进 WGSL 更贴"一处实现"。
 
@@ -77,8 +83,9 @@
 - **B2 Android 竖切** ✅：`GlassMaterial` 改引生成物 AGSL；真机（真机 glass 面 + 滚动钉住）。
 - **B3 iOS 竖切** ✅：删 CoreImage；`glass-metal.swift`（Metal）；真机 `Metal 管线就绪（真源=WGSL）`。
 - **B4 前景材质** ✅：backdropBlur 入 WGSL；gradient/glow/mask 的**几何/曲线数学下沉内核单源**（宿主读结果）；真机验证三块渲染（`hosts/ios/results/glass-ios.png`）。
-- **B5 鸿蒙** 📋：XComponent+GLES/Vulkan 承载研究 → 实现。
+- **B5 鸿蒙** 📋：XComponent+GLES/Vulkan 承载研究 → 实现。（**部分已落地**：鸿蒙离屏 Vulkan 玻璃/vk 管道见 #841；B5 余"全场景接入"待续。）
 - **B6 收口** ✅（像素等价部分）：**玻璃像素等价门禁** `check:glass-pixel-parity`——本机 macOS Metal 渲染生成物 MSL vs Rust CPU oracle 逐像素比对（半纹素对齐后平均差 0.33/255、超差 <3% 上限；**破坏性验证**：故意错 20px 折射深度 ⇒ 11.5% 超差判红）。性能基线待补。
+- **B7 材质派发 + 扩容** ✅（#900）：① 三端宿主**按材质 id 派发**（读 `style.glass.material` → 选管线 + uniform；`gen-shaders` 出材质字典）；② **新增 frosted / vibrancy**（同 `BlurUniforms` ⇒ 宿主零改）；③ `backdropBlur` **接活**（曾生成未消费）。真机 iOS/Android 四材质并排取证。
 
 ## 诚实边界
 

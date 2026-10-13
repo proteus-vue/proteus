@@ -99,8 +99,9 @@ describe('★★G-62 ShaderBackend（材质着色器可插拔落地）', () => {
     expect(ALL_BACKENDS.length).toBeGreaterThanOrEqual(2)
   })
 
-  it('⑨ 多材质：glass + backdropBlur 全端生成物齐（B4）', () => {
-    for (const id of ['glass', 'backdropBlur']) {
+  it('⑨ 多材质：glass + backdropBlur + frosted + vibrancy 全端生成物齐（B4 · #900）', () => {
+    const allIds = ['glass', 'backdropBlur', 'frosted', 'vibrancy']
+    for (const id of allIds) {
       expect(generatedReady(id), `${id} 生成物不齐`).toBe(true)
       for (const tgt of ['agsl.frag.glsl', 'msl.frag.metal', 'glsl.frag.glsl']) {
         expect((SHADER_SOURCES[`${id}.${tgt}`] ?? '').length, `${id}.${tgt}`).toBeGreaterThan(50)
@@ -109,10 +110,12 @@ describe('★★G-62 ShaderBackend（材质着色器可插拔落地）', () => {
       const out = backendById('shader-agsl')!.land(id)
       expect(out.fragment.includes('half4 main(float2 coord)'), `${id} AGSL 入口`).toBe(true)
     }
-    // 目录里有两种材质
-    expect(MATERIALS.map((m) => m.id).sort()).toEqual(['backdropBlur', 'glass'])
-    // backdropBlur uniform = 64（glass = 80）
-    expect(material('backdropBlur')!.uniformSize).toBe(64)
+    // 目录里有四种材质
+    expect(MATERIALS.map((m) => m.id).sort()).toEqual(['backdropBlur', 'frosted', 'glass', 'vibrancy'])
+    // uniform 尺寸：glass = 80（含折射/高光）；模糊族（backdropBlur/frosted/vibrancy）= 64
     expect(material('glass')!.uniformSize).toBe(80)
+    for (const id of ['backdropBlur', 'frosted', 'vibrancy']) {
+      expect(material(id)!.uniformSize, `${id} uniformSize`).toBe(64)
+    }
   })
 })
