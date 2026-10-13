@@ -61,6 +61,16 @@ export interface SlotSubscription {
   sourceExpr?: string
   /** 外层列表的 listId（嵌套时才有；运行时先取外层行，再在行上求内层数组） */
   parentListId?: number
+  /**
+   * ★★★决策 #907/B2：该行内槽位所属列表的**顶层数据源名**（如 `list`）。
+   *
+   * 【为什么需要（跨源触发的正确取行）】行内绑定可依赖**列表源以外**的源
+   *   （`:class="{ on: active == item.key }"` 依赖 `active`）。这类槽位被**同时**挂到
+   *   外层源（`active`）以获取触发——而外层源变化时 `writeListItems` **不能再从该源取行**
+   *   （`active` 不是数组）⇒ 必须用**本字段**（列表自己的源名）取行、用源上下文求 `active`。
+   *   缺省 ⇒ 运行时退回 `src.sourceName`（既有行为）。
+   */
+  listSource?: string
 
   /* ── ★★P2-5（2026-10-03）：v-once / v-memo 语义 ── */
 

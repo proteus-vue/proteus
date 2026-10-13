@@ -20,7 +20,7 @@
 
 | # | 现象（真机） | 根因（file:line） | 静默 | 状态 |
 |---|---|---|---|---|
-| A1 | **组件内 `computed(() => …)` 派生的 v-for 数据不渲染**（`pg-glass-nav` 的 `rows` computed ⇒ 导航项全空白） | 端上不执行 script，组件 `data` 只取 `ref(<字面量>)` 初值；`computed` 不产 data ⇒ 模板 `v-for="row in rows"` 取到 `undefined`（`packages/cli/src/app-component-registry.ts` 的 `extractRefLiterals` 只认 ref） | ✅ 静默 | 绕开（改页面内联 v-for） |
+| A1 | **组件内 `computed(() => …)` 派生的 v-for 数据不渲染**（`pg-glass-nav` 的 `rows` computed ⇒ 导航项全空白）；**且运行期通路的响应式 v-for 被 `staticInstantiate` 静态展开**（`tpl.lists` 清空 ⇒ 运行期订阅表/列表被整条架空） | ① `computed` 不产 data（`app-component-registry.ts` 的 `extractRefLiterals` 只认 ref）；② 运行期通路也给 `buildLayoutTemplate` 传 `statics` ⇒ `staticInstantiate` 把可静态求值的 `v-for` 折成死节点 | ✅ 静默 | **部分修复**（#907：`keepReactiveStructure` 保留响应式 v-for/v-if；③ computed 产 data 待补） |
 | A2 | **`v-for` 行内动态 `:class`（对象）渲染成黑块** | 行内 `:class` 对象被当 `list-item` style 处理、发错值（`build.ts` `inList` 分支 + `slot.ts` `toF32`） | ✅ 静默 | 绕开（去掉行内 `:class`） |
 | A3 | **普通 `const` 数组不被当响应式源** ⇒ 子组件收不到该 prop | `sources.ts` 只把 `ref/reactive/computed/props/model` 当源；普通 `const` 数组不是源 ⇒ `component.items` 槽位不建 | ✅ 静默 | 绕开（改 `ref([...])`） |
 | A4 | **`pg-glass`（玻璃叶子）被当「可展开组件」重复展开 ⇒ 卡片黑块** | `template.ts` `isComponentTag && !iconLeaf`——漏了 `glassLeaf`（glassResolver 折成叶子的标签不该再展开） | ✅ 静默 | **修复**（#906：加 `&& !glassLeaf`） |
@@ -34,13 +34,23 @@
 
 | # | 现象（真机） | 根因（file:line） | 静默 | 状态 |
 |---|---|---|---|---|
-| B1 | **`v-for` 行内 handler 带行参（`@click="pick(r.key)"`）静默不生效** | handler 编成 `{k:'root',name:'r'}`（`events.ts`），而 `dispatch`（`screen-runtime.ts` → `slot-runtime/dispatch.ts` → `handler.ts`）**不传行作用域** ⇒ `r` 取不到 | ✅ 静默 | **登记（未修）** |
-| B2 | **`v-for` 行内绑定引用外层源（`:class="{on: active==r.k}"`）永不更新** | `build.ts` `inList` 分支**只**把行内槽位挂到**列表源**；`analyzeExprDeps` 已给出 `roots:['active']` 却被丢 ⇒ 外层源不进订阅图 | ✅ 静默 | **登记（未修）** |
+| B1 | **`v-for` 行内 handler 带行参（`@click="pick(r.key)"`）静默不生效** | handler 编成 `{k:'root',name:'r'}`（`events.ts`），而 `dispatch`（`screen-runtime.ts` → `slot-runtime/dispatch.ts` → `handler.ts`）**不传行作用域** ⇒ `r` 取不到 | ✅ 静默 | **修复**（#907：实例化产 `rowScopes`（含「实例节点 id ↔ 模板节点 id」映射 + 行作用域）；派发折回模板 id + handler `read` 走行作用域） |
+| B2 | **`v-for` 行内绑定引用外层源（`:class="{on: active==r.k}"`）永不更新** | `build.ts` `inList` 分支**只**把行内槽位挂到**列表源**；`analyzeExprDeps` 已给出 `roots:['active']` 却被丢 ⇒ 外层源不进订阅图 | ✅ 静默 | **修复**（#907：`build.ts` 把行内槽位同时挂外层源 + `listSource`；运行期行内动态 `:class` 按行重算 + `paint.*` 批走宿主 `updatePatches`） |
 | B3 | **组件 prop 传字符串值（`:active="navKey"`）⇒ 整屏 `[unsupported type]` 不渲** | `component-prop` 槽位发 `CALL_COMPONENT_UPDATE` 走 `toF32(value)`（只吃 number/boolean）⇒ 字符串抛 | ✅ 静默（整屏） | **修复**（#906：无 `onComponentProp` 时跳过该槽位） |
 | B4 | **`position:fixed` 的 `bottom` 落到页面内容底部（屏外）** ⇒ 悬浮导航不显示 | 引擎 `taffy_engine.rs` 把 `fixed` 当 `absolute`、inset 相对**父**（App 页面层，内容高 1400）；CSS 语义应相对**视口** | ✅ 静默 | **修复**（#907：`build_taffy` fixed 挂根 + 运行期视口高 `app-root` 包层） |
 | B5 | （同族）fixed 玻璃的**滚动补偿**在独立玻璃遍里缺失 ⇒ 玻璃随滚动下移/文字飞出屏 | `drawGlassPass` 在 onDraw 滚动变换之外，却给 fixed 加 `+scroll`（重复补偿） | ❌ 可见 | **修复**（#907：玻璃遍套用 onDraw 同款 `-scroll` 变换） |
+| B7 | **内核增量重排：范围根为 stretch（无显式宽）时，其 `flex:1` 子项被塌成 0**（真机：悬浮 dock 的 4 个导航项宽 231→0，文字/图标消失；一条 `layout.left` 指令即触发） | 内核 `layout_subtree_and_writeback` 把范围子树隔离求解，而范围根**无显式宽**（宽由父 stretch 撑开）⇒ taffy 按 auto=内容宽算 ⇒ `flex-basis:0` 子项撑不出宽 ⇒ 范围根塌成内容尺寸 | ❌ 可见 | **修复**（#907：隔离求解前把范围根**上次解析出的实际尺寸**钉到拷贝子树根上——边界尺寸与内容无关，本次重排不该改它） |
+| B6 | **行内 `:class` 的绘制字段（color/fontWeight）在运行期静默丢弃**——即使 B2 修好、槽位重算了，也“求值了但找不到节点” | 运行期 `createScreenRuntime` 的**实例化用 `ListRegistry` 与 `VaporRuntime` 用的不是同一实例** ⇒ 运行期读空表解析不到行节点；且运行期**未接 `onPaintProp` 出口**（绘制字段无处可去） | ✅ 静默 | **修复**（#907：共享 `ListRegistry` + 运行期 `onPaintProp`/`updatePatches` 批量通道，与 `entry-vapor` 同构） |
 
 > **B 类共性**：**行作用域（row scope）在事件派发与跨源订阅里没有贯通**——`v-for` 里的绑定/handler 一碰到「行数据以外的东西」（外层源、行参），要么不订阅、要么派发时取不到 ⇒ 静默失效。**这是 Vue 运行时「作用域链」能力的结构性缺失。**
+
+## C0. 运行期指令的单位缺口（跨端，非本会话引入）
+
+| # | 现象（真机） | 根因（file:line） | 静默 | 状态 |
+|---|---|---|---|---|
+| U0 | **`applyOps`（运行期增量指令）里的长度值不乘密度** ⇒ App 上「动态改 left/width/…」只走 1× 距离（静态 mount 正确——它走 physicalizeTree ×密度）。真机：悬浮 dock 高亮胶囊 hlLeft 从 83→237（逻辑）到位应为 711 物理，实际只到 237 物理（=0.33×，胶囊**落在错误项**） | `VaporRenderHost.physicalizeTree` 只物理化 **mount 的 tree JSON**；`applyOps` 的**二进制指令值在 JS 侧编码、内核侧解码** ⇒ 宿主无法介入换算（**已在源码注册为 U0**，见 physicalizeTree 注释「诚实边界」） | ❌ 可见 | **登记（未修）**——需内核侧接密度（proteus_layout_set_density + apply_style_key 对长度键 ×d） |
+
+> **U0 共性**：**「单位换算在入口做一次」** 只覆盖了 mount 通路；**运行期指令通路（applyOps）**是另一条**跨语言边界**（值在 JS 编、内核解），宿主没有介入点 ⇒ **动态几何值的单位与静态值不一致**。iOS 因 CALayer=point（逻辑）而**恰好**正确（与 #892 同因），Android 显式换算 ⇒ 只在 Android 显形。**这与 B7（内核增量）是两回事**：B7 是几何求解错（已修），U0 是**单位**错（未修）。
 
 ## C. 我本会话引入的 bug（非框架缺口，如实记录防混淆）
 
@@ -55,11 +65,13 @@
 ## 结论与主张
 
 1. **App 端「编译折叠面 + 订阅表」相对 Vue 运行时是「窄接受面」**：`computed`、动态 `:class`（行内）、行作用域事件、跨源订阅、图片通路——**均缺**，且**静默**。
-2. **造一个真实演示就撞出 12 面墙**（7 编译折叠 + 5 运行时）——**OS 级承载（超级应用）无法建立在这种接受面上**。
+2. **造一个真实演示就撞出 12 面墙**（7 编译折叠 + 5 运行时 + 我引入 3 个 bug）——**OS 级承载（超级应用）无法建立在这种接受面上**。
+   ★**本轮（#907）已收口**：A1（`keepReactiveStructure` 保留响应式 v-for/v-if）· B1（行作用域事件）· B2（行内跨源绑定 + `paint.*` 批通道）——**三面墙落地**；其余（computed 产 data / 图片通路 / 普通 const 源）仍**登记待补**。
 3. **主张**：把「**App 折叠面/订阅表 ⇄ Vue 运行时**」列为**独立专项**，像「端能力对齐（#477）」那样：以 **Vue 运行时语义为标尺**，逐项登记「Vue 有 / App 折叠面有」的差集，**逐项补接受面 + 配门禁 + 真机判据**。
 4. **纪律（本台账的直接诉求）**：**遇到接受面缺口，禁止用改写法绕过**——**必须登记台账 + 立任务卡**（本会话多处以「绕开」处理属反面教材）。
+5. **根因一句话**：运行期通路此前**与静态通路共用 `staticInstantiate`**（把`v-for` 折死）+ **A1/B1/B2/B6 的接受面**——墙都在「运行期不被静态折叠取代」这条边界上。`keepReactiveStructure` 把这条边界划出来了：**静态通路（无运行期）折死；运行期通路（`runtime-content.json`）保留活结构**。
 
 ## 关联
 
 - 既有相关：`docs/Proteus_Vapor三端能力对照.md` · `docs/Proteus_指令与Vapor能力缺口调研与补齐方案.md` · `docs/Proteus_App三端对齐缺口与收口路线.md` · `docs/proteus-end-alignment-plan/`
-- 本会话决策：#906（玻璃契约/叶子/组件族）· #907（fixed 视口语义 + 玻璃内核重做）
+- 本会话决策：#906（玻璃契约/叶子/组件族）· #907（fixed 视口语义 + 玻璃内核重做 + 运行期接受面收口 A1/B1/B2/B6）

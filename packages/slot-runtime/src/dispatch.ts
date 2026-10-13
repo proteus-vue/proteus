@@ -129,6 +129,13 @@ export function dispatchGesture(
   index: EventIndex,
   state: DispatchState,
   run: (handler: string, nodeId: number) => boolean,
+  /**
+   * ★★★决策 #907/B1：**实例节点 id → 模板节点 id** 的映射（行内节点用）。
+   *   v-for 行实例复用了模板节点的事件绑定（`EventIndex` 是**模板级**的）⇒ 命中行内节点时，
+   *   用它把实例 id 折回模板 id 再查 handler（此前直接用实例 id 查 ⇒ 查不到 ⇒ 行内 handler **静默失效**）。
+   *   缺省（无映射）⇒ 行为不变（非列表/未提供映射时）。
+   */
+  templateIdOf?: (instanceId: number) => number | undefined,
 ): DispatchResult {
   const fired: number[] = []
   const skippedSelf: number[] = []
@@ -138,7 +145,12 @@ export function dispatchGesture(
   const hit = chain.length > 0 ? chain[0]! : -1
 
   for (const id of chain) {
-    const b = index.get(`${id}:${event}`) ?? index.get(`${id}:tap`)
+    let b = index.get(`${id}:${event}`) ?? index.get(`${id}:tap`)
+    // ★#907/B1：行内节点 ⇒ 折回模板 id 查（events 是模板级的，行实例共用）
+    if (!b && templateIdOf) {
+      const tid = templateIdOf(id)
+      if (tid !== undefined) b = index.get(`${tid}:${event}`) ?? index.get(`${tid}:tap`)
+    }
     if (!b) continue
     // ★组件事件绑定（componentEmit）**不参与手势派发**——它由 emit 路由直接查表触发
     //   （见 EventBinding.componentEmit 注释；防"手势恰好同名"把需要 $event 的 handler 跑起来）

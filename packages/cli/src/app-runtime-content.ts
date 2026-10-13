@@ -132,6 +132,9 @@ export async function buildAppRuntimeContent(
     ...(expandableTags.size > 0 ? { componentTags: expandableTags } : {}),
     iconResolver,
     glassResolver,
+    // ★★★运行时列表/条件保持（2026-10-13 · 台账 A1/B1/B2 同源墙）：运行期通路**必须**保留响应式
+    //   v-for/v-if（否则被静态展开成死节点 ⇒ 订阅表/运行期列表被架空）。静态通路（app-content.ts）不开。
+    keepReactiveStructure: true,
   }
   let compiled = 0
   let skipped = 0
@@ -214,7 +217,7 @@ export async function buildAppRuntimeContent(
   // ★★★App 组件实例化（决策 #811）：把页面用到的 `p-*` 组件编译成注册表，**按屏挂载**（该屏用到的组件）。
   //   ⇒ 运行期 `instantiateTemplate` 据此展开组件内部。无组件 ⇒ 各屏不产 `components` 字段（既有产物不变）。
   {
-    const { components, diagnostics: compDiags } = buildAppComponentRegistry(pageSources, root, { tokens, globalCss })
+    const { components, diagnostics: compDiags } = buildAppComponentRegistry(pageSources, root, { tokens, globalCss, keepReactiveStructure: true })
     for (const d of compDiags) diagnostics.push(`[components] ${d}`)
     const tags = Object.keys(components)
     if (tags.length > 0) {

@@ -25,7 +25,7 @@ import { isEnvVarName } from '@proteus-vue/contracts/env-vars'
 // ★★★批 A④（2026-10-08 · 决策 #658）：z-index 数值→语义层区间映射（SSOT 在 contracts/layers.ts）
 import { zIndexOf } from '@proteus-vue/contracts/layers'
 import type { VaporDiagnostic } from './build'
-import type { VueCompatDeps } from './sources'
+import { scanReactiveSources, type VueCompatDeps } from './sources'
 import type { LayoutNode, LayoutTemplate, ListTemplate, TextSegment } from '@proteus-vue/slot-runtime'
 // ★P3-5 宿主指令注册表（**唯一事实来源在运行时包**——编译器据此产诊断、桥据此执行）
 import { HOST_DIRECTIVE_NAMES, HOST_DIRECTIVE_SPECS, isHostDirective } from '@proteus-vue/slot-runtime'
@@ -3421,6 +3421,13 @@ export function buildLayoutTemplate(
      *   （**构建期注入**，编译器不直接依赖玻璃包）。给定则 `pg-glass` 折成带 `glass` 字段的普通盒（保留子内容）。
      */
     glassResolver?: (props: Record<string, string | undefined>) => Record<string, unknown> | null
+    /**
+     * ★★★**运行期列表/条件保持**（2026-10-13 · 台账 A1/B1/B2 同源墙）：给了 `statics` 时，若 v-for 源 /
+     *   v-if 条件**引用响应式源**（ref/reactive/computed/props…）⇒ 不静态折死，保留交订阅表+运行期驱动。
+     *   **仅运行期消费方开**（App 壳 `buildAppRuntimeContent`）；静态通路（`screen-content.json`）不开
+     *   （它无运行期，必须整树静态展开）。缺省 false ⇒ 与旧行为逐字节一致。
+     */
+    keepReactiveStructure?: boolean
   },
 ): LayoutTemplateResult {
   const diagnostics: VaporDiagnostic[] = []
@@ -3460,7 +3467,26 @@ export function buildLayoutTemplate(
   const bodyLineOffset = dev ? templateContentLineOffset(source, desc) : 0
   // ★★★批次 45：构建期静态实例化（给了 `statics` 才做——缺省零行为变化）。
   if (statics) {
-    const si = staticInstantiate(ast as unknown as { type: number; children: unknown[] }, statics)
+    // ★★★运行时列表/条件保持（2026-10-13）：**仅运行期消费方**（`opts.keepReactiveStructure`，如 App 壳
+    //   统一运行期通路 `buildAppRuntimeContent`）——v-for 源、v-if 条件若引用**响应式源**（ref/reactive/
+    //   computed/props…）⇒ **不静态折死**：否则列表被展开成死节点、条件被折成单分支，运行期订阅表
+    //   （列表/visibility 槽位）被整条架空（台账 A1/B1/B2 同源墙："编译折叠"吃掉"运行时"）。
+    //   ★静态通路（无运行期，`screen-content.json`）**不开**此开关——它必须整树静态展开。
+    //   静态常量源（直接引用数组字面量）无论开关都照折。
+    let runtimeSources: Set<string> | undefined
+    if (opts?.keepReactiveStructure) {
+      try {
+        // scanReactiveSources 的 compat 需 `{sfcParse, compileScript}`——本处 compat 是 `{sfcParse, domParse}`
+        // ⇒ 只透传 sfcParse（compileScript 由 scanReactiveSources 内部缺省回退）。
+        const scan = scanReactiveSources(source, filename, compat ? { sfcParse: compat.sfcParse } : undefined)
+        if (scan.ok && scan.sources.length > 0) runtimeSources = new Set(scan.sources.map((s) => s.name))
+      } catch { /* 扫描失败 ⇒ 不保留（与旧行为一致，不阻断） */ }
+    }
+    const si = staticInstantiate(
+      ast as unknown as { type: number; children: unknown[] },
+      statics,
+      runtimeSources ? { runtimeSources } : undefined,
+    )
     ast = si.ast as unknown as { children: unknown[] }
     for (const d of si.diagnostics) diag(d, undefined, 'VAPOR_STATIC_IF_DROPPED')
   }

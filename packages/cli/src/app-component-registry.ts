@@ -183,7 +183,7 @@ export function resolveComponentTags(sfcSources: Array<{ name: string; src: stri
 export function buildAppComponentRegistry(
   sfcSources: Array<{ name: string; src: string }>,
   root: string,
-  opts: { tokens?: Record<string, string>; globalCss?: string } = {},
+  opts: { tokens?: Record<string, string>; globalCss?: string; keepReactiveStructure?: boolean } = {},
 ): { components: Record<string, AppComponentDef>; diagnostics: string[] } {
   const diagnostics: string[] = []
   const fwRoot = resolveComponentsRoot(root)
@@ -202,7 +202,7 @@ export function buildAppComponentRegistry(
     const src = fs.readFileSync(found, 'utf-8')
     const filename = path.relative(root, found)
     const statics = extractRefLiterals(src)
-    const tplRes = buildLayoutTemplate(src, filename, undefined, opts.tokens, statics, opts.globalCss, false, { iconResolver, glassResolver })
+    const tplRes = buildLayoutTemplate(src, filename, undefined, opts.tokens, statics, opts.globalCss, false, { iconResolver, glassResolver, ...(opts.keepReactiveStructure ? { keepReactiveStructure: true } : {}) })
     if (!tplRes.ok) {
       diagnostics.push(`组件 <${tag}> 模板编译失败（${filename}）`)
       continue

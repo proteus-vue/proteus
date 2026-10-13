@@ -504,6 +504,11 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
         scope, // ★v-for 别名（运行时行作用域求值用）
         sourceExpr: ref.listContext!.sourceExpr,     // ★列表源表达式（嵌套如 group.items）
         parentListId: ref.listContext!.parentListId, // ★外层列表 id（嵌套时才有）
+        // ★★★决策 #907/B2：列表的**顶层源名**——外层源变化触发本行重算时，用它取行（见 listSource 注释）
+        ...(() => {
+          const lr = [...new Set(deps.listRelative.map((r) => ref.scopeSources[r.scope] ?? r.scope))]
+          return lr.length > 0 ? { listSource: lr[0]! } : {}
+        })(),
       }
       slotRecords.push({ slot: itemSlot, deps, ref })
       decisions.push({
@@ -525,6 +530,19 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
         const list = slotsBySource.get(src.sourceId) ?? []
         if (!list.some((x) => x.slotId === mySlot)) list.push(itemSlot)
         slotsBySource.set(src.sourceId, list)
+      }
+      // ★★★决策 #907/B2：**行内绑定引用「列表源以外」的源**（`:class="{on: active==item.k}"` 的 `active`）
+      //   ⇒ 也要挂到该**外层源**，否则该源变化时本行**永不重算**（静默失效）。
+      //   运行时按 `slot.listSource` 取行、按源上下文求 `active`（见 runtime `writeListItems`）。
+      const listRootSet = new Set(listRoots)
+      for (const r of new Set(deps.roots)) {
+        if (listRootSet.has(r)) continue      // 列表源已在上面挂过
+        const src = srcScan.byName.get(r)
+        if (!src) continue
+        const list = slotsBySource.get(src.sourceId) ?? []
+        if (!list.some((x) => x.slotId === mySlot)) list.push(itemSlot)
+        slotsBySource.set(src.sourceId, list)
+        notes.push(`slot_${mySlot} 行内槽位**跨源**：还依赖外层源 \`${r}\`（其变化 ⇒ 本行按 listSource=\`${itemSlot.listSource ?? '?'}\` 重算）`)
       }
       // ★★无 `:key` ⇒ **error 级诊断**（本仓实测：这是"静默错行"的来源）
       //

@@ -130,3 +130,22 @@ const padW = ref(300)
     expect(store.padW, '★祖先 handler 被 .stop 挡下（这正是"点了按钮祖先也动"的缺陷形态）').toBe(300)
   })
 })
+
+// ★★★决策 #907/B1：**行内 handler 的模板 id 折回**——修「`@click="pick(row.key)"` 静默失效」。
+describe('★★★B1 行作用域派发（决策 #907）', () => {
+  it('行实例节点 → 折回模板 id 查 handler（events 是模板级的）', () => {
+    const bindings: EventBinding[] = [{ nodeId: 2, event: 'tap', handler: 'pick' }]
+    const index = indexEventBindings(bindings)
+    const state = createDispatchState()
+    const ran: number[] = []
+    const run = (h: string, id: number): boolean => { ran.push(id); return true }
+    // 旧行为：实例 id 直接查 ⇒ 查不到 ⇒ 不派发
+    const r0 = dispatchGesture([102], 'tap', index, state, run)
+    expect(r0.fired, '旧行为：实例 id 直接查 ⇒ 查不到').toEqual([])
+    // 传 templateIdOf：102 → 模板 2 ⇒ 命中 handler
+    const r1 = dispatchGesture([102], 'tap', index, state, run, (iid) => (iid === 102 ? 2 : undefined))
+    expect(r1.fired, '折回模板 id 后命中').toEqual([102])
+    expect(ran).toEqual([102])
+  })
+})
+

@@ -598,11 +598,14 @@ export class VaporRuntime {
       //   `src.sourceName` 取，而不是从 sourceExpr 首段取**。
       //   （首段若是别名，则它前面的层级已经包含在 sourceExpr 里了——见下方段序处理。）
       const segs = (spec.sourceExpr ?? '').split('.').filter(Boolean)
-      const topRows = ctx.read(src.sourceName)
+      // ★★★决策 #907/B2：行/数据源名——有 `listSource` 用它（外层源触发本行重算时 `src.sourceName`
+      //   是外层源、不是列表源）；否则退回 `src.sourceName`（既有行为）。
+      const listSrcName = spec.listSource ?? src.sourceName
+      const topRows = ctx.read(listSrcName)
       if (!Array.isArray(topRows)) return out
       // 段序：sourceExpr 的每一段都是「沿当前行集向下取一层」的字段名；
       // 若首段恰好等于顶层源名（最外层），跳过它（已由 topRows 提供）。
-      const walkSegs = segs[0] === src.sourceName ? segs.slice(1) : segs
+      const walkSegs = segs[0] === listSrcName ? segs.slice(1) : segs
       // 逐段展开：从顶层行集开始，每段把「每行的该字段」展开成新行集
       let current: Array<{ row: Record<string, unknown>; ancestors: Array<Record<string, unknown>> }> = (
         topRows as Record<string, unknown>[]
@@ -674,10 +677,62 @@ export class VaporRuntime {
           ? cached.ctx
           : this.makeRowCtx(scope, row, ancestors, ctx)
         if (!(cached && cached.scope === scope)) rowCtxCache.set(rowRef, { scope, ctx: rowCtx })
+        // ★★★决策 #907/B2：行内 **动态 `:class`**（`paint.class`）——值是**类名形态**（对象/字符串），
+        //   不能走 `toF32`（Number(obj)=0 ⇒ 静默失效）。按行解析活跃类 → 逐字段发到**该行节点**
+        //   （plan 用**模板 nodeId** 查；状态按行节点 id 记 `lastClassFields`）。
+        if (spec.propKey === 'paint.class') {
+          this.emitListItemClass(spec, key, impl(rowCtx))
+          continue
+        }
         const value = impl(rowCtx)
         this.diffAndEmit(spec, key, value)
       }
     }
+  }
+
+  /** ★#907/B2：行内动态 `:class` —— 解析该类字段并按**行节点**下发（数值/枚举/字符串/绘制分流）。 */
+  private emitListItemClass(spec: SubscriptionTable['sources'][number]['slots'][number], key: string, cv: unknown): void {
+    const nodeId = this.registry?.resolveNode(spec.listId ?? -1, key, spec.itemSlotId ?? -1)
+    if (nodeId === undefined) return
+    if (this.skipNodeIds?.has(nodeId)) return
+    // 预计算计划优先（键 = **模板** nodeId，与编译期一致）；无计划 ⇒ 线性匹配
+    const plan = this.table.classPlans?.[String(spec.nodeId)]
+    const fields: Record<string, unknown> = {}
+    if (plan) {
+      applyDynamicClassPlan(cv, plan, fields)
+      if (this.hasStringClassFields) {
+        const linear = resolveDynamicClasses(cv, this.table.classRules ?? [])
+        for (const k of Object.keys(linear)) if (STRING_LAYOUT_FIELDS.has(k)) fields[k] = linear[k]
+      }
+    } else {
+      Object.assign(fields, resolveDynamicClasses(cv, this.table.classRules ?? []))
+    }
+    const nextKeys = new Set(Object.keys(fields))
+    const prev = this.lastClassFields.get(nodeId)
+    if (prev) {
+      for (const k of prev) {
+        if (nextKeys.has(k)) continue
+        if (NUMERIC_LAYOUT_FIELDS.has(k)) this.rt.buffer.push({ op: OpCode.SET_STYLE, nodeId, keyId: this.rt.keys.intern(`layout.${k}`), value: Number.NaN })
+        else if (ENUM_LAYOUT_FIELDS[k]) this.rt.buffer.push({ op: OpCode.SET_STYLE, nodeId, keyId: this.rt.keys.intern(`layout.${k}`), value: ENUM_LAYOUT_FIELDS[k]!.default })
+        else if (STRING_LAYOUT_FIELDS.has(k)) this.rt.buffer.push({ op: OpCode.SET_STYLE_STR, nodeId, keyId: this.rt.keys.intern(`layout.${k}`), valueRef: this.rt.strings.intern('') })
+        else this.onPaintProp?.(nodeId, `paint.${k}`, undefined)
+      }
+    }
+    for (const [fk, fv] of Object.entries(fields)) {
+      if (NUMERIC_LAYOUT_FIELDS.has(fk)) {
+        const n = layoutNumber(fv)
+        this.rt.buffer.push({ op: OpCode.SET_STYLE, nodeId, keyId: this.rt.keys.intern(`layout.${fk}`), value: n === null ? Number.NaN : n })
+      } else if (ENUM_LAYOUT_FIELDS[fk]) {
+        const idx = layoutEnumIndex(fk, fv)
+        this.rt.buffer.push({ op: OpCode.SET_STYLE, nodeId, keyId: this.rt.keys.intern(`layout.${fk}`), value: idx === null ? ENUM_LAYOUT_FIELDS[fk]!.default : idx })
+      } else if (STRING_LAYOUT_FIELDS.has(fk)) {
+        const sv = typeof fv === 'string' ? fv : fv == null ? '' : String(fv)
+        this.rt.buffer.push({ op: OpCode.SET_STYLE_STR, nodeId, keyId: this.rt.keys.intern(`layout.${fk}`), valueRef: this.rt.strings.intern(sv) })
+      } else {
+        this.onPaintProp?.(nodeId, `paint.${fk}`, fv)
+      }
+    }
+    this.lastClassFields.set(nodeId, nextKeys)
   }
 
   /**
