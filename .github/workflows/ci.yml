@@ -64,6 +64,9 @@ jobs:
       - name: 盲等门禁（★用户红线：脚本内 sleep 一律禁止——要么 App/被测对象主动上报，要么 wait_for.sh 条件等待）
         run: node scripts/check-no-blind-wait.mjs
 
+      - name: 多 AI 协作任务板门禁（★本规范：认领/边界/追溯/防撞车自洽——docs/ai-development-spec.md 第 6 节）
+        run: node scripts/check-ai-tasks.mjs --check
+
       - name: 命令机循环推进兜底门禁（★决策 #867：手写解析 while+switch 循环必须有推进兜底——否则非法输入卡死/OOM）
         run: node scripts/check-loop-guard.mjs
 
