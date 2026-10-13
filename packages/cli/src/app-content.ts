@@ -44,6 +44,8 @@ export interface AppScreenContentResult {
   skipped: number
   /** 逐页诊断（如实；多为 CSS class / 不支持语法） */
   diagnostics: string[]
+  /** ★★★M3 玻璃快照（决策 #881）：本次构建折叠出的 `<pg-glass>` 节点总数（0 = 无玻璃） */
+  glassNodes: number
 }
 
 /**
@@ -99,6 +101,8 @@ export async function buildAppScreenContent(root: string, platform: AppPlatform 
   const diagnostics: string[] = []
   let compiled = 0
   let skipped = 0
+  let glassNodes = 0   // ★M3（#881）：折叠玻璃节点计数
+  const glassManifest: Array<{ screen: string; nodeId: number; spec: Record<string, unknown> }> = []
   for (const r of routes) {
     const rel = r.component
     if (!rel) {
@@ -133,6 +137,11 @@ export async function buildAppScreenContent(root: string, platform: AppPlatform 
     }
     out[r.name] = pageSc
     compiled++
+    // ★★★M3 玻璃快照（决策 #881）：从折叠结果（每个 LayoutNode.style.glass）收集——写入 glass-manifest.json
+    for (const n of (res.template.nodes ?? []) as Array<{ id: number; style?: Record<string, unknown> }>) {
+      const spec = n.style?.glass as Record<string, unknown> | undefined
+      if (spec) { glassNodes++; glassManifest.push({ screen: r.name, nodeId: n.id, spec }) }
+    }
     for (const d of res.diagnostics) diagnostics.push(`${r.name}: ${d.code} ${d.message}`)
   }
 
@@ -214,6 +223,11 @@ export async function buildAppScreenContent(root: string, platform: AppPlatform 
   fs.mkdirSync(outDir, { recursive: true })
   const outFile = path.join(outDir, 'screen-content.json')
   fs.writeFileSync(outFile, JSON.stringify(out, null, 2))
+  // ★★★M3 玻璃产物快照（决策 #881）：`glass-manifest.json`——本次构建折叠出的 `<pg-glass>` 节点清单
+  //   （屏名 + nodeId + 内核 spec）。引擎可观测 / 端到端断言 / 降级链核验的证据源。无玻璃 ⇒ 不写。
+  if (glassManifest.length > 0) {
+    fs.writeFileSync(path.join(outDir, 'glass-manifest.json'), JSON.stringify({ platform, count: glassManifest.length, nodes: glassManifest }, null, 2))
+  }
   // ★★★运行时表现配置 → app-config.json（2026-10-08 · 决策 #594）：宿主据此显隐系统状态栏等。
   //   源自应用根 `app.config.ts`（`safeArea.statusBar` 等）——与 Web/MP 同一份（单一事实源）。
   //   缺文件/加载失败 ⇒ 不写（宿主用默认 show）。
@@ -227,7 +241,7 @@ export async function buildAppScreenContent(root: string, platform: AppPlatform 
     }
   } catch { /* 无 app.config / 加载失败 ⇒ 不写，宿主默认 show */ }
   if (compiled === 0) throw new Error('零页面编译成功——App 屏内容产物为空（路由格式/编译器有问题？）')
-  return { ok: true, platform, outFile, compiled, skipped, diagnostics }
+  return { ok: true, platform, outFile, compiled, skipped, diagnostics, glassNodes }
 }
 
 /** 从 `openIdx` 处的 `(` 取**括号平衡**的内容（跳过字符串字面量） */
