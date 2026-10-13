@@ -214,10 +214,15 @@ export async function resolveProteusViteConfig(
     //   变成 Web 端未必注册的 proteus-* 组件，没有 Web 模拟层的工程会整页渲染不出来）。
     //   配套：业务需在入口调 installFluidLayout(app) 注册 v-p-fluid 指令（@proteus-vue/components）。
     plugins = [
-      // ★VC2-b：Profile 边界校验（Web 端**同样执行**——卡片硬性要求，防"问题延迟到 App 端暴露"）
-      profileBoundaryPlugin({ level: mpTarget?.profileBoundary?.level, baselinePath: boundaryBaselinePath }),
+      // ★★★决策 #883（判据错靶修复）：**Profile 边界校验（Skyline 专属）不在 Web 构建执行**。
+      //   规则集 = `SKYLINE_BOUNDARY_RULES`（`end:'skyline'`，来自《Skyline WXSS 支持与差异》）——
+      //   它约束的是**小程序端**。此前 Web 分支也注册（卡片 VC2-b 旧口径"防延迟暴露"），导致
+      //   `display:grid`（Web/App 均支持、仅 Skyline 退化）在 **Web 构建**被误拦。
+      //   ● 判据按**编译目标**（`mode`/CLI `--target`）自动分流——本分支即 web 目标 ⇒ 不跑 Skyline 规则；
+      //     MP 分支（`isMp`）才跑。● 共享组件（`packages/components`）的 Skyline 合规由 **MP 构建**兜底
+      //     （examples/showcase MP 构建编译同一份组件源码）——覆盖不丢。
       // ★★★G-61 B4（P6）：CSE lint（语义级）——Profile 外写法在 Web 端也报错
-      //   （同判据：E-CSS-004/005/006 + W-CSS-101/102/103；与上面的字符串级校验互补）
+      //   （同判据：E-CSS-004/005/006 + W-CSS-101/102/103；与 MP 端字符串级校验互补）
       cseLintPlugin({ target: 'web', baselinePath: cseLintBaselinePath }),
       platformVariantPlugin(root, 'web'),
       vue,
