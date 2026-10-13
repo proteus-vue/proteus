@@ -60,7 +60,7 @@
       "verification": "三端真机截图 + Themis 三层对拍 + pnpm check:glass-capability 全绿",
       "branch": null,
       "related": ["T-glass-end2end"],
-      "note": "承接立项 #878（Hyaleos，docs/Proteus_液态玻璃系统组件库方案.md）。G0 引擎合体 = 既有 T-glass-end2end（前置，须先完）；本任务 = G1，落 lg-* 条族三件（内部渲染 <pg-glass>，参数只经 resolveGlass）。scope 限定为新目录以避免与 G0 撞车。"
+      "note": "承接立项 #878（Aether，docs/Proteus_液态玻璃系统组件库方案.md）。G0 引擎合体 = 既有 T-glass-end2end（前置，须先完）；本任务 = G1，落 lg-* 条族三件（内部渲染 <pg-glass>，参数只经 resolveGlass）。scope 限定为新目录以避免与 G0 撞车。"
     },
     {
       "id": "T-glass-audit-degrade",
