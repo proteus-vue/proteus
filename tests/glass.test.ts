@@ -127,8 +127,9 @@ describe('★G-07 三级降级决策（resolveGlassLevel）', () => {
     expect(solid.background).toBe(r.solid)
     expect(solid.backdropFilter).toBeUndefined()
     const l2 = glassStyleFor(r, 'l2')
-    expect(l2.backdropFilter).toBe(`blur(${r.blurPx}px)`)
-    expect(l2.WebkitBackdropFilter).toBe(`blur(${r.blurPx}px)`)
+    // ★#888：CSS 玻璃 = blur + saturate（对齐 iOS .regular 材质——通透有颜色）
+    expect(l2.backdropFilter).toBe(`blur(${r.blurPx}px) saturate(1.8)`)
+    expect(l2.WebkitBackdropFilter).toBe(`blur(${r.blurPx}px) saturate(1.8)`)
     expect(l2.background).toBe(r.tint)
   })
 

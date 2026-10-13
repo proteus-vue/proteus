@@ -8,6 +8,9 @@ import type { GlassPlatform } from './platforms'
 
 export type { GlassPlatform } from './platforms'
 
+/** ★决策 #888：CSS 玻璃的饱和度提升（对齐 iOS `.regular` 材质——blur + saturate 才有"iOS 那种玻璃"通透感） */
+export const CSS_SATURATE = 1.8
+
 export interface GlassEnv {
   /** 目标平台（缺省 web） */
   platform?: GlassPlatform
@@ -48,9 +51,14 @@ export function glassStyleFor(resolved: ResolvedGlass, level: GlassLevel): Recor
     return { background: 'transparent', borderRadius: px(resolved.radiusPx) }
   }
   const blur = `${resolved.blurPx}px`
+  // ★★★决策 #888（对齐 iOS 玻璃）：CSS 玻璃 = `blur + saturate`。iOS 的 `.regular` 材质不只是模糊，
+  //   还**提升背后内容饱和度**（saturate ~1.8）——这是"iOS 那种玻璃"通透有颜色的关键；此前只有 blur
+  //   ⇒ 深色背景下玻璃与实底难辨（用户实测：玻璃导航"看着像纯文字/没生效"）。原生端自绘玻璃的饱和
+  //   由 WGSL `u.saturation` 承担（#875），此常量仅补 Web/小程序 CSS 路径的对应项。
+  const backdrop = `blur(${blur}) saturate(${CSS_SATURATE})`
   return {
-    backdropFilter: `blur(${blur})`,
-    WebkitBackdropFilter: `blur(${blur})`,
+    backdropFilter: backdrop,
+    WebkitBackdropFilter: backdrop,
     background: resolved.tint,
     borderRadius: px(resolved.radiusPx),
   }
