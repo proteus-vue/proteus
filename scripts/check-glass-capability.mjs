@@ -67,12 +67,36 @@ function seamCheck() {
   }
 }
 
+// ③ 半径/模糊**单位换算**齐（★★决策 #890 · G0-B）：IR 的 `glass.{blur,radius}` 是 **CSS 逻辑 px**
+//   （=`resolveGlass` 的 `blurPx/radiusPx`，不乘密度；Web 端 `radiusPx → borderRadius:12px`），
+//   而三端着色器都在**设备像素空间**（`size_px` 已 ×密度/半分辨率）⇒ 每个宿主**必须**把 glass 的
+//   radius/blur 换算到同尺度。任一端漏换算 ⇒ 圆角/模糊停在逻辑值（真机应显的 1/density）⇒ **静默三端不一致**
+//   （本门禁建立前实测：Android 漏 ×密度，圆角/模糊为应显的 1/3；见决策 #890）。
+const UNIT_SEAMS = [
+  { label: 'Android 宿主（physicalizeSpec ×密度）', file: 'hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/VaporRenderHost.java', needle: 'for (String gk : new String[]{"blur", "radius"})' },
+  { label: 'iOS 宿主（makeUniforms ×outScale）', file: 'hosts/ios/ProteusHost/runtime/glass-metal.swift', needle: 'Float(spec.radius * outScale)' },
+  { label: '鸿蒙宿主（cmd 发射 ×density）', file: 'hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_host.cpp', needle: 'grad * density' },
+]
+function unitCheck() {
+  for (const s of UNIT_SEAMS) {
+    const p = path.join(ROOT, s.file)
+    if (!fs.existsSync(p)) {
+      problems.push(`${s.label}：文件不存在（${s.file}）`)
+      continue
+    }
+    if (!fs.readFileSync(p, 'utf8').includes(s.needle)) {
+      problems.push(`${s.label}：缺 "${s.needle}"（glass 半径/模糊单位换算丢失 ⇒ 该端停在逻辑 px，三端不一致且静默）`)
+    }
+  }
+}
+
 await valueCheck()
 seamCheck()
+unitCheck()
 
 if (problems.length) {
   console.error(`✗ 玻璃材质能力门禁未过（${problems.length}）：`)
   for (const p of problems) console.error(`  - ${p}`)
   process.exit(1)
 }
-console.log('✅ 玻璃材质能力（值 == glass 包预设单源 · glass 字段跨端接缝齐）')
+console.log('✅ 玻璃材质能力（值 == glass 包预设单源 · glass 字段跨端接缝齐 · 半径/模糊单位三端换算齐）')

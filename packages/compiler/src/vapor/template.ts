@@ -4255,7 +4255,12 @@ export function buildLayoutTemplate(
           if (s === undefined || s === '') return undefined
           if (a.type === 6) return s
           const m = /^['"](.*)['"]$/.exec(s)
-          return m ? m[1] : undefined
+          if (m) return m[1]
+          // ★★★#889：绑定**数字字面量** `:radius="12"` / `:noise="0.03"` / `:intensity="1.4"` → 折成字面量。
+          //   此前只认字符串字面量 ⇒ 绑定数字**静默丢弃**、回落 preset 默认（superapp `:radius="12"` 实测踩到：
+          //   清单显示 card 预设的 16）。仅折静态数字字面量；动态表达式（ref/成员）仍不折（诚实边界）。
+          if (/^-?\d+(?:\.\d+)?$/.test(s)) return s
+          return undefined
         }
         const spec = opts.glassResolver({
           preset: strProp('preset'),

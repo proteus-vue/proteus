@@ -44,4 +44,15 @@ describe('★★玻璃材质 IR 折叠（pg-glass → style.glass）', () => {
     const g = glassOf(build(`<view><pg-glass preset="tabBar" /></view>`))
     expect(g).toBeUndefined()
   })
+
+  it('★★#889：绑定数字字面量 :radius="12" 折入（此前静默丢弃、回落 preset）', () => {
+    const g = glassOf(build(`<view><pg-glass preset="card" :radius="12" /></view>`, { glassResolver }))!
+    expect(g).toBeTruthy()
+    expect(g.radius).toBe(12) // 此前恒为 card 预设的 16（绑定数字被丢）
+  })
+
+  it('★#889：绑定动态表达式 :radius="r" 仍不折（回落 preset——诚实边界）', () => {
+    const g = glassOf(build(`<view><pg-glass preset="card" :radius="r" /></view>`, { glassResolver }))!
+    expect(g.radius).toBe(16) // card 预设
+  })
 })

@@ -864,6 +864,7 @@ struct Index {
           const avoid: window.AvoidArea = win.getWindowAvoidArea(window.AvoidAreaType.TYPE_SYSTEM);
           const topPx: number = avoid.topRect.height;   // 物理 px
           setTopInset(topPx);
+          // I2-ALLOW: 仅**日志打印**的读数取整（PROTEUS_TOP_INSET_APPLY 报告行），几何用未取整的 topPx
           hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_TOP_INSET_APPLY px=%{public}d', Math.round(topPx));
         } catch (e) { /* 旧版本/失败 ⇒ 保持 0 */ }
       }).catch((e: Error) => {
