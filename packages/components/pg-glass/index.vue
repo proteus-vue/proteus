@@ -104,7 +104,7 @@ const showBorder = computed(() => resolved.value.border && level.value !== 'soli
 
 <style scoped>
 /* ★#389 根元素不设 position/display——定位与布局归消费方；定位上下文归 __in（noise/highlight 锚点） */
-.pg-glass__in { position: relative; }
+.pg-glass__in { position: relative; border-radius: inherit; }
 @supports not (backdrop-filter: blur(1px)) {
   .pg-glass { background: #121216; }
 }
@@ -112,6 +112,9 @@ const showBorder = computed(() => resolved.value.border && level.value !== 'soli
   position: absolute;
   inset: 0;
   pointer-events: none;
+  /* ★决策 #886：装饰层随玻璃圆角裁剪——此前方角 noise/highlight 在大圆角时**戳出圆角外**
+     （4 个角残留噪点矩形 = 深色方块）。`border-radius: inherit` 令噪点背景按圆角裁切。 */
+  border-radius: inherit;
   opacity: var(--pg-noise-opacity, 0);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
 }
@@ -122,6 +125,7 @@ const showBorder = computed(() => resolved.value.border && level.value !== 'soli
   right: 0;
   height: 1px;
   pointer-events: none;
+  border-radius: inherit;
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
 }
 .pg-glass--border { box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.12); }
