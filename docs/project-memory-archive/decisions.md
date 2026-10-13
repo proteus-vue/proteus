@@ -3850,6 +3850,20 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **⑥ 独立验证抓出的两处盲区（本单当场收紧）**：① 测试用例名「逐名一致」实为**单向子集**断言（`filter` 掉并集多出的名字 ⇒ 看不出"多抽"）⇒ 改**双向锁**（旧口径名一个不丢 + 并集不含「旧口径 ∪ 声明式」之外的名字 + 数量自洽）；② `bridge-keys.mjs` 原在 `GENERATED_BRIDGE_COUNT === 0` 时**整段跳过**声明式解析 ⇒「常量被改成 0 而工厂实含成员」这类脱节**静默溜过**（正是本仓最恨的"静默"）⇒ 去掉该短路（**始终解析**，`return {}` 合法空集天然通过），并补两条测试（改 0 + 工厂非空 ⇒ 报脱节；真·空集 ⇒ 不报）。
 **⑦ 边界与未顺手迁移**：`refs`（hook→桥方法，第二份契约）与 `wxKeys/webKeys`（桥成员集，第三份）是**两条独立契约**，本单只动后者。`gen-content.mjs::extractBridgeBodies`（错误码提取）**仍是旧行匹配口径** —— 已实测其成员集与锚定式一致，但其**取值切片读原文**（错误码是字符串字面量，遮罩会吃掉），迁移须改用 `topLevelEntries` 的 `start/end` 回原文取；属另一契约，**留待单独任务**（不混单）。
 
+896. **★★★鸿蒙 superapp 收敛自绘路径——真机 App 出液态玻璃（#842 未到期项落地 · 共享 runtime）**（2026-10-13）：
+**① 症状（用户「现在是不是可以鸿蒙了？」）**：iOS/Android 真机 `superapp` 已出玻璃（#893/#894），唯鸿蒙 superapp **不画玻璃**——它走 RS RenderNode 树，而玻璃**只在自绘通道**（`g_selfDraw` / `setContentMode('self-draw')`）绘制（#842 未到期项）。
+**② 取证（先查真实形态，别改错地方）**：`appScreenCommands`（proteus_host.cpp）**已**把 border/shadow/svgPath/transform/clip/z-index 全发进 cmd（数据齐）；缺口在**自绘路径的 `SDNode` 解析 + `drawContentNodes` 绘制**——原只画「背景色块 + 圆角 + 文字」。
+**③ 修（共享 runtime · 两处）**：
+ · **`proteus_render.cpp`**：`SDNode` 补 border/shadow/svg/transform/clip/zIndex 字段；自绘解析块（`if (g_selfDraw)`）填充（数据已在 `it` 里，`parentId` 本就有）；`drawContentNodes` 按 `zIndex` 稳定排序 + 画**描边**（Pen+DrawRoundRect/Path）、**盒阴影**（`OH_Drawing_ShadowLayer` 挂 Brush——需 `#include <native_drawing/drawing_shadow_layer.h>`）、**SVG 图标**（`PathBuildFromSvgString`+`DrawPath`）、**静态变换**（绕 pivot 的 `CanvasTranslate/Rotate/Scale`）、**裁剪**。
+ · **`Superapp.ets`**：`paintTree` 增 `setContentMode('self-draw')`；滚动 `scrollRoot`（自绘分支已实现：改 `spec->scrollY`+`markDirty`）/ 命中 `appScreenHitAt`（读内核树，与渲染路径解耦）均**无需改**。
+**④ ★两处真机抓出的 bug（自绘路径此前**从未被 real 数据压过**，故潜伏）**：
+ · **#896-1 裁剪坐标系**：cmd 的 `clipX/Y/W/H` 是**绝对屏幕坐标**（祖先链有效裁剪矩形交集），而自绘绘制在节点**局部原点**（`translate(n.x,ny)` 后）⇒ 我首版直接用绝对值裁剪 ⇒ **把每个节点裁没**（全屏白屏）。修：裁剪矩形换到局部（减 `n.x/ny`）。
+ · **#896-2 玻璃自身子树重画的双重平移**：`drawContentNodes` 自身按**绝对坐标**定位（内部 `translate(n.x,ny)`）⇒ #893 在玻璃面上重画自身子树时**外层又 translate 一次** = 双倍偏移（dev 夹具自身子树为空，故一直未暴露）。
+**⑤ 判据**：三端零设备编译（鸿蒙 OHOS clang）+ `check:harmony-runtime-prebuilt`（prebuilt 同步）+ `check:glass-capability` / `check:glass-audit` 全绿 · **真机（HUAWEI）**：`superapp mine` 页**玻璃卡显形**（蓝块 + 玻璃后绿圆**淡模糊** + 折射带 + 自身文字**清晰** + 图标/边框/圆角正常），与 iOS/Android 并排一致。
+**⑥ ★诚实发现（A/B 取证，非本单引入）**：`index` 屏中部有**文本重叠**（`主题`/`0` 一行）——用 **render-node 原路径**（临时 `setContentMode('render-node')`）A/B 对比，**重叠同样存在**；且该屏节点几何在**编译产物（内核内容）**里即重叠（跨端同一份内容）⇒ **pre-existing 内容/布局问题**，与本轮自绘收敛无关，**另立单**（不混单，`T-superapp-index-overlap`）。
+**⑦ 教训**：**新路径首次接真实数据时，先把"坐标系/单位"这类不变量钉死**——自绘路径此前只跑 dev 夹具（小场景、无 clip、无嵌套玻璃），一上 superapp（全屏 + overflow 裁剪 + 绝对坐标）即暴露「绝对 vs 局部」两处坐标 bug；与 #890 单位、#893 合成顺序同族：**不变量（坐标空间/单位/合成顺序）是静默 bug 的高发区，必须针对性取证**。
+**⑧ 边界**：鸿蒙 superapp 现走自绘（新建工程的鸿蒙宿主经 prebuilt 继承同一 runtime）；render-node 路径保留（`setContentMode('render-node')` 可切回）。
+
 
 
 
