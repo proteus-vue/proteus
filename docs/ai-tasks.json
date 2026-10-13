@@ -1,0 +1,131 @@
+{
+  "version": 1,
+  "spec": "docs/ai-development-spec.md",
+  "updated_at": "2026-10-13",
+  "schema": {
+    "说明": "Proteus 多 AI 协作开发 · 任务板（协调单一事实源）。规范全文见 docs/ai-development-spec.md 第 4 节。目标是让「谁在做 / 边界在哪 / 做完没 / 对应哪条决策」可机器核对，而不是靠记忆与口头协调。",
+    "字段": {
+      "id": "稳定编号，一旦分配不得更改（追溯锚点）。格式 T-<kebab>。",
+      "title": "一句话说清交付（单一可观察结果）",
+      "type": "framework-feature | component-api | capability | end-alignment | bugfix | docs | governance | verification",
+      "status": "planned（已立项未认领） | in_progress（已认领） | blocked（中断/阻塞，须 note 交接） | done（完成） | abandoned（放弃）",
+      "owner": "认领者标识（session:<短名> / agent:<id>）；status=in_progress 时必填。同一时刻不同会话必须不同名。",
+      "scope": "本任务允许改动的路径 glob 数组（边界）。两个 in_progress 任务的 scope 不得重叠（防撞车）。",
+      "decision": "对应决策号（decisions.md）；status=done 时必填，且必须在 decisions.md 真实存在。",
+      "verification": "证明本任务完成的判据：一条可执行门禁（pnpm check:xxx / npx vitest run <path> / 真机判据名）。status=done 时必填。",
+      "branch": "（可选）隔离分支/worktree 名——并行时的物理隔离建议。",
+      "related": "关联任务 id 数组（如残留问题指向原任务、子任务指向父任务）。",
+      "note": "自由文本：阻塞原因 / 【Handoff】块（见规范 4.4）。"
+    },
+    "对账规则": [
+      "认领的唯一形式 = 本文件出现 status=in_progress 的一行（owner 非空）；口头/skill 里的『我来做』不算。",
+      "status=done 必须三样齐全：decision（真实存在）+ verification（可执行）+ 已推送（check:pushed）。",
+      "任意两个 status=in_progress 任务的 scope 不得重叠（glob 静态前缀判定）。",
+      "中断必须交接：status=blocked 时 note 须含【Handoff】块（做到哪/已改/未做/下一步/坑/判据状态）。"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "T-glass-end2end",
+      "title": "端到端样例：真 .vue 用 <pg-glass> → 三端渲染玻璃（含 glass.radius 单位校验）",
+      "type": "end-alignment",
+      "status": "planned",
+      "owner": null,
+      "scope": [
+        "packages/glass/**",
+        "packages/compiler/src/vapor/**",
+        "hosts/android/**",
+        "hosts/ios/**",
+        "hosts/harmony/**",
+        "examples/**"
+      ],
+      "decision": null,
+      "verification": "三端真机截图 + glass.radius 单位一致性断言",
+      "branch": null,
+      "related": [],
+      "note": "承接 #864 遗留：iOS 宿主把 radius 按 pt×scale，而 resolveGlass 产出 radiusPx 物理 px ⇒ 真实 <pg-glass> 会踩『半径 ×3』。"
+    },
+    {
+      "id": "T-glass-audit-degrade",
+      "title": "proteus audit glass + 三级降级链核验（接 CI）",
+      "type": "governance",
+      "status": "planned",
+      "owner": null,
+      "scope": [
+        "packages/cli/src/glass-audit.ts",
+        "packages/glass/**",
+        ".github/workflows/**"
+      ],
+      "decision": null,
+      "verification": "pnpm check:glass-capability + 降级链破坏性验证",
+      "branch": null,
+      "related": [],
+      "note": "packages/cli/src/glass-audit.ts 已存在，需接 CI + 校验三级降级。"
+    },
+    {
+      "id": "T-no-unchecked-indexed-access",
+      "title": "tsconfig noUncheckedIndexedAccess 棘轮式迁移",
+      "type": "governance",
+      "status": "planned",
+      "owner": null,
+      "scope": [
+        "tsconfig.json",
+        "packages/*/tsconfig*.json"
+      ],
+      "decision": null,
+      "verification": "npx vue-tsc --noEmit + 棘轮基线",
+      "branch": null,
+      "related": [],
+      "note": "迁移项目：实测 2 包即 47 错，全仓数千条，须分级上（先棘轮基线再逐包收紧）。"
+    },
+    {
+      "id": "T-lint-next-batch",
+      "title": "lint 后续批次：type-aware 规则 + warning 清理",
+      "type": "governance",
+      "status": "planned",
+      "owner": null,
+      "scope": [
+        "eslint.config.mjs",
+        "eslint-suppressions.json"
+      ],
+      "decision": null,
+      "verification": "pnpm lint（rc=0，新增清零）",
+      "branch": null,
+      "related": [],
+      "note": "type-aware（no-floating-promises 等）需配 parserOptions.project；warning 1431 条走清理批次。"
+    },
+    {
+      "id": "T-capability-bridges-by-domain",
+      "title": "capability-bridges.ts（4040 行）按能力域再分",
+      "type": "governance",
+      "status": "planned",
+      "owner": null,
+      "scope": [
+        "packages/api/src/capability-bridges.ts",
+        "packages/api/src/capability-types.ts",
+        "packages/api/src/capability.ts"
+      ],
+      "decision": null,
+      "verification": "npx vue-tsc --noEmit + capability-* 测试 + 全量",
+      "branch": null,
+      "related": [],
+      "note": "承接 #870 遗留：wxBridge/webBridge 共享 let idleSeq（ES import 绑定只读）⇒ 再分前须先解共享可变态。"
+    },
+    {
+      "id": "T-visual-acceptance-multidevice",
+      "title": "多端逐页视觉验收：css-conformance 31 页 × 4 端截图 + 独立子代理终评",
+      "type": "verification",
+      "status": "planned",
+      "owner": null,
+      "scope": [
+        "css-conformance/**",
+        "showcase/**"
+      ],
+      "decision": null,
+      "verification": "visual-judge 每页 verdict（pass/fail + 证据）",
+      "branch": null,
+      "related": [],
+      "note": "长欠账：现只覆盖代表页。参照 agents 的 documents:visual-judge 单闸口。"
+    }
+  ]
+}
