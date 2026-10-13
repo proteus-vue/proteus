@@ -22,42 +22,54 @@ const route = useRoute()
 const isDocs = computed(() => route.path.startsWith('/docs'))
 // ★#489 全宽演示页（multi-device 撑满屏宽）
 const isWide = computed(() => route.path.startsWith('/multi-device'))
+/** 一级导航（精简为高频入口——内容增长后从 11 平铺项收敛到 5）。 */
 interface NavLink {
   key: string
   label: string
   to?: string
-  external?: boolean
-  href?: string
 }
 const links: NavLink[] = [
   { to: '/', label: '首页', key: 'home' },
-  { to: '/playground', label: 'Playground', key: 'playground' },
-  // ★#489 同一份语义 → 八种设备形态（站内页——同壳同风格、双语）
-  { to: '/multi-device', label: '多端同屏', key: 'multidev' },
-  // ★2026-09-26 P0-3：生态栏目（官方工程案例起步——对标 Flutter Showcase 的导航位）
   { to: '/ecosystem', label: '生态', key: 'ecosystem' },
-  // ★Morpheus 动画引擎（招牌能力——独立产品页）
-  { to: '/animation', label: '动画引擎', key: 'animation' },
-  // ★★CS6 一致性标准（对外展示——实时机器指标 + 三端真截图；"可验证一致性"是我们的标准制定权主张）
-  { to: '/consistency', label: '一致性标准', key: 'consistency' },
-  // ★★★Themis 编译期 CSS 引擎（招牌产品页——写一次样式，所有端长一个样，并可被证明）
-  { to: '/themis', label: 'CSS 引擎', key: 'themis' },
-  // ★Keryx 图标库（Proteus UI 方言层——全量预览 / 质量审查）
-  { to: '/icons', label: '图标库', key: 'icons' },
-  // ★★★液态玻璃引擎（代号 Aether——真跑演示：预设/交互/端矩阵/降级）
-  { to: '/liquid-glass', label: '液态玻璃', key: 'liquid-glass' },
+  { to: '/playground', label: 'Playground', key: 'playground' },
 ]
+/** ★★★决策 #887：招牌「引擎/产品」页收进「引擎▾」下拉（Morpheus / Themis / Aether / 一致性 / Keryx）。
+ *   引擎条码（Morpheus 等）为万神殿代号（决策 #879），双语同值；label 走 i18n。 */
+interface EngineLink {
+  to: string
+  key: string
+  labelKey: Parameters<typeof t>[0]
+  code: string
+}
+const ENGINES: EngineLink[] = [
+  { to: '/animation', key: 'animation', labelKey: 'app.animation', code: 'Morpheus' },
+  { to: '/themis', key: 'themis', labelKey: 'app.themis', code: 'Themis' },
+  { to: '/liquid-glass', key: 'liquid-glass', labelKey: 'app.liquidGlass', code: 'Aether' },
+  { to: '/consistency', key: 'consistency', labelKey: 'app.consistency', code: 'CS6' },
+  { to: '/icons', key: 'icons', labelKey: 'app.icons', code: 'Keryx' },
+]
+const isEngineActive = computed(() => ENGINES.some((e) => route.name === e.key))
 /** 导航文案（双语 key） */
 function navText(l: { key: string; label: string }): string {
   if (l.key === 'home') return t('app.home')
-  if (l.key === 'multidev') return t('app.multidev')
   if (l.key === 'ecosystem') return t('app.ecosystem')
-  if (l.key === 'animation') return t('app.animation')
-  if (l.key === 'consistency') return t('app.consistency')
-  if (l.key === 'themis') return t('app.themis')
-  if (l.key === 'icons') return t('app.icons')
-  if (l.key === 'liquid-glass') return t('app.liquidGlass')
   return l.label
+}
+const engineText = (e: EngineLink): string => t(e.labelKey)
+
+// ★引擎▾ 下拉开合：**click 切换** + **鼠标离开关闭**（确定性、键盘可达；Escape / 路由变化亦关）。
+//   ★不用 hover-**open**：hover 开 + click 切会打架（悬停已开、click 又关）——实测踩过。
+//   ★不用"点击别处"的 scrim：nav-shell 有 `container-type: inline-size`（含 container queries 所需
+//     的 containment）⇒ 它会成为 fixed 后代的**包含块**，scrim 被限制在导航高度内、点页面点不到。
+const enginesOpen = ref(false)
+function toggleEngines(): void {
+  enginesOpen.value = !enginesOpen.value
+}
+function closeEngines(): void {
+  enginesOpen.value = false
+}
+function onKeydown(e: KeyboardEvent): void {
+  if (e.key === 'Escape') { enginesOpen.value = false; menuOpen.value = false }
 }
 
 // ★#389c 滚动进度（0→1）+ scrolled 态（desktop p-scroll-observer——监听注册 + rAF 节流 + 几何全在框架包内）
@@ -79,6 +91,7 @@ onUnmounted(() => {
 const menuOpen = ref(false)
 watch(() => route.fullPath, () => {
   menuOpen.value = false
+  enginesOpen.value = false
 })
 </script>
 
@@ -86,9 +99,17 @@ watch(() => route.fullPath, () => {
   <p-page ref="siteEl" class="site">
     <!-- ★无障碍：跳转到主内容（键盘首个 Tab 即可达；WCAG 2.4.1 Bypass Blocks） -->
     <a class="skip-link" href="#main-content">{{ locale === 'zh' ? '跳到主内容' : 'Skip to content' }}</a>
-    <!-- ★#389 导航：实底细边框（去掉玻璃发光——风格收敛） -->
-    <header class="nav-shell" :class="{ 'is-scrolled': scrolled, 'is-open': menuOpen, 'is-docs': isDocs }">
-      <div class="nav">
+    <!-- ★★★决策 #887：导航栏 = 液态玻璃（`<pg-glass preset="navigationBar">`）——
+         导航条与「引擎▾」下拉面板都用玻璃，顺带在真实站点验证自研玻璃引擎（回收旧 d2-exempt）。 -->
+    <pg-glass
+      preset="navigationBar"
+      :radius="0"
+      border
+      tint="rgba(11, 11, 15, 0.72)"
+      class="nav-shell"
+      :class="{ 'is-scrolled': scrolled, 'is-open': menuOpen, 'is-docs': isDocs, 'engines-open': enginesOpen }"
+    >
+      <div class="nav" @keydown="onKeydown">
         <router-link to="/" class="brand">
           <BrandMark :size="24" />
           <p-text class="brand-name">Proteus</p-text>
@@ -118,19 +139,54 @@ watch(() => route.fullPath, () => {
           >
             {{ locale === 'zh' ? 'EN' : '中文' }}
           </button>
-          <template v-for="l in links" :key="l.key">
-            <a
-              v-if="l.external"
-              class="nav-link"
-              :href="l.href"
-              :aria-label="l.key === 'flexible' ? t('app.multidev') : ''"
+
+          <!-- 首页 -->
+          <router-link to="/" class="nav-link" :class="{ active: route.name === 'home' }">
+            <p-text class="nav-text">{{ t('app.home') }}</p-text>
+          </router-link>
+
+          <!-- 引擎▾（桌面下拉：触发器 + 玻璃面板；click 切换，鼠标离开/Escape 关闭） -->
+          <div class="nav-drop" :class="{ 'is-open': enginesOpen }" @mouseleave="closeEngines">
+            <button
+              type="button"
+              class="nav-link nav-drop-trigger"
+              :class="{ active: isEngineActive }"
+              :aria-expanded="enginesOpen ? 'true' : 'false'"
+              @click="toggleEngines"
             >
-              <p-text class="nav-text">{{ navText(l) }}</p-text>
-            </a>
-            <router-link v-else :to="l.to ?? '/'" class="nav-link" :class="{ active: route.name === l.key }">
-              <p-text class="nav-text">{{ navText(l) }}</p-text>
+              <p-text class="nav-text">{{ t('app.engines') }}<span class="nav-caret" aria-hidden="true">▾</span></p-text>
+            </button>
+            <pg-glass v-show="enginesOpen" preset="floating" tint="rgba(16, 16, 22, 0.9)" :radius="14" class="nav-drop-panel">
+              <router-link
+                v-for="e in ENGINES"
+                :key="e.key"
+                :to="e.to"
+                class="nav-drop-item"
+                :class="{ active: route.name === e.key }"
+              >
+                <span class="nav-drop-label">{{ engineText(e) }}</span>
+                <span class="nav-drop-code">{{ e.code }}</span>
+              </router-link>
+            </pg-glass>
+          </div>
+
+          <!-- 引擎（窄容器平铺——不依赖下拉） -->
+          <div class="nav-engines-flat">
+            <p-text class="nav-group">{{ t('app.engines') }}</p-text>
+            <router-link
+              v-for="e in ENGINES"
+              :key="'m-' + e.key"
+              :to="e.to"
+              class="nav-link nav-link--sub"
+              :class="{ active: route.name === e.key }"
+            >
+              <p-text class="nav-text">{{ engineText(e) }}</p-text>
             </router-link>
-          </template>
+          </div>
+
+          <router-link v-for="l in links.slice(1)" :key="l.key" :to="l.to ?? '/'" class="nav-link" :class="{ active: route.name === l.key }">
+            <p-text class="nav-text">{{ navText(l) }}</p-text>
+          </router-link>
           <router-link to="/docs/01-intro" class="nav-link" :class="{ active: isDocs }">
             <p-text class="nav-text">{{ t('app.docs') }}</p-text>
           </router-link>
@@ -145,7 +201,7 @@ watch(() => route.fullPath, () => {
       <div class="scroll-progress" aria-hidden="true">
         <div class="scroll-progress-bar" :style="{ transform: 'scaleX(' + progress + ')' }" />
       </div>
-    </header>
+    </pg-glass>
 
     <main id="main-content" tabindex="-1" v-p-fluid="'padding(12, 24)'" class="main" :class="{ 'is-docs': isDocs, 'is-wide': isWide }">
       <router-view />
@@ -189,24 +245,20 @@ watch(() => route.fullPath, () => {
   transition: border-color 0.15s, color 0.15s;
 }
 .lang-switch:hover { border-color: var(--brand); color: var(--ink); }
-/* ★导航：实底 + 细下边框（去玻璃发光；滚动后加投影区分层级）
-   ★2026-09-11 移动端：container-type: inline-size → 子元素可用 @container 查询（视口无关，
-   零媒体查询/零裸 window，符合 W-6 与 D-2 no-media-query/no-web-platform-api=error） */
+/* ★★★决策 #887：导航栏 = 液态玻璃容器（`<pg-glass preset="navigationBar">`，radius 0 + 底部高光边）。
+   此前实底 + `is-scrolled` 裸 backdrop-filter（d2-exempt 例外）——现整体走 <pg-glass> 单入口（引擎自证）。 */
 .nav-shell {
   position: -webkit-sticky;
   position: sticky;
   top: 0;
   z-index: 20;
-  background: var(--bg);
-  border-bottom: 1px solid var(--line);
-  transition: box-shadow 0.2s ease, background 0.2s ease;
+  transition: box-shadow 0.2s ease;
   container-type: inline-size;
 }
-/* ★文档页：导航与分区横条融为一体（液态玻璃连续面）——导航下边框透明、由横条出统一底部分隔线
-   （保留 border 宽度=1px → 导航高度不变，避免与 --nav-h 差 1px 再出缝） */
+/* 滚动后加投影区分层级（玻璃本身由 <pg-glass> 出；投影是导航的层级语言，非玻璃参数） */
+.nav-shell.is-scrolled { box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); }
+/* 文档页：导航与分区横条融为一体（导航底部细边透明，由横条出统一分隔线） */
 .nav-shell.is-docs { border-bottom-color: transparent; }
-/* d2-exempt: 导航滚动态玻璃（实底→滚动加模糊的层级区分设计，非独立玻璃面；迁移 pg-glass 归官网视觉批次） */
-.nav-shell.is-scrolled { box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); background: var(--glass-bg); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
 /* ★#389c 滚动进度条（品牌色细线） */
 .scroll-progress {
   position: absolute;
@@ -238,7 +290,38 @@ watch(() => route.fullPath, () => {
 /* ★2026-09-12 品牌标识改为品牌立方体（<BrandMark>，与小程序头像同源）——原 ◆ conic 色片已弃用 */
 .brand-name { color: var(--ink); font-weight: 700; font-size: 17px; letter-spacing: 0.4px; white-space: nowrap; }
 .brand-tag { color: var(--dim); font-size: 13px; white-space: nowrap; }
-.nav-links { display: flex; align-items: center; flex-wrap: wrap; }
+
+/* ---- 引擎▾ 下拉（桌面） ---- */
+.nav-caret { margin-left: 3px; font-size: 10px; opacity: 0.7; }
+/* 窄容器：不显示下拉触发器（用下方平铺组代替）；宽容器才启用下拉 */
+.nav-drop { position: relative; display: none; }
+.nav-drop-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  min-width: 230px;
+  padding: 8px;
+  z-index: 40;
+}
+.nav-drop-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 9px 12px;
+  border-radius: 9px;
+  text-decoration: none;
+  transition: background 0.14s ease;
+}
+.nav-drop-item:hover { background: rgba(255, 255, 255, 0.06); }
+.nav-drop-label { color: var(--ink); font-size: 14px; }
+.nav-drop-item.active .nav-drop-label { color: var(--brand-ink); font-weight: 600; }
+.nav-drop-code { color: var(--dim); font-size: 11px; font-family: var(--mono); }
+/* 窄容器：引擎平铺组（不依赖下拉）；桌面隐藏 */
+.nav-engines-flat { display: block; }
+.nav-group { color: var(--dim); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; padding: 10px 10px 2px; display: block; }
+.nav-link--sub { padding-left: 22px; }
+
 /* ---- 移动端菜单（默认窄容器：收起） ---- */
 .nav-burger {
   display: inline-flex;
@@ -265,7 +348,7 @@ watch(() => route.fullPath, () => {
   z-index: 30;
   flex-direction: column;
   align-items: stretch;
-  gap: 2px;
+  gap: 0;
   padding: 8px 16px 16px;
   background: var(--bg);
   border-bottom: 1px solid var(--line);
@@ -279,18 +362,17 @@ watch(() => route.fullPath, () => {
   z-index: 25;
   background: rgba(0, 0, 0, 0.5);
 }
-/* 窄容器下菜单项紧凑（不再各占一行大块） */
-.nav-menu { gap: 0; }
-.nav-menu .nav-link { padding: 11px 10px; }
-/* 触控目标 ≥44px + 左对齐（移动端菜单项） */
+/* 窄容器下菜单项紧凑 + 触控目标 ≥44px */
 .nav-menu .nav-link { padding: 12px 10px; }
 .nav-menu .nav-link.active::after { left: 10px; right: auto; width: 20px; }
 .brand-tag { display: none; }
-/* ---- 宽容器：恢复横排，隐藏汉堡 ---- */
+/* ---- 宽容器：恢复横排，隐藏汉堡与引擎平铺组 ---- */
 @container (min-width: 900px) {
   .nav-burger { display: none; }
   .nav-scrim { display: none; }
   .brand-tag { display: inline; }
+  .nav-engines-flat { display: none; }
+  .nav-drop { display: block; }
   .nav-menu {
     display: flex;
     position: static;
@@ -306,7 +388,7 @@ watch(() => route.fullPath, () => {
   .nav-menu .nav-link { padding: 7px 12px; }
   .nav-menu .nav-link.active::after { left: 12px; right: 12px; width: auto; }
 }
-.nav-link { text-decoration: none; padding: 7px 12px; border-radius: var(--radius-sm); position: relative; }
+.nav-link { text-decoration: none; padding: 7px 12px; border-radius: var(--radius-sm); position: relative; background: none; border: none; font: inherit; cursor: pointer; }
 /* ★#381：链接文字禁折字（首/页 竖排两字的根因）——窄屏整链接换行 */
 .nav-text { color: var(--muted); font-size: 14px; transition: color 0.15s; white-space: nowrap; }
 .nav-link:hover .nav-text { color: var(--ink); }
