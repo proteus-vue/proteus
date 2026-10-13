@@ -5,6 +5,7 @@
 import { ref } from 'vue'
 import { useRoute } from 'vue-router'
 import TransformDemo from '../components/TransformDemo.vue'
+import GlassPlayground from '../components/GlassPlayground.vue'
 import { listTransformRules } from '@proteus-vue/compiler'
 import { decodeSource } from '../playground/share'
 // ★#478 Playground 页 chrome 双语；★#480 规则行按 locale 取 descriptionEn（注册表双语字段）
@@ -35,6 +36,9 @@ function ruleDesc(r: { description: string; descriptionEn?: string }): string {
     </header>
 
     <TransformDemo :initial-source="initialSource" />
+
+    <!-- ★液态玻璃实时调参（决策 #884）：preset/props → 实时 <pg-glass> + 等价源码 -->
+    <GlassPlayground />
 
     <p-view v-p-fluid="'padding(16, 24)'" class="rules-section">
       <p-heading :level="2" class="rules-title">{{ t('pg.rulesTitle', { n: String(ruleList.length) }) }}</p-heading>
