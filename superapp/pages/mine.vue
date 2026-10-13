@@ -134,10 +134,18 @@ function closeMusic(): void {
     </view>
 
     <text class="sa-section">外观</text>
-    <!-- ★★★自研液态玻璃（决策 #818）验证载体：App 端经构建期折成 style.glass → 宿主自绘玻璃面 -->
-    <pg-glass preset="card" :radius="12" style="height: 64px; margin: 0 12px 12px">
-      <view class="mine-glass-in"><text class="mine-glass-t">液态玻璃 · 自研材质</text></view>
-    </pg-glass>
+    <!-- ★★★自研液态玻璃验证载体（决策 #818 + #893）：玻璃**背后放结构化彩色内容**（玻璃压其上 ⇒
+         **边缘折射 + 内容淡淡模糊**可见；此前背后是纯灰底 ⇒ 没东西可采样、看着像普通卡片）。
+         玻璃自身内容（下方标题）保持**清晰**（决策 #893：材质只作用于背后）。App 端构建期折 style.glass。 -->
+    <view class="mine-glass-stage">
+      <view class="mine-glass-canvas" aria-hidden="true">
+        <view class="mine-glass-canvas__blk" />
+        <view class="mine-glass-canvas__dot" />
+      </view>
+      <pg-glass class="mine-glass-card" preset="card" :radius="12">
+        <view class="mine-glass-in"><text class="mine-glass-t">液态玻璃 · 自研材质</text></view>
+      </pg-glass>
+    </view>
     <view class="sa-list">
       <view id="mine-row-dark" class="sa-item sa-item--tap" @click="toggleDark">
         <view class="mine-ico"><p-icon name="dark-mode" :size="18" color="#4a4ab8" /></view>
@@ -225,6 +233,59 @@ function closeMusic(): void {
   margin-top: 2px;
   font-size: var(--sa-font-sm);
   color: var(--sa-text-3);
+}
+/* ★★★液态玻璃验证舞台（决策 #818/#893）：背后结构化彩色内容 + 玻璃浮于其上。
+   ★用**实色**（App 端不支持 `background: linear-gradient`）且靠**树序**叠放（不写 z-index，LY001 拦内联裸 z-index）。
+   canvas 在树上先于玻璃卡 ⇒ 玻璃在后绘制、压于其上 ⇒ 玻璃采样到有边缘的内容 ⇒ 折射/模糊可见。 */
+.mine-glass-stage {
+  position: relative;
+  height: 84px;
+  margin: 0 12px 12px;
+}
+.mine-glass-canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 12px;
+}
+.mine-glass-canvas__blk {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 64%;
+  height: 100%;
+  background: #5b5bd6;
+}
+.mine-glass-canvas__dot {
+  position: absolute;
+  right: 28px;
+  top: 14px;
+  width: 56px;
+  height: 56px;
+  border-radius: 28px;
+  background: #4aab8b;
+}
+.mine-glass-card {
+  position: absolute;
+  left: 16px;
+  top: 12px;
+  width: 88%;
+  height: 60px;
+}
+.mine-glass-in {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding-left: 14px;
+  box-sizing: border-box;
+}
+.mine-glass-t {
+  font-size: 16px;
+  font-weight: 600;
+  color: #ffffff;
 }
 /* ★2026-10-04：说明文字与右侧开关的**间距保证**（审计实测：说明墨迹右缘 318.5 撞开关左缘 320）
    ——`sa-item` 是 flex 行，`__main` 默认 flex:1 会被内容撑宽 ⇒ 显式限宽 + 右留白。 */
