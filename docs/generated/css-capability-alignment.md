@@ -228,6 +228,8 @@
 | `mask` | `mask` | 引擎扩展通道（JSON 属性载体，非 CSS 属性）——App 宿主真源探针已验证（A/B 批次 probeChannels）；Web/小程序端由编译器映射 |
 | `svg-path` | `svg-path` | 引擎扩展通道（JSON 属性载体，非 CSS 属性）——App 宿主真源探针已验证（A/B 批次 probeChannels）；Web/小程序端由编译器映射 |
 | `svg-path-to` | `svg-path-to` | 引擎扩展通道（JSON 属性载体，非 CSS 属性）——App 宿主真源探针已验证（A/B 批次 probeChannels）；Web/小程序端由编译器映射 |
+| `svg-view-box` | `svg-view-box` | 引擎扩展通道（JSON 属性载体，非 CSS 属性）——App 宿主真源探针已验证（A/B 批次 probeChannels）；Web/小程序端由编译器映射 |
+| `glass` | `glass` | 引擎扩展通道（JSON 属性载体，非 CSS 属性）——App 宿主真源探针已验证（A/B 批次 probeChannels）；Web/小程序端由编译器映射 |
 
 > 判定口径：Web=`CSS.supports` 实测；Skyline=官方表**收录**（未收录≠确认不支持，需实测补证）；
 > App 现状=代码事实（compile 折叠面 ∩ 引擎 ∩ 宿主）；App 可扩展=tier（人工按 Profile §3，非实测毫秒）。

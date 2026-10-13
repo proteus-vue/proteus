@@ -44,10 +44,14 @@ const props = defineProps({
 /** 语义名（name 优先，回退 type）。 */
 const iconName = computed(() => props.name || props.type || 'info')
 
-/** ★数据侧保证：未知名的显式占位 + dev 警告（反黑盒——静默 '?' 变静默 path）。 */
+/** ★数据侧保证：未知名的显式占位 + 警告（反黑盒——静默 '?' 变静默 path）。
+ *  ★不读 `import.meta.env.DEV`：该 vite 专有形态在本仓自定义编译器（compileVueSfc，服务 MP/App 端）
+ *  里不被替换——`import.meta` 残留进 `Page()/Component()` 产物即语法错误（validate 当场抛，实测三处门禁红）。
+ *  MP 端亦无等价的编译期 dev 宏落在 .vue 脚步里（`__PROTEUS_DEBUG__` 只作用于共享 .ts 模块与 app.js）。
+ *  故此处与同库 p-auth-gate 一致：无名即告警（无名 = 开发者写错，任何环境都值得暴露）。 */
 const icon = computed(() => {
   const n = iconName.value
-  if (import.meta.env?.DEV && !hasIcon(n)) {
+  if (!hasIcon(n)) {
     // eslint-disable-next-line no-console
     console.warn(`[p-icon] 未知图标名 "${n}"——已用占位图标。可用名见 @proteus-vue/icons`)
   }

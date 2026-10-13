@@ -71,7 +71,10 @@ describe('① 项目驱动产物：App 导航注册表（消灭夹具手写）',
     // ★同源同数：App 注册表 ⟷ 路由表（同一棵树的投影）
     const autoSrc = fs.readFileSync(path.join(root, 'src/router/auto-routes.ts'), 'utf-8')
     const routeNames = [...autoSrc.matchAll(/name: "([^"]+)"/g)].map((m) => m[1])
-    const navNames = [...src.matchAll(/"name": "([^"]+)"/g)].map((m) => m[1])
+    // ★只数 `screens` 对象（App 屏清单）——不能全文件扫 `"name":`：`tabItems`（tab 渲染最终值）
+    //   也带 `"name"` 键，早期全文件正则会把它计入屏数（3≠2 假红）。语义锁的是"屏数 = 路由数"。
+    const screensBlock = autoSrc.slice(autoSrc.indexOf('export const screens'), autoSrc.indexOf('export const screenNames'))
+    const navNames = [...screensBlock.matchAll(/"name": "([^"]+)"/g)].map((m) => m[1])
     expect(navNames.length, 'App 屏数 = 路由数').toBe(routeNames.length)
     expect(new Set(navNames)).toEqual(new Set(routeNames))
   })
