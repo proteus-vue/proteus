@@ -163,6 +163,8 @@ public final class ProteusTabChrome {
         return sb.toString();
     }
 
+    // I2-ALLOW: dp→物理像素的**宿主 chrome 常量**换算（图标行高/偏移等固定 dp 值，非内核几何；
+    //   chrome 规格在 runtime 而非内核指令，独立于吸咐几何，见卡 I2 例外）
     private int dp(float v) { return Math.round(v * density); }
 
     private String specStr(String key, String fallback) { return spec.optString(key, fallback); }

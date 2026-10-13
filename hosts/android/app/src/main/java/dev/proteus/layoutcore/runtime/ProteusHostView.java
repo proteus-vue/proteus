@@ -3300,7 +3300,8 @@ public class ProteusHostView extends ViewGroup {
             maxY = Math.max(maxY, c.y + c.h + pad);
         }
         if (minX > maxX) return;   // 无有效玻璃盒
-        // ② 钳到屏幕 ⇒ 位图尺寸
+        // ② 钳到屏幕 ⇒ 位图尺寸（★I2-ALLOW: 玻璃背景**位图**的像素尺寸——位图必须整数像素，非几何吸附；
+        //    玻璃采样用的背景缓冲与内核几何无关，见卡 I2 例外「位图/像素缓冲尺寸」）
         final int bx = Math.max(0, (int) Math.floor(minX));
         final int by = Math.max(0, (int) Math.floor(minY));
         final int bw = Math.max(1, Math.min(W, (int) Math.ceil(maxX)) - bx);

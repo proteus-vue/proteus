@@ -110,6 +110,7 @@ final class GlassMetalRenderer {
         }
         var outTexs = [MTLTexture?](repeating: nil, count: n)
         // ② 一条命令缓冲，逐块编码（各自输出纹理；顶点/片元管线同一）
+        //   ★I2-ALLOW: 输出**纹理**像素尺寸（位图必须整数像素，非几何吸附；玻璃采样缓冲与内核几何无关）
         guard let cb = queue.makeCommandBuffer() else { return Array(repeating: nil, count: n) }
         for (i, req) in requests.enumerated() {
             let w = Int((req.nodeRect.width * scale).rounded())
@@ -194,12 +195,15 @@ final class GlassMetalRenderer {
             tex_bias: bias,
             tex_scale: tscale,
             light_dir: SIMD2<Float>(-0.35, -0.94),
+            // ★★★决策 #890（G0-B · 端到端）：`radius`/`blur` 都是 **CSS 逻辑 px**（IR 透传，见 `@proteus-vue/glass`
+            //   的 `resolveGlass → {blurPx,radiusPx}`，不乘密度；Web 端 `radiusPx → borderRadius:12px` 即逻辑 px）。
+            //   本开关的 **输出纹理是半分辨率**（`outScale = scale/2`）⇒ `size_px = nodeRect.width * outScale`
+            //   也在半分辨率像素空间 ⇒ 与 `size_px` 同尺度的 `radius`/`blur` **都必须 × outScale**（= 逻辑 × scale/2）。
+            //   ★**修正 #864 的单位推断**：其把 `blur` 当"物理 px"直传，实为**逻辑 px**（其夹具 `blur:16` 是 pt/逻辑），
+            //     直传 ⇒ 相对半分辨率 `size_px` 偏小 ⇒ iOS 模糊比 Android/鸿蒙偏轻（真机应见"更清脆"而非更糊）；
+            //     此处改回 `× outScale` 与 `radius` 同轴，三端同守恒（物理 blur = 逻辑 × 密度）。
             radius: Float(spec.radius * outScale),
-            // ★★★决策 #864：`blur` 单位 = **物理像素**（与 Android `GlassMaterial` 直传 / 鸿蒙 `gBlur/S`
-            //   同口径）。★此前误乘 `outScale`（把 pt 再 ×3）⇒ 模糊核相对盒子大 ~3 倍 ⇒ 25 抽摊太开
-            //   ⇒ 文字出现**离散回声（重影）**（用户实测抓出）。着色器里 `br/u.size_px`，size_px 已是
-            //   像素 ⇒ blur 必须是像素，**不再乘 scale**。
-            blur: Float(spec.blur),
+            blur: Float(spec.blur * outScale),
             refract_depth: min(w, h) * 0.22,   // 与 Android 同守恒
             specular: 0.18,
             saturation: Float(spec.saturation),

@@ -2041,6 +2041,19 @@ public final class VaporRenderHost {
         if (glow != null && glow.has("radius") && glow.get("radius") instanceof Number) {
             glow.put("radius", glow.getDouble("radius") * lengthScale);
         }
+        // ★★★玻璃材质（决策 #890 · G0-B）：`glass` 嵌套对象的 **blur/radius** 是 CSS **逻辑 px**
+        //   （内核透传，见 `@proteus-vue/glass` 的 `resolveGlass` → `blurPx`/`radiusPx` 不乘密度）
+        //   ⇒ 与节点几何同口径 ×密度转物理 px（AGSL 着色器在物理像素空间采样、`radius` 与 `size_px` 同尺度）。
+        //   ★此前**漏登记**（与 textShadow/glow 同族）⇒ 玻璃圆角/模糊停在逻辑值（真机 = 应显 1/density）：
+        //     iOS（`radius × outScale`）与鸿蒙（`radius/blur × density`）均已换算，唯 Android 最小 ⇒ 三端不一致。
+        JSONObject glass = spec.optJSONObject("glass");
+        if (glass != null) {
+            for (String gk : new String[]{"blur", "radius"}) {
+                if (glass.has(gk) && glass.get(gk) instanceof Number) {
+                    glass.put(gk, glass.getDouble(gk) * lengthScale);
+                }
+            }
+        }
         // ★★★justify-self 项（2026-10-06 · 真机实测抓出）：**网格轨迹串里的 px 长度**也必须按密度缩放。
         //   gridTemplateColumns/Rows 是**字符串**（如 "240px"），不在 LEN_SCALARS（那是数值字段）⇒
         //   此前只缩了容器 width/padding（×density），轨迹串原样 ⇒ track 比物理空间小 density 倍
