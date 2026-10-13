@@ -3864,6 +3864,14 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **⑦ 教训**：**新路径首次接真实数据时，先把"坐标系/单位"这类不变量钉死**——自绘路径此前只跑 dev 夹具（小场景、无 clip、无嵌套玻璃），一上 superapp（全屏 + overflow 裁剪 + 绝对坐标）即暴露「绝对 vs 局部」两处坐标 bug；与 #890 单位、#893 合成顺序同族：**不变量（坐标空间/单位/合成顺序）是静默 bug 的高发区，必须针对性取证**。
 **⑧ 边界**：鸿蒙 superapp 现走自绘（新建工程的鸿蒙宿主经 prebuilt 继承同一 runtime）；render-node 路径保留（`setContentMode('render-node')` 可切回）。
 
+897. **★修鸿蒙参考宿主 `Superapp.ets` tab 栏高亮不更新——chrome 数据的 `current` 与"实际渲染屏"脱节**（2026-10-13 · 承接 #896）：
+**① 症状（用户「鸿蒙的 superapp 切屏时 tabbar 高亮没更新」）**：drive 到 `mine`（报告 `current=mine`、页面正文确为「我的」），但底部 tab 栏**高亮恒停在「首页」**。
+**② 根因**：`Superapp.ets` 的 `applyState(state)` 用 `state.current` 写 `chromeStateJson`（tab 栏数据源）——而该值是**路由 current**，boot 后**恒为 index**（滞后）；随后 `renderCurrent()` 才把 `this.current` 修正为**实际渲染屏**（`rt['current']`），**却未回写 chrome** ⇒ tab 高亮读的 `chromeStateJson.current` 一直是 index。
+**③ 修**：`paintTree(page, …)`（**每次真正上屏的唯一出口**）开头 `setChromeCurrent(page)`——把 chrome 数据的 `current` 同步为**实际渲染屏**（`page`）；无变化则不触发 `@Watch`（零抖动）。
+**④ ★为何"所有宿主生效"已具备**：CLI 模板壳 `packages/cli/templates-host/harmony/.../shell/MainPage.ets` **本就正确**（切 tab 时**同时**更新 `chromeStateJson` 与 `current`，见其 831-839 行注释「chromeStateJson 与 current 都从 state 取」）⇒ **新建工程的鸿蒙宿主不受此 bug 影响**；本 bug 仅存在于**参考宿主**的 `Superapp.ets`（更早、更简的壳）。
+**⑤ 判据**：真机（HUAWEI）drive 到 mine 后 tab 栏**高亮＝「我的」**（品牌色）、首页/消息为灰；`常驻`启动（current=index）高亮首页不变（`setChromeCurrent` 幂等）。
+**⑥ 教训**：**"数据源当前值"与"实际渲染对象"必须有单一真源**——`chromeStateJson.current`（UI 高亮）与 `this.current`（渲染屏）是同一语义的两份拷贝，分两处赋值就会脱节（与 #890 单位、#896 坐标同族：**同一语义多份拷贝 = 静默不一致的高发区**）。
+
 
 
 
