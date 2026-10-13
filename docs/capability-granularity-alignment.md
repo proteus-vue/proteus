@@ -19,7 +19,7 @@
 典型（用户举例）：`useBluetooth()` 计划返回 `BluetoothAPI`（连接/读/写/订阅/断开），实现只返回：
 
 ```ts
-// packages/api/src/capability.ts:384
+// packages/api/src/capability-types.ts:1237
 export interface BluetoothInfo { supported: boolean; available: boolean; devices: string[] }
 ```
 
