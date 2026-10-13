@@ -6,6 +6,7 @@ import type { AppScreenSpec } from '@proteus-vue/router/app-stack'
 
 // ─── ① 全端页面清单（Web/MP：createRouter(routes)）───
 export const routes: RouteRecord[] = [
+  { name: "glass-nav", path: "pages/glass-nav", component: "../pages/glass-nav.vue", parent: "index" },
   { name: "index", path: "pages/index", component: "../pages/index.vue", meta: {"title":"Proteus 超级应用","isTab":true} },
   { name: "messages", path: "pages/messages", component: "../pages/messages.vue", parent: "index", meta: {"title":"消息","isTab":true} },
   { name: "mine", path: "pages/mine", component: "../pages/mine.vue", parent: "index", meta: {"title":"我的","isTab":true} },
@@ -18,6 +19,10 @@ export const routeMap: Record<string, RouteRecord> = routes.reduce((m, r) => { m
 // ─── ② App 端投影（App：createAppStack({ screens }) / createAppNavigation）───
 //     与 ① 同源；平台门控已应用（webOnly / platforms 不含 native 的页面已剔除）
 export const screens: Record<string, AppScreenSpec> = {
+  "glass-nav": {
+    "name": "glass-nav",
+    "path": "pages/glass-nav"
+  },
   "index": {
     "name": "index",
     "path": "pages/index"
@@ -37,7 +42,7 @@ export const screens: Record<string, AppScreenSpec> = {
 }
 
 /** 路由名数组（App 深栈/压测按它循环取屏——顺序与 routes 一致） */
-export const screenNames: string[] = ["index","messages","mine","verify"]
+export const screenNames: string[] = ["glass-nav","index","messages","mine","verify"]
 
 /** tab 根屏（meta.isTab）—— App 端 tab 语义（switchTab/reset）的合法目标 */
 export const tabNames: string[] = ["index","messages","mine"]
@@ -65,6 +70,7 @@ export const tabItems: Array<{ name: string; label: string; glyph?: string; badg
 // ─── ③ 类型提示：按路由名索引的参数类型表（来源：<route> 块 params 声明）───
 declare module '@proteus-vue/router/types' {
   interface RouteParamsByName {
+    'glass-nav': {  },
     'index': {  },
     'messages': {  },
     'mine': {  },

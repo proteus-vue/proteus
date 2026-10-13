@@ -2670,7 +2670,8 @@ public final class VaporRenderHost {
                 g.optBoolean("border", false),
                 (float) g.optDouble("saturation", 1.0),
                 g.optString("material", "glass"),   // ★#900：材质 id（宿主按此选管线）
-                g.optBoolean("interactive", false));   // ★#905：触控形变
+                g.optBoolean("interactive", false),   // ★#905：触控交互
+                (float) g.optDouble("effect", 0));    // ★#906：交互效果（0=上层玻璃流动 / 1=内容位移）
     }
 
     private float[] parseGlow(JSONObject glo) {

@@ -1059,7 +1059,8 @@ final class SelfDrawView: UIView {
         return GlassMetalRenderer.Spec(blur: CGFloat(blur), tint: (tr, tg, tb, ta),
                                        radius: CGFloat(radius), saturation: CGFloat(sat),
                                        material: (g["material"] as? String) ?? "glass",   // ★#900：材质 id
-                                       interactive: (g["interactive"] as? Bool) ?? false)  // ★#905：触控形变
+                                       interactive: (g["interactive"] as? Bool) ?? false,   // ★#905：触控交互
+                                       effect: CGFloat((g["effect"] as? NSNumber)?.doubleValue ?? 0))  // ★#906：交互效果
     }
 
     /// ★★★玻璃遍：捕获"无玻璃面"的内容帧 → 对每个玻璃节点装玻璃面层。
@@ -1189,17 +1190,27 @@ final class SelfDrawView: UIView {
     private var interactStateById: [Int: GlassInteract] = [:]
     private var interactPressTarget: CGFloat = 0
     private var interactActiveId: Int = -1
+    /// ★#906：本次手势是否**归玻璃**（DOWN 命中交互玻璃）⇒ pan 接管后不滚动页面 + 触点出盒仍跟随。
+    private var glassGestureActive = false
 
-    /// 触摸 DOWN/MOVE：`p` = **内容坐标点**。命中交互玻璃盒 ⇒ 记为活动 + 触点（盒局部逻辑点）。
+    /// 触摸 DOWN/MOVE：`p` = **屏幕点**。命中交互玻璃盒 ⇒ 记为活动 + 触点（盒局部逻辑点）。
     /// 返回是否有交互玻璃被命中（调用方可据此决定是否起帧循环）。
+    /// ★#906：**已接管（`glassGestureActive`）⇒ 出盒仍跟随**——触点钳进盒内，修"边缘拖动形变冻结"。
     @discardableResult
     func interactionTouch(at p: CGPoint, down: Bool) -> Bool {
-        // 命中：遍历交互玻璃，取包含 p 的盒（内容坐标；含滚动 → 用节点本地盒 + scrollY 抵消）
+        // 已接管 ⇒ 更新当前活动玻璃的触点（钳进盒内），不再要求落在盒内。
+        if glassGestureActive, interactActiveId >= 0, let l = layersById[interactActiveId] {
+            let b = l.convert(l.bounds, to: self.layer)
+            let local = CGPoint(x: min(max(p.x - b.minX, 0), b.width), y: min(max(p.y - b.minY, 0), b.height))
+            interactStateById[interactActiveId] = GlassInteract(touch: local, press: interactStateById[interactActiveId]?.press ?? 0)
+            interactPressTarget = 1
+            return true
+        }
+        // 命中：遍历交互玻璃，取包含 p 的盒（屏幕坐标；含 sublayerTransform 滚动）
         var hit: Int = -1
         var local = CGPoint.zero
         for (id, spec) in glassSpecByNodeId where spec.interactive {
             guard let l = layersById[id] else { continue }
-            // 节点在内容坐标下的盒：l.frame（父坐标）+ 父链偏移；用 convert 到 self.layer 得屏幕盒更稳。
             let b = l.convert(l.bounds, to: self.layer)   // 屏幕盒（含 sublayerTransform 滚动）
             if b.contains(p) { hit = id; local = CGPoint(x: p.x - b.minX, y: p.y - b.minY); break }
         }
@@ -1211,8 +1222,8 @@ final class SelfDrawView: UIView {
         }
         return false
     }
-    /// UP：清目标（回弹到 0），但保留 press 让它 lerp 回弹完再清 active。
-    func interactionRelease() { interactPressTarget = 0 }
+    /// UP：清目标（回弹到 0），但保留 press 让它 lerp 回弹完再清 active；★#906 同时交还手势。
+    func interactionRelease() { interactPressTarget = 0; glassGestureActive = false }
 
     /// 帧循环调用：press 指数逼近目标；返回是否需要继续（未收敛）。交互玻璃变化时重渲玻璃面。
     @discardableResult
@@ -3068,8 +3079,10 @@ final class SelfDrawView: UIView {
         let cx = Double(p.x) + Double(contentOffset.x)
         let cy = Double(p.y) + Double(contentOffset.y)
         onTouchDown?(cx, cy)
-        // ★★★决策 #905：玻璃触控形变——命中交互玻璃 ⇒ 记触点（`p` 即 self.layer 空间，与本类玻璃盒同空间）
-        if interactionTouch(at: p, down: true) { startInteractionLoopIfNeeded() }
+        // ★★★决策 #905/#906：玻璃触控交互——命中交互玻璃 ⇒ 记触点（`p` 即 self.layer 空间，与本类玻璃盒同空间）。
+        //   ★#906：命中 ⇒ 本手势**归玻璃**（pan 接管后不滚动页面，见 handleScrollPan）。
+        glassGestureActive = interactionTouch(at: p, down: true)
+        if glassGestureActive { startInteractionLoopIfNeeded() }
     }
 
     /// ★新增（Dactyl 专项）：触摸移动 → 场焦点更新（**不派发语义手势**——拖动由 pan 识别器负责滚动）。
@@ -3264,6 +3277,13 @@ final class SelfDrawView: UIView {
     @objc private func handleScrollPan(_ g: UIPanGestureRecognizer) {
         let t = g.translation(in: self)
         g.setTranslation(.zero, in: self)
+        // ★★★决策 #906：本手势归玻璃 ⇒ pan 接管后**不滚动页面**，改为**续喂玻璃触点**（修"拖动时形变冻结"）。
+        if glassGestureActive {
+            let loc = g.location(in: self)
+            _ = interactionTouch(at: loc, down: true)
+            if g.state == .ended || g.state == .cancelled { interactionRelease() }
+            return
+        }
         driveScrollDrag(dx: -t.x, dy: -t.y)
         // ★★★（决策 #797 修）**场跟手焦点由 pan 续喂**：pan 接管后视图收不到 touchesMoved
         //   （见 touchesCancelled 注释）⇒ 这里按当前指尖位置喂（内容坐标换算与 touchesMoved 同款）。

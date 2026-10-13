@@ -4246,8 +4246,11 @@ export function buildLayoutTemplate(
       let glassLeaf = false
       if ((tag === 'pg-glass' || tag === 'p-glass') && opts?.glassResolver) {
         const strProp = (pn: string): string | undefined => {
+          // ★#906：多词 prop 的 **kebab 别名**（模板惯写 `interactive-effect` ↔ 组件 prop `interactiveEffect`）。
+          const kebab = pn.replace(/\B([A-Z])/g, '-$1').toLowerCase()
           const a = (n.props ?? []).find(
-            (p) => (p.type === 6 && p.name === pn) || (p.type === 7 && p.name === 'bind' && p.arg?.content === pn),
+            (p) => (p.type === 6 && (p.name === pn || p.name === kebab))
+              || (p.type === 7 && p.name === 'bind' && (p.arg?.content === pn || p.arg?.content === kebab)),
           )
           if (!a) return undefined
           const raw = a.type === 6 ? a.value?.content : a.exp?.content
@@ -4278,6 +4281,7 @@ export function buildLayoutTemplate(
           fallback: strProp('fallback'),
           material: strProp('material'),   // ★#900：材质 id（glass/backdropBlur/frosted/vibrancy）
           interactive: strProp('interactive'),   // ★#905：触控形变
+          interactiveEffect: strProp('interactiveEffect'),   // ★#906：交互效果形态（surface/displace）
         })
         if (spec) {
           style.glass = spec
@@ -4292,7 +4296,11 @@ export function buildLayoutTemplate(
         if (loc) node.loc = loc
       }
       if (nodeListId !== undefined) node.listId = nodeListId
-      if (isComponentTag && !iconLeaf) node.component = tag
+      // ★★★决策 #906：**resolver 折叠为叶子的标签不得再当组件展开**——`glassLeaf`（`<pg-glass>`
+      //   由 glassResolver 折成带 `style.glass` 的普通盒）与 `iconLeaf` 同理：只折样式/内容、**不展开组件模板**。
+      //   （此前只排除 iconLeaf ⇒ 一旦 pg-glass 也被声明为 componentTag，就会「既折玻璃又展开组件模板」⇒
+      //     卡片被 pg-glass 组件自身的 deco/noise/highlight 结构覆盖成黑块——真机实测。）
+      if (isComponentTag && !iconLeaf && !glassLeaf) node.component = tag
       // ★静态 `is="Name"` ⇒ 当静态组件（与 `<Name>` 完全等价——组件标记指向真名）
       if (staticIsName !== undefined) node.component = staticIsName
       // ★P3 动态组件：`:is` 表达式标记（实例化期解析——见 LayoutNode.componentIs 边界）

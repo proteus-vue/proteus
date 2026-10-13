@@ -239,6 +239,13 @@ describe('★G-07 CLI `proteus audit glass`（GLS001-006）', () => {
     const many = Array.from({ length: GLASS_MAX_NODES + 3 }, () => '<pg-glass/>').join('\n')
     expect(scanGlassSource('a.vue', many).some((x) => x.rule === 'GLS005')).toBe(true)
     expect(GLASS_MAX_NEST_DEPTH).toBe(2)
+    // ★决策 #906：玻璃族组件 `<pg-glass-nav>`（含内层 `<pg-glass>`）**不得**被误当两层 `<pg-glass>`
+    //   （`\b` 前瞻缺陷）——单层嵌套合法，GLS004 不触发。
+    const navComp = '<pg-glass-nav><pg-glass interactive /></pg-glass-nav>'
+    expect(scanGlassSource('packages/components/pg-glass-nav/index.vue', navComp).some((x) => x.rule === 'GLS004')).toBe(false)
+    // ★决策 #906：HTML 注释里的 `<pg-glass>` 示例不计入节点/嵌套预算。
+    const withComments = '<!-- 用法：<pg-glass><pg-glass></pg-glass></pg-glass> -->\n<pg-glass preset="card"/>'
+    expect(scanGlassSource('a.vue', withComments).some((x) => x.rule === 'GLS004' || x.rule === 'GLS005')).toBe(false)
   })
 
   it('runGlassAudit 目录扫描：合规目录 ok=true，含裸玻璃 ok=false', () => {

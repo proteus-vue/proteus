@@ -45,9 +45,12 @@ const props = defineProps({
    *   `frosted`（模糊+颗粒）/ `vibrancy`（模糊+高饱和）。App 端折进 `glass.material` 由宿主按 id 派发管线；
    *   Web/MP 端按 id 映射 CSS 近似（无 GPU 材质时的诚实降级）。 */
   material: { type: String, default: 'glass' },
-  /** ★★★决策 #905：触控形变流动（对齐 Apple `UIGlassEffect.isInteractive`）——点按/拖动时玻璃在触点处
+  /** ★★★决策 #905：触控交互（对齐 Apple `UIGlassEffect.isInteractive`）——点按/拖动时玻璃在触点处
    *   产生液态流动（App 端自绘真实形变；Web/MP 无 GPU warp ⇒ CSS `:active` 近似）。缺省 = 用预设。 */
   interactive: { type: Boolean, default: undefined },
+  /** ★★★决策 #906：交互效果形态——`surface`（默认）= **上层玻璃本身流动**（触点处玻璃表面隆起、高光随
+   *   触点流，背后内容不动，对齐 Apple Liquid Glass）；`displace` = 内容折射位移（背后内容被推开，#905 的能力）。 */
+  interactiveEffect: { type: String, default: undefined },
 })
 
 // ★无障碍优先：prefers-reduced-transparency 自动关玻璃（降级实色——铁律 4）

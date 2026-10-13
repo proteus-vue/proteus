@@ -94,6 +94,8 @@ import PAnimate from './p-animate/index.vue'
 import PRouterLink from './p-router-link/index.vue'
 // ★G-07 液态玻璃统一入口（glass-plan B1 · Web L1+L2 首落地，消费方：官网导航/面板）
 import PgGlass from './pg-glass/index.vue'
+// ★★★决策 #906：悬浮玻璃导航（对齐 iOS App Store 悬浮玻璃 tab 栏；外层 pg-glass interactiveEffect=surface）
+import PgGlassNav from './pg-glass-nav/index.vue'
 // ★Skyline 线收口：能力入口组件（capability.scan-qr / pick-photo / location——消费 @proteus-vue/api hooks）
 import PScanQr from './p-scan-qr/index.vue'
 import PPickPhoto from './p-pick-photo/index.vue'
@@ -199,6 +201,8 @@ export {
   PRouterLink,
   // ★G-07 液态玻璃
   PgGlass,
+  // ★★★决策 #906：悬浮玻璃导航
+  PgGlassNav,
   // ★Skyline 线收口：能力入口组件
   PScanQr,
   PPickPhoto,

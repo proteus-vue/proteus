@@ -367,6 +367,14 @@ export function collectTemplateBindings(
   filename = 'anonymous.vue',
   /** ★可注入（缺省用本仓锁定的 Vue 版本）；兼容性测试传 3.4 / 3.6 的解析器 */
   compat?: Pick<VueCompatDeps, 'sfcParse' | 'domParse'>,
+  /**
+   * ★★★决策 #906：**构建期声明的组件标签集**（kebab 形态如 `pg-glass-nav`）——与 `template.ts` 的
+   *   `opts.componentTags` **同一份约定**（判据必须同源，否则 id 空间/槽位种类分叉）。
+   *   `pg-glass-nav` 非 PascalCase ⇒ 旧判据（仅 `/^[A-Z]/`）漏认 ⇒ 其上 `:active="navKey"` 被当
+   *   `attr.active`（`prop` 槽）发 SET_PROP(字符串) ⇒ 运行期 `toF32` 抛"槽位值必须是 number/boolean"
+   *   ⇒ 整屏不渲（设备实测 `[unsupported type]`）。
+   */
+  componentTags?: ReadonlySet<string>,
 ): TemplateBindingRef[] {
   const vueParse = compat?.sfcParse ?? sfcParse
   const dom = compat?.domParse ?? domParse
@@ -444,8 +452,9 @@ export function collectTemplateBindings(
       // ★★组件标签（P1 组件系统第一批）：PascalCase = 组件（与 Vue 官方约定同）——
       //   组件上的 props 走 `component.<name>` 前缀 ⇒ slotKindOf 归到 `component-prop`
       //   ⇒ 运行时发 CALL_COMPONENT_UPDATE（方案 §7.3："组件边界强制 L0"）。
-      //   ★与 template.ts 的 `isComponentTag` 判据**同源**（同一份约定，两处判据一致）。
-      const isComponentTag = /^[A-Z]/.test(tag)
+      //   ★与 template.ts 的 `isComponentTag` 判据**同源**（同一份约定，两处判据一致）：
+      //     PascalCase **或** 构建期声明的组件标签集（kebab 形态如 `pg-glass-nav`，决策 #906）。
+      const isComponentTag = /^[A-Z]/.test(tag) || (componentTags?.has(tag) ?? false)
       const line = n.loc?.start?.line
       let nextScopes = scopes
       let nextBranch = inBranch

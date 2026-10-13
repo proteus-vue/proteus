@@ -36,6 +36,12 @@ export interface SlotSpec {
   id: number
   nodeId: number
   kind: SlotKind
+  /**
+   * ★★★决策 #906：目标属性键（归一化名，如 `visible` / `paint.color`）。
+   *   list-item 的 emit 需要按 propKey 分流**可见性**（`visible` ⇒ TOGGLE_VIS 布尔）与样式/文本——
+   *   值是任意类型（字符串/对象真值），不能一律 toF32（会在字符串上抛错、设备整屏不渲）。
+   */
+  propKey?: string
   /** prop / style / attrs / component-prop 用到：属性键表下标 */
   keyId?: number
   /** list-item 用到：所属列表 id（与 keyId 复用规则见 makeEmitter 注释） */
@@ -117,8 +123,15 @@ export function createSlot<T>(
           //     （V1 已定义该指令与线上格式，Rust 侧遇它会上报 unsupported 而非静默丢弃）。
           const item = next as unknown as ListItemValue
           const nodeId = registry?.resolveNode(listId, item.key, listSlotId)
+          // ★★★决策 #906：**行内可见性槽位**（`v-if="row.icon"` 折出的 `visible`）——值是**原表达式**
+          //   （字符串/对象皆可能，Vue 语义 = 真值），绝不能走 `toF32`（f32 只吃 number/boolean ⇒
+          //   字符串直接抛，正是"组件里 v-if 带字符串条件"在设备上 `[unsupported type]` 整屏不渲的根因）。
+          //   ⇒ 与标量 `visible` 槽位（上方 `case 'visibility'`）同一语义：TOGGLE_VIS + Boolean 归一。
+          const isVisItem = spec.propKey === 'visible'
           if (nodeId !== undefined) {
-            if ((spec.itemKind ?? 'style') === 'text') {
+            if (isVisItem) {
+              buf.push({ op: OpCode.TOGGLE_VIS, nodeId, visible: Boolean(item.value) })
+            } else if ((spec.itemKind ?? 'style') === 'text') {
               buf.push({ op: OpCode.SET_TEXT, nodeId, textRef: strings.intern(String(item.value)) })
             } else {
               buf.push({ op: OpCode.SET_STYLE, nodeId, keyId, value: toF32(item.value) })
@@ -130,7 +143,7 @@ export function createSlot<T>(
             listId,
             itemKeyRef: strings.intern(item.key),
             slotId: listSlotId,
-            value: toF32(item.value),
+            value: isVisItem ? (item.value ? 1 : 0) : toF32(item.value),
           })
           return
         }

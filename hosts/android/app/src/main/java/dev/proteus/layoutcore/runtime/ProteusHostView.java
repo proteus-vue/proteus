@@ -3285,6 +3285,10 @@ public class ProteusHostView extends ViewGroup {
      * ★诚实边界：内容帧为"本帧内容"，玻璃面随内容实时更新（每帧重捕，仅当本屏有玻璃节点时）。
      * 无 AGSL（API<31）⇒ `GlassMaterial.buildPaint` 返 null ⇒ 回退半透明实色（`glassFallback`）。 */
     private android.graphics.Bitmap glassBackdrop;
+    /** ★★★决策 #906：**全分辨率**背板（捕获目标；末尾**轻降采样**成 `glassBackdrop` 供着色器单次采样）。 */
+    private android.graphics.Bitmap glassBackdropFull;
+    /** ★★★决策 #906：降采样比（全分辨率像素 / 小图 texel）——buildPaint 折 tex_scale/bias 用。 */
+    private float glassBackdropScaleX = 1f, glassBackdropScaleY = 1f;
     /** `glassBackdrop` 在其覆盖的**屏幕区域**中的左上角（屏幕坐标）——玻璃采样按它把"屏幕坐标"折算到位图坐标。 */
     private float glassBackdropX = 0f, glassBackdropY = 0f;
     private boolean capturingGlass = false;
@@ -3328,13 +3332,14 @@ public class ProteusHostView extends ViewGroup {
         final int by = Math.max(0, (int) Math.floor(minY));
         final int bw = Math.max(1, Math.min(W, (int) Math.ceil(maxX)) - bx);
         final int bh = Math.max(1, Math.min(H, (int) Math.ceil(maxY)) - by);
-        if (glassBackdrop == null || glassBackdrop.getWidth() != bw || glassBackdrop.getHeight() != bh) {
-            if (glassBackdrop != null) glassBackdrop.recycle();
-            glassBackdrop = android.graphics.Bitmap.createBitmap(bw, bh, android.graphics.Bitmap.Config.ARGB_8888);
+        // ★★★决策 #906：全分辨率背板（内容画这里；末尾轻降采样）。
+        if (glassBackdropFull == null || glassBackdropFull.getWidth() != bw || glassBackdropFull.getHeight() != bh) {
+            if (glassBackdropFull != null) glassBackdropFull.recycle();
+            glassBackdropFull = android.graphics.Bitmap.createBitmap(bw, bh, android.graphics.Bitmap.Config.ARGB_8888);
         }
         glassBackdropX = bx;
         glassBackdropY = by;
-        final Canvas bc = new Canvas(glassBackdrop);
+        final Canvas bc = new Canvas(glassBackdropFull);
         // ★★★决策 #846 修复「玻璃两侧黑块」：原来 `CLEAR`（透明）⇒ 玻璃盒外扩 pad 超出**内容**的部分
         //   为透明黑 ⇒ AGSL 折射把它当背景采样 ⇒ 玻璃左/右边缘黑块（真机「滚动到看不到内容时两个黑块」）。
         //   改为填**页面底色**（取 View 的背景色；无背景色 ⇒ 白）。与鸿蒙自绘位图 clear 色同口径。
@@ -3367,6 +3372,22 @@ public class ProteusHostView extends ViewGroup {
             capturingGlass = false;
         }
         if (cSave != -1) bc.restoreToCount(cSave);
+        // ★★★决策 #906：**轻度模糊**（对齐 iOS「模糊只为压掉高频干扰，内容仍可见」）——
+        //   全分辨率 → 2× 双线性降采样（= 一次轻盒式低通）⇒ 消硬边锯齿/高频、内容仍清晰可辨。
+        //   着色器对这张轻糊图**单次采样**（无离散核，零条带）。2× 足够轻（内容不糊）。
+        final int DIV = 8;
+        final int sw = Math.max(1, Math.round((float) bw / DIV));
+        final int sh = Math.max(1, Math.round((float) bh / DIV));
+        if (glassBackdrop == null || glassBackdrop.getWidth() != sw || glassBackdrop.getHeight() != sh) {
+            if (glassBackdrop != null) glassBackdrop.recycle();
+            glassBackdrop = android.graphics.Bitmap.createBitmap(sw, sh, android.graphics.Bitmap.Config.ARGB_8888);
+        }
+        final Canvas sc = new Canvas(glassBackdrop);
+        sc.drawBitmap(glassBackdropFull, new android.graphics.Rect(0, 0, bw, bh),
+                new android.graphics.Rect(0, 0, sw, sh),
+                new android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG));
+        glassBackdropScaleX = (float) bw / sw;
+        glassBackdropScaleY = (float) bh / sh;
     }
 
     /** 画一个玻璃面（节点盒 c）：AGSL 采样背后内容 → blur+tint；不可用 ⇒ 半透明实色回退。 */
@@ -3383,7 +3404,8 @@ public class ProteusHostView extends ViewGroup {
                 // ★★★决策 #905：触控形变——交互玻璃才传触点（盒局部 px）+ press；其余恒 (-1e6)（无影响）。
                 (spec.interactive && glassInteractNodeId == nodeId) ? glassTouchLocalX : -1e6f,
                 (spec.interactive && glassInteractNodeId == nodeId) ? glassTouchLocalY : -1e6f,
-                (spec.interactive && glassInteractNodeId == nodeId) ? glassPress : 0f);
+                (spec.interactive && glassInteractNodeId == nodeId) ? glassPress : 0f,
+                glassBackdropScaleX, glassBackdropScaleY);
         if (p != null) {
             canvas.drawRect(c.x, c.y, c.x + c.w, c.y + c.h, p);
         } else {
@@ -3431,7 +3453,18 @@ public class ProteusHostView extends ViewGroup {
         for (int i = 0; i < list.size() && i < ids.length; i++) {
             GlassMaterial.Spec g = glassByNode.get(ids[i]);
             if (g != null) {
-                drawGlassFace(canvas, ids[i], list.get(i), g);
+                // ★★★决策 #906：玻璃是 **fixed**（悬浮导航）时也要做**滚动反向补偿**（钉在视口）——
+                //   此前补偿只在 `drawCmds` 普通绘制里做，而**玻璃面是独立遍** ⇒ 玻璃不钉住、随内容滚走
+                //   （真机实测"悬浮玻璃导航滚动后跑掉"）。只补偿玻璃面本身；其子树由 drawCmds 各自补偿。
+                final Integer fAnchor = fixedAnchorOf(ids[i]);
+                if (fAnchor != null) {
+                    final int gSave = canvas.save();
+                    canvas.translate(scrollX, scrollY);
+                    drawGlassFace(canvas, ids[i], list.get(i), g);
+                    canvas.restoreToCount(gSave);
+                } else {
+                    drawGlassFace(canvas, ids[i], list.get(i), g);
+                }
                 // ★★★决策 #893（对齐 iOS 液态玻璃基准）：玻璃面**之上**重画**该玻璃节点自身子树**（其文本/子视图）
                 //   ——背景已在 captureGlassBackdrop 排除自身子树（只含"背后"），此处把自身内容**清晰**盖回玻璃面上。
                 //   真 iOS `UIVisualEffectView` 语义：材质只糊背后、`contentView` 内容原样清晰。
