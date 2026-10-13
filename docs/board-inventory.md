@@ -93,7 +93,7 @@
 
 | plan | 编号 | 状态 | 说明 |
 |------|------|------|------|
-| `proteus-glass-plan` | G-07 | 🟡 **B1 落地（2026-09-11）** | 新包 **`@proteus-vue/glass`**（纯逻辑 SSOT：preset 表 7 内置 + props 归一 resolveGlass + 三级降级 resolveGlassLevel + 能力矩阵 + defineGlassPreset 扩展）；`<pg-glass>` 组件收口消费该包（去内联硬编码表——多端解释分歧消除）；CLI **`proteus audit glass`**（GLS001-006：裸 backdrop-filter error / 嵌套≤2·节点≤10 warn / d2-exempt 登记豁免）；22 用例 + 双端 demo（glass-demo）；★顺带修编译器尾逗号 bug（computed(() => expr,) 产物 `...,;` 语法错）。**余 M2+ = 原生端 iOS/鸿蒙/Android 系统材质映射（L3，需真机）** |
+| `proteus-glass-plan` | G-07 | 🟡 **B1 落地（2026-09-11）+ 自研玻璃三端（#818/#834/#873/#875）+ M5 治理（#880）** | 新包 **`@proteus-vue/glass`**（纯逻辑 SSOT：preset 表 7 内置 + props 归一 resolveGlass + 三级降级 resolveGlassLevel + 能力矩阵 + defineGlassPreset 扩展）；`<pg-glass>` 组件收口消费该包；**自研液态玻璃引擎**：算法真源 = Rust WGSL → naga → iOS MSL / Android AGSL / 鸿蒙 SPIR-V（#834）· 三端自绘玻璃遍（真折射，iOS#873/鸿蒙#841/安卓#861）· 编译期折叠 `style.glass`（`glassResolver`）· 对齐 Apple 语义（去固有白+明暗自适应 #875）；治理：`proteus audit glass`（GLS001-006）+ **`check:glass-audit` 门禁（接 verify+CI，#880）** + `check:glass-capability` + 像素等价门禁（MSL⇄CPU oracle / 鸿蒙）。**余**：M3（`--trace-glass`/IR 快照）· M6（官网演示）· **端到端真 `.vue`→三端合体验证**（`T-glass-end2end`）。★**下游消费者**：业务 `<pg-glass>` + **Aether `lg-*` 组件族**（内部渲染 pg-glass，复用不重造，见 `docs/Proteus_液态玻璃系统组件库方案.md`） |
 | `proteus-safe-area-plan` | G-09 | 🟡 | p-safe 语义已落地（fluid-system S2）；App 端安全区待渲染层 |
 | `proteus-fluid-layout-plan`（四原语） | G-22 | ✅ | 见 L1 |
 | `proteus-css-compat-plan` | G-08 | ✅ | CSS 矩阵 + 布局语义 + 矩阵测试 |
