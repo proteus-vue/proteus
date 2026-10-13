@@ -44,8 +44,8 @@ useOpenDocument(filePath: string): Promise<CapResult<void>>
 
 | 端 | 兼容 | 说明 |
 |---|---|---|
-| Web SPA | ⚠️ | vue-dom · webBridge 未提供 openDocument → Err 显式降级（平台无直通 API） |
-| 微信小程序 | ⚠️ | skyline（WebView 降级） · wx 桥未提供 openDocument → Err 显式降级 |
+| Web SPA | ✅ | vue-dom · webBridge 实现（平台 API 直连） |
+| 微信小程序 | ✅ | skyline（WebView 降级） · wx 桥 → wx.openDocument（Web 对等：window.open → 浏览器查看器） |
 | Headless（SSR / 测试） | ✅ | headless · mock 桥注入（测试 / SSR 档） |
 | iOS 原生 | 🟡 | native-ios（UIKit + CoreAnimation） · 渲染核心已落地——能力桥未接线 |
 | Android 原生 | 🟡 | native-android（自绘 Canvas） · 渲染核心已落地——能力桥未接线 |

@@ -191,20 +191,20 @@
       "id": "T-bridge-ext-keys",
       "title": "wxKeys/webKeys 纳入声明式 bridge-ext 成员（修 keep-screen-on / document-preview 的 Web+MP 误标 ⚠️）",
       "type": "end-alignment",
-      "status": "planned",
-      "owner": null,
+      "status": "done",
+      "owner": "session:wb-bridgeext",
       "scope": [
         "website/scripts/gen-content.mjs",
         "website/scripts/lib/**",
         "website/content/capabilities/**",
         "website/en/capabilities/**",
-        "tests/gen-content-hook-refs.test.ts"
+        "tests/gen-content-bridge-keys.test.ts"
       ],
-      "decision": null,
+      "decision": 895,
       "verification": "cd website && npx tsx scripts/gen-content.mjs --check",
       "branch": null,
       "related": ["T-app-bridge-refs"],
-      "note": "承接 T-app-bridge-refs 的**独立验证发现**（异会话 AST 复算，refs 逐 hook 零差异时顺带抓出）。★根因：gen-content.mjs 的 extractFnKeys 只扫 `function wxBridge` / `function webBridge` 的**函数体**，而声明式桥成员在 packages/api/src/generated/bridge-ext.ts（`setKeepScreenOn:17/44`、`openDocument:27/59`），经 capability.ts:6（import mpBridgeExt/webBridgeExt）+ capability.ts:31-32（`...mpBridgeExt(...)` / `...webBridgeExt(...)`）**真实并入运行时 bridge** ⇒ MP/Web 均**确实可用**。★错误后果（与 #884/#889 同型：真值支持却被页面宣称「桥未提供」）：keep-screen-on(C83) / document-preview(C84) 两页的 Web+MP 四格 × zh/en 共 8 格被错标 ⚠️（应为 ✅）。★修法建议：桥成员枚举也走锚定式——把 wxBridge/webBridge 的函数体 + bridge-ext 的工厂返回对象**并集**（`lib/ts-source-scan.mjs` 已备原语）。★注意：改 wxKeys/webKeys 会**波及更多页**（凡 refs 命中 bridge-ext 成员的能力），须先跑 `--check` 看漂移面 + 逐页确认是否「由 ⚠️ 转 ✅ 且确有声明层依据」，不可为转绿而转绿。"
+      "note": "【done · 决策 #895】承接 T-app-bridge-refs 的独立验证发现（异会话 AST 复算 refs 时顺带抓出）。★根因：gen-content.mjs 的 extractFnKeys 只扫 `function wxBridge`/`function webBridge` 的**函数体**，而运行时桥 = **两源并集**（capability.ts:31-32：`{...wxBridge, ...mpBridgeExt, ...appCaps}` / `{...webBridge, ...webBridgeExt, ...appCaps}`）⇒ 声明式桥成员（generated/bridge-ext.ts）漏抽 ⇒ keep-screen-on(C83)/document-preview(C84) 的 Web+MP × zh/en **8 格**错标 ⚠️（真值 ✅）。★修：① 原语收一份 `ts-source-scan.mjs::returnObjectMembers`（app-bridge-keys 改用它 84→69 行）；② 新增第三份契约模块 `lib/bridge-keys.mjs`（手写∪声明式 + 与 GENERATED_BRIDGE_COUNT 交叉校验 + 硬失败）；③ 删 extractFnKeys（2815→2812）。★零漂移：锚定式与旧行口径在 89/71 上逐名一致 ⇒ 落页**精确 4 页**各 2 行。★验证：6 门禁绿（check:content/bridge-ext/en-drift/doc-links/ai-tasks/script-compile）+ 三份契约测试 20/20 + 破坏性 2 条 + 异会话 TS-AST 独立复算（168 页零不一致、零谎报、零误降级）。★独立验证抓出的两处盲区本单**当场收紧**：① 测试「逐名一致」实为单向子集 ⇒ 改双向锁；② GENERATED_BRIDGE_COUNT=0 时整段跳过解析 ⇒ 去掉短路（补两条测试）。★未顺手迁移：`extractBridgeBodies`（错误码提取）仍是旧行匹配口径（取值切片须回原文取，属另一契约）。★未推送/未发布：等用户批准。"
     }
   ]
 }

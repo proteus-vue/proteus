@@ -11,8 +11,10 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { COMP_EN, DOMAIN_EN, MP_STATUS_EN, ENDS_EN, END_NOTE_EN, COMP_LEGEND_EN, SHARED_EN, OVERVIEW_EN, CAP_SHARED_EN, CAP_USAGE_EN, CAP_ARGS_EN, CAP_DATA_HINTS_EN, CAP_METHODS_EN, CAP_EN, CAP_CAT_EN, CAP_OVERVIEW_EN, LIFECYCLE_EVENT_EN, LIFECYCLE_EVENT_NOTE_EN, LIFECYCLE_SRC_EN } from './gen-content-en.mjs'
 // ★决策 #881：App 桥方法集抽取抽成独立模块（锚定式解析 + 符号缺失硬失败）——详见该模块头注释
 import { loadAppBridgeKeys } from './lib/app-bridge-keys.mjs'
-// ★hook→桥方法引用抽取同法抽成独立模块（锚定式 + 硬失败）；两条契约共用 lib/ts-source-scan.mjs 原语
+// ★hook→桥方法引用抽取同法抽成独立模块（锚定式 + 硬失败）；三条契约共用 lib/ts-source-scan.mjs 原语
 import { extractHookBridgeRefs, HOOK_FACTORY } from './lib/hook-bridge-refs.mjs'
+// ★平台桥成员集 = 手写桥（capability-bridges.ts）∪ 声明式桥（generated/bridge-ext.ts）——见模块头注释
+import { extractBridgeKeys, BRIDGE_EXT_REL_PATH } from './lib/bridge-keys.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 // ★组件库已拆包（2026-09-14）：@proteus-vue/components → packages/components（原仓库根 src/components）
@@ -237,16 +239,6 @@ function compatSection(rows, footer) {
   lines.push(footer)
   lines.push('')
   return lines
-}
-
-// 解析 api.ts 内 wxBridge/webBridge 实现的方法名集合（能力页 Web 列 ✅/⚠️ 的 SSOT——未实现 → Err 显式降级）
-function extractFnKeys(src, fnName) {
-  const start = src.indexOf(`function ${fnName}`)
-  if (start < 0) return []
-  const rest = src.slice(start)
-  const endM = rest.search(/^}/m)
-  const body = endM >= 0 ? rest.slice(0, endM) : rest
-  return [...body.matchAll(/^ {4}([a-zA-Z]+):/gm)].map((x) => x[1])
 }
 
 // ★#406 颗粒度批：TS 接口解析（能力页参数/返回值属性表的 SSOT——capability.ts 内 60+ 接口属性带 JSDoc）
@@ -1201,8 +1193,13 @@ function capContext(ir) {
 `)
     }
   }
-  const wxKeys = new Set(extractFnKeys(apiSrc, 'wxBridge'))
-  const webKeys = new Set(extractFnKeys(apiSrc, 'webBridge'))
+  // ★平台桥成员集 = 手写桥（wxBridge/webBridge）∪ 声明式桥（generated/bridge-ext.ts）
+  //   ——运行时由 capability.ts 的 createCapabilityBridge **真实 spread 并集**（漏抽曾致 8 格误标 ⚠️）
+  const extPath = path.join(ROOT, BRIDGE_EXT_REL_PATH)
+  if (!fs.existsSync(extPath)) throw new Error(`[gen-content] 找不到声明式桥生成物：${extPath}（先跑 node scripts/gen-bridge-ext.mjs）`)
+  const bridgeKeys = extractBridgeKeys(apiSrc, fs.readFileSync(extPath, 'utf8'))
+  if (bridgeKeys.misses.length) throw new Error(`[gen-content] 平台桥成员集解析失败（数据源契约被破坏）：${bridgeKeys.misses.join('；')}`)
+  const { wxKeys, webKeys } = bridgeKeys
   const ifaces = extractInterfaces(apiSrc)
   // ★颗粒度对齐 A（2026-09-11）：旧 spread 让 webBridge 同名方法覆盖 wxBridge → 丢 wx 原生错误码（network/orientation/device…）。
   //   改 per-method **并集**（同名两段都保留，错误码提取两源皆扫）。

@@ -3841,6 +3841,15 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **⑤ 判据**：真机 **iOS / Android 并排一致**——玻璃卡跨蓝/白边界的**折射亮带**可见 + 青绿圆点在玻璃后**淡模糊透出**（此前玻璃卡区域 = 纯白磨砂无信号）。`check:app-screen-content` / `check:glass-audit` / `check:glass-capability` 全绿。
 **⑥ 边界**：`app-screen-content.generated.ts` 与 `superapp/dist/**` 是构建产物（gitignore），改 `mine.vue` 后由各端构建（`build-batch`/`build-app-stack` → `gen-app-screen-content.mjs`）**自动重生成**，无需手改产物。
 
+895. **★★平台桥成员集抽取改「手写桥 ∪ 声明式桥」并集（锚定式 + 声明数交叉校验）——修 keep-screen-on / document-preview 的 Web+MP 共 8 格误标 ⚠️**（2026-10-13 · 承接 #884/#889 同族 · 独立验证方提出后另单处理）：
+**① 症状**：官网 `keep-screen-on`(C83) / `document-preview`(C84) 两页的 **Web SPA + 微信小程序** 两列（× zh/en = **8 格**）被标 ⚠️「wx/web 桥未提供 `setKeepScreenOn`/`openDocument` → Err 显式降级」，而**真值 ✅**。
+**② 根因**：生成器的桥成员枚举 `extractFnKeys`（`indexOf('function wxBridge')` + `/^}/m` 切片 + `/^ {4}([a-zA-Z]+):/gm` 行匹配）**只扫手写桥函数体**；而运行时桥是**两源并集**——`capability.ts:31-32` 的 `createCapabilityBridge`：`{ ...wxBridge(g.wx), ...mpBridgeExt(g.wx, CapError), ...appCaps }` / `{ ...webBridge(globalThis), ...webBridgeExt(globalThis, CapError), ...appCaps }`。声明式桥成员在 `packages/api/src/generated/bridge-ext.ts`（`scripts/gen-bridge-ext.mjs` 生成，`BRIDGE_DECLS` = keep-screen-on / openDocument）⇒ **漏抽 ⇒ 对外谎报**（与 #884「只认方法简写」、#889「只认紧跟调用括号」同型——**「文本解析源码」第五次咬伤**）。
+**③ 修（原语收敛 + 两源并集 + 交叉校验）**：① 共享原语 `ts-source-scan.mjs::returnObjectMembers`（「`export function` → 顶层 `return {` → 成员名」；`{ names, miss }`，且明确 **`return {}` 是合法空集、不是失败**）；② `app-bridge-keys.mjs`（#884）改用它（删手写编排 84→69 行）；③ 新增第三份契约模块 **`lib/bridge-keys.mjs`**：`wxKeys = wxBridge ∪ mpBridgeExt`、`webKeys = webBridge ∪ webBridgeExt`，并与生成物自带的 `GENERATED_BRIDGE_COUNT`（= 声明数）**交叉校验**（生成器对每个声明恰好产出一个成员 ⇒ 成员数 ≠ 声明数即硬失败）；④ `gen-content.mjs` **删掉 `extractFnKeys`**（净值 2815→2812），改用 `extractBridgeKeys` + `misses` 非空抛错。
+**④ 零漂移复核**：锚定式与旧行匹配口径在 `wxBridge`(**89**) / `webBridge`(**71**) 上**逐名一致** ⇒ 迁移行为等价；唯一新增 = 声明式 **2** 个成员。落页面**精确 4 页**（keep-screen-on / document-preview × zh/en），各只动 Web+MP 两行。
+**⑤ 判据**：`check:content`（组件/能力页与源一致 `78 · 84`）/ `check:bridge-ext` / `check:en-drift` / `check:doc-links` / `check:ai-tasks` / `check:script-compile` 全绿；三份同族契约测试 **20/20**（新增 `tests/gen-content-bridge-keys.test.ts` 7 用例）；**破坏性验证**两条 —— ① 漏抽声明式成员 ⇒ 3 条断言当场红；② 手工把某页 ✅ 改回 ⚠️ ⇒ `check:content` 红（exit 1）。**独立验证**（异会话 · 自写 **TypeScript compiler API** 建 AST 复算，不采信被测模块）：手写 89/71、声明式 2/2 **逐名零差异**；**168 个能力页 MP/Web 零不一致、零谎报升级、零误降级**；确认**无第三个合并点**（`BRIDGE_DECLS` 在 `capability-bridges.ts` 只出现在注释 `:4012`、未参与运行时合并；`appCaps` 被正确排除在 MP/Web 列之外）。
+**⑥ 独立验证抓出的两处盲区（本单当场收紧）**：① 测试用例名「逐名一致」实为**单向子集**断言（`filter` 掉并集多出的名字 ⇒ 看不出"多抽"）⇒ 改**双向锁**（旧口径名一个不丢 + 并集不含「旧口径 ∪ 声明式」之外的名字 + 数量自洽）；② `bridge-keys.mjs` 原在 `GENERATED_BRIDGE_COUNT === 0` 时**整段跳过**声明式解析 ⇒「常量被改成 0 而工厂实含成员」这类脱节**静默溜过**（正是本仓最恨的"静默"）⇒ 去掉该短路（**始终解析**，`return {}` 合法空集天然通过），并补两条测试（改 0 + 工厂非空 ⇒ 报脱节；真·空集 ⇒ 不报）。
+**⑦ 边界与未顺手迁移**：`refs`（hook→桥方法，第二份契约）与 `wxKeys/webKeys`（桥成员集，第三份）是**两条独立契约**，本单只动后者。`gen-content.mjs::extractBridgeBodies`（错误码提取）**仍是旧行匹配口径** —— 已实测其成员集与锚定式一致，但其**取值切片读原文**（错误码是字符串字面量，遮罩会吃掉），迁移须改用 `topLevelEntries` 的 `start/end` 回原文取；属另一契约，**留待单独任务**（不混单）。
+
 
 
 

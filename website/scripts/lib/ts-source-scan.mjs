@@ -218,3 +218,20 @@ export function topLevelEntries(masked, open, close) {
 export function topLevelMemberNames(masked, open, close) {
   return topLevelEntries(masked, open, close).map((e) => e.name)
 }
+
+/**
+ * `export function <name>` → 顶层 `return {` → 顶层成员名（三条「生成器↔源码」契约的公共一步：
+ * App 桥 `capability-app.ts` / 平台桥 `capability-bridges.ts` + `generated/bridge-ext.ts`）。
+ * 失败**不抛错**，把可读原因放进 `miss`（调用方决定是否硬失败——本仓纪律：不静默得空集）。
+ * ★`miss` == null 而 `names` 为空**不是**失败：`return {}` 是合法空集（如声明数为 0 的生成物），
+ *   要求非空的调用方自行判 `names.length`——否则「合法空集」与「解析器坏了」会被混为一谈。
+ */
+export function returnObjectMembers(masked, name) {
+  const body = findFunctionBody(masked, name)
+  if (!body) return { names: [], miss: `${name}（函数未找到）` }
+  const open = findTopReturnObject(masked, body)
+  if (open < 0) return { names: [], miss: `${name}（未找到顶层 \`return {\`）` }
+  const close = matchBrace(masked, open)
+  if (close < 0) return { names: [], miss: `${name}（返回对象花括号不配对）` }
+  return { names: topLevelMemberNames(masked, open, close), miss: null }
+}
