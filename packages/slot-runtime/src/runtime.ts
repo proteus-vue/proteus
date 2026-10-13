@@ -292,6 +292,7 @@ export class VaporRuntime {
               // ★P1-3：子组件的 nodeId 统一加偏移（内核/宿主在**父树空间**里认节点）
               nodeId: spec.nodeId + this.nodeIdOffset,
               kind: spec.kind as SlotKind,
+              propKey: spec.propKey,
               keyId: this.rt.keys.intern(spec.propKey),
               listId: spec.listId ?? spec.slotId,
               listSlotId: spec.itemSlotId ?? spec.slotId,
@@ -480,6 +481,16 @@ export class VaporRuntime {
           const propName = spec.propKey.startsWith('component.') ? spec.propKey.slice('component.'.length) : spec.propKey
           this.onComponentProp(spec.nodeId, propName, value)
           // 仍然要填槽位值（诊断/explain 读它；但不经 slot.emit ⇒ 不发那条指令）
+          entry.slot.value = value
+          continue
+        }
+        // ★★★决策 #906：**无 `onComponentProp` 时的组件 props 槽位直接跳过**——
+        //   组件 props 的**初值**已由 `instantiateTemplate` 的组件展开烘焙（读父表 component-prop 槽位），
+        //   而 `CALL_COMPONENT_UPDATE` 的 value 是 **f32 通道**（`toF32`）⇒ 字符串/对象型 props
+        //   （如 `:active="navKey"` / `:name="'x'"`）会抛"槽位值必须是 number/boolean"⇒ **整屏不渲**
+        //   （设备实测 `[unsupported type]`）。App/一次性 VM 运行期不做组件 props 的**活更新**
+        //   （组件内部已在实例化时展开），故此处跳过是正确语义，非静默丢功能。
+        if (spec.kind === 'component-prop') {
           entry.slot.value = value
           continue
         }
@@ -757,7 +768,11 @@ export class VaporRuntime {
     // ★P1-3 插槽分发：解析出的节点若已被丢弃（整行被摘）⇒ 不发死指令（见 skipNodeIds 注释）
     if (nodeId !== undefined && this.skipNodeIds?.has(nodeId)) return
     if (nodeId !== undefined) {
-      if ((spec.itemKind ?? 'style') === 'text') {
+      // ★★★决策 #906：行内 `visible` 槽位（`v-if` inside v-for）走 TOGGLE_VIS + Boolean（与标量同语义）——
+      //   值可能是字符串/对象（Vue 真值语义），不能按 SET_STYLE 的 f32 处理（曾静默变 0/抛错）。
+      if (spec.propKey === 'visible') {
+        this.rt.buffer.push({ op: OpCode.TOGGLE_VIS, nodeId, visible: Boolean(value) })
+      } else if ((spec.itemKind ?? 'style') === 'text') {
         this.rt.buffer.push({ op: OpCode.SET_TEXT, nodeId, textRef: this.rt.strings.intern(String(value)) })
       } else {
         this.rt.buffer.push({
@@ -773,7 +788,9 @@ export class VaporRuntime {
         listId: spec.listId ?? -1,
         itemKeyRef: this.rt.strings.intern(key),
         slotId: spec.itemSlotId ?? -1,
-        value: typeof value === 'number' ? value : Number(value) || 0,
+        value: spec.propKey === 'visible'
+          ? (value ? 1 : 0)
+          : (typeof value === 'number' ? value : Number(value) || 0),
       })
     }
   }

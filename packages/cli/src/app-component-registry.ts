@@ -43,6 +43,7 @@ export function glassResolver(props: Record<string, string | undefined>): Record
     noise: num(props.noise),
     fallback: props.fallback as never,
     interactive: bool(props.interactive),   // ★#905：触控形变
+    interactiveEffect: props.interactiveEffect as never,   // ★#906：交互效果形态（resolveGlass 归一）
     material: props.material as never,
   })
   const sideMap: Record<string, string> = { all: 'all', top: 'top', bottom: 'bottom', right: 'right' }
@@ -60,6 +61,9 @@ export function glassResolver(props: Record<string, string | undefined>): Record
     material: materialOf(props.material),
     // ★★★决策 #905：触控形变流动——折进 `glass.interactive`（宿主据此接触摸→每帧喂 touch/press uniform）。
     interactive: r.interactive,
+    // ★★★决策 #906：交互效果形态——0=**上层玻璃表面流动**（默认，Apple `isInteractive`）/ 1=内容折射位移。
+    //   折进 `glass.effect`，宿主透传为着色器 `effect` uniform（复用原 `_pad2` 槽，布局仍 96B）。
+    effect: r.interactiveEffect === 'displace' ? 1 : 0,
     // ★level 是**运行期能力决策**（系统材质 vs 自绘），由宿主据自身 OS 能力定，非构建期 —— 此处不下发。
   }
 }
@@ -118,7 +122,9 @@ const tagRegex = (tpl: string): string[] => {
     const raw = m[1]
     // PascalCase → kebab（与 MP collectComponents 同口径）
     const tag = /[A-Z]/.test(raw) ? raw.replace(/\B([A-Z])/g, '-$1').toLowerCase() : raw
-    if (/^p-[a-z]/.test(tag)) used.add(tag)
+    // ★★★决策 #906：框架前缀族 = `p-*`（基础组件）**与 `pg-*`（玻璃族：pg-glass / pg-glass-nav）**——
+    //   此前只认 `^p-[a-z]` ⇒ `pg-` 开头的标签**漏收**（pg-glass 靠编译器特例才折，pg-glass-nav 则完全不展开）。
+    if (/^p[a-z]?-[a-z]/.test(tag)) used.add(tag)
   }
   return [...used]
 }
@@ -196,12 +202,15 @@ export function buildAppComponentRegistry(
     const src = fs.readFileSync(found, 'utf-8')
     const filename = path.relative(root, found)
     const statics = extractRefLiterals(src)
-    const tplRes = buildLayoutTemplate(src, filename, undefined, opts.tokens, statics, opts.globalCss, false)
+    const tplRes = buildLayoutTemplate(src, filename, undefined, opts.tokens, statics, opts.globalCss, false, { iconResolver, glassResolver })
     if (!tplRes.ok) {
       diagnostics.push(`组件 <${tag}> 模板编译失败（${filename}）`)
       continue
     }
-    const subRes = buildVaporSubscriptions(src, filename)
+    // ★★★决策 #906：组件模板内的**子组件绑定**（kebab 形态如 `pg-glass-nav` 内含 `<pg-glass :radius>`）
+    //   也须按 `component.` 归类——与 `buildLayoutTemplate` 的 `componentTags` 同源（此处对**本组件**源解析）。
+    const selfTags = resolveComponentTags([{ name: tag, src }], root)
+    const subRes = buildVaporSubscriptions(src, filename, selfTags.size > 0 ? { componentTags: selfTags } : {})
     components[tag] = {
       tpl: tplRes.template,
       table: subRes.ok ? subRes.table : { version: 1, sources: [], evaluators: [], l0Slots: [], stats: { l1: 0, l0: 0, l1Rate: 0 } },

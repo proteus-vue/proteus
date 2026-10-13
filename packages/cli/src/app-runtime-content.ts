@@ -163,7 +163,7 @@ export async function buildAppRuntimeContent(
     const pumpNames = pumpList.map((p) => p.src)
     // ★泵源首帧初值：取 gen.min（有意义的起点；否则文本首帧显示 undefined）——进 `data`（源初值）。
     for (const p of pumpList) if (statics[p.src] === undefined) statics[p.src] = p.gen.min
-    const subRes = buildVaporSubscriptions(sfcSrc, filename, pumpNames.length > 0 ? { pumpSources: pumpNames } : {})
+    const subRes = buildVaporSubscriptions(sfcSrc, filename, { ...(pumpNames.length > 0 ? { pumpSources: pumpNames } : {}), ...(expandableTags.size > 0 ? { componentTags: expandableTags } : {}) })
     const evRes = compileEvents(sfcSrc)
 
     // ★★★批 A④（2026-10-08 · 决策 #658）：**z-index 层叠序重排**（运行期通路——与静态通路同源同实现）。
@@ -189,7 +189,7 @@ export async function buildAppRuntimeContent(
     }
 
     out[r.name] = {
-      tpl: tplRes.template,
+      tpl: wrapViewportRoot(tplRes.template),
       table: subRes.ok ? subRes.table : EMPTY_TABLE,
       events: (evRes.events ?? []) as unknown[],
       handlers: (evRes.handlers ?? {}) as Record<string, unknown[]>,
@@ -239,4 +239,44 @@ export async function buildAppRuntimeContent(
   fs.writeFileSync(outFile, JSON.stringify(out, null, 2))
   if (compiled === 0) throw new Error('零页面编译成功——运行期屏内容产物为空（路由格式/编译器有问题？）')
   return { ok: true, platform, outFile, compiled, skipped, diagnostics }
+}
+
+/**
+ * ★★★决策 #907：给运行期屏内容包一层**视口高 `app-root`**（对齐静态通路 `app-content.ts` 的结构）。
+ *
+ * 【为什么必须（悬浮导航 fixed 缺口）】运行期通路的根 = **页面本身**（`minHeight` = 内容高，常 > 视口），
+ *   而引擎里 `position:fixed` 的 containing block = **根**（决策 #907）⇒ fixed 的 `bottom` 相对**页面高**
+ *   （落到内容底部、屏外）。静态通路有 `app-root`（`heightRatio:1` = 视口高）包一层 ⇒ fixed 相对视口。
+ *   ⇒ 运行期也补同款包层（不动既有节点 id：新根插在数组末尾，改旧根 `parentId`），fixed 即相对视口。
+ *   ★旧根改为 `absolute inset:0`（脱离流、可溢出视口高根⇒内容仍可滚动）；app-root `overflow:hidden`
+ *     裁到视口（宿主的滚动平移在其内显现）。
+ */
+function wrapViewportRoot(tpl: unknown): unknown {
+  const t = tpl as { nodes?: Array<Record<string, unknown>>; roots?: number[] } | null
+  if (!t || !Array.isArray(t.nodes) || t.nodes.length === 0) return tpl
+  const oldRoots = Array.isArray(t.roots) && t.roots.length > 0
+    ? t.roots.slice()
+    : t.nodes.filter((n) => n.parentId === null || n.parentId === undefined).map((n) => n.id as number)
+  if (oldRoots.length === 0) return tpl
+  const newId = t.nodes.reduce((m, n) => Math.max(m, Number(n.id) || 0), 0) + 1
+  for (const rid of oldRoots) {
+    const node = t.nodes.find((n) => n.id === rid)
+    if (!node) continue
+    node.parentId = newId
+    const st = (node.style ?? {}) as Record<string, unknown>
+    st.position = 'absolute'
+    st.left = 0
+    st.top = 0
+    st.right = 0
+    st.bottom = 0
+    node.style = st
+  }
+  t.nodes.push({
+    id: newId,
+    parentId: null,
+    tag: 'view',
+    style: { widthRatio: 1, heightRatio: 1, position: 'relative', overflow: 'hidden' },
+  })
+  t.roots = [newId]
+  return t
 }

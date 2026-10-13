@@ -392,11 +392,35 @@ impl TaffyEngine {
         //   ⇒ 正解：**只以 `children` 为单一事实来源**（`add_child`/splice 都维护它），
         //     数组顺序退化为无关的实现细节 ⇒ 中间插入只需在父的 `children` 里插一项（O(1)）。
         //   ★前提：`parent` 与 `children` 双向一致——已由输入图校验强制（见 `build_tree` ④）。
+        //
+        // ★★★决策 #907（悬浮导航缺口）：**`position:fixed` 的 containing block = 视口（根）**，不是父盒。
+        //   【缺口】此前 fixed 走 taffy absolute ⇒ inset 相对**父**（App 页面层 `absolute inset:0`、
+        //     内容高 1400）⇒ `bottom:0` 落**页面内容底部（屏外）**，真机实测"悬浮导航 bottom 不生效"。
+        //   【修法】在 taffy 树里把 fixed 节点**挂到根**（根 = 视口高 `heightRatio:1`）⇒ inset 相对视口，
+        //     `top/right/bottom/left` 全部相对视口（CSS 语义）。宿主仍负责"不随滚动"（fixed 反向补偿）。
+        //   ★只在 taffy 上重挂；`LNode.parent/children` 保持不变（滚动/事件/路由仍按原树）——
+        //     绝对坐标由 `apply_absolute` 沿用 page 原点（App 壳页面层恒 `inset:0` ⇒ 原点 (0,0)，等价）。
+        let root_ids = tree.roots.clone();
+        let fixed_nodes: Vec<usize> = (0..tree.nodes.len())
+            .filter(|&i| tree.nodes[i].style.position == Position::Fixed)
+            .collect();
         for (idx, node) in tree.nodes.iter().enumerate() {
             for &c in &node.children {
+                // fixed 子：不挂原父，改挂根（见上）
+                if tree.nodes[c as usize].style.position == Position::Fixed {
+                    continue;
+                }
                 taffy
                     .add_child(ids[idx], ids[c as usize])
                     .expect("taffy: add_child");
+            }
+        }
+        // 把 fixed 节点挂到**根**（多根时挂第一个根——App 壳单根；多根为罕见，取首根使其相对视口原点）
+        if let Some(&root0) = root_ids.first() {
+            for &f in &fixed_nodes {
+                taffy
+                    .add_child(ids[root0 as usize], ids[f])
+                    .expect("taffy: add_child(fixed→root)");
             }
         }
 

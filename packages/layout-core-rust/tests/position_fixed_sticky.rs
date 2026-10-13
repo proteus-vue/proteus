@@ -46,3 +46,31 @@ fn sticky_lays_out_like_static_inset_does_not_offset() {
     let r = out.rect_of(sticky).expect("sticky 节点应有矩形");
     assert!((r.y - 50.0).abs() < 0.5, "sticky 布局同 static（top 不作偏移）⇒ y≈50，实际 {}", r.y);
 }
+
+// ★★★决策 #907：**fixed 的 containing block = 视口（根）**——不是父盒。
+//   【缺口回归】此前 fixed 走 taffy absolute ⇒ inset 相对**父**；App 页面层（absolute inset:0、内容高 500）
+//     内的 fixed `bottom:0` 会落**页面内容底部**（y≈470，屏外），而非**视口底部**（y≈170）。
+#[test]
+fn fixed_bottom_is_relative_to_viewport_not_parent() {
+    let mut tree = LayoutTree::new();
+    // 视口 = 根 200×200
+    let root = tree.push(LNode::new(1, LStyle { width: Some(200.0), height: Some(200.0), ..Default::default() }));
+    // 页面层：absolute inset:0、内容高 500（>视口）
+    let page = tree.push(LNode::new(3, LStyle {
+        position: Position::Absolute, left: Some(0.0), top: Some(0.0), width: Some(200.0), height: Some(500.0),
+        ..Default::default()
+    }));
+    tree.add_child(root, page);
+    // 悬浮导航：fixed、bottom:0、高 30 ⇒ 期望**视口底** y≈170（=200−30），而非页面底 470（=500−30）
+    let dock = tree.push(LNode::new(2, LStyle {
+        position: Position::Fixed, left: Some(0.0), bottom: Some(0.0),
+        width: Some(200.0), height: Some(30.0), ..Default::default()
+    }));
+    tree.add_child(page, dock);
+    tree.roots.push(root);
+
+    let out = TaffyEngine::new().layout(&mut tree, RootConstraint::definite(200.0, 200.0));
+    let r = out.rect_of(dock).expect("fixed 节点应有矩形");
+    assert!((r.y - 170.0).abs() < 0.5, "fixed bottom:0 应相对**视口**（200）⇒ y≈170，实际 {}（相对父页面 500 会是 470）", r.y);
+}
+

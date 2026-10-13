@@ -43,10 +43,17 @@ export interface GlassProps {
   fallback?: GlassFallback
   /** ★★★决策 #900：材质选择（自绘 GPU 材质 id）。缺省/未知 ⇒ 'glass'（真折射）。 */
   material?: GlassMaterialId
-  /** ★★★决策 #905：触控形变流动（对齐 Apple `UIGlassEffect.isInteractive`）——点按/拖动时玻璃
-   *   在触点处产生液态流动，松手回弹。缺省 = 用预设（仅 floating 预设为 true）。 */
+  /** ★★★决策 #905：触控交互（对齐 Apple `UIGlassEffect.isInteractive`）——点按/拖动时玻璃在触点处
+   *   产生液态形变流动，松手回弹。缺省 = 用预设（仅 floating 预设为 true）。 */
   interactive?: boolean
+  /** ★★★决策 #906：交互效果形态——`surface`（默认）= **上层玻璃本身流动**（触点处玻璃表面隆起、
+   *   高光随触点流；背后内容不动，对齐 Apple Liquid Glass `isInteractive`）；`displace` = 内容折射位移
+   *   （把背后内容沿"离触点方向"推开；#905 的能力，单层玻璃按需选用）。仅 App 自绘玻璃区分；Web/MP 近似同 `:active`。 */
+  interactiveEffect?: GlassInteractiveEffect
 }
+
+/** ★#906：交互玻璃的效果形态（见 GlassProps.interactiveEffect）。 */
+export type GlassInteractiveEffect = 'surface' | 'displace'
 
 /** ★#900：材质 id（与 `@proteus-vue/shader` 材质目录同源——宿主按 id 派发管线）。 */
 export type GlassMaterialId = 'glass' | 'backdropBlur' | 'frosted' | 'vibrancy'
@@ -92,6 +99,8 @@ export interface ResolvedGlass {
   noise: number
   /** 是否响应形变（L2 · ★#905：触控时玻璃液态流动；缺省随预设） */
   interactive: boolean
+  /** ★#906：交互效果形态（`surface`=上层玻璃流动 / `displace`=内容位移） */
+  interactiveEffect: GlassInteractiveEffect
   /** 降级实色 */
   solid: string
   /** 降级策略 */

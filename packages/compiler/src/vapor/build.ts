@@ -51,6 +51,11 @@ export type { SubscriptionTable, SourceSubscription, SlotSubscription, Evaluator
 export interface VaporBuildOptions {
   /** 节点 id 分配起点（与 component-ir 的 builder 对齐；缺省 0） */
   startNodeId?: number
+  /**
+   * ★★★决策 #906：**构建期声明的组件标签集**（kebab 形态如 `pg-glass-nav`）——与 `buildLayoutTemplate`
+   *   的 `opts.componentTags` **同一份约定**（判据必须同源，否则组件 props 会被误当普通 attr 槽）。
+   */
+  componentTags?: ReadonlySet<string>
   /** 槽位 id 分配起点（缺省 0） */
   startSlotId?: number
   /** 人工标注为纯函数的符号名（等价 `// @proteus-pure`：方案 §5.6 逃生通道） */
@@ -161,7 +166,7 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
     }
   }
 
-  const bindings = collectTemplateBindings(source, filename, opts.compat)
+  const bindings = collectTemplateBindings(source, filename, opts.compat, opts.componentTags)
   // ★★★`v-pump` 运行期数据源并入（通用原语）：泵名不在 script 里 ⇒ 手动注入源扫描结果。
   //   仅对**尚未声明**的名字注入（不覆盖同名 ref）；sourceId 续增 ⇒ 产物可复现。
   if (opts.pumpSources && opts.pumpSources.length > 0) {

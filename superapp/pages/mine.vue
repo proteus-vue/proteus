@@ -142,7 +142,7 @@ function closeMusic(): void {
         <view class="mine-glass-canvas__blk" />
         <view class="mine-glass-canvas__dot" />
       </view>
-      <pg-glass class="mine-glass-card" preset="card" :radius="12" interactive>
+      <pg-glass class="mine-glass-card" preset="card" :radius="12" interactive interactive-effect="surface">
         <view class="mine-glass-in"><text class="mine-glass-t">液态玻璃 · 按住流动</text></view>
       </pg-glass>
     </view>
@@ -158,6 +158,18 @@ function closeMusic(): void {
         <view id="mine-dark" class="mine-switch" :class="{ 'mine-switch--on': darkOn }">
           <view class="mine-switch__knob" />
         </view>
+      </view>
+    </view>
+
+    <text class="sa-section">悬浮玻璃导航</text>
+    <view class="sa-list">
+      <view class="sa-item sa-item--tap" @click="$nav('glass-nav')">
+        <view class="mine-ico"><p-icon name="apps" :size="18" color="#4a4ab8" /></view>
+        <view class="sa-item__main">
+          <text class="sa-item__label">悬浮玻璃导航</text>
+          <text class="sa-item__desc">上层玻璃流动 · 真实切换内容</text>
+        </view>
+        <text class="sa-item__arrow">›</text>
       </view>
     </view>
 

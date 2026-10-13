@@ -3962,3 +3962,19 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **⑧ 判据**：门禁 `check:shader-generated`/`shader-capability`/`glass-capability`/`glass-audit`/`glass-pixel-parity`（0.49 不变）/三端零设备编译全绿；`tests/glass-ir`（+3 interactive 用例）/`glass`/`shader-backend`（glass uniformSize 96）全绿；**真机 Android 取证**：`hosts/android/results/glass-interactive-{idle,press}.png`——空闲=正圆、按住=**蛋形（朝触点流动）+ 触点高光**。iOS/鸿蒙（编译过 + 逻辑同源）待补真机截图。
 **⑨ 边界**：首版是**单点触觉**（触点局部凸起 + 高光 + 回弹），非多点流体/真实表面张力物理；Web/MP 无 GPU warp。iOS 真机本轮被异会话共享文件竞态阻塞（`invoke-bytes-bridge.swift` 构建期被改写）——代码已过类型检查，真机截图待补。
 
+
+907. **★★★玻璃内核「OS 级」重做：零采样 + 宿主降采样 + 折射带横贯 + fixed 视口语义（对齐 Apple Liquid Glass · 承接 #905/#906）**（2026-10-13 · 用户多轮真机对照 iOS App Store 悬浮玻璃 + 另一 AI 的像素分层分析）：
+**① 缘起与正解（像素取证驱动）**：用户「玻璃必须干净、有玻璃感，不能有脏污染；iOS 是**边缘真实折射**、不是内容模糊」。两名 AI 先后误判为"模糊"，放大对比后被证明：**各向同性高斯模糊不可能产生漩涡/火焰纹** ⇒ 主导视觉是**位移场（透镜弯折）**；实测定量：**折射只发生在上/下边缘带（各约占条高 1/3），中心平坦**，且位移**横贯整带**（不是"只在最外缘"）。
+**② 玻璃内核（唯一真源 `packages/shader-codegen-rust/src/materials/glass.wgsl` + CPU oracle `reference.rs` 同步）**：
+ · **零采样**：**删除**着色器内手写高斯核（旧：8 方向→16 方向→64 点螺旋仍出**离散条带/多边形同心环**；AGSL 无循环只能展开固定点数，大半径必留伪影）⇒ 着色器**单次采样**。
+ · **模糊移到宿主**：Android `ProteusHostView.captureGlassBackdrop` 把背景**逐级减半降采样**（mipmap 做法 = 正确盒式平均 ⇒ 平滑无混叠）+ **LINEAR 过滤**（`BitmapShader.setFilterMode(FILTER_MODE_LINEAR)`）⇒ 单次采样即得平滑霜感，**零离散伪影**。
+ · **位移场**：`band = 0.33×min(hs)`（条高 1/3）；`prof = 1 - smoothstep(0,1,e)`（**横贯整带**，峰值在外缘、中心平坦）；**删除**旧内缘淡出 `smoothstep(1.0,0.75,e)`（真凶：把可见位移掐到 ~4px ⇒ "液态感消失"）；峰值 = 带宽×0.45（自洽，`refract_depth` 作强度系数归一）。
+ · **霜**：**自适应**（深背景→偏深玻璃、亮背景→偏亮，非恒定白霜）+ **边缘兜底高光**（恒定细亮边 + 顶光，纯色/空白背景上玻璃仍可见——iOS 兜底）。
+ · 像素等价门禁（Metal⇄Rust）0.37/255 绿。
+**③ 引擎缺口修复（承接调查：#651/#653 的 fixed 只支持 top）**：**`position:fixed` 的 containing block = 视口**（CSS 语义）。
+ · 根因：引擎 `taffy_engine.rs` 把 `fixed` 当 `absolute`、inset 相对**父**（App 页面层 `absolute inset:0`、内容高 1400）⇒ `bottom` 落**页面内容底部（屏外）**，真机实测"悬浮导航 bottom 不生效"。
+ · 修法：`build_taffy` 把 **fixed 节点挂到根**（根=视口高）；**运行期屏内容补视口高 `app-root` 包层**（`app-runtime-content.ts` 的 `wrapViewportRoot`，与静态通路结构对齐）⇒ `top/right/bottom/left` 相对视口。
+ · 回归测试 `fixed_bottom_is_relative_to_viewport_not_parent`（断言 relative 视口 200 而非父 500）；Rust 全量 230+ 绿。
+ · 宿主：`drawGlassPass` 对 fixed 玻璃补**滚动反向补偿**（玻璃面钉住视口）；backdrop 采集坐标核对（公式 + 真机）。
+**④ 演示（`superapp/pages/glass-nav.vue`，新）**：iOS 式**可滚动长内容流** + **fixed 悬浮玻璃导航**浮于内容之上（内容从玻璃底下滑过）；`pg-glass-nav` 组件（新）。
+**⑤ 诚实边界**：观感收敛靠真机目视（多轮迭代）；**iOS/鸿蒙未同步宿主降采样**（共享 WGSL 已改，两端需各加"背景降采样"否则玻璃"不糊"）；#906 的 `interactiveEffect`（surface/displace）**半回退**（宿主折叠 `effect` 但着色器暂忽略，无害）；refract/band 等参数为**真机 A/B 初值**。

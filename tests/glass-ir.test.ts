@@ -87,6 +87,20 @@ describe('★★玻璃材质 IR 折叠（pg-glass → style.glass）', () => {
     })
   })
 
+  // ★★★决策 #906：交互效果形态（interactiveEffect → glass.effect 0/1）——默认 surface=上层玻璃自身流动。
+  describe('★★★交互效果形态（interactiveEffect · 决策 #906）', () => {
+    it('缺省 ⇒ effect=0（surface = 上层玻璃流动，对齐 Apple isInteractive）', () => {
+      expect(glassOf(build(`<view><pg-glass preset="floating" /></view>`, { glassResolver }))!.effect).toBe(0)
+    })
+    it('interactiveEffect="displace" ⇒ effect=1（内容折射位移，#905 的能力）', () => {
+      expect(glassOf(build(`<view><pg-glass preset="card" interactive interactiveEffect="displace" /></view>`, { glassResolver }))!.effect).toBe(1)
+    })
+    it('interactiveEffect="surface" ⇒ effect=0；未知值 ⇒ 回落 surface(0)', () => {
+      expect(glassOf(build(`<view><pg-glass preset="card" interactive interactiveEffect="surface" /></view>`, { glassResolver }))!.effect).toBe(0)
+      expect(glassOf(build(`<view><pg-glass preset="card" interactive interactiveEffect="nope" /></view>`, { glassResolver }))!.effect).toBe(0)
+    })
+  })
+
   // ★★★#898：文档 Props 用法端到端（每种写法都折进 IR）——防「文档写了、实现不认」的静默缺口。
   describe('★★★文档 Props 用法全覆盖（指南 31-liquid-glass）', () => {
     it('intensity：档位字符串 / 绑定数字 / 静态数字 ⇒ 同一 blur', () => {

@@ -97,7 +97,8 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     let r = p.radius.min(hs.0.min(hs.1));
     let sd = sd_round_rect(pc, hs, r);
     let d = (-sd).max(0.0);
-    let band = (hs.0.min(hs.1) * 0.22).max(6.0);
+    let hsmin = hs.0.min(hs.1);
+    let band = (hsmin * 0.33).max(6.0);   // ★决策 #907：带宽 1/3（带加宽）+ 位移横贯整带（与 glass.wgsl ② 同源）
     let e = (d / band).clamp(0.0, 1.0);
 
     let eps = (band * 0.3).clamp(1.0, 16.0);
@@ -109,8 +110,10 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     let ec = e.clamp(0.004, 0.996);
     let u1 = 1.0 - ec;
     let slope = u1 / (1.0 - u1 * u1).max(1e-4).sqrt();
-    let mut bend = circle_map(1.0 - ec) * p.refract_depth;
-    bend *= smoothstep(1.0, 0.75, e);
+    // ★决策 #907：位移**横贯整带**（prof 外缘1→内缘0），峰值=带宽×0.45；strength 归一化 refract_depth（与 glass.wgsl 同源）
+    let prof = 1.0 - smoothstep(0.0, 1.0, e);
+    let strength = (p.refract_depth / (hsmin * 0.44).max(1.0)).clamp(0.5, 2.0);
+    let bend = prof * band * 0.45 * strength;
     let sp = (local.0 + n.0 * bend, local.1 + n.1 * bend);
 
     // uv 折算：纹理尺寸 = size + 2*pad；节点 uv=0 对应纹理 pad/(size+2pad)
@@ -121,21 +124,8 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     let to_tex = |local: (f32, f32)| ((local.0 / p.size_px.0) * scale.0 + bias.0,
                                       (local.1 / p.size_px.1) * scale.1 + bias.1);
 
-    let br = p.blur.max(0.0) * e * 0.55;
-    let mut acc = backdrop.sample_map(to_tex(sp)).map(|c| c * 0.20);
-    let (w1, w2, w3) = (0.058f32, 0.030f32, 0.012f32);
-    for k in 0..8 {
-        let a = k as f32 * 0.7853981;
-        let dir = (a.cos(), a.sin());
-        for (mult, w) in [(0.5f32, w1), (1.0, w2), (1.6, w3)] {
-            let dpx = (dir.0 * br * mult, dir.1 * br * mult);
-            let t = ((sp.0 + dpx.0) / p.size_px.0 * scale.0 + bias.0,
-                     (sp.1 + dpx.1) / p.size_px.1 * scale.1 + bias.1);
-            let s = backdrop.sample(t.0, t.1);
-            for c in 0..4 { acc[c] += s[c] * w; }
-        }
-    }
-    let mut col = acc;
+    // ★决策 #906：零采样（不做模糊）——与 glass.wgsl ③ 同源（内容不糊，只磨砂叠加）
+    let mut col = backdrop.sample_map(to_tex(sp));
     let lum = col[0] * 0.299 + col[1] * 0.587 + col[2] * 0.114;
     // ★决策 #875：去饱和 0.30 → 0.12（保留背后颜色；与 glass.wgsl ④ 同源）
     for c in 0..3 { col[c] = col[c] + (lum - col[c]) * 0.12; }
@@ -144,9 +134,10 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     // ★★决策 #875：明暗自适应（对齐 Apple Liquid Glass「无固有颜色 + 随背景自适应」；
     //    与 glass.wgsl ⑤ 同源）——亮背景(adapt→1)微奶白、暗背景(adapt→0)压深，替换此前恒定掺白。
     let adapt = smoothstep(0.35, 0.70, lum);
-    let dark = [0.12f32, 0.13, 0.16];
-    let light = [0.99f32, 0.995, 1.0];
-    let fw = 0.20 + p.tint[3] * 0.25;
+    // ★决策 #907：自适应霜（深背景→深玻璃、亮背景→亮；非恒定白）——与 glass.wgsl ⑤ 同源
+    let dark = [0.18f32, 0.20, 0.26];
+    let light = [0.97f32, 0.98, 1.0];
+    let fw = 0.30 + p.tint[3] * 0.25;
     for c in 0..3 {
         let glass_tint = dark[c] + (light[c] - dark[c]) * adapt;
         col[c] = col[c] + (glass_tint - col[c]) * fw;
@@ -159,7 +150,10 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     let ld = (p.light_dir.0 / llen, p.light_dir.1 / llen);
     let facing = (n.0 * ld.0 + n.1 * ld.1).max(0.0);
     let bevel_mask = 1.0 - smoothstep(0.0, 0.35, e);
-    let rim = (facing.powi(6) * p.specular + fres * 0.12) * bevel_mask;
+    // ★决策 #906：兜底边缘高光（恒定细亮边 + 顶光加成）——与 glass.wgsl ⑥ 同源（纯色背景也可见）
+    let top_hi = (-n.1).max(0.0);
+    let edge_hi = bevel_mask * (0.10 + 0.26 * top_hi + 0.16 * facing);
+    let rim = (facing.powi(6) * p.specular + fres * 0.20) * bevel_mask + edge_hi;
     for c in 0..3 { col[c] = (col[c] + rim).min(1.0); }
     col[3] = 1.0;
     col

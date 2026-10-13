@@ -44,16 +44,22 @@ public final class GlassMaterial {
         public final String material;
         /** ★★★决策 #905：触控形变（对齐 Apple `UIGlassEffect.isInteractive`）——该玻璃响应点按/拖动。 */
         public final boolean interactive;
+        /** ★★★决策 #906：交互效果形态——0=上层玻璃表面流动（默认）/ 1=内容折射位移（`glass.effect`）。 */
+        public final float effect;
 
         public Spec(float blur, int tint, float radius, boolean border, float saturation) {
-            this(blur, tint, radius, border, saturation, "glass", false);
+            this(blur, tint, radius, border, saturation, "glass", false, 0f);
         }
 
         public Spec(float blur, int tint, float radius, boolean border, float saturation, String material) {
-            this(blur, tint, radius, border, saturation, material, false);
+            this(blur, tint, radius, border, saturation, material, false, 0f);
         }
 
         public Spec(float blur, int tint, float radius, boolean border, float saturation, String material, boolean interactive) {
+            this(blur, tint, radius, border, saturation, material, interactive, 0f);
+        }
+
+        public Spec(float blur, int tint, float radius, boolean border, float saturation, String material, boolean interactive, float effect) {
             this.blur = blur;
             this.tint = tint;
             this.radius = radius;
@@ -61,6 +67,7 @@ public final class GlassMaterial {
             this.saturation = saturation;
             this.material = (material == null || !GeneratedMaterials.MATERIALS.containsKey(material)) ? "glass" : material;
             this.interactive = interactive;
+            this.effect = effect;
         }
     }
 
@@ -86,6 +93,11 @@ public final class GlassMaterial {
 
     /** ★#905 重载：带触控形变参数（touch 盒局部 px；press 0..1）。 */
     public static Paint buildPaint(int nodeId, Bitmap backdrop, float ox, float oy, float bdX, float bdY, float w, float h, float radius, Spec spec, float touchX, float touchY, float press) {
+        return buildPaint(nodeId, backdrop, ox, oy, bdX, bdY, w, h, radius, spec, touchX, touchY, press, 1f, 1f);
+    }
+
+    /** ★★★决策 #906：带**降采样比**（backdrop 是缩小图；tex_scale/bias 按 divX/divY 折算）。 */
+    public static Paint buildPaint(int nodeId, Bitmap backdrop, float ox, float oy, float bdX, float bdY, float w, float h, float radius, Spec spec, float touchX, float touchY, float press, float divX, float divY) {
         if (!isAvailable() || backdrop == null || backdrop.isRecycled() || spec == null || w <= 0f || h <= 0f) {
             android.util.Log.w("proteus-glass", "buildPaint early-null: avail=" + isAvailable()
                     + " backdrop=" + (backdrop == null ? "null" : backdrop.getWidth() + "x" + backdrop.getHeight())
@@ -106,7 +118,10 @@ public final class GlassMaterial {
                 android.util.Log.i("proteus-glass", "buildPaint: 编译 AGSL（一次，节点 " + nodeId + "，材质 " + spec.material + "，真源=WGSL）");
             }
             // 每帧只更新输入纹理 + uniform（廉价）
-            sh.setInputShader("backdrop_tex", new BitmapShader(backdrop, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP));
+            // ★决策 #906：输入位图是**轻降采样小图** ⇒ 显式 LINEAR 过滤（否则最近邻放大出块状）。
+            BitmapShader bs = new BitmapShader(backdrop, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) bs.setFilterMode(BitmapShader.FILTER_MODE_LINEAR);
+            sh.setInputShader("backdrop_tex", bs);
 
             float a = ((spec.tint >>> 24) & 0xFF) / 255f;
             float cr = ((spec.tint >> 16) & 0xFF) / 255f;
@@ -117,8 +132,9 @@ public final class GlassMaterial {
             // ★AGSL 采样空间 = 画布像素：tex_scale=盒尺寸、tex_bias=节点左上角（**减去背景位图原点** ⇒
             //   采样落到该位图坐标）。render target 仍是整画布（玻璃画在主画布上），故 `origin` 用画布坐标。
             sh.setFloatUniform("origin", ox, oy);
-            sh.setFloatUniform("tex_scale", w, h);
-            sh.setFloatUniform("tex_bias", ox - bdX, oy - bdY);
+            // ★决策 #906：tex_scale/bias 按**降采样比**折算（backdrop 是缩小图，覆盖同一屏幕区）。
+            sh.setFloatUniform("tex_scale", w / divX, h / divY);
+            sh.setFloatUniform("tex_bias", (ox - bdX) / divX, (oy - bdY) / divY);
             sh.setFloatUniform("blur", spec.blur);
             sh.setFloatUniform("saturation", spec.saturation);
             // ★#900：玻璃族专有 uniform（倒角厚板模型）；模糊族（backdropBlur/frosted/vibrancy）**无**这些键

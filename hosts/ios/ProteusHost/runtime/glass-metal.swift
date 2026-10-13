@@ -32,8 +32,10 @@ final class GlassMetalRenderer {
         let saturation: CGFloat
         /// ★★★决策 #900：材质 id（`glass`/`backdropBlur`/`frosted`/`vibrancy`）——宿主按此选管线。
         var material: String = "glass"
-        /// ★★★决策 #905：触控形变（对齐 Apple `UIGlassEffect.isInteractive`）——该玻璃响应点按/拖动。
+        /// ★★★决策 #905：触控交互（对齐 Apple `UIGlassEffect.isInteractive`）——该玻璃响应点按/拖动。
         var interactive: Bool = false
+        /// ★★★决策 #906：交互效果形态——0=**上层玻璃表面流动**（默认，Apple）/ 1=内容折射位移。
+        var effect: CGFloat = 0
     }
 
     private let device: MTLDevice?
@@ -195,10 +197,10 @@ final class GlassMetalRenderer {
         var specular: Float          // 68
         var saturation: Float        // 72
         var _pad: Float              // 76
-        // ★★★决策 #905：触控形变（touch 盒局部 px / press 0..1）
+        // ★★★决策 #905/#906：触控交互（touch 盒局部 px / press 0..1 / effect 0=表面流动 1=内容位移）
         var touch: SIMD2<Float>      // 80
         var press: Float             // 88
-        var _pad2: Float             // 92（总长 96）
+        var effect: Float            // 92（总长 96）
     }
 
     private func makeUniforms(nodeRect: CGRect, outScale: CGFloat, texPxPerPoint: CGFloat,
@@ -241,7 +243,7 @@ final class GlassMetalRenderer {
             touch: SIMD2<Float>(touch.map { Float($0.x * outScale) } ?? -1e6,
                                 touch.map { Float($0.y * outScale) } ?? -1e6),
             press: Float(press),
-            _pad2: 0
+            effect: Float(spec.effect)
         )
     }
 

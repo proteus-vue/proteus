@@ -51,6 +51,8 @@ export function resolveGlass(props: GlassProps = {}): ResolvedGlass {
     borderSide: preset.borderSide ?? 'all',
     noise,
     interactive: props.interactive !== undefined ? Boolean(props.interactive) : Boolean(preset.interactive),
+    // ★#906：交互效果形态（未知/缺省 ⇒ 'surface' = 上层玻璃流动，对齐 Apple Liquid Glass）。
+    interactiveEffect: props.interactiveEffect === 'displace' ? 'displace' : 'surface',
     solid,
     fallback: props.fallback === 'flat' ? 'flat' : 'solid',
     // ★#900：材质 id 归一（未知 ⇒ 'glass'——`@proteus-vue/glass` 不依赖 shader 包，故此处内联白名单）。

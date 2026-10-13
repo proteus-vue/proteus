@@ -68,8 +68,10 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     let r = min(u.radius, min(hs.x, hs.y));
     let sd = sd_round_rect(p, hs, r);
     let d = max(-sd, 0.0);               // 离边深度（内部为正）
-    let band = max(min(hs.x, hs.y) * 0.22, 6.0);
-    let e = clamp(d / band, 0.0, 1.0);   // 0=最外缘, 1=内侧
+    let hsmin = min(hs.x, hs.y);
+    // ★★★决策 #907：折射带 ≈ **条高 1/3**（0.22→0.33，对齐 Apple 实测：倒角带约占条高 1/3）。
+    let band = max(hsmin * 0.33, 6.0);
+    let e = clamp(d / band, 0.0, 1.0);   // 0=最外缘, 1=内侧（带内）
 
     // ① 外法线（SDF 梯度；宽 eps 防药丸中轴裂缝）
     let eps = clamp(band * 0.3, 1.0, 16.0);
@@ -78,16 +80,21 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
         sd_round_rect(p + vec2<f32>(0.0, eps), hs, r) - sd_round_rect(p - vec2<f32>(0.0, eps), hs, r));
     let n = g / max(length(g), 1e-5);
 
-    // ② 倒角斜率（圆弧 h=sqrt(1-(1-e)^2)）→ 位移量（圆心映射 × 峰值；中心 e→1 ⇒ 0）
+    // ② 位移场（透镜弯曲）：**位移横贯整个边缘带**（峰值在外缘、向中心平滑归零，中心平坦）。
+    //   ★#907 关键修正：旧式 `bend *= smoothstep(1.0, 0.75, e)`（内缘淡出）把位移**只留在带的外侧一小段**
+    //     ⇒ 可见位移仅 ~4px（"液态感消失"的真凶）。Apple 的位移横贯整带（带内到处可见压缩漩涡）。
+    //   ⇒ 改用 `prof = 1 - smoothstep(0,1,e)`（带外缘 1 → 带内缘 0，S 形平滑覆盖**整带**，两端 C1）。
+    //     位移峰值 = 带宽 × 0.45（与带同尺度 ⇒ 自洽，不再依赖宿主传入的 refract_depth 数值）。
     let ec = clamp(e, 0.004, 0.996);
     let u1 = 1.0 - ec;
     let slope = u1 / sqrt(max(1.0 - u1 * u1, 1e-4));
-    var bend = circle_map(1.0 - ec) * u.refract_depth;
-    bend = bend * smoothstep(1.0, 0.75, e);      // 内缘 C1 淡出（防环痕）
-    // ★★★决策 #905：**触控形变流动**——触点周围局部凸起（Gaussian 钟），把背后内容沿
-    //   "离触点方向"推开（液态被按压的观感）；`press==0` 时 g*press=0 ⇒ 完全退化到既有折射（像素等价）。
-    //   R = 盒最小半边的 0.9（触点影响半径），位移量 ∝ refract_depth（与折射同一量纲）。
-    let hsmin = min(hs.x, hs.y);
+    let prof = 1.0 - smoothstep(0.0, 1.0, e);   // 横贯整带（外缘 1 → 内缘 0）
+    // 峰值位移 = 带宽 × 0.45（自洽：与带同尺度，对齐 Apple「位移横贯整带」）。
+    // ★`u.refract_depth` 保留为**强度系数**（宿主传 ≈1 时中性；此处归一化到与带同尺度，向后兼容旧宿主像素值）。
+    let strength = clamp(u.refract_depth / max(hsmin * 0.44, 1.0), 0.5, 2.0);
+    var bend = prof * band * 0.45 * strength;
+    // ★★★决策 #905：**触控形变流动**——触点周围局部凸起（Gaussian 钟），按压力把背后内容沿"离触点方向"推开；
+    //   `press==0` ⇒ 该项为 0（退化到既有折射，像素等价）。
     let tR = max(hsmin * 0.9, 8.0);
     let td = local - u.touch;
     let tg = exp(-(dot(td, td)) / (2.0 * tR * tR)) * u.press;   // 0..1 触点钟形（含按压强度）
@@ -96,46 +103,8 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     let sp_uv = sp / u.size_px;
 
     // ③ 模糊按 e 键控（边缘锐、中心糊）；核最大半径 = blur*e*0.55
-    let br = max(u.blur, 0.0) * e * 0.55;
-    // 加权高斯近似：中心 1 抽 + 8 方向 × 3 环（权重和 = 1.0）。
-    // ★★★**固定 8 次必须展开（不用循环）**：naga 会把 WGSL 循环出成 GLSL `while(true){…}`，
-    //   而 **AGSL 不支持 `while`**（只支持 `for`）⇒ 循环会让 Android AGSL 编译失败、玻璃降级。
-    //   展开是固定核的标准做法（零分支、各端一致；land/agsl.rs 有"输出不得含 while"的断言）。
-    let w1 = 0.058; let w2 = 0.030; let w3 = 0.012;
-    var acc = sample_backdrop(sp_uv) * 0.20;
-    // 每方向一次（dir 按 k×π/8 预计算为常量；dpx = dir × br）
-    { let d = vec2<f32>(br, 0.0);
-      acc += sample_backdrop(sp_uv + (d * 0.5) / u.size_px) * w1;
-      acc += sample_backdrop(sp_uv + d / u.size_px) * w2;
-      acc += sample_backdrop(sp_uv + (d * 1.6) / u.size_px) * w3; }
-    { let d = vec2<f32>(br * 0.70710678, br * 0.70710678);
-      acc += sample_backdrop(sp_uv + (d * 0.5) / u.size_px) * w1;
-      acc += sample_backdrop(sp_uv + d / u.size_px) * w2;
-      acc += sample_backdrop(sp_uv + (d * 1.6) / u.size_px) * w3; }
-    { let d = vec2<f32>(0.0, br);
-      acc += sample_backdrop(sp_uv + (d * 0.5) / u.size_px) * w1;
-      acc += sample_backdrop(sp_uv + d / u.size_px) * w2;
-      acc += sample_backdrop(sp_uv + (d * 1.6) / u.size_px) * w3; }
-    { let d = vec2<f32>(-br * 0.70710678, br * 0.70710678);
-      acc += sample_backdrop(sp_uv + (d * 0.5) / u.size_px) * w1;
-      acc += sample_backdrop(sp_uv + d / u.size_px) * w2;
-      acc += sample_backdrop(sp_uv + (d * 1.6) / u.size_px) * w3; }
-    { let d = vec2<f32>(-br, 0.0);
-      acc += sample_backdrop(sp_uv + (d * 0.5) / u.size_px) * w1;
-      acc += sample_backdrop(sp_uv + d / u.size_px) * w2;
-      acc += sample_backdrop(sp_uv + (d * 1.6) / u.size_px) * w3; }
-    { let d = vec2<f32>(-br * 0.70710678, -br * 0.70710678);
-      acc += sample_backdrop(sp_uv + (d * 0.5) / u.size_px) * w1;
-      acc += sample_backdrop(sp_uv + d / u.size_px) * w2;
-      acc += sample_backdrop(sp_uv + (d * 1.6) / u.size_px) * w3; }
-    { let d = vec2<f32>(0.0, -br);
-      acc += sample_backdrop(sp_uv + (d * 0.5) / u.size_px) * w1;
-      acc += sample_backdrop(sp_uv + d / u.size_px) * w2;
-      acc += sample_backdrop(sp_uv + (d * 1.6) / u.size_px) * w3; }
-    { let d = vec2<f32>(br * 0.70710678, -br * 0.70710678);
-      acc += sample_backdrop(sp_uv + (d * 0.5) / u.size_px) * w1;
-      acc += sample_backdrop(sp_uv + d / u.size_px) * w2;
-      acc += sample_backdrop(sp_uv + (d * 1.6) / u.size_px) * w3; }
+    // ★决策 #906：**零采样**——不做任何模糊（对齐用户对 iOS 的理解：内容不糊，只磨砂叠加）。
+    var acc = sample_backdrop(sp_uv);
     var col = acc;
 
     // ④ 去饱和（**轻微**：保留背后颜色——对齐 Apple「玻璃取其正后方之色」）+ 饱和旋钮
@@ -151,18 +120,25 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     //   ★lum 此处 = 模糊后背景的亮度（正后方内容的代表色），正是"响应背景"的判据。
     col = vec4<f32>(mix(col.rgb, col.rgb * u.tint.rgb * 2.0, u.tint.a), col.a);
     let adapt = smoothstep(0.35, 0.70, lum);            // 0=暗背景 → 1=亮背景
-    let glass_tint = mix(vec3<f32>(0.12, 0.13, 0.16),   // 暗背景：压深（近中性深，不发灰白）
-                         vec3<f32>(0.99, 0.995, 1.0),    // 亮背景：微奶白（保留原奶白观感）
+    // ★★★决策 #907：**自适应霜**（对齐 iOS——玻璃取背景色：深背景→偏深玻璃、亮背景→偏亮玻璃；
+    //   **非恒定白霜**。此前 #906 改恒定白 ⇒ 深背景上像贴了张白纸，真机对照 iOS 后纠正）。
+    let glass_tint = mix(vec3<f32>(0.18, 0.20, 0.26),   // 暗背景：偏深玻璃（不发白）
+                         vec3<f32>(0.97, 0.98, 1.0),    // 亮背景：偏亮（微奶白）
                          adapt);
-    col = vec4<f32>(mix(col.rgb, glass_tint, 0.20 + u.tint.a * 0.25), col.a);
+    col = vec4<f32>(mix(col.rgb, glass_tint, 0.30 + u.tint.a * 0.25), col.a);
 
-    // ⑥ 光照：Fresnel + 法线·光源（双瓣）；四周对称（无顶部加权）
+    // ⑥ 光照：Fresnel + 法线·光源（双瓣）＋ ★★★决策 #906 **兜底可见性**（对齐 iOS：**纯色/空白背景上玻璃仍可见**）
+    //   【缺口】此前玻璃完全依赖"背景内容的折射"⇒ 背景是纯色/空白灰时**玻璃几乎消失**（真机实测，用户点名）。
+    //   iOS 兜底 = ① **恒定发丝高光边**（不依赖背景，勾勒轮廓）② 顶边更亮（顶光）③ 整体略亮于背景。
     let cos_i = inverseSqrt(1.0 + slope * slope);
     let f0 = 0.04;
     let fres = f0 + (1.0 - f0) * pow(max(1.0 - cos_i, 0.0), 5.0);
     let facing = max(dot(n, normalize(u.light_dir)), 0.0);
     let bevel_mask = 1.0 - smoothstep(0.0, 0.35, e);   // 亮带仅在外缘
-    let rim = (pow(facing, 6.0) * u.specular + fres * 0.12) * bevel_mask + tg * 0.30;   // ★#905：触点点亮（tg 已含 press）
+    // 边缘高光：细亮边（各向 0.10）+ 顶光加成（法线朝上侧更亮，对齐 iOS 顶缘高光）
+    let top_hi = max(-n.y, 0.0);                        // 上缘（n.y≈-1）
+    let edge_hi = bevel_mask * (0.10 + 0.26 * top_hi + 0.16 * facing);
+    let rim = (pow(facing, 6.0) * u.specular + fres * 0.20) * bevel_mask + edge_hi + tg * 0.30;   // ★#905：触点点亮
     col = vec4<f32>(min(col.rgb + vec3<f32>(rim), vec3<f32>(1.0)), 1.0);
     return col;
 }

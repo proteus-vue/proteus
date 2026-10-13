@@ -216,7 +216,8 @@ struct SDNode {
     bool glass = false;                      // ★本元素是玻璃面（阶段 3 同帧接入）
     double gBlur = 0, gRadius = 0, gSat = 1.0; uint32_t gTint = 0x26FFFFFFu;
     std::string gMaterial = "glass";         // ★★★决策 #900：材质 id（宿主按此选管线）
-    bool gInteractive = false;               // ★★★决策 #905：触控形变
+    bool gInteractive = false;               // ★★★决策 #905：触控交互
+    float gEffect = 0.0f;                    // ★★★决策 #906：交互效果（0=上层玻璃流动 / 1=内容位移）
     // ★★★决策 #895（superapp 收敛自绘）：补齐 superapp 用到的图元——边框/阴影/SVG/变换/裁剪/层序/字距
     double borderWidth = 0; uint32_t borderColor = 0;   // 边框（物理 px；ARGB）
     double shDx = 0, shDy = 0, shBlur = 0; uint32_t shColor = 0;   // 盒阴影
@@ -1351,7 +1352,7 @@ static void drawSelfContentCore(OH_Drawing_Canvas* rsCanvas, SelfDrawSpec* sd) {
                             putF(80, (float)(g_sdGlassTouchX / S)); putF(84, (float)(g_sdGlassTouchY / S));
                             putF(88, (float)g_sdGlassPress);
                         } else { putF(80, -1e6f); putF(84, -1e6f); putF(88, 0.0f); }
-                        putF(92, 0.0f);
+                        putF(92, n.gEffect);   // ★#906：交互效果（0=上层玻璃流动 / 1=内容位移）
                     } else {
                         putF(48, (float)n.gBlur / S);
                         putF(52, (float)n.gSat);
@@ -1784,6 +1785,7 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
                     { double gt = 0; if (jsonNumber(gsub, "tint", &gt)) sn.gTint = (uint32_t)gt; }
                     { std::string gm; if (jsonString(gsub, "material", &gm) && !gm.empty()) sn.gMaterial = gm; }   // ★#900
                     sn.gInteractive = (gsub.find("\"interactive\":true") != std::string::npos);   // ★#905
+                    { double ge = 0; if (jsonNumber(gsub, "effect", &ge)) sn.gEffect = (float)ge; }   // ★#906：交互效果
                 }
                 g_sdSpec->nodes.push_back(sn);
             }
@@ -3464,8 +3466,9 @@ static napi_value Stats(napi_env env, napi_callback_info info) {
     return obj;
 }
 
-/** ★★★决策 #905：`glassTouch(x, y, down)` —— 命中**交互玻璃**（x,y = 内容**物理 px**）⇒ 记触点（盒局部 px）
- *  + 目标 press（down=1 / up=0）；返回命中节点 id（未命中 -1）。驱动方（ArkTS）据此起帧循环。 */
+/** ★★★决策 #905/#906：`glassTouch(x, y, down)` —— 命中**交互玻璃**（x,y = 内容**物理 px**）⇒ 记触点（盒局部 px）
+ *  + 目标 press（down=1 / up=0）；返回命中节点 id（未命中 -1）。驱动方（ArkTS）据此起帧循环。
+ *  ★#906：**已接管（g_sdGlassActiveId>=0 且 down）⇒ 出盒仍跟随**（触点钳进盒内，修"边缘拖动形变冻结"）。 */
 static napi_value GlassTouch(napi_env env, napi_callback_info info) {
     size_t argc = 3; napi_value args[3] = {nullptr, nullptr, nullptr};
     napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
@@ -3473,6 +3476,18 @@ static napi_value GlassTouch(napi_env env, napi_callback_info info) {
     if (argc >= 3) { napi_get_value_double(env, args[0], &x); napi_get_value_double(env, args[1], &y); napi_get_value_double(env, args[2], &down); }
     int hit = -1;
     if (g_sdSpec != nullptr && down > 0.5) {
+        // ★#906：已接管 ⇒ 更新当前活动玻璃的触点（钳进盒内），不再要求落在盒内。
+        if (g_sdGlassActiveId >= 0) {
+            for (const auto& n : g_sdSpec->nodes) {
+                if (n.id != g_sdGlassActiveId) continue;
+                g_sdGlassTouchX = std::min(std::max(x - n.x, 0.0), (double)n.w);
+                g_sdGlassTouchY = std::min(std::max(y - n.y, 0.0), (double)n.h);
+                g_sdGlassPress = std::max(g_sdGlassPress, 0.01);
+                hit = n.id;
+                if (g_rootHost != nullptr) OH_ArkUI_RenderNodeUtils_Invalidate(g_rootHost);
+                napi_value o; napi_create_int32(env, hit, &o); return o;
+            }
+        }
         for (const auto& n : g_sdSpec->nodes) {
             if (!n.glass || !n.gInteractive || n.w <= 0 || n.h <= 0) continue;
             if (x >= n.x && x <= n.x + n.w && y >= n.y && y <= n.y + n.h) {

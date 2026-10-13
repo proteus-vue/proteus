@@ -25,8 +25,10 @@ export interface GlassAuditResult {
 
 // 裸玻璃声明（排除 -webkit- 厂商前缀——与标准声明是同一处，不重复计违规）
 const BARE_BACKDROP_RE = /(?<!-webkit-)backdrop-filter\s*:/i
-const PG_GLASS_OPEN_RE = /<pg-glass\b/gi
-const PG_GLASS_TAG_RE = /<pg-glass\b|<\/pg-glass>/gi
+// ★决策 #906：`<pg-glass>` 开标签 —— 用**前瞻** `(?=[\s/>])` 而非 `\b`：`\b` 会把 `<pg-glass-nav>`
+//   （玻璃族组件）误当 `<pg-glass>`（`-` 是词边界）⇒ 组件内一层玻璃被重复计数、误报 GLS004 嵌套超限。
+const PG_GLASS_OPEN_RE = /<pg-glass(?=[\s/>])/gi
+const PG_GLASS_TAG_RE = /<pg-glass(?=[\s/>])|\/pg-glass\s*>/gi
 // 行内豁免：`// d2-exempt: 原因`（JS/TS）或 `/* d2-exempt: 原因 */`（CSS）
 const EXEMPT_LINE_RE = /(?:\/\/|\/\*)\s*d2-exempt:\s*([^*\n]+)/
 const EXEMPT_FILE_RE = /\/\*\s*d2-exempt-file:\s*([^*\n]+)/
@@ -62,7 +64,10 @@ export function scanGlassSource(relFile: string, src: string): GlassFinding[] {
   const findings: GlassFinding[] = []
   const isEntryImpl = ENTRY_IMPL_RE.test(relFile)
   const fileExempt = EXEMPT_FILE_RE.test(src)
-  const lines = src.split('\n')
+  // ★决策 #906：**先遮蔽 HTML 注释**（注释里出现的 `<pg-glass>` 示例不该计入嵌套/节点预算）——
+  //   以空格替换注释体但**保留换行**，行号与后续 GLS001 定位不受影响。
+  const scanSrc = src.replace(/<!--[\s\S]*?-->/g, (mm) => mm.replace(/[^\n]/g, ' '))
+  const lines = scanSrc.split('\n')
 
   // 文件头整文件豁免：仅豁免「裸 backdrop-filter」类（GLS001），性能预算（嵌套/节点数）仍守
   let depth = 0

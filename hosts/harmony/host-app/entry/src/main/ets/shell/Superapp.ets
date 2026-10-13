@@ -528,14 +528,19 @@ struct Superapp {
       const dt: number = now - this.touchLastTs;
       this.touchLastTs = now;
       if (Math.abs(t.windowY - this.touchStartY) > 16 || Math.abs(t.windowX - this.touchStartX) > 16) { this.touchMoved = true; }
+      // ★★★决策 #906：本手势归玻璃（DOWN 命中交互玻璃）⇒ **不滚动页面**，改为**续喂玻璃触点**（修"拖动时形变冻结"）。
+      if (this.glassActive) {
+        this.glassPressDown(t.windowX, t.windowY + this.scrollOffset);
+        // ★速度采样不再累计页面位移（本手势不滚动）；Dactyl 轨迹照常记。
+        if (this.driver !== null) { this.driver.onTouchMove(t.windowX, t.windowY + this.scrollOffset); }
+        return;
+      }
       // ★速度采样（vp/ms）：本步骤的**实际内容位移**（钳制前）叠加，累计到 ≥24ms 算一次瞬时速度。
       const step: number = this.applyScrollBy(-dy);
       if (dt > 0) { this.touchVelSum += step; this.touchVelDt += dt; }
       if (this.touchVelDt >= 24) { this.velOffset = this.touchVelSum / this.touchVelDt; this.touchVelSum = 0; this.touchVelDt = 0; }
       // ★★★Dactyl 专项：场跟手 MOVE 只记焦点（零 FFI——推帧在 driver 的帧循环里）
       if (this.driver !== null) { this.driver.onTouchMove(t.windowX, t.windowY + this.scrollOffset); }
-      // ★#905：拖动跟随——更新触点（玻璃流动跟手）
-      if (this.glassActive) { this.glassPressDown(t.windowX, t.windowY + this.scrollOffset); }
       return;
     }
     if (e.type === TouchType.Up) {
@@ -555,7 +560,7 @@ struct Superapp {
       this.touchLastY = -1; this.touchMoved = false;
       return;
     }
-    if (e.type === TouchType.Cancel) { this.stopMomentum(); this.touchLastY = -1; this.touchMoved = false; }
+    if (e.type === TouchType.Cancel) { this.stopMomentum(); if (this.glassActive) { this.glassPressUp(); } this.touchLastY = -1; this.touchMoved = false; }
   }
 
   /** ★★★决策 #905：玻璃触控形变——DOWN/MOVE：命中交互玻璃 ⇒ 起帧循环让 press 逼近 1。 */
