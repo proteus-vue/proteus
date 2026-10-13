@@ -3577,3 +3577,13 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **⑥ ★lint 立刻抓到 1 个真 bug（证明这一层的价值）**：`scripts/check-host-layering.mjs:304` 用了**从未声明**的 `notes`（`no-undef`）⇒ 一旦命中"已具名登记"分支即 `ReferenceError` 崩溃（gate 自身崩，而非判红）。本项补 `notes` 声明 + 末尾打印。修后该文件剩余 `no-undef` 真实命中 **0**。
 **⑦ 接线**：`lint`/`lint:fix` 脚本 + CI（`ci.yml` 新增步骤）+ `verify` 链（紧邻 `check:loop-guard`）；`check:gates-sync` 绿。**双向自测**：新建含 `no-constant-condition` 的文件 ⇒ `pnpm lint` **rc=1 精确报错**；删除 ⇒ rc=0。
 **⑧ 诚实边界**：① 仅语法级规则（type-aware 如 `no-floating-promises`/`no-misused-promises` 列后续——需配 project，另批）。② warning 未纳入 gate（1431 条，属"清理"非"缺陷"，走后续批次）。③ tsconfig 的 `noUncheckedIndexedAccess` 是**独立线**（实测 2 包即 47 错，全仓数千条），本项未动。
+
+869. **★收口既有 8 项全量失败（承接 #867 遗留 · 仓库既有漂移，非本轮引入）——内含 1 个真 bug**（2026-10-13）：
+**① 背景**：#867 全量实证发现 8 项失败（444 文件 / 5756 通过 / 8 失败），`git stash` 到干净 HEAD 复现 ⇒ 仓库既有漂移。本项逐项收口。
+**② A · p-icon `import.meta.env?.DEV`（真 bug，三红同源）**：`packages/components/p-icon/index.vue:50`（#804 重写图标库时引入）。本仓自定义编译器 `compileVueSfc`（服务 MP/App）**不替换** vite 专有形态 `import.meta.env`（`grep` 取证：`packages/compiler` 对 .vue script 无任何 env/dev 宏替换点），残留进 `Page()/Component()` 产物 ⇒ `new Function` 抛 `Cannot use 'import.meta' outside a module` ⇒ `validate.assertValidResult` 当场 CompilerError。**三处门禁同红**：`compiler-ir-m3`（真实文件双管线对齐）/`compiler-ir-m4`（ScriptIR 自洽）/`p-batch2-contract`。**修**：组件改**无条件告警**（与同库 `p-auth-gate` 同款——无名即开发者写错，任何环境都该暴露；MP 端 .vue script 无等价 dev 宏）。
+**③ B · p-batch2-contract 契约过时**：#804 已把 p-icon 的 unicode 字形表淘汰（改 SVG path 数据单一真源），但契约仍断言本地字形表。**修**：契约改为「组件不本地持有字形表 + 官方 `type` 8 取值经 `@proteus-vue/icons` 可解析」。
+**④ C · css-capability-alignment 生成物漂移**：编译器折叠面新增 `svg-view-box`/`glass` 字段后清单未重生成。**修**：跑 `gen-css-capability-alignment.mjs` 重生成（json+md 2 文件）。
+**⑤ D · router-project-driven「屏数≠路由数」假红**：产物实际 **2 屏 = 2 路由（正确）**；根因是测试**全文件正则** `/"name":/` 把新增的 `tabItems`（tab 渲染最终值，亦带 `"name"` 键）计入屏数（3）。**修**：只数 `screens` 对象，锁住「屏数 = 路由数」语义（非改产物）。
+**⑥ E · check:stats 官网数字漂移**：packages 47→48（新增 `@proteus-vue/animation`）· conformance 11→12（`animation/conformance.ts`）· plans 86→87。**修**：回填 `website/src/stats.ts`（数字与源码同源，门禁重算口径）。
+**⑦ 验证**：Node 22 全量 **5764 passed / 0 failed**（此前 5756/8）；`check:stats` ✓；`check:pkg` 48 包 0 error ✓。
+**⑧ 教训（工具化缺口）**：#867 的门禁（loop-guard/lint/engines）**未能覆盖**这些"数字/快照/契约随能力演进漂移"——它们是**存量债务**，只有全量跑才暴露。★但 `p-icon import.meta` 是**真缺陷**（编译即崩），说明"改组件要跑一次该组件的编译门禁"仍是弱环节：`test:coupled` 的映射表以 `packages/{compiler,runtime,plugin-vite}/src/**` 为触发面，**改 `packages/components/**` 不在其内** ⇒ 未触发定向。**记为后续**：`components/**` 改动是否纳入 coupled 触发面待评估。
