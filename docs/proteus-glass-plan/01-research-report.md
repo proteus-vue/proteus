@@ -9,7 +9,7 @@
 | iOS | 系统级 `UIGlassEffect`（iOS 26+），回退 `UIVisualEffectView` | iOS 26 / 18 | 高 |
 | 鸿蒙 | ArkUI `blur` + NEXT fractal | API 9+，NEXT 最完善 | **高（中国系统最优）** |
 | Android | `RenderEffect` + `Window.setBackgroundBlur` | API 31+ | 中（碎片化） |
-| Web | `backdrop-filter` + SVG/Canvas Shader | CSS Backdrop Filter L1 | 高 |
+| Web | `backdrop-filter`（**纯 CSS，无自绘着色器**——决策 #877） | CSS Backdrop Filter L1 | 高 |
 | Skyline | `backdrop-filter` + worklet | Skyline 2.x | 高（战略价值点） |
 
 ## 关键事实

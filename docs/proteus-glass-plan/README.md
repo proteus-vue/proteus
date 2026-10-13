@@ -8,9 +8,9 @@
 
 **用统一声明式 API，在各端映射到该端所能达到的最强玻璃实现。**
 
-Web / 小程序 Skyline 无法调用系统级玻璃 API，只能靠 `backdrop-filter` + Shader 模拟；
-iOS / 鸿蒙 / Android 原生端可解锁系统级特效。因此**不存在"一套代码三端像素级相同"**，
-框架承诺的是：**L1 基础玻璃三端必达、API 统一、质感随平台尽力提升。**
+Web / 小程序 Skyline 无系统级玻璃 API，**固定走纯 CSS `backdrop-filter`**（L1+L2，**无自绘着色器、无边缘折射**——决策 #877，见 `07-mapping-web-skyline.md` §边界声明）；
+iOS / 鸿蒙 / Android 原生端走**自绘玻璃遍**（Rust WGSL 单源 → MSL/AGSL/SPIR-V），带**边缘折射/倒角/明暗自适应**。
+因此**不存在"一套代码多端像素级相同"**，框架承诺的是：**L1 基础玻璃全端必达、API 统一、质感随平台尽力提升（Web/MP = CSS 上限，原生端 = 真折射）。**
 
 ## 文档清单
 
@@ -22,7 +22,7 @@ iOS / 鸿蒙 / Android 原生端可解锁系统级特效。因此**不存在"一
 | 04 | mapping-ios | iOS UIGlassEffect 映射 + 版本守门 |
 | 05 | mapping-harmony | 鸿蒙 ArkUI blur/fractal 映射（重点深耕） |
 | 06 | mapping-android | Android RenderEffect 映射 + ROM 边界 |
-| 07 | mapping-web-skyline | backdrop-filter + Shader 模拟 |
+| 07 | mapping-web-skyline | backdrop-filter 纯 CSS + **边界声明（不做自绘，决策 #877）** |
 | 08 | degradation | 降级策略（设备/版本/性能三级） |
 | 09 | presets | 预设清单（navigationBar/modal/card/...） |
 | 10 | compiler-integration | Compiler IR + `--trace-glass` |
