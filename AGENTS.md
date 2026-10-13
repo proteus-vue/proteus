@@ -22,6 +22,8 @@
    （完整模型——统一生命周期 7 关 × 三链路 A/B/C × 协作原语：任务单元 / 所有权边界 / 认领 / 交接 / 追溯）。
    **认领任务 = 往 `docs/ai-tasks.json` 写一行**（`status=in_progress` + `owner` + `scope`）；改内核前先看
    `pnpm test:coupled -- --explain`（配套断言映射表）；门禁 `pnpm check:ai-tasks`（认领 / 边界 / 追溯 / 防撞车）。
+   **★严禁大文件巨型化**（第 4.6）：源文件不得越 **1000 行**——先自问「这文件几个职责？> 1 就拆」；
+   门禁 `pnpm check:file-size`（新文件硬上限 + 存量棘轮只减不增）。
    三链路细则：A=本规范 · B(`AI 用框架`)=`docs/proteus-ai-agent-plan/08-rules.md`(G-36) · C(`外部缺陷`)=`Skill(ai-cobuild)`。
 5. 只改该改的：改动前先用 grep 定位，避免整读大文件；改完跑对应门禁（见下）。
 6. **★一律用中文回复用户**（2026-10-09 用户指定）：所有对用户输出的正文（总结 / 说明 / 结论 /
@@ -350,6 +352,8 @@ pnpm check:stats          # 官网数字 vs 源码实际值（防「数字过时
 pnpm check:vapor-three-end # ★★★三端同步（证据齐 + 同一判据三端全过 + 指纹逐项一致）
 pnpm check:ledger         # 外部报告台账自洽（schema/枚举/repro/related）
 pnpm check:cobuild        # AI 共建三方一致（报告↔台账↔回执）
+pnpm check:ai-tasks       # ★多 AI 协作任务板自洽（认领/边界/追溯/防撞车）
+pnpm check:file-size      # ★严禁大文件巨型化（新文件硬上限 1000 行 + 存量棘轮只减不增）
 pnpm ledger:check         # 收口率报告（**发布前**跑：未收口项 exit 1）
 pnpm verify               # 全量门禁（较重）
 ```
