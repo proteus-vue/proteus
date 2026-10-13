@@ -3872,6 +3872,18 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **⑤ 判据**：真机（HUAWEI）drive 到 mine 后 tab 栏**高亮＝「我的」**（品牌色）、首页/消息为灰；`常驻`启动（current=index）高亮首页不变（`setChromeCurrent` 幂等）。
 **⑥ 教训**：**"数据源当前值"与"实际渲染对象"必须有单一真源**——`chromeStateJson.current`（UI 高亮）与 `this.current`（渲染屏）是同一语义的两份拷贝，分两处赋值就会脱节（与 #890 单位、#896 坐标同族：**同一语义多份拷贝 = 静默不一致的高发区**）。
 
+898. **★★★液态玻璃「文档 Props 用法」端到端验证——修 `:border` 布尔字面量绑定被静默丢弃（#889 数字字面量的同族遗漏）+ 任务卡 T-glass-end2end 收口**（2026-10-13）：
+**① 缘起（用户「继续端到端验证液态玻璃的文档属性用法」）**：文档 `website/guides/31-liquid-glass.md` 的 **Props 表**列了 7 个 prop（`preset`/`intensity`/`tint`/`radius`/`border`/`noise`/`fallback`，含类型/缺省）——逐个验证「文档写的用法」是否真从 `.vue` 折进 IR（App 端 `style.glass`）并渲染。
+**② 取证（探针扫全部写法）**：用 `buildLayoutTemplate + glassResolver` 逐写法探针（静态 / 绑定 × 字符串 / 数字 / 布尔），**发现一处真缺口**：文档说 `border` 是 **Boolean** ⇒ 惯用写法 **`:border="false"`（绑定布尔字面量）被静默丢弃**（回落预设 `border:true`，"关闭高光边"失效）；而 `border="false"`（静态字符串）一直可用。**其余写法全折对**：`:radius="16"`、`:noise="0.05"`、`:intensity="1.4"`、`intensity="thick"`、`tint="rgba(...)"`、`:preset="'card'"`（绑定字符串字面量）——**唯漏「布尔字面量」**。
+**③ 修**：`packages/compiler/src/vapor/template.ts` 的 `strProp()` 在 #889「数字字面量」分支后再补 **布尔字面量** `if (s === 'true' || s === 'false') return s`（仅折静态字面量；动态表达式仍不折——诚实边界）。这是 #889 的同族遗漏（**字面量类型：字符串→数字→布尔**，一次只补了一种）。
+**④ 判据**：
+ · **单元**：`tests/glass-ir.test.ts` 扩 **6→13 例**——新增「文档 Props 用法全覆盖」段（intensity 三写法同 blur / tint 转 hex / radius 两写法 / **:border 布尔**（破坏性：false 折入）/ noise 两写法 / fallback / 缺省回落）。全绿。
+ · **端到端（真 .vue → 三端构建）**：`examples/pages/glass-demo.vue`（已用 `:border="false" :noise="0.08" :radius="32" tint=...`）经 `proteus build --target <android|ios|harmony>` ⇒ `dist/app/<平台>/glass-manifest.json` **14 玻璃节点**：`:border="false"`→`border:false` ✓（修复后端到端生效）、`:noise="0.08"`→`0.08` ✓、`:radius="32"`+`tint`→ 自定义 ✓；**三端 manifest 的 (screen,nodeId,spec) 集合逐字节一致**（共享编译器唯一实现）。
+ · `test:coupled` 全绿（7.7s）· `check:ai-tasks`（任务卡闭合）。
+**⑤ 任务卡**：`T-glass-end2end`（端到端样例，含 radius 单位校验）**收口**为 `done`（decision 898）——其验收含 #890（真 .vue→三端渲染 + radius 单位）+ 本轮（文档 Props 用法全覆盖）。
+**⑥ ★教训**：**「字面量类型」要一次补齐，别一种一种补**——#889 补了**数字**字面量，本轮才发现**布尔**还没补（`strProp` 的白名单是"值的形态"，形态空间 = 字符串/数字/布尔/…，漏一类就有一类写法静默回落）。★**文档与实现的契约必须有机器判据**：文档 Props 表写 `border: Boolean`，而实现只认静态字符串 ⇒ 惯用绑定写法静默失效——这类"文档承诺 vs 实现接受面"的缺口，**只有按文档逐写法探针才能抓到**（与 #888「UI 需求先确认容器还是单元」同族：**先对文档/契约，再对实现**）。
+**⑦ 边界（诚实）**：`v-for` 动态表达式（`:preset="p"` / `:intensity="i"`）**不折**（回落类默认）——文档已声明"App 端构建期折叠只认静态值"，属**设计边界**非缺陷（本轮 examples 探针复现：id 8–26 回落 custom 默认）。
+
 
 
 
