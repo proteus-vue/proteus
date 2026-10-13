@@ -29,6 +29,7 @@ iOS / 鸿蒙 / Android 原生端走**自绘玻璃遍**（Rust WGSL 单源 → MS
 | 11 | audit-performance | `proteus audit glass` + 性能预算 |
 | 12 | batches | M1-M6 分批 + Prompt 模板 |
 | 13 | migration-boundary | 明确不做项 + 迁移路径 |
+| 14 | **ios-gap-analysis** | **对齐 iOS 差距分析（子代理独立调研 · 决策 #909）——只登记未改** |
 
 ## 铁律
 
