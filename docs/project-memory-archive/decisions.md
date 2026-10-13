@@ -3757,6 +3757,18 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **⑥ 教训**：★**"用户上手才暴露的视觉缺陷"要尽快定位到"组件级 vs 页面级"**——本例表面是"产品页 §05 调参暴露"，实为 **`pg-glass` 组件缺陷**（大圆角普遍问题）；**先在组件层修，全站一起好**（对比 #869 的 p-icon 同族：修组件 ≠ 修页面）。★**"装饰层"必须随宿主圆角裁剪**——凡是 `position:absolute; inset:0` 的**方形覆盖层**（噪点/遮罩/高光条/扫描线）叠在**圆角容器**上，都要 `border-radius: inherit`（或父级 `overflow:hidden`）；这是 CSS 覆盖层的通用坑。★**验收"圆角"不能只看小圆角**——**大圆角**才会把"方角覆盖层戳出"暴露出来（视觉验收应含极端参数：radius 拉满）。
 **⑦ ★补修（同日 · 用户复测仍溢出「上面的这个线」）**：首版给装饰层加 `border-radius: inherit` **不够**——① **高光条是 1px 高、`left:0;right:0` 全宽**，`border-radius:48px` 会被 CSS 夹到 ~0.5px ⇒ **等于没裁**，两端水平线仍在大圆角处**溢出**；② 噪点层同理（背景是**正方形 tile**，`border-radius` 只圆了容器边界、未裁背景 tile 的角）。★**根治**：**装饰层包一层裁剪容器 `.pg-glass__deco`（`position:absolute; inset:0; overflow:hidden; border-radius:inherit`）**——`overflow:hidden` 把噪点/高光边**整体裁剪**到玻璃圆角内；`.pg-glass__in` 不再直接含装饰层（**slot 内容不受裁剪**，只有 deco 被裁）。★**教训升级**：**"给元素加 border-radius" ≠ "裁剪其内容"**——圆角不会裁掉**子元素/背景 tile 超出圆角的部分**，那是 `overflow:hidden` 的职责；**1px 条**尤其隐蔽（圆角被夹成亚像素 ⇒ 看似加了实则没裁）。★**验证**：CDP 复现 radius=48——`.pg-glass__deco` computed `overflow:hidden` + `border-radius:48px`，**截图高光条/噪点均不再溢出四角**；回归锁更新为「deco 容器存在 + overflow:hidden + border-radius:inherit」。
 
+887. **★★官网导航栏重设计（信息架构收敛）+ 导航走液态玻璃（自证引擎）**（2026-10-13）：
+**① 起因（用户）**：「现在需要优化官网导航栏了，现在内容越来越多显得越来越乱，需要重新建导航栏设计了，还有一个考虑下导航栏选项能否做成**液态玻璃**刚好验证下我们这套」。
+**② 病灶**：导航从"首页/Playground/文档/GitHub"一路**平铺到 11 项**（每加一个产品页就近加一项：#379→多端同屏/生态/动画/CSS引擎/一致性/图标库/液态玻璃）——**无分组、无层级**，宽屏挤、窄屏换行。
+**③ 交付（用户选定「引擎▾ 下拉」）**：
+   · **信息架构**：一级收敛到 **5 项**——`首页 · 引擎▾ · 生态 · Playground · 文档`（+ 搜索/语言/GitHub）。招牌产品页（Morpheus 动画 / Themis CSS / Aether 液态玻璃 / 一致性标准 / Keryx 图标）收进 **`引擎▾` 下拉**（**玻璃面板**，每项带神职代号 Morpheus/Themis/Aether/CS6/Keryx——与决策 #879 万神殿命名呼应）。
+   · **导航 = 液态玻璃**：导航条与下拉面板都用 **`<pg-glass>`**（导航 `preset="navigationBar"` = blur 20 + 底部高光边；下拉 `preset="floating"`）——**在真实站点验证自研玻璃引擎**（**回收**此前 `App.vue` 的 `is-scrolled` 裸 `backdrop-filter` 的 `d2-exempt` 例外 → D-2 audit PASS）。
+   · **响应式**：宽容器走下拉；窄容器**不依赖下拉**（`.nav-engines-flat` 平铺「引擎」组）+ 汉堡菜单；两者**互斥显示**（@container）。
+**④ 实现踩坑（三个，都实测）**：① **hover-open + click-toggle 打架**（悬停已开、click 又 toggle 成关 ⇒ 点不开）——改 **click 切换**；② **"点击别处关闭"的透明 scrim 失效**——`nav-shell` 有 `container-type: inline-size`（container queries 需要 containment）⇒ 它成为 **fixed 后代的包含块**，scrim 被限制在导航 65px 带内 ⇒ 点页面点不到；改 **click 开 + 鼠标离开关**（`@mouseleave`），零 scrim、零平台 API；③ **`document.addEventListener` 撞 D-2**（裸平台 API）——弃用，回到纯 Vue/CSS 方案。
+**⑤ 验证（CDP 实跑 + 门禁）**：`navGlass=1`（导航是 `pg-glass`）· 下拉 `open=true`（5 引擎项 Morpheus/Themis/Aether/CS6/Keryx）· 鼠标离开 `closed=true` · 点 Aether `onGlass=true` · 该页 trigger `active=1`；滚动后 `backdrop-filter: blur(20px)` + tint `rgba(11,11,15,0.72)`（navigationBar 预设产物）；移动端汉堡菜单引擎平铺组 5 项、下拉触发器隐藏；**D-2 audit PASS**（裸 backdrop-filter 例外回收）；`doc-links`/`en-drift`/`docs-stats`/glass 全绿、官网构建 ✓。
+**⑥ 诚实边界**：`check:content`/`check:file-size` 本地红——**经取证为异会话（`wb-appbridge`）未提交的 `gen-content*.mjs`/`mini-program.md` 改动**（HEAD 上 `gen-content.mjs`=2817 ≤ 基线 2818 ✓，工作树被其改为 2824）**非本轮**；本提交不含这些文件，推送后 CI（跑 HEAD）不受影响。
+**⑦ 教训**：★**"内容增长"必然逼出"信息架构"**——导航从 4 项长到 11 项平铺就是信号；**分组（下拉）比"再删几个"更治本**（删了还得再删）。★**`container-type` 会改变 `position:fixed` 的包含块**——凡是"container query 容器"内放 fixed 覆盖层（scrim/toast），都要意识到它被**限制在容器盒内**（本仓 `App.vue` nav 实证）。★**"顺带验证自家引擎"是最低成本的 dogfooding**——导航用 `<pg-glass>` 既**收敛了视觉**又**在真实高频入口验了玻璃引擎**（比专门演示更有说服力），并顺手**清掉一个 `d2-exempt` 技术债**。
+
 
 
 
