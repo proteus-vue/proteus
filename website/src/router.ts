@@ -15,6 +15,7 @@ import Consistency from './pages/Consistency.vue'
 import CssEngine from './pages/CssEngine.vue'
 import Changelog from './pages/Changelog.vue'
 import Icons from './pages/Icons.vue'
+import LiquidGlass from './pages/LiquidGlass.vue'
 
 export const router = createRouter({
   // ★GitHub Pages 子路径部署：base 跟随 vite（import.meta.env.BASE_URL——Vercel 根路径 = '/' 行为不变）
@@ -33,6 +34,8 @@ export const router = createRouter({
     { path: '/changelog', name: 'changelog', component: Changelog },
     // ★Keryx 图标库预览 / 审查（Proteus UI 的"方言层"——全量可视化 + 点击复制名）
     { path: '/icons', name: 'icons', component: Icons },
+    // ★★★液态玻璃引擎产品页（代号 Aether · 决策 #882）——真跑演示（预设/交互/端矩阵/降级）
+    { path: '/liquid-glass', name: 'liquid-glass', component: LiquidGlass },
     { path: '/docs', redirect: '/docs/01-intro' },
     { path: '/docs/:slug', name: 'guide', component: DocsPage },
     { path: '/docs/component/:slug', name: 'doc-component', component: DocsPage },

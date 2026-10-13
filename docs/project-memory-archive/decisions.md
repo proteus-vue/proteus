@@ -3704,6 +3704,15 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **⑥ 诚实边界**：本批只做 **M3 产物快照**（不涉 `--trace-glass` 交互/IR 更细）；manifest 是**构建期静态**（不覆盖运行期）；写文件仅在**有玻璃**时（无玻璃工程零新增产物）。
 **⑦ 教训**：★**反巨型化棘轮会咬"合理的"内核改动**——当能力可放内核或消费方时，**优先放消费方**（数据已在手，何必改内核）；**"内核最小化"也是反巨型化的一种**。★**"陈旧 dist"是复现率极高的坑**（#663 立规、本轮又踩）——凡"改了 src 但行为没变"，**第一嫌疑是没重建包**（`node scripts/build-packages.mjs`）。
 
+882. **★落地液态玻璃引擎产品 · M6 官网上线（`/liquid-glass` 旗舰产品页）**（2026-10-13）：
+**① 承接 #880/#881**：用户「继续落地液态玻璃引擎产品」。引擎产品化第三块 = **M6（官网演示）**——把引擎能力**对外可见**（与 `/themis` Themis、`/icons` Keryx 同层的旗舰产品页）。
+**② 交付**：新增 `website/src/pages/LiquidGlass.vue`（路由 `/liquid-glass` + 顶导航「液态玻璃」+ i18n zh/en「液态玻璃 / Liquid Glass」）。四段**真跑演示**（非截图）：① **七预设**实时渲染 `<pg-glass>`；② **交互演示**（preset/强度/圆角/噪点/高光边 调节 + 实时 spec 回显）；③ **端能力矩阵**（五端 L1–L3 诚实标注）；④ **降级演示**（`resolveGlassLevel` 五场景：iOS26→L3 / iOS15→L2 / Web→L2 / 无 backdrop→实色 / 低端→实色）。★**数据全部来自 `@proteus-vue/glass`**（GLASS_PRESET_NAMES / GLASS_CAPABILITY / resolveGlass / resolveGlassLevel）——页面**零硬编码玻璃参数**（与 Icons.vue 同纪律）。
+**③ 验证（真渲染 + 机器判据）**：**CDP（Playwright）实跑**——`title=液态玻璃引擎 · presets=7 · matrixRows=5 · demos=5 · demoTags=[L3,L2,L2,实色,实色]`（降级逻辑正确）+ **零 console 报错**；官网构建 `✓ built`；`check:doc-links`/`en-drift`/`docs-stats`/`file-size` 绿。
+**④ ★构建期踩坑（真实）**：网页 CSS 用了 `display:grid` + `justify-content:start` ⇒ 撞 **`[proteus-profile-boundary]`** 门禁（Skyline 端不支持 grid、`start` 非 skyline 取值）⇒ 官网构建**红**。**修**：改用 flex（`flex-wrap` + `justify-content:flex-start`）——**官网=多端 profile 单一源的验证场，页面 CSS 也要过 profile 边界**（这是本仓 dogfooding 的实际约束）。
+**⑤ 诚实边界**：本页是 **Web 端真渲染**（CSS backdrop-filter，**无边缘折射**——页面已明写）；原生端真折射的**真机截图**未放入本页（属 G0 端到端）；Playground（可编辑源码即时预览）的玻璃 preset 是后续增强。
+**⑥ 教训**：★**"产品页"要"真跑"不要"截图"**（本页四段全真渲染 + 真交互，与 `/icons` 同纪律）——**能不能跑起来本身就是产品证明**。★**数据来自包、页面零硬编码**——产品页的数字/矩阵/降级结果**全由 `@proteus-vue/glass` 派生**，引擎改了页面自动跟（同 test:coupled 的"同源"精神）。★**官网是多端 profile 的验证场**——页面 CSS 也受 `[proteus-profile-boundary]` 约束（grid/`start` 被拦），**写官网样式要按 skyline 子集**（本仓 dogfooding 的真实成本，也是价值）。
+
+
 
 
 
