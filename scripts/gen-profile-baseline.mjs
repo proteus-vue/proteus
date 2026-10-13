@@ -24,6 +24,10 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const CHECK = process.argv.includes('--check')
 
 // 项目根（vite root）→ 需扫描的目录（相对 repo；与 vite 实际处理的 .vue 集合对齐）
+//   ★★★决策 #883（判据错靶修复）：**只扫"目标端含 mp"的项目**——Skyline 边界规则约束的是**小程序端**，
+//     纯 web 项目（如官网 `targets:{web:{}}`）不受该规则约束（`display:grid` 等在 Web/App 均合法）。
+//     此前把官网也纳入（VC2-b 旧口径"防延迟暴露"），导致官网 web 构建被 Skyline 规则误拦。
+//     共享组件（`packages/components`）的 Skyline 合规由 examples/showcase 的**MP 构建**兜底。
 const PROJECTS = {
   examples: [
     'examples/pages', 'examples/components', 'examples/subpackages',
@@ -33,16 +37,8 @@ const PROJECTS = {
     'showcase/pages', 'showcase/components', 'showcase/subpackages',
     'packages/components',
   ],
-  // ★2026-10-02：官网加入基线覆盖——VC2 边界门禁对**所有 vite 构建**生效（含 Web 目标，
-  //   卡片硬性要求"否则问题延迟到 App 端暴露"），而官网只有 Web 构建、此前无基线文件
-  //   ⇒ 今早门禁上线后官网构建**直接红**（既有 App.vue 6 条 + 组件库 5 条存量样式）。
-  //   ★`packages/components` 也要扫：官网 vite 把 `@proteus-vue/components` 别名到**工作区源码**
-  //     （dogfooding 直引），构建时这些 .vue 也过同一插件 ⇒ 键口径 = 相对 website 根的
-  //     `../packages/components/...`（构建报错实测的形态）。
-  //   官网是 dogfooding 验证场：语义组件 + 柔性布局本应零违规——存量按棘轮钉住待专项清理。
-  website: ['website/src', 'packages/components'],
-  // ★css-conformance（CSS 一致性验收项目）：页面**有意**使用待验收/边界值（如 pre-wrap 保留空白）——
-  //   存量按棘轮钉住；新增违规同样当场红（该项目的价值恰是"如实暴露边界"）。
+  // ★css-conformance（CSS 一致性验收项目）：**含 mp 目标**（真要构建小程序）——页面有意使用待验收/边界值
+  //   （如 pre-wrap 保留空白、grid 验收项）⇒ 存量按棘轮钉住；新增违规同样当场红（该项目的价值恰是"如实暴露边界"）。
   'css-conformance': ['css-conformance/pages', 'css-conformance/components', 'packages/components'],
 }
 

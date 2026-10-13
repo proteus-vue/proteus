@@ -3710,7 +3710,19 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **③ 验证（真渲染 + 机器判据）**：**CDP（Playwright）实跑**——`title=液态玻璃引擎 · presets=7 · matrixRows=5 · demos=5 · demoTags=[L3,L2,L2,实色,实色]`（降级逻辑正确）+ **零 console 报错**；官网构建 `✓ built`；`check:doc-links`/`en-drift`/`docs-stats`/`file-size` 绿。
 **④ ★构建期踩坑（真实）**：网页 CSS 用了 `display:grid` + `justify-content:start` ⇒ 撞 **`[proteus-profile-boundary]`** 门禁（Skyline 端不支持 grid、`start` 非 skyline 取值）⇒ 官网构建**红**。**修**：改用 flex（`flex-wrap` + `justify-content:flex-start`）——**官网=多端 profile 单一源的验证场，页面 CSS 也要过 profile 边界**（这是本仓 dogfooding 的实际约束）。
 **⑤ 诚实边界**：本页是 **Web 端真渲染**（CSS backdrop-filter，**无边缘折射**——页面已明写）；原生端真折射的**真机截图**未放入本页（属 G0 端到端）；Playground（可编辑源码即时预览）的玻璃 preset 是后续增强。
-**⑥ 教训**：★**"产品页"要"真跑"不要"截图"**（本页四段全真渲染 + 真交互，与 `/icons` 同纪律）——**能不能跑起来本身就是产品证明**。★**数据来自包、页面零硬编码**——产品页的数字/矩阵/降级结果**全由 `@proteus-vue/glass` 派生**，引擎改了页面自动跟（同 test:coupled 的"同源"精神）。★**官网是多端 profile 的验证场**——页面 CSS 也受 `[proteus-profile-boundary]` 约束（grid/`start` 被拦），**写官网样式要按 skyline 子集**（本仓 dogfooding 的真实成本，也是价值）。
+**⑥ 教训**：★**"产品页"要"真跑"不要"截图"**（本页四段全真渲染 + 真交互，与 `/icons` 同纪律）——**能不能跑起来本身就是产品证明**。★**数据来自包、页面零硬编码**——产品页的数字/矩阵/降级结果**全由 `@proteus-vue/glass` 派生**，引擎改了页面自动跟（同 test:coupled 的"同源"精神）。★**官网是多端 profile 的验证场**——页面 CSS 也受 `[proteus-profile-boundary]` 约束（grid/`start` 被拦），**写官网样式要按 skyline 子集**（本仓 dogfooding 的真实成本，也是价值）。★（本条后经 #883 修正——见下。）
+
+883. **★修判据错靶：`[proteus-profile-boundary]` 按**编译目标**分流（Skyline 规则不再拦 Web 构建）**（2026-10-13）：
+**① 起因（用户）**：「这个 css 规则拦截好像有问题，**正确应该是根据当前编译平台做拦截**吧？比如 grid，**web 和 App 全都支持，就小程序不支持**，现在编译 web 直接也不让用 grid 了」+ 追问「构建不都是通过 cli 的 `--target` 吗？**可以根据这个自动判断**吧？不需要依赖框架编译配置文件的硬编码传平台」。
+**② 根因（判据错靶真 bug）**：`profileBoundaryPlugin`（`packages/plugin-vite/src/profile-boundary-plugin.ts`）的规则集 = **`SKYLINE_BOUNDARY_RULES`**（`end:'skyline'`，来源《Skyline WXSS 支持与差异》官方属性表）——**只约束小程序端**；但 `vite-config.ts` **在 web 分支也注册**该插件（第 218 行；旧口径 VC2-b「Web 也跑，防延迟到 App 暴露」）⇒ **web 构建按 Skyline 规则判** ⇒ `display:grid`（**Web/App 均支持、仅 Skyline 退化**）在 web 构建被**误拦**（实测 `[profile-boundary/error]` 阻断官网构建）。★**"防延迟暴露"的前提是"这些值在各端一致"**——但 `grid`/`inline-flex` 等**恰恰是"Web/App 支持、Skyline 不支持"的端差异**，用 Skyline 白名单当"全网约束"是**把端专属规则套到了不该套的目标上**。
+**③ 修（按编译目标自动分流——复用既有 `mode` 判定，零配置）**：
+   · `vite-config.ts`：**Web 分支移除 `profileBoundaryPlugin`**（Skyline 专属）——平台由 `mode = mp-weixin?'mp-weixin':'web'`（CLI `--target` 已映射）**自动判定**，**不依赖 `proteus.config` 硬编码**；MP 分支（`isMp`）保持注册。共享组件（`packages/components`）的 Skyline 合规由 **examples/showcase 的 MP 构建兜底**（同一份源码在 MP 链被校验）——覆盖不丢。
+   · `gen-profile-baseline.mjs`：**从基线项目移除 web-only 的 `website`**（其当初纳入就是"让 web 构建不红"的权宜）；删 `website/profile-boundary-baseline.json`。
+   · `tests/vite-config.test.ts`：web 断言改为「plugins=7 且**不含** profile-boundary」；MP 断言保持「含」。
+**④ 验证（决定性）**：临时在官网页面重新写入 `display:grid` ⇒ **web 构建 `✓ built`（不再被拦）**；MP 分支仍注册该插件（源码断言）+ `checkProfileBoundary` 单测 10/10 绿（Skyline 规则本身不变）；`check:profile-baseline` 无漂移（examples 37/showcase 32/css-conformance 32）；`check:file-size`/`script-compile`/`gates-sync` 绿。
+**⑤ 诚实边界**：`cse-lint` 插件**本就**按 target 分流（`web`/`skyline` 两目标）——只有 `profile-boundary` 有此错靶；`SKYLINE_BOUNDARY_RULES` 规则集本身（Skyline 官方白名单）**正确、不动**（只是不该套 web）。`proteus explain CSS-PB-<prop>` 是"解释某条 Skyline 规则"的显式查询，不受影响。
+**⑥ 教训**：★**端专属规则必须按"当前编译目标"分流**——`SKYLINE_BOUNDARY_RULES` 名字里就写着"Skyline"，却在 web 链执行 = **判据与目标端脱节**（本仓反复教训的同一族：门禁/判据的**作用域**必须跟着实际形态/目标走）。★**"防延迟暴露"不能靠"过宽的约束"**——正解是**在正确的目标端约束**（MP 链拦 Skyline 违规），而非"所有链都套 Skyline 白名单"（那会误伤 web 合法值）。★**平台自动判定优于配置硬编码**（用户点出）：`--target`→vite `mode` 已有映射，**复用即可**，不需要在 `proteus.config` 再传一遍平台。★**M6/`#882` 的"grid 改 flex"实为绕过 bug 的 workaround**——修复后 grid 在 web 本就合法；页面保持 flex 是风格选择（非必需），但**真正的修法是 #883**。
+
 
 
 

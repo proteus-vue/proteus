@@ -26,14 +26,14 @@ describe('#418 框架组装 vite 配置（resolveProteusViteConfig）', () => {
     expect(needsGenRoutes).toBe(false)
     expect(config.configFile).toBe(false)
     expect(config.root).toBe(ROOT)
-    // ① profile-boundary + variant + vue + platform-macros + public-assets + route-blocks + ★p-fluid 布局改写
+    // ① variant + vue + platform-macros + public-assets + route-blocks + cse-lint + ★p-fluid 布局改写
     //   （★2026-09-20：p-fluid 改写此前**未注册**于 Web 分支 → Web 端属性静默不生效，见实战报告第十一节第二条）
-    //   （★2026-10-02 VC2-b：Profile 边界校验在 Web 端**同样执行**——卡片硬性要求，
-    //     防"问题延迟到 App 端暴露"；此前本断言未随源码更新 ⇒ 补 profile-boundary 计数）
-    expect(config.plugins?.length).toBe(8) // ★G-61 B4：+ cse-lint 插件（Web 端语义级 lint）
+    //   （★★★决策 #883：Profile 边界校验**改回"按编译目标"**——规则集 = SKYLINE_BOUNDARY_RULES（end:skyline），
+    //     Web 目标**不再**跑它（此前误拦 `display:grid` 等 Web/App 合法值）；MP 分支才跑。）
+    expect(config.plugins?.length).toBe(7) // ★#883：Web 分支移除 profile-boundary（Skyline 专属）
     const names = (config.plugins ?? []).map((p) => (p as { name?: string }).name)
     expect(names).toContain('proteus-p-fluid-layout')
-    expect(names).toContain('proteus-profile-boundary')
+    expect(names).not.toContain('proteus-profile-boundary') // ★#883：Web 目标不跑 Skyline 边界规则
     expect(config.build?.outDir).toBe(path.join(ROOT, 'dist', 'web'))
     expect((config.define as Record<string, unknown>).__PROTEUS_DEBUG__).toBe(false)
   })
@@ -45,8 +45,8 @@ describe('#418 框架组装 vite 配置（resolveProteusViteConfig）', () => {
     )
     expect(platform).toBe('mp-weixin')
     expect(needsGenRoutes).toBe(true)
-    // ① profile-boundary（VC2-b：MP 端也跑——与 Web 同源） + ② **cse-lint（G-61 B4：同判据两链都跑）**
-    //   + ③ virtual mp-entry + ④ mpTransform
+    // ① profile-boundary（★★★#883：Skyline 专属，**只在 MP 目标跑**——按编译目标分流）
+    //   + ② cse-lint（G-61 B4：两链都跑，但 target 不同：web / skyline）+ ③ virtual mp-entry + ④ mpTransform
     expect(config.plugins?.length).toBe(4)
     const names = (config.plugins ?? []).map((p) => (p as { name?: string }).name)
     expect(names).toContain('proteus-profile-boundary')
@@ -67,9 +67,9 @@ describe('#418 框架组装 vite 配置（resolveProteusViteConfig）', () => {
       },
     )
     expect((config.server as { port?: number }).port).toBe(5999)
-    // 仍保留框架插件（profile-boundary + **cse-lint（G-61 B4）** + variant + vue + macro
-    //   + public-assets + route-blocks + p-fluid）+ 别名 @ 追加（用户别名不被吞）
-    expect(config.plugins?.length).toBe(8)
+    // 仍保留框架插件（cse-lint + variant + vue + macro + public-assets + route-blocks + p-fluid）
+    //   + 别名 @ 追加（用户别名不被吞）。★#883：Web 分支不再含 profile-boundary（Skyline 专属）。
+    expect(config.plugins?.length).toBe(7)
     expect((config.plugins ?? []).map((p) => (p as { name?: string }).name)).toContain('proteus-cse-lint')
     const aliases = (config.resolve?.alias as unknown as Array<{ find: string }>) ?? []
     expect(aliases.some((a) => a.find === '@')).toBe(true)
