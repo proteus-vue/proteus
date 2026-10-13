@@ -9,6 +9,9 @@
 > **状态**：v1（2026-10-13 立）。目标读者：任何 AI（Claude / GPT / DeepSeek… × 任意会话）× 任何人类维护者。
 >
 > **不适用**：单人一次性脚本、与 Proteus 仓库无关的外部项目。
+>
+> **★可执行形态 = `Skill(ai-development)`**（`.agents/skills/ai-development/SKILL.md`，本文件是其规范正文；
+> 与 `Skill(ai-cobuild)` ↔ `docs/ai-cobuild-spec.md` 同款"doc↔skill"约定）。AI 会话启动时应挂载它。
 
 ---
 
