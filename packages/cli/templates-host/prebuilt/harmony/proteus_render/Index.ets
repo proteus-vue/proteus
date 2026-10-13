@@ -31,6 +31,9 @@ export {
   glassStats,
   // ★★★决策 #847：设置顶部避让区（状态栏高，物理 px）——内容裁到其下（防滚进状态栏区）
   setTopInset,
+  // ★★★决策 #905：玻璃触控形变（命中交互玻璃 → 记触点；逐帧 press lerp）
+  glassTouch,
+  glassStep,
 } from 'libproteus_render.so'
 export type { ProteusRenderStats } from 'libproteus_render.so'
 

@@ -216,6 +216,7 @@ struct SDNode {
     bool glass = false;                      // ★本元素是玻璃面（阶段 3 同帧接入）
     double gBlur = 0, gRadius = 0, gSat = 1.0; uint32_t gTint = 0x26FFFFFFu;
     std::string gMaterial = "glass";         // ★★★决策 #900：材质 id（宿主按此选管线）
+    bool gInteractive = false;               // ★★★决策 #905：触控形变
     // ★★★决策 #895（superapp 收敛自绘）：补齐 superapp 用到的图元——边框/阴影/SVG/变换/裁剪/层序/字距
     double borderWidth = 0; uint32_t borderColor = 0;   // 边框（物理 px；ARGB）
     double shDx = 0, shDy = 0, shBlur = 0; uint32_t shColor = 0;   // 盒阴影
@@ -236,6 +237,10 @@ static bool g_sdDrawEventReg = false;   // ON_DRAW 事件是否已注册（防�
 static int g_rootWpx = 0, g_rootHpx = 0;     // 根 RenderNode 尺寸（物理 px）
 static double g_sdTopInsetPx = 0;            // ★决策 #847：顶部避让区（状态栏高，物理 px）——内容裁到其下
 static bool g_sdHasGlass = false;            // 本帧自绘内容含玻璃面 ⇒ 走同帧玻璃 pass
+/** ★★★决策 #905：玻璃触控形变全局态——活动交互玻璃 + 触点（盒局部 px）+ press（驱动方每帧 lerp 后下发）。 */
+static int g_sdGlassActiveId = -1;
+static double g_sdGlassTouchX = -1e6, g_sdGlassTouchY = -1e6;   // 盒局部 px
+static double g_sdGlassPress = 0;
 /** ★决策 #847：**每玻璃节点的小背景位图**（key = iw2<<32|ih2 → {bitmap, canvas}）。
  *   内容直接画 RS 画布（省全屏 blit），玻璃背景只在「盒+pad」小位图上画（省全屏 crop）。 */
 static std::unordered_map<long long, std::pair<OH_Drawing_Bitmap*, OH_Drawing_Canvas*>> g_sdBackdrops;
@@ -1277,7 +1282,9 @@ static void drawSelfContentCore(OH_Drawing_Canvas* rsCanvas, SelfDrawSpec* sd) {
             const double cx = n.x, cy = n.y - dyf;
             geos.push_back({cx, cy, n.w, n.h, n.gRadius});
             GlassCache& gc = g_sdGlassCache[gi];
-            const bool recompute = (gc.img == nullptr) || (g_sdGlassDiv <= 1)
+            // ★★★决策 #905：活动交互玻璃在动画中（press 在变）⇒ **强制每帧重算**（绕过时间复用门控）。
+            const bool animInteract = (n.gInteractive && g_sdGlassActiveId == n.id);
+            const bool recompute = animInteract || (gc.img == nullptr) || (g_sdGlassDiv <= 1)
                         || (yChanged ? (g_sdGlassTick % g_sdGlassDiv == 0) : !g_sdGlassFresh);
             if (recompute) {
                 const int pad = (int)((n.w < n.h ? n.w : n.h) * 0.22 + n.gBlur * 0.55 * 1.6 + 4);
@@ -1316,7 +1323,7 @@ static void drawSelfContentCore(OH_Drawing_Canvas* rsCanvas, SelfDrawSpec* sd) {
                     bi.id = gi;
                     bi.texW = iw2; bi.texH = ih2; bi.outW = ow2; bi.outH = oh2;
                     bi.backdrop.assign(bpx, bpx + (size_t)iw2 * ih2 * 4);
-                    bi.uniform80.assign(80, 0);
+                    bi.uniform80.assign(96, 0);   // ★#905：glass 布局扩到 96B（touch/press）；模糊族仍只用前 64B
                     bi.material = n.gMaterial.c_str();   // ★#900：材质 id（renderBatch 按此选管线）
                     auto putF = [&](int off, float v) { memcpy(&bi.uniform80[off], &v, 4); };
                     auto putV2 = [&](int off, float a2, float b2) { putF(off, a2); putF(off + 4, b2); };
@@ -1338,6 +1345,13 @@ static void drawSelfContentCore(OH_Drawing_Canvas* rsCanvas, SelfDrawSpec* sd) {
                         putF(64, (n.w < n.h ? (float)ow2 : (float)oh2) * 0.22f);
                         putF(68, 0.18f);
                         putF(72, (float)n.gSat);
+                        putF(76, 0.0f);
+                        // ★★★决策 #905：触控形变（touch 盒局部 px / press）——仅活动交互玻璃；升采样到半分辨率空间 (×1/S)
+                        if (g_sdGlassActiveId == n.id) {
+                            putF(80, (float)(g_sdGlassTouchX / S)); putF(84, (float)(g_sdGlassTouchY / S));
+                            putF(88, (float)g_sdGlassPress);
+                        } else { putF(80, -1e6f); putF(84, -1e6f); putF(88, 0.0f); }
+                        putF(92, 0.0f);
                     } else {
                         putF(48, (float)n.gBlur / S);
                         putF(52, (float)n.gSat);
@@ -1769,6 +1783,7 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
                     jsonNumber(gsub, "saturation", &sn.gSat);
                     { double gt = 0; if (jsonNumber(gsub, "tint", &gt)) sn.gTint = (uint32_t)gt; }
                     { std::string gm; if (jsonString(gsub, "material", &gm) && !gm.empty()) sn.gMaterial = gm; }   // ★#900
+                    sn.gInteractive = (gsub.find("\"interactive\":true") != std::string::npos);   // ★#905
                 }
                 g_sdSpec->nodes.push_back(sn);
             }
@@ -3449,11 +3464,53 @@ static napi_value Stats(napi_env env, napi_callback_info info) {
     return obj;
 }
 
+/** ★★★决策 #905：`glassTouch(x, y, down)` —— 命中**交互玻璃**（x,y = 内容**物理 px**）⇒ 记触点（盒局部 px）
+ *  + 目标 press（down=1 / up=0）；返回命中节点 id（未命中 -1）。驱动方（ArkTS）据此起帧循环。 */
+static napi_value GlassTouch(napi_env env, napi_callback_info info) {
+    size_t argc = 3; napi_value args[3] = {nullptr, nullptr, nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    double x = 0, y = 0, down = 1;
+    if (argc >= 3) { napi_get_value_double(env, args[0], &x); napi_get_value_double(env, args[1], &y); napi_get_value_double(env, args[2], &down); }
+    int hit = -1;
+    if (g_sdSpec != nullptr && down > 0.5) {
+        for (const auto& n : g_sdSpec->nodes) {
+            if (!n.glass || !n.gInteractive || n.w <= 0 || n.h <= 0) continue;
+            if (x >= n.x && x <= n.x + n.w && y >= n.y && y <= n.y + n.h) {
+                g_sdGlassActiveId = n.id;
+                g_sdGlassTouchX = x - n.x;   // 盒局部 px
+                g_sdGlassTouchY = y - n.y;
+                g_sdGlassPress = std::max(g_sdGlassPress, 0.01);
+                hit = n.id; break;
+            }
+        }
+    }
+    if (down <= 0.5) { g_sdGlassPress = 0; g_sdGlassActiveId = -1; }   // 松手 ⇒ 立即回（简化：单帧归零）
+    if (g_rootHost != nullptr) OH_ArkUI_RenderNodeUtils_Invalidate(g_rootHost);
+    napi_value out; napi_create_int32(env, hit, &out); return out;
+}
+
+/** ★★★决策 #905：`glassStep(target)` —— press 指数逼近 target，需继续则返 1（驱动方排下一帧）。 */
+static napi_value GlassStep(napi_env env, napi_callback_info info) {
+    size_t argc = 1; napi_value args[1] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    double target = 0;
+    if (argc >= 1) napi_get_value_double(env, args[0], &target);
+    int more = 0;
+    if (g_sdGlassActiveId >= 0) {
+        double np = g_sdGlassPress + (target - g_sdGlassPress) * 0.28;
+        bool settled = std::fabs(np - target) < 0.01;
+        g_sdGlassPress = settled ? target : np;
+        if (!settled) more = 1;
+        else if (target == 0) { g_sdGlassPress = 0; g_sdGlassActiveId = -1; }
+        if (g_rootHost != nullptr) OH_ArkUI_RenderNodeUtils_Invalidate(g_rootHost);
+    }
+    napi_value out; napi_create_int32(env, more, &out); return out;
+}
+
 EXTERN_C_START
 static napi_value Init(napi_env env, napi_value exports) {
     napi_property_descriptor desc[] = {
-        {"attach", nullptr, Attach, nullptr, nullptr, nullptr, napi_default, nullptr},
-        {"renderCommands", nullptr, RenderCommands, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"attach", nullptr, Attach, nullptr, nullptr, nullptr, napi_default, nullptr},        {"renderCommands", nullptr, RenderCommands, nullptr, nullptr, nullptr, napi_default, nullptr},
         // ★★★"跳变驱动动画"（本批）：把内核逐帧视觉（anim_tick 的 updates）写到 RenderNode
         {"applyNodeVisuals", nullptr, ApplyNodeVisuals, nullptr, nullptr, nullptr, napi_default, nullptr},
         // ★★★Dactyl 专项：按下态直写 RenderNode（底色/描边/缩放/发光；{} ⇒ 还原）
@@ -3465,6 +3522,9 @@ static napi_value Init(napi_env env, napi_value exports) {
         {"platformAnimSave", nullptr, PlatformAnimSave, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"clearRoot", nullptr, ClearRoot, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"setContentMode", nullptr, SetContentMode, nullptr, nullptr, nullptr, napi_default, nullptr},
+        // ★★★决策 #905：玻璃触控形变——命中交互玻璃（内容物理 px）→ 记触点+目标 press；每帧 step 逐帧 lerp。
+        {"glassTouch", nullptr, GlassTouch, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"glassStep", nullptr, GlassStep, nullptr, nullptr, nullptr, napi_default, nullptr},
         // ★★★决策 #840/#841：节点快照能力探针（玻璃背景捕获来源取证）
         {"snapshotProbe", nullptr, SnapshotProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
         // ★★★决策 #841：离屏 Vulkan 玻璃 pass 探针（GPU 单源取证）

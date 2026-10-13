@@ -42,18 +42,25 @@ public final class GlassMaterial {
         public final float saturation;
         /** ★★★决策 #900：材质 id（`glass`/`backdropBlur`/`frosted`/`vibrancy`）——按此选 AGSL 源 + uniform。 */
         public final String material;
+        /** ★★★决策 #905：触控形变（对齐 Apple `UIGlassEffect.isInteractive`）——该玻璃响应点按/拖动。 */
+        public final boolean interactive;
 
         public Spec(float blur, int tint, float radius, boolean border, float saturation) {
-            this(blur, tint, radius, border, saturation, "glass");
+            this(blur, tint, radius, border, saturation, "glass", false);
         }
 
         public Spec(float blur, int tint, float radius, boolean border, float saturation, String material) {
+            this(blur, tint, radius, border, saturation, material, false);
+        }
+
+        public Spec(float blur, int tint, float radius, boolean border, float saturation, String material, boolean interactive) {
             this.blur = blur;
             this.tint = tint;
             this.radius = radius;
             this.border = border;
             this.saturation = saturation;
             this.material = (material == null || !GeneratedMaterials.MATERIALS.containsKey(material)) ? "glass" : material;
+            this.interactive = interactive;
         }
     }
 
@@ -74,6 +81,11 @@ public final class GlassMaterial {
      * @param radius   圆角（设备像素）
      */
     public static Paint buildPaint(int nodeId, Bitmap backdrop, float ox, float oy, float bdX, float bdY, float w, float h, float radius, Spec spec) {
+        return buildPaint(nodeId, backdrop, ox, oy, bdX, bdY, w, h, radius, spec, -1e6f, -1e6f, 0f);
+    }
+
+    /** ★#905 重载：带触控形变参数（touch 盒局部 px；press 0..1）。 */
+    public static Paint buildPaint(int nodeId, Bitmap backdrop, float ox, float oy, float bdX, float bdY, float w, float h, float radius, Spec spec, float touchX, float touchY, float press) {
         if (!isAvailable() || backdrop == null || backdrop.isRecycled() || spec == null || w <= 0f || h <= 0f) {
             android.util.Log.w("proteus-glass", "buildPaint early-null: avail=" + isAvailable()
                     + " backdrop=" + (backdrop == null ? "null" : backdrop.getWidth() + "x" + backdrop.getHeight())
@@ -118,6 +130,11 @@ public final class GlassMaterial {
                 sh.setFloatUniform("refract_depth", Math.min(w, h) * 0.22f);
                 sh.setFloatUniform("specular", 0.18f);
                 sh.setFloatUniform("_pad", 0f);
+                // ★★★决策 #905：触控形变（touch 盒局部 px / press 0..1）
+                sh.setFloatUniform("touch", touchX, touchY);
+                sh.setFloatUniform("press", press);
+                // ★`_pad2` 是尾部对齐填充（着色器不读）——**不设**：naga 落 AGSL 时把它改名 `_pad2_`，
+                //   用原名 `setFloatUniform("_pad2")` 会抛（未知名）⇒ buildPaint 返 null ⇒ 玻璃静默降级实色。
             }
 
             Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);

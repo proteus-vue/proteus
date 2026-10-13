@@ -32,6 +32,8 @@ final class GlassMetalRenderer {
         let saturation: CGFloat
         /// ★★★决策 #900：材质 id（`glass`/`backdropBlur`/`frosted`/`vibrancy`）——宿主按此选管线。
         var material: String = "glass"
+        /// ★★★决策 #905：触控形变（对齐 Apple `UIGlassEffect.isInteractive`）——该玻璃响应点按/拖动。
+        var interactive: Bool = false
     }
 
     private let device: MTLDevice?
@@ -105,7 +107,8 @@ final class GlassMetalRenderer {
     ///     玻璃被模糊/折射，背景采样不必全分辨率 ⇒ 省捕获栅格化与纹理上传。
     /// - Returns: 与 `requests` **等长**的数组（失败项为 nil ⇒ 调用方降级）。
     func renderFaces(backdrop: CGImage, requests: [(nodeRect: CGRect, spec: Spec)],
-                     scale: CGFloat, cropOrigin: CGPoint, texPxPerPoint: CGFloat? = nil) -> [CGImage?] {
+                     scale: CGFloat, cropOrigin: CGPoint, texPxPerPoint: CGFloat? = nil,
+                     touchPress: [(t: CGPoint, press: CGFloat)]? = nil) -> [CGImage?] {
         let n = requests.count
         guard n > 0 else { return [] }
         let texPx = texPxPerPoint ?? scale
@@ -141,8 +144,10 @@ final class GlassMetalRenderer {
             enc.setRenderPipelineState(pipeline)
             enc.setFragmentTexture(backdropTex, index: 0)
             if isGlass {
+                let tp = (touchPress != nil && i < touchPress!.count) ? touchPress![i] : nil
                 var u = makeUniforms(nodeRect: req.nodeRect, outScale: scale, texPxPerPoint: texPx,
-                                     backdrop: backdrop, spec: req.spec, cropOrigin: cropOrigin)
+                                     backdrop: backdrop, spec: req.spec, cropOrigin: cropOrigin,
+                                     touch: tp?.t, press: tp?.press ?? 0)
                 enc.setFragmentBytes(&u, length: MemoryLayout<GlassUniforms>.stride, index: 0)
             } else {
                 var u = makeBlurUniforms(nodeRect: req.nodeRect, outScale: scale, texPxPerPoint: texPx,
@@ -190,10 +195,15 @@ final class GlassMetalRenderer {
         var specular: Float          // 68
         var saturation: Float        // 72
         var _pad: Float              // 76
+        // ★★★决策 #905：触控形变（touch 盒局部 px / press 0..1）
+        var touch: SIMD2<Float>      // 80
+        var press: Float             // 88
+        var _pad2: Float             // 92（总长 96）
     }
 
     private func makeUniforms(nodeRect: CGRect, outScale: CGFloat, texPxPerPoint: CGFloat,
-                              backdrop: CGImage, spec: Spec, cropOrigin: CGPoint) -> GlassUniforms {
+                              backdrop: CGImage, spec: Spec, cropOrigin: CGPoint,
+                              touch: CGPoint?, press: CGFloat) -> GlassUniforms {
         let w = Float(nodeRect.width * outScale)
         let h = Float(nodeRect.height * outScale)
         // 背景纹理 = **cropRect 区域**（决策 #863：非整屏，且可按更低分辨率捕获）；节点 uv → 纹理 uv：
@@ -225,7 +235,13 @@ final class GlassMetalRenderer {
             refract_depth: min(w, h) * 0.22,   // 与 Android 同守恒
             specular: 0.18,
             saturation: Float(spec.saturation),
-            _pad: 0
+            _pad: 0,
+            // ★★★决策 #905：触控形变——touch 传入为**盒局部逻辑点**，× outScale 折到半分辨率像素空间
+            //   （与 size_px/radius/blur 同轴）；未激活 = (-1e6,-1e6)（着色器钟形因子≈0）。
+            touch: SIMD2<Float>(touch.map { Float($0.x * outScale) } ?? -1e6,
+                                touch.map { Float($0.y * outScale) } ?? -1e6),
+            press: Float(press),
+            _pad2: 0
         )
     }
 

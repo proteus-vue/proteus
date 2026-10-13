@@ -19,7 +19,7 @@ import { NodeContent } from '@kit.ArkUI';
 import { display, window } from '@kit.ArkUI';
 import { util } from '@kit.ArkTS';
 import { fileIo } from '@kit.CoreFileKit';
-import { attach, renderCommands, scrollRoot, clearRoot, appScreenCommands, appScreenContentHeight, appScreenHitAt, hostRtShellInstall, hostRtShellEvent, hostAppDrive, hostAppRender, AppRuntimeDriver, ProteusTabChrome, setContentMode } from 'proteus_render';
+import { attach, renderCommands, scrollRoot, clearRoot, appScreenCommands, appScreenContentHeight, appScreenHitAt, hostRtShellInstall, hostRtShellEvent, hostAppDrive, hostAppRender, AppRuntimeDriver, ProteusTabChrome, setContentMode, glassTouch, glassStep } from 'proteus_render';
 
 const DOMAIN = 0x0002;
 const TAG = 'ProteusSuperapp';
@@ -508,6 +508,8 @@ struct Superapp {
       this.stopMomentum();   // ★手指按下 ⇒ 停掉上一段惯性（与 iOS/Android 同语义）
       this.touchLastY = t.windowY; this.touchStartX = t.windowX; this.touchStartY = t.windowY; this.touchMoved = false;
       this.touchLastTs = Date.now(); this.touchVelSum = 0; this.touchVelDt = 0; this.velOffset = 0;
+      // ★★★决策 #905：玻璃触控形变——命中交互玻璃（内容物理 px = windowX×density, (windowY+scroll)×density）⇒ 起帧循环。
+      this.glassPressDown(t.windowX, t.windowY + this.scrollOffset);
       // ★★★Dactyl D0：官方触摸时间戳（TouchEvent.timestamp——**系统事件时间，非 JS 时钟**；
       //   与 Android getEventTime / iOS UITouch.timestamp 同口径。单位 ns ⇒ /1e6 = ms。）
       this.dactylT0Ms = e.timestamp > 0 ? e.timestamp / 1e6 : Date.now()
@@ -532,11 +534,14 @@ struct Superapp {
       if (this.touchVelDt >= 24) { this.velOffset = this.touchVelSum / this.touchVelDt; this.touchVelSum = 0; this.touchVelDt = 0; }
       // ★★★Dactyl 专项：场跟手 MOVE 只记焦点（零 FFI——推帧在 driver 的帧循环里）
       if (this.driver !== null) { this.driver.onTouchMove(t.windowX, t.windowY + this.scrollOffset); }
+      // ★#905：拖动跟随——更新触点（玻璃流动跟手）
+      if (this.glassActive) { this.glassPressDown(t.windowX, t.windowY + this.scrollOffset); }
       return;
     }
     if (e.type === TouchType.Up) {
       // ★★★Dactyl 专项：抬起 ⇒ 还原按下态 + 清场（与 iOS handleTouchUp 同语义）
       if (this.driver !== null) { this.driver.onTouchUp(); }
+      if (this.glassActive) { this.glassPressUp(); }   // ★#905：松手 ⇒ 回弹
       if (!this.touchMoved && this.touchStartX >= 0) {
         // ★B1：几乎没动 ⇒ tap → 命中 → 导航（与 Android hitTest→gesture→JS 同语义）
         this.onTapAt(this.touchStartX, this.touchStartY);
@@ -551,6 +556,30 @@ struct Superapp {
       return;
     }
     if (e.type === TouchType.Cancel) { this.stopMomentum(); this.touchLastY = -1; this.touchMoved = false; }
+  }
+
+  /** ★★★决策 #905：玻璃触控形变——DOWN/MOVE：命中交互玻璃 ⇒ 起帧循环让 press 逼近 1。 */
+  private glassActive: boolean = false;
+  private glassPressDown(wpxVp: number, cpyVp: number): void {
+    try {
+      const d: number = vp2px(1);
+      const hit: number = glassTouch(wpxVp * d, cpyVp * d, 1);   // 内容物理 px
+      if (hit >= 0) { this.glassActive = true; this.startGlassPressLoop(); }
+    } catch (e) { /* 无玻璃/异常 ⇒ 忽略 */ }
+  }
+  private glassPressUp(): void {
+    this.glassActive = false;
+    this.startGlassPressLoop();   // 让 press 逼近 0（回弹）——step 收敛后自停
+  }
+  private glassTimer: number = -1;
+  private startGlassPressLoop(): void {
+    if (this.glassTimer !== -1) { return; }
+    // ★与 Shell 既有惯性驱动同款（`setInterval(16)`——本壳惯性即此法）；glassStep 收敛返回 0 即停。
+    this.glassTimer = setInterval(() => {
+      const target: number = this.glassActive ? 1 : 0;
+      const more: number = glassStep(target);
+      if (more === 0) { clearInterval(this.glassTimer); this.glassTimer = -1; }
+    }, 16);
   }
 
   /** 按**内容位移**（vp；正 = offset 增大）滚动一步，钳到 [0,maxScroll]。返回**实际位移**（钳制后）——

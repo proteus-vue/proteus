@@ -32,6 +32,10 @@ export const clearRoot: () => number;
 /** ★★★决策 #842：切换内容渲染模式：`"render-node"`（缺省，RenderNode 属性树）/ `"self-draw"`
  *  （进程内自绘位图 ⇒ 玻璃可与内容同帧）。返回 0。 */
 export const setContentMode: (mode: string, topInsetPx?: number) => number;
+/** ★★★决策 #905：玻璃触控形变——命中交互玻璃（x,y = 内容物理 px，down=1/0）；返回命中节点 id（-1 未命中）。 */
+export const glassTouch: (x: number, y: number, down: number) => number;
+/** ★★★决策 #905：glassStep(target) —— press 指数逼近 target；返 1 = 需继续排帧（驱动帧循环）。 */
+export const glassStep: (target: number) => number;
 /** ★矩阵 #5：平移根 RenderNode（yDesign 设计单位）——Proteus 渲染路径的滚动；返回错误码（0=OK） */
 export const scrollRoot: (yDesign: number) => number;
 /** ★矩阵 #7：在根节点装真触摸接收器（uitest uiInput 注入 → touch-samples.jsonl + PROTEUS_TOUCH）；

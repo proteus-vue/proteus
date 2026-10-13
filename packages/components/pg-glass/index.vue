@@ -45,6 +45,9 @@ const props = defineProps({
    *   `frosted`（模糊+颗粒）/ `vibrancy`（模糊+高饱和）。App 端折进 `glass.material` 由宿主按 id 派发管线；
    *   Web/MP 端按 id 映射 CSS 近似（无 GPU 材质时的诚实降级）。 */
   material: { type: String, default: 'glass' },
+  /** ★★★决策 #905：触控形变流动（对齐 Apple `UIGlassEffect.isInteractive`）——点按/拖动时玻璃在触点处
+   *   产生液态流动（App 端自绘真实形变；Web/MP 无 GPU warp ⇒ CSS `:active` 近似）。缺省 = 用预设。 */
+  interactive: { type: Boolean, default: undefined },
 })
 
 // ★无障碍优先：prefers-reduced-transparency 自动关玻璃（降级实色——铁律 4）
@@ -85,6 +88,7 @@ const resolved = computed(() =>
     noise: props.noise,
     fallback: props.fallback as never,
     material: props.material as never,
+    interactive: props.interactive as never,
   }),
 )
 
@@ -147,4 +151,8 @@ const showBorder = computed(() => resolved.value.border && level.value !== 'soli
 .pg-glass--border-top { box-shadow: inset 0 0.5px 0 0 rgba(255, 255, 255, 0.18); }
 .pg-glass--border-right { box-shadow: inset -0.5px 0 0 0 rgba(255, 255, 255, 0.18); }
 .pg-glass--solid, .pg-glass--flat { box-shadow: none; }
+/* ★★★决策 #905：触控形变流动（Web/MP 近似）。CSS 无 GPU warp（真实液态流动仅 App 自绘，
+   决策 #877 边界）——此处以 `:active` 的轻微下沉 + 提亮近似"被按压"的观感。 */
+.pg-glass--interactive { transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1), filter 160ms ease-out; }
+.pg-glass--interactive:active { transform: scale(0.98); filter: brightness(1.06); }
 </style>

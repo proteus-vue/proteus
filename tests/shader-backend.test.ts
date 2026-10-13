@@ -83,7 +83,7 @@ describe('★★G-62 ShaderBackend（材质着色器可插拔落地）', () => {
       expect(out.uniformStruct).toBe(m.uniformStruct)
       expect(out.uniformLayout).toEqual(m.uniformLayout)
     }
-    expect(material('glass')!.uniformSize).toBe(80)
+    expect(material('glass')!.uniformSize).toBe(96)   // ★#905：含 touch/press（80→96）
   })
 
   it('⑥ 后端能力声明如实（AGSL 版本门 = API 31）', () => {
@@ -112,8 +112,8 @@ describe('★★G-62 ShaderBackend（材质着色器可插拔落地）', () => {
     }
     // 目录里有四种材质
     expect(MATERIALS.map((m) => m.id).sort()).toEqual(['backdropBlur', 'frosted', 'glass', 'vibrancy'])
-    // uniform 尺寸：glass = 80（含折射/高光）；模糊族（backdropBlur/frosted/vibrancy）= 64
-    expect(material('glass')!.uniformSize).toBe(80)
+    // uniform 尺寸：glass = 96（含折射/高光 + ★#905 touch/press）；模糊族（backdropBlur/frosted/vibrancy）= 64
+    expect(material('glass')!.uniformSize).toBe(96)
     for (const id of ['backdropBlur', 'frosted', 'vibrancy']) {
       expect(material(id)!.uniformSize, `${id} uniformSize`).toBe(64)
     }

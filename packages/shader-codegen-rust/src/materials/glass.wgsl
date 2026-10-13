@@ -35,7 +35,12 @@ struct GlassUniforms {
     refract_depth: f32,       // 64 边缘峰值位移（设备像素）
     specular: f32,            // 68 镜面高光强度
     saturation: f32,          // 72 饱和（1=中性）
-    _pad: f32,                // 76 对齐到 16 字节（结构总长 80）
+    _pad: f32,                // 76 对齐到 16 字节
+    // ★★★决策 #905：**触控形变**（对齐 Apple `UIGlassEffect.isInteractive`）——点按/拖动时
+    //   玻璃在触点处产生液态流动（局部凸起 + 折射被"推"开 + 触点高光增强），松手回弹。
+    touch: vec2<f32>,         // 80 触点在**玻璃盒局部设备像素**（未激活 = (-1e6,-1e6)）
+    press: f32,               // 88 按压强度 0..1（host 逐帧 lerp 动画）
+    _pad2: f32,               // 92 对齐到 16 字节（结构总长 96）
 };
 @group(0) @binding(2) var<uniform> u: GlassUniforms;
 
@@ -79,7 +84,15 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     let slope = u1 / sqrt(max(1.0 - u1 * u1, 1e-4));
     var bend = circle_map(1.0 - ec) * u.refract_depth;
     bend = bend * smoothstep(1.0, 0.75, e);      // 内缘 C1 淡出（防环痕）
-    let sp = local + n * bend;                    // 向外采样（卷边界外内容进边缘）
+    // ★★★决策 #905：**触控形变流动**——触点周围局部凸起（Gaussian 钟），把背后内容沿
+    //   "离触点方向"推开（液态被按压的观感）；`press==0` 时 g*press=0 ⇒ 完全退化到既有折射（像素等价）。
+    //   R = 盒最小半边的 0.9（触点影响半径），位移量 ∝ refract_depth（与折射同一量纲）。
+    let hsmin = min(hs.x, hs.y);
+    let tR = max(hsmin * 0.9, 8.0);
+    let td = local - u.touch;
+    let tg = exp(-(dot(td, td)) / (2.0 * tR * tR)) * u.press;   // 0..1 触点钟形（含按压强度）
+    let push = max(hsmin * 0.28, 6.0) * tg;                     // 触点处峰位移（px）
+    let sp = local + n * bend + normalize(td + vec2<f32>(1e-4, 1e-4)) * push;
     let sp_uv = sp / u.size_px;
 
     // ③ 模糊按 e 键控（边缘锐、中心糊）；核最大半径 = blur*e*0.55
@@ -149,7 +162,7 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     let fres = f0 + (1.0 - f0) * pow(max(1.0 - cos_i, 0.0), 5.0);
     let facing = max(dot(n, normalize(u.light_dir)), 0.0);
     let bevel_mask = 1.0 - smoothstep(0.0, 0.35, e);   // 亮带仅在外缘
-    let rim = (pow(facing, 6.0) * u.specular + fres * 0.12) * bevel_mask;
+    let rim = (pow(facing, 6.0) * u.specular + fres * 0.12) * bevel_mask + tg * 0.30;   // ★#905：触点点亮（tg 已含 press）
     col = vec4<f32>(min(col.rgb + vec3<f32>(rim), vec3<f32>(1.0)), 1.0);
     return col;
 }

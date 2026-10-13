@@ -78,6 +78,7 @@ export function glassStyleFor(resolved: ResolvedGlass, level: GlassLevel): Recor
 export function glassClassList(resolved: ResolvedGlass, level: GlassLevel): string[] {
   const classes = ['pg-glass', `pg-glass--${resolved.preset}`, `pg-glass--${resolved.intensity}`, `pg-glass--${level}`]
   if (resolved.border) classes.push('pg-glass--border', `pg-glass--border-${resolved.borderSide}`)
+  if (resolved.interactive) classes.push('pg-glass--interactive')   // ★#905：Web/MP 触控形变近似（CSS :active）
   if (level === 'solid') classes.push('pg-glass--solid')
   if (level === 'flat') classes.push('pg-glass--flat')
   return classes

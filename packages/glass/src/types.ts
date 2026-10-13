@@ -43,6 +43,9 @@ export interface GlassProps {
   fallback?: GlassFallback
   /** ★★★决策 #900：材质选择（自绘 GPU 材质 id）。缺省/未知 ⇒ 'glass'（真折射）。 */
   material?: GlassMaterialId
+  /** ★★★决策 #905：触控形变流动（对齐 Apple `UIGlassEffect.isInteractive`）——点按/拖动时玻璃
+   *   在触点处产生液态流动，松手回弹。缺省 = 用预设（仅 floating 预设为 true）。 */
+  interactive?: boolean
 }
 
 /** ★#900：材质 id（与 `@proteus-vue/shader` 材质目录同源——宿主按 id 派发管线）。 */
@@ -87,7 +90,7 @@ export interface ResolvedGlass {
   borderSide: GlassBorderSide
   /** 噪点强度 */
   noise: number
-  /** 是否响应形变（L2） */
+  /** 是否响应形变（L2 · ★#905：触控时玻璃液态流动；缺省随预设） */
   interactive: boolean
   /** 降级实色 */
   solid: string

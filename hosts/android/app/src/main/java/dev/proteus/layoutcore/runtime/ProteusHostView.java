@@ -2489,6 +2489,8 @@ public class ProteusHostView extends ViewGroup {
             // ★★触摸即刹停惯性（平台标准行为：上手就停）——不刹会"拖拽被旧抛滑顶掉"：
             //   每帧 `stepInertia` 会把 scrollX 拉回抛滑时间线，拖动量被静默吞掉。
             if (flingScroller != null && !flingScroller.isFinished()) flingScroller.forceFinished(true);
+            // ★★★决策 #905：玻璃触控形变——命中交互玻璃 ⇒ 记触点（盒局部 px）+ 目标 press=1，逐帧重绘。
+            glassInteractHit(ev.getX(), ev.getY(), true);
             // ★DOWN 时刻做命中 → 这一整个手势都归它（与平台语义一致）
             dispatchHit(ev.getX(), ev.getY());
             gestureTarget = lastHitTarget;
@@ -2533,6 +2535,11 @@ public class ProteusHostView extends ViewGroup {
             clearPress();
             endFollow();   // ★S3：抬指 ⇒ 松手（回弹/吸附在内核）
             endField();    // ★场跟手：抬指 ⇒ 叶片回声明基态（场消失 = 静止网格）
+            glassInteractRelease();   // ★#905：松手 ⇒ press 目标 0（回弹）
+        }
+        // ★#905：拖动跟随——MOVE 时更新触点（玻璃流动跟着手指走，逐帧重绘）
+        if (action == android.view.MotionEvent.ACTION_MOVE) {
+            glassInteractHit(ev.getX(), ev.getY(), true);
         }
         // ★交给平台识别器判定 tap / longpress / fling / scroll（不自研阈值与时间窗）
         detector().onTouchEvent(ev);
@@ -3113,6 +3120,17 @@ public class ProteusHostView extends ViewGroup {
             stepInertia();
             postInvalidateOnAnimation();
         }
+        // ★★★决策 #905：玻璃触控形变——press 逐帧指数逼近目标；未收敛时继续排帧（自持，收敛即停）。
+        if (glassInteractNodeId >= 0) {
+            if (Math.abs(glassPress - glassPressTarget) > 0.005f) {
+                glassPress += (glassPressTarget - glassPress) * 0.28f;
+                postInvalidateOnAnimation();
+            } else if (glassPressTarget == 0f) {
+                glassPress = 0f; glassInteractNodeId = -1;   // 回弹完 ⇒ 收工
+            } else {
+                glassPress = glassPressTarget;
+            }
+        }
         super.onDraw(canvas);
         ensurePicture();   // ★首帧补建（setCmds 早于布局时）
         // ★★★玻璃材质（决策 #818）：本屏有玻璃节点 ⇒ 先捕获"无玻璃面"的内容帧作背后内容采样源。
@@ -3270,6 +3288,10 @@ public class ProteusHostView extends ViewGroup {
     /** `glassBackdrop` 在其覆盖的**屏幕区域**中的左上角（屏幕坐标）——玻璃采样按它把"屏幕坐标"折算到位图坐标。 */
     private float glassBackdropX = 0f, glassBackdropY = 0f;
     private boolean capturingGlass = false;
+    /** ★★★决策 #905：玻璃触控形变——活动交互玻璃 + 触点（盒局部 px）+ press（逐帧 lerp 动画）。 */
+    private int glassInteractNodeId = -1;
+    private float glassTouchLocalX = -1e6f, glassTouchLocalY = -1e6f;
+    private float glassPress = 0f, glassPressTarget = 0f;
 
     /** ★★★#837 捕获优化：只栅格化**玻璃节点并集包围盒（+外扩 pad）**，不再整屏（真机实测整屏捕获 ~1.5–2ms）。
      *  ★pad = 边缘折射位移 + 模糊核最大采样半径 + 余量（覆盖着色器会采到的所有背景像素）。
@@ -3357,7 +3379,11 @@ public class ProteusHostView extends ViewGroup {
                     android.graphics.Path.Direction.CW);
             canvas.clipPath(clip);
         }
-        android.graphics.Paint p = GlassMaterial.buildPaint(nodeId, glassBackdrop, c.x, c.y, glassBackdropX, glassBackdropY, c.w, c.h, spec.radius, spec);
+        android.graphics.Paint p = GlassMaterial.buildPaint(nodeId, glassBackdrop, c.x, c.y, glassBackdropX, glassBackdropY, c.w, c.h, spec.radius, spec,
+                // ★★★决策 #905：触控形变——交互玻璃才传触点（盒局部 px）+ press；其余恒 (-1e6)（无影响）。
+                (spec.interactive && glassInteractNodeId == nodeId) ? glassTouchLocalX : -1e6f,
+                (spec.interactive && glassInteractNodeId == nodeId) ? glassTouchLocalY : -1e6f,
+                (spec.interactive && glassInteractNodeId == nodeId) ? glassPress : 0f);
         if (p != null) {
             canvas.drawRect(c.x, c.y, c.x + c.w, c.y + c.h, p);
         } else {
@@ -3369,6 +3395,32 @@ public class ProteusHostView extends ViewGroup {
         }
         canvas.restoreToCount(save);
     }
+
+    /** ★★★决策 #905：玻璃触控形变——命中交互玻璃 ⇒ 记触点（盒局部 px）+ 目标 press=1；逐帧重绘。
+     *  `x,y` = 视图内坐标（px）；命中盒另加滚动偏移折算到**内容坐标**（玻璃盒 c.x/c.y 是内容坐标）。 */
+    private void glassInteractHit(float x, float y, boolean down) {
+        final List<Cmd> list = cmds;
+        final int[] ids = cmdNodeIds;
+        if (list == null || ids == null) return;
+        final boolean scrolled = offsetScroll ? (scrollX != 0 || scrollY != 0) : (!horizontalScroll && (scrollX != 0 || scrollY != 0));
+        final float cx = x + (scrolled ? scrollX : 0), cy = y + (scrolled ? scrollY : 0);
+        for (int i = 0; i < list.size() && i < ids.length; i++) {
+            GlassMaterial.Spec g = glassByNode.get(ids[i]);
+            if (g == null || !g.interactive) continue;
+            final Cmd c = list.get(i);
+            if (cx >= c.x && cx <= c.x + c.w && cy >= c.y && cy <= c.y + c.h) {
+                glassInteractNodeId = ids[i];
+                glassTouchLocalX = cx - c.x;    // 盒局部 px
+                glassTouchLocalY = cy - c.y;
+                glassPressTarget = 1f;
+                if (glassPress < 0.01f) glassPress = 0.01f;   // 立即起步（避免首帧无变化）
+                invalidate();
+                return;
+            }
+        }
+    }
+
+    private void glassInteractRelease() { glassPressTarget = 0f; invalidate(); }
 
     /** ★★★玻璃独立绘制遍（实时，不进显示列表）：遍历本屏 cmds，对带 glass 的节点画玻璃面（背后内容采样）。 */
     private void drawGlassPass(Canvas canvas) {
