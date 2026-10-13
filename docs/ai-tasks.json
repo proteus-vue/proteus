@@ -168,7 +168,28 @@
     },
     {
       "id": "T-app-bridge-refs",
-      "title": "生成器 refs（hook→桥方法引用）抽取改锚定式 + 修 mini-program App 端漏判（含 Web/MP 列复核）",
+      "title": "生成器 refs（hook→桥方法引用）抽取改锚定式 + 修 mini-program/webassembly App 端漏判（含 Web/MP 列复核）",
+      "type": "end-alignment",
+      "status": "done",
+      "owner": "session:wb-hookrefs",
+      "scope": [
+        "website/scripts/gen-content.mjs",
+        "website/scripts/gen-content-en.mjs",
+        "website/scripts/lib/**",
+        "website/content/capabilities/**",
+        "website/en/capabilities/**",
+        "tests/gen-content-hook-refs.test.ts",
+        "docs/project-memory-archive/decisions.md"
+      ],
+      "decision": 889,
+      "verification": "cd website && npx tsx scripts/gen-content.mjs --check",
+      "branch": null,
+      "related": ["T-app-bridge-contract"],
+      "note": "承接 T-app-bridge-contract 的**独立验证发现**（异会话子代理）：mini-program（C47）应判 App ✅ 却仍 🟡。★根因两条（均实测）：① 切片按「下一个 use/set 键」截断 ⇒ 抽到 146 个「键」（真顶层成员 94，独立 AST 复算一致），多余 27 个是句柄内 setFillStyle/setSize 之类嵌套成员与桥实现体字段，且**最后一个键**切片吃进 capability-bridges.ts（bridge. 出现 80+ 次）；② 正则 /bridge\\.(\\w+)\\(/ 只认直接调用 ⇒ 漏 `bridge.getCalendar!()`（非空断言）、`const nav = bridge.navigateMiniProgram`（先取后调）。修法：原语收一份到 lib/ts-source-scan.mjs（遮罩/配对/定函数体/定顶层 return 对象/切顶层成员**取值片段**），lib/hook-bridge-refs.mjs 锚定式取每成员取值片段内的 bridge.<名>（不论是否调用）；桥接收者名由**形参表**推导；契约破坏或合计 0 引用 ⇒ 硬失败。交付：6 页重生成（mini-program/webassembly iOS+Android 🟡→✅；auth Web ✅→⚠️ + 新增错误码表）+ 新测试 7 用例（含破坏性 3 + 死循环回归锁）+ 两个大文件净值下钉（2815 / 2215）。★独立验证（异会话 AST 复算）refs 零差异、7 条断言全成立；抓出 1 处同族新缺口 ⇒ 已立项 T-bridge-ext-keys。★本单 commit 为本地提交，**推送待用户批准**（故 check:pushed 暂红属预期）。"
+    },
+    {
+      "id": "T-bridge-ext-keys",
+      "title": "wxKeys/webKeys 纳入声明式 bridge-ext 成员（修 keep-screen-on / document-preview 的 Web+MP 误标 ⚠️）",
       "type": "end-alignment",
       "status": "planned",
       "owner": null,
@@ -176,13 +197,14 @@
         "website/scripts/gen-content.mjs",
         "website/scripts/lib/**",
         "website/content/capabilities/**",
-        "website/en/capabilities/**"
+        "website/en/capabilities/**",
+        "tests/gen-content-hook-refs.test.ts"
       ],
       "decision": null,
       "verification": "cd website && npx tsx scripts/gen-content.mjs --check",
       "branch": null,
-      "related": ["T-app-bridge-contract"],
-      "note": "承接 T-app-bridge-contract 的**独立验证发现**（异会话子代理）：mini-program（C47）应判 App ✅ 却仍 🟡。★另一根因：生成器抽 refs 用 /bridge\\.(\\w+)\\(/（**只认直接调用**），而 capability.ts 的 useMiniProgram 写的是 `if(!bridge.navigateMiniProgram) … const nav = bridge.navigateMiniProgram; nav(options)` ⇒ 从不出现 `bridge.x(`。实测放宽该正则会波及 5 个 hook（useCalendarAPI / useCameraContext / useRecorder / useMiniProgram / useWebAssembly），且 useWebAssembly 的切片会吞进整个桥面（80+ 名）⇒ Web/MP 列会被误降级。**故不得盲放宽**：需同时复核 Web/MP 列 + 破坏性验证。"
+      "related": ["T-app-bridge-refs"],
+      "note": "承接 T-app-bridge-refs 的**独立验证发现**（异会话 AST 复算，refs 逐 hook 零差异时顺带抓出）。★根因：gen-content.mjs 的 extractFnKeys 只扫 `function wxBridge` / `function webBridge` 的**函数体**，而声明式桥成员在 packages/api/src/generated/bridge-ext.ts（`setKeepScreenOn:17/44`、`openDocument:27/59`），经 capability.ts:6（import mpBridgeExt/webBridgeExt）+ capability.ts:31-32（`...mpBridgeExt(...)` / `...webBridgeExt(...)`）**真实并入运行时 bridge** ⇒ MP/Web 均**确实可用**。★错误后果（与 #884/#889 同型：真值支持却被页面宣称「桥未提供」）：keep-screen-on(C83) / document-preview(C84) 两页的 Web+MP 四格 × zh/en 共 8 格被错标 ⚠️（应为 ✅）。★修法建议：桥成员枚举也走锚定式——把 wxBridge/webBridge 的函数体 + bridge-ext 的工厂返回对象**并集**（`lib/ts-source-scan.mjs` 已备原语）。★注意：改 wxKeys/webKeys 会**波及更多页**（凡 refs 命中 bridge-ext 成员的能力），须先跑 `--check` 看漂移面 + 逐页确认是否「由 ⚠️ 转 ✅ 且确有声明层依据」，不可为转绿而转绿。"
     }
   ]
 }

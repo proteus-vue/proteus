@@ -88,11 +88,20 @@ subscribe(cb: (token: string | null) => void): () => void
 | `token` | `string \| null` | Yes | Current token (null when not logged in; reactive — bind directly in the UI) |
 | `isAuthenticated` | `boolean` | Yes | Whether the user is logged in (true when the token is non-empty) |
 
+## Error codes
+
+| code | Doc |
+|---|---|
+| `login.unsupported` | wx.login is unavailable on this platform (useAuth login degraded to Err) |
+| `login.failed` | wx.login failed |
+
+> Platform unsupported → the `*.unsupported` family; business branches on `code`, no try/catch needed.
+
 ## Compat rollout
 
 | Target | Status | Notes |
 |---|---|---|
-| Web SPA | ✅ | vue-dom · webBridge implementation (direct platform API) |
+| Web SPA | ⚠️ | vue-dom · webBridge missing login → explicit Err degradation (no direct platform API) |
 | WeChat Mini Program | ✅ | skyline (WebView fallback) · wx bridge → (wx-native equivalent; exact mapping in the zh version) |
 | Headless (SSR / testing) | ✅ | headless · mock bridge injected (testing / SSR tier) |
 | iOS native | 🟡 | native-ios (UIKit + CoreAnimation) · render core shipped — capability bridge not wired |
