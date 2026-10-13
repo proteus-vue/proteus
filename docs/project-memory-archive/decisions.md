@@ -3833,6 +3833,14 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **⑥ ★教训**：**「材质只作用于背后」是玻璃合成的一般语义**（iOS `UIVisualEffectView` / CSS `backdrop-filter` 一致）——宿主若把**自身子树**也录进背景，就把"材质"错误地施加到了自身内容上。★三端同源同 bug（都录了自身子树），**证明"合成顺序"这类不变量必须一次定死**（本轮补齐：背景=背后∪排除自身，自身内容=清晰盖于面上）。
 **⑦ 边界**：鸿蒙**仅自绘路径**（dev 演示场景）适用；superapp 走 RS 树不画玻璃 = #842 未到期项，**单列**（用户已确认本轮不做）。Android `nodeParent` 目前仅 Vapor 路径填充。
 
+894. **★superapp「我的」页加「液态玻璃舞台」——玻璃背后放结构化彩色内容，让折射/淡模糊显形**（2026-10-13）：
+**① 用户反馈**：「玻璃下面没有任何内容采样，玻璃效果看不出来了……加点儿内容把玻璃的边缘映射和内容淡淡的模糊显示出来，现在看着和普通卡片区别不大了」。
+**② 根因**：演示载体 `superapp/pages/mine.vue` 的玻璃卡**背后是纯灰底**（无内容可采样）+ 玻璃材质在浅背景**自适应推白**（`adapt`）⇒ 玻璃≈普通浅色卡片，折射/模糊无信号。
+**③ 修（纯业务示例，`superapp/pages/mine.vue`）**：加 `.mine-glass-stage`（`position:relative` 舞台）内含 **`.mine-glass-canvas`**（背后结构化彩色内容：**实色蓝块 `.mine-glass-canvas__blk` 64% 宽** + **青绿圆点 `.mine-glass-canvas__dot` 56px 圆**）+ 玻璃卡 `pg-glass`（**绝对定位浮于画布之上**）——玻璃压过**蓝块/白区边界 + 圆点** ⇒ **边缘折射带 + 内容淡模糊**显形。玻璃自身标题（`.mine-glass-t`）**加粗白色、保持清晰**（决策 #893：材质只糊背后）。
+**④ ★平台约束（决定实现形态）**：App 编译器**不支持 `background: linear-gradient`**（诊断丢弃，渐变须走引擎 `fill-gradient` 通道）⇒ 用**实色**；**静态内联 `z-index` 被 LY001 拦**（层级控制手段）⇒ 靠**定位元素树序**叠放（canvas 先于玻璃卡声明 ⇒ 玻璃后绘于其上）。
+**⑤ 判据**：真机 **iOS / Android 并排一致**——玻璃卡跨蓝/白边界的**折射亮带**可见 + 青绿圆点在玻璃后**淡模糊透出**（此前玻璃卡区域 = 纯白磨砂无信号）。`check:app-screen-content` / `check:glass-audit` / `check:glass-capability` 全绿。
+**⑥ 边界**：`app-screen-content.generated.ts` 与 `superapp/dist/**` 是构建产物（gitignore），改 `mine.vue` 后由各端构建（`build-batch`/`build-app-stack` → `gen-app-screen-content.mjs`）**自动重生成**，无需手改产物。
+
 
 
 
