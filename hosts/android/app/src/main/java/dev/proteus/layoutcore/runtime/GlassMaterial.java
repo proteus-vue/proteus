@@ -40,13 +40,20 @@ public final class GlassMaterial {
         public final float radius;
         public final boolean border;
         public final float saturation;
+        /** ★★★决策 #900：材质 id（`glass`/`backdropBlur`/`frosted`/`vibrancy`）——按此选 AGSL 源 + uniform。 */
+        public final String material;
 
         public Spec(float blur, int tint, float radius, boolean border, float saturation) {
+            this(blur, tint, radius, border, saturation, "glass");
+        }
+
+        public Spec(float blur, int tint, float radius, boolean border, float saturation, String material) {
             this.blur = blur;
             this.tint = tint;
             this.radius = radius;
             this.border = border;
             this.saturation = saturation;
+            this.material = (material == null || !GeneratedMaterials.MATERIALS.containsKey(material)) ? "glass" : material;
         }
     }
 
@@ -75,11 +82,16 @@ public final class GlassMaterial {
         }
         try {
             // ★★★只为「编译」缓存（源码静态）：每节点一份 RuntimeShader，跨帧复用 ⇒ 不再每帧重编（滚动不闪）。
-            RuntimeShader sh = SHADER_CACHE.get(nodeId);
+            //   ★#900：缓存键 = nodeId + 材质（同一节点换材质需重建，正常情况下节点材质固定）。
+            final GeneratedMaterials.Def def = GeneratedMaterials.MATERIALS.get(spec.material);
+            final String fragSrc = def != null ? def.frag : GeneratedMaterials.GLASS_AGSL;
+            final boolean isGlass = def == null || "GlassUniforms".equals(def.uniformStruct);
+            final int shaderKey = nodeId * 8 + (isGlass ? 0 : 1);
+            RuntimeShader sh = SHADER_CACHE.get(shaderKey);
             if (sh == null) {
-                sh = new RuntimeShader(GeneratedMaterials.GLASS_AGSL);
-                SHADER_CACHE.put(nodeId, sh);
-                android.util.Log.i("proteus-glass", "buildPaint: 编译 AGSL（一次，节点 " + nodeId + "，真源=WGSL）");
+                sh = new RuntimeShader(fragSrc);
+                SHADER_CACHE.put(shaderKey, sh);
+                android.util.Log.i("proteus-glass", "buildPaint: 编译 AGSL（一次，节点 " + nodeId + "，材质 " + spec.material + "，真源=WGSL）");
             }
             // 每帧只更新输入纹理 + uniform（廉价）
             sh.setInputShader("backdrop_tex", new BitmapShader(backdrop, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP));
@@ -95,14 +107,18 @@ public final class GlassMaterial {
             sh.setFloatUniform("origin", ox, oy);
             sh.setFloatUniform("tex_scale", w, h);
             sh.setFloatUniform("tex_bias", ox - bdX, oy - bdY);
-            sh.setFloatUniform("light_dir", -0.35f, -0.94f);
-            sh.setFloatUniform("radius", radius);
             sh.setFloatUniform("blur", spec.blur);
-            // ★边缘峰值位移：调研守恒 refractionAmount ≈ 2×倒角带宽；带宽 in-kernel = min(size)*0.22
-            sh.setFloatUniform("refract_depth", Math.min(w, h) * 0.22f);
-            sh.setFloatUniform("specular", 0.18f);
             sh.setFloatUniform("saturation", spec.saturation);
-            sh.setFloatUniform("_pad", 0f);
+            // ★#900：玻璃族专有 uniform（倒角厚板模型）；模糊族（backdropBlur/frosted/vibrancy）**无**这些键
+            //   ⇒ 不设（设了会抛"未知 uniform"）。判别键 = 材质字典的 uniformStruct。
+            if (isGlass) {
+                sh.setFloatUniform("light_dir", -0.35f, -0.94f);
+                sh.setFloatUniform("radius", radius);
+                // ★边缘峰值位移：调研守恒 refractionAmount ≈ 2×倒角带宽；带宽 in-kernel = min(size)*0.22
+                sh.setFloatUniform("refract_depth", Math.min(w, h) * 0.22f);
+                sh.setFloatUniform("specular", 0.18f);
+                sh.setFloatUniform("_pad", 0f);
+            }
 
             Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
             p.setShader(sh);

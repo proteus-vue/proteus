@@ -53,8 +53,17 @@ export function glassResolver(props: Record<string, string | undefined>): Record
     borderSide: sideMap[r.borderSide ?? 'all'] ?? 'all',
     noise: r.noise,
     saturation: 1.0,
+    // ★★★决策 #900：材质选择——`<pg-glass material="...">` → 折进 `glass.material`（宿主按 id 派发管线）。
+    //   缺省/未知 ⇒ 'glass'（保持既有行为；合法集 = 材质目录 id，见 `@proteus-vue/shader` catalog）。
+    material: materialOf(props.material),
     // ★level 是**运行期能力决策**（系统材质 vs 自绘），由宿主据自身 OS 能力定，非构建期 —— 此处不下发。
   }
+}
+
+/** ★#900：材质 id 归一——已知材质白名单；缺省/未知 ⇒ 'glass'（向后兼容，不静默给未知 id）。 */
+const KNOWN_MATERIALS = new Set(['glass', 'backdropBlur', 'frosted', 'vibrancy'])
+function materialOf(v: string | undefined): string {
+  return v && KNOWN_MATERIALS.has(v) ? v : 'glass'
 }
 
 /** CSS 颜色 → 内核可吃的 `#RRGGBBAA`（rgba(...) / #rgb / #rrggbb / #rrggbbaa）。不可解析 ⇒ 透明黑。 */

@@ -80,6 +80,42 @@
       "note": "packages/cli/src/glass-audit.ts 已存在，需接 CI + 校验三级降级。"
     },
     {
+      "id": "T-material-dispatch",
+      "title": "材质派发 + 材质扩容（backdropBlur 接活 · frosted/vibrancy 新增）",
+      "type": "end-alignment",
+      "status": "done",
+      "owner": null,
+      "scope": [
+        "packages/shader-codegen-rust/src/materials/**",
+        "packages/shader/src/**",
+        "packages/glass/src/**",
+        "hosts/ios/**",
+        "hosts/android/**",
+        "hosts/harmony/**",
+        "scripts/gen-shaders.mjs"
+      ],
+      "decision": 900,
+      "verification": "pnpm check:shader-capability && pnpm check:shader-generated && npx vitest run tests/shader-backend.test.ts",
+      "branch": null,
+      "related": [],
+      "note": "宿主按 style.glass.material 派发管线（gen-shaders 出材质字典；三端各建每材质管线）；<pg-glass material=\"...\"> 折入；backdropBlur 从「生成未消费」接活；新增 frosted（颗粒）/vibrancy（高饱和）。真机 iOS/Android 四材质并排取证；鸿蒙单材质取证。"
+    },
+    {
+      "id": "T-harmony-selfdraw-scroll",
+      "title": "鸿蒙自绘 scrollRoot（内容溢出 + 滚动 offset>0）整屏空白",
+      "type": "end-alignment",
+      "status": "planned",
+      "owner": null,
+      "scope": [
+        "hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_render.cpp"
+      ],
+      "decision": null,
+      "verification": "真机：superapp 内容溢出屏（如 index 屏）+ 滚动 ⇒ 内容正常显示（非空白）",
+      "branch": null,
+      "related": [],
+      "note": "【Handoff】做到哪：#900 端到端验证时发现——鸿蒙 superapp 若内容溢出视口且发生滚动（scrollRoot offset>0），整屏渲染为空白。已取证：① 内容不溢出/offset=0 ⇒ 正常（#896 基线恰为此态，故未暴露）；② 全部鸿蒙 cpp 还原 HEAD 亦然 ⇒ **pre-existing，非 #900 引入**。已改：无（仅定位）。未做：修复。下一步：查 drawSelfContentCore 的滚动位移（n.y - scrollY）与画布裁剪/玻璃背板捕获在 offset>0 时的坐标。坑：玻璃背板捕获区 cy=n.y-scrollY 会变负。判据：溢出屏滚动后内容可见。"
+    },
+    {
       "id": "T-no-unchecked-indexed-access",
       "title": "tsconfig noUncheckedIndexedAccess 棘轮式迁移",
       "type": "governance",
@@ -205,6 +241,60 @@
       "branch": null,
       "related": ["T-app-bridge-refs"],
       "note": "【done · 决策 #895】承接 T-app-bridge-refs 的独立验证发现（异会话 AST 复算 refs 时顺带抓出）。★根因：gen-content.mjs 的 extractFnKeys 只扫 `function wxBridge`/`function webBridge` 的**函数体**，而运行时桥 = **两源并集**（capability.ts:31-32：`{...wxBridge, ...mpBridgeExt, ...appCaps}` / `{...webBridge, ...webBridgeExt, ...appCaps}`）⇒ 声明式桥成员（generated/bridge-ext.ts）漏抽 ⇒ keep-screen-on(C83)/document-preview(C84) 的 Web+MP × zh/en **8 格**错标 ⚠️（真值 ✅）。★修：① 原语收一份 `ts-source-scan.mjs::returnObjectMembers`（app-bridge-keys 改用它 84→69 行）；② 新增第三份契约模块 `lib/bridge-keys.mjs`（手写∪声明式 + 与 GENERATED_BRIDGE_COUNT 交叉校验 + 硬失败）；③ 删 extractFnKeys（2815→2812）。★零漂移：锚定式与旧行口径在 89/71 上逐名一致 ⇒ 落页**精确 4 页**各 2 行。★验证：6 门禁绿（check:content/bridge-ext/en-drift/doc-links/ai-tasks/script-compile）+ 三份契约测试 20/20 + 破坏性 2 条 + 异会话 TS-AST 独立复算（168 页零不一致、零谎报、零误降级）。★独立验证抓出的两处盲区本单**当场收紧**：① 测试「逐名一致」实为单向子集 ⇒ 改双向锁；② GENERATED_BRIDGE_COUNT=0 时整段跳过解析 ⇒ 去掉短路（补两条测试）。★未顺手迁移：`extractBridgeBodies`（错误码提取）仍是旧行匹配口径（取值切片须回原文取，属另一契约）。★未推送/未发布：等用户批准。"
+    },
+    {
+      "id": "T-app-runtime-capabilities",
+      "title": "「App 三端宿主运行时能力对齐」专项：84 能力 × iOS/Android/鸿蒙（255 格 🟡）逐项落地到宿主壳原生实现",
+      "type": "end-alignment",
+      "status": "planned",
+      "owner": null,
+      "scope": [
+        "packages/api/src/**",
+        "packages/render-backend/src/host-invoke-contract.ts",
+        "packages/cli/templates-host/**",
+        "hosts/ios/**",
+        "hosts/android/**",
+        "hosts/harmony/**",
+        "scripts/check-host-invoke-contract.mjs",
+        "scripts/check-host-variant-parity.mjs",
+        "tests/**"
+      ],
+      "decision": null,
+      "verification": "pnpm check:host-invoke-contract && pnpm check:capability-golden && pnpm check:host-variant-parity && 每项能力一条真机判据（PROTEUS_EXIT_AFTER_REPORT=1 自退，零轮询）",
+      "branch": null,
+      "related": [
+        "T-app-fetch"
+      ],
+      "note": "【★本文为 2026-10-13 误回滚后的重建（依据 = 决策 #899 + 当日实施记录；措辞可能与原文略有差异，事实一致）】【专项立项（决策 #899 · 2026-10-13 · 用户指定「端能力对齐先从最开始的 useFetch 开始，立项端能力对齐的 App 端专项，然后按照清单逐个落地到 App 三端宿主运行时」）】① **现状取证（四层逐层核实，均为一手证据）**：App 三端共 **255 格 🟡**（iOS/Android 各 81 + 鸿蒙 84）；已在位真接线仅 **11 项**（`host.context` / `update.*` / `window.setSize` / `worker.*` / `idle.*` / `preload.assets` / `extension.load` / `mini-program.navigate` / `navigation-guard`）——见 `docs/native-capability-crossend-progress.md` §3。② **落地链路四层**（每项能力都须齐）：① 宿主壳原生实现（Swift / Java / ArkTS）② 契约登记（`packages/render-backend/src/host-invoke-contract.ts` 的 `HOST_CAPABILITY_METHODS`，现 18 项）③ JS 桥（`packages/api/src/capability-app.ts`：`APP_NATIVE_METHODS` + `createAppNativeCapabilities`，现 13 方法）④ Hook（`capability.ts` 的 `createCapabilityHooks`——多数已在，缺的是桥那一层）。③ **纪律（本仓既有精神，逐项适用）**：每项能力**先建真机可观察判据再写实现**（`PROTEUS_EXIT_AFTER_REPORT=1` 报告落盘即进程自退 ⇒ 返回即完成信号，零轮询/零 sleep）；宿主未实现必须仍是 `*.unsupported`（**不伪造成功**）；三端语义差异如实写进页面说明，**不粉饰为「三端一致」**。④ **首单 = `T-app-fetch`**（两任务 `related` 互指）；首单兼作后续 83 项的**落地样板**。⑤ ★**#900（2026-10-13）后通道形态已定型**：App 端 invoke 走**二进制线格式**（去程 `PINV` / 回程 `PRSP` 帧，见 `packages/api/src/invoke-wire.ts`）——后续 83 项须沿用该形态（宿主有 `invokeBytes` ⇒ 字节直传；否则**回落** JSON，降级不静默）。"
+    },
+    {
+      "id": "T-app-fetch",
+      "title": "App 端 C26 useFetch 落地：三端宿主 HTTP 实现 + 契约/桥/门禁 + 真机判据（专项首单 · 样板）",
+      "type": "end-alignment",
+      "status": "in_progress",
+      "owner": "session:wb-appfetch",
+      "scope": [
+        "packages/api/src/capability-app.ts",
+        "packages/api/src/capability-invoke.ts",
+        "packages/api/src/invoke-wire.ts",
+        "packages/api/src/capability-types.ts",
+        "packages/render-backend/src/host-invoke-contract.ts",
+        "hosts/ios/**",
+        "hosts/android/**",
+        "hosts/harmony/**",
+        "scripts/check-host-invoke-contract.mjs",
+        "scripts/check-host-variant-parity.mjs",
+        "packages/cli/templates-host/**",
+        "packages/shared/src/binary/wire.ts",
+        "tests/**"
+      ],
+      "decision": null,
+      "verification": "pnpm check:host-invoke-contract && npx vitest run tests/capability-app-fetch.test.ts && 真机判据：App 启动后 useFetch 请求真实 URL 并把 statusCode/载荷写入报告（PROTEUS_EXIT_AFTER_REPORT=1 自退）",
+      "branch": null,
+      "related": [
+        "T-app-runtime-capabilities"
+      ],
+      "note": "【★本文为 2026-10-13 误回滚后的重建（依据 = 决策 #899 + 当日实施记录；措辞可能与原文略有差异，事实一致）】【专项 T-app-runtime-capabilities 的首单 · 兼作后续 83 项的落地样板】选它的理由（用户指定 + 客观）：① 它是**最基础的能力**（几乎所有 App 都要网络）；② 它同时压到三条最难的形态——异步 vs 同步 invoke、平台权限、三端原生 HTTP 各自的惯用法 ⇒ 样板价值最高。★现有事实（2026-10-13 取证）：Hook 侧已就位（`capability.ts:266` `useFetch` → `bridge.request`，缺桥即 `fetch.unsupported`）；MP/Web 桥已就位（`capability-bridges.ts:500` `wx.request` / `:2675` `fetch`）；**App 侧三层全缺**——`capability-app.ts` 的 `APP_NATIVE_METHODS` 无 `request`、`createAppNativeCapabilities` 无 `request`、`host-invoke-contract.ts` 无网络方法、`hosts/` 下搜 `URLSession|HttpURLConnection|@ohos.net` **零命中**（网络能力从未在 App 三端实现过）。★落地要点：`request` 桥签名 = `RequestConfig → RequestResponse<unknown>`（`capability-types.ts:2752`），须与 `wx.request` 的取数语义（载荷放 `.data`、状态码放 `.status`）对齐，否则 `useFetch` 的 `r.data` 解构会分叉。★诚实边界：宿主未实现 ⇒ 必须仍是 `fetch.unsupported`（不许伪造成功）；超时/取消/重定向语义三端各自如实说明，不粉饰为「三端一致」。★**用户已拍板的三条决策（2026-10-13）**：(a) **异步回推通道**（不做同步阻塞）；(b) **debug + release 都加 INTERNET**（同步调整 `check:host-variant-parity` 判据）；(c) **三端全做**（iOS + Android + 鸿蒙）。★**落地依据 = 仓库既有规格（非新发明）**：G-39 `docs/proteus-host-runtime-plan/04-native-bridge.md` 已定义统一原生桥——`invokeNative(name, args): Promise<any>`（**统一异步，即使 Native 同步**）+ `registerNativeHandler(name, cb)`；序列化协议 `{reqId,name,args,timeout}` → `{reqId,ok,data,error}`；★线程纪律「**Native → JS 回调必须切回 JS 线程；禁止在网络线程直接调 JS**」；错误模型 `unsupported|permission.denied|timeout|cancelled`。`02-responsibility-matrix.md` 另定「网络请求 = CapabilityBackend → useFetch → L2 → L4（**网络线程**）」。★**会话共享 = G-46**（用户点名一并实现）：`docs/proteus-resource-pool-plan/` 的 L1 登录态（Cookie/Token/SSO）/ L2 请求队列 / L3 缓存按 origin 分桶；三端 Backend 机制**已在 03-spi.md 指定**——Android `CookieManager` + OkHttp CookieJar（`flush()` 同步）、iOS `WKHTTPCookieStore` + **`WKProcessPool` 单例**、鸿蒙 `WebCookieManager` + **Header 注入**（优于 Cookie）；判据 `CMP089–096`（HttpOnly 返回 null / 登出级联清空 / revoke 后 null / SSO 防重放）。★本单 range：先打通 **C26 useFetch 的异步通道 + 三端 HTTP + 会话共享机制**并给真机判据；ResourcePool 完整门面（缓存/拦截器/能力网关）留后续子单。★【已实施（2026-10-13 · 决策 #899 批）】(a) 新建 `packages/api/src/capability-invoke.ts`（**零 import** 的通道层）：同步 `invokeHost` + **异步 `invokeHostAsync`**（派发带 `__reqId`，壳回 `{pending:true}` 后经 `__proteusHostResolve` 回推；老壳不认识 `__reqId` 照旧同步返回 ⇒ **零回归**）；(b) `capability-app.ts` 新增 `httpRequest` 桥方法 + `request()`（`invokeHostAsync` → `{data,status,headers,config}`）；(c) 契约 `HOST_CAPABILITY_METHODS` 登记 `http.request`；(d) Android `AndroidManifest.xml` + 模板**双变体**加 `INTERNET`，并把 `check:host-variant-parity` 判据③ 由「release 不得含」**反转为「须含」**；(e) 测试 `tests/capability-app-fetch.test.ts` 11 用例全绿。★★【#900 · 二进制线格式通道（2026-10-13 用户插入指令 · 原话「跨语言数据通道不要用 JSON 字符串，性能损耗太大，走纯二进制方向」）】取证既有通道（`applyOpsBytes` 字节直传 / `blob.rs` PLYT / `rects_bin.rs` PRES / `onGesture` 函数名回调 / 门禁 `check:no-json-wire`）后，**JS 侧本轮已交付**：(a) 新建 `packages/shared/src/binary/wire.ts` —— 跨语言二进制 wire **公共原语**（小端 `ByteWriter`/`ByteReader`（含 `patchU32` 占位回填）+ **免 TextEncoder 的严格 UTF-8**），全仓唯一实现（原为 `slot-runtime/buffer.ts` 的私有副本；该包因**零依赖自包含**定位本轮未合并，已如实登记）；(b) 新建 `packages/api/src/invoke-wire.ts` —— invoke **线格式**（去程 `PINV` / 回程 `PRSP`：20B header + method/reqId 长度前缀 + **TLV meta**（未知 tag 跳过）+ **裸字节 body**；`INVOKE_WIRE_VERSION=1`；`http.request` 的 tag 已定：url/method/headers/params/timeoutMs/responseType/contentType）；(c) `capability-invoke.ts` 新增**二进制腿**：宿主有 `proteusHost.invokeBytes` ⇒ 走 `PINV`/`PRSP`，否则**回退** JSON（`lastInvokeWire()` 可查，**降级不静默**，与 vapor `sendOps` 同构）；回推新增 `__proteusHostResolveBytes(frame)`（reqId 取自帧内；**pending 帧不提前结算**）；(d) 41 用例全绿（`invoke-wire` 19 + `capability-invoke-bytes` 12 + 既有 `capability-app-fetch` 11 零回归；`capability-app` 33/34，唯一超时系并发资源竞争、单跑 1.9s 通过）；(e) **测试抓出真缺陷**：回推入口初版无条件删待决表 ⇒ 宿主先推一帧「已受理」会把 awaiting 提前结算成 undefined（已修）。★【**待做（下一轮）**】三端宿主原生实现：① `quickjs_jni.c` 加 `invokeBytes`（签名 `([B)[B`，**条件注入**，模板 = 既有 `js_host_apply_ops_bytes`）+ 反向导出 `nativeResolveHostBytes(jbyteArray)`（用 `JS_NewUint8ArrayCopy` 造 JS 视图；★**必须在 JS 线程调** —— QuickJS 非线程安全，宿主从网络线程拿结果后须切主线程）；② Android `HostBridge.invokeBytes(byte[])` → `HostCapabilities` 的 `http.request`（HttpURLConnection + CookieManager + 网络线程 + **G-46 会话共享**）；③ iOS 补字节通道（**#769 遗留**；`selfdraw-scene.swift:286` 记「JSExport 对 ArrayBuffer 支持不稳」⇒ 须走 C API）+ URLSession；④ 鸿蒙 napi 字节通道 + http（G-46 指定 **Header 注入**）；⑤ 扩展 `check:no-json-wire` 覆盖 invoke 通道。★**诚实边界**：JSON 未被彻底消灭 —— 小对象（如 `host.context` 的几十字节返回）仍可走 body 的 JSON 字节（开销可忽略，不值得为每种能力定义 TLV schema）；**大载荷（HTTP 响应体 / 文件）走裸字节**，这才是收益所在。★三端 SDK 均在外置盘 `/Volumes/data1/work/office-applications`。"
     }
   ]
 }

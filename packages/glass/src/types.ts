@@ -41,7 +41,12 @@ export interface GlassProps {
   noise?: number
   /** 降级策略（能力不足时呈现方式） */
   fallback?: GlassFallback
+  /** ★★★决策 #900：材质选择（自绘 GPU 材质 id）。缺省/未知 ⇒ 'glass'（真折射）。 */
+  material?: GlassMaterialId
 }
+
+/** ★#900：材质 id（与 `@proteus-vue/shader` 材质目录同源——宿主按 id 派发管线）。 */
+export type GlassMaterialId = 'glass' | 'backdropBlur' | 'frosted' | 'vibrancy'
 
 /** 预设定义（09-presets：一组经验证的最佳参数组合） */
 export interface GlassPreset {
@@ -88,4 +93,6 @@ export interface ResolvedGlass {
   solid: string
   /** 降级策略 */
   fallback: GlassFallback
+  /** ★#900：材质 id（宿主按此派发 GPU 管线） */
+  material: GlassMaterialId
 }

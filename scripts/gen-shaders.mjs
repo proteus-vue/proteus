@@ -111,6 +111,23 @@ function toJavaModule(catalog, files) {
     lines.push(`    /** ${m.id} 材质片元（AGSL · 由 WGSL 真源落地）。 */`)
     lines.push(`    static final String ${constName} = ${esc(src)};`)
   }
+  // ★★★决策 #900：材质字典——宿主按 `style.glass.material` 查表选 AGSL 源 + uniform 分派。
+  lines.push('')
+  lines.push('    /** ★#900：材质定义（AGSL 无顶点阶段；入口恒 `main`）。uniformStruct 是宿主 uniform 分派的判别键。 */')
+  lines.push('    static final class Def {')
+  lines.push('        final String frag; final String uniformStruct; final int uniformSize;')
+  lines.push('        Def(String frag, String uniformStruct, int uniformSize) {')
+  lines.push('            this.frag = frag; this.uniformStruct = uniformStruct; this.uniformSize = uniformSize;')
+  lines.push('        }')
+  lines.push('    }')
+  lines.push('    /** ★#900：材质字典（id → 片元源 + uniform 元信息）。 */')
+  lines.push('    static final java.util.Map<String, Def> MATERIALS = new java.util.LinkedHashMap<>();')
+  lines.push('    static {')
+  for (const m of catalog.materials) {
+    const constName = m.id.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toUpperCase() + '_AGSL'
+    lines.push(`        MATERIALS.put(${JSON.stringify(m.id)}, new Def(${constName}, ${JSON.stringify(m.uniformStruct)}, ${m.uniformSize}));`)
+  }
+  lines.push('    }')
   lines.push('}')
   lines.push('')
   return lines.join('\n')
@@ -137,6 +154,16 @@ function toSwiftModule(catalog, files) {
     lines.push(`    /// ${m.id} 材质顶点（MSL）。`)
     lines.push(`    static let ${m.id}VertexMSL = ${esc(vert)}`)
   }
+  // ★★★决策 #900：材质字典——宿主按 `style.glass.material` 查此表**建/选管线**（数据驱动，加材质零改宿主）。
+  //   uniformStruct 是宿主 uniform 分派的判别键（GlassUniforms → 玻璃 builder；其余 → 模糊族 builder）。
+  lines.push('')
+  lines.push('    /// ★#900：材质字典（id → 源码/入口/uniform）；宿主据此建管线注册表。')
+  lines.push('    struct MaterialSource { let frag: String; let vert: String; let entry: String; let uniformStruct: String; let uniformSize: Int }')
+  lines.push('    static let materials: [String: MaterialSource] = [')
+  for (const m of catalog.materials) {
+    lines.push(`        ${JSON.stringify(m.id)}: MaterialSource(frag: ${m.id}FragmentMSL, vert: ${m.id}VertexMSL, entry: ${JSON.stringify(m.entry)}, uniformStruct: ${JSON.stringify(m.uniformStruct)}, uniformSize: ${m.uniformSize}),`)
+  }
+  lines.push('    ]')
   lines.push('}')
   lines.push('')
   return lines.join('\n')
@@ -189,6 +216,24 @@ function toHarmonyHeader(catalog, binaries) {
     lines.push('};')
     lines.push(`static const size_t ${name}_FRAG_SPV_LEN = sizeof(${name}_FRAG_SPV);`)
   }
+  // ★★★决策 #900：材质字典——宿主（C++）按 `style.glass.material` 查表选 SPIR-V + uniform 分派。
+  lines.push('')
+  lines.push('/// ★#900：材质定义（SPIR-V 顶点/片元 + uniform 判别键 + 片元入口名）。')
+  lines.push('struct MaterialDef {')
+  lines.push('    const char* id;')
+  lines.push('    const uint32_t* vert; size_t vertLen;')
+  lines.push('    const uint32_t* frag; size_t fragLen;')
+  lines.push('    const char* entry;')
+  lines.push('    const char* uniformStruct;')
+  lines.push('};')
+  lines.push('static const MaterialDef MATERIALS[] = {')
+  for (const m of catalog.materials) {
+    if (!binaries[`${m.id}.spirv.vert.spv`] || !binaries[`${m.id}.spirv.frag.spv`]) continue
+    const name = m.id.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toUpperCase()
+    lines.push(`    { ${JSON.stringify(m.id)}, ${name}_VERT_SPV, ${name}_VERT_SPV_LEN, ${name}_FRAG_SPV, ${name}_FRAG_SPV_LEN, ${JSON.stringify(m.entry)}, ${JSON.stringify(m.uniformStruct)} },`)
+  }
+  lines.push('};')
+  lines.push('static const size_t MATERIALS_COUNT = sizeof(MATERIALS) / sizeof(MATERIALS[0]);')
   lines.push('}  // namespace proteus_shaders')
   lines.push('')
   return lines.join('\n').replace(/\n+$/, '\n')

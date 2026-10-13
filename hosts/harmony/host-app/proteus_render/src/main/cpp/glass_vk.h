@@ -48,6 +48,9 @@ struct BatchItem {
     /** ★决策 #856：**可选的持久回读缓冲**。非空时，回读直接 resize+memcpy 进它（跨帧复用容量 ⇒
      *   零 alloc/零 free；否则每帧 new/free 一块 1.5MB 会触发 mmap/munmap 抖动，实测 ~26ms）。 */
     std::vector<uint8_t>* dst = nullptr;
+    /** ★★★决策 #900：材质 id（宿主按此选管线；缺省 "glass"）。uniform80 的**有效长度**由材质定
+     *   （glass=80B / 模糊族=64B）——超出部分的字节被本项 shader 忽略。 */
+    const char* material = "glass";
 };
 std::vector<std::vector<uint8_t>> renderBatch(const std::vector<BatchItem>& items);
 

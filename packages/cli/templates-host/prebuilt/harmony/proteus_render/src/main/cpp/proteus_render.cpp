@@ -215,6 +215,7 @@ struct SDNode {
     bool fixed = false;                      // position:fixed ⇒ 不随滚动位移（钉屏）
     bool glass = false;                      // ★本元素是玻璃面（阶段 3 同帧接入）
     double gBlur = 0, gRadius = 0, gSat = 1.0; uint32_t gTint = 0x26FFFFFFu;
+    std::string gMaterial = "glass";         // ★★★决策 #900：材质 id（宿主按此选管线）
     // ★★★决策 #895（superapp 收敛自绘）：补齐 superapp 用到的图元——边框/阴影/SVG/变换/裁剪/层序/字距
     double borderWidth = 0; uint32_t borderColor = 0;   // 边框（物理 px；ARGB）
     double shDx = 0, shDy = 0, shBlur = 0; uint32_t shColor = 0;   // 盒阴影
@@ -1315,21 +1316,31 @@ static void drawSelfContentCore(OH_Drawing_Canvas* rsCanvas, SelfDrawSpec* sd) {
                     bi.texW = iw2; bi.texH = ih2; bi.outW = ow2; bi.outH = oh2;
                     bi.backdrop.assign(bpx, bpx + (size_t)iw2 * ih2 * 4);
                     bi.uniform80.assign(80, 0);
+                    bi.material = n.gMaterial.c_str();   // ★#900：材质 id（renderBatch 按此选管线）
                     auto putF = [&](int off, float v) { memcpy(&bi.uniform80[off], &v, 4); };
                     auto putV2 = [&](int off, float a2, float b2) { putF(off, a2); putF(off + 4, b2); };
                     float ta = ((n.gTint >> 24) & 0xFF) / 255.0f, tr = ((n.gTint >> 16) & 0xFF) / 255.0f,
                           tg = ((n.gTint >> 8) & 0xFF) / 255.0f, tb = (n.gTint & 0xFF) / 255.0f;
+                    // 公共前缀（glass 与模糊族同布局）：tint / size_px / origin / tex_bias / tex_scale
                     putF(0, tr); putF(4, tg); putF(8, tb); putF(12, ta);
                     putV2(16, (float)ow2, (float)oh2);
                     putV2(24, 0.0f, 0.0f);
                     putV2(32, (float)pad2 / iw2, (float)pad2 / ih2);
                     putV2(40, (float)ow2 / iw2, (float)oh2 / ih2);
-                    { float lx = -0.35f, ly = -0.94f, ll = sqrtf(lx * lx + ly * ly); putV2(48, lx / ll, ly / ll); }
-                    putF(56, (float)n.gRadius / S);
-                    putF(60, (float)n.gBlur / S);
-                    putF(64, (n.w < n.h ? (float)ow2 : (float)oh2) * 0.22f);
-                    putF(68, 0.18f);
-                    putF(72, (float)n.gSat);
+                    // ★#900：按材质的 uniform 布局分派——
+                    //   glass（GlassUniforms 80B）：light_dir@48 / radius@56 / blur@60 / refract@64 / specular@68 / sat@72
+                    //   模糊族（BlurUniforms 64B）：blur@48 / saturation@52
+                    if (n.gMaterial == "glass") {
+                        { float lx = -0.35f, ly = -0.94f, ll = sqrtf(lx * lx + ly * ly); putV2(48, lx / ll, ly / ll); }
+                        putF(56, (float)n.gRadius / S);
+                        putF(60, (float)n.gBlur / S);
+                        putF(64, (n.w < n.h ? (float)ow2 : (float)oh2) * 0.22f);
+                        putF(68, 0.18f);
+                        putF(72, (float)n.gSat);
+                    } else {
+                        putF(48, (float)n.gBlur / S);
+                        putF(52, (float)n.gSat);
+                    }
                     gc.pendW = ow2; gc.pendH = oh2;
                     bi.dst = &gc.bytes;   // ★决策 #856：回读直接进持久缓冲（跨帧复用容量 ⇒ 零 alloc/free）
                     batch.push_back(std::move(bi));
@@ -1756,6 +1767,7 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
                     jsonNumber(gsub, "radius", &sn.gRadius);
                     jsonNumber(gsub, "saturation", &sn.gSat);
                     { double gt = 0; if (jsonNumber(gsub, "tint", &gt)) sn.gTint = (uint32_t)gt; }
+                    { std::string gm; if (jsonString(gsub, "material", &gm) && !gm.empty()) sn.gMaterial = gm; }   // ★#900
                 }
                 g_sdSpec->nodes.push_back(sn);
             }

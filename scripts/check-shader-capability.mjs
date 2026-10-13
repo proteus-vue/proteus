@@ -96,12 +96,16 @@ function packageCheck() {
     return
   }
   const src = fs.readFileSync(gen, 'utf8')
-  for (const key of ['glass.agsl.frag.glsl', 'glass.msl.frag.metal', 'glass.glsl.frag.glsl']) {
-    if (!src.includes(key)) problems.push(`生成物缺 ${key}`)
-  }
-  // ★决策 #841：SPIR-V 生成物（鸿蒙 Vulkan 载体）—— base64 键须在生成物里（`SHADER_SPIRV`）
-  for (const key of ['glass.spirv.vert.spv', 'glass.spirv.frag.spv']) {
-    if (!src.includes(key)) problems.push(`生成物缺 ${key}（SPIR-V / 鸿蒙 Vulkan 载体）`)
+  // ★★★#900：材质键表覆盖**每一种材质**（不再只 glass）——新材质缺生成物即红（防"注册了没落地"）。
+  const ids = ['glass', 'backdropBlur', 'frosted', 'vibrancy']
+  for (const id of ids) {
+    for (const key of [`${id}.agsl.frag.glsl`, `${id}.msl.frag.metal`, `${id}.glsl.frag.glsl`]) {
+      if (!src.includes(key)) problems.push(`生成物缺 ${key}`)
+    }
+    // ★决策 #841：SPIR-V 生成物（鸿蒙 Vulkan 载体）—— base64 键须在生成物里（`SHADER_SPIRV`）
+    for (const key of [`${id}.spirv.vert.spv`, `${id}.spirv.frag.spv`]) {
+      if (!src.includes(key)) problems.push(`生成物缺 ${key}（SPIR-V / 鸿蒙 Vulkan 载体）`)
+    }
   }
 }
 

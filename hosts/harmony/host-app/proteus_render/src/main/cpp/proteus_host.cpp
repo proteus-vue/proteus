@@ -713,11 +713,13 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
                 jstr(glSub.c_str(), glSub.size(), "tint", &gtk);
                 uint32_t gtint = gtk.empty() ? 0x26FFFFFFu : hexToArgb(gtk);
                 bool gborder = (glSub.find("\"border\":true") != std::string::npos);
+                std::string gmat; jstr(glSub.c_str(), glSub.size(), "material", &gmat);   // ★#900：材质 id
+                if (gmat.empty()) gmat = "glass";
                 // blur/radius 是 CSS 逻辑 px ⇒ ×density 转物理 px（与节点几何同口径，见 grad/outline 同法）。
-                char gbuf[220];
+                char gbuf[288];
                 snprintf(gbuf, sizeof(gbuf),
-                         ",\"glass\":{\"blur\":%.2f,\"radius\":%.2f,\"tint\":%u,\"saturation\":%.3f,\"border\":%s}",
-                         gblur * density, grad * density, gtint, gsat, gborder ? "true" : "false");
+                         ",\"glass\":{\"blur\":%.2f,\"radius\":%.2f,\"tint\":%u,\"saturation\":%.3f,\"border\":%s,\"material\":\"%s\"}",
+                         gblur * density, grad * density, gtint, gsat, gborder ? "true" : "false", gmat.c_str());
                 arr += gbuf;
             }
         }

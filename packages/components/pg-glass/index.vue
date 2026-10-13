@@ -41,6 +41,10 @@ const props = defineProps({
   noise: { type: Number, default: undefined },
   /** 降级策略：solid（半透明实色）/ flat（无背景仅边框） */
   fallback: { type: String, default: 'solid' },
+  /** ★★★决策 #900：材质选择（自绘 GPU 材质 id）——`glass`（默认，真折射）/ `backdropBlur`（纯模糊）/
+   *   `frosted`（模糊+颗粒）/ `vibrancy`（模糊+高饱和）。App 端折进 `glass.material` 由宿主按 id 派发管线；
+   *   Web/MP 端按 id 映射 CSS 近似（无 GPU 材质时的诚实降级）。 */
+  material: { type: String, default: 'glass' },
 })
 
 // ★无障碍优先：prefers-reduced-transparency 自动关玻璃（降级实色——铁律 4）
@@ -80,6 +84,7 @@ const resolved = computed(() =>
     border: props.border,
     noise: props.noise,
     fallback: props.fallback as never,
+    material: props.material as never,
   }),
 )
 

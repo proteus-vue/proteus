@@ -24,55 +24,63 @@ final class GlassMetalRenderer {
 
     static let shared = GlassMetalRenderer()
 
-    /// 玻璃材质参数（由内核 `style.glass` 折出；与 Android `GlassMaterial.Spec` 同源）。
+    /// 玻璃/材质参数（由内核 `style.glass` 折出；与 Android `GlassMaterial.Spec` 同源）。
     struct Spec {
         let blur: CGFloat
         let tint: (r: CGFloat, g: CGFloat, b: CGFloat, a: CGFloat)
         let radius: CGFloat
         let saturation: CGFloat
+        /// ★★★决策 #900：材质 id（`glass`/`backdropBlur`/`frosted`/`vibrancy`）——宿主按此选管线。
+        var material: String = "glass"
     }
 
     private let device: MTLDevice?
     private let commandQueue: MTLCommandQueue?
-    private var fragmentPipeline: MTLRenderPipelineState?
+    /// ★★★决策 #900：**每材质一条管线**（数据驱动——遍历 `GeneratedMaterials.materials` 建；
+    ///   加材质零改本文件）。键 = 材质 id。
+    private var pipelines: [String: MTLRenderPipelineState] = [:]
+    /// id → uniform 结构名（分派 uniform builder 的判别键：`GlassUniforms` → 玻璃；其余 → 模糊族）。
+    private var materialUniformStruct: [String: String] = [:]
     private var loggedCompileFail = false
 
     private init() {
         device = MTLCreateSystemDefaultDevice()
         commandQueue = device?.makeCommandQueue()
-        buildPipeline()
+        buildPipelines()
     }
 
-    var isAvailable: Bool { fragmentPipeline != nil }
+    var isAvailable: Bool { !pipelines.isEmpty }
 
-    /// 编译生成物 MSL（顶点 + 片元）并建管线。
-    private func buildPipeline() {
+    /// ★★★决策 #900：**按材质字典 **逐项**建管线**（数据驱动）——遍历 `GeneratedMaterials.materials`，
+    ///   每个材质编译其 MSL（顶点 `vs_quad` + 片元 entry）成一条 `MTLRenderPipelineState`。
+    ///   ⇒ 加材质（改 WGSL + `gen-shaders`）后本文件**零改**（`frosted`/`vibrancy` 自动获得管线）。
+    private func buildPipelines() {
         guard let device = device else {
-            NSLog("[proteus-glass] 无 Metal 设备——玻璃走降级")
+            NSLog("[proteus-glass] 无 Metal 设备——材质走降级")
             return
         }
-        do {
-            // ★算法来自 Rust 真源落地（GeneratedMaterials.*MSL）——本文件不写着色器。
-            let lib = try device.makeLibrary(source: GeneratedMaterials.glassFragmentMSL, options: nil)
-            let vlib = try device.makeLibrary(source: GeneratedMaterials.glassVertexMSL, options: nil)
-            let vfn = vlib.makeFunction(name: "vs_quad")
-            let ffn = lib.makeFunction(name: "fs_glass")
-            guard let vfn = vfn, let ffn = ffn else {
-                NSLog("[proteus-glass] MSL 入口未找到（vs_quad/fs_glass）——玻璃走降级")
-                return
-            }
-            let desc = MTLRenderPipelineDescriptor()
-            desc.vertexFunction = vfn
-            desc.fragmentFunction = ffn
-            desc.colorAttachments[0].pixelFormat = .bgra8Unorm
-            fragmentPipeline = try device.makeRenderPipelineState(descriptor: desc)
-            NSLog("[proteus-glass] Metal 管线就绪（真源=WGSL）")
-        } catch {
-            if !loggedCompileFail {
-                loggedCompileFail = true
-                NSLog("[proteus-glass] MSL 编译/建管线失败——玻璃走降级：%@", String(describing: error))
+        for (id, src) in GeneratedMaterials.materials {
+            do {
+                let lib = try device.makeLibrary(source: src.frag, options: nil)
+                let vlib = try device.makeLibrary(source: src.vert, options: nil)
+                guard let vfn = vlib.makeFunction(name: "vs_quad"), let ffn = lib.makeFunction(name: src.entry) else {
+                    NSLog("[proteus-glass] 材质 %@ MSL 入口未找到（vs_quad/%@）——跳过", id, src.entry)
+                    continue
+                }
+                let desc = MTLRenderPipelineDescriptor()
+                desc.vertexFunction = vfn
+                desc.fragmentFunction = ffn
+                desc.colorAttachments[0].pixelFormat = .bgra8Unorm
+                pipelines[id] = try device.makeRenderPipelineState(descriptor: desc)
+                materialUniformStruct[id] = src.uniformStruct
+            } catch {
+                if !loggedCompileFail {
+                    loggedCompileFail = true
+                    NSLog("[proteus-glass] 材质 %@ MSL 编译/建管线失败——该材质降级：%@", id, String(describing: error))
+                }
             }
         }
+        NSLog("[proteus-glass] Metal 管线就绪（真源=WGSL）· 材质 %d 个：%@", pipelines.count, pipelines.keys.sorted().joined(separator: ","))
     }
 
     /// 渲染一块玻璃面（节点盒尺寸的 CGImage）。
@@ -101,7 +109,7 @@ final class GlassMetalRenderer {
         let n = requests.count
         guard n > 0 else { return [] }
         let texPx = texPxPerPoint ?? scale
-        guard let device = device, let queue = commandQueue, let pipeline = fragmentPipeline else {
+        guard let device = device, let queue = commandQueue, !pipelines.isEmpty else {
             return Array(repeating: nil, count: n)
         }
         // ① 背景纹理（★上传一次，N 块玻璃共用）
@@ -109,19 +117,21 @@ final class GlassMetalRenderer {
             return Array(repeating: nil, count: n)
         }
         var outTexs = [MTLTexture?](repeating: nil, count: n)
-        // ② 一条命令缓冲，逐块编码（各自输出纹理；顶点/片元管线同一）
+        // ② 一条命令缓冲，逐块编码（各自输出纹理；**按材质选管线**）
         //   ★I2-ALLOW: 输出**纹理**像素尺寸（位图必须整数像素，非几何吸附；玻璃采样缓冲与内核几何无关）
         guard let cb = queue.makeCommandBuffer() else { return Array(repeating: nil, count: n) }
         for (i, req) in requests.enumerated() {
             let w = Int((req.nodeRect.width * scale).rounded())
             let h = Int((req.nodeRect.height * scale).rounded())
             guard w > 0, h > 0 else { continue }
+            // ★★★决策 #900：按材质 id 选管线（未知 ⇒ 回落 glass）；uniform 按 uniformStruct 分派。
+            let mid = pipelines[req.spec.material] != nil ? req.spec.material : "glass"
+            guard let pipeline = pipelines[mid] else { continue }
+            let isGlass = (materialUniformStruct[mid] ?? "GlassUniforms") == "GlassUniforms"
             let outDesc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm, width: w, height: h, mipmapped: false)
             outDesc.usage = [.renderTarget, .shaderRead]
             outDesc.storageMode = .shared   // 便于 CPU 读回
             guard let outTex = device.makeTexture(descriptor: outDesc) else { continue }
-            var u = makeUniforms(nodeRect: req.nodeRect, outScale: scale, texPxPerPoint: texPx,
-                                 backdrop: backdrop, spec: req.spec, cropOrigin: cropOrigin)
             let pass = MTLRenderPassDescriptor()
             pass.colorAttachments[0].texture = outTex
             pass.colorAttachments[0].loadAction = .clear
@@ -130,7 +140,15 @@ final class GlassMetalRenderer {
             guard let enc = cb.makeRenderCommandEncoder(descriptor: pass) else { continue }
             enc.setRenderPipelineState(pipeline)
             enc.setFragmentTexture(backdropTex, index: 0)
-            enc.setFragmentBytes(&u, length: MemoryLayout<GlassUniforms>.stride, index: 0)
+            if isGlass {
+                var u = makeUniforms(nodeRect: req.nodeRect, outScale: scale, texPxPerPoint: texPx,
+                                     backdrop: backdrop, spec: req.spec, cropOrigin: cropOrigin)
+                enc.setFragmentBytes(&u, length: MemoryLayout<GlassUniforms>.stride, index: 0)
+            } else {
+                var u = makeBlurUniforms(nodeRect: req.nodeRect, outScale: scale, texPxPerPoint: texPx,
+                                         backdrop: backdrop, spec: req.spec, cropOrigin: cropOrigin)
+                enc.setFragmentBytes(&u, length: MemoryLayout<BlurUniforms>.stride, index: 0)
+            }
             enc.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
             enc.endEncoding()
             outTexs[i] = outTex
@@ -208,6 +226,41 @@ final class GlassMetalRenderer {
             specular: 0.18,
             saturation: Float(spec.saturation),
             _pad: 0
+        )
+    }
+
+    /// ★★★决策 #900：模糊族材质 uniform（`backdropBlur` 等；与 WGSL `BlurUniforms` 逐字段同布局，64B）。
+    ///   无折射/高光/圆角（那些是玻璃倒角厚板模型专有）——只有 tint + 盒 + 采样变换 + blur + saturation。
+    private struct BlurUniforms {
+        var tint: SIMD4<Float>       // 0
+        var size_px: SIMD2<Float>    // 16
+        var origin: SIMD2<Float>     // 24
+        var tex_bias: SIMD2<Float>   // 32
+        var tex_scale: SIMD2<Float>  // 40
+        var blur: Float              // 48
+        var saturation: Float        // 52
+        var _pad: SIMD2<Float>       // 56（补到 64）
+    }
+
+    private func makeBlurUniforms(nodeRect: CGRect, outScale: CGFloat, texPxPerPoint: CGFloat,
+                                  backdrop: CGImage, spec: Spec, cropOrigin: CGPoint) -> BlurUniforms {
+        let w = Float(nodeRect.width * outScale)
+        let h = Float(nodeRect.height * outScale)
+        let tw = Float(backdrop.width)
+        let th = Float(backdrop.height)
+        let relX = Float((nodeRect.minX - cropOrigin.x) * texPxPerPoint)
+        let relY = Float((nodeRect.minY - cropOrigin.y) * texPxPerPoint)
+        let bias = SIMD2<Float>(relX / tw, relY / th)
+        let tscale = SIMD2<Float>(Float(nodeRect.width * texPxPerPoint) / tw, Float(nodeRect.height * texPxPerPoint) / th)
+        return BlurUniforms(
+            tint: SIMD4<Float>(Float(spec.tint.r), Float(spec.tint.g), Float(spec.tint.b), Float(spec.tint.a)),
+            size_px: SIMD2<Float>(w, h),
+            origin: SIMD2<Float>(0, 0),
+            tex_bias: bias,
+            tex_scale: tscale,
+            blur: Float(spec.blur * outScale),   // 与玻璃同守恒（模糊族只消费 blur，非 refract）
+            saturation: Float(spec.saturation),
+            _pad: SIMD2<Float>(0, 0)
         )
     }
 

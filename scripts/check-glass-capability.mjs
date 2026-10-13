@@ -53,6 +53,11 @@ const SEAMS = [
   //   + 渲染层解析（proteus_render.cpp 的 `extractObjectField(it, "glass")`）——miss 任一 ⇒ 鸿蒙玻璃静默丢失。
   { label: '鸿蒙 cmd 发射（proteus_host.cpp）', file: 'hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_host.cpp', needle: '\\"glass\\":{' },
   { label: '鸿蒙渲染层解析（proteus_render.cpp）', file: 'hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_render.cpp', needle: 'extractObjectField(it, "glass")' },
+  // ★★★决策 #900：**材质派发接缝**——`glass.material` 被三端宿主读取以选管线；缺任一 ⇒ 该端材质静默回落 glass。
+  { label: '编译器折 material（app-component-registry）', file: 'packages/cli/src/app-component-registry.ts', needle: 'material: materialOf' },
+  { label: 'iOS 宿主读 material（glass-metal/selfdraw）', file: 'hosts/ios/ProteusHost/runtime/selfdraw-scene.swift', needle: 'g["material"]' },
+  { label: 'Android 宿主读 material（VaporRenderHost）', file: 'hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/VaporRenderHost.java', needle: 'optString("material"' },
+  { label: '鸿蒙 cmd 发 material（proteus_host.cpp）', file: 'hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_host.cpp', needle: '\\"material\\":' },
 ]
 function seamCheck() {
   for (const s of SEAMS) {
