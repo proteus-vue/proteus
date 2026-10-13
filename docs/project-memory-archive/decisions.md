@@ -3975,6 +3975,6 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
  · 根因：引擎 `taffy_engine.rs` 把 `fixed` 当 `absolute`、inset 相对**父**（App 页面层 `absolute inset:0`、内容高 1400）⇒ `bottom` 落**页面内容底部（屏外）**，真机实测"悬浮导航 bottom 不生效"。
  · 修法：`build_taffy` 把 **fixed 节点挂到根**（根=视口高）；**运行期屏内容补视口高 `app-root` 包层**（`app-runtime-content.ts` 的 `wrapViewportRoot`，与静态通路结构对齐）⇒ `top/right/bottom/left` 相对视口。
  · 回归测试 `fixed_bottom_is_relative_to_viewport_not_parent`（断言 relative 视口 200 而非父 500）；Rust 全量 230+ 绿。
- · 宿主：`drawGlassPass` 对 fixed 玻璃补**滚动反向补偿**（玻璃面钉住视口）；backdrop 采集坐标核对（公式 + 真机）。
+ · 宿主：**玻璃遍 `drawGlassPass` 套用与 onDraw 相同的 `-scroll`+clip 变换**（非 fixed 玻璃随内容滚、fixed 玻璃面经 `+scroll` 补偿钉在视口、其子树 `drawCmds` 在同变换内补偿）——修「悬浮导航滚动后下移/文字飞出屏」；backdrop 采集坐标核对（公式 + 真机）。
 **④ 演示（`superapp/pages/glass-nav.vue`，新）**：iOS 式**可滚动长内容流** + **fixed 悬浮玻璃导航**浮于内容之上（内容从玻璃底下滑过）；`pg-glass-nav` 组件（新）。
 **⑤ 诚实边界**：观感收敛靠真机目视（多轮迭代）；**iOS/鸿蒙未同步宿主降采样**（共享 WGSL 已改，两端需各加"背景降采样"否则玻璃"不糊"）；#906 的 `interactiveEffect`（surface/displace）**半回退**（宿主折叠 `effect` 但着色器暂忽略，无害）；refract/band 等参数为**真机 A/B 初值**。

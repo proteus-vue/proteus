@@ -3450,27 +3450,37 @@ public class ProteusHostView extends ViewGroup {
         final List<Cmd> list = cmds;
         final int[] ids = cmdNodeIds;
         if (ids == null) return;
+        // ★★★决策 #907：玻璃遍**套用与 onDraw 相同的 `-scroll`+clip 变换**——这样
+        //   ① fixed 玻璃面/子树经各自 `+scroll` 补偿 ⇒ 净 0 ⇒ 钉在视口；
+        //   ② 非 fixed 玻璃随内容滚动。此前玻璃遍在变换之外（屏幕空间）⇒ fixed 子树的
+        //     `drawCmds` 仍加 `+scroll`（它假设画布已含 `-scroll`）⇒ 文字被推到屏外（"空胶囊"，真机实测）。
+        final boolean gScrolled = offsetScroll
+                ? (scrollX != 0 || scrollY != 0 || scrollViewport != null)
+                : (!horizontalScroll && (scrollX != 0 || scrollY != 0 || scrollViewport != null));
+        final int gSave = gScrolled ? canvas.save() : -1;
+        if (gScrolled) {
+            if (scrollViewport != null) {
+                canvas.clipRect(scrollViewport.left, scrollViewport.top, scrollViewport.right, scrollViewport.bottom);
+            }
+            canvas.translate(-scrollX, -scrollY);
+        }
         for (int i = 0; i < list.size() && i < ids.length; i++) {
             GlassMaterial.Spec g = glassByNode.get(ids[i]);
             if (g != null) {
-                // ★★★决策 #906：玻璃是 **fixed**（悬浮导航）时也要做**滚动反向补偿**（钉在视口）——
-                //   此前补偿只在 `drawCmds` 普通绘制里做，而**玻璃面是独立遍** ⇒ 玻璃不钉住、随内容滚走
-                //   （真机实测"悬浮玻璃导航滚动后跑掉"）。只补偿玻璃面本身；其子树由 drawCmds 各自补偿。
+                // fixed 玻璃面：+scroll 补偿（抵消上面的 -scroll ⇒ 钉在视口）；非 fixed 不加（随内容滚动）。
                 final Integer fAnchor = fixedAnchorOf(ids[i]);
-                if (fAnchor != null) {
-                    final int gSave = canvas.save();
-                    canvas.translate(scrollX, scrollY);
-                    drawGlassFace(canvas, ids[i], list.get(i), g);
-                    canvas.restoreToCount(gSave);
-                } else {
-                    drawGlassFace(canvas, ids[i], list.get(i), g);
-                }
+                final int fs = (fAnchor != null) ? canvas.save() : -1;
+                if (fAnchor != null) canvas.translate(scrollX, scrollY);
+                drawGlassFace(canvas, ids[i], list.get(i), g);
+                if (fs != -1) canvas.restoreToCount(fs);
                 // ★★★决策 #893（对齐 iOS 液态玻璃基准）：玻璃面**之上**重画**该玻璃节点自身子树**（其文本/子视图）
                 //   ——背景已在 captureGlassBackdrop 排除自身子树（只含"背后"），此处把自身内容**清晰**盖回玻璃面上。
                 //   真 iOS `UIVisualEffectView` 语义：材质只糊背后、`contentView` 内容原样清晰。
+                //   ★此处的 `drawCmds` 已在 `-scroll` 变换内 ⇒ 其 fixed 补偿正常工作（与主内容一致）。
                 drawCmds(canvas, null, subtreeIdsOf(ids[i]));
             }
         }
+        if (gSave != -1) canvas.restoreToCount(gSave);
     }
 
     /** ★决策 #893：某节点（含自身）的子树 id 集合——用 `nodeParent` 表；`cmdNodeIds` 为树序（父在子前）⇒ 一趟即成
