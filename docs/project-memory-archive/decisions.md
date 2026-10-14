@@ -4426,3 +4426,13 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   【修】在**主文字路径**同样加暗玻璃覆盖：`if (inDarkGlass(...)) textPaint.setColor(0xFFFFFFFF); else if (animTc…)…`。
   【真机复验】深底：**文字 + 图标全部白色**（`#ffffff`；此前文字 `#212126` 黑）——对齐 iOS。
   【★教训】**同一视觉元素可能有多条绘制路径**（简单/多行/动画/裁剪各一段）——vibrancy 覆盖必须落在**真正被执行的那条**；先定位"哪段在画"再改，否则改了也没走。★诚实边界：暗玻璃内**选中项文字也被统一刷白**（iOS 保留 accent 蓝）——"哪些是 accent 色"需语义（Web/MP 有 tint 语义，App 折叠面暂无）⇒ 列为后续 refinement。
+
+951. **★★★液态玻璃：① vibrancy 保 accent（选中项主题色不被刷白）+ ② 选中胶囊「面纱反相」（与条反向，保差异可读）· 只 Android**（2026-10-14 · 用户「选中项图标/文字不能变，得是选中主题色；胶囊玻璃自动变色应反过来才对——才能和下面始终有差异」）：
+【诉求】① 自动变色时**选中项**的图标/文字须**保留主题色**（accent），不该被 vibrancy 刷白；② 选中**胶囊**的自动变色应与条**反向**（条白霜→胶囊透、条透→胶囊白霜）⇒ 胶囊与条**始终有差异**、选中项始终可读。
+【缺口①（vibrancy 误刷 accent）】#949 的 vibrancy 把暗玻璃内**所有**前景刷白 ⇒ 选中项（"游戏"）的主题蓝也被刷白。
+  【修】加**中性色判据** `isNeutralColor`（三通道极差 ≤ 32）：`inDarkGlass && isNeutralColor(color)` 才刷白；**有彩色的主题色保留**。文字（主路径 4192 + 简单路径 4827）与 svg 图标填充（4043）三处同口径。
+【缺口②（胶囊与条同向 ⇒ 浅底几乎无差异）】此前胶囊也走 `bg_lum → α`，与条**同向** ⇒ 浅底时胶囊(158)≈条(155)，**几乎看不出**（真机实测）。
+  【修】**面纱反相 `veil_flip`**（复用 92B 处 `_pad2` 槽，布局仍 96B）：`glass.wgsl` + `reference.rs` 同改——`veil_t = mix(veil_t0, 1−veil_t0, veil_flip)`。prop 链：`<pg-glass veil-flip>` → `resolveGlass.veilFlip`（`GlassProps`/`ResolvedGlass`）→ `glassResolver` 折 `glass.veilFlip` → 宿主 `Spec.veilFlip` → uniform `veil_flip`。demo 胶囊加 `veil-flip`。
+【判据（真机）】① **选中项文字两态均保留主题蓝 `#2c2f76`**（浅底/深底），未选：**浅底黑 `#000000` / 深底白 `#ffffff`**；② 胶囊 vs 条差异：**浅底 +18.5（胶囊 173 vs 条 155）/ 深底 +142（胶囊 208 vs 条 66）**——两态**均有差异**（此前浅底≈0）。· `check:shader-generated`/`glass-pixel-parity`(Metal==oracle max 1/255)/`glass-capability`/`glass-audit`/`harmony-runtime-prebuilt`/`pixel-snap` 绿 · `test:coupled` 绿 · AAR 重建 · 鸿蒙 prebuilt 同步。
+【诚实边界】仅 Android 真机；`veil_flip` 是通用 `pg-glass` prop（iOS/鸿蒙同源真源已含，宿主未接线）；中性色判据是**接近即中性**的近似（阈值 32）。
+【★教训】**"自动变色"要按语义区分前景**：**中性色**（黑/灰/白，随玻璃底色反相以保对比）vs **accent 主题色**（保留身份）——不能一刀切刷白。★**"选中态"与"容器"要反向**：同向 ⇒ 浅底上二者趋同、选中不可辨；反向才**恒有差异**（这正对齐 iOS 选中胶囊「恒比主体暗/亮」）。

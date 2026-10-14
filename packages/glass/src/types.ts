@@ -46,6 +46,8 @@ export interface GlassProps {
   /** ★★★决策 #905：触控交互（对齐 Apple `UIGlassEffect.isInteractive`）——点按/拖动时玻璃在触点处
    *   产生液态形变流动，松手回弹。缺省 = 用预设（仅 floating 预设为 true）。 */
   interactive?: boolean
+  /** ★#951：面纱反相——浅底透明/深底白霜（选中胶囊与条反向，保差异可读）。 */
+  veilFlip?: boolean
   /** ★★★决策 #906：交互效果形态——`surface`（默认）= **上层玻璃本身流动**（触点处玻璃表面隆起、
    *   高光随触点流；背后内容不动，对齐 Apple Liquid Glass `isInteractive`）；`displace` = 内容折射位移
    *   （把背后内容沿"离触点方向"推开；#905 的能力，单层玻璃按需选用）。仅 App 自绘玻璃区分；Web/MP 近似同 `:active`。 */
@@ -101,6 +103,8 @@ export interface ResolvedGlass {
   interactive: boolean
   /** ★#906：交互效果形态（`surface`=上层玻璃流动 / `displace`=内容位移） */
   interactiveEffect: GlassInteractiveEffect
+  /** ★#951：面纱反相（浅底透明/深底白霜——选中胶囊与条反向，保差异可读）。 */
+  veilFlip: boolean
   /** 降级实色 */
   solid: string
   /** 降级策略 */

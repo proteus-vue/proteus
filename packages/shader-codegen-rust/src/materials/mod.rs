@@ -50,7 +50,7 @@ pub const GLASS: MaterialSpec = MaterialSpec {
         // ★★★决策 #905：触控形变（touch 盒局部 px / press 0..1）
         ("touch", 80, 8),
         ("press", 88, 4),
-        ("_pad2", 92, 4),
+        (("veil_flip", 92, 4)),
     ],
     uniform_size: 96,
 };
