@@ -1317,8 +1317,47 @@ static void drawSelfContentCore(OH_Drawing_Canvas* rsCanvas, SelfDrawSpec* sd) {
                 OH_Drawing_CanvasTranslate(bc, (float)(-bx), (float)(-by));
                 drawContentNodes(bc, sd, bx, by, bx + (double)iw2 * S, by + (double)ih2 * S, &glassSubtree);
                 OH_Drawing_CanvasRestore(bc);
-                const uint8_t* bpx = static_cast<const uint8_t*>(OH_Drawing_BitmapGetPixels(*bmpSlot));
+                const uint8_t* bpx0 = static_cast<const uint8_t*>(OH_Drawing_BitmapGetPixels(*bmpSlot));
                 g_sdBackdropBuildMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - __tb0).count();
+                // ★★★决策 #929：**轻霜**（对齐 iOS 逆向报告「表面磨砂 ~1-3px」；三端同法）——
+                //   对背景小位图做**半分辨率下采样再双线性上采样**（≈2-3px 轻模糊；内容柔化但可读；
+                //   折射/镜像为主、磨砂为配）。放宿主（非 shader）⇒ 不破坏 parity（shader 保持零采样）。
+                std::vector<uint8_t> bpxBuf;
+                const uint8_t* bpx = bpx0;
+                if (bpx0 != nullptr) {
+                    const int hw = std::max(1, iw2 >> 1), hh = std::max(1, ih2 >> 1);
+                    std::vector<uint8_t> half((size_t)hw * hh * 4);
+                    for (int yh = 0; yh < hh; yh++) for (int xh = 0; xh < hw; xh++) {
+                        int s[3] = {0,0,0}, cnt = 0;
+                        for (int dy = 0; dy < 2; dy++) for (int dx = 0; dx < 2; dx++) {
+                            int sx = xh*2+dx, sy = yh*2+dy; if (sx >= iw2 || sy >= ih2) continue;
+                            const uint8_t* q = bpx0 + ((size_t)sy * iw2 + sx) * 4;
+                            s[0]+=q[0]; s[1]+=q[1]; s[2]+=q[2]; cnt++;
+                        }
+                        uint8_t* d = &half[((size_t)yh * hw + xh) * 4];
+                        d[0]=(uint8_t)(s[0]/cnt); d[1]=(uint8_t)(s[1]/cnt); d[2]=(uint8_t)(s[2]/cnt); d[3]=255;
+                    }
+                    bpxBuf.assign((size_t)iw2 * ih2 * 4, 0);
+                    for (int yy = 0; yy < ih2; yy++) for (int xx = 0; xx < iw2; xx++) {
+                        // 双线性从 half 映射（近似）
+                        float fx = (xx - 0.5f) * 0.5f, fy = (yy - 0.5f) * 0.5f;
+                        int x0 = (int)floorf(fx), y0 = (int)floorf(fy);
+                        float tx = fx - x0, ty = fy - y0;
+                        auto at = [&](int cx, int cy) -> const uint8_t* {
+                            if (cx < 0) cx = 0; if (cy < 0) cy = 0; if (cx >= hw) cx = hw-1; if (cy >= hh) cy = hh-1;
+                            return &half[((size_t)cy * hw + cx) * 4];
+                        };
+                        const uint8_t* a = at(x0, y0); const uint8_t* b = at(x0+1, y0);
+                        const uint8_t* c = at(x0, y0+1); const uint8_t* e = at(x0+1, y0+1);
+                        uint8_t* d = &bpxBuf[((size_t)yy * iw2 + xx) * 4];
+                        for (int ch = 0; ch < 3; ch++) {
+                            float top = a[ch] + (b[ch]-a[ch])*tx, bot = c[ch] + (e[ch]-c[ch])*tx;
+                            d[ch] = (uint8_t)std::min(255.0f, std::max(0.0f, top + (bot-top)*ty));
+                        }
+                        d[3] = 255;
+                    }
+                    bpx = bpxBuf.data();
+                }
                 if (bpx != nullptr) {
                     proteus_glass_vk::BatchItem bi;
                     bi.id = gi;
