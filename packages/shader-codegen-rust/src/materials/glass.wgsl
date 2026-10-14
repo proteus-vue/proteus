@@ -96,7 +96,7 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     let ec = clamp(e, 0.004, 0.996);
     let u1 = 1.0 - ec;
     let slope = u1 / sqrt(max(1.0 - u1 * u1, 1e-4));
-    let prof = 1.0 - smoothstep(0.0, 1.0, e);   // 横贯整带（外缘 1 → 内缘 0）
+    let prof = pow(1.0 - e, 3.0);   // ★#918：边缘位移大、内侧快速衰减 —— 边缘非单调(薄折叠=倒影) + 内侧拉伸
     // ★★★决策 #910/#912/#914 · 位移峰值系数 `EDGE_REFRACT`（**方向已冻结，只调幅度**）
     //   【#914 用户真机】「iOS 的折射只有**平面变化**，我们的明显**文字有 y 轴拉伸**」——取证（oracle 细线探针）：
     //     位移机制（沿外法线向外采样 ⇒ 边缘带内容被压缩/弯折）**方向正确**；问题是**幅度**：`0.55·band`
@@ -104,7 +104,7 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     //   ⇒ 幅度降到 **0.15·band**（≈10 物理px ≈ 3 逻辑px）：线间距接近均匀（仅边缘轻微弯折，对齐 iOS"平面变化"）。
     //   ★这是**定稿方向**（不再漂移）：机制=法线方向向外采样（单调、不折叠）+ 小幅度（平面式轻弯折）。
     //   A 分解：`EDGE_REFRACT`（幅度）· `strength`（宿主 refract_depth 旋钮，1.0 中性）。
-    let EDGE_REFRACT = 0.42;   // ★#917：从 iOS 真值反推——边缘压缩比 1−1.5A ≈ 0.33（=iOS 实测压缩量）⇒ A≈0.42
+    let EDGE_REFRACT = 0.70;   // ★#918：配 (1-e)^3 剖面——边缘位移大到非单调(薄折叠=倒影)、内侧拉伸
     let strength = clamp(u.refract_depth / max(band, 1.0), 0.2, 1.1);
     var bend = prof * band * EDGE_REFRACT * strength;
     // ★★★决策 #905：**触控形变流动**——触点周围局部凸起（Gaussian 钟），按压力把背后内容沿"离触点方向"推开；
@@ -113,7 +113,8 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     let td = local - u.touch;
     let tg = exp(-(dot(td, td)) / (2.0 * tR * tR)) * u.press;   // 0..1 触点钟形（含按压强度）
     let push = max(hsmin * 0.28, 6.0) * tg;                     // 触点处峰位移（px）
-    let sp = local + n * bend + normalize(td + vec2<f32>(1e-4, 1e-4)) * push;
+    // ★#918：位移**向内采样**（`− n·bend`）⇒ 边缘内容被**放大/拉伸**（用户实测：iOS 是拉伸不是压缩）。
+    let sp = local - n * bend + normalize(td + vec2<f32>(1e-4, 1e-4)) * push;
     let sp_uv = sp / u.size_px;
 
     // ③ 模糊按 e 键控（边缘锐、中心糊）；核最大半径 = blur*e*0.55
