@@ -4319,7 +4319,7 @@ export function buildLayoutTemplate(
           fallback: strProp('fallback'),
           material: strProp('material'),   // ★#900：材质 id（glass/backdropBlur/frosted/vibrancy）
           interactive: strProp('interactive'),   // ★#905：触控形变
-          veilFlip: strProp('veilFlip'),   // ★#951：面纱反相
+          overlay: strProp('overlay'),   // ★#952：选中胶囊叠加层
           interactiveEffect: strProp('interactiveEffect'),   // ★#906：交互效果形态（surface/displace）
         })
         if (spec) {

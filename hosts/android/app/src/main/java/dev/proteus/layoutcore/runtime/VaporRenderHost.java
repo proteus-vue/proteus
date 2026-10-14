@@ -2728,7 +2728,7 @@ public final class VaporRenderHost {
                 g.optString("material", "glass"),   // ★#900：材质 id（宿主按此选管线）
                 g.optBoolean("interactive", false),   // ★#905：触控交互
                 (float) g.optDouble("effect", 0),     // ★#906：交互效果（0=上层玻璃流动 / 1=内容位移）
-                (float) g.optDouble("veilFlip", 0));  // ★#951：面纱反相（选中胶囊与条反向）
+                (float) g.optDouble("overlay", 0));   // ★#952：选中胶囊叠加层
     }
 
     private float[] parseGlow(JSONObject glo) {
