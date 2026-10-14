@@ -4187,7 +4187,11 @@ public class ProteusHostView extends ViewGroup {
                 //     （文字色四通道里 A 是独立可动的，钳住它 = 静默丢一个通道）。
                 final Integer animTc = (ids != null && i < ids.length && ids[i] >= 0)
                         ? animTextColor.get(ids[i]) : null;
-                if (animTc != null) textPaint.setColor(animTc);
+                // ★#950（vibrancy）：落在**暗玻璃**内的文字**强制白**（对齐 iOS）——**主文字绘制路径**
+                //   （动画色/静态色都在此 setColor；图标已走 svg 分支单独处理）。
+                final boolean dkGlass = inDarkGlass(c.x + c.w * 0.5f, c.y + c.h * 0.5f);
+                if (dkGlass) textPaint.setColor(0xFFFFFFFF);
+                else if (animTc != null) textPaint.setColor(animTc);
                 else if (c.textColor != 0) textPaint.setColor(c.textColor);
                 final int alphaBase = (animTc != null || c.textColor != 0)
                         ? Color.alpha(animTc != null ? animTc : c.textColor) : 255;
