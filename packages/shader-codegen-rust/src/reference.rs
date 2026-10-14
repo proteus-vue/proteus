@@ -140,8 +140,8 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     //   `mix(内容色, 霜色, α)`：整面朝霜色靠拢（降对比 ⇒ 乳白/灰纱）。霜色与厚度随区域背景**翻转**
     //   （深底→厚亮霜 / 亮底→薄暗霜，对齐 HIG "flip from light to dark"）。与 glass.wgsl ⑤ 同源。
     let frost_t = smoothstep(0.30, 0.90, p.bg_lum);
-    let frost_col = 0.93 + (0.62 - 0.93) * frost_t;
-    let frost_a = 0.85 + (0.40 - 0.85) * frost_t;
+    let frost_col = 0.93 + (0.97 - 0.93) * frost_t;   // ★#920：霜色恒亮白（#913 的亮端 0.62 暗霜在白底≈不可见）
+    let frost_a = 0.85 + (0.55 - 0.85) * frost_t;
     for c in 0..3 { col[c] = col[c] + (frost_col - col[c]) * frost_a; }
 
     let cos_i = 1.0 / (1.0 + slope * slope).sqrt();
