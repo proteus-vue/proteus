@@ -228,12 +228,12 @@ const navItems = ref([
 /** 当前激活项 key（→ 行内 `:class` 高亮）。用 `===`（执行器只认严格相等）。 */
 const active = ref('games')
 /** 高亮胶囊左偏移 px（★px 数值：App 端布局只吃数值）。条内宽 320、4 项、各 77px。 */
-const hlLeft = ref(3 + 1 * 92)
+const hlLeft = ref(6 + 1 * 91)
 
 /** ★#907 行参 handler（B1）：两个行参 `item.key` / `item.pos` 均折进行内读取（此前静默失效）。 */
 function pick(key: string, pos: number): void {
   active.value = key
-  hlLeft.value = 3 + pos * 92
+  hlLeft.value = 6 + pos * 91
 }
 </script>
 
@@ -359,19 +359,19 @@ function pick(key: string, pos: number): void {
   flex-direction: row;
   align-items: center;
   justify-content: space-around;
-  /* ★#932：高 68→40（对齐 iOS tab bar ≈40pt）；padding 6→3 */
-  height: 40px;
-  padding: 3px;
+  /* ★#934：高 40→56（用户：「高度太低了」；68 太高、40 太低 ⇒ 取 ≈iOS 的 56pt）；padding 6 */
+  height: 56px;
+  padding: 6px;
   box-sizing: border-box;
 }
 /* ★★★决策 #908：激活胶囊 = 玻璃实例 ⇒ **不再有 background 平铺**（白斑 artifact 的来源）。
    仅保留几何（绝对定位 + 尺寸 + 圆角）；材质/着色由 `<pg-glass preset="floating">` + tint 决定。 */
 .gna-highlight {
   position: absolute;
-  /* ★#932/#933：随条几何收缩（top/bottom 6→3；宽 = (条宽−6)/4 ≈ 92；radius 24→16） */
-  top: 3px;
-  bottom: 3px;
-  width: 92px;
+  /* ★#934：随条高 56 恢复（top/bottom 6；宽 ≈ (条宽−12)/4 = 91）；胶囊 left 由 JS 按 91 步进 */
+  top: 6px;
+  bottom: 6px;
+  width: 91px;
   border-radius: 16px;
 }
 .gna-item {
@@ -380,11 +380,11 @@ function pick(key: string, pos: number): void {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1px;
-  /* ★#932：56→32（随条高 40 收缩） */
-  height: 32px;
+  gap: 2px;
+  /* ★#934：随条高 56 恢复 */
+  height: 44px;
 }
-.gna-item__glyph { display: flex; align-items: center; justify-content: center; height: 22px; color: var(--sa-text-2, #5f6673); }
+.gna-item__glyph { display: flex; align-items: center; justify-content: center; height: 24px; color: var(--sa-text-2, #5f6673); }
 .gna-item__label { font-size: 11px; font-weight: 600; line-height: 1; color: var(--sa-text-2, #5f6673); }
 /* ★#907 行内动态 :class（B2）可见落点：激活项图标/文字提亮（此前该绑定静默失效）。
    ★就地直接声明（**不能**用后代选择器——运行期动态类计划只解析节点自身类的直接声明，见台账）。 */
