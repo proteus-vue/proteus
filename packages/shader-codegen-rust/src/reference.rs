@@ -141,7 +141,7 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     //   （深底→厚亮霜 / 亮底→薄暗霜，对齐 HIG "flip from light to dark"）。与 glass.wgsl ⑤ 同源。
     let frost_t = smoothstep(0.30, 0.90, p.bg_lum);
     let frost_col = 0.93 + (0.97 - 0.93) * frost_t;   // ★#920：霜色恒亮白（#913 的亮端 0.62 暗霜在白底≈不可见）
-    let frost_a = 0.85 + (0.55 - 0.85) * frost_t;
+    let frost_a = 0.70 + (0.28 - 0.70) * frost_t;   // ★#923：降为"轻提亮"（重白霜会糊平内容 ⇒ 折射/倒影看不见）
     for c in 0..3 { col[c] = col[c] + (frost_col - col[c]) * frost_a; }
 
     let cos_i = 1.0 / (1.0 + slope * slope).sqrt();
