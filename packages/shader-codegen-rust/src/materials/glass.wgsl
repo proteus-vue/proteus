@@ -143,7 +143,7 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     //   ⇒ `frost_col` 恒亮白（0.93↔0.97）；`frost_a` 深底厚(0.85) / 白底**仍较实**(0.55，糊白背景内容)。
     let frost_t = smoothstep(0.30, 0.90, u.bg_lum);
     let frost_col = mix(vec3<f32>(0.93), vec3<f32>(0.97), frost_t);   // 恒**亮白**（深底浓霜 / 白底白霜）
-    let frost_a = mix(0.85, 0.55, frost_t);                          // 深底厚 / 白底仍较实（糊白内容）
+    let frost_a = mix(0.70, 0.28, frost_t);   // ★#923：轻提亮（重白霜糊平内容 ⇒ 折射/倒影不可见）
     col = vec4<f32>(mix(col.rgb, frost_col, frost_a), col.a);
 
     // ⑥ 光照：Fresnel + 法线·光源（双瓣）＋ ★★★决策 #906 **兜底可见性**（对齐 iOS：**纯色/空白背景上玻璃仍可见**）
