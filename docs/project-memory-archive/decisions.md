@@ -4354,3 +4354,5 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 【判据】`check:shader-generated`（四端无漂移）· `check:shader-capability` · `check:glass-pixel-parity`（Metal==oracle max 1/255）· `check:glass-capability`/`glass-audit` 绿 · Android 真机：浅底内容明显糊白（"'蛋仔'文字清晰"→"仅淡影"）· 鸿蒙 prebuilt 同步（SPIR-V）。
 【★教训（承 #926「拟合均值漏斜率」/#942「拟合两点漏密度」）】**同一个 4 点，可以拟合出两种方向**——#942 用整体 4 点线性拟合（斜率 0.4）推"α 随 bg 递减"，#943 逐点**反解 α** 才看清"浅底 α 最高"。
   ⇒ **要对齐某个"可反解的物理量"（这里是 α），就逐点反解它，别用别的量（亮度）的拟合去代推它的符号**。★用户第二张对照图是判据（"浅底内容该消失"），#942 的真机验证只看了一个背景点、没验极端浅底 ⇒ **验证要覆盖两端**。
+
+【★续调（用户「观感好很多了，但浅底透明度还是太高，继续压」）】浅底 α 0.89 → **0.94**（`mix(0.63,0.94,bg_lum)`）；真机浅底内容虚影进一步减弱。判据：shader-generated/glass-pixel-parity（Metal==oracle max 1/255）/shader-capability/glass-capability/glass-audit 绿 · 鸿蒙 prebuilt 同步。

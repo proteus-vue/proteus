@@ -157,7 +157,7 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     //   ★这是"自动调整透明度"的落点：宿主已逐帧统计 `bg_lum`（Android `regionLum` / iOS `regionL`）。
     //   ★诚实边界：α 由 4 图反推（V 取近白），真机目视再定微调；iOS/鸿蒙同步（同源真源，仅 Android 真机验证）。
     let VEIL_V = 1.0;                                                  // 面纱基色（**纯白**——浅底 alpha 0.9 时才能够到 iOS L253）
-    let VEIL_A = mix(0.63, 0.89, clamp(u.bg_lum, 0.0, 1.0));           // 深底 0.63 → 浅底 0.89（4 图反解）
+    let VEIL_A = mix(0.63, 0.94, clamp(u.bg_lum, 0.0, 1.0));           // 深底 0.63 → 浅底 0.94（用户「浅底还是太透，继续压」）
     // ★★★决策 #925：**12% 背景色温**（iOS 实证：蓝底玻璃 B−R=+9.0 vs 背景 +75.6）——只取背景的
     //   **色度偏移**（色 − 其灰度）× 12%（色相，不动明度）。
     let acc_chroma = acc.rgb - vec3<f32>(dot(acc.rgb, vec3<f32>(0.299, 0.587, 0.114)));
