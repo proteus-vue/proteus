@@ -153,18 +153,34 @@ final class SuperappScene: NSObject {
             Self.tapMode = true
             let body = String(ta.dropFirst("--tap=".count))
             let parts = body.split(separator: ",")
+            // ★决策 #937：可选**前置** screen/scroll —— 先导航到目标屏 + 注入滚动，再 tap。
+            //   用于验证"滚动后命中 fixed"（与 Android `--es screen`+`--es scroll`+`--es tap` 组合同语义）。
+            let preScreen = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--screen=") })
+                .map { String($0.dropFirst("--screen=".count)) }
+            let preScroll = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--scroll=") })
+                .flatMap { Double($0.dropFirst("--scroll=".count)) }
             if parts.count == 2, let x = Double(parts[0]), let y = Double(parts[1]) {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                    let out = bridgeRef?.tapAt(x, y) ?? "{}"
-                    NSLog("[proteus] SUPERAPP_TAP inject x=%f y=%f => %@", x, y, String(out.prefix(220)))
-                    // 下一 runloop：路由/处理器续体排空 → 重渲 → 落报告 → 自退（与 drive 同款完成信号）
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                        renderCurrent()
-                        takeSnapshot()
-                        switchLog.append(["tap": "inject", "current": currentName(), "ok": true, "via": "tap-inject"])
-                        writeReport(reportBody())
-                        NSLog("[proteus] SUPERAPP_TAP_REPORT_READY current=%@", currentName())
-                        if ProcessInfo.processInfo.environment["PROTEUS_EXIT_AFTER_REPORT"] == "1" { exit(0) }
+                    if let sn = preScreen { _ = evalJs?("__proteusSuperappNav(\(jsonQuote(sn)))"); renderCurrent() }
+                    let doTap: () -> Void = {
+                        let out = bridgeRef?.tapAt(x, y) ?? "{}"
+                        NSLog("[proteus] SUPERAPP_TAP inject x=%f y=%f => %@", x, y, String(out.prefix(220)))
+                        // 下一 runloop：路由/处理器续体排空 → 重渲 → 落报告 → 自退（与 drive 同款完成信号）
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                            renderCurrent()
+                            takeSnapshot()
+                            switchLog.append(["tap": "inject", "scroll": preScroll as Any, "current": currentName(), "ok": true, "via": "tap-inject"])
+                            writeReport(reportBody())
+                            NSLog("[proteus] SUPERAPP_TAP_REPORT_READY current=%@", currentName())
+                            if ProcessInfo.processInfo.environment["PROTEUS_EXIT_AFTER_REPORT"] == "1" { exit(0) }
+                        }
+                    }
+                    // 滚动异步生效 ⇒ 落 offset 后再 tap（否则读到 0）
+                    if let dy = preScroll, dy != 0 {
+                        if let vw = bridgeRef?.view { _ = vw.driveScrollDrag(dx: 0, dy: CGFloat(dy)) }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { doTap() }
+                    } else {
+                        doTap()
                     }
                 }
             } else {
@@ -175,7 +191,8 @@ final class SuperappScene: NSObject {
         //   注入一次**内容滚动**（`driveScrollDrag`）→ 截图 → 落报告 → 自退。用于 fixed/sticky 的**滚动锚定**证据
         //   （fixed 徽标滚动后屏幕位置不变 / sticky 条吸附）。与 Android `--es screen`/`--es scroll` 同语义。
         if let scArg = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--scroll=") }),
-           let snArg = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--screen=") }) {
+           let snArg = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--screen=") }),
+           !ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("--tap=") }) {
             Self.tapMode = true
             let sName = String(snArg.dropFirst("--screen=".count))
             let dy = Double(String(scArg.dropFirst("--scroll=".count))) ?? 0

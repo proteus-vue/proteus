@@ -2628,6 +2628,8 @@ final class SelfDrawView: UIView {
     /** ★★★用户实测修复（2026-10-08）：**fixed 锚点基位**（id → 视口坐标下的原点/尺寸）。
      *  用 frame 补偿（内容平移 −offset ⇒ fixed 反加 +offset）实现视口锚定——见 buildLayers 的 fixed 段注释。 */
     private var fixedBases: [Int: (base: CGPoint, size: CGSize)] = [:]
+    /// ★决策 #937：fixed 节点 id 集（供命中按**视口坐标**优先探测——fixed 覆层钉在视口，命中不加 contentOffset）。
+    var fixedNodeIds: Set<Int> { Set(fixedBases.keys) }
     func setStickyTops(_ tops: [Int: CGFloat]) {
         stickyNodes.removeAll(keepingCapacity: true)
         for (id, top) in tops {
@@ -5813,7 +5815,21 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         // ★★手势发生 ⇒ 收起元素高亮（决策 #714）：用户已看到"面板选中的是设备上这个"⇒ 高亮完成使命，
         //   点空白/点动作都收起（含真实触摸与注入 tap——都走本入口）。下次面板选节点会再下发。
         clearHighlight()
-        let out = takeCString(proteus_layout_hit_test(handle, Float(x), Float(y)))
+        // ★★★决策 #937（承 #652 具名缺口）：**fixed 覆层按视口坐标命中**。
+        //   【缺口】滚动实现 = 内容被全局平移（`sublayerTransform` −contentOffset）⇒ 常规内容屏幕位
+        //     = 内核 y − contentOffset，故命中要 `+contentOffset`（本函数入参已是内容坐标）；而 **fixed
+        //     节点被反向补偿钉在视口** ⇒ 屏幕位 = 内核 y（不能再加 contentOffset）。#652 注释即点名此缺口"待补命中"。
+        //   ⇒ 先按视口坐标测（fixed 覆层绘于内容之上 ⇒ 命中优先）；命中 fixed 子树才采用，否则回落内容坐标。
+        //   ★两端同构：Android 对应修见 `ProteusHostView.hitTestAtView`（决策 #937）。
+        let fixedIds = view?.fixedNodeIds ?? []
+        var hitOut = takeCString(proteus_layout_hit_test(handle, Float(x), Float(y)))
+        if !fixedIds.isEmpty {
+            let co = view?.contentOffset ?? .zero
+            let vx = x - Double(co.x), vy = y - Double(co.y)
+            let vOut = takeCString(proteus_layout_hit_test(handle, Float(vx), Float(vy)))
+            if Self.hitTouchesFixed(vOut, fixedIds) { hitOut = vOut }
+        }
+        let out = hitOut
         guard let d = out.data(using: .utf8),
               let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any],
               (o["ok"] as? Bool) == true else {
@@ -5835,6 +5851,16 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         //   证明"这次注入真的触发了派发"而不是读到了上一次的陈旧值）。
         gestureDispatchCount += 1
         onDispatchToJS?(target, chain, type, x, y)
+    }
+
+    /// ★决策 #937：命中结果（target 或冒泡链）是否落在 **fixed 子树**（链含祖先 ⇒ 覆盖子树）。
+    static func hitTouchesFixed(_ json: String, _ fixedIds: Set<Int>) -> Bool {
+        guard let d = json.data(using: .utf8),
+              let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any],
+              (o["ok"] as? Bool) == true else { return false }
+        if let t = o["target"] as? Int, fixedIds.contains(t) { return true }
+        if let chain = o["chain"] as? [Int] { return chain.contains { fixedIds.contains($0) } }
+        return false
     }
 
     /// 派发次数（A/B 判据的 `gestures_fired` 来源；计的是**真的调了 JS 派发**的次数）
