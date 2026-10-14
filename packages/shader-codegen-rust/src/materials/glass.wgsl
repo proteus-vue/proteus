@@ -104,7 +104,7 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     //   ⇒ 幅度降到 **0.15·band**（≈10 物理px ≈ 3 逻辑px）：线间距接近均匀（仅边缘轻微弯折，对齐 iOS"平面变化"）。
     //   ★这是**定稿方向**（不再漂移）：机制=法线方向向外采样（单调、不折叠）+ 小幅度（平面式轻弯折）。
     //   A 分解：`EDGE_REFRACT`（幅度）· `strength`（宿主 refract_depth 旋钮，1.0 中性）。
-    let EDGE_REFRACT = 0.10;   // ★#916 定稿：位移极小（滚动拖影的数学根因是高幅度位移）
+    let EDGE_REFRACT = 0.42;   // ★#917：从 iOS 真值反推——边缘压缩比 1−1.5A ≈ 0.33（=iOS 实测压缩量）⇒ A≈0.42
     let strength = clamp(u.refract_depth / max(band, 1.0), 0.2, 1.1);
     var bend = prof * band * EDGE_REFRACT * strength;
     // ★★★决策 #905：**触控形变流动**——触点周围局部凸起（Gaussian 钟），按压力把背后内容沿"离触点方向"推开；

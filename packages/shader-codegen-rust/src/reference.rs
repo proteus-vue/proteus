@@ -118,7 +118,7 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     //   式轻弯折；机制 = 法线方向向外采样，单调不折叠）。refract_depth 以 band 为基准（1.0 中性）。
     let prof = 1.0 - smoothstep(0.0, 1.0, e);
     let strength = (p.refract_depth / band.max(1.0)).clamp(0.2, 1.1);
-    let bend = prof * band * 0.10 * strength;
+    let bend = prof * band * 0.42 * strength;
     let sp = (local.0 + n.0 * bend, local.1 + n.1 * bend);
 
     // uv 折算：纹理尺寸 = size + 2*pad；节点 uv=0 对应纹理 pad/(size+2pad)
