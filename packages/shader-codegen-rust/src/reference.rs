@@ -26,6 +26,8 @@ pub struct GlassParams {
     pub bg_lum: f32,
     /// ★#952：选中胶囊叠加层强度（0=无 / 1=叠半透明中性色 light→灰·dark→亮；不动面纱 α）。
     pub overlay: f32,
+    /// ★#963：按下强度 0..1（选中胶囊/条的「点亮透镜」亮边；触点 glass.wgsl 同源）。缺省 0。
+    pub press: f32,
 }
 
 impl Default for GlassParams {
@@ -42,6 +44,7 @@ impl Default for GlassParams {
             light_dir: (-0.35, -0.94),
             bg_lum: 0.0,
             overlay: 0.0,
+            press: 0.0,
         }
     }
 }
@@ -177,7 +180,9 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     // ★#953：边缘高光按 overlay 门控（overlay=1 ⇒ 无边缘高光 = 干净卡片）
     // ★#956 撤回：iOS 选中胶囊实测无高亮边（#953 原判正确）
     let edge_amp = 1.0f32 - p.overlay.clamp(0.0, 1.0);
-    let rim = ((facing.powi(6) * p.specular * 0.22 + fres * 0.06) * bevel_mask + edge_hi) * edge_amp;   // ★#954
+    // ★#963：按下点亮透镜（press>0 的玻璃加镜面亮边）
+    let press_rim = bevel_mask * p.press.clamp(0.0, 1.0) * 0.32;
+    let rim = ((facing.powi(6) * p.specular * 0.22 + fres * 0.06) * bevel_mask + edge_hi) * edge_amp + press_rim;   // ★#954/#963
     for c in 0..3 { col[c] = (col[c] + rim).clamp(0.0, 1.0); }
     col[3] = 1.0;
     col

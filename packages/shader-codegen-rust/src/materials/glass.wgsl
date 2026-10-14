@@ -207,7 +207,10 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     // ★★★决策 #956 撤回：**iOS 选中胶囊实测无高亮边**（顶边 78→109 / 右边界 120→89，皆为**干净色阶、无过亮尖峰**；
     //   此前误把"条自身顶缘高光"(y2285 L142，恰在胶囊上方) 当成胶囊的边）。⇒ 选中等 overlay 玻璃**无边缘高光**（#953 原判正确）。
     let edge_amp = 1.0 - clamp(u.overlay, 0.0, 1.0);
-    let rim = ((pow(facing, 6.0) * u.specular * 0.22 + fres * 0.06) * bevel_mask + edge_hi) * edge_amp + tg * 0.07;   // ★#954/#956
+    // ★★★决策 #963：**按下「点亮透镜」**——press>0 的玻璃（按下组：条 + 选中胶囊）加一道**镜面亮边**
+    //   （对齐 iOS 按下：边缘镜面亮脊 +67L，子代理实测；我们此前按下=edge_amp 把亮边全关了 ⇒ 死平）。
+    let press_rim = bevel_mask * clamp(u.press, 0.0, 1.0) * 0.32;
+    let rim = ((pow(facing, 6.0) * u.specular * 0.22 + fres * 0.06) * bevel_mask + edge_hi) * edge_amp + press_rim + tg * 0.07;   // ★#954/#956/#963
     col = vec4<f32>(clamp(col.rgb + vec3<f32>(rim), vec3<f32>(0.0), vec3<f32>(1.0)), 1.0);
     return col;
 }
