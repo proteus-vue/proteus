@@ -3358,6 +3358,14 @@ public class ProteusHostView extends ViewGroup {
     }
 
     /** 该点是否落在本帧**暗玻璃**盒内（vibrancy 前景覆盖判据）。 */
+    /** ★#951（vibrancy 保 accent）：颜色是否**中性**（黑/灰/白，低饱和）——vibrancy 只把中性色刷白，
+     *  **保留有彩色的主题色**（如选中项的 accent 蓝 #2b2f7a）。判据 = 三通道极差 ≤ 32。 */
+    private static boolean isNeutralColor(int color) {
+        final int r = (color >> 16) & 0xff, g = (color >> 8) & 0xff, b = color & 0xff;
+        final int mx = Math.max(r, Math.max(g, b)), mn = Math.min(r, Math.min(g, b));
+        return (mx - mn) <= 32;
+    }
+
     private boolean inDarkGlass(float x, float y) {
         for (int k = 0; k < darkGlassRects.size(); k++) {
             final float[] r = darkGlassRects.get(k);
@@ -4040,7 +4048,7 @@ public class ProteusHostView extends ViewGroup {
                         canvas.translate(c.x, c.y);
                         android.graphics.Paint fillPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
                         fillPaint.setStyle(android.graphics.Paint.Style.FILL);
-                        fillPaint.setColor(inDarkGlass(c.x + c.w * 0.5f, c.y + c.h * 0.5f) ? 0xFFFFFFFF : scol);   // ★#950 vibrancy
+                        fillPaint.setColor((inDarkGlass(c.x + c.w * 0.5f, c.y + c.h * 0.5f) && isNeutralColor(scol)) ? 0xFFFFFFFF : scol);   // ★#950/951 vibrancy（保 accent）
                         canvas.drawPath(sp, fillPaint);
                         canvas.restoreToCount(svgSaveF);
                     } else if (prog > 0f) {
@@ -4189,8 +4197,9 @@ public class ProteusHostView extends ViewGroup {
                         ? animTextColor.get(ids[i]) : null;
                 // ★#950（vibrancy）：落在**暗玻璃**内的文字**强制白**（对齐 iOS）——**主文字绘制路径**
                 //   （动画色/静态色都在此 setColor；图标已走 svg 分支单独处理）。
+                final int wantTc = animTc != null ? animTc : (c.textColor != 0 ? c.textColor : 0xFF000000);
                 final boolean dkGlass = inDarkGlass(c.x + c.w * 0.5f, c.y + c.h * 0.5f);
-                if (dkGlass) textPaint.setColor(0xFFFFFFFF);
+                if (dkGlass && isNeutralColor(wantTc)) textPaint.setColor(0xFFFFFFFF);
                 else if (animTc != null) textPaint.setColor(animTc);
                 else if (c.textColor != 0) textPaint.setColor(c.textColor);
                 final int alphaBase = (animTc != null || c.textColor != 0)
@@ -4824,7 +4833,7 @@ public class ProteusHostView extends ViewGroup {
                     lastTextSize = c.fontSize;
                 }
                 // ★#950（vibrancy）：落在**暗玻璃**内的文字**强制白色**（对齐 iOS：压暗背景时前景转白保对比）。
-                final int effTc = inDarkGlass(c.x + c.w * 0.5f, c.y + c.h * 0.5f) ? 0xFFFFFFFF : c.textColor;
+                final int effTc = (inDarkGlass(c.x + c.w * 0.5f, c.y + c.h * 0.5f) && isNeutralColor(c.textColor != 0 ? c.textColor : 0xFF000000)) ? 0xFFFFFFFF : c.textColor;
                 if (effTc != 0 && effTc != lastTextColor) {
                     textPaint.setColor(effTc);
                     lastTextColor = effTc;

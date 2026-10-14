@@ -43,6 +43,7 @@ export function glassResolver(props: Record<string, string | undefined>): Record
     noise: num(props.noise),
     fallback: props.fallback as never,
     interactive: bool(props.interactive),   // ★#905：触控形变
+    veilFlip: bool(props.veilFlip),          // ★#951：面纱反相（选中胶囊与条反向）
     interactiveEffect: props.interactiveEffect as never,   // ★#906：交互效果形态（resolveGlass 归一）
     material: props.material as never,
   })
@@ -64,6 +65,8 @@ export function glassResolver(props: Record<string, string | undefined>): Record
     material: materialOf(props.material),
     // ★★★决策 #905：触控形变流动——折进 `glass.interactive`（宿主据此接触摸→每帧喂 touch/press uniform）。
     interactive: r.interactive,
+    // ★#951：面纱反相——折进 `glass.veilFlip`（宿主写 veil_flip uniform：浅底透/深底白霜，与条反向）。
+    veilFlip: r.veilFlip ? 1 : 0,
     // ★★★决策 #906：交互效果形态——0=**上层玻璃表面流动**（默认，Apple `isInteractive`）/ 1=内容折射位移。
     //   折进 `glass.effect`，宿主透传为着色器 `effect` uniform（复用原 `_pad2` 槽，布局仍 96B）。
     effect: r.interactiveEffect === 'displace' ? 1 : 0,

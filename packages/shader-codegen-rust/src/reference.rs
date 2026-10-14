@@ -24,6 +24,8 @@ pub struct GlassParams {
     pub light_dir: (f32, f32),
     /// ★★★决策 #911：区域背景亮度（0..1）——宿主统计玻璃盒区域均值（浅霜/深霜锚点随它切换）。
     pub bg_lum: f32,
+    /// ★#951：面纱反相（0=正常；1=反相，浅底透/深底白霜——选中胶囊与条反向）。
+    pub veil_flip: f32,
 }
 
 impl Default for GlassParams {
@@ -39,6 +41,7 @@ impl Default for GlassParams {
             tint: [1.0, 1.0, 1.0, 0.149],
             light_dir: (-0.35, -0.94),
             bg_lum: 0.0,
+            veil_flip: 0.0,
         }
     }
 }
@@ -143,7 +146,8 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     //   ★#925：附 12% 背景色温（只取色度偏移）。与 glass.wgsl ⑤ 同源。
     // ★★★决策 #949：α 随背景明暗**翻转**（阈值重映射，非线性）——与 glass.wgsl ⑤ 同源。
     let veil_v = 1.0f32;
-    let veil_t = ((p.bg_lum - 0.25) / 0.60).clamp(0.0, 1.0);
+    let veil_t0 = ((p.bg_lum - 0.25) / 0.60).clamp(0.0, 1.0);
+    let veil_t = veil_t0 + (1.0 - 2.0 * veil_t0) * p.veil_flip.clamp(0.0, 1.0);
     let veil_a = 0.09f32 + (0.90f32 - 0.09f32) * veil_t;
     let raw_lum = raw[0]*0.299 + raw[1]*0.587 + raw[2]*0.114;
     for c in 0..3 {
