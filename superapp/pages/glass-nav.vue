@@ -207,7 +207,7 @@
                触点命中被胶囊抢走（原先流动的是整条 bar）——行为回归。胶囊是**静态更亮规格**（同 iOS 选中胶囊）。 -->
           <!-- ★#952：`overlay` ⇒ 胶囊**叠一层半透明中性色**（浅底→灰「light 按下」/ 深底→亮「dark 按下」）——
                与条恒有差异、可辨识，且**不动面纱 α**（透过内容的可见度与条一致）。 -->
-          <pg-glass class="gna-highlight" preset="floating" :radius="27" :interactive="false" overlay tint="rgba(0,0,0,0)" :style="{ left: hlLeft }" />
+          <pg-glass class="gna-highlight" preset="floating" :radius="24" :interactive="false" overlay tint="rgba(0,0,0,0)" :style="{ left: hlLeft }" />
           <!-- ★★★决策 #907 端到端：**v-for 行 + 行参 handler + 行内动态 `:class`**——
                正是本轮修的两面墙：B1（`pick(item.key)` 行参）+ B2（`:class` 引用外层 `active`）。
                此前这两写法在 App 端**静默失效**（点不动 + 高亮不动）。 -->
@@ -396,10 +396,12 @@ function pick(key: string, pos: number): void {
      像素实测：iOS 选中胶囊 ≈ **满条高**（B-bottom：胶囊 143px / 条 141px，边距≈0）；
      我们原 inset 6 ⇒ 胶囊只 79% 条高（上下各留 ~10% 白）⇒ 看着像"浮着的小药丸"。
      现 inset 1 + 圆角 27（= 条高 56/2 − 1 ⇒ 胶囊呈**stadium 药丸**，两端半圆，同 iOS）。 */
-  top: 1px;
-  bottom: 1px;
+  /* ★#955：inset 1→4（用户「胶囊太高了、和上下边完全没边界」；#940 的 6px「太低」/ 1px「太高」⇒ 取中）。
+     可见缝 ≈ 4px 逻辑 = 12px 物理。圆角 = 半高（(56−8)/2 = 24）⇒ stadium。 */
+  top: 4px;
+  bottom: 4px;
   width: 91px;
-  border-radius: 27px;
+  border-radius: 24px;
   /* ★决策 #936：胶囊是**装饰层**（对齐 iOS：选中胶囊在内容之下、不拦截点击）——
      否则命中测试命中的是胶囊而非导航项 ⇒ 点"选中项所在位置"点不动（真机实证 target=178）。 */
   pointer-events: none;
