@@ -168,6 +168,7 @@ fn render_reference(spec_path: &str) -> Result<(), String> {
         // ★★★决策 #911：区域背景亮度（缺省 0 = 视作深底）
         bg_lum: p["bg_lum"].as_f64().unwrap_or(0.0) as f32,
         overlay: p["overlay"].as_f64().unwrap_or(0.0) as f32,
+        press: p["press"].as_f64().unwrap_or(0.0) as f32,
     };
     let ow = spec["out"]["width"].as_u64().unwrap_or(gp.size_px.0 as u64) as usize;
     let oh = spec["out"]["height"].as_u64().unwrap_or(gp.size_px.1 as u64) as usize;

@@ -3332,10 +3332,12 @@ public class ProteusHostView extends ViewGroup {
     private float glassTouchLocalX = -1e6f, glassTouchLocalY = -1e6f;
     private float glassPress = 0f, glassPressTarget = 0f;
     /** ★#959/#961：按下放大的两档系数——**条小、选中胶囊大**（用户实测 iOS：条缩放小、胶囊缩放大）。 */
-    private static final float GLASS_PRESS_SCALE = 0.03f;          // 按下玻璃（条，小幅）
+    /** ★#963：当前"按下组"的玻璃节点集（命中 + 子树内玻璃）——供 drawGlassFace 判"是否点亮"。 */
+    private java.util.Set<Integer> glassPressSubtree = java.util.Collections.emptySet();
+    private static final float GLASS_PRESS_SCALE = 0.03f;          // 按下玻璃（条，小幅 ~1.03×）
     //  ★#962：胶囊幅度要**大到冲出条外**（用户「iOS 缩放直接在玻璃条外面」）——条 56 高、胶囊基底 ~48 ⇒ 须 >58/48=1.21
     //   才越界 ⇒ 取 0.30（1.30×）。
-    private static final float GLASS_PRESS_SCALE_CAPSULE = 0.30f;  // 子树内其余玻璃（选中胶囊，大幅）
+    private static final float GLASS_PRESS_SCALE_CAPSULE = 0.12f;  // 子树内其余玻璃（选中胶囊；实测 iOS 放大亦为 ~1.1×，此前 0.30 冲太猛）
     /** ★★★决策 #950（vibrancy）：本帧**暗玻璃**的区域盒（内容坐标 x,y,w,h）——落在其中的文字/图标**强制白色**
      *  （对齐 iOS：玻璃压暗背景时前景转白，保内容强烈可读）。逐帧在 drawGlassPass 重算。 */
     private final java.util.List<float[]> darkGlassRects = new java.util.ArrayList<>();
@@ -3490,28 +3492,38 @@ public class ProteusHostView extends ViewGroup {
 
     /** 画一个玻璃面（节点盒 c）：AGSL 采样背后内容 → blur+tint；不可用 ⇒ 半透明实色回退。 */
     private void drawGlassFace(Canvas canvas, int nodeId, Cmd c, GlassMaterial.Spec spec) {
-        if (c.w <= 0 || c.h <= 0) return;
+        drawGlassFace(canvas, nodeId, c, spec, c.x, c.y, c.w, c.h);
+    }
+
+    /**
+     * ★★★决策 #963：**显式盒**重载——按下缩放**不再用 `canvas.scale`**（那会让 shader 的 `origin/size_px`
+     *   与实际绘制的盒**错位** ⇒ 采样/SDF 全错 ⇒ 「折射消失、通透没了、变死平色块」，子代理实测 σ=0/无亮脊/无色散）。
+     *   改为**把盒本身放大**（`bx,by,bw,bh`）⇒ origin/size_px/采样/clip 全部一致 ⇒ 玻璃光学（折射/高光/色散）随缩放保持。
+     */
+    private void drawGlassFace(Canvas canvas, int nodeId, Cmd c, GlassMaterial.Spec spec, float bx, float by, float bw, float bh) {
+        if (bw <= 0 || bh <= 0) return;
         final int save = canvas.save();
         if (spec.radius > 0) {
             android.graphics.Path clip = new android.graphics.Path();
-            clip.addRoundRect(new android.graphics.RectF(c.x, c.y, c.x + c.w, c.y + c.h), spec.radius, spec.radius,
+            clip.addRoundRect(new android.graphics.RectF(bx, by, bx + bw, by + bh), spec.radius, spec.radius,
                     android.graphics.Path.Direction.CW);
             canvas.clipPath(clip);
         }
-        android.graphics.Paint p = GlassMaterial.buildPaint(nodeId, glassBackdrop, c.x, c.y, glassBackdropX, glassBackdropY, c.w, c.h, spec.radius, spec,
+        android.graphics.Paint p = GlassMaterial.buildPaint(nodeId, glassBackdrop, bx, by, glassBackdropX, glassBackdropY, bw, bh, spec.radius, spec,
                 // ★★★决策 #905：触控形变——交互玻璃才传触点（盒局部 px）+ press；其余恒 (-1e6)（无影响）。
                 (spec.interactive && glassInteractNodeId == nodeId) ? glassTouchLocalX : -1e6f,
                 (spec.interactive && glassInteractNodeId == nodeId) ? glassTouchLocalY : -1e6f,
-                (spec.interactive && glassInteractNodeId == nodeId) ? glassPress : 0f,
+                // ★#963：**按下组**（命中玻璃 + 其子树内玻璃，如选中胶囊）都点亮；触点位置仅命中玻璃有。
+                (nodeId == glassInteractNodeId || glassPressSubtree.contains(nodeId)) ? glassPress : 0f,
                 glassBackdropScaleX, glassBackdropScaleY);
         if (p != null) {
-            canvas.drawRect(c.x, c.y, c.x + c.w, c.y + c.h, p);
+            canvas.drawRect(bx, by, bx + bw, by + bh, p);
         } else {
             // ★降级（API<31 或着色器失败）：半透明实色——绝不白屏/黑块（玻璃方案铁律 3）
             android.util.Log.w("proteus-glass", "drawGlassFace: 走降级半透明（AGSL 不可用）");
             android.graphics.Paint fp = new android.graphics.Paint();
             fp.setColor(((spec.tint & 0x00FFFFFF) | 0xE6000000)); // tint 提不透明（0.9 alpha）
-            canvas.drawRect(c.x, c.y, c.x + c.w, c.y + c.h, fp);
+            canvas.drawRect(bx, by, bx + bw, by + bh, fp);
         }
         canvas.restoreToCount(save);
     }
@@ -3563,6 +3575,7 @@ public class ProteusHostView extends ViewGroup {
             }
             if (pressBox != null) pressSubtree = subtreeIdsOf(glassInteractNodeId);
         }
+        glassPressSubtree = pressSubtree;
         // ★#961：子树内的**内层玻璃**（选中胶囊）——它用**更大**的缩放系数（条小/胶囊大，对齐 iOS）。
         Cmd pressInner = null;
         if (pressBox != null) {
@@ -3603,15 +3616,17 @@ public class ProteusHostView extends ViewGroup {
                 if (glum >= 0f && glum < 0.45f) darkGlassRects.add(new float[]{gc.x, gc.y, gc.w, gc.h});
             }
             // ★★★决策 #959：**按下放大**（对齐 iOS）——命中交互玻璃且 press>0 ⇒ 以盒中心等比放大（松开 lerp 回 1）。
+            // ★#963：按下 ⇒ **放大盒**（不走 canvas.scale）——绕按下玻璃中心，让 shader 采样一致、玻璃光学保持。
             final boolean inPress = pressBox != null && pressSubtree.contains(ids[i]);
-            final int ss = inPress ? canvas.save() : -1;
-            if (ss != -1) {
+            float bx = gc.x, by = gc.y, bw = gc.w, bh = gc.h;
+            if (inPress) {
                 final float k = (pressInner != null && ids[i] != glassInteractNodeId) ? GLASS_PRESS_SCALE_CAPSULE : GLASS_PRESS_SCALE;
                 final float sc = 1f + glassPress * k;
-                canvas.scale(sc, sc, pressBox.x + pressBox.w * 0.5f, pressBox.y + pressBox.h * 0.5f);
+                final float pcx = pressBox.x + pressBox.w * 0.5f, pcy = pressBox.y + pressBox.h * 0.5f;
+                bx = pcx + (gc.x - pcx) * sc; by = pcy + (gc.y - pcy) * sc;
+                bw = gc.w * sc; bh = gc.h * sc;
             }
-            drawGlassFace(canvas, ids[i], list.get(i), g);
-            if (ss != -1) canvas.restoreToCount(ss);
+            drawGlassFace(canvas, ids[i], list.get(i), g, bx, by, bw, bh);
             if (fs != -1) canvas.restoreToCount(fs);
         }
         // 第二相：玻璃子树内容（其文本/子视图）——背景已在 captureGlassBackdrop 排除玻璃子树（只含"背后"），
