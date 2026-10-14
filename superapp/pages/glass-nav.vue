@@ -207,7 +207,7 @@
                触点命中被胶囊抢走（原先流动的是整条 bar）——行为回归。胶囊是**静态更亮规格**（同 iOS 选中胶囊）。 -->
           <!-- ★#952：`overlay` ⇒ 胶囊**叠一层半透明中性色**（浅底→灰「light 按下」/ 深底→亮「dark 按下」）——
                与条恒有差异、可辨识，且**不动面纱 α**（透过内容的可见度与条一致）。 -->
-          <pg-glass class="gna-highlight" preset="floating" :radius="27" :interactive="false" overlay tint="rgba(115,115,115,1.0)" :style="{ left: hlLeft }" />
+          <pg-glass class="gna-highlight" preset="floating" :radius="27" :interactive="false" overlay tint="rgba(0,0,0,0)" :style="{ left: hlLeft }" />
           <!-- ★★★决策 #907 端到端：**v-for 行 + 行参 handler + 行内动态 `:class`**——
                正是本轮修的两面墙：B1（`pick(item.key)` 行参）+ B2（`:class` 引用外层 `active`）。
                此前这两写法在 App 端**静默失效**（点不动 + 高亮不动）。 -->

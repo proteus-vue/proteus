@@ -173,7 +173,7 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     //   ⇒ 观感"灰蒙蒙"（浅底）/ "亮蒙蒙"（深底），与条恒有差异，且**不改变透过内容的不透明度**。
     if (u.overlay > 0.001) {
         let ov_l = mix(0.88, 0.40, veil_t);                           // 深底→0.88 亮（dark 按下）/ 浅底→0.40 灰（light 按下）
-        col = vec4<f32>(mix(col.rgb, vec3<f32>(ov_l), clamp(u.overlay, 0.0, 1.0) * 0.5), col.a);
+        col = vec4<f32>(mix(col.rgb, vec3<f32>(ov_l), clamp(u.overlay, 0.0, 1.0) * 0.30), col.a);   // ★#952 续：0.5→0.30（用户「白底胶囊太暗/黑底太亮」）
     }
     // ★★★决策 #944：**tint 移到面纱之后**——作者 tint 应作用于**最终玻璃面**，而非"内容色"。
     //   此前 tint 在面纱（#943 α 0.94 近白）**之前** ⇒ 暗 tint（选中胶囊 rgba(115,115,115,…)）被面纱**整片洗白**

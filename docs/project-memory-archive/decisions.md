@@ -4447,3 +4447,4 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 【判据（真机）】**浅底 胶囊体 141 < 条 155（**压暗→灰**，light 按下）**；**深底 胶囊体 131 > 条 66（**提亮**，dark 按下）**——两态都与条有差异、且**内容可见度与条一致**（不再"更透/更糊"）。· 选中项文字仍**保留主题蓝 `#2c2f76`**（#951 的 isNeutralColor 保 accent 沿用）；未选深底白字 `#ffffff`。· `check:shader-generated`/`glass-pixel-parity`(Metal==oracle max 1/255)/`glass-capability`/`glass-audit`/`harmony-runtime-prebuilt`/`pixel-snap` 绿 · `test:coupled` 绿 · AAR 重建。
 【诚实边界】仅 Android 真机；`overlay` 是通用 `pg-glass` prop（iOS/鸿蒙同源真源已含、宿主未接线 ⇒ 该二端 overlay 恒 0）；`ov_l` 两态值（0.88/0.40）与 `0.5` 混合权重为初定，真机目视可再调。
 【★教训】**"选中态/按下态"改的是「元素自身的底色」，不是「它遮挡内容的程度」**——#951 混淆了这两者（改 α = 改可读性）。iOS 的按下反馈始终是**叠加一层半透明中性色**（`UIVisualEffectView` 的 highlight/dimming layer），明暗随当前外观（light 灰 / dark 亮）。★改"观感"先想清楚**改的是哪一层**（背景叠加 / 内容可见度 / 前景色），三者在管线里是三处。
+【★续调（用户「白底胶囊太暗 / 黑底胶囊太亮，调低点」）】两处：
