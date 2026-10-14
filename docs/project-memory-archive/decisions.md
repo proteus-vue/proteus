@@ -4317,3 +4317,10 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 【根因三（图标填补色需内核配合）】图标填充色取自内核 `stroke_color`（`#938` 的 currentColor 回退）——运行期改色须①送内核更新 `text_color`/`stroke_color`；②宿主从内核**重读**并重注入 svg 填充。→ **修**：内核 `PatchStyle` 加 `color`（`apply_to` 更新 `text_color`，`svg_fill` 时同改 `stroke_color`）；Android `updatePatches` 对 svg 节点收集 color 补丁 → `RustLayout.update` + `reInjectSvgFor`（重读 `svgNodes` → `setNodeSvgStroke`）；iOS `updatePatches` 在 `applied==0`（纯色补丁）**不再提前返回**，改调 `applyColorPatches`（文本层改前景色 + svg 层按内核最新色改填充）。
 【判据】**Android 真机**：tap 各位 → 选中项**图标 + 文字**均变蓝 `#2c2f76`、其余保持灰 `#606672`（像素采样；tap Today/搜索 双向验证）· Rust lib 231 · `test:coupled` 545 · iOS 类型检查绿 · `ios-export-wiring`/`ios-style-keys`/`vapor-three-end`/`app-screen-content`/`host-kernel-keys` 绿 · runtime AAR 重建。**iOS 真机**：`--screen=glass-nav --tap` 后**标签选中色可见**（半透明玻璃条下的像素采样受背景干扰，图标级联与 Android 走同一份共享运行期 + 对称的 iOS `applyColorPatches`，**未逐像素取证**——诚实边界）。。
 【★教训（一句话）】**"选中态"是一个跨 5 处的能力，缺任一处都不亮**：宿主回执方法（连接）→ 编译期标记（继承来源）→ 运行期级联（DOM 继承的人工替代）→ 内核字段（svg 色）→ 宿主重注入（重绘）。★**同一族缺陷的第三次显形**（#935 U0 / #938 图标通道 / 本单），共性都是**「JS 侧建了通路，宿主/内核某一端缺席」**——端到端能力必须逐端核对"每一跳都在"。
+
+940. **glass 悬浮导航：选中胶囊改为「紧贴上下边」的 stadium 药丸（对齐 iOS）· 只 Android**（2026-10-14 · 用户「iOS 先不用管，先专攻安卓的……我们的选中项胶囊太低了，不是 iOS 那种紧贴上下两边」）：
+【现象】`.gna-highlight`（选中胶囊）上下各留 6px 白（`top/bottom:6px`，条高 56）⇒ 只占条高 ~79%，读作"浮着的小药丸"。
+【真值（像素实测 wb 存证 `.workbuddy/salvage/liquid-glass/B-bottom.png`）】iOS 选中胶囊 ≈ **满条高**：胶囊 143px / 条 141px（边距≈0），两端呈 **stadium 半圆**（圆角=半高）。
+【修】`.gna-highlight`：`top/bottom` 6→**1px**（54/56 ≈ 满）+ `border-radius` 16→**27px**（= 半高−1 ⇒ stadium）；玻璃 SDF 圆角同步 `:radius` 24→**27**（可见药丸形状来自**玻璃材质的 radius**，不是 CSS `border-radius`——CSS 只做几何盒）。真机实测胶囊/条高比 **0.79→0.92**（再计玻璃描边/发光即贴合）。
+【判据】Android 真机截图（新胶囊呈 stadium、贴近上下缘）· `test:coupled` 绿（本轮仅改 `.vue`，不触内核/宿主源码 ⇒ 无 AAR 重建）· 逐像素胶囊/条高比 0.92。
+【★教训（承 #936）】**"看得见的形状"在两个地方**：CSS `border-radius`（几何盒圆角）**不等于**玻璃材质的 `radius`（SDF 药丸）——改观感要**同时**改两处，只改 CSS 则玻璃面仍是旧圆角（本轮两处同改）。★对齐真值要先**量**（iOS 胶囊/条高比），别凭目测反复微调（#928 的教训同源）。

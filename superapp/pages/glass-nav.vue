@@ -196,7 +196,7 @@
                宿主侧：背板捕获**排除所有玻璃子树** ⇒ 胶囊采到的是**原始内容** ⇒ 观感 = "更亮的玻璃窗口"（与 iOS 同语义）。 -->
           <!-- ★`preset="floating"` 自带 `interactive: true` ⇒ 必须显式关掉：否则玻璃盒里出现**第二个可交互玻璃**，
                触点命中被胶囊抢走（原先流动的是整条 bar）——行为回归。胶囊是**静态更亮规格**（同 iOS 选中胶囊）。 -->
-          <pg-glass class="gna-highlight" preset="floating" :radius="24" :interactive="false" tint="rgba(115,115,115,0.30)" :style="{ left: hlLeft }" />
+          <pg-glass class="gna-highlight" preset="floating" :radius="27" :interactive="false" tint="rgba(115,115,115,0.30)" :style="{ left: hlLeft }" />
           <!-- ★★★决策 #907 端到端：**v-for 行 + 行参 handler + 行内动态 `:class`**——
                正是本轮修的两面墙：B1（`pick(item.key)` 行参）+ B2（`:class` 引用外层 `active`）。
                此前这两写法在 App 端**静默失效**（点不动 + 高亮不动）。 -->
@@ -368,11 +368,14 @@ function pick(key: string, pos: number): void {
    仅保留几何（绝对定位 + 尺寸 + 圆角）；材质/着色由 `<pg-glass preset="floating">` + tint 决定。 */
 .gna-highlight {
   position: absolute;
-  /* ★#934：随条高 56 恢复（top/bottom 6；宽 ≈ (条宽−12)/4 = 91）；胶囊 left 由 JS 按 91 步进 */
-  top: 6px;
-  bottom: 6px;
+  /* ★#940：inset 6→1 + 圆角做满（用户「胶囊太低了，不是 iOS 那种紧贴上下两边」）。
+     像素实测：iOS 选中胶囊 ≈ **满条高**（B-bottom：胶囊 143px / 条 141px，边距≈0）；
+     我们原 inset 6 ⇒ 胶囊只 79% 条高（上下各留 ~10% 白）⇒ 看着像"浮着的小药丸"。
+     现 inset 1 + 圆角 27（= 条高 56/2 − 1 ⇒ 胶囊呈**stadium 药丸**，两端半圆，同 iOS）。 */
+  top: 1px;
+  bottom: 1px;
   width: 91px;
-  border-radius: 16px;
+  border-radius: 27px;
   /* ★决策 #936：胶囊是**装饰层**（对齐 iOS：选中胶囊在内容之下、不拦截点击）——
      否则命中测试命中的是胶囊而非导航项 ⇒ 点"选中项所在位置"点不动（真机实证 target=178）。 */
   pointer-events: none;
