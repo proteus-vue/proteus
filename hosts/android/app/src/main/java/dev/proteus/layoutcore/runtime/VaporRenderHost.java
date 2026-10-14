@@ -939,6 +939,8 @@ public final class VaporRenderHost {
             /** ★改过绘制键的 id（纯绘制补丁要**重建指令**——见下方 ④ 的注释） */
             java.util.LinkedHashSet<Integer> paintChangedIds = new java.util.LinkedHashSet<>();
             int paintOnly = 0;
+            /** ★决策 #939：改过 color 的 **svg 节点**（图标）——需送内核更新填充色 + 重注入 svg。 */
+            JSONArray svgColorPatches = new JSONArray();
             for (int i = 0; i < patches.length(); i++) {
                 JSONObject p = patches.getJSONObject(i);
                 int id = p.getInt("id");
@@ -963,6 +965,13 @@ public final class VaporRenderHost {
                     } else if (LAYOUT_KEYS.contains(k)) {
                         coreStyle.put(k, v);
                         hasGeometryKey = true;
+                    } else if ("color".equals(k) && spec.opt("svgPath") != null) {
+                        // ★决策 #939：图标节点改色 ⇒ 送内核（更新 text_color/stroke_color）——`color` 通常
+                        //   不进内核（绘制键），但 svg 填补色取自内核 stroke_color ⇒ 例外。
+                        JSONObject sp2 = new JSONObject();
+                        sp2.put("id", id);
+                        sp2.put("style", new JSONObject().put("color", v));
+                        svgColorPatches.put(sp2);
                     }
                 }
                 if (hasGeometryKey) {
@@ -1050,6 +1059,13 @@ public final class VaporRenderHost {
                 }
                 if (rebuilt) pushToView();
             } else if (textApplied > 0) pushToView();
+            // ★决策 #939：svg 图标改色 ⇒ 内核更新 + 重注入填充
+            if (svgColorPatches.length() > 0) {
+                try {
+                    RustLayout.update(handle, svgColorPatches.toString());
+                    reInjectSvgFor(svgColorPatches);
+                } catch (Throwable _e) { android.util.Log.w("proteus", "svg 改色重注入失败：" + _e); }
+            }
             double emitMs = (System.nanoTime() - te) / 1e6;
             double totalMs = (System.nanoTime() - t0) / 1e6;
             out.put("ok", true);
@@ -2529,6 +2545,31 @@ public final class VaporRenderHost {
      *   ⇒ 与 `LightsHost.injectSvgStrokes` 同一做法：挂载/重建后**统一注入一次**，
      *     行的物化/释放只动指令（`Cmd`），不重复做节点级注入。
      */
+    /**
+     * ★决策 #939：对给定 `[{id,style:{color}}]` 的 **svg 图标节点**，从内核回读最新描边/填充色并重注入
+     *   （`view.setNodeSvgStroke`）——图标填充色取自内核 `stroke_color`（改色后须重注入才变色）。
+     */
+    private void reInjectSvgFor(JSONArray patches) throws Exception {
+        if (view == null) return;
+        org.json.JSONObject o = new org.json.JSONObject(RustLayout.svgNodes(handle));
+        org.json.JSONObject paths = o.optJSONObject("paths");
+        if (paths == null) return;
+        for (int i = 0; i < patches.length(); i++) {
+            int id = patches.getJSONObject(i).getInt("id");
+            org.json.JSONObject info = paths.optJSONObject(String.valueOf(id));
+            if (info == null) continue;
+            JSONArray segs = info.optJSONArray("segs");
+            if (segs == null) continue;
+            long packed = (long) info.optDouble("strokeColor", 4294967295.0);
+            int col = packed >= 0 && packed < 4294967295L ? (int) packed : 0xFFFFFFFF;
+            float sw = (float) info.optDouble("strokeWidth", 2);
+            float pb = (float) info.optDouble("progressBase", 0);
+            boolean fill = info.optBoolean("fill", false);
+            view.setNodeSvgStroke(id, segs, col, sw, pb, fill);
+        }
+        pushToView();
+    }
+
     private void injectAllNodeState() throws Exception {
         if (view == null) return;
         // ① SVG 描边：内核一次性回带全表（`{paths: {id: {segs, strokeColor, strokeWidth, progressBase}}}`）

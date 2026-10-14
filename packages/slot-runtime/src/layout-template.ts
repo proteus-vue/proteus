@@ -47,6 +47,12 @@ export interface LayoutNode {
   /** 文本占位（元素含静态文本或插值子节点时存在；插值初值为空串，由运行时回填） */
   text?: string
   /**
+   * ★★★决策 #939（CSS 继承 · 运行期级联）：该节点**从父级继承 `color`**——编译期已把初值折入
+   *   （见 template.ts 继承 walk），但运行期父级 `:class` 改色时需跟着变（`paint.color` 是绘制键、
+   *   不进内核，故级联在实例化层按「最近的带 color 祖先」解析）。图标叶（`p-icon` 折叶）恒标此位。
+   */
+  inheritColor?: boolean
+  /**
    * ★★★**过渡声明**（2026-10-03 · P3-3 `Transition` 桥接）——该节点的可见性切换要带过渡。
    *
    * 【为什么是"声明"而不是"实现"】Vue 的 `<Transition>` 在 Web 端靠 CSS class 驱动

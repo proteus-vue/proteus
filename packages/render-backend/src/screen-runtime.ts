@@ -327,11 +327,48 @@ export function createScreenRuntime(opts: CreateScreenRuntimeOptions): ScreenRun
     //   不能走内核 f32 通道（颜色字符串会被洗成 0）⇒ 批量交宿主 `updatePatches`（与 entry-vapor 同构）。
     const pendingPaint = new Map<number, Record<string, unknown>>()
     let paintUnwiredNoted = false
+    /**
+     * ★★★决策 #939（CSS 继承 · 运行期级联）：**`color` 是继承属性**——某节点改色时，其子树里
+     *   「从父级继承 color」的节点（编译期标 `inheritColor`，如 `p-icon` 折叶）应跟着变（CSS `currentColor`
+     *   语义）。运行期动态 `:class` 只改**外层 wrapper** 的 color，子图标叶的填充色则来自编译期级联的**静态**
+     *   初值 ⇒ 不级联就「选中的图标不变色」（真机实证：标签文字变了、图标没变）。
+     *   ★有界实现：把「最近的带 `color` 的祖先（含自身）」的 color 也 patch 给这些后代；未命中继承节点 ⇒ 零开销。
+     */
+    const applyColorInheritance = (nodeId: number, color: unknown): number => {
+      if (color === undefined) return 0
+      const kidsOf = new Map<number, number[]>()
+      for (const n of inst.nodes) {
+        if (n.parentId === null) continue
+        const arr = kidsOf.get(n.parentId) ?? []
+        arr.push(n.id)
+        kidsOf.set(n.parentId, arr)
+      }
+      const byIdMap = new Map<number, (typeof inst.nodes)[number]>()
+      for (const n of inst.nodes) byIdMap.set(n.id, n)
+      let applied = 0
+      const stack = [...(kidsOf.get(nodeId) ?? [])]
+      while (stack.length > 0) {
+        const id = stack.pop()!
+        const node = byIdMap.get(id)
+        if (!node) continue
+        if (node.inheritColor) {
+          const rec = pendingPaint.get(id) ?? {}
+          rec.color = color
+          pendingPaint.set(id, rec)
+          applied++
+        }
+        const kids = kidsOf.get(id)
+        if (kids) for (const k of kids) stack.push(k)
+      }
+      return applied
+    }
     const onPaintProp = (nodeId: number, propKey: string, value: unknown): void => {
       const field = propKey.slice('paint.'.length)
       const rec = pendingPaint.get(nodeId) ?? {}
       rec[field] = value
       pendingPaint.set(nodeId, rec)
+      // ★决策 #939：改的是 color ⇒ 级联给继承该色的后代（图标叶等）
+      if (field === 'color') applyColorInheritance(nodeId, value)
     }
     /** 把累积的绘制键交给宿主（`updatePatches` 合并进 spec 并重建绘制指令）；返回提交条数。 */
     const flushPaint = (): number => {

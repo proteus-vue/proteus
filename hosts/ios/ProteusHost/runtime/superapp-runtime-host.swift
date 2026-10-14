@@ -21,6 +21,11 @@ import QuartzCore
     func mount(_ treeJson: String) -> String
     /// 应用二进制指令流（`number[]` JSON）——增量
     func applyOps(_ opsBytesJson: String) -> String
+    /// ★★★决策 #939（动态 `:class`/`:style` 的**绘制键**回执）：把运行期累积的绘制补丁
+    ///   `[{id, style:{color,fontSize,…}}]` 交 `SelfDrawBridge.updatePatches`（合并 + 重建绘制指令）。
+    ///   ★与 Android `SuperappRuntimeHost.updatePatches` 同形（两端同构）；缺它 ⇒ 运行期记
+    ///     「宿主 updatePatches 无回执」⇒ 动态 `:class` 的颜色/字号不生效（选中态高亮不生效）。
+    func updatePatches(_ patchesJson: String) -> String
     /// 读内核几何（诊断）
     func readRects() -> String
     /// 注册手势反向回调名（native 层**截获**：`SelfDrawView.emitGesture` 命中后调该 JS 全局函数）
@@ -72,6 +77,7 @@ final class SuperappRuntimeHost: NSObject, SuperappRuntimeExports {
         return r
     }
     func applyOps(_ opsBytesJson: String) -> String { draw.applyOps(opsBytesJson) }
+    func updatePatches(_ patchesJson: String) -> String { draw.updatePatches(patchesJson) }
     func readRects() -> String { draw.readRects() }
     func onGesture(_ cbName: String) { gestureCb = cbName }
     /// ★每屏滚动进度记忆（用户：「返回应保留滚动，前进才重置」——系统 App 语义）。
