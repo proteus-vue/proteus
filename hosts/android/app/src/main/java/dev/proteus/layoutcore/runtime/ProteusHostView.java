@@ -3484,22 +3484,29 @@ public class ProteusHostView extends ViewGroup {
             }
             canvas.translate(-scrollX, -scrollY);
         }
+        // ★★★决策 #936（wb 真机诊断 #1 修）：**两相绘制**——先按树序画**全部玻璃面**（外→内 ⇒ 内层在上），
+        //   再统一画**玻璃子树的内容**（内容恒在全部玻璃面之上，对齐 iOS：icon/label 在选中胶囊之上）。
+        //   【为何必须两相（原 bug）】此前每遇一个玻璃就"画自身面 → 重画自身子树内容"：外层条（176）先把
+        //     **整棵子树内容（含导航标签）**重画，循环才走到内层胶囊（178）画面 ⇒ 胶囊面恒盖在标签上
+        //     （真机「游戏」标签被选中胶囊吃掉）。iOS 是**胶囊在内容之下**（wb 逆向：选中胶囊压暗保前景对比度）。
         for (int i = 0; i < list.size() && i < ids.length; i++) {
             GlassMaterial.Spec g = glassByNode.get(ids[i]);
-            if (g != null) {
-                // fixed 玻璃面：+scroll 补偿（抵消上面的 -scroll ⇒ 钉在视口）；非 fixed 不加（随内容滚动）。
-                final Integer fAnchor = fixedAnchorOf(ids[i]);
-                final int fs = (fAnchor != null) ? canvas.save() : -1;
-                if (fAnchor != null) canvas.translate(scrollX, scrollY);
-                drawGlassFace(canvas, ids[i], list.get(i), g);
-                if (fs != -1) canvas.restoreToCount(fs);
-                // ★★★决策 #893（对齐 iOS 液态玻璃基准）：玻璃面**之上**重画**该玻璃节点自身子树**（其文本/子视图）
-                //   ——背景已在 captureGlassBackdrop 排除自身子树（只含"背后"），此处把自身内容**清晰**盖回玻璃面上。
-                //   真 iOS `UIVisualEffectView` 语义：材质只糊背后、`contentView` 内容原样清晰。
-                //   ★此处的 `drawCmds` 已在 `-scroll` 变换内 ⇒ 其 fixed 补偿正常工作（与主内容一致）。
-                drawCmds(canvas, null, subtreeIdsOf(ids[i]));
-            }
+            if (g == null) continue;
+            // fixed 玻璃面：+scroll 补偿（抵消上面的 -scroll ⇒ 钉在视口）；非 fixed 不加（随内容滚动）。
+            final Integer fAnchor = fixedAnchorOf(ids[i]);
+            final int fs = (fAnchor != null) ? canvas.save() : -1;
+            if (fAnchor != null) canvas.translate(scrollX, scrollY);
+            drawGlassFace(canvas, ids[i], list.get(i), g);
+            if (fs != -1) canvas.restoreToCount(fs);
         }
+        // 第二相：玻璃子树内容（其文本/子视图）——背景已在 captureGlassBackdrop 排除玻璃子树（只含"背后"），
+        //   此处把自身内容**清晰**盖回**所有**玻璃面上（真 iOS `UIVisualEffectView`：材质只糊背后、contentView 原样清晰）。
+        //   ★一次 drawCmds 画并集 ⇒ 内容层整体在玻璃面层之上（决策 #893 的"面→内容"语义，只是改成**先全部面**）。
+        final java.util.Set<Integer> gContent = new java.util.HashSet<>();
+        for (int i = 0; i < list.size() && i < ids.length; i++) {
+            if (glassByNode.get(ids[i]) != null) gContent.addAll(subtreeIdsOf(ids[i]));
+        }
+        if (!gContent.isEmpty()) drawCmds(canvas, null, gContent);
         if (gSave != -1) canvas.restoreToCount(gSave);
     }
 
