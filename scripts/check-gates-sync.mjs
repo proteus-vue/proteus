@@ -201,6 +201,22 @@ const LOCAL_ONLY = {
   //   走"未安装但给出指引"分支并**返回 0**（不判红是刻意的：CI 本来就不需要本地 hook）。
   //   ⇒ 归入"仅本地"是因为**它的判据只在本地才有意义**（CI 恒为"未安装"）。
   'check:hook-wiring': '检查本地 .zcode/config.json 的三条红线 hook 接线；CI 无该文件（走"给出安装指引"分支，恒通过）',
+  // ★★★跨语言二进制线格式对拍（2026-10-13 · 决策 #903 / T-app-wire）：守的是 **Android 宿主侧 Java 实现**
+  //   （`InvokeWire.java`）与 TS SSOT（`packages/api/src/invoke-wire.ts`）的**逐字节等价**。
+  //   · 与 check:android-host-compile / check:host-invoke-contract 同族：宿主侧契约门禁，开发机跑；
+  //   · ★它**不需要**真机、不需要 Android SDK —— 只要本机 JDK（`javac` 纯 JVM 编译，已在开发机实测：
+  //     24 条黄金向量全绿 + 4 类破坏性验证均能红）。⇒ 若将来要接 CI，加一步 `actions/setup-java`
+  //     即可（本行就是那句提示；当前未接是因为 CI 未声明 JDK 前提，接了会有"环境缺失型红"）。
+  'check:invoke-wire-parity': '宿主侧线格式契约门禁（Java 实现 ⇄ TS SSOT 逐字节等价；★2026-10-13 追加 Swift 轮 ⇒ 完整覆盖需 macOS 的 Swift 工具链，非 macOS 上该轮**响亮跳过**并在输出标注）——与 check:android-host-compile 同族（开发机跑，零设备零 Android SDK，仅需本机 JDK）',
+  // ★★iOS 二进制腿**端到端**门禁（2026-10-13 · 决策 #904，与 parity 门禁**分层**）：
+  //   parity 门禁守"各端编解码器是否逐字节等价"（静态向量对拍）；本门禁守"**桥的通路跑得通吗**"
+  //   ——在 macOS 的**真实 JSC** 上把字节搬过去再搬回来（去程全字段 / 回执是 Uint8Array 而非 Array /
+  //   回推逐字节一致 / 1MB 大载荷 / 坏入参必须抛）。
+  //   · 为什么必须独立一条：JSC 的 `JSObjectGetTypedArrayBytesPtr` 返回**临时指针**、
+  //     `Uint8Array` 与 `Array` 跨边界后长相相似、C 回调签名差一个可选性就拒编——
+  //     这些**只有真跑一次才暴露**，静态 grep 判据（check:no-json-wire）证明不了。
+  //   · 需 macOS + Swift 工具链（CI 为 ubuntu-latest ⇒ 不接 CI；与 check:ios-cli-host-compile 同族）。
+  'check:ios-invoke-bytes': '需 macOS + Swift 工具链（xcrun swiftc + 真实 JavaScriptCore）；CI 为 ubuntu-latest，无 Swift',
 }
 
 const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'))
