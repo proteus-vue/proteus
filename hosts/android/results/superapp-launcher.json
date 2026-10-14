@@ -18,7 +18,56 @@
       "messages": "消息",
       "mine": "我的",
       "verify": "验收控制台"
-    }
+    },
+    "tabItems": [
+      {
+        "name": "index",
+        "label": "首页",
+        "glyph": "sym:house"
+      },
+      {
+        "name": "messages",
+        "label": "消息",
+        "glyph": "sym:message",
+        "badge": 3
+      },
+      {
+        "name": "mine",
+        "label": "我的",
+        "glyph": "sym:person"
+      }
+    ],
+    "tabSpec": {
+      "height": 52,
+      "surface": "#ffffff",
+      "line": "#dcdfe5",
+      "brand": "#5b5bd6",
+      "text3": "#5f6673",
+      "badgeBg": "#d64545",
+      "iconSize": 19,
+      "labelSize": 10,
+      "badge": {
+        "radius": 8,
+        "fontSize": 11,
+        "offsetX": 4,
+        "offsetY": 4,
+        "padX": 4
+      },
+      "glass": {
+        "blur": 20,
+        "tint": "rgba(255, 255, 255, 0.15)",
+        "border": true,
+        "borderSide": "top"
+      },
+      "contentHeight": 52
+    },
+    "screens": [
+      "glass-nav",
+      "index",
+      "messages",
+      "mine",
+      "verify"
+    ]
   },
   "tabs": [
     "index",
@@ -49,7 +98,7 @@
     }
   ],
   "rendered_page": "mine",
-  "on_draw": 12,
+  "on_draw": 10,
   "host_stats": {
     "ok": true,
     "data": {
@@ -61,7 +110,7 @@
       "anim_hook_missing": 0,
       "rect_calls": 0,
       "shared_calls": 0,
-      "content_node_total": 253,
+      "content_node_total": 269,
       "live_screens": 1,
       "calls": [
         "screen.mount",
@@ -87,5 +136,5 @@
       "handle_count": 2
     }
   },
-  "png": "superapp-launcher.png"
+  "png_error": "IllegalArgumentException"
 }

@@ -245,6 +245,18 @@ export const screenNames: string[] = ["builtin-components-demo","components-demo
 /** tab 根屏（meta.isTab）—— App 端 tab 语义（switchTab/reset）的合法目标 */
 export const tabNames: string[] = ["index","mine"]
 
+/** ★★tab 渲染最终值（App 三端宿主**只渲染**：名字/文案/字形在这里已合并完——B · 能力归 runtime） */
+export const tabItems: Array<{ name: string; label: string; glyph?: string; badge?: number }> = [
+  {
+    "name": "index",
+    "label": "首页"
+  },
+  {
+    "name": "mine",
+    "label": "我的"
+  }
+]
+
 // ─── ③ 类型提示：按路由名索引的参数类型表（来源：<route> 块 params 声明）───
 declare module '@proteus-vue/router/types' {
   interface RouteParamsByName {
