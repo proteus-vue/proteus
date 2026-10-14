@@ -2748,8 +2748,7 @@ public class ProteusHostView extends ViewGroup {
     private int hitNodeAt(float viewX, float viewY) {
         if (coreHandle == 0L) return -1;
         try {
-            final float contentY = viewY + scrollY;
-            final String json = RustLayout.hitTest(coreHandle, viewX, contentY);
+            final String json = hitTestAtView(viewX, viewY);   // ★#937：fixed 按视口坐标、内容按内容坐标
             final org.json.JSONObject o = new org.json.JSONObject(json);
             if (o.optBoolean("ok", false) && !o.isNull("target")) return o.getInt("target");
         } catch (Throwable ignored) { /* 命中失败 ⇒ 该指不跟手（不静默 panic） */ }
@@ -2760,8 +2759,7 @@ public class ProteusHostView extends ViewGroup {
     private int[] hitChainAt(float viewX, float viewY) {
         if (coreHandle == 0L) return new int[0];
         try {
-            final float contentY = viewY + scrollY;
-            final String json = RustLayout.hitTest(coreHandle, viewX, contentY);
+            final String json = hitTestAtView(viewX, viewY);   // ★#937：fixed 按视口坐标、内容按内容坐标
             final org.json.JSONObject o = new org.json.JSONObject(json);
             if (o.optBoolean("ok", false)) {
                 final org.json.JSONArray arr = o.optJSONArray("chain");
@@ -3026,6 +3024,39 @@ public class ProteusHostView extends ViewGroup {
      *   故验收脚本让 app 自己调用本方法——它走的是**同一个** `dispatchHit`，
      *   与真实触摸的区别仅在「事件从哪来」。
      */
+    /**
+     * ★决策 #937：**视口坐标命中**——fixed 覆层按视口坐标、常规内容按内容坐标。
+     *
+     * 【缺口（承 #652 具名的"待批 A 补命中"）】滚动实现模型 = 画布/变换**全局平移**（`onDraw` 里
+     *   `canvas.translate(-scrollX,-scrollY)`）⇒ 常规内容的屏幕位置 = 内核 y − scrollY，故命中要
+     *   `contentY = viewY + scrollY`；而 **fixed 节点被反向补偿钉在视口**（`+scrollX,+scrollY`）⇒
+     *   其屏幕位置 = 内核 y（视口坐标），**不能再加 scrollY**。此前三处命中都统一加 scrollY ⇒
+     *   **滚动后点固定导航无反应**（真机实证：scrollY=400 时点 (873,2250) 命中内容节点 54 而非导航项 192）。
+     *   ⇒ 先按视口坐标测（fixed 绘于内容之上 ⇒ 命中优先），命中 fixed 子树才采用；否则回落到内容坐标。
+     *   ★两端同构：iOS 侧同一缺口见 `selfdraw-scene.swift` 决策 #652 的"诚实边界"（同待补）。
+     */
+    private String hitTestAtView(float viewX, float viewY) {
+        if (coreHandle == 0L) return null;
+        if (!fixedNodes.isEmpty()) {
+            final String fj = RustLayout.hitTest(coreHandle, viewX, viewY);
+            if (chainHitsFixed(fj)) return fj;
+        }
+        return RustLayout.hitTest(coreHandle, viewX, viewY + scrollY);
+    }
+
+    /** 命中结果（target 或冒泡链）是否落在 **fixed 子树**（fixed 集含固定节点自身；链上含祖先 ⇒ 覆盖子树）。 */
+    private boolean chainHitsFixed(String json) {
+        if (json == null) return false;
+        try {
+            final org.json.JSONObject o = new org.json.JSONObject(json);
+            if (!o.optBoolean("ok", false)) return false;
+            if (!o.isNull("target") && fixedNodes.contains(o.getInt("target"))) return true;
+            final org.json.JSONArray arr = o.optJSONArray("chain");
+            if (arr != null) for (int i = 0; i < arr.length(); i++) if (fixedNodes.contains(arr.getInt(i))) return true;
+        } catch (Throwable ignored) { /* 解析失败 ⇒ 视作非 fixed（回落内容坐标） */ }
+        return false;
+    }
+
     public void dispatchHit(float viewX, float viewY) {
         // ★坐标换算：绘制是「canvas.translate(0, -scrollY)」后再画内容，
         //   故屏幕坐标 → 内容坐标要**加回** scrollY。
@@ -3039,7 +3070,7 @@ public class ProteusHostView extends ViewGroup {
         int targetId = -1;
         int[] chain = new int[0];
         if (coreHandle != 0L) {
-            String json = RustLayout.hitTest(coreHandle, contentX, contentY);
+            String json = hitTestAtView(viewX, viewY);   // ★#937：fixed 按视口坐标、内容按内容坐标
             try {
                 org.json.JSONObject o = new org.json.JSONObject(json);
                 if (o.optBoolean("ok", false)) {

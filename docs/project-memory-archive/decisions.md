@@ -4286,3 +4286,13 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 【③ 胶囊拦截点击（`glass-nav.vue`，交互 · ★本单新发现）】验证 z-order 时真机取证：点**选中项所在位置**（glass-nav 第 2 项 x=330）`target=178`（**胶囊本身**）⇒ 胶囊在命中层也盖住了导航项 ⇒ "点选中项点不动"。修：`.gna-highlight` 加 **`pointer-events:none`**（胶囊 = 装饰层，不参与命中）。修后 tap 330/873/100 → target **184/192/179**（全部落到导航行）。
 【判据】真机：tap 100/330/600/873 → target 179/184/188/192（逐项命中）+ 截图：4 标签清晰显示于胶囊之上、胶囊为半透明药丸（非实心灰团）· `test:coupled` 71 全绿 · `check:glass-capability`/`glass-audit`/`vapor-three-end` 全绿 · Android 零设备编译绿 · runtime AAR 重建（指纹同步）。
 【★教训（z-order 结构性）】"边遍历边画"在**嵌套玻璃**下必然错——外层的子树内容会先于内层玻璃面落下 ⇒ 内层面盖住外层内容。**分层绘制**（面层 / 内容层）是嵌套材质的正解，与 iOS 的多 CALayer 分层同构。★**同一现象两个层**：wb 只读到**视觉**（标签被吃）；真机验证时才发现**命中层**同样被盖（`pointer-events`）——**视觉 z-order ≠ 命中 z-order**，修一个要连查另一个。
+
+937. **★★★滚动后点固定导航无反应——修「fixed 覆层命中未反补偿滚动」（承 #652 具名的"待补命中"）· Android + iOS 两端同修**（2026-10-14 · 用户「测试初始化的页面位置点击可以正常切换胶囊，滚动页面后点击切换就没任何反应了」）：
+【现象（真机取证）】`glass-nav` 悬浮玻璃导航：**未滚动**时点各项正常切换胶囊；**滚动后**点击**无任何反应**。真机读数：`scrollY=400` 时点 (873,2250) 命中 `target=54`（**内容行节点**），而非导航项 192 ⇒ 命中落到了玻璃"背后"的内容。
+【根因（承 #652 具名缺口）】滚动实现模型 = **全局内容平移**（Android `canvas.translate(-scrollX,-scrollY)` / iOS `sublayerTransform` −contentOffset）⇒ 常规内容的屏幕位置 = 内核 y − offset，故命中要 `contentY = viewY + offset`。而 **fixed 节点被反向补偿钉在视口**（Android `drawCmds` 里 `translate(+scrollX,+scrollY)` / iOS `fixedBases` frame 补偿）⇒ 其屏幕位置 = 内核 y（**视口坐标**，不能再加 offset）。此前**三处命中入口都统一加 offset** ⇒ 滚动后点固定层必偏 offset（滚得越多偏得越远）。★**#652 注释原文即点名**：iOS「命中测试仍按内核内容坐标映射 ⇒ fixed 元素在滚动后的 tap 映射会偏 contentOffset（具名，待批 A 内补命中）」——本单即该"待补命中"的收口。
+【修（两端同构）】
+  · **Android**（`ProteusHostView`）：新增 `hitTestAtView(viewX,viewY)`——**先按视口坐标**测（fixed 覆层绘于内容之上 ⇒ 命中优先），命中**落在 fixed 子树**（`chainHitsFixed`：target 或冒泡链含 fixed id）才采用；否则回落内容坐标 `viewY+scrollY`。`dispatchHit` / `hitNodeAt`（跟手）/ `hitChainAt`（场容器）三处统一改走它。
+  · **iOS**（`selfdraw-scene.swift`）：bridge `emitGesture` 同法——`fixedNodeIds`（由 `fixedBases` 键推导）+ 静态 `hitTouchesFixed`；先按视口坐标（入参内容坐标 − contentOffset）测，命中 fixed 子树才采用。
+  · **验证装置补齐（iOS）**：`superapp-scene.swift` 的 `--tap` 分支支持**前置** `--screen`/`--scroll`（与 Android `--es screen`+`--es scroll`+`--es tap` 组合同语义）；`--scroll` 独立分支在有 `--tap` 时让位（避免双重驱动）。
+【判据】Android 真机：`scroll=0/400/900` × tap → target **192/192/179/188**（**滚动后仍逐项精确命中**；修前滚 400 命中内容节点 54）· iOS：`--screen=glass-nav --scroll=150 --tap=...` 真机验证（见提交记录）· `test:coupled` 71 全绿 · `check:vapor-three-end` 三端绿 · Android/iOS 零设备编译绿 · runtime AAR 重建。
+【★教训（"滚动实现模型"决定 fixed/sticky 的落点——#652⑤ 的延伸）】在"**全局内容变换**式滚动"（Android/iOS 画布平移、iOS sublayerTransform）下，fixed 必须**抵消该变换**——**绘制**抵消了（#652/#653），但**命中**没抵消，于是"看得见、点不到"。⇒ **凡是"抵消变换"的操作，必须同时覆盖绘制与命中两条链**（#936 的"视觉 z-order ≠ 命中 z-order"是同一族：**同一几何事实的多个消费链会各自分叉**）。★**具名缺口的"待补"要有出口**——#652 的"待批 A 内补命中"挂了很久；缺口具名不等于收口，须在台账/任务卡留可追溯条目。
