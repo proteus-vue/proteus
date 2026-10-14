@@ -58,6 +58,8 @@ public final class RustLayout {
     private static native String nativeSetTextMeasures(long handle, String measuresJson);
     private static native String nativeSplice(long handle, String spliceJson);
     private static native String nativeApplyOps(long handle, byte[] opsBytes);
+    /** ★U0 修复（2026-10-14）：设置句柄的宿主密度（运行期指令长度值 ×density；见 ops_apply::apply_style_key_d）。 */
+    private static native String nativeSetDensity(long handle, float density);
     /** ★B-T2：文本策略回读（node_ids JSON → policy） */
     private static native String nativeTextPolicy(long handle, String nodeIdsJson);
     /* ★★★B4（决策 #834）：材质几何/曲线**内核单源**查询——gradient 端点 / glow 分层 / mask 色标 */
@@ -262,6 +264,11 @@ public final class RustLayout {
     /** ★★Vapor IR 二进制指令流（JNI 原生 byte[] —— 无需 iOS 那层 JSON 数组包装） */
     static String applyOps(long handle, byte[] opsBytes) {
         return loaded ? nativeApplyOps(handle, opsBytes) : NOT_LOADED;
+    }
+
+    /** ★U0 修复：设置内核密度（运行期指令的长度键 ×density；与静态 mount 同口径）。density<=0 时内核回落 1。 */
+    public static String setDensity(long handle, float density) {
+        return loaded ? nativeSetDensity(handle, density) : NOT_LOADED;
     }
 
     /** ★★MA0-RT：曲线贝塞尔近似（`{"ok":true,"bezier":[…4 个数…]|null}`） */

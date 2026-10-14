@@ -48,7 +48,7 @@ pub struct ApplyOutcome {
 /// 把解码后的指令应用到树上（**不改几何，只改节点状态**；重排由调用方决定）
 ///
 /// @param keys 指令流里的键表（keyId → 归一化属性名，如 `layout.width`）
-pub fn apply_ops_to_tree(tree: &mut LayoutTree, dec: &crate::ops::DecodedOps) -> ApplyOutcome {
+pub fn apply_ops_to_tree(tree: &mut LayoutTree, dec: &crate::ops::DecodedOps, density: f32) -> ApplyOutcome {
     let mut out = ApplyOutcome::default();
     let mut dirty_set = std::collections::HashSet::new();
 
@@ -63,7 +63,7 @@ pub fn apply_ops_to_tree(tree: &mut LayoutTree, dec: &crate::ops::DecodedOps) ->
                     out.unsupported.push((op.code(), format!("nodeId {node_id} 不在树上")));
                     continue;
                 };
-                match apply_style_key(&mut tree.nodes[idx], key, *value) {
+                match apply_style_key_d(&mut tree.nodes[idx], key, *value, density) {
                     Ok(true) => {
                         tree.nodes[idx].dirty = true;
                         dirty_set.insert(idx as u32);
@@ -211,7 +211,7 @@ pub fn apply_ops_to_tree(tree: &mut LayoutTree, dec: &crate::ops::DecodedOps) ->
                         bad = Some(format!("keyId {key_id} 越界"));
                         break;
                     };
-                    match apply_style_key(&mut tree.nodes[idx], key, *value) {
+                    match apply_style_key_d(&mut tree.nodes[idx], key, *value, density) {
                         Ok(true) => any_layout = true,
                         Ok(false) => {}
                         Err(msg) => {
@@ -273,7 +273,40 @@ fn detach_subtree(tree: &mut LayoutTree, idx: usize) {
  *   ★不一致的后果是**静默不更新**（键名对不上 → 找不到字段 → 值丢失），故本函数对未知
  *   `layout.*` 键返回 Err 而不是 Ok(false)。
  */
+/// U0: length-key predicate (same family as host LEN_SCALARS white list: geometry lengths only;
+/// no enums / ratios / aspect-ratio).
+fn is_length_key(key: &str) -> bool {
+    matches!(key,
+        "layout.width" | "layout.height" | "layout.minWidth" | "layout.maxWidth"
+        | "layout.minHeight" | "layout.maxHeight" | "layout.flexBasis" | "layout.gap"
+        | "layout.rowGap" | "layout.columnGap"
+        | "layout.top" | "layout.left" | "layout.right" | "layout.bottom"
+        | "layout.paddingTop" | "layout.paddingRight" | "layout.paddingBottom" | "layout.paddingLeft"
+        | "layout.marginTop" | "layout.marginRight" | "layout.marginBottom" | "layout.marginLeft")
+}
+
+/// U0-fix (App runtime op unit gap): length keys are multiplied by density.
+///
+/// Why: the static mount path scales the whole tree to physical px at the host entry
+/// (physicalizeTree); the runtime op path (applyOps) is encoded in JS and decoded in the
+/// kernel, so the host has no interception point -> dynamic geometry values stay in logical
+/// px (device: capsule left should reach 711 physical but only reached 237). Fix: the kernel
+/// holds a density (proteus_layout_set_density) and scales length keys after decode, matching
+/// the static path (the single conversion point moves from host into kernel, covering both).
+/// Only LENGTH keys are scaled; enums / ratios / aspect-ratio are not.
+pub fn apply_style_key_d(node: &mut LNode, key: &str, value: f32, density: f32) -> Result<bool, String> {
+    let v = if density != 1.0 && is_length_key(key) { value * density } else { value };
+
+    apply_style_key_inner(node, key, v)
+}
+
+/// 应用一条样式键（f32 值）到节点；返回 Ok(true)=改了几何需重排 / Ok(false)=非几何 / Err=未知键。
+/// （U0 起：长度键的 ×密度 由 `apply_style_key_d` 完成，本函数作纯写入。）
 pub fn apply_style_key(node: &mut LNode, key: &str, value: f32) -> Result<bool, String> {
+    apply_style_key_inner(node, key, value)
+}
+
+fn apply_style_key_inner(node: &mut LNode, key: &str, value: f32) -> Result<bool, String> {
     let s = &mut node.style;
     let v = value;
     match key {
@@ -956,7 +989,7 @@ mod tests {
             strings: vec![],
             ops: vec![UpdateOp::SetStyle { node_id: 2, key_id: 0, value: 80.0 }],
         };
-        let outcome = apply_ops_to_tree(&mut tree, &dec);
+        let outcome = apply_ops_to_tree(&mut tree, &dec, 1.0);
         assert_eq!(outcome.applied, 1);
         let multi = relayout_multi(&mut tree, &outcome.dirty);
 
@@ -1163,6 +1196,31 @@ mod tests {
     }
 
     fn void<T>(_: T) {}
+    #[test]
+    fn density_scales_length_keys_only() {
+        // ★U0 回归（2026-10-14）：运行期指令的长度键按密度缩放；枚举/比例/比值**不**缩放。
+        let mut n = crate::node::LNode::new(1, crate::style::LStyle::default());
+        // 长度键 ×3
+        apply_style_key_d(&mut n, "layout.left", 97.0, 3.0).unwrap();
+        assert_eq!(n.style.left, Some(291.0), "left 应 ×density");
+        apply_style_key_d(&mut n, "layout.width", 91.0, 3.0).unwrap();
+        assert_eq!(n.style.width, Some(273.0), "width 应 ×density");
+        apply_style_key_d(&mut n, "layout.marginTop", 2.0, 3.0).unwrap();
+        assert_eq!(n.style.margin.top, 6.0, "marginTop 应 ×density");
+        apply_style_key_d(&mut n, "layout.paddingLeft", 6.0, 3.0).unwrap();
+        assert_eq!(n.style.padding.left, 18.0, "paddingLeft 应 ×density");
+        // 比例/枚举不缩放
+        apply_style_key_d(&mut n, "layout.flexGrow", 2.0, 3.0).unwrap();
+        assert_eq!(n.style.flex_grow, 2.0, "flexGrow（比例）不应缩放");
+        apply_style_key_d(&mut n, "layout.display", 2.0, 3.0).unwrap();
+        assert_eq!(n.style.display, crate::style::Display::None, "display（枚举）不应缩放");
+        apply_style_key_d(&mut n, "layout.aspectRatio", 1.5, 3.0).unwrap();
+        assert_eq!(n.style.aspect_ratio, Some(1.5), "aspectRatio（比值）不应缩放");
+        // density=1（缺省/iOS/鸿蒙）⇒ 恒等
+        let mut m = crate::node::LNode::new(2, crate::style::LStyle::default());
+        apply_style_key_d(&mut m, "layout.left", 97.0, 1.0).unwrap();
+        assert_eq!(m.style.left, Some(97.0), "density=1 不应缩放");
+    }
     #[test]
     fn layout_top_and_left_are_mapped() {
         // ★2026-09-30 真缺口回归：`layout.top`/`layout.left` 曾**未登记**（改不了绝对定位偏移）；

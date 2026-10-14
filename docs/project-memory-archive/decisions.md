@@ -4267,3 +4267,14 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 【修】`col = mix(col, veil, 0.28)`（面纱；`VEIL_A=0.28` / `VEIL_V=0.80`）；保留 #925 的 12% 色温。
 【判据】oracle：背板对比 14/180 → 玻璃 **10.0/130.0**（比值 **0.71/0.72×** = iOS 实测 0.72×）；明暗仍对齐（深底 0.353 / 亮底 0.902 vs iOS 0.354/0.933）；玻璃单测 45 · iOS parity max 1/255 · Android 编译绿 · 真机内容被压成**灰雾**（不再透明）。
 【诚实边界】仍以 Android 判据为主；`VEIL_A=0.28` 源自 iOS 双图联立（唯一主旋钮）。
+
+935. **★★★App 运行期指令单位缺口（U0）收口——内核接密度，运行期长度键 ×density（对齐静态 mount）**（2026-10-14 · 台账 U0 / 任务卡 `T-glassnav-vfor-events`；用户「测试点击切换位置都不对」）：
+【现象（真机取证）】`glass-nav` 悬浮玻璃导航点击后**胶囊高亮落在错误项**（点第 4 项「搜索」胶囊只移动 1/3 距离）。内核查得：胶囊 `178` 的 `layout.left` 被 `applyOps` 改到 x=315（应 873=第 4 项左缘）。
+【根因（跨语言边界）】静态 mount 通路在宿主入口 `physicalizeTree` 把整树 ×密度换物理 px；而**运行期指令通路（applyOps）的值在 JS 侧编码、内核侧解码** ⇒ 宿主没有介入点 ⇒ 动态几何值停在**逻辑 px**（1×），静态 3× ⇒ 只走 1/3（同族：`svgPath.d` 内嵌坐标、strokeWidth 同理）。
+【修（把"唯一换算点"从宿主搬进内核，覆盖静态+动态全部路径）】
+  · 内核：`TreeEntry` 增 `density`（缺省 1.0）；新增 `proteus_layout_set_density(handle, density)`；`apply_style_key_d(node, key, value, density)` 仅对**长度键**（白名单 `is_length_key`：width/height/min·max/flexBasis/gap/row·columnGap/top·left·right·bottom/padding四向/margin四向）×density，**枚举（display/align*）/比例（flexGrow/flexShrink）/比值（aspectRatio）不缩放**；`apply_ops_to_tree(tree, dec, density)` 贯穿两处调用点；`apply_style_key` 保留为 density=1 的薄封装（测试/内核用例零变化）。
+  · Android 宿主：`RustLayout.setDensity` + JNI `nativeSetDensity`；`VaporRenderHost.mount`/`mountVirtual` 建 handle 后调 `setDensity(handle, lengthScale)`（lengthScale=1 时恒等，零副作用）。
+  · iOS/鸿蒙：**不设**（其画布本就是逻辑 px——CALayer=pt / ArkUI=vp，与 Web 同口径）⇒ 保持 density=1。
+【判据】① Rust：新增单测 `density_scales_length_keys_only`（长度键 ×3 / 枚举·比例·比值不变 / density=1 恒等）· lib 231 单测全绿 · `incremental_browser_conformance` 2 全绿；② `pnpm test:coupled` 190 全绿（ffi/ops_apply → 5 测试文件）；③ **真机四点位**：tap 100/330/600/873,2250 ⇒ 胶囊 `178` x 依次 54/327/600/873（**逐项精确命中**）；④ `check:vapor-three-end` 三端绿（35 项指纹一致，未破）。
+【教训（沉淀）】**"单位换算在入口做一次"必须覆盖到"全部入口"**——mount 是入口，运行期指令是**另一个跨语言入口**（值在 JS 编、内核解），宿主看不见 ⇒ 换算点必须下沉到**两侧都能到的地方**（内核），否则"静态对/动态错"这类**只在交互路径显形**的缺陷会长期潜伏（本仓 #890/#891 是同类：缺省值、玻璃 blur/radius 的单位分叉）。
+【★未收口（同卡剩余 · 如实登记不假绿）】本例的 `p-icon :name="item.icon"`（**动态图标名**）仍不显示——根因是 **`p-icon` 组件 `computed(() => normalizedIcon(name))` 不产 data**（`app-component-registry.ts` 只认 `ref`）⇒ 组件实例化后 `icon.d` 求值 undefined。属 A 类**「computed 产 data」缺口**（与 A1 同族，已登记待专项）。故本卡：**点击切换位置 = 已修**；**动态图标 = 登记待补**（不属 U0）。

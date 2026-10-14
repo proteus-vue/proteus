@@ -220,7 +220,7 @@ fn incremental_matches_browser_after_mutation() {
             strings: vec![],
             ops: vec![UpdateOp::SetStyle { node_id: sc.mutation.id, key_id: 0, value: sc.mutation.value }],
         };
-        let outcome = apply_ops_to_tree(&mut tree, &dec);
+        let outcome = apply_ops_to_tree(&mut tree, &dec, 1.0);
         assert_eq!(
             outcome.applied, 1,
             "[{}] 变更未被应用（unsupported={:?}）",
@@ -281,7 +281,7 @@ fn contention_scenarios_stay_correct_regardless_of_path() {
             strings: vec![],
             ops: vec![UpdateOp::SetStyle { node_id: sc.mutation.id, key_id: 0, value: sc.mutation.value }],
         };
-        let outcome = apply_ops_to_tree(&mut tree, &dec);
+        let outcome = apply_ops_to_tree(&mut tree, &dec, 1.0);
         assert_eq!(outcome.applied, 1, "[{}] 变更未应用", sc.name);
         let multi = relayout_multi(&mut tree, &outcome.dirty);
         let after = snapshot_abs(&tree);

@@ -1393,6 +1393,10 @@ pub(crate) struct TreeEntry {
     /// ★★★**绝对矩形缓存**（Dactyl L2 场跟手大 N）：空 = 失效，非空 = 上次 `absolute_rects()` 结果。
     ///   结构变更（update/splice/apply_ops/create）时必须清空——场跟手每 MOVE 复用，去掉 O(N) 重算。
     pub(crate) abs_rects: Vec<Option<crate::style::Rect>>,
+    /// U0-fix: host density (logical -> physical px). applyOps length keys are scaled by
+    /// this in `ops_apply::apply_style_key_d`. Default 1.0 (= identity; TS/core tests keep
+    /// logical px). Set via `proteus_layout_set_density` (Android host sets device density).
+    pub(crate) density: f32,
 }
 
 impl TreeEntry {
@@ -1403,7 +1407,7 @@ impl TreeEntry {
         }
         Self {
             last_scopes: Vec::new(), measures, baselines, tree, id_to_idx, orphans: 0,
-            anim: crate::anim::AnimEngine::new(), abs_rects: Vec::new() }
+            anim: crate::anim::AnimEngine::new(), abs_rects: Vec::new(), density: 1.0 }
     }
 
     /// ★★**压实**：把可达节点重建进新数组，回收孤点内存（O(存活节点数)）
@@ -3254,7 +3258,7 @@ fn apply_ops_impl(handle: u64, ptr: *const u8, len: u32, with_rects: bool) -> Re
     let measures = entry.measures.clone();
 
     let t_apply0 = std::time::Instant::now();
-    let outcome = crate::ops_apply::apply_ops_to_tree(&mut entry.tree, &dec);
+    let outcome = crate::ops_apply::apply_ops_to_tree(&mut entry.tree, &dec, entry.density);
     let t_apply = t_apply0.elapsed().as_secs_f64() * 1000.0;
 
     let unsupported_json: Vec<serde_json::Value> = outcome
@@ -3348,6 +3352,27 @@ pub unsafe extern "C" fn proteus_layout_apply_ops_norects(handle: u64, ptr: *con
             .map(|c| c.into_raw())
             .unwrap_or(std::ptr::null_mut()),
     }
+}
+
+/// U0-fix (2026-10-14): set the host density for a handle. Runtime op path (applyOps) length
+/// keys are then multiplied by density in `ops_apply::apply_style_key_d`, matching the static
+/// mount path (host physicalizeTree). Android host calls this once after create with device
+/// density; iOS/Harmony keep 1.0 (their surfaces are already in logical px, same as Web).
+/// Returns `{"ok":true,"density":N}`.
+#[no_mangle]
+pub unsafe extern "C" fn proteus_layout_set_density(handle: u64, density: f32) -> *mut c_char {
+    let d = if density.is_finite() && density > 0.0 { density } else { 1.0 };
+    let r = registry().lock().map(|mut reg| {
+        match reg.get_mut(&handle) {
+            Some(e) => { e.density = d; serde_json::json!({"ok": true, "density": d}).to_string() }
+            None => serde_json::json!({"ok": false, "error": format!("句柄 {handle} 不存在")}).to_string(),
+        }
+    });
+    let s = match r {
+        Ok(s) => s,
+        Err(_) => serde_json::json!({"ok": false, "error": "注册表锁失败"}).to_string(),
+    };
+    CString::new(s).map(|c| c.into_raw()).unwrap_or(std::ptr::null_mut())
 }
 
 #[no_mangle]

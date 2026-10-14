@@ -465,6 +465,28 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeApplyOps<'lo
     into_java_string(&mut env, out)
 }
 
+/// `RustLayout.nativeSetDensity(handle: Long, density: Float): String`
+///
+/// U0-fix (2026-10-14): host density for the runtime op path. applyOps length keys are then
+/// scaled by density in the kernel (matching the static mount path). Android sets device density.
+#[no_mangle]
+pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeSetDensity<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    handle: jni::sys::jlong,
+    density: jni::sys::jfloat,
+) -> jstring {
+    let out = std::panic::catch_unwind(|| -> String {
+        let p = unsafe { ffi::proteus_layout_set_density(handle as u64, density as f32) };
+        if p.is_null() { return "{\"ok\":false,\"error\":\"null\"}".to_string(); }
+        let s = unsafe { std::ffi::CStr::from_ptr(p) }.to_string_lossy().into_owned();
+        unsafe { ffi::proteus_layout_free_string(p) };
+        s
+    })
+    .unwrap_or_else(|_| "{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string());
+    into_java_string(&mut env, out)
+}
+
 /// `RustLayout.nativeTextPolicy(handle: Long, nodeIdsJson: String): String`
 ///
 /// ★★★B-T2（2026-10-10）：**文本策略回读**（`whiteSpace`/`wordBreak`/`lineClamp`；内核 = SSOT）。
