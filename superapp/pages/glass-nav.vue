@@ -312,7 +312,8 @@ function pick(key: string, pos: number): void {
 .gna-hero__art--2 { background: #4aa06a; height: 240px; }
 .gna-list {
   border-radius: 16px;
-  background: #ffffff;
+  /* ★#922：卡片白 #ffffff → iOS App Store 列表浅灰（白霜在纯白上无区分；浅灰上可见） */
+  background: #f2f2f7;
   border: 1px solid var(--sa-line, #e8eaee);
   overflow: hidden;
 }
