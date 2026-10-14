@@ -4369,3 +4369,9 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 【判据】真机：选中胶囊（"游戏"）**清晰可见**（比条略暗的灰胶囊）· `check:shader-generated`（四端无漂移）· `check:glass-pixel-parity`（Metal==oracle max 1/255）· `check:shader-capability`/`glass-capability`/`glass-audit` 绿 · 鸿蒙 prebuilt 同步。
 【★教训】**着色器算子的顺序 = 语义**——"作者 tint / 面纱 / 高光"是有序管线：tint 若在面纱前 = "给内容上色"，在面纱后 = "给玻璃面上色"。
   本仓的历史坑（#926/#931/#942/#943/#944）大多是**同一批算子的次序/方向**问题 ⇒ 改玻璃务必审"这一算子在管线第几步、作用对象是内容还是面"。
+
+945. **液态玻璃：浅底面纱 α 回调（0.94 → 0.91）——「条又压过头了」· 只 Android**（2026-10-14 · 用户「现在下面的玻璃条透明度又压过头了」）：
+【现象】#943 续把浅底 α 提到 0.94 后，**条本身过实**（背后内容几乎不透，失去玻璃感）。
+【修】浅底端 α **0.94 → 0.91**（0.89「太透」/ 0.94「过头」⇒ 取中）；`glass.wgsl` + `reference.rs` 同改。
+【判据】真机：条浅底略透（内容虚影回一点）**且**选中胶囊仍清晰（胶囊面 234.8 vs 条面 262.1 ⇒ 差 27，对齐 iOS「暗 13~35」）· shader-generated/glass-pixel-parity（Metal==oracle max 1/255）/shader-capability/glass-capability/glass-audit 绿 · 鸿蒙 prebuilt 同步。
+【★注】α 是唯一主旋钮，用户的"太透/过头"是**主观**两端 ⇒ 本轮取中值定位；终值待用户目视确认。

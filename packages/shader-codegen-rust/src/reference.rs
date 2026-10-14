@@ -143,7 +143,7 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     //   ★#925：附 12% 背景色温（只取色度偏移）。与 glass.wgsl ⑤ 同源。
     // ★★★决策 #943：`bg_lum` 驱动面纱 α（自动透明度）——与 glass.wgsl ⑤ 同源（**α 随 bg_lum 递增**：浅底更强白霜）。
     let veil_v = 1.0f32;
-    let veil_a = 0.63f32 + (0.94f32 - 0.63f32) * p.bg_lum.clamp(0.0, 1.0);
+    let veil_a = 0.63f32 + (0.91f32 - 0.63f32) * p.bg_lum.clamp(0.0, 1.0);
     let raw_lum = raw[0]*0.299 + raw[1]*0.587 + raw[2]*0.114;
     for c in 0..3 {
         let vc = (veil_v + (raw[c] - raw_lum) * 0.12).clamp(0.0, 1.0);
