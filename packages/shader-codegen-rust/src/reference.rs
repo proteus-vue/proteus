@@ -131,17 +131,13 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     for c in 0..3 { col[c] = col[c] + (lum - col[c]) * 0.12; }
     for c in 0..3 { col[c] = lum + (col[c] - lum) * p.saturation; }
     for c in 0..3 { col[c] = col[c] + (col[c] * p.tint[c] * 2.0 - col[c]) * p.tint[3]; }
-    // ★★决策 #875：明暗自适应（对齐 Apple Liquid Glass「无固有颜色 + 随背景自适应」；
-    //    与 glass.wgsl ⑤ 同源）——亮背景(adapt→1)微奶白、暗背景(adapt→0)压深，替换此前恒定掺白。
-    let adapt = smoothstep(0.35, 0.70, lum);
-    // ★决策 #907：自适应霜（深背景→深玻璃、亮背景→亮；非恒定白）——与 glass.wgsl ⑤ 同源
-    let dark = [0.18f32, 0.20, 0.26];
-    let light = [0.97f32, 0.98, 1.0];
-    let fw = 0.30 + p.tint[3] * 0.25;
-    for c in 0..3 {
-        let glass_tint = dark[c] + (light[c] - dark[c]) * adapt;
-        col[c] = col[c] + (glass_tint - col[c]) * fw;
-    }
+    // ★★★决策 #908：**连续亮度仿射**（取代二极开关）——与 glass.wgsl ⑤ 同源。
+    //    锚点 = 第三方复刻仓像素实测 `glass_L ≈ 0.58·bg_L + 0.13`（暗底恒定提亮、亮底轻压、**色相不动**）；
+    //    `0.85` = 轻收系数（留 15% 原始对比）。旧式 `smoothstep(0.35,0.70)` + 固定 0.30 掺和是阶跃：
+    //    深底被拉向近黑（发脏）、白底"白 mix 白 = 零变化"（隐形）。
+    let target_l = (lum * 0.58 + 0.13).clamp(0.0, 1.0);
+    let d_aff = (target_l - lum) * 0.85;
+    for c in 0..3 { col[c] = (col[c] + d_aff).clamp(0.0, 1.0); }
 
     let cos_i = 1.0 / (1.0 + slope * slope).sqrt();
     let f0 = 0.04f32;
