@@ -537,6 +537,9 @@ public final class VaporRenderHost {
      */
     public String mount(String treeJson) {
         mountCalls++;
+        // ★★★决策 #930：**换屏/整树重建**（节点 id 全换）⇒ 玻璃 shader 缓存作废（此处才是正确时机）。
+        //   此前放在 `ProteusHostView.setCmds`（每次指令重建都清）⇒ 真机实测每 0.5s 重编 AGSL（卡顿）。
+        dev.proteus.layoutcore.GlassMaterial.clearShaderCache();
         // ★★重建 ⇒ 收起旧高亮（决策 #714）：高亮框不随树重建消失，切屏后会挂在旧 rect 上。
         highlightNode(0);
         // ★★保存**原始** tree 串（逻辑单位）——就地编辑（决策 #722）用它重建；★必须在 physicalize **之前**
