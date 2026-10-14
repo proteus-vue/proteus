@@ -1089,12 +1089,12 @@ final class SelfDrawView: UIView {
             unionRect = unionRect.union(nodeLayer.convert(nodeLayer.bounds, to: self.layer))
         }
         guard !unionRect.isNull, unionRect.width > 0, unionRect.height > 0 else { return }
-        // 每个玻璃按自身盒算 pad（更精确）：minDim*0.22（折射位移）+ blur*0.88（模糊采样）+ 4px
+        // 每个玻璃按自身盒算 pad（更精确）：minDim*0.42（折射位移，对齐 Android/鸿蒙 #926）+ blur*0.88 + 4px
         var padPts: CGFloat = 0
         for (id, spec) in glassSpecByNodeId {
             guard let nodeLayer = layersById[id] else { continue }
             let r = nodeLayer.convert(nodeLayer.bounds, to: self.layer)
-            padPts = max(padPts, min(r.width, r.height) * 0.22 + spec.blur * 0.55 * 1.6 + 4)
+            padPts = max(padPts, min(r.width, r.height) * 0.42 + spec.blur * 0.55 * 1.6 + 4)
         }
         let cropRect = unionRect.insetBy(dx: -padPts, dy: -padPts).intersection(bounds)
 
@@ -1110,7 +1110,7 @@ final class SelfDrawView: UIView {
         // ② 只栅格化 cropRect 区域（translate 使 cropRect 原点映射到 (0,0)）
         //   ★决策 #863：背景按**半分辨率**捕获（玻璃被模糊/折射，背景采样不必全分辨率）——
         //   捕获栅格化与纹理上传的像素量都降到 1/4（`capturePxPerPoint = scale/2`）。
-        let capturePxPerPoint = max(1, scale / 3)
+        let capturePxPerPoint = max(1, scale / 2)   // ★三端对齐：输入降采样 =2（与 Android DIV=2 / 鸿蒙 S=2 同口径）
         let fmt = UIGraphicsImageRendererFormat()
         fmt.scale = capturePxPerPoint
         let renderer = UIGraphicsImageRenderer(size: cropRect.size, format: fmt)
