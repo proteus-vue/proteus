@@ -463,23 +463,24 @@
       "id": "T-vapor-computed-data",
       "title": "App 折叠面「computed 产 data」缺口：p-icon 的 computed(()=>normalizedIcon(name)) 不产 data ⇒ 动态图标名（:name=item.icon）不渲染",
       "type": "capability",
-      "status": "planned",
-      "owner": null,
+      "status": "done",
+      "owner": "session:wb-glassvfor",
       "scope": [
-        "packages/cli/src/app-component-registry.ts",
         "packages/compiler/src/vapor/**",
-        "packages/slot-runtime/src/**",
-        "packages/icons/src/**",
+        "packages/cli/src/app-runtime-content.ts",
+        "packages/layout-core-rust/src/ffi.rs",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/**",
         "docs/Proteus_Vapor运行时能力缺口台账.md",
+        "superapp/pages/**",
         "tests/**"
       ],
-      "decision": null,
-      "verification": "npx vitest run tests/vapor-component-*.test.ts + 真机：glass-nav 导航项显示图标（p-icon :name=item.icon）",
+      "decision": 938,
+      "verification": "【#938】cargo test --lib（231）· pnpm test:coupled（516）· check:app-screen-content · check:vapor-three-end · 真机：glass-nav 4 图标全部显示（Android + iOS）",
       "branch": null,
       "related": [
         "T-glassnav-vfor-events"
       ],
-      "note": "【由来（2026-10-14 · #935 收口后暴露）】glass-nav 点击切换修好后（U0），导航项**图标仍不显示**。取证：p-icon 组件产物 `components['p-icon'].data = {}`（空）⇒ 运行期实例化后 `icon.d` / `icon.viewBox` 求值 undefined ⇒ svgPath 不产。根因：p-icon 的 `icon = computed(() => normalizedIcon(iconName.value))`——`app-component-registry.ts` 的 `extractRefLiterals` **只认 `ref(...)` 字面量**，**不产 computed 派生值** ⇒ 组件 data 快照缺 `icon`。★同族：台账 A1「computed 产 data」缺口（`computed` 派生的 v-for 数据不渲染），本卡是其**组件内 computed** 形态。\\n【修法候选】① 组件注册期对**无副作用 computed**做**构建期求值**（在 `buildAppComponentRegistry` 里跑一次 computed 的 getter，取初值写进 data）——与 ref 同列；② 或给 App 折叠面加「计算属性初值抽取」（静态可求值的才抽，含归一化查表）。★诚实边界：只有**纯函数 computed**（无 props 依赖运行期变化）可构建期求值；依赖 props 的 computed 仍需运行期重算（更大的接受面工程，另议）。"
+      "note": "【由来（2026-10-14 · #935 收口后暴露）】glass-nav 点击切换修好后（U0），导航项**图标仍不显示**。取证：p-icon 组件产物 `components['p-icon'].data = {}`（空）⇒ 运行期实例化后 `icon.d` / `icon.viewBox` 求值 undefined ⇒ svgPath 不产。根因：p-icon 的 `icon = computed(() => normalizedIcon(iconName.value))`——`app-component-registry.ts` 的 `extractRefLiterals` **只认 `ref(...)` 字面量**，**不产 computed 派生值** ⇒ 组件 data 快照缺 `icon`。★同族：台账 A1「computed 产 data」缺口（`computed` 派生的 v-for 数据不渲染），本卡是其**组件内 computed** 形态。\\n【修法候选】① 组件注册期对**无副作用 computed**做**构建期求值**（在 `buildAppComponentRegistry` 里跑一次 computed 的 getter，取初值写进 data）——与 ref 同列；② 或给 App 折叠面加「计算属性初值抽取」（静态可求值的才抽，含归一化查表）。★诚实边界：只有**纯函数 computed**（无 props 依赖运行期变化）可构建期求值；依赖 props 的 computed 仍需运行期重算（更大的接受面工程，另议）。\\n\\n【已落地（2026-10-14 · 决策 #938 · 首切片）】改为**在 `p-icon` 层折成叶子盒 + 运行期图标通道**（不改通用 computed 求值）：① `template.ts` 动态 `:name` 的 `p-icon` 折成叶子（去组件边界、去 VAPOR_ICON_DYNAMIC 诊断）；② `build.ts` 把 `p-icon` 的 `component.name/size/color` 改写为 `paint.svgPath`（值 `({d:__iconPath[expr].d,progress:1,fill:true})`）/`paint.svgViewBox`/`layout.width·height`/`paint.color`；③ CLI `app-runtime-content.ts` 扫屏 `data` 里键名 `icon` 的字符串值 → `iconResolver` → 注入 `data.__iconPath`；④ 内核 `ffi.rs` `svgPath.fill` 且无 `stroke` ⇒ 回退节点色（currentColor）；⑤ Android 宿主 svgPath 节点补送 `color`。★诚实边界：只覆盖**构建期可知**的图标名（data 里的字符串值）；运行期才算出的名不渲染（不静默——叶子盒仍在）。★鸿蒙 superapp 走静态 `appScreenCommands`（非 runtime-content）⇒ 动态图标不在其路径（pre-existing）。★通用 computed 求值（依赖 props 的任意派生）仍为更大工程——本卡仅收其**图标切片**。"
     },
     {
       "id": "T-glass-ios-remaining",

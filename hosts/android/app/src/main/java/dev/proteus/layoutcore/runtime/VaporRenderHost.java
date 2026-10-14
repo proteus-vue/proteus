@@ -2177,6 +2177,12 @@ public final class VaporRenderHost {
             for (String k : LAYOUT_KEYS) {
                 if (spec.has(k) && !spec.isNull(k)) c.put(k, spec.get(k));
             }
+            // ★★★决策 #938（动态图标）：带 `svgPath` 的节点**补送 `color`**——内核据此在 `fill` 且无
+            //   `stroke` 时回退填充色（CSS `currentColor` 语义；见 ffi.rs 的 svgPath 解析）。
+            //   `color` 平时是纯绘制属性、不进内核（见 LAYOUT_KEYS 注释）；仅 svgPath 节点例外（窄条件）。
+            if (spec.has("svgPath") && !spec.isNull("svgPath") && spec.has("color") && !spec.isNull("color")) {
+                c.put("color", spec.get("color"));
+            }
             String t = spec.optString("text", null);
             if (t != null && !t.isEmpty()) {
                 c.put("text", t);

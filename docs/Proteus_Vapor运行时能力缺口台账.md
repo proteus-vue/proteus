@@ -20,7 +20,7 @@
 
 | # | 现象（真机） | 根因（file:line） | 静默 | 状态 |
 |---|---|---|---|---|
-| A1 | **组件内 `computed(() => …)` 派生的 v-for 数据不渲染**（`pg-glass-nav` 的 `rows` computed ⇒ 导航项全空白）；**且运行期通路的响应式 v-for 被 `staticInstantiate` 静态展开**（`tpl.lists` 清空 ⇒ 运行期订阅表/列表被整条架空） | ① `computed` 不产 data（`app-component-registry.ts` 的 `extractRefLiterals` 只认 ref）；② 运行期通路也给 `buildLayoutTemplate` 传 `statics` ⇒ `staticInstantiate` 把可静态求值的 `v-for` 折成死节点 | ✅ 静默 | **部分修复**（#907：`keepReactiveStructure` 保留响应式 v-for/v-if；③ computed 产 data 待补） |
+| A1 | **组件内 `computed(() => …)` 派生的 v-for 数据不渲染**（`pg-glass-nav` 的 `rows` computed ⇒ 导航项全空白）；**且运行期通路的响应式 v-for 被 `staticInstantiate` 静态展开**（`tpl.lists` 清空 ⇒ 运行期订阅表/列表被整条架空） | ① `computed` 不产 data（`app-component-registry.ts` 的 `extractRefLiterals` 只认 ref）；② 运行期通路也给 `buildLayoutTemplate` 传 `statics` ⇒ `staticInstantiate` 把可静态求值的 `v-for` 折成死节点 | ✅ 静默 | **部分修复**（#907：`keepReactiveStructure` 保留响应式 v-for/v-if；③ computed 产 data：**首个切片已收口 #938**——`<p-icon :name="动态">` 走运行期图标通道（`__iconPath` + 叶子折叠），Android/iOS 真机图标显示；★通用 computed 求值（依赖 props 的任意派生）仍为更大工程，未收） |
 | A2 | **`v-for` 行内动态 `:class`（对象）渲染成黑块** | 行内 `:class` 对象被当 `list-item` style 处理、发错值（`build.ts` `inList` 分支 + `slot.ts` `toF32`） | ✅ 静默 | 绕开（去掉行内 `:class`） |
 | A3 | **普通 `const` 数组不被当响应式源** ⇒ 子组件收不到该 prop | `sources.ts` 只把 `ref/reactive/computed/props/model` 当源；普通 `const` 数组不是源 ⇒ `component.items` 槽位不建 | ✅ 静默 | 绕开（改 `ref([...])`） |
 | A4 | **`pg-glass`（玻璃叶子）被当「可展开组件」重复展开 ⇒ 卡片黑块** | `template.ts` `isComponentTag && !iconLeaf`——漏了 `glassLeaf`（glassResolver 折成叶子的标签不该再展开） | ✅ 静默 | **修复**（#906：加 `&& !glassLeaf`） |
