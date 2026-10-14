@@ -3331,6 +3331,40 @@ public class ProteusHostView extends ViewGroup {
     private int glassInteractNodeId = -1;
     private float glassTouchLocalX = -1e6f, glassTouchLocalY = -1e6f;
     private float glassPress = 0f, glassPressTarget = 0f;
+    /** ★★★决策 #950（vibrancy）：本帧**暗玻璃**的区域盒（内容坐标 x,y,w,h）——落在其中的文字/图标**强制白色**
+     *  （对齐 iOS：玻璃压暗背景时前景转白，保内容强烈可读）。逐帧在 drawGlassPass 重算。 */
+    private final java.util.List<float[]> darkGlassRects = new java.util.ArrayList<>();
+
+    /** ★#950：某玻璃盒区域的背景平均亮度（0..1；-1=无背板）——与 `GlassMaterial.buildPaint` 的 regionLum 同口径
+     *  （背板是降采样小图 ⇒ 用 `glassBackdropScaleX/Y` + `glassBackdropX/Y` 折算）。 */
+    private float glassRegionLum(Cmd c) {
+        if (glassBackdrop == null || glassBackdrop.isRecycled()) return -1f;
+        final int bx = (int) ((c.x - glassBackdropX) / glassBackdropScaleX);
+        final int by = (int) ((c.y - glassBackdropY) / glassBackdropScaleY);
+        final int bw = Math.max(1, (int) (c.w / glassBackdropScaleX));
+        final int bh = Math.max(1, (int) (c.h / glassBackdropScaleY));
+        final int x0 = Math.max(0, bx), y0 = Math.max(0, by);
+        final int x1 = Math.min(glassBackdrop.getWidth(), bx + bw);
+        final int y1 = Math.min(glassBackdrop.getHeight(), by + bh);
+        if (x1 <= x0 || y1 <= y0) return -1f;
+        final int step = Math.max(1, Math.max(x1 - x0, y1 - y0) / 20);
+        double sum = 0; int n = 0;
+        for (int y = y0; y < y1; y += step) for (int x = x0; x < x1; x += step) {
+            final int p = glassBackdrop.getPixel(x, y);
+            sum += (0.299 * ((p >> 16) & 0xff) + 0.587 * ((p >> 8) & 0xff) + 0.114 * (p & 0xff)) / 255.0;
+            n++;
+        }
+        return n > 0 ? (float) (sum / n) : -1f;
+    }
+
+    /** 该点是否落在本帧**暗玻璃**盒内（vibrancy 前景覆盖判据）。 */
+    private boolean inDarkGlass(float x, float y) {
+        for (int k = 0; k < darkGlassRects.size(); k++) {
+            final float[] r = darkGlassRects.get(k);
+            if (x >= r[0] && x <= r[0] + r[2] && y >= r[1] && y <= r[1] + r[3]) return true;
+        }
+        return false;
+    }
 
     /** ★★★#837 捕获优化：只栅格化**玻璃节点并集包围盒（+外扩 pad）**，不再整屏（真机实测整屏捕获 ~1.5–2ms）。
      *  ★pad = 边缘折射位移 + 模糊核最大采样半径 + 余量（覆盖着色器会采到的所有背景像素）。
@@ -3498,6 +3532,7 @@ public class ProteusHostView extends ViewGroup {
     /** ★★★玻璃独立绘制遍（实时，不进显示列表）：遍历本屏 cmds，对带 glass 的节点画玻璃面（背后内容采样）。 */
     private void drawGlassPass(Canvas canvas) {
         if (glassByNode.isEmpty()) return;
+        darkGlassRects.clear();   // ★#950：本帧暗玻璃盒重算
         final List<Cmd> list = cmds;
         final int[] ids = cmdNodeIds;
         if (ids == null) return;
@@ -3527,6 +3562,12 @@ public class ProteusHostView extends ViewGroup {
             final Integer fAnchor = fixedAnchorOf(ids[i]);
             final int fs = (fAnchor != null) ? canvas.save() : -1;
             if (fAnchor != null) canvas.translate(scrollX, scrollY);
+            // ★#950（vibrancy）：本玻璃区背景够暗 ⇒ 记盒（其内文字/图标强制白，保对比）。
+            final Cmd gc = list.get(i);
+            if (glassBackdrop != null) {
+                final float glum = glassRegionLum(gc);
+                if (glum >= 0f && glum < 0.45f) darkGlassRects.add(new float[]{gc.x, gc.y, gc.w, gc.h});
+            }
             drawGlassFace(canvas, ids[i], list.get(i), g);
             if (fs != -1) canvas.restoreToCount(fs);
         }
@@ -3999,7 +4040,7 @@ public class ProteusHostView extends ViewGroup {
                         canvas.translate(c.x, c.y);
                         android.graphics.Paint fillPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
                         fillPaint.setStyle(android.graphics.Paint.Style.FILL);
-                        fillPaint.setColor(scol);
+                        fillPaint.setColor(inDarkGlass(c.x + c.w * 0.5f, c.y + c.h * 0.5f) ? 0xFFFFFFFF : scol);   // ★#950 vibrancy
                         canvas.drawPath(sp, fillPaint);
                         canvas.restoreToCount(svgSaveF);
                     } else if (prog > 0f) {
@@ -4778,11 +4819,13 @@ public class ProteusHostView extends ViewGroup {
                     textPaint.setTextSize(c.fontSize);
                     lastTextSize = c.fontSize;
                 }
-                if (c.textColor != 0 && c.textColor != lastTextColor) {
-                    textPaint.setColor(c.textColor);
-                    lastTextColor = c.textColor;
+                // ★#950（vibrancy）：落在**暗玻璃**内的文字**强制白色**（对齐 iOS：压暗背景时前景转白保对比）。
+                final int effTc = inDarkGlass(c.x + c.w * 0.5f, c.y + c.h * 0.5f) ? 0xFFFFFFFF : c.textColor;
+                if (effTc != 0 && effTc != lastTextColor) {
+                    textPaint.setColor(effTc);
+                    lastTextColor = effTc;
                     hasTextColor = true;
-                } else if (c.textColor == 0 && hasTextColor) {
+                } else if (effTc == 0 && hasTextColor) {
                     textPaint.setColor(0xFF000000);
                     lastTextColor = 0;
                     hasTextColor = false;
