@@ -114,11 +114,11 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     let ec = e.clamp(0.004, 0.996);
     let u1 = 1.0 - ec;
     let slope = u1 / (1.0 - u1 * u1).max(1e-4).sqrt();
-    // ★决策 #910：位移**横贯整带**（prof 外缘1→内缘0），峰值 = 带宽×1.15（≥带宽 ⇒ 真透镜压缩/回折）；
-    //   refract_depth 以 band 为基准（宿主默认传 band ⇒ 1.0 中性；非恒等 ⇒ 真旋钮）——与 glass.wgsl 同源。
+    // ★决策 #910/#912：位移横贯整带（prof 外缘1→内缘0）；峰值系数 A=0.55（**单调、不折叠**——#912 修
+    //   "边缘卷曲内翻"：旧 A=1.15 > 0.667 ⇒ dsp/dx<0 ⇒ 折叠）。refract_depth 以 band 为基准（1.0 中性）。
     let prof = 1.0 - smoothstep(0.0, 1.0, e);
-    let strength = (p.refract_depth / band.max(1.0)).clamp(0.2, 2.5);
-    let bend = prof * band * 1.15 * strength;
+    let strength = (p.refract_depth / band.max(1.0)).clamp(0.2, 1.1);
+    let bend = prof * band * 0.55 * strength;
     let sp = (local.0 + n.0 * bend, local.1 + n.1 * bend);
 
     // uv 折算：纹理尺寸 = size + 2*pad；节点 uv=0 对应纹理 pad/(size+2pad)
@@ -136,12 +136,13 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     for c in 0..3 { col[c] = col[c] + (lum - col[c]) * 0.12; }
     for c in 0..3 { col[c] = lum + (col[c] - lum) * p.saturation; }
     for c in 0..3 { col[c] = col[c] + (col[c] * p.tint[c] * 2.0 - col[c]) * p.tint[3]; }
-    // ★★★决策 #911：**区域级霜白锚点**（报告 P1-1 完全形态）——与 glass.wgsl ⑤ 同源。
-    //    锚点随**区域背景亮度 `p.bg_lum`** 切换：深底锚点高（翻更白霜）、亮底锚点≈自身（几乎不变）。
-    //    只加**同一 delta**（只改明度、不动色相/饱和 ⇒ 守住 #875）。主旋钮 = 两锚点 (0.84↔0.93)。
-    let frost_l = 0.84 + (0.93 - 0.84) * smoothstep(0.30, 0.90, p.bg_lum);
-    let d_aff = (frost_l - lum) * 0.80;
-    for c in 0..3 { col[c] = (col[c] + d_aff).clamp(0.0, 1.0); }
+    // ★★★决策 #913：**霜层（surface veil）**——修正 #910/#911 的机制错误（对内容做亮度平移 ≠ 表面霜）。
+    //   `mix(内容色, 霜色, α)`：整面朝霜色靠拢（降对比 ⇒ 乳白/灰纱）。霜色与厚度随区域背景**翻转**
+    //   （深底→厚亮霜 / 亮底→薄暗霜，对齐 HIG "flip from light to dark"）。与 glass.wgsl ⑤ 同源。
+    let frost_t = smoothstep(0.30, 0.90, p.bg_lum);
+    let frost_col = 0.93 + (0.62 - 0.93) * frost_t;
+    let frost_a = 0.85 + (0.40 - 0.85) * frost_t;
+    for c in 0..3 { col[c] = col[c] + (frost_col - col[c]) * frost_a; }
 
     let cos_i = 1.0 / (1.0 + slope * slope).sqrt();
     let f0 = 0.04f32;
