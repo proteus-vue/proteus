@@ -787,32 +787,18 @@ export function createAppNativeCapabilities<E extends Error = Error>(CapError: n
     /**
      * C26 网络请求（App 腿）—— `useFetch` 的底层桥方法。
      *
-     * 【★为什么走异步通道】网络天然异步；同步等会阻塞 JS 线程（G-39 责任矩阵：
-     *   「网络请求 → L4 **网络线程**」）。故本方法经 `invokeHostAsync` 派发，
-     *   壳在网络线程完成后再回推（**壳负责切回 JS 线程**）。
-     *
-     * 【★取数语义与 wx 桥**逐字段对齐**（capability-bridges.ts 的 request 分支）】
-     *   载荷 → `.data`、状态码 → `.status`、响应头 → `.headers`。
+     * 【★异步通道】网络天然异步；同步等会阻塞 JS 线程（G-39：「网络请求 → L4 网络线程」）。
+     *   经 `invokeHostAsync` 派发 ⇒ 宿主有 `invokeBytes` 走二进制帧（#903），否则回落 JSON（不静默）。
+     * 【★取数语义与 wx 桥逐字段对齐】载荷 → `.data`、状态码 → `.status`、响应头 → `.headers`
      *   ⇒ `useFetch` 里 `bridge.request(...).then(r => r.data)` 的 `r.data` 两端同义。
-     *
-     * 【★会话共享（G-46）】Cookie/Token 由**壳**按平台机制持有（iOS `WKProcessPool` 单例 /
-     *   Android `CookieManager` / 鸿蒙 Header 注入）——**桥只传 url/params/headers**，
-     *   业务零感知。桥不碰会话，会话归资源池（原则 #13.35「资源归宿主」）。
-     *
-     * 【诚实边界】壳未实现 `http.request` ⇒ 仍返回 `fetch.unsupported`（**不伪造成功**）；
-     *   超时由壳回推明确原因，JS 侧兜底超时 = 业务超时 + 2s（让**壳**先说话）。
+     * 【★会话共享（G-46）】Cookie/Token 归壳（iOS `WKProcessPool` / Android `CookieManager` /
+     *   鸿蒙 Header 注入）——桥只传 url/params/headers，业务零感知。
+     * 【诚实边界】壳未实现 `http.request` ⇒ `fetch.unsupported`（**不伪造成功**）；JS 兜底超时 = 业务 + 2s。
      */
     request: (config: AppRequestConfig): Promise<AppRequestResponse<unknown>> =>
       invokeHostAsync(
         APP_NATIVE_METHODS.httpRequest,
-        {
-          url: config.url,
-          method: config.method,
-          data: config.data,
-          params: config.params,
-          headers: config.headers,
-          timeout: config.timeout,
-        },
+        { url: config.url, method: config.method, data: config.data, params: config.params, headers: config.headers, timeout: config.timeout },
         (config.timeout ?? 15000) + 2000,
       )
         .then((d) => {
