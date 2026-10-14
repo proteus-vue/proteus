@@ -60,10 +60,10 @@ export const STATS: StatItem[] = [
   },
   {
     id: 'components',
-    value: '81',
+    value: '82',
     label: '语义组件（p-* / pg-glass / virtual-list）',
     labelEn: 'semantic components (p-* / pg-glass / virtual-list)',
-    source: 'proteus components:audit packages/components（76 组件全部通过）',
+    source: 'proteus components:audit packages/components（82 组件全部通过 · 计数规则：含 index.vue 的目录）',
     sourceEn: 'proteus components:audit packages/components (76 components, all passing)',
   },
   {
@@ -85,7 +85,7 @@ export const STATS: StatItem[] = [
   },
   {
     id: 'plans',
-    value: '87',
+    value: '88',
     label: 'plan 文档',
     labelEn: 'plan documents',
     source: 'docs/*-plan 目录（board-inventory 全景索引）',
