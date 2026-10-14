@@ -3334,7 +3334,7 @@ public class ProteusHostView extends ViewGroup {
     /** ★#959/#961：按下放大的两档系数——**条小、选中胶囊大**（用户实测 iOS：条缩放小、胶囊缩放大）。 */
     /** ★#963：当前"按下组"的玻璃节点集（命中 + 子树内玻璃）——供 drawGlassFace 判"是否点亮"。 */
     private java.util.Set<Integer> glassPressSubtree = java.util.Collections.emptySet();
-    private static final float GLASS_PRESS_SCALE = 0.03f;          // 按下玻璃（条，小幅 ~1.03×）
+    private static final float GLASS_PRESS_SCALE = 0f;             // ★#965：条**不缩放**（用户「按下条跟着变」——条须完全静止）
     //  ★#962：胶囊幅度要**大到冲出条外**（用户「iOS 缩放直接在玻璃条外面」）——条 56 高、胶囊基底 ~48 ⇒ 须 >58/48=1.21
     //   才越界 ⇒ 取 0.30（1.30×）。
     private static final float GLASS_PRESS_SCALE_CAPSULE = 0.30f;  // 选中胶囊须**超过条**（用户「iOS 缩放直接在玻璃条外面」）
@@ -3617,14 +3617,17 @@ public class ProteusHostView extends ViewGroup {
             }
             // ★★★决策 #959：**按下放大**（对齐 iOS）——命中交互玻璃且 press>0 ⇒ 以盒中心等比放大（松开 lerp 回 1）。
             // ★#963：按下 ⇒ **放大盒**（不走 canvas.scale）——绕按下玻璃中心，让 shader 采样一致、玻璃光学保持。
+            // ★#965：**每个玻璃绕自身中心缩放**（胶囊在**原位**弹出、不横向移位）；条系数=0 ⇒ 条完全静止。
             final boolean inPress = pressBox != null && pressSubtree.contains(ids[i]);
             float bx = gc.x, by = gc.y, bw = gc.w, bh = gc.h;
             if (inPress) {
                 final float k = (pressInner != null && ids[i] != glassInteractNodeId) ? GLASS_PRESS_SCALE_CAPSULE : GLASS_PRESS_SCALE;
-                final float sc = 1f + glassPress * k;
-                final float pcx = pressBox.x + pressBox.w * 0.5f, pcy = pressBox.y + pressBox.h * 0.5f;
-                bx = pcx + (gc.x - pcx) * sc; by = pcy + (gc.y - pcy) * sc;
-                bw = gc.w * sc; bh = gc.h * sc;
+                if (k > 1e-4f) {
+                    final float sc = 1f + glassPress * k;
+                    final float ccx = gc.x + gc.w * 0.5f, ccy = gc.y + gc.h * 0.5f;
+                    bx = ccx + (gc.x - ccx) * sc; by = ccy + (gc.y - ccy) * sc;
+                    bw = gc.w * sc; bh = gc.h * sc;
+                }
             }
             drawGlassFace(canvas, ids[i], list.get(i), g, bx, by, bw, bh);
             if (fs != -1) canvas.restoreToCount(fs);
@@ -3641,24 +3644,17 @@ public class ProteusHostView extends ViewGroup {
         //     `drawCmds` **内部**按节点做），故缩放中心须用 **content 坐标 = 屏幕中心 + scroll**（此前直接用
         //     屏幕坐标 ⇒ 滚动后中心偏 scrollY ⇒ 内容被推下去）。
         //   ★条小/胶囊大：落在**胶囊 x 范围**内的内容用胶囊系数，其余用条系数（分三段裁剪画）。
-        if (pressBox != null && glassPress > 0.001f && !gContent.isEmpty()) {
-            final float cx = pressBox.x + pressBox.w * 0.5f + (gScrolled ? scrollX : 0);
-            final float cy = pressBox.y + pressBox.h * 0.5f + (gScrolled ? scrollY : 0);
-            final float sBar = 1f + glassPress * GLASS_PRESS_SCALE;
-            final float sCap = 1f + glassPress * (pressInner != null ? GLASS_PRESS_SCALE_CAPSULE : GLASS_PRESS_SCALE);
-            @SuppressWarnings("unused") float contentSave = -1;
-            if (pressInner == null || Math.abs(sCap - sBar) < 1e-4f) {
-                int sv = canvas.save(); canvas.scale(sCap, sCap, cx, cy);
-                drawCmds(canvas, null, gContent);
-                canvas.restoreToCount(sv);
-            } else {
-                final float capL = pressInner.x + (gScrolled ? scrollX : 0);
-                final float capR = capL + pressInner.w;
-                final float top = -1e6f, bot = 1e6f;
-                int sv1 = canvas.save(); canvas.clipRect(top, top, capL, bot); canvas.scale(sBar, sBar, cx, cy); drawCmds(canvas, null, gContent); canvas.restoreToCount(sv1);
-                int sv2 = canvas.save(); canvas.clipRect(capL, top, capR, bot); canvas.scale(sCap, sCap, cx, cy); drawCmds(canvas, null, gContent); canvas.restoreToCount(sv2);
-                int sv3 = canvas.save(); canvas.clipRect(capR, top, 1e6f, bot); canvas.scale(sBar, sBar, cx, cy); drawCmds(canvas, null, gContent); canvas.restoreToCount(sv3);
-            }
+        if (pressInner != null && glassPress > 0.001f && !gContent.isEmpty()) {
+            // ★#965：**只缩放胶囊 x 范围的内容**（绕**胶囊自身中心**）——其余（条上的别的 tab）不缩放（条静止）。
+            final float ccx = pressInner.x + pressInner.w * 0.5f + (gScrolled ? scrollX : 0);
+            final float ccy = pressInner.y + pressInner.h * 0.5f + (gScrolled ? scrollY : 0);
+            final float sCap = 1f + glassPress * GLASS_PRESS_SCALE_CAPSULE;
+            final float capL = ccx - pressInner.w * 0.5f * sCap - 4f;
+            final float capR = ccx + pressInner.w * 0.5f * sCap + 4f;
+            final float top = -1e6f, bot = 1e6f;
+            int sv1 = canvas.save(); canvas.clipRect(top, top, capL, bot); drawCmds(canvas, null, gContent); canvas.restoreToCount(sv1);
+            int sv2 = canvas.save(); canvas.clipRect(capL, top, capR, bot); canvas.scale(sCap, sCap, ccx, ccy); drawCmds(canvas, null, gContent); canvas.restoreToCount(sv2);
+            int sv3 = canvas.save(); canvas.clipRect(capR, top, 1e6f, bot); drawCmds(canvas, null, gContent); canvas.restoreToCount(sv3);
         } else if (!gContent.isEmpty()) {
             drawCmds(canvas, null, gContent);
         }
