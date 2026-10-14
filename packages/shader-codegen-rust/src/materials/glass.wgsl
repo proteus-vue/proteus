@@ -96,7 +96,11 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     let ec = clamp(e, 0.004, 0.996);
     let u1 = 1.0 - ec;
     let slope = u1 / sqrt(max(1.0 - u1 * u1, 1e-4));
-    let prof = pow(1.0 - e, 3.0);   // ★#918：边缘位移大、内侧快速衰减 —— 边缘非单调(薄折叠=倒影) + 内侧拉伸
+    // ★★★决策 #924（依据 iOS 逆向调研 .workbuddy/memory/2026-10-14.md §逆向结论）：
+    //   iOS 核心 shader **仅 4 入参**（backdrop / sdf / ref_height 带高 / ref_length 位移），位移 = 沿边缘法线的
+    //   **线性映射**；三种模式由 **ref_length/ref_height 比值**决定 —— <1 凹(缩小) / >1 凸(放大) / ≈1+ **边缘反射(镜像)**
+    //   （文章注明：**苹果 GUI 最常用 = 边缘反射**）。⇒ 剖面改**线性**（不再是 (1-e)^3 的自造曲线）。
+    let prof = 1.0 - e;   // iOS 线性映射
     // ★★★决策 #910/#912/#914 · 位移峰值系数 `EDGE_REFRACT`（**方向已冻结，只调幅度**）
     //   【#914 用户真机】「iOS 的折射只有**平面变化**，我们的明显**文字有 y 轴拉伸**」——取证（oracle 细线探针）：
     //     位移机制（沿外法线向外采样 ⇒ 边缘带内容被压缩/弯折）**方向正确**；问题是**幅度**：`0.55·band`
@@ -104,7 +108,7 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     //   ⇒ 幅度降到 **0.15·band**（≈10 物理px ≈ 3 逻辑px）：线间距接近均匀（仅边缘轻微弯折，对齐 iOS"平面变化"）。
     //   ★这是**定稿方向**（不再漂移）：机制=法线方向向外采样（单调、不折叠）+ 小幅度（平面式轻弯折）。
     //   A 分解：`EDGE_REFRACT`（幅度）· `strength`（宿主 refract_depth 旋钮，1.0 中性）。
-    let EDGE_REFRACT = 0.70;   // ★#918：配 (1-e)^3 剖面——边缘位移大到非单调(薄折叠=倒影)、内侧拉伸
+    let EDGE_REFRACT = 1.10;   // ★#924：ref_length/ref_height = 1.1（> 1 ⇒ **边缘反射/镜像**，对齐 iOS GUI 常用模式）
     let strength = clamp(u.refract_depth / max(band, 1.0), 0.2, 1.1);
     var bend = prof * band * EDGE_REFRACT * strength;
     // ★★★决策 #905：**触控形变流动**——触点周围局部凸起（Gaussian 钟），按压力把背后内容沿"离触点方向"推开；
