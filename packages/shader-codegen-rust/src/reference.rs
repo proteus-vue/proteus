@@ -142,7 +142,9 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     // ★★★决策 #931：**面纱（veil）**——修正 #926「加法亮度位移保对比 ⇒ 读作透明」。
     //   iOS 真实模型（两张不同背景联立）：`glass = mix(bg, 0.80, 0.28)` ⇒ 对比度 0.72×（磨砂）。
     //   ★#925：附 12% 背景色温（只取色度偏移）。与 glass.wgsl ⑤ 同源。
-    let veil_a = 0.28f32; let veil_v = 0.80f32;
+    // ★★★决策 #942：`bg_lum` 驱动面纱（自动透明度）——与 glass.wgsl ⑤ 同源（深底 α 大 / 浅底 α 小；V 近白）。
+    let veil_v = 0.96f32;
+    let veil_a = 0.64f32 + (0.40f32 - 0.64f32) * p.bg_lum.clamp(0.0, 1.0);
     let raw_lum = raw[0]*0.299 + raw[1]*0.587 + raw[2]*0.114;
     for c in 0..3 {
         let vc = (veil_v + (raw[c] - raw_lum) * 0.12).clamp(0.0, 1.0);
