@@ -181,7 +181,10 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     // ★★★决策 #915 · **删除 `edge_pol`（"自适应描边极性"）**——用户实测「边缘随背景发亮发暗，不对」。
     //   取证：iOS 边缘是 **specular 高光（恒亮）**，**不随背景翻转**。旧 `edge_pol`（#910 引入）让亮底边缘**减暗**
     //   ⇒ 既非 iOS，又让"文字经过边缘变亮"（宽带时更糟）。⇒ 缘带收窄到 0.10 后**恒定加亮**（恢复 iOS 语义）。
-    let rim = (pow(facing, 6.0) * u.specular + fres * 0.20) * bevel_mask + edge_hi + tg * 0.30;   // ★#905：触点点亮
+    // ★★★决策 #947：触点高光 `tg*0.30` → **`tg*0.07`**（用户「有一个光斑跟随手指」）——
+    //   `0.30×tg` 最大 +76/255 的**亮斑**（真机实测光斑比条亮 +60~70），iOS 的交互玻璃是**折射扰动**（不是亮斑）。
+    //   ⇒ 压到 0.07（几乎不可见，保留一丝反馈）；折射 warp（`push`）保留 = 真正的"玻璃流动"。
+    let rim = (pow(facing, 6.0) * u.specular + fres * 0.20) * bevel_mask + edge_hi + tg * 0.07;   // ★#947：触点点亮（0.30→0.07）
     col = vec4<f32>(clamp(col.rgb + vec3<f32>(rim), vec3<f32>(0.0), vec3<f32>(1.0)), 1.0);
     return col;
 }
