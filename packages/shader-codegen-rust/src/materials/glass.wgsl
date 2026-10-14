@@ -65,15 +65,41 @@ fn sample_backdrop(uv: vec2<f32>) -> vec4<f32> {
     return textureSample(backdrop_tex, backdrop_smp, uv * u.tex_scale + u.tex_bias);
 }
 
+// ★★★决策 #966/#969：**按下 SDF 形变（形状域）**——触点附近轮廓**内陷（凹）**（增大 SDF = 外形收缩）。
+//   ★#969 修正方向（用户「玻璃条本身的边不是鼓，是内陷了」+ iOS 18:53 暗底实拍）：iOS 按下 = 玻璃表面在
+//     触点处**凹进去**（露透镜状背景 + 彩虹色散边），**不是**凸出 ⇒ 以前做成外凸是**反向**。
+//   ★★本函数只定**剪影/亮环**；**法线/位移仍取原轮廓**（见 fs_glass）——否则内容被挤（#968/#969 实证）。
+//   ★纯 `press × overlay` 门控（未按 ⇒ 逐像素等价 sd_round_rect，parity 不变）。
+fn sd_glass(p: vec2<f32>, hs: vec2<f32>, r: f32, tp: vec2<f32>, press: f32, hsm: f32) -> f32 {
+    var v = sd_round_rect(p, hs, r);
+    let pr = clamp(press, 0.0, 1.0);
+    if (pr > 0.001) {
+        let td = p - tp;
+        let br = hsm * 1.25;                       // 形变横向展布
+        let bulge = exp(-dot(td, td) / (2.0 * br * br));
+        v = v + bulge * (hsm * 0.42) * pr;         // ★#969：增大 SDF ⇒ 轮廓**内陷**（凹，对齐 iOS）
+    }
+    return v;
+}
+
 @fragment
 fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     let local = frag.xy - u.origin;      // 盒内像素坐标（origin = 节点盒左上角）
     let hs = u.size_px * 0.5;
     let p = local - hs;
     let r = min(u.radius, min(hs.x, hs.y));
-    let sd = sd_round_rect(p, hs, r);
-    let d = max(-sd, 0.0);               // 离边深度（内部为正）
     let hsmin = min(hs.x, hs.y);
+    // ★#966：按下 SDF 充气（形状域）由模块级 `sd_glass()` 完成（WGSL 不允许函数嵌套）。
+    //   ★门控 = `press × overlay`：**只让选中胶囊（overlay）变形**，条（overlay=0）保持静止——
+    //     与 #965 同口径（用户「按下条也跟着变」是明确的回归）。
+    let pr_eff = clamp(u.press, 0.0, 1.0) * clamp(u.overlay, 0.0, 1.0);
+    let tpp = u.touch - hs;                          // 触点在 p 空间
+    // ★#968：**轮廓（几何）**用充气后的 SDF——只喂**亮环**（见 ⑥）；
+    //   而 `d`/`e`/**法线**/位移一律用**原轮廓** —— 用户实测「iOS 下面的内容不挤压，只有玻璃边被充气」。
+    //   ★教训：充气改法线 ⇒ 折射把**玻璃下面的内容**也带弯 = 挤内容（非 iOS）。形状域变形只应改剪影。
+    let sd_run = sd_glass(p, hs, r, tpp, pr_eff, hsmin);   // 充气轮廓（仅亮环用）
+    let sd = sd_round_rect(p, hs, r);                     // 原轮廓（d/e/法线/位移用）
+    let d = max(-sd, 0.0);               // 离边深度（内部为正）
     let smin = min(u.size_px.x, u.size_px.y);   // 最短**边**（= 2×hsmin）
     // ★★★决策 #907/#910：折射带 ≈ **最短边 1/3**（= 条高 1/3）。
     //   ★#910 修正口径（报告 G3）：原 `hsmin*0.33 = 0.165·min` 实为**最短边的 1/6**（注释称"1/3"、
@@ -83,6 +109,7 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
 
     // ① 外法线（SDF 梯度；宽 eps 防药丸中轴裂缝）
     let eps = clamp(band * 0.3, 1.0, 16.0);
+    // ★#968：法线取**原轮廓**的梯度（内容不动——充气不改法线，否则折射把下面内容挤弯）。
     let g = vec2<f32>(
         sd_round_rect(p + vec2<f32>(eps, 0.0), hs, r) - sd_round_rect(p - vec2<f32>(eps, 0.0), hs, r),
         sd_round_rect(p + vec2<f32>(0.0, eps), hs, r) - sd_round_rect(p - vec2<f32>(0.0, eps), hs, r));
@@ -117,10 +144,11 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     let td = local - u.touch;
     // ★★★决策 #965：触点钟形**只给选中项（overlay）**——此前给命中玻璃（条）⇒ 按下处局部透出背景 ⇒
     //   用户「按下条也跟着变通透」（按哪哪透，看着像 morph 其实不是）。
-    let tg = exp(-(dot(td, td)) / (2.0 * tR * tR)) * u.press * clamp(u.overlay, 0.0, 1.0);   // 0..1 触点钟形
-    let push = max(hsmin * 0.28, 6.0) * tg;                     // 触点处峰位移（px）
-    // ★#918：位移**向内采样**（`− n·bend`）⇒ 边缘内容被**放大/拉伸**（用户实测：iOS 是拉伸不是压缩）。
-    let sp = local - n * bend + normalize(td + vec2<f32>(1e-4, 1e-4)) * push;
+    let tg = exp(-(dot(td, td)) / (2.0 * tR * tR)) * u.press * clamp(u.overlay, 0.0, 1.0);   // 0..1 触点钟形（仅亮环用）
+    // ★★★决策 #968：**不再做触控内容位移（push=0）**——用户实测「iOS 按下**下面的内容不动**，
+    //   只有玻璃**轮廓边**被充气」。此前 `push` 沿"离触点方向"推挤背后内容 ⇒ 读作"内容被挤压"（明确偏离 iOS）。
+    //   现在按下只改**剪影**（宿主外凸路径 + 沿充气轮廓的亮环）与**内部光学**（边缘折射与静态同）⇒ 内容零位移。
+    let sp = local - n * bend;   // ★#918：仅保留边缘折射（与静态同口径），无触控内容位移
     let sp_uv = sp / u.size_px;
 
     // ③ 模糊按 e 键控（边缘锐、中心糊）；核最大半径 = blur*e*0.55
@@ -210,7 +238,7 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     //   ⇒ 既非 iOS，又让"文字经过边缘变亮"（宽带时更糟）。⇒ 缘带收窄到 0.10 后**恒定加亮**（恢复 iOS 语义）。
     // ★★★决策 #947：触点高光 `tg*0.30` → **`tg*0.07`**（用户「有一个光斑跟随手指」）——
     //   `0.30×tg` 最大 +76/255 的**亮斑**（真机实测光斑比条亮 +60~70），iOS 的交互玻璃是**折射扰动**（不是亮斑）。
-    //   ⇒ 压到 0.07（几乎不可见，保留一丝反馈）；折射 warp（`push`）保留 = 真正的"玻璃流动"。
+    //   ⇒ 压到 0.07（几乎不可见，保留一丝反馈）。★#968：触控**内容位移 `push` 已移除**（按下不改内容）。
     // ★★★决策 #953：**边缘高光按 overlay 门控**——`overlay=1`（选中胶囊）⇒ 无边缘高光（用户「选中胶囊四周有高亮的边，不需要，
     //   干净卡片贴上去即可」）。其余玻璃（overlay=0）边缘高光不变。
     // ★★★决策 #956 撤回：**iOS 选中胶囊实测无高亮边**（顶边 78→109 / 右边界 120→89，皆为**干净色阶、无过亮尖峰**；
@@ -219,8 +247,19 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     // ★★★决策 #963：**按下「点亮透镜」**——press>0 的玻璃（按下组：条 + 选中胶囊）加一道**镜面亮边**
     //   （对齐 iOS 按下：边缘镜面亮脊 +67L，子代理实测；我们此前按下=edge_amp 把亮边全关了 ⇒ 死平）。
     // ★#965：亮边只给**选中项（overlay 玻璃=胶囊）**——否则条（overlay=0）也被点亮 ⇒ 用户「条也跟着变通透」。
-    let press_rim = bevel_mask * clamp(u.press, 0.0, 1.0) * 0.32 * clamp(u.overlay, 0.0, 1.0);
+    // ★★★决策 #967：**按下亮环**——沿**充气轮廓**的亮边（iOS 按下透镜的亮边），压在暗底也读得出。
+    //   ★为什么必须加强（真机取证）：按下后胶囊填充变**透明**（#964）⇒ 在暗底上填充与玻璃条同亮度（实测
+    //     胶囊中心列 lum≈46 = 条，**轮廓完全看不见**），只有底部凸出到白色内容处才显形。用户「只有下边被挤压、
+    //     上边完全看不到」的真因 = **缺亮边**（iOS 的按下透镜 = 透明填充 + 一圈亮边 ⇒ 上下轮廓都读得出）。
+    //   ★带略宽于常态 bevel（0.10→0.16）以在真机分辨率下可见；系数 0.32→0.55。
+    //   ★按 **sd**（充气后轮廓）取环，而非 `e`——充气把 SDF 收缩后，真边缘处的 `e` 被推到 >0.16 ⇒ 用 `e` 会把环整段杀掉（实测）。
+    let pv_rim = clamp(u.press, 0.0, 1.0) * clamp(u.overlay, 0.0, 1.0);
+    let rim_w = max(min(u.size_px.x, u.size_px.y) * 0.06, 2.0);   // 环宽（px）
+    let press_rim = (1.0 - smoothstep(0.0, rim_w, abs(sd_run))) * pv_rim * 0.55;   // ★#968：取**充气轮廓**
     let rim = ((pow(facing, 6.0) * u.specular * 0.22 + fres * 0.06) * bevel_mask + edge_hi) * edge_amp + press_rim + tg * 0.07;   // ★#954/#956/#963
+    // ★★★决策 #966：**按下 SDF 充气**（形状域）只改**内部光学**（法线/折射/高光跟随充气轮廓）。
+    //   ★剪影由**宿主几何**（`GlassMaterial.inflatedPillPath` 外凸路径裁剪）给出——实测本设备
+    //     忽略 `RuntimeShader` 返回的 alpha（返回 0 / 圆覆盖率都仍画成不透明矩形）⇒ 覆盖率不可用。
     col = vec4<f32>(clamp(col.rgb + vec3<f32>(rim), vec3<f32>(0.0), vec3<f32>(1.0)), 1.0);
     return col;
 }

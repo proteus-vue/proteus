@@ -28,6 +28,8 @@ pub struct GlassParams {
     pub overlay: f32,
     /// ★#963：按下强度 0..1（选中胶囊/条的「点亮透镜」亮边；触点 glass.wgsl 同源）。缺省 0。
     pub press: f32,
+    /// ★#966：触点在**盒局部设备像素**（未激活 = (-1e6,-1e6)）；与 glass.wgsl `touch` 同源。
+    pub touch: (f32, f32),
 }
 
 impl Default for GlassParams {
@@ -45,6 +47,7 @@ impl Default for GlassParams {
             bg_lum: 0.0,
             overlay: 0.0,
             press: 0.0,
+            touch: (-1.0e6, -1.0e6),
         }
     }
 }
@@ -90,6 +93,22 @@ fn sd_round_rect(p: (f32, f32), hs: (f32, f32), r: f32) -> f32 {
     mx + (ox * ox + oy * oy).sqrt() - r
 }
 
+/// ★★★决策 #966/#969：**按下 SDF 形变（形状域）**——见 glass.wgsl 同源注释（内陷=凹）。
+/// 触点附近收缩 SDF（外形外凸）；纯 press 门控（press=0 ⇒ 逐像素等价 sd_round_rect）。
+#[allow(clippy::too_many_arguments)]
+fn sd_glass(p: (f32, f32), hs: (f32, f32), r: f32, tp: (f32, f32), press: f32, hsm: f32) -> f32 {
+    let mut v = sd_round_rect(p, hs, r);
+    let pr = press.clamp(0.0, 1.0);
+    if pr > 0.001 {
+        let tdx = p.0 - tp.0;
+        let tdy = p.1 - tp.1;
+        let br = hsm * 1.25;                       // 充气横向展布
+        let bulge = (-(tdx * tdx + tdy * tdy) / (2.0 * br * br)).exp();
+        v += bulge * (hsm * 0.42) * pr;            // ★#969：增大 SDF ⇒ 轮廓内陷（凹）
+    }
+    v
+}
+
 fn circle_map(x: f32) -> f32 {
     1.0 - (1.0 - x * x).max(0.0).sqrt()
 }
@@ -104,6 +123,11 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     let hs = (p.size_px.0 * 0.5, p.size_px.1 * 0.5);
     let pc = (local.0 - hs.0, local.1 - hs.1);
     let r = p.radius.min(hs.0.min(hs.1));
+    let hsmin = hs.0.min(hs.1);
+    let tp = (p.touch.0 - hs.0, p.touch.1 - hs.1);   // ★#966 触点在 p 空间
+    let pr_eff = p.press.clamp(0.0, 1.0) * p.overlay.clamp(0.0, 1.0);   // ★#966：充气只给选中胶囊（overlay）
+    // ★#968：充气轮廓（仅亮环用）；d/e/法线/位移用**原轮廓**（内容不挤压）。
+    let sd_run = sd_glass(pc, hs, r, tp, pr_eff, hsmin);
     let sd = sd_round_rect(pc, hs, r);
     let d = (-sd).max(0.0);
     let smin = p.size_px.0.min(p.size_px.1);   // 最短边（= 2×hsmin）
@@ -112,6 +136,7 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     let e = (d / band).clamp(0.0, 1.0);
 
     let eps = (band * 0.3).clamp(1.0, 16.0);
+    // ★#968：法线取**原轮廓**梯度（充气不改法线 ⇒ 内容不挤压）。
     let gx = sd_round_rect((pc.0 + eps, pc.1), hs, r) - sd_round_rect((pc.0 - eps, pc.1), hs, r);
     let gy = sd_round_rect((pc.0, pc.1 + eps), hs, r) - sd_round_rect((pc.0, pc.1 - eps), hs, r);
     let glen = (gx * gx + gy * gy).sqrt().max(1e-5);
@@ -125,7 +150,14 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     let prof = (1.0 - e).powi(3);   // ★#928 回退#924：位移集中在极边缘（#918 用户认可版）
     let strength = (p.refract_depth / band.max(1.0)).clamp(0.2, 1.1);
     let bend = prof * band * 0.70 * strength;   // ★#928：幅度回 0.70
-    let sp = (local.0 - n.0 * bend, local.1 - n.1 * bend);   // ★#918：向内采样 ⇒ 拉伸
+    // ★#905/#966：触控形变——触点处把内容沿"离触点方向"推挤（Gaussian 钟）。
+    //   ★只给选中项（overlay）；press=0 或 touch 未激活 ⇒ push≈0（退化到既有折射）。
+    let t_r = (hs.0.min(hs.1) * 0.9).max(8.0);
+    let tdx = local.0 - p.touch.0;
+    let tdy = local.1 - p.touch.1;
+    let tg = (-(tdx * tdx + tdy * tdy) / (2.0 * t_r * t_r)).exp() * p.press.clamp(0.0, 1.0) * p.overlay.clamp(0.0, 1.0);
+    // ★#968：无触控内容位移（push=0）——按下只改剪影 + 亮环，内容零位移。
+    let sp = (local.0 - n.0 * bend, local.1 - n.1 * bend);   // ★#918
 
     // uv 折算：纹理尺寸 = size + 2*pad；节点 uv=0 对应纹理 pad/(size+2pad)
     let tex_w = p.size_px.0 + 2.0 * p.pad;
@@ -182,9 +214,13 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     // ★#956 撤回：iOS 选中胶囊实测无高亮边（#953 原判正确）
     let edge_amp = 1.0f32 - p.overlay.clamp(0.0, 1.0);
     // ★#963：按下点亮透镜（press>0 的玻璃加镜面亮边）
-    let press_rim = bevel_mask * p.press.clamp(0.0, 1.0) * 0.32 * p.overlay.clamp(0.0, 1.0);   // ★#965 亮边只给选中项
-    let rim = ((facing.powi(6) * p.specular * 0.22 + fres * 0.06) * bevel_mask + edge_hi) * edge_amp + press_rim;   // ★#954/#963
+    // ★#967：按下亮环——沿充气轮廓的亮边（与 glass.wgsl 同源；压在暗底也读得出）。
+    let pv_rim = p.press.clamp(0.0, 1.0) * p.overlay.clamp(0.0, 1.0);
+    let rim_w = (p.size_px.0.min(p.size_px.1) * 0.06).max(2.0);
+    let press_rim = (1.0 - smoothstep(0.0, rim_w, sd_run.abs())) * pv_rim * 0.55;   // ★#968：取充气轮廓
+    let rim = ((facing.powi(6) * p.specular * 0.22 + fres * 0.06) * bevel_mask + edge_hi) * edge_amp + press_rim + tg * 0.07;   // ★#954/#963/#966
     for c in 0..3 { col[c] = (col[c] + rim).clamp(0.0, 1.0); }
+    // ★#966：剪影由宿主几何（inflatedPillPath）给出——见 glass.wgsl（本设备忽略 shader 返回 alpha）。
     col[3] = 1.0;
     col
 }

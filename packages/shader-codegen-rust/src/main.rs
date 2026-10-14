@@ -169,6 +169,8 @@ fn render_reference(spec_path: &str) -> Result<(), String> {
         bg_lum: p["bg_lum"].as_f64().unwrap_or(0.0) as f32,
         overlay: p["overlay"].as_f64().unwrap_or(0.0) as f32,
         press: p["press"].as_f64().unwrap_or(0.0) as f32,
+        // ★#966：触点在盒局部设备像素（缺省 = 未激活 (-1e6,-1e6) ⇒ 充气项恒 0）
+        touch: (p["touch"][0].as_f64().unwrap_or(-1.0e6) as f32, p["touch"][1].as_f64().unwrap_or(-1.0e6) as f32),
     };
     let ow = spec["out"]["width"].as_u64().unwrap_or(gp.size_px.0 as u64) as usize;
     let oh = spec["out"]["height"].as_u64().unwrap_or(gp.size_px.1 as u64) as usize;

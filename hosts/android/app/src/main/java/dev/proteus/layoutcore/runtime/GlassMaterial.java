@@ -33,6 +33,62 @@ public final class GlassMaterial {
         return Build.VERSION.SDK_INT >= Build.VERSION_CODES.S;
     }
 
+    /** ★#966：该材质是否为**玻璃族**（`GlassUniforms`）——玻璃族的剪影可由 shader 的 SDF 覆盖率给出，
+     *  模糊族（BlurUniforms）无 SDF ⇒ 仍须宿主圆角矩形裁剪。判别与 buildPaint 内 `isGlass` 同源。 */
+    public static boolean isGlassMaterial(String material) {
+        final GeneratedMaterials.Def def = GeneratedMaterials.MATERIALS.get(material);
+        return def == null || "GlassUniforms".equals(def.uniformStruct);
+    }
+
+    /** ★★★决策 #966/#969：**按下形变路径**（形状域变形的**剪影**）——圆角矩形轮廓沿外法线按
+     *  `amp·exp(-d²/2σ²)` **向内**偏移（`d` = 轮廓点到触点距离），与 shader `sd_glass` 的形变式**同源**。
+     *  ★#969：方向 = **内陷（凹）**（iOS 按下表面凹进去），不是外凸。
+     *  ★为什么要宿主建路径：实测本设备**忽略 `RuntimeShader` 返回的 alpha**（返回 0 / 圆覆盖率都仍画成
+     *   不透明矩形）⇒ 剪影只能来自**几何裁剪**（`clipPath`）。`press=0` ⇒ 路径 ≈ 原圆角矩形（逐像素等价）。
+     *  ★坐标系：`bx,by,bw,bh` 与 `tx,ty` 必须在**同一画布坐标空间**（调用方传的是外扩/缩放后的盒）。 */
+    public static android.graphics.Path inflatedPillPath(float bx, float by, float bw, float bh,
+                                                         float r, float tx, float ty, float press) {
+        final float shortSide = Math.min(bw, bh);
+        final float amp = shortSide * 0.5f * 0.42f * Math.max(0f, Math.min(1f, press));   // 充气峰值（同 shader）
+        final float sig = Math.max(shortSide * 0.5f * 1.25f, 1f);                        // 高斯展布（同 shader）
+        final float rr = Math.max(0f, Math.min(r, shortSide * 0.5f));
+        final float twoSig2 = 2f * sig * sig;
+        final float x0 = bx, y0 = by, x1 = bx + bw, y1 = by + bh;
+        final java.util.ArrayList<float[]> pts = new java.util.ArrayList<>();
+        final float step = 4f;
+        for (float x = x0 + rr; x < x1 - rr; x += step) pts.add(new float[]{x, y0, 0f, -1f});
+        arcPts(pts, x1 - rr, y0 + rr, rr, -90f, 0f);
+        for (float y = y0 + rr; y < y1 - rr; y += step) pts.add(new float[]{x1, y, 1f, 0f});
+        arcPts(pts, x1 - rr, y1 - rr, rr, 0f, 90f);
+        for (float x = x1 - rr; x > x0 + rr; x -= step) pts.add(new float[]{x, y1, 0f, 1f});
+        arcPts(pts, x0 + rr, y1 - rr, rr, 90f, 180f);
+        for (float y = y1 - rr; y > y0 + rr; y -= step) pts.add(new float[]{x0, y, -1f, 0f});
+        arcPts(pts, x0 + rr, y0 + rr, rr, 180f, 270f);
+        final android.graphics.Path p = new android.graphics.Path();
+        boolean first = true;
+        for (float[] q : pts) {
+            final float dx = q[0] - tx, dy = q[1] - ty;
+            final float inf = amp * (float) Math.exp(-(dx * dx + dy * dy) / twoSig2);
+            // ★#969：**向内偏移**（凹/内陷）——iOS 按下玻璃表面在触点处凹进去（不是凸出）。
+            final float X = q[0] - q[2] * inf, Y = q[1] - q[3] * inf;
+            if (first) { p.moveTo(X, Y); first = false; } else { p.lineTo(X, Y); }
+        }
+        p.close();
+        return p;
+    }
+
+    /** 圆角弧采样（外法线 = 径向）：`(cx,cy)` 圆心 · `rr` 半径 · `a0→a1` 角度（度）。 */
+    private static void arcPts(java.util.List<float[]> pts, float cx, float cy, float rr, float a0, float a1) {
+        if (rr <= 0.5f) return;
+        // I2-ALLOW: 圆角弧的**离散采样点数**（非几何坐标舍入——弧点由 float 三角函数算出，N 仅为细分常数）
+        final int n = Math.max(2, (int) Math.ceil(Math.abs(a1 - a0) / 6f));
+        for (int i = 1; i < n; i++) {
+            final double th = Math.toRadians(a0 + (a1 - a0) * i / n);
+            final float nx = (float) Math.cos(th), ny = (float) Math.sin(th);
+            pts.add(new float[]{cx + rr * nx, cy + rr * ny, nx, ny});
+        }
+    }
+
     /** 玻璃材质参数（由内核 `style.glass` 折出）。 */
     public static final class Spec {
         public final float blur;
@@ -105,6 +161,7 @@ public final class GlassMaterial {
      */
     private static float regionLum(Bitmap backdrop, float bx, float by, float bw, float bh) {
         if (backdrop == null || backdrop.isRecycled()) return 0f;
+        // I2-ALLOW: **位图采样区域的像素边界**（非布局几何——背景位图必须整数像素，几何仍走内核吸附值）
         int x0 = Math.max(0, (int) bx), y0 = Math.max(0, (int) by);
         int x1 = Math.min(backdrop.getWidth(), (int) Math.ceil(bx + bw));
         int y1 = Math.min(backdrop.getHeight(), (int) Math.ceil(by + bh));

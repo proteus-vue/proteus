@@ -217,7 +217,8 @@ struct SDNode {
     double gBlur = 0, gRadius = 0, gSat = 1.0; uint32_t gTint = 0x26FFFFFFu;
     std::string gMaterial = "glass";         // ★★★决策 #900：材质 id（宿主按此选管线）
     bool gInteractive = false;               // ★★★决策 #905：触控交互
-    float gEffect = 0.0f;                    // ★★★决策 #906：交互效果（0=上层玻璃流动 / 1=内容位移）
+    float gEffect = 0.0f;                    // ★★★决策 #906：交互效果（当前无 shader 消费；占位）
+    float gOverlay = 0.0f;                   // ★#966：选中胶囊叠加层（uniform offset 92，shader 读作 overlay）
     // ★★★决策 #895（superapp 收敛自绘）：补齐 superapp 用到的图元——边框/阴影/SVG/变换/裁剪/层序/字距
     double borderWidth = 0; uint32_t borderColor = 0;   // 边框（物理 px；ARGB）
     double shDx = 0, shDy = 0, shBlur = 0; uint32_t shColor = 0;   // 盒阴影
@@ -1405,7 +1406,9 @@ static void drawSelfContentCore(OH_Drawing_Canvas* rsCanvas, SelfDrawSpec* sd) {
                             putF(80, (float)(g_sdGlassTouchX / S)); putF(84, (float)(g_sdGlassTouchY / S));
                             putF(88, (float)g_sdGlassPress);
                         } else { putF(80, -1e6f); putF(84, -1e6f); putF(88, 0.0f); }
-                        putF(92, n.gEffect);   // ★#906：交互效果（0=上层玻璃流动 / 1=内容位移）
+                        // ★#966：offset 92 = **overlay**（shader 读作 `overlay`；此前写的是 `n.gEffect`（恒 0）
+                        //   ⇒ #952 胶囊叠加层与 #966 充气门控在鸿蒙端**恒不触发**——与 iOS 同一处接缝 bug）。
+                        putF(92, n.gOverlay);
                     } else {
                         putF(48, (float)n.gBlur / S);
                         putF(52, (float)n.gSat);
@@ -1839,6 +1842,7 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
                     { std::string gm; if (jsonString(gsub, "material", &gm) && !gm.empty()) sn.gMaterial = gm; }   // ★#900
                     sn.gInteractive = (gsub.find("\"interactive\":true") != std::string::npos);   // ★#905
                     { double ge = 0; if (jsonNumber(gsub, "effect", &ge)) sn.gEffect = (float)ge; }   // ★#906：交互效果
+                    { double go = 0; if (jsonNumber(gsub, "overlay", &go)) sn.gOverlay = (float)go; }   // ★#966：选中胶囊叠加层
                 }
                 g_sdSpec->nodes.push_back(sn);
             }

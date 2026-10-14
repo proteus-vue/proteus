@@ -21,21 +21,27 @@ echo "==> ① 抽出生成物 MSL（顶点 + 片元）"
 node "$ROOT/scripts/extract-generated-shader.mjs" ts glass msl.frag.metal "$WORK/glass.frag.metal" || exit 1
 node "$ROOT/scripts/extract-generated-shader.mjs" ts glass msl.vert.metal "$WORK/glass.vert.metal" || exit 2
 
-echo "==> ② 合成 backdrop + spec（固定样例，两端同输入）"
-# 300x300 backdrop：横竖彩色条带（含高对比边界——最能暴露采样/坐标错位）
-node "$ROOT/hosts/ios/lib/gen-parity-spec.mjs" "$WORK/spec.json" || exit 2
+# ★#966：两态各跑一遍——rest（常态）/ press（按下：SDF 充气 + 法线重算 + 叠加层）
+#   ★为什么要两态：新代码路径（sd_glass 触点充气）**只在 press>0 生效**；
+#     只跑 rest 等于"自测没对准消费方契约"（本仓已踩过）。两态同输入分别比对 ⇒ 新路径被真正执行。
+OVERALL=0
+for MODE in rest press; do
+  echo "========== 样例：$MODE =========="
+  echo "==> ② 合成 backdrop + spec（固定样例，两端同输入）"
+  node "$ROOT/hosts/ios/lib/gen-parity-spec.mjs" "$WORK/spec_$MODE.json" "$MODE" || exit 2
 
-echo "==> ③ Rust CPU 参考渲染（oracle）"
-( cd "$ROOT/packages/shader-codegen-rust" && cargo run --release --offline --quiet -- --render-ref "$WORK/spec.json" > "$WORK/ref.json" ) || { echo "✗ CPU 参考渲染失败"; exit 3; }
-[ -s "$WORK/ref.json" ] || { echo "✗ 参考渲染无输出"; exit 3; }
-echo "  参考：$(node -e "const d=require('$WORK/ref.json');console.log(d.width+'x'+d.height+' rgba '+d.rgba.length)")"
+  echo "==> ③ Rust CPU 参考渲染（oracle）"
+  ( cd "$ROOT/packages/shader-codegen-rust" && cargo run --release --offline --quiet -- --render-ref "$WORK/spec_$MODE.json" > "$WORK/ref_$MODE.json" ) || { echo "✗ CPU 参考渲染失败"; exit 3; }
+  [ -s "$WORK/ref_$MODE.json" ] || { echo "✗ 参考渲染无输出"; exit 3; }
+  echo "  参考：$(node -e "const d=require('$WORK/ref_$MODE.json');console.log(d.width+'x'+d.height+' rgba '+d.rgba.length)")"
 
-echo "==> ④ macOS Metal 渲染生成物 MSL（同输入）"
-xcrun -sdk macosx swift "$HERE/lib/glass-metal-parity.swift" "$WORK" || { echo "✗ Metal 渲染失败"; exit 4; }
-[ -s "$WORK/gpu.json" ] || { echo "✗ GPU 渲染无输出"; exit 4; }
+  echo "==> ④ macOS Metal 渲染生成物 MSL（同输入）"
+  xcrun -sdk macosx swift "$HERE/lib/glass-metal-parity.swift" "$WORK" "$MODE" || { echo "✗ Metal 渲染失败"; exit 4; }
+  [ -s "$WORK/gpu_$MODE.json" ] || { echo "✗ GPU 渲染无输出"; exit 4; }
 
-echo "==> ⑤ 逐像素比对（容差内相等）"
-node "$HERE/lib/compare-rgba.mjs" "$WORK/ref.json" "$WORK/gpu.json"
-RC=$?
-if [ "$RC" = "0" ]; then echo "✅ 玻璃像素等价（Metal 落地 == Rust 算法真源）"; else echo "✗ 像素不等价"; fi
-exit $RC
+  echo "==> ⑤ 逐像素比对（容差内相等）"
+  node "$HERE/lib/compare-rgba.mjs" "$WORK/ref_$MODE.json" "$WORK/gpu_$MODE.json" || OVERALL=1
+  echo ""
+done
+if [ "$OVERALL" = "0" ]; then echo "✅ 玻璃像素等价（Metal 落地 == Rust 算法真源；rest + press 两态）"; else echo "✗ 像素不等价"; fi
+exit $OVERALL
