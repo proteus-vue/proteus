@@ -350,6 +350,28 @@
         "T-glass-end2end"
       ],
       "note": "承接 docs/proteus-glass-plan/14-ios-gap-analysis.md（决策 #909）。逐条核对结论：11 条差距 0 闭环 / 2 部分 / 9 未动，H1-H6 全未跑。本单做：P0-1 自适应描边极性 + 中心基座；P0-2 中心基座（整体霜 veil，非模糊核——AGSL 约束）；P1-1 换掉 target_l=lum*0.58+0.13（实测与 iOS 方向相反：iOS 深底 lum79→玻璃 lum215 提亮，我们 lum134→102 压暗）；P1-2 band 0.165min→0.33min（条高1/3）+ 峰值≥带宽；P1-3 refract_depth 去归一化旁路（成真旋钮）；P2-1 iOS setFragmentSamplerState；P2-3 三端 saturation 补 ~1.8。★基准=iOS 液态玻璃（#892）；check-glass-pixel-parity 只证三端自洽，不作\"像 iOS\"证据。\n\n【已落地（2026-10-14 · 决策 #910）】五项内核（自适应方向纠正/带宽×2/峰值≥带宽/refract 真旋钮/描边极性）+ 三项宿主（iOS 采样器/三端 saturation/refract 基准同步）。判据：iOS Metal==oracle max 1/255·0% + 鸿蒙 Vulkan==oracle max 1/255·0% + 离线 oracle 深底+91 提亮 + 真机（Android APK）白底可见/绿底穿缘弯折/+56 提亮。**剩余（P3 + 区域估计）**：区域级背景估计（真浅/深霜整体切换）/前景对比保护/Web-MP 自适应/U0 单位 + 玻璃随 translate 动画。"
+    },
+    {
+      "id": "T-glass-region-lum",
+      "title": "液态玻璃「区域级背景估计」——浅霜/深霜随玻璃盒区域亮度整体切换（对齐 iOS .regular「flip from light to dark」）",
+      "type": "end-alignment",
+      "status": "done",
+      "owner": null,
+      "scope": [
+        "packages/shader-codegen-rust/src/materials/**",
+        "packages/shader-codegen-rust/src/reference.rs",
+        "packages/shader/src/**",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/**",
+        "hosts/ios/ProteusHost/**",
+        "hosts/harmony/host-app/**"
+      ],
+      "decision": 911,
+      "verification": "pnpm check:shader-generated && pnpm check:glass-capability && bash hosts/ios/check-glass-pixel-parity.sh && bash hosts/harmony/check-glass-parity.sh + 真机深/亮底对比（背景切换 ⇒ 玻璃明暗基调切换）",
+      "branch": null,
+      "related": [
+        "T-glass-ios-gap-align"
+      ],
+      "note": "承接 #910（其诚实边界②：区域级背景估计仍未做，本单是逐像素霜白锚点）。目标=报告 P1-1 完全形态：iOS `.regular`「each layer continuously adapts based on what's behind it」「flip from light to dark」——锚点随**玻璃盒区域平均亮度**切换（深底⇒更白霜、亮底⇒几乎不变），而非全域固定 FROST_L。实现：复用 GlassUniforms 闲置 `_pad`(offset 76) 槽为 `bg_lum`（**零布局变更**）；三端宿主统计玻璃盒区域平均亮度传入。\n\n【已落地（2026-10-14 · 决策 #911）】_pad(offset 76)→bg_lum（零布局变更）；FROST_L=mix(0.84,0.93,smoothstep(0.30,0.90,bg_lum))；三端宿主统计区域亮度。判据：离线 oracle 深底+114/亮底+19（区域切换）· iOS parity max 1/255（含 bg_lum 0.42）· 鸿蒙 parity max 1/255 · 三端编译绿 · 真机深底白霜/亮底透出内容。"
     }
   ]
 }

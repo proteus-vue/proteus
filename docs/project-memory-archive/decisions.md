@@ -4117,3 +4117,17 @@ clang 18 对 implicit-function-declaration **直接 error**（`call to undeclare
 ⑤ `check:shader-generated`/`shader-capability`/`glass-capability`/`glass-audit` 全绿；`test:coupled` 71/71；玻璃单测 48/48；
 ⑥ **真机取证（Android 重建 APK 含新 shader）**：白底霜白玻璃可见（此前隐形）· 绿底内容穿缘**明显压缩弯折**（此前直穿）· 背景 L134→玻璃 L190（**+56 提亮**，此前 −32 压暗）。
 【诚实边界】① iOS 采样器修复**未在 iOS 真机复验**（离线 parity 已证 max 1/255）；② 「区域级背景估计 → 浅霜/深霜整体切换」（报告 P1-1 的完全形态）仍**未做**——本单是**逐像素霜白锚点**（比 #908 的仿射对，但仍非区域统计）；③ P0-2「中心基座模糊」以**整体霜提亮**近似（AGSL 无循环 ⇒ 不做真模糊核，报告已有此约束）；④ P3（前景对比保护 / Web-MP 自适应 / U0 单位 + 玻璃随 translate 动画）**仍登记未做**；⑤ FROST_L=0.75 / 收拢 0.75 为经验锚点，真机 A/B 旋钮。
+
+
+911. **★★★液态玻璃「区域级背景估计」——浅霜/深霜随玻璃盒区域亮度整体切换（对齐 iOS `.regular`「flip from light to dark」）**（2026-10-14 · 承接 #910 的诚实边界②）：
+【为什么】#910 把自适应方向改对了（霜白锚点），但锚点**全域固定**（FROST_L=0.75）——仍是**逐像素**形态。
+iOS `.regular` 的关键是**区域级**：「each layer continuously adapts based on what's behind it」「flip from light to dark based on the background」——整块玻璃随**背景亮暗**切换基调（浅霜/深霜）。这是报告 P1-1 的完全形态。
+【实现（零布局变更）】复用 `GlassUniforms` 的**闲置对齐槽** `_pad`（offset 76）为 `bg_lum`（0..1，区域背景平均亮度）——结构仍 96B，不新增 uniform、不改三端布局。
+内核 `glass.wgsl` ⑤ + oracle 同源：`FROST_L = mix(0.84, 0.93, smoothstep(0.30, 0.90, u.bg_lum))`——**深底（bg_lum≈0.3）锚点 0.84 ⇒ 翻更白霜**、**亮底（bg_lum≈0.9）锚点 0.93 ⇒ 几乎不变（仍可见）**。组合语义：**区域**决定明暗基调（锚点）、**逐像素 lum** 提供"正后方内容之色"。
+【三端宿主统计】Android `GlassMaterial.regionLum(backdrop, 盒区域)`（从降采样背景位图步长采样均值，≤26×26）；iOS `GlassMetalRenderer.regionLum(backdrop:)`（整图降到 ≤48px 小缓冲再取区域——避开 CG 左下原点偏移陷阱）；鸿蒙 `regionLum()` lambda（从该 pass 的背景位图 pad2 区域取 RGBA_8888 均值）。越界/失败 ⇒ 0（视作深底 ⇒ 锚点高 ⇒ 翻白霜，比"不变"更接近 iOS 且不崩）。
+【判据（全绿）】① **离线 oracle 三档背景**：深底（bg_lum 0.31）L92→206（**+114 翻霜白**）/ 中底 0.50 +97 / 亮底 0.92 +19（**几乎不变**）——正是 iOS「据背景整体切换」；
+② `check:glass-pixel-parity`（iOS Metal == oracle，**含非零 bg_lum=0.42**）：max **1/255** · 超差 0%（spec 与三端夹具同步传 bg_lum ⇒ 门禁**真覆盖**新通路，非测缺省 0）；
+③ `check:glass-parity-harmony`（鸿蒙 Vulkan == oracle，含 bg_lum=0.42）：max **1/255** · 超差 0%；
+④ 三端零设备编译绿；`check:shader-generated`/`shader-capability`/`glass-capability`/`glass-audit` 绿；`test:coupled` 71/71；玻璃单测 45/45；
+⑤ **真机（Android 重建 APK）**：深/彩底玻璃呈**白霜**（彩色内容被提白）、白底玻璃**透出内容**（浅霜）——两张对照目视可辨区域切换。
+【诚实边界】① 真机**量化**采样受"玻璃下方被覆盖、无同位置无玻璃对照"限制 ⇒ 区域切换的**数值**判据由离线 oracle + parity 承担（真机为目视 + 运行正确性）；② 锚点两值 (0.84↔0.93) 与过渡带 (0.30↔0.90) 为经验值，待真机 A/B；③ iOS/鸿蒙真机未复验（离线 parity 三端等价已证）；④ 报告 P3（前景对比保护 / Web-MP 自适应 / U0 单位 + 玻璃随 translate 动画）仍登记未做。
