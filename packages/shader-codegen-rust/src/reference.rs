@@ -155,7 +155,7 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     }
     // ★#952：选中胶囊叠加层（**不动 α**，叠半透明中性色：deep→0.88 亮 / 浅底→0.40 灰）。
     if p.overlay > 0.001f32 {
-        let ov_l = 0.88f32 + (0.40f32 - 0.88f32) * veil_t;
+        let ov_l = 0.52f32 + (0.62f32 - 0.52f32) * veil_t;   // ★#958 两端收拢
         let ov_a = p.overlay.clamp(0.0, 1.0) * 0.30f32;   // ★#952 续：0.5→0.30
         for c in 0..3 { col[c] = col[c] + (ov_l - col[c]) * ov_a; }
     }
