@@ -1292,7 +1292,7 @@ static void drawSelfContentCore(OH_Drawing_Canvas* rsCanvas, SelfDrawSpec* sd) {
                 // ★决策 #860：分辨率降采样因子 S 可配（`g_sdGlassS`：0=自动，>0=强制）。
                 //   降 S ⇒ 离屏纹理/输出更小 ⇒ 回读+建图+**纹理重上传（blit）**按面积线性下降。
                 //   实测（120Hz 面板）：S=2 重算帧 blit≈29ms ⇒ 掉到 ~50fps；S=4 blit≈7.5ms ⇒ 稳定 120fps。
-                int S = ((int)n.w >= 512 || (int)n.h >= 512) ? 4 : (((int)(n.w < n.h ? n.w : n.h) >= 256) ? 2 : 1);
+                int S = 2;   // ★三端对齐：输入降采样 =2（与 Android DIV=2 / iOS capturePxPerPoint=scale/2 同口径；原按尺寸 1/2/4 跳变）
                 if (g_sdGlassS > 0) S = g_sdGlassS;
                 const int iw2 = std::max(1, ((int)n.w + 2 * pad) / S), ih2 = std::max(1, ((int)n.h + 2 * pad) / S);
                 const int ow2 = std::max(1, (int)n.w / S), oh2 = std::max(1, (int)n.h / S);
