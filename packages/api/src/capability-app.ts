@@ -22,6 +22,24 @@
 //
 // 【依赖方向】本模块不 import `capability.ts`（防循环）——`CapError` 由调用方**注入**
 //   （与 `mpBridgeExt(g.wx, CapError)` / `webBridgeExt(globalThis, CapError)` 同一模式）。
+//
+// ★★invoke 通道层（协议细节：两条腿 / 择优降级 / 异步回推）已拆到 `./capability-invoke`（决策 #903）。
+//   本模块只保留**能力语义**（哪些方法、返回什么形状）；通道层的公共面在此 re-export
+//   （历史导入点不变：宿主桥 entry-host-runtime.ts 读 `invokeHost`；能力测试读 `invokeHostAsync` 等）。
+
+import { invokeHost, invokeHostAsync } from './capability-invoke'
+import type { AppRequestConfig, AppRequestResponse } from './capability-invoke'
+export {
+  HOST_INVOKE_KEY,
+  getHostInvoke,
+  invokeHost,
+  appNativeAvailable,
+  invokeHostAsync,
+  installHostResolveBridge,
+  pendingHostCallCount,
+  HOST_RESOLVE_KEY,
+} from './capability-invoke'
+export type { HostInvokeFn, AppRequestConfig, AppRequestResponse } from './capability-invoke'
 
 // ── 类型（与 capability.ts 的同名接口结构兼容；不 import 以避免循环） ──
 
@@ -466,9 +484,6 @@ export const APP_EVENT_META: Record<AppEvent, LifecycleEventMeta> = {
 //   （**不伪造成功**）；壳只需实现它真有 API 的那几个（其余自动诚实降级）。
 // ══════════════════════════════════════════════════════════════════
 
-/** 壳注册的原生调用入口的全局键（壳侧：`globalThis.__proteusHostInvoke = (name, argsJson) => json`） */
-export const HOST_INVOKE_KEY = '__proteusHostInvoke'
-
 /** App 端原生调用名（**契约**：壳按此名实现；未实现 ⇒ 桥返回 unsupported） */
 export const APP_NATIVE_METHODS = {
   /** C51 热更新：`{ hasUpdate, ready }` 或 `{ action: 'apply' }` */
@@ -492,59 +507,12 @@ export const APP_NATIVE_METHODS = {
   idleCancel: 'idle.cancel',
   /** C67 预加载 */
   preloadAssets: 'preload.assets',
+  /** C26 网络请求（App 腿 · `useFetch` 底层）：线格式 tag 约定见 `./invoke-wire`（url/method/headers/params/timeoutMs/responseType/contentType） */
+  httpRequest: 'http.request',
 } as const
 
-/** 壳注册的原生调用签名（同步：返回 JSON 串；抛错 = 原生调用失败） */
-export type HostInvokeFn = (method: string, argsJson: string) => string
-
-/** 取壳注册的原生调用入口（未注册 ⇒ null） */
-export function getHostInvoke(): HostInvokeFn | null {
-  const g = globalThis as Record<string, unknown>
-  const f = g[HOST_INVOKE_KEY]
-  return typeof f === 'function' ? (f as HostInvokeFn) : null
-}
-
-/**
- * 调原生（**同步**——与 G-39 的 JNI trampoline 同契约：壳内同步完成）。
- *
- * 【★两条通道（真机实测补上第二条）】App 壳可以从两处暴露原生调用：
- *   ① `globalThis.__proteusHostInvoke(method, argsJson)` —— 通用通道（简单宿主/测试可自行注册）；
- *   ② **`proteusHost.invoke(method, argsJson)`** —— **JNI 条件注入的主通道**
- *      （`quickjs_jni.c` 的 `js_host_invoke`：宿主 Java 侧实现 `invoke(String,String):String` 即自动注入）。
- *   ★初版只查 ① ⇒ 真实 Java 宿主（提供 ②）**够不着**——真机实测抓出（删掉 JS 桩后立即暴露）。
- *
- * @returns `{ ok: true, data }` 或 `{ ok: false, reason }`
- * ★未注册（壳没提供该方法）与调用失败**分得开**：
- *   前者 = 该端无此能力（框架据此给 `*.unsupported`）；后者 = 有 API 但调用出错（`*.failed`）。
- */
-export function invokeHost(method: string, args?: unknown): { ok: true; data: unknown } | { ok: false; reason: string; missing: boolean } {
-  const f = getHostInvoke()
-  // ② JNI 注入通道：`proteusHost.invoke`（真机 Android/iOS 壳的主路径）
-  const ph = (globalThis as { proteusHost?: { invoke?: (m: string, a: string) => string } }).proteusHost
-  if (!f && typeof ph?.invoke !== 'function') {
-    return { ok: false, reason: `壳未注册 ${HOST_INVOKE_KEY} 且无 proteusHost.invoke（App 端原生通道）`, missing: true }
-  }
-  try {
-    const out = f ? f(method, JSON.stringify(args ?? null)) : ph!.invoke!(method, JSON.stringify(args ?? null))
-    const parsed = JSON.parse(out) as { ok?: boolean; data?: unknown; reason?: string; missing?: boolean }
-    if (parsed && parsed.ok === false) {
-      return { ok: false, reason: String(parsed.reason ?? '原生调用失败'), missing: !!parsed.missing }
-    }
-    return { ok: true, data: parsed?.data ?? parsed }
-  } catch (e) {
-    // 抛错 = 壳未实现该方法（壳侧 `throw new Error('unsupported: …')`）或真失败——
-    // 消息里带 'unsupported'/'missing' 视为"无此能力"（诚实降级），否则算失败
-    const msg = e instanceof Error ? e.message : String(e)
-    const missing = /unsupported|missing|not implemented|no such/i.test(msg)
-    return { ok: false, reason: msg, missing }
-  }
-}
-
-/** App 端能力位是否可用（壳注册了通道 + 该方法可用——供生成器/文档的端支持分档） */
-export function appNativeAvailable(method: string): boolean {
-  const r = invokeHost(method, { probe: true })
-  return r.ok || !r.missing
-}
+// ★通道层实现（`getHostInvoke` / `invokeHost` / `appNativeAvailable` / 异步腿）见 `./capability-invoke`
+//   ——本模块顶部 re-export 其公共面（历史导入点不变）。
 
 // ══════════════════════════════════════════════════════════════════
 // ★★App 端的 10 个「应用与生命周期」能力（壳转发实现）
@@ -816,6 +784,46 @@ export function createAppNativeCapabilities<E extends Error = Error>(CapError: n
             .catch(() => errNow<boolean, E>('webassembly.failed', 'validate 失败（字节非法？）')),
       }
     },
+    /**
+     * C26 网络请求（App 腿）—— `useFetch` 的底层桥方法。
+     *
+     * 【★为什么走异步通道】网络天然异步；同步等会阻塞 JS 线程（G-39 责任矩阵：
+     *   「网络请求 → L4 **网络线程**」）。故本方法经 `invokeHostAsync` 派发，
+     *   壳在网络线程完成后再回推（**壳负责切回 JS 线程**）。
+     *
+     * 【★取数语义与 wx 桥**逐字段对齐**（capability-bridges.ts 的 request 分支）】
+     *   载荷 → `.data`、状态码 → `.status`、响应头 → `.headers`。
+     *   ⇒ `useFetch` 里 `bridge.request(...).then(r => r.data)` 的 `r.data` 两端同义。
+     *
+     * 【★会话共享（G-46）】Cookie/Token 由**壳**按平台机制持有（iOS `WKProcessPool` 单例 /
+     *   Android `CookieManager` / 鸿蒙 Header 注入）——**桥只传 url/params/headers**，
+     *   业务零感知。桥不碰会话，会话归资源池（原则 #13.35「资源归宿主」）。
+     *
+     * 【诚实边界】壳未实现 `http.request` ⇒ 仍返回 `fetch.unsupported`（**不伪造成功**）；
+     *   超时由壳回推明确原因，JS 侧兜底超时 = 业务超时 + 2s（让**壳**先说话）。
+     */
+    request: (config: AppRequestConfig): Promise<AppRequestResponse<unknown>> =>
+      invokeHostAsync(
+        APP_NATIVE_METHODS.httpRequest,
+        {
+          url: config.url,
+          method: config.method,
+          data: config.data,
+          params: config.params,
+          headers: config.headers,
+          timeout: config.timeout,
+        },
+        (config.timeout ?? 15000) + 2000,
+      )
+        .then((d) => {
+          const r = (d ?? {}) as { data?: unknown; status?: number; headers?: Record<string, string> }
+          return { data: r.data, status: Number(r.status ?? 0), headers: r.headers ?? {}, config }
+        })
+        .catch((e: unknown) => {
+          const msg = e instanceof Error ? e.message : String(e)
+          // ★`unsupported:` 前缀 ⇒ `fetch.unsupported`（与 wx 桥同码）；其余 ⇒ `fetch.failed`
+          throw new CapError(/^unsupported:/.test(msg) ? 'fetch.unsupported' : 'fetch.failed', msg.replace(/^unsupported:\s*/, ''))
+        }),
   }
 }
 

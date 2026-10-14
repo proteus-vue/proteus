@@ -6,3 +6,6 @@ export type { PlatformAdapter, Rect } from './platform/adapter'
 export { detectRuntime, isMiniProgram, detectMpRenderer, isSkylineRuntime } from './platform/runtime'
 export type { ProteusRuntime, MpRenderer } from './platform/runtime'
 export * from './storage'
+// ★★★跨语言二进制 wire 公共原语（决策 #903 / S2「去 JSON」）：小端字节游标 + 严格 UTF-8
+//   ——全仓唯一实现（invoke-wire / 后续各二进制通道必须从这里 import，不再各写副本）
+export { ByteWriter, ByteReader, utf8Encode, utf8Decode } from './binary/wire'
