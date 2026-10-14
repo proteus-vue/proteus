@@ -1130,10 +1130,24 @@ final class SelfDrawView: UIView {
             self.layer.render(in: ctx.cgContext)
         }
         for l in hiddenForCapture { l.isHidden = false }   // 恢复（与 CATransaction 同帧，无闪）
-        guard let backdrop = img.cgImage else {
+        guard let captured = img.cgImage else {
             NSLog("[proteus-glass] backdrop 捕获失败——玻璃跳过")
             return
         }
+        // ★★★决策 #929：**轻霜**（对齐 iOS 逆向报告「表面磨砂 ~1-3px」；三端同法）——
+        //   对捕获的 backdrop 做一次**小半径高斯模糊**（内容柔化但可读；折射/镜像是主角、磨砂为配）。
+        //   放进宿主（而非 shader）：不破坏 check:glass-pixel-parity（shader 保持零采样）。
+        let backdrop: CGImage
+        if let blur = CIFilter(name: "CIGaussianBlur") {
+            let ci = CIImage(cgImage: captured)
+            blur.setValue(ci, forKey: kCIInputImageKey)
+            blur.setValue(capturePxPerPoint * 1.5, forKey: kCIInputRadiusKey)   // ≈2 逻辑px（与 Android BLUR_DOWN=4 同量级）
+            let ctx = CIContext(options: nil)
+            if let out = blur.outputImage,
+               let cg = ctx.createCGImage(out, from: ci.extent) {
+                backdrop = cg
+            } else { backdrop = captured }
+        } else { backdrop = captured }
 
         // ③ 逐玻璃节点装玻璃面（★作为**节点层的子层**：与节点同变换空间 ⇒ 自动跟随，含 fixed 钉住）
         //   ★决策 #863：**批量渲染**——一次 `renderFaces`（共用 backdrop 纹理 + 一条命令缓冲 + 一次等待）。
