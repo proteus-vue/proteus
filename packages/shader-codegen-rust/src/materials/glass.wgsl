@@ -78,7 +78,7 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     // ★★★决策 #907/#910：折射带 ≈ **最短边 1/3**（= 条高 1/3）。
     //   ★#910 修正口径（报告 G3）：原 `hsmin*0.33 = 0.165·min` 实为**最短边的 1/6**（注释称"1/3"、
     //   代码只有一半 ⇒ 带宽被砍半 ⇒ 真机"折射区比 iOS 少很多"）。改 `0.33·min` ⇒ 带宽 **×2**，与注释/iOS 实测一致。
-    let band = max(smin * 0.12, 6.0);
+    let band = max(smin * 0.30, 6.0);
     let e = clamp(d / band, 0.0, 1.0);   // 0=最外缘, 1=内侧（带内）
 
     // ① 外法线（SDF 梯度；宽 eps 防药丸中轴裂缝）
@@ -103,8 +103,8 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     //     = 0.55×67 物理px ≈ **37px ≈ 半个字高** ⇒ 整带沿法线大幅平移 ⇒ 读作"竖向拉伸"（内容被非均匀挤压）。
     //   ⇒ 幅度降到 **0.15·band**（≈10 物理px ≈ 3 逻辑px）：线间距接近均匀（仅边缘轻微弯折，对齐 iOS"平面变化"）。
     //   ★这是**定稿方向**（不再漂移）：机制=法线方向向外采样（单调、不折叠）+ 小幅度（平面式轻弯折）。
-    //   A 分解：`EDGE_REFRACT=0.15`（幅度，本轮定稿）· `strength`（宿主 refreact_depth 旋钮，1.0 中性）。
-    let EDGE_REFRACT = 0.50;
+    //   A 分解：`EDGE_REFRACT`（幅度）· `strength`（宿主 refract_depth 旋钮，1.0 中性）。
+    let EDGE_REFRACT = 0.10;   // ★#916 定稿：位移极小（滚动拖影的数学根因是高幅度位移）
     let strength = clamp(u.refract_depth / max(band, 1.0), 0.2, 1.1);
     var bend = prof * band * EDGE_REFRACT * strength;
     // ★★★决策 #905：**触控形变流动**——触点周围局部凸起（Gaussian 钟），按压力把背后内容沿"离触点方向"推开；

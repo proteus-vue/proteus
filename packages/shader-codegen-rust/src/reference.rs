@@ -102,7 +102,7 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     let d = (-sd).max(0.0);
     let smin = p.size_px.0.min(p.size_px.1);   // 最短边（= 2×hsmin）
     // ★决策 #907/#910：折射带 = **最短边 1/3**（#910 修正口径：原 `hsmin*0.33 = 0.165·min` 只有 1/6 ⇒ ×2）
-    let band = (smin * 0.12).max(6.0);
+    let band = (smin * 0.30).max(6.0);
     let e = (d / band).clamp(0.0, 1.0);
 
     let eps = (band * 0.3).clamp(1.0, 16.0);
@@ -118,7 +118,7 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     //   式轻弯折；机制 = 法线方向向外采样，单调不折叠）。refract_depth 以 band 为基准（1.0 中性）。
     let prof = 1.0 - smoothstep(0.0, 1.0, e);
     let strength = (p.refract_depth / band.max(1.0)).clamp(0.2, 1.1);
-    let bend = prof * band * 0.50 * strength;
+    let bend = prof * band * 0.10 * strength;
     let sp = (local.0 + n.0 * bend, local.1 + n.1 * bend);
 
     // uv 折算：纹理尺寸 = size + 2*pad；节点 uv=0 对应纹理 pad/(size+2pad)
