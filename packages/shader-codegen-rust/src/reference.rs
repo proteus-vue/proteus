@@ -116,10 +116,10 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     let slope = u1 / (1.0 - u1 * u1).max(1e-4).sqrt();
     // ★决策 #910/#912/#914：位移横贯整带；幅度系数 **0.15**（#914 定稿——消"y 轴拉伸"，对齐 iOS"平面变化"
     //   式轻弯折；机制 = 法线方向向外采样，单调不折叠）。refract_depth 以 band 为基准（1.0 中性）。
-    let prof = 1.0 - smoothstep(0.0, 1.0, e);
+    let prof = (1.0 - e).powi(3);   // ★#918：边缘大/内侧衰减 ⇒ 薄折叠倒影 + 内侧拉伸
     let strength = (p.refract_depth / band.max(1.0)).clamp(0.2, 1.1);
-    let bend = prof * band * 0.42 * strength;
-    let sp = (local.0 + n.0 * bend, local.1 + n.1 * bend);
+    let bend = prof * band * 0.70 * strength;
+    let sp = (local.0 - n.0 * bend, local.1 - n.1 * bend);   // ★#918：向内采样 ⇒ 拉伸
 
     // uv 折算：纹理尺寸 = size + 2*pad；节点 uv=0 对应纹理 pad/(size+2pad)
     let tex_w = p.size_px.0 + 2.0 * p.pad;
