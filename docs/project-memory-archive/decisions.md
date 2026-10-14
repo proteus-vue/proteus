@@ -4241,3 +4241,8 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 【本单落地】剖面 `(1-e)^3` → **线性 `(1-e)`**；比值 0.70 → **1.10**（>1 ⇒ 边缘反射/镜像）。真机 Android：上缘出现**被折进来的镜像带**。玻璃单测 45 · iOS parity max 1/255。
 【逆向调研的其余权威结论（登记，本单未做）】① **三层 CALayer**：`CABackdropLayer`(glassBackground filter) + `CASDFLayer`(SDF 纹理：R=距边距离、G/B=边缘法线) + 高光/阴影层；② **背景自适应**：`tracksLuma`/`lumaSubrect`(可只跟踪一个像素)/`lumaUpdateRate` + 实测「深底玻璃朝白霜(+24~44) / 浅底朝暗霜(−2)，翻转点在中调」；③ **霜色保留 ~12% 背景色温**（非纯灰：蓝底玻璃 B−R=+9.0 vs 背景 +75.6）；④ **前景保护** = `_UIViewGlass.excludingForeground`（架构层独立 pass，**单 pass WGSL 做不到**）；⑤ **选中胶囊恒比主体暗 13~35**（带 dimming 的 tint 玻璃，tint 取选中项 accent 色）；**未选中胶囊才是白药丸**（我们只有选中态）；⑥ **两态形变**（resting 半透明药丸 ↔ 抬起完整液态玻璃，**spring 弹簧**非 ease）+ 加速度 squash/stretch + 多玻璃 **SDF path-op 融合**（需"共享 SDF 场"架构）+ 出现/消失走**折射量调制**（非 alpha）。
 【★纪律｜本会话不是首个改者】调研日志同条记：该会话曾于 10:41 改 `glass.wgsl` 被用户 10:45 指出"**WGSL 正被并发会话使用**"⇒ 已精确反向 Edit + regen 复原（**未用 `git checkout --`**）⇒ **并发下改共享源前先确认占用**。
+
+925. **液态玻璃：霜色补「12% 背景色温」——对齐 iOS 霜非纯灰**（2026-10-14 · 依据 iOS 逆向调研：蓝底玻璃 B−R=+9.0 vs 背景 +75.6 ⇒ 霜色保留 ~12% 背景色温）：
+【实现（零结构变更）】不新增 uniform，直接用**已采样的正后方背景色 `acc`** 提供色相 —— `frost_col = frost_white + chroma(acc) * 0.12`，其中 `chroma = 色 − 其灰度`（**只取色度偏移**，不动 `frost_white` 亮度）。★首版误用 `acc` 整体 ⇒ 把暗背景色混进霜色 ⇒ **压暗玻璃**（深底亮度 199→186）——"色温"是**色相**不是明度，已修正为只取 chroma。
+【验证（oracle）】蓝底 B−R=+120 ⇒ 玻璃 B−R=**+68**（带蓝）；暖底 B−R=−120 ⇒ **−69**（带暖）；区域亮度切换保持（深底 199 提亮 / 亮底 255）。玻璃单测 45 · iOS parity max 1/255。真机 Android：玻璃内可见内容镜像/拉伸 + 色温倾向。
+【诚实边界】仍只 Android；0.12 系数为文章实证值（真机 A/B 可微调）。
