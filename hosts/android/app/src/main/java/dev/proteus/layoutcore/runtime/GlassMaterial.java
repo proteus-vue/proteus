@@ -87,6 +87,31 @@ public final class GlassMaterial {
      * @param w,h      节点盒尺寸（设备像素）
      * @param radius   圆角（设备像素）
      */
+    /**
+     * ★★★决策 #911：玻璃盒区域的**平均亮度**（0..1）——供 shader **区域级霜锚点**（浅霜/深霜切换，对齐 iOS
+     *   `.regular`「flip from light to dark based on the background」）。从**降采样背景位图**取该节点盒覆盖区域，
+     *   按步长采样求均值（玻璃节点通常 1-2 个 ⇒ 每帧成本可忽略；步长自适应 ≈ ≤26×26 采样点）。
+     *   ★缺省/越界 ⇒ 0（视作深底 ⇒ 锚点高 ⇒ 翻白霜——比"不变"更接近 iOS，且不崩）。
+     */
+    private static float regionLum(Bitmap backdrop, float bx, float by, float bw, float bh) {
+        if (backdrop == null || backdrop.isRecycled()) return 0f;
+        int x0 = Math.max(0, (int) bx), y0 = Math.max(0, (int) by);
+        int x1 = Math.min(backdrop.getWidth(), (int) Math.ceil(bx + bw));
+        int y1 = Math.min(backdrop.getHeight(), (int) Math.ceil(by + bh));
+        if (x1 <= x0 || y1 <= y0) return 0f;
+        final int dx = x1 - x0, dy = y1 - y0;
+        final int step = Math.max(1, Math.max(dx, dy) / 26);
+        double sum = 0; int n = 0;
+        for (int y = y0; y < y1; y += step) {
+            for (int x = x0; x < x1; x += step) {
+                final int p = backdrop.getPixel(x, y);
+                sum += (0.299 * ((p >> 16) & 0xff) + 0.587 * ((p >> 8) & 0xff) + 0.114 * (p & 0xff)) / 255.0;
+                n++;
+            }
+        }
+        return n > 0 ? (float) (sum / n) : 0f;
+    }
+
     public static Paint buildPaint(int nodeId, Bitmap backdrop, float ox, float oy, float bdX, float bdY, float w, float h, float radius, Spec spec) {
         return buildPaint(nodeId, backdrop, ox, oy, bdX, bdY, w, h, radius, spec, -1e6f, -1e6f, 0f);
     }
@@ -148,7 +173,9 @@ public final class GlassMaterial {
                 //   + 锐利内缘亮线**；0.18 时几乎不可见 ⇒ 玻璃读作"半透明塑料片"。WGSL 里该项乘 `bevel_mask`
                 //   （仅外缘带生效）⇒ 加大只强化边缘高光，不会把整面洗白。
                 sh.setFloatUniform("specular", 0.35f);
-                sh.setFloatUniform("_pad", 0f);
+                // ★★★决策 #911：区域级霜锚点——传入玻璃盒（含 pad 视角即节点盒）区域的平均背景亮度。
+                //   换算同 tex_bias：节点盒左上在 backdrop 位图坐标 = (ox-bdX)/divX，宽 = w/divX。
+                sh.setFloatUniform("bg_lum", regionLum(backdrop, (ox - bdX) / divX, (oy - bdY) / divY, w / divX, h / divY));
                 // ★★★决策 #905：触控形变（touch 盒局部 px / press 0..1）
                 sh.setFloatUniform("touch", touchX, touchY);
                 sh.setFloatUniform("press", press);

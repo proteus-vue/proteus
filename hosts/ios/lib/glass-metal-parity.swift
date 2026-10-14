@@ -29,6 +29,7 @@ func fa(_ v: Any?) -> [Float] { (v as? [NSNumber])?.map { $0.floatValue } ?? [] 
 let sizePx = fa(p["size_px"]); let tint = fa(p["tint"]); let light = fa(p["light_dir"])
 let pad = fv(p, "pad", 24), radius = fv(p, "radius", 0), blur = fv(p, "blur", 0)
 let refract = fv(p, "refract_depth", 0), specular = fv(p, "specular", 0.18), sat = fv(p, "saturation", 1)
+let bgLum = fv(p, "bg_lum", 0)   // ★#911：区域背景亮度（浅霜/深霜锚点）
 let outSpec = spec["out"] as! [String: Any]
 let ow = outSpec["width"] as! Int, oh = outSpec["height"] as! Int
 
@@ -61,7 +62,7 @@ let oTex = device.makeTexture(descriptor: oDesc)!
 struct U {
     var tint: SIMD4<Float>; var size_px: SIMD2<Float>; var origin: SIMD2<Float>
     var tex_bias: SIMD2<Float>; var tex_scale: SIMD2<Float>; var light_dir: SIMD2<Float>
-    var radius: Float; var blur: Float; var refract_depth: Float; var specular: Float; var saturation: Float; var _pad: Float
+    var radius: Float; var blur: Float; var refract_depth: Float; var specular: Float; var saturation: Float; var bg_lum: Float
 }
 let tw = Float(bw), th = Float(bh)
 var u = U(
@@ -71,7 +72,7 @@ var u = U(
     tex_bias: SIMD2<Float>(Float(pad) / tw, Float(pad) / th),
     tex_scale: SIMD2<Float>(Float(ow) / tw, Float(oh) / th),
     light_dir: SIMD2<Float>(light.count>0 ? light[0] : -0.35, light.count>1 ? light[1] : -0.94),
-    radius: radius, blur: blur, refract_depth: refract, specular: specular, saturation: sat, _pad: 0)
+    radius: radius, blur: blur, refract_depth: refract, specular: specular, saturation: sat, bg_lum: bgLum)
 
 let pass = MTLRenderPassDescriptor()
 pass.colorAttachments[0].texture = oTex

@@ -21,7 +21,7 @@ for (let y = 0; y < H; y++) {
 const spec = {
   backdrop: { width: W, height: H, rgba },
   params: {
-    size_px: [130, 130], pad: 25, radius: 65, blur: 16, refract_depth: 28.6,
+    size_px: [130, 130], pad: 25, radius: 65, blur: 16, refract_depth: 28.6, bg_lum: 0.42,
     specular: 0.18, saturation: 1.0, tint: [1, 1, 1, 0.149], light_dir: [-0.35, -0.94],
   },
   out: { width: 130, height: 130 },

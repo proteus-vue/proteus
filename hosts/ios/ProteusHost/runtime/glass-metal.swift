@@ -212,11 +212,46 @@ final class GlassMetalRenderer {
         var refract_depth: Float     // 64
         var specular: Float          // 68
         var saturation: Float        // 72
-        var _pad: Float              // 76
+        /// ★★★决策 #911：区域背景亮度（0..1；原 `_pad` 闲置槽语义化复用）——浅霜/深霜锚点随它切换。
+        var bg_lum: Float            // 76
         // ★★★决策 #905/#906：触控交互（touch 盒局部 px / press 0..1 / effect 0=表面流动 1=内容位移）
         var touch: SIMD2<Float>      // 80
         var press: Float             // 88
         var effect: Float            // 92（总长 96）
+    }
+
+    /// ★★★决策 #911：玻璃盒区域**平均背景亮度**（0..1）——供 shader 区域级霜锚点（浅霜/深霜）。
+    ///   做法：把整幅 backdrop **降采样到 ≤48px** 的小缓冲（一次绘制），再按比例取节点盒覆盖区域求均值。
+    ///   ★为何不直取子矩形：CoreGraphics 位图原点在左下，子矩形偏移易错；整图小缩放后按比例取样更稳且同样廉价。
+    ///   越界/失败 ⇒ 0（视作深底 ⇒ 锚点高 ⇒ 翻白霜——比"不变"更接近 iOS，且不崩）。
+    private func regionLum(backdrop: CGImage, bx: Float, by: Float, bw: Float, bh: Float) -> Float {
+        let iw = backdrop.width, ih = backdrop.height
+        guard iw > 0, ih > 0 else { return 0 }
+        let down = 48
+        let sw = min(down, iw), sh = min(down, ih)
+        let bpr = sw * 4
+        var buf = [UInt8](repeating: 0, count: bpr * sh)
+        let cs = CGColorSpaceCreateDeviceRGB()
+        let info = CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
+        guard let ctx = CGContext(data: &buf, width: sw, height: sh, bitsPerComponent: 8, bytesPerRow: bpr,
+                                  space: cs, bitmapInfo: info) else { return 0 }
+        ctx.interpolationQuality = .low
+        ctx.draw(backdrop, in: CGRect(x: 0, y: 0, width: sw, height: sh))
+        // 节点盒（backdrop 像素坐标）→ 小缓冲坐标（顶左原点；CGContext 位图内存首行=顶行）
+        let sx = Float(sw) / Float(iw), sy = Float(sh) / Float(ih)
+        let x0 = max(0, Int(bx * sx)), y0 = max(0, Int(by * sy))
+        let x1 = min(sw, Int(ceil((bx + bw) * sx))), y1 = min(sh, Int(ceil((by + bh) * sy)))
+        guard x1 > x0, y1 > y0 else { return 0 }
+        var sum = 0.0; var n = 0
+        for y in y0..<y1 {
+            for x in x0..<x1 {
+                let o = y * bpr + x * 4
+                // premultipliedFirst | byteOrder32Little ⇒ 内存序 B,G,R,A
+                sum += (0.114 * Double(buf[o]) + 0.587 * Double(buf[o + 1]) + 0.299 * Double(buf[o + 2])) / 255.0
+                n += 1
+            }
+        }
+        return n > 0 ? Float(sum / Double(n)) : 0
     }
 
     private func makeUniforms(nodeRect: CGRect, outScale: CGFloat, texPxPerPoint: CGFloat,
@@ -234,6 +269,9 @@ final class GlassMetalRenderer {
         let relY = Float((nodeRect.minY - cropOrigin.y) * texPxPerPoint)
         let bias = SIMD2<Float>(relX / tw, relY / th)
         let tscale = SIMD2<Float>(Float(nodeRect.width * texPxPerPoint) / tw, Float(nodeRect.height * texPxPerPoint) / th)
+        // ★★★决策 #911：区域级霜锚点——玻璃盒（含 crop 视角）区域的平均背景亮度。
+        let regionL = regionLum(backdrop: backdrop, bx: relX, by: relY,
+                                bw: Float(nodeRect.width * texPxPerPoint), bh: Float(nodeRect.height * texPxPerPoint))
         return GlassUniforms(
             tint: SIMD4<Float>(Float(spec.tint.r), Float(spec.tint.g), Float(spec.tint.b), Float(spec.tint.a)),
             size_px: SIMD2<Float>(w, h),
@@ -255,7 +293,8 @@ final class GlassMetalRenderer {
             //   同步）——顶光高光 + 内缘亮线是玻璃"材质身份"的主来源；WGSL 里该项乘 `bevel_mask`（仅外缘带）。
             specular: 0.35,
             saturation: Float(spec.saturation),
-            _pad: 0,
+            // ★★★决策 #911：区域背景亮度（原 `_pad` 闲置槽语义化复用；零布局变更）——浅霜/深霜锚点随它切换。
+            bg_lum: regionL,
             // ★★★决策 #905：触控形变——touch 传入为**盒局部逻辑点**，× outScale 折到半分辨率像素空间
             //   （与 size_px/radius/blur 同轴）；未激活 = (-1e6,-1e6)（着色器钟形因子≈0）。
             touch: SIMD2<Float>(touch.map { Float($0.x * outScale) } ?? -1e6,

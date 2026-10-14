@@ -165,6 +165,8 @@ fn render_reference(spec_path: &str) -> Result<(), String> {
             p["tint"][3].as_f64().unwrap_or(0.0) as f32,
         ],
         light_dir: (p["light_dir"][0].as_f64().unwrap_or(-0.35) as f32, p["light_dir"][1].as_f64().unwrap_or(-0.94) as f32),
+        // ★★★决策 #911：区域背景亮度（缺省 0 = 视作深底）
+        bg_lum: p["bg_lum"].as_f64().unwrap_or(0.0) as f32,
     };
     let ow = spec["out"]["width"].as_u64().unwrap_or(gp.size_px.0 as u64) as usize;
     let oh = spec["out"]["height"].as_u64().unwrap_or(gp.size_px.1 as u64) as usize;
