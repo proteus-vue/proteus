@@ -4235,3 +4235,9 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 【判据】真机 Android：玻璃内文字**明显拉伸/挤压**、倒影/拼接可见（折射回来了）+ 仍有轻霜；玻璃单测 45；Android 编译绿。
 【诚实边界】仍只 Android；**「轻霜 vs 强霜」是取舍**——强霜（近 iOS 白雾）会牺牲折射可见性，本单取"**折射优先**"；真机目视再定平衡点。
 【★根因链（#920→#923）】白底死区（#920 加霜）→ 霜用平底白混色 → 糊平内容 → 折射形变不可见（#923 回退）。**教训：霜（表面叠加）必须与"内容保真"共存——iOS 用 blur（保内容），不能用平底白（擦内容）。**
+
+924. **★★★液态玻璃位移改「iOS 机制」——线性映射 + ref_length/ref_height 比值（边缘反射）；依据 iOS 逆向调研**（2026-10-14 · 用户提供 `.workbuddy/memory/2026-10-14.md` 的 iOS 液态玻璃**逆向调研**（lrdcq SDF path-op + 少数派 + LiquidGlassKit 逆向 + WWDC + 4 图定量））：
+【★核心发现（回答"为什么一直在微调却总不对"）】iOS 核心 shader **仅 4 入参**：backdrop / sdf / **ref_height**（折射带高）/ **ref_length**（位移距离）；位移 = 沿边缘法线的**线性映射**；三种折射模式由 **ref_length/ref_height 比值**决定 —— <1 凹(缩小) / >1 凸(放大) / ≈1+ **边缘反射(镜像)**（文章注明：**苹果 GUI 最常用 = 边缘反射**）。⇒ 我用「一条自造曲线 × 一个幅度」(smoothstep / `(1-e)^3` 各轮反复调)，而 iOS 是**两个正交参数、比值定模式** —— 这是"方向漂移"的**结构性根因**。
+【本单落地】剖面 `(1-e)^3` → **线性 `(1-e)`**；比值 0.70 → **1.10**（>1 ⇒ 边缘反射/镜像）。真机 Android：上缘出现**被折进来的镜像带**。玻璃单测 45 · iOS parity max 1/255。
+【逆向调研的其余权威结论（登记，本单未做）】① **三层 CALayer**：`CABackdropLayer`(glassBackground filter) + `CASDFLayer`(SDF 纹理：R=距边距离、G/B=边缘法线) + 高光/阴影层；② **背景自适应**：`tracksLuma`/`lumaSubrect`(可只跟踪一个像素)/`lumaUpdateRate` + 实测「深底玻璃朝白霜(+24~44) / 浅底朝暗霜(−2)，翻转点在中调」；③ **霜色保留 ~12% 背景色温**（非纯灰：蓝底玻璃 B−R=+9.0 vs 背景 +75.6）；④ **前景保护** = `_UIViewGlass.excludingForeground`（架构层独立 pass，**单 pass WGSL 做不到**）；⑤ **选中胶囊恒比主体暗 13~35**（带 dimming 的 tint 玻璃，tint 取选中项 accent 色）；**未选中胶囊才是白药丸**（我们只有选中态）；⑥ **两态形变**（resting 半透明药丸 ↔ 抬起完整液态玻璃，**spring 弹簧**非 ease）+ 加速度 squash/stretch + 多玻璃 **SDF path-op 融合**（需"共享 SDF 场"架构）+ 出现/消失走**折射量调制**（非 alpha）。
+【★纪律｜本会话不是首个改者】调研日志同条记：该会话曾于 10:41 改 `glass.wgsl` 被用户 10:45 指出"**WGSL 正被并发会话使用**"⇒ 已精确反向 Edit + regen 复原（**未用 `git checkout --`**）⇒ **并发下改共享源前先确认占用**。
