@@ -3384,7 +3384,7 @@ public class ProteusHostView extends ViewGroup {
         //     先降到 bw/8 的小图（强低通），再双线性升回 bw/2（平滑）——内容**柔化但仍在**（折射/倒影可见）。
         //   ★最终输入分辨率仍 = bw/2（#917：超高降采样会让压缩带混叠 ⇒ 滚动抖动）。
         final int DIV = 2;           // 最终输入分辨率（与 iOS capturePxPerPoint=scale/2 同口径）
-        final int BLUR_DOWN = 8;     // 降采样最深倍数（越大越糊；iOS 近似 ~10-20px 高斯）
+        final int BLUR_DOWN = 2;     // ★#928：8→2——**iOS 是"极淡柔化"不是"糊"**（用户：内容都看不清了）；2 = 不额外模糊
         final int sw = Math.max(1, Math.round((float) bw / DIV));
         final int sh = Math.max(1, Math.round((float) bh / DIV));
         if (glassBackdrop == null || glassBackdrop.getWidth() != sw || glassBackdrop.getHeight() != sh) {
