@@ -22,6 +22,8 @@ pub struct GlassParams {
     pub saturation: f32,
     pub tint: [f32; 4],    // r,g,b,a ∈ [0,1]
     pub light_dir: (f32, f32),
+    /// ★★★决策 #911：区域背景亮度（0..1）——宿主统计玻璃盒区域均值（浅霜/深霜锚点随它切换）。
+    pub bg_lum: f32,
 }
 
 impl Default for GlassParams {
@@ -36,6 +38,7 @@ impl Default for GlassParams {
             saturation: 1.0,
             tint: [1.0, 1.0, 1.0, 0.149],
             light_dir: (-0.35, -0.94),
+            bg_lum: 0.0,
         }
     }
 }
@@ -133,12 +136,11 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     for c in 0..3 { col[c] = col[c] + (lum - col[c]) * 0.12; }
     for c in 0..3 { col[c] = lum + (col[c] - lum) * p.saturation; }
     for c in 0..3 { col[c] = col[c] + (col[c] * p.tint[c] * 2.0 - col[c]) * p.tint[3]; }
-    // ★★★决策 #910：**霜白锚点自适应**（修正 #908 方向错误）——与 glass.wgsl ⑤ 同源。
-    //    #908 的 `lum*0.58+0.13` 斜率<1 = 压缩对比 ⇒ 永远提不亮（深底反而压暗，与 iOS 相反）。
-    //    正确：朝霜白锚点 `FROST_L` 靠拢——暗底大抬升成霜白、亮底轻压仍可见（iOS 真机实测 + WWDC 原文）。
-    //    只加**同一 delta**（只改明度、不动色相/饱和 ⇒ 守住 #875）。`FROST_L` = 唯一主旋钮。
-    let frost_l = 0.75f32;
-    let d_aff = (frost_l - lum) * 0.75;
+    // ★★★决策 #911：**区域级霜白锚点**（报告 P1-1 完全形态）——与 glass.wgsl ⑤ 同源。
+    //    锚点随**区域背景亮度 `p.bg_lum`** 切换：深底锚点高（翻更白霜）、亮底锚点≈自身（几乎不变）。
+    //    只加**同一 delta**（只改明度、不动色相/饱和 ⇒ 守住 #875）。主旋钮 = 两锚点 (0.84↔0.93)。
+    let frost_l = 0.84 + (0.93 - 0.84) * smoothstep(0.30, 0.90, p.bg_lum);
+    let d_aff = (frost_l - lum) * 0.80;
     for c in 0..3 { col[c] = (col[c] + d_aff).clamp(0.0, 1.0); }
 
     let cos_i = 1.0 / (1.0 + slope * slope).sqrt();

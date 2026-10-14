@@ -35,7 +35,12 @@ struct GlassUniforms {
     refract_depth: f32,       // 64 边缘峰值位移（设备像素）
     specular: f32,            // 68 镜面高光强度
     saturation: f32,          // 72 饱和（1=中性）
-    _pad: f32,                // 76 对齐到 16 字节
+    // ★★★决策 #911：**区域背景亮度**（0..1）——宿主统计玻璃盒（含 pad）区域的**平均亮度**。
+    //   【为什么需要（对齐 iOS `.regular`）】iOS「each layer continuously adapts based on what's behind it」/
+    //   「flip from light to dark based on the background」⇒ 玻璃的**明暗基调随整块背景切换**（浅霜/深霜），
+    //   而非只与"该像素正后方"有关（那是 #908/#910 的逐像素形态，缺"区域"这一级）。
+    //   ★**零布局变更**：本槽原为 `_pad`（闲置对齐填充，三端都设 0）⇒ 直接语义化复用，结构仍 96B。
+    bg_lum: f32,              // 76 区域背景亮度（0..1；宿主统计；缺省 0 = 视作深底）
     // ★★★决策 #905：**触控形变**（对齐 Apple `UIGlassEffect.isInteractive`）——点按/拖动时
     //   玻璃在触点处产生液态流动（局部凸起 + 折射被"推"开 + 触点高光增强），松手回弹。
     touch: vec2<f32>,         // 80 触点在**玻璃盒局部设备像素**（未激活 = (-1e6,-1e6)）
@@ -128,10 +133,14 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     //     亮底轻压 → 仍可见。两端都"有材质、看得见"（对齐 iOS `.regular`"adjusts luminosity to maintain
     //     legibility" 与 visionOS"adapts to the luminance behind it"）。
     //   【实现】只加**同一 delta**（只改明度、不动色相/饱和 ⇒ 守住 #875「无固有颜色」）。
-    //   ★`FROST_L` = 锚点（唯一主旋钮，真机 A/B 只调它）；收拢系数 `0.75`（留对比、避免死板）。
+    //   ★★★决策 #911 · **区域级锚点**（报告 P1-1 完全形态）：锚点不再全域固定，而随**玻璃盒区域背景亮度
+    //     `u.bg_lum`** 切换——深底（bg_lum≈0.3）锚点高 ⇒ **翻成更白的霜**；亮底（bg_lum≈0.9）锚点≈自身
+    //     ⇒ **几乎不变（仍可见）**。这就是 iOS「据背景亮暗整体切换」的对齐形态（浅霜/深霜）。
+    //   ⇒ 组合：**区域**决定明暗基调（锚点），**逐像素 lum** 提供"正后方内容之色"（保内容透出）。
+    //   ★主旋钮 = 两个锚点 `(0.84 ↔ 0.93)`；收拢系数 0.80（留 20% 原始对比，避免死板）。
     col = vec4<f32>(mix(col.rgb, col.rgb * u.tint.rgb * 2.0, u.tint.a), col.a);
-    let FROST_L = 0.75;
-    let d_aff = (FROST_L - lum) * 0.75;
+    let FROST_L = mix(0.84, 0.93, smoothstep(0.30, 0.90, u.bg_lum));
+    let d_aff = (FROST_L - lum) * 0.80;
     col = vec4<f32>(clamp(col.rgb + vec3<f32>(d_aff), vec3<f32>(0.0), vec3<f32>(1.0)), col.a);
 
     // ⑥ 光照：Fresnel + 法线·光源（双瓣）＋ ★★★决策 #906 **兜底可见性**（对齐 iOS：**纯色/空白背景上玻璃仍可见**）

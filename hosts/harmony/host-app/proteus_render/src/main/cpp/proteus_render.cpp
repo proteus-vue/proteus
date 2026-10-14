@@ -1328,6 +1328,19 @@ static void drawSelfContentCore(OH_Drawing_Canvas* rsCanvas, SelfDrawSpec* sd) {
                     bi.material = n.gMaterial.c_str();   // ★#900：材质 id（renderBatch 按此选管线）
                     auto putF = [&](int off, float v) { memcpy(&bi.uniform80[off], &v, 4); };
                     auto putV2 = [&](int off, float a2, float b2) { putF(off, a2); putF(off + 4, b2); };
+                    // ★★★决策 #911：区域级霜锚点——玻璃盒（位图上 pad2..pad2+ow2 区域）的平均背景亮度。
+                    auto regionLum = [&]() -> float {
+                        if (bpx == nullptr) return 0.0f;
+                        const int x0 = pad2, y0 = pad2, x1 = std::min(iw2, pad2 + ow2), y1 = std::min(ih2, pad2 + oh2);
+                        if (x1 <= x0 || y1 <= y0) return 0.0f;
+                        const int st = std::max(1, std::max(x1 - x0, y1 - y0) / 26);
+                        double sum = 0; int cnt = 0;
+                        for (int yy = y0; yy < y1; yy += st) for (int xx = x0; xx < x1; xx += st) {
+                            const uint8_t* q = bpx + ((size_t)yy * iw2 + xx) * 4;   // RGBA_8888
+                            sum += (0.299 * q[0] + 0.587 * q[1] + 0.114 * q[2]) / 255.0; cnt++;
+                        }
+                        return cnt > 0 ? (float)(sum / cnt) : 0.0f;
+                    };
                     float ta = ((n.gTint >> 24) & 0xFF) / 255.0f, tr = ((n.gTint >> 16) & 0xFF) / 255.0f,
                           tg = ((n.gTint >> 8) & 0xFF) / 255.0f, tb = (n.gTint & 0xFF) / 255.0f;
                     // 公共前缀（glass 与模糊族同布局）：tint / size_px / origin / tex_bias / tex_scale
@@ -1347,7 +1360,7 @@ static void drawSelfContentCore(OH_Drawing_Canvas* rsCanvas, SelfDrawSpec* sd) {
                         // ★★★决策 #908：镜面高光 0.18 → 0.35（三端同值：Android/iOS 同步）。
                         putF(68, 0.35f);
                         putF(72, (float)n.gSat);
-                        putF(76, 0.0f);
+                        putF(76, regionLum());   // ★#911：区域背景亮度（浅霜/深霜锚点）
                         // ★★★决策 #905：触控形变（touch 盒局部 px / press）——仅活动交互玻璃；升采样到半分辨率空间 (×1/S)
                         if (g_sdGlassActiveId == n.id) {
                             putF(80, (float)(g_sdGlassTouchX / S)); putF(84, (float)(g_sdGlassTouchY / S));
@@ -3194,6 +3207,7 @@ static napi_value VkGlassProbe(napi_env env, napi_callback_info info) {
     putF(64, 28.6f);                                 // refract_depth
     putF(68, 0.18f);                                 // specular
     putF(72, 1.0f);                                  // saturation
+    putF(76, 0.42f);                                 // ★#911：bg_lum（与 gen-parity-spec 的 0.42 对齐——区域霜锚点）
 
     auto t0 = std::chrono::steady_clock::now();
     std::vector<uint8_t> px = proteus_glass_vk::renderRgba8(bd, TW, TH, SW, SH, u);
