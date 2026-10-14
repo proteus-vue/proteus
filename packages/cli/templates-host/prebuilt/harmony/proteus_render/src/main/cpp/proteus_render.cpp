@@ -1288,11 +1288,11 @@ static void drawSelfContentCore(OH_Drawing_Canvas* rsCanvas, SelfDrawSpec* sd) {
             const bool recompute = animInteract || (gc.img == nullptr) || (g_sdGlassDiv <= 1)
                         || (yChanged ? (g_sdGlassTick % g_sdGlassDiv == 0) : !g_sdGlassFresh);
             if (recompute) {
-                const int pad = (int)((n.w < n.h ? n.w : n.h) * 0.22 + n.gBlur * 0.55 * 1.6 + 4);
+                const int pad = (int)((n.w < n.h ? n.w : n.h) * 0.42 + n.gBlur * 0.55 * 1.6 + 4);
                 // ★决策 #860：分辨率降采样因子 S 可配（`g_sdGlassS`：0=自动，>0=强制）。
                 //   降 S ⇒ 离屏纹理/输出更小 ⇒ 回读+建图+**纹理重上传（blit）**按面积线性下降。
                 //   实测（120Hz 面板）：S=2 重算帧 blit≈29ms ⇒ 掉到 ~50fps；S=4 blit≈7.5ms ⇒ 稳定 120fps。
-                int S = ((int)n.w >= 512 || (int)n.h >= 512) ? 4 : (((int)(n.w < n.h ? n.w : n.h) >= 256) ? 2 : 1);
+                int S = 2;   // ★三端对齐：输入降采样 =2（与 Android DIV=2 / iOS capturePxPerPoint=scale/2 同口径；原按尺寸 1/2/4 跳变）
                 if (g_sdGlassS > 0) S = g_sdGlassS;
                 const int iw2 = std::max(1, ((int)n.w + 2 * pad) / S), ih2 = std::max(1, ((int)n.h + 2 * pad) / S);
                 const int ow2 = std::max(1, (int)n.w / S), oh2 = std::max(1, (int)n.h / S);
@@ -1317,8 +1317,47 @@ static void drawSelfContentCore(OH_Drawing_Canvas* rsCanvas, SelfDrawSpec* sd) {
                 OH_Drawing_CanvasTranslate(bc, (float)(-bx), (float)(-by));
                 drawContentNodes(bc, sd, bx, by, bx + (double)iw2 * S, by + (double)ih2 * S, &glassSubtree);
                 OH_Drawing_CanvasRestore(bc);
-                const uint8_t* bpx = static_cast<const uint8_t*>(OH_Drawing_BitmapGetPixels(*bmpSlot));
+                const uint8_t* bpx0 = static_cast<const uint8_t*>(OH_Drawing_BitmapGetPixels(*bmpSlot));
                 g_sdBackdropBuildMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - __tb0).count();
+                // ★★★决策 #929：**轻霜**（对齐 iOS 逆向报告「表面磨砂 ~1-3px」；三端同法）——
+                //   对背景小位图做**半分辨率下采样再双线性上采样**（≈2-3px 轻模糊；内容柔化但可读；
+                //   折射/镜像为主、磨砂为配）。放宿主（非 shader）⇒ 不破坏 parity（shader 保持零采样）。
+                std::vector<uint8_t> bpxBuf;
+                const uint8_t* bpx = bpx0;
+                if (bpx0 != nullptr) {
+                    const int hw = std::max(1, iw2 >> 1), hh = std::max(1, ih2 >> 1);
+                    std::vector<uint8_t> half((size_t)hw * hh * 4);
+                    for (int yh = 0; yh < hh; yh++) for (int xh = 0; xh < hw; xh++) {
+                        int s[3] = {0,0,0}, cnt = 0;
+                        for (int dy = 0; dy < 2; dy++) for (int dx = 0; dx < 2; dx++) {
+                            int sx = xh*2+dx, sy = yh*2+dy; if (sx >= iw2 || sy >= ih2) continue;
+                            const uint8_t* q = bpx0 + ((size_t)sy * iw2 + sx) * 4;
+                            s[0]+=q[0]; s[1]+=q[1]; s[2]+=q[2]; cnt++;
+                        }
+                        uint8_t* d = &half[((size_t)yh * hw + xh) * 4];
+                        d[0]=(uint8_t)(s[0]/cnt); d[1]=(uint8_t)(s[1]/cnt); d[2]=(uint8_t)(s[2]/cnt); d[3]=255;
+                    }
+                    bpxBuf.assign((size_t)iw2 * ih2 * 4, 0);
+                    for (int yy = 0; yy < ih2; yy++) for (int xx = 0; xx < iw2; xx++) {
+                        // 双线性从 half 映射（近似）
+                        float fx = (xx - 0.5f) * 0.5f, fy = (yy - 0.5f) * 0.5f;
+                        int x0 = (int)floorf(fx), y0 = (int)floorf(fy);
+                        float tx = fx - x0, ty = fy - y0;
+                        auto at = [&](int cx, int cy) -> const uint8_t* {
+                            if (cx < 0) cx = 0; if (cy < 0) cy = 0; if (cx >= hw) cx = hw-1; if (cy >= hh) cy = hh-1;
+                            return &half[((size_t)cy * hw + cx) * 4];
+                        };
+                        const uint8_t* a = at(x0, y0); const uint8_t* b = at(x0+1, y0);
+                        const uint8_t* c = at(x0, y0+1); const uint8_t* e = at(x0+1, y0+1);
+                        uint8_t* d = &bpxBuf[((size_t)yy * iw2 + xx) * 4];
+                        for (int ch = 0; ch < 3; ch++) {
+                            float top = a[ch] + (b[ch]-a[ch])*tx, bot = c[ch] + (e[ch]-c[ch])*tx;
+                            d[ch] = (uint8_t)std::min(255.0f, std::max(0.0f, top + (bot-top)*ty));
+                        }
+                        d[3] = 255;
+                    }
+                    bpx = bpxBuf.data();
+                }
                 if (bpx != nullptr) {
                     proteus_glass_vk::BatchItem bi;
                     bi.id = gi;
@@ -1328,6 +1367,19 @@ static void drawSelfContentCore(OH_Drawing_Canvas* rsCanvas, SelfDrawSpec* sd) {
                     bi.material = n.gMaterial.c_str();   // ★#900：材质 id（renderBatch 按此选管线）
                     auto putF = [&](int off, float v) { memcpy(&bi.uniform80[off], &v, 4); };
                     auto putV2 = [&](int off, float a2, float b2) { putF(off, a2); putF(off + 4, b2); };
+                    // ★★★决策 #911：区域级霜锚点——玻璃盒（位图上 pad2..pad2+ow2 区域）的平均背景亮度。
+                    auto regionLum = [&]() -> float {
+                        if (bpx == nullptr) return 0.0f;
+                        const int x0 = pad2, y0 = pad2, x1 = std::min(iw2, pad2 + ow2), y1 = std::min(ih2, pad2 + oh2);
+                        if (x1 <= x0 || y1 <= y0) return 0.0f;
+                        const int st = std::max(1, std::max(x1 - x0, y1 - y0) / 26);
+                        double sum = 0; int cnt = 0;
+                        for (int yy = y0; yy < y1; yy += st) for (int xx = x0; xx < x1; xx += st) {
+                            const uint8_t* q = bpx + ((size_t)yy * iw2 + xx) * 4;   // RGBA_8888
+                            sum += (0.299 * q[0] + 0.587 * q[1] + 0.114 * q[2]) / 255.0; cnt++;
+                        }
+                        return cnt > 0 ? (float)(sum / cnt) : 0.0f;
+                    };
                     float ta = ((n.gTint >> 24) & 0xFF) / 255.0f, tr = ((n.gTint >> 16) & 0xFF) / 255.0f,
                           tg = ((n.gTint >> 8) & 0xFF) / 255.0f, tb = (n.gTint & 0xFF) / 255.0f;
                     // 公共前缀（glass 与模糊族同布局）：tint / size_px / origin / tex_bias / tex_scale
@@ -1343,10 +1395,11 @@ static void drawSelfContentCore(OH_Drawing_Canvas* rsCanvas, SelfDrawSpec* sd) {
                         { float lx = -0.35f, ly = -0.94f, ll = sqrtf(lx * lx + ly * ly); putV2(48, lx / ll, ly / ll); }
                         putF(56, (float)n.gRadius / S);
                         putF(60, (float)n.gBlur / S);
-                        putF(64, (n.w < n.h ? (float)ow2 : (float)oh2) * 0.22f);
-                        putF(68, 0.18f);
+                        putF(64, (n.w < n.h ? (float)ow2 : (float)oh2) * 0.33f);
+                        // ★★★决策 #908：镜面高光 0.18 → 0.35（三端同值：Android/iOS 同步）。
+                        putF(68, 0.35f);
                         putF(72, (float)n.gSat);
-                        putF(76, 0.0f);
+                        putF(76, regionLum());   // ★#911：区域背景亮度（浅霜/深霜锚点）
                         // ★★★决策 #905：触控形变（touch 盒局部 px / press）——仅活动交互玻璃；升采样到半分辨率空间 (×1/S)
                         if (g_sdGlassActiveId == n.id) {
                             putF(80, (float)(g_sdGlassTouchX / S)); putF(84, (float)(g_sdGlassTouchY / S));
@@ -3040,9 +3093,9 @@ static std::string runGlassPassImpl() {
     // ★实测：PixelMap 默认 BGRA_8888 ⇒ 读取为 b,g,r,a。glass 的 GLSL 采样纹理期望 RGBA ⇒ 转序。
     auto done = 0; int totalMs = 0; int imgOk = 0;
     for (auto& g : g_glassReg) {
-        int bx = (int)(g.x - ((g.w < g.h ? g.w : g.h) * 0.22 + g.blur * 0.55 * 1.6 + 4));
-        int by = (int)(g.y - ((g.w < g.h ? g.w : g.h) * 0.22 + g.blur * 0.55 * 1.6 + 4));
-        int pad = (int)((g.w < g.h ? g.w : g.h) * 0.22 + g.blur * 0.55 * 1.6 + 4);
+        int bx = (int)(g.x - ((g.w < g.h ? g.w : g.h) * 0.42 + g.blur * 0.55 * 1.6 + 4));
+        int by = (int)(g.y - ((g.w < g.h ? g.w : g.h) * 0.42 + g.blur * 0.55 * 1.6 + 4));
+        int pad = (int)((g.w < g.h ? g.w : g.h) * 0.42 + g.blur * 0.55 * 1.6 + 4);
         int iw = (int)g.w + 2 * pad, ih = (int)g.h + 2 * pad;
         if (iw <= 0 || ih <= 0) continue;
         // 从快照裁剪（clamp；越界部分填黑 —— 与 GPU 采样 clamp 口径近似）
@@ -3070,8 +3123,8 @@ static std::string runGlassPassImpl() {
         { float lx = -0.35f, ly = -0.94f; float ll = sqrtf(lx * lx + ly * ly); putV2(48, lx / ll, ly / ll); }
         putF(56, (float)g.radius);
         putF(60, (float)g.blur);
-        putF(64, (g.w < g.h ? (float)g.w : (float)g.h) * 0.22f);   // refract_depth（与 Android 同式）
-        putF(68, 0.18f);
+        putF(64, (g.w < g.h ? (float)g.w : (float)g.h) * 0.33f);   // refract_depth（与 Android 同式）
+        putF(68, 0.35f);   // ★决策 #908：镜面高光 0.35（三端同值：Android/iOS 同步）
         putF(72, (float)g.sat);
         std::vector<uint8_t> px = proteus_glass_vk::renderRgba8(bd, iw, ih, (int)g.w, (int)g.h, u);
         if (px.size() == (size_t)g.w * g.h * 4) {
@@ -3193,6 +3246,7 @@ static napi_value VkGlassProbe(napi_env env, napi_callback_info info) {
     putF(64, 28.6f);                                 // refract_depth
     putF(68, 0.18f);                                 // specular
     putF(72, 1.0f);                                  // saturation
+    putF(76, 0.42f);                                 // ★#911：bg_lum（与 gen-parity-spec 的 0.42 对齐——区域霜锚点）
 
     auto t0 = std::chrono::steady_clock::now();
     std::vector<uint8_t> px = proteus_glass_vk::renderRgba8(bd, TW, TH, SW, SH, u);

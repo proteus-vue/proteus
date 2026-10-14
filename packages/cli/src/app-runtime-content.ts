@@ -128,6 +128,19 @@ export async function buildAppRuntimeContent(
     const def = iconByName(name)
     return { d: def.d, viewBox: def.viewBox ?? '0 0 24 24' }
   }
+  // ★★★决策 #938：**动态 `:name` 的运行期图标表** `__iconPath`——把构建期已知数据里
+  //   出现的图标名（键名 `icon` 的字符串值，如 `navItems[].icon`）解析为 path/viewBox，注入屏 `data`；
+  //   运行期 `<p-icon :name="item.icon">` 的折叶求值器读它取 path（见 build.ts 的绑定改写）。
+  //   ★诚实边界：只覆盖**构建期可知**的图标名（data 字面量里的值）；运行期才算出的名不在此表 ⇒ 不渲染（不静默）。
+  const collectIconNames = (v: unknown, out: Set<string>): void => {
+    if (Array.isArray(v)) { for (const x of v) collectIconNames(x, out); return }
+    if (v && typeof v === 'object') {
+      for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+        if (k === 'icon' && typeof val === 'string' && val) out.add(val)
+        else collectIconNames(val, out)
+      }
+    }
+  }
   const compileOpts = {
     ...(expandableTags.size > 0 ? { componentTags: expandableTags } : {}),
     iconResolver,
@@ -200,7 +213,17 @@ export async function buildAppRuntimeContent(
       //   运行期在"首帧 mount 后"（mounted）/ "宿主卸载时"（unmounted）跑其动作表。缺省省略（既有产物不变）。
       ...(evRes.lifecycle ? { lifecycle: evRes.lifecycle } : {}),
       ...(evRes.scriptLifecycle ? { scriptLifecycle: evRes.scriptLifecycle } : {}),
-      data: statics,
+      data: (() => {
+        const names = new Set<string>()
+        collectIconNames(statics, names)
+        if (names.size === 0) return statics
+        const table: Record<string, { d: string; viewBox: number[] }> = {}
+        for (const nm of names) {
+          const r = iconResolver(nm)
+          if (r) table[nm] = { d: r.d, viewBox: (r.viewBox ?? '0 0 24 24').trim().split(/\s+/).map(Number) }
+        }
+        return Object.keys(table).length > 0 ? { ...statics, __iconPath: table } : statics
+      })(),
       // ★★★数据泵表（`v-pump`）：随屏产物带出（宿主周期驱动）；无声明 ⇒ 省略（既有产物不变）。
       ...((tplRes.template as { pumps?: ScreenRuntimeArtifact['pumps'] }).pumps
         ? { pumps: (tplRes.template as { pumps: ScreenRuntimeArtifact['pumps'] }).pumps }

@@ -375,6 +375,33 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
   // ★★★P3 动态组件（2026-10-03）：`<component :is="expr">` 的组件名表达式——实例化期解析。
   const componentIs: NonNullable<SubscriptionTable['componentIs']> = []
 
+  // ★★★决策 #938：**动态 `p-icon` 的值通道改写**（与 template.ts 的叶子折叠配套）——
+  //   `<p-icon :name="item.icon">` 在 template.ts 已折成**叶子盒**（无组件边界），其 `:name` 绑定
+  //   在 deps.ts 仍按 `component.name` 产出（deps 按 tag 判，与 template 折叠无关）⇒ 此处改写为
+  //   **运行期图标通道**：从全局表 `__iconPath` 按名取 path/viewBox，写成 `paint.svgPath`/`paint.svgViewBox`
+  //   （绘制键，走宿主 updatePatches/挂载；非几何、不进内核 SET_STYLE）。`:size`/`:color` 同理映射到真实样式键。
+  //   ★只对 `tag==='p-icon'` 生效（其余组件的 `component.*` 不受影响——窄条件、零回归）。
+  for (let pi = 0; pi < bindings.length; pi++) {
+    const ref = bindings[pi]
+    if (!ref || ref.tag !== 'p-icon' || !ref.propKey.startsWith('component.')) continue
+    const compProp = ref.propKey.slice('component.'.length)
+    const mkRef = (code: string, propKey: string, where: string) => ({ ...ref, code, propKey, where })
+    if (compProp === 'name') {
+      bindings.splice(pi, 1,
+        mkRef(`({ d: __iconPath[${ref.code}].d, progress: 1, fill: true })`, 'paint.svgPath', '<p-icon :name>'),
+        mkRef(`__iconPath[${ref.code}].viewBox`, 'paint.svgViewBox', '<p-icon :name>'),
+      )
+      pi += 1
+    } else if (compProp === 'size') {
+      bindings.splice(pi, 1,
+        mkRef(ref.code, 'layout.width', '<p-icon :size>'),
+        mkRef(ref.code, 'layout.height', '<p-icon :size>'),
+      )
+      pi += 1
+    } else if (compProp === 'color') {
+      bindings.splice(pi, 1, mkRef(ref.code, 'paint.color', '<p-icon :color>'))
+    }
+  }
   for (const ref of bindings) {
     // ★被合成组里的其余成员**跳过建槽**（合成绑定已代表整条文本；见上方合成段注释）
     if (synthesizedMembers.has(ref)) continue

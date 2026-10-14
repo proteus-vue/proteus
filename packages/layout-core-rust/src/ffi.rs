@@ -552,12 +552,21 @@ pub(crate) fn style_from_dto(dto: &NodeDto) -> Result<LStyle, String> {
             }
             style.svg_view_box = Some(out);
         }
-        if let Some(col) = sp.get("stroke").and_then(|x| x.as_str()) {
-            style.stroke_color = parse_css_color(col)?;
-        }
         // ★★填充模式（App 图标渲染，2026-10-11）：`svgPath.fill: true` ⇒ 宿主填充 path（而非描边）。
         if let Some(f) = sp.get("fill").and_then(|x| x.as_bool()) {
             style.svg_fill = f;
+        }
+        if let Some(col) = sp.get("stroke").and_then(|x| x.as_str()) {
+            style.stroke_color = parse_css_color(col)?;
+        } else if style.svg_fill && style.stroke_color == 0 {
+            // ★★★决策 #938（动态图标）：**`fill` + 无显式 `stroke` ⇒ 回落节点自身颜色**（CSS `currentColor` 语义）。
+            //   动态 `<p-icon :name>` 折叶只产 `{d, progress, fill}`（图标名运行期才知、颜色取自 CSS 继承色）——
+            //   此前 `stroke_color` 缺省 0（透明）⇒ 图标**不可见**（真机实测：玻璃导航 4 图标全空）。
+            //   静态 `<p-icon name="x">` 由编译器**显式回填** stroke（见 template.ts），两路同观感、互不影响。
+            //   ★仅 fill 模式生效：描边（`fill:false`）无 stroke 仍保持 0（不改变既有"未声明色"语义）。
+            if let Some(tc) = style.text_color {
+                style.stroke_color = tc;
+            }
         }
         if let Some(w) = sp.get("strokeWidth").and_then(|x| x.as_f64()) {
             let w = w as f32;

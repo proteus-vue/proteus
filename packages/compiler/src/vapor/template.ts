@@ -4259,11 +4259,20 @@ export function buildLayoutTemplate(
             )
           }
         } else if (hasDynName) {
-          diag(
-            `p-icon(id=${id}) \`:name\` 为**动态值**——App 构建期无法解析（本版不支持动态图标名）`,
-            '图标名用静态字面量（name="home"）；动态图标为后续批次（需运行期 path 通道）',
-            'VAPOR_ICON_DYNAMIC',
-          )
+          // ★★★决策 #938：**动态 `:name` 的运行期图标通道**（承 #908 的诊断"需运行期 path 通道"）——
+          //   把 `<p-icon :name="item.icon">` 降级成**叶子盒**，path 由**运行期**从全局表 `__iconPath`
+          //   按名取（`:name` 表达式的值 → `__iconPath[<expr>].d`）。构建期只折出**盒**（宽高/颜色），
+          //   path 走 `paint.svgPath`/`paint.svgViewBox` **动态槽位**（由 build.ts 从 `component.name` 改写而来）。
+          //   ⇒ 覆盖"图标名来自构建期已知数据（列表字面量等）"；运行期才算出的名（如接口返回）为诚实边界。
+          const sizeN = literalProp('size')
+          const size = typeof sizeN === 'number' && sizeN > 0 ? sizeN : 16
+          const colorV = literalProp('color')
+          const hexOf = (v: unknown): string | undefined => (typeof v === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(v) ? v : undefined)
+          style.width = size
+          style.height = size
+          const strokeColor = hexOf(colorV) ?? hexOf(style.color)
+          if (strokeColor) style.color = strokeColor
+          iconLeaf = true
         }
       }
       // ★★★玻璃材质折叠（自研液态玻璃，决策 #818）：`<pg-glass preset intensity tint radius border noise fallback>`
