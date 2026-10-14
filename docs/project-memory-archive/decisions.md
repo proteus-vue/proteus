@@ -4553,3 +4553,11 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
  ③ **放大回 iOS 级**：胶囊 `0.30→0.12`（~1.12×，实测 iOS 亦 1.12×）、条 `0.03`。
 【判据】真机（hold 按下，背景为彩色块墙）：**胶囊按下 = 透出背景色块的玻璃透镜 + 明亮高光环边**（此前死平灰块）——三特征（折射透明/亮脊/中心缩放）齐 · `check:shader-generated`/`glass-pixel-parity`(Metal==oracle max 1/255)/`shader-capability`/`glass-capability`/`harmony-runtime-prebuilt`/`pixel-snap` 绿 · `test:coupled` 绿 · Android 编译绿 · AAR 重建 · 临时 hold 已移除。
 【★教训】**"按下效果"是「玻璃光学 + 几何」两件事，不能只做几何**——我们做成了"缩放一个色块"，iOS 是"点亮一块玻璃"。★**`canvas.scale` 会打乱"盒坐标驱动的 shader"**（origin/size_px 停在未缩放盒）⇒ 凡 shader 靠盒坐标采样，缩放要**改盒参数**、不要改画布变换。★**子代理独立像素取证救了方向**：它量出"两边放大都 1.1×、差异在光学"，一举否掉了前几轮"加大放大倍数"的错方向。
+
+964. **液态玻璃按下：淡出灰叠加（morph 成通透玻璃）+ 胶囊放大「探出条外」· 只 Android**（2026-10-14 · 用户「按下还是灰的、iOS 完全通透；而且始终在玻璃条里面」；iOS 按下图放大取证）：
+【iOS 按下真值（放大 `ios-press-zoom`）】按下"Today"胶囊 = **透明的玻璃透镜**——能透出背后橙色内容（有折射）、带**彩虹色边缘**、且**探出条外**（上下都越过条缘）。这是 iOS 选中项的两态 morph：**静止=灰药丸（dimming）/ 按下=完整液态玻璃**。
+【现象（我们）】① 按下**仍是灰**（选中胶囊的 `overlay` 灰叠加不随 press 退场）；② 胶囊放大 `0.12×` 仍 **小于条** ⇒ 始终在条内。
+【修】① **shader：按下淡出 overlay**——`ov_a = overlay·0.30·(1−press)`（静止=灰药丸 / 按下=纯玻璃；`glass.wgsl`+`reference.rs` 同改，复用 `press` 槽）。② **胶囊放大回 0.30×**（须超过条：条 56·1.03=57.7，胶囊 48·1.30=62.4 > 57.7 ✓）。
+【判据】真机（hold 按下、背景彩块墙）：胶囊 = **透出背景彩块的通透玻璃 + 亮光环边 + 上下探出条外**（此前灰块/在条内）· `check:shader-generated`/`glass-pixel-parity`(Metal==oracle max 1/255)/`shader-capability`/`glass-capability`/`harmony-runtime-prebuilt`/`pixel-snap` 绿 · `test:coupled` 绿 · Android 编译绿 · AAR 重建 · 鸿蒙 prebuilt 同步 · 临时 hold 已移除。
+【诚实边界】① 我们按下玻璃**通透但无"霜"(frost)**——iOS 按下胶囊是**带黄色朦胧的玻璃**（磨砂在）；我们因涂过透明而下场较清（需磨砂可加 `blur` 采样）。② iOS 的**彩虹色边缘（色散）我们没有**（单次采样无色彩分离）——列为后续 refinement。③ 回弹仍 lerp（非 spring）。④ 仅 Android 真机。
+【★教训】**iOS 选中项是「两态 morph」**：**静止=灰药丸（dimming）/ 按下=通透玻璃**——所以"按下"改的不只是几何，更是**材质本身（灰→玻璃）**。我们前几轮只调几何（缩放）、没让"灰退场" ⇒ 永远灰。★**"探出条外"是几何量（胶囊缩放须 > 条缩放），"通透"是材质量（overlay 退场）**——两件事分开调。

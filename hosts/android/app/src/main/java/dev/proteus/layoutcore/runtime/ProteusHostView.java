@@ -3337,7 +3337,7 @@ public class ProteusHostView extends ViewGroup {
     private static final float GLASS_PRESS_SCALE = 0.03f;          // 按下玻璃（条，小幅 ~1.03×）
     //  ★#962：胶囊幅度要**大到冲出条外**（用户「iOS 缩放直接在玻璃条外面」）——条 56 高、胶囊基底 ~48 ⇒ 须 >58/48=1.21
     //   才越界 ⇒ 取 0.30（1.30×）。
-    private static final float GLASS_PRESS_SCALE_CAPSULE = 0.12f;  // 子树内其余玻璃（选中胶囊；实测 iOS 放大亦为 ~1.1×，此前 0.30 冲太猛）
+    private static final float GLASS_PRESS_SCALE_CAPSULE = 0.30f;  // 选中胶囊须**超过条**（用户「iOS 缩放直接在玻璃条外面」）
     /** ★★★决策 #950（vibrancy）：本帧**暗玻璃**的区域盒（内容坐标 x,y,w,h）——落在其中的文字/图标**强制白色**
      *  （对齐 iOS：玻璃压暗背景时前景转白，保内容强烈可读）。逐帧在 drawGlassPass 重算。 */
     private final java.util.List<float[]> darkGlassRects = new java.util.ArrayList<>();
