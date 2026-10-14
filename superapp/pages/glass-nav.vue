@@ -178,6 +178,13 @@
       </view>
     </view>
 
+    <!-- ★#948：**黑底内容**（验证「背景明暗 → 玻璃自动调整」）——滚到此处时玻璃条正下方是纯黑 ⇒
+         玻璃应变暗（深底 α 小、透出暗背景）。与上方浅色卡片交替 ⇒ 滚动即可看玻璃自动切换。 -->
+    <view class="gna-dark">
+      <text class="gna-dark__t">深色背景区</text>
+      <text class="gna-dark__d">滚到这里 → 玻璃条应自动变深（对齐 iOS 背景自适应）</text>
+    </view>
+
     <!-- 尾部说明（保证滑到底仍有余量） -->
     <view class="gna-footer">
       <text class="gna-footer__t">按住/拖动玻璃条 → 玻璃表面流动；上滑 → 内容从玻璃底下经过</text>
@@ -270,6 +277,19 @@ function pick(key: string, pos: number): void {
 .c5 { background: #d63d6a; }
 .c6 { background: #1fb6c9; }
 .c7 { background: #b7c22f; }
+.gna-dark {
+  margin: 14px 0;
+  padding: 60px 20px;
+  background-color: #0b0b0f;
+  border-radius: 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.gna-dark__t { font-size: 20px; font-weight: 700; color: #ffffff; }
+.gna-dark__d { font-size: 12px; color: #9aa1af; }
 .gna-footer {
   margin-top: 16px;
   padding: 20px 0;
