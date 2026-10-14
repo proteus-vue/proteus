@@ -97,8 +97,9 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     let r = p.radius.min(hs.0.min(hs.1));
     let sd = sd_round_rect(pc, hs, r);
     let d = (-sd).max(0.0);
-    let hsmin = hs.0.min(hs.1);
-    let band = (hsmin * 0.33).max(6.0);   // ★决策 #907：带宽 1/3（带加宽）+ 位移横贯整带（与 glass.wgsl ② 同源）
+    let smin = p.size_px.0.min(p.size_px.1);   // 最短边（= 2×hsmin）
+    // ★决策 #907/#910：折射带 = **最短边 1/3**（#910 修正口径：原 `hsmin*0.33 = 0.165·min` 只有 1/6 ⇒ ×2）
+    let band = (smin * 0.33).max(6.0);
     let e = (d / band).clamp(0.0, 1.0);
 
     let eps = (band * 0.3).clamp(1.0, 16.0);
@@ -110,10 +111,11 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     let ec = e.clamp(0.004, 0.996);
     let u1 = 1.0 - ec;
     let slope = u1 / (1.0 - u1 * u1).max(1e-4).sqrt();
-    // ★决策 #907：位移**横贯整带**（prof 外缘1→内缘0），峰值=带宽×0.45；strength 归一化 refract_depth（与 glass.wgsl 同源）
+    // ★决策 #910：位移**横贯整带**（prof 外缘1→内缘0），峰值 = 带宽×1.15（≥带宽 ⇒ 真透镜压缩/回折）；
+    //   refract_depth 以 band 为基准（宿主默认传 band ⇒ 1.0 中性；非恒等 ⇒ 真旋钮）——与 glass.wgsl 同源。
     let prof = 1.0 - smoothstep(0.0, 1.0, e);
-    let strength = (p.refract_depth / (hsmin * 0.44).max(1.0)).clamp(0.5, 2.0);
-    let bend = prof * band * 0.45 * strength;
+    let strength = (p.refract_depth / band.max(1.0)).clamp(0.2, 2.5);
+    let bend = prof * band * 1.15 * strength;
     let sp = (local.0 + n.0 * bend, local.1 + n.1 * bend);
 
     // uv 折算：纹理尺寸 = size + 2*pad；节点 uv=0 对应纹理 pad/(size+2pad)
@@ -131,12 +133,12 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     for c in 0..3 { col[c] = col[c] + (lum - col[c]) * 0.12; }
     for c in 0..3 { col[c] = lum + (col[c] - lum) * p.saturation; }
     for c in 0..3 { col[c] = col[c] + (col[c] * p.tint[c] * 2.0 - col[c]) * p.tint[3]; }
-    // ★★★决策 #908：**连续亮度仿射**（取代二极开关）——与 glass.wgsl ⑤ 同源。
-    //    锚点 = 第三方复刻仓像素实测 `glass_L ≈ 0.58·bg_L + 0.13`（暗底恒定提亮、亮底轻压、**色相不动**）；
-    //    `0.85` = 轻收系数（留 15% 原始对比）。旧式 `smoothstep(0.35,0.70)` + 固定 0.30 掺和是阶跃：
-    //    深底被拉向近黑（发脏）、白底"白 mix 白 = 零变化"（隐形）。
-    let target_l = (lum * 0.58 + 0.13).clamp(0.0, 1.0);
-    let d_aff = (target_l - lum) * 0.85;
+    // ★★★决策 #910：**霜白锚点自适应**（修正 #908 方向错误）——与 glass.wgsl ⑤ 同源。
+    //    #908 的 `lum*0.58+0.13` 斜率<1 = 压缩对比 ⇒ 永远提不亮（深底反而压暗，与 iOS 相反）。
+    //    正确：朝霜白锚点 `FROST_L` 靠拢——暗底大抬升成霜白、亮底轻压仍可见（iOS 真机实测 + WWDC 原文）。
+    //    只加**同一 delta**（只改明度、不动色相/饱和 ⇒ 守住 #875）。`FROST_L` = 唯一主旋钮。
+    let frost_l = 0.75f32;
+    let d_aff = (frost_l - lum) * 0.75;
     for c in 0..3 { col[c] = (col[c] + d_aff).clamp(0.0, 1.0); }
 
     let cos_i = 1.0 / (1.0 + slope * slope).sqrt();
@@ -149,8 +151,12 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     // ★决策 #906：兜底边缘高光（恒定细亮边 + 顶光加成）——与 glass.wgsl ⑥ 同源（纯色背景也可见）
     let top_hi = (-n.1).max(0.0);
     let edge_hi = bevel_mask * (0.10 + 0.26 * top_hi + 0.16 * facing);
-    let rim = (facing.powi(6) * p.specular + fres * 0.20) * bevel_mask + edge_hi;
-    for c in 0..3 { col[c] = (col[c] + rim).min(1.0); }
+    // ★★★决策 #910 · **自适应描边极性**（报告 P0-1）：亮底描边**减暗**（轮廓可见）、暗底**加亮**——与 glass.wgsl ⑥ 同源。
+    let edge_pol = smoothstep(0.55, 0.85, lum);
+    let rim_light = (facing.powi(6) * p.specular + fres * 0.20) * bevel_mask + edge_hi;
+    let rim_dark = edge_hi * 0.9;
+    let rim = rim_light * (1.0 - edge_pol) - rim_dark * edge_pol;
+    for c in 0..3 { col[c] = (col[c] + rim).clamp(0.0, 1.0); }
     col[3] = 1.0;
     col
 }

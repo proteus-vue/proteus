@@ -18,7 +18,7 @@ import path from 'node:path'
 import { buildLayoutTemplate, buildVaporSubscriptions } from '@proteus-vue/compiler'
 import { resolveComponentsRoot } from '@proteus-vue/plugin-vite'
 import { iconByName, hasIcon } from '@proteus-vue/icons'
-import { resolveGlass } from '@proteus-vue/glass'
+import { resolveGlass, cssSaturateForMaterial } from '@proteus-vue/glass'
 
 /**
  * ★★★玻璃材质折叠（自研液态玻璃，决策 #818）：`<pg-glass …props>` → 引擎 `glass` 字段。
@@ -55,7 +55,10 @@ export function glassResolver(props: Record<string, string | undefined>): Record
     border: r.border,
     borderSide: sideMap[r.borderSide ?? 'all'] ?? 'all',
     noise: r.noise,
-    saturation: 1.0,
+    // ★★★决策 #910（报告 P2-3）：`saturation` 此前**硬编码 1.0**（IR 字段从未被填 ⇒ 原生自绘恒中性 ⇒ 玻璃偏灰、
+    //   缺 iOS `.regular` 的"blur + saturate"通透感；该常量此前只在 Web/MP 的 CSS 路径补过，见 `@proteus-vue/glass` 的
+    //   `CSS_SATURATE=1.8`）。现按材质派生，且**复用 CSS 侧同一映射** `cssSaturateForMaterial`（SSOT——防两套口径漂移）。
+    saturation: cssSaturateForMaterial(materialOf(props.material)),
     // ★★★决策 #900：材质选择——`<pg-glass material="...">` → 折进 `glass.material`（宿主按 id 派发管线）。
     //   缺省/未知 ⇒ 'glass'（保持既有行为；合法集 = 材质目录 id，见 `@proteus-vue/shader` catalog）。
     material: materialOf(props.material),

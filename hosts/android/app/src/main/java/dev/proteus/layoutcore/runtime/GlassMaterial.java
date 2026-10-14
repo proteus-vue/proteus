@@ -143,7 +143,7 @@ public final class GlassMaterial {
                 sh.setFloatUniform("light_dir", -0.35f, -0.94f);
                 sh.setFloatUniform("radius", radius);
                 // ★边缘峰值位移：调研守恒 refractionAmount ≈ 2×倒角带宽；带宽 in-kernel = min(size)*0.22
-                sh.setFloatUniform("refract_depth", Math.min(w, h) * 0.22f);
+                sh.setFloatUniform("refract_depth", Math.min(w, h) * 0.33f);   // ★#910：以 band(=0.33·min) 为基准 ⇒ strength=1.0 中性；非恒等 ⇒ 真旋钮
                 // ★★★决策 #908：镜面高光 0.18 → 0.35 —— 真机像素对照 iOS：玻璃的"材质身份"主要来自**顶光高光
                 //   + 锐利内缘亮线**；0.18 时几乎不可见 ⇒ 玻璃读作"半透明塑料片"。WGSL 里该项乘 `bevel_mask`
                 //   （仅外缘带生效）⇒ 加大只强化边缘高光，不会把整面洗白。

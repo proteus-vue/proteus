@@ -1288,7 +1288,7 @@ static void drawSelfContentCore(OH_Drawing_Canvas* rsCanvas, SelfDrawSpec* sd) {
             const bool recompute = animInteract || (gc.img == nullptr) || (g_sdGlassDiv <= 1)
                         || (yChanged ? (g_sdGlassTick % g_sdGlassDiv == 0) : !g_sdGlassFresh);
             if (recompute) {
-                const int pad = (int)((n.w < n.h ? n.w : n.h) * 0.22 + n.gBlur * 0.55 * 1.6 + 4);
+                const int pad = (int)((n.w < n.h ? n.w : n.h) * 0.42 + n.gBlur * 0.55 * 1.6 + 4);
                 // ★决策 #860：分辨率降采样因子 S 可配（`g_sdGlassS`：0=自动，>0=强制）。
                 //   降 S ⇒ 离屏纹理/输出更小 ⇒ 回读+建图+**纹理重上传（blit）**按面积线性下降。
                 //   实测（120Hz 面板）：S=2 重算帧 blit≈29ms ⇒ 掉到 ~50fps；S=4 blit≈7.5ms ⇒ 稳定 120fps。
@@ -1343,7 +1343,7 @@ static void drawSelfContentCore(OH_Drawing_Canvas* rsCanvas, SelfDrawSpec* sd) {
                         { float lx = -0.35f, ly = -0.94f, ll = sqrtf(lx * lx + ly * ly); putV2(48, lx / ll, ly / ll); }
                         putF(56, (float)n.gRadius / S);
                         putF(60, (float)n.gBlur / S);
-                        putF(64, (n.w < n.h ? (float)ow2 : (float)oh2) * 0.22f);
+                        putF(64, (n.w < n.h ? (float)ow2 : (float)oh2) * 0.33f);
                         // ★★★决策 #908：镜面高光 0.18 → 0.35（三端同值：Android/iOS 同步）。
                         putF(68, 0.35f);
                         putF(72, (float)n.gSat);
@@ -3041,9 +3041,9 @@ static std::string runGlassPassImpl() {
     // ★实测：PixelMap 默认 BGRA_8888 ⇒ 读取为 b,g,r,a。glass 的 GLSL 采样纹理期望 RGBA ⇒ 转序。
     auto done = 0; int totalMs = 0; int imgOk = 0;
     for (auto& g : g_glassReg) {
-        int bx = (int)(g.x - ((g.w < g.h ? g.w : g.h) * 0.22 + g.blur * 0.55 * 1.6 + 4));
-        int by = (int)(g.y - ((g.w < g.h ? g.w : g.h) * 0.22 + g.blur * 0.55 * 1.6 + 4));
-        int pad = (int)((g.w < g.h ? g.w : g.h) * 0.22 + g.blur * 0.55 * 1.6 + 4);
+        int bx = (int)(g.x - ((g.w < g.h ? g.w : g.h) * 0.42 + g.blur * 0.55 * 1.6 + 4));
+        int by = (int)(g.y - ((g.w < g.h ? g.w : g.h) * 0.42 + g.blur * 0.55 * 1.6 + 4));
+        int pad = (int)((g.w < g.h ? g.w : g.h) * 0.42 + g.blur * 0.55 * 1.6 + 4);
         int iw = (int)g.w + 2 * pad, ih = (int)g.h + 2 * pad;
         if (iw <= 0 || ih <= 0) continue;
         // 从快照裁剪（clamp；越界部分填黑 —— 与 GPU 采样 clamp 口径近似）
@@ -3071,7 +3071,7 @@ static std::string runGlassPassImpl() {
         { float lx = -0.35f, ly = -0.94f; float ll = sqrtf(lx * lx + ly * ly); putV2(48, lx / ll, ly / ll); }
         putF(56, (float)g.radius);
         putF(60, (float)g.blur);
-        putF(64, (g.w < g.h ? (float)g.w : (float)g.h) * 0.22f);   // refract_depth（与 Android 同式）
+        putF(64, (g.w < g.h ? (float)g.w : (float)g.h) * 0.33f);   // refract_depth（与 Android 同式）
         putF(68, 0.35f);   // ★决策 #908：镜面高光 0.35（三端同值：Android/iOS 同步）
         putF(72, (float)g.sat);
         std::vector<uint8_t> px = proteus_glass_vk::renderRgba8(bd, iw, ih, (int)g.w, (int)g.h, u);

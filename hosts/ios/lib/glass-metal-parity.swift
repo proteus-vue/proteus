@@ -82,6 +82,12 @@ let cb = queue.makeCommandBuffer()!
 let enc = cb.makeRenderCommandEncoder(descriptor: pass)!
 enc.setRenderPipelineState(pipeline)
 enc.setFragmentTexture(bdTex, index: 0)
+// ★★★决策 #910（报告 P2-1）：显式绑定采样器——此前未绑 ⇒ MSL 的 `sampler` 处于未定义状态，
+//   与 Rust oracle 的线性采样只**碰巧**接近；显式 LINEAR+CLAMP 才是三端同口径（也让它与真机一致）。
+let sd = MTLSamplerDescriptor()
+sd.minFilter = .linear; sd.magFilter = .linear; sd.mipFilter = .notMipmapped
+sd.sAddressMode = .clampToEdge; sd.tAddressMode = .clampToEdge
+enc.setFragmentSamplerState(device.makeSamplerState(descriptor: sd)!, index: 0)
 enc.setFragmentBytes(&u, length: MemoryLayout<U>.stride, index: 0)
 enc.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
 enc.endEncoding(); cb.commit(); cb.waitUntilCompleted()
