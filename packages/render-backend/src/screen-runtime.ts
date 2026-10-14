@@ -288,6 +288,41 @@ export function createScreenRuntime(opts: CreateScreenRuntimeOptions): ScreenRun
     const listRegistry = new ListRegistry()
     const instOpts = { viewport: opts.viewport, read, table: art.table, registry: listRegistry, ...(componentDefs ? { components: componentDefs } : {}) }
     let inst = prof.time('instantiate', () => instantiateTemplate(art.tpl, instOpts))
+    /**
+     * ★★★决策 #957（CSS 继承 · **实例化期**级联）：把「从父级继承 `color`」的节点（编译期标 `inheritColor`，
+     *   如 `p-icon` 折叶）的**运行期当前色**从最近的带 color 祖先（含 wrapper 的动态 `:class` 结果）解析下来。
+     *   【缺口（真机实测）】实例化**只**把动态 `:class` 的 color 写到**wrapper**（如 `gna-item__glyph`），
+     *   **不级联**到子图标叶 ⇒ 图标叶停在**编译期静态色**（`#1a1c22`）⇒「选中项图标**初始**永远黑/白、不跟随主题色」
+     *   （点击后靠 onPaintProp 级联才对——但初始态没有这一步）。
+     *   ★节点数组为**树序**（父在子前）⇒ 一趟下推即可（effectiveColor 随行更新）。
+     */
+    /** ★#957：`inheritColor` 节点**实例化期解析出的基色**（用于运行期"取消动态色"时回退——见 applyColorInheritance）。 */
+    const baseColorOf = new Map<number, unknown>()
+    const propagateColorInheritance = (nodes: typeof inst.nodes): void => {
+      const byId = new Map<number, (typeof nodes)[number]>()
+      for (const n of nodes) byId.set(n.id, n)
+      for (const n of nodes) {
+        if (!n.inheritColor) continue
+        // ★`color` 是**编译期静态基色**（未选中色，如 #1a1c22）——它是"取消动态色"时的**回退目标**，先存下。
+        const staticBase = (n as Record<string, unknown>).color
+        // ★编译期已把继承值填进 `color`（故不能用"有没有 color"判"是否自身声明"）；`inheritColor` 标记
+        //   本身已表示"色来自祖先"⇒ **无条件**从祖先重取（覆盖静态值）。沿父链上溯取最近的带 color 祖先。
+        let p = n.parentId
+        while (p !== null && p !== undefined) {
+          const pn = byId.get(p)
+          if (!pn) break
+          const pc = (pn as Record<string, unknown>).color
+          if (pc !== undefined) {
+            (n as Record<string, unknown>).color = pc
+            // 基色 = 编译期静态色（回退目标）；无静态 ⇒ 用当前祖先色（退而求其次）。
+            baseColorOf.set(n.id, staticBase !== undefined ? staticBase : pc)
+            break
+          }
+          p = pn.parentId
+        }
+      }
+    }
+    propagateColorInheritance(inst.nodes)
     // ★R6：内容局部 id 的**有序表**（index → localId）——手势反查用
     let localIdsOrdered = inst.nodes.map((n) => n.id)
     // ★★★决策 #907/B1：**行内节点映射**（每次实例化重建）
@@ -312,6 +347,7 @@ export function createScreenRuntime(opts: CreateScreenRuntimeOptions): ScreenRun
     /** 用**当前 data** 重实例化（节点 id 由 tpl 的 slot 序决定 ⇒ 与初实例化逐位一致，id 映射稳定） */
     function rebuild(): void {
       inst = prof.time('instantiate', () => instantiateTemplate(art.tpl, instOpts))
+      propagateColorInheritance(inst.nodes)
       localIdsOrdered = inst.nodes.map((n) => n.id)
       indexRowScopes()
     }
@@ -352,8 +388,10 @@ export function createScreenRuntime(opts: CreateScreenRuntimeOptions): ScreenRun
         const node = byIdMap.get(id)
         if (!node) continue
         if (node.inheritColor) {
+          // ★#957：`color` 为 null（取消动态色）⇒ 回退到**实例化期基色**（否则 svg 重注入读内核旧色 ⇒ 图标卡住）。
+          const eff = color == null ? baseColorOf.get(id) : color
           const rec = pendingPaint.get(id) ?? {}
-          rec.color = color
+          rec.color = eff
           pendingPaint.set(id, rec)
           applied++
         }

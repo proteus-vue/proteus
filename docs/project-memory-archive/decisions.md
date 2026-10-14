@@ -4487,3 +4487,12 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 【修】**撤回**：`glass.wgsl` + `reference.rs` 去掉 `rim_line`，选中等 overlay 玻璃回到 **无边缘高光**（= #953 原判）。"槽"感由**外层条顶缘高光（#954）+ 胶囊 ins缩（#955）**共同提供，二者我们都有。
 【判据】真机：胶囊左缘 35(条)→91(胶囊) **干净跳变、无过亮尖峰** · 并排放大（iOS vs 我们）两者均为"干净浅色药丸" · `check:shader-generated`/`glass-pixel-parity`(Metal==oracle max 1/255)/`shader-capability`/`glass-capability`/`glass-audit`/`harmony-runtime-prebuilt`/`pixel-snap` 绿 · `test:coupled` 绿 · AAR 重建 · 鸿蒙 prebuilt 同步。
 【★教训】**"放大目测"会误读**——我把"上层条的高光"读成"下层胶囊的边"。**判"某元素有没有某特征"，要在该元素**自身边界**上逐像素量（over-shoot/ring）**，别在整张放大图里"看着像"。承 #928/#954：真值靠**量**不靠**看**。
+
+957. **★★★液态玻璃：选中项**图标**改主题色（accent）——CSS 继承级联补「实例化期」这一跳（图标初始态之前只有静态黑/白）· 只 Android**（2026-10-14 · 用户「选中胶囊图标色一直不对——要么黑要么白，正常应是选中主题色」）：
+【现象】选中项（"游戏"）的**文字**是主题蓝（对），但**图标**始终是黑（浅底）/白（深底），不跟主题色。
+【根因（继承级联缺了"实例化期"这一跳）】#939 的 `applyColorInheritance` **只在 `onPaintProp`（运行期动态 `:class` 变化）时级联** ⇒ 只在**点击切换之后**把 wrapper 的色下推给图标叶。而**初始态**：图标叶的色来自编译期静态值（`#1a1c22`，`template.ts` 烘焙的"非激活"继承色）——**实例化时不跑级联** ⇒ 初始选中项的图标永远停在静态黑/白。
+  ★真机探针实证：`updatePatches` 补丁里**有** `{id:189(图标叶), color:#2b2f7a}`（点击后对），但初始态图标叶无 patch ⇒ 停在 `#1a1c22`。
+【修（`screen-runtime`）】① 加 **`propagateColorInheritance(inst.nodes)`**——实例化后（及 `rebuild` 后）把 `inheritColor` 节点的色从**最近的带 color 祖先**（wrapper 的动态 `:class` 结果）解析下来（沿父链上溯，不依赖数组序）；② 记录**编译期静态基色**（overwrite 前的 `color`）到 `baseColorOf`；③ 级联遇 `color==null`（取消选中）⇒ 回退**基色**（否则 svg 重注入读内核旧色 ⇒ 图标卡在上一个动态色——真机实测："点搜索后未选游戏图标仍蓝"）。
+【判据】真机：**初始**选中"游戏"图标 **`#2c2f76`（主题蓝）/ 未选 `#1a1c21`（黑）**；**切换**点"搜索"后 → 搜索图标蓝、**游戏图标回黑** · `test:coupled` 绿（本轮只改 `screen-runtime` + 临时探针已移除）。
+【诚实边界】仅 Android 真机；iOS/鸿蒙未验（同源共享运行期）。级联为**有界**实现（仅 `inheritColor` 节点、沿父链上溯）。
+【★教训】**CSS 继承级联要在「实例化」与「运行期」两处都做**——#939 只做了运行期，初始态就漏了；这与 #916「静态/动态两条路都要覆盖」同源（本仓已多次踩：玻璃单位、z-order、命中）。★"取消动态色"要回退到**编译期基色**（不是 null）——null 在 svg 重注入路径上会读内核旧色。
