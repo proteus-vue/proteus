@@ -4087,3 +4087,33 @@ clang 18 对 implicit-function-declaration **直接 error**（`call to undeclare
 · **U0（单位,跨端）**:`applyOps` 的**二进制指令值不乘密度**（值在 JS 编、内核解,宿主无介入点）⇒ 真机动态 `layout.left` 只走 1× 距离（83→237 逻辑,实际到 237 物理而非 711）——高亮胶囊**落在错误项**。iOS 因 CALayer=point 天然正确,仅 Android 显形。这与 B7（几何求解错,已修）**是两回事**。需内核侧接密度（`proteus_layout_set_density`）。
 · **A1 其余**:`computed` 不产 data（`extractRefLiterals` 只认 `ref`）/ 普通 `const` 数组不建源 / 图片通路缺失——仍登记待补。
 
+
+909. **液态玻璃「对齐 iOS」差距分析（四路子代理独立调研 · 只登记未改）**（2026-10-13）：
+四路子代理外部干净视角独立取证——① 内核折射/位移场 ② 内容自适应/兜底 ③ iOS 真值联网调研 ④ 宿主合成/采样链路。
+交付 `docs/proteus-glass-plan/14-ios-gap-analysis.md`：11 条差距清单（P0×2/P1×3/P2×3/P3×3）+ 6 条可验证假设（H1-H6）。
+核心结论：① **内核带宽口径差 2×**（`hsmin*0.33=0.165·min` 实为最短边 1/6，注释称 1/3）；② **位移峰值 0.45·band < 带宽 ⇒ 永不折叠**；
+③ **`refract_depth` 是死旋钮**（宿主传值恰等于归一化分母 ⇒ strength≡1.0）；④ **无背景模糊**（`u.blur` 死 uniform，单次采样）；
+⑤ **自适应只有逐像素单点仿射，无区域估计**；⑥ **iOS 采样器未绑定**（`glass-metal.swift` 无 `setFragmentSamplerState`）；
+⑦ **原生缺 saturate(~1.8)**（只补了 Web/MP CSS 路径）。★本报告**只登记未改代码**；其逐条收口见 #910。
+★诚实边界：报告已注明「折射只边缘」无官方原文（强推断）、「58/13 仿射」锚点来自第三方复刻仓非 Apple 官方。
+
+910. **★★★液态玻璃对齐 iOS · 按 #909 报告逐条收口（P0/P1/P2 五项内核 + 三端宿主）**（2026-10-14 · 用户「按照这个施工单做」）：
+【触发】用户在真机上看到（附 iOS App Store tab bar 真机截图对照）：① 「变化不是很大，折射带区域对比 iOS 那种少很多」② 「两层玻璃表现出来的背景色兜底好像和 iOS 做反了」。
+【逐条核对 #909 报告（先取证）】11 条差距 **0 条闭环 / 2 条部分 / 9 条未动**，H1-H6 全未跑——#908 只碰了「specular 0.18→0.35」半条，且其自适应公式**方向与 iOS 相反**。
+【像素取证（本轮）】iOS 真机截图：深绿底 L79 ⇒ 玻璃 L215（**+136 大幅提亮成霜白**）；我们绿底 L134 ⇒ 玻璃 L102（**−32 压暗**）⇒ 方向确实相反。
+【根因】#908 的 `target_l = lum*0.58 + 0.13` 斜率 **0.58<1 = 压缩对比 ⇒ 任何输入都提不亮**（与 iOS 相反）。
+【收口（本单）】① **自适应方向纠正**：`target_l` 仿射 → **霜白锚点** `d_aff=(FROST_L−lum)*0.75`（FROST_L=0.75 唯一主旋钮）——暗底大抬升成霜白、亮底轻压仍可见；
+② **带宽 ×2**：`band=max(hsmin*0.33,6)`（0.165·min）→ `max(smin*0.33,6)`（0.33·min = 条高 1/3，与注释/iOS 一致）；
+③ **位移峰值 ≥ 带宽**：`bend=prof*band*0.45` → `*1.15`（带内采样非单调 ⇒ 真透镜弯折/压缩可见）；
+④ **refract_depth 去归一化旁路**：分母 `hsmin*0.44`（= 宿主传值 ⇒ strength≡1）→ `band`（宿主默认传 band ⇒ 1.0 中性，非恒等 ⇒ 真旋钮）；
+⑤ **自适应描边极性**：描边恒加白（亮底白上加白 ⇒ 轮廓消失）→ `edge_pol` 按背景亮度翻转（暗底加亮 / 亮底**减暗**）；
+⑥ **iOS 采样器绑定**（报告 P2-1）：`glass-metal.swift` + 离线 parity 渲染器补 `setFragmentSamplerState(LINEAR+CLAMP)`（此前 MSL `sampler` 处未定义状态）；
+⑦ **三端 saturation**（报告 P2-3）：折叠期硬编码 1.0 → 复用 `cssSaturateForMaterial`（glass=1.8 对齐 iOS `.regular`；模糊族中性）。`saturation` 由 `@proteus-vue/glass` 导出（SSOT 防两套漂移）。
+【宿主同步】三端 `refract_depth` 基准 0.22·min → 0.33·min（= band）；`glassPad` 0.22 → 0.42（覆盖 1.15·band 新位移）；四端产物重生成。
+【判据（全绿）】① **离线实证（oracle 直渲）**：深绿底 L92→183（**+91 提亮**，与 iOS 同向）/ 白底 L255→253（可见，不再隐形）/ 白底上缘 L159（**描边减暗生效**）/ 黑底 L10→148（霜白）；
+② `check:glass-pixel-parity`（iOS Metal == Rust oracle）：max **85/255→1/255** · 超差 **2.6%→0%**（★绑采样器直接兑现）；
+③ `check:glass-parity-harmony`（鸿蒙 Vulkan == oracle）：max **1/255** · 超差 0%（此前 100% = 旧 HAP，重建后归零）；
+④ 三端零设备编译绿（android javac+C 桥+JNI · iOS swiftc · 鸿蒙 clang）；
+⑤ `check:shader-generated`/`shader-capability`/`glass-capability`/`glass-audit` 全绿；`test:coupled` 71/71；玻璃单测 48/48；
+⑥ **真机取证（Android 重建 APK 含新 shader）**：白底霜白玻璃可见（此前隐形）· 绿底内容穿缘**明显压缩弯折**（此前直穿）· 背景 L134→玻璃 L190（**+56 提亮**，此前 −32 压暗）。
+【诚实边界】① iOS 采样器修复**未在 iOS 真机复验**（离线 parity 已证 max 1/255）；② 「区域级背景估计 → 浅霜/深霜整体切换」（报告 P1-1 的完全形态）仍**未做**——本单是**逐像素霜白锚点**（比 #908 的仿射对，但仍非区域统计）；③ P0-2「中心基座模糊」以**整体霜提亮**近似（AGSL 无循环 ⇒ 不做真模糊核，报告已有此约束）；④ P3（前景对比保护 / Web-MP 自适应 / U0 单位 + 玻璃随 translate 动画）**仍登记未做**；⑤ FROST_L=0.75 / 收拢 0.75 为经验锚点，真机 A/B 旋钮。
