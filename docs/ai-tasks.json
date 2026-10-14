@@ -372,6 +372,28 @@
         "T-glass-ios-gap-align"
       ],
       "note": "承接 #910（其诚实边界②：区域级背景估计仍未做，本单是逐像素霜白锚点）。目标=报告 P1-1 完全形态：iOS `.regular`「each layer continuously adapts based on what's behind it」「flip from light to dark」——锚点随**玻璃盒区域平均亮度**切换（深底⇒更白霜、亮底⇒几乎不变），而非全域固定 FROST_L。实现：复用 GlassUniforms 闲置 `_pad`(offset 76) 槽为 `bg_lum`（**零布局变更**）；三端宿主统计玻璃盒区域平均亮度传入。\n\n【已落地（2026-10-14 · 决策 #911）】_pad(offset 76)→bg_lum（零布局变更）；FROST_L=mix(0.84,0.93,smoothstep(0.30,0.90,bg_lum))；三端宿主统计区域亮度。判据：离线 oracle 深底+114/亮底+19（区域切换）· iOS parity max 1/255（含 bg_lum 0.42）· 鸿蒙 parity max 1/255 · 三端编译绿 · 真机深底白霜/亮底透出内容。"
+    },
+    {
+      "id": "T-glass-planar-edge",
+      "title": "液态玻璃「平面玻璃式边缘（消卷曲内翻）+ 霜层模型修正（表面霜而非内容亮度平移）」",
+      "type": "end-alignment",
+      "status": "done",
+      "owner": null,
+      "scope": [
+        "packages/shader-codegen-rust/src/materials/**",
+        "packages/shader-codegen-rust/src/reference.rs",
+        "packages/shader/src/**",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/**",
+        "hosts/ios/ProteusHost/**",
+        "hosts/harmony/host-app/**"
+      ],
+      "decision": 913,
+      "verification": "pnpm check:shader-generated && bash hosts/ios/check-glass-pixel-parity.sh && bash hosts/harmony/check-glass-parity.sh && npx vitest run tests/glass-ir.test.ts + 真机浅底黑字截图（文字清晰不发白 / 边缘无内翻）",
+      "branch": null,
+      "related": [
+        "T-glass-region-lum"
+      ],
+      "note": "用户真机反馈两点：① 「玻璃边缘有卷曲内翻，iOS 近似平面玻璃」② 「内容可见性太亮，黑色字折射后发白」。取证：① 位移映射 dsp/dx=1−A·d(smoothstep)，折叠阈值 A>1/1.5≈0.667 —— #910 的 A=1.15 **必然折叠**（内翻根因）⇒ 改 A=0.55（单调，平面玻璃式）+ strength 上界 1.1（A_eff≤0.605 恒不折叠）；② 霜白锚点把暗内容一并拉白（黑字 L25→出射 199）⇒ 加 `dark_guard=smoothstep(0.08,0.32,lum)`（正后方越暗提亮越少，保黑）。两处修复正交（区域定基调 / 局部保护内容）。\n\n【补：#913 · 用户点破机制错误】用户「深霜浅霜是对玻璃表面做的处理吧？我们表面没任何处理、太通透」——**判断正确**。#910/#911 的 `col+=(FROST_L-lum)*k` 是**对内容做亮度平移**（非霜层）；真 iOS 是 `mix(内容色, 霜色, α)` **表面霜/纱**（降对比 ⇒ 乳白/灰纱感）。方向也改为 **flip**（深底→亮霜 / 浅底→暗霜）。两图 iOS 实测定标：深底 L79→215 / 浅底 L254→229；oracle 拟合 218 / 230（方向正确）。\n\n【已落地（2026-10-14 · #912/#913）】A 1.15→0.55（单调，消内翻）+ 霜层 mix(内容色,霜色,α)（深底亮霜/浅底暗霜，flip）+ 修重复 tint。判据：oracle 深底 218/亮底 230（对照 iOS 215/229，方向正确）· iOS parity max 1/255 · 鸿蒙 parity max 1/255 · 三端编译绿 · 真机浅底暗霜+黑字清晰+边缘干净圆角。剩余：常量 A/B + iOS/鸿蒙真机复验 + P3。"
     }
   ]
 }
