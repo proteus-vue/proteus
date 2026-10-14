@@ -136,7 +136,6 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     // ★决策 #875：去饱和 0.30 → 0.12（保留背后颜色；与 glass.wgsl ④ 同源）
     for c in 0..3 { col[c] = col[c] + (lum - col[c]) * 0.12; }
     for c in 0..3 { col[c] = lum + (col[c] - lum) * p.saturation; }
-    for c in 0..3 { col[c] = col[c] + (col[c] * p.tint[c] * 2.0 - col[c]) * p.tint[3]; }
     // ★★★决策 #913：**霜层（surface veil）**——修正 #910/#911 的机制错误（对内容做亮度平移 ≠ 表面霜）。
     //   `mix(内容色, 霜色, α)`：整面朝霜色靠拢（降对比 ⇒ 乳白/灰纱）。霜色与厚度随区域背景**翻转**
     // ★★★决策 #931：**面纱（veil）**——修正 #926「加法亮度位移保对比 ⇒ 读作透明」。
@@ -150,6 +149,8 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
         let vc = (veil_v + (raw[c] - raw_lum) * 0.12).clamp(0.0, 1.0);
         col[c] = col[c] + (vc - col[c]) * veil_a;
     }
+    // ★★★决策 #944：tint 移到面纱之后（与 glass.wgsl 同源——作者 tint 作用于最终玻璃面，暗 tint 才不被面纱洗白）。
+    for c in 0..3 { col[c] = col[c] + (col[c] * p.tint[c] * 2.0 - col[c]) * p.tint[3]; }
 
     let cos_i = 1.0 / (1.0 + slope * slope).sqrt();
     let f0 = 0.04f32;

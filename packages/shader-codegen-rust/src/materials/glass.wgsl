@@ -131,8 +131,6 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     let lum = dot(col.rgb, vec3<f32>(0.299, 0.587, 0.114));
     col = vec4<f32>(mix(col.rgb, vec3<f32>(lum), 0.12), col.a);
     col = vec4<f32>(mix(vec3<f32>(lum), col.rgb, u.saturation), col.a);
-    //   ★tint（作者语义着色，可选）作用于采样色（守 #875「无固有颜色」——tint 是作者显式指定的例外）。
-    col = vec4<f32>(mix(col.rgb, col.rgb * u.tint.rgb * 2.0, u.tint.a), col.a);
 
     // ⑤ ★★★决策 #926（★本段历经 #908→#913→#920→#911→#923 五轮迭代，最终由 iOS 逆向调研的**4 图定量**定案）：
     //   历史坑（对照保留，防回退）：① #908 二极开关/仿射方向错（深底被压暗）；② #910 逐像素亮度平移 ⇒ 洗白内容；
@@ -163,6 +161,11 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     let acc_chroma = acc.rgb - vec3<f32>(dot(acc.rgb, vec3<f32>(0.299, 0.587, 0.114)));
     let veil_col = clamp(vec3<f32>(VEIL_V) + acc_chroma * 0.12, vec3<f32>(0.0), vec3<f32>(1.0));
     col = vec4<f32>(mix(col.rgb, veil_col, VEIL_A), col.a);
+    // ★★★决策 #944：**tint 移到面纱之后**——作者 tint 应作用于**最终玻璃面**，而非"内容色"。
+    //   此前 tint 在面纱（#943 α 0.94 近白）**之前** ⇒ 暗 tint（选中胶囊 rgba(115,115,115,…)）被面纱**整片洗白**
+    //   ⇒ 胶囊与条同色 ⇒ 「几乎看不到选中胶囊」（用户实测）。移到之后：白 tint（各 preset）不受影响，
+    //   灰 tint（胶囊）= 白玻璃面**压暗** ⇒ 重新可见（对齐 iOS 选中胶囊「比主体暗 13~35」）。
+    col = vec4<f32>(mix(col.rgb, col.rgb * u.tint.rgb * 2.0, u.tint.a), col.a);
 
     // ⑥ 光照：Fresnel + 法线·光源（双瓣）＋ ★★★决策 #906 **兜底可见性**（对齐 iOS：**纯色/空白背景上玻璃仍可见**）
     //   【缺口】此前玻璃完全依赖"背景内容的折射"⇒ 背景是纯色/空白灰时**玻璃几乎消失**（真机实测，用户点名）。

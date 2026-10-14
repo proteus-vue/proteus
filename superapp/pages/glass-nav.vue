@@ -196,7 +196,7 @@
                宿主侧：背板捕获**排除所有玻璃子树** ⇒ 胶囊采到的是**原始内容** ⇒ 观感 = "更亮的玻璃窗口"（与 iOS 同语义）。 -->
           <!-- ★`preset="floating"` 自带 `interactive: true` ⇒ 必须显式关掉：否则玻璃盒里出现**第二个可交互玻璃**，
                触点命中被胶囊抢走（原先流动的是整条 bar）——行为回归。胶囊是**静态更亮规格**（同 iOS 选中胶囊）。 -->
-          <pg-glass class="gna-highlight" preset="floating" :radius="27" :interactive="false" tint="rgba(115,115,115,0.30)" :style="{ left: hlLeft }" />
+          <pg-glass class="gna-highlight" preset="floating" :radius="27" :interactive="false" tint="rgba(115,115,115,1.0)" :style="{ left: hlLeft }" />
           <!-- ★★★决策 #907 端到端：**v-for 行 + 行参 handler + 行内动态 `:class`**——
                正是本轮修的两面墙：B1（`pick(item.key)` 行参）+ B2（`:class` 引用外层 `active`）。
                此前这两写法在 App 端**静默失效**（点不动 + 高亮不动）。 -->
