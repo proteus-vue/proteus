@@ -174,7 +174,9 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     let edge_hi = bevel_mask * (0.10 + 0.26 * top_hi + 0.16 * facing);
     // ★★★决策 #910 · **自适应描边极性**（报告 P0-1）：亮底描边**减暗**（轮廓可见）、暗底**加亮**——与 glass.wgsl ⑥ 同源。
     // ★#915：删 edge_pol（iOS 边缘恒亮，不随背景翻转）——与 glass.wgsl ⑥ 同源。
-    let rim = (facing.powi(6) * p.specular + fres * 0.20) * bevel_mask + edge_hi;
+    // ★#953：边缘高光按 overlay 门控（overlay=1 ⇒ 无边缘高光 = 干净卡片）
+    let edge_amp = 1.0f32 - p.overlay.clamp(0.0, 1.0);
+    let rim = ((facing.powi(6) * p.specular + fres * 0.20) * bevel_mask + edge_hi) * edge_amp;
     for c in 0..3 { col[c] = (col[c] + rim).clamp(0.0, 1.0); }
     col[3] = 1.0;
     col

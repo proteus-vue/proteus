@@ -4448,3 +4448,11 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 【诚实边界】仅 Android 真机；`overlay` 是通用 `pg-glass` prop（iOS/鸿蒙同源真源已含、宿主未接线 ⇒ 该二端 overlay 恒 0）；`ov_l` 两态值（0.88/0.40）与 `0.5` 混合权重为初定，真机目视可再调。
 【★教训】**"选中态/按下态"改的是「元素自身的底色」，不是「它遮挡内容的程度」**——#951 混淆了这两者（改 α = 改可读性）。iOS 的按下反馈始终是**叠加一层半透明中性色**（`UIVisualEffectView` 的 highlight/dimming layer），明暗随当前外观（light 灰 / dark 亮）。★改"观感"先想清楚**改的是哪一层**（背景叠加 / 内容可见度 / 前景色），三者在管线里是三处。
 【★续调（用户「白底胶囊太暗 / 黑底胶囊太亮，调低点」）】两处：
+
+953. **液态玻璃：选中胶囊去「边缘高光」——`overlay` 门控 rim（干净卡片）· 只 Android**（2026-10-14 · 用户「选中胶囊四周有高亮的边，不需要；静态就类似普通卡片贴在上面」）：
+【现象】选中胶囊四周有一圈**亮边**（高光描边）。
+【根因】胶囊 `<pg-glass>` 走玻璃 shader ⇒ 带**边缘高光**（`rim`：`bevel_mask`(细亮线) + `edge_hi`(顶光/法线) + `fres`(菲涅尔)）。`spec.border`（preset `border:true`）宿主**根本不消费** ⇒ 那不是描边，是 shader 的边缘高光。
+【修】边缘高光按 **`overlay` 门控**：`edge_amp = 1 − clamp(overlay,0,1)`，`rim = (specular+fres 项 + edge_hi) · edge_amp + tg·0.07`。
+  ⇒ 选中胶囊（`overlay=1`）**无边缘高光**（干净平铺卡片）；其余玻璃（`overlay=0`）边缘高光**不变**（条/卡片照旧）。`glass.wgsl` + `reference.rs` 同改，无新增 uniform（复用 overlay）。
+【判据】真机：浅底胶囊 = 平铺灰卡（无高亮边）；深底胶囊 = 平铺亮卡（无高亮边）；条（overlay=0）边缘高光保留 · `check:shader-generated`/`glass-pixel-parity`(Metal==oracle max 1/255)/`shader-capability`/`glass-capability`/`glass-audit`/`harmony-runtime-prebuilt`/`pixel-snap` 绿 · `test:coupled` 绿 · AAR 重建。
+【★教训】**"干净卡片"= 去玻璃的装饰项（边缘高光/描边），保留其底色叠加**——与 #952「叠加层」配套：#952 给"底色"、本条去"边缘装饰"，合起来才是"贴一张卡片"。★**属性归到哪个开关要想清**：`overlay`（选中叠加态）同时承载"叠色 + 去边"两类语义（现状）；若要独立控边，需单列 uniform（96B 已满 ⇒ 扩 112B + 三端）。

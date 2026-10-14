@@ -198,7 +198,10 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     // ★★★决策 #947：触点高光 `tg*0.30` → **`tg*0.07`**（用户「有一个光斑跟随手指」）——
     //   `0.30×tg` 最大 +76/255 的**亮斑**（真机实测光斑比条亮 +60~70），iOS 的交互玻璃是**折射扰动**（不是亮斑）。
     //   ⇒ 压到 0.07（几乎不可见，保留一丝反馈）；折射 warp（`push`）保留 = 真正的"玻璃流动"。
-    let rim = (pow(facing, 6.0) * u.specular + fres * 0.20) * bevel_mask + edge_hi + tg * 0.07;   // ★#947：触点点亮（0.30→0.07）
+    // ★★★决策 #953：**边缘高光按 overlay 门控**——`overlay=1`（选中胶囊）⇒ 无边缘高光（用户「选中胶囊四周有高亮的边，不需要，
+    //   干净卡片贴上去即可」）。其余玻璃（overlay=0）边缘高光不变。
+    let edge_amp = 1.0 - clamp(u.overlay, 0.0, 1.0);
+    let rim = ((pow(facing, 6.0) * u.specular + fres * 0.20) * bevel_mask + edge_hi) * edge_amp + tg * 0.07;   // ★#947 触点点亮 0.07
     col = vec4<f32>(clamp(col.rgb + vec3<f32>(rim), vec3<f32>(0.0), vec3<f32>(1.0)), 1.0);
     return col;
 }
