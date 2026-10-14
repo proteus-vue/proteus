@@ -147,10 +147,10 @@ describe('hook → 桥方法引用抽取（生成器 ↔ 源码 显式契约 · 
     expect(auth).toContain('`login.failed`')
   })
 
-  it('共用原语未回归：App 桥抽取仍为 10 + 3（与 #884 同源）', () => {
+  it('共用原语未回归：App 桥抽取仍为 11 + 3（与 #884 同源；11 = 原 10 + #903 的 request）', () => {
     const { perFn, misses } = extractAppBridgeKeys(fs.readFileSync(path.join(API_SRC_DIR, 'capability-app.ts'), 'utf8'))
     expect(misses).toEqual([])
-    expect(perFn[APP_BRIDGE_FACTORIES[0]]).toBe(10)
+    expect(perFn[APP_BRIDGE_FACTORIES[0]]).toBe(11)
     expect(perFn[APP_BRIDGE_FACTORIES[1]]).toBe(3)
   })
 })

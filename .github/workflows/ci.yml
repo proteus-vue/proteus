@@ -365,6 +365,9 @@ jobs:
       - name: 项目记忆收纳门禁（★2026-10-03：防 PROJECT_MEMORY 长回 2.4MB——薄入口 + 归档索引自洽）
         run: node scripts/check-memory.mjs
 
+      - name: 决策链编号自洽门禁（★2026-10-13 #903：防 #NNN 重号/悬空引用——追溯锚点失效）
+        run: node scripts/check-decision-numbers.mjs
+
       - name: 原语清单生成物漂移门禁（★批次 7：gen:docs 此前从未接线，catalog.md 静默过期多批）
         run: npx tsx scripts/gen-docs.ts --check
 
