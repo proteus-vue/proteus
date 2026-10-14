@@ -414,6 +414,26 @@
         "T-glass-planar-edge"
       ],
       "note": "用户：「折射一直不对，iOS 只有平面变化，我们的明显文字有 y 轴拉伸；**先把安卓一端对齐**再做 iOS/鸿蒙，现在方向一直漂移」。取证（oracle 网格/细线探针）：位移机制（沿外法线向外采样 = 边缘压缩）方向**正确**，但幅度 `A=0.55·band = 0.55×67 物理px ≈ 37px ≈ 半个字高` ⇒ 整带沿 y 平移造成\"拉伸\"观感；A=0.15 时线间距接近均匀（仅轻微弯折）。★流程约束：**本轮只重建/验证 Android**，iOS/鸿蒙产物与 parity 等安卓定稿后再统一（防三端方向再漂移）。\n\n【已落地（2026-10-14 · 决策 #914 · 安卓范围）】EDGE_REFRACT 0.55→0.15（消 y 轴拉伸）。真机 Android：文字穿玻璃无纵向拉扯、图标干净圆角、玻璃均匀霜感。判据：细线探针带内线间距复原为基准值；玻璃单测 45；Android 编译绿。★方向冻结：机制=法线向外采样（单调）+ 小幅度，不再改方向。★**待续（另单）**：iOS/鸿蒙真机复验 + parity 重跑（待安卓定稿）；常量 A/B；P3 三项。"
+    },
+    {
+      "id": "T-glass-ios-model",
+      "title": "液态玻璃★模型级重建★：去「宽缘带假装厚度」+ 去边缘明暗翻转 + 补背景模糊 + 窄带折射（对齐 iOS 真值）",
+      "type": "end-alignment",
+      "status": "done",
+      "owner": null,
+      "scope": [
+        "packages/shader-codegen-rust/src/materials/**",
+        "packages/shader-codegen-rust/src/reference.rs",
+        "packages/shader/src/**",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/**"
+      ],
+      "decision": 915,
+      "verification": "bash hosts/android/check-host-compile.sh && npx vitest run tests/glass.test.ts && 真机（Android）：无 23px 厚缘带 / 边缘恒亮不随背景翻转 / 玻璃内可见模糊 / 边缘窄带折射可见",
+      "branch": null,
+      "related": [
+        "T-glass-planar-refract"
+      ],
+      "note": "用户（附 iOS 滑过前后两张对照图）：「玻璃边缘总有厚厚的玻璃感（iOS 没有）；边缘随背景发亮发暗（不对）；文字经过边缘变亮、折射完全不存在；感觉思路一直都不对」。取证：① 厚玻璃感 = bevel_mask 展布 0.35×band=23px 宽渐变（iOS 仅 ~2px 锐利亮线）；② 边缘翻转 = edge_pol（#910 加的「自适应描边极性」，iOS 无此行为，边缘恒亮）；③ 折射不存在 = #914 把 A 降到 0.15 时连折射一起消掉；④ 模糊不足 = 玻璃内锐度 0.56×(iOS 0.29×)。★模型修正（非微调）：宽缘带→细亮线、删 edge_pol、DIV 2→4 补模糊、band 收窄 + 折射幅度回正。★范围：只 Android（用户明令先对齐一端）。\n\n【已落地（2026-10-14 · 决策 #915 · 安卓范围）】band 0.33→0.12 / EDGE_REFRACT 0.15→0.50 / bevel_mask 0.35→0.10 / 删 edge_pol / Android DIV 2→4。真机：23px 宽渐变→单条细亮线+均匀霜面、边缘不翻转、玻璃内可见模糊。判据：单测 45 · Android 编译绿 · iOS parity(wgsl↔oracle) max 1/255。★待续：安卓真机判\"折射够不够\"；iOS/鸿蒙真机+parity；P3 三项。"
     }
   ]
 }
