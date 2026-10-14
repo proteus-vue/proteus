@@ -4422,20 +4422,6 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 【判据】真机：**深底玻璃体 40（极透）、'App' 图标+文字最亮 `#ffffff`（白）**；**浅底玻璃体 168、文字黑** · `check:shader-generated`/`glass-pixel-parity`(Metal==oracle max 1/255)/`glass-capability`/`glass-audit` 绿 · `test:coupled` 绿 · AAR 重建 · 鸿蒙 prebuilt 同步。
 【诚实边界】① vibrancy 仅 **Android** 宿主实现（iOS/鸿蒙未做，同源 α 已同步）；② 暗玻璃判据用**盒区亮度**（整块统一白/黑，非 iOS 的逐层 vibrancy 细化）；③ `ProteusHostView` 续增 ~75 行（该文件已是存量巨型债，`check:file-size` 本就红）。
 【★教训】**"背景自适应"有两层：玻璃面（α/霜）+ 前景（文字/图标色）**——只做前者，暗底上仍是黑字（不可读）。iOS 的 `UIVisualEffectView` 把这两层都做了（vibrancy）。★用户"多次测试发现白霜随背景自动变"——正解是**阈值重映射**（暗区极透、亮区白霜），线性混合拿不到"深底极透"。
-949. **★★★液态玻璃「背景自适应」深化：α 随明暗**翻转**（重映射）+ **前景 vibrancy（暗玻璃文字/图标转白）** · 只 Android**（2026-10-14 · 用户「iOS 深底白霜很浅 / 浅底白霜 / 文字随背景黑白，可读性始终强烈」）：
-【真值（3 张 iOS 深底图 + 旧浅底图实测）】
-  · **深底（页暗）**：玻璃 ≈ **深色半透明**（iOS 玻璃体 L≈80 / 背景 56 ⇒ 白霜**极浅**、几乎透出暗背景）；**前景文字/图标转为白色**。
-  · **浅底（页亮）**：玻璃 ≈ **白霜**（iOS 玻璃体 L182~253）；**前景文字/图标为黑色**。
-  ⇒ **同一根条，随背景明暗"翻转"**——不是单一线性，且**前景色随之翻转**（iOS `UIVisualEffectView` 的 vibrancy）。
-【缺口 A：α 方向/曲线】#943 的线性 `mix(dark, light, bg_lum)` 在"暗内容"（bg_lum≈0.2）仍给 α≈0.3 ⇒ **黑底还发白**（用户实测）。
-  【修】**阈值重映射**：`veil_t = clamp((bg_lum−0.25)/0.60, 0, 1)`；`VEIL_A = mix(0.09, 0.90, veil_t)`——暗区(bg_lum≤0.25)恒 **0.09（极透）**、亮区(≥0.85)恒 0.90（白霜）。`glass.wgsl` + `reference.rs` 同改。
-  【oracle 校验】深底 bg56 → 玻璃 **85**（iOS 80）· 浅底 bg240 → **255**（iOS 253）· 中调 bg128 → 209。
-【缺口 B：前景 vibrancy（暗玻璃文字/图标不清）】暗玻璃（深色半透）上**黑字/黑图标**几乎不可见（真机实测）。
-  【修（宿主层）】`drawGlassPass` 逐帧对每块玻璃按其**背景区亮度**（`glassRegionLum`，与内核 `bg_lum` 同口径）判定：`< 0.45` ⇒ 记"暗玻璃盒"；`drawCmds` 里落在暗玻璃盒内的**文字**（`textColor`）与 **svg 图标填充**（`fillColor`）**强制白色**（`0xFFFFFFFF`）⇒ 保证暗底上的内容可读（对齐 iOS vibrancy）。浅玻璃不改（保持黑字）。
-【判据】真机：**深底玻璃体 40（极透）、'App' 图标+文字最亮 `#ffffff`（白）**；**浅底玻璃体 168、文字黑** · `check:shader-generated`/`glass-pixel-parity`(Metal==oracle max 1/255)/`glass-capability`/`glass-audit` 绿 · `test:coupled` 绿 · AAR 重建 · 鸿蒙 prebuilt 同步。
-【诚实边界】① vibrancy 仅 **Android** 宿主实现（iOS/鸿蒙未做，同源 α 已同步）；② 暗玻璃判据用**盒区亮度**（整块统一白/黑，非 iOS 的逐层 vibrancy 细化）；③ `ProteusHostView` 续增 ~75 行（该文件已是存量巨型债，`check:file-size` 本就红）。
-【★教训】**"背景自适应"有两层：玻璃面（α/霜）+ 前景（文字/图标色）**——只做前者，暗底上仍是黑字（不可读）。iOS 的 `UIVisualEffectView` 把这两层都做了（vibrancy）。★用户"多次测试发现白霜随背景自动变"——正解是**阈值重映射**（暗区极透、亮区白霜），线性混合拿不到"深底极透"。
-
 【★续修（用户「图标颜色自动变了，但文字始终黑色」）】根因：主文字绘制走的是**带动画色/多行的路径**（`ProteusHostView` 4183 段：`textPaint.setColor(animTc / c.textColor)`），而上一条 vibrancy 只改了另一段（简单 drawText 路径，实际未走）⇒ 文字没变白。
   【修】在**主文字路径**同样加暗玻璃覆盖：`if (inDarkGlass(...)) textPaint.setColor(0xFFFFFFFF); else if (animTc…)…`。
   【真机复验】深底：**文字 + 图标全部白色**（`#ffffff`；此前文字 `#212126` 黑）——对齐 iOS。
