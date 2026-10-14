@@ -202,8 +202,10 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     //   ⇒ 压到 0.07（几乎不可见，保留一丝反馈）；折射 warp（`push`）保留 = 真正的"玻璃流动"。
     // ★★★决策 #953：**边缘高光按 overlay 门控**——`overlay=1`（选中胶囊）⇒ 无边缘高光（用户「选中胶囊四周有高亮的边，不需要，
     //   干净卡片贴上去即可」）。其余玻璃（overlay=0）边缘高光不变。
+    // ★★★决策 #956 撤回：**iOS 选中胶囊实测无高亮边**（顶边 78→109 / 右边界 120→89，皆为**干净色阶、无过亮尖峰**；
+    //   此前误把"条自身顶缘高光"(y2285 L142，恰在胶囊上方) 当成胶囊的边）。⇒ 选中等 overlay 玻璃**无边缘高光**（#953 原判正确）。
     let edge_amp = 1.0 - clamp(u.overlay, 0.0, 1.0);
-    let rim = ((pow(facing, 6.0) * u.specular * 0.22 + fres * 0.06) * bevel_mask + edge_hi) * edge_amp + tg * 0.07;   // ★#954 顶高光减半；#947 触点点亮 0.07
+    let rim = ((pow(facing, 6.0) * u.specular * 0.22 + fres * 0.06) * bevel_mask + edge_hi) * edge_amp + tg * 0.07;   // ★#954/#956
     col = vec4<f32>(clamp(col.rgb + vec3<f32>(rim), vec3<f32>(0.0), vec3<f32>(1.0)), 1.0);
     return col;
 }
