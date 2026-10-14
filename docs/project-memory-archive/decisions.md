@@ -4468,3 +4468,11 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 【判据】真机：顶缘凸出 **+79 → +44/255**（不再饱和；iOS +38，接近）· 截图顶缘仅极淡一层 · `check:shader-generated`/`glass-pixel-parity`(Metal==oracle max 1/255)/`shader-capability`/`glass-capability`/`glass-audit`/`harmony-runtime-prebuilt`/`pixel-snap` 绿 · `test:coupled` 绿 · AAR 重建。
 【诚实边界】仅 Android 真机；`specular` 是 uniform（此处只乘常数 0.22，未改 uniform 值 ⇒ 三端口径一致）。余量：若仍偏亮可再降 `top_hi` 系数（0.05→0.03）。
 【★教训】**"高光/描边"这类细节要对齐 iOS 必须量"它比周围亮多少"**——肉眼看"很明显 vs 微微"没有抓手，量出 **+79 vs +38** 才知道差在哪、该减多少。
+
+955. **glass 选中胶囊：上下 inset 1→4px（恢复「与上下边的边界」，对齐 iOS 胶囊/条高比 0.83）· 只 Android**（2026-10-14 · 用户「选中胶囊太高了，和上下边完全没有了边界」）：
+【现象】#940 把胶囊 inset 压到 1px（用户「太低了、要 iOS 那种紧贴」）后，胶囊 54/56 ≈ **满条高**、可见缝仅 ~0.8px 逻辑（≈2.5px 物理）⇒ **与条上下缘合并、无边界**。
+【真值（iOS B-bottom 放大目测）】iOS 胶囊**与条上下缘有清晰但克制的间距**：胶囊/条高比 ≈ **0.83**、上下 gap ≈ 9~11%。
+【修】`.gna-highlight` `top/bottom` **1 → 4px**（可见缝 ≈ 4px 逻辑 = 12px 物理）；`border-radius` 27→**24**（= 半高 (56−8)/2 ⇒ stadium）；玻璃 `:radius` 27→24。
+【判据】真机：胶囊/条 **137/165 = 0.83**（对齐 iOS）、上下 gap ≈ 13px 物理（可见边界）· 截图边界清晰 · `test:coupled` 绿（仅 `.vue`，无 shader/宿主改动 ⇒ 无 AAR/生成物重建）。
+【诚实边界】inset 4px 定在 #940 的「6px 太低」与「1px 太高」之间、并向 iOS 0.83 收敛；用户目视可再微调（3~5px）。
+【★教训】**"贴边"与"有边界"是一对拉扯**——#940 用户嫌 6px「太低」、本单嫌 1px「太高」；**正确做法是量 iOS 的"胶囊/条高比"**（0.83）作为锚点，而不是在"感觉"上来回。★同一视觉量（胶囊 vs 条）在**不同背景**下像素对比不可靠（横向采到不同内容）⇒ 用**纵向剖面 + 比例**。
