@@ -439,22 +439,47 @@
       "id": "T-glassnav-vfor-events",
       "title": "App 运行期缺陷：v-for 列表项（glass-nav 导航项）事件绑定只产出 1 条 + tpl 未展开项 ⇒ 点击不生效",
       "type": "capability",
-      "status": "planned",
-      "owner": null,
+      "status": "done",
+      "owner": "session:wb-glassvfor",
       "scope": [
         "packages/compiler/src/vapor/**",
         "packages/slot-runtime/src/**",
         "packages/cli/src/app-runtime-content.ts",
+        "packages/layout-core-rust/src/**",
+        "platform/android/proteus-jni/src/**",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/**",
         "superapp/pages/**",
         "tests/**"
       ],
-      "decision": null,
-      "verification": "npx vitest run tests/vapor-list-e2e.test.ts tests/slot-runtime-dispatch.test.ts + 真机：点 glass-nav 第 2/3/4 项，胶囊移到对应项",
+      "decision": 935,
+      "verification": "【#935】cargo test --lib（231 全绿，含新增 density_scales_length_keys_only）· pnpm test:coupled（190 全绿）· check:vapor-three-end（三端绿）· 真机四点位 tap 胶囊落 54/327/600/873。原判据：npx vitest run tests/vapor-list-e2e.test.ts tests/slot-runtime-dispatch.test.ts + 真机：点 glass-nav 第 2/3/4 项，胶囊移到对应项",
       "branch": null,
       "related": [
         "T-app-fetch"
       ],
-      "note": "【取证（2026-10-14）】用户真机点 glass-nav 四项，胶囊纹丝不动。诊断：① 真机命中 node 188（导航项**文字**），产物 events 只挂在 node 179（**唯一一个**项容器）且**无冒泡链**连到 188；② 运行期产物 `APP_RUNTIME_CONTENT[\"glass-nav\"].events` **只有 1 条**（nodeId 179 / tap / h0），而屏上有 **4 个** v-for 导航项；③ tpl.nodes 里 `flexGrow:1+flexBasis:0` 的项容器 = **0 个**（未按项展开）。⇒ v-for 列表项的**事件绑定 = 只产首项**，点击其余项无 handler。★同类：记忆 A1「运行期列表被静态折死」（#802 keepReactiveStructure）在该形态未覆盖。"
+      "note": "【取证（2026-10-14）】用户真机点 glass-nav 四项，胶囊纹丝不动。诊断：① 真机命中 node 188（导航项**文字**），产物 events 只挂在 node 179（**唯一一个**项容器）且**无冒泡链**连到 188；② 运行期产物 `APP_RUNTIME_CONTENT[\"glass-nav\"].events` **只有 1 条**（nodeId 179 / tap / h0），而屏上有 **4 个** v-for 导航项；③ tpl.nodes 里 `flexGrow:1+flexBasis:0` 的项容器 = **0 个**（未按项展开）。⇒ v-for 列表项的**事件绑定 = 只产首项**，点击其余项无 handler。★同类：记忆 A1「运行期列表被静态折死」（#802 keepReactiveStructure）在该形态未覆盖。\n\n【★真因订正（2026-10-14 · 决策 #935）】原判断「v-for 事件绑定只产首项」经补诊断探针后**证伪**：tap 已正确命中行节点（179/188/192）、h0 已触发（events 表 nodeId=179 是**模板 id**，运行期按 rowScopes 把实例 id 折回模板 id，属设计，不是缺陷）。**真因 = U0**：胶囊 hlLeft 经 applyOps 只改到 x=315（1/3 距离）、落在错误项——因运行期指令（applyOps）的长度值在 JS 侧编码、内核侧解码，宿主 physicalizeTree 的 ×密度没覆盖这条**跨语言通路**。修复见决策 #935：内核接密度（proteus_layout_set_density + apply_style_key_d 对长度键 ×density），Android 宿主 mount/mountVirtual 调 setDensity；真机四点位胶囊逐项精确命中。\n★本卡未收口项（转 A 类缺口登记）：本例 p-icon 的 :name=\"item.icon\"（**动态图标名**）仍不显示——真因是 p-icon 组件 computed 不产 data（app-component-registry 只认 ref），属「computed 产 data」缺口（与 A1 同族），不属 U0。"
+    },
+    {
+      "id": "T-vapor-computed-data",
+      "title": "App 折叠面「computed 产 data」缺口：p-icon 的 computed(()=>normalizedIcon(name)) 不产 data ⇒ 动态图标名（:name=item.icon）不渲染",
+      "type": "capability",
+      "status": "planned",
+      "owner": null,
+      "scope": [
+        "packages/cli/src/app-component-registry.ts",
+        "packages/compiler/src/vapor/**",
+        "packages/slot-runtime/src/**",
+        "packages/icons/src/**",
+        "docs/Proteus_Vapor运行时能力缺口台账.md",
+        "tests/**"
+      ],
+      "decision": null,
+      "verification": "npx vitest run tests/vapor-component-*.test.ts + 真机：glass-nav 导航项显示图标（p-icon :name=item.icon）",
+      "branch": null,
+      "related": [
+        "T-glassnav-vfor-events"
+      ],
+      "note": "【由来（2026-10-14 · #935 收口后暴露）】glass-nav 点击切换修好后（U0），导航项**图标仍不显示**。取证：p-icon 组件产物 `components['p-icon'].data = {}`（空）⇒ 运行期实例化后 `icon.d` / `icon.viewBox` 求值 undefined ⇒ svgPath 不产。根因：p-icon 的 `icon = computed(() => normalizedIcon(iconName.value))`——`app-component-registry.ts` 的 `extractRefLiterals` **只认 `ref(...)` 字面量**，**不产 computed 派生值** ⇒ 组件 data 快照缺 `icon`。★同族：台账 A1「computed 产 data」缺口（`computed` 派生的 v-for 数据不渲染），本卡是其**组件内 computed** 形态。\\n【修法候选】① 组件注册期对**无副作用 computed**做**构建期求值**（在 `buildAppComponentRegistry` 里跑一次 computed 的 getter，取初值写进 data）——与 ref 同列；② 或给 App 折叠面加「计算属性初值抽取」（静态可求值的才抽，含归一化查表）。★诚实边界：只有**纯函数 computed**（无 props 依赖运行期变化）可构建期求值；依赖 props 的 computed 仍需运行期重算（更大的接受面工程，另议）。"
     }
   ]
 }

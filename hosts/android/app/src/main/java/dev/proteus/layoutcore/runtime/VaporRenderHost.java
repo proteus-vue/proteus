@@ -608,6 +608,11 @@ public final class VaporRenderHost {
                 if (tmp != null) handle = RustLayout.create(new String(tmp, java.nio.charset.StandardCharsets.UTF_8));
                 if (handle <= 0) return err(out, "核心重建树失败（handle=0）").toString();
             }
+            // ★★★U0 修复（2026-10-14）：把**密度**接进内核——运行期指令（applyOps）的长度值在 JS 侧
+            //   编码、内核解码，宿主无介入点 ⇒ 动态几何停在逻辑 px（真机：胶囊到位应 711 物理，仅到 237）。
+            //   内核持密度后，长度键在解码后 ×density，与静态 mount（physicalizeTree）**同口径**。
+            //   ★与 mount 的物理化同源：lengthScale=1（density=1）时是恒等，零副作用。
+            if (lengthScale != 1f) RustLayout.setDensity(handle, lengthScale);
             // ★★**把句柄接给视图**（2026-10-01 交互闭环实测抓出）：
             //   视图的命中测试（`dispatchHit`）走 `RustLayout.hitTest(coreHandle, …)`——
             //   而 **`coreHandle` 是视图自持的字段**，只有 `attachCore(handle)` 才会设上。
@@ -1619,6 +1624,7 @@ public final class VaporRenderHost {
             double layoutMs = (System.nanoTime() - tc) / 1e6;
             if (handle <= 0) return err(out, "核心建树失败（handle=0）").toString();
             view.attachCore(handle);   // ★句柄每次重建都变 ⇒ 每次都要接（见 mount 的同款注释）
+            if (lengthScale != 1f) RustLayout.setDensity(handle, lengthScale);   // ★U0：运行期指令密度（同 mount）
 
             // ④ 几何全量读一次（物化行时要用；与可见性无关）
             JSONObject rectsAll = new JSONObject(RustLayout.readRects(handle)).getJSONObject("rects");

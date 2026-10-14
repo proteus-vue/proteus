@@ -140,7 +140,7 @@ fn main() {
         let mut b_applied = 0usize;
         for _ in 0..frames {
             dec = decode_ops(&bytes).expect("解码失败");
-            let out = apply_ops_to_tree(&mut tree_b, &dec);
+            let out = apply_ops_to_tree(&mut tree_b, &dec, 1.0);
             b_applied += out.applied;
         }
         let b_total_ms = t_b.elapsed().as_secs_f64() * 1000.0;

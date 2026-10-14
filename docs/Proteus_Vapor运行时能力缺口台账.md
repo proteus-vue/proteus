@@ -48,7 +48,7 @@
 
 | # | 现象（真机） | 根因（file:line） | 静默 | 状态 |
 |---|---|---|---|---|
-| U0 | **`applyOps`（运行期增量指令）里的长度值不乘密度** ⇒ App 上「动态改 left/width/…」只走 1× 距离（静态 mount 正确——它走 physicalizeTree ×密度）。真机：悬浮 dock 高亮胶囊 hlLeft 从 83→237（逻辑）到位应为 711 物理，实际只到 237 物理（=0.33×，胶囊**落在错误项**） | `VaporRenderHost.physicalizeTree` 只物理化 **mount 的 tree JSON**；`applyOps` 的**二进制指令值在 JS 侧编码、内核侧解码** ⇒ 宿主无法介入换算（**已在源码注册为 U0**，见 physicalizeTree 注释「诚实边界」） | ❌ 可见 | **登记（未修）**——需内核侧接密度（proteus_layout_set_density + apply_style_key 对长度键 ×d） |
+| U0 | **`applyOps`（运行期增量指令）里的长度值不乘密度** ⇒ App 上「动态改 left/width/…」只走 1× 距离（静态 mount 正确——它走 physicalizeTree ×密度）。真机：悬浮 dock 高亮胶囊 hlLeft 从 83→237（逻辑）到位应为 711 物理，实际只到 237 物理（=0.33×，胶囊**落在错误项**） | `VaporRenderHost.physicalizeTree` 只物理化 **mount 的 tree JSON**；`applyOps` 的**二进制指令值在 JS 侧编码、内核侧解码** ⇒ 宿主无法介入换算（**已在源码注册为 U0**，见 physicalizeTree 注释「诚实边界」） | ❌ 可见 | **已修（#935）**——内核侧接密度：新增 `proteus_layout_set_density`（`TreeEntry.density`），`apply_style_key_d` 对**长度键**（width/height/*inset/margin/padding/gap/flexBasis 等，白名单 `is_length_key`）×density（枚举/比例/比值不缩放）；Android 宿主 `mount`/`mountVirtual` 建 handle 后调 `RustLayout.setDensity(handle, lengthScale)`。真机：胶囊 hlLeft 到位 873（=192 项左缘），四点位全部命中正确项 |
 
 > **U0 共性**：**「单位换算在入口做一次」** 只覆盖了 mount 通路；**运行期指令通路（applyOps）**是另一条**跨语言边界**（值在 JS 编、内核解），宿主没有介入点 ⇒ **动态几何值的单位与静态值不一致**。iOS 因 CALayer=point（逻辑）而**恰好**正确（与 #892 同因），Android 显式换算 ⇒ 只在 Android 显形。**这与 B7（内核增量）是两回事**：B7 是几何求解错（已修），U0 是**单位**错（未修）。
 
