@@ -1344,7 +1344,8 @@ static void drawSelfContentCore(OH_Drawing_Canvas* rsCanvas, SelfDrawSpec* sd) {
                         putF(56, (float)n.gRadius / S);
                         putF(60, (float)n.gBlur / S);
                         putF(64, (n.w < n.h ? (float)ow2 : (float)oh2) * 0.22f);
-                        putF(68, 0.18f);
+                        // ★★★决策 #908：镜面高光 0.18 → 0.35（三端同值：Android/iOS 同步）。
+                        putF(68, 0.35f);
                         putF(72, (float)n.gSat);
                         putF(76, 0.0f);
                         // ★★★决策 #905：触控形变（touch 盒局部 px / press）——仅活动交互玻璃；升采样到半分辨率空间 (×1/S)
@@ -3071,7 +3072,7 @@ static std::string runGlassPassImpl() {
         putF(56, (float)g.radius);
         putF(60, (float)g.blur);
         putF(64, (g.w < g.h ? (float)g.w : (float)g.h) * 0.22f);   // refract_depth（与 Android 同式）
-        putF(68, 0.18f);
+        putF(68, 0.35f);   // ★决策 #908：镜面高光 0.35（三端同值：Android/iOS 同步）
         putF(72, (float)g.sat);
         std::vector<uint8_t> px = proteus_glass_vk::renderRgba8(bd, iw, ih, (int)g.w, (int)g.h, u);
         if (px.size() == (size_t)g.w * g.h * 4) {

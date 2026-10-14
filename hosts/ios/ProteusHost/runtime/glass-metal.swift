@@ -235,7 +235,9 @@ final class GlassMetalRenderer {
             radius: Float(spec.radius * outScale),
             blur: Float(spec.blur * outScale),
             refract_depth: min(w, h) * 0.22,   // 与 Android 同守恒
-            specular: 0.18,
+            // ★★★决策 #908：镜面高光 0.18 → 0.35（**三端同值**：Android GlassMaterial / 鸿蒙 proteus_render
+            //   同步）——顶光高光 + 内缘亮线是玻璃"材质身份"的主来源；WGSL 里该项乘 `bevel_mask`（仅外缘带）。
+            specular: 0.35,
             saturation: Float(spec.saturation),
             _pad: 0,
             // ★★★决策 #905：触控形变——touch 传入为**盒局部逻辑点**，× outScale 折到半分辨率像素空间
