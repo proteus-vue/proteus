@@ -139,11 +139,15 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     for c in 0..3 { col[c] = col[c] + (col[c] * p.tint[c] * 2.0 - col[c]) * p.tint[3]; }
     // ★★★决策 #913：**霜层（surface veil）**——修正 #910/#911 的机制错误（对内容做亮度平移 ≠ 表面霜）。
     //   `mix(内容色, 霜色, α)`：整面朝霜色靠拢（降对比 ⇒ 乳白/灰纱）。霜色与厚度随区域背景**翻转**
-    // ★★★决策 #926（iOS 4 图定量拟合）：`glass_L = 0.777·bg_L + 0.195` ⇒ **均匀亮度位移**（保内容对比）。
-    //   ★#925：附 **12% 背景色温**（只取色度偏移）。与 glass.wgsl ⑤ 同源。
-    let d_aff = (0.777 * p.bg_lum + 0.195) - p.bg_lum;
+    // ★★★决策 #931：**面纱（veil）**——修正 #926「加法亮度位移保对比 ⇒ 读作透明」。
+    //   iOS 真实模型（两张不同背景联立）：`glass = mix(bg, 0.80, 0.28)` ⇒ 对比度 0.72×（磨砂）。
+    //   ★#925：附 12% 背景色温（只取色度偏移）。与 glass.wgsl ⑤ 同源。
+    let veil_a = 0.28f32; let veil_v = 0.80f32;
     let raw_lum = raw[0]*0.299 + raw[1]*0.587 + raw[2]*0.114;
-    for c in 0..3 { col[c] = (col[c] + d_aff + (raw[c] - raw_lum) * 0.12).clamp(0.0, 1.0); }
+    for c in 0..3 {
+        let vc = (veil_v + (raw[c] - raw_lum) * 0.12).clamp(0.0, 1.0);
+        col[c] = col[c] + (vc - col[c]) * veil_a;
+    }
 
     let cos_i = 1.0 / (1.0 + slope * slope).sqrt();
     let f0 = 0.04f32;
