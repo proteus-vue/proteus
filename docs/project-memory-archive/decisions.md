@@ -4505,3 +4505,13 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 【判据】真机：**白底胶囊 225（Δ−29）/ 黑底胶囊 64（Δ−2.5）**（此前 −46/+56）· `check:shader-generated`/`glass-pixel-parity`(Metal==oracle max 1/255)/`shader-capability`/`glass-capability`/`glass-audit`/`harmony-runtime-prebuilt`/`pixel-snap` 绿 · `test:coupled` 绿 · AAR 重建。
 【诚实边界】仅 Android 真机；ov_l 两端值（0.52/0.62）为按"Δ 收窄到 ±29"定的初值，目视可再调（如两端更近 ⇒ 胶囊更贴条）。★注：黑底 Δ 现为 −2.5（几乎与条同），若嫌"黑底胶囊不够可见"可把深端从 0.52 抬到 ~0.58。
 【★教训】**"两色端点 + 采样插值"容易被误读成"硬编码两色"**——用户这个疑问促成了把机制说清（端点是常数、插值随采样）。★收窄"两端差"最直接的做法是**把两个端点常数往中间挪**（而非改混合权重）。
+
+959. **液态玻璃：按下放大回弹（press 缩放）+ 修「滚动后触点漏命中」· 只 Android**（2026-10-14 · 用户「按下整个放大、松开回弹，对齐 iOS」）：
+【按下放大】**#905 的触控形变此前只做"内容位移（push）+ 触点高光"**，**无缩放** ⇒ 按下观感与 iOS「整个放大」不符。
+  【修（宿主 `drawGlassPass`）】**按 `press` 以盒中心等比缩放**：`sc = 1 + press·GLASS_PRESS_SCALE`（`GLASS_PRESS_SCALE=0.06` ⇒ 峰值 **+6%**）。
+  玻璃面（`drawGlassFace` 前 `canvas.scale`）与**玻璃子树内容**（第二相 `drawCmds` 前同款缩放，否则图标/文字不跟）**两处都缩放**；`press` 由既有逐帧 lerp（0→1→0）驱动 ⇒ 按下放大、松开回弹（临界阻尼 lerp）。
+  ★诚实边界：回弹为**指数 lerp**（无 spring 过冲；iOS 是弹簧 ⇒ 松手有轻微过冲）——列为后续 refinement。
+【修「滚动后触点漏命中」（既有 bug，光斑 #947 同源）】`glassInteractHit` 用**内容坐标**（`x+scrollX`）去比玻璃盒，而 **fixed 条的盒是屏幕坐标**（宿主回读为滚动后值）⇒ **滚动后触点命中不到**（真机：scroll=900 时按条无任何反馈；scroll=0 正常）。**修**：滚动时改用 **raw 视图坐标**命中。
+【判据】真机：**scroll=0 按下 → 条放大（内容被顶出、条变大）** · 探针（临时）`GLASS_PRESS node=179 press→0.96` · 修复后 **scroll=900 按下也放大**（此前漏命中）· `check:android-host-compile`/`check:android-runtime-aar-fresh` 绿 · AAR 重建。`check:host-rounding` 红为**既有**玻璃位图取样（非本轮）。
+【长按拖动玻璃流动 #905 已实现（触点在 `local−touch` 处 Gaussian 推挤背景）——本轮未改，按下放大与它叠加即"按住拖动玻璃流"】。
+【★教训】**"按下反馈"是三层（缩放 + 内容位移 + 高光）**——#905 只做了后两层，缺"缩放"层；用户"整个放大"正指向它。★**触点命中的坐标空间要与"盒坐标"一致**（fixed 盒=屏幕坐标、内容盒=内容坐标）——滚动后漏命中即此（与 #937 fixed 命中同源）。

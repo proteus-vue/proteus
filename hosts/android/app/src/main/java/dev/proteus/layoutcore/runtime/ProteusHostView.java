@@ -3331,6 +3331,8 @@ public class ProteusHostView extends ViewGroup {
     private int glassInteractNodeId = -1;
     private float glassTouchLocalX = -1e6f, glassTouchLocalY = -1e6f;
     private float glassPress = 0f, glassPressTarget = 0f;
+    /** ★#959：按下放大比例上限（press=1 时的额外缩放；iOS 约 1.06~1.10）。 */
+    private static final float GLASS_PRESS_SCALE = 0.06f;
     /** ★★★决策 #950（vibrancy）：本帧**暗玻璃**的区域盒（内容坐标 x,y,w,h）——落在其中的文字/图标**强制白色**
      *  （对齐 iOS：玻璃压暗背景时前景转白，保内容强烈可读）。逐帧在 drawGlassPass 重算。 */
     private final java.util.List<float[]> darkGlassRects = new java.util.ArrayList<>();
@@ -3519,14 +3521,17 @@ public class ProteusHostView extends ViewGroup {
         if (list == null || ids == null) return;
         final boolean scrolled = offsetScroll ? (scrollX != 0 || scrollY != 0) : (!horizontalScroll && (scrollX != 0 || scrollY != 0));
         final float cx = x + (scrolled ? scrollX : 0), cy = y + (scrolled ? scrollY : 0);
+        // ★#959：fixed 玻璃盒坐标是**屏幕坐标**（不随滚动）⇒ 命中须同时试 **raw 视图坐标**（滚动后 content 坐标会偏 offset 漏中）。
+        final boolean useRaw = scrolled;
         for (int i = 0; i < list.size() && i < ids.length; i++) {
             GlassMaterial.Spec g = glassByNode.get(ids[i]);
             if (g == null || !g.interactive) continue;
             final Cmd c = list.get(i);
-            if (cx >= c.x && cx <= c.x + c.w && cy >= c.y && cy <= c.y + c.h) {
+            final float hx = useRaw ? x : cx, hy = useRaw ? y : cy;
+            if (hx >= c.x && hx <= c.x + c.w && hy >= c.y && hy <= c.y + c.h) {
                 glassInteractNodeId = ids[i];
-                glassTouchLocalX = cx - c.x;    // 盒局部 px
-                glassTouchLocalY = cy - c.y;
+                glassTouchLocalX = hx - c.x;    // 盒局部 px
+                glassTouchLocalY = hy - c.y;
                 glassPressTarget = 1f;
                 if (glassPress < 0.01f) glassPress = 0.01f;   // 立即起步（避免首帧无变化）
                 invalidate();
@@ -3576,7 +3581,15 @@ public class ProteusHostView extends ViewGroup {
                 final float glum = glassRegionLum(gc);
                 if (glum >= 0f && glum < 0.45f) darkGlassRects.add(new float[]{gc.x, gc.y, gc.w, gc.h});
             }
+            // ★★★决策 #959：**按下放大**（对齐 iOS）——命中交互玻璃且 press>0 ⇒ 以盒中心等比放大（松开 lerp 回 1）。
+            final int ss = (ids[i] == glassInteractNodeId && glassPress > 0.001f) ? canvas.save() : -1;
+            if (ss != -1) {
+                final Cmd gc2 = list.get(i);
+                final float sc = 1f + glassPress * GLASS_PRESS_SCALE;
+                canvas.scale(sc, sc, gc2.x + gc2.w * 0.5f, gc2.y + gc2.h * 0.5f);
+            }
             drawGlassFace(canvas, ids[i], list.get(i), g);
+            if (ss != -1) canvas.restoreToCount(ss);
             if (fs != -1) canvas.restoreToCount(fs);
         }
         // 第二相：玻璃子树内容（其文本/子视图）——背景已在 captureGlassBackdrop 排除玻璃子树（只含"背后"），
@@ -3586,7 +3599,20 @@ public class ProteusHostView extends ViewGroup {
         for (int i = 0; i < list.size() && i < ids.length; i++) {
             if (glassByNode.get(ids[i]) != null) gContent.addAll(subtreeIdsOf(ids[i]));
         }
+        // ★#959：内容层也要随**命中交互玻璃**缩放（否则图标/文字不跟着放大）。
+        int contentSave = -1;
+        if (glassInteractNodeId >= 0 && glassPress > 0.001f && !gContent.isEmpty()) {
+            for (int i = 0; i < list.size() && i < ids.length; i++) {
+                if (ids[i] != glassInteractNodeId || glassByNode.get(ids[i]) == null) continue;
+                final Cmd gc3 = list.get(i);
+                contentSave = canvas.save();
+                final float sc = 1f + glassPress * GLASS_PRESS_SCALE;
+                canvas.scale(sc, sc, gc3.x + gc3.w * 0.5f, gc3.y + gc3.h * 0.5f);
+                break;
+            }
+        }
         if (!gContent.isEmpty()) drawCmds(canvas, null, gContent);
+        if (contentSave != -1) canvas.restoreToCount(contentSave);
         if (gSave != -1) canvas.restoreToCount(gSave);
     }
 
