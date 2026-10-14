@@ -4436,3 +4436,14 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 【判据（真机）】① **选中项文字两态均保留主题蓝 `#2c2f76`**（浅底/深底），未选：**浅底黑 `#000000` / 深底白 `#ffffff`**；② 胶囊 vs 条差异：**浅底 +18.5（胶囊 173 vs 条 155）/ 深底 +142（胶囊 208 vs 条 66）**——两态**均有差异**（此前浅底≈0）。· `check:shader-generated`/`glass-pixel-parity`(Metal==oracle max 1/255)/`glass-capability`/`glass-audit`/`harmony-runtime-prebuilt`/`pixel-snap` 绿 · `test:coupled` 绿 · AAR 重建 · 鸿蒙 prebuilt 同步。
 【诚实边界】仅 Android 真机；`veil_flip` 是通用 `pg-glass` prop（iOS/鸿蒙同源真源已含，宿主未接线）；中性色判据是**接近即中性**的近似（阈值 32）。
 【★教训】**"自动变色"要按语义区分前景**：**中性色**（黑/灰/白，随玻璃底色反相以保对比）vs **accent 主题色**（保留身份）——不能一刀切刷白。★**"选中态"与"容器"要反向**：同向 ⇒ 浅底上二者趋同、选中不可辨；反向才**恒有差异**（这正对齐 iOS 选中胶囊「恒比主体暗/亮」）。
+
+952. **★★★液态玻璃：选中胶囊改为「叠加层」（对齐 iOS 按下态）——废弃 #951 的"反相面纱"（它改的是内容可读性）· 只 Android**（2026-10-14 · 用户「胶囊影响了背后内容可读性：浅底胶囊下面内容比两边更透、暗底更模糊；iOS 的选中胶囊无论白/黑底始终**灰蒙蒙**——像 dark 模式按下是亮的、light 模式按下是灰的」）：
+【#951 错在哪】#951 用 `veil_flip` 反相**面纱 α** ⇒ 胶囊的**内容可见度**与条不同（浅底胶囊 α 低 ⇒ 内容更清晰；深底 α 高 ⇒ 内容更糊）。**用户一针见血**：iOS 选中胶囊变的是**胶囊自身的背景色**（叠加），**不是**内容的可读性。
+【真值（用户定性 + 对齐 iOS 按下态）】选中胶囊 = 在玻璃上**叠一层半透明中性色**：**light 底 → 灰**（按下变灰）/ **dark 底 → 亮**（按下变亮）；**内容可见度与条一致**（不更透/不更糊）。
+【修】把 `veil_flip`（面纱反相）**换成 `overlay`（叠加层）**——复用同一 uniform 槽（92B 处，布局仍 96B）：
+  · `glass.wgsl` + `reference.rs` 同改：**面纱 α 对条与胶囊同口径**（回到 `veil_t = clamp((bg_lum−0.25)/0.60)`，无 flip）；面纱**之后**叠一层：`ov_l = mix(0.88, 0.40, veil_t)`（深底→0.88 亮 / 浅底→0.40 灰）、`col = mix(col, ov_l, overlay·0.5)`。
+  · prop 链整体改名：`<pg-glass overlay>` → `resolveGlass.overlay` → `glassResolver` → 宿主 `Spec.overlay` → uniform `overlay`；demo 胶囊 `<pg-glass overlay tint=...>`。
+  · vivo/`_pad2` 槽：`materials/mod.rs` 的 `("overlay", 92, 4)`；`main.rs` 读 `overlay`。
+【判据（真机）】**浅底 胶囊体 141 < 条 155（**压暗→灰**，light 按下）**；**深底 胶囊体 131 > 条 66（**提亮**，dark 按下）**——两态都与条有差异、且**内容可见度与条一致**（不再"更透/更糊"）。· 选中项文字仍**保留主题蓝 `#2c2f76`**（#951 的 isNeutralColor 保 accent 沿用）；未选深底白字 `#ffffff`。· `check:shader-generated`/`glass-pixel-parity`(Metal==oracle max 1/255)/`glass-capability`/`glass-audit`/`harmony-runtime-prebuilt`/`pixel-snap` 绿 · `test:coupled` 绿 · AAR 重建。
+【诚实边界】仅 Android 真机；`overlay` 是通用 `pg-glass` prop（iOS/鸿蒙同源真源已含、宿主未接线 ⇒ 该二端 overlay 恒 0）；`ov_l` 两态值（0.88/0.40）与 `0.5` 混合权重为初定，真机目视可再调。
+【★教训】**"选中态/按下态"改的是「元素自身的底色」，不是「它遮挡内容的程度」**——#951 混淆了这两者（改 α = 改可读性）。iOS 的按下反馈始终是**叠加一层半透明中性色**（`UIVisualEffectView` 的 highlight/dimming layer），明暗随当前外观（light 灰 / dark 亮）。★改"观感"先想清楚**改的是哪一层**（背景叠加 / 内容可见度 / 前景色），三者在管线里是三处。

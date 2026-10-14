@@ -46,8 +46,8 @@ public final class GlassMaterial {
         public final boolean interactive;
         /** ★★★决策 #906：交互效果形态——0=上层玻璃表面流动（默认）/ 1=内容折射位移（`glass.effect`）。 */
         public final float effect;
-        /** ★#951：面纱反相（0/1——选中胶囊与条反向）。 */
-        public final float veilFlip;
+        /** ★#952：选中胶囊叠加层强度（0/1——叠半透明中性色 light→灰·dark→亮）。 */
+        public final float overlay;
 
         public Spec(float blur, int tint, float radius, boolean border, float saturation) {
             this(blur, tint, radius, border, saturation, "glass", false, 0f);
@@ -70,14 +70,14 @@ public final class GlassMaterial {
             this.material = (material == null || !GeneratedMaterials.MATERIALS.containsKey(material)) ? "glass" : material;
             this.interactive = interactive;
             this.effect = effect;
-            this.veilFlip = 0f;
+            this.overlay = 0f;
         }
 
-        /** ★#951：带 veilFlips 的构造（0/1）。 */
-        public Spec(float blur, int tint, float radius, boolean border, float saturation, String material, boolean interactive, float effect, float veilFlip) {
+        /** ★#952：带 overlay 的构造（0/1）。 */
+        public Spec(float blur, int tint, float radius, boolean border, float saturation, String material, boolean interactive, float effect, float overlay) {
             this.blur = blur; this.tint = tint; this.radius = radius; this.border = border; this.saturation = saturation;
             this.material = (material == null || !GeneratedMaterials.MATERIALS.containsKey(material)) ? "glass" : material;
-            this.interactive = interactive; this.effect = effect; this.veilFlip = veilFlip;
+            this.interactive = interactive; this.effect = effect; this.overlay = overlay;
         }
     }
 
@@ -189,8 +189,8 @@ public final class GlassMaterial {
                 // ★★★决策 #905：触控形变（touch 盒局部 px / press 0..1）
                 sh.setFloatUniform("touch", touchX, touchY);
                 sh.setFloatUniform("press", press);
-                // ★#951：面纱反相（选中胶囊与条反向；0=正常）
-                sh.setFloatUniform("veil_flip", spec.veilFlip);
+                // ★#952：选中胶囊叠加层（0=无 / 1=叠半透明中性色）
+                sh.setFloatUniform("overlay", spec.overlay);
                 // ★`_pad2` 是尾部对齐填充（着色器不读）——**不设**：naga 落 AGSL 时把它改名 `_pad2_`，
                 //   用原名 `setFloatUniform("_pad2")` 会抛（未知名）⇒ buildPaint 返 null ⇒ 玻璃静默降级实色。
             }

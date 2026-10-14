@@ -51,8 +51,8 @@ export function resolveGlass(props: GlassProps = {}): ResolvedGlass {
     borderSide: preset.borderSide ?? 'all',
     noise,
     interactive: props.interactive !== undefined ? Boolean(props.interactive) : Boolean(preset.interactive),
-    // ★#951：面纱反相（仅显式 props 指定；preset 不设默认）。
-    veilFlip: props.veilFlip === true,
+    // ★#952：选中胶囊叠加层（仅显式 props 指定；preset 不设默认）。
+    overlay: props.overlay === true,
     // ★#906：交互效果形态（未知/缺省 ⇒ 'surface' = 上层玻璃流动，对齐 Apple Liquid Glass）。
     interactiveEffect: props.interactiveEffect === 'displace' ? 'displace' : 'surface',
     solid,

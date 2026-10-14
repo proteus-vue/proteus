@@ -24,8 +24,8 @@ pub struct GlassParams {
     pub light_dir: (f32, f32),
     /// ★★★决策 #911：区域背景亮度（0..1）——宿主统计玻璃盒区域均值（浅霜/深霜锚点随它切换）。
     pub bg_lum: f32,
-    /// ★#951：面纱反相（0=正常；1=反相，浅底透/深底白霜——选中胶囊与条反向）。
-    pub veil_flip: f32,
+    /// ★#952：选中胶囊叠加层强度（0=无 / 1=叠半透明中性色 light→灰·dark→亮；不动面纱 α）。
+    pub overlay: f32,
 }
 
 impl Default for GlassParams {
@@ -41,7 +41,7 @@ impl Default for GlassParams {
             tint: [1.0, 1.0, 1.0, 0.149],
             light_dir: (-0.35, -0.94),
             bg_lum: 0.0,
-            veil_flip: 0.0,
+            overlay: 0.0,
         }
     }
 }
@@ -146,13 +146,18 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     //   ★#925：附 12% 背景色温（只取色度偏移）。与 glass.wgsl ⑤ 同源。
     // ★★★决策 #949：α 随背景明暗**翻转**（阈值重映射，非线性）——与 glass.wgsl ⑤ 同源。
     let veil_v = 1.0f32;
-    let veil_t0 = ((p.bg_lum - 0.25) / 0.60).clamp(0.0, 1.0);
-    let veil_t = veil_t0 + (1.0 - 2.0 * veil_t0) * p.veil_flip.clamp(0.0, 1.0);
+    let veil_t = ((p.bg_lum - 0.25) / 0.60).clamp(0.0, 1.0);
     let veil_a = 0.09f32 + (0.90f32 - 0.09f32) * veil_t;
     let raw_lum = raw[0]*0.299 + raw[1]*0.587 + raw[2]*0.114;
     for c in 0..3 {
         let vc = (veil_v + (raw[c] - raw_lum) * 0.12).clamp(0.0, 1.0);
         col[c] = col[c] + (vc - col[c]) * veil_a;
+    }
+    // ★#952：选中胶囊叠加层（**不动 α**，叠半透明中性色：deep→0.88 亮 / 浅底→0.40 灰）。
+    if p.overlay > 0.001f32 {
+        let ov_l = 0.88f32 + (0.40f32 - 0.88f32) * veil_t;
+        let ov_a = p.overlay.clamp(0.0, 1.0) * 0.5f32;
+        for c in 0..3 { col[c] = col[c] + (ov_l - col[c]) * ov_a; }
     }
     // ★★★决策 #944：tint 移到面纱之后（与 glass.wgsl 同源——作者 tint 作用于最终玻璃面，暗 tint 才不被面纱洗白）。
     for c in 0..3 { col[c] = col[c] + (col[c] * p.tint[c] * 2.0 - col[c]) * p.tint[3]; }
