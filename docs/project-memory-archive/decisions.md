@@ -4456,3 +4456,15 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   ⇒ 选中胶囊（`overlay=1`）**无边缘高光**（干净平铺卡片）；其余玻璃（`overlay=0`）边缘高光**不变**（条/卡片照旧）。`glass.wgsl` + `reference.rs` 同改，无新增 uniform（复用 overlay）。
 【判据】真机：浅底胶囊 = 平铺灰卡（无高亮边）；深底胶囊 = 平铺亮卡（无高亮边）；条（overlay=0）边缘高光保留 · `check:shader-generated`/`glass-pixel-parity`(Metal==oracle max 1/255)/`shader-capability`/`glass-capability`/`glass-audit`/`harmony-runtime-prebuilt`/`pixel-snap` 绿 · `test:coupled` 绿 · AAR 重建。
 【★教训】**"干净卡片"= 去玻璃的装饰项（边缘高光/描边），保留其底色叠加**——与 #952「叠加层」配套：#952 给"底色"、本条去"边缘装饰"，合起来才是"贴一张卡片"。★**属性归到哪个开关要想清**：`overlay`（选中叠加态）同时承载"叠色 + 去边"两类语义（现状）；若要独立控边，需单列 uniform（96B 已满 ⇒ 扩 112B + 三端）。
+
+954. **液态玻璃：顶缘高光整体减半（对齐 iOS「微微一层、基本看不出」）· 只 Android**（2026-10-14 · 用户「玻璃条顶部高光也压一下，iOS 是微微一层、视觉上基本感觉不出，我们上边非常亮」）：
+【取证（真机 + iOS 同口径）】沿**条顶缘列**（干净区 x=800，避图标）量"顶缘峰 − 内部"：
+  · **我们**：顶缘 **255（饱和）/ 内部 176 ⇒ 凸出 +79/255**；
+  · **iOS**（B-bottom 同口径）：顶缘 220 / 内部 182 ⇒ 凸出 **+38/255**（且不饱和）。
+  ⇒ 我们亮约 **2×** 且**过曝到纯白**（iOS 是极淡的一层）。
+【修（`glass.wgsl` + `reference.rs` 同改，`edge_hi`/`rim` 系数约减半；顶缘项是大头）】
+  · `edge_hi = bevel_mask · (0.10 + 0.26·top_hi + 0.16·facing)` → **(0.025 + 0.05·top_hi + 0.03·facing)**（顶缘 0.26→0.05）；
+  · `rim` 的 specular 项 ×0.22、fres 项 0.20→0.06（`pow(facing,6)` 在顶缘≈0.69 ⇒ 原贡献 ~0.24 也要降）。
+【判据】真机：顶缘凸出 **+79 → +44/255**（不再饱和；iOS +38，接近）· 截图顶缘仅极淡一层 · `check:shader-generated`/`glass-pixel-parity`(Metal==oracle max 1/255)/`shader-capability`/`glass-capability`/`glass-audit`/`harmony-runtime-prebuilt`/`pixel-snap` 绿 · `test:coupled` 绿 · AAR 重建。
+【诚实边界】仅 Android 真机；`specular` 是 uniform（此处只乘常数 0.22，未改 uniform 值 ⇒ 三端口径一致）。余量：若仍偏亮可再降 `top_hi` 系数（0.05→0.03）。
+【★教训】**"高光/描边"这类细节要对齐 iOS 必须量"它比周围亮多少"**——肉眼看"很明显 vs 微微"没有抓手，量出 **+79 vs +38** 才知道差在哪、该减多少。

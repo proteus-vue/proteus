@@ -188,10 +188,12 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     let f0 = 0.04;
     let fres = f0 + (1.0 - f0) * pow(max(1.0 - cos_i, 0.0), 5.0);
     let facing = max(dot(n, normalize(u.light_dir)), 0.0);
-    let bevel_mask = 1.0 - smoothstep(0.0, 0.10, e);   // ★#915：0.35→0.10（细亮线，对齐 iOS ~2px；旧值=23px 宽渐变="厚玻璃感"）
-    // 边缘高光：细亮边（各向 0.10）+ 顶光加成（法线朝上侧更亮，对齐 iOS 顶缘高光）
+    let bevel_mask = 1.0 - smoothstep(0.0, 0.10, e);   // ★#915：细亮线（~2px）
+    // ★★★决策 #954：**边缘高光整体减半**（用户「顶部高光很明显、iOS 是微微一层基本看不出」）——
+    //   ★真机实测：我们顶缘 **+79/255 且顶到 255（饱和）**；iOS 同口径 **+38/255**（不饱和）。
+    //   各系数约减半（顶缘加成 0.26→0.05 为大头）；specular 项另乘 0.22（`pow(facing,6)` 在顶缘≈0.69 ⇒ 原贡献 ~0.24）。
     let top_hi = max(-n.y, 0.0);                        // 上缘（n.y≈-1）
-    let edge_hi = bevel_mask * (0.10 + 0.26 * top_hi + 0.16 * facing);
+    let edge_hi = bevel_mask * (0.025 + 0.05 * top_hi + 0.03 * facing);
     // ★★★决策 #915 · **删除 `edge_pol`（"自适应描边极性"）**——用户实测「边缘随背景发亮发暗，不对」。
     //   取证：iOS 边缘是 **specular 高光（恒亮）**，**不随背景翻转**。旧 `edge_pol`（#910 引入）让亮底边缘**减暗**
     //   ⇒ 既非 iOS，又让"文字经过边缘变亮"（宽带时更糟）。⇒ 缘带收窄到 0.10 后**恒定加亮**（恢复 iOS 语义）。
@@ -201,7 +203,7 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     // ★★★决策 #953：**边缘高光按 overlay 门控**——`overlay=1`（选中胶囊）⇒ 无边缘高光（用户「选中胶囊四周有高亮的边，不需要，
     //   干净卡片贴上去即可」）。其余玻璃（overlay=0）边缘高光不变。
     let edge_amp = 1.0 - clamp(u.overlay, 0.0, 1.0);
-    let rim = ((pow(facing, 6.0) * u.specular + fres * 0.20) * bevel_mask + edge_hi) * edge_amp + tg * 0.07;   // ★#947 触点点亮 0.07
+    let rim = ((pow(facing, 6.0) * u.specular * 0.22 + fres * 0.06) * bevel_mask + edge_hi) * edge_amp + tg * 0.07;   // ★#954 顶高光减半；#947 触点点亮 0.07
     col = vec4<f32>(clamp(col.rgb + vec3<f32>(rim), vec3<f32>(0.0), vec3<f32>(1.0)), 1.0);
     return col;
 }
