@@ -206,7 +206,7 @@
             class="gna-item"
             @click="pick(item.key, item.pos)"
           >
-            <view class="gna-item__glyph" :class="{ 'gna-item__glyph--on': active === item.key }"><p-icon :name="item.icon" :size="22" /></view>
+            <view class="gna-item__glyph" :class="{ 'gna-item__glyph--on': active === item.key }"><p-icon :name="item.icon" :size="26" /></view>
             <text class="gna-item__label" :class="{ 'gna-item__label--on': active === item.key }">{{ item.label }}</text>
           </view>
         </view>
@@ -220,8 +220,8 @@ import { ref } from 'vue'
 
 /** ★#907 端到端：导航项（**ref 数组**——普通 const 不被当响应式源，见缺口台账 A3）。 */
 const navItems = ref([
-  { key: 'today', pos: 0, label: 'Today', icon: 'home' },
-  { key: 'games', pos: 1, label: '游戏', icon: 'apps' },
+  { key: 'today', pos: 0, label: 'Today', icon: 'calendar-today' },
+  { key: 'games', pos: 1, label: '游戏', icon: 'local-fire-department' },
   { key: 'apps', pos: 2, label: 'App', icon: 'apps' },
   { key: 'search', pos: 3, label: '搜索', icon: 'search' },
 ])
@@ -390,8 +390,10 @@ function pick(key: string, pos: number): void {
   /* ★#934：随条高 56 恢复 */
   height: 44px;
 }
-.gna-item__glyph { display: flex; align-items: center; justify-content: center; height: 24px; color: var(--sa-text-2, #5f6673); }
-.gna-item__label { font-size: 11px; font-weight: 600; line-height: 1; color: var(--sa-text-2, #5f6673); }
+/* ★#941：未选中用 --sa-text（浅底近黑 #1a1c22 / 深底近白 #eef0f5，对齐 iOS「浅底黑/深底白」）；
+   此前 --sa-text-2（更浅灰）。glyph 高 24→26 随图标放大（`p-icon :size` 26）。 */
+.gna-item__glyph { display: flex; align-items: center; justify-content: center; height: 26px; color: var(--sa-text); }
+.gna-item__label { font-size: 11px; font-weight: 600; line-height: 1; color: var(--sa-text); }
 /* ★#907 行内动态 :class（B2）可见落点：激活项图标/文字提亮（此前该绑定静默失效）。
    ★就地直接声明（**不能**用后代选择器——运行期动态类计划只解析节点自身类的直接声明，见台账）。 */
 .gna-item__glyph--on { color: #2b2f7a; }
