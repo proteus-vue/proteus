@@ -115,7 +115,9 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     //   `press==0` ⇒ 该项为 0（退化到既有折射，像素等价）。
     let tR = max(hsmin * 0.9, 8.0);
     let td = local - u.touch;
-    let tg = exp(-(dot(td, td)) / (2.0 * tR * tR)) * u.press;   // 0..1 触点钟形（含按压强度）
+    // ★★★决策 #965：触点钟形**只给选中项（overlay）**——此前给命中玻璃（条）⇒ 按下处局部透出背景 ⇒
+    //   用户「按下条也跟着变通透」（按哪哪透，看着像 morph 其实不是）。
+    let tg = exp(-(dot(td, td)) / (2.0 * tR * tR)) * u.press * clamp(u.overlay, 0.0, 1.0);   // 0..1 触点钟形
     let push = max(hsmin * 0.28, 6.0) * tg;                     // 触点处峰位移（px）
     // ★#918：位移**向内采样**（`− n·bend`）⇒ 边缘内容被**放大/拉伸**（用户实测：iOS 是拉伸不是压缩）。
     let sp = local - n * bend + normalize(td + vec2<f32>(1e-4, 1e-4)) * push;
@@ -162,7 +164,10 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     //     改用**阈值重映射**把"低 α"铺满整个暗区（bg_lum<0.25 恒 0.15），仅亮区快速升到白霜。
     let veil_t = clamp((u.bg_lum - 0.25) / 0.60, 0.0, 1.0);           // 暗区(bg_lum≤0.25)恒 0；亮区(≥0.85)恒 1
     // ★★★决策 #952：面纱 α 对**条与胶囊同口径**（内容可见度一致——#951 的"反相 α"会改内容可读性，已废弃）。
-    let VEIL_A = mix(0.09, 0.90, veil_t);                             // 深底 0.09（极透）→ 浅底 0.90（白霜）
+    // ★★★决策 #966（**订正 #965**）：**面纱 α 不因按下而变**——用户「两块玻璃叠加互不影响，按下胶囊不该让内容透出来」。
+    //   #965 把按下时面纱砍到 14% ⇒ 胶囊直接透出**原始内容**（比条更清晰）——错。正解：面纱与条**同口径**，
+    //   按下的形态变化只由「灰叠加退场」（见下 overlay 段）表达 ⇒ 胶囊 = 同条材质的玻璃、内容清晰度 = 条。
+    let VEIL_A = mix(0.09, 0.90, veil_t);   // 深底 0.09 → 浅底 0.90（与条同口径，不随 press 变）
     // ★★★决策 #925：**12% 背景色温**（iOS 实证：蓝底玻璃 B−R=+9.0 vs 背景 +75.6）——只取背景的
     //   **色度偏移**（色 − 其灰度）× 12%（色相，不动明度）。
     let acc_chroma = acc.rgb - vec3<f32>(dot(acc.rgb, vec3<f32>(0.299, 0.587, 0.114)));
@@ -213,7 +218,8 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     let edge_amp = 1.0 - clamp(u.overlay, 0.0, 1.0);
     // ★★★决策 #963：**按下「点亮透镜」**——press>0 的玻璃（按下组：条 + 选中胶囊）加一道**镜面亮边**
     //   （对齐 iOS 按下：边缘镜面亮脊 +67L，子代理实测；我们此前按下=edge_amp 把亮边全关了 ⇒ 死平）。
-    let press_rim = bevel_mask * clamp(u.press, 0.0, 1.0) * 0.32;
+    // ★#965：亮边只给**选中项（overlay 玻璃=胶囊）**——否则条（overlay=0）也被点亮 ⇒ 用户「条也跟着变通透」。
+    let press_rim = bevel_mask * clamp(u.press, 0.0, 1.0) * 0.32 * clamp(u.overlay, 0.0, 1.0);
     let rim = ((pow(facing, 6.0) * u.specular * 0.22 + fres * 0.06) * bevel_mask + edge_hi) * edge_amp + press_rim + tg * 0.07;   // ★#954/#956/#963
     col = vec4<f32>(clamp(col.rgb + vec3<f32>(rim), vec3<f32>(0.0), vec3<f32>(1.0)), 1.0);
     return col;

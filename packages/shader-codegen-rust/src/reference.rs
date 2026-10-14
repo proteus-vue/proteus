@@ -150,6 +150,7 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     // ★★★决策 #949：α 随背景明暗**翻转**（阈值重映射，非线性）——与 glass.wgsl ⑤ 同源。
     let veil_v = 1.0f32;
     let veil_t = ((p.bg_lum - 0.25) / 0.60).clamp(0.0, 1.0);
+    // ★#966：面纱不随 press 变（与条同口径）——按下形态只由"灰叠加退场"表达。
     let veil_a = 0.09f32 + (0.90f32 - 0.09f32) * veil_t;
     let raw_lum = raw[0]*0.299 + raw[1]*0.587 + raw[2]*0.114;
     for c in 0..3 {
@@ -181,7 +182,7 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     // ★#956 撤回：iOS 选中胶囊实测无高亮边（#953 原判正确）
     let edge_amp = 1.0f32 - p.overlay.clamp(0.0, 1.0);
     // ★#963：按下点亮透镜（press>0 的玻璃加镜面亮边）
-    let press_rim = bevel_mask * p.press.clamp(0.0, 1.0) * 0.32;
+    let press_rim = bevel_mask * p.press.clamp(0.0, 1.0) * 0.32 * p.overlay.clamp(0.0, 1.0);   // ★#965 亮边只给选中项
     let rim = ((facing.powi(6) * p.specular * 0.22 + fres * 0.06) * bevel_mask + edge_hi) * edge_amp + press_rim;   // ★#954/#963
     for c in 0..3 { col[c] = (col[c] + rim).clamp(0.0, 1.0); }
     col[3] = 1.0;
