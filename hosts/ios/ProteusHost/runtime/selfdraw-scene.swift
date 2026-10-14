@@ -1990,6 +1990,43 @@ final class SelfDrawView: UIView {
     /// 【为什么必须在"挂载后"（本仓设计缺口的修复）】段列表由内核解析（单一实现）⇒
     ///   宿主建层时**没有**它（请求树只有 `d`）。⇒ 流程：内核收到树 → `svgNodes()` 查询
     ///   回带段列表 → 宿主据此建 `CAShapeLayer`。★与"度量先注入再建树"同款顺序纪律。
+    /// ★★★决策 #939（CSS 继承 · 运行期级联 · iOS 腿）：**纯色补丁落到层**——
+    ///   文本层改前景色；svg 图标层（`layerStrokeShapes`）按内核最新 `strokeColor` 改填充/描边。
+    ///   【为什么需要】共享运行期把动态 `:class` 的颜色交 `proteusHost.updatePatches`，而 iOS 的
+    ///   `updatePatches` 只处理几何/文本、**纯色补丁在 `applied==0` 处提前返回** ⇒ 颜色永不变
+    ///   （选中态文字/图标/highlight 不变色）。本方法补上"颜色落层"。
+    ///   @return 落层的层数（诊断）
+    func applyColorPatches(_ patches: [[String: Any]], svgJson: String) -> Int {
+        var n = 0
+        var touchedSvg = false
+        for p in patches {
+            guard let id = p["id"] as? Int,
+                  let style = p["style"] as? [String: Any],
+                  let colorS = style["color"] as? String,
+                  let cg = parseHexColor(colorS) else { continue }
+            if let tl = layersById[id] as? CATextLayer {
+                tl.foregroundColor = cg.cgColor
+                n += 1
+            }
+            if layerStrokeShapes[id] != nil { touchedSvg = true }
+        }
+        // svg 图标：从内核**重读**最新色（改色写进了内核 stroke_color）并更新已建形状
+        if touchedSvg,
+           let data = svgJson.data(using: .utf8),
+           let o = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+           let paths = o["paths"] as? [String: [String: Any]] {
+            for (idS, info) in paths {
+                guard let id = Int(idS), let shape = layerStrokeShapes[id] else { continue }
+                let packed = (info["strokeColor"] as? NSNumber)?.uint32Value ?? 0xFFFFFFFF
+                let c = Self.cgColorFromPacked(packed)
+                if (info["fill"] as? Bool) ?? false { shape.fillColor = c; shape.strokeColor = nil }
+                else { shape.strokeColor = c }
+                n += 1
+            }
+        }
+        return n
+    }
+
     func attachSvgStroke(fromKernelPaths json: String) {
         guard let data = json.data(using: .utf8),
               let o = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
@@ -5573,14 +5610,23 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         if applied > 0 { patchAppliedTotal += applied }
         if relayout > 0 { relayoutTotal += relayout }
 
-        // 无有效补丁 ⇒ 什么都不用做（例如只改了颜色）
+        // ★★★决策 #939：**纯色补丁落到层**（几何无变化但颜色变了——动态 :class 的选中态）——
+        //   此前 `applied==0` 直接返回 ⇒ 颜色永不变（真机：文字/图标/highlight 选中态不生效）。
+        //   文本层改前景色；svg 图标层按内核最新色改填充。
+        var colorLayers = 0
         if applied == 0 {
+            if let d = patchesJson.data(using: .utf8),
+               let allPatches = (try? JSONSerialization.jsonObject(with: d)) as? [[String: Any]] {
+                let svgJson = takeCString(proteus_layout_svg_nodes(handle))
+                colorLayers = view.applyColorPatches(allPatches, svgJson: svgJson)
+            }
             let m0 = physFootprintMB()
             SelfDrawBridge.memPeakMB = max(SelfDrawBridge.memPeakMB, m0)
             return jsonString(["ok": true, "path": "updatePatches", "incremental": true,
                                "patch_count": 0, "relayout_count": 0, "changed_rects": 0,
                                // ★A/B 判据键名别名（见 applyOps 同款注释）
                                "applied": 0, "relayout": 0, "text_layers_applied": 0,
+                               "color_layers_applied": colorLayers,
                                "updated_layers": 0, "mem_mb": round(m0 * 10) / 10,
                                "mem_peak_mb": round(SelfDrawBridge.memPeakMB * 10) / 10,
                                "update_ms": round(updateMs * 100) / 100])

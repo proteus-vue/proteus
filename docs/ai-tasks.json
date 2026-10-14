@@ -504,6 +504,32 @@
         "T-glass-region-lum"
       ],
       "note": "【由来】wb 会话 11:39 真机诊断 glass 条 7 问题；#936 已修 #1(z-order)/#2(胶囊 tint)/并新发现修 #3(胶囊 pointer-events)。本卡收剩余：\n① **#4 霜过重**：`preset=floating` blur=39 + 宿主 BLUR_DOWN 降采样管线 + 白霜 mix ⇒ 条下内容几乎洗没（「开放世界冒险」只剩残影）；iOS 保持 ~50% 可读（wb 逆向外证）。\n② **#5 折射顺序**：强模糊先灭高频 ⇒ 位移场无素材可弯 ⇒ 镜像/拉伸看不到。iOS 是**先保高频再位移**（顺序问题）。与 #915/#918 的位移/剖面调整是两条轴。\n③ **第十块（亮度→alpha 调制）**：WGSL 现 `bg_lum` 只驱动霜**颜色**，mix 权重 `0.30+tint.a×0.25` 是常量；iOS `tracksLuma` 同时调制霜 alpha 与模糊（亮底更实 / 暗底更透，对比度稳态）。方向：霜权重=f(bg_lum)，亮底 ~0.5-0.6 / 暗底 ~0.15-0.2。★需新增 uniform（96B→112B）+ 三端宿主同步统计。\n④ **#7 标签贴条底缘**（图标缺失次生问题；图标缺口见 T-vapor-computed-data）。\n【诚实边界】① ② 属 WGSL 源 + 三端宿主 ⇒ **必须三端重跑**（check:vapor-three-end）。③ 需扩 uniform 结构（跨端 ABI）。★真值基准 = iOS 真机截图（wb 存证 `.workbuddy/salvage/liquid-glass/`）。"
+    },
+    {
+      "id": "T-vapor-select-state",
+      "title": "App 运行期「选中态」：宿主缺 updatePatches（连接断点）+ 运行期 CSS color 继承级联（图标/文字/高亮）",
+      "type": "capability",
+      "status": "done",
+      "owner": "session:wb-glassvfor",
+      "scope": [
+        "packages/render-backend/src/screen-runtime.ts",
+        "packages/slot-runtime/src/instantiate.ts",
+        "packages/slot-runtime/src/layout-template.ts",
+        "packages/compiler/src/vapor/**",
+        "packages/layout-core-rust/src/ffi.rs",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/**",
+        "hosts/ios/ProteusHost/runtime/**",
+        "superapp/pages/**",
+        "tests/**"
+      ],
+      "decision": 939,
+      "verification": "【#939】cargo test --lib（231）· test:coupled（545）· Android 真机：tap 各项 → 选中项图标+文字变蓝 #2c2f76、其余灰 #606672（像素采样）· iOS 真机标签选中色可见 · ios-export-wiring/vapor-three-end/app-screen-content/host-kernel-keys 绿",
+      "branch": null,
+      "related": [
+        "T-vapor-computed-data",
+        "T-glassnav-vfor-events"
+      ],
+      "note": "【由来】用户「图标显示了，但没有选中高亮，文字也是」。三处根因：① 两端 SuperappRuntimeHost 缺 updatePatches（C 桥按 mount 存在注入 → 方法 id NULL → 运行期记「无回执」）⇒ 动态 :class 颜色不生效；② svg 图标填充色是编译期继承烘焙的静态值、运行期 :class 改的 color 挂外层 wrapper 不级联到子图标叶（CSS 继承在自绘模型里不天然继承）；③ 图标填补色取自内核 stroke_color，改色须内核配合 + 宿主重注入。★修：① 两端加 updatePatches 转发；② 编译器标 inheritColor（iconLeaf && !hadOwnColorDecl）+ instantiate 透传 + screen-runtime.onPaintProp 级联；③ 内核 PatchStyle.color + 宿主 svg 重注入（Android reInjectSvgFor / iOS applyColorPatches）。★教训：『选中态』是跨 5 处的能力（宿主回执→编译标记→运行期级联→内核字段→宿主重注入），缺一不亮；与 #935/#938 同族（JS 建了通路、某端缺席）。★诚实边界：iOS 图标级联未逐像素取证（玻璃底噪）。"
     }
   ]
 }

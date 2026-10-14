@@ -447,6 +447,7 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
     if (n.tag) out.tag = n.tag
     if (n.component) out.component = n.component
     if (n.pseudo) out.pseudo = n.pseudo   // ★伪元素标记（本批）——必须透传宿主（按下传播用）
+    if (n.inheritColor) out.inheritColor = true   // ★★★决策 #939：该节点从父级继承 color（运行期级联用）
     // ★★★批次 54（决策 #713）：模板源位置随节点透传（dev 构建有、release 无）——面板 Elements
     //   选中/就地编辑的节点据此锚回 `.vue` 源行。★id 变了（列表行/组件展开重编号）而 loc 是**源属性**不变。
     if (n.loc) out.loc = n.loc

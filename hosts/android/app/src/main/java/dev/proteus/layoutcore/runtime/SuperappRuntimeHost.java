@@ -66,6 +66,22 @@ public final class SuperappRuntimeHost {
     }
 
     /**
+     * ★★★决策 #939（动态 `:class`/`:style` 的**绘制键**回执）：把运行期累积的绘制补丁
+     *   `[{id, style:{color,fontSize,…}}]` 交 `VaporRenderHost.updatePatches`（合并进 spec + 重建**绘制指令**）。
+     *
+     * 【缺口（真机实证）】JS 运行期（`screen-runtime.flushPaint`）把动态 `:class` 的颜色/字号交
+     *   `proteusHost.updatePatches`；而 C 桥按「`mount` 存在」注入该方法——本类**没有**它 ⇒
+     *   `g_host_methods.update_patches=NULL` ⇒ 注入的 C 函数返回 undefined ⇒ 运行期记
+     *   「宿主 updatePatches 无回执 ⇒ 动态 :class/:style 的颜色/字号不会变」⇒ **选中态颜色不生效**
+     *   （真机：glass-nav 点项后胶囊移动了、但选中项图标/文字颜色不变）。
+     *   ★**这是"JS 侧通道建了、宿主侧没接"的端到端断点**（与 #935 的 U0 同族：通路存在但一端缺席）。
+     */
+    @SuppressWarnings("unused")
+    public String updatePatches(String patchesJson) {
+        return draw.updatePatches(patchesJson);
+    }
+
+    /**
      * ★★★**"跳变驱动动画"宿主动画入口**（本批）：`v-animate` / `<Transition>` 触发时，运行期
      *   把 `{anims:[{nodeId,kind,from,to,durMs,curve}]}` 交本方法 ⇒ 转发 `VaporRenderHost.animStart`
      *   （内核动画通道 + 帧循环）。★与装置桥的 `animStart` 同一条内核路径（零新增内核能力）。

@@ -4192,6 +4192,9 @@ export function buildLayoutTemplate(
       // ★★★批次 1（CSS 兼容对齐 · 继承）：可继承字段（color/fontSize）在**本节点无显式值**时
       //   取祖先继承值；随后把本节点"生效值"更新进 `childInherited` 传给子节点。
       //   CSS 语义：子节点自己的声明（含来自 class/style）覆盖继承值 ⇒ 继承只在**缺失**时填。
+      // ★决策 #939：本元素**自身是否声明 color**（含 class/inline）——用于判断 p-icon 折叶的色
+      //   是否纯继承而来（继承来的色须在运行期随祖先变；自身声明的则是固定的）。
+      const hadOwnColorDecl = style.color !== undefined
       const childInherited: Record<string, unknown> = { ...inherited }
       for (const f of APP_INHERITABLE_FIELDS) {
         // ★批次 28：`inherit` 哨兵 ⇒ 显式取父值（父无 ⇒ 回落 undefined = 默认）
@@ -4323,7 +4326,7 @@ export function buildLayoutTemplate(
           glassLeaf = true
         }
       }
-      const node: LayoutNode = { id, parentId, tag: iconLeaf ? 'view' : tag, style }
+      const node: LayoutNode = { id, parentId, tag: iconLeaf ? 'view' : tag, style, ...(iconLeaf && !hadOwnColorDecl ? { inheritColor: true } : {}) }
       // ★★★批次 54（决策 #713）：dev 构建发射模板源位置（面板 Elements 选中/就地编辑 → 跳源行）。
       //   非 dev ⇒ `dev` 为 false、此处根本不进 ⇒ 产物逐字节不变。
       if (dev) {

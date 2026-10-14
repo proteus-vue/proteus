@@ -2038,6 +2038,10 @@ pub(crate) struct PatchStyle {
     padding: Option<EdgesDto>,
     #[serde(default)]
     text: Option<String>,
+    /// ★★★决策 #939（CSS 继承 · 运行期级联）：`color` 更新——**非几何**（绘制键），但需进内核：
+    ///   `svgPath.fill` 的图标填充色取自 `stroke_color`，运行期改色须同步更新内核 `text_color`
+    ///   （+ 若为 fill 图标则 `stroke_color`）⇒ 宿主方可从内核回读重注入 svg 填充。
+    color: Option<String>,
 }
 
 impl StylePatch {
@@ -2081,6 +2085,17 @@ impl StylePatch {
                 req.text = t.clone();
             } else {
                 node.text = Some(crate::node::TextMeasureRequest { text: t.clone(), style_key: 0 });
+            }
+        }
+        // ★★★决策 #939：`color` 更新（非几何，但图标填补色取自它）——更新 text_color；
+        //   若该节点是 **fill 图标**（`svgPath.fill`），同步把 `stroke_color` 也改成新色
+        //   （图标填充 = 颜色，见 style_from_dto 的 currentColor 回退）。
+        if let Some(c) = &s.color {
+            let packed = crate::ffi::parse_css_color(c)?;
+            node.style.text_color = Some(packed);
+            node.style.text_color_base = Some(packed);
+            if node.style.svg_fill {
+                node.style.stroke_color = packed;
             }
         }
         Ok(())
