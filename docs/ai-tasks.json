@@ -394,6 +394,26 @@
         "T-glass-region-lum"
       ],
       "note": "用户真机反馈两点：① 「玻璃边缘有卷曲内翻，iOS 近似平面玻璃」② 「内容可见性太亮，黑色字折射后发白」。取证：① 位移映射 dsp/dx=1−A·d(smoothstep)，折叠阈值 A>1/1.5≈0.667 —— #910 的 A=1.15 **必然折叠**（内翻根因）⇒ 改 A=0.55（单调，平面玻璃式）+ strength 上界 1.1（A_eff≤0.605 恒不折叠）；② 霜白锚点把暗内容一并拉白（黑字 L25→出射 199）⇒ 加 `dark_guard=smoothstep(0.08,0.32,lum)`（正后方越暗提亮越少，保黑）。两处修复正交（区域定基调 / 局部保护内容）。\n\n【补：#913 · 用户点破机制错误】用户「深霜浅霜是对玻璃表面做的处理吧？我们表面没任何处理、太通透」——**判断正确**。#910/#911 的 `col+=(FROST_L-lum)*k` 是**对内容做亮度平移**（非霜层）；真 iOS 是 `mix(内容色, 霜色, α)` **表面霜/纱**（降对比 ⇒ 乳白/灰纱感）。方向也改为 **flip**（深底→亮霜 / 浅底→暗霜）。两图 iOS 实测定标：深底 L79→215 / 浅底 L254→229；oracle 拟合 218 / 230（方向正确）。\n\n【已落地（2026-10-14 · #912/#913）】A 1.15→0.55（单调，消内翻）+ 霜层 mix(内容色,霜色,α)（深底亮霜/浅底暗霜，flip）+ 修重复 tint。判据：oracle 深底 218/亮底 230（对照 iOS 215/229，方向正确）· iOS parity max 1/255 · 鸿蒙 parity max 1/255 · 三端编译绿 · 真机浅底暗霜+黑字清晰+边缘干净圆角。剩余：常量 A/B + iOS/鸿蒙真机复验 + P3。"
+    },
+    {
+      "id": "T-glass-planar-refract",
+      "title": "液态玻璃折射幅度对齐 iOS（消 y 轴拉伸 / 平面式轻微弯折）——★先只对齐安卓一端",
+      "type": "end-alignment",
+      "status": "done",
+      "owner": null,
+      "scope": [
+        "packages/shader-codegen-rust/src/materials/**",
+        "packages/shader-codegen-rust/src/reference.rs",
+        "packages/shader/src/**",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/**"
+      ],
+      "decision": 914,
+      "verification": "npx vitest run tests/glass-ir.test.ts && bash hosts/android/check-host-compile.sh && 真机（Android）玻璃内文字无 y 轴拉伸（对照 iOS 轻微平面弯折）",
+      "branch": null,
+      "related": [
+        "T-glass-planar-edge"
+      ],
+      "note": "用户：「折射一直不对，iOS 只有平面变化，我们的明显文字有 y 轴拉伸；**先把安卓一端对齐**再做 iOS/鸿蒙，现在方向一直漂移」。取证（oracle 网格/细线探针）：位移机制（沿外法线向外采样 = 边缘压缩）方向**正确**，但幅度 `A=0.55·band = 0.55×67 物理px ≈ 37px ≈ 半个字高` ⇒ 整带沿 y 平移造成\"拉伸\"观感；A=0.15 时线间距接近均匀（仅轻微弯折）。★流程约束：**本轮只重建/验证 Android**，iOS/鸿蒙产物与 parity 等安卓定稿后再统一（防三端方向再漂移）。\n\n【已落地（2026-10-14 · 决策 #914 · 安卓范围）】EDGE_REFRACT 0.55→0.15（消 y 轴拉伸）。真机 Android：文字穿玻璃无纵向拉扯、图标干净圆角、玻璃均匀霜感。判据：细线探针带内线间距复原为基准值；玻璃单测 45；Android 编译绿。★方向冻结：机制=法线向外采样（单调）+ 小幅度，不再改方向。★**待续（另单）**：iOS/鸿蒙真机复验 + parity 重跑（待安卓定稿）；常量 A/B；P3 三项。"
     }
   ]
 }
