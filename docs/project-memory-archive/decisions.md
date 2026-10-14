@@ -3895,7 +3895,8 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **⑤ 文档**：`website/{,en/}guides/31-liquid-glass.md` 的「App 端」一句补精确口径——折叠认**静态可求值**值，含 **`v-for` 遍历字面量数组/常量（逐项展开并折入）**；运行期动态值不折。（en 镜像同步，`check:en-drift` 绿。）
 **⑥ ★教训**：**"静态实例化"必须**逐项特化绑定**，不能只折 `:class`——展开 v-for 只是第一步，**展开后的值要一级级求值**才能被下游静态消费方（玻璃/图标等**只认字面量**的折叠面）看见**。★与 #889/#898 同族：**折叠的"接受面"要覆盖到每一层**（字面量类型 → 绑定形态 → v-for 逐项），漏一层就有一类写法静默回落。
 
-899. **★★★立项「App 三端宿主运行时能力对齐」专项（84 能力 × iOS/Android/鸿蒙 = 255 格 🟡）+ 首单 useFetch（C26）**（2026-10-13 · 用户指定「端能力对齐先从最开始的 useFetch 开始，立项端能力对齐的 App 端专项，然后按照清单逐个落地到 App 三端宿主运行时」）：
+902. **★★★立项「App 三端宿主运行时能力对齐」专项（84 能力 × iOS/Android/鸿蒙 = 255 格 🟡）+ 首单 useFetch（C26）**（2026-10-13 · 用户指定「端能力对齐先从最开始的 useFetch 开始，立项端能力对齐的 App 端专项，然后按照清单逐个落地到 App 三端宿主运行时」）：
+**★编号勘误（2026-10-13 事后发现）**：本条原记为 `#899`，与**同一提交**（`b51b3cb8`）里的「v-for 静态列表边界」条**重号**——`#900`（材质系统，`36b11e4f`）、`#901`（鸿蒙自绘滚动，`8b65b5e9`）随后已按序占用 ⇒ 本条改记 `#902`。★**根因 = 台账缺"决策号唯一性"机器判据**（`check:memory` 不校验重号 ⇒ 只能靠人眼，属结构性缺口）；已同步补门禁 `check:decision-numbers`。
 **① 现状取证（本轮四层逐层核实，均为一手证据）**：
  · **清单规模**：App 三端共 **255 格 🟡**（iOS/Android 各 81 + 鸿蒙 84）；已在位真接线仅 **11 项**（`host.context`/`update.*`/`window.setSize`/`worker.*`/`idle.*`/`preload.assets`/`extension.load`/`mini-program.navigate`/`navigation-guard`）——见 `docs/native-capability-crossend-progress.md` §3。
  · **落地链路四层**（每项能力都须齐）：① 宿主壳原生实现（Swift / Java / ArkTS）② 契约登记（`packages/render-backend/src/host-invoke-contract.ts` 的 `HOST_CAPABILITY_METHODS`，现 18 项）③ JS 桥（`packages/api/src/capability-app.ts`：`APP_NATIVE_METHODS` + `createAppNativeCapabilities`，现 13 方法）④ Hook（`capability.ts` 的 `createCapabilityHooks`——多数已在，缺的是桥那一层）。
@@ -3927,6 +3928,19 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **④ 判据**：真机（HUAWEI）——mine 页加高占位使内容溢出（contentH 1154 > 视口 816，maxScroll 338）⇒ `superapp-drive` 自动滚到底 ⇒ **子行全部渲染**（深色模式/客服悬浮球/音乐播放条/版本…），`hosts/harmony/results/superapp-scroll-fixed.jpeg`。门禁 `check:harmony-host-compile` / `glass-capability` / `glass-audit` / `app-screen-content` / `harmony-runtime-prebuilt` 全绿。
 **⑤ ★教训（与 #890/#900 同族）**：**裁剪/坐标换算必须钉死"是屏幕坐标还是内容坐标"**——原点用了屏幕坐标（`ny`）而裁剪用内容坐标，**同一函数里两个坐标系混用** ⇒ 位移为 0 时巧合正确、一旦滚动即错（**"零位移的巧合"掩盖坐标系混用**）。★**验证样本必须覆盖"真实使用形态"**：短页（不滚动）是"最小样本"而非"代表样本"，长页滚动才是——#896 的验证缺口正是此。★**真机现象 ≠ 数据现象**：SDNode 转储证明**数据全对**（行节点在列表、坐标正常），问题纯在**绘制坐标系**——"数据对但画不出"要往坐标/裁剪/变换查。
 
+903. **★★★跨语言数据通道「去 JSON」：invoke 能力通道改二进制帧（`PINV`/`PRSP`）+ 新增跨语言逐字节等价门禁（把纪律 #22 机器化）**（2026-10-13 · 用户「还有一个注意下能力端对齐实现时跨语言数据通道不要用JSON字符串，这个性能损耗太大，有非常大的隐患，我们框架既有的跨语言数据通道好像是纯二进制的方向，规避JSON过大性能损耗的问题」· 承接 #902 专项目标）：
+**① 先取证（用户说的"既有的纯二进制方向"确有其物）**：既有范式 = S2「去 JSON」（#769）的 `applyOpsBytes`——JS `Uint8Array` → QuickJS `JS_GetTypedArrayBuffer` 拿**裸指针** → JNI `SetByteArrayRegion` → Java `byte[]`；三端同形态（iOS `JSObjectGetArrayBufferBytesPtr` / 鸿蒙 `napi_get_arraybuffer_info`）。同族线格式纪律（三处既有实现共同遵守）：全**小端** + `magic u32 + version u32` 开头 + 定长 header + 长度前缀变长区；magic 不符即拒、**未知字段跳过而不报错**（版本演进）——见 `blob.rs`「PLYT」v2 / `rects_bin.rs`「PRES」v1 / `slot-runtime/buffer.ts`「PVOP」v2。
+**② 实测病灶（为什么必须改）**：invoke 通道此前有**两处 JSON 文本**——派发 `JSON.stringify({...args, __reqId})`、回推 `__proteusHostResolve(reqId, json)`；最坏的不是请求参数（几百字节）而是**响应体**：HTML / JSON / 下载文件几 MB 当 JSON 字符串过界 = 每字节膨胀 3~4× + 两次 UTF-8 编解码 + 一次 `JSON.parse`（1MB 级 ~10ms）。
+**③ 交付（形态 + 体积判据）**：
+ · **线格式**（SSOT = `packages/api/src/invoke-wire.ts`）：去程 `PINV` / 回程 `PRSP` + **20B header**（magic · version · flags · metaBytes · bodyBytes）+ `method(str) · reqId(str) · meta(TLV) · body(裸字节)`；TLV = `tag u8 · len u32 · payload`；**未知 tag 跳过**；body **裸字节垫底**（不 base64、不当字符串——也是将来"零拷贝"只换的那一段）。
+ · **JS 侧**：`packages/shared/src/binary/wire.ts`（公共原语 · 全仓唯一：小端字节游标 + **免 TextEncoder 的严格 UTF-8**，严格是为"双端比对不假绿"）；`capability-invoke.ts` 加字节腿（**择优降级**：宿主有 `invokeBytes` ⇒ 字节帧，否则**回落** JSON 且 `lastInvokeWire()` 可查）；回程**双入口并存**（`__proteusHostResolve` JSON + `__proteusHostResolveBytes` 字节）⇒ **老壳零回归**。42 条单测全绿（`invoke-wire` 19 + `capability-invoke-bytes` 12 + 既有 11）。
+ · **Android 宿主**：`InvokeWire.java`（Java 侧**唯一**编解码器；**纯 JDK、零 android 依赖** ⇒ 可在本机 JVM 上对拍）；`HttpCapability.java`（HttpURLConnection + **`CookieManager` 会话共享**（G-46）+ 网络线程 + **切主线程回推**）；`HostCapabilities.invokeBytes(byte[])`；`HostBridge`/`SuperappRuntimeHost` 各一层转发（真源单点，不写第二份）；C 桥 `js_host_invoke_bytes`（**条件注入**：`GetMethodID("invokeBytes","([B)[B")` 查不到 ⇒ 不注入 ⇒ JS 侧探测 undefined ⇒ 回退 JSON，**降级不静默**）+ `nativeResolveHostBytes`（`JS_NewUint8ArrayCopy` 造 JS 视图）。
+ · **为什么不选"零拷贝"**：字节直传（拷贝一次）已拿到 99% 收益（1MB 从 ~10ms → ~0.1ms）；零拷贝只多省 ~0.1ms，却要承担 GC 后**悬挂指针**风险（`applyOpsBytes` 与 #769 记录均已把该路径列为风险项）+ pin/refcount 复杂度 + Java direct buffer 不可用（只能 Cleaner 管理）+ 小载荷反而更慢 ⇒ **拷贝优先**，且契约已定成"帧字节进出"，将来换零拷贝**只换宿主实现**。
+ · **体积判据**（`tests/invoke-wire.test.ts`）：4KB body 帧**协议开销 < 64B**；同数据走旧 `number[]` JSON 膨胀 **>3×**；1MB 帧开销 < 64B。
+**④ ★★新增门禁 `check:invoke-wire-parity`（把纪律 #22「第 N 份手写副本 = 下一个静默缺陷」机器化）**：手写副本**不可怕**，**没有对拍才可怕**（同族事故：hook 只自测"自己 stdout 有 deny"就宣布拦住了，而消费方读的是另一套契约 ⇒ 契约从未成立）。做法：Node 用 **SSOT**（TS 编解码器）产**黄金向量**——期望值 = TS 自己的**往返结果**（`encode(decode(x))`）⇒ 断言的是「**Java 与 TS 语义等价**」而不是「等于人手抄的字节串」（向量改动只改一处；版本演进时"跳过未知 tag"的行为**自动**被验到）→ `javac` 编译 Java 侧（**零 android 依赖 ⇒ 无需真机 / 无需 Android SDK**）→ Java 自检运行器逐条比对往返字节 + 坏帧**必须被拒** + 独立判据"运行条数必须与向量条数相等"（防运行器静默空跑 = 假绿）。**24 条向量**（去程 9 / 回程 7 / 坏帧 8）全绿；★**已做 4 类破坏性验证**：缺省值判据漂移（`!= null` 写成 `!= 0`）/ 端序漂移（小端改大端）/ 尾部残留判据失守 / magic 判据失守——**均能红且能定位到具体向量**。另：`check:no-json-wire` **扩面覆盖 invoke 通道**（6 组新判据，含"派发走字节、回推仍 JSON"的**半截形态**独立判据），并同样做了破坏性验证（二进制回程入口未安装 / C 桥回推非字节视图 → 均红）。
+**⑤ ★诚实边界（不粉饰）**：① **JSON 未被彻底消灭**——**小对象**（如 `host.context` 的几十字节返回）仍走 body 的 JSON 字节（开销可忽略，不值得为每种能力定义 TLV schema）；被消掉的是**通道协议层**的 JSON（无引号转义、无形如 `(反斜杠)uXXXX` 的转义展开、无"整帧 `JSON.parse`"）。② 三端里**只有 Android 宿主已实现**：iOS(Swift/JSC) 与鸿蒙(ArkTS) 的线格式编解码器**未做**（#769 遗留的双向缺口在此延续）⇒ 这两端 JS 侧**回落 JSON 腿**，端支持如实标注、**不谎称三端一致**。③ 会话共享本单只落 **`CookieManager` 取/存 + `flush()`**；`HttpOnly` 不回 JS（`CMP089` 语义对），但登出级联清空等 ResourcePool 门面未做（已登记）。
+**⑥ ★教训（两条）**：① **"名字骗人"的通道要按字节数取证**——"字节通道"曾是 `number[]` JSON（#769）；本轮同样只有把"每字节膨胀几倍"写进**判据**，才不会再次静默回退。② **手写副本的防线不在"写得对"，在"能被对拍"**：三端各写一份编解码器是物理现实（无共享运行时）⇒ 唯一结构性的防线是**跨语言黄金向量 + 逐字节比对**；本轮把它做成门禁，并为后续端（Swift/ArkTS）预留扩展位（`ROUNDS`）。
+**⑦ ★事故与勘误留痕**：a) **决策号勘误**：本轮工作一度记 `#900`，而 `#900` 已被材质系统占用（`36b11e4f`）⇒ 改记 **#903**（详见 #902 条首的编号勘误段）；b) **操作事故**：曾误用 `git checkout -- docs/ai-tasks.json` 回滚掉**未提交**的两个任务（`T-app-runtime-capabilities` + `T-app-fetch`，HEAD 版本不含它们）⇒ 已从 #902 全文重建。**教训：撤销未提交改动严禁 `git checkout --`，必须先 `git diff` 确认该文件的所有改动都属于本次操作**（多会话并行下，工作区改动**不属于** HEAD）。
 
 
 
@@ -3947,6 +3961,60 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 
 
 
+
+
+
+904. **App 端能力对齐 · iOS 腿落地（S2「去 JSON」的第二端）**（2026-10-13 · 承接 #903 / T-app-fetch）
+
+  **背景**：#903 把 invoke 通道从 JSON 文本改成二进制帧（`PINV`/`PRSP`），但**只落了 JS 桥 + Android 宿主**，
+  iOS/鸿蒙两端在 #903 的「诚实边界」里明确登记为未做。本轮补 iOS 腿（用户目标：「按清单逐个落地到 App 三端宿主运行时」）。
+
+  **交付**（4 新 + 4 改）：
+  · 新 `hosts/ios/ProteusHost/runtime/InvokeWire.swift` —— Swift 侧**唯一**帧编解码器（仅 import Foundation
+    ⇒ 本机 macOS 可直编直跑，与 Java 腿同一纪律）；★登记两个 Swift 特有坑：**name-value 必须是有序数组**
+    （TS `Object.entries` / Java `LinkedHashMap` 都是有序的 ⇒ 用 `Dictionary` 会让字节随哈希序**随机漂移**）、
+    可选字段判据必须与 TS `!== undefined` 对齐（不要折叠成 0）。
+  · 新 `hosts/ios/ProteusHost/runtime/invoke-bytes-bridge.swift` —— JSC **C API** 字节桥：注入
+    `__proteusHostInvokeBytes`（`JSObjectMakeFunctionWithCallback`）+ 取裸指针（`JSObjectGetTypedArrayBytesPtr`
+    ——**必须立即拷贝**，JSC 文档明写该指针是临时的）+ 造 `Uint8Array` 回（`JSObjectMakeTypedArray`）+
+    回推 `__proteusHostResolveBytes`。★**不走 JSExport 的理由**（贴合本仓已登记的坑）：selfdraw 侧早已记
+    「JSExport 对 ArrayBuffer 支持不稳」，且 JSExport 只能传 NSData/NSArray ⇒ JS 侧还得 `Array.from` 一遍，
+    正是本单要消灭的那层开销。
+  · 新 `hosts/ios/ProteusHost/runtime/http-capability.swift` —— `http.request` 真实实现：`URLSession` +
+    **立即回 `pending` 帧 → 网络线程完成 → 主线程回推**（G-39 线程纪律：禁止在网络线程直接调 JS）+
+    G-46 会话共享（显式注入 `Cookie` 头；响应侧 Set-Cookie 由 URLSession 落 `HTTPCookieStorage.shared`）。
+  · 新 `hosts/ios/tools/InvokeBytesProbe.swift` + `hosts/ios/check-invoke-bytes.sh` —— **端到端探针 + 门禁**（见下）。
+  · 改 `superapp-runtime-host.swift`（字节腿分发 `dispatchInvokeBytes` + `installInvokeBytes`）、
+    `superapp-scene.swift`（装配点：`setObject` 后立即装桥）、三处源码清单（`check-selfdraw-compile.sh` /
+    `run-selfdraw.sh` / `run-selfdraw-sim.sh` —— 新文件不进清单会**悄悄不参与编译**，G-39 教训）。
+
+  **判据（★三层，分工明确——"形态对 ≠ 字节对 ≠ 跑得通"）**：
+  · **形态**：`check:no-json-wire` **扩面**到 iOS（⑦ JSC C-API 形态齐备 + 反向判据「不得出现 NSData / `Array.from(`」
+    + ⑧ 跨文件名字对账：JS 常量值必须逐字出现在 Swift/C 桥里，且**判据脚本/探针在位**）。
+  · **字节**：`check:invoke-wire-parity` **追加 Swift 轮**（`ROUNDS` 扩展位，不新开门禁）⇒ 同一份 24 条黄金向量
+    现在同时压 TS ⇄ Java ⇄ Swift。★非 macOS 上 Swift 轮**响亮跳过**并在输出标注（"验了但验的不是事实"比不验更坏），
+    另立独立判据「**至少有一端真跑过**」防"全跳过还报绿"。
+  · **通路**：新 `check:ios-invoke-bytes`（本地门禁）—— macOS **真实 JSC** 上跑 12 项：注入可见 / 去程全字段
+    （含中文 headers+body）/ 回执是 `Uint8Array` **而非** `Array`（"免 JSON"的形态判据）/ 回执逐字节等于宿主编码器结果 /
+    回推逐字节一致 / 坏入参（普通数组、空帧）**必须抛异常** / 1MB body 往返长度+校验和一致 / 宿主记账。
+
+  **破坏性验证**（证明判据能红，不是自我感觉良好）：parity 的 Swift 轮 3 类（缺省值判据漂移 8 ✗ / 端序漂移 17 ✗ /
+  尾部残留判据失守 2 ✗）；端到端探针 2 类（回执类型漂移 5 ✗ / 空帧判据失守 2 ✗，并**连带抓出记账不符**——
+  独立判据的价值）；`check:no-json-wire` 的 iOS 新判据 2 类（壳不调用装桥点 / 回推键名漂移）。全部复原后逐字节复跑绿。
+
+  **★本轮抓出的真缺陷（发生在我自己新写的判据上）**：`check-no-json-wire` 的 iOS 判据初版用 `src.includes(token)`
+  ⇒ 把 `installInvokeBytes` 改名成 `installInvokeBytesDisabled`、把 `__proteusHostResolveBytes` 改名成
+  `...BytesX` 都**照样判绿**（子串匹配不是契约检查）。**破坏性验证①直接把它抓出来了**（第一次跑没红 ⇒ 不是判据在红，
+  是判据有洞）。修法：引入 `hasExact()`（前后加 `(?<![A-Za-z0-9_])` / `(?![A-Za-z0-9_])` 词边界），
+  并把"桥定义在"补成"定义在 **且** 壳真的调了"两条独立判据（只判定义会漏掉"方法在但没人调 = 死代码"）。
+  ★教训与 #903 的「自测必须对准消费方的契约」同源：**判据的匹配语义也是契约的一部分**。
+
+  **诚实边界**：① iOS 腿**未跑真机/模拟器**（改动已过 `check-selfdraw-compile` 的 iOS `-typecheck` +
+  macOS 真实 JSC 端到端 + 编解码逐字节对拍 ⇒ 但"真机跑通"仍待验收）；② `http.request` 的语义边界同 Android 腿
+  （重定向默认跟随、`timeoutInterval` 是空闲超时非总时限、HTTP/2 与压缩走平台默认）；③ 会话共享只做"请求带 cookie"，
+  **WKWebView 的 `WKHTTPCookieStore` 与原生能力的打通未做**（与 Android 侧"登出级联清空未做"同级）；④ 字节腿只接在
+  **superapp 运行期**（dev/bench 场景仍走 JSON 腿——不谎称全场景已去 JSON）；⑤ **鸿蒙（ArkTS）腿仍未做**（`ROUNDS`
+  已留位）。
 
 905. **★★★玻璃内核补「触控形变流动」——对齐 Apple `UIGlassEffect.isInteractive`（WGSL+三端宿主，`interactive` 从死数据到落地）**（2026-10-13 · 用户「玻璃胶囊点击时是真实的玻璃流动，按住不动拖动也会有这样的效果」）：
 **① 缘起**：用户指出玻璃缺一个「真实玻璃流动」——点按/按住拖动的玻璃块应在触点产生液态形变。取证：`GlassPreset.interactive`（仅 `floating:true`）**是死数据**——`<pg-glass>` 无此 prop、`resolveGlass` 只从 preset 读、`glassResolver` 不折、宿主零消费、WGSL **无任何触控/时间输入**。本单补全整条链 + 三端真实 shader 形变。
@@ -3963,6 +4031,31 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **⑨ 边界**：首版是**单点触觉**（触点局部凸起 + 高光 + 回弹），非多点流体/真实表面张力物理；Web/MP 无 GPU warp。iOS 真机本轮被异会话共享文件竞态阻塞（`invoke-bytes-bridge.swift` 构建期被改写）——代码已过类型检查，真机截图待补。
 
 
+906. **★★★C 桥（`quickjs_jni.c`）「绿门禁下的编不过」——回程造 `Uint8Array` 改走公开 API + 给 C 桥补真编译步 + 顺带补 `peekMethod` / Java 注释 Unicode 转义陷阱（#903/#904 的收口修复）**（2026-10-13 · 承接 #903；用户「异会话回退了 C 桥……刚才已经还原了，因为异会话构建安卓被卡住」）：
+**① 现象（复现，不是推测）**：#903 的能力通道 C 桥（`invokeBytes` / `nativeResolveHostBytes`）在静态门禁 `check:no-json-wire` 下**全绿**，但用**与真机构建同一条编译命令**（NDK r27c · clang 18.0.3）跑 `-c` ⇒ **5 处错误**：
+· `JS_IsArrayBuffer` —— 公开头 `quickjs.h` 里**没有**这个声明；
+· `JS_NewUint8ArrayCopy` —— 在 `quickjs.c` 内是 `static`，`nm .tools/quickjs/libquickjs.a` ⇒ `t _JS_NewUint8ArrayCopy`（小写 `t` = **local，链接期不可外链**）。
+clang 18 对 implicit-function-declaration **直接 error**（`call to undeclared function`）⇒ 不是"运行期才炸"，是**编译期即红**。
+**② 根因（两层，缺一不可）**：① **门禁覆盖面没跟上实际形态**——`hosts/android/check-host-compile.sh` **只跑 javac**，C 桥**从来没有本地编译判据**（只有真机构建 `scripts/setup-android-js-engine.sh` 才编它）⇒ 断代码被"绿门禁"放行；② **判据自身是假的**——`check:no-json-wire` ⑥ 原文要求 C 桥含 `JS_NewUint8ArrayCopy` **文本**，而那个名字**永远编不过**（判据等于"要求写一段编不过的代码"）。
+**③ 修**：① 判型改**只用公开 API**：先 `JS_GetTypedArrayBuffer`，失败再 `JS_GetArrayBuffer`（非 NULL 即"入参本身是 ArrayBuffer"），并**取走试探产生的 pending exception**（残留会污染后续 eval / 回推）；② 新增本文件自带助手 `proteus_new_uint8_array_copy`（`JS_NewArrayBufferCopy` 把字节拷进 JS 堆 + `JS_NewTypedArray(…, JS_TYPED_ARRAY_UINT8)` 造视图）——**语义与"拷贝"取向不变**（不借 Java 内存 ⇒ 无悬挂指针）；③ `check:no-json-wire` ⑥ **改判真实公开 API**且**只认调用形态**（`JS_NewArrayBufferCopy\s*\(` / `JS_TYPED_ARRAY_UINT8`），并新增**反向判据**「**不得调用** `JS_NewUint8ArrayCopy(` / `JS_IsArrayBuffer(`（QuickJS 未导出 API）」；④ `check-host-compile.sh` 新增 **C 桥编译步**（与真机构建同参的 `-fsyntax-only`，~1 秒；缺 NDK / JDK 头则**响亮略过**并给出补齐命令）。
+**④ 同批还原里的另两处真缺口（一并补齐）**：① `InvokeWire.java` **缺 `peekMethod(byte[])`** —— 而宿主运行期（`HostBridge.invokeBytes` 记账）与对拍工具（`hosts/android/tools/InvokeWireParity.java`）**都在调它** ⇒ `javac: 找不到符号: 方法 peekMethod(byte[])`。已按 Swift 侧 `InvokeWire.peekMethod` **逐字同义**补上（只走 header + method/reqId 两个长度前缀，**不碰 meta/body**——记日志的开销不该与载荷成正比；解码失败返 `"?"` 只作诊断）。② `InvokeWire.java` 注释里写了**字面 `\uXXXX`** ⇒ javac 在**词法分析之前**先扫全文件 Unicode 转义（JLS §3.3）⇒ `错误: 非法的 Unicode 转义`（**注释也会炸**，且报错行号会漂到别处，误导排查）；改为 `U+XXXX` 写法并就地写明该 JLS 陷阱。
+**⑤ 验证（三层 · 全绿）**：① **编译**：`aarch64-linux-android21-clang -c` ⇒ rc=0；② **链接**（与真机构建同参：6 个 QuickJS 源 + `-Wl,-z,max-page-size=16384`）⇒ 产出 **ARM aarch64 `.so`**，**11 个 JNI 导出含 `nativeResolveHostBytes`**，`nm -D -u` **无任何未决 `JS_*` 符号**；③ **门禁**：`check:no-json-wire`（含订正后的 ⑥ + 反向判据）/ `check-host-compile`（含新 C 桥步）/ `check-invoke-wire-parity` / `check-host-invoke-contract` / `check-decision-numbers` / `check-gates-sync` / `check-script-compile` / `check-memory` / `check-ai-tasks` 全绿。
+**⑥ ★★破坏性验证（证明判据真的能红，不是自我安慰）**：把回程调用改回 `JS_NewUint8ArrayCopy(...)` ⇒ ① `check:no-json-wire` **红 2 条**（反向判据命中「调用了未导出 API」+ 正向前缀缺失）；② `check-host-compile` 的 C 桥步 **红**（打印真实 clang `undeclared function` + 指引）。复原后 `diff` 逐字节一致、两条复跑双绿。
+★**这一轮第一版判据其实是"空心"的**：只匹配**裸 token** 时，**注释里提一句** `JS_NewArrayBufferCopy` 就能让判据变绿（而代码根本没调它）——**破坏性验证① 当场抓出**。⇒ 改为"只认**调用形态**"。★教训与 #903「判据匹配语义也是契约」同源：**注释里的名字是文档，不是证据**。
+**⑦ 诚实边界**：① 本修复让 `.so` **能编能链**，**未上真机**（真机 `useFetch` 判据仍待跑）；② `check-host-compile.sh` 的 C 桥步只做 `-fsyntax-only`（不产 `.so`、不编 QuickJS 六源）——`undefined symbol` 一类仍由 `setup-android-js-engine.sh` 的链接步 + `assert_jni_export` 兜底；③ **并发风险仍在**：本文件当日被异会话**整文件改写两次**（一次回退、一次还原）⇒ 本轮改完**立即 `git add` 暂存**（`git checkout --` 只会还原到**索引**内容 ⇒ 不会再被误清）+ 另存 `/tmp` 副本；④ **file-size 门禁扫不到 `.c`**（其 `EXT` 只有 `.ts/.tsx/.vue/.rs/.java/.kt/.swift/.ets/.mjs/.cjs/.py/.sh`）⇒ 1292 行的 `quickjs_jni.c` **对该门禁不可见**——属"覆盖面跟不上实际形态"的同类缺口，**未擅自扩面**（扩面会一次性淹没异会话的门禁）。
+**⑧ 下一步**：① 鸿蒙（ArkTS）腿（三端同形收口）；② iOS/Android 真机跑 `useFetch` 判据（`PROTEUS_EXIT_AFTER_REPORT=1` 自退）；③ 建议单列：file-size 门禁 `EXT` 增 `.c/.h/.cc/.cpp`（会**连带反噬**已存在的 C/C++ 大文件，需同批登记基线，不宜顺手做）。
+
+908. **★★★液态玻璃材质「连续亮度仿射 + 镜面高光 0.35 + 选中胶囊第二玻璃实例」——三张真机实拍截图的收口修复**（2026-10-13 · 承接 #906/#907 玻璃内核重做；用户三张自研 AGSL 悬浮玻璃导航截图「和 iOS 差很远」→「好的」批准落地）：
+**① 缘起与取证（先放像素，不凭先验）**：用户连续三轮出示真机截图（棋盘格 / 深绿底文字 / 白底列表）。像素取证（3× NEAREST 放大 + 色块边界过渡宽度 + `|Laplacian|` 高频能量）得出一句话结论——「**不像玻璃**」= **三个 0 + 两个 artifact**：**位移 0**（文字笔画直穿玻璃上下缘**零弯折**）、**中心处理 0**（玻璃内文字高频 **8.47 ≥** 玻璃外 6.42 ⇒ 中心是 identity 直通，对照 iOS 中心带高频要降一半 20→9）、**白端自适应 0**（白底上玻璃**隐形**）；artifact = **背板 8× 预糊**（棋盘格在玻璃内变软团，但**几何完全不变**——软而位置不变 = 纯模糊，不是折射）+ **胶囊 rgba 白斑**（深底上无锚定脏白 + 越界盖到相邻 icon 的**月牙裁切**）。
+★**方法论修正（两轮被用户点破）**：我先后凭「低通滤波」先验推断「折射全表面位移」与「blur 全额消费 28px」，均被用户一句话纠正（「消失其实是内容的折射，滑过折射区后就清晰」「iOS 的折射带不是全表面都有」）⇒ 三分带取证后确证 **折射 = 上下边缘带（各 ≈ 1/3 条高）、中心平坦**。**教训：先放像素、再分层定位、别外推。**
+**② 本单边界（异会话已修掉三条）**：`da3482fcb`（标 #906/#907）+ `a96b0311a`（#907）已修 **背板 DIV 8→2**（注释/代码漂移）、**折射带 0.22→0.33 且位移横贯整带**、**prof 位移场**。本单只修**仍未修的三条**：
+**③ 二极开关 → 连续亮度仿射**（`glass.wgsl` ⑤ + `reference.rs` 同源）：旧式 `adapt = smoothstep(0.35,0.70)` + 黑白两极 `glass_tint`（暗端 `(0.18,0.20,0.26)` / 亮端 `(0.97,0.98,1.0)`）+ **固定 0.30 掺和**是**阶跃开关** ⇒ 深底被拉向近黑（**比背景更暗、发脏**）、白底「白 mix 白 = 零变化」（**隐形**）——**同一材质在亮/暗两端各烂一次**，阶跃没有中间态。改为**连续仿射**：`target_l = clamp(lum*0.58+0.13, 0, 1)`、`d_aff = (target_l - lum) * 0.85`、**三通道加同一个 delta**（只改明度、**不动色相/饱和** ⇒ 守住 #875「无固有颜色 + 取正后方之色」）。锚点 `0.58 / 0.13` 来自**第三方复刻仓像素实测**（暗底≈4× 抬亮、亮底轻压；**非 Apple 官方文档**——官方只在 WWDC 视频里说 lensing）；`0.85` = 轻收系数（留 15% 原始对比）⇒ **唯一旋钮**，真机 A/B 只调它（1.0 ↔ 0.7）。
+**④ 镜面高光 0.18 → 0.35**（**三端同值**：Android `GlassMaterial.buildPaint` / iOS `glass-metal.swift` / 鸿蒙 `proteus_render.cpp` **两处** `putF(68)`）——玻璃的「材质身份」主要来自**顶光高光 + 锐利内缘亮线**；0.18 时几乎不可见 ⇒ 读作「半透明塑料片」。WGSL 里该项乘 `bevel_mask`（**仅外缘带**）⇒ 加大只强化边缘高光，**不会**把整面洗白。（`check:glass-pixel-parity` 夹具里的 0.18 **不动**——那是固定样例输入。）
+**⑤ 选中胶囊 = 第二层玻璃**（`superapp/pages/glass-nav.vue`）：`.gna-highlight` 从 `background: rgba(255,255,255,0.55)` **白平铺** → `<pg-glass preset="floating" :radius="24" :interactive="false" tint="rgba(255,255,255,0.30)">`，CSS **去掉 `background`**（白斑 artifact 的来源），仅留几何。★**两处必须先验的前提（都验了）**：a) App 内核 `VaporRenderHost.parseGlass` 有 `if (!t.startsWith("#")) return null;` ⇒ 非 `#` 开头的 tint 会让**整条 glass spec 被丢弃**（静默无材质）——查证 `packages/cli/src/app-component-registry.ts` 的 `glassResolver` 里确有 `rgbaToHex8(r.tint)`（`rgba(255,255,255,0.30)` → `#FFFFFF4D`）⇒ 安全；b) `floating` 预设**自带 `interactive: true`** ⇒ 必须显式 `:interactive="false"`，否则玻璃盒里出现**第二个可交互玻璃**、触点命中被胶囊抢走（原本流动的是整条 bar）——**行为回归**。宿主侧背板捕获 `drawCmds(bc, glassSubtree, null)` **排除所有玻璃节点子树** ⇒ 胶囊采到的是**原始内容**（= 「更亮的玻璃窗口」，与 iOS 选中胶囊同语义）；嵌套合法性见 `docs/proteus-glass-plan/11-audit-performance.md`（`<pg-glass>` 嵌套 ≤ 2 层，本处 1 层）。
+**⑥ 判据（全绿）**：`check:shader-generated`（**无漂移**：TS + Android + iOS + 鸿蒙 SPIR-V 四端重生成一致）· `check:shader-capability` · `check:glass-audit`（扫 270 个 .vue · `<pg-glass>` 6 文件 / 玻璃节点 15）· `check:glass-capability`（值 == glass 包预设单源）· **`check:glass-pixel-parity`**（**Metal 落地 == Rust 算法真源**：像素 16900 · 最大差 85/255 · 平均差 0.50 · 超差(>10) 439 = 2.60%）· 玻璃单测 **48/48**（`glass.test.ts` 22 + `glass-ir.test.ts` 23 + `pg-glass-layers.test.ts` 3）。
+**⑦ 诚实边界**：① **未上真机**——三张截图是**修复前**状态；本单只做到「生成物 ↔ Rust oracle ↔ 门禁」三层一致，**修复后须重跑真机取证**（这恰是本轮反复强调的「形态对 ≠ 字节对 ≠ 跑得通」的第三次实例）；② **中心区仍无柔和化**——并发会话的 #906/#907 走「**零采样**」路线（不做 blur），本单只补了**提亮**（仿射对中心同样生效）；「中心降一半高频」的柔化**留真机 A/B**（JPEG 上定不死）；③ 术语出处：「Apple 实测 `glass_L ≈ 0.58·L+34`」来自**第三方复刻仓像素采样**，**非 Apple 官方**（官方文档只说 "peek through"/"obscure"，lensing 只在 WWDC session 219 视频）；④ **`#907` 号被异会话占用**（5 条提交：`da3482fcb`/`6934ac8fa`/`a96b0311a`/`0809aeea9`/`b9eb26a60`）**但 `decisions.md` 至今无 #907 条目** —— 台账缺口，**非本单**（本单取 #908 避开）；⑤ 本单**未动** #906/#907 已交付的 DIV 2 / 带宽 0.33 / 带内位移 / 零采样。
+**⑧ 下一步**：① **真机重跑三张图当判据**——棋盘格边界在玻璃内应**弯折**（不只是变软）· 文字穿缘应见位移 · 白底上玻璃应可见；② 三处 A/B：`0.85`（对比保留）· `DIV 1↔2`（锐 ↔ 轻霜）· 中心柔化开/关；③ 鸿蒙（ArkTS）腿能力通道（承接 #903/#904 的 `useFetch`）；④ 补登 `#907` 台账条目（异会话）。
+
 907. **★★★玻璃内核「OS 级」重做：零采样 + 宿主降采样 + 折射带横贯 + fixed 视口语义（对齐 Apple Liquid Glass · 承接 #905/#906）**（2026-10-13 · 用户多轮真机对照 iOS App Store 悬浮玻璃 + 另一 AI 的像素分层分析）：
 **① 缘起与正解（像素取证驱动）**：用户「玻璃必须干净、有玻璃感，不能有脏污染；iOS 是**边缘真实折射**、不是内容模糊」。两名 AI 先后误判为"模糊"，放大对比后被证明：**各向同性高斯模糊不可能产生漩涡/火焰纹** ⇒ 主导视觉是**位移场（透镜弯折）**；实测定量：**折射只发生在上/下边缘带（各约占条高 1/3），中心平坦**，且位移**横贯整带**（不是"只在最外缘"）。
 **② 玻璃内核（唯一真源 `packages/shader-codegen-rust/src/materials/glass.wgsl` + CPU oracle `reference.rs` 同步）**：
@@ -3978,3 +4071,19 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
  · 宿主：**玻璃遍 `drawGlassPass` 套用与 onDraw 相同的 `-scroll`+clip 变换**（非 fixed 玻璃随内容滚、fixed 玻璃面经 `+scroll` 补偿钉在视口、其子树 `drawCmds` 在同变换内补偿）——修「悬浮导航滚动后下移/文字飞出屏」；backdrop 采集坐标核对（公式 + 真机）。
 **④ 演示（`superapp/pages/glass-nav.vue`，新）**：iOS 式**可滚动长内容流** + **fixed 悬浮玻璃导航**浮于内容之上（内容从玻璃底下滑过）；`pg-glass-nav` 组件（新）。
 **⑤ 诚实边界**：观感收敛靠真机目视（多轮迭代）；**iOS/鸿蒙未同步宿主降采样**（共享 WGSL 已改，两端需各加"背景降采样"否则玻璃"不糊"）；#906 的 `interactiveEffect`（surface/displace）**半回退**（宿主折叠 `effect` 但着色器暂忽略，无害）；refract/band 等参数为**真机 A/B 初值**。
+
+**⑥ ★★承接本条的「运行期接受面收口」（2026-10-13 · 悬浮玻璃导航演示端到端驱动）**：造这条演示
+（`superapp/pages/glass-nav.vue`：可滚动内容流 + fixed 悬浮玻璃导航 + v-for 行 + 行参 handler + 行内动态 `:class`）
+时,**一步一坑**,全是「App 端编译折叠面 / 订阅表」相对 Vue 运行时的能力缺口（用户点名「不能遇到缺陷就绕过去,得记下来」）。
+本轮收口 4 面墙（详见 `docs/Proteus_Vapor运行时能力缺口台账.md`）:
+· **A1 运行期列表被静态折死**:运行期通路也给 `buildLayoutTemplate` 传 `statics` ⇒ `staticInstantiate` 把响应式 `v-for` 展开成死节点
+（`tpl.lists` 清空,订阅表/运行期列表被整条架空）。修:`buildLayoutTemplate` 加 `keepReactiveStructure`——v-for 源 / v-if 条件引用**响应式源**（ref/reactive/computed/props）时**不折死**,保留交订阅表+运行期;静态通路（`screen-content.json`）不开（它无运行期,必须整树展开）。
+· **B1 行内 handler 带行参静默失效**（`@click="pick(item.key)"` 取不到 `item`）:实例化产 `rowScopes`（实例节点 id→模板节点 id + 行作用域）,`dispatch` 折回模板 id 命中 handler,`runHandler` 的 `read` 先走行作用域。
+· **B2 行内绑定引用外层源永不更新**（`:class="{on: active===item.key}"`）:编译期把行内槽位**同时**挂到外层源（带 `listSource`）;运行期 `writeListItems` 用 `listSource` 取行、源上下文求外层源;新增 `emitListItemClass` 按行下发动态类字段。
+· **B6 行内 `:class` 绘制字段（color/fontWeight）运行期静默丢弃**:`createScreenRuntime` 的实例化用 `ListRegistry` 与 `VaporRuntime` 用的**不是同一实例**（运行期读空表解析不到行节点）+ 未接 `onPaintProp` 出口。修:共享 `ListRegistry` + 运行期 `onPaintProp`/`updatePatches` 批量通道（与设备夹具 `entry-vapor.ts` 同构）。
+· **B7 内核增量重排缺陷（本仓 Rust 内核）**:范围根为 **stretch（无显式宽）** 时,`layout_subtree_and_writeback` 隔离求解把范围根按 auto=内容宽算 ⇒ `flex:1` 子项（`flex-basis:0`）撑不出宽 ⇒ **塌成 0**（真机:悬浮 dock 的 4 个导航项宽 231→0,文字/图标消失;一条 `layout.left` 指令即触发）。修:隔离求解前把范围根**上次解析出的实际尺寸**钉到拷贝子树根上（边界尺寸与内容无关,本次重排不该改它）。回归测试 `incremental_equals_full_when_scope_root_is_stretch_sized`（破坏性验证:撤掉修复当场红）。
+**⑦ ★判据/取证**:定向测试 `vapor-list-e2e`（含 A1 双例 + B1 + B2 端到端）/`slot-runtime-dispatch`（B1）/`screen-runtime`/`superapp-runtime` 全绿;Rust 全量 **230+** 绿（含新回归）;`test:coupled` 除异会话 `AndroidManifest`/INTERNET 用例（**非本条**）外全绿。**真机 Android**:`--es screen glass-nav --es tap x,y` 注入合成 tap ⇒ `SUPERAPP_TAP target=192`（命中搜索行实例）+ handler fired + `active=search`;内核 rects 证明行项宽保持 231（修复前塌成 0）;证据图 `hosts/android/results/glass-nav-b1-{before,after}.png`。
+**⑧ ★诚实边界（未修,已登记）**:
+· **U0（单位,跨端）**:`applyOps` 的**二进制指令值不乘密度**（值在 JS 编、内核解,宿主无介入点）⇒ 真机动态 `layout.left` 只走 1× 距离（83→237 逻辑,实际到 237 物理而非 711）——高亮胶囊**落在错误项**。iOS 因 CALayer=point 天然正确,仅 Android 显形。这与 B7（几何求解错,已修）**是两回事**。需内核侧接密度（`proteus_layout_set_density`）。
+· **A1 其余**:`computed` 不产 data（`extractRefLiterals` 只认 `ref`）/ 普通 `const` 数组不建源 / 图片通路缺失——仍登记待补。
+
