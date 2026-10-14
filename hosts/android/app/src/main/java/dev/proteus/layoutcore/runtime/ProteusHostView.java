@@ -1931,7 +1931,9 @@ public class ProteusHostView extends ViewGroup {
     public void setCmds(List<Cmd> value) {
         this.cmds = value;
         clearMaterialQueryCache();   // ★B4：指令重建 ⇒ 材质几何/曲线缓存失效（重查内核）
-        GlassMaterial.clearShaderCache();  // ★#836：指令重建 ⇒ 玻璃着色器缓存失效（旧节点 id 不再用）
+        // ★★★决策 #930：**不再**在 setCmds 里清玻璃 shader 缓存——缓存键 = (nodeId, 材质位)，指令重建
+        //   不影响其正确性（同一节点同一材质 ⇒ 同一 shader）。此前每帧清 ⇒ 真机实测 **每 0.5s 重建一次**
+        //   ⇒ 每帧重编 AGSL（卡顿 + 观感跳变）。只在**换屏/重挂载**（节点 id 全换）时清，见 `resetGlassShaders()`。
         // ★★★显示列表随指令变更重建（脏时一次 5ms；此后每帧回放 2ms）。
         //   ★尺寸未知时（未布局）先置空——onSizeChanged/首次 onDraw 时补建（见 ensurePicture）。
         if (getWidth() > 0 && getHeight() > 0 && value != null && !value.isEmpty()) {
