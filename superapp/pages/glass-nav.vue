@@ -185,7 +185,9 @@
 
     <!-- ★★悬浮玻璃导航：**fixed** 钉在视口底部（内容从玻璃底下滑过）。bottom 抬到 App 壳 tab 栏之上。 -->
     <view class="gna-dock">
-      <pg-glass class="gna-bar" preset="floating" :radius="30" interactive interactive-effect="surface">
+      <!-- ★#946：条**不加白 tint**——面纱（#943 α0.91 近白）已经是"白霜"，preset floating 的 `tint rgba(255,255,255,0.18)`
+           在面纱后**再提亮**把 90% 的霜面推成 100% 纯白（iOS 浅底 L253 保留一丝内容 / 我们 255 死白）⇒ 显式关掉（tint alpha 0）。 -->
+      <pg-glass class="gna-bar" preset="floating" :radius="30" interactive interactive-effect="surface" tint="rgba(255,255,255,0)">
         <view class="gna-bar__inner">
           <!-- ★★★决策 #908：激活胶囊 = **第二层玻璃**（对齐 iOS App Store 选中胶囊 = 同材质的更亮规格），
                不再是 `rgba(255,255,255,0.55)` 白平铺。真机像素实证两处 artifact 都出自它：
