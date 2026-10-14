@@ -4,7 +4,8 @@
 // 读 `$work/spec.json`（backdrop + params + out），用**生成物 MSL**（glass.frag.metal / glass.vert.metal）
 // 建管线、离屏渲染一块玻璃面，写 `$work/gpu.json`（与 Rust oracle 同格式）。
 //
-// 用法：xcrun -sdk macosx swift glass-metal-parity.swift <workDir>
+// 用法：xcrun -sdk macosx swift glass-metal-parity.swift <workDir> [rest|press]
+//   ★#966：mode 决定读 spec_<mode>.json / 写 gpu_<mode>.json（两态各跑一遍覆盖按下路径）
 import Foundation
 import Metal
 import CoreGraphics
@@ -12,6 +13,7 @@ import CoreGraphics
 let args = CommandLine.arguments
 guard args.count >= 2 else { FileHandle.standardError.write("用法：... <workDir>\n".data(using: .utf8)!); exit(2) }
 let work = args[1]
+let mode = args.count >= 3 ? args[2] : "rest"
 
 func readJSON(_ p: String) -> [String: Any] {
     guard let d = FileManager.default.contents(atPath: p), let o = try? JSONSerialization.jsonObject(with: d) as? [String: Any] else {
@@ -19,7 +21,7 @@ func readJSON(_ p: String) -> [String: Any] {
     }
     return o
 }
-let spec = readJSON("\(work)/spec.json")
+let spec = readJSON("\(work)/spec_\(mode).json")
 let bd = spec["backdrop"] as! [String: Any]
 let bw = bd["width"] as! Int, bh = bd["height"] as! Int
 let brgba = (bd["rgba"] as! [NSNumber]).map { UInt8(truncating: $0) }
@@ -30,6 +32,9 @@ let sizePx = fa(p["size_px"]); let tint = fa(p["tint"]); let light = fa(p["light
 let pad = fv(p, "pad", 24), radius = fv(p, "radius", 0), blur = fv(p, "blur", 0)
 let refract = fv(p, "refract_depth", 0), specular = fv(p, "specular", 0.18), sat = fv(p, "saturation", 1)
 let bgLum = fv(p, "bg_lum", 0)   // ★#911：区域背景亮度（浅霜/深霜锚点）
+// ★#966：触点/按压/叠加层——与 WGSL GlassUniforms 同源（缺省未激活）
+let press = fv(p, "press", 0), overlay = fv(p, "overlay", 0)
+let touchArr = fa(p["touch"]); let touch = SIMD2<Float>(touchArr.count>0 ? touchArr[0] : -1.0e6, touchArr.count>1 ? touchArr[1] : -1.0e6)
 let outSpec = spec["out"] as! [String: Any]
 let ow = outSpec["width"] as! Int, oh = outSpec["height"] as! Int
 
@@ -63,6 +68,7 @@ struct U {
     var tint: SIMD4<Float>; var size_px: SIMD2<Float>; var origin: SIMD2<Float>
     var tex_bias: SIMD2<Float>; var tex_scale: SIMD2<Float>; var light_dir: SIMD2<Float>
     var radius: Float; var blur: Float; var refract_depth: Float; var specular: Float; var saturation: Float; var bg_lum: Float
+    var touch: SIMD2<Float>; var press: Float; var overlay: Float   // ★#966：WGSL 尾部三字段（布局 96B）
 }
 let tw = Float(bw), th = Float(bh)
 var u = U(
@@ -72,7 +78,8 @@ var u = U(
     tex_bias: SIMD2<Float>(Float(pad) / tw, Float(pad) / th),
     tex_scale: SIMD2<Float>(Float(ow) / tw, Float(oh) / th),
     light_dir: SIMD2<Float>(light.count>0 ? light[0] : -0.35, light.count>1 ? light[1] : -0.94),
-    radius: radius, blur: blur, refract_depth: refract, specular: specular, saturation: sat, bg_lum: bgLum)
+    radius: radius, blur: blur, refract_depth: refract, specular: specular, saturation: sat, bg_lum: bgLum,
+    touch: touch, press: press, overlay: overlay)
 
 let pass = MTLRenderPassDescriptor()
 pass.colorAttachments[0].texture = oTex
@@ -100,5 +107,5 @@ var rgba = [Int](repeating: 0, count: ow*oh*4)
 for i in 0..<(ow*oh) { rgba[i*4+0] = Int(bytes[i*4+2]); rgba[i*4+1] = Int(bytes[i*4+1]); rgba[i*4+2] = Int(bytes[i*4+0]); rgba[i*4+3] = Int(bytes[i*4+3]) }
 let out: [String: Any] = ["width": ow, "height": oh, "rgba": rgba]
 let data = try! JSONSerialization.data(withJSONObject: out, options: [])
-try! data.write(to: URL(fileURLWithPath: "\(work)/gpu.json"))
+try! data.write(to: URL(fileURLWithPath: "\(work)/gpu_\(mode).json"))
 FileHandle.standardOutput.write("  Metal 渲染完成：\(ow)x\(oh)\n".data(using: .utf8)!)

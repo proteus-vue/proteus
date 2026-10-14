@@ -3330,6 +3330,9 @@ public class ProteusHostView extends ViewGroup {
     /** ★★★决策 #905：玻璃触控形变——活动交互玻璃 + 触点（盒局部 px）+ press（逐帧 lerp 动画）。 */
     private int glassInteractNodeId = -1;
     private float glassTouchLocalX = -1e6f, glassTouchLocalY = -1e6f;
+    // ★#966：触点在**命中盒坐标空间**（与 cmd 盒 c.x/c.y 同空间）——供**选中胶囊**（overlay 玻璃）
+    //   折算自身局部触点 ⇒ SDF 充气。命中玻璃自身仍用上面的 local（盒相同）。
+    private float glassTouchAbsX = -1e6f, glassTouchAbsY = -1e6f;
     private float glassPress = 0f, glassPressTarget = 0f;
     /** ★#959/#961：按下放大的两档系数——**条小、选中胶囊大**（用户实测 iOS：条缩放小、胶囊缩放大）。 */
     /** ★#963：当前"按下组"的玻璃节点集（命中 + 子树内玻璃）——供 drawGlassFace 判"是否点亮"。 */
@@ -3467,6 +3470,7 @@ public class ProteusHostView extends ViewGroup {
         //   ★最终输入分辨率仍 = bw/2（#917：超高降采样会让压缩带混叠 ⇒ 滚动抖动）。
         final int DIV = 2;           // 最终输入分辨率（与 iOS capturePxPerPoint=scale/2 同口径）
         final int BLUR_DOWN = 4;     // ★#929：iOS「轻霜」= 极轻柔化（逆向报告：~1-3px / 中心高频衰减~50%）；4⇒≈2px（2=无霜/#906 过头，8=糊过头/#927）
+        // I2-ALLOW: **降采样缓冲的位图像素尺寸**（非几何坐标——位图必须整数像素；几何采样走内核吸附值）
         final int sw = Math.max(1, Math.round((float) bw / DIV));
         final int sh = Math.max(1, Math.round((float) bh / DIV));
         if (glassBackdrop == null || glassBackdrop.getWidth() != sw || glassBackdrop.getHeight() != sh) {
@@ -3502,21 +3506,34 @@ public class ProteusHostView extends ViewGroup {
      */
     private void drawGlassFace(Canvas canvas, int nodeId, Cmd c, GlassMaterial.Spec spec, float bx, float by, float bw, float bh) {
         if (bw <= 0 || bh <= 0) return;
+        final float nodePress = (nodeId == glassInteractNodeId || glassPressSubtree.contains(nodeId)) ? glassPress : 0f;
+        // ★#966/#969：触点在**本盒（可能已缩放）坐标空间**的局部位置——**按下组内的每一块玻璃**（命中玻璃=条 与
+        //   其子树内玻璃=选中胶囊）**都在同一触点处外凸**（iOS 的 flex 是整个玻璃面在触点处鼓起，不只胶囊）。
+        //   ★`glassTouchAbsX` 与盒 x 同空间；按 #961 缩放后 `bx` 已变 ⇒ 必须用绝对值减 `bx`。
+        final boolean inPressGroup = (nodeId == glassInteractNodeId) || glassPressSubtree.contains(nodeId);
+        final boolean touchApplies = inPressGroup && glassTouchAbsX > -1e5f;
+        final float qtx = touchApplies ? glassTouchAbsX - bx : -1e6f;
+        final float qty = touchApplies ? glassTouchAbsY - by : -1e6f;
+        android.graphics.Paint p = GlassMaterial.buildPaint(nodeId, glassBackdrop, bx, by, glassBackdropX, glassBackdropY, bw, bh, spec.radius, spec,
+                qtx, qty, nodePress, glassBackdropScaleX, glassBackdropScaleY);
+        // ★★★决策 #966/#969：**充气态剪影 = 外凸路径裁剪**（`inflatedPillPath`，与 shader `sd_glass` 同式）。
+        //   ★为什么不用 shader alpha 覆盖率：实测本设备**忽略 `RuntimeShader` 返回的 alpha**（返回 0 与圆覆盖率
+        //     都仍画成不透明矩形）⇒ 剪影只能来自**几何裁剪**。绘制矩形外扩以覆盖凸出区（否则凸出部分采不到）。
+        //   ★★#969（用户「下面的玻璃条边完全看不到挤压」）：**去掉 overlay 门控**——命中玻璃（条）也外凸 ⇒
+        //     条的下/上边缘在触点处鼓起（对齐 iOS 的整面 flex）。静止态仍走圆角矩形裁剪（逐像素不变）。
+        final boolean inflated = p != null && touchApplies && nodePress > 0.001f
+                && GlassMaterial.isGlassMaterial(spec.material);
         final int save = canvas.save();
-        if (spec.radius > 0) {
+        if (inflated) {
+            canvas.clipPath(GlassMaterial.inflatedPillPath(bx, by, bw, bh, spec.radius, qtx, qty, nodePress));
+        } else if (spec.radius > 0) {
             android.graphics.Path clip = new android.graphics.Path();
             clip.addRoundRect(new android.graphics.RectF(bx, by, bx + bw, by + bh), spec.radius, spec.radius,
                     android.graphics.Path.Direction.CW);
             canvas.clipPath(clip);
         }
-        android.graphics.Paint p = GlassMaterial.buildPaint(nodeId, glassBackdrop, bx, by, glassBackdropX, glassBackdropY, bw, bh, spec.radius, spec,
-                // ★★★决策 #905：触控形变——交互玻璃才传触点（盒局部 px）+ press；其余恒 (-1e6)（无影响）。
-                (spec.interactive && glassInteractNodeId == nodeId) ? glassTouchLocalX : -1e6f,
-                (spec.interactive && glassInteractNodeId == nodeId) ? glassTouchLocalY : -1e6f,
-                // ★#963：**按下组**（命中玻璃 + 其子树内玻璃，如选中胶囊）都点亮；触点位置仅命中玻璃有。
-                (nodeId == glassInteractNodeId || glassPressSubtree.contains(nodeId)) ? glassPress : 0f,
-                glassBackdropScaleX, glassBackdropScaleY);
         if (p != null) {
+            // ★#969：形变**向内**（内陷/凹）⇒ 盒矩形已完整覆盖形变路径，无需外扩。
             canvas.drawRect(bx, by, bx + bw, by + bh, p);
         } else {
             // ★降级（API<31 或着色器失败）：半透明实色——绝不白屏/黑块（玻璃方案铁律 3）
@@ -3547,6 +3564,8 @@ public class ProteusHostView extends ViewGroup {
                 glassInteractNodeId = ids[i];
                 glassTouchLocalX = hx - c.x;    // 盒局部 px
                 glassTouchLocalY = hy - c.y;
+                glassTouchAbsX = hx;             // ★#966：绝对触点（同空间，供 overlay 玻璃折算）
+                glassTouchAbsY = hy;
                 glassPressTarget = 1f;
                 if (glassPress < 0.01f) glassPress = 0.01f;   // 立即起步（避免首帧无变化）
                 invalidate();

@@ -36,6 +36,9 @@ final class GlassMetalRenderer {
         var interactive: Bool = false
         /// ★★★决策 #906：交互效果形态——0=**上层玻璃表面流动**（默认，Apple）/ 1=内容折射位移。
         var effect: CGFloat = 0
+        /// ★★★决策 #952/#966：选中胶囊**叠加层**强度（0=无 / 1=叠半透明中性色）——uniform offset 92，
+        ///   与 shader 的 `overlay` 同槽（此前 iOS 写的是 `effect`（恒 0）⇒ #952 与 #966 充气门控在该端**恒不触发**）。
+        var overlay: CGFloat = 0
     }
 
     private let device: MTLDevice?
@@ -217,7 +220,7 @@ final class GlassMetalRenderer {
         // ★★★决策 #905/#906：触控交互（touch 盒局部 px / press 0..1 / effect 0=表面流动 1=内容位移）
         var touch: SIMD2<Float>      // 80
         var press: Float             // 88
-        var effect: Float            // 92（总长 96）
+        var overlay: Float           // 92 ★#966：shader 读作 `overlay`（选中胶囊叠加层 / 充气门控）
     }
 
     /// ★★★决策 #911：玻璃盒区域**平均背景亮度**（0..1）——供 shader 区域级霜锚点（浅霜/深霜）。
@@ -239,6 +242,7 @@ final class GlassMetalRenderer {
         ctx.draw(backdrop, in: CGRect(x: 0, y: 0, width: sw, height: sh))
         // 节点盒（backdrop 像素坐标）→ 小缓冲坐标（顶左原点；CGContext 位图内存首行=顶行）
         let sx = Float(sw) / Float(iw), sy = Float(sh) / Float(ih)
+        // I2-ALLOW: **位图采样区域的像素边界**（非布局几何——背景位图必须整数像素，几何仍走内核吸附值）
         let x0 = max(0, Int(bx * sx)), y0 = max(0, Int(by * sy))
         let x1 = min(sw, Int(ceil((bx + bw) * sx))), y1 = min(sh, Int(ceil((by + bh) * sy)))
         guard x1 > x0, y1 > y0 else { return 0 }
@@ -300,7 +304,7 @@ final class GlassMetalRenderer {
             touch: SIMD2<Float>(touch.map { Float($0.x * outScale) } ?? -1e6,
                                 touch.map { Float($0.y * outScale) } ?? -1e6),
             press: Float(press),
-            effect: Float(spec.effect)
+            overlay: Float(spec.overlay)
         )
     }
 
