@@ -434,6 +434,27 @@
         "T-glass-planar-refract"
       ],
       "note": "用户（附 iOS 滑过前后两张对照图）：「玻璃边缘总有厚厚的玻璃感（iOS 没有）；边缘随背景发亮发暗（不对）；文字经过边缘变亮、折射完全不存在；感觉思路一直都不对」。取证：① 厚玻璃感 = bevel_mask 展布 0.35×band=23px 宽渐变（iOS 仅 ~2px 锐利亮线）；② 边缘翻转 = edge_pol（#910 加的「自适应描边极性」，iOS 无此行为，边缘恒亮）；③ 折射不存在 = #914 把 A 降到 0.15 时连折射一起消掉；④ 模糊不足 = 玻璃内锐度 0.56×(iOS 0.29×)。★模型修正（非微调）：宽缘带→细亮线、删 edge_pol、DIV 2→4 补模糊、band 收窄 + 折射幅度回正。★范围：只 Android（用户明令先对齐一端）。\n\n【已落地（2026-10-14 · 决策 #915 · 安卓范围）】band 0.33→0.12 / EDGE_REFRACT 0.15→0.50 / bevel_mask 0.35→0.10 / 删 edge_pol / Android DIV 2→4。真机：23px 宽渐变→单条细亮线+均匀霜面、边缘不翻转、玻璃内可见模糊。判据：单测 45 · Android 编译绿 · iOS parity(wgsl↔oracle) max 1/255。★待续：安卓真机判\"折射够不够\"；iOS/鸿蒙真机+parity；P3 三项。"
+    },
+    {
+      "id": "T-glassnav-vfor-events",
+      "title": "App 运行期缺陷：v-for 列表项（glass-nav 导航项）事件绑定只产出 1 条 + tpl 未展开项 ⇒ 点击不生效",
+      "type": "capability",
+      "status": "planned",
+      "owner": null,
+      "scope": [
+        "packages/compiler/src/vapor/**",
+        "packages/slot-runtime/src/**",
+        "packages/cli/src/app-runtime-content.ts",
+        "superapp/pages/**",
+        "tests/**"
+      ],
+      "decision": null,
+      "verification": "npx vitest run tests/vapor-list-e2e.test.ts tests/slot-runtime-dispatch.test.ts + 真机：点 glass-nav 第 2/3/4 项，胶囊移到对应项",
+      "branch": null,
+      "related": [
+        "T-app-fetch"
+      ],
+      "note": "【取证（2026-10-14）】用户真机点 glass-nav 四项，胶囊纹丝不动。诊断：① 真机命中 node 188（导航项**文字**），产物 events 只挂在 node 179（**唯一一个**项容器）且**无冒泡链**连到 188；② 运行期产物 `APP_RUNTIME_CONTENT[\"glass-nav\"].events` **只有 1 条**（nodeId 179 / tap / h0），而屏上有 **4 个** v-for 导航项；③ tpl.nodes 里 `flexGrow:1+flexBasis:0` 的项容器 = **0 个**（未按项展开）。⇒ v-for 列表项的**事件绑定 = 只产首项**，点击其余项无 handler。★同类：记忆 A1「运行期列表被静态折死」（#802 keepReactiveStructure）在该形态未覆盖。"
     }
   ]
 }
