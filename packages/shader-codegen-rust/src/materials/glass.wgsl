@@ -78,7 +78,7 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     // ★★★决策 #907/#910：折射带 ≈ **最短边 1/3**（= 条高 1/3）。
     //   ★#910 修正口径（报告 G3）：原 `hsmin*0.33 = 0.165·min` 实为**最短边的 1/6**（注释称"1/3"、
     //   代码只有一半 ⇒ 带宽被砍半 ⇒ 真机"折射区比 iOS 少很多"）。改 `0.33·min` ⇒ 带宽 **×2**，与注释/iOS 实测一致。
-    let band = max(smin * 0.33, 6.0);
+    let band = max(smin * 0.12, 6.0);
     let e = clamp(d / band, 0.0, 1.0);   // 0=最外缘, 1=内侧（带内）
 
     // ① 外法线（SDF 梯度；宽 eps 防药丸中轴裂缝）
@@ -104,7 +104,7 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     //   ⇒ 幅度降到 **0.15·band**（≈10 物理px ≈ 3 逻辑px）：线间距接近均匀（仅边缘轻微弯折，对齐 iOS"平面变化"）。
     //   ★这是**定稿方向**（不再漂移）：机制=法线方向向外采样（单调、不折叠）+ 小幅度（平面式轻弯折）。
     //   A 分解：`EDGE_REFRACT=0.15`（幅度，本轮定稿）· `strength`（宿主 refreact_depth 旋钮，1.0 中性）。
-    let EDGE_REFRACT = 0.15;
+    let EDGE_REFRACT = 0.50;
     let strength = clamp(u.refract_depth / max(band, 1.0), 0.2, 1.1);
     var bend = prof * band * EDGE_REFRACT * strength;
     // ★★★决策 #905：**触控形变流动**——触点周围局部凸起（Gaussian 钟），按压力把背后内容沿"离触点方向"推开；
@@ -150,17 +150,14 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     let f0 = 0.04;
     let fres = f0 + (1.0 - f0) * pow(max(1.0 - cos_i, 0.0), 5.0);
     let facing = max(dot(n, normalize(u.light_dir)), 0.0);
-    let bevel_mask = 1.0 - smoothstep(0.0, 0.35, e);   // 亮带仅在外缘
+    let bevel_mask = 1.0 - smoothstep(0.0, 0.10, e);   // ★#915：0.35→0.10（细亮线，对齐 iOS ~2px；旧值=23px 宽渐变="厚玻璃感"）
     // 边缘高光：细亮边（各向 0.10）+ 顶光加成（法线朝上侧更亮，对齐 iOS 顶缘高光）
     let top_hi = max(-n.y, 0.0);                        // 上缘（n.y≈-1）
     let edge_hi = bevel_mask * (0.10 + 0.26 * top_hi + 0.16 * facing);
-    // ★★★决策 #910 · **自适应描边极性**（报告 P0-1）：此前描边**恒加白** ⇒ 亮底"白上加白" ⇒ 轮廓消失
-    //   （这正是"完全透明"的主因链之一）。`edge_pol` = 0（暗底 → **加亮**描边）→ 1（亮底 → **减暗**描边，
-    //   让轮廓在白底上仍可读）。参照系 = **背景亮度 `lum`**（而非玻璃自身）。
-    let edge_pol = smoothstep(0.55, 0.85, lum);
-    let rim_light = (pow(facing, 6.0) * u.specular + fres * 0.20) * bevel_mask + edge_hi + tg * 0.30;   // ★#905：触点点亮
-    let rim_dark = edge_hi * 0.9;
-    let rim = rim_light * (1.0 - edge_pol) - rim_dark * edge_pol;
+    // ★★★决策 #915 · **删除 `edge_pol`（"自适应描边极性"）**——用户实测「边缘随背景发亮发暗，不对」。
+    //   取证：iOS 边缘是 **specular 高光（恒亮）**，**不随背景翻转**。旧 `edge_pol`（#910 引入）让亮底边缘**减暗**
+    //   ⇒ 既非 iOS，又让"文字经过边缘变亮"（宽带时更糟）。⇒ 缘带收窄到 0.10 后**恒定加亮**（恢复 iOS 语义）。
+    let rim = (pow(facing, 6.0) * u.specular + fres * 0.20) * bevel_mask + edge_hi + tg * 0.30;   // ★#905：触点点亮
     col = vec4<f32>(clamp(col.rgb + vec3<f32>(rim), vec3<f32>(0.0), vec3<f32>(1.0)), 1.0);
     return col;
 }

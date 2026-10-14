@@ -102,7 +102,7 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     let d = (-sd).max(0.0);
     let smin = p.size_px.0.min(p.size_px.1);   // 最短边（= 2×hsmin）
     // ★决策 #907/#910：折射带 = **最短边 1/3**（#910 修正口径：原 `hsmin*0.33 = 0.165·min` 只有 1/6 ⇒ ×2）
-    let band = (smin * 0.33).max(6.0);
+    let band = (smin * 0.12).max(6.0);
     let e = (d / band).clamp(0.0, 1.0);
 
     let eps = (band * 0.3).clamp(1.0, 16.0);
@@ -118,7 +118,7 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     //   式轻弯折；机制 = 法线方向向外采样，单调不折叠）。refract_depth 以 band 为基准（1.0 中性）。
     let prof = 1.0 - smoothstep(0.0, 1.0, e);
     let strength = (p.refract_depth / band.max(1.0)).clamp(0.2, 1.1);
-    let bend = prof * band * 0.15 * strength;
+    let bend = prof * band * 0.50 * strength;
     let sp = (local.0 + n.0 * bend, local.1 + n.1 * bend);
 
     // uv 折算：纹理尺寸 = size + 2*pad；节点 uv=0 对应纹理 pad/(size+2pad)
@@ -150,15 +150,13 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     let llen = (p.light_dir.0 * p.light_dir.0 + p.light_dir.1 * p.light_dir.1).sqrt();
     let ld = (p.light_dir.0 / llen, p.light_dir.1 / llen);
     let facing = (n.0 * ld.0 + n.1 * ld.1).max(0.0);
-    let bevel_mask = 1.0 - smoothstep(0.0, 0.35, e);
+    let bevel_mask = 1.0 - smoothstep(0.0, 0.10, e);
     // ★决策 #906：兜底边缘高光（恒定细亮边 + 顶光加成）——与 glass.wgsl ⑥ 同源（纯色背景也可见）
     let top_hi = (-n.1).max(0.0);
     let edge_hi = bevel_mask * (0.10 + 0.26 * top_hi + 0.16 * facing);
     // ★★★决策 #910 · **自适应描边极性**（报告 P0-1）：亮底描边**减暗**（轮廓可见）、暗底**加亮**——与 glass.wgsl ⑥ 同源。
-    let edge_pol = smoothstep(0.55, 0.85, lum);
-    let rim_light = (facing.powi(6) * p.specular + fres * 0.20) * bevel_mask + edge_hi;
-    let rim_dark = edge_hi * 0.9;
-    let rim = rim_light * (1.0 - edge_pol) - rim_dark * edge_pol;
+    // ★#915：删 edge_pol（iOS 边缘恒亮，不随背景翻转）——与 glass.wgsl ⑥ 同源。
+    let rim = (facing.powi(6) * p.specular + fres * 0.20) * bevel_mask + edge_hi;
     for c in 0..3 { col[c] = (col[c] + rim).clamp(0.0, 1.0); }
     col[3] = 1.0;
     col

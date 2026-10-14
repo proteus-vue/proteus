@@ -3376,7 +3376,7 @@ public class ProteusHostView extends ViewGroup {
         //   （线稿/文字/发丝）压弯成漩涡 ⇒ **输入必须保留高频**。此前误用 8×（注释却写 2×，漂移）⇒
         //   68px 条背板只剩 ~28 texel、高频全灭 ⇒ 位移场只能输出**灰糊色团**（真机"糊成一团"的真因）。
         //   ⇒ 降到 **2×**（一次轻盒式低通，够霜感、不灭高频）。真机 A/B：1（锐）↔ 2（轻霜）。
-        final int DIV = 2;
+        final int DIV = 4;   // ★#915：2→4——补背景模糊（真机对照：iOS 玻璃内锐度 0.29× vs 我们 0.56× ⇒ 模糊不足）
         final int sw = Math.max(1, Math.round((float) bw / DIV));
         final int sh = Math.max(1, Math.round((float) bh / DIV));
         if (glassBackdrop == null || glassBackdrop.getWidth() != sw || glassBackdrop.getHeight() != sh) {
