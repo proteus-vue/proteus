@@ -3546,9 +3546,20 @@ public class ProteusHostView extends ViewGroup {
     private void drawGlassPass(Canvas canvas) {
         if (glassByNode.isEmpty()) return;
         darkGlassRects.clear();   // ★#950：本帧暗玻璃盒重算
+
         final List<Cmd> list = cmds;
         final int[] ids = cmdNodeIds;
         if (ids == null) return;
+        // ★#960：**整块放大**（对齐 iOS）——按下玻璃（多为条）时，**它子树里的所有玻璃**（如选中胶囊）都要
+        //   绕**同一中心**（按下玻璃的盒中心）等比缩放，否则"条放大、胶囊不动"（真机实测：用户「条有缩放、胶囊没变化」）。
+        Cmd pressBox = null;
+        java.util.Set<Integer> pressSubtree = java.util.Collections.emptySet();
+        if (glassInteractNodeId >= 0 && glassPress > 0.001f && ids != null) {
+            for (int k = 0; k < list.size() && k < ids.length; k++) {
+                if (ids[k] == glassInteractNodeId) { pressBox = list.get(k); break; }
+            }
+            if (pressBox != null) pressSubtree = subtreeIdsOf(glassInteractNodeId);
+        }
         // ★★★决策 #907：玻璃遍**套用与 onDraw 相同的 `-scroll`+clip 变换**——这样
         //   ① fixed 玻璃面/子树经各自 `+scroll` 补偿 ⇒ 净 0 ⇒ 钉在视口；
         //   ② 非 fixed 玻璃随内容滚动。此前玻璃遍在变换之外（屏幕空间）⇒ fixed 子树的
@@ -3582,11 +3593,11 @@ public class ProteusHostView extends ViewGroup {
                 if (glum >= 0f && glum < 0.45f) darkGlassRects.add(new float[]{gc.x, gc.y, gc.w, gc.h});
             }
             // ★★★决策 #959：**按下放大**（对齐 iOS）——命中交互玻璃且 press>0 ⇒ 以盒中心等比放大（松开 lerp 回 1）。
-            final int ss = (ids[i] == glassInteractNodeId && glassPress > 0.001f) ? canvas.save() : -1;
+            final boolean inPress = pressBox != null && pressSubtree.contains(ids[i]);
+            final int ss = inPress ? canvas.save() : -1;
             if (ss != -1) {
-                final Cmd gc2 = list.get(i);
                 final float sc = 1f + glassPress * GLASS_PRESS_SCALE;
-                canvas.scale(sc, sc, gc2.x + gc2.w * 0.5f, gc2.y + gc2.h * 0.5f);
+                canvas.scale(sc, sc, pressBox.x + pressBox.w * 0.5f, pressBox.y + pressBox.h * 0.5f);
             }
             drawGlassFace(canvas, ids[i], list.get(i), g);
             if (ss != -1) canvas.restoreToCount(ss);
