@@ -139,16 +139,11 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     for c in 0..3 { col[c] = col[c] + (col[c] * p.tint[c] * 2.0 - col[c]) * p.tint[3]; }
     // ★★★决策 #913：**霜层（surface veil）**——修正 #910/#911 的机制错误（对内容做亮度平移 ≠ 表面霜）。
     //   `mix(内容色, 霜色, α)`：整面朝霜色靠拢（降对比 ⇒ 乳白/灰纱）。霜色与厚度随区域背景**翻转**
-    //   （深底→厚亮霜 / 亮底→薄暗霜，对齐 HIG "flip from light to dark"）。与 glass.wgsl ⑤ 同源。
-    let frost_t = smoothstep(0.30, 0.90, p.bg_lum);
-    let frost_white = 0.93 + (0.97 - 0.93) * frost_t;
-    // ★★★决策 #925：霜色保留 ~12% 背景色温（iOS 逆向实证 B−R ≈ 12%）——与 glass.wgsl ⑤ 同源。
-    //   frost_white 逐通道 + 12% 原始采样色。
+    // ★★★决策 #926（iOS 4 图定量拟合）：`glass_L = 0.777·bg_L + 0.195` ⇒ **均匀亮度位移**（保内容对比）。
+    //   ★#925：附 **12% 背景色温**（只取色度偏移）。与 glass.wgsl ⑤ 同源。
+    let d_aff = (0.777 * p.bg_lum + 0.195) - p.bg_lum;
     let raw_lum = raw[0]*0.299 + raw[1]*0.587 + raw[2]*0.114;
-    let mut frost_col = [0.0f32; 3];
-    for c in 0..3 { frost_col[c] = (frost_white + (raw[c] - raw_lum) * 0.12).clamp(0.0, 1.0); }
-    let frost_a = 0.70 + (0.28 - 0.70) * frost_t;   // ★#923：降为"轻提亮"（重白霜会糊平内容 ⇒ 折射/倒影看不见）
-    for c in 0..3 { col[c] = col[c] + (frost_col[c] - col[c]) * frost_a; }
+    for c in 0..3 { col[c] = (col[c] + d_aff + (raw[c] - raw_lum) * 0.12).clamp(0.0, 1.0); }
 
     let cos_i = 1.0 / (1.0 + slope * slope).sqrt();
     let f0 = 0.04f32;
