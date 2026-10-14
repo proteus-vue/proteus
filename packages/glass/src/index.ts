@@ -31,6 +31,9 @@ export {
   glassStyleFor,
   glassClassList,
   showsDecoration,
+  // ★决策 #910：材质 → 提饱和度的**唯一映射**（Web/MP 的 CSS 与原生自绘共用同一口径，防两套漂移）。
+  cssSaturateForMaterial,
+  CSS_SATURATE,
 } from './degrade'
 export type { GlassEnv } from './degrade'
 

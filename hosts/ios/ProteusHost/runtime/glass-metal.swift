@@ -40,6 +40,12 @@ final class GlassMetalRenderer {
 
     private let device: MTLDevice?
     private let commandQueue: MTLCommandQueue?
+    /// ★★★决策 #910（报告 P2-1 · 结构性缺口）：**背景采样器**。
+    ///   【为什么之前是坏形态】MSL 的 `fs_glass` 片元按参数顺序期望 `sampler backdrop_smp [[user(fake0)]]`，
+    ///   而本文件此前**从未 `setFragmentSamplerState`** ⇒ sampler 处于**未定义状态**（可能 nearest/clamp-zero），
+    ///   与 Android（`FILTER_MODE_LINEAR`）/ 鸿蒙（`VK_FILTER_LINEAR`）**不一致** ⇒ 采样可能出块状/偏色。
+    ///   现显式绑定 LINEAR + CLAMP_TO_EDGE（与三端同口径）。
+    private let backdropSampler: MTLSamplerState?
     /// ★★★决策 #900：**每材质一条管线**（数据驱动——遍历 `GeneratedMaterials.materials` 建；
     ///   加材质零改本文件）。键 = 材质 id。
     private var pipelines: [String: MTLRenderPipelineState] = [:]
@@ -50,6 +56,14 @@ final class GlassMetalRenderer {
     private init() {
         device = MTLCreateSystemDefaultDevice()
         commandQueue = device?.makeCommandQueue()
+        // ★★★决策 #910（报告 P2-1）：显式建 LINEAR + CLAMP_TO_EDGE 采样器（与 Android/鸿蒙同口径）。
+        let sd = MTLSamplerDescriptor()
+        sd.minFilter = .linear
+        sd.magFilter = .linear
+        sd.mipFilter = .notMipmapped
+        sd.sAddressMode = .clampToEdge
+        sd.tAddressMode = .clampToEdge
+        backdropSampler = device?.makeSamplerState(descriptor: sd)
         buildPipelines()
     }
 
@@ -145,6 +159,8 @@ final class GlassMetalRenderer {
             guard let enc = cb.makeRenderCommandEncoder(descriptor: pass) else { continue }
             enc.setRenderPipelineState(pipeline)
             enc.setFragmentTexture(backdropTex, index: 0)
+            // ★★★决策 #910（报告 P2-1）：绑定背景采样器（此前缺失 ⇒ 未定义状态）。所有材质（玻璃 + 模糊族）都采样背景。
+            if let smp = backdropSampler { enc.setFragmentSamplerState(smp, index: 0) }
             if isGlass {
                 let tp = (touchPress != nil && i < touchPress!.count) ? touchPress![i] : nil
                 var u = makeUniforms(nodeRect: req.nodeRect, outScale: scale, texPxPerPoint: texPx,
@@ -234,7 +250,7 @@ final class GlassMetalRenderer {
             //     此处改回 `× outScale` 与 `radius` 同轴，三端同守恒（物理 blur = 逻辑 × 密度）。
             radius: Float(spec.radius * outScale),
             blur: Float(spec.blur * outScale),
-            refract_depth: min(w, h) * 0.22,   // 与 Android 同守恒
+            refract_depth: min(w, h) * 0.33,   // ★#910：以 band(=0.33·min) 为基准（与 Android 同守恒）
             // ★★★决策 #908：镜面高光 0.18 → 0.35（**三端同值**：Android GlassMaterial / 鸿蒙 proteus_render
             //   同步）——顶光高光 + 内缘亮线是玻璃"材质身份"的主来源；WGSL 里该项乘 `bevel_mask`（仅外缘带）。
             specular: 0.35,

@@ -69,8 +69,11 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     let sd = sd_round_rect(p, hs, r);
     let d = max(-sd, 0.0);               // 离边深度（内部为正）
     let hsmin = min(hs.x, hs.y);
-    // ★★★决策 #907：折射带 ≈ **条高 1/3**（0.22→0.33，对齐 Apple 实测：倒角带约占条高 1/3）。
-    let band = max(hsmin * 0.33, 6.0);
+    let smin = min(u.size_px.x, u.size_px.y);   // 最短**边**（= 2×hsmin）
+    // ★★★决策 #907/#910：折射带 ≈ **最短边 1/3**（= 条高 1/3）。
+    //   ★#910 修正口径（报告 G3）：原 `hsmin*0.33 = 0.165·min` 实为**最短边的 1/6**（注释称"1/3"、
+    //   代码只有一半 ⇒ 带宽被砍半 ⇒ 真机"折射区比 iOS 少很多"）。改 `0.33·min` ⇒ 带宽 **×2**，与注释/iOS 实测一致。
+    let band = max(smin * 0.33, 6.0);
     let e = clamp(d / band, 0.0, 1.0);   // 0=最外缘, 1=内侧（带内）
 
     // ① 外法线（SDF 梯度；宽 eps 防药丸中轴裂缝）
@@ -89,10 +92,13 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     let u1 = 1.0 - ec;
     let slope = u1 / sqrt(max(1.0 - u1 * u1, 1e-4));
     let prof = 1.0 - smoothstep(0.0, 1.0, e);   // 横贯整带（外缘 1 → 内缘 0）
-    // 峰值位移 = 带宽 × 0.45（自洽：与带同尺度，对齐 Apple「位移横贯整带」）。
-    // ★`u.refract_depth` 保留为**强度系数**（宿主传 ≈1 时中性；此处归一化到与带同尺度，向后兼容旧宿主像素值）。
-    let strength = clamp(u.refract_depth / max(hsmin * 0.44, 1.0), 0.5, 2.0);
-    var bend = prof * band * 0.45 * strength;
+    // ★★★决策 #910 · 位移峰值 ≥ 带宽（报告 G2）：旧 `0.45·band` **恒 < 带宽** ⇒ 只平滑外扩、
+    //   不出现真透镜的**压缩/回折（漩涡）**。改 `1.15·band`（峰值 > 带宽 ⇒ 带内采样非单调 ⇒ 弯折可见）。
+    // ★`u.refract_depth` 由"归一化旁路"改为**真旋钮**（报告 G5）：旧式分母 `hsmin*0.44` 恰好等于宿主传入值
+    //   ⇒ `strength≡1.0`，任何调参都改不动折射。现以 `band` 为基准（宿主默认传 `min(w,h)*0.33` = band ⇒ 1.0 中性），
+    //   传 2×/0.5× 即真的更强/更弱。
+    let strength = clamp(u.refract_depth / max(band, 1.0), 0.2, 2.5);
+    var bend = prof * band * 1.15 * strength;
     // ★★★决策 #905：**触控形变流动**——触点周围局部凸起（Gaussian 钟），按压力把背后内容沿"离触点方向"推开；
     //   `press==0` ⇒ 该项为 0（退化到既有折射，像素等价）。
     let tR = max(hsmin * 0.9, 8.0);
@@ -113,21 +119,19 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     col = vec4<f32>(mix(col.rgb, vec3<f32>(lum), 0.12), col.a);
     col = vec4<f32>(mix(vec3<f32>(lum), col.rgb, u.saturation), col.a);
 
-    // ⑤ tint（作者语义着色，可选）+ ★★★**连续亮度仿射**（决策 #908 · 对齐 Apple Liquid Glass）
-    //   【为什么第三次改】上一版 `smoothstep(0.35,0.70)` 是**阶跃开关**：暗端把玻璃 mix 向近黑
-    //     `(0.18,0.20,0.26)`、亮端 mix 向奶白 `(0.97,0.98,1.0)`，系数固定 `0.30`。真机像素实证**两种失败**：
-    //       ① 深色底（深绿/黑）⇒ 玻璃被拉向近黑，**比背景更暗、发脏**；
-    //       ② 白色底 ⇒ "白 mix 白 = 零变化" ⇒ 玻璃**隐形**。
-    //     同一材质在亮/暗两端各烂一次 = 开关模型的必然结果（阶跃没有中间态）。
-    //   【Apple 做法（第三方复刻仓像素实测，非 Apple 官方）】玻璃亮度是背景亮度的**连续仿射**：
-    //     `glass_L ≈ 0.58·bg_L + 0.13`（归一化 0..1）——暗底**恒定提亮**（≈4× 抬亮 ⇒ 深底不发脏）、
-    //     亮底**轻微压暗**（压缩对比 ⇒ 白底可见）。曲线连续无台阶 ⇒ 整条玻璃是**同一个材质**。
-    //   【实现】对三通道加**同一个** delta（只改明度、不动色相/饱和）⇒ 玻璃始终取"正后方之色"，
-    //     不做黑白两极替换（守住 #875「无固有颜色」）。`0.85` = 轻收系数（留 15% 原始对比，避免死板）；
-    //     取 1.0 即完全复刻实测曲线。★该系数是**唯一旋钮**，真机 A/B 只调它（1.0 ↔ 0.7）。
+    // ⑤ tint（作者语义着色，可选）+ ★★★决策 #910 **霜白锚点自适应**（**修正 #908 的方向错误**）
+    //   【为何又改（第四次）】#908 用 `target_l = lum*0.58 + 0.13`——斜率 0.58 **<1 = 压缩对比**，
+    //     意味着它**在任何输入下都提不亮**：深底只会被拉向 0.13~0.5 的暗区（比背景更暗、发脏）。
+    //     ★真机 iOS 实测（深绿卡通底，本单取证）：背景 L≈0.31 ⇒ 玻璃 L≈0.72~0.85（**大幅提亮成霜白**）；
+    //     白底 ⇒ 玻璃略暗于白（可见）。⇒ #908 的曲线与 iOS **方向相反**（正是用户"背景兜底做反了"）。
+    //   【正确模型】不是"按背景亮度做仿射"，而是**朝一个霜白锚点靠拢**（frost anchor）：暗底大抬升 → 霜白；
+    //     亮底轻压 → 仍可见。两端都"有材质、看得见"（对齐 iOS `.regular`"adjusts luminosity to maintain
+    //     legibility" 与 visionOS"adapts to the luminance behind it"）。
+    //   【实现】只加**同一 delta**（只改明度、不动色相/饱和 ⇒ 守住 #875「无固有颜色」）。
+    //   ★`FROST_L` = 锚点（唯一主旋钮，真机 A/B 只调它）；收拢系数 `0.75`（留对比、避免死板）。
     col = vec4<f32>(mix(col.rgb, col.rgb * u.tint.rgb * 2.0, u.tint.a), col.a);
-    let target_l = clamp(lum * 0.58 + 0.13, 0.0, 1.0);
-    let d_aff = (target_l - lum) * 0.85;
+    let FROST_L = 0.75;
+    let d_aff = (FROST_L - lum) * 0.75;
     col = vec4<f32>(clamp(col.rgb + vec3<f32>(d_aff), vec3<f32>(0.0), vec3<f32>(1.0)), col.a);
 
     // ⑥ 光照：Fresnel + 法线·光源（双瓣）＋ ★★★决策 #906 **兜底可见性**（对齐 iOS：**纯色/空白背景上玻璃仍可见**）
@@ -141,7 +145,13 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     // 边缘高光：细亮边（各向 0.10）+ 顶光加成（法线朝上侧更亮，对齐 iOS 顶缘高光）
     let top_hi = max(-n.y, 0.0);                        // 上缘（n.y≈-1）
     let edge_hi = bevel_mask * (0.10 + 0.26 * top_hi + 0.16 * facing);
-    let rim = (pow(facing, 6.0) * u.specular + fres * 0.20) * bevel_mask + edge_hi + tg * 0.30;   // ★#905：触点点亮
-    col = vec4<f32>(min(col.rgb + vec3<f32>(rim), vec3<f32>(1.0)), 1.0);
+    // ★★★决策 #910 · **自适应描边极性**（报告 P0-1）：此前描边**恒加白** ⇒ 亮底"白上加白" ⇒ 轮廓消失
+    //   （这正是"完全透明"的主因链之一）。`edge_pol` = 0（暗底 → **加亮**描边）→ 1（亮底 → **减暗**描边，
+    //   让轮廓在白底上仍可读）。参照系 = **背景亮度 `lum`**（而非玻璃自身）。
+    let edge_pol = smoothstep(0.55, 0.85, lum);
+    let rim_light = (pow(facing, 6.0) * u.specular + fres * 0.20) * bevel_mask + edge_hi + tg * 0.30;   // ★#905：触点点亮
+    let rim_dark = edge_hi * 0.9;
+    let rim = rim_light * (1.0 - edge_pol) - rim_dark * edge_pol;
+    col = vec4<f32>(clamp(col.rgb + vec3<f32>(rim), vec3<f32>(0.0), vec3<f32>(1.0)), 1.0);
     return col;
 }

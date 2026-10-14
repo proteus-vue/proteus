@@ -3302,7 +3302,7 @@ public class ProteusHostView extends ViewGroup {
      *  包围盒钳到屏幕；位图随之变小 ⇒ 像素填充成正比下降（玻璃集中于局部时收益最大）。 */
     private static float glassPad(Cmd c, GlassMaterial.Spec g) {
         // 折射峰值位移 = min(w,h)*0.22（与 buildPaint/shader 同式）；模糊最远采样 ≈ blur*0.55*1.6
-        return Math.min(c.w, c.h) * 0.22f + g.blur * 0.55f * 1.6f + 4f;
+        return Math.min(c.w, c.h) * 0.42f + g.blur * 0.55f * 1.6f + 4f;   // ★#910：位移峰值 1.15·band ⇒ pad 需 ≥此
     }
 
     /** 捕获"无玻璃面"的内容帧（作玻璃采样的背后内容）；调用方须保证本屏有玻璃节点。 */
