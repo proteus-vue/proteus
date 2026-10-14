@@ -83,6 +83,11 @@ final class SuperappScene: NSObject {
         rtHost.jsContext = ctx
         rtHostRef = rtHost
         ctx.setObject(rtHost, forKeyedSubscript: "proteusHost" as NSString)
+        // ★★★S2「去 JSON」（决策 #903）：注入 `__proteusHostInvokeBytes`（JSC C API）——
+        //   JS 侧 `getHostInvokeBytes()` 探测到它 ⇒ App 能力派发/回推走**二进制帧**（免 JSON 文本）。
+        //   ★装在这里（`setObject` 之后、bundle 执行之前）：JS 侧是**调用时**探测，但早装可让首屏
+        //     首个 `useFetch` 就走字节腿（避免"首请求回落 JSON"的静默不一致）。
+        rtHost.installInvokeBytes(on: ctx)
         // ★手势命中链 → JS 运行期（SelfDrawBridge 命中后反向调 JS 注册的 `__proteusRuntimeGesture`）。
         bridge.onDispatchToJS = { target, chain, type, _, _ in
             rtHost.dispatchGestureToJS(type: type, target: target, chain: chain)

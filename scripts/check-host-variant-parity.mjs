@@ -12,7 +12,8 @@
 //
 // 【判据】① 每端**功能能力清单**必须都在**主壳**内（不被 DEV 门控 / 不在 dev-only 文件里）；
 //         ② 变体模型齐备（android/ios：`ProteusBuildConfig.DEV` 常量 + dev 调试层以 `DEV` 早退）；
-//         ③ release 隔离（android release manifest **不含** INTERNET）。
+//         ③ 网络权限（★判据 2026-10-13 反转，决策 #902）：release/dev **都须**含 INTERNET
+//            （原「release 无 INTERNET」的最小权限隔离已废——C26 useFetch 是基础能力）。
 //   ★已知缺口走**具名登记**（KNOWN_GAPS，附理由 + 决策号）——不静默豁免；补齐后删登记。
 //
 // 用法：node scripts/check-host-variant-parity.mjs
@@ -102,12 +103,16 @@ for (const [end, cfg] of Object.entries(ENDS)) {
   }
 }
 
-/* ── ③ release 隔离：android release manifest 不含 INTERNET（dev 变体才有）── */
+/* ── ③ 网络权限：release/dev **都须**含 INTERNET ──
+ *   ★判据反转（决策 #902 / T-app-fetch）：原判据是「release 无 INTERNET」（最小权限隔离）。
+ *   用户 2026-10-13 拍板「debug + release 都加」——C26 useFetch 是 App 端**基础能力**，
+ *   release 不可联网则能力页只能标 ⚠️，与「App 宿主承载超级应用」的目标冲突。
+ *   dev 变体另需 INTERNET 走本地 HTTP dev server（原就要求）。 */
 {
   const rel = read(T('android/AndroidManifest.xml'))
   const dev = read(T('android/AndroidManifest.dev.xml'))
   if (!rel) problems.push('③ Android: 缺 release manifest（AndroidManifest.xml）')
-  else if (/android\.permission\.INTERNET/.test(rel)) problems.push('③ Android: **release manifest 含 INTERNET**（应仅 dev 变体有）')
+  else if (!/android\.permission\.INTERNET/.test(rel)) problems.push('③ Android: release manifest **缺 INTERNET**（C26 useFetch 需要——决策 #902）')
   if (dev && !/android\.permission\.INTERNET/.test(dev)) problems.push('③ Android: dev manifest 缺 INTERNET（dev server 走 HTTP 需要）')
 }
 
@@ -207,4 +212,4 @@ if (problems.length) {
   for (const p of problems) console.error(`  - ${p}`)
   process.exit(1)
 }
-console.log('✅ 三端宿主变体一致（每端单一壳；功能清单齐全；dev 件以 DEV 门控；android release 无 INTERNET）')
+console.log('✅ 三端宿主变体一致（每端单一壳；功能清单齐全；dev 件以 DEV 门控；release/dev 均含 INTERNET）')

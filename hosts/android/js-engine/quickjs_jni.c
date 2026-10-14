@@ -77,6 +77,12 @@ static struct {
   jmethodID gc;
   /* ★★App 端原生能力通道（`proteusHost.invoke(method, argsJson)` —— capability-app.ts 的 invokeHost 消费） */
   jmethodID invoke;
+  /* ★★★S2「去 JSON」在能力通道上的落地（决策 #903）：`invokeBytes(byte[]) -> byte[]`
+   *   —— 收发 **PINV / PRSP 帧字节**（见 `packages/api/src/invoke-wire.ts` 与 Java 侧 `InvokeWire`）。
+   *   与 `invoke` **并行**的第二条腿：同一批方法名、同一套语义，差别只在**载荷形态**
+   *   （不再 `JSON.stringify` 派发 + `JSON.parse` 回推；响应体原样当 byte[] 搬）。
+   *   同一条件注入原则（Java 未实现 ⇒ 不注入 ⇒ JS 侧探测为 undefined ⇒ **回退** JSON 腿，降级不静默）。 */
+  jmethodID invoke_bytes;
   /* ★★动画桥（2026-10-01 · 灯光秀）：内核动画从 JS 侧驱动——逐帧 tick / 起停 / active 查询。
    *   与 mount/update 同一"按 Java 实现条件注入"原则（宿主未实现 ⇒ 不注入 ⇒ JS 侧探测为 undefined，
    *   走诚实降级而不是静默拿到 undefined）。 */
@@ -320,6 +326,190 @@ static JSValue js_host_invoke(JSContext *ctx, JSValueConst this_val, int argc, J
   JS_FreeCString(ctx, method);
   if (args != NULL) JS_FreeCString(ctx, args);
   return out;
+}
+
+/**
+ * 造一份 JS `Uint8Array`（**拷贝**入参字节）。
+ *
+ * 【★为什么本文件自带一份，而不是直接调 `JS_NewUint8ArrayCopy`（2026-10-13 实测订正）】
+ *   QuickJS 的 `JS_NewUint8ArrayCopy` 在 `quickjs.c` 里是 **static 内部函数**（**未导出**）：
+ *   `nm .tools/quickjs/libquickjs.a` ⇒ `t _JS_NewUint8ArrayCopy`（小写 t = **local** ⇒ 链接期不可外链），
+ *   且 `quickjs.h` 里**没有**它的声明 ⇒ 外部 TU 调用在 NDK clang 18 上是
+ *   `error: call to undeclared function 'JS_NewUint8ArrayCopy'`（**编译期即红**，不是运行期才炸）。
+ *   ⇒ 改用**公开 API** 等价实现：`JS_NewArrayBufferCopy`（把字节拷进 JS 堆）
+ *     + `JS_NewTypedArray(…, JS_TYPED_ARRAY_UINT8)`（在其上造 `Uint8Array` 视图）。
+ *   ★这是"门禁只 grep 文本 ⇒ 形态对 ≠ 编得过"的实例：本文件此前**没有任何编译判据**
+ *     （`hosts/android/check-host-compile.sh` 只跑 javac）——本函数落地时一并补上（见该脚本）。
+ *
+ * 【为什么"拷贝"而非零拷贝】借用 Java 侧 `jbyte*` 会随 GC 失效（悬挂指针）；
+ *   拷贝一次换掉"JSON 文本 3~4× 膨胀 + 两次 UTF-8 编解码 + 一次 parse"仍是净赚，
+ *   且不引入跨语言生命周期债（见 #903 决策记录）。
+ */
+static JSValue proteus_new_uint8_array_copy(JSContext *ctx, const uint8_t *buf, size_t len) {
+  JSValue ab = JS_NewArrayBufferCopy(ctx, buf, len);
+  if (JS_IsException(ab)) return ab;
+  JSValueConst args[1] = { ab };
+  JSValue arr = JS_NewTypedArray(ctx, 1, args, JS_TYPED_ARRAY_UINT8);
+  JS_FreeValue(ctx, ab);
+  return arr;
+}
+
+/**
+ * `proteusHost.invokeBytes(frame)` —— ★★★**S2「去 JSON」在能力通道上的落地**（2026-10-13 · 决策 #903）。
+ *
+ * 【与 `js_host_invoke` 的关系】**同一件事的两种载荷**：都调宿主能力层，差别只在通道形态——
+ *   旧：`(method, argsJson): String`（JSON 文本双向）；新：`(PINV 帧): PRSP 帧`（**裸字节**双向）。
+ *   【为什么必须做（用户 2026-10-13 指令）】「跨语言数据通道不要用 JSON 字符串，性能损耗太大，
+ *   走纯二进制方向」：响应体几 MB 时 JSON 文本每字节膨胀 3~4× + 两次 UTF-8 + 一次 `JSON.parse`（1MB ~10ms）。
+ *
+ * 【为什么与 `js_host_apply_ops_bytes` 同形（本仓既有先例 · #769）】同为「JS 字节 → Java `byte[]` 直传」：
+ *   `JS_GetTypedArrayBuffer` 拿裸指针 + `SetByteArrayRegion` 拷进 `byte[]`，**中间不经字符串**
+ *   （iOS `JSObjectGetArrayBufferBytesPtr` / 鸿蒙 `napi_get_arraybuffer_info` 同形态）。
+ *
+ * 【回程】宿主回 `byte[]`（`PRSP` 帧）⇒ 用 `proteus_new_uint8_array_copy` 造 JS `Uint8Array`（**拷贝**，
+ *   不持有 Java 侧内存 ⇒ 无悬挂指针风险；这正是选"字节直传"而非"零拷贝"的理由，见 #903 记录）。
+ *   ★宿主返回**空数组** ⇒ 本函数返回 `undefined` ⇒ JS 侧按"已受理、结果稍后回推"处理（**不结算**）。
+ *
+ * 【★线程】在 JS 线程（eval 栈）上被调 —— 宿主内部**不得**在此同步等网络（本仓红线：禁止盲等；
+ *   JS 线程上等网络会把 UI 与 JS 一起冻住）。受理即返、完成后经 `nativeResolveHostBytes` 回推。
+ */
+static JSValue js_host_invoke_bytes(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+  (void)this_val;
+  if (g_host_methods.invoke_bytes == NULL || g_host_obj == NULL || g_vm == NULL) {
+    return JS_ThrowInternalError(ctx, "宿主未实现 invokeBytes（App 能力二进制通道不可用）");
+  }
+  if (argc < 1) return JS_ThrowTypeError(ctx, "proteusHost.invokeBytes 需要 (frame: Uint8Array)");
+
+  /* ── 取字节视图（`Uint8Array` 与 `ArrayBuffer` 都接受；其余类型明确报错，不静默用空帧）──
+   * ★判型只用**公开 API**（2026-10-13 实测订正：本版 QuickJS **未导出** `JS_IsArrayBuffer`
+   *   —— `quickjs.h` 无声明 ⇒ clang 18 报 `undeclared function`，编译期即红）：
+   *   ① 先按 TypedArray 解（JS 侧绝大多数调用形态是 `Uint8Array`）；
+   *   ② 解不出 ⇒ 再按"入参本身就是 `ArrayBuffer`"解（`JS_GetArrayBuffer` 返回非 NULL 即成立）。 */
+  uint8_t *ptr = NULL;
+  size_t off = 0, nbytes = 0;
+  size_t blen = 0, bpe = 0;
+  JSValue ab = JS_GetTypedArrayBuffer(ctx, argv[0], &off, &blen, &bpe);
+  if (JS_IsException(ab)) {
+    /* ★异常必须**取走**（`JS_GetException`）——残留的 pending exception 会污染后续 eval / 回推 */
+    JSValue exc = JS_GetException(ctx);
+    JS_FreeValue(ctx, exc);
+    ab = JS_UNDEFINED;
+    size_t absize = 0;
+    ptr = JS_GetArrayBuffer(ctx, &absize, argv[0]);   /* 非 NULL ⇒ 入参就是 ArrayBuffer 本身 */
+    if (ptr == NULL) {
+      /* `JS_GetArrayBuffer` 对 detached ArrayBuffer 会抛 —— 一并取走，再抛我们自己的错 */
+      JSValue e2 = JS_GetException(ctx);
+      JS_FreeValue(ctx, e2);
+      return JS_ThrowTypeError(ctx, "proteusHost.invokeBytes 需要 Uint8Array / ArrayBuffer");
+    }
+    nbytes = absize;
+  } else {
+    size_t absize = 0;
+    ptr = JS_GetArrayBuffer(ctx, &absize, ab);
+    nbytes = blen;   /* TypedArray 视图：长度用 byte_length（含 offset） */
+  }
+  if (ptr == NULL || nbytes == 0) {
+    JS_FreeValue(ctx, ab);
+    return JS_ThrowTypeError(ctx, "proteusHost.invokeBytes 收到空帧（0 字节）");
+  }
+
+  JNIEnv *env = NULL;
+  int attached = 0;
+  if ((*g_vm)->GetEnv(g_vm, (void **)&env, JNI_VERSION_1_6) != JNI_OK) {
+    if ((*g_vm)->AttachCurrentThread(g_vm, (void **)&env, NULL) == JNI_OK) attached = 1;
+  }
+  JSValue out = JS_UNDEFINED;
+  if (env != NULL) {
+    jbyteArray ja = (*env)->NewByteArray(env, (jsize)nbytes);
+    if (ja != NULL) {
+      (*env)->SetByteArrayRegion(env, ja, 0, (jsize)nbytes, (const jbyte *)(ptr + off));
+      jbyteArray ret = (jbyteArray)(*env)->CallObjectMethod(env, g_host_obj, g_host_methods.invoke_bytes, ja);
+      if ((*env)->ExceptionCheck(env)) {
+        /* ★异常不吞（与 js_host_invoke 同纪律）：转成 JS 异常抛出 ⇒ 桥侧按 missing/failed 分档 */
+        jthrowable exc = (*env)->ExceptionOccurred(env);
+        (*env)->ExceptionClear(env);
+        jclass excCls = (*env)->GetObjectClass(env, exc);
+        jmethodID getMsg = (*env)->GetMethodID(env, excCls, "getMessage", "()Ljava/lang/String;");
+        jstring jmsg = getMsg != NULL ? (jstring)(*env)->CallObjectMethod(env, exc, getMsg) : NULL;
+        const char *cmsg = jmsg != NULL ? (*env)->GetStringUTFChars(env, jmsg, NULL) : NULL;
+        const char *full = cmsg != NULL ? cmsg : "宿主抛异常";
+        if (attached) (*g_vm)->DetachCurrentThread(g_vm);
+        if (ja != NULL) (*env)->DeleteLocalRef(env, ja);
+        if (jmsg != NULL && cmsg != NULL) (*env)->ReleaseStringUTFChars(env, jmsg, cmsg);
+        if (jmsg != NULL) (*env)->DeleteLocalRef(env, jmsg);
+        if (excCls != NULL) (*env)->DeleteLocalRef(env, excCls);
+        if (exc != NULL) (*env)->DeleteLocalRef(env, exc);
+        JS_FreeValue(ctx, ab);
+        return JS_ThrowInternalError(ctx, "host-invokeBytes: %s", full);
+      }
+      if (ret != NULL) {
+        jsize n = (*env)->GetArrayLength(env, ret);
+        if (n > 0) {
+          jbyte *elems = (*env)->GetByteArrayElements(env, ret, NULL);
+          if (elems != NULL) {
+            out = proteus_new_uint8_array_copy(ctx, (const uint8_t *)elems, (size_t)n);
+            (*env)->ReleaseByteArrayElements(env, ret, elems, JNI_ABORT);
+          }
+        }
+        /* n == 0 ⇒ 保持 JS_UNDEFINED = "已受理、结果稍后回推" */
+        (*env)->DeleteLocalRef(env, ret);
+      }
+      (*env)->DeleteLocalRef(env, ja);
+    }
+  }
+  JS_FreeValue(ctx, ab);
+  if (attached) (*g_vm)->DetachCurrentThread(g_vm);
+  return out;
+}
+
+JNIEXPORT jstring JNICALL
+Java_dev_proteus_layoutcore_QuickJsEngine_nativeResolveHostBytes(JNIEnv *env, jclass cls, jbyteArray frame) {
+  (void)cls;
+  if (g_ctx == NULL) return (*env)->NewStringUTF(env, "{\"ok\":false,\"reason\":\"ctx 未就绪\"}");
+  if (frame == NULL) return (*env)->NewStringUTF(env, "{\"ok\":false,\"reason\":\"frame 为 null\"}");
+  jsize n = (*env)->GetArrayLength(env, frame);
+  if (n <= 0) return (*env)->NewStringUTF(env, "{\"ok\":false,\"reason\":\"frame 为空\"}");
+  jbyte *elems = (*env)->GetByteArrayElements(env, frame, NULL);
+  if (elems == NULL) return (*env)->NewStringUTF(env, "{\"ok\":false,\"reason\":\"取字节失败\"}");
+
+  /* 造 JS `Uint8Array`（**拷贝**——不借 Java 内存，杜绝 GC 后悬挂指针，见 #903 决策记录） */
+  JSValue arr = proteus_new_uint8_array_copy(g_ctx, (const uint8_t *)elems, (size_t)n);
+  (*env)->ReleaseByteArrayElements(env, frame, elems, JNI_ABORT);
+
+  JSValue global = JS_GetGlobalObject(g_ctx);
+  JSValue fn = JS_GetPropertyStr(g_ctx, global, "__proteusHostResolveBytes");
+  JSValue out = JS_UNDEFINED;
+  if (JS_IsFunction(g_ctx, fn)) {
+    JSValue args[1] = { arr };
+    out = JS_Call(g_ctx, fn, global, 1, args);
+    if (JS_IsException(out)) {
+      JSValue exc = JS_GetException(g_ctx);
+      const char *em = JS_ToCString(g_ctx, exc);
+      LOGE("回推回调抛异常：%s", em ? em : "?");
+      JS_FreeCString(g_ctx, em);
+      JS_FreeValue(g_ctx, exc);
+      JS_FreeValue(g_ctx, out);
+      out = JS_UNDEFINED;
+    }
+  }
+  /* ★`JS_Call` 不消费实参引用（签名是 JSValueConst*）⇒ 调用后必须自己释放（否则每帧漏一个 Uint8Array） */
+  JS_FreeValue(g_ctx, arr);
+  /* 泵掉回调里产生的微任务（宿主侧同步执行语义——与 eval 后 / 手势分发同一纪律） */
+  pump_jobs_bounded();
+  jstring ret;
+  if (JS_IsString(out)) {
+    const char *r = JS_ToCString(g_ctx, out);
+    ret = (*env)->NewStringUTF(env, r ? r : "{\"ok\":false,\"reason\":\"空返回\"}");
+    JS_FreeCString(g_ctx, r);
+  } else if (JS_IsFunction(g_ctx, fn)) {
+    ret = (*env)->NewStringUTF(env, "{\"ok\":true,\"reason\":\"回推已调用（无返回串）\"}");
+  } else {
+    ret = (*env)->NewStringUTF(env, "{\"ok\":false,\"reason\":\"JS 侧未挂 __proteusHostResolveBytes\"}");
+  }
+  JS_FreeValue(g_ctx, out);
+  JS_FreeValue(g_ctx, fn);
+  JS_FreeValue(g_ctx, global);
+  return ret;
 }
 
 /** `proteusHost.memUsage()` —— 引擎内存读数（返回 JSON 串；见 nativeMemoryUsage） */
@@ -640,6 +830,11 @@ static jstring eval_impl(JNIEnv *env, jstring source, jboolean with_host) {
       JS_SetPropertyStr(g_ctx, host, "invoke", JS_NewCFunction(g_ctx, js_host_invoke, "invoke", 2));
       LOGI("宿主已实现 invoke ⇒ JS 侧可调 App 原生能力（update/window/worker/idle/preload…）");
     }
+    // ★★★S2「去 JSON」在能力通道上的落地（条件注入——同原则）：帧字节直传
+    if (g_host_methods.invoke_bytes != NULL) {
+      JS_SetPropertyStr(g_ctx, host, "invokeBytes", JS_NewCFunction(g_ctx, js_host_invoke_bytes, "invokeBytes", 1));
+      LOGI("宿主已实现 invokeBytes ⇒ App 能力走**二进制帧**（免 JSON 派发/回推，S2 去 JSON · #903）");
+    }
     // ★★灯光秀计量/几何桥（条件注入——同 mount 原则）
     if (g_host_methods.now_us != NULL) {
       JS_SetPropertyStr(g_ctx, host, "nowUs", JS_NewCFunction(g_ctx, js_host_now_us, "nowUs", 0));
@@ -812,6 +1007,7 @@ Java_dev_proteus_layoutcore_QuickJsEngine_nativeSetHostCallback(JNIEnv *env, jcl
   g_host_methods.post = g_host_methods.mount = g_host_methods.update = g_host_methods.update_patches = NULL;
   g_host_methods.mem_usage = g_host_methods.gc = NULL;
   g_host_methods.invoke = NULL;
+  g_host_methods.invoke_bytes = NULL;
   g_host_methods.anim_start = g_host_methods.anim_tick = g_host_methods.anim_stop = g_host_methods.anim_active = NULL;
   g_host_methods.now_us = g_host_methods.rects = g_host_methods.probe = g_host_methods.report = NULL;
   g_host_methods.anim_control = NULL;
@@ -842,6 +1038,11 @@ Java_dev_proteus_layoutcore_QuickJsEngine_nativeSetHostCallback(JNIEnv *env, jcl
     if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
     /* ★★App 端原生能力通道（两参：method + argsJson；返回 String） */
     g_host_methods.invoke = (*env)->GetMethodID(env, c, "invoke", "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;");
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+    /* ★★★S2「去 JSON」（#903）：能力通道的**二进制**腿 —— ([B) → [B（帧字节直传）
+     *   ★签名与既有的 `applyOpsBytes` 是同族（`([B)Ljava/lang/String;` vs `([B)[B`）——
+     *   查不到 ⇒ 保持 NULL ⇒ **不注入** ⇒ JS 侧探测 undefined ⇒ 回退 JSON 腿（降级不静默）。 */
+    g_host_methods.invoke_bytes = (*env)->GetMethodID(env, c, "invokeBytes", "([B)[B");
     if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
     /* ★★动画桥（灯光秀）：animStart/animTick/animStop 为 (String)->String；animActive 为 ()->String */
     g_host_methods.anim_start = (*env)->GetMethodID(env, c, "animStart", "(Ljava/lang/String;)Ljava/lang/String;");

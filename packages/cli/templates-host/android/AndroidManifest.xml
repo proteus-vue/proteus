@@ -13,6 +13,11 @@
         android:minSdkVersion="24"
         android:targetSdkVersion="34" />
 
+    <!-- ★★网络权限（决策 #902）：C26 useFetch 是 App 端基础能力 ⇒ **release 也须可联网**。
+         用户 2026-10-13 拍板「debug + release 都加」（此前是最小权限、release 零 uses-permission）。
+         ⇒ 门禁 check:host-variant-parity 判据③ 已同步反转（原「release 无 INTERNET」）。 -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <application
         android:label="{{appName}}"
         android:debuggable="true"

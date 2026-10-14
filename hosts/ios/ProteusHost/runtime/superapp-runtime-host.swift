@@ -51,6 +51,9 @@ final class SuperappRuntimeHost: NSObject, SuperappRuntimeExports {
     private var gestureCb: String?
     /// JSC 上下文（注册手势回调名后，宿主用它反向调 JS）
     var jsContext: JSContext?
+    /// ★★★二进制腿（S2 去 JSON · 决策 #903）：`__proteusHostInvokeBytes` 注入 +
+    ///   `__proteusHostResolveBytes` 回推（见 `invoke-bytes-bridge.swift` / `http-capability.swift`）
+    private let bytesBridge = InvokeBytesBridge()
 
     init(draw: SelfDrawBridge, caps: HostRuntimeBridge) {
         self.draw = draw
@@ -214,6 +217,53 @@ final class SuperappRuntimeHost: NSObject, SuperappRuntimeExports {
     func memUsage() -> String { caps.memUsage() }
     func gc() { caps.gc() }
     func post(_ json: String) { caps.post(json) }
+
+    /* ══════════ ★★★二进制腿（S2 去 JSON · 决策 #903 · 与 Android `HostCapabilities.invokeBytes` 同形）══════════
+     * 【做什么】在 JSContext 上注入 `__proteusHostInvokeBytes(PINV 帧) -> PRSP 帧`（JSC C API，见
+     *   `invoke-bytes-bridge.swift` 为何不走 JSExport）；JS 侧 `getHostInvokeBytes()` 探测到它 ⇒
+     *   该端 App 能力走**二进制帧**（免 `JSON.stringify` 派发 + 免 JSON 回推）。
+     * 【装配位置】`SuperappScene.run` 在 `ctx.setObject(rtHost, "proteusHost")` **之后**调本方法——
+     *   顺序无关紧要（JS 侧是**调用时**探测），但与 `setObject` 相邻更易审。
+     * 【零回归】未装本桥的端/场景仍走既有 JSON 腿（`invokeHostAsync` 的降级分支）——**不谎称全场景已去 JSON**。 */
+    @discardableResult
+    func installInvokeBytes(on ctx: JSContext) -> Bool {
+        bytesBridge.handler = { [weak self] frame in self?.dispatchInvokeBytes(frame) }
+        let ok = bytesBridge.install(on: ctx)
+        if ok {
+            NSLog("[proteus] 宿主已注入 invokeBytes ⇒ App 能力走**二进制帧**（免 JSON 派发/回推，S2 去 JSON · #903）")
+        } else {
+            NSLog("[proteus] ✗ 二进制腿安装失败：%@", (bytesBridge.stats()["last_error"] as? String) ?? "?")
+        }
+        return ok
+    }
+
+    /// 分发去程帧（与 Android `HostCapabilities.invokeBytes` 同一分发：`http.request` 走能力层，
+    ///   其余 ⇒ `missing` 帧 = JS 侧 `*.unsupported`）。
+    /// 返回 `nil` = 已受理、结果稍后 `pushResolve` 回推（异步能力）；返回帧 = 当场结算。
+    private func dispatchInvokeBytes(_ frame: [UInt8]) -> [UInt8]? {
+        do {
+            let f = try InvokeWire.decodeInvoke(frame)
+            switch f.method {
+            case "http.request":
+                return try HttpCapability.handle(f) { [weak self] reply in
+                    // ★回推失败（JS 侧未装 `__proteusHostResolveBytes`）⇒ 如实记日志，不静默
+                    if self?.bytesBridge.pushResolve(reply) == false {
+                        NSLog("[proteus] ✗ 二进制回推被丢弃（JS 侧未安装 __proteusHostResolveBytes）")
+                    }
+                }
+            default:
+                return try InvokeWire.encodeResolve(
+                    .makeMissingMethod(f.reqId, "二进制通道未实现的原生方法：\(f.method)（当前仅 http.request）"))
+            }
+        } catch {
+            // 帧解不出 / 编码失败 ⇒ 回一帧错误。★回程是**同步返回**给本次调用方的：JS 侧按自己的
+            //   reqId 结算（不依赖帧内 reqId），故这里 reqId 空缺不会导致"错误被静默丢弃"。
+            return try? InvokeWire.encodeResolve(.makeErr("", "二进制帧处理失败：\(error)"))
+        }
+    }
+
+    /// ★判据读数（native 直读——报告/诊断用；不经 JS，证明字节腿**真的被走过**）
+    func invokeBytesStats() -> [String: Any] { bytesBridge.stats() }
 
     /// ★由 SelfDrawView.emitGesture（实现侧）调：命中节点 + 冒泡链 → 反向调 JS 注册的回调。
     ///   在**主线程**的 UI 回调里调 JSC（非 eval 重入场景）——与 Android 的 native 反向通道同语义。

@@ -795,8 +795,10 @@ describe('★★★三端宿主变体模型（dev-host = 宿主：单一壳 + DE
     expect(fs.readFileSync(path.join(TH, 'android/src/dev/proteus/layoutcore/DevOverlay.java'), 'utf-8'), 'DevOverlay 以 DEV 早退').toMatch(/if\s*\(\s*!?\s*ProteusBuildConfig\.DEV\s*\)\s*return/)
     // 主壳内含 dev 门控（同一份壳里切 dev 件）
     expect(fs.readFileSync(path.join(TH, 'ios/shell/ProteusApp.swift'), 'utf-8'), 'iOS 壳内 DEV 门控').toContain('ProteusBuildConfig.DEV')
-    // android release manifest 无 INTERNET（dev 变体才有）
-    expect(fs.readFileSync(path.join(TH, 'android/AndroidManifest.xml'), 'utf-8'), 'release 无 INTERNET').not.toMatch(/android\.permission\.INTERNET/)
+    // ★★决策 #902（用户拍板）：INTERNET 权限 **两变体都有**（C26 useFetch 是 App 端基础能力，
+    //   不只是 dev 调试需要）——故它**不再是**变体差异点；机器判据 check:host-variant-parity 判据③
+    //   已同步反转为「release/dev 均须含 INTERNET」（原「release 无 INTERNET」是旧的最小权限设计）。
+    expect(fs.readFileSync(path.join(TH, 'android/AndroidManifest.xml'), 'utf-8'), 'release 有 INTERNET').toMatch(/android\.permission\.INTERNET/)
     expect(fs.readFileSync(path.join(TH, 'android/AndroidManifest.dev.xml'), 'utf-8'), 'dev 有 INTERNET').toMatch(/android\.permission\.INTERNET/)
   })
   it('变体一致性门禁已注册 + 接入 verify', () => {

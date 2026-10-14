@@ -146,6 +146,20 @@ public final class SuperappRuntimeHost {
         return caps.invoke(method, argsJson);
     }
 
+    /**
+     * ★★★**二进制线格式的能力通道**（S2「去 JSON」· 决策 #903）——与 {@link #invoke} 并列的第二条腿。
+     *
+     * 【为什么本类也要有（不是重复）】JNI 侧 `g_host_obj` 是**单一对象**（`nativeSetHostCallback` 收到的那个），
+     *   方法表按它的**真实方法**逐条探测 ⇒ 统一运行期壳（本类）若不声明 `invokeBytes`，
+     *   **运行期壳上这条腿就不存在**（`GetMethodID` 失败 ⇒ 不注入）——与 `animTick` 那个坑同源
+     *   （见下方 `animTick` 注释：缺一个方法会让整条能力"静默不注入"）。
+     *   ⇒ 与 {@link HostBridge#invokeBytes} 同形：**只转发给能力层**（真源在 `HostCapabilities`，#22）。
+     */
+    @SuppressWarnings("unused")
+    public byte[] invokeBytes(byte[] frame) throws Exception {
+        return caps.invokeBytes(frame);
+    }
+
     @SuppressWarnings("unused")
     public String memUsage() {
         return QuickJsEngine.nativeMemoryUsage();
