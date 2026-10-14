@@ -347,25 +347,28 @@ function pick(key: string, pos: number): void {
   flex-direction: row;
   justify-content: center;
 }
-.gna-bar { width: 320px; }
+/* ★#932：宽 320→350（与 iOS tab bar 等宽：屏 390pt − 左右 20） */
+.gna-bar { width: 350px; }
 .gna-bar__inner {
   position: relative;
   display: flex;
   flex-direction: row;
   align-items: center;
   justify-content: space-around;
-  height: 68px;
-  padding: 6px;
+  /* ★#932：高 68→40（对齐 iOS tab bar ≈40pt）；padding 6→3 */
+  height: 40px;
+  padding: 3px;
   box-sizing: border-box;
 }
 /* ★★★决策 #908：激活胶囊 = 玻璃实例 ⇒ **不再有 background 平铺**（白斑 artifact 的来源）。
    仅保留几何（绝对定位 + 尺寸 + 圆角）；材质/着色由 `<pg-glass preset="floating">` + tint 决定。 */
 .gna-highlight {
   position: absolute;
-  top: 6px;
-  bottom: 6px;
-  width: 77px;
-  border-radius: 24px;
+  /* ★#932：随条几何收缩（top/bottom 6→3；宽 77→84 = (350−6)/4；radius 24→16） */
+  top: 3px;
+  bottom: 3px;
+  width: 84px;
+  border-radius: 16px;
 }
 .gna-item {
   flex: 1;
@@ -373,10 +376,11 @@ function pick(key: string, pos: number): void {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  height: 56px;
+  gap: 1px;
+  /* ★#932：56→32（随条高 40 收缩） */
+  height: 32px;
 }
-.gna-item__glyph { display: flex; align-items: center; justify-content: center; height: 24px; color: var(--sa-text-2, #5f6673); }
+.gna-item__glyph { display: flex; align-items: center; justify-content: center; height: 18px; color: var(--sa-text-2, #5f6673); }
 .gna-item__label { font-size: 11px; font-weight: 600; line-height: 1; color: var(--sa-text-2, #5f6673); }
 /* ★#907 行内动态 :class（B2）可见落点：激活项图标/文字提亮（此前该绑定静默失效）。
    ★就地直接声明（**不能**用后代选择器——运行期动态类计划只解析节点自身类的直接声明，见台账）。 */
