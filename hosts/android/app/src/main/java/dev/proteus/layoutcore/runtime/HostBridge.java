@@ -52,11 +52,42 @@ public final class HostBridge {
         }
     }
 
+    /**
+     * ★★★**二进制线格式的能力通道**（S2「去 JSON」· 决策 #903）——与 {@link #invoke} **并列**的第二条腿。
+     *
+     * 【为什么（用户 2026-10-13 指令）】「跨语言数据通道不要用 JSON 字符串，性能损耗太大，
+     *   走纯二进制方向」。入参 / 出参都是 `PINV` / `PRSP` **帧字节**（见 {@link InvokeWire}）——
+     *   HTTP 响应体原样当 `byte[]` 搬，不再每字节膨胀 3~4× + 两次 UTF-8 + 一次 `JSON.parse`。
+     *
+     * 【为什么只做一层转发（真源在能力层）】帧的**解码 / 分发 / 编码**全在 {@link HostCapabilities#invokeBytes}
+     *   —— 本类与 {@link SuperappRuntimeHost} 都只是"宿主桥"，各自持有一个 caps ⇒ 两边各写一份实现
+     *   就是本仓纪律 #22 的"第 N 份手写副本"（既有 `invoke` 已按此原则转发）。
+     *
+     * ★由 JNI 条件注入驱动：Java 侧**存在**本方法 ⇒ `quickjs_jni.c` 才把 `proteusHost.invokeBytes`
+     *   暴露给 JS（否则 JS 侧探测 undefined ⇒ 回退 JSON 腿，降级不静默）。
+     */
+    @SuppressWarnings("unused")
+    public byte[] invokeBytes(byte[] frame) throws Exception {
+        long t0 = System.nanoTime();
+        boolean ok = true;
+        try {
+            return caps.invokeBytes(frame);
+        } catch (Throwable t) {
+            ok = false;
+            throw t;
+        } finally {
+            // ★记账只在装了日志端口时做（release 下 invokeLogger == null ⇒ **零解析、零开销**）；
+            //   只读方法名而不全帧解码——见 `InvokeWire.peekMethod` 的说明。
+            if (invokeLogger != null) {
+                try { invokeLogger.log(InvokeWire.peekMethod(frame), ok, (System.nanoTime() - t0) / 1_000_000); } catch (Throwable ignored) { }
+            }
+        }
+    }
+
     @SuppressWarnings("unused")
     public String memUsage() {
         return QuickJsEngine.nativeMemoryUsage();
     }
-
     @SuppressWarnings("unused")
     public void gc() {
         QuickJsEngine.nativeRunGC();

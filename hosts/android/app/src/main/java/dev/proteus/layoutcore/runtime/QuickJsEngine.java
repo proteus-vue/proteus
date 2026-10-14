@@ -137,6 +137,25 @@ public final class QuickJsEngine {
 
     static native String nativeDispatchGesture(String type, int nodeId, String chainJson);
 
+    /**
+     * ★★★**回推异步结果到 JS**（反向通道 · 二进制形态；S2「去 JSON」· 决策 #903）。
+     *
+     * 调 JS 全局入口 `globalThis.__proteusHostResolveBytes(Uint8Array)` —— 入参是 `PRSP` **帧字节**
+     * （见 {@link InvokeWire}），reqId 编在**帧内**（不再走 `(reqId, json)` 两参形态）。
+     * 由 JS 桥 `packages/api/src/capability-invoke.ts` 的 `installHostResolveBridge` 安装该入口。
+     *
+     * @param frame `PRSP` 帧字节
+     * @return JS 回调的返回串（宿主记账/诊断用）；未挂入口 / 上下文未就绪 ⇒ `{"ok":false,…}`
+     * ★**必须在 JS 线程（主线程）调用** —— QuickJS 非线程安全；从网络线程直调是未定义行为
+     *   （同 {@link #dispatchGesture} 的纪律）。宿主侧示例见 `HttpCapability.push`。
+     */
+    public static String resolveHostBytes(byte[] frame) {
+        if (!loaded) return "{\"ok\":false,\"reason\":\"引擎未加载：" + loadError + "\"}";
+        return nativeResolveHostBytes(frame);
+    }
+
+    static native String nativeResolveHostBytes(byte[] frame);
+
     public static EvalResult evalWithHost(String source, Object host) {
         if (!loaded) return new EvalResult(false, null, "引擎未加载：" + loadError, "{}");
         nativeSetHostCallback(host);

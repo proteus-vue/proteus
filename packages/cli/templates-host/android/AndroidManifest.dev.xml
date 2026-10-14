@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- {{appName}} —— Proteus Android 宿主 · **dev 变体** Manifest（`proteus dev` 构建时选用）
-     ★与 release（AndroidManifest.xml）**唯一差别** = 多了 INTERNET 权限（dev server 走 HTTP 拉 bundle）。
+     ★与 release（AndroidManifest.xml）的差别 = 多 `android:usesCleartextTraffic="true"`（dev server 无 TLS）。
        两变体共用 activity/application 声明；`proteus dev` 用本文件，打包（release）用 release 文件。
-     ★变体隔离的机器判据：release APK 的 manifest **不得**含 android.permission.INTERNET。
+     ★INTERNET 权限**两变体都有**（决策 #902：C26 useFetch 是 App 端基础能力）——故它**不再是**变体差异点；
+       机器判据（check:host-variant-parity 判据③）已同步**反转**为「release/dev 均须含 INTERNET」
+       （原判据「release 不得含 INTERNET」是旧的最小权限设计，已废）。
      （注：XML 注释内不得出现连续两个 ASCII 连字符——故此处不写命令字面量。） -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="{{bundleName}}"

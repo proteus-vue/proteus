@@ -73,6 +73,53 @@ fi
 
 echo "✅ Android 宿主编译通过（改动 layoutcore/*.java 后先跑本脚本，再上真机）"
 
+# ★★★QuickJS JNI 桥（`js-engine/quickjs_jni.c`）的**编译检查**（2026-10-13 · #903 暴露的门禁盲区）
+#
+# 【为什么单列一步（本仓真实踩坑）】#903 给 C 桥加了能力通道的字节腿（`invokeBytes` /
+#   `nativeResolveHostBytes`），门禁 `check:no-json-wire` **全绿**（它只 grep 文本 token）——
+#   但那个文件**根本编译不过**：误用了两个 QuickJS **未导出**的 API
+#   （`JS_IsArrayBuffer` 公开头里没有；`JS_NewUint8ArrayCopy` 在 `quickjs.c` 内是 `static`，
+#    `nm libquickjs.a` ⇒ `t _JS_NewUint8ArrayCopy`，**链接期不可外链**）
+#   ⇒ NDK clang 18 直接 `error: call to undeclared function`（5 处错）。
+#   而**此前没有任何门禁编译它**（本脚本只 javac；真机构建 `setup-android-js-engine.sh` 才编）
+#   ⇒ 断代码被"绿门禁"一路放行到真机构建才炸。★教训与"门禁覆盖面必须跟着实际形态走"同源：
+#   **形态判据（grep）不能替代"能不能编过"**。
+#
+# 【判据】用**与真机构建同一条编译命令**做 `-fsyntax-only`（零产物、~1 秒）。
+#   之所以 `-fsyntax-only` 就够：C 里跨 TU 的 API 只可能来自头文件 ⇒ 用错 API 的**唯一入口形式**
+#   就是 "call to undeclared function"，clang 在编译期即报错（本站实测 5 处全命中）。
+# 【诚实边界】只做**语法 + 声明**检查，不产 `.so`、不编 QuickJS 六个源（那要几分钟）——
+#   `undefined symbol` 一类仍由 `setup-android-js-engine.sh` 的链接步 + `assert_jni_export` 兜底。
+CBRIDGE_SRC="$HERE/js-engine/quickjs_jni.c"
+QJS_DIR="$ROOT/.tools/quickjs"
+if [ -f "$CBRIDGE_SRC" ] && [ -f "$QJS_DIR/quickjs.h" ]; then
+  echo "==> 编译检查 QuickJS JNI 桥（js-engine/quickjs_jni.c · 零设备）"
+  CB_TC=""
+  # 工具链探测顺序与 setup-android-js-engine.sh / build-and-run.sh 同口径：先本仓 .tools，再 SDK
+  for base in "$ROOT/.tools/ndk" "$SDK/ndk/"*; do
+    for tc in "$base/toolchains/llvm/prebuilt"/*; do
+      [ -x "$tc/bin/aarch64-linux-android21-clang" ] && CB_TC="$tc" && break
+    done
+    [ -n "$CB_TC" ] && break
+  done
+  CB_JNI_INC="$ROOT/.tools/jdk17/include"
+  if [ -n "$CB_TC" ] && [ -d "$CB_JNI_INC" ]; then
+    CB_LOG="$OUT/cbridge.log"
+    if "$CB_TC/bin/aarch64-linux-android21-clang" -fPIC -O2 -D_GNU_SOURCE \
+         -I"$QJS_DIR" -I"$CB_JNI_INC" -I"$CB_JNI_INC/darwin" \
+         -fsyntax-only "$CBRIDGE_SRC" > "$CB_LOG" 2>&1; then
+      echo "    ✅ C 桥编译通过（改 js-engine/quickjs_jni.c 后先跑本脚本，再上真机）"
+    else
+      head -25 "$CB_LOG"
+      echo "✗ quickjs_jni.c 未通过编译（见上方）——★门禁 grep 到 token ≠ 它编得过"
+      exit 1
+    fi
+  else
+    echo "    ◐ 略过：缺 NDK clang 或 JDK 头（NDK=${CB_TC:-未找到} / JDK=${CB_JNI_INC}）"
+    echo "      先跑 scripts/setup-android-js-engine.sh 备齐 .tools/ndk 与 .tools/jdk17"
+  fi
+fi
+
 # ★★★Rust JNI 绑定层的 **Android target 编译检查**（决策 #834 暴露的门禁盲区）
 #
 # 【为什么单列一步（本仓真实踩坑）】B2/B4 给 JNI 加了材质查询包装后，**javac 全绿**——

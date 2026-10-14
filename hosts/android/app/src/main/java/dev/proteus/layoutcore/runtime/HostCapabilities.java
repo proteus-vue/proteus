@@ -193,6 +193,47 @@ public final class HostCapabilities {
         }
     }
 
+    /**
+     * ★★★**二进制线格式入口**（S2「去 JSON」· 决策 #903）——与 {@link #invoke} **并行**的第二条腿。
+     *
+     * 【为什么（用户 2026-10-13 指令）】「跨语言数据通道不要用 JSON 字符串，性能损耗太大，走纯二进制方向」。
+     *   本入口收发的是 `PINV` / `PRSP` **帧字节**（见 {@link InvokeWire}），中间**不经过任何 JSON 文本**：
+     *   响应体（HTML / JSON / 文件）原样当 `byte[]` 搬 —— 不再每字节膨胀 3~4× + 两次 UTF-8 + 一次 parse。
+     *
+     * 【与 {@link #invoke} 的关系】**同一批方法名、同一套语义**（`missing` 分档 / `pending` 异步回推一致）；
+     *   差别只在**载荷形态**。故本方法是一个**薄分发层**：解码帧 → 按 method 转发 → 编回程帧。
+     *
+     * 【★诚实边界】`screen.*` 与其余能力族**当前仍只在 JSON 腿**（`invoke`）——本单是 `http.request` 首单；
+     *   其它方法从本入口进来一律回 `missing` 帧（**不伪造成功**），JS 侧会如实给 `*.unsupported`。
+     *
+     * @param frame `PINV` 帧字节（JS `Uint8Array` → JNI → `byte[]`）
+     * @return `PRSP` 帧字节（同步回执；异步结果经 {@link QuickJsEngine#resolveHostBytes} 回推）
+     */
+    public byte[] invokeBytes(byte[] frame) {
+        String method = "";
+        String reqId = "";
+        try {
+            InvokeWire.InvokeFrame f = InvokeWire.decodeInvoke(frame);
+            method = f.method;
+            reqId = f.reqId;
+            callLog.add(method); // ★真实宿主记账（与 invoke 同口径）
+            switch (method) {
+                case "http.request":
+                    return HttpCapability.handle(f);
+                default:
+                    return InvokeWire.encodeResolve(InvokeWire.ResolveFrame.missingMethod(
+                            reqId, "二进制通道未实现的原生方法：" + method + "（当前仅 http.request）"));
+            }
+        } catch (Throwable t) {
+            // ★解不出帧 ⇒ 拿不到 reqId 锚定回调；但本帧是**同步返回**的 ⇒ JS 侧 `invokeHostAsyncBytes`
+            //   按**本次调用自己的 reqId** 结算（不依赖帧内 reqId）⇒ reason 能如实到达调用方，**不被静默丢弃**。
+            //   （这与"回推不静默"同一纪律：失败要么有原因、要么有诊断读数，不允许无声无息。）
+            Log.e(TAG, "invokeBytes 帧处理失败（method=" + method + "）：" + t);
+            return InvokeWire.encodeResolve(InvokeWire.ResolveFrame.err(
+                    reqId, "invokeBytes 宿主侧失败：" + t));
+        }
+    }
+
     // ────────────────────────── C48 宿主上下文 ──────────────────────────
 
     private JSONObject hostContext() throws Exception {
