@@ -3287,6 +3287,8 @@ public class ProteusHostView extends ViewGroup {
     private android.graphics.Bitmap glassBackdrop;
     /** ★★★决策 #906：**全分辨率**背板（捕获目标；末尾**轻降采样**成 `glassBackdrop` 供着色器单次采样）。 */
     private android.graphics.Bitmap glassBackdropFull;
+    /** ★#927：模糊中间小图（降采样→升采样近似高斯，供"白霜面感"）。 */
+    private android.graphics.Bitmap glassBackdropSmall;
     /** ★★★决策 #906：降采样比（全分辨率像素 / 小图 texel）——buildPaint 折 tex_scale/bias 用。 */
     private float glassBackdropScaleX = 1f, glassBackdropScaleY = 1f;
     /** `glassBackdrop` 在其覆盖的**屏幕区域**中的左上角（屏幕坐标）——玻璃采样按它把"屏幕坐标"折算到位图坐标。 */
@@ -3376,17 +3378,32 @@ public class ProteusHostView extends ViewGroup {
         //   （线稿/文字/发丝）压弯成漩涡 ⇒ **输入必须保留高频**。此前误用 8×（注释却写 2×，漂移）⇒
         //   68px 条背板只剩 ~28 texel、高频全灭 ⇒ 位移场只能输出**灰糊色团**（真机"糊成一团"的真因）。
         //   ⇒ 降到 **2×**（一次轻盒式低通，够霜感、不灭高频）。真机 A/B：1（锐）↔ 2（轻霜）。
-        final int DIV = 2;   // ★#917：回 2——减采样错位导致的滚动抖动（位移现为 0.42·band，降采样会把压缩带混叠）
+        // ★★★决策 #927（依据 iOS 逆向调研）：iOS 的"白霜面感"**主要由宿主 blur 承担**
+        //   （CABackdropLayer = 真模糊 + luma 调节），而非 shader 里混白（混白会糊平内容 ⇒ #923）。
+        //   ⇒ 把单次 2× 降采样升级为**降采样-升采样**近似高斯（Android box-blur 惯用做法）：
+        //     先降到 bw/8 的小图（强低通），再双线性升回 bw/2（平滑）——内容**柔化但仍在**（折射/倒影可见）。
+        //   ★最终输入分辨率仍 = bw/2（#917：超高降采样会让压缩带混叠 ⇒ 滚动抖动）。
+        final int DIV = 2;           // 最终输入分辨率（与 iOS capturePxPerPoint=scale/2 同口径）
+        final int BLUR_DOWN = 8;     // 降采样最深倍数（越大越糊；iOS 近似 ~10-20px 高斯）
         final int sw = Math.max(1, Math.round((float) bw / DIV));
         final int sh = Math.max(1, Math.round((float) bh / DIV));
         if (glassBackdrop == null || glassBackdrop.getWidth() != sw || glassBackdrop.getHeight() != sh) {
             if (glassBackdrop != null) glassBackdrop.recycle();
             glassBackdrop = android.graphics.Bitmap.createBitmap(sw, sh, android.graphics.Bitmap.Config.ARGB_8888);
         }
+        final android.graphics.Paint filtp = new android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG);
+        // ① 一次降到小图（aw/BLUR_DOWN，双线性低通）
+        int bw8 = Math.max(1, bw / BLUR_DOWN), bh8 = Math.max(1, bh / BLUR_DOWN);
+        if (glassBackdropSmall == null || glassBackdropSmall.getWidth() != bw8 || glassBackdropSmall.getHeight() != bh8) {
+            if (glassBackdropSmall != null) glassBackdropSmall.recycle();
+            glassBackdropSmall = android.graphics.Bitmap.createBitmap(bw8, bh8, android.graphics.Bitmap.Config.ARGB_8888);
+        }
+        new Canvas(glassBackdropSmall).drawBitmap(glassBackdropFull, new android.graphics.Rect(0, 0, bw, bh),
+                new android.graphics.Rect(0, 0, bw8, bh8), filtp);
+        // ② 升回 sw×sh（双线性平滑）
         final Canvas sc = new Canvas(glassBackdrop);
-        sc.drawBitmap(glassBackdropFull, new android.graphics.Rect(0, 0, bw, bh),
-                new android.graphics.Rect(0, 0, sw, sh),
-                new android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG));
+        sc.drawBitmap(glassBackdropSmall, new android.graphics.Rect(0, 0, bw8, bh8),
+                new android.graphics.Rect(0, 0, sw, sh), filtp);
         glassBackdropScaleX = (float) bw / sw;
         glassBackdropScaleY = (float) bh / sh;
     }
