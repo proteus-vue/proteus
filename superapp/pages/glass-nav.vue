@@ -228,12 +228,12 @@ const navItems = ref([
 /** 当前激活项 key（→ 行内 `:class` 高亮）。用 `===`（执行器只认严格相等）。 */
 const active = ref('games')
 /** 高亮胶囊左偏移 px（★px 数值：App 端布局只吃数值）。条内宽 320、4 项、各 77px。 */
-const hlLeft = ref(6 + 1 * 77)
+const hlLeft = ref(3 + 1 * 92)
 
 /** ★#907 行参 handler（B1）：两个行参 `item.key` / `item.pos` 均折进行内读取（此前静默失效）。 */
 function pick(key: string, pos: number): void {
   active.value = key
-  hlLeft.value = 6 + pos * 77
+  hlLeft.value = 3 + pos * 92
 }
 </script>
 
@@ -341,14 +341,18 @@ function pick(key: string, pos: number): void {
   position: fixed;
   left: 0;
   right: 0;
+  /* ★#933：左右 padding 12（与 .gna-page 一致）⇒ 条与内容等宽（box-sizing 防溢出） */
+  padding: 0 12px;
+  box-sizing: border-box;
   /* ★fixed 的 containing block = 视口（引擎 #907 修复）⇒ bottom 相对视口生效（此前只能 top）。 */
   bottom: 90;
   display: flex;
   flex-direction: row;
   justify-content: center;
 }
-/* ★#932：宽 320→350（与 iOS tab bar 等宽：屏 390pt − 左右 20） */
-.gna-bar { width: 350px; }
+/* ★#933：宽 = **内容等宽**（dock 左右 padding 12 ⇒ bar 100% 填满 = 屏宽 − 24；★不写死 px——
+   设备逻辑宽不同（我们 400pt / iOS 390pt），固定值必然对不齐）。 */
+.gna-bar { width: 100%; }
 .gna-bar__inner {
   position: relative;
   display: flex;
@@ -364,10 +368,10 @@ function pick(key: string, pos: number): void {
    仅保留几何（绝对定位 + 尺寸 + 圆角）；材质/着色由 `<pg-glass preset="floating">` + tint 决定。 */
 .gna-highlight {
   position: absolute;
-  /* ★#932：随条几何收缩（top/bottom 6→3；宽 77→84 = (350−6)/4；radius 24→16） */
+  /* ★#932/#933：随条几何收缩（top/bottom 6→3；宽 = (条宽−6)/4 ≈ 92；radius 24→16） */
   top: 3px;
   bottom: 3px;
-  width: 84px;
+  width: 92px;
   border-radius: 16px;
 }
 .gna-item {
@@ -380,7 +384,7 @@ function pick(key: string, pos: number): void {
   /* ★#932：56→32（随条高 40 收缩） */
   height: 32px;
 }
-.gna-item__glyph { display: flex; align-items: center; justify-content: center; height: 18px; color: var(--sa-text-2, #5f6673); }
+.gna-item__glyph { display: flex; align-items: center; justify-content: center; height: 22px; color: var(--sa-text-2, #5f6673); }
 .gna-item__label { font-size: 11px; font-weight: 600; line-height: 1; color: var(--sa-text-2, #5f6673); }
 /* ★#907 行内动态 :class（B2）可见落点：激活项图标/文字提亮（此前该绑定静默失效）。
    ★就地直接声明（**不能**用后代选择器——运行期动态类计划只解析节点自身类的直接声明，见台账）。 */
