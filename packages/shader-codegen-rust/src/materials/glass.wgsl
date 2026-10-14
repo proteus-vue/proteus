@@ -146,7 +146,13 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     //     只是**白底更薄**（微白朦胧）、**深底更厚**（浓白霜）。
     //   ⇒ `frost_col` 恒亮白（0.93↔0.97）；`frost_a` 深底厚(0.85) / 白底**仍较实**(0.55，糊白背景内容)。
     let frost_t = smoothstep(0.30, 0.90, u.bg_lum);
-    let frost_col = mix(vec3<f32>(0.93), vec3<f32>(0.97), frost_t);   // 恒**亮白**（深底浓霜 / 白底白霜）
+    let frost_white = mix(vec3<f32>(0.93), vec3<f32>(0.97), frost_t);   // 亮度基调（深底浓霜 / 白底白霜）
+    // ★★★决策 #925（依据 iOS 逆向调研）：霜色**保留 ~12% 背景色温**（非纯灰）——
+    //   文章实证：蓝底玻璃 B−R=+9.0 vs 背景 B−R=+75.6（≈12%）。用**已采样的背景色** `acc` 提供色相，
+    //   零结构变更（不再新增 uniform；`acc` 本就是该像素的正后方之色，符合 #875「取正后方之色」）。
+    //   只取背景的**色度偏移**（偏离其灰度的部分）× 12% —— 保 `frost_white` 亮度不变（"色温"是色相，非明度）。
+    let acc_chroma = acc.rgb - vec3<f32>(dot(acc.rgb, vec3<f32>(0.299, 0.587, 0.114)));
+    let frost_col = clamp(frost_white + acc_chroma * 0.12, vec3<f32>(0.0), vec3<f32>(1.0));
     let frost_a = mix(0.70, 0.28, frost_t);   // ★#923：轻提亮（重白霜糊平内容 ⇒ 折射/倒影不可见）
     col = vec4<f32>(mix(col.rgb, frost_col, frost_a), col.a);
 
