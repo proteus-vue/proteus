@@ -146,10 +146,21 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
 
     // ③ 模糊按 e 键控（边缘锐、中心糊）；核最大半径 = blur*e*0.55
     // ★决策 #906：**零采样**——不做任何模糊（对齐用户对 iOS 的理解：内容不糊，只磨砂叠加）。
-    var acc = sample_backdrop(sp_uv);
+    // ★★★决策 #978：**按下透镜「自低通」（凸透镜的柔）**——workbuddy B：iOS 透镜内部比条**柔**
+    //   （std 0.43× / 梯度 0.70 vs 条 2.79），我们更锐（1.95×）⇒ 面纱一关就成"挖洞"（原始高频直透）。
+    //   iOS 通透 = 内容被**放大 + 轻模糊 + 位移**（凸透镜），不是"洞"。⇒ 内部加 5-tap 十字轻低通。
+    //   门控 `pr_ov`（`br2=0` 时 5 tap 同为一点 ⇒ 权重和为 1 ⇒ **静止/条逐像素等价**，parity 不变）。
+    let br2 = band * 0.10 * pr_ov;                   // 低通半径（按下才开启）
+    let bx1 = vec2<f32>(br2, 0.0);
+    let by1 = vec2<f32>(0.0, br2);
+    var acc = sample_backdrop(spL / u.size_px) * 0.36;
+    acc = acc + sample_backdrop((spL + bx1) / u.size_px) * 0.16
+              + sample_backdrop((spL - bx1) / u.size_px) * 0.16
+              + sample_backdrop((spL + by1) / u.size_px) * 0.16
+              + sample_backdrop((spL - by1) / u.size_px) * 0.16;
     // ★★★决策 #972/#976：**按下透镜的「边缘色散」**（RGB 沿法线差异化偏移）——对齐 iOS 透镜边缘虹彩。
-    //   门控 `pr_ov`；`e` 大处=中心 ⇒ 0 ⇒ 只体现在**边缘带**；★#976 幅度加大到可感知（原 `min(band*0.12,3)` 真机实测无错位）。
-    //   ★**无条件采样**（不写 `if`）——WGSL 要求在一致控制流里 `textureSample`；`disp=0` 时与 `acc` 逐像素一致。
+    //   门控 `pr_ov`；`e` 大处=中心 ⇒ 0 ⇒ 只体现在**边缘带**；★#976 幅度加大到可感知。
+    //   ★**无条件采样**——WGSL 要求 `textureSample` 在一致控制流；`disp=0` 时与 `acc` 逐像素一致。
     let disp = pr_ov * (1.0 - e) * min(band * 0.30, 6.0);
     let aR = sample_backdrop((spL + n * disp) / u.size_px);
     let aB = sample_backdrop((spL - n * disp) / u.size_px);

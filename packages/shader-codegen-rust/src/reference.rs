@@ -153,8 +153,17 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     let ctr = hs;
     let zoom = 1.0 + pr_ov * 0.16;
     let sp_l = (ctr.0 + (sp.0 - ctr.0) / zoom, ctr.1 + (sp.1 - ctr.1) / zoom);
-    // ★决策 #906：零采样（不做模糊）——与 glass.wgsl ③ 同源（内容不糊，只磨砂叠加）
-    let mut col = backdrop.sample_map(to_tex(sp_l));
+    // ★★★决策 #978：按下透镜「自低通」（凸透镜的柔）——与 glass.wgsl 同源（5-tap 十字，br2=0 等价）。
+    let br2 = band * 0.10 * pr_ov;
+    let s5 = |px: f32, py: f32| backdrop.sample_map(to_tex((px, py)));
+    let mut col = [0.0f32; 4];
+    for c in 0..4 {
+        col[c] = s5(sp_l.0, sp_l.1)[c] * 0.36
+            + s5(sp_l.0 + br2, sp_l.1)[c] * 0.16
+            + s5(sp_l.0 - br2, sp_l.1)[c] * 0.16
+            + s5(sp_l.0, sp_l.1 + br2)[c] * 0.16
+            + s5(sp_l.0, sp_l.1 - br2)[c] * 0.16;
+    }
     // ★★★决策 #972/#976：按下透镜的「边缘色散」（RGB 沿法线差异化偏移）——与 glass.wgsl 同源（无条件采样，disp=0 等价）。
     let disp = pr_ov * (1.0 - e) * (band * 0.30).min(6.0);
     let a_r = backdrop.sample_map(to_tex((sp_l.0 + n.0 * disp, sp_l.1 + n.1 * disp)));

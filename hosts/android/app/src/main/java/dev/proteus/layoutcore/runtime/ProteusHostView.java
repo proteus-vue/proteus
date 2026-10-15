@@ -3570,19 +3570,6 @@ public class ProteusHostView extends ViewGroup {
         return false;
     }
 
-    /** ★#975：最近的**玻璃祖先**的 Cmd（用于把外层玻璃的边线叠画到内层玻璃上）。 */
-    private Cmd nearestGlassAncestorCmd(int nodeId, List<Cmd> list, int[] ids) {
-        Integer cur = nodeParent.get(nodeId);
-        int guard = 0;
-        while (cur != null && guard++ < 256) {
-            if (glassByNode.containsKey(cur)) {
-                for (int k = 0; k < list.size() && k < ids.length; k++) if (ids[k] == cur) return list.get(k);
-                return null;
-            }
-            cur = nodeParent.get(cur);
-        }
-        return null;
-    }
 
     /** 画一个玻璃面（节点盒 c）：AGSL 采样背后内容 → blur+tint；不可用 ⇒ 半透明实色回退。 */
     private void drawGlassFace(Canvas canvas, int nodeId, Cmd c, GlassMaterial.Spec spec) {
@@ -3743,26 +3730,11 @@ public class ProteusHostView extends ViewGroup {
             }
             // ★#973：**内层玻璃**（有玻璃祖先，如选中胶囊）采样 `glassLayer`（= 原始内容 + 外层玻璃面纱）
             //   ⇒ 玻璃叠玻璃（用户「胶囊要透出的是下面的玻璃条」）；外层玻璃（条）采样 `glassBackdrop`。
+            //   ★★★#978（用户「手画肯定不行」）：**移除** #975 的手画条边线——用户明确长期要做"长按滑动时
+            //     透过胶囊实时看到条流动"，手画描边撑不到那个需求；正解 = 内层采样外层已合成帧（离屏管线，待做）。
+            //     本项只保留"配方"修正（内部放大 + 自低通，见 shader），不再画任何近似几何。
             if (glassHasNesting && glassLayer != null && hasGlassAncestor(ids[i])) {
                 drawGlassFace(canvas, ids[i], list.get(i), g, bx, by, bw, bh, glassLayer);
-                // ★★★决策 #975：**把外层玻璃（条）的上下边线叠画在胶囊上**——这是"看到下面压着一条玻璃条"的
-                //   唯一可辨识 cue（iOS 胶囊内可见条边线穿过）。为何不用 layer 里的描边：胶囊着色器在自身边缘
-                //   强折射（`sp=local−n·bend`，band≈43px）⇒ 恰好采不到条边那条 2-3px 线（实测剖面无亮线）。
-                //   ⇒ 用**确定性的宿主几何**直接补：在胶囊内、条顶/底边处各画一道柔和亮线（无需折射）。
-                final Cmd bar = nearestGlassAncestorCmd(ids[i], list, ids);
-                if (bar != null) {
-                    final int cs = canvas.save();
-                    android.graphics.Path cpath = new android.graphics.Path();
-                    cpath.addRoundRect(new android.graphics.RectF(bx, by, bx + bw, by + bh), g.radius, g.radius,
-                            android.graphics.Path.Direction.CW);
-                    canvas.clipPath(cpath);
-                    android.graphics.Paint lp = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-                    lp.setColor(android.graphics.Color.argb(170, 255, 255, 255));   // 半透明白（近似镜面高光边）
-                    lp.setStrokeWidth(Math.max(2f, bh * 0.012f));
-                    canvas.drawLine(bx, bar.y, bx + bw, bar.y, lp);                         // 条顶边线穿胶囊
-                    canvas.drawLine(bx, bar.y + bar.h, bx + bw, bar.y + bar.h, lp);         // 条底边线穿胶囊
-                    canvas.restoreToCount(cs);
-                }
             } else {
                 drawGlassFace(canvas, ids[i], list.get(i), g, bx, by, bw, bh);
             }
