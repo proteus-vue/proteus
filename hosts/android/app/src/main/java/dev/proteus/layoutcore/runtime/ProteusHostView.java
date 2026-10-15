@@ -3324,6 +3324,15 @@ public class ProteusHostView extends ViewGroup {
     private android.graphics.Bitmap glassBackdropSmall;
     /** ★★★决策 #906：降采样比（全分辨率像素 / 小图 texel）——buildPaint 折 tex_scale/bias 用。 */
     private float glassBackdropScaleX = 1f, glassBackdropScaleY = 1f;
+    /** ★★★决策 #973：**玻璃叠玻璃**（内层玻璃采样"下层玻璃面"）——`glassLayer` = **原始内容 + 外层玻璃面纱**
+     *   合成（与 `glassBackdrop` 同帧/同尺寸/同原点/同降采样比 ⇒ 仅位图不同 ⇒ buildPaint 无需改）。
+     *   ★为何：内层玻璃（选中胶囊）此前采样"排除全部玻璃"的背板 ⇒ 一撤面纱就露出**底层内容**
+     *     （用户「胶囊下面看不到玻璃条、直接看到条下面的内容」）。iOS 是玻璃叠玻璃 ⇒ 内层须看到**下层玻璃条**。
+     *   ★为何用**软件合成面纱**而非把外层玻璃面真渲染进该位图：实测本设备**软件 Canvas 不支持 RuntimeShader**
+     *     （`IllegalArgumentException: Software rendering doesn't support RuntimeShader`）、**HARDWARE 位图不可变**
+     *     ⇒ 离屏不可行。退而求其次：把外层玻璃的**面纱（白霜）**用软件圆角矩形绘制合成进 layer（观感≈"看到下面的条"）。 */
+    private android.graphics.Bitmap glassLayer;
+    private boolean glassHasNesting = false;
     /** `glassBackdrop` 在其覆盖的**屏幕区域**中的左上角（屏幕坐标）——玻璃采样按它把"屏幕坐标"折算到位图坐标。 */
     private float glassBackdropX = 0f, glassBackdropY = 0f;
     private boolean capturingGlass = false;
@@ -3497,6 +3506,63 @@ public class ProteusHostView extends ViewGroup {
                 new android.graphics.Rect(0, 0, sw, sh), filtp);
         glassBackdropScaleX = (float) bw / sw;
         glassBackdropScaleY = (float) bh / sh;
+
+        // ★★★决策 #973：**玻璃叠玻璃**——内层玻璃（选中胶囊）的采样源 = 原始内容 + **外层玻璃面纱**。
+        //   仅当存在嵌套玻璃时构建（否则零开销）。软件合成（无 RuntimeShader ⇒ 本设备可用的唯一路径）。
+        glassHasNesting = false;
+        if (glassByNode.size() > 1) {
+            for (Integer gid : glassByNode.keySet()) {
+                if (hasGlassAncestor(gid)) { glassHasNesting = true; break; }
+            }
+        }
+        if (glassHasNesting) {
+            // ★layer 与 `glassBackdrop` **同尺寸/同原点**（buildPaint 的 tex_scale/bias 用 divX/divY 折算 ⇒ 必须同口径）。
+            final android.graphics.Bitmap src = glassBackdrop;
+            final int lw = src.getWidth(), lh = src.getHeight();
+            if (glassLayer == null || glassLayer.getWidth() != lw || glassLayer.getHeight() != lh) {
+                if (glassLayer != null) glassLayer.recycle();
+                glassLayer = android.graphics.Bitmap.createBitmap(lw, lh, android.graphics.Bitmap.Config.ARGB_8888);
+            }
+            final Canvas lc = new Canvas(glassLayer);
+            lc.drawBitmap(src, 0f, 0f, null);   // 基线 = 原始内容（降采样后）
+            // 逐"外层玻璃"（无玻璃祖先者）：叠其**面纱（白霜）**——观感≈"看到下面的玻璃条"（非裸内容）。
+            final float lScaleX = 1f / glassBackdropScaleX, lScaleY = 1f / glassBackdropScaleY;
+            for (int i = 0; i < list.size() && i < ids.length; i++) {
+                final GlassMaterial.Spec g = glassByNode.get(ids[i]);
+                if (g == null || hasGlassAncestor(ids[i])) continue;
+                final Cmd gc = list.get(i);
+                final float glum = glassRegionLum(gc);          // 0..1（-1=无背板）
+                if (glum < 0f) continue;
+                final float veilT = Math.max(0f, Math.min(1f, (glum - 0.25f) / 0.60f));
+                final float veilA = 0.09f + (0.90f - 0.09f) * veilT;   // 同 shader `VEIL_A`（不随 press）
+                // 面纱是"白霜"（浅底强 / 深底弱）——把**外层玻璃盒区域**按该 α 叠白（圆角裁剪）。
+                final android.graphics.Paint vp = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                // I2-ALLOW: **颜色分量的 0..255 取整**（非几何坐标——面纱 α 转 ARGB 色值，与布局几何无关）
+                vp.setColor(android.graphics.Color.argb(Math.round(veilA * 255), 255, 255, 255));
+                final int ls = lc.save();
+                final float x = (gc.x - bx) * lScaleX, y = (gc.y - by) * lScaleY;
+                final float w = gc.w * lScaleX, h = gc.h * lScaleY;
+                if (g.radius > 0) {
+                    android.graphics.Path cp = new android.graphics.Path();
+                    cp.addRoundRect(new android.graphics.RectF(x, y, x + w, y + h),
+                            g.radius * lScaleX, g.radius * lScaleY, android.graphics.Path.Direction.CW);
+                    lc.clipPath(cp);
+                }
+                lc.drawRect(x, y, x + w, y + h, vp);
+                lc.restoreToCount(ls);
+            }
+        }
+    }
+
+    /** ★#973：该节点是否有**玻璃祖先**（用于"内层玻璃采样 layer（内容+外层玻璃面纱）/ 外层玻璃采样原始内容"分组）。 */
+    private boolean hasGlassAncestor(int nodeId) {
+        Integer cur = nodeParent.get(nodeId);
+        int guard = 0;
+        while (cur != null && guard++ < 256) {
+            if (glassByNode.containsKey(cur)) return true;
+            cur = nodeParent.get(cur);
+        }
+        return false;
     }
 
     /** 画一个玻璃面（节点盒 c）：AGSL 采样背后内容 → blur+tint；不可用 ⇒ 半透明实色回退。 */
@@ -3510,6 +3576,13 @@ public class ProteusHostView extends ViewGroup {
      *   改为**把盒本身放大**（`bx,by,bw,bh`）⇒ origin/size_px/采样/clip 全部一致 ⇒ 玻璃光学（折射/高光/色散）随缩放保持。
      */
     private void drawGlassFace(Canvas canvas, int nodeId, Cmd c, GlassMaterial.Spec spec, float bx, float by, float bw, float bh) {
+        drawGlassFace(canvas, nodeId, c, spec, bx, by, bw, bh, glassBackdrop);
+    }
+
+    /** ★★★决策 #973：带**采样位图**的重载——内层玻璃（选中胶囊）传 `glassLayer`（= 原始内容 + 外层玻璃面纱）
+     *  ⇒ **玻璃叠玻璃**（用户：「胶囊要透出的是下面的玻璃条」）。`sampling` 与 `glassBackdrop` 同尺寸/同原点。 */
+    private void drawGlassFace(Canvas canvas, int nodeId, Cmd c, GlassMaterial.Spec spec, float bx, float by, float bw, float bh,
+                               android.graphics.Bitmap sampling) {
         if (bw <= 0 || bh <= 0) return;
         final float nodePress = (nodeId == glassInteractNodeId || glassPressSubtree.contains(nodeId)) ? glassPress : 0f;
         // ★#966/#969：触点在**本盒（可能已缩放）坐标空间**的局部位置——**按下组内的每一块玻璃**（命中玻璃=条 与
@@ -3519,7 +3592,7 @@ public class ProteusHostView extends ViewGroup {
         final boolean touchApplies = inPressGroup && glassTouchAbsX > -1e5f;
         final float qtx = touchApplies ? glassTouchAbsX - bx : -1e6f;
         final float qty = touchApplies ? glassTouchAbsY - by : -1e6f;
-        android.graphics.Paint p = GlassMaterial.buildPaint(nodeId, glassBackdrop, bx, by, glassBackdropX, glassBackdropY, bw, bh, spec.radius, spec,
+        android.graphics.Paint p = GlassMaterial.buildPaint(nodeId, sampling != null ? sampling : glassBackdrop, bx, by, glassBackdropX, glassBackdropY, bw, bh, spec.radius, spec,
                 qtx, qty, nodePress, glassBackdropScaleX, glassBackdropScaleY);
         // ★★★决策 #971（对齐 workbuddy 09:05 取证）：**剪影恒为当前盒的圆角矩形**——形状变化全部来自
         //   **盒几何**（条盒不动 ⇒ 条边平直不动；胶囊盒已纵向放大 ⇒ 透镜轮廓）。不再用 `inflatedPillPath`
@@ -3649,7 +3722,13 @@ public class ProteusHostView extends ViewGroup {
                     by = ccy + (gc.y - ccy) * sy; bh = gc.h * sy;
                 }
             }
-            drawGlassFace(canvas, ids[i], list.get(i), g, bx, by, bw, bh);
+            // ★#973：**内层玻璃**（有玻璃祖先，如选中胶囊）采样 `glassLayer`（= 原始内容 + 外层玻璃面纱）
+            //   ⇒ 玻璃叠玻璃（用户「胶囊要透出的是下面的玻璃条」）；外层玻璃（条）采样 `glassBackdrop`。
+            if (glassHasNesting && glassLayer != null && hasGlassAncestor(ids[i])) {
+                drawGlassFace(canvas, ids[i], list.get(i), g, bx, by, bw, bh, glassLayer);
+            } else {
+                drawGlassFace(canvas, ids[i], list.get(i), g, bx, by, bw, bh);
+            }
             if (fs != -1) canvas.restoreToCount(fs);
         }
         // 第二相：玻璃子树内容（其文本/子视图）——背景已在 captureGlassBackdrop 排除玻璃子树（只含"背后"），

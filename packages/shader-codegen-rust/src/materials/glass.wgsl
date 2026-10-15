@@ -78,6 +78,8 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     let p = local - hs;
     let r = min(u.radius, min(hs.x, hs.y));
     let hsmin = min(hs.x, hs.y);
+    // ★★★决策 #972：**按下 × 选中项** 的门控（条 overlay=0 ⇒ 恒 0，按下不影响条）。多处复用（面纱/色散/叠加/亮环）。
+    let pr_ov = clamp(u.press, 0.0, 1.0) * clamp(u.overlay, 0.0, 1.0);
     // ★#971：SDF 恒为（当前盒的）圆角矩形——条盒未变 ⇒ 条边平直不动；胶囊盒已纵向放大 ⇒ 透镜轮廓。
     let sd = sd_round_rect(p, hs, r);
     let d = max(-sd, 0.0);               // 离边深度（内部为正）
@@ -135,6 +137,14 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     // ③ 模糊按 e 键控（边缘锐、中心糊）；核最大半径 = blur*e*0.55
     // ★决策 #906：**零采样**——不做任何模糊（对齐用户对 iOS 的理解：内容不糊，只磨砂叠加）。
     var acc = sample_backdrop(sp_uv);
+    // ★★★决策 #972：**按下透镜的「边缘色散」**（RGB 沿法线差异化偏移）——对齐 iOS 透镜边缘虹彩。
+    //   门控 `pr_ov`（仅按下×选中项）；`e`（离边深度）大处=中心 ⇒ 色散 0 ⇒ 只体现在**边缘带**。
+    //   ★**无条件采样**（不写 `if`）——WGSL 要求在一致控制流里 `textureSample`；`disp=0`（静止/条）时
+    //     偏移恰为 0 ⇒ `aR/aB` 与 `acc` **逐像素一致** ⇒ parity 不受影响。
+    let disp = pr_ov * (1.0 - e) * min(band * 0.12, 3.0);
+    let aR = sample_backdrop((sp + n * disp) / u.size_px);
+    let aB = sample_backdrop((sp - n * disp) / u.size_px);
+    acc = vec4<f32>(aR.r, acc.g, aB.b, acc.a);
     var col = acc;
 
     // ④ 去饱和（**轻微**：保留背后颜色——对齐 Apple「玻璃取其正后方之色」）+ 饱和旋钮
@@ -173,10 +183,11 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     //     改用**阈值重映射**把"低 α"铺满整个暗区（bg_lum<0.25 恒 0.15），仅亮区快速升到白霜。
     let veil_t = clamp((u.bg_lum - 0.25) / 0.60, 0.0, 1.0);           // 暗区(bg_lum≤0.25)恒 0；亮区(≥0.85)恒 1
     // ★★★决策 #952：面纱 α 对**条与胶囊同口径**（内容可见度一致——#951 的"反相 α"会改内容可读性，已废弃）。
-    // ★★★决策 #966（**订正 #965**）：**面纱 α 不因按下而变**——用户「两块玻璃叠加互不影响，按下胶囊不该让内容透出来」。
-    //   #965 把按下时面纱砍到 14% ⇒ 胶囊直接透出**原始内容**（比条更清晰）——错。正解：面纱与条**同口径**，
-    //   按下的形态变化只由「灰叠加退场」（见下 overlay 段）表达 ⇒ 胶囊 = 同条材质的玻璃、内容清晰度 = 条。
-    let VEIL_A = mix(0.09, 0.90, veil_t);   // 深底 0.09 → 浅底 0.90（与条同口径，不随 press 变）
+    // ★★★决策 #972（**订正 #966**）：**按下 ⇒ 选中胶囊 morph 成「通透玻璃」**——面纱大幅退场（露出背后内容/折射），
+    //   门控 = `press × overlay` ⇒ **条（overlay=0）完全不受影响**（守 #965「条不该跟着变通透」）。
+    //   为何反过来：#966 把按下砍面纱删了 ⇒ 胶囊按下仍是 90% 白霜 = **不透明色块**（用户「看着就是个色块，iOS 是通透玻璃」）。
+    let veil_base = mix(0.09, 0.90, veil_t);   // 深底 0.09 → 浅底 0.90（静止态，与条同口径）
+    let VEIL_A = mix(veil_base, veil_base * 0.18, pr_ov);   // 按下 → 面纱退到 18%（通透玻璃透镜）
     // ★★★决策 #925：**12% 背景色温**（iOS 实证：蓝底玻璃 B−R=+9.0 vs 背景 +75.6）——只取背景的
     //   **色度偏移**（色 − 其灰度）× 12%（色相，不动明度）。
     let acc_chroma = acc.rgb - vec3<f32>(dot(acc.rgb, vec3<f32>(0.299, 0.587, 0.114)));
