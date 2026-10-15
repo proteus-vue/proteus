@@ -184,7 +184,7 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     // ★★★决策 #984（订正 #943/#949/#977）：**面纱 α 恒定、霜色分档**（详见 glass.wgsl 同源注释）。
     //   旧模型(V=255 恒白 + α 随 bg) 用 4 点反解出浅底 α=−0.13（自相矛盾）；新模型 α=0.467 · 暗霜140/亮霜236，4 点零残差。
     let veil_t = smoothstep(0.42f32, 0.62f32, p.bg_lum);
-    let veil_v = 0.55f32 + (0.925f32 - 0.55f32) * veil_t;
+    let veil_v = 0.55f32 + (1.0f32 - 0.55f32) * veil_t;   // ★#988：亮端纯白
     let pr_ov = p.press.clamp(0.0, 1.0) * p.overlay.clamp(0.0, 1.0);
     // ★★★决策 #987（B）：α 随背景变——浅端 0.88（内容压到不可见）/ 深端 0.467（#984 四点拟合）。
     let veil_a0 = 0.467f32 + (0.88f32 - 0.467f32) * veil_t;
