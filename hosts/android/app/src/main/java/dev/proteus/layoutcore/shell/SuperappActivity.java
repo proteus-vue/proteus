@@ -164,6 +164,10 @@ public class SuperappActivity extends android.app.Activity {
                     android.util.Log.i(TAG, "SUPERAPP_SCREEN_NAV screen=" + wantScreen);
                 }
                 renderCurrent(readState());
+                // ★判据（任务 A）：`--es glassdbg 1` ⇒ 逐帧 dump 复合层 + 几何（供逐点对照脚本）
+                if (getIntent() != null && "1".equals(getIntent().getStringExtra("glassdbg")) && draw.view() != null) {
+                    draw.view().glassDebug = true;
+                }
                 android.util.Log.i(TAG, "SUPERAPP_LAUNCHER_READY screen=" + currentName(readState()));
                 // ★判据用：`--es scroll "dx,dy"`（物理像素）——**先滚动**（验证"滚动后导航"的跨屏偏移重置）。
                 String scroll = getIntent() != null ? getIntent().getStringExtra("scroll") : null;
