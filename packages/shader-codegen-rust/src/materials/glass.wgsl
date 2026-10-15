@@ -173,7 +173,10 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     // ★★★决策 #972/#976：**按下透镜的「边缘色散」**（RGB 沿法线差异化偏移）——对齐 iOS 透镜边缘虹彩。
     //   门控 `pr_ov`；`e` 大处=中心 ⇒ 0 ⇒ 只体现在**边缘带**；★#976 幅度加大到可感知。
     //   ★**无条件采样**——WGSL 要求 `textureSample` 在一致控制流；`disp=0` 时与 `acc` 逐像素一致。
-    let disp = pr_ov * (1.0 - e) * min(band * 0.30, 6.0);
+    // ★★★决策 #999（用户：「获取文字**边缘一圈映射**还没有」）：**静止态也有色散**——iOS 边缘一圈实测是
+    //   青色 `(219,246,254)`（B>G>R ⇒ RGB 错位）；我们此前 `disp` 被 `pr_ov` 门控 ⇒ **静止无色散** ⇒
+    //   边缘一圈读不出来。⇒ 加**静止基线 0.35**（按下到 1.0）⇒ 边缘带沿法线 RGB 差异化偏移 = 一圈色散。
+    let disp = mix(0.35, 1.0, pr_ov) * (1.0 - e) * min(band * 0.30, 6.0);
     let aR = sample_backdrop((spL + n * disp) / u.size_px);
     let aB = sample_backdrop((spL - n * disp) / u.size_px);
     acc = vec4<f32>(aR.r, acc.g, aB.b, acc.a);
