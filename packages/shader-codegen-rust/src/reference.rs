@@ -154,7 +154,7 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     let zoom = 1.0 + pr_ov * 0.16;
     let sp_l = (ctr.0 + (sp.0 - ctr.0) / zoom, ctr.1 + (sp.1 - ctr.1) / zoom);
     // ★★★决策 #978：按下透镜「自低通」（凸透镜的柔）——与 glass.wgsl 同源（5-tap 十字，br2=0 等价）。
-    let br2 = band * 0.10 * pr_ov;
+    let br2 = band * 0.05 * pr_ov;   // ★#980：0.10→0.05
     let s5 = |px: f32, py: f32| backdrop.sample_map(to_tex((px, py)));
     let mut col = [0.0f32; 4];
     for c in 0..4 {
@@ -208,10 +208,10 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     let llen = (p.light_dir.0 * p.light_dir.0 + p.light_dir.1 * p.light_dir.1).sqrt();
     let ld = (p.light_dir.0 / llen, p.light_dir.1 / llen);
     let facing = (n.0 * ld.0 + n.1 * ld.1).max(0.0);
-    let bevel_mask = 1.0 - smoothstep(0.0, 0.10, e);
+    let bevel_mask = 1.0 - smoothstep(0.0, 0.04, e);   // ★#980：0.10→0.04（窄锐边线）
     // ★决策 #906：兜底边缘高光（恒定细亮边 + 顶光加成）——与 glass.wgsl ⑥ 同源（纯色背景也可见）
     let top_hi = (-n.1).max(0.0);
-    let edge_hi = bevel_mask * (0.025 + 0.05 * top_hi + 0.03 * facing);   // ★#954 顶缘高光减半
+    let edge_hi = bevel_mask * (0.12 + 0.06 * top_hi + 0.08 * facing);   // ★#980：提亮
     // ★★★决策 #910 · **自适应描边极性**（报告 P0-1）：亮底描边**减暗**（轮廓可见）、暗底**加亮**——与 glass.wgsl ⑥ 同源。
     // ★#915：删 edge_pol（iOS 边缘恒亮，不随背景翻转）——与 glass.wgsl ⑥ 同源。
     // ★#953：边缘高光按 overlay 门控（overlay=1 ⇒ 无边缘高光 = 干净卡片）
