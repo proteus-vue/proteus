@@ -3525,7 +3525,7 @@ public class ProteusHostView extends ViewGroup {
             }
             final Canvas lc = new Canvas(glassLayer);
             lc.drawBitmap(src, 0f, 0f, null);   // 基线 = 原始内容（降采样后）
-            // 逐"外层玻璃"（无玻璃祖先者）：叠其**面纱（白霜）**——观感≈"看到下面的玻璃条"（非裸内容）。
+            // 逐"外层玻璃"（无玻璃祖先者）：叠其**面纱（白霜）+ 轮廓描边** —— 观感≈"看到下面的玻璃条"。
             final float lScaleX = 1f / glassBackdropScaleX, lScaleY = 1f / glassBackdropScaleY;
             for (int i = 0; i < list.size() && i < ids.length; i++) {
                 final GlassMaterial.Spec g = glassByNode.get(ids[i]);
@@ -3535,21 +3535,26 @@ public class ProteusHostView extends ViewGroup {
                 if (glum < 0f) continue;
                 final float veilT = Math.max(0f, Math.min(1f, (glum - 0.25f) / 0.60f));
                 final float veilA = 0.09f + (0.90f - 0.09f) * veilT;   // 同 shader `VEIL_A`（不随 press）
-                // 面纱是"白霜"（浅底强 / 深底弱）——把**外层玻璃盒区域**按该 α 叠白（圆角裁剪）。
+                final float x = (gc.x - bx) * lScaleX, y = (gc.y - by) * lScaleY;
+                final float w = gc.w * lScaleX, h = gc.h * lScaleY;
+                final float rr = g.radius * lScaleX;
+                android.graphics.Path cp = new android.graphics.Path();
+                cp.addRoundRect(new android.graphics.RectF(x, y, x + w, y + h), rr, rr, android.graphics.Path.Direction.CW);
+                // ① **面纱（白霜）**——把外层玻璃盒区域按 α 叠白。
+                final int ls = lc.save();
+                lc.clipPath(cp);
                 final android.graphics.Paint vp = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
                 // I2-ALLOW: **颜色分量的 0..255 取整**（非几何坐标——面纱 α 转 ARGB 色值，与布局几何无关）
                 vp.setColor(android.graphics.Color.argb(Math.round(veilA * 255), 255, 255, 255));
-                final int ls = lc.save();
-                final float x = (gc.x - bx) * lScaleX, y = (gc.y - by) * lScaleY;
-                final float w = gc.w * lScaleX, h = gc.h * lScaleY;
-                if (g.radius > 0) {
-                    android.graphics.Path cp = new android.graphics.Path();
-                    cp.addRoundRect(new android.graphics.RectF(x, y, x + w, y + h),
-                            g.radius * lScaleX, g.radius * lScaleY, android.graphics.Path.Direction.CW);
-                    lc.clipPath(cp);
-                }
                 lc.drawRect(x, y, x + w, y + h, vp);
                 lc.restoreToCount(ls);
+                // ② **轮廓描边**（★#973 关键：用户「看不到下面的玻璃条」——iOS 胶囊能看到**条上下两条边线穿过胶囊**；
+                //   条边线须进 layer，胶囊采 layer 时才透得出这两条边 ⇒ 才读作"下面压着一条玻璃条"）。
+                final android.graphics.Paint sp = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                sp.setStyle(android.graphics.Paint.Style.STROKE);
+                sp.setStrokeWidth(Math.max(1.5f, 2.2f * lScaleX));
+                sp.setColor(android.graphics.Color.argb(150, 255, 255, 255));   // 半透明白（边缘镜面高光近似）
+                lc.drawPath(cp, sp);
             }
         }
     }
