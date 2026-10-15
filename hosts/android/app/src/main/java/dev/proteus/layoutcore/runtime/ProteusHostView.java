@@ -3334,6 +3334,8 @@ public class ProteusHostView extends ViewGroup {
     /** 复合帧在屏幕坐标中的区域（= glassBackdropFull 的区域）。 */
     private int glassLayerX = 0, glassLayerY = 0;
     private boolean glassHasNesting = false;
+    /** ★判据（任务 A）：true ⇒ 每帧 dump 复合层 + 几何（供脚本逐点对照）。由 `--es glassdbg 1` 打开。 */
+    public boolean glassDebug = false;
     /** `glassBackdrop` 在其覆盖的**屏幕区域**中的左上角（屏幕坐标）——玻璃采样按它把"屏幕坐标"折算到位图坐标。 */
     private float glassBackdropX = 0f, glassBackdropY = 0f;
     private boolean capturingGlass = false;
@@ -3554,6 +3556,17 @@ public class ProteusHostView extends ViewGroup {
                 final Cmd gc = list.get(k);
                 drawGlassFaceAt(c, ids[k], g, gc.x - gx, gc.y - gy, gc.w, gc.h,
                         glassBackdropFull, 0f, 0f, 1f, 1f);   // ★背板在离屏画布原点 (0,0) ⇒ bdX/bdY=0
+                // ②b ★#982：**外层玻璃自身的镜面边**——iOS 的条本就有一条 1px 高光边（shader `edge_hi` 只 ~0.12
+                //   ⇒ 经内层胶囊采样后衰减殆尽）。这里在复合层里沿**外层玻璃轮廓**再描一道**清晰的镜面边**
+                //   （属"渲染条本身"，非手画替代光学）⇒ 内层胶囊采样时能透出这条边。
+                final android.graphics.Paint ep = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                ep.setStyle(android.graphics.Paint.Style.STROKE);
+                ep.setStrokeWidth(3f);
+                ep.setColor(android.graphics.Color.argb(230, 255, 255, 255));
+                android.graphics.Path bp = new android.graphics.Path();
+                bp.addRoundRect(new android.graphics.RectF(gc.x - gx, gc.y - gy, gc.x - gx + gc.w, gc.y - gy + gc.h),
+                        g.radius, g.radius, android.graphics.Path.Direction.CW);
+                c.drawPath(bp, ep);
             }
             node.endRecording();
             final java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
@@ -3569,8 +3582,43 @@ public class ProteusHostView extends ViewGroup {
             glassLayerFull = wrap.copy(android.graphics.Bitmap.Config.ARGB_8888, false);
             if (wrap != null) wrap.recycle();
             img.close();
-            // ★★★决策 #980：**不再降采样**——条的边线只有 ~1–2px，降采样 2× + 线性采样会把它**抹没**
-            //   （实测复合层 y178 有 +44 的亮线，但胶囊采样后消失）。⇒ 内层直接采**全分辨率层**（`glassLayerFull`，div=1）。
+            // ★★★决策 #980：**不再降采样**——条的边线只有 ~1–2px，降采样 2× + 线性采样会把它**抹没**。
+            //   ⇒ 内层直接采**全分辨率层**（`glassLayerFull`，div=1）。
+            // ★判据（任务 A）：`glassDebug` 时 dump 复合层 + 几何 ⇒ 供脚本做"胶囊内部 vs 复合层同位置"逐点对照。
+            if (glassDebug) {
+                try {
+                    // ★raw 转储（比 PNG 更易无损读回）：宽高头(LittleEndian) + 每像素 4 字节 ARGB。
+                    final int w = glassLayerFull.getWidth(), h = glassLayerFull.getHeight();
+                    final int[] px = new int[w * h];
+                    glassLayerFull.getPixels(px, 0, w, 0, 0, w, h);
+                    final byte[] out = new byte[8 + w * h * 4];
+                    out[0]=(byte)w; out[1]=(byte)(w>>8); out[2]=(byte)(w>>16); out[3]=(byte)(w>>24);
+                    out[4]=(byte)h; out[5]=(byte)(h>>8); out[6]=(byte)(h>>16); out[7]=(byte)(h>>24);
+                    for (int i = 0; i < px.length; i++) {
+                        int v = px[i];
+                        int o = 8 + i * 4;
+                        out[o]=(byte)v; out[o+1]=(byte)(v>>8); out[o+2]=(byte)(v>>16); out[o+3]=(byte)(v>>24);
+                    }
+                    final java.io.File tmp = new java.io.File(getContext().getFilesDir(), "glasslayer.raw.tmp");
+                    final java.io.File dst = new java.io.File(getContext().getFilesDir(), "glasslayer.raw");
+                    final java.io.FileOutputStream fo = new java.io.FileOutputStream(tmp);
+                    fo.write(out); fo.flush(); fo.close();
+                    tmp.renameTo(dst);
+                    StringBuilder sb = new StringBuilder("GLASSDUMP gx=").append(gx).append(" gy=").append(gy)
+                            .append(" gw=").append(gw).append(" gh=").append(gh);
+                    for (int k = 0; k < list.size() && k < ids.length; k++) {
+                        if (glassByNode.get(ids[k]) != null) {
+                            Cmd gc = list.get(k);
+                            sb.append(" | n").append(ids[k]).append("=").append(gc.x).append(",").append(gc.y)
+                              .append(",").append(gc.w).append(",").append(gc.h)
+                              .append(" ov=").append(glassByNode.get(ids[k]).overlay)
+                              .append(" anc=").append(hasGlassAncestor(ids[k]));
+                        }
+                    }
+                    sb.append(" | press=").append(glassPress);
+                    android.util.Log.i("proteus-glass", sb.toString());
+                } catch (Throwable t) { android.util.Log.w("proteus-glass", "GLASSDUMP fail " + t); }
+            }
         } catch (Throwable t) {
             android.util.Log.w("proteus-glass", "GLASSLAYER offscreen FAIL " + t);
         }
