@@ -65,25 +65,12 @@ fn sample_backdrop(uv: vec2<f32>) -> vec4<f32> {
     return textureSample(backdrop_tex, backdrop_smp, uv * u.tex_scale + u.tex_bias);
 }
 
-// ★★★决策 #966/#969：**按下 SDF 形变（形状域）**——触点附近轮廓**内陷（凹）**（增大 SDF = 外形收缩）。
-//   ★#969 修正方向（用户「玻璃条本身的边不是鼓，是内陷了」+ iOS 18:53 暗底实拍）：iOS 按下 = 玻璃表面在
-//     触点处**凹进去**（露透镜状背景 + 彩虹色散边），**不是**凸出 ⇒ 以前做成外凸是**反向**。
-//   ★★本函数只定**剪影/亮环**；**法线/位移仍取原轮廓**（见 fs_glass）——否则内容被挤（#968/#969 实证）。
-//   ★纯 `press × overlay` 门控（未按 ⇒ 逐像素等价 sd_round_rect，parity 不变）。
-fn sd_glass(p: vec2<f32>, hs: vec2<f32>, r: f32, tp: vec2<f32>, press: f32, hsm: f32) -> f32 {
-    var v = sd_round_rect(p, hs, r);
-    let pr = clamp(press, 0.0, 1.0);
-    if (pr > 0.001) {
-        let td = p - tp;
-        // ★★★#970：展布/幅度按 iOS 真值收紧（18:53 暗底实拍量得：内压峰 ~16px、横向 ~±60px 即衰减到 0）。
-        //   原 br=1.25/amp=0.42 太宽（~±180px）且偏大（~23px）⇒ 读作"整条被压瘪"而非"触点处局部内陷"。
-        let br = hsm * 0.90;                       // 形变横向展布（≈0.9×最短半边 ⇒ ±~1.5·hsm 内衰减）
-        let bulge = exp(-dot(td, td) / (2.0 * br * br));
-        v = v + bulge * (hsm * 0.30) * pr;         // ★#969：增大 SDF ⇒ 轮廓**内陷**（凹，对齐 iOS）
-    }
-    return v;
-}
-
+// ★★★决策 #971（对齐 workbuddy 09:05 双场景取证 + iOS 18:53/17:45 实拍）：**按下不做 SDF 轮廓形变**。
+//   ★取证订正：iOS 按下时**玻璃条的上下两条边保持原位、平直贯穿**（镜面边线穿过透镜仍连续可见）；
+//     外凸（鼓出条外）的是**选中胶囊自己的透镜**（纵向膨胀），两者是**叠加/穿越**关系，**无 smooth-min 颈部**。
+//     ⇒ #969 的「轮廓内陷（凹口）」方向错误（会在条上凹出两个坑）；#966 的「宿主 inflatedPillPath 充气剪影」也是错的机制。
+//   ★新模型：**形状变化全部来自几何（条静止 + 胶囊盒纵向鼓起，见宿主 drawGlassPass）**，SDF 恒为圆角矩形；
+//     shader 侧只剩「亮环沿轮廓」（press_rim）——胶囊的透镜轮廓由**它自己的盒**给出。
 @fragment
 fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     let local = frag.xy - u.origin;      // 盒内像素坐标（origin = 节点盒左上角）
@@ -91,16 +78,8 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     let p = local - hs;
     let r = min(u.radius, min(hs.x, hs.y));
     let hsmin = min(hs.x, hs.y);
-    // ★#966：按下 SDF 充气（形状域）由模块级 `sd_glass()` 完成（WGSL 不允许函数嵌套）。
-    //   ★门控 = `press × overlay`：**只让选中胶囊（overlay）变形**，条（overlay=0）保持静止——
-    //     与 #965 同口径（用户「按下条也跟着变」是明确的回归）。
-    let pr_eff = clamp(u.press, 0.0, 1.0) * clamp(u.overlay, 0.0, 1.0);
-    let tpp = u.touch - hs;                          // 触点在 p 空间
-    // ★#968：**轮廓（几何）**用充气后的 SDF——只喂**亮环**（见 ⑥）；
-    //   而 `d`/`e`/**法线**/位移一律用**原轮廓** —— 用户实测「iOS 下面的内容不挤压，只有玻璃边被充气」。
-    //   ★教训：充气改法线 ⇒ 折射把**玻璃下面的内容**也带弯 = 挤内容（非 iOS）。形状域变形只应改剪影。
-    let sd_run = sd_glass(p, hs, r, tpp, pr_eff, hsmin);   // 充气轮廓（仅亮环用）
-    let sd = sd_round_rect(p, hs, r);                     // 原轮廓（d/e/法线/位移用）
+    // ★#971：SDF 恒为（当前盒的）圆角矩形——条盒未变 ⇒ 条边平直不动；胶囊盒已纵向放大 ⇒ 透镜轮廓。
+    let sd = sd_round_rect(p, hs, r);
     let d = max(-sd, 0.0);               // 离边深度（内部为正）
     let smin = min(u.size_px.x, u.size_px.y);   // 最短**边**（= 2×hsmin）
     // ★★★决策 #907/#910：折射带 ≈ **最短边 1/3**（= 条高 1/3）。
@@ -246,22 +225,16 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     // ★★★决策 #956 撤回：**iOS 选中胶囊实测无高亮边**（顶边 78→109 / 右边界 120→89，皆为**干净色阶、无过亮尖峰**；
     //   此前误把"条自身顶缘高光"(y2285 L142，恰在胶囊上方) 当成胶囊的边）。⇒ 选中等 overlay 玻璃**无边缘高光**（#953 原判正确）。
     let edge_amp = 1.0 - clamp(u.overlay, 0.0, 1.0);
-    // ★★★决策 #963：**按下「点亮透镜」**——press>0 的玻璃（按下组：条 + 选中胶囊）加一道**镜面亮边**
-    //   （对齐 iOS 按下：边缘镜面亮脊 +67L，子代理实测；我们此前按下=edge_amp 把亮边全关了 ⇒ 死平）。
-    // ★#965：亮边只给**选中项（overlay 玻璃=胶囊）**——否则条（overlay=0）也被点亮 ⇒ 用户「条也跟着变通透」。
-    // ★★★决策 #967：**按下亮环**——沿**充气轮廓**的亮边（iOS 按下透镜的亮边），压在暗底也读得出。
-    //   ★为什么必须加强（真机取证）：按下后胶囊填充变**透明**（#964）⇒ 在暗底上填充与玻璃条同亮度（实测
-    //     胶囊中心列 lum≈46 = 条，**轮廓完全看不见**），只有底部凸出到白色内容处才显形。用户「只有下边被挤压、
-    //     上边完全看不到」的真因 = **缺亮边**（iOS 的按下透镜 = 透明填充 + 一圈亮边 ⇒ 上下轮廓都读得出）。
-    //   ★带略宽于常态 bevel（0.10→0.16）以在真机分辨率下可见；系数 0.32→0.55。
-    //   ★按 **sd**（充气后轮廓）取环，而非 `e`——充气把 SDF 收缩后，真边缘处的 `e` 被推到 >0.16 ⇒ 用 `e` 会把环整段杀掉（实测）。
+    // ★★★决策 #963：**按下「点亮透镜」**——press>0 的玻璃加一道**镜面亮边**（对齐 iOS 按下透镜的亮脊）。
+    // ★#965：亮边只给**选中项（overlay 玻璃=胶囊）**——条不点亮（对齐 iOS：条边是常态镜面线，不随按下增强）。
+    // ★★★决策 #971：取环改用**本盒圆角矩形轮廓** `sd`（不再是"充气轮廓"）——形状变化全在宿主的**盒几何**
+    //   （胶囊盒纵向放大），SDF 就是放大后的圆角矩形 ⇒ 亮环自然贴着透镜轮廓走（对齐 iOS 透镜边缘亮边）。
     let pv_rim = clamp(u.press, 0.0, 1.0) * clamp(u.overlay, 0.0, 1.0);
     let rim_w = max(min(u.size_px.x, u.size_px.y) * 0.06, 2.0);   // 环宽（px）
-    let press_rim = (1.0 - smoothstep(0.0, rim_w, abs(sd_run))) * pv_rim * 0.55;   // ★#968：取**充气轮廓**
+    let press_rim = (1.0 - smoothstep(0.0, rim_w, abs(sd))) * pv_rim * 0.55;   // ★#971：沿本盒轮廓取环
     let rim = ((pow(facing, 6.0) * u.specular * 0.22 + fres * 0.06) * bevel_mask + edge_hi) * edge_amp + press_rim + tg * 0.07;   // ★#954/#956/#963
-    // ★★★决策 #966：**按下 SDF 充气**（形状域）只改**内部光学**（法线/折射/高光跟随充气轮廓）。
-    //   ★剪影由**宿主几何**（`GlassMaterial.inflatedPillPath` 外凸路径裁剪）给出——实测本设备
-    //     忽略 `RuntimeShader` 返回的 alpha（返回 0 / 圆覆盖率都仍画成不透明矩形）⇒ 覆盖率不可用。
+    // ★★★决策 #971：**按下形状变化全部来自宿主几何**（条静止 + 胶囊盒纵向放大），shader 不做任何轮廓形变。
+    //   ★实测本设备**忽略 `RuntimeShader` 返回的 alpha**（返回 0 / 圆覆盖率都仍画成不透明矩形）⇒ 剪影只能来自宿主几何。
     col = vec4<f32>(clamp(col.rgb + vec3<f32>(rim), vec3<f32>(0.0), vec3<f32>(1.0)), 1.0);
     return col;
 }

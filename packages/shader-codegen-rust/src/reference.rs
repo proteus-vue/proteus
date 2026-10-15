@@ -93,22 +93,6 @@ fn sd_round_rect(p: (f32, f32), hs: (f32, f32), r: f32) -> f32 {
     mx + (ox * ox + oy * oy).sqrt() - r
 }
 
-/// ★★★决策 #966/#969：**按下 SDF 形变（形状域）**——见 glass.wgsl 同源注释（内陷=凹）。
-/// 触点附近收缩 SDF（外形外凸）；纯 press 门控（press=0 ⇒ 逐像素等价 sd_round_rect）。
-#[allow(clippy::too_many_arguments)]
-fn sd_glass(p: (f32, f32), hs: (f32, f32), r: f32, tp: (f32, f32), press: f32, hsm: f32) -> f32 {
-    let mut v = sd_round_rect(p, hs, r);
-    let pr = press.clamp(0.0, 1.0);
-    if pr > 0.001 {
-        let tdx = p.0 - tp.0;
-        let tdy = p.1 - tp.1;
-        let br = hsm * 0.90;                       // ★#970：形变横向展布（对齐 iOS，原 1.25 过宽）
-        let bulge = (-(tdx * tdx + tdy * tdy) / (2.0 * br * br)).exp();
-        v += bulge * (hsm * 0.30) * pr;            // ★#969：增大 SDF ⇒ 轮廓内陷（凹）；★#970 幅度 0.42→0.30
-    }
-    v
-}
-
 fn circle_map(x: f32) -> f32 {
     1.0 - (1.0 - x * x).max(0.0).sqrt()
 }
@@ -124,10 +108,7 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     let pc = (local.0 - hs.0, local.1 - hs.1);
     let r = p.radius.min(hs.0.min(hs.1));
     let hsmin = hs.0.min(hs.1);
-    let tp = (p.touch.0 - hs.0, p.touch.1 - hs.1);   // ★#966 触点在 p 空间
-    let pr_eff = p.press.clamp(0.0, 1.0) * p.overlay.clamp(0.0, 1.0);   // ★#966：充气只给选中胶囊（overlay）
-    // ★#968：充气轮廓（仅亮环用）；d/e/法线/位移用**原轮廓**（内容不挤压）。
-    let sd_run = sd_glass(pc, hs, r, tp, pr_eff, hsmin);
+    // ★#971：SDF 恒为（当前盒的）圆角矩形——形状变化全在宿主盒几何，shader 不做轮廓形变。
     let sd = sd_round_rect(pc, hs, r);
     let d = (-sd).max(0.0);
     let smin = p.size_px.0.min(p.size_px.1);   // 最短边（= 2×hsmin）
@@ -217,7 +198,7 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     // ★#967：按下亮环——沿充气轮廓的亮边（与 glass.wgsl 同源；压在暗底也读得出）。
     let pv_rim = p.press.clamp(0.0, 1.0) * p.overlay.clamp(0.0, 1.0);
     let rim_w = (p.size_px.0.min(p.size_px.1) * 0.06).max(2.0);
-    let press_rim = (1.0 - smoothstep(0.0, rim_w, sd_run.abs())) * pv_rim * 0.55;   // ★#968：取充气轮廓
+    let press_rim = (1.0 - smoothstep(0.0, rim_w, sd.abs())) * pv_rim * 0.55;   // ★#971：沿本盒轮廓取环
     let rim = ((facing.powi(6) * p.specular * 0.22 + fres * 0.06) * bevel_mask + edge_hi) * edge_amp + press_rim + tg * 0.07;   // ★#954/#963/#966
     for c in 0..3 { col[c] = (col[c] + rim).clamp(0.0, 1.0); }
     // ★#966：剪影由宿主几何（inflatedPillPath）给出——见 glass.wgsl（本设备忽略 shader 返回 alpha）。

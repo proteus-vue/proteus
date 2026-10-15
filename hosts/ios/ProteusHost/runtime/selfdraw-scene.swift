@@ -1189,18 +1189,10 @@ final class SelfDrawView: UIView {
             fl.frame = nodeLayer.bounds        // 与节点**同本地坐标**（随节点变换）
             fl.contents = face
             fl.contentsScale = glassOutScale   // 半分辨率图 → CA 放大到节点尺寸（玻璃模糊 ⇒ 无损）
-            // ★★★决策 #966：**按下充气剪影**——选中胶囊（overlay）× 按下 ⇒ 用**外凸路径** mask 定形
-            //   （与 shader `sd_glass` 同式；CALayer cornerRadius 只能给圆角矩形，凸不出）。否则圆角矩形。
-            let tp = touchPress[i]
-            if spec.overlay > 0.001, tp.press > 0.001 {
-                let m = CAShapeLayer()
-                m.path = SelfDrawView.inflatedPillPath(bx: 0, by: 0, bw: nodeLayer.bounds.width, bh: nodeLayer.bounds.height,
-                                                        r: spec.radius, tx: tp.t.x, ty: tp.t.y, press: tp.press)
-                fl.mask = m
-            } else {
-                fl.cornerRadius = spec.radius
-                fl.masksToBounds = true
-            }
+            // ★★★决策 #971（对齐 workbuddy 09:05 取证）：**剪影恒为圆角矩形**——形状变化全在**盒几何**
+            //   （条盒不动 ⇒ 条边平直；胶囊盒已纵向放大 ⇒ 透镜轮廓）。不再用 `inflatedPillPath` 做凹口。
+            fl.cornerRadius = spec.radius
+            fl.masksToBounds = true
             // ★★★决策 #893（对齐 iOS 液态玻璃基准）：玻璃面画在**自身内容之下**（zPosition < 自身子层默认 0）
             //   ⇒ 玻璃节点自己的文本/子视图**清晰地浮在玻璃面之上**（真 iOS：材质只糊背后，自身内容原样）。
             //   此前 `zPosition = 5000` 把自身子层盖住 ⇒ 自身文字被玻璃面糊掉（8× 真机取证偏离参照）。
@@ -1553,59 +1545,6 @@ final class SelfDrawView: UIView {
     }
 
     /// CGPath **真实弧长**（直线精确 + 贝塞尔 16 段采样——判据读它证明"描边层真的建出来了"）
-    /// ★★★决策 #966/#969：**按下形变路径**（形状域变形的剪影）——圆角矩形轮廓沿外法线按 `amp·exp(-d²/2σ²)`
-    ///   **向内**偏移（内陷/凹；`d` = 轮廓点到触点距离），与 shader `sd_glass` 的形变式**同源**（参数同 Android
-    ///   `GlassMaterial.inflatedPillPath`）。`press=0` ⇒ 路径 ≈ 原圆角矩形（逐像素等价）。
-    ///   ★坐标系：`bx,by` = 盒左上（mask 用 0,0）；`tx,ty` 与盒同坐标空间（屏触点 − 盒左上）。
-    static func inflatedPillPath(bx: CGFloat, by: CGFloat, bw: CGFloat, bh: CGFloat,
-                                 r: CGFloat, tx: CGFloat, ty: CGFloat, press: CGFloat) -> CGPath {
-        let shortSide = min(bw, bh)
-        let amp = shortSide * 0.5 * 0.30 * max(0, min(1, press))   // ★#970：幅度 0.42→0.30（对齐 iOS 内压峰 ~16px）
-        let sig = max(shortSide * 0.5 * 0.90, 1)                   // ★#970：展布 1.25→0.90（对齐 iOS 局部内陷 ~±60px）
-        let rr = max(0, min(r, shortSide * 0.5))
-        let twoSig2 = 2 * sig * sig
-        let x0 = bx, y0 = by, x1 = bx + bw, y1 = by + bh
-        var pts: [(x: CGFloat, y: CGFloat, nx: CGFloat, ny: CGFloat)] = []
-        let step: CGFloat = 4
-        var x = x0 + rr
-        while x < x1 - rr { pts.append((x, y0, 0, -1)); x += step }
-        Self.arcPts(&pts, cx: x1 - rr, cy: y0 + rr, rr: rr, a0: -90, a1: 0)
-        var y = y0 + rr
-        while y < y1 - rr { pts.append((x1, y, 1, 0)); y += step }
-        Self.arcPts(&pts, cx: x1 - rr, cy: y1 - rr, rr: rr, a0: 0, a1: 90)
-        x = x1 - rr
-        while x > x0 + rr { pts.append((x, y1, 0, 1)); x -= step }
-        Self.arcPts(&pts, cx: x0 + rr, cy: y1 - rr, rr: rr, a0: 90, a1: 180)
-        y = y1 - rr
-        while y > y0 + rr { pts.append((x0, y, -1, 0)); y -= step }
-        Self.arcPts(&pts, cx: x0 + rr, cy: y0 + rr, rr: rr, a0: 180, a1: 270)
-        let path = CGMutablePath()
-        var first = true
-        for q in pts {
-            let dx = q.x - tx, dy = q.y - ty
-            let inf = amp * CGFloat(exp(Double(-(dx * dx + dy * dy) / twoSig2)))
-            let px = q.x - q.nx * inf, py = q.y - q.ny * inf   // ★#969：向内偏移（内陷/凹）
-            if first { path.move(to: CGPoint(x: px, y: py)); first = false }
-            else { path.addLine(to: CGPoint(x: px, y: py)) }
-        }
-        path.closeSubpath()
-        return path
-    }
-
-    /// 圆角弧采样（外法线 = 径向）：`(cx,cy)` 圆心 · `rr` 半径 · `a0→a1` 角度（度）。
-    private static func arcPts(_ pts: inout [(x: CGFloat, y: CGFloat, nx: CGFloat, ny: CGFloat)],
-                               cx: CGFloat, cy: CGFloat, rr: CGFloat, a0: CGFloat, a1: CGFloat) {
-        if rr <= 0.5 { return }
-        // I2-ALLOW: 圆角弧的**离散采样点数**（非几何坐标舍入——弧点由 CGFloat 三角函数算出，N 仅为细分常数）
-        let n = max(2, Int(ceil(abs(a1 - a0) / 6)))
-        if n <= 1 { return }
-        for i in 1..<n {
-            let th = (a0 + (a1 - a0) * CGFloat(i) / CGFloat(n)) * .pi / 180
-            let nx = cos(th), ny = sin(th)
-            pts.append((cx + rr * nx, cy + rr * ny, nx, ny))
-        }
-    }
-
     static func cgPathLength(_ path: CGPath) -> Double {
         var len = 0.0
         var cur = CGPoint.zero
