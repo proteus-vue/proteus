@@ -148,14 +148,17 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     let to_tex = |local: (f32, f32)| ((local.0 / p.size_px.0) * scale.0 + bias.0,
                                       (local.1 / p.size_px.1) * scale.1 + bias.1);
 
+    // ★★★决策 #976：按下透镜「内部放大」（凸模式放大镜）——与 glass.wgsl 同源（门控 pr_ov ⇒ 静止/条等价）。
+    let pr_ov = p.press.clamp(0.0, 1.0) * p.overlay.clamp(0.0, 1.0);
+    let ctr = hs;
+    let zoom = 1.0 + pr_ov * 0.16;
+    let sp_l = (ctr.0 + (sp.0 - ctr.0) / zoom, ctr.1 + (sp.1 - ctr.1) / zoom);
     // ★决策 #906：零采样（不做模糊）——与 glass.wgsl ③ 同源（内容不糊，只磨砂叠加）
-    let mut col = backdrop.sample_map(to_tex(sp));
-    // ★★★决策 #972：按下透镜的「边缘色散」（RGB 沿法线差异化偏移）——与 glass.wgsl 同源（无条件采样，disp=0 等价）。
-    //   R 通道多采一步（更靠内）、B 少采一步（更靠外）——即 `sp ± n·disp`。
-    let pr_ov_disp = p.press.clamp(0.0, 1.0) * p.overlay.clamp(0.0, 1.0);
-    let disp = pr_ov_disp * (1.0 - e) * (band * 0.12).min(3.0);
-    let a_r = backdrop.sample_map(to_tex((sp.0 + n.0 * disp, sp.1 + n.1 * disp)));
-    let a_b = backdrop.sample_map(to_tex((sp.0 - n.0 * disp, sp.1 - n.1 * disp)));
+    let mut col = backdrop.sample_map(to_tex(sp_l));
+    // ★★★决策 #972/#976：按下透镜的「边缘色散」（RGB 沿法线差异化偏移）——与 glass.wgsl 同源（无条件采样，disp=0 等价）。
+    let disp = pr_ov * (1.0 - e) * (band * 0.30).min(6.0);
+    let a_r = backdrop.sample_map(to_tex((sp_l.0 + n.0 * disp, sp_l.1 + n.1 * disp)));
+    let a_b = backdrop.sample_map(to_tex((sp_l.0 - n.0 * disp, sp_l.1 - n.1 * disp)));
     col[0] = a_r[0];
     col[2] = a_b[2];
     let raw = col;   // ★#925：原始采样色（供霜色 12% 色温）
@@ -207,8 +210,8 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     // ★#963：按下点亮透镜（press>0 的玻璃加镜面亮边）
     // ★#967：按下亮环——沿充气轮廓的亮边（与 glass.wgsl 同源；压在暗底也读得出）。
     let pv_rim = p.press.clamp(0.0, 1.0) * p.overlay.clamp(0.0, 1.0);
-    let rim_w = (p.size_px.0.min(p.size_px.1) * 0.06).max(2.0);
-    let press_rim = (1.0 - smoothstep(0.0, rim_w, sd.abs())) * pv_rim * 0.55;   // ★#971：沿本盒轮廓取环
+    let rim_w = (p.size_px.0.min(p.size_px.1) * 0.018).max(1.8);   // ★#976：0.06→0.018（窄锐亮脊）
+    let press_rim = (1.0 - smoothstep(0.0, rim_w, sd.abs())) * pv_rim * 0.85;   // ★#976：0.55→0.85
     let rim = ((facing.powi(6) * p.specular * 0.22 + fres * 0.06) * bevel_mask + edge_hi) * edge_amp + press_rim + tg * 0.07;   // ★#954/#963/#966
     for c in 0..3 { col[c] = (col[c] + rim).clamp(0.0, 1.0); }
     // ★#966：剪影由宿主几何（inflatedPillPath）给出——见 glass.wgsl（本设备忽略 shader 返回 alpha）。

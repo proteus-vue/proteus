@@ -132,18 +132,27 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     //   只有玻璃**轮廓边**被充气」。此前 `push` 沿"离触点方向"推挤背后内容 ⇒ 读作"内容被挤压"（明确偏离 iOS）。
     //   现在按下只改**剪影**（宿主外凸路径 + 沿充气轮廓的亮环）与**内部光学**（边缘折射与静态同）⇒ 内容零位移。
     let sp = local - n * bend;   // ★#918：仅保留边缘折射（与静态同口径），无触控内容位移
-    let sp_uv = sp / u.size_px;
+
+    // ★★★决策 #976：**按下透镜「内部放大」（凸模式放大镜）**——用户「iOS 本身按下就会放大、松开回弹」
+    //   + workbuddy ②「透镜内部零折射 ⇒ 读作和条同一块面」。此前位移集中在极边缘 `(1-e)³` ⇒ **内部零位移**。
+    //   iOS 透镜内部是**凸模式放大折射**：内容整体被放大（放大镜感）⇒ 这才让"胶囊 ≠ 条面"（区域级差异）。
+    //   实现：采样点向**盒中心**收缩 `zoom` 倍 ⇒ 放大（zoom>1）。门控 `pr_ov`（仅按下×选中胶囊）——
+    //   **条（overlay=0）与静止态 ⇒ zoom=1 ⇒ 逐像素等价**（parity 不受影响）。
+    //   ★守住 #968：这里只放大**胶囊内部**（透镜里的内容/图标），**不改条下面的内容**（两者不同层、不冲突）。
+    let ctr = hs;                                    // 盒中心（local 空间）
+    let zoom = 1.0 + pr_ov * 0.16;                   // 按下 → 1.16×（放大镜）
+    let spL = ctr + (sp - ctr) / zoom;               // spL = 放大后的采样点
+    let sp_uv = spL / u.size_px;
 
     // ③ 模糊按 e 键控（边缘锐、中心糊）；核最大半径 = blur*e*0.55
     // ★决策 #906：**零采样**——不做任何模糊（对齐用户对 iOS 的理解：内容不糊，只磨砂叠加）。
     var acc = sample_backdrop(sp_uv);
-    // ★★★决策 #972：**按下透镜的「边缘色散」**（RGB 沿法线差异化偏移）——对齐 iOS 透镜边缘虹彩。
-    //   门控 `pr_ov`（仅按下×选中项）；`e`（离边深度）大处=中心 ⇒ 色散 0 ⇒ 只体现在**边缘带**。
-    //   ★**无条件采样**（不写 `if`）——WGSL 要求在一致控制流里 `textureSample`；`disp=0`（静止/条）时
-    //     偏移恰为 0 ⇒ `aR/aB` 与 `acc` **逐像素一致** ⇒ parity 不受影响。
-    let disp = pr_ov * (1.0 - e) * min(band * 0.12, 3.0);
-    let aR = sample_backdrop((sp + n * disp) / u.size_px);
-    let aB = sample_backdrop((sp - n * disp) / u.size_px);
+    // ★★★决策 #972/#976：**按下透镜的「边缘色散」**（RGB 沿法线差异化偏移）——对齐 iOS 透镜边缘虹彩。
+    //   门控 `pr_ov`；`e` 大处=中心 ⇒ 0 ⇒ 只体现在**边缘带**；★#976 幅度加大到可感知（原 `min(band*0.12,3)` 真机实测无错位）。
+    //   ★**无条件采样**（不写 `if`）——WGSL 要求在一致控制流里 `textureSample`；`disp=0` 时与 `acc` 逐像素一致。
+    let disp = pr_ov * (1.0 - e) * min(band * 0.30, 6.0);
+    let aR = sample_backdrop((spL + n * disp) / u.size_px);
+    let aB = sample_backdrop((spL - n * disp) / u.size_px);
     acc = vec4<f32>(aR.r, acc.g, aB.b, acc.a);
     var col = acc;
 
@@ -241,8 +250,10 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     // ★★★决策 #971：取环改用**本盒圆角矩形轮廓** `sd`（不再是"充气轮廓"）——形状变化全在宿主的**盒几何**
     //   （胶囊盒纵向放大），SDF 就是放大后的圆角矩形 ⇒ 亮环自然贴着透镜轮廓走（对齐 iOS 透镜边缘亮边）。
     let pv_rim = clamp(u.press, 0.0, 1.0) * clamp(u.overlay, 0.0, 1.0);
-    let rim_w = max(min(u.size_px.x, u.size_px.y) * 0.06, 2.0);   // 环宽（px）
-    let press_rim = (1.0 - smoothstep(0.0, rim_w, abs(sd))) * pv_rim * 0.55;   // ★#971：沿本盒轮廓取环
+    // ★★★决策 #976：**窄锐亮脊**——workbuddy ③ 实测我们 `rim_w≈13px` 的软环峰值只 ~0.26（被 smoothstep 软衰减吃掉）；
+    //   iOS 是 **1–2px 锐利亮脊**（对比 +100）。⇒ 环宽收到 ~1.8px、系数 0.55→0.85（拧成一道细亮线）。
+    let rim_w = max(min(u.size_px.x, u.size_px.y) * 0.018, 1.8);   // ★#976：0.06→0.018（窄锐）
+    let press_rim = (1.0 - smoothstep(0.0, rim_w, abs(sd))) * pv_rim * 0.85;   // ★#976：0.55→0.85
     let rim = ((pow(facing, 6.0) * u.specular * 0.22 + fres * 0.06) * bevel_mask + edge_hi) * edge_amp + press_rim + tg * 0.07;   // ★#954/#956/#963
     // ★★★决策 #971：**按下形状变化全部来自宿主几何**（条静止 + 胶囊盒纵向放大），shader 不做任何轮廓形变。
     //   ★实测本设备**忽略 `RuntimeShader` 返回的 alpha**（返回 0 / 圆覆盖率都仍画成不透明矩形）⇒ 剪影只能来自宿主几何。
