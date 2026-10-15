@@ -153,16 +153,20 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     let ctr = hs;
     let zoom = 1.0 + pr_ov * 0.08;   // ★#981：0.16→0.08
     let sp_l = (ctr.0 + (sp.0 - ctr.0) / zoom, ctr.1 + (sp.1 - ctr.1) / zoom);
-    // ★★★决策 #978：按下透镜「自低通」（凸透镜的柔）——与 glass.wgsl 同源（5-tap 十字，br2=0 等价）。
-    let br2 = band * 0.03 * pr_ov;   // ★#981：0.05→0.03
+    // ★★★决策 #985：3×3 盒式模糊（间距 u.blur·0.30）——与 glass.wgsl ③ 同源（覆盖原 #978 的 5-tap 低通）。
+    let blr = (p.blur * 0.30).max(0.0);
     let s5 = |px: f32, py: f32| backdrop.sample_map(to_tex((px, py)));
     let mut col = [0.0f32; 4];
     for c in 0..4 {
-        col[c] = s5(sp_l.0, sp_l.1)[c] * 0.36
-            + s5(sp_l.0 + br2, sp_l.1)[c] * 0.16
-            + s5(sp_l.0 - br2, sp_l.1)[c] * 0.16
-            + s5(sp_l.0, sp_l.1 + br2)[c] * 0.16
-            + s5(sp_l.0, sp_l.1 - br2)[c] * 0.16;
+        col[c] = s5(sp_l.0, sp_l.1)[c] * (1.0 / 9.0)
+            + s5(sp_l.0 + blr, sp_l.1)[c] * (1.0 / 9.0)
+            + s5(sp_l.0 - blr, sp_l.1)[c] * (1.0 / 9.0)
+            + s5(sp_l.0, sp_l.1 + blr)[c] * (1.0 / 9.0)
+            + s5(sp_l.0, sp_l.1 - blr)[c] * (1.0 / 9.0)
+            + s5(sp_l.0 + blr, sp_l.1 + blr)[c] * (1.0 / 9.0)
+            + s5(sp_l.0 + blr, sp_l.1 - blr)[c] * (1.0 / 9.0)
+            + s5(sp_l.0 - blr, sp_l.1 + blr)[c] * (1.0 / 9.0)
+            + s5(sp_l.0 - blr, sp_l.1 - blr)[c] * (1.0 / 9.0);
     }
     // ★★★决策 #972/#976：按下透镜的「边缘色散」（RGB 沿法线差异化偏移）——与 glass.wgsl 同源（无条件采样，disp=0 等价）。
     let disp = pr_ov * (1.0 - e) * (band * 0.30).min(6.0);
