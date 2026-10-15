@@ -168,6 +168,10 @@ public class SuperappActivity extends android.app.Activity {
                 if (getIntent() != null && "1".equals(getIntent().getStringExtra("glassdbg")) && draw.view() != null) {
                     draw.view().glassDebug = true;
                 }
+                // ★决策 #983 可回归诊断：`--es alphaprobe 1` ⇒ RuntimeShader alpha 是否生效（离屏探针，自判 PASS/FAIL）
+                if (getIntent() != null && "1".equals(getIntent().getStringExtra("alphaprobe"))) {
+                    dev.proteus.layoutcore.GlassAlphaProbe.runAsync();
+                }
                 android.util.Log.i(TAG, "SUPERAPP_LAUNCHER_READY screen=" + currentName(readState()));
                 // ★判据用：`--es scroll "dx,dy"`（物理像素）——**先滚动**（验证"滚动后导航"的跨屏偏移重置）。
                 String scroll = getIntent() != null ? getIntent().getStringExtra("scroll") : null;
