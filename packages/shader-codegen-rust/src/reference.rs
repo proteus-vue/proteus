@@ -175,7 +175,8 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     let veil_v = 1.0f32;
     let veil_t = ((p.bg_lum - 0.25) / 0.60).clamp(0.0, 1.0);
     // ★★★决策 #972：按下 ⇒ 选中胶囊面纱退场（通透玻璃透镜），门控 press×overlay（条不受影响）。
-    let veil_base = 0.09f32 + (0.90f32 - 0.09f32) * veil_t;
+    // ★★★决策 #977：浅端 α 0.90→0.55（用户「白底下像透明卡片、没有通透玻璃感」；见 glass.wgsl 同源注释）。
+    let veil_base = 0.09f32 + (0.55f32 - 0.09f32) * veil_t;
     let pr_ov = p.press.clamp(0.0, 1.0) * p.overlay.clamp(0.0, 1.0);
     let veil_a = veil_base + (veil_base * 0.18f32 - veil_base) * pr_ov;
     let raw_lum = raw[0]*0.299 + raw[1]*0.587 + raw[2]*0.114;

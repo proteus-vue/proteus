@@ -3534,7 +3534,7 @@ public class ProteusHostView extends ViewGroup {
                 final float glum = glassRegionLum(gc);          // 0..1（-1=无背板）
                 if (glum < 0f) continue;
                 final float veilT = Math.max(0f, Math.min(1f, (glum - 0.25f) / 0.60f));
-                final float veilA = 0.09f + (0.90f - 0.09f) * veilT;   // 同 shader `VEIL_A`（不随 press）
+                final float veilA = 0.09f + (0.55f - 0.09f) * veilT;   // 同 shader `VEIL_A`（★#977：浅端 0.90→0.55）
                 final float x = (gc.x - bx) * lScaleX, y = (gc.y - by) * lScaleY;
                 final float w = gc.w * lScaleX, h = gc.h * lScaleY;
                 final float rr = g.radius * lScaleX;
