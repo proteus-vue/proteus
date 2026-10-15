@@ -8,7 +8,7 @@
 import { describe, it, expect } from 'vitest'
 import { buildLayoutTemplate } from '@proteus-vue/compiler'
 import { glassResolver } from '../packages/cli/src/app-component-registry'
-import { getGlassPreset, cssSaturateForMaterial } from '../packages/glass/src/index'
+import { getGlassPreset } from '../packages/glass/src/index'
 
 const build = (tpl: string, opts?: { glassResolver?: typeof glassResolver }) =>
   buildLayoutTemplate(`<template>${tpl}</template>`, 'x.vue', undefined, undefined, undefined, undefined, false, opts)
@@ -25,9 +25,8 @@ describe('★★玻璃材质 IR 折叠（pg-glass → style.glass）', () => {
     expect(g.blur).toBe(preset.blur) // 20
     expect(g.border).toBe(preset.border) // true
     expect(g.borderSide).toBe(preset.borderSide ?? 'all') // top
-    // ★决策 #910（报告 P2-3）：saturation 此前硬编码 1.0 ⇒ 原生自绘缺 iOS `.regular` 的提彩；
-    //   现按材质派生（复用 CSS 侧同一映射 cssSaturateForMaterial）——glass 材质 = 1.8。
-    expect(g.saturation).toBe(cssSaturateForMaterial('glass')) // 1.8（对齐 iOS .regular）
+    // ★决策 #1001：改为 **1.0**（不再放大背景内容彩度）——iOS 实测不放大（视频1 橙卡条外/内 sat 165/166）。
+    expect(g.saturation).toBe(1.0)
   })
 
   it('★tint 转内核可吃 #RRGGBBAA（非 rgba())', () => {

@@ -18,7 +18,7 @@ import path from 'node:path'
 import { buildLayoutTemplate, buildVaporSubscriptions } from '@proteus-vue/compiler'
 import { resolveComponentsRoot } from '@proteus-vue/plugin-vite'
 import { iconByName, hasIcon } from '@proteus-vue/icons'
-import { resolveGlass, cssSaturateForMaterial } from '@proteus-vue/glass'
+import { resolveGlass } from '@proteus-vue/glass'
 
 /**
  * ★★★玻璃材质折叠（自研液态玻璃，决策 #818）：`<pg-glass …props>` → 引擎 `glass` 字段。
@@ -56,10 +56,11 @@ export function glassResolver(props: Record<string, string | undefined>): Record
     border: r.border,
     borderSide: sideMap[r.borderSide ?? 'all'] ?? 'all',
     noise: r.noise,
-    // ★★★决策 #910（报告 P2-3）：`saturation` 此前**硬编码 1.0**（IR 字段从未被填 ⇒ 原生自绘恒中性 ⇒ 玻璃偏灰、
-    //   缺 iOS `.regular` 的"blur + saturate"通透感；该常量此前只在 Web/MP 的 CSS 路径补过，见 `@proteus-vue/glass` 的
-    //   `CSS_SATURATE=1.8`）。现按材质派生，且**复用 CSS 侧同一映射** `cssSaturateForMaterial`（SSOT——防两套口径漂移）。
-    saturation: cssSaturateForMaterial(materialOf(props.material)),
+    // ★★★决策 #1001（用户「为什么会一直在改变内容颜色？iOS 视频里也没有内容颜色的变化」）：**不再放大内容彩度**。
+    //   shader 里 `col = mix(lum, col.rgb, saturation)` ⇒ `saturation=1.8` 把**背景内容**彩度放大约 1.58×
+    //   ⇒ 读作"内容在变色"。**iOS 实测不放大**（视频1 橙卡条外 sat=165 / 条内 166；18:53 条内为灰 sat≤1）。
+    //   ⇒ App 原生玻璃改回 **1.0**（中性，不动内容色彩）。★Web/MP 仍是 CSS `saturate(1.8)`（不同渲染器，另议）。
+    saturation: 1.0,
     // ★★★决策 #900：材质选择——`<pg-glass material="...">` → 折进 `glass.material`（宿主按 id 派发管线）。
     //   缺省/未知 ⇒ 'glass'（保持既有行为；合法集 = 材质目录 id，见 `@proteus-vue/shader` catalog）。
     material: materialOf(props.material),
