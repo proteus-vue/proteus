@@ -4610,3 +4610,15 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 【判据】真机 Android 按下：条上/下边在触点处**内压（上边下压/下边上抬）**、旁侧对照不动 · `check:shader-generated`（四端重生成无漂移）· `check:glass-pixel-parity`（Metal==oracle max 1/255 · rest+press 两态）· `check:shader-capability`/`glass-capability`/`glass-audit`/`pixel-snap`/`host-rounding`/`android-host-compile`/iOS `check-selfdraw-compile` 全绿 · AAR 重建 · `test:coupled` 71 绿。
 【诚实边界】① 色散（彩虹边）未做；② 回弹仍 lerp（非 spring 过冲）；③ iOS/鸿蒙**已接线未真机复验**（本轮仅 Android）；④ "两块玻璃真正叠加"仍未做（承接 #965/#966）。iOS/鸿蒙的 `inflatedPillPath` 本就是局部坐标、**无此坐标系 bug**（本轮仅 Android 有此 bug）。
 【★教训】★★**"按下有形变"改的是几何（剪影路径），而几何路径一旦跨"盒坐标 vs 局部坐标"就极易把距离算成常数**——`dx=q.x-tx` 里 `q.x`(绝对) 与 `tx`(局部) 混用 ⇒ `exp` 恒 0、形变静默失效（无报错、无门禁红，只有真机逐列量 Δy 才看得见）。★**其余三端同函数"天然对"是巧合**（iOS 传 `bx=0`）⇒ 不能因"三端同一算法"就推定各调用点都没错——**调用点的坐标空间要单独验**。★量化对齐观感：**先量 iOS 的"内压峰多少 px / 横向衰减到多远"**（16px / ±60px），再定参数，别凭目测反复调（#954/#955/#956 同源）。
+
+971. **★★★液态玻璃按下机制订正：撤「SDF 轮廓形变（#966/#969 凹口）」——真机制 = 条静止 + 选中胶囊纵向鼓起成透镜溢出条外 · Android 真机**（2026-10-15 承 #970 · 用户「看看 workbuddy 最新的结论，那个应该是补齐了疑虑」+ workbuddy 09:05 边缘分离取证）：
+【订正来源】#970 修好坐标 bug 后条边"有了形变"，但方向仍是 #969 的「内陷（凹）」。workbuddy 09:05 用**双场景增强对比 + 逐 x 边缘剖面**订正（并推翻它自己 08:55 的"smooth-min 并集/颈部"结论）：**iOS 条的上/下两条边保持原位、平直贯穿**（镜面边线穿过透镜仍连续可见），外凸（鼓出条外）的是**选中胶囊自己的透镜**（纵向膨胀）；两者是**叠加/穿越**关系，**无融合颈部**。用户「还是原来的边 + 被挤压了」两者同时成立——"挤压感"= **透镜鼓出 + 条边不动的对比**（参照物鼓出去，原位条边相对显得凹）。
+【本会话独立复测（对齐 workbuddy）】iOS 18:53 原图逐列剖面：透镜列（x=450）在条底边**下方**（y=2477–2485）**另有一条弧**（远端 x=1000 该处已是纯黑）⇒ 透镜确实**溢出条外**；同时条底边在透镜处仅 ~9px 抬升（观感上的"内压"）。⇒ 外凸的是**胶囊透镜**，条边基本不动。
+【修（四处同源，撤销 SDF 形变）】
+  · **shader（glass.wgsl）**：删掉 `sd_glass()`（#966/#969 的触点高斯凹口）；SDF 恒为（当前盒的）圆角矩形。按下亮环 `press_rim` 改沿**本盒轮廓** `sd` 取环。**形状变化全部来自宿主盒几何**。
+  · **oracle（reference.rs）**：同步删除 `sd_glass()`、`sd_run`；`press_rim` 用 `sd`。
+  · **Android 宿主**：删除 `GlassMaterial.inflatedPillPath()` + `arcPts()`；`drawGlassFace` 按下不再走充气 `clipPath`，剪影恒为**当前盒**圆角矩形。按下缩放从**等比 1.3×**（`GLASS_PRESS_SCALE_CAPSULE=0.30`）改为**各向异性纵向鼓起**：胶囊 `x×1.14 / y×1.55`（`GLASS_PRESS_SCALE_CAPSULE_X/Y`）⇒ 透镜纵向溢出条外；前景内容随胶囊缩放 `x×1.20 / y×1.17`（对齐 iOS 实测 icon ≈1.2×，不跟着盒的 1.55 拉伸）。
+  · **iOS 宿主**：删除 `SelfDrawView.inflatedPillPath()` + `arcPts()`；玻璃面剪影恒为 `cornerRadius`（盒已变 ⇒ 透镜轮廓）。
+【判据（全绿）】真机 Android（glass-nav 按住）：**胶囊纵向鼓起、上下各溢出条外 ~25px**（x=465 列：顶 2170→2145 / 底 2337→2362）；**条边完全不动**（x=750/900：顶 2170/2170、底 2337/2337 逐像素一致）——对齐 iOS 结构 · `check:shader-generated`（四端无漂移）· `check:glass-pixel-parity`（Metal==oracle max 1/255 · rest+press）· `shader-capability`/`glass-capability`/`glass-audit`/`pixel-snap` · `android-host-compile`/iOS `check-selfdraw-compile` · AAR 重建 · `test:coupled` 71 绿。
+【诚实边界】① **色散（彩虹边）未做**——iOS 透镜上下端有 RGB 色散环；② 回弹仍 lerp；③ iOS/鸿蒙**已接线未真机复验**（本轮仅 Android）；④ "两块玻璃真正叠加"仍未做（承接 #965/#966——透镜背板采的是原始内容，非下面的条）；⑤ 透镜左右端收窄的椭圆端部形态未精调。
+【★教训】★★**"按下有形变"不等于"对条做形变"**——iOS 的机制是**叠加层各自变形**（胶囊透镜外凸、条边不动），"挤压感"是对比产生的**视错觉**，无需（也不应）对条做任何轮廓形变。#966/#969 把"内容内流"误读成"轮廓内陷"，在条上打高斯凹口 ⇒ 与实拍方向相反。★★**两层结构的验证要用"多层分离"证据**：单帧目测分不清"条内陷 vs 胶囊外凸"，必须**逐列剖面看某条边在不同 x 的 y 位置**（条边平直贯穿 = 条没动），以及**看条边之外是否另有弧**（透镜溢出）。★★**并发诊断报告要独立复测**（workbuddy 08:55 的"smooth-min 颈部"它自己 09:05 就推翻了）——先量再采信。

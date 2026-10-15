@@ -3338,9 +3338,14 @@ public class ProteusHostView extends ViewGroup {
     /** ★#963：当前"按下组"的玻璃节点集（命中 + 子树内玻璃）——供 drawGlassFace 判"是否点亮"。 */
     private java.util.Set<Integer> glassPressSubtree = java.util.Collections.emptySet();
     private static final float GLASS_PRESS_SCALE = 0f;             // ★#965：条**不缩放**（用户「按下条跟着变」——条须完全静止）
-    //  ★#962：胶囊幅度要**大到冲出条外**（用户「iOS 缩放直接在玻璃条外面」）——条 56 高、胶囊基底 ~48 ⇒ 须 >58/48=1.21
-    //   才越界 ⇒ 取 0.30（1.30×）。
-    private static final float GLASS_PRESS_SCALE_CAPSULE = 0.30f;  // 选中胶囊须**超过条**（用户「iOS 缩放直接在玻璃条外面」）
+    //  ★★★#971（对齐 workbuddy 09:05 取证 + iOS 18:53 实拍）：按下时**外凸的是胶囊透镜**、**条的边基本不动**——
+    //    胶囊**纵向鼓起**（垂直 ~1.5×、溢出条外）、横向略涨（窄腰椭圆端），不是等比放大。
+    //    ★旧 `GLASS_PRESS_SCALE_CAPSULE=0.30`（等比 1.3×）造成的观感是"整块变白"，得不到 iOS 的"透镜从条里鼓出"。
+    private static final float GLASS_PRESS_SCALE_CAPSULE_X = 0.14f;  // 胶囊横向（+14% ⇒ 1.14×）
+    private static final float GLASS_PRESS_SCALE_CAPSULE_Y = 0.55f;  // 胶囊纵向（+55% ⇒ 1.55×，明显溢出条外）
+    /** ★#971：前景内容随胶囊缩放（对齐 iOS 实测 icon ≈1.2×；横向略多于纵向）。 */
+    private static final float GLASS_PRESS_CONTENT_SCALE_X = 0.20f;
+    private static final float GLASS_PRESS_CONTENT_SCALE_Y = 0.17f;
     /** ★★★决策 #950（vibrancy）：本帧**暗玻璃**的区域盒（内容坐标 x,y,w,h）——落在其中的文字/图标**强制白色**
      *  （对齐 iOS：玻璃压暗背景时前景转白，保内容强烈可读）。逐帧在 drawGlassPass 重算。 */
     private final java.util.List<float[]> darkGlassRects = new java.util.ArrayList<>();
@@ -3516,28 +3521,17 @@ public class ProteusHostView extends ViewGroup {
         final float qty = touchApplies ? glassTouchAbsY - by : -1e6f;
         android.graphics.Paint p = GlassMaterial.buildPaint(nodeId, glassBackdrop, bx, by, glassBackdropX, glassBackdropY, bw, bh, spec.radius, spec,
                 qtx, qty, nodePress, glassBackdropScaleX, glassBackdropScaleY);
-        // ★★★决策 #966/#969：**充气态剪影 = 外凸路径裁剪**（`inflatedPillPath`，与 shader `sd_glass` 同式）。
-        //   ★为什么不用 shader alpha 覆盖率：实测本设备**忽略 `RuntimeShader` 返回的 alpha**（返回 0 与圆覆盖率
-        //     都仍画成不透明矩形）⇒ 剪影只能来自**几何裁剪**。绘制矩形外扩以覆盖凸出区（否则凸出部分采不到）。
-        //   ★★#969（用户「下面的玻璃条边完全看不到挤压」）：**去掉 overlay 门控**——命中玻璃（条）也外凸 ⇒
-        //     条的下/上边缘在触点处鼓起（对齐 iOS 的整面 flex）。静止态仍走圆角矩形裁剪（逐像素不变）。
-        final boolean inflated = p != null && touchApplies && nodePress > 0.001f
-                && GlassMaterial.isGlassMaterial(spec.material);
+        // ★★★决策 #971（对齐 workbuddy 09:05 取证）：**剪影恒为当前盒的圆角矩形**——形状变化全部来自
+        //   **盒几何**（条盒不动 ⇒ 条边平直不动；胶囊盒已纵向放大 ⇒ 透镜轮廓）。不再用 `inflatedPillPath`
+        //   做 SDF 凹口（#966/#969 的"内陷"方向错误——iOS 条边无内陷、透镜是单独一层外凸）。
         final int save = canvas.save();
-        if (inflated) {
-            // ★★★#970 修：`inflatedPillPath` 内部按**绝对坐标**建路径点（`bx..bx+bw`），故触点也必须传**绝对**值
-            //   （此前误传盒局部 `qtx`）——两者坐标系不一致 ⇒ `dx=q.x-tx` 恒≈−bx（数百 px）⇒ 高斯权重恒 0
-            //   ⇒ 按下剪影**完全不变形**（真机实测条边 Δy=0，正是用户「没有真实按下去、边受挤压的感觉」的根因）。
-            //   iOS 同函数传的是局部点（调用处 `bx=0`）⇒ 天然一致、无此 bug。
-            canvas.clipPath(GlassMaterial.inflatedPillPath(bx, by, bw, bh, spec.radius, glassTouchAbsX, glassTouchAbsY, nodePress));
-        } else if (spec.radius > 0) {
+        if (spec.radius > 0) {
             android.graphics.Path clip = new android.graphics.Path();
             clip.addRoundRect(new android.graphics.RectF(bx, by, bx + bw, by + bh), spec.radius, spec.radius,
                     android.graphics.Path.Direction.CW);
             canvas.clipPath(clip);
         }
         if (p != null) {
-            // ★#969：形变**向内**（内陷/凹）⇒ 盒矩形已完整覆盖形变路径，无需外扩。
             canvas.drawRect(bx, by, bx + bw, by + bh, p);
         } else {
             // ★降级（API<31 或着色器失败）：半透明实色——绝不白屏/黑块（玻璃方案铁律 3）
@@ -3644,12 +3638,15 @@ public class ProteusHostView extends ViewGroup {
             final boolean inPress = pressBox != null && pressSubtree.contains(ids[i]);
             float bx = gc.x, by = gc.y, bw = gc.w, bh = gc.h;
             if (inPress) {
-                final float k = (pressInner != null && ids[i] != glassInteractNodeId) ? GLASS_PRESS_SCALE_CAPSULE : GLASS_PRESS_SCALE;
-                if (k > 1e-4f) {
-                    final float sc = 1f + glassPress * k;
+                // ★#971：**条静止**（k=0）；**胶囊纵向鼓起**（垂直 1.55×、横向 1.14×）⇒ 透镜从条里鼓出、溢出条外。
+                //   （旧版等比 1.3× 的观感是"整块变白"，非 iOS 的"透镜鼓出"。）
+                final boolean isCapsule = pressInner != null && ids[i] != glassInteractNodeId;
+                if (isCapsule) {
+                    final float sx = 1f + glassPress * GLASS_PRESS_SCALE_CAPSULE_X;
+                    final float sy = 1f + glassPress * GLASS_PRESS_SCALE_CAPSULE_Y;
                     final float ccx = gc.x + gc.w * 0.5f, ccy = gc.y + gc.h * 0.5f;
-                    bx = ccx + (gc.x - ccx) * sc; by = ccy + (gc.y - ccy) * sc;
-                    bw = gc.w * sc; bh = gc.h * sc;
+                    bx = ccx + (gc.x - ccx) * sx; bw = gc.w * sx;
+                    by = ccy + (gc.y - ccy) * sy; bh = gc.h * sy;
                 }
             }
             drawGlassFace(canvas, ids[i], list.get(i), g, bx, by, bw, bh);
@@ -3668,15 +3665,18 @@ public class ProteusHostView extends ViewGroup {
         //     屏幕坐标 ⇒ 滚动后中心偏 scrollY ⇒ 内容被推下去）。
         //   ★条小/胶囊大：落在**胶囊 x 范围**内的内容用胶囊系数，其余用条系数（分三段裁剪画）。
         if (pressInner != null && glassPress > 0.001f && !gContent.isEmpty()) {
-            // ★#965：**只缩放胶囊 x 范围的内容**（绕**胶囊自身中心**）——其余（条上的别的 tab）不缩放（条静止）。
+            // ★#971：**只缩放胶囊 x 范围的内容**（绕**胶囊自身中心**）——其余 tab 不缩放（条静止）。
+            //   内容缩放与胶囊盒缩放**不同**：iOS 实测 icon ≈1.2×（近似等比、横向略多），
+            //   而不是跟着盒的 1.55× 纵向拉伸（那会把文字拉长）。
             final float ccx = pressInner.x + pressInner.w * 0.5f + (gScrolled ? scrollX : 0);
             final float ccy = pressInner.y + pressInner.h * 0.5f + (gScrolled ? scrollY : 0);
-            final float sCap = 1f + glassPress * GLASS_PRESS_SCALE_CAPSULE;
-            final float capL = ccx - pressInner.w * 0.5f * sCap - 4f;
-            final float capR = ccx + pressInner.w * 0.5f * sCap + 4f;
+            final float sCapX = 1f + glassPress * GLASS_PRESS_CONTENT_SCALE_X;
+            final float sCapY = 1f + glassPress * GLASS_PRESS_CONTENT_SCALE_Y;
+            final float capL = ccx - pressInner.w * 0.5f * sCapX - 4f;
+            final float capR = ccx + pressInner.w * 0.5f * sCapX + 4f;
             final float top = -1e6f, bot = 1e6f;
             int sv1 = canvas.save(); canvas.clipRect(top, top, capL, bot); drawCmds(canvas, null, gContent); canvas.restoreToCount(sv1);
-            int sv2 = canvas.save(); canvas.clipRect(capL, top, capR, bot); canvas.scale(sCap, sCap, ccx, ccy); drawCmds(canvas, null, gContent); canvas.restoreToCount(sv2);
+            int sv2 = canvas.save(); canvas.clipRect(capL, top, capR, bot); canvas.scale(sCapX, sCapY, ccx, ccy); drawCmds(canvas, null, gContent); canvas.restoreToCount(sv2);
             int sv3 = canvas.save(); canvas.clipRect(capR, top, 1e6f, bot); drawCmds(canvas, null, gContent); canvas.restoreToCount(sv3);
         } else if (!gContent.isEmpty()) {
             drawCmds(canvas, null, gContent);
