@@ -102,9 +102,9 @@ fn sd_glass(p: (f32, f32), hs: (f32, f32), r: f32, tp: (f32, f32), press: f32, h
     if pr > 0.001 {
         let tdx = p.0 - tp.0;
         let tdy = p.1 - tp.1;
-        let br = hsm * 1.25;                       // 充气横向展布
+        let br = hsm * 0.90;                       // ★#970：形变横向展布（对齐 iOS，原 1.25 过宽）
         let bulge = (-(tdx * tdx + tdy * tdy) / (2.0 * br * br)).exp();
-        v += bulge * (hsm * 0.42) * pr;            // ★#969：增大 SDF ⇒ 轮廓内陷（凹）
+        v += bulge * (hsm * 0.30) * pr;            // ★#969：增大 SDF ⇒ 轮廓内陷（凹）；★#970 幅度 0.42→0.30
     }
     v
 }

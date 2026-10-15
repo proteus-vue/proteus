@@ -49,8 +49,8 @@ public final class GlassMaterial {
     public static android.graphics.Path inflatedPillPath(float bx, float by, float bw, float bh,
                                                          float r, float tx, float ty, float press) {
         final float shortSide = Math.min(bw, bh);
-        final float amp = shortSide * 0.5f * 0.42f * Math.max(0f, Math.min(1f, press));   // 充气峰值（同 shader）
-        final float sig = Math.max(shortSide * 0.5f * 1.25f, 1f);                        // 高斯展布（同 shader）
+        final float amp = shortSide * 0.5f * 0.30f * Math.max(0f, Math.min(1f, press));   // ★#970：幅度 0.42→0.30（对齐 iOS 内压峰 ~16px）
+        final float sig = Math.max(shortSide * 0.5f * 0.90f, 1f);                        // ★#970：展布 1.25→0.90（对齐 iOS 局部内陷 ~±60px）
         final float rr = Math.max(0f, Math.min(r, shortSide * 0.5f));
         final float twoSig2 = 2f * sig * sig;
         final float x0 = bx, y0 = by, x1 = bx + bw, y1 = by + bh;

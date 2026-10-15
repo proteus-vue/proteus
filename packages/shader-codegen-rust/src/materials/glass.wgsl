@@ -75,9 +75,11 @@ fn sd_glass(p: vec2<f32>, hs: vec2<f32>, r: f32, tp: vec2<f32>, press: f32, hsm:
     let pr = clamp(press, 0.0, 1.0);
     if (pr > 0.001) {
         let td = p - tp;
-        let br = hsm * 1.25;                       // 形变横向展布
+        // ★★★#970：展布/幅度按 iOS 真值收紧（18:53 暗底实拍量得：内压峰 ~16px、横向 ~±60px 即衰减到 0）。
+        //   原 br=1.25/amp=0.42 太宽（~±180px）且偏大（~23px）⇒ 读作"整条被压瘪"而非"触点处局部内陷"。
+        let br = hsm * 0.90;                       // 形变横向展布（≈0.9×最短半边 ⇒ ±~1.5·hsm 内衰减）
         let bulge = exp(-dot(td, td) / (2.0 * br * br));
-        v = v + bulge * (hsm * 0.42) * pr;         // ★#969：增大 SDF ⇒ 轮廓**内陷**（凹，对齐 iOS）
+        v = v + bulge * (hsm * 0.30) * pr;         // ★#969：增大 SDF ⇒ 轮廓**内陷**（凹，对齐 iOS）
     }
     return v;
 }
