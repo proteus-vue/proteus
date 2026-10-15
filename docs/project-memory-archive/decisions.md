@@ -4785,3 +4785,11 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 【判据】真机 Android（白底）条面 **236→253**（= iOS 253）· `check:shader-generated`（四端无漂移）· `check:glass-pixel-parity`（rest+press · max 1/255）· 玻璃能力链 · pixel-snap · host-rounding · coupled · Android 零设备编译 · AAR 重建。
 【诚实边界】① 与 #984 的"bg240→glass238"（4 点集）**不一致**——那是**另一张 iOS 截图**（较暗白底+内容）；本项按 15:24 白底图（→253）。**再次印证 #984 具名的"两组数据互斥、样本不足"**，需受控重测定亮端 V；② 折射（bend）未动——"保持折射通透感"这一半是现成的（边缘折射仍在）。
 【★教训】★★**"发灰 vs 发白"要量绝对亮度、并拿"iOS 值"当靶**——我们 236、iOS 253；只差 17 级但肉眼是"灰/白"之别。**"霜色 V"设成 0.925 是个陷阱**（看着像"浅白"、实为"灰"）；**白霜就该是纯白 1.0**。
+
+989. **超应用玻璃条**收窄到与「获取」按钮边对齐**（padding 12→26）+ 胶囊 pitch 同步 · Android 真机**（2026-10-15 · 用户「玻璃条宽度再减小，基本和上面的获取按钮的边对齐，我好和 iOS 同场景测试对比」）：
+【目标】iOS 的条左右内边距 ≈24pt（比卡片边再内缩），便于同场景对齐对比。
+【量测】卡片边 = 12pt（`.gna-page` padding）；「获取」按钮边 = 卡片 12 + 行内 14 = **26pt**。⇒ 条 padding 12→**26**。
+【修（`superapp/pages/glass-nav.vue`）】① `.gna-dock` `padding: 0 12px → 0 26px`；② 条内缩 ⇒ 每项宽（= 胶囊宽 / `hlLeft` pitch）`91 → 84`（`宽 400 − 52 − 12 = 336`，`336/4 = 84`）——`hlLeft`、`pick()`、`.gna-highlight width` 三处同步。
+【判据】真机 Android：条白区 **x 40..1159 → 78..1117**（左右各收 14pt；左 26pt 对齐按钮左边、右 372pt ≈ 按钮右 374pt）；胶囊仍对准各项 · `check:app-screen-content`（132 页 / 5436 节点 · id 唯一 / parent 可达 / 枚举闭集）绿。
+【★构建链坑（本轮踩到，记牢）】改 `superapp/pages/*.vue` 后，**光跑 `build-and-run.sh` 不够**——App 端跑的是 **`hosts/shared/bridge/app-screen-content.generated.ts`**（bundle 内嵌，构建期由 `gen-app-screen-content.mjs` 生成），而 `build-and-run` 只同步**资产 JSON**（`app-screen-content.json`）⇒ 两者**不一致**（资产对、屏内容旧）。正确顺序：`superapp build --target android`（产 dist JSON）→ `npx tsx hosts/shared/bridge/gen-app-screen-content.mjs`（→ generated.ts）→ `bash hosts/android/build-and-run.sh`（→ bundle 重打 + 资产同步）。★资产 JSON 与 generated.ts 是**两份来源**，必须同批重生成。
+【★测量坑】"条左右边界"用过亮度跳变法，**把卡片边（12pt）误判成条边**（卡片 242 vs 页底 244 太近）；改用**白条判据**（L≥250）才对上。★教训同源：**判据要挑"可区分"的特征**（#2341）。
