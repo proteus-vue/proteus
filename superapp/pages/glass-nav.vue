@@ -238,13 +238,13 @@ const navItems = ref([
 ])
 /** 当前激活项 key（→ 行内 `:class` 高亮）。用 `===`（执行器只认严格相等）。 */
 const active = ref('games')
-/** 高亮胶囊左偏移 px（★px 数值：App 端布局只吃数值）。条内宽 320、4 项、各 77px。 */
-const hlLeft = ref(6 + 1 * 91)
+/** 高亮胶囊左偏移 px（★px 数值：App 端布局只吃数值）。条内缩后每项宽 84px（★#989）。 */
+const hlLeft = ref(6 + 1 * 84)
 
 /** ★#907 行参 handler（B1）：两个行参 `item.key` / `item.pos` 均折进行内读取（此前静默失效）。 */
 function pick(key: string, pos: number): void {
   active.value = key
-  hlLeft.value = 6 + pos * 91
+  hlLeft.value = 6 + pos * 84
 }
 </script>
 
@@ -365,8 +365,8 @@ function pick(key: string, pos: number): void {
   position: fixed;
   left: 0;
   right: 0;
-  /* ★#933：左右 padding 12（与 .gna-page 一致）⇒ 条与内容等宽（box-sizing 防溢出） */
-  padding: 0 12px;
+  /* ★#989：左右 padding 12→26（用户「玻璃条宽度再减小，与上面的获取按钮边对齐」——按钮边 = 卡片12 + 行内14 = 26pt）。 */
+  padding: 0 26px;
   box-sizing: border-box;
   /* ★fixed 的 containing block = 视口（引擎 #907 修复）⇒ bottom 相对视口生效（此前只能 top）。 */
   bottom: 90;
@@ -400,7 +400,7 @@ function pick(key: string, pos: number): void {
      可见缝 ≈ 4px 逻辑 = 12px 物理。圆角 = 半高（(56−8)/2 = 24）⇒ stadium。 */
   top: 4px;
   bottom: 4px;
-  width: 91px;
+  width: 84px;   /* ★#989：91→84（条内缩后每项宽） */
   border-radius: 24px;
   /* ★决策 #936：胶囊是**装饰层**（对齐 iOS：选中胶囊在内容之下、不拦截点击）——
      否则命中测试命中的是胶囊而非导航项 ⇒ 点"选中项所在位置"点不动（真机实证 target=178）。 */
