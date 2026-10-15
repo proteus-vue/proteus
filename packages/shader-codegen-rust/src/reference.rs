@@ -165,7 +165,8 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
             + s5(sp_l.0, sp_l.1 - br2)[c] * 0.16;
     }
     // ★★★决策 #972/#976：按下透镜的「边缘色散」（RGB 沿法线差异化偏移）——与 glass.wgsl 同源（无条件采样，disp=0 等价）。
-    let disp = pr_ov * (1.0 - e) * (band * 0.30).min(6.0);
+    // ★#999：静止基线 0.35（边缘一圈色散，对齐 iOS）
+    let disp = (0.35 + 0.65 * pr_ov) * (1.0 - e) * (band * 0.30).min(6.0);
     let a_r = backdrop.sample_map(to_tex((sp_l.0 + n.0 * disp, sp_l.1 + n.1 * disp)));
     let a_b = backdrop.sample_map(to_tex((sp_l.0 - n.0 * disp, sp_l.1 - n.1 * disp)));
     col[0] = a_r[0];
