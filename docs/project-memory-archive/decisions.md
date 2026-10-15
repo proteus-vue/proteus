@@ -4872,3 +4872,10 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 【判据】真机 Android（白底，"获取"按钮在条后）：**文字边缘出现彩边（紫/青错位）**；边缘内侧有淡彩色圈 · 实测像素 `(232,242,254)`（偏青）· `check:shader-generated`（四端无漂移）· `check:glass-pixel-parity`（rest+press · max 1/255）· 玻璃能力链 · pixel-snap · host-rounding · coupled · Android 零设备编译 · AAR 重建。
 【诚实边界】静止基线 0.35 为**真机目视定档**；色散幅度受 `min(band*0.30,6)` 封顶（≤6px）。
 【★教训】★**"静止态没有 X"先查"X 是否被 press 门控"**——#972 的色散只给按下态，静止永远看不到；用户要的"边缘一圈"是**静止**特征 ⇒ 需 **press 门控之外的基线**。
+
+1001. **★★★修「内容颜色一直在变」：App 原生玻璃 `saturation` 1.8 → **1.0**（不再放大背景内容彩度）**（2026-10-15 · 用户「为什么会一直在改变内容颜色？iOS 视频里面也没有内容颜色的变化」）：
+【根因（硬 bug）】shader 末尾 `col = mix(lum, col.rgb, u.saturation)`（+ 前面 0.12 去饱和）⇒ **`saturation=1.8` 把背景内容彩度放大约 1.58×** ⇒ 读作"内容跟着变颜色"。值来自 `CSS_SATURATE=1.8`（`packages/glass/src/degrade.ts` 决策 #888，注释称"对齐 iOS `.regular`"），App 端经 `app-component-registry.ts` 的 `cssSaturateForMaterial('glass')` 写进内核 `GlassSpec.saturation`。
+【iOS 实测（反驳 1.8）】**iOS 不放大饱和度**：视频1 帧11（橙卡压条下）条外 sat=165 / **条内 sat=166**（几乎不变）；18:53 静态图条内有彩内容、条内却是**灰 sat≤1**（iOS 甚至去色）。
+【修（**只 App 原生玻璃**）】`packages/cli/src/app-component-registry.ts`：`saturation: cssSaturateForMaterial(...)` → **`saturation: 1.0`**（中性、不动内容色相/彩度）；清理不再用的 import；同步改动**配套断言** `tests/glass-ir.test.ts`（`toBe(cssSaturateForMaterial('glass'))` → `toBe(1.0)`）。★**Web/MP 未动**（仍是 CSS `saturate(1.8)`——不同渲染器，另议）。
+【判据】真机 Android（白底彩色网格在条后）：**条内色相与背景一致**（红块→条内红、蓝块→偏蓝，不再被放大饱和）；saturation=1 进产物（`screen-content.json` 两玻璃节点）· `check:app-screen-content` · `check:glass-capability` · `check:shader-generated` · `tests/glass-ir.test.ts` 23 全绿。
+【★教训】★★★**"对齐 iOS"的注释 ≠ 对齐**——#888 写"对齐 .regular"但**从未拿 iOS 实测验证过**；1.8 放大了内容彩度（那是"改内容"）。★**"内容变色"先去 shader 找"乘性/加性改色项"**（`mix(lum, col, sat)` / `+chroma`），而不是怀疑渲染路径。
