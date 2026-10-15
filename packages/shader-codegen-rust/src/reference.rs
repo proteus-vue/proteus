@@ -186,7 +186,9 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     let veil_t = smoothstep(0.42f32, 0.62f32, p.bg_lum);
     let veil_v = 0.55f32 + (0.925f32 - 0.55f32) * veil_t;
     let pr_ov = p.press.clamp(0.0, 1.0) * p.overlay.clamp(0.0, 1.0);
-    let veil_a = 0.467f32 + (0.467f32 * 0.06f32 - 0.467f32) * pr_ov;   // ★#984：α 恒定 0.467（按下退场 0.06×）
+    // ★★★决策 #987（B）：α 随背景变——浅端 0.88（内容压到不可见）/ 深端 0.467（#984 四点拟合）。
+    let veil_a0 = 0.467f32 + (0.88f32 - 0.467f32) * veil_t;
+    let veil_a = veil_a0 + (veil_a0 * 0.06f32 - veil_a0) * pr_ov;
     let raw_lum = raw[0]*0.299 + raw[1]*0.587 + raw[2]*0.114;
     for c in 0..3 {
         let vc = (veil_v + (raw[c] - raw_lum) * 0.12).clamp(0.0, 1.0);
