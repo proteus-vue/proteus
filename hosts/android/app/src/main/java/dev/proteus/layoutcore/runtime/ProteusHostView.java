@@ -3525,7 +3525,11 @@ public class ProteusHostView extends ViewGroup {
                 && GlassMaterial.isGlassMaterial(spec.material);
         final int save = canvas.save();
         if (inflated) {
-            canvas.clipPath(GlassMaterial.inflatedPillPath(bx, by, bw, bh, spec.radius, qtx, qty, nodePress));
+            // ★★★#970 修：`inflatedPillPath` 内部按**绝对坐标**建路径点（`bx..bx+bw`），故触点也必须传**绝对**值
+            //   （此前误传盒局部 `qtx`）——两者坐标系不一致 ⇒ `dx=q.x-tx` 恒≈−bx（数百 px）⇒ 高斯权重恒 0
+            //   ⇒ 按下剪影**完全不变形**（真机实测条边 Δy=0，正是用户「没有真实按下去、边受挤压的感觉」的根因）。
+            //   iOS 同函数传的是局部点（调用处 `bx=0`）⇒ 天然一致、无此 bug。
+            canvas.clipPath(GlassMaterial.inflatedPillPath(bx, by, bw, bh, spec.radius, glassTouchAbsX, glassTouchAbsY, nodePress));
         } else if (spec.radius > 0) {
             android.graphics.Path clip = new android.graphics.Path();
             clip.addRoundRect(new android.graphics.RectF(bx, by, bx + bw, by + bh), spec.radius, spec.radius,

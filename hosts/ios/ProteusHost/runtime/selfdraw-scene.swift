@@ -1560,8 +1560,8 @@ final class SelfDrawView: UIView {
     static func inflatedPillPath(bx: CGFloat, by: CGFloat, bw: CGFloat, bh: CGFloat,
                                  r: CGFloat, tx: CGFloat, ty: CGFloat, press: CGFloat) -> CGPath {
         let shortSide = min(bw, bh)
-        let amp = shortSide * 0.5 * 0.42 * max(0, min(1, press))
-        let sig = max(shortSide * 0.5 * 1.25, 1)
+        let amp = shortSide * 0.5 * 0.30 * max(0, min(1, press))   // ★#970：幅度 0.42→0.30（对齐 iOS 内压峰 ~16px）
+        let sig = max(shortSide * 0.5 * 0.90, 1)                   // ★#970：展布 1.25→0.90（对齐 iOS 局部内陷 ~±60px）
         let rr = max(0, min(r, shortSide * 0.5))
         let twoSig2 = 2 * sig * sig
         let x0 = bx, y0 = by, x1 = bx + bw, y1 = by + bh
