@@ -128,7 +128,7 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     let slope = u1 / (1.0 - u1 * u1).max(1e-4).sqrt();
     // ★决策 #910/#912/#914：位移横贯整带；幅度系数 **0.15**（#914 定稿——消"y 轴拉伸"，对齐 iOS"平面变化"
     //   式轻弯折；机制 = 法线方向向外采样，单调不折叠）。refract_depth 以 band 为基准（1.0 中性）。
-    let prof = (1.0 - smoothstep(0.0, 1.0, e)).max(0.45);   // ★#995：边缘强圈 + 中腹弱折射基线 0.45
+    let prof = 1.0 - smoothstep(0.0, 1.0, e);   // ★#997：去中腹基线（中腹=1:1 文字不动）
     let strength = (p.refract_depth / band.max(1.0)).clamp(0.2, 1.1);
     let bend = prof * band * 0.30 * strength;   // ★#994：0.30
     // ★#905/#966：触控形变——触点处把内容沿"离触点方向"推挤（Gaussian 钟）。
@@ -138,7 +138,7 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     let tdy = local.1 - p.touch.1;
     let tg = (-(tdx * tdx + tdy * tdy) / (2.0 * t_r * t_r)).exp() * p.press.clamp(0.0, 1.0) * p.overlay.clamp(0.0, 1.0);
     // ★#968：无触控内容位移（push=0）——按下只改剪影 + 亮环，内容零位移。
-    let sp = (local.0 - n.0 * bend, local.1 - n.1 * bend);   // ★#918
+    let sp = (local.0 + n.0 * bend, local.1 + n.1 * bend);   // ★#997：向外采样=边缘反射
 
     // uv 折算：纹理尺寸 = size + 2*pad；节点 uv=0 对应纹理 pad/(size+2pad)
     let tex_w = p.size_px.0 + 2.0 * p.pad;
