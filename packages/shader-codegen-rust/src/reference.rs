@@ -150,6 +150,14 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
 
     // ★决策 #906：零采样（不做模糊）——与 glass.wgsl ③ 同源（内容不糊，只磨砂叠加）
     let mut col = backdrop.sample_map(to_tex(sp));
+    // ★★★决策 #972：按下透镜的「边缘色散」（RGB 沿法线差异化偏移）——与 glass.wgsl 同源（无条件采样，disp=0 等价）。
+    //   R 通道多采一步（更靠内）、B 少采一步（更靠外）——即 `sp ± n·disp`。
+    let pr_ov_disp = p.press.clamp(0.0, 1.0) * p.overlay.clamp(0.0, 1.0);
+    let disp = pr_ov_disp * (1.0 - e) * (band * 0.12).min(3.0);
+    let a_r = backdrop.sample_map(to_tex((sp.0 + n.0 * disp, sp.1 + n.1 * disp)));
+    let a_b = backdrop.sample_map(to_tex((sp.0 - n.0 * disp, sp.1 - n.1 * disp)));
+    col[0] = a_r[0];
+    col[2] = a_b[2];
     let raw = col;   // ★#925：原始采样色（供霜色 12% 色温）
     let lum = col[0] * 0.299 + col[1] * 0.587 + col[2] * 0.114;
     // ★决策 #875：去饱和 0.30 → 0.12（保留背后颜色；与 glass.wgsl ④ 同源）
@@ -163,8 +171,10 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     // ★★★决策 #949：α 随背景明暗**翻转**（阈值重映射，非线性）——与 glass.wgsl ⑤ 同源。
     let veil_v = 1.0f32;
     let veil_t = ((p.bg_lum - 0.25) / 0.60).clamp(0.0, 1.0);
-    // ★#966：面纱不随 press 变（与条同口径）——按下形态只由"灰叠加退场"表达。
-    let veil_a = 0.09f32 + (0.90f32 - 0.09f32) * veil_t;
+    // ★★★决策 #972：按下 ⇒ 选中胶囊面纱退场（通透玻璃透镜），门控 press×overlay（条不受影响）。
+    let veil_base = 0.09f32 + (0.90f32 - 0.09f32) * veil_t;
+    let pr_ov = p.press.clamp(0.0, 1.0) * p.overlay.clamp(0.0, 1.0);
+    let veil_a = veil_base + (veil_base * 0.18f32 - veil_base) * pr_ov;
     let raw_lum = raw[0]*0.299 + raw[1]*0.587 + raw[2]*0.114;
     for c in 0..3 {
         let vc = (veil_v + (raw[c] - raw_lum) * 0.12).clamp(0.0, 1.0);

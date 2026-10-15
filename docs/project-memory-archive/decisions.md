@@ -4622,3 +4622,23 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 【判据（全绿）】真机 Android（glass-nav 按住）：**胶囊纵向鼓起、上下各溢出条外 ~25px**（x=465 列：顶 2170→2145 / 底 2337→2362）；**条边完全不动**（x=750/900：顶 2170/2170、底 2337/2337 逐像素一致）——对齐 iOS 结构 · `check:shader-generated`（四端无漂移）· `check:glass-pixel-parity`（Metal==oracle max 1/255 · rest+press）· `shader-capability`/`glass-capability`/`glass-audit`/`pixel-snap` · `android-host-compile`/iOS `check-selfdraw-compile` · AAR 重建 · `test:coupled` 71 绿。
 【诚实边界】① **色散（彩虹边）未做**——iOS 透镜上下端有 RGB 色散环；② 回弹仍 lerp；③ iOS/鸿蒙**已接线未真机复验**（本轮仅 Android）；④ "两块玻璃真正叠加"仍未做（承接 #965/#966——透镜背板采的是原始内容，非下面的条）；⑤ 透镜左右端收窄的椭圆端部形态未精调。
 【★教训】★★**"按下有形变"不等于"对条做形变"**——iOS 的机制是**叠加层各自变形**（胶囊透镜外凸、条边不动），"挤压感"是对比产生的**视错觉**，无需（也不应）对条做任何轮廓形变。#966/#969 把"内容内流"误读成"轮廓内陷"，在条上打高斯凹口 ⇒ 与实拍方向相反。★★**两层结构的验证要用"多层分离"证据**：单帧目测分不清"条内陷 vs 胶囊外凸"，必须**逐列剖面看某条边在不同 x 的 y 位置**（条边平直贯穿 = 条没动），以及**看条边之外是否另有弧**（透镜溢出）。★★**并发诊断报告要独立复测**（workbuddy 08:55 的"smooth-min 颈部"它自己 09:05 就推翻了）——先量再采信。
+
+972. **★★★液态玻璃按下：选中胶囊 morph 成「通透玻璃」——面纱随 press 退场（门控 press×overlay）+ 边缘色散 · Android 真机**（2026-10-15 承 #971 · 用户「我们的胶囊按下时明显不是透镜玻璃、感觉就是一个色块；iOS 那个很明显能看到是一个通透的玻璃在玻璃条上面」）：
+【根因】#966 为守 #965「按下不该让内容透出」**把"按下砍面纱"删了** ⇒ 按下时胶囊仍是 `VEIL_A=mix(0.09,0.90,veil_t)`（浅底 0.90）的白霜 ⇒ **不透明色块**。而 iOS 按下 = **通透玻璃透镜**。⇒「砍面纱=改内容透明度 / 不砍=没通透感」这个两难，正解不是二选一（见 #973 根因）。
+【修·shader/oracle 同源】
+  · **面纱随 press 退场**：`VEIL_A = mix(veil_base, veil_base*0.18, pr_ov)`，`pr_ov = press×overlay` ⇒ **只作用于选中胶囊、条（overlay=0）恒不变**（守 #965）。
+  · **边缘色散**：`disp = pr_ov·(1−e)·min(band*0.12,3)`，R 采 `sp+n·disp` / B 采 `sp−n·disp`（**无条件采样**——WGSL 要求 `textureSample` 在一致控制流；`disp=0` 等价 ⇒ parity 不变）⇒ 对齐 iOS 透镜边缘虹彩。
+  · 顺带把 `pr_ov` 提到顶部单点定义（面纱/色散/亮环复用）。
+【判据】真机 Android（glass-nav 滚到内容后按下）：胶囊**透出背景内容 + 边缘虹彩**（此前=不透明色块）· `check:glass-pixel-parity`（rest+press · max 1/255）· shader/glass 能力链绿 · AAR 重建。
+【诚实边界】色散幅度/圈宽未精调；iOS 更"薄雾"（我们更锐）。
+
+973. **★★★液态玻璃「玻璃叠玻璃」：内层玻璃（选中胶囊）采样**下层玻璃面**（非裸内容）· Android 软件合成路径**（2026-10-15 承 #972 · 用户「胶囊下面看不到玻璃条了、直接看到了玻璃条下面的内容」+「砍面纱=改变下面内容透明度，不砍=没通透感，都不是 iOS 那种『不改变下面内容可读性、仅仅透出下面的玻璃条』」）：
+【根因（架构级）】`captureGlassBackdrop` 的背板 `drawCmds(bc, glassSubtree, null)` **排除了全部玻璃子树** ⇒ 玻璃只采"玻璃**背后**的原始内容"。故内层玻璃（胶囊）**看不到下层玻璃（条）**：一撤面纱就露出**底层裸内容**（不是条）⇒ #972 的两难正解 = **让内层采到下层玻璃面**（iOS 的"玻璃叠玻璃"）。
+【修（四层）】
+  1. `captureGlassBackdrop` 末尾：若存在**嵌套玻璃**（某玻璃有玻璃祖先）⇒ 建 `glassLayer` = **原始内容（降采样）+ 逐"外层玻璃"（无玻璃祖先者）叠其面纱（白霜，α 同 shader `VEIL_A`，圆角裁剪）**。与 `glassBackdrop` **同尺寸/同原点/同降采样比** ⇒ `buildPaint` 无需改（仅换位图）。
+  2. `drawGlassFace` 加**采样位图**重载：内层玻璃传 `glassLayer`、外层传 `glassBackdrop`（`hasGlassAncestor` 分组）。
+  3. `hasGlassAncestor(nodeId)`（沿 `nodeParent` 上溯）。
+  4. ★**为何用"软件合成面纱"而非把外层玻璃面真渲染进该位图**：实测本设备 **软件 `Canvas` 不支持 `RuntimeShader`**（`IllegalArgumentException: Software rendering doesn't support RuntimeShader`）；**`Config.HARDWARE` 位图不可变**（`can't create mutable bitmap with Config.HARDWARE`）⇒ 离屏渲染 RuntimeShader 需 RenderNode/HardwareRenderer 管线（代价大）⇒ 退而用**软件可画的"白霜近似"**。
+【判据】真机 Android（滚到绿底内容后按下）：胶囊透出的是**条的材质（同色调绿）**、**不再透出底层深绿内容**（底层内容 `(97,158,111)` **未透出**）· shader/glass 能力链 + parity + coupled + host-rounding 绿 · AAR 重建 · App 不崩（实机存活）。
+【诚实边界】① 这是**近似**——胶囊采样的是"内容 + 条**面纱**"，不是条的完整光学（折射/高光/倒影不在背板里）；真正的两层渲染需离屏 RuntimeShader 管线（RenderNode）。② iOS/鸿蒙未接线本轮。
+【★教训】★★**"透出下面的玻璃"是"玻璃叠玻璃"，不是"降低透明度"**——用户把两难说清了：砍面纱改的是「底层内容可读性」（错），要的是「内层采样**下层玻璃面**」（对）。根因是背板**排除全部玻璃**（#965/#966 具名的架构缺口）。★★**平台能力要实测**：离屏画 RuntimeShader 在 Android 上**软件 Canvas 不行 / HARDWARE 位图不可变**——先跑一条最小复现（崩在 `onDraw`）再定路径，别假设"能画到位图"。
