@@ -113,7 +113,7 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     let d = (-sd).max(0.0);
     let smin = p.size_px.0.min(p.size_px.1);   // 最短边（= 2×hsmin）
     // ★决策 #907/#910：折射带 = **最短边 1/3**（#910 修正口径：原 `hsmin*0.33 = 0.165·min` 只有 1/6 ⇒ ×2）
-    let band = (smin * 0.20).max(6.0);   // ★#994：0.42→0.20
+    let band = (smin * 0.28).max(6.0);   // ★#995：0.20→0.28（窄强圈 + prof 中腹基线）
     let e = (d / band).clamp(0.0, 1.0);
 
     let eps = (band * 0.3).clamp(1.0, 16.0);
@@ -128,7 +128,7 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     let slope = u1 / (1.0 - u1 * u1).max(1e-4).sqrt();
     // ★决策 #910/#912/#914：位移横贯整带；幅度系数 **0.15**（#914 定稿——消"y 轴拉伸"，对齐 iOS"平面变化"
     //   式轻弯折；机制 = 法线方向向外采样，单调不折叠）。refract_depth 以 band 为基准（1.0 中性）。
-    let prof = 1.0 - smoothstep(0.0, 1.0, e);   // ★#991：铺满整带（内侧一圈折射）
+    let prof = (1.0 - smoothstep(0.0, 1.0, e)).max(0.45);   // ★#995：边缘强圈 + 中腹弱折射基线 0.45
     let strength = (p.refract_depth / band.max(1.0)).clamp(0.2, 1.1);
     let bend = prof * band * 0.30 * strength;   // ★#994：0.30
     // ★#905/#966：触控形变——触点处把内容沿"离触点方向"推挤（Gaussian 钟）。
