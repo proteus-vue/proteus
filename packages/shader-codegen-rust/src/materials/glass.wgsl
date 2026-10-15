@@ -150,7 +150,7 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     //   （std 0.43× / 梯度 0.70 vs 条 2.79），我们更锐（1.95×）⇒ 面纱一关就成"挖洞"（原始高频直透）。
     //   iOS 通透 = 内容被**放大 + 轻模糊 + 位移**（凸透镜），不是"洞"。⇒ 内部加 5-tap 十字轻低通。
     //   门控 `pr_ov`（`br2=0` 时 5 tap 同为一点 ⇒ 权重和为 1 ⇒ **静止/条逐像素等价**，parity 不变）。
-    let br2 = band * 0.10 * pr_ov;                   // 低通半径（按下才开启）
+    let br2 = band * 0.05 * pr_ov;                   // 低通半径（★#980：0.10→0.05——保住外层细边线不被抹掉）
     let bx1 = vec2<f32>(br2, 0.0);
     let by1 = vec2<f32>(0.0, br2);
     var acc = sample_backdrop(spL / u.size_px) * 0.36;
@@ -244,12 +244,15 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     let f0 = 0.04;
     let fres = f0 + (1.0 - f0) * pow(max(1.0 - cos_i, 0.0), 5.0);
     let facing = max(dot(n, normalize(u.light_dir)), 0.0);
-    let bevel_mask = 1.0 - smoothstep(0.0, 0.10, e);   // ★#915：细亮线（~2px）
+    // ★★★决策 #980：**窄锐边线**——workbuddy C「条在胶囊里读不出」；dump 复合层实证**条的存在感≈0**
+    //   （`bevel_mask` 带 0.10×band≈5px、幅度 0.025~0.105 ⇒ 饱和内容上那点亮度台阶看不见）。
+    //   iOS 玻璃边是 **1–2px 锐线**（hairline）⇒ 带宽 0.10→0.04（≈2px）、略提幅度。
+    let bevel_mask = 1.0 - smoothstep(0.0, 0.04, e);   // ★#980：0.10→0.04（窄锐；~2px）
     // ★★★决策 #954：**边缘高光整体减半**（用户「顶部高光很明显、iOS 是微微一层基本看不出」）——
     //   ★真机实测：我们顶缘 **+79/255 且顶到 255（饱和）**；iOS 同口径 **+38/255**（不饱和）。
     //   各系数约减半（顶缘加成 0.26→0.05 为大头）；specular 项另乘 0.22（`pow(facing,6)` 在顶缘≈0.69 ⇒ 原贡献 ~0.24）。
     let top_hi = max(-n.y, 0.0);                        // 上缘（n.y≈-1）
-    let edge_hi = bevel_mask * (0.025 + 0.05 * top_hi + 0.03 * facing);
+    let edge_hi = bevel_mask * (0.12 + 0.06 * top_hi + 0.08 * facing);   // ★#980：提亮（条边要能穿过胶囊被看见）
     // ★★★决策 #915 · **删除 `edge_pol`（"自适应描边极性"）**——用户实测「边缘随背景发亮发暗，不对」。
     //   取证：iOS 边缘是 **specular 高光（恒亮）**，**不随背景翻转**。旧 `edge_pol`（#910 引入）让亮底边缘**减暗**
     //   ⇒ 既非 iOS，又让"文字经过边缘变亮"（宽带时更糟）。⇒ 缘带收窄到 0.10 后**恒定加亮**（恢复 iOS 语义）。

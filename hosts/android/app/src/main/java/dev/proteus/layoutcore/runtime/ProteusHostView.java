@@ -3324,15 +3324,8 @@ public class ProteusHostView extends ViewGroup {
     private android.graphics.Bitmap glassBackdropSmall;
     /** ★★★决策 #906：降采样比（全分辨率像素 / 小图 texel）——buildPaint 折 tex_scale/bias 用。 */
     private float glassBackdropScaleX = 1f, glassBackdropScaleY = 1f;
-    /** ★★★决策 #973：**玻璃叠玻璃**（内层玻璃采样"下层玻璃面"）——`glassLayer` = **原始内容 + 外层玻璃面纱**
-     *   合成（与 `glassBackdrop` 同帧/同尺寸/同原点/同降采样比 ⇒ 仅位图不同 ⇒ buildPaint 无需改）。
-     *   ★为何：内层玻璃（选中胶囊）此前采样"排除全部玻璃"的背板 ⇒ 一撤面纱就露出**底层内容**
-     *     （用户「胶囊下面看不到玻璃条、直接看到条下面的内容」）。iOS 是玻璃叠玻璃 ⇒ 内层须看到**下层玻璃条**。
-     *   ★★★决策 #979（**订正 #973/#975 的"离屏不可行"结论**）：实测本设备**离屏 `HardwareRenderer` + `RuntimeShader` 可行**
-     *     （探针 `PROBE: OK center=#ffff0000`）⇒ 内层采样源改为 **离屏硬件渲染的「内容 + 外层玻璃面（真 shader）」帧**
-     *     ⇒ 条边/霜/折射以**真光学**透过胶囊（对齐 iOS），且**滑动时实时**。 */
-    private android.graphics.Bitmap glassLayer;
-    /** ★#979：离屏合成帧缓冲（HardwareRenderer 渲染目标位图 + ImageReader 读回；`glassLayerFull` 的替代）。 */
+    /** ★★★决策 #979/#980：**玻璃叠玻璃（真光学）**——内层玻璃（选中胶囊）采样**全分辨率离屏复合层**
+     *   `glassLayerFull`（= 内容 + 外层玻璃的**真 shader 面**）；离屏用 `HardwareRenderer` 每帧合成（滑动实时）。 */
     private android.graphics.HardwareRenderer glassHR;
     private android.media.ImageReader glassReader;
     private android.os.HandlerThread glassHT;
@@ -3576,16 +3569,8 @@ public class ProteusHostView extends ViewGroup {
             glassLayerFull = wrap.copy(android.graphics.Bitmap.Config.ARGB_8888, false);
             if (wrap != null) wrap.recycle();
             img.close();
-            // ③ 降采样到与 `glassBackdrop` 同尺寸（供内层 buildPaint：同 divX/divY）
-            final int sw = glassBackdrop != null ? glassBackdrop.getWidth() : gw;
-            final int sh = glassBackdrop != null ? glassBackdrop.getHeight() : gh;
-            if (glassLayer == null || glassLayer.getWidth() != sw || glassLayer.getHeight() != sh) {
-                if (glassLayer != null) glassLayer.recycle();
-                glassLayer = android.graphics.Bitmap.createBitmap(sw, sh, android.graphics.Bitmap.Config.ARGB_8888);
-            }
-            new Canvas(glassLayer).drawBitmap(glassLayerFull, new android.graphics.Rect(0, 0, gw, gh),
-                    new android.graphics.Rect(0, 0, sw, sh),
-                    new android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG));
+            // ★★★决策 #980：**不再降采样**——条的边线只有 ~1–2px，降采样 2× + 线性采样会把它**抹没**
+            //   （实测复合层 y178 有 +44 的亮线，但胶囊采样后消失）。⇒ 内层直接采**全分辨率层**（`glassLayerFull`，div=1）。
         } catch (Throwable t) {
             android.util.Log.w("proteus-glass", "GLASSLAYER offscreen FAIL " + t);
         }
@@ -3799,13 +3784,10 @@ public class ProteusHostView extends ViewGroup {
                     by = ccy + (gc.y - ccy) * sy; bh = gc.h * sy;
                 }
             }
-            // ★#973：**内层玻璃**（有玻璃祖先，如选中胶囊）采样 `glassLayer`（= 原始内容 + 外层玻璃面纱）
-            //   ⇒ 玻璃叠玻璃（用户「胶囊要透出的是下面的玻璃条」）；外层玻璃（条）采样 `glassBackdrop`。
-            //   ★★★#978（用户「手画肯定不行」）：**移除** #975 的手画条边线——用户明确长期要做"长按滑动时
-            //     透过胶囊实时看到条流动"，手画描边撑不到那个需求；正解 = 内层采样外层已合成帧（离屏管线，待做）。
-            //     本项只保留"配方"修正（内部放大 + 自低通，见 shader），不再画任何近似几何。
-            if (glassHasNesting && glassLayer != null && hasGlassAncestor(ids[i])) {
-                drawGlassFace(canvas, ids[i], list.get(i), g, bx, by, bw, bh, glassLayer);
+            // ★#973/#979：**内层玻璃**（有玻璃祖先，如选中胶囊）采样**全分辨率离屏复合层** `glassLayerFull`
+            //   （= 内容 + 外层玻璃真光学；div=1、原点 (glassLayerX,glassLayerY)）⇒ 条的边线/霜/折射以真光学透过胶囊。
+            if (glassHasNesting && glassLayerFull != null && hasGlassAncestor(ids[i])) {
+                drawGlassFaceAt(canvas, ids[i], g, bx, by, bw, bh, glassLayerFull, glassLayerX, glassLayerY, 1f, 1f);
             } else {
                 drawGlassFace(canvas, ids[i], list.get(i), g, bx, by, bw, bh);
             }
