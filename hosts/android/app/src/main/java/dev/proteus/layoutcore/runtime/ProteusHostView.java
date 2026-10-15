@@ -3328,10 +3328,18 @@ public class ProteusHostView extends ViewGroup {
      *   合成（与 `glassBackdrop` 同帧/同尺寸/同原点/同降采样比 ⇒ 仅位图不同 ⇒ buildPaint 无需改）。
      *   ★为何：内层玻璃（选中胶囊）此前采样"排除全部玻璃"的背板 ⇒ 一撤面纱就露出**底层内容**
      *     （用户「胶囊下面看不到玻璃条、直接看到条下面的内容」）。iOS 是玻璃叠玻璃 ⇒ 内层须看到**下层玻璃条**。
-     *   ★为何用**软件合成面纱**而非把外层玻璃面真渲染进该位图：实测本设备**软件 Canvas 不支持 RuntimeShader**
-     *     （`IllegalArgumentException: Software rendering doesn't support RuntimeShader`）、**HARDWARE 位图不可变**
-     *     ⇒ 离屏不可行。退而求其次：把外层玻璃的**面纱（白霜）**用软件圆角矩形绘制合成进 layer（观感≈"看到下面的条"）。 */
+     *   ★★★决策 #979（**订正 #973/#975 的"离屏不可行"结论**）：实测本设备**离屏 `HardwareRenderer` + `RuntimeShader` 可行**
+     *     （探针 `PROBE: OK center=#ffff0000`）⇒ 内层采样源改为 **离屏硬件渲染的「内容 + 外层玻璃面（真 shader）」帧**
+     *     ⇒ 条边/霜/折射以**真光学**透过胶囊（对齐 iOS），且**滑动时实时**。 */
     private android.graphics.Bitmap glassLayer;
+    /** ★#979：离屏合成帧缓冲（HardwareRenderer 渲染目标位图 + ImageReader 读回；`glassLayerFull` 的替代）。 */
+    private android.graphics.HardwareRenderer glassHR;
+    private android.media.ImageReader glassReader;
+    private android.os.HandlerThread glassHT;
+    private android.view.Surface glassHRSurface;
+    private android.graphics.Bitmap glassLayerFull;
+    /** 复合帧在屏幕坐标中的区域（= glassBackdropFull 的区域）。 */
+    private int glassLayerX = 0, glassLayerY = 0;
     private boolean glassHasNesting = false;
     /** `glassBackdrop` 在其覆盖的**屏幕区域**中的左上角（屏幕坐标）——玻璃采样按它把"屏幕坐标"折算到位图坐标。 */
     private float glassBackdropX = 0f, glassBackdropY = 0f;
@@ -3507,8 +3515,9 @@ public class ProteusHostView extends ViewGroup {
         glassBackdropScaleX = (float) bw / sw;
         glassBackdropScaleY = (float) bh / sh;
 
-        // ★★★决策 #973：**玻璃叠玻璃**——内层玻璃（选中胶囊）的采样源 = 原始内容 + **外层玻璃面纱**。
-        //   仅当存在嵌套玻璃时构建（否则零开销）。软件合成（无 RuntimeShader ⇒ 本设备可用的唯一路径）。
+        // ★★★决策 #979：**玻璃叠玻璃（真光学）**——内层玻璃（选中胶囊）的采样源 = **内容 + 外层玻璃面（真 shader）**
+        //   的离屏合成帧。★用**离屏硬件渲染**（`HardwareRenderer`+`ImageReader`）——实测本设备可行（#973 的
+        //   "软件 Canvas 不支持 / HARDWARE 位图不可变"只是**错误路径**，非"离屏不可达"）。
         glassHasNesting = false;
         if (glassByNode.size() > 1) {
             for (Integer gid : glassByNode.keySet()) {
@@ -3516,47 +3525,79 @@ public class ProteusHostView extends ViewGroup {
             }
         }
         if (glassHasNesting) {
-            // ★layer 与 `glassBackdrop` **同尺寸/同原点**（buildPaint 的 tex_scale/bias 用 divX/divY 折算 ⇒ 必须同口径）。
-            final android.graphics.Bitmap src = glassBackdrop;
-            final int lw = src.getWidth(), lh = src.getHeight();
-            if (glassLayer == null || glassLayer.getWidth() != lw || glassLayer.getHeight() != lh) {
-                if (glassLayer != null) glassLayer.recycle();
-                glassLayer = android.graphics.Bitmap.createBitmap(lw, lh, android.graphics.Bitmap.Config.ARGB_8888);
-            }
-            final Canvas lc = new Canvas(glassLayer);
-            lc.drawBitmap(src, 0f, 0f, null);   // 基线 = 原始内容（降采样后）
-            // 逐"外层玻璃"（无玻璃祖先者）：叠其**面纱（白霜）+ 轮廓描边** —— 观感≈"看到下面的玻璃条"。
-            final float lScaleX = 1f / glassBackdropScaleX, lScaleY = 1f / glassBackdropScaleY;
-            for (int i = 0; i < list.size() && i < ids.length; i++) {
-                final GlassMaterial.Spec g = glassByNode.get(ids[i]);
-                if (g == null || hasGlassAncestor(ids[i])) continue;
-                final Cmd gc = list.get(i);
-                final float glum = glassRegionLum(gc);          // 0..1（-1=无背板）
-                if (glum < 0f) continue;
-                final float veilT = Math.max(0f, Math.min(1f, (glum - 0.25f) / 0.60f));
-                final float veilA = 0.09f + (0.55f - 0.09f) * veilT;   // 同 shader `VEIL_A`（★#977：浅端 0.90→0.55）
-                final float x = (gc.x - bx) * lScaleX, y = (gc.y - by) * lScaleY;
-                final float w = gc.w * lScaleX, h = gc.h * lScaleY;
-                final float rr = g.radius * lScaleX;
-                android.graphics.Path cp = new android.graphics.Path();
-                cp.addRoundRect(new android.graphics.RectF(x, y, x + w, y + h), rr, rr, android.graphics.Path.Direction.CW);
-                // ① **面纱（白霜）**——把外层玻璃盒区域按 α 叠白。
-                final int ls = lc.save();
-                lc.clipPath(cp);
-                final android.graphics.Paint vp = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-                // I2-ALLOW: **颜色分量的 0..255 取整**（非几何坐标——面纱 α 转 ARGB 色值，与布局几何无关）
-                vp.setColor(android.graphics.Color.argb(Math.round(veilA * 255), 255, 255, 255));
-                lc.drawRect(x, y, x + w, y + h, vp);
-                lc.restoreToCount(ls);
-                // ② **轮廓描边**（★#973 关键：用户「看不到下面的玻璃条」——iOS 胶囊能看到**条上下两条边线穿过胶囊**；
-                //   条边线须进 layer，胶囊采 layer 时才透得出这两条边 ⇒ 才读作"下面压着一条玻璃条"）。
-                final android.graphics.Paint sp = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-                sp.setStyle(android.graphics.Paint.Style.STROKE);
-                sp.setStrokeWidth(Math.max(1.5f, 2.2f * lScaleX));
-                sp.setColor(android.graphics.Color.argb(150, 255, 255, 255));   // 半透明白（边缘镜面高光近似）
-                lc.drawPath(cp, sp);
-            }
+            buildGlassLayerOffscreen(bx, by, bw, bh, list, ids);
         }
+    }
+
+    /** ★#979：离屏合成「内容 + 外层玻璃面」——`glassLayerFull` = 帧缓冲读回（全分辨率，屏幕区 [gx,gy]）；
+     *  再降采样成 `glassLayer`（与 `glassBackdrop` 同尺寸/同原点，供内层 `buildPaint` 采样）。 */
+    private void buildGlassLayerOffscreen(int gx, int gy, int gw, int gh, List<Cmd> list, int[] ids) {
+        try {
+            if (glassReader == null || glassLayerX != gx || glassLayerY != gy
+                    || glassLayerFull == null || glassLayerFull.getWidth() != gw || glassLayerFull.getHeight() != gh) {
+                disposeGlassLayer();
+                glassHT = new android.os.HandlerThread("glass-layer");
+                glassHT.start();
+                glassReader = android.media.ImageReader.newInstance(gw, gh,
+                        android.hardware.HardwareBuffer.RGBA_8888, 2,
+                        android.hardware.HardwareBuffer.USAGE_GPU_SAMPLED_IMAGE | android.hardware.HardwareBuffer.USAGE_GPU_COLOR_OUTPUT);
+                glassHR = new android.graphics.HardwareRenderer();
+                glassHRSurface = glassReader.getSurface();
+                glassHR.setSurface(glassHRSurface);
+                glassLayerX = gx; glassLayerY = gy;
+            }
+            final android.graphics.RenderNode node = new android.graphics.RenderNode("glass-layer");
+            node.setPosition(0, 0, gw, gh);
+            glassHR.setContentRoot(node);
+            final Canvas c = node.beginRecording(gw, gh);
+            // 离屏局部坐标（原点 0,0；div=1）：盒在离屏画布的位置 = 屏幕盒 − (gx,gy)
+            c.drawColor(0x00000000);
+            // ① 内容（把全分辨率背板搬到离屏局部坐标；背板覆盖屏幕区 [gx,gy]，其 (0,0) 已对应屏幕 (gx,gy)）
+            if (glassBackdropFull != null) c.drawBitmap(glassBackdropFull, 0f, 0f, null);
+            // ② 逐"外层玻璃"（无玻璃祖先者）：用真 shader 合成其玻璃面（采样 = 内容背板）
+            for (int k = 0; k < list.size() && k < ids.length; k++) {
+                final GlassMaterial.Spec g = glassByNode.get(ids[k]);
+                if (g == null || hasGlassAncestor(ids[k])) continue;
+                final Cmd gc = list.get(k);
+                drawGlassFaceAt(c, ids[k], g, gc.x - gx, gc.y - gy, gc.w, gc.h,
+                        glassBackdropFull, 0f, 0f, 1f, 1f);   // ★背板在离屏画布原点 (0,0) ⇒ bdX/bdY=0
+            }
+            node.endRecording();
+            final java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
+            glassReader.setOnImageAvailableListener(r -> latch.countDown(), new android.os.Handler(glassHT.getLooper()));
+            glassHR.createRenderRequest().syncAndDraw();
+
+            latch.await(3, java.util.concurrent.TimeUnit.SECONDS);
+            final android.media.Image img = glassReader.acquireLatestImage();
+            if (img == null) { android.util.Log.w("proteus-glass", "GLASSLAYER offscreen: no image"); return; }
+            final android.hardware.HardwareBuffer buf = img.getHardwareBuffer();
+            final android.graphics.Bitmap wrap = android.graphics.Bitmap.wrapHardwareBuffer(buf, null);
+            if (glassLayerFull != null) glassLayerFull.recycle();
+            glassLayerFull = wrap.copy(android.graphics.Bitmap.Config.ARGB_8888, false);
+            if (wrap != null) wrap.recycle();
+            img.close();
+            // ③ 降采样到与 `glassBackdrop` 同尺寸（供内层 buildPaint：同 divX/divY）
+            final int sw = glassBackdrop != null ? glassBackdrop.getWidth() : gw;
+            final int sh = glassBackdrop != null ? glassBackdrop.getHeight() : gh;
+            if (glassLayer == null || glassLayer.getWidth() != sw || glassLayer.getHeight() != sh) {
+                if (glassLayer != null) glassLayer.recycle();
+                glassLayer = android.graphics.Bitmap.createBitmap(sw, sh, android.graphics.Bitmap.Config.ARGB_8888);
+            }
+            new Canvas(glassLayer).drawBitmap(glassLayerFull, new android.graphics.Rect(0, 0, gw, gh),
+                    new android.graphics.Rect(0, 0, sw, sh),
+                    new android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG));
+        } catch (Throwable t) {
+            android.util.Log.w("proteus-glass", "GLASSLAYER offscreen FAIL " + t);
+        }
+    }
+
+    private void disposeGlassLayer() {
+        try { if (glassHR != null) glassHR.destroy(); } catch (Throwable ignored) {}
+        try { if (glassReader != null) glassReader.close(); } catch (Throwable ignored) {}
+        try { if (glassHT != null) glassHT.quitSafely(); } catch (Throwable ignored) {}
+        try { if (glassHRSurface != null) glassHRSurface.release(); } catch (Throwable ignored) {}
+        glassHR = null; glassReader = null; glassHT = null; glassHRSurface = null;
+        if (glassLayerFull != null) { glassLayerFull.recycle(); glassLayerFull = null; }
     }
 
     /** ★#973：该节点是否有**玻璃祖先**（用于"内层玻璃采样 layer（内容+外层玻璃面纱）/ 外层玻璃采样原始内容"分组）。 */
@@ -3570,6 +3611,36 @@ public class ProteusHostView extends ViewGroup {
         return false;
     }
 
+
+    /** ★★★决策 #979：**离屏核心**——把玻璃面画到任意画布/坐标空间。`ox,oy` = 盒在**目标画布**的左上角；
+     *  `bdX,bdY,divX,divY` = 采样位图 `sampling` 覆盖的**目标画布**区域原点 + 降采样比。主画布路径传屏幕坐标/全局
+     *  背板参数；**离屏合成帧**路径传离屏局部坐标（原点 0,0、div=1）⇒ 同一 shader、同一光学。 */
+    private void drawGlassFaceAt(Canvas canvas, int nodeId, GlassMaterial.Spec spec, float ox, float oy, float w, float h,
+                                 android.graphics.Bitmap sampling, float bdX, float bdY, float divX, float divY) {
+        if (w <= 0 || h <= 0) return;
+        final float nodePress = (nodeId == glassInteractNodeId || glassPressSubtree.contains(nodeId)) ? glassPress : 0f;
+        final boolean inPressGroup = (nodeId == glassInteractNodeId) || glassPressSubtree.contains(nodeId);
+        final boolean touchApplies = inPressGroup && glassTouchAbsX > -1e5f;
+        final float qtx = touchApplies ? glassTouchAbsX - ox : -1e6f;
+        final float qty = touchApplies ? glassTouchAbsY - oy : -1e6f;
+        android.graphics.Paint p = GlassMaterial.buildPaint(nodeId, sampling, ox, oy, bdX, bdY, w, h, spec.radius, spec,
+                qtx, qty, nodePress, divX, divY);
+        final int save = canvas.save();
+        if (spec.radius > 0) {
+            android.graphics.Path clip = new android.graphics.Path();
+            clip.addRoundRect(new android.graphics.RectF(ox, oy, ox + w, oy + h), spec.radius, spec.radius,
+                    android.graphics.Path.Direction.CW);
+            canvas.clipPath(clip);
+        }
+        if (p != null) {
+            canvas.drawRect(ox, oy, ox + w, oy + h, p);
+        } else {
+            android.graphics.Paint fp = new android.graphics.Paint();
+            fp.setColor(((spec.tint & 0x00FFFFFF) | 0xE6000000));
+            canvas.drawRect(ox, oy, ox + w, oy + h, fp);
+        }
+        canvas.restoreToCount(save);
+    }
 
     /** 画一个玻璃面（节点盒 c）：AGSL 采样背后内容 → blur+tint；不可用 ⇒ 半透明实色回退。 */
     private void drawGlassFace(Canvas canvas, int nodeId, Cmd c, GlassMaterial.Spec spec) {

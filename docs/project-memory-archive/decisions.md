@@ -4687,3 +4687,16 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 【判据】真机 Android 按下：胶囊内部**放大 + 柔化**（凸透镜感，此前=挖洞）· `check:shader-generated`（四端无漂移）· `check:glass-pixel-parity`（rest+press · max 1/255）· shader/glass 能力链 · pixel-snap · host-rounding · coupled · Android 零设备编译 · App 存活。
 【下一步（架构级 · 明确）】**实现 A**：宿主把**外层玻璃（条）绘制完成后的帧**作为**内层玻璃（胶囊）的采样源**（离屏硬件渲染管线）⇒ 条边/霜/折射以真光学透过胶囊，且**滑动时实时**。
 【★教训】★★**"平台做不到"要分清是"能力不可达"还是"这条路径不通"**——#973 我据"软件 Canvas 不支持 RuntimeShader / HARDWARE 位图不可变"判"离屏不可达"；本项一条**最小探针**（离屏 HardwareRenderer 跑 RuntimeShader）就证伪了——**下"做不到"的结论前必须先跑最小复现**（AGENTS.md「先取证再断言」）。★★**长按滑动这类"动起来"的需求会把静态近似全部暴露**——用户点出"手画不行"正是因为**动态**；判"近似够不够"要把**运动**纳入。
+
+979. **★★★液态玻璃「玻璃叠玻璃」真光学落地：离屏 `HardwareRenderer` 两遍渲染（内层采样外层已合成帧）· Android 真机**（2026-10-15 承 #978 · 用户「还得上光学才行，手画肯定不行，后面要做长按滑动、滑动时条要实时透过胶囊看到，像透过水珠」）：
+【目标（用户定的长期需求）】长按滑动切换时，**条要实时透过胶囊被看到** ⇒ 静态手画近似全废 ⇒ 必须**内层玻璃采样"外层玻璃绘制完成后的帧"**（iOS 统一渲染架构的 `CABackdropLayer` 语义）。
+【探针取证（#978 完成）】离屏 `HardwareRenderer` + `RuntimeShader` + `ImageReader` 读回在本设备**可行**（`PROBE: OK center=#ffff0000`）⇒ #973「离屏不可达」是**误判**（只有"软件 `Canvas` 不支持 RuntimeShader / `Config.HARDWARE` 位图不可变"两条**错误路径**）。
+【实现（宿主 `buildGlassLayerOffscreen`）】
+  1. `HardwareRenderer` + `ImageReader`（`RGBA_8888` / `USAGE_GPU_SAMPLED_IMAGE|COLOR_OUTPUT`）作**离屏合成帧**（屏幕区 `[gx,gy,gw,gh]` = 全分辨率背板区）。
+  2. 每帧：`RenderNode.beginRecording` → 画**内容背板**（`glassBackdropFull`）→ 逐"外层玻璃"（无玻璃祖先者）用**真 shader** 合成其玻璃面（新增 `drawGlassFaceAt`，离屏局部坐标、`bdX/bdY=0`、`div=1`）→ `endRecording` → `syncAndDraw` → `onImageAvailable` latch → `acquireLatestImage` → `wrapHardwareBuffer().copy()` 读回。
+  3. 读回帧降采样成 `glassLayer`（与 `glassBackdrop` **同尺寸/同原点** ⇒ 内层 `buildPaint` 无需改）。
+  4. 内层玻璃（胶囊）→ 采样 `glassLayer`（**含外层玻璃真光学**）⇒ 条边/霜/折射以**真光学**透过胶囊；**每帧重建 ⇒ 滑动时实时**。
+  5. `disposeGlassLayer()` 释放（`HardwareRenderer.destroy` / `ImageReader.close` / `HandlerThread.quitSafely` / `Surface.release`）。
+【判据】真机 Android（白底/网格按下）：胶囊透出**条的真玻璃面**（浅底白霜 + 条纹边界；网格下为被条过纱的绿块）——非手画、非裸内容 · `check:shader-generated`（四端无漂移）· `check:glass-pixel-parity`（rest+press · max 1/255）· shader/glass 能力链 · pixel-snap · host-rounding · coupled · Android 零设备编译 · AAR 重建 · App 存活（不崩）。
+【诚实边界】① 离屏合成目前**每帧一次**（`syncAndDraw`+读回）——性能未测（滑动流畅度待真机确认；可后置节流/仅按下时启用）；② 仅 Android；③ 外层玻璃若自身也嵌套三层以上未特别处理（当前 2 层：条+胶囊）。
+【★教训】★★**"平台做不到"必须区分"能力不可达"与"这条路径不通"**——#973 据两条错误路径判死"离屏"，#978 一条最小探针就证伪。**下否定结论前先跑最小复现**。★★**动态需求（长按滑动）会淘汰一切静态近似**——用户"手画不行"正因为要**动起来**；判"近似够不够"必须把**运动**与**实时性**纳入（这正是本轮做"每帧离屏合成"而非"预烘焙"的原因）。
