@@ -151,10 +151,10 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     // ★★★决策 #976：按下透镜「内部放大」（凸模式放大镜）——与 glass.wgsl 同源（门控 pr_ov ⇒ 静止/条等价）。
     let pr_ov = p.press.clamp(0.0, 1.0) * p.overlay.clamp(0.0, 1.0);
     let ctr = hs;
-    let zoom = 1.0 + pr_ov * 0.16;
+    let zoom = 1.0 + pr_ov * 0.08;   // ★#981：0.16→0.08
     let sp_l = (ctr.0 + (sp.0 - ctr.0) / zoom, ctr.1 + (sp.1 - ctr.1) / zoom);
     // ★★★决策 #978：按下透镜「自低通」（凸透镜的柔）——与 glass.wgsl 同源（5-tap 十字，br2=0 等价）。
-    let br2 = band * 0.05 * pr_ov;   // ★#980：0.10→0.05
+    let br2 = band * 0.03 * pr_ov;   // ★#981：0.05→0.03
     let s5 = |px: f32, py: f32| backdrop.sample_map(to_tex((px, py)));
     let mut col = [0.0f32; 4];
     for c in 0..4 {
@@ -187,7 +187,7 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     // ★★★决策 #977：浅端 α 0.90→0.55（用户「白底下像透明卡片、没有通透玻璃感」；见 glass.wgsl 同源注释）。
     let veil_base = 0.09f32 + (0.55f32 - 0.09f32) * veil_t;
     let pr_ov = p.press.clamp(0.0, 1.0) * p.overlay.clamp(0.0, 1.0);
-    let veil_a = veil_base + (veil_base * 0.18f32 - veil_base) * pr_ov;
+    let veil_a = veil_base + (veil_base * 0.06f32 - veil_base) * pr_ov;   // ★#981：按下 → 0.06×（≈纯通透）
     let raw_lum = raw[0]*0.299 + raw[1]*0.587 + raw[2]*0.114;
     for c in 0..3 {
         let vc = (veil_v + (raw[c] - raw_lum) * 0.12).clamp(0.0, 1.0);
