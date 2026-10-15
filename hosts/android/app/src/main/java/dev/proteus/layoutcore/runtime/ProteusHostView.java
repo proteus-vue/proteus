@@ -3486,7 +3486,8 @@ public class ProteusHostView extends ViewGroup {
         //     先降到 bw/8 的小图（强低通），再双线性升回 bw/2（平滑）——内容**柔化但仍在**（折射/倒影可见）。
         //   ★最终输入分辨率仍 = bw/2（#917：超高降采样会让压缩带混叠 ⇒ 滚动抖动）。
         final int DIV = 2;           // 最终输入分辨率（与 iOS capturePxPerPoint=scale/2 同口径）
-        final int BLUR_DOWN = 4;     // ★#929：极轻重采样（输入分辨率）；**真模糊在 shader（#985）**
+        final int BLUR_DOWN = 2;     // ★#991：4→2（去掉 1/4 **往返**的额外模糊——workbuddy 取证「透出来是雾不是形」:
+                             //   内容笔画在**采样前**就被 1/4 往返抹平）。2× = iOS capturePxPerPoint=scale/2 口径。
         // I2-ALLOW: **降采样缓冲的位图像素尺寸**（非几何坐标——位图必须整数像素；几何采样走内核吸附值）
         final int sw = Math.max(1, Math.round((float) bw / DIV));
         final int sh = Math.max(1, Math.round((float) bh / DIV));

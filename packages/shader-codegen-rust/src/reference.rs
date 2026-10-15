@@ -113,7 +113,7 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     let d = (-sd).max(0.0);
     let smin = p.size_px.0.min(p.size_px.1);   // 最短边（= 2×hsmin）
     // ★决策 #907/#910：折射带 = **最短边 1/3**（#910 修正口径：原 `hsmin*0.33 = 0.165·min` 只有 1/6 ⇒ ×2）
-    let band = (smin * 0.30).max(6.0);
+    let band = (smin * 0.42).max(6.0);   // ★#992
     let e = (d / band).clamp(0.0, 1.0);
 
     let eps = (band * 0.3).clamp(1.0, 16.0);
@@ -128,9 +128,9 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     let slope = u1 / (1.0 - u1 * u1).max(1e-4).sqrt();
     // ★决策 #910/#912/#914：位移横贯整带；幅度系数 **0.15**（#914 定稿——消"y 轴拉伸"，对齐 iOS"平面变化"
     //   式轻弯折；机制 = 法线方向向外采样，单调不折叠）。refract_depth 以 band 为基准（1.0 中性）。
-    let prof = (1.0 - e).powi(3);   // ★#928 回退#924：位移集中在极边缘（#918 用户认可版）
+    let prof = 1.0 - smoothstep(0.0, 1.0, e);   // ★#991：铺满整带（内侧一圈折射）
     let strength = (p.refract_depth / band.max(1.0)).clamp(0.2, 1.1);
-    let bend = prof * band * 0.70 * strength;   // ★#928：幅度回 0.70
+    let bend = prof * band * 0.80 * strength;   // ★#992：0.80
     // ★#905/#966：触控形变——触点处把内容沿"离触点方向"推挤（Gaussian 钟）。
     //   ★只给选中项（overlay）；press=0 或 touch 未激活 ⇒ push≈0（退化到既有折射）。
     let t_r = (hs.0.min(hs.1) * 0.9).max(8.0);
@@ -187,7 +187,7 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     let veil_v = 0.55f32 + (1.0f32 - 0.55f32) * veil_t;   // ★#988：亮端纯白
     let pr_ov = p.press.clamp(0.0, 1.0) * p.overlay.clamp(0.0, 1.0);
     // ★★★决策 #987（B）：α 随背景变——浅端 0.88（内容压到不可见）/ 深端 0.467（#984 四点拟合）。
-    let veil_a0 = 0.467f32 + (0.88f32 - 0.467f32) * veil_t;
+    let veil_a0 = 0.467f32;   // ★#992
     let veil_a = veil_a0 + (veil_a0 * 0.06f32 - veil_a0) * pr_ov;
     let raw_lum = raw[0]*0.299 + raw[1]*0.587 + raw[2]*0.114;
     for c in 0..3 {
