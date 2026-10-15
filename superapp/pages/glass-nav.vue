@@ -358,7 +358,9 @@ function pick(key: string, pos: number): void {
 .gna-row__main { flex: 1; min-width: 0; }
 .gna-row__t { display: block; font-size: 16px; font-weight: 600; color: var(--sa-text, #1a1c22); }
 .gna-row__d { display: block; margin-top: 2px; font-size: 12px; color: var(--sa-text-3, #8a8f99); }
-.gna-row__btn { flex-shrink: 0; padding: 6px 18px; border-radius: 16px; background: rgba(91, 91, 214, 0.14); }
+/* ★#990：按钮背景 紫调 rgba(91,91,214,.14) → **iOS 中性浅灰**（实测 iOS 获取按钮 = (238,238,239) 中性灰；
+   相对卡片(255)暗 17；我们卡片 #f2f2f7(242) ⇒ 对应 ≈226 中性灰 #e2e2e7）。 */
+.gna-row__btn { flex-shrink: 0; padding: 6px 18px; border-radius: 16px; background: #e2e2e7; }
 .gna-row__btn-t { font-size: 14px; font-weight: 600; color: #5b5bd6; }
 /* ★悬浮玻璃导航：**fixed** 钉在视口底部（内容从玻璃底下滑过）；bottom 抬到 App 壳 tab 栏之上。 */
 .gna-dock {

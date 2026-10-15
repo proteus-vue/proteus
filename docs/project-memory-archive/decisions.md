@@ -4793,3 +4793,9 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 【判据】真机 Android：条白区 **x 40..1159 → 78..1117**（左右各收 14pt；左 26pt 对齐按钮左边、右 372pt ≈ 按钮右 374pt）；胶囊仍对准各项 · `check:app-screen-content`（132 页 / 5436 节点 · id 唯一 / parent 可达 / 枚举闭集）绿。
 【★构建链坑（本轮踩到，记牢）】改 `superapp/pages/*.vue` 后，**光跑 `build-and-run.sh` 不够**——App 端跑的是 **`hosts/shared/bridge/app-screen-content.generated.ts`**（bundle 内嵌，构建期由 `gen-app-screen-content.mjs` 生成），而 `build-and-run` 只同步**资产 JSON**（`app-screen-content.json`）⇒ 两者**不一致**（资产对、屏内容旧）。正确顺序：`superapp build --target android`（产 dist JSON）→ `npx tsx hosts/shared/bridge/gen-app-screen-content.mjs`（→ generated.ts）→ `bash hosts/android/build-and-run.sh`（→ bundle 重打 + 资产同步）。★资产 JSON 与 generated.ts 是**两份来源**，必须同批重生成。
 【★测量坑】"条左右边界"用过亮度跳变法，**把卡片边（12pt）误判成条边**（卡片 242 vs 页底 244 太近）；改用**白条判据**（L≥250）才对上。★教训同源：**判据要挑"可区分"的特征**（#2341）。
+
+990. **超应用「获取」按钮背景：紫调 → iOS 中性浅灰**（`rgba(91,91,214,.14)` → `#e2e2e7`）· Android 真机（2026-10-15 · 用户「把获取按钮的背景色改为 iOS 的那种灰色背景」）：
+【量测】iOS 15:24 图「获取」按钮背景 = **(238,238,239) 中性浅灰**（相对白卡片 255 **暗 17**、几乎无彩）；我们 = (221,221,240) **带紫调**（`rgba(91,91,214,0.14)`，蓝通道高 19）。
+【修（`superapp/pages/glass-nav.vue`）】`.gna-row__btn` background → **`#e2e2e7`**（=227，相对我们卡片 #f2f2f7(242) 暗 ~16 ⇒ 与 iOS 的"暗 17"同量级、中性无紫调）。文字色 `#5b5bd6` 保留（iOS 的"获取"是蓝色文字）。
+【判据】真机 Android：按钮背景 **(221,221,240) → (226,226,230)**（中性浅灰、去紫调）· `check:app-screen-content` 绿。
+【★教训】★**"灰色"要量"相对卡片暗多少"**（iOS 17级），并**同时看彩度**（我们旧值 B−R=19 是"紫"不是"灰"）——"看着灰"的色可能带明显色调。
