@@ -187,7 +187,8 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     let veil_v = 0.55f32 + (1.0f32 - 0.55f32) * veil_t;   // ★#988：亮端纯白
     let pr_ov = p.press.clamp(0.0, 1.0) * p.overlay.clamp(0.0, 1.0);
     // ★★★决策 #987（B）：α 随背景变——浅端 0.88（内容压到不可见）/ 深端 0.467（#984 四点拟合）。
-    let veil_a0 = 0.467f32;   // ★#992
+    // ★#996：恢复 B——浅底 α 0.85（对比度门控）
+    let veil_a0 = 0.467f32 + (0.85f32 - 0.467f32) * veil_t;
     let veil_a = veil_a0 + (veil_a0 * 0.06f32 - veil_a0) * pr_ov;
     let raw_lum = raw[0]*0.299 + raw[1]*0.587 + raw[2]*0.114;
     for c in 0..3 {
