@@ -953,6 +953,23 @@
         "T-glass-drop-flow"
       ],
       "note": "【由来】用户「按下膨胀后的形态不是原来那种胶囊了，变成四方形了」。\n【根因】圆角是绝对量（72px ≈ 静止盒半高）；膨胀后盒变大而半径不变 ⇒ 只占高 32% ⇒ 直线边占主。\n【修】按下胶囊 rr=clamp(spec.radius·(bh/gc.h), ≤min(bw,bh)/2)（bh=223⇒rr≈111.6）+ 画完复位；两处绘制（buildPaint+clip）用覆盖值。\n【★教训】\"形态变了\"回到\"半径是不是常量\"上查——形变必须同步缩放圆角（同源：#1015 pad / #1022 碗形 span = 绝对量作用域没跟盒变）；形状判别用逐行宽变化率（64px vs 7px）。\n【诚实边界】半径按高度缩放（极端 sx≫sy 走保底）；iOS 滴尖未解；iOS/鸿蒙未接；实时高亮未做。"
+    },
+    {
+      "id": "T-glass-drop-dynamics",
+      "title": "水滴质心动力学：弹簧-阻尼跟随（急停前冲/回收/振铃）——\"车头前冲收窄成滴尖\"的真实物理",
+      "type": "capability",
+      "status": "done",
+      "owner": "session:zcode-glassblur",
+      "scope": [
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/**"
+      ],
+      "decision": 1026,
+      "verification": "真机 GLASSSTRETCH 相位链：急停 lag=34.8/stretch=0.300（w=491=+33%）→ 追赶 → 过冲回摆（−0.7）→ 收敛（lag 0.3/w=382）；释放吸附正常（.workbuddy/salvage/liquid-glass/rush-1026/）&& bash hosts/android/check-host-compile.sh && pnpm check:file-size && pnpm test:coupled",
+      "branch": null,
+      "related": [
+        "T-glass-drop-flow"
+      ],
+      "note": "【由来】用户「停得快的时候类似于车头一样往前冲下，端部往前冲收窄成滴尖然后回收回来，应该根据真实的物理动学实现的吧」+ iOS 59fps 录屏。\n【取证】骤停瞬间宽 370→504（+36%）→ 回收到 402（−20%，≈130ms）→ 振铃 ⇒ 欠阻尼弹簧，参数直接反解。\n【修】质心 bpos/bvel 弹簧-阻尼（K=0.040/C=0.140 ⇒ ζ≈0.35 · 稳态滞后 3.5v）；绘制用质心；变形速度取 max(EMA, 质心速度)；拉伸加滞后项。\n【★教训】\"像液体\"本质=质心惯性（非形变函数——v=0 时映射必归零）；用户\"按真实物理动学\"= 弹簧-阻尼照做；参数从帧序列反解。\n【诚实边界】滴尖盒层近似（teardrop 端帽未做）；K/C 单例标定 ±30%；松手走槽位吸附；iOS/鸿蒙未接；实时高亮未做。"
     }
   ]
 }

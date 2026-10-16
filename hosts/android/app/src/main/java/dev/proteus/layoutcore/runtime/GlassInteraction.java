@@ -17,6 +17,9 @@ import java.util.Map;
  * 59fps 实测：最快帧宽 +15~25% / 高 −2~6%）；松 ⇒ lerp 吸附回槽位 + 释放点 tab 选中，速度量自然衰减（≈0.3s 落定）。</p>
  *
  * <p>【几何】lens 横向可**溢出条端**（iOS 视频实证：按在端部 tab 时 blob 盖过条端）⇒ 不做条内 clamp。</p>
+ *
+ * <p>【#1026 物理】质心弹簧-阻尼跟随手指：稳态滞后 ∝ 速度（拖尾）；急停 ⇒ 质心惯性**前冲越指**再弹回
+ * （"车头前冲收窄成滴尖然后回收"，59fps 实测 +36% 宽过冲 / ~150ms 回收）——参数见 LAG_K/LAG_C。</p>
  */
 final class GlassInteraction {
 
@@ -34,6 +37,14 @@ final class GlassInteraction {
     /** ★★★决策 #1024：拖动速度 EMA（px 每渲染帧 @≈60fps）——液滴变形驱动量（越快越扁长）。 */
     float velSmooth = 0f;
     private float lastDragTarget = 0f;
+    // ★★★决策 #1026（iOS 19:14 录屏取证：急停时"车头前冲收窄成滴尖然后回收"）：**水滴质心的物理跟随**——
+    //   bpos/bvel = 质心位置/速度，以**弹簧-阻尼**追手指（dragTarget）：
+    //   · 稳态滞后 ∝ 速度（拖越快质心拖得越后 = 拖尾）；· **急停时质心惯性前冲**（越过手指）再弹回 = "车头前冲/回收"；
+    //   · 校准（59fps 实测 a036：骤停瞬间宽 504px = 基准 +36%，150ms 回收到 402px = 25% 回收）
+    //     ⇒ ζ=C/(2√K)=0.35（过冲 ~31%）/ 稳态滞后 = (C/K)·v = 3.5v px。
+    float bpos = 0f, bvel = 0f;
+    private static final float LAG_K = 0.040f;
+    private static final float LAG_C = 0.140f;
     /** 拖动超阈标志（释放重定向 tap 的触发条件之一）。 */
     boolean dragMoved = false;
     /** 本手势期间 GestureDetector 是否已判 scroll（判过不会再发 tap ⇒ 释放重定向只在此时兜底派发）。 */
@@ -70,7 +81,7 @@ final class GlassInteraction {
                 touchAbsY = hy;
                 dragStartX = hx;
                 dragTarget = 0f; dragDx = 0f; dragAppliedDx = 0f; dragMoved = false;
-                lastDragTarget = 0f; velSmooth = 0f;   // 新手势 ⇒ 速度归零（防上轮残留瞬跳）
+                lastDragTarget = 0f; velSmooth = 0f; bpos = 0f; bvel = 0f;   // 新手势 ⇒ 动力学归零（防上轮残留瞬跳）
                 pressTarget = 1f;
                 if (press < 0.01f) press = 0.01f;   // 立即起步（避免首帧无变化）
                 return true;
@@ -98,6 +109,7 @@ final class GlassInteraction {
     /** 硬清零（UP 事件收尾——吸附立即生效，不等 lerp）。 */
     void resetDrag() {
         dragDx = 0f; dragTarget = 0f; dragStartX = -1e6f; dragMoved = false; lastDragTarget = 0f;
+        bpos = 0f; bvel = 0f;   // ★#1026：硬吸附到槽位（JS 新 hlLeft）⇒ 质心动力学同步清零
     }
 
     /** 每帧推进（press + 拖拽 lerp + 速度 EMA/衰减）。返回 true = 未收敛，宿主应继续排帧（自持直到收敛即停）。 */
@@ -119,6 +131,12 @@ final class GlassInteraction {
         } else if (dragDx != dragTarget) {
             dragDx = dragTarget;
             need = true;
+        }
+        // ★#1026：水滴质心弹簧-阻尼推进（惯性前冲/回收的动力学本体；按住期间始终步进）。
+        if (nodeId >= 0 && pressTarget > 0.5f) {
+            bvel += (dragTarget - bpos) * LAG_K - bvel * LAG_C;
+            bpos += bvel;
+            if (Math.abs(dragTarget - bpos) > 0.5f || Math.abs(bvel) > 0.4f) need = true;
         }
         // ★#1024：速度跟踪（按住时差分 EMA；停手/松手 ⇒ 衰减——液滴自然落定 ≈0.3s）。
         if (nodeId >= 0 && pressTarget > 0.5f) {
@@ -142,18 +160,22 @@ final class GlassInteraction {
         final float sx = 1f + press * PRESS_SCALE_CAPSULE_X;
         final float sy = 1f + press * PRESS_SCALE_CAPSULE_Y;
         final float ccx = gc.x + gc.w * 0.5f, ccy = gc.y + gc.h * 0.5f;
-        dragAppliedDx = dragDx;
-        float bx = ccx + dragDx + (gc.x - ccx) * sx;
+        dragAppliedDx = bpos;   // ★#1026：内容跟随用**质心**（与透镜面同相位——惯性前冲时放大镜内容同步冲）
+        float bx = ccx + bpos + (gc.x - ccx) * sx;
         float bw = gc.w * sx;
         float by = ccy + (gc.y - ccy) * sy;
         float bh = gc.h * sy;
-        // ★#1024 液滴变形：速度 → 横向拉伸（尾迹偏置）/ 纵向压扁（中心不动）。
-        final float sp = Math.min(Math.abs(velSmooth), VEL_CAP);
-        final float stretch = Math.min(STRETCH_MAX, sp * 0.024f) * press;
+        // ★#1024/#1026 液滴变形：速度 → 横向拉伸（尾迹偏置）/ 纵向压扁（中心不动）；
+        //   #1026 起速度取 **max(手指 EMA, 质心速度)**（急停后手指停但质心仍在冲 ⇒ 畸形保持到回收期）。
+        final float sp = Math.min(Math.max(Math.abs(velSmooth), Math.abs(bvel)), VEL_CAP);
+        final float lagPx = dragTarget - bpos;   // >0=手指在前（拖动中）/ <0=质心越过手指（前冲相位）
+        final float stretch = Math.min(STRETCH_MAX, sp * 0.024f + Math.abs(lagPx) * 0.008f) * press;
         final float flatten = Math.min(FLATTEN_MAX, sp * 0.012f) * press;
         if (stretch > 0.001f) {
             final float extraW = bw * stretch;
-            final boolean right = velSmooth >= 0f;
+            // 方向：优先用质心速度（前冲相位仍朝原方向）；都小时退化不敏感
+            final float dirV = Math.abs(bvel) > Math.abs(velSmooth) ? bvel : velSmooth;
+            final boolean right = dirV >= 0f;
             final float extL = extraW * (right ? 0.65f : 0.35f);   // 尾迹（运动反侧）拉得更多 = 水滴感
             final float extR = extraW * (right ? 0.35f : 0.65f);
             bx -= extL; bw += extL + extR;
@@ -161,6 +183,7 @@ final class GlassInteraction {
         }
         if (debug && stretch > 0.01f) {
             android.util.Log.i("proteus-glass", "GLASSSTRETCH vel=" + String.format("%.1f", velSmooth)
+                    + " bvel=" + String.format("%.1f", bvel) + " lag=" + String.format("%.1f", lagPx)
                     + " stretch=" + String.format("%.3f", stretch) + " flatten=" + String.format("%.3f", flatten)
                     + " w=" + String.format("%.0f", bw) + " h=" + String.format("%.0f", bh));
         }
