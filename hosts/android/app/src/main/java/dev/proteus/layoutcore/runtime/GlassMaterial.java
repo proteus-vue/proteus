@@ -134,6 +134,12 @@ public final class GlassMaterial {
 
     /** ★★★决策 #906：带**降采样比**（backdrop 是缩小图；tex_scale/bias 按 divX/divY 折算）。 */
     public static Paint buildPaint(int nodeId, Bitmap backdrop, float ox, float oy, float bdX, float bdY, float w, float h, float radius, Spec spec, float touchX, float touchY, float press, float divX, float divY) {
+        return buildPaint(nodeId, backdrop, ox, oy, bdX, bdY, w, h, radius, spec, touchX, touchY, press, divX, divY, 0f, -1f);
+    }
+
+    /** ★★★决策 #1004：带**nest（内层/预模糊模式）**与 **bgLumOverride**（内层继承外层两态判定；<0=自动）。
+     *   nest 语义见 glass.wgsl：0/1 锐背板 · 2 外层宿主已预模糊 · 3 内层（复合帧，跳自己的面纱）。 */
+    public static Paint buildPaint(int nodeId, Bitmap backdrop, float ox, float oy, float bdX, float bdY, float w, float h, float radius, Spec spec, float touchX, float touchY, float press, float divX, float divY, float nest, float bgLumOverride) {
         if (!isAvailable() || backdrop == null || backdrop.isRecycled() || spec == null || w <= 0f || h <= 0f) {
             android.util.Log.w("proteus-glass", "buildPaint early-null: avail=" + isAvailable()
                     + " backdrop=" + (backdrop == null ? "null" : backdrop.getWidth() + "x" + backdrop.getHeight())
@@ -186,7 +192,15 @@ public final class GlassMaterial {
                 sh.setFloatUniform("specular", 0.35f);
                 // ★★★决策 #911：区域级霜锚点——传入玻璃盒（含 pad 视角即节点盒）区域的平均背景亮度。
                 //   换算同 tex_bias：节点盒左上在 backdrop 位图坐标 = (ox-bdX)/divX，宽 = w/divX。
-                sh.setFloatUniform("bg_lum", regionLum(backdrop, (ox - bdX) / divX, (oy - bdY) / divY, w / divX, h / divY));
+                // ★★★决策 #1004：内层玻璃（nest=3）**继承外层亮度**（bgLumOverride ≥ 0）——此前内层从
+                //   "含外层白霜的复合帧"算亮度 ⇒ 条判暗档（透彩）/胶囊判亮档（白霜）= 两态分裂
+                //   （用户「不是只有两种切换」）。继承后条与胶囊恒同态（浅底一起白 / 暗底一起暗）。
+                final float bgLum = (bgLumOverride >= 0f)
+                        ? bgLumOverride
+                        : regionLum(backdrop, (ox - bdX) / divX, (oy - bdY) / divY, w / divX, h / divY);
+                sh.setFloatUniform("bg_lum", bgLum);
+                // ★★★决策 #1004：nest（内层/预模糊模式；见 glass.wgsl struct 注释）
+                sh.setFloatUniform("nest", nest);
                 // ★★★决策 #905：触控形变（touch 盒局部 px / press 0..1）
                 sh.setFloatUniform("touch", touchX, touchY);
                 sh.setFloatUniform("press", press);

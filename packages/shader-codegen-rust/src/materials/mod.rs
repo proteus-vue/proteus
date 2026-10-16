@@ -51,8 +51,10 @@ pub const GLASS: MaterialSpec = MaterialSpec {
         ("touch", 80, 8),
         ("press", 88, 4),
         ("overlay", 92, 4),
+        // ★★★决策 #1004：内层/预模糊模式（0/1 锐背板 · 2 外层预模糊 · 3 内层复合帧；见 glass.wgsl struct）
+        ("nest", 96, 4),
     ],
-    uniform_size: 96,
+    uniform_size: 112,
 };
 
 /// ★★★背板模糊材质（backdropBlur）——玻璃的基座（只模糊 + tint，无折射/高光）。

@@ -28,6 +28,8 @@ const spec = {
     overlay: mode === 'press' ? 1.0 : 0.0,
     press: mode === 'press' ? 1.0 : 0.0,
     touch: mode === 'press' ? [82.0, 60.0] : [-1.0e6, -1.0e6],
+    // ★#1004：nest 模式——内层玻璃（跳面纱 + 小残差 tap）路径覆盖（GPU 与 oracle 同输入逐像素对拍）。
+    nest: mode === 'nest' ? 3.0 : 0.0,
   },
   out: { width: 130, height: 130 },
 }
