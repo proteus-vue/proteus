@@ -1129,6 +1129,25 @@
         "T-glass-click-flow"
       ],
       "note": "用户「为什么相邻的切换过去还是缓冲那么大」。根因：flow 复用拖动弹簧（ζ=0.35 ⇒ 252px 反向过冲 74px）。修：FLOW_K=0.35/FLOW_C=1.00（ζ≈0.85）+ lift 升速 0.45；拖动弹簧不动。附带：GeneratedMaterials.java（#1031 起漂移的生成物）补入库。"
+    },
+    {
+      "id": "T-glass-flow-shape",
+      "title": "点击切换与长按同一形态：flow 起跳相位 + 纯速度驱动小形变 + 内容放大/跟随 effPress 门控",
+      "type": "bugfix",
+      "status": "done",
+      "owner": null,
+      "scope": [
+        "hosts/android/**"
+      ],
+      "decision": 1035,
+      "verification": "bash hosts/android/check-host-compile.sh && pnpm test:coupled && 真机 120fps 录屏抽帧（salvage/liquid-glass/shape-1035/：起跳零形变 + 飞行 h 不塌 + 图标放大）",
+      "branch": null,
+      "related": [
+        "T-glass-click-flow",
+        "T-glass-flow-lift",
+        "T-glass-flow-spring"
+      ],
+      "note": "用户「点击切换的玻璃形态不是长按拖动的形态……不能应付了事」。根因：lagPx 在 flow=剩余行程 ⇒ 起跳即扁饼；内容放大只认 press。修：FLOW_POP=3 起跳相位 + flow 形变纯速度驱动小量 + capP=max(press,lift) 门控。判据：起跳全零形变 lift→0.90、飞行 stretch 8.8~12.6% 且 h 保持、图标 +9% 放大、拖动零回归。"
     }
   ]
 }
