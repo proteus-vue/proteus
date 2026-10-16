@@ -746,6 +746,29 @@
         "T-glass-div1-25tap"
       ],
       "note": "【由来】用户「现在最大的问题就是内容还是不够清晰」。\n【取证】离线 oracle 分治：锐背板 foldHP=0.78（网纹）→ 预模糊 σ2.0=0.26 且 4px 笔画保留（19→17/255）；无预模糊+宽下限 ⇒ 字形碎斑（0.94）⇒ 低通必须在位移采样前。\n【修】GlassPreblur（半程双线性+3×3盒式+升采样 ≈σ2.0px）作用于背板捕获末尾；GlassBackdrop 拆分（采样源子系统搬出，ProteusHostView 5838→5562 行清偿体积债）；顺修 #1013 漏的 I2-ALLOW 登记（HEAD 上 host-rounding 本就红）。\n【★教训】压缩映射下\"更清晰\"= 源端限带 + 保真身对比（非核端模糊加/减拉锯）；采样源频率与采样格密度两层分开治；结构债跟着改动热点拆。\n【诚实边界】σ2.0 取自 PIL 2.0/2.5 窗口；iOS/鸿蒙未接（iOS 架构本就先糊背板）；预模糊成本未逐帧量。"
+    },
+    {
+      "id": "T-glass-contrast",
+      "title": "两态明暗对比对齐 iOS（暗霜 0.20 + 胶囊叠加单一常数 174/0.226）+ 模糊残差 0.02（消磨砂叠加）",
+      "type": "bugfix",
+      "status": "done",
+      "owner": "session:zcode-glassblur",
+      "scope": [
+        "packages/shader-codegen-rust/src/materials/**",
+        "packages/shader-codegen-rust/src/reference.rs",
+        "packages/shader/src/generated/**",
+        "hosts/ios/ProteusHost/runtime/generated-materials.swift",
+        "hosts/harmony/host-app/proteus_render/src/main/cpp/generated_materials_spirv.h",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/GeneratedMaterials.java"
+      ],
+      "decision": 1016,
+      "verification": "真机两态判据：亮条 250/胶囊 229（iOS 254/236）· 暗条 30/胶囊 62（iOS 24/58）（.workbuddy/salvage/liquid-glass/contrast-1016/）&& bash hosts/ios/check-glass-pixel-parity.sh（四态 max 1/255）&& npx vitest run tests/glass.test.ts tests/glass-ir.test.ts && pnpm check:shader-generated",
+      "branch": null,
+      "related": [
+        "T-glass-veil-alpha",
+        "T-glass-preblur"
+      ],
+      "note": "【由来】用户「亮底和暗底的玻璃条以及选中胶囊的明暗对比度…我觉得我们的这个对比还差点儿」+「模糊磨砂感太重了」。\n【取证】iOS 亮态 254/236（Δ−18）· 暗态 24/58（Δ+34）；叠加层单一常数零残差反解 C=0.683(174)/α=0.226——同一组常数覆盖两态。\n【磨砂归因】superapp blur=28 ⇒ 预模糊 σ2.0 + shader 0.07(1.96) 总 σ2.80 = #1014 前 +43%。\n【修】wgsl/oracle 同源：暗霜 0.55→0.20（暗条 24）；叠加单一常数；模糊残差 0.02（总 σ2.08，抗摩尔纹在预模糊里不降）。\n【★教训】「对比不够」找**覆盖两态的同一常数**而非每态各配参数（#958 双参两态都偏）；「模糊太重」查**串联总传递**（预模糊×shader 核）,残差化比每处调小可控。\n【诚实边界】暗霜按纯黑拟合；中灰底未单独校；iOS 图含深色模式全局效应，本项只对齐玻璃面。"
     }
   ]
 }

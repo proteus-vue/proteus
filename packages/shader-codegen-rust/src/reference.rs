@@ -167,8 +167,10 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     //   2/3 宿主已深链预模糊（σ_pre≈3.9px）⇒ 本核退为小残差 d=2.5px/1.6px < 笔画宽 ⇒ 无副本分离）。
     //   ★★★决策 #1005：nest=2 的 tap 0.065→**0.08**（宿主深链 → 单次 /2 轻链；可读性修正，见 glass.wgsl ③）。
     let mut bsig = (p.blur * 0.16f32).clamp(0.0, 8.0);
-    if p.nest > 1.5 { bsig = (p.blur * 0.07f32).clamp(0.0, 8.0); }   // ★#1007：0.08→0.07
-    if p.nest > 2.5 { bsig = (p.blur * 0.04f32).clamp(0.0, 8.0); }
+    // ★★★决策 #1016（与 glass.wgsl 同源）：模式 2/3 残差 0.02——主模糊由宿主预模糊（#1015 σ≈2.0px）承担，
+    //   消除"预模糊 + shader 模糊"双重叠加（用户「模糊磨砂感太重」）。
+    if p.nest > 1.5 { bsig = (p.blur * 0.02f32).clamp(0.0, 8.0); }
+    if p.nest > 2.5 { bsig = (p.blur * 0.02f32).clamp(0.0, 8.0); }
     // ★★★决策 #1012/#1013：模糊按 e 键控 + 折叠带反走样下限 0.80（MTF 核算：σ≈2.2px 对 4.4px 拍频图案
     //   MTF=0.008 ⇒ 网纹不可见；与 glass.wgsl 同源）。
     let blur_k = 0.80 + (1.0 - 0.80) * smoothstep(0.05, 0.35, e);
@@ -220,7 +222,8 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     //   vibrancy 阈值(0.46) 同源对齐。中亮内容（彩色网格等，区域均值≈0.53）此前落在窗口中部 ⇒
     //   条进入"半霜"第三态（彩透出），与 iOS 的"白玻璃/暗玻璃二选一"不符（用户「不是只有两种切换」）。
     let veil_t = smoothstep(0.42f32, 0.50f32, p.bg_lum);
-    let veil_v = 0.55f32 + (1.0f32 - 0.55f32) * veil_t;   // ★#988：亮端纯白
+    // ★★★决策 #1016（与 glass.wgsl 同源）：暗端 0.55→0.20（iOS 暗底条面实测 L24 ⇒ V_dark=24/0.467≈51）。
+    let veil_v = 0.20f32 + (1.0f32 - 0.20f32) * veil_t;
     let pr_ov = p.press.clamp(0.0, 1.0) * p.overlay.clamp(0.0, 1.0);
     // ★★★决策 #987（B）：α 随背景变——浅端 0.88（内容压到不可见）/ 深端 0.467（#984 四点拟合）。
     // ★#996：恢复 B——浅底 α 0.85（对比度门控）
@@ -238,8 +241,9 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     }
     // ★#952：选中胶囊叠加层（**不动 α**，叠半透明中性色：deep→0.88 亮 / 浅底→0.40 灰）。
     if p.overlay > 0.001f32 {
-        let ov_l = 0.52f32 + (0.62f32 - 0.52f32) * veil_t;   // ★#958 两端收拢
-        let ov_a = p.overlay.clamp(0.0, 1.0) * 0.30f32 * (1.0f32 - p.press.clamp(0.0, 1.0));   // ★#964 按下淡出灰叠加
+        // ★★★决策 #1016（与 glass.wgsl 同源）：单一恒定 (C=0.683, a=0.226)——双态实测零残差。
+        let ov_l = 0.683f32;
+        let ov_a = p.overlay.clamp(0.0, 1.0) * 0.226f32 * (1.0f32 - p.press.clamp(0.0, 1.0));   // ★#964 按下淡出
         for c in 0..3 { col[c] = col[c] + (ov_l - col[c]) * ov_a; }
     }
     // ★★★决策 #944：tint 移到面纱之后（与 glass.wgsl 同源——作者 tint 作用于最终玻璃面，暗 tint 才不被面纱洗白）。
