@@ -813,6 +813,29 @@
         "T-glass-luminal-2state"
       ],
       "note": "【由来】用户「再白一档」。\n【修】白端 bowl 增益 +2%（veil_t 门控：白端抬/暗端零位移）。\n★门控只给外层（nest≤2）：首版胶囊 241.1（偏 iOS +5）= 双重加成（内层采样\"已+2%的条复合帧\"又叠一次）；内层跳过 ⇒ 经采样继承条的白度 = 236.5（iOS 236）。\n【★教训】跨层链路里\"叠加层自己再抬一次\"=双重加成——面值调整必须门控到生产者层（外层），消费者（内层）继承；白端 254.9 已到屏幕极限（255满格），白端头寸用尽。\n【诚实边界】暗端零位移（未要求动）；iOS/鸿蒙未接（生成物已同步）。"
+    },
+    {
+      "id": "T-glass-capsule-flat",
+      "title": "胶囊/条差异度拉开：整个碗形只给外层（nest≤2）——胶囊平直化 237/58 恒定（对齐 iOS Δ18/Δ34）",
+      "type": "bugfix",
+      "status": "done",
+      "owner": "session:zcode-glassblur",
+      "scope": [
+        "packages/shader-codegen-rust/src/materials/**",
+        "packages/shader-codegen-rust/src/reference.rs",
+        "packages/shader/src/generated/**",
+        "hosts/ios/ProteusHost/runtime/generated-materials.swift",
+        "hosts/harmony/host-app/proteus_render/src/main/cpp/generated_materials_spirv.h",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/GeneratedMaterials.java"
+      ],
+      "decision": 1019,
+      "verification": "真机终版：亮条 255/胶囊 237.0 恒定（Δ18=ios Δ18）· 暗条 24.4/胶囊 58.0 恒定（Δ34=ios Δ34）（.workbuddy/salvage/liquid-glass/contrast-1016/{light,dark}-1019.png）&& bash hosts/ios/check-glass-pixel-parity.sh（四态 max 1/255）&& npx vitest run tests/glass.test.ts tests/glass-ir.test.ts && pnpm check:shader-generated",
+      "branch": null,
+      "related": [
+        "T-glass-white-plus",
+        "T-glass-luminal-2state"
+      ],
+      "note": "【由来】用户「胶囊和玻璃条差异度太低了…亮底胶囊也近乎全白了…白底胶囊不能和玻璃条一样白」。\n【取证】iOS 双态胶囊平直（236/58 恒定）；我们边缘 252（中心 236→+16 梯度）⇒ 感知≈244、与条差 Δ19→Δ11。\n【根因】碗形边缘带 span=79px 覆盖胶囊全高（半高 72px）；#1018 只门控了\"白端+2%\"、碗形本体 +4% 仍作用。\n【修】整个碗形门控到外层（nest>2.5 平直）；胶囊经复合帧采样继承条白度≈236。\n【★教训】\"差异度不够\"先量\"感知面值\"（大部分区域）而非中心值；跨层效果要整层门控（遗漏=部分参数忘了）。\n【诚实边界】碗形保留在条上（彩色内容 #1006 保留）；iOS/鸿蒙未接。"
     }
   ]
 }
