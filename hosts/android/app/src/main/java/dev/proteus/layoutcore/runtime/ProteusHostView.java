@@ -3422,7 +3422,7 @@ public class ProteusHostView extends ViewGroup {
     private void drawGlassFaceAt(Canvas canvas, int nodeId, GlassMaterial.Spec spec, float ox, float oy, float w, float h,
                                  android.graphics.Bitmap sampling, float bdX, float bdY, float divX, float divY, float nest, float bgOv) {
         if (w <= 0 || h <= 0) return;
-        final float nodePress = (nodeId == glassIx.nodeId || glassIx.pressSubtree.contains(nodeId)) ? glassIx.press : 0f;
+        final float nodePress = glassIx.effPress(nodeId);   // ★#1032：press ∨ flow-lift（流动起跳膨胀/透明）
         final boolean inPressGroup = (nodeId == glassIx.nodeId) || glassIx.pressSubtree.contains(nodeId);
         final boolean touchApplies = inPressGroup && glassIx.touchAbsX > -1e5f;
         final float qtx = touchApplies ? glassIx.touchAbsX - ox : -1e6f;
@@ -3491,7 +3491,7 @@ public class ProteusHostView extends ViewGroup {
     private void drawGlassFace(Canvas canvas, int nodeId, Cmd c, GlassMaterial.Spec spec, float bx, float by, float bw, float bh,
                                android.graphics.Bitmap sampling, float nest, float bgOv) {
         if (bw <= 0 || bh <= 0) return;
-        final float nodePress = (nodeId == glassIx.nodeId || glassIx.pressSubtree.contains(nodeId)) ? glassIx.press : 0f;
+        final float nodePress = glassIx.effPress(nodeId);   // ★#1032：press ∨ flow-lift（流动起跳膨胀/透明）
         // ★#966/#969：触点在**本盒（可能已缩放）坐标空间**的局部位置——**按下组内的每一块玻璃**（命中玻璃=条 与
         //   其子树内玻璃=选中胶囊）**都在同一触点处外凸**（iOS 的 flex 是整个玻璃面在触点处鼓起，不只胶囊）。
         //   ★`glassIx.touchAbsX` 与盒 x 同空间；按 #961 缩放后 `bx` 已变 ⇒ 必须用绝对值减 `bx`。
