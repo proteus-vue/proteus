@@ -169,6 +169,9 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     let mut bsig = (p.blur * 0.16f32).clamp(0.0, 8.0);
     if p.nest > 1.5 { bsig = (p.blur * 0.07f32).clamp(0.0, 8.0); }   // ★#1007：0.08→0.07
     if p.nest > 2.5 { bsig = (p.blur * 0.04f32).clamp(0.0, 8.0); }
+    // ★★★决策 #1012：模糊按 e 键控（贴边锐/中腹糊——iOS 实证贴边带细节保留 85-93%；与 glass.wgsl 同源）。
+    let blur_k = smoothstep(0.05, 0.35, e);
+    bsig = bsig * blur_k;
     let taps: [(f32, f32); 9] = [
         (0.0, 0.0),
         (bsig, 0.0), (-bsig, 0.0), (0.0, bsig), (0.0, -bsig),
@@ -178,7 +181,9 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     let s5 = |px: f32, py: f32| backdrop.sample_map(to_tex((px, py)));
     // ★★★决策 #972/#976：按下透镜的「边缘色散」（RGB 沿法线差异化偏移）——与 glass.wgsl 同源。
     // ★#999：静止基线 0.35（边缘一圈色散，对齐 iOS）
-    let disp = (0.35 + 0.65 * pr_ov) * (1.0 - e) * (band * 0.30).min(6.0);
+    // ★★★决策 #1011：色散收窄到外缘极窄环（消「条内文字彩虹」；与 glass.wgsl 同源）。
+    let disp_rim = 1.0 - smoothstep(0.0, 0.035, e);
+    let disp = (0.35 + 0.65 * pr_ov) * disp_rim * (band * 0.015).min(1.0);
     let mut col = [0.0f32; 4];
     let mut ac_r = 0.0f32;
     let mut ac_b = 0.0f32;

@@ -639,6 +639,27 @@
       "note": "【由来】用户「完了，折射和边缘反射都消失了」（#1009 上线后）。\n【#1009 诊断错误】「(1-e)^3 非单调⇒折叠」漏符号：bend'<0 ⇒ s'=1-bend'>0 恒成立（数值 s'(0)=3.63 全程正）⇒ 处处单调无折叠。\n【真相】d<22.5px 带内 s<0 ⇒ 采条外上方内容（-66..0px 压缩 3.6×）= #998 边缘镜像反射本体（信号不是 bug）。\n【恢复】剖面回 (1-e)^3、ER 回 1.20；保留 #1006 碗形、#1007/#1008 面纱。\n【★教训】折叠判据必须带方向（s'<0 才是折叠）；外部报告的「现象」可采信、「归因」必须数学复核；探针「额外结构」先问是不是本来就该采进来。\n【诚实边界】条内可读性与倒影强度是同一位移场两面（备选 ER 0.6-1.2 目视定夺）；iOS/鸿蒙未接。"
     },
     {
+      "id": "T-glass-rainbow-blurk",
+      "title": "彩虹收窄（色散贴边环）+ 模糊按离边距离键控（贴边锐/中腹糊）——对齐 iOS「干净利落吸入」",
+      "type": "capability",
+      "status": "done",
+      "owner": "session:zcode-glassblur",
+      "scope": [
+        "packages/shader-codegen-rust/src/materials/**",
+        "packages/shader-codegen-rust/src/reference.rs",
+        "packages/shader/src/generated/**",
+        "hosts/harmony/host-app/**"
+      ],
+      "decision": 1012,
+      "verification": "oracle 刻度尺探针（折叠保留 [3,60,80,101,127,148]）&& 文字探针（|R-B| 33→0）&& bash hosts/ios/check-glass-pixel-parity.sh（四态 max 1/255）&& 真机：贴边带碎片结构可见、灰度区彩边中位 2",
+      "branch": null,
+      "related": [
+        "T-glass-refract-restore",
+        "T-glass-bowl-fold"
+      ],
+      "note": "【由来】用户「为什么我们的这些地方都有彩虹？」+「iOS 非常干净利落的文字吸进去…两行一模一样的分身、不是反向倒影」。\n【#1011 彩虹】色散 (1−e) 因子横跨近半条（2.1px/通道）⇒ 字形边缘全彩（|R-B| 中位33/最大75）；修=贴边极窄环（disp_rim=1−smoothstep(0,0.035,e)，≤1px/通道）⇒ |R-B|→0-2。\n【#1012 吸入清晰度】三项取证：NCC 假说检验（iOS 贴边带=条内 80px 翻转压缩 r=+0.80）+ 单线探针（我们 q=+60→y=3 副本+y=60 真身，机制同构）+ workbuddy 逐帧（iOS 贴边保留 85-93%/中腹 12-18%）⇒ 差异在清晰度分布；修=blur_k=smoothstep(0.05,0.35,e)（贴边不糊/中腹全糊），探针复验 75% vs 50%。\n【★教训】模糊不是单一 σ、是沿边缘的距离函数；用户「不是反向倒影」翻译成映射命题再验证（NCC 一测即分）。\n【诚实边界】端帽 4-8px 色散未做；贴边过锐可调 blur_k 起点；iOS/鸿蒙未接。"
+    },
+    {
       "id": "T-glass-ios-remaining",
       "title": "液态玻璃对齐 iOS · 剩余项：折射顺序(先保高频再位移) / 亮度→alpha 调制 / 标签贴底缘（wb 真机诊断 #5/#7 + 第十块结论；①blur 已收口至 T-glass-ios-blur）",
       "type": "capability",
