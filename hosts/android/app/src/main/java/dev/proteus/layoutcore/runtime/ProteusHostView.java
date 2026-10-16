@@ -3564,7 +3564,7 @@ public class ProteusHostView extends ViewGroup {
         if (ids == null) return;
         // ★#960：**整块放大**（对齐 iOS）——按下玻璃（多为条）时，**它子树里的所有玻璃**（如选中胶囊）都要
         //   绕**同一中心**（按下玻璃的盒中心）等比缩放，否则"条放大、胶囊不动"（真机实测：用户「条有缩放、胶囊没变化」）。
-        Cmd pressBox = null;
+        Cmd pressBox = null, flowCapCmd = null;   // ★#1035：flow 胶囊 Cmd（内容放大/跟随与长按同款）
         java.util.Set<Integer> pressSubtree = java.util.Collections.emptySet();
         if (glassIx.nodeId >= 0 && glassIx.press > 0.001f && ids != null) {
             for (int k = 0; k < list.size() && k < ids.length; k++) {
@@ -3618,13 +3618,14 @@ public class ProteusHostView extends ViewGroup {
             // ★★★决策 #959：**按下放大**（对齐 iOS）——命中交互玻璃且 press>0 ⇒ 以盒中心等比放大（松开 lerp 回 1）。
             // ★#963：按下 ⇒ **放大盒**（不走 canvas.scale）——绕按下玻璃中心，让 shader 采样一致、玻璃光学保持。
             // ★#965：**每个玻璃绕自身中心缩放**（胶囊在**原位**弹出、不横向移位）；条系数=0 ⇒ 条完全静止。
-            final boolean inPress = (pressBox != null && pressSubtree.contains(ids[i])) || glassIx.isFlowNode(ids[i]);   // ★#1030：流动胶囊也走形变盒
+            // ★#1030/#1035：流动胶囊也走形变盒（内容/形态与长按同款）
+            final boolean isFlow = glassIx.isFlowNode(ids[i]), inPress = (pressBox != null && pressSubtree.contains(ids[i])) || isFlow;
             float bx = gc.x, by = gc.y, bw = gc.w, bh = gc.h;
             if (inPress) {
-                // ★#971：**条静止**（k=0）；**胶囊纵向鼓起**（垂直 1.55×、横向 1.14×）⇒ 透镜从条里鼓出、溢出条外。
-                //   （旧版等比 1.3× 的观感是"整块变白"，非 iOS 的"透镜鼓出"。）
-                final boolean isCapsule = (pressInner != null && ids[i] != glassIx.nodeId) || glassIx.isFlowNode(ids[i]);
+                // ★#971/#1033：**条静止**；**胶囊纵向鼓起**（垂直 1.30×、横向 1.00×）⇒ 透镜从条里鼓出、溢出条外。
+                final boolean isCapsule = (pressInner != null && ids[i] != glassIx.nodeId) || isFlow;
                 if (isCapsule) {
+                    if (isFlow) flowCapCmd = gc;   // ★#1035：记 flow 胶囊盒（内容段按 bpos 跟随）
                     // ★#1023/#1024：按压膨胀 + 拖拽跟手 + 速度驱动液滴变形（见 GlassInteraction.capsuleBox）。
                     final float[] cb = glassIx.capsuleBox(gc);
                     bx = cb[0]; by = cb[1]; bw = cb[2]; bh = cb[3];
@@ -3659,17 +3660,16 @@ public class ProteusHostView extends ViewGroup {
         //     `drawCmds` **内部**按节点做），故缩放中心须用 **content 坐标 = 屏幕中心 + scroll**（此前直接用
         //     屏幕坐标 ⇒ 滚动后中心偏 scrollY ⇒ 内容被推下去）。
         //   ★条小/胶囊大：落在**胶囊 x 范围**内的内容用胶囊系数，其余用条系数（分三段裁剪画）。
-        if (pressInner != null && glassIx.press > 0.001f && !gContent.isEmpty()) {
-            // ★#971：**只缩放胶囊 x 范围的内容**（绕**胶囊自身中心**）——其余 tab 不缩放（条静止）。
-            //   内容缩放与胶囊盒缩放**不同**：iOS 实测 icon ≈1.2×（近似等比、横向略多），
-            //   而不是跟着盒的 1.55× 纵向拉伸（那会把文字拉长）。
-            // ★#1023：内容缩放区中心**跟随 lens 拖动**（与胶囊面同一偏移——拖动时"放大镜"下的内容同步移动）。
-            final float ccx = pressInner.x + pressInner.w * 0.5f + glassIx.dragAppliedDx + (gScrolled ? scrollX : 0);
-            final float ccy = pressInner.y + pressInner.h * 0.5f + (gScrolled ? scrollY : 0);
-            final float sCapX = 1f + glassIx.press * GlassInteraction.PRESS_CONTENT_SCALE_X;
-            final float sCapY = 1f + glassIx.press * GlassInteraction.PRESS_CONTENT_SCALE_Y;
-            final float capL = ccx - pressInner.w * 0.5f * sCapX - 4f;
-            final float capR = ccx + pressInner.w * 0.5f * sCapX + 4f;
+        // ★#1035：内容放大/跟随按 **effPress 门控**（flow 用 lift）——此前只认物理 press ⇒ flow 全程不放大不跟随 = 割裂。
+        final float capP = Math.max(glassIx.press, glassIx.lift()); final Cmd capCmd = (pressInner != null && glassIx.press > 0.001f) ? pressInner : flowCapCmd;
+        if (capCmd != null && capP > 0.001f && !gContent.isEmpty()) {
+            // ★#971/#1023：**只缩放胶囊 x 范围的内容**（绕胶囊中心，中心跟随 lens——"放大镜"下内容同步移动）；≈1.2× 等比。
+            final float ccx = capCmd.x + capCmd.w * 0.5f + glassIx.dragAppliedDx + (gScrolled ? scrollX : 0);
+            final float ccy = capCmd.y + capCmd.h * 0.5f + (gScrolled ? scrollY : 0);
+            final float sCapX = 1f + capP * GlassInteraction.PRESS_CONTENT_SCALE_X;
+            final float sCapY = 1f + capP * GlassInteraction.PRESS_CONTENT_SCALE_Y;
+            final float capL = ccx - capCmd.w * 0.5f * sCapX - 4f;
+            final float capR = ccx + capCmd.w * 0.5f * sCapX + 4f;
             final float top = -1e6f, bot = 1e6f;
             int sv1 = canvas.save(); canvas.clipRect(top, top, capL, bot); drawCmds(canvas, null, gContent); canvas.restoreToCount(sv1);
             int sv2 = canvas.save(); canvas.clipRect(capL, top, capR, bot); canvas.scale(sCapX, sCapY, ccx, ccy); drawCmds(canvas, null, gContent); canvas.restoreToCount(sv2);

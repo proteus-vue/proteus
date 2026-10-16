@@ -52,6 +52,12 @@ final class GlassInteraction {
     //   @120Hz 到站(±10px) 8 帧 ≈67ms · 全收敛 15 帧 ≈125ms（LAG_K/LAG_C 保持不动——只服务手指拖动）。
     private static final float FLOW_K = 0.35f;
     private static final float FLOW_C = 1.00f;
+    // ★★★决策 #1035（用户「点击切换的玻璃形态不是长按拖动的玻璃形态……正常点击切换就是长按那种的
+    //   膨胀流动然后自然恢复为静态胶囊」）：**点击=长按同款形态序列**——① 起跳相位（原地膨胀 FLOW_POP 帧，
+    //   速度=0 ⇒ 零形变 = 圆润水滴，对齐 iOS 原片 f0538）；② 飞行形变=**纯质心速度驱动小量**
+    //   （iOS 原片 f0542：气泡保持大水滴、宽 ~1.0-1.1×、高不压扁——不是 #1030"剩余行程当滞后"的扁饼）；
+    //   ③ 落地照旧收回。系数带 distK 梯度（跨步越大形变略大——#1030"越大越扁长"的小量版）。
+    private static final int FLOW_POP = 3;   // 起跳相位帧数（≈25-50ms：原地膨胀完再起飞）
     /** 拖动超阈标志（释放重定向 tap 的触发条件之一）。 */
     boolean dragMoved = false;
     /** 本手势期间 GestureDetector 是否已判 scroll（判过不会再发 tap ⇒ 释放重定向只在此时兜底派发）。 */
@@ -86,12 +92,13 @@ final class GlassInteraction {
 
     // ★★★决策 #1030（用户「点击切换时也会自然流动，选项跨步越大流动形态越扁平形变越大」+ iOS 20:04 录屏
     //   59fps 取证：点击后胶囊从旧槽**拖出液态尾巴**滑到新槽（拉丝延伸 ~48px / ~90ms），跨步越大越扁长）：
-    //   **点击流动 = 复用 #1026 质心动力学的积分器**（★#1034：参数独立为 FLOW_K/FLOW_C，不借拖动弹簧）——tap 时捕获胶囊**视觉位**（基位 + 拖拽偏移），JS 改 hlLeft 后
+    //   **点击流动 = 复用 #1026 质心动力学的积分器**（★#1034：参数独立为 FLOW_K/FLOW_C；★#1035：起跳相位
+    //   FLOW_POP + 形变只由质心速度驱动）——tap 时捕获胶囊**视觉位**（基位 + 拖拽偏移），JS 改 hlLeft 后
     //   把位移差作为**初始偏移**注入弹簧（bpos=Δ），弹簧把 lens 从旧位滑到新位；速度/滞后自动驱动
     //   拉伸/压扁/锥化 ⇒ 跨步越大峰值速度越高 + 上限按距离抬升（越大越扁）。
     //   ★与拖动的区别：无按压膨胀（press≡0）、无触点/无跟手——是"自走"的一次流体迁移。
     private boolean flowActive = false, flowPending = false;
-    private int flowNode = -1;
+    private int flowNode = -1, flowPop = 0;   // ★#1035：起跳相位剩余帧（>0 时 bpos 冻结在原地膨胀）
     private float flowFrom = 0f, flowOldVisual = 0f;
 
     /** 命中判定：该节点正是**流动中的胶囊**（宿主 drawGlassPass 据此走 capsuleBox 形变路径）。 */
@@ -153,7 +160,7 @@ final class GlassInteraction {
             final float delta = flowOldVisual - (c.x + c.w * 0.5f);
             if (Math.abs(delta) > 6f) {
                 flowActive = true; flowFrom = delta; bpos = delta; dragTarget = 0f; lift = 0.22f;
-                bvel = -Math.signum(delta);   // 初速给对方向（首帧锥化不反向）
+                bvel = 0f; flowPop = FLOW_POP;   // ★#1035：静止起步 + 起跳相位（原地膨胀完再飞）
             }
             return;
         }
@@ -182,7 +189,7 @@ final class GlassInteraction {
                 dragStartX = hx;
                 dragTarget = 0f; dragDx = 0f; dragAppliedDx = 0f; dragMoved = false;
                 lastDragTarget = 0f; velSmooth = 0f; bpos = 0f; bvel = 0f;   // 新手势 ⇒ 动力学归零（防上轮残留瞬跳）
-                flowActive = false; flowPending = false; lift = 0f;   // ★#1030/#1032：按下即接管（清点击流动 + lift）
+                flowActive = false; flowPending = false; lift = 0f; flowPop = 0;   // ★#1030/#1032：按下即接管（清点击流动 + lift）
                 pressTarget = 1f;
                 if (press < 0.01f) press = 0.01f;   // 立即起步（避免首帧无变化）
                 return true;
@@ -236,16 +243,20 @@ final class GlassInteraction {
         // ★#1030：点击流动——质心弹簧滑向新槽位（积分器结构与 #1026 同源；未收敛即持续排帧）。
         //   ★#1034：弹簧参数改用 **FLOW_K/FLOW_C**（拖动 ζ=0.35 只留给手指驱动）——见常量处注解。
         if (flowActive) {
-            bvel += (0f - bpos) * FLOW_K - bvel * FLOW_C;
-            bpos += bvel;
+            // ★#1035：起跳相位——bpos 冻结旧视觉位、bvel=0（与长按起跳同形态：速度 0 ⇒ 零形变圆润水滴）。
+            if (flowPop > 0) {
+                flowPop--;
+            } else {
+                bvel += (0f - bpos) * FLOW_K - bvel * FLOW_C;
+                bpos += bvel;
+            }
             need = true;
             // ★#1032 订正：lift 目标按**剩余行程**（>18% ⇒ 1 透明；≤18% ⇒ 0 收回）——起跳快升、靠站收回，
             //   落地时已是灰色胶囊（旧版只升不降 ⇒ 落地仍全透明，与 iOS"到站即归位"不符）。
-            //   ★#1034：升速 0.30→0.45——新弹簧 ~4 帧即到站（旧 ~13 帧），升速要跟上才能到站前达 ~0.93 透明；
-            //   降速 0.24 保留不动（@120Hz ≈140ms，与 iOS 落地收回一致，已验收）。
+            //   ★#1034/#1035：升速 0.50——pop 3 帧内到 ~0.90 再起飞；降速 0.24（@120Hz ≈140ms，已验收）。
             final float remain = Math.abs(bpos) / Math.max(Math.abs(flowFrom), 1f);
             final float liftT = remain > 0.18f ? 1f : 0f;
-            lift += (liftT - lift) * (liftT > lift ? 0.45f : 0.24f);
+            lift += (liftT - lift) * (liftT > lift ? 0.50f : 0.24f);
             if (Math.abs(bpos) < 0.5f && Math.abs(bvel) < 0.3f) { flowActive = false; bpos = 0f; bvel = 0f; }
         }
         // ★#1032：落地收回——flow 结束（bpos 收敛）后 lift 衰减 ⇒ 透明玻璃收成灰色胶囊。
@@ -337,13 +348,15 @@ final class GlassInteraction {
         //   #1026 起速度取 **max(手指 EMA, 质心速度)**（急停后手指停但质心仍在冲 ⇒ 畸形保持到回收期）。
         final float sp = Math.min(Math.max(Math.abs(velSmooth), Math.abs(bvel)), VEL_CAP);
         final float lagPx = dragTarget - bpos;   // >0=手指在前（拖动中）/ <0=质心越过手指（前冲相位）
-        // ★#1030：点击流动——强度 max(press, flow)；★跨步越大上限越高（"越大越扁长"的量化口径：以 1 格 252px 为基准）。
         final float pressI = Math.max(press, lift);   // ★#1032：形变强度随 lift 包络（起跳渐入/落地渐出）
-        final float distK = Math.abs(flowFrom) / 252f;
-        final float sMax = flowActive ? Math.min(0.45f, 0.24f + distK * 0.12f) : STRETCH_MAX;
-        final float fMax = flowActive ? Math.min(0.24f, 0.12f + distK * 0.06f) : FLATTEN_MAX;
-        final float stretch = Math.min(sMax, sp * 0.024f + Math.abs(lagPx) * 0.008f) * pressI;
-        final float flatten = Math.min(fMax, sp * 0.012f) * pressI;
+        // ★#1035：flow 形变=**纯质心速度驱动的小量**（旧版"剩余行程当 lagPx"⇒ 起跳瞬间恒满拉伸 = 扁饼，
+        //   与长按形态割裂的根源；lagPx 语义只属拖动）。distK 给跨步梯度（≤3 格），上限沿用拖动同款常量。
+        final float distK = flowActive ? Math.min(Math.abs(flowFrom) / 252f, 3f) : 0f;
+        final float strRaw = flowActive ? sp * (0.0018f + distK * 0.0005f)
+                : sp * 0.024f + Math.abs(lagPx) * 0.008f;
+        final float fltRaw = flowActive ? sp * (0.0009f + distK * 0.0003f) : sp * 0.012f;
+        final float stretch = Math.min(STRETCH_MAX, strRaw) * pressI;
+        final float flatten = Math.min(FLATTEN_MAX, fltRaw) * pressI;
         if (stretch > 0.001f) {
             final float extraW = bw * stretch;
             // 方向：优先用质心速度（前冲相位仍朝原方向）；都小时退化不敏感
@@ -360,8 +373,10 @@ final class GlassInteraction {
         //   （质心被拉回），若直取 bvel 会把滴尖瞬间换端；velSmooth 衰减后用 bvel（回收相位滴尖随实际运动）。
         final float dirT = Math.abs(velSmooth) > 0.5f ? velSmooth
                 : (Math.abs(bvel) > Math.abs(velSmooth) ? bvel : velSmooth);
-        shapeTaper = Math.min(0.42f, sp * 0.010f + Math.abs(lagPx) * 0.002f) * pressI * (dirT >= 0f ? 1f : -1f);
-        if (debug && stretch > 0.01f) {
+        final float tapRaw = flowActive ? sp * (0.0013f + distK * 0.0004f)
+                : sp * 0.010f + Math.abs(lagPx) * 0.002f;
+        shapeTaper = Math.min(0.42f, tapRaw) * pressI * (dirT >= 0f ? 1f : -1f);
+        if (debug && (stretch > 0.01f || (flowActive && Math.abs(bpos) > 1f))) {   // ★#1035：起跳相位（stretch=0）也可取证
             android.util.Log.i("proteus-glass", "GLASSSTRETCH vel=" + String.format("%.1f", velSmooth)
                     + " bvel=" + String.format("%.1f", bvel) + " lag=" + String.format("%.1f", lagPx)
                     + " stretch=" + String.format("%.3f", stretch) + " flatten=" + String.format("%.3f", flatten)
