@@ -169,15 +169,14 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     let mut bsig = (p.blur * 0.16f32).clamp(0.0, 8.0);
     if p.nest > 1.5 { bsig = (p.blur * 0.07f32).clamp(0.0, 8.0); }   // ★#1007：0.08→0.07
     if p.nest > 2.5 { bsig = (p.blur * 0.04f32).clamp(0.0, 8.0); }
-    // ★★★决策 #1012：模糊按 e 键控（贴边锐/中腹糊——iOS 实证贴边带细节保留 85-93%；与 glass.wgsl 同源）。
-    let blur_k = smoothstep(0.05, 0.35, e);
+    // ★★★决策 #1012/#1013：模糊按 e 键控 + 折叠带反走样下限 0.80（MTF 核算：σ≈2.2px 对 4.4px 拍频图案
+    //   MTF=0.008 ⇒ 网纹不可见；与 glass.wgsl 同源）。
+    let blur_k = 0.80 + (1.0 - 0.80) * smoothstep(0.05, 0.35, e);
     bsig = bsig * blur_k;
-    let taps: [(f32, f32); 9] = [
-        (0.0, 0.0),
-        (bsig, 0.0), (-bsig, 0.0), (0.0, bsig), (0.0, -bsig),
-        (bsig, bsig), (bsig, -bsig), (-bsig, -bsig), (-bsig, bsig),
-    ];
-    let wts: [f32; 9] = [0.25, 0.125, 0.125, 0.125, 0.125, 0.0625, 0.0625, 0.0625, 0.0625];
+    // ★★★决策 #1014：**9-tap → 25-tap（5×5 二项式，等 σ）**——与 glass.wgsl 同源（消采样格/笔画拍频摩尔纹）。
+    //   1D 权重 [1,4,6,4,1]/16，格距 s25 = bsig·√0.5（方差守恒：5×5 二项式 1D 方差 = 2·s25² = bsig²）。
+    let w5: [f32; 5] = [0.0625, 0.25, 0.375, 0.25, 0.0625];
+    let s25 = bsig * 0.7071;
     let s5 = |px: f32, py: f32| backdrop.sample_map(to_tex((px, py)));
     // ★★★决策 #972/#976：按下透镜的「边缘色散」（RGB 沿法线差异化偏移）——与 glass.wgsl 同源。
     // ★#999：静止基线 0.35（边缘一圈色散，对齐 iOS）
@@ -187,15 +186,20 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     let mut col = [0.0f32; 4];
     let mut ac_r = 0.0f32;
     let mut ac_b = 0.0f32;
-    for i in 0..9 {
-        let base = s5(sp_l.0 + taps[i].0, sp_l.1 + taps[i].1);
-        let sr = s5(sp_l.0 + n.0 * disp + taps[i].0, sp_l.1 + n.1 * disp + taps[i].1);
-        let sb = s5(sp_l.0 - n.0 * disp + taps[i].0, sp_l.1 - n.1 * disp + taps[i].1);
-        for c in 0..4 {
-            col[c] += base[c] * wts[i];
+    for i in 0..5 {
+        for j in 0..5 {
+            let ox = (i as f32 - 2.0) * s25;
+            let oy = (j as f32 - 2.0) * s25;
+            let wgt = w5[i] * w5[j];
+            let base = s5(sp_l.0 + ox, sp_l.1 + oy);
+            let sr = s5(sp_l.0 + n.0 * disp + ox, sp_l.1 + n.1 * disp + oy);
+            let sb = s5(sp_l.0 - n.0 * disp + ox, sp_l.1 - n.1 * disp + oy);
+            for c in 0..4 {
+                col[c] += base[c] * wgt;
+            }
+            ac_r += sr[0] * wgt;
+            ac_b += sb[2] * wgt;
         }
-        ac_r += sr[0] * wts[i];
-        ac_b += sb[2] * wts[i];
     }
     col[0] = ac_r;
     col[2] = ac_b;

@@ -223,14 +223,19 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     //   **模糊按 e 键控**——iOS 实证（workbuddy v2/video 逐帧）：**贴边折射带细节保留 85–93%**
     //   （压缩但成形）、**只有中腹重糊**（对比残留 12–18%）。我们此前模糊**全局**（9-tap 不分位置）⇒
     //   贴边带的折叠副本（= 用户看到的"文字分身"）也被糊掉 ⇒ 读不出来（"差异"的机制本体）。
-    //   ⇒ 模糊强度乘 e-键控：贴边（e<0.05 ≈ 3.8px）不糊 / 中腹（e>0.35 ≈ 26px）全糊（平滑过渡）。
+    //   ⇒ 模糊强度乘 e-键控：贴边不糊 / 中腹全糊（平滑过渡）。
     //   ★副验：NCC 假说检验（iOS 15:27 截图）贴边带 = 条内 80px 内容翻转压缩（r=+0.80）——
     //     与我们的折叠机制同构（单线探针 q=+60 → 输出 y=3 副本 + y=60 真身），差异只在**清晰度**。
-    let blur_k = smoothstep(0.05, 0.35, e);
+    //   ★★★决策 #1013 订正（用户「获取的映射感觉有点儿脏」+ 本会话离线复现）：**贴边必须保留反走样下限**——
+    //     纯零模糊（blur_k→0）在折叠压缩区**欠采样**：贴边带把 66px 内容压进 ~34px（压缩比 s'=3.64）⇒
+    //     需要 ≈1.3px 过滤（Nyquist），blur_k=0 时高频内容被压成**摩尔纹/织纹**（用户截图的"格纹"）。
+    //   ★★★决策 #1013 订正2（用户「获取的映射感觉有点儿脏」+ MTF 核算 + 真机素材入 oracle 复现）：
+    //     **下限 0.45（σ≈1.2px）不足以压制折叠带拍频**——折叠带把源内容压缩 ~3.6×（16px 笔格 → ~4.4px），
+    //     25-tap 采样格（1.93px）与 4.4px 周期拍频 ⇒ 网纹。MTF 核算（对 4.4px 图案）：σ=1.23 → 0.215（可见）/
+    //     σ=2.18 → **0.008（不可见）**。iOS 的折叠带鬼影实测是**软而干净**（不是锐）⇒ 下限 **0.80**（σ≈2.2px）。
+    let blur_k = mix(0.80, 1.0, smoothstep(0.05, 0.35, e));
     bsig = bsig * blur_k;
-    let bdx = vec2<f32>(bsig, 0.0);
-    let bdy = vec2<f32>(0.0, bsig);
-    let bdd = vec2<f32>(bsig, bsig);
+    // （bdx/bdy/bdd 已由 #1014 的 25-tap 循环取代——不再使用）
     // ★★★决策 #972/#976：**按下透镜的「边缘色散」**（RGB 沿法线差异化偏移）——对齐 iOS 透镜边缘虹彩。
     //   门控 `pr_ov`；`e` 大处=中心 ⇒ 0 ⇒ 只体现在**边缘带**；★#976 幅度加大到可感知。
     // ★★★决策 #1011（用户「为什么我们的这些地方都有彩虹？iOS 肉眼上看没有，非常干净的文字」）：
@@ -245,33 +250,97 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     let disp = mix(0.35, 1.0, pr_ov) * disp_rim * min(band * 0.015, 1.0);
     let dR = n * disp;
     let dB = n * (-disp);
-    var acc = sample_backdrop(spL / u.size_px) * 0.25;
-    var acR = sample_backdrop((spL + dR) / u.size_px) * 0.25;
-    var acB = sample_backdrop((spL + dB) / u.size_px) * 0.25;
-    acc = acc + (sample_backdrop((spL + bdx) / u.size_px)
-               + sample_backdrop((spL - bdx) / u.size_px)
-               + sample_backdrop((spL + bdy) / u.size_px)
-               + sample_backdrop((spL - bdy) / u.size_px)) * 0.125;
-    acR = acR + (sample_backdrop((spL + dR + bdx) / u.size_px)
-               + sample_backdrop((spL + dR - bdx) / u.size_px)
-               + sample_backdrop((spL + dR + bdy) / u.size_px)
-               + sample_backdrop((spL + dR - bdy) / u.size_px)) * 0.125;
-    acB = acB + (sample_backdrop((spL + dB + bdx) / u.size_px)
-               + sample_backdrop((spL + dB - bdx) / u.size_px)
-               + sample_backdrop((spL + dB + bdy) / u.size_px)
-               + sample_backdrop((spL + dB - bdy) / u.size_px)) * 0.125;
-    acc = acc + (sample_backdrop((spL + bdd) / u.size_px)
-               + sample_backdrop((spL + vec2<f32>(bsig, -bsig)) / u.size_px)
-               + sample_backdrop((spL - bdd) / u.size_px)
-               + sample_backdrop((spL + vec2<f32>(-bsig, bsig)) / u.size_px)) * 0.0625;
-    acR = acR + (sample_backdrop((spL + dR + bdd) / u.size_px)
-               + sample_backdrop((spL + dR + vec2<f32>(bsig, -bsig)) / u.size_px)
-               + sample_backdrop((spL + dR - bdd) / u.size_px)
-               + sample_backdrop((spL + dR + vec2<f32>(-bsig, bsig)) / u.size_px)) * 0.0625;
-    acB = acB + (sample_backdrop((spL + dB + bdd) / u.size_px)
-               + sample_backdrop((spL + dB + vec2<f32>(bsig, -bsig)) / u.size_px)
-               + sample_backdrop((spL + dB - bdd) / u.size_px)
-               + sample_backdrop((spL + dB + vec2<f32>(-bsig, bsig)) / u.size_px)) * 0.0625;
+    // ★★★决策 #1014（用户「获取的映射感觉有点儿脏」+ 本会话**真机素材入 oracle** 决定性复现）：
+    //   **9-tap → 25-tap（5×5 二项式）**——消"采样格与笔画"的**拍频摩尔纹**。
+    //   【复现】把真机截图里干净的"获取"按钮素材（156×96px）放进 oracle、在鬼影同深度(66px)渲染：
+    //     9-tap 格距 b=2.73px 与笔画宽（3–6px）拍频 ⇒ 鬼影上叠出**交叉网纹**（与用户截图的格纹同型）；
+    //     而 16px 周期的合成条纹**干净**（周期 ≫ 格距 ⇒ 无拍频）⇒ 直指**采样格密度**（非内容、非宿主）。
+    //   【修】5×5 二项式 [1,4,6,4,1]/16 ⊗ 同（**一等 σ**：1D 方差 = 格距² ⇒ 新格距 s25 = bsig·0.7071，
+    //     σ 不变）⇒ 采样格密度 ×1.41，拍频频率上移出可见区。
+    //   【成本】3×25 = 75 次 textureSample（前 27）——条盒 ~175k px、玻璃节点 1-2 块 ⇒ 可接受
+    //     （若未来要省：`textureSampleLevel`+disp 分支省 R/B 两条，非一致控制流）。
+    //   ★`u.blur=0` ⇒ 25 tap 同为一点、权重和 = 1 ⇒ 逐像素等价（零回归）不变。
+    //   ★摊开写（AGSL 不支持 while/for——naga 落地检查会拦：必须手工展开）。
+    let o1 = bsig * 0.7071;
+    let o2 = o1 * 2.0;
+    var acc = vec4<f32>(0.0);
+    var acR = vec4<f32>(0.0);
+    var acB = vec4<f32>(0.0);
+    acc = acc + sample_backdrop((spL + vec2<f32>(-o2, -o2)) / u.size_px) * 0.00390625;
+    acR = acR + sample_backdrop((spL + dR + vec2<f32>(-o2, -o2)) / u.size_px) * 0.00390625;
+    acB = acB + sample_backdrop((spL + dB + vec2<f32>(-o2, -o2)) / u.size_px) * 0.00390625;
+    acc = acc + sample_backdrop((spL + vec2<f32>(-o2, -o1)) / u.size_px) * 0.015625;
+    acR = acR + sample_backdrop((spL + dR + vec2<f32>(-o2, -o1)) / u.size_px) * 0.015625;
+    acB = acB + sample_backdrop((spL + dB + vec2<f32>(-o2, -o1)) / u.size_px) * 0.015625;
+    acc = acc + sample_backdrop((spL + vec2<f32>(-o2, 0.0)) / u.size_px) * 0.0234375;
+    acR = acR + sample_backdrop((spL + dR + vec2<f32>(-o2, 0.0)) / u.size_px) * 0.0234375;
+    acB = acB + sample_backdrop((spL + dB + vec2<f32>(-o2, 0.0)) / u.size_px) * 0.0234375;
+    acc = acc + sample_backdrop((spL + vec2<f32>(-o2, o1)) / u.size_px) * 0.015625;
+    acR = acR + sample_backdrop((spL + dR + vec2<f32>(-o2, o1)) / u.size_px) * 0.015625;
+    acB = acB + sample_backdrop((spL + dB + vec2<f32>(-o2, o1)) / u.size_px) * 0.015625;
+    acc = acc + sample_backdrop((spL + vec2<f32>(-o2, o2)) / u.size_px) * 0.00390625;
+    acR = acR + sample_backdrop((spL + dR + vec2<f32>(-o2, o2)) / u.size_px) * 0.00390625;
+    acB = acB + sample_backdrop((spL + dB + vec2<f32>(-o2, o2)) / u.size_px) * 0.00390625;
+    acc = acc + sample_backdrop((spL + vec2<f32>(-o1, -o2)) / u.size_px) * 0.015625;
+    acR = acR + sample_backdrop((spL + dR + vec2<f32>(-o1, -o2)) / u.size_px) * 0.015625;
+    acB = acB + sample_backdrop((spL + dB + vec2<f32>(-o1, -o2)) / u.size_px) * 0.015625;
+    acc = acc + sample_backdrop((spL + vec2<f32>(-o1, -o1)) / u.size_px) * 0.0625;
+    acR = acR + sample_backdrop((spL + dR + vec2<f32>(-o1, -o1)) / u.size_px) * 0.0625;
+    acB = acB + sample_backdrop((spL + dB + vec2<f32>(-o1, -o1)) / u.size_px) * 0.0625;
+    acc = acc + sample_backdrop((spL + vec2<f32>(-o1, 0.0)) / u.size_px) * 0.09375;
+    acR = acR + sample_backdrop((spL + dR + vec2<f32>(-o1, 0.0)) / u.size_px) * 0.09375;
+    acB = acB + sample_backdrop((spL + dB + vec2<f32>(-o1, 0.0)) / u.size_px) * 0.09375;
+    acc = acc + sample_backdrop((spL + vec2<f32>(-o1, o1)) / u.size_px) * 0.0625;
+    acR = acR + sample_backdrop((spL + dR + vec2<f32>(-o1, o1)) / u.size_px) * 0.0625;
+    acB = acB + sample_backdrop((spL + dB + vec2<f32>(-o1, o1)) / u.size_px) * 0.0625;
+    acc = acc + sample_backdrop((spL + vec2<f32>(-o1, o2)) / u.size_px) * 0.015625;
+    acR = acR + sample_backdrop((spL + dR + vec2<f32>(-o1, o2)) / u.size_px) * 0.015625;
+    acB = acB + sample_backdrop((spL + dB + vec2<f32>(-o1, o2)) / u.size_px) * 0.015625;
+    acc = acc + sample_backdrop((spL + vec2<f32>(0.0, -o2)) / u.size_px) * 0.0234375;
+    acR = acR + sample_backdrop((spL + dR + vec2<f32>(0.0, -o2)) / u.size_px) * 0.0234375;
+    acB = acB + sample_backdrop((spL + dB + vec2<f32>(0.0, -o2)) / u.size_px) * 0.0234375;
+    acc = acc + sample_backdrop((spL + vec2<f32>(0.0, -o1)) / u.size_px) * 0.09375;
+    acR = acR + sample_backdrop((spL + dR + vec2<f32>(0.0, -o1)) / u.size_px) * 0.09375;
+    acB = acB + sample_backdrop((spL + dB + vec2<f32>(0.0, -o1)) / u.size_px) * 0.09375;
+    acc = acc + sample_backdrop((spL + vec2<f32>(0.0, 0.0)) / u.size_px) * 0.140625;
+    acR = acR + sample_backdrop((spL + dR + vec2<f32>(0.0, 0.0)) / u.size_px) * 0.140625;
+    acB = acB + sample_backdrop((spL + dB + vec2<f32>(0.0, 0.0)) / u.size_px) * 0.140625;
+    acc = acc + sample_backdrop((spL + vec2<f32>(0.0, o1)) / u.size_px) * 0.09375;
+    acR = acR + sample_backdrop((spL + dR + vec2<f32>(0.0, o1)) / u.size_px) * 0.09375;
+    acB = acB + sample_backdrop((spL + dB + vec2<f32>(0.0, o1)) / u.size_px) * 0.09375;
+    acc = acc + sample_backdrop((spL + vec2<f32>(0.0, o2)) / u.size_px) * 0.0234375;
+    acR = acR + sample_backdrop((spL + dR + vec2<f32>(0.0, o2)) / u.size_px) * 0.0234375;
+    acB = acB + sample_backdrop((spL + dB + vec2<f32>(0.0, o2)) / u.size_px) * 0.0234375;
+    acc = acc + sample_backdrop((spL + vec2<f32>(o1, -o2)) / u.size_px) * 0.015625;
+    acR = acR + sample_backdrop((spL + dR + vec2<f32>(o1, -o2)) / u.size_px) * 0.015625;
+    acB = acB + sample_backdrop((spL + dB + vec2<f32>(o1, -o2)) / u.size_px) * 0.015625;
+    acc = acc + sample_backdrop((spL + vec2<f32>(o1, -o1)) / u.size_px) * 0.0625;
+    acR = acR + sample_backdrop((spL + dR + vec2<f32>(o1, -o1)) / u.size_px) * 0.0625;
+    acB = acB + sample_backdrop((spL + dB + vec2<f32>(o1, -o1)) / u.size_px) * 0.0625;
+    acc = acc + sample_backdrop((spL + vec2<f32>(o1, 0.0)) / u.size_px) * 0.09375;
+    acR = acR + sample_backdrop((spL + dR + vec2<f32>(o1, 0.0)) / u.size_px) * 0.09375;
+    acB = acB + sample_backdrop((spL + dB + vec2<f32>(o1, 0.0)) / u.size_px) * 0.09375;
+    acc = acc + sample_backdrop((spL + vec2<f32>(o1, o1)) / u.size_px) * 0.0625;
+    acR = acR + sample_backdrop((spL + dR + vec2<f32>(o1, o1)) / u.size_px) * 0.0625;
+    acB = acB + sample_backdrop((spL + dB + vec2<f32>(o1, o1)) / u.size_px) * 0.0625;
+    acc = acc + sample_backdrop((spL + vec2<f32>(o1, o2)) / u.size_px) * 0.015625;
+    acR = acR + sample_backdrop((spL + dR + vec2<f32>(o1, o2)) / u.size_px) * 0.015625;
+    acB = acB + sample_backdrop((spL + dB + vec2<f32>(o1, o2)) / u.size_px) * 0.015625;
+    acc = acc + sample_backdrop((spL + vec2<f32>(o2, -o2)) / u.size_px) * 0.00390625;
+    acR = acR + sample_backdrop((spL + dR + vec2<f32>(o2, -o2)) / u.size_px) * 0.00390625;
+    acB = acB + sample_backdrop((spL + dB + vec2<f32>(o2, -o2)) / u.size_px) * 0.00390625;
+    acc = acc + sample_backdrop((spL + vec2<f32>(o2, -o1)) / u.size_px) * 0.015625;
+    acR = acR + sample_backdrop((spL + dR + vec2<f32>(o2, -o1)) / u.size_px) * 0.015625;
+    acB = acB + sample_backdrop((spL + dB + vec2<f32>(o2, -o1)) / u.size_px) * 0.015625;
+    acc = acc + sample_backdrop((spL + vec2<f32>(o2, 0.0)) / u.size_px) * 0.0234375;
+    acR = acR + sample_backdrop((spL + dR + vec2<f32>(o2, 0.0)) / u.size_px) * 0.0234375;
+    acB = acB + sample_backdrop((spL + dB + vec2<f32>(o2, 0.0)) / u.size_px) * 0.0234375;
+    acc = acc + sample_backdrop((spL + vec2<f32>(o2, o1)) / u.size_px) * 0.015625;
+    acR = acR + sample_backdrop((spL + dR + vec2<f32>(o2, o1)) / u.size_px) * 0.015625;
+    acB = acB + sample_backdrop((spL + dB + vec2<f32>(o2, o1)) / u.size_px) * 0.015625;
+    acc = acc + sample_backdrop((spL + vec2<f32>(o2, o2)) / u.size_px) * 0.00390625;
+    acR = acR + sample_backdrop((spL + dR + vec2<f32>(o2, o2)) / u.size_px) * 0.00390625;
+    acB = acB + sample_backdrop((spL + dB + vec2<f32>(o2, o2)) / u.size_px) * 0.00390625;
     acc = vec4<f32>(acR.r, acc.g, acB.b, acc.a);
     var col = acc;
 
