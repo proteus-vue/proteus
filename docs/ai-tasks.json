@@ -505,6 +505,30 @@
       "note": "【由来】承 #1002 定稿「11 项机制」落地优先级 P0（`u.blur` 声明却从未消费 = \"白底没玻璃感\"头号缺失）+ 原 T-glass-ios-remaining ①「#4 霜过重」。\n【先解历史冲突】#986 否决的是**过度**模糊（σ_eff≈9.5px 字形糊没，格距 u.blur·0.30），非\"有模糊\"——独立复测 f0060 同帧同字跨条缘（条外 Δ175-190 → 条内 Δ5-8；仅面纱应残留 Δ26）⇒ 必须有强低通；取 σ_eff≈4.4px（bsig=clamp(u.blur·0.16,0,8)，glass-nav blur=39 ⇒ b=6.24）。\n【实现】wgsl 真源 + oracle 同源：9-tap 二项式；取代 #978 按下 5-tap。\n【★真 bug】#999 色散 `vec4(aR.r,acc.g,aB.b)` 单点整替换 R/B 通道 ⇒ 模糊只在 G 通道存活（4px 亮线 R 通道 blur=39 与 blur=0 逐字节一致）⇒ 灰度 UI 几乎无模糊。修=三累加器各跑同一核（色散=错位的模糊图）。\n【判据】真机条内网格边界过渡 1px→17px · 4px 笔画保留 50%（erf 理论）· Metal==oracle + 鸿蒙真机 Vulkan==oracle · 破坏性验证（系数改 0 当场红 3.23%/8.06%）· u.blur=0 恒等。\n【诚实边界】σ_eff 居标定区间（5-7px）下沿偏保守——真机目视无感再加档；模糊核类型未反解；27 texSample 成本未逐帧量；P1 滑动形变 / P2 luma 平滑 / P3 色散暗缝不在本项（见 T-glass-ios-remaining）。"
     },
     {
+      "id": "T-glass-nesting-2state",
+      "title": "液态玻璃「两态分裂 + 双重霜 + 文字重影」三修（nest 字段 · veil 窗口收窄 · 宿主深链预模糊）",
+      "type": "capability",
+      "status": "done",
+      "owner": "session:zcode-glassblur",
+      "scope": [
+        "packages/shader-codegen-rust/src/materials/**",
+        "packages/shader-codegen-rust/src/reference.rs",
+        "packages/shader/src/generated/**",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/**",
+        "hosts/ios/ProteusHost/**",
+        "hosts/ios/lib/**",
+        "hosts/harmony/host-app/**"
+      ],
+      "decision": 1004,
+      "verification": "bash hosts/ios/check-glass-pixel-parity.sh（rest+press+nest 三态 max 1/255）&& bash scripts/check-harmony-host-compile.sh && bash hosts/android/check-host-compile.sh && 真机判据：白底胶囊比条暗 −29 / 暗底更亮 +17 / 网格同判白霜档 / 重影区连续虚影",
+      "branch": null,
+      "related": [
+        "T-glass-ios-remaining",
+        "T-glass-ios-blur"
+      ],
+      "note": "【由来】用户「选中胶囊反而更白、和 iOS 刚好相反」+「不是只有两种切换」+「玻璃下面文字有重影」（#1003 真机验证时暴露）。\n【① 两态分裂】#979 内层胶囊从**复合帧**（含外层白霜）算 bg_lum ⇒ 条判暗档/胶囊判亮档。修=内层继承外层 bg_lum（glassBgLumByNode 缓存 + 最近玻璃祖先取值）。\n【② 双重霜】胶囊采样含霜复合帧后又叠自己的 VEIL_A0(0.85)。修=nest 字段（0/1 锐背板·2 外层预模糊·3 内层复合帧），内层跳自己的面纱。\n【③ 第三态】veil_t 软窗 0.42–0.62 太宽（中亮 0.53 落中部 ⇒ 半霜）。修=收窄 0.42–0.50（与 vibrancy 0.46 对齐）⇒ 准二态。\n【④ 重影】9-tap 离散间距 6.24px > 笔画宽 4px ⇒ 笔画复制（剖面 0.5/1/0.5 三段）。修=宿主深链预模糊（/2→/4→/8→/4→/2, σ≈3.9px）+ shader 小残差 tap（2.5px；剖面≈理想高斯 L∞≤0.02）。\n【ABI】96→112B（mod.rs + Android + iOS + 鸿蒙 + parity 工具）。\n【门禁】parity 三态 max 1/255 · 鸿蒙真机 Vulkan · 单测 48 · coupled 71 · Android/鸿蒙/iOS 零设备编译（鸿蒙 C++ 编译抓到 void* 算术错当场修）· AAR 重建 · prebuilt 同步。\n【诚实边界】只 Android（iOS/鸿蒙无离屏复合路径 nest 恒 0）；内层 d=0.04 首猜待目视；深链成本未逐帧量。"
+    },
+    {
       "id": "T-glass-ios-remaining",
       "title": "液态玻璃对齐 iOS · 剩余项：折射顺序(先保高频再位移) / 亮度→alpha 调制 / 标签贴底缘（wb 真机诊断 #5/#7 + 第十块结论；①blur 已收口至 T-glass-ios-blur）",
       "type": "capability",

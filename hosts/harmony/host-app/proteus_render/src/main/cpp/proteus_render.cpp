@@ -1364,7 +1364,7 @@ static void drawSelfContentCore(OH_Drawing_Canvas* rsCanvas, SelfDrawSpec* sd) {
                     bi.id = gi;
                     bi.texW = iw2; bi.texH = ih2; bi.outW = ow2; bi.outH = oh2;
                     bi.backdrop.assign(bpx, bpx + (size_t)iw2 * ih2 * 4);
-                    bi.uniform80.assign(96, 0);   // ★#905：glass 布局扩到 96B（touch/press）；模糊族仍只用前 64B
+                    bi.uniform80.assign(112, 0);   // ★#1004：96→112（末字段 nest=0 锐背板；模糊族仍只用前 64B）
                     bi.material = n.gMaterial.c_str();   // ★#900：材质 id（renderBatch 按此选管线）
                     auto putF = [&](int off, float v) { memcpy(&bi.uniform80[off], &v, 4); };
                     auto putV2 = [&](int off, float a2, float b2) { putF(off, a2); putF(off + 4, b2); };
@@ -3113,8 +3113,8 @@ static std::string runGlassPassImpl() {
                 bd[o + 0] = snap[so + 2]; bd[o + 1] = snap[so + 1]; bd[o + 2] = snap[so + 0]; bd[o + 3] = snap[so + 3];
             }
         }
-        // GlassUniforms（80B），尺寸/纹理同 pwgen 口径
-        std::vector<uint8_t> u(80, 0);
+        // GlassUniforms（112B · ★#1004：96→112，nest=0 锐背板口径），尺寸/纹理同 pwgen 口径
+        std::vector<uint8_t> u(112, 0);
         auto putF = [&](int off, float v) { memcpy(&u[off], &v, 4); };
         auto putV2 = [&](int off, float a, float b) { putF(off, a); putF(off + 4, b); };
         float ta = ((g.tint >> 24) & 0xFF) / 255.0f, tr = ((g.tint >> 16) & 0xFF) / 255.0f,
@@ -3232,10 +3232,11 @@ static napi_value VkGlassProbe(napi_env env, napi_callback_info info) {
         size_t o = ((size_t)y * TW + x) * 4;
         bd[o] = c[0]; bd[o + 1] = c[1]; bd[o + 2] = c[2]; bd[o + 3] = 255;
     }
-    // GlassUniforms（80B；与 materials/mod.rs 布局逐字节对应）：
+    // GlassUniforms（112B；与 materials/mod.rs 布局逐字节对应）：
     //  tint(0,16) size_px(16,8) origin(24,8) tex_bias(32,8) tex_scale(40,8) light_dir(48,8)
     //  radius(56,4) blur(60,4) refract_depth(64,4) specular(68,4) saturation(72,4) _pad(76,4)
-    std::vector<uint8_t> u(80, 0);
+    //  touch(80,8) press(88,4) overlay(92,4) nest(96,4)  —— ★#1004：96→112（nest=0 锐背板口径）
+    std::vector<uint8_t> u(112, 0);
     auto putF = [&](int off, float v) { memcpy(&u[off], &v, 4); };
     auto putV2 = [&](int off, float a, float b) { putF(off, a); putF(off + 4, b); };
     // tint = [1,1,1,0.149]

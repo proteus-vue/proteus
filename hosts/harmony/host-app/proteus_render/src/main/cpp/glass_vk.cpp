@@ -273,7 +273,7 @@ static bool buildSizeCache(SizeCache& sc) {
     if (!image(texW, texH, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, &sc.texImg, &sc.texMem, &sc.texView)) { failMem(sc.texMem); return false; }
     if (!image(outW, outH, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, &sc.outImg, &sc.outMem, &sc.outView)) { failMem(sc.outMem); return false; }
     if (!hostBuf(outBytes, VK_BUFFER_USAGE_TRANSFER_DST_BIT, &sc.outStaging, &sc.outStagingMem, &sc.outMap, true /*cached 回读*/)) { failMem(sc.outStagingMem); return false; }
-    if (!hostBuf(96, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &sc.ubo, &sc.uboMem, &sc.uboMap, false)) { failMem(sc.uboMem); return false; }
+    if (!hostBuf(112, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &sc.ubo, &sc.uboMem, &sc.uboMap, false)) { failMem(sc.uboMem); return false; }
     sc.outBytes = outBytes;
     { VkImageView atts[1] = {sc.outView};
       VkFramebufferCreateInfo fci{VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
@@ -289,7 +289,7 @@ static bool buildSizeCache(SizeCache& sc) {
       if (vkAllocateDescriptorSets(dev, &dsai, &sc.dset) != VK_SUCCESS) return false;
       VkDescriptorImageInfo bgInfo{}; bgInfo.imageView = sc.texView; bgInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
       VkDescriptorImageInfo smpInfo{}; smpInfo.sampler = g_ctx.sampler;
-      VkDescriptorBufferInfo ubInfo{}; ubInfo.buffer = sc.ubo; ubInfo.offset = 0; ubInfo.range = 80;
+      VkDescriptorBufferInfo ubInfo{}; ubInfo.buffer = sc.ubo; ubInfo.offset = 0; ubInfo.range = 112;   // ★#1004：96→112（nest 字段）
       VkWriteDescriptorSet wr[3] = {};
       wr[0] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET}; wr[0].dstSet = sc.dset; wr[0].dstBinding = 0; wr[0].descriptorCount = 1;
       wr[0].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE; wr[0].pImageInfo = &bgInfo;
@@ -425,8 +425,14 @@ std::vector<uint8_t> renderRgba8(const std::vector<uint8_t>& backdrop, int texW,
     auto T1 = std::chrono::steady_clock::now();
 
     // 更新输入：背景纹理 staging + uniform（两者都是持久映射，直接 memcpy）
+    // ★#1004：uniform 布局 112B（末尾 nest）——copy 上限 112 且**尾零填充**（调用方给短缓冲时
+    //   原样保留旧帧垃圾会污染 nest ⇒ 必须清零）。
     memcpy(sc->texMap, backdrop.data(), backdrop.size());
-    memcpy(sc->uboMap, uniform80.data(), uniform80.size() < 96 ? uniform80.size() : 96);
+    {
+        size_t n = uniform80.size() < 112 ? uniform80.size() : 112;
+        memcpy(sc->uboMap, uniform80.data(), n);
+        if (n < 112) memset((uint8_t*)sc->uboMap + n, 0, 112 - n);
+    }
 
     VkCommandBuffer cmd = g_ctx.cmd;
     vkResetCommandBuffer(cmd, 0);
@@ -528,7 +534,11 @@ std::vector<std::vector<uint8_t>> renderBatch(const std::vector<BatchItem>& item
             sb.inited[p] = true;
         }
         memcpy(sc.texMap, it.backdrop.data(), it.backdrop.size());
-        memcpy(sc.uboMap, it.uniform80.data(), it.uniform80.size() < 96 ? it.uniform80.size() : 96);
+        {
+            size_t n = it.uniform80.size() < 112 ? it.uniform80.size() : 112;   // ★#1004：96→112 + 尾零填充
+            memcpy(sc.uboMap, it.uniform80.data(), n);
+            if (n < 112) memset((uint8_t*)sc.uboMap + n, 0, 112 - n);
+        }
         // ★★★决策 #900：按材质 id 选管线（未知 ⇒ 回落 glass）。
         VkPipeline pl = g_ctx.pipeline;
         auto pit = g_ctx.pipelines.find(it.material ? it.material : "glass");

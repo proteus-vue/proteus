@@ -30,6 +30,9 @@ pub struct GlassParams {
     pub press: f32,
     /// ★#966：触点在**盒局部设备像素**（未激活 = (-1e6,-1e6)）；与 glass.wgsl `touch` 同源。
     pub touch: (f32, f32),
+    /// ★★★#1004：内层/预模糊模式（0/1=锐背板 ⇒ d=blur·0.16；2=外层·宿主预模糊 ⇒ d=blur·0.065；
+    ///   3=内层·复合帧 ⇒ d=blur·0.04）。与 glass.wgsl `nest` 同源；0 ⇒ 与 #1003 逐像素等价。
+    pub nest: f32,
 }
 
 impl Default for GlassParams {
@@ -48,6 +51,7 @@ impl Default for GlassParams {
             overlay: 0.0,
             press: 0.0,
             touch: (-1.0e6, -1.0e6),
+            nest: 0.0,
         }
     }
 }
@@ -157,7 +161,11 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     // ★★★决策 #1003：**大半径模糊**（9-tap 二项式，σ = 格距 d）——与 glass.wgsl ③ 同源，取代 #978 的 5-tap。
     //   σ 标定见 glass.wgsl ③（blur=39 ⇒ b=6.24px · σ_eff≈4.4px；`u.blur=0` ⇒ 9 tap 同点、权重和 1 ⇒ 逐像素等价）。
     //   ★色散采样**同样过模糊核**（三个累加器）——与 glass.wgsl ③ 同源（修「R/B 通道被单点采样整替换」的模糊丢失）。
-    let bsig = (p.blur * 0.16f32).clamp(0.0, 8.0);
+    // ★★★决策 #1004：**tap 间距分档**（消重影）——与 glass.wgsl ③ 同源（0/1 锐背板 = #1003 口径不变；
+    //   2/3 宿主已深链预模糊（σ_pre≈3.9px）⇒ 本核退为小残差 d=2.5px/1.6px < 笔画宽 ⇒ 无副本分离）。
+    let mut bsig = (p.blur * 0.16f32).clamp(0.0, 8.0);
+    if p.nest > 1.5 { bsig = (p.blur * 0.065f32).clamp(0.0, 8.0); }
+    if p.nest > 2.5 { bsig = (p.blur * 0.04f32).clamp(0.0, 8.0); }
     let taps: [(f32, f32); 9] = [
         (0.0, 0.0),
         (bsig, 0.0), (-bsig, 0.0), (0.0, bsig), (0.0, -bsig),
@@ -196,13 +204,19 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     // ★★★决策 #949：α 随背景明暗**翻转**（阈值重映射，非线性）——与 glass.wgsl ⑤ 同源。
     // ★★★决策 #984（订正 #943/#949/#977）：**面纱 α 恒定、霜色分档**（详见 glass.wgsl 同源注释）。
     //   旧模型(V=255 恒白 + α 随 bg) 用 4 点反解出浅底 α=−0.13（自相矛盾）；新模型 α=0.467 · 暗霜140/亮霜236，4 点零残差。
-    let veil_t = smoothstep(0.42f32, 0.62f32, p.bg_lum);
+    // ★★★决策 #1004：判定窗口 0.42–0.62 → **0.42–0.50（准二态）**——与 glass.wgsl ⑤ / Android 宿主
+    //   vibrancy 阈值(0.46) 同源对齐。中亮内容（彩色网格等，区域均值≈0.53）此前落在窗口中部 ⇒
+    //   条进入"半霜"第三态（彩透出），与 iOS 的"白玻璃/暗玻璃二选一"不符（用户「不是只有两种切换」）。
+    let veil_t = smoothstep(0.42f32, 0.50f32, p.bg_lum);
     let veil_v = 0.55f32 + (1.0f32 - 0.55f32) * veil_t;   // ★#988：亮端纯白
     let pr_ov = p.press.clamp(0.0, 1.0) * p.overlay.clamp(0.0, 1.0);
     // ★★★决策 #987（B）：α 随背景变——浅端 0.88（内容压到不可见）/ 深端 0.467（#984 四点拟合）。
     // ★#996：恢复 B——浅底 α 0.85（对比度门控）
     let veil_a0 = 0.467f32 + (0.85f32 - 0.467f32) * veil_t;
-    let veil_a = veil_a0 + (veil_a0 * 0.06f32 - veil_a0) * pr_ov;
+    // ★★★决策 #1004：内层玻璃（nest=1/3）跳过自己的面纱（输入=含外层霜的复合帧 ⇒ 避免双重霜；
+    //   与 glass.wgsl ⑤ 同源）。外层（0/2）保留 = 条的白霜本体。
+    let veil_skip = (p.nest - 1.0).abs() < 0.5 || p.nest > 2.5;
+    let veil_a = if veil_skip { 0.0 } else { veil_a0 + (veil_a0 * 0.06f32 - veil_a0) * pr_ov };
     let raw_lum = raw[0]*0.299 + raw[1]*0.587 + raw[2]*0.114;
     for c in 0..3 {
         let vc = (veil_v + (raw[c] - raw_lum) * 0.12).clamp(0.0, 1.0);

@@ -221,6 +221,10 @@ final class GlassMetalRenderer {
         var touch: SIMD2<Float>      // 80
         var press: Float             // 88
         var overlay: Float           // 92 ★#966：shader 读作 `overlay`（选中胶囊叠加层 / 充气门控）
+        /// ★★★决策 #1004：**内层/预模糊模式**（0/1 锐背板 · 2 外层预模糊 · 3 内层复合帧；见 glass.wgsl struct）。
+        ///   本端当前无离屏复合路径（#979 仅 Android）⇒ 渲染的玻璃均为"外层"语义 ⇒ 传 0（锐背板口径，
+        ///   与 iOS `regionLum`/背板捕获链一致）；待 iOS 接离屏复合时改传 2/3。
+        var nest: Float              // 96
     }
 
     /// ★★★决策 #911：玻璃盒区域**平均背景亮度**（0..1）——供 shader 区域级霜锚点（浅霜/深霜）。
@@ -304,7 +308,8 @@ final class GlassMetalRenderer {
             touch: SIMD2<Float>(touch.map { Float($0.x * outScale) } ?? -1e6,
                                 touch.map { Float($0.y * outScale) } ?? -1e6),
             press: Float(press),
-            overlay: Float(spec.overlay)
+            overlay: Float(spec.overlay),
+            nest: 0   // ★#1004：iOS 无离屏复合路径（全为外层语义）⇒ 锐背板口径（见 struct 注释）
         )
     }
 
