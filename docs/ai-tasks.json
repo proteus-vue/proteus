@@ -483,14 +483,37 @@
       "note": "【由来（2026-10-14 · #935 收口后暴露）】glass-nav 点击切换修好后（U0），导航项**图标仍不显示**。取证：p-icon 组件产物 `components['p-icon'].data = {}`（空）⇒ 运行期实例化后 `icon.d` / `icon.viewBox` 求值 undefined ⇒ svgPath 不产。根因：p-icon 的 `icon = computed(() => normalizedIcon(iconName.value))`——`app-component-registry.ts` 的 `extractRefLiterals` **只认 `ref(...)` 字面量**，**不产 computed 派生值** ⇒ 组件 data 快照缺 `icon`。★同族：台账 A1「computed 产 data」缺口（`computed` 派生的 v-for 数据不渲染），本卡是其**组件内 computed** 形态。\\n【修法候选】① 组件注册期对**无副作用 computed**做**构建期求值**（在 `buildAppComponentRegistry` 里跑一次 computed 的 getter，取初值写进 data）——与 ref 同列；② 或给 App 折叠面加「计算属性初值抽取」（静态可求值的才抽，含归一化查表）。★诚实边界：只有**纯函数 computed**（无 props 依赖运行期变化）可构建期求值；依赖 props 的 computed 仍需运行期重算（更大的接受面工程，另议）。\\n\\n【已落地（2026-10-14 · 决策 #938 · 首切片）】改为**在 `p-icon` 层折成叶子盒 + 运行期图标通道**（不改通用 computed 求值）：① `template.ts` 动态 `:name` 的 `p-icon` 折成叶子（去组件边界、去 VAPOR_ICON_DYNAMIC 诊断）；② `build.ts` 把 `p-icon` 的 `component.name/size/color` 改写为 `paint.svgPath`（值 `({d:__iconPath[expr].d,progress:1,fill:true})`）/`paint.svgViewBox`/`layout.width·height`/`paint.color`；③ CLI `app-runtime-content.ts` 扫屏 `data` 里键名 `icon` 的字符串值 → `iconResolver` → 注入 `data.__iconPath`；④ 内核 `ffi.rs` `svgPath.fill` 且无 `stroke` ⇒ 回退节点色（currentColor）；⑤ Android 宿主 svgPath 节点补送 `color`。★诚实边界：只覆盖**构建期可知**的图标名（data 里的字符串值）；运行期才算出的名不渲染（不静默——叶子盒仍在）。★鸿蒙 superapp 走静态 `appScreenCommands`（非 runtime-content）⇒ 动态图标不在其路径（pre-existing）。★通用 computed 求值（依赖 props 的任意派生）仍为更大工程——本卡仅收其**图标切片**。"
     },
     {
+      "id": "T-glass-ios-blur",
+      "title": "液态玻璃 P0「大半径模糊」落地（9-tap 二项式 · σ_eff 可配 · 修 R/B 通道被单点采样整替换）",
+      "type": "capability",
+      "status": "done",
+      "owner": "session:zcode-glassblur",
+      "scope": [
+        "packages/shader-codegen-rust/src/materials/**",
+        "packages/shader-codegen-rust/src/reference.rs",
+        "packages/shader/src/generated/**",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/**",
+        "hosts/ios/ProteusHost/**",
+        "hosts/harmony/host-app/**"
+      ],
+      "decision": 1003,
+      "verification": "node scripts/gen-shaders.mjs --check && bash hosts/ios/check-glass-pixel-parity.sh（rest+press max 1/255）&& bash hosts/harmony/check-glass-parity.sh（真机 Vulkan==oracle）&& npx vitest run tests/glass-ir.test.ts tests/glass.test.ts && 真机判据：glass-nav 条内网格边界过渡 1px→17px（旧核 5px）",
+      "branch": null,
+      "related": [
+        "T-glass-ios-remaining"
+      ],
+      "note": "【由来】承 #1002 定稿「11 项机制」落地优先级 P0（`u.blur` 声明却从未消费 = \"白底没玻璃感\"头号缺失）+ 原 T-glass-ios-remaining ①「#4 霜过重」。\n【先解历史冲突】#986 否决的是**过度**模糊（σ_eff≈9.5px 字形糊没，格距 u.blur·0.30），非\"有模糊\"——独立复测 f0060 同帧同字跨条缘（条外 Δ175-190 → 条内 Δ5-8；仅面纱应残留 Δ26）⇒ 必须有强低通；取 σ_eff≈4.4px（bsig=clamp(u.blur·0.16,0,8)，glass-nav blur=39 ⇒ b=6.24）。\n【实现】wgsl 真源 + oracle 同源：9-tap 二项式；取代 #978 按下 5-tap。\n【★真 bug】#999 色散 `vec4(aR.r,acc.g,aB.b)` 单点整替换 R/B 通道 ⇒ 模糊只在 G 通道存活（4px 亮线 R 通道 blur=39 与 blur=0 逐字节一致）⇒ 灰度 UI 几乎无模糊。修=三累加器各跑同一核（色散=错位的模糊图）。\n【判据】真机条内网格边界过渡 1px→17px · 4px 笔画保留 50%（erf 理论）· Metal==oracle + 鸿蒙真机 Vulkan==oracle · 破坏性验证（系数改 0 当场红 3.23%/8.06%）· u.blur=0 恒等。\n【诚实边界】σ_eff 居标定区间（5-7px）下沿偏保守——真机目视无感再加档；模糊核类型未反解；27 texSample 成本未逐帧量；P1 滑动形变 / P2 luma 平滑 / P3 色散暗缝不在本项（见 T-glass-ios-remaining）。"
+    },
+    {
       "id": "T-glass-ios-remaining",
-      "title": "液态玻璃对齐 iOS · 剩余项：霜过重(blur) / 折射顺序(先保高频再位移) / 亮度→alpha 调制 / 标签贴底缘（wb 真机诊断 #4/#5/#7 + 第十块结论）",
+      "title": "液态玻璃对齐 iOS · 剩余项：折射顺序(先保高频再位移) / 亮度→alpha 调制 / 标签贴底缘（wb 真机诊断 #5/#7 + 第十块结论；①blur 已收口至 T-glass-ios-blur）",
       "type": "capability",
       "status": "planned",
       "owner": null,
       "scope": [
         "packages/shader-codegen-rust/src/materials/**",
         "packages/shader-codegen-rust/src/reference.rs",
+        "packages/shader/src/generated/**",
         "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/**",
         "hosts/ios/ProteusHost/**",
         "hosts/harmony/host-app/**",
@@ -501,9 +524,10 @@
       "branch": null,
       "related": [
         "T-glassnav-vfor-events",
-        "T-glass-region-lum"
+        "T-glass-region-lum",
+        "T-glass-ios-blur"
       ],
-      "note": "【由来】wb 会话 11:39 真机诊断 glass 条 7 问题；#936 已修 #1(z-order)/#2(胶囊 tint)/并新发现修 #3(胶囊 pointer-events)。本卡收剩余：\n① **#4 霜过重**：`preset=floating` blur=39 + 宿主 BLUR_DOWN 降采样管线 + 白霜 mix ⇒ 条下内容几乎洗没（「开放世界冒险」只剩残影）；iOS 保持 ~50% 可读（wb 逆向外证）。\n② **#5 折射顺序**：强模糊先灭高频 ⇒ 位移场无素材可弯 ⇒ 镜像/拉伸看不到。iOS 是**先保高频再位移**（顺序问题）。与 #915/#918 的位移/剖面调整是两条轴。\n③ **第十块（亮度→alpha 调制）**：WGSL 现 `bg_lum` 只驱动霜**颜色**，mix 权重 `0.30+tint.a×0.25` 是常量；iOS `tracksLuma` 同时调制霜 alpha 与模糊（亮底更实 / 暗底更透，对比度稳态）。方向：霜权重=f(bg_lum)，亮底 ~0.5-0.6 / 暗底 ~0.15-0.2。★需新增 uniform（96B→112B）+ 三端宿主同步统计。\n④ **#7 标签贴条底缘**（图标缺失次生问题；图标缺口见 T-vapor-computed-data）。\n【诚实边界】① ② 属 WGSL 源 + 三端宿主 ⇒ **必须三端重跑**（check:vapor-three-end）。③ 需扩 uniform 结构（跨端 ABI）。★真值基准 = iOS 真机截图（wb 存证 `.workbuddy/salvage/liquid-glass/`）。"
+      "note": "【由来】wb 会话 11:39 真机诊断 glass 条 7 问题；#936 已修 #1(z-order)/#2(胶囊 tint)/#3(胶囊 pointer-events)。\n【✅ 已完成移交】① **#4 霜过重(blur) 已收口**（决策 #1003 · 卡 T-glass-ios-blur）：大半径模糊落地（9-tap 二项式 σ_eff≈4.4px）+ 修真 bug（色散单点替换吃掉 R/B 通道模糊）——真机条内网格边界过渡 1px→17px。\n【未做】② **#5 折射顺序**：强模糊先灭高频 ⇒ 位移场无素材可弯 ⇒ 镜像/拉伸看不到。iOS 是**先保高频再位移**（顺序问题）。与 #915/#918 的位移/剖面调整是两条轴。★注：#1003 已把模糊改成 shader 内（作用于位移后的 spL 采样），顺序问题部分缓解——可否结案需真机目视（折射是否可见）。\n③ **第十块（亮度→alpha 调制）**：WGSL 现 `bg_lum` 只驱动霜**颜色**，mix 权重是常量；iOS `tracksLuma` 同时调制霜 alpha 与模糊（亮底更实 / 暗底更透）。方向：霜权重=f(bg_lum)，亮底 ~0.5-0.6 / 暗底 ~0.15-0.2。★需扩 uniform 结构（跨端 ABI）。\n④ **#7 标签贴条底缘**（图标缺失次生问题；图标缺口见 T-vapor-computed-data）。\n【诚实边界】② ③ 属 WGSL 源 + 三端宿主 ⇒ **必须三端重跑**（check:vapor-three-end）。③ 需扩 uniform 结构（跨端 ABI）。★真值基准 = iOS 真机截图（wb 存证 `.workbuddy/salvage/liquid-glass/`）。"
     },
     {
       "id": "T-vapor-select-state",

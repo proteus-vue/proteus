@@ -153,24 +153,36 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     let ctr = hs;
     let zoom = 1.0 + pr_ov * 0.08;   // ★#981：0.16→0.08
     let sp_l = (ctr.0 + (sp.0 - ctr.0) / zoom, ctr.1 + (sp.1 - ctr.1) / zoom);
-    // ★★★决策 #978：按下透镜「自低通」（凸透镜的柔）——与 glass.wgsl 同源（5-tap 十字，br2=0 等价）。
-    let br2 = band * 0.03 * pr_ov;   // ★#981：0.05→0.03
+    // ★★★决策 #978：按下透镜「自低通」（凸透镜的柔）——与 glass.wgsl 同源。
+    // ★★★决策 #1003：**大半径模糊**（9-tap 二项式，σ = 格距 d）——与 glass.wgsl ③ 同源，取代 #978 的 5-tap。
+    //   σ 标定见 glass.wgsl ③（blur=39 ⇒ b=6.24px · σ_eff≈4.4px；`u.blur=0` ⇒ 9 tap 同点、权重和 1 ⇒ 逐像素等价）。
+    //   ★色散采样**同样过模糊核**（三个累加器）——与 glass.wgsl ③ 同源（修「R/B 通道被单点采样整替换」的模糊丢失）。
+    let bsig = (p.blur * 0.16f32).clamp(0.0, 8.0);
+    let taps: [(f32, f32); 9] = [
+        (0.0, 0.0),
+        (bsig, 0.0), (-bsig, 0.0), (0.0, bsig), (0.0, -bsig),
+        (bsig, bsig), (bsig, -bsig), (-bsig, -bsig), (-bsig, bsig),
+    ];
+    let wts: [f32; 9] = [0.25, 0.125, 0.125, 0.125, 0.125, 0.0625, 0.0625, 0.0625, 0.0625];
     let s5 = |px: f32, py: f32| backdrop.sample_map(to_tex((px, py)));
-    let mut col = [0.0f32; 4];
-    for c in 0..4 {
-        col[c] = s5(sp_l.0, sp_l.1)[c] * 0.36
-            + s5(sp_l.0 + br2, sp_l.1)[c] * 0.16
-            + s5(sp_l.0 - br2, sp_l.1)[c] * 0.16
-            + s5(sp_l.0, sp_l.1 + br2)[c] * 0.16
-            + s5(sp_l.0, sp_l.1 - br2)[c] * 0.16;
-    }
-    // ★★★决策 #972/#976：按下透镜的「边缘色散」（RGB 沿法线差异化偏移）——与 glass.wgsl 同源（无条件采样，disp=0 等价）。
+    // ★★★决策 #972/#976：按下透镜的「边缘色散」（RGB 沿法线差异化偏移）——与 glass.wgsl 同源。
     // ★#999：静止基线 0.35（边缘一圈色散，对齐 iOS）
     let disp = (0.35 + 0.65 * pr_ov) * (1.0 - e) * (band * 0.30).min(6.0);
-    let a_r = backdrop.sample_map(to_tex((sp_l.0 + n.0 * disp, sp_l.1 + n.1 * disp)));
-    let a_b = backdrop.sample_map(to_tex((sp_l.0 - n.0 * disp, sp_l.1 - n.1 * disp)));
-    col[0] = a_r[0];
-    col[2] = a_b[2];
+    let mut col = [0.0f32; 4];
+    let mut ac_r = 0.0f32;
+    let mut ac_b = 0.0f32;
+    for i in 0..9 {
+        let base = s5(sp_l.0 + taps[i].0, sp_l.1 + taps[i].1);
+        let sr = s5(sp_l.0 + n.0 * disp + taps[i].0, sp_l.1 + n.1 * disp + taps[i].1);
+        let sb = s5(sp_l.0 - n.0 * disp + taps[i].0, sp_l.1 - n.1 * disp + taps[i].1);
+        for c in 0..4 {
+            col[c] += base[c] * wts[i];
+        }
+        ac_r += sr[0] * wts[i];
+        ac_b += sb[2] * wts[i];
+    }
+    col[0] = ac_r;
+    col[2] = ac_b;
     let raw = col;   // ★#925：原始采样色（供霜色 12% 色温）
     let lum = col[0] * 0.299 + col[1] * 0.587 + col[2] * 0.114;
     // ★决策 #875：去饱和 0.30 → 0.12（保留背后颜色；与 glass.wgsl ④ 同源）
