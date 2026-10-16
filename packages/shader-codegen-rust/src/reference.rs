@@ -33,6 +33,8 @@ pub struct GlassParams {
     /// ★★★#1004：内层/预模糊模式（0/1=锐背板 ⇒ d=blur·0.16；2=外层·宿主预模糊 ⇒ d=blur·0.065；
     ///   3=内层·复合帧 ⇒ d=blur·0.04）。与 glass.wgsl `nest` 同源；0 ⇒ 与 #1003 逐像素等价。
     pub nest: f32,
+    /// ★★★#1027：端部锥化（signed；>0=向右运动，尾缘锥化最强；0=恒等）。与 glass.wgsl `shp_a` 同源。
+    pub shp_a: f32,
 }
 
 impl Default for GlassParams {
@@ -52,6 +54,7 @@ impl Default for GlassParams {
             press: 0.0,
             touch: (-1.0e6, -1.0e6),
             nest: 0.0,
+            shp_a: 0.0,
         }
     }
 }
@@ -97,6 +100,16 @@ fn sd_round_rect(p: (f32, f32), hs: (f32, f32), r: f32) -> f32 {
     mx + (ox * ox + oy * oy).sqrt() - r
 }
 
+/// ★★★决策 #1027：**形变域 SDF**（端部锥化；shp_a=0 ⇒ 与 sd_round_rect 逐像素等价）——与 glass.wgsl 同源。
+fn sd_glass(p: (f32, f32), hs: (f32, f32), r: f32, shp_a: f32) -> f32 {
+    let nx = (p.0 / hs.0.max(1.0)).clamp(-1.0, 1.0);
+    let tip_r = shp_a.max(0.0);
+    let tip_l = (-shp_a).max(0.0);
+    let taper = if nx >= 0.0 { tip_r + 0.45 * tip_l } else { tip_l + 0.45 * tip_r };
+    let ym = 1.0 - taper * nx * nx;
+    sd_round_rect((p.0, p.1 / ym.max(0.15)), hs, r)
+}
+
 fn circle_map(x: f32) -> f32 {
     1.0 - (1.0 - x * x).max(0.0).sqrt()
 }
@@ -112,8 +125,8 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     let pc = (local.0 - hs.0, local.1 - hs.1);
     let r = p.radius.min(hs.0.min(hs.1));
     let hsmin = hs.0.min(hs.1);
-    // ★#971：SDF 恒为（当前盒的）圆角矩形——形状变化全在宿主盒几何，shader 不做轮廓形变。
-    let sd = sd_round_rect(pc, hs, r);
+    // ★#971：SDF 基准为圆角矩形；★#1027 起经**形变域**（端部锥化；shp_a=0 ⇒ 恒等）。
+    let sd = sd_glass(pc, hs, r, p.shp_a);
     let d = (-sd).max(0.0);
     let smin = p.size_px.0.min(p.size_px.1);   // 最短边（= 2×hsmin）
     // ★决策 #907/#910：折射带 = **最短边 1/3**（#910 修正口径：原 `hsmin*0.33 = 0.165·min` 只有 1/6 ⇒ ×2）
@@ -124,8 +137,8 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
 
     let eps = (band * 0.3).clamp(1.0, 16.0);
     // ★#968：法线取**原轮廓**梯度（充气不改法线 ⇒ 内容不挤压）。
-    let gx = sd_round_rect((pc.0 + eps, pc.1), hs, r) - sd_round_rect((pc.0 - eps, pc.1), hs, r);
-    let gy = sd_round_rect((pc.0, pc.1 + eps), hs, r) - sd_round_rect((pc.0, pc.1 - eps), hs, r);
+    let gx = sd_glass((pc.0 + eps, pc.1), hs, r, p.shp_a) - sd_glass((pc.0 - eps, pc.1), hs, r, p.shp_a);
+    let gy = sd_glass((pc.0, pc.1 + eps), hs, r, p.shp_a) - sd_glass((pc.0, pc.1 - eps), hs, r, p.shp_a);
     let glen = (gx * gx + gy * gy).sqrt().max(1e-5);
     let n = (gx / glen, gy / glen);
 

@@ -3340,6 +3340,8 @@ public class ProteusHostView extends ViewGroup {
     private final GlassInteraction glassIx = new GlassInteraction();
     /** ★#1025（用户「按下膨胀后不是胶囊形了」）：按下胶囊的**有效圆角覆盖**（-1=用 spec.radius）——形变时半径随高度缩放，保持胶囊形。 */
     private float glassRadiusOverride = -1f;
+    /** ★#1027：形变域端部锥化覆盖（胶囊分支写入；0=恒等）。 */
+    private float glassShapeOverride = 0f;
 
     /** ★★★决策 #950（vibrancy）：本帧**暗玻璃**的区域盒（内容坐标 x,y,w,h）——落在其中的文字/图标**强制白色**
      *  （对齐 iOS：玻璃压暗背景时前景转白，保内容强烈可读）。逐帧在 drawGlassPass 重算。 */
@@ -3427,7 +3429,7 @@ public class ProteusHostView extends ViewGroup {
         final float qtx = touchApplies ? glassIx.touchAbsX - ox : -1e6f;
         final float qty = touchApplies ? glassIx.touchAbsY - oy : -1e6f; final float rr = glassRadiusOverride >= 0f ? glassRadiusOverride : spec.radius;   // ★#1025
         android.graphics.Paint p = GlassMaterial.buildPaint(nodeId, sampling, ox, oy, bdX, bdY, w, h, rr, spec,
-                qtx, qty, nodePress, divX, divY, nest, bgOv);
+                qtx, qty, nodePress, divX, divY, nest, bgOv, glassShapeOverride);
         final int save = canvas.save();
         if (rr > 0) {
             android.graphics.Path clip = new android.graphics.Path();
@@ -3499,7 +3501,7 @@ public class ProteusHostView extends ViewGroup {
         final float qtx = touchApplies ? glassIx.touchAbsX - bx : -1e6f;
         final float qty = touchApplies ? glassIx.touchAbsY - by : -1e6f; final float rr = glassRadiusOverride >= 0f ? glassRadiusOverride : spec.radius;   // ★#1025
         android.graphics.Paint p = GlassMaterial.buildPaint(nodeId, sampling != null ? sampling : glassBd.bitmap(), bx, by, glassBd.originX(), glassBd.originY(), bw, bh, rr, spec,
-                qtx, qty, nodePress, glassBd.scaleX(), glassBd.scaleY(), nest, bgOv);
+                qtx, qty, nodePress, glassBd.scaleX(), glassBd.scaleY(), nest, bgOv, glassShapeOverride);
         // ★★★决策 #971（对齐 workbuddy 09:05 取证）：**剪影恒为当前盒的圆角矩形**——形状变化全部来自
         //   **盒几何**（条盒不动 ⇒ 条边平直不动；胶囊盒已纵向放大 ⇒ 透镜轮廓）。不再用 `inflatedPillPath`
         //   做 SDF 凹口（#966/#969 的"内陷"方向错误——iOS 条边无内陷、透镜是单独一层外凸）。
@@ -3620,6 +3622,7 @@ public class ProteusHostView extends ViewGroup {
                     final float[] cb = glassIx.capsuleBox(gc);
                     bx = cb[0]; by = cb[1]; bw = cb[2]; bh = cb[3];
                     glassRadiusOverride = Math.min(g.radius * (bh / Math.max(gc.h, 1f)), Math.min(bw, bh) * 0.5f);   // ★#1025：半径随高度缩放（clamp 最短边半）⇒ 膨胀/拉伸下保持胶囊形
+                    glassShapeOverride = glassIx.shapeTaper;   // ★#1027：端部锥化（形变域 SDF 的 shp_a）
                 }
             }
             // ★#973/#979：**内层玻璃**（有玻璃祖先，如选中胶囊）采样**全分辨率离屏复合层** `glassLayerFull`
@@ -3635,7 +3638,7 @@ public class ProteusHostView extends ViewGroup {
             } else {
                 drawGlassFace(canvas, ids[i], list.get(i), g, bx, by, bw, bh);
             }
-            if (fs != -1) canvas.restoreToCount(fs); glassRadiusOverride = -1f;   // ★#1025：本节点画完复位
+            if (fs != -1) canvas.restoreToCount(fs); glassRadiusOverride = -1f; glassShapeOverride = 0f;   // ★#1025/#1027：本节点画完复位
         }
         // 第二相：玻璃子树内容（其文本/子视图）——背景已在 captureGlassBackdrop 排除玻璃子树（只含"背后"），
         //   此处把自身内容**清晰**盖回**所有**玻璃面上（真 iOS `UIVisualEffectView`：材质只糊背后、contentView 原样清晰）。

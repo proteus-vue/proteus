@@ -225,6 +225,8 @@ final class GlassMetalRenderer {
         ///   本端当前无离屏复合路径（#979 仅 Android）⇒ 渲染的玻璃均为"外层"语义 ⇒ 传 0（锐背板口径，
         ///   与 iOS `regionLum`/背板捕获链一致）；待 iOS 接离屏复合时改传 2/3。
         var nest: Float              // 96
+        /// ★★★决策 #1027：端部锥化（signed；本端暂不做拖拽形变 ⇒ 恒 0 = 身份；待接 #1026/#1027 交互后写入）。
+        var shp_a: Float             // 100
     }
 
     /// ★★★决策 #911：玻璃盒区域**平均背景亮度**（0..1）——供 shader 区域级霜锚点（浅霜/深霜）。
@@ -309,7 +311,8 @@ final class GlassMetalRenderer {
                                 touch.map { Float($0.y * outScale) } ?? -1e6),
             press: Float(press),
             overlay: Float(spec.overlay),
-            nest: 0   // ★#1004：iOS 无离屏复合路径（全为外层语义）⇒ 锐背板口径（见 struct 注释）
+            nest: 0,  // ★#1004：iOS 无离屏复合路径（全为外层语义）⇒ 锐背板口径（见 struct 注释）
+            shp_a: 0  // ★#1027：端部锥化（本端未接拖拽形变 ⇒ 身份）
         )
     }
 

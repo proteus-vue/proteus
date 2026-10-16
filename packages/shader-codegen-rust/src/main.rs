@@ -173,6 +173,8 @@ fn render_reference(spec_path: &str) -> Result<(), String> {
         touch: (p["touch"][0].as_f64().unwrap_or(-1.0e6) as f32, p["touch"][1].as_f64().unwrap_or(-1.0e6) as f32),
         // ★#1004：内层/预模糊模式（缺省 0 = 锐背板 ⇒ 与 #1003 逐像素等价）
         nest: p["nest"].as_f64().unwrap_or(0.0) as f32,
+        // ★#1027：端部锥化（缺省 0 = 恒等）
+        shp_a: p["shp_a"].as_f64().unwrap_or(0.0) as f32,
     };
     let ow = spec["out"]["width"].as_u64().unwrap_or(gp.size_px.0 as u64) as usize;
     let oh = spec["out"]["height"].as_u64().unwrap_or(gp.size_px.1 as u64) as usize;
