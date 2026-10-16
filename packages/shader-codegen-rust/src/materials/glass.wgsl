@@ -161,25 +161,67 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     // ★★★决策 #978：**按下透镜「自低通」（凸透镜的柔）**——workbuddy B：iOS 透镜内部比条**柔**
     //   （std 0.43× / 梯度 0.70 vs 条 2.79），我们更锐（1.95×）⇒ 面纱一关就成"挖洞"（原始高频直透）。
     //   iOS 通透 = 内容被**放大 + 轻模糊 + 位移**（凸透镜），不是"洞"。⇒ 内部加 5-tap 十字轻低通。
-    //   门控 `pr_ov`（`br2=0` 时 5 tap 同为一点 ⇒ 权重和为 1 ⇒ **静止/条逐像素等价**，parity 不变）。
-    let br2 = band * 0.03 * pr_ov;                   // ★#981：低通 0.05→0.03（保住条边）
-    let bx1 = vec2<f32>(br2, 0.0);
-    let by1 = vec2<f32>(0.0, br2);
-    var acc = sample_backdrop(spL / u.size_px) * 0.36;
-    acc = acc + sample_backdrop((spL + bx1) / u.size_px) * 0.16
-              + sample_backdrop((spL - bx1) / u.size_px) * 0.16
-              + sample_backdrop((spL + by1) / u.size_px) * 0.16
-              + sample_backdrop((spL - by1) / u.size_px) * 0.16;
+    //   ★#1003：该 5-tap 由下方「大半径模糊」取代（同口径已覆盖按下态）——旧 br2 删除。
+    // ★★★决策 #1003（承 #1002 定稿「11 项机制」的 P0）：**大半径模糊 = 内容透射的核心分量**——
+    //   #1002 逐帧实证：跨条边界同一内容边缘锐度 **207→8（~25×）**、细字对比抹到 ≤8%（鬼影）、
+    //   块状保留 ~1/3 ⇒ **"白底不像玻璃"的头号缺失**。本实现 = **9-tap 二项式**
+    //   （[1,2,1]/4 ⊗ [1,2,1]/4，等效 σ = 格距 d）。采样点 = 位移/放大之后的 spL（同口径作用于全玻璃）。
+    //   ★σ 标定（物理px，本会话两条独立线）：① 真机 f0060 同字跨条缘——细笔画条内残差 Δ5-8 / 条外 Δ175-190，
+    //     剥掉面纱（浅端 t≈15%）反解模糊保留率 ≈0.23-0.3 ⇒ **σ ≈ 5-7px**；② 本机 oracle 标定——
+    //     b=3.12px（σ_eff=2.2px）下 12px 条纹保留 ~100% ⇒ 太弱（真机网格边界仅 0.8→2-4px 过渡）。
+    //     取 `d = clamp(u.blur·0.16, 0, 8)`（glass-nav blur=39 ⇒ b=6.24px，**σ_eff = b/√2 ≈ 4.4px**，
+    //     居 5-7 下沿偏保守；先落此档真机目视，不足再加档）。
+    //   ★与 #986 的边界（用户当年否过"全局 3×3 盒式"并撤回）：那次格距 = `u.blur·0.30`（39 → 11.7px，
+    //     σ_eff≈9.5px）⇒ 过度模糊把字形糊没；本项 σ ≈ 其 0.46（**削锐度、保字形**）——只改"清晰度"，
+    //     不改色相（saturation/去饱和链路不动）、不改结构。
+    //   ★★★决策 #1003 订正（本机 oracle 实证的 R 通道反例）：**色散采样必须同样过模糊核**——
+    //     #999 的 `acc = vec4(aR.r, acc.g, aB.b)` 用**单点** aR/aB 整替换 R/B 通道 ⇒ **模糊只在 G 通道存活**
+    //     （实测：4px 亮线在 blur=39 下 R 通道纹丝不动 65→65、编码无变化）⇒ 去饱和后灰度内容几乎无模糊。
+    //     ⇒ 三个累加器各跑**同一 9-tap 核**（基色 · R 在 +n·disp · B 在 −n·disp）⇒ 色散 = "错位的模糊图"（真色差语义）。
+    //   ★`u.blur=0` ⇒ 9 tap 同为一点、权重和 = 1 ⇒ 逐像素等价（零回归）；erf 口径下 σ_eff=4.4px 对 4px 笔画
+    //     对比保留 ~30%，叠加面纱后 ≈ iOS 实测残差（≤8% 量级）。
+    //   ★成本诚实：27 次 textureSample（3×9）——玻璃节点像素量小（条 ~190k px），本机 GPU 余量足够；
+    //     若未来要省，可改 `textureSampleLevel` + disp 分支（非一致控制流），当前先保正确性。
+    let bsig = clamp(u.blur * 0.16, 0.0, 8.0);       // ★#1003：σ_eff = bsig/√2（9-tap 二项式格距，设备像素）
+    let bdx = vec2<f32>(bsig, 0.0);
+    let bdy = vec2<f32>(0.0, bsig);
+    let bdd = vec2<f32>(bsig, bsig);
     // ★★★决策 #972/#976：**按下透镜的「边缘色散」**（RGB 沿法线差异化偏移）——对齐 iOS 透镜边缘虹彩。
     //   门控 `pr_ov`；`e` 大处=中心 ⇒ 0 ⇒ 只体现在**边缘带**；★#976 幅度加大到可感知。
-    //   ★**无条件采样**——WGSL 要求 `textureSample` 在一致控制流；`disp=0` 时与 `acc` 逐像素一致。
     // ★★★决策 #999（用户：「获取文字**边缘一圈映射**还没有」）：**静止态也有色散**——iOS 边缘一圈实测是
     //   青色 `(219,246,254)`（B>G>R ⇒ RGB 错位）；我们此前 `disp` 被 `pr_ov` 门控 ⇒ **静止无色散** ⇒
     //   边缘一圈读不出来。⇒ 加**静止基线 0.35**（按下到 1.0）⇒ 边缘带沿法线 RGB 差异化偏移 = 一圈色散。
     let disp = mix(0.35, 1.0, pr_ov) * (1.0 - e) * min(band * 0.30, 6.0);
-    let aR = sample_backdrop((spL + n * disp) / u.size_px);
-    let aB = sample_backdrop((spL - n * disp) / u.size_px);
-    acc = vec4<f32>(aR.r, acc.g, aB.b, acc.a);
+    let dR = n * disp;
+    let dB = n * (-disp);
+    var acc = sample_backdrop(spL / u.size_px) * 0.25;
+    var acR = sample_backdrop((spL + dR) / u.size_px) * 0.25;
+    var acB = sample_backdrop((spL + dB) / u.size_px) * 0.25;
+    acc = acc + (sample_backdrop((spL + bdx) / u.size_px)
+               + sample_backdrop((spL - bdx) / u.size_px)
+               + sample_backdrop((spL + bdy) / u.size_px)
+               + sample_backdrop((spL - bdy) / u.size_px)) * 0.125;
+    acR = acR + (sample_backdrop((spL + dR + bdx) / u.size_px)
+               + sample_backdrop((spL + dR - bdx) / u.size_px)
+               + sample_backdrop((spL + dR + bdy) / u.size_px)
+               + sample_backdrop((spL + dR - bdy) / u.size_px)) * 0.125;
+    acB = acB + (sample_backdrop((spL + dB + bdx) / u.size_px)
+               + sample_backdrop((spL + dB - bdx) / u.size_px)
+               + sample_backdrop((spL + dB + bdy) / u.size_px)
+               + sample_backdrop((spL + dB - bdy) / u.size_px)) * 0.125;
+    acc = acc + (sample_backdrop((spL + bdd) / u.size_px)
+               + sample_backdrop((spL + vec2<f32>(bsig, -bsig)) / u.size_px)
+               + sample_backdrop((spL - bdd) / u.size_px)
+               + sample_backdrop((spL + vec2<f32>(-bsig, bsig)) / u.size_px)) * 0.0625;
+    acR = acR + (sample_backdrop((spL + dR + bdd) / u.size_px)
+               + sample_backdrop((spL + dR + vec2<f32>(bsig, -bsig)) / u.size_px)
+               + sample_backdrop((spL + dR - bdd) / u.size_px)
+               + sample_backdrop((spL + dR + vec2<f32>(-bsig, bsig)) / u.size_px)) * 0.0625;
+    acB = acB + (sample_backdrop((spL + dB + bdd) / u.size_px)
+               + sample_backdrop((spL + dB + vec2<f32>(bsig, -bsig)) / u.size_px)
+               + sample_backdrop((spL + dB - bdd) / u.size_px)
+               + sample_backdrop((spL + dB + vec2<f32>(-bsig, bsig)) / u.size_px)) * 0.0625;
+    acc = vec4<f32>(acR.r, acc.g, acB.b, acc.a);
     var col = acc;
 
     // ④ 去饱和（**轻微**：保留背后颜色——对齐 Apple「玻璃取其正后方之色」）+ 饱和旋钮
