@@ -1054,6 +1054,28 @@
         "T-glass-hover-live"
       ],
       "note": "【由来】用户「点击切换时也会自然流动，选项跨步越大流动形态越扁平形变越大」+ iOS 59fps 录屏。\n【取证】点击后胶囊从旧槽拖出液态尾巴滑到新槽（拉丝 ~48px/~90ms，沿途内容拖拽变形）。\n【修】captureTap（report 前记视觉位：基位+bpos）→ applyFlow（重排后 Δ 注入弹簧 bpos=Δ）→ 弹簧滑槽；pressI=max(press,flow)；sMax/fMax 按 |Δ|/252 距离标定。\n【★教训】\"点击也要流动\"≠\"补间动画\"（补间=几何插值、形态不变；流动需物理状态）；正解=click 注入同一物理管线初始条件；\"幅度随距离\"要标定量纲。\n【诚实边界】拖尾拉丝是位移+模糊自然结果（粘连拉伸需 SDF 场耦合）；sMax/fMax 单段标定 ±30%；iOS/鸿蒙宿主未接。"
+    },
+    {
+      "id": "T-glass-droplet-edge",
+      "title": "按压水滴：膨胀收小（Y 1.30/X 1.42，每侧溢出 ~9.5px=iOS 量级）+ 透出条上下边（内层位移 0.10× + 暗缝亮脊）",
+      "type": "bugfix",
+      "status": "done",
+      "owner": "session:zcode-glassblur",
+      "scope": [
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/**",
+        "packages/shader-codegen-rust/src/materials/glass.wgsl",
+        "packages/shader-codegen-rust/src/reference.rs",
+        "packages/shader/src/generated/**",
+        "tests/glass-frozen-model.test.ts"
+      ],
+      "decision": 1031,
+      "verification": "真机：水滴 187px vs 条 168px（每侧 9.5px·iOS ~10px）· 胶囊内上/下边线可见（扫描 y2170-2173/y2334-2337 + 对比拉伸图）（.workbuddy/salvage/liquid-glass/edge-1031/）&& bash hosts/ios/check-glass-pixel-parity.sh（五态 1/255）&& npx vitest run tests/glass-frozen-model.test.ts && pnpm check:shader-generated",
+      "branch": null,
+      "related": [
+        "T-glass-press-drag",
+        "T-glass-model-frozen"
+      ],
+      "note": "【由来】用户「膨胀幅度太大，稍微溢出就行」+「弹起胶囊看不到条上下边」（多次提出）。\n【取证①】iOS 每侧溢出 ~10px；我们 27.5px ⇒ 修 PRESS Y 0.55→0.30 / X 0.50→0.42。\n【取证②】复合层 dump：条边线在层里清晰（y176-179 暗缝），胶囊全 255——根因=位移\"源跳过区\"（bend(0)=100px > 边线距边 ~10px）；iOS 位移 ~10px 所以可见 ⇒ 修：内层 ER 0.10× + 复合层边线暗缝+亮脊（#982 白描边看不见）。\n【★教训】\"看不到某结构\"先 dump 中间产物（上游 OK → 下游采样数学）；\"位移场跳过区\"是盲区——查透不出先算 bend(0) vs 内容距边/距离。\n【诚实边界】0.10× 待真机微调（0.08~0.15）；弓形形变未做；iOS/鸿蒙宿主未接。"
     }
   ]
 }

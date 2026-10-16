@@ -169,8 +169,13 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     //     "它是不是本来就该被采进来"（条外内容/倒影），再判 bug。
     let prof = pow(1.0 - e, 3.0);   // ★#1010：恢复 #998/#928 —— 边缘侧采样延伸至条外 = 倒影/吸入
     let EDGE_REFRACT = 1.20;        // ★#1010：0.15→1.20（恢复 #1006 验收口径）
+    // ★★★决策 #1031（用户「弹起来的胶囊水滴无法看到下面玻璃条的上下边」）：**内层胶囊位移缩到 0.10×**——
+    //   向内采样跳过「源距边 0..bend(0)」区间（bend(0)=band·ER=100px）⇒ 条边线（源距胶囊边 ~10px）
+    //   落在跳过区【永远采不到】（真机 dump 实证：复合层里条边线清晰存在、胶囊内全 255）。
+    //   iOS 位移小（#924 逆向 ~10px）⇒ 条边可见。修：nest>2.5 的 ER 乘 0.10（峰值 ≈10px、单调不折叠）。
+    let ER_EFF = EDGE_REFRACT * select(1.0, 0.10, u.nest > 2.5);
     let strength = clamp(u.refract_depth / max(band, 1.0), 0.2, 1.1);
-    var bend = prof * band * EDGE_REFRACT * strength;
+    var bend = prof * band * ER_EFF * strength;
     // ★★★决策 #905：**触控形变流动**——触点周围局部凸起（Gaussian 钟），按压力把背后内容沿"离触点方向"推开；
     //   `press==0` ⇒ 该项为 0（退化到既有折射，像素等价）。
     let tR = max(hsmin * 0.9, 8.0);

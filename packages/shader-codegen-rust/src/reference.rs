@@ -149,7 +149,9 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     //   s'=1+3(1−e)²·ER·str>0 恒成立 ⇒ 该剖面单调；探针"多余的线"= 条外内容被采入 = #998 边缘倒影本体）。
     let prof = (1.0 - e).powi(3);
     let strength = (p.refract_depth / band.max(1.0)).clamp(0.2, 1.1);
-    let bend = prof * band * 1.20 * strength;
+    // ★#1031：内层胶囊（nest>2.5）位移缩 0.10×（与 glass.wgsl 同源——消源跳过区 ⇒ 条边线可见）。
+    let er_eff = 1.20f32 * if p.nest > 2.5 { 0.10 } else { 1.0 };
+    let bend = prof * band * er_eff * strength;
     // ★#905/#966：触控形变——触点处把内容沿"离触点方向"推挤（Gaussian 钟）。
     //   ★只给选中项（overlay）；press=0 或 touch 未激活 ⇒ push≈0（退化到既有折射）。
     let t_r = (hs.0.min(hs.1) * 0.9).max(8.0);
