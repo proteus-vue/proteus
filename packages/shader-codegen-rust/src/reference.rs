@@ -117,7 +117,8 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     let d = (-sd).max(0.0);
     let smin = p.size_px.0.min(p.size_px.1);   // 最短边（= 2×hsmin）
     // ★决策 #907/#910：折射带 = **最短边 1/3**（#910 修正口径：原 `hsmin*0.33 = 0.165·min` 只有 1/6 ⇒ ×2）
-    let band = (smin * 0.30).max(6.0);   // ★#998：恢复 #928 口径
+    // ★★★决策 #1005：0.30→**0.62×最短边** + EDGE_REFRACT 0.70→**1.90**（倒影带对齐 iOS；详见 glass.wgsl 同源注释）。
+    let band = (smin * 0.62).max(6.0);
     let e = (d / band).clamp(0.0, 1.0);
 
     let eps = (band * 0.3).clamp(1.0, 16.0);
@@ -134,7 +135,7 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     //   式轻弯折；机制 = 法线方向向外采样，单调不折叠）。refract_depth 以 band 为基准（1.0 中性）。
     let prof = (1.0 - e).powi(3);   // ★#998：恢复 #928（非单调 ⇒ 倒影；中腹≈0）
     let strength = (p.refract_depth / band.max(1.0)).clamp(0.2, 1.1);
-    let bend = prof * band * 0.70 * strength;   // ★#998：恢复 #928 口径
+    let bend = prof * band * 1.90 * strength;   // ★#1005：0.70→1.90（倒影带对齐 iOS；见 glass.wgsl EDGE_REFRACT）
     // ★#905/#966：触控形变——触点处把内容沿"离触点方向"推挤（Gaussian 钟）。
     //   ★只给选中项（overlay）；press=0 或 touch 未激活 ⇒ push≈0（退化到既有折射）。
     let t_r = (hs.0.min(hs.1) * 0.9).max(8.0);
@@ -163,8 +164,9 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     //   ★色散采样**同样过模糊核**（三个累加器）——与 glass.wgsl ③ 同源（修「R/B 通道被单点采样整替换」的模糊丢失）。
     // ★★★决策 #1004：**tap 间距分档**（消重影）——与 glass.wgsl ③ 同源（0/1 锐背板 = #1003 口径不变；
     //   2/3 宿主已深链预模糊（σ_pre≈3.9px）⇒ 本核退为小残差 d=2.5px/1.6px < 笔画宽 ⇒ 无副本分离）。
+    //   ★★★决策 #1005：nest=2 的 tap 0.065→**0.08**（宿主深链 → 单次 /2 轻链；可读性修正，见 glass.wgsl ③）。
     let mut bsig = (p.blur * 0.16f32).clamp(0.0, 8.0);
-    if p.nest > 1.5 { bsig = (p.blur * 0.065f32).clamp(0.0, 8.0); }
+    if p.nest > 1.5 { bsig = (p.blur * 0.08f32).clamp(0.0, 8.0); }
     if p.nest > 2.5 { bsig = (p.blur * 0.04f32).clamp(0.0, 8.0); }
     let taps: [(f32, f32); 9] = [
         (0.0, 0.0),
