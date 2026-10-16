@@ -1,7 +1,7 @@
 {
   "version": 1,
   "spec": "docs/ai-development-spec.md",
-  "updated_at": "2026-10-14",
+  "updated_at": "2026-10-16",
   "schema": {
     "说明": "Proteus 多 AI 协作开发 · 任务板（协调单一事实源）。规范全文见 docs/ai-development-spec.md 第 4 节。目标是让「谁在做 / 边界在哪 / 做完没 / 对应哪条决策」可机器核对，而不是靠记忆与口头协调。",
     "字段": {
@@ -615,7 +615,7 @@
         "T-glass-bowl-fold",
         "T-glass-veil-alpha"
       ],
-      "note": "【由来】用户转 workbuddy 报告「条内透射是细密错位纹理/横条纹，iOS 成形成句」。\n【复核（刻度尺探针实锤）】输入暗线 q≡0 mod 20 ⇒ 输出 y=3 多出一条（深部 q≈60 折叠镜像到贴边）；bend(0)=66px ⇒ 内容 0-44px 永不显示 + 44-66px 镜像进顶带 = 错位副本机制本体；视频逐帧（单调减速到冻结、无反向）同向。\n【修】剖面 4·e·(1-e)（bump 单调）+ EDGE_REFRACT 1.20→0.15（峰值 66px→≈8.3px < 字高 24px）；保留暗缝/亮脊/色散/碗形。\n【判据】探针 8 线→8 线 1:1（0-9px 向边轻拉）· parity 四态 · 单测 58 · coupled · 双端编译 · AAR/prebuilt · 真机条内网格结构成形透出。\n【★教训】「外观像」与「内容可读」可能互斥于同一位移场（折叠=液态感但毁字形；单调压缩兼得）；给位移场做「刻度尺探针」=把「手感」变成「测量」。\n【诚实边界】折叠感不再保留（若要倒影应反射条外内容）；幅度 0.15 可目视加档至 0.30；iOS/鸿蒙未接。\n【★2026-10-16 撤回（决策 #1010）】本卡「折叠」诊断经数学复核证伪（s\u0027=1+3(1−e)²·ER·str>0 恒成立 ⇒ (1−e)³ 单调）；bump/0.15 已回退，#1009 改动不再存在。保留作追溯锚点。"
+      "note": "【由来】用户转 workbuddy 报告「条内透射是细密错位纹理/横条纹，iOS 成形成句」。\n【复核（刻度尺探针实锤）】输入暗线 q≡0 mod 20 ⇒ 输出 y=3 多出一条（深部 q≈60 折叠镜像到贴边）；bend(0)=66px ⇒ 内容 0-44px 永不显示 + 44-66px 镜像进顶带 = 错位副本机制本体；视频逐帧（单调减速到冻结、无反向）同向。\n【修】剖面 4·e·(1-e)（bump 单调）+ EDGE_REFRACT 1.20→0.15（峰值 66px→≈8.3px < 字高 24px）；保留暗缝/亮脊/色散/碗形。\n【判据】探针 8 线→8 线 1:1（0-9px 向边轻拉）· parity 四态 · 单测 58 · coupled · 双端编译 · AAR/prebuilt · 真机条内网格结构成形透出。\n【★教训】「外观像」与「内容可读」可能互斥于同一位移场（折叠=液态感但毁字形；单调压缩兼得）；给位移场做「刻度尺探针」=把「手感」变成「测量」。\n【诚实边界】折叠感不再保留（若要倒影应反射条外内容）；幅度 0.15 可目视加档至 0.30；iOS/鸿蒙未接。\n【★2026-10-16 撤回（决策 #1010）】本卡「折叠」诊断经数学复核证伪（s'=1+3(1−e)²·ER·str>0 恒成立 ⇒ (1−e)³ 单调）；bump/0.15 已回退，#1009 改动不再存在。保留作追溯锚点。"
     },
     {
       "id": "T-glass-refract-restore",
@@ -709,6 +709,43 @@
         "T-glassnav-vfor-events"
       ],
       "note": "【由来】用户「图标显示了，但没有选中高亮，文字也是」。三处根因：① 两端 SuperappRuntimeHost 缺 updatePatches（C 桥按 mount 存在注入 → 方法 id NULL → 运行期记「无回执」）⇒ 动态 :class 颜色不生效；② svg 图标填充色是编译期继承烘焙的静态值、运行期 :class 改的 color 挂外层 wrapper 不级联到子图标叶（CSS 继承在自绘模型里不天然继承）；③ 图标填补色取自内核 stroke_color，改色须内核配合 + 宿主重注入。★修：① 两端加 updatePatches 转发；② 编译器标 inheritColor（iconLeaf && !hadOwnColorDecl）+ instantiate 透传 + screen-runtime.onPaintProp 级联；③ 内核 PatchStyle.color + 宿主 svg 重注入（Android reInjectSvgFor / iOS applyColorPatches）。★教训：『选中态』是跨 5 处的能力（宿主回执→编译标记→运行期级联→内核字段→宿主重注入），缺一不亮；与 #935/#938 同族（JS 建了通路、某端缺席）。★诚实边界：iOS 图标级联未逐像素取证（玻璃底噪）。"
+    },
+    {
+      "id": "T-glass-div1-25tap",
+      "title": "采样源提全分辨率（DIV=1）+ 25-tap 等 σ 采样 + 折叠带模糊下限 0.80——消「获取映射发脏」",
+      "type": "bugfix",
+      "status": "done",
+      "owner": "session:zcode-glassblur",
+      "scope": [
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/**",
+        "packages/shader-codegen-rust/src/materials/**",
+        "packages/shader-codegen-rust/src/reference.rs",
+        "packages/shader/src/generated/**"
+      ],
+      "decision": 1014,
+      "verification": "真机网纹指标 平均 2.73→2.14 / p90 7.7→5.5 / max 31→22 && node scripts/gen-shaders.mjs --check && bash hosts/ios/check-glass-pixel-parity.sh（四态 max 1/255）&& npx vitest run tests/glass.test.ts tests/glass-ir.test.ts",
+      "branch": null,
+      "related": [
+        "T-glass-rainbow-blurk"
+      ],
+      "note": "【由来】用户「内容还是不够清晰可读，获取的映射感觉有点儿脏」。\n【两叠加根因】A 采样源插值织纹（DIV=2 双线性放大，此前被全局模糊掩护）⇒ DIV 2→1；B 折叠带欠采样（s'=3.64 需 ≈1.3px 过滤）⇒ blur_k 下限 0.45→0.80。\n【修】9-tap→25-tap（5×5 二项式等 σ；AGSL 无循环 ⇒ 手工摊开 75 行 ×3 累加器）。\n【★教训】拍频摩尔纹先算频率比；\"清晰\"与\"反走样\"同币两面（压缩比必须匹配过滤）；真机素材入 oracle = 归因鸿沟通用桥。\n【诚实边界】残余网纹含双副本叠加成分（#998 本体勿清）；可再上收 0.90；iOS/鸿蒙未接（同源）。"
+    },
+    {
+      "id": "T-glass-preblur",
+      "title": "宿主预模糊（σ≈2.0px 背板低通，GlassPreblur）+ 玻璃采样源子系统拆分（GlassBackdrop）——消折叠带混叠网纹",
+      "type": "bugfix",
+      "status": "done",
+      "owner": "session:zcode-glassblur",
+      "scope": [
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/**"
+      ],
+      "decision": 1015,
+      "verification": "真机 glass-nav 条内透射\"第五人格\"干净可辨无网纹（.workbuddy/salvage/liquid-glass/preblur-1015/）&& 离线 oracle 对照 foldHP 0.78→0.26（四组 floor×preblur）&& bash hosts/android/check-host-compile.sh && pnpm check:file-size && pnpm check:host-rounding",
+      "branch": null,
+      "related": [
+        "T-glass-div1-25tap"
+      ],
+      "note": "【由来】用户「现在最大的问题就是内容还是不够清晰」。\n【取证】离线 oracle 分治：锐背板 foldHP=0.78（网纹）→ 预模糊 σ2.0=0.26 且 4px 笔画保留（19→17/255）；无预模糊+宽下限 ⇒ 字形碎斑（0.94）⇒ 低通必须在位移采样前。\n【修】GlassPreblur（半程双线性+3×3盒式+升采样 ≈σ2.0px）作用于背板捕获末尾；GlassBackdrop 拆分（采样源子系统搬出，ProteusHostView 5838→5562 行清偿体积债）；顺修 #1013 漏的 I2-ALLOW 登记（HEAD 上 host-rounding 本就红）。\n【★教训】压缩映射下\"更清晰\"= 源端限带 + 保真身对比（非核端模糊加/减拉锯）；采样源频率与采样格密度两层分开治；结构债跟着改动热点拆。\n【诚实边界】σ2.0 取自 PIL 2.0/2.5 窗口；iOS/鸿蒙未接（iOS 架构本就先糊背板）；预模糊成本未逐帧量。"
     }
   ]
 }
