@@ -117,8 +117,9 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     let d = (-sd).max(0.0);
     let smin = p.size_px.0.min(p.size_px.1);   // 最短边（= 2×hsmin）
     // ★决策 #907/#910：折射带 = **最短边 1/3**（#910 修正口径：原 `hsmin*0.33 = 0.165·min` 只有 1/6 ⇒ ×2）
-    // ★★★决策 #1005：0.30→**0.62×最短边** + EDGE_REFRACT 0.70→**1.90**（倒影带对齐 iOS；详见 glass.wgsl 同源注释）。
-    let band = (smin * 0.62).max(6.0);
+    // ★★★决策 #1006：0.62→**0.45×最短边** + EDGE_REFRACT 1.90→**1.20**（复核修正：薄折叠贴边带 ≈0.17·H；
+    //   详见 glass.wgsl 同源注释）。
+    let band = (smin * 0.45).max(6.0);
     let e = (d / band).clamp(0.0, 1.0);
 
     let eps = (band * 0.3).clamp(1.0, 16.0);
@@ -135,7 +136,7 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     //   式轻弯折；机制 = 法线方向向外采样，单调不折叠）。refract_depth 以 band 为基准（1.0 中性）。
     let prof = (1.0 - e).powi(3);   // ★#998：恢复 #928（非单调 ⇒ 倒影；中腹≈0）
     let strength = (p.refract_depth / band.max(1.0)).clamp(0.2, 1.1);
-    let bend = prof * band * 1.90 * strength;   // ★#1005：0.70→1.90（倒影带对齐 iOS；见 glass.wgsl EDGE_REFRACT）
+    let bend = prof * band * 1.20 * strength;   // ★#1006：1.90→1.20（见 glass.wgsl EDGE_REFRACT）
     // ★#905/#966：触控形变——触点处把内容沿"离触点方向"推挤（Gaussian 钟）。
     //   ★只给选中项（overlay）；press=0 或 touch 未激活 ⇒ push≈0（退化到既有折射）。
     let t_r = (hs.0.min(hs.1) * 0.9).max(8.0);
@@ -232,6 +233,13 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     }
     // ★★★决策 #944：tint 移到面纱之后（与 glass.wgsl 同源——作者 tint 作用于最终玻璃面，暗 tint 才不被面纱洗白）。
     for c in 0..3 { col[c] = col[c] + (col[c] * p.tint[c] * 2.0 - col[c]) * p.tint[3]; }
+
+    // ★★★决策 #1006：**菲涅尔碗形亮度场**（连续 SDF 驱动；与 glass.wgsl 同源——见其注释的实证）。
+    let bowl_span = (smin * 0.55).max(8.0);
+    let bowl_t = (d / bowl_span).clamp(0.0, 1.0);
+    let bowl_ep = 1.0 - smoothstep(0.29, 1.0, bowl_t);
+    let bowl_f = 0.96 + (1.005 - 0.96) * bowl_ep;
+    for c in 0..3 { col[c] = col[c] * bowl_f; }
 
     let cos_i = 1.0 / (1.0 + slope * slope).sqrt();
     let f0 = 0.04f32;

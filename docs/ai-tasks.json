@@ -552,6 +552,28 @@
       "note": "【由来】用户对照截图「我们的文字看快不见了，iOS 清晰可见」+「iOS 字到玻璃中间、上边内侧有倒影」。\n【① 可读性】#1004 深链末级 16px bilinear 核在 16px 尺度过零 ⇒ 字形（笔画/字间隙 8-16px）被精确杀灭 ⇒ 回退单次 /2 + shader d=3.12px（< 笔画宽无重影）；MTF(16px)≈0.53。\n【② 折叠倒影】iOS 几何：镜面 0.33·H、采样 0.56·H ⇒ band 0.30→0.62·min + EDGE_REFRACT 0.70→1.90 ⇒ 镜面 ≈0.38·H；oracle 线探针验证（d=84→y=12 翻转副本）。\n【★教训】核形状（零点）与 σ 是两个自由度；「倒影」当几何命题解。\n【诚实边界】band/ER 为第一版估值待目视；倒影亮度层级未单调；iOS/鸿蒙未接。"
     },
     {
+      "id": "T-glass-bowl-fold",
+      "title": "液态玻璃「三场拆分」：菲涅尔碗形亮度场（新增）+ 折叠镜面修正（回调 #1005）· workbuddy v3-1016 复核",
+      "type": "capability",
+      "status": "done",
+      "owner": "session:zcode-glassblur",
+      "scope": [
+        "packages/shader-codegen-rust/src/materials/**",
+        "packages/shader-codegen-rust/src/reference.rs",
+        "packages/shader/src/generated/**",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/**",
+        "hosts/harmony/host-app/**"
+      ],
+      "decision": 1006,
+      "verification": "bash hosts/ios/check-glass-pixel-parity.sh（三态 max 1/255）&& bash hosts/android/check-host-compile.sh && 真机判据：条内碗形 255→244→254（4.3%）· 幽灵 Δ33 · 刻度尺探针折叠 29px 薄带",
+      "branch": null,
+      "related": [
+        "T-glass-readability-fold",
+        "T-glass-nesting-2state"
+      ],
+      "note": "【由来】用户转 workbuddy v3-1016 报告（折射贯穿整条/三个场/反射=菲涅尔/吸入），逐条独立复测后：① 碗形亮度场采纳并落地（bowl_f=mix(0.96,1.005,ep)，span 0.55·min）——两份独立测量互证（2.8%/4.1% 连续渐变）；② 折叠镜面修正（回调 #1005 的 0.62/1.90）：21x 拉伸证实 iOS「上边的文字」是真实列表行非镜像副本 ⇒ band 0.45 + ER 1.20（镜面 ≈0.17·H 薄折叠带）；③ 三场同 SDF 连续驱动；④ 「反射=菲涅尔」部分采纳（折叠薄副本仍存在）。\n【★教训】采信外部报告逐条独立复测；「上边看到的文字」先问是不是本来就在那；刻度尺探针=位移映射通用工具。\n【诚实边界】碗形参数首落待目视；iOS/鸿蒙未接。"
+    },
+    {
       "id": "T-glass-ios-remaining",
       "title": "液态玻璃对齐 iOS · 剩余项：折射顺序(先保高频再位移) / 亮度→alpha 调制 / 标签贴底缘（wb 真机诊断 #5/#7 + 第十块结论；①blur 已收口至 T-glass-ios-blur）",
       "type": "capability",
