@@ -2368,6 +2368,7 @@ public class ProteusHostView extends ViewGroup {
                         @Override public boolean onScroll(android.view.MotionEvent e1, android.view.MotionEvent e2,
                                                          float dx, float dy) {
                             if (e1 == null || e2 == null) return false;
+                            glassIx.gestureScrolled = true;   // ★#1023：本手势已判 scroll（释放重定向的触发条件）
                             android.os.Bundle b = new android.os.Bundle();
                             b.putFloat("dx", dx);
                             b.putFloat("dy", dy);
@@ -2377,7 +2378,16 @@ public class ProteusHostView extends ViewGroup {
                             //   只 report（手势语义上报），内容纹丝不动（边界原文："真机手指拖拽未接线"）。
                             // ★★长卷模式（2026-10-01）：`horizontalScroll` 开时走 **X 轴**通路
                             //   （横移整幅长卷——同类手势、另一个轴；两轴互斥由模式开关决定）。
-                            if (horizontalScroll) {
+                            // ★★★决策 #1023（对齐 iOS tab bar 语义）：按压在交互玻璃上且**横向主导**
+                            //   ⇒ 这是"拖 lens"手势，不滚页面（iOS 从 tab bar 拖动 = 移动选中胶囊，非滚动）。
+                            //   纵向主导则照常滚动（从条上滑起滚页面不破坏）。
+                            final float dxT = e2.getX() - gestureStartX;
+                            final float dyT = e2.getY() - gestureStartY;
+                            final boolean glassDragMode = glassIx.nodeId >= 0
+                                    && Math.abs(dxT) > 12f && Math.abs(dxT) > Math.abs(dyT);
+                            if (glassDragMode) {
+                                // 只上报语义（滚动抑制——lens 跟手在 glassInteractDrag 里）
+                            } else if (horizontalScroll) {
                                 scrollDragByX(dx);
                             } else {
                                 scrollDragBy(dx, dy);
@@ -2492,13 +2502,14 @@ public class ProteusHostView extends ViewGroup {
             //   每帧 `stepInertia` 会把 scrollX 拉回抛滑时间线，拖动量被静默吞掉。
             if (flingScroller != null && !flingScroller.isFinished()) flingScroller.forceFinished(true);
             // ★★★决策 #905：玻璃触控形变——命中交互玻璃 ⇒ 记触点（盒局部 px）+ 目标 press=1，逐帧重绘。
-            glassInteractHit(ev.getX(), ev.getY(), true);
+            glassInteractHit(ev.getX(), ev.getY());
             // ★DOWN 时刻做命中 → 这一整个手势都归它（与平台语义一致）
             dispatchHit(ev.getX(), ev.getY());
             gestureTarget = lastHitTarget;
             gestureChain = lastHitChain;
             gestureStartX = lastHitX;
             gestureStartY = lastHitY;
+            glassIx.gestureScrolled = false;   // ★#1023：新手势 ⇒ 重置 scroll 判定
             // ★★★S1.1（2026-10-10 · 输入延迟专项 #767）：**按下态原生即时应用**——命中节点若有
             //   `:active` 折出的 press* 字段，立即（同一 DOWN 内、零 JS 跨界）改绘制属性并重录帧。
             //   ⇒ "输入不过桥"：按下反馈延迟 = 0 个 JS 往返（对标 RN Pressable / Flutter InkWell 必过逻辑层）。
@@ -2537,11 +2548,25 @@ public class ProteusHostView extends ViewGroup {
             clearPress();
             endFollow();   // ★S3：抬指 ⇒ 松手（回弹/吸附在内核）
             endField();    // ★场跟手：抬指 ⇒ 叶片回声明基态（场消失 = 静止网格）
+            // ★★★决策 #1023（iOS：长按拖到哪个 tab ⇒ 释放选哪个）：拖动超 slop ⇒ 用**释放点**重定向 tap。
+            //   （拖动后 GestureDetector 已判 scroll、不会发 tap ⇒ 这里手动派发一次；同步进 JS 走 @click。）
+            if (action == android.view.MotionEvent.ACTION_UP && glassIx.dragMoved && glassIx.gestureScrolled && glassIx.nodeId >= 0) {
+                dispatchHit(ev.getX(), ev.getY());
+                if (lastHitTarget >= 0) {
+                    gestureTarget = lastHitTarget;
+                    gestureChain = lastHitChain;
+                    gestureStartX = lastHitX;
+                    gestureStartY = lastHitY;
+                    report("tap", ev, null);
+                }
+            }
+            glassIx.resetDrag();   // 拖拽状态清零（lens 硬吸附：dx 回 0 + JS 新槽位 = "吸附到释放点"）
             glassInteractRelease();   // ★#905：松手 ⇒ press 目标 0（回弹）
         }
-        // ★#905：拖动跟随——MOVE 时更新触点（玻璃流动跟着手指走，逐帧重绘）
+        // ★#905/#1023：拖动跟随——MOVE 时更新触点 + lens 横向偏移（流动跟着手指走，逐帧重绘）。
+        //   ★#1023 改用 glassInteractDrag：不重做 hit test（手指移出条外 lens 仍跟手）。
         if (action == android.view.MotionEvent.ACTION_MOVE) {
-            glassInteractHit(ev.getX(), ev.getY(), true);
+            glassInteractDrag(ev.getX(), ev.getY());
         }
         // ★交给平台识别器判定 tap / longpress / fling / scroll（不自研阈值与时间窗）
         detector().onTouchEvent(ev);
@@ -3153,17 +3178,7 @@ public class ProteusHostView extends ViewGroup {
             stepInertia();
             postInvalidateOnAnimation();
         }
-        // ★★★决策 #905：玻璃触控形变——press 逐帧指数逼近目标；未收敛时继续排帧（自持，收敛即停）。
-        if (glassInteractNodeId >= 0) {
-            if (Math.abs(glassPress - glassPressTarget) > 0.005f) {
-                glassPress += (glassPressTarget - glassPress) * 0.28f;
-                postInvalidateOnAnimation();
-            } else if (glassPressTarget == 0f) {
-                glassPress = 0f; glassInteractNodeId = -1;   // 回弹完 ⇒ 收工
-            } else {
-                glassPress = glassPressTarget;
-            }
-        }
+        if (glassIx.tick()) postInvalidateOnAnimation();   // ★#905/#1023：交互推进（press + 拖拽 lerp；未收敛 ⇒ 自持排帧）
         super.onDraw(canvas);
         ensurePicture();   // ★首帧补建（setCmds 早于布局时）
         // ★★★玻璃材质（决策 #818）：本屏有玻璃节点 ⇒ 先捕获"无玻璃面"的内容帧作背后内容采样源。
@@ -3323,25 +3338,9 @@ public class ProteusHostView extends ViewGroup {
     private final java.util.HashMap<Integer, Float> glassBgLumByNode = new java.util.HashMap<>();
     /** ★判据（任务 A）：true ⇒ 每帧 dump 复合层 + 几何（供脚本逐点对照）。由 `--es glassdbg 1` 打开。 */
     public boolean glassDebug = false;
-    /** ★★★决策 #905：玻璃触控形变——活动交互玻璃 + 触点（盒局部 px）+ press（逐帧 lerp 动画）。 */
-    private int glassInteractNodeId = -1;
-    private float glassTouchLocalX = -1e6f, glassTouchLocalY = -1e6f;
-    // ★#966：触点在**命中盒坐标空间**（与 cmd 盒 c.x/c.y 同空间）——供**选中胶囊**（overlay 玻璃）
-    //   折算自身局部触点 ⇒ SDF 充气。命中玻璃自身仍用上面的 local（盒相同）。
-    private float glassTouchAbsX = -1e6f, glassTouchAbsY = -1e6f;
-    private float glassPress = 0f, glassPressTarget = 0f;
-    /** ★#959/#961：按下放大的两档系数——**条小、选中胶囊大**（用户实测 iOS：条缩放小、胶囊缩放大）。 */
-    /** ★#963：当前"按下组"的玻璃节点集（命中 + 子树内玻璃）——供 drawGlassFace 判"是否点亮"。 */
-    private java.util.Set<Integer> glassPressSubtree = java.util.Collections.emptySet();
-    private static final float GLASS_PRESS_SCALE = 0f;             // ★#965：条**不缩放**（用户「按下条跟着变」——条须完全静止）
-    //  ★★★#971（对齐 workbuddy 09:05 取证 + iOS 18:53 实拍）：按下时**外凸的是胶囊透镜**、**条的边基本不动**——
-    //    胶囊**纵向鼓起**（垂直 ~1.5×、溢出条外）、横向略涨（窄腰椭圆端），不是等比放大。
-    //    ★旧 `GLASS_PRESS_SCALE_CAPSULE=0.30`（等比 1.3×）造成的观感是"整块变白"，得不到 iOS 的"透镜从条里鼓出"。
-    private static final float GLASS_PRESS_SCALE_CAPSULE_X = 0.14f;  // 胶囊横向（+14% ⇒ 1.14×）
-    private static final float GLASS_PRESS_SCALE_CAPSULE_Y = 0.55f;  // 胶囊纵向（+55% ⇒ 1.55×，明显溢出条外）
-    /** ★#971：前景内容随胶囊缩放（对齐 iOS 实测 icon ≈1.2×；横向略多于纵向）。 */
-    private static final float GLASS_PRESS_CONTENT_SCALE_X = 0.20f;
-    private static final float GLASS_PRESS_CONTENT_SCALE_Y = 0.17f;
+    /** ★★★决策 #1023：玻璃**交互子系统**（press/drag 状态机 + 命中；见 GlassInteraction）。 */
+    private final GlassInteraction glassIx = new GlassInteraction();
+
     /** ★★★决策 #950（vibrancy）：本帧**暗玻璃**的区域盒（内容坐标 x,y,w,h）——落在其中的文字/图标**强制白色**
      *  （对齐 iOS：玻璃压暗背景时前景转白，保内容强烈可读）。逐帧在 drawGlassPass 重算。 */
     private final java.util.List<float[]> darkGlassRects = new java.util.ArrayList<>();
@@ -3394,7 +3393,7 @@ public class ProteusHostView extends ViewGroup {
             drawGlassFaceAt(c, nodeId, g, ox, oy, w, h, glassBd.offscreenSource(), 0f, 0f, 1f, 1f, nest, bgOv);
         }
         @Override public boolean debugDump() { return glassDebug; }
-        @Override public float press() { return glassPress; }
+        @Override public float press() { return glassIx.press; }
         @Override public java.io.File filesDir() { return getContext().getFilesDir(); }
     };
 
@@ -3422,11 +3421,11 @@ public class ProteusHostView extends ViewGroup {
     private void drawGlassFaceAt(Canvas canvas, int nodeId, GlassMaterial.Spec spec, float ox, float oy, float w, float h,
                                  android.graphics.Bitmap sampling, float bdX, float bdY, float divX, float divY, float nest, float bgOv) {
         if (w <= 0 || h <= 0) return;
-        final float nodePress = (nodeId == glassInteractNodeId || glassPressSubtree.contains(nodeId)) ? glassPress : 0f;
-        final boolean inPressGroup = (nodeId == glassInteractNodeId) || glassPressSubtree.contains(nodeId);
-        final boolean touchApplies = inPressGroup && glassTouchAbsX > -1e5f;
-        final float qtx = touchApplies ? glassTouchAbsX - ox : -1e6f;
-        final float qty = touchApplies ? glassTouchAbsY - oy : -1e6f;
+        final float nodePress = (nodeId == glassIx.nodeId || glassIx.pressSubtree.contains(nodeId)) ? glassIx.press : 0f;
+        final boolean inPressGroup = (nodeId == glassIx.nodeId) || glassIx.pressSubtree.contains(nodeId);
+        final boolean touchApplies = inPressGroup && glassIx.touchAbsX > -1e5f;
+        final float qtx = touchApplies ? glassIx.touchAbsX - ox : -1e6f;
+        final float qty = touchApplies ? glassIx.touchAbsY - oy : -1e6f;
         android.graphics.Paint p = GlassMaterial.buildPaint(nodeId, sampling, ox, oy, bdX, bdY, w, h, spec.radius, spec,
                 qtx, qty, nodePress, divX, divY, nest, bgOv);
         final int save = canvas.save();
@@ -3491,14 +3490,14 @@ public class ProteusHostView extends ViewGroup {
     private void drawGlassFace(Canvas canvas, int nodeId, Cmd c, GlassMaterial.Spec spec, float bx, float by, float bw, float bh,
                                android.graphics.Bitmap sampling, float nest, float bgOv) {
         if (bw <= 0 || bh <= 0) return;
-        final float nodePress = (nodeId == glassInteractNodeId || glassPressSubtree.contains(nodeId)) ? glassPress : 0f;
+        final float nodePress = (nodeId == glassIx.nodeId || glassIx.pressSubtree.contains(nodeId)) ? glassIx.press : 0f;
         // ★#966/#969：触点在**本盒（可能已缩放）坐标空间**的局部位置——**按下组内的每一块玻璃**（命中玻璃=条 与
         //   其子树内玻璃=选中胶囊）**都在同一触点处外凸**（iOS 的 flex 是整个玻璃面在触点处鼓起，不只胶囊）。
-        //   ★`glassTouchAbsX` 与盒 x 同空间；按 #961 缩放后 `bx` 已变 ⇒ 必须用绝对值减 `bx`。
-        final boolean inPressGroup = (nodeId == glassInteractNodeId) || glassPressSubtree.contains(nodeId);
-        final boolean touchApplies = inPressGroup && glassTouchAbsX > -1e5f;
-        final float qtx = touchApplies ? glassTouchAbsX - bx : -1e6f;
-        final float qty = touchApplies ? glassTouchAbsY - by : -1e6f;
+        //   ★`glassIx.touchAbsX` 与盒 x 同空间；按 #961 缩放后 `bx` 已变 ⇒ 必须用绝对值减 `bx`。
+        final boolean inPressGroup = (nodeId == glassIx.nodeId) || glassIx.pressSubtree.contains(nodeId);
+        final boolean touchApplies = inPressGroup && glassIx.touchAbsX > -1e5f;
+        final float qtx = touchApplies ? glassIx.touchAbsX - bx : -1e6f;
+        final float qty = touchApplies ? glassIx.touchAbsY - by : -1e6f;
         android.graphics.Paint p = GlassMaterial.buildPaint(nodeId, sampling != null ? sampling : glassBd.bitmap(), bx, by, glassBd.originX(), glassBd.originY(), bw, bh, spec.radius, spec,
                 qtx, qty, nodePress, glassBd.scaleX(), glassBd.scaleY(), nest, bgOv);
         // ★★★决策 #971（对齐 workbuddy 09:05 取证）：**剪影恒为当前盒的圆角矩形**——形状变化全部来自
@@ -3523,36 +3522,26 @@ public class ProteusHostView extends ViewGroup {
         canvas.restoreToCount(save);
     }
 
-    /** ★★★决策 #905：玻璃触控形变——命中交互玻璃 ⇒ 记触点（盒局部 px）+ 目标 press=1；逐帧重绘。
-     *  `x,y` = 视图内坐标（px）；命中盒另加滚动偏移折算到**内容坐标**（玻璃盒 c.x/c.y 是内容坐标）。 */
-    private void glassInteractHit(float x, float y, boolean down) {
+    /** ★★★决策 #1023：玻璃命中（薄 wrapper；子系统见 GlassInteraction）。★#959：fixed 盒坐标=屏幕坐标，滚动时用 raw 坐标。 */
+    private void glassInteractHit(float x, float y) {
         final List<Cmd> list = cmds;
         final int[] ids = cmdNodeIds;
         if (list == null || ids == null) return;
         final boolean scrolled = offsetScroll ? (scrollX != 0 || scrollY != 0) : (!horizontalScroll && (scrollX != 0 || scrollY != 0));
-        final float cx = x + (scrolled ? scrollX : 0), cy = y + (scrolled ? scrollY : 0);
-        // ★#959：fixed 玻璃盒坐标是**屏幕坐标**（不随滚动）⇒ 命中须同时试 **raw 视图坐标**（滚动后 content 坐标会偏 offset 漏中）。
-        final boolean useRaw = scrolled;
-        for (int i = 0; i < list.size() && i < ids.length; i++) {
-            GlassMaterial.Spec g = glassByNode.get(ids[i]);
-            if (g == null || !g.interactive) continue;
-            final Cmd c = list.get(i);
-            final float hx = useRaw ? x : cx, hy = useRaw ? y : cy;
-            if (hx >= c.x && hx <= c.x + c.w && hy >= c.y && hy <= c.y + c.h) {
-                glassInteractNodeId = ids[i];
-                glassTouchLocalX = hx - c.x;    // 盒局部 px
-                glassTouchLocalY = hy - c.y;
-                glassTouchAbsX = hx;             // ★#966：绝对触点（同空间，供 overlay 玻璃折算）
-                glassTouchAbsY = hy;
-                glassPressTarget = 1f;
-                if (glassPress < 0.01f) glassPress = 0.01f;   // 立即起步（避免首帧无变化）
-                invalidate();
-                return;
-            }
-        }
+        final float hx = scrolled ? x : x + scrollX, hy = scrolled ? y : y + scrollY;
+        if (glassIx.hit(list, ids, glassByNode, hx, hy)) invalidate();
     }
 
-    private void glassInteractRelease() { glassPressTarget = 0f; invalidate(); }
+    /** ★#1023：拖动跟手（薄 wrapper；不重做 hit test——手指移出条外 lens 仍跟手）。 */
+    private void glassInteractDrag(float x, float y) {
+        if (glassIx.nodeId < 0) return;
+        final boolean scrolled = offsetScroll ? (scrollX != 0 || scrollY != 0) : (!horizontalScroll && (scrollX != 0 || scrollY != 0));
+        glassIx.drag(scrolled ? x : x + scrollX, scrolled ? y : y + scrollY);
+        invalidate();
+    }
+
+    /** ★#905：松手 ⇒ press 目标 0（回弹）+ lens 吸附回槽位（#1023）。 */
+    private void glassInteractRelease() { glassIx.release(); invalidate(); }
 
     /** ★★★玻璃独立绘制遍（实时，不进显示列表）：遍历本屏 cmds，对带 glass 的节点画玻璃面（背后内容采样）。 */
     private void drawGlassPass(Canvas canvas) {
@@ -3567,18 +3556,18 @@ public class ProteusHostView extends ViewGroup {
         //   绕**同一中心**（按下玻璃的盒中心）等比缩放，否则"条放大、胶囊不动"（真机实测：用户「条有缩放、胶囊没变化」）。
         Cmd pressBox = null;
         java.util.Set<Integer> pressSubtree = java.util.Collections.emptySet();
-        if (glassInteractNodeId >= 0 && glassPress > 0.001f && ids != null) {
+        if (glassIx.nodeId >= 0 && glassIx.press > 0.001f && ids != null) {
             for (int k = 0; k < list.size() && k < ids.length; k++) {
-                if (ids[k] == glassInteractNodeId) { pressBox = list.get(k); break; }
+                if (ids[k] == glassIx.nodeId) { pressBox = list.get(k); break; }
             }
-            if (pressBox != null) pressSubtree = subtreeIdsOf(glassInteractNodeId);
+            if (pressBox != null) pressSubtree = subtreeIdsOf(glassIx.nodeId);
         }
-        glassPressSubtree = pressSubtree;
+        glassIx.pressSubtree = pressSubtree;
         // ★#961：子树内的**内层玻璃**（选中胶囊）——它用**更大**的缩放系数（条小/胶囊大，对齐 iOS）。
         Cmd pressInner = null;
         if (pressBox != null) {
             for (int k = 0; k < list.size() && k < ids.length; k++) {
-                if (ids[k] != glassInteractNodeId && glassByNode.get(ids[k]) != null && pressSubtree.contains(ids[k])) { pressInner = list.get(k); break; }
+                if (ids[k] != glassIx.nodeId && glassByNode.get(ids[k]) != null && pressSubtree.contains(ids[k])) { pressInner = list.get(k); break; }
             }
         }
         // ★★★决策 #907：玻璃遍**套用与 onDraw 相同的 `-scroll`+clip 变换**——这样
@@ -3624,12 +3613,22 @@ public class ProteusHostView extends ViewGroup {
             if (inPress) {
                 // ★#971：**条静止**（k=0）；**胶囊纵向鼓起**（垂直 1.55×、横向 1.14×）⇒ 透镜从条里鼓出、溢出条外。
                 //   （旧版等比 1.3× 的观感是"整块变白"，非 iOS 的"透镜鼓出"。）
-                final boolean isCapsule = pressInner != null && ids[i] != glassInteractNodeId;
+                final boolean isCapsule = pressInner != null && ids[i] != glassIx.nodeId;
                 if (isCapsule) {
-                    final float sx = 1f + glassPress * GLASS_PRESS_SCALE_CAPSULE_X;
-                    final float sy = 1f + glassPress * GLASS_PRESS_SCALE_CAPSULE_Y;
+                    final float sx = 1f + glassIx.press * GlassInteraction.PRESS_SCALE_CAPSULE_X;
+                    final float sy = 1f + glassIx.press * GlassInteraction.PRESS_SCALE_CAPSULE_Y;
                     final float ccx = gc.x + gc.w * 0.5f, ccy = gc.y + gc.h * 0.5f;
-                    bx = ccx + (gc.x - ccx) * sx; bw = gc.w * sx;
+                    // ★★★决策 #1023（iOS 18 视频取证）：**拖拽跟手**——lens 横向偏移 glassIx.dragDx，
+                    //   clamp 保证缩放后 lens 整体留在条内（8px 内边距）；glassIx.dragAppliedDx 供内容缩放段复用。
+                    float ddx = glassIx.dragDx;
+                    if (pressBox != null && Math.abs(ddx) > 0.01f) {
+                        final float halfW = gc.w * sx * 0.5f;
+                        final float minC = pressBox.x + 8f + halfW;
+                        final float maxC = pressBox.x + pressBox.w - 8f - halfW;
+                        if (minC <= maxC) ddx = Math.max(minC, Math.min(maxC, ccx + ddx)) - ccx;
+                    }
+                    glassIx.dragAppliedDx = ddx;
+                    bx = ccx + ddx + (gc.x - ccx) * sx; bw = gc.w * sx;
                     by = ccy + (gc.y - ccy) * sy; bh = gc.h * sy;
                 }
             }
@@ -3660,14 +3659,15 @@ public class ProteusHostView extends ViewGroup {
         //     `drawCmds` **内部**按节点做），故缩放中心须用 **content 坐标 = 屏幕中心 + scroll**（此前直接用
         //     屏幕坐标 ⇒ 滚动后中心偏 scrollY ⇒ 内容被推下去）。
         //   ★条小/胶囊大：落在**胶囊 x 范围**内的内容用胶囊系数，其余用条系数（分三段裁剪画）。
-        if (pressInner != null && glassPress > 0.001f && !gContent.isEmpty()) {
+        if (pressInner != null && glassIx.press > 0.001f && !gContent.isEmpty()) {
             // ★#971：**只缩放胶囊 x 范围的内容**（绕**胶囊自身中心**）——其余 tab 不缩放（条静止）。
             //   内容缩放与胶囊盒缩放**不同**：iOS 实测 icon ≈1.2×（近似等比、横向略多），
             //   而不是跟着盒的 1.55× 纵向拉伸（那会把文字拉长）。
-            final float ccx = pressInner.x + pressInner.w * 0.5f + (gScrolled ? scrollX : 0);
+            // ★#1023：内容缩放区中心**跟随 lens 拖动**（与胶囊面同一偏移——拖动时"放大镜"下的内容同步移动）。
+            final float ccx = pressInner.x + pressInner.w * 0.5f + glassIx.dragAppliedDx + (gScrolled ? scrollX : 0);
             final float ccy = pressInner.y + pressInner.h * 0.5f + (gScrolled ? scrollY : 0);
-            final float sCapX = 1f + glassPress * GLASS_PRESS_CONTENT_SCALE_X;
-            final float sCapY = 1f + glassPress * GLASS_PRESS_CONTENT_SCALE_Y;
+            final float sCapX = 1f + glassIx.press * GlassInteraction.PRESS_CONTENT_SCALE_X;
+            final float sCapY = 1f + glassIx.press * GlassInteraction.PRESS_CONTENT_SCALE_Y;
             final float capL = ccx - pressInner.w * 0.5f * sCapX - 4f;
             final float capR = ccx + pressInner.w * 0.5f * sCapX + 4f;
             final float top = -1e6f, bot = 1e6f;
