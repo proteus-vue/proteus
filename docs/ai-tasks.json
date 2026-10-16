@@ -769,6 +769,28 @@
         "T-glass-preblur"
       ],
       "note": "【由来】用户「亮底和暗底的玻璃条以及选中胶囊的明暗对比度…我觉得我们的这个对比还差点儿」+「模糊磨砂感太重了」。\n【取证】iOS 亮态 254/236（Δ−18）· 暗态 24/58（Δ+34）；叠加层单一常数零残差反解 C=0.683(174)/α=0.226——同一组常数覆盖两态。\n【磨砂归因】superapp blur=28 ⇒ 预模糊 σ2.0 + shader 0.07(1.96) 总 σ2.80 = #1014 前 +43%。\n【修】wgsl/oracle 同源：暗霜 0.55→0.20（暗条 24）；叠加单一常数；模糊残差 0.02（总 σ2.08，抗摩尔纹在预模糊里不降）。\n【★教训】「对比不够」找**覆盖两态的同一常数**而非每态各配参数（#958 双参两态都偏）；「模糊太重」查**串联总传递**（预模糊×shader 核）,残差化比每处调小可控。\n【诚实边界】暗霜按纯黑拟合；中灰底未单独校；iOS 图含深色模式全局效应，本项只对齐玻璃面。"
+    },
+    {
+      "id": "T-glass-luminal-2state",
+      "title": "两态各再推一档：白端 bowl 1.0/1.04（条面 254）+ 暗端霜色 0.15（条面 24）双对齐 iOS",
+      "type": "bugfix",
+      "status": "done",
+      "owner": "session:zcode-glassblur",
+      "scope": [
+        "packages/shader-codegen-rust/src/materials/**",
+        "packages/shader-codegen-rust/src/reference.rs",
+        "packages/shader/src/generated/**",
+        "hosts/ios/ProteusHost/runtime/generated-materials.swift",
+        "hosts/harmony/host-app/proteus_render/src/main/cpp/generated_materials_spirv.h",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/GeneratedMaterials.java"
+      ],
+      "decision": 1017,
+      "verification": "真机双态判据：亮条 252.9/胶囊 233.2（iOS 254/236）· 暗条 24.4/胶囊 59.6（iOS 24/58）（.workbuddy/salvage/liquid-glass/contrast-1016/{light,dark}-1017.png）&& bash hosts/ios/check-glass-pixel-parity.sh（四态 max 1/255）&& npx vitest run tests/glass.test.ts tests/glass-ir.test.ts && pnpm check:shader-generated",
+      "branch": null,
+      "related": [
+        "T-glass-contrast"
+      ],
+      "note": "【由来】用户「白底能不能再白点儿？暗底也同理调一档」。\n【测量】iOS 亮/暗条面均**全高平直**（254/24）⇒ 白卡上无碗形；基准面值与碗形解耦。\n【修】bowl 基线 1.0/边缘 1.04（白端乘性增益）；暗霜 0.15。\n【★教训】\"再白/再暗\"选乘性通道（bowl），不选已饱和加性通道（V/α）；参考图\"平直 vs 渐变\"是拟合口径信号。\n【诚实边界】白卡口径（彩色碗形 #1006 未动）；残差含色彩管理成分；iOS/鸿蒙未接。"
     }
   ]
 }

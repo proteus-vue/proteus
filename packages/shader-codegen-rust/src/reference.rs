@@ -223,7 +223,8 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     //   条进入"半霜"第三态（彩透出），与 iOS 的"白玻璃/暗玻璃二选一"不符（用户「不是只有两种切换」）。
     let veil_t = smoothstep(0.42f32, 0.50f32, p.bg_lum);
     // ★★★决策 #1016（与 glass.wgsl 同源）：暗端 0.55→0.20（iOS 暗底条面实测 L24 ⇒ V_dark=24/0.467≈51）。
-    let veil_v = 0.20f32 + (1.0f32 - 0.20f32) * veil_t;
+    // ★★★决策 #1017（与 glass.wgsl 同源）：暗端 0.20→0.15（内容 L11 上条面 →≈24，iOS 24）。
+    let veil_v = 0.15f32 + (1.0f32 - 0.15f32) * veil_t;
     let pr_ov = p.press.clamp(0.0, 1.0) * p.overlay.clamp(0.0, 1.0);
     // ★★★决策 #987（B）：α 随背景变——浅端 0.88（内容压到不可见）/ 深端 0.467（#984 四点拟合）。
     // ★#996：恢复 B——浅底 α 0.85（对比度门控）
@@ -253,7 +254,8 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     let bowl_span = (smin * 0.55).max(8.0);
     let bowl_t = (d / bowl_span).clamp(0.0, 1.0);
     let bowl_ep = 1.0 - smoothstep(0.29, 1.0, bowl_t);
-    let bowl_f = 0.96 + (1.005 - 0.96) * bowl_ep;
+    // ★★★决策 #1017（与 glass.wgsl 同源）：bowl 基线 →1.0 / 边缘 →1.04（白端 254 / 暗端 24 双端同系数对齐）。
+    let bowl_f = 1.0 + (1.04 - 1.0) * bowl_ep;
     for c in 0..3 { col[c] = col[c] * bowl_f; }
 
     let cos_i = 1.0 / (1.0 + slope * slope).sqrt();
