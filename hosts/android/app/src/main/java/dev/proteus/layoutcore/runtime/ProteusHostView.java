@@ -3320,13 +3320,7 @@ public class ProteusHostView extends ViewGroup {
     private android.graphics.Bitmap glassBackdrop;
     /** ★★★决策 #906：**全分辨率**背板（捕获目标；末尾**轻降采样**成 `glassBackdrop` 供着色器单次采样）。 */
     private android.graphics.Bitmap glassBackdropFull;
-    /** ★#927：模糊中间小图（降采样→升采样近似高斯，供"白霜面感"）。
-     *  ★#1004：用途改为**深链末级小图**（bw/8 级；见 captureGlassBackdrop 的连续预模糊链）。 */
-    private android.graphics.Bitmap glassBackdropSmall;
-    /** ★★★决策 #1004：**深链中间缓冲**（/2、/4 两级；连续预模糊链的一部分——消稀疏 tap 的"文字重影"：
-     *   核改为连续 box 链（σ≈3.9px）+ shader 只做 <笔画宽的小残差 tap ⇒ 无离散副本）。 */
-    private android.graphics.Bitmap glassBlur2, glassBlur4;
-    /** ★#973/#1004：**全分辨率预模糊背板**（= glassBackdrop 升回全分辨率）——离屏复合帧的内容源
+    /** ★#973/#1004/#1005：**轻预模糊全分辨率背板**（= glassBackdrop 升回全分辨率）——离屏复合帧的内容源
      *  （外层玻璃面在该帧上按 nest=2 渲染 ⇒ 与屏上条面一致，内层采它才不会"比条更锐"）。 */
     private android.graphics.Bitmap glassBlurFull;
     /** ★★★决策 #906：降采样比（全分辨率像素 / 小图 texel）——buildPaint 折 tex_scale/bias 用。 */
@@ -3496,12 +3490,13 @@ public class ProteusHostView extends ViewGroup {
         //     先降到 bw/8 的小图（强低通），再双线性升回 bw/2（平滑）——内容**柔化但仍在**（折射/倒影可见）。
         //   ★最终输入分辨率仍 = bw/2（#917：超高降采样会让压缩带混叠 ⇒ 滚动抖动）。
         final int DIV = 2;           // 最终输入分辨率（与 iOS capturePxPerPoint=scale/2 同口径）
-        // ★★★决策 #1004：**连续预模糊链**（/2→/4→/8→/4→/2）——替代 #991 的"一次 2× 往返"（其实几乎没有模糊，
-        //   实测高频仅 2.7→2.72）。动因=用户「玻璃下的文字有**重影**」：稀疏 9-tap 的 tap 间距 d=6.24px >
-        //   文字笔画宽（~4px @3x）⇒ 笔画被"复制"成主图 ± 副图（剖面 0.5/1.0/0.5 三段，仿真实证）。
-        //   修法=把模糊搬到**宿主连续链**（sigma≈3.9px，无副本分离），shader 只做 d=2.5px 的小残差 tap
-        //   （< 笔画宽 ⇒ 副本重叠）⇒ 组合剖面与理想高斯逐点偏差 ≤0.02（本机仿真实证；总 σ 与 #1003 同量级）。
-        //   ★链为什么这么长：单步 box2 只给 σ≈0.58px；连续三次 halving（到 /8）再两次升采样 ⇒ σ≈3.9px。
+        // ★★★决策 #1005（**订正 #1004 的过度模糊**——用户「玻璃下面文字都看快不见了，iOS 文字清晰可见」）：
+        //   #1004 的深链（/2→/4→/8→/4→/2，σ≈3.9px）**末级 16px bilinear 核在 16px 尺度过零**——文字笔画/
+        //   字间隙恰为 8–16px ⇒ **字形结构被精确杀灭**（真机对照实证：同 σ 下稀疏核字形可辨、深链只剩白雾）。
+        //   ⇒ 回退为**单次 /2 轻降采样**（σ≈0.5px，仅作抗锯齿；= #991 口径 + #1003 前的宿主链），
+        //   **主模糊交回 shader 的 9-tap 核**（nest=2 口径 d=blur·0.08 = 3.12px < 笔画宽 ⇒ 无副本分离；
+        //   MTF(16px)≈0.53，对齐 iOS 实测 ≈0.5 的"字形可辨"）。另：mipmap 级联（box2 链）在高频同样
+        //   比同 σ 高斯狠——"结构可读性"与 σ 不是一回事，核形状必须贴 iOS 的软高斯（见决策 #1005）。
         final int sw = Math.max(1, Math.round((float) bw / DIV));
         final int sh = Math.max(1, Math.round((float) bh / DIV));
         if (glassBackdrop == null || glassBackdrop.getWidth() != sw || glassBackdrop.getHeight() != sh) {
@@ -3509,37 +3504,9 @@ public class ProteusHostView extends ViewGroup {
             glassBackdrop = android.graphics.Bitmap.createBitmap(sw, sh, android.graphics.Bitmap.Config.ARGB_8888);
         }
         final android.graphics.Paint filtp = new android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG);
-        // 深链缓冲（上一级 → 下一级半尺寸；两处升采样复用 glassBlur4 当目标——见下）
-        final int w2 = Math.max(1, bw / 2), h2 = Math.max(1, bh / 2);
-        final int w4 = Math.max(1, bw / 4), h4 = Math.max(1, bh / 4);
-        final int w8 = Math.max(1, bw / 8), h8 = Math.max(1, bh / 8);
-        if (glassBlur2 == null || glassBlur2.getWidth() != w2 || glassBlur2.getHeight() != h2) {
-            if (glassBlur2 != null) glassBlur2.recycle();
-            glassBlur2 = android.graphics.Bitmap.createBitmap(w2, h2, android.graphics.Bitmap.Config.ARGB_8888);
-        }
-        if (glassBlur4 == null || glassBlur4.getWidth() != w4 || glassBlur4.getHeight() != h4) {
-            if (glassBlur4 != null) glassBlur4.recycle();
-            glassBlur4 = android.graphics.Bitmap.createBitmap(w4, h4, android.graphics.Bitmap.Config.ARGB_8888);
-        }
-        if (glassBackdropSmall == null || glassBackdropSmall.getWidth() != w8 || glassBackdropSmall.getHeight() != h8) {
-            if (glassBackdropSmall != null) glassBackdropSmall.recycle();
-            glassBackdropSmall = android.graphics.Bitmap.createBitmap(w8, h8, android.graphics.Bitmap.Config.ARGB_8888);
-        }
         // I2-ALLOW: **降采样缓冲的位图像素尺寸**（非几何坐标——位图必须整数像素；几何采样走内核吸附值）
-        // ① 全分辨率 → /2（box2 低通）
-        new Canvas(glassBlur2).drawBitmap(glassBackdropFull, new android.graphics.Rect(0, 0, bw, bh),
-                new android.graphics.Rect(0, 0, w2, h2), filtp);
-        // ② /2 → /4
-        new Canvas(glassBlur4).drawBitmap(glassBlur2, new android.graphics.Rect(0, 0, w2, h2),
-                new android.graphics.Rect(0, 0, w4, h4), filtp);
-        // ③ /4 → /8（最深一级）
-        new Canvas(glassBackdropSmall).drawBitmap(glassBlur4, new android.graphics.Rect(0, 0, w4, h4),
-                new android.graphics.Rect(0, 0, w8, h8), filtp);
-        // ④ /8 → /4（升采样复用 glassBlur4 作目标；其旧内容已作 ③ 的源用毕）
-        new Canvas(glassBlur4).drawBitmap(glassBackdropSmall, new android.graphics.Rect(0, 0, w8, h8),
-                new android.graphics.Rect(0, 0, w4, h4), filtp);
-        // ⑤ /4 → /2 = glassBackdrop（最终采样级；tex_scale/bias 不变）
-        new Canvas(glassBackdrop).drawBitmap(glassBlur4, new android.graphics.Rect(0, 0, w4, h4),
+        // 一次 /2 降采样（双线性低通；即最终采样级 glassBackdrop——tex_scale/bias 不变）
+        new Canvas(glassBackdrop).drawBitmap(glassBackdropFull, new android.graphics.Rect(0, 0, bw, bh),
                 new android.graphics.Rect(0, 0, sw, sh), filtp);
         glassBackdropScaleX = (float) bw / sw;
         glassBackdropScaleY = (float) bh / sh;
@@ -3554,9 +3521,10 @@ public class ProteusHostView extends ViewGroup {
             }
         }
         if (glassHasNesting) {
-            // ★★★决策 #1004：**全分辨率预模糊内容**（glassBackdrop /2 升回全分辨率）——离屏复合帧的内容源。
-            //   外层玻璃面在复合帧里按 nest=2（小残差 tap）渲染 ⇒ 必须喂它**已深链预模糊**的内容，
-            //   否则复合帧里的条面比屏上更锐（内层采它会读出不一致的清晰度）。
+            // ★★★决策 #1004/#1005：**全分辨率（轻链）背板**——离屏复合帧的内容源。外层玻璃面在复合帧里
+            //   按 nest=2 渲染（tap 在 shader、宿主只做 /2 抗锯齿）⇒ 与屏上条面同口径（内层采它不会读出
+            //   不一致的清晰度）。★#1005：由"深链预模糊"改回**仅 /2 往返**（与主链同形——只是把 /2 级
+            //   升回全分辨率，供离屏 1:1 采样；shader 的 nest=2 tap 承担全部模糊）。
             if (glassBlurFull == null || glassBlurFull.getWidth() != bw || glassBlurFull.getHeight() != bh) {
                 if (glassBlurFull != null) glassBlurFull.recycle();
                 glassBlurFull = android.graphics.Bitmap.createBitmap(bw, bh, android.graphics.Bitmap.Config.ARGB_8888);
