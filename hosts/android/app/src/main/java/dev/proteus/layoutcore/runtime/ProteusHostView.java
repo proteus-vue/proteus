@@ -3489,7 +3489,7 @@ public class ProteusHostView extends ViewGroup {
         //   ⇒ 把单次 2× 降采样升级为**降采样-升采样**近似高斯（Android box-blur 惯用做法）：
         //     先降到 bw/8 的小图（强低通），再双线性升回 bw/2（平滑）——内容**柔化但仍在**（折射/倒影可见）。
         //   ★最终输入分辨率仍 = bw/2（#917：超高降采样会让压缩带混叠 ⇒ 滚动抖动）。
-        final int DIV = 2;           // 最终输入分辨率（与 iOS capturePxPerPoint=scale/2 同口径）
+        //   ★#1013 起 DIV=1（见下方 —— 采样源提全分辨率，消 /2 放大织纹）。
         // ★★★决策 #1005（**订正 #1004 的过度模糊**——用户「玻璃下面文字都看快不见了，iOS 文字清晰可见」）：
         //   #1004 的深链（/2→/4→/8→/4→/2，σ≈3.9px）**末级 16px bilinear 核在 16px 尺度过零**——文字笔画/
         //   字间隙恰为 8–16px ⇒ **字形结构被精确杀灭**（真机对照实证：同 σ 下稀疏核字形可辨、深链只剩白雾）。
@@ -3497,6 +3497,15 @@ public class ProteusHostView extends ViewGroup {
         //   **主模糊交回 shader 的 9-tap 核**（nest=2 口径 d=blur·0.08 = 3.12px < 笔画宽 ⇒ 无副本分离；
         //   MTF(16px)≈0.53，对齐 iOS 实测 ≈0.5 的"字形可辨"）。另：mipmap 级联（box2 链）在高频同样
         //   比同 σ 高斯狠——"结构可读性"与 σ 不是一回事，核形状必须贴 iOS 的软高斯（见决策 #1005）。
+        // ★★★决策 #1013（用户「获取的映射感觉有点儿脏」+ 本会话离线对照实证）：**采样源改全分辨率（DIV 2→1）**。
+        //   【离线复现（oracle，合成「获取风格」蓝字内容）】DIV=2（/2 降采样→shader 放大）时，蓝色笔画周围
+        //   出现**网格状插值织纹**（周期 ≈5-6px 斜向条纹，与用户截图自相关峰 lag 2/4/6 吻合）；DIV=1 干净平滑。
+        //   【为什么现在暴露】此前全局模糊（σ≈2.7px）把 /2 的插值伪影盖住；#1012 的贴边锐化（blur_k→0）
+        //   让它们**直接暴露** ⇒ "脏"。#1012 的方向（贴边锐）与 DIV=2（采样源糊/锯齿）**互斥** ⇒ 必须把源提清。
+        //   【成本】条级玻璃盒（~1044×168 逻辑 ⇒ 全分辨率位图 ~1.2MB）单缓冲、ARGB_8888、每帧一次 /1 blit——
+        //   玻璃节点少（1-2 块/屏），可接受（#906 当初降低分辨率是为大盒性能，当前场景盒小）。
+        //   ★若未来大盒性能回归（>2 屏面积），回退口径应为"按盒尺寸自适应 DIV"（大盒 2 / 小盒 1），不是全体回 2。
+        final int DIV = 1;
         final int sw = Math.max(1, Math.round((float) bw / DIV));
         final int sh = Math.max(1, Math.round((float) bh / DIV));
         if (glassBackdrop == null || glassBackdrop.getWidth() != sw || glassBackdrop.getHeight() != sh) {
@@ -3505,7 +3514,7 @@ public class ProteusHostView extends ViewGroup {
         }
         final android.graphics.Paint filtp = new android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG);
         // I2-ALLOW: **降采样缓冲的位图像素尺寸**（非几何坐标——位图必须整数像素；几何采样走内核吸附值）
-        // 一次 /2 降采样（双线性低通；即最终采样级 glassBackdrop——tex_scale/bias 不变）
+        // DIV=1 ⇒ 直拷（无降采样；tex_scale/bias 仍按 bw/sw=1 折算 ⇒ 恒等）
         new Canvas(glassBackdrop).drawBitmap(glassBackdropFull, new android.graphics.Rect(0, 0, bw, bh),
                 new android.graphics.Rect(0, 0, sw, sh), filtp);
         glassBackdropScaleX = (float) bw / sw;
