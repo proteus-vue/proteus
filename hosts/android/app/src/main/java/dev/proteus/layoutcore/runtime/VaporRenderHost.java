@@ -378,8 +378,8 @@ public final class VaporRenderHost {
             public void onGesture(String type, int targetId, int[] chain, float x, float y, android.os.Bundle extra) {
                 // ★★手势发生 ⇒ 收起元素高亮（决策 #714）：与 iOS `emitGesture` 同语义——
                 //   点空白/点动作/滚动都收起（高亮是"面板→设备"方向的证据；下次面板选节点会再下发）。
-                highlightNode(0);
-                if (!"tap".equals(type) && !"longpress".equals(type)) return;
+                if (!"hover".equals(type)) highlightNode(0);   // ★#1029：hover 不收起元素高亮（实时高亮是常态反馈）
+                if (!"tap".equals(type) && !"longpress".equals(type) && !"hover".equals(type)) return;
                 gestureDispatched++;
                 // ★探针带上冒泡链（判据核对"链真的过宿主"——不是只信 JS 侧自报）
                 StringBuilder cb = new StringBuilder("[");

@@ -78,6 +78,11 @@ describe('Vapor 事件编译 · 支持形态', () => {
     ])
   })
 
+  it('★#1029 `@hover` 映射为 hover 语义（拖动经过的实时高亮通道）', () => {
+    const r = compileEvents(sfc(`<p-view @hover="count++"></p-view>`))
+    expect(r.events[0]!.event).toBe('hover')
+  })
+
   it('`@longpress` 映射为 longpress 语义（不是 tap）', () => {
     const r = compileEvents(sfc(`<p-view @longpress="count--"></p-view>`))
     expect(r.events[0]!.event).toBe('longpress')
