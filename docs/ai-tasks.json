@@ -1094,6 +1094,24 @@
         "T-glass-hover-live"
       ],
       "note": "【由来】用户「点击切换时直接把静态胶囊做成流动，没有膨胀透明玻璃的过程」+ iOS 录屏 f0538-542 取证（原位膨胀成透明透镜+色散+灰退场）。\n【修】flow 加 lift 包络（0=灰/1=透明）经 effPress(nodeId)=max(press,lift) 注入既有 pr_ov 门控链（面纱/色散/亮脊，shader 零改动）；升降按剩余行程（remain>0.18 透明/≤0.18 收回）；首版\"只升不降\"落地仍透明（实测定证）已订正。\n【★教训】\"流动\"= 几何 × 材质两维（#1030 只做几何）；既有门控复用省一条新通路；包络必须有降段（按剩余行程比按时间可靠）。\n【诚实边界】lift 期间跳过自身面纱（透明）有意为之；起跳时长 ~70ms 量级估；iOS/鸿蒙宿主未接。"
+    },
+    {
+      "id": "T-glass-press-xwidth",
+      "title": "按压膨胀去水平拉伸（X→0）——水平不越一个选项宽；切换飞行宽度收窄至 1.39 选项",
+      "type": "bugfix",
+      "status": "done",
+      "owner": "session:zcode-glassblur",
+      "scope": [
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/**"
+      ],
+      "decision": 1033,
+      "verification": "真机：按下水滴宽 ≈255px（= 一项宽，不越界）+ 垂直溢出条边 · 切换飞行 w=351px（stretch 0.391）≈1.39 选项（对齐 iOS 1.33~1.4）不再盖邻项图标（.workbuddy/salvage/liquid-glass/xscale-1033/）&& bash hosts/android/check-host-compile.sh && pnpm check:file-size && pnpm test:coupled",
+      "branch": null,
+      "related": [
+        "T-glass-droplet-edge",
+        "T-glass-flow-lift"
+      ],
+      "note": "【由来】用户「膨胀水平幅度明显过大」+「膨胀时水平不可能超出一个选项的宽度」+「切换水滴拉伸到另一个选项上」。\n【取证】iOS 静止长按水平仅 +1.4%（284→288px），且静止胶囊已占满选项宽（284≈290）⇒ X>1 必越界。\n【缺陷】X=0.42 从\"按下+拖动\"帧误估；按下越界 53px、飞行放大 2.06 选项。\n【修】PRESS_SCALE_CAPSULE_X 0.42→0.00；垂直保 1.30×（各向异性= iOS 行为）。\n【★教训】\"从哪帧量的\"决定参数对不对（量参数要冻住其他自由度）；几何约束先于拟合；同一根因在大倍数处才显形。\n【诚实边界】X=0 保守（iOS +1.4% 可给 0.03~0.06）；尾迹偏置未动；iOS/鸿蒙宿主未接。"
     }
   ]
 }
