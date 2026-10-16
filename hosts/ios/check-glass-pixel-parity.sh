@@ -26,8 +26,9 @@ node "$ROOT/scripts/extract-generated-shader.mjs" ts glass msl.vert.metal "$WORK
 #     只跑 rest 等于"自测没对准消费方契约"（本仓已踩过）。两态同输入分别比对 ⇒ 新路径被真正执行。
 # ★#1004：加第三态 nest（内层玻璃：跳面纱 + 小残差 tap）——同理由，新分支（veil_skip / bsig 分档）只在
 #   nest>0 生效，只跑 rest/press 覆盖不到。
+# ★#1007：拆两档 nest2/nest3（外层 d=0.07 / 内层 d=0.04 分支）+ 浅底 bg_lum 0.95（覆盖 VEIL_A0 浅端新系数）。
 OVERALL=0
-for MODE in rest press nest; do
+for MODE in rest press nest2 nest3; do
   echo "========== 样例：$MODE =========="
   echo "==> ② 合成 backdrop + spec（固定样例，两端同输入）"
   node "$ROOT/hosts/ios/lib/gen-parity-spec.mjs" "$WORK/spec_$MODE.json" "$MODE" || exit 2
@@ -45,5 +46,5 @@ for MODE in rest press nest; do
   node "$HERE/lib/compare-rgba.mjs" "$WORK/ref_$MODE.json" "$WORK/gpu_$MODE.json" || OVERALL=1
   echo ""
 done
-if [ "$OVERALL" = "0" ]; then echo "✅ 玻璃像素等价（Metal 落地 == Rust 算法真源；rest + press + nest 三态）"; else echo "✗ 像素不等价"; fi
+if [ "$OVERALL" = "0" ]; then echo "✅ 玻璃像素等价（Metal 落地 == Rust 算法真源；rest + press + nest2 + nest3 四态）"; else echo "✗ 像素不等价"; fi
 exit $OVERALL
