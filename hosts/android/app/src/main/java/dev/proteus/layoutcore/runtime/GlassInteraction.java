@@ -55,8 +55,9 @@ final class GlassInteraction {
     static boolean debug = false;
 
     /** 按下放大系数（对齐 iOS）——**条静止**（无系数）· **胶囊透镜**：横向 1.50× / 纵向 1.55× / 内容 1.20×·1.17×。 */
-    static final float PRESS_SCALE_CAPSULE_X = 0.50f;   // ★#1023：0.14→0.50（iOS 视频取证：按下 lens ≈1.5× 宽）
-    static final float PRESS_SCALE_CAPSULE_Y = 0.55f;   // 纵向 1.55×（溢出条外 = 透镜鼓出）
+    static final float PRESS_SCALE_CAPSULE_X = 0.42f;   // ★#1031：#1023 的 0.50→0.42（1.42×——与 iOS 实测 347/252 对齐）
+    static final float PRESS_SCALE_CAPSULE_Y = 0.30f;   // ★#1031：#1023 的 0.55→0.30（1.30×）——iOS 双录屏实测：水滴 211px vs 条 192px
+                                                        //   ⇒ **每侧溢出仅 ~10px**；0.55（1.55×）给 223px vs 条 168px = 每侧 27.5px（用户「太大了，稍微溢出就行」）
     static final float PRESS_CONTENT_SCALE_X = 0.20f;
     static final float PRESS_CONTENT_SCALE_Y = 0.17f;
     /** ★#1024 液滴变形上限（59fps 校准：最快帧宽 +15~25% / 高 −2~6%，取上沿偏动感）。 */

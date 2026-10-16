@@ -269,13 +269,20 @@ final class GlassBackdrop {
                 // ②b ★#982：**外层玻璃自身的镜面边**——iOS 的条本就有一条 1px 高光边（shader `edge_hi` 只 ~0.12
                 //   ⇒ 经内层胶囊采样后衰减殆尽）。这里在复合层里沿**外层玻璃轮廓**再描一道**清晰的镜面边**
                 //   （属"渲染条本身"，非手画替代光学）⇒ 内层胶囊采样时能透出这条边。
+                // ★★★决策 #1031（用户「弹起来的胶囊水滴无法看到下面玻璃条的上下边」）：**暗缝 + 亮脊双线**——
+                //   #982 的白描边（230α）画在**白条面**上对比度 ≈10L（等于看不见）⇒ 用户看不到条边。
+                //   iOS 边模型（#1002）= 1px 暗缝 + 亮脊 ⇒ 先 3px 半透明暗缝（对比 ~60L），再 1.2px 白核
+                //   ⇒ 透过弹起胶囊（采样本复合层）能清楚看到条的上下边。
+                final android.graphics.Path bp = new android.graphics.Path();
+                bp.addRoundRect(new android.graphics.RectF(gc.x - gx, gc.y - gy, gc.x - gx + gc.w, gc.y - gy + gc.h),
+                        g.radius, g.radius, android.graphics.Path.Direction.CW);
                 final Paint ep = new Paint(Paint.ANTI_ALIAS_FLAG);
                 ep.setStyle(Paint.Style.STROKE);
                 ep.setStrokeWidth(3f);
-                ep.setColor(android.graphics.Color.argb(230, 255, 255, 255));
-                android.graphics.Path bp = new android.graphics.Path();
-                bp.addRoundRect(new android.graphics.RectF(gc.x - gx, gc.y - gy, gc.x - gx + gc.w, gc.y - gy + gc.h),
-                        g.radius, g.radius, android.graphics.Path.Direction.CW);
+                ep.setColor(android.graphics.Color.argb(96, 18, 20, 26));
+                c.drawPath(bp, ep);
+                ep.setStrokeWidth(1.3f);
+                ep.setColor(android.graphics.Color.argb(205, 255, 255, 255));
                 c.drawPath(bp, ep);
             }
             node.endRecording();
