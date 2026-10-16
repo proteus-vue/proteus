@@ -918,6 +918,23 @@
         "T-glass-model-frozen"
       ],
       "note": "【由来】用户「现在专攻按下的状态和长按拖动的流动状态模型」+ iOS 18 录屏（251 帧取证）。\n【iOS 三段态】按下膨胀成透镜（横 1.5×/纵 1.55×、内部透模糊内容、彩色色散）→ 拖动跟手平移（保持膨胀、下方 tab 实时高亮）→ 释放收窄吸附+选中。\n【修】横膨胀 0.14→0.50 · MOVE 跟手（lerp 0.35+clamp）· 横向主导拖动抑制滚动 · UP 释放点重定向 tap（gestureScrolled 防双发）· 交互状态机拆 GlassInteraction.java（5563=基线）。\n【★教训】按下态=三段连续状态机（press→drag→snap）；滚动抑制与手势竞争一起解；释放重定向防与原生识别双发。\n【诚实边界】拖动中实时高亮未做（需 host→JS 悬停通道）；跟手为 lerp 非 1:1；iOS/鸿蒙未接；按下色散拉丝未加档。"
+    },
+    {
+      "id": "T-glass-drop-flow",
+      "title": "速度驱动的水滴流动：拖越快 lens 越扁长（拉伸+压扁+尾迹偏置，速度 EMA/衰减）+ lens 溢出条端（修 #1023 clamp）",
+      "type": "capability",
+      "status": "done",
+      "owner": "session:zcode-glassblur",
+      "scope": [
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/**"
+      ],
+      "decision": 1024,
+      "verification": "真机 GLASSSTRETCH 日志：快拖 vel=6.2 ⇒ stretch +14.9%/flatten 7.5%；停手 6.2→0.5 ⇒ 434→382 自然落定；释放吸附未回归（tap=195）（.workbuddy/salvage/liquid-glass/flow-1024/）&& bash hosts/android/check-host-compile.sh && pnpm check:file-size && npx vitest run tests/glass.test.ts tests/glass-frozen-model.test.ts",
+      "branch": null,
+      "related": [
+        "T-glass-press-drag"
+      ],
+      "note": "【由来】用户「没有根据拖动幅度的自然水滴流动…iOS 拖的越快越扁平」。\n【取证 59fps】最快帧 blob 宽 +15~25%（408 vs 320-330）· 高 −2~6%；lens 溢出条端 ⇒ #1023 条内 clamp 撤销（我拍的、非实证）。\n【修】速度 EMA（0.4）+衰减 ×0.82/帧（≈0.3s 落定）；stretch=min(0.30,|vel|·0.024)·press + flatten=min(0.15,|vel|·0.012)·press + 尾迹偏置（反侧 65/前侧 35）。\n【★教训】\"越快越扁\"先证明速度与形态相关再上参数（59fps 才能测出）；\"幅度\"要三个自由度；我拍的决定要标注\"我拍的\"。\n【诚实边界】真机快拖 vel 20-40（注入式上不去）⇒ 上限待真机目视；盒层变形（滴尖需 SDF 未做）；iOS/鸿蒙未接；实时高亮未做。"
     }
   ]
 }

@@ -3546,6 +3546,7 @@ public class ProteusHostView extends ViewGroup {
     /** ★★★玻璃独立绘制遍（实时，不进显示列表）：遍历本屏 cmds，对带 glass 的节点画玻璃面（背后内容采样）。 */
     private void drawGlassPass(Canvas canvas) {
         if (glassByNode.isEmpty()) return;
+        GlassInteraction.debug = glassDebug;   // ★#1024：液滴变形调试日志（--es glassdbg 1）
         darkGlassRects.clear();   // ★#950：本帧暗玻璃盒重算
         glassBgLumByNode.clear(); // ★#1004：本帧各玻璃 bg_lum 重算（内层继承外层两态判定）
 
@@ -3615,21 +3616,9 @@ public class ProteusHostView extends ViewGroup {
                 //   （旧版等比 1.3× 的观感是"整块变白"，非 iOS 的"透镜鼓出"。）
                 final boolean isCapsule = pressInner != null && ids[i] != glassIx.nodeId;
                 if (isCapsule) {
-                    final float sx = 1f + glassIx.press * GlassInteraction.PRESS_SCALE_CAPSULE_X;
-                    final float sy = 1f + glassIx.press * GlassInteraction.PRESS_SCALE_CAPSULE_Y;
-                    final float ccx = gc.x + gc.w * 0.5f, ccy = gc.y + gc.h * 0.5f;
-                    // ★★★决策 #1023（iOS 18 视频取证）：**拖拽跟手**——lens 横向偏移 glassIx.dragDx，
-                    //   clamp 保证缩放后 lens 整体留在条内（8px 内边距）；glassIx.dragAppliedDx 供内容缩放段复用。
-                    float ddx = glassIx.dragDx;
-                    if (pressBox != null && Math.abs(ddx) > 0.01f) {
-                        final float halfW = gc.w * sx * 0.5f;
-                        final float minC = pressBox.x + 8f + halfW;
-                        final float maxC = pressBox.x + pressBox.w - 8f - halfW;
-                        if (minC <= maxC) ddx = Math.max(minC, Math.min(maxC, ccx + ddx)) - ccx;
-                    }
-                    glassIx.dragAppliedDx = ddx;
-                    bx = ccx + ddx + (gc.x - ccx) * sx; bw = gc.w * sx;
-                    by = ccy + (gc.y - ccy) * sy; bh = gc.h * sy;
+                    // ★#1023/#1024：按压膨胀 + 拖拽跟手 + 速度驱动液滴变形（见 GlassInteraction.capsuleBox）。
+                    final float[] cb = glassIx.capsuleBox(gc);
+                    bx = cb[0]; by = cb[1]; bw = cb[2]; bh = cb[3];
                 }
             }
             // ★#973/#979：**内层玻璃**（有玻璃祖先，如选中胶囊）采样**全分辨率离屏复合层** `glassLayerFull`
