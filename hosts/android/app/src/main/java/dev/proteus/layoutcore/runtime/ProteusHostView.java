@@ -2548,8 +2548,7 @@ public class ProteusHostView extends ViewGroup {
             clearPress();
             endFollow();   // ★S3：抬指 ⇒ 松手（回弹/吸附在内核）
             endField();    // ★场跟手：抬指 ⇒ 叶片回声明基态（场消失 = 静止网格）
-            // ★★★决策 #1023（iOS：长按拖到哪个 tab ⇒ 释放选哪个）：拖动超 slop ⇒ 用**释放点**重定向 tap。
-            //   （拖动后 GestureDetector 已判 scroll、不会发 tap ⇒ 这里手动派发一次；同步进 JS 走 @click。）
+            // ★★★决策 #1023（iOS：拖到哪个 tab 释放 ⇒ 选哪个）：超 slop 用**释放点**重定向 tap（GestureDetector 判 scroll 后不再发 tap ⇒ 手动派发一次；进 JS 走 @click）。
             if (action == android.view.MotionEvent.ACTION_UP && glassIx.dragMoved && glassIx.gestureScrolled && glassIx.nodeId >= 0) {
                 dispatchHit(ev.getX(), ev.getY());
                 if (lastHitTarget >= 0) {
@@ -2563,8 +2562,7 @@ public class ProteusHostView extends ViewGroup {
             glassIx.resetDrag();   // 拖拽状态清零（lens 硬吸附：dx 回 0 + JS 新槽位 = "吸附到释放点"）
             glassInteractRelease();   // ★#905：松手 ⇒ press 目标 0（回弹）
         }
-        // ★#905/#1023：拖动跟随——MOVE 时更新触点 + lens 横向偏移（流动跟着手指走，逐帧重绘）。
-        //   ★#1023 改用 glassInteractDrag：不重做 hit test（手指移出条外 lens 仍跟手）。
+        // ★#905/#1023：拖动跟随——MOVE 更新触点 + lens 横向偏移（glassInteractDrag 不重做 hit test，手指移出条外仍跟手）。
         if (action == android.view.MotionEvent.ACTION_MOVE) {
             glassInteractDrag(ev.getX(), ev.getY());
         }
@@ -3340,6 +3338,8 @@ public class ProteusHostView extends ViewGroup {
     public boolean glassDebug = false;
     /** ★★★决策 #1023：玻璃**交互子系统**（press/drag 状态机 + 命中；见 GlassInteraction）。 */
     private final GlassInteraction glassIx = new GlassInteraction();
+    /** ★#1025（用户「按下膨胀后不是胶囊形了」）：按下胶囊的**有效圆角覆盖**（-1=用 spec.radius）——形变时半径随高度缩放，保持胶囊形。 */
+    private float glassRadiusOverride = -1f;
 
     /** ★★★决策 #950（vibrancy）：本帧**暗玻璃**的区域盒（内容坐标 x,y,w,h）——落在其中的文字/图标**强制白色**
      *  （对齐 iOS：玻璃压暗背景时前景转白，保内容强烈可读）。逐帧在 drawGlassPass 重算。 */
@@ -3425,13 +3425,13 @@ public class ProteusHostView extends ViewGroup {
         final boolean inPressGroup = (nodeId == glassIx.nodeId) || glassIx.pressSubtree.contains(nodeId);
         final boolean touchApplies = inPressGroup && glassIx.touchAbsX > -1e5f;
         final float qtx = touchApplies ? glassIx.touchAbsX - ox : -1e6f;
-        final float qty = touchApplies ? glassIx.touchAbsY - oy : -1e6f;
-        android.graphics.Paint p = GlassMaterial.buildPaint(nodeId, sampling, ox, oy, bdX, bdY, w, h, spec.radius, spec,
+        final float qty = touchApplies ? glassIx.touchAbsY - oy : -1e6f; final float rr = glassRadiusOverride >= 0f ? glassRadiusOverride : spec.radius;   // ★#1025
+        android.graphics.Paint p = GlassMaterial.buildPaint(nodeId, sampling, ox, oy, bdX, bdY, w, h, rr, spec,
                 qtx, qty, nodePress, divX, divY, nest, bgOv);
         final int save = canvas.save();
-        if (spec.radius > 0) {
+        if (rr > 0) {
             android.graphics.Path clip = new android.graphics.Path();
-            clip.addRoundRect(new android.graphics.RectF(ox, oy, ox + w, oy + h), spec.radius, spec.radius,
+            clip.addRoundRect(new android.graphics.RectF(ox, oy, ox + w, oy + h), rr, rr,
                     android.graphics.Path.Direction.CW);
             canvas.clipPath(clip);
         }
@@ -3497,16 +3497,16 @@ public class ProteusHostView extends ViewGroup {
         final boolean inPressGroup = (nodeId == glassIx.nodeId) || glassIx.pressSubtree.contains(nodeId);
         final boolean touchApplies = inPressGroup && glassIx.touchAbsX > -1e5f;
         final float qtx = touchApplies ? glassIx.touchAbsX - bx : -1e6f;
-        final float qty = touchApplies ? glassIx.touchAbsY - by : -1e6f;
-        android.graphics.Paint p = GlassMaterial.buildPaint(nodeId, sampling != null ? sampling : glassBd.bitmap(), bx, by, glassBd.originX(), glassBd.originY(), bw, bh, spec.radius, spec,
+        final float qty = touchApplies ? glassIx.touchAbsY - by : -1e6f; final float rr = glassRadiusOverride >= 0f ? glassRadiusOverride : spec.radius;   // ★#1025
+        android.graphics.Paint p = GlassMaterial.buildPaint(nodeId, sampling != null ? sampling : glassBd.bitmap(), bx, by, glassBd.originX(), glassBd.originY(), bw, bh, rr, spec,
                 qtx, qty, nodePress, glassBd.scaleX(), glassBd.scaleY(), nest, bgOv);
         // ★★★决策 #971（对齐 workbuddy 09:05 取证）：**剪影恒为当前盒的圆角矩形**——形状变化全部来自
         //   **盒几何**（条盒不动 ⇒ 条边平直不动；胶囊盒已纵向放大 ⇒ 透镜轮廓）。不再用 `inflatedPillPath`
         //   做 SDF 凹口（#966/#969 的"内陷"方向错误——iOS 条边无内陷、透镜是单独一层外凸）。
         final int save = canvas.save();
-        if (spec.radius > 0) {
+        if (rr > 0) {
             android.graphics.Path clip = new android.graphics.Path();
-            clip.addRoundRect(new android.graphics.RectF(bx, by, bx + bw, by + bh), spec.radius, spec.radius,
+            clip.addRoundRect(new android.graphics.RectF(bx, by, bx + bw, by + bh), rr, rr,
                     android.graphics.Path.Direction.CW);
             canvas.clipPath(clip);
         }
@@ -3619,6 +3619,7 @@ public class ProteusHostView extends ViewGroup {
                     // ★#1023/#1024：按压膨胀 + 拖拽跟手 + 速度驱动液滴变形（见 GlassInteraction.capsuleBox）。
                     final float[] cb = glassIx.capsuleBox(gc);
                     bx = cb[0]; by = cb[1]; bw = cb[2]; bh = cb[3];
+                    glassRadiusOverride = Math.min(g.radius * (bh / Math.max(gc.h, 1f)), Math.min(bw, bh) * 0.5f);   // ★#1025：半径随高度缩放（clamp 最短边半）⇒ 膨胀/拉伸下保持胶囊形
                 }
             }
             // ★#973/#979：**内层玻璃**（有玻璃祖先，如选中胶囊）采样**全分辨率离屏复合层** `glassLayerFull`
@@ -3634,7 +3635,7 @@ public class ProteusHostView extends ViewGroup {
             } else {
                 drawGlassFace(canvas, ids[i], list.get(i), g, bx, by, bw, bh);
             }
-            if (fs != -1) canvas.restoreToCount(fs);
+            if (fs != -1) canvas.restoreToCount(fs); glassRadiusOverride = -1f;   // ★#1025：本节点画完复位
         }
         // 第二相：玻璃子树内容（其文本/子视图）——背景已在 captureGlassBackdrop 排除玻璃子树（只含"背后"），
         //   此处把自身内容**清晰**盖回**所有**玻璃面上（真 iOS `UIVisualEffectView`：材质只糊背后、contentView 原样清晰）。
