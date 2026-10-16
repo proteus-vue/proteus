@@ -1012,6 +1012,29 @@
         "T-glass-drop-dynamics"
       ],
       "note": "【由来】用户「只有手指停到哪个图标选项才会停，不然还会回到原处，正确应该是哪个选项落在胶囊里面的区域大就近停靠，不依赖手指的落点」。\n【缺陷】#1023 释放重定向用释放点（指尖）⇒ 指尖不在 tab 上 hit 到父容器 ⇒ 回原处。\n【修】dockPick：lens 变形盒 ∩ 同父兄弟（tab items）面积最大者，派发点=候选中心；平手就近；全无就近兜底；找不到回退释放点。\n【★教训】\"拖动的归属\"必须用被拖物（状态）几何判定、不能用手指（输入）落点；选择要\"完备三段\"（无\"回原处\"第四态）；判据要设计\"输入与状态分离\"的场景。\n【诚实边界】候选=同父兄弟；阈值 0.5px²；iOS/鸿蒙宿主交互未接。"
+    },
+    {
+      "id": "T-glass-hover-live",
+      "title": "拖动实时高亮：新增 hover 语义事件（host→JS 通道）——经过的 tab 实时变蓝、释放仍面积优先落定",
+      "type": "capability",
+      "status": "done",
+      "owner": "session:zcode-glassblur",
+      "scope": [
+        "packages/compiler/src/vapor/events.ts",
+        "packages/slot-runtime/src/dispatch.ts",
+        "superapp/pages/glass-nav.vue",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/**",
+        "tests/vapor-events.test.ts",
+        "tests/slot-runtime-dispatch.test.ts"
+      ],
+      "decision": 1029,
+      "verification": "真机三段链：hover 187（游戏）→ hover 191（App）→ 松手 tap 197（搜索）；q3 帧（未松手）App 已蓝（.workbuddy/salvage/liquid-glass/hover-1029/）&& npx vitest run tests/vapor-events.test.ts tests/slot-runtime-dispatch.test.ts（72）&& bash hosts/android/check-host-compile.sh && pnpm check:file-size",
+      "branch": null,
+      "related": [
+        "T-glass-dock-area",
+        "T-glass-press-drag"
+      ],
+      "note": "【由来】用户「拖动过程中就会让经过的 tab 实时变蓝——做实时高亮需要一条 host→JS 的悬停通道」。\n【链路】宿主 onGesture(\"hover\") → VaporRenderHost（白名单）→ QuickJsEngine 反向通道 → JS dispatch(\"hover\") → 节点:hover → 页面 hover(key)。\n【修】events.ts 加别名；dispatch.ts **hover 不回退 tap**（防拖动途中跑 click）；页面 @hover 只改 active 不动 hlLeft；宿主 drag 算 dockPick 变化才派发（去重）；VaporRenderHost 放行+不收起高亮。\n【★教训】\"语义一致、视觉不同步\"= 补状态事件（hover=广播：可重复无落定 / tap=确认：一次有落定 ⇒ :tap 兜底对 hover 关闭）；判据要能\"看见时间差\"（未松手已变蓝）。\n【诚实边界】hover 单向；候选与释放同 dockPick；iOS/鸿蒙宿主未接（TS 已通）。"
     }
   ]
 }

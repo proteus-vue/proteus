@@ -216,6 +216,7 @@
             :key="item.key"
             class="gna-item"
             @click="pick(item.key, item.pos)"
+            @hover="hover(item.key)"
           >
             <view class="gna-item__glyph" :class="{ 'gna-item__glyph--on': active === item.key }"><p-icon :name="item.icon" :size="26" /></view>
             <text class="gna-item__label" :class="{ 'gna-item__label--on': active === item.key }">{{ item.label }}</text>
@@ -245,6 +246,13 @@ const hlLeft = ref(6 + 1 * 84)
 function pick(key: string, pos: number): void {
   active.value = key
   hlLeft.value = 6 + pos * 84
+}
+
+/** ★★★决策 #1029（用户「拖动过程中就会让经过的 tab 实时变蓝」）：**hover 实时高亮**——拖动经过某 tab
+ *  ⇒ 立即改激活色（只动 `active` = 图标/文字变蓝；**不动 hlLeft**——胶囊位置由释放时的 `pick` 落定，
+ *  与 #1028 的"覆盖面积优先"同一判据源 ⇒ 视觉实时、落定不变）。 */
+function hover(key: string): void {
+  active.value = key
 }
 </script>
 

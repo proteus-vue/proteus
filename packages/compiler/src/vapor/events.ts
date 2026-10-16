@@ -153,11 +153,14 @@ export interface ScriptLifecycleBinding {
   handler: string
 }
 
-/** 支持的语义事件（与宿主 GestureListener 的语义类型对齐：tap/longpress） */
+/** 支持的语义事件（与宿主 GestureListener 的语义类型对齐：tap/longpress/hover） */
 const EVENT_ALIAS: Record<string, string> = {
   click: 'tap',
   tap: 'tap',
   longpress: 'longpress',
+  // ★★★决策 #1029：**hover**——拖动**经过**的实时高亮通道（宿主在拖动中派发，见 dispatch.ts 的
+  //   "hover 不回退 tap"：误回退会把 @click 的选中在拖动途中就落定 + 胶囊跳位 = 双胶囊）。
+  hover: 'hover',
 }
 
 /**
@@ -744,7 +747,7 @@ export function compileEvents(
           continue
         }
         // 事件本身不支持 ⇒ 只报事件（修饰符诊断在此时无意义，避免噪音误导修法）
-        diag(`事件未支持：@${rawName}`, '本版支持 click / tap / longpress（分别映射宿主的 tap/longpress）；组件上的自定义事件需写成 `<Kid @my-event="..." />`')
+        diag(`事件未支持：@${rawName}`, '本版支持 click / tap / longpress / hover（映射宿主的 tap/longpress/hover 语义）；组件上的自定义事件需写成 `<Kid @my-event="..." />`')
         continue
       }
       // 修饰符诊断（`.prevent` 等无对应语义 / 按键修饰符 / 未知）——**不阻碍绑定**

@@ -122,6 +122,8 @@ export function indexEventBindings(bindings: readonly EventBinding[]): EventInde
  * ★查找口径与既有实现**逐字一致**（含 `:tap` 兜底）：先查 `节点:事件`，
  *   再退到 `节点:tap`——宿主上报的类型可能是 `longpress` 而绑定只在 tap 上，
  *   这一兜底维持既有行为（改动它属行为变更，不在本批范围）。
+ * ★★★决策 #1029：**`hover` 例外——不回退 `tap`**。hover = 拖动**经过**的实时高亮通道；
+ *   若回退 tap，拖动经过只会 `@click` 的节点就会跑 click handler（选中在拖动途中落定 + 胶囊跳位）。
  */
 export function dispatchGesture(
   chain: readonly number[],
@@ -144,12 +146,14 @@ export function dispatchGesture(
   let stopped = false
   const hit = chain.length > 0 ? chain[0]! : -1
 
+  // ★#1029：tap 兜底对 hover 关闭（见上方 doc）
+  const tapFallback = (n: number) => (event === 'hover' ? undefined : index.get(`${n}:tap`))
   for (const id of chain) {
-    let b = index.get(`${id}:${event}`) ?? index.get(`${id}:tap`)
+    let b = index.get(`${id}:${event}`) ?? tapFallback(id)
     // ★#907/B1：行内节点 ⇒ 折回模板 id 查（events 是模板级的，行实例共用）
     if (!b && templateIdOf) {
       const tid = templateIdOf(id)
-      if (tid !== undefined) b = index.get(`${tid}:${event}`) ?? index.get(`${tid}:tap`)
+      if (tid !== undefined) b = index.get(`${tid}:${event}`) ?? tapFallback(tid)
     }
     if (!b) continue
     // ★组件事件绑定（componentEmit）**不参与手势派发**——它由 emit 路由直接查表触发

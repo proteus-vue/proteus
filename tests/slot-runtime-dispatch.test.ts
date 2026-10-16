@@ -131,6 +131,27 @@ const padW = ref(300)
   })
 })
 
+// ★★★决策 #1029：**hover 不回退 tap**（拖动经过的实时高亮通道）——对比 longpress（保留 tap 兜底）。
+describe('★★★#1029 hover 派发（拖动经过的实时高亮）', () => {
+  it('hover 只命中 `节点:hover` —— 有 tap 绑定的节点**不**因兜底跑 click handler', () => {
+    const bindings: EventBinding[] = [
+      { nodeId: 2, event: 'tap', handler: 'pickA' },
+      { nodeId: 1, event: 'hover', handler: 'hoverB' },
+    ]
+    const { index, state, run, ran } = makeSut(bindings, new Set())
+    const r = dispatchGesture([2, 1, 0], 'hover', index, state, run)
+    expect([...ran], '只有 :hover 绑定跑；:tap 绑定被跳过（防"拖动经过即选中"）').toEqual(['hoverB'])
+    expect(r.fired).toEqual([1])
+  })
+
+  it('longpress 保持既有 tap 兜底（回归：本批只对 hover 例外）', () => {
+    const bindings: EventBinding[] = [{ nodeId: 2, event: 'tap', handler: 'pickA' }]
+    const { index, state, run, ran } = makeSut(bindings, new Set())
+    const r = dispatchGesture([2], 'longpress', index, state, run)
+    expect([...ran], 'longpress 无绑定 ⇒ 仍退到 tap（既有行为）').toEqual(['pickA'])
+  })
+})
+
 // ★★★决策 #907/B1：**行内 handler 的模板 id 折回**——修「`@click="pick(row.key)"` 静默失效」。
 describe('★★★B1 行作用域派发（决策 #907）', () => {
   it('行实例节点 → 折回模板 id 查 handler（events 是模板级的）', () => {

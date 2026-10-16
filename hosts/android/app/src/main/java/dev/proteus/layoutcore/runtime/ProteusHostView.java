@@ -2559,7 +2559,7 @@ public class ProteusHostView extends ViewGroup {
                     report("tap", ev, null);
                 }
             }
-            glassIx.resetDrag();   // 拖拽状态清零（lens 硬吸附：dx 回 0 + JS 新槽位 = "吸附到释放点"）
+            glassIx.resetDrag(); glassIx.hoverReset();   // 拖拽清零 + hover 记账清零（#1029）
             glassInteractRelease();   // ★#905：松手 ⇒ press 目标 0（回弹）
         }
         // ★#905/#1023：拖动跟随——MOVE 更新触点 + lens 横向偏移（glassInteractDrag 不重做 hit test，手指移出条外仍跟手）。
@@ -3534,16 +3534,23 @@ public class ProteusHostView extends ViewGroup {
         if (glassIx.hit(list, ids, glassByNode, hx, hy)) invalidate();
     }
 
-    /** ★#1023：拖动跟手（薄 wrapper；不重做 hit test——手指移出条外 lens 仍跟手）。 */
+    /** ★#1023/#1029：拖动跟手（不重做 hit test）+ **hover 实时高亮**（候选变化才派发——同一 dockPick 判据源）。 */
     private void glassInteractDrag(float x, float y) {
         if (glassIx.nodeId < 0) return;
         final boolean scrolled = offsetScroll ? (scrollX != 0 || scrollY != 0) : (!horizontalScroll && (scrollX != 0 || scrollY != 0));
         glassIx.drag(scrolled ? x : x + scrollX, scrolled ? y : y + scrollY);
-        invalidate();
+        glassIx.dockPick(cmds, cmdNodeIds, nodeParent, glassByNode);   // ★#1029：先算候选（写 dockNodeId）
+        final int hv = glassIx.hoverChanged(); if (hv >= 0) reportHover(hv); invalidate();
     }
 
     /** ★#905：松手 ⇒ press 目标 0（回弹）+ lens 吸附回槽位（#1023）。 */
     private void glassInteractRelease() { glassIx.release(); invalidate(); }
+
+    /** ★#1029：**hover 语义派发**（拖动经过的实时高亮）——不污染手势态；JS 侧 hover 不回退 tap 防误选。 */
+    private void reportHover(int nodeId) {
+        if (gestureListener == null) return;
+        android.os.Bundle b = new android.os.Bundle(); b.putString("hover", "1");
+        android.util.Log.i("proteus", "手势识别：hover target=" + nodeId); gestureListener.onGesture("hover", nodeId, new int[]{nodeId}, 0f, 0f, b); }
 
     /** ★★★玻璃独立绘制遍（实时，不进显示列表）：遍历本屏 cmds，对带 glass 的节点画玻璃面（背后内容采样）。 */
     private void drawGlassPass(Canvas canvas) {

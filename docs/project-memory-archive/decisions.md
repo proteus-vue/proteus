@@ -5342,3 +5342,27 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   **用状态（lens 盒）∩ 候选**。★★"面积最大 + 平手就近 + 全无就近"是**选择的完备三段**（任何释放位置都有确定归属，
   不会"回原处"这种第四态）；★★**判据要专门设计"输入与状态分离"的场景**（测试②：手指在搜索、胶囊在 App——
   这种用例才能把两套逻辑区分开；手指与胶囊重合的用例两套都对，**分不出对错**）。
+
+1029. **★★★液态玻璃「拖动实时高亮」：新增 `hover` 语义事件（host→JS 通道）——拖动经过的 tab 实时变蓝，释放仍按覆盖面积落定 · 只 Android 真机验证**（2026-10-16 · 用户「拖动过程中就会让经过的 tab 实时变蓝，我们现在是释放时才切换（语义一致、视觉不同步）——做实时高亮需要一条 host→JS 的悬停通道」）：
+【链路（本仓既有通路，复用不新建）】宿主 `gestureListener.onGesture("hover", id, chain)` → `VaporRenderHost`（★有
+  **类型白名单**，必须放行 hover）→ `QuickJsEngine.dispatchGesture`（native 反向通道）→ JS `dispatch("hover", chain)`
+  → `dispatchGesture` 查 `节点:hover` 绑定 → 页面 `hover(key)` ⇒ `active.value = key`（图标/文字变蓝）。
+【修（四处 TS + 三处宿主）】
+  · **编译器**（`events.ts`）：`EVENT_ALIAS` 加 `hover: 'hover'`（白名单 + 诊断文案同步）；
+  · **派发器**（`dispatch.ts`）：★**`hover` 不回退 `tap`**——既有 `:tap` 兜底会让"拖动经过只会 @click 的节点"
+    跑 click handler（选中在拖动途中落定 + 胶囊跳位 = 双胶囊）；改为 `tapFallback()` 对 hover 关闭（longpress 保持兜底）；
+  · **页面**（`glass-nav.vue`）：`@hover="hover(item.key)"`——★只改 `active`（变蓝），**不动 hlLeft**
+    （胶囊位置仍由释放时的 `pick` 落定 = #1028 面积优先 ⇒ 视觉实时、落定不变）；
+  · **宿主**（`ProteusHostView`）：`glassInteractDrag` 里算 `dockPick`（与释放**同一判据源**）→ 候选变化才
+    `reportHover`（`GlassInteraction.hoverChanged` 去重——防每帧刷 JS）；UP 时 `hoverReset`；
+  · **VaporRenderHost**：白名单放行 hover + ★**hover 不收起元素高亮**（拖动中的高亮是常态反馈）。
+【判据】真机日志三段链：`hover target=187`（游戏）→ `hover target=191`（App）→ 松手 `tap target=197`（搜索）；
+**q3 帧（手指未松开）App 图标+文字已蓝、游戏回黑**（实时性的直接证据，存证 `.workbuddy/salvage/liquid-glass/hover-1029/`）；
+释放吸附未回归（面积优先）· TS 侧 72 测试（含 hover 专项：`:tap` 节点不因兜底跑 click）+ 编译/体积
+  （ProteusHostView 5562·VaporRenderHost 3036——借本轮把两文件压回基线内）/舍入 全绿。
+【诚实边界】① hover 通道是 **host→JS 单向**（宿主算候选，JS 只改色）——若未来要"悬停预览"等更复杂反馈，
+  同一通道可扩；② 候选判据与释放**同一 dockPick**（"胶囊压住谁"）——两处不会漂移；③ iOS/鸿蒙宿主未接（TS 侧已通）。
+【★教训】★★★**"语义一致、视觉不同步"的修法是补一条状态事件，不是改手势语义**——参考 #1023 的三段状态机：
+  press→drag→**hover（新增）**→snap；hover 与 tap 的关键区别：**它是状态广播（可重复、无落定语义），tap 是意图确认
+  （一次、有落定）**——所以 `:tap` 兜底必须对它关闭（否则把"广播"当"确认"跑）。★★**判据要能"看见时间差"**：
+  "未松手时目标已变蓝"这个帧（q3）才是实时性的证据——只看"最终变蓝"分不出 hover 与 tap 两套实现。

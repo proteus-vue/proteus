@@ -64,10 +64,19 @@ final class GlassInteraction {
     private static final float STRETCH_MAX = 0.30f;     // 横向拉伸上限（+30% 宽）
     private static final float FLATTEN_MAX = 0.15f;     // 纵向压扁上限（−15% 高）
 
+    /** ★#1029：上一次 hover 派发的候选（拖动中变化才上报——防每帧刷 JS）。 */
+    private int hoverNode = -1;
+    /** ★#1029：拖动中刷新候选，**变化时返回新候选 id**（否则 -1）——宿主据此派发 hover。 */
+    int hoverChanged() { if (dockNodeId == hoverNode) return -1; hoverNode = dockNodeId; return hoverNode; }
+    /** ★#1029：手势收尾清零（下次拖动重新派发）。 */
+    void hoverReset() { hoverNode = -1; }
+
     /** ★★★决策 #1027：**端部锥化**（signed；形变域 SDF 的 shp_a——>0=向右运动、前缘锥化，尾缘 0.45×）。 */
     float shapeTaper = 0f;
     /** 变形盒输出缓冲（复用——每帧每胶囊一次调用，避免分配）。 */
-    private final float[] dockOut = new float[2];
+    private final float[] dockOut = new float[3];
+    /** ★★★决策 #1029：当前停靠候选**节点 id**（拖动中变化 ⇒ 派发 hover 实时高亮；-1=无）。 */
+    int dockNodeId = -1;
     private final float[] boxOut = new float[4];
 
     /** 命中交互玻璃（hx/hy = 命中坐标系；命中 ⇒ 记录触点与起点、press 起步）。返回 true = 命中。 */
@@ -178,7 +187,7 @@ final class GlassInteraction {
         // ③ 候选 = 同父兄弟（tab items；跳过玻璃）
         final Integer parent = nodeParent.get(capsuleNode);
         if (parent == null) return null;
-        ProteusHostView.Cmd pick = null; float pickArea = -1f, pickDist = Float.MAX_VALUE;
+        ProteusHostView.Cmd pick = null; int pickId = -1; float pickArea = -1f, pickDist = Float.MAX_VALUE;
         for (int k = 0; k < list.size() && k < ids.length; k++) {
             if (ids[k] == capsuleNode || glassByNode.get(ids[k]) != null) continue;
             if (!parent.equals(nodeParent.get(ids[k]))) continue;
@@ -189,13 +198,14 @@ final class GlassInteraction {
             final float area = (ox > 0f && oy > 0f) ? ox * oy : 0f;
             final float dist = Math.abs(c.x + c.w * 0.5f - lensCx);
             if (pick == null || area > pickArea + 0.5f || (Math.abs(area - pickArea) <= 0.5f && dist < pickDist)) {
-                pick = c; pickArea = area; pickDist = dist;
+                pick = c; pickArea = area; pickDist = dist; pickId = ids[k];
             }
         }
         if (pick == null) return null;
         if (debug) android.util.Log.i("proteus-glass", "GLASSDOCK lens=[" + String.format("%.0f..%.0f", cb[0], cb[0] + cb[2])
                 + "] bpos=" + String.format("%.0f", bpos)
                 + " pick=[" + String.format("%.0f..%.0f", pick.x, pick.x + pick.w) + "] area=" + String.format("%.0f", pickArea));
+        dockNodeId = pickId;   // ★#1029：候选节点（hover 实时高亮用）
         dockOut[0] = pick.x + pick.w * 0.5f; dockOut[1] = pick.y + pick.h * 0.5f;
         return dockOut;
     }
