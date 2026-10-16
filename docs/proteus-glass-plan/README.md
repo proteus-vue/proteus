@@ -31,6 +31,7 @@ iOS / 鸿蒙 / Android 原生端走**自绘玻璃遍**（Rust WGSL 单源 → MS
 | 13 | migration-boundary | 明确不做项 + 迁移路径 |
 | 14 | **ios-gap-analysis** | **对齐 iOS 差距分析（子代理独立调研 · 决策 #909）——只登记未改** |
 | 15 | **ios-liquid-glass-model** | **★★★iOS 液态玻璃「完整真实模型」（三段录屏逐帧取证 · 决策 #1002）——真值模型，落地对照 SSOT** |
+| 16 | **liquid-glass-frozen-model** | **★★★液态玻璃「最终冻结模型」定稿（决策 #1022 · 用户验收「这个对了，固化下来不用再动了」）——定稿参数全景 + 验收值 + 冻结协议；守卫 `tests/glass-frozen-model.test.ts`** |
 
 ## 铁律
 
