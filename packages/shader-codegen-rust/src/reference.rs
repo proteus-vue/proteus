@@ -224,13 +224,15 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     let veil_t = smoothstep(0.42f32, 0.50f32, p.bg_lum);
     // ★★★决策 #1016（与 glass.wgsl 同源）：暗端 0.55→0.20（iOS 暗底条面实测 L24 ⇒ V_dark=24/0.467≈51）。
     // ★★★决策 #1017（与 glass.wgsl 同源）：暗端 0.20→0.15（内容 L11 上条面 →≈24，iOS 24）。
-    let veil_v = 0.15f32 + (1.0f32 - 0.15f32) * veil_t;
+    // ★★★决策 #1020（与 glass.wgsl 同源）：暗端 0.15→0.134（配 α 上调保持暗条平值 24）。
+    let veil_v = 0.134f32 + (1.0f32 - 0.134f32) * veil_t;
     let pr_ov = p.press.clamp(0.0, 1.0) * p.overlay.clamp(0.0, 1.0);
     // ★★★决策 #987（B）：α 随背景变——浅端 0.88（内容压到不可见）/ 深端 0.467（#984 四点拟合）。
     // ★#996：恢复 B——浅底 α 0.85（对比度门控）
     // ★#1007：0.85→0.62（内容透射 15%→38%）
     // ★#1008：0.62→**0.50**（透射 38%→50%，对齐 iOS 实测 53%；用户「内容还是有点看不清」；见 glass.wgsl 同源注释）。
-    let veil_a0 = 0.467f32 + (0.50f32 - 0.467f32) * veil_t;
+    // ★★★决策 #1020（与 glass.wgsl 同源）：面纱更实——α 0.467/0.50→0.56/0.62（透射 53/50%→44/38%）。
+    let veil_a0 = 0.56f32 + (0.62f32 - 0.56f32) * veil_t;
     // ★★★决策 #1004：内层玻璃（nest=1/3）跳过自己的面纱（输入=含外层霜的复合帧 ⇒ 避免双重霜；
     //   与 glass.wgsl ⑤ 同源）。外层（0/2）保留 = 条的白霜本体。
     let veil_skip = (p.nest - 1.0).abs() < 0.5 || p.nest > 2.5;
@@ -244,7 +246,8 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     if p.overlay > 0.001f32 {
         // ★★★决策 #1016（与 glass.wgsl 同源）：单一恒定 (C=0.683, a=0.226)——双态实测零残差。
         let ov_l = 0.683f32;
-        let ov_a = p.overlay.clamp(0.0, 1.0) * 0.226f32 * (1.0f32 - p.press.clamp(0.0, 1.0));   // ★#964 按下淡出
+        // ★★★决策 #1020（与 glass.wgsl 同源）：胶囊叠加 0.226→0.28（差异再拉开一档）。
+        let ov_a = p.overlay.clamp(0.0, 1.0) * 0.28f32 * (1.0f32 - p.press.clamp(0.0, 1.0));   // ★#964 按下淡出
         for c in 0..3 { col[c] = col[c] + (ov_l - col[c]) * ov_a; }
     }
     // ★★★决策 #944：tint 移到面纱之后（与 glass.wgsl 同源——作者 tint 作用于最终玻璃面，暗 tint 才不被面纱洗白）。
