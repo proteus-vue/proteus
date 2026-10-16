@@ -1112,6 +1112,23 @@
         "T-glass-flow-lift"
       ],
       "note": "【由来】用户「膨胀水平幅度明显过大」+「膨胀时水平不可能超出一个选项的宽度」+「切换水滴拉伸到另一个选项上」。\n【取证】iOS 静止长按水平仅 +1.4%（284→288px），且静止胶囊已占满选项宽（284≈290）⇒ X>1 必越界。\n【缺陷】X=0.42 从\"按下+拖动\"帧误估；按下越界 53px、飞行放大 2.06 选项。\n【修】PRESS_SCALE_CAPSULE_X 0.42→0.00；垂直保 1.30×（各向异性= iOS 行为）。\n【★教训】\"从哪帧量的\"决定参数对不对（量参数要冻住其他自由度）；几何约束先于拟合；同一根因在大倍数处才显形。\n【诚实边界】X=0 保守（iOS +1.4% 可给 0.03~0.06）；尾迹偏置未动；iOS/鸿蒙宿主未接。"
+    },
+    {
+      "id": "T-glass-flow-spring",
+      "title": "点击切换 flow 专用弹簧：消相邻切换大过冲/缓冲（FLOW_K/FLOW_C 近临界阻尼）",
+      "type": "bugfix",
+      "status": "done",
+      "owner": null,
+      "scope": [
+        "hosts/android/**"
+      ],
+      "decision": 1034,
+      "verification": "bash hosts/android/check-host-compile.sh && pnpm test:coupled && 真机逐帧日志（salvage/liquid-glass/flow-1034/：lag 单调收敛零过冲）",
+      "branch": null,
+      "related": [
+        "T-glass-click-flow"
+      ],
+      "note": "用户「为什么相邻的切换过去还是缓冲那么大」。根因：flow 复用拖动弹簧（ζ=0.35 ⇒ 252px 反向过冲 74px）。修：FLOW_K=0.35/FLOW_C=1.00（ζ≈0.85）+ lift 升速 0.45；拖动弹簧不动。附带：GeneratedMaterials.java（#1031 起漂移的生成物）补入库。"
     }
   ]
 }

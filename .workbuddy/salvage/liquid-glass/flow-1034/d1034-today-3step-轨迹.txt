@@ -1,0 +1,11 @@
+GLASSSTRETCH vel=0.0 bvel=-1.0 lag=-504.0 stretch=0.099 flatten=0.003 taper=-0.092 lift=0.22 w=277 h=153
+GLASSSTRETCH vel=0.0 bvel=-176.4 lag=-327.6 stretch=0.257 flatten=0.137 taper=-0.240 lift=0.57 w=317 h=146
+GLASSSTRETCH vel=0.0 bvel=-114.7 lag=-212.9 stretch=0.344 flatten=0.183 taper=-0.321 lift=0.76 w=339 h=145
+GLASSSTRETCH vel=0.0 bvel=-74.5 lag=-138.4 stretch=0.392 flatten=0.209 taper=-0.365 lift=0.87 w=351 h=144
+GLASSSTRETCH vel=0.0 bvel=-48.4 lag=-90.0 stretch=0.298 flatten=0.159 taper=-0.278 lift=0.66 w=327 h=145
+GLASSSTRETCH vel=0.0 bvel=-31.5 lag=-58.5 stretch=0.226 flatten=0.121 taper=-0.211 lift=0.50 w=309 h=146
+GLASSSTRETCH vel=0.0 bvel=-20.5 lag=-38.0 stretch=0.172 flatten=0.092 taper=-0.107 lift=0.38 w=295 h=146
+GLASSSTRETCH vel=0.0 bvel=-13.3 lag=-24.7 stretch=0.131 flatten=0.046 taper=-0.053 lift=0.29 w=285 h=149
+GLASSSTRETCH vel=0.0 bvel=-8.6 lag=-16.1 stretch=0.074 flatten=0.023 taper=-0.026 lift=0.22 w=271 h=150
+GLASSSTRETCH vel=0.0 bvel=-5.6 lag=-10.4 stretch=0.037 flatten=0.011 taper=-0.013 lift=0.17 w=261 h=150
+GLASSSTRETCH vel=0.0 bvel=-3.7 lag=-6.8 stretch=0.018 flatten=0.006 taper=-0.006 lift=0.13 w=257 h=149

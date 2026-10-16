@@ -45,6 +45,13 @@ final class GlassInteraction {
     float bpos = 0f, bvel = 0f;
     private static final float LAG_K = 0.040f;
     private static final float LAG_C = 0.140f;
+    // ★★★决策 #1034（用户「相邻的切换过去还是缓冲那么大呢？这不合逻辑啊」）：**点击切换用独立弹簧**——
+    //   #1030 曾直接复用上面的拖动参数（ζ=0.35）⇒ 换槽数学上**反向过冲 74px**（252px 相邻切换荡过目标
+    //   ~1/3 格、振铃 ~0.6s@120Hz）——「车头前冲」是手指驱动的惯性（已验收），而点击切换是**自走迁移**，
+    //   越界震荡不合逻辑（iOS 59fps 取证：飞行 2-4 帧即到站、无反向过冲）。ζ≈0.85：过冲 <1px 不可见；
+    //   @120Hz 到站(±10px) 8 帧 ≈67ms · 全收敛 15 帧 ≈125ms（LAG_K/LAG_C 保持不动——只服务手指拖动）。
+    private static final float FLOW_K = 0.35f;
+    private static final float FLOW_C = 1.00f;
     /** 拖动超阈标志（释放重定向 tap 的触发条件之一）。 */
     boolean dragMoved = false;
     /** 本手势期间 GestureDetector 是否已判 scroll（判过不会再发 tap ⇒ 释放重定向只在此时兜底派发）。 */
@@ -79,7 +86,7 @@ final class GlassInteraction {
 
     // ★★★决策 #1030（用户「点击切换时也会自然流动，选项跨步越大流动形态越扁平形变越大」+ iOS 20:04 录屏
     //   59fps 取证：点击后胶囊从旧槽**拖出液态尾巴**滑到新槽（拉丝延伸 ~48px / ~90ms），跨步越大越扁长）：
-    //   **点击流动 = 复用 #1026 质心动力学**——tap 时捕获胶囊**视觉位**（基位 + 拖拽偏移），JS 改 hlLeft 后
+    //   **点击流动 = 复用 #1026 质心动力学的积分器**（★#1034：参数独立为 FLOW_K/FLOW_C，不借拖动弹簧）——tap 时捕获胶囊**视觉位**（基位 + 拖拽偏移），JS 改 hlLeft 后
     //   把位移差作为**初始偏移**注入弹簧（bpos=Δ），弹簧把 lens 从旧位滑到新位；速度/滞后自动驱动
     //   拉伸/压扁/锥化 ⇒ 跨步越大峰值速度越高 + 上限按距离抬升（越大越扁）。
     //   ★与拖动的区别：无按压膨胀（press≡0）、无触点/无跟手——是"自走"的一次流体迁移。
@@ -226,16 +233,19 @@ final class GlassInteraction {
             dragDx = dragTarget;
             need = true;
         }
-        // ★#1030：点击流动——质心弹簧滑向新槽位（与 #1026 同一积分器；未收敛即持续排帧）。
+        // ★#1030：点击流动——质心弹簧滑向新槽位（积分器结构与 #1026 同源；未收敛即持续排帧）。
+        //   ★#1034：弹簧参数改用 **FLOW_K/FLOW_C**（拖动 ζ=0.35 只留给手指驱动）——见常量处注解。
         if (flowActive) {
-            bvel += (0f - bpos) * LAG_K - bvel * LAG_C;
+            bvel += (0f - bpos) * FLOW_K - bvel * FLOW_C;
             bpos += bvel;
             need = true;
             // ★#1032 订正：lift 目标按**剩余行程**（>18% ⇒ 1 透明；≤18% ⇒ 0 收回）——起跳快升、靠站收回，
             //   落地时已是灰色胶囊（旧版只升不降 ⇒ 落地仍全透明，与 iOS"到站即归位"不符）。
+            //   ★#1034：升速 0.30→0.45——新弹簧 ~4 帧即到站（旧 ~13 帧），升速要跟上才能到站前达 ~0.93 透明；
+            //   降速 0.24 保留不动（@120Hz ≈140ms，与 iOS 落地收回一致，已验收）。
             final float remain = Math.abs(bpos) / Math.max(Math.abs(flowFrom), 1f);
             final float liftT = remain > 0.18f ? 1f : 0f;
-            lift += (liftT - lift) * (liftT > lift ? 0.30f : 0.24f);
+            lift += (liftT - lift) * (liftT > lift ? 0.45f : 0.24f);
             if (Math.abs(bpos) < 0.5f && Math.abs(bvel) < 0.3f) { flowActive = false; bpos = 0f; bvel = 0f; }
         }
         // ★#1032：落地收回——flow 结束（bpos 收敛）后 lift 衰减 ⇒ 透明玻璃收成灰色胶囊。
