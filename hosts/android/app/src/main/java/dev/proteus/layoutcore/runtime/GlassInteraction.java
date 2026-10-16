@@ -71,6 +71,68 @@ final class GlassInteraction {
     /** ★#1029：手势收尾清零（下次拖动重新派发）。 */
     void hoverReset() { hoverNode = -1; }
 
+    // ★★★决策 #1030（用户「点击切换时也会自然流动，选项跨步越大流动形态越扁平形变越大」+ iOS 20:04 录屏
+    //   59fps 取证：点击后胶囊从旧槽**拖出液态尾巴**滑到新槽（拉丝延伸 ~48px / ~90ms），跨步越大越扁长）：
+    //   **点击流动 = 复用 #1026 质心动力学**——tap 时捕获胶囊**视觉位**（基位 + 拖拽偏移），JS 改 hlLeft 后
+    //   把位移差作为**初始偏移**注入弹簧（bpos=Δ），弹簧把 lens 从旧位滑到新位；速度/滞后自动驱动
+    //   拉伸/压扁/锥化 ⇒ 跨步越大峰值速度越高 + 上限按距离抬升（越大越扁）。
+    //   ★与拖动的区别：无按压膨胀（press≡0）、无触点/无跟手——是"自走"的一次流体迁移。
+    private boolean flowActive = false, flowPending = false;
+    private int flowNode = -1;
+    private float flowFrom = 0f, flowOldVisual = 0f;
+
+    /** 命中判定：该节点正是**流动中的胶囊**（宿主 drawGlassPass 据此走 capsuleBox 形变路径）。 */
+    boolean isFlowNode(int id) { return flowActive && id == flowNode; }
+
+    /** 找**内层胶囊**（玻璃且祖先是玻璃）——流动与 dockPick 的候选锚点同源（"胶囊身体"）。 */
+    private int findCapsule(List<ProteusHostView.Cmd> list, int[] ids,
+                            Map<Integer, GlassMaterial.Spec> glassByNode,
+                            java.util.Map<Integer, Integer> nodeParent) {
+        if (list == null || ids == null) return -1;
+        for (int k = 0; k < list.size() && k < ids.length; k++) {
+            if (glassByNode.get(ids[k]) == null) continue;
+            Integer cur = nodeParent.get(ids[k]); int guard = 0;
+            while (cur != null && guard++ < 256) { if (glassByNode.containsKey(cur)) return ids[k]; cur = nodeParent.get(cur); }
+        }
+        return -1;
+    }
+
+    /** ★#1030：tap 捕获（**必须在 JS 改 hlLeft 之前**调——此时 cmds 仍是旧几何）。 */
+    void captureTap(List<ProteusHostView.Cmd> list, int[] ids,
+                    Map<Integer, GlassMaterial.Spec> glassByNode,
+                    java.util.Map<Integer, Integer> nodeParent) {
+        flowPending = false; flowNode = -1;
+        final int cap = findCapsule(list, ids, glassByNode, nodeParent);
+        if (cap < 0) return;
+        for (int k = 0; k < list.size() && k < ids.length; k++) {
+            if (ids[k] == cap) {
+                final ProteusHostView.Cmd c = list.get(k);
+                flowOldVisual = c.x + c.w * 0.5f + bpos;   // 视觉位（基位 + 当前偏移——二次点击从当前位置续走）
+                flowNode = cap; flowPending = true;
+                return;
+            }
+        }
+    }
+
+    /** ★#1030：relayout 后初始化流动（drawGlassPass 调一次）——基位移动 |Δ|>6px 才启动。 */
+    void applyFlow(List<ProteusHostView.Cmd> list, int[] ids,
+                   Map<Integer, GlassMaterial.Spec> glassByNode,
+                   java.util.Map<Integer, Integer> nodeParent) {
+        if (!flowPending) return;
+        flowPending = false;
+        if (flowNode < 0 || list == null || ids == null) return;
+        for (int k = 0; k < list.size() && k < ids.length; k++) {
+            if (ids[k] != flowNode) continue;
+            final ProteusHostView.Cmd c = list.get(k);
+            final float delta = flowOldVisual - (c.x + c.w * 0.5f);
+            if (Math.abs(delta) > 6f) {
+                flowActive = true; flowFrom = delta; bpos = delta; dragTarget = 0f;
+                bvel = -Math.signum(delta);   // 初速给对方向（首帧锥化不反向）
+            }
+            return;
+        }
+    }
+
     /** ★★★决策 #1027：**端部锥化**（signed；形变域 SDF 的 shp_a——>0=向右运动、前缘锥化，尾缘 0.45×）。 */
     float shapeTaper = 0f;
     /** 变形盒输出缓冲（复用——每帧每胶囊一次调用，避免分配）。 */
@@ -94,6 +156,7 @@ final class GlassInteraction {
                 dragStartX = hx;
                 dragTarget = 0f; dragDx = 0f; dragAppliedDx = 0f; dragMoved = false;
                 lastDragTarget = 0f; velSmooth = 0f; bpos = 0f; bvel = 0f;   // 新手势 ⇒ 动力学归零（防上轮残留瞬跳）
+                flowActive = false; flowPending = false;   // ★#1030：按下即接管（清点击流动）
                 pressTarget = 1f;
                 if (press < 0.01f) press = 0.01f;   // 立即起步（避免首帧无变化）
                 return true;
@@ -143,6 +206,13 @@ final class GlassInteraction {
         } else if (dragDx != dragTarget) {
             dragDx = dragTarget;
             need = true;
+        }
+        // ★#1030：点击流动——质心弹簧滑向新槽位（与 #1026 同一积分器；未收敛即持续排帧）。
+        if (flowActive) {
+            bvel += (0f - bpos) * LAG_K - bvel * LAG_C;
+            bpos += bvel;
+            need = true;
+            if (Math.abs(bpos) < 0.5f && Math.abs(bvel) < 0.3f) { flowActive = false; bpos = 0f; bvel = 0f; }
         }
         // ★#1026：水滴质心弹簧-阻尼推进（惯性前冲/回收的动力学本体；按住期间始终步进）。
         if (nodeId >= 0 && pressTarget > 0.5f) {
@@ -226,8 +296,13 @@ final class GlassInteraction {
         //   #1026 起速度取 **max(手指 EMA, 质心速度)**（急停后手指停但质心仍在冲 ⇒ 畸形保持到回收期）。
         final float sp = Math.min(Math.max(Math.abs(velSmooth), Math.abs(bvel)), VEL_CAP);
         final float lagPx = dragTarget - bpos;   // >0=手指在前（拖动中）/ <0=质心越过手指（前冲相位）
-        final float stretch = Math.min(STRETCH_MAX, sp * 0.024f + Math.abs(lagPx) * 0.008f) * press;
-        final float flatten = Math.min(FLATTEN_MAX, sp * 0.012f) * press;
+        // ★#1030：点击流动——强度 max(press, flow)；★跨步越大上限越高（"越大越扁长"的量化口径：以 1 格 252px 为基准）。
+        final float pressI = Math.max(press, flowActive ? 1f : 0f);
+        final float distK = Math.abs(flowFrom) / 252f;
+        final float sMax = flowActive ? Math.min(0.45f, 0.24f + distK * 0.12f) : STRETCH_MAX;
+        final float fMax = flowActive ? Math.min(0.24f, 0.12f + distK * 0.06f) : FLATTEN_MAX;
+        final float stretch = Math.min(sMax, sp * 0.024f + Math.abs(lagPx) * 0.008f) * pressI;
+        final float flatten = Math.min(fMax, sp * 0.012f) * pressI;
         if (stretch > 0.001f) {
             final float extraW = bw * stretch;
             // 方向：优先用质心速度（前冲相位仍朝原方向）；都小时退化不敏感
@@ -244,7 +319,7 @@ final class GlassInteraction {
         //   （质心被拉回），若直取 bvel 会把滴尖瞬间换端；velSmooth 衰减后用 bvel（回收相位滴尖随实际运动）。
         final float dirT = Math.abs(velSmooth) > 0.5f ? velSmooth
                 : (Math.abs(bvel) > Math.abs(velSmooth) ? bvel : velSmooth);
-        shapeTaper = Math.min(0.42f, sp * 0.010f + Math.abs(lagPx) * 0.002f) * press * (dirT >= 0f ? 1f : -1f);
+        shapeTaper = Math.min(0.42f, sp * 0.010f + Math.abs(lagPx) * 0.002f) * pressI * (dirT >= 0f ? 1f : -1f);
         if (debug && stretch > 0.01f) {
             android.util.Log.i("proteus-glass", "GLASSSTRETCH vel=" + String.format("%.1f", velSmooth)
                     + " bvel=" + String.format("%.1f", bvel) + " lag=" + String.format("%.1f", lagPx)

@@ -2336,9 +2336,8 @@ public class ProteusHostView extends ViewGroup {
                         @Override public boolean onDown(android.view.MotionEvent e) { return true; }
 
                         @Override public boolean onSingleTapUp(android.view.MotionEvent e) {
-                            report("tap", e, null);
-                            return true;
-                        }
+                            // ★#1030：先捕获胶囊视觉位（report 会触发 JS 改 hlLeft + 重排——之后旧几何就没了）。
+                            glassIx.captureTap(cmds, cmdNodeIds, glassByNode, nodeParent); report("tap", e, null); return true; }
 
                         @Override public void onLongPress(android.view.MotionEvent e) {
                             report("longpress", e, null);
@@ -3556,6 +3555,7 @@ public class ProteusHostView extends ViewGroup {
     private void drawGlassPass(Canvas canvas) {
         if (glassByNode.isEmpty()) return;
         GlassInteraction.debug = glassDebug;   // ★#1024：液滴变形调试日志（--es glassdbg 1）
+        glassIx.applyFlow(cmds, cmdNodeIds, glassByNode, nodeParent);   // ★#1030：点击流动初始化（relayout 后一行）
         darkGlassRects.clear();   // ★#950：本帧暗玻璃盒重算
         glassBgLumByNode.clear(); // ★#1004：本帧各玻璃 bg_lum 重算（内层继承外层两态判定）
 
@@ -3618,12 +3618,12 @@ public class ProteusHostView extends ViewGroup {
             // ★★★决策 #959：**按下放大**（对齐 iOS）——命中交互玻璃且 press>0 ⇒ 以盒中心等比放大（松开 lerp 回 1）。
             // ★#963：按下 ⇒ **放大盒**（不走 canvas.scale）——绕按下玻璃中心，让 shader 采样一致、玻璃光学保持。
             // ★#965：**每个玻璃绕自身中心缩放**（胶囊在**原位**弹出、不横向移位）；条系数=0 ⇒ 条完全静止。
-            final boolean inPress = pressBox != null && pressSubtree.contains(ids[i]);
+            final boolean inPress = (pressBox != null && pressSubtree.contains(ids[i])) || glassIx.isFlowNode(ids[i]);   // ★#1030：流动胶囊也走形变盒
             float bx = gc.x, by = gc.y, bw = gc.w, bh = gc.h;
             if (inPress) {
                 // ★#971：**条静止**（k=0）；**胶囊纵向鼓起**（垂直 1.55×、横向 1.14×）⇒ 透镜从条里鼓出、溢出条外。
                 //   （旧版等比 1.3× 的观感是"整块变白"，非 iOS 的"透镜鼓出"。）
-                final boolean isCapsule = pressInner != null && ids[i] != glassIx.nodeId;
+                final boolean isCapsule = (pressInner != null && ids[i] != glassIx.nodeId) || glassIx.isFlowNode(ids[i]);
                 if (isCapsule) {
                     // ★#1023/#1024：按压膨胀 + 拖拽跟手 + 速度驱动液滴变形（见 GlassInteraction.capsuleBox）。
                     final float[] cb = glassIx.capsuleBox(gc);
