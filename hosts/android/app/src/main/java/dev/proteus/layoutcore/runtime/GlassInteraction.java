@@ -85,6 +85,19 @@ final class GlassInteraction {
     /** 命中判定：该节点正是**流动中的胶囊**（宿主 drawGlassPass 据此走 capsuleBox 形变路径）。 */
     boolean isFlowNode(int id) { return flowActive && id == flowNode; }
 
+    // ★★★决策 #1032（用户「点击切换时我们是直接把静态胶囊做成了流动，没有膨胀透明玻璃的过程——看 iOS 那个切换形态」）：
+    //   **lift 包络**——flow 的三段：**起跳膨胀成透明玻璃**（≈70ms，面纱退场+色散亮脊，见 iOS f538-542）→
+    //   **飞行**（拉伸滑槽，lift≈1 保持）→ **落地**（lift 衰减 ⇒ 灰色胶囊收回）。实现：lift 0→1→0 的快升慢降包络，
+    //   通过 **effPress（=press 与 lift 的 max）** 注入 shader 的 pr_ov 门控（面纱退场/色散/亮脊全链自动生效）。
+    private float lift = 0f;
+    float lift() { return lift; }
+    /** ★#1032：某节点的**有效按压**（物理按下 或 flow lift——流动胶囊的"膨胀透明"由此进入 shader）。 */
+    float effPress(int nodeId) {
+        float p = (nodeId == this.nodeId || pressSubtree.contains(nodeId)) ? press : 0f;
+        if (flowActive && nodeId == flowNode) p = Math.max(p, lift);
+        return p;
+    }
+
     /** 找**内层胶囊**（玻璃且祖先是玻璃）——流动与 dockPick 的候选锚点同源（"胶囊身体"）。 */
     private int findCapsule(List<ProteusHostView.Cmd> list, int[] ids,
                             Map<Integer, GlassMaterial.Spec> glassByNode,
@@ -127,7 +140,7 @@ final class GlassInteraction {
             final ProteusHostView.Cmd c = list.get(k);
             final float delta = flowOldVisual - (c.x + c.w * 0.5f);
             if (Math.abs(delta) > 6f) {
-                flowActive = true; flowFrom = delta; bpos = delta; dragTarget = 0f;
+                flowActive = true; flowFrom = delta; bpos = delta; dragTarget = 0f; lift = 0.22f;
                 bvel = -Math.signum(delta);   // 初速给对方向（首帧锥化不反向）
             }
             return;
@@ -157,7 +170,7 @@ final class GlassInteraction {
                 dragStartX = hx;
                 dragTarget = 0f; dragDx = 0f; dragAppliedDx = 0f; dragMoved = false;
                 lastDragTarget = 0f; velSmooth = 0f; bpos = 0f; bvel = 0f;   // 新手势 ⇒ 动力学归零（防上轮残留瞬跳）
-                flowActive = false; flowPending = false;   // ★#1030：按下即接管（清点击流动）
+                flowActive = false; flowPending = false; lift = 0f;   // ★#1030/#1032：按下即接管（清点击流动 + lift）
                 pressTarget = 1f;
                 if (press < 0.01f) press = 0.01f;   // 立即起步（避免首帧无变化）
                 return true;
@@ -213,7 +226,18 @@ final class GlassInteraction {
             bvel += (0f - bpos) * LAG_K - bvel * LAG_C;
             bpos += bvel;
             need = true;
+            // ★#1032 订正：lift 目标按**剩余行程**（>18% ⇒ 1 透明；≤18% ⇒ 0 收回）——起跳快升、靠站收回，
+            //   落地时已是灰色胶囊（旧版只升不降 ⇒ 落地仍全透明，与 iOS"到站即归位"不符）。
+            final float remain = Math.abs(bpos) / Math.max(Math.abs(flowFrom), 1f);
+            final float liftT = remain > 0.18f ? 1f : 0f;
+            lift += (liftT - lift) * (liftT > lift ? 0.30f : 0.24f);
             if (Math.abs(bpos) < 0.5f && Math.abs(bvel) < 0.3f) { flowActive = false; bpos = 0f; bvel = 0f; }
+        }
+        // ★#1032：落地收回——flow 结束（bpos 收敛）后 lift 衰减 ⇒ 透明玻璃收成灰色胶囊。
+        if (!flowActive && lift > 0.01f) {
+            lift += (0f - lift) * 0.26f;
+            if (lift < 0.01f) lift = 0f;
+            need = true;
         }
         // ★#1026：水滴质心弹簧-阻尼推进（惯性前冲/回收的动力学本体；按住期间始终步进）。
         if (nodeId >= 0 && pressTarget > 0.5f) {
@@ -285,8 +309,9 @@ final class GlassInteraction {
      *  越快越扁长 = 横向拉伸 + 纵向压扁 + 尾迹偏置；lens 可溢出条端，不做条内 clamp）。
      *  写入 dragAppliedDx（内容缩放段复用）；返回复用缓冲 [bx, by, bw, bh]。 */
     float[] capsuleBox(ProteusHostView.Cmd gc) {
-        final float sx = 1f + press * PRESS_SCALE_CAPSULE_X;
-        final float sy = 1f + press * PRESS_SCALE_CAPSULE_Y;
+        final float bulge = Math.max(press, lift);   // ★#1032：流动胶囊的"起跳膨胀"由 lift 驱动
+        final float sx = 1f + bulge * PRESS_SCALE_CAPSULE_X;
+        final float sy = 1f + bulge * PRESS_SCALE_CAPSULE_Y;
         final float ccx = gc.x + gc.w * 0.5f, ccy = gc.y + gc.h * 0.5f;
         dragAppliedDx = bpos;   // ★#1026：内容跟随用**质心**（与透镜面同相位——惯性前冲时放大镜内容同步冲）
         float bx = ccx + bpos + (gc.x - ccx) * sx;
@@ -298,7 +323,7 @@ final class GlassInteraction {
         final float sp = Math.min(Math.max(Math.abs(velSmooth), Math.abs(bvel)), VEL_CAP);
         final float lagPx = dragTarget - bpos;   // >0=手指在前（拖动中）/ <0=质心越过手指（前冲相位）
         // ★#1030：点击流动——强度 max(press, flow)；★跨步越大上限越高（"越大越扁长"的量化口径：以 1 格 252px 为基准）。
-        final float pressI = Math.max(press, flowActive ? 1f : 0f);
+        final float pressI = Math.max(press, lift);   // ★#1032：形变强度随 lift 包络（起跳渐入/落地渐出）
         final float distK = Math.abs(flowFrom) / 252f;
         final float sMax = flowActive ? Math.min(0.45f, 0.24f + distK * 0.12f) : STRETCH_MAX;
         final float fMax = flowActive ? Math.min(0.24f, 0.12f + distK * 0.06f) : FLATTEN_MAX;
@@ -325,7 +350,7 @@ final class GlassInteraction {
             android.util.Log.i("proteus-glass", "GLASSSTRETCH vel=" + String.format("%.1f", velSmooth)
                     + " bvel=" + String.format("%.1f", bvel) + " lag=" + String.format("%.1f", lagPx)
                     + " stretch=" + String.format("%.3f", stretch) + " flatten=" + String.format("%.3f", flatten)
-                    + " taper=" + String.format("%.3f", shapeTaper)
+                    + " taper=" + String.format("%.3f", shapeTaper) + " lift=" + String.format("%.2f", lift)
                     + " w=" + String.format("%.0f", bw) + " h=" + String.format("%.0f", bh));
         }
         boxOut[0] = bx; boxOut[1] = by; boxOut[2] = bw; boxOut[3] = bh;

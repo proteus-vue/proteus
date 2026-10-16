@@ -1076,6 +1076,24 @@
         "T-glass-model-frozen"
       ],
       "note": "【由来】用户「膨胀幅度太大，稍微溢出就行」+「弹起胶囊看不到条上下边」（多次提出）。\n【取证①】iOS 每侧溢出 ~10px；我们 27.5px ⇒ 修 PRESS Y 0.55→0.30 / X 0.50→0.42。\n【取证②】复合层 dump：条边线在层里清晰（y176-179 暗缝），胶囊全 255——根因=位移\"源跳过区\"（bend(0)=100px > 边线距边 ~10px）；iOS 位移 ~10px 所以可见 ⇒ 修：内层 ER 0.10× + 复合层边线暗缝+亮脊（#982 白描边看不见）。\n【★教训】\"看不到某结构\"先 dump 中间产物（上游 OK → 下游采样数学）；\"位移场跳过区\"是盲区——查透不出先算 bend(0) vs 内容距边/距离。\n【诚实边界】0.10× 待真机微调（0.08~0.15）；弓形形变未做；iOS/鸿蒙宿主未接。"
+    },
+    {
+      "id": "T-glass-flow-lift",
+      "title": "点击切换=三段：起跳膨胀透明（lift 包络/effPress）→ 飞行 → 落地收回灰色",
+      "type": "capability",
+      "status": "done",
+      "owner": "session:zcode-glassblur",
+      "scope": [
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/**"
+      ],
+      "decision": 1032,
+      "verification": "真机全链：起跳 lift 0.22→0.45→0.62→0.73→0.81→0.87 渐升（stretch/taper 同步）· 飞行透明拉伸帧 · 靠站 0.25→0.19→0.14→0.11→0.08→0.06 收回（落地=灰色胶囊）（.workbuddy/salvage/liquid-glass/lift-1032/）&& bash hosts/android/check-host-compile.sh && pnpm check:file-size && pnpm test:coupled",
+      "branch": null,
+      "related": [
+        "T-glass-click-flow",
+        "T-glass-hover-live"
+      ],
+      "note": "【由来】用户「点击切换时直接把静态胶囊做成流动，没有膨胀透明玻璃的过程」+ iOS 录屏 f0538-542 取证（原位膨胀成透明透镜+色散+灰退场）。\n【修】flow 加 lift 包络（0=灰/1=透明）经 effPress(nodeId)=max(press,lift) 注入既有 pr_ov 门控链（面纱/色散/亮脊，shader 零改动）；升降按剩余行程（remain>0.18 透明/≤0.18 收回）；首版\"只升不降\"落地仍透明（实测定证）已订正。\n【★教训】\"流动\"= 几何 × 材质两维（#1030 只做几何）；既有门控复用省一条新通路；包络必须有降段（按剩余行程比按时间可靠）。\n【诚实边界】lift 期间跳过自身面纱（透明）有意为之；起跳时长 ~70ms 量级估；iOS/鸿蒙宿主未接。"
     }
   ]
 }
