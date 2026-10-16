@@ -36,6 +36,8 @@ let bgLum = fv(p, "bg_lum", 0)   // ★#911：区域背景亮度（浅霜/深霜
 let press = fv(p, "press", 0), overlay = fv(p, "overlay", 0)
 // ★#1004：nest 模式（0/1 锐背板 · 2 外层预模糊 · 3 内层复合帧）
 let nest = fv(p, "nest", 0)
+// ★#1027：端部锥化（shape 模式覆盖形变域路径）
+let shpA = fv(p, "shp_a", 0)
 let touchArr = fa(p["touch"]); let touch = SIMD2<Float>(touchArr.count>0 ? touchArr[0] : -1.0e6, touchArr.count>1 ? touchArr[1] : -1.0e6)
 let outSpec = spec["out"] as! [String: Any]
 let ow = outSpec["width"] as! Int, oh = outSpec["height"] as! Int
@@ -72,6 +74,7 @@ struct U {
     var radius: Float; var blur: Float; var refract_depth: Float; var specular: Float; var saturation: Float; var bg_lum: Float
     var touch: SIMD2<Float>; var press: Float; var overlay: Float   // ★#966：WGSL 尾部三字段
     var nest: Float                                                 // ★#1004：内层/预模糊模式（布局 112B）
+    var shp_a: Float                                                // ★#1027：端部锥化（signed；0=恒等）
 }
 let tw = Float(bw), th = Float(bh)
 var u = U(
@@ -82,7 +85,7 @@ var u = U(
     tex_scale: SIMD2<Float>(Float(ow) / tw, Float(oh) / th),
     light_dir: SIMD2<Float>(light.count>0 ? light[0] : -0.35, light.count>1 ? light[1] : -0.94),
     radius: radius, blur: blur, refract_depth: refract, specular: specular, saturation: sat, bg_lum: bgLum,
-    touch: touch, press: press, overlay: overlay, nest: nest)
+    touch: touch, press: press, overlay: overlay, nest: nest, shp_a: shpA)
 
 let pass = MTLRenderPassDescriptor()
 pass.colorAttachments[0].texture = oTex

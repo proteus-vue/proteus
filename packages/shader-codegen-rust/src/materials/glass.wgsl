@@ -62,6 +62,10 @@ struct GlassUniforms {
     //     · 3（内层·复合帧——已被外层 blur 过）⇒ d = blur·0.04（仅补轻微柔化）
     //   ★nest=0 时本字段所有分支逐像素等价（老资产/旧宿主零回归）。见 决策 #1004。
     nest: f32,                // 96 内层/预模糊模式（见上；0=默认）
+    // ★★★决策 #1027：**形变域（端部锥化）**——带符号：>0=向右运动（尾缘=左端锥化最强、前缘 0.45×）/ <0=反向。
+    //   0 ⇒ 恒等（与 #1026 前逐像素等价）。【为什么（用户「两端甚至会形变成尖的圆角，形变后回弹」+ iOS 19:14 录屏）】
+    //   SDF 域变形 = 端部垂直收缩 m(nx)=1−taper·nx²（抛物线）⇒ 端头收窄成**圆润滴尖**（"车头前冲"的形态本体）。
+    shp_a: f32,               // 100 端部锥化（signed；0=身份）
 };
 @group(0) @binding(2) var<uniform> u: GlassUniforms;
 
@@ -69,6 +73,17 @@ struct GlassUniforms {
 fn sd_round_rect(p: vec2<f32>, hs: vec2<f32>, r: f32) -> f32 {
     let q = abs(p) - hs + vec2<f32>(r, r);
     return min(max(q.x, q.y), 0.0) + length(max(q, vec2<f32>(0.0, 0.0))) - r;
+}
+
+// ★★★决策 #1027：**形变域 SDF**（端部锥化；u.shp_a=0 ⇒ 与 sd_round_rect 逐像素等价）。
+//   端部垂直收缩 m(nx)=1−taper·nx²（抛物线）⇒ 端头收窄成圆润滴尖。taper 尾重前轻（拖尾语义）。
+fn sd_glass(p: vec2<f32>, hs: vec2<f32>, r: f32) -> f32 {
+    let nx = clamp(p.x / max(hs.x, 1.0), -1.0, 1.0);
+    let tip_r = max(u.shp_a, 0.0);
+    let tip_l = max(-u.shp_a, 0.0);
+    let taper = select(tip_l + 0.45 * tip_r, tip_r + 0.45 * tip_l, nx >= 0.0);
+    let ym = 1.0 - taper * nx * nx;
+    return sd_round_rect(vec2<f32>(p.x, p.y / max(ym, 0.15)), hs, r);
 }
 
 // 圆弧倒角映射（Kyant）：x=0 外缘 → 0，x=1 内侧 → 1
@@ -97,7 +112,7 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     // ★★★决策 #972：**按下 × 选中项** 的门控（条 overlay=0 ⇒ 恒 0，按下不影响条）。多处复用（面纱/色散/叠加/亮环）。
     let pr_ov = clamp(u.press, 0.0, 1.0) * clamp(u.overlay, 0.0, 1.0);
     // ★#971：SDF 恒为（当前盒的）圆角矩形——条盒未变 ⇒ 条边平直不动；胶囊盒已纵向放大 ⇒ 透镜轮廓。
-    let sd = sd_round_rect(p, hs, r);
+    let sd = sd_glass(p, hs, r);   // ★#1027：形变域（shp_a=0 ⇒ 恒等）
     let d = max(-sd, 0.0);               // 离边深度（内部为正）
     let smin = min(u.size_px.x, u.size_px.y);   // 最短**边**（= 2×hsmin）
     // ★★★决策 #907/#910：折射带 ≈ **最短边 1/3**（= 条高 1/3）。
@@ -119,8 +134,8 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     let eps = clamp(band * 0.3, 1.0, 16.0);
     // ★#968：法线取**原轮廓**的梯度（内容不动——充气不改法线，否则折射把下面内容挤弯）。
     let g = vec2<f32>(
-        sd_round_rect(p + vec2<f32>(eps, 0.0), hs, r) - sd_round_rect(p - vec2<f32>(eps, 0.0), hs, r),
-        sd_round_rect(p + vec2<f32>(0.0, eps), hs, r) - sd_round_rect(p - vec2<f32>(0.0, eps), hs, r));
+        sd_glass(p + vec2<f32>(eps, 0.0), hs, r) - sd_glass(p - vec2<f32>(eps, 0.0), hs, r),
+        sd_glass(p + vec2<f32>(0.0, eps), hs, r) - sd_glass(p - vec2<f32>(0.0, eps), hs, r));
     let n = g / max(length(g), 1e-5);
 
     // ② 位移场（透镜弯曲）：**位移横贯整个边缘带**（峰值在外缘、向中心平滑归零，中心平坦）。

@@ -140,6 +140,11 @@ public final class GlassMaterial {
     /** ★★★决策 #1004：带**nest（内层/预模糊模式）**与 **bgLumOverride**（内层继承外层两态判定；<0=自动）。
      *   nest 语义见 glass.wgsl：0/1 锐背板 · 2 外层宿主已预模糊 · 3 内层（复合帧，跳自己的面纱）。 */
     public static Paint buildPaint(int nodeId, Bitmap backdrop, float ox, float oy, float bdX, float bdY, float w, float h, float radius, Spec spec, float touchX, float touchY, float press, float divX, float divY, float nest, float bgLumOverride) {
+        return buildPaint(nodeId, backdrop, ox, oy, bdX, bdY, w, h, radius, spec, touchX, touchY, press, divX, divY, nest, bgLumOverride, 0f);
+    }
+
+    /** ★★★决策 #1027：带 **shp_a（端部锥化，signed；0=恒等）** 的完整重载——形变域 SDF 见 glass.wgsl `sd_glass`。 */
+    public static Paint buildPaint(int nodeId, Bitmap backdrop, float ox, float oy, float bdX, float bdY, float w, float h, float radius, Spec spec, float touchX, float touchY, float press, float divX, float divY, float nest, float bgLumOverride, float shpA) {
         if (!isAvailable() || backdrop == null || backdrop.isRecycled() || spec == null || w <= 0f || h <= 0f) {
             android.util.Log.w("proteus-glass", "buildPaint early-null: avail=" + isAvailable()
                     + " backdrop=" + (backdrop == null ? "null" : backdrop.getWidth() + "x" + backdrop.getHeight())
@@ -201,6 +206,8 @@ public final class GlassMaterial {
                 sh.setFloatUniform("bg_lum", bgLum);
                 // ★★★决策 #1004：nest（内层/预模糊模式；见 glass.wgsl struct 注释）
                 sh.setFloatUniform("nest", nest);
+                // ★★★决策 #1027：端部锥化（signed；0=恒等）
+                sh.setFloatUniform("shp_a", shpA);
                 // ★★★决策 #905：触控形变（touch 盒局部 px / press 0..1）
                 sh.setFloatUniform("touch", touchX, touchY);
                 sh.setFloatUniform("press", press);

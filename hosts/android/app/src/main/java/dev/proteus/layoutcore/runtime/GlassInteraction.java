@@ -64,6 +64,8 @@ final class GlassInteraction {
     private static final float STRETCH_MAX = 0.30f;     // 横向拉伸上限（+30% 宽）
     private static final float FLATTEN_MAX = 0.15f;     // 纵向压扁上限（−15% 高）
 
+    /** ★★★决策 #1027：**端部锥化**（signed；形变域 SDF 的 shp_a——>0=向右运动、前缘锥化，尾缘 0.45×）。 */
+    float shapeTaper = 0f;
     /** 变形盒输出缓冲（复用——每帧每胶囊一次调用，避免分配）。 */
     private final float[] boxOut = new float[4];
 
@@ -181,10 +183,18 @@ final class GlassInteraction {
             bx -= extL; bw += extL + extR;
             by += bh * flatten * 0.5f; bh *= (1f - flatten);
         }
+        // ★★★决策 #1027：端部锥化——速度+滞后驱动（越快越尖；dirT 符号给 host 定"哪端是前缘"）。
+        //   上限 0.42（端头竖直收窄至 ~58% 高）；0 = 恒等（不触碰非按下路径）。
+        // ★#1027 订正：方向**优先手指 EMA**（它保留"最后拖动方向"的记忆并渐衰）——急停瞬间 bvel 会先翻转
+        //   （质心被拉回），若直取 bvel 会把滴尖瞬间换端；velSmooth 衰减后用 bvel（回收相位滴尖随实际运动）。
+        final float dirT = Math.abs(velSmooth) > 0.5f ? velSmooth
+                : (Math.abs(bvel) > Math.abs(velSmooth) ? bvel : velSmooth);
+        shapeTaper = Math.min(0.42f, sp * 0.010f + Math.abs(lagPx) * 0.002f) * press * (dirT >= 0f ? 1f : -1f);
         if (debug && stretch > 0.01f) {
             android.util.Log.i("proteus-glass", "GLASSSTRETCH vel=" + String.format("%.1f", velSmooth)
                     + " bvel=" + String.format("%.1f", bvel) + " lag=" + String.format("%.1f", lagPx)
                     + " stretch=" + String.format("%.3f", stretch) + " flatten=" + String.format("%.3f", flatten)
+                    + " taper=" + String.format("%.3f", shapeTaper)
                     + " w=" + String.format("%.0f", bw) + " h=" + String.format("%.0f", bh));
         }
         boxOut[0] = bx; boxOut[1] = by; boxOut[2] = bw; boxOut[3] = bh;
