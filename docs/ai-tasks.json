@@ -881,6 +881,26 @@
         "T-glass-density-2"
       ],
       "note": "【由来】用户「好多了，这个方向是对了，再加一档」（承 #1020 同轴）。\n【修】α 0.56/0.62→0.62/0.68（透射 44/38%→38/32%，条面平值不变）· V_dark 0.134→0.124（配 α 保暗条 24）· 胶囊叠加 0.28→0.34（Δ23/42→Δ28/50）。\n【★教训】\"方向对了\"= 用户验收了参数轴——后续加档沿同轴步进+面值守恒约束（#1016→#1021 收敛形态：改两个数+一个权重）；三连递进要有护栏值（透射 32% 已近\"内容不可见\"区 <25%，到达前应主动提示）。\n【诚实边界】α 显著实于 iOS 原版（连续选择）；透射 32% 已低，下档前建议真机目视滚动场景；iOS/鸿蒙未接。"
+    },
+    {
+      "id": "T-glass-model-frozen",
+      "title": "★★★液态玻璃最终模型冻结：定稿文档（16-frozen-model）+ 机器守卫测试（18 项双侧同源）",
+      "type": "governance",
+      "status": "done",
+      "owner": "session:zcode-glassblur",
+      "scope": [
+        "docs/proteus-glass-plan/**",
+        "tests/glass-frozen-model.test.ts"
+      ],
+      "decision": 1022,
+      "verification": "npx vitest run tests/glass-frozen-model.test.ts（3 passed）+ 破坏性验证（注入 α 0.68→0.70 ⇒ 红 / 还原 ⇒ 绿 + 零 diff）&& npx vitest run tests/glass.test.ts tests/glass-ir.test.ts（45 passed）&& pnpm check:shader-generated",
+      "branch": null,
+      "related": [
+        "T-glass-density-3",
+        "T-glass-veil-alpha",
+        "T-glass-ios-model"
+      ],
+      "note": "【由来】用户「对了对了，这个对了，固化下来不用再动了。花费了三天终于做出来了 iOS 的这个液态玻璃模型了」。\n【交付】① 冻结文档 docs/proteus-glass-plan/16-liquid-glass-frozen-model.md（两态对照/18 项定稿参数/架构三层/证据链/冻结协议/下一档护栏值）；② 守卫测试 tests/glass-frozen-model.test.ts——18 项定稿值 × [wgsl, oracle] 双侧断言（防单侧漂移）+ 宿主预模糊链在位断言。\n【判据】破坏性验证过（注入红/还原绿/零 diff）；全组玻璃测试绿；shader-generated 四端一致。\n【★教训】\"做完了\"≠\"固化下来\"——定稿值必须有机器守卫（只有工具层是结构性的）；守卫要双侧同源（防\"改一边忘另一边\"）。\n【护栏值】白端 255 到头（#1018）；透射 32/38% 已低（≲25% 前先真机目视）；胶囊 Δ28/50 已强于 iOS（Δ18/34）。\n【诚实边界】iOS/鸿蒙未逐项真机复测（真源同源+parity 四态 1/255）；宿主预模糊只在 Android；两态口径=白卡/纯黑。"
     }
   ]
 }
