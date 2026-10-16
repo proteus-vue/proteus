@@ -255,9 +255,11 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     let bowl_t = (d / bowl_span).clamp(0.0, 1.0);
     let bowl_ep = 1.0 - smoothstep(0.29, 1.0, bowl_t);
     // ★★★决策 #1017（与 glass.wgsl 同源）：bowl 基线 →1.0 / 边缘 →1.04（白端 254 / 暗端 24 双端同系数对齐）。
-    // ★★★决策 #1018（与 glass.wgsl 同源）：白端再 +2% 按 veil_t 门控、**只给外层**（nest≤2；
-    //   内层胶囊经采样继承条的白度，不双重加成）。
-    let bowl_f = 1.0 + (1.04 - 1.0) * bowl_ep + 0.02 * veil_t * if p.nest > 2.5 { 0.0 } else { 1.0 };
+    // ★★★决策 #1018（与 glass.wgsl 同源）：白端再 +2% 按 veil_t 门控。
+    // ★★★决策 #1019（与 glass.wgsl 同源）：**整个碗形只给外层**（nest≤2）——内层胶囊平直化
+    //   （iOS 实测 236/58 恒定；旧行为胶囊边缘被 +4% 提亮到 252 ⇒ 与条差异度损失）。
+    let bowl_gain = 1.0 + (1.04 - 1.0) * bowl_ep + 0.02 * veil_t;
+    let bowl_f = 1.0 + (bowl_gain - 1.0) * if p.nest > 2.5 { 0.0 } else { 1.0 };
     for c in 0..3 { col[c] = col[c] * bowl_f; }
 
     let cos_i = 1.0 / (1.0 + slope * slope).sqrt();
