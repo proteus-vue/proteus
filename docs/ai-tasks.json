@@ -574,6 +574,29 @@
       "note": "【由来】用户转 workbuddy v3-1016 报告（折射贯穿整条/三个场/反射=菲涅尔/吸入），逐条独立复测后：① 碗形亮度场采纳并落地（bowl_f=mix(0.96,1.005,ep)，span 0.55·min）——两份独立测量互证（2.8%/4.1% 连续渐变）；② 折叠镜面修正（回调 #1005 的 0.62/1.90）：21x 拉伸证实 iOS「上边的文字」是真实列表行非镜像副本 ⇒ band 0.45 + ER 1.20（镜面 ≈0.17·H 薄折叠带）；③ 三场同 SDF 连续驱动；④ 「反射=菲涅尔」部分采纳（折叠薄副本仍存在）。\n【★教训】采信外部报告逐条独立复测；「上边看到的文字」先问是不是本来就在那；刻度尺探针=位移映射通用工具。\n【诚实边界】碗形参数首落待目视；iOS/鸿蒙未接。"
     },
     {
+      "id": "T-glass-veil-alpha",
+      "title": "液态玻璃「太白了、文字看不清」修正：浅端面纱 α 0.85→0.62（内容透射 15%→38%）",
+      "type": "capability",
+      "status": "done",
+      "owner": "session:zcode-glassblur",
+      "scope": [
+        "packages/shader-codegen-rust/src/materials/**",
+        "packages/shader-codegen-rust/src/reference.rs",
+        "packages/shader/src/generated/**",
+        "hosts/ios/lib/**",
+        "hosts/harmony/host-app/**",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/**"
+      ],
+      "decision": 1007,
+      "verification": "bash hosts/ios/check-glass-pixel-parity.sh（四态 rest/press/nest2/nest3 max 1/255）&& npx vitest run tests/glass-ir.test.ts tests/glass.test.ts && 真机判据：字幕 ghost Δ45（前 35）· 条面 244-247",
+      "branch": null,
+      "related": [
+        "T-glass-bowl-fold",
+        "T-glass-nesting-2state"
+      ],
+      "note": "【由来】用户「折射对了…就剩下太白了，文字看不清」。\n【定位】oracle 文字探针：细笔画保留 α0.85=15.9% / α0.80=19.9% / α0.62=32.7%；粗 18.8%/23.6%/40.6% ⇒ 采纳 0.62；真机字幕 Δ35→45。\n【依据】#996 的 0.85 拟合自低对比灰药丸；文字（高对比）被同一 α 压到 15% ⇒ 可读性优先（#984 的 0.467 同向）。\n【附带】nest=2 模糊间隔 0.08→0.07。\n【★教训】同一 α 承担「低对比融霜 + 高对比透字」是模型级过载（0.467↔0.85 反复的根源）——正解=α 依赖内容局部对比度（门控，架构级待做）；门禁样例要随参数使用场景覆盖（本次补浅端 nest2/nest3）。\n【诚实边界】0.62 中偏透（过透可回 0.70）；iOS/鸿蒙未接（α 常量同源）。"
+    },
+    {
       "id": "T-glass-ios-remaining",
       "title": "液态玻璃对齐 iOS · 剩余项：折射顺序(先保高频再位移) / 亮度→alpha 调制 / 标签贴底缘（wb 真机诊断 #5/#7 + 第十块结论；①blur 已收口至 T-glass-ios-blur）",
       "type": "capability",

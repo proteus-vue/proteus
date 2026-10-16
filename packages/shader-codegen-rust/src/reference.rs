@@ -167,7 +167,7 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     //   2/3 宿主已深链预模糊（σ_pre≈3.9px）⇒ 本核退为小残差 d=2.5px/1.6px < 笔画宽 ⇒ 无副本分离）。
     //   ★★★决策 #1005：nest=2 的 tap 0.065→**0.08**（宿主深链 → 单次 /2 轻链；可读性修正，见 glass.wgsl ③）。
     let mut bsig = (p.blur * 0.16f32).clamp(0.0, 8.0);
-    if p.nest > 1.5 { bsig = (p.blur * 0.08f32).clamp(0.0, 8.0); }
+    if p.nest > 1.5 { bsig = (p.blur * 0.07f32).clamp(0.0, 8.0); }   // ★#1007：0.08→0.07
     if p.nest > 2.5 { bsig = (p.blur * 0.04f32).clamp(0.0, 8.0); }
     let taps: [(f32, f32); 9] = [
         (0.0, 0.0),
@@ -215,7 +215,8 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     let pr_ov = p.press.clamp(0.0, 1.0) * p.overlay.clamp(0.0, 1.0);
     // ★★★决策 #987（B）：α 随背景变——浅端 0.88（内容压到不可见）/ 深端 0.467（#984 四点拟合）。
     // ★#996：恢复 B——浅底 α 0.85（对比度门控）
-    let veil_a0 = 0.467f32 + (0.85f32 - 0.467f32) * veil_t;
+    // ★#1007：0.85→**0.62**（内容透射 15%→38%——用户「太白、文字看不清」；见 glass.wgsl 同源注释）。
+    let veil_a0 = 0.467f32 + (0.62f32 - 0.467f32) * veil_t;
     // ★★★决策 #1004：内层玻璃（nest=1/3）跳过自己的面纱（输入=含外层霜的复合帧 ⇒ 避免双重霜；
     //   与 glass.wgsl ⑤ 同源）。外层（0/2）保留 = 条的白霜本体。
     let veil_skip = (p.nest - 1.0).abs() < 0.5 || p.nest > 2.5;
