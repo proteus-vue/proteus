@@ -2548,14 +2548,14 @@ public class ProteusHostView extends ViewGroup {
             clearPress();
             endFollow();   // ★S3：抬指 ⇒ 松手（回弹/吸附在内核）
             endField();    // ★场跟手：抬指 ⇒ 叶片回声明基态（场消失 = 静止网格）
-            // ★★★决策 #1023（iOS：拖到哪个 tab 释放 ⇒ 选哪个）：超 slop 用**释放点**重定向 tap（GestureDetector 判 scroll 后不再发 tap ⇒ 手动派发一次；进 JS 走 @click）。
+            // ★★★决策 #1023/#1028（用户「哪个选项落在胶囊里面的区域大就近停靠，不依赖手指的落点」）：
+            //   派发点 = **胶囊覆盖面积最大**的 tab 中心（无重叠 ⇒ 就近；找不到 ⇒ 释放点兜底）——超 slop 重定向 tap。
             if (action == android.view.MotionEvent.ACTION_UP && glassIx.dragMoved && glassIx.gestureScrolled && glassIx.nodeId >= 0) {
-                dispatchHit(ev.getX(), ev.getY());
+                final float[] dp = glassIx.dockPick(cmds, cmdNodeIds, nodeParent, glassByNode);
+                dispatchHit(dp != null ? dp[0] : ev.getX(), dp != null ? dp[1] : ev.getY());
                 if (lastHitTarget >= 0) {
-                    gestureTarget = lastHitTarget;
-                    gestureChain = lastHitChain;
-                    gestureStartX = lastHitX;
-                    gestureStartY = lastHitY;
+                    gestureTarget = lastHitTarget; gestureChain = lastHitChain;
+                    gestureStartX = lastHitX; gestureStartY = lastHitY;
                     report("tap", ev, null);
                 }
             }

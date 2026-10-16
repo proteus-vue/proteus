@@ -67,6 +67,7 @@ final class GlassInteraction {
     /** ★★★决策 #1027：**端部锥化**（signed；形变域 SDF 的 shp_a——>0=向右运动、前缘锥化，尾缘 0.45×）。 */
     float shapeTaper = 0f;
     /** 变形盒输出缓冲（复用——每帧每胶囊一次调用，避免分配）。 */
+    private final float[] dockOut = new float[2];
     private final float[] boxOut = new float[4];
 
     /** 命中交互玻璃（hx/hy = 命中坐标系；命中 ⇒ 记录触点与起点、press 起步）。返回 true = 命中。 */
@@ -153,6 +154,50 @@ final class GlassInteraction {
             velSmooth = 0f;
         }
         return need;
+    }
+
+    /** ★★★决策 #1028（用户「哪个选项落在胶囊里面的区域大就近停靠，不依赖手指的落点」）：
+     *  释放时按**胶囊覆盖面积**选停靠 tab——返回派发点（重叠最大 tab 的中心；盒坐标空间 = 屏幕坐标）。
+     *  · 候选 = 胶囊的**同父兄弟**（tab items；跳过玻璃兄弟）；面积 = lens 盒 ∩ 候选盒；
+     *  · 全部无重叠（拖出条外）⇒ 就近（中心距 lens 中心最近）；找不到胶囊/候选 ⇒ null（调用方用释放点兜底）。 */
+    float[] dockPick(List<ProteusHostView.Cmd> list, int[] ids,
+                     java.util.Map<Integer, Integer> nodeParent,
+                     java.util.Map<Integer, GlassMaterial.Spec> glassByNode) {
+        if (list == null || ids == null || nodeId < 0) return null;
+        // ① 胶囊 = 按下组内的**内层玻璃**（与外层条 nodeId 区分）
+        ProteusHostView.Cmd capsule = null; int capsuleNode = -1;
+        for (int k = 0; k < list.size() && k < ids.length; k++) {
+            if (ids[k] != nodeId && glassByNode.get(ids[k]) != null && pressSubtree.contains(ids[k])) {
+                capsule = list.get(k); capsuleNode = ids[k]; break;
+            }
+        }
+        if (capsule == null) return null;
+        // ② 胶囊当前（已拖拽/形变）盒——与 drawGlassPass 同源（capsuleBox 复用缓冲）
+        final float[] cb = capsuleBox(capsule);
+        final float lensCx = cb[0] + cb[2] * 0.5f;
+        // ③ 候选 = 同父兄弟（tab items；跳过玻璃）
+        final Integer parent = nodeParent.get(capsuleNode);
+        if (parent == null) return null;
+        ProteusHostView.Cmd pick = null; float pickArea = -1f, pickDist = Float.MAX_VALUE;
+        for (int k = 0; k < list.size() && k < ids.length; k++) {
+            if (ids[k] == capsuleNode || glassByNode.get(ids[k]) != null) continue;
+            if (!parent.equals(nodeParent.get(ids[k]))) continue;
+            final ProteusHostView.Cmd c = list.get(k);
+            if (c.w <= 0f || c.h <= 0f) continue;
+            final float ox = Math.min(cb[0] + cb[2], c.x + c.w) - Math.max(cb[0], c.x);
+            final float oy = Math.min(cb[1] + cb[3], c.y + c.h) - Math.max(cb[1], c.y);
+            final float area = (ox > 0f && oy > 0f) ? ox * oy : 0f;
+            final float dist = Math.abs(c.x + c.w * 0.5f - lensCx);
+            if (pick == null || area > pickArea + 0.5f || (Math.abs(area - pickArea) <= 0.5f && dist < pickDist)) {
+                pick = c; pickArea = area; pickDist = dist;
+            }
+        }
+        if (pick == null) return null;
+        if (debug) android.util.Log.i("proteus-glass", "GLASSDOCK lens=[" + String.format("%.0f..%.0f", cb[0], cb[0] + cb[2])
+                + "] bpos=" + String.format("%.0f", bpos)
+                + " pick=[" + String.format("%.0f..%.0f", pick.x, pick.x + pick.w) + "] area=" + String.format("%.0f", pickArea));
+        dockOut[0] = pick.x + pick.w * 0.5f; dockOut[1] = pick.y + pick.h * 0.5f;
+        return dockOut;
     }
 
     /** ★★★决策 #1023/#1024：按下胶囊的变形盒——按压膨胀（#1023）+ 拖拽跟手 + **速度驱动的液滴拉伸**（#1024：

@@ -994,6 +994,24 @@
         "T-glass-capsule-radius"
       ],
       "note": "【由来】用户「惯性有了，但是形态没跟着走…两端甚至会形变成尖的圆角，形变后回弹」。\n【取证】急停瞬间尾缘垂直收窄（高 218→190）+ 抛物线收尖；两端不对称（前缘拉长/尾缘压缩）。\n【修】sd_round_rect → sd_glass（端部收缩 m(nx)=1−taper·nx² ⇒ 圆润滴尖；法线/折射/亮环自动跟随）；uniform shp_a（signed，复用 pad 槽 100，结构仍 112B）；宿主 shapeTaper=min(0.42, sp·0.010+|lag|·0.002)·press·sign(dirT)。\n【★教训】\"剪影变形\"的钥匙是 SDF（距离场本身就是形状——#971/#983 曾把路堵死）；\"形态没跟手\"拆\"盒层 vs SDF 层\"；signed 参数给对称机制。\n【诚实边界】端头抛物线（更尖改 nx⁴）；上下边弓形未做；锥化系数目测标定；iOS/鸿蒙宿主交互未接（shader+生成物四端同步）。"
+    },
+    {
+      "id": "T-glass-dock-area",
+      "title": "停靠逻辑：胶囊覆盖面积优先（dockPick）——释放按 lens∩tab 面积最大选停靠项，不依赖手指落点",
+      "type": "bugfix",
+      "status": "done",
+      "owner": "session:zcode-glassblur",
+      "scope": [
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/**"
+      ],
+      "decision": 1028,
+      "verification": "真机 GLASSDOCK 三场景：① 指尖 640 ⇒ 停游戏（面积 33264 最大）② 指尖 900（搜索区）⇒ 停 App（不依赖指尖）③ 拖出条外 ⇒ 停搜索（就近）（.workbuddy/salvage/liquid-glass/dock-1028/）&& bash hosts/android/check-host-compile.sh && pnpm check:file-size && pnpm check:host-rounding",
+      "branch": null,
+      "related": [
+        "T-glass-press-drag",
+        "T-glass-drop-dynamics"
+      ],
+      "note": "【由来】用户「只有手指停到哪个图标选项才会停，不然还会回到原处，正确应该是哪个选项落在胶囊里面的区域大就近停靠，不依赖手指的落点」。\n【缺陷】#1023 释放重定向用释放点（指尖）⇒ 指尖不在 tab 上 hit 到父容器 ⇒ 回原处。\n【修】dockPick：lens 变形盒 ∩ 同父兄弟（tab items）面积最大者，派发点=候选中心；平手就近；全无就近兜底；找不到回退释放点。\n【★教训】\"拖动的归属\"必须用被拖物（状态）几何判定、不能用手指（输入）落点；选择要\"完备三段\"（无\"回原处\"第四态）；判据要设计\"输入与状态分离\"的场景。\n【诚实边界】候选=同父兄弟；阈值 0.5px²；iOS/鸿蒙宿主交互未接。"
     }
   ]
 }
