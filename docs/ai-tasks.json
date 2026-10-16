@@ -598,9 +598,9 @@
     },
     {
       "id": "T-glass-refract-monotonic",
-      "title": "折射剖面订正：删折叠（(1-e)^3）→ bump 单调压缩 + 幅度对齐 #914（峰值 ≈8px）",
+      "title": "折射剖面订正：删折叠（(1-e)^3）→ bump 单调压缩（★已被决策 #1010 撤回——诊断证伪）",
       "type": "capability",
-      "status": "done",
+      "status": "abandoned",
       "owner": "session:zcode-glassblur",
       "scope": [
         "packages/shader-codegen-rust/src/materials/**",
@@ -615,7 +615,28 @@
         "T-glass-bowl-fold",
         "T-glass-veil-alpha"
       ],
-      "note": "【由来】用户转 workbuddy 报告「条内透射是细密错位纹理/横条纹，iOS 成形成句」。\n【复核（刻度尺探针实锤）】输入暗线 q≡0 mod 20 ⇒ 输出 y=3 多出一条（深部 q≈60 折叠镜像到贴边）；bend(0)=66px ⇒ 内容 0-44px 永不显示 + 44-66px 镜像进顶带 = 错位副本机制本体；视频逐帧（单调减速到冻结、无反向）同向。\n【修】剖面 4·e·(1-e)（bump 单调）+ EDGE_REFRACT 1.20→0.15（峰值 66px→≈8.3px < 字高 24px）；保留暗缝/亮脊/色散/碗形。\n【判据】探针 8 线→8 线 1:1（0-9px 向边轻拉）· parity 四态 · 单测 58 · coupled · 双端编译 · AAR/prebuilt · 真机条内网格结构成形透出。\n【★教训】「外观像」与「内容可读」可能互斥于同一位移场（折叠=液态感但毁字形；单调压缩兼得）；给位移场做「刻度尺探针」=把「手感」变成「测量」。\n【诚实边界】折叠感不再保留（若要倒影应反射条外内容）；幅度 0.15 可目视加档至 0.30；iOS/鸿蒙未接。"
+      "note": "【由来】用户转 workbuddy 报告「条内透射是细密错位纹理/横条纹，iOS 成形成句」。\n【复核（刻度尺探针实锤）】输入暗线 q≡0 mod 20 ⇒ 输出 y=3 多出一条（深部 q≈60 折叠镜像到贴边）；bend(0)=66px ⇒ 内容 0-44px 永不显示 + 44-66px 镜像进顶带 = 错位副本机制本体；视频逐帧（单调减速到冻结、无反向）同向。\n【修】剖面 4·e·(1-e)（bump 单调）+ EDGE_REFRACT 1.20→0.15（峰值 66px→≈8.3px < 字高 24px）；保留暗缝/亮脊/色散/碗形。\n【判据】探针 8 线→8 线 1:1（0-9px 向边轻拉）· parity 四态 · 单测 58 · coupled · 双端编译 · AAR/prebuilt · 真机条内网格结构成形透出。\n【★教训】「外观像」与「内容可读」可能互斥于同一位移场（折叠=液态感但毁字形；单调压缩兼得）；给位移场做「刻度尺探针」=把「手感」变成「测量」。\n【诚实边界】折叠感不再保留（若要倒影应反射条外内容）；幅度 0.15 可目视加档至 0.30；iOS/鸿蒙未接。\n【★2026-10-16 撤回（决策 #1010）】本卡「折叠」诊断经数学复核证伪（s\u0027=1+3(1−e)²·ER·str>0 恒成立 ⇒ (1−e)³ 单调）；bump/0.15 已回退，#1009 改动不再存在。保留作追溯锚点。"
+    },
+    {
+      "id": "T-glass-refract-restore",
+      "title": "折射恢复：撤回 #1009（折叠误诊）→ 恢复 #998/#928「(1-e)^3 + ER=1.20」",
+      "type": "bugfix",
+      "status": "done",
+      "owner": "session:zcode-glassblur",
+      "scope": [
+        "packages/shader-codegen-rust/src/materials/**",
+        "packages/shader-codegen-rust/src/reference.rs",
+        "packages/shader/src/generated/**",
+        "hosts/harmony/host-app/**"
+      ],
+      "decision": 1010,
+      "verification": "刻度尺探针（输出与 #1008 逐项一致 [3,60,80,101,127,148]）&& node scripts/gen-shaders.mjs --check && bash hosts/ios/check-glass-pixel-parity.sh（四态 max 1/255）&& 真机三方对照（#1008/#1009/#1010）",
+      "branch": null,
+      "related": [
+        "T-glass-refract-monotonic",
+        "T-glass-bowl-fold"
+      ],
+      "note": "【由来】用户「完了，折射和边缘反射都消失了」（#1009 上线后）。\n【#1009 诊断错误】「(1-e)^3 非单调⇒折叠」漏符号：bend'<0 ⇒ s'=1-bend'>0 恒成立（数值 s'(0)=3.63 全程正）⇒ 处处单调无折叠。\n【真相】d<22.5px 带内 s<0 ⇒ 采条外上方内容（-66..0px 压缩 3.6×）= #998 边缘镜像反射本体（信号不是 bug）。\n【恢复】剖面回 (1-e)^3、ER 回 1.20；保留 #1006 碗形、#1007/#1008 面纱。\n【★教训】折叠判据必须带方向（s'<0 才是折叠）；外部报告的「现象」可采信、「归因」必须数学复核；探针「额外结构」先问是不是本来就该采进来。\n【诚实边界】条内可读性与倒影强度是同一位移场两面（备选 ER 0.6-1.2 目视定夺）；iOS/鸿蒙未接。"
     },
     {
       "id": "T-glass-ios-remaining",

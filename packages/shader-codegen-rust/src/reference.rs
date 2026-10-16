@@ -132,13 +132,11 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     let ec = e.clamp(0.004, 0.996);
     let u1 = 1.0 - ec;
     let slope = u1 / (1.0 - u1 * u1).max(1e-4).sqrt();
-    // ★决策 #910/#912/#914：位移横贯整带；幅度系数 **0.15**（#914 定稿——消"y 轴拉伸"，对齐 iOS"平面变化"
-    //   式轻弯折；机制 = 法线方向向内采样，单调不折叠）。refract_depth 以 band 为基准（1.0 中性）。
-    // ★★★决策 #1009：prof `(1−e)³`（#998 折叠）→ **bump `4·e·(1−e)`**（单调无折叠；边缘压缩侧），
-    //   系数 1.20→**0.15**（峰值位移 ≈8.3px @条）；与 glass.wgsl 同源（完整证据见其注释）。
-    let prof = 4.0 * e * (1.0 - e);
+    // ★★★决策 #1010：撤回 #1009——恢复 `(1−e)³` + 1.20（数学复核：#1009 的"折叠"判据漏符号，
+    //   s'=1+3(1−e)²·ER·str>0 恒成立 ⇒ 该剖面单调；探针"多余的线"= 条外内容被采入 = #998 边缘倒影本体）。
+    let prof = (1.0 - e).powi(3);
     let strength = (p.refract_depth / band.max(1.0)).clamp(0.2, 1.1);
-    let bend = prof * band * 0.15 * strength;
+    let bend = prof * band * 1.20 * strength;
     // ★#905/#966：触控形变——触点处把内容沿"离触点方向"推挤（Gaussian 钟）。
     //   ★只给选中项（overlay）；press=0 或 touch 未激活 ⇒ push≈0（退化到既有折射）。
     let t_r = (hs.0.min(hs.1) * 0.9).max(8.0);
