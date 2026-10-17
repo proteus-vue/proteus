@@ -163,7 +163,7 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     // ★#1043：0.42→0.25 —— bend(0)=22×0.30×1.1≈7.3px < 条边距胶囊边 9.5px（保住条边可见）；
     //   同时 s'(0)=1−3×0.30×1.1≈0.01（强压缩 ⇒ 暗带）。与 glass.wgsl 同源。
     // ★#1044：0.25→0.142（ER_EFF≈0.17）——宽带 60 配中等位移，与 glass.wgsl 同源
-    let er_eff = 1.20f32 * if is_inner { 0.142 } else { 1.0 };
+    let er_eff = 1.20f32 * if is_inner { 0.10 } else { 1.0 };
     let bend = prof * band * er_eff * strength;
     // ★#905/#966：触控形变——触点处把内容沿"离触点方向"推挤（Gaussian 钟）。
     //   ★只给选中项（overlay）；press=0 或 touch 未激活 ⇒ push≈0（退化到既有折射）。
@@ -185,7 +185,7 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     // ★★★决策 #976：按下透镜「内部放大」（凸模式放大镜）——与 glass.wgsl 同源（门控 pr_ov ⇒ 静止/条等价）。
     let pr_ov = p.press.clamp(0.0, 1.0) * p.overlay.clamp(0.0, 1.0);
     let ctr = hs;
-    let zoom = 1.0 + pr_ov * 0.13;   // ★#981 0.16→0.08 · ★#1039 提到 0.13（与 glass.wgsl 同源）
+    let zoom = 1.0 + pr_ov * 0.03;   // ★#1045：0.13→0.03（条边显示位 d≈15px，避开 3.4px 亮脊）；与 glass.wgsl 同源
     let sp_l = (ctr.0 + (sp.0 - ctr.0) / zoom, ctr.1 + (sp.1 - ctr.1) / zoom);
     // ★★★决策 #978：按下透镜「自低通」（凸透镜的柔）——与 glass.wgsl 同源。
     // ★★★决策 #1003：**大半径模糊**（9-tap 二项式，σ = 格距 d）——与 glass.wgsl ③ 同源，取代 #978 的 5-tap。
