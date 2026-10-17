@@ -3630,7 +3630,7 @@ public class ProteusHostView extends ViewGroup {
                     final float[] cb = glassIx.capsuleBox(gc);
                     bx = cb[0]; by = cb[1]; bw = cb[2]; bh = cb[3];
                     glassRadiusOverride = Math.min(g.radius * (bh / Math.max(gc.h, 1f)), Math.min(bw, bh) * 0.5f);   // ★#1025：半径随高度缩放（clamp 最短边半）⇒ 膨胀/拉伸下保持胶囊形
-                    glassShapeOverride = glassIx.shapeTaper;   // ★#1027：端部锥化（形变域 SDF 的 shp_a）
+                    glassShapeOverride = glassIx.shapeTaper; glassIx.drawPressShadow(canvas, shadowPaint, bx, by, bw, bh);   // ★#1027 端部锥化 · ★#1039 接触影（细节见 GlassInteraction）
                 }
             }
             // ★#973/#979：**内层玻璃**（有玻璃祖先，如选中胶囊）采样**全分辨率离屏复合层** `glassLayerFull`

@@ -130,6 +130,31 @@ final class GlassInteraction {
     /** ★#1038：当前流动胶囊的**实际撑开比例**（bw/槽宽）——内容按此做透镜式放大（iOS 1.15→1.4×）。 */
     private float flowSpanRatio = 1f;
     float flowSpanRatio() { return flowActive ? flowSpanRatio : 1f; }
+    /** ★#1039：按压/流动胶囊的**接触影**（复用宿主 paint；多层同心圆角矩形近似软阴影）。
+     *  iOS 实测（亮底 B 帧 + 暗底 press3）：紧贴底缘 −18…−25/255、**向下偏 4–5px**、模糊 3–7px。
+     *  此前胶囊**完全没有投影** ⇒ 缺"浮在条上"的深度线索，按压态读作"贴纸"（用户「没有生命力」）。 */
+    void drawPressShadow(android.graphics.Canvas canvas, android.graphics.Paint paint,
+                         float bx, float by, float bw, float bh) {
+        final float sp = Math.max(press, lift);
+        if (sp <= 0.02f) return;
+        // ★实测校正（2026-10-17 真机）：首版 a0=0.30×255 + 6 层叠加 ⇒ 底缘实测 **183/255（−60）**，
+        //   而 iOS 只有 −18…−25；且整圈外扩导致**胶囊上方也出现暗晕**（物理上不对）。
+        //   ⇒ ① alpha 0.30→0.11（多层累加后约 −22）；② 只在**下半部**画（裁掉上缘，投影只向下）。
+        final int a0 = (int) (0.11f * 255 * sp);
+        final float rr = Math.min(bw, bh) * 0.5f;
+        final float dy = 4f * sp;
+        final int sc = canvas.save();
+        canvas.clipRect(bx - 40f, by + bh * 0.55f, bx + bw + 40f, by + bh + dy + 20f);
+        for (int k = 5; k >= 1; k--) {
+            final float grow = k * 1.5f;
+            final int aa = a0 / (k + 1);
+            if (aa <= 0) continue;
+            paint.setColor(aa << 24);
+            canvas.drawRoundRect(bx - grow, by + dy - grow, bx + bw + grow, by + bh + dy + grow,
+                    rr + grow, rr + grow, paint);
+        }
+        canvas.restoreToCount(sc);
+    }
     /** ★#1038：内容缩放系数 [sx, sy]——flow 用**实际撑开比例**（横向跟满、纵向只跟 35% 的各向异性，
      *  对齐 iOS 实测"图标横向 1.2–1.7× / 纵向 1.08–1.14×"）；按压路径用固定 1.20×/1.17×。 */
     private final float[] contentScaleOut = new float[2];
