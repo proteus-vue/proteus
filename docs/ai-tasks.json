@@ -1227,6 +1227,24 @@
         "T-glass-density-3"
       ],
       "note": "用户「按起来膨胀的感觉还不对，我们的是完全透明的，没有边界，没有生命力；iOS 一眼看出一个水滴在玻璃体上流动」。根因：按压同时关掉 5 层（veil_skip/ov_a→0/tint.a=0/bowl_f=1/edge_amp=0），只剩饱和的白亮脊 + 无投影。修：edge_amp 按 pr_ov 恢复；亮脊改亮核+暗缝(只顶/底)+内脊三明治；色散×2 且色带放宽到 9px；zoom 0.08→0.13；胶囊接触影（−22/255 · 下偏 4px · 只下半部）。诚实边界：亮底加\"外柔光晕\"会饱和并填平暗缝（实测已撤回）；暗缝比 iOS 略硬；色散在亮底仍不明显；未做用户目视验收。"
+    },
+    {
+      "id": "T-glass-press-content-clip",
+      "title": "按压时相邻图标被「裁剪画布」覆盖：内容放大窗口改胶囊实际宽度",
+      "type": "bugfix",
+      "status": "done",
+      "owner": "session:zcode-glassbounce",
+      "scope": [
+        "hosts/android/**"
+      ],
+      "decision": 1040,
+      "verification": "真机 press=1.0 逐列差分 vs 稳定静止帧（salvage/liquid-glass/press-1040/：修复前变化区间含 (192-251)+(700-751)+(949-1005) 三个相邻图标；修复后只剩胶囊自身 346-601）+ bash hosts/android/check-host-compile.sh && pnpm test:coupled",
+      "branch": null,
+      "related": [
+        "T-glass-press-volume",
+        "T-glass-two-edge-morph"
+      ],
+      "note": "用户「胶囊还没接触到选项图标，图标文字就有一个类似裁剪的画布铺了上去」。根因：内容跟随的三段裁剪用 capCmd.w*0.5*sCapX 算窗口，而按压时 sCapX=1.20、胶囊盒水平却不放大（PRESS_SCALE_CAPSULE_X=0，宽恒 252）⇒ 放大画布每侧多 ~29px，把相邻图标二次绘制上去，边缘笔直读作\"裁剪画布\"。修：bandHalf = flowContent ? w*0.5*sCapX : w*0.5（按压=胶囊实际宽度；flow 仍按撑开比例）。★教训：内容裁剪窗口必须与实际绘制的盒同源，不要各自算。"
     }
   ]
 }

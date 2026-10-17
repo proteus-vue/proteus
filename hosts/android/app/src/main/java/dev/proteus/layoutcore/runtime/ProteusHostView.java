@@ -3665,13 +3665,12 @@ public class ProteusHostView extends ViewGroup {
         if (capCmd != null && capP > 0.001f && !gContent.isEmpty()) {
             // ★#971/#1023：**只缩放胶囊 x 范围的内容**（绕胶囊中心，中心跟随 lens——"放大镜"下内容同步移动）。
             final float ccx = capCmd.x + capCmd.w * 0.5f + glassIx.dragAppliedDx + (gScrolled ? scrollX : 0);
-            final float ccy = capCmd.y + capCmd.h * 0.5f + (gScrolled ? scrollY : 0);
-            // ★#1038：flow 的内容放大按胶囊实际撑开比例（iOS：横向 1.2–1.7×、纵向仅 +35% 的各向异性）
-            final float[] cs = glassIx.contentScale(capP, flowCapCmd != null && pressInner == null); final float sCapX = cs[0], sCapY = cs[1];
-            final float capL = ccx - capCmd.w * 0.5f * sCapX - 4f;
-            final float capR = ccx + capCmd.w * 0.5f * sCapX + 4f;
-            final float top = -1e6f, bot = 1e6f;
-            int sv1 = canvas.save(); canvas.clipRect(top, top, capL, bot); drawCmds(canvas, null, gContent); canvas.restoreToCount(sv1);
+            final float ccy = capCmd.y + capCmd.h * 0.5f + (gScrolled ? scrollY : 0);            // ★★★#1040：内容放大窗口 = **胶囊实际绘制宽度**（不是 w*sCapX）——按压时胶囊水平不放大（X=0，宽恒 252），
+            //   旧式 252×1.2=302px ⇒ 放大画布每侧多 ~29px 盖到相邻图标上（「有个类似裁剪的画布铺了上去」）；flow 时胶囊确实被撑开，仍用 w*sCapX。
+            final boolean flowContent = flowCapCmd != null && pressInner == null;
+            final float[] cs = glassIx.contentScale(capP, flowContent); final float sCapX = cs[0], sCapY = cs[1];
+            final float bandHalf = flowContent ? capCmd.w * 0.5f * sCapX : capCmd.w * 0.5f;
+            final float capL = ccx - bandHalf, capR = ccx + bandHalf, top = -1e6f, bot = 1e6f;            int sv1 = canvas.save(); canvas.clipRect(top, top, capL, bot); drawCmds(canvas, null, gContent); canvas.restoreToCount(sv1);
             int sv2 = canvas.save(); canvas.clipRect(capL, top, capR, bot); canvas.scale(sCapX, sCapY, ccx, ccy); drawCmds(canvas, null, gContent); canvas.restoreToCount(sv2);
             int sv3 = canvas.save(); canvas.clipRect(capR, top, 1e6f, bot); drawCmds(canvas, null, gContent); canvas.restoreToCount(sv3);
         } else if (!gContent.isEmpty()) {
