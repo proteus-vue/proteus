@@ -311,15 +311,25 @@ final class GlassBackdrop {
                 c.drawPath(bp, ep);
             }
             // ★★★决策 #1044（用户「我们的经过图标文字时没有真实的光学折射」）：
-            //   **把玻璃子树的内容（tab 图标/文字）也画进复合层** —— 此前复合层只含「背景 + 外层玻璃面 + 条边线」，
-            //   而图标/文字属于**玻璃子树**、在 `captureGlassBackdrop` 里被排除（那是"只糊背后"的正确语义）。
-            //   ⇒ 胶囊采样时**根本没有图标可折射**（只有纯色背景），所以永远没有透镜扭曲/彩虹。
-            //   iOS 的做法（公开逆向 + 私有选择器实证）：`_UILiquidLensView` 内部是
-            //   `_UIPortalView 采样 bar 自身内容 + displacementMap over SDF` —— **图标是被透镜 warp 的**，
-            //   不是重新布局的。⇒ 这里把内容并入复合层，让胶囊的折射/放大/色散真实作用在图标上。
+            //   把玻璃子树的内容（tab 图标/文字）也画进复合层 —— 此前复合层只含「背景 + 外层玻璃面 + 条边线」，
+            //   而图标/文字属于**玻璃子树**、在 `captureGlassBackdrop` 里被排除（"材质只糊背后"的正确语义）。
+            //   ⇒ 胶囊采样时根本没有图标可折射（只有纯色背景），所以永远没有透镜扭曲/彩虹。
+            //   iOS 的做法（公开逆向 + 私有选择器实证）：`_UILiquidLensView` =
+            //   `_UIPortalView 采样 bar 自身内容 + displacementMap over SDF` ⇒ **图标是被透镜 warp 的**。
+            //   ★★★决策 #1045（用户「滑过去的时候下面变成全白了，玻璃条边线也看不到了」）：**必须排除内层玻璃**
+            //   —— 首版写成"遍历所有 glassByNode 加子树"，而**外层条的子树里就包含选中胶囊自己**（n181 是
+            //   n179 的后代）⇒ 胶囊采样到**自己的静态影像**（还带着条边线的描边）⇒ 滑过去整片糊白、
+            //   条边线被自己的白影像盖掉。⇒ 只取**外层玻璃**的子树，再**减去所有内层玻璃的子树**（留下图标/文字）。
             final java.util.Set<Integer> glassContentIds = new java.util.HashSet<>();
             for (int k = 0; k < list.size() && k < ids.length; k++) {
-                if (glassByNode.get(ids[k]) != null) glassContentIds.addAll(host.subtreeOf(ids[k]));
+                if (glassByNode.get(ids[k]) != null && !host.hasGlassAncestor(ids[k])) {
+                    glassContentIds.addAll(host.subtreeOf(ids[k]));
+                }
+            }
+            for (int k = 0; k < list.size() && k < ids.length; k++) {
+                if (glassByNode.get(ids[k]) != null && host.hasGlassAncestor(ids[k])) {
+                    glassContentIds.removeAll(host.subtreeOf(ids[k]));   // 内层胶囊自身（采样源不能含自己）
+                }
             }
             if (!glassContentIds.isEmpty()) {
                 final int sc = c.save();

@@ -209,7 +209,7 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     //   ★★★#1044：**0.25 → 0.142**（ER_EFF = 1.20×0.142 = 0.17）——与上面 band=60 组成"宽带中等位移"：
     //   bend(0)=11.2px（< 溢出 17.5 ⇒ 条边可见）· bend(17.5)=6.7px（条边向内 6.7px，对齐 iOS 6.5）。
     //   ★#1043 的 0.25 是为"窄带 22px + 强压缩"配的；换成宽带后必须同步降 ER，否则 bend(0)=16.5 会吞掉条边。
-    let ER_EFF = EDGE_REFRACT * select(1.0, 0.142, isInner);
+    let ER_EFF = EDGE_REFRACT * select(1.0, 0.10, isInner);   // ★#1045：0.142→0.10（条边显示位 d≈12.9px，避开 3.4px 亮脊）
     let strength = clamp(u.refract_depth / max(band, 1.0), 0.2, 1.1);
     var bend = prof * band * ER_EFF * strength;
     // ★★★决策 #905：**触控形变流动**——触点周围局部凸起（Gaussian 钟），按压力把背后内容沿"离触点方向"推开；
@@ -236,7 +236,13 @@ fn fs_glass(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     let ctr = hs;                                    // 盒中心（local 空间）
     //   ★★★决策 #1039：**放大 0.08→0.13**——iOS 按压透镜内部内容放大 1.15–1.4×（公开逆向 + 本仓实测），
     //     8% 不足以让"透镜里的内容"和条面区分开（那正是"水滴立在条上"的第二个线索）。
-    let zoom = 1.0 + pr_ov * 0.13;
+    //   ★★★#1039：#1042 把 0.08→0.13（"放大镜感"）。
+    //   ★★★决策 #1045（用户「玻璃条边线看不到了」）：**0.13 → 0.03**——`zoom` 是**绕中心收缩采样点**，
+    //   它会把内容整体往中心"吸"，等效于把条边（源距胶囊边 17.5px）**推近胶囊边缘**：
+    //     显示位 d = (17.5 − hs·(1−1/zoom)) · zoom，zoom=1.13 ⇒ **d=6.6px**（正压在 3.4px 亮脊下 ⇒ 看不见）；
+    //     zoom=1.03 ⇒ **d=15.0px**（清晰可见，接近 iOS 实测的 20–23px 暗带位置）。
+    //   ⇒ 放大感让位给"条边可见"（用户反复要求的那一项）。
+    let zoom = 1.0 + pr_ov * 0.03;
     let spL = ctr + (sp - ctr) / zoom;               // spL = 放大后的采样点
     let sp_uv = spL / u.size_px;
 
