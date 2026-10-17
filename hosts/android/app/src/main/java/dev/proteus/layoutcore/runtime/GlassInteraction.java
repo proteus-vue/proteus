@@ -163,8 +163,22 @@ final class GlassInteraction {
             canvas.clipRect(capL, top, capR, bot);
         }
         canvas.scale(sCapX, sCapY, ccx, ccy); drawer.draw(canvas); canvas.restoreToCount(sv2);
+        // ★★★决策 #1042：**补画"胶囊圆角外的四角"**——此前左段到 capL、右段从 capR 起，而 capL..capR 内、
+        //   圆角路径外的四角**没有任何一遍在画** ⇒ 内容被"挖掉"（真机上表现为图标缺一角，而不是被裁掉）。
+        //   iOS 那里是**原样内容**（没被放大，也没消失）⇒ 这里用"矩形差集"把四角按原样补一遍。
+        if (lw > 1f && lh > 1f) {
+            int sv4 = canvas.save();
+            pathB.reset();
+            pathB.addRect(capL, top, capR, bot, android.graphics.Path.Direction.CW);
+            pathB.op(path, android.graphics.Path.Op.DIFFERENCE);
+            canvas.clipPath(pathB);
+            drawer.draw(canvas);
+            canvas.restoreToCount(sv4);
+        }
         int sv3 = canvas.save(); canvas.clipRect(capR, top, 1e6f, bot); drawer.draw(canvas); canvas.restoreToCount(sv3);
     }
+    /** ★#1042：补画四角的差集路径（复用）。 */
+    private final android.graphics.Path pathB = new android.graphics.Path();
 
     /** ★#1038：当前流动胶囊的**实际撑开比例**（bw/槽宽）——内容按此做透镜式放大（iOS 1.15→1.4×）。 */
     private float flowSpanRatio = 1f;
@@ -393,10 +407,12 @@ final class GlassInteraction {
             bvel = bpos - prevCenter;
             need = true;
             // ★#1038：lift = **独立时间包络**（起跳快升 → 飞行保持 → 靠站后慢降），不再绑位移比例。
-            //   升速 0.45（≈70-90ms 到 ~0.95）；保持到中心走完 85% 行程；之后降速 0.18（≈220ms 回霜）。
+            // ★★★决策 #1042（用户「恢复为静态胶囊的自然过渡」）：**保持到真正到站**（done>0.02，此前 0.15 ⇒ 走完 85%
+            //   就开始退霜，此时宽度还有 1.17×，与 iOS「飞行全透明 → 到站后回霜」不符）。
+            //   回霜速率按 iOS 1442 实测：**释放后约 390ms**（两段式 250→239 仅 102ms + 慢尾 254ms）⇒ 取 ~0.10/标准步。
             final float done = Math.abs(bpos) / Math.max(Math.abs(flowFrom), 1f);
-            final float liftT = done > 0.15f ? 1f : 0f;
-            float lk = liftT > lift ? 0.45f : 0.18f;
+            final float liftT = done > 0.02f ? 1f : 0f;
+            float lk = liftT > lift ? 0.45f : 0.10f;
             for (int s = 0; s < sub; s++) lift += (liftT - lift) * lk;
             // 收敛：两边缘都贴近 0 且速度近 0（此时宽度已自回收拢）。
             if (Math.abs(leadP) < 0.5f && Math.abs(leadV) < 0.3f
@@ -536,10 +552,14 @@ final class GlassInteraction {
             // 纵向：仍按 lift 鼓起（膨胀是材质体积，不是横向拉宽）
             by = ccy + (gc.y - ccy) * (1f + bulge * PRESS_SCALE_CAPSULE_Y);
             bh = gc.h * (1f + bulge * PRESS_SCALE_CAPSULE_Y);
-            // 锥化：前缘在运动方向 ⇒ 用两边缘速度差定符号与强度（形态本体来自"两边缘不同步"）
-            final float edgeVel = (rightward ? leadV - trailV : trailV - leadV);
-            final float tapK = Math.min(0.42f, Math.abs(edgeVel) * 0.0035f);
-            shapeTaper = tapK * bulge * (edgeVel >= 0f ? 1f : -1f);
+            // ★★★决策 #1042：锥化改由**两边缘间距**驱动（不再只看速度）——iOS 1442 段逐帧实测：
+            //   峰值拉伸时端部比 stadium **再收窄 10–25%**（taper 0.25–0.41），且最强出现在高亮交叉后 50–135ms。
+            //   旧式 `|edgeVel|*0.0035` 在 1 格行程峰值只有 **0.054**（几乎看不见），因为速度在起跳/落地的短暂峰值
+            //   之外都很小；而"被拉开多少"在整个飞行段持续存在 ⇒ 用它才是形态本体。
+            //   span = |leadP − trailP| / 槽宽（0 → 峰值 ≈0.52），乘 0.75 映射到 iOS 的 0.30–0.40 量级。
+            final float spanN = Math.min(1f, Math.abs(leadP - trailP) / Math.max(flowSlotW, 1f));
+            final float tapK = Math.min(0.42f, spanN * 0.75f);
+            shapeTaper = tapK * bulge * (rightward ? 1f : -1f);   // 锥化端 = 运动前缘（右移 ⇒ +x 端）
             if (debug) {
                 android.util.Log.i("proteus-glass", "GLASSSTRETCH flow lead=" + String.format("%.1f", leadP)
                         + " trail=" + String.format("%.1f", trailP) + " span=" + String.format("%.0f", bw)

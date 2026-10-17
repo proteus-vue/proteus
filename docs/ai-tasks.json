@@ -1264,6 +1264,26 @@
         "T-glass-dock-area"
       ],
       "note": "用户「水滴端部开始接触时图标文字没接触的地方也变色，判定区域是矩形不是胶囊真实接触的位置」。根因三处都拿矩形当胶囊：①dockPick 用包围盒求交（盒子四角在 stadium 之外，端部刚擦到面积已不小）；②内容缩放裁剪用通高 clipRect（圆角外侧也放大）；③形状还有端部锥化未被表达。修：新增 insideCapsule()（与 shader sd_glass 同式 SDF 含锥化）→ dockPick 改 7×7 真实覆盖率；hover 阈值 0.50（=胶囊边缘到达目标图标中心；0.28 时中心还在左侧 56px）；内容缩放整体下沉 GlassInteraction.drawScaledContent（ContentDrawer 回调 + Path.addRoundRect，盒取 lastCapsuleBox 同一来源）。★教训：命中/裁剪/形变必须共用同一形状函数。"
+    },
+    {
+      "id": "T-glass-waterdrop-shape",
+      "title": "水滴形态本体：shader 输出 SDF 覆盖率 alpha + 锥化形状驱动 + 窄带强弯月折射 + 色散×4 + 松手弹簧落位 + 到站后回霜",
+      "type": "bugfix",
+      "status": "done",
+      "owner": "session:zcode-glassbounce",
+      "scope": [
+        "hosts/android/**",
+        "packages/shader-codegen-rust/**"
+      ],
+      "decision": 1042,
+      "verification": "真机 GLASSSTRETCH（salvage/liquid-glass/shape-1042/：taper 0.054→0.391、宽度峰 1.52×）+ 真机剪影沿 x 高度 135 vs 144px（锥化入剪影）+ 像素等价五态 0.00% + bash hosts/android/check-host-compile.sh && pnpm test:coupled && node scripts/gen-shaders.mjs --check",
+      "branch": null,
+      "related": [
+        "T-glass-shape-true-hit",
+        "T-glass-press-volume",
+        "T-glass-two-edge-morph"
+      ],
+      "note": "用户「逐帧剖解胶囊覆盖率、玻璃折射、透过胶囊看到条上下边、上下边被挤压、恢复为静态胶囊的自然过渡」。五路子代理逐帧（iOS 1442 段 1464 帧）后定位六个本体：①水滴轮廓从未画出（glass.wgsl/reference.rs 两处 alpha=1.0；#966 前提早已被 #983 三重探针证伪）；②锥化只看速度（峰值 0.054，iOS 0.25-0.41）；③折射带太宽太弱（band 65-84px/ER 0.12 ⇒ s'∈[0.736,1] 只放大不压缩，条边不可能被挤压）；④松手 resetDrag 一帧清零 bpos（硬瞬移）；⑤回霜在 85% 行程就开始；⑥内容三段裁剪把圆角外四角挖掉。修：alpha=SDF 覆盖率（0.75px 过渡与 oracle 同源）、锥化改两边缘间距驱动（峰值 0.391）、内层折射 band≈18px+ER 0.42（s'(0)≈0.08 强压缩）、色散×4 且基线 0.35→0.06、回霜到站后+0.10（≈390ms）、松手走两边缘弹簧、补画四角。附带修掉 oracle 三处漂移（#1039 三明治 / zoom 0.13）——press 态 46.8%→0.00%。诚实边界：高亮阈值 0.50 未按 iOS（内容盒 0.98）重标；色散亮底不明显（iOS 同）；条边 −7% 压缩未逐像素复核；只验 Android。"
     }
   ]
 }

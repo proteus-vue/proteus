@@ -132,7 +132,15 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     // ★决策 #907/#910：折射带 = **最短边 1/3**（#910 修正口径：原 `hsmin*0.33 = 0.165·min` 只有 1/6 ⇒ ×2）
     // ★★★决策 #1006：0.62→**0.45×最短边** + EDGE_REFRACT 1.90→**1.20**（复核修正：薄折叠贴边带 ≈0.17·H；
     //   详见 glass.wgsl 同源注释）。
-    let band = (smin * 0.45).max(6.0);
+    // ★★★决策 #1042（与 glass.wgsl 逐字同源）：内层胶囊（nest>2.5）改**窄带强弯月面**——
+    //   band 收到 ≈18px（iOS 暗带 20–23px）、ER 0.10→0.42 ⇒ 外缘强压缩 s'(0)≈0.08，
+    //   这才是"条边细线变 20px 暗带"的机理。★改 wgsl 必须同步本文件（同一算法的两份实现）。
+    let is_inner = p.nest > 2.5;
+    let band = if is_inner {
+        (smin * 0.13).clamp(10.0, 22.0)
+    } else {
+        (smin * 0.45).max(6.0)
+    };
     let e = (d / band).clamp(0.0, 1.0);
 
     let eps = (band * 0.3).clamp(1.0, 16.0);
@@ -149,8 +157,8 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     //   s'=1+3(1−e)²·ER·str>0 恒成立 ⇒ 该剖面单调；探针"多余的线"= 条外内容被采入 = #998 边缘倒影本体）。
     let prof = (1.0 - e).powi(3);
     let strength = (p.refract_depth / band.max(1.0)).clamp(0.2, 1.1);
-    // ★#1031：内层胶囊（nest>2.5）位移缩 0.10×（与 glass.wgsl 同源——消源跳过区 ⇒ 条边线可见）。
-    let er_eff = 1.20f32 * if p.nest > 2.5 { 0.10 } else { 1.0 };
+    // ★★★#1042：内层胶囊 0.10 → **0.42**（与 glass.wgsl 同源）——配合收窄的 band 让外缘出现强压缩。
+    let er_eff = 1.20f32 * if is_inner { 0.42 } else { 1.0 };
     let bend = prof * band * er_eff * strength;
     // ★#905/#966：触控形变——触点处把内容沿"离触点方向"推挤（Gaussian 钟）。
     //   ★只给选中项（overlay）；press=0 或 touch 未激活 ⇒ push≈0（退化到既有折射）。
@@ -172,7 +180,7 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     // ★★★决策 #976：按下透镜「内部放大」（凸模式放大镜）——与 glass.wgsl 同源（门控 pr_ov ⇒ 静止/条等价）。
     let pr_ov = p.press.clamp(0.0, 1.0) * p.overlay.clamp(0.0, 1.0);
     let ctr = hs;
-    let zoom = 1.0 + pr_ov * 0.08;   // ★#981：0.16→0.08
+    let zoom = 1.0 + pr_ov * 0.13;   // ★#981 0.16→0.08 · ★#1039 提到 0.13（与 glass.wgsl 同源）
     let sp_l = (ctr.0 + (sp.0 - ctr.0) / zoom, ctr.1 + (sp.1 - ctr.1) / zoom);
     // ★★★决策 #978：按下透镜「自低通」（凸透镜的柔）——与 glass.wgsl 同源。
     // ★★★决策 #1003：**大半径模糊**（9-tap 二项式，σ = 格距 d）——与 glass.wgsl ③ 同源，取代 #978 的 5-tap。
@@ -198,8 +206,13 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     // ★★★决策 #972/#976：按下透镜的「边缘色散」（RGB 沿法线差异化偏移）——与 glass.wgsl 同源。
     // ★#999：静止基线 0.35（边缘一圈色散，对齐 iOS）
     // ★★★决策 #1011：色散收窄到外缘极窄环（消「条内文字彩虹」；与 glass.wgsl 同源）。
+    // ★★★#1042（与 glass.wgsl 同源）：色散幅度×3、带宽按 pr_ov 放宽、静止基线 0.35→0.06
+    //   （iOS 实测：霜态 chroma 0–4 / 抬起态 91，约 23× ⇒ 色散是"透态属性"）。
     let disp_rim = 1.0 - smoothstep(0.0, 0.035, e);
-    let disp = (0.35 + 0.65 * pr_ov) * disp_rim * (band * 0.015).min(1.0);
+    let disp_band = 0.035 + pr_ov.clamp(0.0, 1.0) * 0.105;
+    let disp_rim2 = 1.0 - smoothstep(0.0, disp_band, e);
+    let disp_scale = if is_inner { 1.0 + 3.0 * pr_ov.clamp(0.0, 1.0) } else { 1.0 };
+    let disp = (0.06 + 0.94 * pr_ov) * disp_rim2 * (band * 0.015).max(0.35) * disp_scale;
     let mut col = [0.0f32; 4];
     let mut ac_r = 0.0f32;
     let mut ac_b = 0.0f32;
@@ -294,16 +307,27 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     // ★#915：删 edge_pol（iOS 边缘恒亮，不随背景翻转）——与 glass.wgsl ⑥ 同源。
     // ★#953：边缘高光按 overlay 门控（overlay=1 ⇒ 无边缘高光 = 干净卡片）
     // ★#956 撤回：iOS 选中胶囊实测无高亮边（#953 原判正确）
-    let edge_amp = 1.0f32 - p.overlay.clamp(0.0, 1.0);
+    // ★★★#1039（与 glass.wgsl 逐字同源）：按下恢复边缘光学（edge_amp 随 pr_ov），
+    //   并把亮脊改成**亮核 + 暗缝（只顶/底）+ 内侧柔脊**的三明治——否则亮底上纯加色饱和、边界不可见。
+    let edge_amp = 1.0 - p.overlay.clamp(0.0, 1.0) * (1.0 - pr_ov.clamp(0.0, 1.0));
     // ★#963：按下点亮透镜（press>0 的玻璃加镜面亮边）
     // ★#967：按下亮环——沿充气轮廓的亮边（与 glass.wgsl 同源；压在暗底也读得出）。
     let pv_rim = p.press.clamp(0.0, 1.0) * p.overlay.clamp(0.0, 1.0);
     let rim_w = (p.size_px.0.min(p.size_px.1) * 0.018).max(1.8);   // ★#976：0.06→0.018（窄锐亮脊）
-    let press_rim = (1.0 - smoothstep(0.0, rim_w, sd.abs())) * pv_rim * 0.85;   // ★#976：0.55→0.85
+    let rr = sd.abs() / rim_w;
+    let top_bias = 0.75 + 0.50 * top_hi;
+    let press_core = (1.0 - smoothstep(0.0, 1.0, rr)) * pv_rim * 0.70 * top_bias;
+    let seam_gate = smoothstep(0.45, 0.80, pc.1.abs() / hs.1.max(1.0));
+    let press_seam = smoothstep(0.8, 2.2, rr) * (1.0 - smoothstep(2.2, 5.6, rr)) * pv_rim * (-0.11) * seam_gate;
+    let inner_hi = smoothstep(4.0, 6.0, rr) * (1.0 - smoothstep(6.0, 9.0, rr)) * pv_rim * 0.075 * seam_gate;
+    let press_rim = press_core + press_seam + inner_hi;
     let rim = ((facing.powi(6) * p.specular * 0.22 + fres * 0.06) * bevel_mask + edge_hi) * edge_amp + press_rim + tg * 0.07;   // ★#954/#963/#966
     for c in 0..3 { col[c] = (col[c] + rim).clamp(0.0, 1.0); }
-    // ★#966：剪影由宿主几何（inflatedPillPath）给出——见 glass.wgsl（本设备忽略 shader 返回 alpha）。
-    col[3] = 1.0;
+    // ★★★决策 #1042：**alpha = SDF 覆盖率**（与 glass.wgsl 同源）——真实水滴剪影（含端部锥化）。
+    //   #966「本设备忽略 shader alpha」已被 #983 三重探针证伪（真因是此处写死 1.0）。
+    //   1 像素抗锯齿过渡：`0.5 - sd/0.75`（sd<0 在内部）。
+    let cov = (0.5 - sd / 0.75).clamp(0.0, 1.0);
+    col[3] = cov;
     col
 }
 
