@@ -136,8 +136,9 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     //   band 收到 ≈18px（iOS 暗带 20–23px）、ER 0.10→0.42 ⇒ 外缘强压缩 s'(0)≈0.08，
     //   这才是"条边细线变 20px 暗带"的机理。★改 wgsl 必须同步本文件（同一算法的两份实现）。
     let is_inner = p.nest > 2.5;
+    // ★#1044：宽带 60px（与 glass.wgsl 同源）——让位移剖面能延伸到条边所在的 d=17.5px
     let band = if is_inner {
-        (smin * 0.13).clamp(10.0, 22.0)
+        (smin * 0.30).clamp(20.0, 60.0)
     } else {
         (smin * 0.45).max(6.0)
     };
@@ -161,7 +162,8 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     // ★★★#1042：内层胶囊 0.10 → **0.42**（与 glass.wgsl 同源）——配合收窄的 band 让外缘出现强压缩。
     // ★#1043：0.42→0.25 —— bend(0)=22×0.30×1.1≈7.3px < 条边距胶囊边 9.5px（保住条边可见）；
     //   同时 s'(0)=1−3×0.30×1.1≈0.01（强压缩 ⇒ 暗带）。与 glass.wgsl 同源。
-    let er_eff = 1.20f32 * if is_inner { 0.25 } else { 1.0 };
+    // ★#1044：0.25→0.142（ER_EFF≈0.17）——宽带 60 配中等位移，与 glass.wgsl 同源
+    let er_eff = 1.20f32 * if is_inner { 0.142 } else { 1.0 };
     let bend = prof * band * er_eff * strength;
     // ★#905/#966：触控形变——触点处把内容沿"离触点方向"推挤（Gaussian 钟）。
     //   ★只给选中项（overlay）；press=0 或 touch 未激活 ⇒ push≈0（退化到既有折射）。

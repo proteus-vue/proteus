@@ -143,34 +143,27 @@ final class GlassInteraction {
      *  让「内容缩放窗口/裁剪」留在交互子系统内（几何只有一个来源），宿主不重复实现裁剪。 */
     interface ContentDrawer { void draw(android.graphics.Canvas c); }
 
-    /** ★★★#1040/#1041：内容放大区的三段绘制（左段原样 / 中间按胶囊真实轮廓裁剪并缩放 / 右段原样）。
-     *  · #1040：窗口宽度 = **胶囊实际绘制宽度**（按压时胶囊水平不放大 ⇒ 不能用 w*sCapX，否则每侧多 ~29px 盖到邻项）；
-     *  · #1041：中间段用**胶囊圆角路径**裁剪（不是通高矩形）——矩形会在圆角外侧（水滴没到的地方）也放大内容。 */
+    /** ★★★#1040/#1041/#1043/#1044：内容层绘制（**只在胶囊外**画清晰内容）。
+     *  · 静止（capP≈0）：原样画一遍。
+     *  · 抬起（press/flow）：先画**胶囊之外**（原样清晰），**胶囊内留给玻璃面**——因为复合层现已含
+     *    图标/文字（#1044），胶囊的折射/放大/色散会真实作用在它们上面
+     *    （与 iOS `_UIPortalView + displacementMap` 同构）。
+     *    ★此前把清晰内容整块盖在胶囊上 ⇒ 折射像被完全覆盖 ⇒ 用户「经过图标文字时没有真实的光学折射」。 */
     void drawScaledContent(android.graphics.Canvas canvas, ProteusHostView.Cmd capCmd, float capP,
                            boolean isFlow, int scrollX, int scrollY, android.graphics.Path path,
                            ContentDrawer drawer) {
-        final float ccx = capCmd.x + capCmd.w * 0.5f + dragAppliedDx + scrollX;
-        final float ccy = capCmd.y + capCmd.h * 0.5f + scrollY;
-        // ★#1040：按压时胶囊水平不放大（X=0，宽恒 252）⇒ 放大窗口用胶囊实际宽度；flow 时胶囊确实被撑开，用 w*sCapX。
-        final boolean flowContent = isFlow;
-        final float[] cs = contentScale(capP, flowContent);
-        final float sCapX = cs[0], sCapY = cs[1];
-        // ★★★决策 #1043（用户「滑动落点的时候有点儿慢了，感觉被卡了下」+「左上右上被截断」）：
-        //   **改成两遍绘制**（此前是四遍：左段/胶囊/右段 + 补四角）——
-        //   ① 先**原样画一遍全部内容**（四角与外部都在，不再"挖掉"，也不再有段边界）；
-        //   ② 再**裁到胶囊真实轮廓、按系数缩放画一遍**（覆盖 ①  的胶囊内部）。
-        //   ⇒ 遍数 4→2（真机 ~35fps 下这是"卡一下"的直接来源），且语义更简单：放大只发生在胶囊内。
-        drawer.draw(canvas);
+        if (capP <= 0.001f) { drawer.draw(canvas); return; }
         final float lw = lastCapsuleBox[2], lh = lastCapsuleBox[3];
-        int sv = canvas.save();
-        if (lw > 1f && lh > 1f) {
-            final float lx = lastCapsuleBox[0] + scrollX, ly = lastCapsuleBox[1] + scrollY;
-            final float lr = Math.min(lw, lh) * 0.5f;
-            path.reset();
-            path.addRoundRect(lx, ly, lx + lw, ly + lh, lr, lr, android.graphics.Path.Direction.CW);
-            canvas.clipPath(path);
-        }
-        canvas.scale(sCapX, sCapY, ccx, ccy);
+        if (lw <= 1f || lh <= 1f) { drawer.draw(canvas); return; }
+        final float lx = lastCapsuleBox[0] + scrollX, ly = lastCapsuleBox[1] + scrollY;
+        final float lr = Math.min(lw, lh) * 0.5f;
+        path.reset();
+        path.addRoundRect(lx, ly, lx + lw, ly + lh, lr, lr, android.graphics.Path.Direction.CW);
+        pathB.reset();
+        pathB.addRect(-1e6f, -1e6f, 1e6f, 1e6f, android.graphics.Path.Direction.CW);
+        pathB.op(path, android.graphics.Path.Op.DIFFERENCE);
+        final int sv = canvas.save();
+        canvas.clipPath(pathB);
         drawer.draw(canvas);
         canvas.restoreToCount(sv);
     }
