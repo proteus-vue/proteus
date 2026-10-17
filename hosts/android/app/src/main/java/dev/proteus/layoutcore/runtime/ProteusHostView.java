@@ -909,7 +909,7 @@ public class ProteusHostView extends ViewGroup {
                 }
             }
         }
-        nodeSvgStroke.put(nodeId, new Object[]{path, strokeColor, strokeWidth, progressBase, fill});
+        nodeSvgStroke.put(nodeId, new Object[]{path, strokeColor, strokeWidth, progressBase, fill}); bumpContentVersion();   // #1046：图标注入 ⇒ 复合层必须重建
     }
 
     /** 每帧下发的裁剪参数（16 槽；空 = 本帧该节点无裁剪更新） */
@@ -1929,9 +1929,11 @@ public class ProteusHostView extends ViewGroup {
         // ★批次 5：边框笔（STROKE 一次设定，绘制时只改色/宽）
         borderPaint.setStyle(android.graphics.Paint.Style.STROKE);
     }
-
-    public void setCmds(List<Cmd> value) {
+    /* #1046：内容版本号——composite 层缓存的必要键（cmds 身份覆盖不到 SVG 图标 nodeSvgStroke ⇒ 会把"图标尚未注入"的空版本永久固化 ⇒ 胶囊内永久空白）。 */
+    private int contentVersion = 0;
+    private void bumpContentVersion() { contentVersion++; } public void setCmds(List<Cmd> value) {
         this.cmds = value;
+        bumpContentVersion();   // #1046：复合层缓存键
         clearMaterialQueryCache();   // ★B4：指令重建 ⇒ 材质几何/曲线缓存失效（重查内核）
         // ★★★决策 #930：**不再**在 setCmds 里清玻璃 shader 缓存——缓存键 = (nodeId, 材质位)，指令重建
         //   不影响其正确性（同一节点同一材质 ⇒ 同一 shader）。此前每帧清 ⇒ 真机实测 **每 0.5s 重建一次**
@@ -3391,9 +3393,7 @@ public class ProteusHostView extends ViewGroup {
 
     /** ★#1015：GlassBackdrop 的宿主侧回调（绘制 / 树结构 / 调试）——玻璃子系统不做绘制决策，全向宿主要。 */
     private final GlassBackdrop.Host glassHost = new GlassBackdrop.Host() {
-        @Override public void drawContent(Canvas c, java.util.Set<Integer> skipIds, java.util.Set<Integer> onlyIds) {
-            drawCmds(c, skipIds, onlyIds);
-        }
+        @Override public void drawContent(Canvas c, java.util.Set<Integer> skipIds, java.util.Set<Integer> onlyIds) { drawCmds(c, skipIds, onlyIds); }
         @Override public java.util.Set<Integer> subtreeOf(int rootId) { return subtreeIdsOf(rootId); }
         @Override public boolean hasGlassAncestor(int nodeId) { return ProteusHostView.this.hasGlassAncestor(nodeId); }
         @Override public void renderOuterFace(Canvas c, int nodeId, GlassMaterial.Spec g, float ox, float oy, float w, float h,
@@ -3401,7 +3401,7 @@ public class ProteusHostView extends ViewGroup {
             drawGlassFaceAt(c, nodeId, g, ox, oy, w, h, glassBd.offscreenSource(), 0f, 0f, 1f, 1f, nest, bgOv);
         }
         @Override public boolean debugDump() { return glassDebug; }
-        @Override public float press() { return glassIx.press; }
+        @Override public int contentVersion() { return contentVersion; } @Override public float press() { return glassIx.press; }
         @Override public java.io.File filesDir() { return getContext().getFilesDir(); }
     };
 

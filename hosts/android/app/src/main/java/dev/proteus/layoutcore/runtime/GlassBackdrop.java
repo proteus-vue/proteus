@@ -46,6 +46,11 @@ final class GlassBackdrop {
         /** 复合层 dump 开关（宿主 `--es glassdbg 1`）。 */
         boolean debugDump();
 
+        /** ★★★#1046：**内容版本号**——`setCmds` / `setNodeSvgStroke` / 内容属性任何变化都 +1。
+         *  复合层缓存必须看它：图标来自 `nodeSvgStroke`（**不在 cmds 里**），只按 cmds 身份做键会把
+         *  "SVG 尚未注入时的空版本"永久缓存下来（真机实证：复合层里有文字、没有图标 ⇒ 胶囊内一片空白）。 */
+        int contentVersion();
+
         /** 当前 press 值（dump 记录用）。 */
         float press();
 
@@ -78,7 +83,7 @@ final class GlassBackdrop {
      *  却每帧都在做 `HardwareRenderer.syncAndDraw()` + `latch.await()` 的**同步 GPU 往返**
      *  —— 这是用户「滑动落点有点儿慢、感觉被卡了一下」的直接来源（~35fps 下每帧多一次 GPU 同步）。
      *  缓存键 = (cmds 身份, 滚动, 几何)：换屏 / 改指令 / 滚动时才重建。 */
-    private int layerKeyCmds = 0, layerKeyScrollX = 0, layerKeyScrollY = 0;
+    private int layerKeyCmds = 0, layerKeyScrollX = 0, layerKeyScrollY = 0, layerKeyContent = -1;
     private boolean layerKeyValid = false;
     /** 复合帧在屏幕坐标中的区域（= glassBackdropFull 的区域）。 */
     private int glassLayerX = 0, glassLayerY = 0;
@@ -227,7 +232,9 @@ final class GlassBackdrop {
             // ★★★#1043：**只在内容/滚动/几何真正变化时重建复合层**（见字段处注解）。
             //   动画期间（press/flow）cmds 与滚动都不变 ⇒ 命中缓存，省掉每帧一次同步 GPU 往返。
             final int kc = System.identityHashCode(list);
-            if (layerKeyValid && kc == layerKeyCmds && scrollX == layerKeyScrollX && scrollY == layerKeyScrollY
+            final int kv = host.contentVersion();   // ★#1046：图标(svg)/文本等"不在 cmds 里"的内容变化
+            if (layerKeyValid && kc == layerKeyCmds && kv == layerKeyContent
+                    && scrollX == layerKeyScrollX && scrollY == layerKeyScrollY
                     && glassLayerFull != null) {
                 // 命中：直接复用上一帧的复合层（胶囊形变不进入这一层）
             } else {
@@ -238,7 +245,7 @@ final class GlassBackdrop {
                 new Canvas(glassBlurFull).drawBitmap(glassBackdrop, new Rect(0, 0, sw, sh),
                         new Rect(0, 0, bw, bh), filtp);
                 buildGlassLayerOffscreen(host, bx, by, bw, bh, list, ids, glassByNode);
-                layerKeyCmds = kc; layerKeyScrollX = scrollX; layerKeyScrollY = scrollY;
+                layerKeyCmds = kc; layerKeyScrollX = scrollX; layerKeyScrollY = scrollY; layerKeyContent = kv;
                 layerKeyValid = glassLayerFull != null;
             }
         }
