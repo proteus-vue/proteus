@@ -1207,6 +1207,26 @@
         "T-glass-flow-shape"
       ],
       "note": "用户「效果还是不对，再仔细分析 iOS 的这个……一定要拿到 iOS 这个实现思路」。四路并行拆解（iOS 59fps 逐帧几何 / 我们 24fps 逐帧 / 代码路径 / 公开逆向）后确认：**模型错误而非参数错误**。iOS 的真签名 = 胶囊两边缘各一条弹簧（前缘先走 ~190ms 到站、后缘晚 2–4 帧起步且慢 ⇒ 宽度被撑开 1.48–1.62×），中心几乎不过冲（≤1.5px）；我们旧模型是单一刚体质心弹簧 + 速度×小系数附加拉伸 —— 刚体只有一个自由度，数学上永远做不出「中心不冲而宽度冲」的签名（实测宽度仅 1.035×）。修：leadP/trailP 两条独立弹簧 + 后缘延迟 + 宽度上限 1.55× + 子步积分（dt 归一化，帧锁会让 ~35fps 真机慢 3 倍）+ lift 改独立时间包络 + 内容按实际撑开比例各向异性放大。"
+    },
+    {
+      "id": "T-glass-press-volume",
+      "title": "液态玻璃按压态体积感：恢复边缘光学 + 三明治边界（亮脊/暗缝/内脊）+ 胶囊接触影",
+      "type": "bugfix",
+      "status": "done",
+      "owner": "session:zcode-glassbounce",
+      "scope": [
+        "hosts/android/**",
+        "packages/shader-codegen-rust/**"
+      ],
+      "decision": 1039,
+      "verification": "真机 GLASSDUMP press=1.0 + 屏幕逐像素剖面（salvage/liquid-glass/press-1039/：顶部 243→255 亮脊→225 暗缝→255；底部 225 暗缝→208 接触影）+ bash hosts/android/check-host-compile.sh && pnpm test:coupled && node scripts/gen-shaders.mjs --check",
+      "branch": null,
+      "related": [
+        "T-glass-two-edge-morph",
+        "T-glass-press-drag",
+        "T-glass-density-3"
+      ],
+      "note": "用户「按起来膨胀的感觉还不对，我们的是完全透明的，没有边界，没有生命力；iOS 一眼看出一个水滴在玻璃体上流动」。根因：按压同时关掉 5 层（veil_skip/ov_a→0/tint.a=0/bowl_f=1/edge_amp=0），只剩饱和的白亮脊 + 无投影。修：edge_amp 按 pr_ov 恢复；亮脊改亮核+暗缝(只顶/底)+内脊三明治；色散×2 且色带放宽到 9px；zoom 0.08→0.13；胶囊接触影（−22/255 · 下偏 4px · 只下半部）。诚实边界：亮底加\"外柔光晕\"会饱和并填平暗缝（实测已撤回）；暗缝比 iOS 略硬；色散在亮底仍不明显；未做用户目视验收。"
     }
   ]
 }
