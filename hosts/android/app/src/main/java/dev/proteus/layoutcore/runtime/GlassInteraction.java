@@ -95,8 +95,13 @@ final class GlassInteraction {
     //   #1023/#1031 的 X=0.42/0.50 是**从"按下+拖动"的帧上估的**（含拖动拉伸，把液滴拉伸当成了静压膨胀）。
     //   ⇒ 各向异性是 iOS 的真实行为（水平 ≈1.0 / 垂直 1.30），"等比放大"在几何上与本约束互斥。
     static final float PRESS_SCALE_CAPSULE_X = 0.0f;    // ★#1033：水平不放大（≤ 选项宽 252px）
-    static final float PRESS_SCALE_CAPSULE_Y = 0.30f;   // ★#1031：#1023 的 0.55→0.30（1.30×）——iOS 双录屏实测：水滴 211px vs 条 192px
-                                                        //   ⇒ **每侧溢出仅 ~10px**；0.55（1.55×）给 223px vs 条 168px = 每侧 27.5px（用户「太大了，稍微溢出就行」）
+    static final float PRESS_SCALE_CAPSULE_Y = 0.41f;   // ★#1043：0.30→0.41（1.41× / 相对**条高** 1.21×）
+                                                        //   【为什么必须加大】#1031 取 0.30 只溢出 9.6px/侧 —— 而折射把条边
+                                                        //   （源距胶囊边 9.6px）**压到显示位 3.5px**，正好落在 3.4px 的亮脊底下 ⇒
+                                                        //   条边**永远看不见**（用户「胶囊玻璃无法透过去看到玻璃条的上下边」）。
+                                                        //   iOS 1442 段实测：透镜高/条高 = **1.19–1.22**、溢出条 **19–22px** ⇒
+                                                        //   0.41（144→203px，溢出 17.5px）既对齐 iOS，又让条边显示在 d≈16px（远离亮脊）。
+                                                        //   ★这不违背 #1031「稍微溢出就行」：0.55 是每侧 27.5px（用户嫌大），0.41 是 17.5px = iOS 真值。
     static final float PRESS_CONTENT_SCALE_X = 0.20f;
     static final float PRESS_CONTENT_SCALE_Y = 0.17f;
     /** ★#1024 液滴变形上限（59fps 校准：最快帧宽 +15~25% / 高 −2~6%，取上沿偏动感）。 */
@@ -146,38 +151,30 @@ final class GlassInteraction {
                            ContentDrawer drawer) {
         final float ccx = capCmd.x + capCmd.w * 0.5f + dragAppliedDx + scrollX;
         final float ccy = capCmd.y + capCmd.h * 0.5f + scrollY;
-        final float[] cs = contentScale(capP, isFlow);
+        // ★#1040：按压时胶囊水平不放大（X=0，宽恒 252）⇒ 放大窗口用胶囊实际宽度；flow 时胶囊确实被撑开，用 w*sCapX。
+        final boolean flowContent = isFlow;
+        final float[] cs = contentScale(capP, flowContent);
         final float sCapX = cs[0], sCapY = cs[1];
-        final float bandHalf = isFlow ? capCmd.w * 0.5f * sCapX : capCmd.w * 0.5f;
-        final float capL = ccx - bandHalf, capR = ccx + bandHalf, top = -1e6f, bot = 1e6f;
-        int sv1 = canvas.save(); canvas.clipRect(top, top, capL, bot); drawer.draw(canvas); canvas.restoreToCount(sv1);
-        int sv2 = canvas.save();
-        final float lx = lastCapsuleBox[0] + scrollX, ly = lastCapsuleBox[1] + scrollY;
+        // ★★★决策 #1043（用户「滑动落点的时候有点儿慢了，感觉被卡了下」+「左上右上被截断」）：
+        //   **改成两遍绘制**（此前是四遍：左段/胶囊/右段 + 补四角）——
+        //   ① 先**原样画一遍全部内容**（四角与外部都在，不再"挖掉"，也不再有段边界）；
+        //   ② 再**裁到胶囊真实轮廓、按系数缩放画一遍**（覆盖 ①  的胶囊内部）。
+        //   ⇒ 遍数 4→2（真机 ~35fps 下这是"卡一下"的直接来源），且语义更简单：放大只发生在胶囊内。
+        drawer.draw(canvas);
         final float lw = lastCapsuleBox[2], lh = lastCapsuleBox[3];
+        int sv = canvas.save();
         if (lw > 1f && lh > 1f) {
+            final float lx = lastCapsuleBox[0] + scrollX, ly = lastCapsuleBox[1] + scrollY;
             final float lr = Math.min(lw, lh) * 0.5f;
             path.reset();
             path.addRoundRect(lx, ly, lx + lw, ly + lh, lr, lr, android.graphics.Path.Direction.CW);
             canvas.clipPath(path);
-        } else {
-            canvas.clipRect(capL, top, capR, bot);
         }
-        canvas.scale(sCapX, sCapY, ccx, ccy); drawer.draw(canvas); canvas.restoreToCount(sv2);
-        // ★★★决策 #1042：**补画"胶囊圆角外的四角"**——此前左段到 capL、右段从 capR 起，而 capL..capR 内、
-        //   圆角路径外的四角**没有任何一遍在画** ⇒ 内容被"挖掉"（真机上表现为图标缺一角，而不是被裁掉）。
-        //   iOS 那里是**原样内容**（没被放大，也没消失）⇒ 这里用"矩形差集"把四角按原样补一遍。
-        if (lw > 1f && lh > 1f) {
-            int sv4 = canvas.save();
-            pathB.reset();
-            pathB.addRect(capL, top, capR, bot, android.graphics.Path.Direction.CW);
-            pathB.op(path, android.graphics.Path.Op.DIFFERENCE);
-            canvas.clipPath(pathB);
-            drawer.draw(canvas);
-            canvas.restoreToCount(sv4);
-        }
-        int sv3 = canvas.save(); canvas.clipRect(capR, top, 1e6f, bot); drawer.draw(canvas); canvas.restoreToCount(sv3);
+        canvas.scale(sCapX, sCapY, ccx, ccy);
+        drawer.draw(canvas);
+        canvas.restoreToCount(sv);
     }
-    /** ★#1042：补画四角的差集路径（复用）。 */
+    /** ★#1042：补画四角的差集路径（#1043 改为两遍绘制后不再使用，保留字段避免改动面扩大）。 */
     private final android.graphics.Path pathB = new android.graphics.Path();
 
     /** ★#1038：当前流动胶囊的**实际撑开比例**（bw/槽宽）——内容按此做透镜式放大（iOS 1.15→1.4×）。 */
@@ -552,13 +549,15 @@ final class GlassInteraction {
             // 纵向：仍按 lift 鼓起（膨胀是材质体积，不是横向拉宽）
             by = ccy + (gc.y - ccy) * (1f + bulge * PRESS_SCALE_CAPSULE_Y);
             bh = gc.h * (1f + bulge * PRESS_SCALE_CAPSULE_Y);
-            // ★★★决策 #1042：锥化改由**两边缘间距**驱动（不再只看速度）——iOS 1442 段逐帧实测：
-            //   峰值拉伸时端部比 stadium **再收窄 10–25%**（taper 0.25–0.41），且最强出现在高亮交叉后 50–135ms。
-            //   旧式 `|edgeVel|*0.0035` 在 1 格行程峰值只有 **0.054**（几乎看不见），因为速度在起跳/落地的短暂峰值
-            //   之外都很小；而"被拉开多少"在整个飞行段持续存在 ⇒ 用它才是形态本体。
-            //   span = |leadP − trailP| / 槽宽（0 → 峰值 ≈0.52），乘 0.75 映射到 iOS 的 0.30–0.40 量级。
+            // ★★★决策 #1042：锥化改由**两边缘间距**驱动（不再只看速度）。
+            //   ★★★#1043 订正（用户「左上右上部分感觉被截断」）：**系数 0.75 → 0.28**——
+            //   `sd_glass` 的 `ym = 1 − taper·nx²` 是**叠加在 stadium 自身收窄之上**的：taper=0.39 时
+            //   nx=±0.8 处 ym=0.75（再收窄 25%），与半圆截面叠加后剪影变成**橄榄/菱形**，
+            //   端部上下被削平 = 用户看到的"左上右上被截断"。
+            //   iOS 实测「端部比 stadium 再收窄 10–25%」= **阶跃后额外量**，映射到 ym 上约 0.10–0.18
+            //   ⇒ spanN 峰值 0.52 × 0.28 ≈ **0.146**（落在 iOS 区间）。
             final float spanN = Math.min(1f, Math.abs(leadP - trailP) / Math.max(flowSlotW, 1f));
-            final float tapK = Math.min(0.42f, spanN * 0.75f);
+            final float tapK = Math.min(0.18f, spanN * 0.28f);
             shapeTaper = tapK * bulge * (rightward ? 1f : -1f);   // 锥化端 = 运动前缘（右移 ⇒ +x 端）
             if (debug) {
                 android.util.Log.i("proteus-glass", "GLASSSTRETCH flow lead=" + String.format("%.1f", leadP)

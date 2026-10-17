@@ -1284,6 +1284,25 @@
         "T-glass-two-edge-morph"
       ],
       "note": "用户「逐帧剖解胶囊覆盖率、玻璃折射、透过胶囊看到条上下边、上下边被挤压、恢复为静态胶囊的自然过渡」。五路子代理逐帧（iOS 1442 段 1464 帧）后定位六个本体：①水滴轮廓从未画出（glass.wgsl/reference.rs 两处 alpha=1.0；#966 前提早已被 #983 三重探针证伪）；②锥化只看速度（峰值 0.054，iOS 0.25-0.41）；③折射带太宽太弱（band 65-84px/ER 0.12 ⇒ s'∈[0.736,1] 只放大不压缩，条边不可能被挤压）；④松手 resetDrag 一帧清零 bpos（硬瞬移）；⑤回霜在 85% 行程就开始；⑥内容三段裁剪把圆角外四角挖掉。修：alpha=SDF 覆盖率（0.75px 过渡与 oracle 同源）、锥化改两边缘间距驱动（峰值 0.391）、内层折射 band≈18px+ER 0.42（s'(0)≈0.08 强压缩）、色散×4 且基线 0.35→0.06、回霜到站后+0.10（≈390ms）、松手走两边缘弹簧、补画四角。附带修掉 oracle 三处漂移（#1039 三明治 / zoom 0.13）——press 态 46.8%→0.00%。诚实边界：高亮阈值 0.50 未按 iOS（内容盒 0.98）重标；色散亮底不明显（iOS 同）；条边 −7% 压缩未逐像素复核；只验 Android。"
+    },
+    {
+      "id": "T-glass-four-fixes",
+      "title": "按压/切换四项收口：删合成暗缝（黑线）+ 锥化 0.28（截断）+ 垂直膨胀 0.41/边线加粗（条边可见）+ 复合层缓存/绘制减半（卡顿）",
+      "type": "bugfix",
+      "status": "done",
+      "owner": "session:zcode-glassbounce",
+      "scope": [
+        "hosts/android/**",
+        "packages/shader-codegen-rust/**"
+      ],
+      "decision": 1043,
+      "verification": "真机剖面（salvage/liquid-glass/press-1043/：底边 255→225 灰带 修后 255→207 细线→243；screenrecord 抽帧上下条边可见）+ bash hosts/android/check-host-compile.sh && pnpm test:coupled && bash hosts/ios/check-glass-pixel-parity.sh（五态 0.00%）",
+      "branch": null,
+      "related": [
+        "T-glass-waterdrop-shape",
+        "T-glass-press-volume"
+      ],
+      "note": "用户四个症状。①底边黑线#1039 合成暗缝（相对胶囊轮廓固定减色带）——与\"看不到条边\"同源：真条边被折射压到距边 4px 正落在暗缝带内被埋掉 ⇒ 彻底删掉合成暗缝。②左上右上截断：taper 0.391 叠加在 stadium 自身收窄上 ⇒ 橄榄形，改 0.75→0.28（峰值 0.146，对齐 iOS 0.10-0.18）。③条边不可见三重原因：溢出仅 9.6px（iOS 19-22）、bend(0)=7.3px 把条边压到 3.5px 被 3.4px 亮脊盖住、复合层细线 3px 经压缩+模糊抹平 ⇒ 垂直膨胀 0.30→0.41（溢出 17.5px=1.21×）、ER 0.42→0.25、剖面 (1-e)^3→^1.5、边线 3px/α96→9px/α150。④卡顿：每帧同步 GPU 往返（HardwareRenderer+latch.await 拷回 CPU）+ 内容画 4 遍 ⇒ 复合层按 (cmds 身份,滚动,几何) 缓存 + 绘制改 2 遍。诚实边界：卡顿改善是结构性推断未做帧率量化；条边略粗；只验 Android。"
     }
   ]
 }

@@ -72,6 +72,14 @@ final class GlassBackdrop {
     private android.os.HandlerThread glassHT;
     private android.view.Surface glassHRSurface;
     private Bitmap glassLayerFull;
+    /** ★★★决策 #1043：**复合层缓存键**——离屏合成 = 「内容 + 外层玻璃面」，而**胶囊的形变不在其中**
+     *  （胶囊有玻璃祖先 ⇒ 被 skip；位移/形变全在绘制期由 `capsuleBox` 施加）。
+     *  ⇒ flow / press 动画期间 `cmds` 与滚动都不变，这一帧**逐帧完全相同**，
+     *  却每帧都在做 `HardwareRenderer.syncAndDraw()` + `latch.await()` 的**同步 GPU 往返**
+     *  —— 这是用户「滑动落点有点儿慢、感觉被卡了一下」的直接来源（~35fps 下每帧多一次 GPU 同步）。
+     *  缓存键 = (cmds 身份, 滚动, 几何)：换屏 / 改指令 / 滚动时才重建。 */
+    private int layerKeyCmds = 0, layerKeyScrollX = 0, layerKeyScrollY = 0;
+    private boolean layerKeyValid = false;
     /** 复合帧在屏幕坐标中的区域（= glassBackdropFull 的区域）。 */
     private int glassLayerX = 0, glassLayerY = 0;
     private boolean glassHasNesting = false;
@@ -216,13 +224,23 @@ final class GlassBackdrop {
             //   按 nest=2 渲染（tap 在 shader、宿主只做 /2 抗锯齿）⇒ 与屏上条面同口径（内层采它不会读出
             //   不一致的清晰度）。★#1005：由"深链预模糊"改回**仅 /2 往返**（与主链同形——只是把 /2 级
             //   升回全分辨率，供离屏 1:1 采样；shader 的 nest=2 tap 承担全部模糊）。
-            if (glassBlurFull == null || glassBlurFull.getWidth() != bw || glassBlurFull.getHeight() != bh) {
-                if (glassBlurFull != null) glassBlurFull.recycle();
-                glassBlurFull = android.graphics.Bitmap.createBitmap(bw, bh, android.graphics.Bitmap.Config.ARGB_8888);
+            // ★★★#1043：**只在内容/滚动/几何真正变化时重建复合层**（见字段处注解）。
+            //   动画期间（press/flow）cmds 与滚动都不变 ⇒ 命中缓存，省掉每帧一次同步 GPU 往返。
+            final int kc = System.identityHashCode(list);
+            if (layerKeyValid && kc == layerKeyCmds && scrollX == layerKeyScrollX && scrollY == layerKeyScrollY
+                    && glassLayerFull != null) {
+                // 命中：直接复用上一帧的复合层（胶囊形变不进入这一层）
+            } else {
+                if (glassBlurFull == null || glassBlurFull.getWidth() != bw || glassBlurFull.getHeight() != bh) {
+                    if (glassBlurFull != null) glassBlurFull.recycle();
+                    glassBlurFull = android.graphics.Bitmap.createBitmap(bw, bh, android.graphics.Bitmap.Config.ARGB_8888);
+                }
+                new Canvas(glassBlurFull).drawBitmap(glassBackdrop, new Rect(0, 0, sw, sh),
+                        new Rect(0, 0, bw, bh), filtp);
+                buildGlassLayerOffscreen(host, bx, by, bw, bh, list, ids, glassByNode);
+                layerKeyCmds = kc; layerKeyScrollX = scrollX; layerKeyScrollY = scrollY;
+                layerKeyValid = glassLayerFull != null;
             }
-            new Canvas(glassBlurFull).drawBitmap(glassBackdrop, new Rect(0, 0, sw, sh),
-                    new Rect(0, 0, bw, bh), filtp);
-            buildGlassLayerOffscreen(host, bx, by, bw, bh, list, ids, glassByNode);
         }
     }
 
@@ -278,11 +296,18 @@ final class GlassBackdrop {
                         g.radius, g.radius, android.graphics.Path.Direction.CW);
                 final Paint ep = new Paint(Paint.ANTI_ALIAS_FLAG);
                 ep.setStyle(Paint.Style.STROKE);
-                ep.setStrokeWidth(3f);
-                ep.setColor(android.graphics.Color.argb(96, 18, 20, 26));
+                // ★★★决策 #1043（用户「胶囊玻璃无法透过去看到玻璃条的上下边」）：
+                //   **边线加粗加深**——3px/α96 + 1.3px/α205 在复合层里清楚（实测 y176-179 = 201-213），
+                //   但胶囊采样时有 ① 折射压缩（s'≈0.5 ⇒ 3px→1.5px）② nest=3 残差模糊（σ≈1.9px）
+                //   ⇒ 细线被抹平到看不见。
+                //   iOS 实测：条边透过胶囊后是「2–3px 高光 + **20–23px 暗带**」、边线过渡 0.84→12.5px
+                //   ⇒ 它读作一条**宽带**而不是细线。这里把合成边线加粗到 **9px/α150**（透出后约 4–5px、仍可辨），
+                //   白核 2px/α235。
+                ep.setStrokeWidth(9f);
+                ep.setColor(android.graphics.Color.argb(150, 12, 14, 20));
                 c.drawPath(bp, ep);
-                ep.setStrokeWidth(1.3f);
-                ep.setColor(android.graphics.Color.argb(205, 255, 255, 255));
+                ep.setStrokeWidth(2f);
+                ep.setColor(android.graphics.Color.argb(235, 255, 255, 255));
                 c.drawPath(bp, ep);
             }
             node.endRecording();
