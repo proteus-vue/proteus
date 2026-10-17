@@ -163,7 +163,8 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     // ★#1043：0.42→0.25 —— bend(0)=22×0.30×1.1≈7.3px < 条边距胶囊边 9.5px（保住条边可见）；
     //   同时 s'(0)=1−3×0.30×1.1≈0.01（强压缩 ⇒ 暗带）。与 glass.wgsl 同源。
     // ★#1044：0.25→0.142（ER_EFF≈0.17）——宽带 60 配中等位移，与 glass.wgsl 同源
-    let er_eff = 1.20f32 * if is_inner { 0.10 } else { 1.0 };
+    // ★#1046：0.10→0.19（配"向外采样"，条边显示在 24.4px，对齐 iOS 25.5）；与 glass.wgsl 同源
+    let er_eff = 1.20f32 * if is_inner { 0.19 } else { 1.0 };
     let bend = prof * band * er_eff * strength;
     // ★#905/#966：触控形变——触点处把内容沿"离触点方向"推挤（Gaussian 钟）。
     //   ★只给选中项（overlay）；press=0 或 touch 未激活 ⇒ push≈0（退化到既有折射）。
@@ -172,7 +173,12 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     let tdy = local.1 - p.touch.1;
     let tg = (-(tdx * tdx + tdy * tdy) / (2.0 * t_r * t_r)).exp() * p.press.clamp(0.0, 1.0) * p.overlay.clamp(0.0, 1.0);
     // ★#968：无触控内容位移（push=0）——按下只改剪影 + 亮环，内容零位移。
-    let sp = (local.0 - n.0 * bend, local.1 - n.1 * bend);   // ★#998：向内采样（#918 原式）
+    // ★#1046：内层胶囊**向外采样**（把条边压向中心 = iOS 的"挤压进去"）；外层保持向内采样（已验收的吸入/倒影）
+    let sp = if is_inner {
+        (local.0 + n.0 * bend, local.1 + n.1 * bend)
+    } else {
+        (local.0 - n.0 * bend, local.1 - n.1 * bend)
+    };
 
     // uv 折算：纹理尺寸 = size + 2*pad；节点 uv=0 对应纹理 pad/(size+2pad)
     let tex_w = p.size_px.0 + 2.0 * p.pad;
