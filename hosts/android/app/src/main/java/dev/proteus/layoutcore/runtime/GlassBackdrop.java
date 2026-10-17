@@ -310,6 +310,23 @@ final class GlassBackdrop {
                 ep.setColor(android.graphics.Color.argb(235, 255, 255, 255));
                 c.drawPath(bp, ep);
             }
+            // ★★★决策 #1044（用户「我们的经过图标文字时没有真实的光学折射」）：
+            //   **把玻璃子树的内容（tab 图标/文字）也画进复合层** —— 此前复合层只含「背景 + 外层玻璃面 + 条边线」，
+            //   而图标/文字属于**玻璃子树**、在 `captureGlassBackdrop` 里被排除（那是"只糊背后"的正确语义）。
+            //   ⇒ 胶囊采样时**根本没有图标可折射**（只有纯色背景），所以永远没有透镜扭曲/彩虹。
+            //   iOS 的做法（公开逆向 + 私有选择器实证）：`_UILiquidLensView` 内部是
+            //   `_UIPortalView 采样 bar 自身内容 + displacementMap over SDF` —— **图标是被透镜 warp 的**，
+            //   不是重新布局的。⇒ 这里把内容并入复合层，让胶囊的折射/放大/色散真实作用在图标上。
+            final java.util.Set<Integer> glassContentIds = new java.util.HashSet<>();
+            for (int k = 0; k < list.size() && k < ids.length; k++) {
+                if (glassByNode.get(ids[k]) != null) glassContentIds.addAll(host.subtreeOf(ids[k]));
+            }
+            if (!glassContentIds.isEmpty()) {
+                final int sc = c.save();
+                c.translate(-gx, -gy);   // 内容在屏幕坐标 ⇒ 平移到离屏局部坐标
+                host.drawContent(c, null, glassContentIds);
+                c.restoreToCount(sc);
+            }
             node.endRecording();
             final java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
             glassReader.setOnImageAvailableListener(r -> latch.countDown(), new android.os.Handler(glassHT.getLooper()));

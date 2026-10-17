@@ -1303,6 +1303,25 @@
         "T-glass-press-volume"
       ],
       "note": "用户四个症状。①底边黑线#1039 合成暗缝（相对胶囊轮廓固定减色带）——与\"看不到条边\"同源：真条边被折射压到距边 4px 正落在暗缝带内被埋掉 ⇒ 彻底删掉合成暗缝。②左上右上截断：taper 0.391 叠加在 stadium 自身收窄上 ⇒ 橄榄形，改 0.75→0.28（峰值 0.146，对齐 iOS 0.10-0.18）。③条边不可见三重原因：溢出仅 9.6px（iOS 19-22）、bend(0)=7.3px 把条边压到 3.5px 被 3.4px 亮脊盖住、复合层细线 3px 经压缩+模糊抹平 ⇒ 垂直膨胀 0.30→0.41（溢出 17.5px=1.21×）、ER 0.42→0.25、剖面 (1-e)^3→^1.5、边线 3px/α96→9px/α150。④卡顿：每帧同步 GPU 往返（HardwareRenderer+latch.await 拷回 CPU）+ 内容画 4 遍 ⇒ 复合层按 (cmds 身份,滚动,几何) 缓存 + 绘制改 2 遍。诚实边界：卡顿改善是结构性推断未做帧率量化；条边略粗；只验 Android。"
+    },
+    {
+      "id": "T-glass-icon-refraction",
+      "title": "图标实时折射：复合层并入玻璃子树内容 + 胶囊内不盖清晰层 + 宽带 60px/ER 0.17（条边内移 6.7px）",
+      "type": "bugfix",
+      "status": "done",
+      "owner": "session:zcode-glassbounce",
+      "scope": [
+        "hosts/android/**",
+        "packages/shader-codegen-rust/**"
+      ],
+      "decision": 1044,
+      "verification": "真机 screenrecord 抽帧（salvage/liquid-glass/press-1044/：图标/文字透过玻璃被透镜柔化+扭曲；条边暗线在胶囊内 y≈2199/2356 且只在平直段透出）+ bash hosts/android/check-host-compile.sh && pnpm test:coupled && bash hosts/ios/check-glass-pixel-parity.sh（五态 0.00%）",
+      "branch": null,
+      "related": [
+        "T-glass-four-fixes",
+        "T-glass-waterdrop-shape"
+      ],
+      "note": "用户「iOS 的玻璃条两个边线明显比胶囊外的低，透出来的边线长度刚好是胶囊上下边平面；我们经过图标文字时没有真实的光学折射，记得我们在玻璃条上不是实现折射模型了吗」。根因：①图标/文字属于玻璃子树，在 captureGlassBackdrop 被排除 ⇒ 复合层采样源里根本没有图标，shader 折射再完整也无内容可折；且旧 drawScaledContent 把清晰内容整块盖在胶囊上 ⇒ 折射像被完全覆盖。iOS 用 _UIPortalView 采样 bar 内容 + displacementMap over SDF。②窄带 22px + 强 ER 时 prof 在 d=17.5 衰减到 0.09 ⇒ bend(17.5) 只 0.7px（条边不内移）。修：复合层最后一步并入玻璃子树内容（drawContent(null, glassContentIds)）；drawScaledContent 改为只在胶囊外画清晰内容；band 22→60px、ER_EFF 0.30→0.17（bend(0)=11.2<17.5 保条边可见、bend(17.5)=6.7 对齐 iOS 6.5、条面压缩比 0.923 vs iOS 0.930、s'(0)≈0.44 使端部圆弧收拢只露平直段）。诚实边界：扭曲强度未逐像素对齐；条边仍是描出来的 9px 线不是纯光学；只验 Android。"
     }
   ]
 }
