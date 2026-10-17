@@ -151,8 +151,10 @@ final class GlassInteraction {
      *    ★此前把清晰内容整块盖在胶囊上 ⇒ 折射像被完全覆盖 ⇒ 用户「经过图标文字时没有真实的光学折射」。 */
     void drawScaledContent(android.graphics.Canvas canvas, ProteusHostView.Cmd capCmd, float capP,
                            boolean isFlow, int scrollX, int scrollY, android.graphics.Path path,
-                           ContentDrawer drawer) {
-        if (capP <= 0.001f) { drawer.draw(canvas); return; }
+                           boolean interiorFromGlass, ContentDrawer drawer) {
+        // ★★★#1047：`interiorFromGlass=true` = 复合层可用 ⇒ 胶囊**内部**留给玻璃面（折射真实作用在内容上）；
+        //   `false` = 层不可用 ⇒ **必须**把清晰内容也画进胶囊，否则内部只剩空采样 = 空白（用户反复报告的"滑到哪哪空白"）。
+        if (capP <= 0.001f || !interiorFromGlass) { drawer.draw(canvas); return; }
         final float lw = lastCapsuleBox[2], lh = lastCapsuleBox[3];
         if (lw <= 1f || lh <= 1f) { drawer.draw(canvas); return; }
         final float lx = lastCapsuleBox[0] + scrollX, ly = lastCapsuleBox[1] + scrollY;

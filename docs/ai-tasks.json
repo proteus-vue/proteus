@@ -1322,6 +1322,43 @@
         "T-glass-waterdrop-shape"
       ],
       "note": "用户「iOS 的玻璃条两个边线明显比胶囊外的低，透出来的边线长度刚好是胶囊上下边平面；我们经过图标文字时没有真实的光学折射，记得我们在玻璃条上不是实现折射模型了吗」。根因：①图标/文字属于玻璃子树，在 captureGlassBackdrop 被排除 ⇒ 复合层采样源里根本没有图标，shader 折射再完整也无内容可折；且旧 drawScaledContent 把清晰内容整块盖在胶囊上 ⇒ 折射像被完全覆盖。iOS 用 _UIPortalView 采样 bar 内容 + displacementMap over SDF。②窄带 22px + 强 ER 时 prof 在 d=17.5 衰减到 0.09 ⇒ bend(17.5) 只 0.7px（条边不内移）。修：复合层最后一步并入玻璃子树内容（drawContent(null, glassContentIds)）；drawScaledContent 改为只在胶囊外画清晰内容；band 22→60px、ER_EFF 0.30→0.17（bend(0)=11.2<17.5 保条边可见、bend(17.5)=6.7 对齐 iOS 6.5、条面压缩比 0.923 vs iOS 0.930、s'(0)≈0.44 使端部圆弧收拢只露平直段）。诚实边界：扭曲强度未逐像素对齐；条边仍是描出来的 9px 线不是纯光学；只验 Android。"
+    },
+    {
+      "id": "T-glass-dyn-icon-color",
+      "title": "冷启动动态图标不可见：动态 p-icon 的 svgPath 缺 stroke + paint.color 未建槽 ⇒ 内核 stroke_color=0（全透明）",
+      "type": "bugfix",
+      "status": "planned",
+      "owner": null,
+      "scope": [
+        "packages/compiler/**"
+      ],
+      "decision": null,
+      "verification": "2 次冷启动后四个 tab 图标深色像素均 >500（当前 Today/App/搜索 = 0）+ npx vitest run tests/vapor-events.test.ts tests/app-icon-lowering.test.ts + 三端 run-vapor 重跑",
+      "branch": null,
+      "related": [
+        "T-vapor-computed-data",
+        "T-glass-waterdrop-shape"
+      ],
+      "note": "独立子代理 6/6 复现：冷启动后 Today/App/搜索 三图标不可见（深色像素=0），8 秒不自愈、点内容区无效，只有切换 tab 才恢复。真机探针实测 SVGFILL scol=0x0（选中项 0xff2b2f7a 正常）。根因：动态图标（:name）走 build.ts 运行期改写，产出 paint.svgPath={d,progress:1,fill:true} 无 stroke ⇒ 内核 stroke_color=0；内核「fill+无 stroke ⇒ 回退 text_color」兜底也失效，因为 paint.color 只在显式 :color 绑定才建槽（本 demo 走 CSS 继承）。修法：运行期改写时把编译期已知的继承色作为常量写进 svgPath.stroke（build.ts:389 一带，需从 template.ts 传 iconInheritColor 表）；改动跨两模块 + 需重生成夹具 + 三端重验，本轮未做（未验证的尝试已 revert）。"
+    },
+    {
+      "id": "T-glass-press-washout",
+      "title": "按压内容洗淡三修：内层模糊 σ 2.34→0.47 + 灰叠加只退场 15% + 叠加改乘性",
+      "type": "bugfix",
+      "status": "done",
+      "owner": "session:zcode-glassbounce",
+      "scope": [
+        "hosts/android/**",
+        "packages/shader-codegen-rust/**"
+      ],
+      "decision": 1048,
+      "verification": "独立子代理终验（salvage 无）：按住文字深色核心 0→383、滑动覆盖 tab 核心归零帧 17.2%→0%、胶囊面 pure 0.000 / mean 223.1（iOS 221.2）+ bash hosts/ios/check-glass-pixel-parity.sh（五态 0.00%）+ pnpm test:coupled",
+      "branch": null,
+      "related": [
+        "T-glass-icon-refraction",
+        "T-glass-four-fixes"
+      ],
+      "note": "用户「不行不行，效果差得远，单独子代理重新验证」。独立子代理逐帧查出三个开发者自测全漏的缺陷：①按压文字被糊成钟形（中位 75→135、深色核心 555→0）—— nest>2.5 的 bsig=blur*0.02 而 blur 已×3=117 ⇒ σ2.34px；复合层内容本就清晰 ⇒ 改 0.004（σ0.47）。②按压胶囊面纯白 pure0.79/p50 255（iOS 222-229/pure 0）—— ov_a 的 (1-press) 在 press=1 归零 ⇒ 改 (1-press*0.15)。③灰叠加 mix 把深色 54 抬到 95 ⇒ 改乘性 col*(1-a*(1-0.683))（白端 227 同值、暗端 48）。终验：核心 0→383、滑动归零帧 0/208、面 mean 223.1。★教训：自测≠验收，动画/时序缺陷必须独立方全程多状态验证；模糊不能叠加；亮底叠加要用乘法保对比。"
     }
   ]
 }

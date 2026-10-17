@@ -909,7 +909,8 @@ public class ProteusHostView extends ViewGroup {
                 }
             }
         }
-        nodeSvgStroke.put(nodeId, new Object[]{path, strokeColor, strokeWidth, progressBase, fill}); bumpContentVersion();   // #1046：图标注入 ⇒ 复合层必须重建
+        // ★#1048：内容录进显示列表(Picture) ⇒ 只 invalidate 会重放"图标注入前"的录制品；必须同时丢静态帧重录（6/6 冷启动复现过）。
+        nodeSvgStroke.put(nodeId, new Object[]{path, strokeColor, strokeWidth, progressBase, fill}); bumpContentVersion(); framePicture = null; invalidate();
     }
 
     /** 每帧下发的裁剪参数（16 槽；空 = 本帧该节点无裁剪更新） */
@@ -1247,7 +1248,7 @@ public class ProteusHostView extends ViewGroup {
             // ★第 4 项（声明基态）必须**保留**（2026-10-01：这里整组重建数组，漏拷 ⇒
             //   变形一帧后静态 `progress:1` 的鸟/山描边回落成 0 就消失了）
             Object[] sv = nodeSvgStroke.get(nodeId);
-            if (sv != null) nodeSvgStroke.put(nodeId, new Object[]{path, sv[1], sv[2], sv[3]});
+            if (sv != null) { nodeSvgStroke.put(nodeId, new Object[]{path, sv[1], sv[2], sv[3]}); bumpContentVersion(); }
         } catch (Throwable ignored) { /* 查询失败不阻断（下一帧再试） */ }
     }
 
@@ -1499,7 +1500,7 @@ public class ProteusHostView extends ViewGroup {
      *   （它们按 id 指向旧树的节点），故一并清（不留给新树"继承"）。
      */
     public void resetPerTreeState() {
-        nodeSvgStroke.clear();
+        nodeSvgStroke.clear(); bumpContentVersion();
         nodeClipKindAndBase.clear();
         nodeTransformOrigin.clear();
         nodeStaticTx.clear();
@@ -1929,12 +1930,9 @@ public class ProteusHostView extends ViewGroup {
         // ★批次 5：边框笔（STROKE 一次设定，绘制时只改色/宽）
         borderPaint.setStyle(android.graphics.Paint.Style.STROKE);
     }
-    /* #1046：内容版本号——composite 层缓存的必要键（cmds 身份覆盖不到 SVG 图标 nodeSvgStroke ⇒ 会把"图标尚未注入"的空版本永久固化 ⇒ 胶囊内永久空白）。 */
-    private int contentVersion = 0;
+    /* #1046：内容版本号——composite 层缓存键（cmds 覆盖不到 SVG 图标 ⇒ 空版本会被永久固化）。 */ private int contentVersion = 0;
     private void bumpContentVersion() { contentVersion++; } public void setCmds(List<Cmd> value) {
-        this.cmds = value;
-        bumpContentVersion();   // #1046：复合层缓存键
-        clearMaterialQueryCache();   // ★B4：指令重建 ⇒ 材质几何/曲线缓存失效（重查内核）
+        this.cmds = value; bumpContentVersion(); clearMaterialQueryCache();   // ★B4：指令重建 ⇒ 材质几何/曲线缓存失效（重查内核）
         // ★★★决策 #930：**不再**在 setCmds 里清玻璃 shader 缓存——缓存键 = (nodeId, 材质位)，指令重建
         //   不影响其正确性（同一节点同一材质 ⇒ 同一 shader）。此前每帧清 ⇒ 真机实测 **每 0.5s 重建一次**
         //   ⇒ 每帧重编 AGSL（卡顿 + 观感跳变）。只在**换屏/重挂载**（节点 id 全换）时清，见 `resetGlassShaders()`。
@@ -3644,7 +3642,8 @@ public class ProteusHostView extends ViewGroup {
             //   （= 内容 + 外层玻璃真光学；div=1、原点 (glassLayerX,glassLayerY)）⇒ 条的边线/霜/折射以真光学透过胶囊。
             //   ★#1004：内层走 **nest=3**（跳自己的面纱 = 修双重霜/两态分裂）+ **bg_lum 继承外层**
             //   （此前内层从"含外层白霜的复合帧"算亮度 ⇒ 条判暗档/胶囊判亮档 = 用户「不是只有两种切换」）。
-            if (glassBd.hasNesting() && glassBd.layerBitmap() != null && hasGlassAncestor(ids[i])) {
+            // ★★★#1047：层**可用**才走 nest=3（layerFresh 在回读失败/dispose 后 false）；否则退回普通玻璃面+清晰内容，杜绝空白。
+            if (glassBd.hasNesting() && glassBd.layerFresh() && hasGlassAncestor(ids[i])) {
                 float bgOv = -1f;
                 final Integer anc = nearestGlassAncestor(ids[i]);
                 final Float av = (anc != null) ? glassBgLumByNode.get(anc) : null;
@@ -3671,8 +3670,9 @@ public class ProteusHostView extends ViewGroup {
         final float capP = Math.max(glassIx.press, glassIx.lift()); final Cmd capCmd = (pressInner != null && glassIx.press > 0.001f) ? pressInner : flowCapCmd;
         if (capCmd != null && capP > 0.001f && !gContent.isEmpty()) {
             // ★#971/#1023 · ★#1040/#1041：内容缩放窗口与裁剪**委托给 GlassInteraction**（几何单一来源）。
+            // ★★★#1047：复合层不可用 ⇒ **必须**把清晰内容也画进胶囊（否则内部只剩空采样 = 空白）。
             glassIx.drawScaledContent(canvas, capCmd, capP, flowCapCmd != null && pressInner == null,
-                    gScrolled ? scrollX : 0, gScrolled ? scrollY : 0, capPath,
+                    gScrolled ? scrollX : 0, gScrolled ? scrollY : 0, capPath, glassBd.layerFresh(),
                     new GlassInteraction.ContentDrawer() { @Override public void draw(android.graphics.Canvas c) { drawCmds(c, null, gContent); } });
         } else if (!gContent.isEmpty()) {
             drawCmds(canvas, null, gContent);

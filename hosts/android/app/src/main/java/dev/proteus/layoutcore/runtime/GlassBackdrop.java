@@ -84,6 +84,12 @@ final class GlassBackdrop {
      *  —— 这是用户「滑动落点有点儿慢、感觉被卡了一下」的直接来源（~35fps 下每帧多一次 GPU 同步）。
      *  缓存键 = (cmds 身份, 滚动, 几何)：换屏 / 改指令 / 滚动时才重建。 */
     private int layerKeyCmds = 0, layerKeyScrollX = 0, layerKeyScrollY = 0, layerKeyContent = -1;
+    /** ★#1047：本次 capture 的滚动量（离屏层画内容时要做同样的 `-scroll`，见 capture 处注解）。 */
+    private int capScrollX = 0, capScrollY = 0;
+    /** ★★★#1047：复合层**是否可用**——成功回读后为 true；构建失败/尺寸变化/dispose 置 false。
+     *  宿主据此决定"走 nest=3 采样复合层"还是"退回清晰内容"（**永不空白**）。 */
+    private boolean layerFresh = false;
+    boolean layerFresh() { return layerFresh && glassLayerFull != null; }
     private boolean layerKeyValid = false;
     /** 复合帧在屏幕坐标中的区域（= glassBackdropFull 的区域）。 */
     private int glassLayerX = 0, glassLayerY = 0;
@@ -139,6 +145,12 @@ final class GlassBackdrop {
                  boolean scrolled, int scrollX, int scrollY, Rect viewport, int pageBg) {
         if (W <= 0 || H <= 0) return;
         if (list == null || ids == null) return;
+        // ★★★#1047（子代理独立审计发现的坐标系缺陷）：复合层里画内容时也要先 `-scroll`
+        //   —— `drawCmds` 对 fixed 节点会 `translate(+scroll)`（它假定画布已在"内容空间"），
+        //   而离屏层只做了 `-gx/-gy`、没做 `-scroll`（对比背板路径的 `translate(-bx - scrollX, ...)`）。
+        //   ⇒ 滚动后图标/文字被**额外位移 scrollY**、整体画到层边界之外 ⇒ 胶囊内部空白。
+        this.capScrollX = scrolled ? scrollX : 0;
+        this.capScrollY = scrolled ? scrollY : 0;
         // ① 玻璃节点并集包围盒（屏幕坐标）+ 外扩 pad
         float minX = Float.MAX_VALUE, minY = Float.MAX_VALUE, maxX = -Float.MAX_VALUE, maxY = -Float.MAX_VALUE;
         for (int i = 0; i < list.size() && i < ids.length; i++) {
@@ -340,7 +352,7 @@ final class GlassBackdrop {
             }
             if (!glassContentIds.isEmpty()) {
                 final int sc = c.save();
-                c.translate(-gx, -gy);   // 内容在屏幕坐标 ⇒ 平移到离屏局部坐标
+                c.translate(-gx - capScrollX, -gy - capScrollY);   // ★#1047：与背板路径同口径（含 -scroll）
                 host.drawContent(c, null, glassContentIds);
                 c.restoreToCount(sc);
             }
@@ -356,6 +368,7 @@ final class GlassBackdrop {
             final Bitmap wrap = Bitmap.wrapHardwareBuffer(buf, null);
             if (glassLayerFull != null) glassLayerFull.recycle();
             glassLayerFull = wrap.copy(Bitmap.Config.ARGB_8888, false);
+            layerFresh = glassLayerFull != null;   // ★#1047：回读成功 ⇒ 层可用
             if (wrap != null) wrap.recycle();
             img.close();
             // ★★★决策 #980：**不再降采样**——条的边线只有 ~1–2px，降采样 2× + 线性采样会把它**抹没**。
@@ -396,6 +409,7 @@ final class GlassBackdrop {
                 } catch (Throwable t) { android.util.Log.w("proteus-glass", "GLASSDUMP fail " + t); }
             }
         } catch (Throwable t) {
+            layerFresh = false;   // ★#1047：失败 ⇒ 宿主退回清晰内容（永不空白）
             android.util.Log.w("proteus-glass", "GLASSLAYER offscreen FAIL " + t);
         }
     }
@@ -406,6 +420,7 @@ final class GlassBackdrop {
         try { if (glassHT != null) glassHT.quitSafely(); } catch (Throwable ignored) {}
         try { if (glassHRSurface != null) glassHRSurface.release(); } catch (Throwable ignored) {}
         glassHR = null; glassReader = null; glassHT = null; glassHRSurface = null;
+        layerFresh = false;   // ★#1047：dispose ⇒ 层不可用
         if (glassLayerFull != null) { glassLayerFull.recycle(); glassLayerFull = null; }
         if (glassBlurFull != null) { glassBlurFull.recycle(); glassBlurFull = null; }   // ★#1004
     }
