@@ -29,24 +29,24 @@ export const CSS_ENGINE_PAGE = {
       "source": "fixture"
     },
     "coverage": {
-      "m1": 0.6545,
-      "unionCovered": 82,
-      "unionTotal": 82,
+      "m1": 0.6546,
+      "unionCovered": 83,
+      "unionTotal": 83,
       "byLayer": {
         "L1": {
-          "covered": 82,
-          "total": 82,
+          "covered": 83,
+          "total": 83,
           "note": "支持度矩阵 + 边界门禁 + 棘轮基线（逐字段，已落地）"
         },
         "L2": {
           "covered": 2,
-          "total": 82,
+          "total": 83,
           "note": "★B3（2026-10-05）：几何快照（B-b）→ 只映射 width/height（x/y 是位置不是字段——保守计 2）；其余 semantic 字段的读数归 L3（样式快照 B-a）。判据②（数值等价）= L2 ∪ L3 的**并集**（见 union 口径）"
         },
         "L3": {
-          "covered": 77,
-          "total": 82,
-          "note": "★B3（2026-10-05）：快照面扩到**全部 semantic 字段**（web 探针读数 + 比对引擎分类 + 门禁 check:style-coverage）；覆盖数由 `SEMANTIC_FIELD_SNAPSHOT_KEYS` **机器推导**（不手写清单）。此前口径（27 项）为\"VC6 实测可比键\"——扩面后 = 全部 semantic 字段（`77` 个）"
+          "covered": 78,
+          "total": 83,
+          "note": "★B3（2026-10-05）：快照面扩到**全部 semantic 字段**（web 探针读数 + 比对引擎分类 + 门禁 check:style-coverage）；覆盖数由 `SEMANTIC_FIELD_SNAPSHOT_KEYS` **机器推导**（不手写清单）。此前口径（27 项）为\"VC6 实测可比键\"——扩面后 = 全部 semantic 字段（`78` 个）"
         },
         "L2_5": {
           "covered": 1,
@@ -66,16 +66,16 @@ export const CSS_ENGINE_PAGE = {
       "structureRelPct": 0.5
     },
     "lint": {
-      "total": 118,
+      "total": 117,
       "byProject": {
         "examples": 25,
         "showcase": 26,
         "css-conformance": 25,
-        "website": 42
+        "website": 41
       }
     },
     "alignment": {
-      "rows": 79,
+      "rows": 81,
       "ends": 3,
       "endsList": [
         "web",

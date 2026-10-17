@@ -151,7 +151,7 @@ if [ -f "$JNI_CRATE/Cargo.toml" ]; then
           exit 1
         fi
       else
-        echo "    ◐ 略过：未找到 NDK clang（$CLANG）"
+        echo "    ◐ 略过：未找到 NDK clang（${CLANG}）"
       fi
     else
       echo "    ◐ 略过：未找到 NDK（$SDK/ndk/*）"

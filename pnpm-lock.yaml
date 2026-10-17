@@ -1132,6 +1132,9 @@ importers:
       '@proteus-vue/gesture':
         specifier: 0.3.0-beta.28
         version: link:../packages/gesture
+      '@proteus-vue/glass':
+        specifier: 0.3.0-beta.28
+        version: link:../packages/glass
       '@proteus-vue/i18n':
         specifier: 0.3.0-beta.28
         version: link:../packages/i18n

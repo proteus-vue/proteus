@@ -46,14 +46,21 @@ pub const GLASS: MaterialSpec = MaterialSpec {
         ("refract_depth", 64, 4),
         ("specular", 68, 4),
         ("saturation", 72, 4),
-        ("_pad", 76, 4),
+        // ★2026-10-17 补登：本槽自 #911 起语义化为 `bg_lum`（区域背景亮度；WGSL/三端宿主均按此名写），
+        //   布局表此前仍写 `_pad` ⇒ 契约与真源不同名（生成物跟着错）。
+        ("bg_lum", 76, 4),
         // ★★★决策 #905：触控形变（touch 盒局部 px / press 0..1）
         ("touch", 80, 8),
         ("press", 88, 4),
         ("overlay", 92, 4),
         // ★★★决策 #1004：内层/预模糊模式（0/1 锐背板 · 2 外层预模糊 · 3 内层复合帧；见 glass.wgsl struct）
         ("nest", 96, 4),
+        // ★★★决策 #1027：形变域端部锥化（signed；0=身份）。★2026-10-17 补登：WGSL/三端宿主自 #1027
+        //   起就有 `shp_a`（iOS glass-metal.swift 显式声明 `shp_a: Float // 100`），但本布局表漏了这条
+        //   ⇒ 生成物 materials.ts 的布局末端停在 100 而 uniformSize=112，**宿主常量缓冲契约不完整**。
+        ("shp_a", 100, 4),
     ],
+    // 112 = 104 字节结构按 WGSL uniform 16 字节对齐上取整（shp_a 之后有 8 字节尾部填充）。
     uniform_size: 112,
 };
 

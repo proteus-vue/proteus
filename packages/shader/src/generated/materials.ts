@@ -104,7 +104,7 @@ export const MATERIAL_CATALOG = {
           "size": 4
         },
         {
-          "name": "_pad",
+          "name": "bg_lum",
           "offset": 76,
           "size": 4
         },
@@ -126,6 +126,11 @@ export const MATERIAL_CATALOG = {
         {
           "name": "nest",
           "offset": 96,
+          "size": 4
+        },
+        {
+          "name": "shp_a",
+          "offset": 100,
           "size": 4
         }
       ],

@@ -600,7 +600,9 @@ describe('★★★B2 行内跨源绑定（决策 #907）', () => {
     data['active'] = 'b'
     for (const [nm, cb] of subs) if (nm === 'active') cb()
     rt.flush()
-    const hit = ops.some((o: { nodeId?: number }) => o.nodeId === 101 || o.nodeId === 102)
+    // ★2026-10-17 类型门禁修复：`UpdateOp` 是联合类型，`OpInsertBlock` 等分支没有 nodeId
+    //   ⇒ 谓词参数不能用 `{nodeId?: number}` 形状（TS2345）。用 `in` 收窄后取值，语义不变。
+    const hit = ops.some((o) => 'nodeId' in o && (o.nodeId === 101 || o.nodeId === 102))
     expect(hit, 'active 变化 ⇒ 行内槽位按行重算并指向行节点').toBe(true)
   })
 })
