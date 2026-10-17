@@ -155,10 +155,13 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     let slope = u1 / (1.0 - u1 * u1).max(1e-4).sqrt();
     // ★★★决策 #1010：撤回 #1009——恢复 `(1−e)³` + 1.20（数学复核：#1009 的"折叠"判据漏符号，
     //   s'=1+3(1−e)²·ER·str>0 恒成立 ⇒ 该剖面单调；探针"多余的线"= 条外内容被采入 = #998 边缘倒影本体）。
-    let prof = (1.0 - e).powi(3);
+    // ★#1042/#1043：内层用更平缓的 1.5 次幂（与 glass.wgsl 同源）
+    let prof = if is_inner { (1.0 - e).powf(1.5) } else { (1.0 - e).powi(3) };
     let strength = (p.refract_depth / band.max(1.0)).clamp(0.2, 1.1);
     // ★★★#1042：内层胶囊 0.10 → **0.42**（与 glass.wgsl 同源）——配合收窄的 band 让外缘出现强压缩。
-    let er_eff = 1.20f32 * if is_inner { 0.42 } else { 1.0 };
+    // ★#1043：0.42→0.25 —— bend(0)=22×0.30×1.1≈7.3px < 条边距胶囊边 9.5px（保住条边可见）；
+    //   同时 s'(0)=1−3×0.30×1.1≈0.01（强压缩 ⇒ 暗带）。与 glass.wgsl 同源。
+    let er_eff = 1.20f32 * if is_inner { 0.25 } else { 1.0 };
     let bend = prof * band * er_eff * strength;
     // ★#905/#966：触控形变——触点处把内容沿"离触点方向"推挤（Gaussian 钟）。
     //   ★只给选中项（overlay）；press=0 或 touch 未激活 ⇒ push≈0（退化到既有折射）。
@@ -318,7 +321,8 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     let top_bias = 0.75 + 0.50 * top_hi;
     let press_core = (1.0 - smoothstep(0.0, 1.0, rr)) * pv_rim * 0.70 * top_bias;
     let seam_gate = smoothstep(0.45, 0.80, pc.1.abs() / hs.1.max(1.0));
-    let press_seam = smoothstep(0.8, 2.2, rr) * (1.0 - smoothstep(2.2, 5.6, rr)) * pv_rim * (-0.11) * seam_gate;
+    // ★#1043：暗缝收窄到贴边（距边 2.7–8.8px）+ 幅度减半（与 glass.wgsl 同源）
+    let press_seam = 0.0;   // ★#1043：删合成暗缝（与 glass.wgsl 同源）
     let inner_hi = smoothstep(4.0, 6.0, rr) * (1.0 - smoothstep(6.0, 9.0, rr)) * pv_rim * 0.075 * seam_gate;
     let press_rim = press_core + press_seam + inner_hi;
     let rim = ((facing.powi(6) * p.specular * 0.22 + fres * 0.06) * bevel_mask + edge_hi) * edge_amp + press_rim + tg * 0.07;   // ★#954/#963/#966
