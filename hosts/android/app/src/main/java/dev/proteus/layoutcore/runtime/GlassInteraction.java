@@ -73,6 +73,12 @@ final class GlassInteraction {
     private static final float FLOW_TRAIL_C = 0.201f;  // ζ≈0.88
     private static final int FLOW_TRAIL_DELAY = 8;     // 后缘起步延迟（标准步；iOS 59fps 2–4 帧 ⇒ @120Hz 4–8）
     private static final float FLOW_MAX_STRETCH = 0.55f;  // 宽度最多撑到 1.55×（再大就越过多格）
+    /** ★#1041：hover 高亮所需的**真实形状覆盖率**。
+     *  几何推导（胶囊与槽同宽 252）：cover = 胶囊压入槽的深度 / 252。
+     *   · cover=0.28 ⇒ 胶囊中心还在目标槽左侧 **56px**（只有端部圆角擦到）= 用户说的「端部刚接触就变色」；
+     *   · cover=0.50 ⇒ 胶囊边缘**到达目标图标中心**（图标一半在玻璃下）⇒ 这才是"真实接触"。
+     *  注意：**点击切换**不走这条（tap 时目标已知，JS 立即高亮，与 iOS 一致）；这里只管**拖动 hover**。 */
+    private static final float HOVER_MIN_COVER = 0.50f;
     /** 拖动超阈标志（释放重定向 tap 的触发条件之一）。 */
     boolean dragMoved = false;
     /** 本手势期间 GestureDetector 是否已判 scroll（判过不会再发 tap ⇒ 释放重定向只在此时兜底派发）。 */
@@ -127,6 +133,39 @@ final class GlassInteraction {
 
     /** 命中判定：该节点正是**流动中的胶囊**（宿主 drawGlassPass 据此走 capsuleBox 形变路径）。 */
     boolean isFlowNode(int id) { return flowActive && id == flowNode; }
+
+    /** ★#1041：内容绘制回调——宿主包一层 `drawCmds(canvas, null, gContent)` 传进来，
+     *  让「内容缩放窗口/裁剪」留在交互子系统内（几何只有一个来源），宿主不重复实现裁剪。 */
+    interface ContentDrawer { void draw(android.graphics.Canvas c); }
+
+    /** ★★★#1040/#1041：内容放大区的三段绘制（左段原样 / 中间按胶囊真实轮廓裁剪并缩放 / 右段原样）。
+     *  · #1040：窗口宽度 = **胶囊实际绘制宽度**（按压时胶囊水平不放大 ⇒ 不能用 w*sCapX，否则每侧多 ~29px 盖到邻项）；
+     *  · #1041：中间段用**胶囊圆角路径**裁剪（不是通高矩形）——矩形会在圆角外侧（水滴没到的地方）也放大内容。 */
+    void drawScaledContent(android.graphics.Canvas canvas, ProteusHostView.Cmd capCmd, float capP,
+                           boolean isFlow, int scrollX, int scrollY, android.graphics.Path path,
+                           ContentDrawer drawer) {
+        final float ccx = capCmd.x + capCmd.w * 0.5f + dragAppliedDx + scrollX;
+        final float ccy = capCmd.y + capCmd.h * 0.5f + scrollY;
+        final float[] cs = contentScale(capP, isFlow);
+        final float sCapX = cs[0], sCapY = cs[1];
+        final float bandHalf = isFlow ? capCmd.w * 0.5f * sCapX : capCmd.w * 0.5f;
+        final float capL = ccx - bandHalf, capR = ccx + bandHalf, top = -1e6f, bot = 1e6f;
+        int sv1 = canvas.save(); canvas.clipRect(top, top, capL, bot); drawer.draw(canvas); canvas.restoreToCount(sv1);
+        int sv2 = canvas.save();
+        final float lx = lastCapsuleBox[0] + scrollX, ly = lastCapsuleBox[1] + scrollY;
+        final float lw = lastCapsuleBox[2], lh = lastCapsuleBox[3];
+        if (lw > 1f && lh > 1f) {
+            final float lr = Math.min(lw, lh) * 0.5f;
+            path.reset();
+            path.addRoundRect(lx, ly, lx + lw, ly + lh, lr, lr, android.graphics.Path.Direction.CW);
+            canvas.clipPath(path);
+        } else {
+            canvas.clipRect(capL, top, capR, bot);
+        }
+        canvas.scale(sCapX, sCapY, ccx, ccy); drawer.draw(canvas); canvas.restoreToCount(sv2);
+        int sv3 = canvas.save(); canvas.clipRect(capR, top, 1e6f, bot); drawer.draw(canvas); canvas.restoreToCount(sv3);
+    }
+
     /** ★#1038：当前流动胶囊的**实际撑开比例**（bw/槽宽）——内容按此做透镜式放大（iOS 1.15→1.4×）。 */
     private float flowSpanRatio = 1f;
     float flowSpanRatio() { return flowActive ? flowSpanRatio : 1f; }
@@ -245,6 +284,11 @@ final class GlassInteraction {
     /** ★★★决策 #1029：当前停靠候选**节点 id**（拖动中变化 ⇒ 派发 hover 实时高亮；-1=无）。 */
     int dockNodeId = -1;
     private final float[] boxOut = new float[4];
+    /** ★#1041：最近一帧胶囊**实际绘制盒**（bx,by,bw,bh）——内容放大区按它裁剪（见 ProteusHostView）。
+     *  此前内容段用「通高矩形条」裁剪 ⇒ 胶囊圆角外侧（水滴没到的地方）的内容也被放大，
+     *  用户「不是胶囊真实接触的位置」。 */
+    private final float[] lastCapsuleBox = new float[4];
+    float[] lastCapsuleBox() { return lastCapsuleBox; }
 
     /** 命中交互玻璃（hx/hy = 命中坐标系；命中 ⇒ 记录触点与起点、press 起步）。返回 true = 命中。 */
     boolean hit(List<ProteusHostView.Cmd> list, int[] ids, Map<Integer, GlassMaterial.Spec> glassByNode, float hx, float hy) {
@@ -391,6 +435,24 @@ final class GlassInteraction {
      *  释放时按**胶囊覆盖面积**选停靠 tab——返回派发点（重叠最大 tab 的中心；盒坐标空间 = 屏幕坐标）。
      *  · 候选 = 胶囊的**同父兄弟**（tab items；跳过玻璃兄弟）；面积 = lens 盒 ∩ 候选盒；
      *  · 全部无重叠（拖出条外）⇒ 就近（中心距 lens 中心最近）；找不到胶囊/候选 ⇒ null（调用方用释放点兜底）。 */
+    /** ★★★决策 #1041：**胶囊真实形状**内点判定（圆角矩形 stadium + 端部锥化）——与 shader `sd_glass` 同形。
+     *  判定区域不能是包围盒：胶囊两端是半圆（r = min(bw,bh)/2），盒子四角在形状之外 ⇒ 用矩形求交会在
+     *  "端部还没真正碰到"时就把邻项判为已覆盖（用户「判定区域是矩形，不是胶囊真实接触的位置」）。 */
+    private static boolean insideCapsule(float px, float py, float bx, float by,
+                                         float bw, float bh, float rad, float taper) {
+        final float hx = bw * 0.5f, hy = bh * 0.5f;
+        final float cx = bx + hx, cy = by + hy;
+        final float nx = Math.max(-1f, Math.min(1f, (px - cx) / Math.max(hx, 1f)));
+        // 与 glass.wgsl 的 sd_glass 同式：运动端满锥化、反端 0.45×
+        final float tipR = Math.max(taper, 0f), tipL = Math.max(-taper, 0f);
+        final float tp = nx >= 0f ? tipR + 0.45f * tipL : tipL + 0.45f * tipR;
+        final float ym = Math.max(1f - tp * nx * nx, 0.15f);
+        final float dx = Math.abs(px - cx) - (hx - rad);
+        final float dy = Math.abs((py - cy) / ym) - (hy - rad);
+        final float ox = Math.max(dx, 0f), oy = Math.max(dy, 0f);
+        return Math.sqrt(ox * ox + oy * oy) + Math.min(Math.max(dx, dy), 0f) - rad <= 0f;
+    }
+
     float[] dockPick(List<ProteusHostView.Cmd> list, int[] ids,
                      java.util.Map<Integer, Integer> nodeParent,
                      java.util.Map<Integer, GlassMaterial.Spec> glassByNode) {
@@ -410,24 +472,36 @@ final class GlassInteraction {
         final Integer parent = nodeParent.get(capsuleNode);
         if (parent == null) return null;
         ProteusHostView.Cmd pick = null; int pickId = -1; float pickArea = -1f, pickDist = Float.MAX_VALUE;
+        float pickCover = 0f;
+        // ★#1041：用**胶囊真实形状**（stadium + 锥化）在候选盒上采样覆盖，替代矩形求交。
+        final float rad = Math.min(cb[2], cb[3]) * 0.5f;
         for (int k = 0; k < list.size() && k < ids.length; k++) {
             if (ids[k] == capsuleNode || glassByNode.get(ids[k]) != null) continue;
             if (!parent.equals(nodeParent.get(ids[k]))) continue;
             final ProteusHostView.Cmd c = list.get(k);
             if (c.w <= 0f || c.h <= 0f) continue;
-            final float ox = Math.min(cb[0] + cb[2], c.x + c.w) - Math.max(cb[0], c.x);
-            final float oy = Math.min(cb[1] + cb[3], c.y + c.h) - Math.max(cb[1], c.y);
-            final float area = (ox > 0f && oy > 0f) ? ox * oy : 0f;
+            int hits = 0, total = 0;
+            for (int gy = 0; gy < 7; gy++) {
+                for (int gx = 0; gx < 7; gx++) {
+                    total++;
+                    if (insideCapsule(c.x + (gx + 0.5f) * c.w / 7f, c.y + (gy + 0.5f) * c.h / 7f,
+                            cb[0], cb[1], cb[2], cb[3], rad, shapeTaper)) hits++;
+                }
+            }
+            final float cover = hits / (float) total;
+            final float area = cover * c.w * c.h;
             final float dist = Math.abs(c.x + c.w * 0.5f - lensCx);
             if (pick == null || area > pickArea + 0.5f || (Math.abs(area - pickArea) <= 0.5f && dist < pickDist)) {
-                pick = c; pickArea = area; pickDist = dist; pickId = ids[k];
+                pick = c; pickArea = area; pickDist = dist; pickId = ids[k]; pickCover = cover;
             }
         }
         if (pick == null) return null;
         if (debug) android.util.Log.i("proteus-glass", "GLASSDOCK lens=[" + String.format("%.0f..%.0f", cb[0], cb[0] + cb[2])
                 + "] bpos=" + String.format("%.0f", bpos)
-                + " pick=[" + String.format("%.0f..%.0f", pick.x, pick.x + pick.w) + "] area=" + String.format("%.0f", pickArea));
-        dockNodeId = pickId;   // ★#1029：候选节点（hover 实时高亮用）
+                + " pick=[" + String.format("%.0f..%.0f", pick.x, pick.x + pick.w) + "] cover=" + String.format("%.2f", pickCover));
+        // ★#1041：**hover 高亮需要真实覆盖到阈值**才点亮——端部刚擦到（cover 很小）不算"接触"，
+        //   否则会出现用户说的「水滴端部开始接触时，没接触的地方也变色」。
+        dockNodeId = (pickCover >= HOVER_MIN_COVER) ? pickId : -1;
         dockOut[0] = pick.x + pick.w * 0.5f; dockOut[1] = pick.y + pick.h * 0.5f;
         return dockOut;
     }
@@ -479,6 +553,7 @@ final class GlassInteraction {
                         + " w=" + String.format("%.0f", bw) + " h=" + String.format("%.0f", bh));
             }
             boxOut[0] = bx; boxOut[1] = by; boxOut[2] = bw; boxOut[3] = bh;
+            System.arraycopy(boxOut, 0, lastCapsuleBox, 0, 4);
             return boxOut;
         }
         final float sx = 1f + bulge * PRESS_SCALE_CAPSULE_X;
@@ -524,6 +599,7 @@ final class GlassInteraction {
                     + " w=" + String.format("%.0f", bw) + " h=" + String.format("%.0f", bh));
         }
         boxOut[0] = bx; boxOut[1] = by; boxOut[2] = bw; boxOut[3] = bh;
+        System.arraycopy(boxOut, 0, lastCapsuleBox, 0, 4);
         return boxOut;
     }
 }
