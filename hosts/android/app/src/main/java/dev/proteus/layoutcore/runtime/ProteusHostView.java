@@ -3663,11 +3663,11 @@ public class ProteusHostView extends ViewGroup {
         // ★#1035：内容放大/跟随按 **effPress 门控**（flow 用 lift）——此前只认物理 press ⇒ flow 全程不放大不跟随 = 割裂。
         final float capP = Math.max(glassIx.press, glassIx.lift()); final Cmd capCmd = (pressInner != null && glassIx.press > 0.001f) ? pressInner : flowCapCmd;
         if (capCmd != null && capP > 0.001f && !gContent.isEmpty()) {
-            // ★#971/#1023：**只缩放胶囊 x 范围的内容**（绕胶囊中心，中心跟随 lens——"放大镜"下内容同步移动）；≈1.2× 等比。
+            // ★#971/#1023：**只缩放胶囊 x 范围的内容**（绕胶囊中心，中心跟随 lens——"放大镜"下内容同步移动）。
             final float ccx = capCmd.x + capCmd.w * 0.5f + glassIx.dragAppliedDx + (gScrolled ? scrollX : 0);
             final float ccy = capCmd.y + capCmd.h * 0.5f + (gScrolled ? scrollY : 0);
-            final float sCapX = 1f + capP * GlassInteraction.PRESS_CONTENT_SCALE_X;
-            final float sCapY = 1f + capP * GlassInteraction.PRESS_CONTENT_SCALE_Y;
+            // ★#1038：flow 的内容放大按胶囊实际撑开比例（iOS：横向 1.2–1.7×、纵向仅 +35% 的各向异性）
+            final float[] cs = glassIx.contentScale(capP, flowCapCmd != null && pressInner == null); final float sCapX = cs[0], sCapY = cs[1];
             final float capL = ccx - capCmd.w * 0.5f * sCapX - 4f;
             final float capR = ccx + capCmd.w * 0.5f * sCapX + 4f;
             final float top = -1e6f, bot = 1e6f;

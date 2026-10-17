@@ -5533,3 +5533,97 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   从"缓冲太大"直接跌到"一点儿缓冲都没有"。★★**先在纸上验、再上真机**：本轮先跑离线离散积分得到 14.5px/13 帧，
   真机逐帧吻合到 0.05px ⇒ 一次真机就收口（无需试参轮次）。★**离散实现的名义阻尼比会骗人**：Euler 步长 1 时
   C 接近 2√K 会让判别式归零，连续公式的过冲表不能直接搬。
+
+1037. **★★全链 18 条失败的归因与同步：shader uniform 契约补 `bg_lum`/`shp_a`（真缺陷）+ 断言/配置/类型门禁漂移**（2026-10-17 · 收尾跑 `pnpm verify` 暴露；任务卡 `T-verify-red-sync`）：
+【现象】全链 **5858 通过 / 5 失败**（4 个测试文件）；修完复跑又依次浮出 13 条（见 ⑥–⑱）——**共 18 条**。**本轮 diff 零触及**这些包（`git diff --stat 1bbd0fae..HEAD`
+  只有 GlassInteraction.java + 文档 + AAR）⇒ 全部是**历史轮次留下的欠账**，被全链一次性照出来。
+【逐条归因 + 处置】
+  ① ★**真缺陷（跨端契约）**：`packages/shader-codegen-rust/src/materials/mod.rs` 的 glass `uniform_layout`
+    停在 `nest@96`，而 **WGSL 真源自 #911 起就有 `bg_lum@76`（原 `_pad` 语义化）、#1027 起有 `shp_a@100`**，
+    三端宿主也都在按这些偏移写（iOS `glass-metal.swift` 显式声明 `shp_a: Float // 100`）⇒ **布局表比真源少两条**，
+    生成物 `materials.ts` 的布局末端 100 与 `uniformSize=112` 不自洽。修：补 `("bg_lum",76,4)` + `("shp_a",100,4)`
+    并 `node scripts/gen-shaders.mjs` 重生成（TS/Android/iOS/鸿蒙四端生成物）；`gen-shaders --check` 与
+    `check:shader-capability` 复验无漂移。
+  ② `tests/shader-backend.test.ts` 仍断言 `glass.uniformSize === 96`（#905 口径）⇒ 同步为 **112**（附三处变更来源）。
+  ③ `tests/app-icon-lowering.test.ts` 仍断言动态 `:name` 产 `VAPOR_ICON_DYNAMIC` 诊断，而 **#938 已把动态图标
+    折成叶子盒**（path 走运行期 `__iconPath`）⇒ 断言改为「折成 16×16 叶子盒 + **不产该诊断**」。
+  ④ `@proteus-vue/components` 的 `files` 只写 `pg-glass` + `p-*/**`，而 `index.ts` 已 import `./pg-glass-nav/index.vue`
+    ⇒ **发布物里缺该目录，用户 import 即构建失败**（`check-publish-contents` 判红）。修：`pg-glass` → `pg-*/**`。
+  ⑤ `website/src/App.vue` import `@proteus-vue/glass` 但 `website/package.json` 未声明（`check-deps` 判红）；
+    补 `0.3.0-beta.28` + 更新 lockfile（workspace link）。
+  ⑥ **（测试全绿后才浮出的第 6 条）** `website/cse-lint-baseline.json` 仍钉着 `src/App.vue:E-CSS-002`，
+    而该违规**已在 #887（3ccb1c20）随「导航改走 <pg-glass> 单入口」被移除**——基线只减不增的棘轮要求
+    "修一条删一条"，这条一直没删。修：`node scripts/gen-cse-lint-baseline.mjs` 重生成（website 42→41 条）；
+    `--check` 四工程全一致。★**为什么第一次 verify 没显示它**：首次全链在 `pnpm test` 阶段就挂了（5 条测试失败）
+    ⇒ 排在 test 之后的 lint/基线类门禁**根本没跑到**——「一条失败遮住后面所有门禁」是串行全链的固有盲区。
+  ⑦ **（第二次 verify 才浮出）`npx vue-tsc --noEmit` 报 `tests/shader-backend.test.ts` 找不到 `@proteus-vue/shader`**：
+    `vitest.config.ts` 有该 alias（#900 加），但 **`tsconfig.json` 的 `paths` 没配** —— 测试运行时绿、类型门禁红
+    （决策 #214 的口径是"两处都配"）。修：`tsconfig.json` 补 `"@proteus-vue/shader": ["packages/shader/src/index.ts"]`
+    （补齐后连带 4 条 implicit-any / unknown 错误一起消失——都是"模块解析失败 ⇒ 类型退化"的下游）。
+  ⑧ 同一轮 `vue-tsc` 还报 `tests/vapor-list-e2e.test.ts:603` **TS2345**：谓词写成 `(o: {nodeId?: number})`，
+    而 `UpdateOp` 是联合类型（`OpInsertBlock` 等分支无 `nodeId`）⇒ 形状不兼容。修：`ops.some((o) => 'nodeId' in o && ...)`（语义不变）。
+  ⑨ **（上游变更）`check:mp-attrs`**：微信官方 swiper 新增 `clip`（boolean · 默认 true · 最低 3.17.4，已核对官方页）
+    ⇒ 标尺快照脱节。修：`node scripts/gen-mp-component-attrs.mjs --only swiper`（`attrTotal` 772→773）。
+  ⑩ **（生成物漂移 · 同一根因链）** semantic 字段 82→83（`-webkit-line-clamp` 落链时的登记）驱动三件生成物过期：
+    `docs/generated/consistency-metrics.json`（M1 0.6545→0.6546 / L1 83 / L3 78）、`css-engine-numbers.{json,md}`、
+    `website/src/data/{consistency-page,css-engine-page}.ts` —— 全部按生成器重算（不手改）。
+  ⑪ **（文档正向断言缺失）`check:docs-stats`**：Themis 白皮书 lint 与 M1 两处**没写出当前权威值**
+    （数值早已是 117/65.46%，只是缺正向断言）。修：白皮书 §6 表与来源表同步为 `**117** 条存量`
+    （明细 examples 25 · showcase 26 · css-conformance 25 · **website 41**）与 `M1 65.46%`，另修 `semantic 82+26` → `83+25`。
+  ⑫ **（组件页漂移）`check:component-demo`**：73 个 showcase 组件详情页的兼容进度行过期
+    （`端原型映射——组件级接线未开始` → `渲染核心已落地——组件级接线未开始`；官网 md SSOT 早已更新）。
+    修：`node scripts/gen-component-demo-pages.mjs`。
+  ⑬ **（环境·非代码）`check:glass-parity-harmony`**：鸿蒙设备在线但**锁屏**，`aa start` 报
+    「developer mode 下无法自动解锁」⇒ 渲染未启动、`vkglass-gpu.json` 为空。**如实记为环境阻塞**（未改代码绕过）。
+  ⑭ **（夹具时间炸弹）`check:ios-signing-selftest`**：夹具把描述文件过期日写死 `2026-10-15`，今天已过期
+    ⇒ 4 条用例假红。修：默认过期日改远期 `2099-12-31`（被测逻辑是"有效期过滤 + 交集选择"，不该由运行当天日期决定）。
+  ⑮ **（随包副本陈旧）`check:harmony-runtime-prebuilt`**：HEAD 里鸿蒙真源 SPIR-V 已是 2588 字节，prebuilt 仍 2564
+    ⇒ 外部用户（无框架 checkout）拿到旧运行时。修：`node scripts/harmony-runtime-prebuilt.mjs`。
+  ⑯ **（shell 变量边界）`check:shell-i18n-vars`**：3 处 `$VAR<全角字符>`（`$CLANG）` / `$APP_SC——`）——
+    bash 把全角标点并入变量名 ⇒ `set -u` 下 unbound variable。修：`${VAR}<全角>`（三个脚本）。
+  ⑰ **（门禁结构性误报）`check:loop-guard`**：`packages/api/src/invoke-wire.ts:204/304` 的 TLV 解码循环条件
+    是**字节读取器游标**（`while (r.remaining > 0)`），`r.u8()/r.u32()/r.raw(len)` 每轮必消费、不足即抛错，
+    **无空转分支**；门禁 A/B/C 只认"简单标识符自增"。处置：写进 `ALLOW` 附具体理由（不静默放过）。
+  ⑱ **（工具链解析）`check:invoke-wire-parity`**：本机 PATH 无 `javac` ⇒ 红，而仓库自带 `.tools/jdk17`。
+    修：脚本优先用 `<repo>/.tools/jdk17/bin/{javac,java}`（不存在才回退 PATH，真缺 JDK 仍红）。
+【判据】`npx vitest run` 四个文件全绿（16 + 20 项）+ vapor-list-e2e 26 项 · `check-deps` 50 目标 0 缺失 ·
+  48 包全过（仅余 5 条 README 悬空声明的既有 warning）· `gen-shaders --check` 无漂移 · `check:shader-capability` 绿 ·
+  `gen-cse-lint-baseline --check` 四工程无漂移 · `npx vue-tsc --noEmit` **零错误** · `gen-mp-component-attrs --check` 77 组件一致 ·
+  `check:docs-stats` 绿 · `check:component-demo` 73 页一致 · `check:shell-i18n-vars` / `check:loop-guard` /
+  `check:invoke-wire-parity` / `check:harmony-runtime-prebuilt` 全绿 · 全链 `pnpm verify` 复跑（见提交正文实测结果）。
+  ★**唯一未验**：`check:glass-parity-harmony`（鸿蒙锁屏 · 环境阻塞，非代码）。
+【★教训】★★**生成物漂移的根因常在"真源的两份描述不同步"**：WGSL struct（算法真源）与 Rust `uniform_layout`
+  （宿主契约）是同一结构的两份手工维护描述——加字段只改一处 ⇒ 生成物布局与字节长度错位，而**定向门禁都不查**
+  （只有全链的 `check:shader-capability` 会）。★**"发布物的 glob 覆盖"要跟着 index 的 import 走**：新增 `pg-*`
+  组件目录时 `files` 里的 `p-*/**` 不覆盖它（前缀不同）——这类漏项只会在**真的发版后**由用户踩到。
+  ★**同一结构的多份声明必须由工具派生**（理想形态：从 WGSL 直接解析出 layout，而不是手抄第二份）。
+  ★**串行全链的"前置失败遮蔽"要记牢**：test 一挂，后面几十条门禁一条都不跑——所以"一次全链只暴露 5 条"
+  不等于"只有 5 条问题"，修完必须再跑一次全链（本轮因此多发现第 6 条）。
+
+1038. **★★★液态玻璃「tab 切换两边缘形变」：结构性重写——前缘/后缘各自弹簧（宽度撑开 1.5× · 中心零过冲）· 只 Android 真机验证**（2026-10-17 · 用户「效果还是不对，再仔细分析 iOS 的这个……一定要拿到 iOS 这个实现思路」）：
+【根因（模型错误，不是参数错误）】四路并行拆解（iOS 59fps 逐帧几何 · 我们 24fps 逐帧 · 代码路径 · Apple 官方/逆向）：
+  iOS 真签名 = **胶囊两边缘各一条弹簧**——前缘先走（190–330ms 到站、越界 12–17%），后缘晚 2–4 帧@59fps 起步且慢得多
+  ⇒ **宽度被两边缘间距撑开 1.37–1.62×**，而**中心几乎不过冲（≤1.5px）**。我们旧模型是**单一刚体质心弹簧 +
+  速度×小系数附加拉伸**：刚体只有一个自由度 ⇒ 数学上**永远做不出「中心不冲而宽度冲」**（实测宽度仅 1.035×，
+  且旧版 24fps 真机逐帧显示"旧胶囊淡出→2–4 帧空档→新胶囊在终点淡入"，即视觉上根本没有连续位移）。
+【修（GlassInteraction · 两边缘模型）】
+  · `leadP/leadV`（前缘）+ `trailP/trailV`（后缘），各自弹簧收敛到 0；**宽度 = 槽宽 + |lead−trail|**，中心 = 均值；
+  · `FLOW_LEAD_K/C = 0.023/0.267`（ζ≈0.88）· `FLOW_TRAIL_K/C = 0.013/0.201`（ζ≈0.88）· `FLOW_TRAIL_DELAY=8`（标准步）；
+  · 宽度上限 `FLOW_MAX_STRETCH=0.55`（1.55×，防多格切换横跨过多选项）；
+  · lift 改**独立时间包络**（不再用 `remain>0.18`——线性弹簧归一化后该比例与步长无关，实际是"固定第 6 帧触发"）；
+  · 内容放大按**实际撑开比例**、纵向只跟 35%（iOS 实测图标横向 1.2–1.7× / 纵向 1.08–1.14× 的各向异性）；
+  · ★**子步积分**（关键）：所有系数是 @120Hz 每帧量，而真机玻璃绘制实测只有 **~35fps** ⇒ 帧锁会让动画慢 3 倍
+    （实测 1047ms vs 设计 350ms）。改为把 dt 折成 n 个标准步（不是"系数乘 dt"——半隐式 Euler 非线性等价，
+    实测会让尾段慢一倍），墙钟时长与刷新率无关。
+【判据（真机 GLASSSTRETCH 逐帧 vs iOS 实测；`salvage/liquid-glass/ios-ref-1017/`）】
+  · 宽度峰值 **1.52× @89ms**（iOS 1.48–1.62× @120–190ms）；
+  · 中心 95% 行程 **268ms**（iOS ~305ms）· 宽度收拢 **337ms**（iOS ~441ms）· 总时长 **437ms**；
+  · **中心反向过冲 0.0px**（iOS ≤1.5px）——旧模型是"中心冲、宽度不冲"，现在方向正确；
+  · 前后缘轨迹可见 lead 先动、trail 滞后 ~5 帧后起步；taper 随边缘速度差换向；
+  · 编译 / file-size / coupled（71 项）全绿；静止态截图确认胶囊形态正常。
+【诚实边界】时间尺度整体仍比 iOS 快 ~20–25%（中心 268 vs 305ms）；宽度峰值出现偏早（89 vs 120–190ms）；
+  taper 峰值仅 0.05（旧拖动路径 0.42）——滴尖形态偏弱；iOS/鸿蒙宿主未接；未做用户目视验收。
+【★教训】★★★**先确认"模型能不能产生目标签名"，再谈调参**：刚体弹簧 + 附加拉伸无论怎么调都做不出
+  "中心不冲而宽度冲"——`宽度` 与 `中心` 必须是**两个独立自由度**。★★**从视频里量的应该是"几何量之间的关系"**
+  （前缘/后缘各自轨迹），而不是"胶囊中心的某条曲线"——后者会把"两边缘不同步"这个本质抹平成一个质心。
+  ★**帧锁是隐藏的 3 倍误差**：所有"每帧系数"在真机 35fps 下全部慢 3 倍；调参前先量真实帧率。

@@ -1166,6 +1166,47 @@
         "T-glass-flow-shape"
       ],
       "note": "用户「是不是把点击切换的物理力学缓冲全部删除了？之前只说缓冲幅度不合理，没让你全部删除」「一点儿缓冲都没有了，不符合物理视觉和人工力学」。根因=过度修正：#1034 把过冲 74px→<1px（ζ=0.85 单调收敛）把「缓冲」整项删掉。修：FLOW_C 1.00→0.6508（=2ζ√K，K=0.35 ⇒ ζ=0.55）；FLOW_K/拖动弹簧/FLOW_POP 全不动。真机 1 格 252px 过冲 14.5px(5.8%)、零交叉 2 次；3 格 −756px 过冲 43.4px(5.7%)、零交叉 3 次；起跳前 4 帧 stretch/flatten/taper 全 0 + lift 递增（#1035 不回归）。★诚实边界：过冲峰值待用户目视验收（手感以用户为准）；离散 Euler 名义 ζ≠等效 ζ（C=1.00 时判别式归零；ζ=0.55 离散等效≈0.68）；日志帧间隔 ~14.9ms（67fps）⇒ 13 帧≈0.19s；iOS/鸿蒙宿主未接。"
+    },
+    {
+      "id": "T-verify-red-sync",
+      "title": "全链 5 条失败归因与同步：shader uniform 契约补 shp_a / 断言随 #938 更新 / components 发布物补 pg-* / website 补 glass 依赖",
+      "type": "bugfix",
+      "status": "done",
+      "owner": "session:zcode-glassbounce",
+      "scope": [
+        "tests/**",
+        "packages/shader-codegen-rust/**",
+        "packages/shader/**",
+        "packages/components/package.json",
+        "website/package.json"
+      ],
+      "decision": 1037,
+      "verification": "全链逐段跑完（test 452 文件 5863 项全绿；mp-attrs 之后 97 条门禁分 12 段跑到底，链尾 exit 0）；唯一未验 check:glass-parity-harmony（鸿蒙设备锁屏 · 环境阻塞）",
+      "branch": null,
+      "related": [
+        "T-glass-interactive",
+        "T-glass-shape-domain"
+      ],
+      "note": "2026-10-17 收尾跑 pnpm verify 暴露 5 条失败，修完逐层浮出共 18 条（git diff 证明本轮零触及这些包 ⇒ 全为历史欠账）。①真缺陷：shader uniform_layout 漏 bg_lum@76/shp_a@100（三端宿主早已按此偏移写）⇒ 补两条 + 重生四端生成物。②uniformSize 96→112。③app-icon-lowering 随 #938 改为\"动态图标折叶子盒\"。④components files pg-glass→pg-*/**（否则发布物缺 pg-glass-nav）。⑤website 补 @proteus-vue/glass 依赖。⑥cse-lint 基线删已修条目。⑦tsconfig paths 补 @proteus-vue/shader（vitest 有 alias、tsconfig 没有 ⇒ vue-tsc TS2307）。⑧vapor-list-e2e 联合类型谓词。⑨mp-attrs 标尺同步 swiper.clip（官方 3.17.4）。⑩semantic 82→83 驱动三件生成物重算。⑪Themis 白皮书补正向断言（117 条/M1 65.46%）。⑫component-demo 73 页重生成。⑬鸿蒙 glass parity 因设备锁屏未跑（环境）。⑭ios-signing 自测夹具过期日改成远期。⑮鸿蒙 runtime prebuilt 同步。⑯3 处 $VAR<全角> 加花括号。⑰loop-guard 两个 TLV 解码循环写 ALLOW 具名豁免。⑱invoke-wire-parity 优先用仓库 .tools/jdk17。★教训：串行全链的前置失败会遮蔽后面所有门禁——\"一次全链只报 5 条\"≠\"只有 5 条问题\"。"
+    },
+    {
+      "id": "T-glass-two-edge-morph",
+      "title": "液态玻璃 tab 切换结构性重写：两边缘弹簧（前缘快/后缘慢）——宽度撑开 1.5×、中心零过冲，对齐 iOS 实测签名",
+      "type": "bugfix",
+      "status": "done",
+      "owner": "session:zcode-glassbounce",
+      "scope": [
+        "hosts/android/**"
+      ],
+      "decision": 1038,
+      "verification": "真机 GLASSSTRETCH 逐帧（salvage/liquid-glass/ios-ref-1017/d1038d-1step.txt：宽度峰 1.52×@89ms、中心 95% 268ms、宽度收拢 337ms、中心反向过冲 0.0px）vs iOS 实测（1.48–1.62× / 305ms / 441ms / ≤1.5px）+ bash hosts/android/check-host-compile.sh && pnpm test:coupled",
+      "branch": null,
+      "related": [
+        "T-glass-flow-bounce",
+        "T-glass-flow-spring",
+        "T-glass-flow-shape"
+      ],
+      "note": "用户「效果还是不对，再仔细分析 iOS 的这个……一定要拿到 iOS 这个实现思路」。四路并行拆解（iOS 59fps 逐帧几何 / 我们 24fps 逐帧 / 代码路径 / 公开逆向）后确认：**模型错误而非参数错误**。iOS 的真签名 = 胶囊两边缘各一条弹簧（前缘先走 ~190ms 到站、后缘晚 2–4 帧起步且慢 ⇒ 宽度被撑开 1.48–1.62×），中心几乎不过冲（≤1.5px）；我们旧模型是单一刚体质心弹簧 + 速度×小系数附加拉伸 —— 刚体只有一个自由度，数学上永远做不出「中心不冲而宽度冲」的签名（实测宽度仅 1.035×）。修：leadP/trailP 两条独立弹簧 + 后缘延迟 + 宽度上限 1.55× + 子步积分（dt 归一化，帧锁会让 ~35fps 真机慢 3 倍）+ lift 改独立时间包络 + 内容按实际撑开比例各向异性放大。"
     }
   ]
 }
