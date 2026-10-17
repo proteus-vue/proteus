@@ -204,7 +204,8 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     // ★★★决策 #1016（与 glass.wgsl 同源）：模式 2/3 残差 0.02——主模糊由宿主预模糊（#1015 σ≈2.0px）承担，
     //   消除"预模糊 + shader 模糊"双重叠加（用户「模糊磨砂感太重」）。
     if p.nest > 1.5 { bsig = (p.blur * 0.02f32).clamp(0.0, 8.0); }
-    if p.nest > 2.5 { bsig = (p.blur * 0.02f32).clamp(0.0, 8.0); }
+    // ★#1048：内层透镜几乎不模糊（复合层内容本就清晰；0.02×blur117=2.34px 会把文字糊成钟形）
+    if p.nest > 2.5 { bsig = (p.blur * 0.004f32).clamp(0.0, 1.0); }
     // ★★★决策 #1012/#1013：模糊按 e 键控 + 折叠带反走样下限 0.80（MTF 核算：σ≈2.2px 对 4.4px 拍频图案
     //   MTF=0.008 ⇒ 网纹不可见；与 glass.wgsl 同源）。
     let blur_k = 0.80 + (1.0 - 0.80) * smoothstep(0.05, 0.35, e);
@@ -286,8 +287,11 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
         // ★★★决策 #1016（与 glass.wgsl 同源）：单一恒定 (C=0.683, a=0.226)——双态实测零残差。
         let ov_l = 0.683f32;
         // ★★★决策 #1020/#1021（与 glass.wgsl 同源）：胶囊叠加 →#1021 **0.34**（差异再加一档）。
-        let ov_a = p.overlay.clamp(0.0, 1.0) * 0.34f32 * (1.0f32 - p.press.clamp(0.0, 1.0));   // ★#964 按下淡出
-        for c in 0..3 { col[c] = col[c] + (ov_l - col[c]) * ov_a; }
+        // ★#1048：按下只退场 15%（保留灰叠加 ⇒ 面亮度≈231，对齐 iOS 按压 222–229；旧式归零会变纯白 255）
+        let ov_a = p.overlay.clamp(0.0, 1.0) * 0.34f32 * (1.0f32 - p.press.clamp(0.0, 1.0) * 0.15f32);
+        // ★#1049：灰叠加改**乘性变暗**（白端同值 227、暗端保对比 ⇒ 内容不被洗淡）；与 glass.wgsl 同源
+        let ov_mul = 1.0 - ov_a * (1.0 - ov_l);
+        for c in 0..3 { col[c] = col[c] * ov_mul; }
     }
     // ★★★决策 #944：tint 移到面纱之后（与 glass.wgsl 同源——作者 tint 作用于最终玻璃面，暗 tint 才不被面纱洗白）。
     for c in 0..3 { col[c] = col[c] + (col[c] * p.tint[c] * 2.0 - col[c]) * p.tint[3]; }
