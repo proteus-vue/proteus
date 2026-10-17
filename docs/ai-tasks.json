@@ -1245,6 +1245,25 @@
         "T-glass-two-edge-morph"
       ],
       "note": "用户「胶囊还没接触到选项图标，图标文字就有一个类似裁剪的画布铺了上去」。根因：内容跟随的三段裁剪用 capCmd.w*0.5*sCapX 算窗口，而按压时 sCapX=1.20、胶囊盒水平却不放大（PRESS_SCALE_CAPSULE_X=0，宽恒 252）⇒ 放大画布每侧多 ~29px，把相邻图标二次绘制上去，边缘笔直读作\"裁剪画布\"。修：bandHalf = flowContent ? w*0.5*sCapX : w*0.5（按压=胶囊实际宽度；flow 仍按撑开比例）。★教训：内容裁剪窗口必须与实际绘制的盒同源，不要各自算。"
+    },
+    {
+      "id": "T-glass-shape-true-hit",
+      "title": "胶囊判定/裁剪按真实形状：stadium SDF 覆盖率 + 圆角路径裁剪 + hover 阈值 0.50",
+      "type": "bugfix",
+      "status": "done",
+      "owner": "session:zcode-glassbounce",
+      "scope": [
+        "hosts/android/**"
+      ],
+      "decision": 1041,
+      "verification": "真机拖动逐帧（salvage/liquid-glass/dock-1041/：hover 切换点 x=600→620，即胶囊压住目标图标后才亮；截图可见 App 图标被圆角裁切而非矩形边）+ bash hosts/android/check-host-compile.sh && pnpm test:coupled",
+      "branch": null,
+      "related": [
+        "T-glass-press-content-clip",
+        "T-glass-press-volume",
+        "T-glass-dock-area"
+      ],
+      "note": "用户「水滴端部开始接触时图标文字没接触的地方也变色，判定区域是矩形不是胶囊真实接触的位置」。根因三处都拿矩形当胶囊：①dockPick 用包围盒求交（盒子四角在 stadium 之外，端部刚擦到面积已不小）；②内容缩放裁剪用通高 clipRect（圆角外侧也放大）；③形状还有端部锥化未被表达。修：新增 insideCapsule()（与 shader sd_glass 同式 SDF 含锥化）→ dockPick 改 7×7 真实覆盖率；hover 阈值 0.50（=胶囊边缘到达目标图标中心；0.28 时中心还在左侧 56px）；内容缩放整体下沉 GlassInteraction.drawScaledContent（ContentDrawer 回调 + Path.addRoundRect，盒取 lastCapsuleBox 同一来源）。★教训：命中/裁剪/形变必须共用同一形状函数。"
     }
   ]
 }

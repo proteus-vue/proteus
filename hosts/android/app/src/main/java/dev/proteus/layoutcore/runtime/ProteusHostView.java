@@ -610,6 +610,8 @@ public class ProteusHostView extends ViewGroup {
     private final android.graphics.Path sideBorderPath = new android.graphics.Path();
     /** ★★★线型：角部实心块（dashed/dotted 的封角——Chrome 角部真值）。 */
     private final android.graphics.Path cornerBlock = new android.graphics.Path();
+    /** ★#1041：内容放大区的**胶囊圆角裁剪路径**（复用，避免每帧分配）。 */
+    private final android.graphics.Path capPath = new android.graphics.Path();
     /** ★批次 10：盒阴影填充专用（分层近似——与 border/glow 分开避免相互污染）。 */
     private final android.graphics.Paint shadowPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
     /** ★★软边遮罩合成用（mask v1）：`渐变 shader + DST_IN`（见 drawCmds 的遮罩合成段） */
@@ -3663,16 +3665,10 @@ public class ProteusHostView extends ViewGroup {
         // ★#1035：内容放大/跟随按 **effPress 门控**（flow 用 lift）——此前只认物理 press ⇒ flow 全程不放大不跟随 = 割裂。
         final float capP = Math.max(glassIx.press, glassIx.lift()); final Cmd capCmd = (pressInner != null && glassIx.press > 0.001f) ? pressInner : flowCapCmd;
         if (capCmd != null && capP > 0.001f && !gContent.isEmpty()) {
-            // ★#971/#1023：**只缩放胶囊 x 范围的内容**（绕胶囊中心，中心跟随 lens——"放大镜"下内容同步移动）。
-            final float ccx = capCmd.x + capCmd.w * 0.5f + glassIx.dragAppliedDx + (gScrolled ? scrollX : 0);
-            final float ccy = capCmd.y + capCmd.h * 0.5f + (gScrolled ? scrollY : 0);            // ★★★#1040：内容放大窗口 = **胶囊实际绘制宽度**（不是 w*sCapX）——按压时胶囊水平不放大（X=0，宽恒 252），
-            //   旧式 252×1.2=302px ⇒ 放大画布每侧多 ~29px 盖到相邻图标上（「有个类似裁剪的画布铺了上去」）；flow 时胶囊确实被撑开，仍用 w*sCapX。
-            final boolean flowContent = flowCapCmd != null && pressInner == null;
-            final float[] cs = glassIx.contentScale(capP, flowContent); final float sCapX = cs[0], sCapY = cs[1];
-            final float bandHalf = flowContent ? capCmd.w * 0.5f * sCapX : capCmd.w * 0.5f;
-            final float capL = ccx - bandHalf, capR = ccx + bandHalf, top = -1e6f, bot = 1e6f;            int sv1 = canvas.save(); canvas.clipRect(top, top, capL, bot); drawCmds(canvas, null, gContent); canvas.restoreToCount(sv1);
-            int sv2 = canvas.save(); canvas.clipRect(capL, top, capR, bot); canvas.scale(sCapX, sCapY, ccx, ccy); drawCmds(canvas, null, gContent); canvas.restoreToCount(sv2);
-            int sv3 = canvas.save(); canvas.clipRect(capR, top, 1e6f, bot); drawCmds(canvas, null, gContent); canvas.restoreToCount(sv3);
+            // ★#971/#1023 · ★#1040/#1041：内容缩放窗口与裁剪**委托给 GlassInteraction**（几何单一来源）。
+            glassIx.drawScaledContent(canvas, capCmd, capP, flowCapCmd != null && pressInner == null,
+                    gScrolled ? scrollX : 0, gScrolled ? scrollY : 0, capPath,
+                    new GlassInteraction.ContentDrawer() { @Override public void draw(android.graphics.Canvas c) { drawCmds(c, null, gContent); } });
         } else if (!gContent.isEmpty()) {
             drawCmds(canvas, null, gContent);
         }
