@@ -134,17 +134,17 @@ const compatRows = ref([
   [
     "iOS 原生",
     "🟡",
-    "native-ios（UIKit） · 端原型映射——组件级接线未开始"
+    "native-ios（UIKit + CoreAnimation） · 渲染核心已落地——组件级接线未开始"
   ],
   [
     "Android 原生",
     "🟡",
-    "native-android（Jetpack） · 端原型映射——组件级接线未开始"
+    "native-android（自绘 Canvas） · 渲染核心已落地——组件级接线未开始"
   ],
   [
     "鸿蒙",
     "🟡",
-    "native-harmony（ArkUI） · 端原型映射——组件级接线未开始"
+    "native-harmony（ArkUI RenderNode） · 渲染核心已落地——组件级接线未开始"
   ],
   [
     "Flutter 混合",

@@ -21,12 +21,12 @@ const codes = ref({
 const apiRows = ref([
   [
     "name",
-    "图标名（内置字形表；未知 → '?'）。框架名，优先于官方 type",
+    "图标语义名（Keryx 名称；未知 → 显式占位图标，非 '?'）。框架名，优先于官方 type",
     "String"
   ],
   [
     "type",
-    "★官方 <icon> type（success/info/warn/waiting/cancel/download/clear…）——name 的官方别名",
+    "★官方 <icon> type（success/info/warn/…）——name 的官方别名",
     "String"
   ],
   [
@@ -72,17 +72,17 @@ const compatRows = ref([
   [
     "iOS 原生",
     "🟡",
-    "native-ios（UIKit） · 端原型映射——组件级接线未开始"
+    "native-ios（UIKit + CoreAnimation） · 渲染核心已落地——组件级接线未开始"
   ],
   [
     "Android 原生",
     "🟡",
-    "native-android（Jetpack） · 端原型映射——组件级接线未开始"
+    "native-android（自绘 Canvas） · 渲染核心已落地——组件级接线未开始"
   ],
   [
     "鸿蒙",
     "🟡",
-    "native-harmony（ArkUI） · 端原型映射——组件级接线未开始"
+    "native-harmony（ArkUI RenderNode） · 渲染核心已落地——组件级接线未开始"
   ],
   [
     "Flutter 混合",
