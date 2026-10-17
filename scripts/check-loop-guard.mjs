@@ -34,6 +34,12 @@ const ts = require('typescript')
 // ★白名单（具名豁免，须写具体理由）——按 `相对路径:行` 精确匹配。
 const ALLOW = {
   // 'packages/xxx/yyy.ts:123': '理由：……',
+  // ★2026-10-17（#903 引入的 TLV 解码，本门禁首轮扫到）：循环条件是**字节读取器游标**
+  //   `while (r.remaining > 0)`，体首两个访问器 `r.u8()`/`r.u32()` 各消费 1/4 字节、不足即抛错，
+  //   随后 `r.raw(len)` 再消费 len 字节 ⇒ **每轮必然推进（或抛错）**，不存在"状态零变化"的分支。
+  //   本门禁的 A/B/C 三种推进形态只认「简单标识符自增」，识别不了"方法消费式推进"——属结构性误报。
+  'packages/api/src/invoke-wire.ts:204': '字节读取器 TLV 解码：r.u8()/r.u32()/r.raw(len) 每轮必消费（不足即抛错），无空转分支',
+  'packages/api/src/invoke-wire.ts:304': '同上（回程 TLV 解码，与去程同形）',
 }
 
 function walk(dir, out = []) {

@@ -96,7 +96,7 @@ if [ "$MODE" = "superapp" ]; then
   cp "$HERE/bridge/dist/bundle-superapp.js" "$APP/bundle-superapp.js"
   APP_SC="$ROOT/${PROTEUS_APP_PROJECT:-superapp}/dist/app/ios/screen-content.json"
   if [ -f "$APP_SC" ]; then cp "$APP_SC" "$APP/app-screen-content.json"
-  else echo "    ⚠ 未见 $APP_SC——superapp 壳需要它（先跑 proteus build --target ios 的 bundle 步骤）"; fi
+  else echo "    ⚠ 未见 ${APP_SC}——superapp 壳需要它（先跑 proteus build --target ios 的 bundle 步骤）"; fi
 fi
 cat > "$APP/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

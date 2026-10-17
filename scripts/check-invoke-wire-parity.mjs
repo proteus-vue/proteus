@@ -54,6 +54,13 @@ const run = (cmd, args, opts = {}) => {
   return { code: r.status === null ? 127 : r.status, out: (r.stdout || '') + (r.stderr || '') }
 }
 
+/* ★2026-10-17：**优先用仓库自带 JDK**（`.tools/jdk17`）——本机 PATH 里通常没有 javac，
+ *   此前门禁因此红（「Unable to locate a Java Runtime」），而工具链其实就在仓库里（hosts 构建脚本也用它）。
+ *   只在仓库 JDK 存在时用绝对路径；不存在则仍走 PATH（真缺 JDK ⇒ 依旧按原判据红）。 */
+const JDK_BIN = path.join(ROOT, '.tools/jdk17/bin')
+const hasRepoJdk = fs.existsSync(path.join(JDK_BIN, 'javac'))
+const jdk = (name) => (hasRepoJdk ? path.join(JDK_BIN, name) : name)
+
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'iw-parity-'))
 const golden = path.join(tmp, 'golden.tsv')
 
@@ -67,7 +74,7 @@ const ROUNDS = [
     name: 'Java',
     target: 'Android 宿主 `InvokeWire.java`',
     required: true,
-    probe: () => run('javac', ['-version']),
+    probe: () => run(jdk('javac'), ['-version']),
     versionOf: (out) => (out.match(/javac (\S+)/) || [])[1] || '?',
     missing: (out) => `缺 \`javac\` —— 本门禁需要本机 JDK（纯 JVM 编译 Java 侧编解码器，**不需要** Android SDK/真机）。${out.trim()}`,
     build: () => {
@@ -77,13 +84,13 @@ const ROUNDS = [
       fs.mkdirSync(outDir, { recursive: true })
       fs.copyFileSync(JAVA_SRC, path.join(srcDir, PKG_DIR, 'InvokeWire.java'))
       fs.copyFileSync(JAVA_RUNNER, path.join(srcDir, PKG_DIR, 'InvokeWireParity.java'))
-      const r = run('javac', ['-encoding', 'UTF-8', '-d', outDir,
+      const r = run(jdk('javac'), ['-encoding', 'UTF-8', '-d', outDir,
         path.join(srcDir, PKG_DIR, 'InvokeWire.java'),
         path.join(srcDir, PKG_DIR, 'InvokeWireParity.java')])
       if (r.code !== 0) return { error: `Java 侧编解码器**编译失败**（源码级缺陷，与线格式无关）：\n${r.out.trim()}` }
       return {
         note: 'Java 侧 `InvokeWire` 编译通过（零 android 依赖 ⇒ 无需真机/SDK）',
-        exec: () => run('java', ['-Dfile.encoding=UTF-8', '-cp', outDir, MAIN_CLASS, golden]),
+        exec: () => run(jdk('java'), ['-Dfile.encoding=UTF-8', '-cp', outDir, MAIN_CLASS, golden]),
       }
     },
   },

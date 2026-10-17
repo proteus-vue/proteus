@@ -31,7 +31,7 @@ DEVECO="$(find_deveco)" || { echo "ℹ 未找到 DevEco Studio（无 OHOS 工具
 SDK="$DEVECO/sdk/default/openharmony/native"
 CLANG="$SDK/llvm/bin/clang"
 SYSROOT="$SDK/sysroot"
-[ -x "$CLANG" ] || { echo "ℹ 缺 OHOS clang（$CLANG）——跳过"; exit 0; }
+[ -x "$CLANG" ] || { echo "ℹ 缺 OHOS clang（${CLANG}）——跳过"; exit 0; }
 ARCH_INC="$(ls "$SYSROOT/usr/include" 2>/dev/null | grep -iE 'aarch64|aarch' | head -1)"
 [ -n "$ARCH_INC" ] || ARCH_INC="aarch64-linux-ohos"
 

@@ -18,7 +18,10 @@ const mkId = (sha1, account, team, notBefore) => ({
   notBefore: d(notBefore),
   notAfter: d('2027-10-01'),
 })
-const mkProf = (bundleId, team, certSha1s, expiry = '2026-10-15') => ({
+// ★2026-10-17 修（时间炸弹夹具）：默认过期日曾写死 '2026-10-15' ⇒ 到 10-17 之后
+//   `validProfs` 的有效期过滤把它们全剔除，4 条用例假红（本机无 team 描述文件 / 交集为空）。
+//   ⇒ 改**远期**默认值（被测逻辑是「有效期过滤 + 交集选择」，不该由运行当天日期决定结果）。
+const mkProf = (bundleId, team, certSha1s, expiry = '2099-12-31') => ({
   file: `/tmp/${bundleId}.mobileprovision`,
   name: `profile ${bundleId}`,
   appId: `${team}.${bundleId}`,

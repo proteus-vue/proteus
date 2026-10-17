@@ -2,7 +2,7 @@
  "_comment": "微信小程序官方组件**属性级**清单快照——由 scripts/gen-mp-component-attrs.mjs 从官方文档抓取，勿手改。",
  "source": "https://developers.weixin.qq.com/miniprogram/dev/component/<tag>.html",
  "componentCount": 77,
- "attrTotal": 772,
+ "attrTotal": 773,
  "components": {
   "ad": [
    {
@@ -3856,6 +3856,12 @@
     "type": "string",
     "required": false,
     "desc": "指定 swiper 滑动方向"
+   },
+   {
+    "name": "clip",
+    "type": "boolean",
+    "required": false,
+    "desc": "是否对溢出进行裁剪"
    },
    {
     "name": "bind:change",

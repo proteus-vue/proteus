@@ -88,6 +88,9 @@
       "@proteus-vue/docs": ["packages/docs/src/index.ts"],
       "@proteus-vue/dev-host": ["packages/dev-host/src/index.ts"],
       "@proteus-vue/test-ir": ["packages/test-ir/src/index.ts"],
+      // ★2026-10-17：G-62 ShaderBackend 落地层（tests/shader-backend.test.ts 走包名导入；
+      //   vitest.config 早已有 alias，但 tsconfig paths 缺这一条 ⇒ `vue-tsc --noEmit` 报 TS2307）。
+      "@proteus-vue/shader": ["packages/shader/src/index.ts"],
       // ★2026-09-12 CI 类型门禁修复：补 4 个缺失包（tests 走包名导入 → 缺 paths 报 TS2307 Cannot find module）
       "@proteus-vue/component-ir": ["packages/component-ir/src/index.ts"],
       "@proteus-vue/render-backend": ["packages/render-backend/src/index.ts"],
