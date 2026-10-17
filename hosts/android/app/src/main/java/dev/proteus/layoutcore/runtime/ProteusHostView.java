@@ -2552,6 +2552,11 @@ public class ProteusHostView extends ViewGroup {
             // ★★★决策 #1023/#1028（用户「哪个选项落在胶囊里面的区域大就近停靠，不依赖手指的落点」）：
             //   派发点 = **胶囊覆盖面积最大**的 tab 中心（无重叠 ⇒ 就近；找不到 ⇒ 释放点兜底）——超 slop 重定向 tap。
             if (action == android.view.MotionEvent.ACTION_UP && glassIx.dragMoved && glassIx.gestureScrolled && glassIx.nodeId >= 0) {
+                // ★★★决策 #1042（用户「恢复为静态胶囊的自然过渡」）：**松手也走两边缘弹簧落位**，不硬瞬移。
+                //   此前 release 直接 resetDrag() 清零 bpos ⇒ 胶囊从手指位置**一帧跳回槽位**（最多一整槽宽），
+                //   拉伸/压扁/锥化同帧消失——"生硬"的最强来源（iOS 1442 实测落地 = 等比收拢+滑回槽+390ms 回霜）。
+                //   ⇒ 先 captureTap 记**当前视觉位**，再由 report("tap") 改 hlLeft，下帧 applyFlow 拿 Δ 走同一套弹簧。
+                glassIx.captureTap(cmds, cmdNodeIds, glassByNode, nodeParent);
                 final float[] dp = glassIx.dockPick(cmds, cmdNodeIds, nodeParent, glassByNode);
                 dispatchHit(dp != null ? dp[0] : ev.getX(), dp != null ? dp[1] : ev.getY());
                 if (lastHitTarget >= 0) {
