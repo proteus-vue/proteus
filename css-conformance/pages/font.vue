@@ -60,6 +60,14 @@ const lhText = '第一行文本\n第二行文本（行高 28px）'
       <text id="case-font-style-oblique" class="fst-oblique">倾斜 oblique Italic 123</text>
     </view>
 
+    <!-- ★★★font 简写项（2026-10-18 · 批 B F3）：重置型简写（父的 italic/3 倍行高**不得**漏进子节点） -->
+    <text class="cc-sec">H · font 简写（重置型 · 基准 = Web）</text>
+    <view class="cc-card fsh-wrap">
+      <text id="case-font-short-all" class="fsh-all">italic bold 20px/1.5</text>
+      <text id="case-font-short-reset" class="fsh-reset">16px monospace</text>
+      <text id="case-font-short-order" class="fsh-order">normal normal 700 14px</text>
+    </view>
+
     <!-- F：text-decoration + color -->
     <text class="cc-sec">F · text-decoration / color</text>
     <view class="cc-card">
@@ -87,4 +95,11 @@ const lhText = '第一行文本\n第二行文本（行高 28px）'
 .fst-normal { display: block; font-size: 16px; font-style: normal; color: #1a1c22; }
 .fst-italic { display: block; font-size: 16px; font-style: italic; color: #1a1c22; }
 .fst-oblique { display: block; font-size: 16px; font-style: oblique; color: #1a1c22; }
+/* ★★★font 简写项（2026-10-18 · 批 B F3 · 基准 = Web）：**重置型简写**——
+   父 .fsh-wrap 的 font-style:italic / line-height:3 **不应**漏进三个子节点（Web 实测如此）。
+   `.fsh-order` 的多个 normal 占位也不得吞掉 700 字重。 */
+.fsh-wrap { font-style: italic; line-height: 3; }
+.fsh-all { display: block; font: italic bold 20px/1.5 "Helvetica Neue", sans-serif; color: #1a1c22; }
+.fsh-reset { display: block; font: 16px monospace; color: #4b5058; }
+.fsh-order { display: block; font: normal normal 700 14px serif; color: #1a1c22; }
 </style>

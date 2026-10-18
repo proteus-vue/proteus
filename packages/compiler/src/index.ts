@@ -148,6 +148,10 @@ export {
   APP_SPECIAL_FIELDS,
   APP_INHERITABLE_FIELDS,
   APP_ENUM_VALUES,
+  // ★★★font 简写（2026-10-18 · 批 B F3）：词法/语义唯一实现（App 折叠面 + CSE 共用）
+  splitFontShorthand,
+  foldFont,
+  FONT_FIELDS,
 } from './vapor'
 export type {
   ReactiveSource,

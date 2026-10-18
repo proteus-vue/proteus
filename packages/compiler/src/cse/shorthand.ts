@@ -8,9 +8,12 @@
 // 【支持面（v1）】margin/padding/inset（1–4 值）· border-width/color/style（1–4）· border-radius（1–4，
 //   `/` 椭圆形式不支持）· border / border-<side>（width style color 任意序）· gap（1–2）·
 //   overflow（1–2）· flex（`none`/`auto`/`<grow> <shrink>? <basis>?`）· text-decoration（取 line 维度）·
-//   background（只取颜色 token）。其余（font/transition/animation…）⇒ null（调用方计数，不静默）。
+//   background（只取颜色 token）· font（style/weight/size/line-height/family 五长手；★重置型简写：
+//   未给的分量发 initial——normal/400/normal）。其余（transition/animation…）⇒ null（调用方计数，不静默）。
 
 import type { CseDeclaration } from './types'
+// ★★★font 简写词法（2026-10-18 · 批 B F3）：与 App 折叠面**同一语法实现**（防两份漂移）
+import { splitFontShorthand } from '../font-shorthand'
 
 /** 顶层空格切分（括号/引号感知——`rgb(0, 0, 0)` 内空格不切） */
 export function splitTopLevel(value: string): string[] {
@@ -58,6 +61,8 @@ const CORNER_SUFFIX: Array<'top-left' | 'top-right' | 'bottom-right' | 'bottom-l
 
 /** 已知不支持简写（调用方据此记 skipped/诊断——列在这里防"悄悄当长手收下"） */
 export const UNSUPPORTED_SHORTHANDS = new Set([
+  // ★font 已实现（见 expandShorthandDecl）——保留在此仅为**解析失败**（系统字体关键字 /
+  //   small-caps / stretch）时计 skipped：成功路径在上方直接 return，走不到这条。
   'font', 'transition', 'animation', 'border-image', 'background-image', 'list-style', 'outline',
   'box-shadow', 'filter', 'backdrop-filter',
 ])
@@ -68,6 +73,26 @@ export const UNSUPPORTED_SHORTHANDS = new Set([
  */
 export function expandShorthandDecl(prop: string, value: string, important: boolean): CseDeclaration[] | null {
   const decl = (p: string, v: string): CseDeclaration => ({ prop: p, value: v, important, fromShorthand: prop })
+  // font：重置型简写 ⇒ 五条长手（style/weight/size/line-height/family）
+  //   ★必须同时发**未给出的分量**（normal/400/normal）：简写语义是"重置"，不是"只管给了的"——
+  //   漏发 line-height 会让父级继承值漏进来（与 Web 不符）。
+  //   ★system 关键字 / small-caps / stretch ⇒ 共享解析器返回 null ⇒ 落 UNSUPPORTED 计数（不静默近似）。
+  if (prop === 'font') {
+    // inherit / unset（可继承属性同义）⇒ 五条长手都带该关键字，交给层叠/计算阶段取值。
+    const kw = value.trim().toLowerCase()
+    if (kw === 'inherit' || kw === 'unset') {
+      return ['font-style', 'font-weight', 'font-size', 'line-height', 'font-family'].map((x) => decl(x, kw))
+    }
+    const p = splitFontShorthand(value)
+    if (!p) return null
+    return [
+      decl('font-style', p.style ?? 'normal'),
+      decl('font-weight', p.weight ?? 'normal'),
+      decl('font-size', p.size),
+      decl('line-height', p.lineHeight ?? 'normal'),
+      decl('font-family', p.family),
+    ]
+  }
   // margin / padding / inset：1–4 值
   const m = /^(margin|padding|inset)$/.exec(prop)
   if (m) {

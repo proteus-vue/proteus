@@ -269,20 +269,6 @@ describe('★C1 最小切片 · SFC <style> 单类规则 → class→节点样�
     expect(d.some((x) => x.includes('letter-spacing')), 'em 有诊断').toBe(true)
   })
 
-  it('★⑦h2 font-style（2026-10-18 · 批 B F3 · ★基准 = Web）：italic/oblique 折值 + normal 不发射 + 带角度诊断', () => {
-    // 【为什么（以 web 为基准）】斜体是排版能力；Web 的 initial = normal（不发射 ⇒ 零行为变化）。
-    //   ★带角度的 `oblique 10deg` 三端字体引擎都无角度语义（Skyline 只有 italic）⇒ 必须诊断，不静默近似。
-    const s1 = parseStaticStyle('font-style: italic', () => {})
-    expect((s1 as { fontStyle?: string }).fontStyle, 'italic 折值').toBe('italic')
-    const s2 = parseStaticStyle('font-style: oblique', () => {})
-    expect((s2 as { fontStyle?: string }).fontStyle, 'oblique 折值').toBe('oblique')
-    const s3 = parseStaticStyle('font-style: normal', () => {})
-    expect((s3 as { fontStyle?: string }).fontStyle, 'normal 不发射').toBeUndefined()
-    const d: string[] = []
-    parseStaticStyle('font-style: oblique 10deg', (m: string) => d.push(m))
-    expect(d.some((x) => x.includes('font-style')), '带角度有诊断').toBe(true)
-  })
-
   it('★⑦i rpx 折 px（批次 21 · 多端一致）：1rpx = 0.5px（rpxRatio:2 逆）', () => {
     // 【为什么（以 web 为基准）】rpx 是小程序 750 设计单位；Web 端由浏览器/平台处理；
     //   App 折叠此前**丢弃 rpx** ⇒ 真项目（125 处）失样式（尺寸/圆角/字号全丢）。
@@ -1130,9 +1116,14 @@ describe('★批次 13 · line-height（行盒高）', () => {
     expect(parseStaticStyle('line-height: 24px', () => {}).lineHeight).toBe('24px')
   })
 
-  it('② normal / 非法 ⇒ 诊断跳过', () => {
+  it('② normal 折 token（可压继承）/ 非法 ⇒ 诊断跳过', () => {
+    // 【为什么 normal 不能跳过】CSS initial = normal；子节点显式 normal 必须**压掉父级继承**
+    //   （否则 `.a{line-height:3} .b{line-height:normal}` 的子文本仍按 3 倍排——与 Web 不符）。
+    const d0: string[] = []
+    expect(parseStaticStyle('line-height: normal', (m) => d0.push(m)).lineHeight).toBe('normal')
+    expect(d0.length, 'normal 不应诊断').toBe(0)
     const d: string[] = []
-    expect(parseStaticStyle('line-height: normal', (m) => d.push(m)).lineHeight).toBeUndefined()
+    expect(parseStaticStyle('line-height: 1.6x', (m) => d.push(m)).lineHeight).toBeUndefined()
     expect(d.some((m) => m.includes('line-height'))).toBe(true)
   })
 

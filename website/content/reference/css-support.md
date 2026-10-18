@@ -7,12 +7,12 @@ generated: true
 
 # CSS 多端支持参考
 
-> 81 项 CSS 能力在 **Web / Skyline / App 三端**的支持现状与可扩展档位。**每项能力均带独立锚点**（右侧页内导航可逐项跳转、可被外链深链引用），支持度以 **Web 真值为基准**，App 端自研引擎按 **L0–L5 成本分级**。
+> 82 项 CSS 能力在 **Web / Skyline / App 三端**的支持现状与可扩展档位。**每项能力均带独立锚点**（右侧页内导航可逐项跳转、可被外链深链引用），支持度以 **Web 真值为基准**，App 端自研引擎按 **L0–L5 成本分级**。
 > ★自动生成（`scripts/gen-css-support.mjs`），SSOT = `docs/generated/css-capability-alignment.json`；漂移门禁 `--check`。
 
 ## 概览
 
-共 **81** 项：三端全支持（universal）**32** 项 · 条件支持（conditional）**45** 项 · 三端不可用（unsupported）**4** 项。App 端当前**已支持 73 项**、**暂缺 8 项**（候选特性按 L 档扩展）。
+共 **82** 项：三端全支持（universal）**33** 项 · 条件支持（conditional）**45** 项 · 三端不可用（unsupported）**4** 项。App 端当前**已支持 74 项**、**暂缺 8 项**（候选特性按 L 档扩展）。
 
 ### 端模型
 
@@ -55,7 +55,7 @@ generated: true
 | [选择器](#cat-selector) | [类选择器 .a / .a.b](#selector-class) · [元素/类型选择器 h3 / p.foo](#selector-type) · [后代 / 子组合 .a .b / .a > .b](#selector-combinator) · [静态结构伪类 :first-child / :last-child / :nth-child(An+B\|odd\|even) / :not(简单选择器)](#selector-pseudo-structural) · [伪元素 ::before / ::after（+ content）](#selector-pseudo-element) · [状态伪类 :active（按下态）](#selector-pseudo-state-active) · [状态伪类 :hover / :focus / :checked](#selector-pseudo-state) · [属性选择器 data-x](#selector-attr) · [Vue 作用域穿透 :deep() / ::v-deep() / >>>](#selector-deep) · [兄弟组合 + / ~](#selector-sibling) · [通配 *](#selector-wildcard) |
 | [层叠](#cat-cascade) | [特异性 / 继承 / !important](#specificity-inheritance) · [CSS 自定义属性（design tokens）var(--x)](#css-vars) |
 | [@ 规则](#cat-at-rule) | [@media（响应式 / 环境条件）](#at-media) · [@supports（特性检测）](#at-supports) · [@keyframes（关键帧动画）](#keyframes) · [animation（简写：name duration timing delay …）](#animation) |
-| [文本](#cat-text) | [word-break（行内断词策略）](#word-break) · [font-weight](#font-weight) · [text-decoration](#text-decoration) · [text-align](#text-align) · [line-height](#line-height) · [text-overflow](#text-overflow) · [-webkit-line-clamp: <integer>](#-webkit-line-clamp) · [letter-spacing](#letter-spacing) · [font-family](#font-family) · [white-space](#text-attrs) |
+| [文本](#cat-text) | [word-break（行内断词策略）](#word-break) · [font-weight](#font-weight) · [font-style](#font-style) · [text-decoration](#text-decoration) · [text-align](#text-align) · [line-height](#line-height) · [text-overflow](#text-overflow) · [-webkit-line-clamp: <integer>](#-webkit-line-clamp) · [letter-spacing](#letter-spacing) · [font-family](#font-family) · [white-space](#text-attrs) |
 | [层](#cat-layer) | [z-index](#z-index) |
 
 ## 逐能力参考
@@ -346,7 +346,7 @@ generated: true
 
 **Web** — · **Skyline** — · **App** ✅ 支持 · **App 可扩展** L1 · **策略** 编译期折叠 · **对齐** conditional
 
-> ★批次 2/7（2026-10-04）：a) `margin: 8px 0` / `padding: 8px 12px` 按 CSS 标准展开为 {top,right,bottom,left}（auto 的边忽略）；b) `background: #fff`/`rgba(...)` 归一折进 backgroundColor；c) `flex: <g> [<s> [<b>]]` / `none` / `auto` 展开到 flexGrow/flexShrink/flexBasis（CSS 语义：省略 shrink=1、省略 basis=0）。取证：真项目这些简写高频。渐变/图片简写诊断跳过
+> ★批次 2/7（2026-10-04）：a) `margin: 8px 0` / `padding: 8px 12px` 按 CSS 标准展开为 {top,right,bottom,left}（auto 的边忽略）；b) `background: #fff`/`rgba(...)` 归一折进 backgroundColor；c) `flex: <g> [<s> [<b>]]` / `none` / `auto` 展开到 flexGrow/flexShrink/flexBasis（CSS 语义：省略 shrink=1、省略 basis=0）。取证：真项目这些简写高频。渐变/图片简写诊断跳过 ★★★font 简写（2026-10-18 · 批 B F3 · 基准 = Web）：`font: [style] [weight]? size[/line-height]? family` 展开为 fontStyle/fontWeight/fontSize/lineHeight/fontFamily 五长手——**重置型简写**（未给的分量发 initial：normal/400/normal；真 Chromium 实测父 line-height:3 不漏进简写子节点）。语法解析**唯一实现**在 `packages/compiler/src/font-shorthand.ts`，App 折叠面与 CSE 共用；system 字体关键字 / small-caps / stretch 无宿主通道 ⇒ 编译期诊断（不静默近似）。
 
 ## 单位 · 3 项 {#cat-unit}
 
@@ -498,7 +498,7 @@ generated: true
 
 > ★批次 42（对齐 Web）：animation 简写 → 命中同文件 @keyframes → 逐通道 keyframe 动画（内核 anim_start）；★#791/本批：**animation-delay**（第 2 个时间 token，内核 `delayMs`）与 **animation-iteration-count**（数字 / `infinite`→内核 `repeat:-1`）已支持；`direction`/`fill`/多动画逗号列表暂忽略（诊断）。可动画通道限 opacity / px 位移 / 等比缩放 / 旋转
 
-## 文本 · 10 项 {#cat-text}
+## 文本 · 11 项 {#cat-text}
 
 ### word-break（行内断词策略） {#word-break}
 
@@ -511,6 +511,12 @@ generated: true
 **Web** ◻ 未测 · **Skyline** ✅ 支持 · **App** ✅ 支持 · **App 可扩展** L1 · **策略** 编译期折叠 · **对齐** conditional
 
 > ★批次 3（2026-10-04）：`normal`→400 / `bold`→700 / 100–900 数值归一；作为**文本可继承**字段沿树继承。三端宿主：iOS 已读 `fontWeight`（≥600 bold 判据）、Android 新接线（Cmd.fontWeight + 绘制/度量同源 typeface）、鸿蒙新接线（OH_Drawing_SetTextStyleFontWeight）
+
+### font-style {#font-style}
+
+**Web** ✅ 支持 · **Skyline** ✅ 支持 · **App** ✅ 支持 · **App 可扩展** L1 · **策略** 编译期折叠 · **对齐** universal
+
+> ★★★font-style 项（2026-10-18 · 批 B F3 · 基准 = Web）：`normal` / `italic` / `oblique`（四端可表达子集；带角度的 `oblique <angle>` 三端字体引擎均无角度语义 ⇒ 编译期诊断跳过）。CSS **可继承**属性（沿树传播）。三端宿主：iOS `UIFontDescriptor.SymbolicTraits.traitItalic` · Android `Typeface.ITALIC`（`Typeface.create(fam, BOLD|ITALIC)`）· 鸿蒙 `OH_Drawing_SetTextStyleFontStyle(FONT_STYLE_ITALIC/OBLIQUE)`。★斜体是**另一套字形**（宽度不同）⇒ 度量与绘制必须同源（共用角色串 `italic:<族>`，平台层唯一解析）。
 
 ### text-decoration {#text-decoration}
 

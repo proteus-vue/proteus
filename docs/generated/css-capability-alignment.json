@@ -120,7 +120,7 @@
           "skyline": "—",
           "app": "supported"
         },
-        "why": "★批次 2/7（2026-10-04）：a) `margin: 8px 0` / `padding: 8px 12px` 按 CSS 标准展开为 {top,right,bottom,left}（auto 的边忽略）；b) `background: #fff`/`rgba(...)` 归一折进 backgroundColor；c) `flex: <g> [<s> [<b>]]` / `none` / `auto` 展开到 flexGrow/flexShrink/flexBasis（CSS 语义：省略 shrink=1、省略 basis=0）。取证：真项目这些简写高频。渐变/图片简写诊断跳过"
+        "why": "★批次 2/7（2026-10-04）：a) `margin: 8px 0` / `padding: 8px 12px` 按 CSS 标准展开为 {top,right,bottom,left}（auto 的边忽略）；b) `background: #fff`/`rgba(...)` 归一折进 backgroundColor；c) `flex: <g> [<s> [<b>]]` / `none` / `auto` 展开到 flexGrow/flexShrink/flexBasis（CSS 语义：省略 shrink=1、省略 basis=0）。取证：真项目这些简写高频。渐变/图片简写诊断跳过 ★★★font 简写（2026-10-18 · 批 B F3 · 基准 = Web）：`font: [style] [weight]? size[/line-height]? family` 展开为 fontStyle/fontWeight/fontSize/lineHeight/fontFamily 五长手——**重置型简写**（未给的分量发 initial：normal/400/normal；真 Chromium 实测父 line-height:3 不漏进简写子节点）。语法解析**唯一实现**在 `packages/compiler/src/font-shorthand.ts`，App 折叠面与 CSE 共用；system 字体关键字 / small-caps / stretch 无宿主通道 ⇒ 编译期诊断（不静默近似）。"
       },
       {
         "css": "width/height 百分比",
@@ -1111,7 +1111,7 @@
       "app": "supported",
       "tier": "L1",
       "strategy": "编译期折叠",
-      "note": "★批次 2/7（2026-10-04）：a) `margin: 8px 0` / `padding: 8px 12px` 按 CSS 标准展开为 {top,right,bottom,left}（auto 的边忽略）；b) `background: #fff`/`rgba(...)` 归一折进 backgroundColor；c) `flex: <g> [<s> [<b>]]` / `none` / `auto` 展开到 flexGrow/flexShrink/flexBasis（CSS 语义：省略 shrink=1、省略 basis=0）。取证：真项目这些简写高频。渐变/图片简写诊断跳过",
+      "note": "★批次 2/7（2026-10-04）：a) `margin: 8px 0` / `padding: 8px 12px` 按 CSS 标准展开为 {top,right,bottom,left}（auto 的边忽略）；b) `background: #fff`/`rgba(...)` 归一折进 backgroundColor；c) `flex: <g> [<s> [<b>]]` / `none` / `auto` 展开到 flexGrow/flexShrink/flexBasis（CSS 语义：省略 shrink=1、省略 basis=0）。取证：真项目这些简写高频。渐变/图片简写诊断跳过 ★★★font 简写（2026-10-18 · 批 B F3 · 基准 = Web）：`font: [style] [weight]? size[/line-height]? family` 展开为 fontStyle/fontWeight/fontSize/lineHeight/fontFamily 五长手——**重置型简写**（未给的分量发 initial：normal/400/normal；真 Chromium 实测父 line-height:3 不漏进简写子节点）。语法解析**唯一实现**在 `packages/compiler/src/font-shorthand.ts`，App 折叠面与 CSE 共用；system 字体关键字 / small-caps / stretch 无宿主通道 ⇒ 编译期诊断（不静默近似）。",
       "supportTier": "conditional"
     },
     {

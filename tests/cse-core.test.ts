@@ -50,6 +50,39 @@ describe('★★★G-61 B1 · CSE 解析（长手展开）', () => {
     expect(props).toContain('flex-basis')
   })
 
+  it('★font 简写（2026-10-18 · 批 B F3 · 基准 = Web）：五长手展开 + 未给分量重置 + 不支持计数', () => {
+    // 【为什么（以 web 为基准）】font 是**重置型简写**：未给的 style/weight/line-height 发 initial
+    //   （normal/400/normal）——不是"只管给了的"。真 Chromium 实测见 font-shorthand.ts 头注。
+    const s = parseStyleSheet('.a { font: italic bold 20px/1.5 "Helvetica Neue", sans-serif }')
+    const got = Object.fromEntries(s.rules[0]!.decls.map((d) => [d.prop, d.value]))
+    expect(got['font-style']).toBe('italic')
+    expect(got['font-weight']).toBe('bold')
+    expect(got['font-size']).toBe('20px')
+    expect(got['line-height']).toBe('1.5')
+    expect(got['font-family']).toBe('"Helvetica Neue", sans-serif')
+    expect(s.rules[0]!.decls.every((d) => d.fromShorthand === 'font')).toBe(true)
+    // 未给分量 ⇒ initial（含 line-height：web 实测会重置，父级 3 倍不漏进来）
+    const s2 = parseStyleSheet('.b { font: 16px monospace }')
+    const g2 = Object.fromEntries(s2.rules[0]!.decls.map((d) => [d.prop, d.value]))
+    expect(g2['font-style']).toBe('normal')
+    expect(g2['font-weight']).toBe('normal')
+    expect(g2['line-height']).toBe('normal')
+    // 多个 normal 占位不吞掉字重（web 真值：weight 仍是 700）
+    const s3 = parseStyleSheet('.c { font: normal normal 700 14px serif }')
+    const g3 = Object.fromEntries(s3.rules[0]!.decls.map((d) => [d.prop, d.value]))
+    expect(g3['font-weight']).toBe('700')
+    expect(g3['font-size']).toBe('14px')
+    // 无宿主通道的形态 ⇒ 计 skipped（不静默丢弃）
+    // font: inherit / unset ⇒ 五条长手带关键字（与应用折叠面同口径）
+    const s5 = parseStyleSheet('.f { font: inherit }')
+    const g5 = Object.fromEntries(s5.rules[0]!.decls.map((d) => [d.prop, d.value]))
+    expect(g5['font-size']).toBe('inherit')
+    expect(g5['font-family']).toBe('inherit')
+    const s4 = parseStyleSheet('.d { font: menu } .e { font: small-caps 16px serif }')
+    expect(s4.rules.length).toBe(0)
+    expect(s4.skipped.filter((x) => x.detail.includes('font')).length).toBe(2)
+  })
+
   it('@layer 收集顺序（语句 + 块）', () => {
     const s = parseStyleSheet('@layer base, theme;\n@layer theme { .a { color: red } }\n@layer base { .a { color: blue } }')
     expect(s.layerOrder).toEqual(['base', 'theme'])

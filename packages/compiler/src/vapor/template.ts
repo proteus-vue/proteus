@@ -44,6 +44,8 @@ import { parseSlotScope } from './slot-scope'
 import { isAllConstantObject, mapStyleObjectKey, parseStyleObject } from './style-object'
 // ★单键拼接形态的判据（`'width:' + w`）——与 deps 的降级**同一函数**（一处实现）
 import { stylePropKeyFromExpr } from './deps'
+// ★★★font 简写词法（2026-10-18 · 批 B F3）：**唯一语法实现**（CSE 与本折叠面共用，防两份漂移）
+import { foldFont, foldFontLonghand, FONT_FIELDS, FONT_STYLE_VALUES } from './font-fold'
 
 // ★类型定义在**运行时契约包**（slot-runtime/layout-template.ts）——编译器只是产出方之一，
 //   消费方定义的形状才是唯一契约（与 SubscriptionTable 同一处置）。
@@ -137,8 +139,16 @@ export const APP_TEXT_ALIGN_VALUES = ['left', 'center', 'right'] as const
  *   鸿蒙 `OH_Drawing_SetTypographyTextEllipsis`。其余（如 `fade`）⇒ 诊断跳过（不猜）。
  */
 export const APP_TEXT_OVERFLOW_VALUES = ['clip', 'ellipsis'] as const
-/** ★★★font-style 项（批 B F3）：封闭集（normal/italic/oblique）；iOS traitItalic / Android ITALIC / 鸿蒙 FONT_STYLE_*。 */
-export const APP_FONT_STYLE_VALUES = ['normal', 'italic', 'oblique'] as const
+/** ★★★font-style 项（批 B F3）：封闭集（normal/italic/oblique）；iOS traitItalic / Android ITALIC / 鸿蒙 FONT_STYLE_*。
+ *   ★与 `font-fold.ts` 的 FONT_STYLE_VALUES **同一份**（对外保留旧名字，避免破坏导出契约）。 */
+export const APP_FONT_STYLE_VALUES = FONT_STYLE_VALUES
+/** 字体折叠面的值归一器集合（简写与长手共用——两处若各自归一就会漂移） */
+const FONT_DEPS = {
+  weight: normalizeFontWeight,
+  len: lenOrEnv,
+  lineHeight: parseLineHeight,
+  family: parseFontFamilyRole,
+}
 /** 四边简写字段（`margin`/`padding` → 结构化 `{top,right,bottom,left}`） */
 export const APP_EDGE_FIELDS = ['margin', 'padding'] as const
 /** 百分比宽高折叠出的**比例字段**（App 端原生支持 `widthRatio`/`heightRatio`；非长度、不乘密度） */
@@ -377,7 +387,10 @@ const kebabToCamel = (s: string): string => s.replace(/-([a-z])/g, (_, c: string
  */
 function parseLineHeight(raw: string): string | null {
   const v = raw.trim().toLowerCase()
-  if (v === 'normal' || v === '') return null
+  // ★normal **不是错误值**（CSS initial）——折叠为 token `normal`：三端宿主 lineHeightPx 解析失败 ⇒ 0
+  //   ⇒ 回落字体自然行高 = Web 的 normal 语义。★必须发射（不是跳过）：它要**压掉父级继承的 line-height**。
+  if (v === 'normal') return 'normal'
+  if (v === '') return null
   // ★★★min()/max()/clamp()（2026-10-08）：先折为 `<n>px` 再走既有 token 归一（px-only）
   if (/^(min|max|clamp)\(/i.test(v)) {
     const n = numOfMathFn(v)
@@ -676,6 +689,8 @@ export function parseStaticStyle(
     //   语义：`\.b{color:inherit}` 覆盖 `.a{color:red}` ⇒ b 应取**父节点**的 color（非 red）。
     //   记哨兵 `'inherit'`，由下方继承 walk 解析为父的 computed 值。
     if (rawVal.trim().toLowerCase() === 'inherit') {
+      // ★font 简写：五条长手一起继承（简写名不是字段名）——值与语义交给 font-fold 的同一实现
+      if (key === 'font') { const inh = foldFont(rawVal, FONT_DEPS); if (inh.ok) for (const f of FONT_FIELDS) { if (inh.fields[f] !== undefined) { out[f] = inh.fields[f]!; markImportant(f) } } continue }
       if (INHERIT_KEY_SET.has(key)) { out[key] = 'inherit'; markImportant(key) }
       continue
     }
@@ -1118,6 +1133,17 @@ export function parseStaticStyle(
         continue
       }
     }
+    // ★★★font 简写（2026-10-18 · 批 B F3）：纯编译期语法糖——语法/语义/CSS-wide 关键字都在 ./font-fold.ts
+    //   （语法层与 CSE 共用 ../font-shorthand.ts；五字段宿主早已支持，零宿主改动）。
+    if (key === 'font') {
+      const r = foldFont(rawVal, FONT_DEPS)
+      if (!r.ok) {
+        pushDiag(r.reason === 'initial' ? `\`${rawKey}: ${rawVal}\` 未支持（简写 initial 含 UA 默认字体/字号，跨端不可知）——已跳过` : `style 里 \`${rawKey}: ${rawVal}\` 无法解析为 font 简写——已跳过`)
+        continue
+      }
+      for (const f of FONT_FIELDS) { if (r.fields[f] !== undefined) { out[f] = r.fields[f]!; markImportant(f) } }
+      continue
+    }
     if (PAINT_FIELDS.has(key)) {
       if (key === 'transform') {
         // ★批次 38（对齐 Web · 削减胶水）：**静态 `transform`** —— 位移/缩放/旋转一次性折成数值（**不可继承**）。
@@ -1134,26 +1160,15 @@ export function parseStaticStyle(
         markImportant('transform')
         continue
       }
-      if (key === 'fontWeight') {
-        // ★批次 3：`font-weight`（真项目第 2 高频丢弃项）——`normal`/`bold` 关键字 + 100–900 数值
-        //   归一为**数值**（宿主按 `weight >= 600 ⇒ bold` 判定——见 Android typefaceOf / iOS）。
-        const w = normalizeFontWeight(rawVal)
-        if (w === undefined) { pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 不是合法字重（normal/bold/100–900）`); continue }
-        out[key] = w
-        markImportant(key)
-        continue
-      }
-      if (key === 'fontStyle') {
-        // ★★★批 B F3（基准 = Web）：斜体（oblique <angle> 三端无角度语义 ⇒ 诊断）。可继承。
-        const v = rawVal.trim().toLowerCase()
-        if (!(APP_FONT_STYLE_VALUES as readonly string[]).includes(v)) {
-          pushDiag(`\`${rawKey}: ${rawVal}\` 不是 App 支持的值（仅 ${APP_FONT_STYLE_VALUES.join(' / ')}；带角度的 oblique 暂不支持）——已跳过`)
+      // ★字体长手（font-weight / font-style / font-family / line-height）统一在 ./font-fold.ts：
+      //   与 `font` 简写共用**同一批归一器**————简写展开与长手直写必须产出同一形态。
+      {
+        const lh = foldFontLonghand(key, rawVal, FONT_DEPS, rawKey)
+        if (lh !== null) {
+          if (lh.kind === 'diag') pushDiag(lh.message)
+          else { out[lh.field] = lh.value; markImportant(lh.field) }
           continue
         }
-        if (v === 'normal') continue   // 默认值 ⇒ 不发射（零行为变化）
-        out[key] = v
-        markImportant(key)
-        continue
       }
       if (key === 'textAlign') {
         // ★批次 4：`text-align`——封闭集 left/center/right（宿主文本对齐通道；值原样下发）
@@ -1208,25 +1223,6 @@ export function parseStaticStyle(
         if (v === 'none') continue   // 默认
         if (v === 'underline' || v === 'line-through') { out[key] = v; markImportant(key); continue }
         pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 未支持（仅 none / underline / line-through）——已跳过`)
-        continue
-      }
-      if (key === 'fontFamily') {
-        // ★批次 36（对齐 Web · 削减胶水）：`font-family` 候选清单 → **字体角色**（可继承）。
-        //   与 renderer-app 的 normalizeFontFamily **同一映射**（两端一处归一；原生宿主按角色解析）。
-        const role = parseFontFamilyRole(rawVal)
-        if (role === undefined) { pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 无法归一为字体角色（system/serif/monospace/rounded/condensed）——已跳过`); continue }
-        out[key] = role; markImportant(key); continue
-      }
-      if (key === 'lineHeight') {
-        // ★批次 13：`line-height`（超级应用文本排版）——归一为 token 串：无单位倍数 `1.6` / 绝对 `24px`
-        //   （`160%` → 倍数 1.6）。宿主据此算行盒高（倍数 × fontSize）并令字形**垂直居中**。
-        const lh = parseLineHeight(rawVal)
-        if (lh === null) {
-          pushDiag(`\`${rawKey}: ${rawVal}\` 未解析（支持无单位倍数 \`1.6\` / \`160%\` / \`24px\`）——已跳过`)
-          continue
-        }
-        out[key] = lh
-        markImportant(key)
         continue
       }
       if (key === 'borderRadius') {
@@ -3112,6 +3108,7 @@ function expandBoxShorthand(rawVal: string, toNum: (v: string) => number | strin
   return Object.keys(box).length > 0 ? box : null
 }
 
+
 /**
  * ★批次 3：`font-weight` → 数值（100–900）。关键字：`normal`→400 / `bold`→700；`bolder`/`lighter`
  *   依赖父级（App 折叠面无上下文）⇒ 返回 undefined（调用方诊断，不猜）。
@@ -4036,7 +4033,9 @@ export function buildLayoutTemplate(
                 'VAPOR_STYLE_OBJECT_UNSUPPORTED',
               )
             }
-            const unsupportedKeys = parsed.entries.filter((e) => mapStyleObjectKey(e.key) === null)
+            // ★font 常量字面量由下方 foldFont 展开（键不在引擎映射表里，但**受支持**）⇒ 不报"不支持"
+            const unsupportedKeys = parsed.entries.filter((e) => mapStyleObjectKey(e.key) === null
+              && !(e.key === 'font' && typeof e.constValue === 'string'))
             for (const e of unsupportedKeys) {
               diag(
                 `${tag}(id=${id}) \`:style\` 的键 \`${e.key}\` 不支持**动态**更新` +
@@ -4050,6 +4049,14 @@ export function buildLayoutTemplate(
               // ① 全字面量 ⇒ 折进静态 style（与 parseStaticStyle 同一形态：键归一化 + 数值/字符串原样）
               //   ★批次 1：`:style` 视作 inline 层 ⇒ 受 class `!important` 保护（同 static style 的规则）
               for (const e of parsed.entries) {
+                // ★font 简写（批 B F3）：常量字面量 ⇒ 用同一 foldFont 展开成五字段
+                //   （与静态 style 同口径；否则 `:style="{ font: '16px serif' }"` 会被静默丢弃）
+                if (e.key === 'font' && typeof e.constValue === 'string') {
+                  const r = foldFont(e.constValue, FONT_DEPS)
+                  if (r.ok) { for (const f of FONT_FIELDS) { const v = r.fields[f]; if (v !== undefined && !classImportant.has(f)) style[f] = v } }
+                  else diag(`${tag}(id=${id}) \`:style\` 的 \`font: ${e.constValue}\` 无法展开`, '改用五个长手字段（fontSize/fontWeight/fontStyle/lineHeight/fontFamily）', 'VAPOR_FONT_SHORTHAND_UNSUPPORTED')
+                  continue
+                }
                 const mapped = mapStyleObjectKey(e.key)
                 if (!mapped) continue
                 const fld = mapped.slice(mapped.indexOf('.') + 1)

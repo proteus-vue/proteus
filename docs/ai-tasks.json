@@ -1394,6 +1394,30 @@
       "branch": null,
       "related": [],
       "note": "【批 B 进度】F3 排版增强 8 项的第 1 项（计划 docs/proteus-superapp-css-expansion-plan.md 批 B）。本轮交付 font-style：四同步（contracts 级别 FontStyle + runtime PROP_TYPES + 编译器折叠/CSE + 注册表）+ IR（TextProps.fontStyle）+ 三端字形（Android Typeface.ITALIC / iOS traitItalic / 鸿蒙 OH_Drawing_SetTextStyleFontStyle）+ 度量与绘制同源（角色串 italic:<族> 前缀，平台层唯一解析）+ 一致性快照/probe/coverage + 验收页 + 回归测试。★诚实边界：带角度的 oblique<angle> 诊断跳过（三端无角度语义）；iOS/鸿蒙真机未跑（本轮只做零设备编译 + Android 真机构建）。 【本轮收口】四同步 + 三端字形 + 度量同源均已落地；css:verify 三段过、style-ir 109/84、coverage 84/84、配套断言修平、Android javac 真编译绿。★诚实边界：oblique<angle> 诊断跳过；iOS/鸿蒙真机未跑；Android 真机因设备被占用未截到图（视觉验收待补）。下一条批 B 项建议：`font` 简写展开（纯编译期，成本最低）或 `text-transform`（编译期变换静态文本）。"
+    },
+    {
+      "id": "T-css-batch-b-font-shorthand",
+      "title": "批 B · F3 排版增强 2/8：font 简写展开（纯编译期，零宿主改动）",
+      "type": "end-alignment",
+      "status": "done",
+      "owner": "zcode-2026-10-18",
+      "scope": [
+        "packages/compiler/src/font-shorthand.ts",
+        "packages/compiler/src/vapor/font-fold.ts",
+        "packages/compiler/src/vapor/template.ts",
+        "packages/compiler/src/cse/shorthand.ts",
+        "css-conformance/pages/font.vue",
+        "tests/vapor-font-shorthand.test.ts",
+        "tests/cse-core.test.ts",
+        "docs/generated/**"
+      ],
+      "decision": 1058,
+      "verification": "npx vitest run tests/vapor-font-shorthand.test.ts tests/cse-core.test.ts tests/vapor-class-styles.test.ts && pnpm test:coupled && pnpm check:css-capability-alignment && pnpm check:app-css-surface && pnpm check:style-coverage && pnpm check:file-size",
+      "branch": null,
+      "related": [
+        "T-css-batch-b-font-style"
+      ],
+      "note": "【批 B 进度】F3 第 2 项。font 简写 = CSS Fonts 4：`font: [style] [variant] [weight] [stretch]? size[/line-height]? family`。本批实现子集：font-style(normal/italic/oblique) + font-weight(normal/bold/100-900) + font-size(px/%) + line-height(数字/px) + font-family(候选清单)。**纯编译期展开成既有字段**（fontSize/fontWeight/fontStyle/lineHeight/fontFamily），零宿主改动（宿主已支持这五个字段）。诚实边界：`font-variant: small-caps` / `font-stretch` / 系统字体关键字（caption/icon/menu…）暂不支持 ⇒ 编译期诊断。 【已交付】语法唯一实现 packages/compiler/src/font-shorthand.ts（App 折叠面 + CSE 共用）；App 语义 font-fold.ts（foldFont + foldFontLonghand，简写与长手同一批归一器）；parseLineHeight 接受 normal 作重置 token；font-style: normal 显式发射；:style 对象常量同口径。Web 真值实测纠正了『line-height 不重置』的错误认知（Chromium：父 line-height:3 + 子 font:14px serif ⇒ 子 normal）。判据 tests/vapor-font-shorthand.test.ts（4 条）+ cse-core 用例；test:coupled 417 全绿。"
     }
   ]
 }

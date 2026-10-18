@@ -6243,3 +6243,51 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   （一次宣布"没生效"、一次宣布"生效"）⇒ 连续抓多张并核对内容（如"G 区墨迹量"）再下结论。
 【诚实边界】只验 iOS（真机）；Web/Android/鸿蒙的合成斜体由其系统自动完成（本轮已对照确认）。
   合成倾角取 14°（`tan≈0.249`，CSS `oblique` 默认角）；与各端真 italic 面的角度可能有 ±2° 差异。
+
+1058. **★★★批 B F3 第 2 项：`font` 简写——重置型语义 + 语法单一实现（App 折叠面 / CSE 共用）· 决策**（2026-10-18 · 批 B F3）：
+【做了什么】`font: [style] [weight]? size[/line-height]? family` 展开成五个既有字段
+  （fontStyle/fontWeight/fontSize/lineHeight/fontFamily）——纯编译期语法糖，**零宿主改动**。
+【★★★Web 真值（真 Chromium 实测，纠正了我自己先前写错的注释）】`font` 是**重置型简写**：
+  · `font: italic bold 20px/1.5 "Helvetica", sans-serif` ⇒ style=italic weight=700 size=20px lh=30px
+  · `font: normal normal 700 14px serif` ⇒ weight=700 size=14px（**多个 normal 不吞掉字重**）
+  · **未指定的 style/weight/line-height 全部重置为 initial（normal/400/normal）**——
+    父 `line-height:3` + 子 `font:14px serif` ⇒ 子 computed line-height = **normal**（实测）。
+  ★我第一版按"line-height 是例外、省略时不重置"写（凭 CSS 规范印象），探针一跑就证伪 ⇒ 改正。
+【★为什么必须显式发射 normal/400/normal】缺任一项 = 继承：子节点会拿到父的 italic / 300 字重 / 3 倍行高
+  （Web 实测反例）。这与 #1050 里 `font-style: normal` 必须发射是同一条规则。
+【实现（三处，两层单一实现）】
+  · `packages/compiler/src/font-shorthand.ts` —— **语法唯一实现**（`splitFontShorthand`）：
+    修饰词任意顺序、多个 `normal` 占位、斜杠两侧空白（`18px/24px`、`18px / 24px`、`18px/ 24px`）、
+    size 与 weight 歧义（先找带单位的 token）；`small-caps`/stretch/系统字体关键字 ⇒ null（不静默近似）。
+  · `packages/compiler/src/vapor/font-fold.ts` —— **App 折叠面语义**（`foldFont` / `foldFontLonghand`）：
+    值归一（字重→数值、字号→长度 token、行高→token、族→角色）+ 五字段重置 + CSS-wide 关键字
+    （`inherit`/`unset` ⇒ 五字段 sentinel；`initial` ⇒ 诊断，因简写 initial 含 UA 默认字体字号）。
+    ★顺手把**长手** `font-weight/font-style/font-family/line-height` 也收口到这里——简写展开与长手直写
+    必须产出同一形态（否则两条通道必然漂移）。
+  · `packages/compiler/src/cse/shorthand.ts` —— CSE 侧展开为五条长手（共用同一语法层，走层叠/计算）。
+  · `template.ts` 只留薄分派（`foldFont(rawVal, FONT_DEPS)`）；**file-size 棘轮因此反而下降**
+    （4571 → 4552 → 见基线），新增模块各 < 200 行。
+【★`line-height: normal` 成为合法 token】此前 `parseLineHeight('normal')` 返回 null + 诊断 ⇒ 无法表达
+  "重置行高"。现在折叠为 token `normal`；三端宿主解析该 token 均**解析失败并回落自然行高**
+  （Android `NumberFormatException→0` / iOS `Double()→nil` / 鸿蒙 `stod` 抛异常→0）⇒ 恰是 Web 的 normal 语义。
+  已逐端核对宿主代码（非推断）。
+【`:style` 对象字面量同口径】`:style="{ font: 'bold 16px serif' }"` 的常量值同样经 foldFont 展开；
+  并修掉"键不在引擎映射表 ⇒ 报不支持动态更新"的**假诊断**（这是本仓反复出现的假阳性类型）。
+【判据】新增 `tests/vapor-font-shorthand.test.ts`（4 条：简写五字段+重置、长手 normal 显式发射、
+  端到端继承压制、`:style` 对象通道）+ `tests/cse-core.test.ts` 的 CSE 展开用例（含 inherit/skip 计数）；
+  `pnpm test:coupled` 417 条全绿；`check:style-ir-schema`/`check:app-css-surface`/`check:style-coverage`/
+  `check:css-engine-numbers`/`check:stats`/`check:css-capability-alignment` 全绿。
+  css-conformance 新增 H 区三案例（case-font-short-all/reset/order），父容器故意带 `font-style:italic; line-height:3`
+  ⇒ 若重置失效会立刻看得出来。
+【诚实边界】`font` 的完整语法还有 variant（small-caps）/stretch/系统字体关键字——**无宿主通道**，
+  一律诊断跳过（不静默近似）。Web 端由浏览器原生处理，不受本折叠面影响。
+【★顺带修的两笔历史欠账（全量测试暴露，都不是本轮引入）】
+  ① **鸿蒙平台适配头两份漂移**：#1055 改了 HAR 随包副本（`hosts/harmony/.../proteus_text_platform.h`），
+     却漏了**真源** `platform/harmony/proteus-platform/src/main/cpp/proteus_text_platform.h`
+     ⇒ `app-host-cli` 的"逐字节一致"门禁红。已把真源同步为同一份 + 重建 prebuilt。
+     ★这正是 #759 教训 c 记过的纪律（"平台适配头有真源↔随包副本两份，改一处必须同步另一处"）——
+     **记了不等于防住了**：只有当轮跑了全量才暴露。⇒ 改 `platform/` 或 HAR 任一侧后必须跑该门禁。
+  ② **一致性 golden 未随 #1050 刷新**：`fontStyle` 进 `SEMANTIC_FIELD_SNAPSHOT_KEYS` 后，
+     `tests/__snapshots__/consistency/web-home.geometry.json` 少了 6 处 `"fontStyle": "normal"`。
+     已用 `PROTEUS_UPDATE_GOLDEN=1` 刷新，并 `diff` 核对**只有这 6 行新增**（无几何漂移）。
+     ★教训：加**快照键**类字段时，"改代码 + 改断言"清单里还必须包含**golden 重生成**。
