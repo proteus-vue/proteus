@@ -91,6 +91,13 @@ export interface SelfDrawNodeSpec {
    */
   fontVariantNumeric?: 'normal' | 'tabular-nums'
   /**
+   * ★★★text-decoration 三兄弟项（2026-10-18 · 批 B F3）：装饰线颜色/线型/线宽。
+   *   缺省（undefined）⇒ 颜色跟随文字色、线型 solid、线宽由宿主按字体默认（零行为变化）。
+   */
+  textDecorationColor?: string
+  textDecorationStyle?: 'solid' | 'double' | 'dotted' | 'dashed' | 'wavy'
+  textDecorationThickness?: number
+  /**
    * 绘制用：**字体族（语义角色，已归一化）**——不是 CSS 原始清单
    *
    * 【为什么发语义角色而不是原始 CSS 串（本仓纪律：契约要自描述）】
@@ -238,7 +245,7 @@ export interface SelfDrawAdapter extends NativeAdapter {
  * 绘制相关的键（**不进布局核心**——核心只管几何；绘制由宿主的指令流消费）。
  *
  */
-const PAINT_KEYS = new Set(['backgroundColor', 'color', 'fontSize', 'fontWeight', 'fontStyle', 'textTransform', 'fontVariantNumeric', 'fontFamily', 'borderRadius', 'borderColor', 'borderWidth', 'opacity'])
+const PAINT_KEYS = new Set(['backgroundColor', 'color', 'fontSize', 'fontWeight', 'fontStyle', 'textTransform', 'fontVariantNumeric', 'textDecorationColor', 'textDecorationStyle', 'textDecorationThickness', 'fontFamily', 'borderRadius', 'borderColor', 'borderWidth', 'opacity'])
 
 /** 布局相关的键（进核心；其余键既非布局也非绘制 → 忽略并计数，便于发现「静默丢失」） */
 const LAYOUT_KEYS = new Set([
@@ -896,6 +903,17 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
       const fvnRaw = styleValue(tStyle, 'fontVariantNumeric') ?? props.fontVariantNumeric
         ?? styleValue(pStyle, 'fontVariantNumeric') ?? (parent ? parent.props.fontVariantNumeric : undefined)
       if (typeof fvnRaw === 'string' && fvnRaw !== 'normal') spec.fontVariantNumeric = fvnRaw as 'tabular-nums'
+      // ★★★text-decoration 三兄弟（2026-10-18 · 批 B F3）：同 textTransform 从父元素继承
+      //   （CSS 可继承属性；文本叶子是匿名子节点）。缺省 ⇒ 宿主用文字色 + solid + 字体默认线宽。
+      const dcRaw = styleValue(tStyle, 'textDecorationColor') ?? props.textDecorationColor
+        ?? styleValue(pStyle, 'textDecorationColor') ?? (parent ? parent.props.textDecorationColor : undefined)
+      if (typeof dcRaw === 'string' && dcRaw.length > 0) spec.textDecorationColor = dcRaw
+      const dsRaw = styleValue(tStyle, 'textDecorationStyle') ?? props.textDecorationStyle
+        ?? styleValue(pStyle, 'textDecorationStyle') ?? (parent ? parent.props.textDecorationStyle : undefined)
+      if (typeof dsRaw === 'string' && dsRaw !== 'solid') spec.textDecorationStyle = dsRaw as 'double' | 'dotted' | 'dashed' | 'wavy'
+      const dtRaw = styleValue(tStyle, 'textDecorationThickness') ?? props.textDecorationThickness
+        ?? styleValue(pStyle, 'textDecorationThickness') ?? (parent ? parent.props.textDecorationThickness : undefined)
+      if (typeof dtRaw === 'number' && dtRaw > 0) spec.textDecorationThickness = dtRaw
       if (Number.isFinite(fsNum) && fsNum > 0) {
         spec.fontSize = fsNum
         spec.fontWeight = fwNum

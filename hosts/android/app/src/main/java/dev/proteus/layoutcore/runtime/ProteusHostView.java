@@ -112,6 +112,16 @@ public class ProteusHostView extends ViewGroup {
          */
         int lineClamp;
         /**
+         * ★★★text-decoration 三兄弟项（2026-10-18 · 批 B F3）：装饰线颜色 / 线型 / 线宽。
+         *   · color：0 = 未声明 ⇒ **跟随文字色**（Web 初值 currentColor）
+         *   · style：0=solid（初值）/1=double/2=dotted/3=dashed/4=wavy
+         *   · thicknessPx：0 = 未声明 ⇒ 用 FontMetrics.underlineThickness（与 Web 初值 auto 同义）
+         *   ★非 final（构造器链长，同 lineClamp/outline——构建后赋值，零构造器改动）。
+         */
+        int decoColor;
+        int decoStyle;
+        float decoThicknessPx;
+        /**
          * ★★★逐边 border 批（2026-10-05）：**逐边边框规格**——`float[12]`：
          *   [0..3] = 四边宽度（top/right/bottom/left；**NaN = 该边未声明 ⇒ 回落到 uniform borderWidth**）·
          *   [4..7] = 四边颜色（ARGB int as float；0 = 未声明 ⇒ 回落 borderColor）·
@@ -602,6 +612,8 @@ public class ProteusHostView extends ViewGroup {
     private final Paint atlasPaint = new Paint();
     // ★StaticLayout 要求 `TextPaint`（Paint 的子类）——文本配置色/字号都在它上面
     private final android.text.TextPaint textPaint = new android.text.TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+    /** ★★★text-decoration 三兄弟项（2026-10-18 · 批 B F3）：装饰线绘制（独立工具类，见 TextDecorationPainter）。 */
+    private final TextDecorationPainter decoPainter = TextDecorationPainter.create();
     /** ★★C2：描边笔（STROKE 风格——与填充用的 bgPaint 分开；圆头圆角与 iOS 一致） */
     private final android.graphics.Paint strokePaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
     /** ★批次 5：边框描边专用（与 SVG/glow 的 strokePaint 分开——避免相互污染 STROKE 样式/宽度）。 */
@@ -4267,10 +4279,16 @@ public class ProteusHostView extends ViewGroup {
                     lastLetter = c.letterSpacing;
                 }
                 // ★批次 35：文本装饰（变化时才设——同值连排零开销）
-                if (c.textDecoration != lastDecor) {
-                    textPaint.setUnderlineText(c.textDecoration == 1);
-                    textPaint.setStrikeThruText(c.textDecoration == 2);
-                    lastDecor = c.textDecoration;
+                // ★★★text-decoration 三兄弟项（2026-10-18 · 批 B F3）：**有自定义颜色/线型/线宽时不能走原生**
+                //   （`setUnderlineText` 只会画文字色的单实线、线宽也不可控）⇒ 交给下方 drawDecorationLines 手绘。
+                //   无自定义 ⇒ 仍走原生（零行为变化、零额外开销）。
+                final boolean decoCustom = c.textDecoration != 0
+                        && (c.decoColor != 0 || c.decoStyle != 0 || c.decoThicknessPx > 0f);
+                final int decoKind = decoCustom ? 0 : c.textDecoration;
+                if (decoKind != lastDecor) {
+                    textPaint.setUnderlineText(decoKind == 1);
+                    textPaint.setStrikeThruText(decoKind == 2);
+                    lastDecor = decoKind;
                 }
                 // ★批次 4：文本水平对齐（仅在变化时设 Align——同对齐连排零开销）
                 if (c.textAlign != lastAlign) {
@@ -4348,6 +4366,9 @@ public class ProteusHostView extends ViewGroup {
                     if (hardShadow) drawShadowCopy(canvas, c, textPaint, tx, baseY, false);
                     canvas.drawText(c.text, tx, baseY, textPaint);
                 }
+                // ★★★text-decoration 三兄弟项（2026-10-18 · 批 B F3）：自定义颜色/线型/线宽 ⇒ 手绘装饰线
+                //   （原生 setUnderlineText 只会画"文字色单实线"且线宽不可控）。
+                if (decoCustom) drawDecorationLines(canvas, c, tx, baseY);
             }
             // ★★★逐边 border 批（2026-10-05）：含逐边声明 ⇒ **逐边绘制**（每边一条线；线型 solid/dashed/dotted）。
             //   逐边未声明的边回落 uniform（borderWidth/borderColor）——与 Web 的 border 简写语义一致。
@@ -5065,6 +5086,18 @@ public class ProteusHostView extends ViewGroup {
      *   行距差分摊（半距上移首行）——与 `drawCmds` 单行的半行距口径同源）。
      *   textPaint 状态（字号/字重/字距/颜色/alpha）由调用方已设好（与单行路径同一份 paint 状态机）。
      */
+    /**
+    /**
+     * ★★★text-decoration 三兄弟项（2026-10-18 · 批 B F3）：装饰线绘制**委托**给独立工具类。
+     *
+     * <p>【为什么抽出去】它是纯绘制算法（颜色/线型/线宽），无 View 状态；留在本类会把
+     *   巨型文件推高（纪律：源文件不越 1000 行 + 存量只减不增）。实现见 `TextDecorationPainter`。</p>
+     */
+    private void drawDecorationLines(Canvas canvas, Cmd c, float tx, float baseY) {
+        decoPainter.draw(canvas, textPaint, c.text, tx, baseY, c.textAlign, c.textDecoration,
+                c.decoStyle, c.decoColor, c.decoThicknessPx);
+    }
+
     private void drawTextMultiline(Canvas canvas, Cmd c) {
         // ★★★text 内间距批（2026-10-09）：折行宽 = **内容盒宽**（内缩 padding）
         // I2-ALLOW: 文本**测量/位图**宽（StaticLayout 需整型像素宽——canvas 文本排版参数，非绘制几何发射；绘制几何一律走内核吸附指令流）

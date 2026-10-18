@@ -6403,3 +6403,37 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   ② MP/Skyline 引擎锁死（具名）——**且无法编译期模拟**（字形选择不是字符串变换，这与 text-transform
   可编译期变换静态文本不同）；③ 本项未跑 Android/iOS 真机截图判据（**截图对该属性天然不可判**，
   改用平台层探针 + 编译期断言取证）。
+
+1062. **★★★批 B F3 第 5 项：`text-decoration` 三兄弟（color / style / thickness）+ 简写扩展 · 决策**（2026-10-18 · 批 B F3）：
+【做了什么】`text-decoration-color`（初值 **currentColor** ⇒ 未声明时跟随自身文字色）·
+  `text-decoration-style`（solid/double/dotted/dashed/wavy；初值 solid）·
+  `text-decoration-thickness`（px；初值 auto/from-font ⇒ 不发射）。CSS 可继承。
+【★★★顺带修的真缺陷：简写整条被丢弃】此前 `text-decoration` 只认**单个单词**
+  （`underline`/`line-through`/`none`）——而 `underline red` / `underline 1px dashed #f00`
+  是真实项目**高频写法** ⇒ 整条**静默失样式**。现按 CSS `<line> || <style> || <color> || <thickness>`
+  任意顺序解析，name 折叠成 4 个字段。
+【★三端绘制形态（各端能力差异真实存在，不是"统一一下就好"）】
+  · **Android 改为手绘**（新建 `TextDecorationPainter`）：原生 `setUnderlineText` 是**布尔开关**——
+    颜色恒为文字色、线型恒为单实线、线宽由字体决定 ⇒ CSS 三兄弟**全部无法表达**。
+    ⇒ Path 手绘 solid/double/dotted/dashed/wavy；**只在有自定义声明时接管**（否则仍走原生 = 零行为变化）。
+    ★线位与 Web 对齐：underline = 基线 + |getUnderlinePosition()|；line-through = 基线 − 0.3em。
+  · **iOS**：`NSUnderlineStyle` 选项集（single/double/patternDot/patternDash/thick）+
+    `underlineColor`/`strikethroughColor`。★**wavy 不在该枚举**（实测 SDK）⇒ 单实线 + 显式厚度**如实近似**。
+  · **鸿蒙**：`OH_Drawing_SetTextStyleDecoration{Color,Style,ThicknessScale}`（API 齐全，含 WAVY）。
+  · **Skyline**：`-color`/`-style` **官方原生支持**（仅 text 节点）；**`-thickness` 未收录** ⇒ 具名引擎边界。
+【★顺带修的 CSE 通路分叉（真缺陷）】CSE 侧 `text-decoration-color` 没进 `COLOR_PROPS`、
+  `text-decoration-thickness` 没进长度归一 ⇒ 实测 CSE 产出 `rgb(255, 0, 0)` / `"3px"`，
+  而 App 折叠面产出 `#ff0000` / `3` —— **同一属性两条通路形态不一致**（验收 parity 当场红）。
+  ⇒ 两处补齐归一（与"简写与长手必须同一形态"同一条纪律）。
+【★顺手把巨型文件拆了】Android 装饰线绘制 ~90 行原本塞进 `ProteusHostView`（已 5563 行）⇒
+  抽成独立 `TextDecorationPainter`（纯绘制算法、无 View 状态、任何 Android 宿主可复用）；
+  `ProteusHostView` 增长从 +92 降到 +33。
+  ★踩坑记录：新文件放 `runtime/` 目录但声明了 `...layoutcore.runtime` 包 —— 而该目录下
+  **20 个文件全都用父包名 `dev.proteus.layoutcore`**（目录只是组织方式）⇒ javac 报"找不到符号"。
+【判据】`tests/text-decoration.test.ts`（4 条：三条长手折叠/初值不发射/简写四字段+顺序无关+诊断/
+  纯色简写不折 line）；`test:coupled` 全绿；全量 **5883** 全绿；三个 `css:verify` 三段机器判据全过
+  （含 Skyline 具名豁免 `-thickness`）；css-conformance 新增 K 区 6 案例；
+  **Android 真机**截图逐项确认（红实线/红点线/绿虚线/蓝紫双线/红 3px 加粗/简写虚线全部生效）。
+【诚实边界】① iOS **wavy 近似为实线**（NSUnderlineStyle 无该值）；② 百分比厚度（`10%`）需字号换算、
+  三端通道未统一 ⇒ 编译期诊断；③ Skyline `-thickness` 引擎边界；④ iOS/鸿蒙未跑本项真机截图
+  （Android 已真机验证绘制算法；iOS/鸿蒙走各自原生装饰 API，编译检查已过）。

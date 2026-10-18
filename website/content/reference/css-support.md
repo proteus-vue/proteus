@@ -7,12 +7,12 @@ generated: true
 
 # CSS 多端支持参考
 
-> 84 项 CSS 能力在 **Web / Skyline / App 三端**的支持现状与可扩展档位。**每项能力均带独立锚点**（右侧页内导航可逐项跳转、可被外链深链引用），支持度以 **Web 真值为基准**，App 端自研引擎按 **L0–L5 成本分级**。
+> 87 项 CSS 能力在 **Web / Skyline / App 三端**的支持现状与可扩展档位。**每项能力均带独立锚点**（右侧页内导航可逐项跳转、可被外链深链引用），支持度以 **Web 真值为基准**，App 端自研引擎按 **L0–L5 成本分级**。
 > ★自动生成（`scripts/gen-css-support.mjs`），SSOT = `docs/generated/css-capability-alignment.json`；漂移门禁 `--check`。
 
 ## 概览
 
-共 **84** 项：三端全支持（universal）**44** 项 · 条件支持（conditional）**36** 项 · 三端不可用（unsupported）**4** 项。App 端当前**已支持 76 项**、**暂缺 8 项**（候选特性按 L 档扩展）。
+共 **87** 项：三端全支持（universal）**46** 项 · 条件支持（conditional）**37** 项 · 三端不可用（unsupported）**4** 项。App 端当前**已支持 79 项**、**暂缺 8 项**（候选特性按 L 档扩展）。
 
 ### 端模型
 
@@ -55,7 +55,7 @@ generated: true
 | [选择器](#cat-selector) | [类选择器 .a / .a.b](#selector-class) · [元素/类型选择器 h3 / p.foo](#selector-type) · [后代 / 子组合 .a .b / .a > .b](#selector-combinator) · [静态结构伪类 :first-child / :last-child / :nth-child(An+B\|odd\|even) / :not(简单选择器)](#selector-pseudo-structural) · [伪元素 ::before / ::after（+ content）](#selector-pseudo-element) · [状态伪类 :active（按下态）](#selector-pseudo-state-active) · [状态伪类 :hover / :focus / :checked](#selector-pseudo-state) · [属性选择器 data-x](#selector-attr) · [Vue 作用域穿透 :deep() / ::v-deep() / >>>](#selector-deep) · [兄弟组合 + / ~](#selector-sibling) · [通配 *](#selector-wildcard) |
 | [层叠](#cat-cascade) | [特异性 / 继承 / !important](#specificity-inheritance) · [CSS 自定义属性（design tokens）var(--x)](#css-vars) |
 | [@ 规则](#cat-at-rule) | [@media（响应式 / 环境条件）](#at-media) · [@supports（特性检测）](#at-supports) · [@keyframes（关键帧动画）](#keyframes) · [animation（简写：name duration timing delay …）](#animation) |
-| [文本](#cat-text) | [word-break（行内断词策略）](#word-break) · [font-weight](#font-weight) · [font-style](#font-style) · [text-transform](#text-transform) · [font-variant-numeric](#font-variant-numeric) · [text-decoration](#text-decoration) · [text-align](#text-align) · [line-height](#line-height) · [text-overflow](#text-overflow) · [-webkit-line-clamp: <integer>](#-webkit-line-clamp) · [letter-spacing](#letter-spacing) · [font-family](#font-family) · [white-space](#text-attrs) |
+| [文本](#cat-text) | [word-break（行内断词策略）](#word-break) · [font-weight](#font-weight) · [font-style](#font-style) · [text-transform](#text-transform) · [font-variant-numeric](#font-variant-numeric) · [text-decoration](#text-decoration) · [text-align](#text-align) · [line-height](#line-height) · [text-overflow](#text-overflow) · [-webkit-line-clamp: <integer>](#-webkit-line-clamp) · [letter-spacing](#letter-spacing) · [font-family](#font-family) · [white-space](#text-attrs) · [text-decoration-color](#text-decoration-color) · [text-decoration-style](#text-decoration-style) · [text-decoration-thickness](#text-decoration-thickness) |
 | [层](#cat-layer) | [z-index](#z-index) |
 
 ## 逐能力参考
@@ -498,7 +498,7 @@ generated: true
 
 > ★批次 42（对齐 Web）：animation 简写 → 命中同文件 @keyframes → 逐通道 keyframe 动画（内核 anim_start）；★#791/本批：**animation-delay**（第 2 个时间 token，内核 `delayMs`）与 **animation-iteration-count**（数字 / `infinite`→内核 `repeat:-1`）已支持；`direction`/`fill`/多动画逗号列表暂忽略（诊断）。可动画通道限 opacity / px 位移 / 等比缩放 / 旋转
 
-## 文本 · 13 项 {#cat-text}
+## 文本 · 16 项 {#cat-text}
 
 ### word-break（行内断词策略） {#word-break}
 
@@ -534,7 +534,7 @@ generated: true
 
 **Web** ✅ 支持 · **Skyline** ✅ 支持 · **App** ✅ 支持 · **App 可扩展** L1 · **策略** 编译期折叠 · **对齐** universal
 
-> ★批次 35（2026-10-04 · ★基准 = Web）：`underline` / `line-through`（`none` = 默认不发射）；CSS **可继承**（沿树传播）。三端宿主：iOS `NSAttributedString.underlineStyle/strikethroughStyle` · Android `Paint.setUnderlineText/setStrikeThruText` · 鸿蒙 `OH_Drawing_SetTextStyleDecoration`。诚实边界：`overline`/颜色/线型未支持（诊断）
+> ★批次 35（2026-10-04 · ★基准 = Web）：`underline` / `line-through`（`none` = 默认不发射）；CSS **可继承**（沿树传播）。三端宿主：iOS `NSAttributedString.underlineStyle/strikethroughStyle` · Android `Paint.setUnderlineText/setStrikeThruText` · 鸿蒙 `OH_Drawing_SetTextStyleDecoration`。诚实边界：`overline`/颜色/线型未支持（诊断） ★★★text-decoration 三兄弟项（2026-10-18 · 批 B F3 · 基准 = Web）：`text-decoration-color`（初值 **currentColor** —— 未声明时跟随自身文字色）· `text-decoration-style`（solid/double/dotted/dashed/wavy；初值 solid）· `text-decoration-thickness`（px；初值 auto/from-font ⇒ 不发射）。★**简写一并扩展**：`underline red` / `underline 1px dashed #f00` 这类真实高频写法此前**整条被丢弃**，现折成 line + 三兄弟。★三端绘制：**Android 改为手绘**（原生 `setUnderlineText` 只画"文字色单实线"且线宽不可控——Path 实线/双线/点/虚线/波线）· iOS `NSUnderlineStyle` 选项集 + `underlineColor`/`strikethroughColor`（**wavy 不在该枚举** ⇒ 实线+厚度如实近似）· 鸿蒙 `OH_Drawing_SetTextStyleDecoration{Color,Style,ThicknessScale}`。★Skyline：`-color`/`-style` 官方原生支持；**`-thickness` 官方表未收录** ⇒ 具名引擎边界。
 
 ### text-align {#text-align}
 
@@ -577,6 +577,24 @@ generated: true
 **Web** ✅ 支持 · **Skyline** ✅ 支持 · **App** ✗ 无 · **App 可扩展** L4 · **策略** 降级 · **对齐** conditional
 
 > 白空格（多行/保留空白）走平台文本引擎（不自研）——App 仅支持 `nowrap`（= App 单行默认，no-op）；`normal`/`pre`/`pre-wrap`/`pre-line` 未支持（诊断）。★文本维已含 fontSize/color/fontWeight/textAlign/line-height/text-overflow/letter-spacing/**text-decoration**（批 35）
+
+### text-decoration-color {#text-decoration-color}
+
+**Web** ✅ 支持 · **Skyline** ✅ 支持 · **App** ✅ 支持 · **App 可扩展** L1 · **策略** 编译期折叠 + 宿主绘制 · **对齐** universal
+
+> ★见 text-decoration 条目（三兄弟同批落地，2026-10-18 · 批 B F3）。
+
+### text-decoration-style {#text-decoration-style}
+
+**Web** ✅ 支持 · **Skyline** ✅ 支持 · **App** ✅ 支持 · **App 可扩展** L1 · **策略** 编译期折叠 + 宿主绘制 · **对齐** universal
+
+> ★见 text-decoration 条目（三兄弟同批落地，2026-10-18 · 批 B F3）。
+
+### text-decoration-thickness {#text-decoration-thickness}
+
+**Web** ✅ 支持 · **Skyline** ◻ 未列 · **App** ✅ 支持 · **App 可扩展** L1 · **策略** 编译期折叠 + 宿主绘制 · **对齐** conditional
+
+> ★见 text-decoration 条目（三兄弟同批落地，2026-10-18 · 批 B F3）。
 
 ## 层 · 1 项 {#cat-layer}
 

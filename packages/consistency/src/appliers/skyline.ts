@@ -170,6 +170,21 @@ export function mapStyleIRToSkyline(fields: Record<string, unknown>, opts: Skyli
         drop(field, value, 'Skyline 官方样式表无 font-variant-numeric（数字等宽该端无通道）')
         continue
       }
+      // ★★★text-decoration 三兄弟项（2026-10-18 · 批 B F3）：Skyline **原生支持**
+      //   `text-decoration-color` / `text-decoration-style`（官方表明确列出，仅作用于 text 节点）；
+      //   `text-decoration-thickness` **官方表未收录** ⇒ 如实 drop（不假绿）。
+      if (field === 'textDecorationColor') {
+        put(field, 'text-decoration-color', String(value))
+        continue
+      }
+      if (field === 'textDecorationStyle') {
+        put(field, 'text-decoration-style', String(value))
+        continue
+      }
+      if (field === 'textDecorationThickness') {
+        drop(field, value, 'Skyline 官方样式表无 text-decoration-thickness（线宽该端无通道）')
+        continue
+      }
 
       // ★★★grid-template-areas / grid-area 项（2026-10-08）：**原样透传**——与 grid-auto-flow（#571）/
       //   justify-self（#570）同款：用户 CSS 里的 grid-template-areas 本就逐字进 wxss。

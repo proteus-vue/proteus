@@ -621,6 +621,10 @@ function irFieldCandidatesOf(prop: string): string[] {
     'text-transform': 'textTransform',
     // ★★★font-variant-numeric 项（2026-10-18 · 批 B F3）：等宽数字（继承属性；直通同名 IR 字段）
     'font-variant-numeric': 'fontVariantNumeric',
+    // ★★★text-decoration 三兄弟项（2026-10-18 · 批 B F3）：装饰线颜色/线型/线宽
+    'text-decoration-color': 'textDecorationColor',
+    'text-decoration-style': 'textDecorationStyle',
+    'text-decoration-thickness': 'textDecorationThickness',
     'line-height': 'lineHeight',
     'font-family': 'fontFamily',
     'flex-basis': 'flexBasis',

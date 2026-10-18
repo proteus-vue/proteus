@@ -2524,7 +2524,14 @@ public final class VaporRenderHost {
             final boolean clipText = !wsWrap && w > 1f
                     && "hidden".equals(spec.optString("overflow", null))
                     && !("ellipsis".equals(spec.optString("textOverflow", null)));
-            { ProteusHostView.Cmd _c = new ProteusHostView.Cmd(x, y, w, h, color, t, fs, textColor, radius, grad, glowSpec, maskSpec, fw, ta, bw, bc, shadowSpec, lh, ls, decor, wsWrap ? 0 : 1, multiLine, clipText, sideBorderOf(spec)); _c.lineClamp = clamp; _c.outline = parseOutline(spec); _c.textShadow = parseTextShadow(spec.optJSONObject("textShadow")); applyTextPad(_c, spec); return _c; }
+            { ProteusHostView.Cmd _c = new ProteusHostView.Cmd(x, y, w, h, color, t, fs, textColor, radius, grad, glowSpec, maskSpec, fw, ta, bw, bc, shadowSpec, lh, ls, decor, wsWrap ? 0 : 1, multiLine, clipText, sideBorderOf(spec)); _c.lineClamp = clamp; _c.outline = parseOutline(spec); _c.textShadow = parseTextShadow(spec.optJSONObject("textShadow"));
+                // ★★★text-decoration 三兄弟项（2026-10-18 · 批 B F3）：装饰线颜色/线型/线宽
+                //   （0/0/0 = 未声明 ⇒ 原生实线 + 文字色 + 字体默认线宽，零行为变化）
+                { String dc = spec.optString("textDecorationColor", null); if (dc != null && !dc.isEmpty()) _c.decoColor = parseColor(dc); }
+                { String ds = spec.optString("textDecorationStyle", null);
+                  _c.decoStyle = "double".equals(ds) ? 1 : "dotted".equals(ds) ? 2 : "dashed".equals(ds) ? 3 : "wavy".equals(ds) ? 4 : 0; }
+                { double dt = spec.optDouble("textDecorationThickness", 0); if (dt > 0) _c.decoThicknessPx = (float) dt; }
+                applyTextPad(_c, spec); return _c; }
         }
         { ProteusHostView.Cmd _c = new ProteusHostView.Cmd(x, y, w, h, color, null, 0f, 0, radius, grad, glowSpec, maskSpec, 400, 0, bw, bc, shadowSpec, 0f, 0f, 0, 0, false, false, sideBorderOf(spec)); _c.outline = parseOutline(spec); _c.textShadow = parseTextShadow(spec.optJSONObject("textShadow")); return _c; }
     }

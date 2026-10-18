@@ -1,9 +1,9 @@
 # CSS Web 全量能力清单（自动生成——勿手改；生成器 scripts/gen-css-feature-inventory.mjs）
 
 > 总 949 项（property 651 · selector 144 · at-rule 19 · function 105 · unit 30）
-> 实现：**not-started** 521 · **excluded** 280 · **implemented** 147 · **partial** 1
-> 优先级：P2 114 · excluded 280 · done 147 · P1 408
-> ★**可推项（非已实现/非排除）**：522（其中 **P0 0**）
+> 实现：**not-started** 518 · **excluded** 280 · **implemented** 150 · **partial** 1
+> 优先级：P2 114 · excluded 280 · done 150 · P1 405
+> ★**可推项（非已实现/非排除）**：519（其中 **P0 0**）
 
 ## P0 —— 语料在用但未实现（真实需求，最优先）
 

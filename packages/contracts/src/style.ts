@@ -23,6 +23,7 @@ export type StylePropLevel =
   | 'FontStyle'
   | 'TextTransform'
   | 'FontVariantNumeric'
+  | 'TextDecorationStyle'
   // ★★★G-61 后批（2026-10-05）：文本换行/空白语义（white-space）——CSE 与旧折叠器都已支持，
   //   但注册表/矩阵/runtime 三处漏登记（**四同步缺口**，清单审计抓出）⇒ 补齐（INV-CE-07）。
   | 'TextWrap'
@@ -105,6 +106,10 @@ export const STYLE_PROP_LEVELS = {
   textTransform: 'TextTransform',
   // ★★★font-variant-numeric 项（2026-10-18 · 批 B F3）：等宽数字（normal/tabular-nums）
   fontVariantNumeric: 'FontVariantNumeric',
+  // ★★★text-decoration 三兄弟项（2026-10-18 · 批 B F3）：装饰线的颜色/线型/线宽
+  textDecorationColor: 'Color',
+  textDecorationStyle: 'TextDecorationStyle',
+  textDecorationThickness: 'Length',
   textAlign: 'TextAlign',
   whiteSpace: 'TextWrap',
   borderRadius: 'Length',

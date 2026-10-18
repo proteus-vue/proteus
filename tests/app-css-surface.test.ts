@@ -125,6 +125,10 @@ describe('★App CSS 支持面 · ② SSOT 与折叠实现同源（真折叠，�
       if (f === 'textTransform') return 'uppercase'
       // ★★★font-variant-numeric 项（2026-10-18 · 批 B F3）：枚举样例（折叠器折 fontVariantNumeric）
       if (f === 'fontVariantNumeric') return 'tabular-nums'
+      // ★★★text-decoration 三兄弟项（2026-10-18 · 批 B F3）：颜色/线型/线宽各自的样例值
+      if (f === 'textDecorationColor') return '#ff0000'
+      if (f === 'textDecorationStyle') return 'dotted'
+      if (f === 'textDecorationThickness') return '3'
       if (f === 'fontFamily') return 'monospace'
       if (f === 'transform') return 'translateY(4px)'
       return '10'

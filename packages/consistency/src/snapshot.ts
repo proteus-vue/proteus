@@ -89,6 +89,12 @@ export interface NormalizedStyle {
   textTransform?: string
   /** ★★★font-variant-numeric 项（2026-10-18 · 批 B F3）：等宽数字（枚举串） */
   fontVariantNumeric?: string
+  /** ★★★text-decoration 三兄弟项（2026-10-18 · 批 B F3）：装饰线颜色（与其它颜色同口径 = Rgba） */
+  textDecorationColor?: Rgba
+  /** ★★★装饰线型（枚举串） */
+  textDecorationStyle?: string
+  /** ★★★装饰线宽（px 数值） */
+  textDecorationThickness?: number
   /** 字族首个（不含引号） */
   fontFamily?: string
   paddingTop?: number
@@ -454,7 +460,7 @@ export function validateGeometrySnapshot(snap: unknown): ValidationResult {
 }
 
 const STYLE_KEYS = new Set([
-  'color', 'backgroundColor', 'fontSize', 'fontWeight', 'fontStyle', 'textTransform', 'fontVariantNumeric', 'fontFamily',
+  'color', 'backgroundColor', 'fontSize', 'fontWeight', 'fontStyle', 'textTransform', 'fontVariantNumeric', 'textDecorationColor', 'textDecorationStyle', 'textDecorationThickness', 'fontFamily',
   'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
   'marginTop', 'marginRight', 'marginBottom', 'marginLeft',
   'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth',
@@ -530,7 +536,7 @@ export function validateStyleSnapshot(snap: unknown): ValidationResult {
         continue
       }
       if (v === undefined) continue
-      if (k === 'color' || k === 'backgroundColor' || k === 'outlineColor' || k.startsWith('border') && k.endsWith('Color')) {
+      if (k === 'color' || k === 'backgroundColor' || k === 'outlineColor' || k === 'textDecorationColor' || k.startsWith('border') && k.endsWith('Color')) {
         const c = v as Partial<Rgba>
         if (typeof c?.r !== 'number' || typeof c?.g !== 'number' || typeof c?.b !== 'number' || typeof c?.a !== 'number') {
           push('wrong-type', `${where}.styles.${k}`, '颜色必须是 {r,g,b,a} 数值')
@@ -544,6 +550,7 @@ export function validateStyleSnapshot(snap: unknown): ValidationResult {
         || k === 'fontStyle'   // ★★★font-style 项（2026-10-18）
         || k === 'textTransform'   // ★★★text-transform 项（2026-10-18 · 批 B F3）
         || k === 'fontVariantNumeric'   // ★★★font-variant-numeric 项（2026-10-18 · 批 B F3）
+        || k === 'textDecorationStyle'   // ★★★text-decoration 三兄弟项（2026-10-18 · 批 B F3）
         || k === 'flexDirection' || k === 'justifyContent' || k === 'alignItems' || k === 'alignSelf' || k === 'overflow'
         || k === 'justifySelf'   // ★★★justify-self 项（2026-10-06）
         || k === 'justifyItems'  // ★★★place-items/justify-items 项（2026-10-08）

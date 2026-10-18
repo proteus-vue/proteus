@@ -44,7 +44,7 @@ export const APP_LAYOUT_FIELDS: readonly string[] = [
 ]
 /** App 端绘制字段（→ ops 前缀 `paint.`） */
 export const APP_PAINT_FIELDS: readonly string[] = [
-  'backgroundColor', 'color', 'fontSize', 'fontWeight', 'fontStyle', 'textTransform', 'fontVariantNumeric', 'fontFamily', 'textAlign', 'lineHeight',
+  'backgroundColor', 'color', 'fontSize', 'fontWeight', 'fontStyle', 'textTransform', 'fontVariantNumeric', 'textDecorationColor', 'textDecorationStyle', 'textDecorationThickness', 'fontFamily', 'textAlign', 'lineHeight',
   'textOverflow', 'letterSpacing', 'textDecoration', 'visibility', 'borderRadius', 'borderRadiusPct',
   'borderColor', 'borderWidth', 'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor',
   'opacity',
@@ -197,7 +197,9 @@ export function mapStyleIRToApp(fields: Record<string, unknown>): AppMappingResu
       if (field === 'opacity' || field === 'flexGrow' || field === 'flexShrink' || field === 'aspectRatio' ||
           field === 'fontWeight' || field === 'fontSize' || field === 'letterSpacing' || field === 'lineHeight' ||
           field === 'borderWidth' || field === 'borderRadius' || field === 'borderRadiusPct' ||
-          field === 'lineClamp') {
+          field === 'lineClamp' ||
+          // ★★★text-decoration 三兄弟项（2026-10-18 · 批 B F3）：装饰线宽（px 数值）
+          field === 'textDecorationThickness') {
         put(field, value, value)
         continue
       }
@@ -248,7 +250,10 @@ export function mapStyleIRToApp(fields: Record<string, unknown>): AppMappingResu
         'color', 'backgroundColor', 'display', 'position', 'overflow', 'visibility', 'pointerEvents',
         // ★★★overflow-x 项（2026-10-06）：逐轴溢出（字符串枚举）
         'overflowX', 'overflowY',
-        'textAlign', 'textOverflow', 'textDecoration', 'fontStyle', 'textTransform', 'fontVariantNumeric', 'flexDirection', 'flexWrap', 'justifyContent',
+        'textAlign', 'textOverflow', 'textDecoration', 'fontStyle', 'textTransform', 'fontVariantNumeric', 'textDecorationStyle',
+        // ★★★text-decoration 三兄弟项（2026-10-18 · 批 B F3）：装饰线颜色（CSE/折叠面均产出 hex 串）
+        'textDecorationColor',
+        'flexDirection', 'flexWrap', 'justifyContent',
         'alignItems', 'alignContent', 'alignSelf', 'boxSizing', 'whiteSpace',
         // ★★★justify-self 项（2026-10-06）：网格项行内轴自对齐（字符串枚举，内核 DTO 通道）
         'justifySelf',

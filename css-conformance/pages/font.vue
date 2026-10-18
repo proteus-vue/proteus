@@ -69,6 +69,17 @@ const lhText = '第一行文本\n第二行文本（行高 28px）'
       <text id="case-text-transform-inherit" class="tt-inherit">inherited caps</text>
     </view>
 
+    <!-- ★★★text-decoration 三兄弟项（2026-10-18 · 批 B F3）：颜色 / 线型 / 线宽 -->
+    <text class="cc-sec">K · text-decoration 三兄弟（颜色 / 线型 / 线宽 · 基准 = Web）</text>
+    <view class="cc-card">
+      <text id="case-deco-color" class="dk-color">彩色下划线（红）</text>
+      <text id="case-deco-style-dotted" class="dk-dotted">点线下划线</text>
+      <text id="case-deco-style-dashed" class="dk-dashed">虚线下划线</text>
+      <text id="case-deco-style-double" class="dk-double">双线下划线</text>
+      <text id="case-deco-thickness" class="dk-thick">加粗下划线 3px</text>
+      <text id="case-deco-shorthand" class="dk-short">简写 underline 2px dashed 品牌色</text>
+    </view>
+
     <!-- ★★★font-variant-numeric 项（2026-10-18 · 批 B F3）：等宽数字（价格/KPI 列对齐刚需） -->
     <text class="cc-sec">J · font-variant-numeric（等宽数字 · 基准 = Web）</text>
     <view class="cc-card fvn-scope">
@@ -139,4 +150,12 @@ const lhText = '第一行文本\n第二行文本（行高 28px）'
 .fvn-plain { display: block; font-size: 15px; color: #4b5058; }
 .fvn-serif-tab { display: block; font-size: 15px; color: #1a1c22; font-family: serif; font-variant-numeric: tabular-nums; }
 .fvn-serif-prop { display: block; font-size: 15px; color: #1a1c22; font-family: serif; font-variant-numeric: normal; }
+/* ★★★text-decoration 三兄弟项（2026-10-18 · 批 B F3 · 基准 = Web）：
+   线型须在**比例字体**下看才有意义（等宽字体里点线/虚线都很密）。 */
+.dk-color { display: block; font-size: 15px; color: #5b5bd6; text-decoration: underline; text-decoration-color: #d64545; }
+.dk-dotted { display: block; font-size: 15px; color: #1a1c22; text-decoration: underline; text-decoration-style: dotted; text-decoration-color: #d64545; }
+.dk-dashed { display: block; font-size: 15px; color: #1a1c22; text-decoration: underline; text-decoration-style: dashed; text-decoration-color: #2a8a5a; }
+.dk-double { display: block; font-size: 15px; color: #1a1c22; text-decoration: underline; text-decoration-style: double; text-decoration-color: #5b5bd6; }
+.dk-thick { display: block; font-size: 15px; color: #1a1c22; text-decoration: underline; text-decoration-color: #d64545; text-decoration-thickness: 3px; }
+.dk-short { display: block; font-size: 15px; color: #1a1c22; text-decoration: underline 2px dashed #5b5bd6; }
 </style>

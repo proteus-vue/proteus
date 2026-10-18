@@ -352,6 +352,9 @@ const ENGINE_LOCKED_ENDS = {
   // Skyline 官方样式属性表**无 font-variant-numeric**（font-* 仅 5 条）。该端无字形特性通道，
   //   也无法编译期模拟（等宽数字是字形选择，不是字符串变换）⇒ 引擎锁死。
   'font-variant-numeric': ['skyline'],
+  // Skyline 官方表**收录** text-decoration-color / text-decoration-style（仅作用于 text 节点），
+  //   但**未收录 text-decoration-thickness** ⇒ 仅线宽这一项是引擎边界。
+  'text-decoration-thickness': ['skyline'],
 }
 
 const KNOWN_ENGINE_CHANNELS = new Set([

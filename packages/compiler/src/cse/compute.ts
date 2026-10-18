@@ -54,6 +54,9 @@ const COLOR_PROPS = new Set([
   'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color',
   // ★★★outline 族项（2026-10-08）：轮廓色
   'outline-color',
+  // ★★★text-decoration 三兄弟项（2026-10-18 · 批 B F3）：装饰线颜色（必须归一为 hex，
+  //   否则与 App 折叠面形态不一致——实测 CSE 出 `rgb(255, 0, 0)` 而 App 出 `#ff0000`）
+  'text-decoration-color',
 ])
 const NUMBER_PROPS = new Set(['opacity', 'flex-grow', 'flex-shrink', 'z-index', 'order', 'aspect-ratio', '-webkit-line-clamp'])
 const ENUM_PROPS = new Set([
@@ -93,7 +96,7 @@ const RATIO_BASES: Record<string, 'parentWidth' | 'parentHeight' | 'viewportWidt
 }
 /** 全部长度类属性（含 font-size 特例） */
 const LENGTH_PROPS = new Set([
-  ...Object.keys(RATIO_BASES), ...PX_LENGTH_PROPS, 'font-size', 'line-height',
+  ...Object.keys(RATIO_BASES), ...PX_LENGTH_PROPS, 'font-size', 'line-height', 'text-decoration-thickness',
   'border-top-left-radius', 'border-top-right-radius', 'border-bottom-right-radius', 'border-bottom-left-radius',
 ])
 
@@ -122,6 +125,10 @@ const INITIAL_VALUES: Record<string, string> = {
   'text-transform': 'none',
   // ★★★font-variant-numeric 项（2026-10-18）：CSS initial = normal（继承属性）
   'font-variant-numeric': 'normal',
+  // ★★★text-decoration 三兄弟项（2026-10-18）：CSS 初值
+  'text-decoration-color': 'currentcolor',
+  'text-decoration-style': 'solid',
+  'text-decoration-thickness': 'auto',
   'font-family': 'initial',
   'line-height': 'normal',
   'letter-spacing': '0px',
@@ -960,6 +967,10 @@ function mapToIrField(prop: string, val: CssComputedValue): { field: string; val
     'text-transform': 'textTransform',
     // ★★★font-variant-numeric 项（2026-10-18 · 批 B F3）：等宽数字（继承属性；直通同名 IR 字段）
     'font-variant-numeric': 'fontVariantNumeric',
+    // ★★★text-decoration 三兄弟项（2026-10-18 · 批 B F3）：装饰线颜色/线型/线宽（直通同名 IR 字段）
+    'text-decoration-color': 'textDecorationColor',
+    'text-decoration-style': 'textDecorationStyle',
+    'text-decoration-thickness': 'textDecorationThickness',
     'text-decoration-line': 'textDecoration',
     'flex-direction': 'flexDirection',
     'flex-wrap': 'flexWrap',
@@ -1025,6 +1036,16 @@ function mapToIrField(prop: string, val: CssComputedValue): { field: string; val
   }
   if (prop === 'font-weight') {
     return { field: 'fontWeight', value: typeof val === 'number' ? val : null }
+  }
+  if (prop === 'text-decoration-color') {
+    // ★★★text-decoration 三兄弟项（2026-10-18）：装饰线颜色（颜色由上方 COLOR_PROPS 归一，此处只映射字段）
+    return { field: 'textDecorationColor', value: typeof val === 'string' ? val : null }
+  }
+  if (prop === 'text-decoration-style') {
+    return { field: 'textDecorationStyle', value: typeof val === 'string' ? val : null }
+  }
+  if (prop === 'text-decoration-thickness') {
+    return { field: 'textDecorationThickness', value: typeof val === 'string' || typeof val === 'number' ? val : null }
   }
   if (prop === 'font-variant-numeric') {
     // ★★★font-variant-numeric 项（2026-10-18 · 批 B F3）：等宽数字（封闭集已由编译期/校验器收口，此处直通）

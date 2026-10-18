@@ -874,6 +874,16 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
             { std::string fst; if (jstr(it.c_str(), it.size(), "fontStyle", &fst) && !fst.empty()) arr += ",\"fontStyle\":\"" + jsonEscape(fst) + "\""; }
             // ★★★font-variant-numeric（2026-10-18 · 批 B F3）：等宽数字形态透传渲染侧（tnum）
             { std::string fvn; if (jstr(it.c_str(), it.size(), "fontVariantNumeric", &fvn) && !fvn.empty()) arr += ",\"fontVariantNumeric\":\"" + jsonEscape(fvn) + "\""; }
+            // ★★★text-decoration 三兄弟项（2026-10-18 · 批 B F3）：线型 / 颜色 / 线宽
+            //   ★颜色转成 ARGB 数值再透传（渲染侧按 uint32 直接喂 SetTextStyleDecorationColor）
+            { std::string ds; if (jstr(it.c_str(), it.size(), "textDecorationStyle", &ds) && !ds.empty()) arr += ",\"textDecorationStyle\":\"" + jsonEscape(ds) + "\""; }
+            { std::string dc; if (jstr(it.c_str(), it.size(), "textDecorationColor", &dc) && !dc.empty()) {
+                uint32_t argb = hexToArgb(dc);
+                if (argb != 0) { char cb[48]; snprintf(cb, sizeof(cb), ",\"textDecorationColorArgb\":%u", argb); arr += cb; }
+              } }
+            { double dt2 = 0; if (jnum(it.c_str(), it.size(), "textDecorationThickness", &dt2) && dt2 > 0) {
+                char tb[48]; snprintf(tb, sizeof(tb), ",\"textDecorationThickness\":%.2f", dt2); arr += tb;
+              } }
 
             // ★批次 36：字体角色（font-family → role；鸿蒙按可用字族映射，缺则回落默认）
             { std::string ff; if (jstr(it.c_str(), it.size(), "fontFamily", &ff) && !ff.empty()) arr += ",\"fontFamily\":\"" + jsonEscape(ff) + "\""; }

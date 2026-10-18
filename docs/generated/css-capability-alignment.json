@@ -431,6 +431,16 @@
           "app": "supported"
         },
         "why": "★★★grid-area 项（2026-10-08 · css:next P0·2× · CSS Grid）：子项的**网格放置**（命名区引用 / 线号）。命名形态 grid-area: <name> 折为 gridArea（内核走命名线放置）；线号形态 grid-area: 1 / 2 / 3 / 4 拆为 grid-row + grid-column。契约四同步（引擎字段，同 gridColumn 先例）；编译器折叠 + CSE（gridArea 直通）。★诚实边界：span / auto 命名线混合形态未支持（诊断）。"
+      },
+      {
+        "css": "text-decoration-thickness",
+        "id": "text-decoration-thickness",
+        "ends": {
+          "web": "supported",
+          "skyline": "not-listed",
+          "app": "supported"
+        },
+        "why": "★见 text-decoration 条目（三兄弟同批落地，2026-10-18 · 批 B F3）。"
       }
     ],
     "skylineAlignSwitches": [
@@ -641,6 +651,9 @@
       "textOverflow",
       "letterSpacing",
       "textDecoration",
+      "textDecorationColor",
+      "textDecorationStyle",
+      "textDecorationThickness",
       "visibility",
       "borderRadius",
       "borderColor",
@@ -1813,7 +1826,7 @@
       "app": "supported",
       "tier": "L1",
       "strategy": "编译期折叠",
-      "note": "★批次 35（2026-10-04 · ★基准 = Web）：`underline` / `line-through`（`none` = 默认不发射）；CSS **可继承**（沿树传播）。三端宿主：iOS `NSAttributedString.underlineStyle/strikethroughStyle` · Android `Paint.setUnderlineText/setStrikeThruText` · 鸿蒙 `OH_Drawing_SetTextStyleDecoration`。诚实边界：`overline`/颜色/线型未支持（诊断）",
+      "note": "★批次 35（2026-10-04 · ★基准 = Web）：`underline` / `line-through`（`none` = 默认不发射）；CSS **可继承**（沿树传播）。三端宿主：iOS `NSAttributedString.underlineStyle/strikethroughStyle` · Android `Paint.setUnderlineText/setStrikeThruText` · 鸿蒙 `OH_Drawing_SetTextStyleDecoration`。诚实边界：`overline`/颜色/线型未支持（诊断） ★★★text-decoration 三兄弟项（2026-10-18 · 批 B F3 · 基准 = Web）：`text-decoration-color`（初值 **currentColor** —— 未声明时跟随自身文字色）· `text-decoration-style`（solid/double/dotted/dashed/wavy；初值 solid）· `text-decoration-thickness`（px；初值 auto/from-font ⇒ 不发射）。★**简写一并扩展**：`underline red` / `underline 1px dashed #f00` 这类真实高频写法此前**整条被丢弃**，现折成 line + 三兄弟。★三端绘制：**Android 改为手绘**（原生 `setUnderlineText` 只画\"文字色单实线\"且线宽不可控——Path 实线/双线/点/虚线/波线）· iOS `NSUnderlineStyle` 选项集 + `underlineColor`/`strikethroughColor`（**wavy 不在该枚举** ⇒ 实线+厚度如实近似）· 鸿蒙 `OH_Drawing_SetTextStyleDecoration{Color,Style,ThicknessScale}`。★Skyline：`-color`/`-style` 官方原生支持；**`-thickness` 官方表未收录** ⇒ 具名引擎边界。",
       "supportTier": "universal"
     },
     {
@@ -1994,6 +2007,51 @@
       "tier": "L2",
       "strategy": "直映射",
       "note": "★★★grid-area 项（2026-10-08 · css:next P0·2× · CSS Grid）：子项的**网格放置**（命名区引用 / 线号）。命名形态 grid-area: <name> 折为 gridArea（内核走命名线放置）；线号形态 grid-area: 1 / 2 / 3 / 4 拆为 grid-row + grid-column。契约四同步（引擎字段，同 gridColumn 先例）；编译器折叠 + CSE（gridArea 直通）。★诚实边界：span / auto 命名线混合形态未支持（诊断）。",
+      "supportTier": "conditional"
+    },
+    {
+      "id": "text-decoration-color",
+      "css": "text-decoration-color",
+      "category": "text",
+      "compilerFields": [
+        "textDecorationColor"
+      ],
+      "web": "supported",
+      "skyline": "supported",
+      "app": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠 + 宿主绘制",
+      "note": "★见 text-decoration 条目（三兄弟同批落地，2026-10-18 · 批 B F3）。",
+      "supportTier": "universal"
+    },
+    {
+      "id": "text-decoration-style",
+      "css": "text-decoration-style",
+      "category": "text",
+      "compilerFields": [
+        "textDecorationStyle"
+      ],
+      "web": "supported",
+      "skyline": "supported",
+      "app": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠 + 宿主绘制",
+      "note": "★见 text-decoration 条目（三兄弟同批落地，2026-10-18 · 批 B F3）。",
+      "supportTier": "universal"
+    },
+    {
+      "id": "text-decoration-thickness",
+      "css": "text-decoration-thickness",
+      "category": "text",
+      "compilerFields": [
+        "textDecorationThickness"
+      ],
+      "web": "supported",
+      "skyline": "not-listed",
+      "app": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠 + 宿主绘制",
+      "note": "★见 text-decoration 条目（三兄弟同批落地，2026-10-18 · 批 B F3）。",
       "supportTier": "conditional"
     }
   ],

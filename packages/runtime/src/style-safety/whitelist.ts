@@ -43,6 +43,8 @@ const TEXT_TRANSFORM = ['none', 'uppercase', 'lowercase', 'capitalize']
  *   只收 四端都能表达 的两个值；其余数字特性（slashed-zero/ordinal/…）无宿主通道 ⇒ 编译期诊断。
  */
 const FONT_VARIANT_NUMERIC = ['normal', 'tabular-nums']
+/** ★★★text-decoration 三兄弟项（2026-10-18 · 批 B F3）：装饰线型封闭集（CSS 全集；初值 solid）。 */
+const TEXT_DECORATION_STYLE = ['solid', 'double', 'dotted', 'dashed', 'wavy']
 /**
  * ★★★G-61 后批（2026-10-05）：`white-space` 封闭集（Web 标准关键字）。
  *   与"各端可表达值"是两个轴：App 单行文本模型把 `nowrap` 当默认（no-op），
@@ -92,6 +94,8 @@ export const PROP_TYPES = {
   TextTransform: isEnum(TEXT_TRANSFORM),
   // ★★★font-variant-numeric 项（2026-10-18）：等宽数字枚举
   FontVariantNumeric: isEnum(FONT_VARIANT_NUMERIC),
+  // ★★★text-decoration 三兄弟项（2026-10-18）：装饰线型枚举
+  TextDecorationStyle: isEnum(TEXT_DECORATION_STYLE),
   TextWrap: isEnum(TEXT_WRAP),
   BorderStyle: isEnum(BORDER_STYLE),
   Overflow: isEnum(OVERFLOW),

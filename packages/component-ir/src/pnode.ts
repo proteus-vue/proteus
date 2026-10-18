@@ -127,6 +127,15 @@ export interface TextProps {
    *   价格/KPI/编号列对齐刚需 —— 三端平台层统一设 OpenType `tnum`。
    */
   fontVariantNumeric?: 'normal' | 'tabular-nums'
+  /**
+   * ★★★text-decoration 三兄弟项（2026-10-18 · 批 B F3）：装饰线的颜色 / 线型 / 线宽。
+   *   · color：Web 初值 = currentColor（缺省 ⇒ 跟随自身文字色）
+   *   · style：solid / double / dotted / dashed / wavy（初值 solid）
+   *   · thickness：px（auto / from-font ⇒ 不发射，由宿主按字体默认）
+   */
+  textDecorationColor?: string
+  textDecorationStyle?: 'solid' | 'double' | 'dotted' | 'dashed' | 'wavy'
+  textDecorationThickness?: ResolvedLength | number
   lineHeight?: ResolvedLength | number
   letterSpacing?: ResolvedLength
   color?: string

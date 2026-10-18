@@ -67,6 +67,12 @@ export interface RenderCmd {
    *   本字段仅作快照/诊断的可观测读数）。缺省省略。
    */
   fontVariantNumeric?: 'normal' | 'tabular-nums'
+  /** ★★★text-decoration 三兄弟项（2026-10-18 · 批 B F3）：装饰线颜色（缺省 = 文字色）。 */
+  textDecorationColor?: string
+  /** ★★★装饰线型（solid/double/dotted/dashed/wavy；缺省 = solid）。 */
+  textDecorationStyle?: 'solid' | 'double' | 'dotted' | 'dashed' | 'wavy'
+  /** ★★★装饰线宽（px；缺省 = 宿主按字体默认）。 */
+  textDecorationThickness?: number
   lineHeight?: number
   color_?: string
   textAlign?: string

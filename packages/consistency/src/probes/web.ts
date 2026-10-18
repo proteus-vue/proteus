@@ -133,6 +133,17 @@ function styleOf(el: Element, win: Window): NormalizedStyle {
   // ★★★font-variant-numeric 项（2026-10-18 · 批 B F3）：Web computed 为关键字串（如 `tabular-nums`）或 `normal`
   const fvn = cs.getPropertyValue('font-variant-numeric').trim().toLowerCase()
   if (fvn) styles.fontVariantNumeric = fvn
+  // ★★★text-decoration 三兄弟项（2026-10-18 · 批 B F3）：颜色（currentcolor 归一为自身 color 值）/ 线型 / 线宽
+  const dcol = color('text-decoration-color')
+  if (dcol) styles.textDecorationColor = dcol
+  const dst = cs.getPropertyValue('text-decoration-style').trim().toLowerCase()
+  if (dst) styles.textDecorationStyle = dst
+  const dth = cs.getPropertyValue('text-decoration-thickness').trim().toLowerCase()
+  // ★线宽：`auto`/`from-font` 不是长度（初值）⇒ 只在 px 数值时采集（与 App 侧"不发射"同口径）
+  if (dth && !/^(auto|from-font)$/.test(dth)) {
+    const px = normalizeLength(dth)
+    if (px !== null) styles.textDecorationThickness = px   // null = 非 px 长度（初值/不可绝对化）⇒ 不采集
+  }
   const ff = cs.getPropertyValue('font-family')
   if (ff) styles.fontFamily = normalizeFontFamily(ff)
   for (const [prop, key] of [

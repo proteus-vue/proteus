@@ -110,6 +110,10 @@ export const SEMANTIC_FIELD_SNAPSHOT_KEYS: Readonly<Record<string, readonly stri
   textTransform: ['textTransform'],
   // ★★★font-variant-numeric 项（2026-10-18 · 批 B F3）：等宽数字（读数键 = 同名字符串）
   fontVariantNumeric: ['fontVariantNumeric'],
+  // ★★★text-decoration 三兄弟项（2026-10-18 · 批 B F3）：装饰线颜色/线型/线宽（读数键 = 同名）
+  textDecorationColor: ['textDecorationColor'],
+  textDecorationStyle: ['textDecorationStyle'],
+  textDecorationThickness: ['textDecorationThickness'],
   fontFamily: ['fontFamily'],
   lineHeight: ['lineHeight'],
   textAlign: ['textAlign'],

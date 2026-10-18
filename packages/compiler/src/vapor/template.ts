@@ -124,7 +124,7 @@ export const APP_ENUM_VALUES: Record<string, readonly string[]> = {
 //   判据 = contracts/layers.ts 的 `zIndexOf`（数值→语义层区间映射 + 越界诊断；SSOT）。
 //   ★LY001 立场不变（内联 style/:style 裸 z-index 仍编译期拦——那是"层级控制手段"的逃生口）；
 //     本条服务**类样式**里的 z-index（语料 66 处：路由层叠/壳骨架——合法且跨端必需）。
-export const APP_PAINT_FIELDS = ['backgroundColor', 'color', 'fontSize', 'fontWeight', 'fontStyle', 'textTransform', 'fontVariantNumeric', 'fontFamily', 'textAlign', 'lineHeight', 'textOverflow', 'letterSpacing', 'textDecoration', 'visibility', 'borderRadius', 'borderColor', 'borderWidth', 'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth', 'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor', 'borderTopStyle', 'borderRightStyle', 'borderBottomStyle', 'borderLeftStyle', 'opacity', 'boxShadow', 'textShadow', 'transform', 'backgroundSize', 'backgroundPosition', 'backgroundRepeat', 'outlineWidth', 'outlineColor', 'outlineStyle', 'outlineOffset', 'zIndex'] as const
+export const APP_PAINT_FIELDS = ['backgroundColor', 'color', 'fontSize', 'fontWeight', 'fontStyle', 'textTransform', 'fontVariantNumeric', 'fontFamily', 'textAlign', 'lineHeight', 'textOverflow', 'letterSpacing', 'textDecoration', 'textDecorationColor', 'textDecorationStyle', 'textDecorationThickness', 'visibility', 'borderRadius', 'borderColor', 'borderWidth', 'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth', 'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor', 'borderTopStyle', 'borderRightStyle', 'borderBottomStyle', 'borderLeftStyle', 'opacity', 'boxShadow', 'textShadow', 'transform', 'backgroundSize', 'backgroundPosition', 'backgroundRepeat', 'outlineWidth', 'outlineColor', 'outlineStyle', 'outlineOffset', 'zIndex'] as const
 const PAINT_FIELDS = new Set<string>(APP_PAINT_FIELDS)
 /**
  * ★批次 4（CSS 兼容对齐）：`text-align` 的**封闭集**（App 自绘文本在盒内的水平对齐）。
@@ -151,6 +151,12 @@ export const APP_TEXT_TRANSFORM_VALUES = ['none', 'uppercase', 'lowercase', 'cap
  *   ⇒ 诊断跳过（不静默近似）。Web 基准：`tabular-nums` 使数字等宽（Helvetica Neue 实测 +55%）。
  */
 export const APP_FONT_VARIANT_NUMERIC_VALUES = ['normal', 'tabular-nums'] as const
+/**
+ * ★★★text-decoration 三兄弟项（2026-10-18 · 批 B F3）：装饰**线型**封闭集（四端可表达子集）。
+ *   `solid` = CSS 初值（不发射）；其余值三端都能画：iOS `NSUnderlineStyle` 模式位 ·
+ *   Android 手绘（Path：实线/双线/点/虚线/波线）· 鸿蒙 `TEXT_DECORATION_STYLE_*` · Skyline 原生支持。
+ */
+export const APP_TEXT_DECORATION_STYLE_VALUES = ['solid', 'double', 'dotted', 'dashed', 'wavy'] as const
 /** ★★★font-style 项（批 B F3）：封闭集（normal/italic/oblique）；iOS traitItalic / Android ITALIC / 鸿蒙 FONT_STYLE_*。
  *   ★与 `font-fold.ts` 的 FONT_STYLE_VALUES **同一份**（对外保留旧名字，避免破坏导出契约）。 */
 export const APP_FONT_STYLE_VALUES = FONT_STYLE_VALUES
@@ -1259,13 +1265,64 @@ export function parseStaticStyle(
         continue
       }
       if (key === 'textDecoration') {
-        // ★批次 35（对齐 Web）：text-decoration（none/underline/line-through；继承）。
-        //   `none` = 默认 ⇒ 不发射；underline/line-through → 枚举字符串。
-        const v = rawVal.trim().toLowerCase()
-        if (v === 'none') continue   // 默认
-        if (v === 'underline' || v === 'line-through') { out[key] = v; markImportant(key); continue }
-        pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 未支持（仅 none / underline / line-through）——已跳过`)
+        // ★批次 35（对齐 Web）：text-decoration（行/线型/颜色/线宽；继承）。
+        // ★★★text-decoration 三兄弟项（2026-10-18 · 批 B F3）：简写里的**颜色/线型/线宽**也一并折出
+        //   （`underline red` / `underline 1px dashed #f00` 是真实项目高频写法——此前整条被丢弃）。
+        //   语法：`<line> || <style> || <color> || <thickness>`（任意顺序；line 可为 none/underline/line-through）。
+        const toks = splitTopLevelSpaces(rawVal)
+        let line: string | undefined
+        let style: string | undefined
+        let color: string | undefined
+        let thickness: number | undefined
+        let bad = ''
+        for (const t of toks) {
+          const low = t.toLowerCase()
+          if (low === 'none') { line = 'none'; continue }
+          if (low === 'underline' || low === 'line-through') { line = low; continue }
+          if ((APP_TEXT_DECORATION_STYLE_VALUES as readonly string[]).includes(low)) { style = low; continue }
+          if (low === 'auto' || low === 'from-font') { thickness = undefined; continue }
+          const c = normalizeCssColor(t)
+          if (c) { color = c; continue }
+          const n = numOf(t)
+          if (n !== undefined) { thickness = n; continue }
+          bad = t; break
+        }
+        if (bad) { pushDiag('style 里 `' + rawKey + ': ' + rawVal + '` 含未支持的 token `' + bad + '`——已跳过'); continue }
+        if (line === 'none' || (line === undefined && style === undefined && color === undefined && thickness === undefined)) continue
+        if (line) { out[key] = line; markImportant(key) }
+        if (style && style !== 'solid') { out.textDecorationStyle = style; markImportant('textDecorationStyle') }
+        if (color) { out.textDecorationColor = color; markImportant('textDecorationColor') }
+        if (thickness !== undefined) { out.textDecorationThickness = thickness; markImportant('textDecorationThickness') }
         continue
+      }
+      // ★★★text-decoration 三兄弟项（2026-10-18 · 批 B F3）：
+      //   · text-decoration-color：装饰线颜色（Web 初值 = **currentColor** ⇒ 未声明时跟随文字色，
+      //     故只在显式声明时发射；App 宿主按「有值用该色、无值用文字色」绘制）。
+      //   · text-decoration-style：线型（初值 solid ⇒ 不发射）。
+      //   · text-decoration-thickness：线宽（初值 auto ⇒ 不发射；百分比需按字号换算、三端通道未统一 ⇒ 诊断）。
+      if (key === 'textDecorationColor') {
+        const c = normalizeCssColor(rawVal)
+        if (!c) { pushDiag('`' + rawKey + ': ' + rawVal + '` 无法归一为十六进制——已跳过'); continue }
+        out[key] = c; markImportant(key); continue
+      }
+      if (key === 'textDecorationStyle') {
+        const v = rawVal.trim().toLowerCase()
+        if (!(APP_TEXT_DECORATION_STYLE_VALUES as readonly string[]).includes(v)) {
+          pushDiag('`' + rawKey + ': ' + rawVal + '` 不是 App 支持的值（仅 ' + APP_TEXT_DECORATION_STYLE_VALUES.join(' / ') + '）——已跳过')
+          continue
+        }
+        if (v === 'solid') continue   // 初值 ⇒ 不发射
+        out[key] = v; markImportant(key); continue
+      }
+      if (key === 'textDecorationThickness') {
+        const v = rawVal.trim().toLowerCase()
+        if (v === 'auto' || v === 'from-font') continue   // 初值/字体自带 ⇒ 不发射
+        const n = numOf(rawVal)
+        if (n === undefined) {
+          pushDiag('`' + rawKey + ': ' + rawVal + '` 未解析（支持 auto / from-font / px；百分比需按字号换算，三端通道未统一）——已跳过')
+          continue
+        }
+        out[key] = n; markImportant(key); continue
       }
       if (key === 'borderRadius') {
         // ★批次 18（CSS 兼容对齐 · 以 Web 为基准）：`border-radius` 支持**百分比**（Web `border-radius: 50%`

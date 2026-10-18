@@ -4084,7 +4084,7 @@ final class SelfDrawView: UIView {
         // ★★★overflow-x 项（2026-10-06）：overflowX/overflowY 也透传（层配置按其开裁剪）
         // ★★★word-break 项（2026-10-06）：wordBreak 也透传（段落样式按其设 lineBreakMode）
         // ★批 A（决策 #651/#652）：position 必须透传——fixed 层需重挂到视图层（不随内容滚动）。
-        for k in ["backgroundColor", "color", "text", "fontFamily", "fontStyle", "fontVariantNumeric", "textAlign", "borderColor", "lineHeight", "whiteSpace", "wordBreak", "overflow", "textOverflow", "overflowX", "overflowY", "position"] {
+        for k in ["backgroundColor", "color", "text", "fontFamily", "fontStyle", "fontVariantNumeric", "textDecorationColor", "textDecorationStyle", "textDecorationThickness", "textAlign", "borderColor", "lineHeight", "whiteSpace", "wordBreak", "overflow", "textOverflow", "overflowX", "overflowY", "position"] {
             if let v = n[k] as? String { style[k] = v }
         }
         // ★★★修复（2026-10-08 · 子代理审美审查 + 真机取证）：**letterSpacing / textDecoration 此前被本函数丢弃**——
@@ -4552,9 +4552,29 @@ final class SelfDrawView: UIView {
         var attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: UIColor(cgColor: color)]
         if kern != 0 { attrs[.kern] = kern }
         if let para = para { attrs[.paragraphStyle] = para }
-        if deco == "underline" { attrs[.underlineStyle] = NSUnderlineStyle.single.rawValue }
-        else if deco == "line-through" { attrs[.strikethroughStyle] = NSUnderlineStyle.single.rawValue }
-
+        // ★★★text-decoration 三兄弟项（2026-10-18 · 批 B F3）：线型 / 颜色 / 线宽
+        //   ★iOS 的 NSUnderlineStyle 是**选项集**：single/double/dotted/dashed + thick。
+        //   ★wavy **不在该枚举里**（实测 SDK 只有 single/double/thick 与 pattern 位）
+        //     ⇒ 用单实线 + 显式厚度如实近似（不静默丢整条装饰）。
+        //   ★颜色：显式声明才设（Web 初值 = currentColor ⇒ 未声明时不设 = 跟随文字色）。
+        var decoRaw = NSUnderlineStyle.single.rawValue
+        if let ds = style["textDecorationStyle"] as? String {
+            switch ds {
+            case "double": decoRaw = NSUnderlineStyle.double.rawValue
+            case "dotted": decoRaw |= 0x0100   // patternDot
+            case "dashed": decoRaw |= 0x0200   // patternDash
+            default: break                      // solid / wavy（近似）
+            }
+        }
+        if let dt = style["textDecorationThickness"] as? CGFloat, dt > 0 { decoRaw |= NSUnderlineStyle.thick.rawValue }
+        else if let dtD = style["textDecorationThickness"] as? Double, dtD > 0 { decoRaw |= NSUnderlineStyle.thick.rawValue }
+        if deco == "underline" { attrs[.underlineStyle] = decoRaw }
+        else if deco == "line-through" { attrs[.strikethroughStyle] = decoRaw }
+        // 装饰色（underline / strikethrough 各有独立键）
+        if let dc = style["textDecorationColor"] as? String, let uic = parseHexColor(dc) {
+            if deco == "underline" { attrs[.underlineColor] = uic }
+            else if deco == "line-through" { attrs[.strikethroughColor] = uic }
+        }
         return NSAttributedString(string: text, attributes: attrs)
     }
 

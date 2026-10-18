@@ -1482,5 +1482,41 @@
       "related": ["T-css-batch-b-text-transform"],
       "note": "【已交付】tabular-nums 三端平台层唯一设置点（Android setFontFeatureSettings / iOS kNumberSpacing / 鸿蒙 AddFontFeature），度量与绘制同源。★Web 真值：宽度差取决于字族（Helvetica Neue +55%，SF Pro 0）⇒ 截图不可判，改用同字族开/关 tnum 的度量差。★新增鸿蒙 tnumProbe（真机 PASS，delta=0 是正确行为）。★顺带修：normal/none 必须显式发射才能压掉父级继承。★Skyline 具名引擎锁死（且无法编译期模拟）。"
     }
+    ,
+{
+      "id": "T-css-batch-b-text-decoration",
+      "title": "批 B · F3 排版增强 5/8：text-decoration 三兄弟（color/style/thickness）+ 简写扩展",
+      "type": "end-alignment",
+      "status": "done",
+      "owner": "zcode-2026-10-18",
+      "scope": [
+        "packages/compiler/src/vapor/template.ts",
+        "packages/compiler/src/cse/compute.ts",
+        "packages/compiler/src/cse/dynamic.ts",
+        "packages/component-ir/src/pnode.ts",
+        "packages/component-ir/src/pnode-style.ts",
+        "packages/renderer-app/src/adapters/selfdraw.ts",
+        "packages/contracts/src/style.ts",
+        "packages/runtime/src/style-safety/whitelist.ts",
+        "packages/layout-core/src/render-cmd.ts",
+        "packages/consistency/src/**",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/TextDecorationPainter.java",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/ProteusHostView.java",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/VaporRenderHost.java",
+        "hosts/ios/ProteusHost/runtime/selfdraw-scene.swift",
+        "hosts/harmony/host-app/proteus_render/src/main/cpp/**",
+        "platform/harmony/proteus-platform/src/main/cpp/proteus_text_platform.h",
+        "css-conformance/pages/font.vue",
+        "tests/text-decoration.test.ts",
+        "docs/generated/**"
+      ],
+      "decision": 1062,
+      "verification": "npx vitest run tests/text-decoration.test.ts && pnpm test:coupled && node scripts/verify-css-feature.mjs text-decoration-color && node scripts/verify-css-feature.mjs text-decoration-style && node scripts/verify-css-feature.mjs text-decoration-thickness && pnpm check:android-host-compile && pnpm check:harmony-host-compile",
+      "branch": null,
+      "related": [
+        "T-css-batch-b-tabular-nums"
+      ],
+      "note": "【已交付】三条长手（color/style/thickness）+ 简写按 CSS 四分量任意顺序解析（此前 underline red 整条被丢弃=静默失样式）。★三端差异真实：Android 原生装饰是布尔开关 ⇒ 新建 TextDecorationPainter 手绘五线型（仅自定义时接管）；iOS NSUnderlineStyle 选项集（wavy 不在枚举 ⇒ 实线近似）；鸿蒙 API 齐全含 WAVY；Skyline -thickness 具名边界。★顺带修 CSE 通路分叉（color 未进 COLOR_PROPS、thickness 未进长度归一）。★Android 真机六种线型逐项确认。"
+    }
   ]
 }

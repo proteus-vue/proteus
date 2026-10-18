@@ -464,6 +464,17 @@ export function normalizeStyleDecls(decls: Record<string, string>, opts: Normali
         // ★★★font-style（2026-10-18 · 批 B F3）：封闭集（`oblique <angle>` 由编译期诊断拦下，不进 IR）
         if (v === 'normal' || v === 'italic' || v === 'oblique') text.fontStyle = v
         break
+      case 'textDecorationColor':
+        // ★★★text-decoration 三兄弟项（2026-10-18 · 批 B F3）：装饰线颜色（hex 串；缺省 = currentColor）
+        text.textDecorationColor = v
+        break
+      case 'textDecorationStyle':
+        if (v === 'solid' || v === 'double' || v === 'dotted' || v === 'dashed' || v === 'wavy') text.textDecorationStyle = v
+        break
+      case 'textDecorationThickness':
+        // ★线宽（px；auto / from-font 由编译期拦下，不进 IR）
+        text.textDecorationThickness = resolveLength(v, { axis: 'vertical' })
+        break
       case 'fontVariantNumeric':
         // ★★★font-variant-numeric（2026-10-18 · 批 B F3）：封闭集（其余数字特性由编译期诊断拦下）
         if (v === 'normal' || v === 'tabular-nums') text.fontVariantNumeric = v

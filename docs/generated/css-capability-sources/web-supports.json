@@ -354,6 +354,24 @@
       "valueOk": null,
       "supported": true
     },
+    "text-decoration-color": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
+    "text-decoration-style": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
+    "text-decoration-thickness": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
     "visibility": {
       "recognized": true,
       "valueProbe": "hidden",
