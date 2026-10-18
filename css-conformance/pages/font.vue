@@ -60,6 +60,15 @@ const lhText = '第一行文本\n第二行文本（行高 28px）'
       <text id="case-font-style-oblique" class="fst-oblique">倾斜 oblique Italic 123</text>
     </view>
 
+    <!-- ★★★text-transform 项（2026-10-18 · 批 B F3）：大小写变换（Cap 形态用于**静态文本**——MP 编译期通道） -->
+    <text class="cc-sec">I · text-transform（大小写变换 · 基准 = Web）</text>
+    <view class="cc-card tt-scope">
+      <text id="case-text-transform-upper" class="tt-upper">Hello World 123</text>
+      <text id="case-text-transform-lower" class="tt-lower">Hello World 123</text>
+      <text id="case-text-transform-cap" class="tt-cap">don't 中文abc hello-world a1b</text>
+      <text id="case-text-transform-inherit" class="tt-inherit">inherited caps</text>
+    </view>
+
     <!-- ★★★font 简写项（2026-10-18 · 批 B F3）：重置型简写（父的 italic/3 倍行高**不得**漏进子节点） -->
     <text class="cc-sec">H · font 简写（重置型 · 基准 = Web）</text>
     <view class="cc-card fsh-wrap">
@@ -102,4 +111,12 @@ const lhText = '第一行文本\n第二行文本（行高 28px）'
 .fsh-all { display: block; font: italic bold 20px/1.5 "Helvetica Neue", sans-serif; color: #1a1c22; }
 .fsh-reset { display: block; font: 16px monospace; color: #4b5058; }
 .fsh-order { display: block; font: normal normal 700 14px serif; color: #1a1c22; }
+/* ★★★text-transform 项（2026-10-18 · 批 B F3 · 基准 = Web）：
+   `.tt-scope` 自身声明 uppercase ⇒ 子 `.tt-inherit` 未声明时**应继承**（CSS 可继承属性）。
+   `.tt-upper`/`.tt-lower`/`.tt-cap` 各自覆盖。 静态文本在 MP 端由编译期变换（Skyline 无该属性）。 */
+.tt-scope { display: flex; flex-direction: column; text-transform: uppercase; }
+.tt-upper { display: block; font-size: 15px; color: #1a1c22; text-transform: uppercase; }
+.tt-lower { display: block; font-size: 15px; color: #1a1c22; text-transform: lowercase; }
+.tt-cap { display: block; font-size: 15px; color: #1a1c22; text-transform: capitalize; }
+.tt-inherit { display: block; font-size: 15px; color: #4b5058; }
 </style>

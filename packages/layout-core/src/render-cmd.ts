@@ -57,6 +57,11 @@ export interface RenderCmd {
   fontWeight?: number | 'normal' | 'bold'
   /** ★★★font-style（2026-10-18 · 批 B F3）：斜体（normal/italic/oblique——四端可表达子集） */
   fontStyle?: 'normal' | 'italic' | 'oblique'
+  /**
+   * ★★★text-transform 项（2026-10-18 · 批 B F3）：大小写变换（**文本已在共享运行期变换**，
+   *   本字段仅作快照/诊断的可观测读数——宿主不需要消费它）。缺省省略。
+   */
+  textTransform?: 'none' | 'uppercase' | 'lowercase' | 'capitalize'
   lineHeight?: number
   color_?: string
   textAlign?: string

@@ -61,6 +61,9 @@ export { ListRegistry } from './list-registry'
 // ★V4：LayoutTemplate 契约 + 实例化（模板 + 数据 → 引擎就绪节点树）
 export type { LayoutTemplate, LayoutNode, ListTemplate, TextSegment, InstantiatedNode } from './layout-template'
 export { instantiateTemplate, evalTextSegments } from './instantiate'
+// ★★★text-transform 项（2026-10-18 · 批 B F3）：**唯一语义实现**（编译器 / App 运行时 / 渲染适配器共用）
+export { applyTextTransform, TEXT_TRANSFORM_VALUES } from './text-transform'
+export type { TextTransformValue } from './text-transform'
 export type { InstantiateOptions, InstantiateResult } from './instantiate'
 export { VaporRuntime, tierOf, makeScopedRead } from './runtime'
 export type { SourceSubscriber, EvalContext, LoadResult } from './runtime'

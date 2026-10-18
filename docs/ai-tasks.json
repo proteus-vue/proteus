@@ -1419,5 +1419,37 @@
       ],
       "note": "【批 B 进度】F3 第 2 项。font 简写 = CSS Fonts 4：`font: [style] [variant] [weight] [stretch]? size[/line-height]? family`。本批实现子集：font-style(normal/italic/oblique) + font-weight(normal/bold/100-900) + font-size(px/%) + line-height(数字/px) + font-family(候选清单)。**纯编译期展开成既有字段**（fontSize/fontWeight/fontStyle/lineHeight/fontFamily），零宿主改动（宿主已支持这五个字段）。诚实边界：`font-variant: small-caps` / `font-stretch` / 系统字体关键字（caption/icon/menu…）暂不支持 ⇒ 编译期诊断。 【已交付】语法唯一实现 packages/compiler/src/font-shorthand.ts（App 折叠面 + CSE 共用）；App 语义 font-fold.ts（foldFont + foldFontLonghand，简写与长手同一批归一器）；parseLineHeight 接受 normal 作重置 token；font-style: normal 显式发射；:style 对象常量同口径。Web 真值实测纠正了『line-height 不重置』的错误认知（Chromium：父 line-height:3 + 子 font:14px serif ⇒ 子 normal）。判据 tests/vapor-font-shorthand.test.ts（4 条）+ cse-core 用例；test:coupled 417 全绿。"
     }
+    ,
+    {
+      "id": "T-css-batch-b-text-transform",
+      "title": "批 B · F3 排版增强 3/8：text-transform（共享运行期唯一实现 + MP 编译期变换）",
+      "type": "end-alignment",
+      "status": "done",
+      "owner": "zcode-2026-10-18",
+      "scope": [
+        "packages/slot-runtime/src/text-transform.ts",
+        "packages/slot-runtime/src/instantiate.ts",
+        "packages/slot-runtime/src/slot.ts",
+        "packages/slot-runtime/src/runtime.ts",
+        "packages/slot-runtime/src/table.ts",
+        "packages/compiler/src/vapor/text-transform-fold.ts",
+        "packages/compiler/src/vapor/template.ts",
+        "packages/compiler/src/vapor/build.ts",
+        "packages/compiler/src/template.ts",
+        "packages/compiler/src/index.ts",
+        "packages/renderer-app/src/adapters/selfdraw.ts",
+        "packages/contracts/src/style.ts",
+        "packages/runtime/src/style-safety/whitelist.ts",
+        "packages/consistency/src/**",
+        "css-conformance/pages/font.vue",
+        "tests/text-transform.test.ts",
+        "docs/generated/**"
+      ],
+      "decision": 1059,
+      "verification": "npx vitest run tests/text-transform.test.ts && pnpm test:coupled && pnpm check:style-ir-schema && pnpm check:style-coverage && pnpm check:app-css-surface && pnpm check:css-capability-alignment && pnpm check:file-size",
+      "branch": null,
+      "related": ["T-css-batch-b-font-shorthand"],
+      "note": "【已交付】语义唯一实现在 slot-runtime/text-transform.ts（App 三端宿主零改动）；MP/Skyline 官方表无此属性 ⇒ 编译期变换静态文本 + 动态文本诊断。★capitalize 词边界由 135+ 样本与 Chromium 逐像素比对（0 差异）：撇号/下划线/Nd·Nl 是词内，CJK·假名·韩文音节·半角片假名·々 断词，titlecase（ǳ→ǲ）、ß 词首不展开。★意外修复：鸿蒙 JSVM 不支持任何 Unicode 属性转义（改纯码位区间表）；MP 类名表未剥注释导致继承静默失效（已修+断言）；css:verify 新增 engineLockedEnds 具名豁免。★真机：Android/iOS/Web ✓；MP 产物 ✓；鸿蒙 superapp-screen 场景白屏（与 text-transform 无关，已单独立项）。"
+    }
   ]
 }

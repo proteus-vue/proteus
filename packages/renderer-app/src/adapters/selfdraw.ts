@@ -16,6 +16,8 @@
 //   不实现 em/rem/vw/calc 等需要上下文才能解析的单位（那是编译期的事，见 W-CSS 规则）。
 //   ⇒ 诚实边界：本文件不是编译期折叠的替代品，而是它的**消费端形状示范**。
 import type { NativeAdapter, NativeNode, NativeTextNode, NativeElementNode, NativeCommentNode } from '../native'
+// ★★★text-transform 项（2026-10-18 · 批 B F3）：**唯一语义实现**（与 slot-runtime 实例化同源）
+import { applyTextTransform } from '@proteus-vue/slot-runtime'
 
 /* ────────────────────────── 布局请求（与 Rust `LayoutRequest` DTO 逐字段对应） ────────────────────────── */
 
@@ -78,6 +80,11 @@ export interface SelfDrawNodeSpec {
    *   否则「同文本 + 同字号 + 同字重，只差斜体」会被缓存合并 ⇒ 其中一个尺寸错（静默）。
    */
   fontStyle?: 'normal' | 'italic' | 'oblique'
+  /**
+   * ★★★text-transform 项（2026-10-18 · 批 B F3）：大小写变换（**在 JS 侧已应用到 spec.text**；
+   *   本字段只保留声明值，供动态更新与诊断可观测）。
+   */
+  textTransform?: 'none' | 'uppercase' | 'lowercase' | 'capitalize'
   /**
    * 绘制用：**字体族（语义角色，已归一化）**——不是 CSS 原始清单
    *
@@ -226,7 +233,7 @@ export interface SelfDrawAdapter extends NativeAdapter {
  * 绘制相关的键（**不进布局核心**——核心只管几何；绘制由宿主的指令流消费）。
  *
  */
-const PAINT_KEYS = new Set(['backgroundColor', 'color', 'fontSize', 'fontWeight', 'fontStyle', 'fontFamily', 'borderRadius', 'borderColor', 'borderWidth', 'opacity'])
+const PAINT_KEYS = new Set(['backgroundColor', 'color', 'fontSize', 'fontWeight', 'fontStyle', 'textTransform', 'fontFamily', 'borderRadius', 'borderColor', 'borderWidth', 'opacity'])
 
 /** 布局相关的键（进核心；其余键既非布局也非绘制 → 忽略并计数，便于发现「静默丢失」） */
 const LAYOUT_KEYS = new Set([
@@ -873,6 +880,12 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
       const fstRaw = styleValue(tStyle, 'fontStyle') ?? props.fontStyle
         ?? styleValue(pStyle, 'fontStyle') ?? (parent ? parent.props.fontStyle : undefined)
       const fst = typeof fstRaw === 'string' && (fstRaw === 'italic' || fstRaw === 'oblique') ? fstRaw : 'normal'
+      // ★★★text-transform 项（2026-10-18 · 批 B F3）：**B 路**（Vue 官方 renderer → 本适配器）的文本变换。
+      //   A 路（Vapor 实例化）已在 `instantiate.ts` 的文本出口变换过——两条路径各自覆盖、互不重复。
+      //   ★同样从父元素继承（CSS：text-transform 可继承；文本叶子是匿名子节点，值写在 `p-text` 元素上）。
+      const ttRaw = styleValue(tStyle, 'textTransform') ?? props.textTransform
+        ?? styleValue(pStyle, 'textTransform') ?? (parent ? parent.props.textTransform : undefined)
+      if (typeof ttRaw === 'string' && ttRaw !== 'none' && spec.text) spec.text = applyTextTransform(spec.text, ttRaw)
       if (Number.isFinite(fsNum) && fsNum > 0) {
         spec.fontSize = fsNum
         spec.fontWeight = fwNum
@@ -953,6 +966,9 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
       } else if (key === 'fontStyle') {
         // ★★★font-style 项（2026-10-18）：封闭集（normal/italic/oblique）；未知值不落（宿主回退常规体）
         if (typeof src === 'string' && (src === 'normal' || src === 'italic' || src === 'oblique')) spec.fontStyle = src
+      } else if (key === 'textTransform') {
+        // ★★★text-transform 项（2026-10-18）：封闭集；值落 spec（文本变换发生在上面的文本叶分支）
+        if (typeof src === 'string' && (src === 'none' || src === 'uppercase' || src === 'lowercase' || src === 'capitalize')) spec.textTransform = src
       } else if (key === 'fontFamily') {
         // ★字体族是字符串清单 ⇒ 归一化成**语义角色**；未识别则**不落**（宿主回退 system）
         const fam = normalizeFontFamily(src)
@@ -1025,8 +1041,15 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
       //   ★与 `setElementText` 的 V7 修正是同一原则：**文本变更必须进补丁通道**，
       //     既不能被静默丢弃，也不该被迫走全量（id 稳定 ⇒ 走补丁）。
       if (node.text !== text) {
-        node.text = text
-        textDirty.set(node, text)
+        // ★★★text-transform（批 B F3）：**更新路径也必须变换**——否则首帧正确、改数据后又变回原文。
+        //   有效值取父元素（文本叶子是匿名子节点；CSS 继承语义）。
+        const parentEl = parentOf.get(node) ?? null
+        const tt = parentEl
+          ? (styleValue((parentEl.props.style as Record<string, unknown> | undefined) ?? {}, 'textTransform') ?? parentEl.props.textTransform)
+          : undefined
+        const next = typeof tt === 'string' && tt !== 'none' ? applyTextTransform(text, tt) : text
+        node.text = next
+        textDirty.set(node, next)
       }
       patches++
     },
@@ -1041,8 +1064,11 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
       const only = el.children.length === 1 ? el.children[0] : null
       if (only && only.__kind === 'text') {
         if (only.text !== text) {
-          only.text = text
-          textDirty.set(only, text)
+          // ★★★text-transform（批 B F3）：与 setText 同一处理（更新路径同样要变换）
+          const tt2 = styleValue((el.props.style as Record<string, unknown> | undefined) ?? {}, 'textTransform') ?? el.props.textTransform
+          const next = typeof tt2 === 'string' && tt2 !== 'none' ? applyTextTransform(text, tt2) : text
+          only.text = next
+          textDirty.set(only, next)
           patches++
         }
         return

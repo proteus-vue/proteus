@@ -229,6 +229,12 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
   //     **同一语义一处实现**：合成的表达式文本为此后唯一入口，独立绑定不再各发一条。
   //   ★单段插值（`{{ x }}`，无静态段）**不合成**——产物与既有逐字节一致（既有回归锁）。
   const textSegsByNode = new Map<number, TextSegment[]>()
+  /**
+   * ★★★text-transform 项（2026-10-18 · 批 B F3）：节点 id → 该节点的 `textTransform`。
+   *   来源 = 模板产物的节点 style（**继承已在 buildLayoutTemplate 里按 APP_INHERITABLE_FIELDS 展开**）。
+   *   ⇒ 订阅槽位带上它，App 运行期只需读槽位（无需回查树），三端宿主零改动。
+   */
+  const textTransformByNode = new Map<number, string>()
   /** ★G-61 B2：动态 :class 计划（键 = 运行期 nodeId 的字符串形态） */
   let tplClassPlans: Record<string, import('@proteus-vue/slot-runtime').DynamicClassPlan> | undefined
   {
@@ -237,6 +243,9 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
     tplDynamicClassRules = tplRes.dynamicClassRules
     for (const n of tplRes.template.nodes) {
       if (n.textSegments && n.textSegments.length > 0) textSegsByNode.set(n.id, n.textSegments)
+      // ★text-transform：只收非 none（缺省省略字段 ⇒ 既有产物逐字节不变）
+      const tt = (n.style as { textTransform?: unknown } | undefined)?.textTransform
+      if (typeof tt === 'string' && tt !== 'none') textTransformByNode.set(n.id, tt)
     }
     // ★★★G-61 B2：预计算计划（仅在存在动态 :class 时做——既有产物逐字节不变）
     if (hasDynamicClass) {
@@ -519,6 +528,7 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
       const itemSlot: SlotSubscription = {
         slotId: mySlot,
         nodeId: myNode, // 模板级序号（诊断用；实际目标由 ListRegistry 解析）
+        ...(itemKind === 'text' && textTransformByNode.has(myNode) ? { textTransform: textTransformByNode.get(myNode) } : {}),
         evaluatorId,
         tier: decision.tier,
         kind: 'list-item',
@@ -623,6 +633,8 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
     const slot: SlotSubscription = {
       slotId: mySlot,
       nodeId: myNode,
+      // ★text-transform：文本槽位带上该节点的大小写变换（缺省省略）
+      ...(kind === 'text' && textTransformByNode.has(myNode) ? { textTransform: textTransformByNode.get(myNode) } : {}),
       evaluatorId,
       tier: decision.tier,
       kind,

@@ -339,6 +339,18 @@ for (const kebab of Object.keys(mdnProps)) {
 }
 
 /* ── ⑤ 实现状态判定（按证据——不拍脑袋）── */
+/**
+ * ★★★**引擎锁死豁免**（2026-10-18 · 批 B F3）：某端**引擎锁死、改不动**时，可具名登记为
+ *   "该端不表达"（验收记 n/a：不当作通过、也不当作缺陷）。★只在**穷尽主流端做法**后使用；
+ *   "本端能实现、只是别的批次没接线"**禁止**列在这里（必须本项补齐——用户 2026-10-07 铁律）。
+ *   键 = CSS 能力 id；值 = 端列表（'skyline' / 'app'）。
+ */
+const ENGINE_LOCKED_ENDS = {
+  // Skyline 官方样式属性表**无 text-transform**（已核官方文档 + skyline-wxss-official.json：110 条属性无此项）。
+  //   本仓补偿：MP 产物**编译期**变换静态文本（动态绑定文本编译期如实诊断）⇒ 静态面已与 Web 对齐。
+  'text-transform': ['skyline'],
+}
+
 const KNOWN_ENGINE_CHANNELS = new Set([
   // 走"结构化属性通道"而非 CSS 属性的能力（映射到对应 CSS 名便于清单归位）
   'clip-path', 'mask', 'background-image', // fill-gradient 通道 = background-image 的渐变子集
@@ -437,6 +449,8 @@ const toEntry = (kebab, kind) => {
       webSupport: webSupports.properties?.[kebab]?.supported ?? null,
     },
     usage,
+    // ★引擎锁死豁免（具名；空数组 ⇒ 验收按"必须可表达"判）
+    engineLockedEnds: ENGINE_LOCKED_ENDS[kebab] ?? [],
     priority: kind === 'property' ? priorityOf(kebab, implInfo, usage) : 'P2',
     acceptance: implInfo.impl === 'implemented' ? 'pending' : 'none', // 验收状态（逐项推进时更新——见 verify-css-feature）
   }

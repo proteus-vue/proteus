@@ -34,6 +34,11 @@ const TEXT_ALIGN = ['left', 'center', 'right']
  */
 const FONT_STYLE = ['normal', 'italic', 'oblique']
 /**
+ * ★★★text-transform 项（2026-10-18 · 批 B F3）：大小写变换封闭集。
+ *   ★只列 **四端都能表达** 的值：`full-width` / `full-size-kana` 无宿主通道 ⇒ 编译期诊断（不进本集）。
+ */
+const TEXT_TRANSFORM = ['none', 'uppercase', 'lowercase', 'capitalize']
+/**
  * ★★★G-61 后批（2026-10-05）：`white-space` 封闭集（Web 标准关键字）。
  *   与"各端可表达值"是两个轴：App 单行文本模型把 `nowrap` 当默认（no-op），
  *   其余值由 Applier/折叠器如实降级（诊断）——本层按 Web 标准收口，端侧收窄不在这层。
@@ -78,6 +83,8 @@ export const PROP_TYPES = {
   TextAlign: isEnum(TEXT_ALIGN),
   // ★★★font-style 项（2026-10-18）：斜体枚举（normal/italic/oblique）
   FontStyle: isEnum(FONT_STYLE),
+  // ★★★text-transform 项（2026-10-18）：大小写变换枚举
+  TextTransform: isEnum(TEXT_TRANSFORM),
   TextWrap: isEnum(TEXT_WRAP),
   BorderStyle: isEnum(BORDER_STYLE),
   Overflow: isEnum(OVERFLOW),

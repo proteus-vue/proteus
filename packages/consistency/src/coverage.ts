@@ -106,6 +106,8 @@ export const SEMANTIC_FIELD_SNAPSHOT_KEYS: Readonly<Record<string, readonly stri
   fontWeight: ['fontWeight'],
   // ★★★font-style 项（2026-10-18 · 批 B F3）：斜体（读数键 = 同名字符串）
   fontStyle: ['fontStyle'],
+  // ★★★text-transform 项（2026-10-18 · 批 B F3）：大小写变换（读数键 = 同名字符串）
+  textTransform: ['textTransform'],
   fontFamily: ['fontFamily'],
   lineHeight: ['lineHeight'],
   textAlign: ['textAlign'],

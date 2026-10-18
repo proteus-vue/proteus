@@ -896,6 +896,18 @@
       "note": "★★★font-style 项（2026-10-18 · 批 B F3 · 基准 = Web）：`normal` / `italic` / `oblique`（四端可表达子集；带角度的 `oblique <angle>` 三端字体引擎均无角度语义 ⇒ 编译期诊断跳过）。CSS **可继承**属性（沿树传播）。三端宿主：iOS `UIFontDescriptor.SymbolicTraits.traitItalic` · Android `Typeface.ITALIC`（`Typeface.create(fam, BOLD|ITALIC)`）· 鸿蒙 `OH_Drawing_SetTextStyleFontStyle(FONT_STYLE_ITALIC/OBLIQUE)`。★斜体是**另一套字形**（宽度不同）⇒ 度量与绘制必须同源（共用角色串 `italic:<族>`，平台层唯一解析）。"
     },
     {
+      "id": "text-transform",
+      "css": "text-transform",
+      "category": "text",
+      "today": "supported",
+      "tier": "L1",
+      "strategy": "编译期变换 + 共享运行期",
+      "probe": [
+        "text-transform"
+      ],
+      "note": "★★★text-transform 项（2026-10-18 · 批 B F3 · 基准 = Web）：`none` / `uppercase` / `lowercase` / `capitalize`（CSS **可继承**）。★**语义唯一实现在共享运行期** `packages/slot-runtime/src/text-transform.ts`——uppercase/lowercase 复用 JS 内建 Unicode 映射（与真 Chromium 逐字符一致：`straße→STRASSE` / `ΣΟΦΟΣ→σοφος`）；`capitalize` 的词边界规则由 **135 条样本与 Chromium 逐像素比对**（0 差异）得出：撇号/下划线/数字是词内，CJK/假名/韩文/标点/emoji 是边界，且用 **titlecase**（`ǳ→ǲ`）而非 uppercase。★四端落地：Web = 浏览器原生；App 三端 = 文本出口（实例化 `setNormText` + `SET_TEXT` 指令 + 自绘适配器）**同一实现**，宿主零改动；MP/Skyline = 官方样式表**无此属性**（已核官方文档）⇒ **编译期变换静态文本**，动态绑定文本编译期**如实诊断**（不静默当已实现）。诚实边界：`full-width` / `full-size-kana` 需东亚宽度表且三端宿主无通道 ⇒ 编译期诊断。"
+    },
+    {
       "id": "text-decoration",
       "css": "text-decoration",
       "category": "text",

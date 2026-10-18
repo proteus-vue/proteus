@@ -7,12 +7,12 @@ generated: true
 
 # CSS 多端支持参考
 
-> 82 项 CSS 能力在 **Web / Skyline / App 三端**的支持现状与可扩展档位。**每项能力均带独立锚点**（右侧页内导航可逐项跳转、可被外链深链引用），支持度以 **Web 真值为基准**，App 端自研引擎按 **L0–L5 成本分级**。
+> 83 项 CSS 能力在 **Web / Skyline / App 三端**的支持现状与可扩展档位。**每项能力均带独立锚点**（右侧页内导航可逐项跳转、可被外链深链引用），支持度以 **Web 真值为基准**，App 端自研引擎按 **L0–L5 成本分级**。
 > ★自动生成（`scripts/gen-css-support.mjs`），SSOT = `docs/generated/css-capability-alignment.json`；漂移门禁 `--check`。
 
 ## 概览
 
-共 **82** 项：三端全支持（universal）**33** 项 · 条件支持（conditional）**45** 项 · 三端不可用（unsupported）**4** 项。App 端当前**已支持 74 项**、**暂缺 8 项**（候选特性按 L 档扩展）。
+共 **83** 项：三端全支持（universal）**33** 项 · 条件支持（conditional）**46** 项 · 三端不可用（unsupported）**4** 项。App 端当前**已支持 75 项**、**暂缺 8 项**（候选特性按 L 档扩展）。
 
 ### 端模型
 
@@ -55,7 +55,7 @@ generated: true
 | [选择器](#cat-selector) | [类选择器 .a / .a.b](#selector-class) · [元素/类型选择器 h3 / p.foo](#selector-type) · [后代 / 子组合 .a .b / .a > .b](#selector-combinator) · [静态结构伪类 :first-child / :last-child / :nth-child(An+B\|odd\|even) / :not(简单选择器)](#selector-pseudo-structural) · [伪元素 ::before / ::after（+ content）](#selector-pseudo-element) · [状态伪类 :active（按下态）](#selector-pseudo-state-active) · [状态伪类 :hover / :focus / :checked](#selector-pseudo-state) · [属性选择器 data-x](#selector-attr) · [Vue 作用域穿透 :deep() / ::v-deep() / >>>](#selector-deep) · [兄弟组合 + / ~](#selector-sibling) · [通配 *](#selector-wildcard) |
 | [层叠](#cat-cascade) | [特异性 / 继承 / !important](#specificity-inheritance) · [CSS 自定义属性（design tokens）var(--x)](#css-vars) |
 | [@ 规则](#cat-at-rule) | [@media（响应式 / 环境条件）](#at-media) · [@supports（特性检测）](#at-supports) · [@keyframes（关键帧动画）](#keyframes) · [animation（简写：name duration timing delay …）](#animation) |
-| [文本](#cat-text) | [word-break（行内断词策略）](#word-break) · [font-weight](#font-weight) · [font-style](#font-style) · [text-decoration](#text-decoration) · [text-align](#text-align) · [line-height](#line-height) · [text-overflow](#text-overflow) · [-webkit-line-clamp: <integer>](#-webkit-line-clamp) · [letter-spacing](#letter-spacing) · [font-family](#font-family) · [white-space](#text-attrs) |
+| [文本](#cat-text) | [word-break（行内断词策略）](#word-break) · [font-weight](#font-weight) · [font-style](#font-style) · [text-transform](#text-transform) · [text-decoration](#text-decoration) · [text-align](#text-align) · [line-height](#line-height) · [text-overflow](#text-overflow) · [-webkit-line-clamp: <integer>](#-webkit-line-clamp) · [letter-spacing](#letter-spacing) · [font-family](#font-family) · [white-space](#text-attrs) |
 | [层](#cat-layer) | [z-index](#z-index) |
 
 ## 逐能力参考
@@ -498,7 +498,7 @@ generated: true
 
 > ★批次 42（对齐 Web）：animation 简写 → 命中同文件 @keyframes → 逐通道 keyframe 动画（内核 anim_start）；★#791/本批：**animation-delay**（第 2 个时间 token，内核 `delayMs`）与 **animation-iteration-count**（数字 / `infinite`→内核 `repeat:-1`）已支持；`direction`/`fill`/多动画逗号列表暂忽略（诊断）。可动画通道限 opacity / px 位移 / 等比缩放 / 旋转
 
-## 文本 · 11 项 {#cat-text}
+## 文本 · 12 项 {#cat-text}
 
 ### word-break（行内断词策略） {#word-break}
 
@@ -517,6 +517,12 @@ generated: true
 **Web** ✅ 支持 · **Skyline** ✅ 支持 · **App** ✅ 支持 · **App 可扩展** L1 · **策略** 编译期折叠 · **对齐** universal
 
 > ★★★font-style 项（2026-10-18 · 批 B F3 · 基准 = Web）：`normal` / `italic` / `oblique`（四端可表达子集；带角度的 `oblique <angle>` 三端字体引擎均无角度语义 ⇒ 编译期诊断跳过）。CSS **可继承**属性（沿树传播）。三端宿主：iOS `UIFontDescriptor.SymbolicTraits.traitItalic` · Android `Typeface.ITALIC`（`Typeface.create(fam, BOLD|ITALIC)`）· 鸿蒙 `OH_Drawing_SetTextStyleFontStyle(FONT_STYLE_ITALIC/OBLIQUE)`。★斜体是**另一套字形**（宽度不同）⇒ 度量与绘制必须同源（共用角色串 `italic:<族>`，平台层唯一解析）。
+
+### text-transform {#text-transform}
+
+**Web** ◻ 未测 · **Skyline** ◻ 未列 · **App** ✅ 支持 · **App 可扩展** L1 · **策略** 编译期变换 + 共享运行期 · **对齐** conditional
+
+> ★★★text-transform 项（2026-10-18 · 批 B F3 · 基准 = Web）：`none` / `uppercase` / `lowercase` / `capitalize`（CSS **可继承**）。★**语义唯一实现在共享运行期** `packages/slot-runtime/src/text-transform.ts`——uppercase/lowercase 复用 JS 内建 Unicode 映射（与真 Chromium 逐字符一致：`straße→STRASSE` / `ΣΟΦΟΣ→σοφος`）；`capitalize` 的词边界规则由 **135 条样本与 Chromium 逐像素比对**（0 差异）得出：撇号/下划线/数字是词内，CJK/假名/韩文/标点/emoji 是边界，且用 **titlecase**（`ǳ→ǲ`）而非 uppercase。★四端落地：Web = 浏览器原生；App 三端 = 文本出口（实例化 `setNormText` + `SET_TEXT` 指令 + 自绘适配器）**同一实现**，宿主零改动；MP/Skyline = 官方样式表**无此属性**（已核官方文档）⇒ **编译期变换静态文本**，动态绑定文本编译期**如实诊断**（不静默当已实现）。诚实边界：`full-width` / `full-size-kana` 需东亚宽度表且三端宿主无通道 ⇒ 编译期诊断。
 
 ### text-decoration {#text-decoration}
 

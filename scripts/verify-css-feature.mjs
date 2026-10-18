@@ -95,6 +95,8 @@ const PROBE_VALUES = {
   'word-break': ['word-break: break-all', 'wordBreak', 'break-all'],
   // ★★★font-style 项（2026-10-18 · 批 B F3）：斜体（CSE 产出 fontStyle 字符串）
   'font-style': ['font-style: italic', 'fontStyle', 'italic'],
+  // ★★★text-transform 项（2026-10-18 · 批 B F3）：大小写变换（CSE 产出 textTransform 字符串）
+  'text-transform': ['text-transform: uppercase', 'textTransform', 'uppercase'],
   'justify-self': ['justify-self: center', 'justifySelf', 'center'],
   // ★★★grid-template-areas 项（2026-10-08）：命名区域模板（浏览器 computed 形态 '"a b" "c c"'）
   'grid-template-areas': ['grid-template-areas: "a b" "a c"', 'gridTemplateAreas', '"a b" "a c"'],
@@ -191,7 +193,7 @@ if (!probe) {
     parity.irField = irField
     parity.irValue = irVal
     parity.computedProbe = Object.fromEntries(
-      Object.entries(computed).filter(([k]) => ['inset', 'top', 'right', 'bottom', 'left', 'overflow-x', 'overflow-y', 'white-space', 'word-break', 'justify-self', 'grid-area', 'background-color', 'color', 'border-radius', 'text-align', 'opacity', 'font-size', 'letter-spacing', 'line-height', 'flex-direction', 'justify-content', 'align-items', 'gap', 'border-bottom-width', 'border-top-width', 'border-left-width', 'border-right-width', 'border-bottom-color', 'border-top-color', 'border-left-color', 'border-right-color', 'border-style', 'border-top-style', 'border-bottom-style', 'border-top-left-radius', 'border-bottom-right-radius', 'background-size', 'background-position', 'background-repeat', 'grid-auto-flow', 'grid-auto-columns', 'grid-auto-rows', 'grid-template-areas', 'grid-area', 'grid-column', 'grid-template-columns', 'justify-items', 'width', 'height', 'min-width', 'max-width', 'display', 'font-family', 'font-weight', 'font-style', 'flex-wrap', 'align-content', 'text-shadow', 'outline-width', 'outline-offset', 'outline-style', '-webkit-line-clamp'].includes(k)),
+      Object.entries(computed).filter(([k]) => ['inset', 'top', 'right', 'bottom', 'left', 'overflow-x', 'overflow-y', 'white-space', 'word-break', 'justify-self', 'grid-area', 'background-color', 'color', 'border-radius', 'text-align', 'opacity', 'font-size', 'letter-spacing', 'line-height', 'flex-direction', 'justify-content', 'align-items', 'gap', 'border-bottom-width', 'border-top-width', 'border-left-width', 'border-right-width', 'border-bottom-color', 'border-top-color', 'border-left-color', 'border-right-color', 'border-style', 'border-top-style', 'border-bottom-style', 'border-top-left-radius', 'border-bottom-right-radius', 'background-size', 'background-position', 'background-repeat', 'grid-auto-flow', 'grid-auto-columns', 'grid-auto-rows', 'grid-template-areas', 'grid-area', 'grid-column', 'grid-template-columns', 'justify-items', 'width', 'height', 'min-width', 'max-width', 'display', 'font-family', 'font-weight', 'font-style', 'text-transform', 'flex-wrap', 'align-content', 'text-shadow', 'outline-width', 'outline-offset', 'outline-style', '-webkit-line-clamp'].includes(k)),
     )
     // 判据：IR 出值且与浏览器 resolved 语义一致（按形态）
     if (irVal === undefined) {
@@ -254,12 +256,24 @@ const channelBased = entry.channel === 'component' || entry.channel === 'indepen
 // ★★★简写展开项（border/background/outline…）：交付 = 展开为长手（长手各自验）⇒ parity/ends 不适用
 const shorthandBased = /简写展开/.test(entry.implNote || '')
 const nA = channelBased || shorthandBased
+// ★★★**引擎锁死豁免**（用户 2026-10-07 铁律）：唯一允许"某端不表达"的情形是
+//   **引擎锁死、改不动**（如 Skyline 官方属性表无 text-transform），且必须**具名**。
+//   ★与"差一个批次没接线"区分：后者禁止豁免（必须本项补齐）。
+//   引擎锁死项由能力清单的 `engineLockedEnds` 显式声明（具名 + 理由），此处只认声明、不猜。
+const lockedEnds = entry.engineLockedEnds ?? []
+const endsOk = (end) => {
+  const exp = end === 'skyline' ? END_CHECK.skyline : END_CHECK.app
+  if (exp.startsWith('可表达')) return true
+  // 引擎锁死 ⇒ null（n/a：不当作"过"也不当作"不过"——如实登记在验收包里）
+  return lockedEnds.includes(end) ? null : false
+}
 const gates = {
   implemented: entry.impl === 'implemented',
   parity: nA ? null : parity.pass === true,
+  // 两端都过（或引擎锁死 n/a）⇒ 过；任一端「能表达却没接线」⇒ 红
   endsMapped: nA
     ? null
-    : entry.kind !== 'property' ? null : END_CHECK.skyline.startsWith('可表达') && END_CHECK.app.startsWith('可表达'),
+    : entry.kind !== 'property' ? null : (endsOk('skyline') === false || endsOk('app') === false ? false : true),
 }
 const pass = gates.implemented && (gates.parity === null || gates.parity) && (gates.endsMapped === null || gates.endsMapped)
 
@@ -275,6 +289,8 @@ const pkg = {
   implEvidence,
   parity,
   endExpressibility: END_CHECK,
+  /** ★引擎锁死豁免的端（具名；来自能力清单 engineLockedEnds——空数组 = 无豁免） */
+  engineLockedEnds: lockedEnds,
   gates,
   pass,
   nextStep: pass

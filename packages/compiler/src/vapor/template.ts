@@ -124,7 +124,7 @@ export const APP_ENUM_VALUES: Record<string, readonly string[]> = {
 //   判据 = contracts/layers.ts 的 `zIndexOf`（数值→语义层区间映射 + 越界诊断；SSOT）。
 //   ★LY001 立场不变（内联 style/:style 裸 z-index 仍编译期拦——那是"层级控制手段"的逃生口）；
 //     本条服务**类样式**里的 z-index（语料 66 处：路由层叠/壳骨架——合法且跨端必需）。
-export const APP_PAINT_FIELDS = ['backgroundColor', 'color', 'fontSize', 'fontWeight', 'fontStyle', 'fontFamily', 'textAlign', 'lineHeight', 'textOverflow', 'letterSpacing', 'textDecoration', 'visibility', 'borderRadius', 'borderColor', 'borderWidth', 'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth', 'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor', 'borderTopStyle', 'borderRightStyle', 'borderBottomStyle', 'borderLeftStyle', 'opacity', 'boxShadow', 'textShadow', 'transform', 'backgroundSize', 'backgroundPosition', 'backgroundRepeat', 'outlineWidth', 'outlineColor', 'outlineStyle', 'outlineOffset', 'zIndex'] as const
+export const APP_PAINT_FIELDS = ['backgroundColor', 'color', 'fontSize', 'fontWeight', 'fontStyle', 'textTransform', 'fontFamily', 'textAlign', 'lineHeight', 'textOverflow', 'letterSpacing', 'textDecoration', 'visibility', 'borderRadius', 'borderColor', 'borderWidth', 'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth', 'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor', 'borderTopStyle', 'borderRightStyle', 'borderBottomStyle', 'borderLeftStyle', 'opacity', 'boxShadow', 'textShadow', 'transform', 'backgroundSize', 'backgroundPosition', 'backgroundRepeat', 'outlineWidth', 'outlineColor', 'outlineStyle', 'outlineOffset', 'zIndex'] as const
 const PAINT_FIELDS = new Set<string>(APP_PAINT_FIELDS)
 /**
  * ★批次 4（CSS 兼容对齐）：`text-align` 的**封闭集**（App 自绘文本在盒内的水平对齐）。
@@ -139,6 +139,11 @@ export const APP_TEXT_ALIGN_VALUES = ['left', 'center', 'right'] as const
  *   鸿蒙 `OH_Drawing_SetTypographyTextEllipsis`。其余（如 `fade`）⇒ 诊断跳过（不猜）。
  */
 export const APP_TEXT_OVERFLOW_VALUES = ['clip', 'ellipsis'] as const
+/**
+ * ★★★text-transform 项（2026-10-18 · 批 B F3）：封闭集（四端可表达子集）。
+ *   `full-width` / `full-size-kana` 需东亚宽度表且三端宿主无通道 ⇒ 诊断跳过（不静默当 none）。
+ */
+export const APP_TEXT_TRANSFORM_VALUES = ['none', 'uppercase', 'lowercase', 'capitalize'] as const
 /** ★★★font-style 项（批 B F3）：封闭集（normal/italic/oblique）；iOS traitItalic / Android ITALIC / 鸿蒙 FONT_STYLE_*。
  *   ★与 `font-fold.ts` 的 FONT_STYLE_VALUES **同一份**（对外保留旧名字，避免破坏导出契约）。 */
 export const APP_FONT_STYLE_VALUES = FONT_STYLE_VALUES
@@ -166,7 +171,7 @@ export const APP_SPECIAL_FIELDS = ['boxSizing'] as const
  *   `font-weight`/`line-height`/`text-align`/`text-overflow`（批 16）。
  *   背景/边框/圆角/不透明度在内核语义里**不继承**（见 Profile §3 可继承/不可继承表）⇒ 不得纳入。
  */
-export const APP_INHERITABLE_FIELDS = ['color', 'fontSize', 'fontWeight', 'fontStyle', 'fontFamily', 'lineHeight', 'textAlign', 'textOverflow', 'letterSpacing', 'textDecoration',
+export const APP_INHERITABLE_FIELDS = ['color', 'fontSize', 'fontWeight', 'fontStyle', 'textTransform', 'fontFamily', 'lineHeight', 'textAlign', 'textOverflow', 'letterSpacing', 'textDecoration',
   // ★★★word-break 项（2026-10-06 · CSS 继承属性）：`white-space` 与 `word-break` 都是 CSS Text 的**继承**属性
   //   （规范：父设、子默认继承）——App 折叠面须编译期传播，否则 `word-break: break-all` 设在容器上、
   //   文本子节点继承不到（Web/Skyline 由 CSS 引擎原生继承 ⇒ 跨端不一致）。★补 `whiteSpace` 同样纳入
@@ -1169,6 +1174,20 @@ export function parseStaticStyle(
           else { out[lh.field] = lh.value; markImportant(lh.field) }
           continue
         }
+      }
+      // ★★★text-transform 项（2026-10-18 · 批 B F3）：大小写变换（可继承）。
+      //   ★Web 由浏览器原生处理；MP/Skyline 官方表**无此属性** ⇒ 编译期对**静态文本**变换；
+      //     App 三端由共享运行期在文本出口变换（三端宿主零改动）。
+      if (key === 'textTransform') {
+        const v = rawVal.trim().toLowerCase()
+        if (!(APP_TEXT_TRANSFORM_VALUES as readonly string[]).includes(v)) {
+          pushDiag(`\`${rawKey}: ${rawVal}\` 不是 App 支持的值（仅 ${APP_TEXT_TRANSFORM_VALUES.join(' / ')}；full-width/full-size-kana 无宿主通道）——已跳过`)
+          continue
+        }
+        if (v === 'none') continue   // 默认值 ⇒ 不发射（零行为变化）
+        out[key] = v
+        markImportant(key)
+        continue
       }
       if (key === 'textAlign') {
         // ★批次 4：`text-align`——封闭集 left/center/right（宿主文本对齐通道；值原样下发）

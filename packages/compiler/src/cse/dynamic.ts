@@ -617,6 +617,8 @@ function irFieldCandidatesOf(prop: string): string[] {
     'font-weight': 'fontWeight',
     // ★★★font-style 项（2026-10-18 · 批 B F3）：斜体（动态类字段候选——与 compute.ts 对齐）
     'font-style': 'fontStyle',
+    // ★★★text-transform 项（2026-10-18 · 批 B F3）：大小写变换（继承属性；直通同名 IR 字段）
+    'text-transform': 'textTransform',
     'line-height': 'lineHeight',
     'font-family': 'fontFamily',
     'flex-basis': 'flexBasis',

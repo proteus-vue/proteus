@@ -21,6 +21,10 @@ import { GESTURE_MP_EVENTS, MP_GESTURE_ALTERNATIVES } from './tags'
 // ★★★GP2-a（2026-10-03）：三层挂载契约（层标签 / C1 判据 / C2 上限——单一来源在 contracts）
 import { GLOBAL_LAYER_NODE_LIMIT, MOUNT_LAYER_TAGS, isMountLayerDeclarableFile, type MountLayer } from '@proteus-vue/contracts'
 import { CompilerError } from './validate'
+// ★★★text-transform 项（2026-10-18 · 批 B F3）：**唯一语义实现**（与 slot-runtime 同源）
+import { applyTextTransform } from '@proteus-vue/slot-runtime'
+// ★★★text-transform 编译期折叠（类名表/值域/元素解析——与 App 折叠面同源）
+import { collectTextTransformByClass, ownTextTransform } from './vapor/text-transform-fold'
 import { lowerSvgToImage, lowerSvgDynamic, collectUnsupportedSvgTags, lowerSvgToScene } from './svg-lower'
 import type { SvgTextNode } from './svg-lower'
 
@@ -335,6 +339,17 @@ interface SerializeContext {
    *   只有组件自己 <style scoped> 声明过的类（+框架注入的语义/转场类）才后缀——
    *   全局共享类（app.wxss 定义）保持原样，否则与全局规则永不相交（两端视觉分叉的根因）。 */
   scopedClassNames?: ReadonlySet<string>
+  /**
+   * ★★★text-transform 项（2026-10-18 · 批 B F3）：**类名 → 大小写变换**（来自本页/本组件样式表）。
+   *   【为什么 MP 需要编译期查表】Skyline 官方属性表**没有 `text-transform`**（已核官方文档与
+   *   `skyline-wxss-official.json`）⇒ 该端不能靠 CSS 生效，只能**编译期变换静态文本**。
+   *   动态绑定文本在 MP 端无通道 ⇒ 如实诊断（不静默近似）。
+   */
+  textTransformByClass?: ReadonlyMap<string, string>
+  /** 当前正在序列化的元素的**有效 textTransform**（进入子节点前由 serializeElement 设置；无则 undefined） */
+  currentTextTransform?: string
+  /** 是否已就「动态文本 + text-transform」出过诊断（一次即可，避免逐节点刷屏） */
+  textTransformDiagnosed?: boolean
   /** ★组件模式根节点标记（首个顶层元素：class 追加 {{rootClass}} 接收外部 class 透传） */
   isComponentRoot?: boolean
   /** .self 修饰符 handler 名集合（script 生成 proteusSelfXxx 包装） */
@@ -1809,6 +1824,13 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
   }
   if (!node.children.length) return `${lineNote}<${tag}${attrStr} />`
   const hasElementChild = node.children.some((c) => c.type === NodeTypes.ELEMENT)
+  // ★★★text-transform（批 B F3）：本元素的有效变换 ⇒ 写进 ctx 供**文本子节点**读取
+  //   （MP 无该 CSS 属性 ⇒ 静态文本只能编译期变换；动态文本见 serializeNode 的诊断）。
+  //   ★值来自类名表（.cls { text-transform: uppercase }）+ 内联 style 声明，后者优先。
+  const prevTT = ctx.currentTextTransform
+  const ownTT = resolveTextTransform(node, ctx)
+  ctx.currentTextTransform = ownTT ?? prevTT
+  try {
   if (hasElementChild) {
     const inner = node.children.map((c) => serializeNode(c, ctx)).join('\n')
     return `${lineNote}<${tag}${attrStr}>\n${inner}\n</${tag}>`
@@ -1816,6 +1838,9 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
   // 纯文本/插值子节点：紧凑单行（产物可读性）
   const inline = node.children.map((c) => serializeNode(c, ctx)).join('')
   return `${lineNote}<${tag}${attrStr}>${inline}</${tag}>`
+  } finally {
+    ctx.currentTextTransform = prevTT
+  }
 }
 
 /** ★平台编译期宏·静态条件求值（2026-09-13）：把**字面量**布尔表达式求值——宏替换后的
@@ -1928,13 +1953,43 @@ function pruneStaticConditionals(children: TemplateChildNode[], ctx: SerializeCo
   }
 }
 
+/**
+ * ★★★text-transform（批 B F3）：解析某元素的**有效**大小写变换（MP 编译期通道）。
+ *   优先级：内联 \`style\` 的 \`text-transform\` > 类名表（\`.cls { text-transform: … }\`）。
+ *   ★CSS 继承：调用方在 serializeElement 里"元素自身无声明 ⇒ 沿用父元素值"（与 Web 一致）。
+ */
+function resolveTextTransform(node: ElementNode, ctx: SerializeContext): string | undefined {
+  // 值与类名解析都在 ./text-transform-fold.ts（与 App 折叠面同源）；此处只做"从节点取属性"
+  const styleAttr = node.props.find(
+    (p): p is AttributeNode => p.type === 6 && p.name === 'style' && Boolean(p.value?.content),
+  )
+  const clsAttr = node.props.find(
+    (p): p is AttributeNode => p.type === 6 && p.name === 'class' && Boolean(p.value?.content),
+  )
+  const classes = clsAttr ? clsAttr.value!.content.trim().split(/\s+/).filter(Boolean) : []
+  return ownTextTransform(styleAttr?.value?.content, classes, ctx.textTransformByClass)
+}
+
 function serializeNode(node: TemplateChildNode, ctx: SerializeContext): string {
   switch (node.type) {
     case NodeTypes.ELEMENT:
       return serializeElement(node as ElementNode, ctx)
-    case NodeTypes.TEXT:
-      return escapeXml((node as unknown as { content: string }).content)
+    case NodeTypes.TEXT: {
+      // ★★★text-transform（批 B F3）：**静态文本在编译期变换**（MP/Skyline 无该 CSS 属性）。
+      //   变换值由父元素在 serializeElement 里写入 `ctx.currentTextTransform`（进入子节点前）。
+      const raw = (node as unknown as { content: string }).content
+      return escapeXml(applyTextTransform(raw, ctx.currentTextTransform))
+    }
     case NodeTypes.INTERPOLATION:
+      // ★★★text-transform（批 B F3）：**动态文本在 MP 端无通道**（Skyline 无该 CSS 属性；
+      //   本仓 MP 产物也没有 WXS 通道）⇒ **如实诊断**，不静默当作已实现。
+      if (ctx.currentTextTransform) {
+        ctx.warnings.push(
+          `text-transform: ${ctx.currentTextTransform} 作用于**动态绑定文本**（{{ }}）——MP/Skyline 官方样式表无此属性，` +
+          `动态文本无编译期通道（静态文本已自动变换）⇒ 该端此节点不生效；Web 由浏览器原生、App 三端由共享运行期生效`,
+        )
+        ctx.textTransformDiagnosed = true
+      }
       ctx.trace?.add('node/interpolation', { line: (node as unknown as { loc: { start: { line: number } } }).loc.start.line, before: '{{ expr }}', after: '{{ expr }}（原样保留）' })
       // ★pinia-plan 12 P1：模板 store 引用 → 剥离前缀 + 收集字段（{{ store.current.title }} → {{ current.title }}）
       return `{{ ${rewriteStoreRefs((node as unknown as { content: { content: string } }).content.content, ctx)} }}`
@@ -1966,6 +2021,7 @@ export function transformTemplateToWxml(
     ...resolveOverrides(opts.rules),
     scopeId: opts.scopeId,
     scopedClassNames: opts.scopedClassNames,
+    textTransformByClass: opts.textTransformByClass,
     selfHandlers: new Set(),
     onceHandlers: new Set(),
     inlineHandlers: [],

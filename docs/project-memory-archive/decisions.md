@@ -6291,3 +6291,44 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
      `tests/__snapshots__/consistency/web-home.geometry.json` 少了 6 处 `"fontStyle": "normal"`。
      已用 `PROTEUS_UPDATE_GOLDEN=1` 刷新，并 `diff` 核对**只有这 6 行新增**（无几何漂移）。
      ★教训：加**快照键**类字段时，"改代码 + 改断言"清单里还必须包含**golden 重生成**。
+
+1059. **★★★批 B F3 第 3 项：`text-transform` —— 语义唯一实现在共享运行期 + MP 编译期变换 · 决策**（2026-10-18 · 批 B F3）：
+【做了什么】`none` / `uppercase` / `lowercase` / `capitalize`（CSS **可继承**）。四端落地：
+  · **Web** = 浏览器原生（基准，不经过我们任何代码）；
+  · **App 三端** = `packages/slot-runtime/src/text-transform.ts` 在**文本出口**变换
+    （实例化 `setNormText` + `SET_TEXT` 指令两处 + 自绘适配器 B 路）⇒ **三端宿主零改动**
+    （纪律 #1055：同一系统内的通用能力严禁每个宿主各实现一遍）；
+  · **MP/Skyline** = 官方样式属性表**无此属性**（已核官方文档 110 条 + `skyline-wxss-official.json`）
+    ⇒ **编译期变换静态文本**（`packages/compiler/src/vapor/text-transform-fold.ts`），
+    动态绑定文本**编译期如实诊断**（不静默当已实现）。
+【★★★capitalize 的词边界：135+ 样本与 Chromium 逐像素比对得出（0 差异）】
+  · 词内 = 字母 / 组合符 / **Nd·Nl 数字** / 撇号 / 下划线 / 中点；**CJK·假名·韩文音节·半角片假名·々** 断词；
+  · 反例（全部实测排除）：`don't`⇒`Don't`（不转 T）、`a_b`⇒`A_b`、`a1b`⇒`A1b`、`123abc`⇒`123abc`、
+    `v1.2beta`⇒`V1.2beta`、`abc中文`⇒`Abc中文`、`½abc`⇒`½abc`（No 类数字是边界但开头的非字母不触发）；
+  · **是 titlecase 不是 uppercase**：`ǳ`⇒`ǲ`（U+01C5）而非 `Ǳ`；
+  · 长度扩张映射不采用：`ß` 词首保持 `ß`（`toUpperCase` 给 `SS`，实测 Chromium 不展开）。
+【★★★意外收获（真缺陷，先于本项存在）：鸿蒙 JSVM 不支持任何 Unicode 属性转义】
+  首版用 `\p{L}` / `\p{Script=Han}` —— **`node --check` 通过、Android/iOS 正常，但鸿蒙 bundle 整包
+  "编译失败"**（`SUPERAPP_SCREEN_DRIVE {"error":"bundle 编译失败"}`，JSVM 连基础类别都不支持）。
+  ⇒ 共享层改为**纯码位区间表**（`WORD_CHAR_RANGES` / `WORD_BREAK_RANGES`，与 iOS 平台层 `isCJK` 同款）。
+  ★教训：**目标引擎是能力最弱者** —— 共享 JS 层的新语法必须先在**最弱引擎**上验证，
+    而"node --check 通过"只证明 Node 能解析，证明不了 JSVM 能解析。
+【★CSS 继承在 MP 端也要成立】`.p{text-transform:uppercase}` 的子节点必须继承。
+  实现：`serializeElement` 把"自身值 ?? 父值"写进 ctx，文本子节点读它。
+  实测抓到一个真 bug：类名表提取**没剥 CSS 注释** ⇒ 注释里出现的 `text-transform: uppercase` 字样
+  把后一条规则错位吃掉 ⇒ `.tt-scope` 的继承静默失效（wxml 产物里是原文）。已修 + 加回归断言。
+【四同步 + 全端】contracts 级别 `TextTransform` · runtime `PROP_TYPES` · 编译器折叠（App `textTransform`，
+  `none` 不发射）· 注册表 VALUE_TYPE `enum` · CSE 继承/初始值/IR 映射 · 一致性快照键 + Web 探针 +
+  applier（Skyline **如实 drop 并给理由**，不假绿）。
+【★验收装置的缺口修复】`css:verify` 原来把"某端不可表达"一律判红 ⇒ 与铁律"引擎锁死可具名豁免"
+  冲突。新增 `engineLockedEnds` 通道（能力清单显式声明"具名 + 理由"；验收包记 `null` = n/a，
+  **既不当作通过也不当作缺陷**）。`text-transform` 的 Skyline 端是首个使用者。
+【判据】`tests/text-transform.test.ts`（7 条：三值语义 + capitalize 全部易错边界 + 分区脚本 +
+  编译器折叠 + App 继承/槽位 + MP 静态变换/动态诊断/注释后继承）；`test:coupled` 725 全绿；
+  全量套件在此之前全绿；css-conformance 新增 I 区 4 案例。
+  **真机**：Android ✓（四态与 Web 一致）· iOS ✓（同）· Web 基准 ✓ · MP WXML 产物 ✓（静态文本已变换、
+  动态文本有诊断）· 鸿蒙 ⚠ 见下。
+【★诚实边界 / 未收口】① 鸿蒙的 `superapp-screen-<page>` 场景**白屏**——对照实验证明与 `text-transform` 无关
+  （`text` 页同样白屏，而 10-07 的历史截图正常 ⇒ 是本轮之前引入的宿主回归，疑与 #1054/#1055 的字体
+  统一有关）。**已单独立项**，不在本项内扩大范围。② MP 端动态文本无通道（诊断如实）。
+  ③ `full-width` / `full-size-kana` 未实现（无宿主通道 + 需东亚宽度表）⇒ 诊断。

@@ -121,6 +121,8 @@ describe('★App CSS 支持面 · ② SSOT 与折叠实现同源（真折叠，�
       if (f === 'aspectRatio') return '1.5'
       if (f === 'pointerEvents') return 'none'
       if (f === 'textDecoration') return 'underline'
+      // ★★★text-transform 项（2026-10-18 · 批 B F3）：枚举样例（折叠器折 textTransform；none = 默认不发射）
+      if (f === 'textTransform') return 'uppercase'
       if (f === 'fontFamily') return 'monospace'
       if (f === 'transform') return 'translateY(4px)'
       return '10'

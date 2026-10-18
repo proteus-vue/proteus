@@ -5,6 +5,8 @@ import { parse as sfcParse } from '@vue/compiler-sfc'
 // ★GP3-b1（2026-10-03）：Global 层共享状态模块路径（插件按此产出通道；契约单一来源）
 import { GLOBAL_LAYER_STATE_MODULE } from '@proteus-vue/contracts'
 import { transformTemplateToWxml } from './template'
+// ★★★text-transform 编译期折叠（MP/Skyline 无该 CSS 属性 ⇒ 静态文本编译期变换）
+import { collectTextTransformByClass } from './vapor/text-transform-fold'
 import { collectCssClassNames, FRAMEWORK_SCOPED_CLASS_NAMES } from './style'
 import { transformScriptToPage } from './script'
 import { transformStyleToWxss, BASE_SEMANTIC_WXSS } from './style'
@@ -287,9 +289,17 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
         ...FRAMEWORK_SCOPED_CLASS_NAMES,
       ])
     : undefined
+  // ★★★text-transform 项（2026-10-18 · 批 B F3）：从 <style> 析出「类名 → 大小写变换」表。
+  //   MP/Skyline 官方样式表无 text-transform ⇒ 该端只能**编译期**变换静态文本（动态文本如实诊断）。
+  //   ★按源码顺序扫描，后者覆盖前者（近似 CSS 源序；!important 未建模——MP 端保守）。
+  // 值与类名解析在 compiler/src/vapor/text-transform-fold.ts（唯一实现，与 App 折叠面共享）
+  const textTransformByClass = collectTextTransformByClass(
+    [...globalStyles, ...scopedStyles].map(preprocess).join(String.fromCharCode(10)),
+  )
   const tplResult = transformTemplateToWxml(tpl, {
     ...styleOpts,
     filename: options.filename,
+    textTransformByClass,
     annotateLines: options.annotateLines,
     scopeId,
     scopedClassNames: scopedClassNameSet,

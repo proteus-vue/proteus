@@ -464,6 +464,10 @@ export function normalizeStyleDecls(decls: Record<string, string>, opts: Normali
         // ★★★font-style（2026-10-18 · 批 B F3）：封闭集（`oblique <angle>` 由编译期诊断拦下，不进 IR）
         if (v === 'normal' || v === 'italic' || v === 'oblique') text.fontStyle = v
         break
+      case 'textTransform':
+        // ★★★text-transform（2026-10-18 · 批 B F3）：封闭集（full-width/full-size-kana 由编译期诊断拦下）
+        if (v === 'none' || v === 'uppercase' || v === 'lowercase' || v === 'capitalize') text.textTransform = v
+        break
       case 'lineHeight': {
         const n = Number(v)
         if (Number.isFinite(n) && !/[a-z%]/.test(v)) text.lineHeight = n // 无单位 = 倍数

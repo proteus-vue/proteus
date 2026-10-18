@@ -72,6 +72,14 @@ export interface SlotSubscription {
    */
   listSource?: string
 
+  /**
+   * ★★★text-transform 项（2026-10-18 · 批 B F3）：该**文本槽位**的大小写变换（已按 CSS 继承展开）。
+   *   缺省（undefined）⇒ 不变换（既有产物逐字节不变）。
+   *   ★挂在槽位上而非运行期查节点：槽位是编译期已知的（节点 style 已含继承后的值）；
+   *     且**增量更新时节点树未必在手**（指令只带 nodeId）。
+   */
+  textTransform?: string
+
   /* ── ★★P2-5（2026-10-03）：v-once / v-memo 语义 ── */
 
   /**

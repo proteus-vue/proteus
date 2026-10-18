@@ -21,6 +21,7 @@ export type StylePropLevel =
   //   `oblique <angle>` 带角度形式 Skyline 无 ⇒ 编译期诊断跳过，v1 边界）。
   //   四同步（INV-CE-07）：本表 + runtime PROP_TYPES/narrowing + compiler 静态校验 + 注册表 VALUE_TYPE_BY_LEVEL。
   | 'FontStyle'
+  | 'TextTransform'
   // ★★★G-61 后批（2026-10-05）：文本换行/空白语义（white-space）——CSE 与旧折叠器都已支持，
   //   但注册表/矩阵/runtime 三处漏登记（**四同步缺口**，清单审计抓出）⇒ 补齐（INV-CE-07）。
   | 'TextWrap'
@@ -99,6 +100,8 @@ export const STYLE_PROP_LEVELS = {
   fontWeight: 'Integer',
   // ★★★font-style 项（2026-10-18）：斜体（normal/italic/oblique；带角度的 oblique 诊断跳过）
   fontStyle: 'FontStyle',
+  // ★★★text-transform 项（2026-10-18 · 批 B F3）：大小写变换（none/uppercase/lowercase/capitalize）
+  textTransform: 'TextTransform',
   textAlign: 'TextAlign',
   whiteSpace: 'TextWrap',
   borderRadius: 'Length',

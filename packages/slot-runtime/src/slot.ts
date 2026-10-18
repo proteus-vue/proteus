@@ -15,6 +15,8 @@
 //   本文件的 `makeEmitter` 是它的**运行时等价物**——与 V0 探针里 `withMemo` 的角色相同
 //   （同一实现，先手工调用、后由编译器展开）。这样 V1 就能独立验证指令与通道。
 import { InsertPos, OpCode, PropKeyTable, SLOT_KIND_OP, StringPool } from './opcode'
+// ★★★text-transform 项（2026-10-18 · 批 B F3）：SET_TEXT 的**唯一变换点**（与实例化同源）
+import { applyTextTransform } from './text-transform'
 import type { SlotKind, UpdateOp } from './opcode'
 import { OpBuffer } from './buffer'
 import type { OpSink } from './buffer'
@@ -66,6 +68,13 @@ export interface SlotSpec {
   sourceExpr?: string
   /** 外层列表 id（嵌套时才有） */
   parentListId?: number
+  /**
+   * ★★★text-transform 项（2026-10-18 · 批 B F3）：该文本槽位的**大小写变换**（已按 CSS 继承展开）。
+   *   缺省（undefined）⇒ 不变换（既有产物逐字节不变）。
+   *   ★挂在槽位上而非运行期查节点：槽位是编译期已知的（节点 style 已含继承后的值），
+   *     运行期查树要多一次查找，且**增量更新时节点未必在手**。
+   */
+  textTransform?: string
 }
 
 /**
@@ -101,7 +110,8 @@ export function createSlot<T>(
       switch (spec.kind) {
         case 'text':
           // 文本进字符串池（指令体只带整数引用 ⇒ 运行时无字符串解析）
-          buf.push({ op: OpCode.SET_TEXT, nodeId, textRef: strings.intern(String(next)) })
+          // ★text-transform：变换在**入池之前**（池里存的是最终显示串，指令体仍只带整数引用）
+          buf.push({ op: OpCode.SET_TEXT, nodeId, textRef: strings.intern(applyTextTransform(String(next), spec.textTransform)) })
           return
         case 'prop':
           buf.push({ op: OpCode.SET_PROP, nodeId, keyId, value: toF32(next) })
@@ -132,7 +142,8 @@ export function createSlot<T>(
             if (isVisItem) {
               buf.push({ op: OpCode.TOGGLE_VIS, nodeId, visible: Boolean(item.value) })
             } else if ((spec.itemKind ?? 'style') === 'text') {
-              buf.push({ op: OpCode.SET_TEXT, nodeId, textRef: strings.intern(String(item.value)) })
+              // ★text-transform：行内文本同样在入池前变换（与标量文本槽位同一实现）
+              buf.push({ op: OpCode.SET_TEXT, nodeId, textRef: strings.intern(applyTextTransform(String(item.value), spec.textTransform)) })
             } else {
               buf.push({ op: OpCode.SET_STYLE, nodeId, keyId, value: toF32(item.value) })
             }

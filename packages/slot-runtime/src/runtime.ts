@@ -15,6 +15,8 @@
 //   生产环境用 Vue 的 `watch`/`effect` 接，测试用同步桩。这样：
 //     · 本模块可独立测试（不依赖 Vue 版本）
 //     · 换响应式实现（如方案 §8 讨论的 alien-signals）不用改这里
+// ★★★text-transform 项（2026-10-18 · 批 B F3）：行内文本指令的变换（与 slot.ts 同源）
+import { applyTextTransform } from './text-transform'
 import { OpCode } from './opcode'
 import type { SlotKind, UpdateTier } from './opcode'
 import type { ListRegistry } from './list-registry'
@@ -300,6 +302,7 @@ export class VaporRuntime {
               itemValueField: spec.itemValueField,
               itemKeyField: spec.itemKeyField,
               scope: spec.scope,
+              textTransform: spec.textTransform,   // ★text-transform（编译器已按继承展开）
             },
             this.rt.keys,
             this.rt.strings,
@@ -828,7 +831,8 @@ export class VaporRuntime {
       if (spec.propKey === 'visible') {
         this.rt.buffer.push({ op: OpCode.TOGGLE_VIS, nodeId, visible: Boolean(value) })
       } else if ((spec.itemKind ?? 'style') === 'text') {
-        this.rt.buffer.push({ op: OpCode.SET_TEXT, nodeId, textRef: this.rt.strings.intern(String(value)) })
+        // ★text-transform：行内文本在入池前变换（与 slot.ts 同一实现）
+        this.rt.buffer.push({ op: OpCode.SET_TEXT, nodeId, textRef: this.rt.strings.intern(applyTextTransform(String(value), spec.textTransform)) })
       } else {
         this.rt.buffer.push({
           op: OpCode.SET_STYLE,

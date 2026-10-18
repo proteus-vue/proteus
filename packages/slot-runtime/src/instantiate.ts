@@ -17,6 +17,8 @@ import type { SubscriptionTable } from './table'
 // ★★★G-61 B2：预计算计划（位图 O(1) 查表 + 基线回退）
 import { applyDynamicClassPlan } from './dynamic-class'
 import { resolveDynamicClasses } from './table'
+// ★★★text-transform 项（2026-10-18 · 批 B F3）：文本出口统一变换（与编译器/渲染器共用唯一实现）
+import { applyTextTransform } from './text-transform'
 import type { ComponentDef, InstantiatedNode, LayoutNode, LayoutTemplate, ListTemplate } from './layout-template'
 // ★★初值回填复用**运行时同一套实现**（求值器重建 + 行作用域读取）——见下方注释：
 //   组合表达式（`'a' + item.x + 'b'`）不能靠"取单个字段"回填，且两处各写一份必然分叉。
@@ -244,7 +246,11 @@ function applyStyleField(
 /** 把文本写进节点（**唯一出口**）——按节点的 `whiteSpace` 归一化后写入。所有设置 `text` 的路径都走它。 */
 function setNormText(obj: Record<string, unknown>, value: unknown): void {
   const t = value === undefined || value === null ? '' : String(value)
-  obj['text'] = normalizeWhiteSpace(t, obj['whiteSpace'] as string | undefined)
+  // ★★★text-transform 项（2026-10-18 · 批 B F3）：**在归一化之后**变换（顺序固定——
+  //   CSS 语义是"空白处理后对可见文本做大小写映射"；顺序反了会让折叠出的空格参与词边界判断）。
+  //   ★查节点自身的 `textTransform`（继承已在编译器按 APP_INHERITABLE_FIELDS 展开到每个节点，
+  //   与 color/fontSize 同一条继承通道）⇒ 三端宿主零改动。
+  obj['text'] = applyTextTransform(normalizeWhiteSpace(t, obj['whiteSpace'] as string | undefined), obj['textTransform'] as string | undefined)
 }
 
 function normalizeWhiteSpace(text: string, ws: string | undefined): string {

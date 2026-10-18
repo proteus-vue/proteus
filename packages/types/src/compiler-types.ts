@@ -81,6 +81,13 @@ export interface StyleTransformOptions {
    * 【向后兼容】缺省（undefined）= 旧行为（全后缀）——只有 compileVueSfc 主链路显式传入。
    */
   scopedClassNames?: ReadonlySet<string>
+  /**
+   * ★★★text-transform 项（2026-10-18 · 批 B F3）：**类名 → 大小写变换**（来自本页/本组件样式表）。
+   *   【为什么 MP 需要】Skyline 官方属性表**无 `text-transform`**（已核官方文档）⇒ 该端只能
+   *   **编译期变换静态文本**；本表是那条通道的输入（由 compileVueSfc 从 <style> 析出）。
+   *   动态绑定文本在 MP 端无通道 ⇒ 编译期如实诊断。
+   */
+  textTransformByClass?: ReadonlyMap<string, string>
   /** ★平台化薄接缝：MP 渲染引擎（skyline/webview）——缺省沿用现行为；使 platform 特判有显式挂点 */
   renderer?: Renderer
 }

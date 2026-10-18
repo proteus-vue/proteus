@@ -116,6 +116,12 @@ export interface TextProps {
   fontWeight?: number | 'normal' | 'bold'
   /** ★★★font-style（2026-10-18 · 批 B F3）：斜体（CSS Fonts 4 关键字；带角度的 oblique 编译期诊断跳过，不进 IR） */
   fontStyle?: 'normal' | 'italic' | 'oblique'
+  /**
+   * ★★★text-transform 项（2026-10-18 · 批 B F3）：大小写变换。
+   *   ★App 三端由**共享运行期**在文本出口应用（宿主零改动）；Web 由浏览器原生；
+   *     MP/Skyline 官方表无此属性 ⇒ 编译期对静态文本变换。
+   */
+  textTransform?: 'none' | 'uppercase' | 'lowercase' | 'capitalize'
   lineHeight?: ResolvedLength | number
   letterSpacing?: ResolvedLength
   color?: string

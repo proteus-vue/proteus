@@ -154,6 +154,15 @@ export function mapStyleIRToSkyline(fields: Record<string, unknown>, opts: Skyli
       continue
     }
     if (typeof value === 'string') {
+      // ★★★text-transform 项（2026-10-18 · 批 B F3）：**如实登记为引擎边界**（不假装可表达）。
+      //   Skyline 官方样式属性表**无 text-transform**（已核官方文档：110 条属性里没有它）。
+      //   ★本仓的补偿：MP 产物在**编译期**变换**静态文本**（动态文本编译期如实诊断）；
+      //     ⇒ 该端"可表达"的是**静态文本**这一面，运行时属性本身不可表达 ⇒ 明确 drop 并给理由，
+      //       而不是像其它字符串字段那样原样透传（透传会让 `css:verify` 的 endsMapped 假绿）。
+      if (field === 'textTransform') {
+        drop(field, value, 'Skyline 官方样式表无 text-transform（编译期变换静态文本；动态文本该端无通道）')
+        continue
+      }
 
       // ★★★grid-template-areas / grid-area 项（2026-10-08）：**原样透传**——与 grid-auto-flow（#571）/
       //   justify-self（#570）同款：用户 CSS 里的 grid-template-areas 本就逐字进 wxss。
