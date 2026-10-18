@@ -6332,3 +6332,42 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   （`text` 页同样白屏，而 10-07 的历史截图正常 ⇒ 是本轮之前引入的宿主回归，疑与 #1054/#1055 的字体
   统一有关）。**已单独立项**，不在本项内扩大范围。② MP 端动态文本无通道（诊断如实）。
   ③ `full-width` / `full-size-kana` 未实现（无宿主通道 + 需东亚宽度表）⇒ 诊断。
+
+1060. **★★★鸿蒙「白屏」修复：一次性 VM 的同屏短路 + JS 字符串转义 + 首帧判据（三个独立缺陷）· 决策**（2026-10-18 · 用户「鸿蒙的白屏先修掉」）：
+【现象】`superapp-screen-<page>` 场景部分页（font / text）**整页白屏**，而 border / word-break 正常；
+  报告显示 `current` 正确、`contentNodes=44` 已建树，但屏幕全白。
+【★三个独立缺陷（逐个取证，都被"看起来像同一个 bug"掩盖）】
+  ① **一次性 VM 里的同屏短路**（真缺陷 · 主因）
+     `superapp-runtime.mountScreen` 有 `if (name === cur) return true`（"同屏重渲不动滚动"）——
+     这对**持久 VM**（iOS）正确，但鸿蒙是**一次性 VM**：每次 `hostAppRender` 都新建 runtime、
+     `cur` 从 index 起算。而 ArkTS 壳每次都 `clearRoot()` 重建 ⇒ 第二次渲染**同屏被短路**、
+     **不调 host.mount** ⇒ 捕获树为空 ⇒ `nodes_rendered=0` ⇒ 白屏（实测日志：44 → 0）。
+     ★修：`rtArgsJson` 增加 `remount` 参数，一次性 VM 一律传 `true`（走 `mountScreenInto` 无条件重挂）；
+       且 C++ `HostAppRender` **此前根本没解析 remount**（ArkTS 传了也无效）⇒ 一并接上。
+  ② **JS 字符串字面量转义**（真缺陷 · 与 ① 同源但独立）
+     渲染入参拼成 `"String(__proteusHostAppRender('" + vpb + "'))"`（**单引号**包裹）。
+     当页面 data 含**换行**（`font` 的 `lhText` = `"第一行\n第二行"`，经 seedData 回灌）时，
+     真实换行会**截断 JS 字符串** ⇒ 语法错误 ⇒ `jsvmEvalStr` **静默失败** ⇒ 空树 ⇒ 白屏。
+     ★这解释了"为什么偏偏是 font/text 白、border 正常"——只有前两页的 data 含 \n。
+     ★修：全 5 处渲染表达式改为**双引号 + `jsonEscape(vpb)`**；并给 `jsvmEvalStr` 的失败
+       补 `OH_LOG_ERROR`（**零静默失败**——此前失败只返回 false、调用方不检查）。
+  ③ **截图判据早于首帧**（假象 · 让我误判了数轮）
+     `PROTEUS_FIRST_FRAME_DRAWN` 实测在 `SUPERAPP_REPORT_READY` **之后 ~10ms** 才出现
+     ⇒ "报告落盘 → 立刻截图"必然**截到白屏**（我因此一度认为"修了也没用"）。
+     ★修：新增首帧日志作**完成信号**；截图改用**连续两次非白像素量一致**的稳定判据
+       （实测：第 1 张 682、第 2/3 张 45229 稳定）。
+【★"先取证再断言"的代价（本轮如实记账）】
+  · 起初按"页面内容差异"二分（lineHeight / textTransform / data 非空 / self-draw 模式）——
+    **四次假设全部证伪**（禁用 textTransform 无效、render-node 模式也白、text-shadow 换时机就正常）。
+  · 真正的分水岭是**给绘制链路加可观测日志**：`PROTEUS_SELF_DRAW sdNodes=44 sdTexts=32`
+    证明**数据通路完全正常**（排除上层所有怀疑），才把注意力收到绘制时序与表达式求值。
+  · 又一次印证「**能编译 ≠ 有语义**」「**跑起来 ≠ 画上屏**」：`nodes_rendered=44` 与
+    「屏幕上真的有东西」之间隔着绘制事件，二者必须分别取证。
+【判据（鸿蒙真机）】font / text 两页（原白屏）连续两轮启动均 **stable nonwhite=45229**；
+  截图见 `salvage/text-transform/harmony/font-harmony-final.jpeg`（I 区 text-transform 标题可见）。
+  门禁：`check:harmony-host-compile` · `check:harmony-runtime-prebuilt` · `check:text-style-single-impl` ·
+  `check:platform-layering` · `check:file-size` 全绿。
+【诚实边界】① iOS/Android 走**持久 VM**，本修不影响它们（remount 只在一性 VM 壳里传 true）；
+  ② 首帧判据目前只在鸿蒙壳里落地——Android/iOS 的截图脚本仍按各自既有信号（未同步，属独立改进）；
+  ③ 本轮**未**复跑 text-transform 的四端全链（鸿蒙已可取证，但 css-conformance 的鸿蒙包
+     仍卡在**签名 bundleName 不匹配**：本机 profile 只绑定 `dev.proteus.host`）。

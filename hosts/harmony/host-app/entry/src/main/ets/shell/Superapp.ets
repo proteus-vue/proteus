@@ -335,10 +335,17 @@ struct Superapp {
   }
 
   /** ★B1：统一运行期渲染入参 → JSON（用接口声明，避 ArkTS 未型字面量） */
-  private static rtArgsJson(page: string, bundle: string, filesDir: string, vpW: number, vpH: number, chain?: number[], state?: Record<string, Object> | null): string {
+  private static rtArgsJson(page: string, bundle: string, filesDir: string, vpW: number, vpH: number, chain?: number[], state?: Record<string, Object> | null, remount?: boolean): string {
     const vp: RtViewport = { width: vpW, height: vpH };
     const a: RtArgs = { bundle: bundle, filesDir: filesDir, page: page, viewport: vp };
     if (chain && chain.length > 0) { a.chain = chain; }
+    // ★★★鸿蒙**一次性 VM** 必须 remount（2026-10-18 · 用户「鸿蒙的白屏先修掉」）：
+    //   每次 hostAppRender 都是**新 VM** ⇒ 运行期里的 "当前屏 cur" 从 index 起算，
+    //   而本壳每次都 clearRoot() 重建。若走普通 mountScreen，同屏（cur == 目标屏）会被
+    //   **短路**（"同屏重渲不动滚动"是给**持久 VM** 省的）⇒ 不调 host.mount ⇒ 捕获树为空
+    //   ⇒ ArkTS 拿到 nodes=0 ⇒ clearRoot 之后 **白屏**（本仓实测：SUPERAPP_RUNTIME nodes=0）。
+    //   ⇒ 一次性 VM 一律 remount（无条件重挂，拿"反映当前 state"的整树）。
+    a.remount = remount === true;
     // ★跨调用状态回灌（一次性 VM）：非空则带上（C++ 侧转 render 的 seedData）
     if (state !== undefined && state !== null && Object.keys(state).length > 0) { a.state = state; }
     return JSON.stringify(a);
@@ -467,7 +474,8 @@ struct Superapp {
       //   路由值）——若以改后的 this.current 与 target 比较，会在"路由已 settle"时判成"未变化"⇒ 不入栈
       //   ⇒ 二级页返回时无栈可弹 ⇒ **直接退出应用**（用户抓出「二级页滑动返回退出应用」的真因）。
       const prev: string = this.current;
-      const rtOut: string = hostAppRender(Superapp.rtArgsJson(this.current, this.bundle, this.filesDir, Superapp.vpW, Superapp.vpH, chain, this.runtimeState));
+      // ★remount=true（一次性 VM：tap 后同样必须重挂拿新树）
+      const rtOut: string = hostAppRender(Superapp.rtArgsJson(this.current, this.bundle, this.filesDir, Superapp.vpW, Superapp.vpH, chain, this.runtimeState, true));
       const rt = JSON.parse(rtOut) as Record<string, Object>;
       const st = rt['state'] as Record<string, Object> | undefined;
       if (st) { this.applyState(st); }
@@ -660,7 +668,8 @@ struct Superapp {
       //   ★带上次 snapshot（一次性 VM 状态回灌）；返回的 snapshot 存回（下次用）。
       Superapp.vpW = vpW;
       try {
-        const rtOut: string = hostAppRender(Superapp.rtArgsJson(page, this.bundle, this.filesDir, vpW, vpH, undefined, this.runtimeState));
+        // ★remount=true（一次性 VM：必须无条件重挂——否则同屏短路 ⇒ 空树 ⇒ 白屏）
+        const rtOut: string = hostAppRender(Superapp.rtArgsJson(page, this.bundle, this.filesDir, vpW, vpH, undefined, this.runtimeState, true));
         const rt = JSON.parse(rtOut) as Record<string, Object>;
         const tree = rt['tree'] as Record<string, Object> | undefined;
         if (tree && Array.isArray(tree['nodes'])) {

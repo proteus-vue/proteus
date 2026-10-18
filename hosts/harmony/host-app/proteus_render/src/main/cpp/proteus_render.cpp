@@ -1557,12 +1557,21 @@ static napi_value GlassStats(napi_env env, napi_callback_info info) {
  *     改 FloatProperty / FloatAnimatableProperty / `Invalidate` **都不重跑它** ⇒ 滚动后画面不更新。
  *   而本事件接收器**每次节点绘制都被回调**（给 `DrawContext`）⇒ 是"每帧重画"的正确钩子。
  */
+/** 自绘帧计数（截图判据用：报告落盘 ≠ 已上屏——真上屏以本计数为准）。 */
+static int g_sdDrawEvents = 0;
 static void OnRootDrawEvent(ArkUI_NodeCustomEvent* event) {
     if (OH_ArkUI_NodeCustomEvent_GetEventType(event) != ARKUI_NODE_CUSTOM_EVENT_ON_DRAW) return;
     ArkUI_DrawContext* dc = OH_ArkUI_NodeCustomEvent_GetDrawContextInDraw(event);
     if (dc == nullptr) return;
     void* canvasRaw = OH_ArkUI_DrawContext_GetCanvas(dc);
     drawSelfContentCore(static_cast<OH_Drawing_Canvas*>(canvasRaw), g_sdSpec);
+    g_sdDrawEvents++;
+    // ★★**真上屏的完成信号**（2026-10-18 · 鸿蒙白屏排查教训）：`SUPERAPP_REPORT_READY` 只表示
+    //   报告落盘，**首次绘制可能晚于它**（实测 ~10ms）⇒ 截图判据必须等本日志，否则截到白屏
+    //   （本仓因此误判"白屏"数轮）。
+    if (g_sdDrawEvents == 1) {
+        OH_LOG_Print(LOG_APP, LOG_INFO, LOG_DOMAIN, LOG_TAG, "PROTEUS_FIRST_FRAME_DRAWN");
+    }
 }
 
 /**
@@ -2462,13 +2471,26 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
         //   单一绘制源 = 无覆盖、每帧重画。
         if (g_rootHost != nullptr && g_nodeApi != nullptr) {
             if (!g_sdDrawEventReg) {
-                g_nodeApi->registerNodeCustomEvent(g_rootHost, ARKUI_NODE_CUSTOM_EVENT_ON_DRAW, 0, nullptr);
-                g_nodeApi->addNodeCustomEventReceiver(g_rootHost, OnRootDrawEvent);
+                // ★注册失败必须可见（零静默失败）：任一非 0 ⇒ 自绘内容**永远不画**（白屏）
+                int32_t rcReg = g_nodeApi->registerNodeCustomEvent(g_rootHost, ARKUI_NODE_CUSTOM_EVENT_ON_DRAW, 0, nullptr);
+                int32_t rcSub = g_nodeApi->addNodeCustomEventReceiver(g_rootHost, OnRootDrawEvent);
+                if (rcReg != 0 || rcSub != 0) {
+                    OH_LOG_Print(LOG_APP, LOG_ERROR, LOG_DOMAIN, LOG_TAG,
+                                 "PROTEUS_SELF_DRAW_REGISTER_FAIL rcReg=%{public}d rcSub=%{public}d",
+                                 rcReg, rcSub);
+                }
                 g_sdDrawEventReg = true;
             }
         }
-        OH_LOG_Print(LOG_APP, LOG_INFO, LOG_DOMAIN, LOG_TAG,
-                     "PROTEUS_SELF_DRAW nodes=%{public}d w=%{public}d h=%{public}d", built, g_rootWpx, g_rootHpx);
+        {
+            // ★自绘节点/文本计数（2026-10-18 排查"白屏"的证据：sdNodes=44 sdTexts=32 证明数据通路正常，
+            //   问题只可能在绘制侧）——保留为诊断读数。
+            int sdTexts = 0;
+            for (const auto& sn : g_sdSpec->nodes) if (!sn.text.empty()) sdTexts++;
+            OH_LOG_Print(LOG_APP, LOG_INFO, LOG_DOMAIN, LOG_TAG,
+                         "PROTEUS_SELF_DRAW nodes=%{public}d w=%{public}d h=%{public}d sdNodes=%{public}zu sdTexts=%{public}d",
+                         built, g_rootWpx, g_rootHpx, g_sdSpec->nodes.size(), sdTexts);
+        }
     }
     // ★★MA0-RT 计数只对**绘制指令构建**（`renderCommands` 的 JS 路径）有意义——
     //   `proteus_render_commands_cstr` 是**探针的建树入口**（vapor 场景，为让通道真建出来），

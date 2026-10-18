@@ -606,6 +606,13 @@ static napi_value HostAppRender(napi_env env, napi_callback_info info) {
     // ★★★跨调用状态回灌（一次性 VM）：宿主把上次 snapshot 回传为 `state`，本处转为 render 的
     //   seedData（恢复 count 等实例态）；无则用构建期初值。
     std::string stateJson = extractValueAfterKey(argsJson, "state", '{', '}');
+    // ★★★remount（2026-10-18 · 用户「鸿蒙的白屏先修掉」）：鸿蒙是**一次性 VM**，每次都要挂出新树；
+    //   而 JS 运行期 `mountScreen` 有"同屏短路"（cur == 目标 ⇒ 不动，给**持久 VM** 省开销）
+    //   ⇒ 一次性 VM 里第二次渲染同屏 **不调 host.mount** ⇒ 捕获树为空 ⇒ ArkTS nodes=0 ⇒ **白屏**
+    //   （实测日志：SUPERAPP_RUNTIME page=font nodes=0，前一次是 nodes=44）。
+    //   ⇒ ArkTS 传 remount=true（无条件重挂，走 mountScreenInto）。
+    const bool remount = argsJson.find("\"remount\":true") != std::string::npos;
+
 
     std::string err;
     g_scRuntimeTree.clear();
@@ -660,9 +667,25 @@ static napi_value HostAppRender(napi_env env, napi_callback_info info) {
         std::string seedFrag = stateJson.empty() ? std::string("") : (std::string(",\"seedData\":") + stateJson);
         char vpHead[256]; snprintf(vpHead, sizeof(vpHead), "{\"name\":\"%s\",\"viewport\":{\"width\":%.4f,\"height\":%.4f}",
                                     jsonEscape(page).c_str(), vpW, vpH);
-        std::string vpb = std::string(vpHead) + seedFrag + "}";
-        std::string renderExpr = "String(__proteusHostAppRender('" + vpb + "'))";
-        jsvmEvalStr(jenv, renderExpr.c_str(), nullptr);
+        std::string vpb = std::string(vpHead) + seedFrag + (remount ? ",\"remount\":true" : "") + "}";
+        // ★★★**入参必须 JSON 转义后作为 JS 字符串字面量**（2026-10-18 · 鸿蒙白屏根因）：
+        //   `vpb` 里可含**换行**（页面 data 的文本值，如 `"第一行\n第二行"` 经 seedData 回灌后的
+        //   JSON 表示）。原实现把 vpb 直接塞进**单引号**字面量 ⇒ 真实换行会**截断 JS 字符串** ⇒
+        //   语法错误 ⇒ `jsvmEvalStr` 静默失败 ⇒ 树为空 ⇒ **白屏**（实测：数据含 \n 的 font/text 页
+        //   白屏，而不含的 border/word-break 正常）。
+        //   ⇒ 用 jsonEscape 生成的是"JSON 内的字符串转义"，这里需要的是**JS 字符串字面量**转义
+        //     （两者对 \n/\"/\\ 语义一致，且 jsonEscape 不碰其他字符）⇒ 直接复用。
+        std::string renderExpr = "String(__proteusHostAppRender(\"" + jsonEscape(vpb) + "\"))";
+        // ★★★零静默失败（2026-10-18 · 鸿蒙白屏根因排查）：此前 jsvmEvalStr 失败**静默返回 false**、
+        //   调用方不检查 ⇒ 渲染表达式语法错误（如 seedData 拼进单引号字面量时的转义问题）
+        //   表现为"后面拿到空树 ⇒ 白屏"，而日志上只有 nodes=0 没有任何原因。
+        if (!jsvmEvalStr(jenv, renderExpr.c_str(), nullptr)) {
+            std::string desc = "unknown";
+            { JSVM_Value exc = nullptr; OH_JSVM_GetAndClearLastException(jenv, &exc);
+              if (exc != nullptr) { std::string s; jsvmStr(jenv, exc, &s); desc = s; } }
+            OH_LOG_ERROR(LOG_APP, "PROTEUS_APP_RENDER_EVAL_FAILED page=%{public}s remount=%{public}d seed=%{public}d err=%{public}s expr=%{public}.400s",
+                        page.c_str(), remount ? 1 : 0, stateJson.empty() ? 0 : 1, desc.c_str(), renderExpr.c_str());
+        }
         if (policyOk) OH_JSVM_PerformMicrotaskCheckpoint(vm);
         // ③ 可选：派发一次 tap（导航 / 数据变更）——派发后**重挂**以取"反映新 state"的整树
         if (hasChain) {
@@ -677,7 +700,7 @@ static napi_value HostAppRender(napi_env env, napi_callback_info info) {
             if (afterPage.empty() || afterPage == "null") afterPage = page;
             char vpb2[512]; snprintf(vpb2, sizeof(vpb2), "{\"name\":\"%s\",\"viewport\":{\"width\":%.4f,\"height\":%.4f},\"remount\":true}",
                                      jsonEscape(afterPage).c_str(), vpW, vpH);
-            std::string reRender = "String(__proteusHostAppRender('" + std::string(vpb2) + "'))";
+            std::string reRender = "String(__proteusHostAppRender(\"" + jsonEscape(std::string(vpb2)) + "\"))";
             jsvmEvalStr(jenv, reRender.c_str(), nullptr);
             if (policyOk) OH_JSVM_PerformMicrotaskCheckpoint(vm);
         }
@@ -813,7 +836,7 @@ static napi_value HostAppPumpTick(napi_env env, napi_callback_info info) {
         char vpHead[320]; snprintf(vpHead, sizeof(vpHead), "{\"name\":\"%s\",\"viewport\":{\"width\":%.4f,\"height\":%.4f}",
                                     jsonEscape(page).c_str(), vpW, vpH);
         std::string vpb = std::string(vpHead) + seedFrag + "}";
-        std::string renderExpr = "String(__proteusHostAppRender('" + vpb + "'))";
+        std::string renderExpr = "String(__proteusHostAppRender(\"" + jsonEscape(vpb) + "\"))";
         jsvmEvalStr(jenv, renderExpr.c_str(), nullptr);
         if (policyOk) OH_JSVM_PerformMicrotaskCheckpoint(vm);
         // ③ **批量泵帧**（本批：一次性 VM 约束下把 N 帧批在一次 VM 里跑）
@@ -829,7 +852,7 @@ static napi_value HostAppPumpTick(napi_env env, napi_callback_info info) {
             // ④ 重挂：把**末帧数据**重新挂出整树（mountScreenInto 无短路；重建后的 content() 反映新值）
             char vpb2[512]; snprintf(vpb2, sizeof(vpb2), "{\"name\":\"%s\",\"viewport\":{\"width\":%.4f,\"height\":%.4f},\"remount\":true}",
                                      jsonEscape(page).c_str(), vpW, vpH);
-            std::string reRender = "String(__proteusHostAppRender('" + std::string(vpb2) + "'))";
+            std::string reRender = "String(__proteusHostAppRender(\"" + jsonEscape(std::string(vpb2)) + "\"))";
             jsvmEvalStr(jenv, reRender.c_str(), nullptr);
             if (policyOk) OH_JSVM_PerformMicrotaskCheckpoint(vm);
         }
@@ -846,7 +869,7 @@ static napi_value HostAppPumpTick(napi_env env, napi_callback_info info) {
             if (afterPage.empty() || afterPage == "null") afterPage = page;
             char vpb3[512]; snprintf(vpb3, sizeof(vpb3), "{\"name\":\"%s\",\"viewport\":{\"width\":%.4f,\"height\":%.4f},\"remount\":true}",
                                      jsonEscape(afterPage).c_str(), vpW, vpH);
-            std::string reRender2 = "String(__proteusHostAppRender('" + std::string(vpb3) + "'))";
+            std::string reRender2 = "String(__proteusHostAppRender(\"" + jsonEscape(std::string(vpb3)) + "\"))";
             jsvmEvalStr(jenv, reRender2.c_str(), nullptr);
             if (policyOk) OH_JSVM_PerformMicrotaskCheckpoint(vm);
         }

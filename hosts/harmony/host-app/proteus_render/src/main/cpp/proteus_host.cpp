@@ -410,7 +410,17 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
     char vpb[96]; snprintf(vpb, sizeof(vpb), "{\"width\":%.2f,\"height\":%.2f}", vpW, vpH);
     std::string req = "{\"viewport\":" + std::string(vpb) + ",\"nodes\":" + nodes + ",\"textMeasures\":" + measures + "}";
     uint64_t handle = proteus_layout_create(req.c_str());
-    if (handle == 0) { napi_value o; napi_create_string_utf8(env, "[]", NAPI_AUTO_LENGTH, &o); return o; }
+    if (handle == 0) {
+        // ★★★零静默失败（2026-10-18 · 用户「鸿蒙的白屏先修掉」）：此前 create 返回 0 直接吐 `[]`
+        //   ⇒ ArkTS 只看到 `nodes_rendered=0`，**内核原话被丢弃** ⇒ 白屏无从定位
+        //   （本仓实测一轮排查全靠"改代码→打包→装真机"）。内核侧已把原因写 stderr（ffi.rs），
+        //   这里补**本条链路的上下文**（page / 节点数 / 请求字节数），二者在 hilog 里可对齐。
+        // ★用 hilog（鸿蒙上 stderr 不进日志系统——实测 fprintf 到 stderr 在 hilog 里看不到）
+        OH_LOG_Print(LOG_APP, LOG_ERROR, 0x0002, "ProteusHostBridge",
+                     "PROTEUS_APP_SCREEN_CREATE_FAILED page=%{public}s nodes=%{public}d req_bytes=%{public}d",
+                     page.c_str(), (int)nItems.size(), (int)req.size());
+        napi_value o; napi_create_string_utf8(env, "[]", NAPI_AUTO_LENGTH, &o); return o;
+    }
     // ★★第三轮复评修复（2026-10-05）：**wrap 文本二遍测量**——首遍只有单行度量 ⇒ 折行文本
     //   盒高偏小（副标题尾部丢失/与 Web 不等高）。流程：读首遍盒宽 → 按盒宽折行重测 →
     //   有变化则重建（与 Android/iOS 宿主同源）。
