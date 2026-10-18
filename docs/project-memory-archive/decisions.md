@@ -6099,3 +6099,34 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   的时间戳与内容，再谈改代码。
 【诚实边界】两端**只到编译 + 打包**，未装机、未真机渲染验证 font-style；鸿蒙缺 cssconf 专属签名配置、
   iOS 两份描述文件均已过期 ⇒ 需用户侧一次性 GUI 动作（DevEco 自动签名 / Xcode 重新签名）。
+
+1054. **★★★鸿蒙 `font-style` 造假绿的根因：指令组装层（`proteus_host.cpp`）**从未透传** `fontStyle` —— 三段剪切测量全 0 · 决策**（2026-10-18 · 用户「你是从哪里看到鸿蒙验证过了呢？很明显的斜体都没生效啊」）：
+【★我的错误（先说）】上一轮我**只看了缩略图目测**就宣布"斜体生效"——而截图里三行都是正体。
+  用户当场指出后改用**客观像素判据**（三行剪切量 shear dx 全部 = 0 / 1 / 0）⇒ **斜体完全没生效**。
+  ★教训：**缩略图不能当判据**；判据必须是像素/管道级别的可复现测量（本仓「先取证再断言」的老纪律）。
+【断链三层（逐层查证后钉死）】
+  ① **`proteus_host.cpp`（内核节点 → 绘制指令的唯一组装点）**：第 818 行手写 `snprintf(tail, ...,
+     ",\"fontSize\":%.2f,\"fontWeight\":%d,\"textColor\":%u", ...)`——**只透传这三项**，
+     `fontStyle` 在这一层被**丢弃**。⇒ 下游无论怎么写都拿不到值（**这是真断点**）。
+  ② `proteus_render.cpp`（渲染侧）：主路径 `drawChannelsAndText` 只设 fontWeight/fontFamily，
+     **从不读 `fontStyle`**；自绘路径 `sdDrawText` 连字重/字族都没设。
+  ③ `proteus_text_platform.h` 的 `applyTextFont` 里我上轮加的 `OH_Drawing_SetTextStyleFontStyle` 分支
+     **没有任何调用者**（鸿蒙绘制不走那个 helper）——纯死代码。
+【修（三处补齐）】
+  · `proteus_host.cpp`：指令组装时透传 `,"fontStyle":"<v>"`（**唯一断点，最关键**）；
+  · `proteus_render.cpp` 主路径：`OH_Drawing_SetTextStyleFontStyle(FONT_STYLE_ITALIC/OBLIQUE/NORMAL)`；
+  · `proteus_render.cpp` 自绘路径 `SDNode`：补 `fontWeight` + `fontStyle` 字段、解析、并在 `sdDrawText` 设置；
+  · **聚合初始化改显式赋值**：给 `TextDrawSpec` 插字段后，`TextDrawSpec{...}` 按位置绑定会导致
+    `-Wc++11-narrowing: type double cannot be narrowed to int`（实测编译错）⇒ 改为逐字段 `spec->x = ...`。
+【判据（客观测量，非目测）】
+  · 修复前（同一设备/同一页）：三行 shear **normal +0 / italic +0 / oblique +0**；
+  · 修复后：`顶部墨迹中心 − 底部墨迹中心` ⇒ **normal −30px（中文字形）· italic +5px · oblique +12px**
+    （斜体应 > 0：顶部比底部更右）；放大三行并排图目视亦为 italic/oblique 明显右倾、normal 垂直；
+  · 鸿蒙 `BUILD SUCCESSFUL`（7.9s）→ `entry-default-signed.hap` → hdc 装机 → 导航 font 页截图；
+  · `check:file-size` 绿 · `harmony-runtime-prebuilt` 已同步（21 文件，prebuilt ⇄ 真源逐字节一致）。
+【★教训】★★★**"某端不生效"要沿「数据流」逐层查，不要只改最像的那层**——本轮我先在平台 helper 里
+  加了枚举映射（看起来最专业），却漏了**指令组装层根本没把字段传下来**（上游丢弃 ⇒ 下游永远是空）。
+  **先确认字段"到没到"（打点/断言），再谈"怎么用"**；
+  ★★**聚合初始化 + 插字段 = 静默错位风险**（编译器这次恰好报了 narrowing，换个类型就静默了）；
+  ★**缩略图目测 ≠ 验收**——必须用像素级可复现判据（本仓已有"独立子代理 + 逐帧"纪律，这次是我自己先违反了）。
+【诚实边界】只验鸿蒙（真机）；Android 上一轮已验（同页同案例）；iOS 仍卡**描述文件过期**（见 #1053），未真机验。

@@ -849,6 +849,12 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
             }
             // ★批次 35：文本装饰（underline / line-through）
             { std::string td; if (jstr(it.c_str(), it.size(), "textDecoration", &td) && td != "none") arr += ",\"textDecoration\":\"" + jsonEscape(td) + "\""; }
+            // ★★★font-style 项（2026-10-18 · 批 B F3）：斜体形态透传渲染侧（normal/italic/oblique）。
+            //   【为什么在这里补】本函数是「内核节点 → 绘制指令」的**唯一组装点**，此前只写
+            //   fontSize/fontWeight/textColor/fontFamily ⇒ `fontStyle` 在这一层就被**丢弃**，
+            //   渲染侧（proteus_render.cpp）即使读了也永远拿到空值（真机实测：三段 shear 全 0）。
+            { std::string fst; if (jstr(it.c_str(), it.size(), "fontStyle", &fst) && !fst.empty()) arr += ",\"fontStyle\":\"" + jsonEscape(fst) + "\""; }
+
             // ★批次 36：字体角色（font-family → role；鸿蒙按可用字族映射，缺则回落默认）
             { std::string ff; if (jstr(it.c_str(), it.size(), "fontFamily", &ff) && !ff.empty()) arr += ",\"fontFamily\":\"" + jsonEscape(ff) + "\""; }
             // ★批次 13：行盒高（lineHeight token → 物理 px；倍数×fs 或 px）——半行距居中用

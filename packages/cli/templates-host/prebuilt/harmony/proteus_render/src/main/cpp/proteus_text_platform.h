@@ -44,10 +44,22 @@ static inline void applyTextFont(OH_Drawing_TextStyle* tstyle, int fontWeight, c
     int wi = fontWeight / 100 - 1;
     if (wi < 0) wi = 0; else if (wi > 8) wi = 8;
     OH_Drawing_SetTextStyleFontWeight(tstyle, wi);
-    if (fontFamily == "monospace") {
+    // ★★★font-style 项（2026-10-18 · 批 B F3）：斜体/倾斜（角色串前缀与 Android/iOS 同契约）——
+    //   鸿蒙有独立枚举 FONT_STYLE_ITALIC / FONT_STYLE_OBLIQUE ⇒ 不做近似。
+    if (fontFamily.rfind("italic:", 0) == 0) {
+        OH_Drawing_SetTextStyleFontStyle(tstyle, FONT_STYLE_ITALIC);
+    } else if (fontFamily.rfind("oblique:", 0) == 0) {
+        OH_Drawing_SetTextStyleFontStyle(tstyle, FONT_STYLE_OBLIQUE);
+    } else {
+        OH_Drawing_SetTextStyleFontStyle(tstyle, FONT_STYLE_NORMAL);
+    }
+    std::string famBase = fontFamily;
+    if (famBase.rfind("italic:", 0) == 0) famBase = famBase.substr(7);
+    else if (famBase.rfind("oblique:", 0) == 0) famBase = famBase.substr(8);
+    if (famBase == "monospace") {
         const char* fams[] = {"HarmonyOS Sans Digit", "monospace"};
         OH_Drawing_SetTextStyleFontFamilies(tstyle, 2, fams);
-    } else if (fontFamily == "serif") {
+    } else if (famBase == "serif") {
         const char* fams[] = {"serif"};
         OH_Drawing_SetTextStyleFontFamilies(tstyle, 1, fams);
     }
