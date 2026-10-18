@@ -169,13 +169,49 @@ final class ProteusTextAdapter {
         return UIFont.systemFont(ofSize: size)
     }
 
-    /// ★★★font-style 项（2026-10-18）：取同族**斜体面**；平台无斜体面 ⇒ 回退常规面并计数（不静默）。
-    private static func italicFont(base: UIFont, size: CGFloat) -> UIFont {
-        guard let d = base.fontDescriptor.withSymbolicTraits(.traitItalic) else {
-            fontFamilyFallbackCount += 1
-            lastUnknownFontFamily = "italic@no-face"
-            return base
+    /// ★★★#1057：**CJK 合成斜体判定**（本平台唯一实现——宿主只调它）。
+    ///   PingFang SC 无 italic 字面 ⇒ `withSymbolicTraits(.traitItalic)` 返回 nil；而 Web/Android/鸿蒙
+    ///   都对无 italic 字面的字族**自动合成倾斜** ⇒ iOS 必须补。判据 = 要求 italic/oblique 且含 CJK。
+    static func needsSyntheticOblique(fontStyle: String?, text: String?) -> Bool {
+        guard let f = fontStyle, f == "italic" || f == "oblique" else { return false }
+        guard let t = text, !t.isEmpty else { return false }
+        return t.unicodeScalars.contains(where: { isCJK($0) })
+    }
+    /// CJK 码位判据（汉字/假名/谚文/全角/扩展区）。
+    static func isCJK(_ s: Unicode.Scalar) -> Bool {
+        switch s.value {
+        case 0x2E80...0x2EFF, 0x3000...0x303F, 0x3040...0x30FF, 0x3400...0x4DBF,
+             0x4E00...0x9FFF, 0xF900...0xFAFF, 0xFF00...0xFFEF, 0xAC00...0xD7AF,
+             0x20000...0x2FA1F: return true
+        default: return false
         }
+    }
+
+    /// ★★★font-style 项（2026-10-18 · 决策 #1057）：取同族**斜体面**；无斜体面 ⇒ **合成斜切**。
+    ///
+    /// 【为什么必须合成（用户实测「iOS 的中文没斜体，英文和数字生效了」）】
+    ///   中文字体（PingFang SC）**没有 italic 字面** ⇒ `withSymbolicTraits(.traitItalic)` 返回 nil ⇒
+    ///   旧实现回退**常规面** ⇒ 同一行里英文/数字倾斜、中文正立（四端不一致）。
+    ///   而 Web / Android(`Typeface.ITALIC`) / 鸿蒙(`FONT_STYLE_ITALIC`) 都会对无 italic 字面的字族
+    ///   **自动合成倾斜** ⇒ iOS 必须补同样的合成。
+    ///
+    /// 【★★为什么用 `withMatrix` 而不是 `.obliqueness`】`.obliqueness` 是 **AppKit(macOS)** 的
+    ///   NSAttributedString 属性；iOS SDK 里**没有** `kCTObliquenessAttributeName`（实测 swiftc：
+    ///   `cannot find in scope`）⇒ 写了也会被静默忽略（本轮实测两轮真机截图中文始终正立）。
+    ///   iOS 上唯一可靠的合成方式是**字体级斜切矩阵**：`UIFontDescriptor.withMatrix`，
+    ///   矩阵 `[1, 0, tan(θ), 1, 0, 0]`（θ=14° ≈ CSS oblique 默认角，tan≈0.249）。
+    ///   ★它作用在**整个字体**上（含 CJK），所以调用方只在"确实需要斜体"时才会走到这里。
+    private static func italicFont(base: UIFont, size: CGFloat) -> UIFont {
+        // ① 优先真斜体字面（拉丁字体通常有）
+        if let d = base.fontDescriptor.withSymbolicTraits(.traitItalic) {
+            return UIFont(descriptor: d, size: size)
+        }
+        // ② 无斜体面 ⇒ 合成斜切（与 Web/Android/鸿蒙 同语义）
+        fontFamilyFallbackCount += 1
+        lastUnknownFontFamily = "italic@synth"
+        let slant = CGFloat(tan(14.0 * Double.pi / 180.0))
+        let m = CGAffineTransform(a: 1, b: 0, c: slant, d: 1, tx: 0, ty: 0)
+        let d = base.fontDescriptor.withMatrix(m)
         return UIFont(descriptor: d, size: size)
     }
     /// 用 `UIFontDescriptor` 的**设计族**取字体（serif/rounded/condensed），并尽量叠上字重

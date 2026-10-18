@@ -6212,3 +6212,34 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   ★**数值判据要选对特征**：字形倾斜在混合中英文行上会被字形本身淹没 ⇒ 改用"并排对照 Web 基准"。
 【诚实边界】三端均已真机（Web 为真 Chromium 基准）；本轮 iOS 无源码改动（`ProteusTextAdapter.font` +
   `familyOf` 本来就正确）——验证的是 #1050/#1054 的落地效果。
+
+1057. **★★★iOS「中文无斜体」修复：PingFang SC 无 italic 字面 ⇒ 用 CoreText 上下文剪切做**合成斜体**（`.obliqueness` 是 AppKit 属性、`withMatrix` 被 CGFont 丢）· 决策**（2026-10-18 · 用户「iOS的中文没斜体，英文和数字生效了」）：
+【现象（四端实测对照）】Web（真 Chromium）/ Android（`Typeface.ITALIC`）/ 鸿蒙（`FONT_STYLE_ITALIC`）的
+  中文斜体**都生效**——三个平台都对「无 italic 字面的字族」做**自动合成倾斜**；
+  只有 **iOS 中文完全正立**，而同行的英文/数字倾斜（它们有真 italic 字面）。
+【根因】`UIFontDescriptor.withSymbolicTraits(.traitItalic)` 对 PingFang SC 返回 **nil**（无该字面）
+  ⇒ 旧实现回退**常规面** ⇒ 中文不斜。iOS **不自动合成**，必须自己做。
+【★三次错误尝试（如实记录，都是"看起来最专业"的那条路）】
+  ① `NSAttributedString.Key.obliqueness` —— 编译能过、**运行时静默无效**：该键是 **AppKit(macOS)** 属性，
+     iOS SDK 里**没有** `kCTObliquenessAttributeName`（swiftc 实测 `cannot find in scope`）。
+     两轮真机截图中文始终正立才发现（★"能编译"不等于"有语义"）。
+  ② `UIFontDescriptor.withMatrix` —— 字体级斜切矩阵，方向正确但**被绘制路径丢掉**：
+     `cgFont(of:)` 优先 `CGFont(font.fontName)`，**按字体名重建** ⇒ descriptor 里的矩阵消失。
+  ③ 一度把 `guard` 插错到 `effectiveWrap` 里（而非 `needsCoreText`）⇒ 一行都没执行。
+【★正解：CoreText 绘制前对上下文做剪切变换】
+  · `ProteusTextLayer` 新增 `obliqueShear`；`draw(in:)` 在 y 翻转之后追加
+    `ctx.concatenate(CGAffineTransform(a: 1, b: 0, c: shear, d: 1, tx: 0, ty: 0))`；
+  · 判定 `needsSyntheticOblique` = **要求 italic/oblique 且文本含 CJK**（纯拉丁有真 italic 面，
+    再加剪切会**双重倾斜**）⇒ 合成时字体取**常规面**（不带 `italic:` 前缀）；
+  · 该判定**下沉到平台层** `ProteusTextAdapter.needsSyntheticOblique(fontStyle:text:)`（+`isCJK` 码位判据）——
+    与 #1055「通用能力只在平台层一个设置点」同纪律；
+  · 两条绘制路径都接：`makeLayer`（首建）与 `configureLayer`（增量更新）。
+【判据（真机 + 与 Web 基准并排，非目测）】iOS 真机 `--screen=font --scroll=0` 截图，
+  中文三行与 Web（真 Chromium）同区域并排：**normal 正立 / italic 正立→明显右倾 / oblique 明显右倾**，
+  与 Web 形态一致；整页其余案例（字号/字重/字族/行高/字距/对齐/装饰）无回归。
+【★教训】★★★**"能编译"≠"有语义"**：`.obliqueness` 在 iOS 上编译通过但被静默忽略 ——
+  与 #1054「字段传了没被消费」同型；跨平台 API 名字相同**不代表语义存在**，必须真机取证。
+  ★★**看截图要找"稳定帧"**：App 启动/切屏动画期间的截图会取到过渡态/旧进程，本轮因此**误判过两次**
+  （一次宣布"没生效"、一次宣布"生效"）⇒ 连续抓多张并核对内容（如"G 区墨迹量"）再下结论。
+【诚实边界】只验 iOS（真机）；Web/Android/鸿蒙的合成斜体由其系统自动完成（本轮已对照确认）。
+  合成倾角取 14°（`tan≈0.249`，CSS `oblique` 默认角）；与各端真 italic 面的角度可能有 ±2° 差异。

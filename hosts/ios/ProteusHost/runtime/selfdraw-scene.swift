@@ -557,6 +557,8 @@ enum ProteusLaunchDiag {
 final class ProteusTextLayer: CATextLayer {
     /// true ⇒ 用 CoreText 绘制（`string` 须为 NSAttributedString）；false ⇒ 原生 CATextLayer 绘制。
     var useCoreText = false
+    var obliqueShear: CGFloat = 0   // ★#1057 合成斜切（`.obliqueness` 是 AppKit、`withMatrix` 被 CGFont 丢）
+
     override func draw(in ctx: CGContext) {
         guard useCoreText, let attributed = string as? NSAttributedString else { super.draw(in: ctx); return }
         let framesetter = CTFramesetterCreateWithAttributedString(attributed)
@@ -568,6 +570,7 @@ final class ProteusTextLayer: CATextLayer {
         //   否则文本上下颠倒（真机实测：A/B/C 三段全镜像——独立 CGContext 上恰好相反，不能照搬）。
         ctx.translateBy(x: 0, y: bounds.height)
         ctx.scaleBy(x: 1, y: -1)
+        if obliqueShear != 0 { ctx.concatenate(CGAffineTransform(a: 1, b: 0, c: obliqueShear, d: 1, tx: 0, ty: 0)) }   // ★#1057 合成斜切
         CTFrameDraw(frame, ctx)
         ctx.restoreGState()
     }
@@ -707,8 +710,10 @@ final class SelfDrawView: UIView {
             let fs = fontSize ?? 14
             let fw = (style["fontWeight"] as? CGFloat) ?? 400
             // ★字体由统一构造器给出（与度量同源——见 `font(size:weight:family:)` 注释）
+            let synth = SelfDrawView.needsSyntheticOblique(style), baseFam = (style["fontFamily"] as? String) ?? "system"   // ★#1057 合成斜体走剪切，不走 italic 面
             let ufont = ProteusTextAdapter.font(size: fs, weight: fw,
-                                            family: SelfDrawView.familyOf(style))
+                                            family: synth ? baseFam : SelfDrawView.familyOf(style))
+            tl.obliqueShear = synth ? CGFloat(tan(14.0 * Double.pi / 180.0)) : 0
             tl.font = ProteusTextAdapter.cgFont(of: ufont)
             tl.fontSize = fs
             // ★★★CSS 初值 `color`（2026-10-08 · 以 Web 为基准）：缺省 **黑**（Web 未声明 color 时即黑）。
@@ -724,7 +729,7 @@ final class SelfDrawView: UIView {
             //   nowrap ⇒ 单行（ellipsis 截断 / overflow:hidden 裁切 / 其余原样溢出）。
             // ★★★行高修复（2026-10-08）：声明行高的**多行**文本 ⇒ CoreText 绘制（CATextLayer 忽略段落行高）
             // ★★★word-break:normal（2026-10-09）：CoreText 会**硬折**长词 ⇒ 仅在实际换行(wrapMode)时启用
-            tl.useCoreText = SelfDrawView.needsCoreText(style) && wrapMode
+            tl.useCoreText = SelfDrawView.needsCoreText(style) && (wrapMode || SelfDrawView.needsSyntheticOblique(style))
             tl.truncationMode = (!wrapMode && (style["textOverflow"] as? String) == "ellipsis") ? .end : .none
             tl.masksToBounds = isClipTextStyle(style)   // nowrap 溢出的裁切（Web overflow:hidden 语义）
             // ★contentsScale 必须显式设置：否则 Retina 上文本模糊（CATextLayer 不继承自动缩放）
@@ -3608,14 +3613,16 @@ final class SelfDrawView: UIView {
             let fw = (paint["fontWeight"] as? CGFloat) ?? 400
             // ★字族也是字体维度：paint 里带它（或带 fontSize/weight）都要重建字体
             let fam0 = (paint["fontFamily"] as? String) ?? metaByNodeId[id]?["fontFamily"] as? String ?? "system"
+            let synthOb = SelfDrawView.needsSyntheticOblique(paint)   // ★#1057：合成斜体（同 makeLayer）
             // ★★★font-style 项（2026-10-18 · 批 B F3）：斜体/倾斜折进**角色串前缀**（与 Android 同契约）——
             //   平台层 ProteusTextAdapter.font 统一解析 ⇒ 度量与绘制同源（斜体是另一套字形，宽度不同）。
             let fst = (paint["fontStyle"] as? String) ?? metaByNodeId[id]?["fontStyle"] as? String
             let fam: String
-            if let f = fst, f == "italic" || f == "oblique" { fam = f + ":" + fam0 } else { fam = fam0 }
+            if let f = fst, f == "italic" || f == "oblique", !synthOb { fam = f + ":" + fam0 } else { fam = fam0 }
             if paint["fontSize"] != nil || paint["fontWeight"] != nil || paint["fontFamily"] != nil || paint["fontStyle"] != nil {
                 let ufont = ProteusTextAdapter.font(size: fs, weight: fw, family: fam)
                 // ★字体变了 ⇒ 必须同时更新 `font` 与 `fontSize`（CATextLayer 两者独立）
+                (tl as? ProteusTextLayer)?.obliqueShear = synthOb ? CGFloat(tan(14.0 * Double.pi / 180.0)) : 0
                 tl.font = ProteusTextAdapter.cgFont(of: ufont)
                 tl.fontSize = fs
             }
@@ -4009,8 +4016,10 @@ final class SelfDrawView: UIView {
 
     /// ★★★行高修复（2026-10-08）：该 style 是否需 CoreText 绘制——**多行（wrap）且声明了 line-height**。
     ///   （CATextLayer 忽略段落行高 ⇒ 只有这种形态才需要；单行/未声明行高仍走原生路径，零行为变化。）
+    /// ★#1057：CJK 合成斜体判定（实现唯一在平台层）
+    static func needsSyntheticOblique(_ s: [String: Any]) -> Bool { ProteusTextAdapter.needsSyntheticOblique(fontStyle: s["fontStyle"] as? String, text: s["text"] as? String) }
     static func needsCoreText(_ style: [String: Any]) -> Bool {
-        guard isWrapStyle(style) else { return false }
+        guard isWrapStyle(style) || needsSyntheticOblique(style) else { return false }   // ★#1057：斜体与 wrap 无关
         // ★★★修复（2026-10-08 · 子代理审美审查 + 取证）：此前**只**在声明 lineHeight 时用 CoreText ⇒
         //   字距（letterSpacing→`.kern`）与文本装饰（textDecoration→`.underlineStyle`/`.strikethroughStyle`）
         //   的富文本**被 CATextLayer 默认渲染器丢弃**（其 `draw` 不用 NSAttributedString 的这些属性——
@@ -4020,7 +4029,7 @@ final class SelfDrawView: UIView {
         let kern = ((style["letterSpacing"] as? Double) ?? (style["letterSpacing"] as? CGFloat).map(Double.init) ?? 0) != 0
         let deco = style["textDecoration"] as? String
         let hasDeco = deco == "underline" || deco == "line-through"
-        return hasLH || kern || hasDeco
+        return hasLH || kern || hasDeco || needsSyntheticOblique(style)   // ★#1057
     }
 
     /// ★★★line-clamp 项（2026-10-08 · CSS Overflow）：按 `lineClamp` 预截断文本（尾省略号）。
@@ -4369,7 +4378,7 @@ final class SelfDrawView: UIView {
                 tl.isWrapped = wrapMode2
                 // ★★★行高修复（复用 = 完全重配：useCoreText 也必须重配，否则复用层残留上一节点的绘制方式）
                 // ★★★word-break:normal（2026-10-09）：同上——仅在实际换行时用 CoreText
-                (tl as? ProteusTextLayer)?.useCoreText = SelfDrawView.needsCoreText(style) && wrapMode2
+                (tl as? ProteusTextLayer)?.useCoreText = SelfDrawView.needsCoreText(style) && (wrapMode2 || SelfDrawView.needsSyntheticOblique(style))
                 tl.contentsScale = UIScreen.main.scale
             }
             // ★★复用路径**必须同样重配**（纪律：复用 = 完全重配）——否则池里取出的层会
@@ -4542,6 +4551,7 @@ final class SelfDrawView: UIView {
         if let para = para { attrs[.paragraphStyle] = para }
         if deco == "underline" { attrs[.underlineStyle] = NSUnderlineStyle.single.rawValue }
         else if deco == "line-through" { attrs[.strikethroughStyle] = NSUnderlineStyle.single.rawValue }
+
         return NSAttributedString(string: text, attributes: attrs)
     }
 
