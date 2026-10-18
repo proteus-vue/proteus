@@ -43,6 +43,8 @@
 #include <native_drawing/drawing_canvas.h>
 #include <native_drawing/drawing_font_collection.h>
 #include <native_drawing/drawing_text_typography.h>
+// ★★★决策 #1055：字体属性（字重/字族/斜体）的**唯一实现**在平台层——绘制与测量共用
+#include "proteus_text_platform.h"
 #include <native_drawing/drawing_text_declaration.h>
 #include <native_drawing/drawing_types.h>
 // ★★绘制四通道（2026-10-03 · 三端打通绘制通道）：渐变/发光/裁剪/描边
@@ -924,26 +926,13 @@ static void drawChannelsAndText(OH_Drawing_Canvas* canvas, const TextDrawSpec* s
                 OH_Drawing_PointDestroy(shOff);
             }
             OH_Drawing_SetTextStyleFontSize(tstyle, spec->fontSizePx);
-            // ★批次 3：字重（`OH_Drawing_FontWeight` = FONT_WEIGHT_100..900 ⇒ 索引 (w/100)-1，钳 [0,8]）
-            {
-                int wi = spec->fontWeight / 100 - 1;
-                if (wi < 0) wi = 0; else if (wi > 8) wi = 8;
-                OH_Drawing_SetTextStyleFontWeight(tstyle, wi);
-            }
-            // ★★★font-style 项（2026-10-18 · 批 B F3）：斜体/倾斜——直映射平台枚举（不做近似）。
-            if (spec->fontStyle == "italic") OH_Drawing_SetTextStyleFontStyle(tstyle, FONT_STYLE_ITALIC);
-            else if (spec->fontStyle == "oblique") OH_Drawing_SetTextStyleFontStyle(tstyle, FONT_STYLE_OBLIQUE);
-            else OH_Drawing_SetTextStyleFontStyle(tstyle, FONT_STYLE_NORMAL);
+            // ★★★决策 #1055：字重/字族/斜体统一走平台层 `applyTextFont`（**唯一实现**）。
+            //   此前这里内联设三项、测量另走 applyTextFont ⇒ 两套实现，加能力必漏一半
+            //   （实证：`font-style` 只加到测量侧时，绘制端永远不倾斜）。
+            applyTextFont(tstyle, spec->fontWeight, spec->family, spec->fontStyle);
             // ★批次 35：文本装饰（0=none/1=underline/4=line-through）
             if (spec->textDecoration != 0) OH_Drawing_SetTextStyleDecoration(tstyle, spec->textDecoration);
-            // ★批次 36：字体角色 → 字族（best-effort；鸿蒙字体集有限，未知角色回落默认）
-            if (spec->family == "monospace") {
-                const char* fams[] = {"HarmonyOS Sans Digit", "monospace"};
-                OH_Drawing_SetTextStyleFontFamilies(tstyle, 2, fams);
-            } else if (spec->family == "serif") {
-                const char* fams[] = {"serif"};
-                OH_Drawing_SetTextStyleFontFamilies(tstyle, 1, fams);
-            }
+            // （字体角色已在上面 applyTextFont 内按角色→字族映射，见平台层）
             // ★批次 20（CSS 兼容对齐 · 以 Web 为基准）：字距（物理 px；0 = 默认不设）
             if (spec->letterSpacing != 0) OH_Drawing_SetTextStyleLetterSpacing(tstyle, spec->letterSpacing);
             // ★批次 16（CSS 兼容对齐 · 以 Web 为基准）：`text-overflow:ellipsis` ⇒ 单行尾部省略号。
@@ -1094,15 +1083,8 @@ static void sdDrawText(OH_Drawing_Canvas* canvas, const SDNode& n) {
     else OH_Drawing_SetTypographyTextAlign(ts, 0);
     OH_Drawing_SetTextStyleColor(tstyle, n.textColor);
     OH_Drawing_SetTextStyleFontSize(tstyle, n.fontSize);
-    // ★★★font-style 项（2026-10-18）：自绘通道补字重 + 斜体（此前两者都没设）
-    {
-        int wi = n.fontWeight / 100 - 1;
-        if (wi < 0) wi = 0; else if (wi > 8) wi = 8;
-        OH_Drawing_SetTextStyleFontWeight(tstyle, wi);
-    }
-    if (n.fontStyle == "italic") OH_Drawing_SetTextStyleFontStyle(tstyle, FONT_STYLE_ITALIC);
-    else if (n.fontStyle == "oblique") OH_Drawing_SetTextStyleFontStyle(tstyle, FONT_STYLE_OBLIQUE);
-    else OH_Drawing_SetTextStyleFontStyle(tstyle, FONT_STYLE_NORMAL);
+    // ★★★决策 #1055：自绘通道同样走平台层唯一实现（此前连字重都没设）
+    applyTextFont(tstyle, n.fontWeight, "", n.fontStyle);
     OH_Drawing_SetTypographyTextWordBreakType(ts, 0);   // NORMAL（与旧路径一致，防数字边界断词）
     OH_Drawing_TypographyCreate* handler = OH_Drawing_CreateTypographyHandler(ts, fc);
     if (handler != nullptr) {

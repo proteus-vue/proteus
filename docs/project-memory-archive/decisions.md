@@ -6130,3 +6130,48 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   ★★**聚合初始化 + 插字段 = 静默错位风险**（编译器这次恰好报了 narrowing，换个类型就静默了）；
   ★**缩略图目测 ≠ 验收**——必须用像素级可复现判据（本仓已有"独立子代理 + 逐帧"纪律，这次是我自己先违反了）。
 【诚实边界】只验鸿蒙（真机）；Android 上一轮已验（同页同案例）；iOS 仍卡**描述文件过期**（见 #1053），未真机验。
+
+1055. **★★★「同一系统内通用能力严禁每个宿主实现一遍」——鸿蒙字体属性统一到平台层唯一设置点 + 新增静态门禁 · 决策**（2026-10-18 · 用户「还有一次确认下现在改的适用于同一系统的所有宿主吗？……通用能力在同一个系统里面严禁每个宿主都需要实现一遍」）：
+【用户的问题是对的（实证）】`font-style` 在鸿蒙「跑通了一个宿主」不等于"所有宿主都能用"。核查发现：
+  · **同一平台内有两套字体设置实现**：测量侧走平台层 `applyTextFont`（我在那加了斜体枚举映射），
+    绘制侧 `proteus_render.cpp` **自己内联** `OH_Drawing_SetTextStyleFontWeight/FontFamilies`，
+    **从不读 `fontStyle`** ⇒ 加在上游的项永远到不了屏幕（正是上一轮"真机三段 shear 全 0"的另一面）；
+  · 另有自绘路径 `sdDrawText`（SDNode）连字重/字族都没设——**第三套**写法。
+  ⇒ 只要保留多套，「加一个字体能力」就必须改 N 处，漏一处 = 某条绘制路径静默不支持。
+【修：统一到唯一实现点】
+  · 平台层 `proteus_text_platform.h` 的 `applyTextFont(tstyle, weight, family, fontStyle="")` 成为
+    **本平台唯一的字体属性设置点**（字重 + 字族 + 斜体）；`fontStyle` 显式参数优先，
+    留空则回退解析 `italic:`/`oblique:` 前缀（与 Android/iOS 角色串契约兼容）；
+  · 绘制主路径：删掉内联三块（字重/斜体/字族）⇒ 一行 `applyTextFont(...)`；
+  · 自绘路径 `sdDrawText`：同样改调 `applyTextFont`（此前连字重都没有）；
+  · 测量两个入口（`measureTextTypoPx` / `measureTextWrappedTypoPx`）也加 `fontStyle` 参数并传下去
+    ⇒ **度量与绘制同属性**（斜体字形更宽，不带会低估宽度/误折行）。
+【★新门禁 `check:text-style-single-impl`（静态，已接 CI + `pnpm verify`）】
+  判据：三端的「字体属性原生调用」（`OH_Drawing_SetTextStyleFontWeight/FontFamilies/FontStyle` ·
+  `Typeface.create` · `withSymbolicTraits`）只允许出现在**平台层唯一文件**：
+  · harmony → `proteus_text_platform.h`（真源 + prebuilt 副本）；android → `ProteusTextPlatform.java`；
+    ios → `ProteusTextAdapter.swift`。宿主目录里再出现 ⇒ 红并指名文件 + 给修法。
+  具名豁免（须写理由）：`proteus_bench.cpp`（鸿蒙 V13 字体族**诊断探针**——它是被测对象本身，
+  改走平台层等于"用被测物测自己"，判据失去独立性）。
+  · **破坏性验证**：在 `proteus_render.cpp` 注入一处内联 `OH_Drawing_SetTextStyleFontStyle` ⇒
+    **rc=1** 且点名 `[harmony] hosts/harmony/.../proteus_render.cpp`；恢复后 rc=0。
+  · 当前三端计数：harmony 12 处（全部在平台层）· android 3 · ios 3 处（全部在平台层）。
+【「新项目也能拿到」的机制核验（用户核心关切）】
+  · `host-scaffold.ts::syncRuntimeUnits` 在**每次 `packageHarmonyHost` 打包时**从框架真源
+    重拷贝 runtime 目录（决策 #692 的"源集自愈"）；prebuilt 随包副本由
+    `scripts/harmony-runtime-prebuilt.mjs` 同步（门禁 `check:harmony-runtime-prebuilt` 逐字节比对）。
+  · **实测**：三个已生成的项目宿主（`css-conformance` / `superapp` / `demos/dactyl` 的
+    `dist/app/harmony/host`）在修复前 `fontStyle` 计数**全为 0**（陈旧）；
+    调一次 `syncRuntimeUnits` 后 **全部变为 5 处** ⇒ 自愈有效，不需要"每个项目改一遍"。
+【判据】
+  · 鸿蒙 `BUILD SUCCESSFUL` → signed hap → hdc 装机 → font 页；客观测量与统一前**完全一致**
+    （顶−底墨迹中心：normal −30px · italic **+5px** · oblique **+12px**）⇒ 统一无回归；
+  · `check:text-style-single-impl` rc=0（三端单点）· `check:platform-layering` 绿（platform 不反向依赖 hosts）·
+    `check:harmony-runtime-prebuilt` 绿 · `check:gates-sync` 绿（新门禁已接 ci.yml + verify）·
+    `check:file-size` / `check:script-compile` 绿。
+【★教训】★★★**"跑通一个宿主"≠"所有宿主可用"**——通用能力必须落在**平台层唯一实现**，
+  并由**静态门禁**守住"不得再长出第二套"（记忆/注释拦不住，本轮已实证）；
+  ★★**加字体类能力时，度量与绘制必须同时改**（同属性不同值 ⇒ 宽度/折行错，且是静默的）；
+  ★**"自愈同步"要能实测**：不要相信"机制应该会同步"，去把陈旧宿主的计数从 0 改到 N 才算证明。
+【诚实边界】本轮只真机复验鸿蒙；Android/iOS 是**静态门禁**证明"单实现点"（android 3 / ios 3 处全在平台层），
+  未重跑真机像素（iOS 仍卡描述文件过期 · #1053）。

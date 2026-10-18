@@ -39,6 +39,12 @@ jobs:
       - name: Keryx 图标库门禁（★数据法则 + 生成物漂移：内核可吃/24 网格 [0,24]/kebab/类别/双体系/零 hex）
         run: pnpm run check:icons
 
+      # ★★★文本字体属性「单实现」门禁（决策 #1055）：同一平台严禁每个宿主各自实现一遍
+      #   背景：鸿蒙 `font-style` 加在测量侧、绘制侧另有一套内联设置 ⇒ 真机三段 shear 全 0（白验一轮）。
+      #   判据：字重/字族/斜体的原生设置调用只允许出现在**平台层**唯一文件；纯静态扫描，CI 可跑。
+      - name: 文本字体属性单实现门禁（★平台层唯一设置点，宿主不得重复实现）
+        run: pnpm run check:text-style-single-impl
+
       - name: 玻璃治理门禁（★G-07 M5：裸 backdrop-filter 即红——单入口铁律 GLS001）
         run: pnpm run check:glass-audit
 
