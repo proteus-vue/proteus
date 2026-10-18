@@ -37,10 +37,6 @@ export {
   invokeHostAsync,
   installHostResolveBridge,
   pendingHostCallCount,
-  // ★T-app-fetch：实际走的线格式读数（'bytes' | 'json'）——真机判据用它证明**没有回落 JSON**
-  lastInvokeWire,
-  // ★超时形态读数（`js-timer` = 引擎有 setTimeout；`host-only` = App 引擎无定时器，超时由宿主兜底）
-  hostCallTimerMode,
   HOST_RESOLVE_KEY,
 } from './capability-invoke'
 export type { HostInvokeFn, AppRequestConfig, AppRequestResponse } from './capability-invoke'

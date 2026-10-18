@@ -67,7 +67,7 @@ const g = globalThis as unknown as HostGlobals
 const HOST_ID = g.__PROTEUS_HOST_ID__ ?? 'quickjs-desktop'
 // ★构建标识（由 hosts/ios/bridge/inject-build-id.mjs **编译期替换**——与 entry-bench/entry-selfdraw
 //   同一机制；报告据此断言"设备上跑的是本次构建"，而不是靠运行时环境变量（那种是第二种形态））
-const BUILD_ID = '8b65b5e9-161013'
+const BUILD_ID = '0353e99a-215230'
 const FRAME_DRIVER = g.__PROTEUS_HOST_FRAME_DRIVER__ ?? 'manual'
 
 // ══════════════════════════════════════════════════════════════════
@@ -577,6 +577,51 @@ export function __proteusHostRun(): string {
 
       // ① C48 宿主上下文（壳自述——已实现）
       appPending.hostContext = appCaps.getHostContext()
+      // ①b ★★★C26 useFetch 网络腿（T-app-fetch 真机判据 · 决策 #1063/#1064）
+      //   【★为什么**不 await**】本探针是「run → job 泵 → finish」**单相位**结构：真实网络回推要等
+      //     宿主主循环转起来才送达，await 会把它卡成 `done=false`（本轮实测）。而**同步派发**已经
+      //     覆盖了本轮要验的那条崩溃链——宿主当场回 `pending` 帧 ⇒ C 桥要把它造成 JS `Uint8Array`
+      //     （`proteus_new_uint8_array_copy`）⇒ 那正是真机 SIGSEGV 的位置（决策 #1064 ②）。
+      //   【判据】派发不抛 + `invokeWire === 'bytes'`（没回落 JSON 腿）。
+      //   【诚实边界】完整响应体（status/载荷）由**鸿蒙真机探针**（`run-http-probe.sh`）与单测覆盖；
+      //     本端只判"派发通路 + 字节回执不崩"。`fetchResult` 通常来不及（为 undefined 属预期）。
+      try {
+        const p = appCaps.request({ url: 'https://www.baidu.com', method: 'GET', timeout: 12000 })
+        appPending.fetchDispatch = { ok: true }
+        // ★挂续体只为记录"若它真的回来了"（不阻塞、不影响 done）
+        void p
+          .then((r: { status?: number; data?: unknown }) => {
+            const payload = typeof r.data === 'string' ? r.data : ''
+            ;(appPending as Record<string, unknown>).fetchResult = {
+              ok: true,
+              status: r.status,
+              bytes: payload.length,
+              preview: payload.slice(0, 60),
+            }
+          })
+          .catch((e: { code?: string; message?: string }) => {
+            ;(appPending as Record<string, unknown>).fetchResult = {
+              ok: false,
+              code: e?.code,
+              message: String(e?.message ?? e),
+            }
+          })
+      } catch (e) {
+        appPending.fetchDispatch = { ok: false, message: String(e) }
+      }
+      // ★线格式读数（'bytes' = 二进制腿；'json' = 回落）——判据据此判定"半截去 JSON"
+      try {
+        const mod = (await import('@proteus-vue/api')) as unknown as {
+          lastInvokeWire?: () => string
+          hostCallTimerMode?: () => string
+        }
+        appPending.invokeWire = typeof mod.lastInvokeWire === 'function' ? mod.lastInvokeWire() : 'unavailable'
+        // ★超时形态（App 引擎无 setTimeout ⇒ 'host-only' 是正确值——决策 #1064 ①）
+        const tm = mod.hostCallTimerMode
+        appPending.timerMode = typeof tm === 'function' ? tm() : 'unavailable'
+      } catch (e) {
+        appPending.invokeWire = 'error:' + String(e)
+      }
       // ② C51 热更新
       const um = appCaps.getUpdateManager()
       appPending.updateCheck = await um.checkUpdate()

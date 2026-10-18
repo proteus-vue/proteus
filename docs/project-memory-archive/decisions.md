@@ -6545,3 +6545,30 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   `false`（本轮实测），故该判据**未**放进 host-runtime 探针；真机 `useFetch` 判据的落点应是
   **superapp 场景**（应用已常驻、ArkTS/主线程事件循环在跑）——已登记为后续项。
   ② iOS 真机 `useFetch` 判据同样未跑。
+
+1065. **★★★T-app-fetch 三端真机闭环 + iOS `host-runtime` 缺字节桥（静默回落 JSON）· 决策**（2026-10-18 · T-app-fetch 收尾）：
+【结论】`T-app-fetch` 完成（任务板转 `done`，decision #1063）：三端真机 `useFetch` 判据全绿。
+  · **鸿蒙** `run-http-probe.sh --url https://www.baidu.com` ⇒ `{ok:true,bridge:invokeBytes,frameSource:arkts,status:200,bodyBytes:2443}`
+  · **Android** `run-host-runtime.sh` ⇒ `⑩ useFetch：线格式=bytes · 超时形态=host-only` + 宿主记账含 `http.request`
+  · **iOS** `run-selfdraw.sh --host-runtime` ⇒ 同上（`线格式=bytes · 超时形态=host-only`）
+【★iOS 判据首轮抓到的真缺陷（本轮新增的性质）】`host-runtime` 场景**没有装**二进制腿：
+  `HostRuntimeBridge` 只实现了 `invoke`（JSON），`installInvokeBytes` 只存在于 `SuperappRuntimeHost`。
+  ⇒ JS 侧 `getHostInvokeBytes()` 探测不到 ⇒ `useFetch` **静默回落 JSON 腿**（真机实测 `invokeWire === "json"`）。
+  【修】`HostRuntimeBridge` 加 `bytesBridge: InvokeBytesBridge` + `installInvokeBytes(on:)` +
+  `dispatchInvokeBytes`（分发与 `SuperappRuntimeHost` 同形），`HostRuntimeScene.run` 在
+  `ctx.setObject(hostBridge, "proteusHost")` 之后调用。★iOS `swiftc -typecheck` 通过 + 真机复验 bytes。
+  ★教训：**"桥在代码里"≠"场景真的装了"**——`check:no-json-wire` 的 `hasExact` 判据只能证明**存在**
+  （而且它当时判的是 shell 场景的调用点）；**每个会调该能力的场景都要有自己的装配点**，
+  且只有真机能证明"这个场景里它生效了"。这与"提交≠交付"同族：存在性 ≠ 生效性。
+【★判据落点的诚实边界（已写进 checker 注释）】`host-runtime` 探针是「run → job 泵 → finish」**单相位**
+  结构：真实网络回推要等宿主主循环转起来才送达。本轮实测把 `await appCaps.request(...)` 放进去，
+  会把整条 `app_native` 链卡成 `done=false`（90s 出不了报告）。
+  ⇒ 该端判据改为**只判派发通路**（不 await）：① 派发不抛（真机 SIGSEGV 的位置就在这条链上——
+  宿主回来 `pending` 帧 ⇒ C 桥造 `Uint8Array` ⇒ 决策 #1064 ②）；② `invokeWire === 'bytes'`；
+  ③ `timerMode === 'host-only'`。完整响应体（status/载荷）由**鸿蒙真机探针**（空 VM + 真 `invokeBytes`）
+  + 46 条单测覆盖。★"判据要放在能观测到该事实的地方"——单相位探针观测不到异步网络结果，就不该在那里判它。
+【既有偶发红（如实登记，非本轮引入）】iOS 同一提交连跑三次：① GC 后内存微增（`alloc=43173824 → gc=43190208`）
+  ② `theme-change` 三环未对齐（回调 1 / 推送 0 / 收到 0）③ 全绿——各一次。属既有 flaky，已登记待查。
+【判据】`T-app-fetch` → done；46 条单测全绿；五端 parity / no-json-wire / 三端宿主编译检查 /
+  file-size / memory / ai-tasks / gates-sync 全绿。
+【下一步】`T-app-runtime-capabilities` 按域批量推（先「设备与系统」20 项——共享系统信息模块、依赖最少）。

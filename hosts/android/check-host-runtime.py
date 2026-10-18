@@ -409,6 +409,30 @@ def main() -> int:
             else:
                 fail(f"⑨ C82 空模块校验失败：{wv}")
 
+        # ⑩ ★★★C26 useFetch 派发通路（T-app-fetch · 决策 #1063/#1064）
+        #   【判什么】① 派发不抛（真机 SIGSEGV 的位置就在这条链上）；② 走的是**字节腿**（没回落 JSON）；
+        #             ③ 超时形态如实（App 引擎无 setTimeout ⇒ 'host-only' 是**正确值**）。
+        #   【★诚实边界】本探针是单相位（run→泵→finish），网络回推要主循环 ⇒ **不 await**，
+        #     故 `fetchResult` 通常为 None（齐全响应由鸿蒙真机探针 + 单测覆盖）。
+        fd = app_native.get("fetchDispatch") or {}
+        wire = app_native.get("invokeWire")
+        tmode = app_native.get("timerMode")
+        if fd.get("ok") is not True:
+            fail(f"⑩ C26 useFetch 派发失败（code={fd.get('code')}）：{fd.get('message')}")
+        elif wire != "bytes":
+            fail(f"⑩ C26 useFetch 走的是 **{wire}** 线格式（期望 bytes）——二进制腿未生效/被回落")
+        else:
+            fr = app_native.get("fetchResult")
+            extra = ""
+            if isinstance(fr, dict):
+                if fr.get("ok") is True:
+                    extra = f" · 回推已到：status={fr.get('status')} {fr.get('bytes')}B"
+                else:
+                    extra = f" · 回推失败：{fr.get('code') or fr.get('message')}"
+            else:
+                extra = " · 回推未到（单相位探针预期，见注释）"
+            report(f"⑩ C26 useFetch：派发通路通（线格式={wire} · 超时形态={tmode}）{extra}")
+
         # ④ ★★壳调用记录（**由真实 Java 宿主自报**——证明能力经宿主执行，不是桥自造数据）
         #   初版读 JS 侧桩的 `__calls`（自我闭环）；现读 `HostCapabilities.callLog`。
         host_calls_raw = app_native.get("__hostCalls")

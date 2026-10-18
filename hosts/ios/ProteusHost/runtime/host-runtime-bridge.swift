@@ -27,6 +27,12 @@ final class HostRuntimeBridge: NSObject, HostRuntimeExports {
     let capabilities = HostCapabilities()
     /// ★★M5 执行器的宿主实现（screen.* 协议——真内核树 + CADisplayLink 帧循环；见 screen-host.swift）
     let screen = ScreenHost()
+    /// ★★★S2「去 JSON」（决策 #903 / #1064）：能力通道的**二进制腿**——与 shell 的 SuperappRuntimeHost 同一形态。
+    ///   ★为什么 host-runtime 场景也要装：本场景是**真机 useFetch 判据**的落点；不装 ⇒ JS 侧探测不到
+    ///     `invokeBytes` ⇒ 静默回落 JSON 腿（真机实测抓出：`invokeWire === "json"`）。
+    ///   「桥在代码里」≠「场景真的装了」——这正是 iOS 腿此前漏接的那一类。
+    private let bytesBridge = InvokeBytesBridge()
+
     /// JSC 全局上下文（供 `gc()` 主动回收；注入方 setObject 前设置——本桥自持，不引用 shell/dev）
     var jsContextRef: JSGlobalContextRef?
 
@@ -63,4 +69,45 @@ final class HostRuntimeBridge: NSObject, HostRuntimeExports {
         }
         return capabilities.invoke(method, argsJson)
     }
+
+    // ────────────────────────── ★S2「去 JSON」：能力二进制腿 ──────────────────────────
+
+    /// 注入 `__proteusHostInvokeBytes`（JSC C API；JSExport 传不了 `Uint8Array`）。
+    /// ★装配位置 = 场景在 `ctx.setObject(hostBridge, "proteusHost")` **之后**调本方法；
+    ///   JS 侧是**调用时**探测 ⇒ 顺序无关，但与 setObject 相邻更易审。
+    @discardableResult
+    func installInvokeBytes(on ctx: JSContext) -> Bool {
+        bytesBridge.handler = { [weak self] frame in self?.dispatchInvokeBytes(frame) }
+        let ok = bytesBridge.install(on: ctx)
+        if ok {
+            NSLog("[proteus] host-runtime 已注入 invokeBytes ⇒ App 能力走**二进制帧**（S2 去 JSON · #903/#1064）")
+        } else {
+            NSLog("[proteus] ✗ host-runtime 二进制腿安装失败：%@", (bytesBridge.stats()["last_error"] as? String) ?? "?")
+        }
+        return ok
+    }
+
+    /// 分发去程帧（与 SuperappRuntimeHost.dispatchInvokeBytes / Android HostCapabilities.invokeBytes 同一分发）。
+    /// 返回 `nil` = 已受理、结果稍后 `pushResolve` 回推；返回帧 = 当场结算。
+    private func dispatchInvokeBytes(_ frame: [UInt8]) -> [UInt8]? {
+        do {
+            let f = try InvokeWire.decodeInvoke(frame)
+            switch f.method {
+            case "http.request":
+                return try HttpCapability.handle(f) { [weak self] reply in
+                    if self?.bytesBridge.pushResolve(reply) == false {
+                        NSLog("[proteus] ✗ 二进制回推被丢弃（JS 侧未安装 __proteusHostResolveBytes）")
+                    }
+                }
+            default:
+                return try InvokeWire.encodeResolve(
+                    .makeMissingMethod(f.reqId, "二进制通道未实现的原生方法：\(f.method)（当前仅 http.request）"))
+            }
+        } catch {
+            return try? InvokeWire.encodeResolve(.makeErr("", "二进制帧处理失败：\(error)"))
+        }
+    }
+
+    /// 字节腿读数（判据用；不经 JS ⇒ 证明桥真的被走过）
+    func invokeBytesStats() -> [String: Any] { bytesBridge.stats() }
 }

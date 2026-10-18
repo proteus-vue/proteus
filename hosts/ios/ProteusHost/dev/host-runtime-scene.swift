@@ -50,6 +50,9 @@ final class HostRuntimeScene: NSObject {
         let hostBridge = HostRuntimeBridge()
         hostBridge.jsContextRef = ctx.jsGlobalContextRef
         ctx.setObject(hostBridge, forKeyedSubscript: "proteusHost" as NSString)
+        // ★★★S2「去 JSON」：注入 `__proteusHostInvokeBytes`（JSC C API）——
+        //   不装 ⇒ JS 侧探测不到 ⇒ useFetch 静默回落 JSON 腿（真机判据抓出：invokeWire == "json"）。
+        hostBridge.installInvokeBytes(on: ctx)
 
         // ③ 加载 bundle（JSC 无模块系统——IIFE 整份 evaluate）
         guard let src = try? String(contentsOf: bundleURL, encoding: .utf8) else {
