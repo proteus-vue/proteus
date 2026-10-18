@@ -6068,3 +6068,34 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   只有运行期 wrapper 是"代码里硬写"的一层，这类层最容易在改 A 目标时引入 B 副作用。
 【诚实边界】本轮只验 Android 真机；iOS/鸿蒙共用同一份 `wrapViewportRoot`（TS 层）⇒ 该修复对三端同时生效，
   但两端的真机像素未重跑。31 项 fixture 用 2400 视口模拟，真实设备 2608——比例一致，结论不受影响。
+
+1053. **★★构建可移植性：鸿蒙 build-profile 签名路径跨机重定位（换机后 SignHap 必失败）· 决策**（2026-10-18 · 用户「编译iOS和鸿蒙我看看」）：
+【现象】在本机（yunlaidemini）跑 `bash hosts/harmony/build-host-app.sh --css`：
+  · 第一次：`00303107 Invalid storeFile value ... must be included in '/Users/kags/.ohos/config/...p12'`
+    —— `build-profile.json5`（**gitignored 本地状态**）里存的是**另一台机器（kags）的家目录绝对路径**；
+  · 第二次（路径重定位后）：`00303242 Signature material verification failed: Unsupported state or unable to
+    authenticate data` —— 本机 `~/.ohos/config` 里有**同名** p12（10-11 本机生成），
+    但 `build-profile.json5` 里的 `keyPassword/storePassword` 是**另一台机器加密的密文** ⇒ 解不开。
+  ⇒ 两步都不是代码问题：**编译（hvigor assembleHap 的 PackageHap/PackingCheck）全部成功**，只停在 SignHap。
+【修（本轮落地的一半）】`build-host-app.sh` 加**签名路径重定位**：若 `certpath/profile/storeFile` 指向的
+  家目录不是当前 `$HOME`、而**当前 `$HOME` 下有同名文件** ⇒ 就地重写为当前路径，构建后 `trap` 还原
+  （`build-profile.json5` 属本地状态，不留改动；签名材料本身不动）。
+  ⇒ 解决了第一类失败（换机路径不对）；**第二类（口令密文跨机）无法自动修**——必须在该机 DevEco 里
+  重新生成一次签名（File → Project Structure → Signing Configs → Automatically generate signature）。
+【验证（两端编译都是干净的）】
+  · **鸿蒙**：`BUILD SUCCESSFUL in 7s`，产出 `entry-default-unsigned.hap`（12.2MB，含
+    `resources/rawfile/app-screen-content.json` **2 处 fontStyle**、`bundle-superapp.js`）；
+    临时清空 `signingConfig` 以跳过签名（构建后已还原为 `default`）；
+  · **iOS**：`swiftc` 全过 + `.app` 组装完成（16:26），包内 `bundle-superapp.js` **4 处 fontStyle**、
+    `app-screen-content.json` **2 处**；卡在**描述文件过期**——
+    本机两份 provisioning profile（`cn.shxuxi.proteus.experiments` / `cn.proteus.dactyl`）**均在
+    2026-10-18 凌晨过期**（免费个人团队 7 天有效期）⇒ `e8008011 This provisioning profile has expired`。
+    ★默认 bundle id `dev.proteus.experiments` 本机**根本没有对应描述文件**（需用
+    `PROTEUS_BUNDLE_ID=cn.shxuxi.proteus.experiments`，且要先在 Xcode 重新签名）。
+【★教训】★★**"编译通过"与"能装机"是两道独立的门**——本轮两端都卡在**签名材料**（路径跨机 / 口令跨机 /
+  描述文件过期），而它们全在编译之后、且在脚本里以「✗ 构建失败」呈现 ⇒ 极易被误读成"代码有错"。
+  ⇒ 报错必须读到**具体 stage**（`SignHap` vs `PackageHap`）与**具体原因**（storeFile 路径 / 认证失败 / profile 过期）；
+  ★**机器本地状态（签名/口令/team id）不该被当成代码问题排查**——先看 `~/.ohos`、`Xcode/…/Provisioning Profiles`
+  的时间戳与内容，再谈改代码。
+【诚实边界】两端**只到编译 + 打包**，未装机、未真机渲染验证 font-style；鸿蒙缺 cssconf 专属签名配置、
+  iOS 两份描述文件均已过期 ⇒ 需用户侧一次性 GUI 动作（DevEco 自动签名 / Xcode 重新签名）。

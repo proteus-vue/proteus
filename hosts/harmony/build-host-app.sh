@@ -213,6 +213,39 @@ if [ "$PRODUCT" = "cssconf" ]; then
   APPJSON_SWAPPED=1
 fi
 
+# ── ★★★签名路径重定位（2026-10-18）：build-profile.json5 是 **gitignored 本地状态**，其中的
+#   certpath/profile/storeFile 绝对路径带着**上一次生成它的那台机器**的家目录（实测：/Users/kags）。
+#   换机/换用户后这些路径不存在 ⇒ hvigor 报 `Invalid storeFile value ... must be included in /Users/<other>/...`
+#   ⇒ 构建在 SignHap 阶段失败，而前面所有编译步骤都成功（很容易被误读成"代码有问题"）。
+#   【修法】若路径指向的家目录不是当前 $HOME、但**同名文件在当前 $HOME 下存在** ⇒ 就地重写为当前路径，
+#     并在构建后**还原**（该文件是本地状态，不留改动）。签名材料本身不动（同一个 p12/cer/p7b 文件名）。
+BPROFILE="$HERE/host-app/build-profile.json5"
+SIGN_RELOCATED=0
+restore_signpaths() {
+  if [ "$SIGN_RELOCATED" = "1" ] && [ -f "${BPROFILE}.pkgsave" ]; then
+    mv -f "${BPROFILE}.pkgsave" "$BPROFILE" && echo "    ✓ build-profile.json5 签名路径已还原"
+    SIGN_RELOCATED=0
+  fi
+}
+trap restore_signpaths EXIT
+if [ -f "$BPROFILE" ]; then
+  _RELOC=$(node -e '
+const fs=require("fs"),os=require("os"),path=require("path");
+const f=process.argv[1]; const home=os.homedir();
+const re=/(\/Users\/[^\/"]+)(\/\.ohos\/config\/[^"]+)/g;
+const src=fs.readFileSync(f,"utf8"); let changed=0;
+const out=src.replace(re,(m,root,tail)=>{
+  const cur=home+tail;
+  if (root===home) return m;
+  if (!fs.existsSync(cur)) return m;   // 当前家目录没有同名文件 ⇒ 不动（交给人工 DevEco 签名）
+  changed++; return home+tail;
+});
+if (changed>0) { fs.writeFileSync(f+".pkgsave", src); fs.writeFileSync(f, out); }
+process.stdout.write(String(changed));
+' "$BPROFILE" 2>/dev/null || echo 0)
+  if [ "${_RELOC:-0}" != "0" ]; then SIGN_RELOCATED=1; echo "==> 签名路径重定位：${_RELOC} 处（另一台机器的家目录 → 当前 ${HOME}）"; fi
+fi
+
 echo "==> 构建（assembleHap · product=${PRODUCT}）"
 # ★生效的 bundleName 快照（app.json5 是事实源；--css 时已切为 cssconf，构建后会被还原）——
 #   供构建失败的定向提示使用（还原之后再读就晚了）。
