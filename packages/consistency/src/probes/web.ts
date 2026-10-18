@@ -130,6 +130,9 @@ function styleOf(el: Element, win: Window): NormalizedStyle {
   // ★★★text-transform 项（2026-10-18 · 批 B F3）：Web computed = none/uppercase/lowercase/capitalize（原样）
   const ttf = cs.getPropertyValue('text-transform').trim().toLowerCase()
   if (ttf) styles.textTransform = ttf
+  // ★★★font-variant-numeric 项（2026-10-18 · 批 B F3）：Web computed 为关键字串（如 `tabular-nums`）或 `normal`
+  const fvn = cs.getPropertyValue('font-variant-numeric').trim().toLowerCase()
+  if (fvn) styles.fontVariantNumeric = fvn
   const ff = cs.getPropertyValue('font-family')
   if (ff) styles.fontFamily = normalizeFontFamily(ff)
   for (const [prop, key] of [

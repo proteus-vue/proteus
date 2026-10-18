@@ -233,6 +233,8 @@ struct SDNode {
     /** ★★★font-style 项（2026-10-18 · 批 B F3）：斜体形态（normal/italic/oblique）。
      *   ★自绘通道此前**连字重/字族都没设** ⇒ 斜体自然也丢；一并补齐（与主路径同契约）。 */
     std::string fontStyle;
+    /** ★★★font-variant-numeric（2026-10-18 · 批 B F3）：等宽数字（自绘路径与 RenderNode 路径同源）。 */
+    bool tabular = false;
 };
 struct SelfDrawSpec {
     double screenW = 0, screenH = 0;         // 物理 px（位图尺寸）
@@ -426,6 +428,8 @@ struct TextDrawSpec {
      *   映射到 `OH_Drawing_SetTextStyleFontStyle`（FONT_STYLE_NORMAL/ITALIC/OBLIQUE）。
      *   ★与 Android/iOS 同契约：宿主从 spec 的 `fontStyle` 读，不依赖角色串前缀。 */
     std::string fontStyle;
+    /** ★★★font-variant-numeric（2026-10-18 · 批 B F3）：`tabular-nums` ⇒ OpenType tnum（等宽数字）。 */
+    bool tabular = false;
     /** ★批次 3（CSS 兼容对齐）：文本字重（`font-weight` 折叠值 100–900；缺省 400）。
      *   映射到 `OH_Drawing_FontWeight`（100→0 … 900→8）——见 typography 设置处。 */
     int fontWeight = 400;
@@ -929,7 +933,7 @@ static void drawChannelsAndText(OH_Drawing_Canvas* canvas, const TextDrawSpec* s
             // ★★★决策 #1055：字重/字族/斜体统一走平台层 `applyTextFont`（**唯一实现**）。
             //   此前这里内联设三项、测量另走 applyTextFont ⇒ 两套实现，加能力必漏一半
             //   （实证：`font-style` 只加到测量侧时，绘制端永远不倾斜）。
-            applyTextFont(tstyle, spec->fontWeight, spec->family, spec->fontStyle);
+            applyTextFont(tstyle, spec->fontWeight, spec->family, spec->fontStyle, spec->tabular);
             // ★批次 35：文本装饰（0=none/1=underline/4=line-through）
             if (spec->textDecoration != 0) OH_Drawing_SetTextStyleDecoration(tstyle, spec->textDecoration);
             // （字体角色已在上面 applyTextFont 内按角色→字族映射，见平台层）
@@ -1084,7 +1088,7 @@ static void sdDrawText(OH_Drawing_Canvas* canvas, const SDNode& n) {
     OH_Drawing_SetTextStyleColor(tstyle, n.textColor);
     OH_Drawing_SetTextStyleFontSize(tstyle, n.fontSize);
     // ★★★决策 #1055：自绘通道同样走平台层唯一实现（此前连字重都没设）
-    applyTextFont(tstyle, n.fontWeight, "", n.fontStyle);
+    applyTextFont(tstyle, n.fontWeight, "", n.fontStyle, n.tabular);
     OH_Drawing_SetTypographyTextWordBreakType(ts, 0);   // NORMAL（与旧路径一致，防数字边界断词）
     OH_Drawing_TypographyCreate* handler = OH_Drawing_CreateTypographyHandler(ts, fc);
     if (handler != nullptr) {
@@ -1833,6 +1837,7 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
               if (jsonNumber(it, "letterSpacing", &v)) sn.letterSpacing = v; }
             { double v = 0; if (jsonNumber(it, "fontWeight", &v)) sn.fontWeight = (int)(v + 0.5); }
             { std::string v; if (jsonString(it, "fontStyle", &v)) sn.fontStyle = v; }
+            { std::string v; if (jsonString(it, "fontVariantNumeric", &v)) sn.tabular = (v == "tabular-nums"); }
             { double cx = 0, cy = 0, cw = 0, ch = 0;
               if (jsonNumber(it, "clipX", &cx)) { jsonNumber(it, "clipY", &cy); jsonNumber(it, "clipW", &cw); jsonNumber(it, "clipH", &ch);
                 sn.hasClip = true; sn.clipX = cx; sn.clipY = cy; sn.clipW = cw; sn.clipH = ch; } }
@@ -2178,6 +2183,9 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
         std::string ffStr; jsonString(it, "fontFamily", &ffStr);
         // ★★★font-style 项（2026-10-18）：斜体形态（normal/italic/oblique）
         std::string fstStr; jsonString(it, "fontStyle", &fstStr);
+        // ★font-variant-numeric（2026-10-18）：等宽数字（tnum）——解析留到 spec 创建后赋值（见下）
+        bool tabularFlag = false;
+        { std::string fvn; jsonString(it, "fontVariantNumeric", &fvn); tabularFlag = (fvn == "tabular-nums"); }
         // ★批次 4：文本水平对齐（text-align；缺省 left）
         std::string taStr;
         jsonString(it, "textAlign", &taStr);
@@ -2202,6 +2210,7 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
             spec->textDecoration = deco;
             spec->family = ffStr;
             spec->fontStyle = fstStr;   // ★★★font-style 项（2026-10-18）
+            spec->tabular = tabularFlag;   // ★★★font-variant-numeric 项（2026-10-18）：等宽数字
             spec->lineHeightPx = lhPx;
             { double lsg = 0; jsonNumber(it, "letterSpacing", &lsg); spec->letterSpacing = lsg; }
             { double toe = 0; jsonNumber(it, "textOverflowEllipsis", &toe); spec->textOverflowEllipsis = toe > 0 ? 1 : 0; }

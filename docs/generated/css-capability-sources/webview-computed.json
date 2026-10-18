@@ -3,7 +3,7 @@
     "kind": "wechatide-computedStyle",
     "tool": "wechatide automation_evaluate + fields({computedStyle})",
     "page": "computed-pages/webview-geom/index",
-    "collectedAt": "2026-10-02",
+    "collectedAt": "2026-10-18",
     "raw": "spike/vc0-skyline-geom/results/computed-webview.txt"
   },
   "rows": [

@@ -2,8 +2,8 @@
   "provenance": {
     "kind": "official-doc",
     "url": "https://developers.weixin.qq.com/miniprogram/dev/framework/runtime/skyline/wxss.html",
-    "fetchedAt": "2026-10-02",
-    "htmlSha": "f7f4d7ebaef41608"
+    "fetchedAt": "2026-10-18",
+    "htmlSha": "208068b7296f4239"
   },
   "modules": [
     [
@@ -817,6 +817,12 @@
       "auto / contents",
       "auto",
       "声明绘制边界，优化渲染性能"
+    ],
+    [
+      "text-underline-offset",
+      "auto / <length>",
+      "auto",
+      "设置文本装饰下划线的偏移距离"
     ]
   ],
   "types": [

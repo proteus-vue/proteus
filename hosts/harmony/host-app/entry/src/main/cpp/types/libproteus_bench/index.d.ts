@@ -41,6 +41,8 @@ export const gestureHitPrepare: (fixtureJson: string, vpW: number, vpH: number, 
 export const gestureHitAt: (xDesign: number, yDesign: number) => string;
 /** ★矩阵 #9：字体族端到端（同样文本同字号三族 ⇒ 度量分流 + 同族稳定性反例） */
 export const fontFamilyProbe: () => string;
+/** ★★★font-variant-numeric（2026-10-18 · 批 B F3）：等宽数字是否生效——同字族下开/关 tnum 的度量宽度差。 */
+export const tnumProbe: () => string;
 /** ★矩阵 #10：读核心真源的单节点几何（设计单位）——ArkUI 原生组件按此定位 */
 export const nodeRect: (nodeId: number) => string;
 /** ★★★Vulkan 能力探针（决策 #841）：真机确认是否有 libvulkan 运行时 + 物理设备 + 计算队列。

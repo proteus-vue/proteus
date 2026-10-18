@@ -86,6 +86,11 @@ export interface SelfDrawNodeSpec {
    */
   textTransform?: 'none' | 'uppercase' | 'lowercase' | 'capitalize'
   /**
+   * ★★★font-variant-numeric 项（2026-10-18 · 批 B F3）：等宽数字（`tabular-nums`）。
+   *   宿主在**选字形**时消费（三端平台层设 OpenType `tnum`）；度量与绘制必须同源。
+   */
+  fontVariantNumeric?: 'normal' | 'tabular-nums'
+  /**
    * 绘制用：**字体族（语义角色，已归一化）**——不是 CSS 原始清单
    *
    * 【为什么发语义角色而不是原始 CSS 串（本仓纪律：契约要自描述）】
@@ -233,7 +238,7 @@ export interface SelfDrawAdapter extends NativeAdapter {
  * 绘制相关的键（**不进布局核心**——核心只管几何；绘制由宿主的指令流消费）。
  *
  */
-const PAINT_KEYS = new Set(['backgroundColor', 'color', 'fontSize', 'fontWeight', 'fontStyle', 'textTransform', 'fontFamily', 'borderRadius', 'borderColor', 'borderWidth', 'opacity'])
+const PAINT_KEYS = new Set(['backgroundColor', 'color', 'fontSize', 'fontWeight', 'fontStyle', 'textTransform', 'fontVariantNumeric', 'fontFamily', 'borderRadius', 'borderColor', 'borderWidth', 'opacity'])
 
 /** 布局相关的键（进核心；其余键既非布局也非绘制 → 忽略并计数，便于发现「静默丢失」） */
 const LAYOUT_KEYS = new Set([
@@ -886,6 +891,11 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
       const ttRaw = styleValue(tStyle, 'textTransform') ?? props.textTransform
         ?? styleValue(pStyle, 'textTransform') ?? (parent ? parent.props.textTransform : undefined)
       if (typeof ttRaw === 'string' && ttRaw !== 'none' && spec.text) spec.text = applyTextTransform(spec.text, ttRaw)
+      // ★★★font-variant-numeric（2026-10-18 · 批 B F3）：等宽数字——同 textTransform 从父元素继承
+      //   （CSS 可继承属性；文本叶子是匿名子节点）。宿主据此选 OpenType `tnum` 字形。
+      const fvnRaw = styleValue(tStyle, 'fontVariantNumeric') ?? props.fontVariantNumeric
+        ?? styleValue(pStyle, 'fontVariantNumeric') ?? (parent ? parent.props.fontVariantNumeric : undefined)
+      if (typeof fvnRaw === 'string' && fvnRaw !== 'normal') spec.fontVariantNumeric = fvnRaw as 'tabular-nums'
       if (Number.isFinite(fsNum) && fsNum > 0) {
         spec.fontSize = fsNum
         spec.fontWeight = fwNum
@@ -966,6 +976,9 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
       } else if (key === 'fontStyle') {
         // ★★★font-style 项（2026-10-18）：封闭集（normal/italic/oblique）；未知值不落（宿主回退常规体）
         if (typeof src === 'string' && (src === 'normal' || src === 'italic' || src === 'oblique')) spec.fontStyle = src
+      } else if (key === 'fontVariantNumeric') {
+        // ★★★font-variant-numeric（2026-10-18）：封闭集；值落 spec（宿主选字形时消费）
+        if (typeof src === 'string' && (src === 'normal' || src === 'tabular-nums')) spec.fontVariantNumeric = src
       } else if (key === 'textTransform') {
         // ★★★text-transform 项（2026-10-18）：封闭集；值落 spec（文本变换发生在上面的文本叶分支）
         if (typeof src === 'string' && (src === 'none' || src === 'uppercase' || src === 'lowercase' || src === 'capitalize')) spec.textTransform = src

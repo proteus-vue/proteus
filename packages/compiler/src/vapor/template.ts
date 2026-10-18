@@ -124,7 +124,7 @@ export const APP_ENUM_VALUES: Record<string, readonly string[]> = {
 //   判据 = contracts/layers.ts 的 `zIndexOf`（数值→语义层区间映射 + 越界诊断；SSOT）。
 //   ★LY001 立场不变（内联 style/:style 裸 z-index 仍编译期拦——那是"层级控制手段"的逃生口）；
 //     本条服务**类样式**里的 z-index（语料 66 处：路由层叠/壳骨架——合法且跨端必需）。
-export const APP_PAINT_FIELDS = ['backgroundColor', 'color', 'fontSize', 'fontWeight', 'fontStyle', 'textTransform', 'fontFamily', 'textAlign', 'lineHeight', 'textOverflow', 'letterSpacing', 'textDecoration', 'visibility', 'borderRadius', 'borderColor', 'borderWidth', 'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth', 'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor', 'borderTopStyle', 'borderRightStyle', 'borderBottomStyle', 'borderLeftStyle', 'opacity', 'boxShadow', 'textShadow', 'transform', 'backgroundSize', 'backgroundPosition', 'backgroundRepeat', 'outlineWidth', 'outlineColor', 'outlineStyle', 'outlineOffset', 'zIndex'] as const
+export const APP_PAINT_FIELDS = ['backgroundColor', 'color', 'fontSize', 'fontWeight', 'fontStyle', 'textTransform', 'fontVariantNumeric', 'fontFamily', 'textAlign', 'lineHeight', 'textOverflow', 'letterSpacing', 'textDecoration', 'visibility', 'borderRadius', 'borderColor', 'borderWidth', 'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth', 'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor', 'borderTopStyle', 'borderRightStyle', 'borderBottomStyle', 'borderLeftStyle', 'opacity', 'boxShadow', 'textShadow', 'transform', 'backgroundSize', 'backgroundPosition', 'backgroundRepeat', 'outlineWidth', 'outlineColor', 'outlineStyle', 'outlineOffset', 'zIndex'] as const
 const PAINT_FIELDS = new Set<string>(APP_PAINT_FIELDS)
 /**
  * ★批次 4（CSS 兼容对齐）：`text-align` 的**封闭集**（App 自绘文本在盒内的水平对齐）。
@@ -144,6 +144,13 @@ export const APP_TEXT_OVERFLOW_VALUES = ['clip', 'ellipsis'] as const
  *   `full-width` / `full-size-kana` 需东亚宽度表且三端宿主无通道 ⇒ 诊断跳过（不静默当 none）。
  */
 export const APP_TEXT_TRANSFORM_VALUES = ['none', 'uppercase', 'lowercase', 'capitalize'] as const
+/**
+ * ★★★font-variant-numeric 项（2026-10-18 · 批 B F3）：**等宽数字**封闭集（四端可表达子集）。
+ *   ★只收 `tabular-nums` / `normal`：其余（`slashed-zero` / `ordinal` / `diagonal-fractions` /
+ *   `lining-nums` / `oldstyle-nums` / `proportional-nums` 等）需各端字体特性直通——三端通道尚不可用
+ *   ⇒ 诊断跳过（不静默近似）。Web 基准：`tabular-nums` 使数字等宽（Helvetica Neue 实测 +55%）。
+ */
+export const APP_FONT_VARIANT_NUMERIC_VALUES = ['normal', 'tabular-nums'] as const
 /** ★★★font-style 项（批 B F3）：封闭集（normal/italic/oblique）；iOS traitItalic / Android ITALIC / 鸿蒙 FONT_STYLE_*。
  *   ★与 `font-fold.ts` 的 FONT_STYLE_VALUES **同一份**（对外保留旧名字，避免破坏导出契约）。 */
 export const APP_FONT_STYLE_VALUES = FONT_STYLE_VALUES
@@ -171,7 +178,7 @@ export const APP_SPECIAL_FIELDS = ['boxSizing'] as const
  *   `font-weight`/`line-height`/`text-align`/`text-overflow`（批 16）。
  *   背景/边框/圆角/不透明度在内核语义里**不继承**（见 Profile §3 可继承/不可继承表）⇒ 不得纳入。
  */
-export const APP_INHERITABLE_FIELDS = ['color', 'fontSize', 'fontWeight', 'fontStyle', 'textTransform', 'fontFamily', 'lineHeight', 'textAlign', 'textOverflow', 'letterSpacing', 'textDecoration',
+export const APP_INHERITABLE_FIELDS = ['color', 'fontSize', 'fontWeight', 'fontStyle', 'textTransform', 'fontVariantNumeric', 'fontFamily', 'lineHeight', 'textAlign', 'textOverflow', 'letterSpacing', 'textDecoration',
   // ★★★word-break 项（2026-10-06 · CSS 继承属性）：`white-space` 与 `word-break` 都是 CSS Text 的**继承**属性
   //   （规范：父设、子默认继承）——App 折叠面须编译期传播，否则 `word-break: break-all` 设在容器上、
   //   文本子节点继承不到（Web/Skyline 由 CSS 引擎原生继承 ⇒ 跨端不一致）。★补 `whiteSpace` 同样纳入
@@ -1184,8 +1191,24 @@ export function parseStaticStyle(
           pushDiag(`\`${rawKey}: ${rawVal}\` 不是 App 支持的值（仅 ${APP_TEXT_TRANSFORM_VALUES.join(' / ')}；full-width/full-size-kana 无宿主通道）——已跳过`)
           continue
         }
-        if (v === 'none') continue   // 默认值 ⇒ 不发射（零行为变化）
+        // ★★★显式 `none` **必须发射**（2026-10-18 · 与 font-variant-numeric 的 `normal` 同一规则）：
+        //   它是 CSS 初值，但同时承担"压掉父级继承值"的作用——跳过就等于 inherit。
         out[key] = v
+        markImportant(key)
+        continue
+      }
+      // ★★★font-variant-numeric 项（2026-10-18 · 批 B F3）：等宽数字（可继承）。
+      //   `font-variant-numeric` 是**简写**（可含多个关键字），本版只认单一 `tabular-nums` / `normal`。
+      if (key === 'fontVariantNumeric') {
+        const toks = rawVal.trim().toLowerCase().split(/\s+/).filter(Boolean)
+        if (toks.length !== 1 || !(APP_FONT_VARIANT_NUMERIC_VALUES as readonly string[]).includes(toks[0]!)) {
+          pushDiag(`\`${rawKey}: ${rawVal}\` 不是 App 支持的值（仅 ${APP_FONT_VARIANT_NUMERIC_VALUES.join(' / ')}；其余数字特性无宿主通道）——已跳过`)
+          continue
+        }
+        // ★★★显式 `normal` **必须发射**（2026-10-18 · 与 font-style/text-transform 同一规则）：
+        //   它是 CSS 初值，但在这里承担"压掉父级继承值"的作用——跳过就等于 inherit
+        //   （实测：父 .kpi{tnum} + 子 .off{normal} ⇒ 子仍等宽，与 Web 不符）。
+        out[key] = toks[0]
         markImportant(key)
         continue
       }

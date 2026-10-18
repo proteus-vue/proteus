@@ -41,12 +41,42 @@ final class ProteusTextAdapter {
     ///   （与 Android `ProteusTextPlatform.ITALIC_PREFIX` 同契约）。iOS 用 `UIFontDescriptor` 的
     ///   `.traitItalic` 取同族斜体面；取不到 ⇒ **显式回退常规面 + 计数**（不静默）。
     ///   ★为什么必须在这一层：斜体是**另一套字形**（宽度不同）⇒ 度量与绘制必须同源，否则字被裁而判据全绿。
-    static func font(size: CGFloat, weight: CGFloat, family: String = "system") -> UIFont {
+    /// ★★★font-variant-numeric 项（2026-10-18 · 批 B F3）：**等宽数字**（tabular-nums）。
+    ///   `tabular=true` ⇒ 走 `UIFontDescriptor.featureSettings` 的 `kNumberSpacing`=`kMonospacedNumbersSelector`。
+    ///   【为什么必须在这一层】tnum 选的是**另一套数字字形**（字宽不同）⇒ 度量与绘制必须同源
+    ///   （本仓已因"度量一支、绘制另一支"踩过"字被裁而报告全绿"）。
+    ///   ★诚实边界：能否生效取决于**字体是否带 tnum 特性**——Web 实测（Chromium）：
+    ///   Helvetica Neue 上 tnum 使宽度 +55%，而 SF Pro / Georgia 本身已等宽（差异 0）。
+    ///   不带该特性的字族静默无效 = 与 Web 一致（浏览器同样不报错）。
+    static func font(size: CGFloat, weight: CGFloat, family: String = "system", tabular: Bool = false) -> UIFont {
+        // ★★★font-variant-numeric（2026-10-18 · 批 B F3）：角色串可带 `tnum:` 前缀（与 Android 同契约；
+        //   与 `italic:`/`oblique:` 可叠加）⇒ 先剥 tnum 再交给 fontBase（它已处理斜体前缀）。
+        if family.hasPrefix("tnum:") {
+            return font(size: size, weight: weight, family: String(family.dropFirst("tnum:".count)), tabular: true)
+        }
+        let f = fontBase(size: size, weight: weight, family: family)
+        return tabular ? withTabularNumbers(f, size: size) : f
+    }
+
+    /// ★★★font-variant-numeric（2026-10-18）：给字体加 **tnum** 特性（等宽数字）。
+    ///   ★iOS 的 `kNumberSpacing` 是 **CoreText feature**（不是 SymbolicTraits）⇒ 只能走 descriptor 的
+    ///   `featureSettings`；取不到 ⇒ 返回原字体（**不静默失败到别的字族**——同族常规面即可，
+    ///   与 Web「字体不支持该特性时按默认数字渲染」一致）。
+    static func withTabularNumbers(_ font: UIFont, size: CGFloat) -> UIFont {
+        let settings: [[UIFontDescriptor.FeatureKey: Int]] = [
+            [.featureIdentifier: kNumberSpacingType, .typeIdentifier: kMonospacedNumbersSelector],
+        ]
+        let d = font.fontDescriptor.addingAttributes([.featureSettings: settings])
+        return UIFont(descriptor: d, size: size)
+    }
+
+    /// 字体解析本体（原 `font(size:weight:family:)` 的实现——拆出来供 tabular 包装复用）
+    private static func fontBase(size: CGFloat, weight: CGFloat, family: String = "system") -> UIFont {
         if family.hasPrefix("italic:") {
-            return italicFont(base: font(size: size, weight: weight, family: String(family.dropFirst("italic:".count))), size: size)
+            return italicFont(base: fontBase(size: size, weight: weight, family: String(family.dropFirst("italic:".count))), size: size)
         }
         if family.hasPrefix("oblique:") {
-            return italicFont(base: font(size: size, weight: weight, family: String(family.dropFirst("oblique:".count))), size: size)
+            return italicFont(base: fontBase(size: size, weight: weight, family: String(family.dropFirst("oblique:".count))), size: size)
         }
         let base = systemFont(size: size, weight: weight)
         switch family {
@@ -279,21 +309,24 @@ final class ProteusTextAdapter {
 
     /// ★★★B-T1（2026-10-10）：**文本基线**（盒内容顶 → 基线）。CoreText ascent = 基线到顶 ⇒ 基线 = ascent。
     ///   供内核 `align-items: baseline` 对文本对齐（taffy 叶基线恒缺，内核侧后处理消费此值）。
-    static func textBaseline(fontSize: CGFloat, fontWeight: CGFloat = 400, fontFamily: String = "system") -> CGFloat {
-        let font = ProteusTextAdapter.font(size: fontSize, weight: fontWeight, family: fontFamily)
+    static func textBaseline(fontSize: CGFloat, fontWeight: CGFloat = 400, fontFamily: String = "system", tabular: Bool = false) -> CGFloat {
+        // ★font-variant-numeric：tnum 选另一套数字字形（基线不变，但统一走同一构造以免分叉）
+        let font = ProteusTextAdapter.font(size: fontSize, weight: fontWeight, family: fontFamily, tabular: tabular)
         return CTFontGetAscent(font as CTFont)
     }
 
     static func measureText(_ text: String, fontSize: CGFloat, fontWeight: CGFloat = 400,
-                            fontFamily: String = "system", lineHeight: String? = nil, letterSpacing: CGFloat = 0) -> CGSize {
+                            fontFamily: String = "system", lineHeight: String? = nil, letterSpacing: CGFloat = 0, tabular: Bool = false) -> CGSize {
         if text.isEmpty { return .zero }
         // ★缓存键必须含**字重与字族**（本仓实测的同一类缺陷：键不含某维度 ⇒ 不同字体共用度量 ⇒ 静默错几何）
         //   ★三层维度与适配器 `fontSignature` 的输入**逐项对应**（新增维度必须两边同时加）
         //   ★批次 13：键含 `lineHeight`（影响行盒高）
-        let key = "\(fontSize)\u{1}\(fontWeight)\u{1}\(fontFamily)\u{1}\(lineHeight ?? "")\u{1}\(letterSpacing)\u{1}\(text)"
+        //   ★★★font-variant-numeric（2026-10-18）：键含 `tabular`——tnum 是另一套字形（宽度不同），
+        //     不含它会让「等宽数字文本」与「同文常规数字」**共用度量缓存** ⇒ 几何静默错。
+        let key = "\(fontSize)\u{1}\(fontWeight)\u{1}\(fontFamily)\u{1}\(lineHeight ?? "")\u{1}\(letterSpacing)\u{1}\(tabular)\u{1}\(text)"
         if let hit = measureCache[key] { measureCacheHits += 1; return hit }
         measureCacheMisses += 1
-        let font = ProteusTextAdapter.font(size: fontSize, weight: fontWeight, family: fontFamily)
+        let font = ProteusTextAdapter.font(size: fontSize, weight: fontWeight, family: fontFamily, tabular: tabular)
         var attrs: [NSAttributedString.Key: Any] = [.font: font]
         // ★批次 20（CSS 兼容对齐 · 以 Web 为基准）：字距（kern）影响文本宽度 ⇒ 必须进度量
         if letterSpacing != 0 { attrs[.kern] = letterSpacing as NSNumber }
@@ -319,15 +352,16 @@ final class ProteusTextAdapter {
     static func measureTextWrapped(_ text: String, fontSize: CGFloat, fontWeight: CGFloat = 400,
                                     fontFamily: String = "system", lineWidth: CGFloat,
                                     lineHeight: String? = nil, letterSpacing: CGFloat = 0, wordBreak: String? = nil,
-                                    maxLines: Int = 0) -> CGSize {
+                                    maxLines: Int = 0, tabular: Bool = false) -> CGSize {
         if text.isEmpty || lineWidth <= 0 { return .zero }
         // 缓存键含 lineWidth（同文本不同盒宽折行结果不同；前缀 W 与单行键空间区分）
         // ★★★word-break 项（2026-10-06）：键含 wordBreak（不同断词策略折行结果不同）
         // ★★★line-clamp 项（2026-10-08）：键含 maxLines（不同截断行数折行/高度不同）
-        let key = "W\u{1}\(fontSize)\u{1}\(fontWeight)\u{1}\(fontFamily)\u{1}\(lineWidth)\u{1}\(lineHeight ?? "")\u{1}\(letterSpacing)\u{1}\(wordBreak ?? "")\u{1}\(maxLines)\u{1}\(text)"
+        // ★font-variant-numeric（2026-10-18）：键含 tabular（tnum 是另一套字形，宽度不同）
+        let key = "W\u{1}\(fontSize)\u{1}\(fontWeight)\u{1}\(fontFamily)\u{1}\(lineWidth)\u{1}\(lineHeight ?? "")\u{1}\(letterSpacing)\u{1}\(wordBreak ?? "")\u{1}\(maxLines)\u{1}\(tabular)\u{1}\(text)"
         if let hit = measureCache[key] { measureCacheHits += 1; return hit }
         measureCacheMisses += 1
-        let font = ProteusTextAdapter.font(size: fontSize, weight: fontWeight, family: fontFamily)
+        let font = ProteusTextAdapter.font(size: fontSize, weight: fontWeight, family: fontFamily, tabular: tabular)
         var attrs: [NSAttributedString.Key: Any] = [.font: font]
         if letterSpacing != 0 { attrs[.kern] = letterSpacing as NSNumber }
         // ★★★word-break 项（2026-10-06）：断词策略 → 段落 lineBreakMode（与绘制 textLayerString 同源）。

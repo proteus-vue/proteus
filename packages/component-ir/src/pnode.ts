@@ -122,6 +122,11 @@ export interface TextProps {
    *     MP/Skyline 官方表无此属性 ⇒ 编译期对静态文本变换。
    */
   textTransform?: 'none' | 'uppercase' | 'lowercase' | 'capitalize'
+  /**
+   * ★★★font-variant-numeric 项（2026-10-18 · 批 B F3）：等宽数字（`tabular-nums`）。
+   *   价格/KPI/编号列对齐刚需 —— 三端平台层统一设 OpenType `tnum`。
+   */
+  fontVariantNumeric?: 'normal' | 'tabular-nums'
   lineHeight?: ResolvedLength | number
   letterSpacing?: ResolvedLength
   color?: string

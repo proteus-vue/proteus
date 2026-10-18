@@ -4070,7 +4070,10 @@ final class SelfDrawView: UIView {
     /// ★★★font-style 项（2026-10-18 · 批 B F3）：**字体角色串 + 斜体前缀**的唯一合成点。
     ///   度量与绘制都必须走它（斜体是另一套字形，宽度不同 ⇒ 两处不一致就会"字被裁而判据全绿"）。
     static func familyOf(_ style: [String: Any]) -> String {
-        let base = (style["fontFamily"] as? String) ?? "system"
+        var base = (style["fontFamily"] as? String) ?? "system"
+        // ★★★font-variant-numeric（2026-10-18 · 批 B F3）：`tnum:` 前缀 = 等宽数字（与 Android 同契约）。
+        //   ★与斜体**可叠加**（平台层逐层剥前缀）：`italic:tnum:system`。
+        if let fvn = style["fontVariantNumeric"] as? String, fvn == "tabular-nums" { base = "tnum:" + base }
         if let f = style["fontStyle"] as? String, f == "italic" || f == "oblique" { return f + ":" + base }
         return base
     }
@@ -4081,7 +4084,7 @@ final class SelfDrawView: UIView {
         // ★★★overflow-x 项（2026-10-06）：overflowX/overflowY 也透传（层配置按其开裁剪）
         // ★★★word-break 项（2026-10-06）：wordBreak 也透传（段落样式按其设 lineBreakMode）
         // ★批 A（决策 #651/#652）：position 必须透传——fixed 层需重挂到视图层（不随内容滚动）。
-        for k in ["backgroundColor", "color", "text", "fontFamily", "fontStyle", "textAlign", "borderColor", "lineHeight", "whiteSpace", "wordBreak", "overflow", "textOverflow", "overflowX", "overflowY", "position"] {
+        for k in ["backgroundColor", "color", "text", "fontFamily", "fontStyle", "fontVariantNumeric", "textAlign", "borderColor", "lineHeight", "whiteSpace", "wordBreak", "overflow", "textOverflow", "overflowX", "overflowY", "position"] {
             if let v = n[k] as? String { style[k] = v }
         }
         // ★★★修复（2026-10-08 · 子代理审美审查 + 真机取证）：**letterSpacing / textDecoration 此前被本函数丢弃**——

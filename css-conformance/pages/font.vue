@@ -69,6 +69,17 @@ const lhText = '第一行文本\n第二行文本（行高 28px）'
       <text id="case-text-transform-inherit" class="tt-inherit">inherited caps</text>
     </view>
 
+    <!-- ★★★font-variant-numeric 项（2026-10-18 · 批 B F3）：等宽数字（价格/KPI 列对齐刚需） -->
+    <text class="cc-sec">J · font-variant-numeric（等宽数字 · 基准 = Web）</text>
+    <view class="cc-card fvn-scope">
+      <text id="case-tabular-nums" class="fvn-tab">1111111111</text>
+      <text id="case-variant-normal" class="fvn-prop">1111111111</text>
+      <text id="case-tabular-inherit" class="fvn-plain">2222222222</text>
+      <!-- ★用**比例数字**字族对照：serif（Times）的 1 明显窄于 8 ⇒ tabular 前后宽度差可见 -->
+      <text id="case-tabular-serif" class="fvn-serif-tab">1111111111</text>
+      <text id="case-normal-serif" class="fvn-serif-prop">1111111111</text>
+    </view>
+
     <!-- ★★★font 简写项（2026-10-18 · 批 B F3）：重置型简写（父的 italic/3 倍行高**不得**漏进子节点） -->
     <text class="cc-sec">H · font 简写（重置型 · 基准 = Web）</text>
     <view class="cc-card fsh-wrap">
@@ -119,4 +130,13 @@ const lhText = '第一行文本\n第二行文本（行高 28px）'
 .tt-lower { display: block; font-size: 15px; color: #1a1c22; text-transform: lowercase; }
 .tt-cap { display: block; font-size: 15px; color: #1a1c22; text-transform: capitalize; }
 .tt-inherit { display: block; font-size: 15px; color: #4b5058; }
+/* ★★★font-variant-numeric 项（2026-10-18 · 批 B F3 · 基准 = Web）：
+   用**比例数字**字族（Helvetica/Arial——Web 实测 tnum 使数字宽 +55%）让差异可见。
+   `.fvn-prop` 显式 normal（= proportion 数字）作对照；`.fvn-plain` 未声明 ⇒ **继承**父的 tabular-nums。 */
+.fvn-scope { display: flex; flex-direction: column; font-variant-numeric: tabular-nums; font-family: system; }
+.fvn-tab { display: block; font-size: 15px; color: #1a1c22; font-variant-numeric: tabular-nums; }
+.fvn-prop { display: block; font-size: 15px; color: #1a1c22; font-variant-numeric: normal; }
+.fvn-plain { display: block; font-size: 15px; color: #4b5058; }
+.fvn-serif-tab { display: block; font-size: 15px; color: #1a1c22; font-family: serif; font-variant-numeric: tabular-nums; }
+.fvn-serif-prop { display: block; font-size: 15px; color: #1a1c22; font-family: serif; font-variant-numeric: normal; }
 </style>

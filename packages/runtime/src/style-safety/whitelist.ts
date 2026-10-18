@@ -39,6 +39,11 @@ const FONT_STYLE = ['normal', 'italic', 'oblique']
  */
 const TEXT_TRANSFORM = ['none', 'uppercase', 'lowercase', 'capitalize']
 /**
+ * ★★★font-variant-numeric 项（2026-10-18 · 批 B F3）：等宽数字封闭集。
+ *   只收 四端都能表达 的两个值；其余数字特性（slashed-zero/ordinal/…）无宿主通道 ⇒ 编译期诊断。
+ */
+const FONT_VARIANT_NUMERIC = ['normal', 'tabular-nums']
+/**
  * ★★★G-61 后批（2026-10-05）：`white-space` 封闭集（Web 标准关键字）。
  *   与"各端可表达值"是两个轴：App 单行文本模型把 `nowrap` 当默认（no-op），
  *   其余值由 Applier/折叠器如实降级（诊断）——本层按 Web 标准收口，端侧收窄不在这层。
@@ -85,6 +90,8 @@ export const PROP_TYPES = {
   FontStyle: isEnum(FONT_STYLE),
   // ★★★text-transform 项（2026-10-18）：大小写变换枚举
   TextTransform: isEnum(TEXT_TRANSFORM),
+  // ★★★font-variant-numeric 项（2026-10-18）：等宽数字枚举
+  FontVariantNumeric: isEnum(FONT_VARIANT_NUMERIC),
   TextWrap: isEnum(TEXT_WRAP),
   BorderStyle: isEnum(BORDER_STYLE),
   Overflow: isEnum(OVERFLOW),

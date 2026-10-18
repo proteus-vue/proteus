@@ -17,18 +17,18 @@
       "unit": 30
     },
     "byImpl": {
-      "not-started": 522,
+      "not-started": 521,
       "excluded": 280,
-      "implemented": 146,
+      "implemented": 147,
       "partial": 1
     },
     "byPriority": {
       "P2": 114,
       "excluded": 280,
-      "done": 146,
-      "P1": 409
+      "done": 147,
+      "P1": 408
     },
-    "actionable": 523,
+    "actionable": 522,
     "actionableP0": 0
   },
   "entries": [
@@ -2003,7 +2003,7 @@
         "irScope": "semantic",
         "inCompilerFold": true,
         "matrixLevel": "LineClamp",
-        "webSupport": null
+        "webSupport": true
       },
       "usage": 4,
       "engineLockedEnds": [],
@@ -3229,7 +3229,7 @@
         "irScope": "semantic",
         "inCompilerFold": true,
         "matrixLevel": null,
-        "webSupport": null
+        "webSupport": true
       },
       "usage": 5,
       "engineLockedEnds": [],
@@ -3488,7 +3488,7 @@
         "irScope": "semantic",
         "inCompilerFold": true,
         "matrixLevel": "BackgroundPosition",
-        "webSupport": null
+        "webSupport": true
       },
       "usage": 4,
       "engineLockedEnds": [],
@@ -3563,7 +3563,7 @@
         "irScope": "semantic",
         "inCompilerFold": true,
         "matrixLevel": "BackgroundRepeat",
-        "webSupport": null
+        "webSupport": true
       },
       "usage": 0,
       "engineLockedEnds": [],
@@ -3588,7 +3588,7 @@
         "irScope": "semantic",
         "inCompilerFold": true,
         "matrixLevel": "BackgroundSize",
-        "webSupport": null
+        "webSupport": true
       },
       "usage": 2,
       "engineLockedEnds": [],
@@ -4058,7 +4058,7 @@
         "irScope": "semantic",
         "inCompilerFold": true,
         "matrixLevel": "Color",
-        "webSupport": null
+        "webSupport": true
       },
       "usage": 2,
       "engineLockedEnds": [],
@@ -4133,7 +4133,7 @@
         "irScope": "semantic",
         "inCompilerFold": true,
         "matrixLevel": "BorderStyle",
-        "webSupport": null
+        "webSupport": true
       },
       "usage": 0,
       "engineLockedEnds": [],
@@ -4158,7 +4158,7 @@
         "irScope": "semantic",
         "inCompilerFold": true,
         "matrixLevel": "Length",
-        "webSupport": null
+        "webSupport": true
       },
       "usage": 0,
       "engineLockedEnds": [],
@@ -4785,7 +4785,7 @@
         "irScope": "semantic",
         "inCompilerFold": true,
         "matrixLevel": "Color",
-        "webSupport": null
+        "webSupport": true
       },
       "usage": 0,
       "engineLockedEnds": [],
@@ -4810,7 +4810,7 @@
         "irScope": "semantic",
         "inCompilerFold": true,
         "matrixLevel": "BorderStyle",
-        "webSupport": null
+        "webSupport": true
       },
       "usage": 0,
       "engineLockedEnds": [],
@@ -4835,7 +4835,7 @@
         "irScope": "semantic",
         "inCompilerFold": true,
         "matrixLevel": "Length",
-        "webSupport": null
+        "webSupport": true
       },
       "usage": 0,
       "engineLockedEnds": [],
@@ -4919,7 +4919,7 @@
         "irScope": "semantic",
         "inCompilerFold": true,
         "matrixLevel": "Color",
-        "webSupport": null
+        "webSupport": true
       },
       "usage": 0,
       "engineLockedEnds": [],
@@ -4944,7 +4944,7 @@
         "irScope": "semantic",
         "inCompilerFold": true,
         "matrixLevel": "BorderStyle",
-        "webSupport": null
+        "webSupport": true
       },
       "usage": 0,
       "engineLockedEnds": [],
@@ -4969,7 +4969,7 @@
         "irScope": "semantic",
         "inCompilerFold": true,
         "matrixLevel": "Length",
-        "webSupport": null
+        "webSupport": true
       },
       "usage": 0,
       "engineLockedEnds": [],
@@ -5128,7 +5128,7 @@
         "irScope": "semantic",
         "inCompilerFold": true,
         "matrixLevel": "Color",
-        "webSupport": null
+        "webSupport": true
       },
       "usage": 0,
       "engineLockedEnds": [],
@@ -5203,7 +5203,7 @@
         "irScope": "semantic",
         "inCompilerFold": true,
         "matrixLevel": "BorderStyle",
-        "webSupport": null
+        "webSupport": true
       },
       "usage": 0,
       "engineLockedEnds": [],
@@ -5228,7 +5228,7 @@
         "irScope": "semantic",
         "inCompilerFold": true,
         "matrixLevel": "Length",
-        "webSupport": null
+        "webSupport": true
       },
       "usage": 0,
       "engineLockedEnds": [],
@@ -6022,7 +6022,7 @@
         "irScope": "semantic",
         "inCompilerFold": true,
         "matrixLevel": null,
-        "webSupport": null
+        "webSupport": true
       },
       "usage": 1,
       "engineLockedEnds": [],
@@ -8276,20 +8276,22 @@
       "inherited": true,
       "initial": "normal",
       "syntax": "normal | [ <numeric-figure-values> || <numeric-spacing-values> || <numeric-fraction-values> || ordinal || slashed-zero ]",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "implemented",
+      "implNote": "IR 注册表在册（scope=semantic · 矩阵 FontVariantNumeric）",
       "channel": null,
       "evidencedBy": {
-        "inIrRegistry": false,
-        "irScope": null,
-        "inCompilerFold": false,
-        "matrixLevel": null,
-        "webSupport": null
+        "inIrRegistry": true,
+        "irScope": "semantic",
+        "inCompilerFold": true,
+        "matrixLevel": "FontVariantNumeric",
+        "webSupport": true
       },
       "usage": 0,
-      "engineLockedEnds": [],
-      "priority": "P1",
-      "acceptance": "none"
+      "engineLockedEnds": [
+        "skyline"
+      ],
+      "priority": "done",
+      "acceptance": "pending"
     },
     {
       "id": "font-variant-position",
@@ -8359,7 +8361,7 @@
         "irScope": "semantic",
         "inCompilerFold": true,
         "matrixLevel": "Integer",
-        "webSupport": null
+        "webSupport": true
       },
       "usage": 84,
       "engineLockedEnds": [],
@@ -8503,7 +8505,7 @@
         "irScope": "semantic",
         "inCompilerFold": true,
         "matrixLevel": null,
-        "webSupport": null
+        "webSupport": true
       },
       "usage": 10,
       "engineLockedEnds": [],
@@ -8528,7 +8530,7 @@
         "irScope": "semantic",
         "inCompilerFold": true,
         "matrixLevel": null,
-        "webSupport": null
+        "webSupport": true
       },
       "usage": 1,
       "engineLockedEnds": [],
@@ -8553,7 +8555,7 @@
         "irScope": "semantic",
         "inCompilerFold": true,
         "matrixLevel": "GridAutoFlow",
-        "webSupport": null
+        "webSupport": true
       },
       "usage": 3,
       "engineLockedEnds": [],
@@ -8578,7 +8580,7 @@
         "irScope": "semantic",
         "inCompilerFold": true,
         "matrixLevel": null,
-        "webSupport": null
+        "webSupport": true
       },
       "usage": 1,
       "engineLockedEnds": [],
@@ -8606,7 +8608,7 @@
         "irScope": "semantic",
         "inCompilerFold": true,
         "matrixLevel": null,
-        "webSupport": null
+        "webSupport": true
       },
       "usage": 20,
       "engineLockedEnds": [],
@@ -8737,7 +8739,7 @@
         "irScope": "semantic",
         "inCompilerFold": true,
         "matrixLevel": null,
-        "webSupport": null
+        "webSupport": true
       },
       "usage": 17,
       "engineLockedEnds": [],
@@ -8866,7 +8868,7 @@
         "irScope": "semantic",
         "inCompilerFold": true,
         "matrixLevel": null,
-        "webSupport": null
+        "webSupport": true
       },
       "usage": 2,
       "engineLockedEnds": [],
@@ -8916,7 +8918,7 @@
         "irScope": "semantic",
         "inCompilerFold": true,
         "matrixLevel": null,
-        "webSupport": null
+        "webSupport": true
       },
       "usage": 7,
       "engineLockedEnds": [],
@@ -9613,7 +9615,7 @@
         "irScope": "semantic",
         "inCompilerFold": true,
         "matrixLevel": "JustifyItems",
-        "webSupport": null
+        "webSupport": true
       },
       "usage": 0,
       "engineLockedEnds": [],
@@ -9638,7 +9640,7 @@
         "irScope": "semantic",
         "inCompilerFold": true,
         "matrixLevel": "JustifySelf",
-        "webSupport": null
+        "webSupport": true
       },
       "usage": 9,
       "engineLockedEnds": [],
@@ -10077,7 +10079,7 @@
         "irScope": "engine-only",
         "inCompilerFold": false,
         "matrixLevel": "Length",
-        "webSupport": true
+        "webSupport": null
       },
       "usage": 86,
       "engineLockedEnds": [],
@@ -10181,7 +10183,7 @@
         "irScope": "engine-only",
         "inCompilerFold": false,
         "matrixLevel": "Length",
-        "webSupport": true
+        "webSupport": null
       },
       "usage": 19,
       "engineLockedEnds": [],
@@ -10207,7 +10209,7 @@
         "irScope": "engine-only",
         "inCompilerFold": false,
         "matrixLevel": "Length",
-        "webSupport": true
+        "webSupport": null
       },
       "usage": 12,
       "engineLockedEnds": [],
@@ -11513,7 +11515,7 @@
         "irScope": "semantic",
         "inCompilerFold": true,
         "matrixLevel": "Color",
-        "webSupport": null
+        "webSupport": true
       },
       "usage": 0,
       "engineLockedEnds": [],
@@ -11538,7 +11540,7 @@
         "irScope": "semantic",
         "inCompilerFold": true,
         "matrixLevel": "OutlineOffset",
-        "webSupport": null
+        "webSupport": true
       },
       "usage": 3,
       "engineLockedEnds": [],
@@ -11563,7 +11565,7 @@
         "irScope": "semantic",
         "inCompilerFold": true,
         "matrixLevel": "BorderStyle",
-        "webSupport": null
+        "webSupport": true
       },
       "usage": 0,
       "engineLockedEnds": [],
@@ -11588,7 +11590,7 @@
         "irScope": "semantic",
         "inCompilerFold": true,
         "matrixLevel": "OutlineWidth",
-        "webSupport": null
+        "webSupport": true
       },
       "usage": 0,
       "engineLockedEnds": [],
@@ -11788,7 +11790,7 @@
         "irScope": "semantic",
         "inCompilerFold": true,
         "matrixLevel": "Overflow",
-        "webSupport": null
+        "webSupport": true
       },
       "usage": 10,
       "engineLockedEnds": [],
@@ -11813,7 +11815,7 @@
         "irScope": "semantic",
         "inCompilerFold": true,
         "matrixLevel": "Overflow",
-        "webSupport": null
+        "webSupport": true
       },
       "usage": 10,
       "engineLockedEnds": [],
@@ -12096,7 +12098,7 @@
         "irScope": "engine-only",
         "inCompilerFold": false,
         "matrixLevel": "Length",
-        "webSupport": true
+        "webSupport": null
       },
       "usage": 10,
       "engineLockedEnds": [],
@@ -12199,7 +12201,7 @@
         "irScope": "engine-only",
         "inCompilerFold": false,
         "matrixLevel": "Length",
-        "webSupport": true
+        "webSupport": null
       },
       "usage": 16,
       "engineLockedEnds": [],
@@ -12224,7 +12226,7 @@
         "irScope": "engine-only",
         "inCompilerFold": false,
         "matrixLevel": "Length",
-        "webSupport": true
+        "webSupport": null
       },
       "usage": 15,
       "engineLockedEnds": [],
@@ -12533,7 +12535,7 @@
         "irScope": "semantic",
         "inCompilerFold": true,
         "matrixLevel": null,
-        "webSupport": null
+        "webSupport": true
       },
       "usage": 28,
       "engineLockedEnds": [],
@@ -12937,7 +12939,7 @@
         "irScope": "semantic",
         "inCompilerFold": true,
         "matrixLevel": null,
-        "webSupport": null
+        "webSupport": true
       },
       "usage": 0,
       "engineLockedEnds": [],
@@ -14645,7 +14647,7 @@
         "irScope": "semantic",
         "inCompilerFold": true,
         "matrixLevel": "TextAlign",
-        "webSupport": null
+        "webSupport": true
       },
       "usage": 68,
       "engineLockedEnds": [],
@@ -15277,7 +15279,7 @@
         "irScope": "semantic",
         "inCompilerFold": true,
         "matrixLevel": null,
-        "webSupport": null
+        "webSupport": true
       },
       "usage": 2,
       "engineLockedEnds": [],
@@ -15353,7 +15355,7 @@
         "irScope": "semantic",
         "inCompilerFold": true,
         "matrixLevel": "TextTransform",
-        "webSupport": null
+        "webSupport": true
       },
       "usage": 0,
       "engineLockedEnds": [

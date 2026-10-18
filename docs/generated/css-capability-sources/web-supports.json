@@ -2,7 +2,7 @@
   "provenance": {
     "kind": "playwright-css-supports",
     "engine": "chromium",
-    "collectedAt": "2026-10-02",
+    "collectedAt": "2026-10-18",
     "browserVersion": "151.0.7922.34"
   },
   "properties": {
@@ -60,6 +60,12 @@
       "valueOk": true,
       "supported": true
     },
+    "flex-wrap": {
+      "recognized": true,
+      "valueProbe": "wrap",
+      "valueOk": true,
+      "supported": true
+    },
     "justify-content": {
       "recognized": true,
       "valueProbe": "center",
@@ -67,6 +73,12 @@
       "supported": true
     },
     "align-items": {
+      "recognized": true,
+      "valueProbe": "center",
+      "valueOk": true,
+      "supported": true
+    },
+    "align-content": {
       "recognized": true,
       "valueProbe": "center",
       "valueOk": true,
@@ -102,6 +114,18 @@
       "valueOk": true,
       "supported": true
     },
+    "row-gap": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
+    "column-gap": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
     "display": {
       "recognized": true,
       "valueProbe": "flex",
@@ -126,10 +150,130 @@
       "valueOk": true,
       "supported": true
     },
+    "right": {
+      "recognized": true,
+      "valueProbe": "1px",
+      "valueOk": true,
+      "supported": true
+    },
+    "bottom": {
+      "recognized": true,
+      "valueProbe": "1px",
+      "valueOk": true,
+      "supported": true
+    },
     "overflow": {
       "recognized": true,
       "valueProbe": "hidden",
       "valueOk": true,
+      "supported": true
+    },
+    "overflow-x": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
+    "overflow-y": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
+    "-webkit-line-clamp": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
+    "grid-template-columns": {
+      "recognized": true,
+      "valueProbe": "1fr 1fr",
+      "valueOk": true,
+      "supported": true
+    },
+    "grid-template-rows": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
+    "grid-auto-columns": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
+    "grid-auto-rows": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
+    "grid-column": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
+    "grid-row": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
+    "grid-template-areas": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
+    "grid-area": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
+    "aspect-ratio": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
+    "pointer-events": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
+    "justify-self": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
+    "justify-items": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
+    "grid-auto-flow": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
+    "white-space": {
+      "recognized": true,
+      "valueProbe": "nowrap",
+      "valueOk": true,
+      "supported": true
+    },
+    "word-break": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
       "supported": true
     },
     "background-color": {
@@ -147,6 +291,72 @@
     "font-size": {
       "recognized": true,
       "valueProbe": "16px",
+      "valueOk": true,
+      "supported": true
+    },
+    "font-weight": {
+      "recognized": true,
+      "valueProbe": "700",
+      "valueOk": true,
+      "supported": true
+    },
+    "font-style": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
+    "text-transform": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
+    "font-variant-numeric": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
+    "font-family": {
+      "recognized": true,
+      "valueProbe": "system-ui",
+      "valueOk": true,
+      "supported": true
+    },
+    "text-align": {
+      "recognized": true,
+      "valueProbe": "center",
+      "valueOk": true,
+      "supported": true
+    },
+    "line-height": {
+      "recognized": true,
+      "valueProbe": "1.5",
+      "valueOk": true,
+      "supported": true
+    },
+    "text-overflow": {
+      "recognized": true,
+      "valueProbe": "ellipsis",
+      "valueOk": true,
+      "supported": true
+    },
+    "letter-spacing": {
+      "recognized": true,
+      "valueProbe": "1px",
+      "valueOk": true,
+      "supported": true
+    },
+    "text-decoration": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
+    "visibility": {
+      "recognized": true,
+      "valueProbe": "hidden",
       "valueOk": true,
       "supported": true
     },
@@ -168,15 +378,147 @@
       "valueOk": true,
       "supported": true
     },
+    "border-top-width": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
+    "border-right-width": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
+    "border-bottom-width": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
+    "border-left-width": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
+    "border-top-color": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
+    "border-right-color": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
+    "border-bottom-color": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
+    "border-left-color": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
+    "border-top-style": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
+    "border-right-style": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
+    "border-bottom-style": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
+    "border-left-style": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
     "opacity": {
       "recognized": true,
       "valueProbe": "0.5",
       "valueOk": true,
       "supported": true
     },
+    "box-shadow": {
+      "recognized": true,
+      "valueProbe": "0 0 2px #000",
+      "valueOk": true,
+      "supported": true
+    },
+    "text-shadow": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
     "transform": {
       "recognized": true,
       "valueProbe": "translateX(10px)",
+      "valueOk": true,
+      "supported": true
+    },
+    "background-size": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
+    "background-position": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
+    "background-repeat": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
+    "outline-width": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
+    "outline-color": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
+    "outline-style": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
+    "outline-offset": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
+    "z-index": {
+      "recognized": true,
+      "valueProbe": "1",
       "valueOk": true,
       "supported": true
     },
@@ -192,76 +534,10 @@
       "valueOk": true,
       "supported": true
     },
-    "z-index": {
-      "recognized": true,
-      "valueProbe": "1",
-      "valueOk": true,
-      "supported": true
-    },
-    "visibility": {
-      "recognized": true,
-      "valueProbe": "hidden",
-      "valueOk": true,
-      "supported": true
-    },
-    "line-height": {
-      "recognized": true,
-      "valueProbe": "1.5",
-      "valueOk": true,
-      "supported": true
-    },
-    "letter-spacing": {
-      "recognized": true,
-      "valueProbe": "1px",
-      "valueOk": true,
-      "supported": true
-    },
-    "white-space": {
-      "recognized": true,
-      "valueProbe": "nowrap",
-      "valueOk": true,
-      "supported": true
-    },
-    "text-overflow": {
-      "recognized": true,
-      "valueProbe": "ellipsis",
-      "valueOk": true,
-      "supported": true
-    },
-    "word-break": {
-      "recognized": true,
-      "valueProbe": "break-all",
-      "valueOk": true,
-      "supported": true
-    },
     "word-spacing": {
       "recognized": true,
-      "valueProbe": "1px",
-      "valueOk": true,
-      "supported": true
-    },
-    "font-style": {
-      "recognized": true,
-      "valueProbe": "italic",
-      "valueOk": true,
-      "supported": true
-    },
-    "font-family": {
-      "recognized": true,
-      "valueProbe": "system-ui",
-      "valueOk": true,
-      "supported": true
-    },
-    "text-decoration": {
-      "recognized": true,
-      "valueProbe": "underline",
-      "valueOk": true,
-      "supported": true
-    },
-    "box-shadow": {
-      "recognized": true,
-      "valueProbe": "0 0 2px #000",
-      "valueOk": true,
+      "valueProbe": null,
+      "valueOk": null,
       "supported": true
     },
     "filter": {
@@ -278,20 +554,8 @@
     },
     "will-change": {
       "recognized": true,
-      "valueProbe": "transform",
-      "valueOk": true,
-      "supported": true
-    },
-    "align-content": {
-      "recognized": true,
-      "valueProbe": "center",
-      "valueOk": true,
-      "supported": true
-    },
-    "flex-wrap": {
-      "recognized": true,
-      "valueProbe": "wrap",
-      "valueOk": true,
+      "valueProbe": null,
+      "valueOk": null,
       "supported": true
     },
     "order": {
@@ -300,57 +564,9 @@
       "valueOk": true,
       "supported": true
     },
-    "padding-left": {
-      "recognized": true,
-      "valueProbe": null,
-      "valueOk": null,
-      "supported": true
-    },
-    "padding-right": {
-      "recognized": true,
-      "valueProbe": null,
-      "valueOk": null,
-      "supported": true
-    },
-    "padding-bottom": {
-      "recognized": true,
-      "valueProbe": null,
-      "valueOk": null,
-      "supported": true
-    },
-    "margin-left": {
-      "recognized": true,
-      "valueProbe": null,
-      "valueOk": null,
-      "supported": true
-    },
-    "margin-right": {
-      "recognized": true,
-      "valueProbe": null,
-      "valueOk": null,
-      "supported": true
-    },
-    "margin-bottom": {
-      "recognized": true,
-      "valueProbe": null,
-      "valueOk": null,
-      "supported": true
-    },
     "border-style": {
       "recognized": true,
       "valueProbe": "solid",
-      "valueOk": true,
-      "supported": true
-    },
-    "right": {
-      "recognized": true,
-      "valueProbe": "1px",
-      "valueOk": true,
-      "supported": true
-    },
-    "bottom": {
-      "recognized": true,
-      "valueProbe": "1px",
       "valueOk": true,
       "supported": true
     },
@@ -360,22 +576,16 @@
       "valueOk": null,
       "supported": true
     },
-    "grid-template-columns": {
-      "recognized": true,
-      "valueProbe": "1fr 1fr",
-      "valueOk": true,
-      "supported": true
-    },
     "animation-name": {
       "recognized": true,
-      "valueProbe": "none",
-      "valueOk": true,
+      "valueProbe": null,
+      "valueOk": null,
       "supported": true
     },
     "transition-property": {
       "recognized": true,
-      "valueProbe": "all",
-      "valueOk": true,
+      "valueProbe": null,
+      "valueOk": null,
       "supported": true
     }
   },

@@ -619,6 +619,8 @@ function irFieldCandidatesOf(prop: string): string[] {
     'font-style': 'fontStyle',
     // ★★★text-transform 项（2026-10-18 · 批 B F3）：大小写变换（继承属性；直通同名 IR 字段）
     'text-transform': 'textTransform',
+    // ★★★font-variant-numeric 项（2026-10-18 · 批 B F3）：等宽数字（继承属性；直通同名 IR 字段）
+    'font-variant-numeric': 'fontVariantNumeric',
     'line-height': 'lineHeight',
     'font-family': 'fontFamily',
     'flex-basis': 'flexBasis',

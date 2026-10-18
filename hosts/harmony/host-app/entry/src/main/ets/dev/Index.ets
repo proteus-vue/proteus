@@ -26,7 +26,7 @@ import { runAppStackProbe } from './app-stack-probe';
 import { attach, renderCommands, stats, ProteusRenderStats, platformAnimBegin, platformAnimStep, platformAnimEnd, platformAnimSave, clearRoot, scrollRoot, setContentMode, setTopInset, gestureInstall, gestureSample, snapshotProbe, vkGlassProbe, glassPass, glassStats, appScreenCommands, appScreenHitAt, appScreenAnimTick } from 'proteus_render';
 // ★P3-3：宿主动画入口（`<Transition>` 桥的鸿蒙腿——与 Android/iOS 同形）
 import { animTick, animActive } from 'libproteus_bench.so';
-import { bench4050, hitProbe, recycleProbe, spliceProbe, textProbe, kernelAnimProbe, memProbe, sfcStressProbe, sfcStressCommands, jsvmProbe, vaporProbe, animCurveBezier, hostRuntimeProbe, hostRtShellInstall, mountVirtualProbe, gestureHitPrepare, gestureHitAt, fontFamilyProbe, nodeRect, vkProbe, screenContentProbe, appStackExecutorProbe, version as rustVersion } from 'libproteus_bench.so';
+import { bench4050, hitProbe, recycleProbe, spliceProbe, textProbe, kernelAnimProbe, memProbe, sfcStressProbe, sfcStressCommands, jsvmProbe, vaporProbe, animCurveBezier, hostRuntimeProbe, hostRtShellInstall, mountVirtualProbe, gestureHitPrepare, gestureHitAt, fontFamilyProbe, tnumProbe, nodeRect, vkProbe, screenContentProbe, appStackExecutorProbe, version as rustVersion } from 'libproteus_bench.so';
 
 const DOMAIN = 0x0002;
 const TAG = 'ProteusRender';
@@ -1523,6 +1523,14 @@ struct Index {
           hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_FONTFAMILY_PROBE %{public}s', ff);
         } catch (ffe) {
           hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_FONTFAMILY_ERROR %{public}s', JSON.stringify(ffe) ?? '');
+        }
+        // ★★★font-variant-numeric 项（2026-10-18 · 批 B F3）：等宽数字（tnum）**到底生效没有**——
+        //   截图看不出差异（多数系统字族数字本已等宽）⇒ 用同字族下开/关 tnum 的**度量宽度差**取证。
+        try {
+          const tn: string = tnumProbe();
+          hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_TNUM_PROBE %{public}s', tn);
+        } catch (tne) {
+          hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_TNUM_ERROR %{public}s', JSON.stringify(tne) ?? '');
         }
         // ★★整树级虚拟化（矩阵 #12）——同一份 SFC 产物（与 Android/iOS 同源）
         try {

@@ -395,8 +395,11 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
         std::string ff; jstr(it.c_str(), it.size(), "fontFamily", &ff);
         // ★★★决策 #1055：度量也带 fontStyle（斜体字形更宽 ⇒ 不带会低估宽度/误折行）
         std::string fst; jstr(it.c_str(), it.size(), "fontStyle", &fst);
+        // ★font-variant-numeric（2026-10-18）：等宽数字——**度量必须带**（tnum 是另一套字形，宽度不同）
+        bool tabular = false;
+        { std::string fvn; jstr(it.c_str(), it.size(), "fontVariantNumeric", &fvn); tabular = (fvn == "tabular-nums"); }
         double lsDesign = 0; jnum(it.c_str(), it.size(), "letterSpacing", &lsDesign);   // ★批次 20：字距（设计 px）
-        measureTextTypoPx(tx, fs * density, &wpx, &hpx, lsDesign * density, fw, ff, nullptr, &basepx, fst);
+        measureTextTypoPx(tx, fs * density, &wpx, &hpx, lsDesign * density, fw, ff, nullptr, &basepx, fst, tabular);
         // ★批次 13：line-height ⇒ 行盒高覆盖字形高
         std::string lhTok; jstr(it.c_str(), it.size(), "lineHeight", &lhTok);
         double lhDesign = lineHeightDesignPx(lhTok, fs);
@@ -437,6 +440,8 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
             double fwd = 400; jnum(it.c_str(), it.size(), "fontWeight", &fwd); int fw = (int)(fwd + 0.5);
             std::string ff; jstr(it.c_str(), it.size(), "fontFamily", &ff);
             std::string fst; jstr(it.c_str(), it.size(), "fontStyle", &fst);   // ★#1055：度量带斜体
+            bool tabular = false;   // ★font-variant-numeric（2026-10-18）：度量带等宽数字
+            { std::string fvn; jstr(it.c_str(), it.size(), "fontVariantNumeric", &fvn); tabular = (fvn == "tabular-nums"); }
             double lsDesign = 0; jnum(it.c_str(), it.size(), "letterSpacing", &lsDesign);
             std::string ws; jstr(it.c_str(), it.size(), "whiteSpace", &ws);
             const bool single = (ws == "nowrap" || ws == "pre");
@@ -454,7 +459,7 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
                 //   （此前用 `hpx / 单行高` 反推——含 `\n` 的文本单行度量本身就是多行高 ⇒ 比值恒 ≈1 ⇒ 行数误判 1
                 //   ⇒ 盒高只算一行 ⇒ 第二行溢出）。lineHeight 声明时盒高 = 行数 × 行高。
                 int lines = 0;
-                measureTextWrappedTypoPx(tx, fs * density, boxWpx, &wpx, &hpx, lsDesign * density, wbM, fw, ff, &lines, fst);
+                measureTextWrappedTypoPx(tx, fs * density, boxWpx, &wpx, &hpx, lsDesign * density, wbM, fw, ff, &lines, fst, tabular);
                 if (lines < 1) lines = 1;
                 const double perLine = (hpx > 0) ? (hpx / lines) : 0;
                 // ★★line-clamp 项：测量封顶——行数 = min(自然行数, clamp)（与绘制 maxLines 同源）
@@ -867,6 +872,8 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
             //   fontSize/fontWeight/textColor/fontFamily ⇒ `fontStyle` 在这一层就被**丢弃**，
             //   渲染侧（proteus_render.cpp）即使读了也永远拿到空值（真机实测：三段 shear 全 0）。
             { std::string fst; if (jstr(it.c_str(), it.size(), "fontStyle", &fst) && !fst.empty()) arr += ",\"fontStyle\":\"" + jsonEscape(fst) + "\""; }
+            // ★★★font-variant-numeric（2026-10-18 · 批 B F3）：等宽数字形态透传渲染侧（tnum）
+            { std::string fvn; if (jstr(it.c_str(), it.size(), "fontVariantNumeric", &fvn) && !fvn.empty()) arr += ",\"fontVariantNumeric\":\"" + jsonEscape(fvn) + "\""; }
 
             // ★批次 36：字体角色（font-family → role；鸿蒙按可用字族映射，缺则回落默认）
             { std::string ff; if (jstr(it.c_str(), it.size(), "fontFamily", &ff) && !ff.empty()) arr += ",\"fontFamily\":\"" + jsonEscape(ff) + "\""; }

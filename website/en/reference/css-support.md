@@ -7,12 +7,12 @@ generated: true
 
 # CSS cross-end support reference
 
-> How 83 CSS capabilities are supported across **Web / Skyline / App**, with App extensibility tier. **Every capability has its own anchor** (jump from the on-page outline; deep-linkable from anywhere), measured against the **Web baseline**, with the in-house Rust engine graded **L0–L5**.
+> How 84 CSS capabilities are supported across **Web / Skyline / App**, with App extensibility tier. **Every capability has its own anchor** (jump from the on-page outline; deep-linkable from anywhere), measured against the **Web baseline**, with the in-house Rust engine graded **L0–L5**.
 > ★Auto-generated (`scripts/gen-css-support.mjs`), SSOT = `docs/generated/css-capability-alignment.json`; drift gate `--check`.
 
 ## Overview
 
-**83** capabilities: **33** universal · **46** conditional · **4** unsupported. App currently supports **75**, with **8** not present yet (candidates graded by tier).
+**84** capabilities: **44** universal · **36** conditional · **4** unsupported. App currently supports **76**, with **8** not present yet (candidates graded by tier).
 
 ### End model
 
@@ -55,7 +55,7 @@ generated: true
 | [选择器](#cat-selector) | [类选择器 .a / .a.b](#selector-class) · [元素/类型选择器 h3 / p.foo](#selector-type) · [后代 / 子组合 .a .b / .a > .b](#selector-combinator) · [静态结构伪类 :first-child / :last-child / :nth-child(An+B\|odd\|even) / :not(简单选择器)](#selector-pseudo-structural) · [伪元素 ::before / ::after（+ content）](#selector-pseudo-element) · [状态伪类 :active（按下态）](#selector-pseudo-state-active) · [状态伪类 :hover / :focus / :checked](#selector-pseudo-state) · [属性选择器 data-x](#selector-attr) · [Vue 作用域穿透 :deep() / ::v-deep() / >>>](#selector-deep) · [兄弟组合 + / ~](#selector-sibling) · [通配 *](#selector-wildcard) |
 | [层叠](#cat-cascade) | [特异性 / 继承 / !important](#specificity-inheritance) · [CSS 自定义属性（design tokens）var(--x)](#css-vars) |
 | [@ 规则](#cat-at-rule) | [@media（响应式 / 环境条件）](#at-media) · [@supports（特性检测）](#at-supports) · [@keyframes（关键帧动画）](#keyframes) · [animation（简写：name duration timing delay …）](#animation) |
-| [文本](#cat-text) | [word-break（行内断词策略）](#word-break) · [font-weight](#font-weight) · [font-style](#font-style) · [text-transform](#text-transform) · [text-decoration](#text-decoration) · [text-align](#text-align) · [line-height](#line-height) · [text-overflow](#text-overflow) · [-webkit-line-clamp: <integer>](#-webkit-line-clamp) · [letter-spacing](#letter-spacing) · [font-family](#font-family) · [white-space](#text-attrs) |
+| [文本](#cat-text) | [word-break（行内断词策略）](#word-break) · [font-weight](#font-weight) · [font-style](#font-style) · [text-transform](#text-transform) · [font-variant-numeric](#font-variant-numeric) · [text-decoration](#text-decoration) · [text-align](#text-align) · [line-height](#line-height) · [text-overflow](#text-overflow) · [-webkit-line-clamp: <integer>](#-webkit-line-clamp) · [letter-spacing](#letter-spacing) · [font-family](#font-family) · [white-space](#text-attrs) |
 | [层](#cat-layer) | [z-index](#z-index) |
 
 ## Per-capability reference
@@ -64,13 +64,13 @@ generated: true
 
 ### outline-offset {#outline-offset}
 
-**Web** ◻ n/a · **Skyline** ◻ not listed · **App** ✅ yes · **App extensible** L2 · **Strategy** host-drawn · **Alignment** conditional
+**Web** ✅ yes · **Skyline** ◻ not listed · **App** ✅ yes · **App extensible** L2 · **Strategy** host-drawn · **Alignment** conditional
 
 > host-drawn · conditional
 
 ### outline（+ outline-width/-color/-style 长手） {#outline}
 
-**Web** ◻ n/a · **Skyline** ◻ not listed · **App** ✅ yes · **App extensible** L2 · **Strategy** host-drawn · **Alignment** conditional
+**Web** ◐ partial · **Skyline** ◻ not listed · **App** ✅ yes · **App extensible** L2 · **Strategy** host-drawn · **Alignment** conditional
 
 > host-drawn · conditional
 
@@ -82,21 +82,21 @@ generated: true
 
 ### background-size {#background-size}
 
-**Web** ◻ n/a · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L2 · **Strategy** host geometry · **Alignment** conditional
+**Web** ✅ yes · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L2 · **Strategy** host geometry · **Alignment** universal
 
-> host geometry · conditional
+> host geometry · universal
 
 ### background-position {#background-position}
 
-**Web** ◻ n/a · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L2 · **Strategy** host geometry · **Alignment** conditional
+**Web** ✅ yes · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L2 · **Strategy** host geometry · **Alignment** universal
 
-> host geometry · conditional
+> host geometry · universal
 
 ### background-repeat {#background-repeat}
 
-**Web** ◻ n/a · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L2 · **Strategy** host geometry · **Alignment** conditional
+**Web** ✅ yes · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L2 · **Strategy** host geometry · **Alignment** universal
 
-> host geometry · conditional
+> host geometry · universal
 
 ### color {#color}
 
@@ -130,27 +130,27 @@ generated: true
 
 ### border-top {#border-top}
 
-**Web** ◻ n/a · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L1 · **Strategy** compile-time fold · **Alignment** conditional
+**Web** ✅ yes · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L1 · **Strategy** compile-time fold · **Alignment** universal
 
-> compile-time fold · conditional
+> compile-time fold · universal
 
 ### border-right {#border-right}
 
-**Web** ◻ n/a · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L1 · **Strategy** compile-time fold · **Alignment** conditional
+**Web** ✅ yes · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L1 · **Strategy** compile-time fold · **Alignment** universal
 
-> compile-time fold · conditional
+> compile-time fold · universal
 
 ### border-bottom {#border-bottom}
 
-**Web** ◻ n/a · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L1 · **Strategy** compile-time fold · **Alignment** conditional
+**Web** ✅ yes · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L1 · **Strategy** compile-time fold · **Alignment** universal
 
-> compile-time fold · conditional
+> compile-time fold · universal
 
 ### border-left {#border-left}
 
-**Web** ◻ n/a · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L1 · **Strategy** compile-time fold · **Alignment** conditional
+**Web** ✅ yes · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L1 · **Strategy** compile-time fold · **Alignment** universal
 
-> compile-time fold · conditional
+> compile-time fold · universal
 
 ### box-shadow {#box-shadow}
 
@@ -160,9 +160,9 @@ generated: true
 
 ### text-shadow {#text-shadow}
 
-**Web** ◻ n/a · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L3 · **Strategy** compile-time fold · **Alignment** conditional
+**Web** ✅ yes · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L3 · **Strategy** compile-time fold · **Alignment** universal
 
-> compile-time fold · conditional
+> compile-time fold · universal
 
 ### filter / backdrop-filter {#filter-backdrop}
 
@@ -240,7 +240,7 @@ generated: true
 
 ### gap（+ row-gap / column-gap） {#gap}
 
-**Web** ◐ partial · **Skyline** ◐ partial · **App** ✅ yes · **App extensible** L2 · **Strategy** direct mapping · **Alignment** conditional
+**Web** ✅ yes · **Skyline** ◐ partial · **App** ✅ yes · **App extensible** L2 · **Strategy** direct mapping · **Alignment** conditional
 
 > direct mapping · conditional
 
@@ -258,31 +258,31 @@ generated: true
 
 ### overflow: visible / hidden / scroll / auto {#overflow}
 
-**Web** ◐ partial · **Skyline** ◐ partial · **App** ✅ yes · **App extensible** L2 · **Strategy** direct mapping · **Alignment** conditional
+**Web** ✅ yes · **Skyline** ◐ partial · **App** ✅ yes · **App extensible** L2 · **Strategy** direct mapping · **Alignment** conditional
 
 > direct mapping · conditional
 
 ### display: grid + grid-template-columns/rows（显式轨迹）+ grid-column/row 线号放置 {#grid}
 
-**Web** ◐ partial · **Skyline** ◻ not listed · **App** ✅ yes · **App extensible** L2 · **Strategy** direct mapping · **Alignment** conditional
+**Web** ✅ yes · **Skyline** ◻ not listed · **App** ✅ yes · **App extensible** L2 · **Strategy** direct mapping · **Alignment** conditional
 
 > direct mapping · conditional
 
 ### justify-self（网格项行内轴自对齐） {#justify-self}
 
-**Web** ◻ n/a · **Skyline** ◻ not listed · **App** ✅ yes · **App extensible** L2 · **Strategy** direct mapping · **Alignment** conditional
+**Web** ✅ yes · **Skyline** ◻ not listed · **App** ✅ yes · **App extensible** L2 · **Strategy** direct mapping · **Alignment** conditional
 
 > direct mapping · conditional
 
 ### place-items（+ justify-items 长手） {#place-items}
 
-**Web** ◻ n/a · **Skyline** ◻ not listed · **App** ✅ yes · **App extensible** L2 · **Strategy** shorthand expand · **Alignment** conditional
+**Web** ◐ partial · **Skyline** ◻ not listed · **App** ✅ yes · **App extensible** L2 · **Strategy** shorthand expand · **Alignment** conditional
 
 > shorthand expand · conditional
 
 ### aspect-ratio {#aspect-ratio}
 
-**Web** ◻ n/a · **Skyline** ◻ not listed · **App** ✅ yes · **App extensible** L2 · **Strategy** compile-time fold · **Alignment** conditional
+**Web** ✅ yes · **Skyline** ◻ not listed · **App** ✅ yes · **App extensible** L2 · **Strategy** compile-time fold · **Alignment** conditional
 
 > compile-time fold · conditional
 
@@ -318,25 +318,25 @@ generated: true
 
 ### pointer-events {#pointer-events}
 
-**Web** ◻ n/a · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L2 · **Strategy** compile-time fold · **Alignment** conditional
+**Web** ✅ yes · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L2 · **Strategy** compile-time fold · **Alignment** universal
 
-> compile-time fold · conditional
+> compile-time fold · universal
 
 ### grid-auto-flow {#grid-auto-flow}
 
-**Web** ◻ n/a · **Skyline** ◻ not listed · **App** ✅ yes · **App extensible** L2 · **Strategy** direct mapping · **Alignment** conditional
+**Web** ✅ yes · **Skyline** ◻ not listed · **App** ✅ yes · **App extensible** L2 · **Strategy** direct mapping · **Alignment** conditional
 
 > direct mapping · conditional
 
 ### grid-template-areas {#grid-template-areas}
 
-**Web** ◻ n/a · **Skyline** ◻ not listed · **App** ✅ yes · **App extensible** L2 · **Strategy** direct mapping · **Alignment** conditional
+**Web** ✅ yes · **Skyline** ◻ not listed · **App** ✅ yes · **App extensible** L2 · **Strategy** direct mapping · **Alignment** conditional
 
 > direct mapping · conditional
 
 ### grid-area {#grid-area}
 
-**Web** ◻ n/a · **Skyline** ◻ not listed · **App** ✅ yes · **App extensible** L2 · **Strategy** direct mapping · **Alignment** conditional
+**Web** ✅ yes · **Skyline** ◻ not listed · **App** ✅ yes · **App extensible** L2 · **Strategy** direct mapping · **Alignment** conditional
 
 > direct mapping · conditional
 
@@ -498,7 +498,7 @@ generated: true
 
 > compile-time fold · conditional
 
-## 文本 · 12 {#cat-text}
+## 文本 · 13 {#cat-text}
 
 ### word-break（行内断词策略） {#word-break}
 
@@ -508,9 +508,9 @@ generated: true
 
 ### font-weight {#font-weight}
 
-**Web** ◻ n/a · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L1 · **Strategy** compile-time fold · **Alignment** conditional
+**Web** ✅ yes · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L1 · **Strategy** compile-time fold · **Alignment** universal
 
-> compile-time fold · conditional
+> compile-time fold · universal
 
 ### font-style {#font-style}
 
@@ -520,9 +520,15 @@ generated: true
 
 ### text-transform {#text-transform}
 
-**Web** ◻ n/a · **Skyline** ◻ not listed · **App** ✅ yes · **App extensible** L1 · **Strategy** 编译期变换 + 共享运行期 · **Alignment** conditional
+**Web** ✅ yes · **Skyline** ◻ not listed · **App** ✅ yes · **App extensible** L1 · **Strategy** 编译期变换 + 共享运行期 · **Alignment** conditional
 
 > 编译期变换 + 共享运行期 · conditional
+
+### font-variant-numeric {#font-variant-numeric}
+
+**Web** ✅ yes · **Skyline** ◻ not listed · **App** ✅ yes · **App extensible** L1 · **Strategy** 编译期折叠 + 平台字形 · **Alignment** conditional
+
+> 编译期折叠 + 平台字形 · conditional
 
 ### text-decoration {#text-decoration}
 
@@ -532,9 +538,9 @@ generated: true
 
 ### text-align {#text-align}
 
-**Web** ◻ n/a · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L1 · **Strategy** compile-time fold · **Alignment** conditional
+**Web** ✅ yes · **Skyline** ✅ yes · **App** ✅ yes · **App extensible** L1 · **Strategy** compile-time fold · **Alignment** universal
 
-> compile-time fold · conditional
+> compile-time fold · universal
 
 ### line-height {#line-height}
 
@@ -550,7 +556,7 @@ generated: true
 
 ### -webkit-line-clamp: <integer> {#-webkit-line-clamp}
 
-**Web** ◻ n/a · **Skyline** ◻ not listed · **App** ✅ yes · **App extensible** L1 · **Strategy** compile-time fold · **Alignment** conditional
+**Web** ✅ yes · **Skyline** ◻ not listed · **App** ✅ yes · **App extensible** L1 · **Strategy** compile-time fold · **Alignment** conditional
 
 > compile-time fold · conditional
 

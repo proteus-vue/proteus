@@ -7,12 +7,12 @@ generated: true
 
 # CSS 多端支持参考
 
-> 83 项 CSS 能力在 **Web / Skyline / App 三端**的支持现状与可扩展档位。**每项能力均带独立锚点**（右侧页内导航可逐项跳转、可被外链深链引用），支持度以 **Web 真值为基准**，App 端自研引擎按 **L0–L5 成本分级**。
+> 84 项 CSS 能力在 **Web / Skyline / App 三端**的支持现状与可扩展档位。**每项能力均带独立锚点**（右侧页内导航可逐项跳转、可被外链深链引用），支持度以 **Web 真值为基准**，App 端自研引擎按 **L0–L5 成本分级**。
 > ★自动生成（`scripts/gen-css-support.mjs`），SSOT = `docs/generated/css-capability-alignment.json`；漂移门禁 `--check`。
 
 ## 概览
 
-共 **83** 项：三端全支持（universal）**33** 项 · 条件支持（conditional）**46** 项 · 三端不可用（unsupported）**4** 项。App 端当前**已支持 75 项**、**暂缺 8 项**（候选特性按 L 档扩展）。
+共 **84** 项：三端全支持（universal）**44** 项 · 条件支持（conditional）**36** 项 · 三端不可用（unsupported）**4** 项。App 端当前**已支持 76 项**、**暂缺 8 项**（候选特性按 L 档扩展）。
 
 ### 端模型
 
@@ -55,7 +55,7 @@ generated: true
 | [选择器](#cat-selector) | [类选择器 .a / .a.b](#selector-class) · [元素/类型选择器 h3 / p.foo](#selector-type) · [后代 / 子组合 .a .b / .a > .b](#selector-combinator) · [静态结构伪类 :first-child / :last-child / :nth-child(An+B\|odd\|even) / :not(简单选择器)](#selector-pseudo-structural) · [伪元素 ::before / ::after（+ content）](#selector-pseudo-element) · [状态伪类 :active（按下态）](#selector-pseudo-state-active) · [状态伪类 :hover / :focus / :checked](#selector-pseudo-state) · [属性选择器 data-x](#selector-attr) · [Vue 作用域穿透 :deep() / ::v-deep() / >>>](#selector-deep) · [兄弟组合 + / ~](#selector-sibling) · [通配 *](#selector-wildcard) |
 | [层叠](#cat-cascade) | [特异性 / 继承 / !important](#specificity-inheritance) · [CSS 自定义属性（design tokens）var(--x)](#css-vars) |
 | [@ 规则](#cat-at-rule) | [@media（响应式 / 环境条件）](#at-media) · [@supports（特性检测）](#at-supports) · [@keyframes（关键帧动画）](#keyframes) · [animation（简写：name duration timing delay …）](#animation) |
-| [文本](#cat-text) | [word-break（行内断词策略）](#word-break) · [font-weight](#font-weight) · [font-style](#font-style) · [text-transform](#text-transform) · [text-decoration](#text-decoration) · [text-align](#text-align) · [line-height](#line-height) · [text-overflow](#text-overflow) · [-webkit-line-clamp: <integer>](#-webkit-line-clamp) · [letter-spacing](#letter-spacing) · [font-family](#font-family) · [white-space](#text-attrs) |
+| [文本](#cat-text) | [word-break（行内断词策略）](#word-break) · [font-weight](#font-weight) · [font-style](#font-style) · [text-transform](#text-transform) · [font-variant-numeric](#font-variant-numeric) · [text-decoration](#text-decoration) · [text-align](#text-align) · [line-height](#line-height) · [text-overflow](#text-overflow) · [-webkit-line-clamp: <integer>](#-webkit-line-clamp) · [letter-spacing](#letter-spacing) · [font-family](#font-family) · [white-space](#text-attrs) |
 | [层](#cat-layer) | [z-index](#z-index) |
 
 ## 逐能力参考
@@ -64,13 +64,13 @@ generated: true
 
 ### outline-offset {#outline-offset}
 
-**Web** ◻ 未测 · **Skyline** ◻ 未列 · **App** ✅ 支持 · **App 可扩展** L2 · **策略** 宿主绘制 · **对齐** conditional
+**Web** ✅ 支持 · **Skyline** ◻ 未列 · **App** ✅ 支持 · **App 可扩展** L2 · **策略** 宿主绘制 · **对齐** conditional
 
 > ★★★outline 族项（2026-10-08）：轮廓与盒边的**偏移**（正=盒外 / 负=盒内；不影响布局）。Web 真值（真 Chromium）：`outline-offset: 2px` / `-2px` computed 即 px。App 宿主按偏移把环画在盒外/内（同 outline 通道）。
 
 ### outline（+ outline-width/-color/-style 长手） {#outline}
 
-**Web** ◻ 未测 · **Skyline** ◻ 未列 · **App** ✅ 支持 · **App 可扩展** L2 · **策略** 宿主绘制 · **对齐** conditional
+**Web** ◐ 部分 · **Skyline** ◻ 未列 · **App** ✅ 支持 · **App 可扩展** L2 · **策略** 宿主绘制 · **对齐** conditional
 
 > ★★★outline 族项（2026-10-08 · css:next P0·3× · Basic User Interface）：**轮廓**（盒外/内偏移的环，**不占布局**，与 border 不同）。契约：新级别 OutlineWidth/OutlineOffset（+ outlineColor 复用 Color / outlineStyle 复用 BorderStyle）；编译器 APP_PAINT_FIELDS + 折叠（简写 `<width> <style> <color>` 序任意 + 长手 + offset 可负）；CSE 直通 outlineWidth/outlineColor/outlineStyle/outlineOffset；**宿主绘制**（host-only paint，同 border/box-shadow——**内核零改动**）；consistency 链。★诚实边界：① **Skyline 官方属性表（110 项）无 outline**（引擎锁死）；② 语料 3× 全在 `:focus-visible` 下（焦点环）——App **不支持状态伪类** ⇒ 语料到不了 App（**具名依赖**：焦点态需独立能力）；本项验**静态** outline。
 
@@ -82,19 +82,19 @@ generated: true
 
 ### background-size {#background-size}
 
-**Web** ◻ 未测 · **Skyline** ✅ 支持 · **App** ✅ 支持 · **App 可扩展** L2 · **策略** 宿主几何 · **对齐** conditional
+**Web** ✅ 支持 · **Skyline** ✅ 支持 · **App** ✅ 支持 · **App 可扩展** L2 · **策略** 宿主几何 · **对齐** universal
 
 > ★★★背景定位家族（2026-10-07 · css:next background-position · 静态单层）：**背景图层的图像盒尺寸**。契约：新级别 BackgroundSize（四同步）；CSE 直通 IR 字段 backgroundSize；编译器 APP_PAINT_FIELDS + 折叠分支（字符串原样下发）；宿主按 Web 几何（size %= 相对盒、px 直接）把渐变端点/平铺算到图像盒。★诚实边界：多值/关键字 cover/contain 暂诊断（本批不做）；动画/多层渐变留下一批。见 docs/css-background-family-plan.md
 
 ### background-position {#background-position}
 
-**Web** ◻ 未测 · **Skyline** ✅ 支持 · **App** ✅ 支持 · **App 可扩展** L2 · **策略** 宿主几何 · **对齐** conditional
+**Web** ✅ 支持 · **Skyline** ✅ 支持 · **App** ✅ 支持 · **App 可扩展** L2 · **策略** 宿主几何 · **对齐** universal
 
 > ★★★背景定位家族（2026-10-07 · css:next）：**背景图像盒的偏移**。契约：新级别 BackgroundPosition（四同步）；CSE 直通 backgroundPosition；编译器 APP_PAINT_FIELDS + 折叠分支。★Web 真值（真 Chromium 实测）：关键字 left/top=0、right/bottom=100%、center=50%；px 直接；**% = X%×(盒宽−图宽)**（减图尺寸）。宿主解析该几何。见 docs/css-background-family-plan.md
 
 ### background-repeat {#background-repeat}
 
-**Web** ◻ 未测 · **Skyline** ✅ 支持 · **App** ✅ 支持 · **App 可扩展** L2 · **策略** 宿主几何 · **对齐** conditional
+**Web** ✅ 支持 · **Skyline** ✅ 支持 · **App** ✅ 支持 · **App 可扩展** L2 · **策略** 宿主几何 · **对齐** universal
 
 > ★★★背景定位家族（2026-10-07）：**背景图像盒平铺**（repeat=以图像尺寸为砖平铺，相位=偏移；no-repeat=只画一次）。契约：新级别 BackgroundRepeat（四同步，值集 repeat/no-repeat——Space/Round 暂不做）；CSE 直通 backgroundRepeat；编译器 APP_PAINT_FIELDS + 折叠分支。见 docs/css-background-family-plan.md
 
@@ -130,25 +130,25 @@ generated: true
 
 ### border-top {#border-top}
 
-**Web** ◻ 未测 · **Skyline** ✅ 支持 · **App** ✅ 支持 · **App 可扩展** L1 · **策略** 编译期折叠 · **对齐** conditional
+**Web** ✅ 支持 · **Skyline** ✅ 支持 · **App** ✅ 支持 · **App 可扩展** L1 · **策略** 编译期折叠 · **对齐** universal
 
 > ★★★逐边 border 批（2026-10-05 · 用户「全端对齐不留缺陷」）：`border-top: <width> solid <color>` 简写 折为 borderTopWidth/Color（宿主**逐边绘制**）；`none` ⇒ 该边清零（重置语义）；★★★边框族收口批（2026-10-05）：**线型支持**——solid/dashed/dotted 落 border<Side>Style（宿主按线型绘制：Android 封角块+DashPathEffect / iOS CAShapeLayer lineDashPattern / 鸿蒙 ArkUI 原生；节距按 Chrome 实测真值 {3w,2w}/{w,w}）；double/groove 等仍诊断跳过。`border: <w> dashed <c>` 简写同步支持（1–4 值）。；不静默画成实线冒充）。Web/MP 端为该族**原生支持**（Skyline 官方 formats 表含 border-<side>-* 全部 12 项）。
 
 ### border-right {#border-right}
 
-**Web** ◻ 未测 · **Skyline** ✅ 支持 · **App** ✅ 支持 · **App 可扩展** L1 · **策略** 编译期折叠 · **对齐** conditional
+**Web** ✅ 支持 · **Skyline** ✅ 支持 · **App** ✅ 支持 · **App 可扩展** L1 · **策略** 编译期折叠 · **对齐** universal
 
 > ★★★逐边 border 批（2026-10-05 · 用户「全端对齐不留缺陷」）：`border-right: <width> solid <color>` 简写 折为 borderRightWidth/Color（宿主**逐边绘制**）；`none` ⇒ 该边清零（重置语义）；★★★边框族收口批（2026-10-05）：**线型支持**——solid/dashed/dotted 落 border<Side>Style（宿主按线型绘制：Android 封角块+DashPathEffect / iOS CAShapeLayer lineDashPattern / 鸿蒙 ArkUI 原生；节距按 Chrome 实测真值 {3w,2w}/{w,w}）；double/groove 等仍诊断跳过。`border: <w> dashed <c>` 简写同步支持（1–4 值）。；不静默画成实线冒充）。Web/MP 端为该族**原生支持**（Skyline 官方 formats 表含 border-<side>-* 全部 12 项）。
 
 ### border-bottom {#border-bottom}
 
-**Web** ◻ 未测 · **Skyline** ✅ 支持 · **App** ✅ 支持 · **App 可扩展** L1 · **策略** 编译期折叠 · **对齐** conditional
+**Web** ✅ 支持 · **Skyline** ✅ 支持 · **App** ✅ 支持 · **App 可扩展** L1 · **策略** 编译期折叠 · **对齐** universal
 
 > ★★★逐边 border 批（2026-10-05 · 用户「全端对齐不留缺陷」）：`border-bottom: <width> solid <color>` 简写 折为 borderBottomWidth/Color（宿主**逐边绘制**）；`none` ⇒ 该边清零（重置语义）；★★★边框族收口批（2026-10-05）：**线型支持**——solid/dashed/dotted 落 border<Side>Style（宿主按线型绘制：Android 封角块+DashPathEffect / iOS CAShapeLayer lineDashPattern / 鸿蒙 ArkUI 原生；节距按 Chrome 实测真值 {3w,2w}/{w,w}）；double/groove 等仍诊断跳过。`border: <w> dashed <c>` 简写同步支持（1–4 值）。；不静默画成实线冒充）。Web/MP 端为该族**原生支持**（Skyline 官方 formats 表含 border-<side>-* 全部 12 项）。
 
 ### border-left {#border-left}
 
-**Web** ◻ 未测 · **Skyline** ✅ 支持 · **App** ✅ 支持 · **App 可扩展** L1 · **策略** 编译期折叠 · **对齐** conditional
+**Web** ✅ 支持 · **Skyline** ✅ 支持 · **App** ✅ 支持 · **App 可扩展** L1 · **策略** 编译期折叠 · **对齐** universal
 
 > ★★★逐边 border 批（2026-10-05 · 用户「全端对齐不留缺陷」）：`border-left: <width> solid <color>` 简写 折为 borderLeftWidth/Color（宿主**逐边绘制**）；`none` ⇒ 该边清零（重置语义）；★★★边框族收口批（2026-10-05）：**线型支持**——solid/dashed/dotted 落 border<Side>Style（宿主按线型绘制：Android 封角块+DashPathEffect / iOS CAShapeLayer lineDashPattern / 鸿蒙 ArkUI 原生；节距按 Chrome 实测真值 {3w,2w}/{w,w}）；double/groove 等仍诊断跳过。`border: <w> dashed <c>` 简写同步支持（1–4 值）。；不静默画成实线冒充）。Web/MP 端为该族**原生支持**（Skyline 官方 formats 表含 border-<side>-* 全部 12 项）。
 
@@ -160,7 +160,7 @@ generated: true
 
 ### text-shadow {#text-shadow}
 
-**Web** ◻ 未测 · **Skyline** ✅ 支持 · **App** ✅ 支持 · **App 可扩展** L3 · **策略** 编译期折叠 · **对齐** conditional
+**Web** ✅ 支持 · **Skyline** ✅ 支持 · **App** ✅ 支持 · **App 可扩展** L3 · **策略** 编译期折叠 · **对齐** universal
 
 > ★★★text-shadow 项（2026-10-08 · css:next P0·2× · CSS Text Decoration）：**文本阴影**（单层 dx dy [blur] color；无 spread）。契约：引擎字段 textShadow（同 boxShadow 先例）；编译器折叠（parseBoxShadow 复用）+ CSE 归一到**浏览器 computed 形态**（rgba(...) dxpx dypx blurpx）；**三端宿主文本绘制投影**：Android `TextPaint.setShadowLayer`（硬件加速下**只对文本生效**——正是文本阴影所需）· iOS `CATextLayer.shadow*` · 鸿蒙 `OH_Drawing_SetTextShadow + OH_Drawing_TextStyleAddShadow`（Typography 原生）。★语料 2×（glass-demo / p-formfactor 封面标题）。★诚实边界：多重阴影取首个；spread 无（CSS text-shadow 本无 spread）。
 
@@ -240,7 +240,7 @@ generated: true
 
 ### gap（+ row-gap / column-gap） {#gap}
 
-**Web** ◐ 部分 · **Skyline** ◐ 部分 · **App** ✅ 支持 · **App 可扩展** L2 · **策略** 直映射 · **对齐** conditional
+**Web** ✅ 支持 · **Skyline** ◐ 部分 · **App** ✅ 支持 · **App 可扩展** L2 · **策略** 直映射 · **对齐** conditional
 
 > px/数字；★批次 31：**两值** `gap:<row> <col>` 与 **轴级** `row-gap`/`column-gap`（内核 `LStyle.row_gap/column_gap` → taffy `gap.height/width`）——真项目组件库 15 处两值 gap
 
@@ -258,31 +258,31 @@ generated: true
 
 ### overflow: visible / hidden / scroll / auto {#overflow}
 
-**Web** ◐ 部分 · **Skyline** ◐ 部分 · **App** ✅ 支持 · **App 可扩展** L2 · **策略** 直映射 · **对齐** conditional
+**Web** ✅ 支持 · **Skyline** ◐ 部分 · **App** ✅ 支持 · **App 可扩展** L2 · **策略** 直映射 · **对齐** conditional
 
 > 引擎封闭集；auto 折叠为 taffy Scroll；★★★overflow-x 项（2026-10-06）：**单轴 overflow-x/y 已支持**（长手 + overflow 1–2 值简写；Web 归一回放：visible↔非visible ⇒ visible→auto；逐轴字段 overflowX/overflowY）+ 三端宿主**子内容裁剪**（Android 画布 clipRect / iOS masksToBounds / 鸿蒙 SetClip——内核 rects 下发有效裁剪矩形）
 
 ### display: grid + grid-template-columns/rows（显式轨迹）+ grid-column/row 线号放置 {#grid}
 
-**Web** ◐ 部分 · **Skyline** ◻ 未列 · **App** ✅ 支持 · **App 可扩展** L2 · **策略** 直映射 · **对齐** conditional
+**Web** ✅ 支持 · **Skyline** ◻ 未列 · **App** ✅ 支持 · **App 可扩展** L2 · **策略** 直映射 · **对齐** conditional
 
 > ★批次 12（2026-10-04）：引擎 `Display::Grid` + `LStyle.grid_template_columns/rows`（字符串轨迹）+ `NodeDto` + taffy grid_template_* 映射（parse_grid_tracks：fr/px/数字）；编译器 display:grid 入封闭集 + `grid-template-columns/rows` 解析（**显式轨迹**，`repeat(N,X)` 编译期展开）。★批次 41（2026-10-04）：`grid-column`/`grid-row` **线号放置**（`<n>` / `<start> / <end>`，线号可负——`1 / -1` 跨全宽）已支持（内核 taffy `Line<GridPlacement>`）。★★★grid 轨迹解析升级（2026-10-08）：① **minmax()** 支持（minmax(0, 1fr)——语料最高频；内核改用 taffy 官方 FromStr，裸 0→0px）；② 轨迹串接受 auto / % / min-content / max-content / fit-content + repeat(auto-fill|auto-fit, …)；③ 新增 **grid-auto-columns/rows**（隐式轨道尺寸，taffy GridTrackVec<TrackSizingFunction> 原生）。★**诚实边界**：命名线（[name]）/ span 文字未支持（诊断跳过）；Skyline 端实测退化为 block ⇒ 有条件可用
 
 ### justify-self（网格项行内轴自对齐） {#justify-self}
 
-**Web** ◻ 未测 · **Skyline** ◻ 未列 · **App** ✅ 支持 · **App 可扩展** L2 · **策略** 直映射 · **对齐** conditional
+**Web** ✅ 支持 · **Skyline** ◻ 未列 · **App** ✅ 支持 · **App 可扩展** L2 · **策略** 直映射 · **对齐** conditional
 
 > ★★★justify-self 项（2026-10-06 · css:next P0·9× · CSS Box Alignment 3）：网格项**行内轴自对齐**。语料 9 处全在 grid 上下文（p-formfactor 仪表盘 justify-self: start/stretch）。契约：新级别 JustifySelf（四同步）；编译器 APP_LAYOUT_FIELDS + 封闭集（auto/normal/start/end/flex-start/flex-end/self-start/self-end/center/stretch）；内核 LStyle.justify_self → taffy Style.justify_self（grid 计算路径原生消费——flex 容器下 taffy 与 Web 同为「忽略」）；blob 枚举位图 E_JUSTIFY_SELF。★诚实边界：baseline/left/right 未列（taffy 的 grid baseline 按 start 近似=与 Web 不符 ⇒ 诊断跳过，不静默近似）；仅 grid 容器生效（taffy 原生语义=Web 语义：flex 下被忽略）；宿主零改动（纯内核布局）。★Skyline 官方属性表无 justify-self（该端无 Grid 容器）——主承载端为 App（自研内核）
 
 ### place-items（+ justify-items 长手） {#place-items}
 
-**Web** ◻ 未测 · **Skyline** ◻ 未列 · **App** ✅ 支持 · **App 可扩展** L2 · **策略** 简写展开 · **对齐** conditional
+**Web** ◐ 部分 · **Skyline** ◻ 未列 · **App** ✅ 支持 · **App 可扩展** L2 · **策略** 简写展开 · **对齐** conditional
 
 > ★★★place-items/justify-items 项（2026-10-08 · css:next P0·1× · CSS Box Alignment 3）：**网格容器内所有子项的「行内轴」对齐**（`place-items: <align-items> <justify-items>` 简写；单值⇒两轴同）。语料 1 处（p-formfactor hero 媒体 `place-items: center end`）。契约：新级别 JustifyItems（四同步，值集 = JustifySelf 去 auto）；编译器 place-items 简写展开为 alignItems + justifyItems（+ justify-items 长手）；内核 LStyle.justify_items → taffy Style.justify_items（grid 容器原生——flex 下 taffy 与 Web 同为「忽略」）。★诚实边界：baseline 按 start 近似（同 justify-self ⇒ 未列封闭集，诊断跳过）；仅 grid 容器生效；宿主零改动（纯内核布局）。★Skyline 官方属性表无 grid 族——主承载端为 App（自研内核）
 
 ### aspect-ratio {#aspect-ratio}
 
-**Web** ◻ 未测 · **Skyline** ◻ 未列 · **App** ✅ 支持 · **App 可扩展** L2 · **策略** 编译期折叠 · **对齐** conditional
+**Web** ✅ 支持 · **Skyline** ◻ 未列 · **App** ✅ 支持 · **App 可扩展** L2 · **策略** 编译期折叠 · **对齐** conditional
 
 > ★批次 24（2026-10-04 · ★基准 = Web）：宽高比（媒体卡/占位图）。`<n>`（1.5）/`<w>/<h>`（16/9，含空格）→ 比值；`auto` = 默认不发射。内核 `LStyle.aspect_ratio` → taffy `aspect_ratio`（原生；定一轴派生另一轴）
 
@@ -318,25 +318,25 @@ generated: true
 
 ### pointer-events {#pointer-events}
 
-**Web** ◻ 未测 · **Skyline** ✅ 支持 · **App** ✅ 支持 · **App 可扩展** L2 · **策略** 编译期折叠 · **对齐** conditional
+**Web** ✅ 支持 · **Skyline** ✅ 支持 · **App** ✅ 支持 · **App 可扩展** L2 · **策略** 编译期折叠 · **对齐** universal
 
 > ★批次 32（2026-10-04 · ★基准 = Web）：`none` / `auto`。`none` ⇒ 该节点**不参与命中测试**（事件穿透到其下——浮层/遮罩刚需），但**仍占位**（有几何）。CSS **可继承**（父 none ⇒ 子默认 none、子 auto 可覆盖）——编译期按树算 computed 值。内核 `hit_path` 逐节点跳过 `pointer_events==false`（绘制/层不动——node 仍绘制）。只有内核 hitTest 消费（三端同一命中实现）。
 
 ### grid-auto-flow {#grid-auto-flow}
 
-**Web** ◻ 未测 · **Skyline** ◻ 未列 · **App** ✅ 支持 · **App 可扩展** L2 · **策略** 直映射 · **对齐** conditional
+**Web** ✅ 支持 · **Skyline** ◻ 未列 · **App** ✅ 支持 · **App 可扩展** L2 · **策略** 直映射 · **对齐** conditional
 
 > ★★★grid-auto-flow 项（2026-10-08 · css:next P0·3× · CSS Grid）：类 grid 容器的**自动放置方向/密度**。契约：新级别 GridAutoFlow（四同步）；值集 = 四端可表达子集（row / column / dense / column dense；Web `row dense` 归一为 `dense`）；编译器 APP_LAYOUT_FIELDS + 封闭集 + 折叠分支；CSE 直通 IR 字段 gridAutoFlow；内核 LStyle.grid_auto_flow → taffy `Style.grid_auto_flow`（GridAutoFlow 原生，仅 grid 容器消费——item 上被忽略，与 Web 同）；consistency 链（applier/snapshot/probes/coverage）。★诚实边界：Skyline 官方属性表无 grid 族（该端无 Grid 容器，grid→嵌套 flex degrade）——主承载端为 App（自研内核）。
 
 ### grid-template-areas {#grid-template-areas}
 
-**Web** ◻ 未测 · **Skyline** ◻ 未列 · **App** ✅ 支持 · **App 可扩展** L2 · **策略** 直映射 · **对齐** conditional
+**Web** ✅ 支持 · **Skyline** ◻ 未列 · **App** ✅ 支持 · **App 可扩展** L2 · **策略** 直映射 · **对齐** conditional
 
 > ★★★grid-template-areas 项（2026-10-08 · css:next P0·2× · CSS Grid）：grid 容器的**命名区域模板**（配合子项 grid-area: <name> 放置）。契约四同步（该能力无独立语义级别——走引擎字段，同 gridTemplateColumns 先例）；编译器 APP_LAYOUT_FIELDS + 折叠分支（CSS 多引号串归一为**浏览器 computed 形态**，与 parity 真值对齐）；CSE 直通 IR 字段 gridTemplateAreas + gridArea（grid-area: <name> 即命名区引用；线号形态 1 / 2 / 3 / 4 拆 grid-row/grid-column）；内核 LStyle.grid_template_areas 走 taffy GridTemplateAreas（区域名解析成 名-start / 名-end 命名线）+ grid_area 走 GridPlacement::NamedLine（NamedLineResolver 解析区域跨行/跨列）；consistency 链（applier/snapshot/probes/coverage）。★诚实边界：Skyline 官方属性表无 grid 族（该端无 Grid 容器，grid→嵌套 flex degrade）——主承载端为 App（自研内核）；空单元（点号）/ 命名线 / span 未支持（诊断）。
 
 ### grid-area {#grid-area}
 
-**Web** ◻ 未测 · **Skyline** ◻ 未列 · **App** ✅ 支持 · **App 可扩展** L2 · **策略** 直映射 · **对齐** conditional
+**Web** ✅ 支持 · **Skyline** ◻ 未列 · **App** ✅ 支持 · **App 可扩展** L2 · **策略** 直映射 · **对齐** conditional
 
 > ★★★grid-area 项（2026-10-08 · css:next P0·2× · CSS Grid）：子项的**网格放置**（命名区引用 / 线号）。命名形态 grid-area: <name> 折为 gridArea（内核走命名线放置）；线号形态 grid-area: 1 / 2 / 3 / 4 拆为 grid-row + grid-column。契约四同步（引擎字段，同 gridColumn 先例）；编译器折叠 + CSE（gridArea 直通）。★诚实边界：span / auto 命名线混合形态未支持（诊断）。
 
@@ -498,7 +498,7 @@ generated: true
 
 > ★批次 42（对齐 Web）：animation 简写 → 命中同文件 @keyframes → 逐通道 keyframe 动画（内核 anim_start）；★#791/本批：**animation-delay**（第 2 个时间 token，内核 `delayMs`）与 **animation-iteration-count**（数字 / `infinite`→内核 `repeat:-1`）已支持；`direction`/`fill`/多动画逗号列表暂忽略（诊断）。可动画通道限 opacity / px 位移 / 等比缩放 / 旋转
 
-## 文本 · 12 项 {#cat-text}
+## 文本 · 13 项 {#cat-text}
 
 ### word-break（行内断词策略） {#word-break}
 
@@ -508,7 +508,7 @@ generated: true
 
 ### font-weight {#font-weight}
 
-**Web** ◻ 未测 · **Skyline** ✅ 支持 · **App** ✅ 支持 · **App 可扩展** L1 · **策略** 编译期折叠 · **对齐** conditional
+**Web** ✅ 支持 · **Skyline** ✅ 支持 · **App** ✅ 支持 · **App 可扩展** L1 · **策略** 编译期折叠 · **对齐** universal
 
 > ★批次 3（2026-10-04）：`normal`→400 / `bold`→700 / 100–900 数值归一；作为**文本可继承**字段沿树继承。三端宿主：iOS 已读 `fontWeight`（≥600 bold 判据）、Android 新接线（Cmd.fontWeight + 绘制/度量同源 typeface）、鸿蒙新接线（OH_Drawing_SetTextStyleFontWeight）
 
@@ -520,9 +520,15 @@ generated: true
 
 ### text-transform {#text-transform}
 
-**Web** ◻ 未测 · **Skyline** ◻ 未列 · **App** ✅ 支持 · **App 可扩展** L1 · **策略** 编译期变换 + 共享运行期 · **对齐** conditional
+**Web** ✅ 支持 · **Skyline** ◻ 未列 · **App** ✅ 支持 · **App 可扩展** L1 · **策略** 编译期变换 + 共享运行期 · **对齐** conditional
 
 > ★★★text-transform 项（2026-10-18 · 批 B F3 · 基准 = Web）：`none` / `uppercase` / `lowercase` / `capitalize`（CSS **可继承**）。★**语义唯一实现在共享运行期** `packages/slot-runtime/src/text-transform.ts`——uppercase/lowercase 复用 JS 内建 Unicode 映射（与真 Chromium 逐字符一致：`straße→STRASSE` / `ΣΟΦΟΣ→σοφος`）；`capitalize` 的词边界规则由 **135 条样本与 Chromium 逐像素比对**（0 差异）得出：撇号/下划线/数字是词内，CJK/假名/韩文/标点/emoji 是边界，且用 **titlecase**（`ǳ→ǲ`）而非 uppercase。★四端落地：Web = 浏览器原生；App 三端 = 文本出口（实例化 `setNormText` + `SET_TEXT` 指令 + 自绘适配器）**同一实现**，宿主零改动；MP/Skyline = 官方样式表**无此属性**（已核官方文档）⇒ **编译期变换静态文本**，动态绑定文本编译期**如实诊断**（不静默当已实现）。诚实边界：`full-width` / `full-size-kana` 需东亚宽度表且三端宿主无通道 ⇒ 编译期诊断。
+
+### font-variant-numeric {#font-variant-numeric}
+
+**Web** ✅ 支持 · **Skyline** ◻ 未列 · **App** ✅ 支持 · **App 可扩展** L1 · **策略** 编译期折叠 + 平台字形 · **对齐** conditional
+
+> ★★★font-variant-numeric 项（2026-10-18 · 批 B F3 · 基准 = Web）：本版只做 **`tabular-nums`**（等宽数字——价格/KPI/编号列对齐刚需），CSS **可继承**。★**三端都在平台层统一设 OpenType `tnum`**（Android `Paint.setFontFeatureSettings("\"tnum\" 1")` · iOS `UIFontDescriptor.featureSettings` 的 `kNumberSpacing`/`kMonospacedNumbersSelector` · 鸿蒙 `OH_Drawing_TextStyleAddFontFeature("tnum",1)`）——**度量与绘制同源**（tnum 是另一套字形，宽度不同；两侧分叉会「字被裁而报告全绿」）。★Web 实测真值：`tabular-nums` 使数字等宽——Helvetica Neue 上宽度 **+55%**，而 SF Pro / Georgia 本身已等宽（差异 0）⇒ 该属性**是否可见取决于字族是否带 tnum 特性**（不带则静默无效，与浏览器行为一致）。★MP/Skyline 官方样式表**无该属性**（font-* 仅 5 条）⇒ 引擎边界（具名）。诚实边界：`slashed-zero` / `ordinal` / `diagonal-fractions` / `lining-nums` / `oldstyle-nums` / `proportional-nums` 需各端特性直通，三端通道尚未统一 ⇒ 编译期诊断。
 
 ### text-decoration {#text-decoration}
 
@@ -532,7 +538,7 @@ generated: true
 
 ### text-align {#text-align}
 
-**Web** ◻ 未测 · **Skyline** ✅ 支持 · **App** ✅ 支持 · **App 可扩展** L1 · **策略** 编译期折叠 · **对齐** conditional
+**Web** ✅ 支持 · **Skyline** ✅ 支持 · **App** ✅ 支持 · **App 可扩展** L1 · **策略** 编译期折叠 · **对齐** universal
 
 > ★批次 4（2026-10-04）：封闭集 left/center/right（justify/st 等诊断跳过）。宿主：iOS CATextLayer.alignmentMode · Android Paint.Align（绘制 x 按对齐换算）· 鸿蒙 OH_Drawing_SetTypographyTextAlign。真项目 28 处（22 center）
 
@@ -550,7 +556,7 @@ generated: true
 
 ### -webkit-line-clamp: <integer> {#-webkit-line-clamp}
 
-**Web** ◻ 未测 · **Skyline** ◻ 未列 · **App** ✅ 支持 · **App 可扩展** L1 · **策略** 编译期折叠 · **对齐** conditional
+**Web** ✅ 支持 · **Skyline** ◻ 未列 · **App** ✅ 支持 · **App 可扩展** L1 · **策略** 编译期折叠 · **对齐** conditional
 
 > ★line-clamp 项（2026-10-08 · ★基准 = Web）：**多行截断**——文本折行超过 N 行 ⇒ 只保留前 N 行、末行尾以 … 结尾（WebKit 三件套 `display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:<n>` 的事实标准）。Web 真值（真 Chromium 实测）：盒高恒 = N × lineHeight、末行尾加 …，**与 overflow 声明无关**（computed display 变 flow-root）。编译期：`display: -webkit-box/-webkit-inline-box/box` 静默容忍（无 App 对等、不落 display 字段）、`-webkit-box-orient` 静默丢弃、`-webkit-line-clamp:<正整数>` → lineClamp（0/负 = 无截断，诊断跳过）。作为**文本可继承**？否（line-clamp 非继承属性）。三端宿主（均**测量封顶 = 绘制同源**——否则盒高与墨迹打架）：iOS 适配器 CTFramesetter 预截断（CATextLayer 无 numberOfLines ⇒ 自建截断串）+ measureTextWrapped(maxLines) 封顶 · Android StaticLayout.setMaxLines+setEllipsize(END)（测量/绘制两处同款）· 鸿蒙 OH_Drawing_SetTypographyTextMaxLines + EllipsisModal(TAIL)（测量用 min(自然行数, clamp) 封顶）。诚实边界：① 仅**尾部省略号**（WebKit 事实标准；fade 渐隐未支持）；仅当文本确需折行（white-space 非 nowrap/pre）时生效（与 Web `display:-webkit-box` 的块级折行语义一致）。② **Skyline（本页真机渲染器）引擎锁死边界**：官方属性表未收录 `-webkit-line-clamp`、且不收 `display:-webkit-box`（只认 none/flex/block）⇒ 真机实测**不截断**；该端无 CSS 多行截断等价属性（如需按端条件渲染或组件化，另立项）。主承载端 = Web（浏览器原生）+ App（自研内核）。
 

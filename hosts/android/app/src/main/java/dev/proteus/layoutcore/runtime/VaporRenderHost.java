@@ -2241,13 +2241,13 @@ public final class VaporRenderHost {
             // ★HA0.5：折行度量抽到**平台适配层**（`ProteusTextPlatform.measureWrapped`，与 iOS `measureTextWrapped` 对称）；
             //   返回 null = 单行且无 clamp（与首遍等价，零操作）。断词/长串溢出/行高封顶都在平台层。
             float[] m2 = ProteusTextPlatform.measureWrapped(t, fs, mw, spec.optString("fontFamily", null), ls,
-                    spec.optString("wordBreak", null), clamp, boxW, lineHeightPxOf(spec, fs), italicOf(spec));
+                    spec.optString("wordBreak", null), clamp, boxW, lineHeightPxOf(spec, fs), italicOf(spec), tabularOf(spec));
             if (m2 == null) continue;
             JSONObject sz = new JSONObject();
             sz.put("width", m2[0]);
             sz.put("height", m2[1]);
             // ★B-T1：折行度量同样带基线（基线是首行字体度量，与是否折行无关）
-            sz.put("baseline", ProteusTextPlatform.baseline(fs, mw, spec.optString("fontFamily", null), ls, italicOf(spec)));
+            sz.put("baseline", ProteusTextPlatform.baseline(fs, mw, spec.optString("fontFamily", null), ls, italicOf(spec), tabularOf(spec)));
             measures.put(String.valueOf(spec.getInt("id")), sz);
             changed = true;
         }
@@ -2274,6 +2274,12 @@ public final class VaporRenderHost {
     static boolean italicOf(org.json.JSONObject spec) {
         final String fst = spec.optString("fontStyle", null);
         return "italic".equals(fst) || "oblique".equals(fst);
+    }
+
+    /** ★★★font-variant-numeric 项（2026-10-18 · 批 B F3）：`spec.fontVariantNumeric` ⇒ 是否等宽数字
+     *  （**度量与绘制共用本判据**——tnum 是另一套字形，两边判据分叉就会"字被裁而报告全绿"）。 */
+    static boolean tabularOf(org.json.JSONObject spec) {
+        return "tabular-nums".equals(spec.optString("fontVariantNumeric", null));
     }
     static String applyWordBreak(String t, String wb) {
         // ★HA0.5：实现抽到平台层（度量与绘制同源共用）——本方法保留签名供 mkCmd 等既有调用方。
@@ -2313,7 +2319,7 @@ public final class VaporRenderHost {
             float ls = (float) spec.optDouble("letterSpacing", 0);
             // ★HA0.5：单行度量抽到**平台适配层**（`ProteusTextPlatform.measureSingle`，与 iOS `measureText` 对称）
             //   —— 度量与绘制同源（共用 typefaceOf + 字号/字重/字距），此处零行为变化。
-            float[] m2 = ProteusTextPlatform.measureSingle(fs, mw, spec.optString("fontFamily", null), ls, t, italicOf(spec));
+            float[] m2 = ProteusTextPlatform.measureSingle(fs, mw, spec.optString("fontFamily", null), ls, t, italicOf(spec), tabularOf(spec));
             float w = m2[0];
             float glyphH = m2[1];   // ★真实字体度量（descent−ascent）
             float baseline = m2[2]; // ★B-T1：盒内容顶→基线（−ascent）——供内核 align-items:baseline 对文本对齐
@@ -2680,9 +2686,14 @@ public final class VaporRenderHost {
         //   绘制（ProteusHostView 的 typefaceOf）与度量（本类 measure*）天然同源。
         final String fam0 = spec.optString("fontFamily", null);
         final String fst0 = spec.optString("fontStyle", null);
-        final String famMarked = ("italic".equals(fst0) || "oblique".equals(fst0))
-                ? (("oblique".equals(fst0) ? ProteusTextPlatform.OBLIQUE_PREFIX : ProteusTextPlatform.ITALIC_PREFIX) + (fam0 == null ? "system" : fam0))
-                : fam0;
+        final boolean tnum = "tabular-nums".equals(spec.optString("fontVariantNumeric", null));
+        // ★★前缀合成（2026-10-18）：斜体与等宽数字**可叠加** ⇒ 先 italic/oblique，再 tnum
+        //   （平台层 typefaceOf 逐层剥离前缀；tabularOfRole 只看 tnum 前缀）
+        String famMarked = fam0 == null ? "system" : fam0;
+        if (tnum) famMarked = ProteusTextPlatform.TABULAR_PREFIX + famMarked;
+        if ("italic".equals(fst0) || "oblique".equals(fst0)) {
+            famMarked = ("oblique".equals(fst0) ? ProteusTextPlatform.OBLIQUE_PREFIX : ProteusTextPlatform.ITALIC_PREFIX) + famMarked;
+        }
         view.setNodeFontRole(id, famMarked);
     }
 

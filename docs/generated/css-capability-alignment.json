@@ -76,7 +76,7 @@
         "css": "outline-offset",
         "id": "outline-offset",
         "ends": {
-          "web": "not-measured",
+          "web": "supported",
           "skyline": "not-listed",
           "app": "supported"
         },
@@ -86,7 +86,7 @@
         "css": "outline（+ outline-width/-color/-style 长手）",
         "id": "outline",
         "ends": {
-          "web": "not-measured",
+          "web": "partial",
           "skyline": "not-listed",
           "app": "supported"
         },
@@ -96,7 +96,7 @@
         "css": "gap（+ row-gap / column-gap）",
         "id": "gap",
         "ends": {
-          "web": "partial",
+          "web": "supported",
           "skyline": "partial",
           "app": "supported"
         },
@@ -106,7 +106,7 @@
         "css": "overflow: visible / hidden / scroll / auto",
         "id": "overflow",
         "ends": {
-          "web": "partial",
+          "web": "supported",
           "skyline": "partial",
           "app": "supported"
         },
@@ -131,76 +131,6 @@
           "app": "supported"
         },
         "why": "→ widthRatio/heightRatio（比例字段）"
-      },
-      {
-        "css": "background-size",
-        "id": "background-size",
-        "ends": {
-          "web": "not-measured",
-          "skyline": "supported",
-          "app": "supported"
-        },
-        "why": "★★★背景定位家族（2026-10-07 · css:next background-position · 静态单层）：**背景图层的图像盒尺寸**。契约：新级别 BackgroundSize（四同步）；CSE 直通 IR 字段 backgroundSize；编译器 APP_PAINT_FIELDS + 折叠分支（字符串原样下发）；宿主按 Web 几何（size %= 相对盒、px 直接）把渐变端点/平铺算到图像盒。★诚实边界：多值/关键字 cover/contain 暂诊断（本批不做）；动画/多层渐变留下一批。见 docs/css-background-family-plan.md"
-      },
-      {
-        "css": "background-position",
-        "id": "background-position",
-        "ends": {
-          "web": "not-measured",
-          "skyline": "supported",
-          "app": "supported"
-        },
-        "why": "★★★背景定位家族（2026-10-07 · css:next）：**背景图像盒的偏移**。契约：新级别 BackgroundPosition（四同步）；CSE 直通 backgroundPosition；编译器 APP_PAINT_FIELDS + 折叠分支。★Web 真值（真 Chromium 实测）：关键字 left/top=0、right/bottom=100%、center=50%；px 直接；**% = X%×(盒宽−图宽)**（减图尺寸）。宿主解析该几何。见 docs/css-background-family-plan.md"
-      },
-      {
-        "css": "background-repeat",
-        "id": "background-repeat",
-        "ends": {
-          "web": "not-measured",
-          "skyline": "supported",
-          "app": "supported"
-        },
-        "why": "★★★背景定位家族（2026-10-07）：**背景图像盒平铺**（repeat=以图像尺寸为砖平铺，相位=偏移；no-repeat=只画一次）。契约：新级别 BackgroundRepeat（四同步，值集 repeat/no-repeat——Space/Round 暂不做）；CSE 直通 backgroundRepeat；编译器 APP_PAINT_FIELDS + 折叠分支。见 docs/css-background-family-plan.md"
-      },
-      {
-        "css": "border-top",
-        "id": "border-top",
-        "ends": {
-          "web": "not-measured",
-          "skyline": "supported",
-          "app": "supported"
-        },
-        "why": "★★★逐边 border 批（2026-10-05 · 用户「全端对齐不留缺陷」）：`border-top: <width> solid <color>` 简写 折为 borderTopWidth/Color（宿主**逐边绘制**）；`none` ⇒ 该边清零（重置语义）；★★★边框族收口批（2026-10-05）：**线型支持**——solid/dashed/dotted 落 border<Side>Style（宿主按线型绘制：Android 封角块+DashPathEffect / iOS CAShapeLayer lineDashPattern / 鸿蒙 ArkUI 原生；节距按 Chrome 实测真值 {3w,2w}/{w,w}）；double/groove 等仍诊断跳过。`border: <w> dashed <c>` 简写同步支持（1–4 值）。；不静默画成实线冒充）。Web/MP 端为该族**原生支持**（Skyline 官方 formats 表含 border-<side>-* 全部 12 项）。"
-      },
-      {
-        "css": "border-right",
-        "id": "border-right",
-        "ends": {
-          "web": "not-measured",
-          "skyline": "supported",
-          "app": "supported"
-        },
-        "why": "★★★逐边 border 批（2026-10-05 · 用户「全端对齐不留缺陷」）：`border-right: <width> solid <color>` 简写 折为 borderRightWidth/Color（宿主**逐边绘制**）；`none` ⇒ 该边清零（重置语义）；★★★边框族收口批（2026-10-05）：**线型支持**——solid/dashed/dotted 落 border<Side>Style（宿主按线型绘制：Android 封角块+DashPathEffect / iOS CAShapeLayer lineDashPattern / 鸿蒙 ArkUI 原生；节距按 Chrome 实测真值 {3w,2w}/{w,w}）；double/groove 等仍诊断跳过。`border: <w> dashed <c>` 简写同步支持（1–4 值）。；不静默画成实线冒充）。Web/MP 端为该族**原生支持**（Skyline 官方 formats 表含 border-<side>-* 全部 12 项）。"
-      },
-      {
-        "css": "border-bottom",
-        "id": "border-bottom",
-        "ends": {
-          "web": "not-measured",
-          "skyline": "supported",
-          "app": "supported"
-        },
-        "why": "★★★逐边 border 批（2026-10-05 · 用户「全端对齐不留缺陷」）：`border-bottom: <width> solid <color>` 简写 折为 borderBottomWidth/Color（宿主**逐边绘制**）；`none` ⇒ 该边清零（重置语义）；★★★边框族收口批（2026-10-05）：**线型支持**——solid/dashed/dotted 落 border<Side>Style（宿主按线型绘制：Android 封角块+DashPathEffect / iOS CAShapeLayer lineDashPattern / 鸿蒙 ArkUI 原生；节距按 Chrome 实测真值 {3w,2w}/{w,w}）；double/groove 等仍诊断跳过。`border: <w> dashed <c>` 简写同步支持（1–4 值）。；不静默画成实线冒充）。Web/MP 端为该族**原生支持**（Skyline 官方 formats 表含 border-<side>-* 全部 12 项）。"
-      },
-      {
-        "css": "border-left",
-        "id": "border-left",
-        "ends": {
-          "web": "not-measured",
-          "skyline": "supported",
-          "app": "supported"
-        },
-        "why": "★★★逐边 border 批（2026-10-05 · 用户「全端对齐不留缺陷」）：`border-left: <width> solid <color>` 简写 折为 borderLeftWidth/Color（宿主**逐边绘制**）；`none` ⇒ 该边清零（重置语义）；★★★边框族收口批（2026-10-05）：**线型支持**——solid/dashed/dotted 落 border<Side>Style（宿主按线型绘制：Android 封角块+DashPathEffect / iOS CAShapeLayer lineDashPattern / 鸿蒙 ArkUI 原生；节距按 Chrome 实测真值 {3w,2w}/{w,w}）；double/groove 等仍诊断跳过。`border: <w> dashed <c>` 简写同步支持（1–4 值）。；不静默画成实线冒充）。Web/MP 端为该族**原生支持**（Skyline 官方 formats 表含 border-<side>-* 全部 12 项）。"
       },
       {
         "css": "类选择器 .a / .a.b",
@@ -356,7 +286,7 @@
         "css": "display: grid + grid-template-columns/rows（显式轨迹）+ grid-column/row 线号放置",
         "id": "grid",
         "ends": {
-          "web": "partial",
+          "web": "supported",
           "skyline": "not-listed",
           "app": "supported"
         },
@@ -366,7 +296,7 @@
         "css": "justify-self（网格项行内轴自对齐）",
         "id": "justify-self",
         "ends": {
-          "web": "not-measured",
+          "web": "supported",
           "skyline": "not-listed",
           "app": "supported"
         },
@@ -376,7 +306,7 @@
         "css": "place-items（+ justify-items 长手）",
         "id": "place-items",
         "ends": {
-          "web": "not-measured",
+          "web": "partial",
           "skyline": "not-listed",
           "app": "supported"
         },
@@ -386,7 +316,7 @@
         "css": "aspect-ratio",
         "id": "aspect-ratio",
         "ends": {
-          "web": "not-measured",
+          "web": "supported",
           "skyline": "not-listed",
           "app": "supported"
         },
@@ -423,16 +353,6 @@
         "why": "本仓已定案**语义化**（layer=\"content|navigation|mask|popout\"，见 contracts/layers.ts）——数值禁止（跨端无意义 + 推高合成层内存）"
       },
       {
-        "css": "text-shadow",
-        "id": "text-shadow",
-        "ends": {
-          "web": "not-measured",
-          "skyline": "supported",
-          "app": "supported"
-        },
-        "why": "★★★text-shadow 项（2026-10-08 · css:next P0·2× · CSS Text Decoration）：**文本阴影**（单层 dx dy [blur] color；无 spread）。契约：引擎字段 textShadow（同 boxShadow 先例）；编译器折叠（parseBoxShadow 复用）+ CSE 归一到**浏览器 computed 形态**（rgba(...) dxpx dypx blurpx）；**三端宿主文本绘制投影**：Android `TextPaint.setShadowLayer`（硬件加速下**只对文本生效**——正是文本阴影所需）· iOS `CATextLayer.shadow*` · 鸿蒙 `OH_Drawing_SetTextShadow + OH_Drawing_TextStyleAddShadow`（Typography 原生）。★语料 2×（glass-demo / p-formfactor 封面标题）。★诚实边界：多重阴影取首个；spread 无（CSS text-shadow 本无 spread）。"
-      },
-      {
         "css": "filter / backdrop-filter",
         "id": "filter-backdrop",
         "ends": {
@@ -443,40 +363,30 @@
         "why": "离屏/额外缓冲；走 <p-glass> / <p-filter> 语义组件"
       },
       {
-        "css": "font-weight",
-        "id": "font-weight",
-        "ends": {
-          "web": "not-measured",
-          "skyline": "supported",
-          "app": "supported"
-        },
-        "why": "★批次 3（2026-10-04）：`normal`→400 / `bold`→700 / 100–900 数值归一；作为**文本可继承**字段沿树继承。三端宿主：iOS 已读 `fontWeight`（≥600 bold 判据）、Android 新接线（Cmd.fontWeight + 绘制/度量同源 typeface）、鸿蒙新接线（OH_Drawing_SetTextStyleFontWeight）"
-      },
-      {
         "css": "text-transform",
         "id": "text-transform",
         "ends": {
-          "web": "not-measured",
+          "web": "supported",
           "skyline": "not-listed",
           "app": "supported"
         },
         "why": "★★★text-transform 项（2026-10-18 · 批 B F3 · 基准 = Web）：`none` / `uppercase` / `lowercase` / `capitalize`（CSS **可继承**）。★**语义唯一实现在共享运行期** `packages/slot-runtime/src/text-transform.ts`——uppercase/lowercase 复用 JS 内建 Unicode 映射（与真 Chromium 逐字符一致：`straße→STRASSE` / `ΣΟΦΟΣ→σοφος`）；`capitalize` 的词边界规则由 **135 条样本与 Chromium 逐像素比对**（0 差异）得出：撇号/下划线/数字是词内，CJK/假名/韩文/标点/emoji 是边界，且用 **titlecase**（`ǳ→ǲ`）而非 uppercase。★四端落地：Web = 浏览器原生；App 三端 = 文本出口（实例化 `setNormText` + `SET_TEXT` 指令 + 自绘适配器）**同一实现**，宿主零改动；MP/Skyline = 官方样式表**无此属性**（已核官方文档）⇒ **编译期变换静态文本**，动态绑定文本编译期**如实诊断**（不静默当已实现）。诚实边界：`full-width` / `full-size-kana` 需东亚宽度表且三端宿主无通道 ⇒ 编译期诊断。"
       },
       {
-        "css": "text-align",
-        "id": "text-align",
+        "css": "font-variant-numeric",
+        "id": "font-variant-numeric",
         "ends": {
-          "web": "not-measured",
-          "skyline": "supported",
+          "web": "supported",
+          "skyline": "not-listed",
           "app": "supported"
         },
-        "why": "★批次 4（2026-10-04）：封闭集 left/center/right（justify/st 等诊断跳过）。宿主：iOS CATextLayer.alignmentMode · Android Paint.Align（绘制 x 按对齐换算）· 鸿蒙 OH_Drawing_SetTypographyTextAlign。真项目 28 处（22 center）"
+        "why": "★★★font-variant-numeric 项（2026-10-18 · 批 B F3 · 基准 = Web）：本版只做 **`tabular-nums`**（等宽数字——价格/KPI/编号列对齐刚需），CSS **可继承**。★**三端都在平台层统一设 OpenType `tnum`**（Android `Paint.setFontFeatureSettings(\"\\\"tnum\\\" 1\")` · iOS `UIFontDescriptor.featureSettings` 的 `kNumberSpacing`/`kMonospacedNumbersSelector` · 鸿蒙 `OH_Drawing_TextStyleAddFontFeature(\"tnum\",1)`）——**度量与绘制同源**（tnum 是另一套字形，宽度不同；两侧分叉会「字被裁而报告全绿」）。★Web 实测真值：`tabular-nums` 使数字等宽——Helvetica Neue 上宽度 **+55%**，而 SF Pro / Georgia 本身已等宽（差异 0）⇒ 该属性**是否可见取决于字族是否带 tnum 特性**（不带则静默无效，与浏览器行为一致）。★MP/Skyline 官方样式表**无该属性**（font-* 仅 5 条）⇒ 引擎边界（具名）。诚实边界：`slashed-zero` / `ordinal` / `diagonal-fractions` / `lining-nums` / `oldstyle-nums` / `proportional-nums` 需各端特性直通，三端通道尚未统一 ⇒ 编译期诊断。"
       },
       {
         "css": "-webkit-line-clamp: <integer>",
         "id": "-webkit-line-clamp",
         "ends": {
-          "web": "not-measured",
+          "web": "supported",
           "skyline": "not-listed",
           "app": "supported"
         },
@@ -493,20 +403,10 @@
         "why": "白空格（多行/保留空白）走平台文本引擎（不自研）——App 仅支持 `nowrap`（= App 单行默认，no-op）；`normal`/`pre`/`pre-wrap`/`pre-line` 未支持（诊断）。★文本维已含 fontSize/color/fontWeight/textAlign/line-height/text-overflow/letter-spacing/**text-decoration**（批 35）"
       },
       {
-        "css": "pointer-events",
-        "id": "pointer-events",
-        "ends": {
-          "web": "not-measured",
-          "skyline": "supported",
-          "app": "supported"
-        },
-        "why": "★批次 32（2026-10-04 · ★基准 = Web）：`none` / `auto`。`none` ⇒ 该节点**不参与命中测试**（事件穿透到其下——浮层/遮罩刚需），但**仍占位**（有几何）。CSS **可继承**（父 none ⇒ 子默认 none、子 auto 可覆盖）——编译期按树算 computed 值。内核 `hit_path` 逐节点跳过 `pointer_events==false`（绘制/层不动——node 仍绘制）。只有内核 hitTest 消费（三端同一命中实现）。"
-      },
-      {
         "css": "grid-auto-flow",
         "id": "grid-auto-flow",
         "ends": {
-          "web": "not-measured",
+          "web": "supported",
           "skyline": "not-listed",
           "app": "supported"
         },
@@ -516,7 +416,7 @@
         "css": "grid-template-areas",
         "id": "grid-template-areas",
         "ends": {
-          "web": "not-measured",
+          "web": "supported",
           "skyline": "not-listed",
           "app": "supported"
         },
@@ -526,7 +426,7 @@
         "css": "grid-area",
         "id": "grid-area",
         "ends": {
-          "web": "not-measured",
+          "web": "supported",
           "skyline": "not-listed",
           "app": "supported"
         },
@@ -658,14 +558,14 @@
     "web": {
       "kind": "playwright-css-supports",
       "engine": "chromium",
-      "collectedAt": "2026-10-02",
+      "collectedAt": "2026-10-18",
       "browserVersion": "151.0.7922.34"
     },
     "skyline": {
       "kind": "official-doc",
       "url": "https://developers.weixin.qq.com/miniprogram/dev/framework/runtime/skyline/wxss.html",
-      "fetchedAt": "2026-10-02",
-      "htmlSha": "f7f4d7ebaef41608"
+      "fetchedAt": "2026-10-18",
+      "htmlSha": "208068b7296f4239"
     },
     "appProfile": {
       "kind": "curated",
@@ -734,6 +634,7 @@
       "fontWeight",
       "fontStyle",
       "textTransform",
+      "fontVariantNumeric",
       "fontFamily",
       "textAlign",
       "lineHeight",
@@ -866,7 +767,7 @@
       "compilerFields": [
         "outlineOffset"
       ],
-      "web": "not-measured",
+      "web": "supported",
       "skyline": "not-listed",
       "app": "supported",
       "tier": "L2",
@@ -883,7 +784,7 @@
         "outlineColor",
         "outlineStyle"
       ],
-      "web": "not-measured",
+      "web": "partial",
       "skyline": "not-listed",
       "app": "supported",
       "tier": "L2",
@@ -1056,7 +957,7 @@
         "rowGap",
         "columnGap"
       ],
-      "web": "partial",
+      "web": "supported",
       "skyline": "partial",
       "app": "supported",
       "tier": "L2",
@@ -1104,7 +1005,7 @@
         "overflowX",
         "overflowY"
       ],
-      "web": "partial",
+      "web": "supported",
       "skyline": "partial",
       "app": "supported",
       "tier": "L2",
@@ -1160,13 +1061,13 @@
       "compilerFields": [
         "backgroundSize"
       ],
-      "web": "not-measured",
+      "web": "supported",
       "skyline": "supported",
       "app": "supported",
       "tier": "L2",
       "strategy": "宿主几何",
       "note": "★★★背景定位家族（2026-10-07 · css:next background-position · 静态单层）：**背景图层的图像盒尺寸**。契约：新级别 BackgroundSize（四同步）；CSE 直通 IR 字段 backgroundSize；编译器 APP_PAINT_FIELDS + 折叠分支（字符串原样下发）；宿主按 Web 几何（size %= 相对盒、px 直接）把渐变端点/平铺算到图像盒。★诚实边界：多值/关键字 cover/contain 暂诊断（本批不做）；动画/多层渐变留下一批。见 docs/css-background-family-plan.md",
-      "supportTier": "conditional"
+      "supportTier": "universal"
     },
     {
       "id": "background-position",
@@ -1175,13 +1076,13 @@
       "compilerFields": [
         "backgroundPosition"
       ],
-      "web": "not-measured",
+      "web": "supported",
       "skyline": "supported",
       "app": "supported",
       "tier": "L2",
       "strategy": "宿主几何",
       "note": "★★★背景定位家族（2026-10-07 · css:next）：**背景图像盒的偏移**。契约：新级别 BackgroundPosition（四同步）；CSE 直通 backgroundPosition；编译器 APP_PAINT_FIELDS + 折叠分支。★Web 真值（真 Chromium 实测）：关键字 left/top=0、right/bottom=100%、center=50%；px 直接；**% = X%×(盒宽−图宽)**（减图尺寸）。宿主解析该几何。见 docs/css-background-family-plan.md",
-      "supportTier": "conditional"
+      "supportTier": "universal"
     },
     {
       "id": "background-repeat",
@@ -1190,13 +1091,13 @@
       "compilerFields": [
         "backgroundRepeat"
       ],
-      "web": "not-measured",
+      "web": "supported",
       "skyline": "supported",
       "app": "supported",
       "tier": "L2",
       "strategy": "宿主几何",
       "note": "★★★背景定位家族（2026-10-07）：**背景图像盒平铺**（repeat=以图像尺寸为砖平铺，相位=偏移；no-repeat=只画一次）。契约：新级别 BackgroundRepeat（四同步，值集 repeat/no-repeat——Space/Round 暂不做）；CSE 直通 backgroundRepeat；编译器 APP_PAINT_FIELDS + 折叠分支。见 docs/css-background-family-plan.md",
-      "supportTier": "conditional"
+      "supportTier": "universal"
     },
     {
       "id": "color",
@@ -1296,13 +1197,13 @@
         "borderTopColor",
         "borderTopStyle"
       ],
-      "web": "not-measured",
+      "web": "supported",
       "skyline": "supported",
       "app": "supported",
       "tier": "L1",
       "strategy": "编译期折叠",
       "note": "★★★逐边 border 批（2026-10-05 · 用户「全端对齐不留缺陷」）：`border-top: <width> solid <color>` 简写 折为 borderTopWidth/Color（宿主**逐边绘制**）；`none` ⇒ 该边清零（重置语义）；★★★边框族收口批（2026-10-05）：**线型支持**——solid/dashed/dotted 落 border<Side>Style（宿主按线型绘制：Android 封角块+DashPathEffect / iOS CAShapeLayer lineDashPattern / 鸿蒙 ArkUI 原生；节距按 Chrome 实测真值 {3w,2w}/{w,w}）；double/groove 等仍诊断跳过。`border: <w> dashed <c>` 简写同步支持（1–4 值）。；不静默画成实线冒充）。Web/MP 端为该族**原生支持**（Skyline 官方 formats 表含 border-<side>-* 全部 12 项）。",
-      "supportTier": "conditional"
+      "supportTier": "universal"
     },
     {
       "id": "border-right",
@@ -1313,13 +1214,13 @@
         "borderRightColor",
         "borderRightStyle"
       ],
-      "web": "not-measured",
+      "web": "supported",
       "skyline": "supported",
       "app": "supported",
       "tier": "L1",
       "strategy": "编译期折叠",
       "note": "★★★逐边 border 批（2026-10-05 · 用户「全端对齐不留缺陷」）：`border-right: <width> solid <color>` 简写 折为 borderRightWidth/Color（宿主**逐边绘制**）；`none` ⇒ 该边清零（重置语义）；★★★边框族收口批（2026-10-05）：**线型支持**——solid/dashed/dotted 落 border<Side>Style（宿主按线型绘制：Android 封角块+DashPathEffect / iOS CAShapeLayer lineDashPattern / 鸿蒙 ArkUI 原生；节距按 Chrome 实测真值 {3w,2w}/{w,w}）；double/groove 等仍诊断跳过。`border: <w> dashed <c>` 简写同步支持（1–4 值）。；不静默画成实线冒充）。Web/MP 端为该族**原生支持**（Skyline 官方 formats 表含 border-<side>-* 全部 12 项）。",
-      "supportTier": "conditional"
+      "supportTier": "universal"
     },
     {
       "id": "border-bottom",
@@ -1330,13 +1231,13 @@
         "borderBottomColor",
         "borderBottomStyle"
       ],
-      "web": "not-measured",
+      "web": "supported",
       "skyline": "supported",
       "app": "supported",
       "tier": "L1",
       "strategy": "编译期折叠",
       "note": "★★★逐边 border 批（2026-10-05 · 用户「全端对齐不留缺陷」）：`border-bottom: <width> solid <color>` 简写 折为 borderBottomWidth/Color（宿主**逐边绘制**）；`none` ⇒ 该边清零（重置语义）；★★★边框族收口批（2026-10-05）：**线型支持**——solid/dashed/dotted 落 border<Side>Style（宿主按线型绘制：Android 封角块+DashPathEffect / iOS CAShapeLayer lineDashPattern / 鸿蒙 ArkUI 原生；节距按 Chrome 实测真值 {3w,2w}/{w,w}）；double/groove 等仍诊断跳过。`border: <w> dashed <c>` 简写同步支持（1–4 值）。；不静默画成实线冒充）。Web/MP 端为该族**原生支持**（Skyline 官方 formats 表含 border-<side>-* 全部 12 项）。",
-      "supportTier": "conditional"
+      "supportTier": "universal"
     },
     {
       "id": "border-left",
@@ -1347,13 +1248,13 @@
         "borderLeftColor",
         "borderLeftStyle"
       ],
-      "web": "not-measured",
+      "web": "supported",
       "skyline": "supported",
       "app": "supported",
       "tier": "L1",
       "strategy": "编译期折叠",
       "note": "★★★逐边 border 批（2026-10-05 · 用户「全端对齐不留缺陷」）：`border-left: <width> solid <color>` 简写 折为 borderLeftWidth/Color（宿主**逐边绘制**）；`none` ⇒ 该边清零（重置语义）；★★★边框族收口批（2026-10-05）：**线型支持**——solid/dashed/dotted 落 border<Side>Style（宿主按线型绘制：Android 封角块+DashPathEffect / iOS CAShapeLayer lineDashPattern / 鸿蒙 ArkUI 原生；节距按 Chrome 实测真值 {3w,2w}/{w,w}）；double/groove 等仍诊断跳过。`border: <w> dashed <c>` 简写同步支持（1–4 值）。；不静默画成实线冒充）。Web/MP 端为该族**原生支持**（Skyline 官方 formats 表含 border-<side>-* 全部 12 项）。",
-      "supportTier": "conditional"
+      "supportTier": "universal"
     },
     {
       "id": "transform",
@@ -1642,7 +1543,7 @@
         "gridColumn",
         "gridRow"
       ],
-      "web": "partial",
+      "web": "supported",
       "skyline": "not-listed",
       "app": "supported",
       "tier": "L2",
@@ -1657,7 +1558,7 @@
       "compilerFields": [
         "justifySelf"
       ],
-      "web": "not-measured",
+      "web": "supported",
       "skyline": "not-listed",
       "app": "supported",
       "tier": "L2",
@@ -1672,7 +1573,7 @@
       "compilerFields": [
         "justifyItems"
       ],
-      "web": "not-measured",
+      "web": "partial",
       "skyline": "not-listed",
       "app": "supported",
       "tier": "L2",
@@ -1702,7 +1603,7 @@
       "compilerFields": [
         "aspectRatio"
       ],
-      "web": "not-measured",
+      "web": "supported",
       "skyline": "not-listed",
       "app": "supported",
       "tier": "L2",
@@ -1819,13 +1720,13 @@
       "compilerFields": [
         "textShadow"
       ],
-      "web": "not-measured",
+      "web": "supported",
       "skyline": "supported",
       "app": "supported",
       "tier": "L3",
       "strategy": "编译期折叠",
       "note": "★★★text-shadow 项（2026-10-08 · css:next P0·2× · CSS Text Decoration）：**文本阴影**（单层 dx dy [blur] color；无 spread）。契约：引擎字段 textShadow（同 boxShadow 先例）；编译器折叠（parseBoxShadow 复用）+ CSE 归一到**浏览器 computed 形态**（rgba(...) dxpx dypx blurpx）；**三端宿主文本绘制投影**：Android `TextPaint.setShadowLayer`（硬件加速下**只对文本生效**——正是文本阴影所需）· iOS `CATextLayer.shadow*` · 鸿蒙 `OH_Drawing_SetTextShadow + OH_Drawing_TextStyleAddShadow`（Typography 原生）。★语料 2×（glass-demo / p-formfactor 封面标题）。★诚实边界：多重阴影取首个；spread 无（CSS text-shadow 本无 spread）。",
-      "supportTier": "conditional"
+      "supportTier": "universal"
     },
     {
       "id": "filter-backdrop",
@@ -1847,13 +1748,13 @@
       "compilerFields": [
         "fontWeight"
       ],
-      "web": "not-measured",
+      "web": "supported",
       "skyline": "supported",
       "app": "supported",
       "tier": "L1",
       "strategy": "编译期折叠",
       "note": "★批次 3（2026-10-04）：`normal`→400 / `bold`→700 / 100–900 数值归一；作为**文本可继承**字段沿树继承。三端宿主：iOS 已读 `fontWeight`（≥600 bold 判据）、Android 新接线（Cmd.fontWeight + 绘制/度量同源 typeface）、鸿蒙新接线（OH_Drawing_SetTextStyleFontWeight）",
-      "supportTier": "conditional"
+      "supportTier": "universal"
     },
     {
       "id": "font-style",
@@ -1877,12 +1778,27 @@
       "compilerFields": [
         "textTransform"
       ],
-      "web": "not-measured",
+      "web": "supported",
       "skyline": "not-listed",
       "app": "supported",
       "tier": "L1",
       "strategy": "编译期变换 + 共享运行期",
       "note": "★★★text-transform 项（2026-10-18 · 批 B F3 · 基准 = Web）：`none` / `uppercase` / `lowercase` / `capitalize`（CSS **可继承**）。★**语义唯一实现在共享运行期** `packages/slot-runtime/src/text-transform.ts`——uppercase/lowercase 复用 JS 内建 Unicode 映射（与真 Chromium 逐字符一致：`straße→STRASSE` / `ΣΟΦΟΣ→σοφος`）；`capitalize` 的词边界规则由 **135 条样本与 Chromium 逐像素比对**（0 差异）得出：撇号/下划线/数字是词内，CJK/假名/韩文/标点/emoji 是边界，且用 **titlecase**（`ǳ→ǲ`）而非 uppercase。★四端落地：Web = 浏览器原生；App 三端 = 文本出口（实例化 `setNormText` + `SET_TEXT` 指令 + 自绘适配器）**同一实现**，宿主零改动；MP/Skyline = 官方样式表**无此属性**（已核官方文档）⇒ **编译期变换静态文本**，动态绑定文本编译期**如实诊断**（不静默当已实现）。诚实边界：`full-width` / `full-size-kana` 需东亚宽度表且三端宿主无通道 ⇒ 编译期诊断。",
+      "supportTier": "conditional"
+    },
+    {
+      "id": "font-variant-numeric",
+      "css": "font-variant-numeric",
+      "category": "text",
+      "compilerFields": [
+        "fontVariantNumeric"
+      ],
+      "web": "supported",
+      "skyline": "not-listed",
+      "app": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠 + 平台字形",
+      "note": "★★★font-variant-numeric 项（2026-10-18 · 批 B F3 · 基准 = Web）：本版只做 **`tabular-nums`**（等宽数字——价格/KPI/编号列对齐刚需），CSS **可继承**。★**三端都在平台层统一设 OpenType `tnum`**（Android `Paint.setFontFeatureSettings(\"\\\"tnum\\\" 1\")` · iOS `UIFontDescriptor.featureSettings` 的 `kNumberSpacing`/`kMonospacedNumbersSelector` · 鸿蒙 `OH_Drawing_TextStyleAddFontFeature(\"tnum\",1)`）——**度量与绘制同源**（tnum 是另一套字形，宽度不同；两侧分叉会「字被裁而报告全绿」）。★Web 实测真值：`tabular-nums` 使数字等宽——Helvetica Neue 上宽度 **+55%**，而 SF Pro / Georgia 本身已等宽（差异 0）⇒ 该属性**是否可见取决于字族是否带 tnum 特性**（不带则静默无效，与浏览器行为一致）。★MP/Skyline 官方样式表**无该属性**（font-* 仅 5 条）⇒ 引擎边界（具名）。诚实边界：`slashed-zero` / `ordinal` / `diagonal-fractions` / `lining-nums` / `oldstyle-nums` / `proportional-nums` 需各端特性直通，三端通道尚未统一 ⇒ 编译期诊断。",
       "supportTier": "conditional"
     },
     {
@@ -1907,13 +1823,13 @@
       "compilerFields": [
         "textAlign"
       ],
-      "web": "not-measured",
+      "web": "supported",
       "skyline": "supported",
       "app": "supported",
       "tier": "L1",
       "strategy": "编译期折叠",
       "note": "★批次 4（2026-10-04）：封闭集 left/center/right（justify/st 等诊断跳过）。宿主：iOS CATextLayer.alignmentMode · Android Paint.Align（绘制 x 按对齐换算）· 鸿蒙 OH_Drawing_SetTypographyTextAlign。真项目 28 处（22 center）",
-      "supportTier": "conditional"
+      "supportTier": "universal"
     },
     {
       "id": "line-height",
@@ -1952,7 +1868,7 @@
       "compilerFields": [
         "lineClamp"
       ],
-      "web": "not-measured",
+      "web": "supported",
       "skyline": "not-listed",
       "app": "supported",
       "tier": "L1",
@@ -2012,13 +1928,13 @@
       "compilerFields": [
         "pointerEvents"
       ],
-      "web": "not-measured",
+      "web": "supported",
       "skyline": "supported",
       "app": "supported",
       "tier": "L2",
       "strategy": "编译期折叠",
       "note": "★批次 32（2026-10-04 · ★基准 = Web）：`none` / `auto`。`none` ⇒ 该节点**不参与命中测试**（事件穿透到其下——浮层/遮罩刚需），但**仍占位**（有几何）。CSS **可继承**（父 none ⇒ 子默认 none、子 auto 可覆盖）——编译期按树算 computed 值。内核 `hit_path` 逐节点跳过 `pointer_events==false`（绘制/层不动——node 仍绘制）。只有内核 hitTest 消费（三端同一命中实现）。",
-      "supportTier": "conditional"
+      "supportTier": "universal"
     },
     {
       "id": "visibility",
@@ -2042,7 +1958,7 @@
       "compilerFields": [
         "gridAutoFlow"
       ],
-      "web": "not-measured",
+      "web": "supported",
       "skyline": "not-listed",
       "app": "supported",
       "tier": "L2",
@@ -2057,7 +1973,7 @@
       "compilerFields": [
         "gridTemplateAreas"
       ],
-      "web": "not-measured",
+      "web": "supported",
       "skyline": "not-listed",
       "app": "supported",
       "tier": "L2",
@@ -2072,7 +1988,7 @@
       "compilerFields": [
         "gridArea"
       ],
-      "web": "not-measured",
+      "web": "supported",
       "skyline": "not-listed",
       "app": "supported",
       "tier": "L2",

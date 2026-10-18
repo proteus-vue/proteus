@@ -163,6 +163,13 @@ export function mapStyleIRToSkyline(fields: Record<string, unknown>, opts: Skyli
         drop(field, value, 'Skyline 官方样式表无 text-transform（编译期变换静态文本；动态文本该端无通道）')
         continue
       }
+      // ★★★font-variant-numeric 项（2026-10-18 · 批 B F3）：**如实登记为引擎边界**。
+      //   Skyline 官方样式属性表无该属性（已核官方文档：font-* 只有 5 条，不含它）
+      //   ⇒ 明确 drop 并给理由（不透传——透传会让 css:verify 的 endsMapped 假绿）。
+      if (field === 'fontVariantNumeric') {
+        drop(field, value, 'Skyline 官方样式表无 font-variant-numeric（数字等宽该端无通道）')
+        continue
+      }
 
       // ★★★grid-template-areas / grid-area 项（2026-10-08）：**原样透传**——与 grid-auto-flow（#571）/
       //   justify-self（#570）同款：用户 CSS 里的 grid-template-areas 本就逐字进 wxss。

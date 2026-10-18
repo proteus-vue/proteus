@@ -83,7 +83,8 @@ describe('★★★text-transform · 编译器折叠（批 B F3）', () => {
   it('④ 四个合法值折进 IR；none 不发射；full-width 诊断', () => {
     expect((parseStaticStyle('text-transform: uppercase', () => {}) as { textTransform?: string }).textTransform).toBe('uppercase')
     expect((parseStaticStyle('text-transform: capitalize', () => {}) as { textTransform?: string }).textTransform).toBe('capitalize')
-    expect((parseStaticStyle('text-transform: none', () => {}) as { textTransform?: string }).textTransform, 'none = 默认 ⇒ 不发射').toBeUndefined()
+    // ★显式 none **必须发射**：CSS 里它压掉父级继承的 uppercase（跳过 = inherit，实测会错继承）
+    expect((parseStaticStyle('text-transform: none', () => {}) as { textTransform?: string }).textTransform, 'none 显式发射').toBe('none')
     const d: string[] = []
     expect((parseStaticStyle('text-transform: full-width', (m: string) => d.push(m)) as { textTransform?: string }).textTransform).toBeUndefined()
     expect(d.some((x) => x.includes('text-transform')), 'full-width 有诊断').toBe(true)

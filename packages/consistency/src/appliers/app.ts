@@ -44,7 +44,7 @@ export const APP_LAYOUT_FIELDS: readonly string[] = [
 ]
 /** App 端绘制字段（→ ops 前缀 `paint.`） */
 export const APP_PAINT_FIELDS: readonly string[] = [
-  'backgroundColor', 'color', 'fontSize', 'fontWeight', 'fontStyle', 'textTransform', 'fontFamily', 'textAlign', 'lineHeight',
+  'backgroundColor', 'color', 'fontSize', 'fontWeight', 'fontStyle', 'textTransform', 'fontVariantNumeric', 'fontFamily', 'textAlign', 'lineHeight',
   'textOverflow', 'letterSpacing', 'textDecoration', 'visibility', 'borderRadius', 'borderRadiusPct',
   'borderColor', 'borderWidth', 'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor',
   'opacity',
@@ -248,7 +248,7 @@ export function mapStyleIRToApp(fields: Record<string, unknown>): AppMappingResu
         'color', 'backgroundColor', 'display', 'position', 'overflow', 'visibility', 'pointerEvents',
         // ★★★overflow-x 项（2026-10-06）：逐轴溢出（字符串枚举）
         'overflowX', 'overflowY',
-        'textAlign', 'textOverflow', 'textDecoration', 'fontStyle', 'textTransform', 'flexDirection', 'flexWrap', 'justifyContent',
+        'textAlign', 'textOverflow', 'textDecoration', 'fontStyle', 'textTransform', 'fontVariantNumeric', 'flexDirection', 'flexWrap', 'justifyContent',
         'alignItems', 'alignContent', 'alignSelf', 'boxSizing', 'whiteSpace',
         // ★★★justify-self 项（2026-10-06）：网格项行内轴自对齐（字符串枚举，内核 DTO 通道）
         'justifySelf',

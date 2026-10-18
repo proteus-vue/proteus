@@ -83,6 +83,8 @@ const VALUE_TYPE_BY_LEVEL = {
   FontStyle: 'enum',
   // ★★★text-transform 项（2026-10-18 · 批 B F3）：大小写变换枚举（与 runtime PROP_TYPES.TextTransform 同集）
   TextTransform: 'enum',
+  // ★★★font-variant-numeric 项（2026-10-18 · 批 B F3）：等宽数字枚举（与 runtime PROP_TYPES.FontVariantNumeric 同集）
+  FontVariantNumeric: 'enum',
   TextWrap: 'enum',
   BorderStyle: 'enum',
   // ★★★overflow-x 项（2026-10-06）：单轴溢出的值类型（与 runtime PROP_TYPES.Overflow 同集）

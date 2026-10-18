@@ -6371,3 +6371,35 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   ② 首帧判据目前只在鸿蒙壳里落地——Android/iOS 的截图脚本仍按各自既有信号（未同步，属独立改进）；
   ③ 本轮**未**复跑 text-transform 的四端全链（鸿蒙已可取证，但 css-conformance 的鸿蒙包
      仍卡在**签名 bundleName 不匹配**：本机 profile 只绑定 `dev.proteus.host`）。
+
+1061. **★★★批 B F3 第 4 项：`font-variant-numeric: tabular-nums`（等宽数字）——三端平台层统一设 OpenType `tnum` · 决策**（2026-10-18 · 批 B F3）：
+【做了什么】本版只做 **`tabular-nums`**（价格/KPI/编号列对齐刚需），CSS **可继承**。
+  三端都在**平台层的唯一设置点**设 OpenType `tnum`：
+  · **Android**：`Paint.setFontFeatureSettings("\"tnum\" 1")`（`ProteusTextPlatform.paintFor`）
+  · **iOS**：`UIFontDescriptor.featureSettings` 的 `kNumberSpacing`/`kMonospacedNumbersSelector`（`withTabularNumbers`）
+  · **鸿蒙**：`OH_Drawing_TextStyleAddFontFeature(tstyle, "tnum", 1)`（`applyTextFont`）
+  ★**度量与绘制必须同源**（tnum 是**另一套字形**，字宽不同）——三端都做到"同一函数供两侧调用"。
+【★★★Web 真值（真 Chromium 实测，决定本项判据怎么写）】`tabular-nums` 与 `proportional-nums` 的
+  **宽度差取决于字族**：Helvetica Neue **+55%**（100.53 → 155.69），而 SF Pro / Georgia **差异 0**
+  （这些字族的数字本就等宽）⇒ **该属性是否"看得见"由字族是否带 tnum 特性决定**。
+  ⇒ **截图判据在本项不成立**（默认字族上看不出差异），必须改用"同字族下开/关 tnum 的**度量宽度差**"。
+【★为此新增鸿蒙探针 `tnumProbe`（真机客观证据）】同一字族、同一样本 `1111111111`，开/关 tnum 各测一次：
+  实测 **`width_off=[182.40,182.40] width_on=[182.40,182.40] delta=[0.00,0.00] verdict=PASS`**
+  ⇒ ① API 被正常调用（不报错、度量不回退）；② HarmonyOS Sans 的数字本就等宽 ⇒ delta=0 是**正确**行为
+  （与浏览器上 SF Pro 的表现一致），**不是失败**。★探针把"delta 可以为 0"写进语义，避免把正确行为判成缺陷。
+【★顺手统一了一条语义（真缺陷）】`font-variant-numeric: normal` 与 `text-transform: none` 都是
+  **初始值**，但它们同时承担"**压掉父级继承**"的作用。此前两者都"默认值 ⇒ 不发射" ⇒
+  `.kpi{tnum}` 下的 `.off{normal}` **仍等宽**（实测）——与 Web 不符。
+  ⇒ 两者都改为**显式发射**（与 font-style 的 `normal` 同一规则，本仓第三次踩到同一模式）。
+【四同步 + 全端】contracts `FontVariantNumeric` · runtime PROP_TYPES · 编译器折叠（封闭集只认
+  normal/tabular-nums；其余数字特性 **诊断跳过**——三端通道未统一）· IR/registry · CSE 继承/initial/映射 ·
+  一致性快照键 + Web 探针 + applier（Skyline **如实 drop + 具名豁免**，与 text-transform 同法）。
+  能力清单新增条目 + `engineLockedEnds: ['skyline']`（Skyline font-* 仅 5 条，无此属性）。
+【判据】`tests/font-variant-numeric.test.ts`（4 条：折叠/诊断、继承与显式 normal 覆盖、槽位+节点样式、
+  MP 静态文本不被变换）；`test:coupled` 488 全绿；全量 **5879** 全绿；css-conformance 新增 J 区
+  （tabular / normal 对照 / 继承 + serif 对照两组）；鸿蒙探针真机 PASS。
+【诚实边界】① 其余数字特性（`slashed-zero`/`ordinal`/`diagonal-fractions`/`lining-nums`/
+  `oldstyle-nums`/`proportional-nums`）需各端特性直通，三端通道未统一 ⇒ 编译期诊断；
+  ② MP/Skyline 引擎锁死（具名）——**且无法编译期模拟**（字形选择不是字符串变换，这与 text-transform
+  可编译期变换静态文本不同）；③ 本项未跑 Android/iOS 真机截图判据（**截图对该属性天然不可判**，
+  改用平台层探针 + 编译期断言取证）。

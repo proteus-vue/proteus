@@ -107,6 +107,8 @@ export const CSE_INHERITED_PROPS = new Set([
   'font-style',
   // ★★★text-transform 项（2026-10-18 · 批 B F3）：CSS Text 继承属性（子节点默认继承父的大小写变换）
   'text-transform',
+  // ★★★font-variant-numeric 项（2026-10-18 · 批 B F3）：CSS Fonts 继承属性（数字形态）
+  'font-variant-numeric',
 ])
 
 /** 各属性 initial 值（`initial`/`unset` 需要；未列 ⇒ initial 不可用（如实记 diagnostic）） */
@@ -118,6 +120,8 @@ const INITIAL_VALUES: Record<string, string> = {
   'font-style': 'normal',
   // ★★★text-transform 项（2026-10-18）：CSS initial = none（继承属性）
   'text-transform': 'none',
+  // ★★★font-variant-numeric 项（2026-10-18）：CSS initial = normal（继承属性）
+  'font-variant-numeric': 'normal',
   'font-family': 'initial',
   'line-height': 'normal',
   'letter-spacing': '0px',
@@ -954,6 +958,8 @@ function mapToIrField(prop: string, val: CssComputedValue): { field: string; val
     'font-style': 'fontStyle',
     // ★★★text-transform 项（2026-10-18 · 批 B F3）：大小写变换（继承属性；直通同名 IR 字段）
     'text-transform': 'textTransform',
+    // ★★★font-variant-numeric 项（2026-10-18 · 批 B F3）：等宽数字（继承属性；直通同名 IR 字段）
+    'font-variant-numeric': 'fontVariantNumeric',
     'text-decoration-line': 'textDecoration',
     'flex-direction': 'flexDirection',
     'flex-wrap': 'flexWrap',
@@ -1019,6 +1025,10 @@ function mapToIrField(prop: string, val: CssComputedValue): { field: string; val
   }
   if (prop === 'font-weight') {
     return { field: 'fontWeight', value: typeof val === 'number' ? val : null }
+  }
+  if (prop === 'font-variant-numeric') {
+    // ★★★font-variant-numeric 项（2026-10-18 · 批 B F3）：等宽数字（封闭集已由编译期/校验器收口，此处直通）
+    return { field: 'fontVariantNumeric', value: typeof val === 'string' ? val : null }
   }
   if (prop === 'text-transform') {
     // ★★★text-transform 项（2026-10-18 · 批 B F3）：大小写变换（封闭集已由编译期/校验器收口，此处直通）

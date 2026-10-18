@@ -108,6 +108,8 @@ export const SEMANTIC_FIELD_SNAPSHOT_KEYS: Readonly<Record<string, readonly stri
   fontStyle: ['fontStyle'],
   // ★★★text-transform 项（2026-10-18 · 批 B F3）：大小写变换（读数键 = 同名字符串）
   textTransform: ['textTransform'],
+  // ★★★font-variant-numeric 项（2026-10-18 · 批 B F3）：等宽数字（读数键 = 同名字符串）
+  fontVariantNumeric: ['fontVariantNumeric'],
   fontFamily: ['fontFamily'],
   lineHeight: ['lineHeight'],
   textAlign: ['textAlign'],

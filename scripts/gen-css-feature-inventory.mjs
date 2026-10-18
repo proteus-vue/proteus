@@ -349,6 +349,9 @@ const ENGINE_LOCKED_ENDS = {
   // Skyline 官方样式属性表**无 text-transform**（已核官方文档 + skyline-wxss-official.json：110 条属性无此项）。
   //   本仓补偿：MP 产物**编译期**变换静态文本（动态绑定文本编译期如实诊断）⇒ 静态面已与 Web 对齐。
   'text-transform': ['skyline'],
+  // Skyline 官方样式属性表**无 font-variant-numeric**（font-* 仅 5 条）。该端无字形特性通道，
+  //   也无法编译期模拟（等宽数字是字形选择，不是字符串变换）⇒ 引擎锁死。
+  'font-variant-numeric': ['skyline'],
 }
 
 const KNOWN_ENGINE_CHANNELS = new Set([

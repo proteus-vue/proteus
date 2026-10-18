@@ -3409,6 +3409,81 @@ static napi_value FontFamilyProbe(napi_env env, napi_callback_info info) {
 }
 
 /**
+ * tnumProbe(): string(JSON) —— ★★★font-variant-numeric（2026-10-18 · 批 B F3）：
+ *   **等宽数字该端到底生效没有**（平台层 OH_Drawing_TextStyleAddFontFeature("tnum",1) 的直接证据）。
+ *
+ * 【为什么必须单独取证】该属性改的是**字形选择**（另一套数字字形，字宽不同），
+ *   而"是否可见"取决于字族是否带 tnum 特性——多数系统默认字族的数字本身已等宽
+ *   （Web 实测：SF Pro / Georgia 的 tnum 与 pnum 宽度差 0）⇒ **截图看不出差异**。
+ *   ⇒ 唯一可靠的判据 = **同字族下开/关 tnum 的文本宽度差**（走真实 Typography 度量）。
+ *
+ * 【判据】① 两次度量都成功；② 高度不变（tnum 只改字宽）。
+ *   delta 如实报出——**不预设必须 > 1px**（该字族不带 tnum 特性时 delta=0 是**正确**行为，
+ *   与浏览器一致）。
+ */
+static napi_value TnumProbe(napi_env env, napi_callback_info info) {
+    (void)info;
+    const char* TEXT = "1111111111";
+    const double FS = 32.0;
+    double wOff[2] = {0, 0}, wOn[2] = {0, 0};
+    double hOff[2] = {0, 0}, hOn[2] = {0, 0};
+    const char* famName[2] = {"HarmonyOS Sans", "HarmonyOS Sans Digit"};
+    for (int f = 0; f < 2; f++) {
+        for (int on = 0; on < 2; on++) {
+            OH_Drawing_FontCollection* fc = OH_Drawing_CreateFontCollection();
+            if (fc == nullptr) break;
+            OH_Drawing_TypographyStyle* ts = OH_Drawing_CreateTypographyStyle();
+            OH_Drawing_TextStyle* tstyle = OH_Drawing_CreateTextStyle();
+            OH_Drawing_SetTextStyleFontSize(tstyle, FS);
+            const char* one[1] = {famName[f]};
+            OH_Drawing_SetTextStyleFontFamilies(tstyle, 1, one);
+            if (on) OH_Drawing_TextStyleAddFontFeature(tstyle, "tnum", 1);
+            OH_Drawing_TypographyCreate* handler = OH_Drawing_CreateTypographyHandler(ts, fc);
+            if (handler != nullptr) {
+                OH_Drawing_TypographyHandlerPushTextStyle(handler, tstyle);
+                OH_Drawing_TypographyHandlerAddText(handler, TEXT);
+                OH_Drawing_Typography* typo = OH_Drawing_CreateTypography(handler);
+                if (typo != nullptr) {
+                    OH_Drawing_TypographyLayout(typo, 10000.0);
+                    double w = OH_Drawing_TypographyGetLongestLine(typo);
+                    double h = OH_Drawing_TypographyGetHeight(typo);
+                    if (on) { wOn[f] = w; hOn[f] = h; } else { wOff[f] = w; hOff[f] = h; }
+                    OH_Drawing_DestroyTypography(typo);
+                }
+                OH_Drawing_DestroyTypographyHandler(handler);
+            }
+            OH_Drawing_DestroyTextStyle(tstyle);
+            OH_Drawing_DestroyTypographyStyle(ts);
+            OH_Drawing_DestroyFontCollection(fc);
+        }
+    }
+    bool measured = wOff[0] > 0 && wOn[0] > 0 && wOff[1] > 0 && wOn[1] > 0;
+    bool heightSame = std::fabs(hOff[0] - hOn[0]) < 0.01 && std::fabs(hOff[1] - hOn[1]) < 0.01;
+    bool verdict = measured && heightSame;
+    // ★用字符常量 '"' 拼引号（源码里不出现反斜杠转义 ⇒ 没有多层转义歧义）
+    char nb0[32], nb1[32], nb2[32], nb3[32], nb4[32], nb5[32];
+    snprintf(nb0, sizeof(nb0), "%.2f", wOff[0]); snprintf(nb1, sizeof(nb1), "%.2f", wOn[0]);
+    snprintf(nb2, sizeof(nb2), "%.2f", wOn[0] - wOff[0]); snprintf(nb3, sizeof(nb3), "%.2f", wOff[1]);
+    snprintf(nb4, sizeof(nb4), "%.2f", wOn[1]); snprintf(nb5, sizeof(nb5), "%.2f", wOn[1] - wOff[1]);
+    char fsb[32]; snprintf(fsb, sizeof(fsb), "%d", (int)FS);
+    std::string json = std::string("{")
+        + '"' + "ok" + '"' + ":true," + '"' + "text" + '"' + ":" + '"' + TEXT + '"'
+        + "," + '"' + "font_size" + '"' + ":" + fsb
+        + "," + '"' + "families" + '"' + ":[" + '"' + famName[0] + '"' + "," + '"' + famName[1] + '"' + "],"
+        + '"' + "width_off" + '"' + ":[" + nb0 + "," + nb3 + "],"
+        + '"' + "width_on" + '"' + ":[" + nb1 + "," + nb4 + "],"
+        + '"' + "delta" + '"' + ":[" + nb2 + "," + nb5 + "],"
+        + '"' + "checks" + '"' + ":{" + '"' + "measured" + '"' + ":" + '"' + (measured ? "true" : "false") + '"'
+        + "," + '"' + "height_same" + '"' + ":" + '"' + (heightSame ? "true" : "false") + '"' + "},"
+        + '"' + "verdict" + '"' + ":" + '"' + (verdict ? "PASS" : "FAIL") + '"' + "}";
+    OH_LOG_Print(LOG_APP, LOG_INFO, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG,
+                 "PROTEUS_TNUM off0=%.2f on0=%.2f d0=%.2f off1=%.2f on1=%.2f d1=%.2f verdict=%{public}s",
+                 wOff[0], wOn[0], wOn[0] - wOff[0], wOff[1], wOn[1], wOn[1] - wOff[1], verdict ? "PASS" : "FAIL");
+    napi_value outVal;
+    napi_create_string_utf8(env, json.c_str(), json.size(), &outVal);
+    return outVal;
+}
+/**
  * nodeRect(nodeId): string(JSON) —— ★矩阵 #10：读**核心真源**的单节点几何（设计单位）。
  *   用途：ArkUI 原生组件（Text/Button 等）按此几何定位——**位置由 Rust 核心决定**
  *   （与 Android native-host 的判据①同义：native View 的位置 == Rust 算出的几何）。
@@ -3856,6 +3931,7 @@ static napi_value BenchInit(napi_env env, napi_value exports) {
         {"gestureHitPrepare", nullptr, GestureHitPrepare, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"gestureHitAt", nullptr, GestureHitAt, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"fontFamilyProbe", nullptr, FontFamilyProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"tnumProbe", nullptr, TnumProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"nodeRect", nullptr, NodeRect, nullptr, nullptr, nullptr, napi_default, nullptr},
         // ★★★Vulkan 能力探针（决策 #841）：真机确认鸿蒙运行时是否有 libvulkan + 计算队列
         {"vkProbe", nullptr, VkProbe, nullptr, nullptr, nullptr, napi_default, nullptr},

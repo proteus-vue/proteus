@@ -34,6 +34,14 @@ public final class ProteusTextPlatform {
     /** ★★★font-style 项（2026-10-18）：斜体/倾斜的角色串前缀（与适配器同契约；宿主只存一个角色串） */
     public static final String ITALIC_PREFIX = "italic:";
     public static final String OBLIQUE_PREFIX = "oblique:";
+    /**
+     * ★★★font-variant-numeric 项（2026-10-18 · 批 B F3）：**等宽数字**前缀（`tnum:`）。
+     *
+     * <p>【为什么用前缀而不是新字段】宿主的"逐节点字体"表**只存一个字符串**（该文件已顶行数上限），
+     *   而 tnum 与 italic 同属**字形选择**（同一支字体 + 不同 OpenType 特性）⇒ 复合同一条通道
+     *   ⇒ 绘制与度量天然同源（本仓为 font-style 建立的同一机制）。</p>
+     */
+    public static final String TABULAR_PREFIX = "tnum:";
 
     /** 族名 → 字体（注册表） */
     private static final Map<String, Typeface> customFonts = new HashMap<>();
@@ -65,6 +73,8 @@ public final class ProteusTextPlatform {
         if (role != null) {
             if (role.startsWith(ITALIC_PREFIX)) return typefaceOf(role.substring(ITALIC_PREFIX.length()), weight, true, fallbackCounter);
             if (role.startsWith(OBLIQUE_PREFIX)) return typefaceOf(role.substring(OBLIQUE_PREFIX.length()), weight, true, fallbackCounter);
+            // ★font-variant-numeric：`tnum:` 前缀 = 等宽数字标记（字形本身不在这层换，见 tabularOfRole）
+            if (role.startsWith(TABULAR_PREFIX)) return typefaceOf(role.substring(TABULAR_PREFIX.length()), weight, false, fallbackCounter);
         }
         return typefaceOf(role, weight, false, fallbackCounter);
     }
@@ -199,10 +209,35 @@ public final class ProteusTextPlatform {
 
     /** ★★★font-style 项（2026-10-18 · 批 B F3）：带斜体的 paint 构造（度量与绘制同源——同一支字体）。 */
     public static android.text.TextPaint paintFor(float sizePx, int weight, String familyRole, float letterSpacingPx, boolean italic) {
+        return paintFor(sizePx, weight, familyRole, letterSpacingPx, italic, tabularOfRole(familyRole));
+    }
+
+    /**
+     * ★★★font-variant-numeric 项（2026-10-18 · 批 B F3）：角色串是否带 `tnum:` 前缀（**唯一判据**）。
+     *   绘制（宿主 `configureText`/mkText）与度量（本类 `paintFor`）共用本判据 ⇒ 两侧同源。
+     */
+    public static boolean tabularOfRole(String familyRole) {
+        return familyRole != null && familyRole.startsWith(TABULAR_PREFIX);
+    }
+
+    /**
+     * ★★★font-variant-numeric 项（2026-10-18 · 批 B F3）：**等宽数字**（`tabular-nums` → OpenType `tnum`）。
+     *
+     * <p>【为什么必须在本层】tnum 选的是**另一套数字字形**（字宽不同）⇒ 度量与绘制必须同源
+     * （本仓已因"度量一支、绘制另一支"踩过"字被裁而报告全绿"）。唯一实现放这里 ⇒ 三处调用点天然同源。</p>
+     *
+     * <p>【Android 的表达方式】`Paint.setFontFeatureSettings("\"tnum\" 1")`（API 21+）。
+     * ★诚实边界：能否生效取决于**字体是否带 tnum 特性**——Web 实测（Chromium）Helvetica Neue 上
+     * tnum 使数字宽 +55%，而 SF Pro / Georgia 本身已等宽（差异 0）；不带该特性的字族静默无效
+     * = 与 Web 一致（浏览器同样不报错）。</p>
+     */
+    public static android.text.TextPaint paintFor(float sizePx, int weight, String familyRole, float letterSpacingPx,
+                                                  boolean italic, boolean tabular) {
         android.text.TextPaint tp = new android.text.TextPaint();
         tp.setTextSize(sizePx);
         tp.setTypeface(typefaceOf(familyRole, weight, italic, null));
         if (letterSpacingPx != 0f && sizePx > 0f) tp.setLetterSpacing(letterSpacingPx / sizePx);
+        if (tabular) tp.setFontFeatureSettings("\"tnum\" 1");
         return tp;
     }
 
@@ -216,7 +251,13 @@ public final class ProteusTextPlatform {
 
     /** ★★★font-style 项（2026-10-18）：带斜体的单行度量（与绘制同源——同一支字体，否则度量偏窄会被裁）。 */
     public static float[] measureSingle(float sizePx, int weight, String familyRole, float letterSpacingPx, String text, boolean italic) {
-        android.text.TextPaint tp = paintFor(sizePx, weight, familyRole, letterSpacingPx, italic);
+        return measureSingle(sizePx, weight, familyRole, letterSpacingPx, text, italic, false);
+    }
+
+    /** ★★★font-variant-numeric 项（2026-10-18）：带等宽数字的单行度量（与绘制同源）。 */
+    public static float[] measureSingle(float sizePx, int weight, String familyRole, float letterSpacingPx, String text,
+                                        boolean italic, boolean tabular) {
+        android.text.TextPaint tp = paintFor(sizePx, weight, familyRole, letterSpacingPx, italic, tabular);
         float w = tp.measureText(text);
         android.graphics.Paint.FontMetrics fm = tp.getFontMetrics();
         return new float[]{ w, fm.descent - fm.ascent, -fm.ascent };
@@ -229,7 +270,12 @@ public final class ProteusTextPlatform {
 
     /** ★★★font-style 项（2026-10-18）：带斜体的基线（与绘制同源）。 */
     public static float baseline(float sizePx, int weight, String familyRole, float letterSpacingPx, boolean italic) {
-        android.text.TextPaint tp = paintFor(sizePx, weight, familyRole, letterSpacingPx, italic);
+        return baseline(sizePx, weight, familyRole, letterSpacingPx, italic, false);
+    }
+
+    /** ★★★font-variant-numeric 项（2026-10-18）：带等宽数字的基线（与绘制同源）。 */
+    public static float baseline(float sizePx, int weight, String familyRole, float letterSpacingPx, boolean italic, boolean tabular) {
+        android.text.TextPaint tp = paintFor(sizePx, weight, familyRole, letterSpacingPx, italic, tabular);
         return -tp.getFontMetrics().ascent;
     }
 
@@ -249,8 +295,15 @@ public final class ProteusTextPlatform {
     public static float[] measureWrapped(String text, float sizePx, int weight, String familyRole,
                                          float letterSpacingPx, String wordBreak, int lineClamp,
                                          float boxW, float lineHeightPx, boolean italic) {
+        return measureWrapped(text, sizePx, weight, familyRole, letterSpacingPx, wordBreak, lineClamp, boxW, lineHeightPx, italic, false);
+    }
+
+    /** ★★★font-variant-numeric 项（2026-10-18）：带等宽数字的折行度量（与绘制同源）。 */
+    public static float[] measureWrapped(String text, float sizePx, int weight, String familyRole,
+                                         float letterSpacingPx, String wordBreak, int lineClamp,
+                                         float boxW, float lineHeightPx, boolean italic, boolean tabular) {
         String mt = applyWordBreak(text, wordBreak);
-        android.text.TextPaint tp = paintFor(sizePx, weight, familyRole, letterSpacingPx, italic);
+        android.text.TextPaint tp = paintFor(sizePx, weight, familyRole, letterSpacingPx, italic, tabular);
         // ★无断点长串 + 溢出盒宽（normal）⇒ 单行溢出（不增长——与宿主 mkCmd 同步）
         if (!"break-all".equals(wordBreak) && isUnbreakableToken(text) && tp.measureText(text) > boxW + 0.5f) {
             return null;

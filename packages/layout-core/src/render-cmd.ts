@@ -62,6 +62,11 @@ export interface RenderCmd {
    *   本字段仅作快照/诊断的可观测读数——宿主不需要消费它）。缺省省略。
    */
   textTransform?: 'none' | 'uppercase' | 'lowercase' | 'capitalize'
+  /**
+   * ★★★font-variant-numeric 项（2026-10-18 · 批 B F3）：等宽数字（**字形已在宿主选好**，
+   *   本字段仅作快照/诊断的可观测读数）。缺省省略。
+   */
+  fontVariantNumeric?: 'normal' | 'tabular-nums'
   lineHeight?: number
   color_?: string
   textAlign?: string

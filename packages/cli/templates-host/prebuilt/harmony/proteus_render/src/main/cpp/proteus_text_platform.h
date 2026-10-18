@@ -46,8 +46,13 @@ static inline double lineHeightDesignPx(const std::string& token, double fontSiz
 ///   （实证：`font-style` 只在测量侧加了枚举映射，绘制侧没加 ⇒ 真机三段 shear 全 0，白验一轮）。
 ///   `fontStyle` 显式参数（normal/italic/oblique）优先；留空则回退解析 `fontFamily` 的 `italic:`/`oblique:` 前缀
 ///   （与 Android/iOS 的角色串契约兼容）。
+/// ★★★font-variant-numeric 项（2026-10-18 · 批 B F3）：**等宽数字**（`tabular-nums` → OpenType `tnum`）。
+///   【为什么必须在本层】tnum 选的是另一套数字字形（字宽不同）⇒ 度量与绘制必须同源
+///   （本仓已因"度量一支、绘制另一支"踩过"字被裁而报告全绿"）；本函数是两个入口的**唯一设置点**。
+///   ★诚实边界：能否生效取决于字体是否带 tnum 特性——Web 实测 Helvetica Neue 上 width +55%，
+///   SF Pro / Georgia 本身已等宽（差异 0）；不带该特性的字族静默无效 = 与 Web 一致。
 static inline void applyTextFont(OH_Drawing_TextStyle* tstyle, int fontWeight, const std::string& fontFamily,
-                                 const std::string& fontStyle = "") {
+                                 const std::string& fontStyle = "", bool tabular = false) {
     int wi = fontWeight / 100 - 1;
     if (wi < 0) wi = 0; else if (wi > 8) wi = 8;
     OH_Drawing_SetTextStyleFontWeight(tstyle, wi);
@@ -70,6 +75,8 @@ static inline void applyTextFont(OH_Drawing_TextStyle* tstyle, int fontWeight, c
         const char* fams[] = {"serif"};
         OH_Drawing_SetTextStyleFontFamilies(tstyle, 1, fams);
     }
+    // ★font-variant-numeric：OpenType `tnum`（等宽数字）。字体不带该特性时库侧静默忽略（与 Web 一致）
+    if (tabular) OH_Drawing_TextStyleAddFontFeature(tstyle, "tnum", 1);
 }
 
 /// 单行度量（物理 px）：`*outW/*outH` = 最长行宽 / 行盒高（同 iOS `measureText` / Android `measureSingle`）。
@@ -78,7 +85,7 @@ static inline void applyTextFont(OH_Drawing_TextStyle* tstyle, int fontWeight, c
 static inline void measureTextTypoPx(const std::string& text, double fontPx, double* outW, double* outH, double letterSpacingPx = 0,
                                      int fontWeight = 400, const std::string& fontFamily = "",
                                      int* outLines = nullptr, double* outBaseline = nullptr,
-                                     const std::string& fontStyle = "") {
+                                     const std::string& fontStyle = "", bool tabular = false) {
     *outW = 0;
     *outH = 0;
     if (outLines != nullptr) *outLines = 0;
@@ -89,7 +96,7 @@ static inline void measureTextTypoPx(const std::string& text, double fontPx, dou
     OH_Drawing_TypographyStyle* ts = OH_Drawing_CreateTypographyStyle();
     OH_Drawing_TextStyle* tstyle = OH_Drawing_CreateTextStyle();
     OH_Drawing_SetTextStyleFontSize(tstyle, fontPx);
-    applyTextFont(tstyle, fontWeight, fontFamily, fontStyle);   // ★唯一实现（字重/字族/斜体，与绘制同源）
+    applyTextFont(tstyle, fontWeight, fontFamily, fontStyle, tabular);   // ★唯一实现（字重/字族/斜体/等宽数字，与绘制同源）
     // ★批次 20：字距（物理 px）——影响文本宽度，必须进度量
     if (letterSpacingPx != 0) OH_Drawing_SetTextStyleLetterSpacing(tstyle, letterSpacingPx);
     OH_Drawing_TypographyCreate* handler = OH_Drawing_CreateTypographyHandler(ts, fc);
@@ -117,7 +124,7 @@ static inline void measureTextWrappedTypoPx(const std::string& text, double font
                                      double* outW, double* outH, double letterSpacingPx = 0,
                                      const std::string& wordBreak = "",
                                      int fontWeight = 400, const std::string& fontFamily = "",
-                                     int* outLines = nullptr, const std::string& fontStyle = "") {
+                                     int* outLines = nullptr, const std::string& fontStyle = "", bool tabular = false) {
     *outW = 0; *outH = 0;
     if (outLines != nullptr) *outLines = 0;
     if (text.empty() || fontPx <= 0 || lineWidthPx <= 1.0) return;
@@ -132,7 +139,7 @@ static inline void measureTextWrappedTypoPx(const std::string& text, double font
     else OH_Drawing_SetTypographyTextWordBreakType(ts, 0); // WORD_BREAK_TYPE_NORMAL
     OH_Drawing_TextStyle* tstyle = OH_Drawing_CreateTextStyle();
     OH_Drawing_SetTextStyleFontSize(tstyle, fontPx);
-    applyTextFont(tstyle, fontWeight, fontFamily, fontStyle);   // ★唯一实现（与绘制同源）
+    applyTextFont(tstyle, fontWeight, fontFamily, fontStyle, tabular);   // ★唯一实现（与绘制同源）
     if (letterSpacingPx != 0) OH_Drawing_SetTextStyleLetterSpacing(tstyle, letterSpacingPx);
     OH_Drawing_TypographyCreate* handler = OH_Drawing_CreateTypographyHandler(ts, fc);
     if (handler != nullptr) {
