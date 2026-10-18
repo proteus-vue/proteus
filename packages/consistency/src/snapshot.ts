@@ -83,6 +83,8 @@ export interface NormalizedStyle {
   /** px 数值（3 位小数） */
   fontSize?: number
   fontWeight?: number
+  /** ★★★font-style 项（2026-10-18 · 批 B F3）：斜体（normal/italic/oblique） */
+  fontStyle?: string
   /** 字族首个（不含引号） */
   fontFamily?: string
   paddingTop?: number
@@ -448,7 +450,7 @@ export function validateGeometrySnapshot(snap: unknown): ValidationResult {
 }
 
 const STYLE_KEYS = new Set([
-  'color', 'backgroundColor', 'fontSize', 'fontWeight', 'fontFamily',
+  'color', 'backgroundColor', 'fontSize', 'fontWeight', 'fontStyle', 'fontFamily',
   'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
   'marginTop', 'marginRight', 'marginBottom', 'marginLeft',
   'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth',
@@ -535,6 +537,7 @@ export function validateStyleSnapshot(snap: unknown): ValidationResult {
         // ★字符串族（枚举项）——★必须与 STYLE_KEYS 的字符串键同步（首版漏扩 ⇒ 25 条误报：
         //   校验器把新枚举键当数值项要求。这正是"两处必须同源"的教训——本仓纪律：闭集与校验同改。）
         k === 'display' || k === 'position' || k === 'visibility' || k === 'fontFamily'
+        || k === 'fontStyle'   // ★★★font-style 项（2026-10-18）
         || k === 'flexDirection' || k === 'justifyContent' || k === 'alignItems' || k === 'alignSelf' || k === 'overflow'
         || k === 'justifySelf'   // ★★★justify-self 项（2026-10-06）
         || k === 'justifyItems'  // ★★★place-items/justify-items 项（2026-10-08）

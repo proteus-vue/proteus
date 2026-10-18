@@ -114,6 +114,8 @@ export interface PaintProps {
 export interface TextProps {
   fontSize?: ResolvedLength
   fontWeight?: number | 'normal' | 'bold'
+  /** ★★★font-style（2026-10-18 · 批 B F3）：斜体（CSS Fonts 4 关键字；带角度的 oblique 编译期诊断跳过，不进 IR） */
+  fontStyle?: 'normal' | 'italic' | 'oblique'
   lineHeight?: ResolvedLength | number
   letterSpacing?: ResolvedLength
   color?: string

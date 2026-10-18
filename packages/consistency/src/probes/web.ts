@@ -124,6 +124,9 @@ function styleOf(el: Element, win: Window): NormalizedStyle {
       /* 未识别字重：不采集 */
     }
   }
+  // ★★★font-style 项（2026-10-18 · 批 B F3）：斜体（Web computed = normal/italic/oblique；带角度的 oblique 归一为 oblique）
+  const fst = cs.getPropertyValue('font-style').trim().toLowerCase()
+  if (fst) styles.fontStyle = fst.startsWith('oblique') ? 'oblique' : fst
   const ff = cs.getPropertyValue('font-family')
   if (ff) styles.fontFamily = normalizeFontFamily(ff)
   for (const [prop, key] of [

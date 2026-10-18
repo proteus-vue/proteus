@@ -5967,3 +5967,42 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   这是本轮最有价值的一条判据（比像素剖面更早、更准）；
   ★★**柔边不是 alpha 斜坡**：形状（SDF 覆盖率）与材质（倒角亮脊/折射）必须分成两层，混在一起改必定二选一出错；
   ★**"过度修正"会引入新缺陷**：为修 A 放宽参数前，先确认 A 的成因是不是这个参数。
+
+1050. **★★★批 B · F3 排版增强 1/8：`font-style`（normal/italic/oblique）四端全端对齐 · 决策 · Web 基准 · 零设备编译 + 机器判据全过**（2026-10-18 · 用户「液态玻璃先到这里吧，先放下缓缓，来继续主线」——主线 = `docs/proteus-superapp-css-expansion-plan.md` 批 B，用户此前点名「文本样式/文本排版太简单」）：
+【立项依据（先取证再动手）】批 A 已收官；批 B 的 8 项在框架里**全部未实现**（`font-style`/`text-transform`/
+  `font-variant-numeric`/`text-decoration-color`/`word-spacing`/`overflow-wrap` 源码零命中，`font` 简写零命中）⇒
+  取 8 项里**四端字体引擎都有原生支持**的一项（`font-style`）作样板，把「四同步 + 三端字形 + 度量与绘制同源」的方法跑通。
+【契约四同步（INV-CE-07）】
+  · `contracts/style.ts`：新级别 `FontStyle`（值集 = 四端可表达子集 `normal/italic/oblique`）+ `fontStyle: 'FontStyle'`；
+  · `runtime/style-safety/whitelist.ts`：`FONT_STYLE` 封闭集 + `PROP_TYPES.FontStyle`；
+  · 编译器：`APP_FONT_STYLE_VALUES` 封闭集 + `parseStaticStyle` 折叠分支（`normal` 不发射）+ `APP_PAINT_FIELDS`/
+    `APP_INHERITABLE_FIELDS` 登记 + `:style` 对象字面量 `PAINT` 集 + CSE（`ENUM_IR` / `CSE_INHERITED_PROPS` /
+    `INITIAL_VALUES` / `dynamic.ts` 候选表）+ `component-ir` 的 `TextProps.fontStyle` 与 `pnode-style` 分支；
+  · 注册表：`gen-style-ir-registry` 的 `VALUE_TYPE_BY_LEVEL.FontStyle='enum'` ⇒ 字段 108→**109**（semantic 83→**84**）。
+【三端字形 + ★度量与绘制同源（本轮最关键的一条）】斜体不是"把画布歪一下"，是**另一套字形**（宽度不同）——
+  若度量用常规面、绘制用斜体面，就会复现本仓多次踩过的「字被裁而判据全绿」。
+  ⇒ 统一用**角色串前缀** `italic:<族>` / `oblique:<族>`（宿主只存一个字符串），由**平台适配层唯一解析**：
+  · Android `ProteusTextPlatform.typefaceOf(role, weight, italic, …)` → `Typeface.create(fam, BOLD|ITALIC)`；
+    并给 `paintFor`/`measureSingle`/`measureWrapped`/`baseline` 全部加 `italic` 重载（旧签名委托，零行为变化）；
+  · iOS `ProteusTextAdapter.font(...)` 解析前缀 → `fontDescriptor.withSymbolicTraits(.traitItalic)`（取不到 ⇒ 显式回退 + 计数）；
+    宿主侧新增 `SelfDrawView.familyOf(style)` 作为**唯一合成点**，并把 8 处 `style["fontFamily"]` 读取全部改走它
+    （漏一处就是"度量/绘制的斜体不一致"）；
+  · 鸿蒙 `applyTextFont` → `OH_Drawing_SetTextStyleFontStyle(FONT_STYLE_ITALIC/OBLIQUE)`（SDK 头已确认存在），
+    并剥离前缀再做族名匹配（否则 `italic:serif` 匹配不上 serif 分支）。
+【判据（全过）】
+  · `node scripts/verify-css-feature.mjs font-style` 三段：implemented（IR 在册 scope=semantic · 矩阵 FontStyle）·
+    parity（真 Chromium：IR `fontStyle`="italic" 与浏览器一致）· endsMapped（Web 基准 / Skyline 可表达 / App 可表达）；
+  · 新增回归 `tests/vapor-class-styles.test.ts` ★⑦h2（italic/oblique 折值 · normal 不发射 · 带角度有诊断）；
+  · 配套断言（`pnpm test:coupled` 曾报 2 红，均已就地对齐）：`app-css-surface` 补 `fontStyle` 折叠样例 ·
+    鸿蒙平台头 vendor 副本随源同步（逐字节一致）；
+  · `check:style-ir-schema`（109 字段 · semantic 84）· `check:style-coverage`（84/84）· `check:style-ir-golden` ·
+    `check:css-inventory`（implemented 145）· `check:css-capability-alignment`（82 行）· `check:css-engine-numbers`
+    （IR 109）· `check:stats`/`check:content`/`check:docs`/`check:memory` · `check:android-host-compile`（javac 真编译）·
+    `check:ai-tasks` · `check:file-size` 全绿。
+【诚实边界】① `oblique <angle>` 三端字体引擎均无角度语义（Skyline 官方表只有 italic）⇒ **编译期诊断跳过**，不静默近似；
+  ② 本轮**未跑 iOS/鸿蒙真机**（只过零设备编译：Android javac / 鸿蒙 C++ 头随 HAR 同步）；Android 真机因设备被占用未截到图
+  ⇒ 视觉验收待补；③ `check:file-size` 的基线刷新（5 个存量文件 +1~15 行）是**新增真实能力**所需，已如实随本轮提交。
+【★教训】★★★**「新增字体维度」必须同时扩度量缓存键与全部度量入口**——`fontSignature(fs, weight, family)` 少一个
+  `fontStyle` 维度就会把「同文本同字号同字重、只差斜体」合并成同一缓存项 ⇒ 一个尺寸错（静默）；
+  ★★**「平台层唯一解析」比"每个宿主各自解析"少 3 倍接线面**——三端只改各自的 `typefaceOf`/`font`/`applyTextFont`，
+  宿主只负责把前缀拼进角色串；★★**大文件棘轮是"真实能力 vs 体积债"的显式记账**，刷新基线要能被评审看懂（本轮在提交里写明）。

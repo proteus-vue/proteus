@@ -599,6 +599,19 @@ export const STYLE_IR_FIELDS: Record<string, StyleFieldSpec> = {
       inheritable: true,
     },
   },
+  "fontStyle": {
+    scope: "semantic",
+    domain: "paint",
+    valueType: "enum",
+    sources: {
+      compiler: "APP_PAINT_FIELDS",
+      matrixLevel: "FontStyle",
+      runtimeWhitelist: false,
+      runtimeForbidden: false,
+      consistencyMatrix: true,
+      inheritable: true,
+    },
+  },
   "fontWeight": {
     scope: "semantic",
     domain: "paint",
@@ -1448,15 +1461,15 @@ export const STYLE_IR_FIELDS: Record<string, StyleFieldSpec> = {
 
 /** 摘要（判据与官网数字读它——机器推导，非手写） */
 export const STYLE_IR_SUMMARY = {
-  total: 108,
-  semantic: 83,
+  total: 109,
+  semantic: 84,
   engineOnly: 25,
   byDomain: {
     "derived": 10,
     "edges": 8,
     "layout": 47,
     "matrix-only": 4,
-    "paint": 38,
+    "paint": 39,
     "special": 1,
   },
 } as const

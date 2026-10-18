@@ -615,6 +615,8 @@ function irFieldCandidatesOf(prop: string): string[] {
     'border-left-color': 'borderLeftColor',
     'font-size': 'fontSize',
     'font-weight': 'fontWeight',
+    // ★★★font-style 项（2026-10-18 · 批 B F3）：斜体（动态类字段候选——与 compute.ts 对齐）
+    'font-style': 'fontStyle',
     'line-height': 'lineHeight',
     'font-family': 'fontFamily',
     'flex-basis': 'flexBasis',

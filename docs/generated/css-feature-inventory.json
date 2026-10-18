@@ -17,18 +17,18 @@
       "unit": 30
     },
     "byImpl": {
-      "not-started": 524,
+      "not-started": 523,
       "excluded": 280,
-      "implemented": 144,
+      "implemented": 145,
       "partial": 1
     },
     "byPriority": {
       "P2": 114,
       "excluded": 280,
-      "done": 144,
-      "P1": 411
+      "done": 145,
+      "P1": 410
     },
-    "actionable": 525,
+    "actionable": 524,
     "actionableP0": 0
   },
   "entries": [
@@ -2540,7 +2540,7 @@
         "matrixLevel": "FlexAlign",
         "webSupport": true
       },
-      "usage": 122,
+      "usage": 131,
       "priority": "done",
       "acceptance": "pending"
     },
@@ -3187,7 +3187,7 @@
         "matrixLevel": null,
         "webSupport": null
       },
-      "usage": 218,
+      "usage": 242,
       "priority": "done",
       "acceptance": "pending"
     },
@@ -3283,7 +3283,7 @@
         "matrixLevel": "Color",
         "webSupport": true
       },
-      "usage": 65,
+      "usage": 66,
       "priority": "done",
       "acceptance": "pending"
     },
@@ -3551,7 +3551,7 @@
         "matrixLevel": null,
         "webSupport": null
       },
-      "usage": 89,
+      "usage": 90,
       "priority": "done",
       "acceptance": "pending"
     },
@@ -3879,7 +3879,7 @@
         "matrixLevel": null,
         "webSupport": null
       },
-      "usage": 13,
+      "usage": 14,
       "priority": "done",
       "acceptance": "pending"
     },
@@ -4679,7 +4679,7 @@
         "matrixLevel": "Length",
         "webSupport": true
       },
-      "usage": 204,
+      "usage": 216,
       "priority": "done",
       "acceptance": "pending"
     },
@@ -5082,7 +5082,7 @@
         "matrixLevel": null,
         "webSupport": true
       },
-      "usage": 47,
+      "usage": 49,
       "priority": "done",
       "acceptance": "pending"
     },
@@ -5330,7 +5330,7 @@
         "matrixLevel": null,
         "webSupport": true
       },
-      "usage": 26,
+      "usage": 27,
       "priority": "done",
       "acceptance": "pending"
     },
@@ -5354,7 +5354,7 @@
         "matrixLevel": null,
         "webSupport": true
       },
-      "usage": 34,
+      "usage": 39,
       "priority": "done",
       "acceptance": "pending"
     },
@@ -5670,7 +5670,7 @@
         "matrixLevel": "Color",
         "webSupport": true
       },
-      "usage": 329,
+      "usage": 347,
       "priority": "done",
       "acceptance": "pending"
     },
@@ -6941,7 +6941,7 @@
         "matrixLevel": "FORBIDDEN",
         "webSupport": true
       },
-      "usage": 292,
+      "usage": 311,
       "priority": "done",
       "acceptance": "pending"
     },
@@ -7134,7 +7134,7 @@
         "matrixLevel": "SEMANTIC_ONLY",
         "webSupport": true
       },
-      "usage": 2,
+      "usage": 3,
       "priority": "done",
       "acceptance": "pending"
     },
@@ -7162,7 +7162,7 @@
         "matrixLevel": "FlexNumber",
         "webSupport": null
       },
-      "usage": 42,
+      "usage": 46,
       "priority": "done",
       "acceptance": "pending"
     },
@@ -7210,7 +7210,7 @@
         "matrixLevel": null,
         "webSupport": true
       },
-      "usage": 97,
+      "usage": 105,
       "priority": "done",
       "acceptance": "pending"
     },
@@ -7285,7 +7285,7 @@
         "matrixLevel": "FlexNumber",
         "webSupport": true
       },
-      "usage": 18,
+      "usage": 20,
       "priority": "done",
       "acceptance": "pending"
     },
@@ -7581,7 +7581,7 @@
         "matrixLevel": null,
         "webSupport": true
       },
-      "usage": 324,
+      "usage": 338,
       "priority": "done",
       "acceptance": "pending"
     },
@@ -7667,19 +7667,19 @@
       "inherited": true,
       "initial": "normal",
       "syntax": "normal | italic | oblique <angle>?",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "implemented",
+      "implNote": "IR 注册表在册（scope=semantic · 矩阵 FontStyle）",
       "channel": null,
       "evidencedBy": {
-        "inIrRegistry": false,
-        "irScope": null,
-        "inCompilerFold": false,
-        "matrixLevel": null,
+        "inIrRegistry": true,
+        "irScope": "semantic",
+        "inCompilerFold": true,
+        "matrixLevel": "FontStyle",
         "webSupport": true
       },
       "usage": 0,
-      "priority": "P1",
-      "acceptance": "none"
+      "priority": "done",
+      "acceptance": "pending"
     },
     {
       "id": "font-synthesis",
@@ -8037,7 +8037,7 @@
         "matrixLevel": "Integer",
         "webSupport": null
       },
-      "usage": 75,
+      "usage": 84,
       "priority": "done",
       "acceptance": "pending"
     },
@@ -8112,7 +8112,7 @@
         "matrixLevel": null,
         "webSupport": true
       },
-      "usage": 90,
+      "usage": 93,
       "priority": "done",
       "acceptance": "pending"
     },
@@ -8621,7 +8621,7 @@
         "matrixLevel": "Length",
         "webSupport": true
       },
-      "usage": 122,
+      "usage": 138,
       "priority": "done",
       "acceptance": "pending"
     },
@@ -8891,7 +8891,7 @@
         "matrixLevel": null,
         "webSupport": null
       },
-      "usage": 10,
+      "usage": 11,
       "priority": "done",
       "acceptance": "pending"
     },
@@ -9219,7 +9219,7 @@
         "matrixLevel": "FlexJustify",
         "webSupport": true
       },
-      "usage": 76,
+      "usage": 84,
       "priority": "done",
       "acceptance": "pending"
     },
@@ -9316,7 +9316,7 @@
         "matrixLevel": null,
         "webSupport": true
       },
-      "usage": 61,
+      "usage": 68,
       "priority": "done",
       "acceptance": "pending"
     },
@@ -9436,7 +9436,7 @@
         "matrixLevel": null,
         "webSupport": true
       },
-      "usage": 32,
+      "usage": 33,
       "priority": "done",
       "acceptance": "pending"
     },
@@ -9589,7 +9589,7 @@
         "matrixLevel": "Length",
         "webSupport": null
       },
-      "usage": 82,
+      "usage": 86,
       "priority": "done",
       "acceptance": "pending"
     },
@@ -9689,7 +9689,7 @@
         "matrixLevel": "Length",
         "webSupport": true
       },
-      "usage": 85,
+      "usage": 86,
       "priority": "done",
       "acceptance": "pending"
     },
@@ -9814,7 +9814,7 @@
         "matrixLevel": "Length",
         "webSupport": true
       },
-      "usage": 11,
+      "usage": 12,
       "priority": "done",
       "acceptance": "pending"
     },
@@ -9839,7 +9839,7 @@
         "matrixLevel": "Length",
         "webSupport": true
       },
-      "usage": 61,
+      "usage": 66,
       "priority": "done",
       "acceptance": "pending"
     },
@@ -10651,7 +10651,7 @@
         "matrixLevel": "Length",
         "webSupport": true
       },
-      "usage": 54,
+      "usage": 55,
       "priority": "done",
       "acceptance": "pending"
     },
@@ -10699,7 +10699,7 @@
         "matrixLevel": "Length",
         "webSupport": true
       },
-      "usage": 40,
+      "usage": 41,
       "priority": "done",
       "acceptance": "pending"
     },
@@ -11165,7 +11165,7 @@
         "matrixLevel": null,
         "webSupport": true
       },
-      "usage": 59,
+      "usage": 65,
       "priority": "done",
       "acceptance": "pending"
     },
@@ -11530,7 +11530,7 @@
         "matrixLevel": "Length",
         "webSupport": null
       },
-      "usage": 228,
+      "usage": 237,
       "priority": "done",
       "acceptance": "pending"
     },
@@ -11728,7 +11728,7 @@
         "matrixLevel": "Length",
         "webSupport": true
       },
-      "usage": 15,
+      "usage": 16,
       "priority": "done",
       "acceptance": "pending"
     },
@@ -12049,7 +12049,7 @@
         "matrixLevel": null,
         "webSupport": null
       },
-      "usage": 26,
+      "usage": 28,
       "priority": "done",
       "acceptance": "pending"
     },
@@ -12073,7 +12073,7 @@
         "matrixLevel": null,
         "webSupport": true
       },
-      "usage": 111,
+      "usage": 120,
       "priority": "done",
       "acceptance": "pending"
     },
@@ -12389,7 +12389,7 @@
         "matrixLevel": null,
         "webSupport": true
       },
-      "usage": 52,
+      "usage": 54,
       "priority": "done",
       "acceptance": "pending"
     },
@@ -14078,7 +14078,7 @@
         "matrixLevel": "TextAlign",
         "webSupport": null
       },
-      "usage": 69,
+      "usage": 68,
       "priority": "done",
       "acceptance": "pending"
     },
@@ -15154,7 +15154,7 @@
         "matrixLevel": null,
         "webSupport": true
       },
-      "usage": 56,
+      "usage": 61,
       "priority": "done",
       "acceptance": "pending"
     },
@@ -15202,7 +15202,7 @@
         "matrixLevel": "Transform",
         "webSupport": true
       },
-      "usage": 93,
+      "usage": 94,
       "priority": "done",
       "acceptance": "pending"
     },
@@ -15304,7 +15304,7 @@
         "matrixLevel": null,
         "webSupport": null
       },
-      "usage": 62,
+      "usage": 64,
       "priority": "done",
       "acceptance": "pending"
     },
@@ -15836,7 +15836,7 @@
         "matrixLevel": "Length",
         "webSupport": true
       },
-      "usage": 129,
+      "usage": 137,
       "priority": "done",
       "acceptance": "pending"
     },
@@ -16019,12 +16019,12 @@
       "initial": "auto",
       "syntax": "auto | <integer>",
       "impl": "implemented",
-      "implNote": "IR 注册表在册（scope=engine-only · 矩阵 FORBIDDEN）",
+      "implNote": "IR 注册表在册（scope=semantic · 矩阵 FORBIDDEN）",
       "channel": null,
       "evidencedBy": {
         "inIrRegistry": true,
-        "irScope": "engine-only",
-        "inCompilerFold": false,
+        "irScope": "semantic",
+        "inCompilerFold": true,
         "matrixLevel": "FORBIDDEN",
         "webSupport": true
       },

@@ -1359,6 +1359,41 @@
         "T-glass-four-fixes"
       ],
       "note": "用户「不行不行，效果差得远，单独子代理重新验证」。独立子代理逐帧查出三个开发者自测全漏的缺陷：①按压文字被糊成钟形（中位 75→135、深色核心 555→0）—— nest>2.5 的 bsig=blur*0.02 而 blur 已×3=117 ⇒ σ2.34px；复合层内容本就清晰 ⇒ 改 0.004（σ0.47）。②按压胶囊面纯白 pure0.79/p50 255（iOS 222-229/pure 0）—— ov_a 的 (1-press) 在 press=1 归零 ⇒ 改 (1-press*0.15)。③灰叠加 mix 把深色 54 抬到 95 ⇒ 改乘性 col*(1-a*(1-0.683))（白端 227 同值、暗端 48）。终验：核心 0→383、滑动归零帧 0/208、面 mean 223.1。★教训：自测≠验收，动画/时序缺陷必须独立方全程多状态验证；模糊不能叠加；亮底叠加要用乘法保对比。"
+    },
+    {
+      "id": "T-css-batch-b-font-style",
+      "title": "批 B · F3 排版增强 1/8：font-style（italic/oblique）四端全端对齐",
+      "type": "end-alignment",
+      "status": "done",
+      "owner": "zcode-2026-10-18",
+      "scope": [
+        "packages/contracts/src/style.ts",
+        "packages/runtime/src/style-safety/whitelist.ts",
+        "packages/component-ir/src/pnode.ts",
+        "packages/component-ir/src/pnode-style.ts",
+        "packages/compiler/src/vapor/template.ts",
+        "packages/compiler/src/vapor/style-object.ts",
+        "packages/compiler/src/cse/compute.ts",
+        "packages/compiler/src/cse/dynamic.ts",
+        "packages/layout-core/src/render-cmd.ts",
+        "packages/renderer-app/src/adapters/selfdraw.ts",
+        "packages/consistency/src/**",
+        "platform/android/**",
+        "platform/ios/**",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/VaporRenderHost.java",
+        "hosts/ios/ProteusHost/runtime/selfdraw-scene.swift",
+        "hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_text_platform.h",
+        "scripts/verify-css-feature.mjs",
+        "scripts/gen-style-ir-registry.mjs",
+        "tests/vapor-class-styles.test.ts",
+        "css-conformance/pages/font.vue",
+        "docs/generated/**"
+      ],
+      "decision": 1050,
+      "verification": "node scripts/verify-css-feature.mjs font-style && npx vitest run tests/vapor-class-styles.test.ts tests/app-css-surface.test.ts && pnpm check:android-host-compile && npx tsx scripts/check-style-ir-schema.mjs && npx tsx scripts/check-style-coverage.mjs",
+      "branch": null,
+      "related": [],
+      "note": "【批 B 进度】F3 排版增强 8 项的第 1 项（计划 docs/proteus-superapp-css-expansion-plan.md 批 B）。本轮交付 font-style：四同步（contracts 级别 FontStyle + runtime PROP_TYPES + 编译器折叠/CSE + 注册表）+ IR（TextProps.fontStyle）+ 三端字形（Android Typeface.ITALIC / iOS traitItalic / 鸿蒙 OH_Drawing_SetTextStyleFontStyle）+ 度量与绘制同源（角色串 italic:<族> 前缀，平台层唯一解析）+ 一致性快照/probe/coverage + 验收页 + 回归测试。★诚实边界：带角度的 oblique<angle> 诊断跳过（三端无角度语义）；iOS/鸿蒙真机未跑（本轮只做零设备编译 + Android 真机构建）。 【本轮收口】四同步 + 三端字形 + 度量同源均已落地；css:verify 三段过、style-ir 109/84、coverage 84/84、配套断言修平、Android javac 真编译绿。★诚实边界：oblique<angle> 诊断跳过；iOS/鸿蒙真机未跑；Android 真机因设备被占用未截到图（视觉验收待补）。下一条批 B 项建议：`font` 简写展开（纯编译期，成本最低）或 `text-transform`（编译期变换静态文本）。"
     }
   ]
 }

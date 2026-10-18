@@ -122,7 +122,7 @@ export const APP_ENUM_VALUES: Record<string, readonly string[]> = {
 //   判据 = contracts/layers.ts 的 `zIndexOf`（数值→语义层区间映射 + 越界诊断；SSOT）。
 //   ★LY001 立场不变（内联 style/:style 裸 z-index 仍编译期拦——那是"层级控制手段"的逃生口）；
 //     本条服务**类样式**里的 z-index（语料 66 处：路由层叠/壳骨架——合法且跨端必需）。
-export const APP_PAINT_FIELDS = ['backgroundColor', 'color', 'fontSize', 'fontWeight', 'fontFamily', 'textAlign', 'lineHeight', 'textOverflow', 'letterSpacing', 'textDecoration', 'visibility', 'borderRadius', 'borderColor', 'borderWidth', 'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth', 'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor', 'borderTopStyle', 'borderRightStyle', 'borderBottomStyle', 'borderLeftStyle', 'opacity', 'boxShadow', 'textShadow', 'transform', 'backgroundSize', 'backgroundPosition', 'backgroundRepeat', 'outlineWidth', 'outlineColor', 'outlineStyle', 'outlineOffset', 'zIndex'] as const
+export const APP_PAINT_FIELDS = ['backgroundColor', 'color', 'fontSize', 'fontWeight', 'fontStyle', 'fontFamily', 'textAlign', 'lineHeight', 'textOverflow', 'letterSpacing', 'textDecoration', 'visibility', 'borderRadius', 'borderColor', 'borderWidth', 'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth', 'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor', 'borderTopStyle', 'borderRightStyle', 'borderBottomStyle', 'borderLeftStyle', 'opacity', 'boxShadow', 'textShadow', 'transform', 'backgroundSize', 'backgroundPosition', 'backgroundRepeat', 'outlineWidth', 'outlineColor', 'outlineStyle', 'outlineOffset', 'zIndex'] as const
 const PAINT_FIELDS = new Set<string>(APP_PAINT_FIELDS)
 /**
  * ★批次 4（CSS 兼容对齐）：`text-align` 的**封闭集**（App 自绘文本在盒内的水平对齐）。
@@ -137,6 +137,8 @@ export const APP_TEXT_ALIGN_VALUES = ['left', 'center', 'right'] as const
  *   鸿蒙 `OH_Drawing_SetTypographyTextEllipsis`。其余（如 `fade`）⇒ 诊断跳过（不猜）。
  */
 export const APP_TEXT_OVERFLOW_VALUES = ['clip', 'ellipsis'] as const
+/** ★★★font-style 项（批 B F3）：封闭集（normal/italic/oblique）；iOS traitItalic / Android ITALIC / 鸿蒙 FONT_STYLE_*。 */
+export const APP_FONT_STYLE_VALUES = ['normal', 'italic', 'oblique'] as const
 /** 四边简写字段（`margin`/`padding` → 结构化 `{top,right,bottom,left}`） */
 export const APP_EDGE_FIELDS = ['margin', 'padding'] as const
 /** 百分比宽高折叠出的**比例字段**（App 端原生支持 `widthRatio`/`heightRatio`；非长度、不乘密度） */
@@ -154,7 +156,7 @@ export const APP_SPECIAL_FIELDS = ['boxSizing'] as const
  *   `font-weight`/`line-height`/`text-align`/`text-overflow`（批 16）。
  *   背景/边框/圆角/不透明度在内核语义里**不继承**（见 Profile §3 可继承/不可继承表）⇒ 不得纳入。
  */
-export const APP_INHERITABLE_FIELDS = ['color', 'fontSize', 'fontWeight', 'fontFamily', 'lineHeight', 'textAlign', 'textOverflow', 'letterSpacing', 'textDecoration',
+export const APP_INHERITABLE_FIELDS = ['color', 'fontSize', 'fontWeight', 'fontStyle', 'fontFamily', 'lineHeight', 'textAlign', 'textOverflow', 'letterSpacing', 'textDecoration',
   // ★★★word-break 项（2026-10-06 · CSS 继承属性）：`white-space` 与 `word-break` 都是 CSS Text 的**继承**属性
   //   （规范：父设、子默认继承）——App 折叠面须编译期传播，否则 `word-break: break-all` 设在容器上、
   //   文本子节点继承不到（Web/Skyline 由 CSS 引擎原生继承 ⇒ 跨端不一致）。★补 `whiteSpace` 同样纳入
@@ -1138,6 +1140,18 @@ export function parseStaticStyle(
         const w = normalizeFontWeight(rawVal)
         if (w === undefined) { pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 不是合法字重（normal/bold/100–900）`); continue }
         out[key] = w
+        markImportant(key)
+        continue
+      }
+      if (key === 'fontStyle') {
+        // ★★★批 B F3（基准 = Web）：斜体（oblique <angle> 三端无角度语义 ⇒ 诊断）。可继承。
+        const v = rawVal.trim().toLowerCase()
+        if (!(APP_FONT_STYLE_VALUES as readonly string[]).includes(v)) {
+          pushDiag(`\`${rawKey}: ${rawVal}\` 不是 App 支持的值（仅 ${APP_FONT_STYLE_VALUES.join(' / ')}；带角度的 oblique 暂不支持）——已跳过`)
+          continue
+        }
+        if (v === 'normal') continue   // 默认值 ⇒ 不发射（零行为变化）
+        out[key] = v
         markImportant(key)
         continue
       }

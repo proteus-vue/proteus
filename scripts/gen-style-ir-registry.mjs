@@ -79,6 +79,8 @@ const VALUE_TYPE_BY_LEVEL = {
   FlexAlign: 'enum',
   FlexJustify: 'enum',
   TextAlign: 'enum',
+  // ★★★font-style 项（2026-10-18 · 批 B F3）：斜体枚举（与 runtime PROP_TYPES.FontStyle 同集）
+  FontStyle: 'enum',
   TextWrap: 'enum',
   BorderStyle: 'enum',
   // ★★★overflow-x 项（2026-10-06）：单轴溢出的值类型（与 runtime PROP_TYPES.Overflow 同集）

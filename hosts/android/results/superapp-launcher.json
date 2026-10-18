@@ -4,41 +4,19 @@
   "host_id": "android",
   "state": {
     "depth": 1,
-    "current": "mine",
+    "current": "index",
     "stack": [
-      "mine"
+      "index"
     ],
-    "tabs": [
-      "index",
-      "messages",
-      "mine"
-    ],
+    "tabs": [],
     "tabLabels": {
-      "index": "Proteus 超级应用",
-      "messages": "消息",
-      "mine": "我的",
-      "verify": "验收控制台"
+      "border": "CSS 验收 · 边框",
+      "justify-self": "CSS 验收 · 网格自对齐",
+      "text": "CSS 验收 · 文本",
+      "word-break": "CSS 验收 · 断词"
     },
-    "tabItems": [
-      {
-        "name": "index",
-        "label": "首页",
-        "glyph": "sym:house"
-      },
-      {
-        "name": "messages",
-        "label": "消息",
-        "glyph": "sym:message",
-        "badge": 3
-      },
-      {
-        "name": "mine",
-        "label": "我的",
-        "glyph": "sym:person"
-      }
-    ],
     "tabSpec": {
-      "height": 52,
+      "height": 56,
       "surface": "#ffffff",
       "line": "#dcdfe5",
       "brand": "#5b5bd6",
@@ -53,88 +31,75 @@
         "offsetY": 4,
         "padX": 4
       },
-      "glass": {
-        "blur": 20,
-        "tint": "rgba(255, 255, 255, 0.15)",
-        "border": true,
-        "borderSide": "top"
+      "icons": {
+        "index": "⌂",
+        "messages": "✉",
+        "mine": "☺"
       },
-      "contentHeight": 52
+      "labels": {
+        "index": "首页",
+        "messages": "消息",
+        "mine": "我的"
+      }
     },
     "screens": [
-      "glass-nav",
+      "animation",
+      "at-rules",
+      "background-position",
+      "background",
+      "border-style",
+      "border",
+      "box-model",
+      "effects",
+      "flex",
+      "font",
+      "grid-auto-flow",
+      "grid-auto",
+      "grid-template-areas",
+      "grid-tracks",
       "index",
-      "messages",
-      "mine",
-      "verify"
+      "justify-self",
+      "line-clamp",
+      "math-functions",
+      "misc",
+      "outline",
+      "overflow-page",
+      "overflow",
+      "place-items",
+      "position-scroll",
+      "position",
+      "safe-area",
+      "text-shadow",
+      "text",
+      "units",
+      "vw-vh",
+      "word-break"
     ]
   },
-  "tabs": [
-    "index",
-    "messages",
-    "mine"
-  ],
-  "switch_log": [
-    {
-      "tap": "index",
-      "current": "index",
-      "ok": true,
-      "via": "motion-root",
-      "motion_consumed": true
-    },
-    {
-      "tap": "messages",
-      "current": "messages",
-      "ok": true,
-      "via": "motion-root",
-      "motion_consumed": true
-    },
-    {
-      "tap": "mine",
-      "current": "mine",
-      "ok": true,
-      "via": "motion-root",
-      "motion_consumed": true
-    }
-  ],
-  "rendered_page": "mine",
-  "on_draw": 10,
+  "tabs": [],
+  "switch_log": [],
+  "rendered_page": "index",
+  "on_draw": 3,
   "host_stats": {
     "ok": true,
     "data": {
-      "mount_calls": 4,
-      "visible_calls": 4,
-      "destroy_calls": 3,
+      "mount_calls": 0,
+      "visible_calls": 0,
+      "destroy_calls": 0,
       "anim_calls": 0,
       "anim_completed": 0,
       "anim_hook_missing": 0,
       "rect_calls": 0,
       "shared_calls": 0,
-      "content_node_total": 269,
-      "live_screens": 1,
+      "content_node_total": 0,
+      "live_screens": 0,
       "calls": [
         "screen.mount",
-        "screen.visible",
-        "screen.destroy",
-        "screen.mount",
-        "screen.visible",
-        "screen.destroy",
-        "screen.mount",
-        "screen.visible",
-        "screen.destroy",
-        "screen.mount",
-        "screen.visible",
         "screen.stats"
       ],
-      "screens": [
-        {
-          "screenId": "mine#4",
-          "visible": true,
-          "rootNodeId": 100
-        }
-      ],
-      "handle_count": 2
+      "screens": [],
+      "handle_count": 1
     }
   },
-  "png_error": "IllegalArgumentException"
+  "png": "superapp-launcher.png"
 }

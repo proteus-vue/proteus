@@ -72,6 +72,13 @@ export interface SelfDrawNodeSpec {
    */
   fontWeight?: number
   /**
+   * 绘制用：**字体的斜体形态**（`normal` / `italic` / `oblique`）
+   *
+   * 【为什么必须进字体维度签名】斜体字形（尤其拉丁文斜体）宽度与常规体不同 ⇒ 度量必须按斜体算，
+   *   否则「同文本 + 同字号 + 同字重，只差斜体」会被缓存合并 ⇒ 其中一个尺寸错（静默）。
+   */
+  fontStyle?: 'normal' | 'italic' | 'oblique'
+  /**
    * 绘制用：**字体族（语义角色，已归一化）**——不是 CSS 原始清单
    *
    * 【为什么发语义角色而不是原始 CSS 串（本仓纪律：契约要自描述）】
@@ -219,7 +226,7 @@ export interface SelfDrawAdapter extends NativeAdapter {
  * 绘制相关的键（**不进布局核心**——核心只管几何；绘制由宿主的指令流消费）。
  *
  */
-const PAINT_KEYS = new Set(['backgroundColor', 'color', 'fontSize', 'fontWeight', 'fontFamily', 'borderRadius', 'borderColor', 'borderWidth', 'opacity'])
+const PAINT_KEYS = new Set(['backgroundColor', 'color', 'fontSize', 'fontWeight', 'fontStyle', 'fontFamily', 'borderRadius', 'borderColor', 'borderWidth', 'opacity'])
 
 /** 布局相关的键（进核心；其余键既非布局也非绘制 → 忽略并计数，便于发现「静默丢失」） */
 const LAYOUT_KEYS = new Set([
@@ -489,7 +496,7 @@ export function normalizeFontFamily(v: unknown): string | undefined {
  */
 // ★入参类型放宽为 `string`：角色（5 个）与自定义族（`custom:<名>`）共用同一通道，
 //   混算对两者一视同仁（新增族名维度**不必改本函数**——这正是当初换 FNV-1a 的理由）。
-export function fontSignature(fontSize: number, fontWeight: number, fontFamily: string): number {
+export function fontSignature(fontSize: number, fontWeight: number, fontFamily: string, fontStyle: string = 'normal'): number {
   // FNV-1a（32 位）：实现短、分布好、跨 JS 引擎确定（不需要密码学强度）
   let h = 0x811c9dc5
   const mix = (s: string): void => {
@@ -504,6 +511,8 @@ export function fontSignature(fontSize: number, fontWeight: number, fontFamily: 
   mix(String(Math.round(fontSize * 100)))   // 字号（×100 ⇒ 保留 0.01 精度）
   mix(String(Math.round(fontWeight)))
   mix(fontFamily)
+  // ★★★font-style 项（2026-10-18）：斜体维度（斜体字形宽度与常规体不同 ⇒ 必须进度量缓存键）
+  mix(fontStyle)
   // ★u32 且**非 0**（核心用 0 表示"无字体签名 ⇒ 回退节点寻址"）
   return (h >>> 0) || 1
 }
@@ -860,10 +869,15 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
       const famRaw = styleValue(tStyle, 'fontFamily') ?? props.fontFamily
         ?? styleValue(pStyle, 'fontFamily') ?? (parent ? parent.props.fontFamily : undefined)
       const famRole = normalizeFontFamily(famRaw) ?? DEFAULT_FONT_FAMILY
+      // ★★★font-style 项（2026-10-18 · 批 B F3）：斜体同样**从父元素继承**（同 fontSize/fontWeight）
+      const fstRaw = styleValue(tStyle, 'fontStyle') ?? props.fontStyle
+        ?? styleValue(pStyle, 'fontStyle') ?? (parent ? parent.props.fontStyle : undefined)
+      const fst = typeof fstRaw === 'string' && (fstRaw === 'italic' || fstRaw === 'oblique') ? fstRaw : 'normal'
       if (Number.isFinite(fsNum) && fsNum > 0) {
         spec.fontSize = fsNum
         spec.fontWeight = fwNum
         spec.fontFamily = famRole
+        spec.fontStyle = fst
         // ★字体维度进缓存键：**字号 × 字重 × 字族**（与宿主度量输入同源）
         //
         // 【为什么必须含字重（本仓实测的正确性缺口）】度量缓存键是 `(text_hash, max_w)`，
@@ -871,7 +885,7 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
         //   会被**错误合并**同一缓存项 ⇒ 其中一个尺寸错（本仓已在字号维度踩过同一坑）。
         // 【为什么必须含字族】同一理由——衬线体与等宽体对同一文案的宽度**不同**。
         // ⇒ 实现见 `fontSignature`（FNV-1a 混算；含"为什么不再是算术拼接"的原因）
-        spec.textStyleKey = fontSignature(fsNum, fwNum, famRole)
+        spec.textStyleKey = fontSignature(fsNum, fwNum, famRole, fst)
       }
       // 同理继承颜色（否则文本用宿主的白色兜底 ⇒ 深色主题下说明文字看不见）
       const col = styleValue(tStyle, 'color') ?? props.color
@@ -936,6 +950,9 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
         // ★字重是 `string | number`（'bold' / 700）⇒ 归一化后再落（其它键是纯 number）
         const w = normalizeFontWeight(src)
         if (w !== undefined) spec.fontWeight = w
+      } else if (key === 'fontStyle') {
+        // ★★★font-style 项（2026-10-18）：封闭集（normal/italic/oblique）；未知值不落（宿主回退常规体）
+        if (typeof src === 'string' && (src === 'normal' || src === 'italic' || src === 'oblique')) spec.fontStyle = src
       } else if (key === 'fontFamily') {
         // ★字体族是字符串清单 ⇒ 归一化成**语义角色**；未识别则**不落**（宿主回退 system）
         const fam = normalizeFontFamily(src)

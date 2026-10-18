@@ -16,6 +16,11 @@ export type StylePropLevel =
   | 'FlexAlign'
   | 'FlexJustify'
   | 'TextAlign'
+  // ★★★font-style 项（2026-10-18 · 批 B F3 排版增强之一 · CSS Fonts 4）：**斜体/倾斜**（继承属性）。
+  //   值集 = 四端可表达子集（normal / italic / oblique——三端字体引擎都有 italic/oblique；
+  //   `oblique <angle>` 带角度形式 Skyline 无 ⇒ 编译期诊断跳过，v1 边界）。
+  //   四同步（INV-CE-07）：本表 + runtime PROP_TYPES/narrowing + compiler 静态校验 + 注册表 VALUE_TYPE_BY_LEVEL。
+  | 'FontStyle'
   // ★★★G-61 后批（2026-10-05）：文本换行/空白语义（white-space）——CSE 与旧折叠器都已支持，
   //   但注册表/矩阵/runtime 三处漏登记（**四同步缺口**，清单审计抓出）⇒ 补齐（INV-CE-07）。
   | 'TextWrap'
@@ -92,6 +97,8 @@ export const STYLE_PROP_LEVELS = {
   borderColor: 'Color',
   opacity: 'Opacity',
   fontWeight: 'Integer',
+  // ★★★font-style 项（2026-10-18）：斜体（normal/italic/oblique；带角度的 oblique 诊断跳过）
+  fontStyle: 'FontStyle',
   textAlign: 'TextAlign',
   whiteSpace: 'TextWrap',
   borderRadius: 'Length',

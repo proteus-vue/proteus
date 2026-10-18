@@ -1,9 +1,9 @@
 # CSS Web 全量能力清单（自动生成——勿手改；生成器 scripts/gen-css-feature-inventory.mjs）
 
 > 总 949 项（property 651 · selector 144 · at-rule 19 · function 105 · unit 30）
-> 实现：**not-started** 524 · **excluded** 280 · **implemented** 144 · **partial** 1
-> 优先级：P2 114 · excluded 280 · done 144 · P1 411
-> ★**可推项（非已实现/非排除）**：525（其中 **P0 0**）
+> 实现：**not-started** 523 · **excluded** 280 · **implemented** 145 · **partial** 1
+> 优先级：P2 114 · excluded 280 · done 145 · P1 410
+> ★**可推项（非已实现/非排除）**：524（其中 **P0 0**）
 
 ## P0 —— 语料在用但未实现（真实需求，最优先）
 
@@ -57,7 +57,6 @@
 | `font-optical-sizing` | CSS Fonts | not-started |
 | `font-palette` | CSS Fonts | not-started |
 | `font-size-adjust` | CSS Fonts | not-started |
-| `font-style` | CSS Fonts | not-started |
 | `font-synthesis` | CSS Fonts | not-started |
 | `font-synthesis-small-caps` | CSS Fonts | not-started |
 | `font-synthesis-style` | CSS Fonts | not-started |
@@ -94,5 +93,6 @@
 | `place-self` | CSS Box Alignment | not-started |
 | `reading-flow` | CSS Display | not-started |
 | `reading-order` | CSS Display | not-started |
+| `rotate` | CSS Transforms | not-started |
 
 （P2 与 excluded 全量见 JSON；本 MD 只列推进面）

@@ -708,7 +708,7 @@ final class SelfDrawView: UIView {
             let fw = (style["fontWeight"] as? CGFloat) ?? 400
             // ★字体由统一构造器给出（与度量同源——见 `font(size:weight:family:)` 注释）
             let ufont = ProteusTextAdapter.font(size: fs, weight: fw,
-                                            family: (style["fontFamily"] as? String) ?? "system")
+                                            family: SelfDrawView.familyOf(style))
             tl.font = ProteusTextAdapter.cgFont(of: ufont)
             tl.fontSize = fs
             // ★★★CSS 初值 `color`（2026-10-08 · 以 Web 为基准）：缺省 **黑**（Web 未声明 color 时即黑）。
@@ -2786,7 +2786,7 @@ final class SelfDrawView: UIView {
                 let m = metaByNodeId[id] ?? [:]
                 let uf = ProteusTextAdapter.font(size: (m["fontSize"] as? CGFloat) ?? 14,
                                                  weight: (m["fontWeight"] as? CGFloat) ?? 400,
-                                                 family: (m["fontFamily"] as? String) ?? "system")
+                                                 family: SelfDrawView.familyOf(m))
                 tl.string = textLayerString(text, style: m, font: uf, color: tl.foregroundColor ?? UIColor.white.cgColor)
                 applied += 1
             }
@@ -3607,8 +3607,13 @@ final class SelfDrawView: UIView {
             let fs = (paint["fontSize"] as? CGFloat) ?? tl.fontSize
             let fw = (paint["fontWeight"] as? CGFloat) ?? 400
             // ★字族也是字体维度：paint 里带它（或带 fontSize/weight）都要重建字体
-            let fam = (paint["fontFamily"] as? String) ?? metaByNodeId[id]?["fontFamily"] as? String ?? "system"
-            if paint["fontSize"] != nil || paint["fontWeight"] != nil || paint["fontFamily"] != nil {
+            let fam0 = (paint["fontFamily"] as? String) ?? metaByNodeId[id]?["fontFamily"] as? String ?? "system"
+            // ★★★font-style 项（2026-10-18 · 批 B F3）：斜体/倾斜折进**角色串前缀**（与 Android 同契约）——
+            //   平台层 ProteusTextAdapter.font 统一解析 ⇒ 度量与绘制同源（斜体是另一套字形，宽度不同）。
+            let fst = (paint["fontStyle"] as? String) ?? metaByNodeId[id]?["fontStyle"] as? String
+            let fam: String
+            if let f = fst, f == "italic" || f == "oblique" { fam = f + ":" + fam0 } else { fam = fam0 }
+            if paint["fontSize"] != nil || paint["fontWeight"] != nil || paint["fontFamily"] != nil || paint["fontStyle"] != nil {
                 let ufont = ProteusTextAdapter.font(size: fs, weight: fw, family: fam)
                 // ★字体变了 ⇒ 必须同时更新 `font` 与 `fontSize`（CATextLayer 两者独立）
                 tl.font = ProteusTextAdapter.cgFont(of: ufont)
@@ -3997,7 +4002,7 @@ final class SelfDrawView: UIView {
         }
         let fs = (style["fontSize"] as? CGFloat) ?? 14
         let fw = (style["fontWeight"] as? CGFloat) ?? 400
-        let fam = (style["fontFamily"] as? String) ?? "system"
+        let fam = SelfDrawView.familyOf(style)
         let w = ProteusTextAdapter.measureText(text, fontSize: fs, fontWeight: fw, fontFamily: fam).width
         return w <= cw + 0.5
     }
@@ -4031,7 +4036,7 @@ final class SelfDrawView: UIView {
         let contentW = max(1, boxWidth - padW)
         let fs = (style["fontSize"] as? CGFloat) ?? 14
         let fw = (style["fontWeight"] as? CGFloat) ?? 400
-        let fam = (style["fontFamily"] as? String) ?? "system"
+        let fam = SelfDrawView.familyOf(style)
         let ls = (style["letterSpacing"] as? Double).map({ CGFloat($0) }) ?? (style["letterSpacing"] as? CGFloat) ?? 0
         return ProteusTextAdapter.truncateToLines(text, fontSize: fs, fontWeight: fw, fontFamily: fam,
             lineWidth: contentW, lineHeight: style["lineHeight"] as? String, letterSpacing: ls,
@@ -4053,6 +4058,13 @@ final class SelfDrawView: UIView {
         return ov == "hidden" || ov == "scroll" || ov == "auto"
     }
 
+    /// ★★★font-style 项（2026-10-18 · 批 B F3）：**字体角色串 + 斜体前缀**的唯一合成点。
+    ///   度量与绘制都必须走它（斜体是另一套字形，宽度不同 ⇒ 两处不一致就会"字被裁而判据全绿"）。
+    static func familyOf(_ style: [String: Any]) -> String {
+        let base = (style["fontFamily"] as? String) ?? "system"
+        if let f = style["fontStyle"] as? String, f == "italic" || f == "oblique" { return f + ":" + base }
+        return base
+    }
     /// 把节点规格里的绘制字段取出来（与全量路径同款；单一实现避免分叉）
     static func styleOf(_ n: [String: Any]) -> [String: Any] {
         var style: [String: Any] = [:]
@@ -4060,7 +4072,7 @@ final class SelfDrawView: UIView {
         // ★★★overflow-x 项（2026-10-06）：overflowX/overflowY 也透传（层配置按其开裁剪）
         // ★★★word-break 项（2026-10-06）：wordBreak 也透传（段落样式按其设 lineBreakMode）
         // ★批 A（决策 #651/#652）：position 必须透传——fixed 层需重挂到视图层（不随内容滚动）。
-        for k in ["backgroundColor", "color", "text", "fontFamily", "textAlign", "borderColor", "lineHeight", "whiteSpace", "wordBreak", "overflow", "textOverflow", "overflowX", "overflowY", "position"] {
+        for k in ["backgroundColor", "color", "text", "fontFamily", "fontStyle", "textAlign", "borderColor", "lineHeight", "whiteSpace", "wordBreak", "overflow", "textOverflow", "overflowX", "overflowY", "position"] {
             if let v = n[k] as? String { style[k] = v }
         }
         // ★★★修复（2026-10-08 · 子代理审美审查 + 真机取证）：**letterSpacing / textDecoration 此前被本函数丢弃**——
@@ -4347,11 +4359,11 @@ final class SelfDrawView: UIView {
                 tl.string = clamped
                 tl.font = ProteusTextAdapter.cgFont(of: ProteusTextAdapter.font(
                     size: fs, weight: fw,
-                    family: (style["fontFamily"] as? String) ?? "system"))
+                    family: SelfDrawView.familyOf(style)))
                 tl.fontSize = fs
                 tl.foregroundColor = (style["color"] as? String).flatMap(parseHexColor)?.cgColor
                     ?? UIColor.white.cgColor
-                tl.string = textLayerString(clamped, style: style, font: ProteusTextAdapter.font(size: fs, weight: fw, family: (style["fontFamily"] as? String) ?? "system"), color: (style["color"] as? String).flatMap(parseHexColor)?.cgColor ?? UIColor.white.cgColor, wrapOverride: wrapMode2)
+                tl.string = textLayerString(clamped, style: style, font: ProteusTextAdapter.font(size: fs, weight: fw, family: SelfDrawView.familyOf(style)), color: (style["color"] as? String).flatMap(parseHexColor)?.cgColor ?? UIColor.white.cgColor, wrapOverride: wrapMode2)
                 tl.alignmentMode = alignmentMode(style["textAlign"] as? String)
                 tl.truncationMode = (!wrapMode2 && (style["textOverflow"] as? String) == "ellipsis") ? .end : .none
                 tl.isWrapped = wrapMode2
@@ -4404,7 +4416,7 @@ final class SelfDrawView: UIView {
            !SelfDrawView.effectiveWrap(style, text: text, boxWidth: f.width) {
             let fs0 = (style["fontSize"] as? CGFloat) ?? 14
             let fw0 = (style["fontWeight"] as? CGFloat) ?? 400
-            let fam0 = (style["fontFamily"] as? String) ?? "system"
+            let fam0 = SelfDrawView.familyOf(style)
             let kern0 = (style["letterSpacing"] as? Double).map({ CGFloat($0) }) ?? (style["letterSpacing"] as? CGFloat) ?? 0
             let natW = ProteusTextAdapter.measureText(text, fontSize: fs0, fontWeight: fw0, fontFamily: fam0, letterSpacing: kern0).width
             if natW > cbf.width + 0.5 {
@@ -4421,7 +4433,7 @@ final class SelfDrawView: UIView {
             if text.contains("\n") { return cbf }
             let fs2 = (style["fontSize"] as? CGFloat) ?? 14
             let fw2 = (style["fontWeight"] as? CGFloat) ?? 400
-            let fam2 = (style["fontFamily"] as? String) ?? "system"
+            let fam2 = SelfDrawView.familyOf(style)
             let kern2 = (style["letterSpacing"] as? Double).map({ CGFloat($0) }) ?? (style["letterSpacing"] as? CGFloat) ?? 0
             var attrs2: [NSAttributedString.Key: Any] = [.font: ProteusTextAdapter.font(size: fs2, weight: fw2, family: fam2)]
             if kern2 != 0 { attrs2[.kern] = kern2 }
@@ -4442,7 +4454,7 @@ final class SelfDrawView: UIView {
               let boxH = ProteusTextAdapter.lineHeightPx(lhTok, fontSize: (style["fontSize"] as? CGFloat) ?? 14),
               boxH > 0 else { return cbf }
         let fw = (style["fontWeight"] as? CGFloat) ?? 400
-        let fam = (style["fontFamily"] as? String) ?? "system"
+        let fam = SelfDrawView.familyOf(style)
         let contentH = ProteusTextAdapter.font(size: (style["fontSize"] as? CGFloat) ?? 14, weight: fw, family: fam).lineHeight
         guard contentH > 0 else { return cbf }
         let cy = cbf.origin.y + boxH * 0.5   // 行盒中心（= 内容盒 minY + boxH/2）

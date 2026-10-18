@@ -55,6 +55,8 @@ export interface RenderCmd {
   text?: string
   fontSize?: number
   fontWeight?: number | 'normal' | 'bold'
+  /** ★★★font-style（2026-10-18 · 批 B F3）：斜体（normal/italic/oblique——四端可表达子集） */
+  fontStyle?: 'normal' | 'italic' | 'oblique'
   lineHeight?: number
   color_?: string
   textAlign?: string
@@ -599,6 +601,8 @@ function buildCmd(
     text: info.literal,
     fontSize: num(info.text?.fontSize),
     fontWeight: info.text?.fontWeight,
+    // ★★★font-style 项（2026-10-18 · 批 B F3）：斜体（宿主按字体 trait 选字形）
+    fontStyle: info.text?.fontStyle,
     lineHeight: typeof info.text?.lineHeight === 'number' ? info.text.lineHeight : num(info.text?.lineHeight),
     color_: info.text?.color,
     textAlign: info.text?.textAlign,

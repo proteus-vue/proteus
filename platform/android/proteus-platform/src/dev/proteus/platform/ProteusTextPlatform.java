@@ -31,6 +31,9 @@ public final class ProteusTextPlatform {
 
     /** 与适配器 `CUSTOM_FONT_PREFIX` **同一常量**（两端契约；不一致则自定义族永远命中不了） */
     public static final String CUSTOM_FONT_PREFIX = "custom:";
+    /** ★★★font-style 项（2026-10-18）：斜体/倾斜的角色串前缀（与适配器同契约；宿主只存一个角色串） */
+    public static final String ITALIC_PREFIX = "italic:";
+    public static final String OBLIQUE_PREFIX = "oblique:";
 
     /** 族名 → 字体（注册表） */
     private static final Map<String, Typeface> customFonts = new HashMap<>();
@@ -58,18 +61,41 @@ public final class ProteusTextPlatform {
      *     ⇒ 两端"衬线体"长得不完全一样（平台字体库的固有差异，能力对齐 ≠ 像素一致）。
      */
     public static Typeface typefaceOf(String role, int weight, int[] fallbackCounter) {
+        // ★★★font-style 项（2026-10-18 · 批 B F3）：角色串可带 `italic:` 前缀（宿主的节点字体角色表只存一个字符串）
+        if (role != null) {
+            if (role.startsWith(ITALIC_PREFIX)) return typefaceOf(role.substring(ITALIC_PREFIX.length()), weight, true, fallbackCounter);
+            if (role.startsWith(OBLIQUE_PREFIX)) return typefaceOf(role.substring(OBLIQUE_PREFIX.length()), weight, true, fallbackCounter);
+        }
+        return typefaceOf(role, weight, false, fallbackCounter);
+    }
+
+    /**
+     * ★★★font-style 项（2026-10-18 · 批 B F3）：**带斜体的字形解析**（原签名委托到本方法，行为不变）。
+     *
+     * <p>【为什么斜体必须进这一层】斜体不是"画的时候把画布歪一下"——它是**另一套字形**
+     * （字宽/字高/字重都不同）⇒ 度量与绘制必须用同一支字体（本仓已因"度量一支、绘制另一支"
+     * 踩过"字被裁而报告全绿"）。唯一实现放在本层 ⇒ 三处调用点（度量/绘制/预测量）天然同源。</p>
+     *
+     * <p>【Android 的表达方式】`Typeface.create(base, style)` 的 style 是位掩码：
+     * `BOLD` / `ITALIC` / `BOLD_ITALIC` ⇒ 斜体与字重可组合。</p>
+     */
+    public static Typeface typefaceOf(String role, int weight, boolean italic, int[] fallbackCounter) {
         boolean bold = weight >= 600;
+        int style = (bold ? Typeface.BOLD : Typeface.NORMAL) | (italic ? Typeface.ITALIC : Typeface.NORMAL);
         // ★★自定义字体（`custom:<族名>`）——**先查注册表**
         //   契约见适配器 `CUSTOM_FONT_PREFIX`。未注册 ⇒ **回退 system + 计数**（不静默：
         //   "未识别"与"识别为默认"必须可区分）。
         if (role != null && role.startsWith(CUSTOM_FONT_PREFIX)) {
             String name = role.substring(CUSTOM_FONT_PREFIX.length());
             Typeface tf = customFonts.get(name);
-            if (tf != null) return tf;
+            if (tf != null) {
+                // 自定义字体族可能自带斜体（家族文件）；`create(base, style)` 让系统按 style 取变体，
+                // 取不到时平台回退同族的常规面（可接受：显式族优先于形态）。
+                return style == Typeface.NORMAL ? tf : Typeface.create(tf, style);
+            }
             customFontMisses++;
             lastMissingCustomFont = name;
-            return Typeface.create("sans-serif",
-                    bold ? Typeface.BOLD : Typeface.NORMAL);
+            return Typeface.create("sans-serif", style);
         }
         String fam;
         switch (role == null ? "system" : role) {
@@ -84,7 +110,7 @@ public final class ProteusTextPlatform {
                 fam = "sans-serif";
                 break;
         }
-        return Typeface.create(fam, bold ? Typeface.BOLD : Typeface.NORMAL);
+        return Typeface.create(fam, style);
     }
 
     /**
@@ -168,9 +194,14 @@ public final class ProteusTextPlatform {
 
     /** 配一支与绘制同源的度量用 `TextPaint`（字号/字重/字体角色/字距）。 */
     public static android.text.TextPaint paintFor(float sizePx, int weight, String familyRole, float letterSpacingPx) {
+        return paintFor(sizePx, weight, familyRole, letterSpacingPx, false);
+    }
+
+    /** ★★★font-style 项（2026-10-18 · 批 B F3）：带斜体的 paint 构造（度量与绘制同源——同一支字体）。 */
+    public static android.text.TextPaint paintFor(float sizePx, int weight, String familyRole, float letterSpacingPx, boolean italic) {
         android.text.TextPaint tp = new android.text.TextPaint();
         tp.setTextSize(sizePx);
-        tp.setTypeface(typefaceOf(familyRole, weight, null));
+        tp.setTypeface(typefaceOf(familyRole, weight, italic, null));
         if (letterSpacingPx != 0f && sizePx > 0f) tp.setLetterSpacing(letterSpacingPx / sizePx);
         return tp;
     }
@@ -180,7 +211,12 @@ public final class ProteusTextPlatform {
      *  ★B-T1（2026-10-10）：第 3 项 **baseline**（盒内容顶 → 基线）供内核 `align-items: baseline` 对文本对齐；
      *    既有调用方只取 [0]/[1] ⇒ 零影响。 */
     public static float[] measureSingle(float sizePx, int weight, String familyRole, float letterSpacingPx, String text) {
-        android.text.TextPaint tp = paintFor(sizePx, weight, familyRole, letterSpacingPx);
+        return measureSingle(sizePx, weight, familyRole, letterSpacingPx, text, false);
+    }
+
+    /** ★★★font-style 项（2026-10-18）：带斜体的单行度量（与绘制同源——同一支字体，否则度量偏窄会被裁）。 */
+    public static float[] measureSingle(float sizePx, int weight, String familyRole, float letterSpacingPx, String text, boolean italic) {
+        android.text.TextPaint tp = paintFor(sizePx, weight, familyRole, letterSpacingPx, italic);
         float w = tp.measureText(text);
         android.graphics.Paint.FontMetrics fm = tp.getFontMetrics();
         return new float[]{ w, fm.descent - fm.ascent, -fm.ascent };
@@ -188,7 +224,12 @@ public final class ProteusTextPlatform {
 
     /** ★B-T1：文本基线（盒内容顶 → 基线；Android = −ascent）。与 `measureSingle` 同源（同一 paintFor）。 */
     public static float baseline(float sizePx, int weight, String familyRole, float letterSpacingPx) {
-        android.text.TextPaint tp = paintFor(sizePx, weight, familyRole, letterSpacingPx);
+        return baseline(sizePx, weight, familyRole, letterSpacingPx, false);
+    }
+
+    /** ★★★font-style 项（2026-10-18）：带斜体的基线（与绘制同源）。 */
+    public static float baseline(float sizePx, int weight, String familyRole, float letterSpacingPx, boolean italic) {
+        android.text.TextPaint tp = paintFor(sizePx, weight, familyRole, letterSpacingPx, italic);
         return -tp.getFontMetrics().ascent;
     }
 
@@ -201,8 +242,15 @@ public final class ProteusTextPlatform {
     public static float[] measureWrapped(String text, float sizePx, int weight, String familyRole,
                                          float letterSpacingPx, String wordBreak, int lineClamp,
                                          float boxW, float lineHeightPx) {
+        return measureWrapped(text, sizePx, weight, familyRole, letterSpacingPx, wordBreak, lineClamp, boxW, lineHeightPx, false);
+    }
+
+    /** ★★★font-style 项（2026-10-18）：带斜体的折行度量（与绘制同源）。 */
+    public static float[] measureWrapped(String text, float sizePx, int weight, String familyRole,
+                                         float letterSpacingPx, String wordBreak, int lineClamp,
+                                         float boxW, float lineHeightPx, boolean italic) {
         String mt = applyWordBreak(text, wordBreak);
-        android.text.TextPaint tp = paintFor(sizePx, weight, familyRole, letterSpacingPx);
+        android.text.TextPaint tp = paintFor(sizePx, weight, familyRole, letterSpacingPx, italic);
         // ★无断点长串 + 溢出盒宽（normal）⇒ 单行溢出（不增长——与宿主 mkCmd 同步）
         if (!"break-all".equals(wordBreak) && isUnbreakableToken(text) && tp.measureText(text) > boxW + 0.5f) {
             return null;

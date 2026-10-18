@@ -5,13 +5,13 @@
 
 | 指标 | 数值 | 来源 |
 |---|---|---|
-| StyleIR 字段（闭集·版本化） | **108**（semantic 83 · engine-only 25） | STYLE_IR_SUMMARY |
+| StyleIR 字段（闭集·版本化） | **109**（semantic 84 · engine-only 25） | STYLE_IR_SUMMARY |
 | 判据①-b 逐属性对拍 | **113** 用例 / **153** 项 ≡ 真 Chromium | PARITY_CASES（夹具） |
 | M1 数值一致性覆盖率 | **65.46%**（并集 83/83） | consistency-metrics.json |
 | 判据② 几何等价阈值 | **≤ 0.5 dp**（App ≡ Web）· 结构类容差 ≤1px / ≤0.5% | appliers-conformance.test.ts / tolerance.ts |
 | Profile lint 存量（棘轮） | **117**（examples 25 · showcase 26 · css-conformance 25 · website 41） | cse-lint-baseline.json |
-| 三端能力对齐矩阵 | **81** 行 × **3** 端（web / skyline / app） | css-capability-alignment.json |
-| CSS 能力清单（Web 全量） | **949** 项（implemented 144 · actionable 525 · P0 0） | css-feature-inventory.json |
+| 三端能力对齐矩阵 | **82** 行 × **3** 端（web / skyline / app） | css-capability-alignment.json |
+| CSS 能力清单（Web 全量） | **949** 项（implemented 145 · actionable 524 · P0 0） | css-feature-inventory.json |
 
 > ★「113 用例 / 153 项」为**测试夹具静态计数**（与 `tests/e2e-cse-parity.test.ts` 运行时同源）；
 > ≤undefineddp 为 `tolerance.ts` 的**承诺值**，非计数。

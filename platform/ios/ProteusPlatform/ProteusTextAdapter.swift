@@ -37,7 +37,17 @@ final class ProteusTextAdapter {
     ///   宿主的缓存省的是**跨界调用**（CoreText），核心的缓存省的是**重复回调**。
     private static var measureCache: [String: CGSize] = [:]
 
+    /// ★★★font-style 项（2026-10-18 · 批 B F3）：**斜体/倾斜**——角色串可带 `italic:` / `oblique:` 前缀
+    ///   （与 Android `ProteusTextPlatform.ITALIC_PREFIX` 同契约）。iOS 用 `UIFontDescriptor` 的
+    ///   `.traitItalic` 取同族斜体面；取不到 ⇒ **显式回退常规面 + 计数**（不静默）。
+    ///   ★为什么必须在这一层：斜体是**另一套字形**（宽度不同）⇒ 度量与绘制必须同源，否则字被裁而判据全绿。
     static func font(size: CGFloat, weight: CGFloat, family: String = "system") -> UIFont {
+        if family.hasPrefix("italic:") {
+            return italicFont(base: font(size: size, weight: weight, family: String(family.dropFirst("italic:".count))), size: size)
+        }
+        if family.hasPrefix("oblique:") {
+            return italicFont(base: font(size: size, weight: weight, family: String(family.dropFirst("oblique:".count))), size: size)
+        }
         let base = systemFont(size: size, weight: weight)
         switch family {
         case "system":
@@ -159,6 +169,15 @@ final class ProteusTextAdapter {
         return UIFont.systemFont(ofSize: size)
     }
 
+    /// ★★★font-style 项（2026-10-18）：取同族**斜体面**；平台无斜体面 ⇒ 回退常规面并计数（不静默）。
+    private static func italicFont(base: UIFont, size: CGFloat) -> UIFont {
+        guard let d = base.fontDescriptor.withSymbolicTraits(.traitItalic) else {
+            fontFamilyFallbackCount += 1
+            lastUnknownFontFamily = "italic@no-face"
+            return base
+        }
+        return UIFont(descriptor: d, size: size)
+    }
     /// 用 `UIFontDescriptor` 的**设计族**取字体（serif/rounded/condensed），并尽量叠上字重
     private static func designFont(size: CGFloat, weight: CGFloat, design: UIFontDescriptor.SystemDesign) -> UIFont? {
         guard let d0 = UIFont.systemFont(ofSize: size).fontDescriptor.withDesign(design) else { return nil }

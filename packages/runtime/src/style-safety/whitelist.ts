@@ -29,6 +29,11 @@ const FLEX_JUSTIFY = ['flex-start', 'flex-end', 'center', 'space-between', 'spac
 /** ★批次 4：`text-align` 封闭集（App 自绘文本水平对齐） */
 const TEXT_ALIGN = ['left', 'center', 'right']
 /**
+ * ★★★font-style 项（2026-10-18 · 批 B F3）：`font-style` 封闭集（四端可表达子集）。
+ *   `normal` / `italic` / `oblique` 三端字体引擎均支持；带角度的 `oblique 10deg` Skyline 无 ⇒ 诊断跳过。
+ */
+const FONT_STYLE = ['normal', 'italic', 'oblique']
+/**
  * ★★★G-61 后批（2026-10-05）：`white-space` 封闭集（Web 标准关键字）。
  *   与"各端可表达值"是两个轴：App 单行文本模型把 `nowrap` 当默认（no-op），
  *   其余值由 Applier/折叠器如实降级（诊断）——本层按 Web 标准收口，端侧收窄不在这层。
@@ -71,6 +76,8 @@ export const PROP_TYPES = {
   FlexAlign: isEnum(FLEX_ALIGN),
   FlexJustify: isEnum(FLEX_JUSTIFY),
   TextAlign: isEnum(TEXT_ALIGN),
+  // ★★★font-style 项（2026-10-18）：斜体枚举（normal/italic/oblique）
+  FontStyle: isEnum(FONT_STYLE),
   TextWrap: isEnum(TEXT_WRAP),
   BorderStyle: isEnum(BORDER_STYLE),
   Overflow: isEnum(OVERFLOW),

@@ -83,6 +83,8 @@ describe('★App CSS 支持面 · ② SSOT 与折叠实现同源（真折叠，�
       if (/^border(Top|Right|Bottom|Left)Width$/.test(f)) return '1'
       if (f === 'boxSizing') return 'border-box'
       if (f === 'fontWeight') return 'bold'
+      // ★★★font-style 项（2026-10-18 · 批 B F3）：斜体（枚举样例——折叠器直传宿主）
+      if (f === 'fontStyle') return 'italic'
       if (f === 'textAlign') return 'center'
       if (f === 'boxShadow') return '0 1px 2px #000000'
       // ★★★text-shadow 项（2026-10-08）：文本阴影（结构化折叠）

@@ -103,6 +103,8 @@ export const CSE_INHERITED_PROPS = new Set([
   'text-align', 'text-overflow', 'visibility', 'white-space',
   // ★★★word-break 项（2026-10-06）：CSS Text 继承属性（子节点默认继承父的断词策略）
   'word-break',
+  // ★★★font-style 项（2026-10-18 · 批 B F3）：CSS Fonts 继承属性（子节点默认继承父的斜体）
+  'font-style',
 ])
 
 /** 各属性 initial 值（`initial`/`unset` 需要；未列 ⇒ initial 不可用（如实记 diagnostic）） */
@@ -110,6 +112,8 @@ const INITIAL_VALUES: Record<string, string> = {
   color: '#000000',
   'font-size': '16px',
   'font-weight': '400',
+  // ★★★font-style 项（2026-10-18）：CSS initial = normal（继承属性）
+  'font-style': 'normal',
   'font-family': 'initial',
   'line-height': 'normal',
   'letter-spacing': '0px',
@@ -942,6 +946,8 @@ function mapToIrField(prop: string, val: CssComputedValue): { field: string; val
     visibility: 'visibility',
     'text-align': 'textAlign',
     'text-overflow': 'textOverflow',
+    // ★★★font-style 项（2026-10-18 · 批 B F3）：斜体（继承属性；CSE 直通同名 IR 字段）
+    'font-style': 'fontStyle',
     'text-decoration-line': 'textDecoration',
     'flex-direction': 'flexDirection',
     'flex-wrap': 'flexWrap',
@@ -1007,6 +1013,10 @@ function mapToIrField(prop: string, val: CssComputedValue): { field: string; val
   }
   if (prop === 'font-weight') {
     return { field: 'fontWeight', value: typeof val === 'number' ? val : null }
+  }
+  if (prop === 'font-style') {
+    // ★★★font-style 项（2026-10-18 · 批 B F3）：斜体（封闭集已由编译期/校验器收口，此处直通）
+    return { field: 'fontStyle', value: typeof val === 'string' ? val : null }
   }
   if (prop === 'line-height') {
     // 契约：lineHeight 为 engine-field（旧通路存 '1.4' | '22px'）；CSE v1 直通（number=px；因子也 number）

@@ -52,6 +52,14 @@ const lhText = '第一行文本\n第二行文本（行高 28px）'
       </view>
     </view>
 
+    <!-- ★★★font-style 项（2026-10-18 · 批 B F3）：斜体/倾斜（normal 作对照） -->
+    <text class="cc-sec">G · font-style（斜体对齐 Web）</text>
+    <view class="cc-card">
+      <text id="case-font-style-normal" class="fst-normal">常规 normal（对照）</text>
+      <text id="case-font-style-italic" class="fst-italic">斜体 italic Italic 123</text>
+      <text id="case-font-style-oblique" class="fst-oblique">倾斜 oblique Italic 123</text>
+    </view>
+
     <!-- F：text-decoration + color -->
     <text class="cc-sec">F · text-decoration / color</text>
     <view class="cc-card">
@@ -75,4 +83,8 @@ const lhText = '第一行文本\n第二行文本（行高 28px）'
 .ta-r { display: block; font-size: 14px; text-align: right; color: #1a1c22; }
 .deco-underline { display: block; font-size: 14px; text-decoration: underline; color: #5b5bd6; }
 .col-brand { display: block; font-size: 14px; color: #d64545; }
+/* ★★★font-style 项（2026-10-18）：斜体/倾斜 —— 三端字体引擎都支持；Web 为基准。 */
+.fst-normal { display: block; font-size: 16px; font-style: normal; color: #1a1c22; }
+.fst-italic { display: block; font-size: 16px; font-style: italic; color: #1a1c22; }
+.fst-oblique { display: block; font-size: 16px; font-style: oblique; color: #1a1c22; }
 </style>

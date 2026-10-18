@@ -11,8 +11,8 @@
     "tolerance": "packages/consistency/src/tolerance.ts::DEFAULT_TOLERANCE"
   },
   "ir": {
-    "total": 108,
-    "semantic": 83,
+    "total": 109,
+    "semantic": 84,
     "engineOnly": 25
   },
   "parity": {
@@ -67,7 +67,7 @@
     }
   },
   "alignment": {
-    "rows": 81,
+    "rows": 82,
     "ends": 3,
     "endsList": [
       "web",
@@ -84,9 +84,9 @@
       "function": 105,
       "unit": 30
     },
-    "implemented": 144,
-    "notStarted": 524,
-    "actionable": 525,
+    "implemented": 145,
+    "notStarted": 523,
+    "actionable": 524,
     "actionableP0": 0
   }
 }
