@@ -6175,3 +6175,40 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   ★**"自愈同步"要能实测**：不要相信"机制应该会同步"，去把陈旧宿主的计数从 0 改到 N 才算证明。
 【诚实边界】本轮只真机复验鸿蒙；Android/iOS 是**静态门禁**证明"单实现点"（android 3 / ios 3 处全在平台层），
   未重跑真机像素（iOS 仍卡描述文件过期 · #1053）。
+
+1056. **★★★`font-style` 三端真机全验完毕（iOS 真机通过 · 与 Web 基准并排对照）· 决策**（2026-10-18 · 用户「现在验证iOS真机，xcode你用的是/Volumes/data1/work/office-applications目录里面吗？」+「已经信任了」）：
+【环境问答（用户直接问的）】**当前解析到的是 `/Applications/Xcode.app`（Xcode 27.1）**，不是
+  `/Volumes/data1/work/office-applications/Xcode.app`（26.5）。解析顺序：`PROTEUS_DEVELOPER_DIR` >
+  `DEVELOPER_DIR` > `xcode-select` > Spotlight(mdfind) > 常见安装位；两者都能给 iOS SDK + `xcrun devicectl`，
+  功能等价。要让脚本固定用 26.5：`PROTEUS_DEVELOPER_DIR=/Volumes/data1/work/office-applications/Xcode.app/Contents/Developer`。
+【iOS 真机验证链路（本轮全部打通）】
+  ① **描述文件过期**（10-18 凌晨到期，目录已被清空）⇒ 用 `hosts/ios/experiments/device/provision.sh
+     cn.shxuxi.proteus.experiments F4R3P3L477` 自动申请（`BUILD SUCCEEDED`），新 profile 至 **2026-10-25**；
+  ② `hosts/ios/signing.sh use lyunlai@dingtalk.com` 上本机档（team **F4R3P3L477**，证书 4B20090A…）；
+     ★两台机分档：办公室 `kagsdeimac` = `lyl@shxuxi.cn` / `XKH568R7A5`；家里 `yunlaidemini` =
+     `lyunlai@dingtalk.com` / `F4R3P3L477`（`signing.local.json` 按主机名分，互不干扰）；
+  ③ **设备上原装的是公司团队签的同名 App**（`XKH568R7A5.cn.shxuxi.proteus.experiments`）⇒ 升级被拒
+     （`application-identifier does not match installed`）⇒ `devicectl device uninstall app` 卸旧包；
+  ④ 装机成功 → 首次启动要**设备手动信任新证书**（设置→通用→VPN与设备管理）——用户已信任；
+  ⑤ 导航：★`--screen=<name>` 在 iOS 上**必须与 `--scroll=<dy>` 同时给**（`superapp-scene.swift` 里
+     两者的 `if let` 是 `&&` 条件）——单独传 `--screen=font` 会被**静默忽略**（本轮实测：三次都停在索引页）。
+     正解：`--screen=font --scroll=0`；
+  ⑥ 截图：`xcrun devicectl device capture screenshot -d <UDID> --destination <png>`（不是 `--device`/`screenshot`
+     旧写法；27.1 的语法是 `device capture screenshot`）。
+【判据（与 Web 基准并排对照，非目测）】`css-conformance/results/web/font.png`（真 Chromium，DPR2）与
+  iOS 真机截图同区域并排（`.workbuddy/salvage/font-style/ios/ios-vs-web.png`）：
+  · **normal 正立**（两排一致）· **italic 明显右倾** · **oblique 明显右倾** ⇒ 与 Web 基准形态一致；
+  · ★纯数值判据（顶−底墨迹中心）在本字体下**不可靠**（中文字形/字母形状干扰：normal 也 −7.1、
+    italic −14.4、oblique +3.0）⇒ 最终判据用**并排放大图 + 与 Web 对照**（这也是本仓"三端对齐以 Web 为基准"的标准做法）。
+【三端 font-style 验证状态（全绿）】
+  · **Android**：真机截图 G 案例（`salvage/font-style/android/`），斜体/倾斜明显右倾；
+  · **鸿蒙**：真机（`salvage/font-style/harmony/`），Δ = normal −30 / italic **+5** / oblique **+12** px；
+  · **iOS**：真机（`salvage/font-style/ios/`），与 Web 并排对照一致；
+  · **Web**：基准（真 Chromium）。
+【★教训】★★★**参数"看起来传了"不等于"被消费"**——`--screen=font` 单独传会被 `&&` 条件静默丢弃
+  （与 `fontStyle` 在指令层的静默丢弃**同型**）；凡"传了没效果"先查**消费方的解析条件**，别急着改功能；
+  ★★**iOS 装机有三个环境门**（描述文件有效 / 团队一致（否则同名 App 拒绝升级）/ 设备信任证书），
+  三者任一不过都表现为"装不上/打不开"，必须逐门核对而不是当成代码问题（与 #1053 鸿蒙签名同族）；
+  ★**数值判据要选对特征**：字形倾斜在混合中英文行上会被字形本身淹没 ⇒ 改用"并排对照 Web 基准"。
+【诚实边界】三端均已真机（Web 为真 Chromium 基准）；本轮 iOS 无源码改动（`ProteusTextAdapter.font` +
+  `familyOf` 本来就正确）——验证的是 #1050/#1054 的落地效果。
