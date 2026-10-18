@@ -427,6 +427,14 @@ if [ "$MODE" = "release" ]; then
     _M="$BUILD/AndroidManifest.ink.release.xml"
     sed 's/ *android:debuggable="true"//' "$MANIFEST" > "$_M"
     MANIFEST="$_M"
+  elif [ "$CSSCONF" = "1" ]; then
+    # ★★★（2026-10-18 修）：release 分支此前**漏了 cssconf** ⇒ 落到 else 用默认清单覆盖
+    #   ⇒ `--css --release` 产出的 APK 包名是 dev.proteus.layoutcore（不是 cssconf）⇒
+    #   adb install 静默替换了**另一个包**，而启动的仍是旧的 cssconf（实测：装了"成功"但设备上
+    #   还是 10-08 的旧包）。与 lights/flip/ink 同款分支。
+    _M="$BUILD/AndroidManifest.cssconf.release.xml"
+    sed 's/ *android:debuggable="true"//' "$MANIFEST" > "$_M"
+    MANIFEST="$_M"
   else
     MANIFEST="$BUILD/AndroidManifest.release.xml"
     sed 's/ *android:debuggable="true"//' "$APP/src/main/AndroidManifest.xml" > "$MANIFEST"
@@ -566,6 +574,28 @@ else
   echo "✗ zipalign 失败（$ZIPALIGN 16384）"
   exit 3
 fi
+
+# ★★★（2026-10-18 · 用户「安卓页面滚动没有惯性」的根因修复配套门禁）：**产物包名断言**。
+#   【为什么必须有（实测事故）】release 分支此前漏了 cssconf 子分支 ⇒ 打包用默认清单
+#   ⇒ `--css --release` 产出包名 dev.proteus.layoutcore 的 APK，名字却叫 proteus-cssconf.apk
+#   ⇒ `adb install` 把**另一个包**替换了，而真正的 CSS 验收包**一直停留在 7 小时前的旧版本**
+#   （旧版没有竖向 fling）⇒ 用户看到「松手即停、没有惯性」，且构建日志全是 Success。
+#   ⇒ 判据必须是**产物里的真实包名**（不是文件名、不是脚本意图）。
+_EXPECT_PKG="dev.proteus.layoutcore"
+if [ "$LIGHTS" = "1" ]; then _EXPECT_PKG="dev.proteus.lights";
+elif [ "$FLIP" = "1" ]; then _EXPECT_PKG="dev.proteus.flip";
+elif [ "$INKSCROLL" = "1" ]; then _EXPECT_PKG="dev.proteus.inkscroll";
+elif [ "$INK" = "1" ]; then _EXPECT_PKG="dev.proteus.ink";
+elif [ "$CSSCONF" = "1" ]; then _EXPECT_PKG="dev.proteus.cssconf"; fi
+# ★测试钩子（必须在分支**之后**）：PROTEUS_EXPECT_PKG 覆盖期望包名——破坏性验证"断言真的会拦"；生产不设。
+if [ -n "${PROTEUS_EXPECT_PKG:-}" ]; then _EXPECT_PKG="$PROTEUS_EXPECT_PKG"; fi
+_APK_PKG="$("$BT/aapt2" dump packagename "$APK" 2>/dev/null | tr -d "\r")"
+if [ "$_APK_PKG" != "$_EXPECT_PKG" ]; then
+  echo "✗ 产物包名不匹配：期望 ${_EXPECT_PKG}，实际 ${_APK_PKG:-（读不到）}"
+  echo "  ⇒ 拒绝安装（否则会静默替换成另一个包，而目标包仍是旧版本——2026-10-18 实测事故）"
+  exit 3
+fi
+echo "    ✓ 产物包名校验：${_APK_PKG}"
 
 echo "==> ⑥ 签名（apksigner + debug keystore）"
 KS="$BUILD/debug.keystore"

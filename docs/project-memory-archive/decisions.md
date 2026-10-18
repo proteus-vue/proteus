@@ -6006,3 +6006,33 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   `fontStyle` 维度就会把「同文本同字号同字重、只差斜体」合并成同一缓存项 ⇒ 一个尺寸错（静默）；
   ★★**「平台层唯一解析」比"每个宿主各自解析"少 3 倍接线面**——三端只改各自的 `typefaceOf`/`font`/`applyTextFont`，
   宿主只负责把前缀拼进角色串；★★**大文件棘轮是"真实能力 vs 体积债"的显式记账**，刷新基线要能被评审看懂（本轮在提交里写明）。
+
+1051. **★★★Android `--css --release` 打包清单漏分支 ⇒ CSS 验收包一直装的是 7 小时前的旧版本（用户「页面滚动没有惯性/不丝滑」的直接原因）· 产物包名断言门禁 · 决策**（2026-10-18 · 用户「测试发现安卓的页面滚动没有惯性和丝滑，css-conformance 项目」）：
+【取证链（三步钉死，不是猜）】
+  ① **真机录屏逐帧量化**（120fps 真实 PTS，用 FFT 无关的行剖面互相关求位移）：惯性**存在且健康**——
+     松手后每帧 8.2–8.4ms，位移单调递减（-54,-48,-48,-54,…,-24→0），跟手 1:1，总位移 565–606px；
+  ② **但设备上那份 APK 的安装时间是 2026-10-08 11:22:48**，而**竖向 fling 是 a110dfb6（10-08 18:23:58）才加的**
+     ——设备跑的是**比功能早 7 小时**的旧包（旧版 `onFling` 只接横向 `startFlingX`，竖向松手即停）；
+  ③ **为什么装不上新包**：`build-and-run.sh` 的 release 分支只有 lights/flip/ink/inkscroll 四个子分支，
+     **漏了 `CSSCONF`** ⇒ `--css --release` 落到 `else`，用**默认清单**覆盖 ⇒ 产出 APK 的包名是
+     `dev.proteus.layoutcore`（文件名却叫 `proteus-cssconf.apk`）⇒ `adb install` **静默替换了另一个包**，
+     而 `dev.proteus.cssconf` 从未被更新 ⇒ 构建日志一路 `Success`，用户却一直看旧包。
+  ★时间线证明这不是偶发：release 块引入于 0d8413a6（10-01），cssconf 分支引入于 8a2a1b99（10-07）
+    ⇒ **10-07 之后所有 `--css --release` 都是错的**（约 11 天）。
+【修】
+  · `build-and-run.sh` release 分支补 `elif [ "$CSSCONF" = "1" ]`（与 lights/flip/ink 同款）；
+  · **产物包名断言**（新增门禁，装前强制）：按构建变体算出期望包名，用 `aapt2 dump packagename` 读**产物真实包名**，
+    不一致 ⇒ `exit 3` 拒绝安装。判据是**产物里的字节**，不是文件名、不是脚本意图。
+  · 测试钩子 `PROTEUS_EXPECT_PKG`（放在分支判定**之后**，否则会被 elif 覆盖——首版就踩了这个，破坏性验证当场抓出）。
+【判据（双向验证）】
+  · 破坏性：`PROTEUS_EXPECT_PKG=dev.wrong.pkg bash hosts/android/build-and-run.sh --release --css --no-install`
+    ⇒ **rc=3** + 打印「期望 dev.wrong.pkg，实际 dev.proteus.cssconf」；
+  · 正常路径：`rc=0` + `✓ 产物包名校验：dev.proteus.cssconf`；
+  · 装机后重测惯性：`vy=-5999.995` → 逐帧位移 -48/-54/-48/-48/-54/-48/-48/-60/-42/-48/-84/-24 → 0（606px）；
+  · `bash -n` · `check:script-compile`（129 脚本）· `check:acceptance-stub`（桩测含 bash 3.2 静态扫描）全绿。
+【★教训】★★★**「构建 Success」不等于「设备上是新代码」**——两次事故同源（#663 `npx proteus` 跑旧 dist、
+  本条装错包）：判据必须落在**消费方的真实状态**（设备上安装的包 / 产物里的真实包名），而不是构建脚本的自述；
+  ★★**变体分支是"漏一个就静默"的结构**：5 个变体里漏 1 个，表现不是报错而是"装到了另一个包"，必须用产物断言兜；
+  ★**测试钩子要放在判定链的末端**：首版把它放在分支之前 ⇒ 被后面 elif 覆盖 ⇒ 破坏性验证返回 rc=0（假绿）。
+【诚实边界】CSS 验收多数页面 `scroll_range=0`（内容 ≤ 一屏，如 `text`/`effects` 页内容高 2608 = 视口高）——
+  这是**页面本身没有可滚内容**，不是滚动缺陷；索引页 654px、可滚，惯性曲线如上。iOS/鸿蒙未验（本轮只 Android）。
