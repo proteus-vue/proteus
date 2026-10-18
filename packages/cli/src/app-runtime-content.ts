@@ -274,8 +274,15 @@ export async function buildAppRuntimeContent(
  *   而引擎里 `position:fixed` 的 containing block = **根**（决策 #907）⇒ fixed 的 `bottom` 相对**页面高**
  *   （落到内容底部、屏外）。静态通路有 `app-root`（`heightRatio:1` = 视口高）包一层 ⇒ fixed 相对视口。
  *   ⇒ 运行期也补同款包层（不动既有节点 id：新根插在数组末尾，改旧根 `parentId`），fixed 即相对视口。
- *   ★旧根改为 `absolute inset:0`（脱离流、可溢出视口高根⇒内容仍可滚动）；app-root `overflow:hidden`
- *     裁到视口（宿主的滚动平移在其内显现）。
+ *   ★旧根改为 `absolute` + **top/left/right**（**不设 bottom**）：脱离流 ⇒ 可超出视口高根（内容仍可滚动），
+ *     但高度**由内容撑开**（auto）。
+ *   ★★★（2026-10-18 修 · 用户「首页列表项看着被压缩了那么多、每一个都非常窄」）：**这里原本写了 `bottom:0`**
+ *     ⇒ 页面根被钉成「视口高」的定高盒；而内核默认 `display:flex; flex-direction:column`，
+ *     flex 子项默认 `flex-shrink:1` ⇒ 内容超高时 **31 个列表项被等比压缩**（真机实测项高 132→72，
+ *     CSS 24px vs Web 42.5px）。Web 端页面是 block 流（不压缩）⇒ 纯属本包层引入的回归。
+ *     ★为什么会有 `bottom:0`：当时只想着"四边铺满"，没意识到它把高度从 auto 变成了 definite。
+ *     ⇒ 与 `position:absolute; inset:0` 的差异是**语义级**的：`inset` 是「铺满父盒」，
+ *       而这里要的是「脱离文档流 + 内容撑高」。
  */
 function wrapViewportRoot(tpl: unknown): unknown {
   const t = tpl as { nodes?: Array<Record<string, unknown>>; roots?: number[] } | null
@@ -294,7 +301,7 @@ function wrapViewportRoot(tpl: unknown): unknown {
     st.left = 0
     st.top = 0
     st.right = 0
-    st.bottom = 0
+    // ★★不设 `bottom`：设了会把高度钉成视口高 ⇒ flex-shrink 压缩所有子项（决策 #1052）
     node.style = st
   }
   t.nodes.push({

@@ -6036,3 +6036,35 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   ★**测试钩子要放在判定链的末端**：首版把它放在分支之前 ⇒ 被后面 elif 覆盖 ⇒ 破坏性验证返回 rc=0（假绿）。
 【诚实边界】CSS 验收多数页面 `scroll_range=0`（内容 ≤ 一屏，如 `text`/`effects` 页内容高 2608 = 视口高）——
   这是**页面本身没有可滚内容**，不是滚动缺陷；索引页 654px、可滚，惯性曲线如上。iOS/鸿蒙未验（本轮只 Android）。
+
+1052. **★★★安卓页面列表项被等比压扁（用户「每一个都非常窄」）根因：运行期页根包层写了 `bottom:0` ⇒ 页根定高 + flex-shrink 压缩全部子项 · 决策**（2026-10-18 · 用户「为什么现在的首页列表项看着被压缩了那么多？看着每一个都非常窄」）：
+【现象与量测（真机 1200×2608 @480dpi vs Web 780×1688 @2x）】
+  · App 列表项高 **62px（20.7 CSS）**；Web 同项 **84px（42 CSS）** —— 差整整一半，且与「11 天旧包」无关（换新包后仍在）；
+  · 内核几何 dump：页根 `h=2608`（= 视口高，定死）、列表项 `h=72`、子文本 `h=60/48`（度量正确）⇒
+    **项的 padding（上下各 36）之和正好 = 72** ⇒ 内容高度被压成 0 的效果。
+【根因（宿主链路 hack 引入的回归）】`packages/cli/src/app-runtime-content.ts` 的 `wrapViewportRoot`（决策 #907，
+  为让 `position:fixed` 相对视口）把页面旧根改写成 `position:absolute` + **`inset:0`（含 `bottom:0`）**。
+  ⇒ 页根成为**定高盒**（= 视口高）；内核默认 `display:flex; flex-direction:column`，子项默认 `flex-shrink:1`
+  ⇒ 内容总高（31 项 × 122 ≈ 3782）超出视口（2608）时，**所有子项被等比压缩到 ~0.55**（72/132）。
+  Web 端页面是 **block 流**（不压缩）⇒ 纯属本包层引入的跨端不一致。
+  ★为什么以前"看着正常"：用户设备上那份 APK 是 10-08 11:22 的，早于 #907（10-08 之后引入）⇒ 从未见过该包层。
+【取证（不猜，用最小夹具钉死机制）】`packages/layout-core-rust/tests/page_root_flex_shrink.rs`（新增，2 项）：
+  · `pinned_page_root_compresses_children`：页根 `absolute + inset:0`（定高）+ 31 项 ⇒ 项高 **72**（复现真机）；
+  · `auto_height_page_root_keeps_children_intact`：去掉 `bottom` ⇒ 项高恢复 **132**、页根高由内容撑到 **>2400**。
+  ⇒ 差异**只在 `bottom:0` 一行**，与文本度量/内核 flex 实现无关（已逐层排除 TextMeasurer、padding、widthRatio、
+     minHeight、绝对定位本身——都能正确计算）。
+【修】`wrapViewportRoot`：旧根保留 `absolute` + `top/left/right`，**删除 `bottom:0`** ⇒ 高度 auto、由内容撑开
+  （仍脱离文档流 ⇒ fixed 仍相对视口、内容仍可滚动，#907 的原目标不回归）。
+【判据】
+  · 新增 Rust 回归 2 项（缺陷形态可复现 + 修复后正确）全绿；
+  · `app-runtime-content` 4 · `superapp-runtime` 11 · `screen-runtime` 13 全绿；
+  · `check:android-host-compile`（javac 真编译）· `check:file-size`（app-runtime-content.ts 315 行）；
+  · 真机：列表项 **62px → 122px**（20.7 → 40.7 CSS；Web 42 CSS，余下 1.3 CSS 属两端字体度量差）。
+【★教训】★★★**"铺满父盒"（`inset:0`）与"脱离流但内容撑高"是两种语义**——前者把高度变 definite，
+  后者必须留一个方向 auto；包层（wrapper）引入的定高会通过 **flex-shrink 静默压缩所有后代**，
+  且表现为"缩放到某个比例"（很难看出根因在布局父级）；
+  ★★**跨端不一致先问"Web 那边是什么流"**（block 流不压缩 / flex 会压缩）——这条比逐像素调参快一个数量级；
+  ★**先怀疑最外层包层**：页面自身样式（`.cc-page{min-height:100vh}`）与模板产物都是对的，
+  只有运行期 wrapper 是"代码里硬写"的一层，这类层最容易在改 A 目标时引入 B 副作用。
+【诚实边界】本轮只验 Android 真机；iOS/鸿蒙共用同一份 `wrapViewportRoot`（TS 层）⇒ 该修复对三端同时生效，
+  但两端的真机像素未重跑。31 项 fixture 用 2400 视口模拟，真实设备 2608——比例一致，结论不受影响。
