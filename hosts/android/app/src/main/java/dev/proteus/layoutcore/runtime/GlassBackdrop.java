@@ -303,31 +303,13 @@ final class GlassBackdrop {
                 final ProteusHostView.Cmd gc = list.get(k);
                 // ★#1004：外层在复合帧里按 nest=2（宿主已预模糊 ⇒ 小残差 tap）渲染——与屏上条面同口径。
                 host.renderOuterFace(c, ids[k], g, gc.x - gx, gc.y - gy, gc.w, gc.h, 2f, -1f);
-                // ②b ★#982：**外层玻璃自身的镜面边**——iOS 的条本就有一条 1px 高光边（shader `edge_hi` 只 ~0.12
-                //   ⇒ 经内层胶囊采样后衰减殆尽）。这里在复合层里沿**外层玻璃轮廓**再描一道**清晰的镜面边**
-                //   （属"渲染条本身"，非手画替代光学）⇒ 内层胶囊采样时能透出这条边。
-                // ★★★决策 #1031（用户「弹起来的胶囊水滴无法看到下面玻璃条的上下边」）：**暗缝 + 亮脊双线**——
-                //   #982 的白描边（230α）画在**白条面**上对比度 ≈10L（等于看不见）⇒ 用户看不到条边。
-                //   iOS 边模型（#1002）= 1px 暗缝 + 亮脊 ⇒ 先 3px 半透明暗缝（对比 ~60L），再 1.2px 白核
-                //   ⇒ 透过弹起胶囊（采样本复合层）能清楚看到条的上下边。
-                final android.graphics.Path bp = new android.graphics.Path();
-                bp.addRoundRect(new android.graphics.RectF(gc.x - gx, gc.y - gy, gc.x - gx + gc.w, gc.y - gy + gc.h),
-                        g.radius, g.radius, android.graphics.Path.Direction.CW);
-                final Paint ep = new Paint(Paint.ANTI_ALIAS_FLAG);
-                ep.setStyle(Paint.Style.STROKE);
-                // ★★★决策 #1043（用户「胶囊玻璃无法透过去看到玻璃条的上下边」）：
-                //   **边线加粗加深**——3px/α96 + 1.3px/α205 在复合层里清楚（实测 y176-179 = 201-213），
-                //   但胶囊采样时有 ① 折射压缩（s'≈0.5 ⇒ 3px→1.5px）② nest=3 残差模糊（σ≈1.9px）
-                //   ⇒ 细线被抹平到看不见。
-                //   iOS 实测：条边透过胶囊后是「2–3px 高光 + **20–23px 暗带**」、边线过渡 0.84→12.5px
-                //   ⇒ 它读作一条**宽带**而不是细线。这里把合成边线加粗到 **9px/α150**（透出后约 4–5px、仍可辨），
-                //   白核 2px/α235。
-                ep.setStrokeWidth(9f);
-                ep.setColor(android.graphics.Color.argb(150, 12, 14, 20));
-                c.drawPath(bp, ep);
-                ep.setStrokeWidth(2f);
-                ep.setColor(android.graphics.Color.argb(235, 255, 255, 255));
-                c.drawPath(bp, ep);
+                // ★★★决策 #1049（用户「iOS 胶囊玻璃下面条的上/下边不可能是手绘的——滑动时和条无缝衔接，
+                //   手绘绝对做不到这么丝滑」+「现在胶囊上下两条黑线，长按膨胀变 4 条」）：
+                //   **删除合成的「暗缝 + 亮脊」描边**（#982 白描边 → #1031 3px 暗缝 → #1043 加粗到 9px/α150）。
+                //   逐帧对照用户 2026-10-18 iOS 录屏（drag f0096 / press f0140）：iOS 胶囊**没有任何深色描边**，
+                //   条的上下边只是被透镜弯折的**柔和亮度过渡**；我们的黑线是复合层手绘描边被内层透镜
+                //   **向外采样**拉进胶囊边缘的产物（按压时位移增大 ⇒ 同一条边被拉成两个半径 ⇒ 2 条变 4 条）。
+                //   ⇒ 采样的必须是「真实渲染出来的条面」（上面这一行 renderOuterFace），而不是另一套画上去的线。
             }
             // ★★★决策 #1044（用户「我们的经过图标文字时没有真实的光学折射」）：
             //   把玻璃子树的内容（tab 图标/文字）也画进复合层 —— 此前复合层只含「背景 + 外层玻璃面 + 条边线」，

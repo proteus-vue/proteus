@@ -324,7 +324,13 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     // ★#956 撤回：iOS 选中胶囊实测无高亮边（#953 原判正确）
     // ★★★#1039（与 glass.wgsl 逐字同源）：按下恢复边缘光学（edge_amp 随 pr_ov），
     //   并把亮脊改成**亮核 + 暗缝（只顶/底）+ 内侧柔脊**的三明治——否则亮底上纯加色饱和、边界不可见。
-    let edge_amp = 1.0 - p.overlay.clamp(0.0, 1.0) * (1.0 - pr_ov.clamp(0.0, 1.0));
+    // ★★★#1049（与 glass.wgsl 同源）：内层胶囊静止也保留倒角亮脊（0.40×；按下 1.0）——
+    //   iOS 重测 面 233 → 边缘 250/253 → 条 255（亮脊真实存在；#956 的采样取到了条面）。
+    let edge_amp = if is_inner {
+        0.40 + (1.0 - 0.40) * pr_ov.clamp(0.0, 1.0)
+    } else {
+        1.0 - p.overlay.clamp(0.0, 1.0) * (1.0 - pr_ov.clamp(0.0, 1.0))
+    };
     // ★#963：按下点亮透镜（press>0 的玻璃加镜面亮边）
     // ★#967：按下亮环——沿充气轮廓的亮边（与 glass.wgsl 同源；压在暗底也读得出）。
     let pv_rim = p.press.clamp(0.0, 1.0) * p.overlay.clamp(0.0, 1.0);
@@ -341,7 +347,8 @@ fn shade(backdrop: &Backdrop, local: (f32, f32), p: &GlassParams) -> [f32; 4] {
     for c in 0..3 { col[c] = (col[c] + rim).clamp(0.0, 1.0); }
     // ★★★决策 #1042：**alpha = SDF 覆盖率**（与 glass.wgsl 同源）——真实水滴剪影（含端部锥化）。
     //   #966「本设备忽略 shader alpha」已被 #983 三重探针证伪（真因是此处写死 1.0）。
-    //   1 像素抗锯齿过渡：`0.5 - sd/0.75`（sd<0 在内部）。
+    // ★★★#1049：形状**只由 SDF 覆盖率**定义（0.75px 抗锯齿），柔感靠倒角亮脊、不靠 alpha 斜坡
+    //   （放宽 alpha 会越过 SDF 边界 ⇒ 盒内矩形状半透明外溢，真机实测）。
     let cov = (0.5 - sd / 0.75).clamp(0.0, 1.0);
     col[3] = cov;
     col
