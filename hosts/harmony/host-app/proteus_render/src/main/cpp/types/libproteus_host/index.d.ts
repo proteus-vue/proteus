@@ -19,6 +19,8 @@ export const appScreenAnimTick: (json?: string) => string;
 export const appScreenFollowField: (json: string) => string;
 /** 建立持久壳 VM（注入 proteusHost + 平台全局 → eval bundle → 探测生命周期钩子） */
 export const hostRtShellInstall: (json: string) => string;
+/** ★T-app-fetch 真机判据：空 VM + 真实 `invokeBytes` + 真网络（入参 {url}）→ JSON 回执 */
+export const hostHttpProbe: (json: string) => string;
 /** 真事件转发：__proteusHostShellLifecycle('pause'|'resume') + 泵 job + 读回 + 落盘 */
 export const hostRtShellEvent: (evt: string) => string;
 /** ★应用运行期·启动（一次性 VM）：eval bundle → boot（路由栈 + 进入入口 tab）；入参 {bundle,filesDir} */

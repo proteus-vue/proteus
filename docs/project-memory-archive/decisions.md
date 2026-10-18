@@ -6437,3 +6437,111 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 【诚实边界】① iOS **wavy 近似为实线**（NSUnderlineStyle 无该值）；② 百分比厚度（`10%`）需字号换算、
   三端通道未统一 ⇒ 编译期诊断；③ Skyline `-thickness` 引擎边界；④ iOS/鸿蒙未跑本项真机截图
   （Android 已真机验证绘制算法；iOS/鸿蒙走各自原生装饰 API，编译检查已过）。
+
+1063. **★★★T-app-fetch 收官：鸿蒙（ArkTS + C++）二进制腿落地 —— 五端线格式逐字节等价 + 真机 HTTP 通路判据 · 决策**（2026-10-18 · T-app-fetch · 能力对齐专项首单的最后一端）：
+【背景】决策 #903（JS 桥 + Android 宿主）/ #904（iOS 腿）之后，`T-app-fetch` 只剩两块欠账：
+  ① 鸿蒙侧**没有**线格式编解码器（`grep PINV hosts/harmony` 只命中 JS bundle）；
+  ② 三端真机 `useFetch` 判据都未跑。本轮两件都做完了（鸿蒙腿 + 鸿蒙真机判据），并把 parity 门禁
+  从「TS ⇄ Java ⇄ Swift」扩到「TS ⇄ Java ⇄ Swift ⇄ ArkTS ⇄ C++」**五端 24 条向量逐字节等价**。
+【★为什么鸿蒙要写**两份**编解码器（ArkTS + C++），而其它端各一份】
+  鸿蒙 superapp 路径是**一次性 VM**（决策 #540：跨 napi 复用 JSVM 会 SIGSEGV）——
+  JS 侧 `useFetch` 的 `invokeBytes` 调用发生在 `hostAppRender` 这个 napi 调用**内部**：
+  · 交回 ArkTS 去发异步请求 ⇒ 控制权不在 ArkTS 手里；
+  · 异步回推 ⇒ 等 napi 返回时 VM 已销毁，**没有接收方**。
+  ⇒ 唯一合法形态 = 在 napi 调用内**同步完成整次往返**。而要同步完成，C++ 必须自己看懂 `PINV` 帧
+  （method/url/headers/body 全在字节里）⇒ 需要 C++ 编解码器；ArkTS 那份则是**给 JS 侧与真机判据**用的
+  （判据刻意让 ArkTS 自己编帧交给 C++ 解，验的才是真实跨语言契约）。
+【★诚实边界（三端调度语义不一致，不粉饰）】Android/iOS = 「受理即返（`pending:true` 帧）→ 网络线程完成
+  → 切主线程回推」；鸿蒙 = 「**阻塞调用线程**同步取回」。错误码与取数**形状**一致，**调度语义**不一致。
+  等鸿蒙宿主换成可重入 VM 后应改异步（已登记为后续项）。
+【落地】
+  · `hosts/harmony/host-app/entry/src/main/ets/runtime/InvokeWire.ts` —— ArkTS 唯一实现（零 import）。
+  · `hosts/harmony/host-app/proteus_render/src/main/cpp/invoke_wire.h` —— C++ 唯一实现（零 OHOS 依赖）。
+  · `hosts/harmony/tools/InvokeWireParity.ts` / `.cpp` —— 两个对拍运行器（不参与 HAP 构建）。
+  · `hosts/harmony/.../proteus_http.h` —— HTTP 腿：`HMS_Rcp_FetchSync`（HMS RemoteCommunicationKit）
+    经 **dlopen** 调用（`librcp_c.so` 设备位于 `/system/lib64/ndk/`，不在默认命名空间）；
+    缺库/缺头 ⇒ **诚实回 `http.unsupported`**（不伪造成功）。头路径由 CMake 探测 + `PROTEUS_HMS_SDK` 覆盖。
+  · `hosts/harmony/.../invoke_bytes_bridge.h` —— 字节桥（`OH_JSVM_GetTypedarrayInfo` 取裸指针 /
+    `OH_JSVM_CreateArraybuffer` + `OH_JSVM_CreateTypedarray` 造 `Uint8Array` 回）。
+  · `hosts/harmony/.../http_probe.h` —— 真机判据入口（空 VM + 只装 invokeBytes + 真网络）。
+  · 5 处 `proteusHost` 注入点全部装了 `invokeBytes`（3 处单方法 + 2 处 NamedFn 数组）。
+  · `module.json5` 加 `ohos.permission.INTERNET`（鸿蒙此前**从未声明过任何网络权限**）。
+  · `hosts/harmony/run-http-probe.sh` —— 真机判据（零盲等：等报告落盘）。
+【★本轮抓到并修掉的**三个真缺陷**（都不是"猜"出来的，是二分定位的）】
+  ① **回调结构体悬空**（头号崩溃）：`installInvokeBytes` 里用**局部** `JSVM_CallbackStruct`，
+     该函数返回后引擎仍持有其地址 ⇒ 后续 JS 调 `invokeBytes` 读到被覆写的回调指针 ⇒ `SIGSEGV`。
+     修 = `static JSVM_CallbackStruct`。★既有 `invoke`/`mount` 用调用方函数帧里的数组**侥幸存活**，
+     这类"碰巧对"的形态一旦抽成独立函数就必炸。
+  ② **`HMS_Rcp_DestroyHeaders` 是单指针**（`void f(Rcp_Headers*)`），我按 OHOS 的
+     `OH_Http_DestroyHeaders(Rcp_Headers**)` 双指针调 ⇒ 把**栈地址**当对象释放 ⇒ `SIGSEGV`。
+     同族：`HMS_Rcp_DestroyHeaderEntries(Rcp_HeaderEntry*)` 也是单指针。
+     ★教训：**HMS 与 OHOS 的同名 API 签名不一致**，dlsym + 手写 typedef 时一个字符（`**` vs `*`）
+     就是崩溃；类型系统的保护在 `reinterpret_cast` 之后就没了。
+  ③ **OHOS clang 15 默认 C++14**：`std::optional` 报 "no member named 'optional'"。
+     修 = 自带 `Opt<T>`（`has` 语义与 TS `=== undefined` 一一对应）——不为此抬高整个宿主工程的 `-std`。
+【灯下黑记录（过程教训）】第一轮二分诊断**自己写错了**：DIAG-A 分支 `return` 之后的所有诊断代码
+  永远不执行，于是 A/B/C 三轮都读到同一个固定串（"A-no-vm"），差点被当成"崩在别处"。
+  ⇒ **诊断分支必须有独立的进入条件**，且每轮要看"这个分支的标记是否新出现"，不能只看报告内容相同。
+  真定位靠的是**文件级阶段日志**（hilog 在崩溃时会丢尾行；写文件不会）。
+【判据（全部真跑）】
+  · `pnpm check:invoke-wire-parity` —— **五端 24 条向量全绿**；破坏性验证三类（ArkTS：缺省值判据漂移
+    23/1 红、端序漂移 8/16 红、尾部残留判据失守 1 条红；C++：缺省值判据漂移 23/1 红），复原后复绿。
+  · `pnpm check:no-json-wire` —— 扩面到鸿蒙腿（6 组新判据：ArkTS/C++ 编解码器、HMS RCP + 零 JSON、
+    JSVM typedarray 三件套、**安装点非死代码**、通路判据在位）；破坏性验证（删 `OH_JSVM_CreateTypedarray`
+    ⇒ 当场红）。
+  · `bash scripts/check-harmony-host-compile.sh` —— 新增 `invoke_wire.h` **独立 TU** 检查（头文件自身可编译）。
+  · **鸿蒙真机**（KLE-AL00U / API 26）：`bash hosts/harmony/run-http-probe.sh --url https://www.baidu.com`
+    ⇒ `{"ok":true,"bridge":"invokeBytes","frameSource":"arkts","status":200,"bodyBytes":2443}`
+    （响应体真实 HTML 前 100 字符已在报告里）——**ArkTS 编的帧 → C++ 解 → 真 HTTPS → PRSP 回帧 → C++ 解**
+    整条链一次跑通。`bash hosts/harmony/run-superapp.sh` 回归仍全绿（应用启动/切 tab 未受影响）。
+  · `npx vitest run tests/{invoke-wire,capability-invoke-bytes,capability-app-fetch}.test.ts` 42/42。
+【遗留（明确登记，不假装完成）】
+  · **iOS/Android 真机 `useFetch` 判据仍未跑**（本机设备都在线，但两端各需一次宿主侧探针改动；
+    二进制腿本身已由 `check:ios-invoke-bytes`（真实 JSC 12 项）+ parity 覆盖）。
+  · 鸿蒙 HTTP 腿**未做 G-46 会话共享**（`WebCookieManager` + Header 注入）——属 ResourcePool 子单。
+  · 鸿蒙请求体走 RCP 的 `RCP_CONTENT_TYPE_STRING`（**二进制 body 未验证**，本判据只跑 GET）。
+  · 重定向/超时语义：RCP `autoRedirect=true` + connect/transfer 双超时（不等于 fetch 的
+    `AbortSignal.timeout` 总时限）——如实登记。
+【判据纪律沉淀】"门禁的覆盖面必须跟着**实际形态**走"在本轮又验了一次：鸿蒙腿落地前
+  `check:no-json-wire` 只判 Android/iOS，**新端可以静默回退 JSON 而门禁全绿**。腿一落地就补判据，
+  否则等于给新端开了免检通道。
+
+1064. **★★★App 异步能力通道的两个真机崩溃缺陷：`setTimeout` 在 App 引擎不存在 + QuickJS `JS_NewTypedArray` 实参越界 · 决策**（2026-10-18 · T-app-fetch 真机判据连带抓出）：
+【缺陷一：`setTimeout` 不是 ECMAScript 标准，App 三端都没有】
+  `capability-invoke.ts` 的异步腿（JSON 与字节两条**都**）在 `new Promise(...)` 构造器里无条件
+  `setTimeout(() => reject(超时), ms)`。而 App 三端 JS 引擎：
+  · Android = QuickJS（`JS_NewContext` 不带 libc 定时器）· iOS = JavaScriptCore（`JSContext` 无 window）·
+  鸿蒙 = JSVM（同上）——**三个引擎都没有 `setTimeout`**。
+  ⇒ 真机上 `useFetch` 一调用就在 Promise 构造器里抛 `ReferenceError`（构造器内抛出 ⇒ Promise 立刻 reject）
+  ⇒ 业务只会看到一条莫名的失败，**根因完全不可见**。★这是"单元测试在 Node 上全绿、真机必炸"的典型：
+  Node 有定时器，测试环境天然掩盖了它。
+  【修】新增 `armHostCallTimeout(ms, onTimeout): TimerHandle`：
+  有原生定时器 ⇒ JS 侧超时（`hostCallTimerMode() === 'js-timer'`）；
+  没有 ⇒ **降级为 host-only**（`'host-only'`）——帧的 meta **本来就带 `timeoutMs`**，宿主侧
+  （Android `setConnectTimeout/ReadTimeout` · iOS `URLSessionConfiguration.timeoutIntervalForRequest` ·
+  鸿蒙 RCP `connectMs/transferMs`）是**权威超时**，JS 侧本来只是第二道防线。
+  ★降级**不静默**：形态记在 `hostCallTimerMode()`，真机/单测都能读到。
+  【判据】`tests/capability-invoke-timer.test.ts` 4 条 —— 核心是 ② **摘掉全局 `setTimeout`**（模拟 App 引擎）
+  后派发不抛、回推可结算、`timerMode === 'host-only'`。这条能直抓"又有人写回裸 `setTimeout`"。
+【缺陷二：QuickJS `JS_NewTypedArray` 实参个数越界（真机 SIGSEGV）】
+  `proteus_new_uint8_array_copy` 里 `JS_NewTypedArray(ctx, 1, args, JS_TYPED_ARRAY_UINT8)` 只传 1 个实参；
+  而 QuickJS 内部 `js_typed_array_constructor` 在首参是 ArrayBuffer 时**会读 `argv[1]`（byteOffset）与
+  `argv[2]`（length）** ⇒ **越界读栈内存** ⇒ 真机 `SIGSEGV：JS_ToIndex ← js_typed_array_constructor ←
+  JS_NewTypedArray ← proteus_new_uint8_array_copy ← js_host_invoke_bytes`。
+  【修】按构造函数真实签名补足三个实参（`{ab, 0, undefined}`），并释放自造的 offset 值。
+  ★这个缺陷**静态门禁永远抓不到**（`check:no-json-wire` 的 ⑥ 只判"用了公开 API + 造的是 Uint8Array"，
+  形态完全吻合、编译也通过）——只有**真机跑一次字节回执**才暴露。这是"形态判据 ≠ 通路判据"的又一实证。
+【★诊断方法论教训（本轮又踩一次）】二分诊断本身写错：`DIAG-A` 分支 `return` 之后的所有诊断代码
+  **永不执行**，于是 A/B/C 三轮读到同一个固定串（"A-no-vm"），差点误判"崩在别处"。
+  ⇒ ① 诊断分支必须**各自独立可进入**；② 每轮判据要看"**该分支的标记是否新出现**"，而不是"报告内容变了没"；
+  ③ **文件级阶段日志** > hilog（崩溃时 hilog 会丢尾行；写文件不会）。真定位靠的就是文件日志。
+【判据（全部真跑）】
+  · `tests/capability-invoke-timer.test.ts` 4/4 · 既有 42 条（invoke-wire 19 + invoke-bytes 12 + app-fetch 11）全绿；
+  · `bash hosts/android/check-host-compile.sh`（含 QuickJS JNI 真编译步）通过；
+  · **Android 真机** `run-host-runtime.sh` 全绿（修前是 `SIGSEGV` 崩在 `js_host_invoke_bytes`）；
+  · **鸿蒙真机** `run-http-probe.sh --url https://www.baidu.com` ⇒ 仍 `{ok:true,status:200,bodyBytes:2443}`。
+【诚实边界】① Android/iOS 的**宿主运行时探针**是「run → job 泵 → finish」**单相位**结构，
+  真实网络回推需要主循环转起来才能送达 ⇒ 在那条探针链路里做 `useFetch` 判据会把 `app_native.done` 卡成
+  `false`（本轮实测），故该判据**未**放进 host-runtime 探针；真机 `useFetch` 判据的落点应是
+  **superapp 场景**（应用已常驻、ArkTS/主线程事件循环在跑）——已登记为后续项。
+  ② iOS 真机 `useFetch` 判据同样未跑。

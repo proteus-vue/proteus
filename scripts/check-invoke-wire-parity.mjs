@@ -17,7 +17,9 @@
 //
 // 【★扩展纪律（#903 头注承诺的 ROUNDS 扩展位）】新增一端时**追加一个 ROUND**，
 //   **不要**新开一个门禁脚本（否则"三端一致"这条性质会被拆成三个各自为政的判据）。
-//   已接：TS（生成侧）+ Java（Android 宿主）+ Swift（iOS 宿主）；待接：ArkTS（鸿蒙宿主）。
+//   已接：TS（生成侧）+ Java（Android 宿主）+ Swift（iOS 宿主）+ ArkTS（鸿蒙 JS 侧）+ C++（鸿蒙宿主侧）。
+//   ★ArkTS 轮的诚实边界：ArkTS 无独立 CLI 编译器 ⇒ 该轮用 tsx 执行**同一份源码**验字节语义，
+//     能否被 ArkTS 编译由 `hosts/harmony/build-host-app.sh` 兜住（不把"tsx 跑过"说成"ArkTS 编译器验过"）。
 //
 // 【★诚实边界 / 为什么 Swift 腿缺失时是"响亮跳过"而不是红】本门禁被登记为**仅本地**
 //   （CI 是 ubuntu-latest，无 Swift 工具链）。Swift 工具链只存在于 macOS —— 在非 macOS 上，
@@ -42,6 +44,10 @@ const JAVA_SRC = path.join(ROOT, 'hosts/android/app/src/main/java/dev/proteus/la
 const JAVA_RUNNER = path.join(ROOT, 'hosts/android/tools/InvokeWireParity.java')
 const PKG_DIR = 'dev/proteus/layoutcore'
 const MAIN_CLASS = 'dev.proteus.layoutcore.InvokeWireParity'
+const ARKTS_SRC = path.join(ROOT, 'hosts/harmony/host-app/entry/src/main/ets/runtime/InvokeWire.ts')
+const ARKTS_RUNNER = path.join(ROOT, 'hosts/harmony/tools/InvokeWireParity.ts')
+const INVOKE_WIRE_CPP_H = path.join(ROOT, 'hosts/harmony/host-app/proteus_render/src/main/cpp/invoke_wire.h')
+const CPP_RUNNER = path.join(ROOT, 'hosts/harmony/tools/InvokeWireParity.cpp')
 const SWIFT_SRC = path.join(ROOT, 'hosts/ios/ProteusHost/runtime/InvokeWire.swift')
 const SWIFT_RUNNER = path.join(ROOT, 'hosts/ios/tools/InvokeWireParity.swift')
 
@@ -107,6 +113,45 @@ const ROUNDS = [
       if (r.code !== 0) return { error: `Swift 侧编解码器**编译失败**（源码级缺陷，与线格式无关）：\n${r.out.trim()}` }
       return {
         note: 'Swift 侧 `InvokeWire` 编译通过（仅 import Foundation ⇒ 本机 macOS 即可跑）',
+        exec: () => run(bin, [golden]),
+      }
+    },
+  },
+  {
+    name: 'ArkTS',
+    target: '鸿蒙宿主 InvokeWire.ts',
+    required: true, // tsx 是仓库依赖 ⇒ 缺失属环境缺陷（不是"本机无工具链"的正常状态）
+    probe: () => run('npx', ['tsx', '--version']),
+    versionOf: (out) => (out.match(/tsx v?(\S+)/) || [])[1] || '?',
+    missing: (out) => '缺 `tsx`——本门禁需要它执行 ArkTS 侧的**同一份源码**（ArkTS 无独立 CLI 编译器）。' + out.trim(),
+    build: () => {
+      // ★先跑一遍再交结果：模块级的语法/导入错误只会在执行时暴露（tsx 不产独立编译产物）。
+      const r = run('npx', ['tsx', ARKTS_RUNNER, golden])
+      const hasRows = /^ {2}[✓✗] /m.test(r.out)
+      if (!hasRows) return { error: 'ArkTS 侧编解码器**执行失败**（源码级缺陷，与线格式无关）：\n' + r.out.trim() }
+      return {
+        note: 'ArkTS 侧 InvokeWire.ts 跑通（同一份 TS 源码；能否被 ArkTS 编译由 hvigor 构建兜住）',
+        exec: () => r,
+      }
+    },
+  },
+  {
+    name: 'C++',
+    target: '鸿蒙宿主 invoke_wire.h',
+    required: true, // 本机必有 C++ 工具链（clang++/c++）⇒ 缺失属环境缺陷
+    probe: () => {
+      const r = run('clang++', ['--version'])
+      return r.code === 0 ? r : run('c++', ['--version'])
+    },
+    versionOf: (out) => (out.match(/(?:clang version|Apple clang version)\s+(\S+)/) || [])[1] || '?',
+    missing: (out) => '缺 C++ 编译器（clang++/c++）——本门禁需要它编译宿主侧编解码器。' + out.trim(),
+    build: () => {
+      const bin = path.join(tmp, 'iw-parity-cpp')
+      const cxx = run('clang++', ['--version']).code === 0 ? 'clang++' : 'c++'
+      const r = run(cxx, ['-std=c++17', '-O1', `-I${path.dirname(INVOKE_WIRE_CPP_H)}`, '-o', bin, CPP_RUNNER])
+      if (r.code !== 0) return { error: 'C++ 侧编解码器**编译失败**（源码级缺陷，与线格式无关）：\n' + r.out.trim() }
+      return {
+        note: 'C++ 侧 invoke_wire.h 编译通过（零 OHOS 依赖 ⇒ 本机即可跑；OHOS 编译另由 check:harmony-host-compile 兜住）',
         exec: () => run(bin, [golden]),
       }
     },

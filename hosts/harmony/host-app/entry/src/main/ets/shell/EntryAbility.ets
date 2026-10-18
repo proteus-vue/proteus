@@ -55,6 +55,9 @@ export default class EntryAbility extends UIAbility {
     }
     const changed: boolean = AppStorage.get<string>('proteusScene') !== sceneStr;
     AppStorage.setOrCreate('proteusScene', sceneStr);
+    // ★T-app-fetch：HTTP 探针目标 URL（`--ps url https://…`）
+    const probeUrl = want?.parameters?.['url'];
+    AppStorage.setOrCreate('proteusProbeUrl', typeof probeUrl === 'string' ? probeUrl : '');
     const scroll = want?.parameters?.['scroll'];
     AppStorage.setOrCreate('proteusScroll', typeof scroll === 'string' ? scroll : '');
     const ms = want?.parameters?.['ms'];
@@ -69,7 +72,8 @@ export default class EntryAbility extends UIAbility {
     const gd = want?.parameters?.['glassDiv'];
     AppStorage.setOrCreate('proteusGlassDiv', typeof gd === 'string' ? gd : (typeof gd === 'number' ? String(gd) : ''));
     if (sceneStr === '' || sceneStr === 'superapp' || sceneStr === 'superapp-drive'
-        || sceneStr.startsWith('superapp-screen-') || sceneStr.startsWith('superapp-pump-')) {
+        || sceneStr.startsWith('superapp-screen-') || sceneStr.startsWith('superapp-pump-')
+        || sceneStr === 'superapp-http') {
       this.pageToLoad = 'shell/Superapp';
     } else {
       this.pageToLoad = 'dev/Index';

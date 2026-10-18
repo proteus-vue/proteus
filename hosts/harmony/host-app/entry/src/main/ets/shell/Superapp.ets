@@ -19,7 +19,10 @@ import { NodeContent } from '@kit.ArkUI';
 import { display, window } from '@kit.ArkUI';
 import { util } from '@kit.ArkTS';
 import { fileIo } from '@kit.CoreFileKit';
-import { attach, renderCommands, scrollRoot, clearRoot, appScreenCommands, appScreenContentHeight, appScreenHitAt, hostRtShellInstall, hostRtShellEvent, hostAppDrive, hostAppRender, AppRuntimeDriver, ProteusTabChrome, setContentMode, glassTouch, glassStep } from 'proteus_render';
+import { attach, renderCommands, scrollRoot, clearRoot, appScreenCommands, appScreenContentHeight, appScreenHitAt, hostRtShellInstall, hostRtShellEvent, hostAppDrive, hostAppRender, AppRuntimeDriver, ProteusTabChrome, setContentMode, glassTouch, glassStep, hostHttpProbe } from 'proteus_render';
+// ★T-app-fetch：ArkTS 侧编解码器（本端唯一实现）——真机判据用它**自己编码**一帧交给 C++，
+//   验的就是「ArkTS 编的字节 → C++ 解」这条真实跨语言契约（parity 门禁在本机验同一性质）。
+import { encodeInvoke, InvokeFrame } from '../runtime/InvokeWire';
 
 const DOMAIN = 0x0002;
 const TAG = 'ProteusSuperapp';
@@ -109,6 +112,12 @@ struct Superapp {
 
   aboutToAppear(): void {
     hilog.info(DOMAIN, TAG, 'SUPERAPP_PAGE_APPEAR scene=%{public}s', this.scene);
+    // ★T-app-fetch：HTTP 通路判据场景（不依赖应用 bundle —— 应用层故障时仍可独立判定网络腿）
+    if (this.scene === 'superapp-http') {
+      try { this.filesDir = getContext(this).filesDir; } catch (e) { /* filesDir 取不到时报告写 /tmp 之外会失败 */ }
+      this.runHttpProbe();
+      return;
+    }
     try {
       const ctx = getContext(this);
       this.filesDir = ctx.filesDir;
@@ -775,6 +784,59 @@ struct Superapp {
     this.scrollOffset = this.maxScroll;
     scrollRoot(this.scrollOffset);
     return this.scrollOffset;
+  }
+
+  /**
+   * ★★★T-app-fetch 真机判据：`scene=superapp-http` ⇒ **不 boot 应用**，只跑一次真实网络往返。
+   *
+   * 【为什么单开一个场景（而不是塞进 superapp-drive）】本判据要 Answer 的问题是
+   *   「鸿蒙宿主的 `http.request` 二进制腿在真机上通不通」——它与应用 bundle/路由无关。
+   *   单开场景 ⇒ 判据不受应用层故障干扰（应用白屏时仍能独立判定网络腿）。
+   *
+   * 【链路】`hostHttpProbe`（proteus_host.so）内部：C++ 用 SSOT 编 `PINV` 帧 →
+   *   建一个**空 JSVM** → 只注入 `proteusHost.invokeBytes` → eval 一段 hex↔Uint8Array 脚本 →
+   *   JS 调桥（真实 `Uint8Array` 进出）→ C++ 解 `PRSP`。⇒ 证明「JS 字节交接 + 线格式 + 宿主 HTTP」三段。
+   *   ★诚实边界：不覆盖 `useFetch` 的业务封装（那由单测 + parity 门禁覆盖，见 http_probe.h 头注）。
+   *
+   * 【完成信号】落 `<filesDir>/http-probe.json` + hilog `PROTEUS_HTTP_PROBE_DONE`（脚本零盲等）。
+   */
+  private runHttpProbe(): void {
+    let url: string = AppStorage.get<string>('proteusProbeUrl') ?? '';
+    if (url.length === 0) url = 'https://httpbin.org/get';
+    let result: string = '';
+    // ★ArkTS 自己编一帧（frameHex 入参）——C++ 侧解它 ⇒ 真机上的跨语言逐字节契约
+    let frameHex: string = '';
+    try {
+      const f: InvokeFrame = new InvokeFrame();
+      f.method = 'http.request';
+      f.reqId = 'probe-http-arkts-1';
+      f.url = url;
+      f.httpMethod = 'GET';
+      f.responseType = 0;   // RESPONSE_TEXT
+      const bytes: Uint8Array = encodeInvoke(f);
+      let hex: string = '';
+      for (let i = 0; i < bytes.length; i++) {
+        const b: number = bytes[i];
+        hex += (b < 16 ? '0' : '') + b.toString(16);
+      }
+      frameHex = hex;
+    } catch (e) {
+      hilog.error(DOMAIN, TAG, 'HTTP_PROBE_ARKTS_ENCODE_FAIL %{public}s', JSON.stringify(e) ?? '');
+    }
+    try {
+      result = hostHttpProbe(JSON.stringify({ 'url': url, 'frameHex': frameHex, 'filesDir': this.filesDir } as Record<string, Object>));
+    } catch (e) {
+      result = '{"ok":false,"host":"harmony","error":"' + JSON.stringify(e) + '"}';
+    }
+    try {
+      const path: string = this.filesDir + '/http-probe.json';
+      const fd = fileIo.openSync(path, fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE | fileIo.OpenMode.TRUNC);
+      fileIo.writeSync(fd.fd, result);
+      fileIo.closeSync(fd.fd);
+    } catch (e) {
+      hilog.error(DOMAIN, TAG, 'HTTP_PROBE_WRITE_FAIL %{public}s', JSON.stringify(e) ?? '');
+    }
+    hilog.info(DOMAIN, TAG, 'PROTEUS_HTTP_PROBE_DONE %{public}s', result);
   }
 
   private writeReport(): void {

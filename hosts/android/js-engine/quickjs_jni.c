@@ -348,8 +348,15 @@ static JSValue js_host_invoke(JSContext *ctx, JSValueConst this_val, int argc, J
 static JSValue proteus_new_uint8_array_copy(JSContext *ctx, const uint8_t *buf, size_t len) {
   JSValue ab = JS_NewArrayBufferCopy(ctx, buf, len);
   if (JS_IsException(ab)) return ab;
-  JSValueConst args[1] = { ab };
-  JSValue arr = JS_NewTypedArray(ctx, 1, args, JS_TYPED_ARRAY_UINT8);
+  /* ★★★真机 SIGSEGV 修复（2026-10-18 · T-app-fetch 真机判据抓出）：
+   *   `JS_NewTypedArray` 内部直接转调 `js_typed_array_constructor`，而后者在首参是 ArrayBuffer 时
+   *   **会读 argv[1]（byteOffset）与 argv[2]（length）**——只传 1 个实参就是**越界读栈内存**
+   *   ⇒ 真机 `SIGSEGV in JS_ToIndex ← js_typed_array_constructor ← JS_NewTypedArray`。
+   *   ★此类缺陷**静态门禁永远抓不到**（形态齐备、编译通过），只有真机能暴露——正是"必须跑真机判据"的实例。
+   *   修：按构造函数真实签名补足三个实参（buffer, byteOffset=0, length=undefined ⇒ 取整个 buffer）。 */
+  JSValueConst args[3] = { ab, JS_NewInt32(ctx, 0), JS_UNDEFINED };
+  JSValue arr = JS_NewTypedArray(ctx, 3, args, JS_TYPED_ARRAY_UINT8);
+  JS_FreeValue(ctx, args[1]);   /* 自造的 offset 值由本函数释放 */
   JS_FreeValue(ctx, ab);
   return arr;
 }

@@ -37,6 +37,19 @@ ARCH_INC="$(ls "$SYSROOT/usr/include" 2>/dev/null | grep -iE 'aarch64|aarch' | h
 
 echo "==> 编译检查鸿蒙宿主 C++（OHOS clang -fsyntax-only，零设备）"
 fail=0
+# ★T-app-fetch（2026-10-18）：`invoke_wire.h` 只有被某个 TU include 才会被编译到。
+#   `proteus_host.cpp` 已 include 它（能力通道 http.request 用）⇒ 上面的循环天然覆盖；
+#   这里再单独编一个**最小 TU**，保证"头文件自身可独立编译"（它声明零依赖，应成立）。
+if printf '#include "invoke_wire.h"\nint main(){return 0;}\n' > /tmp/proteus_iw_probe.cpp \
+   && "$CLANG" --target=aarch64-linux-ohos --sysroot="$SYSROOT" -fsyntax-only -std=c++17 \
+      -I"$SYSROOT/usr/include" -I"$SYSROOT/usr/include/$ARCH_INC" -I"$CPP_DIR" \
+      /tmp/proteus_iw_probe.cpp 2>/tmp/harmony_cc_invoke_wire.log; then
+  echo "  ✅ invoke_wire.h（独立 TU）"
+else
+  echo "  ✗ invoke_wire.h（独立 TU）"
+  grep -E "error:" /tmp/harmony_cc_invoke_wire.log | head -10
+  fail=1
+fi
 for f in proteus_host.cpp proteus_render.cpp glass_vk.cpp; do
   if "$CLANG" --target=aarch64-linux-ohos --sysroot="$SYSROOT" -fsyntax-only \
       -I"$SYSROOT/usr/include" -I"$SYSROOT/usr/include/$ARCH_INC" -I"$CPP_DIR" \

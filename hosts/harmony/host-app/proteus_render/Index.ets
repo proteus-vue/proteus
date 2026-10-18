@@ -48,6 +48,8 @@ export {
   appScreenFollowField,
   hostRtShellInstall,
   hostRtShellEvent,
+  // ★T-app-fetch：真机 HTTP 通路判据（空 VM + 真实 invokeBytes + 真网络）
+  hostHttpProbe,
   hostAppBoot,
   hostAppDrive,
   hostAppRender,

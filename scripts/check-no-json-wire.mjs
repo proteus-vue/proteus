@@ -326,6 +326,92 @@ if (!fs.existsSync(HTTP_JAVA)) {
   }
 }
 
+// ── ⑨ 鸿蒙腿（T-app-fetch 2026-10-18）：编解码器 + 字节桥 + HTTP + **真的被装上** ──
+// 【判据形态与 ⑤⑥⑦ 同族：正向缺件 + 反向回退 + 安装点非死代码】
+//   ★这一节是"判定覆盖跟着实际落点走"的落点：鸿蒙腿落地前本门禁只判 Android/iOS；
+//     腿一落地就必须补上，否则**新端可以静默回退 JSON 而门禁全绿**（同 source 的旧教训）。
+{
+  const HARMONY_CPP = path.join(ROOT, 'hosts/harmony/host-app/proteus_render/src/main/cpp')
+  const HARMONY_WIRE_TS = path.join(ROOT, 'hosts/harmony/host-app/entry/src/main/ets/runtime/InvokeWire.ts')
+  const HARMONY_WIRE_CPP = path.join(HARMONY_CPP, 'invoke_wire.h')
+  const HARMONY_HTTP = path.join(HARMONY_CPP, 'proteus_http.h')
+  const HARMONY_BRIDGE = path.join(HARMONY_CPP, 'invoke_bytes_bridge.h')
+  const HARMONY_RUNTIME = path.join(HARMONY_CPP, 'host_app_runtime_impl.h')
+  const HARMONY_PROBE_SCRIPT = path.join(ROOT, 'hosts/harmony/run-http-probe.sh')
+
+  const missingFiles = [HARMONY_WIRE_TS, HARMONY_WIRE_CPP, HARMONY_HTTP, HARMONY_BRIDGE].filter((f) => !fs.existsSync(f))
+  if (missingFiles.length) {
+    for (const f of missingFiles) fail(`缺鸿蒙腿源码：${path.relative(ROOT, f)}（能力通道的二进制腿在该端无落点）`)
+  } else {
+    // ① ArkTS 编解码器（JS 侧唯一实现）——必须有 decode/encode + magic
+    const at = fs.readFileSync(HARMONY_WIRE_TS, 'utf-8')
+    const atGaps = []
+    if (!/export function decodeInvoke\s*\(\s*bytes:\s*Uint8Array\s*\)/.test(at)) atGaps.push('`decodeInvoke(bytes)`')
+    if (!/export function encodeResolve\s*\(\s*f:\s*ResolveFrame\s*\)/.test(at)) atGaps.push('`encodeResolve(ResolveFrame)`')
+    if (!at.includes('INVOKE_MAGIC') || !at.includes('RESOLVE_MAGIC')) atGaps.push('magic 常量（`PINV`/`PRSP`）')
+    if (atGaps.length) fail(`鸿蒙 \`InvokeWire.ts\` 缺 ${atGaps.join(' / ')}（帧的字节出入不成立）`)
+    else console.log('  ✓ 鸿蒙宿主：ArkTS `InvokeWire.ts` 帧编解码齐备（decodeInvoke / encodeResolve / magic）')
+
+    // ② C++ 编解码器（宿主主用）——同上
+    const cw = fs.readFileSync(HARMONY_WIRE_CPP, 'utf-8')
+    const cwGaps = []
+    if (!/InvokeFrame decodeInvoke\s*\(/.test(cw)) cwGaps.push('`decodeInvoke(...)`')
+    if (!/std::vector<uint8_t> encodeResolve\s*\(/.test(cw)) cwGaps.push('`encodeResolve(...)`')
+    if (!cw.includes('INVOKE_MAGIC') || !cw.includes('RESOLVE_MAGIC')) cwGaps.push('magic 常量')
+    if (cwGaps.length) fail(`鸿蒙 \`invoke_wire.h\` 缺 ${cwGaps.join(' / ')}`)
+    else console.log('  ✓ 鸿蒙宿主：C++ `invoke_wire.h` 帧编解码齐备')
+
+    // ③ HTTP 能力：真实网络 SDK + 经 `encodeResolve` 回帧 + **零 JSON 解析**
+    //   ★分层：HTTP 头只产 `ResolveFrame`（语义层）；帧编码在字节桥里 ⇒ 两处都读，判**整条链**。
+    const hh = fs.readFileSync(HARMONY_HTTP, 'utf-8')
+    const hb = fs.readFileSync(HARMONY_BRIDGE, 'utf-8')
+    if (!hasExact(hh, 'HMS_Rcp_FetchSync')) {
+      fail('`proteus_http.h` 未用 `HMS_Rcp_FetchSync`（鸿蒙腿的网络实现缺失 ⇒ 能力无真实消费者）')
+    } else if (!hasExact(hh, 'encodeResolve') && !hasExact(hb, 'encodeResolve')) {
+      fail('HTTP 腿未接 `encodeResolve` 帧编码（`proteus_http` 与 `invoke_bytes_bridge` 两处皆无 ⇒ 结果无法走字节通道）')
+    } else if (/\bcJSON_Parse\b|\bnlohmann\b|org\.json|JSONSerialization/.test(hh)) {
+      fail('`proteus_http.h` 出现 JSON 解析形态（响应体应原样回字节，由 JS 侧按 responseType 解释）')
+    } else {
+      console.log('  ✓ 鸿蒙宿主：`proteus_http` 走 HMS RCP + `encodeResolve` 回帧 + 零 JSON 解析')
+    }
+
+    // ④ 字节桥：进出都必须是 Uint8Array（JSVM typedarray API），不是 JSON 串
+    const hbNeed = [
+      ['OH_JSVM_GetTypedarrayInfo', '从 JS `Uint8Array` 取**裸指针**（免逐元素拷贝）'],
+      ['OH_JSVM_CreateTypedarray', '回执时造 JS `Uint8Array`（而非 JSON 串）'],
+      ['OH_JSVM_CreateArraybuffer', '字节拷进 JS 堆（回调返回后栈上字节即失效）'],
+      ['JSVM_UINT8_ARRAY', '视图类型必须是 Uint8Array'],
+    ]
+    const hbMissing = hbNeed.filter(([p]) => !hasExact(hb, p))
+    if (hbMissing.length) {
+      for (const [p, why] of hbMissing) fail(`\`invoke_bytes_bridge.h\` 缺 \`${p}\`（${why}）`)
+    } else {
+      console.log('  ✓ 鸿蒙宿主：字节桥走 JSVM typedarray API（裸指针读 / Uint8Array 造 / 拷入 JS 堆）')
+    }
+    // ★反向判据：不得把字节经 hex/JSON 文本中转（那正是要消灭的那层开销）
+    if (/std::string\s*\(\s*reinterpret_cast<const char\*>\(\s*outBytes\.data\(\)/.test(hb) || /\bJSON\.stringify\b/.test(hb)) {
+      fail('`invoke_bytes_bridge.h` 出现把回程字节当文本串搬运的形态（应直接造 Uint8Array）')
+    }
+
+    // ⑤ 安装点非死代码：`installInvokeBytes` 必须被运行期/注入点真的调用
+    const hr = fs.readFileSync(HARMONY_RUNTIME, 'utf-8')
+    if (!hasExact(hb, 'installInvokeBytes')) {
+      fail('`invoke_bytes_bridge.h` 未定义 `installInvokeBytes`（桥存在但没装机接口）')
+    } else if (!hasExact(hr, 'installInvokeBytes') && !hasExact(hr, 'InvokeBytesCb')) {
+      fail('`host_app_runtime_impl.h` 未安装 `invokeBytes`（定义在但没有注入点 = 死代码 ⇒ 真机永远回落 JSON 腿）')
+    } else {
+      console.log('  ✓ 鸿蒙宿主：字节桥有定义**且**运行期真的注入了（非死代码）')
+    }
+  }
+
+  // ⑥ 通路判据必须在（静态形态判据证明不了"能跑"——与 iOS `check-invoke-bytes.sh` 同纪律）
+  if (!fs.existsSync(HARMONY_PROBE_SCRIPT)) {
+    fail('缺 `hosts/harmony/run-http-probe.sh`（鸿蒙端到端通路判据）——形态判据不能替代通路判据')
+  } else {
+    console.log('  ✓ 鸿蒙端到端判据在位（`run-http-probe.sh`：ArkTS 编帧 → C++ 解 → 真网络）')
+  }
+}
+
 if (failed) {
   console.error('\n✗ 跨语言数据通道出现 JSON 文本（S2 去 JSON 被回退）——见上')
   console.error('  正确做法：逐帧指令走 `sendOps`（字节直传）；能力调用走 `invokeBytes` / `resolveHostBytes`（`PINV`/`PRSP` 帧）')

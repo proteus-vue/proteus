@@ -9,6 +9,7 @@
 //   NAPI 模块名 `proteus_host`（.so = libproteus_host.so）；ArkTS 侧 `import ... from 'proteus_host'`。
 #include "proteus_host_helpers.h"
 #include "host_app_runtime_impl.h"
+#include "http_probe.h"   // ★T-app-fetch：真机 HTTP 通路判据（走真实 invokeBytes）
 #include <arkui/native_node_napi.h>
 
 #define PROTEUS_HOST_DOMAIN 0x0003
@@ -1003,6 +1004,8 @@ static napi_value HostBridgeInit(napi_env env, napi_value exports) {
         {"hostAppAnimReset", nullptr, HostAppAnimReset, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"hostAppAnimTick", nullptr, HostAppAnimTick, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"hostAppAnimStats", nullptr, HostAppAnimStats, nullptr, nullptr, nullptr, napi_default, nullptr},
+        // ★T-app-fetch：真机 HTTP 通路判据（空 VM + 真实 invokeBytes + 真网络）
+        {"hostHttpProbe", nullptr, HostHttpProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
     };
     napi_define_properties(env, exports, sizeof(desc) / sizeof(desc[0]), desc);
     return exports;

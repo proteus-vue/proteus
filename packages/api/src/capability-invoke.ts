@@ -199,8 +199,41 @@ function encodeBody(data: unknown, meta: InvokeMeta): Uint8Array {
 interface PendingHostCall {
   resolve: (v: unknown) => void
   reject: (e: Error) => void
-  timer: ReturnType<typeof setTimeout>
+  /** ★异步腿的超时句柄（引擎无 `setTimeout` 时是 no-op——见 `armHostCallTimeout`）。 */
+  timer: TimerHandle
   responseType: ResponseKind
+}
+
+/** 超时句柄（`clear()` 幂等；无引擎定时器时是 no-op）。 */
+export interface TimerHandle {
+  clear(): void
+}
+
+/**
+ * ★★★`setTimeout` 是**宿主环境**能力，不是 ECMAScript 标准 —— 而 App 三端 JS 引擎**都没有**它：
+ *   Android = QuickJS（`JS_NewContext` 不带 libc 定时器）· iOS = JavaScriptCore（`JSContext` 无 window）·
+ *   鸿蒙 = JSVM（同上）。此前本文件**无条件** `setTimeout(...)` ⇒ 异步腿（含 `useFetch`）在真机上
+ *   直接 `ReferenceError: setTimeout is not defined`（Promise 构造器内抛出 ⇒ 立刻 reject）。
+ * ★为什么不是"偷偷跳过超时"：帧的 meta 里**已带 `timeoutMs`**，宿主持有同值超时（Android/iOS 各自
+ *   设 connect/read timeout、鸿蒙设 RCP connect/transfer）⇒ 超时语义**由宿主兜底**，JS 侧只是
+ *   第二道防线。故无定时器时降级为 host-only，并**记下来**（`hostCallTimerMode()` 可查，不静默）。
+ */
+function armHostCallTimeout(ms: number, onTimeout: () => void): TimerHandle {
+  const st = (globalThis as { setTimeout?: (fn: () => void, ms?: number) => unknown }).setTimeout
+  if (typeof st !== "function") {
+    timerMode = "host-only"
+    return { clear() {} }
+  }
+  timerMode = "js-timer"
+  const id = st(onTimeout, ms)
+  const ct = (globalThis as { clearTimeout?: (id: unknown) => void }).clearTimeout
+  return { clear() { if (typeof ct === "function") ct(id) } }
+}
+
+/** 实际使用的超时形态（`js-timer` | `host-only`；真机/单测判据读它）。 */
+let timerMode: "js-timer" | "host-only" | "unset" = "unset"
+export function hostCallTimerMode(): "js-timer" | "host-only" | "unset" {
+  return timerMode
 }
 
 const pendingHostCalls = new Map<string, PendingHostCall>()
@@ -230,7 +263,7 @@ function settleFromFrame(p: Pick<PendingHostCall, 'resolve' | 'reject' | 'respon
 function settleHostCall(reqId: string, resultJson: string): void {
   const p = pendingHostCalls.get(reqId)
   if (!p) return
-  clearTimeout(p.timer)
+  p.timer.clear()
   pendingHostCalls.delete(reqId)
   try {
     const parsed = JSON.parse(resultJson) as { ok?: boolean; data?: unknown; reason?: string; missing?: boolean }
@@ -262,7 +295,7 @@ function settleHostCallBytes(frame: Uint8Array): void {
   const p = pendingHostCalls.get(f.reqId)
   if (!p) return
   if (f.ok && f.pending === true) return
-  clearTimeout(p.timer)
+  p.timer.clear()
   pendingHostCalls.delete(f.reqId)
   settleFromFrame(p, f)
 }
@@ -314,17 +347,17 @@ export function invokeHostAsync(method: string, args?: unknown, timeoutMs = 1500
   const reqId = nextReqId()
   const payload = JSON.stringify({ ...((args ?? {}) as Record<string, unknown>), __reqId: reqId })
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
+    const timer: TimerHandle = armHostCallTimeout(timeoutMs, () => {
       pendingHostCalls.delete(reqId)
       reject(new Error(`原生异步调用超时（${method}，${timeoutMs}ms）`))
-    }, timeoutMs)
+    })
     pendingHostCalls.set(reqId, { resolve, reject, timer, responseType: 'text' })
     let out: string
     try {
       out = f ? f(method, payload) : ph!.invoke!(method, payload)
     } catch (e) {
       pendingHostCalls.delete(reqId)
-      clearTimeout(timer)
+      timer.clear()
       reject(e instanceof Error ? e : new Error(String(e)))
       return
     }
@@ -340,7 +373,7 @@ export function invokeHostAsync(method: string, args?: unknown, timeoutMs = 1500
       return // 已受理 ⇒ 等回推
     }
     pendingHostCalls.delete(reqId)
-    clearTimeout(timer)
+    timer.clear()
     if (parsed && parsed.ok === false) {
       const msg = parsed.reason ?? ''
       reject(new Error(parsed.missing ? `unsupported: ${msg}` : msg || '原生调用失败'))
@@ -370,17 +403,17 @@ function invokeHostAsyncBytes(
     return Promise.reject(e instanceof Error ? e : new Error(String(e)))
   }
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
+    const timer: TimerHandle = armHostCallTimeout(timeoutMs, () => {
       pendingHostCalls.delete(reqId)
       reject(new Error(`原生异步调用超时（${method}，${timeoutMs}ms）`))
-    }, timeoutMs)
+    })
     pendingHostCalls.set(reqId, { resolve, reject, timer, responseType })
     let out: Uint8Array | undefined
     try {
       out = fn(frame)
     } catch (e) {
       pendingHostCalls.delete(reqId)
-      clearTimeout(timer)
+      timer.clear()
       reject(e instanceof Error ? e : new Error(String(e)))
       return
     }
@@ -393,13 +426,13 @@ function invokeHostAsyncBytes(
       reply = decodeResolveFrame(out)
     } catch (e) {
       pendingHostCalls.delete(reqId)
-      clearTimeout(timer)
+      timer.clear()
       reject(e instanceof Error ? e : new Error(String(e)))
       return
     }
     if (reply.ok && reply.pending === true) return // 受理帧不结算
     pendingHostCalls.delete(reqId)
-    clearTimeout(timer)
+    timer.clear()
     settleFromFrame({ resolve, reject, responseType }, reply)
   })
 }

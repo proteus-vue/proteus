@@ -24,6 +24,7 @@
 //   命中链由 ArkTS 侧（持内核树）算出后传入（chain）；`screen.rect/shared` 未实现（e4 诚实跳过）。
 #pragma once
 #include "proteus_host_helpers.h"
+#include "invoke_bytes_bridge.h"
 #include <chrono>
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -444,6 +445,7 @@ static napi_value HostAppBoot(napi_env env, napi_callback_info info) {
         JSVM_CallbackStruct cb; cb.callback = InvokeCb; cb.data = nullptr;
         JSVM_Value fn = nullptr; OH_JSVM_CreateFunction(jenv, "invoke", JSVM_AUTO_LENGTH, &cb, &fn);
         OH_JSVM_SetNamedProperty(jenv, host, "invoke", fn);
+        installInvokeBytes(jenv, host);   // ★T-app-fetch：能力通道二进制腿
         JSVM_Value global = nullptr; OH_JSVM_GetGlobal(jenv, &global);
         OH_JSVM_SetNamedProperty(jenv, global, "proteusHost", host);
         JSVM_Value src = nullptr; OH_JSVM_CreateStringUtf8(jenv, bundle.c_str(), bundle.size(), &src);
@@ -521,6 +523,7 @@ static napi_value HostAppDrive(napi_env env, napi_callback_info info) {
         JSVM_CallbackStruct cb; cb.callback = InvokeCb; cb.data = nullptr;
         JSVM_Value fn = nullptr; OH_JSVM_CreateFunction(jenv, "invoke", JSVM_AUTO_LENGTH, &cb, &fn);
         OH_JSVM_SetNamedProperty(jenv, host, "invoke", fn);
+        installInvokeBytes(jenv, host);   // ★T-app-fetch：能力通道二进制腿
         JSVM_Value global = nullptr; OH_JSVM_GetGlobal(jenv, &global);
         OH_JSVM_SetNamedProperty(jenv, global, "proteusHost", host);
         JSVM_Value src = nullptr; OH_JSVM_CreateStringUtf8(jenv, bundle.c_str(), bundle.size(), &src);
@@ -638,6 +641,8 @@ static napi_value HostAppRender(napi_env env, napi_callback_info info) {
         struct NamedFn { const char* name; JSVM_CallbackStruct cb; };
         NamedFn fns[] = {
             {"invoke", {InvokeCb, nullptr}},
+            // ★T-app-fetch：能力通道二进制腿（InvokeBytesCb 见 invoke_bytes_bridge.h）
+            {"invokeBytes", {InvokeBytesCb, nullptr}},
             {"mount", {MountCaptureCb, nullptr}},
             {"applyOps", {NoopCb, nullptr}},
             {"getScroll", {GetScroll0Cb, nullptr}},
@@ -807,6 +812,8 @@ static napi_value HostAppPumpTick(napi_env env, napi_callback_info info) {
         struct NamedFn { const char* name; JSVM_CallbackStruct cb; };
         NamedFn fns[] = {
             {"invoke", {InvokeCb, nullptr}},
+            // ★T-app-fetch：能力通道二进制腿（InvokeBytesCb 见 invoke_bytes_bridge.h）
+            {"invokeBytes", {InvokeBytesCb, nullptr}},
             {"mount", {MountCaptureCb, nullptr}},
             {"applyOps", {NoopCb, nullptr}},
             {"getScroll", {GetScroll0Cb, nullptr}},
@@ -955,6 +962,7 @@ static napi_value HostAppEval(napi_env env, napi_callback_info info) {
         JSVM_CallbackStruct cb; cb.callback = InvokeCb; cb.data = nullptr;
         JSVM_Value fn = nullptr; OH_JSVM_CreateFunction(jenv, "invoke", JSVM_AUTO_LENGTH, &cb, &fn);
         OH_JSVM_SetNamedProperty(jenv, host, "invoke", fn);
+        installInvokeBytes(jenv, host);   // ★T-app-fetch：能力通道二进制腿
         JSVM_Value global = nullptr; OH_JSVM_GetGlobal(jenv, &global);
         OH_JSVM_SetNamedProperty(jenv, global, "proteusHost", host);
         JSVM_Value src = nullptr; OH_JSVM_CreateStringUtf8(jenv, bundle.c_str(), bundle.size(), &src);

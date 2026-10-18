@@ -8,6 +8,13 @@
     "deliveryWithInstall": true,
     "installationFree": false,
     "pages": "$profile:main_pages",
+    // ★T-app-fetch（2026-10-18）：C26 useFetch 的宿主 HTTP 腿需要联网权限。
+    //   Android 侧已双变体加 INTERNET（决策 #902）；鸿蒙此前无任何网络能力 ⇒ 从未声明过。
+    "requestPermissions": [
+      {
+        "name": "ohos.permission.INTERNET"
+      }
+    ],
     "abilities": [
       {
         "name": "EntryAbility",
