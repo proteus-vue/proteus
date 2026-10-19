@@ -837,10 +837,18 @@ static napi_value HostAppRender(napi_env env, napi_callback_info info) {
     // ★★★决策 #1081：元素查询读数（静态 id → nodeId → 内核矩形）——三端同一份探针，须在 VM 销毁前取。
     std::string elReg = "null";
     std::string elProbe = "null";
+    std::string elClass = "null";
+    std::string elCompound = "null";
+    std::string elPseudo = "null";
     if (err.empty()) {
         jsvmEvalStr(jenv, "String(__proteusHostAppElementRegistry())", &elReg);
-        // ★缺省 selector = 当前渲染屏的**第一个元素 id**（探针跨页，不硬编码某页 id）
-        jsvmEvalStr(jenv, "String(__proteusHostAppElementRect('{}'))", &elProbe);
+        // ★仅解析（不取几何）：本 VM 期间内核树尚未建 ⇒ element.rect 必回「尚未建树」（真机实证）
+        //   几何由 ArkTS 在建树后补测（nodeId 由这里给出）
+        jsvmEvalStr(jenv, "String(__proteusHostAppElementResolve('{}'))", &elProbe);
+        // ★#1082：class / 复合 / 伪类（与 Android/iOS 同判据）
+        jsvmEvalStr(jenv, "String(__proteusHostAppElementResolve('{\"selector\":\".sa-item\"}'))", &elClass);
+        jsvmEvalStr(jenv, "String(__proteusHostAppElementResolve('{\"selector\":\"view.sa-item\"}'))", &elCompound);
+        jsvmEvalStr(jenv, "String(__proteusHostAppElementResolve('{\"selector\":\"view:hover\"}'))", &elPseudo);
     }
     // ★★★dev 元素树（决策 #732）：优先取**运行期** `__proteusHostAppTree()`（= `currentContent()`，
     //   **带 `file`/`screen`** ⇒ 面板据节点 loc 拼 `file:line:col` → 跳编辑器）。比 mount 捕获树多 `file` 字段。
@@ -859,8 +867,12 @@ static napi_value HostAppRender(napi_env env, napi_callback_info info) {
         + ",\"snapshot\":" + (snap.empty() ? std::string("{}") : snap)
         + ",\"pumpHz\":" + (pumpHz.empty() ? "[]" : pumpHz)
         + ",\"tree\":" + (g_scRuntimeTree.empty() ? "null" : g_scRuntimeTree);
-    out += ",\"elementRegistry\":" + (elReg.empty() ? std::string("null") : elReg)
-        + ",\"elementProbe\":" + (elProbe.empty() ? std::string("null") : elProbe);
+    // ★返回**字符串**（探针原文），不是内嵌对象——否则 ArkTS 侧拼报告时会变成 `[object Object]`（真机实测）。
+    out += ",\"elementRegistry\":\"" + jsonEscape(elReg.empty() ? std::string("null") : elReg) + "\""
+        + ",\"elementProbe\":\"" + jsonEscape(elProbe.empty() ? std::string("null") : elProbe) + "\""
+        + ",\"elementClass\":\"" + jsonEscape(elClass.empty() ? std::string("null") : elClass) + "\""
+        + ",\"elementCompound\":\"" + jsonEscape(elCompound.empty() ? std::string("null") : elCompound) + "\""
+        + ",\"elementPseudo\":\"" + jsonEscape(elPseudo.empty() ? std::string("null") : elPseudo) + "\"";
     if (!g_devConsoleOut.empty()) out += ",\"console\":\"" + jsonEscape(g_devConsoleOut) + "\"";
     if (!err.empty()) out += ",\"error\":\"" + jsonEscape(err) + "\"";
     out += "}";

@@ -19,13 +19,15 @@ import { NodeContent } from '@kit.ArkUI';
 import { display, window } from '@kit.ArkUI';
 import { util } from '@kit.ArkTS';
 import { fileIo } from '@kit.CoreFileKit';
-import { attach, renderCommands, scrollRoot, clearRoot, appScreenCommands, appScreenContentHeight, appScreenHitAt, hostRtShellInstall, hostRtShellEvent, hostAppDrive, hostAppRender, AppRuntimeDriver, ProteusTabChrome, setContentMode, glassTouch, glassStep, hostHttpProbe } from 'proteus_render';
+import { appScreenNodeRect, attach, renderCommands, scrollRoot, clearRoot, appScreenCommands, appScreenContentHeight, appScreenHitAt, hostRtShellInstall, hostRtShellEvent, hostAppDrive, hostAppRender, AppRuntimeDriver, ProteusTabChrome, setContentMode, glassTouch, glassStep, hostHttpProbe } from 'proteus_render';
 // ★T-app-fetch：ArkTS 侧编解码器（本端唯一实现）——真机判据用它**自己编码**一帧交给 C++，
 //   验的就是「ArkTS 编的字节 → C++ 解」这条真实跨语言契约（parity 门禁在本机验同一性质）。
 import { encodeInvoke, InvokeFrame } from '../runtime/InvokeWire';
 // ★★设备与系统域（决策 #1067）：渲染前注入设备快照、渲染后执行宿主动作队列
 import { refreshDeviceSnapshot, runDeviceActions } from '../runtime/DeviceSnapshot';
 import { runKeyboardProbe } from '../runtime/KeyboardProbe';
+// ★★★决策 #1082：元素查询探针读数（把回执里的探针字段转 JSON 文本——String(obj) 会变 [object Object]）
+import { readElementProbes, elementReportFragment, measureElementRect, ElementProbeReadout } from '../runtime/ElementProbe';
 // ★决策 #1077：键盘探针要主动收键盘（IMEKit 的输入会话控制）
 import { inputMethod } from '@kit.IMEKit';
 
@@ -103,8 +105,7 @@ struct Superapp {
   /** ★★★跨调用状态（2026-10-07 · 鸿蒙一次性 VM）：上次 hostAppRender 返回的 `snapshot`
    *   （`{屏名:{变量:值}}`）——每次新 VM 作 `state` 回灌，恢复 count 等实例态（否则点击计数不动）。 */
   private runtimeState: Record<string, Object> | null = null;
-  private elementRegistryJson: string = 'null';   // ★#1081 元素索引读数
-  private elementProbeJson: string = 'null';      // ★#1081 元素查询读数
+  private elementProbes: ElementProbeReadout = { registry: 'null', probe: 'null', cls: 'null', compound: 'null', pseudo: 'null' }; private elementRectVp: string = 'null';   // ★#1081/#1082 元素读数 + 建树后补测几何
   /** ★★决策 #1067：窗口引用（设备亮度/常亮/剪贴板动作要在窗口上执行） */
   private win: window.Window | undefined = undefined;
   /** 视口高/宽（vp；renderCurrent 处记录——与 contentH 同源）。 */
@@ -716,8 +717,8 @@ struct Superapp {
         // ★★★v-pump / 动画（决策 #796）：**归 runtime** 的 driver 接棒（起/停泵 + 动画挂树重放）
         this.ensureDriver().onRenderReply(rt);
         // ★★★决策 #1081：元素查询读数（静态 id → nodeId → 内核矩形）——报告用（三端同一份探针）
-        this.elementRegistryJson = rt['elementRegistry'] !== undefined ? String(rt['elementRegistry']) : 'null';
-        this.elementProbeJson = rt['elementProbe'] !== undefined ? String(rt['elementProbe']) : 'null';
+        // ★探针读数（转换逻辑在 runtime/ElementProbe：String(obj) 会变 [object Object]，真机抓到过）
+        this.elementProbes = readElementProbes(rt);
       } catch (re) {
         hilog.error(DOMAIN, TAG, 'SUPERAPP_RUNTIME_ERROR %{public}s', JSON.stringify(re) ?? '');
       }
@@ -815,6 +816,7 @@ struct Superapp {
         this.pendingScrollInject = 0;   // 消费式：只注入一次
         hilog.info(DOMAIN, TAG, 'SUPERAPP_SCROLL_TEST offset=%{public}f max=%{public}f', this.scrollOffset, this.maxScroll);
       }
+      this.elementRectVp = measureElementRect(this.elementProbes.probe, this.scrollOffset);   // ★#1082 树已建好 ⇒ 用 nodeId 读内核几何
       scrollRoot(this.scrollOffset);
       hilog.info(DOMAIN, TAG, 'SUPERAPP_SCROLL contentH=%{public}s viewport=%{public}s max=%{public}s offset=%{public}s',
         chVp.toFixed(1), Superapp.vpH.toFixed(1), this.maxScroll.toFixed(1), this.scrollOffset.toFixed(1));
@@ -931,7 +933,7 @@ struct Superapp {
         + ',"current":"' + this.current + '"'
         + ',"switch_log":[' + this.switchLog.join(',') + ']}'
         // ★★★决策 #1081：元素查询（静态 id → nodeId → 内核矩形）——三端同一份读数
-        .replace(/\}$/, ',"element_registry":' + this.elementRegistryJson + ',"element_probe":' + this.elementProbeJson + '}')
+        .replace(/\}$/, elementReportFragment(this.elementProbes) + ',"element_rect":' + this.elementRectVp + '}')
         // ★★★滚动对齐（2026-10-05）：滚动读数（范围/当前偏移）——与 Android/iOS 的 scroll 读数同语义；★惯性读数（2026-10-09）：momentum_frames/moved = **"惯性真的接线了"的机器证据**（本仓纪律：
         //     "报告有、通路无"只能靠计数现形——Android 曾有 startFlingX 声明但无人调的先例）。
         .replace(/\}$/, ',"scroll":{"max":' + this.maxScroll.toFixed(1) + ',"offset":' + this.scrollOffset.toFixed(1)

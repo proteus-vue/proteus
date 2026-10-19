@@ -162,6 +162,38 @@ for row in log:
     flag = '✓' if row.get('ok') else '✗'
     if not row.get('ok'): allok = False
     print(f"    {flag} tap={row.get('tap')} → current={row.get('current')}")
+
+# ★★★决策 #1082：元素查询探针（静态 id → nodeId → 内核几何；三端同一份判据）
+reg = d.get('element_registry') or {}
+print("    element_registry=" + str(reg))
+if not (reg.get('screens') or {}):
+    print('✗ 元素索引为空（selector→nodeId 映射无数据源）'); allok = False
+for k in ('element_probe', 'element_class', 'element_compound'):
+    v = d.get(k) or {}
+    if not v.get('ok'):
+        print("✗ " + k + " 未命中：" + str(v)); allok = False
+    else:
+        print("    ✓ " + k + " → nodeId=" + str(v.get('nodeId')))
+# class 与 id 必须命中同一节点（同一元素的两个选择器）
+pr = d.get('element_probe') or {}
+cl = d.get('element_class') or {}
+if pr.get('ok') and cl.get('ok') and pr.get('nodeId') != cl.get('nodeId'):
+    print("✗ 同一元素的两个选择器命中不同节点：" + str(pr.get('nodeId')) + " vs " + str(cl.get('nodeId')))
+    allok = False
+# 几何（建树后补测）：正尺寸 + 落在视口内
+er = d.get('element_rect') or {}
+if not er.get('ok'):
+    print("✗ element_rect 未取到几何：" + str(er)); allok = False
+else:
+    print("    ✓ element_rect nodeId=" + str(er.get('nodeId')) + " (" + str(er.get('left')) + "," + str(er.get('top')) + ") " + str(er.get('width')) + "x" + str(er.get('height')) + " vp")
+    if not (er.get('width', 0) > 0 and er.get('height', 0) > 0):
+        print('✗ element_rect 尺寸为 0（可疑）'); allok = False
+# 不支持形态必须如实分档（伪类）
+ps = d.get('element_pseudo') or {}
+if ps.get('ok') or ps.get('error') != 'unsupported':
+    print("✗ 伪类未如实分档（期望 unsupported）：" + str(ps)); allok = False
+else:
+    print('    ✓ 伪类如实 unsupported')
 sys.exit(0 if (d.get('ok') and allok and len(log) > 0) else 1)
 PY
 RC=$?

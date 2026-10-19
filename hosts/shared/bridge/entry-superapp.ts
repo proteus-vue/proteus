@@ -461,6 +461,31 @@ export function installAppElementResolver(currentScreen: () => string): void {
   })
 }
 
+/**
+ * ★★★**仅解析选择器**（不取几何）——`selector → 引擎 nodeId`，供**宿主自己取几何**的场景用。
+ *
+ * 【为什么需要它（鸿蒙一次性 VM 的必然形态）】鸿蒙的 `hostAppRender` 期间**内核树还没建**
+ *   （树是 ArkTS 在这之后调 `appScreenCommands` 才建的）⇒ 此时 `element.rect` 必然回「尚未建树」。
+ *   而 selector→nodeId 的解析**只能在 JS 侧做**（索引在这里，宿主不认识 `#foo`）。
+ *   ⇒ 拆成两段：JS 解析出 nodeId（本函数）→ 宿主建树后用**自己的**几何读法取矩形
+ *     （鸿蒙 = `appScreenNodeRect`，已是内核真源）。Android/iOS 树的建立与 mount 同步，仍走一次到位的 `element.rect`。
+ */
+export function appElementResolve(argsJson: string): string {
+  const g = globalThis as unknown as { __SUPERAPP_RUNTIME__?: { current(): string } }
+  let sel = ''
+  try {
+    const a = JSON.parse(argsJson || '{}') as { selector?: string }
+    sel = typeof a.selector === 'string' ? a.selector : ''
+  } catch { return JSON.stringify({ ok: false, error: '入参非法' }) }
+  const screen = g.__SUPERAPP_RUNTIME__ ? g.__SUPERAPP_RUNTIME__.current() : ''
+  // ★selector 缺省 ⇒ 当前屏的第一个元素 id（跨页探针不硬编码某页的 id）
+  if (!sel) { const first = firstScreenElementId(screen); if (first) sel = '#' + first }
+  const sup = selectorSupport(sel)
+  if (!sup.ok) return JSON.stringify({ ok: false, error: 'unsupported', reason: sup.reason, selector: sel, screen })
+  const hit = resolveElement(sel, screen || undefined)
+  if (!hit) return JSON.stringify({ ok: false, error: 'not-found', selector: sel, screen })
+  return JSON.stringify({ ok: true, selector: sel, nodeId: hit.nodeId, source: hit.source, screen })
+}
 /** 解析 + 取几何（探针/宿主调；返回 JSON 串——与壳的字符串回执契约同形）。 */
 export function appElementRect(argsJson: string): string {
   const g = globalThis as unknown as { proteusHost?: { invoke?: (m: string, a: string) => string }; __SUPERAPP_RUNTIME__?: { current(): string } }
@@ -546,6 +571,10 @@ __HOSTAPP.__proteusHostAppAnimActive = (): string => {
 __HOSTAPP.__proteusHostAppTree = __HOSTAPP.__proteusSuperappTree
 // ★★★决策 #1081：元素查询（中性名——三端宿主/判据按此名调）
 __HOSTAPP.__proteusHostAppElementRect = __HOSTAPP.__proteusSuperappElementRect
+// ★#1082：仅解析（鸿蒙：宿主建树后自己取几何；三端 selector→nodeId 仍只有 JS 一份实现）
+;(globalThis as unknown as { __proteusSuperappElementResolve?: (a: string) => string })
+  .__proteusSuperappElementResolve = (a: string) => appElementResolve(a)
+__HOSTAPP.__proteusHostAppElementResolve = __HOSTAPP.__proteusSuperappElementResolve
 __HOSTAPP.__proteusHostAppElementRegistry = __HOSTAPP.__proteusSuperappElementRegistry
 
 

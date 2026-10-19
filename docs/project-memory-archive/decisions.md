@@ -7257,6 +7257,16 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   ① 兄弟（`+` `~`）、伪类、伪元素、属性运算符**明确不支持**（`unsupported` + 可操作原因）——
      索引不记兄弟位置、App 无 CSS 引擎语义；**不做近似匹配**（错节点比 unsupported 危险）。
   ② 动态 `:id` / `:class` / `:data-*` = 运行期事实 ⇒ 编译期诊断；这类节点在相应选择器下可能查不到。
-  ③ 鸿蒙真机仍未闭环（设备 `Offline` + 锁屏），但 `element.rect` 已实现且 C++ 编译通过，
-     `check:host-invoke-contract` 判其为已接线；几何腿本身**无真机证据**（与 #1081 同一具名边界）。
+  ③ 鸿蒙几何腿**已真机闭环**（2026-10-19 补测，设备恢复 Connected 后）：`#mine-row-dark` / `.sa-item` /
+     `view.sa-item` 三个选择器**命中同一 nodeId 16**，`element_rect = {left:16, top:230, 345×48 vp}`，
+     伪类如实 `unsupported`。★过程中真机抓出**两个真缺陷**（都是"构造上应该对"却实际不对的形态）：
+     · **`String(obj)` 把探针变 `[object Object]`**：回执经 `JSON.parse` 后探针已是对象，壳里 `String()`
+       拼报告 ⇒ 报告变成**非法 JSON**（取回即解析失败）。修法：native 侧回**字符串字段** + ArkTS 侧
+       双形态兼容（字符串直接用 / 对象 stringify）。
+     · **时序错位**：`element.rect` 在 `hostAppRender` 期间必然回「尚未建树」——鸿蒙的内核树是
+       ArkTS 之后调 `appScreenCommands` 才建的。修法：**拆两段**——JS 只解析 `selector→nodeId`
+       （`__proteusHostAppElementResolve`，索引在 JS），宿主建树后用 `appScreenNodeRect`（同一棵内核树）
+       取几何。⇒ 三端几何归一仍在 JS 一份实现，宿主只报自己的 scrollY。
+     ★教训：**"Vapor 三端共享同一份 JS 运行期"不等于"三端时序相同"**——鸿蒙一次性 VM 的
+       "渲染 = 先 JS 后建树"与 Android/iOS 的"mount 即建树"是两个形态，判据必须按端形态写。
   ④ `useIntersection` 仍未实现（缺帧级几何变化事件源），本单未触及。
