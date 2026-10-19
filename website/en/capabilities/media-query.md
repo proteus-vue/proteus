@@ -110,13 +110,15 @@ disconnect(): void
 ## Usage
 
 ```ts
-const mediaQuery = useMediaQuery()   // synchronous handle — no await, no res.ok on the handle itself
+const mq = useMediaQuery() // synchronous handle — no await, no res.ok
 
-if (!mediaQuery.ok) {
-  // mediaQuery.error.code tells you why (e.g. *.unsupported → this end cannot do it)
-} else {
-  // call its methods — THOSE return Promise<CapResult<T>>:
-  //   const r = await mediaQuery.data.<method>()
+if (mq.ok) {
+  mq.data.observe({ minWidth: 600, orientation: 'landscape' }, (res) => {
+    console.log('wide screen:', res.matches)
+  })
+  // mq.data.disconnect() stops observing
+} else if (mq.error.code === 'element.unsupported') {
+  // bridge has no media-query API → degradation path
 }
 ```
 

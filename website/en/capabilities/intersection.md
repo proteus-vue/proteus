@@ -171,13 +171,17 @@ disconnect(): void
 ## Usage
 
 ```ts
-const intersection = useIntersection()   // synchronous handle — no await, no res.ok on the handle itself
+const obs = useIntersection({ thresholds: [0.5] }) // synchronous handle — no await, no res.ok
 
-if (!intersection.ok) {
-  // intersection.error.code tells you why (e.g. *.unsupported → this end cannot do it)
-} else {
-  // call its methods — THOSE return Promise<CapResult<T>>:
-  //   const r = await intersection.data.<method>()
+if (obs.ok) {
+  obs.data
+    .relativeToViewport()
+    .observe('.lazy-item', (res) => {
+      if (res.intersectionRatio >= 0.5) console.log('entered viewport:', res.id)
+    })
+  // obs.data.disconnect() stops observing (releases)
+} else if (obs.error.code === 'element.unsupported') {
+  // bridge has no intersection API → degradation path
 }
 ```
 

@@ -159,13 +159,15 @@ on(event: 'statechange' | 'netstatus' | 'error', cb: (payload: unknown) => void)
 ## Usage
 
 ```ts
-const livePusher = useLivePusher('my-pusher')   // synchronous handle — no await, no res.ok on the handle itself
+const pusher = useLivePusher('livePusher') // synchronous handle — no await, no res.ok
 
-if (!livePusher.ok) {
-  // livePusher.error.code tells you why (e.g. *.unsupported → this end cannot do it)
-} else {
-  // call its methods — THOSE return Promise<CapResult<T>>:
-  //   const r = await livePusher.data.<method>()
+if (pusher.ok) {
+  await pusher.data.start() // start pushing
+  await pusher.data.switchCamera() // front/rear camera
+  const shot = await pusher.data.snapshot() // snapshot
+  pusher.data.on('netstatus', (s) => console.log('network:', s))
+} else if (pusher.error.code === 'live-pusher.unsupported') {
+  // no standard push API on Web → degradation path (host bridge)
 }
 ```
 

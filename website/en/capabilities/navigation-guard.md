@@ -85,13 +85,13 @@ disable(): Promise<CapResult<void>>
 ## Usage
 
 ```ts
-const navigationGuard = useNavigationGuard()   // synchronous handle — no await, no res.ok on the handle itself
+const guard = useNavigationGuard() // synchronous handle — no await, no res.ok
 
-if (!navigationGuard.ok) {
-  // navigationGuard.error.code tells you why (e.g. *.unsupported → this end cannot do it)
-} else {
-  // call its methods — THOSE return Promise<CapResult<T>>:
-  //   const r = await navigationGuard.data.<method>()
+if (guard.ok) {
+  await guard.data.enable('Form has unsaved changes. Leave anyway?')
+  // after a successful save: await guard.data.disable()
+} else if (guard.error.code === 'navigation-guard.unsupported') {
+  // platform unsupported → degradation path
 }
 ```
 

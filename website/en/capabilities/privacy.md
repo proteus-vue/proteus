@@ -119,13 +119,19 @@ web 端无对等标准（Cookie 同意可由宿主自建）→ 缺省 Err 诚实
 ## Usage
 
 ```ts
-const privacy = usePrivacy()   // synchronous handle — no await, no res.ok on the handle itself
+const privacy = usePrivacy() // synchronous handle — no await, no res.ok
 
-if (!privacy.ok) {
-  // privacy.error.code tells you why (e.g. *.unsupported → this end cannot do it)
-} else {
-  // call its methods — THOSE return Promise<CapResult<T>>:
-  //   const r = await privacy.data.<method>()
+if (privacy.ok) {
+  const setting = await privacy.data.getSetting()
+  if (setting.ok && setting.data.needAuthorization) {
+    // user hit a privacy API without consent → show your own consent UI
+    privacy.data.onNeedAuthorization((res) => {
+      console.log('needs consent:', res.privacyContractName)
+    })
+    await privacy.data.openContract() // or open the WeChat privacy page
+  }
+} else if (privacy.error.code === 'privacy.unsupported') {
+  // no WeChat privacy standard on Web → degradation path (build your own consent)
 }
 ```
 

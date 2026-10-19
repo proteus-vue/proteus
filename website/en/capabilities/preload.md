@@ -126,13 +126,14 @@ subpackage(packageType: string): Promise<CapResult<PreDownloadTask>>
 ## Usage
 
 ```ts
-const preload = usePreload()   // synchronous handle — no await, no res.ok on the handle itself
+const pre = usePreload() // synchronous handle — no await, no res.ok
 
-if (!preload.ok) {
-  // preload.error.code tells you why (e.g. *.unsupported → this end cannot do it)
-} else {
-  // call its methods — THOSE return Promise<CapResult<T>>:
-  //   const r = await preload.data.<method>()
+if (pre.ok) {
+  await pre.data.assets([{ src: "/assets/title.woff", type: "font" }])
+  await pre.data.subpackage("workers") // prefetch the workers subpackage
+  // await pre.data.skylineView() / await pre.data.webview()
+} else if (pre.error.code === 'preload.unsupported') {
+  // no standard preload on Web → degradation path (<link rel=preload>)
 }
 ```
 

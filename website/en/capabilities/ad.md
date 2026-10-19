@@ -153,13 +153,17 @@ banner(options: { adUnitId: string; style: BannerAdStyle }): BannerAdHandle
 ## Usage
 
 ```ts
-const ad = useAd()   // synchronous handle — no await, no res.ok on the handle itself
+const ad = useAd() // synchronous handle — no await, no res.ok
 
-if (!ad.ok) {
-  // ad.error.code tells you why (e.g. *.unsupported → this end cannot do it)
-} else {
-  // call its methods — THOSE return Promise<CapResult<T>>:
-  //   const r = await ad.data.<method>()
+if (ad.ok) {
+  const rv = ad.data.rewardedVideo('adunit-xxxx') // same id reuses the instance
+  rv.onClose((res) => {
+    if (res.isEnded) console.log('finished watching — grant the reward')
+  })
+  await rv.load()
+  await rv.show()
+} else if (ad.error.code === 'ad.unsupported') {
+  // no ad-network standard on Web → degradation path (host bridge)
 }
 ```
 

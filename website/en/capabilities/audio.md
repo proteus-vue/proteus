@@ -162,13 +162,16 @@ on(event: 'canplay' | 'play' | 'pause' | 'stop' | 'ended' | 'timeupdate' | 'erro
 ## Usage
 
 ```ts
-const audio = useAudio()   // synchronous handle — no await, no res.ok on the handle itself
+const a = useAudio('https://cdn.example.com/bgm.mp3') // synchronous handle — no await, no res.ok
 
-if (!audio.ok) {
-  // audio.error.code tells you why (e.g. *.unsupported → this end cannot do it)
-} else {
-  // call its methods — THOSE return Promise<CapResult<T>>:
-  //   const r = await audio.data.<method>()
+if (a.ok) {
+  a.data.setVolume(0.8)
+  a.data.setLoop(true)
+  await a.data.play()
+  a.data.on('ended', () => console.log('playback ended'))
+  // a.data.destroy() releases resources
+} else if (a.error.code === 'audio.unsupported') {
+  // bridge has no audio API → degradation path
 }
 ```
 

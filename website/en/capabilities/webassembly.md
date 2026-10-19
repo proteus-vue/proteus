@@ -135,13 +135,22 @@ instantiate(source: WasmSource, options?: WasmInstantiateOptions): Promise<CapRe
 ## Usage
 
 ```ts
-const webAssembly = useWebAssembly()   // synchronous handle — no await, no res.ok on the handle itself
+const wasm = useWebAssembly() // synchronous handle — no await, no res.ok
 
-if (!webAssembly.ok) {
-  // webAssembly.error.code tells you why (e.g. *.unsupported → this end cannot do it)
-} else {
-  // call its methods — THOSE return Promise<CapResult<T>>:
-  //   const r = await webAssembly.data.<method>()
+if (wasm.ok) {
+  // ★branch on capability flags, not on platform names:
+  //   (on mini programs WXWebAssembly is a **global object** — available since base lib v2.13.0)
+  //   MP accepts package paths only (supportsPathLoad); Web / App-iOS accept bytes (supportsStreaming)
+  const source = wasm.data.supportsPathLoad
+    ? { path: 'wasm/image-filter.wasm.br' }   // mini program: in-package path (brotli supported)
+    : { bytes: await fetch(url).then((r) => r.arrayBuffer()) } // Web / App-JSC: bytes
+  const inst = await wasm.data.instantiate(source)
+  if (inst.ok) inst.data.exports.sharpen(width, height, amount)
+
+  // compile / validate are **optional** (MP has neither) — probe before calling:
+  if (wasm.data.validate && (await wasm.data.validate(bytes)).ok) { /* ... */ }
+} else if (wasm.error.code === 'webassembly.unsupported') {
+  // no WASM engine on this host (e.g. App-Android has no JS engine) → fall back to JS
 }
 ```
 

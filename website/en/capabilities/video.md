@@ -181,13 +181,15 @@ on(event: 'play' | 'pause' | 'ended' | 'timeupdate' | 'error' | 'fullscreenchang
 ## Usage
 
 ```ts
-const video = useVideo('my-video')   // synchronous handle — no await, no res.ok on the handle itself
+const v = useVideo('myVideo') // synchronous handle — no await, no res.ok
 
-if (!video.ok) {
-  // video.error.code tells you why (e.g. *.unsupported → this end cannot do it)
-} else {
-  // call its methods — THOSE return Promise<CapResult<T>>:
-  //   const r = await video.data.<method>()
+if (v.ok) {
+  await v.data.play()
+  await v.data.seek(12) // jump to 12s
+  await v.data.playbackRate(1.5) // 1.5x speed
+  v.data.on('ended', () => console.log('playback ended'))
+} else if (v.error.code === 'video.unsupported') {
+  // bridge has no video API → degradation path
 }
 ```
 

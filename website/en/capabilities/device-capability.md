@@ -72,13 +72,13 @@ supportsHevc(): Promise<CapResult<boolean>>
 ## Usage
 
 ```ts
-const deviceCapability = useDeviceCapability()   // synchronous handle — no await, no res.ok on the handle itself
+const cap = useDeviceCapability() // synchronous handle — no await, no res.ok
 
-if (!deviceCapability.ok) {
-  // deviceCapability.error.code tells you why (e.g. *.unsupported → this end cannot do it)
-} else {
-  // call its methods — THOSE return Promise<CapResult<T>>:
-  //   const r = await deviceCapability.data.<method>()
+if (cap.ok) {
+  const hevc = await cap.data.supportsHevc()
+  if (hevc.ok) console.log("HEVC decode supported:", hevc.data)
+} else if (cap.error.code === 'device-capability.unsupported') {
+  // cannot probe on this platform → treat as unsupported
 }
 ```
 

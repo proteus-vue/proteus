@@ -90,13 +90,14 @@ edit(src: string): Promise<CapResult<string>>
 ## Usage
 
 ```ts
-const imageEdit = useImageEdit()   // synchronous handle — no await, no res.ok on the handle itself
+const edit = useImageEdit() // synchronous handle — no await, no res.ok
 
-if (!imageEdit.ok) {
-  // imageEdit.error.code tells you why (e.g. *.unsupported → this end cannot do it)
-} else {
-  // call its methods — THOSE return Promise<CapResult<T>>:
-  //   const r = await imageEdit.data.<method>()
+if (edit.ok) {
+  const cropped = await edit.data.crop("wxfile://tmp/a.png", "1:1")
+  if (cropped.ok) console.log('crop result:', cropped.data)
+  const edited = await edit.data.edit("wxfile://tmp/a.png")
+} else if (edit.error.code === 'image-edit.unsupported') {
+  // no WeChat edit UI on Web → degradation path (implement with canvas)
 }
 ```
 

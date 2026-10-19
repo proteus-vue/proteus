@@ -109,13 +109,15 @@ isPictureInPictureActive(): Promise<CapResult<boolean>>
 ## Usage
 
 ```ts
-const screenCapture = useScreenCapture()   // synchronous handle — no await, no res.ok on the handle itself
+const sc = useScreenCapture() // synchronous handle — no await, no res.ok
 
-if (!screenCapture.ok) {
-  // screenCapture.error.code tells you why (e.g. *.unsupported → this end cannot do it)
-} else {
-  // call its methods — THOSE return Promise<CapResult<T>>:
-  //   const r = await screenCapture.data.<method>()
+if (sc.ok) {
+  const st = await sc.data.getRecordingState()
+  if (st.ok) console.log('recording state:', st.data)
+  sc.data.onUserCapture(() => console.log('user took a screenshot'))
+  const pip = await sc.data.isPictureInPictureActive()
+} else if (sc.error.code === 'screen-capture.unsupported') {
+  // no standard recording-state API on Web → degradation path
 }
 ```
 

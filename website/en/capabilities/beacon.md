@@ -106,13 +106,13 @@ iBeacon 设备信息（wx BeaconInfo）
 ## Usage
 
 ```ts
-const beacon = useBeacon()   // synchronous handle — no await, no res.ok on the handle itself
+const beacon = useBeacon() // synchronous handle — no await, no res.ok
 
-if (!beacon.ok) {
-  // beacon.error.code tells you why (e.g. *.unsupported → this end cannot do it)
-} else {
-  // call its methods — THOSE return Promise<CapResult<T>>:
-  //   const r = await beacon.data.<method>()
+if (beacon.ok) {
+  beacon.data.onServiceChange((res) => console.log("beacon service:", res.available))
+  beacon.data.onUpdate((res) => console.log("found", res.beacons.length, "beacons"))
+} else if (beacon.error.code === 'beacon.unsupported') {
+  // platform unsupported → degradation path
 }
 ```
 

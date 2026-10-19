@@ -243,13 +243,21 @@ Canvas 图案填充（createPattern 返回）
 ## Usage
 
 ```ts
-const canvas = useCanvas('my-canvas')   // synchronous handle — no await, no res.ok on the handle itself
+const c = useCanvas('myCanvas') // synchronous handle — no await, no res.ok
 
-if (!canvas.ok) {
-  // canvas.error.code tells you why (e.g. *.unsupported → this end cannot do it)
-} else {
-  // call its methods — THOSE return Promise<CapResult<T>>:
-  //   const r = await canvas.data.<method>()
+if (c.ok) {
+  const ctx = c.data.createContext()
+  if (ctx.ok) {
+    ctx.data.setFillStyle('#5b8cff')
+    ctx.data.beginPath()
+    ctx.data.arc(60, 60, 40, 0, Math.PI * 2)
+    ctx.data.fill()
+    ctx.data.draw() // commit drawing (async on wx; immediate on web)
+  }
+  // export: await c.data.toTempFilePath({ fileType: "png" })
+  // 2D node (requestAnimationFrame): await c.data.node()
+} else if (c.error.code === 'canvas.unsupported') {
+  // bridge has no canvas API → degradation path
 }
 ```
 

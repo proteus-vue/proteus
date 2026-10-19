@@ -130,13 +130,14 @@ mDNS 局域网服务（wx OnLocalServiceFound/Lost）
 ## Usage
 
 ```ts
-const localService = useLocalService()   // synchronous handle — no await, no res.ok on the handle itself
+const mdns = useLocalService() // synchronous handle — no await, no res.ok
 
-if (!localService.ok) {
-  // localService.error.code tells you why (e.g. *.unsupported → this end cannot do it)
-} else {
-  // call its methods — THOSE return Promise<CapResult<T>>:
-  //   const r = await localService.data.<method>()
+if (mdns.ok) {
+  mdns.data.onFound((svc) => console.log("found service:", svc.serviceName, svc.ip, svc.port))
+  mdns.data.onLost((svc) => console.log("service left:", svc.serviceName))
+  mdns.data.onDiscoveryStop(() => console.log("discovery stopped"))
+} else if (mdns.error.code === 'local-service.unsupported') {
+  // mDNS unsupported on this platform → degradation path
 }
 ```
 

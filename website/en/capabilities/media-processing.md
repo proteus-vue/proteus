@@ -134,13 +134,17 @@ wx 侧真实接入；web：MediaContainer/MediaAudioPlayer 无标准 → Err（�
 ## Usage
 
 ```ts
-const mediaProcessing = useMediaProcessing()   // synchronous handle — no await, no res.ok on the handle itself
+const mp = useMediaProcessing() // synchronous handle — no await, no res.ok
 
-if (!mediaProcessing.ok) {
-  // mediaProcessing.error.code tells you why (e.g. *.unsupported → this end cannot do it)
-} else {
-  // call its methods — THOSE return Promise<CapResult<T>>:
-  //   const r = await mediaProcessing.data.<method>()
+if (mp.ok) {
+  const c = mp.data.container()
+  await c.addTrack({ kind: 'video', src: 'a.mp4' })
+  const out = await c.export() // mux and export video
+  const d = mp.data.videoDecoder()
+  await d.start({ source: 'a.mp4' })
+  const frame = await d.getFrameData() // grab a frame
+} else if (mp.error.code === 'media-processing.unsupported') {
+  // no standard media muxing on Web → degradation path (compose with WebCodecs)
 }
 ```
 

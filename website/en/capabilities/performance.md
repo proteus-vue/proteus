@@ -151,13 +151,16 @@ report(id: number, value: number, dimensions?: string | unknown[]): Promise<CapR
 ## Usage
 
 ```ts
-const performance = usePerformance()   // synchronous handle — no await, no res.ok on the handle itself
+const perf = usePerformance() // synchronous handle — no await, no res.ok
 
-if (!performance.ok) {
-  // performance.error.code tells you why (e.g. *.unsupported → this end cannot do it)
-} else {
-  // call its methods — THOSE return Promise<CapResult<T>>:
-  //   const r = await performance.data.<method>()
+if (perf.ok) {
+  const ents = await perf.data.getEntries("navigation")
+  if (ents.ok) console.log('navigation took:', ents.data[0]?.duration, 'ms')
+  perf.data.report(101, performance.now()) // report a platform perf metric
+  const obs = perf.data.createObserver()
+  obs.observe((list) => console.log("new entries:", list.length))
+} else if (perf.error.code === 'performance.unsupported') {
+  // platform unsupported → degradation path
 }
 ```
 

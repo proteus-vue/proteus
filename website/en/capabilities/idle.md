@@ -104,13 +104,16 @@ cancel(id: number): Promise<CapResult<void>>
 ## Usage
 
 ```ts
-const idle = useIdle()   // synchronous handle — no await, no res.ok on the handle itself
+const idle = useIdle() // synchronous handle — no await, no res.ok
 
-if (!idle.ok) {
-  // idle.error.code tells you why (e.g. *.unsupported → this end cannot do it)
-} else {
-  // call its methods — THOSE return Promise<CapResult<T>>:
-  //   const r = await idle.data.<method>()
+if (idle.ok) {
+  const id = await idle.data.request((d) => {
+    // do non-critical work while idle (d.timeRemaining() ms left)
+    console.log("idle time left:", d.timeRemaining(), "ms")
+  }, 2000)
+  // if (id.ok) await idle.data.cancel(id.data)
+} else if (idle.error.code === 'idle.unsupported') {
+  // platform unsupported → degradation path
 }
 ```
 

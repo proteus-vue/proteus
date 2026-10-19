@@ -79,13 +79,12 @@ setSize(width: number, height: number): Promise<CapResult<void>>
 ## Usage
 
 ```ts
-const window = useWindow()   // synchronous handle — no await, no res.ok on the handle itself
+const win = useWindow() // synchronous handle — no await, no res.ok
 
-if (!window.ok) {
-  // window.error.code tells you why (e.g. *.unsupported → this end cannot do it)
-} else {
-  // call its methods — THOSE return Promise<CapResult<T>>:
-  //   const r = await window.data.<method>()
+if (win.ok) {
+  await win.data.setSize(1280, 720) // resize on desktop (needs a large enough screen)
+} else if (win.error.code === 'window.unsupported') {
+  // non-desktop / no Web standard → degradation path
 }
 ```
 

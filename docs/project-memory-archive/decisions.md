@@ -7531,3 +7531,59 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
      与生成逻辑;**两份示例仍可能漂移**（属"一处实现"纪律的欠账，登记为后续批次）。
   ② 示例的**语义正确性**（是否展示了该能力最典型的用法）机器判不出来——本判据只保证
      "形状可运行 + 不误导同步/异步"，内容质量仍需人审。
+
+1088. **★★★能力页「用法」示例收口为单一 SSOT（中英同源）——#1087 的「两份手写表」欠账还清 · 决策**（2026-10-19 · 承接 #1087）:
+
+【问题（#1087 自己写下的诚实边界，本轮还账）】
+  #1087 修掉了英文页 `await` 同步句柄的毛病，但留下了根因：
+  · 中文示例写在 `gen-content.mjs` 的 `USAGE_EXAMPLES`（**43 条**，395 行内联）；
+  · 英文示例写在 `gen-content-en.mjs` 的 `CAP_USAGE_EN`（**17 条**）+ `direct()` / `generic()` 兜底。
+  ⇒ **同一事实两份手写代码**：
+    ① 26 条能力中文有手写示例、英文没有 ⇒ 英文读者拿到的是"占位式"通用模板
+       （`const element = useElement()` + `// call its methods`），而中文读者拿到的是
+       `useElement('box')` + `boundingClientRect()` + `batch([".item","#footer"])`；
+    ② 只要两边都手写就**必然漂移**——#1087 的 29 条错误形状就是这么长出来的；
+    ③ 两份表各自受行数棘轮约束（2833 / 2216），越到后面越没人愿意往小表里加。
+
+【修法（一次收口，不是"再对齐一遍"）】
+  · 新增 `website/scripts/lib/cap-usage/`（**按域分 5 个文件**——本仓「严禁大文件巨型化」硬上限 1000 行，
+    单体版首写 1137 行被 `check:file-size` 当场拦下）：
+    `shared.mjs`（原语 `U(zh,en)` + `skeletonOf`）· `cap-usage-network.mjs`（6 条）·
+    `cap-usage-device.mjs`（9 条）· `cap-usage-media.mjs`（8 条）· `cap-usage-app.mjs`（21 条）·
+    `index.mjs`（装配 `CAP_USAGE` + `usageOf()` + `assertUsageParity()`）。
+    **44 条**（HEAD 里中文 43 条**逐字保留** + 新增 `useSensorStream`）。
+  · 中文生成器：删掉内联 `USAGE_EXAMPLES`（-482 行，2807 → 2325），改 `usageOf(hook, 'zh')`。
+    **中文产物零变化**（`git diff website/content` 为空）——证明迁移是等价搬运。
+  · 英文生成器：删掉 `CAP_USAGE_EN` 的 17 条硬编码，只留 `direct` / `generic` 两个派生模板
+    （未登记示例的能力仍有兜底，不会空着）。
+  · 26 条英文翻译**从 HEAD 中文原文逐行对应**（不是从"我以为的中文"翻译）——
+    过程中我先用自己的记忆重写了 8 条中文（丢掉了 `useSocketTask` 的 `task.close/isConnected`、
+    `useAudio` 的 `setVolume/setLoop`、`useAR` 的 `isSupported('v2')` 等细节），
+    用脚本对 HEAD 逐行比对后**全部回滚为原文**。★教训：迁移类改动必须以"原文"为输入，
+    不能以"记忆里的原文"为输入。
+
+【判据】新增 `tests/capability-usage-ssot.test.ts` **7/7**：
+  ① 中文生成器**不得**再出现 `USAGE_EXAMPLES`（定义或引用）；英文表不得再有逐条手写
+     （只许 `direct`/`generic`）；两侧生成器都必须 `usageOf(hook, '<lang>')`；
+  ② 每条必须**双语非空**且行数相同（不存在"只有一边有"）；
+  ③ `assertUsageParity()`：中英两段**代码骨架逐行相同**——抹掉 `//` 注释与字符串内容后比对，
+     能抓住"只改了一边代码"的漂移；附反向自检证明该判据有效；
+  ④ 产物页中英 `Usage` 代码块**行数一致**（文档层面的同源证据）。
+  + `pnpm check:content` 绿（幂等）；英文产物实测从占位模板升级为真实示例（见下）。
+  + **破坏性验证**：把英文段 `useElement('box')` 改成 `useElement()`（中文段不动）⇒
+    `assertUsageParity()` 当场红并点名 `useElement 第 1 行骨架不同`；还原 ⇒ 7/7 绿。
+  + **行数门禁的真实拦截**：单体版 `cap-usage.mjs` 首写 **1137 行**，被 `pnpm check:file-size`
+    当场拦下（"新增大文件 1137 行 ≥ 上限 1000"）⇒ 按域拆成 5 个文件（最大 490 行）。
+
+【效果（抽查 `git diff website/en/capabilities/`）】
+  · `element-query.md`：`const element = useElement()` + "call its methods" 占位
+    → `const q = useElement('box')` + `boundingClientRect()` + `scrollOffset/size/fields` + `batch([...])`
+  · `performance.md`：占位 → `getEntries("navigation")` + `report(101, …)` + `createObserver().observe(...)`
+  · 共 26 个英文页升级；中文页**零 diff**。
+
+【诚实边界】
+  ① 示例的**语义质量**（是否展示该能力最典型的用法）机器判不出来——`assertUsageParity` 只保证
+     "形状可运行 + 中英同源 + 不误导同步/异步"，内容仍待人审。
+  ② `useSensorStream` 是**新增**条目（原中文表没有），中文段也是新写的——不是从原文迁移。
+  ③ 未登记示例的能力仍走 `direct` / `generic` 模板（英文侧比中文侧"更像占位"）——
+     这是有意的兜底，不属漂移；要补齐就往 `CAP_USAGE` 加条目（两侧一起）。

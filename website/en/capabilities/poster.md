@@ -78,13 +78,12 @@ onGenerate(cb: (res: { src: string; promise?: unknown }) => void): () => void
 ## Usage
 
 ```ts
-const poster = usePoster()   // synchronous handle — no await, no res.ok on the handle itself
+const poster = usePoster() // synchronous handle — no await, no res.ok
 
-if (!poster.ok) {
-  // poster.error.code tells you why (e.g. *.unsupported → this end cannot do it)
-} else {
-  // call its methods — THOSE return Promise<CapResult<T>>:
-  //   const r = await poster.data.<method>()
+if (poster.ok) {
+  poster.data.onGenerate((res) => console.log("poster generated:", res.src))
+} else if (poster.error.code === 'poster.unsupported') {
+  // platform unsupported → degradation path
 }
 ```
 

@@ -58,13 +58,16 @@ useSocket(): CapResult<{ udp(): UDPSocketHandle; tcp(options?: TCPSocketConnectO
 ## Usage
 
 ```ts
-const socket = useSocket()   // synchronous handle — no await, no res.ok on the handle itself
+const sock = useSocket() // synchronous handle — no await, no res.ok
 
-if (!socket.ok) {
-  // socket.error.code tells you why (e.g. *.unsupported → this end cannot do it)
-} else {
-  // call its methods — THOSE return Promise<CapResult<T>>:
-  //   const r = await socket.data.<method>()
+if (sock.ok) {
+  const udp = sock.data.udp()
+  await udp.bind(8080)
+  udp.onMessage((m) => console.log('received:', m.remoteAddress, m.remotePort))
+  await udp.send('192.168.1.1', 9000, 'ping')
+  // or TCP: const tcp = sock.data.tcp(); await tcp.connect({ address, port })
+} else if (sock.error.code === 'socket.unsupported') {
+  // browsers cannot open raw sockets → degradation path (WebSocket/WebRTC)
 }
 ```
 

@@ -209,13 +209,15 @@ Canvas 画布节点（`<canvas type="2d">`——wx fields({node:true}) / web HTM
 ## Usage
 
 ```ts
-const element = useElement()   // synchronous handle — no await, no res.ok on the handle itself
+const q = useElement('box') // synchronous handle — no await, no res.ok
 
-if (!element.ok) {
-  // element.error.code tells you why (e.g. *.unsupported → this end cannot do it)
-} else {
-  // call its methods — THOSE return Promise<CapResult<T>>:
-  //   const r = await element.data.<method>()
+if (q.ok) {
+  const rect = await q.data.boundingClientRect() // geometry
+  if (rect.ok) console.log('size:', rect.data.width, rect.data.height)
+  // await q.data.scrollOffset() / q.data.size() / q.data.fields({ node: true })
+  // await q.data.batch([".item", "#footer"]) batch
+} else if (q.error.code === 'element.unsupported') {
+  // bridge has no query API → degradation path
 }
 ```
 
