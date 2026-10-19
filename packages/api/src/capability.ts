@@ -7,6 +7,7 @@ import { detectAppHost } from './capability-app'
 // ★★2026-10-19（决策 #1067）：App 端三组能力（生命周期 + 平台能力 + 设备域）统一装配
 import { createAppCapabilities } from './capability-app-device'
 import { createSubscriptionScope } from './capability-hooks-scope' // ★#1071
+import { makeCapabilityRuntime } from './capability-runtime'; import type { CapabilityHooksOptions } from './capability-hooks-options'   // ★#1094 G-43
 import { getSharedCapabilityBridge, registerBridgeFactory } from './capability-bridge-shared'
 import type { AuthStorage } from './auth'
 import { CapError, capErr, capOk, wrap } from './capability-types'
@@ -15,7 +16,7 @@ import { webBridge, wxBridge } from './capability-bridges'
 // ★决策 #870：类型契约整体转发——保持 @proteus-vue/api 公共面（含 index.ts 的 capOk/capErr/CapError/各类型）不变
 export * from './capability-types'
 
-export function createCapabilityBridge(): CapabilityBridge {
+export function createCapabilityBridge(resOpts: CapabilityHooksOptions = {}): CapabilityBridge {   // ★#1094 账本透传
   const g = globalThis as { wx?: WxLike }
   // ★★App 宿主（壳注入 `__PROTEUS_HOST_ID__`）⇒ 挂 App 生命周期能力。
   //   · 为什么必须显式判定：QuickJS/JSC **无 window 无 wx** ⇒ detectRuntime() 落 'web'，
@@ -24,7 +25,7 @@ export function createCapabilityBridge(): CapabilityBridge {
   //   · 诚实边界：App 端已接「应用与生命周期」+「设备与系统」两域；其余域（媒体/位置/支付…）
   //     仍走 web 桥的降级路径——逐域铺开（不冒充已完成）。
   // ★★App 端三组能力的装配收在 `capability-app-device.ts::createAppCapabilities`（决策 #1067）。
-  const appCaps = detectAppHost() ? createAppCapabilities(CapError) : ({} as Record<string, never>)
+  const appCaps = detectAppHost() ? createAppCapabilities(CapError, resOpts) : ({} as Record<string, never>)
   if (detectRuntime() === 'mp' && g.wx) return { ...wxBridge(g.wx), ...mpBridgeExt(g.wx, CapError), ...appCaps }
   return { ...webBridge(globalThis), ...webBridgeExt(globalThis, CapError), ...appCaps }
 }
@@ -230,7 +231,10 @@ export interface CapabilityHooks {
 }
 
 export { getSharedCapabilityBridge, resetSharedCapabilityBridge } from './capability-bridge-shared' // ★#1072 共享桥（省 23.8KB/页）
-export function createCapabilityHooks(bridge: CapabilityBridge = getSharedCapabilityBridge()): CapabilityHooks {
+export function createCapabilityHooks(
+  bridge: CapabilityBridge = getSharedCapabilityBridge(),
+  opts: CapabilityHooksOptions = {},
+): CapabilityHooks {
   // ★统一 handle 型 hook 契约：桥构造句柄失败（缺平台 API / 抛错）→ 返回 Err（不 uncaught、不半残句柄）
   const handleResult = <T,>(make: () => T): CapResult<T> => {
     try {
@@ -240,6 +244,7 @@ export function createCapabilityHooks(bridge: CapabilityBridge = getSharedCapabi
     }
   }
   const scope = createSubscriptionScope() // ★#1071 订阅回收袋
+  const res = makeCapabilityRuntime(opts)   // ★#1094 边界资源账本（G-43；不传 = 旧行为）
 
   // ★传感器流局部状态（useSensorStream 用；订阅经桥 readSensor 轮询——无推送桥的诚实降级）
   const listeners: Array<(s: SensorSample) => void> = []
@@ -444,13 +449,7 @@ export function createCapabilityHooks(bridge: CapabilityBridge = getSharedCapabi
       }
     },
     // ★G-32 B3 四期：websocket / upload / download / analytics / log / file-system（缺桥 → Err('<cap>.unsupported') 非抛异常）
-    useWebSocket: (url, protocols) =>
-      wrap(
-        (() => {
-          if (!bridge.connectWebSocket) return Promise.reject(new CapError('websocket.unsupported', '桥未提供 connectWebSocket（useWebSocket 不可用）'))
-          return bridge.connectWebSocket(url, protocols)
-        })(),
-      ),
+    useWebSocket: (url, protocols) => wrap(res.connectWs(bridge, url, protocols)),
     useUpload: (options, onProgress) =>
       wrap(
         (() => {
@@ -953,7 +952,7 @@ export function createCapabilityHooks(bridge: CapabilityBridge = getSharedCapabi
       if (!bridge.getWebAssembly) throw new CapError('webassembly.unsupported', '桥未提供 getWebAssembly（useWebAssembly 不可用）')
       return bridge.getWebAssembly()
     }),
-    dispose: () => scope.dispose(), // ★决策 #1071：解除本实例登记的全部订阅
+    dispose: () => { res.dispose(scope) },   // ★#1094 = 资源释放（G-43.6）+ 订阅回收（#1071）
     probe: async () => ({
       location: bridge.getLocation !== undefined,
       vibrate: bridge.vibrate !== undefined,

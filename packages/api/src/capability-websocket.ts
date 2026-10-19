@@ -22,6 +22,7 @@
 //   连接失败 ⇒ 推 `error` 事件 + 后续 `close`（与浏览器语义同形）；**不伪造 `open`**。
 
 import { invokeHost } from './capability-invoke'
+import type { CapabilityResourceRegistry } from './capability-resources'   // ★#1094 G-43 边界资源账本
 import { CapError as ProteusCapError } from './capability-types'
 import type { CapResult, WebSocketConnection } from './capability-types'
 
@@ -98,7 +99,11 @@ export function dispatchWsPush(payload: unknown): number {
   const handlers = conns.get(n.id)?.get(n.event)
   if (!handlers || handlers.size === 0) {
     // ★close/error 之后清理该连接的全部订阅（防泄漏）
-    if (n.event === 'close' || n.event === 'error') { conns.delete(n.id); happened.delete(n.id) }
+    if (n.event === 'close' || n.event === 'error') {
+      conns.delete(n.id)
+      happened.delete(n.id)
+      if (n.event === 'close') releaseConnResource(n.id)
+    }
     return 0
   }
   for (const h of [...handlers]) {
@@ -108,7 +113,12 @@ export function dispatchWsPush(payload: unknown): number {
       /* 单个订阅者抛错不影响其它订阅者（订阅者边界） */
     }
   }
-  if (n.event === 'close') { conns.delete(n.id); happened.delete(n.id) }
+  if (n.event === 'close') {
+    conns.delete(n.id)
+    happened.delete(n.id)
+    // ★#1094：连接真正关闭 ⇒ 资源账本销账（否则账本会把已关连接当泄漏）
+    releaseConnResource(n.id)
+  }
   return handlers.size
 }
 
@@ -150,7 +160,9 @@ function errOf(code: string, message: string): ProteusCapError {
  * @returns 连接句柄（`send`/`close`/`on`）；**句柄不等于已连上**——
  *   `open` 事件才是连接建立的证据（与浏览器 `WebSocket` 同语义）。
  */
-export function createAppWebSocket(): (url: string, protocols?: string[]) => Promise<WebSocketConnection> {
+export function createAppWebSocket(
+  opts: { resources?: CapabilityResourceRegistry; owner?: string } = {},
+): (url: string, protocols?: string[]) => Promise<WebSocketConnection> {
   installWsChannel()
   return async (url, protocols) => {
     const r = invokeHost(APP_WS_METHODS.open, { url, protocols: protocols ?? [] })
@@ -168,6 +180,23 @@ export function createAppWebSocket(): (url: string, protocols?: string[]) => Pro
     }
     const table = new Map<EventName, Set<(payload?: unknown) => void>>()
     conns.set(id, table)
+    // ★★★#1094：登记为**边界资源**（G-43.1 禁止无主资源）。
+    //   释放钩子必须真的把连接关掉——只清本地表会让宿主侧 socket 泄漏。
+    //   ★这也是"页面卸载但宿主没推 close"时的唯一回收路径（此前 conns 会永久留下）。
+    if (opts.resources) {
+      const res = opts.resources.register({
+        type: 'ws-connection',
+        owner: opts.owner,
+        sourceLocation: 'packages/api/src/capability-websocket.ts',
+        release: () => {
+          try { invokeHost(APP_WS_METHODS.close, { id, code: 1001, reason: 'owner-dropped' }) } catch { /* 宿主不在也不阻断本地清理 */ }
+          conns.delete(id)
+          happened.delete(id)
+          connResource.delete(id)
+        },
+      })
+      connResource.set(id, { registry: opts.resources, resourceId: res.id })
+    }
     const on = (event: EventName, handler: (payload?: unknown) => void): (() => void) => {
       let set = table.get(event)
       if (!set) { set = new Set(); table.set(event, set) }
@@ -206,4 +235,18 @@ export function createAppWebSocket(): (url: string, protocols?: string[]) => Pro
 /** 探针用：当前活跃连接数（诊断读数）。 */
 export function wsConnectionCount(): number {
   return conns.size
+}
+
+/**
+ * ★#1094：连接 id → 所属账本 + 资源 id（close 时把登记项一并销账）。
+ * ★为什么放在模块级：`dispatchWsPush` 是模块级函数，拿不到 `createAppWebSocket` 的闭包。
+ */
+const connResource = new Map<number, { registry: CapabilityResourceRegistry; resourceId: string }>()
+
+/** close/error 时销账（幂等；未登记则无操作）。 */
+export function releaseConnResource(id: number): boolean {
+  const rec = connResource.get(id)
+  if (!rec) return false
+  connResource.delete(id)
+  return rec.registry.release(rec.resourceId)
 }

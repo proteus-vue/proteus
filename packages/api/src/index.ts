@@ -13,6 +13,9 @@ export type { PlatformAPI, RouterAPI, StorageAPI, UIAPI } from './types'
 export { createCapabilityHooks, createCapabilityBridge, createReactiveStorage, capOk, capErr, CapError } from './capability'
 // ★决策 #1071：能力实例的订阅回收接线（注入式，零 vue 依赖）
 export { createSubscriptionScope, installCapabilityDisposeHook } from './capability-hooks-scope'
+// ★#1094：能力层边界资源账本（G-43 治理在能力侧的落点）
+export { createCapabilityResourceRegistry } from './capability-resources'
+export type { CapabilityResource, CapabilityResourceRegistry, CapabilityResourceRegistryOptions, CapabilityOwnershipGraph, ResourceState } from './capability-resources'
 export { getSharedCapabilityBridge, resetSharedCapabilityBridge, hasSharedCapabilityBridge } from './capability-bridge-shared'
 // ★T-app-fetch（决策 #1064）：能力通道的**诊断读数**（真机判据读它们证明「走字节腿 / 超时形态」）
 export { lastInvokeWire, hostCallTimerMode } from './capability-invoke'

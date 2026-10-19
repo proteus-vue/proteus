@@ -7876,3 +7876,75 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
      单条消息上限 16 MiB（超限 close 1009）。
   ④ 探针的等待是**有界轮询**（deadline 6×8s，`Thread.sleep(2~10ms)` 让出 CPU）——
      不用 `setTimeout` 是因为 **superapp bundle 的 JS 环境根本没有定时器宿主**（grep 0 次、宿主未注入）。
+
+1094. **★★★G-43 所有权治理接进能力层：边界资源账本 + WebSocket/键盘/传感器真登记 · 决策**（2026-10-19 · 用户提问「G-43 现在能不能做了？能力里可能已经涉及所有权治理」）:
+
+【用户直觉是对的：能力层早就踩到所有权治理，而且完全没被治理】
+  G-43 语义层 B1-B5 已落地（Owned/Borrow/Weak + Drop 五阶段 + 借用检查 + DevTools 图 + PSS），
+  但它挂在 **G-42 容器**上，而能力层零接入。实测清点出的**无主边界资源**：
+    · `conns` / `happened`（WebSocket 连接表）——只有测试用 reset，生产无清理入口
+    · `keyboardSubs` / `sensorSubs` / `recordingSubs` / `userCaptureSubs`——只能靠订阅者自己 off
+    · `screenTrees`（元素索引）——有 `clearScreenElements()` 但**生产零调用**
+    · `pendingHostCalls`——✅ #1071 已加 1024 上限（唯一已治理的一项）
+  这直接违反铁律 **G-43.1**「边界资源必须归属某个 Owner……禁止无主资源」。
+
+【★更重要的是：G-43 的集成验证跑在容器上，而真实 app 不经过容器】
+  `PageOwnership` 只挂在 StackContainer / SuperAppContainer / basic-containers 上，
+  这些容器**生产路径零调用**（只有 tests/ 用）。真实 superapp 走 `superapp-runtime.ts` 的
+  `rt.instance(name)` 那条链，而那条链里 `destroy`/`unmount`/`dispose`/`release` **一个都没有**。
+  ⇒ 「G-43 做完了但没接上」比「缺 B6」更是问题。本轮先补能力层的接入。
+
+【落点：`packages/api/src/capability-resources.ts`（新）】
+  `createCapabilityResourceRegistry()`：登记 / 按 id 释放 / `releaseAll` / 按类型计数 / `attachGraph`。
+  · `release()` **幂等**；`releaseAll` **聚合失败而不中断**（把错误收进 `failed`，其余照常释放）——
+    一个坏钩子不该让别的资源泄漏。
+  · 先改状态再跑释放钩子 ⇒ 即便钩子抛错也不留"看似存活"的条目。
+  · `attachGraph()` 接 G-43 `OwnershipGraph` 的**结构子集**（register/setState）——
+    api 包不 import render-backend（与既有 `OwnedLike` 同款，零硬依赖），登记/释放出现在 DevTools Ownership 视图。
+
+【★为什么是"账本"而不是直接用 `Owned<T>`】
+  `Owned<T>` 的语义是「唯一所有权 + Move + Borrow」，而能力资源是**多订阅者共享**的
+  （同一 WebSocket 连接可被多处 `on('message')`）。套 `Owned` 会迫使业务理解 Move/Borrow，
+  违背 G-43.4「默认路径框架代管，业务零心智负担」。
+  ⇒ 能力层走「框架代管 + 确定性释放」这一档（G-43.4 / G-43.6），Move/Borrow 留给真正需要的业务资源。
+
+【接入面（本轮三处，都是边界资源）】
+  · **WebSocket**：`createAppWebSocket({ resources, owner })`——连接建立即登记 `ws-connection`；
+    释放钩子**真的向宿主发 `ws.close`**（只清本地表会让宿主 socket 泄漏）。
+    ★这也是"页面卸载但宿主没推 close"时的唯一回收路径（此前 `conns` 会永久留下）。
+    对端 close 到达时同步销账（`releaseConnResource`），不把已关连接当泄漏。
+  · **键盘订阅**：`getKeyboard().onChange` 登记 `keyboard-subscription`；显式 off 同步销账。
+  · **传感器流**：`subscribeSensor` 登记 `sensor-stream`；同上。
+  · `createCapabilityHooks(bridge, { resources, owner })` 的 `dispose()` = **先释放资源再解订阅**
+    （反过来会让已关连接的回调在释放期间还被调一次）。
+
+【★零回归（渐进采用，不是强制改造）】
+  `resources` 缺省 ⇒ 所有路径与从前**完全一致**：不登记、`dispose` 只解订阅、
+  `useWebSocket` 走原桥。判据里专门有一条守着这个形态。
+
+【行数棘轮的处理（capability.ts 1093 行只减不增）】
+  新增逻辑全部落到独立文件：`capability-resources.ts`（账本）·
+  `capability-hooks-options.ts`（选项类型）· `capability-runtime.ts`（装配 + ws 路由 + dispose 编排）。
+  capability.ts 只留 3 行调用点 + 1 行合并 import，**压回 1093 基线**。
+
+【判据】`tests/capability-resource-governance.test.ts` **15/15**：
+  ① 账本语义（登记/幂等释放/批量/按类型/单钩子抛错不阻断/状态变更）；
+  ② 接图（登记与释放都反映到图；图侧抛错不阻断释放）；
+  ③ **WebSocket 真登记**：建立后有 `ws-connection`、释放后连接表归零且向宿主发 close、
+     对端 close 时账本同步销账、不传 resources 零回归；
+  ④ **键盘/传感器登记**：off 同步销账、`releaseAll` 能兜底退订、不传 resources 零回归；
+  ⑤ `dispose` 真清空账本。
+  + **破坏性验证**：把 `if (opts.resources)` 改成 `if (false && ...)` ⇒ ③ 两条当场红；还原 ⇒ 绿。
+  + 相关 5 个测试文件 **61/61**；`check:file-size` / `tsc --noEmit` / `check:content` /
+    `check:en-drift` / `check:no-blind-wait` / `build-packages` 全绿。
+
+【诚实边界】
+  ① **只覆盖本轮登记的三类**（ws 连接 / 键盘订阅 / 传感器流）。
+     capture 订阅（`recordingSubs`/`userCaptureSubs`）与元素索引（`screenTrees`）**还没登记**——
+     它们同属边界资源，下一批补。**没登记的就管不到**，判据只保证"登记过的会被释放"。
+  ② 字节量对能力资源多为 0（socket/订阅器没有可靠内存读数）——**不编造数字**；
+     配额治理仍以 G-46 资源池为准。
+  ③ **真实 superapp 链（`superapp-runtime.ts`）仍未接页面销毁**——本轮补的是"能力实例自身
+     有可释放入口"，不是"页面卸载会自动触发它"。谁来调 `dispose()` 是下一步要定的事
+     （选项：接 Vue `onScopeDispose` / 接 superapp 的页面切换 / 接容器）。
+  ④ G-43 **B6（跨设备转移）仍未做**，仍依赖 G-42 分布式容器。

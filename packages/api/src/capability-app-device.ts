@@ -19,6 +19,7 @@
 // 【诚实降级】宿主未实现 ⇒ `*.unsupported`（`invokeHost` 的 missing 分档）；**不伪造成功**。
 
 import { invokeHost } from './capability-invoke'
+import type { CapabilityResource, CapabilityResourceRegistry } from './capability-resources'   // ★#1094
 // ★`capErr` 直接产 **CapError 实例**（Hook 契约的 error 类型）；本文件构造器参数名 `CapError`
 //   是**泛型构造器**（返回 E），不能当类型/不能保证是 CapError ⇒ 这里用库提供的 concrete 工厂。
 // ★参数名 `CapError` 是**泛型构造器**（返回 E）会遮蔽同名导入 ⇒ 用别名导入 concrete 类。
@@ -82,6 +83,8 @@ type R<T, E extends Error = Error> = { ok: true; data: T } | { ok: false; error:
  */
 export function createAppDeviceCapabilities<E extends Error = Error>(
   CapError: new (code: string, message: string, cause?: unknown) => E,
+  // ★#1094：边界资源账本（G-43）。不传 ⇒ 行为与从前一致（渐进采用）。
+  resOpts: { resources?: CapabilityResourceRegistry; owner?: string } = {},
 ) {
   /** 统一封装：未注册/未实现 ⇒ `unsupported`；真失败 ⇒ `failed`（与 `createAppNativeCapabilities` 同口径） */
   const call = <T,>(method: string, args: unknown, slug: string): R<T, E> => {
@@ -156,6 +159,17 @@ export function createAppDeviceCapabilities<E extends Error = Error>(
         info: { ...keyboardState },
         onChange: (cb: (i: KeyboardInfo) => void): (() => void) => {
           keyboardSubs.add(cb)
+          // ★#1094：订阅登记为边界资源（G-43.1）——`dispose()` 时即使业务忘了 off 也会退订。
+          //   ★keyboardSubs 是**模块级全局**：不登记就只能靠订阅者自觉，页面卸载后回调永久留存（#1071 实测同族）。
+          let res: CapabilityResource | null = null
+          if (resOpts.resources) {
+            res = resOpts.resources.register({
+              type: 'keyboard-subscription',
+              owner: resOpts.owner,
+              sourceLocation: 'packages/api/src/capability-app-device.ts',
+              release: () => { keyboardSubs.delete(cb) },
+            })
+          }
           // 立即推一次当前值（订阅者无需等下一次系统事件——与 wx 的语义一致）
           try {
             cb({ ...keyboardState })
@@ -164,6 +178,7 @@ export function createAppDeviceCapabilities<E extends Error = Error>(
           }
           return () => {
             keyboardSubs.delete(cb)
+            if (res) { res.release(); res = null }   // ★#1094 显式 off 时同步销账
           }
         },
       }
@@ -186,8 +201,19 @@ export function createAppDeviceCapabilities<E extends Error = Error>(
     subscribeSensor: (kind: SensorKind, cb: (sample: SensorSample) => void): (() => void) => {
       const entry = { kind, cb }
       sensorSubs.add(entry)
+      // ★#1094：同上——传感器流也登记（宿主侧在真采样，属于最典型的边界资源）
+      let res: CapabilityResource | null = null
+      if (resOpts.resources) {
+        res = resOpts.resources.register({
+          type: 'sensor-stream',
+          owner: resOpts.owner,
+          sourceLocation: 'packages/api/src/capability-app-device.ts',
+          release: () => { sensorSubs.delete(entry) },
+        })
+      }
       return () => {
         sensorSubs.delete(entry)
+        if (res) { res.release(); res = null }
       }
     },
 
@@ -217,14 +243,16 @@ export function createAppDeviceCapabilities<E extends Error = Error>(
  */
 export function createAppCapabilities<E extends Error = Error>(
   CapError: new (code: string, message: string, cause?: unknown) => E,
+  // ★#1094：边界资源账本（G-43）——透传给设备域/WebSocket（键盘订阅、传感器流、连接都是边界资源）
+  resOpts: { resources?: CapabilityResourceRegistry; owner?: string } = {},
 ) {
   return {
     ...createAppLifecycleCapabilities(getHostLifecycleBus(), CapError),
     ...createAppNativeCapabilities(CapError),
-    ...createAppDeviceCapabilities(CapError),
+    ...createAppDeviceCapabilities(CapError, resOpts),
     ...createAppElementCapabilities(CapError),   // ★#1081 元素查询（createElementQuery/createIntersection）
     ...createAppCaptureCapabilities(),   // ★#1083 录屏/截屏状态（getScreenCapture）
-    connectWebSocket: createAppWebSocket(),   // ★#1093 App 端 WebSocket（ws.open/send/close + 壳推事件流）
+    connectWebSocket: createAppWebSocket(resOpts),   // ★#1093 App 端 WebSocket（ws.open/send/close + 壳推事件流）
   }
 }
 

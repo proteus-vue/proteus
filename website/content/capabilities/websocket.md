@@ -99,7 +99,7 @@ on(event: 'open' | 'message' | 'close' | 'error', handler: (payload?: unknown) =
 
 | code | 说明 |
 |---|---|
-| `websocket.unsupported` | 桥未提供 connectWebSocket（useWebSocket 不可用） |
+| `websocket.unsupported` | wx.connectSocket 缺失 |
 | `websocket.failed` | wx.connectSocket 返回空 |
 
 > 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。
@@ -108,12 +108,12 @@ on(event: 'open' | 'message' | 'close' | 'error', handler: (payload?: unknown) =
 
 | 端 | 兼容 | 说明 |
 |---|---|---|
-| Web SPA | ✅ | vue-dom · webBridge 实现（平台 API 直连） |
+| Web SPA | ✅ | vue-dom · webBridge 平台桥（wx 缺席时默认注入） |
 | 微信小程序 | ✅ | skyline（WebView 降级） · wx 桥 → wx.connectSocket |
 | Headless（SSR / 测试） | ✅ | headless · mock 桥注入（测试 / SSR 档） |
-| iOS 原生 | ✅ | native-ios（UIKit + CoreAnimation） · App 宿主桥（capability-app.ts）· 桥方法已接入 |
-| Android 原生 | ✅ | native-android（自绘 Canvas） · App 宿主桥（capability-app.ts）· 桥方法已接入 |
-| 鸿蒙 | 🟡 | native-harmony（ArkUI RenderNode） · App 桥已就绪（平台中立）——鸿蒙宿主壳未接线 |
+| iOS 原生 | 🟡 | native-ios（UIKit + CoreAnimation） · 渲染核心已落地——能力桥未接线 |
+| Android 原生 | 🟡 | native-android（自绘 Canvas） · 渲染核心已落地——能力桥未接线 |
+| 鸿蒙 | 🟡 | native-harmony（ArkUI RenderNode） · 渲染核心已落地——能力桥未接线 |
 | Flutter 混合 | 🟡 | flutter · 同一 JS 逻辑层——能力桥未接线 |
 | 快应用 | ⬜ | 快应用引擎（待定） · 端未开始 |
 
