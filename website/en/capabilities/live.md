@@ -6,9 +6,15 @@ order: 4004
 
 # useLive
 
-useLive: live room (wx live component form / host bridge — Err by default)
+**What it does**: Embed a live room for watching and interaction.
 
-> Capability primitive C49 · `capability.live` · returns `LiveRoom` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Livestream commerce, event viewing.
+
+**End support & boundaries**: Only mini programs provide a live component; App ends must integrate a third-party live SDK.
+
+> 技术标识：能力原语 C49 · `capability.live` · 返回 `LiveRoom` · **Hook implemented** (per-end support in the table below)
+
+useLive: live room (wx live component form / host bridge — Err by default)
 
 ## Signature
 

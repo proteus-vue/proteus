@@ -6,9 +6,13 @@ order: 2001
 
 # useStorage
 
-useStorage：存储句柄（响应式增强见 createReactiveStorage）
+**它能做什么**：在本地持久保存键值数据。
 
-> 能力原语 C15 · `capability.storage` · 返回 `StorageAPI` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：登录态、草稿、用户偏好。
+
+> 技术标识：能力原语 C15 · `capability.storage` · 返回 `StorageAPI` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+useStorage：存储句柄（响应式增强见 createReactiveStorage）
 
 ## 签名
 

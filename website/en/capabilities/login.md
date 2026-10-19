@@ -6,9 +6,13 @@ order: 5006
 
 # useLogin
 
-useLogin: login (wx.login → code / integrate a third-party provider)
+**What it does**: Get a platform login code to exchange for your own session.
 
-> Capability primitive C41 · `capability.login` · returns `Result<Token>` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: WeChat login, silent login.
+
+> 技术标识：能力原语 C41 · `capability.login` · 返回 `Result<Token>` · **Hook implemented** (per-end support in the table below)
+
+useLogin: login (wx.login → code / integrate a third-party provider)
 
 ## Signature
 

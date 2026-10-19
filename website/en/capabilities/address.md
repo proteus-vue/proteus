@@ -6,9 +6,13 @@ order: 5008
 
 # useAddress
 
-useAddress: shipping address picker (wx.chooseAddress; web has no standard → Err)
+**What it does**: Use the platform shipping-address picker.
 
-> Capability primitive C54 · `capability.address` · returns `ShippingAddress` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Checkout shipping address.
+
+> 技术标识：能力原语 C54 · `capability.address` · 返回 `ShippingAddress` · **Hook implemented** (per-end support in the table below)
+
+useAddress: shipping address picker (wx.chooseAddress; web has no standard → Err)
 
 ## Signature
 

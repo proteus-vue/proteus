@@ -6,9 +6,13 @@ order: 7010
 
 # useIdle
 
-useIdle: idle scheduling — run a callback when the host is idle, with cancel (wx.requestIdleCallback/cancelIdleCallback; web requestIdleCallback with setTimeout fallback)
+**What it does**: Defer non-urgent work until the device is idle.
 
-> Capability primitive C73 · `capability.idle` · returns `IdleAPI` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Precomputation, cache warming.
+
+> 技术标识：能力原语 C73 · `capability.idle` · 返回 `IdleAPI` · **Hook implemented** (per-end support in the table below)
+
+useIdle: idle scheduling — run a callback when the host is idle, with cancel (wx.requestIdleCallback/cancelIdleCallback; web requestIdleCallback with setTimeout fallback)
 
 ## Signature
 

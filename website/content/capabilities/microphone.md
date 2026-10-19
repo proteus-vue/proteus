@@ -6,9 +6,13 @@ order: 4002
 
 # useMicrophone
 
-useMicrophone：麦克风访问（wx.authorize / web getUserMedia）
+**它能做什么**：录音并把音频保存成文件，或实时拿到音量。
 
-> 能力原语 C2 · `capability.microphone` · 返回 `Result<AudioBuffer>` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：语音消息、录音笔记、音量可视化。
+
+> 技术标识：能力原语 C2 · `capability.microphone` · 返回 `Result<AudioBuffer>` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+useMicrophone：麦克风访问（wx.authorize / web getUserMedia）
 
 ## 签名
 

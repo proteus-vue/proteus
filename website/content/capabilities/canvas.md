@@ -6,9 +6,13 @@ order: 4006
 
 # useCanvas
 
-★C57 useCanvas：画布控制器（wx.createCanvasContext/SelectorQuery node/canvasToTempFilePath/OffscreenCanvas；web HTMLCanvasElement）
+**它能做什么**：在画布上绘制图形、文字并导出图片。
 
-> 能力原语 C57 · `capability.canvas` · 返回 `CanvasController` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：图表、签名板、海报生成。
+
+> 技术标识：能力原语 C57 · `capability.canvas` · 返回 `CanvasController` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+★C57 useCanvas：画布控制器（wx.createCanvasContext/SelectorQuery node/canvasToTempFilePath/OffscreenCanvas；web HTMLCanvasElement）
 
 ## 签名
 

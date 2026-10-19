@@ -6,9 +6,13 @@ order: 1001
 
 # useSensor
 
-useSensor：传感器一次性读取（accelerometer/compass/gyroscope）
+**它能做什么**：读加速度计、陀螺仪、罗盘（一次读取或持续采样）。
 
-> 能力原语 C5 · `capability.sensor` · 返回 `SensorStream` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：摇一摇、步数、指南针、姿态识别。
+
+> 技术标识：能力原语 C5 · `capability.sensor` · 返回 `SensorStream` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+useSensor：传感器一次性读取（accelerometer/compass/gyroscope）
 
 ## 签名
 

@@ -6,9 +6,13 @@ order: 5007
 
 # useInAppPurchase
 
-useInAppPurchase: In-app purchase (wx — no public API → honest Err degradation)
+**What it does**: Use in-app purchase for subscriptions or consumables.
 
-> Capability primitive C46 · `capability.in-app-purchase` · returns `Result<Receipt>` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Memberships, removing ads.
+
+> 技术标识：能力原语 C46 · `capability.in-app-purchase` · 返回 `Result<Receipt>` · **Hook implemented** (per-end support in the table below)
+
+useInAppPurchase: In-app purchase (wx — no public API → honest Err degradation)
 
 ## Signature
 

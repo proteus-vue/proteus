@@ -6,9 +6,13 @@ order: 6002
 
 # useShare
 
-Sharing (wx.shareAppMessage / navigator.share / mock)
+**What it does**: Share content to chat apps and social feeds.
 
-> Capability primitive C18 · `capability.share` · returns `Result<void>` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Invites, sharing products.
+
+> 技术标识：能力原语 C18 · `capability.share` · 返回 `Result<void>` · **Hook implemented** (per-end support in the table below)
+
+Sharing (wx.shareAppMessage / navigator.share / mock)
 
 ## Signature
 

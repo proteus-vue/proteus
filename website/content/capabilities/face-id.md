@@ -6,9 +6,15 @@ order: 5004
 
 # useFaceID
 
-useFaceID：人脸识别认证（wx startSoterAuthentication facial / web WebAuthn）
+**它能做什么**：人脸识别（活体检测）验证身份。
 
-> 能力原语 C39 · `capability.face-id` · 返回 `Result<boolean>` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：实名认证、门禁刷脸。
+
+**端实现边界**：活体检测依赖平台能力（iOS Face ID / Android 厂商生物识别）；Web 无对等。
+
+> 技术标识：能力原语 C39 · `capability.face-id` · 返回 `Result<boolean>` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+useFaceID：人脸识别认证（wx startSoterAuthentication facial / web WebAuthn）
 
 ## 签名
 

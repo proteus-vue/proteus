@@ -6,9 +6,15 @@ order: 7003
 
 # useBackground
 
-useBackground: background/foreground switch subscription (wx onAppHide/onAppShow / web visibilitychange)
+**What it does**: Request extra background execution time.
 
-> Capability primitive C25 · `capability.background` · returns `BackgroundAPI` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Large uploads, location reporting.
+
+**End support & boundaries**: Background time is **only** system-granted and revocable — **requires** `UIBackgroundModes` on iOS and a foreground service on Android. Treat it as best-effort.
+
+> 技术标识：能力原语 C25 · `capability.background` · 返回 `BackgroundAPI` · **Hook implemented** (per-end support in the table below)
+
+useBackground: background/foreground switch subscription (wx onAppHide/onAppShow / web visibilitychange)
 
 ## Signature
 

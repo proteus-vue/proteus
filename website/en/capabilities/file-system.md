@@ -6,9 +6,13 @@ order: 2003
 
 # useFileSystem
 
-useFileSystem: file system handle (wx.getFileSystemManager / web in-memory fallback)
+**What it does**: Read and write local files and directories.
 
-> Capability primitive C43 · `capability.file-system` · returns `FSAdapter` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Exporting files, caching large assets.
+
+> 技术标识：能力原语 C43 · `capability.file-system` · 返回 `FSAdapter` · **Hook implemented** (per-end support in the table below)
+
+useFileSystem: file system handle (wx.getFileSystemManager / web in-memory fallback)
 
 ## Signature
 

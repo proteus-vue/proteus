@@ -6,9 +6,13 @@ order: 5
 
 # useDownload
 
-useDownload: download files (wx.downloadFile / web fetch blob)
+**What it does**: Download a file from a server with progress.
 
-> Capability primitive C30 · `capability.download` · returns `Progress<Result>` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Attachments, offline bundles, exports.
+
+> 技术标识：能力原语 C30 · `capability.download` · 返回 `Progress<Result>` · **Hook implemented** (per-end support in the table below)
+
+useDownload: download files (wx.downloadFile / web fetch blob)
 
 ## Signature
 

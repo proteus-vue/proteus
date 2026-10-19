@@ -6,9 +6,13 @@ order: 7008
 
 # useWorker
 
-★C53 useWorker：多线程 Worker（wx.createWorker / web Worker；不可用 → Err）
+**它能做什么**：把耗时计算放到后台线程，避免卡住界面。
 
-> 能力原语 C53 · `capability.worker` · 返回 `WorkerHandle` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：大文件解析、复杂计算、加解密。
+
+> 技术标识：能力原语 C53 · `capability.worker` · 返回 `WorkerHandle` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+★C53 useWorker：多线程 Worker（wx.createWorker / web Worker；不可用 → Err）
 
 ## 签名
 

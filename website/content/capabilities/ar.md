@@ -6,9 +6,15 @@ order: 1017
 
 # useAR
 
-★C76 useAR：AR/XR 视觉算法（wx.createVKSession/isVKSupport；web 无对等 → Err）
+**它能做什么**：在相机画面上叠加虚拟物体（ARKit / ARCore / VKSession 一类的空间跟踪）。
 
-> 能力原语 C76 · `capability.ar` · 返回 `ARAPI` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：虚拟试穿、家具摆放预览、AR 导航箭头。
+
+**端实现边界**：需要平台 AR/XR 会话能力（微信 VKSession）：App 三端**未接线**。若只需"相机 + 平面覆盖"可用 `useCamera` 自行合成。
+
+> 技术标识：能力原语 C76 · `capability.ar` · 返回 `ARAPI` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+★C76 useAR：AR/XR 视觉算法（wx.createVKSession/isVKSupport；web 无对等 → Err）
 
 ## 签名
 

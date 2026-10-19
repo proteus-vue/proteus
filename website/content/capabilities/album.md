@@ -6,9 +6,13 @@ order: 4005
 
 # useAlbum
 
-★C52 useAlbum：相册句柄（wx.chooseMedia/saveImageToPhotosAlbum/previewMedia；web <input type=file>）
+**它能做什么**：从相册选图/选视频，或把图片保存到相册。
 
-> 能力原语 C52 · `capability.album` · 返回 `AlbumAPI` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：头像上传、晒图、保存生成的图片。
+
+> 技术标识：能力原语 C52 · `capability.album` · 返回 `AlbumAPI` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+★C52 useAlbum：相册句柄（wx.chooseMedia/saveImageToPhotosAlbum/previewMedia；web <input type=file>）
 
 ## 签名
 

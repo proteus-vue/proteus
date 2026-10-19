@@ -6,9 +6,13 @@ order: 6008
 
 # useAd
 
-useAd: ad handle — rewardedVideo / interstitial / banner (wx.createRewardedVideoAd/createInterstitialAd/createBannerAd; web has no ad-network standard → throws on create)
+**What it does**: Show rewarded video, interstitial or banner ads.
 
-> Capability primitive C64 · `capability.ad` · returns `AdAPI` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Unlock-by-ad, ad monetisation.
+
+> 技术标识：能力原语 C64 · `capability.ad` · 返回 `AdAPI` · **Hook implemented** (per-end support in the table below)
+
+useAd: ad handle — rewardedVideo / interstitial / banner (wx.createRewardedVideoAd/createInterstitialAd/createBannerAd; web has no ad-network standard → throws on create)
 
 ## Signature
 

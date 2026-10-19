@@ -6,9 +6,13 @@ order: 2003
 
 # useFileSystem
 
-useFileSystem：文件系统句柄（wx.getFileSystemManager / web 内存降级）
+**它能做什么**：读写本地文件与目录。
 
-> 能力原语 C43 · `capability.file-system` · 返回 `FSAdapter` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：导出文件、缓存大文件。
+
+> 技术标识：能力原语 C43 · `capability.file-system` · 返回 `FSAdapter` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+useFileSystem：文件系统句柄（wx.getFileSystemManager / web 内存降级）
 
 ## 签名
 

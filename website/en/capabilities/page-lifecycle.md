@@ -6,9 +6,13 @@ order: 7002
 
 # usePageLifecycle
 
-usePageLifecycle: page lifecycle subscription handle (wx Page hooks / web load + visibilitychange)
+**What it does**: Observe page load/show/hide/unload.
 
-> Capability primitive C24 · `capability.page-lifecycle` · returns `LifecycleHooks` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Fetching on enter, cleaning up on leave.
+
+> 技术标识：能力原语 C24 · `capability.page-lifecycle` · 返回 `LifecycleHooks` · **Hook implemented** (per-end support in the table below)
+
+usePageLifecycle: page lifecycle subscription handle (wx Page hooks / web load + visibilitychange)
 
 ## Signature
 

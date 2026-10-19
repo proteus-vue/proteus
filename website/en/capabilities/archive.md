@@ -6,9 +6,13 @@ order: 2004
 
 # useArchive
 
-useArchive: compress files (wx.compressFile; web → Err)
+**What it does**: Compress or extract files and directories.
 
-> Capability primitive C44 · `capability.archive` · returns `Result<void>` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Bundling logs, unpacking offline bundles.
+
+> 技术标识：能力原语 C44 · `capability.archive` · 返回 `Result<void>` · **Hook implemented** (per-end support in the table below)
+
+useArchive: compress files (wx.compressFile; web → Err)
 
 ## Signature
 

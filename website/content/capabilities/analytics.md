@@ -6,9 +6,13 @@ order: 8001
 
 # useAnalytics
 
-useAnalytics：埋点句柄（wx.reportEvent；web 无标准 → track 返回 Err）
+**它能做什么**：上报业务埋点事件。
 
-> 能力原语 C34 · `capability.analytics` · 返回 `TrackAPI` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：转化漏斗、功能使用统计。
+
+> 技术标识：能力原语 C34 · `capability.analytics` · 返回 `TrackAPI` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+useAnalytics：埋点句柄（wx.reportEvent；web 无标准 → track 返回 Err）
 
 ## 签名
 

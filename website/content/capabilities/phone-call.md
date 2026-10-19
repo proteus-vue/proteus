@@ -6,9 +6,13 @@ order: 6005
 
 # usePhoneCall
 
-usePhoneCall：拨打电话
+**它能做什么**：直接调起系统拨号界面并填入号码。
 
-> 能力原语 C21 · `capability.phone-call` · 返回 `Result<void>` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：联系客服、一键呼救、商家电话。
+
+> 技术标识：能力原语 C21 · `capability.phone-call` · 返回 `Result<void>` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+usePhoneCall：拨打电话
 
 ## 签名
 

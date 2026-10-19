@@ -6,9 +6,15 @@ order: 1016
 
 # useCacheManager
 
-★C72 useCacheManager：缓存管理（wx.createCacheManager；web → throw）
+**它能做什么**：为网络请求配置缓存规则（最大存活时间、弱网策略），并清理缓存。
 
-> 能力原语 C72 · `capability.cache-manager` · 返回 `CacheManagerHandle` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：离线可用、弱网加速、按域名清缓存。
+
+**端实现边界**：App 端**无对等物**（HTTP 缓存策略由各端网络栈自行决定），三端均返回 `unsupported`。需要离线能力请用 `useStorage` / `useFileSystem` + 本地 ETag 策略自行实现。
+
+> 技术标识：能力原语 C72 · `capability.cache-manager` · 返回 `CacheManagerHandle` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+★C72 useCacheManager：缓存管理（wx.createCacheManager；web → throw）
 
 ## 签名
 

@@ -6,9 +6,13 @@ order: 1
 
 # useFetch
 
-★ G-32 B3 (continued): communication / permission / storage — a missing bridge → Err instead of throwing (G-32.3 degradation semantics)
+**What it does**: Send an HTTP request and get the response data.
 
-> Capability primitive C26 · `capability.fetch` · returns `Promise<T>` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Calling APIs, loading lists, submitting forms.
+
+> 技术标识：能力原语 C26 · `capability.fetch` · 返回 `Promise<T>` · **Hook implemented** (per-end support in the table below)
+
+★ G-32 B3 (continued): communication / permission / storage — a missing bridge → Err instead of throwing (G-32.3 degradation semantics)
 
 ## Signature
 

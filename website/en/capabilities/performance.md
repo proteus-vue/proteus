@@ -6,9 +6,13 @@ order: 8003
 
 # usePerformance
 
-usePerformance: performance handle — entries (navigation/render/script) + real-time observer + setBufferSize + report a custom metric (wx.getPerformance/reportPerformance; web performance.getEntries*)
+**What it does**: Collect page performance metrics.
 
-> Capability primitive C66 · `capability.performance` · returns `PerformanceAPI` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Monitoring startup time and jank.
+
+> 技术标识：能力原语 C66 · `capability.performance` · 返回 `PerformanceAPI` · **Hook implemented** (per-end support in the table below)
+
+usePerformance: performance handle — entries (navigation/render/script) + real-time observer + setBufferSize + report a custom metric (wx.getPerformance/reportPerformance; web performance.getEntries*)
 
 ## Signature
 

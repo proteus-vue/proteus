@@ -6,9 +6,15 @@ order: 7004
 
 # useMiniProgram
 
-useMiniProgram: jump to a mini program (wx.navigateToMiniProgram / web → Err)
+**What it does**: Jump to another mini program or app.
 
-> Capability primitive C47 · `capability.mini-program` · returns `MPContext` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Partner mini programs, opening maps.
+
+**End support & boundaries**: iOS has no mini-program concept (URL Scheme / Universal Link only); Android depends on the host app.
+
+> 技术标识：能力原语 C47 · `capability.mini-program` · 返回 `MPContext` · **Hook implemented** (per-end support in the table below)
+
+useMiniProgram: jump to a mini program (wx.navigateToMiniProgram / web → Err)
 
 ## Signature
 

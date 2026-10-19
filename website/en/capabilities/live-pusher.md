@@ -6,9 +6,13 @@ order: 4009
 
 # useLivePusher
 
-useLivePusher: live-stream pusher instance — start/stop/pause/resume/switchCamera/toggleTorch/snapshot/SEI + events (wx.createLivePusherContext; web has no standard → Err)
+**What it does**: Push camera video to a live-streaming service.
 
-> Capability primitive C63 · `capability.live-pusher` · returns `LivePusherController` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Merchant or event live streaming.
+
+> 技术标识：能力原语 C63 · `capability.live-pusher` · 返回 `LivePusherController` · **Hook implemented** (per-end support in the table below)
+
+useLivePusher: live-stream pusher instance — start/stop/pause/resume/switchCamera/toggleTorch/snapshot/SEI + events (wx.createLivePusherContext; web has no standard → Err)
 
 ## Signature
 

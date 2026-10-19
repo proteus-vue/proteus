@@ -6,9 +6,15 @@ order: 1011
 
 # useWeRun
 
-★C56 useWeRun：微信运动数据（wx.getWeRunData；web 无标准 → Err）
+**它能做什么**：读微信运动的步数数据。
 
-> 能力原语 C56 · `capability.we-run` · 返回 `WeRunData` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：运动排行、步数兑换。
+
+**端实现边界**：仅微信小程序提供（需用户在微信运动授权）；其他端**无对等数据源**——App 端要步数请接系统健康数据（iOS HealthKit / Android Health Connect）。
+
+> 技术标识：能力原语 C56 · `capability.we-run` · 返回 `WeRunData` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+★C56 useWeRun：微信运动数据（wx.getWeRunData；web 无标准 → Err）
 
 ## 签名
 

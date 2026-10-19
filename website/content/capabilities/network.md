@@ -6,9 +6,13 @@ order: 1004
 
 # useNetwork
 
-网络（wx.getNetworkType / navigator.onLine / mock）
+**它能做什么**：读当前网络类型（WiFi/蜂窝/离线）并订阅变化。
 
-> 能力原语 C8 · `capability.network` · 返回 `NetworkType` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：弱网提示、仅 WiFi 上传。
+
+> 技术标识：能力原语 C8 · `capability.network` · 返回 `NetworkType` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+网络（wx.getNetworkType / navigator.onLine / mock）
 
 ## 签名
 

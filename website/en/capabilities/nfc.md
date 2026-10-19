@@ -6,9 +6,15 @@ order: 8
 
 # useNFC
 
-useNFC: NFC status (wx.getHCEState / web NDEFReader feature detection)
+**What it does**: Read/write NFC tags or emulate a card (HCE).
 
-> Capability primitive C37 · `capability.nfc` · returns `NFCAPI` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Access cards, transit cards, tag authentication.
+
+**End support & boundaries**: HCE card emulation is limited to some Android devices and mini programs; iOS only allows tag reading (Core NFC), not emulation.
+
+> 技术标识：能力原语 C37 · `capability.nfc` · 返回 `NFCAPI` · **Hook implemented** (per-end support in the table below)
+
+useNFC: NFC status (wx.getHCEState / web NDEFReader feature detection)
 
 ## Signature
 

@@ -6,9 +6,13 @@ order: 1019
 
 # useDeviceCapability
 
-★C81 useDeviceCapability：设备能力探测（wx.checkDeviceSupportHevc / web MediaSource）
+**它能做什么**：探测设备支持哪些高级能力（如 HEVC 硬解）。
 
-> 能力原语 C81 · `capability.device-capability` · 返回 `DeviceCapabilityAPI` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：按设备能力选择视频编码或降级方案。
+
+> 技术标识：能力原语 C81 · `capability.device-capability` · 返回 `DeviceCapabilityAPI` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+★C81 useDeviceCapability：设备能力探测（wx.checkDeviceSupportHevc / web MediaSource）
 
 ## 签名
 

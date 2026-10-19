@@ -6,9 +6,13 @@ order: 6008
 
 # useAd
 
-★C64 useAd：广告句柄（wx.createRewardedVideoAd/createInterstitialAd/createBannerAd / web 无标准 → throw）
+**它能做什么**：展示激励视频、插屏、横幅广告并拿收益回调。
 
-> 能力原语 C64 · `capability.ad` · 返回 `AdAPI` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：看广告解锁、流量变现。
+
+> 技术标识：能力原语 C64 · `capability.ad` · 返回 `AdAPI` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+★C64 useAd：广告句柄（wx.createRewardedVideoAd/createInterstitialAd/createBannerAd / web 无标准 → throw）
 
 ## 签名
 

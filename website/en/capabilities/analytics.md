@@ -6,9 +6,13 @@ order: 8001
 
 # useAnalytics
 
-useAnalytics: analytics tracking handle (wx.reportEvent; no web standard → track returns Err)
+**What it does**: Report analytics events.
 
-> Capability primitive C34 · `capability.analytics` · returns `TrackAPI` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Conversion funnels, feature usage stats.
+
+> 技术标识：能力原语 C34 · `capability.analytics` · 返回 `TrackAPI` · **Hook implemented** (per-end support in the table below)
+
+useAnalytics: analytics tracking handle (wx.reportEvent; no web standard → track returns Err)
 
 ## Signature
 

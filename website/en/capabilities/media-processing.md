@@ -6,9 +6,13 @@ order: 4011
 
 # useMediaProcessing
 
-useMediaProcessing: advanced media — MediaContainer (track compose/export) / VideoDecoder (frame grabbing) / MediaAudioPlayer (multi-source mixing) (wx.createMediaContainer/createVideoDecoder/createMediaAudioPlayer; web has no standard compose → container/audioPlayer throw, VideoDecoder uses WebCodecs)
+**What it does**: Mux media files, decode video and process audio/video tracks.
 
-> Capability primitive C70 · `capability.media-processing` · returns `MediaProcessingAPI` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Re-muxing, frame extraction.
+
+> 技术标识：能力原语 C70 · `capability.media-processing` · 返回 `MediaProcessingAPI` · **Hook implemented** (per-end support in the table below)
+
+useMediaProcessing: advanced media — MediaContainer (track compose/export) / VideoDecoder (frame grabbing) / MediaAudioPlayer (multi-source mixing) (wx.createMediaContainer/createVideoDecoder/createMediaAudioPlayer; web has no standard compose → container/audioPlayer throw, VideoDecoder uses WebCodecs)
 
 ## Signature
 

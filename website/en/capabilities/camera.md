@@ -6,9 +6,13 @@ order: 4001
 
 # useCamera
 
-useCamera: camera access (wx.authorize / web getUserMedia)
+**What it does**: Take photos or record video with the camera, and show a live preview on the page.
 
-> Capability primitive C1 · `capability.camera` · returns `Result<Media>` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: QR scanning, ID capture, live-stream preview.
+
+> 技术标识：能力原语 C1 · `capability.camera` · 返回 `Result<Media>` · **Hook implemented** (per-end support in the table below)
+
+useCamera: camera access (wx.authorize / web getUserMedia)
 
 ## Signature
 

@@ -6,9 +6,13 @@ order: 2005
 
 # useOpenDocument
 
-useOpenDocument: open a document for preview — a PDF, image, text, or office file (mini program wx.openDocument; Web window.open → the browser viewer). ★Honest boundary on Web: PDFs, images, and text preview inline, but office formats are usually downloaded rather than previewed (it depends on the browser). On the mini program you must pass a platform temp-file path (e.g. wxfile://...).
+**What it does**: Preview PDF/Office documents inside the app.
 
-> Capability primitive C84 · `capability.document-preview` · returns `DocumentPath` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Contracts, invoices, e-receipts.
+
+> 技术标识：能力原语 C84 · `capability.document-preview` · 返回 `DocumentPath` · **Hook implemented** (per-end support in the table below)
+
+useOpenDocument: open a document for preview — a PDF, image, text, or office file (mini program wx.openDocument; Web window.open → the browser viewer). ★Honest boundary on Web: PDFs, images, and text preview inline, but office formats are usually downloaded rather than previewed (it depends on the browser). On the mini program you must pass a platform temp-file path (e.g. wxfile://...).
 
 ## Signature
 

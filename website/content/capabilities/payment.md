@@ -6,9 +6,13 @@ order: 5005
 
 # usePayment
 
-usePayment：拉起支付（wx.requestPayment 字段）
+**它能做什么**：发起支付并拿到支付结果。
 
-> 能力原语 C40 · `capability.payment` · 返回 `Result<PayResult>` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：下单付款、充值。
+
+> 技术标识：能力原语 C40 · `capability.payment` · 返回 `Result<PayResult>` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+usePayment：拉起支付（wx.requestPayment 字段）
 
 ## 签名
 

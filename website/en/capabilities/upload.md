@@ -6,9 +6,13 @@ order: 4
 
 # useUpload
 
-useUpload: upload files (wx.uploadFile / web fetch FormData)
+**What it does**: Upload a file to a server with progress.
 
-> Capability primitive C29 · `capability.upload` · returns `Progress<Result>` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Uploading avatars, documents, videos.
+
+> 技术标识：能力原语 C29 · `capability.upload` · 返回 `Progress<Result>` · **Hook implemented** (per-end support in the table below)
+
+useUpload: upload files (wx.uploadFile / web fetch FormData)
 
 ## Signature
 

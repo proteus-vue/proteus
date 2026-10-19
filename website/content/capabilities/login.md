@@ -6,9 +6,13 @@ order: 5006
 
 # useLogin
 
-useLogin：登录（wx.login → code / 接入第三方 provider）
+**它能做什么**：调用平台登录拿到临时凭证，换取自己的登录态。
 
-> 能力原语 C41 · `capability.login` · 返回 `Result<Token>` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：微信登录、静默登录。
+
+> 技术标识：能力原语 C41 · `capability.login` · 返回 `Result<Token>` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+useLogin：登录（wx.login → code / 接入第三方 provider）
 
 ## 签名
 

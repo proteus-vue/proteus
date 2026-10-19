@@ -6,9 +6,13 @@ order: 5008
 
 # useAddress
 
-★C54 useAddress：收货地址（wx.chooseAddress；web 无标准 → Err）
+**它能做什么**：调用平台的收货地址选择器。
 
-> 能力原语 C54 · `capability.address` · 返回 `ShippingAddress` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：下单填写收货地址。
+
+> 技术标识：能力原语 C54 · `capability.address` · 返回 `ShippingAddress` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+★C54 useAddress：收货地址（wx.chooseAddress；web 无标准 → Err）
 
 ## 签名
 

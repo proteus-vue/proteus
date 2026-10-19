@@ -6,9 +6,15 @@ order: 6001
 
 # useNotification
 
-useNotification: Message subscription authorization (wx.requestSubscribeMessage / web Notification)
+**What it does**: Request subscription messages or push notifications.
 
-> Capability primitive C17 · `capability.notification` · returns `NotificationAPI` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Order updates, marketing reach.
+
+**End support & boundaries**: Mini programs use subscription messages (per-use consent, limited count); App ends need notification permission first; Web uses the Notification API behind a user gesture.
+
+> 技术标识：能力原语 C17 · `capability.notification` · 返回 `NotificationAPI` · **Hook implemented** (per-end support in the table below)
+
+useNotification: Message subscription authorization (wx.requestSubscribeMessage / web Notification)
 
 ## Signature
 

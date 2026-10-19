@@ -6,9 +6,13 @@ order: 3002
 
 # useMap
 
-useMap：地图上下文句柄（wx.createMapContext / web 宿主集成；无 → Err）
+**它能做什么**：在页面里嵌入地图，控制标记点、视野与路线。
 
-> 能力原语 C4 · `capability.map` · 返回 `MapController` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：门店位置、配送轨迹、地图选点。
+
+> 技术标识：能力原语 C4 · `capability.map` · 返回 `MapController` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+useMap：地图上下文句柄（wx.createMapContext / web 宿主集成；无 → Err）
 
 ## 签名
 

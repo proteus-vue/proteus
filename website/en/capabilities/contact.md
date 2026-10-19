@@ -6,9 +6,13 @@ order: 6003
 
 # useContact
 
-useContact: Contact picking (wx.chooseContact; web has no standard → Err degradation)
+**What it does**: Pick a contact from the address book.
 
-> Capability primitive C19 · `capability.contact` · returns `Result<Contact[]>` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Filling in a recipient, inviting friends.
+
+> 技术标识：能力原语 C19 · `capability.contact` · 返回 `Result<Contact[]>` · **Hook implemented** (per-end support in the table below)
+
+useContact: Contact picking (wx.chooseContact; web has no standard → Err degradation)
 
 ## Signature
 

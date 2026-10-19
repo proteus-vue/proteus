@@ -6,9 +6,15 @@ order: 1020
 
 # useKeepScreenOn
 
-★NC1 C83 useKeepScreenOn：屏幕常亮开关（MP wx.setKeepScreenOn / Web Screen Wake Lock；重复调用幂等）
+**它能做什么**：让屏幕保持常亮不自动锁屏。
 
-> 能力原语 C83 · `capability.keep-screen-on` · 返回 `KeepScreenOnState` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：看视频、看菜谱、导航。
+
+**端实现边界**：Web 需 Screen Wake Lock API 且要求页面可见；App 端走系统常亮标记。
+
+> 技术标识：能力原语 C83 · `capability.keep-screen-on` · 返回 `KeepScreenOnState` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+★NC1 C83 useKeepScreenOn：屏幕常亮开关（MP wx.setKeepScreenOn / Web Screen Wake Lock；重复调用幂等）
 
 ## 签名
 

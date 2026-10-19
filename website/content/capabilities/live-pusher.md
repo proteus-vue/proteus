@@ -6,9 +6,13 @@ order: 4009
 
 # useLivePusher
 
-★C63 useLivePusher：直播推流控制器（wx.createLivePusherContext / web 无标准 → Err）
+**它能做什么**：把摄像头画面推流到直播服务。
 
-> 能力原语 C63 · `capability.live-pusher` · 返回 `LivePusherController` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：商家直播、活动直播。
+
+> 技术标识：能力原语 C63 · `capability.live-pusher` · 返回 `LivePusherController` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+★C63 useLivePusher：直播推流控制器（wx.createLivePusherContext / web 无标准 → Err）
 
 ## 签名
 

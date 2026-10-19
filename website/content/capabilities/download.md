@@ -6,9 +6,13 @@ order: 5
 
 # useDownload
 
-useDownload：下载文件（wx.downloadFile / web fetch blob）
+**它能做什么**：从服务器下载文件，并拿到进度。
 
-> 能力原语 C30 · `capability.download` · 返回 `Progress<Result>` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：下载附件、离线包、导出文件。
+
+> 技术标识：能力原语 C30 · `capability.download` · 返回 `Progress<Result>` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+useDownload：下载文件（wx.downloadFile / web fetch blob）
 
 ## 签名
 

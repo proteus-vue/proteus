@@ -6,9 +6,13 @@ order: 1003
 
 # useBattery
 
-电量（wx.getBatteryInfo / navigator.getBattery / mock）
+**它能做什么**：读电量百分比与是否在充电。
 
-> 能力原语 C7 · `capability.battery` · 返回 `BatteryInfo` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：省电模式、低电量提示。
+
+> 技术标识：能力原语 C7 · `capability.battery` · 返回 `BatteryInfo` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+电量（wx.getBatteryInfo / navigator.getBattery / mock）
 
 ## 签名
 

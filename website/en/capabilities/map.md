@@ -6,9 +6,13 @@ order: 3002
 
 # useMap
 
-useMap: map context handle (wx.createMapContext / web host integration; → Err when none is available)
+**What it does**: Embed a map and control markers, viewport and routes.
 
-> Capability primitive C4 · `capability.map` · returns `MapController` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Store locator, delivery tracking, picking a point.
+
+> 技术标识：能力原语 C4 · `capability.map` · 返回 `MapController` · **Hook implemented** (per-end support in the table below)
+
+useMap: map context handle (wx.createMapContext / web host integration; → Err when none is available)
 
 ## Signature
 

@@ -6,9 +6,13 @@ order: 3
 
 # useSocketTask
 
-useSocketTask：底层 SocketTask 句柄（wx.connectSocket→SocketTask / web WebSocket）
+**它能做什么**：管理一条 WebSocket 连接的完整生命周期。
 
-> 能力原语 C28 · `capability.socket-task` · 返回 `SocketTask` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：需要断线重连、多路复用时的长连接。
+
+> 技术标识：能力原语 C28 · `capability.socket-task` · 返回 `SocketTask` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+useSocketTask：底层 SocketTask 句柄（wx.connectSocket→SocketTask / web WebSocket）
 
 ## 签名
 

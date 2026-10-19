@@ -6,9 +6,13 @@ order: 7012
 
 # useNavigationGuard
 
-useNavigationGuard: navigation/unload guard — enable/disable a confirm prompt before leaving (wx.enableAlertBeforeUnload/disableAlertBeforeUnload; web beforeunload event)
+**What it does**: Intercept navigation away from a page to confirm.
 
-> Capability primitive C75 · `capability.navigation-guard` · returns `NavigationGuardAPI` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Unsaved-form protection, leave confirmation.
+
+> 技术标识：能力原语 C75 · `capability.navigation-guard` · 返回 `NavigationGuardAPI` · **Hook implemented** (per-end support in the table below)
+
+useNavigationGuard: navigation/unload guard — enable/disable a confirm prompt before leaving (wx.enableAlertBeforeUnload/disableAlertBeforeUnload; web beforeunload event)
 
 ## Signature
 

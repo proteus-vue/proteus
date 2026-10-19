@@ -6,9 +6,15 @@ order: 6010
 
 # usePoster
 
-usePoster: share poster — poster generation event (wx.onGeneratePoster; web has no equivalent → empty subscription)
+**What it does**: Compose text, QR codes and images into one poster image.
 
-> Capability primitive C80 · `capability.poster` · returns `PosterAPI` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Share posters, invite cards.
+
+**End support & boundaries**: Web exposes an **empty subscription** only — poster composition **requires** a canvas pipeline that is **missing** on Web; App ends depend on `useCanvas` (planned). Only the WeChat mini program is actually usable today.
+
+> 技术标识：能力原语 C80 · `capability.poster` · 返回 `PosterAPI` · **Hook implemented** (per-end support in the table below)
+
+usePoster: share poster — poster generation event (wx.onGeneratePoster; web has no equivalent → empty subscription)
 
 ## Signature
 

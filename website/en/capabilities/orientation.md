@@ -6,9 +6,13 @@ order: 1008
 
 # useOrientation
 
-Screen orientation (wx.onDeviceOrientationChange / matchMedia / mock)
+**What it does**: Read screen orientation and subscribe to rotation.
 
-> Capability primitive C12 · `capability.orientation` · returns `Orientation` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Fullscreen video, landscape games, adaptive layout.
+
+> 技术标识：能力原语 C12 · `capability.orientation` · 返回 `Orientation` · **Hook implemented** (per-end support in the table below)
+
+Screen orientation (wx.onDeviceOrientationChange / matchMedia / mock)
 
 ## Signature
 

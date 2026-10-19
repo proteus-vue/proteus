@@ -11,6 +11,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { COMP_EN, DOMAIN_EN, MP_STATUS_EN, ENDS_EN, END_NOTE_EN, COMP_LEGEND_EN, SHARED_EN, OVERVIEW_EN, CAP_SHARED_EN, CAP_USAGE_EN, CAP_ARGS_EN, CAP_DATA_HINTS_EN, CAP_METHODS_EN, CAP_EN, CAP_CAT_EN, CAP_OVERVIEW_EN, LIFECYCLE_EVENT_EN, LIFECYCLE_EVENT_NOTE_EN, LIFECYCLE_SRC_EN } from './gen-content-en.mjs'
 // ★决策 #881：App 桥方法集抽取抽成独立模块（锚定式解析 + 符号缺失硬失败）——详见该模块头注释
 import { loadAppBridgeKeysFrom } from './lib/app-bridge-keys.mjs'
+import { capabilityIntro, assertGuideCoverage } from './lib/capability-docs.mjs'   // ★#1084 人话描述 + 端边界
 import { appEndStatus } from './lib/harmony-host-keys.mjs'
 // ★hook→桥方法引用抽取同法抽成独立模块（锚定式 + 硬失败）；三条契约共用 lib/ts-source-scan.mjs 原语
 import { extractHookBridgeRefs, HOOK_FACTORY } from './lib/hook-bridge-refs.mjs'
@@ -1802,12 +1803,11 @@ function genCapabilities(ir, ends) {
     lines.push('')
     lines.push(`# ${hook}`)
     lines.push('')
+    lines.push(...capabilityIntro(c, { en: false }))   // ★#1084 先答"能做什么"，技术标识行后移
     if (doc) {
       lines.push(doc)
       lines.push('')
     }
-    lines.push(`> 能力原语 ${c.id} · \`${c.semantic}\` · 返回 \`${(c.props ?? [])[0] ?? 'Result<T>'}\` · **Hook 已实现**（API 就绪，双端桥见下表）`)
-    lines.push('')
     lines.push('## 签名')
     lines.push('')
     lines.push('```ts')
@@ -2357,9 +2357,9 @@ async function genCapabilitiesEn(ir, ends) {
     lines.push('')
     lines.push(`# ${hook}`)
     lines.push('')
+    // ★★★决策 #1084：EN 与 zh 结构对称——先答"what it does"，技术标识行后移
+    lines.push(...capabilityIntro(c, { en: true }))
     lines.push(page.desc || CAP_SHARED_EN.noDataGeneric)
-    lines.push('')
-    lines.push(CAP_SHARED_EN.callout(c.id, c.semantic, (c.props ?? [])[0] ?? 'Result<T>'))
     lines.push('')
     lines.push(CAP_SHARED_EN.hSignature)
     lines.push('')

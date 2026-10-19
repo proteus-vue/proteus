@@ -6,9 +6,15 @@ order: 7011
 
 # useWindow
 
-★C74 useWindow：窗口（wx.setWindowSize；web 缺省 → Err）
+**它能做什么**：调整窗口尺寸/层级（分屏、悬浮窗场景）。
 
-> 能力原语 C74 · `capability.window` · 返回 `WindowAPI` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：平板分屏、悬浮播放。
+
+**端实现边界**：App 端为**全屏单窗口**应用：只能读尺寸，**不能**程序化改窗口大小（分屏由系统控制）。
+
+> 技术标识：能力原语 C74 · `capability.window` · 返回 `WindowAPI` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+★C74 useWindow：窗口（wx.setWindowSize；web 缺省 → Err）
 
 ## 签名
 

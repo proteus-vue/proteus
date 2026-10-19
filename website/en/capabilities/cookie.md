@@ -6,9 +6,13 @@ order: 2002
 
 # useCookie
 
-useCookie: cookie jar (web document.cookie / wx storage fallback)
+**What it does**: Read and write HTTP cookies.
 
-> Capability primitive C32 · `capability.cookie` · returns `CookieJar` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Keeping web-view sessions.
+
+> 技术标识：能力原语 C32 · `capability.cookie` · 返回 `CookieJar` · **Hook implemented** (per-end support in the table below)
+
+useCookie: cookie jar (web document.cookie / wx storage fallback)
 
 ## Signature
 

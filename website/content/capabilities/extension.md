@@ -6,9 +6,15 @@ order: 7006
 
 # useExtension
 
-useExtension：扩展/插件（G-21 扩展点——宿主 loadPlugin 桥；缺省 Err）
+**它能做什么**：加载宿主提供的扩展/插件能力。
 
-> 能力原语 C50 · `capability.extension` · 返回 `ExtensionAPI` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：宿主注入的业务扩展点。
+
+**端实现边界**：iOS **禁止**动态加载第三方代码（App Store 政策）；Android/鸿蒙可用宿主侧注册表实现。
+
+> 技术标识：能力原语 C50 · `capability.extension` · 返回 `ExtensionAPI` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+useExtension：扩展/插件（G-21 扩展点——宿主 loadPlugin 桥；缺省 Err）
 
 ## 签名
 

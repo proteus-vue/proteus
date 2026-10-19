@@ -6,9 +6,13 @@ order: 8002
 
 # useLog
 
-useLog: log handle (console + reporting)
+**What it does**: Emit unified logs, optionally uploaded.
 
-> Capability primitive C35 · `capability.log` · returns `Logger` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Production troubleshooting.
+
+> 技术标识：能力原语 C35 · `capability.log` · 返回 `Logger` · **Hook implemented** (per-end support in the table below)
+
+useLog: log handle (console + reporting)
 
 ## Signature
 

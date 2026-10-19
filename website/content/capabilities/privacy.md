@@ -6,9 +6,15 @@ order: 5009
 
 # usePrivacy
 
-★C65 usePrivacy：隐私协议句柄（wx.getPrivacySetting/openPrivacyContract/requirePrivacyAuthorize；web 缺省 → Err）
+**它能做什么**：查询并引导用户同意隐私协议。
 
-> 能力原语 C65 · `capability.privacy` · 返回 `PrivacyAPI` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：首次启动的隐私弹窗。
+
+**端实现边界**：隐私授权是平台合规流程（小程序/App 商店要求）；Web 无对等，返回 `unsupported`。
+
+> 技术标识：能力原语 C65 · `capability.privacy` · 返回 `PrivacyAPI` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+★C65 usePrivacy：隐私协议句柄（wx.getPrivacySetting/openPrivacyContract/requirePrivacyAuthorize；web 缺省 → Err）
 
 ## 签名
 

@@ -6,9 +6,15 @@ order: 11
 
 # useLocalService
 
-useLocalService: LAN service discovery (mDNS) — found / lost / resolve-fail / discovery-stop events (wx.onLocalService*; web has no standard mDNS → empty subscription)
+**What it does**: Discover or advertise services on the local network (mDNS).
 
-> Capability primitive C78 · `capability.local-service` · returns `LocalServiceAPI` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Finding printers or cast devices on the same Wi-Fi.
+
+**End support & boundaries**: mDNS local discovery is only provided by the WeChat mini program; Web and all App ends have no standard implementation. On App ends use `useSocket` for broadcast-based discovery.
+
+> 技术标识：能力原语 C78 · `capability.local-service` · 返回 `LocalServiceAPI` · **Hook implemented** (per-end support in the table below)
+
+useLocalService: LAN service discovery (mDNS) — found / lost / resolve-fail / discovery-stop events (wx.onLocalService*; web has no standard mDNS → empty subscription)
 
 ## Signature
 

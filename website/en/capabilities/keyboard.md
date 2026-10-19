@@ -6,9 +6,13 @@ order: 1010
 
 # useKeyboard
 
-useKeyboard: keyboard lifecycle handle (wx.onKeyboardHeightChange / web visualViewport)
+**What it does**: Get the software keyboard height and visibility.
 
-> Capability primitive C14 · `capability.keyboard` · returns `KeyboardInfo` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Keeping inputs visible, pushing chat bars up.
+
+> 技术标识：能力原语 C14 · `capability.keyboard` · 返回 `KeyboardInfo` · **Hook implemented** (per-end support in the table below)
+
+useKeyboard: keyboard lifecycle handle (wx.onKeyboardHeightChange / web visualViewport)
 
 ## Signature
 

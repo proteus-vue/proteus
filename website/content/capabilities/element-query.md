@@ -6,9 +6,15 @@ order: 1012
 
 # useElement
 
-★C58 useElement：元素查询句柄（wx.createSelectorQuery / web querySelector + getBoundingClientRect）
+**它能做什么**：按选择器查页面元素的实际位置与尺寸。
 
-> 能力原语 C58 · `capability.element-query` · 返回 `ElementQuery` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：做锚点定位、测量布局、引导浮层对齐元素。
+
+**端实现边界**：App 端**只支持 `#id` / `.class` / `tag` / 复合 / 后代 / `>` / 选择器列表 / `[attr]`**；兄弟（`+` `~`）、伪类、伪元素、属性运算符（`^=` 等）返回 `unsupported`（**原因**：自绘树没有兄弟序与 CSS 引擎语义；不做近似匹配）。动态 `:id`/`:class`/`:data-*` 在编译期产诊断，这类节点**查不到**。
+
+> 技术标识：能力原语 C58 · `capability.element-query` · 返回 `ElementQuery` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+★C58 useElement：元素查询句柄（wx.createSelectorQuery / web querySelector + getBoundingClientRect）
 
 ## 签名
 

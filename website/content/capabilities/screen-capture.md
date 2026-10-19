@@ -6,9 +6,15 @@ order: 1015
 
 # useScreenCapture
 
-★C71 useScreenCapture：录屏/截屏（wx.getScreenRecordingState/onScreenRecordingStateChanged/onUserCaptureScreen/checkIsPictureInPictureActive）
+**它能做什么**：查询设备是否正在被录屏/投屏，以及用户是否刚刚截屏；部分端可查画中画。
 
-> 能力原语 C71 · `capability.screen-capture` · 返回 `ScreenCaptureAPI` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：隐私提示、截屏分享引导、防录屏水印。
+
+**端实现边界**：各端能查的字段**不同**（逐方法独立分档，查不了返回 `unsupported`、**不伪造 false**）：Android 无公开录屏查询（仅 API 34+ 本人窗口截屏回调 + 本应用画中画）；iOS 有 `UIScreen.isCaptured` 与截屏通知、**无全局画中画查询**；鸿蒙三项都支持但读数来自**渲染时刻快照**（延迟 = 一次渲染间隔），且**无用户截屏事件**。
+
+> 技术标识：能力原语 C71 · `capability.screen-capture` · 返回 `ScreenCaptureAPI` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+★C71 useScreenCapture：录屏/截屏（wx.getScreenRecordingState/onScreenRecordingStateChanged/onUserCaptureScreen/checkIsPictureInPictureActive）
 
 ## 签名
 

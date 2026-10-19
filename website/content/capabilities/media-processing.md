@@ -6,9 +6,13 @@ order: 4011
 
 # useMediaProcessing
 
-★C70 useMediaProcessing：媒体高级（wx.createMediaContainer/createVideoDecoder/createMediaAudioPlayer）
+**它能做什么**：封装媒体文件、解码视频、处理音视频轨道。
 
-> 能力原语 C70 · `capability.media-processing` · 返回 `MediaProcessingAPI` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：视频压缩转封装、抽帧。
+
+> 技术标识：能力原语 C70 · `capability.media-processing` · 返回 `MediaProcessingAPI` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+★C70 useMediaProcessing：媒体高级（wx.createMediaContainer/createVideoDecoder/createMediaAudioPlayer）
 
 ## 签名
 

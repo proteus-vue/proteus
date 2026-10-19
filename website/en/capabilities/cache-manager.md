@@ -6,9 +6,15 @@ order: 1016
 
 # useCacheManager
 
-useCacheManager: HTTP request cache manager — add/delete rules, start/stop, delete/clear caches, events (wx.createCacheManager; web has no equivalent → throws, use Service Worker / Cache Storage)
+**What it does**: Configure HTTP caching rules (max-age, weak-network policy) and clear cache.
 
-> Capability primitive C72 · `capability.cache-manager` · returns `CacheManagerHandle` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Offline support, weak-network speed-up, per-origin cache clearing.
+
+**End support & boundaries**: No App-end equivalent (HTTP caching is owned by each platform network stack); all three App ends return `unsupported`. For offline needs, use `useStorage` / `useFileSystem` with your own ETag strategy.
+
+> 技术标识：能力原语 C72 · `capability.cache-manager` · 返回 `CacheManagerHandle` · **Hook implemented** (per-end support in the table below)
+
+useCacheManager: HTTP request cache manager — add/delete rules, start/stop, delete/clear caches, events (wx.createCacheManager; web has no equivalent → throws, use Service Worker / Cache Storage)
 
 ## Signature
 

@@ -6,9 +6,15 @@ order: 6001
 
 # useNotification
 
-useNotification：消息订阅授权（wx.requestSubscribeMessage / web Notification）
+**它能做什么**：申请订阅消息/推送通知。
 
-> 能力原语 C17 · `capability.notification` · 返回 `NotificationAPI` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：订单状态提醒、营销触达。
+
+**端实现边界**：小程序为"订阅消息"（需用户每次授权、次数受限）；App 需先申请系统通知权限；Web 走 Notification API 且需用户手势。
+
+> 技术标识：能力原语 C17 · `capability.notification` · 返回 `NotificationAPI` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+useNotification：消息订阅授权（wx.requestSubscribeMessage / web Notification）
 
 ## 签名
 

@@ -6,9 +6,15 @@ order: 6009
 
 # useTranslation
 
-★C79 useTranslation：翻译（wx.onUserTriggerTranslation/onUserOffTranslation；web 空订阅）
+**它能做什么**：触发系统翻译（用户主动翻译页面文字）。
 
-> 能力原语 C79 · `capability.translation` · 返回 `TranslationAPI` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：多语言页面、跨境内容。
+
+**端实现边界**：Web 端**只有空订阅**（无标准翻译触发 API——`Translation` 实验特性未普及）：订阅后**永远收不到回调**，平台标记为可用但实际不工作。App 三端未接线。需要翻译请自行调翻译服务。
+
+> 技术标识：能力原语 C79 · `capability.translation` · 返回 `TranslationAPI` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+★C79 useTranslation：翻译（wx.onUserTriggerTranslation/onUserOffTranslation；web 空订阅）
 
 ## 签名
 

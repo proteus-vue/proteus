@@ -6,9 +6,13 @@ order: 4008
 
 # useAudio
 
-★C62 useAudio：音频控制器（wx.createInnerAudioContext / web Audio）
+**它能做什么**：播放音频，并控制播放、暂停、进度与音量。
 
-> 能力原语 C62 · `capability.audio` · 返回 `AudioController` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：背景音乐、语音播报。
+
+> 技术标识：能力原语 C62 · `capability.audio` · 返回 `AudioController` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+★C62 useAudio：音频控制器（wx.createInnerAudioContext / web Audio）
 
 ## 签名
 

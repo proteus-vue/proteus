@@ -6,9 +6,13 @@ order: 4010
 
 # useImageEdit
 
-★C68 useImageEdit：图像编辑句柄（wx.cropImage/editImage；web 缺省 → Err）
+**它能做什么**：裁剪、旋转、编辑图片。
 
-> 能力原语 C68 · `capability.image-edit` · 返回 `ImageEditAPI` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：头像裁剪、海报二次编辑。
+
+> 技术标识：能力原语 C68 · `capability.image-edit` · 返回 `ImageEditAPI` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+★C68 useImageEdit：图像编辑句柄（wx.cropImage/editImage；web 缺省 → Err）
 
 ## 签名
 

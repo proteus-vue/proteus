@@ -6,9 +6,13 @@ order: 1006
 
 # useScreen
 
-屏幕（wx.getSystemInfo / window.screen + matchMedia / mock）
+**它能做什么**：读屏幕宽高与像素密度。
 
-> 能力原语 C10 · `capability.screen` · 返回 `ScreenInfo` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：自适应布局、按机型调整。
+
+> 技术标识：能力原语 C10 · `capability.screen` · 返回 `ScreenInfo` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+屏幕（wx.getSystemInfo / window.screen + matchMedia / mock）
 
 ## 签名
 

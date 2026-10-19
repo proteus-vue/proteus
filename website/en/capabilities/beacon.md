@@ -6,9 +6,15 @@ order: 1018
 
 # useBeacon
 
-useBeacon: iBeacon — service state change + device update events (wx.onBeaconServiceChange/onBeaconUpdate; web has no equivalent → empty subscription, use Web Bluetooth)
+**What it does**: Scan nearby iBeacon BLE beacons and read their identifiers and signal strength to estimate proximity.
 
-> Capability primitive C77 · `capability.beacon` · returns `BeaconAPI` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Indoor positioning, proximity prompts, museum audio guides, venue check-in — when GPS is not accurate indoors.
+
+**End support & boundaries**: **Contract is incomplete today**: only the two subscriptions are exposed; `startBeaconDiscovery`/`stopBeaconDiscovery` are missing — without starting discovery WeChat never emits updates (error 11004). No App-end iBeacon scanning is implemented.
+
+> 技术标识：能力原语 C77 · `capability.beacon` · 返回 `BeaconAPI` · **Hook implemented** (per-end support in the table below)
+
+useBeacon: iBeacon — service state change + device update events (wx.onBeaconServiceChange/onBeaconUpdate; web has no equivalent → empty subscription, use Web Bluetooth)
 
 ## Signature
 

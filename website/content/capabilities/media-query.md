@@ -6,9 +6,13 @@ order: 1014
 
 # useMediaQuery
 
-★C60 useMediaQuery：媒体查询句柄（wx.createMediaQueryObserver / web matchMedia）
+**它能做什么**：按屏幕尺寸等条件监听"当前是哪种布局断点"。
 
-> 能力原语 C60 · `capability.media-query` · 返回 `MediaQueryObserver` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：响应式布局、平板/手机不同排版。
+
+> 技术标识：能力原语 C60 · `capability.media-query` · 返回 `MediaQueryObserver` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+★C60 useMediaQuery：媒体查询句柄（wx.createMediaQueryObserver / web matchMedia）
 
 ## 签名
 

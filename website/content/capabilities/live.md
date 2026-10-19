@@ -6,9 +6,15 @@ order: 4004
 
 # useLive
 
-useLive：直播房间（wx live 组件形态/宿主桥——缺省 Err）
+**它能做什么**：嵌入直播间（观看与互动）。
 
-> 能力原语 C49 · `capability.live` · 返回 `LiveRoom` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：电商带货、活动观看。
+
+**端实现边界**：仅小程序提供直播组件；App 端需自行接入第三方直播 SDK。
+
+> 技术标识：能力原语 C49 · `capability.live` · 返回 `LiveRoom` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+useLive：直播房间（wx live 组件形态/宿主桥——缺省 Err）
 
 ## 签名
 

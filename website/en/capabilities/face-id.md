@@ -6,9 +6,15 @@ order: 5004
 
 # useFaceID
 
-useFaceID: facial recognition authentication (wx startSoterAuthentication facial / web WebAuthn)
+**What it does**: Face recognition with liveness detection.
 
-> Capability primitive C39 · `capability.face-id` · returns `Result<boolean>` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Identity verification, face-access control.
+
+**End support & boundaries**: Liveness detection depends on platform capability (iOS Face ID / Android vendor biometrics); no Web equivalent.
+
+> 技术标识：能力原语 C39 · `capability.face-id` · 返回 `Result<boolean>` · **Hook implemented** (per-end support in the table below)
+
+useFaceID: facial recognition authentication (wx startSoterAuthentication facial / web WebAuthn)
 
 ## Signature
 

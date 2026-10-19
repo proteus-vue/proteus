@@ -6,9 +6,15 @@ order: 1020
 
 # useKeepScreenOn
 
-useKeepScreenOn: keep the screen awake (mini program wx.setKeepScreenOn; Web Screen Wake Lock API). ★Web requires a visible page and a secure context — the system releases the lock automatically when the page is hidden, so call it again on visibility resume. Repeated calls are idempotent (on→on does not re-acquire; off→off does not re-release).
+**What it does**: Keep the screen awake (prevent auto-lock).
 
-> Capability primitive C83 · `capability.keep-screen-on` · returns `KeepScreenOnState` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Watching video, following a recipe, navigation.
+
+**End support & boundaries**: Web **requires** the Screen Wake Lock API and a visible page (**限制**: no background wake lock); App ends use the platform keep-awake flag.
+
+> 技术标识：能力原语 C83 · `capability.keep-screen-on` · 返回 `KeepScreenOnState` · **Hook implemented** (per-end support in the table below)
+
+useKeepScreenOn: keep the screen awake (mini program wx.setKeepScreenOn; Web Screen Wake Lock API). ★Web requires a visible page and a secure context — the system releases the lock automatically when the page is hidden, so call it again on visibility resume. Repeated calls are idempotent (on→on does not re-acquire; off→off does not re-release).
 
 ## Signature
 

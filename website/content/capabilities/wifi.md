@@ -6,9 +6,13 @@ order: 9
 
 # useWifi
 
-★C55 useWifi：WiFi 句柄（wx.getConnectedWifi/getWifiList/connectWifi；web 无标准 → Err）
+**它能做什么**：读当前 WiFi 信息，或连接指定 WiFi。
 
-> 能力原语 C55 · `capability.wifi` · 返回 `WifiAPI` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：配网、门店 WiFi 引导。
+
+> 技术标识：能力原语 C55 · `capability.wifi` · 返回 `WifiAPI` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+★C55 useWifi：WiFi 句柄（wx.getConnectedWifi/getWifiList/connectWifi；web 无标准 → Err）
 
 ## 签名
 

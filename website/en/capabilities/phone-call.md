@@ -6,9 +6,13 @@ order: 6005
 
 # usePhoneCall
 
-usePhoneCall: Make a phone call
+**What it does**: Place a phone call.
 
-> Capability primitive C21 · `capability.phone-call` · returns `Result<void>` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Calling support, emergency dial.
+
+> 技术标识：能力原语 C21 · `capability.phone-call` · 返回 `Result<void>` · **Hook implemented** (per-end support in the table below)
+
+usePhoneCall: Make a phone call
 
 ## Signature
 

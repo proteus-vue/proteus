@@ -6,9 +6,13 @@ order: 4003
 
 # useQRCode
 
-useQRCode: scan a QR code (wx.scanCode; web needs a camera capture source → Err fallback)
+**What it does**: Scan QR/barcodes, or generate QR codes.
 
-> Capability primitive C42 · `capability.qr-code` · returns `Result<string>` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Scan-to-login, scan-to-pay, share codes.
+
+> 技术标识：能力原语 C42 · `capability.qr-code` · 返回 `Result<string>` · **Hook implemented** (per-end support in the table below)
+
+useQRCode: scan a QR code (wx.scanCode; web needs a camera capture source → Err fallback)
 
 ## Signature
 

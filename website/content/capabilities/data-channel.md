@@ -6,9 +6,15 @@ order: 6
 
 # useDataChannel
 
-useDataChannel：数据通道（直播/实时——宿主桥接；缺省 Err 诚实降级）
+**它能做什么**：在直播/实时场景里传小数据（连麦状态、信令）。
 
-> 能力原语 C31 · `capability.data-channel` · 返回 `Channel` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：直播间连麦、实时投票。
+
+**端实现边界**：仅直播/实时容器内有意义（微信直播组件）；其他端无载体。
+
+> 技术标识：能力原语 C31 · `capability.data-channel` · 返回 `Channel` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+useDataChannel：数据通道（直播/实时——宿主桥接；缺省 Err 诚实降级）
 
 ## 签名
 

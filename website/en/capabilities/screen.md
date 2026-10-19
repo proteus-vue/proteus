@@ -6,9 +6,13 @@ order: 1006
 
 # useScreen
 
-Screen (wx.getSystemInfo / window.screen + matchMedia / mock)
+**What it does**: Read screen size and pixel density.
 
-> Capability primitive C10 · `capability.screen` · returns `ScreenInfo` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Adaptive layout, per-device tuning.
+
+> 技术标识：能力原语 C10 · `capability.screen` · 返回 `ScreenInfo` · **Hook implemented** (per-end support in the table below)
+
+Screen (wx.getSystemInfo / window.screen + matchMedia / mock)
 
 ## Signature
 

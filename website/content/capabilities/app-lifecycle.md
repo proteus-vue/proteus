@@ -6,9 +6,13 @@ order: 7001
 
 # useAppLifecycle
 
-useAppLifecycle：应用生命周期订阅句柄（wx App 钩子 / web visibilitychange+load）
+**它能做什么**：监听 App 进入前台/后台/启动。
 
-> 能力原语 C23 · `capability.app-lifecycle` · 返回 `LifecycleHooks` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：前后台暂停任务、回到前台刷新。
+
+> 技术标识：能力原语 C23 · `capability.app-lifecycle` · 返回 `LifecycleHooks` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+useAppLifecycle：应用生命周期订阅句柄（wx App 钩子 / web visibilitychange+load）
 
 ## 签名
 

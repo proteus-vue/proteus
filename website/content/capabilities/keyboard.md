@@ -6,9 +6,13 @@ order: 1010
 
 # useKeyboard
 
-useKeyboard：键盘生命周期句柄（wx.onKeyboardHeightChange / web visualViewport）
+**它能做什么**：拿到软键盘弹起的高度与显示状态。
 
-> 能力原语 C14 · `capability.keyboard` · 返回 `KeyboardInfo` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：输入框不被键盘遮挡、聊天输入栏上推。
+
+> 技术标识：能力原语 C14 · `capability.keyboard` · 返回 `KeyboardInfo` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+useKeyboard：键盘生命周期句柄（wx.onKeyboardHeightChange / web visualViewport）
 
 ## 签名
 

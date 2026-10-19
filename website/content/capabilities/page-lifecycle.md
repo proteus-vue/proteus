@@ -6,9 +6,13 @@ order: 7002
 
 # usePageLifecycle
 
-usePageLifecycle：页面生命周期订阅句柄（wx Page 钩子 / web load+visibilitychange）
+**它能做什么**：监听页面加载/显示/隐藏/卸载。
 
-> 能力原语 C24 · `capability.page-lifecycle` · 返回 `LifecycleHooks` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：进入页面拉数据、离开时清理。
+
+> 技术标识：能力原语 C24 · `capability.page-lifecycle` · 返回 `LifecycleHooks` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+usePageLifecycle：页面生命周期订阅句柄（wx Page 钩子 / web load+visibilitychange）
 
 ## 签名
 

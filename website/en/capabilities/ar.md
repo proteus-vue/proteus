@@ -6,9 +6,15 @@ order: 1017
 
 # useAR
 
-useAR: AR/XR vision session — create a VKSession (plane/marker/face/hand/body/depth tracking) + start/stop/events/frame, and query support (wx.createVKSession/isVKSupport; web has no equivalent vision algorithm → Err)
+**What it does**: Overlay virtual objects on the camera feed using spatial tracking.
 
-> Capability primitive C76 · `capability.ar` · returns `ARAPI` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Virtual try-on, furniture preview, AR navigation arrows.
+
+**End support & boundaries**: Requires a platform AR/XR session (WeChat VKSession); App ends are not wired. If you only need camera plus a plane overlay, compose it with `useCamera`.
+
+> 技术标识：能力原语 C76 · `capability.ar` · 返回 `ARAPI` · **Hook implemented** (per-end support in the table below)
+
+useAR: AR/XR vision session — create a VKSession (plane/marker/face/hand/body/depth tracking) + start/stop/events/frame, and query support (wx.createVKSession/isVKSupport; web has no equivalent vision algorithm → Err)
 
 ## Signature
 

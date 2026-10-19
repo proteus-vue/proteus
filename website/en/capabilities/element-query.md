@@ -6,9 +6,15 @@ order: 1012
 
 # useElement
 
-useElement: element query handle — geometry / scroll offset / fields (node/rect/size/computedStyle) / batch (wx.createSelectorQuery; web querySelector + getBoundingClientRect)
+**What it does**: Query an element on-screen position and size by selector.
 
-> Capability primitive C58 · `capability.element-query` · returns `ElementQuery` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Anchoring overlays, measuring layout.
+
+**End support & boundaries**: On App ends only `#id` / `.class` / `tag` / compound / descendant / `>` / selector lists / `[attr]` are supported; sibling combinators, pseudo-classes/elements and attribute operators return `unsupported`. Dynamic `:id`/`:class`/`:data-*` are diagnosed at build time and cannot be queried.
+
+> 技术标识：能力原语 C58 · `capability.element-query` · 返回 `ElementQuery` · **Hook implemented** (per-end support in the table below)
+
+useElement: element query handle — geometry / scroll offset / fields (node/rect/size/computedStyle) / batch (wx.createSelectorQuery; web querySelector + getBoundingClientRect)
 
 ## Signature
 

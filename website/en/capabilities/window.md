@@ -6,9 +6,15 @@ order: 7011
 
 # useWindow
 
-useWindow: window size — setSize for PC (wx.setWindowSize; web has no standard → Err, window.resizeTo is popup-only)
+**What it does**: Adjust window size or layering (split-screen, floating windows).
 
-> Capability primitive C74 · `capability.window` · returns `WindowAPI` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Tablet split view, floating video.
+
+**End support & boundaries**: App ends are full-screen single-window apps: size can be read but not changed programmatically (split view is system-controlled).
+
+> 技术标识：能力原语 C74 · `capability.window` · 返回 `WindowAPI` · **Hook implemented** (per-end support in the table below)
+
+useWindow: window size — setSize for PC (wx.setWindowSize; web has no standard → Err, window.resizeTo is popup-only)
 
 ## Signature
 

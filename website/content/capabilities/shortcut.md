@@ -6,9 +6,13 @@ order: 6007
 
 # useShortcut
 
-useShortcut：添加桌面快捷方式（wx.addToDesktop；web → Err）
+**它能做什么**：把入口添加到桌面。
 
-> 能力原语 C45 · `capability.shortcut` · 返回 `Result<void>` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：高频功能快捷方式。
+
+> 技术标识：能力原语 C45 · `capability.shortcut` · 返回 `Result<void>` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+useShortcut：添加桌面快捷方式（wx.addToDesktop；web → Err）
 
 ## 签名
 

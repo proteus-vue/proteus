@@ -6,9 +6,13 @@ order: 5007
 
 # useInAppPurchase
 
-useInAppPurchase：内购（wx/无公开 API → Err 诚实降级）
+**它能做什么**：走应用商店内购（订阅/消耗型商品）。
 
-> 能力原语 C46 · `capability.in-app-purchase` · 返回 `Result<Receipt>` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：会员订阅、去广告。
+
+> 技术标识：能力原语 C46 · `capability.in-app-purchase` · 返回 `Result<Receipt>` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+useInAppPurchase：内购（wx/无公开 API → Err 诚实降级）
 
 ## 签名
 

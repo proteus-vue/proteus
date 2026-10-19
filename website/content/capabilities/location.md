@@ -6,9 +6,13 @@ order: 3001
 
 # useLocation
 
-位置（wx.getLocation / navigator.geolocation / mock）
+**它能做什么**：拿到用户的经纬度（GPS 或基站定位）。
 
-> 能力原语 C3 · `capability.location` · 返回 `Result<Coords>` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：附近门店、打卡、配送地址。
+
+> 技术标识：能力原语 C3 · `capability.location` · 返回 `Result<Coords>` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+位置（wx.getLocation / navigator.geolocation / mock）
 
 ## 签名
 

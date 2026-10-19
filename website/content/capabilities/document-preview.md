@@ -6,9 +6,13 @@ order: 2005
 
 # useOpenDocument
 
-★NC1 C84 useOpenDocument：文档预览（MP wx.openDocument / Web window.open；Web 下 office 格式通常转为下载——浏览器能力所限）
+**它能做什么**：在应用内预览 PDF/Office 等文档。
 
-> 能力原语 C84 · `capability.document-preview` · 返回 `DocumentPath` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：查看合同、发票、电子票据。
+
+> 技术标识：能力原语 C84 · `capability.document-preview` · 返回 `DocumentPath` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+★NC1 C84 useOpenDocument：文档预览（MP wx.openDocument / Web window.open；Web 下 office 格式通常转为下载——浏览器能力所限）
 
 ## 签名
 

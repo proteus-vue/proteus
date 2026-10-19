@@ -6,9 +6,13 @@ order: 10
 
 # useSocket
 
-useSocket: low-level sockets — UDP (bind/connect/send/write/onMessage) and TCP (connect/write/onMessage/close) (wx.createUDPSocket/createTCPSocket; web browsers do not expose raw UDP/TCP → Err, use WebSocket/WebRTC)
+**What it does**: Send and receive raw bytes over UDP or TCP.
 
-> Capability primitive C69 · `capability.socket` · returns `UDPSocketHandle / TCPSocketHandle` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: IoT device protocols, custom protocols.
+
+> 技术标识：能力原语 C69 · `capability.socket` · 返回 `UDPSocketHandle / TCPSocketHandle` · **Hook implemented** (per-end support in the table below)
+
+useSocket: low-level sockets — UDP (bind/connect/send/write/onMessage) and TCP (connect/write/onMessage/close) (wx.createUDPSocket/createTCPSocket; web browsers do not expose raw UDP/TCP → Err, use WebSocket/WebRTC)
 
 ## Signature
 

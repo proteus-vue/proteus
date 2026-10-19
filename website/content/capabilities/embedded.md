@@ -6,9 +6,13 @@ order: 7005
 
 # useEmbedded
 
-useEmbedded：宿主嵌入上下文（被嵌入场景——宿主桥；缺省 Err）
+**它能做什么**：读"当前被谁嵌入"的宿主上下文。
 
-> 能力原语 C48 · `capability.embedded` · 返回 `HostContext` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：同一份页面嵌进不同 App 时区分来源。
+
+> 技术标识：能力原语 C48 · `capability.embedded` · 返回 `HostContext` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+useEmbedded：宿主嵌入上下文（被嵌入场景——宿主桥；缺省 Err）
 
 ## 签名
 

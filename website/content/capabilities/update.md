@@ -6,9 +6,13 @@ order: 7007
 
 # useUpdate
 
-★C51 小程序热更新管理器（wx.getUpdateManager；web → Err）
+**它能做什么**：检查并应用应用/小程序的版本更新。
 
-> 能力原语 C51 · `capability.update` · 返回 `UpdateManagerAPI` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：强制更新、灰度发布。
+
+> 技术标识：能力原语 C51 · `capability.update` · 返回 `UpdateManagerAPI` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+★C51 小程序热更新管理器（wx.getUpdateManager；web → Err）
 
 ## 签名
 

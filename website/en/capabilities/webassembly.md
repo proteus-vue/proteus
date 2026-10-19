@@ -6,9 +6,13 @@ order: 7013
 
 # useWebAssembly
 
-useWebAssembly: cross-platform WebAssembly — compile / instantiate / validate. ★Three runtime shapes differ substantively (dual-source evidence): mini program uses WXWebAssembly.instantiate(**package path**, .wasm/.wasm.br, base library v2.13.0+, no compile/validate); Web and App-iOS (JavaScriptCore) use the standard WebAssembly (bytes, compile/validate available); App-Android currently has no JS engine → unavailable. Branch on the capability flags (supportsStreaming / supportsPathLoad), never on platform name.
+**What it does**: Load and execute WebAssembly modules.
 
-> Capability primitive C82 · `capability.webassembly` · returns `WebAssemblyAPI` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Heavy computation, reusing C/Rust libraries.
+
+> 技术标识：能力原语 C82 · `capability.webassembly` · 返回 `WebAssemblyAPI` · **Hook implemented** (per-end support in the table below)
+
+useWebAssembly: cross-platform WebAssembly — compile / instantiate / validate. ★Three runtime shapes differ substantively (dual-source evidence): mini program uses WXWebAssembly.instantiate(**package path**, .wasm/.wasm.br, base library v2.13.0+, no compile/validate); Web and App-iOS (JavaScriptCore) use the standard WebAssembly (bytes, compile/validate available); App-Android currently has no JS engine → unavailable. Branch on the capability flags (supportsStreaming / supportsPathLoad), never on platform name.
 
 ## Signature
 

@@ -6,9 +6,15 @@ order: 1013
 
 # useIntersection
 
-useIntersection: intersection observer — relativeTo/relativeToViewport + observe + disconnect (wx.createIntersectionObserver; web IntersectionObserver)
+**What it does**: Observe whether an element enters or leaves the visible area.
 
-> Capability primitive C59 · `capability.intersection` · returns `IntersectionHandle` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Impression tracking, infinite scroll, lazy loading.
+
+**End support & boundaries**: Not supported on App ends: requires frame-level geometry notifications from the render host; geometry is only computed on mount/update today. Works on Web/MP.
+
+> 技术标识：能力原语 C59 · `capability.intersection` · 返回 `IntersectionHandle` · **Hook implemented** (per-end support in the table below)
+
+useIntersection: intersection observer — relativeTo/relativeToViewport + observe + disconnect (wx.createIntersectionObserver; web IntersectionObserver)
 
 ## Signature
 

@@ -6,9 +6,13 @@ order: 5001
 
 # usePermission
 
-usePermission：权限状态（web Permissions API）
+**它能做什么**：查询并申请系统权限（相机、定位、通知等）。
 
-> 能力原语 C16 · `capability.permission` · 返回 `Result<PermissionStatus>` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：首次使用前的授权引导。
+
+> 技术标识：能力原语 C16 · `capability.permission` · 返回 `Result<PermissionStatus>` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+usePermission：权限状态（web Permissions API）
 
 ## 签名
 

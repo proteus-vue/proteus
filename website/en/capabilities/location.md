@@ -6,9 +6,13 @@ order: 3001
 
 # useLocation
 
-Location (wx.getLocation / navigator.geolocation / mock)
+**What it does**: Get the user latitude/longitude from GPS or network positioning.
 
-> Capability primitive C3 · `capability.location` · returns `Result<Coords>` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Nearby stores, check-in, delivery address.
+
+> 技术标识：能力原语 C3 · `capability.location` · 返回 `Result<Coords>` · **Hook implemented** (per-end support in the table below)
+
+Location (wx.getLocation / navigator.geolocation / mock)
 
 ## Signature
 

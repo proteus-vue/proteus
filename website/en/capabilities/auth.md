@@ -6,9 +6,13 @@ order: 5002
 
 # useAuth
 
-useAuth: authentication state composition (token custody + login/logout + subscription) — business code never reads the raw token (iron rule 2)
+**What it does**: Run an authorization flow and obtain a session.
 
-> Capability primitive C33 · `capability.auth` · returns `AuthState` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Phone or third-party sign-in.
+
+> 技术标识：能力原语 C33 · `capability.auth` · 返回 `AuthState` · **Hook implemented** (per-end support in the table below)
+
+useAuth: authentication state composition (token custody + login/logout + subscription) — business code never reads the raw token (iron rule 2)
 
 ## Signature
 

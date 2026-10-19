@@ -6,9 +6,13 @@ order: 1001
 
 # useSensor
 
-useSensor: one-shot sensor read (accelerometer/compass/gyroscope)
+**What it does**: Read accelerometer, gyroscope and compass — once or as a stream.
 
-> Capability primitive C5 · `capability.sensor` · returns `SensorStream` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Shake, step counting, compass, orientation.
+
+> 技术标识：能力原语 C5 · `capability.sensor` · 返回 `SensorStream` · **Hook implemented** (per-end support in the table below)
+
+useSensor: one-shot sensor read (accelerometer/compass/gyroscope)
 
 ## Signature
 

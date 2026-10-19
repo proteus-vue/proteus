@@ -6,9 +6,15 @@ order: 1011
 
 # useWeRun
 
-useWeRun: WeChat Sports data (wx.getWeRunData — encrypted; the business backend must decrypt)
+**What it does**: Read WeRun step data.
 
-> Capability primitive C56 · `capability.we-run` · returns `WeRunData` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Step leaderboards, step-to-reward.
+
+**End support & boundaries**: Provided only by the WeChat mini program; no equivalent data source elsewhere.
+
+> 技术标识：能力原语 C56 · `capability.we-run` · 返回 `WeRunData` · **Hook implemented** (per-end support in the table below)
+
+useWeRun: WeChat Sports data (wx.getWeRunData — encrypted; the business backend must decrypt)
 
 ## Signature
 

@@ -6,9 +6,13 @@ order: 1007
 
 # useDevice
 
-Device (wx.getSystemInfo / navigator.userAgent / mock)
+**What it does**: Read device model and OS version info.
 
-> Capability primitive C11 · `capability.device` · returns `DeviceInfo` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Troubleshooting, per-device compatibility.
+
+> 技术标识：能力原语 C11 · `capability.device` · 返回 `DeviceInfo` · **Hook implemented** (per-end support in the table below)
+
+Device (wx.getSystemInfo / navigator.userAgent / mock)
 
 ## Signature
 

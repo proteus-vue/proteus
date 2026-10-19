@@ -6,9 +6,15 @@ order: 7003
 
 # useBackground
 
-useBackground：后台/前台切换订阅（wx onAppHide/onAppShow / web visibilitychange）
+**它能做什么**：申请后台继续运行一段时间。
 
-> 能力原语 C25 · `capability.background` · 返回 `BackgroundAPI` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：上传大文件、定位上报。
+
+**端实现边界**：后台执行时长由系统决定并随时可被回收；iOS 需声明 `UIBackgroundModes`，Android 需前台服务。不要把它当保证。
+
+> 技术标识：能力原语 C25 · `capability.background` · 返回 `BackgroundAPI` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+useBackground：后台/前台切换订阅（wx onAppHide/onAppShow / web visibilitychange）
 
 ## 签名
 

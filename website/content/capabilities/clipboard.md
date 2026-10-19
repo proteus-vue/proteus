@@ -6,9 +6,13 @@ order: 1005
 
 # useClipboard
 
-剪贴板（wx.getClipboardData / navigator.clipboard.readText / mock）
+**它能做什么**：读剪贴板文字，或把文字写进剪贴板。
 
-> 能力原语 C9 · `capability.clipboard` · 返回 `Result<string>` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：复制邀请码、粘贴地址。
+
+> 技术标识：能力原语 C9 · `capability.clipboard` · 返回 `Result<string>` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+剪贴板（wx.getClipboardData / navigator.clipboard.readText / mock）
 
 ## 签名
 

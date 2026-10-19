@@ -6,9 +6,13 @@ order: 2001
 
 # useStorage
 
-useStorage: storage handle (see createReactiveStorage for the reactive enhancement)
+**What it does**: Persist key-value data locally.
 
-> Capability primitive C15 · `capability.storage` · returns `StorageAPI` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Sessions, drafts, user preferences.
+
+> 技术标识：能力原语 C15 · `capability.storage` · 返回 `StorageAPI` · **Hook implemented** (per-end support in the table below)
+
+useStorage: storage handle (see createReactiveStorage for the reactive enhancement)
 
 ## Signature
 

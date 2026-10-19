@@ -6,9 +6,13 @@ order: 4007
 
 # useVideo
 
-useVideo: video component instance — play/pause/stop/seek/playbackRate/fullscreen/danmu + events (wx.createVideoContext; web HTMLVideoElement)
+**What it does**: Play video with control over progress, volume and fullscreen.
 
-> Capability primitive C61 · `capability.video` · returns `VideoController` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Course videos, product videos.
+
+> 技术标识：能力原语 C61 · `capability.video` · 返回 `VideoController` · **Hook implemented** (per-end support in the table below)
+
+useVideo: video component instance — play/pause/stop/seek/playbackRate/fullscreen/danmu + events (wx.createVideoContext; web HTMLVideoElement)
 
 ## Signature
 

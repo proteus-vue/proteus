@@ -6,9 +6,13 @@ order: 1009
 
 # useBrightness
 
-useBrightness: read the current brightness (0-1)
+**What it does**: Read or set the screen brightness.
 
-> Capability primitive C13 · `capability.brightness` · returns `Result<void>` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Night mode, brightening for QR scanning.
+
+> 技术标识：能力原语 C13 · `capability.brightness` · 返回 `Result<void>` · **Hook implemented** (per-end support in the table below)
+
+useBrightness: read the current brightness (0-1)
 
 ## Signature
 

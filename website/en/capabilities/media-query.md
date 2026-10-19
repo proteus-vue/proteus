@@ -6,9 +6,13 @@ order: 1014
 
 # useMediaQuery
 
-useMediaQuery: media query observer — observe width/height/orientation conditions + disconnect (wx.createMediaQueryObserver; web matchMedia)
+**What it does**: Watch responsive breakpoints such as screen width.
 
-> Capability primitive C60 · `capability.media-query` · returns `MediaQueryObserver` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Responsive layout for phone vs tablet.
+
+> 技术标识：能力原语 C60 · `capability.media-query` · 返回 `MediaQueryObserver` · **Hook implemented** (per-end support in the table below)
+
+useMediaQuery: media query observer — observe width/height/orientation conditions + disconnect (wx.createMediaQueryObserver; web matchMedia)
 
 ## Signature
 

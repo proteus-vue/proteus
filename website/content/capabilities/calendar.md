@@ -6,9 +6,13 @@ order: 6004
 
 # useCalendar
 
-useCalendar：添加日历事件（wx.addPhoneCalendar；web → Err）
+**它能做什么**：往系统日历添加日程。
 
-> 能力原语 C20 · `capability.calendar` · 返回 `CalendarAPI` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：课程表、活动提醒。
+
+> 技术标识：能力原语 C20 · `capability.calendar` · 返回 `CalendarAPI` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+useCalendar：添加日历事件（wx.addPhoneCalendar；web → Err）
 
 ## 签名
 

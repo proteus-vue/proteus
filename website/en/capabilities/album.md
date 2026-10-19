@@ -6,9 +6,13 @@ order: 4005
 
 # useAlbum
 
-useAlbum: album handle — pick media + save to the system album + preview (wx.chooseMedia/saveImageToPhotosAlbum/previewMedia; web <input type=file>)
+**What it does**: Pick images/videos from the album, or save images to it.
 
-> Capability primitive C52 · `capability.album` · returns `AlbumAPI` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Avatar upload, sharing photos, saving generated images.
+
+> 技术标识：能力原语 C52 · `capability.album` · 返回 `AlbumAPI` · **Hook implemented** (per-end support in the table below)
+
+useAlbum: album handle — pick media + save to the system album + preview (wx.chooseMedia/saveImageToPhotosAlbum/previewMedia; web <input type=file>)
 
 ## Signature
 

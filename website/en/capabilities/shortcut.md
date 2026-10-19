@@ -6,9 +6,13 @@ order: 6007
 
 # useShortcut
 
-useShortcut: Add a desktop shortcut (wx.addToDesktop; web → Err)
+**What it does**: Add a home-screen shortcut.
 
-> Capability primitive C45 · `capability.shortcut` · returns `Result<void>` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Quick access to frequent features.
+
+> 技术标识：能力原语 C45 · `capability.shortcut` · 返回 `Result<void>` · **Hook implemented** (per-end support in the table below)
+
+useShortcut: Add a desktop shortcut (wx.addToDesktop; web → Err)
 
 ## Signature
 

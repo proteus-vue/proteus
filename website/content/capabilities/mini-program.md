@@ -6,9 +6,15 @@ order: 7004
 
 # useMiniProgram
 
-useMiniProgram：跳小程序（wx.navigateToMiniProgram / web → Err）
+**它能做什么**：跳转到另一个小程序/应用。
 
-> 能力原语 C47 · `capability.mini-program` · 返回 `MPContext` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：跳合作方小程序、打开地图导航。
+
+**端实现边界**：iOS **无小程序概念**（只能 URL Scheme / Universal Link 跳转）；Android 视宿主而定。
+
+> 技术标识：能力原语 C47 · `capability.mini-program` · 返回 `MPContext` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+useMiniProgram：跳小程序（wx.navigateToMiniProgram / web → Err）
 
 ## 签名
 

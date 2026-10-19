@@ -6,11 +6,15 @@ order: 7013
 
 # useWebAssembly
 
+**它能做什么**：加载并执行 WebAssembly 模块。
+
+**什么时候用**：跑高性能计算、复用 C/Rust 库。
+
+> 技术标识：能力原语 C82 · `capability.webassembly` · 返回 `WebAssemblyAPI` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
 ★C82 WebAssembly：跨端归一（MP `WXWebAssembly` 收路径 · Web/iOS-JSC 走标准 API ·
 Android 走宿主 wasm3）。用 `supportsStreaming`/`supportsPathLoad` 判断，**不要按平台名分支**。
 三端真实形态详见 `WebAssemblyAPI` 类型头（已取证 + 真机验证）。
-
-> 能力原语 C82 · `capability.webassembly` · 返回 `WebAssemblyAPI` · **Hook 已实现**（API 就绪，双端桥见下表）
 
 ## 签名
 

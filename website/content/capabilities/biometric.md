@@ -6,9 +6,15 @@ order: 5003
 
 # useBiometric
 
-useBiometric：生物识别支持性检测
+**它能做什么**：调指纹/人脸做本机身份校验。
 
-> 能力原语 C38 · `capability.biometric` · 返回 `Result<boolean>` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：支付确认、敏感操作二次验证。
+
+**端实现边界**：仅"本机校验"（指纹/面容）——**不是**服务端可验证的凭据；需要服务端确认时请与自有鉴权组合。
+
+> 技术标识：能力原语 C38 · `capability.biometric` · 返回 `Result<boolean>` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+useBiometric：生物识别支持性检测
 
 ## 签名
 

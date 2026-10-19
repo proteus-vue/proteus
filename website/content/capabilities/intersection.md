@@ -6,9 +6,15 @@ order: 1013
 
 # useIntersection
 
-★C59 useIntersection：交叉观察句柄（wx.createIntersectionObserver / web IntersectionObserver）
+**它能做什么**：监听元素是否进入/离开可视区域。
 
-> 能力原语 C59 · `capability.intersection` · 返回 `IntersectionHandle` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：曝光统计、上拉加载更多、懒加载。
+
+**端实现边界**：App 三端**如实不支持**：需要渲染宿主的帧级几何变化通知，当前只在挂载/增量时算几何 ⇒ 无法持续观察。Web/MP 可用。
+
+> 技术标识：能力原语 C59 · `capability.intersection` · 返回 `IntersectionHandle` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+★C59 useIntersection：交叉观察句柄（wx.createIntersectionObserver / web IntersectionObserver）
 
 ## 签名
 

@@ -6,9 +6,13 @@ order: 2
 
 # useWebSocket
 
-useWebSocket：WebSocket 连接句柄（wx.connectSocket / web WebSocket）
+**它能做什么**：和服务器建立长连接，双向实时收发消息。
 
-> 能力原语 C27 · `capability.websocket` · 返回 `WSConnection` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：聊天、实时协作、行情推送。
+
+> 技术标识：能力原语 C27 · `capability.websocket` · 返回 `WSConnection` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+useWebSocket：WebSocket 连接句柄（wx.connectSocket / web WebSocket）
 
 ## 签名
 

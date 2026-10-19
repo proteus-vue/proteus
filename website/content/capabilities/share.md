@@ -6,9 +6,13 @@ order: 6002
 
 # useShare
 
-通知/分享（wx.shareAppMessage / navigator.share / mock）
+**它能做什么**：把内容分享到微信好友/朋友圈等渠道。
 
-> 能力原语 C18 · `capability.share` · 返回 `Result<void>` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：邀请好友、分享商品。
+
+> 技术标识：能力原语 C18 · `capability.share` · 返回 `Result<void>` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+通知/分享（wx.shareAppMessage / navigator.share / mock）
 
 ## 签名
 

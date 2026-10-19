@@ -1932,6 +1932,25 @@
         "T-app-element-selector-web-parity"
       ],
       "note": "【done · 决策 #1083（2026-10-19）】设备域剩 4 项里选 C71——只有它三端都有真实 API，且核心是\"能不能说真话\"。\n【实测 API 面（先取证）】鸿蒙最全（display.isCaptured + captureStatusChange + PiPWindow.isPiPEnabled，@since 11/12，设备 API 26）；iOS 有 UIScreen.isCaptured(KVO) + 截屏通知、无全局 PiP；Android API34+ 有 ScreenCaptureCallback + isInPictureInPictureMode、无公开录屏查询。\n【分档铁律】逐方法独立分档，**缺字段 = 该端查不了 ⇒ unsupported，绝不伪造 false**（false 会让业务误判\"确认没在录屏\"）；不因一项缺而整能力降级。\n【三端真机】Android {channel:true,recording:\"unsupported\",pip:false} · iOS {channel:true,recording:\"off\",pip:\"unsupported\"} · 鸿蒙 {channel:true,recording:\"off\",pip:true}。\n【★★★抓出三个真缺陷】① isDeviceMethod 前缀把 device.capture 先截走（回\"未实现的设备方法\"，真机 raw 点名）；② proteus_capture.h 用文件级 static ⇒ 跨 TU 各一份 ⇒ \"采到了但读不到\"（日志实证 hasRec=1 而回执 false），改函数内静态（与 proteus_device.h::snapshot 同款）；③ hostAppRender 先于 refreshDeviceSnapshot ⇒ 首次查询读空快照，改渲染前先刷。另修探针装置自建 caps 实例未注入 provider。\n【判据】单测 11/11 + 破坏性 2 条（缺字段当 false ⇒ 1 红；推通道不校验类型 ⇒ 2 红）+ Android 判据脚本新增录屏断言 + file-size/契约/no-json-wire/iOS 源清单/两副本/check:content/check:ai-tasks/test:coupled/check:vapor-three-end/vue-tsc/三端编译全绿。\n【诚实边界】① PiP 三端语义**不同**（Android=本应用是否在 PiP / 鸿蒙=系统 PiP 是否启用 / iOS=查不了），同一 API 名不是同一个问题；② 鸿蒙读类是渲染时刻快照（延迟=一次渲染间隔），且无截屏事件；③ Android 截屏回调只覆盖本应用窗口；④ 未做 useCacheManager/useAR/useBeacon（后两者真机可判成本高：iBeacon 需硬件+定位权限，AR 需 VKSession）。"
+    },
+    {
+      "id": "T-capability-docs-plain-language",
+      "title": "能力页可读性：84 项能力补「人话描述 + 端实现边界」（源码 SSOT 派生，含覆盖门禁）",
+      "type": "docs",
+      "status": "done",
+      "owner": "session:zcode-invoke-bytes-20261019",
+      "scope": [
+        "website/scripts/lib/capability-docs.mjs",
+        "website/scripts/gen-content.mjs",
+        "tests/capability-docs-guide.test.ts"
+      ],
+      "decision": 1084,
+      "verification": "npx vitest run tests/capability-docs-guide.test.ts && pnpm check:content",
+      "branch": null,
+      "related": [
+        "T-app-screen-capture-domain"
+      ],
+      "note": "【done · 决策 #1084（2026-10-19）】用户原话：「能力描述太过专业化，能力原语 C77 · capability.beacon · 返回 BeaconAPI · Hook 已实现（API 就绪，双端桥见下表）。这一句话还是不知道这个能力是做什么的。还有就是文档没有把我们端实现边界写清楚。」\n【问题定性】能力页标题下只有一行**自动生成的机器标识**（原语编号 + 语义 id + 返回类型 + \"Hook 已实现\"）——它回答\"叫什么/实现了没\"，**不回答\"能做什么\"**。兼容进度表只给 ✅/🟡 标记，不说为什么不能用、能不能降级。\n【落地】新增 `website/scripts/lib/capability-docs.mjs`（SSOT）：`CAPABILITY_GUIDE`（84 条 · 中英各一版 · `what`=一句话干什么 / `use`=什么时候用，业务语言）+ `CAPABILITY_END_NOTE`（23 条端边界，必须说清原因与替代路径）+ `capabilityIntro()`（渲染：人话在前、技术标识后移）+ `assertGuideCoverage()`（缺一条即硬失败）。生成器中英两侧都接入。\n【判据】`tests/capability-docs-guide.test.ts` **13/13**：覆盖 84/84、无多余键、中英非空 · **反技术腔**（说明里不得出现 API 名/原语编号/Hook/返回类型）· 端边界必须含原因语义词 · **重复键检测**（本轮实测踩到：END_NOTE 里 poster 重复键被后者静默覆盖，单测报\"缺原因词\"却查不到数据毛病）· 渲染顺序（人话在前、技术标识在后）· EN 用英文标签。\n【顺带发现（未修，已登记边界）】**空订阅装成可用**：Web 侧 translation/poster/local-service/beacon 的实现是 `() => () => {}`——方法存在 ⇒ 兼容表判 ✅，但订阅后**永远收不到回调**。已在对应能力的端边界里写明；运行期改造成独立任务（涉及行为变更：应改为 throw 或显式 unsupported）。\n【用户点名的 useBeacon 真问题】不只是文档：契约里**缺 `startBeaconDiscovery`/`stopBeaconDiscovery`**——微信端不先开始搜索就收不到任何更新（错误码 11004）；App 三端均无 iBeacon 扫描。已在文档写明，接口补齐属后续批次。"
     }
   ]
 }

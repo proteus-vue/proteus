@@ -6,9 +6,13 @@ order: 2004
 
 # useArchive
 
-useArchive：压缩文件（wx.compressFile；web → Err）
+**它能做什么**：压缩、解压文件或目录。
 
-> 能力原语 C44 · `capability.archive` · 返回 `Result<void>` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：打包日志、解压离线包。
+
+> 技术标识：能力原语 C44 · `capability.archive` · 返回 `Result<void>` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+useArchive：压缩文件（wx.compressFile；web → Err）
 
 ## 签名
 

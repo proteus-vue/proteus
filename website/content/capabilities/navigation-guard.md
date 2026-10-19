@@ -6,9 +6,13 @@ order: 7012
 
 # useNavigationGuard
 
-★C75 useNavigationGuard：卸载拦截（wx.enableAlertBeforeUnload / web beforeunload）
+**它能做什么**：在用户离开页面前拦截并询问（如未保存的编辑）。
 
-> 能力原语 C75 · `capability.navigation-guard` · 返回 `NavigationGuardAPI` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：表单防误退、离开确认。
+
+> 技术标识：能力原语 C75 · `capability.navigation-guard` · 返回 `NavigationGuardAPI` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+★C75 useNavigationGuard：卸载拦截（wx.enableAlertBeforeUnload / web beforeunload）
 
 ## 签名
 

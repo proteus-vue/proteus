@@ -6,9 +6,15 @@ order: 7
 
 # useBluetooth
 
-useBluetooth：蓝牙状态（wx.openBluetoothAdapter / web 特性探测）
+**它能做什么**：连接低功耗蓝牙设备并读写特征值。
 
-> 能力原语 C36 · `capability.bluetooth` · 返回 `BluetoothAPI` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：手环、体脂秤、蓝牙打印机。
+
+**端实现边界**：iOS 需要 `NSBluetoothAlwaysUsageDescription` 与真机；Web 走 Web Bluetooth 受浏览器与用户手势限制（页面内无法后台扫描）。
+
+> 技术标识：能力原语 C36 · `capability.bluetooth` · 返回 `BluetoothAPI` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+useBluetooth：蓝牙状态（wx.openBluetoothAdapter / web 特性探测）
 
 ## 签名
 

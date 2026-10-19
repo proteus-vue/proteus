@@ -6,9 +6,13 @@ order: 7008
 
 # useWorker
 
-useWorker: multi-threaded Worker — postMessage / onMessage / terminate (wx.createWorker / web Worker)
+**What it does**: Run heavy work on a background thread to keep the UI smooth.
 
-> Capability primitive C53 · `capability.worker` · returns `WorkerHandle` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Large parsing, heavy computation, crypto.
+
+> 技术标识：能力原语 C53 · `capability.worker` · 返回 `WorkerHandle` · **Hook implemented** (per-end support in the table below)
+
+useWorker: multi-threaded Worker — postMessage / onMessage / terminate (wx.createWorker / web Worker)
 
 ## Signature
 

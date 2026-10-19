@@ -6,9 +6,13 @@ order: 1007
 
 # useDevice
 
-设备（wx.getSystemInfo / navigator.userAgent / mock）
+**它能做什么**：读机型、系统版本等设备标识信息。
 
-> 能力原语 C11 · `capability.device` · 返回 `DeviceInfo` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：问题排查、按机型做兼容。
+
+> 技术标识：能力原语 C11 · `capability.device` · 返回 `DeviceInfo` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+设备（wx.getSystemInfo / navigator.userAgent / mock）
 
 ## 签名
 

@@ -6,9 +6,13 @@ order: 7001
 
 # useAppLifecycle
 
-useAppLifecycle: app lifecycle subscription handle (wx App hooks / web visibilitychange + load)
+**What it does**: Observe app launch, foreground and background transitions.
 
-> Capability primitive C23 · `capability.app-lifecycle` · returns `LifecycleHooks` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Pausing work in background, refreshing on resume.
+
+> 技术标识：能力原语 C23 · `capability.app-lifecycle` · 返回 `LifecycleHooks` · **Hook implemented** (per-end support in the table below)
+
+useAppLifecycle: app lifecycle subscription handle (wx App hooks / web visibilitychange + load)
 
 ## Signature
 

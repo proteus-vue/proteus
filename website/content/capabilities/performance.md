@@ -6,9 +6,13 @@ order: 8003
 
 # usePerformance
 
-★C66 usePerformance：性能句柄（wx.getPerformance/reportPerformance；web performance API）
+**它能做什么**：采集页面性能指标。
 
-> 能力原语 C66 · `capability.performance` · 返回 `PerformanceAPI` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：监控启动耗时、卡顿。
+
+> 技术标识：能力原语 C66 · `capability.performance` · 返回 `PerformanceAPI` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+★C66 usePerformance：性能句柄（wx.getPerformance/reportPerformance；web performance API）
 
 ## 签名
 

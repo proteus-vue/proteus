@@ -6,9 +6,15 @@ order: 1015
 
 # useScreenCapture
 
-useScreenCapture: screen recording / capture — recording state + change events / user-capture event / picture-in-picture active (wx.getScreenRecordingState/onScreenRecordingStateChanged/onUserCaptureScreen/checkIsPictureInPictureActive; web has no standard → Err, PiP via document.pictureInPictureElement)
+**What it does**: Detect whether the device is being recorded/mirrored, and whether the user just took a screenshot.
 
-> Capability primitive C71 · `capability.screen-capture` · returns `ScreenCaptureAPI` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Privacy hints, share-after-screenshot, watermarking.
+
+**End support & boundaries**: Capabilities differ per end (each method is graded independently; unavailable methods return `unsupported` and never a faked `false`): Android has no public recording query (only API 34+ screenshot callback for its own window and its own PiP state); iOS has `UIScreen.isCaptured` plus screenshot notifications but no global PiP query; HarmonyOS supports all three but values come from a per-render snapshot and it has no user-screenshot event.
+
+> 技术标识：能力原语 C71 · `capability.screen-capture` · 返回 `ScreenCaptureAPI` · **Hook implemented** (per-end support in the table below)
+
+useScreenCapture: screen recording / capture — recording state + change events / user-capture event / picture-in-picture active (wx.getScreenRecordingState/onScreenRecordingStateChanged/onUserCaptureScreen/checkIsPictureInPictureActive; web has no standard → Err, PiP via document.pictureInPictureElement)
 
 ## Signature
 

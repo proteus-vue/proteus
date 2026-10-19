@@ -6,9 +6,13 @@ order: 7010
 
 # useIdle
 
-★C73 useIdle：空闲调度（wx.requestIdleCallback / web requestIdleCallback）
+**它能做什么**：把不紧急的工作排到浏览器/设备空闲时执行。
 
-> 能力原语 C73 · `capability.idle` · 返回 `IdleAPI` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：预计算、缓存预热。
+
+> 技术标识：能力原语 C73 · `capability.idle` · 返回 `IdleAPI` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+★C73 useIdle：空闲调度（wx.requestIdleCallback / web requestIdleCallback）
 
 ## 签名
 

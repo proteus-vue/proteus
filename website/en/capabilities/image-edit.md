@@ -6,9 +6,13 @@ order: 4010
 
 # useImageEdit
 
-useImageEdit: image editing handle — crop by ratio / free edit (wx.cropImage/editImage; web has no WeChat editing UI → Err, implement with canvas)
+**What it does**: Crop, rotate and edit images.
 
-> Capability primitive C68 · `capability.image-edit` · returns `ImageEditAPI` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Avatar cropping, editing a generated poster.
+
+> 技术标识：能力原语 C68 · `capability.image-edit` · 返回 `ImageEditAPI` · **Hook implemented** (per-end support in the table below)
+
+useImageEdit: image editing handle — crop by ratio / free edit (wx.cropImage/editImage; web has no WeChat editing UI → Err, implement with canvas)
 
 ## Signature
 

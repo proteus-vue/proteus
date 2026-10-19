@@ -6,9 +6,13 @@ order: 4002
 
 # useMicrophone
 
-useMicrophone: microphone access (wx.authorize / web getUserMedia)
+**What it does**: Record audio to a file, or read live volume levels.
 
-> Capability primitive C2 · `capability.microphone` · returns `Result<AudioBuffer>` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Voice messages, audio notes, volume visualisation.
+
+> 技术标识：能力原语 C2 · `capability.microphone` · 返回 `Result<AudioBuffer>` · **Hook implemented** (per-end support in the table below)
+
+useMicrophone: microphone access (wx.authorize / web getUserMedia)
 
 ## Signature
 

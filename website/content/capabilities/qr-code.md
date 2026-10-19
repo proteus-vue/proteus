@@ -6,9 +6,13 @@ order: 4003
 
 # useQRCode
 
-useQRCode：扫码（wx.scanCode；web 需摄像头取流源 → 降级 Err）
+**它能做什么**：扫码识别二维码/条形码，或生成二维码。
 
-> 能力原语 C42 · `capability.qr-code` · 返回 `Result<string>` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：扫码登录、扫码付款、生成分享码。
+
+> 技术标识：能力原语 C42 · `capability.qr-code` · 返回 `Result<string>` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+useQRCode：扫码（wx.scanCode；web 需摄像头取流源 → 降级 Err）
 
 ## 签名
 

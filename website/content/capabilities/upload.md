@@ -6,9 +6,13 @@ order: 4
 
 # useUpload
 
-useUpload：上传文件（wx.uploadFile / web fetch FormData）
+**它能做什么**：上传文件到服务器，并拿到进度。
 
-> 能力原语 C29 · `capability.upload` · 返回 `Progress<Result>` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：上传头像、证件、视频。
+
+> 技术标识：能力原语 C29 · `capability.upload` · 返回 `Progress<Result>` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+useUpload：上传文件（wx.uploadFile / web fetch FormData）
 
 ## 签名
 

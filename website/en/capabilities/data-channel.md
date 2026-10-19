@@ -6,9 +6,15 @@ order: 6
 
 # useDataChannel
 
-useDataChannel: data channel (live/real-time — bridged by the host; honest Err fallback by default)
+**What it does**: Exchange small real-time messages inside a live session.
 
-> Capability primitive C31 · `capability.data-channel` · returns `Channel` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Co-hosting, live polls.
+
+**End support & boundaries**: Only meaningful inside a live/realtime container (WeChat live component); no carrier elsewhere.
+
+> 技术标识：能力原语 C31 · `capability.data-channel` · 返回 `Channel` · **Hook implemented** (per-end support in the table below)
+
+useDataChannel: data channel (live/real-time — bridged by the host; honest Err fallback by default)
 
 ## Signature
 

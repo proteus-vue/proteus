@@ -6,9 +6,13 @@ order: 6003
 
 # useContact
 
-useContact：联系人选择（wx.chooseContact；web 无标准 → Err 降级）
+**它能做什么**：从通讯录选择一个联系人。
 
-> 能力原语 C19 · `capability.contact` · 返回 `Result<Contact[]>` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：填写收货人、邀请好友。
+
+> 技术标识：能力原语 C19 · `capability.contact` · 返回 `Result<Contact[]>` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+useContact：联系人选择（wx.chooseContact；web 无标准 → Err 降级）
 
 ## 签名
 

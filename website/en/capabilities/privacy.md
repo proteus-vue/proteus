@@ -6,9 +6,15 @@ order: 5009
 
 # usePrivacy
 
-usePrivacy: privacy-agreement handle — query authorization state / open the privacy contract page / require authorization / on-need-authorization (wx.getPrivacySetting/openPrivacyContract/requirePrivacyAuthorize/onNeedPrivacyAuthorization; web has no WeChat-privacy standard → Err)
+**What it does**: Check and obtain privacy-policy consent.
 
-> Capability primitive C65 · `capability.privacy` · returns `PrivacyAPI` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: First-launch privacy consent dialog.
+
+**End support & boundaries**: Privacy consent is a platform compliance flow (mini program / app store); Web has no equivalent and returns `unsupported`.
+
+> 技术标识：能力原语 C65 · `capability.privacy` · 返回 `PrivacyAPI` · **Hook implemented** (per-end support in the table below)
+
+usePrivacy: privacy-agreement handle — query authorization state / open the privacy contract page / require authorization / on-need-authorization (wx.getPrivacySetting/openPrivacyContract/requirePrivacyAuthorize/onNeedPrivacyAuthorization; web has no WeChat-privacy standard → Err)
 
 ## Signature
 

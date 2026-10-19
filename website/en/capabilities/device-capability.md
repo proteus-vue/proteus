@@ -6,9 +6,13 @@ order: 1019
 
 # useDeviceCapability
 
-useDeviceCapability: device capability probe — HEVC (H.265) hardware decode support (wx.checkDeviceSupportHevc; web MediaSource.isTypeSupported)
+**What it does**: Probe optional device capabilities such as HEVC decoding.
 
-> Capability primitive C81 · `capability.device-capability` · returns `DeviceCapabilityAPI` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Choosing a video codec or fallback per device.
+
+> 技术标识：能力原语 C81 · `capability.device-capability` · 返回 `DeviceCapabilityAPI` · **Hook implemented** (per-end support in the table below)
+
+useDeviceCapability: device capability probe — HEVC (H.265) hardware decode support (wx.checkDeviceSupportHevc; web MediaSource.isTypeSupported)
 
 ## Signature
 

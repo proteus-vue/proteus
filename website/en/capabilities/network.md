@@ -6,9 +6,13 @@ order: 1004
 
 # useNetwork
 
-Network (wx.getNetworkType / navigator.onLine / mock)
+**What it does**: Read the current network type and subscribe to changes.
 
-> Capability primitive C8 · `capability.network` · returns `NetworkType` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Weak-network hints, Wi-Fi-only uploads.
+
+> 技术标识：能力原语 C8 · `capability.network` · 返回 `NetworkType` · **Hook implemented** (per-end support in the table below)
+
+Network (wx.getNetworkType / navigator.onLine / mock)
 
 ## Signature
 

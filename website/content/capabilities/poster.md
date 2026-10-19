@@ -6,9 +6,15 @@ order: 6010
 
 # usePoster
 
-★C80 usePoster：分享海报（wx.onGeneratePoster；web 空订阅）
+**它能做什么**：把内容（文字、二维码、图片）合成一张海报图片。
 
-> 能力原语 C80 · `capability.poster` · 返回 `PosterAPI` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：分享海报、活动邀请卡。
+
+**端实现边界**：Web 端**只有空订阅**（海报生成需画布合成，各端未接）；App 端依赖 `useCanvas`（当前 planned）。实际可用的是微信小程序。
+
+> 技术标识：能力原语 C80 · `capability.poster` · 返回 `PosterAPI` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+★C80 usePoster：分享海报（wx.onGeneratePoster；web 空订阅）
 
 ## 签名
 

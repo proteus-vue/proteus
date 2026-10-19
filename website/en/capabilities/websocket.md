@@ -6,9 +6,13 @@ order: 2
 
 # useWebSocket
 
-useWebSocket: WebSocket connection handle (wx.connectSocket / web WebSocket)
+**What it does**: Open a persistent bidirectional connection to a server.
 
-> Capability primitive C27 · `capability.websocket` · returns `WSConnection` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Chat, real-time collaboration, market data.
+
+> 技术标识：能力原语 C27 · `capability.websocket` · 返回 `WSConnection` · **Hook implemented** (per-end support in the table below)
+
+useWebSocket: WebSocket connection handle (wx.connectSocket / web WebSocket)
 
 ## Signature
 

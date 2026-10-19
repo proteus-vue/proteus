@@ -6,9 +6,13 @@ order: 5005
 
 # usePayment
 
-usePayment: Launch payment (wx.requestPayment fields)
+**What it does**: Start a payment and receive the result.
 
-> Capability primitive C40 · `capability.payment` · returns `Result<PayResult>` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Checkout, top-ups.
+
+> 技术标识：能力原语 C40 · `capability.payment` · 返回 `Result<PayResult>` · **Hook implemented** (per-end support in the table below)
+
+usePayment: Launch payment (wx.requestPayment fields)
 
 ## Signature
 

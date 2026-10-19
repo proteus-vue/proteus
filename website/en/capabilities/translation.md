@@ -6,9 +6,15 @@ order: 6009
 
 # useTranslation
 
-useTranslation: translation — user-triggered / user-cancelled translation events (wx.onUserTriggerTranslation/onUserOffTranslation; web has no equivalent → empty subscription)
+**What it does**: Trigger system translation of on-page content.
 
-> Capability primitive C79 · `capability.translation` · returns `TranslationAPI` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Multilingual pages, cross-border content.
+
+**End support & boundaries**: On Web this is an **empty subscription** (no standard translation-trigger API): it never fires, so the platform looks wired but does nothing. App ends are not wired. Call a translation service yourself.
+
+> 技术标识：能力原语 C79 · `capability.translation` · 返回 `TranslationAPI` · **Hook implemented** (per-end support in the table below)
+
+useTranslation: translation — user-triggered / user-cancelled translation events (wx.onUserTriggerTranslation/onUserOffTranslation; web has no equivalent → empty subscription)
 
 ## Signature
 

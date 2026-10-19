@@ -6,9 +6,13 @@ order: 7009
 
 # usePreload
 
-usePreload: preload handle — assets (font/image) / skyline view / webview / subpackage pre-download with progress (wx.preloadAssets/preloadSkylineView/preloadWebview/preDownloadSubpackage; web has no standard → Err, use <link rel=preload>)
+**What it does**: Preload assets or pages ahead of time.
 
-> Capability primitive C67 · `capability.preload` · returns `PreloadAPI` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Faster first paint, preloading the next page.
+
+> 技术标识：能力原语 C67 · `capability.preload` · 返回 `PreloadAPI` · **Hook implemented** (per-end support in the table below)
+
+usePreload: preload handle — assets (font/image) / skyline view / webview / subpackage pre-download with progress (wx.preloadAssets/preloadSkylineView/preloadWebview/preDownloadSubpackage; web has no standard → Err, use <link rel=preload>)
 
 ## Signature
 

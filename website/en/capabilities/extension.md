@@ -6,9 +6,15 @@ order: 7006
 
 # useExtension
 
-useExtension: extension/plugin (G-21 extension point — host loadPlugin bridge; Err by default)
+**What it does**: Load host-provided extensions/plugins.
 
-> Capability primitive C50 · `capability.extension` · returns `ExtensionAPI` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Host-injected extension points.
+
+**End support & boundaries**: iOS forbids dynamic loading of third-party code (App Store policy); Android/HarmonyOS can implement it via a host-side registry.
+
+> 技术标识：能力原语 C50 · `capability.extension` · 返回 `ExtensionAPI` · **Hook implemented** (per-end support in the table below)
+
+useExtension: extension/plugin (G-21 extension point — host loadPlugin bridge; Err by default)
 
 ## Signature
 

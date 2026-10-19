@@ -6,9 +6,13 @@ order: 9
 
 # useWifi
 
-useWifi: WiFi handle — connected network / scan list / connect (wx.getConnectedWifi/getWifiList/connectWifi; web has no standard → Err)
+**What it does**: Read current Wi-Fi info or connect to a specific network.
 
-> Capability primitive C55 · `capability.wifi` · returns `WifiAPI` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Device provisioning, in-store Wi-Fi onboarding.
+
+> 技术标识：能力原语 C55 · `capability.wifi` · 返回 `WifiAPI` · **Hook implemented** (per-end support in the table below)
+
+useWifi: WiFi handle — connected network / scan list / connect (wx.getConnectedWifi/getWifiList/connectWifi; web has no standard → Err)
 
 ## Signature
 

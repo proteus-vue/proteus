@@ -6,9 +6,15 @@ order: 5003
 
 # useBiometric
 
-useBiometric: biometric support detection
+**What it does**: Verify identity locally with fingerprint or face.
 
-> Capability primitive C38 · `capability.biometric` · returns `Result<boolean>` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Payment confirmation, re-auth for sensitive actions.
+
+**End support & boundaries**: Local verification only (fingerprint/face) — not a server-verifiable credential; combine with your own auth when the server must confirm.
+
+> 技术标识：能力原语 C38 · `capability.biometric` · 返回 `Result<boolean>` · **Hook implemented** (per-end support in the table below)
+
+useBiometric: biometric support detection
 
 ## Signature
 

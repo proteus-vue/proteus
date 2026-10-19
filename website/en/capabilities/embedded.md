@@ -6,9 +6,13 @@ order: 7005
 
 # useEmbedded
 
-useEmbedded: host embedding context (embedded scenario — host bridge; Err by default)
+**What it does**: Read the embedding host context.
 
-> Capability primitive C48 · `capability.embedded` · returns `HostContext` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Adapting one page embedded in different host apps.
+
+> 技术标识：能力原语 C48 · `capability.embedded` · 返回 `HostContext` · **Hook implemented** (per-end support in the table below)
+
+useEmbedded: host embedding context (embedded scenario — host bridge; Err by default)
 
 ## Signature
 

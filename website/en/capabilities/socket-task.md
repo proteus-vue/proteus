@@ -6,9 +6,13 @@ order: 3
 
 # useSocketTask
 
-useSocketTask: low-level SocketTask handle (wx.connectSocket → SocketTask / web WebSocket)
+**What it does**: Manage the full lifecycle of one WebSocket connection.
 
-> Capability primitive C28 · `capability.socket-task` · returns `SocketTask` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Long-lived connections with reconnection.
+
+> 技术标识：能力原语 C28 · `capability.socket-task` · 返回 `SocketTask` · **Hook implemented** (per-end support in the table below)
+
+useSocketTask: low-level SocketTask handle (wx.connectSocket → SocketTask / web WebSocket)
 
 ## Signature
 

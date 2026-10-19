@@ -6,9 +6,15 @@ order: 11
 
 # useLocalService
 
-★C78 useLocalService：局域网 mDNS（wx.onLocalService*；web 空订阅）
+**它能做什么**：在局域网里发现/广播服务（mDNS）。
 
-> 能力原语 C78 · `capability.local-service` · 返回 `LocalServiceAPI` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：同一 WiFi 下发现打印机、投屏设备、局域网协作。
+
+**端实现边界**：mDNS 局域网发现：Web 与 App 三端**均无标准实现**（仅微信小程序提供）—— Web 侧是**空订阅**（订阅后永远收不到回调）。App 端可改用 `useSocket` 做局域网广播发现。
+
+> 技术标识：能力原语 C78 · `capability.local-service` · 返回 `LocalServiceAPI` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+★C78 useLocalService：局域网 mDNS（wx.onLocalService*；web 空订阅）
 
 ## 签名
 

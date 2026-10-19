@@ -6,9 +6,13 @@ order: 1002
 
 # useVibrate
 
-Vibration (wx.vibrateShort / navigator.vibrate / mock)
+**What it does**: Vibrate the phone briefly or for a longer duration.
 
-> Capability primitive C6 · `capability.vibrate` · returns `void` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Tap feedback, error alerts, reminders.
+
+> 技术标识：能力原语 C6 · `capability.vibrate` · 返回 `void` · **Hook implemented** (per-end support in the table below)
+
+Vibration (wx.vibrateShort / navigator.vibrate / mock)
 
 ## Signature
 

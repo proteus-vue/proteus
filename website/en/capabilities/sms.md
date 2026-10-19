@@ -6,9 +6,15 @@ order: 6006
 
 # useSMS
 
-useSMS: Send SMS (wx restricted — no open API / web has no standard → Err)
+**What it does**: Compose or send SMS (platform-limited on most ends).
 
-> Capability primitive C22 · `capability.sms` · returns `Result<void>` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Verification codes, notifications.
+
+**End support & boundaries**: Most ends can only open the SMS composer with prefilled content; silent sending is blocked by the OS.
+
+> 技术标识：能力原语 C22 · `capability.sms` · 返回 `Result<void>` · **Hook implemented** (per-end support in the table below)
+
+useSMS: Send SMS (wx restricted — no open API / web has no standard → Err)
 
 ## Signature
 

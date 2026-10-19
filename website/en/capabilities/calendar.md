@@ -6,9 +6,13 @@ order: 6004
 
 # useCalendar
 
-useCalendar: Add a calendar event (wx.addPhoneCalendar; web → Err)
+**What it does**: Add events to the system calendar.
 
-> Capability primitive C20 · `capability.calendar` · returns `CalendarAPI` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Class schedules, event reminders.
+
+> 技术标识：能力原语 C20 · `capability.calendar` · 返回 `CalendarAPI` · **Hook implemented** (per-end support in the table below)
+
+useCalendar: Add a calendar event (wx.addPhoneCalendar; web → Err)
 
 ## Signature
 

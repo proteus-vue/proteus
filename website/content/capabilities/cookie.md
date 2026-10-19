@@ -6,9 +6,13 @@ order: 2002
 
 # useCookie
 
-useCookie：Cookie 罐（web document.cookie / wx storage 兜底）
+**它能做什么**：读写 HTTP Cookie。
 
-> 能力原语 C32 · `capability.cookie` · 返回 `CookieJar` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：维持 Web 视图登录态。
+
+> 技术标识：能力原语 C32 · `capability.cookie` · 返回 `CookieJar` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+useCookie：Cookie 罐（web document.cookie / wx storage 兜底）
 
 ## 签名
 

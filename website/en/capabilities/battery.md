@@ -6,9 +6,13 @@ order: 1003
 
 # useBattery
 
-Battery (wx.getBatteryInfo / navigator.getBattery / mock)
+**What it does**: Read battery percentage and charging state.
 
-> Capability primitive C7 · `capability.battery` · returns `BatteryInfo` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Power-saving mode, low-battery prompts.
+
+> 技术标识：能力原语 C7 · `capability.battery` · 返回 `BatteryInfo` · **Hook implemented** (per-end support in the table below)
+
+Battery (wx.getBatteryInfo / navigator.getBattery / mock)
 
 ## Signature
 

@@ -6,9 +6,13 @@ order: 1005
 
 # useClipboard
 
-Clipboard (wx.getClipboardData / navigator.clipboard.readText / mock)
+**What it does**: Read text from the clipboard, or write text into it.
 
-> Capability primitive C9 · `capability.clipboard` · returns `Result<string>` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Copying invite codes, pasting addresses.
+
+> 技术标识：能力原语 C9 · `capability.clipboard` · 返回 `Result<string>` · **Hook implemented** (per-end support in the table below)
+
+Clipboard (wx.getClipboardData / navigator.clipboard.readText / mock)
 
 ## Signature
 

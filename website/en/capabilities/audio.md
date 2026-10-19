@@ -6,9 +6,13 @@ order: 4008
 
 # useAudio
 
-useAudio: audio instance — play/pause/stop/seek/volume/loop + duration/currentTime + events (wx.createInnerAudioContext; web Audio element)
+**What it does**: Play audio with play/pause/seek/volume control.
 
-> Capability primitive C62 · `capability.audio` · returns `AudioController` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Background music, spoken announcements.
+
+> 技术标识：能力原语 C62 · `capability.audio` · 返回 `AudioController` · **Hook implemented** (per-end support in the table below)
+
+useAudio: audio instance — play/pause/stop/seek/volume/loop + duration/currentTime + events (wx.createInnerAudioContext; web Audio element)
 
 ## Signature
 

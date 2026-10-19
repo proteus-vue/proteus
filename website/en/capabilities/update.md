@@ -6,9 +6,13 @@ order: 7007
 
 # useUpdate
 
-useUpdate: mini program hot-update manager (wx.getUpdateManager; web → Err)
+**What it does**: Check for and apply app/mini-program updates.
 
-> Capability primitive C51 · `capability.update` · returns `UpdateManagerAPI` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Forced updates, staged rollouts.
+
+> 技术标识：能力原语 C51 · `capability.update` · 返回 `UpdateManagerAPI` · **Hook implemented** (per-end support in the table below)
+
+useUpdate: mini program hot-update manager (wx.getUpdateManager; web → Err)
 
 ## Signature
 

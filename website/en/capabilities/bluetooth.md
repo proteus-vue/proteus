@@ -6,9 +6,15 @@ order: 7
 
 # useBluetooth
 
-useBluetooth: Bluetooth status (wx.openBluetoothAdapter / web feature detection)
+**What it does**: Connect to BLE peripherals and read/write characteristics.
 
-> Capability primitive C36 · `capability.bluetooth` · returns `BluetoothAPI` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Wearables, smart scales, BLE printers.
+
+**End support & boundaries**: iOS requires the Bluetooth usage description and a real device; Web Bluetooth is browser-gated and requires a user gesture (no background scanning in a page).
+
+> 技术标识：能力原语 C36 · `capability.bluetooth` · 返回 `BluetoothAPI` · **Hook implemented** (per-end support in the table below)
+
+useBluetooth: Bluetooth status (wx.openBluetoothAdapter / web feature detection)
 
 ## Signature
 

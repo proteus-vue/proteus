@@ -6,9 +6,13 @@ order: 1009
 
 # useBrightness
 
-useBrightness：读取当前亮度（0-1）
+**它能做什么**：读当前屏幕亮度，或调亮调暗。
 
-> 能力原语 C13 · `capability.brightness` · 返回 `Result<void>` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：夜间模式、扫码时临时提亮。
+
+> 技术标识：能力原语 C13 · `capability.brightness` · 返回 `Result<void>` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+useBrightness：读取当前亮度（0-1）
 
 ## 签名
 

@@ -6,9 +6,13 @@ order: 5001
 
 # usePermission
 
-usePermission: Permission status (web Permissions API)
+**What it does**: Check and request system permissions (camera, location, notifications).
 
-> Capability primitive C16 · `capability.permission` · returns `Result<PermissionStatus>` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: First-use permission prompts.
+
+> 技术标识：能力原语 C16 · `capability.permission` · 返回 `Result<PermissionStatus>` · **Hook implemented** (per-end support in the table below)
+
+usePermission: Permission status (web Permissions API)
 
 ## Signature
 

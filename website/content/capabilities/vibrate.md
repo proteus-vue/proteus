@@ -6,9 +6,13 @@ order: 1002
 
 # useVibrate
 
-震动（wx.vibrateShort / navigator.vibrate / mock）
+**它能做什么**：让手机震动一下（短震或长震）。
 
-> 能力原语 C6 · `capability.vibrate` · 返回 `void` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：点击反馈、错误提示、提醒。
+
+> 技术标识：能力原语 C6 · `capability.vibrate` · 返回 `void` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+震动（wx.vibrateShort / navigator.vibrate / mock）
 
 ## 签名
 

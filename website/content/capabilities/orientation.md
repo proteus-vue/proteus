@@ -6,9 +6,13 @@ order: 1008
 
 # useOrientation
 
-屏幕方向（wx.onDeviceOrientationChange / matchMedia / mock）
+**它能做什么**：读屏幕方向（横屏/竖屏）并订阅旋转。
 
-> 能力原语 C12 · `capability.orientation` · 返回 `Orientation` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：视频全屏、横屏游戏、旋转布局。
+
+> 技术标识：能力原语 C12 · `capability.orientation` · 返回 `Orientation` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+屏幕方向（wx.onDeviceOrientationChange / matchMedia / mock）
 
 ## 签名
 

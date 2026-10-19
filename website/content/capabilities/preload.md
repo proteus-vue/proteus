@@ -6,9 +6,13 @@ order: 7009
 
 # usePreload
 
-★C67 usePreload：预加载句柄（wx.preloadAssets/preloadSkylineView/preloadWebview/preDownloadSubpackage；web 缺省 → Err）
+**它能做什么**：提前预加载资源或页面，减少后续等待。
 
-> 能力原语 C67 · `capability.preload` · 返回 `PreloadAPI` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：首屏加速、预载下一页。
+
+> 技术标识：能力原语 C67 · `capability.preload` · 返回 `PreloadAPI` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+★C67 usePreload：预加载句柄（wx.preloadAssets/preloadSkylineView/preloadWebview/preDownloadSubpackage；web 缺省 → Err）
 
 ## 签名
 

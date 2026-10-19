@@ -6,9 +6,13 @@ order: 4006
 
 # useCanvas
 
-useCanvas: canvas component instance — 2D drawing context + node (type=2d) + export to temp file / data URL + offscreen canvas (wx.createCanvasContext/SelectorQuery node/canvasToTempFilePath/createOffscreenCanvas; web HTMLCanvasElement + standard 2D context)
+**What it does**: Draw shapes and text on a canvas and export images.
 
-> Capability primitive C57 · `capability.canvas` · returns `CanvasController` · **Hook implemented** (API ready — target bridges in the table below)
+**When to use it**: Charts, signature pads, poster generation.
+
+> 技术标识：能力原语 C57 · `capability.canvas` · 返回 `CanvasController` · **Hook implemented** (per-end support in the table below)
+
+useCanvas: canvas component instance — 2D drawing context + node (type=2d) + export to temp file / data URL + offscreen canvas (wx.createCanvasContext/SelectorQuery node/canvasToTempFilePath/createOffscreenCanvas; web HTMLCanvasElement + standard 2D context)
 
 ## Signature
 

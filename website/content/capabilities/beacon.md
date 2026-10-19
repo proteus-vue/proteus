@@ -6,9 +6,15 @@ order: 1018
 
 # useBeacon
 
-★C77 useBeacon：iBeacon（wx.onBeaconServiceChange/onBeaconUpdate；web 空订阅）
+**它能做什么**：扫描身边的 iBeacon 蓝牙信标，拿到信标标识与信号强度（据此估算距离）。
 
-> 能力原语 C77 · `capability.beacon` · 返回 `BeaconAPI` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：室内定位、到店提醒、博物馆展项讲解、场馆签到打卡——GPS 在室内不准时用它。
+
+**端实现边界**：**当前契约不完整**：只暴露了两个订阅（`onServiceChange`/`onUpdate`），缺少 `startBeaconDiscovery`/`stopBeaconDiscovery`——微信端不先开始搜索就**收不到任何更新**（错误码 11004）。Web 端是**空订阅**（永远收不到回调）；App 三端均无 iBeacon 扫描实现。
+
+> 技术标识：能力原语 C77 · `capability.beacon` · 返回 `BeaconAPI` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+★C77 useBeacon：iBeacon（wx.onBeaconServiceChange/onBeaconUpdate；web 空订阅）
 
 ## 签名
 

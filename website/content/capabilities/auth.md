@@ -6,9 +6,13 @@ order: 5002
 
 # useAuth
 
-useAuth：认证状态组合（token 托管 + 登录/登出 + 订阅）——业务不读 raw token（铁律 2）
+**它能做什么**：走登录授权流程并拿到登录态。
 
-> 能力原语 C33 · `capability.auth` · 返回 `AuthState` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：手机号/第三方登录。
+
+> 技术标识：能力原语 C33 · `capability.auth` · 返回 `AuthState` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+useAuth：认证状态组合（token 托管 + 登录/登出 + 订阅）——业务不读 raw token（铁律 2）
 
 ## 签名
 

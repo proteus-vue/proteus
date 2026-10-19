@@ -6,9 +6,13 @@ order: 4007
 
 # useVideo
 
-★C61 useVideo：视频控制器（wx.createVideoContext / web HTMLVideoElement）
+**它能做什么**：播放视频，并控制播放进度、音量与全屏。
 
-> 能力原语 C61 · `capability.video` · 返回 `VideoController` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：课程视频、商品详情视频。
+
+> 技术标识：能力原语 C61 · `capability.video` · 返回 `VideoController` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+★C61 useVideo：视频控制器（wx.createVideoContext / web HTMLVideoElement）
 
 ## 签名
 

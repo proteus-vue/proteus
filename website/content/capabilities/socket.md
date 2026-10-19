@@ -6,9 +6,13 @@ order: 10
 
 # useSocket
 
-★C69 useSocket：底层网络 Socket（wx.createUDPSocket/createTCPSocket；web 无裸 socket → Err）
+**它能做什么**：直接用 UDP/TCP 收发原始字节。
 
-> 能力原语 C69 · `capability.socket` · 返回 `UDPSocketHandle / TCPSocketHandle` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：物联网设备通信、自定义协议。
+
+> 技术标识：能力原语 C69 · `capability.socket` · 返回 `UDPSocketHandle / TCPSocketHandle` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+★C69 useSocket：底层网络 Socket（wx.createUDPSocket/createTCPSocket；web 无裸 socket → Err）
 
 ## 签名
 

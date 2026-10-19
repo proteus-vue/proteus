@@ -6,9 +6,15 @@ order: 8
 
 # useNFC
 
-useNFC：NFC 状态（wx.getHCEState / web NDEFReader 特性探测）
+**它能做什么**：读/写 NFC 标签，或模拟卡（HCE）。
 
-> 能力原语 C37 · `capability.nfc` · 返回 `NFCAPI` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：门禁卡、公交卡、NFC 标签防伪。
+
+**端实现边界**：HCE 卡模拟**仅**部分安卓机型与小程序支持（**限制**：iOS 只开放标签读取 Core NFC，**不能模拟卡**）。
+
+> 技术标识：能力原语 C37 · `capability.nfc` · 返回 `NFCAPI` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+useNFC：NFC 状态（wx.getHCEState / web NDEFReader 特性探测）
 
 ## 签名
 

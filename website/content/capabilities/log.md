@@ -6,9 +6,13 @@ order: 8002
 
 # useLog
 
-useLog：日志句柄（console + 上报）
+**它能做什么**：统一输出日志（可上报）。
 
-> 能力原语 C35 · `capability.log` · 返回 `Logger` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：线上问题排查。
+
+> 技术标识：能力原语 C35 · `capability.log` · 返回 `Logger` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+useLog：日志句柄（console + 上报）
 
 ## 签名
 

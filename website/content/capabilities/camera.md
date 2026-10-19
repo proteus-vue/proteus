@@ -6,9 +6,13 @@ order: 4001
 
 # useCamera
 
-useCamera：摄像头访问（wx.authorize / web getUserMedia）
+**它能做什么**：调用摄像头拍照或录像，并把画面实时显示在页面上。
 
-> 能力原语 C1 · `capability.camera` · 返回 `Result<Media>` · **Hook 已实现**（API 就绪，双端桥见下表）
+**什么时候用**：扫码、证件拍摄、直播前置画面。
+
+> 技术标识：能力原语 C1 · `capability.camera` · 返回 `Result<Media>` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+
+useCamera：摄像头访问（wx.authorize / web getUserMedia）
 
 ## 签名
 
