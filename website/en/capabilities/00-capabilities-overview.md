@@ -8,6 +8,37 @@ order: 0
 
 > 84 capability primitives — SSOT = `PRIMITIVE_CATALOG` (capability kind) + `CapabilityHooks` interface. **All hooks implemented** (API ready — target bridges/degradation in each page's compat table).
 
+## All-target compatibility
+
+> Numbers come from **source facts** (same computation as each capability page's compat table): ✅ usable directly · ⚠️ target shipped but the bridge is absent → calls return `*.unsupported` and degrade explicitly · 🟡 capability bridge not wired · ⬜ target not started (including planned). **Coverage = ✅ / total** — ⚠️ does not count, because the caller gets an Err.
+
+| Target | ✅ Usable | ⚠️ Degraded | 🟡 Not wired | ⬜ Not started | Coverage |
+|---|---|---|---|---|---|
+| Web SPA | 62 | 22 | 0 | 0 | 74% |
+| WeChat Mini Program | 81 | 3 | 0 | 0 | 96% |
+| Headless (SSR / testing) | 84 | 0 | 0 | 0 | 100% |
+| iOS native | 30 | 0 | 54 | 0 | 36% |
+| Android native | 30 | 0 | 54 | 0 | 36% |
+| HarmonyOS | 14 | 0 | 70 | 0 | 17% |
+| Flutter hybrid | 0 | 0 | 84 | 0 | 0% |
+| Quick App | 0 | 0 | 0 | 84 | 0% |
+
+### By category (✅ / total in that category)
+
+> Read a row for one capability domain across targets; read a column for one target's weakest domains. The denominator is the number of capabilities in that category.
+
+| Category | Web SPA | WeChat Mini Program | Headless (SSR / testing) | iOS native | Android native | HarmonyOS | Flutter hybrid | Quick App |
+|---|---|---|---|---|---|---|---|---|
+| Network & Communication | 8/11 | 10/11 | 11/11 | 1/11 | 1/11 | 0/11 | 0/11 | 0/11 |
+| Device & System | 17/20 | 20/20 | 20/20 | 16/20 | 16/20 | 14/20 | 0/20 | 0/20 |
+| Storage & Files | 4/5 | 5/5 | 5/5 | 0/5 | 0/5 | 0/5 | 0/5 | 0/5 |
+| Location & Maps | 1/2 | 2/2 | 2/2 | 0/2 | 0/2 | 0/2 | 0/2 | 0/2 |
+| Media & Scanning | 10/11 | 11/11 | 11/11 | 0/11 | 0/11 | 0/11 | 0/11 | 0/11 |
+| Account & Payment | 4/9 | 8/9 | 9/9 | 0/9 | 0/9 | 0/9 | 0/9 | 0/9 |
+| Notifications & Sharing | 3/10 | 9/10 | 10/10 | 0/10 | 0/10 | 0/10 | 0/10 | 0/10 |
+| App & Lifecycle | 13/13 | 13/13 | 13/13 | 13/13 | 13/13 | 0/13 | 0/13 | 0/13 |
+| Observability & Debugging | 2/3 | 3/3 | 3/3 | 0/3 | 0/3 | 0/3 | 0/3 | 0/3 |
+
 ## Network & Communication (11)
 
 | # | Capability | API | Returns | Mini Program equivalent |

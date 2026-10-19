@@ -13,7 +13,7 @@ import { COMP_EN, DOMAIN_EN, MP_STATUS_EN, ENDS_EN, END_NOTE_EN, COMP_LEGEND_EN,
 import { loadAppBridgeKeysFrom } from './lib/app-bridge-keys.mjs'
 import { capabilityIntro, assertGuideCoverage } from './lib/capability-docs.mjs'; import { EN_ARG_PLACEHOLDERS } from './lib/cap-usage-en.mjs'   // ★#1084/#1087
 import { usageOf } from './lib/cap-usage/index.mjs'   // ★#1088 示例 SSOT（中英同源）
-import { appEndStatus } from './lib/harmony-host-keys.mjs'
+import { capabilityEndStatuses, bucketOf, STATUS_MARK, capabilityCoverage, renderCoverage } from './lib/cap-end-status.mjs'   // ★#1089 逐端判定 + 总览汇总
 // ★hook→桥方法引用抽取同法抽成独立模块（锚定式 + 硬失败）；三条契约共用 lib/ts-source-scan.mjs 原语
 import { extractHookBridgeRefs, HOOK_FACTORY } from './lib/hook-bridge-refs.mjs'
 // ★平台桥成员集 = 手写桥（capability-bridges.ts）∪ 声明式桥（generated/bridge-ext.ts）——见模块头注释
@@ -95,7 +95,6 @@ async function loadEnds() {
   return mod.ENDS
 }
 
-const STATUS_MARK = { '✅ 已落地': '✅', '🟡 部分落地': '🟡', '📋 规划已入库': '📋', '⬜ 未开始': '⬜' }
 
 // ══════════════════════════════════════════════════════════════════
 // ★★生命周期事件 meta（用户反馈三点的数据源：说明缺失 / 无方法级端支持）
@@ -247,6 +246,7 @@ function compatSection(rows, footer) {
   return lines
 }
 
+// ★#1089 全端兼容进度的汇总与渲染实现在 lib/cap-end-status.mjs（生成器保持"只装配不实现"）
 // ★#406 颗粒度批：TS 接口解析（能力页参数/返回值属性表的 SSOT——capability.ts 内 60+ 接口属性带 JSDoc）
 //   提取 export interface X { ... } 的逐属性：名称/类型/可选(?)/前置 JSDoc 首行
 //   ★#490 补方法成员：句柄型接口（CookieJar/BackgroundAPI/FSAdapter…）的结构本体是方法——属性通道排除 '): ' 行，这里成对补齐
@@ -1491,46 +1491,12 @@ function genCapabilities(ir, ends) {
       lines.push('> 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。')
       lines.push('')
     }
-    // ★兼容进度（uni-app 式全端对照）：端列/状态 = ENDS 注册表；Web 列 ✅/⚠️ 由 webBridge 实际方法集推导
-    const wxMissing = refs.filter((r) => !wxKeys.has(r))
-    const webMissing = refs.filter((r) => !webKeys.has(r))
-    const capRows = []
-    for (const end of ends) {
-      let status = STATUS_MARK[end.status] ?? '⬜'
-      let note = ''
-      switch (end.id) {
-        case 'mp-weixin':
-          status = wxMissing.length ? '⚠️' : '✅'
-          note = wxMissing.length ? `wx 桥未提供 ${wxMissing.join('/')} → Err 显式降级` : `wx 桥 → ${c.mpEquiv}`
-          break
-        case 'web':
-          if (!refs.length) {
-            note = 'webBridge 平台桥（wx 缺席时默认注入）'
-          } else if (webMissing.length) {
-            status = '⚠️'
-            note = `webBridge 未提供 ${webMissing.join('/')} → Err 显式降级（平台无直通 API）`
-          } else {
-            note = 'webBridge 实现（平台 API 直连）'
-          }
-          break
-        case 'headless': note = 'mock 桥注入（测试 / SSR 档）'; break
-        case 'flutter': note = '同一 JS 逻辑层——能力桥未接线'; break
-        case 'quick-app': note = '端未开始'; break
-        // ★App 端（app-ios/app-android/app-harmony）：由**源码事实**推导（见 APP_BRIDGE_KEYS 注释）
-        case 'app-ios':
-        case 'app-android': {
-          // ★App 分档收在 lib（决策 #1067/#1069；推送型能力还要求壳真的推）
-          const a = appEndStatus(ROOT, end.id === 'app-ios' ? 'ios' : 'android', refs, APP_BRIDGE_KEYS, {
-            capSlug, pushCapabilities: PUSH_CAPABILITIES, verified: HOST_RUNTIME_VERIFIED_CAPS,
-          })
-          status = a.status; note = a.note
-          break
-        }
-        case 'app-harmony': { const a = appEndStatus(ROOT, 'harmony', refs, APP_BRIDGE_KEYS, { capSlug, pushCapabilities: PUSH_CAPABILITIES, verified: HOST_RUNTIME_VERIFIED_CAPS }); status = a.status; note = a.note; break }
-        default: note = '渲染核心已落地——能力桥未接线'
-      }
-      capRows.push({ name: end.name, status, note: `${end.engine} · ${note}` })
-    }
+    // ★兼容进度（uni-app 式全端对照）：端列/状态 = ENDS 注册表；判定逻辑与总览汇总**同源**（#1089）
+    const endStatuses = capabilityEndStatuses({
+      ends, refs, mpEquiv: c.mpEquiv, wxKeys, webKeys, root: ROOT, capSlug,
+      appBridgeKeys: APP_BRIDGE_KEYS, pushCapabilities: PUSH_CAPABILITIES, verified: HOST_RUNTIME_VERIFIED_CAPS,
+    })
+    const capRows = ends.map((end) => ({ name: end.name, status: endStatuses[end.id].status, note: `${end.engine} · ${endStatuses[end.id].note}` }))
     lines.push(...compatSection(capRows, '> 状态口径：✅ 端已落地·本能力可用；⚠️ 端已落地·桥未提供→Err 显式降级；🟡 能力桥未接线；⬜ 端未开始。端架构对照见 [端与成熟度](/docs/framework/ends-matrix)。'))
     lines.push('> 铁律：能力原语全部返回 `Result<T>`（无回调 / 无全局对象）；平台不支持 → `Err` 显式降级，业务零平台分支。')
     lines.push('')
@@ -1635,6 +1601,21 @@ function genCapabilities(ir, ends) {
   idx.push('')
   idx.push(`> ${caps.length} 个能力原语——SSOT = \`PRIMITIVE_CATALOG\`（capability kind）+ \`CapabilityHooks\` 接口。**Hook 全部已实现**（API 就绪，双端桥/降级见各页兼容进度表）`)
   idx.push('')
+  // ★#1089 全端兼容进度（用户需求：让开发者一目了然"目前全端能用到哪"）
+  const cov = capabilityCoverage({
+    caps, ends, hookRefs, wxKeys, webKeys, catOf, capOrder: CAP_CAT_ORDER,
+    root: ROOT, appBridgeKeys: APP_BRIDGE_KEYS, pushCapabilities: PUSH_CAPABILITIES, verified: HOST_RUNTIME_VERIFIED_CAPS,
+  })
+  renderCoverage(idx, cov, {
+    h2: '## 全端兼容进度',
+    intro: '> 数字来自**源码事实**（与各能力页「兼容进度」表同一份判定）：✅ 直接可用 · ⚠️ 端已落地但桥未提供 → 调用返回 `*.unsupported` 显式降级 · 🟡 能力桥未接线 · ⬜ 端未开始（含"规划已入库"）。**覆盖率 = ✅ / 能力总数**——⚠️ 不计入覆盖，因为业务拿到的是 Err。',
+    cols: '| 端 | ✅ 直接可用 | ⚠️ 需降级 | 🟡 未接线 | ⬜ 未开始 | 覆盖率 |',
+    h3: '### 按类别（✅ / 该类总数）',
+    catIntro: '> 横看一行 = 某个能力域在各端的落地程度；纵看一列 = 某端最薄弱的域。分母 = 该类别能力数。',
+    catCols: '| 类别 | ' + ends.map((e) => e.name).join(' | ') + ' |',
+    endName: (r) => r.name,
+    catName: (c) => c,
+  })
   // ★能力总览按类别分组（与侧栏分组同构，#403）
   const byCat = {}
   for (const c of caps) (byCat[catOf[c.semantic]] ??= []).push(c)
@@ -2086,45 +2067,21 @@ async function genCapabilitiesEn(ir, ends) {
       lines.push(CAP_SHARED_EN.unsupportedNote)
       lines.push('')
     }
-    const wxMissing = refs.filter((r) => !wxKeys.has(r))
-    const webMissing = refs.filter((r) => !webKeys.has(r))
     const mpEquivEn = /[\u4e00-\u9fff]/.test(c.mpEquiv) ? '(wx-native equivalent; exact mapping in the zh version)' : c.mpEquiv // 目录 mpEquiv 含中文时 EN 降级
+    // ★判定逻辑与 zh 页、总览汇总**同源**（#1089）——文案走 CAP_SHARED_EN.endNote，不在这里写第二份
+    const endStatuses = capabilityEndStatuses({
+      ends, refs, mpEquiv: mpEquivEn, wxKeys, webKeys, root: ROOT, capSlug,
+      appBridgeKeys: APP_BRIDGE_KEYS, pushCapabilities: PUSH_CAPABILITIES, verified: HOST_RUNTIME_VERIFIED_CAPS,
+      en: true, enNotes: CAP_SHARED_EN.endNote,
+    })
     lines.push(CAP_SHARED_EN.hCompat)
     lines.push('')
     lines.push('| Target | Status | Notes |')
     lines.push('|---|---|---|')
     for (const end of ends) {
-      let status = STATUS_MARK[end.status] ?? '⬜'
-      let note
-      switch (end.id) {
-        case 'mp-weixin':
-          status = wxMissing.length ? '⚠️' : '✅'
-          note = CAP_SHARED_EN.endNote.mp(wxMissing, mpEquivEn)
-          break
-        case 'web':
-          if (!refs.length) note = CAP_SHARED_EN.endNote.webNoRefs
-          else if (webMissing.length) {
-            status = '⚠️'
-            note = CAP_SHARED_EN.endNote.webMissing(webMissing)
-          } else note = CAP_SHARED_EN.endNote.webOk
-          break
-        case 'headless': note = CAP_SHARED_EN.endNote.headless; break
-        case 'flutter': note = CAP_SHARED_EN.endNote.flutter; break
-        case 'quick-app': note = CAP_SHARED_EN.endNote['quick-app']; break
-        // ★App ends: derived from source facts (see APP_BRIDGE_KEYS comment)
-        case 'app-ios':
-        case 'app-android': {
-          const a = appEndStatus(ROOT, end.id === 'app-ios' ? 'ios' : 'android', refs, APP_BRIDGE_KEYS, {
-            capSlug, pushCapabilities: PUSH_CAPABILITIES, verified: HOST_RUNTIME_VERIFIED_CAPS, en: true,
-          })
-          status = a.status; note = a.note
-          break
-        }
-        case 'app-harmony': { const a = appEndStatus(ROOT, 'harmony', refs, APP_BRIDGE_KEYS, { capSlug, pushCapabilities: PUSH_CAPABILITIES, verified: HOST_RUNTIME_VERIFIED_CAPS, en: true }); status = a.status; note = a.note; break }
-        default: note = CAP_SHARED_EN.endNote.prototype
-      }
       const endEn = ENDS_EN[end.id]
-      lines.push(`| ${endEn?.name ?? end.name} | ${status} | ${endEn?.engine ?? end.engine} · ${note} |`)
+      const st = endStatuses[end.id]
+      lines.push(`| ${endEn?.name ?? end.name} | ${st.status} | ${endEn?.engine ?? end.engine} · ${st.note} |`)
     }
     lines.push('')
     lines.push(CAP_SHARED_EN.capLegend)
@@ -2256,6 +2213,22 @@ async function genCapabilitiesEn(ir, ends) {
   idx.push('')
   idx.push(CAP_OVERVIEW_EN.intro(vis.length))
   idx.push('')
+  // ★#1089 全端兼容进度（EN 镜像：同一份判定 + 同列结构，否则 check:en-drift 会红）
+  const cov = capabilityCoverage({
+    caps: vis, ends, hookRefs, wxKeys, webKeys, catOf, capOrder: CAP_CAT_ORDER,
+    root: ROOT, appBridgeKeys: APP_BRIDGE_KEYS, pushCapabilities: PUSH_CAPABILITIES, verified: HOST_RUNTIME_VERIFIED_CAPS,
+    en: true, enNotes: CAP_SHARED_EN.endNote,
+  })
+  renderCoverage(idx, cov, {
+    h2: '## All-target compatibility',
+    intro: '> Numbers come from **source facts** (same computation as each capability page\'s compat table): ✅ usable directly · ⚠️ target shipped but the bridge is absent → calls return `*.unsupported` and degrade explicitly · 🟡 capability bridge not wired · ⬜ target not started (including planned). **Coverage = ✅ / total** — ⚠️ does not count, because the caller gets an Err.',
+    cols: '| Target | ✅ Usable | ⚠️ Degraded | 🟡 Not wired | ⬜ Not started | Coverage |',
+    h3: '### By category (✅ / total in that category)',
+    catIntro: '> Read a row for one capability domain across targets; read a column for one target\'s weakest domains. The denominator is the number of capabilities in that category.',
+    catCols: '| Category | ' + ends.map((e) => ENDS_EN[e.id]?.name ?? e.name).join(' | ') + ' |',
+    endName: (r) => ENDS_EN[r.id]?.name ?? r.name,
+    catName: (c) => CAP_CAT_EN[c] ?? c,
+  })
   const byCat = {}
   for (const c of vis) (byCat[catOf[c.semantic]] ??= []).push(c)
   for (const cat of Object.keys(byCat).sort((a, b) => CAP_CAT_ORDER.indexOf(a) - CAP_CAT_ORDER.indexOf(b))) {
