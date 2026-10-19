@@ -10,7 +10,8 @@ import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { COMP_EN, DOMAIN_EN, MP_STATUS_EN, ENDS_EN, END_NOTE_EN, COMP_LEGEND_EN, SHARED_EN, OVERVIEW_EN, CAP_SHARED_EN, CAP_USAGE_EN, CAP_ARGS_EN, CAP_DATA_HINTS_EN, CAP_METHODS_EN, CAP_EN, CAP_CAT_EN, CAP_OVERVIEW_EN, LIFECYCLE_EVENT_EN, LIFECYCLE_EVENT_NOTE_EN, LIFECYCLE_SRC_EN } from './gen-content-en.mjs'
 // ★决策 #881：App 桥方法集抽取抽成独立模块（锚定式解析 + 符号缺失硬失败）——详见该模块头注释
-import { loadAppBridgeKeys } from './lib/app-bridge-keys.mjs'
+import { loadAppBridgeKeysFrom } from './lib/app-bridge-keys.mjs'
+import { harmonyEndStatus } from './lib/harmony-host-keys.mjs'
 // ★hook→桥方法引用抽取同法抽成独立模块（锚定式 + 硬失败）；三条契约共用 lib/ts-source-scan.mjs 原语
 import { extractHookBridgeRefs, HOOK_FACTORY } from './lib/hook-bridge-refs.mjs'
 // ★平台桥成员集 = 手写桥（capability-bridges.ts）∪ 声明式桥（generated/bridge-ext.ts）——见模块头注释
@@ -215,7 +216,8 @@ function endSupportLine(m, labels) {
 //   【决策 #881】解析抽到 `lib/app-bridge-keys.mjs`（锚定式：export function → 顶层 return 对象 → 深度 0
 //   成员名，方法简写/属性箭头两种风格都收）；旧窄正则 `/^\s{4}(get[A-Z]\w*)\(/` 只认简写 ⇒ 13 个只抽到 3 个。
 //   数据源文件/工厂符号/返回对象缺失 ⇒ 硬失败抛错（不静默得空集）。细节见该模块头注释。
-const APP_BRIDGE_KEYS = loadAppBridgeKeys(path.join(ROOT, 'packages', 'api', 'src', 'capability-app.ts')).keys
+// ★决策 #1067：多源（含拆出的 capability-app-device.ts）；鸿蒙分档见 lib/harmony-host-keys.mjs
+const APP_BRIDGE_KEYS = loadAppBridgeKeysFrom(ROOT).keys
 // ★真机双端验证的覆盖范围（SSOT = check:host-runtime 的 results/*.json——当前只含生命周期组）：
 const HOST_RUNTIME_VERIFIED_CAPS = new Set(['app-lifecycle', 'page-lifecycle', 'background'])
 const MP_STATUS_LABEL = { ok: 'L1 原语', compat: 'L2 兼容层', private: '平台私有', missing: '缺失' }
@@ -2005,12 +2007,8 @@ function genCapabilities(ir, ends) {
             note = '渲染核心已落地——能力桥未接线'
           }
           break
-        case 'app-harmony':
-          // ★鸿蒙：桥是**平台中立 TS**（壳注入标识即生效）——但鸿蒙宿主壳尚未构建 ⇒ 诚实标 🟡
-          note = refs.length && refs.every((r) => APP_BRIDGE_KEYS.has(r))
-            ? 'App 桥已就绪（平台中立）——鸿蒙宿主壳未接线'
-            : '渲染核心已落地——能力桥未接线'
-          break
+        // ★鸿蒙三档判定收在 lib（决策 #1067）——本文件只接线，不放判定逻辑
+        case 'app-harmony': { const h = harmonyEndStatus(ROOT, refs, APP_BRIDGE_KEYS); status = h.status; note = h.note; break }
         default: note = '渲染核心已落地——能力桥未接线'
       }
       capRows.push({ name: end.name, status, note: `${end.engine} · ${note}` })
@@ -2604,11 +2602,7 @@ async function genCapabilitiesEn(ir, ends) {
             note = CAP_SHARED_EN.endNote.prototype
           }
           break
-        case 'app-harmony':
-          note = refs.length && refs.every((r) => APP_BRIDGE_KEYS.has(r))
-            ? 'App bridge ready (platform-neutral TS) — Harmony host shell not wired'
-            : CAP_SHARED_EN.endNote.prototype
-          break
+        case 'app-harmony': { const h = harmonyEndStatus(ROOT, refs, APP_BRIDGE_KEYS, true); status = h.status; note = h.note; break }
         default: note = CAP_SHARED_EN.endNote.prototype
       }
       const endEn = ENDS_EN[end.id]

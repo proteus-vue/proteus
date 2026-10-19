@@ -156,8 +156,13 @@ describe('平台桥成员集抽取（生成器 ↔ 源码 显式契约 · 两源
         const s = seg(slug)
         expect(s, `${dir}/${slug} 的 Web 应为 ✅`).toMatch(/\|\s*(Web SPA)\s*\|\s*✅/)
         expect(s, `${dir}/${slug} 的 MP 应为 ✅`).toMatch(/\|\s*(微信小程序|WeChat Mini Program)\s*\|\s*✅/)
-        // App 端仍是 🟡（宿主壳未接线——不得顺手谎报为 ✅）
-        expect(s, `${dir}/${slug} 的 iOS 应为 🟡`).toMatch(/\|\s*(iOS 原生|iOS native)\s*\|\s*🟡/)
+        // ★2026-10-19（决策 #1067）：App 端状态按**源码事实**分档，不再一律断言 🟡——
+        //   keep-screen-on 的桥方法（setKeepScreenOn）已真接 App 三端 ⇒ ✅；
+        //   document-preview 的 openDocument 仍未接 ⇒ 保持 🟡。写死 🟡 会让"真接线"被测试反向惩罚。
+        const expectIos = slug === 'keep-screen-on' ? '✅' : '🟡'
+        expect(s, `${dir}/${slug} 的 iOS 应为 ${expectIos}`).toMatch(
+          new RegExp(`\\|\\s*(iOS 原生|iOS native)\\s*\\|\\s*${expectIos}`),
+        )
       }
       // 旧的「桥未提供」表述在这两页必须消失（那是漏抽造成的谎报）
       for (const slug of ['keep-screen-on', 'document-preview']) {

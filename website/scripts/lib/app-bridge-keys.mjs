@@ -23,10 +23,21 @@ import fs from 'node:fs'
 import { maskNonCode, returnObjectMembers } from './ts-source-scan.mjs'
 
 /**
- * 契约常量：App 桥的两个工厂函数（`packages/api/src/capability-app.ts`）。
- * 二者返回对象的方法名并集 = App 端可用桥方法集。★改源码里的工厂名须同步此表（否则硬失败报错）。
+ * 契约常量：App 桥的工厂函数（**按文件分组**）。
+ * 各文件返回对象的方法名并集 = App 端可用桥方法集。★改源码里的工厂名/文件名须同步此表（否则硬失败报错）。
+ *
+ * 【★★2026-10-19 扩面（决策 #1067）】设备与系统域的 12 个桥方法在**独立文件**
+ *   `capability-app-device.ts`（反巨型化拆出）。只扫 `capability-app.ts` 会让这 12 项在
+ *   官网能力页上**仍显示 🟡（App 未接线）**——代码做了、文档谎报，与 #881 同一形态。
+ *   ⇒ 本模块改为**多源**：每个源文件各自声明工厂名，任一源缺文件/解析失败即硬失败。
  */
 export const APP_BRIDGE_FACTORIES = ['createAppNativeCapabilities', 'createAppLifecycleCapabilities']
+
+/** 多源契约（文件 → 该文件的工厂名）。新增 App 桥源文件必须登记在此（否则文档静默漏判）。 */
+export const APP_BRIDGE_SOURCES = [
+  { file: 'packages/api/src/capability-app.ts', functions: APP_BRIDGE_FACTORIES },
+  { file: 'packages/api/src/capability-app-device.ts', functions: ['createAppDeviceCapabilities'] },
+]
 
 /**
  * 抽取：给定源码 + 工厂函数名列表 → `{ keys:Set<string>, perFn:{[fn]:number}, misses:string[] }`。
@@ -71,4 +82,23 @@ export function loadAppBridgeKeys(filePath, functions = APP_BRIDGE_FACTORIES) {
     throw new Error('[app-bridge-keys] 抽取到 0 个 App 桥方法（不静默得空集）')
   }
   return { keys, perFn }
+}
+
+/**
+ * 从**多个源文件**读并合并（生成器用）。★任一源缺失/解析失败 ⇒ 抛错（不静默漏判）。
+ * @param {string} root 仓库根
+ * @param {{file:string, functions:string[]}[]} sources 默认 APP_BRIDGE_SOURCES
+ * @returns {{keys:Set<string>, perSource:{[file]:{perFn:object,count:number}}}}
+ */
+export function loadAppBridgeKeysFrom(root, sources = APP_BRIDGE_SOURCES) {
+  const keys = new Set()
+  const perSource = {}
+  for (const src of sources) {
+    const abs = root.endsWith('/') ? root + src.file : root + '/' + src.file
+    const one = loadAppBridgeKeys(abs, src.functions)
+    perSource[src.file] = { perFn: one.perFn, count: one.keys.size }
+    for (const k of one.keys) keys.add(k)
+  }
+  if (keys.size === 0) throw new Error('[app-bridge-keys] 多源合计抽取到 0 个 App 桥方法（不静默得空集）')
+  return { keys, perSource }
 }

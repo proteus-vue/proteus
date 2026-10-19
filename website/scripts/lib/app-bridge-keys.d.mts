@@ -23,3 +23,12 @@ export function loadAppBridgeKeys(
   filePath: string,
   functions?: string[],
 ): { keys: Set<string>; perFn: Record<string, number> }
+
+/** 多源契约（文件 → 该文件的工厂名）。新增 App 桥源文件必须登记在此。 */
+export const APP_BRIDGE_SOURCES: Array<{ file: string; functions: string[] }>
+
+/** 从多个源文件读并合并；任一源缺失/解析失败 ⇒ 抛错（不静默漏判） */
+export function loadAppBridgeKeysFrom(
+  root: string,
+  sources?: Array<{ file: string; functions: string[] }>,
+): { keys: Set<string>; perSource: Record<string, { perFn: Record<string, number>; count: number }> }

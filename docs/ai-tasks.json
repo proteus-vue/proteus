@@ -1573,6 +1573,33 @@
         "T-app-invoke-bytes-generic"
       ],
       "note": "【done · 决策 #1067（2026-10-19）】能力对齐专项「设备与系统」域首批 12 项（用户指定先推该域）。★四层：① JS 新文件 `capability-app-device.ts`（12 项桥 + 键盘通道 + 纯 JS 媒体查询 + `createAppCapabilities` 统一装配；同步能力走 #1066 的字节腿）；② 契约 `HOST_CAPABILITY_METHODS` 登记 12 个方法名；③ Android `DeviceCapability.java` 真实 API（Vibrator/ConnectivityManager/ClipboardManager/MediaCodecList/BatteryManager/Settings 亮度/FLAG_KEEP_SCREEN_ON）；④ iOS `device-capability.swift`（UIImpactFeedbackGenerator/NWPathMonitor/UIPasteboard/UIScreen/UIDevice/VTIsHardwareDecodeSupported/isIdleTimerDisabled）；⑤ 鸿蒙「快照 + 动作队列」（`proteus_device.h` + ArkTS `DeviceSnapshot.ets`：渲染前注入快照、渲染后 drain 动作）。★关键取舍：`capability.ts` 是存量棘轮文件（1097 行）⇒ 装配收进 device 文件，capability.ts 反而 1097→1093。★`check:host-invoke-contract` 扩面到三端设备域**独立文件**（原只扫 HostCapabilities/host-capabilities ⇒ 真实覆盖被低报）；覆盖率 android 17→29、ios 13→25、harmony 1→13（分母 31）。★破坏性验证：鸿蒙 ArkTS 写错 API 名 ⇒ ArkTS Compiler Error（证明构建真的编译新文件，不是缓存复用）。★判据：设备桥单测 9/9 + 既有能力测试 96/96、三端编译、file-size/no-json-wire/ai-tasks/script-compile/vue-tsc 绿、AAR 重建 + prebuilt 同步。★诚实边界：**真机未跑**（12 项通路待真机判据）；鸿蒙动作类=已受理非已生效、亮度=窗口亮度、剪贴板=快照；iOS 震动=触觉反馈、网络=瞬时读数。"
+    },
+    {
+      "id": "T-app-device-pages-truth",
+      "title": "官网能力页文档如实：App 桥键多源抽取 + 鸿蒙宿主真接线派生分档",
+      "type": "docs",
+      "status": "done",
+      "owner": "session:zcode-invoke-bytes-20261019",
+      "scope": [
+        "website/scripts/lib/app-bridge-keys.mjs",
+        "website/scripts/lib/app-bridge-keys.d.mts",
+        "website/scripts/lib/harmony-host-keys.mjs",
+        "website/scripts/lib/harmony-host-keys.d.mts",
+        "website/scripts/gen-content.mjs",
+        "website/content/capabilities/**",
+        "website/en/capabilities/**",
+        "tests/gen-content-harmony-host.test.ts",
+        "tests/gen-content-bridge-keys.test.ts",
+        "scripts/file-size-baseline.json"
+      ],
+      "decision": 1068,
+      "verification": "npx vitest run tests/gen-content-harmony-host.test.ts && npx vitest run tests/gen-content-app-bridge.test.ts tests/gen-content-bridge-keys.test.ts && cd website && npx tsx scripts/gen-content.mjs --check && node website/scripts/check-en-drift.mjs && node website/scripts/check-doc-links.mjs && node scripts/check-file-size.mjs",
+      "branch": null,
+      "related": [
+        "T-app-device-domain",
+        "T-app-invoke-bytes-generic"
+      ],
+      "note": "【done · 决策 #1068（2026-10-19）】#1067 把设备域桥拆到独立文件后，官网两处说谎：① App 列（iOS/Android）扫不到新文件 ⇒ 12 项仍显示「能力桥未接线」（漏报成功）；② 鸿蒙列写死「宿主壳未接线」⇒ 真接了却仍报落后（多报落后）。修：`APP_BRIDGE_SOURCES` 多源合并 + 新增 `harmony-host-keys.mjs`（桥方法 → 宿主方法显式映射 + 从宿主 C++ 源码扫已实现方法；未登记即硬失败）；分档函数收在 lib（生成器存量棘轮，只留一行调用 ⇒ 净减 6 行）。首版坑：用 `APP_DEVICE_METHODS` 的键当桥方法名（与能力页 refs 对不上）⇒ 改抽工厂返回对象成员名。落页 48 行：iOS/Android 12 项全 ✅；鸿蒙 11 项 ✅（keyboard/media-query 仍 🟡——壳推通道与纯 JS 判定不在宿主口径）。判据：新测试 10/10 + 既有 6/6 + 7/7；check:content/en-drift/doc-links/stats/capability-priority/file-size/ai-tasks/script-compile/gates-sync/vue-tsc 全绿；基线降钉。★只改声明面，不改运行时；真机通路仍待验。"
     }
   ]
 }

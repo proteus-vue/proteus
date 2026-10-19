@@ -49,9 +49,9 @@ useNetwork(): Promise<CapResult<NetworkType>>
 | Web SPA | ✅ | vue-dom · webBridge implementation (direct platform API) |
 | WeChat Mini Program | ✅ | skyline (WebView fallback) · wx bridge → wx.getNetworkType |
 | Headless (SSR / testing) | ✅ | headless · mock bridge injected (testing / SSR tier) |
-| iOS native | 🟡 | native-ios (UIKit + CoreAnimation) · render core shipped — capability bridge not wired |
-| Android native | 🟡 | native-android (self-drawn Canvas) · render core shipped — capability bridge not wired |
-| HarmonyOS | 🟡 | native-harmony (ArkUI RenderNode) · render core shipped — capability bridge not wired |
+| iOS native | ✅ | native-ios (UIKit + CoreAnimation) · App host bridge (capability-app.ts) · bridge method wired |
+| Android native | ✅ | native-android (self-drawn Canvas) · App host bridge (capability-app.ts) · bridge method wired |
+| HarmonyOS | ✅ | native-harmony (ArkUI RenderNode) · Harmony host wired (proteus_device.h / host_app_runtime_impl.h) |
 | Flutter hybrid | 🟡 | flutter · same JS logic layer — capability bridge not wired |
 | Quick App | ⬜ | Quick App engine (TBD) · target not started |
 

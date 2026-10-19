@@ -6601,3 +6601,18 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 【判据】设备桥单测 **9/9**（方法名契约 12 项全命中 + 字节腿 + 降级分档 unsupported/failed + 键盘归一 + 媒体查询求值 + 形状直通）；能力测试合计 **96/96**；`check:host-invoke-contract`（含扩面）/ `check:no-json-wire` / `check:file-size` / `check:ai-tasks` / `check:script-compile` / `vue-tsc` 全绿；三端编译（javac + C 桥 + JNI / swiftc / OHOS clang）全绿；**鸿蒙 hvigor clean 构建的 ArkTS 编译通过**（`PackageHap` 完成；`SignHap` 因 p12 口令在另一台机加密而失败——既有环境态，非本轮引入）；AAR 重建 + 鸿蒙 prebuilt 同步。
 【诚实边界（逐端登记，不粉饰为"三端一致"）】① **真机通路未跑**——本批只到编译/单测/门禁，12 项的真机判据待补（属 `T-app-runtime-capabilities` 的逐项验收）。② 鸿蒙：动作类回 `{accepted:true}` = **已受理**不是已生效；亮度 = **窗口亮度**；剪贴板 = **快照值**（延迟上界 = 一次渲染间隔）；HEVC 判据是"枚举里有该 MIME"，与 Android `MediaCodecList` / iOS `VideoToolbox` 的口径不同。③ iOS：震动是**触觉反馈**（系统决定是否真震）；网络是**瞬时读数**（一次性 monitor）；方向优先界面方向、回落物理方向（锁定竖屏时会分叉）。④ Android：亮度写需 WRITE_SETTINGS；后台读剪贴板被系统拒绝（返回空并在 note 说明）；网络不区分 4G/5G。
 【下一步】设备域剩 8 项（传感器流 / 元素查询 / 交叉观察 / 录屏 / 缓存管理 / AR / Beacon / 微信运动）逐项落地；随后按域推进（网络与通信 / 存储与文件 / 位置与地图 …）。
+
+1068. **★★★官网能力页的「文档如实」两处收口：多源 App 桥键 + 鸿蒙宿主真接线派生 · 决策**（2026-10-19 · 承接 #1067）：
+【问题（#1067 带来的两个"文档说谎"，方向相反）】
+  · **iOS/Android 列说谎（漏报成功）**：能力页的 App 端判定从 `capability-app.ts` 的桥方法名派生（#881 的 `APP_BRIDGE_KEYS`）。#1067 把设备域 12 项桥拆到**独立文件** `capability-app-device.ts` ⇒ 生成器扫不到 ⇒ 那 12 项在官网上**仍显示 🟡「能力桥未接线」**——代码做了、文档不认（与 #881 同一形态，只是这次是"拆文件"引发的）。
+  · **鸿蒙列说谎（多报落后）**：#1067 已把设备域真接进鸿蒙宿主，但生成器对鸿蒙列的文案**写死**为「App 桥已就绪（平台中立）——鸿蒙宿主壳未接线」⇒ 从"保守"变成"说谎"。
+【落地】
+  · `lib/app-bridge-keys.mjs` 增 `APP_BRIDGE_SOURCES`（文件→工厂名列表）+ `loadAppBridgeKeysFrom(root)`：**多源**合并，任一源缺失/解析失败 ⇒ 硬失败。生成器改用它（`APP_BRIDGE_KEYS` 从 14 → 28 个桥方法）。
+  · 新增 `lib/harmony-host-keys.mjs`：① 用 `ts-source-scan.mjs::returnObjectMembers` 抽 `createAppDeviceCapabilities` **返回对象的方法名**（才是能力页 refs 用的真实桥方法名）；② `BRIDGE_TO_HOST` 显式登记桥方法 → 宿主方法（`getDevice → device.info`、`getDeviceCapability → device.hevc`）；③ 从鸿蒙宿主 C++ 源码扫已实现方法；④ 交集 = 鸿蒙真的答得出的桥方法。`null` 表示不由宿主回答（`getKeyboard` 壳推 / `createMediaQuery` 纯 JS）⇒ **保持 🟡**。
+  · 分档函数 `harmonyEndStatus()` 收在 lib（生成器是存量棘轮文件，塞 20 行判定会被 `check:file-size` 判红；生成器只留一行调用，净**减 6 行**）。
+【★首版踩的坑（已修）】第一版用 `APP_DEVICE_METHODS` 的**键**当桥方法名（`info`/`screen`/`hevc`）⇒ 与能力页 refs（`getDevice`/`getScreen`/`getDeviceCapability`）对不上 ⇒ 一项都没匹配。正确数据源是**工厂返回对象的成员名**（`returnObjectMembers`），`APP_DEVICE_METHODS` 只是"键→宿主方法"的转发表。
+【★硬失败（不静默）】`createAppDeviceCapabilities` 返回对象里出现 `BRIDGE_TO_HOST` 未登记的桥方法 ⇒ 抛错——否则**新增桥方法会永远 🟡**（代码做了、文档不认），正是本决策要消灭的形态。
+【另一处被连带修正的旧断言】`tests/gen-content-bridge-keys.test.ts` 里写死「keep-screen-on / document-preview 的 App 端仍是 🟡」；前者（`setKeepScreenOn`）已在 #1067 真接三端 ⇒ 断言按**源码事实**分档（keep-screen-on ✅ / document-preview 🟡），不再一律 🟡（写死 🟡 会让"真接线"被测试反向惩罚）。
+【落页效果（24 页 × 2 = 48 行）】12 个能力页（device/screen/battery/orientation/network/brightness/vibrate/clipboard/keep-screen-on/keyboard/media-query/device-capability）中：iOS/Android 12 项全 ✅；鸿蒙 11 项 ✅（keyboard / media-query 仍 🟡，因壳推通道与纯 JS 判定不在宿主口径内）。
+【判据】新增 `tests/gen-content-harmony-host.test.ts` **10/10**（多源桥键 / 鸿蒙派生 12 项 / 不由宿主回答的两项必须不绿 / 未登记即抛错 / 宿主方法抽取形态 / 三页分档端到端）+ 既有 `gen-content-app-bridge` 6/6 + `gen-content-bridge-keys` 7/7；`check:content`（幂等）/ `check:en-drift`（305 对）/ `check:doc-links`（386 篇）/ `check:stats` / `check:capability-priority` / `check:file-size` / `no-json-wire` / `ai-tasks` / `script-compile` / `gates-sync` / `vue-tsc` 全绿；文件规模基线已降钉（gen-content 2813→2807 · capability 1097→1093）。
+【诚实边界】① 只覆盖设备与系统域（其余能力族在鸿蒙落地时须登记自己的工厂与 `BRIDGE_TO_HOST`；**不登记 = 文档保守 🟡**，宁可少说不多说）；② `getKeyboard` 的鸿蒙 ✅ 要等壳真的推 `__proteusHostKeyboard`（当前只装了通道、壳未推）；③ 本决策只改**声明面**，不改任何运行时行为——真机通路仍待验（#1067 边界不变）。
