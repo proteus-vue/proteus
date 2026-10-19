@@ -31,12 +31,20 @@ public final class QuickJsEngine {
             //   （由 scripts/setup-android-js-engine.sh 生成并打进 APK 的 lib/ 目录）
             System.loadLibrary("quickjs_jni");
             loaded = true;
+            // ★#1098：dev 构建启用 P0 长任务采样（release 零开销——采样只 read 时钟）
+            try { JsTaskSampler.setEnabled(ProteusBuildConfig.DEV); } catch (Throwable ignored) { /* 无构建配置时默认关 */ }
         } catch (Throwable t) {
             loadError = t.getClass().getSimpleName() + ": " + t.getMessage();
         }
     }
 
     public static boolean isAvailable() { return loaded; }
+
+    /** ★#1098：P0 长任务观测读数（JSON；判据/面板读它）。纯观测，不改变执行行为。 */
+    public static String perfStats() { return JsTaskSampler.statsJson(); }
+
+    /** ★#1098：清空采样（判据起始基线用）。 */
+    public static void resetPerf() { JsTaskSampler.reset(); }
     public static String getLoadError() { return loadError; }
 
     /** 引擎标识（诊断：确认 .so 真的加载了 QuickJS） */
@@ -104,10 +112,17 @@ public final class QuickJsEngine {
         }
     }
 
-    /** 执行 JS 并解析出结果（★最小 JSON 解析：只取 value/error 两个字段，不引第三方） */
+    /**
+     * 执行 JS 并解析出结果（★最小 JSON 解析：只取 value/error 两个字段，不引第三方）。
+     *
+     * ★★★决策 #1098：**P0 长任务采样**埋在这里（唯一入口）——生产宿主有十几处 eval 调用点，
+     *   逐个埋必然漏；本函数覆盖全部同步段。★采样**只读时钟**，不改变执行行为。
+     */
     public static EvalResult eval(String source) {
         if (!loaded) return new EvalResult(false, null, "引擎未加载：" + loadError, "{}");
+        long t0 = JsTaskSampler.isEnabled() ? System.nanoTime() : 0L;
         String raw = nativeEval(source);
+        if (t0 != 0L) JsTaskSampler.record(JsTaskSampler.labelOf(source), t0);
         return parse(raw);
     }
 
@@ -158,8 +173,10 @@ public final class QuickJsEngine {
 
     public static EvalResult evalWithHost(String source, Object host) {
         if (!loaded) return new EvalResult(false, null, "引擎未加载：" + loadError, "{}");
+        long t0 = JsTaskSampler.isEnabled() ? System.nanoTime() : 0L;
         nativeSetHostCallback(host);
         String raw = nativeEvalWithHost(source);
+        if (t0 != 0L) JsTaskSampler.record(JsTaskSampler.labelOf(source), t0);
         return parse(raw);
     }
 

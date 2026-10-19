@@ -507,6 +507,11 @@ public final class AppActivity extends Activity {
                 java.util.Iterator<String> it = f.keys();
                 while (it.hasNext()) { String k = it.next(); o.put(k, f.get(k)); }
             }
+            // ★#1098：P0 长任务观测（读最新快照——**不排空**：要的是累计分布，不是"本次事件"）
+            try {
+                JSONObject js = new JSONObject(QuickJsEngine.perfStats());
+                o.put("jsTasks", js);
+            } catch (Throwable ignored) { }
             return o.toString();
         } catch (Throwable t) { return base; }
     }

@@ -112,7 +112,7 @@ final class ProteusHostDriver {
           });
         })();
         """
-        _ = ctx.evaluateScript(shim)
+        _ = JsTaskSampler.eval(ctx, shim)
     }
 
     /// 记录一次手势 trace（供面板 Events）——由 dev 场景在派发后调用（决策 #693）。
@@ -150,7 +150,7 @@ final class ProteusHostDriver {
     /// 当前屏实例化节点树（面板 Elements）——经运行期快照桥
     func snapshotTreeJson() -> String? {
         guard let ctx = self.ctx else { return nil }
-        return ctx.evaluateScript("__proteusSuperappTree ? __proteusSuperappTree() : null")?.toString()
+        return JsTaskSampler.eval(ctx, "__proteusSuperappTree ? __proteusSuperappTree() : null")?.toString()
     }
 
     /// ★每 tick 现取的节点树（决策 #698，对齐 Android `pushDevTree`/`syncDevScreen`）。
@@ -220,11 +220,16 @@ final class ProteusHostDriver {
         // ★★★CPU Profiler（决策 #715）：JS 侧运行期阶段耗时（instantiate/flush/dispatch/handler「hN」）——
         //   排空式取走。嵌套进 perf（面板 `renderProf`/`applyPerf` 消费 `perf.profile`）。
         if let ctx = self.ctx,
-           let profStr = ctx.evaluateScript("__proteusSuperappProfile ? __proteusSuperappProfile() : '{}'")?.toString(),
+           let profStr = JsTaskSampler.eval(ctx, "__proteusSuperappProfile ? __proteusSuperappProfile() : '{}'")?.toString(),
            let pd = profStr.data(using: .utf8),
            let prof = (try? JSONSerialization.jsonObject(with: pd)) as? [String: Any],
            !prof.isEmpty {
             o["profile"] = prof
+        }
+        // ★#1098：P0 长任务观测（字段名与 Android 一致，面板可对比）
+        if let jd = JsTaskSampler.statsJson().data(using: .utf8),
+           let js = (try? JSONSerialization.jsonObject(with: jd)) as? [String: Any] {
+            o["jsTasks"] = js
         }
         guard let d = try? JSONSerialization.data(withJSONObject: o, options: [.sortedKeys]) else { return "{}" }
         return String(data: d, encoding: .utf8) ?? "{}"
@@ -233,7 +238,7 @@ final class ProteusHostDriver {
     /// ★DevTools REPL（决策 #701）：在设备 JSContext 里求值一个表达式，返回结果字符串（主线程调用）。
     func evalExpr(_ expr: String) -> String {
         guard let ctx = self.ctx else { return "（无 JSContext）" }
-        let v = ctx.evaluateScript(expr)
+        let v = JsTaskSampler.eval(ctx, expr)
         if let exc = ctx.exception { return "✗ " + (exc.toString() ?? "异常") }
         return v?.toString() ?? "undefined"
     }
@@ -274,8 +279,9 @@ final class ProteusHostDriver {
         guard let ctx = JSContext() else { return "{\"ok\":false,\"error\":\"JSContext 创建失败\"}" }
         self.ctx = ctx
         // ① 平台标识（TS 侧自报——三端同契约）
-        _ = ctx.evaluateScript("var __PROTEUS_HOST_ID__ = 'ios';")
-        _ = ctx.evaluateScript("var __PROTEUS_HOST_FRAME_DRIVER__ = 'CADisplayLink';")
+        JsTaskSampler.setEnabled(ProteusBuildConfig.DEV)   // ★#1098 P0 长任务采样（release 零开销）
+        _ = JsTaskSampler.eval(ctx, "var __PROTEUS_HOST_ID__ = 'ios';")
+        _ = JsTaskSampler.eval(ctx, "var __PROTEUS_HOST_FRAME_DRIVER__ = 'CADisplayLink';")
         // ② 运行期桥（mount/applyOps/readRects/onGesture + invoke/memUsage/gc/post）
         caps.jsContextRef = ctx.jsGlobalContextRef
         let rtHost = SuperappRuntimeHost(draw: bridge, caps: caps)
@@ -308,8 +314,8 @@ final class ProteusHostDriver {
             }
         }
         // ③ eval bundle + boot（路由栈装配 + 入口 tab）
-        _ = ctx.evaluateScript(bundleSource)
-        let boot = ctx.evaluateScript("__proteusSuperappBootJson()")?.toString() ?? "null"
+        _ = JsTaskSampler.eval(ctx, bundleSource)
+        let boot = JsTaskSampler.eval(ctx, "__proteusSuperappBootJson()")?.toString() ?? "null"
         if !boot.contains("\"ok\":true") {
             NSLog("[proteus] PROTEUS_HOST_BOOT_FAIL %@", String(boot.prefix(240)))
             return "{\"ok\":false,\"error\":\"boot 失败\",\"raw\":\(jsonEscape(String(boot.prefix(240))))}"
@@ -346,7 +352,7 @@ final class ProteusHostDriver {
         guard let ad = try? JSONSerialization.data(withJSONObject: args),
               let argsStr = String(data: ad, encoding: .utf8) else { return "{\"ok\":false}" }
         let argsLit = jsonEscape(argsStr)   // JSON 字符串字面量（带引号）
-        let out = ctx.evaluateScript("__proteusSuperappRender(\(argsLit))")?.toString() ?? "{\"ok\":false}"
+        let out = JsTaskSampler.eval(ctx, "__proteusSuperappRender(\(argsLit))")?.toString() ?? "{\"ok\":false}"
         if out.contains("\"ok\":false") {
             NSLog("[proteus] PROTEUS_HOST_RENDER_FAIL page=%@ %@", page, out)
             devLog("error", "render fail · \(page) · \(String(out.prefix(160)))")
@@ -369,7 +375,7 @@ final class ProteusHostDriver {
     func navigate(to name: String) {
         guard let ctx else { return }
         let before = currentName(ctx)
-        _ = ctx.evaluateScript("__proteusSuperappNav(\(jsonEscape(name)))")
+        _ = JsTaskSampler.eval(ctx, "__proteusSuperappNav(\(jsonEscape(name)))")
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             _ = self.renderCurrent(ctx)
@@ -420,7 +426,7 @@ final class ProteusHostDriver {
     /// 返回上一屏（运行期 router.back）
     func goBack() {
         guard let ctx else { return }
-        _ = ctx.evaluateScript("__proteusSuperappBack()")
+        _ = JsTaskSampler.eval(ctx, "__proteusSuperappBack()")
         DispatchQueue.main.async { [weak self] in
             _ = self?.renderCurrent(ctx)
             self?.refreshChrome()
@@ -430,7 +436,7 @@ final class ProteusHostDriver {
     // ── 状态读取 ──
 
     private func superappState(_ ctx: JSContext) -> [String: Any] {
-        guard let s = ctx.evaluateScript("__proteusSuperappState()")?.toString(),
+        guard let s = JsTaskSampler.eval(ctx, "__proteusSuperappState()")?.toString(),
               let d = s.data(using: .utf8),
               let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] else { return [:] }
         return o

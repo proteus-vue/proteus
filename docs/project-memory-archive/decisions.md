@@ -8141,3 +8141,61 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
      ★如实说明：**当前证据 = 单测（13/13）+ 两端宿主编译通过**，真机服务发现**未取证**。
   ② App 端只做 **discovery**，不做 **advertise**（契约里没有 register/advertise 成员）。
   ③ \`serviceType\` 由调用方给（不做"扫全部"——mDNS 全扫代价大且多数平台不允许）。
+
+1098. **★★P0 长任务观测落地（线程治理第一批）+ 对调研文档的一处技术纠正 · 决策**（2026-10-19 · 用户「顺便看下新增的文档，关于线程治理的」）:
+
+【背景：`docs/Proteus_运行时线程模型调研与决策建议.md` 是**调研产物**，无实现、无决策号】
+  我逐条核实了它引用的关键事实，**结论站得住**：
+  · \`quickjs-host.ts\` 真的有「诚实拒绝后台线程」（\`threads.background=false\`，\`runOnThread('background')\`
+    抛错并记账，注释明写"不做假排队"）；
+  · 该 runtime **只有 \`tests/quickjs-host.test.ts\` 在用**（生产宿主各自直接操作引擎）；
+  · \`enqueue\` **确实无上限**，且 \`suspended\` 时 \`pumpFrame\` 直接 \`return 0\` ⇒ **挂起期间入队永久堆积**
+    （结构性缺陷，不是使用不当）；
+  · \`quickjs_jni.c\` 无 \`JS_SetInterruptHandler\` ⇒ **不可抢占**。
+  ⇒ "不自研线程引擎"的判断是**基于本仓真实代码**，不是偏好。尤其第 1 与第 3 条并列看：
+    **已经有一个写了诚实拒绝的 runtime，但它没接进生产** ⇒ 再自研就是第三个互不相认的调度层
+    （与 #1094「做完了但没接上」同族）。
+
+【★对文档的一处技术纠正（它写错了）】
+  文档 §6 P1 写「三端同构、**零原生改动**」。这句不成立：
+  **App 三端都没有 \`setTimeout\`**（#1095 实测：superapp bundle 里 \`setTimeout\` 出现 0 次，宿主也未注入）。
+  ⇒ Web/MP 能用 \`setTimeout(0)\` 让出，但 App 端要让出**必须新增宿主推进入口**
+    （现有 \`nativeRunPendingJobs()\` 是同步的、只在特定时机被调，没有"下一帧再继续"的回调机制）。
+  若按文档原话直接写 scheduler，会得到「Web 能跑、App 端 \`yield()\` 卡死」的原语——
+  ★正是 #1095 踩过的同类坑（判据/实现假设了宿主不存在的能力）。
+
+【本轮做了什么：只做 P0（纯观测、零行为改动）】
+  · \`hosts/android/.../runtime/JsTaskSampler.java\`：单次同步段 >50ms 记一条；
+    环形缓冲 **64 条**（★观测装置自己不能成为内存问题）+ total/long/maxMs/avgMs/recent/recentP95Ms。
+  · \`packages/cli/templates-host/ios/shell/JsTaskSampler.swift\`：**字段名与 Android 逐项一致**
+    （否则两端面板读数无法对比）。
+  · **埋点位置（两端不同，原因如实登记）**：
+    · Android：JS 执行**唯一入口**是 \`QuickJsEngine.eval\`（\`nativeEval\` 只被它调）⇒ 埋一处覆盖全部
+      （\`eval\` + \`evalWithHost\` 两处同步段都计时——bundle 装载也是长任务候选）。
+    · iOS：\`JSContext.evaluateScript\` 是**系统 API**，无法内部埋点 ⇒ 包一层 \`JsTaskSampler.eval(ctx, src)\`，
+      并把壳里**全部** 12 处调用点改走它。
+    ★这条差异本身是证据：**"统一入口"是平台给的，不是设计能保证的**——
+      iOS 侧将来若有人直接调 \`evaluateScript\`，采样就会漏（判据用静态扫描守着）。
+  · 读数并入既有 perf 报告（两端字段名都叫 \`jsTasks\`）：Android 心跳 \`takePerfJsonForPing\` ·
+    iOS \`perfJson()\`。
+  · **只读时钟**：不排队、不让出、不取消、不改返回值——release 构建 \`enabled=false\`，零开销。
+
+【判据】\`tests/thread-p0-sampler.test.ts\` **11/11**：
+  ① 两端阈值/容量/JSON 字段名**逐项一致**（9 个字段名都查）；
+  ② **纯观测**（采样器不得含 \`queue.add\`/\`Thread.sleep\`/\`postDelayed\`/\`reject(\`；iOS 包装原样返回）；
+  ③ 环形缓冲有上限（两端各一条正则守着）；
+  ④ Android 埋点在唯一入口（两处 record）+ dev 才启用；iOS 壳**不得残留裸 \`ctx.evaluateScript(\`**
+    （残留数 = 0），且 ≥5 处走采样器；
+  ⑤ 两端都把 \`jsTasks\` 并入 perf 报告。
+  + **破坏性验证**：把 iOS 的 \`JsTaskSampler.eval(ctx, expr)\` 改回 \`ctx.evaluateScript(expr)\`
+    ⇒ ④ 当场红并点名"那些 JS 段不会被采样"；还原 ⇒ 11/11 绿。
+  + \`check:android-host-compile\` / \`check:cli-host-compile\`（壳 3→4：新文件已被 glob 收录）/
+    \`check:file-size\` / \`check:no-blind-wait\` / \`tsc --noEmit\` 全绿。
+
+【诚实边界】
+  ① **只测同步段**：\`eval\` 内部发起的异步任务（Promise/job）不计时——那部分由宿主泵
+     \`nativeRunPendingJobs\` 消费，属后续批次。
+  ② \`recentP95Ms\` 是**最近样本的分位**（环形缓冲 64 条），不是全量分位——字段名已体现（\`recent*\`）。
+  ③ **未做真机读数**：本轮交付的是采样装置 + 编译通过 + 单测；真实基线需跑一轮真机。
+  ④ **P1（scheduler 原语）未做**——建议等 P0 基线出来再定切片粒度，且动手前必须先解决
+     "App 端无 \`setTimeout\`" 的让出机制（见上纠正）。
