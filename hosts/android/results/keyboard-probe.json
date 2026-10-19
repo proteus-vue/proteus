@@ -1,0 +1,19 @@
+{
+  "channel": "no-eval",
+  "diag_has_window_focus": true,
+  "diag_is_finishing": false,
+  "diag_root_w": 1200,
+  "diag_root_h": 2236,
+  "diag_root_attached": true,
+  "diag_sdk": 37,
+  "diag_edit_focused": true,
+  "diag_edit_attached": true,
+  "diag_edit_w": 0,
+  "diag_edit_h": 0,
+  "diag_wait_ms": 41,
+  "shown_height_dp": 336.3333435058594,
+  "js_calls_on_show": 0,
+  "hidden_height_dp": 0,
+  "js_calls_total": 0,
+  "js_log": "[]"
+}

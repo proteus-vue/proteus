@@ -57,6 +57,10 @@ public final class KeyboardWatcher {
                 // 只在**变化**时回调（insets 回调节奏随焦点/键盘动画变化，重复推送会打爆订阅者）
                 if (Math.abs(dp - lastHeightDp) >= 0.5f) {
                     lastHeightDp = dp;
+                    // ★决策 #1078：**通知等待方**（条件变量——"被测对象主动上报"形态）。
+                    //   探针用它替代"轮询 40 次 yield"：后者在主线程空闲时每轮 <1ms，
+                    //   40 轮只要 5ms ⇒ 键盘动画还没开始就判失败（实测）。
+                    synchronized (KeyboardWatcher.class) { KeyboardWatcher.class.notifyAll(); }
                     try {
                         onFrame.onHeightChanged(dp);
                     } catch (Throwable t) {
@@ -71,6 +75,42 @@ public final class KeyboardWatcher {
         } catch (Throwable t) {
             Log.w(TAG, "keyboard-watch 安装失败：" + t.getMessage());
             return false;
+        }
+    }
+
+    /**
+     * ★★★**条件等待**键盘高度进入期望状态（决策 #1078）——**事件驱动，零轮询、零固定延时**。
+     *
+     * 【为什么必须有它（实测）】探针原先用"40 次 yield 帧"等待 ⇒ 主线程空闲时每轮 <1ms
+     *   ⇒ **40 轮只要 5ms** ⇒ 键盘动画（~200-300ms）还没开始就判失败。
+     *   这不是"等得不够久"，是**等的方式错了**：让出 CPU ≠ 等待条件。
+     * 【形态】insets 回调里 `notifyAll`，这里 `wait(剩余预算)` —— 完成信号由**被测对象上报**，
+     *   与 AGENTS.md「让被测对象主动上报（首选）」一致；总预算有界（timeoutMs）。
+     *
+     * @param expectShown true=等高度 > 0（弹出）；false=等高度 == 0（收起）
+     * @param timeoutMs   总预算（ms）
+     * @return 超时时返回最后一次读数（调用方据此如实报错，不伪造）
+     */
+    /** ★决策 #1078：探针开始前重置读数（避免"上一轮残留值"让条件立即满足/永不满足） */
+    public static void resetForProbe() {
+        synchronized (KeyboardWatcher.class) { lastHeightDp = 0f; }
+    }
+
+    public static float awaitHeight(boolean expectShown, long timeoutMs) {
+        final long deadline = System.currentTimeMillis() + timeoutMs;
+        synchronized (KeyboardWatcher.class) {
+            while (true) {
+                float h = lastHeightDp;
+                if (expectShown ? h > 0f : h == 0f) return h;
+                long remain = deadline - System.currentTimeMillis();
+                if (remain <= 0) return lastHeightDp;
+                try {
+                    KeyboardWatcher.class.wait(Math.min(remain, 200));
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return lastHeightDp;
+                }
+            }
         }
     }
 

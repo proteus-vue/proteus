@@ -115,12 +115,14 @@ public class MainActivity extends Activity {
                     }
                     return;
                 }
+                if ("dev.proteus.KEYBOARD".equals(a)) { runKeyboardProbeAsync(); return; } // ★#1078 键盘探针
                 if (p != null) testPath = p;
                 runAll();
             }
         };
         android.content.IntentFilter filter = new android.content.IntentFilter("dev.proteus.RUN");
         filter.addAction("dev.proteus.CRASH");
+        filter.addAction("dev.proteus.KEYBOARD"); // ★#1078 键盘探针（独立异步 action——漏加 = 广播到不了）
         // ★Android 14+ 要求显式声明导出行为
         if (android.os.Build.VERSION.SDK_INT >= 34) {
             registerReceiver(receiver, filter, android.content.Context.RECEIVER_EXPORTED);
@@ -134,6 +136,8 @@ public class MainActivity extends Activity {
     }
 
     /** 报告目录：★外置存储（release 包无 run-as，脚本经 adb pull 取回） */
+    private void runKeyboardProbeAsync() { KeyboardProbe.runAsync(this, root, this::writeReport); } // ★#1078
+
     private File reportDir() {
         File d = getExternalFilesDir(null);
         return d != null ? d : getFilesDir();
@@ -1331,7 +1335,7 @@ public class MainActivity extends Activity {
             //   JS 侧"我收到了"可伪造；本记账在 Java 进程内，判据要求两者对齐（任一环断即红）。
             HostLifecycleEvents le = this.lifecycleEvents;
             if (le != null) out.put("host_app_events", le.stats());
-            try { out.put("keyboard_probe", new KeyboardProbe(this, root).run()); } catch (Throwable kt) { out.put("keyboard_probe", new org.json.JSONObject().put("error", String.valueOf(kt))); } out.put("ok", r.optBoolean("ok") && f.optBoolean("async_resolved")); // ★C14 #1075 键盘探针
+            out.put("ok", r.optBoolean("ok") && f.optBoolean("async_resolved"));
         } catch (Throwable t) {
             try {
                 out.put("ok", false);
@@ -1845,8 +1849,6 @@ public class MainActivity extends Activity {
     }
 
     /** 静态版写报告（演示壳没有实例成员） */
-
-
 
     /** 灯光秀宿主（诊断/生命周期用） */
     private LightsHost lightsHost = null;
@@ -6391,7 +6393,6 @@ public class MainActivity extends Activity {
         }
     }
 
-
     /**
      * ★★M3 手势验收：**平台识别器 + 核心命中标注 target**。
      *
@@ -6613,6 +6614,5 @@ public class MainActivity extends Activity {
         for (int i = 0; i < list.size(); i++) if (list.get(i).startsWith(prefix)) return i;
         return -1;
     }
-
 
 }

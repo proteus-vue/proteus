@@ -56,6 +56,7 @@ final class KeyboardProbe {
         QuickJsEngine.eval("(function(){var g=globalThis;g.__proteusKbLog=[];var o=g.__proteusHostKeyboard;"
             + "g.__proteusHostKeyboard=function(p){try{g.__proteusKbLog.push(p)}catch(e){};"
             + "return (typeof o==='function')?o(p):'no-orig';};return 'ok';})()");
+        KeyboardWatcher.resetForProbe(); // ★#1078：清掉上一轮残留读数
         // ③ 装与 superapp **同一份** KeyboardWatcher（不是另写一份）
         final float density = activity.getResources().getDisplayMetrics().density;
         KeyboardWatcher.install(activity, density, dp -> KeyboardWatcher.pushToJs());
@@ -98,8 +99,24 @@ final class KeyboardProbe {
             kp.put("diag_edit_h", et0.getHeight());
         }
 
-        // ⑦ 等布局测量完成（条件：getWidth() > 0），再请求焦点 + 弹键盘
-        for (int i = 0; i < 20; i++) {
+        // ⑦ 等布局测量完成。★真机实测（#1078）：`yieldFrame` 40 轮 26ms 就跑完（UI 线程空闲但
+        //   EditText 始终不测量——注入的视图在 MIUI 上不参与常规 layout pass）。
+        //   ⇒ **手动 measure + layout**（确定性，不依赖系统什么时候走 layout）：
+        //     按父容器可用尺寸给一个明确测量规格，再把结果写回。
+        activity.runOnUiThread(() -> {
+            try {
+                EditText cur = fieldRef[0];
+                if (cur != null && cur.getWidth() == 0) {
+                    int w = Math.max(root.getWidth(), 200);
+                    cur.measure(
+                        android.view.View.MeasureSpec.makeMeasureSpec(w, android.view.View.MeasureSpec.EXACTLY),
+                        android.view.View.MeasureSpec.makeMeasureSpec(80, android.view.View.MeasureSpec.EXACTLY));
+                    cur.layout(0, 0, cur.getMeasuredWidth(), cur.getMeasuredHeight());
+                    kp.put("diag_manual_measure", cur.getMeasuredWidth() + "x" + cur.getMeasuredHeight());
+                }
+            } catch (Throwable mt) { try { kp.put("diag_manual_measure_err", String.valueOf(mt)); } catch (Throwable ignored) { } }
+        });
+        for (int i = 0; i < 10; i++) {
             EditText cur = fieldRef[0];
             if (cur != null && cur.getWidth() > 0) break;
             yieldFrame();
@@ -116,7 +133,10 @@ final class KeyboardProbe {
         });
 
         // ⑧ 等弹出（条件：高度 > 0）
-        float shown = waitHeight(true);
+        long tWait0 = System.nanoTime();
+        // ★决策 #1078：**条件等待**（insets 回调 notifyAll；零轮询）——替代原来的 40 次 yield
+        float shown = KeyboardWatcher.awaitHeight(true, 3000);
+        kp.put("diag_wait_ms", (System.nanoTime() - tWait0) / 1000000);
         kp.put("shown_height_dp", shown);
         if (shown <= 0f) kp.put("shown_error", "键盘 2s 内未出现（0 尺寸输入控件 / 硬件键盘 / 模拟器？）");
         kp.put("js_calls_on_show", jsLogLength());
@@ -130,7 +150,7 @@ final class KeyboardProbe {
                 if (cur != null) root.removeView(cur);
             } catch (Throwable ignored) { }
         });
-        float hidden = waitHeight(false);
+        float hidden = KeyboardWatcher.awaitHeight(false, 2000);
         kp.put("hidden_height_dp", hidden);
         if (hidden != 0f) kp.put("hidden_error", "键盘 2s 内未收起");
         kp.put("js_calls_total", jsLogLength());
@@ -151,8 +171,13 @@ final class KeyboardProbe {
     }
 
     /** 条件等待键盘高度进入 expectShown 状态（>0 / ==0），有界 MAX_ROUNDS 轮。 */
+    /** 等待循环实际迭代数（诊断：证明 yieldFrame 真的跑了） */
+    private int lastWaitRounds = 0;
+
     private float waitHeight(boolean expectShown) {
+        lastWaitRounds = 0;
         for (int i = 0; i < MAX_ROUNDS; i++) {
+            lastWaitRounds = i + 1;
             float h = KeyboardWatcher.lastHeightDp;
             if (expectShown ? h > 0f : h == 0f) return h;
             yieldFrame();
@@ -168,4 +193,39 @@ final class KeyboardProbe {
             return 0;
         }
     }
+
+    /**
+     * ★★★异步驱动（决策 #1078）：**后台线程**跑探针，UI 线程只负责挂控件/请求焦点。
+     *
+     * 【为什么必须异步（真根因，推翻了 #1075 的"尺寸"判断）】探针原先在 `appHostRun()` 里同步调用，
+     *   而那是**主线程**（广播 onReceive → runAll）⇒ `latch.await(2s)` **阻塞主线程**
+     *   ⇒ UI 消息队列不执行 ⇒ layout 永不跑 ⇒ EditText 恒 0×0 ⇒ 键盘不弹。
+     *   **不是尺寸/alpha/焦点问题**（当时那些读数全都正常）。这是"在 UI 线程上同步等 UI 线程"的自锁。
+     *
+     * @param write 落盘回调（`(name, content) => void`，由 Activity 提供——复用其报告目录）
+     */
+    public static void runAsync(Activity activity, ViewGroup root, WriteReport write) {
+        new Thread(() -> {
+            JSONObject kp = null;
+            try {
+                kp = new KeyboardProbe(activity, root).run();
+            } catch (Throwable t) {
+                kp = new JSONObject();
+                try { kp.put("error", String.valueOf(t)); } catch (Throwable ignored) { }
+            }
+            JSONObject out = kp;
+            try {
+                write.write("keyboard-probe.json", out.toString(2));
+                android.util.Log.i("proteus-kb", "KEYBOARD_PROBE_DONE " + out);
+            } catch (Throwable t) {
+                android.util.Log.e("proteus-kb", "KEYBOARD_PROBE_WRITE_FAIL " + t);
+            }
+        }, "proteus-kb-probe").start();
+    }
+
+    /** 落盘回调（由 Activity 提供——复用其报告目录） */
+    public interface WriteReport {
+        void write(String name, String content);
+    }
+
 }

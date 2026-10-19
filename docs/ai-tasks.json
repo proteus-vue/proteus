@@ -1750,7 +1750,7 @@
       "id": "T-keyboard-android-probe",
       "title": "Android 键盘监听抽成可复用单元 + 探针（探针未打通，装置问题已定位）",
       "type": "capability",
-      "status": "blocked",
+      "status": "done",
       "owner": "session:zcode-invoke-bytes-20261019",
       "scope": [
         "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/KeyboardWatcher.java",
@@ -1758,14 +1758,14 @@
         "hosts/android/app/src/main/java/dev/proteus/layoutcore/dev/MainActivity.java",
         "hosts/android/results/**"
       ],
-      "decision": 1075,
-      "verification": "bash hosts/android/check-host-compile.sh && bash hosts/android/run-host-runtime.sh",
+      "decision": 1079,
+      "verification": "bash hosts/android/run-keyboard-probe.sh && bash hosts/android/check-host-compile.sh",
       "branch": null,
       "related": [
         "T-keyboard-device-proof",
         "T-app-keyboard-push"
       ],
-      "note": "【blocked · 决策 #1075（2026-10-19）】【Handoff】做到哪：① KeyboardWatcher.java 抽出（任何 Activity 一行 install 即可；SuperappActivity 改委托，行为不变）；② dev/MainActivity 加键盘探针（与 iOS 同口径），判据 ⑪ 两端共用。★已验证有效：channel=\"function\"（JS 接收通道正确装了，证明 #1074 修法在 Android 也生效）；diag_has_window_focus=true / root_w=1200 / root_h=2236 / attached=true。★未做：真实键盘弹收未打通——diag_edit_w=0 / h=0（EditText 已获焦、已挂窗但测量为 0×0）⇒ MIUI 上 0 尺寸视图不触发输入法。5 轮未解决（1×1 → MATCH_PARENT×40 + 条件等待 → 仍 0）。★下一步（可照做）：改用**真实可见输入控件**（测试场景放一个可见 EditText，脚本 adb shell input tap 点它），不要程序化注入隐藏控件——showSoftInput 对未完成测量的视图在 MIUI 上行为不稳定。★坑：探针里 showSoftInput 必须等布局完成；alpha=0 无法获焦。★判据状态：Android 整体 exit=0 全绿，键盘项如实报\"未覆盖\"（不假绿）；iOS 有完整证据（#1074 336pt→0pt）。"
+      "note": "【done · 决策 #1079（2026-10-19）· 原 blocked（#1075）已解】真根因（推翻 #1075 的\"尺寸\"判断）：探针在**主线程**（广播 onReceive→runAll）里 latch.await 自锁 ⇒ layout 永不跑 ⇒ EditText 恒 0×0。修：① 探针移出 appHostRun，改**独立广播 action** dev.proteus.KEYBOARD + 后台线程；② **等待机制从\"40 次 yield\"改条件变量**（insets 回调 notifyAll + awaitHeight wait）——原方案\"让出 CPU ≠ 等待条件\"，主线程空闲时 40 轮只要 5ms，键盘动画还没开始就判失败；③ resetForProbe 清残留；④ 判据修正：本场景不 eval bundle ⇒ channel=no-eval 是设计不是缺陷。★真机：真实键盘 **336.33dp → 收起 0dp**，条件等待 26ms（事件驱动）。★三端键盘证据齐：iOS 336pt→0（含 JS 2 次推送）· 鸿蒙 314vp→0 · Android 336.33dp→0。★纪律账：Android 探针合计 12 轮真机（教训：等待逻辑应先纯逻辑验证）。"
     },
     {
       "id": "T-harmony-device-reverify",
