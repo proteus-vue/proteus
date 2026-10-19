@@ -7634,3 +7634,66 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   ② ⚠️（端已落地但桥未提供）在汇总里单列而**不计入覆盖率**——这是刻意的：能调用但拿到 Err
      对开发者不算"能用"。若将来要区分"有降级路径也算可用"，需另加一列而不是改口径。
   ③ 百分比按端展示，**不提供加权总分**——不同能力对业务的重要性差异极大，加权会造出假精度。
+
+1090. **★★★能力页 ✅ 的第二道判据：桥方法存在 ≠ 能用——12 处"纯空壳"假绿降 ⚠️ · 决策**（2026-10-19 · 用户追问「✅ 是只有接线才算还是有桥就算」）:
+
+【问题（用户追问直接命中的缺陷）】
+  查证三端 ✅ 的判定口径**并不一致**：
+  · 微信 / Web：`wxKeys.has(ref)` / `webKeys.has(ref)` —— **方法名存在**就 ✅，完全不看方法体；
+  · iOS / Android：App 桥工厂返回对象里有该方法名 ⇒ ✅（不看宿主是否真实现）；
+  · 鸿蒙：JS 桥 + 宿主 C++ `method == "..."` **双证据** ⇒ 最严；
+  · 键盘（三端）：额外要求壳源码里有推送证据。
+  ⇒ 方法名存在但方法体**没有任何平台对接**的成员被判 ✅。实测 12 处：
+    Web 11 处：`getPreload` / `getImageEdit` / `getWindow` / `getAd` / `createCacheManager` /
+      `getSocket` / `getPrivacy` / `getAR` / `joinLiveRoom` / `createLivePusher` / `navigateMiniProgram`
+    微信 1 处：`loadExtension`
+    业务永远拿到 `*.unsupported`，文档却写「webBridge 实现（平台 API 直连）」。
+  与 #1085「空订阅装成可用」同族：**看起来可用、实际不工作**。
+
+【修法（新增 lib，判据与判定同源）】
+  · `website/scripts/lib/bridge-impl-reality.mjs`：
+    `extractFactoryMembers(src, factory)` 抽工厂返回对象的「成员名 → 方法体」；
+    `classifyMemberBody(code, end)` 三档：`shell`（有 unsupported 且零平台入口）/ `real` / `pure-js`（无 unsupported）。
+    平台入口白名单：Web = `g`/`nav`/`doc`/`navigator`/`document`/`WebSocket`/`fetch`/`MediaSource`… 微信 = `wx.`。
+  · 接进 `cap-end-status.mjs`：`capabilityEndStatuses()` 里 Web/MP 分支先查空壳集 ⇒ ⚠️；
+    状态口径图例同步改写（说明"各端严格度不同"，⚠️ 现在也涵盖纯空壳）。
+    ★为守住生成器行数棘轮（只减不增），空壳集的加载**内化进 lib**（`shellsFor(root, end)` 惰性 + 缓存），
+      生成器**零新增传参**（否则 4 个调用点各 +1 行就越界；实测差 3 行，靠压缩注释补齐）。
+  · 文案同样放 lib（`SHELL_NOTE.zh/en`），生成器不写第二份。
+
+【★两个把判据做失效的坑（都实测踩过，已写进测试）】
+  ① **参数表里的类型字面量**：`webBridge(g: typeof globalThis & { navigator?: … })` ——
+     直接找第一个 `{` 会落进参数里 ⇒ 抽出的成员数恒为 0，判据**静默失效**（首版 shell 集为空）。
+     修法：先做括号配对跳过 `( … )`，再定位函数体。
+  ② **错误文案里的平台名**：`navigateMiniProgram` 的 Err 文案写着「请用 `window.open`」——
+     不剥字符串就会被判成"真有平台调用"⇒ 空壳漏网。修法：平台入口用**剥字符串后**的文本判断；
+     而 `unsupported` **本身就在字符串里**（`'preload.unsupported'`）⇒ 它必须用**原文**判断。
+     ★一条判据要同时用两种文本，这点必须显式写下来，否则改一处就退化成"全部 pure-js"。
+
+【效果】
+  · Web ✅ 62 → **51**（覆盖率 74% → **61%**）、⚠️ 22 → 33；
+  · 微信 ✅ 81 → **80**、⚠️ 3 → 4；
+  · iOS / Android / 鸿蒙 / Flutter / 快应用 **零变化**（它们的判据本来就不是"名字存在"）。
+  · 12 个页面逐页可见原因：`webBridge getPreload 是纯空壳（全部出口 unsupported）→ 恒 Err`。
+
+【判据】新增 `tests/capability-bridge-reality.test.ts` **14/14**：
+  ① 合成样本逐形态（全 unsupported / 创建即抛 / 有探测入口 / 文案含平台名 / 纯 JS / 微信）；
+  ② 真桥抽取不落进参数表（webBridge 成员 > 60）；
+  ③ 已知 12 处空壳全部命中（防判据退化）；④ **反向保护**：17 个真实现不得被误判空壳
+     （`getBattery`/`getLocation`/`getWebAssembly`/`getDeviceCapability`/`createCanvas`/`getStorage`/`loadExtension`…）；
+  ⑤ 产物：12 页对应端列都是 ⚠️ 且文案点名"纯空壳" + 总览 Web ✅ 数严格小于 62。
+  + **破坏性验证**：给 `navigateMiniProgram` 加一个 `g.window` 引用（让它"看起来有平台调用"）⇒
+    ③ 当场红并点名漏判；还原 ⇒ 14/14 绿。
+  + `check:content` / `check:en-drift`（305 对）/ `check:file-size` / 相关 9 个测试文件 **89/89** 全绿。
+
+【诚实边界】
+  ① 仍是**文本判定**（不执行 TS）：白名单外的平台 API 会被误判为空壳 ⇒ 文档保守标 ⚠️
+     （方向安全：只会少说，不会多说）。新增平台入口时补 `WEB_ENTRY` 白名单。
+  ② 只抓**整块**都不干活的纯空壳。**部分方法空、主体方法如实 Err** 的仍算 ✅
+     （如 Web `getBluetooth` 只有特性探测、BLE 操作全 Err）——与 #1085 已确立的口径一致。
+     若将来要更严（"主要操作可用"才算 ✅），需另立判据，不能改这条的语义。
+  ③ iOS/Android 的判据仍是"App 桥工厂里有方法名"，**不验证宿主是否实现对应 invoke**
+     （本次核对 30 个 ✅ 的宿主方法都在，但这是人工核对，不是门禁）。
+     该方向的门禁是 `check:host-invoke-contract`（按端报告覆盖率），它目前只覆盖宿主声明面。
+  ④ 顺带发现 `check:host-invoke-contract` 漏认 Swift 的 `if f.method == "http.request"` 形态
+     ⇒ 报 iOS 缺 `http.request`（实际已实现）。同 #1080 的"门禁覆盖面没跟上实现形态"，未修。

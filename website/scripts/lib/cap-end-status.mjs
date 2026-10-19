@@ -14,6 +14,7 @@
 // 【状态四档】✅ 直接可用 · ⚠️ 端已落地但桥未提供 → 调用返回 `*.unsupported` 显式降级 ·
 //   🟡 能力桥未接线 · ⬜ 端未开始（含 📋 规划已入库，汇总时并入"未开始"）。
 import { appEndStatus } from './harmony-host-keys.mjs'
+import { loadPureShellMembers } from './bridge-impl-reality.mjs'
 
 /** ends.ts 的文档状态 → 四档标记 */
 export const STATUS_MARK = { '✅ 已落地': '✅', '🟡 部分落地': '🟡', '📋 规划已入库': '📋', '⬜ 未开始': '⬜' }
@@ -43,20 +44,34 @@ export function capabilityEndStatuses({
   if (en && !enNotes) throw new Error('[cap-end-status] 英文模式必须传 enNotes（避免文案写第二遍）')
   const wxMissing = refs.filter((r) => !wxKeys.has(r))
   const webMissing = refs.filter((r) => !webKeys.has(r))
+  // ★#1090：桥成员**存在但方法体是纯空壳**（全部出口 unsupported、零平台调用）⇒ 恒 Err。
+  //   仅"名字存在"就判 ✅ 会对外谎报（实测 Web 侧 11 处、MP 侧 1 处）。
+  //   ★惰性内化：只需 `root`，调用方不必传（生成器是存量棘轮，多一行就超线）。
+  const wxShellsHit = refs.filter((r) => shellsFor(root, 'mp')?.has(r))
+  const webShellsHit = refs.filter((r) => shellsFor(root, 'web')?.has(r))
+  const shellText = en ? SHELL_NOTE.en : SHELL_NOTE.zh
   const out = {}
   for (const end of ends) {
     let status = STATUS_MARK[end.status] ?? '⬜'
     let note
     switch (end.id) {
       case 'mp-weixin':
-        status = wxMissing.length ? '⚠️' : '✅'
-        note = en
-          ? enNotes.mp(wxMissing, mpEquiv)
-          : (wxMissing.length ? `wx 桥未提供 ${wxMissing.join('/')} → Err 显式降级` : `wx 桥 → ${mpEquiv}`)
+        if (wxShellsHit.length) {
+          status = '⚠️'
+          note = shellText.mp(wxShellsHit)
+        } else {
+          status = wxMissing.length ? '⚠️' : '✅'
+          note = en
+            ? enNotes.mp(wxMissing, mpEquiv)
+            : (wxMissing.length ? `wx 桥未提供 ${wxMissing.join('/')} → Err 显式降级` : `wx 桥 → ${mpEquiv}`)
+        }
         break
       case 'web':
         if (!refs.length) {
           note = en ? enNotes.webNoRefs : 'webBridge 平台桥（wx 缺席时默认注入）'
+        } else if (webShellsHit.length) {
+          status = '⚠️'
+          note = shellText.web(webShellsHit)
         } else if (webMissing.length) {
           status = '⚠️'
           note = en ? enNotes.webMissing(webMissing) : `webBridge 未提供 ${webMissing.join('/')} → Err 显式降级（平台无直通 API）`
@@ -175,3 +190,47 @@ export function renderCoverage(idx, cov, o) {
   }
   idx.push('')
 }
+
+/**
+ * ★#1090：一次性加载 Web / MP 两端的「纯空壳」桥成员集合（生成器只留一行调用）。
+ * 判据实现在 `bridge-impl-reality.mjs`；这里只做装配——生成器是存量棘轮文件（只减不增）。
+ * @param {string} root 仓库根
+ * @returns {{WEB_SHELLS: Set<string>, MP_SHELLS: Set<string>}}
+ */
+export function loadBridgeShells(root) {
+  return { WEB_SHELLS: loadPureShellMembers(root, 'web'), MP_SHELLS: loadPureShellMembers(root, 'mp') }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// 「纯空壳」桥成员（#1090）—— 惰性加载 + 文案，**生成器零感知**
+//   ★为什么内化：判定所需的只有 `root`（已传），而生成器是存量棘轮文件（只减不增）。
+//     让调用方逐处传 `wxShells/webShells/shellNotes` 会让 4 个调用点各 +1 行 ⇒ 越界。
+// ══════════════════════════════════════════════════════════════════
+
+const shellCache = new Map()
+
+/** 某端的纯空壳桥成员集（按 root 缓存）。 */
+function shellsFor(root, end) {
+  if (!root) return undefined
+  const key = root + '::' + end
+  if (!shellCache.has(key)) shellCache.set(key, loadPureShellMembers(root, end))
+  return shellCache.get(key)
+}
+
+/** 纯空壳的端说明文案（中英各一版；与页面表同源，不写第二份）。 */
+export const SHELL_NOTE = {
+  zh: {
+    mp: (names) => `wx 桥 ${names.join('/')} 是纯空壳（恒 Err，无平台对接）→ 显式降级`,
+    web: (names) => `webBridge ${names.join('/')} 是纯空壳（全部出口 unsupported）→ 恒 Err`,
+  },
+  en: {
+    mp: (names) => `wx bridge ${names.join('/')} is a pure shell (always rejects, no platform integration) → explicit Err`,
+    web: (names) => `webBridge ${names.join('/')} is a pure shell (every path returns unsupported, no platform integration) → always Err`,
+  },
+}
+
+/**
+ * ★#1090：能力页「兼容进度」的状态口径（中英共用一份事实——各端判据严格度不同，必须在页面上说清）。
+ * 放在 lib 而不是生成器：后者是存量棘轮文件（只减不增）。
+ */
+export const CAP_LEGEND_ZH = '> 状态口径：✅ 端已落地·本能力可用；⚠️ 端已落地·桥未提供**或桥是纯空壳**→Err 显式降级（方法存在但每一条路径都返回 unsupported 不算可用）；🟡 能力桥未接线；⬜ 端未开始。★**各端判据严格度不同**：微信/Web 要求桥方法存在**且方法体真有平台对接**；iOS/Android 要求 App 桥工厂里有该方法；鸿蒙要求 JS 桥 + 宿主分派**双证据**。端架构对照见 [端与成熟度](/docs/framework/ends-matrix)。'

@@ -13,7 +13,7 @@ import { COMP_EN, DOMAIN_EN, MP_STATUS_EN, ENDS_EN, END_NOTE_EN, COMP_LEGEND_EN,
 import { loadAppBridgeKeysFrom } from './lib/app-bridge-keys.mjs'
 import { capabilityIntro, assertGuideCoverage } from './lib/capability-docs.mjs'; import { EN_ARG_PLACEHOLDERS } from './lib/cap-usage-en.mjs'   // ★#1084/#1087
 import { usageOf } from './lib/cap-usage/index.mjs'   // ★#1088 示例 SSOT（中英同源）
-import { capabilityEndStatuses, bucketOf, STATUS_MARK, capabilityCoverage, renderCoverage } from './lib/cap-end-status.mjs'   // ★#1089 逐端判定 + 总览汇总
+import { capabilityEndStatuses, bucketOf, STATUS_MARK, capabilityCoverage, renderCoverage, CAP_LEGEND_ZH } from './lib/cap-end-status.mjs'   // ★#1089/#1090 逐端判定（含纯空壳）+ 总览汇总
 // ★hook→桥方法引用抽取同法抽成独立模块（锚定式 + 硬失败）；三条契约共用 lib/ts-source-scan.mjs 原语
 import { extractHookBridgeRefs, HOOK_FACTORY } from './lib/hook-bridge-refs.mjs'
 // ★平台桥成员集 = 手写桥（capability-bridges.ts）∪ 声明式桥（generated/bridge-ext.ts）——见模块头注释
@@ -221,7 +221,7 @@ function endSupportLine(m, labels) {
 const APP_BRIDGE_KEYS = loadAppBridgeKeysFrom(ROOT).keys
 // ★真机双端验证的覆盖范围（SSOT = check:host-runtime 的 results/*.json——当前只含生命周期组）：
 const HOST_RUNTIME_VERIFIED_CAPS = new Set(['app-lifecycle', 'page-lifecycle', 'background'])
-// ★★推送型能力（决策 #1069）：桥方法只返回订阅句柄，**必须壳真的推**才可用——判据读壳源码
+// ★#1069 推送型（壳真推才可用）· #1090 纯空壳降 ⚠️（lib/bridge-impl-reality.mjs）
 const PUSH_CAPABILITIES = new Set(['keyboard'])
 const MP_STATUS_LABEL = { ok: 'L1 原语', compat: 'L2 兼容层', private: '平台私有', missing: '缺失' }
 
@@ -1497,7 +1497,7 @@ function genCapabilities(ir, ends) {
       appBridgeKeys: APP_BRIDGE_KEYS, pushCapabilities: PUSH_CAPABILITIES, verified: HOST_RUNTIME_VERIFIED_CAPS,
     })
     const capRows = ends.map((end) => ({ name: end.name, status: endStatuses[end.id].status, note: `${end.engine} · ${endStatuses[end.id].note}` }))
-    lines.push(...compatSection(capRows, '> 状态口径：✅ 端已落地·本能力可用；⚠️ 端已落地·桥未提供→Err 显式降级；🟡 能力桥未接线；⬜ 端未开始。端架构对照见 [端与成熟度](/docs/framework/ends-matrix)。'))
+    lines.push(...compatSection(capRows, CAP_LEGEND_ZH))
     lines.push('> 铁律：能力原语全部返回 `Result<T>`（无回调 / 无全局对象）；平台不支持 → `Err` 显式降级，业务零平台分支。')
     lines.push('')
     // ★官网漏修：扩展接口段（该能力的额外 hook——富操作句柄）

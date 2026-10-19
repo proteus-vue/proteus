@@ -77,7 +77,7 @@ C47 小程序跳转（wx.navigateToMiniProgram）
 
 | 端 | 兼容 | 说明 |
 |---|---|---|
-| Web SPA | ✅ | vue-dom · webBridge 实现（平台 API 直连） |
+| Web SPA | ⚠️ | vue-dom · webBridge navigateMiniProgram 是纯空壳（全部出口 unsupported）→ 恒 Err |
 | 微信小程序 | ✅ | skyline（WebView 降级） · wx 桥 → wx.navigateToMiniProgram |
 | Headless（SSR / 测试） | ✅ | headless · mock 桥注入（测试 / SSR 档） |
 | iOS 原生 | ✅ | native-ios（UIKit + CoreAnimation） · App 宿主桥（capability-app.ts）· 桥方法已接入 |
@@ -86,7 +86,7 @@ C47 小程序跳转（wx.navigateToMiniProgram）
 | Flutter 混合 | 🟡 | flutter · 同一 JS 逻辑层——能力桥未接线 |
 | 快应用 | ⬜ | 快应用引擎（待定） · 端未开始 |
 
-> 状态口径：✅ 端已落地·本能力可用；⚠️ 端已落地·桥未提供→Err 显式降级；🟡 能力桥未接线；⬜ 端未开始。端架构对照见 [端与成熟度](/docs/framework/ends-matrix)。
+> 状态口径：✅ 端已落地·本能力可用；⚠️ 端已落地·桥未提供**或桥是纯空壳**→Err 显式降级（方法存在但每一条路径都返回 unsupported 不算可用）；🟡 能力桥未接线；⬜ 端未开始。★**各端判据严格度不同**：微信/Web 要求桥方法存在**且方法体真有平台对接**；iOS/Android 要求 App 桥工厂里有该方法；鸿蒙要求 JS 桥 + 宿主分派**双证据**。端架构对照见 [端与成熟度](/docs/framework/ends-matrix)。
 
 > 铁律：能力原语全部返回 `Result<T>`（无回调 / 无全局对象）；平台不支持 → `Err` 显式降级，业务零平台分支。
 
