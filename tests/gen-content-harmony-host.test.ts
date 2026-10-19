@@ -17,6 +17,7 @@ import {
   loadHarmonyBridgeKeys,
   BRIDGE_TO_HOST,
   DEVICE_BRIDGE_FACTORY,
+  HARMONY_BRIDGE_SOURCES,
   extractHarmonyHostMethods,
 } from '../website/scripts/lib/harmony-host-keys.mjs'
 
@@ -46,15 +47,21 @@ describe('① 多源桥键（App 桥跨文件）', () => {
 })
 
 describe('② 鸿蒙宿主派生（桥方法 → 宿主方法）', () => {
-  it('真实源码：无 misses，且 12 项宿主支持的方法全部判为已接线', () => {
+  it('真实源码：无 misses，且**所有映射到宿主方法**的桥方法都判为已接线', () => {
     const r = loadHarmonyBridgeKeys(ROOT)
     expect(r.misses).toEqual([])
-    const hosted = [...r.keys].sort()
-    expect(hosted).toEqual([
-      'getBattery', 'getBrightness', 'getDevice', 'getDeviceCapability', 'getNetwork',
-      'getOrientation', 'getScreen', 'readClipboard', 'setBrightness', 'setClipboard',
-      'setKeepScreenOn', 'vibrate',
-    ])
+    // ★不硬编码条数/名单（#1081 扩了元素域后就变了）：判据 = 映射表里每个非 null 的宿主方法，
+    //   只要宿主源码真的实现了它，就必须出现在已接线集里。这样新增域自动纳入，不会"做了却漏判"。
+    const mapped = [...HARMONY_BRIDGE_SOURCES.flatMap((x) => Object.entries(x.map))]
+      .filter(([, host]) => host !== null)
+    expect(mapped.length).toBeGreaterThan(0)
+    for (const [bridge, host] of mapped) {
+      if (!r.hostMethods.has(host as string)) continue // 宿主未实现 ⇒ 如实不在集里
+      expect(r.keys.has(bridge), `宿主已实现 ${host} ⇒ 桥方法 ${bridge} 应判已接线`).toBe(true)
+    }
+    // 设备域 12 项仍应在集里（防止上面循环因映射表被清空而空转）
+    expect(r.keys.has('vibrate')).toBe(true)
+    expect(r.keys.has('readSensor')).toBe(true) // #1080 传感器（#1082 补登记后的回归锚点）
   })
 
   it('不由宿主回答的桥方法（键盘壳推 / 纯 JS 媒体查询）必须**不**在已接线集里', () => {
@@ -129,8 +136,9 @@ describe('④ 键盘推送通道（读壳源码，不看桥方法）', () => {
     expect(KEYBOARD_PUSH_SOURCES.ios.length).toBe(2)
     // 鸿蒙：ArkTS 监听 + C++ 注入
     expect(KEYBOARD_PUSH_SOURCES.harmony.length).toBe(2)
-    // Android：壳内一处（ime + eval 推送同文件）
-    expect(KEYBOARD_PUSH_SOURCES.android.length).toBe(1)
+    // Android：实现（`KeyboardWatcher` 的 ime 监听 + eval 推送）+ 装配点（壳调 install）
+    //   ★#1075 把实现抽出壳后，证据必须跟到实现文件；两处都判才能同时抓"没实现"与"实现了没人装"。
+    expect(KEYBOARD_PUSH_SOURCES.android.length).toBe(2)
   })
 
   it('破坏性：摘掉 iOS 的通知名 ⇒ 判据变 false（不是读文档/桥方法）', () => {

@@ -41,6 +41,17 @@ export interface LayoutNode {
    *   只收静态 id；动态 `:id` 由编译器产 `VAPOR_DYNAMIC_ID_UNSUPPORTED` 诊断（不静默丢）。缺省省略 ⇒ 无 id 的节点产物逐字节不变。
    */
   elementId?: string
+  /**
+   * ★★★**元素类名**（决策 #1082）：模板上的**静态** `class`（含 `:class="'a b'"` 字面量形态）。
+   *   宿主据此支持 `.foo` 选择器（与 Web `querySelector` 的类名匹配对齐）。
+   *   ★动态 `:class`（对象/数组/变量）在构建期不可确定 ⇒ 编译器产 `VAPOR_DYNAMIC_CLASS_QUERY_UNSUPPORTED`。
+   */
+  elementClasses?: string[]
+  /**
+   * ★★★**元素数据集**（决策 #1082）：静态 `data-*` → HTML `dataset` 命名（`data-foo-bar` ⇒ `fooBar`）。
+   *   宿主据此支持 `[data-foo-bar="v"]` 选择器（与 Web 一致）。
+   */
+  elementDataset?: Record<string, string>
   /** 静态样式（**引擎字段名**：width/height/margin/flexDirection/backgroundColor/…） */
   style: Record<string, unknown>
   /**
@@ -311,6 +322,10 @@ export interface InstantiatedNode {
    *   ★必须透传（漏掉 = `useElement` 静默查不到，与 `tag`/`pseudo` 同族的静默丢失形态）。
    */
   elementId?: string
+  /** ★★★**元素类名**（决策 #1082）：`LayoutNode.elementClasses` 的透传——`.foo` 选择器的数据源。 */
+  elementClasses?: string[]
+  /** ★★★**元素数据集**（决策 #1082）：`LayoutNode.elementDataset` 的透传 —— `[data-*]` 选择器的数据源。 */
+  elementDataset?: Record<string, string>
   /** ★组件边界标记（见 LayoutNode.component；P1 组件系统） */
   component?: string
   /**

@@ -7,6 +7,17 @@ export const BRIDGE_TO_HOST: Record<string, string | null>
 /** 承载设备域桥的工厂函数名 */
 export const DEVICE_BRIDGE_FACTORY: string
 
+/** 元素查询域（#1081）的桥工厂名与方法映射 */
+export const ELEMENT_BRIDGE_FACTORY: string
+export const ELEMENT_BRIDGE_TO_HOST: Record<string, string | null>
+
+/** 参与鸿蒙分档的全部桥源（文件 + 工厂 + 该域的映射表） */
+export const HARMONY_BRIDGE_SOURCES: Array<{
+  file: string
+  factory: string
+  map: Record<string, string | null>
+}>
+
 /** 鸿蒙宿主里承载能力分发的源码（相对仓库根） */
 export const HARMONY_HOST_SOURCES: string[]
 

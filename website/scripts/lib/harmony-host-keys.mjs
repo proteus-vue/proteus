@@ -47,6 +47,13 @@ export const BRIDGE_TO_HOST = {
   setBrightness: 'device.brightness.set',
   setKeepScreenOn: 'device.keepScreenOn',
   getDeviceCapability: 'device.hevc',
+  // ★★决策 #1080（补齐 #1081 门禁抓出的漏登记）：C5 传感器三条直连宿主方法；
+  //   `subscribeSensor` 是**纯 JS**（订阅本地回调集合，采样经壳推 `__proteusHostSensor`）
+  //   ⇒ 不由宿主方法回答 ⇒ null（与 getKeyboard 同类：推送证据不在"method 分支"里）。
+  readSensor: 'device.sensor.read',
+  startSensor: 'device.sensor.start',
+  stopSensor: 'device.sensor.stop',
+  subscribeSensor: null,
   // ★不由宿主**方法分派**回答（两条都走专门通道判定，见下方 KEYBOARD_PUSH_SOURCES）：
   //   · getKeyboard：壳**主动推** `__proteusHostKeyboard`——是否有推送能力要读**壳源码**，
   //     不是读"宿主有没有某个 method 分支"。三端此前都只有 JS 接收侧、没人推（决策 #1069 修）。
@@ -54,6 +61,30 @@ export const BRIDGE_TO_HOST = {
   getKeyboard: null,
   createMediaQuery: null,
 }
+
+/**
+ * ★★★决策 #1081：**元素查询域**的桥工厂与方法映射（`capability-app-element.ts`）。
+ *   `createElementQuery` → 宿主 `element.rect`（三端都实现了：Android `ElementRectProbe` /
+ *   iOS `element-rect.swift` / 鸿蒙 `host_app_runtime_impl.h`）。
+ *   `createIntersection` → `null`：桥方法存在但**如实不支持**（缺帧级几何变化事件源）⇒ 页面保持 🟡。
+ */
+export const ELEMENT_BRIDGE_FACTORY = 'createAppElementBridge'
+export const ELEMENT_BRIDGE_TO_HOST = {
+  createElementQuery: 'element.rect',
+  createIntersection: null,
+}
+
+/**
+ * 参与鸿蒙分档的**全部**桥源（新增域必须登记——否则该域在文档上永远 🟡）。
+ * ★map 的值类型显式写 `Record<string, string | null>`：`null` = 该桥方法不由宿主方法回答
+ *   （纯 JS 或壳推通道）。不标注的话两个 map 的字面量形状不同，数组元素会被推成联合类型，
+ *   消费方读 `.map[...]` 时类型对不上（vue-tsc 实测）。
+ * @type {Array<{file: string, factory: string, map: Record<string, string | null>}>}
+ */
+export const HARMONY_BRIDGE_SOURCES = [
+  { file: 'packages/api/src/capability-app-device.ts', factory: DEVICE_BRIDGE_FACTORY, map: BRIDGE_TO_HOST },
+  { file: 'packages/api/src/capability-app-element.ts', factory: ELEMENT_BRIDGE_FACTORY, map: ELEMENT_BRIDGE_TO_HOST },
+]
 
 /** 鸿蒙宿主里承载能力分发的源码（新增承载文件必须登记——否则该能力在文档上永远 🟡）。 */
 export const HARMONY_HOST_SOURCES = [
@@ -76,19 +107,23 @@ export function extractHarmonyHostMethods(src) {
  */
 export function loadHarmonyBridgeKeys(root) {
   const misses = []
-  const devPath = path.join(root, 'packages/api/src/capability-app-device.ts')
+  /** 全部桥源的方法名（并集；用于"鸿蒙认不认这个桥方法"的交集判定） */
   let bridgeMethods = []
-  if (!fs.existsSync(devPath)) {
-    misses.push(`缺 ${path.relative(root, devPath)}（数据源缺失 = 硬失败）`)
-  } else {
-    const masked = maskNonCode(fs.readFileSync(devPath, 'utf8'))
-    const { names, miss } = returnObjectMembers(masked, DEVICE_BRIDGE_FACTORY)
-    if (miss) misses.push(miss)
-    bridgeMethods = names
-    const unregistered = names.filter((n) => !(n in BRIDGE_TO_HOST))
+  for (const source of HARMONY_BRIDGE_SOURCES) {
+    const abs = path.join(root, source.file)
+    if (!fs.existsSync(abs)) {
+      misses.push(`缺 ${source.file}（数据源缺失 = 硬失败）`)
+      continue
+    }
+    const masked = maskNonCode(fs.readFileSync(abs, 'utf8'))
+    const { names, miss } = returnObjectMembers(masked, source.factory)
+    if (miss) { misses.push(miss); continue }
+    bridgeMethods = bridgeMethods.concat(names)
+    // ★硬失败（不静默）：新增桥方法而忘了登记 ⇒ 文档永远 🟡（代码做了、文档不认）
+    const unregistered = names.filter((n) => !(n in source.map))
     if (unregistered.length) {
       misses.push(
-        `桥方法未在 BRIDGE_TO_HOST 登记：${unregistered.join(', ')}（新增桥方法必须登记，否则文档永远标 🟡）`,
+        `${source.file}：桥方法未登记主机映射：${unregistered.join(', ')}（新增桥方法必须登记，否则文档永远标 🟡）`,
       )
     }
   }
@@ -100,7 +135,9 @@ export function loadHarmonyBridgeKeys(root) {
   }
   const keys = new Set()
   for (const bridge of bridgeMethods) {
-    const host = BRIDGE_TO_HOST[bridge]
+    // ★同一桥方法名可能在多个域出现（当前没有）；按**先登记的域**取映射（与源码阅读顺序一致）
+    const map = HARMONY_BRIDGE_SOURCES.find((x) => bridge in x.map)?.map ?? {}
+    const host = map[bridge]
     if (host && hostMethods.has(host)) keys.add(bridge)
   }
   return { keys, bridgeMethods, hostMethods, misses }
@@ -122,8 +159,11 @@ export function loadHarmonyBridgeKeys(root) {
  *   ——与 Android/iOS 的即时推**语义不同**（如实记账，不粉饰为一致）。
  */
 export const KEYBOARD_PUSH_SOURCES = {
+  // ★2026-10-19（#1082）：实现已由 #1075 抽到 `runtime/KeyboardWatcher.java`——
+  //   证据必须跟到**实现所在文件**（只判壳会误报"未推送"：#1075 之后此处一直红）。
   android: [
-    { file: 'hosts/android/app/src/main/java/dev/proteus/layoutcore/shell/SuperappActivity.java', tokens: ['__proteusHostKeyboard', 'Type.ime()'] },
+    { file: 'hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/KeyboardWatcher.java', tokens: ['Type.ime()', '__proteusHostKeyboard'] },
+    { file: 'hosts/android/app/src/main/java/dev/proteus/layoutcore/shell/SuperappActivity.java', tokens: ['KeyboardWatcher.install'] },
   ],
   ios: [
     // 推送实现与装配点**两处都要**（只判装配会漏"装了但实现没推"，只判实现会漏"实现了但没人装"）

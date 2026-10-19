@@ -9,7 +9,7 @@
 import { toComponentIR } from '@proteus-vue/component-ir'
 import type { IRNode, NodeHandle, ProteusRenderBackend } from './spi'
 // ★★★决策 #1081：**元素身份索引**——Vue 自定义渲染通道里 `id` 属性是唯一能拿到「元素 id ↔ 句柄」的位置
-import { registerVueElementId } from './element-registry'
+import { registerVueElement, registerVueElementId, registerVueElementParent } from './element-registry'
 
 /** 未知标签（非 p-* / 未知 p-*）→ 编译期就该拦截，运行期硬拖底（G-41.2：禁止静默） */
 export class DispatcherError extends Error {
@@ -93,6 +93,29 @@ export function createNodeOpsDispatcher(initialBackend: ProteusRenderBackend): P
     return 0
   }
 
+/**
+ * 从 Vue 传来的 props 里抽**元素身份**（id / class / data-*）。
+ * ★与编译器侧的 `element-identity.ts` **同一份命名规则**（`data-foo-bar` ⇒ `fooBar`）——
+ *   两处不一致会让 Vue 链与 Vapor 链的 `useElement('[data-x]')` 命中不同节点。
+ */
+function identityFromProps(props: Record<string, unknown>): { id?: string; classes?: string[]; dataset?: Record<string, string> } {
+  const out: { id?: string; classes?: string[]; dataset?: Record<string, string> } = {}
+  const id = props.id
+  if (typeof id === 'string' && id) out.id = id
+  const cls = props.class
+  const clsText = typeof cls === 'string' ? cls : Array.isArray(cls) ? cls.filter((x) => typeof x === 'string').join(' ') : ''
+  const classes = clsText.split(/\s+/).filter(Boolean)
+  if (classes.length) out.classes = classes
+  const dataset: Record<string, string> = {}
+  for (const [k, v] of Object.entries(props)) {
+    if (!k.startsWith('data-')) continue
+    const key = k.replace(/^data-/, '').replace(/-([a-z])/g, (_, c: string) => c.toUpperCase())
+    dataset[key] = v == null ? '' : String(v)
+  }
+  if (Object.keys(dataset).length) out.dataset = dataset
+  return out
+}
+
   function toIRNode(type: string, props: Record<string, unknown> = {}): IRNode {
     const cir = toComponentIR(type, props)
     if (!cir) throw new DispatcherError('unknown.primitive', { type })
@@ -103,11 +126,15 @@ export function createNodeOpsDispatcher(initialBackend: ProteusRenderBackend): P
     createElement(type, props = {}) {
       const ir = toIRNode(type, props)
       const handle = current.createElement(ir)
+      // ★★★决策 #1082（用户：「选择器应该通过 vue 自定义渲染通道做映射」）：元素身份在**这一层**可知
+      //   ——`props` 是 Vue 交给 nodeOps 的初始属性。在此登记 tag/class/data-*，后续 `patchProp` 增量更新。
+      registerVueElement({ nodeId: idOf(handle), tag: type, ...identityFromProps(props) })
       trace.push({ seq: ++seq, op: 'createElement', type, semantic: ir.semantic ?? type })
       return handle
     },
     insert(child, parent, anchor) {
       current.insert(child, parent, anchor)
+      registerVueElementParent(idOf(child), parent ? idOf(parent) : null)
       trace.push({ seq: ++seq, op: 'insert', child: idOf(child), parent: parent ? idOf(parent) : null, anchor: anchor ? idOf(anchor) : null })
     },
     remove(child) {
@@ -119,6 +146,8 @@ export function createNodeOpsDispatcher(initialBackend: ProteusRenderBackend): P
       //   是可知的（Vue 的 patchProp 把模板属性交给 nodeOps）⇒ 在此登记 `元素 id → 渲染句柄 id`。
       //   引擎侧只认数字 id；能力层 `useElement('#id')` 经同一索引查回句柄 id。
       if (key === 'id' && typeof next === 'string' && next) registerVueElementId(next, idOf(el))
+      else if (key === 'class') registerVueElement({ nodeId: idOf(el), ...identityFromProps({ class: next }) })
+      else if (typeof key === 'string' && key.startsWith('data-')) registerVueElement({ nodeId: idOf(el), ...identityFromProps({ [key]: next }) })
       current.patchProp(el, key, prev, next)
       trace.push({ seq: ++seq, op: 'patchProp', el: idOf(el), key, next })
     },

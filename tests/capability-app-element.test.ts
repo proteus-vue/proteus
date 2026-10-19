@@ -18,8 +18,13 @@ import { buildLayoutTemplate } from '@proteus-vue/compiler'
 import { instantiateTemplate } from '@proteus-vue/slot-runtime'
 import {
   parseIdSelector,
+  parseSelector,
+  selectorSupport,
+  datasetKeyOf,
   registerScreenElements,
   clearScreenElements,
+  registerVueElement,
+  registerVueElementParent,
   registerVueElementId,
   clearVueElementIds,
   resolveElement,
@@ -57,6 +62,47 @@ describe('★#1081 ① 编译器：模板静态 id → LayoutNode.elementId', ()
     expect(plain, '应存在一个无 elementId 的 p-view（class=plain）').toBeTruthy()
   })
 
+  it('★#1082 静态 class / data-* 进产物（`.foo` / `[data-k]` 选择器的数据源）', () => {
+    const res = buildLayoutTemplate(SFC_WITH_IDS, 'ids.vue')
+    const hero = res.template.nodes.find((n) => n.elementId === 'hero')!
+    expect(hero.elementClasses).toBeUndefined() // 模板里 hero 没有 class
+    const plain = res.template.nodes.find((n) => n.elementId === undefined)!
+    expect(plain.elementClasses).toEqual(['plain'])
+
+    // data-*（HTML dataset 命名：data-foo-bar ⇒ fooBar）
+    const sfc2 = sfc('<p-view id="x" data-kind="a" data-foo-bar="2" style="height: 20px" />')
+    const r2 = buildLayoutTemplate(sfc2, 'ds.vue')
+    const nx = r2.template.nodes.find((n) => n.elementId === 'x')!
+    expect(nx.elementDataset).toEqual({ kind: 'a', fooBar: '2' })
+  })
+
+  it('★#1082 `:class` 字面量形态折成静态类；对象/数组形态产诊断', () => {
+    const lit = sfc(`<p-view :class="'a b'" style=\"height: 20px\" />`)
+    const r1 = buildLayoutTemplate(lit, 'lit.vue')
+    expect(r1.template.nodes[0]!.elementClasses).toEqual(['a', 'b'])
+    expect(r1.diagnostics.some((d) => d.code === 'VAPOR_DYNAMIC_CLASS_QUERY_UNSUPPORTED')).toBe(false)
+
+    const obj = sfc(`<p-view :class=\"{ on: x }\" style=\"height: 20px\" />`, 'const x = ref(true)\n')
+    const r2 = buildLayoutTemplate(obj, 'obj.vue')
+    expect(r2.diagnostics.some((d) => d.code === 'VAPOR_DYNAMIC_CLASS_QUERY_UNSUPPORTED')).toBe(true)
+  })
+
+  it('★#1082 动态 :data-* 产诊断（不静默丢）', () => {
+    const dyn = sfc(`<p-view :data-k=\"v\" style=\"height: 20px\" />`, 'const v = ref(1)\n')
+    const r = buildLayoutTemplate(dyn, 'dyn-data.vue')
+    expect(r.diagnostics.some((d) => d.code === 'VAPOR_DYNAMIC_DATASET_UNSUPPORTED')).toBe(true)
+    expect(r.template.nodes.some((n) => n.elementDataset !== undefined)).toBe(false)
+  })
+
+  it('★#1082 实例化透传 class / dataset', () => {
+    const sfc3 = sfc('<p-view id="p" class="a b" data-k="v" style="height: 20px" />')
+    const res = buildLayoutTemplate(sfc3, 'inst.vue')
+    const inst = instantiateTemplate(res.template, { viewport: { width: 390, height: 844 }, read: () => undefined })
+    const n = inst.nodes.find((x) => (x as { elementId?: string }).elementId === 'p') as unknown as { elementClasses?: string[]; elementDataset?: Record<string, string> }
+    expect(n.elementClasses).toEqual(['a', 'b'])
+    expect(n.elementDataset).toEqual({ k: 'v' })
+  })
+
   it('动态 :id 产精确诊断（不静默丢——静默丢会让 useElement 无声失效）', () => {
     const res = buildLayoutTemplate(SFC_DYNAMIC_ID, 'dyn.vue')
     const d = res.diagnostics.find((x) => x.code === 'VAPOR_DYNAMIC_ID_UNSUPPORTED')
@@ -80,18 +126,45 @@ describe('★#1081 ③ 索引：选择器解析 / 按屏分桶 / 重复 id / 整
   beforeEach(() => resetElementRegistry())
   afterEach(() => resetElementRegistry())
 
-  it('#id 与裸 id 都解析；class/复合选择器返回 null（**不**近似匹配）', () => {
+  it('选择器支持面：id/class/tag/复合/后代/子/列表/属性 支持；兄弟/伪类/伪元素/属性运算符 明确拒绝', () => {
+    // 裸 id 与 `#id` 同义（本仓既有约定）
     expect(parseIdSelector('#hero')).toBe('hero')
     expect(parseIdSelector('  #hero ')).toBe('hero')
     expect(parseIdSelector('hero')).toBe('hero')
-    expect(parseIdSelector('')).toBeNull()
-    expect(parseIdSelector(undefined)).toBeNull()
-    // ★这些必须**拒绝**（近似匹配会返回错节点，比 unsupported 危险）
-    expect(parseIdSelector('.hero')).toBeNull()
-    expect(parseIdSelector('#a .b')).toBeNull()
-    expect(parseIdSelector('div#a')).toBeNull()
-    expect(parseIdSelector('[data-x]')).toBeNull()
-    expect(parseIdSelector('#a > #b')).toBeNull()
+    expect(parseIdSelector('.hero')).toBeNull() // 已扩面：不再是 id
+
+    // ★支持面（与 Web querySelector 同一子集）
+    for (const ok of [
+      '#hero', '.card', 'p-view', '*',
+      'p-view.card', '.a.b', '#hero.card', '[data-k]', '[data-k="v"]', "[data-k='v']",
+      '.list .item', '.list > .item', 'p-view .x', '.a, .b', 'p-view#hero.card[data-k="v"]',
+    ]) {
+      expect(selectorSupport(ok).ok, `应支持：${ok}`).toBe(true)
+    }
+
+    // ★拒绝面：给出**可操作原因**，且绝不退化成"当成 id 查"
+    for (const [bad, hint] of [
+      ['.a + .b', '兄弟选择器'],
+      ['.a ~ .b', '兄弟选择器'],
+      ['li:nth-child(2)', '伪类'],
+      ['p::before', '伪元素'],
+      ['[data-k^="v"]', '属性运算符'],
+      ['[data-k~="v"]', '属性运算符'],
+    ]) {
+      const r = selectorSupport(bad)
+      expect(r.ok, `应拒绝：${bad}`).toBe(false)
+      if (!r.ok) expect(r.reason).toContain(hint)
+      // ★解析失败 ⇒ 查询必须**返回 null**（不能落到"按 id 查"的近似分支）
+      expect(resolveElement(bad, 'index')).toBeNull()
+    }
+    expect(selectorSupport('').ok).toBe(false)
+    expect(parseSelector('').reason).toBeTruthy()
+  })
+
+  it('datasetKeyOf 与 HTML dataset 命名一致（data-foo-bar ⇒ fooBar）', () => {
+    expect(datasetKeyOf('data-k')).toBe('k')
+    expect(datasetKeyOf('data-foo-bar')).toBe('fooBar')
+    expect(datasetKeyOf('data-a-b-c')).toBe('aBC')
   })
 
   it('按屏分桶：同名 id 不串屏；当前屏优先于其它屏', () => {
@@ -120,6 +193,43 @@ describe('★#1081 ③ 索引：选择器解析 / 按屏分桶 / 重复 id / 整
     expect(r.duplicates).toEqual(['dup'])
   })
 
+  it('★class / data-* / tag / 复合 / 后代 / 子 / 列表 / 文档序（Web querySelector 语义）', () => {
+    // 一棵小树：0(根 p-view) → {1(card), 2(card 无 id)}；1 → 3(item)；3 → 4(deep)
+    const tree = [
+      { id: 10, tag: 'p-view', parentId: null, elementId: 'root' },
+      { id: 11, tag: 'p-view', parentId: 10, elementClasses: ['card'], elementDataset: { kind: 'a' } },
+      { id: 12, tag: 'p-view', parentId: 10, elementClasses: ['card', 'wide'], elementDataset: { kind: 'b' } },
+      { id: 13, tag: 'p-text', parentId: 11, elementId: 'title', elementClasses: ['item'] },
+      { id: 14, tag: 'p-text', parentId: 13, elementClasses: ['deep'] },
+    ]
+    registerScreenElements('index', tree)
+
+    // .class：文档序第一个
+    expect(resolveElement('.card', 'index')).toEqual({ nodeId: 11, source: 'screen' })
+    expect(resolveElement('.wide', 'index')).toEqual({ nodeId: 12, source: 'screen' })
+    // tag
+    expect(resolveElement('p-text', 'index')).toEqual({ nodeId: 13, source: 'screen' })
+    expect(resolveElement('*', 'index')).toEqual({ nodeId: 10, source: 'screen' })
+    // 复合（同一元素多个条件同时满足）
+    expect(resolveElement('p-view.wide', 'index')).toEqual({ nodeId: 12, source: 'screen' })
+    expect(resolveElement('#title.item', 'index')).toEqual({ nodeId: 13, source: 'screen' })
+    expect(resolveElement('.card#root', 'index')).toBeNull() // root 没有 card
+    // 属性（dataset 语义）
+    expect(resolveElement('[data-kind]', 'index')).toEqual({ nodeId: 11, source: 'screen' })
+    expect(resolveElement('[data-kind="b"]', 'index')).toEqual({ nodeId: 12, source: 'screen' })
+    expect(resolveElement('[data-kind="zzz"]', 'index')).toBeNull()
+    // 后代 / 子
+    expect(resolveElement('.card .item', 'index')).toEqual({ nodeId: 13, source: 'screen' })
+    expect(resolveElement('.card > .item', 'index')).toEqual({ nodeId: 13, source: 'screen' })
+    // ★`>` 只认直接父：`.item > .deep` 成立，`.root > .deep` 不成立（deep 的父是 title）
+    expect(resolveElement('.item > .deep', 'index')).toEqual({ nodeId: 14, source: 'screen' })
+    expect(resolveElement('.card > .deep', 'index')).toBeNull()
+    // 选择器列表：**文档序**取第一个（不是按列表顺序）。
+    //   ★本树 DFS 序 = 10(root) → 11(card) → 13(title) → 14(deep) → 12(card.wide)
+    expect(resolveElement('.deep, .card', 'index')).toEqual({ nodeId: 11, source: 'screen' }) // card 在 deep 之前
+    expect(resolveElement('.deep, .wide', 'index')).toEqual({ nodeId: 14, source: 'screen' }) // deep 在 wide 之前
+    expect(resolveElement('.wide, .deep', 'index')).toEqual({ nodeId: 14, source: 'screen' }) // 列表顺序不影响
+  })
   it('整桶替换：重建后旧 id 不再可查（不留幽灵条目）', () => {
     registerScreenElements('index', [{ id: 11, elementId: 'old' }])
     expect(resolveElement('#old', 'index')).toEqual({ nodeId: 11, source: 'screen' })
@@ -168,7 +278,10 @@ describe('★#1081 ④ 能力层：selector → nodeId → 宿主 element.rect �
 
   it('boundingClientRect：内容坐标 − scrollY = Web 视口坐标', async () => {
     registerScreenElements('index', [{ id: 77, elementId: 'hero' }])
-    installElementResolver({ resolve: (s: string | null | undefined) => (parseIdSelector(s) === 'hero' ? { nodeId: 77, source: 'screen' } : null) })
+    installElementResolver({
+      resolve: (s: string | null | undefined) => (resolveElement(s, 'index')),
+      support: (s: string | null | undefined) => selectorSupport(s),
+    })
     // 宿主给**内容坐标** + 自己的滚动偏移（Web 语义由 JS 侧归一）
     const calls = makeHost({ x: 16, y: 200, width: 358, height: 120, scrollY: 50 })
     const q = createAppElementQuery()
@@ -189,6 +302,7 @@ describe('★#1081 ④ 能力层：selector → nodeId → 宿主 element.rect �
       { id: 2, elementId: 'b' },
     ])
     installElementResolver({
+      support: (s: string | null | undefined) => selectorSupport(s),
       resolve: (s: string | null | undefined) => {
         const id = parseIdSelector(s)
         if (id === 'a') return { nodeId: 1, source: 'screen' }
@@ -217,18 +331,22 @@ describe('★#1081 ④ 能力层：selector → nodeId → 宿主 element.rect �
     expect(!noIndex.ok && noIndex.error.code).toBe('element.unsupported')
 
     registerScreenElements('index', [{ id: 1, elementId: 'hero' }])
-    installElementResolver({ resolve: () => null })
+    installElementResolver({ resolve: () => null, support: (s) => selectorSupport(s) })
     const q = createAppElementQuery()
     const notFound = await q.boundingClientRect('#hero')
     expect(!notFound.ok && notFound.error.code).toBe('element.not-found')
-    const badSel = await q.boundingClientRect('.hero')
+    // ★class 选择器自 #1082 起**受支持**：没注册带该 class 的元素 ⇒ not-found（不是 unsupported）
+    const classMiss = await q.boundingClientRect('.hero')
+    expect(!classMiss.ok && classMiss.error.code).toBe('element.not-found')
+    // 真正不受支持的形态（伪类）⇒ unsupported + 可操作原因
+    const badSel = await q.boundingClientRect('li:hover')
     expect(!badSel.ok && badSel.error.code).toBe('element.unsupported')
-    expect(!badSel.ok && badSel.error.message).toContain('只支持 #id')
+    expect(!badSel.ok && badSel.error.message).toContain('伪类')
   })
 
   it('宿主未实现 element.rect ⇒ element.unsupported（不是 failed）；宿主报错 ⇒ failed', async () => {
     registerScreenElements('index', [{ id: 5, elementId: 'hero' }])
-    installElementResolver({ resolve: () => ({ nodeId: 5, source: 'screen' }) })
+    installElementResolver({ resolve: () => ({ nodeId: 5, source: 'screen' }), support: (s) => selectorSupport(s) })
     const q = createAppElementQuery()
 
     // ① 壳完全没有能力通道 ⇒ invokeHost 的 missing 分档

@@ -194,8 +194,13 @@ export type { TabBarSpec } from './tab-bar-spec'
 // ★★★决策 #1081：**元素身份索引**（模板静态 id → 引擎节点 id）——`useElement` 选择器通路的映射层。
 //   两条渲染链都写它：Vapor（`screen-runtime` 实例化后按屏建桶）· Vue 自定义渲染器（`dispatcher.patchProp`）。
 export {
+  parseSelector,
+  selectorSupport,
   parseIdSelector,
+  datasetKeyOf,
+  registerVueElement,
   registerVueElementId,
+  registerVueElementParent,
   clearVueElementIds,
   registerScreenElements,
   clearScreenElements,
@@ -204,7 +209,7 @@ export {
   elementRegistryStats,
   resetElementRegistry,
 } from './element-registry'
-export type { ElementResolution, ElementIndexSource } from './element-registry'
+export type { ElementResolution, ElementIndexSource, ElementRecord, ScreenElementNode, SelectorSupport, SelectorParseResult } from './element-registry'
 export { createSuperappRuntime } from './superapp-runtime'
 export type { SuperappRuntime, SuperappRuntimeOptions, SuperappHostPorts } from './superapp-runtime'
 export type { HostInvokeChannel, HostScreenPorts, HostScreenPortsOptions } from './screen-executor-host'

@@ -7186,3 +7186,77 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   ④ `useIntersection` 仍未实现（需渲染宿主的帧级几何通知，属下一批）。
   ⑤ Android/iOS 的 `scrollY` 取自**各自视图**的当前偏移；三端语义一致（视口坐标 = 内容坐标 − 偏移），
      但滚动**进行中**读到的是该帧快照（与 Web 的 scroll 事件时刻同性质）。
+
+1082. **★★★`useElement` 选择器面与 Web `querySelector` 对齐（class / data-* / 复合 / 后代 / 子 / 列表）+ 文档真相修复（两处既有腐化）· 决策**（2026-10-19 · 承接 #1081 的「下一批扩 class/data-*」）:
+
+【用户指定（#1081 同轮）】「验证通路没问题后真正落地就需要和 web 的查询结构保持同步了」。
+#1081 只做了 `#id`；本单把**支持面**按 Web `querySelector` 的子集补齐，并把边界写进源码注释（生成器直接带进官网）。
+
+【支持面（实现 = `render-backend/src/element-registry.ts`，与 Web 逐条对齐）】
+  | 形态 | 支持 | 说明 |
+  |---|---|---|
+  | `#id` / 裸 id | ✅ | 裸 id 是本仓既有约定（MP/web 的 `norm()` 同法） |
+  | `.class` | ✅ | 静态 class（含 `:class="'a b'"` 字面量形态，编译期折入） |
+  | `tag` / `*` | ✅ | 与 Web 类型选择器同义 |
+  | 复合（`p-view.foo#bar[data-x="1"]`） | ✅ | 同一元素多条件同时满足 |
+  | 后代（`A B`）/ 子（`A > B`） | ✅ | 祖先链任意层级 / 直接父级 |
+  | 选择器列表（`A, B`） | ✅ | **文档序**取第一个（与 `querySelector` 一致，不是按列表顺序） |
+  | `[attr]` / `[attr="v"]` / `[attr='v']` | ✅ | 属性名按 HTML `dataset` 语义（`data-foo-bar` ⇒ `fooBar`） |
+  | 兄弟（`+` / `~`） | ❌ | 需兄弟序，当前索引不记位置 ⇒ `element.unsupported` + 原因 |
+  | 伪类 / 伪元素 | ❌ | 无 CSS 引擎语义 ⇒ unsupported |
+  | `[attr~=]` / `^=` / `$=` / `*=` / `\|=` | ❌ | 未实现 ⇒ unsupported（**不**悄悄按 `=` 处理） |
+
+【四层改动】
+  · **编译器** `vapor/element-identity.ts`（由 `element-id.ts` 改名扩面）：静态 `class` → `elementClasses`、
+    静态 `data-*` → `elementDataset`（HTML dataset 命名）、`elementId` 照旧；动态 `:class`（对象/数组/变量）
+    产 `VAPOR_DYNAMIC_CLASS_QUERY_UNSUPPORTED`、动态 `:data-*` 产 `VAPOR_DYNAMIC_DATASET_UNSUPPORTED`
+    —— `:class="'a b'"` 字面量形态按静态收（Vue 语义等价，不产诊断）。
+  · **契约** `LayoutNode` / `InstantiatedNode` 加 `elementClasses` / `elementDataset`；`instantiate` 一行展开透传（0 行增长）。
+  · **索引** `element-registry.ts` 重写为「记录表 + 选择器解析 + 匹配 + 文档序 DFS」：
+    `parseSelector` / `selectorSupport` / `resolveElement` **共用同一份解析器**（不会出现"检查说支持、查询按另一套解析"）；
+    Vue 渲染链扩到 `createElement(props)` / `insert` 父子边 / `patchProp(class|data-*)`（用户点名的"vue 渲染通道"）。
+  · **能力层** `capability-app-element.ts`：`ElementResolver.support` 从**可选改必填**——
+    缺省"视作支持"会让伪类/兄弟选择器静默退化成 `not-found`（调用方以为"元素不存在"，实际是"端不解析它"）；
+    单测当场抓到该形态。
+
+【判据】
+  · `tests/capability-app-element.test.ts` **20/20**（原 14 + 6）：支持面 14 条正例 / 6 条拒绝面（带原因）·
+    `datasetKeyOf` · class/复合/后代/子/列表/文档序（含"列表顺序不影响命中"）· 编译器 class/data-* 进产物 ·
+    `:class` 字面量折静态 vs 对象形态产诊断 · 动态 `:data-*` 产诊断 · 实例化透传。
+  · `tests/screen-runtime.test.ts` 新增**端到端**用例（+1）：真编译产物 → `createScreenRuntime` → 选择器。
+    ★这一条补的是**真机抓出的盲区**：`indexElementIds` 当时只传 `elementId`，classes/dataset/tag 全丢
+    ⇒ `#id` 查得到、`.class` 全 not-found，而单测（直接调 `registerScreenElements`）**全绿**。
+  · **破坏性验证 3 条**：摘编译器身份折叠 ⇒ 7 红；摘实例化透传 ⇒ 1 红；类名只判"有无数组"不比内容 ⇒ 1 红；均复原绿。
+  · **Android 真机**（`bash hosts/android/run-element-probe.sh`）：`.sa-item` → nodeId 11（`{16,232,368,48}`）、
+    `view.sa-item` 同 nodeId；`view:hover` ⇒ `unsupported` + 原因；`#idx-read-theme` 与内核 `readRects()` 仍逐值一致。
+  · **iOS 真机**（`--superapp --drive`）：`.sa-item` 与 `#mine-row-dark` **命中同一 nodeId 16**、`view.sa-item` 同；
+    伪类 unsupported；`cross_check_ok=true`。
+  · 门禁：`test:coupled` · file-size（`capability-types.ts` 用"三行并两行"保住 3851 基线）· 契约 ·
+    no-json-wire · iOS 源清单 · 两副本同步 · `check:content`（幂等）· `check:ai-tasks` · `check:memory` ·
+    `vue-tsc` · Android javac · iOS swiftc · 鸿蒙 clang · `check:vapor-three-end`（35 项 × 3 端指纹一致）全绿。
+
+【★顺带修掉两处**既有腐化**（不是我引入的，都是门禁抓出来的）】
+  ① **`pnpm check:content` 在 HEAD 上本来就是红的**：#1080 给设备域加了 4 个传感器桥方法
+     （`readSensor`/`startSensor`/`stopSensor`/`subscribeSensor`），却没在 `BRIDGE_TO_HOST` 登记
+     ⇒ `loadHarmonyBridgeKeys` 的"未登记即硬失败"当场抛错 ⇒ 官网生成器整条跑不起来。
+     #1080 那轮漏跑了 `check:content`（只跑了单测+编译）——本单补齐登记（`subscribeSensor` 是纯 JS ⇒ `null`）。
+     ★教训：**"桥方法 + 映射登记"是一对**，加前者必须加后者，否则文档生成器直接崩（不是静默降级）。
+  ② **Android 键盘推送判据指向了旧文件**：#1075 把 IME 监听从壳抽到 `runtime/KeyboardWatcher.java`，
+     而 `KEYBOARD_PUSH_SOURCES.android` 仍只看 `SuperappActivity` ⇒ 判据误报"壳未推键盘"
+     ⇒ 键盘页 Android 从 ✅ 掉回 🟡（文档跟着说谎）。改为「实现文件 + 装配点」两处（与 iOS/鸿蒙同款纪律）。
+  ③ 顺带：`gen-content-harmony-host.test.ts` 硬编码"12 项"清单 ⇒ #1081 扩元素域后必红；改为按
+     `HARMONY_BRIDGE_SOURCES` 的映射表动态推导（新增域自动纳入，不会"做了却漏判"）。
+
+【文档真相（用户正打开着 element-query 页）】
+  · 该页 App 三端原写「渲染核心已落地——能力桥未接线」⇒ 现由**源码事实**派生为 ✅，
+    说明文案是「桥方法已接入」（**不谎称真机验证**，真机证据在本单判据里）。
+  · 选择器支持面写进 `ElementQuery` 各方法的 `@param selector`（生成器直接带出）——
+    源码与官网**同源**，不再手抄一份表格。
+
+【诚实边界】
+  ① 兄弟（`+` `~`）、伪类、伪元素、属性运算符**明确不支持**（`unsupported` + 可操作原因）——
+     索引不记兄弟位置、App 无 CSS 引擎语义；**不做近似匹配**（错节点比 unsupported 危险）。
+  ② 动态 `:id` / `:class` / `:data-*` = 运行期事实 ⇒ 编译期诊断；这类节点在相应选择器下可能查不到。
+  ③ 鸿蒙真机仍未闭环（设备 `Offline` + 锁屏），但 `element.rect` 已实现且 C++ 编译通过，
+     `check:host-invoke-contract` 判其为已接线；几何腿本身**无真机证据**（与 #1081 同一具名边界）。
+  ④ `useIntersection` 仍未实现（缺帧级几何变化事件源），本单未触及。

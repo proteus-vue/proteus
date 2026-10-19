@@ -52,7 +52,7 @@ boundingClientRect(selector?: string): Promise<CapResult<ElementRect>>
 
 | 参数 | 类型 | 必填 | 说明 |
 |---|---|---|---|
-| `selector` | `string` | 否 | CSS 选择器（缺省 = 句柄初始 id/选择器） |
+| `selector` | `string` | 否 | CSS 选择器（缺省 = 句柄初始 id）。App 端支持 `#id` / `.class` / `tag` / 复合 / 后代 / `>` / 选择器列表 / `[attr]`；兄弟（`+` `~`）、伪类、伪元素、属性运算符返回 `element.unsupported` |
 
 **返回值**：`Promise<CapResult<ElementRect>>`
 
@@ -66,7 +66,7 @@ scrollOffset(selector?: string): Promise<CapResult<ElementScrollOffset>>
 
 | 参数 | 类型 | 必填 | 说明 |
 |---|---|---|---|
-| `selector` | `string` | 否 | CSS 选择器（缺省 = 句柄初始 id/选择器） |
+| `selector` | `string` | 否 | CSS 选择器（缺省 = 句柄初始 id）。App 端支持 `#id` / `.class` / `tag` / 复合 / 后代 / `>` / 选择器列表 / `[attr]`；兄弟（`+` `~`）、伪类、伪元素、属性运算符返回 `element.unsupported` |
 
 **返回值**：`Promise<CapResult<ElementScrollOffset>>`
 
@@ -81,7 +81,7 @@ fields(options: ElementFieldsOptions, selector?: string): Promise<CapResult<Elem
 | 参数 | 类型 | 必填 | 说明 |
 |---|---|---|---|
 | `options` | `ElementFieldsOptions` | 是 | 字段开关 |
-| `selector` | `string` | 否 | CSS 选择器（缺省 = 句柄初始 id/选择器） |
+| `selector` | `string` | 否 | CSS 选择器（缺省 = 句柄初始 id）。App 端支持 `#id` / `.class` / `tag` / 复合 / 后代 / `>` / 选择器列表 / `[attr]`；兄弟（`+` `~`）、伪类、伪元素、属性运算符返回 `element.unsupported` |
 
 **返回值**：`Promise<CapResult<ElementFieldsResult>>`
 
@@ -95,7 +95,7 @@ size(selector?: string): Promise<CapResult<{ width: number; height: number }>>
 
 | 参数 | 类型 | 必填 | 说明 |
 |---|---|---|---|
-| `selector` | `string` | 否 | CSS 选择器（缺省 = 句柄初始 id/选择器） |
+| `selector` | `string` | 否 | CSS 选择器（缺省 = 句柄初始 id）。App 端支持 `#id` / `.class` / `tag` / 复合 / 后代 / `>` / 选择器列表 / `[attr]`；兄弟（`+` `~`）、伪类、伪元素、属性运算符返回 `element.unsupported` |
 
 **返回值**：`Promise<CapResult<{ width: number; height: number }>>`
 
@@ -109,7 +109,7 @@ batch(selectors: string[]): Promise<CapResult<Array<ElementRect | null>>>
 
 | 参数 | 类型 | 必填 | 说明 |
 |---|---|---|---|
-| `selectors` | `string[]` | 是 | CSS 选择器数组 |
+| `selectors` | `string[]` | 是 | CSS 选择器数组（App 端支持面同 `boundingClientRect`；数组内查不到的元素回 `null`） |
 
 **返回值**：`Promise<CapResult<Array<ElementRect \| null>>>`
 
@@ -200,9 +200,9 @@ Canvas 画布节点（`<canvas type="2d">`——wx fields({node:true}) / web HTM
 | Web SPA | ✅ | vue-dom · webBridge 实现（平台 API 直连） |
 | 微信小程序 | ✅ | skyline（WebView 降级） · wx 桥 → wx.createSelectorQuery |
 | Headless（SSR / 测试） | ✅ | headless · mock 桥注入（测试 / SSR 档） |
-| iOS 原生 | 🟡 | native-ios（UIKit + CoreAnimation） · 渲染核心已落地——能力桥未接线 |
-| Android 原生 | 🟡 | native-android（自绘 Canvas） · 渲染核心已落地——能力桥未接线 |
-| 鸿蒙 | 🟡 | native-harmony（ArkUI RenderNode） · 渲染核心已落地——能力桥未接线 |
+| iOS 原生 | ✅ | native-ios（UIKit + CoreAnimation） · App 宿主桥（capability-app.ts）· 桥方法已接入 |
+| Android 原生 | ✅ | native-android（自绘 Canvas） · App 宿主桥（capability-app.ts）· 桥方法已接入 |
+| 鸿蒙 | ✅ | native-harmony（ArkUI RenderNode） · 鸿蒙宿主已接线（proteus_device.h / host_app_runtime_impl.h） |
 | Flutter 混合 | 🟡 | flutter · 同一 JS 逻辑层——能力桥未接线 |
 | 快应用 | ⬜ | 快应用引擎（待定） · 端未开始 |
 

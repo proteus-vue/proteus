@@ -24,7 +24,7 @@ import type { RouteRecord } from '@proteus-vue/router/types'
 import { APP_SCREEN_CONTENT, APP_SCREEN_REGISTRY, APP_RUNTIME_CONTENT } from './app-screen-content.generated'
 import { createSuperappRuntime, TAB_BAR_SPEC } from '@proteus-vue/render-backend'
 // ★★★决策 #1081：元素索引 + 元素查询探针（`useElement` 选择器通路）
-import { resolveElement, elementRegistryStats, firstScreenElementId } from '@proteus-vue/render-backend'
+import { resolveElement, elementRegistryStats, firstScreenElementId, selectorSupport } from '@proteus-vue/render-backend'
 // ★与 entry-host-runtime.ts 同款：包内**相对路径**引用源（tsconfig.json 是 JSONC，加 paths 会撞校验；
 //   而相对路径让 bundler 与类型检查解析到同一份源，零配置改动）
 import { installElementResolver } from '../../../packages/api/src/capability-app-element'
@@ -463,6 +463,8 @@ export function installAppElementResolver(currentScreen: () => string): void {
       const hit = resolveElement(selector, screen || undefined)
       return hit ? { nodeId: hit.nodeId, source: hit.source } : null
     },
+    // ★与 resolve **同源**（同一份解析器）——"支持性检查"与"查询"不会走两套规则（决策 #1082）
+    support: (selector) => selectorSupport(selector),
     currentScreen,
   })
 }
@@ -484,13 +486,11 @@ export function appElementRect(argsJson: string): string {
   let nodeId = explicitId
   let source = explicitId >= 0 ? 'explicit' : ''
   if (explicitId < 0) {
+    const sup = selectorSupport(sel)
+    if (!sup.ok) return JSON.stringify({ ok: false, error: 'unsupported', reason: sup.reason, selector: sel, screen })
     const hit = resolveElement(sel, screen || undefined)
     if (!hit) {
-      const raw2 = sel.trim()
-      const looksLikeId = raw2 === '' || raw2.startsWith('#') || !/[\s.[\]\>+~:#]/.test(raw2)
-      const error = looksLikeId ? 'not-found' : 'unsupported'
-      const reason = looksLikeId ? undefined : 'App 端元素查询目前只支持 #id / 裸 id（class/复合选择器为下一批）'
-      return JSON.stringify({ ok: false, error, selector: sel, screen, registry: elementRegistryStats(), ...(reason ? { reason } : {}) })
+      return JSON.stringify({ ok: false, error: 'not-found', selector: sel, screen, registry: elementRegistryStats() })
     }
     nodeId = hit.nodeId
     source = hit.source

@@ -620,7 +620,10 @@ final class SuperappScene: NSObject {
         o["element_registry"] = evalJs?("__proteusHostAppElementRegistry()") ?? "null"
         o["element_probe"] = evalJs?("__proteusHostAppElementRect('{}')") ?? "null"
         o["element_not_found"] = evalJs?("__proteusHostAppElementRect('{\"selector\":\"#no-such-element-xyz\"}')") ?? "null"
+        // ★#1082：`.sa-item` 现在**受支持**（静态 class 已进产物）⇒ 应命中；伪类应 unsupported
         o["element_class_selector"] = evalJs?("__proteusHostAppElementRect('{\"selector\":\".sa-item\"}')") ?? "null"
+        o["element_compound_selector"] = evalJs?("__proteusHostAppElementRect('{\"selector\":\"view.sa-item\"}')") ?? "null"
+        o["element_pseudo_selector"] = evalJs?("__proteusHostAppElementRect('{\"selector\":\"view:hover\"}')") ?? "null"
         // 独立交叉核对（内核 readRects 里同一 nodeId 的矩形）
         if let pj = o["element_probe"] as? String, let pd = pj.data(using: .utf8),
            let po = (try? JSONSerialization.jsonObject(with: pd)) as? [String: Any],

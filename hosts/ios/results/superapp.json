@@ -3,12 +3,14 @@
   "dactyl_metrics" : "{\"end\":\"ios\",\"samples\":[],\"sampled\":0,\"dropped\":0}",
   "dactyl_samples" : "{\"sampled\":0,\"pending\":0,\"dropped\":0}",
   "dactyl_trail" : "{\"points\":[],\"count\":0}",
-  "element_class_selector" : "{\"ok\":false,\"error\":\"unsupported\",\"selector\":\".sa-item\",\"screen\":\"mine\",\"registry\":{\"vue\":0,\"screens\":{\"index\":5,\"messages\":3,\"mine\":4}},\"reason\":\"App 端元素查询目前只支持 #id \/ 裸 id（class\/复合选择器为下一批）\"}",
-  "element_not_found" : "{\"ok\":false,\"error\":\"not-found\",\"selector\":\"#no-such-element-xyz\",\"screen\":\"mine\",\"registry\":{\"vue\":0,\"screens\":{\"index\":5,\"messages\":3,\"mine\":4}}}",
+  "element_class_selector" : "{\"ok\":true,\"selector\":\".sa-item\",\"nodeId\":16,\"source\":\"screen\",\"screen\":\"mine\",\"left\":16,\"top\":231,\"right\":374,\"bottom\":279,\"width\":358,\"height\":48,\"scrollY\":0}",
+  "element_compound_selector" : "{\"ok\":true,\"selector\":\"view.sa-item\",\"nodeId\":16,\"source\":\"screen\",\"screen\":\"mine\",\"left\":16,\"top\":231,\"right\":374,\"bottom\":279,\"width\":358,\"height\":48,\"scrollY\":0}",
+  "element_not_found" : "{\"ok\":false,\"error\":\"not-found\",\"selector\":\"#no-such-element-xyz\",\"screen\":\"mine\",\"registry\":{\"vue\":0,\"screens\":{\"index\":64,\"messages\":43,\"mine\":62}}}",
   "element_probe" : "{\"ok\":true,\"selector\":\"#mine-row-dark\",\"nodeId\":16,\"source\":\"screen\",\"screen\":\"mine\",\"left\":16,\"top\":231,\"right\":374,\"bottom\":279,\"width\":358,\"height\":48,\"scrollY\":0}",
-  "element_registry" : "{\"vue\":0,\"screens\":{\"index\":5,\"messages\":3,\"mine\":4}}",
+  "element_pseudo_selector" : "{\"ok\":false,\"error\":\"unsupported\",\"reason\":\"伪类（`:hover` \/ `:nth-child` 等）未支持：App 端无 CSS 引擎语义\",\"selector\":\"view:hover\",\"screen\":\"mine\"}",
+  "element_registry" : "{\"vue\":0,\"screens\":{\"index\":64,\"messages\":43,\"mine\":62}}",
   "host_id" : "ios",
-  "host_stats" : "{\"data\":{\"destroy_calls\":3,\"anim_completed\":0,\"shared_calls\":0,\"content_node_total\":269,\"anim_hook_missing\":0,\"calls\":[\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.stats\"],\"screens\":[{\"visible\":true,\"screenId\":\"mine#4\",\"rootNodeId\":100}],\"anim_calls\":0,\"live_screens\":1,\"visible_calls\":4,\"mount_calls\":4,\"rect_calls\":0},\"ok\":true}",
+  "host_stats" : "{\"data\":{\"calls\":[\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.stats\"],\"anim_completed\":0,\"visible_calls\":4,\"mount_calls\":4,\"anim_hook_missing\":0,\"rect_calls\":0,\"shared_calls\":0,\"live_screens\":1,\"destroy_calls\":3,\"anim_calls\":0,\"content_node_total\":269,\"screens\":[{\"screenId\":\"mine#4\",\"rootNodeId\":100,\"visible\":true}]},\"ok\":true}",
   "interaction_probe" : "{\"press_styles\":5,\"press_applied\":0,\"press_anim_starts\":0,\"press_anim_stops\":0,\"field_specs\":0,\"field_ticks\":0,\"field_nodes_touched\":0,\"field_touched_now\":0,\"pseudo_parents\":0,\"last_field_ids\":[]}",
   "kernel_rect" : {
     "clipH" : 48,
@@ -33,7 +35,7 @@
     "running" : false
   },
   "rendered_page" : "mine",
-  "run_ts" : 1792385008.8563519,
+  "run_ts" : 1792388948.1459179,
   "scroll_probe" : {
     "after_drag_down_100k" : 0,
     "after_drag_left_100k_x" : 0,

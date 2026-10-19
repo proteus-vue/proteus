@@ -128,11 +128,18 @@ public final class ElementProbe {
                 out.put("cross_check", "probe 未成功 ⇒ 无从交叉核对");
             }
 
-            // ⑥ 诚实边界：查不到 / 非 id 选择器（必须分档，不近似匹配）
+            // ⑥ 诚实边界 + ★#1082 扩面：class / 属性 / 复合 / 后代 真机可解析；不支持形态明确拒绝
             out.put("not_found_probe", evalStr("__proteusHostAppElementRect("
                     + JSONObject.quote(new JSONObject().put("selector", "#no-such-element-xyz").toString()) + ")"));
+            // ★#1082：`.sa-item` 现在**受支持**（静态 class 已进产物）⇒ 应命中真实节点
             out.put("class_probe", evalStr("__proteusHostAppElementRect("
                     + JSONObject.quote(new JSONObject().put("selector", ".sa-item").toString()) + ")"));
+            // 复合选择器（tag + class）与后代组合——与 Web 同一语义
+            out.put("compound_probe", evalStr("__proteusHostAppElementRect("
+                    + JSONObject.quote(new JSONObject().put("selector", "view.sa-item").toString()) + ")"));
+            // ★不支持形态（伪类）⇒ 必须 unsupported + 原因（不近似匹配）
+            out.put("pseudo_probe", evalStr("__proteusHostAppElementRect("
+                    + JSONObject.quote(new JSONObject().put("selector", "view:hover").toString()) + ")"));
 
             // ★**宿主栈自检**：同一宿主 + 一棵最小树（证明"几何腿本身可用"，排除"栈不可用"误判）
             try {

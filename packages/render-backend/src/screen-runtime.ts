@@ -332,10 +332,18 @@ export function createScreenRuntime(opts: CreateScreenRuntimeOptions): ScreenRun
      *   · 每次实例化/重建都**整桶替换**（旧树 id 已失效；合并会留下幽灵条目 ⇒ 查到已销毁的节点）。
      */
     function indexElementIds(): void {
-      const rows = inst.nodes.map((n, i) => ({
-        id: typeof base === 'number' ? base + i : n.id,
-        elementId: (n as { elementId?: unknown }).elementId,
-      }))
+      // ★#1082：身份是**四个字段**——只传 elementId 会让 `.class` / `[data-*]` 查询全落空（真机判据抓到）
+      const rows = inst.nodes.map((n, i) => {
+        const rec = n as { elementId?: unknown; elementClasses?: unknown; elementDataset?: unknown; tag?: unknown; parentId?: unknown }
+        return {
+          id: typeof base === 'number' ? base + i : n.id,
+          elementId: rec.elementId,
+          elementClasses: rec.elementClasses,
+          elementDataset: rec.elementDataset,
+          tag: rec.tag,
+          parentId: rec.parentId,
+        }
+      })
       const r = registerScreenElements(name, rows)
       if (r.duplicates.length) {
         note(`[screen-runtime] ${name}: 重复元素 id（与 Web 一致取文档序第一个）：${r.duplicates.slice(0, 4).join(', ')}`)

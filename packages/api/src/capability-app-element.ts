@@ -58,8 +58,16 @@ interface HostRectReply {
  * 未注入 ⇒ 所有查询 `element.unsupported`（诚实，不猜测）。
  */
 export interface ElementResolver {
-  /** `#id` / 裸 id ⇒ 引擎节点 id；不可解析/非 id 形态 ⇒ null（附带原因用于诊断） */
+  /** 任意**受支持**的 CSS 选择器 ⇒ 引擎节点 id（`querySelector` 语义：文档序第一个） */
   resolve(selector: string | undefined | null): { nodeId: number; source: string } | null
+  /**
+   * 选择器**形态**是否受支持（`{ok:false,reason}` → `element.unsupported`）。
+   * ★必须与 `resolve` 共用同一份解析器（registry 的 `selectorSupport` / `resolveElement` 同源）——
+   *   否则会出现"检查说支持、查询按另一套解析"的分叉。
+   * ★★**必填**（不是可选）：缺省"视作支持"会让伪类/兄弟选择器这类不支持形态静默退化成
+   *   `not-found`——调用方以为"元素不存在"，实际是"这个端不会解析它"。单测当场抓到该形态。
+   */
+  support(selector: string | undefined | null): { ok: true } | { ok: false; reason: string }
   /** 当前屏名（多屏时定位索引桶；缺省由实现自己取"当前屏"） */
   currentScreen?(): string
 }
@@ -88,7 +96,7 @@ export function currentElementResolver(): ElementResolver | null {
  *   ★与 `createAppElementCapabilities` **同一实现**（后者只是把错误构造器换成本仓 CapError）。
  */
 export function createAppElementQuery(): ElementQuery {
-  return buildElementQuery().createElementQuery()
+  return createAppElementBridge().createElementQuery()
 }
 
 /**
@@ -96,11 +104,17 @@ export function createAppElementQuery(): ElementQuery {
  *   异步方法都是它的 `Promise.resolve` 包装 ⇒ 探针不会偏离真实语义。
  */
 export function createAppElementResolveSync(): (selector?: string | null) => R<ResolvedElementRect> {
-  return buildElementQuery().rectOf
+  return createAppElementBridge().rectOf
 }
 
-/** 实现主体（唯一一份；错误统一是 `CapError` 实例——能力层的错误契约）——产出**桥成员形状** */
-function buildElementQuery() {
+/**
+ * ★★★**桥工厂**（唯一实现）——返回对象 = App 端元素能力的**全部桥成员**（生成器 `APP_BRIDGE_SOURCES` 扫它）。
+ *   · `createElementQuery`：`useElement` 的落地（宿主腿 = `element.rect`）
+ *   · `createIntersection`：如实不支持（见方法注释）
+ *   ★返回对象**只放桥成员**（`rectOf` 是内部助手，另行导出 `createAppElementResolveSync`）——
+ *     否则生成器会把内部助手当桥方法，文档与桥形状都开始漂。
+ */
+export function createAppElementBridge() {
   const err = errOf
 
   /** 解析 + 取几何的一次性流水线（所有查询方法共用——**一处实现**） */
@@ -109,21 +123,14 @@ function buildElementQuery() {
     if (!r) {
       return { ok: false, error: err('element.unsupported', 'App 端元素索引未装配（element-registry 未接入）') }
     }
+    // ★区分"选择器形态不支持"与"没找到"：前者是能力边界，后者是业务路径问题。
+    //   判定**只在 registry 的解析器里**做一次（与 resolve 同源——不会出现两套解析分叉）。
+    const sup = r.support(selector)
+    if (!sup.ok) return { ok: false, error: err('element.unsupported', sup.reason) }
     const hit = r.resolve(selector)
     if (!hit) {
-      // ★区分"选择器形态不支持"与"没找到"：前者是能力边界，后者是业务路径问题（与 Web 同名分档）
       const raw = (selector ?? '').trim()
-      const looksLikeId = raw === '' || raw.startsWith('#') || !/[\s.[\]>+~:#]/.test(raw)
-      if (!looksLikeId) {
-        return {
-          ok: false,
-          error: err(
-            'element.unsupported',
-            `App 端元素查询目前只支持 #id / 裸 id（收到 "${raw.slice(0, 40)}"）；class/复合选择器为下一批`,
-          ),
-        }
-      }
-      return { ok: false, error: err('element.not-found', `未找到元素：#${raw.replace(/^#/, '')}`) }
+      return { ok: false, error: err('element.not-found', `未找到元素：${raw || '(空选择器)'}`) }
     }
     const call = invokeHost(APP_ELEMENT_METHODS.rect, { nodeId: hit.nodeId })
     if (!call.ok) {
@@ -229,13 +236,15 @@ function buildElementQuery() {
 
 /**
  * 装配入口（`createCapabilityBridge` 用）：错误类型换成调用方的 CapError。
- * ★实现只有一份（`buildElementQuery`）——本函数只做错误构造器适配。
+ * ★实现只有一份（`createAppElementBridge`）——本函数只做错误构造器适配。
  */
 export function createAppElementCapabilities<E extends Error = Error>(
   CapError: new (code: string, message: string, cause?: unknown) => E,
 ) {
   void CapError   // ★错误实例由 `errOf` 产（CapError 实例，已是能力层契约）；保留形参以对齐同族装配签名
-  return buildElementQuery()
+  // ★只取**两个桥成员**：`rectOf` 是内部助手，不能随 spread 进 `CapabilityBridge`（形状干净 + 生成器不误判）
+  const { createElementQuery, createIntersection } = createAppElementBridge()
+  return { createElementQuery, createIntersection }
 }
 
 /** `CapError` 实例 + `code` 属性（错误契约：能力层读 `error.code` 做分档）——唯一构造点 */

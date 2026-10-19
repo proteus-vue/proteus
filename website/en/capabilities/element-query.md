@@ -50,7 +50,7 @@ boundingClientRect(selector?: string): Promise<CapResult<ElementRect>>
 
 | Param | Type | Required | Doc |
 |---|---|---|---|
-| `selector` | `string` | No | CSS 选择器（缺省 = 句柄初始 id/选择器） |
+| `selector` | `string` | No | CSS 选择器（缺省 = 句柄初始 id）。App 端支持 `#id` / `.class` / `tag` / 复合 / 后代 / `>` / 选择器列表 / `[attr]`；兄弟（`+` `~`）、伪类、伪元素、属性运算符返回 `element.unsupported` |
 
 **Returns**: `Promise<CapResult<ElementRect>>`
 
@@ -62,7 +62,7 @@ scrollOffset(selector?: string): Promise<CapResult<ElementScrollOffset>>
 
 | Param | Type | Required | Doc |
 |---|---|---|---|
-| `selector` | `string` | No | CSS 选择器（缺省 = 句柄初始 id/选择器） |
+| `selector` | `string` | No | CSS 选择器（缺省 = 句柄初始 id）。App 端支持 `#id` / `.class` / `tag` / 复合 / 后代 / `>` / 选择器列表 / `[attr]`；兄弟（`+` `~`）、伪类、伪元素、属性运算符返回 `element.unsupported` |
 
 **Returns**: `Promise<CapResult<ElementScrollOffset>>`
 
@@ -75,7 +75,7 @@ fields(options: ElementFieldsOptions, selector?: string): Promise<CapResult<Elem
 | Param | Type | Required | Doc |
 |---|---|---|---|
 | `options` | `ElementFieldsOptions` | Yes | 字段开关 |
-| `selector` | `string` | No | CSS 选择器（缺省 = 句柄初始 id/选择器） |
+| `selector` | `string` | No | CSS 选择器（缺省 = 句柄初始 id）。App 端支持 `#id` / `.class` / `tag` / 复合 / 后代 / `>` / 选择器列表 / `[attr]`；兄弟（`+` `~`）、伪类、伪元素、属性运算符返回 `element.unsupported` |
 
 **Returns**: `Promise<CapResult<ElementFieldsResult>>`
 
@@ -87,7 +87,7 @@ size(selector?: string): Promise<CapResult<{ width: number; height: number }>>
 
 | Param | Type | Required | Doc |
 |---|---|---|---|
-| `selector` | `string` | No | CSS 选择器（缺省 = 句柄初始 id/选择器） |
+| `selector` | `string` | No | CSS 选择器（缺省 = 句柄初始 id）。App 端支持 `#id` / `.class` / `tag` / 复合 / 后代 / `>` / 选择器列表 / `[attr]`；兄弟（`+` `~`）、伪类、伪元素、属性运算符返回 `element.unsupported` |
 
 **Returns**: `Promise<CapResult<{ width: number; height: number }>>`
 
@@ -99,7 +99,7 @@ batch(selectors: string[]): Promise<CapResult<Array<ElementRect | null>>>
 
 | Param | Type | Required | Doc |
 |---|---|---|---|
-| `selectors` | `string[]` | Yes | CSS 选择器数组 |
+| `selectors` | `string[]` | Yes | CSS 选择器数组（App 端支持面同 `boundingClientRect`；数组内查不到的元素回 `null`） |
 
 **Returns**: `Promise<CapResult<Array<ElementRect \| null>>>`
 
@@ -190,9 +190,9 @@ Canvas 画布节点（`<canvas type="2d">`——wx fields({node:true}) / web HTM
 | Web SPA | ✅ | vue-dom · webBridge implementation (direct platform API) |
 | WeChat Mini Program | ✅ | skyline (WebView fallback) · wx bridge → wx.createSelectorQuery |
 | Headless (SSR / testing) | ✅ | headless · mock bridge injected (testing / SSR tier) |
-| iOS native | 🟡 | native-ios (UIKit + CoreAnimation) · render core shipped — capability bridge not wired |
-| Android native | 🟡 | native-android (self-drawn Canvas) · render core shipped — capability bridge not wired |
-| HarmonyOS | 🟡 | native-harmony (ArkUI RenderNode) · render core shipped — capability bridge not wired |
+| iOS native | ✅ | native-ios (UIKit + CoreAnimation) · App host bridge (capability-app.ts) · bridge method wired |
+| Android native | ✅ | native-android (self-drawn Canvas) · App host bridge (capability-app.ts) · bridge method wired |
+| HarmonyOS | ✅ | native-harmony (ArkUI RenderNode) · Harmony host wired (proteus_device.h / host_app_runtime_impl.h) |
 | Flutter hybrid | 🟡 | flutter · same JS logic layer — capability bridge not wired |
 | Quick App | ⬜ | Quick App engine (TBD) · target not started |
 

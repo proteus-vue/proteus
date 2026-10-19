@@ -920,34 +920,34 @@ export interface ElementFieldsResult {
 
 /**
  * ★组件实例 API 对齐：C58 元素查询句柄（`useElement(id?)`）。
- *   wx：`wx.createSelectorQuery()`（boundingClientRect / scrollOffset / fields + node/rect/size）+
- *   `wx.createIntersectionObserver` 关联元素；web：`document.querySelector` + `getBoundingClientRect()`。
+ *   wx：`wx.createSelectorQuery()`（rect / scrollOffset / fields + node/rect/size）+ `createIntersectionObserver`；
+ *   web：`querySelector` + `getBoundingClientRect()`。★App 选择器支持面见各方法 `@param selector`（#1082）；坐标为视口坐标（同 Web）。
  */
 export interface ElementQuery {
   /**
    * 查询元素几何。
-   * @param selector CSS 选择器（缺省 = 句柄初始 id/选择器）
+   * @param selector CSS 选择器（缺省 = 句柄初始 id）。App 端支持 `#id` / `.class` / `tag` / 复合 / 后代 / `>` / 选择器列表 / `[attr]`；兄弟（`+` `~`）、伪类、伪元素、属性运算符返回 `element.unsupported`
    */
   boundingClientRect(selector?: string): Promise<CapResult<ElementRect>>
   /**
    * 查询元素滚动位置。
-   * @param selector CSS 选择器（缺省 = 句柄初始 id/选择器）
+   * @param selector CSS 选择器（缺省 = 句柄初始 id）。App 端支持 `#id` / `.class` / `tag` / 复合 / 后代 / `>` / 选择器列表 / `[attr]`；兄弟（`+` `~`）、伪类、伪元素、属性运算符返回 `element.unsupported`
    */
   scrollOffset(selector?: string): Promise<CapResult<ElementScrollOffset>>
   /**
    * 按需查询元素字段（node/rect/size/scrollOffset/computedStyle）。
    * @param options 字段开关
-   * @param selector CSS 选择器（缺省 = 句柄初始 id/选择器）
+   * @param selector CSS 选择器（缺省 = 句柄初始 id）。App 端支持 `#id` / `.class` / `tag` / 复合 / 后代 / `>` / 选择器列表 / `[attr]`；兄弟（`+` `~`）、伪类、伪元素、属性运算符返回 `element.unsupported`
    */
   fields(options: ElementFieldsOptions, selector?: string): Promise<CapResult<ElementFieldsResult>>
   /**
    * 查询元素尺寸（boundingClientRect 的常用投影）。
-   * @param selector CSS 选择器（缺省 = 句柄初始 id/选择器）
+   * @param selector CSS 选择器（缺省 = 句柄初始 id）。App 端支持 `#id` / `.class` / `tag` / 复合 / 后代 / `>` / 选择器列表 / `[attr]`；兄弟（`+` `~`）、伪类、伪元素、属性运算符返回 `element.unsupported`
    */
   size(selector?: string): Promise<CapResult<{ width: number; height: number }>>
   /**
    * 批量查询（同一查询内选择器数组——对齐官方 selectAll 的批量语义）。
-   * @param selectors CSS 选择器数组
+   * @param selectors CSS 选择器数组（App 端支持面同 `boundingClientRect`；数组内查不到的元素回 `null`）
    */
   batch(selectors: string[]): Promise<CapResult<Array<ElementRect | null>>>
 }

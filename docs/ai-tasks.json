@@ -1861,6 +1861,42 @@
         "T-app-device-domain"
       ],
       "note": "【done · 决策 #1081（2026-10-19）】用户指定路线：「选择器正常应该是通过 vue 自定义渲染通道做映射」（= 映射必须在知道元素身份的那一层）+「验证通路没问题后真正落地就需要和 web 的查询结构保持同步」。\n【取证】superapp 不走 Vue createRenderer（走 vapor：LayoutTemplate → instantiate → InstantiatedNode → host.mount，链上无 vnode），而 InstantiatedNode 原本没有 class/id/dataset ⇒ 模板 id 被编译器丢弃 ⇒ 源头没有信息。\n【落地】① 编译器静态 id → LayoutNode.elementId（动态 :id 产 VAPOR_DYNAMIC_ID_UNSUPPORTED，单列 element-id.ts 保持 template.ts 0 行增长）；② instantiate 透传；③ element-registry（Vapor 按屏建桶 + Vue patchProp 写桶；#id/裸 id，其它选择器明确拒绝）；④ 能力层 createElementQuery（Web 视口坐标归一：内容坐标 − scrollY）+ useIntersection 如实不支持；⑤ 三端宿主 element.rect（Android ElementRectProbe / iOS element-rect.swift / 鸿蒙 host_app_runtime_impl.h），坐标归一只有 JS 一份实现。\n【判据】单测 14/14 + 破坏性 2 条（摘透传 ⇒ 1 红；摘编译器折叠 ⇒ 3 红）；Android 真机 #idx-read-theme → nodeId 14 与内核 readRects 逐值一致（cross_check_ok=true）；iOS 真机 #mine-row-dark → nodeId 16 同样逐值一致。\n【诚实边界】① 只支持 #id/裸 id（class/data-*/组合选择器明确 unsupported，不做近似匹配）；② **鸿蒙真机未闭环**——设备锁屏且开发者模式拒绝自动解锁（Error Code:10106102），只到编译+语法检查，解锁后跑 hosts/harmony/run-superapp.sh 取证；③ fields({node})/computedStyle 在 App 无对应能力（不伪造）；④ useIntersection 未实现（缺帧级几何变化事件源）。\n【顺带修】check-host-invoke-contract 只认 case \"…\" ⇒ 漏 \"element.rect\".equals(method) 形态（现两种都收）；run-element-probe.sh 的 unzip|grep -q 配 pipefail 误报（改先捕获再 printf）。"
+    },
+    {
+      "id": "T-app-element-selector-web-parity",
+      "title": "useElement 选择器面与 Web querySelector 对齐（class/data-*/复合/后代/子/列表）+ 文档真相修复",
+      "type": "capability",
+      "status": "done",
+      "owner": "session:zcode-invoke-bytes-20261019",
+      "scope": [
+        "packages/compiler/src/vapor/element-identity.ts",
+        "packages/compiler/src/vapor/template.ts",
+        "packages/slot-runtime/src/layout-template.ts",
+        "packages/slot-runtime/src/instantiate.ts",
+        "packages/render-backend/src/element-registry.ts",
+        "packages/render-backend/src/dispatcher.ts",
+        "packages/render-backend/src/screen-runtime.ts",
+        "packages/render-backend/src/index.ts",
+        "packages/api/src/capability-app-element.ts",
+        "packages/api/src/capability-types.ts",
+        "website/scripts/lib/app-bridge-keys.mjs",
+        "website/scripts/lib/harmony-host-keys.mjs",
+        "website/scripts/lib/harmony-host-keys.d.mts",
+        "hosts/shared/bridge/entry-superapp.ts",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/dev/ElementProbe.java",
+        "hosts/ios/ProteusHost/shell/superapp-scene.swift",
+        "tests/capability-app-element.test.ts",
+        "tests/screen-runtime.test.ts",
+        "tests/gen-content-harmony-host.test.ts"
+      ],
+      "decision": 1082,
+      "verification": "npx vitest run tests/capability-app-element.test.ts tests/screen-runtime.test.ts tests/gen-content-harmony-host.test.ts && pnpm test:coupled && pnpm check:content && bash hosts/android/run-element-probe.sh && bash hosts/ios/run-selfdraw.sh --superapp --drive",
+      "branch": null,
+      "related": [
+        "T-app-element-selector-path",
+        "T-app-runtime-capabilities"
+      ],
+      "note": "【done · 决策 #1082（2026-10-19）】承接 #1081「下一批扩 class/data-*」与用户「真正落地就需要和 web 的查询结构保持同步」。\n【支持面】#id/裸 id · .class · tag/* · 复合 · 后代 · > · 选择器列表（文档序）· [attr]/[attr=\"v\"] 均支持；兄弟 +/~ · 伪类 · 伪元素 · 属性运算符（~= ^= $= *= |=）明确 unsupported + 原因（不做近似匹配）。\n【四层】① 编译器 element-identity.ts（改名扩面）：静态 class→elementClasses、data-*→elementDataset（HTML dataset 命名）；动态 :class 对象形态与 :data-* 产精确诊断，:class 字面量按静态收；② 契约与实例化透传（0 行增长）；③ 索引重写为「记录表 + 解析 + 匹配 + 文档序 DFS」，parseSelector/selectorSupport/resolveElement 共用同一解析器；Vue 渲染链扩到 createElement/insert/patchProp；④ 能力层 ElementResolver.support 由可选改**必填**（缺省会让不支持形态静默退化成 not-found）。\n【真机】Android `.sa-item` → nodeId 11、`view.sa-item` 同节点、伪类 unsupported、#id 与 readRects 逐值一致；iOS `.sa-item` 与 `#mine-row-dark` 命中同一 nodeId 16、cross_check_ok=true。\n【真机抓出的单元测试盲区】`indexElementIds` 只传了 elementId（classes/dataset/tag 全丢）⇒ `#id` 查得到、`.class` 全 not-found，而单测（直接调 registerScreenElements）全绿。已补 screen-runtime 端到端用例。\n【顺带修两处既有腐化】① `pnpm check:content` 在 HEAD 上本来就是红的：#1080 加了 4 个传感器桥方法但没在 BRIDGE_TO_HOST 登记 ⇒ 生成器\"未登记即硬失败\"抛错（#1080 漏跑 check:content）；② Android 键盘推送判据仍指向 SuperappActivity，而 #1075 已把实现抽到 KeyboardWatcher ⇒ 误报\"壳未推\"，键盘页 Android 从 ✅ 掉回 🟡；改为实现+装配点两处。\n【诚实边界】① 兄弟/伪类/伪元素/属性运算符明确不支持；② 动态 :id/:class/:data-* 是运行期事实（编译期诊断），这类节点可能查不到；③ 鸿蒙真机仍未闭环（设备 Offline + 锁屏），element.rect 已实现且编译通过但无真机几何证据；④ useIntersection 仍未实现。"
     }
   ]
 }

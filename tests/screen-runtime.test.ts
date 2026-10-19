@@ -12,6 +12,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { buildAppRuntimeContent } from '../packages/cli/src/app-runtime-content'
 import { createScreenRuntime } from '@proteus-vue/render-backend'
+import { resolveElement, elementRegistryStats, resetElementRegistry, selectorSupport } from '@proteus-vue/render-backend'
 import type { ScreenRuntimeArtifact } from '@proteus-vue/render-backend'
 
 function makeTempProject(): string {
@@ -418,3 +419,57 @@ function flip() { shown.value = !shown.value }
   })
 })
 
+// ══════════════ ★★决策 #1082：元素索引的**端到端**覆盖 ══════════════
+//
+// 【为什么必须走这一层（真机判据抓出的盲区）】`capability-app-element.test.ts` 直接调
+//   `registerScreenElements` 建索引 ⇒ 覆盖了匹配逻辑，但**绕过了 `createScreenRuntime` 的索引装配**。
+//   真机首跑：`#id` 查得到、`.class` 全 not-found——因为 `indexElementIds` 当时只传了 `elementId`，
+//   把 classes/dataset/tag 全丢了。而单测全绿。⇒ 这一条从**编译产物 + 真实运行期**走一遍。
+describe('★#1082 元素索引端到端（编译产物 → createScreenRuntime → 选择器）', () => {
+  it('id / class / tag / 复合 / 属性 在真实运行期产物上都能解析', async () => {
+    resetElementRegistry()
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-el-'))
+    fs.mkdirSync(path.join(dir, 'router'), { recursive: true })
+    fs.mkdirSync(path.join(dir, 'pages'), { recursive: true })
+    fs.writeFileSync(
+      path.join(dir, 'pages', 'el.vue'),
+      [
+        '<template>',
+        '  <view id="root" class="page" data-kind="p">',
+        '    <view class="card wide" data-kind="c">',
+        '      <text id="title" class="item">hi</text>',
+        '    </view>',
+        '  </view>',
+        '</template>',
+        '<script setup lang="ts">',
+        'const x = 1',
+        '</script>',
+      ].join('\n'),
+    )
+    fs.writeFileSync(
+      path.join(dir, 'router', 'auto-routes.ts'),
+      `export const routes = [{ name: "el", path: "pages/el", component: "../pages/el.vue" }]\n`,
+    )
+    fs.writeFileSync(path.join(dir, 'proteus.config.ts'), `export default { pagesDir: 'pages' }\n`)
+
+    const build = await buildAppRuntimeContent(dir, 'android')
+    const artifacts = JSON.parse(fs.readFileSync(build.outFile, 'utf-8')) as Record<string, ScreenRuntimeArtifact>
+    const rt = createScreenRuntime({
+      artifacts,
+      applyOps: () => {},
+      viewport: { width: 390, height: 844 },
+    })
+    rt.instance('el').content() // 触发实例化 + 索引装配
+
+    expect(elementRegistryStats().screens.el, '索引应覆盖整棵树（不只带 id 的节点）').toBeGreaterThan(1)
+    const root = resolveElement('#root', 'el')
+    expect(root && root.source).toBe('screen')
+    expect(resolveElement('.page', 'el')!.nodeId).toBe(root!.nodeId)
+    expect(resolveElement('.card', 'el')).toBeTruthy()
+    expect(resolveElement('.card.wide', 'el')).toBeTruthy()
+    expect(resolveElement('text.item', 'el')).toBeTruthy()
+    expect(resolveElement('[data-kind="c"]', 'el')).toBeTruthy()
+    expect(resolveElement('.card text', 'el')).toBeTruthy()
+    expect(selectorSupport('.card > text').ok).toBe(true)
+  })
+})

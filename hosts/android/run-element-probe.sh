@@ -64,7 +64,7 @@ try:
         fails.append(f'元素索引为空：{reg}')
 except Exception as e:
     fails.append(f'registry 解析失败：{e}')
-for k, want in (('not_found_probe', 'not-found'), ('class_probe', 'unsupported')):
+for k, want in (('not_found_probe', 'not-found'), ('pseudo_probe', 'unsupported')):
     v = d.get(k)
     try:
         o = json.loads(v) if isinstance(v, str) else v
@@ -72,6 +72,17 @@ for k, want in (('not_found_probe', 'not-found'), ('class_probe', 'unsupported')
         o = {}
     if not (o and o.get('ok') is False and want in str(o.get('error', ''))):
         fails.append(f'{k} 未如实分档（期望 {want}）：{v}')
+# ★#1082：class / 复合选择器必须**真的命中**（静态 class 已进产物）
+for k in ('class_probe', 'compound_probe'):
+    v = d.get(k)
+    try:
+        o = json.loads(v) if isinstance(v, str) else v
+    except Exception:
+        o = {}
+    if not (o and o.get('ok') is True and o.get('nodeId', -1) >= 0):
+        fails.append(f'{k} 应命中（class 选择器已支持）：{v}')
+    elif not (o.get('width', 0) > 0 and o.get('height', 0) > 0):
+        fails.append(f'{k} 命中但几何为 0（可疑）：{v}')
 if fails:
     print('\n❌ 判据未过：')
     for f in fails: print('  -', f)
