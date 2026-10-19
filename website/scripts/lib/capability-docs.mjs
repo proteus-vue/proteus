@@ -277,8 +277,8 @@ export const CAPABILITY_END_NOTE = {
     en: 'Web exposes an **empty subscription** only — poster composition **requires** a canvas pipeline that is **missing** on Web; App ends depend on `useCanvas` (planned). Only the WeChat mini program is actually usable today.',
   },
   'capability.local-service': {
-    zh: 'mDNS 局域网发现：Web 与 App 三端**均无标准实现**（仅微信小程序提供）—— Web 侧是**空订阅**（订阅后永远收不到回调）。App 端可改用 `useSocket` 做局域网广播发现。',
-    en: 'mDNS local discovery is only provided by the WeChat mini program; Web and all App ends have no standard implementation. On App ends use `useSocket` for broadcast-based discovery.',
+    zh: '**微信 + App 两端可用；Web 不可用**（浏览器没有 mDNS 服务发现 API）。用法上有个容易漏的步骤：**必须先调 `startDiscovery(serviceType)` 才会收到 `onFound`**——订阅本身不会启动搜索。★这个契约缺陷本轮才补：此前只有四个订阅、没有启停开关，等于给业务一个"照文档写完什么都不会发生"的接口（与 `useBeacon` 同一族缺陷）。两端形态差异：Android 用 `NsdManager`（`onServiceFound` 之后需**二次 resolve** 才拿得到 ip/port）；iOS 用 `NWBrowser` + `NetService` 解析。',
+    en: '**Usable on WeChat and both App targets; not on Web** (browsers expose no mDNS discovery API). One step is easy to miss: you **must call `startDiscovery(serviceType)` before `onFound` fires** — subscribing alone does not start discovery. ★That contract gap was fixed in this batch: it previously had four subscriptions and no start/stop switch, i.e. an interface where following the docs produces no events at all (the same family as `useBeacon`). The two App implementations differ: Android uses `NsdManager` (a second **resolve** is required after `onServiceFound` to get ip/port); iOS uses `NWBrowser` plus `NetService` resolution.',
   },
   'capability.nfc': {
     zh: 'HCE 卡模拟**仅**部分安卓机型与小程序支持（**限制**：iOS 只开放标签读取 Core NFC，**不能模拟卡**）。',

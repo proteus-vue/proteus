@@ -137,6 +137,23 @@ final class HostCapabilities: NSObject {
                     return fail("\(method) 失败：\(error)")
                 }
             }
+            // ★★★决策 #1097：C78 局域网服务发现（mDNS，NWBrowser；事件经壳推 __proteusHostLocalService）
+            if method.hasPrefix("localService.") {
+                do {
+                    switch method {
+                    case "localService.start": return ok(try LocalServiceCapability.start(args))
+                    case "localService.stop": return ok(try LocalServiceCapability.stop(args))
+                    default: return miss("未实现的 localService 方法：\(method)")
+                    }
+                } catch let e as WsError {
+                    switch e {
+                    case .unsupported(let m): return miss(m)
+                    case .invalid(let m): return fail(m)
+                    }
+                } catch {
+                    return fail("\(method) 失败：\(error)")
+                }
+            }
             // ★★★决策 #1095：C29/C30 的文件腿（沙箱读写；拒绝绝对路径与 '..'）
             //   ★invoke 不是 throws 函数 ⇒ 必须在此就地收口；invalid ⇒ failed，其余 ⇒ failed（附原因）
             if method.hasPrefix("fs.") {

@@ -205,6 +205,7 @@ xcrun --sdk iphoneos swiftc -O -target arm64-apple-ios15.0 \
   -framework UIKit -framework CoreText -framework JavaScriptCore -framework AVFoundation -parse-as-library \
   -o "$APP/ProteusSelfDraw" $PLATFORM_SRC "$HERE/ProteusHost/runtime/selfdraw-scene.swift" \
   "$HERE/ProteusHost/runtime/host-runtime-bridge.swift" "$HERE/ProteusHost/runtime/interaction-feedback.swift" "$HERE/ProteusHost/runtime/superapp-runtime-host.swift" "$HERE/ProteusHost/runtime/proteus-host-controller.swift" "$HERE/ProteusHost/runtime/host-capabilities.swift" "$HERE/ProteusHost/runtime/device-capability.swift" "$HERE/ProteusHost/runtime/keyboard-watch.swift" "$HERE/ProteusHost/runtime/element-rect.swift" "$HERE/ProteusHost/runtime/capture-capability.swift" "$HERE/ProteusHost/runtime/websocket-capability.swift" "$HERE/ProteusHost/runtime/file-transfer-capability.swift" \
+  "$HERE/ProteusHost/runtime/local-service-capability.swift" \
   "$HERE/ProteusHost/runtime/InvokeWire.swift" "$HERE/ProteusHost/runtime/invoke-bytes-bridge.swift" "$HERE/ProteusHost/runtime/http-capability.swift" \
   "$HERE/ProteusHost/runtime/host-lifecycle-events.swift" "$HERE/ProteusHost/runtime/screen-host.swift" "$HERE/ProteusHost/runtime/tab-chrome.swift" \
   "$HERE/ProteusHost/runtime/glass-metal.swift" "$HERE/ProteusHost/runtime/generated-materials.swift" \

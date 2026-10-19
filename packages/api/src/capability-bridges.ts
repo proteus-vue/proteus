@@ -9,6 +9,7 @@ import { BRIDGE_DECLS } from './bridge-decls/index'
 import type { RequestResponse } from '@proteus-vue/types/api-types'
 import { CapError, capErr, capOk, wrap } from './capability-types'
 import { createWxBeacon } from './capability-beacon'
+import { createWxLocalService } from './capability-local-service-wx'   // ★#1097
 import type { BackgroundEvent, BannerAdHandle, BleDevice, BluetoothAPI, CacheManagerState, CalendarEvent, CanvasContext, CanvasExportOptions, CanvasGradientLike, CanvasNode, CanvasPatternLike, CanvasTextMetrics, CapResult, CapabilityBridge, CompatStorage, ElementFieldsResult, ElementRect, ElementScrollOffset, FSAdapter, FileStat, FileSystemBridge, IntersectionHandle, IntersectionResult, InterstitialAdHandle, KeyboardInfo, LivePlayState, MapCircle, MapContextBridge, MapMarker, MapPolyline, MediaFile, MediaQueryCondition, MediaQueryResult, MediaTrackInfo, NFCAPI, NdefHandle, NetworkType, NfcAdapter, NfcTag, NfcTagHandle, NotificationConstructor, OffscreenCanvasHandle, PerformanceEntry, PermissionState, PhotoResult, PreDownloadTask, PrivacySetting, RecordOptions, RewardedVideoAdHandle, SavedFileInfo, ShippingAddress, TCPSocketHandle, UDPSocketHandle, VKSessionState, VideoResult, WasmModuleHandle, WeRunData, WebAssemblyAPI, WifiInfo, WxInnerAudioContextLike, WxLike, WxNfcTagLike, WxPerformanceEntryLike, WxPreDownloadTaskLike, WxRecorderManagerLike, WxSelectorQueryLike, WxStatsLike, WxVideoContextLike } from './capability-types'
 /** 内存存储兜底（wx sync 存储缺失 / Node / SSR） */
 function memoryStorage(): CompatStorage {
@@ -2176,36 +2177,8 @@ export function wxBridge(wx: WxLike): CapabilityBridge {
     // ★权威标尺缺口 C77：iBeacon（实现单列在 capability-beacon.ts——见该文件头注释）
     getBeacon: () => createWxBeacon(wx),
     // ★权威标尺缺口 C78：局域网服务 mDNS
-    getLocalService: () => ({
-      onFound: (cb) => {
-        if (typeof wx.onLocalServiceFound !== 'function') return () => {}
-        wx.onLocalServiceFound(cb)
-        return () => {
-          if (typeof wx.offLocalServiceFound === 'function') wx.offLocalServiceFound()
-        }
-      },
-      onLost: (cb) => {
-        if (typeof wx.onLocalServiceLost !== 'function') return () => {}
-        wx.onLocalServiceLost(cb)
-        return () => {
-          if (typeof wx.offLocalServiceLost === 'function') wx.offLocalServiceLost()
-        }
-      },
-      onResolveFail: (cb) => {
-        if (typeof wx.onLocalServiceResolveFail !== 'function') return () => {}
-        wx.onLocalServiceResolveFail(cb)
-        return () => {
-          if (typeof wx.offLocalServiceResolveFail === 'function') wx.offLocalServiceResolveFail()
-        }
-      },
-      onDiscoveryStop: (cb) => {
-        if (typeof wx.onLocalServiceDiscoveryStop !== 'function') return () => {}
-        wx.onLocalServiceDiscoveryStop(cb)
-        return () => {
-          if (typeof wx.offLocalServiceDiscoveryStop === 'function') wx.offLocalServiceDiscoveryStop()
-        }
-      },
-    }),
+    // ★#1097：mDNS 实现单列在 capability-local-service-wx.ts（含**启停开关**——原契约缺它）
+    getLocalService: () => createWxLocalService(wx),
     // ★权威标尺缺口 C79：翻译
     getTranslation: () => ({
       onTrigger: (cb) => {

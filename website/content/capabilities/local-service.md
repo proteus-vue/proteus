@@ -10,7 +10,7 @@ order: 11
 
 **什么时候用**：同一 WiFi 下发现打印机、投屏设备、局域网协作。
 
-**端实现边界**：mDNS 局域网发现：Web 与 App 三端**均无标准实现**（仅微信小程序提供）—— Web 侧是**空订阅**（订阅后永远收不到回调）。App 端可改用 `useSocket` 做局域网广播发现。
+**端实现边界**：**微信 + App 两端可用；Web 不可用**（浏览器没有 mDNS 服务发现 API）。用法上有个容易漏的步骤：**必须先调 `startDiscovery(serviceType)` 才会收到 `onFound`**——订阅本身不会启动搜索。★这个契约缺陷本轮才补：此前只有四个订阅、没有启停开关，等于给业务一个"照文档写完什么都不会发生"的接口（与 `useBeacon` 同一族缺陷）。两端形态差异：Android 用 `NsdManager`（`onServiceFound` 之后需**二次 resolve** 才拿得到 ip/port）；iOS 用 `NWBrowser` + `NetService` 解析。
 
 > 技术标识：能力原语 C78 · `capability.local-service` · 返回 `LocalServiceAPI` · **Hook 已实现**（各端支持情况见下方兼容进度表）
 
@@ -36,10 +36,36 @@ useLocalService(): CapResult<LocalServiceAPI>
 
 | 方法 | 说明 |
 |---|---|
-| [`onFound`](#onfound) | 订阅发现新服务。 |
+| [`startDiscovery`](#startdiscovery) | ★#1097：**必须先 startDiscovery 才会收到 onFound**（与 useBeacon 同形态——订阅不启动搜索）。 |
+| [`stopDiscovery`](#stopdiscovery) | 停止搜索（订阅保留；会触发一次 `onDiscoveryStop`）。 |
+| [`onFound`](#onfound) | 订阅发现新服务（**需先 `startDiscovery`**）。 |
 | [`onLost`](#onlost) | 订阅服务离开。 |
 | [`onResolveFail`](#onresolvefail) | 订阅服务解析失败。 |
 | [`onDiscoveryStop`](#ondiscoverystop) | 订阅搜索停止。 |
+
+### `startDiscovery`
+
+```ts
+startDiscovery(serviceType: string): Promise<CapResult<void>>
+```
+
+**说明**：★#1097：**必须先 startDiscovery 才会收到 onFound**（与 useBeacon 同形态——订阅不启动搜索）。
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `serviceType` | `string` | 是 | mDNS 类型（如 `'_http._tcp'`） |
+
+**返回值**：`Promise<CapResult<void>>`
+
+### `stopDiscovery`
+
+```ts
+stopDiscovery(): Promise<CapResult<void>>
+```
+
+**说明**：停止搜索（订阅保留；会触发一次 `onDiscoveryStop`）。
+
+**返回值**：`Promise<CapResult<void>>`
 
 ### `onFound`
 
@@ -47,7 +73,7 @@ useLocalService(): CapResult<LocalServiceAPI>
 onFound(cb: (res: LocalServiceInfo) => void): () => void
 ```
 
-**说明**：订阅发现新服务。
+**说明**：订阅发现新服务（**需先 `startDiscovery`**）。
 
 | 参数 | 类型 | 必填 | 说明 |
 |---|---|---|---|
@@ -125,9 +151,9 @@ mDNS 局域网服务（wx OnLocalServiceFound/Lost）
 | Web SPA | ⚠️ | vue-dom · webBridge 未提供 getLocalService → Err 显式降级（平台无直通 API） |
 | 微信小程序 | ✅ | skyline（WebView 降级） · wx 桥 → wx.onLocalServiceFound/Lost/ResolveFail/DiscoveryStop |
 | Headless（SSR / 测试） | ✅ | headless · mock 桥注入（测试 / SSR 档） |
-| iOS 原生 | 🟡 | native-ios（UIKit + CoreAnimation） · 渲染核心已落地——能力桥未接线 |
-| Android 原生 | 🟡 | native-android（自绘 Canvas） · 渲染核心已落地——能力桥未接线 |
-| 鸿蒙 | 🟡 | native-harmony（ArkUI RenderNode） · 渲染核心已落地——能力桥未接线 |
+| iOS 原生 | ✅ | native-ios（UIKit + CoreAnimation） · App 宿主桥（capability-app.ts）· 桥方法已接入 |
+| Android 原生 | ✅ | native-android（自绘 Canvas） · App 宿主桥（capability-app.ts）· 桥方法已接入 |
+| 鸿蒙 | 🟡 | native-harmony（ArkUI RenderNode） · App 桥已就绪（平台中立）——鸿蒙宿主壳未接线 |
 | Flutter 混合 | 🟡 | flutter · 同一 JS 逻辑层——能力桥未接线 |
 | 快应用 | ⬜ | 快应用引擎（待定） · 端未开始 |
 

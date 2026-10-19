@@ -32,7 +32,8 @@ import { createAppElementCapabilities } from './capability-app-element'
 import { createAppCaptureCapabilities } from './capability-app-capture'
 import { createAppWebSocket } from './capability-websocket'
 import { createAppSocketTask } from './capability-socket-task'   // ★#1096
-import { createAppTransfer } from './capability-transfer'   // ★#1095   // ★#1093
+import { createAppTransfer } from './capability-transfer'   // ★#1095
+import { createAppLocalService } from './capability-local-service'   // ★#1097   // ★#1093
 import type {
   BatteryInfo,
   CapDeviceInfo,
@@ -258,6 +259,7 @@ export function createAppCapabilities<E extends Error = Error>(
     connectWebSocket: appWs,   // ★#1093 App 端 WebSocket（ws.open/send/close + 壳推事件流）
     createSocketTask: createAppSocketTask(appWs),   // ★#1096 C28 低层句柄（复用同一 ws 腿）
     ...createAppTransfer(resOpts),   // ★#1095 App 端 upload/download（复用 http.request 字节腿 + 宿主 fs）
+    getLocalService: createAppLocalService(resOpts),   // ★#1097 C78 mDNS（NsdManager / NWBrowser）
   }
 }
 

@@ -2476,8 +2476,13 @@ export interface LocalServiceInfo {
  *   / `onLocalServiceDiscoveryStop`；web：无标准 mDNS → Err 诚实降级。
  */
 export interface LocalServiceAPI {
+  /** ★#1097：**必须先 startDiscovery 才会收到 onFound**（与 useBeacon 同形态——订阅不启动搜索）。
+   *  @param serviceType mDNS 类型（如 `'_http._tcp'`） */
+  startDiscovery(serviceType: string): Promise<CapResult<void>>
+  /** 停止搜索（订阅保留；会触发一次 `onDiscoveryStop`）。 */
+  stopDiscovery(): Promise<CapResult<void>>
   /**
-   * 订阅发现新服务。
+   * 订阅发现新服务（**需先 `startDiscovery`**）。
    * @param cb 服务回调
    * @returns 取消订阅函数
    */
@@ -3476,6 +3481,9 @@ export interface WxLike {
   offBeaconServiceChange?: (cb?: (...a: never[]) => void) => void
   onBeaconUpdate?: (cb: (res: { beacons: BeaconInfo[] }) => void) => void
   offBeaconUpdate?: (cb?: (...a: never[]) => void) => void
+  /** ★#1097：mDNS 搜索开关——**不先 start 就收不到任何 onLocalServiceFound** */
+  startLocalServiceDiscovery?: (opt: { serviceType: string; success?: () => void; fail?: (e: unknown) => void }) => void
+  stopLocalServiceDiscovery?: (opt?: { success?: () => void; fail?: (e: unknown) => void }) => void
   onLocalServiceFound?: (cb: (res: { serviceName: string; serviceType: string; ip?: string; port?: number }) => void) => void
   offLocalServiceFound?: (cb?: (...a: never[]) => void) => void
   onLocalServiceLost?: (cb: (res: { serviceName: string; serviceType: string; ip?: string; port?: number }) => void) => void

@@ -58,6 +58,15 @@ public final class HostCapabilities {
     public HostCapabilities(Activity activity) {
         this.activity = activity;
         this.device = new DeviceCapability(activity);
+        // ★#1097：mDNS 事件出口（切主线程推——QuickJsEngine 非线程安全，与 ws/capture 同款纪律）
+        LocalServiceCapability.setPusher(payload -> new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+            try {
+                QuickJsEngine.eval("typeof __proteusHostLocalService==='function'?__proteusHostLocalService("
+                        + org.json.JSONObject.quote(payload.toString()) + "):'no-hook'");
+            } catch (Throwable t) {
+                android.util.Log.w("proteus", "mDNS push failed: " + t);
+            }
+        }));
     }
 
     /**
@@ -154,6 +163,11 @@ public final class HostCapabilities {
                 // ★Android 无"小程序"概念；"跳其他 App" 走 Intent（能力同名但语义不同——本场景如实说明）
                 throw new UnsupportedOperationException(
                         "mini-program.navigate: Android 无小程序概念（跨 App 跳转请用 Intent/App Links）");
+            // ── C78 局域网服务发现（#1097：NsdManager；事件经壳推 __proteusHostLocalService）──
+            case "localService.start":
+                return ok(LocalServiceCapability.start(activity, args));
+            case "localService.stop":
+                return ok(LocalServiceCapability.stop(activity, args));
             // ── C29/C30 上传/下载的文件腿（#1095：沙箱读写，见 FileTransferCapability）──
             case "fs.writeBytes":
                 return ok(FileTransferCapability.writeBytes(activity, args));

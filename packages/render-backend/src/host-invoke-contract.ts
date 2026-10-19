@@ -54,6 +54,9 @@ export const HOST_CAPABILITY_METHODS = [
   'fs.writeBytes',
   'fs.readBytes',
   'fs.remove',
+  // ★★C78 局域网服务发现（#1097）：NsdManager / NWBrowser（事件经壳推 __proteusHostLocalService）
+  'localService.start',
+  'localService.stop',
   // ★★C27 WebSocket（#1093）：连接/发送/关闭三个方法都**受理即返**，事件经壳推送达。
   'ws.open',
   'ws.send',

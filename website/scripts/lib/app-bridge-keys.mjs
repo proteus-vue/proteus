@@ -47,6 +47,8 @@ export const APP_BRIDGE_FACTORIES = ['createAppNativeCapabilities', 'createAppLi
 export const APP_BRIDGE_EXTRA_MEMBERS = {
   /** C28 `useSocketTask` → `capability-socket-task.ts::createAppSocketTask`（返回闭包） */
   createSocketTask: 'createAppSocketTask',
+  /** C78 `useLocalService` → `capability-local-service.ts::createAppLocalService`（返回闭包） */
+  getLocalService: 'createAppLocalService',
 }
 
 export const APP_BRIDGE_SOURCES = [

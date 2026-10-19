@@ -8093,3 +8093,51 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
      故错误只经 `send` reject 暴露、关闭只经 `isConnected()` 反映。
      扩展契约属单独决策（会改公共面）。
   ③ 只支持文本消息；二进制走 C27 `useWebSocket`。
+
+1097. **★★★`useLocalService` 契约补启停 + App 两端 mDNS 落地（NsdManager / NWBrowser）+ 旧文档谎报纠正 · 决策**（2026-10-19 · 承接网络域盘点）：
+
+【★先说一个**同一族缺陷第二次出现**的契约问题】
+  原 \`LocalServiceAPI\` **只有四个订阅**（onFound/onLost/onResolveFail/onDiscoveryStop），
+  **没有启停开关**。而微信 mDNS 的语义是：**必须先 \`wx.startLocalServiceDiscovery({ serviceType })\`**
+  才会回调 \`onLocalServiceFound\` ⇒ 不搜索就订阅，业务**永远收不到任何服务**。
+  ⇒ 原契约对业务不可用：照文档写完，运行起来什么都没有。
+  ★**这与 #1091 的 \`useBeacon\` 是同一族**（订阅存在但没有启停开关）。
+    ⇒ 该形态（"只有订阅"）应视为**可疑信号**：订阅型能力必须问一句"事件由谁触发"。
+  修：契约补 \`startDiscovery(serviceType)\` / \`stopDiscovery()\`，wx 桥同步实现
+  （单列 \`capability-local-service-wx.ts\`，因为 \`capability-bridges.ts\` 是 4031 行存量棘轮）。
+
+【★★旧文档在**谎报**（本轮顺带纠出，比缺陷本身更值得记）】
+  能力页原端边界写着：「mDNS 局域网发现：Web 与 App 三端**均无标准实现**（仅微信小程序提供）——
+  App 端可改用 \`useSocket\` 做局域网广播发现」。
+  **这句话是错的**：Android \`NsdManager\`（DNS-SD）与 iOS \`NWBrowser\`（Bonjour）
+  都是**系统自带**的 mDNS 客户端，一直存在，不需要第三方依赖、不需要特殊权限。
+  ⇒ 该文档把"我们没做"写成了"平台没有"——**性质等同于谎报**（且会误导业务去自造广播发现）。
+  ★教训：端边界里的"平台无 X"必须**先取证**（查该平台官方 API），不能凭印象写。
+    与「下否定结论前先跑一条取证命令」是同一条纪律，只是这次的对象是**平台能力**而不是设备。
+
+【App 两端实现】
+  · Android \`LocalServiceCapability.java\`：\`NsdManager.discoverServices\` +
+    **二次 \`resolveService\`**（NsdManager 的固定两段形态：\`onServiceFound\` 只给名字/类型，
+      地址要 resolve 才有）⇒ 解析成功才推 \`found\`，失败推 \`resolveFail\`（对齐 wx 语义）。
+  · iOS \`local-service-capability.swift\`：\`NWBrowser(.bonjour)\` + \`NetService\` 解析；
+    ★平台格式要求 serviceType **带尾点**（自动补），回推时**去掉尾点**（与 wx 形态对齐）。
+  · 共享桥 \`capability-local-service.ts\`：启停走宿主方法（\`localService.start/stop\`），
+    服务事件走壳推 \`__proteusHostLocalService\`（四类事件归一）。
+  · **资源账本**：start 登记 \`mdns-discovery\`，stop/释放时**真的向宿主发 stop**
+    （不停会一直占着系统的 mDNS 会话）——页面离开场景由 G-43 账本兜底。
+
+【判据】\`tests/capability-app-local-service.test.ts\` **13/13**：
+  ① 契约有启停 + wx 桥真的调那两个 wx API（静态锁）；
+  ② 空 serviceType ⇒ \`invalid-type\`（不静默成功）；宿主缺方法 ⇒ \`unsupported\`；成功时 serviceType 原样透传；
+  ③ 四类事件各自分发 · 取消订阅 · 畸形载荷不抛不误分发 · **ip/port 缺失时如实省略字段**（不填假值）；
+  ④ stop 幂等 · \`mdns-discovery\` 登记/销账 · **releaseAll 真的向宿主发 stop** · 不传 resources 零回归。
+  + \`check:content\` / \`check:en-drift\`（305 对）/ \`check:file-size\` / \`tsc --noEmit\` /
+    相关 4 个测试文件 **58/58** 全绿。
+
+【诚实边界】
+  ① **未做真机探针**：mDNS 发现需要**同一局域网内有可发现的服务**才能产生真实事件；
+     本地起一个 mDNS 广播器（Android \`NsdManager.registerService\` / iOS \`NWListener\`）可以做，
+     但那是"自己发现自己"的闭环验证，与真实场景（打印机/投屏设备）仍有差距。
+     ★如实说明：**当前证据 = 单测（13/13）+ 两端宿主编译通过**，真机服务发现**未取证**。
+  ② App 端只做 **discovery**，不做 **advertise**（契约里没有 register/advertise 成员）。
+  ③ \`serviceType\` 由调用方给（不做"扫全部"——mDNS 全扫代价大且多数平台不允许）。

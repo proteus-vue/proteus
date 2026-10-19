@@ -10,7 +10,7 @@ order: 11
 
 **When to use it**: Finding printers or cast devices on the same Wi-Fi.
 
-**End support & boundaries**: mDNS local discovery is only provided by the WeChat mini program; Web and all App ends have no standard implementation. On App ends use `useSocket` for broadcast-based discovery.
+**End support & boundaries**: **Usable on WeChat and both App targets; not on Web** (browsers expose no mDNS discovery API). One step is easy to miss: you **must call `startDiscovery(serviceType)` before `onFound` fires** — subscribing alone does not start discovery. ★That contract gap was fixed in this batch: it previously had four subscriptions and no start/stop switch, i.e. an interface where following the docs produces no events at all (the same family as `useBeacon`). The two App implementations differ: Android uses `NsdManager` (a second **resolve** is required after `onServiceFound` to get ip/port); iOS uses `NWBrowser` plus `NetService` resolution.
 
 > 技术标识：能力原语 C78 · `capability.local-service` · 返回 `LocalServiceAPI` · **Hook implemented** (per-end support in the table below)
 
@@ -36,10 +36,32 @@ useLocalService(): CapResult<LocalServiceAPI>
 
 | Method | Doc |
 |---|---|
+| [`startDiscovery`](#startdiscovery) | — |
+| [`stopDiscovery`](#stopdiscovery) | — |
 | [`onFound`](#onfound) | — |
 | [`onLost`](#onlost) | — |
 | [`onResolveFail`](#onresolvefail) | — |
 | [`onDiscoveryStop`](#ondiscoverystop) | — |
+
+### `startDiscovery`
+
+```ts
+startDiscovery(serviceType: string): Promise<CapResult<void>>
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `serviceType` | `string` | Yes | mDNS 类型（如 `'_http._tcp'`） |
+
+**Returns**: `Promise<CapResult<void>>`
+
+### `stopDiscovery`
+
+```ts
+stopDiscovery(): Promise<CapResult<void>>
+```
+
+**Returns**: `Promise<CapResult<void>>`
 
 ### `onFound`
 
@@ -117,9 +139,9 @@ mDNS 局域网服务（wx OnLocalServiceFound/Lost）
 | Web SPA | ⚠️ | vue-dom · webBridge missing getLocalService → explicit Err degradation (no direct platform API) |
 | WeChat Mini Program | ✅ | skyline (WebView fallback) · wx bridge → wx.onLocalServiceFound/Lost/ResolveFail/DiscoveryStop |
 | Headless (SSR / testing) | ✅ | headless · mock bridge injected (testing / SSR tier) |
-| iOS native | 🟡 | native-ios (UIKit + CoreAnimation) · render core shipped — capability bridge not wired |
-| Android native | 🟡 | native-android (self-drawn Canvas) · render core shipped — capability bridge not wired |
-| HarmonyOS | 🟡 | native-harmony (ArkUI RenderNode) · render core shipped — capability bridge not wired |
+| iOS native | ✅ | native-ios (UIKit + CoreAnimation) · App host bridge (capability-app.ts) · bridge method wired |
+| Android native | ✅ | native-android (self-drawn Canvas) · App host bridge (capability-app.ts) · bridge method wired |
+| HarmonyOS | 🟡 | native-harmony (ArkUI RenderNode) · App bridge ready (platform-neutral TS) — Harmony host shell not wired |
 | Flutter hybrid | 🟡 | flutter · same JS logic layer — capability bridge not wired |
 | Quick App | ⬜ | Quick App engine (TBD) · target not started |
 
