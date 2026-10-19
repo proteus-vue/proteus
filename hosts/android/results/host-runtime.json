@@ -1,18 +1,18 @@
 {
   "engine_available": true,
-  "bundle_chars": 534561,
+  "bundle_chars": 552192,
   "bundle_load_ok": true,
   "run_ok": true,
   "pending_after_run": false,
   "jobs_pumped": 0,
   "finish_ok": true,
   "pending_after_finish": false,
-  "total_ms": 529,
+  "total_ms": 528,
   "ok": true,
   "scene": "host-runtime",
   "host_id": "android",
   "frame_driver": "Choreographer",
-  "build_id": "0353e99a-214903",
+  "build_id": "0353e99a-215230",
   "state_created": "created",
   "state_running": "running",
   "state_suspended": "suspended",
@@ -29,11 +29,11 @@
   "refuse_background_thread": true,
   "async_resolved_at_run": false,
   "mem_available": true,
-  "mem_before": 2044045,
-  "mem_after_alloc": 2364309,
-  "mem_after_gc": 2044325,
-  "mem_obj_before": 795,
-  "mem_obj_after": 797,
+  "mem_before": 2094707,
+  "mem_after_alloc": 2414971,
+  "mem_after_gc": 2094987,
+  "mem_obj_before": 830,
+  "mem_obj_after": 832,
   "mem_ok": true,
   "mem_scope": "engine",
   "conf_total": 32,
@@ -161,13 +161,13 @@
     "extensionLoad": {
       "ok": false,
       "error": {
-        "code": "extension.failed",
+        "code": "extension.unsupported",
         "name": "CapError"
       }
     },
     "navigateMiniProgram": {
       "ok": false,
-      "code": "mini-program.failed"
+      "code": "mini-program.unsupported"
     },
     "wasmSupportsStreaming": false,
     "wasmAddResult": 42,

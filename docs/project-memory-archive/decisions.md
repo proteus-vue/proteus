@@ -6782,3 +6782,46 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 【诚实边界】① 共享的是**桥**，Hooks 对象仍每页 30.7 KB（它持有该页的订阅回收袋，语义上必须独立）——
   本决策省的是 43% 而非全部；② 探针在 Node 跑真实源码（非真机）；③ `resetSharedCapabilityBridge()` 是
   **测试专用**，生产调用会让后续页面拿到新桥（旧 Hooks 仍持旧桥，功能正常但不共享）。
+
+1073. **★★★四轮改动的真机验证 + iOS 真机构建清单的两处静默失效（含一条新门禁）· 决策**（2026-10-19 · 承接 #1069～#1072 的"探针在 Node、非真机"边界）：
+【设备取证（先跑命令再下结论）】`adb devices` ⇒ **Android 在线**；`source hosts/ios/lib/xcode-env.sh && xcrun devicectl list devices` ⇒ **iOS iPhone 12 在线（paired）**；hdc `list targets` ⇒ **空**（鸿蒙无设备）。⇒ 本轮做 Android + iOS；**鸿蒙真机本轮做不了**（无设备，如实标注）。
+【Android 真机：全绿（`run-host-runtime.sh`，release 包）】
+  · **⑩ C26 useFetch：线格式=`bytes` · 超时形态=`host-only`** —— #1066 的全能力字节腿在真机生效；
+  · **⑩ 真实 Java 宿主自报调用 18 次**（host.context / http.request / update.check / window.setSize / worker.* …）
+    —— #1071 的**环形记账改造后判据仍工作**（这是本轮最关心的回归点：记账从无界 List 换 ArrayDeque 后，
+    `native.calls` 读出来的形态必须不变）；
+  · **⑤ 阶段快照 `cap_subscribers=12`** —— #1071 的订阅回收改造后，正常页面的订阅数仍是有限值（未误删）；
+  · K 组三环对齐（memory-warning / theme-change / resize / error 各 1/1/1）+ 内容断言（rawLevel=10 · theme=dark ·
+    resize 821x332dp）+ 真未捕获异常链 —— 生命周期与事件通道无回归；
+  · 响应式屏（`cap_page_subscribers` 在 superapp 流里）未受影响。
+【iOS 真机：抓到两个**真机构建**的静默失效（都已修）】
+  · **缺陷 A：`keyboard-watch.swift` 没进真机构建清单**。#1069 我只把它加进了
+    `check-selfdraw-compile.sh`（静态类型检查清单），**漏了 `run-selfdraw.sh`**（真机构建清单）
+    ⇒ 真机 `cannot find 'KeyboardWatch' in scope`。★#1067 的 `device-capability.swift` 也踩过同一形态。
+  · **缺陷 B（更隐蔽）：清单续行被写成双反斜杠 `\\`**。我在 #1067 用脚本插 `device-capability.swift` 时，
+    行尾变成了 `\\` ⇒ bash 解析成"转义反斜杠 + 命令结束" ⇒ **该行之后的全部源码不参与编译**，
+    而 `bash -n` **照样通过**（语法没错、语义变了）⇒ 报出 `proteus_layout_node_rect` 等一堆
+    "找不到符号"的**假错误**，真因完全不可见。★这是"误诊成本最高"的一类：我前两轮都以为是符号缺失。
+【修复 + 工具化】
+  · 修 `run-selfdraw.sh`：补 `keyboard-watch.swift`；把双反斜杠改回单反斜杠。
+  · **新增门禁 `check:ios-source-lists`**（`scripts/check-ios-source-lists.mjs`）：
+    ① **两份清单必须同集**（具名例外仅 `dev/l4-scene.swift`，附理由）；
+    ② **清单续行不得以双反斜杠结尾**（`bash -n` 查不出来，只能静态判据）。
+    ★接线：`pnpm verify` 链 + `check-gates-sync` 的 `LOCAL_ONLY` 声明（需 macOS 工具链语境）。
+    **破坏性验证两条**：从 run 清单删 `keyboard-watch.swift` ⇒ 红（并点名"真机会 cannot find"）；
+    把续行改成 `\\` ⇒ 红（并点名"后续文件不参与编译"）；复原 ⇒ 双绿。
+【iOS 签名环境（本轮顺带修好的）】
+  · 描述文件**已于 2026-10-15 过期**（今天 10-19）⇒ 装机报 `provisioning profile has expired`。
+    跑 `hosts/ios/experiments/device/provision.sh` 重新签发（**BUILD SUCCEEDED**），新档有效期至 **2026-10-26**。
+  · 设备上残留**旧团队**（F4R3P3L477）装的同 bundle id 应用 ⇒ 升级报 `application-identifier 不匹配`。
+    用 `devicectl device uninstall app` 卸载旧应用后，**新一轮安装成功**。
+【★iOS 真机判据仍卡在人工步骤（如实）】装上了，但启动被系统拦：**需在设备上手动信任开发者证书**
+  （设置 → 通用 → VPN与设备管理）。这是 iOS 强制的人工确认，**无法用命令代办**（记忆 #657 已登记）。
+  ⇒ iOS 侧的 runtime 判据本轮**未取到报告**；`hosts/ios/results/host-runtime.json` 保持上次内容（未覆盖）。
+  ★可确认的是：**编译已通过**（300+ warning、0 error），即 #1069/#1071/#1072 的 iOS 源码改动语法与类型都成立。
+【诚实边界】① **鸿蒙真机本轮完全没跑**（无设备）⇒ #1069 的鸿蒙键盘推送、#1071/#1072 的鸿蒙侧（若有）都没有真机证据；
+  ② iOS 真机判据待"设备信任证书"后补跑；③ Android 侧只验了 `host-runtime` 场景（含 useFetch/K 组），
+  **共享桥（#1072）的收益是 JS 内存量级，真机未做内存对比**（Node 实测 500 页 26.5→15.1MB）。
+【下一步】① 用户在 iPhone 上点一次"信任"后补跑 `run-selfdraw.sh --host-runtime`；
+  ② 鸿蒙设备接入后跑 `run-http-probe.sh` + `run-superapp.sh` 回归；③ 真机内存对比（共享桥前后）需要一个
+  "同页多次进出"的场景装置，属独立项。

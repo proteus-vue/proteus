@@ -39,6 +39,10 @@ const LOCAL_ONLY = {
   //   背景：`run-selfdraw.sh` 是唯一编译 selfdraw-scene.swift 的地方且需真机+签名
   //   ⇒ 改宿主代码本地无任何检查（实测触发：加自定义字体注册通道时）。
   'check:ios-selfdraw-compile': '需 macOS + Xcode（iphoneos SDK 做 swiftc -typecheck）；CI 为 ubuntu-latest',
+  // ★决策 #1073：iOS 两份源码清单一致性 + 清单续行形态（纯静态，但检查对象是 macOS 工具链脚本）。
+  //   实测事故：#1067/#1069 两轮各漏加一个 .swift 到 run-selfdraw.sh ⇒ 真机 "cannot find X in scope"；
+  //   #1067 那轮还用脚本把清单续行写成了 `\\` ⇒ 后续文件全部不参与编译（bash -n 查不出来）。
+  'check:ios-source-lists': '检查 hosts/ios 的两份手写源码清单（依赖 macOS 工具链语境；CI 为 ubuntu-latest）',
   // ★玻璃像素等价门禁（决策 #834 · B6）：需 macOS Metal（xcrun swift 编译生成物 MSL 并渲染）——
   //   CI 为 ubuntu-latest、无 Metal ⇒ 归开发机（真机端另有 iOS --glass 截图取证）。
   'check:glass-pixel-parity': '需 macOS Metal（本机渲染生成物 MSL 与 Rust CPU oracle 逐像素比对）；CI 为 ubuntu-latest 无 Metal',
