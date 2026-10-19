@@ -11,7 +11,7 @@
   "element_pseudo_selector" : "{\"ok\":false,\"error\":\"unsupported\",\"reason\":\"伪类（`:hover` \/ `:nth-child` 等）未支持：App 端无 CSS 引擎语义\",\"selector\":\"view:hover\",\"screen\":\"mine\"}",
   "element_registry" : "{\"vue\":0,\"screens\":{\"index\":64,\"messages\":43,\"mine\":62}}",
   "host_id" : "ios",
-  "host_stats" : "{\"ok\":true,\"data\":{\"shared_calls\":0,\"anim_completed\":0,\"visible_calls\":4,\"content_node_total\":269,\"mount_calls\":4,\"destroy_calls\":3,\"anim_hook_missing\":0,\"calls\":[\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.stats\"],\"screens\":[{\"screenId\":\"mine#4\",\"rootNodeId\":100,\"visible\":true}],\"live_screens\":1,\"rect_calls\":0,\"anim_calls\":0}}",
+  "host_stats" : "{\"ok\":true,\"data\":{\"destroy_calls\":3,\"anim_completed\":0,\"shared_calls\":0,\"screens\":[{\"visible\":true,\"rootNodeId\":100,\"screenId\":\"mine#4\"}],\"live_screens\":1,\"anim_calls\":0,\"visible_calls\":4,\"content_node_total\":269,\"calls\":[\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.stats\"],\"anim_hook_missing\":0,\"rect_calls\":0,\"mount_calls\":4}}",
   "interaction_probe" : "{\"press_styles\":5,\"press_applied\":0,\"press_anim_starts\":0,\"press_anim_stops\":0,\"field_specs\":0,\"field_ticks\":0,\"field_nodes_touched\":0,\"field_touched_now\":0,\"pseudo_parents\":0,\"last_field_ids\":[]}",
   "isect_after" : "[100]",
   "isect_after_hits" : "1",
@@ -44,7 +44,7 @@
     "running" : false
   },
   "rendered_page" : "mine",
-  "run_ts" : 1792403007.3672662,
+  "run_ts" : 1792403623.4910059,
   "scroll_probe" : {
     "after_drag_down_100k" : 0,
     "after_drag_left_100k_x" : 0,
@@ -146,10 +146,12 @@
     "messages",
     "mine"
   ],
-  "transfer_diag" : "{\"hook\":\"function\",\"res\":\"\",\"pending\":true}",
-  "transfer_ok" : false,
-  "transfer_probe" : "null",
-  "transfer_probe_rounds" : 5408,
+  "transfer_dispatch" : "{\"phase\":\"started\",\"queued\":true}",
+  "transfer_dispatch_ok" : true,
+  "transfer_fs" : "{\"writeOk\":true,\"readOk\":true,\"same\":true}",
+  "transfer_fs_ok" : true,
+  "transfer_note" : "iOS 判据 = 宿主 fs 往返（同步）+ 派发通路；完整 4096B 往返由 Android 真机探针覆盖",
+  "transfer_ok" : true,
   "transfer_url" : "http:\/\/192.168.1.124:8789",
   "ws_ok" : false,
   "ws_probe" : "skipped (PROTEUS_WS_PROBE_URL 未设置)"

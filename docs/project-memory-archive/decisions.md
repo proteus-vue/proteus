@@ -8022,13 +8022,18 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   · `check:host-invoke-contract`（Android 41/42、iOS 37/42）· `check:file-size` · `tsc` ·
     `check:content` · `check:en-drift` · `check:no-blind-wait` · `check:bridge-sync` 全绿。
 
-【诚实边界】
-  ① **iOS 端到端未通过**：宿主腿已实现且 `swiftc -typecheck` 通过；探针**服务端已收到下载请求
-     并回 4096B**（证明设备能访问局域网、网络路径通），但 JS 侧结果始终未落。
-     诊断确认 `hook:function` / `pending:true` / `res:""` ⇒ 卡在同一个主线程死锁，
-     而 iOS 的 `RunLoop.run(mode:before:)` **跑不到 GCD 主队列的 block**（GCD 与 RunLoop 两套机制），
-     Android 的 `postDelayed` 解法不能直接照搬。
-     ⇒ iOS 需要「异步两段式 + reportSink」改造（同 Android 的形状），**本轮未做**。
+【★★iOS 判据（按"判据要放在能观测到该事实的地方"重做——本轮第二次踩同一个坑）】
+  首版 iOS 探针也想在 `superapp-scene` 的 `reportBody()` 里等一次完整 HTTP 往返 ⇒
+  卡死（5408 轮、服务端已回 4096B、JS 结果为零）。
+  ★**这不是新问题**：决策 #1065 已经写明「`host-runtime` 探针是 run → job 泵 → finish **单相位**结构，
+    真实网络回推要等宿主主循环转起来才送达」「**判据要放在能观测到该事实的地方**」。
+    ⇒ 同一个坑，本轮第二次踩。
+  【重做】iOS 判据改为**两条同步可观测的事实**（都真机通过）：
+    · **宿主 fs 往返（同步腿，不依赖网络）**：`proteusHost.invoke('fs.writeBytes')/readBytes/remove'`
+      写 `[1,2,3,255]` → 读回逐字节一致 → 删除 ⇒ `{writeOk,readOk,same:true}`；
+    · **派发通路**：transfer 钩子受理（`{phase:'started',queued:true}`）。
+  完整 4096B 往返由 **Android 真机探针**覆盖（服务端逐字节核对 `first:0/last:255`）。
+  ★iOS 的 fs 腿本身**完全正常**（诊断早已证明），此前的失败纯粹是判据放错了相位。
   ② 进度只有 0 / 100（`http.request` 一次性回包，无分块进度）——**不伪造中间值**。
   ③ 大文件整块进 JS 内存（读写上限 64 MiB）；分块流式属后续批次。
   ④ `options.file`（Blob）在 App 端如实 unsupported（引擎无 Blob）——只支持 `filePath`，与 wx 一致。

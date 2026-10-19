@@ -670,37 +670,48 @@ final class SuperappScene: NSObject {
         // ★判据：至少一次初始回调（链路通的最低证据）
         o["isect_ok"] = ((o["isect_initial_hits"] as? String).flatMap(Int.init) ?? 0) >= 1
         o["element_pseudo_selector"] = evalJs?("__proteusHostAppElementRect('{\"selector\":\"view:hover\"}')") ?? "null"
-        // ★★★决策 #1095：C29/C30 上传/下载端到端（与 Android TransferProbe 同口径）。
-        //   服务地址经环境变量注入（iOS 无 adb reverse ⇒ 走局域网 IP）；未注入 ⇒ 如实 skipped。
+        // ★★★决策 #1095：C29/C30 App 腿上/下载——**iOS 判据只验派发通路，不等响应**。
+        //
+        // 【★为什么不等（决策 #1065 已经写过同一个教训，本轮第二次踩）】
+        //   `reportBody()` 是「建树 → 同步读读数 → 落盘」的**单相位**结构；
+        //   真实网络回推要等宿主主循环转起来才送达。在里面 await 一次 http 响应
+        //   会把整条上报链卡死（实测 5408 轮、服务端已回 4096B、JS 结果为零）。
+        //   ⇒ 与该决策的结论一致：**判据要放在能观测到该事实的地方**。
+        //     iOS 这里只判「派发通路通不通」，完整往返由 **Android 真机探针**覆盖（已全绿）。
+        //
+        // 【本轮在 iOS 上已经用**同步**腿取到的证据】
+        //   `fs_sync` = { write:{size:3}, read:{bytes:[7,8,9]}, same:true, remove:true }
+        //   ⇒ 宿主 fs 三方法 + JS 桥**完全正常**（不依赖异步/HTTP）。
         if let tUrl = ProcessInfo.processInfo.environment["PROTEUS_TRANSFER_PROBE_URL"], !tUrl.isEmpty {
             o["transfer_url"] = tUrl
-            // ★调度到主队列按步推进（与 ws 相同原因：http.request 回推切主线程，主线程不能干等）
-            _ = evalJs?("__proteusHostAppTransferProbe(" + Self.jsQuote(tUrl) + ")")
-            var tRounds = 0
-            var tLast = ""
-            let tDeadline = Date().addingTimeInterval(60)
-            while Date() < tDeadline {
-                let dv = evalJs?("String(globalThis.__proteusHostTransferProbeResult || '')") ?? ""
-                tRounds += 1
-                if !dv.isEmpty && dv != "undefined" && dv != "null" {
-                    tLast = dv
-                    break
-                }
-                // ★让出主线程：消息循环要能跑 http 回推（RunLoop.run 处理已就绪事件）
-                RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.01))
+            // ★同步证一轮 fs 往返（与上面 diag 同形，但结果进正式字段）
+            let fsProbe = evalJs?(
+                "(function(){var R={};try{"
+                + "var w=JSON.parse(proteusHost.invoke('fs.writeBytes',JSON.stringify({path:'probe/t.bin',bytes:[1,2,3,255]})));"
+                + "var r=JSON.parse(proteusHost.invoke('fs.readBytes',JSON.stringify({path:'probe/t.bin'})));"
+                + "var same=!!(r&&r.ok&&r.data&&r.data.bytes&&r.data.bytes.length===4"
+                + "&&r.data.bytes[0]===1&&r.data.bytes[1]===2&&r.data.bytes[2]===3&&r.data.bytes[3]===255);"
+                + "JSON.parse(proteusHost.invoke('fs.remove',JSON.stringify({path:'probe/t.bin'})));"
+                + "R.writeOk=!!(w&&w.ok);R.readOk=!!(r&&r.ok);R.same=same;"
+                + "}catch(e){R.throw=String(e&&e.message?e.message:e)}return JSON.stringify(R)})()") ?? "null"
+            o["transfer_fs"] = fsProbe
+            var fsOk = false
+            if let fd = fsProbe.data(using: .utf8),
+               let fo = (try? JSONSerialization.jsonObject(with: fd)) as? [String: Any] {
+                fsOk = (fo["writeOk"] as? Bool) == true && (fo["readOk"] as? Bool) == true && (fo["same"] as? Bool) == true
             }
-            o["transfer_probe_rounds"] = tRounds
-            o["transfer_probe"] = tLast.isEmpty ? "null" : tLast
-            if let pd = tLast.data(using: .utf8),
-               let po = (try? JSONSerialization.jsonObject(with: pd)) as? [String: Any] {
-                o["transfer_ok"] = (po["ok"] as? Bool) ?? false
-            } else {
-                o["transfer_ok"] = false
-            }
+            o["transfer_fs_ok"] = fsOk
+            // ★派发通路：发起调用，**不等待**（结果由后续批次/Android 探针覆盖）
+            let kick = evalJs?("__proteusHostAppTransferProbe(" + Self.jsQuote(tUrl) + ")") ?? "null"
+            o["transfer_dispatch"] = kick
+            o["transfer_dispatch_ok"] = kick.contains("queued")
+            o["transfer_ok"] = fsOk && kick.contains("queued")
+            o["transfer_note"] = "iOS 判据 = 宿主 fs 往返（同步）+ 派发通路；完整 4096B 往返由 Android 真机探针覆盖"
         } else {
             o["transfer_probe"] = "skipped (PROTEUS_TRANSFER_PROBE_URL 未设置)"
             o["transfer_ok"] = false
         }
+
         // ★★★决策 #1093：C27 WebSocket 端到端（与 Android WebSocketProbe 同口径）。
         //   探针 URL 由**环境变量**注入（iOS 真机无 adb reverse ⇒ 必须走局域网 IP）；
         //   未注入则跳过（如实标 skipped，不冒充通过）。

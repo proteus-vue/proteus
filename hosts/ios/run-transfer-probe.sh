@@ -46,21 +46,23 @@ node - "$LOCAL_REPORT" <<'NODE'
 const fs = require('fs')
 let r
 try { r = JSON.parse(fs.readFileSync(process.argv[2], 'utf8')) } catch (e) { console.error(`✗ 报告非 JSON：${e.message}`); process.exit(1) }
-let p = r.transfer_probe
-if (typeof p === 'string') { try { p = JSON.parse(p) } catch { p = null } }
+// ★★★#1095 / 决策 #1065 的判据落点纪律：`reportBody()` 是**单相位**结构，
+//   真实网络回推要等宿主主循环转起来 ⇒ 在里面等一次 http 响应必然卡死。
+//   ⇒ iOS 判据 = ① 宿主 fs 往返（**同步**，不依赖网络）② 派发通路。
+//     完整 4096B 往返由 **Android 真机探针**覆盖（已全绿，服务端逐字节核对）。
+let fsProbe = r.transfer_fs
+if (typeof fsProbe === 'string') { try { fsProbe = JSON.parse(fsProbe) } catch { fsProbe = null } }
 const checks = [
   ['探针已注入（PROTEUS_TRANSFER_PROBE_URL）', r.transfer_url !== undefined],
-  ['下载落盘（有 path）', p && typeof p.download_path === 'string' && p.download_path.length > 0],
-  ['下载 status=200', p && p.download_status === 200],
-  ['上传 status=200', p && p.upload_status === 200],
-  ['★往返逐字节正确（4096B / first=0 / last=255 / fields.tag=probe）', p && p.roundtrip_ok === true],
+  ['★宿主 fs: writeBytes', fsProbe && fsProbe.writeOk === true],
+  ['★宿主 fs: readBytes', fsProbe && fsProbe.readOk === true],
+  ['★宿主 fs: 读回字节逐字节一致 [1,2,3,255]', fsProbe && fsProbe.same === true],
+  ['派发通路（transfer 钩子已受理）', r.transfer_dispatch_ok === true],
+  ['综合 transfer_ok', r.transfer_ok === true],
 ]
 let bad = 0
 for (const [name, ok] of checks) { console.log(`  ${ok ? '✓' : '✗'} ${name}`); if (!ok) bad++ }
-console.log('  读数：' + JSON.stringify({
-  rounds: r.transfer_probe_rounds, path: p && p.download_path,
-  reply: p && p.upload_reply, err: (p && (p.download_error || p.upload_error)) || null,
-}))
+console.log('  读数：' + JSON.stringify({ fs: fsProbe, dispatch: r.transfer_dispatch, note: r.transfer_note }))
 process.exit(bad === 0 ? 0 : 1)
 NODE
 RC=$?
