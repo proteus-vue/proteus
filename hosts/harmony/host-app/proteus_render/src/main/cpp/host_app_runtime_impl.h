@@ -32,6 +32,10 @@
 //   供本头内较早定义的函数（如 invokeKeyboardSnapshot）使用（与文件下方同名常量同值）。
 static constexpr unsigned int PROTEUS_APP_RT_DOMAIN_LOCAL = 0x0003;
 static constexpr const char* PROTEUS_APP_RT_TAG_LOCAL = "ProteusAppRuntime";
+// ★★★决策 #1081：元素几何回执（定义在下方 scAnimSetHandle 之后——此处先声明，
+//   `screenInvokeDispatch`/`MountCaptureCb` 在它们之前定义）。
+static void scRebuildElementIds();
+static std::string scElementRect(const std::string& argsJson);
 
 /* ═══════════════════════════════════════════════════════════════════════
  * screen.* 协议分发（与 Android ScreenHost / iOS screen-host 同契约）——
@@ -146,6 +150,8 @@ static std::string screenInvokeDispatch(const std::string& method, const std::st
         char b[128]; snprintf(b, sizeof(b), "{\"ok\":true,\"data\":{\"started\":%d}}", started);
         return b;
     }
+    // ★★★决策 #1081：元素几何（`useElement` → selector→nodeId → 内核矩形）
+    if (method == "element.rect") return scElementRect(argsJson);
     if (method == "screen.rect" || method == "screen.shared") {
         return "{\"ok\":false,\"missing\":true,\"reason\":\"未实现（e4 诚实跳过）\"}";
     }
@@ -229,6 +235,7 @@ static JSVM_Value MountCaptureCb(JSVM_Env env, JSVM_CallbackInfo info) {
     size_t argc = 1; JSVM_Value args[1] = {nullptr};
     OH_JSVM_GetCbInfo(env, info, &argc, args, nullptr, nullptr);
     if (argc > 0 && args[0] != nullptr) jsvmStr(env, args[0], &g_scRuntimeTree);
+    scRebuildElementIds();   // ★#1081：整树更换 ⇒ 元素身份索引整桶替换
     JSVM_Value r = nullptr; OH_JSVM_CreateStringUtf8(env, "{\"ok\":true}", JSVM_AUTO_LENGTH, &r); return r;
 }
 
@@ -271,6 +278,52 @@ static int g_scAnimLastActive = -1;        // 最近一次内核自报在飞数
 /** 由 `AppScreenCommands`（proteus_host.cpp）在建树后回填句柄——本头被 include 在它之前
  *  （静态符号作用域），故走这个 setter（而不是直接引用它的 static 变量）。 */
 static void scAnimSetHandle(uint64_t h) { g_scAnimHandle = h; }
+
+/* ══════════ ★★★决策 #1081：元素身份索引 + `element.rect`（`useElement` 选择器通路）══════════
+ * 【数据源（一次性 VM 的必然形态）】运行时挂载的整树由 `proteusHost.mount` **捕获**在 `g_scRuntimeTree`
+ *   （见 MountCaptureCb）⇒ 在那一次捕获时建 `elementId → nodeId` 索引。JS 侧传进来的内核 id 就是这棵树里的 id。
+ * 【内核树】复用 `g_scAnimHandle`（`AppScreenCommands` 建树后回填）——与动画同一棵，零新增树状态。
+ * 【单位】内核几何是**设计单位（vp）**（鸿蒙建树不做 ×density）⇒ 直接回 vp，与 iOS pt / Android dp 同口径。
+ *   `scrollY` 由 ArkTS 每次 `hostAppRender` 带入（壳持有真实滚动偏移）——JS 侧统一减掉得到视口坐标。
+ * 【诚实边界】索引只收**静态 id**（动态 `:id` 编译器已产诊断）；查不到 ⇒ `ok:false`（不伪造 0 尺寸）。 */
+static std::unordered_map<std::string, int> g_scElementIds;
+static double g_scScrollY = 0;   // 宿主当前滚动偏移（vp）——ArkTS 每次 render 带入
+
+/** 用**刚捕获的整树**重建元素身份索引（整桶替换——旧树 id 已失效）。 */
+static void scRebuildElementIds() {
+    g_scElementIds.clear();
+    if (g_scRuntimeTree.empty()) return;
+    for (const auto& it : splitJsonObjects(extractNodesArray(g_scRuntimeTree))) {
+        double id = -1;
+        if (!jnum(it.c_str(), it.size(), "id", &id) || id < 0) continue;
+        std::string eid;
+        if (!jstr(it.c_str(), it.size(), "elementId", &eid) || eid.empty()) continue;
+        // ★与 Web 一致：重复 id 取**文档序第一个**（不覆盖）
+        if (g_scElementIds.find(eid) == g_scElementIds.end()) g_scElementIds[eid] = (int) id;
+    }
+}
+
+/** `element.rect`：`{nodeId}` → `{ok,x,y,width,height,scrollY}`（内核几何 + 宿主滚动偏移）。 */
+static std::string scElementRect(const std::string& argsJson) {
+    double nodeId = -1;
+    jnum(argsJson.c_str(), argsJson.size(), "nodeId", &nodeId);
+    if (nodeId < 0) return "{\"ok\":false,\"reason\":\"element.rect: 缺 nodeId\"}";
+    if (g_scAnimHandle == 0) return "{\"ok\":false,\"reason\":\"element.rect: 尚未建树\"}";
+    char* rp = proteus_layout_node_rect(g_scAnimHandle, (uint32_t) nodeId);
+    std::string rs = rp ? rp : "{}";
+    if (rp) proteus_layout_free_string(rp);
+    if (rs.find("\"ok\": true") == std::string::npos && rs.find("\"ok\":true") == std::string::npos) {
+        return "{\"ok\":false,\"reason\":\"element.rect: 节点无几何（不在树上或 display:none）\"}";
+    }
+    double x = 0, y = 0, w = 0, h = 0;
+    jnum(rs.c_str(), rs.size(), "x", &x);
+    jnum(rs.c_str(), rs.size(), "y", &y);
+    jnum(rs.c_str(), rs.size(), "width", &w);
+    jnum(rs.c_str(), rs.size(), "height", &h);
+    char b[224];
+    snprintf(b, sizeof(b), "{\"ok\":true,\"x\":%.4f,\"y\":%.4f,\"width\":%.4f,\"height\":%.4f,\"scrollY\":%.4f}", x, y, w, h, g_scScrollY);
+    return b;
+}
 
 /** JSVM 回调：记录 `v-animate`/`<Transition>` 交来的动画规格（此刻新树未建 ⇒ 只登记，挂树在 attach）。 */
 static JSVM_Value AnimStartCaptureCb(JSVM_Env env, JSVM_CallbackInfo info) {
@@ -651,6 +704,8 @@ static napi_value HostAppRender(napi_env env, napi_callback_info info) {
     double vpW = 390, vpH = 844;
     { std::string vpObj = extractValueAfterKey(argsJson, "viewport", '{', '}');
       if (!vpObj.empty()) { jnum(vpObj.c_str(), vpObj.size(), "width", &vpW); jnum(vpObj.c_str(), vpObj.size(), "height", &vpH); } }
+    // ★★★决策 #1081：滚动偏移随每次 render 带入（`element.rect` 回给 JS 做视口坐标归一）
+    { double sv = 0; if (jnum(argsJson.c_str(), argsJson.size(), "scrollY", &sv)) g_scScrollY = sv; }
     std::string chainArr = extractValueAfterKey(argsJson, "chain", '[', ']');
     std::vector<int> chainD = parseIntArrayBare(chainArr);
     bool hasChain = !chainD.empty();
@@ -779,6 +834,14 @@ static napi_value HostAppRender(napi_env env, napi_callback_info info) {
     std::string pumpHz = "[]";
     if (err.empty()) jsvmEvalStr(jenv, "String(__proteusHostAppPumpHz())", &pumpHz);
     if (err.empty() && pumpHz.size() > 2) g_scPumpHzLast = pumpHz;
+    // ★★★决策 #1081：元素查询读数（静态 id → nodeId → 内核矩形）——三端同一份探针，须在 VM 销毁前取。
+    std::string elReg = "null";
+    std::string elProbe = "null";
+    if (err.empty()) {
+        jsvmEvalStr(jenv, "String(__proteusHostAppElementRegistry())", &elReg);
+        // ★缺省 selector = 当前渲染屏的**第一个元素 id**（探针跨页，不硬编码某页 id）
+        jsvmEvalStr(jenv, "String(__proteusHostAppElementRect('{}'))", &elProbe);
+    }
     // ★★★dev 元素树（决策 #732）：优先取**运行期** `__proteusHostAppTree()`（= `currentContent()`，
     //   **带 `file`/`screen`** ⇒ 面板据节点 loc 拼 `file:line:col` → 跳编辑器）。比 mount 捕获树多 `file` 字段。
     //   ★须在 VM 销毁**之前**取；无该全局/返回空 ⇒ 回退捕获树（`g_scRuntimeTree`）。
@@ -796,6 +859,8 @@ static napi_value HostAppRender(napi_env env, napi_callback_info info) {
         + ",\"snapshot\":" + (snap.empty() ? std::string("{}") : snap)
         + ",\"pumpHz\":" + (pumpHz.empty() ? "[]" : pumpHz)
         + ",\"tree\":" + (g_scRuntimeTree.empty() ? "null" : g_scRuntimeTree);
+    out += ",\"elementRegistry\":" + (elReg.empty() ? std::string("null") : elReg)
+        + ",\"elementProbe\":" + (elProbe.empty() ? std::string("null") : elProbe);
     if (!g_devConsoleOut.empty()) out += ",\"console\":\"" + jsonEscape(g_devConsoleOut) + "\"";
     if (!err.empty()) out += ",\"error\":\"" + jsonEscape(err) + "\"";
     out += "}";

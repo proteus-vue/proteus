@@ -44,6 +44,8 @@ import type {
 } from '@proteus-vue/slot-runtime'
 // ★★★运行期阶段耗时自采样（CPU Profiler · 决策 #715）——dev-only 的框架级归因
 import { createRuntimeProfiler, NULL_PROFILER, type RuntimeProfiler, type ProfEntry } from './runtime-profiler'
+// ★★★决策 #1081：**元素身份索引**（模板静态 `id` → 引擎节点 id）——`useElement` 选择器通路的映射层
+import { registerScreenElements } from './element-registry'
 
 /** 一屏的运行期产物（与 `packages/cli/src/app-runtime-content.ts` 的 `ScreenRuntimeArtifact` **同形**） */
 export interface ScreenRuntimeArtifact {
@@ -323,6 +325,22 @@ export function createScreenRuntime(opts: CreateScreenRuntimeOptions): ScreenRun
       }
     }
     propagateColorInheritance(inst.nodes)
+    /**
+     * ★★★决策 #1081：**元素身份索引**（模板静态 `id` → 引擎节点 id）——`useElement('#id')` 的映射落点。
+     *   · 节点数组序 = `content()`/`screen.mount` 的挂载序；`contentIdBase` 有值时内核 id = base + 数组序
+     *     （与 `localIdOf` 的逆映射同源），否则内核直用节点 id（superapp 的 VaporRenderHost 走这条）。
+     *   · 每次实例化/重建都**整桶替换**（旧树 id 已失效；合并会留下幽灵条目 ⇒ 查到已销毁的节点）。
+     */
+    function indexElementIds(): void {
+      const rows = inst.nodes.map((n, i) => ({
+        id: typeof base === 'number' ? base + i : n.id,
+        elementId: (n as { elementId?: unknown }).elementId,
+      }))
+      const r = registerScreenElements(name, rows)
+      if (r.duplicates.length) {
+        note(`[screen-runtime] ${name}: 重复元素 id（与 Web 一致取文档序第一个）：${r.duplicates.slice(0, 4).join(', ')}`)
+      }
+    }
     // ★R6：内容局部 id 的**有序表**（index → localId）——手势反查用
     let localIdsOrdered = inst.nodes.map((n) => n.id)
     // ★★★决策 #907/B1：**行内节点映射**（每次实例化重建）
@@ -344,12 +362,14 @@ export function createScreenRuntime(opts: CreateScreenRuntimeOptions): ScreenRun
       }
     }
     indexRowScopes()
+    indexElementIds()   // ★#1081 元素身份索引（首帧/重建后整桶替换）
     /** 用**当前 data** 重实例化（节点 id 由 tpl 的 slot 序决定 ⇒ 与初实例化逐位一致，id 映射稳定） */
     function rebuild(): void {
       inst = prof.time('instantiate', () => instantiateTemplate(art.tpl, instOpts))
       propagateColorInheritance(inst.nodes)
       localIdsOrdered = inst.nodes.map((n) => n.id)
       indexRowScopes()
+      indexElementIds()   // ★#1081 元素身份索引（重建后整桶替换）
     }
     // 组件未展开 ⇒ 如实记（不静默）
     if (inst.stats.componentNodes === 0 && inst.nodes.some((n) => n.component)) {

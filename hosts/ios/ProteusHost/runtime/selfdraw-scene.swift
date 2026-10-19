@@ -5238,7 +5238,7 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     private var interactionFeedback: InteractionFeedback?
     var jsReport: [String: Any] = [:]
     /// ★句柄常驻：Vue 的后续更新复用同一棵 Rust 树（与 §5.1「节点树页面存活期间常驻」一致）
-    private var handle: UInt64 = 0
+    private(set) var handle: UInt64 = 0   // ★#1081：几何回执在 element-rect.swift 的 extension 里读它
     /// ★★复用池句柄（§12.6：核心给决策、宿主执行动作）——`mountVirtual` 时创建
     private var recycleHandle: UInt64 = 0
     /// 上一帧的节点数组（**增量 diff 的基线**）——只有它才能算出「哪些节点真的变了」

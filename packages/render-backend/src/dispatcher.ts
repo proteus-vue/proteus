@@ -8,6 +8,8 @@
 //   纯逻辑零依赖（component-ir 同为零依赖纯 TS）；与 G-27 ProteusRenderBackend SPI 紧耦合（同包）。
 import { toComponentIR } from '@proteus-vue/component-ir'
 import type { IRNode, NodeHandle, ProteusRenderBackend } from './spi'
+// ★★★决策 #1081：**元素身份索引**——Vue 自定义渲染通道里 `id` 属性是唯一能拿到「元素 id ↔ 句柄」的位置
+import { registerVueElementId } from './element-registry'
 
 /** 未知标签（非 p-* / 未知 p-*）→ 编译期就该拦截，运行期硬拖底（G-41.2：禁止静默） */
 export class DispatcherError extends Error {
@@ -113,6 +115,10 @@ export function createNodeOpsDispatcher(initialBackend: ProteusRenderBackend): P
       trace.push({ seq: ++seq, op: 'remove', child: idOf(child) })
     },
     patchProp(el, key, prev, next) {
+      // ★★★决策 #1081（用户：「选择器应该通过 vue 自定义渲染通道做映射」）：元素 `id` 在**这一层**
+      //   是可知的（Vue 的 patchProp 把模板属性交给 nodeOps）⇒ 在此登记 `元素 id → 渲染句柄 id`。
+      //   引擎侧只认数字 id；能力层 `useElement('#id')` 经同一索引查回句柄 id。
+      if (key === 'id' && typeof next === 'string' && next) registerVueElementId(next, idOf(el))
       current.patchProp(el, key, prev, next)
       trace.push({ seq: ++seq, op: 'patchProp', el: idOf(el), key, next })
     },

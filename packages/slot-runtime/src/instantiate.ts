@@ -433,7 +433,7 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
     //   ★更糟的是：`mount` 仍会成功、层也会建（几何是"某种"结果）⇒ **V6 判据全过（假绿）**。
     //   ⇒ 形态与 `SelfDrawNodeSpec`（自绘适配器的产物）**逐字段一致**——
     //     那条链已验证可行（S1/S5 等真机用例），本函数与之对齐。
-    const out: InstantiatedNode = { id, parentId }
+    const out: InstantiatedNode = { id, parentId, ...(n.elementId !== undefined ? { elementId: n.elementId } : {}) }   // ★#1081 元素身份透传（漏 = useElement 静默查不到）
     if (n.style) for (const [k, v] of Object.entries(n.style)) {
       ;(out as Record<string, unknown>)[k] = v
     }

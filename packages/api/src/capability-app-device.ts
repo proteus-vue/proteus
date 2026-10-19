@@ -25,6 +25,8 @@ import { invokeHost } from './capability-invoke'
 import { CapError as ProteusCapError } from './capability-types'
 // ★装配用的两组能力（生命周期 / 平台能力）——见文件底部 createAppCapabilities
 import { createAppLifecycleCapabilities, createAppNativeCapabilities, getHostLifecycleBus } from './capability-app'
+// ★★★决策 #1081：App 端元素查询（`useElement` 选择器通路）——解析器由装配层注入
+import { createAppElementCapabilities } from './capability-app-element'
 import type {
   BatteryInfo,
   CapDeviceInfo,
@@ -217,6 +219,7 @@ export function createAppCapabilities<E extends Error = Error>(
     ...createAppLifecycleCapabilities(getHostLifecycleBus(), CapError),
     ...createAppNativeCapabilities(CapError),
     ...createAppDeviceCapabilities(CapError),
+    ...createAppElementCapabilities(CapError),   // ★#1081 元素查询（createElementQuery/createIntersection）
   }
 }
 

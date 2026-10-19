@@ -80,6 +80,8 @@ export default defineConfig({
       { find: '@proteus-vue/capabilities/check', replacement: fileURLToPath(new URL('./packages/capabilities/src/check.ts', import.meta.url)) },
       { find: '@proteus-vue/capabilities', replacement: fileURLToPath(new URL('./packages/capabilities/src/index.ts', import.meta.url)) },
       // ★发布前收口（决策 #214）：测试统一走包名（去掉 packages 相对路径引入）——缺失 alias 补全
+      // ★★★决策 #1081：元素查询原子模块（App 壳不打包 9000 行 capability.ts；测试也按子路径引用）
+      { find: '@proteus-vue/api/capability-app-element', replacement: fileURLToPath(new URL('./packages/api/src/capability-app-element.ts', import.meta.url)) },
       { find: '@proteus-vue/api', replacement: fileURLToPath(new URL('./packages/api/src/index.ts', import.meta.url)) },
       { find: '@proteus-vue/built-in-components', replacement: fileURLToPath(new URL('./packages/built-in-components/src/index.ts', import.meta.url)) },
       // ★组件库已拆包（@proteus-vue/components → packages/components，2026-09-14）：测试仍显式 alias 指向包源码

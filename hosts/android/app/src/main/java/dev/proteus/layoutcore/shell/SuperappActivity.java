@@ -137,6 +137,10 @@ public class SuperappActivity extends android.app.Activity {
 
         draw = new VaporRenderHost(this, contentHost);
         draw.setLengthScale(density);          // 逻辑单位 → 物理像素（唯一换算点，与 StressSfc 同）
+        // ★★★决策 #1081：元素几何源接线（`useElement` 的宿主腿）——能力层只分档，几何来自渲染宿主。
+        //   ★实现单列在 `runtime/ElementRectProbe`（VaporRenderHost 是存量巨型文件，只减不增）。
+        caps.setElementRectProvider(args -> ElementRectProbe.rect(
+                draw, density, draw.view() != null ? draw.view().getContentScrollY() : 0, args));
         draw.enableContentScrollRange();       // 内容装不下才滚（与 Web 页面语义一致）
         screenHost.setEnvResolver(draw::resolveEnvInSpec);   // ★屏切换通路的 env 解析（决策 #677）
 
@@ -329,46 +333,8 @@ public class SuperappActivity extends android.app.Activity {
         });
     }
 
-    private org.json.JSONObject collectEnvVars() {
-        org.json.JSONObject o = new org.json.JSONObject();
-        try {
-            if (android.os.Build.VERSION.SDK_INT < 20) return o;
-            android.view.WindowInsets wi = getWindow().getDecorView().getRootWindowInsets();
-            if (wi == null) return o;
-            // ★本宿主 edge-to-edge：状态栏恒隐藏（onWindowFocusChanged 里 hide(statusBars())）⇒
-            //   statusBars().top 的“可见性值”恒为 0（= 期望的顶避让）；导航栏可见 ⇒ 其值即真实。
-            //   （SDK 公共 stub 未暴露 *IgnoringVisibility 变体，故用标准访问器——本场景等价且稳定。）
-            int sb = wi.getInsets(android.view.WindowInsets.Type.statusBars()).top;
-            int nav = wi.getInsets(android.view.WindowInsets.Type.navigationBars()).bottom;
-            int tap = wi.getInsets(android.view.WindowInsets.Type.tappableElement()).bottom;
-            int cutT = 0, cutL = 0, cutR = 0;
-            if (android.os.Build.VERSION.SDK_INT >= 28) {
-                android.view.DisplayCutout dc = wi.getDisplayCutout();
-                if (dc != null) { cutT = dc.getSafeInsetTop(); cutL = dc.getSafeInsetLeft(); cutR = dc.getSafeInsetRight(); }
-            }
-            double d = density;
-            // A 组：避让量（statusBar ∪ cutout / navigationBars）——逻辑像素（dp）
-            o.put("--pf-inset-top", Math.max(sb, cutT) / d);
-            o.put("--pf-inset-bottom", nav / d);
-            o.put("--pf-inset-left", cutL / d);
-            o.put("--pf-inset-right", cutR / d);
-            // B 组：系统栏本体
-            boolean gesture = tap < nav * 0.6;   // 手势机：tappable 显著小于 navigationBars
-            o.put("--pf-status-bar-height", sb / d);
-            o.put("--pf-nav-bar-height", (gesture ? 0 : nav) / d);
-            o.put("--pf-indicator-height", (gesture ? nav : 0) / d);
-            o.put("--pf-nav-bar-total", nav / d);
-            // C 组：挖孔 + 导航模式
-            o.put("--pf-cutout-top", cutT / d);
-            o.put("--pf-cutout-left", cutL / d);
-            o.put("--pf-cutout-right", cutR / d);
-            o.put("--pf-keyboard-height", (double) KeyboardWatcher.lastHeightDp);   // ★决策 #1069/#1075：真实 IME 高度（dp）
-            // ★E 组（设备标量 · 决策 #598）：--pf-hairline = 1/density（一条物理像素的逻辑长度，dp）
-            o.put("--pf-hairline", 1.0 / d);
-            android.util.Log.i(TAG, "ENV_VARS top=" + (Math.max(sb, cutT) / d) + " bottom=" + (nav / d) + " gesture=" + gesture);
-        } catch (Throwable t) { android.util.Log.w(TAG, "collectEnvVars 失败：" + t.getMessage()); }
-        return o;
-    }
+    /** ★决策 #1081：内置环境变量采集的唯一实现在 `runtime/EnvVars`（壳与真机判据共用）。 */
+    private org.json.JSONObject collectEnvVars() { return EnvVars.collect(this, density); }
 
     private void renderCurrent(String stateJson) {
         final String page = currentName(stateJson);

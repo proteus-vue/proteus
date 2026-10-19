@@ -55,6 +55,9 @@ final class HostCapabilities: NSObject {
     /// ★★2026-10-19（决策 #1067）：「设备与系统」域 12 项（真实 UIKit/Network/VideoToolbox，
     ///   见 device-capability.swift）。
     private lazy var device = DeviceCapability(hostView: nil)
+    /// ★★★决策 #1081（`useElement` 选择器通路）：**元素几何源**（由壳注入——几何在渲染宿主手里）。
+    ///   未接线 ⇒ `missing` 分档（`element.unsupported`，诚实不伪造）。
+    var elementRectProvider: ((String) -> String)?
 
     // ────────────────────────── 主入口（契约同 Android.invoke） ──────────────────────────
 
@@ -92,6 +95,23 @@ final class HostCapabilities: NSObject {
             return miss("extension.load: iOS 禁止动态模块加载（App Store 政策；dlopen 第三方代码会被拒审）")
         case "mini-program.navigate":
             return miss("mini-program.navigate: iOS 无小程序概念（跨 App 跳转请用 URL Scheme / Universal Links）")
+        case "element.rect":
+            // ★★★决策 #1081：元素几何（`useElement` → selector→nodeId → 内核矩形）。
+            //   ★回执形状归一：几何源给的是裸几何；本层包成既有的 `{ok:true,data:…}` 契约。
+            guard let ep = elementRectProvider else {
+                return miss("element.rect: 宿主未接线几何源")
+            }
+            let raw = ep(argsJson)
+            guard let gd = raw.data(using: .utf8),
+                  let go = (try? JSONSerialization.jsonObject(with: gd)) as? [String: Any] else {
+                return fail("element.rect: 几何源回执非 JSON")
+            }
+            guard (go["ok"] as? Bool) == true else {
+                return fail((go["reason"] as? String) ?? "element.rect 失败")
+            }
+            var payload = go
+            payload.removeValue(forKey: "ok")
+            return ok(payload)
         case "native.calls":
             // ★形态与 Android 一致：返回**裸 JSON 数组**（诊断通道，非 {ok,data} 包装）
             return Self.jsonString(callLog)

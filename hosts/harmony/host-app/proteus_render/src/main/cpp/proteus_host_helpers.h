@@ -26,6 +26,8 @@
 extern "C" {
 uint64_t proteus_layout_create(const char* request_json);
 char* proteus_layout_rects(uint64_t handle);
+/// ★★★决策 #1081：单节点绝对矩形（内核 SSOT；`element.rect` 用）
+char* proteus_layout_node_rect(uint64_t handle, uint32_t node_id);
 /// ★★App 图标/SVG 渲染（2026-10-11）：导出有 svgPath 的节点（`{segs, d, strokeColor, strokeWidth, fill, ...}`）——
 ///   鸿蒙宿主据此画图标（填充）与描边路径。返回的 JSON 须 `proteus_layout_free_string` 释放。
 char* proteus_layout_svg_nodes(uint64_t handle);

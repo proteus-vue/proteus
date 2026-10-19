@@ -7105,3 +7105,84 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 【下一步】设备域剩 7 项：`useElement` / `useIntersection`（两者都依赖"选择器→节点 id"的映射，App 自绘树
   没有选择器概念——**需先设计 id 映射方案**）· `useScreenCapture` / `useCacheManager` / `useAR` /
   `useBeacon` · `useDeviceCapability`（已接 HEVC，可扩展更多探测位）。
+
+1081. **`useElement` 选择器通路（静态 id → 引擎 nodeId → 内核矩形）：四层落地 + Android/iOS 真机闭环 · 决策**（2026-10-19 · 承接 #1080 的「设备域剩 7 项」）:
+
+【用户指定（2026-10-19）】
+  1. 「这个选择器正常应该是通过 vue 自定义渲染通道做映射吧？因为拿到的肯定是 vue 元素信息不是原生元素信息」
+  2. 「验证通路没问题后真正落地就需要和 web 的查询结构保持同步了」
+
+【取证（先于设计）】
+  · App 的 superapp **不走** Vue `createRenderer`（G-41 B3 的 `vue-bridge.ts` 存在，但 superapp 用的是 vapor 链）：
+    `.vue` → 编译器 → `LayoutTemplate`（节点 = 数字 id + 扁平样式）→ `instantiateTemplate()`
+    → `InstantiatedNode[]` → `host.mount(nodes)` → 宿主自绘。**链上没有 vnode**。
+  · `InstantiatedNode` 原字段：`{id, parentId, tag, component, loc, text, pseudo, …扁平样式}`——
+    **没有 `class`、没有 `id`、没有 dataset**；编译器在 vapor 路径里把 `id` 属性当普通属性丢弃。
+  ⇒ `useElement('#foo')` 在 App 端不是"映射难"，是**源头没有这个信息**。
+
+【设计（两条链共用一个索引）】
+  · 编译器：静态 `id="foo"` → `LayoutNode.elementId`（**与引擎 `LayoutNode.id` 是两个空间**）；
+    **动态 `:id` 产精确诊断** `VAPOR_DYNAMIC_ID_UNSUPPORTED`（不静默丢——静默丢会让查询无声失效）。
+    实现单列 `compiler/src/vapor/element-id.ts`（`template.ts` 是 4651 行存量巨型文件，只减不增）。
+  · 实例化：`InstantiatedNode.elementId` 透传（与 `tag`/`pseudo` 同族；漏透传 = 静默查不到）。
+  · **映射层** `render-backend/src/element-registry.ts`：`#id`/裸 id → 引擎 nodeId。
+    两条渲染链都写它：Vapor（`screen-runtime` 每次实例化后按屏整桶替换）·
+    Vue 自定义渲染器（`dispatcher.patchProp(el,'id',…,next)`——用户点名的"vue 渲染通道"落点）。
+    重复 id 与 Web 一致取**文档序第一个**并如实记 duplicates；**整桶替换**（旧树 id 失效 ⇒ 不留幽灵条目）。
+  · 能力层 `api/src/capability-app-element.ts`：`createElementQuery` 的每个方法 = 解析 selector →
+    宿主 `element.rect` → **归一成 Web `getBoundingClientRect()` 的视口坐标**（内容坐标 − scrollY）。
+    `useIntersection` **如实不支持**（缺帧级几何变化事件源；不做"observe 回调一次"的假观察）。
+  · 宿主新方法 `element.rect`（三端同一契约）：`{nodeId}` → `{x,y,width,height,scrollY}`。
+    **坐标归一只有一份实现（JS 侧）**——宿主各报自己的 scrollY，不各算一套（避免"三端自洽但偏离 Web"）。
+
+【落地（四层 + 三端宿主）】
+  · 编译器 `template.ts` + 新 `element-id.ts`（行内展开 ⇒ 主文件 0 行增长）
+  · `slot-runtime/layout-template.ts`（`LayoutNode.elementId` / `InstantiatedNode.elementId`）+
+    `instantiate.ts`（初值字面量展开 ⇒ 0 行增长）
+  · `render-backend/element-registry.ts`（新）+ `screen-runtime.ts`（按屏建桶，首帧/重建）+
+    `dispatcher.ts`（patchProp 写桶）+ `host-invoke-contract.ts`（`element.rect`）
+  · `api/capability-app-element.ts`（新）+ `capability-app-device.ts` 装配 + `api` 子路径导出
+  · Android：`runtime/ElementRectProbe.java`（新；几何回执）+ `runtime/EnvVars.java`（新；
+    **env 表从壳提到 runtime**——真机判据与壳共用同一张表）+ `HostCapabilities`（provider 注入）+
+    `SuperappActivity` 接线 + `dev/ElementProbe.java`（新；真机判据）+ `run-element-probe.sh`（新）
+  · iOS：`runtime/element-rect.swift`（新；extension 拆文件，`selfdraw-scene.swift` 0 行增长）+
+    `host-capabilities.swift`（provider）+ `superapp-scene.swift`（接线 + 报告读数）
+  · 鸿蒙：`host_app_runtime_impl.h`（`element.rect` + 捕获树建索引 + `scrollY` 随 render 带入）+
+    `proteus_host_helpers.h`（FFI 声明）+ `Superapp.ets`（传 scrollY + 报告读数）
+  · `entry-superapp.ts`（`__proteusHostAppElementRect` / `…ElementRegistry` 探针 + 装配解析器；
+    已 `sync-host-bridge` 同步 CLI 副本）
+
+【判据】
+  · `tests/capability-app-element.test.ts` **14/14**：编译器静态 id 进产物 + 动态 :id 诊断 ·
+    实例化透传 · `#id`/裸 id 解析与 class/复合选择器**拒绝** · 按屏分桶 · 重复 id 取首个 ·
+    整桶替换 · Vue 链写桶 · **Web 视口坐标归一**（内容坐标 − scrollY）· 三档错误分档 · useIntersection 不假观察。
+  · **破坏性验证 2 条**：摘掉 `instantiate` 透传 ⇒ 1 红；摘掉编译器 `elementIdFields` ⇒ 3 红；均复原绿。
+  · **Android 真机**（`bash hosts/android/run-element-probe.sh`，报告 `results/element-probe.json`）：
+    `#idx-read-theme` → nodeId 14 → `{x:340,y:246.67,w:28,h:18.67}`，与内核 `readRects()` 同 nodeId
+    **逐值一致**（`cross_check_ok=true`）；`#no-such-…` ⇒ `not-found`；`.sa-item` ⇒ `unsupported`（带原因）。
+  · **iOS 真机**（`--superapp --drive`，报告 `results/superapp.json`）：
+    `#mine-row-dark` → nodeId 16 → `{left:16,top:231,w:358,h:48}`，与 `readRects()` **逐值一致**
+    （`cross_check_ok=true`）；两档边界同上。
+  · 门禁：`check:file-size` · `check:host-invoke-contract`（三端 ⊆ 契约）· `check-no-json-wire` ·
+    `check-ios-source-lists` · `sync-host-bridge --check` · `check:ai-tasks` · `vue-tsc` ·
+    `pnpm test:coupled`（429 条）· Android javac · iOS swiftc · 鸿蒙 clang 全绿。
+
+【顺带修的门禁缺陷】
+  · `check-host-invoke-contract` 只认 `case "…"` ⇒ Java 的 `"element.rect".equals(method)` 形态
+    **实现了也报"未覆盖"**（与 #1080 的误报同族：门禁覆盖面没跟着实际形态走）。
+    现两种分派形态都收（同一"含点或已登记"判据，仍不收业务字符串）。
+  · `run-element-probe.sh` 首版 `unzip -l | grep -q` 配 `set -o pipefail` ⇒ grep 提前退出让 unzip 收
+    SIGPIPE ⇒ **误报"APK 内无 bundle"**（`run-superapp.sh` 早已用"先捕获再 printf"避开，本脚本改同法）。
+
+【诚实边界】
+  ① **本切片只有 `#id` / 裸 id**。`class` / `data-*` / 组合选择器**明确拒绝**（`element.unsupported` + 原因），
+     **不做近似匹配**——错节点比 unsupported 危险得多。下一批沿同一索引扩形态。
+  ② **鸿蒙真机未闭环**：设备处于锁屏且为开发者模式（`Error Code:10106102`，系统拒绝自动解锁）⇒
+     本端只到编译 + C++ 语法检查 + 装置代码就位；宿主体阅读数已进 `hostAppRender` 回执与报告，
+     解锁后跑 `bash hosts/harmony/run-superapp.sh` 即可取证。
+     如实说明：**鸿蒙这条几何腿与 Android/iOS 同契约但没有真机证据**。
+  ③ `fields({node})`（CanvasNode）与 `fields({computedStyle})` 在 App 无对应能力 ⇒ 前者不填、后者空，
+     不伪造值。
+  ④ `useIntersection` 仍未实现（需渲染宿主的帧级几何通知，属下一批）。
+  ⑤ Android/iOS 的 `scrollY` 取自**各自视图**的当前偏移；三端语义一致（视口坐标 = 内容坐标 − 偏移），
+     但滚动**进行中**读到的是该帧快照（与 Web 的 scroll 事件时刻同性质）。

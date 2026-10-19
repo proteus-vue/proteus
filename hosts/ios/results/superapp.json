@@ -1,10 +1,25 @@
 {
+  "cross_check_ok" : true,
   "dactyl_metrics" : "{\"end\":\"ios\",\"samples\":[],\"sampled\":0,\"dropped\":0}",
   "dactyl_samples" : "{\"sampled\":0,\"pending\":0,\"dropped\":0}",
   "dactyl_trail" : "{\"points\":[],\"count\":0}",
+  "element_class_selector" : "{\"ok\":false,\"error\":\"unsupported\",\"selector\":\".sa-item\",\"screen\":\"mine\",\"registry\":{\"vue\":0,\"screens\":{\"index\":5,\"messages\":3,\"mine\":4}},\"reason\":\"App 端元素查询目前只支持 #id \/ 裸 id（class\/复合选择器为下一批）\"}",
+  "element_not_found" : "{\"ok\":false,\"error\":\"not-found\",\"selector\":\"#no-such-element-xyz\",\"screen\":\"mine\",\"registry\":{\"vue\":0,\"screens\":{\"index\":5,\"messages\":3,\"mine\":4}}}",
+  "element_probe" : "{\"ok\":true,\"selector\":\"#mine-row-dark\",\"nodeId\":16,\"source\":\"screen\",\"screen\":\"mine\",\"left\":16,\"top\":231,\"right\":374,\"bottom\":279,\"width\":358,\"height\":48,\"scrollY\":0}",
+  "element_registry" : "{\"vue\":0,\"screens\":{\"index\":5,\"messages\":3,\"mine\":4}}",
   "host_id" : "ios",
-  "host_stats" : "{\"ok\":true,\"data\":{\"rect_calls\":0,\"screens\":[{\"visible\":true,\"screenId\":\"mine#4\",\"rootNodeId\":100}],\"anim_completed\":0,\"calls\":[\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.stats\"],\"content_node_total\":260,\"shared_calls\":0,\"anim_hook_missing\":0,\"anim_calls\":0,\"destroy_calls\":3,\"live_screens\":1,\"mount_calls\":4,\"visible_calls\":4}}",
-  "interaction_probe" : "{\"press_styles\":4,\"press_applied\":0,\"press_anim_starts\":0,\"press_anim_stops\":0,\"field_specs\":0,\"field_ticks\":0,\"field_nodes_touched\":0,\"field_touched_now\":0,\"pseudo_parents\":0,\"last_field_ids\":[]}",
+  "host_stats" : "{\"data\":{\"destroy_calls\":3,\"anim_completed\":0,\"shared_calls\":0,\"content_node_total\":269,\"anim_hook_missing\":0,\"calls\":[\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.stats\"],\"screens\":[{\"visible\":true,\"screenId\":\"mine#4\",\"rootNodeId\":100}],\"anim_calls\":0,\"live_screens\":1,\"visible_calls\":4,\"mount_calls\":4,\"rect_calls\":0},\"ok\":true}",
+  "interaction_probe" : "{\"press_styles\":5,\"press_applied\":0,\"press_anim_starts\":0,\"press_anim_stops\":0,\"field_specs\":0,\"field_ticks\":0,\"field_nodes_touched\":0,\"field_touched_now\":0,\"pseudo_parents\":0,\"last_field_ids\":[]}",
+  "kernel_rect" : {
+    "clipH" : 48,
+    "clipW" : 358,
+    "clipX" : 16,
+    "clipY" : 231,
+    "height" : 48,
+    "width" : 358,
+    "x" : 16,
+    "y" : 231
+  },
   "ok" : true,
   "pump" : {
     "anim_start_calls" : 0,
@@ -18,7 +33,7 @@
     "running" : false
   },
   "rendered_page" : "mine",
-  "run_ts" : 1791879117.0181761,
+  "run_ts" : 1792385008.8563519,
   "scroll_probe" : {
     "after_drag_down_100k" : 0,
     "after_drag_left_100k_x" : 0,
@@ -32,6 +47,7 @@
     "current" : "mine",
     "depth" : 1,
     "screens" : [
+      "glass-nav",
       "index",
       "messages",
       "mine",

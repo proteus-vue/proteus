@@ -38,7 +38,15 @@ const contract = new Set([...HOST_CAPABILITY_METHODS, ...HOST_SCREEN_METHODS])
 function extractCases(file) {
   const out = []
   const contractNames = new Set([...HOST_CAPABILITY_METHODS, ...HOST_SCREEN_METHODS])
-  for (const m of fs.readFileSync(path.join(ROOT, file), 'utf-8').matchAll(/case\s+"([^"]+)"/g)) {
+  const text = fs.readFileSync(path.join(ROOT, file), 'utf-8')
+  for (const m of text.matchAll(/case\s+"([^"]+)"/g)) {
+    const name = m[1]
+    if (name.includes('.') || contractNames.has(name)) out.push(name)
+  }
+  // ★2026-10-19（决策 #1081）：**另一种真实分发形态** `"element.rect".equals(method)`（Java 前缀/精确判定）
+  //   初版只认 `case "..."` ⇒ 实现了也报"未覆盖"（数字低报，与 #1080 的误报同族：门禁覆盖面没跟着实际形态走）。
+  //   ★只收**方法名形态**（含点或已登记）——与 case 分支同一条判据，避免把业务字符串当方法。
+  for (const m of text.matchAll(/"([a-z][a-z0-9-]*(?:\.[a-z0-9-]+)+)"\.equals\(\s*method\s*\)/g)) {
     const name = m[1]
     if (name.includes('.') || contractNames.has(name)) out.push(name)
   }

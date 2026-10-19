@@ -36,6 +36,7 @@ import { foldCalcArithmetic } from '../calc-fold'
 import { staticInstantiate } from './static-instantiate'
 // ★★★模板源位置换算（唯一实现——与 events.ts 同口径；决策 #712/#713）
 import { templateContentLineOffset, sourceLocOf } from './source-loc'
+import { elementIdFields } from './element-id'   // ★#1081 元素身份（模板静态 id）
 // ★★★元素/文本**混排**归一化（2026-10-03）——三处遍历（template/deps/events）的**唯一**输入
 import { normalizedChildSequence } from './text-runs'
 // ★作用域插槽的变量形态解析（单名 / 对象解构——唯一入口；2026-10-03）
@@ -4447,9 +4448,8 @@ export function buildLayoutTemplate(
           glassLeaf = true
         }
       }
-      const node: LayoutNode = { id, parentId, tag: iconLeaf ? 'view' : tag, style, ...(iconLeaf && !hadOwnColorDecl ? { inheritColor: true } : {}) }
-      // ★★★批次 54（决策 #713）：dev 构建发射模板源位置（面板 Elements 选中/就地编辑 → 跳源行）。
-      //   非 dev ⇒ `dev` 为 false、此处根本不进 ⇒ 产物逐字节不变。
+      const node: LayoutNode = { id, parentId, tag: iconLeaf ? 'view' : tag, style, ...(iconLeaf && !hadOwnColorDecl ? { inheritColor: true } : {}), ...elementIdFields(n, diag, tag, id) }   // ★#1081 末项 = 元素身份（静态 `id`；动态 `:id` 产诊断，不静默丢）
+      // ★★★批次 54（决策 #713）：dev 构建发射模板源位置（面板 Elements 选中/就地编辑 → 跳源行）；非 dev ⇒ 产物逐字节不变。
       if (dev) {
         const loc = sourceLocOf(n.loc, bodyLineOffset)
         if (loc) node.loc = loc

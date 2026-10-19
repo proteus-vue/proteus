@@ -12,14 +12,19 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./capability-app-element": {
+      "types": "./dist/capability-app-element.d.ts",
+      "import": "./dist/capability-app-element.js",
+      "default": "./dist/capability-app-element.js"
+    }
   },
   "files": [
     "dist",
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js"
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js && esbuild src/capability-app-element.ts --bundle --format=esm --platform=neutral --outfile=dist/capability-app-element.js"
   },
   "devDependencies": {
     "@types/node": "^20.0.0"

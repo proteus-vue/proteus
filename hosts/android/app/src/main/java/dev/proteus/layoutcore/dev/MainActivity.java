@@ -427,10 +427,10 @@ public class MainActivity extends Activity {
             String as = appStackRun();
             sb.append(as).append('\n');
             writeReport("app-stack.json", as);
+        } else if ("element-probe".equals(testPath)) { String ep = ElementProbe.run(this, root); sb.append(ep).append('\n'); writeReport(ElementProbe.REPORT, ep);
         } else if ("superapp".equals(testPath)) {
-            // ★★★批次 43（用户「不要装置级别了，要真实的独立应用了」）：
-            //   **真实 superapp 运行**——读 bundle-superapp.js，启动（路由栈 + 宿主真建树），
-            //   并导航（switchTab / push / back）——证明「真实应用在端上跑」。
+            // ★★★批次 43（用户「不要装置级别了，要真实的独立应用了」）：**真实 superapp 运行**——
+            //   读 bundle-superapp.js，启动（路由栈 + 宿主真建树）并导航（switchTab / push / back）。
             sb.append("【superapp 真实应用（路由栈 + 宿主真建树 + 导航）】\n");
             String sa = superappRun();
             sb.append(sa).append('\n');

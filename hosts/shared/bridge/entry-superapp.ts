@@ -15,6 +15,11 @@ import { createRouter, type RouterInstance } from '@proteus-vue/router'
 import type { RouteRecord } from '@proteus-vue/router/types'
 import { APP_SCREEN_CONTENT, APP_SCREEN_REGISTRY, APP_RUNTIME_CONTENT } from './app-screen-content.generated'
 import { createSuperappRuntime, TAB_BAR_SPEC } from '@proteus-vue/render-backend'
+// ★★★决策 #1081：元素索引 + 元素查询探针（`useElement` 选择器通路）
+import { resolveElement, elementRegistryStats, firstScreenElementId } from '@proteus-vue/render-backend'
+// ★与 entry-host-runtime.ts 同款：包内**相对路径**引用源（tsconfig.json 是 JSONC，加 paths 会撞校验；
+//   而相对路径让 bundler 与类型检查解析到同一份源，零配置改动）
+import { installElementResolver } from '../../../packages/api/src/capability-app-element'
 import type { SuperappRuntime } from '@proteus-vue/render-backend'
 
 // ★★★（决策 #715）**必须引用裸标识符 `__DEV__`**——esbuild 的 `define` 只替换**裸标识符**，
@@ -287,6 +292,8 @@ interface SuperappRuntimeHostShape {
         ...(__DEV__ ? { profile: true } : {}),
       })
       g.__SUPERAPP_RUNTIME__ = runtime
+      // ★★★决策 #1081：元素索引接到能力层（`useElement` 的 selector→nodeId 映射；当前屏为桶）。
+      try { installAppElementResolver(() => runtime!.current()) } catch { /* 装线失败不影响渲染 */ }
     }
     // ★remount（鸿蒙一次性 VM 判据用）：无条件重挂——拿"反映当前 state"的整树（同屏也重挂）；
     //   否则走 mountScreen（含导航/滚动语义）。两种都返回 snapshot（一次性 VM 宿主持有）。
@@ -432,6 +439,83 @@ interface SuperappRuntimeHostShape {
   return JSON.stringify(g.__SUPERAPP_RUNTIME__?.profileStats() ?? {})
 }
 
+/* ═══════════ ★★★决策 #1081：**元素查询探针**（`useElement` 选择器通路的三端判据入口）═══════════
+ * 【它证明什么】`#id` → 引擎 nodeId → **内核矩形**这条链真的通了（不是"桥存在"而是"几何回得来"）。
+ *   判据：宿主取 `__proteusHostAppElementRect({selector:"#hero"})` ⇒ `{ok:true,nodeId,source,…}`。
+ * 【映射在哪】`element-registry`（render-backend）：Vapor 实例化按屏建桶，Vue 渲染器在 `patchProp` 写桶。
+ *   本处只做"解析 + 调宿主 element.rect + 视口坐标归一"——与 `capability-app-element` **同一语义**。
+ * 【为什么还要单独暴露一份】superapp bundle 刻意**不打包** 9000 行 `capability.ts`（体积 + IIFE 兼容）
+ *   ⇒ 探针必须能直接测这条链，而不依赖整条能力桥被加载。
+ */
+/** 装配期调用一次：把元素索引接到能力层（能力层不反向依赖渲染包）。 */
+export function installAppElementResolver(currentScreen: () => string): void {
+  installElementResolver({
+    resolve: (selector) => {
+      const screen = currentScreen()
+      const hit = resolveElement(selector, screen || undefined)
+      return hit ? { nodeId: hit.nodeId, source: hit.source } : null
+    },
+    currentScreen,
+  })
+}
+
+/** 解析 + 取几何（探针/宿主调；返回 JSON 串——与壳的字符串回执契约同形）。 */
+export function appElementRect(argsJson: string): string {
+  const g = globalThis as unknown as { proteusHost?: { invoke?: (m: string, a: string) => string }; __SUPERAPP_RUNTIME__?: { current(): string } }
+  let sel = ''
+  let explicitId = -1
+  try {
+    const a = JSON.parse(argsJson || '{}') as { selector?: string; nodeId?: number }
+    sel = typeof a.selector === 'string' ? a.selector : ''
+    // 直接给 nodeId（诊断/对照用）：跳过索引，验"宿主几何腿"本身
+    if (typeof a.nodeId === 'number' && a.nodeId >= 0) explicitId = a.nodeId
+  } catch { return JSON.stringify({ ok: false, error: '入参非法' }) }
+  const screen = g.__SUPERAPP_RUNTIME__ ? g.__SUPERAPP_RUNTIME__.current() : ''
+  // ★selector 缺省 ⇒ 当前屏的**第一个元素 id**（跨页探针/诊断用，避免硬编码某页的 id——iOS 驱动会切屏）
+  if (!sel && explicitId < 0) { const first = firstScreenElementId(screen); if (first) sel = '#' + first }
+  let nodeId = explicitId
+  let source = explicitId >= 0 ? 'explicit' : ''
+  if (explicitId < 0) {
+    const hit = resolveElement(sel, screen || undefined)
+    if (!hit) {
+      const raw2 = sel.trim()
+      const looksLikeId = raw2 === '' || raw2.startsWith('#') || !/[\s.[\]\>+~:#]/.test(raw2)
+      const error = looksLikeId ? 'not-found' : 'unsupported'
+      const reason = looksLikeId ? undefined : 'App 端元素查询目前只支持 #id / 裸 id（class/复合选择器为下一批）'
+      return JSON.stringify({ ok: false, error, selector: sel, screen, registry: elementRegistryStats(), ...(reason ? { reason } : {}) })
+    }
+    nodeId = hit.nodeId
+    source = hit.source
+  }
+  const host = g.proteusHost
+  if (!host || typeof host.invoke !== 'function') return JSON.stringify({ ok: false, error: '宿主缺 invoke' })
+  try {
+    const raw = host.invoke('element.rect', JSON.stringify({ nodeId }))
+    const o = JSON.parse(raw) as { ok?: boolean; data?: { x: number; y: number; width: number; height: number; scrollY?: number }; reason?: string }
+    if (!o || o.ok !== true) return JSON.stringify({ ok: false, error: o?.reason ?? 'element.rect 失败', nodeId, source })
+    const d = o.data ?? (o as unknown as { x: number; y: number; width: number; height: number; scrollY?: number })
+    const x = Number((d as { x?: number }).x ?? 0)
+    const y = Number((d as { y?: number }).y ?? 0)
+    const w = Number((d as { width?: number }).width ?? 0)
+    const h = Number((d as { height?: number }).height ?? 0)
+    const sy = Number((d as { scrollY?: number }).scrollY ?? 0)
+    // ★Web `getBoundingClientRect()` 语义：视口坐标（内容坐标 − 滚动偏移）
+    return JSON.stringify({
+      ok: true, selector: sel, nodeId, source, screen,
+      left: x, top: y - sy, right: x + w, bottom: y - sy + h, width: w, height: h, scrollY: sy,
+    })
+  } catch (e) {
+    return JSON.stringify({ ok: false, error: String((e as Error)?.message ?? e) })
+  }
+}
+
+;(globalThis as unknown as { __proteusSuperappElementRect?: (a: string) => string })
+  .__proteusSuperappElementRect = (a: string) => appElementRect(a)
+
+/** 元素索引读数（判据：证明索引里真有条目，而不是"查询恒 not-found"）。 */
+;(globalThis as unknown as { __proteusSuperappElementRegistry?: () => string })
+  .__proteusSuperappElementRegistry = () => JSON.stringify(elementRegistryStats())
+
 /* ═══════════ ★★★中性协议别名（2026-10-09）：runtime 侧调用入口 ═══════════
  * 【为什么有它】鸿蒙 runtime HAR 的**应用运行期驱动**（`host_app_runtime_impl.h`）按**中性名**调用
  *   全局——因为 runtime 是"换一个 App 不用改"的单元（分层门禁 `check-host-layering` 明令 runtime 目录
@@ -460,5 +544,8 @@ __HOSTAPP.__proteusHostAppAnimActive = (): string => {
 // ★dev 元素树（决策 #732）：含 `file`/`screen`（面板据节点 loc 拼 file:line:col → 跳编辑器）——
 //   鸿蒙壳取它作 `/tree` body（比 mount 捕获树多 `file` 字段）。
 __HOSTAPP.__proteusHostAppTree = __HOSTAPP.__proteusSuperappTree
+// ★★★决策 #1081：元素查询（中性名——三端宿主/判据按此名调）
+__HOSTAPP.__proteusHostAppElementRect = __HOSTAPP.__proteusSuperappElementRect
+__HOSTAPP.__proteusHostAppElementRegistry = __HOSTAPP.__proteusSuperappElementRegistry
 
 

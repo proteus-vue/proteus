@@ -224,9 +224,34 @@ public final class HostCapabilities {
                         throw new UnsupportedOperationException(e.getMessage());
                     }
                 }
+                // ★★★决策 #1081：元素几何（`useElement` → selector→nodeId → 内核矩形）。
+                //   几何源由壳注入（见 ElementRectProvider）；未接线 ⇒ 诚实 unsupported。
+                if ("element.rect".equals(method)) {
+                    ElementRectProvider ep = elementRectProvider;
+                    if (ep == null) throw new UnsupportedOperationException("element.rect: 宿主未接线几何源");
+                    // ★几何源回**裸对象串** ⇒ 这里解析后按能力契约包成 `{ok:true,data:{…}}`（三端同形）
+                    JSONObject g = new JSONObject(ep.rect(argsJson));
+                    if (!g.optBoolean("ok", false)) {
+                        // "节点无几何"是**真失败**（不是 unsupported）——与其它能力的 failed 分档一致
+                        throw new IllegalStateException(g.optString("reason", "element.rect 失败"));
+                    }
+                    g.remove("ok");
+                    return ok(g);
+                }
                 throw new UnsupportedOperationException("未实现的原生方法：" + method);
         }
     }
+
+    /**
+     * ★★★决策 #1081（`useElement` 选择器通路）：**元素几何源**注入点。
+     *
+     * 【为什么是注入而不是本类直读】内核树句柄在**渲染宿主**（superapp 壳 = `VaporRenderHost`；
+     *   screen 执行器壳 = `ScreenHost`）里，能力层看不到它。两个壳各自接线一次，本类只做分档。
+     * 【缺省（未接线）】抛 `UnsupportedOperationException` ⇒ JS 桥给 `element.unsupported`（诚实，不伪造）。
+     */
+    public interface ElementRectProvider { String rect(String argsJson); }
+    private volatile ElementRectProvider elementRectProvider;
+    public void setElementRectProvider(ElementRectProvider p) { this.elementRectProvider = p; }
 
     /** 设备域方法前缀（`device.*` + 剪贴板两方法——与 `APP_DEVICE_METHODS` 对齐）。 */
     private static boolean isDeviceMethod(String method) {

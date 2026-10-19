@@ -1,0 +1,24 @@
+{
+  "engine_available": true,
+  "bundle_chars": 859846,
+  "bundle_load_ok": true,
+  "boot_ok": true,
+  "tree_chars": "10641",
+  "render_ok": true,
+  "render_reply": "{\"ok\":true,\"current\":\"index\",\"snapshot\":{\"index\":{\"themeLabel\":\"浅色\",\"unreadLabel\":\"0\",\"musicLabel\":\"未播放\",\"shellThemeIsDark\":false,\"shellThemeCls\":\"\",\"stats\":[{\"k\":\"待办\",\"v\":\"6\",\"tone\":\"brand\"},{\"k\":\"未读\",\"v\":\"3\",\"tone\":\"rec\"},{\"k\":\"完成率\",\"v\":\"92%\",\"tone\":\"ok\"}]}},\"hostReply\":\"{\\\"ok\\\":true,\\\"nodes\\\":64,\\\"text_nodes\\\":35,\\\"cmds\\\":64,\\\"layout_ms\\\":3.845,\\\"measure_ms\\\":2.577,\\\"emit_cmds_ms\\\":10.627,\\\"painted_samples\\\":18000,\\\"painted_colors\\\":194,\\\"css_anim_nodes\\\":0,\\\"viewport\\\":\\\"1200.0x2404.0\\\"}\"}",
+  "registry": "{\"vue\":0,\"screens\":{\"index\":5}}",
+  "target_selector": "#idx-read-theme",
+  "probe": "{\"ok\":true,\"selector\":\"#idx-read-theme\",\"nodeId\":14,\"source\":\"screen\",\"screen\":\"index\",\"left\":340,\"top\":246.66666666666666,\"right\":368,\"bottom\":265.3333333333333,\"width\":28,\"height\":18.666666666666668,\"scrollY\":0}",
+  "resolved_node_id": 14,
+  "kernel_rect_logical": {
+    "x": 340,
+    "y": 246.66666666666666,
+    "width": 28,
+    "height": 18.666666666666668
+  },
+  "cross_check_ok": true,
+  "not_found_probe": "{\"ok\":false,\"error\":\"not-found\",\"selector\":\"#no-such-element-xyz\",\"screen\":\"index\",\"registry\":{\"vue\":0,\"screens\":{\"index\":5}}}",
+  "class_probe": "{\"ok\":false,\"error\":\"unsupported\",\"selector\":\".sa-item\",\"screen\":\"index\",\"registry\":{\"vue\":0,\"screens\":{\"index\":5}},\"reason\":\"App 端元素查询目前只支持 #id \/ 裸 id（class\/复合选择器为下一批）\"}",
+  "mini_mount_reply": "{\"ok\":true,\"nodes\":1,\"text_nodes\":0,\"cmds\":1,\"layout_ms\":0.054,\"measure_ms\":0.001,\"emit_cmds_ms\":0.06,\"painted_samples\":18000,\"painted_colors\":1,\"css_anim_nodes\":0,\"viewport\":\"1170.0x2532.0\"}",
+  "ok": true
+}

@@ -35,6 +35,12 @@ export interface LayoutNode {
   id: number
   parentId: number | null
   tag: string
+  /**
+   * ★★★**元素身份**（决策 #1081 · `useElement` 选择器通路）——模板上的**静态** `id`（`<view id="hero">` ⇒ `'hero'`）。
+   *   ★与 `id`（引擎节点 id = 模板序 DFS 序号）是**两个空间**：这是业务侧元素名，宿主据此建 `selector → nodeId` 索引。
+   *   只收静态 id；动态 `:id` 由编译器产 `VAPOR_DYNAMIC_ID_UNSUPPORTED` 诊断（不静默丢）。缺省省略 ⇒ 无 id 的节点产物逐字节不变。
+   */
+  elementId?: string
   /** 静态样式（**引擎字段名**：width/height/margin/flexDirection/backgroundColor/…） */
   style: Record<string, unknown>
   /**
@@ -300,6 +306,11 @@ export interface InstantiatedNode {
   parentId: number | null
   /** ★节点标签（原生标签名 or 组件名；2026-10-03 起透传——此前被 emit 丢弃） */
   tag?: string
+  /**
+   * ★★★**元素身份**（决策 #1081）：`LayoutNode.elementId` 的透传（模板静态 `id`）——运行期据此建 `#id → nodeId` 索引。
+   *   ★必须透传（漏掉 = `useElement` 静默查不到，与 `tag`/`pseudo` 同族的静默丢失形态）。
+   */
+  elementId?: string
   /** ★组件边界标记（见 LayoutNode.component；P1 组件系统） */
   component?: string
   /**

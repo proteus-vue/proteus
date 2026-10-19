@@ -34,7 +34,7 @@ const TAG = 'ProteusSuperapp';
 
 /** ★B1：统一运行期渲染入参（ArkTS 禁未型字面量 ⇒ 用接口声明） */
 interface RtViewport { width: number; height: number }
-interface RtArgs { bundle: string; filesDir: string; page: string; viewport: RtViewport; chain?: number[]; state?: Record<string, Object>; remount?: boolean }
+interface RtArgs { bundle: string; filesDir: string; page: string; viewport: RtViewport; chain?: number[]; state?: Record<string, Object>; remount?: boolean; scrollY?: number }
 /** 惯性减速速率（= iOS UIScrollView normal 0.998/ms；平台标准值，不自造曲线）+ 停止阈值（vp/ms）。 */
 const DECEL_RATE = 0.998;
 const MOMENTUM_STOP = 0.02;
@@ -103,6 +103,8 @@ struct Superapp {
   /** ★★★跨调用状态（2026-10-07 · 鸿蒙一次性 VM）：上次 hostAppRender 返回的 `snapshot`
    *   （`{屏名:{变量:值}}`）——每次新 VM 作 `state` 回灌，恢复 count 等实例态（否则点击计数不动）。 */
   private runtimeState: Record<string, Object> | null = null;
+  private elementRegistryJson: string = 'null';   // ★#1081 元素索引读数
+  private elementProbeJson: string = 'null';      // ★#1081 元素查询读数
   /** ★★决策 #1067：窗口引用（设备亮度/常亮/剪贴板动作要在窗口上执行） */
   private win: window.Window | undefined = undefined;
   /** 视口高/宽（vp；renderCurrent 处记录——与 contentH 同源）。 */
@@ -245,8 +247,7 @@ struct Superapp {
       for (const nm of names) {
         this.nodesByPage.set(nm, JSON.stringify(pages[nm]['nodes']));
       }
-      // ★★★逐屏截图装置（2026-10-05 · 拆页后每页需独立截图与 Web 基准可比）：
-      //   `scene=superapp-screen-<name>` ⇒ 启动后**导航到该屏**（验收跑器逐页调用 + 截图）。
+      // ★★★逐屏截图装置（2026-10-05 · 拆页后每页需独立截图与 Web 基准可比）：；`scene=superapp-screen-<name>` ⇒ 启动后**导航到该屏**（验收跑器逐页调用 + 截图）。
       //   与 Android `--es screen <name>` / iOS drive 遍历同法（三端同语义）。
       // ★★★v-pump / 跳变驱动动画判据（本批）：`scene=superapp-pump-<name>`——导航到该屏 →
       //   渲染（泵驱动随 mount 起）→ 让泵跑 `holdMs`（AppStorage proteusPumpMs，缺省 2500）→
@@ -276,12 +277,10 @@ struct Superapp {
         const dr2 = o2['drive'] as Record<string, Object> | undefined;
         if (dr2) this.applyState(dr2['state'] as Object);
         this.renderCurrent();
-        // ★★★不滚到底（2026-10-07 修）：逐屏截图必须**页顶锚定**——与 Web 基准（视口截图从页顶裁剪）
-        //   同坐标系。此前滚到底 ⇒ 内容高于视口的页（如 background-position contentH=857>816）
+        // ★★★不滚到底（2026-10-07 修）：逐屏截图必须**页顶锚定**——与 Web 基准（视口截图从页顶裁剪）；同坐标系。此前滚到底 ⇒ 内容高于视口的页（如 background-position contentH=857>816）
         //   会把**页头/标题**切出屏外（真机抓出：鸿蒙页比 Web 少标题、整体上移）。
         //   保持 offset=0（renderCurrent 已 scrollRoot(0)）⇒ 页顶对齐。
-        // ★★★批 A⑤ 补齐（2026-10-08）：**可选滚动注入**（`--ps scroll <dy>`，vp）——采 fixed/sticky
-        //   的「滚动后」证据（对齐 Android `--es scroll "0,400"` / iOS `--scroll=`）。
+        // ★★★批 A⑤ 补齐（2026-10-08）：**可选滚动注入**（`--ps scroll <dy>`，vp）——采 fixed/sticky；的「滚动后」证据（对齐 Android `--es scroll "0,400"` / iOS `--scroll=`）。
         //   ★只**登记**到待处理标志（不当场 scrollRoot——env 异步回调会再渲染一次把 offset 归零；
         //     见 pendingScrollInject 注释）；真正注入发生在每次 paintTree 收尾（消费式）。
         const scrollArg: string = AppStorage.get<string>('proteusScroll') ?? '';
@@ -368,7 +367,7 @@ struct Superapp {
   }
 
   /** ★B1：统一运行期渲染入参 → JSON（用接口声明，避 ArkTS 未型字面量） */
-  private static rtArgsJson(page: string, bundle: string, filesDir: string, vpW: number, vpH: number, chain?: number[], state?: Record<string, Object> | null, remount?: boolean): string {
+  private static rtArgsJson(page: string, bundle: string, filesDir: string, vpW: number, vpH: number, chain?: number[], state?: Record<string, Object> | null, remount?: boolean, scrollY?: number): string {
     const vp: RtViewport = { width: vpW, height: vpH };
     const a: RtArgs = { bundle: bundle, filesDir: filesDir, page: page, viewport: vp };
     if (chain && chain.length > 0) { a.chain = chain; }
@@ -381,6 +380,8 @@ struct Superapp {
     a.remount = remount === true;
     // ★跨调用状态回灌（一次性 VM）：非空则带上（C++ 侧转 render 的 seedData）
     if (state !== undefined && state !== null && Object.keys(state).length > 0) { a.state = state; }
+    // ★★★决策 #1081：滚动偏移随每次 render 带入（`element.rect` 回给 JS 做 Web 视口坐标归一）
+    if (scrollY !== undefined && scrollY > 0) { a.scrollY = scrollY; }
     return JSON.stringify(a);
   }
 
@@ -507,7 +508,7 @@ struct Superapp {
       //   ⇒ 二级页返回时无栈可弹 ⇒ **直接退出应用**（用户抓出「二级页滑动返回退出应用」的真因）。
       const prev: string = this.current;
       // ★remount=true（一次性 VM：tap 后同样必须重挂拿新树）
-      const rtOut: string = hostAppRender(Superapp.rtArgsJson(this.current, this.bundle, this.filesDir, Superapp.vpW, Superapp.vpH, chain, this.runtimeState, true));
+      const rtOut: string = hostAppRender(Superapp.rtArgsJson(this.current, this.bundle, this.filesDir, Superapp.vpW, Superapp.vpH, chain, this.runtimeState, true, this.scrollOffset));
       const rt = JSON.parse(rtOut) as Record<string, Object>;
       const st = rt['state'] as Record<string, Object> | undefined;
       if (st) { this.applyState(st); }
@@ -526,8 +527,7 @@ struct Superapp {
         // ★以**实际渲染屏**为准（防 applyState 把 current 设成滞后的路由值）
         this.current = target;
       }
-      // ★★★统一上屏（2026-10-07）：**每次 tap 都重绘**——导航 tap 画目标屏；**数据 tap（count++）也画同屏**
-      //   新树（此前只在导航分支重绘 ⇒ 点计数没反应）。用 hostAppRender 返回的 tree **直接上屏**，省一次
+      // ★★★统一上屏（2026-10-07）：**每次 tap 都重绘**——导航 tap 画目标屏；**数据 tap（count++）也画同屏**；新树（此前只在导航分支重绘 ⇒ 点计数没反应）。用 hostAppRender 返回的 tree **直接上屏**，省一次
       //   renderCurrent 的 hostAppRender boot（一次性 VM 每次 boot 要 eval 整包 ⇒ 卡顿/"不灵敏"）。
       let nodes: string = this.nodesByPage.get(this.current) ?? '[]';
       const tree = rt['tree'] as Record<string, Object> | undefined;
@@ -695,13 +695,12 @@ struct Superapp {
     const contentH: number = vpH;
     try {
       attach(this.content, vpDensity, vpW, contentH);
-      // ★★★B1（统一运行期）：内容由 JS **共享运行期**实例化（hostAppRender：boot → createSuperappRuntime
-      //   → 实例化该屏 → host.mount 捕获 tree）；拿不到则回退静态 nodesByPage（诚实降级）。
+      // ★★★B1（统一运行期）：内容由 JS **共享运行期**实例化（hostAppRender：boot → createSuperappRuntime；→ 实例化该屏 → host.mount 捕获 tree）；拿不到则回退静态 nodesByPage（诚实降级）。
       //   ★带上次 snapshot（一次性 VM 状态回灌）；返回的 snapshot 存回（下次用）。
       Superapp.vpW = vpW;
       try {
         // ★remount=true（一次性 VM：必须无条件重挂——否则同屏短路 ⇒ 空树 ⇒ 白屏）
-        const rtOut: string = hostAppRender(Superapp.rtArgsJson(page, this.bundle, this.filesDir, vpW, vpH, undefined, this.runtimeState, true));
+        const rtOut: string = hostAppRender(Superapp.rtArgsJson(page, this.bundle, this.filesDir, vpW, vpH, undefined, this.runtimeState, true, this.scrollOffset));
         const rt = JSON.parse(rtOut) as Record<string, Object>;
         const tree = rt['tree'] as Record<string, Object> | undefined;
         if (tree && Array.isArray(tree['nodes'])) {
@@ -716,6 +715,9 @@ struct Superapp {
         if (cur !== undefined && cur.length > 0) { this.current = cur; }
         // ★★★v-pump / 动画（决策 #796）：**归 runtime** 的 driver 接棒（起/停泵 + 动画挂树重放）
         this.ensureDriver().onRenderReply(rt);
+        // ★★★决策 #1081：元素查询读数（静态 id → nodeId → 内核矩形）——报告用（三端同一份探针）
+        this.elementRegistryJson = rt['elementRegistry'] !== undefined ? String(rt['elementRegistry']) : 'null';
+        this.elementProbeJson = rt['elementProbe'] !== undefined ? String(rt['elementProbe']) : 'null';
       } catch (re) {
         hilog.error(DOMAIN, TAG, 'SUPERAPP_RUNTIME_ERROR %{public}s', JSON.stringify(re) ?? '');
       }
@@ -773,8 +775,7 @@ struct Superapp {
     // ★★决策 #1067：渲染前刷新设备快照（JS 侧 device.* 读类能力的数据源）——失败不阻断渲染
     refreshDeviceSnapshot(this.win, this.keyboardHeightVp);
     try {
-      // ★★★决策 #897：tab 栏高亮的 current 以**实际渲染屏**为准。根因 = `applyState` 用**路由 current**
-      //   （boot 后恒为 index）写 chromeStateJson，而 `renderCurrent` 随后把 `this.current` 修正为真实屏
+      // ★★★决策 #897：tab 栏高亮的 current 以**实际渲染屏**为准。根因 = `applyState` 用**路由 current**；（boot 后恒为 index）写 chromeStateJson，而 `renderCurrent` 随后把 `this.current` 修正为真实屏
       //   （rt['current']）却**未回写 chrome** ⇒ 切屏后 tab 高亮恒停在「首页」（真机实测：drive 到 mine，
       //   current=mine 但高亮仍首页）。此处按最终渲染屏补齐 chrome 的 current。
       this.setChromeCurrent(page);
@@ -929,16 +930,15 @@ struct Superapp {
       const body: string = '{"ok":true,"host_id":"harmony","tabs":' + JSON.stringify(this.tabNamesForReport)
         + ',"current":"' + this.current + '"'
         + ',"switch_log":[' + this.switchLog.join(',') + ']}'
-        // ★★★滚动对齐（2026-10-05）：滚动读数（范围/当前偏移）——与 Android/iOS 的 scroll 读数同语义
-        //   ★惯性读数（2026-10-09）：momentum_frames/moved = **"惯性真的接线了"的机器证据**（本仓纪律：
+        // ★★★决策 #1081：元素查询（静态 id → nodeId → 内核矩形）——三端同一份读数
+        .replace(/\}$/, ',"element_registry":' + this.elementRegistryJson + ',"element_probe":' + this.elementProbeJson + '}')
+        // ★★★滚动对齐（2026-10-05）：滚动读数（范围/当前偏移）——与 Android/iOS 的 scroll 读数同语义；★惯性读数（2026-10-09）：momentum_frames/moved = **"惯性真的接线了"的机器证据**（本仓纪律：
         //     "报告有、通路无"只能靠计数现形——Android 曾有 startFlingX 声明但无人调的先例）。
         .replace(/\}$/, ',"scroll":{"max":' + this.maxScroll.toFixed(1) + ',"offset":' + this.scrollOffset.toFixed(1)
           + ',"momentum_frames":' + this.momentumFrames + ',"momentum_moved":' + this.momentumMovedFrames + '}}')
-        // ★★★v-pump / 跳变驱动动画（本批·判据）：泵节拍与动画受理读数（宿主侧真源 + native 会话真源）。
-        //   ★判据纪律（同 #793）：判"动画在播"看**内核受理 / 宿主真写**（anim_starts / anim_applied），不看截屏像素。
+        // ★★★v-pump / 跳变驱动动画（本批·判据）：泵节拍与动画受理读数（宿主侧真源 + native 会话真源）。；★判据纪律（同 #793）：判"动画在播"看**内核受理 / 宿主真写**（anim_starts / anim_applied），不看截屏像素。
         .replace(/\}$/, ',"anim_pump":' + this.animPumpStats() + '}')
-        // ★★★Dactyl D0（决策 #797）：触摸延迟采样（真源在壳——TouchEvent.timestamp 只有壳有）+ 落盘
-        //   ★串接式（body 是 const：追加而非重赋——本仓实测 ArkTS 无值重赋语义差异）
+        // ★★★Dactyl D0（决策 #797）：触摸延迟采样（真源在壳——TouchEvent.timestamp 只有壳有）+ 落盘；串接式（body 是 const）
         + '\u0000DACTYL:' + this.dactylMetricsJson();
       const path: string = this.filesDir + '/superapp.json';
       const fd = fileIo.openSync(path, fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE | fileIo.OpenMode.TRUNC);
@@ -976,8 +976,7 @@ struct Superapp {
       .clip(true)   // ★★★滚动对齐：越界内容裁剪（与 Android 视图裁剪同语义）
       .onTouch((e: TouchEvent) => { this.onScrollTouch(e); })
 
-      // ★★★B（决策 #800）：底部 Tab 栏 = runtime `ProteusTabChrome`（**唯一实现**）——
-      //   本壳只喂 state JSON（含生成期已合并的 tabItems + tabSpec）+ 安全区 + 切屏出口；
+      // ★★★B（决策 #800）：底部 Tab 栏 = runtime `ProteusTabChrome`（**唯一实现**）——；本壳只喂 state JSON（含生成期已合并的 tabItems + tabSpec）+ 安全区 + 切屏出口；
       //   解析/合并/兜底/高亮/角标/字形（SymbolGlyph vs 文本）全在 runtime（换壳不漏接）。
       //   无 tab 的应用不渲染 tab 栏（chrome 内部判 items.length，与 MP「未声明 tabBar 就无 tabBar」同源）。
       ProteusTabChrome({
@@ -989,9 +988,8 @@ struct Superapp {
     .width('100%')
     .height('100%')
     .backgroundColor('#101020')
-    // ★★★内容铺满**全屏**（含状态栏与手势区）——与 Web viewport（390×844 全屏）同口径。
-    //   此前默认避让系统安全区 ⇒ 内容区止于 y≈2795/2856（差 61px ≈ 17dp）：
-    //   ① 客服球（bottom 定位）整体偏高 17dp；② 页头被状态栏压住。独立视觉验收抓出。
+    // ★★★内容铺满**全屏**（含状态栏与手势区）——与 Web viewport（390×844 全屏）同口径。此前默认避让系统安全区
+    //   ⇒ 内容区止于 y≈2795/2856（差 61px ≈ 17dp）：① 客服球（bottom 定位）偏高 17dp；② 页头被状态栏压住。
     //   ★页面自身已由编译器给下内边距（120dp）⇒ Tab 栏不遮内容（与 Web overlay Tab 同理）。
     .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
   }

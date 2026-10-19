@@ -76,6 +76,8 @@ final class SuperappScene: NSObject {
         SelfDrawBridge.contentScrollRangeEnabled = true
         // ② 宿主桥（screen.* + 能力）——与 AppStackScene 同一份
         let hostBridge = HostRuntimeBridge()
+        // ★★★决策 #1081：元素几何源接线（`useElement` 的宿主腿）——能力层只分档，几何来自渲染宿主。
+        hostBridge.capabilities.elementRectProvider = { [weak bridge] args in bridge?.elementRect(args) ?? "{\"ok\":false,\"reason\":\"桥已释放\"}" }
         hostBridge.jsContextRef = ctx.jsGlobalContextRef
         // ★★★B1：壳走**统一运行期**——proteusHost = SuperappRuntimeHost（mount/applyOps/readRects/onGesture
         //   原语，交互/响应式/导航全在共享 JS 层）；旧静态屏内容改由 JS 侧 __proteusSuperappRender 实例化。
@@ -614,6 +616,29 @@ final class SuperappScene: NSObject {
             o["rendered_page"] = so["current"] ?? ""
         }
         o["host_stats"] = (evalJs?("proteusHost.invoke('screen.stats', '{}')") ?? "null")
+        // ★★★决策 #1081：元素查询（静态 id → nodeId → 内核矩形）——三端同一份探针
+        o["element_registry"] = evalJs?("__proteusHostAppElementRegistry()") ?? "null"
+        o["element_probe"] = evalJs?("__proteusHostAppElementRect('{}')") ?? "null"
+        o["element_not_found"] = evalJs?("__proteusHostAppElementRect('{\"selector\":\"#no-such-element-xyz\"}')") ?? "null"
+        o["element_class_selector"] = evalJs?("__proteusHostAppElementRect('{\"selector\":\".sa-item\"}')") ?? "null"
+        // 独立交叉核对（内核 readRects 里同一 nodeId 的矩形）
+        if let pj = o["element_probe"] as? String, let pd = pj.data(using: .utf8),
+           let po = (try? JSONSerialization.jsonObject(with: pd)) as? [String: Any],
+           let nid = po["nodeId"] as? Int,
+           let rj = evalJs?("proteusSelfDraw.readRects()"), let rd = rj.data(using: .utf8),
+           let ro = (try? JSONSerialization.jsonObject(with: rd)) as? [String: Any],
+           let rects = ro["rects"] as? [String: Any], let kr = rects[String(nid)] as? [String: Any] {
+            o["kernel_rect"] = kr
+            let kx = (kr["x"] as? Double) ?? 0, ky = (kr["y"] as? Double) ?? 0
+            let kw = (kr["width"] as? Double) ?? 0, kh = (kr["height"] as? Double) ?? 0
+            let sx = (po["scrollY"] as? Double) ?? 0
+            o["cross_check_ok"] = abs(kx - ((po["left"] as? Double) ?? -1e9)) < 0.51
+                && abs(ky - (((po["top"] as? Double) ?? -1e9) + sx)) < 0.51
+                && abs(kw - ((po["width"] as? Double) ?? -1e9)) < 0.51
+                && abs(kh - ((po["height"] as? Double) ?? -1e9)) < 0.51
+        } else {
+            o["cross_check_ok"] = false
+        }
         return o
     }
 

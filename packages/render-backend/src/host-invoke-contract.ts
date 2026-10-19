@@ -72,6 +72,14 @@ export const HOST_CAPABILITY_METHODS = [
   'device.sensor.read',
   'device.sensor.start',
   'device.sensor.stop',
+  // ★★★2026-10-19（决策 #1081）：**元素查询**（`useElement` 选择器通路）。
+  //   `{nodeId}` → `{ok,x,y,width,height,scrollY}`——**内容坐标 + 逻辑 px**（宿主报告自己的滚动偏移，
+  //   JS 侧统一减掉得到 Web `getBoundingClientRect()` 的视口坐标语义 ⇒ 三端一套归一实现）。
+  //   ★selector → nodeId 的映射**不在宿主**（宿主只认数字 id）：由 `render-backend/src/element-registry.ts`
+  //     在知道元素身份的那一层建索引（Vapor 实例化 / Vue patchProp 两条链都写它）。
+  //   ★三端实现：Android `VaporRenderHost.elementRect` · iOS `SelfDrawBridge.elementRect` ·
+  //     鸿蒙 `host_app_runtime_impl.h`（读 `g_elTree` = 上一帧内核树，一次性 VM 的必然形态）。
+  'element.rect',
 ] as const
 
 /** **合法省略**（某端不实现但非漂移——由引擎/平台提供）。键 = 端名（`android`/`ios`/`harmony`）。 */

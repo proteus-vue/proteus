@@ -191,6 +191,20 @@ export type { RuntimeProfiler, ProfEntry } from './runtime-profiler'
 export { HOST_INVOKE_METHODS, HOST_SCREEN_METHODS, HOST_CAPABILITY_METHODS, HOST_METHOD_OPTIONAL } from './host-invoke-contract'
 export { TAB_BAR_SPEC } from './tab-bar-spec'
 export type { TabBarSpec } from './tab-bar-spec'
+// ★★★决策 #1081：**元素身份索引**（模板静态 id → 引擎节点 id）——`useElement` 选择器通路的映射层。
+//   两条渲染链都写它：Vapor（`screen-runtime` 实例化后按屏建桶）· Vue 自定义渲染器（`dispatcher.patchProp`）。
+export {
+  parseIdSelector,
+  registerVueElementId,
+  clearVueElementIds,
+  registerScreenElements,
+  clearScreenElements,
+  resolveElement,
+  firstScreenElementId,
+  elementRegistryStats,
+  resetElementRegistry,
+} from './element-registry'
+export type { ElementResolution, ElementIndexSource } from './element-registry'
 export { createSuperappRuntime } from './superapp-runtime'
 export type { SuperappRuntime, SuperappRuntimeOptions, SuperappHostPorts } from './superapp-runtime'
 export type { HostInvokeChannel, HostScreenPorts, HostScreenPortsOptions } from './screen-executor-host'
