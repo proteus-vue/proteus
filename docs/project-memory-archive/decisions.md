@@ -7420,6 +7420,55 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   ② `useBeacon` 契约缺 `startBeaconDiscovery` / `stopBeaconDiscovery`（#1084 已登记）仍未补，
      属独立批次（需三端各接 BLE 扫描 + iBeacon 帧解析）。
 
+
+1086. **★★★`useIntersection` 从「如实不支持」改为**已实现**（相交计算在 JS，宿主只推几何 tick）· 决策**（2026-10-19）:
+
+【为什么此前记为"不支持"】
+  #1081 把 `useIntersection` 判为 `unsupported`，理由是"缺渲染宿主的**帧级几何变化通知**"。
+  本轮取证发现这个理由**过严**：不必等帧级通知，只要一个"几何可能变了"的 tick 就够。
+
+【取证（三件事，先查再写）】
+  · `element.rect` 已返回**视口坐标**（内容坐标 − scrollY，#1081）⇒ 目标元素的几何现成；
+  · 视口尺寸运行期可知（`args.viewport`，与 `host.mount` 同源）；
+  · 三端滚动入口都是**单点**：Android `ProteusHostView.setScrollPosListener`（**已有钩子但无人接**）·
+    iOS `applyContentOffset` · 鸿蒙渲染时传 scrollY。
+  ⇒ **相交计算完全放 JS**（与 Web 的观察者语义天然同构），宿主只推 tick、不做任何几何数学。
+
+【实现（`packages/api/src/capability-app-intersection.ts`）】
+  · 语义对齐 Web `IntersectionObserver`：`relativeToViewport(margins)` / `relativeTo(selector, margins)` /
+    `observe(target, cb)` / `disconnect()` / `thresholds` / `observeAll`；
+  · **初始回调**：`observe` 后立即评估一次（Web 语义，不是等第一次滚动）；
+  · **阈值跨档才回调**：同一档内比例变化**不**回调（否则每 tick 都刷——Web 不是这语义）；
+  · **相交比例 = 相交面积 / 目标面积**（Web 定义，不是"占视口比例"）；
+  · `disconnect` **只清本句柄**（多句柄并存互不影响）；
+  · 拿不到几何（节点没了/参照查不到）⇒ **跳过、不伪造 0 比例**；
+  · 参照元素查不到 ⇒ **不静默退回视口**（那会让业务以为在相对某元素观察）。
+  · 索引侧新增 `resolveAllElements`（`querySelectorAll` 语义，`observeAll` 用）——
+    与 `resolveElement` **同一份解析器 + 同一文档序**，不会出现两套匹配规则。
+
+【三端 tick 接线（宿主只报"几何可能变了"）】
+  · **Android** `SuperappRuntimeHost.mount` 里接 `setScrollPosListener` → `view.post` → 调
+    `__proteusSuperappIntersectionTick()`。★放在 runtime 的 mount 里（与 `pullPumpsDeferred` 同一纪律：
+    "每屏挂载后该补的接线由 runtime 自发完成" ⇒ 换壳不漏接）。★用 `post` 排一帧：滚动回调内可能正处在
+    QuickJS eval 栈上，直接重入不可控。
+  · **iOS** `superapp-scene` 的 `onScrollDrag` 里，`scrollDragBy` 后 `DispatchQueue.main.async` 调 tick
+    （同款理由：避免嵌套 JSC eval）。
+  · **鸿蒙**：一次性 VM（#540）⇒ 观察者**无法跨渲染存活**（`observe` 注册的条目在下一个 VM 就不存在）
+    ⇒ 该端仍 `unsupported`（不假装能观察）。
+
+【判据】`tests/capability-app-intersection.test.ts` **10/10**：
+  相交比例（Web 定义 / 0 面积回 0）· 初始回调 · **同档不回调、跨档才回调** · `margins` 外扩
+  · `observeAll` 每个匹配都回调 · `disconnect` 只清本句柄 · 拿不到几何跳过 · 参照不存在不退化成视口
+  · 未装配依赖不抛（诚实降级）。
+  + **破坏性验证 2 条**：摘掉"跨档判断" ⇒ 1 红；把比例改成"相交面积/参照面积" ⇒ 4 红。
+
+【诚实边界（不静默半支持）】
+  ① **只在"几何变了"时评估**：滚动 tick 与 `observe` 时刻。**不监听**纯布局变化
+     （内容高度变化导致上方元素位移、动画位移）——那需要真正的帧级通知，属后续批次。
+  ② **鸿蒙不支持**（一次性 VM，见上）。
+  ③ 本轮**未做三端真机取证**（Android/iOS 的 tick 接线已编译通过，但滚动驱动的实际回调
+     未在设备上验证）——登记为后续验证项（`useIntersection` 的真机判据需在 showcase 的
+     intersection 页上跑）。
 1087. **★★★能力页「用法」示例的可运行性：英文侧 29 个同步句柄被写成 `await`（含把参数名当值）· 决策**（2026-10-19 · 承接 #1084 的文档审计）:
 
 【问题（用户先前的反馈「继续推进」，本轮做示例审计时发现）】

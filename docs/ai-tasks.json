@@ -1989,6 +1989,30 @@
         "T-capability-docs-plain-language"
       ],
       "note": "【done · 决策 #1087（2026-10-19）】承接 #1084 的文档审计，本轮查「用法」示例。英文侧 29 个同步句柄能力写成 `const res = await useElement()`：① await 一个非 thenable —— 运行时能过但教会错误形状；② `useVideo(id)` 把**参数名**当值（照抄 ReferenceError）；③ `console.log(res.data)` 对句柄无意义。\n【★真根因】`hookShape()` 的 `handleT` 判据要求返回类型是**裸名字**（`^[A-Z]\\w*$`），而同步句柄签名是 `CapResult<ElementQuery>`（带尖括号）⇒ 永不命中 ⇒ 落 `generic()` 兜底 ⇒ 生成 await 形态。中文页没这问题是因为中文侧另有一套手写示例表（CAP_USAGE）——**两条路径分叉**，而门禁只比\"文件与源一致\"，比不出示例对不对。\n【修法】新增 lib/cap-usage-en.mjs（directUsageEn + EN_ARG_PLACEHOLDERS 可运行字面量）；gen-content.mjs 英文分支改 `handleT || /^CapResult</.test(shape.retType)` 并传实参占位。两个生成器行数**零增长**（2807/2216 基线守住）。\n【判据】新测试 4/4：同步句柄不得 await（按签名判定）· 不得把参数名当实参 · **反向保护**（异步 Hook 仍应 await）· 根因锁（生成器须含 CapResult< 判据）。破坏性：撤判据+重生成 ⇒ 3 红。\n【诚实边界】① 中文页示例是手写表（CAP_USAGE），与英文派生路径不同源——**两份仍可能漂移**（\"一处实现\"欠账，登记后续）；② 示例的**语义质量**（是否展示最典型用法）机器判不出，本判据只保证形状可运行 + 不误导同步/异步。"
+    },
+    {
+      "id": "T-app-intersection-impl",
+      "title": "useIntersection 从「如实不支持」改为已实现（相交计算在 JS、宿主只推几何 tick）",
+      "type": "capability",
+      "status": "done",
+      "owner": "session:zcode-invoke-bytes-20261019",
+      "scope": [
+        "packages/api/src/capability-app-intersection.ts",
+        "packages/api/src/capability-app-element.ts",
+        "packages/render-backend/src/element-registry.ts",
+        "packages/render-backend/src/index.ts",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/SuperappRuntimeHost.java",
+        "hosts/ios/ProteusHost/shell/superapp-scene.swift",
+        "hosts/shared/bridge/entry-superapp.ts",
+        "tests/capability-app-intersection.test.ts"
+      ],
+      "decision": 1086,
+      "verification": "npx vitest run tests/capability-app-intersection.test.ts && bash hosts/android/check-host-compile.sh && bash hosts/ios/check-selfdraw-compile.sh",
+      "branch": null,
+      "related": [
+        "T-app-element-selector-web-parity"
+      ],
+      "note": "【done · 决策 #1086（2026-10-19）】#1081 把 useIntersection 判为 unsupported，理由是\"缺帧级几何变化通知\"。本轮取证发现理由**过严**：element.rect 已返回视口坐标、视口尺寸可知、三端滚动入口都是单点 ⇒ 只要一个\"几何可能变了\"的 tick 就够，相交计算可全放 JS。\n【实现】语义对齐 Web IntersectionObserver：relativeToViewport/relativeTo(margins)/observe/disconnect/thresholds/observeAll；**初始回调**（observe 后立即评估）· **阈值跨档才回调**（同档内不刷）· 比例 = 相交面积/目标面积 · disconnect 只清本句柄 · 拿不到几何跳过（不伪造 0）· 参照不存在**不静默退回视口**。索引侧新增 resolveAllElements（与 resolveElement 同一解析器+同一文档序）。\n【三端】Android 在 SuperappRuntimeHost.mount 接 setScrollPosListener → view.post → tick（放在 runtime 里，与 pullPumpsDeferred 同一纪律：换壳不漏接；post 避免 QuickJS 嵌套 eval）；iOS onScrollDrag 后 DispatchQueue.main.async 调 tick；**鸿蒙不支持**（一次性 VM，观察者无法跨渲染存活）。\n【判据】10/10 + 破坏性 2 条（摘跨档判断 ⇒ 1 红；比例改用参照面积 ⇒ 4 红）。\n【诚实边界】① 只在\"几何变了\"时评估（滚动 tick + observe 时刻），**不监听**纯布局变化/动画位移——那需真正的帧级通知，属后续批次；② 鸿蒙不支持；③ **本轮未做三端真机取证**——tick 接线已编译通过，但滚动驱动的实际回调未在设备上验证（后续在 showcase intersection 页跑真机判据）。"
     }
   ]
 }
