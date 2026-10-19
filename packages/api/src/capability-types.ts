@@ -2440,40 +2440,11 @@ export interface ARAPI {
   isSupported(version?: 'v1' | 'v2'): Promise<CapResult<boolean>>
 }
 
-/** iBeacon 设备信息（wx BeaconInfo） */
-export interface BeaconInfo {
-  /** 设备 uuid */
-  uuid: string
-  /** major 值 */
-  major: number
-  /** minor 值 */
-  minor: number
-  /** 距离（米） */
-  accuracy: number
-  /** 信号强度 */
-  rssi: number
-  /** 距离档位（0 未知 / 1 极近 / 2 近 / 3 远） */
-  proximity: 0 | 1 | 2 | 3
-}
-
-/**
- * ★权威标尺缺口 C77：iBeacon（`useBeacon()`）。
- *   wx：`wx.onBeaconServiceChange` / `wx.onBeaconUpdate`；web：无对等（可用 Web Bluetooth）→ Err 诚实降级。
- */
-export interface BeaconAPI {
-  /**
-   * 订阅 Beacon 服务状态变化。
-   * @param cb 状态回调（available 服务可用 / discovering 搜索中）
-   * @returns 取消订阅函数
-   */
-  onServiceChange(cb: (res: { available: boolean; discovering: boolean }) => void): () => void
-  /**
-   * 订阅 Beacon 设备更新。
-   * @param cb 设备回调（beacons 发现的设备列表）
-   * @returns 取消订阅函数
-   */
-  onUpdate(cb: (res: { beacons: BeaconInfo[] }) => void): () => void
-}
+// ★#1090：iBeacon 的 `BeaconInfo` / `BeaconAPI` 已移到 `capability-beacon.ts`（beacon 域的唯一实现点）。
+//   ★这里要 **import 再 export**（仅 `export type ... from` 不会把名字引入本文件作用域——
+//     本文件内部还在用它们：`CapabilityBridge.getBeacon` 与 `WxLike.onBeaconUpdate`）。
+import type { BeaconInfo, BeaconAPI } from './capability-beacon'
+export type { BeaconInfo, BeaconAPI }
 
 /** mDNS 局域网服务（wx OnLocalServiceFound/Lost） */
 export interface LocalServiceInfo {
@@ -3486,6 +3457,9 @@ export interface WxLike {
   // ★权威标尺缺口 C76-C81：AR/XR / iBeacon / 局域网 / 翻译 / 海报 / 设备探测
   createVKSession?: (opt: Record<string, unknown>) => WxVKSessionLike
   isVKSupport?: (version: 'v1' | 'v2') => boolean
+  // ★决策 #1090：iBeacon 的**搜索开关**——不先 start 就收不到 onBeaconUpdate（错误码 11004）
+  startBeaconDiscovery?: (opt: { uuids: string[]; success?: () => void; fail?: (e: unknown) => void }) => void
+  stopBeaconDiscovery?: (opt?: { success?: () => void; fail?: (e: unknown) => void }) => void
   onBeaconServiceChange?: (cb: (res: { available: boolean; discovering: boolean }) => void) => void
   offBeaconServiceChange?: (cb?: (...a: never[]) => void) => void
   onBeaconUpdate?: (cb: (res: { beacons: BeaconInfo[] }) => void) => void

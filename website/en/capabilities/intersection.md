@@ -10,7 +10,7 @@ order: 1013
 
 **When to use it**: Impression tracking, infinite scroll, lazy loading.
 
-**End support & boundaries**: Not supported on App ends: requires frame-level geometry notifications from the render host; geometry is only computed on mount/update today. Works on Web/MP.
+**End support & boundaries**: **Works on Web / WeChat / App-iOS / App-Android** (intersection math runs in JS; the host only pushes geometry ticks). **Not on HarmonyOS** — observers cannot survive across renders in its one-shot VM. Honest limit: it reacts to "geometry may have changed" moments such as scrolling; **pure layout changes and animated movement do not fire**.
 
 > 技术标识：能力原语 C59 · `capability.intersection` · 返回 `IntersectionHandle` · **Hook implemented** (per-end support in the table below)
 

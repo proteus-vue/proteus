@@ -26,32 +26,50 @@ if (!fs.existsSync(dist)) {
 const { HOST_CAPABILITY_METHODS, HOST_SCREEN_METHODS, HOST_METHOD_OPTIONAL } = await import(pathToFileURL(dist).href)
 const contract = new Set([...HOST_CAPABILITY_METHODS, ...HOST_SCREEN_METHODS])
 
-/** 从源码抽取 `case "xxx":`（Java/Swift）。 */
 /**
- * 从源码抽取方法分派用的 `case "xxx"`。
+ * 从源码抽取方法分派用的方法名字面量（**四种真实形态**）。
  *
  * ★2026-10-19（决策 #1080）：初版**无条件收所有** `case "..."` ⇒ 设备实现里的业务 switch
  *   （`switch (kind) { case "gyroscope": … }`）被当成"宿主方法名"，门禁误报"未知方法 gyroscope"。
- *   ⇒ 按**方法名形态**过滤：必须是 `a.b`（含点，如 `device.sensor.read` / `screen.mount`）
- *     或是**已登记的契约方法**。业务枚举值（无点、短词）一律排除——它们不是方法分派。
+ *   ⇒ 按**方法名形态**过滤：必须是 `a.b`（含点）或是**已登记的契约方法**。业务枚举值一律排除。
+ *
+ * ★2026-10-19（决策 #1090）：补齐另外三种形态——此前只认 ①②，**实现了也报缺**：
+ *   ③ `if f.method == "http.request"`（Swift 属性比较）——iOS 字节腿就是这个形态
+ *      ⇒ 门禁一直报「ios 缺 http.request」，而 `http-capability.swift` 早已实现（数字低报）。
+ *   ④ `method.equals("http.request")`（Java 反向调用）
+ *   ★教训同 #1080/#1081：**门禁覆盖面必须跟着实际形态走**——换了写法就静默漏判，
+ *     而它输出的"覆盖率"看起来仍然权威。
  */
 function extractCases(file) {
   const out = []
   const contractNames = new Set([...HOST_CAPABILITY_METHODS, ...HOST_SCREEN_METHODS])
   const text = fs.readFileSync(path.join(ROOT, file), 'utf-8')
-  for (const m of text.matchAll(/case\s+"([^"]+)"/g)) {
-    const name = m[1]
+  const push = (name) => {
     if (name.includes('.') || contractNames.has(name)) out.push(name)
   }
-  // ★2026-10-19（决策 #1081）：**另一种真实分发形态** `"element.rect".equals(method)`（Java 前缀/精确判定）
-  //   初版只认 `case "..."` ⇒ 实现了也报"未覆盖"（数字低报，与 #1080 的误报同族：门禁覆盖面没跟着实际形态走）。
-  //   ★只收**方法名形态**（含点或已登记）——与 case 分支同一条判据，避免把业务字符串当方法。
-  for (const m of text.matchAll(/"([a-z][a-z0-9-]*(?:\.[a-z0-9-]+)+)"\.equals\(\s*method\s*\)/g)) {
-    const name = m[1]
-    if (name.includes('.') || contractNames.has(name)) out.push(name)
-  }
+  for (const m of text.matchAll(/case\s+"([^"]+)"/g)) push(m[1])                                  // ① switch 分支
+  for (const m of text.matchAll(/"([a-z][a-z0-9-]*(?:\.[a-z0-9-]+)+)"\.equals\(\s*method\s*\)/g)) push(m[1]) // ② Java 前缀判定
+  for (const m of text.matchAll(/method\.equals\(\s*"([^"]+)"\s*\)/g)) push(m[1])                  // ③ Java 反向
+  for (const m of text.matchAll(/\bmethod\s*==\s*"([^"]+)"/g)) push(m[1])                          // ④ Swift 属性比较
   return out
 }
+/** 扫目录：对每个匹配文件跑 extractCases 并合并（排除探针/工具/自测——它们不是运行期实现）。 */
+function extractCasesInDir(dir, extRe) {
+  const out = []
+  const walk = (rel) => {
+    for (const e of fs.readdirSync(path.join(ROOT, rel), { withFileTypes: true })) {
+      const p = rel + '/' + e.name
+      if (e.isDirectory()) {
+        if (!/(^|\/)(tools?|probe|selftest)(\/|$)/i.test(p)) walk(p)
+      } else if (extRe.test(p) && !/probe|selftest|tools?\//i.test(p)) {
+        out.push(...extractCases(p))
+      }
+    }
+  }
+  walk(dir)
+  return out
+}
+
 /** 从源码抽取 `method == "xxx"`（C++）。 */
 function extractMethodEq(file) {
   const out = []
@@ -64,18 +82,16 @@ const ENDS = {
     screen: extractCases('hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/ScreenHost.java'),
     // ★★2026-10-19（决策 #1067）：设备域 12 项在**独立文件**（HostCapabilities 用前缀判定转发，
     //   不写 12 个 case）⇒ 覆盖率必须同时扫该文件，否则数字低报（"实现了但门禁看不见"）。
-    capability: [
-      ...extractCases('hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/HostCapabilities.java'),
-      ...extractCases('hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/DeviceCapability.java'),
-    ],
+    // ★★2026-10-19（决策 #1090）：改**扫整个 runtime 目录**——具体文件清单每加一个实现就漏一个
+    //   （实测：HttpCapability.java 早已实现 http.request，清单里没有它 ⇒ 数字低报）。
+    capability: extractCasesInDir('hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime', /\.(java|kt)$/),
   },
   ios: {
     screen: extractCases('hosts/ios/ProteusHost/runtime/screen-host.swift'),
     // ★同上：iOS 设备域在 device-capability.swift（host-capabilities 走前缀转发）
-    capability: [
-      ...extractCases('hosts/ios/ProteusHost/runtime/host-capabilities.swift'),
-      ...extractCases('hosts/ios/ProteusHost/runtime/device-capability.swift'),
-    ],
+    // ★★2026-10-19（决策 #1090）：同样改扫目录——host-runtime-bridge.swift 里的
+    //   if f.method == "http.request" 此前压根没被扫到（清单外文件）。
+    capability: extractCasesInDir('hosts/ios/ProteusHost/runtime', /\.swift$/),
   },
   harmony: {
     // ★决策 #725：鸿蒙 `screen.*`（一处 `method == "..."` 分发）已按**中性名下沉**到 runtime HAR

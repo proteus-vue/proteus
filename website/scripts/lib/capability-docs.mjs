@@ -239,12 +239,12 @@ export const CAPABILITY_GUIDE = {
  */
 export const CAPABILITY_END_NOTE = {
   'capability.beacon': {
-    zh: '**当前契约不完整**：只暴露了两个订阅（`onServiceChange`/`onUpdate`），缺少 `startBeaconDiscovery`/`stopBeaconDiscovery`——微信端不先开始搜索就**收不到任何更新**（错误码 11004）。Web 端是**空订阅**（永远收不到回调）；App 三端均无 iBeacon 扫描实现。',
-    en: '**Contract is incomplete today**: only the two subscriptions are exposed; `startBeaconDiscovery`/`stopBeaconDiscovery` are missing — without starting discovery WeChat never emits updates (error 11004). No App-end iBeacon scanning is implemented.',
+    zh: '**微信端可用，其余端如实不可用**。用法上有个容易漏的步骤：**必须先调 `startBeaconDiscovery(uuids)` 才会收到 `onUpdate`**——不搜索就订阅，微信端不会有任何回调（错误码 11004 通常意味着缺少定位/蓝牙授权）。Web 端浏览器没有 iBeacon 扫描 API（Web Bluetooth 需用户手势且不自带信标帧解析）；App 三端宿主均未实现 BLE 扫描。',
+    en: '**Usable on WeChat; honestly unavailable elsewhere.** One step is easy to miss: you **must call `startBeaconDiscovery(uuids)` before `onUpdate` fires** — subscribing without starting discovery yields no callbacks on WeChat (error 11004 usually means location/Bluetooth permission is missing). Browsers expose no iBeacon scanning API (Web Bluetooth needs a user gesture and does not parse beacon frames); no App host implements BLE scanning yet.',
   },
   'capability.intersection': {
-    zh: 'App 三端**如实不支持**：需要渲染宿主的帧级几何变化通知，当前只在挂载/增量时算几何 ⇒ 无法持续观察。Web/MP 可用。',
-    en: 'Not supported on App ends: requires frame-level geometry notifications from the render host; geometry is only computed on mount/update today. Works on Web/MP.',
+    zh: 'Web / 微信 / App-iOS / App-Android **可用**（相交计算在 JS，宿主只推几何 tick）；**鸿蒙不可用**——一次性 VM 下观察者无法跨渲染存活。诚实边界：只监听滚动等"几何可能变了"的时机，**纯布局变化与动画位移不触发**。',
+    en: '**Works on Web / WeChat / App-iOS / App-Android** (intersection math runs in JS; the host only pushes geometry ticks). **Not on HarmonyOS** — observers cannot survive across renders in its one-shot VM. Honest limit: it reacts to "geometry may have changed" moments such as scrolling; **pure layout changes and animated movement do not fire**.',
   },
   'capability.element-query': {
     zh: 'App 端**只支持 `#id` / `.class` / `tag` / 复合 / 后代 / `>` / 选择器列表 / `[attr]`**；兄弟（`+` `~`）、伪类、伪元素、属性运算符（`^=` 等）返回 `unsupported`（**原因**：自绘树没有兄弟序与 CSS 引擎语义；不做近似匹配）。动态 `:id`/`:class`/`:data-*` 在编译期产诊断，这类节点**查不到**。',

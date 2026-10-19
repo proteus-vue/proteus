@@ -10,7 +10,7 @@ order: 1018
 
 **When to use it**: Indoor positioning, proximity prompts, museum audio guides, venue check-in — when GPS is not accurate indoors.
 
-**End support & boundaries**: **Contract is incomplete today**: only the two subscriptions are exposed; `startBeaconDiscovery`/`stopBeaconDiscovery` are missing — without starting discovery WeChat never emits updates (error 11004). No App-end iBeacon scanning is implemented.
+**End support & boundaries**: **Usable on WeChat; honestly unavailable elsewhere.** One step is easy to miss: you **must call `startBeaconDiscovery(uuids)` before `onUpdate` fires** — subscribing without starting discovery yields no callbacks on WeChat (error 11004 usually means location/Bluetooth permission is missing). Browsers expose no iBeacon scanning API (Web Bluetooth needs a user gesture and does not parse beacon frames); no App host implements BLE scanning yet.
 
 > 技术标识：能力原语 C77 · `capability.beacon` · 返回 `BeaconAPI` · **Hook implemented** (per-end support in the table below)
 
@@ -29,54 +29,8 @@ useBeacon(): CapResult<BeaconAPI>
 | Property | Type | Doc |
 |---|---|---|
 | `ok` | `boolean` | Succeeded `true` / failed `false` |
-| `data` | `BeaconAPI` | Success payload (methods below) |
+| `data` | `BeaconAPI` | Success payload |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
-
-## Methods
-
-| Method | Doc |
-|---|---|
-| [`onServiceChange`](#onservicechange) | — |
-| [`onUpdate`](#onupdate) | — |
-
-### `onServiceChange`
-
-```ts
-onServiceChange(cb: (res: { available: boolean; discovering: boolean }) => void): () => void
-```
-
-| Param | Type | Required | Doc |
-|---|---|---|---|
-| `cb` | `(res: { available: boolean; discovering: boolean }) => void` | Yes | 状态回调（available 服务可用 / discovering 搜索中） |
-
-**Returns**: `() => void` -- 取消订阅函数
-
-### `onUpdate`
-
-```ts
-onUpdate(cb: (res: { beacons: BeaconInfo[] }) => void): () => void
-```
-
-| Param | Type | Required | Doc |
-|---|---|---|---|
-| `cb` | `(res: { beacons: BeaconInfo[] }) => void` | Yes | 设备回调（beacons 发现的设备列表） |
-
-**Returns**: `() => void` -- 取消订阅函数
-
-## Referenced types
-
-### `BeaconInfo`
-
-iBeacon 设备信息（wx BeaconInfo）
-
-| Prop | Type | Default | Doc |
-|---|---|---|---|
-| `uuid` | `string` | — | 设备 uuid |
-| `major` | `number` | — | major 值 |
-| `minor` | `number` | — | minor 值 |
-| `accuracy` | `number` | — | 距离（米） |
-| `rssi` | `number` | — | 信号强度 |
-| `proximity` | `0 \| 1 \| 2 \| 3` | — | 距离档位（0 未知 / 1 极近 / 2 近 / 3 远） |
 
 ## Error codes
 
@@ -109,8 +63,12 @@ iBeacon 设备信息（wx BeaconInfo）
 const beacon = useBeacon() // synchronous handle — no await, no res.ok
 
 if (beacon.ok) {
+  // ★subscribe first, then start discovery — without discovery onUpdate never fires (WeChat 11004)
   beacon.data.onServiceChange((res) => console.log("beacon service:", res.available))
   beacon.data.onUpdate((res) => console.log("found", res.beacons.length, "beacons"))
+  const started = await beacon.data.startBeaconDiscovery(["FDA50693-A4E2-4FB1-AFCF-C6EB07647825"])
+  if (!started.ok) console.log('discovery failed:', started.error.code) // beacon.failed / unsupported
+  // beacon.data.stopBeaconDiscovery() stops discovery (subscriptions stay)
 } else if (beacon.error.code === 'beacon.unsupported') {
   // platform unsupported → degradation path
 }

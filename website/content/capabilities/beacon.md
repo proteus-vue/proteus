@@ -10,7 +10,7 @@ order: 1018
 
 **什么时候用**：室内定位、到店提醒、博物馆展项讲解、场馆签到打卡——GPS 在室内不准时用它。
 
-**端实现边界**：**当前契约不完整**：只暴露了两个订阅（`onServiceChange`/`onUpdate`），缺少 `startBeaconDiscovery`/`stopBeaconDiscovery`——微信端不先开始搜索就**收不到任何更新**（错误码 11004）。Web 端是**空订阅**（永远收不到回调）；App 三端均无 iBeacon 扫描实现。
+**端实现边界**：**微信端可用，其余端如实不可用**。用法上有个容易漏的步骤：**必须先调 `startBeaconDiscovery(uuids)` 才会收到 `onUpdate`**——不搜索就订阅，微信端不会有任何回调（错误码 11004 通常意味着缺少定位/蓝牙授权）。Web 端浏览器没有 iBeacon 扫描 API（Web Bluetooth 需用户手势且不自带信标帧解析）；App 三端宿主均未实现 BLE 扫描。
 
 > 技术标识：能力原语 C77 · `capability.beacon` · 返回 `BeaconAPI` · **Hook 已实现**（各端支持情况见下方兼容进度表）
 
@@ -29,58 +29,8 @@ useBeacon(): CapResult<BeaconAPI>
 | 属性 | 类型 | 说明 |
 |---|---|---|
 | `ok` | `boolean` | 成功 `true` / 失败 `false` |
-| `data` | `BeaconAPI` | 成功载荷（方法结构见下） |
+| `data` | `BeaconAPI` | 成功载荷 |
 | `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
-
-## 方法
-
-| 方法 | 说明 |
-|---|---|
-| [`onServiceChange`](#onservicechange) | 订阅 Beacon 服务状态变化。 |
-| [`onUpdate`](#onupdate) | 订阅 Beacon 设备更新。 |
-
-### `onServiceChange`
-
-```ts
-onServiceChange(cb: (res: { available: boolean; discovering: boolean }) => void): () => void
-```
-
-**说明**：订阅 Beacon 服务状态变化。
-
-| 参数 | 类型 | 必填 | 说明 |
-|---|---|---|---|
-| `cb` | `(res: { available: boolean; discovering: boolean }) => void` | 是 | 状态回调（available 服务可用 / discovering 搜索中） |
-
-**返回值**：`() => void`——取消订阅函数
-
-### `onUpdate`
-
-```ts
-onUpdate(cb: (res: { beacons: BeaconInfo[] }) => void): () => void
-```
-
-**说明**：订阅 Beacon 设备更新。
-
-| 参数 | 类型 | 必填 | 说明 |
-|---|---|---|---|
-| `cb` | `(res: { beacons: BeaconInfo[] }) => void` | 是 | 设备回调（beacons 发现的设备列表） |
-
-**返回值**：`() => void`——取消订阅函数
-
-## 类型引用
-
-### `BeaconInfo`
-
-iBeacon 设备信息（wx BeaconInfo）
-
-| 属性 | 类型 | 默认值 | 说明 |
-|---|---|---|---|
-| `uuid` | `string` | — | 设备 uuid |
-| `major` | `number` | — | major 值 |
-| `minor` | `number` | — | minor 值 |
-| `accuracy` | `number` | — | 距离（米） |
-| `rssi` | `number` | — | 信号强度 |
-| `proximity` | `0 \| 1 \| 2 \| 3` | — | 距离档位（0 未知 / 1 极近 / 2 近 / 3 远） |
 
 ## 错误码
 
@@ -113,8 +63,12 @@ iBeacon 设备信息（wx BeaconInfo）
 const beacon = useBeacon() // 同步句柄——无 await、无 res.ok
 
 if (beacon.ok) {
+  // ★先订阅，再开始搜索——不搜索就收不到任何 onUpdate（微信端 11004）
   beacon.data.onServiceChange((res) => console.log("Beacon 服务:", res.available))
   beacon.data.onUpdate((res) => console.log("发现:", res.beacons.length, "个 Beacon"))
+  const started = await beacon.data.startBeaconDiscovery(["FDA50693-A4E2-4FB1-AFCF-C6EB07647825"])
+  if (!started.ok) console.log('搜索失败:', started.error.code) // beacon.failed / unsupported
+  // beacon.data.stopBeaconDiscovery() 停止搜索（订阅仍保留）
 } else if (beacon.error.code === 'beacon.unsupported') {
   // 平台不支持 → 降级路径
 }

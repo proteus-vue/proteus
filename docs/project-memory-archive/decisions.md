@@ -7697,3 +7697,60 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
      该方向的门禁是 `check:host-invoke-contract`（按端报告覆盖率），它目前只覆盖宿主声明面。
   ④ 顺带发现 `check:host-invoke-contract` 漏认 Swift 的 `if f.method == "http.request"` 形态
      ⇒ 报 iOS 缺 `http.request`（实际已实现）。同 #1080 的"门禁覆盖面没跟上实现形态"，未修。
+
+1091. **★★★`useBeacon` 契约补齐搜索开关 + 宿主契约门禁补第四种分派形态 · 决策**（2026-10-19 · 承接 #1084/#1085/#1090 的连续欠账）:
+
+【A. `useBeacon` 契约不可用（#1084/#1085 两轮登记、本轮才修）】
+  原 `BeaconAPI` **只有两个订阅**（`onServiceChange` / `onUpdate`）。而微信 iBeacon 的语义是：
+  **必须先 `wx.startBeaconDiscovery({ uuids })` 才会回调 `onBeaconUpdate`** ——
+  不搜索就订阅，上层**永远收不到任何更新**（11004 / 静默无回调）。
+  ⇒ 原契约对业务是**不可用**的：照文档写完，运行时什么都不会发生。
+  这比 #1085 的"空订阅"更隐蔽——这次连"启动"这一步都没暴露。
+
+  【修法】
+  · 契约补 `startBeaconDiscovery(uuids: string[]): Promise<CapResult<void>>` +
+    `stopBeaconDiscovery(): Promise<CapResult<void>>`（JSDoc 明写"必须先 start 才收 onUpdate"）。
+  · `WxLike` 补 `startBeaconDiscovery` / `stopBeaconDiscovery` 声明。
+  · 实现单列到新文件 `packages/api/src/capability-beacon.ts`（`createWxBeacon(wx)`），
+    `capability-bridges.ts` 只留 `getBeacon: () => createWxBeacon(wx)`。
+    `BeaconInfo` / `BeaconAPI` 类型也迁到该文件，`capability-types.ts` **import 再 export**——
+    ★不能用 `export type ... from`：那样名字不会进入本文件作用域，而本文件内部还要用
+      （`CapabilityBridge.getBeacon` / `WxLike.onBeaconUpdate`）⇒ tsc 当场报 TS2304。
+  · 错误分档：缺 API ⇒ `beacon.unsupported`；空 uuids ⇒ `beacon.invalid-uuids`（**不静默成功**）；
+    微信 fail ⇒ `beacon.failed` + 保留 cause（11004 可被业务读到）。
+  · 文档：端边界说明改写（不再是"契约不完整"，而是"微信可用 + 必须先搜索"）；
+    用法示例补 `startBeaconDiscovery([...UUID])` + 失败分支。
+    顺带把 `intersection` 的端边界也更新为已实现状态（#1086 的欠账）。
+
+  【判据】新增 `tests/capability-beacon-discovery.test.ts` **10/10**：
+    ① 契约两方法 + start 收 uuids；② 实现真的调 `wx.startBeaconDiscovery/stop`；
+    ③ 行为四条：缺 uuids / 缺 API / 成功（uuids 原样透传）/ 失败带 cause；
+    ④ **诚实边界**：Web 桥不得提供 `getBeacon`（无 iBeacon 扫描标准）。
+
+【B. `check:host-invoke-contract` 漏认 Swift 分派形态（#1090 顺带查出，本轮修）】
+  门禁统计各端能力覆盖率，但只认 `case "x.y":` 与 `"x.y".equals(method)` 两种写法。
+  iOS 的字节腿是 `if f.method == "http.request"` ⇒ **压根抽不到**，
+  于是长期报「ios 缺 http.request」，而 `http-capability.swift` 早已实现（真机跑过）。
+  更糟：它扫的是**写死的文件清单**，`host-runtime-bridge.swift`（真正分发点）不在清单里。
+
+  【修法】
+  · 抽取器补齐四种形态：switch 分支 / Java 前缀 `"x".equals(method)` /
+    Java 反向 `method.equals("x")` / Swift 属性比较 `method == "x"`；
+  · 覆盖率统计改**扫目录**（`extractCasesInDir`），排除 probe/tools/selftest；
+  · 实测：iOS 覆盖率 30/36 → **31/36**（http.request 被认出），Android 35/36 不变。
+
+  【判据】新增 `tests/host-invoke-contract-forms.test.ts` **5/5**：
+    ① 源码里四种匹配式都在（用 `String.raw` 比对原文——首版被测试里的转义层弄红）；
+    ② 覆盖率用 `extractCasesInDir` 而非写死清单 + 排除探针目录；
+    ③ **行为验证**：跑门禁，ios 行里不得出现 `http.request`；门禁退出码 0。
+    + **破坏性验证**：撤掉 Swift 形态 ⇒ ①③ 同时红（报 `ios 30/36 缺 2：http.request`）；还原 ⇒ 绿。
+
+【门禁】`check:content` / `check:en-drift`（305 对）/ `check:file-size` / `check:script-compile` /
+  `check:doc-links` / `check:stats` / `tsc --noEmit` / `build-packages` 全绿；
+  相关 9 个测试文件 **80/80**。
+
+【诚实边界】
+  ① `useBeacon` 仍**只有微信可用**：Web 无 iBeacon 扫描标准（Web Bluetooth 需用户手势且不自带信标帧解析），
+     App 三端宿主未实现 BLE 扫描。契约补齐不代表端能力补齐——兼容表仍如实显示。
+  ② 搜索开关本身**不返回发现的设备**（设备仍走 `onUpdate`）；这是微信 API 的形状，不是本框架的取舍。
+  ③ 契约门禁仍只覆盖"宿主声明了哪些方法"，**不验证语义正确**（那是 `check:host-runtime` 的职责范围）。
