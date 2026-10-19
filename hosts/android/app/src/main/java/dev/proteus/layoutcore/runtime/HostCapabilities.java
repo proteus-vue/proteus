@@ -60,8 +60,20 @@ public final class HostCapabilities {
         this.device = new DeviceCapability(activity);
     }
 
-    /** ★调用记账（**真实宿主自报**——判据据此证明"能力确实经宿主执行"，而非桥自造数据） */
-    private final List<String> callLog = new ArrayList<>();
+    /**
+     * ★调用记账（**真实宿主自报**——判据据此证明"能力确实经宿主执行"，而非桥自造数据）。
+     * ★★2026-10-19（决策 #1071）：改为**有界环形**（保留最近 {@value #CALL_LOG_MAX} 条）。
+     *   原实现无上限 append ⇒ 超级应用长跑（每次能力调用记一条）内存单调增长。
+     *   判据只读"最近调用过什么"（⑩ 组取前 6 条），历史全量没有消费方 ⇒ 环形即够。
+     */
+    private static final int CALL_LOG_MAX = 512;
+    private final java.util.ArrayDeque<String> callLog = new java.util.ArrayDeque<>();
+
+    /** 记一次调用（环形：满则丢最旧——判据只读最近若干条） */
+    private void logCall(String method) {
+        callLog.addLast(method);
+        while (callLog.size() > CALL_LOG_MAX) callLog.removeFirst();
+    }
 
     /** 供 JS 侧查询调用记录（`native.calls` 方法——判据用） */
     public String callsJson() {
@@ -92,7 +104,7 @@ public final class HostCapabilities {
      * ★统一入口（JNI 调它）。未实现的方法**抛 UnsupportedOperationException**（桥据 missing 分档）。
      */
     public String invoke(String method, String argsJson) throws Exception {
-        callLog.add(method); // ★真实宿主记账（判据读它证明"经壳执行"）
+        logCall(method); // ★真实宿主记账（判据读它证明"经壳执行"）
         return invokeCore(method, argsJson);
     }
 
@@ -249,7 +261,7 @@ public final class HostCapabilities {
             InvokeWire.InvokeFrame f = InvokeWire.decodeInvoke(frame);
             method = f.method;
             reqId = f.reqId;
-            callLog.add(method); // ★真实宿主记账（与 invoke 同口径）
+            logCall(method); // ★真实宿主记账（与 invoke 同口径）
             if ("http.request".equals(method)) return HttpCapability.handle(f);
             return invokeGenericBytes(f);
         } catch (UnsupportedOperationException e) {

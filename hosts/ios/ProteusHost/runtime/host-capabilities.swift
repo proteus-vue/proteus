@@ -34,7 +34,10 @@ import UIKit
 final class HostCapabilities: NSObject {
     private static let TAG = "proteus-cap"
 
-    /// 宿主调用记账（`native.calls` 读它——判据证明"经壳执行"，与 Android 同构）
+    /// 宿主调用记账（`native.calls` 读它——判据证明"经壳执行"，与 Android 同构）。
+    /// ★★2026-10-19（决策 #1071）：**有界环形**（只留最近 512 条）——原实现无上限增长，
+    ///   超级应用长跑时宿主内存单调涨。判据只读最近若干条，全量历史无消费方。
+    private static let callLogMax = 512
     private var callLog: [String] = []
     private let lock = NSLock()
 
@@ -59,6 +62,7 @@ final class HostCapabilities: NSObject {
     func invoke(_ method: String, _ argsJson: String) -> String {
         lock.lock()
         callLog.append(method) // ★真实宿主记账（在分派**前**记录——未实现的方法也记账，与 Android 一致）
+        if callLog.count > Self.callLogMax { callLog.removeFirst(callLog.count - Self.callLogMax) }
         lock.unlock()
 
         let args = Self.parseJsonObject(argsJson)
