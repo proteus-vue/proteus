@@ -588,6 +588,36 @@ def main() -> int:
             else:
                 report("K 白名单校验生效（非法事件名被拒 + 可读回执）")
 
+    # ── ★★★C14 键盘推送探针（决策 #1074）──
+    #   【为什么要这条】#1069 把三端键盘推送接了，但测试场景里没有输入元素 ⇒ 键盘永不弹 ⇒
+    #   推送通道**从未被真实触发**。iOS 场景现在用隐藏 UITextField 触发真实系统键盘，
+    #   记录「UIKeyboard 通知 → KeyboardWatch → JS __proteusHostKeyboard」全链读数。
+    #   ★只在探针存在时判（Android 壳暂未加同类探针——那里如实报"未覆盖"，不假绿）。
+    kb = d.get("keyboard_probe")
+    if isinstance(kb, dict) and kb:
+        ch = kb.get("channel")
+        shown = kb.get("shown_height_pt")
+        hidden = kb.get("hidden_height_pt")
+        calls_show = kb.get("js_calls_on_show", 0)
+        calls_total = kb.get("js_calls_total", 0)
+        if ch != "function":
+            fail(f"⑪ 键盘：JS 侧接收通道未装（typeof __proteusHostKeyboard={ch}）——#1069 的壳推通道没生效")
+        elif kb.get("shown_error"):
+            # 接了硬件键盘等环境因素 ⇒ 如实报未触发，不判红（但也不判绿）
+            report(f"⑪ 键盘：{kb.get('shown_error')}（高度={shown}pt）——如实未覆盖")
+        elif not (isinstance(shown, (int, float)) and shown > 0):
+            fail(f"⑪ 键盘：真实键盘已弹出但壳读数 height={shown}pt（应 > 0）——推送链路断了")
+        elif calls_total < 2:
+            fail(f"⑪ 键盘：弹收各一次应至少 2 次 JS 推送，实得 {calls_total}（show 相位 {calls_show}）")
+        elif not (isinstance(hidden, (int, float)) and hidden == 0):
+            fail(f"⑪ 键盘：收起后壳读数 height={hidden}pt（应为 0）")
+        else:
+            report(f"⑪ 键盘推送全链：真实键盘弹出 {shown}pt → 收起 0pt · JS 收到 {calls_total} 次推送")
+    elif host_id == "ios":
+        fail("⑪ 键盘：iOS 报告缺 keyboard_probe（探针未跑或未写入——判据无法证明推送链路）")
+    else:
+        report("⑪ 键盘：本端未装键盘探针（如实未覆盖，非假绿）")
+
     # ── G 宿主 conformance ──
     total = d.get("conf_total", 0)
     if d.get("conf_fail", -1) != 0 or total != 32:

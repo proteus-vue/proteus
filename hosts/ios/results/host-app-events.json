@@ -41,14 +41,14 @@
         "payload" : {
           "theme" : "dark"
         },
-        "ts" : 1790769561370
+        "ts" : 1792376862046
       },
       {
         "evt" : "theme-change",
         "payload" : {
           "theme" : "light"
         },
-        "ts" : 1790769561421
+        "ts" : 1792376862162
       },
       {
         "evt" : "memory-warning",
@@ -56,21 +56,21 @@
           "level" : 2,
           "source" : "didReceiveMemoryWarning"
         },
-        "ts" : 1790769561422
+        "ts" : 1792376862167
       },
       {
         "evt" : "theme-change",
         "payload" : {
           "theme" : "dark"
         },
-        "ts" : 1790769561424
+        "ts" : 1792376862170
       },
       {
         "evt" : "error",
         "payload" : {
           "error" : "NSGenericException: proteus-test-crash"
         },
-        "ts" : 1790769564725
+        "ts" : 1792376865285
       }
     ],
     "lastPayload" : {
@@ -97,5 +97,5 @@
       "theme-change" : 2
     }
   },
-  "ts" : 1790769564726
+  "ts" : 1792376865285
 }

@@ -6825,3 +6825,50 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 【下一步】① 用户在 iPhone 上点一次"信任"后补跑 `run-selfdraw.sh --host-runtime`；
   ② 鸿蒙设备接入后跑 `run-http-probe.sh` + `run-superapp.sh` 回归；③ 真机内存对比（共享桥前后）需要一个
   "同页多次进出"的场景装置，属独立项。
+
+1074. **★★★键盘推送的真机闭环：探针抓出「host-runtime 场景根本没装接收通道」+ 真机取证 336pt→0pt · 决策**（2026-10-19 · 承接 #1069/#1073）：
+【背景】#1069 把三端键盘推送接了，但**始终没有真机证据**——全仓 app 产物扫描：`inputs=0`
+（测试场景里没有任何 input/textarea）⇒ 键盘永远不会弹 ⇒ 推送通道从未被真实触发过。
+#1073 补跑 iOS 真机判据时，其余 40+ 条全绿、唯独没有键盘项——因为**没有探针**。
+【探针（新增）】
+  · **iOS**（`host-runtime-scene.swift`）：隐藏 `UITextField` + `becomeFirstResponder()` 触发
+    **真实系统键盘**（不是 post 伪通知——伪通知只能证明 handler 会响应，证明不了系统真会发；
+    真实键盘栈才能拿到真实 `UIKeyboardFrameEndUserInfoKey`）。装与 superapp **同一份**
+    `KeyboardWatch`（不是另写一份），记录 `shown_height_pt` / `hidden_height_pt` /
+    JS 侧 `__proteusHostKeyboard` 调用次数与载荷。**有界**：弹收各最多等 2s（50ms × 40 轮条件轮询）；
+    接了硬件键盘时如实写 `shown_error` 并继续（不阻断其余判据）。
+  · **判据**（`check-host-runtime.py` ⑪）：通道必须是 `function`；弹出高度 > 0；弹收至少 2 次推送；
+    收起后为 0。★只在探针存在时判——Android 壳未加同类探针时如实报"未覆盖"，**不假绿**。
+【★★探针首轮就抓到真缺陷（这正是它存在的价值）】`typeof __proteusHostKeyboard === 'undefined'`
+  ⇒ iOS 上**接收通道根本没装**。根因：`installKeyboardChannel()` 原先只在
+  `createAppDeviceCapabilities()` 里调 ⇒ 只有走 `createCapabilityHooks()`（= 加载整个 9000 行
+  `capability.ts`）的路径才有接收器；而 **`host-runtime` 场景故意不 import `capability.ts`**
+  （体积 + IIFE 下 `import.meta` 兼容）⇒ 这个场景的 `__proteusHostKeyboard` 恒 undefined、
+  **壳推了没人收**。
+  ★这是"装配依赖了另一个模块恰巧被加载"的老病——与 #1069 记录过的
+  `installAppEventSource` 完全同型（那次也是"只 import 子路径的宿主不会触发它"）。
+【修复】
+  · `capability-app-device.ts` **模块加载即自装**键盘接收通道（幂等 + 外层 try 兜底，
+    与 `capability-app.ts::installAppEventSource` 同一纪律：**装配跟着定义走**）。
+  · `entry-host-runtime.ts` import 该文件（并真实调用 `createAppDeviceCapabilities()`，
+    避免被 tree-shake）；报告新增 `device_probe` 读数（自证模块真的加载并执行）。
+  · iOS/Android 两个 bundle 构建脚本加 alias `@proteus-vue/api/capability-app-device` → src。
+    ★bundle 体积代价实测：555.2 KB（原 554.5 KB，**+0.7 KB**）——因为该文件只依赖
+    capability-invoke / capability-types / capability-app，不拖 9000 行能力面。
+【真机取证（iOS · 已信任证书后）】
+  · **⑪ 键盘推送全链：真实键盘弹出 336pt → 收起 0pt · JS 收到 2 次推送**；
+  · `keyboard_probe` 完整读数：`channel=function` · `shown_height_pt=336` · `hidden_height_pt=0` ·
+    `js_calls_total=2` · `js_log=[{height:336,visible:true},{height:0,visible:false}]` ·
+    `device_probe={keyboard_channel:"function",has_screen:true}`。
+  · 宿主运行时其余 40+ 条判据**同时全绿**（A/B 状态机 · 真实壳转发 · job 泵 · E 边界 · F 内存账本 ·
+    C23/C24/C25 · C48/C51/C74/C53/C73/C67/C75/C82 · **C26 useFetch 线格式=bytes · 超时=host-only** ·
+    K 三环 · G conformance 32/32）。
+  ★这是 **#1069（键盘三端推送）第一次拿到真机证据**，且它顺带证明了 #1071/#1072 在 iOS 上无回归
+  （`cap_subscribers=12` · 宿主自报 13 次调用）。
+【判据】`check-host-runtime.py` 新增 ⑪ 段；`tests/capability-app-device.test.ts` 9/9（自装副作用
+  不破坏测试隔离）+ `capability-scale` 16/16；iOS 类型检查 / vue-tsc 0 error / script-compile /
+  file-size / no-json-wire 全绿；**iOS 真机 exit=0 全绿**。
+【诚实边界】① **Android 侧未加同类探针**（判据会如实报"本端未装键盘探针"）——Android 的
+  `WindowInsets.ime()` 通路仍只有编译/单测证据；② **鸿蒙无设备**，其"渲染时注入"形态仍未真机验证；
+  ③ 探针触发的是**系统键盘**，未覆盖第三方输入法/硬件键盘的边界情形（后者会落 `shown_error`
+  如实标注，不判绿也不算红）；④ 键盘动画曲线仍未跟随（#1069 已登记）。

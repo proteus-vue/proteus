@@ -83,8 +83,14 @@ final class HostRuntimeScene: NSObject {
             }
             let p2 = evalJson("__proteusHostFinish()")
             mainPhase2 = p2
-            writeMainReport()
             installLifecycleObservers()
+            // ★★★C14 键盘推送探针（决策 #1074）：真实键盘 → 壳推送 → JS 记录 → 收起
+            runKeyboardProbe {
+                writeMainReport()
+                NSLog("[proteus] HOST_RUNTIME_PHASE_DONE async_resolved=%@",
+                      String(describing: p2["async_resolved"] ?? "?"))
+            }
+            return
             NSLog("[proteus] HOST_RUNTIME_PHASE_DONE async_resolved=%@",
                   String(describing: p2["async_resolved"] ?? "?"))
             return
@@ -180,6 +186,83 @@ final class HostRuntimeScene: NSObject {
         try? raw.write(to: reportURL(name), atomically: true, encoding: .utf8)
     }
 
+    // ────────────────────────── ★★★C14 键盘推送探针（决策 #1074） ──────────────────────────
+
+    /** 探针读数（写进主报告的 `keyboard_probe`） */
+    private static var keyboardProbe: [String: Any] = [:]
+    private static var kbField: UITextField?
+    /** 有界轮询：每轮 50ms，最多 40 轮（2s）；与 `waitAsyncThenFinish` 同款条件等待 */
+    private static let KB_MAX_ROUNDS = 40
+
+    /**
+     * 触发**真实系统键盘** → 验证「UIKeyboard 通知 → KeyboardWatch → JS `__proteusHostKeyboard`」全链。
+     *
+     * 【为什么用隐藏 UITextField 而不是直接 post 伪通知】伪通知只能证明"我们的 handler 会响应"，
+     *   证明不了系统真会发通知、也证明不了高度语义（用户可见的让位量）。`becomeFirstResponder`
+     *   会走**真实键盘输入栈** ⇒ 拿到的是真实 `UIKeyboardFrameEndUserInfoKey`。
+     *
+     * 【有界】键盘出现/消失各最多等 2s（50ms × 40 轮，条件轮询）。超时**如实写入
+     *   `error` 并继续**（不阻断其余判据）——例如设备接了硬件键盘时键盘可能不弹。
+     */
+    private static func runKeyboardProbe(done: @escaping () -> Void) {
+        // ① JS 侧接收通道存在？（capability-app-device 的 installKeyboardChannel）
+        keyboardProbe["channel"] = evalJs?("String(typeof __proteusHostKeyboard)") ?? "no-eval"
+        // ★设备域自检（bundle 内的 device_probe：证明设备桥模块被真实加载，而非只 import 未执行）
+        keyboardProbe["device_probe"] = evalJs?("JSON.stringify(globalThis.__proteusDeviceProbe || null)") ?? "no-eval"
+        // ② 装记录器：包一层记下每次推送的载荷（判据据此断言"JS 真的收到了"）
+        _ = evalJs?("(function(){var g=globalThis;g.__proteusKbLog=[];var o=g.__proteusHostKeyboard;"
+            + "g.__proteusHostKeyboard=function(p){try{g.__proteusKbLog.push(p)}catch(e){};"
+            + "return (typeof o==='function')?o(p):'no-orig';};return 'ok';})()")
+        // ③ 装与 superapp **同一份** KeyboardWatch（不是另写一份）
+        KeyboardWatch.install(
+            eval: { expr in evalJs?(expr) ?? "no-eval" },
+            render: { /* 探针不重渲（没有内容要重排） */ },
+            safeBottom: { 0 }
+        )
+        guard let win = UIApplication.shared.windows.first(where: { $0.isKeyWindow }),
+              let root = win.rootViewController?.view else {
+            keyboardProbe["error"] = "无 key window（探针无法触发键盘）"
+            done()
+            return
+        }
+        let tf = UITextField(frame: CGRect(x: 0, y: 0, width: 4, height: 4))
+        tf.isHidden = true
+        tf.autocorrectionType = .no
+        root.addSubview(tf)
+        kbField = tf
+        tf.becomeFirstResponder()
+        waitKeyboard(shown: true, rounds: 0, done: done)
+    }
+
+    /** 条件等待：键盘出现（height > 0）或消失（height == 0）。 */
+    private static func waitKeyboard(shown: Bool, rounds: Int, done: @escaping () -> Void) {
+        let h = KeyboardWatch.heightPt
+        let settled = shown ? h > 0 : h == 0
+        if settled || rounds >= KB_MAX_ROUNDS {
+            if shown {
+                keyboardProbe["shown_height_pt"] = h
+                keyboardProbe["js_calls_on_show"] = Int(evalJs?("String(__proteusKbLog.length)") ?? "0") ?? 0
+                if !settled { keyboardProbe["shown_error"] = "键盘 2s 内未出现（接了硬件键盘？）" }
+                kbField?.resignFirstResponder()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    waitKeyboard(shown: false, rounds: 0, done: done)
+                }
+                return
+            }
+            keyboardProbe["hidden_height_pt"] = h
+            keyboardProbe["js_calls_total"] = Int(evalJs?("String(__proteusKbLog.length)") ?? "0") ?? 0
+            keyboardProbe["js_log"] = evalJs?("JSON.stringify(__proteusKbLog)") ?? "[]"
+            if !settled { keyboardProbe["hidden_error"] = "键盘 2s 内未收起" }
+            kbField?.removeFromSuperview()
+            kbField = nil
+            done()
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            waitKeyboard(shown: shown, rounds: rounds + 1, done: done)
+        }
+    }
+
     /// 主报告：phase1 ∪ phase2 ∪ 壳转发计数 ∪ 新鲜度（run_ts/build_id——脚本按此断言"本轮新报告"）
     private static func writeMainReport(fatal: String? = nil) {
         var out: [String: Any] = [
@@ -195,6 +278,8 @@ final class HostRuntimeScene: NSObject {
             "finish_ok": !mainPhase2.isEmpty,
         ]
         if let f = fatal { out["error"] = f }
+        // ★决策 #1074：键盘推送探针读数（判据读它证明「真实键盘 → 壳推 → JS 收到」）
+        if !keyboardProbe.isEmpty { out["keyboard_probe"] = keyboardProbe }
         for (k, v) in mainPhase1 { out[k] = v }
         for (k, v) in mainPhase2 { out[k] = v }
         // ok 语义与 Android 一致：phase1 ok && 续体已解析

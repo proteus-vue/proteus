@@ -32,6 +32,11 @@ import {
   createAppLifecycleCapabilities,
   createStackPageSource,
 } from '@proteus-vue/api/capability-app'
+// ★★★决策 #1074：设备域桥（installKeyboardChannel 等接收通道随模块加载自装）。
+//   为什么只 import 这个文件而不是 `capability.ts`：后者是 9000 行全能力面（见下方注释的体积理由），
+//   而本文件只依赖 capability-invoke / capability-types / capability-app，体积可忽略。
+//   ★真机探针抓出的缺陷：不 import 它 ⇒ `__proteusHostKeyboard` 恒 undefined ⇒ 壳推了没人收。
+import { createAppDeviceCapabilities } from '@proteus-vue/api/capability-app-device'
 // ★为什么**不** import `@proteus-vue/api/capability`（拿 createCapabilityHooks）：
 //   那个文件是 9000 行全能力面 + 依赖 @proteus-vue/shared（含 import.meta.env / window 探测）
 //   ⇒ 在 IIFE（QuickJS/JSC 无模块系统）下既拖进 267KB 无关代码，又触发 import.meta 警告。
@@ -67,7 +72,7 @@ const g = globalThis as unknown as HostGlobals
 const HOST_ID = g.__PROTEUS_HOST_ID__ ?? 'quickjs-desktop'
 // ★构建标识（由 hosts/ios/bridge/inject-build-id.mjs **编译期替换**——与 entry-bench/entry-selfdraw
 //   同一机制；报告据此断言"设备上跑的是本次构建"，而不是靠运行时环境变量（那种是第二种形态））
-const BUILD_ID = '0353e99a-215230'
+const BUILD_ID = 'be6b7af9-102637'
 const FRAME_DRIVER = g.__PROTEUS_HOST_FRAME_DRIVER__ ?? 'manual'
 
 // ══════════════════════════════════════════════════════════════════
@@ -574,6 +579,16 @@ export function __proteusHostRun(): string {
         }
       }
       const appCaps = createAppNativeCapabilities(DemoCapError)
+      // ★决策 #1074：设备域桥真实使用（同时确保其模块级"键盘接收通道自装"不被 tree-shake）
+      try {
+        const devCaps = createAppDeviceCapabilities(DemoCapError)
+        ;(globalThis as Record<string, unknown>).__proteusDeviceProbe = {
+          keyboard_channel: typeof (globalThis as Record<string, unknown>).__proteusHostKeyboard,
+          has_screen: typeof devCaps.getScreen === 'function',
+        }
+      } catch (e) {
+        ;(globalThis as Record<string, unknown>).__proteusDeviceProbe = { error: String(e) }
+      }
 
       // ① C48 宿主上下文（壳自述——已实现）
       appPending.hostContext = appCaps.getHostContext()
@@ -817,6 +832,8 @@ export function __proteusHostFinish(): string {
     cap_subscribers: cap?.subscribers ?? -1,
     // J：App 端原生能力通道读数（**同一份业务代码在 App 端跑**）
     app_native: app ?? { done: false },
+    // ★决策 #1074：设备域自检读数（键盘接收通道是否随模块加载自装）
+    device_probe: (globalThis as unknown as { __proteusDeviceProbe?: unknown }).__proteusDeviceProbe ?? { done: false },
     // K：应用级生命周期事件源（真系统回调 → 总线）
     app_events: (globalThis as unknown as { __proteusAppEventProbe?: unknown }).__proteusAppEventProbe ?? { done: false },
   })

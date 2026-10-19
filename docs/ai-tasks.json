@@ -1721,6 +1721,30 @@
         "T-capability-bridge-shared"
       ],
       "note": "【done · 决策 #1073（2026-10-19）】四轮改动（#1069 键盘三端推送 / #1071 通道加固 / #1072 共享桥）的真机验证。★设备取证：Android 在线、iOS iPhone12 在线、**鸿蒙无设备**。★Android 真机全绿：useFetch 线格式=bytes · 超时=host-only（#1066 生效）；宿主自报 18 次调用（#1071 环形记账后判据仍工作）；cap_subscribers=12（订阅回收未误删）；K 组三环 1/1/1 + 内容断言。★iOS 抓到两个真机构建静默失效：① `keyboard-watch.swift` 只在静态检查清单、漏了 run-selfdraw 构建清单 ⇒ cannot find in scope；② 清单续行被写成双反斜杠 ⇒ 该行后所有源码不参与编译，而 `bash -n` 照样通过（伪装成\"符号缺失\"假错误）。修 + 新增 `check:ios-source-lists` 门禁（两份清单同集 + 续行形态），两条破坏性验证有效，已接 verify + gates-sync LOCAL_ONLY。★顺带修好签名环境：描述文件 10-15 过期 ⇒ provision.sh 重签至 10-26；设备残留旧团队应用 ⇒ 卸载后安装成功。★**iOS 真机判据仍卡在人工步骤**：需在设备设置里信任开发者证书（无法命令代办）⇒ iOS 报告未取到，编译已通过（0 error）。★诚实边界：鸿蒙本轮完全未跑；共享桥的真机内存对比未做（Node 实测 26.5→15.1MB）。"
+    },
+    {
+      "id": "T-keyboard-device-proof",
+      "title": "键盘推送真机闭环：探针 + 抓出「host-runtime 未装接收通道」并修复（iOS 336pt→0pt 全链通过）",
+      "type": "verification",
+      "status": "done",
+      "owner": "session:zcode-invoke-bytes-20261019",
+      "scope": [
+        "hosts/ios/ProteusHost/dev/host-runtime-scene.swift",
+        "hosts/shared/bridge/entry-host-runtime.ts",
+        "hosts/ios/bridge/build-host-runtime.mjs",
+        "hosts/android/bridge/build-batch.mjs",
+        "hosts/android/check-host-runtime.py",
+        "packages/api/src/capability-app-device.ts",
+        "hosts/ios/results/**"
+      ],
+      "decision": 1074,
+      "verification": "bash hosts/ios/run-selfdraw.sh --host-runtime && npx vitest run tests/capability-app-device.test.ts tests/capability-scale.test.ts",
+      "branch": null,
+      "related": [
+        "T-app-keyboard-push",
+        "T-ios-source-lists-gate"
+      ],
+      "note": "【done · 决策 #1074（2026-10-19）】#1069 的键盘推送一直没有真机证据（全仓 app 产物 inputs=0 ⇒ 键盘永不弹）。本轮加探针：iOS 用隐藏 UITextField + becomeFirstResponder 触发真实系统键盘（装与 superapp 同一份 KeyboardWatch），判据读 channel/弹出高度/推送次数/收起高度。★**探针首轮抓到真缺陷**：iOS 上 __proteusHostKeyboard=undefined ⇒ 接收通道根本没装——installKeyboardChannel 只在 createAppDeviceCapabilities 里调，而 host-runtime 场景故意不 import capability.ts（体积+IIFE import.meta）⇒ 壳推了没人收。这与 #1069 的 installAppEventSource 完全同型（装配依赖别处加载）。修：capability-app-device 模块加载即自装（幂等+try 兜底，装配跟着定义走）+ entry-host-runtime import 并真实调用 + 两个 bundle 构建加 alias（体积 +0.7KB）。★真机结果：⑪ 键盘推送全链 336pt→0pt、JS 收到 2 次（js_log 逐帧载荷正确）；其余 40+ 条同时全绿（useFetch bytes/host-only、cap_subscribers=12、宿主自报 13 次、G conformance 32/32）。★诚实边界：Android 未加同类探针（判据如实报未覆盖）；鸿蒙无设备；未覆盖硬件键盘（落 shown_error 不判绿）。"
     }
   ]
 }

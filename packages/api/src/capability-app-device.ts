@@ -341,3 +341,21 @@ function createMediaQueryObserver<E extends Error>(
     },
   }
 }
+
+// ★★★模块加载即自装键盘接收通道（决策 #1074）。
+//
+// 【为什么必须在这里装（真机探针抓出的真缺陷）】此前 `installKeyboardChannel()` 只在
+//   `createAppDeviceCapabilities()` 里调 ⇒ 只有走 `createCapabilityHooks()`（= 加载整个 9000 行
+//   capability.ts）的路径才有接收器。而 **`host-runtime` 场景故意不 import capability.ts**
+//   （体积 + IIFE 兼容）⇒ 那里的 `__proteusHostKeyboard` 恒为 `undefined` ⇒ **壳推了没人收**。
+//   真机探针实测：`typeof __proteusHostKeyboard === 'undefined'`。
+//
+// 【纪律同 `capability-app.ts::installAppEventSource`】**装配跟着定义走**：
+//   谁 import 本模块，接收通道就装好——不依赖"另一个模块恰巧被加载"。
+//   ★零成本：本函数只写一个全局函数（幂等），不构造桥、不读平台全局。
+//   ★外层 try 兜底：装配失败绝不能中断 bundle 加载（与 app 事件源同款双保险）。
+try {
+  installKeyboardChannel()
+} catch {
+  /* 装线失败不影响其余功能（通道缺失会有可观测后果：键盘高度恒 0） */
+}
