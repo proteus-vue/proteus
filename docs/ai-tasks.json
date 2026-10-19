@@ -1970,6 +1970,25 @@
         "T-app-screen-capture-domain"
       ],
       "note": "【done · 决策 #1085（2026-10-19）】承接 #1084 审计：Web 侧 getBeacon/getLocalService/getTranslation/getPoster 的桥对象**只含空订阅**（onXxx 返回合法的取消函数、但根本没有事件源）⇒ Hook 拿到 ok:true 假句柄 ⇒ 业务\"订阅成功\"却永远收不到回调。与\"伪造 false\"同族（看起来可用、实际不工作），且会污染兼容表（按桥方法存在判 ✅）。\n【修法】删掉这四个 API 在 webBridge 的实现 ⇒ Hook 既有 `if (!bridge.getXxx) throw CapError(xxx.unsupported)` 生效 ⇒ 显式 Err。\n★**文档自动跟着降级**（✅ → ⚠️「未提供 → Err 显式降级」），四页全部自动变——没有一处手改文档，正是 #1084 建的 SSOT 派生机制自证有效。\n【判据】新测试 3/3：静态扫描 webBridge 段（★只扫 web 段——wxBridge 的同名 getBeacon 是真实现，首版扫全文件误报）+ 四个 API 点名不得有实现形态 + 行为验证（空桥 ⇒ 四个 Hook 都 reject 成 unsupported）。破坏性：加回 getBeacon 空壳 ⇒ 2 红。\n【B 类不动】部分方法空的 API（NFC adapter、web screen-capture/bluetooth/nfc/album 等）主体方法如实返回 unsupported，空订阅只是形状兜底 ⇒ **不是谎报**，判据只抓\"全部方法是空订阅\"的纯空壳，不误伤。\n【诚实边界】未实现这四个能力的 Web 端真订阅（iBeacon 需 Web Bluetooth+帧解析；mDNS 需浏览器支持；翻译需 Translation API 普及；海报需画布管线）；useBeacon 契约缺 startBeaconDiscovery/stopBeaconDiscovery（#1084 已登记）仍未补。"
+    },
+    {
+      "id": "T-capability-usage-examples",
+      "title": "能力页「用法」示例可运行性：英文侧 29 个同步句柄被写成 await（含参数名当值）+ 根因判定修复",
+      "type": "docs",
+      "status": "done",
+      "owner": "session:zcode-invoke-bytes-20261019",
+      "scope": [
+        "website/scripts/lib/cap-usage-en.mjs",
+        "website/scripts/gen-content.mjs",
+        "tests/capability-usage-examples.test.ts"
+      ],
+      "decision": 1087,
+      "verification": "npx vitest run tests/capability-usage-examples.test.ts && pnpm check:content",
+      "branch": null,
+      "related": [
+        "T-capability-docs-plain-language"
+      ],
+      "note": "【done · 决策 #1087（2026-10-19）】承接 #1084 的文档审计，本轮查「用法」示例。英文侧 29 个同步句柄能力写成 `const res = await useElement()`：① await 一个非 thenable —— 运行时能过但教会错误形状；② `useVideo(id)` 把**参数名**当值（照抄 ReferenceError）；③ `console.log(res.data)` 对句柄无意义。\n【★真根因】`hookShape()` 的 `handleT` 判据要求返回类型是**裸名字**（`^[A-Z]\\w*$`），而同步句柄签名是 `CapResult<ElementQuery>`（带尖括号）⇒ 永不命中 ⇒ 落 `generic()` 兜底 ⇒ 生成 await 形态。中文页没这问题是因为中文侧另有一套手写示例表（CAP_USAGE）——**两条路径分叉**，而门禁只比\"文件与源一致\"，比不出示例对不对。\n【修法】新增 lib/cap-usage-en.mjs（directUsageEn + EN_ARG_PLACEHOLDERS 可运行字面量）；gen-content.mjs 英文分支改 `handleT || /^CapResult</.test(shape.retType)` 并传实参占位。两个生成器行数**零增长**（2807/2216 基线守住）。\n【判据】新测试 4/4：同步句柄不得 await（按签名判定）· 不得把参数名当实参 · **反向保护**（异步 Hook 仍应 await）· 根因锁（生成器须含 CapResult< 判据）。破坏性：撤判据+重生成 ⇒ 3 红。\n【诚实边界】① 中文页示例是手写表（CAP_USAGE），与英文派生路径不同源——**两份仍可能漂移**（\"一处实现\"欠账，登记后续）；② 示例的**语义质量**（是否展示最典型用法）机器判不出，本判据只保证形状可运行 + 不误导同步/异步。"
     }
   ]
 }

@@ -21,6 +21,8 @@
 //     `element.unsupported`，不做"只在 observe 时回调一次"的假观察。
 
 import { invokeHost } from './capability-invoke'
+// ★★★决策 #1086：交叉观察（相交计算在 JS；宿主只推几何变化 tick）
+import { createAppIntersection } from './capability-app-intersection'
 import { CapError as ProteusCapError } from './capability-types'
 import type {
   ElementFieldsOptions,
@@ -222,15 +224,10 @@ export function createAppElementBridge() {
      *   会以为持续监听生效，实际滚出屏幕后再也不会回调（静默错行为）。与 Web `IntersectionObserver`
      *   的语义差一个**几何变化事件源**，缺件是渲染宿主的帧级几何通知，属下一批。
      */
-    createIntersection: (_options?: IntersectionOptions): IntersectionHandle => {
-      const handle: IntersectionHandle = {
-        relativeTo: () => handle,
-        relativeToViewport: () => handle,
-        observe: (_targetSelector: string, _cb: (result: IntersectionResult) => void) => handle,
-        disconnect: () => {},
-      }
-      return handle
-    },
+    // ★★★决策 #1086：交叉观察**已实现**（相交计算在 JS：`element.rect` 已返回视口坐标）。
+    //   ★宿主只推"几何变了"的 tick（滚动），不在宿主做任何几何数学（三端同一份实现）。
+    createIntersection: (options?: IntersectionOptions): IntersectionHandle =>
+      createAppIntersection(options),
   }
 }
 

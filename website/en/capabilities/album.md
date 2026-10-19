@@ -141,12 +141,13 @@ Web 端：pick 走 <input type=file>（需宿主/用户手势），save 无标�
 ## Usage
 
 ```ts
-const res = await useAlbum()
+const album = useAlbum()   // synchronous handle — no await, no res.ok on the handle itself
 
-if (res.ok) {
-  console.log(res.data)
-} else if (res.error.code.endsWith('.unsupported')) {
-  // platform unsupported → degradation path
+if (!album.ok) {
+  // album.error.code tells you why (e.g. *.unsupported → this end cannot do it)
+} else {
+  // call its methods — THOSE return Promise<CapResult<T>>:
+  //   const r = await album.data.<method>()
 }
 ```
 

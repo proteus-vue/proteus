@@ -171,12 +171,13 @@ disconnect(): void
 ## Usage
 
 ```ts
-const res = await useIntersection()
+const intersection = useIntersection()   // synchronous handle — no await, no res.ok on the handle itself
 
-if (res.ok) {
-  console.log(res.data)
-} else if (res.error.code.endsWith('.unsupported')) {
-  // platform unsupported → degradation path
+if (!intersection.ok) {
+  // intersection.error.code tells you why (e.g. *.unsupported → this end cannot do it)
+} else {
+  // call its methods — THOSE return Promise<CapResult<T>>:
+  //   const r = await intersection.data.<method>()
 }
 ```
 

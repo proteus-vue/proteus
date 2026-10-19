@@ -153,12 +153,13 @@ banner(options: { adUnitId: string; style: BannerAdStyle }): BannerAdHandle
 ## Usage
 
 ```ts
-const res = await useAd()
+const ad = useAd()   // synchronous handle — no await, no res.ok on the handle itself
 
-if (res.ok) {
-  console.log(res.data)
-} else if (res.error.code.endsWith('.unsupported')) {
-  // platform unsupported → degradation path
+if (!ad.ok) {
+  // ad.error.code tells you why (e.g. *.unsupported → this end cannot do it)
+} else {
+  // call its methods — THOSE return Promise<CapResult<T>>:
+  //   const r = await ad.data.<method>()
 }
 ```
 

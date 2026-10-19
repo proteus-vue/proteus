@@ -162,12 +162,13 @@ on(event: 'canplay' | 'play' | 'pause' | 'stop' | 'ended' | 'timeupdate' | 'erro
 ## Usage
 
 ```ts
-const res = await useAudio()
+const audio = useAudio()   // synchronous handle — no await, no res.ok on the handle itself
 
-if (res.ok) {
-  console.log(res.data)
-} else if (res.error.code.endsWith('.unsupported')) {
-  // platform unsupported → degradation path
+if (!audio.ok) {
+  // audio.error.code tells you why (e.g. *.unsupported → this end cannot do it)
+} else {
+  // call its methods — THOSE return Promise<CapResult<T>>:
+  //   const r = await audio.data.<method>()
 }
 ```
 

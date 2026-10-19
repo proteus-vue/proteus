@@ -126,12 +126,13 @@ subpackage(packageType: string): Promise<CapResult<PreDownloadTask>>
 ## Usage
 
 ```ts
-const res = await usePreload()
+const preload = usePreload()   // synchronous handle — no await, no res.ok on the handle itself
 
-if (res.ok) {
-  console.log(res.data)
-} else if (res.error.code.endsWith('.unsupported')) {
-  // platform unsupported → degradation path
+if (!preload.ok) {
+  // preload.error.code tells you why (e.g. *.unsupported → this end cannot do it)
+} else {
+  // call its methods — THOSE return Promise<CapResult<T>>:
+  //   const r = await preload.data.<method>()
 }
 ```
 

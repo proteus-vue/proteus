@@ -181,12 +181,13 @@ on(event: 'play' | 'pause' | 'ended' | 'timeupdate' | 'error' | 'fullscreenchang
 ## Usage
 
 ```ts
-const res = await useVideo(id)
+const video = useVideo('my-video')   // synchronous handle — no await, no res.ok on the handle itself
 
-if (res.ok) {
-  console.log(res.data)
-} else if (res.error.code.endsWith('.unsupported')) {
-  // platform unsupported → degradation path
+if (!video.ok) {
+  // video.error.code tells you why (e.g. *.unsupported → this end cannot do it)
+} else {
+  // call its methods — THOSE return Promise<CapResult<T>>:
+  //   const r = await video.data.<method>()
 }
 ```
 

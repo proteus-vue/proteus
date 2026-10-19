@@ -243,12 +243,13 @@ Canvas 图案填充（createPattern 返回）
 ## Usage
 
 ```ts
-const res = await useCanvas(id)
+const canvas = useCanvas('my-canvas')   // synchronous handle — no await, no res.ok on the handle itself
 
-if (res.ok) {
-  console.log(res.data)
-} else if (res.error.code.endsWith('.unsupported')) {
-  // platform unsupported → degradation path
+if (!canvas.ok) {
+  // canvas.error.code tells you why (e.g. *.unsupported → this end cannot do it)
+} else {
+  // call its methods — THOSE return Promise<CapResult<T>>:
+  //   const r = await canvas.data.<method>()
 }
 ```
 

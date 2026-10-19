@@ -16,10 +16,12 @@ import type { RouteRecord } from '@proteus-vue/router/types'
 import { APP_SCREEN_CONTENT, APP_SCREEN_REGISTRY, APP_RUNTIME_CONTENT } from './app-screen-content.generated'
 import { createSuperappRuntime, TAB_BAR_SPEC } from '@proteus-vue/render-backend'
 // ★★★决策 #1081：元素索引 + 元素查询探针（`useElement` 选择器通路）
-import { resolveElement, elementRegistryStats, firstScreenElementId, selectorSupport } from '@proteus-vue/render-backend'
+import { resolveElement, resolveAllElements, elementRegistryStats, firstScreenElementId, selectorSupport } from '@proteus-vue/render-backend'
 // ★与 entry-host-runtime.ts 同款：包内**相对路径**引用源（tsconfig.json 是 JSONC，加 paths 会撞校验；
 //   而相对路径让 bundler 与类型检查解析到同一份源，零配置改动）
 import { installElementResolver } from '../../../packages/api/src/capability-app-element'
+// ★★★决策 #1086：交叉观察依赖注入（与 useElement 同一解析器 + 同一文档序）
+import { installIntersectionDeps, evaluateIntersections } from '../../../packages/api/src/capability-app-intersection'
 // ★★★决策 #1083：录屏/截屏能力探针（真机判据直接调真实桥，不经 capability.ts 全量入口）
 import { createAppCaptureCapabilities } from '../../../packages/api/src/capability-app-capture'
 import type { SuperappRuntime } from '@proteus-vue/render-backend'
@@ -295,7 +297,10 @@ interface SuperappRuntimeHostShape {
       })
       g.__SUPERAPP_RUNTIME__ = runtime
       // ★★★决策 #1081：元素索引接到能力层（`useElement` 的 selector→nodeId 映射；当前屏为桶）。
-      try { installAppElementResolver(() => runtime!.current()) } catch { /* 装线失败不影响渲染 */ }
+      try {
+        // ★视口 = 本次渲染的 viewport（与 host.mount 同源，避免参照矩形与元素矩形口径分叉）
+        installAppElementResolver(() => runtime!.current(), () => args.viewport)
+      } catch { /* 装线失败不影响渲染 */ }
     }
     // ★remount（鸿蒙一次性 VM 判据用）：无条件重挂——拿"反映当前 state"的整树（同屏也重挂）；
     //   否则走 mountScreen（含导航/滚动语义）。两种都返回 snapshot（一次性 VM 宿主持有）。
@@ -449,8 +454,14 @@ interface SuperappRuntimeHostShape {
  * 【为什么还要单独暴露一份】superapp bundle 刻意**不打包** 9000 行 `capability.ts`（体积 + IIFE 兼容）
  *   ⇒ 探针必须能直接测这条链，而不依赖整条能力桥被加载。
  */
-/** 装配期调用一次：把元素索引接到能力层（能力层不反向依赖渲染包）。 */
-export function installAppElementResolver(currentScreen: () => string): void {
+/**
+ * 装配期调用一次：把元素索引 + 交叉观察依赖接到能力层（能力层不反向依赖渲染包）。
+ * @param viewport 当前视口（逻辑 px）——交叉观察的参照矩形；拿不到 ⇒ 该轮不评估（不猜）
+ */
+export function installAppElementResolver(
+  currentScreen: () => string,
+  viewport?: () => { width: number; height: number } | null,
+): void {
   installElementResolver({
     resolve: (selector) => {
       const screen = currentScreen()
@@ -460,6 +471,20 @@ export function installAppElementResolver(currentScreen: () => string): void {
     // ★与 resolve **同源**（同一份解析器）——"支持性检查"与"查询"不会走两套规则（决策 #1082）
     support: (selector) => selectorSupport(selector),
     currentScreen,
+  })
+  // ★★★决策 #1086：交叉观察依赖——`resolve` / `resolveAll` 走**同一份**解析器，
+  //   所以 `useIntersection` 与 `useElement` 对同一选择器必命中同一批节点（不会两套规则漂移）。
+  installIntersectionDeps({
+    viewport: () => (viewport ? viewport() : null),
+    resolve: (selector) => {
+      const screen = currentScreen()
+      const hit = resolveElement(selector, screen || undefined)
+      return hit ? { nodeId: hit.nodeId, source: hit.source } : null
+    },
+    resolveAll: (selector) => {
+      const screen = currentScreen()
+      return resolveAllElements(selector, screen || undefined).map((h) => ({ nodeId: h.nodeId, source: h.source }))
+    },
   })
 }
 
@@ -571,6 +596,22 @@ export function appCaptureProbe(): string {
   return JSON.stringify(out)   // 立即回（done 缺失 = 结果还在算）
 }
 /** 元素索引读数（判据：证明索引里真有条目，而不是"查询恒 not-found"）。 */
+/**
+ * ★★★决策 #1086：**交叉观察的几何变化 tick**（宿主调）。
+ *
+ * 【谁调】三端在**滚动**（及视口尺寸变化）后各调一次：
+ *   · Android：`ProteusHostView.setScrollPosListener`（已有钩子，接线即可）
+ *   · iOS：`applyContentOffset` 之后
+ *   · 鸿蒙：不支持（一次性 VM，观察者无法跨渲染存活）
+ * 【为什么宿主只报"变了"】相交比例 = 目标矩形 ∩ 参照矩形 / 目标面积——两边都是**视口坐标**，
+ *   而 `element.rect` 已把内容坐标减掉 scrollY（#1081）。⇒ 计算全在 JS 一处，三端不会各算一套。
+ * 【返回】本轮**跨阈值真正回调**的条数（0 = 未跨档，属正常：Web 语义就是只在跨档时回调）。
+ */
+;(globalThis as unknown as { __proteusSuperappIntersectionTick?: () => number })
+  .__proteusSuperappIntersectionTick = () => {
+    try { return evaluateIntersections() } catch { return 0 }
+  }
+
 ;(globalThis as unknown as { __proteusSuperappElementRegistry?: () => string })
   .__proteusSuperappElementRegistry = () => JSON.stringify(elementRegistryStats())
 

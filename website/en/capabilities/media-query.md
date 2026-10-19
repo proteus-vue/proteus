@@ -110,12 +110,13 @@ disconnect(): void
 ## Usage
 
 ```ts
-const res = await useMediaQuery()
+const mediaQuery = useMediaQuery()   // synchronous handle — no await, no res.ok on the handle itself
 
-if (res.ok) {
-  console.log(res.data)
-} else if (res.error.code.endsWith('.unsupported')) {
-  // platform unsupported → degradation path
+if (!mediaQuery.ok) {
+  // mediaQuery.error.code tells you why (e.g. *.unsupported → this end cannot do it)
+} else {
+  // call its methods — THOSE return Promise<CapResult<T>>:
+  //   const r = await mediaQuery.data.<method>()
 }
 ```
 

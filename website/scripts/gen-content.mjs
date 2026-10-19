@@ -11,7 +11,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { COMP_EN, DOMAIN_EN, MP_STATUS_EN, ENDS_EN, END_NOTE_EN, COMP_LEGEND_EN, SHARED_EN, OVERVIEW_EN, CAP_SHARED_EN, CAP_USAGE_EN, CAP_ARGS_EN, CAP_DATA_HINTS_EN, CAP_METHODS_EN, CAP_EN, CAP_CAT_EN, CAP_OVERVIEW_EN, LIFECYCLE_EVENT_EN, LIFECYCLE_EVENT_NOTE_EN, LIFECYCLE_SRC_EN } from './gen-content-en.mjs'
 // ★决策 #881：App 桥方法集抽取抽成独立模块（锚定式解析 + 符号缺失硬失败）——详见该模块头注释
 import { loadAppBridgeKeysFrom } from './lib/app-bridge-keys.mjs'
-import { capabilityIntro, assertGuideCoverage } from './lib/capability-docs.mjs'   // ★#1084 人话描述 + 端边界
+import { capabilityIntro, assertGuideCoverage } from './lib/capability-docs.mjs'; import { EN_ARG_PLACEHOLDERS } from './lib/cap-usage-en.mjs'   // ★#1084/#1087
 import { appEndStatus } from './lib/harmony-host-keys.mjs'
 // ★hook→桥方法引用抽取同法抽成独立模块（锚定式 + 硬失败）；三条契约共用 lib/ts-source-scan.mjs 原语
 import { extractHookBridgeRefs, HOOK_FACTORY } from './lib/hook-bridge-refs.mjs'
@@ -2705,9 +2705,9 @@ async function genCapabilitiesEn(ir, ends) {
     lines.push('```ts')
     if (CAP_USAGE_EN[hook]) {
       lines.push(...CAP_USAGE_EN[hook])
-    } else if (handleT) {
+    } else if (handleT || /^CapResult</.test(shape.retType)) {
       const lv = (hook.replace(/^use/, '') || 'handle').charAt(0).toLowerCase() + hook.replace(/^use/, '').slice(1)
-      lines.push(...CAP_USAGE_EN.direct(c.api, lv))
+      lines.push(...CAP_USAGE_EN.direct(c.api, lv, EN_ARG_PLACEHOLDERS[hook]))   // ★#1087 带可运行实参
     } else {
       const required = params.filter((p) => !p.optional).map((p) => p.name)
       const args = CAP_ARGS_EN[hook] ?? required.join(', ')

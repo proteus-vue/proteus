@@ -7419,3 +7419,54 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
      `webBridge` 里实现**真事件源**，不要恢复空壳。
   ② `useBeacon` 契约缺 `startBeaconDiscovery` / `stopBeaconDiscovery`（#1084 已登记）仍未补，
      属独立批次（需三端各接 BLE 扫描 + iBeacon 帧解析）。
+
+1087. **★★★能力页「用法」示例的可运行性：英文侧 29 个同步句柄被写成 `await`（含把参数名当值）· 决策**（2026-10-19 · 承接 #1084 的文档审计）:
+
+【问题（用户先前的反馈「继续推进」，本轮做示例审计时发现）】
+  英文能力页有 **29 个**同步句柄能力的用法示例是：
+  ```ts
+  const res = await useElement()      // ← useElement 是**同步**返回 CapResult
+  if (res.ok) { console.log(res.data) }
+  ```
+  三层问题：
+  ① **`await` 一个同步句柄** —— 运行时虽能过（`await` 非 thenable 会原样返回），但**教会了错误形状**：
+     读者会以为这些 Hook 是异步的，于是到处 `await`，且分不清"句柄同步取、方法才异步";
+  ② **参数名当值**：`useVideo(id)` / `useWorker(scriptPath)` / `useCanvas(id)` ——
+     `id`/`scriptPath` 是**参数名**不是值，照抄**直接 ReferenceError**;
+  ③ **`console.log(res.data)` 对句柄无意义**：打印一堆方法，读者仍不知怎么用。
+
+【★真根因（不是"忘了改英文"，是一个判定 bug）】
+  生成器的 `hookShape()` 里：`handleT = !/^Promise</.test(retType) && /^[A-Z]\w*$/.test(retType)`。
+  同步句柄的签名是 `useElement(): CapResult<ElementQuery>`（**带尖括号**）⇒ `^[A-Z]\w*$` **永不命中**
+  ⇒ 落到 `generic()` 兜底 ⇒ 生成 `const res = await useElement()`。
+  ★中文页没这个问题，是因为中文侧另有一套手写示例表（`CAP_USAGE`）——**两条路径分叉**，
+    一边对一边错，而门禁只比对"文件与源一致"，比不出"示例写得对不对"。
+
+【修法】
+  · 新增 `website/scripts/lib/cap-usage-en.mjs`：`directUsageEn(api, handle, argPlaceholder)` ——
+    同步句柄的正确形状（同步拿句柄 → 判 ok → 提示"调它的方法才返回 Promise"）+
+    `EN_ARG_PLACEHOLDERS`（`useVideo: "'my-video'"` 等**可运行字面量**）。
+    ★为什么单列：`gen-content-en.mjs` 是 2215 行存量棘轮（只减不增）。
+  · `gen-content.mjs` 的英文分支：`handleT || /^CapResult</.test(shape.retType)` —— 补上同步句柄判据;
+    并把实参占位传进去（`EN_ARG_PLACEHOLDERS[hook]`）。
+  · 两个生成器行数**零增长**（2807 / 2216 基线守住了，靠合并 import 行腾空间）。
+
+【判据】新增 `tests/capability-usage-examples.test.ts` **4/4**（这是"示例正确性"的第一道机器判据）：
+  ① 同步句柄页**不得**出现 `await useXxx()`（按签名是否 `CapResult<` 判定，不是按文件名）;
+  ② 不得把**参数名**当实参（`useXxx(id)` / `useXxx(scriptPath)` …—— 照抄会 ReferenceError）;
+  ③ **反向保护**：`Promise<CapResult<…>>` 的异步 Hook **仍应** `await`（不能把对的改坏）;
+  ④ 根因锁：生成器里必须存在 `/^CapResult</.test(shape.retType)` 判据。
+  + **破坏性验证**：撤掉该判据 + 重新生成 ⇒ 3 条红；复原 ⇒ 4 绿。
+
+【效果（抽查）】
+  · `en/capabilities/element-query.md`：
+    `const element = useElement()   // synchronous handle — no await, no res.ok on the handle itself`
+  · `en/capabilities/video.md`：
+    `const video = useVideo('my-video')   // 不再是 useVideo(id)`（实参是可运行字面量）
+  · 异步 Hook 未受影响（`await useFetch('/api/user/1')` / `await useBattery()` 等原样保留）。
+
+【诚实边界】
+  ① 中文页的示例是**手写表**（`CAP_USAGE`），与英文的派生路径不同源——本轮只修了英文侧
+     与生成逻辑;**两份示例仍可能漂移**（属"一处实现"纪律的欠账，登记为后续批次）。
+  ② 示例的**语义正确性**（是否展示了该能力最典型的用法）机器判不出来——本判据只保证
+     "形状可运行 + 不误导同步/异步"，内容质量仍需人审。

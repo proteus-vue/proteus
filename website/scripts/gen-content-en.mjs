@@ -1169,6 +1169,8 @@ export const COMP_EN = {
 // ════════════ capabilities EN（★#481 续：能力分区，CAP_EN 页面级字段表） ════════════
 
 /** 能力页共享文案 EN（生成器镜像 zh 模板——标题/表头/图例/铁律/降级语义） */
+import { directUsageEn } from './lib/cap-usage-en.mjs'   // ★#1087 英文用法示例（同步句柄正确形状）
+
 export const CAP_SHARED_EN = {
   callout: (id, semantic, ret) =>
     `> Capability primitive ${id} · \`${semantic}\` · returns \`${ret}\` · **Hook implemented** (API ready — target bridges in the table below)`,
@@ -1504,10 +1506,8 @@ export const CAP_USAGE_EN = {
     "console.log('theme =', store.get('theme'))",
     "// store.remove(key) / store.clear(); reactivity booster: createReactiveStorage(store, reactive)",
   ],
-  direct: (api, handle) => [
-    `const ${handle} = ${api}`,
-    `// ${handle} is a synchronous handle — property/method structure in the Returns table (no await, no res.ok)`,
-  ],
+  // ★#1087：同步句柄示例的**唯一实现**在 lib（原实现把 await 放在同步句柄上、还会把参数名当值）
+  direct: directUsageEn,
   generic: (call, hint, voidRet) => [
     `const res = await ${call}`,
     '',

@@ -211,12 +211,13 @@ on(event: 'request' | 'enterWeakNetwork' | 'exitWeakNetwork', cb: (payload: unkn
 ## Usage
 
 ```ts
-const res = await useCacheManager()
+const cacheManager = useCacheManager()   // synchronous handle — no await, no res.ok on the handle itself
 
-if (res.ok) {
-  console.log(res.data)
-} else if (res.error.code.endsWith('.unsupported')) {
-  // platform unsupported → degradation path
+if (!cacheManager.ok) {
+  // cacheManager.error.code tells you why (e.g. *.unsupported → this end cannot do it)
+} else {
+  // call its methods — THOSE return Promise<CapResult<T>>:
+  //   const r = await cacheManager.data.<method>()
 }
 ```
 

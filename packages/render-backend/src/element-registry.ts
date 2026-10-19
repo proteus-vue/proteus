@@ -412,6 +412,35 @@ function queryFirst(tree: ElementTree, sels: ComplexSelector[]): number | null {
 
 /* ══════════════════════ 对外查询 ══════════════════════ */
 
+/** 在给定树上按选择器列表取**全部**命中（`querySelectorAll` 语义：文档序） */
+function queryAll(tree: ElementTree, sels: ComplexSelector[]): number[] {
+  const out: number[] = []
+  for (const rec of documentOrder(tree)) {
+    for (const sel of sels) {
+      if (matchesComplex(rec, tree, sel, sel.compounds.length - 1)) { out.push(rec.nodeId); break }
+    }
+  }
+  return out
+}
+
+/**
+ * 解析选择器 → **全部**匹配的引擎节点 id（`querySelectorAll` 语义，文档序）。
+ * ★用于 `useIntersection` 的 `observeAll: true`（以及将来的批量查询）。
+ * 与 `resolveElement` **同一份解析器 + 同一文档序**——不会出现两套匹配规则。
+ */
+export function resolveAllElements(selector: string | undefined | null, screen?: string): ElementResolution[] {
+  const parsed = parseSelector(selector)
+  if (parsed.reason || !parsed.selectors.length) return []
+  if (screen) {
+    const tree = screenTrees.get(screen)
+    if (tree) {
+      const hits = queryAll(tree, parsed.selectors)
+      if (hits.length) return hits.map((nodeId) => ({ nodeId, source: 'screen' as const }))
+    }
+  }
+  return queryAll(vueTree, parsed.selectors).map((nodeId) => ({ nodeId, source: 'vue' as const }))
+}
+
 /**
  * 解析选择器 → 引擎节点 id（`querySelector` 语义：**文档序第一个**匹配）。
  * 顺序：**当前屏的 Vapor 索引**优先（它就是屏幕上那棵树），再回落 Vue 渲染链。

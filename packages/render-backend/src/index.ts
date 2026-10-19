@@ -205,6 +205,7 @@ export {
   registerScreenElements,
   clearScreenElements,
   resolveElement,
+  resolveAllElements,
   firstScreenElementId,
   elementRegistryStats,
   resetElementRegistry,

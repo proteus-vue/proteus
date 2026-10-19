@@ -91,12 +91,13 @@ onOff(cb: () => void): () => void
 ## Usage
 
 ```ts
-const res = await useTranslation()
+const translation = useTranslation()   // synchronous handle — no await, no res.ok on the handle itself
 
-if (res.ok) {
-  console.log(res.data)
-} else if (res.error.code.endsWith('.unsupported')) {
-  // platform unsupported → degradation path
+if (!translation.ok) {
+  // translation.error.code tells you why (e.g. *.unsupported → this end cannot do it)
+} else {
+  // call its methods — THOSE return Promise<CapResult<T>>:
+  //   const r = await translation.data.<method>()
 }
 ```
 

@@ -118,12 +118,13 @@ web：`WebXR` 无对等视觉算法 → Err 诚实降级（isVKSupport 恒 false
 ## Usage
 
 ```ts
-const res = await useAR()
+const aR = useAR()   // synchronous handle — no await, no res.ok on the handle itself
 
-if (res.ok) {
-  console.log(res.data)
-} else if (res.error.code.endsWith('.unsupported')) {
-  // platform unsupported → degradation path
+if (!aR.ok) {
+  // aR.error.code tells you why (e.g. *.unsupported → this end cannot do it)
+} else {
+  // call its methods — THOSE return Promise<CapResult<T>>:
+  //   const r = await aR.data.<method>()
 }
 ```
 

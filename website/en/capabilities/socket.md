@@ -58,12 +58,13 @@ useSocket(): CapResult<{ udp(): UDPSocketHandle; tcp(options?: TCPSocketConnectO
 ## Usage
 
 ```ts
-const res = await useSocket()
+const socket = useSocket()   // synchronous handle — no await, no res.ok on the handle itself
 
-if (res.ok) {
-  console.log(res.data)
-} else if (res.error.code.endsWith('.unsupported')) {
-  // platform unsupported → degradation path
+if (!socket.ok) {
+  // socket.error.code tells you why (e.g. *.unsupported → this end cannot do it)
+} else {
+  // call its methods — THOSE return Promise<CapResult<T>>:
+  //   const r = await socket.data.<method>()
 }
 ```
 
