@@ -6908,3 +6908,45 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   ③ 探针的诊断读数保留在报告里（`diag_*`），是后续接手的证据起点。
 【后续接手建议】改用**真实输入控件**（在测试场景里放一个可见 EditText 让脚本 `adb shell input tap`
 点它）而不是程序化注入隐藏控件——`showSoftInput` 对未完成测量的视图行为在 MIUI 上不稳定。
+
+1076. **★★★鸿蒙真机接入复验 + 两处构建/设备取证纪律修订 · 决策**（2026-10-19 · 用户指出「鸿蒙的有设备啊」）：
+【★我的误判（如实记录）】#1075 里我写「鸿蒙无设备」，依据只有一条：`hdc list targets` 返回 `[Empty]`。
+用户当场纠正「鸿蒙的有设备啊，你是在 /Volumes/data1/work/office-applications 目录下面找的 IDE 吗？」。
+复验：
+  · DevEco 路径正确（`/Volumes/data1/work/office-applications/DevEco-Studio.app`），hdc **3.2.0d**；
+  · **`hdc list targets -v` 能列出设备**：`69F9K26126005311  USB  Offline/Connected  localhost`；
+  · **ioreg（USB 层）一直能看到 `HDC Device`**：HUAWEI、序列号 `69F9K26126005311`、`active`；
+  · 不加 `-v` 的 `list targets` **会过滤掉 offline 设备** ⇒ 我把它当成了"没有设备"。
+  ★教训（与 AGENTS.md「下否定结论前先跑一条取证命令」同类但更进一步）：
+    **一条命令的"空结果"不等于事实**——必须知道该命令的过滤语义，并用第二证据源交叉验证
+    （USB 层 ioreg / `-v` 详细模式）。这是我今天的第二次同类失误（第一次是"本机无可用 Xcode"）。
+【★设备状态不稳（环境态，如实）】设备在 `Connected` ↔ `Offline` ↔ `Empty` 之间反复：
+  · `Connected` 时 `hdc shell echo hdc-ok` 正常、`param get const.product.model` = **KLE-AL00U**；
+  · 一段时间后变 `Offline`（USB 仍在，ioreg 可见），重启 hdc server 后一度 `Empty`；
+  ⇒ 这解释了为什么我第一次拿到「Empty」：**不是没有设备，是连接没建立/已掉**。
+  （可能原因：USB 线/口接触、设备端调试授权状态、hdc server 与设备握手时序——非本轮可解。）
+【★已取得的真机证据（设备 `Connected` 期间跑的）】**鸿蒙 HTTP 二进制腿全链通过**：
+  `{"ok":true,"host":"harmony","bridge":"invokeBytes","frameSource":"arkts","status":200,"bodyBytes":2443}`
+  —— `bridge=invokeBytes`（走二进制腿非 JSON）+ `frameSource=arkts`（帧由 **ArkTS 自己编**、C++ 解）
+  + `status=200`/`bodyBytes=2443`（**真实 baidu.com 响应**，不是宿主自报常量）。
+  与提交版 `hosts/harmony/results/http-probe.json` **逐字段一致**（#1063 证据仍成立）。
+  ★说明：这次跑的是**设备上已安装的版本**（跳过 install——见下条签名阻塞），
+    因此验证的是 #1063 提交版的行为，**不包含** #1074/#1076 的改动。
+【★阻塞：本机无法重新签名 HAP（环境态）】`build-host-app.sh` 的 `PackageHap`（ArkTS 编译）**成功**，
+  `SignHap` 失败：`00303242 Signature material verification failed, as: Unsupported state or unable to
+  authenticate data`。根因（记忆已登记）：`build-profile.json5` 的 p12 **口令是另一台机（yunlailuo）加密的**，
+  路径重定位能改路径、但**解不开口令**。⇒ 需要用户在 DevEco 图形界面
+  （Project Structure → Signing Configs → 勾 Automatically generate signature）重签一次。
+  ★因此 `run-http-probe.sh` / `run-superapp.sh` 都跑不了（它们要求 `*-signed.hap` + install）；
+    本轮改用「跳过安装、直接驱动设备已装版本」的方式取证（见上）。
+【顺手修掉的一处构建缺陷】**`entry-host-runtime.ts` 的 `@proteus-vue/api/capability-app-device`
+  包名子路径解析不到**（#1074 引入）：三端 bundle 构建的类型检查报 `TS2307`。
+  修法 = 改**相对路径** `'../../../packages/api/src/capability-app-device'`（bundle 解析与类型检查直连
+  同一份源码，零 tsconfig/package.json 改动）。★试过的弯路（记录以免重犯）：
+    · 给 `tsconfig.bridge.json` 加 `paths`——但 **TS 的 `paths` 是覆盖语义**，继承来的 75 条全丢 ⇒
+      引发 `render-backend`/`slot-runtime` 等一片 TS2307（已回退）；
+    · 给根 `tsconfig.json` 加一条——该文件是 **JSONC（含注释）**，`safe-edit` 的 JSON 校验必失败（工具局限）。
+【诚实边界】① 鸿蒙 **superapp 回归 / 键盘推送** 本轮**未跑成**（设备在启动时掉线，且签名阻塞）；
+  ② HTTP 探针证据来自**已装旧版**，不代表最新代码；③ 设备连接不稳是环境态，需用户确认 USB 线/口与授权。
+【下一步】① 用户在 DevEco 里重签（一次性）→ 跑 `build-host-app.sh` + `run-superapp.sh` + `run-http-probe.sh`；
+  ② 设备稳定后可补鸿蒙键盘推送的真机判据（#1069 的"渲染时注入"形态至今无真机证据）。

@@ -36,7 +36,12 @@ import {
 //   为什么只 import 这个文件而不是 `capability.ts`：后者是 9000 行全能力面（见下方注释的体积理由），
 //   而本文件只依赖 capability-invoke / capability-types / capability-app，体积可忽略。
 //   ★真机探针抓出的缺陷：不 import 它 ⇒ `__proteusHostKeyboard` 恒 undefined ⇒ 壳推了没人收。
-import { createAppDeviceCapabilities } from '@proteus-vue/api/capability-app-device'
+// ★决策 #1074/#1076：**相对路径**指向 api 源码，而非包名子路径——
+//   本文件被三端壳的 esbuild 打包，且各端 tsconfig 只映射了部分 `@proteus-vue/api/*` 子路径；
+//   包名子路径要同时动 tsconfig paths（覆盖语义，易伤其它解析）与 package.json exports。
+//   相对路径让「bundle 解析」与「类型检查」直连同一份源码，零额外配置。
+//   ★代价：路径硬编码——文件搬迁时这里会编译报错（不是静默失效）。
+import { createAppDeviceCapabilities } from '../../../packages/api/src/capability-app-device'
 // ★为什么**不** import `@proteus-vue/api/capability`（拿 createCapabilityHooks）：
 //   那个文件是 9000 行全能力面 + 依赖 @proteus-vue/shared（含 import.meta.env / window 探测）
 //   ⇒ 在 IIFE（QuickJS/JSC 无模块系统）下既拖进 267KB 无关代码，又触发 import.meta 警告。
