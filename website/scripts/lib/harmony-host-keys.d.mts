@@ -75,3 +75,16 @@ export function appEndStatus(
     en?: boolean
   },
 ): { status: string; note: string }
+
+/** ★#1092：App 端**引擎自带**的方法（宿主不实现合法——如 iOS JSC 内建 WebAssembly） */
+export const APP_ENGINE_BUILTIN: Record<'ios' | 'android', string[]>
+
+/**
+ * ★#1092：App 端（iOS/Android）宿主证据判定。
+ * refs 里每个桥成员要么是纯 JS（无宿主方法名），要么其宿主方法在该端源码里真的被分派。
+ */
+export function appHostEvidence(
+  root: string,
+  end: 'ios' | 'android',
+  refs: string[],
+): { ok: boolean; pureJs: string[]; missing: string[] }

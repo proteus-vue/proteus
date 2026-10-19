@@ -309,6 +309,17 @@ export function appEndStatus(root, end, refs, appBridgeKeys, opts) {
         : `App 宿主桥（capability-app.ts）· ${p.note}`,
     }
   }
+  // ★#1092：JS 桥有方法还不够——宿主源码里必须真的有对应分派（否则桥写了、壳没实现会被标 ✅）。
+  //   纯 JS 桥成员（查不到宿主方法名）不算缺：导航守卫 / 键盘推送 / 媒体查询求值等本就在 JS 侧。
+  const ev = appHostEvidence(root, end, refs)
+  if (!ev.ok) {
+    return {
+      status: '🟡',
+      note: en
+        ? `App bridge present but the host has no dispatch for ${ev.missing.join('/')} — capability bridge not wired`
+        : `App 桥有该方法，但宿主未实现 ${ev.missing.join('/')} 的分派 → 能力桥未接线`,
+    }
+  }
   if (en) {
     return {
       status: '✅',
@@ -323,3 +334,125 @@ export function appEndStatus(root, end, refs, appBridgeKeys, opts) {
 
 /** 推送型能力缺壳推送时的英文说明（与中文口径对齐）。 */
 export const PUSH_MISS_EN = 'host bridge present but the shell does not notify the keyboard — height stays 0'
+
+// ══════════════════════════════════════════════════════════════════
+// App 端（iOS/Android）「宿主证据」判定（#1092）
+//   ★#1090 只管 Web/MP 的"纯空壳"；App 端仍只看「JS 桥工厂里有这个方法名」。
+//   用户追问口径后实测：30 个 ✅ 里 **29 个**在宿主源码里找得到对应分派
+//   （唯一例外是 iOS webassembly——JSC 内建，契约里已是合法省略）。
+//   ⇒ 把"宿主真的实现了"变成判据，而不是靠人工核对。
+//
+//   ★判定两步（缺一不可）：
+//     ① 桥方法 → 宿主方法名：扫 App 桥工厂体内的 `invokeHost('x.y')` / `APP_*_METHODS.k`
+//        （后者查常量表）+ 三张显式表（设备/元素/录屏域）。
+//     ② 宿主方法名 → 该端源码里有没有分派（四种形态，与 check:host-invoke-contract 同一套）。
+//   ★纯 JS 桥成员（查不到任何宿主方法名）**不算缺**——它们本来就在 JS 侧实现
+//     （navigation-guard / 键盘推送 / media-query 求值等）。
+// ══════════════════════════════════════════════════════════════════
+
+/** 桥成员 → 宿主方法名（扫工厂体 + 常量表 + 显式映射；带缓存）。 */
+const bridgeHostMapCache = new Map()
+
+function bridgeHostMap(root) {
+  if (bridgeHostMapCache.has(root)) return bridgeHostMapCache.get(root)
+  const files = [
+    'packages/api/src/capability-app.ts',
+    'packages/api/src/capability-app-device.ts',
+    'packages/api/src/capability-app-element.ts',
+    'packages/api/src/capability-app-capture.ts',
+  ]
+  const read = (p) => fs.readFileSync(path.join(root, p), 'utf8')
+  const tables = {}
+  for (const f of files) {
+    const src = read(f)
+    for (const m of src.matchAll(/export const (\w+)\s*=\s*\{([\s\S]*?)\}\s*as const/g)) {
+      const t = {}
+      for (const kv of m[2].matchAll(/(\w+):\s*'([^']+)'/g)) t[kv[1]] = kv[2]
+      if (Object.keys(t).length) tables[m[1]] = t
+    }
+  }
+  // 显式表（bridge 成员名 → 宿主方法名；null 表示不由宿主方法回答）
+  const explicit = { ...BRIDGE_TO_HOST, ...ELEMENT_BRIDGE_TO_HOST, ...CAPTURE_BRIDGE_TO_HOST }
+  const src = files.map(read).join('\n')
+  const starts = []
+  for (const m of src.matchAll(/^ {4}(?:async\s+)?(\w+)\s*[:(]/gm)) starts.push({ name: m[1], at: m.index })
+  const map = {}
+  for (let i = 0; i < starts.length; i++) {
+    const { name, at } = starts[i]
+    const end = i + 1 < starts.length ? starts[i + 1].at : Math.min(at + 6000, src.length)
+    const body = src.slice(at, end)
+    const hosts = new Set()
+    for (const h of body.matchAll(/invokeHost(?:Async)?(?:<[^>]*>)?\(\s*'([^']+)'/g)) hosts.add(h[1])
+    for (const h of body.matchAll(/\b(APP_\w+_METHODS)\.(\w+)/g)) {
+      const t = tables[h[1]]
+      if (t && t[h[2]]) hosts.add(t[h[2]])
+    }
+    if (typeof explicit[name] === 'string') hosts.add(explicit[name])
+    map[name] = [...hosts]
+  }
+  // 显式表里、但工厂体扫不到名字的也要收（如 createElementQuery 在返回对象里）
+  for (const [k, v] of Object.entries(explicit)) {
+    if (typeof v !== 'string') continue
+    if (!map[k]) map[k] = []
+    if (!map[k].includes(v)) map[k].push(v)
+  }
+  bridgeHostMapCache.set(root, map)
+  return map
+}
+
+/** 宿主源码里实现了哪些方法名（四种分派形态；排除 probe/tools/selftest）。 */
+const hostMethodCache = new Map()
+
+function hostMethodsOf(root, end) {
+  const key = root + '::' + end
+  if (hostMethodCache.has(key)) return hostMethodCache.get(key)
+  const spec = end === 'ios'
+    ? { dirs: ['hosts/ios/ProteusHost'], ext: /\.swift$/ }
+    : { dirs: ['hosts/android/app/src/main/java/dev/proteus/layoutcore'], ext: /\.(java|kt)$/ }
+  const out = new Set()
+  const walk = (rel) => {
+    for (const e of fs.readdirSync(path.join(root, rel), { withFileTypes: true })) {
+      const p = rel + '/' + e.name
+      if (e.isDirectory()) { if (!/(^|\/)(tools?|probe|selftest)(\/|$)/i.test(p)) walk(p) }
+      else if (spec.ext.test(p) && !/probe|selftest|tools?\//i.test(p)) {
+        const s = fs.readFileSync(path.join(root, p), 'utf8')
+        for (const re of [/case\s+"([^"]+)"/g, /"([a-z][a-z0-9-]*(?:\.[a-z0-9-]+)+)"\.equals\(\s*method\s*\)/g, /method\.equals\(\s*"([^"]+)"\s*\)/g, /\bmethod\s*==\s*"([^"]+)"/g]) {
+          for (const m of s.matchAll(re)) out.add(m[1])
+        }
+      }
+    }
+  }
+  for (const d of spec.dirs) walk(d)
+  hostMethodCache.set(key, out)
+  return out
+}
+
+/**
+ * App 端（iOS/Android）的宿主证据：refs 里每个桥成员要么是纯 JS（无宿主方法），
+ * 要么其宿主方法在该端源码里真的被分派。
+ *
+ * @returns {{ ok: boolean, pureJs: string[], missing: string[] }}
+ */
+export function appHostEvidence(root, end, refs) {
+  const map = bridgeHostMap(root)
+  const impl = hostMethodsOf(root, end)
+  const pureJs = []
+  const missing = []
+  for (const r of refs) {
+    const hosts = map[r] ?? []
+    if (!hosts.length) { pureJs.push(r); continue }
+    const builtin = APP_ENGINE_BUILTIN[end] ?? []
+    for (const h of hosts) if (!impl.has(h) && !builtin.includes(h)) missing.push(h)
+  }
+  return { ok: missing.length === 0, pureJs, missing: [...new Set(missing)] }
+}
+
+/**
+ * ★#1092：App 端**引擎自带**的方法（宿主不实现是合法的）——宿主证据判据据此豁免。
+ * iOS JSC **内建标准 WebAssembly**（实测 `typeof WebAssembly === 'object'`，validate/add 都能跑）
+ *   ⇒ 壳不需要也不应该实现 `webassembly.*`。与 `render-backend` 的 `HOST_METHOD_OPTIONAL.ios` 同源。
+ */
+export const APP_ENGINE_BUILTIN = {
+  ios: ['webassembly.instantiate', 'webassembly.validate', 'webassembly.call', 'webassembly.release'],
+  android: [],
+}

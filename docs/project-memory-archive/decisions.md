@@ -7754,3 +7754,57 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
      App 三端宿主未实现 BLE 扫描。契约补齐不代表端能力补齐——兼容表仍如实显示。
   ② 搜索开关本身**不返回发现的设备**（设备仍走 `onUpdate`）；这是微信 API 的形状，不是本框架的取舍。
   ③ 契约门禁仍只覆盖"宿主声明了哪些方法"，**不验证语义正确**（那是 `check:host-runtime` 的职责范围）。
+
+1092. **★★★App 端 ✅ 补「宿主证据」判据——从"人工核对过"变成"门禁强制" · 决策**（2026-10-19 · 补 #1090 的诚实边界）:
+
+【问题（#1090 自己写下的边界③，本轮补上）】
+  #1090 只给 Web/MP 加了"纯空壳"判据，App 端（iOS/Android）仍是
+  **只看 JS 桥工厂有没有方法名**：`capability-app.ts` 里写了 `getBattery` ⇒ 标 ✅，
+  **不验证宿主是否真的实现了 `device.battery`**。
+  当轮我人工核对了 30 个 ✅ 的宿主方法都在，并把这点写进了"诚实边界"——
+  ★但"人工核对过"与"门禁强制"是两件事：下一次有人只改桥不改宿主，文档会继续 ✅。
+
+【实测（本轮先量化再动手）】
+  扫 30 个 ✅ 页面 → 桥成员 → 宿主方法名 → 该端源码分派：
+    · Android：**30/30** 全部有宿主证据
+    · iOS：**29/30**，唯一例外是 `webassembly`——JSC **内建**标准 WebAssembly
+      （实测 `typeof WebAssembly === 'object'`），宿主不实现是**合法**的
+      （`render-backend` 的 `HOST_METHOD_OPTIONAL.ios` 早已这样登记）
+  ⇒ 当时的数字是对的，但判据不保证。
+
+【修法】
+  · `harmony-host-keys.mjs` 新增 `appHostEvidence(root, end, refs)`：
+    ① 桥成员 → 宿主方法名：扫 App 桥工厂体内的 `invokeHost('x.y')` / `APP_*_METHODS.k`
+       （后者查常量表）+ 三张显式表（设备 / 元素 / 录屏域）；
+    ② 宿主方法名 → 该端源码里真的有分派（**四种形态**，与 `check:host-invoke-contract` 同一套，
+       复用 #1091 刚补的 Swift `method == "x"` 形态）；
+    ③ **纯 JS 桥成员不算缺**——导航守卫 / 键盘推送 / 媒体查询求值等本来就在 JS 侧实现；
+    ④ **引擎自带豁免** `APP_ENGINE_BUILTIN`（iOS JSC 内建 WASM），与 HOST_METHOD_OPTIONAL 同源。
+  · `appEndStatus()` 在给 ✅ 之前先过这道判据；不通过 ⇒ 🟡 +
+    「App 桥有该方法，但宿主未实现 xxx 的分派 → 能力桥未接线」（**点名缺哪个方法**，
+    不再是笼统的"桥未接线"）。
+
+【效果】
+  · 数字不变（iOS/Android 各 30 ✅）——**这正是预期**：判据只是把既有的正确事实固化成门禁。
+  · 破坏性验证：把 Android 宿主 `case "device.battery"` 改名 ⇒ 生成器当场把
+    `battery.md` 的 Android 列降 🟡 并点名 `device.battery`，总览 Android 30 → **29**；
+    还原 ⇒ 回到 30。★同一轮还暴露出 iOS 也降（因为 iOS 侧同样依赖 device.battery）——
+    这是判据在**按方法粒度**工作，不是按端。
+
+【判据】新增 `tests/capability-app-host-evidence.test.ts` **8/8**：
+  ① 设备/元素域桥成员解析到真实宿主方法名（三端各验）；
+  ② 纯 JS 桥成员不算缺（`getNavigationGuard` / `getKeyboard` 必须落 pureJs）；
+  ③ 引擎豁免：iOS `webassembly.*` 不判缺，Android 无豁免（QuickJS 无内建 WASM，靠宿主 wasm3）；
+  ④ 产物：所有 App ✅ 行不得带"宿主未实现"文案 + 总览 iOS/Android 各 30；
+  ⑤ 反证：不存在的桥名落 pureJs（不会误报缺）。
+  + `check:content` / `check:en-drift`（305 对）/ `check:file-size` / `tsc --noEmit` 全绿；
+    相关 6 个测试文件 **57/57**。
+
+【诚实边界】
+  ① 判据只证明"宿主有该方法名的分派"，**不证明语义正确**
+     （语义由 `check:host-runtime` 的真机探针覆盖，当前只含生命周期组 + 部分设备域）。
+  ② 桥成员 → 宿主方法名靠**文本解析**（`invokeHost('x.y')` / 常量表 / 显式表）；
+     新增一种调用形态（如把方法名拼在变量里）会落进"纯 JS"而**不判缺**（方向保守：
+     宁可少说"缺"，不会把缺的说成有）。新增桥域时把映射补进显式表即可。
+  ③ 纯 JS 成员"不算缺"是**有意**的：它们没有宿主腿，硬判缺会把 navigation-guard 这类
+     框架内实现误降级。真实边界是"该能力是否有宿主依赖"，这由桥实现决定，不由判据猜。
