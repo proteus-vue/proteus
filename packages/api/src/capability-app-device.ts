@@ -30,7 +30,8 @@ import { createAppLifecycleCapabilities, createAppNativeCapabilities, getHostLif
 import { createAppElementCapabilities } from './capability-app-element'
 // ★★★决策 #1083：录屏/截屏状态（C71）——三端能力面不同，逐方法诚实分档
 import { createAppCaptureCapabilities } from './capability-app-capture'
-import { createAppWebSocket } from './capability-websocket'   // ★#1093
+import { createAppWebSocket } from './capability-websocket'
+import { createAppTransfer } from './capability-transfer'   // ★#1095   // ★#1093
 import type {
   BatteryInfo,
   CapDeviceInfo,
@@ -253,6 +254,7 @@ export function createAppCapabilities<E extends Error = Error>(
     ...createAppElementCapabilities(CapError),   // ★#1081 元素查询（createElementQuery/createIntersection）
     ...createAppCaptureCapabilities(resOpts),   // ★#1083 录屏/截屏状态（getScreenCapture）
     connectWebSocket: createAppWebSocket(resOpts),   // ★#1093 App 端 WebSocket（ws.open/send/close + 壳推事件流）
+    ...createAppTransfer(resOpts),   // ★#1095 App 端 upload/download（复用 http.request 字节腿 + 宿主 fs）
   }
 }
 

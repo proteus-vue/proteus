@@ -45,6 +45,10 @@ export const APP_BRIDGE_SOURCES = [
   //   `createAppCapabilities` 的返回对象里，不在任何子工厂内）⇒ 不登记就会被判「桥未接线」。
   //   ★这条是实测抓出来的：ws.* 的宿主腿都实现并编译通过了，页面仍显示 🟡。
   { file: 'packages/api/src/capability-app-device.ts', functions: ['createAppCapabilities'] },
+  // ★★★决策 #1095：C29/C30 的 upload/download 在**独立工厂**的返回对象里
+  //   （`capability-transfer.ts::createAppTransfer` 展开进装配层）。
+  //   ★不登记就会被判「桥未接线」——与 #1093 的 connectWebSocket 同一形态。
+  { file: 'packages/api/src/capability-transfer.ts', functions: ['createAppTransfer'] },
 ]
 
 /**

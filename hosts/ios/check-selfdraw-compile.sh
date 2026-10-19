@@ -51,6 +51,8 @@ HOST_SRCS=(
   "$HERE/ProteusHost/runtime/screen-host.swift"
   # ★★★C27 WebSocket（决策 #1093）：URLSessionWebSocketTask 腿（ws.open/send/close + 壳推事件流）
   "$HERE/ProteusHost/runtime/websocket-capability.swift"
+  # ★★★决策 #1095：C29/C30 文件腿（沙箱读写，拒绝绝对路径与 '..'）
+  "$HERE/ProteusHost/runtime/file-transfer-capability.swift"
   # ★★★S2「去 JSON」（决策 #903）：invoke 通道的**二进制线格式**（Swift 侧唯一编解码器）+ JSC 字节桥
   #   + `http.request` 真实实现。三者被 superapp-runtime-host.swift 引用 ⇒ 必须进清单
   #   （否则本脚本报 "cannot find InvokeWire in scope"——正是 G-39 该抓的"文件没进编译"形态）。

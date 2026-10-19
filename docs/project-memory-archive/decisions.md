@@ -7969,3 +7969,66 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
      有可释放入口"，不是"页面卸载会自动触发它"。谁来调 `dispose()` 是下一步要定的事
      （选项：接 Vue `onScopeDispose` / 接 superapp 的页面切换 / 接容器）。
   ④ G-43 **B6（跨设备转移）仍未做**，仍依赖 G-42 分布式容器。
+
+1095. **★★★App 端 `useUpload`/`useDownload` 落地（Android 真机闭环）+ 三个契约级真缺陷 · 决策**（2026-10-19 · 承接「网络域 App 端 21 项 🟡」）：
+
+【为什么之前 App 端没有这两项】
+  它们的 wx 形态是「临时文件路径 + 表单上传 / 下载到临时文件」，而 App 端**没有** uploadFile/downloadFile
+  那套原生 API。但底子都在：`http.request` 的字节腿（#903）已支持 `arraybuffer` ⇒ 能收发裸字节；
+  缺的只有「字节 ↔ 文件」——那是宿主文件系统（JS 侧无 FS）。
+  ⇒ 新增三个宿主方法 `fs.writeBytes` / `fs.readBytes` / `fs.remove`，再用 `http.request` 拼出两条腿。
+  **不新增网络栈**，Cookie 会话共享沿用 `http.request` 已有的 G-46 实现。
+
+【落点】
+  · `packages/api/src/capability-transfer.ts`（新）：`createAppDownload` / `createAppUpload` /
+    `createAppTransfer`（带 G-43 资源账本：请求进行中登记，成功与失败都销账）。
+  · 宿主：Android `FileTransferCapability.java` · iOS `file-transfer-capability.swift`。
+  · 沙箱纪律（两端逐条对齐，与 G-49 deny-by-default 同族）：只接受**沙箱相对路径**，
+    绝对路径与 `..` 一律拒绝；`fs.remove` 幂等；读写上限 64 MiB。
+
+【★★★真机抓出的三个契约级缺陷（都不是"代码写错了"，是**契约没写对**）】
+  ① **`TextEncoder` 在 App 三端引擎都不存在**（QuickJS / JSC 精简版 / JSVM）：
+     `new TextEncoder()` ⇒ ReferenceError ⇒ 上传整条失败（真机报 `'TextEncoder' is not defined`）。
+     ⇒ 手写 `utf8Encode`（覆盖 BMP + 代理对）。★这与本仓既有的「App 无 TextDecoder」同族
+       （#1071 曾为此手写 utf8Decode）——**同一族陷阱第二次踩**，故在判据里加了静态锁：
+       源码不得出现 `TextEncoder`，且必须有内置 `utf8Encode`。
+  ② **`encodeBody` 只把 `Uint8Array`/`ArrayBuffer`/view 当原始字节**：
+     普通 `number[]`（`toByteArray()` 的产物）会落到 `JSON.stringify` ⇒ body 变成 `"[1,2,3]"` 文本
+     ⇒ 服务端解析出 **0 字节**（真机现象：HTTP 200 但 `bytes:0`）。
+     ⇒ 上传必须传 `Uint8Array` 本体。
+  ③ **测试服务端自己的 bug**（不是产品缺陷，但差点误判成宿主腿问题）：
+     Node `Buffer` **没有 `split`** ⇒ 服务端 TypeError 崩 ⇒ 客户端看到
+     `unexpected end of stream`。第一反应会去查宿主/网络，实际是量具坏了。
+     ★教训：**量具也要先自证**（本次靠服务端日志里的堆栈一眼定位）。
+
+【★第四个是装置层死锁（与 #1093 ws 同族，但更隐蔽）】
+  `http.request` 的异步回推是**切主线程**调 `resolveHostBytes`；
+  而探针「在主线程写 while + sleep 的泵循环」会让主线程**永远不进消息循环**
+  ⇒ 回推 Runnable 排不上 ⇒ Promise 永不 settle。
+  真机表现极具误导性：**服务端已回 4096B、探针结果为零**。
+  ⇒ 修法（Android）：**不用 while 循环**，把「推进」本身 `Handler.postDelayed` 进消息队列，
+    让主线程在正常消息循环里既跑回推、又跑推进；`run()` 立即返回占位，**真实结果由最后一步写盘**
+    （新增 `reportSink` 注入点）。
+  ★`post + latch.await` 救不了（自己等自己）——这个中间尝试也走了弯路。
+
+【判据】
+  · `tests/capability-app-transfer.test.ts` **14/14**：
+    下载（path 落盘 / text 原样 / json 解析 / 进度只有 0 与 100）·
+    上传（multipart 边界/字段段/文件段/结尾逐段可验）· App 无 Blob ⇒ 如实 unsupported ·
+    **App 引擎无 TextEncoder**（静态锁 + utf8Encode 行为级含中文/emoji）· 资源账本（成功与失败都销账）。
+  · **Android 真机**（`bash hosts/android/run-transfer-probe.sh`，localhost echo 服务）：
+    8 项全绿——下载落盘 / status 200 / 上传 200 / **往返逐字节**（服务端回
+    `bytes:4096 first:0 last:255 fields:{tag:probe}`）/ 沙箱拒绝绝对路径 / 拒绝 `..`。**只用了 4 轮**。
+  · `check:host-invoke-contract`（Android 41/42、iOS 37/42）· `check:file-size` · `tsc` ·
+    `check:content` · `check:en-drift` · `check:no-blind-wait` · `check:bridge-sync` 全绿。
+
+【诚实边界】
+  ① **iOS 端到端未通过**：宿主腿已实现且 `swiftc -typecheck` 通过；探针**服务端已收到下载请求
+     并回 4096B**（证明设备能访问局域网、网络路径通），但 JS 侧结果始终未落。
+     诊断确认 `hook:function` / `pending:true` / `res:""` ⇒ 卡在同一个主线程死锁，
+     而 iOS 的 `RunLoop.run(mode:before:)` **跑不到 GCD 主队列的 block**（GCD 与 RunLoop 两套机制），
+     Android 的 `postDelayed` 解法不能直接照搬。
+     ⇒ iOS 需要「异步两段式 + reportSink」改造（同 Android 的形状），**本轮未做**。
+  ② 进度只有 0 / 100（`http.request` 一次性回包，无分块进度）——**不伪造中间值**。
+  ③ 大文件整块进 JS 内存（读写上限 64 MiB）；分块流式属后续批次。
+  ④ `options.file`（Blob）在 App 端如实 unsupported（引擎无 Blob）——只支持 `filePath`，与 wx 一致。

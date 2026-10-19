@@ -17,8 +17,8 @@ order: 0
 | Web SPA | 51 | 33 | 0 | 0 | 61% |
 | WeChat Mini Program | 80 | 4 | 0 | 0 | 95% |
 | Headless (SSR / testing) | 84 | 0 | 0 | 0 | 100% |
-| iOS native | 30 | 0 | 54 | 0 | 36% |
-| Android native | 30 | 0 | 54 | 0 | 36% |
+| iOS native | 32 | 0 | 52 | 0 | 38% |
+| Android native | 32 | 0 | 52 | 0 | 38% |
 | HarmonyOS | 14 | 0 | 70 | 0 | 17% |
 | Flutter hybrid | 0 | 0 | 84 | 0 | 0% |
 | Quick App | 0 | 0 | 0 | 84 | 0% |
@@ -29,7 +29,7 @@ order: 0
 
 | Category | Web SPA | WeChat Mini Program | Headless (SSR / testing) | iOS native | Android native | HarmonyOS | Flutter hybrid | Quick App |
 |---|---|---|---|---|---|---|---|---|
-| Network & Communication | 7/11 | 10/11 | 11/11 | 1/11 | 1/11 | 0/11 | 0/11 | 0/11 |
+| Network & Communication | 7/11 | 10/11 | 11/11 | 3/11 | 3/11 | 0/11 | 0/11 | 0/11 |
 | Device & System | 15/20 | 20/20 | 20/20 | 16/20 | 16/20 | 14/20 | 0/20 | 0/20 |
 | Storage & Files | 4/5 | 5/5 | 5/5 | 0/5 | 0/5 | 0/5 | 0/5 | 0/5 |
 | Location & Maps | 1/2 | 2/2 | 2/2 | 0/2 | 0/2 | 0/2 | 0/2 | 0/2 |

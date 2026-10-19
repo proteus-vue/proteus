@@ -504,8 +504,8 @@ export const APP_NATIVE_METHODS = {
   idleCancel: 'idle.cancel',
   /** C67 预加载 */
   preloadAssets: 'preload.assets',
-  /** C26 网络请求（App 腿 · `useFetch` 底层）：线格式 tag 约定见 `./invoke-wire`（url/method/headers/params/timeoutMs/responseType/contentType） */
-  httpRequest: 'http.request',
+  /** C26 网络请求（App 腿 · `useFetch` 底层）· ★#1095 文件二进制读写（C29/C30 必须宿主做） */
+  httpRequest: 'http.request', fsWriteBytes: 'fs.writeBytes', fsReadBytes: 'fs.readBytes', fsRemove: 'fs.remove',
 } as const
 
 // ★通道层实现（`getHostInvoke` / `invokeHost` / `appNativeAvailable` / 异步腿）见 `./capability-invoke`

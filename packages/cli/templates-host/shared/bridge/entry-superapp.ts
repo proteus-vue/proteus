@@ -28,10 +28,14 @@ import { resolveElement, resolveAllElements, elementRegistryStats, firstScreenEl
 // ★与 entry-host-runtime.ts 同款：包内**相对路径**引用源（tsconfig.json 是 JSONC，加 paths 会撞校验；
 //   而相对路径让 bundler 与类型检查解析到同一份源，零配置改动）
 import { installElementResolver } from '../../../packages/api/src/capability-app-element'
+import { createCapabilityHooks } from '../../../packages/api/src/capability'   // ★#1094 按屏能力实例
+import { createCapabilityResourceRegistry } from '../../../packages/api/src/capability-resources'   // ★#1094 边界资源账本
 // ★★★决策 #1086：交叉观察依赖注入（与 useElement 同一解析器 + 同一文档序）
 import { installIntersectionDeps, evaluateIntersections, createAppIntersection } from '../../../packages/api/src/capability-app-intersection'
 // ★★★决策 #1083：录屏/截屏能力探针（真机判据直接调真实桥，不经 capability.ts 全量入口）
 import { createAppCaptureCapabilities } from '../../../packages/api/src/capability-app-capture'
+import { createAppWebSocket } from '../../../packages/api/src/capability-websocket'   // ★#1093 WS 探针
+import { createAppTransfer } from '../../../packages/api/src/capability-transfer'   // ★#1095 传输探针
 import type { SuperappRuntime } from '@proteus-vue/render-backend'
 
 // ★★★（决策 #715）**必须引用裸标识符 `__DEV__`**——esbuild 的 `define` 只替换**裸标识符**，
@@ -54,6 +58,44 @@ function pushNote(n: string): void {
   arr.push(n)
   if (arr.length > 200) arr.shift()
 }
+
+/**
+ * ★★★决策 #1094：**按屏的能力实例 + 资源账本**（G-43 边界资源治理接进真实 superapp 链）。
+ *
+ * 【为什么按屏而不是全局】G-43.1「边界资源归属某个 Owner」——一个屏就是一个 Owner。
+ *   全局一个账本会让"离开 A 屏"释放掉 B 屏的资源。
+ * 【为什么在这里而不是容器】真实 superapp 走 `createSuperappRuntime` 这条链，
+ *   容器（StackContainer 等）**不在生产路径上**；把治理挂到容器上等于没接。
+ */
+const perScreenCaps = new Map<string, {
+  resources: ReturnType<typeof createCapabilityResourceRegistry>
+  dispose: () => void
+}>()
+
+/**
+ * 取（或创建）某屏的能力实例——同一屏重复取复用同一个（订阅不重复登记）。
+ *
+ * ★导出为 `__proteusScreenCaps(screen)`（见文件底部的中性名挂载）：
+ *   这是业务页面**按屏取能力实例**的入口。业务用 `useWebSocket()` 等 hook 时，
+ *   应当从它拿 hooks 实例（而不是全局单例），这样离开该屏时资源才会被释放。
+ *
+ * ★诚实边界：当前 superapp 的 5 个页面**尚未使用任何能力**（grep 零命中），
+ *   所以本函数在生产 bundle 里暂时没有调用者——它不伪装成"已经在治理"，
+ *   而是**提供了正确的接入点**；页面一旦开始用能力，按此入口取即可自动受治理。
+ *   （不存在"悄悄不生效"：`onScreenLeave` 对空表是安全的 no-op。）
+ */
+function capsForScreen(screen: string) {
+  const existing = perScreenCaps.get(screen)
+  if (existing) return existing
+  const resources = createCapabilityResourceRegistry({ owner: 'screen:' + screen })
+  const hooks = createCapabilityHooks(undefined as never, { resources, owner: 'screen:' + screen })
+  const entry = { resources, dispose: () => hooks.dispose() }
+  perScreenCaps.set(screen, entry)
+  return entry
+}
+
+;(globalThis as unknown as { __proteusScreenCaps?: (screen: string) => unknown })
+  .__proteusScreenCaps = (screen: string) => capsForScreen(screen)
 
 interface SuperappHost {
   /** 宿主 `proteusHost.invoke`（screen.* 端口；三端同形） */
@@ -297,6 +339,14 @@ interface SuperappRuntimeHostShape {
         // ★★★页面处理器 source map（决策 #712）：运行期 handler 出错 ⇒ 记入 notes（宿主 debug 读数可见）+
         //   走 `console.error`（dev 垫片转发面板 Console·项目通道 error 级）——不再静默吞掉。
         onNote: (n: string) => pushNote(n),
+        // ★★★决策 #1094：**页面离开 = 边界资源释放点**（G-43 接进真实 superapp 链）。
+        //   ★这是"谁来调 dispose()"的答案：不是靠容器（容器不在生产路径上），而是靠真实导航。
+        onScreenLeave: (left: string) => {
+          const entry = perScreenCaps.get(left)
+          if (!entry) return
+          perScreenCaps.delete(left)
+          try { entry.dispose() } catch (e) { pushNote('[screen-leave] dispose 异常：' + String((e as Error)?.message ?? e)) }
+        },
         onError: (e: string) => { pushNote(e); try { console.error(e) } catch { /* 无 console（非 dev）⇒ 仅 notes */ } },
         // ★★★CPU Profiler（决策 #715）：dev 构建开阶段耗时自采样（instantiate/flush/dispatch/handler）。
         //   `__DEV__` 由构建注入（dev bundle 为 true，release 为 false）⇒ release 零开销。
@@ -603,6 +653,184 @@ export function appCaptureProbe(): string {
   }
   return JSON.stringify(out)   // 立即回（done 缺失 = 结果还在算）
 }
+/**
+ * ★★★决策 #1093：**WebSocket 端到端探针**（宿主经中性名 `__proteusHostAppWsProbe` 调）。
+ *
+ * 【为什么需要这个钩子】bundle 默认不导出 hook 工厂 ⇒ 宿主没法直接调 `useWebSocket`。
+ *   本钩子走**真实桥**（`createAppWebSocket` —— 与 `useWebSocket` 内部同一个 connectWebSocket），
+ *   因此它验的是「桥 + 宿主腿」整条链，不是绕过桥的假通路。
+ *
+ * 【两段式】与 `appCaptureProbe` 同款：宿主同步调用只认当场返回 ⇒ 立即回占位，
+ *   结果填到 `__proteusHostWsProbeResult`，判据读该全局（宿主在 stop 后等待它出现）。
+ *
+ * 【参数】`url`（如 `ws://127.0.0.1:8787`）。
+ */
+export function appWsProbe(url: string): string {
+  const g = globalThis as Record<string, unknown>
+  const state: Record<string, unknown> = {
+    phase: 'opening', echo: undefined, binary: undefined, big_len: 0, close_code: undefined, error: undefined,
+  }
+  g['__wsProbeState'] = state
+  g['__wsProbeQueue'] = [] as Array<Record<string, unknown>>
+  g['__proteusHostWsProbeResult'] = ''
+  try {
+    const connect = createAppWebSocket()
+    connect(url).then(
+      (ws) => {
+        g['__wsProbeWs'] = ws
+        const push = (e: string, p: unknown): void => {
+          ;(g['__wsProbeQueue'] as Array<Record<string, unknown>>).push({ e, p })
+        }
+        // ★open 的补感知在桥里已实现（happened 缓存）⇒ 这里晚订阅也能拿到
+        ws.on('open', (p) => push('open', p))
+        ws.on('message', (p) => push('message', p))
+        ws.on('close', (p) => push('close', p))
+        ws.on('error', (p) => push('error', p))
+        state['phase'] = 'connected'
+      },
+      (e: { code?: string, message?: string }) => {
+        state['error'] = String(e?.code ?? '') + ' ' + String(e?.message ?? e)
+        state['phase'] = 'failed'
+      },
+    )
+  } catch (e) {
+    state['error'] = String((e as Error)?.message ?? e)
+    state['phase'] = 'failed'
+  }
+  return JSON.stringify({ phase: state['phase'], queued: true })
+}
+
+/**
+ * ★#1093：探针驱动器（宿主每轮调用一次；**同步**推进状态机）。
+ * 返回 done:true 时结果已写入 __proteusHostWsProbeResult。
+ */
+export function appWsProbeDrive(): string {
+  const g = globalThis as Record<string, unknown>
+  const st = g['__wsProbeState'] as Record<string, unknown> | undefined
+  if (!st) return JSON.stringify({ done: true, phase: 'no-state' })
+  const q = (g['__wsProbeQueue'] as Array<Record<string, unknown>> | undefined) ?? []
+  const ws = g['__wsProbeWs'] as {
+    send: (d: string | ArrayBuffer) => void
+    close: (c?: number, r?: string) => void
+  } | undefined
+  const finish = (ok: boolean): string => {
+    st['ok'] = ok
+    st['done'] = true
+    const payload = JSON.stringify({
+      ok,
+      connect_ok: !!ws,
+      open_ok: st['open_ok'],
+      echo: st['echo'],
+      echo_ok: st['echo_ok'],
+      binary: st['binary'],
+      binary_ok: st['binary_ok'],
+      big_len: st['big_len'],
+      big_ok: st['big_ok'],
+      close_code: st['close_code'],
+      close_ok: st['close_ok'],
+      error: st['error'],
+    })
+    g['__proteusHostWsProbeResult'] = payload
+    return JSON.stringify({ done: true, phase: st['phase'], ok })
+  }
+  // 消费队列（每条只消费一次）
+  while (q.length) {
+    const evt = q.shift() as Record<string, unknown>
+    const kind = String(evt['e'])
+    const p = evt['p'] as Record<string, unknown> | undefined
+    if (kind === 'open') { st['open_ok'] = true; st['phase'] = 'open' }
+    else if (kind === 'error') { st['error'] = String(p?.['message'] ?? 'unknown'); st['phase'] = 'failed' }
+    else if (kind === 'close') { st['close_code'] = p?.['code']; st['close_ok'] = true; st['phase'] = 'closed' }
+    else if (kind === 'message') {
+      const data = p?.['data']
+      // ★等待态必须与"已发送"态并列判断（真机抓出的状态机 bug）：
+      //   发送后 phase 是 'echo-sent'，而这里原来只认 'open' ⇒ 回包被丢弃、状态机卡死。
+      if (st['phase'] === 'open' || st['phase'] === 'echo-sent') {
+        st['echo'] = data
+        st['echo_ok'] = data === 'ping-proteus'
+        st['phase'] = 'echoed'
+      } else if (st['phase'] === 'echoed' || st['phase'] === 'binary-sent') {
+        const arr = Array.isArray(data) ? (data as number[]) : null
+        st['binary'] = arr
+        st['binary_ok'] = !!arr && arr.length === 4 && arr[0] === 1 && arr[1] === 2 && arr[2] === 3 && arr[3] === 255
+        st['phase'] = 'binary'
+      } else if (st['phase'] === 'binary' || st['phase'] === 'big-sent') {
+        st['big_len'] = typeof data === 'string' ? data.length : 0
+        st['big_ok'] = st['big_len'] === 300
+        st['phase'] = 'big'
+      }
+    }
+  }
+  // 状态机推进（发出下一步）
+  if (!ws) {
+    if (st['phase'] === 'failed') return finish(false)
+    return JSON.stringify({ done: false, phase: st['phase'] })
+  }
+  try {
+    if (st['phase'] === 'open') { ws.send('ping-proteus'); st['phase'] = 'echo-sent' }
+    else if (st['phase'] === 'echoed') { ws.send(new Uint8Array([1, 2, 3, 255]).buffer); st['phase'] = 'binary-sent' }
+    else if (st['phase'] === 'binary') { ws.send('x'.repeat(300)); st['phase'] = 'big-sent' }
+    else if (st['phase'] === 'big') { ws.close(1000, 'probe-done'); st['phase'] = 'closing' }
+    else if (st['phase'] === 'closed') {
+      return finish(!!(st['open_ok'] && st['echo_ok'] && st['binary_ok'] && st['big_ok'] && st['close_ok']))
+    }
+  } catch (e) {
+    st['error'] = String((e as Error)?.message ?? e)
+    return finish(false)
+  }
+  return JSON.stringify({ done: false, phase: st['phase'] })
+}
+/**
+ * ★★★决策 #1095：**上传/下载端到端探针**（宿主经中性名 `__proteusHostAppTransferProbe` 调）。
+ *
+ * 【为什么需要钩子】bundle 不导出 hook 工厂 ⇒ 宿主没法直接调 useUpload/useDownload。
+ *   本钩子走**真实桥**（createAppTransfer —— 与 hook 内部同一实现）。
+ *
+ * 【两段式】同步入口回占位；结果填 `__proteusHostTransferProbeResult`（与 ws/capture 同款）。
+ *   ★用 `.then` 链而不用 async/await + setTimeout：bundle 环境**没有定时器宿主**（#1093 实测）。
+ *
+ * 【判据链】下载 4KB 落盘 → 用上传腿把该文件发回服务端 → 服务端逐字节摘要
+ *   （first=0 / last=255 / sum）⇒ 证明"收到的就是你发的"。
+ *
+ * @param base 本地服务基址（如 `http://192.168.1.5:8788`）
+ */
+export function appTransferProbe(base: string): string {
+  const g = globalThis as Record<string, unknown>
+  const out: Record<string, unknown> = {}
+  g['__proteusHostTransferProbeResult'] = ''
+  const t = createAppTransfer()
+  let downloadedPath = ''
+  t.download(base + '/download?size=4096', { responseType: 'path' }).then(
+    (r) => {
+      out['download_ok'] = true
+      out['download_status'] = (r as { status?: number }).status
+      downloadedPath = (r as { path?: string }).path ?? ''
+      out['download_path'] = downloadedPath
+      return t.upload({ url: base + '/upload', filePath: downloadedPath, name: 'file', formData: { tag: 'probe' } })
+    },
+  ).then(
+    (r) => {
+      out['upload_ok'] = true
+      out['upload_status'] = (r as { status?: number }).status
+      const d = (r as { data?: unknown }).data
+      const reply = typeof d === 'string' ? JSON.parse(d) : d
+      out['upload_reply'] = reply
+      const o = (reply ?? {}) as { bytes?: number, first?: number, last?: number, fields?: Record<string, string> }
+      out['roundtrip_ok'] = o.bytes === 4096 && o.first === 0 && o.last === 255 && o.fields?.['tag'] === 'probe'
+      out['ok'] = out['download_ok'] === true && out['upload_ok'] === true && out['roundtrip_ok'] === true
+      g['__proteusHostTransferProbeResult'] = JSON.stringify(out)
+    },
+    (e) => {
+      // ★失败也要落结果（否则宿主只能看到"超时"，无法归因）
+      if (out['download_ok'] !== true) out['download_error'] = String((e as { code?: string })?.code ?? (e as Error)?.message ?? e)
+      else if (out['upload_ok'] !== true) out['upload_error'] = String((e as { code?: string })?.code ?? (e as Error)?.message ?? e)
+      out['ok'] = false
+      g['__proteusHostTransferProbeResult'] = JSON.stringify(out)
+    },
+  )
+  return JSON.stringify({ phase: 'started', queued: true })
+}
+
 /** 元素索引读数（判据：证明索引里真有条目，而不是"查询恒 not-found"）。 */
 /**
  * ★★★决策 #1086：**交叉观察的几何变化 tick**（宿主调）。
@@ -681,5 +909,12 @@ __HOSTAPP.__proteusHostAppCapture = __HOSTAPP.__proteusSuperappCapture
   .__proteusSuperappElementResolve = (a: string) => appElementResolve(a)
 __HOSTAPP.__proteusHostAppElementResolve = __HOSTAPP.__proteusSuperappElementResolve
 __HOSTAPP.__proteusHostAppElementRegistry = __HOSTAPP.__proteusSuperappElementRegistry
+// ★★★决策 #1093：WebSocket 端到端探针（宿主按中性名调；结果填 __proteusHostWsProbeResult）
+;(globalThis as unknown as { __proteusHostAppWsProbe?: (u: string) => string })
+  .__proteusHostAppWsProbe = (u: string) => appWsProbe(u)
+;(globalThis as unknown as { __proteusHostAppTransferProbe?: (b: string) => string })
+  .__proteusHostAppTransferProbe = (b: string) => appTransferProbe(b)
+;(globalThis as unknown as { __proteusHostAppWsProbeDrive?: () => string })
+  .__proteusHostAppWsProbeDrive = () => appWsProbeDrive()
 
 

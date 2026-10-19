@@ -154,6 +154,13 @@ public final class HostCapabilities {
                 // ★Android 无"小程序"概念；"跳其他 App" 走 Intent（能力同名但语义不同——本场景如实说明）
                 throw new UnsupportedOperationException(
                         "mini-program.navigate: Android 无小程序概念（跨 App 跳转请用 Intent/App Links）");
+            // ── C29/C30 上传/下载的文件腿（#1095：沙箱读写，见 FileTransferCapability）──
+            case "fs.writeBytes":
+                return ok(FileTransferCapability.writeBytes(activity, args));
+            case "fs.readBytes":
+                return ok(FileTransferCapability.readBytes(activity, args));
+            case "fs.remove":
+                return ok(FileTransferCapability.remove(activity, args));
             // ── C27 WebSocket（#1093：RFC 6455 客户端，见 WebSocketCapability）──
             //   ★三个方法都**受理即返**；连接结果与消息经壳推 `__proteusHostWs` 到达 JS。
             case "ws.open":

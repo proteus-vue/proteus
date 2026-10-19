@@ -137,6 +137,25 @@ final class HostCapabilities: NSObject {
                     return fail("\(method) 失败：\(error)")
                 }
             }
+            // ★★★决策 #1095：C29/C30 的文件腿（沙箱读写；拒绝绝对路径与 '..'）
+            //   ★invoke 不是 throws 函数 ⇒ 必须在此就地收口；invalid ⇒ failed，其余 ⇒ failed（附原因）
+            if method.hasPrefix("fs.") {
+                do {
+                    switch method {
+                    case "fs.writeBytes": return ok(try FileTransferCapability.writeBytes(args))
+                    case "fs.readBytes": return ok(try FileTransferCapability.readBytes(args))
+                    case "fs.remove": return ok(try FileTransferCapability.remove(args))
+                    default: return miss("未实现的 fs 方法：\(method)")
+                    }
+                } catch let e as WsError {
+                    switch e {
+                    case .unsupported(let m): return miss(m)
+                    case .invalid(let m): return fail(m)
+                    }
+                } catch {
+                    return fail("\(method) 失败：\(error)")
+                }
+            }
             // ★★★决策 #1093：C27 WebSocket（三个方法都受理即返；事件经 `__proteusHostWs` 推送）
             if method.hasPrefix("ws.") {
                 do {

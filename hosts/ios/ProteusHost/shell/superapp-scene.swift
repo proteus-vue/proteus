@@ -670,6 +670,37 @@ final class SuperappScene: NSObject {
         // ★判据：至少一次初始回调（链路通的最低证据）
         o["isect_ok"] = ((o["isect_initial_hits"] as? String).flatMap(Int.init) ?? 0) >= 1
         o["element_pseudo_selector"] = evalJs?("__proteusHostAppElementRect('{\"selector\":\"view:hover\"}')") ?? "null"
+        // ★★★决策 #1095：C29/C30 上传/下载端到端（与 Android TransferProbe 同口径）。
+        //   服务地址经环境变量注入（iOS 无 adb reverse ⇒ 走局域网 IP）；未注入 ⇒ 如实 skipped。
+        if let tUrl = ProcessInfo.processInfo.environment["PROTEUS_TRANSFER_PROBE_URL"], !tUrl.isEmpty {
+            o["transfer_url"] = tUrl
+            // ★调度到主队列按步推进（与 ws 相同原因：http.request 回推切主线程，主线程不能干等）
+            _ = evalJs?("__proteusHostAppTransferProbe(" + Self.jsQuote(tUrl) + ")")
+            var tRounds = 0
+            var tLast = ""
+            let tDeadline = Date().addingTimeInterval(60)
+            while Date() < tDeadline {
+                let dv = evalJs?("String(globalThis.__proteusHostTransferProbeResult || '')") ?? ""
+                tRounds += 1
+                if !dv.isEmpty && dv != "undefined" && dv != "null" {
+                    tLast = dv
+                    break
+                }
+                // ★让出主线程：消息循环要能跑 http 回推（RunLoop.run 处理已就绪事件）
+                RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.01))
+            }
+            o["transfer_probe_rounds"] = tRounds
+            o["transfer_probe"] = tLast.isEmpty ? "null" : tLast
+            if let pd = tLast.data(using: .utf8),
+               let po = (try? JSONSerialization.jsonObject(with: pd)) as? [String: Any] {
+                o["transfer_ok"] = (po["ok"] as? Bool) ?? false
+            } else {
+                o["transfer_ok"] = false
+            }
+        } else {
+            o["transfer_probe"] = "skipped (PROTEUS_TRANSFER_PROBE_URL 未设置)"
+            o["transfer_ok"] = false
+        }
         // ★★★决策 #1093：C27 WebSocket 端到端（与 Android WebSocketProbe 同口径）。
         //   探针 URL 由**环境变量**注入（iOS 真机无 adb reverse ⇒ 必须走局域网 IP）；
         //   未注入则跳过（如实标 skipped，不冒充通过）。

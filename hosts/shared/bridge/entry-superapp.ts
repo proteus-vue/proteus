@@ -27,6 +27,7 @@ import { installIntersectionDeps, evaluateIntersections, createAppIntersection }
 // ★★★决策 #1083：录屏/截屏能力探针（真机判据直接调真实桥，不经 capability.ts 全量入口）
 import { createAppCaptureCapabilities } from '../../../packages/api/src/capability-app-capture'
 import { createAppWebSocket } from '../../../packages/api/src/capability-websocket'   // ★#1093 WS 探针
+import { createAppTransfer } from '../../../packages/api/src/capability-transfer'   // ★#1095 传输探针
 import type { SuperappRuntime } from '@proteus-vue/render-backend'
 
 // ★★★（决策 #715）**必须引用裸标识符 `__DEV__`**——esbuild 的 `define` 只替换**裸标识符**，
@@ -771,6 +772,57 @@ export function appWsProbeDrive(): string {
   }
   return JSON.stringify({ done: false, phase: st['phase'] })
 }
+/**
+ * ★★★决策 #1095：**上传/下载端到端探针**（宿主经中性名 `__proteusHostAppTransferProbe` 调）。
+ *
+ * 【为什么需要钩子】bundle 不导出 hook 工厂 ⇒ 宿主没法直接调 useUpload/useDownload。
+ *   本钩子走**真实桥**（createAppTransfer —— 与 hook 内部同一实现）。
+ *
+ * 【两段式】同步入口回占位；结果填 `__proteusHostTransferProbeResult`（与 ws/capture 同款）。
+ *   ★用 `.then` 链而不用 async/await + setTimeout：bundle 环境**没有定时器宿主**（#1093 实测）。
+ *
+ * 【判据链】下载 4KB 落盘 → 用上传腿把该文件发回服务端 → 服务端逐字节摘要
+ *   （first=0 / last=255 / sum）⇒ 证明"收到的就是你发的"。
+ *
+ * @param base 本地服务基址（如 `http://192.168.1.5:8788`）
+ */
+export function appTransferProbe(base: string): string {
+  const g = globalThis as Record<string, unknown>
+  const out: Record<string, unknown> = {}
+  g['__proteusHostTransferProbeResult'] = ''
+  const t = createAppTransfer()
+  let downloadedPath = ''
+  t.download(base + '/download?size=4096', { responseType: 'path' }).then(
+    (r) => {
+      out['download_ok'] = true
+      out['download_status'] = (r as { status?: number }).status
+      downloadedPath = (r as { path?: string }).path ?? ''
+      out['download_path'] = downloadedPath
+      return t.upload({ url: base + '/upload', filePath: downloadedPath, name: 'file', formData: { tag: 'probe' } })
+    },
+  ).then(
+    (r) => {
+      out['upload_ok'] = true
+      out['upload_status'] = (r as { status?: number }).status
+      const d = (r as { data?: unknown }).data
+      const reply = typeof d === 'string' ? JSON.parse(d) : d
+      out['upload_reply'] = reply
+      const o = (reply ?? {}) as { bytes?: number, first?: number, last?: number, fields?: Record<string, string> }
+      out['roundtrip_ok'] = o.bytes === 4096 && o.first === 0 && o.last === 255 && o.fields?.['tag'] === 'probe'
+      out['ok'] = out['download_ok'] === true && out['upload_ok'] === true && out['roundtrip_ok'] === true
+      g['__proteusHostTransferProbeResult'] = JSON.stringify(out)
+    },
+    (e) => {
+      // ★失败也要落结果（否则宿主只能看到"超时"，无法归因）
+      if (out['download_ok'] !== true) out['download_error'] = String((e as { code?: string })?.code ?? (e as Error)?.message ?? e)
+      else if (out['upload_ok'] !== true) out['upload_error'] = String((e as { code?: string })?.code ?? (e as Error)?.message ?? e)
+      out['ok'] = false
+      g['__proteusHostTransferProbeResult'] = JSON.stringify(out)
+    },
+  )
+  return JSON.stringify({ phase: 'started', queued: true })
+}
+
 /** 元素索引读数（判据：证明索引里真有条目，而不是"查询恒 not-found"）。 */
 /**
  * ★★★决策 #1086：**交叉观察的几何变化 tick**（宿主调）。
@@ -852,6 +904,8 @@ __HOSTAPP.__proteusHostAppElementRegistry = __HOSTAPP.__proteusSuperappElementRe
 // ★★★决策 #1093：WebSocket 端到端探针（宿主按中性名调；结果填 __proteusHostWsProbeResult）
 ;(globalThis as unknown as { __proteusHostAppWsProbe?: (u: string) => string })
   .__proteusHostAppWsProbe = (u: string) => appWsProbe(u)
+;(globalThis as unknown as { __proteusHostAppTransferProbe?: (b: string) => string })
+  .__proteusHostAppTransferProbe = (b: string) => appTransferProbe(b)
 ;(globalThis as unknown as { __proteusHostAppWsProbeDrive?: () => string })
   .__proteusHostAppWsProbeDrive = () => appWsProbeDrive()
 
