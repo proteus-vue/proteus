@@ -133,6 +133,8 @@ struct Superapp {
       this.safeBottom = 16;
       window.getLastWindow(ctx).then((win: window.Window) => {
         this.win = win;
+        // ★★★C14 键盘（决策 #1069）：系统键盘高度变化 → 写 env（CSS 让位）+ 推 JS（`__proteusHostKeyboard`）
+        this.installKeyboardWatch(win);
         // ★★全端对齐批（2026-10-05 · css-conformance 独立复评抓出）：**隐藏系统状态栏**——
         //   与 Android `hide(statusBars())` / iOS 全屏同口径（Web 基准无系统栏）。
         //   此前状态栏图标（时钟等）叠印在页面标题上（复评 major：标题被遮挡），
@@ -713,9 +715,48 @@ struct Superapp {
    *   renderCurrent 与 onTapAt **共用**——onTapAt 用 hostAppRender(chain) 返回的 tree 直接画，
    *   省掉一次 renderCurrent 的 hostAppRender boot（一次性 VM 每次 boot 要 eval 整包 ⇒ 卡顿）。
    *   视口取 Superapp.vpW/vpH（由 renderCurrent 设定）。 */
+  // ────────────────────────── ★★★C14 键盘（决策 #1069） ──────────────────────────
+
+  /** 最近一次键盘高度（vp；0 = 收起）——env 与 JS 推送共用同一份读数 */
+  private keyboardHeightVp: number = 0;
+  /** 监听是否已装（幂等） */
+  private keyboardWatched: boolean = false;
+
+  /**
+   * 装系统键盘高度监听 → 写 `--pf-keyboard-height`（CSS 让位）+ 推 JS 接收器。
+   *
+   * 【为什么用 window.on('keyboardHeightChange')】鸿蒙有**平台原生**事件，比"靠 onAreaChange 猜"
+   *   准确（后者把"内容变高"与"键盘弹起"混在一起）。回调给的是 px ⇒ 必须 px2vp 归一
+   *   （与其余 `--pf-*` 同单位；不归一会高密度机上大 3 倍）。
+   * 【JS 推送的诚实边界】鸿蒙 superapp 是**一次性 VM**（#540）⇒ 键盘事件发生时**没有存活的 JS 环境**
+   *   （napi 调用已返回、VM 已销毁）。⇒ JS 侧 `__proteusHostKeyboard` 只能在**下一次渲染的 VM 内**
+   *   被调用：本实现把读数存进字段，由 `refreshDeviceSnapshot` 一并交给 C++ 的快照，
+   *   且每次渲染的 VM 装配阶段注入一次当前值（见 DeviceSnapshot.ets 的 keyboard 字段）。
+   *   这与 Android/iOS 的"事件即时推"语义不同——**如实登记，不粉饰为三端一致**。
+   */
+  private installKeyboardWatch(win: window.Window): void {
+    if (this.keyboardWatched) { return; }
+    this.keyboardWatched = true;
+    try {
+      win.on('keyboardHeightChange', (h: number) => {
+        const vp: number = px2vp(h);
+        if (Math.abs(vp - this.keyboardHeightVp) < 0.5) { return; }
+        this.keyboardHeightVp = vp;
+        this.envVars['--pf-keyboard-height'] = vp;
+        hilog.info(DOMAIN, TAG, 'KEYBOARD height_vp=%{public}f', vp);
+        // ★环境变量变了必须重渲一次（本仓既有纪律：env token 只在渲染时求值）
+        this.renderCurrent();
+      });
+      hilog.info(DOMAIN, TAG, 'KEYBOARD_WATCH_INSTALLED');
+    } catch (e) {
+      hilog.warn(DOMAIN, TAG, 'KEYBOARD_WATCH_FAIL %{public}s', JSON.stringify(e) ?? '');
+    }
+  }
+
+
   private paintTree(page: string, nodes: string): void {
     // ★★决策 #1067：渲染前刷新设备快照（JS 侧 device.* 读类能力的数据源）——失败不阻断渲染
-    refreshDeviceSnapshot(this.win);
+    refreshDeviceSnapshot(this.win, this.keyboardHeightVp);
     try {
       // ★★★决策 #897：tab 栏高亮的 current 以**实际渲染屏**为准。根因 = `applyState` 用**路由 current**
       //   （boot 后恒为 index）写 chromeStateJson，而 `renderCurrent` 随后把 `this.current` 修正为真实屏

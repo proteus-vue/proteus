@@ -35,7 +35,7 @@ interface DeviceAction {
 }
 
 /** 采集同步可读读数并交给 C++（渲染前调用；失败不阻断渲染）。 */
-export function refreshDeviceSnapshot(win: window.Window | undefined): void {
+export function refreshDeviceSnapshot(win: window.Window | undefined, keyboardHeightVp: number = 0): void {
   try {
     const d: display.Display = display.getDefaultDisplaySync();
     const landscape = d.width > d.height;
@@ -103,6 +103,9 @@ export function refreshDeviceSnapshot(win: window.Window | undefined): void {
       'network': { 'online': online, 'type': netType } as Record<string, Object>,
       'orientation': { 'type': landscape ? 'landscape' : 'portrait', 'angle': angle } as Record<string, Object>,
       'clipboard': clip,
+      // ★★决策 #1069：键盘高度（vp）——一次性 VM 无法接收键盘事件 ⇒ 由快照带入
+      //   由 C++ 在**本次渲染的 VM** 内调 `__proteusHostKeyboard(...)` 注入（见 host_app_runtime_impl.h）。
+      'keyboard': { 'height': keyboardHeightVp, 'visible': keyboardHeightVp > 0 } as Record<string, Object>,
       // ★HEVC：枚举里有该 MIME 即视为"编码格式受支持"（不是硬解能力证明——如实登记差异）
       'hevc': media.CodecMimeType.VIDEO_HEVC === 'video/hevc',
     };

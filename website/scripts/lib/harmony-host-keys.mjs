@@ -47,8 +47,9 @@ export const BRIDGE_TO_HOST = {
   setBrightness: 'device.brightness.set',
   setKeepScreenOn: 'device.keepScreenOn',
   getDeviceCapability: 'device.hevc',
-  // ★不由宿主回答：
-  //   · getKeyboard：壳**主动推** `__proteusHostKeyboard`（鸿蒙壳尚未推 ⇒ 保持 🟡）
+  // ★不由宿主**方法分派**回答（两条都走专门通道判定，见下方 KEYBOARD_PUSH_SOURCES）：
+  //   · getKeyboard：壳**主动推** `__proteusHostKeyboard`——是否有推送能力要读**壳源码**，
+  //     不是读"宿主有没有某个 method 分支"。三端此前都只有 JS 接收侧、没人推（决策 #1069 修）。
   //   · createMediaQuery：纯 JS 求值（但读 `device.screen`；本模块按"桥方法级"判定，故不长绿）
   getKeyboard: null,
   createMediaQuery: null,
@@ -106,6 +107,55 @@ export function loadHarmonyBridgeKeys(root) {
 }
 
 /**
+ * ★★★「壳主动推」类通道的**源码证据**（决策 #1069）——键盘是第一个消费者。
+ *
+ * 【为什么不能用桥方法判】\`getKeyboard\` 的实现是"返回一个订阅句柄"，任何端只要装了 JS 侧通道
+ *   就**看起来**有这个方法——而高度恒为 0。本轮实测：三端都只装了接收侧、**没有一端真的推**，
+ *   官网却因为"桥方法存在"判了 ✅。⇒ 这类能力必须按**壳里有没有推送代码**判。
+ *
+ * 【判据（每端一条真实的推送调用形态）】
+ *   · Android：\`SuperappActivity\` 里出现 \`__proteusHostKeyboard\`（eval 推送）+ \`ime()\` insets 监听
+ *   · iOS：\`superapp-scene.swift\` 里出现 \`__proteusHostKeyboard\` + \`keyboardWillShowNotification\`
+ *   · 鸿蒙：\`Superapp.ets\` 里有 \`keyboardHeightChange\` 监听，且 C++ 在 VM 内注入（\`invokeKeyboardSnapshot\`）
+ *
+ * 【诚实边界】鸿蒙是**一次性 VM**（#540）⇒ 键盘事件到达时无存活 JS 环境，只能"下次渲染时注入一次"
+ *   ——与 Android/iOS 的即时推**语义不同**（如实记账，不粉饰为一致）。
+ */
+export const KEYBOARD_PUSH_SOURCES = {
+  android: [
+    { file: 'hosts/android/app/src/main/java/dev/proteus/layoutcore/shell/SuperappActivity.java', tokens: ['__proteusHostKeyboard', 'Type.ime()'] },
+  ],
+  ios: [
+    // 推送实现与装配点**两处都要**（只判装配会漏"装了但实现没推"，只判实现会漏"实现了但没人装"）
+    { file: 'hosts/ios/ProteusHost/shell/superapp-scene.swift', tokens: ['KeyboardWatch.install'] },
+    { file: 'hosts/ios/ProteusHost/runtime/keyboard-watch.swift', tokens: ['__proteusHostKeyboard', 'keyboardWillShowNotification'] },
+  ],
+  harmony: [
+    { file: 'hosts/harmony/host-app/entry/src/main/ets/shell/Superapp.ets', tokens: ['keyboardHeightChange'] },
+    { file: 'hosts/harmony/host-app/proteus_render/src/main/cpp/host_app_runtime_impl.h', tokens: ['invokeKeyboardSnapshot', '__proteusHostKeyboard'] },
+  ],
+}
+
+/**
+ * 该端是否**真的会推**键盘事件（读源码，不看文档、不看桥方法）。
+ * @param {string} root 仓库根
+ * @param {'android'|'ios'|'harmony'} end
+ * @returns {boolean}
+ */
+export function hasKeyboardPush(root, end) {
+  const specs = KEYBOARD_PUSH_SOURCES[end]
+  if (!specs) return false
+  for (const spec of specs) {
+    const abs = path.join(root, spec.file)
+    if (!fs.existsSync(abs)) return false
+    const src = fs.readFileSync(abs, 'utf8')
+    if (!spec.tokens.every((t) => src.includes(t))) return false
+  }
+  return true
+}
+
+
+/**
  * 鸿蒙端在能力页上的分档（生成器唯一的鸿蒙判定入口）。
  *
  * 【为什么放在 lib 而不是 gen-content.mjs】后者是存量棘轮文件（只减不增）——把 20 行判定
@@ -141,3 +191,83 @@ export function harmonyEndStatus(root, refs, appBridgeKeys, en = false) {
     note: en ? 'render core shipped — capability bridge not wired' : '渲染核心已落地——能力桥未接线',
   }
 }
+
+/**
+ * ★★★「壳主动推」类能力的端分档（决策 #1069）——键盘是第一个消费者。
+ *
+ * 【为什么必须有这条】`getKeyboard` 这类桥方法只返回"订阅句柄"，**任何端装了 JS 侧通道就长得像有**；
+ *   而高度要靠壳主动推。本轮实测：三端都只装了接收侧、**没有一端真的推**，
+ *   官网却因"桥方法存在"判了 ✅（对外谎报可用）。⇒ 判据必须读**壳里有没有推送代码**。
+ *
+ * @param {string} root 仓库根
+ * @param {'android'|'ios'|'harmony'} end 端
+ * @returns {{supported:boolean, note:string}}
+ */
+export function pushChannelStatus(root, end) {
+  const ok = hasKeyboardPush(root, end)
+  const label = {
+    android: ok ? '壳推送已接线（WindowInsets.ime → __proteusHostKeyboard）' : '壳未推键盘事件——高度恒 0',
+    ios: ok ? '壳推送已接线（UIKeyboard 通知 → __proteusHostKeyboard）' : '壳未推键盘事件——高度恒 0',
+    harmony: ok
+      ? '壳推送已接线（keyboardHeightChange → 渲染时注入；一次性 VM ⇒ 非即时推送）'
+      : '壳未推键盘事件——高度恒 0',
+  }[end]
+  return { supported: ok, note: label }
+}
+
+/**
+ * ★★★App 三端（iOS/Android/鸿蒙）能力分档的**唯一判定入口**（决策 #1067/#1069）。
+ *
+ * 【为什么收在 lib】\`gen-content.mjs\` 是存量棘轮文件（只减不增）；分档规则越写越长，
+ *   留在生成器里只能靠"每次压缩注释"换行数。判定属"文档契约"职责，放 lib 更合适。
+ *
+ * @param {string} root 仓库根
+ * @param {'ios'|'android'|'harmony'} end
+ * @param {string[]} refs 该能力页引用的桥方法名
+ * @param {Set<string>} appBridgeKeys App 桥全集（平台中立 TS）
+ * @param {{capSlug:string, pushCapabilities:Set<string>, verified:Set<string>, en?:boolean}} opts
+ * @returns {{status:string, note:string}}
+ */
+export function appEndStatus(root, end, refs, appBridgeKeys, opts) {
+  const { capSlug, pushCapabilities, verified, en = false } = opts
+  const hasBridge = refs.length > 0 && refs.every((r) => appBridgeKeys.has(r))
+  if (end === 'harmony') {
+    // ★推送型能力（决策 #1069）：鸿蒙走**快照注入**、不走宿主方法分派 ⇒ 不能靠
+    //   `harmonyEndStatus`（它按"有没有 method 分支"判）。先按**推送证据**判，再回落三档。
+    if (pushCapabilities.has(capSlug) && refs.length && appBridgeKeys.has(refs[0])) {
+      const p = pushChannelStatus(root, 'harmony')
+      if (!p.supported) return { status: '🟡', note: en ? PUSH_MISS_EN : p.note }
+      return { status: '✅', note: en ? 'Harmony host wired (keyboard height injected per render)' : '鸿蒙宿主已接线（键盘高度随渲染注入）' }
+    }
+    return harmonyEndStatus(root, refs, appBridgeKeys, en)
+  }
+  if (!hasBridge) {
+    return {
+      status: '🟡',
+      note: en ? 'render core shipped — capability bridge not wired' : '渲染核心已落地——能力桥未接线',
+    }
+  }
+  if (pushCapabilities.has(capSlug)) {
+    const p = pushChannelStatus(root, end)
+    if (!p.supported) return { status: '🟡', note: en ? PUSH_MISS_EN : p.note }
+    return {
+      status: '✅',
+      note: en
+        ? 'App host bridge (capability-app.ts) · shell pushes keyboard events'
+        : `App 宿主桥（capability-app.ts）· ${p.note}`,
+    }
+  }
+  if (en) {
+    return {
+      status: '✅',
+      note: `App host bridge (capability-app.ts) · ${verified.has(capSlug) ? 'device-verified on both ends (check:host-runtime)' : 'bridge method wired'}`,
+    }
+  }
+  return {
+    status: '✅',
+    note: `App 宿主桥（capability-app.ts）· ${verified.has(capSlug) ? '真机双端验证（check:host-runtime）' : '桥方法已接入'}`,
+  }
+}
+
+/** 推送型能力缺壳推送时的英文说明（与中文口径对齐）。 */
+export const PUSH_MISS_EN = 'host bridge present but the shell does not notify the keyboard — height stays 0'

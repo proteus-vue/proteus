@@ -95,8 +95,10 @@ describe('③ 官网能力页分档（端到端）', () => {
     expect(harmonyRow('device')).toBe('✅')
   })
 
-  it('keyboard / media-query 页鸿蒙仍 🟡（壳推通道未推、媒体查询不在宿主）', () => {
-    expect(harmonyRow('keyboard')).toBe('🟡')
+  it('keyboard 页鸿蒙 ✅（#1069 已接键盘推送）/ media-query 仍 🟡（媒体查询判定不在宿主）', () => {
+    // ★决策 #1069：键盘推送三端都已接线 ⇒ 鸿蒙从 🟡 转 ✅；
+    //   media-query 是纯 JS 求值（读 device.screen），按"桥方法级"口径仍不给绿。
+    expect(harmonyRow('keyboard')).toBe('✅')
     expect(harmonyRow('media-query')).toBe('🟡')
   })
 
@@ -104,5 +106,52 @@ describe('③ 官网能力页分档（端到端）', () => {
     const md = read('device')
     expect(/^\| iOS 原生 \| ✅ \|/m.test(md)).toBe(true)
     expect(/^\| Android 原生 \| ✅ \|/m.test(md)).toBe(true)
+  })
+})
+
+// ══════════════ ★★决策 #1069：推送型能力不能凭"桥方法存在"判 ✅ ══════════════
+//
+// 【这一组防的正是本轮抓到的真缺陷】`getKeyboard` 的实现只返回订阅句柄 ⇒ 任何端装了 JS 侧通道
+//   就**看起来**有；而高度要靠壳主动推。三端此前都没推，官网却判了 ✅（对外谎报）。
+//   ⇒ 判据必须读**壳里有没有推送代码**（`hasKeyboardPush`），且缺一端就该掉到 🟡。
+
+import { hasKeyboardPush as hasPush, KEYBOARD_PUSH_SOURCES } from '../website/scripts/lib/harmony-host-keys.mjs'
+
+describe('④ 键盘推送通道（读壳源码，不看桥方法）', () => {
+  it('三端都真的有推送实现（Android ime / iOS UIKeyboard / 鸿蒙 keyboardHeightChange）', () => {
+    for (const end of ['android', 'ios', 'harmony']) {
+      expect(hasPush(ROOT, end as 'android' | 'ios' | 'harmony'), `${end} 应已接推送`).toBe(true)
+    }
+  })
+
+  it('每端的证据源都登记了**实现 + 装配点**（只判一边会漏"做了但没人调"）', () => {
+    // iOS：场景装（KeyboardWatch.install）+ runtime 实现（通知 + JS 推送）
+    expect(KEYBOARD_PUSH_SOURCES.ios.length).toBe(2)
+    // 鸿蒙：ArkTS 监听 + C++ 注入
+    expect(KEYBOARD_PUSH_SOURCES.harmony.length).toBe(2)
+    // Android：壳内一处（ime + eval 推送同文件）
+    expect(KEYBOARD_PUSH_SOURCES.android.length).toBe(1)
+  })
+
+  it('破坏性：摘掉 iOS 的通知名 ⇒ 判据变 false（不是读文档/桥方法）', () => {
+    const p = 'hosts/ios/ProteusHost/runtime/keyboard-watch.swift'
+    const abs = path.join(ROOT, p)
+    const bak = fs.readFileSync(abs, 'utf8')
+    try {
+      fs.writeFileSync(abs, bak.replace('keyboardWillShowNotification', 'keyboardWillShowBOGUS'))
+      expect(hasPush(ROOT, 'ios')).toBe(false)
+    } finally {
+      fs.writeFileSync(abs, bak)
+    }
+    expect(hasPush(ROOT, 'ios')).toBe(true)
+  })
+
+  it('键盘页三端分档：都是 ✅，且说明里点名"壳推送"（不是只写桥方法）', () => {
+    const md = fs.readFileSync(path.join(ROOT, 'website/content/capabilities/keyboard.md'), 'utf8')
+    for (const label of ['iOS 原生', 'Android 原生', '鸿蒙']) {
+      const row = new RegExp(`^\\| ${label} \\| ([^|]+) \\|`, 'm').exec(md)
+      expect(row?.[1].trim(), `${label} 应为 ✅`).toBe('✅')
+    }
+    expect(md).toMatch(/壳推送已接线|键盘高度随渲染注入/)
   })
 })

@@ -72,9 +72,9 @@ C14 键盘信息（高度 px + 可见性）
 | Web SPA | ✅ | vue-dom · webBridge 实现（平台 API 直连） |
 | 微信小程序 | ✅ | skyline（WebView 降级） · wx 桥 → wx.onKeyboardHeightChange |
 | Headless（SSR / 测试） | ✅ | headless · mock 桥注入（测试 / SSR 档） |
-| iOS 原生 | ✅ | native-ios（UIKit + CoreAnimation） · App 宿主桥（capability-app.ts）· 桥方法已接入 |
-| Android 原生 | ✅ | native-android（自绘 Canvas） · App 宿主桥（capability-app.ts）· 桥方法已接入 |
-| 鸿蒙 | 🟡 | native-harmony（ArkUI RenderNode） · App 桥已就绪（平台中立）——鸿蒙宿主壳未接线 |
+| iOS 原生 | ✅ | native-ios（UIKit + CoreAnimation） · App 宿主桥（capability-app.ts）· 壳推送已接线（UIKeyboard 通知 → __proteusHostKeyboard） |
+| Android 原生 | ✅ | native-android（自绘 Canvas） · App 宿主桥（capability-app.ts）· 壳推送已接线（WindowInsets.ime → __proteusHostKeyboard） |
+| 鸿蒙 | ✅ | native-harmony（ArkUI RenderNode） · 鸿蒙宿主已接线（键盘高度随渲染注入） |
 | Flutter 混合 | 🟡 | flutter · 同一 JS 逻辑层——能力桥未接线 |
 | 快应用 | ⬜ | 快应用引擎（待定） · 端未开始 |
 

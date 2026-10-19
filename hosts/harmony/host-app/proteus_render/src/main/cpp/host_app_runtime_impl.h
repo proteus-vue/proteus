@@ -28,6 +28,11 @@
 #include "proteus_device.h"
 #include <chrono>
 
+// ★本头被**两种 include 顺序**包含（调用方日志宏定义在 include 之后）⇒ 自带日志域常量，
+//   供本头内较早定义的函数（如 invokeKeyboardSnapshot）使用（与文件下方同名常量同值）。
+static constexpr unsigned int PROTEUS_APP_RT_DOMAIN_LOCAL = 0x0003;
+static constexpr const char* PROTEUS_APP_RT_TAG_LOCAL = "ProteusAppRuntime";
+
 /* ═══════════════════════════════════════════════════════════════════════
  * screen.* 协议分发（与 Android ScreenHost / iOS screen-host 同契约）——
  *   执行器（JS）把建屏/隐藏/销毁/转场翻译成 screen.* 请求，本处是真实现（真内核树）。
@@ -179,6 +184,29 @@ struct InvokeBytesGenericRegistrar {
     InvokeBytesGenericRegistrar() { setInvokeBytesGenericHandler(&screenInvokeDispatch); }
 } g_invokeBytesGenericRegistrar;
 } // namespace
+
+/**
+ * ★★C14 键盘（决策 #1069）：把设备快照里的键盘读数注入**本次渲染的 VM**。
+ *
+ * 【为什么必须在 VM 内 eval（而不是宿主直接调 JS）】鸿蒙 superapp 是**一次性 VM**（#540）——
+ *   键盘事件到达时（ArkTS 侧 `window.on('keyboardHeightChange')`）没有存活的 JS 环境；
+ *   唯一合法形态 = 下次渲染建好 VM、eval bundle（`capability-app-device` 的接收通道随之装好）之后，
+ *   把读数推一次。⇒ 本 VM 内的 `getKeyboard()` 看到的是**本次渲染时刻**的真实高度。
+ *   ★与 Android/iOS 的"事件即时推"**语义不同**（如实登记，不粉饰为三端一致）。
+ * 【幂等/安全】快照无 keyboard 字段 ⇒ 什么都不做（不推假 0）；JS 侧无接收器 ⇒ `no-hook` 静默。
+ */
+static void invokeKeyboardSnapshot(JSVM_Env jenv) {
+    std::string kb = proteus::device::snapshotObj("keyboard");
+    if (kb.empty()) return;
+    std::string expr =
+        "(typeof __proteusHostKeyboard === 'function') ? String(__proteusHostKeyboard(" + kb + ")) : 'no-hook'";
+    std::string ack;
+    if (jsvmEvalStr(jenv, expr.c_str(), &ack)) {
+        OH_LOG_Print(LOG_APP, LOG_INFO, PROTEUS_APP_RT_DOMAIN_LOCAL, PROTEUS_APP_RT_TAG_LOCAL,
+                     "PROTEUS_KEYBOARD_INJECT ack=%{public}s", ack.c_str());
+    }
+}
+
 
 /** JSVM 回调：proteusHost.invoke(method, argsJson) → JSON 串 */
 static JSVM_Value InvokeCb(JSVM_Env env, JSVM_CallbackInfo info) {
@@ -686,6 +714,10 @@ static napi_value HostAppRender(napi_env env, napi_callback_info info) {
         else { JSVM_Value rr = nullptr; if (OH_JSVM_RunScript(jenv, script, &rr) != JSVM_OK) err = "bundle 执行失败"; }
     }
     if (err.empty()) {
+        // ★★C14 键盘（决策 #1069）：一次性 VM 收不到键盘事件 ⇒ 在 **bundle 已 eval（通道已装）**
+        //   之后、boot 之前，把宿主快照里的键盘读数注入一次。此后本 VM 内的 `getKeyboard()`
+        //   读到的是**本次渲染时刻**的真实高度（页面布局据此让位）。
+        invokeKeyboardSnapshot(jenv);
         // ① boot（进入入口 tab）
         jsvmEvalStr(jenv, "String(__proteusHostAppBootJson())", nullptr);
         // ② 渲染目标屏（JS 共享运行期实例化 → host.mount 捕获 tree）——★带 seedData 恢复跨调用实例态

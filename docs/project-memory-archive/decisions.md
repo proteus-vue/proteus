@@ -6616,3 +6616,45 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 【落页效果（24 页 × 2 = 48 行）】12 个能力页（device/screen/battery/orientation/network/brightness/vibrate/clipboard/keep-screen-on/keyboard/media-query/device-capability）中：iOS/Android 12 项全 ✅；鸿蒙 11 项 ✅（keyboard / media-query 仍 🟡，因壳推通道与纯 JS 判定不在宿主口径内）。
 【判据】新增 `tests/gen-content-harmony-host.test.ts` **10/10**（多源桥键 / 鸿蒙派生 12 项 / 不由宿主回答的两项必须不绿 / 未登记即抛错 / 宿主方法抽取形态 / 三页分档端到端）+ 既有 `gen-content-app-bridge` 6/6 + `gen-content-bridge-keys` 7/7；`check:content`（幂等）/ `check:en-drift`（305 对）/ `check:doc-links`（386 篇）/ `check:stats` / `check:capability-priority` / `check:file-size` / `no-json-wire` / `ai-tasks` / `script-compile` / `gates-sync` / `vue-tsc` 全绿；文件规模基线已降钉（gen-content 2813→2807 · capability 1097→1093）。
 【诚实边界】① 只覆盖设备与系统域（其余能力族在鸿蒙落地时须登记自己的工厂与 `BRIDGE_TO_HOST`；**不登记 = 文档保守 🟡**，宁可少说不多说）；② `getKeyboard` 的鸿蒙 ✅ 要等壳真的推 `__proteusHostKeyboard`（当前只装了通道、壳未推）；③ 本决策只改**声明面**，不改任何运行时行为——真机通路仍待验（#1067 边界不变）。
+
+1069. **★★★键盘（C14）三端推送通道真落地 + 「推送型能力」的文档判据纠正 · 决策**（2026-10-19 · 用户指出「键盘那个我看鸿蒙没打通？官网文档是就差鸿蒙」）：
+【用户的观察对，但比它更严重】我核实三端后确认：**不是只差鸿蒙——三端都没推**。
+  · `capability-app-device.ts` 只装了 **JS 侧接收器**（`__proteusHostKeyboard` → 订阅者）；
+  · Android / iOS / 鸿蒙 **没有一端**真的把系统键盘高度推过去（`SuperappActivity` 里甚至写着
+    `--pf-keyboard-height = 0.0 // State 1：不接键盘`，iOS `envVarTable` 同理，鸿蒙 `--pf-keyboard-height` 恒 0）；
+  · 而官网能力页因为"桥方法存在"（`getKeyboard` 在 `createAppDeviceCapabilities` 返回对象里）
+    把三端都判成了 ✅ —— 典型的**"方法在 = 能用"** 谎报，与本仓 #881 同族但更隐蔽：
+    `getKeyboard` 的实现只返回一个订阅句柄，**任何端只要装了 JS 通道就长得像有**。
+【三端推送落地】
+  · **Android**（`SuperappActivity`）：注册 `setOnApplyWindowInsetsListener` 读
+    `WindowInsets.Type.ime().bottom` → dp 归一 → 变化才推（`__proteusHostKeyboard({height,visible})`）
+    + 同步 `--pf-keyboard-height` + 触发重渲。★API<30 拿不到 ime() ⇒ **不注册**（高度不可知，
+    不推假 0）。★为什么必须真监听：本宿主 edge-to-edge（`decorFitsSystemWindows=false`）⇒ 系统不会自动缩窗。
+  · **iOS**（新 `runtime/keyboard-watch.swift` + 场景注入）：`keyboardWillShow/WillChangeFrame/WillHide`
+    → `UIKeyboardFrameEndUserInfoKey` 高度**减去底部安全区**（Home Indicator 区键盘本就覆盖；
+    不减法在全面屏上高估约 34pt）→ 推 JS + 重渲。★状态放 runtime、`selfdraw-scene.swift`（8831 行存量棘轮）
+    只读一行 `KeyboardWatch.heightPt`——否则巨型文件 +4 行即被 `check:file-size` 判红。
+  · **鸿蒙**（`Superapp.ets` + `DeviceSnapshot.ets` + `host_app_runtime_impl.h`）：`window.on('keyboardHeightChange')`
+    → px2vp → 写 env + 重渲。★一次性 VM（#540）收不到键盘事件 ⇒ 读数进**设备快照**，
+    由 C++ 在下次渲染的 VM 内（bundle eval 之后、boot 之前）调 `__proteusHostKeyboard` 注入一次
+    （新函数 `invokeKeyboardSnapshot`）。**与 Android/iOS 的即时推语义不同——如实登记，不粉饰为三端一致。**
+【★文档判据的纠正（本决策的另一半）】新增 `KEYBOARD_PUSH_SOURCES` + `hasKeyboardPush()`：
+  「推送型能力」的端分档**读壳源码**（实现 + 装配点两处都要），不看桥方法。生成器新增
+  `PUSH_CAPABILITIES` 集合（当前 = `keyboard`）与 `appEndStatus()` 统一入口（三端共用、判定收在 lib——
+  `gen-content.mjs` 是存量棘轮文件，只留调用）。**破坏性验证**：摘掉 iOS 通知名 / Android `ime()`
+  ⇒ `hasKeyboardPush` 立刻 false（不是读文档）；恢复 ⇒ true。
+【★本轮顺带修正的两条旧断言（都是"写死旧事实"型）】① `gen-content-harmony-host.test.ts` 里
+  「keyboard 页鸿蒙仍 🟡」——推送接上后应为 ✅（写死 🟡 会让真接线被测试反向惩罚）；
+  ② iOS 推送证据源最初只登记了场景文件（token 在 runtime 实现里）⇒ 判据假红，改为实现 + 装配点两处。
+【判据】`gen-content-harmony-host` **14/14**（含新增 4 条：三端推送为真 / 证据源齐 / 破坏性摘除 / 键盘页三端 ✅）+
+  `gen-content-app-bridge` 6/6 + `gen-content-bridge-keys` 7/7 + `capability-app-device` 9/9；
+  `check:content` 幂等 / `en-drift`（305 对）/ `doc-links`（386 篇）/ `file-size` / `no-json-wire` /
+  `host-invoke-contract` / `script-compile` / `vue-tsc` 全绿；三端编译（javac + C 桥 + JNI / swiftc /
+  OHOS clang）全绿；**鸿蒙 hvigor ArkTS 编译通过**（`PackageHap` 完成；`SignHap` 仍因 p12 口令环境态失败）；
+  AAR 重建 + 鸿蒙 prebuilt 同步。
+【诚实边界】① **真机未跑**——三端推送通路只到编译/单测/门禁（键盘高度是否真的随弹收变化，需真机判据）；
+  ② iOS 未处理键盘动画曲线（高度跳变是即时写，不跟随系统动画时长）；③ Android `--pf-keyboard-height`
+  参与页面让位，但**没有订阅窗口尺寸变化**去重算 maxScroll（长页 + 键盘同时出现时的滚动范围属后续项）；
+  ④ 鸿蒙是"渲染时注入"不是即时推——JS 侧同一渲染内多次读取拿到的是同一值（如实）。
+【下一步】三端真机键盘判据（弹收 → 报告里的 `keyboard.height` 序列 + `--pf-keyboard-height` 生效）；
+  设备域剩 8 项继续。

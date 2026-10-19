@@ -43,6 +43,8 @@ HOST_SRCS=(
   "$HERE/ProteusHost/runtime/host-capabilities.swift"
   # ★★设备与系统域（决策 #1067）：设备/屏幕/电量/方向/网络/亮度/震动/剪贴板/常亮/HEVC
   "$HERE/ProteusHost/runtime/device-capability.swift"
+  # ★★键盘监听（决策 #1069）：系统键盘通知 → __proteusHostKeyboard
+  "$HERE/ProteusHost/runtime/keyboard-watch.swift"
   "$HERE/ProteusHost/runtime/host-lifecycle-events.swift"
   "$HERE/ProteusHost/runtime/screen-host.swift"
   # ★★★S2「去 JSON」（决策 #903）：invoke 通道的**二进制线格式**（Swift 侧唯一编解码器）+ JSC 字节桥

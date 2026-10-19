@@ -11,7 +11,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { COMP_EN, DOMAIN_EN, MP_STATUS_EN, ENDS_EN, END_NOTE_EN, COMP_LEGEND_EN, SHARED_EN, OVERVIEW_EN, CAP_SHARED_EN, CAP_USAGE_EN, CAP_ARGS_EN, CAP_DATA_HINTS_EN, CAP_METHODS_EN, CAP_EN, CAP_CAT_EN, CAP_OVERVIEW_EN, LIFECYCLE_EVENT_EN, LIFECYCLE_EVENT_NOTE_EN, LIFECYCLE_SRC_EN } from './gen-content-en.mjs'
 // ★决策 #881：App 桥方法集抽取抽成独立模块（锚定式解析 + 符号缺失硬失败）——详见该模块头注释
 import { loadAppBridgeKeysFrom } from './lib/app-bridge-keys.mjs'
-import { harmonyEndStatus } from './lib/harmony-host-keys.mjs'
+import { appEndStatus } from './lib/harmony-host-keys.mjs'
 // ★hook→桥方法引用抽取同法抽成独立模块（锚定式 + 硬失败）；三条契约共用 lib/ts-source-scan.mjs 原语
 import { extractHookBridgeRefs, HOOK_FACTORY } from './lib/hook-bridge-refs.mjs'
 // ★平台桥成员集 = 手写桥（capability-bridges.ts）∪ 声明式桥（generated/bridge-ext.ts）——见模块头注释
@@ -220,6 +220,8 @@ function endSupportLine(m, labels) {
 const APP_BRIDGE_KEYS = loadAppBridgeKeysFrom(ROOT).keys
 // ★真机双端验证的覆盖范围（SSOT = check:host-runtime 的 results/*.json——当前只含生命周期组）：
 const HOST_RUNTIME_VERIFIED_CAPS = new Set(['app-lifecycle', 'page-lifecycle', 'background'])
+// ★★推送型能力（决策 #1069）：桥方法只返回订阅句柄，**必须壳真的推**才可用——判据读壳源码
+const PUSH_CAPABILITIES = new Set(['keyboard'])
 const MP_STATUS_LABEL = { ok: 'L1 原语', compat: 'L2 兼容层', private: '平台私有', missing: '缺失' }
 
 // ★能力侧栏分组：按 10 类归组——★2026-09-30 已抽为 **component-ir 的共享事实源**
@@ -1999,16 +2001,15 @@ function genCapabilities(ir, ends) {
         case 'quick-app': note = '端未开始'; break
         // ★App 端（app-ios/app-android/app-harmony）：由**源码事实**推导（见 APP_BRIDGE_KEYS 注释）
         case 'app-ios':
-        case 'app-android':
-          if (refs.length && refs.every((r) => APP_BRIDGE_KEYS.has(r))) {
-            status = '✅'
-            note = `App 宿主桥（capability-app.ts）· ${HOST_RUNTIME_VERIFIED_CAPS.has(capSlug) ? '真机双端验证（check:host-runtime）' : '桥方法已接入'}`
-          } else {
-            note = '渲染核心已落地——能力桥未接线'
-          }
+        case 'app-android': {
+          // ★App 分档收在 lib（决策 #1067/#1069；推送型能力还要求壳真的推）
+          const a = appEndStatus(ROOT, end.id === 'app-ios' ? 'ios' : 'android', refs, APP_BRIDGE_KEYS, {
+            capSlug, pushCapabilities: PUSH_CAPABILITIES, verified: HOST_RUNTIME_VERIFIED_CAPS,
+          })
+          status = a.status; note = a.note
           break
-        // ★鸿蒙三档判定收在 lib（决策 #1067）——本文件只接线，不放判定逻辑
-        case 'app-harmony': { const h = harmonyEndStatus(ROOT, refs, APP_BRIDGE_KEYS); status = h.status; note = h.note; break }
+        }
+        case 'app-harmony': { const a = appEndStatus(ROOT, 'harmony', refs, APP_BRIDGE_KEYS, { capSlug, pushCapabilities: PUSH_CAPABILITIES, verified: HOST_RUNTIME_VERIFIED_CAPS }); status = a.status; note = a.note; break }
         default: note = '渲染核心已落地——能力桥未接线'
       }
       capRows.push({ name: end.name, status, note: `${end.engine} · ${note}` })
@@ -2594,15 +2595,14 @@ async function genCapabilitiesEn(ir, ends) {
         case 'quick-app': note = CAP_SHARED_EN.endNote['quick-app']; break
         // ★App ends: derived from source facts (see APP_BRIDGE_KEYS comment)
         case 'app-ios':
-        case 'app-android':
-          if (refs.length && refs.every((r) => APP_BRIDGE_KEYS.has(r))) {
-            status = '✅'
-            note = `App host bridge (capability-app.ts) · ${HOST_RUNTIME_VERIFIED_CAPS.has(capSlug) ? 'device-verified on both ends (check:host-runtime)' : 'bridge method wired'}`
-          } else {
-            note = CAP_SHARED_EN.endNote.prototype
-          }
+        case 'app-android': {
+          const a = appEndStatus(ROOT, end.id === 'app-ios' ? 'ios' : 'android', refs, APP_BRIDGE_KEYS, {
+            capSlug, pushCapabilities: PUSH_CAPABILITIES, verified: HOST_RUNTIME_VERIFIED_CAPS, en: true,
+          })
+          status = a.status; note = a.note
           break
-        case 'app-harmony': { const h = harmonyEndStatus(ROOT, refs, APP_BRIDGE_KEYS, true); status = h.status; note = h.note; break }
+        }
+        case 'app-harmony': { const a = appEndStatus(ROOT, 'harmony', refs, APP_BRIDGE_KEYS, { capSlug, pushCapabilities: PUSH_CAPABILITIES, verified: HOST_RUNTIME_VERIFIED_CAPS, en: true }); status = a.status; note = a.note; break }
         default: note = CAP_SHARED_EN.endNote.prototype
       }
       const endEn = ENDS_EN[end.id]

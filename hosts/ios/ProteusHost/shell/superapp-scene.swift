@@ -88,6 +88,10 @@ final class SuperappScene: NSObject {
         //   ★装在这里（`setObject` 之后、bundle 执行之前）：JS 侧是**调用时**探测，但早装可让首屏
         //     首个 `useFetch` 就走字节腿（避免"首请求回落 JSON"的静默不一致）。
         rtHost.installInvokeBytes(on: ctx)
+        // ★★★C14 键盘（决策 #1069）：装系统键盘通知 → 推 JS `__proteusHostKeyboard` + 刷新 env
+        //   【为什么在这里装】本场景持有 JSContext（evalJs）与容器视图；且键盘是**每次弹收**都要推的
+        //   持续事件，只能由壳装（JS 侧没有 UIKit 通知）。
+        installKeyboardWatch()
         // ★手势命中链 → JS 运行期（SelfDrawBridge 命中后反向调 JS 注册的 `__proteusRuntimeGesture`）。
         bridge.onDispatchToJS = { target, chain, type, _, _ in
             rtHost.dispatchGestureToJS(type: type, target: target, chain: chain)
@@ -394,6 +398,24 @@ final class SuperappScene: NSObject {
     // ── 上屏 ──
 
     /// 把**当前屏内容**真画到屏上（编译产物 app-screen-content.json → CALayer 层）。
+    // ────────────────────────── ★★★C14 键盘（决策 #1069） ──────────────────────────
+
+    /// 键盘推送是否已装（幂等——run 可能被多次调用）。实现见 `KeyboardWatch`（runtime 单元）。
+    private static var keyboardWatched = false
+
+    /// 装键盘监听：把本场景的 JSContext / 重渲出口 / 底部安全区交给 runtime 的 `KeyboardWatch`。
+    /// 【为什么是"注入三个出口"而不是在这里实现】`selfdraw-scene.swift` 是 8800+ 行的存量棘轮文件
+    ///   （只减不增）；而键盘读数必须与 env 表同源 ⇒ 状态放 runtime、巨型文件只读一行。
+    private static func installKeyboardWatch() {
+        if keyboardWatched { return }
+        keyboardWatched = true
+        KeyboardWatch.install(
+            eval: { expr in evalJs?(expr) ?? "no-eval" },
+            render: { renderCurrent() },
+            safeBottom: { Double(container?.safeAreaInsets.bottom ?? 0) },
+        )
+    }
+
     private static func renderCurrent() {
         let page = currentName()
         guard let path = Bundle.main.path(forResource: "app-screen-content", ofType: "json"),

@@ -8059,7 +8059,7 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         t["--pf-cutout-top"] = Double(s.top)
         t["--pf-cutout-left"] = Double(s.left)
         t["--pf-cutout-right"] = Double(s.right)
-        t["--pf-keyboard-height"] = 0
+        t["--pf-keyboard-height"] = KeyboardWatch.heightPt   // ★决策 #1069：真实键盘高度（pt）
         // ★视口逻辑尺寸（决策 #595）：`vw`/`vh` 单位与流式布局用
         t["--pf-vw"] = Double(v.bounds.width)
         t["--pf-vh"] = Double(v.bounds.height)
