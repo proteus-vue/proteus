@@ -25,6 +25,9 @@ import { attach, renderCommands, scrollRoot, clearRoot, appScreenCommands, appSc
 import { encodeInvoke, InvokeFrame } from '../runtime/InvokeWire';
 // ★★设备与系统域（决策 #1067）：渲染前注入设备快照、渲染后执行宿主动作队列
 import { refreshDeviceSnapshot, runDeviceActions } from '../runtime/DeviceSnapshot';
+import { runKeyboardProbe } from '../runtime/KeyboardProbe';
+// ★决策 #1077：键盘探针要主动收键盘（IMEKit 的输入会话控制）
+import { inputMethod } from '@kit.IMEKit';
 
 const DOMAIN = 0x0002;
 const TAG = 'ProteusSuperapp';
@@ -120,6 +123,20 @@ struct Superapp {
     if (this.scene === 'superapp-http') {
       try { this.filesDir = getContext(this).filesDir; } catch (e) { /* filesDir 取不到时报告写 /tmp 之外会失败 */ }
       this.runHttpProbe();
+      return;
+    }
+    // ★★★C14 键盘推送判据场景（决策 #1077）：真实系统键盘 → keyboardHeightChange → env
+    if (this.scene === 'superapp-keyboard') {
+      const ctxK = getContext(this); // ★#1077：本场景提前 return，自行取窗口装监听
+      this.filesDir = ctxK.filesDir;
+      window.getLastWindow(ctxK).then((win: window.Window) => {
+        this.win = win;
+        this.installKeyboardWatch(win);
+        this.startKeyboardProbe();
+      }).catch((e: Error) => {
+        hilog.error(DOMAIN, TAG, 'KB_PROBE_WINDOW_FAIL %{public}s', String(e?.message ?? e));
+        this.startKeyboardProbe();   // 无窗口也跑（会如实报 watch_installed=false）
+      });
       return;
     }
     try {
@@ -464,7 +481,6 @@ struct Superapp {
     return '{"end":"harmony","samples":[' + parts.join(',') + '],"sampled":' + this.dactylSamplesArr.length + '}'
   }
 
-
   /** ★Dactyl 专项：内核命中链（按下态/场跟手用；与 onTapAt 同一内核入口——单一真源）。 */
   private hitAndChainAt(vpX: number, vpY: number): number[] {
     try {
@@ -753,7 +769,6 @@ struct Superapp {
     }
   }
 
-
   private paintTree(page: string, nodes: string): void {
     // ★★决策 #1067：渲染前刷新设备快照（JS 侧 device.* 读类能力的数据源）——失败不阻断渲染
     refreshDeviceSnapshot(this.win, this.keyboardHeightVp);
@@ -889,6 +904,26 @@ struct Superapp {
     hilog.info(DOMAIN, TAG, 'PROTEUS_HTTP_PROBE_DONE %{public}s', result);
   }
 
+  private startKeyboardProbe(): void {
+    runKeyboardProbe({
+      filesDir: this.filesDir,
+      heightVp: (): number => this.keyboardHeightVp,
+      envVars: (): Record<string, number> => this.envVars,
+      watched: (): boolean => this.keyboardWatched,
+      requestFocus: (id: string): void => { focusControl.requestFocus(id); },
+      write: (name: string, content: string): void => {
+        try {
+          const fd = fileIo.openSync(this.filesDir + '/' + name, fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE | fileIo.OpenMode.TRUNC);
+          fileIo.writeSync(fd.fd, content); fileIo.closeSync(fd.fd);
+        } catch (e) { hilog.error(DOMAIN, TAG, 'KB_PROBE_WRITE_FAIL'); }
+      },
+      hideKeyboard: (): void => {
+        try { inputMethod.getController().stopInputSession(); } catch (e) { hilog.warn(DOMAIN, TAG, 'KB_HIDE_FAIL'); }
+      },
+      log: (m: string): void => { hilog.info(DOMAIN, TAG, '%{public}s', m); },
+    });
+  }
+
   private writeReport(): void {
     try {
       const body: string = '{"ok":true,"host_id":"harmony","tabs":' + JSON.stringify(this.tabNamesForReport)
@@ -928,6 +963,10 @@ struct Superapp {
 
   build() {
     Column() {
+      // ★决策 #1077：键盘探针场景渲染一个真实 TextInput（鸿蒙 superapp 是自绘，无输入控件）
+      if (this.scene === 'superapp-keyboard') {
+        TextInput({ placeholder: 'kb-probe' }).id('proteus-kb-probe').width(1).height(1).opacity(0.01)
+      }
       // 内容区（自绘 RenderNode 挂在 ContentSlot）
       Stack() {
         ContentSlot(this.content)

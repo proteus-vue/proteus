@@ -71,9 +71,8 @@ export default class EntryAbility extends UIAbility {
     // ★决策 #860：重算步长（`--ps glassDiv 6` ⇒ 每 6 帧重算一次，其余复用）。
     const gd = want?.parameters?.['glassDiv'];
     AppStorage.setOrCreate('proteusGlassDiv', typeof gd === 'string' ? gd : (typeof gd === 'number' ? String(gd) : ''));
-    if (sceneStr === '' || sceneStr === 'superapp' || sceneStr === 'superapp-drive'
-        || sceneStr.startsWith('superapp-screen-') || sceneStr.startsWith('superapp-pump-')
-        || sceneStr === 'superapp-http') {
+    // ★决策 #1077：**前缀匹配**所有 superapp-* 场景（此前是逐个列举，新增场景漏加 ⇒ 落到 dev/Index）
+    if (sceneStr === '' || sceneStr.startsWith('superapp')) {
       this.pageToLoad = 'shell/Superapp';
     } else {
       this.pageToLoad = 'dev/Index';

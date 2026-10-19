@@ -1785,6 +1785,28 @@
         "T-app-fetch"
       ],
       "note": "【blocked · 决策 #1076（2026-10-19）】【Handoff】做到哪：① 纠正误判——设备确实在（`hdc list targets -v` 可见 69F9K26126005311；ioreg USB 层也可见 HDC Device），我上次只看无 -v 的输出（它过滤 offline）就下了\"无设备\"结论；② **已取得鸿蒙 HTTP 二进制腿真机证据**：{ok:true,bridge:invokeBytes,frameSource:arkts,status:200,bodyBytes:2443}（真实 baidu.com）；③ 修掉构建缺陷：entry-host-runtime 的包名子路径 TS2307 → 改相对路径。★未做：① 鸿蒙 **superapp 回归 / 键盘推送** 未跑（设备在启动时 Connected→Offline→Empty 反复掉线）；② 无法重签 HAP（SignHap 报 00303242，p12 口令是另一台机加密的）⇒ run-http-probe/run-superapp 都要求 signed hap + install。★下一步（可照做）：用户在 DevEco → Project Structure → Signing Configs 勾「Automatically generate signature」重签一次；设备连接稳定后跑 build-host-app.sh + run-superapp.sh + run-http-probe.sh。★坑：`hdc list targets`（无 -v）会过滤 offline 设备，必须用 `-v` 并交叉 ioreg；设备 Connected 时可 shell（KLE-AL00U）。"
+    },
+    {
+      "id": "T-harmony-keyboard-probe",
+      "title": "鸿蒙键盘推送真机闭环（314vp→0）+ 场景白名单/窗口时序/收键盘三处装置修复",
+      "type": "verification",
+      "status": "done",
+      "owner": "session:zcode-invoke-bytes-20261019",
+      "scope": [
+        "hosts/harmony/host-app/entry/src/main/ets/shell/Superapp.ets",
+        "hosts/harmony/host-app/entry/src/main/ets/shell/EntryAbility.ets",
+        "hosts/harmony/host-app/entry/src/main/ets/runtime/KeyboardProbe.ets",
+        "hosts/harmony/run-keyboard-probe.sh",
+        "hosts/harmony/results/**"
+      ],
+      "decision": 1077,
+      "verification": "bash hosts/harmony/build-host-app.sh && bash hosts/harmony/run-keyboard-probe.sh && bash hosts/harmony/run-http-probe.sh --url https://www.baidu.com && bash hosts/harmony/run-superapp.sh",
+      "branch": null,
+      "related": [
+        "T-harmony-device-reverify",
+        "T-app-keyboard-push"
+      ],
+      "note": "【done · 决策 #1077（2026-10-19）】用户重签后 BUILD SUCCESSFUL。三件套全绿：① HTTP 二进制腿 {bridge:invokeBytes,frameSource:arkts,status:200,bodyBytes:2443}（新签名版）；② superapp 回归 ok=True current=mine；③ **键盘推送 314vp→env=314→0vp**。★修掉三处装置缺陷：① EntryAbility 场景白名单逐个列举漏加 superapp-keyboard ⇒ 落 dev/Index（改**前缀匹配** startsWith(\"superapp\")，本仓已两次漏加）；② 探针场景提前 return 绕过了 window.getLastWindow（监听在那儿装）⇒ watch_installed=false ⇒ 自行取窗口；③ 收键盘不能用\"移焦到不存在 id\"⇒ inputMethod.stopInputSession()。★探针设计：自绘 superapp 无输入控件 ⇒ 单独渲染 TextInput + focusControl.requestFocus 走真实输入法栈；逻辑抽到 runtime/KeyboardProbe.ets（Superapp.ets 959 行防破 1000）；判据脚本条件等报告落盘。★诚实边界：一次性 VM ⇒ JS 侧当帧接收由渲染时注入覆盖（本探针证明系统事件 + env 通路），与 Android/iOS 即时推语义不同。★三端状态：iOS 336pt→0（#1074 含 JS 2 次推送）· 鸿蒙 314vp→0（本单）· **Android 仍缺**（#1075 blocked）。"
     }
   ]
 }

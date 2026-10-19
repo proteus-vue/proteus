@@ -6950,3 +6950,44 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   ② HTTP 探针证据来自**已装旧版**，不代表最新代码；③ 设备连接不稳是环境态，需用户确认 USB 线/口与授权。
 【下一步】① 用户在 DevEco 里重签（一次性）→ 跑 `build-host-app.sh` + `run-superapp.sh` + `run-http-probe.sh`；
   ② 设备稳定后可补鸿蒙键盘推送的真机判据（#1069 的"渲染时注入"形态至今无真机证据）。
+
+1077. **★★★鸿蒙键盘推送真机闭环（#1069 的最后一块证据）+ 三处装置缺陷修复 · 决策**（2026-10-19 · 承接 #1076 重签后）：
+【重签生效（用户操作）】用户在 DevEco 重签后，`build-profile.json5` 的路径/口令全部换成本机（`/Users/kags`），
+  `SignHap` 通过 ⇒ **`BUILD SUCCESSFUL`**，产出 `entry-default-signed.hap`。三件套随即全部可跑。
+【真机三项全绿】
+  · **HTTP 二进制腿**：`{ok:true,bridge:invokeBytes,frameSource:arkts,status:200,bodyBytes:2443}`
+    （新签名版，含最新代码；此前 #1076 只能用设备上已装旧版取证）。
+  · **superapp 回归**：`ok=True host=harmony current=mine tabs=['index','messages','mine']`，
+    tap 切换 messages/mine 均正确，视觉证据 `superapp.png` 落盘。
+  · **键盘推送（本决策主目标，`#1069` 一直缺的那块）**：
+    `{"watch_installed":true,"shown_height_vp":314,"env_keyboard":314,"shown_ok":true,
+      "hidden_height_vp":0,"hidden_ok":true}` ⇒ **真实系统键盘 314vp → `--pf-keyboard-height` 同步 314 → 收起 0vp**。
+【★修掉的三处装置缺陷（都是"看起来跑了、其实没验到"型）】
+  · **① 场景白名单逐个列举**：`EntryAbility` 里原本是
+    `scene==='superapp' || ==='superapp-drive' || startsWith('superapp-screen-') || startsWith('superapp-pump-') || ==='superapp-http'`
+    —— 新增 `superapp-keyboard` **没加进去** ⇒ 落到 `dev/Index`（日志实锤 `page=dev/Index`），
+    探针代码根本没执行。★改为**前缀匹配** `sceneStr.startsWith('superapp')`
+    —— 本仓已在 #1069/#1077 两次漏加，逐个列举的形态注定会再漏。
+  · **② 探针场景提前 return 绕过了窗口装配**：`superapp-keyboard` 分支在 `aboutToAppear` 里早退，
+    而 `window.getLastWindow(...)` 那段（**监听就是在那儿装的**）在后面 ⇒ `this.win` 恒 `undefined`
+    ⇒ `watch_installed=false`、键盘读数恒 0。修法：本场景**自己取窗口**（异步）再装监听 + 跑探针。
+  · **③ 收起键盘不能靠"移焦到不存在的 id"**（鸿蒙不一定收）⇒ 改用 `inputMethod.getController().stopInputSession()`
+    （`@kit.IMEKit`，注入式 `hideKeyboard` 由壳提供）。
+【★探针设计（可复用样板）】
+  · 鸿蒙 superapp 是**自绘**（RenderNode）⇒ 没有输入控件 ⇒ 探针场景单独渲染
+    `<TextInput id="proteus-kb-probe" width(1) height(1) opacity(0.01)>` + `focusControl.requestFocus()`
+    —— 走**真实输入法栈**（伪事件证明不了系统真会发 `keyboardHeightChange`）。
+  · 有界：弹/收各最多 3s（100ms × 30 轮条件轮询，非盲等）；超时如实写 `shown_error`。
+  · 逻辑抽到 `runtime/KeyboardProbe.ets`（`Superapp.ets` 已 959 行，塞进去会破 1000 红线）。
+  · 判据脚本 `run-keyboard-probe.sh`：装 → 清场 → 启动 → **条件等报告落盘** → 断言四项
+    （watch_installed / shown>0 / env 同步 / 收起为 0）。
+【★诚实边界（重要）】鸿蒙是**一次性 VM**（#540）：键盘事件到达时**没有存活的 JS 环境**，
+  `__proteusHostKeyboard` 只能在**下一次渲染的 VM 内**被调用（读数经 `DeviceSnapshot` 带进快照，
+  C++ `invokeKeyboardSnapshot` 注入）。⇒ 本探针证明的是「**系统真的发 keyboardHeightChange** +
+  **env 通路真的更新**」；JS 侧当帧接收由注入路径 + 单测覆盖，**不是本探针的判据范围**。
+  这与 Android/iOS 的「事件即时推」语义不同，如实登记、不粉饰为三端一致。
+【判据】鸿蒙 `check-harmony-host-compile` 绿 · `harmony-runtime-prebuilt` 已同步 ·
+  `check:file-size` 绿（`Superapp.ets` 压到 1000 行内——新文件硬上限，过程删了两处双空行）·
+  `run-http-probe` / `run-superapp` / **`run-keyboard-probe`** 三件套 exit=0。
+【三端键盘证据现状（更新）】iOS 336pt→0（#1074，含 JS 收到 2 次推送）· 鸿蒙 314vp→0（本决策，
+  系统事件 + env 通路）· **Android 仍缺**（#1075 探针装置问题 blocked：MIUI 上注入的 EditText 测量为 0×0）。
