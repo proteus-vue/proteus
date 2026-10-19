@@ -6694,3 +6694,55 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 【诚实边界】① 真机（iOS Safari/移动端）未验——本次只验桌面 Chromium；触屏无 hover，不走本路径；
   ② 宽限期 140ms 是经验值（够覆盖普通斜向移动，不拖沓）；若将来出现"移开不关"的报告，先查这个值；
   ③ 键盘可达性维持原状（Escape 关闭 + 触发器具 `aria-expanded`），未加方向键在子项间移动（独立改进项）。
+
+1071. **★★★能力通道能否承载上百页面超级应用？—— 四项结构性风险取证与修复（N×N 事件放大 / 订阅泄漏 / 待决表无界 / UTF-8 解码瓶颈）· 决策**（2026-10-19 · 用户提问「当前能力通道架构能否承载上百页面大厂超级应用，是否有内存风险」）：
+【结论】**协议层能承载，实例化模型不能**。问题不在 84 项能力或字节管线，而在"每页建一次能力实例"的累积效应。
+【取证（Node 跑真实源码，非推断；探针脚本一次性、未入库）】
+  · **① 事件源不幂等（P0 · 平方级放大）**：`createCapabilityHooks()` 默认参数是 `createCapabilityBridge()`，
+    而 `webBridge()` 每次都调 `installWebEventSources`（**无幂等守卫**）⇒ 每页往 `window` 挂 5 个监听器
+    （visibilitychange/resize/load/scroll/beforeunload），而总线是**全局单例** ⇒ 一次系统事件被 N 个监听器
+    各 emit 一次、再分发给 N 页订阅者 = **N×N 次回调**。实测：100 页 ⇒ **10000 次**（应为 100）、0.68ms；
+    200 页 ⇒ 40000；500 页 ⇒ **500000 次**/6.3ms。★单调性实测：500→600→700→800 页 ⇒ 50万→66万→84万→**104万**。
+    ★`scroll` 更糟（浏览器每帧触发）：100 个监听器 = 每帧 100 次无谓派发。
+    ★MP 端同源：`wx.onAppShow/onError/onMemoryWarning` 都是**追加订阅**语义，同样 N×N。
+  · **② 订阅不回收（P1）**：`capability.ts` 无任何自动 dispose；`onShow(cb)` 返回的取消函数没人保存
+    ⇒ 页面卸载后订阅仍在全局总线里。实测：100 页 ⇒ **200 个悬挂订阅**（每页 2 个），单调增长。
+    ★有量具没门禁：`bus.subscriberCount` 已存在（App 壳还写进 host-runtime.json），但没有"卸载后必须回落"的断言。
+  · **③ 待决表无界（P2）**：App 三端引擎无 `setTimeout` ⇒ 超时降级 `host-only`（JS 侧不设表），此时只有
+    "宿主回推/抛错"才删条目。实测：宿主只受理不回推 ⇒ 5000 次调用后 pending **5000**、heap **+5.54MB**，永久挂起。
+  · **④ UTF-8 手写解码是大载荷瓶颈（P2）**：App 三引擎**都没有 `TextDecoder`**（查证：C 桥/JSC 上下文/JSVM
+    注入点均无）。实测 1MB ASCII：`utf8Decode` **35.65ms** vs `JSON.parse` **0.49ms**（**74x**）；CJK 1MB 19.2ms。
+    ★注意口径：这是 **JS 侧解码成本**；JSON 腿把开销推给宿主（要把 1MB 转义成 JSON），故非"JSON 整体更快"。
+    但结论成立：**大响应体在 App 上是真实性能风险**（`responseType:'arraybuffer'` 路径零解码，下载/文件场景无此问题）。
+  · **⑤ 宿主记账无界（P1）**：Android/iOS `callLog` 每次 invoke 都 append、从不清理（判据 `native.calls` 读它）。
+【修复】
+  · 新增 `capability-lifecycle-once.ts`：按**事件源身份**（`addEventListener` 引用 / `wx` 对象）用 `WeakSet`
+    去重 + 安装次数诊断读数。★为什么用身份而非布尔：生产环境引用恒定（只装一次）；测试每次换新桩（正常重装，
+    不破坏既有隔离语义）；源被回收即自动出表。
+  · `capability-app.ts` 两处安装器接入守卫（各压成一行；注释移入 lib 头，规避存量棘轮）。
+  · 新增 `capability-hooks-scope.ts`：`createSubscriptionScope()` 回收袋 + `wrap(handle)`（保留 getter/描述符，
+    只替换函数成员 ⇒ 可见语义零变化）+ `installCapabilityDisposeHook(register, cap)`（注入式，零 vue 依赖）。
+    `useAppLifecycle` / `usePageLifecycle` / `useBackground` 的句柄经 `scope.wrap`；`CapabilityHooks` 新增 `dispose()`。
+  · `capability-invoke.ts`：待决表加上限 1024 + 淘汰最旧**并 reject**（不静默丢弃）+ `pendingHostCallEvictions()` 读数。
+  · `shared/binary/wire.ts`：`utf8Decode` 加 **ASCII 快路径**（连续 ASCII 段用 `String.fromCharCode.apply`
+    分块批量转换）。实测 1MB ASCII：35.65ms → **4.21ms（8.5x）**；CJK 无改善（如实）。
+    ★**严格性不变**：快路径只处理 `<0x80` 字节，遇高位字节退回原逐码点分支 ⇒ 非法序列仍抛错（实测三类均抛）。
+  · 宿主记账改**有界环形**：Android `ArrayDeque` + `CALL_LOG_MAX=512`；iOS 超限 `removeFirst`。
+【判据】新增 `tests/capability-scale.test.ts` **13/13**：
+  ① 100 页 ⇒ window 监听器仍 5 个（不是 500）、一次事件回调 = 订阅数（不是 N×N）；
+  ② dispose ⇒ 订阅回到卸载前（含"未 dispose 时保持"的对照组、幂等、getter 不被破坏）；
+  ③ 1200 次无回推 ⇒ 表 ≤1024 且淘汰计数增长、健康路径不新增；
+  ④ UTF-8 往返一致（ASCII/中文/emoji/长混合）+ 三类非法输入仍抛 + ASCII 明显快于 CJK 同尺寸；
+  ⑤ Android/iOS 记账形态断言（有界容器 + 淘汰逻辑，且无界 List 不得残留）。
+  **破坏性验证 3 条**：摘幂等守卫 ⇒ 2 红；摘回收登记 ⇒ 3 红；摘待决表上限 ⇒ 1 红；恢复 ⇒ 13/13 绿。
+  既有能力测试 **180/180** 无回归；`check:file-size`（两处存量棘轮压回基线并降钉）/ `no-json-wire` /
+  `capability-golden` / `invoke-wire-parity`（五端 24 向量）/ `host-invoke-contract` / `script-compile` /
+  `ai-tasks` / `vue-tsc` 全绿；三端编译（javac+C桥+JNI / swiftc）+ AAR 重建。
+【排期建议（未做完的，如实登记）】① 业务侧迁移：页面里 `createCapabilityHooks()` 应改为**模块级单例**或
+  `installCapabilityDisposeHook(onScopeDispose, cap)`（当前示例与 showcase 仍是每页新建——已修好"不再放大"，
+  但"每页多一份实例"的 55KB/页开销仍在）；② 大响应体建议走 `responseType:'arraybuffer'`（零解码），
+  或在 App 端给 `utf8Decode` 补 CJK 快路径（需要引擎级 `TextDecoder` 或宿主解码）；③ 鸿蒙宿主 `callLog` 不在
+  本轮范围（其运行时无该记账结构）。
+【诚实边界】① 探针在 Node 环境跑真实源码，**非真机**；② 事件放大在浏览器里的真实表现取决于浏览器如何派发
+  多监听器（本次按规范语义逐监听器调用验证）；③ 55KB/页 是 Web 路径实测（含 hooks 闭包 + 订阅），App 路径的
+  每页实例成本未单独测；④ 本轮**未改业务侧用法**（示例/showcase 仍每页新建）——修复的是"放大"与"泄漏"，不是"实例数"。

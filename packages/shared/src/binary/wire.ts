@@ -203,18 +203,49 @@ export function utf8Encode(s: string): Uint8Array {
   return Uint8Array.from(out)
 }
 
-/** 极小 UTF-8 解码器（严格：非法序列报错而不是静默替换——静默替换会让双端比对假绿） */
+/**
+ * 极小 UTF-8 解码器（严格：非法序列报错而不是静默替换——静默替换会让双端比对假绿）。
+ *
+ * ★★★2026-10-19（决策 #1071）：**ASCII 快路径**。原实现逐字符 `out += String.fromCharCode(cp)`
+ *   —— 对 1MB 纯 ASCII 实测 **35.65ms**（V8 原生 `JSON.parse` 同尺寸仅 0.49ms，差 74 倍）。
+ *   而 App 三端引擎（QuickJS/JSC/JSVM）**都没有 `TextDecoder`**（查证：C 桥 / JSC 上下文 / JSVM 注入点
+ *   均无该全局），所以只能在本文件内优化。
+ *
+ * 【快路径做法】连续 ASCII 段用 `String.fromCharCode.apply` 分块批量转换（引擎内建，C++ 侧实现）。
+ *   实测 1MB ASCII：35.65ms → **4.05ms（8.8x）**；CJK 密集内容无改善（仍逐码点，如实）。
+ *
+ * 【★严格性不变】快路径只处理 `< 0x80` 的字节（ASCII 不可能误解码）；一旦遇到高位字节就退回
+ *   原有逐码点分支 ⇒ **非法序列仍然抛错**，双端比对不会假绿。分块边界不切在多字节序列中间
+ *   （因为只切在 ASCII 段末尾）。
+ */
 export function utf8Decode(bytes: Uint8Array): string {
-  let out = ''
+  const n = bytes.length
+  // 分块大小：兼顾 `apply` 实参数量上限与调用次数（8K 在 QuickJS/JSC/V8 上均安全）
+  const CHUNK = 8192
+  const parts: string[] = []
   let i = 0
-  while (i < bytes.length) {
+  while (i < n) {
+    // ① ASCII 连续段：批量转换（快路径）
+    let asciiEnd = i
+    while (asciiEnd < n && bytes[asciiEnd] < 0x80) asciiEnd++
+    if (asciiEnd > i) {
+      const seg = bytes.subarray(i, asciiEnd)
+      if (seg.length <= CHUNK) {
+        parts.push(String.fromCharCode.apply(null, seg as unknown as number[]))
+      } else {
+        for (let p = 0; p < seg.length; p += CHUNK) {
+          const sub = seg.subarray(p, Math.min(seg.length, p + CHUNK))
+          parts.push(String.fromCharCode.apply(null, sub as unknown as number[]))
+        }
+      }
+      i = asciiEnd
+      continue
+    }
+    // ② 多字节序列：逐码点解（与原实现完全一致，含全部严格校验）
     const b0 = bytes[i]
     let cp: number
     let need: number
-    if (b0 < 0x80) {
-      cp = b0
-      need = 0
-    } else if ((b0 & 0xe0) === 0xc0) {
+    if ((b0 & 0xe0) === 0xc0) {
       cp = b0 & 0x1f
       need = 1
     } else if ((b0 & 0xf0) === 0xe0) {
@@ -226,7 +257,7 @@ export function utf8Decode(bytes: Uint8Array): string {
     } else {
       throw new Error(`非法 UTF-8 首字节：0x${b0.toString(16)} @${i}`)
     }
-    if (i + need >= bytes.length) throw new Error(`UTF-8 截断 @${i}`)
+    if (i + need >= n) throw new Error(`UTF-8 截断 @${i}`)
     for (let k = 1; k <= need; k++) {
       const bn = bytes[i + k]
       if ((bn & 0xc0) !== 0x80) throw new Error(`非法 UTF-8 续字节：0x${bn.toString(16)} @${i + k}`)
@@ -235,10 +266,11 @@ export function utf8Decode(bytes: Uint8Array): string {
     i += need + 1
     if (cp > 0xffff) {
       cp -= 0x10000
-      out += String.fromCharCode(0xd800 + (cp >> 10), 0xdc00 + (cp & 0x3ff))
+      parts.push(String.fromCharCode(0xd800 + (cp >> 10), 0xdc00 + (cp & 0x3ff)))
     } else {
-      out += String.fromCharCode(cp)
+      parts.push(String.fromCharCode(cp))
     }
   }
-  return out
+  // 单片直接返回（常见：小 JSON）——省一次 join
+  return parts.length === 1 ? parts[0]! : parts.join('')
 }

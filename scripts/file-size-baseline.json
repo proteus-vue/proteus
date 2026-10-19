@@ -15,7 +15,7 @@
   "website/scripts/gen-content.mjs": 2807,
   "packages/compiler/src/template.ts": 2230,
   "website/scripts/gen-content-en.mjs": 2216,
-  "packages/api/src/capability-app.ts": 2095,
+  "packages/api/src/capability-app.ts": 2093,
   "tests/mp-transform.test.ts": 1967,
   "hosts/shared/bridge/showcase-ink.ts": 1960,
   "tests/capability-granularity.test.ts": 1941,

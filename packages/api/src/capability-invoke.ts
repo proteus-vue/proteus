@@ -351,6 +351,40 @@ export function hostCallTimerMode(): "js-timer" | "host-only" | "unset" {
 const pendingHostCalls = new Map<string, PendingHostCall>()
 let hostCallSeq = 0
 
+/**
+ * ★★★待决表上限（决策 #1071）。
+ *
+ * 【为什么必须有】App 三端引擎没有 `setTimeout` ⇒ 超时降级为 `host-only`（JS 侧不设表）；
+ *   此时只有"宿主回推"或"宿主抛错"才会删条目。宿主一旦丢帧/重装/被系统杀过一次，
+ *   对应 Promise 就**永久挂在表里**（实测：5000 次调用不回推 ⇒ pending 5000、heap +5.54MB）。
+ *   超级应用长跑会持续涨。
+ * 【策略】超过上限时**淘汰最旧**并 reject 掉——不静默丢弃（调用方拿到明确错误而不是永久挂起）。
+ *   上限取 1024：正常并发请求远低于此（HTTP 默认 6 并发/域），触到上限本身就说明宿主异常。
+ */
+const PENDING_HOST_CALLS_MAX = 1024
+/** 被容量淘汰的累计次数（诊断读数——供门禁/真机判据观察宿主是否在丢回推） */
+let pendingEvictions = 0
+export function pendingHostCallEvictions(): number {
+  return pendingEvictions
+}
+/** 插入并维护上限（所有 `pendingHostCalls.set` 都走这里） */
+function trackPending(reqId: string, p: PendingHostCall): void {
+  pendingHostCalls.set(reqId, p)
+  while (pendingHostCalls.size > PENDING_HOST_CALLS_MAX) {
+    const oldest = pendingHostCalls.keys().next()
+    if (oldest.done) break
+    const victim = pendingHostCalls.get(oldest.value)
+    pendingHostCalls.delete(oldest.value)
+    pendingEvictions++
+    if (victim) {
+      try {
+        victim.timer.clear()
+        victim.reject(new Error(`原生异步调用被淘汰（待决表超过 ${PENDING_HOST_CALLS_MAX} 条——宿主可能丢失回推）`))
+      } catch { /* reject 抛错不影响淘汰流程 */ }
+    }
+  }
+}
+
 /** 生成 `__reqId`（壳按它关联回推；格式 `app-async-N`——真机判据按它与宿主记账对账） */
 function nextReqId(): string {
   return `app-async-${++hostCallSeq}`
@@ -491,7 +525,7 @@ function invokeHostAsyncJson(method: string, args: unknown, timeoutMs: number): 
       pendingHostCalls.delete(reqId)
       reject(new Error(`原生异步调用超时（${method}，${timeoutMs}ms）`))
     })
-    pendingHostCalls.set(reqId, { resolve, reject, timer, responseType: 'text', generic: false })
+    trackPending(reqId, { resolve, reject, timer, responseType: 'text', generic: false })
     let out: string
     try {
       out = f ? f(method, payload) : ph!.invoke!(method, payload)
@@ -550,7 +584,7 @@ function invokeHostAsyncBytes(
       pendingHostCalls.delete(reqId)
       reject(new Error(`原生异步调用超时（${method}，${timeoutMs}ms）`))
     })
-    pendingHostCalls.set(reqId, { resolve, reject, timer, responseType, generic: !isHttp })
+    trackPending(reqId, { resolve, reject, timer, responseType, generic: !isHttp })
     let out: Uint8Array | undefined
     try {
       out = fn(frame)

@@ -29,6 +29,7 @@
 
 import { invokeHost, invokeHostAsync } from './capability-invoke'
 import type { AppRequestConfig, AppRequestResponse } from './capability-invoke'
+import { onceWebEventSource, onceWxAppBridge } from './capability-lifecycle-once' // ★决策 #1071 幂等守卫
 export {
   HOST_INVOKE_KEY,
   getHostInvoke,
@@ -190,15 +191,11 @@ export interface WxLifecycleSource {
   onAudioInterruptionEnd?: (cb: (...args: unknown[]) => void) => void
 }
 
-/**
- * ★★把小程序**应用级**官方事件接进总线（这些是真实全局 API——与页面级的机制不同）。
- *
- * 覆盖：onAppShow / onAppHide / onError / onUnhandledRejection / onMemoryWarning /
- *       onThemeChange / onWindowResize / onPageNotFound / onAudioInterruptionBegin/End。
- * ★`launch` 由首个 show 自动补发（总线语义，见 emit 分支）——wx 无独立全局 launch 事件。
- * ★每个订阅各自 try 守卫：某个 API 在旧基础库缺失时不影响其余（诚实降级，不静默整体失败）。
- */
+/** ★★把小程序**应用级**官方事件接进总线（覆盖 onAppShow/Hide/Error/UnhandledRejection/MemoryWarning/
+ *  ThemeChange/WindowResize/PageNotFound/AudioInterruption*；`launch` 由首个 show 补发）。
+ *  ★每个订阅各自 try 守卫：某 API 在旧基础库缺失不影响其余。★幂等见 `capability-lifecycle-once.ts`。 */
 export function installWxAppEventBridge(bus: HostLifecycleBus, wx: WxLifecycleSource): void {
+  if (!onceWxAppBridge(wx)) return // ★幂等（决策 #1071）
   /** 接线诊断（**独立于业务事件面**）：业务订阅 app:error 时不该收到"桥没接线"这类内部噪音 */
   const bridgeDiag = (msg: string): void => {
     // 可观测但不污染事件面：优先 console（devtools/真机 logcat 可见），console 缺失则忽略
@@ -1450,7 +1447,8 @@ export interface WebEventSource {
 export function installWebEventSources(bus: HostLifecycleBus, g: WebEventSource): void {
   const doc = g.document
   const win = g
-  if (typeof win.addEventListener !== 'function') return // 非浏览器环境（SSR/测试）——诚实跳过
+  // 非浏览器环境（SSR/测试）诚实跳过；已装过同一事件源则幂等返回（决策 #1071：N 页 ⇒ 仍是 1 套监听器）
+  if (typeof win.addEventListener !== 'function' || !onceWebEventSource(win.addEventListener)) return
 
   // ── app:show/hide + page:show/hide（visibilitychange；launch 由总线在首个 show 时自动补） ──
   //   ★两个层级都派发（语义不同、都要）：应用退后台 ⇒ 应用 hide **且** 页面 hide；

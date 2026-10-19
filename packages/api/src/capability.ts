@@ -7,6 +7,7 @@ import { mpBridgeExt, webBridgeExt } from './generated/bridge-ext'
 import { detectAppHost } from './capability-app'
 // ★★2026-10-19（决策 #1067）：App 端三组能力（生命周期 + 平台能力 + 设备域）统一装配
 import { createAppCapabilities } from './capability-app-device'
+import { createSubscriptionScope } from './capability-hooks-scope' // ★决策 #1071 订阅回收
 import type { AuthStorage } from './auth'
 import { CapError, capErr, capOk, wrap } from './capability-types'
 import type { ARAPI, AdAPI, AlbumAPI, AppLifecycle, ArchiveOptions, AudioController, AuthState, BackgroundAPI, BatteryInfo, BeaconAPI, BiometricOptions, BluetoothAPI, CacheManagerHandle, CalendarAPI, CalendarEvent, CameraController, CanvasController, CapDeviceInfo, CapResult, CapabilityBridge, CapabilityProbe, CompatStorage, Contact, CookieJar, Coords, DataChannelHandle, DataChannelOptions, DeviceCapabilityAPI, DownloadOptions, DownloadResult, ElementQuery, FSAdapter, FetchConfig, FileSystemBridge, HostContext, IAPReceipt, IdleAPI, ImageEditAPI, IntersectionHandle, IntersectionOptions, KeyboardLifecycle, LivePusherController, LiveRoomHandle, LiveRoomOptions, LocalServiceAPI, Logger, LoginResult, MapController, MediaAccess, MediaProcessingAPI, MediaQueryObserver, MessageSubscription, MiniProgramAPI, NFCAPI, NavigationGuardAPI, NetworkType, OrientationInfo, PageLifecycle, PaymentConfig, PaymentReceipt, PerformanceAPI, PermissionState, PosterAPI, PreloadAPI, PrivacyAPI, ProgressCallback, RecorderController, ScreenCaptureAPI, ScreenInfo, SensorKind, SensorSample, SensorStream, ShareOptions, ShippingAddress, SocketTaskHandle, TCPSocketConnectOptions, TCPSocketHandle, TrackAPI, TranslationAPI, UDPSocketHandle, UpdateManagerAPI, UploadOptions, UploadResult, VideoController, WeRunData, WebAssemblyAPI, WebSocketConnection, WifiAPI, WindowAPI, WorkerHandle, WxLike } from './capability-types'
@@ -217,20 +218,15 @@ export interface CapabilityHooks {
   usePoster(): CapResult<PosterAPI>
   /** ★C81 useDeviceCapability：设备能力探测（wx.checkDeviceSupportHevc / web MediaSource） */
   useDeviceCapability(): CapResult<DeviceCapabilityAPI>
-  /**
-   * ★C82 WebAssembly：WASM 编译/实例化/校验（跨端归一，平台差异见 `WebAssemblyAPI` 头）。
-   *
-   * 【三端真实形态（已取证 + 双端真机验证）】MP 走 `WXWebAssembly.instantiate(path)`（基础库
-   *   v2.13.0+ · 只收**代码包路径** · 无 compile/validate）· Web 与 App-iOS(JSC) 走标准
-   *   `WebAssembly`（收字节 · compile/validate 齐备）· App-Android 由**宿主 wasm3** 执行
-   *   （QuickJS 无内建 WASM——真机 add(2,40)=42）。
-   *   ⇒ 用 `supportsStreaming` / `supportsPathLoad` 两个能力位判断，**不要按平台名分支**。
-   */
+  /** ★C82 WebAssembly：跨端归一（MP `WXWebAssembly` 收路径 · Web/iOS-JSC 走标准 API ·
+   *  Android 走宿主 wasm3）。用 `supportsStreaming`/`supportsPathLoad` 判断，**不要按平台名分支**。
+   *  三端真实形态详见 `WebAssemblyAPI` 类型头（已取证 + 真机验证）。 */
   useWebAssembly(): CapResult<WebAssemblyAPI>
   /** 能力探测面（降级查询） */
   probe(): Promise<CapabilityProbe>
+  /** ★决策 #1071：解除本实例登记的全部订阅（页面卸载时调用；幂等）。 */
+  dispose(): void
 }
-
 
 /** ★createCapabilityHooks：能力 Hook 统一实例（bridge 注入可单测） */
 export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilityBridge()): CapabilityHooks {
@@ -242,6 +238,8 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
       return capErr<T>(e instanceof CapError ? e.code : 'cap.failed', e instanceof Error ? e.message : String(e))
     }
   }
+
+  const scope = createSubscriptionScope() // ★#1071
 
   // ★传感器流局部状态（useSensorStream 用；订阅经桥 readSensor 轮询——无推送桥的诚实降级）
   const listeners: Array<(s: SensorSample) => void> = []
@@ -599,7 +597,7 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
     },
     useAppLifecycle: () => {
       if (!bridge.getAppLifecycle) throw new CapError('app-lifecycle.unsupported', '桥未提供 getAppLifecycle（useAppLifecycle 不可用）')
-      return bridge.getAppLifecycle()
+      return scope.wrap(bridge.getAppLifecycle()) // ★#1071 订阅自动登记回收
     },
     useArchive: (options) =>
       wrap(
@@ -618,7 +616,7 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
     // ★G-32 B3 六期：page-lifecycle / bluetooth / nfc / camera / microphone / keyboard（缺桥 → Err 非抛异常 / 句柄抛错）
     usePageLifecycle: () => {
       if (!bridge.getPageLifecycle) throw new CapError('page-lifecycle.unsupported', '桥未提供 getPageLifecycle（usePageLifecycle 不可用）')
-      return bridge.getPageLifecycle()
+      return scope.wrap(bridge.getPageLifecycle())
     },
     useBluetooth: () =>
       wrap(
@@ -719,7 +717,7 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
       wrap(
         (() => {
           if (!bridge.getBackground) return Promise.reject(new CapError('background.unsupported', '桥未提供 getBackground（useBackground 不可用）'))
-          return Promise.resolve(bridge.getBackground())
+          return Promise.resolve(bridge.getBackground()).then(scope.wrap)
         })(),
       ),
     useSocketTask: (url) =>
@@ -955,6 +953,7 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
       if (!bridge.getWebAssembly) throw new CapError('webassembly.unsupported', '桥未提供 getWebAssembly（useWebAssembly 不可用）')
       return bridge.getWebAssembly()
     }),
+    dispose: () => scope.dispose(), // ★决策 #1071：解除本实例登记的全部订阅
     probe: async () => ({
       location: bridge.getLocation !== undefined,
       vibrate: bridge.vibrate !== undefined,
@@ -1090,3 +1089,4 @@ export function createReactiveStorage<TState extends Record<string, unknown> = R
     },
   }
 }
+
