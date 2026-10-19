@@ -1632,6 +1632,22 @@
         "T-app-device-pages-truth"
       ],
       "note": "【done · 决策 #1069（2026-10-19）· 用户指出「键盘那个我看鸿蒙没打通？官网文档是就差鸿蒙」】核实结论比用户看到更严重：**三端都没推**（只装了 JS 接收器；Android 壳里甚至写死 `--pf-keyboard-height = 0`），官网却因\"桥方法存在\"判了三端 ✅。落地：Android WindowInsets.ime 监听（API<30 不注册，不推假 0）；iOS 新 `keyboard-watch.swift`（UIKeyboard 通知，高度减底部安全区）+ 场景注入（巨型文件只读一行）；鸿蒙 `window.on(keyboardHeightChange)` + 设备快照 → C++ 在渲染时注入（一次性 VM 收不到事件，语义如实不同）。文档判据纠正：`hasKeyboardPush()` 读壳源码（实现+装配点），`PUSH_CAPABILITIES` 集合驱动 `appEndStatus()`。破坏性验证：摘掉 iOS 通知名 / Android ime() ⇒ 判据立刻 false。判据：新测试 14/14（+4 条推送）+ 既有 22 条；check:content/en-drift/doc-links/file-size/no-json-wire/host-invoke-contract/script-compile/vue-tsc 全绿；三端编译 + 鸿蒙 ArkTS 编译通过；AAR/prebuilt 同步。★诚实边界：**真机未跑**；iOS 未跟键盘动画曲线；Android 未在键盘弹出时重算 maxScroll；鸿蒙是渲染时注入非即时推。"
+    },
+    {
+      "id": "T-website-nav-dropdown",
+      "title": "官网导航「引擎▾」下拉 8px 死区修复（鼠标移走即关 → 间隙命中桥 + 关闭宽限期）",
+      "type": "bugfix",
+      "status": "done",
+      "owner": "session:zcode-invoke-bytes-20261019",
+      "scope": [
+        "website/src/App.vue",
+        "tests/website-nav-dropdown.test.ts"
+      ],
+      "decision": 1070,
+      "verification": "npx vitest run tests/website-nav-dropdown.test.ts && node scripts/check-file-size.mjs && node website/scripts/check-doc-links.mjs",
+      "branch": null,
+      "related": [],
+      "note": "【done · 决策 #1070（2026-10-19）· 用户实测报告：引擎下拉鼠标移走自动消失，文档页基本点不开子菜单】根因（浏览器实测）：面板 `top: calc(100% + 8px)` 与触发器之间有 8px 视觉间隙，`@mouseleave` 挂在 `.nav-drop` 上 ⇒ 指针穿过间隙那一刻不在任何后代内 ⇒ 立即关闭。首页\"看起来正常\"只是鼠标常直接跳进面板（实测同样有缺陷）。修法两层：① `.nav-drop.is-open::after` 8px 命中桥（宽 230 = 面板 min-width，只在展开态）；② `closeEngines` 改 140ms 宽限期 + 面板 mouseenter 取消 + toggle 取消；路由/Escape 走 `closeEnginesNow` 清定时器。仍保持 click 开（hover 开 + click 切会打架，既有结论不变）。判据：新测试 7/7（含\"桥高 = 面板偏移\"数值同源断言、宽限期有界）+ 破坏性 2 条（摘桥 ⇒ 2 红；改回立即关 ⇒ 1 红）；浏览器实测三页\"触发器→间隙→面板\"全程可见且子项可点击（点击后 URL = /docs/animation/00-overview）。★顺带记录：Node 18 下 `proteus build --target web` 报 `require() of ES Module`，换 Node 22.22 正常——既有环境要求（非本轮引入），不需改代码。★诚实边界：仅桌面 Chromium 实测，移动端/触屏未验（无 hover 路径）。"
     }
   ]
 }

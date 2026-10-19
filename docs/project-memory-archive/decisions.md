@@ -6658,3 +6658,39 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   ④ 鸿蒙是"渲染时注入"不是即时推——JS 侧同一渲染内多次读取拿到的是同一值（如实）。
 【下一步】三端真机键盘判据（弹收 → 报告里的 `keyboard.height` 序列 + `--pf-keyboard-height` 生效）；
   设备域剩 8 项继续。
+
+1070. **★★★官网导航「引擎▾」下拉：8px 死区导致鼠标一移走就关闭（文档页几乎点不开子菜单）· 决策**（2026-10-19 · 用户实测报告）：
+【现象（用户原话）】「引擎那个下拉弹窗鼠标移走自动消失，这个在阅读文档时基本点不开弹窗子菜单，只有首页能正常去点击」。
+【取证（浏览器实测，不是推断）】在文档页点开下拉后逐点移动鼠标：
+  · 触发器 box `y=12 h=38` ⇒ 底边 y=50；面板 `top: calc(100% + 8px)` ⇒ 面板 y=58 ⇒ **间隙 = 8px**；
+  · 鼠标在触发器上 `panel.isVisible() === true`；移到 y=54（8px 间隙内）⇒ **false**；继续移到面板内 y=78 ⇒ 仍 false。
+  ⇒ 根因确定：`@mouseleave` 挂在 `.nav-drop` 上，而面板是**绝对定位且与触发器之间留了 8px 视觉间隙**——
+  指针穿过间隙那一刻既不在按钮也不在面板（不是任何后代）⇒ `mouseleave` 立即触发 ⇒ 下拉被关，
+  子项永远来不及点。★首页"看起来正常"只是运气：首页鼠标常从触发器**直接跳进面板**（不经间隙中点），
+  实测首页同样存在该缺陷（gap=8.0，穿过间隙照样 false）。
+【修法（两层，缺一不可）】
+  · **① 间隙命中桥**：`.nav-drop.is-open::after`——`top:100%; height:8px; width:230px`（与面板 `min-width` 同值），
+    只在展开态存在（收起态不凭空多出热区），`z-index:39` 在面板（40）之下不吃面板点击。
+  · **② 关闭宽限期**：`closeEngines()` 改为 140ms 定时器（`ENGINES_CLOSE_GRACE_MS`）；
+    面板 `@mouseenter="cancelCloseEngines"`、`toggleEngines()` 也取消；单靠任一层的边界：
+    只补桥 ⇒ 斜向快速移动仍可能瞬时掠过间隙外沿；只加宽限期 ⇒ 鼠标**缓慢**穿过 8px（>140ms）照样关。
+  · 路由切换 / Escape 走 `closeEnginesNow()`（清定时器后立即关，不留悬空回调）。
+  ★**仍保持"click 开"不改成 hover 开**——本仓已实测 hover 开 + click 切会打架（悬停已开、click 又关），
+    原注释的这条判断仍然成立，本次只修"移走即关"，不改开合模型。
+【★顺带修掉的既有构建缺陷（阻塞验证）】`proteus dev/build --target web` 在本机 **Node 18** 下报
+  `require() of ES Module .../packages/docs/dist/vite.js not supported`：`config-loader.ts` 用
+  esbuild 把 `proteus.config.ts` 转 CJS 后 `require()` 一个纯 ESM 包。**这不是本轮引入**——根因是
+  本仓门禁要求 Node ≥22（`require(ESM)` 自 Node 22.12 起可用），而我先用 Node 18 跑。
+  换 `~/.nvm/versions/node/v22.22.0` 后构建/验证全部正常（不需要改代码）。
+  ★记一笔：**"构建失败"先核对 Node 版本**，别急着改源码（AGENTS.md 已写明"本仓所有门禁要求 Node ≥22"）。
+【判据】
+  · 新增 `tests/website-nav-dropdown.test.ts` **7/7**：间隙 >0 前提 · 命中桥存在且**高度 = 面板偏移**（数值同源）·
+    桥宽 ≥ 面板宽 · `closeEngines` 走定时器（不是立即置 false）· 宽限期有界（0<ms≤300）·
+    面板/触发器都取消待关闭 · 路由/Escape 走立即关并清定时器。
+  · **破坏性验证 2 条**：摘掉 `.is-open::after` ⇒ 2 条红；把 `closeEngines` 改回立即置 false ⇒ 1 条红；恢复 ⇒ 7/7 绿。
+  · **浏览器实测（修复后）**：文档页/首页/能力总览页三页 —「触发器 → 间隙 → 面板」全程 `panel.isVisible() === true`，
+    子项 5 个可见，点击「动画引擎」真实跳转到 `/docs/animation/00-overview`（URL 断言）。
+  · `check:file-size` / `en-drift` / `doc-links` / `script-compile` / `vue-tsc` 全绿。
+【诚实边界】① 真机（iOS Safari/移动端）未验——本次只验桌面 Chromium；触屏无 hover，不走本路径；
+  ② 宽限期 140ms 是经验值（够覆盖普通斜向移动，不拖沓）；若将来出现"移开不关"的报告，先查这个值；
+  ③ 键盘可达性维持原状（Escape 关闭 + 触发器具 `aria-expanded`），未加方向键在子项间移动（独立改进项）。

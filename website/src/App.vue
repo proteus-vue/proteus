@@ -80,14 +80,38 @@ const navPillActive = glassPill('rgba(124, 92, 255, 0.30)', true)
 //   ★不用"点击别处"的 scrim：nav-shell 有 `container-type: inline-size`（含 container queries 所需
 //     的 containment）⇒ 它会成为 fixed 后代的**包含块**，scrim 被限制在导航高度内、点页面点不到。
 const enginesOpen = ref(false)
+
+// ★★★2026-10-19（用户实测：「引擎下拉鼠标一移走就自动消失，文档页基本点不开子菜单」）：
+//   根因 = 面板 `top: calc(100% + 8px)` 在按钮与面板之间留了 **8px 死区**——鼠标从按钮移向面板必然
+//   穿过它，那一刻指针既不在按钮也不在面板上 ⇒ `mouseleave` 立即关闭 ⇒ 子项永远点不到。
+//   （实测取证：y=54 的间隙点 `panel.isVisible() === false`，y=78 进面板也已是 false；
+//     首页同样如此，只是鼠标常直接跳进面板所以"看起来正常"。）
+//   ★修法两层（缺一不可）：
+//     ① **命中桥**（CSS `.nav-drop.is-open::after`）：把 8px 视觉间隙纳入 hover 命中区；
+//     ② **关闭宽限期**（本处 140ms）：斜向移动/快速掠过时不会瞬间关闭，进入面板即取消。
+//   ★仍保持"click 开"（不改成 hover 开——hover 开 + click 切会打架，见下方注释）。
+const ENGINES_CLOSE_GRACE_MS = 140
+let enginesCloseTimer: ReturnType<typeof setTimeout> | null = null
+function cancelCloseEngines(): void {
+  if (enginesCloseTimer !== null) { clearTimeout(enginesCloseTimer); enginesCloseTimer = null }
+}
 function toggleEngines(): void {
+  cancelCloseEngines()
   enginesOpen.value = !enginesOpen.value
 }
 function closeEngines(): void {
+  cancelCloseEngines()
+  enginesCloseTimer = setTimeout(() => {
+    enginesOpen.value = false
+    enginesCloseTimer = null
+  }, ENGINES_CLOSE_GRACE_MS)
+}
+function closeEnginesNow(): void {
+  cancelCloseEngines()
   enginesOpen.value = false
 }
 function onKeydown(e: KeyboardEvent): void {
-  if (e.key === 'Escape') { enginesOpen.value = false; menuOpen.value = false }
+  if (e.key === 'Escape') { closeEnginesNow(); menuOpen.value = false }
 }
 
 // ★#389c 滚动进度（0→1）+ scrolled 态（desktop p-scroll-observer——监听注册 + rAF 节流 + 几何全在框架包内）
@@ -109,7 +133,7 @@ onUnmounted(() => {
 const menuOpen = ref(false)
 watch(() => route.fullPath, () => {
   menuOpen.value = false
-  enginesOpen.value = false
+  closeEnginesNow()
 })
 </script>
 
@@ -176,7 +200,14 @@ watch(() => route.fullPath, () => {
             >
               <p-text class="nav-text">{{ t('app.engines') }}<span class="nav-caret" aria-hidden="true">▾</span></p-text>
             </button>
-            <pg-glass v-show="enginesOpen" preset="floating" tint="rgba(16, 16, 22, 0.9)" :radius="14" class="nav-drop-panel">
+            <pg-glass
+              v-show="enginesOpen"
+              preset="floating"
+              tint="rgba(16, 16, 22, 0.9)"
+              :radius="14"
+              class="nav-drop-panel"
+              @mouseenter="cancelCloseEngines"
+            >
               <router-link
                 v-for="e in ENGINES"
                 :key="e.key"
@@ -314,6 +345,20 @@ watch(() => route.fullPath, () => {
 .nav-caret { margin-left: 3px; font-size: 10px; opacity: 0.7; }
 /* 窄容器：不显示下拉触发器（用下方平铺组代替）；宽容器才启用下拉 */
 .nav-drop { position: relative; display: none; }
+/* ★★间隙命中桥（2026-10-19 · 决策 #1070）：面板与触发器之间有 8px 视觉间隙，
+   若不加桥，鼠标穿过间隙的瞬间既不在按钮也不在面板上 ⇒ `mouseleave` 立即关闭下拉，
+   子项永远点不到（用户实测：「文档页基本点不开弹窗子菜单」）。
+   ★与面板同宽（min-width 230px）、同偏移（8px）——两处数值必须同源，改一处要改两处。
+   ★只在 `.is-open` 时存在：收起态不凭空多出热区。 */
+.nav-drop.is-open::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 230px;
+  height: 8px;
+  z-index: 39; /* 面板 40 之下：不吃面板自己的点击 */
+}
 .nav-drop-panel {
   position: absolute;
   top: calc(100% + 8px);
