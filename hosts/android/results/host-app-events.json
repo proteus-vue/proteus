@@ -1,17 +1,17 @@
 {
-  "ts": 1792375838379,
+  "ts": 1792378216738,
   "java": {
     "attempts": {
       "memory-warning": 1,
       "resize": 1,
       "error": 1,
-      "theme-change": 1
+      "theme-change": 2
     },
     "pushes": {
       "memory-warning": 1,
       "resize": 1,
       "error": 1,
-      "theme-change": 1
+      "theme-change": 2
     },
     "history": [
       {
@@ -20,14 +20,21 @@
           "level": 1,
           "rawLevel": 10
         },
-        "ts": 1792375769167
+        "ts": 1792378159989
+      },
+      {
+        "evt": "theme-change",
+        "payload": {
+          "theme": "light"
+        },
+        "ts": 1792378160135
       },
       {
         "evt": "theme-change",
         "payload": {
           "theme": "dark"
         },
-        "ts": 1792375781752
+        "ts": 1792378160254
       },
       {
         "evt": "resize",
@@ -35,14 +42,14 @@
           "windowWidth": 821,
           "windowHeight": 332
         },
-        "ts": 1792375791405
+        "ts": 1792378169783
       },
       {
         "evt": "error",
         "payload": {
           "error": "java.lang.RuntimeException: proteus-test-crash"
         },
-        "ts": 1792375838379
+        "ts": 1792378216738
       }
     ],
     "lastPayload": {
@@ -73,7 +80,7 @@
       "error": 1,
       "unhandled-rejection": 0,
       "memory-warning": 1,
-      "theme-change": 1,
+      "theme-change": 2,
       "resize": 1,
       "page-not-found": 0,
       "audio-interruption-begin": 0,

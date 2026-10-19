@@ -1331,7 +1331,7 @@ public class MainActivity extends Activity {
             //   JS 侧"我收到了"可伪造；本记账在 Java 进程内，判据要求两者对齐（任一环断即红）。
             HostLifecycleEvents le = this.lifecycleEvents;
             if (le != null) out.put("host_app_events", le.stats());
-            out.put("ok", r.optBoolean("ok") && f.optBoolean("async_resolved"));
+            try { out.put("keyboard_probe", new KeyboardProbe(this, root).run()); } catch (Throwable kt) { out.put("keyboard_probe", new org.json.JSONObject().put("error", String.valueOf(kt))); } out.put("ok", r.optBoolean("ok") && f.optBoolean("async_resolved")); // ★C14 #1075 键盘探针
         } catch (Throwable t) {
             try {
                 out.put("ok", false);

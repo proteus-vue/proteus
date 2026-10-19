@@ -311,61 +311,23 @@ public class SuperappActivity extends android.app.Activity {
      */
     // ────────────────────────── ★★★C14 键盘（决策 #1069） ──────────────────────────
 
-    /** 最近一次 IME 高度（dp；0 = 收起）。供 env 采集与判据读数。 */
+    /** 最近一次 IME 高度（dp；0 = 收起）——镜像 `KeyboardWatcher.lastHeightDp`（单一真源在那个类） */
     private volatile float keyboardHeightDp = 0f;
     /** 键盘监听是否已装（幂等；API<30 拿不到 ime() ⇒ 保持 false，如实上报不可知） */
     private volatile boolean keyboardWatched = false;
 
     /**
-     * 注册 IME insets 监听 → 推 JS `__proteusHostKeyboard({ height, visible })`。
-     *
-     * 【为什么推"高度"而不是"可见"】wx.onKeyboardHeightChange 的语义就是高度（0 = 收起）；
-     *   可见性由高度 > 0 推导（JS 侧 `normalizeKeyboard` 同一口径）。
-     * 【线程】insets 回调在主线程 ⇒ 直接 eval JS（QuickJS 非线程安全，主线程是唯一合法入口）。
-     * 【失败不静默】JS 侧未装接收器时 `__proteusHostKeyboard` 是 undefined ⇒ 回执 `no-hook`（记日志）；
-     *   不抛错、不影响布局（键盘高度是增强信息，不是渲染前置）。
+     * 装 IME 监听（**唯一实现已抽到 `KeyboardWatcher`**——决策 #1075：原先只在本 Activity 里，
+     * 导致 host-runtime 场景完全没有推送）。
      */
     private void installKeyboardInsets() {
-        if (keyboardWatched) return;
-        if (android.os.Build.VERSION.SDK_INT < 30) {
-            android.util.Log.i(TAG, "keyboard-watch skip（API<" + 30 + "：拿不到 ime() insets——高度不可知，不推假 0）");
-            return;
-        }
-        try {
-            getWindow().getDecorView().setOnApplyWindowInsetsListener((v, insets) -> {
-                int imePx = insets.getInsets(android.view.WindowInsets.Type.ime()).bottom;
-                float dp = density > 0 ? imePx / density : 0f;
-                // 只在**变化**时推（insets 回调节奏随焦点/动画变化，重复推送会打爆订阅者）
-                if (Math.abs(dp - keyboardHeightDp) >= 0.5f) {
-                    keyboardHeightDp = dp;
-                    pushKeyboard();
-                }
-                return v.onApplyWindowInsets(insets);
-            });
-            keyboardWatched = true;
-            android.util.Log.i(TAG, "keyboard-watch installed（IME insets → __proteusHostKeyboard）");
-        } catch (Throwable t) {
-            android.util.Log.w(TAG, "keyboard-watch 安装失败：" + t.getMessage());
-        }
-    }
-
-    /** 推键盘状态给 JS（幂等安全；未装接收器 ⇒ 记 no-hook，不抛）。 */
-    private void pushKeyboard() {
-        try {
-            if (!QuickJsEngine.isAvailable()) return;
-            String payload = "{\"height\":" + keyboardHeightDp + ",\"visible\":" + (keyboardHeightDp > 0f) + "}";
-            QuickJsEngine.EvalResult r = QuickJsEngine.eval(
-                    "typeof __proteusHostKeyboard === 'function' ? __proteusHostKeyboard(" + payload + ") : 'no-hook'");
-            String ack = r.ok && r.value != null ? r.value : ("error:" + r.error);
-            android.util.Log.i(TAG, "keyboard-push dp=" + keyboardHeightDp + " ack=" + ack);
-            QuickJsEngine.nativeRunPendingJobs();
-            // 环境变量同步（CSS `--pf-keyboard-height` 让位；复用既有渲染路径，不另造一条）
+        keyboardWatched = KeyboardWatcher.install(this, density, dp -> {
+            keyboardHeightDp = dp;
+            KeyboardWatcher.pushToJs();
+            // 环境变量同步（CSS `--pf-keyboard-height` 让位；复用既有渲染路径）
             renderCurrent(readState());
-        } catch (Throwable t) {
-            android.util.Log.w(TAG, "keyboard-push 失败：" + t.getMessage());
-        }
+        });
     }
-
 
     private org.json.JSONObject collectEnvVars() {
         org.json.JSONObject o = new org.json.JSONObject();
@@ -400,7 +362,7 @@ public class SuperappActivity extends android.app.Activity {
             o.put("--pf-cutout-top", cutT / d);
             o.put("--pf-cutout-left", cutL / d);
             o.put("--pf-cutout-right", cutR / d);
-            o.put("--pf-keyboard-height", (double) keyboardHeightDp);   // ★决策 #1069：真实 IME 高度（dp）
+            o.put("--pf-keyboard-height", (double) KeyboardWatcher.lastHeightDp);   // ★决策 #1069/#1075：真实 IME 高度（dp）
             // ★E 组（设备标量 · 决策 #598）：--pf-hairline = 1/density（一条物理像素的逻辑长度，dp）
             o.put("--pf-hairline", 1.0 / d);
             android.util.Log.i(TAG, "ENV_VARS top=" + (Math.max(sb, cutT) / d) + " bottom=" + (nav / d) + " gesture=" + gesture);

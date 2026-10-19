@@ -1,18 +1,18 @@
 {
   "engine_available": true,
-  "bundle_chars": 552192,
+  "bundle_chars": 552797,
   "bundle_load_ok": true,
   "run_ok": true,
   "pending_after_run": false,
   "jobs_pumped": 0,
   "finish_ok": true,
   "pending_after_finish": false,
-  "total_ms": 528,
+  "total_ms": 529,
   "ok": true,
   "scene": "host-runtime",
   "host_id": "android",
   "frame_driver": "Choreographer",
-  "build_id": "0353e99a-215230",
+  "build_id": "be6b7af9-102637",
   "state_created": "created",
   "state_running": "running",
   "state_suspended": "suspended",
@@ -29,11 +29,11 @@
   "refuse_background_thread": true,
   "async_resolved_at_run": false,
   "mem_available": true,
-  "mem_before": 2094707,
-  "mem_after_alloc": 2414971,
-  "mem_after_gc": 2094987,
-  "mem_obj_before": 830,
-  "mem_obj_after": 832,
+  "mem_before": 2094571,
+  "mem_after_alloc": 2414835,
+  "mem_after_gc": 2094851,
+  "mem_obj_before": 833,
+  "mem_obj_after": 835,
   "mem_ok": true,
   "mem_scope": "engine",
   "conf_total": 32,
@@ -196,6 +196,10 @@
       "native.calls"
     ]
   },
+  "device_probe": {
+    "keyboard_channel": "function",
+    "has_screen": true
+  },
   "app_events": {
     "seen": {
       "launch": 0,
@@ -223,5 +227,25 @@
     "errorHandlerInstalled": true,
     "audioReceiverRegistered": true,
     "active": true
+  },
+  "keyboard_probe": {
+    "channel": "function",
+    "diag_has_window_focus": true,
+    "diag_is_finishing": false,
+    "diag_root_child_count": 1,
+    "diag_root_w": 1200,
+    "diag_root_h": 2236,
+    "diag_root_attached": true,
+    "diag_contentview_is_root": true,
+    "diag_edit_focused": true,
+    "diag_edit_attached": true,
+    "diag_edit_w": 0,
+    "diag_edit_h": 0,
+    "shown_height_dp": 0,
+    "shown_error": "键盘 2s 内未出现（模拟器\/硬件键盘？）",
+    "js_calls_on_show": 0,
+    "hidden_height_dp": 0,
+    "js_calls_total": 0,
+    "js_log": "[]"
   }
 }

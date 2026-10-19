@@ -1745,6 +1745,27 @@
         "T-ios-source-lists-gate"
       ],
       "note": "【done · 决策 #1074（2026-10-19）】#1069 的键盘推送一直没有真机证据（全仓 app 产物 inputs=0 ⇒ 键盘永不弹）。本轮加探针：iOS 用隐藏 UITextField + becomeFirstResponder 触发真实系统键盘（装与 superapp 同一份 KeyboardWatch），判据读 channel/弹出高度/推送次数/收起高度。★**探针首轮抓到真缺陷**：iOS 上 __proteusHostKeyboard=undefined ⇒ 接收通道根本没装——installKeyboardChannel 只在 createAppDeviceCapabilities 里调，而 host-runtime 场景故意不 import capability.ts（体积+IIFE import.meta）⇒ 壳推了没人收。这与 #1069 的 installAppEventSource 完全同型（装配依赖别处加载）。修：capability-app-device 模块加载即自装（幂等+try 兜底，装配跟着定义走）+ entry-host-runtime import 并真实调用 + 两个 bundle 构建加 alias（体积 +0.7KB）。★真机结果：⑪ 键盘推送全链 336pt→0pt、JS 收到 2 次（js_log 逐帧载荷正确）；其余 40+ 条同时全绿（useFetch bytes/host-only、cap_subscribers=12、宿主自报 13 次、G conformance 32/32）。★诚实边界：Android 未加同类探针（判据如实报未覆盖）；鸿蒙无设备；未覆盖硬件键盘（落 shown_error 不判绿）。"
+    },
+    {
+      "id": "T-keyboard-android-probe",
+      "title": "Android 键盘监听抽成可复用单元 + 探针（探针未打通，装置问题已定位）",
+      "type": "capability",
+      "status": "blocked",
+      "owner": "session:zcode-invoke-bytes-20261019",
+      "scope": [
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/KeyboardWatcher.java",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/shell/SuperappActivity.java",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/dev/MainActivity.java",
+        "hosts/android/results/**"
+      ],
+      "decision": 1075,
+      "verification": "bash hosts/android/check-host-compile.sh && bash hosts/android/run-host-runtime.sh",
+      "branch": null,
+      "related": [
+        "T-keyboard-device-proof",
+        "T-app-keyboard-push"
+      ],
+      "note": "【blocked · 决策 #1075（2026-10-19）】【Handoff】做到哪：① KeyboardWatcher.java 抽出（任何 Activity 一行 install 即可；SuperappActivity 改委托，行为不变）；② dev/MainActivity 加键盘探针（与 iOS 同口径），判据 ⑪ 两端共用。★已验证有效：channel=\"function\"（JS 接收通道正确装了，证明 #1074 修法在 Android 也生效）；diag_has_window_focus=true / root_w=1200 / root_h=2236 / attached=true。★未做：真实键盘弹收未打通——diag_edit_w=0 / h=0（EditText 已获焦、已挂窗但测量为 0×0）⇒ MIUI 上 0 尺寸视图不触发输入法。5 轮未解决（1×1 → MATCH_PARENT×40 + 条件等待 → 仍 0）。★下一步（可照做）：改用**真实可见输入控件**（测试场景放一个可见 EditText，脚本 adb shell input tap 点它），不要程序化注入隐藏控件——showSoftInput 对未完成测量的视图在 MIUI 上行为不稳定。★坑：探针里 showSoftInput 必须等布局完成；alpha=0 无法获焦。★判据状态：Android 整体 exit=0 全绿，键盘项如实报\"未覆盖\"（不假绿）；iOS 有完整证据（#1074 336pt→0pt）。"
     }
   ]
 }

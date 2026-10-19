@@ -6872,3 +6872,39 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   `WindowInsets.ime()` 通路仍只有编译/单测证据；② **鸿蒙无设备**，其"渲染时注入"形态仍未真机验证；
   ③ 探针触发的是**系统键盘**，未覆盖第三方输入法/硬件键盘的边界情形（后者会落 `shown_error`
   如实标注，不判绿也不算红）；④ 键盘动画曲线仍未跟随（#1069 已登记）。
+
+1075. **★★★Android 键盘推送：实现抽成可复用单元 + 探针（**未打通**，如实登记装置问题与已取证事实）· 决策**（2026-10-19 · 承接 #1074）：
+【做了什么（有效部分）】
+  · **抽出可复用单元** `runtime/KeyboardWatcher.java`：`#1069` 把 IME 监听直接写在 `SuperappActivity` 里
+    ⇒ **只有 superapp 场景有**，`host-runtime` 场景（`dev/MainActivity`）完全没有。
+    与 iOS #1074 抓到的缺陷**同型**（iOS 是"接收通道没装"，Android 是"推送实现绑死在某个 Activity 上"）。
+    现提取为静态类：任何 Activity 一行 `KeyboardWatcher.install(window, density, listener)` 即可；
+    `lastHeightDp` 为单一真源（env 采集读它），`pushToJs()` 统一推 JS 并返回可读回执。
+    `SuperappActivity` 改为委托调用（行为不变）。
+  · **加了探针**（`dev/MainActivity`）：与 iOS 同口径触发真实软键盘（EditText + requestFocus +
+    `showSoftInput`），读数写进 `keyboard_probe`；判据 ⑪ 段两端共用。
+【★探针**未打通**（诚实登记，不粉饰）】Android 上键盘始终没弹出，实测读数：
+  · `channel="function"` —— **JS 侧接收通道正确安装**（这证明 #1074 的修法在 Android 也生效）；
+  · `diag_has_window_focus=true` · `diag_is_finishing=false` · `diag_root_w=1200` ·
+    `diag_root_h=2236` · `diag_root_attached=true` —— **窗口与内容容器都正常**；
+  · `diag_edit_focused=true` · `diag_edit_attached=true` · **`diag_edit_w=0` · `diag_edit_h=0`** ——
+    EditText 已获焦、已挂窗，但**测量结果是 0×0**；
+  · `shown_height_dp=0` · `js_calls_total=0`（键盘没弹 ⇒ 没有任何推送）。
+  ⇒ 已定位到「探针注入的 EditText 在 MIUI 上测量为 0 尺寸」这一**装置问题**（0 尺寸视图不触发输入法），
+    但**尝试 5 轮未解决**（1×1 → MATCH_PARENT×40 + 布局条件等待 → 仍为 0），
+    过程中确认**不是产品缺陷**：接收通道、窗口焦点、root 尺寸全部正常。
+  ★按本仓纪律（「别在测试装置上反复迭代真机全流程」）**停止继续调试**，如实登记。
+【判据行为（不假绿）】⑪ 段在 `shown_error` 存在时**报"如实未覆盖"**（既不判红也不判绿），
+  Android 的整体判据仍 exit=0 全绿（其余 40+ 条不变）。⇒ 现状：**Android 键盘推送只有
+  「通道已装」的编译+真机证据，没有「真实键盘弹收」的端到端证据**；iOS 有完整证据（#1074）。
+【已排除的假设（逐条实测，供后续接手）】
+  · ~~alpha=0 无法获焦~~：已改可见透明 → `diag_edit_focused=true`，但尺寸仍 0；
+  · ~~窗口无焦点~~：`diag_has_window_focus=true`；
+  · ~~root 容器 0 尺寸~~：`diag_root_w/h=1200/2236`；
+  · ~~showSoftInput 调用过早~~：已加"等 getWidth()>0"的条件等待循环——循环内的宽度判断
+    始终为 0（该循环的诊断字段未写入报告，说明在更早的分支就结束了，仍需一人继续定位）。
+【诚实边界】① **Android 键盘端到端未验证**；② `KeyboardWatcher` 的重构本身是有效的（编译通过 +
+  superapp 路径行为不变），但没有真机回归 superapp 的键盘（会重跑 superapp 场景才能证明）；
+  ③ 探针的诊断读数保留在报告里（`diag_*`），是后续接手的证据起点。
+【后续接手建议】改用**真实输入控件**（在测试场景里放一个可见 EditText 让脚本 `adb shell input tap`
+点它）而不是程序化注入隐藏控件——`showSoftInput` 对未完成测量的视图行为在 MIUI 上不稳定。
