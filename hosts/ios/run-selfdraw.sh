@@ -204,7 +204,7 @@ PLATFORM_SRC="$(ls "$ROOT"/platform/ios/ProteusPlatform/*.swift 2>/dev/null | tr
 xcrun --sdk iphoneos swiftc -O -target arm64-apple-ios15.0 \
   -framework UIKit -framework CoreText -framework JavaScriptCore -framework AVFoundation -parse-as-library \
   -o "$APP/ProteusSelfDraw" $PLATFORM_SRC "$HERE/ProteusHost/runtime/selfdraw-scene.swift" \
-  "$HERE/ProteusHost/runtime/host-runtime-bridge.swift" "$HERE/ProteusHost/runtime/interaction-feedback.swift" "$HERE/ProteusHost/runtime/superapp-runtime-host.swift" "$HERE/ProteusHost/runtime/proteus-host-controller.swift" "$HERE/ProteusHost/runtime/host-capabilities.swift" "$HERE/ProteusHost/runtime/device-capability.swift" "$HERE/ProteusHost/runtime/keyboard-watch.swift" "$HERE/ProteusHost/runtime/element-rect.swift" "$HERE/ProteusHost/runtime/capture-capability.swift" \
+  "$HERE/ProteusHost/runtime/host-runtime-bridge.swift" "$HERE/ProteusHost/runtime/interaction-feedback.swift" "$HERE/ProteusHost/runtime/superapp-runtime-host.swift" "$HERE/ProteusHost/runtime/proteus-host-controller.swift" "$HERE/ProteusHost/runtime/host-capabilities.swift" "$HERE/ProteusHost/runtime/device-capability.swift" "$HERE/ProteusHost/runtime/keyboard-watch.swift" "$HERE/ProteusHost/runtime/element-rect.swift" "$HERE/ProteusHost/runtime/capture-capability.swift" "$HERE/ProteusHost/runtime/websocket-capability.swift" \
   "$HERE/ProteusHost/runtime/InvokeWire.swift" "$HERE/ProteusHost/runtime/invoke-bytes-bridge.swift" "$HERE/ProteusHost/runtime/http-capability.swift" \
   "$HERE/ProteusHost/runtime/host-lifecycle-events.swift" "$HERE/ProteusHost/runtime/screen-host.swift" "$HERE/ProteusHost/runtime/tab-chrome.swift" \
   "$HERE/ProteusHost/runtime/glass-metal.swift" "$HERE/ProteusHost/runtime/generated-materials.swift" \
@@ -584,6 +584,11 @@ elif [ "$MODE" = "superapp" ]; then
   #     App 退出为止 ⇒ 脚本永不返回、AI 侧看不到任何"结果"，而 App 其实早已在设备上跑起来）。
   #     ⇒ 无 `--console` 启动（launch 输出 PID 后**立即返回**），App 留在设备上常驻。
   SA_ARGS=(--superapp)
+  # ★#1093：C27 WebSocket 真机探针要设备能访问到的 URL（局域网 IP —— iOS 无 adb reverse）
+  WS_PROBE_ENV=""
+  if [ -n "${PROTEUS_WS_PROBE_URL:-}" ]; then
+    WS_PROBE_ENV=",\"PROTEUS_WS_PROBE_URL\":\"${PROTEUS_WS_PROBE_URL}\""
+  fi
   if [ "$DRIVE" = "1" ]; then SA_ARGS+=(--drive); fi
   if [ -n "$TAP" ]; then SA_ARGS+=("--tap=$TAP"); fi
   if [ -n "${PUMP:-}" ]; then SA_ARGS+=("--pump=$PUMP"); fi
@@ -593,7 +598,7 @@ elif [ "$MODE" = "superapp" ]; then
   #   两者皆无 = 常驻给人看（App 不退 ⇒ 绝不能加 `--console`，见上注释）。
   if [ "$DRIVE" = "1" ] || [ -n "$TAP" ] || [ -n "${PUMP:-}" ] || [ -n "${SCROLL_ARG:-}" ]; then
     xcrun devicectl device process launch --console --terminate-existing \
-      --environment-variables '{"PROTEUS_EXIT_AFTER_REPORT":"1"}' \
+      --environment-variables "{\"PROTEUS_EXIT_AFTER_REPORT\":\"1\"${WS_PROBE_ENV}}" \
       --device "$UDID" "$BUNDLE_ID" "${SA_ARGS[@]}" > "$LAUNCH_LOG" 2>&1 || LAUNCH_RC=$?
   else
     xcrun devicectl device process launch --terminate-existing \

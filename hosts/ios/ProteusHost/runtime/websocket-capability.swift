@@ -157,11 +157,39 @@ final class WebSocketCapability: NSObject {
         guard let data = try? JSONSerialization.data(withJSONObject: payload),
               let json = String(data: data, encoding: .utf8) else { return }
         let expr = "typeof \(Self.pushKey)==='function'?\(Self.pushKey)(\(jsQuote(json))):'no-hook'"
-        if Thread.isMainThread {
-            _ = evalJs?(expr)
-        } else {
-            DispatchQueue.main.async { [weak self] in _ = self?.evalJs?(expr) }
+        // ★#1093 真机并发纪律（与 Android 的 PENDING_PUSH 同因）：
+        //   探针/宿主在主线程跑泵循环时，DispatchQueue.main.async 的回调**排不上**
+        //   ⇒ 探针等事件、事件等主线程 ⇒ 死锁。
+        //   ⇒ 推送先入进程内队列；主线程空闲时由 scheduled drain 消费，
+        //     或由**探针循环主动调** drainPending() 就地消费。
+        pendingLock.lock()
+        pending.append(expr)
+        pendingLock.unlock()
+        DispatchQueue.main.async { [weak self] in self?.drainPending() }
+    }
+
+    /// 待分发推送（网络线程写、主线程读）。
+    private var pending: [String] = []
+    private let pendingLock = NSLock()
+
+    /// 就地消费待分发推送（**必须在 JS 线程/主线程调用**）。返回本次分发条数。
+    @discardableResult
+    func drainPending() -> Int {
+        pendingLock.lock()
+        let batch = pending
+        pending.removeAll()
+        pendingLock.unlock()
+        var n = 0
+        for expr in batch {
+            if evalJs?(expr) != nil { n += 1 }
         }
+        return n
+    }
+
+    /// 队列剩余条数（诊断：区分"宿主没入队"与"JS 没消费"）。
+    var pendingCount: Int {
+        pendingLock.lock(); defer { pendingLock.unlock() }
+        return pending.count
     }
 
     /// JSON 串转成 JS 字符串字面量（转义引号/反斜杠/换行——与 keyboard/sensor 同款）。

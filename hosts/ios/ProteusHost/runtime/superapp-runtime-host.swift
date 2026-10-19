@@ -231,9 +231,10 @@ final class SuperappRuntimeHost: NSObject, SuperappRuntimeExports {
      * 【装配位置】`SuperappScene.run` 在 `ctx.setObject(rtHost, "proteusHost")` **之后**调本方法——
      *   顺序无关紧要（JS 侧是**调用时**探测），但与 `setObject` 相邻更易审。
      * 【零回归】未装本桥的端/场景仍走既有 JSON 腿（`invokeHostAsync` 的降级分支）——**不谎称全场景已去 JSON**。 */
+    /// ★#1093：就地消费 WebSocket 待分发推送（探针的泵循环调用；正常运行由 main.async 自动消费）。
     @discardableResult
-    /// ★★★决策 #1083：装录屏/截屏推送（用户截屏 / 录屏状态变化 → `__proteusHostCapture`）。
-    ///   ★为什么在这里：推送要 `JSContext`（`HostCapabilities` 没有它）；且必须在 `setObject` 之后。
+    func drainWsPending() -> Int { caps.capabilities.websocket.drainPending() }
+
     /// ★★★决策 #1093：装 WebSocket 推送（连接/消息/关闭事件 → `__proteusHostWs`）。
     ///   与 installCapturePush 同款：推送要 JSContext，必须在 setObject 之后注入求值出口。
     func installWsPush(on ctx: JSContext) {

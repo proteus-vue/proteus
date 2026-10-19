@@ -48,6 +48,24 @@ final class SuperappScene: NSObject {
     private static weak var bridgeRef: SelfDrawBridge?
     /// ★★★v-pump/动画判据（本批）：宿主持有运行时桥 ⇒ 报告里直读泵/动画计数（native 真源，不经 JS）。
     private static weak var rtHostRef: SuperappRuntimeHost?
+    /// JSON 字符串字面量（转义引号/反斜杠/换行）——供以 JS 表达式传参用。
+    static func jsQuote(_ s: String) -> String {
+        var out = "\""
+        for ch in s.unicodeScalars {
+            switch ch {
+            case "\"": out += "\\\""
+            case "\\": out += "\\\\"
+            case "\n": out += "\\n"
+            case "\r": out += "\\r"
+            case "\t": out += "\\t"
+            default:
+                if ch.value < 0x20 { out += String(format: "\\u%04x", ch.value) }
+                else { out.unicodeScalars.append(ch) }
+            }
+        }
+        return out + "\""
+    }
+
     private static var container: UIView?
     private static var tabNames: [String] = []
     // ★★★B · 能力归 runtime（决策 #800）：**tab 栏 chrome 唯一实现在 runtime**——本壳只喂 state、
@@ -652,6 +670,40 @@ final class SuperappScene: NSObject {
         // ★判据：至少一次初始回调（链路通的最低证据）
         o["isect_ok"] = ((o["isect_initial_hits"] as? String).flatMap(Int.init) ?? 0) >= 1
         o["element_pseudo_selector"] = evalJs?("__proteusHostAppElementRect('{\"selector\":\"view:hover\"}')") ?? "null"
+        // ★★★决策 #1093：C27 WebSocket 端到端（与 Android WebSocketProbe 同口径）。
+        //   探针 URL 由**环境变量**注入（iOS 真机无 adb reverse ⇒ 必须走局域网 IP）；
+        //   未注入则跳过（如实标 skipped，不冒充通过）。
+        if let wsUrl = ProcessInfo.processInfo.environment["PROTEUS_WS_PROBE_URL"], !wsUrl.isEmpty {
+            o["ws_url"] = wsUrl
+            _ = evalJs?("__proteusHostAppWsProbe(" + Self.jsQuote(wsUrl) + ")")
+            var rounds = 0
+            var lastPhase = ""
+            let deadline = Date().addingTimeInterval(60)
+            while Date() < deadline {
+                // ★泵：Promise 回调与推送分发都要主线程跑 JS——先就地消费推送，再驱动状态机
+                _ = rtHostRef?.drainWsPending()
+                let dv = evalJs?("typeof __proteusHostAppWsProbeDrive==='function'?__proteusHostAppWsProbeDrive():'{}'") ?? "{}"
+                rounds += 1
+                if let d = dv.data(using: .utf8),
+                   let dj = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] {
+                    lastPhase = (dj["phase"] as? String) ?? "?"
+                    if (dj["done"] as? Bool) == true { break }
+                }
+                usleep(10_000)   // 10ms（有界轮询；deadline 60s）
+            }
+            o["ws_probe_rounds"] = rounds
+            o["ws_probe_last_phase"] = lastPhase
+            o["ws_probe"] = evalJs?("String(globalThis.__proteusHostWsProbeResult || 'null')") ?? "null"
+            if let pj = o["ws_probe"] as? String, let pd = pj.data(using: .utf8),
+               let po = (try? JSONSerialization.jsonObject(with: pd)) as? [String: Any] {
+                o["ws_ok"] = (po["ok"] as? Bool) ?? false
+            } else {
+                o["ws_ok"] = false
+            }
+        } else {
+            o["ws_probe"] = "skipped (PROTEUS_WS_PROBE_URL 未设置)"
+            o["ws_ok"] = false
+        }
         // 独立交叉核对（内核 readRects 里同一 nodeId 的矩形）
         if let pj = o["element_probe"] as? String, let pd = pj.data(using: .utf8),
            let po = (try? JSONSerialization.jsonObject(with: pd)) as? [String: Any],

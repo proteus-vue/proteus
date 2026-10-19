@@ -10,7 +10,7 @@ order: 2
 
 **When to use it**: Chat, real-time collaboration, market data.
 
-**End support & boundaries**: **Available on four targets** (Web / WeChat / App-iOS / App-Android); **not wired on HarmonyOS** (no ws channel in the host). One easy mistake: a successful `useWebSocket()` only means the **connection was accepted** — the `open` event is the proof it is connected (especially on App, where `ws.open` returns immediately instead of blocking the JS thread on the handshake). Send failures surface through the `error` event (`send` does not throw, matching the browser). The two App implementations differ because the platforms do: iOS uses the system `URLSessionWebSocketTask`; Android hand-writes RFC 6455 because the build has no dependency manager.
+**End support & boundaries**: **Available on four targets** (Web / WeChat / App-iOS / App-Android, both App ends device-verified); **not wired on HarmonyOS** (no ws channel in the host). One easy mistake: a successful `useWebSocket()` only means the **connection was accepted** — the `open` event is the proof it is connected (especially on App, where `ws.open` returns immediately instead of blocking the JS thread on the handshake). Send failures surface through the `error` event (`send` does not throw, matching the browser). The two App implementations differ because the platforms do: iOS uses the system `URLSessionWebSocketTask`; Android hand-writes RFC 6455 because the build has no dependency manager.
 
 > 技术标识：能力原语 C27 · `capability.websocket` · 返回 `WSConnection` · **Hook implemented** (per-end support in the table below)
 

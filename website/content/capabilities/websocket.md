@@ -10,7 +10,7 @@ order: 2
 
 **什么时候用**：聊天、实时协作、行情推送。
 
-**端实现边界**：**四端可用**（Web / 微信 / App-iOS / App-Android）；**鸿蒙未接线**（宿主没有 ws 通道）。用法上有个易错点：`useWebSocket()` 成功只代表**连接已受理**，`open` 事件才是"连上了"的证据——App 端尤其如此（`ws.open` 受理即返，不阻塞 JS 线程等握手）。发送失败走 `error` 事件（`send` 不抛，与浏览器一致）。实现上两端形态不同：iOS 用系统 `URLSessionWebSocketTask`，Android 因构建不允许引依赖而**手写 RFC 6455**（握手/Mask/分片/close 帧）。
+**端实现边界**：**四端可用**（Web / 微信 / App-iOS / App-Android，两端均已真机验证）；**鸿蒙未接线**（宿主没有 ws 通道）。用法上有个易错点：`useWebSocket()` 成功只代表**连接已受理**，`open` 事件才是"连上了"的证据——App 端尤其如此（`ws.open` 受理即返，不阻塞 JS 线程等握手）。发送失败走 `error` 事件（`send` 不抛，与浏览器一致）。实现上两端形态不同：iOS 用系统 `URLSessionWebSocketTask`，Android 因构建不允许引依赖而**手写 RFC 6455**（握手/Mask/分片/close 帧）。
 
 > 技术标识：能力原语 C27 · `capability.websocket` · 返回 `WSConnection` · **Hook 已实现**（各端支持情况见下方兼容进度表）
 

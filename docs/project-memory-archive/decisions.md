@@ -7811,10 +7811,15 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 
 1093. **★★★App 端 `useWebSocket` 真机闭环（Android）——四个真 bug，其中一个让"每一步都成功、整体不工作" · 决策**（2026-10-19 · 承接"网络域 App 端 21 项 🟡"的第一项）:
 
-【结果】Android 端 WebSocket **端到端真机通过**（`bash hosts/android/run-ws-probe.sh`）：
-  连接 / 文本 echo `ping-proteus` / **二进制逐字节** `[1,2,3,255]` / 300 字节大消息 / close code 1000 —— 8 项全绿。
-  iOS 侧用系统 `URLSessionWebSocketTask` 实现并且 `swiftc -typecheck` 通过，但**本轮无 iOS 设备**（`devicectl` 不可用）
-  ⇒ iOS 仍是"编译通过、真机未验"，兼容表上按既有口径标 ✅（桥+宿主分派齐备），真机验证另列。
+【结果】**Android 与 iOS 两端都端到端真机通过**：
+  · Android（`bash hosts/android/run-ws-probe.sh`）：连接 / 文本 echo / **二进制逐字节** `[1,2,3,255]` /
+    300 字节大消息 / close code 1000 —— 8 项全绿（探针 4600+ 轮泵，手写 RFC 6455 腿）。
+  · iOS（`bash hosts/ios/run-ws-probe.sh`）：同样 8 项全绿，**只用了 14 轮**（系统 `URLSessionWebSocketTask` 腿）。
+  ★★关于"iOS 设备"的一次误判（教训）：我先只查 `PATH` 与默认安装位就写了"本轮无 iOS 设备（devicectl 不可用）"，
+    而**设备一直连着**、Xcode 26.5 也一直在 `/Volumes/data1/work/office-applications/Xcode.app`。
+    本仓 `hosts/ios/lib/xcode-env.sh` 的头注释**早就写明**这个非默认安装位与两级偏好；
+    我既没 source 它、也没按"下否定结论前先跑一条取证命令"的纪律去查。
+    ⇒ 这条与记忆里 2026-09-29 那次"误判本机无可用 Xcode"**是同一个错误**。
 
 【通道设计（一次受理 + 壳推事件流）】
   `ws.open` / `ws.send` / `ws.close` 三个宿主方法都**受理即返**（G-39「invokeNative 统一异步」；
@@ -7861,7 +7866,11 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     `swiftc -typecheck` / `check:content` / `check:en-drift` 全绿。
 
 【诚实边界】
-  ① **iOS 未真机验证**（本轮无设备）：实现用了系统 API、类型检查通过，但"能连"未取证。
+  ① **iOS 已真机验证**（8 项全绿，14 轮泵）——但先说清一处误判：我曾写"本轮无 iOS 设备"，
+     而设备一直连着、Xcode 26.5 一直在 `/Volumes/data1/work/office-applications/Xcode.app`（`xcode-env.sh` 头注释就写着）。
+     这是「下否定结论前没跑取证命令」的同一错误（2026-09-29 那次误判过一回）——已修正并记录。
+  ② iOS 端不需要 Android 那样的推送队列死锁处理：`URLSessionWebSocketTask` 的回调本就在后台队列，
+     `push` 里切主线程即可排上（探针 14 轮 vs Android 4600+ 轮）。
   ② **鸿蒙未实现**（宿主没有 ws 通道）⇒ 兼容表 🟡，能力页端边界已写明。
   ③ Android 手写实现**不支持 permessage-deflate**（不发 `Sec-WebSocket-Extensions`，服务端不会压缩）；
      单条消息上限 16 MiB（超限 close 1009）。

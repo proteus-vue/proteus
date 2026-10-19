@@ -16,10 +16,14 @@
 import { WebSocketServer } from 'ws'
 
 const port = Number(process.argv[2] ?? 8787)
-const wss = new WebSocketServer({ port, host: '127.0.0.1' })
+// ★#1093：host 可配置——Android 走 adb reverse（127.0.0.1 即可），
+//   iOS 真机没有 reverse 通道 ⇒ 必须绑 **0.0.0.0** 让设备经局域网 IP 访问。
+//   用法：node ws-echo-server.mjs 8787 0.0.0.0
+const host = process.argv[3] ?? '127.0.0.1'
+const wss = new WebSocketServer({ port, host })
 
 wss.on('listening', () => {
-  console.log(`ws-echo-ready port=${port}`)
+  console.log(`ws-echo-ready port=${port} host=${host}`)
 })
 
 let connSeq = 0
