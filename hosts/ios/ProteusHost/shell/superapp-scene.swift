@@ -633,6 +633,23 @@ final class SuperappScene: NSObject {
         // ★★★决策 #1083：录屏/截屏能力探针（iOS：有 isCaptured、无全局 PiP、有截屏通知）
         _ = evalJs?("__proteusHostAppCapture()")
         o["capture_probe"] = evalJs?("String(globalThis.__proteusCaptureProbeResult ?? 'null')") ?? "null"
+        // ★★★决策 #1086：交叉观察真机判据（与 Android `ElementProbe` 同口径）
+        o["isect_register"] = evalJs?(
+            "(function(){var g=globalThis;var h=g.__proteusHostAppIntersection;"
+            + "if(typeof h!=='function')return 'no-hook';"
+            + "g.__ISECT_HITS=[];"
+            + "return h('{\"selector\":\"#mine-row-dark\",\"thresholds\":[0,0.5,1]}',"
+            + " function(r){g.__ISECT_HITS.push(Math.round(r.intersectionRatio*100));});})()") ?? "null"
+        o["isect_initial"] = evalJs?("JSON.stringify(globalThis.__ISECT_HITS||[])") ?? "[]"
+        o["isect_initial_hits"] = evalJs?("String((globalThis.__ISECT_HITS||[]).length)") ?? "0"
+        // ★主动再评估一次（模拟滚动后的 tick；生产由宿主自动调）→ 记录滚动后回调
+        o["isect_retick"] = evalJs?("String(typeof __proteusSuperappIntersectionTick==='function'?__proteusSuperappIntersectionTick():-1)") ?? "-1"
+        o["isect_after"] = evalJs?("JSON.stringify(globalThis.__ISECT_HITS||[])") ?? "[]"
+        o["isect_after_hits"] = evalJs?("String((globalThis.__ISECT_HITS||[]).length)") ?? "0"
+        // ★同位几何探针：证明"此刻几何腿可取"（否则"没回调"无法归因）
+        o["isect_rect_probe"] = evalJs?("__proteusHostAppElementRect('{\"selector\":\"#mine-row-dark\"}')") ?? "null"
+        // ★判据：至少一次初始回调（链路通的最低证据）
+        o["isect_ok"] = ((o["isect_initial_hits"] as? String).flatMap(Int.init) ?? 0) >= 1
         o["element_pseudo_selector"] = evalJs?("__proteusHostAppElementRect('{\"selector\":\"view:hover\"}')") ?? "null"
         // 独立交叉核对（内核 readRects 里同一 nodeId 的矩形）
         if let pj = o["element_probe"] as? String, let pd = pj.data(using: .utf8),

@@ -11,8 +11,16 @@
   "element_pseudo_selector" : "{\"ok\":false,\"error\":\"unsupported\",\"reason\":\"伪类（`:hover` \/ `:nth-child` 等）未支持：App 端无 CSS 引擎语义\",\"selector\":\"view:hover\",\"screen\":\"mine\"}",
   "element_registry" : "{\"vue\":0,\"screens\":{\"index\":64,\"messages\":43,\"mine\":62}}",
   "host_id" : "ios",
-  "host_stats" : "{\"ok\":true,\"data\":{\"mount_calls\":4,\"rect_calls\":0,\"content_node_total\":269,\"live_screens\":1,\"anim_calls\":0,\"destroy_calls\":3,\"anim_hook_missing\":0,\"anim_completed\":0,\"shared_calls\":0,\"calls\":[\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.stats\"],\"screens\":[{\"visible\":true,\"rootNodeId\":100,\"screenId\":\"mine#4\"}],\"visible_calls\":4}}",
+  "host_stats" : "{\"data\":{\"visible_calls\":4,\"anim_completed\":0,\"destroy_calls\":3,\"anim_hook_missing\":0,\"anim_calls\":0,\"rect_calls\":0,\"live_screens\":1,\"content_node_total\":269,\"screens\":[{\"screenId\":\"mine#4\",\"visible\":true,\"rootNodeId\":100}],\"shared_calls\":0,\"mount_calls\":4,\"calls\":[\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.stats\"]},\"ok\":true}",
   "interaction_probe" : "{\"press_styles\":5,\"press_applied\":0,\"press_anim_starts\":0,\"press_anim_stops\":0,\"field_specs\":0,\"field_ticks\":0,\"field_nodes_touched\":0,\"field_touched_now\":0,\"pseudo_parents\":0,\"last_field_ids\":[]}",
+  "isect_after" : "[100]",
+  "isect_after_hits" : "1",
+  "isect_initial" : "[100]",
+  "isect_initial_hits" : "1",
+  "isect_ok" : true,
+  "isect_rect_probe" : "{\"ok\":true,\"selector\":\"#mine-row-dark\",\"nodeId\":16,\"source\":\"screen\",\"screen\":\"mine\",\"left\":16,\"top\":231,\"right\":374,\"bottom\":279,\"width\":358,\"height\":48,\"scrollY\":0}",
+  "isect_register" : "{\"ok\":true}",
+  "isect_retick" : "0",
   "kernel_rect" : {
     "clipH" : 48,
     "clipW" : 358,
@@ -36,7 +44,7 @@
     "running" : false
   },
   "rendered_page" : "mine",
-  "run_ts" : 1792391097.107759,
+  "run_ts" : 1792394228.1355591,
   "scroll_probe" : {
     "after_drag_down_100k" : 0,
     "after_drag_left_100k_x" : 0,

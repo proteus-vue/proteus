@@ -7471,7 +7471,10 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
      `isect_rect_probe` 同时证明几何腿可取（`#idx-read-theme` → nodeId 14）。
      `isect_after_scroll` 与初始相同 = [100,100]——**目标始终在视口内 ⇒ 比例未跨档 ⇒ 不回调**，
      正是 Web 语义（不是失败）；"跨档才回调"已由单测（10/10）覆盖。
-     ★iOS/鸿蒙未做真机（iOS 接线仅编译通过；鸿蒙本就 unsupported）。
+     ★**iOS 真机也已闭环**（2026-10-19 补测）：`isect_register={ok:true}` · `isect_initial=[100]`（1 次回调）·
+     `isect_retick=0`（**tick 函数被真的调到**，返回 0 = 同档不回调）· `isect_after=[100]`（未跨档 ⇒ 不回调，
+     符合 Web 语义）· `isect_rect_probe={ok:true,nodeId:16}`（几何腿可取）。
+     ⇒ **两端（Android/iOS）同口径闭环**；鸿蒙如实 unsupported（一次性 VM）。
   ★**真机过程中抓到一个装置缺陷（值得记，因为它会污染后续所有几何探针）**：
      `ElementProbe` 里原有的"宿主栈自检"`mini_mount`（挂一棵 1 节点小树）跑在**几何探针之前**
      ⇒ **把整棵树换掉了** ⇒ 之后所有 `element.rect` 都回"节点无几何（不在树上或 display:none）"。
