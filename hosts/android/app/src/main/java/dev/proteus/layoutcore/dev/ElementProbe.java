@@ -149,15 +149,45 @@ public final class ElementProbe {
             out.put("pseudo_probe", evalStr("__proteusHostAppElementRect("
                     + JSONObject.quote(new JSONObject().put("selector", "view:hover").toString()) + ")"));
 
+            // ★★★决策 #1086：交叉观察真机判据（注册 → 初始回调 → 驱动滚动 → 看是否有新回调）
+            try {
+                // ① 注册：观察一个**滚动后会移动**的目标（页根下第二个卡片，滚动必然改变其可见度）
+                out.put("isect_register", evalStr(
+                        "(function(){var g=globalThis;var h=g.__proteusHostAppIntersection;if(typeof h!=='function')return 'no-hook';"
+                        + "g.__ISECT_HITS=[];h('{\"selector\":\"#idx-read-theme\",\"thresholds\":[0,0.5,1]}', function(r){g.__ISECT_HITS.push(Math.round(r.intersectionRatio*100));});"
+                        + "return String((g.__ISECT_HITS||[]).length);})()"));
+                out.put("isect_probe_reply", evalStr(
+                        "(function(){var g=globalThis;var h=g.__proteusHostAppIntersection;"
+                        + "if(typeof h!=='function')return 'no-hook';"
+                        + "return h('{\"selector\":\"#idx-read-theme\",\"thresholds\":[0,0.5,1]}', function(r){g.__ISECT_HITS.push(Math.round(r.intersectionRatio*100));});})()"));
+                // ★诊断：即时重评估一次（若 observe 时几何取不到，这里建树后应能补上）
+                out.put("isect_retick", evalStr("String(typeof globalThis.__proteusSuperappIntersectionTick==='function'?globalThis.__proteusSuperappIntersectionTick():-1)"));
+                out.put("isect_hits2", evalStr("JSON.stringify((globalThis.__ISECT_HITS||[]))"));
+                // ★诊断：直接查该节点几何（确认 evaluate 能不能取到）
+                out.put("isect_rect_probe", evalStr("__proteusHostAppElementRect('{\"selector\":\"#idx-read-theme\"}')"));
+                out.put("isect_stats", evalStr("JSON.stringify(globalThis.__proteusIsectStats?globalThis.__proteusIsectStats():null)"));
+                // ② 初始回调条数（observe 后应立即可评估一次）
+                out.put("isect_initial_hits", evalStr("String((globalThis.__ISECT_HITS||[]).length)"));
+                out.put("isect_initial", evalStr("JSON.stringify((globalThis.__ISECT_HITS||[]))"));
+                // ③ 驱动滚动（与真手指同一条 scrollDragBy 链）→ 等 tick 生效
+                try { rtHost.scrollBy("{\"dx\":0,\"dy\":-200}"); } catch (Throwable ignored) { }
+                try { QuickJsEngine.nativeRunPendingJobs(); } catch (Throwable ignored) { }
+                out.put("isect_after_scroll", evalStr("JSON.stringify((globalThis.__ISECT_HITS||[]))"));
+                // ④ 判据：至少有一次初始回调（链路通的**最低证据**）
+                int initHits = 0;
+                try { initHits = Integer.parseInt(out.optString("isect_initial_hits", "0")); } catch (Throwable ignored) { }
+                out.put("isect_ok", initHits >= 1);
+            } catch (Throwable t) { out.put("isect_error", String.valueOf(t)); }
+
+            // ★★★决策 #1083：录屏/截屏能力探针（两段式：先调一次，再读异步结果）
+            out.put("capture_probe_call", evalStr("__proteusHostAppCapture()"));
+            try { QuickJsEngine.nativeRunPendingJobs(); } catch (Throwable ignored) { }
+            out.put("capture_probe", evalStr("String(globalThis.__proteusCaptureProbeResult ?? 'null')"));
             // ★**宿主栈自检**：同一宿主 + 一棵最小树（证明"几何腿本身可用"，排除"栈不可用"误判）
             try {
                 String mini = "{\"viewport\":{\"width\":390,\"height\":844},\"nodes\":[{\"id\":1,\"width\":390,\"height\":844,\"backgroundColor\":\"#ff0000\"}]}";
                 out.put("mini_mount_reply", draw.mount(mini));
             } catch (Throwable t2) { out.put("mini_mount_reply", "throw: " + t2); }
-            // ★★★决策 #1083：录屏/截屏能力探针（两段式：先调一次，再读异步结果）
-            out.put("capture_probe_call", evalStr("__proteusHostAppCapture()"));
-            try { QuickJsEngine.nativeRunPendingJobs(); } catch (Throwable ignored) { }
-            out.put("capture_probe", evalStr("String(globalThis.__proteusCaptureProbeResult ?? 'null')"));
             boolean ok = p.optBoolean("ok", false) && out.optBoolean("cross_check_ok", false);
             out.put("ok", ok);
         } catch (Throwable t) {

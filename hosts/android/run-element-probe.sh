@@ -72,6 +72,17 @@ for k, want in (('not_found_probe', 'not-found'), ('pseudo_probe', 'unsupported'
         o = {}
     if not (o and o.get('ok') is False and want in str(o.get('error', ''))):
         fails.append(f'{k} 未如实分档（期望 {want}）：{v}')
+# ★#1086：交叉观察——注册必须成功、且**初始回调至少一次**（Web 语义：observe 后立即评估）
+#   ★`isect_after_scroll` 可能等于 `isect_initial`：目标始终在视口内 ⇒ 比例未跨档 ⇒ 不回调（**符合 Web 语义**，不是失败）
+if not d.get("isect_ok"):
+    fails.append("交叉观察未通过（isect_ok=false）：" + str({
+        "reply": d.get("isect_probe_reply"),
+        "initial_hits": d.get("isect_initial_hits"),
+        "initial": d.get("isect_initial"),
+        "rect": d.get("isect_rect_probe"),
+    }))
+else:
+    print("    ✓ 交叉观察初始回调 " + str(d.get("isect_initial_hits")) + " 次 · 比例 " + str(d.get("isect_initial")))
 # ★#1083：录屏/截屏能力——三端**能查的字段不同**，判据必须验"真值 vs unsupported"分得开
 #   Android：无公开录屏查询 ⇒ recording 必须 unsupported（**不是 false**）；pip 应是真值
 try:

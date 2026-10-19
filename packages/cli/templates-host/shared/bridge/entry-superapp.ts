@@ -29,7 +29,7 @@ import { resolveElement, resolveAllElements, elementRegistryStats, firstScreenEl
 //   而相对路径让 bundler 与类型检查解析到同一份源，零配置改动）
 import { installElementResolver } from '../../../packages/api/src/capability-app-element'
 // ★★★决策 #1086：交叉观察依赖注入（与 useElement 同一解析器 + 同一文档序）
-import { installIntersectionDeps, evaluateIntersections } from '../../../packages/api/src/capability-app-intersection'
+import { installIntersectionDeps, evaluateIntersections, createAppIntersection } from '../../../packages/api/src/capability-app-intersection'
 // ★★★决策 #1083：录屏/截屏能力探针（真机判据直接调真实桥，不经 capability.ts 全量入口）
 import { createAppCaptureCapabilities } from '../../../packages/api/src/capability-app-capture'
 import type { SuperappRuntime } from '@proteus-vue/render-backend'
@@ -615,6 +615,23 @@ export function appCaptureProbe(): string {
  *   而 `element.rect` 已把内容坐标减掉 scrollY（#1081）。⇒ 计算全在 JS 一处，三端不会各算一套。
  * 【返回】本轮**跨阈值真正回调**的条数（0 = 未跨档，属正常：Web 语义就是只在跨档时回调）。
  */
+/**
+ * ★★★决策 #1086：**交叉观察探针**（真机判据入口）。
+ *   `{selector, thresholds?}` → 注册一个观察者，每次回调把 `Math.round(ratio*100)` 推进全局数组。
+ *   ★与 `useIntersection` **同一实现**（`createAppIntersection`），不另造一套。
+ */
+;(globalThis as unknown as { __proteusSuperappIntersection?: (a: string, cb: (r: { intersectionRatio: number }) => void) => string })
+  .__proteusSuperappIntersection = (argsJson, cb) => {
+    try {
+      const a = JSON.parse(argsJson || '{}') as { selector?: string; thresholds?: number[] }
+      const h = createAppIntersection({ thresholds: a.thresholds })
+      h.relativeToViewport().observe(a.selector ?? '', (r) => cb(r))
+      return '{"ok":true}'
+    } catch (e) {
+      return JSON.stringify({ ok: false, error: String((e as Error)?.message ?? e) })
+    }
+  }
+
 ;(globalThis as unknown as { __proteusSuperappIntersectionTick?: () => number })
   .__proteusSuperappIntersectionTick = () => {
     try { return evaluateIntersections() } catch { return 0 }
@@ -653,6 +670,8 @@ __HOSTAPP.__proteusHostAppAnimActive = (): string => {
 __HOSTAPP.__proteusHostAppTree = __HOSTAPP.__proteusSuperappTree
 // ★★★决策 #1081：元素查询（中性名——三端宿主/判据按此名调）
 __HOSTAPP.__proteusHostAppElementRect = __HOSTAPP.__proteusSuperappElementRect
+// ★#1086：交叉观察探针（中性名）
+__HOSTAPP.__proteusHostAppIntersection = __HOSTAPP.__proteusSuperappIntersection
 // ★★★决策 #1083：录屏/截屏能力探针（中性名——三端判据按此名调）
 ;(globalThis as unknown as { __proteusSuperappCapture?: () => string })
   .__proteusSuperappCapture = () => appCaptureProbe()

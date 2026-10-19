@@ -2007,12 +2007,12 @@
         "tests/capability-app-intersection.test.ts"
       ],
       "decision": 1086,
-      "verification": "npx vitest run tests/capability-app-intersection.test.ts && bash hosts/android/check-host-compile.sh && bash hosts/ios/check-selfdraw-compile.sh",
+      "verification": "npx vitest run tests/capability-app-intersection.test.ts && bash hosts/android/check-host-compile.sh && bash hosts/ios/check-selfdraw-compile.sh && bash hosts/android/run-element-probe.sh",
       "branch": null,
       "related": [
         "T-app-element-selector-web-parity"
       ],
-      "note": "【done · 决策 #1086（2026-10-19）】#1081 把 useIntersection 判为 unsupported，理由是\"缺帧级几何变化通知\"。本轮取证发现理由**过严**：element.rect 已返回视口坐标、视口尺寸可知、三端滚动入口都是单点 ⇒ 只要一个\"几何可能变了\"的 tick 就够，相交计算可全放 JS。\n【实现】语义对齐 Web IntersectionObserver：relativeToViewport/relativeTo(margins)/observe/disconnect/thresholds/observeAll；**初始回调**（observe 后立即评估）· **阈值跨档才回调**（同档内不刷）· 比例 = 相交面积/目标面积 · disconnect 只清本句柄 · 拿不到几何跳过（不伪造 0）· 参照不存在**不静默退回视口**。索引侧新增 resolveAllElements（与 resolveElement 同一解析器+同一文档序）。\n【三端】Android 在 SuperappRuntimeHost.mount 接 setScrollPosListener → view.post → tick（放在 runtime 里，与 pullPumpsDeferred 同一纪律：换壳不漏接；post 避免 QuickJS 嵌套 eval）；iOS onScrollDrag 后 DispatchQueue.main.async 调 tick；**鸿蒙不支持**（一次性 VM，观察者无法跨渲染存活）。\n【判据】10/10 + 破坏性 2 条（摘跨档判断 ⇒ 1 红；比例改用参照面积 ⇒ 4 红）。\n【诚实边界】① 只在\"几何变了\"时评估（滚动 tick + observe 时刻），**不监听**纯布局变化/动画位移——那需真正的帧级通知，属后续批次；② 鸿蒙不支持；③ **本轮未做三端真机取证**——tick 接线已编译通过，但滚动驱动的实际回调未在设备上验证（后续在 showcase intersection 页跑真机判据）。"
+      "note": "【done · 决策 #1086（2026-10-19）】#1081 把 useIntersection 判为 unsupported，理由是\"缺帧级几何变化通知\"。本轮取证发现理由**过严**：element.rect 已返回视口坐标、视口尺寸可知、三端滚动入口都是单点 ⇒ 只要一个\"几何可能变了\"的 tick 就够，相交计算可全放 JS。\n【实现】语义对齐 Web IntersectionObserver：relativeToViewport/relativeTo(margins)/observe/disconnect/thresholds/observeAll；**初始回调**（observe 后立即评估）· **阈值跨档才回调**（同档内不刷）· 比例 = 相交面积/目标面积 · disconnect 只清本句柄 · 拿不到几何跳过（不伪造 0）· 参照不存在**不静默退回视口**。索引侧新增 resolveAllElements（与 resolveElement 同一解析器+同一文档序）。\n【三端】Android 在 SuperappRuntimeHost.mount 接 setScrollPosListener → view.post → tick（放在 runtime 里，与 pullPumpsDeferred 同一纪律：换壳不漏接；post 避免 QuickJS 嵌套 eval）；iOS onScrollDrag 后 DispatchQueue.main.async 调 tick；**鸿蒙不支持**（一次性 VM，观察者无法跨渲染存活）。\n【判据】10/10 + 破坏性 2 条（摘跨档判断 ⇒ 1 红；比例改用参照面积 ⇒ 4 红）。\n【诚实边界】① 只在\"几何变了\"时评估（滚动 tick + observe 时刻），**不监听**纯布局变化/动画位移——那需真正的帧级通知，属后续批次；② 鸿蒙不支持；③ **Android 真机已闭环**（2026-10-19 补测）：观察者注册成功、**初始回调 2 次、比例 [100,100]**、`isect_rect_probe` 证明几何腿可取；`isect_after_scroll` 与初始相同是因为目标始终在视口内（比例未跨档 ⇒ 不回调，**符合 Web 语义**）。iOS 仅编译通过；鸿蒙 unsupported。★真机抓到**装置缺陷**：ElementProbe 的 `mini_mount`（挂 1 节点小树做自检）跑在几何探针之前 ⇒ **换掉整棵树** ⇒ 之后所有 `element.rect` 都\"无几何\"；已挪到所有几何探针之后。教训：同一宿主上的多个探针，顺序就是依赖。"
     }
   ]
 }
