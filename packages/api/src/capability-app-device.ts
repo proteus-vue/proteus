@@ -31,6 +31,7 @@ import { createAppElementCapabilities } from './capability-app-element'
 // ★★★决策 #1083：录屏/截屏状态（C71）——三端能力面不同，逐方法诚实分档
 import { createAppCaptureCapabilities } from './capability-app-capture'
 import { createAppWebSocket } from './capability-websocket'
+import { createAppSocketTask } from './capability-socket-task'   // ★#1096
 import { createAppTransfer } from './capability-transfer'   // ★#1095   // ★#1093
 import type {
   BatteryInfo,
@@ -247,13 +248,15 @@ export function createAppCapabilities<E extends Error = Error>(
   // ★#1094：边界资源账本（G-43）——透传给设备域/WebSocket（键盘订阅、传感器流、连接都是边界资源）
   resOpts: { resources?: CapabilityResourceRegistry; owner?: string } = {},
 ) {
+  const appWs = createAppWebSocket(resOpts)   // ★#1093/#1096 共用一条 ws 腿
   return {
     ...createAppLifecycleCapabilities(getHostLifecycleBus(), CapError),
     ...createAppNativeCapabilities(CapError),
     ...createAppDeviceCapabilities(CapError, resOpts),
     ...createAppElementCapabilities(CapError),   // ★#1081 元素查询（createElementQuery/createIntersection）
     ...createAppCaptureCapabilities(resOpts),   // ★#1083 录屏/截屏状态（getScreenCapture）
-    connectWebSocket: createAppWebSocket(resOpts),   // ★#1093 App 端 WebSocket（ws.open/send/close + 壳推事件流）
+    connectWebSocket: appWs,   // ★#1093 App 端 WebSocket（ws.open/send/close + 壳推事件流）
+    createSocketTask: createAppSocketTask(appWs),   // ★#1096 C28 低层句柄（复用同一 ws 腿）
     ...createAppTransfer(resOpts),   // ★#1095 App 端 upload/download（复用 http.request 字节腿 + 宿主 fs）
   }
 }

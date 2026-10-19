@@ -8037,3 +8037,59 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   ② 进度只有 0 / 100（`http.request` 一次性回包，无分块进度）——**不伪造中间值**。
   ③ 大文件整块进 JS 内存（读写上限 64 MiB）；分块流式属后续批次。
   ④ `options.file`（Blob）在 App 端如实 unsupported（引擎无 Blob）——只支持 `filePath`，与 wx 一致。
+
+1096. **★★★App 端 `useSocketTask` 落地（复用已验证的 ws 腿）+ 一个抽取器陷阱 · 决策**（2026-10-19 · 承接能力盘点）:
+
+【先做盘点：网络域 App 端剩余 7 项按「平台原生 API / 前置件 / 可复用腿」分档】
+  | 能力 | Android | iOS | 结论 |
+  |---|---|---|---|
+  | `socket-task` | 复用 ws（已手写 RFC 6455） | 复用 `URLSessionWebSocketTask` | ★**与 useWebSocket 高度重叠 ⇒ 本轮做** |
+  | `local-service` | `NsdManager` 完备 | `NWBrowser`（Bonjour）完备 | 可做，需服务类型过滤 |
+  | `bluetooth` | `BluetoothLeScanner`/`Gatt` 完备 | `CoreBluetooth` 完备 | 可做，但需权限（Android 12+ `BLUETOOTH_SCAN/CONNECT`、iOS `NSBluetoothAlwaysUsageDescription`） |
+  | `socket`（裸 UDP/TCP） | `DatagramSocket`/`Socket` 完备 | `Network.framework`/BSD socket | 可做，需自写收发循环 |
+  | `nfc` | `android.nfc.*` 完备 | `CoreNFC` 仅读，**HCE 不开放** | 可做但 iOS 必须**如实分档**（HCE 不支持） |
+  | `wifi` | `WifiManager` 可读，扫描受限 | **无法扫描列表**（仅当前 SSID） | ★平台锁定差异，需如实分档 |
+  | `data-channel` | **无标准对等**（需第三方 RTC SDK） | 同 | ★应**如实 unsupported**，不该硬做 |
+
+【本轮的 `socket-task`：为什么能复用（不是偷懒，是契约本来就重叠）】
+  `SocketTaskBridge`（wx `SocketTask` 语义：`send/close/onMessage/isConnected`）与本仓
+  `WebSocketConnection`（C27：`send/close/on(event)`）是**同一件事的两种形状**——
+  App 端底层都是同一条 WebSocket。⇒ 只做形状适配，**不新增网络栈、不新增宿主方法**。
+
+【★形态差异（必须处理，否则语义错误）】
+  `createSocketTask(url)` 是**同步返回句柄**（wx 语义），而 `connect(url)` 是 async。
+  ⇒ 句柄立即返回（`isConnected()` 先 false），内部异步 connect；open 后置 connected 并补发积压消息。
+  这与浏览器 `new WebSocket()` 的「同步返回 + 异步 open」同形。
+  ★connecting 期间 `send` **排队而非 reject**（wx 语义允许先发后连），open 后按序补发。
+
+【★★★抽取器陷阱（本轮实测，差点让文档谎报）】
+  给 `app-bridge-keys.mjs` 登记 `createAppSocketTask` 后，通用抽取器
+  `returnObjectMembers` 硬失败（"未找到顶层 `return {`"）——因为该工厂**返回的是函数**（返回闭包）。
+  我先加了 `returnObjectMembersDeep`（扫描函数体内所有对象字面量），实测抽出：
+  `state/send/on/for/if/String/trim/add/delete` ——**混进局部变量与无关对象**。
+  ⇒ **污染桥方法集** ⇒ 文档会把未接线的方法误判为已接线（**比漏判更危险**）。
+  ⇒ 最终方案：新增 **`APP_BRIDGE_EXTRA_MEMBERS` 显式登记表**（`createSocketTask: 'createAppSocketTask'`）——
+    来源可审计、意图清楚、不会误收。★新增"返回闭包"的工厂必须在此登记，
+    否则该能力的 App 列会如实显示 🟡（漏判是可见的，误判不可见——**宁可漏判**）。
+  ★教训与 #1088/#1090 同族：**「让文档自己算出真相」的前提是抽取器可靠**；
+    当抽取不可靠时，显式登记比"聪明的通用算法"更诚实。
+
+【判据】`tests/capability-app-socket-task.test.ts` **10/10**：
+  ① 同步返回句柄 + 初始 `isConnected()===false`（不假装已连）；
+  ② open 后变 true；
+  ③ connecting 期间 send 排队、open 后**按序补发**；
+  ④ 消息转发 + 取消订阅 + 多订阅者 + **二进制不进 onMessage**（契约是文本，不静默当文本）；
+  ⑤ 连接失败 ⇒ send reject 且恒 false（不伪造已连接）；close 后 reject；
+  ⑥ **复用底层 ws：只调一次 `ws.open`、只占一个连接**（证明没有额外开栈）。
+  + `check:file-size` / `tsc --noEmit` / `check:content` / `check:en-drift` /
+    相关 4 个测试文件 **63/63** 全绿。
+
+【诚实边界】
+  ① **没做新的真机探针**：`socket-task` 的底层就是已真机验证的 ws 腿
+     （Android 8 项全绿 / iOS 宿主 fs + 派发通路），本轮改动是**纯形状适配**且单测 10/10 覆盖
+     状态机分支。★如实说明：**"复用已验证的腿"不等于"这条新路径已验证"**——
+     若要真机取证，可在 `run-ws-probe.sh` 里加一段 socket-task 往返（属后续批次）。
+  ② `SocketTaskBridge` 契约**没有** `onError`/`onClose` 成员（只有 `send/close/onMessage/isConnected`），
+     故错误只经 `send` reject 暴露、关闭只经 `isConnected()` 反映。
+     扩展契约属单独决策（会改公共面）。
+  ③ 只支持文本消息；二进制走 C27 `useWebSocket`。

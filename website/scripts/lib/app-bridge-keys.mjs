@@ -34,6 +34,21 @@ import { maskNonCode, returnObjectMembers } from './ts-source-scan.mjs'
 export const APP_BRIDGE_FACTORIES = ['createAppNativeCapabilities', 'createAppLifecycleCapabilities']
 
 /** 多源契约（文件 → 该文件的工厂名）。新增 App 桥源文件必须登记在此（否则文档静默漏判）。 */
+/**
+ * ★★★决策 #1096：**显式登记的桥成员**（工厂返回的是**函数**而非对象时用）。
+ *
+ * 【为什么单列而不是扩展抽取器】`createAppSocketTask` 的形态是 `(url) => SocketTaskBridge`
+ *   ——桥成员在**内部闭包**的返回对象里。通用"扫函数体内所有对象字面量"的抽取器会混进
+ *   局部变量与无关对象（实测抽出 `state/send/on/for/if/String/trim/add/delete`）⇒ **污染桥方法集**，
+ *   进而让文档把未接线的方法误判为已接线（比漏判更危险）。
+ *   ⇒ 对这类工厂**显式登记**：来源可审计、意图清楚，且不会误收。
+ *   ★新增此类工厂时必须在此登记（否则该能力的 App 列会如实显示 🟡）。
+ */
+export const APP_BRIDGE_EXTRA_MEMBERS = {
+  /** C28 `useSocketTask` → `capability-socket-task.ts::createAppSocketTask`（返回闭包） */
+  createSocketTask: 'createAppSocketTask',
+}
+
 export const APP_BRIDGE_SOURCES = [
   { file: 'packages/api/src/capability-app.ts', functions: APP_BRIDGE_FACTORIES },
   { file: 'packages/api/src/capability-app-device.ts', functions: ['createAppDeviceCapabilities'] },
@@ -49,6 +64,8 @@ export const APP_BRIDGE_SOURCES = [
   //   （`capability-transfer.ts::createAppTransfer` 展开进装配层）。
   //   ★不登记就会被判「桥未接线」——与 #1093 的 connectWebSocket 同一形态。
   { file: 'packages/api/src/capability-transfer.ts', functions: ['createAppTransfer'] },
+  // ★★★决策 #1096：C28 socket-task 的桥成员在独立工厂（复用 ws 腿的形状适配）
+
 ]
 
 /**
@@ -110,6 +127,12 @@ export function loadAppBridgeKeysFrom(root, sources = APP_BRIDGE_SOURCES) {
     const one = loadAppBridgeKeys(abs, src.functions)
     perSource[src.file] = { perFn: one.perFn, count: one.keys.size }
     for (const k of one.keys) keys.add(k)
+  }
+  for (const [k, v] of Object.entries(APP_BRIDGE_EXTRA_MEMBERS)) {
+    keys.add(k)
+    perSource['<extra>'] = perSource['<extra>'] ?? { perFn: {}, count: 0 }
+    perSource['<extra>'].perFn[k] = v
+    perSource['<extra>'].count = Object.keys(perSource['<extra>'].perFn).length
   }
   if (keys.size === 0) throw new Error('[app-bridge-keys] 多源合计抽取到 0 个 App 桥方法（不静默得空集）')
   return { keys, perSource }

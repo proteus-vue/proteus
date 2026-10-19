@@ -235,3 +235,44 @@ export function returnObjectMembers(masked, name) {
   if (close < 0) return { names: [], miss: `${name}（返回对象花括号不配对）` }
   return { names: topLevelMemberNames(masked, open, close), miss: null }
 }
+
+/**
+ * ★★★决策 #1096：**返回闭包**的工厂也能抽成员（`returnObjectMembers` 的变体）。
+ *
+ * 【为什么需要】`createAppSocketTask` 的返回形态是 `(url) => SocketTaskBridge`（**返回函数**，
+ *   不是返回对象）——桥成员在那个内部函数的返回对象字面量里。
+ *   `returnObjectMembers` 只认顶层 `return {` ⇒ 对它硬失败（"未找到顶层 return {"）。
+ *
+ * 【★★本方案已被否决（#1096 实测），保留代码仅作记录——不要用它做桥方法集】
+ *   实测对 `createAppSocketTask` 抽出：`state/send/on/for/if/String/trim/add/delete`
+ *   ——**混进局部变量与无关对象** ⇒ 污染桥方法集 ⇒ 文档会把**未接线**的方法误判为**已接线**。
+ *   ★这比"漏判"危险得多：漏判在页面上是可见的 🟡，误判是不可见的假绿。
+ *   ⇒ 正解是 `app-bridge-keys.mjs` 的 **`APP_BRIDGE_EXTRA_MEMBERS` 显式登记**。
+ *   ★保留本函数的唯一理由：记录"为什么不能用通用启发式代替显式登记"。
+ *
+ * @deprecated 不要用于桥方法集抽取（见上）。仅保留作反例。
+ */
+export function returnObjectMembersDeep(masked, name) {
+  const direct = returnObjectMembers(masked, name)
+  if (direct.miss === null) return direct
+  const body = findFunctionBody(masked, name)
+  if (!body) return { names: [], miss: `${name}（函数未找到）` }
+  const names = new Set()
+  let found = false
+  for (let i = body.open; i <= body.close; i++) {
+    if (masked[i] !== '{') continue
+    const close = matchBrace(masked, i)
+    if (close < 0) continue
+    // 只看"像对象字面量"的（前一个非空白字符是 `=` / `(` / `:` / `,` / `>`）
+    let k = i - 1
+    while (k > body.open && /\s/.test(masked[k])) k--
+    const prev = masked[k]
+    if (!'=(:,>'.includes(prev)) continue
+    for (const nm of topLevelMemberNames(masked, i, close)) {
+      names.add(nm)
+      found = true
+    }
+  }
+  if (!found) return { names: [], miss: `${name}（函数体内无可识别的对象字面量）` }
+  return { names: [...names], miss: null }
+}
