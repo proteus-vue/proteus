@@ -43,6 +43,7 @@ public final class SuperappRuntimeHost {
     public String mount(String treeJson) {
         String r = draw.mount(treeJson);
         pullPumpsDeferred();
+        wireIntersectionTick();   // ★#1086 滚动 → 交叉观察重评估
         return r;
     }
 
@@ -56,6 +57,26 @@ public final class SuperappRuntimeHost {
         if (v == null) { return; }
         v.post(new Runnable() {
             @Override public void run() { pullPumps(); }
+        });
+    }
+
+    /**
+     * ★★★决策 #1086（`useIntersection`）：**几何变化 tick 接线**——滚动时通知 JS 重评估相交。
+     *
+     * 【为什么在宿主的 `mount` 里接（而不是壳里）】与 `pullPumpsDeferred` 同一纪律：
+     *   "每屏挂载后该补的接线"由 **runtime** 自发完成 ⇒ 任何壳零接线受益，换壳不漏接。
+     * 【为什么用 `view.post`】tick 会在滚动回调里跑（Choreographer/触摸帧内），此时 QuickJS 可能正处在
+     *   某次 eval 栈上 ⇒ 直接重入不可控；排到下一 UI message（非盲等，是一帧后的一次确定性回调）。
+     * 【宿主只报"几何可能变了"】**相交比例与阈值判定全在 JS 一处**（三端不会各算一套）。
+     */
+    private void wireIntersectionTick() {
+        ProteusHostView v = draw.view();
+        if (v == null) { return; }
+        v.setScrollPosListener((x, y) -> {
+            v.post(() -> {
+                try { QuickJsEngine.eval("typeof __proteusSuperappIntersectionTick==='function'?__proteusSuperappIntersectionTick():0"); }
+                catch (Throwable ignored) { /* 单次 tick 失败不影响渲染 */ }
+            });
         });
     }
 

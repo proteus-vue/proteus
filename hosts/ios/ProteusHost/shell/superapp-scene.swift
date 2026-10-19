@@ -104,7 +104,12 @@ final class SuperappScene: NSObject {
         //   的唯一出口；superapp 场景**此前未接** ⇒ 真触摸拖拽无反应（长页无法滚动）+ `driveScrollDrag` 空转（offset 恒 0）。
         //   与 selfdraw-app.swift / proteus-host-controller.swift 同款接线（同一 bridge 方法 `scrollDragBy`）。
         bridge.view?.onScrollDrag = { [weak bridge] dx, dy in
-            bridge?.scrollDragBy(dx: Double(dx), dy: Double(dy)) ?? "{\"ok\":false,\"error\":\"bridge 已释放\"}"
+            let r = bridge?.scrollDragBy(dx: Double(dx), dy: Double(dy)) ?? "{\"ok\":false,\"error\":\"bridge 已释放\"}"
+            // ★#1086：滚动 ⇒ 交叉观察重评估（排下一 runloop，非盲等）
+            DispatchQueue.main.async {
+                _ = evalJs?("typeof __proteusSuperappIntersectionTick==='function'?__proteusSuperappIntersectionTick():0")
+            }
+            return r
         }
         // ③ proteusSelfDraw 由 SelfDrawViewController 注入（本场景复用同一 bridge）
 
