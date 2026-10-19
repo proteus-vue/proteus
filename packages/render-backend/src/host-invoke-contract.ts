@@ -50,6 +50,10 @@ export const HOST_CAPABILITY_METHODS = [
   // ★★C26 网络请求（App 腿 · S2/#903）：`http.request` 经二进制帧（`PINV`/`PRSP`）派发，
   //   宿主实现 = HttpCapability（Android 已接 / iOS 已接 / 鸿蒙未做——门禁按覆盖率如实报缺）。
   'http.request',
+  // ★★C27 WebSocket（#1093）：连接/发送/关闭三个方法都**受理即返**，事件经壳推送达。
+  'ws.open',
+  'ws.send',
+  'ws.close',
   // ★★dev 通道 · 项目 console 回收（决策 #730）：页面 `console.*` 经垫片 → `invoke('dev.console', {level,text})`
   //   ⇒ 宿主回收，渲染收尾带走（面板 Console·项目通道）。★当前仅鸿蒙 runtime 声明（一次性 VM 无法用
   //   `post` 反向通道；Android/iOS 走 `proteusHost.post`）——他端不实现 ⇒ 覆盖率如实报缺（非漂移）。

@@ -10,6 +10,8 @@ order: 2
 
 **When to use it**: Chat, real-time collaboration, market data.
 
+**End support & boundaries**: **Available on four targets** (Web / WeChat / App-iOS / App-Android); **not wired on HarmonyOS** (no ws channel in the host). One easy mistake: a successful `useWebSocket()` only means the **connection was accepted** — the `open` event is the proof it is connected (especially on App, where `ws.open` returns immediately instead of blocking the JS thread on the handshake). Send failures surface through the `error` event (`send` does not throw, matching the browser). The two App implementations differ because the platforms do: iOS uses the system `URLSessionWebSocketTask`; Android hand-writes RFC 6455 because the build has no dependency manager.
+
 > 技术标识：能力原语 C27 · `capability.websocket` · 返回 `WSConnection` · **Hook implemented** (per-end support in the table below)
 
 useWebSocket: WebSocket connection handle (wx.connectSocket / web WebSocket)
@@ -105,9 +107,9 @@ on(event: 'open' | 'message' | 'close' | 'error', handler: (payload?: unknown) =
 | Web SPA | ✅ | vue-dom · webBridge implementation (direct platform API) |
 | WeChat Mini Program | ✅ | skyline (WebView fallback) · wx bridge → wx.connectSocket |
 | Headless (SSR / testing) | ✅ | headless · mock bridge injected (testing / SSR tier) |
-| iOS native | 🟡 | native-ios (UIKit + CoreAnimation) · render core shipped — capability bridge not wired |
-| Android native | 🟡 | native-android (self-drawn Canvas) · render core shipped — capability bridge not wired |
-| HarmonyOS | 🟡 | native-harmony (ArkUI RenderNode) · render core shipped — capability bridge not wired |
+| iOS native | ✅ | native-ios (UIKit + CoreAnimation) · App host bridge (capability-app.ts) · bridge method wired |
+| Android native | ✅ | native-android (self-drawn Canvas) · App host bridge (capability-app.ts) · bridge method wired |
+| HarmonyOS | 🟡 | native-harmony (ArkUI RenderNode) · App bridge ready (platform-neutral TS) — Harmony host shell not wired |
 | Flutter hybrid | 🟡 | flutter · same JS logic layer — capability bridge not wired |
 | Quick App | ⬜ | Quick App engine (TBD) · target not started |
 
@@ -121,10 +123,12 @@ on(event: 'open' | 'message' | 'close' | 'error', handler: (payload?: unknown) =
 const res = await useWebSocket('wss://echo.example.com')
 
 if (res.ok) {
-  const ws = res.data
-  const off = ws.on('message', (payload) => console.log('received:', payload))
-  ws.send('hello')
-  // off() unsubscribes; ws.close(1000, 'done') closes the connection
+  const ws = res.data // ★handle != connected: the open event proves the connection
+  ws.on('open', () => ws.send('hello')) // send after open so the first frame is not lost
+  ws.on('message', (payload) => console.log('received:', payload))
+  ws.on('error', (e) => console.log('connection/send error:', e.message))
+  ws.on('close', (c) => console.log('closed:', c.code, c.reason))
+  // ws.close(1000, 'done') requests close (the close event is the real confirmation)
 } else if (res.error.code.endsWith('.unsupported')) {
   // platform unsupported → degradation path
 }

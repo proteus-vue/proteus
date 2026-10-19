@@ -7808,3 +7808,62 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
      宁可少说"缺"，不会把缺的说成有）。新增桥域时把映射补进显式表即可。
   ③ 纯 JS 成员"不算缺"是**有意**的：它们没有宿主腿，硬判缺会把 navigation-guard 这类
      框架内实现误降级。真实边界是"该能力是否有宿主依赖"，这由桥实现决定，不由判据猜。
+
+1093. **★★★App 端 `useWebSocket` 真机闭环（Android）——四个真 bug，其中一个让"每一步都成功、整体不工作" · 决策**（2026-10-19 · 承接"网络域 App 端 21 项 🟡"的第一项）:
+
+【结果】Android 端 WebSocket **端到端真机通过**（`bash hosts/android/run-ws-probe.sh`）：
+  连接 / 文本 echo `ping-proteus` / **二进制逐字节** `[1,2,3,255]` / 300 字节大消息 / close code 1000 —— 8 项全绿。
+  iOS 侧用系统 `URLSessionWebSocketTask` 实现并且 `swiftc -typecheck` 通过，但**本轮无 iOS 设备**（`devicectl` 不可用）
+  ⇒ iOS 仍是"编译通过、真机未验"，兼容表上按既有口径标 ✅（桥+宿主分派齐备），真机验证另列。
+
+【通道设计（一次受理 + 壳推事件流）】
+  `ws.open` / `ws.send` / `ws.close` 三个宿主方法都**受理即返**（G-39「invokeNative 统一异步」；
+  在 JS 线程上等握手 = 把 UI 与 JS 一起冻住）。连接结果与消息经壳推 `__proteusHostWs` 到达。
+  ★为什么消息不做成 invoke 往返：消息是高频的（弹幕/协同），一问一答会把每条消息变成两次跨边界调用。
+  ★两端实现不同是**平台事实**：iOS 用系统 `URLSessionWebSocketTask`；Android 构建是
+  `javac --release 17 -classpath android.jar` 裸编译（无 Gradle/无依赖树），且 `android.jar`
+  **没有** `java.net.http.WebSocket` ⇒ 手写 RFC 6455 客户端（握手/Mask/分片/ping-pong/close，约 300 行）。
+
+【★★★真机抓出的四个 bug（前三个是"看起来成功"的形态）】
+  ① **宿主推 JSON 字符串，桥只接受对象**（根因，最贵）：
+     宿主用 `__proteusHostWs(<JSONObject.quote 包过的字符串>)` 推，而 `normalizeWsPush` 里
+     `typeof payload === 'object'` 对字符串为 false ⇒ 返回 null ⇒ `dispatchWsPush` **恒返回 0**。
+     现象：连接真建成了（服务端 `conn#1 open`）、宿主真推了（日志 `push 入队`）、
+     eval 真成功了（`ok=true`）——**但事件永远到不了业务**（探针卡 46 秒）。
+     ★这条躲过了 18 条单测，因为单测一直按"对象"传（我的假设），而宿主传字符串。
+     ⇒ 修：字符串入参先 `JSON.parse`。★教训：**单测的输入形态必须来自被测方的真实行为**。
+  ② **`drained_total` 是假成功计数**：`QuickJsEngine.eval` **不抛 Java 异常**，
+     JS 错误包在 `EvalResult` 里返回；原代码只 `catch (Throwable)` ⇒ JS 报错被记成"分发成功"。
+     ⇒ 修：读 `EvalResult.ok`，false 时记日志。与 #1090「纯空壳」同族：**没抛异常 ≠ 执行成功**。
+  ③ **探针占主线程 × 壳推走 `MAIN.post` = 死锁**：探针在主线程跑几十秒泵循环，
+     壳推 Runnable 永远排不上（探针等事件、事件等主线程）。⇒ 修：壳推同时投进程内队列，
+     探针循环里 `drainPendingPushes()` 就地分发（双通道，post 那条会先 remove 再 eval 防重复）。
+  ④ **状态机等待态漏判**：`drive` 里消息消费分支只认 `phase === 'open'`，
+     而发送后 phase 已变成 `'echo-sent'` ⇒ 回包被丢弃、卡在 `echo-sent`。⇒ 修：等待态与已发送态并列判断。
+
+【★另一个自己挖的坑（记下来防再犯）】
+  排查中加的"诊断代码"各调了一次 `ws.open` ⇒ 额外开连接、产生新 id ⇒
+  **宿主推的是诊断连接的 id，探针订阅的是正式连接的 id** ⇒ 白排查两轮。
+  ★诊断代码不能改变被测对象的状态；要看内部状态就读，不要顺带发起真实调用。
+
+【桥层配套修复（不是探针专用，业务同样受益）】
+  · `open` 可能早于 `on('open')` 到达（真机实证）⇒ `happened` 状态缓存 + 晚订阅补感知。
+    ★只缓存状态型事件（open/close/error）；`message` 不缓存（流式事件重复投递是错误语义）。
+  · `close`/`error` 后清理该连接的订阅与状态（防泄漏）。
+
+【判据】
+  · `tests/capability-app-websocket.test.ts` **18/18**：通道契约（受理即返 / unsupported / 无效 id）·
+    事件按 id 精确路由 · close 后清理 · 取消订阅 · 多订阅者 · 文本/二进制发送 · 失败经 error 事件 ·
+    **晚订阅补感知** · **message 不缓存** · **★宿主字符串载荷形态**（新增两条，直接对应真机根因）。
+  · `bash hosts/android/run-ws-probe.sh`：8 项真机判据 + 本地 echo 服务（`adb reverse`，不经公网）。
+  · `check:host-invoke-contract`：ws 三方法进契约，Android 35→38、iOS 31→34（覆盖率如实上升）。
+  · `check:file-size` / `check:no-blind-wait` / `tsc --noEmit` / `check:android-host-compile` /
+    `swiftc -typecheck` / `check:content` / `check:en-drift` 全绿。
+
+【诚实边界】
+  ① **iOS 未真机验证**（本轮无设备）：实现用了系统 API、类型检查通过，但"能连"未取证。
+  ② **鸿蒙未实现**（宿主没有 ws 通道）⇒ 兼容表 🟡，能力页端边界已写明。
+  ③ Android 手写实现**不支持 permessage-deflate**（不发 `Sec-WebSocket-Extensions`，服务端不会压缩）；
+     单条消息上限 16 MiB（超限 close 1009）。
+  ④ 探针的等待是**有界轮询**（deadline 6×8s，`Thread.sleep(2~10ms)` 让出 CPU）——
+     不用 `setTimeout` 是因为 **superapp bundle 的 JS 环境根本没有定时器宿主**（grep 0 次、宿主未注入）。

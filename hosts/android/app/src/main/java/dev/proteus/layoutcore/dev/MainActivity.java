@@ -101,7 +101,7 @@ public class MainActivity extends Activity {
                     }, "proteus-test-crash").start();
                     return;
                 }
-                String p = i.getStringExtra("path");
+                String p = i.getStringExtra("path"); WebSocketProbe.noteUrl(i.getStringExtra("wsUrl")); // ★#1093 广播 extra 在**这个** Intent 上
                 // ★★长卷收尾**不进 runAll**（2026-10-01 真机实证的致命细节）：
                 //   `runAll()` 会 `clearSceneViews()`（把长卷清掉）+ 重跑全套重活测试 ⇒
                 //   长卷的"帧循环/滚动记账"全部作废（报告只剩静态壳）。
@@ -427,7 +427,7 @@ public class MainActivity extends Activity {
             String as = appStackRun();
             sb.append(as).append('\n');
             writeReport("app-stack.json", as);
-        } else if ("element-probe".equals(testPath)) { String ep = ElementProbe.run(this, root); sb.append(ep).append('\n'); writeReport(ElementProbe.REPORT, ep);
+        } else if ("element-probe".equals(testPath)) { String ep = ElementProbe.run(this, root); sb.append(ep).append('\n'); writeReport(ElementProbe.REPORT, ep); } else if ("ws-probe".equals(testPath)) { String wp = WebSocketProbe.runPending(this, root); sb.append(wp).append('\n'); writeReport(WebSocketProbe.REPORT, wp);
         } else if ("superapp".equals(testPath)) {
             // ★★★批次 43（用户「不要装置级别了，要真实的独立应用了」）：**真实 superapp 运行**——
             //   读 bundle-superapp.js，启动（路由栈 + 宿主真建树）并导航（switchTab / push / back）。

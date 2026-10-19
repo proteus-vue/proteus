@@ -234,6 +234,15 @@ final class SuperappRuntimeHost: NSObject, SuperappRuntimeExports {
     @discardableResult
     /// ★★★决策 #1083：装录屏/截屏推送（用户截屏 / 录屏状态变化 → `__proteusHostCapture`）。
     ///   ★为什么在这里：推送要 `JSContext`（`HostCapabilities` 没有它）；且必须在 `setObject` 之后。
+    /// ★★★决策 #1093：装 WebSocket 推送（连接/消息/关闭事件 → `__proteusHostWs`）。
+    ///   与 installCapturePush 同款：推送要 JSContext，必须在 setObject 之后注入求值出口。
+    func installWsPush(on ctx: JSContext) {
+        caps.capabilities.websocket.evalJs = { (expr: String) -> String in
+            let r = ctx.evaluateScript(expr)
+            return r?.toString() ?? ""
+        }
+    }
+
     func installCapturePush(on ctx: JSContext) {
         caps.capabilities.capture.push = { (payload: [String: Any]) in
             guard let data = try? JSONSerialization.data(withJSONObject: payload),

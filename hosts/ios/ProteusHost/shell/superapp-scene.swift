@@ -92,6 +92,7 @@ final class SuperappScene: NSObject {
         rtHost.installInvokeBytes(on: ctx)
         // ★★★决策 #1083：装录屏/截屏推送（用户截屏 / 录屏状态变化 → __proteusHostCapture）
         rtHost.installCapturePush(on: ctx)
+        rtHost.installWsPush(on: ctx)   // ★#1093 WebSocket 事件推送
         // ★★★C14 键盘（决策 #1069）：装系统键盘通知 → 推 JS `__proteusHostKeyboard` + 刷新 env
         //   【为什么在这里装】本场景持有 JSContext（evalJs）与容器视图；且键盘是**每次弹收**都要推的
         //   持续事件，只能由壳装（JS 侧没有 UIKit 通知）。

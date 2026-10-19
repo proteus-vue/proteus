@@ -86,12 +86,27 @@ describe('★#1092 ④ 产物：App 端 ✅ 全部有宿主证据', () => {
     }
     expect(bad, bad.join('\n')).toEqual([])
   })
-  it('总览的 iOS/Android ✅ 数 = 30（引擎豁免未造成虚高也未误降）', () => {
+  it('总览的 iOS/Android ✅ 数 == 逐页 ✅ 行数（不硬编码数字）', () => {
+    // ★不写死 30：每加一个 App 能力这个数就会变（实测 #1093 加 WebSocket 后 30 → 31，
+    //   硬编码的断言当场红——它测的是"我记得的数字"，不是"两处一致"）。
     const ov = fs.readFileSync(path.join(CAP_DIR, '00-capabilities-overview.md'), 'utf8')
-    const ios = /\| iOS 原生 \| (\d+) \|/.exec(ov)
-    const and = /\| Android 原生 \| (\d+) \|/.exec(ov)
-    expect(ios && +ios[1]).toBe(30)
-    expect(and && +and[1]).toBe(30)
+    const count = (label: string) => {
+      let n = 0
+      for (const f of fs.readdirSync(CAP_DIR)) {
+        if (!f.endsWith('.md') || f.startsWith('00-')) continue
+        const s = fs.readFileSync(path.join(CAP_DIR, f), 'utf8')
+        const m = new RegExp('\\| ' + label + '[^|]*\\| ([^|]+) \\|').exec(s)
+        if (m && m[1].trim() === '✅') n++
+      }
+      return n
+    }
+    const ovNum = (label: string) => {
+      const m = new RegExp('\\| ' + label + ' \\| (\\d+) \\|').exec(ov)
+      return m ? +m[1] : -1
+    }
+    for (const label of ['iOS 原生', 'Android 原生']) {
+      expect(ovNum(label), `${label}: 总览与逐页 ✅ 数不一致`).toBe(count(label))
+    }
   })
 })
 

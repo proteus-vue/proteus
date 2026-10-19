@@ -203,13 +203,25 @@ export interface BiometricOptions {
 
 // ★G-32 B3 四期：websocket / upload / download / analytics / log / file-system
 
-/** C27 WebSocket 连接句柄（wx SocketTask / web WebSocket 适配） */
+/**
+ * C27 WebSocket 连接句柄（wx SocketTask / web WebSocket / App 宿主 ws.* 适配）。
+ *
+ * ★**句柄 ≠ 已连接**：`useWebSocket()` 成功只代表"连接已受理"；
+ *   真正的连接建立以 `on('open')` 回调为准（与浏览器 `WebSocket` 同语义）。
+ *   App 端尤其如此——`ws.open` 受理即返（不阻塞 JS 线程等握手）。
+ */
 export interface WebSocketConnection {
-  /** 发送消息（字符串或二进制） */
+  /** 发送消息（字符串或二进制）。★发送失败经 `error` 事件回报（不抛，与浏览器一致）。 */
   send(data: string | ArrayBuffer): void
-  /** 关闭连接 */
+  /** 关闭连接（`close` 事件仍由对端/宿主推回——本调用不等于已断开） */
   close(code?: number, reason?: string): void
-  /** 订阅事件（返回取消订阅函数）——open/message/close/error */
+  /**
+   * 订阅事件（返回取消订阅函数）。
+   * - `open`：连接建立（**唯一**的"已连上"证据）
+   * - `message`：收到的消息（`{ data }`；二进制为字节数组）
+   * - `close`：连接关闭（`{ code, reason }`）
+   * - `error`：连接或发送出错（`{ message, missing? }`）
+   */
   on(event: 'open' | 'message' | 'close' | 'error', handler: (payload?: unknown) => void): () => void
 }
 

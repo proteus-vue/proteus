@@ -10,6 +10,8 @@ order: 2
 
 **什么时候用**：聊天、实时协作、行情推送。
 
+**端实现边界**：**四端可用**（Web / 微信 / App-iOS / App-Android）；**鸿蒙未接线**（宿主没有 ws 通道）。用法上有个易错点：`useWebSocket()` 成功只代表**连接已受理**，`open` 事件才是"连上了"的证据——App 端尤其如此（`ws.open` 受理即返，不阻塞 JS 线程等握手）。发送失败走 `error` 事件（`send` 不抛，与浏览器一致）。实现上两端形态不同：iOS 用系统 `URLSessionWebSocketTask`，Android 因构建不允许引依赖而**手写 RFC 6455**（握手/Mask/分片/close 帧）。
+
 > 技术标识：能力原语 C27 · `capability.websocket` · 返回 `WSConnection` · **Hook 已实现**（各端支持情况见下方兼容进度表）
 
 useWebSocket：WebSocket 连接句柄（wx.connectSocket / web WebSocket）
@@ -41,9 +43,9 @@ useWebSocket(url: string, protocols?: string[]): Promise<CapResult<WebSocketConn
 
 | 方法 | 说明 |
 |---|---|
-| [`send`](#send) | 发送消息（字符串或二进制） |
-| [`close`](#close) | 关闭连接 |
-| [`on`](#on) | 订阅事件（返回取消订阅函数）——open/message/close/error |
+| [`send`](#send) | 发送消息（字符串或二进制）。★发送失败经 `error` 事件回报（不抛，与浏览器一致）。 |
+| [`close`](#close) | 关闭连接（`close` 事件仍由对端/宿主推回——本调用不等于已断开） |
+| [`on`](#on) | 订阅事件（返回取消订阅函数）。 - `open`：连接建立（**唯一**的"已连上"证据） - `message`：收到的消息（`{ data }`；二进制为字节数组） - `close`：连接关闭（`{ code, reason }`） - `error`：连接或发送出错（`{ message, missing? }`） |
 
 ### `send`
 
@@ -51,7 +53,7 @@ useWebSocket(url: string, protocols?: string[]): Promise<CapResult<WebSocketConn
 send(data: string | ArrayBuffer): void
 ```
 
-**说明**：发送消息（字符串或二进制）
+**说明**：发送消息（字符串或二进制）。★发送失败经 `error` 事件回报（不抛，与浏览器一致）。
 
 | 参数 | 类型 | 必填 | 说明 |
 |---|---|---|---|
@@ -65,7 +67,7 @@ send(data: string | ArrayBuffer): void
 close(code?: number, reason?: string): void
 ```
 
-**说明**：关闭连接
+**说明**：关闭连接（`close` 事件仍由对端/宿主推回——本调用不等于已断开）
 
 | 参数 | 类型 | 必填 | 说明 |
 |---|---|---|---|
@@ -80,7 +82,11 @@ close(code?: number, reason?: string): void
 on(event: 'open' | 'message' | 'close' | 'error', handler: (payload?: unknown) => void): () => void
 ```
 
-**说明**：订阅事件（返回取消订阅函数）——open/message/close/error
+**说明**：订阅事件（返回取消订阅函数）。
+- `open`：连接建立（**唯一**的"已连上"证据）
+- `message`：收到的消息（`{ data }`；二进制为字节数组）
+- `close`：连接关闭（`{ code, reason }`）
+- `error`：连接或发送出错（`{ message, missing? }`）
 
 | 参数 | 类型 | 必填 | 说明 |
 |---|---|---|---|
@@ -105,9 +111,9 @@ on(event: 'open' | 'message' | 'close' | 'error', handler: (payload?: unknown) =
 | Web SPA | ✅ | vue-dom · webBridge 实现（平台 API 直连） |
 | 微信小程序 | ✅ | skyline（WebView 降级） · wx 桥 → wx.connectSocket |
 | Headless（SSR / 测试） | ✅ | headless · mock 桥注入（测试 / SSR 档） |
-| iOS 原生 | 🟡 | native-ios（UIKit + CoreAnimation） · 渲染核心已落地——能力桥未接线 |
-| Android 原生 | 🟡 | native-android（自绘 Canvas） · 渲染核心已落地——能力桥未接线 |
-| 鸿蒙 | 🟡 | native-harmony（ArkUI RenderNode） · 渲染核心已落地——能力桥未接线 |
+| iOS 原生 | ✅ | native-ios（UIKit + CoreAnimation） · App 宿主桥（capability-app.ts）· 桥方法已接入 |
+| Android 原生 | ✅ | native-android（自绘 Canvas） · App 宿主桥（capability-app.ts）· 桥方法已接入 |
+| 鸿蒙 | 🟡 | native-harmony（ArkUI RenderNode） · App 桥已就绪（平台中立）——鸿蒙宿主壳未接线 |
 | Flutter 混合 | 🟡 | flutter · 同一 JS 逻辑层——能力桥未接线 |
 | 快应用 | ⬜ | 快应用引擎（待定） · 端未开始 |
 
@@ -121,10 +127,12 @@ on(event: 'open' | 'message' | 'close' | 'error', handler: (payload?: unknown) =
 const res = await useWebSocket('wss://echo.example.com')
 
 if (res.ok) {
-  const ws = res.data
-  const off = ws.on('message', (payload) => console.log('收到:', payload))
-  ws.send('hello')
-  // off() 取消订阅；ws.close(1000, 'done') 关闭连接
+  const ws = res.data // ★句柄 ≠ 已连上：open 事件才是连接建立的证据
+  ws.on('open', () => ws.send('hello')) // 连上后再发，避免首帧丢失
+  ws.on('message', (payload) => console.log('收到:', payload))
+  ws.on('error', (e) => console.log('连接或发送出错:', e.message))
+  ws.on('close', (c) => console.log('已关闭:', c.code, c.reason))
+  // ws.close(1000, 'done') 关闭连接（真实断开仍以 close 事件为准）
 } else if (res.error.code.endsWith('.unsupported')) {
   // 平台不支持 → 降级路径
 }

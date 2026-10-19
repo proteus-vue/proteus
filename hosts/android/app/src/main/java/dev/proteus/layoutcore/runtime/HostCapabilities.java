@@ -154,6 +154,14 @@ public final class HostCapabilities {
                 // ★Android 无"小程序"概念；"跳其他 App" 走 Intent（能力同名但语义不同——本场景如实说明）
                 throw new UnsupportedOperationException(
                         "mini-program.navigate: Android 无小程序概念（跨 App 跳转请用 Intent/App Links）");
+            // ── C27 WebSocket（#1093：RFC 6455 客户端，见 WebSocketCapability）──
+            //   ★三个方法都**受理即返**；连接结果与消息经壳推 `__proteusHostWs` 到达 JS。
+            case "ws.open":
+                return ok(WebSocketCapability.open(args));
+            case "ws.send":
+                return ok(WebSocketCapability.send(args));
+            case "ws.close":
+                return ok(WebSocketCapability.close(args));
             // ── C82 WebAssembly（**真实 wasm3 执行**——宿主侧 wasm 运行时）──
             //   为什么在宿主侧：App 端 JS 引擎 QuickJS **内建无 WebAssembly**（双证据见
             //   scripts/setup-android-wasm.sh 头注），wasm 属宿主能力（Host ABI 的用途）。

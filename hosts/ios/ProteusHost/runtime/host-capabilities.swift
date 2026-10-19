@@ -62,6 +62,10 @@ final class HostCapabilities: NSObject {
     /// ★★★决策 #1083：录屏/截屏状态（C71）——平台观察者在独立文件（capture-capability.swift）
     let capture = CaptureCapability()
 
+    /// ★★★决策 #1093：C27 WebSocket（ws.open/send/close）——URLSessionWebSocketTask 腿。
+    ///   `evalJs` 由壳在 `installWsPush` 里注入（推送要 JSContext，而本类没有）。
+    let websocket = WebSocketCapability()
+
     // ────────────────────────── 主入口（契约同 Android.invoke） ──────────────────────────
 
     /// 执行原生方法并返回 JSON 串。**同步**（与 G-39 的 JNI trampoline 同契约：壳内同步完成）。
@@ -129,6 +133,24 @@ final class HostCapabilities: NSObject {
                 } catch let u as DeviceCapability.Unsupported {
                     // ★"平台无此能力" ⇒ missing 分档（与 Android 的 UnsupportedOperationException 同义）
                     return miss(u.message)
+                } catch {
+                    return fail("\(method) 失败：\(error)")
+                }
+            }
+            // ★★★决策 #1093：C27 WebSocket（三个方法都受理即返；事件经 `__proteusHostWs` 推送）
+            if method.hasPrefix("ws.") {
+                do {
+                    switch method {
+                    case "ws.open": return ok(try websocket.open(args))
+                    case "ws.send": return ok(try websocket.send(args))
+                    case "ws.close": return ok(try websocket.close(args))
+                    default: return miss("未实现的 WebSocket 方法：\(method)")
+                    }
+                } catch let e as WsError {
+                    switch e {
+                    case .unsupported(let m): return miss(m)
+                    case .invalid(let m): return fail(m)
+                    }
                 } catch {
                     return fail("\(method) 失败：\(error)")
                 }

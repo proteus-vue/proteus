@@ -41,6 +41,10 @@ export const APP_BRIDGE_SOURCES = [
   { file: 'packages/api/src/capability-app-element.ts', functions: ['createAppElementBridge'] },
   // ★★★决策 #1083：录屏/截屏状态（C71）
   { file: 'packages/api/src/capability-app-capture.ts', functions: ['createAppCaptureCapabilities'] },
+  // ★★★决策 #1093：装配层也直接贡献桥成员（`connectWebSocket: createAppWebSocket()` 写在
+  //   `createAppCapabilities` 的返回对象里，不在任何子工厂内）⇒ 不登记就会被判「桥未接线」。
+  //   ★这条是实测抓出来的：ws.* 的宿主腿都实现并编译通过了，页面仍显示 🟡。
+  { file: 'packages/api/src/capability-app-device.ts', functions: ['createAppCapabilities'] },
 ]
 
 /**
