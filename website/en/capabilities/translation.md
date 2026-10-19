@@ -75,7 +75,7 @@ onOff(cb: () => void): () => void
 
 | Target | Status | Notes |
 |---|---|---|
-| Web SPA | ✅ | vue-dom · webBridge implementation (direct platform API) |
+| Web SPA | ⚠️ | vue-dom · webBridge missing getTranslation → explicit Err degradation (no direct platform API) |
 | WeChat Mini Program | ✅ | skyline (WebView fallback) · wx bridge → wx.onUserTriggerTranslation/onUserOffTranslation |
 | Headless (SSR / testing) | ✅ | headless · mock bridge injected (testing / SSR tier) |
 | iOS native | 🟡 | native-ios (UIKit + CoreAnimation) · render core shipped — capability bridge not wired |

@@ -7379,3 +7379,43 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 【useBeacon 的真问题（不只是文档）】契约缺 `startBeaconDiscovery` / `stopBeaconDiscovery`：
   微信端不先开始搜索就收不到任何更新（官方错误码 11004 `not startBeaconDiscovery`）；
   App 三端均无 iBeacon 扫描实现。文档已写明，接口补齐属后续批次。
+
+1085. **★★★修掉「空订阅装成可用」——Web 桥删除 4 个纯空壳 API + 判据（承接 #1084 的审计）· 决策**（2026-10-19 · 用户「继续推进」）:
+
+【承接什么】#1084 做能力页可读性时审计到：Web 侧 `getBeacon` / `getLocalService` / `getTranslation` /
+  `getPoster` 的桥对象**只含空订阅**（`onXxx: () => () => {}`）。当时只写进了文档边界、**代码没改**——
+  因为那是行为变更，需要单独评估。本轮把它修掉。
+
+【为什么这是真缺陷（缺陷定性）】
+  · `onXxx` 返回 `() => {}`（一个合法的取消函数）⇒ Hook 层拿到 `ok:true` + 句柄 ⇒ 业务**以为订阅成功**；
+  · 而实现根本没有任何事件源 ⇒ **回调永远不会触发** ⇒ 业务"订阅了但收不到"却查不出原因；
+  · 与"伪造 `false`"（#1083）**同族**：都是「看起来可用、实际不工作」。
+  · 更糟的是它还会**污染文档**：兼容表按"桥方法存在"判 ✅ ⇒ 对外宣称 Web 可用（与 #881 的谎报同源）。
+
+【修法（最小、可自动派生，不手改文档）】
+  删掉这四个 API 在 `webBridge` 里的实现 ⇒ Hook 层既有的
+  `if (!bridge.getXxx) throw CapError('xxx.unsupported')` 生效 ⇒ 显式 Err。
+  ★**文档自动跟着降级**：兼容表按 `webKeys` 派生 ⇒ 从 `✅ webBridge 实现` 变成
+  `⚠️ 未提供 xxx → Err 显式降级`。实测四页全部自动变了——**没有一处手改文档**，
+  这正是"SSOT 派生"该有的样子（#1084 建的文档机制在这一轮自证有效）。
+  ★保留说明性注释（为什么不提供、将来要真做时怎么做），避免下一个人"顺手补回空壳"。
+
+【判据】新增 `tests/capability-no-empty-subscription.test.ts` **3/3**：
+  ① **静态**：扫 `webBridge` 段，不得出现"整个桥对象只含空订阅"的能力
+     （★必须**只扫 web 段**——wxBridge 里的同名 `getBeacon` 是**真实现**，删它是错的；首版扫全文件误报）；
+  ② **点名**：四个 API 不得在 web 段有实现形态（允许出现在注释里）；
+  ③ **行为**：给一个不含这四个方法的空桥，四个 Hook 都必须 reject 成 `*.unsupported`（不是假句柄）。
+  + **破坏性验证**：把 `getBeacon` 空壳加回去 ⇒ 2 条红；复原 ⇒ 3 绿。
+
+【B 类（部分方法空）**不动**——判定标准写在这里，防后人误删】
+  `wxBridge` 的 NFC adapter、web 的 `screen-capture` / `bluetooth` / `nfc` / `album` 等：
+  它们**主体方法如实返回 `unsupported`**（`noWeb('...')`），空订阅只是"形状兜底"
+  （保证返回类型完整）。这类**不是谎报**——因为调用方调任何主体方法都会拿到显式失败。
+  ⇒ 判据只抓"**全部**方法都是空订阅"的纯空壳，不误伤这类。
+
+【诚实边界】
+  ① 本轮没有实现这四个能力的 Web 端真订阅（iBeacon 需 Web Bluetooth + 信标帧解析；
+     mDNS 需浏览器支持；翻译需 Translation API 普及；海报需画布管线）——将来做时在
+     `webBridge` 里实现**真事件源**，不要恢复空壳。
+  ② `useBeacon` 契约缺 `startBeaconDiscovery` / `stopBeaconDiscovery`（#1084 已登记）仍未补，
+     属独立批次（需三端各接 BLE 扫描 + iBeacon 帧解析）。

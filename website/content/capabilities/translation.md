@@ -79,7 +79,7 @@ onOff(cb: () => void): () => void
 
 | 端 | 兼容 | 说明 |
 |---|---|---|
-| Web SPA | ✅ | vue-dom · webBridge 实现（平台 API 直连） |
+| Web SPA | ⚠️ | vue-dom · webBridge 未提供 getTranslation → Err 显式降级（平台无直通 API） |
 | 微信小程序 | ✅ | skyline（WebView 降级） · wx 桥 → wx.onUserTriggerTranslation/onUserOffTranslation |
 | Headless（SSR / 测试） | ✅ | headless · mock 桥注入（测试 / SSR 档） |
 | iOS 原生 | 🟡 | native-ios（UIKit + CoreAnimation） · 渲染核心已落地——能力桥未接线 |

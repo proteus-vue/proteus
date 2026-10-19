@@ -114,7 +114,7 @@ mDNS 局域网服务（wx OnLocalServiceFound/Lost）
 
 | Target | Status | Notes |
 |---|---|---|
-| Web SPA | ✅ | vue-dom · webBridge implementation (direct platform API) |
+| Web SPA | ⚠️ | vue-dom · webBridge missing getLocalService → explicit Err degradation (no direct platform API) |
 | WeChat Mini Program | ✅ | skyline (WebView fallback) · wx bridge → wx.onLocalServiceFound/Lost/ResolveFail/DiscoveryStop |
 | Headless (SSR / testing) | ✅ | headless · mock bridge injected (testing / SSR tier) |
 | iOS native | 🟡 | native-ios (UIKit + CoreAnimation) · render core shipped — capability bridge not wired |

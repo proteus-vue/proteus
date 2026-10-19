@@ -3816,27 +3816,14 @@ export function webBridge(g: typeof globalThis & { navigator?: Navigator & { get
       },
       isSupported: () => Promise.resolve(capOk(false)),
     }),
-    // ★权威标尺缺口 C77：iBeacon（web 无对等 → 空订阅；可用 Web Bluetooth）
-    getBeacon: () => ({
-      onServiceChange: () => () => {},
-      onUpdate: () => () => {},
-    }),
-    // ★权威标尺缺口 C78：局域网 mDNS（web 无标准 → 空订阅）
-    getLocalService: () => ({
-      onFound: () => () => {},
-      onLost: () => () => {},
-      onResolveFail: () => () => {},
-      onDiscoveryStop: () => () => {},
-    }),
-    // ★权威标尺缺口 C79：翻译（web 无对等 → 空订阅；可用 Translation API）
-    getTranslation: () => ({
-      onTrigger: () => () => {},
-      onOff: () => () => {},
-    }),
-    // ★权威标尺缺口 C80：分享海报（web 无对等 → 空订阅）
-    getPoster: () => ({
-      onGenerate: () => () => {},
-    }),
+    // ★★★决策 #1085：以下四个 API **不在 web 桥提供**（此前是空订阅 ⇒ 假可用）。
+    //   它们的桥对象只含 `() => () => {}` —— 方法存在 ⇒ Hook 返回成功句柄 ⇒ 订阅后永远收不到回调。
+    //   删掉实现 ⇒ Hook 走既有 `*.unsupported` 分支（显式 Err），兼容表同步降为 ⚠️。
+    //   · C77 iBeacon：web 无标准扫描 API（Web Bluetooth 可用但需用户手势且无 iBeacon 帧解析）
+    //   · C78 mDNS：web 无标准局域网服务发现
+    //   · C79 翻译：`Translation` 实验特性未普及，无稳定触发 API
+    //   · C80 海报：需画布合成管线，web 端未接
+    // ★要真做时在此实现**真订阅**（拿到真实回调源），不要恢复空壳。
     // ★权威标尺缺口 C81：设备能力探测（web MediaSource.isTypeSupported 兜底）
     getDeviceCapability: () => ({
       supportsHevc: () =>
