@@ -1677,6 +1677,27 @@
         "T-app-device-domain"
       ],
       "note": "【done · 决策 #1071（2026-10-19）· 用户提问「能力通道能否承载上百页面超级应用、有无内存风险」】取证结论：协议层能承载，**实例化模型不能**。四项实测风险 + 一项：① 事件源不幂等 ⇒ 每页挂 5 个 window 监听器 × 全局单例总线 = **N×N 回调放大**（100 页 10000 次、500 页 50 万次，单调增长）；② 订阅不回收 ⇒ 100 页 200 个悬挂订阅（有 subscriberCount 量具但无断言）；③ 待决表无界 ⇒ 宿主不回推时 5000 次调用积压 5000 条/5.54MB；④ 手写 utf8Decode 1MB ASCII 35.65ms（JSON.parse 同尺寸 0.49ms，74x；App 三引擎都没有 TextDecoder）；⑤ 宿主 callLog 无界。修：新增 `capability-lifecycle-once.ts`（WeakSet 按源身份去重）+ `capability-hooks-scope.ts`（回收袋 + wrap + 注入式 dispose 接线）、待决表 1024 上限 + 淘汰 reject + 读数、utf8Decode ASCII 快路径（8.5x，严格性不变）、Android ArrayDeque(512)/iOS 裁剪。判据：新测试 13/13 + 既有 180/180 + 破坏性 3 条 + 全套门禁 + 三端编译 + AAR。★未做：业务侧仍每页新建（55KB/页 实例开销仍在）；CJK 解码无改善；鸿蒙 callLog 不在范围。★探针在 Node 跑真实源码，非真机。"
+    },
+    {
+      "id": "T-capability-bridge-shared",
+      "title": "能力桥共享单例：每页少付 23.5KB（54.3 → 30.9 KB/页）",
+      "type": "capability",
+      "status": "done",
+      "owner": "session:zcode-invoke-bytes-20261019",
+      "scope": [
+        "packages/api/src/capability.ts",
+        "packages/api/src/capability-bridge-shared.ts",
+        "packages/api/src/index.ts",
+        "packages/api/dist/**",
+        "tests/capability-scale.test.ts"
+      ],
+      "decision": 1072,
+      "verification": "npx vitest run tests/capability-scale.test.ts && npx vitest run tests/capability-app.test.ts tests/capability-hooks.test.ts tests/capability-granularity.test.ts && node scripts/check-file-size.mjs && node scripts/build-packages.mjs",
+      "branch": null,
+      "related": [
+        "T-capability-scale-hardening"
+      ],
+      "note": "【done · 决策 #1072（2026-10-19）】承接 #1071 明确留下的\"业务侧仍每页建桥\"。实测拆分：桥 23.8KB/个 + Hooks 30.7KB/个 = 54.3KB/页；500 页 26.5MB。而 createCapabilityHooks 默认参数是 createCapabilityBridge() ⇒ 每页白建一份桥。修：新增 capability-bridge-shared.ts（惰性单例 + 构造器槽位，避免 ESM 环——capability.ts 顶层 registerBridgeFactory 登记，未登记则抛错不静默）+ 默认参数改共享桥。收益实测（--expose-gc）：500 页 26.52MB → 15.07MB，每页 54.3→30.9KB（−43%）。判据：新增 3 条（默认桥就是共享桥——判据是调前 has=false / 调后 true；reset 重建；多 Hooks 共享桥但订阅独立）+ 既有 224/224；破坏性验证（改回新建桥 ⇒ ① 红）。构建产物端到端验证（dist 含新逻辑 + 两次 Hooks 只建一份桥 + dispose 可用）。★诚实边界：Hooks 对象仍每页 30.7KB（持订阅回收袋，语义上必须独立）；探针在 Node 非真机；reset 仅测试用。"
     }
   ]
 }

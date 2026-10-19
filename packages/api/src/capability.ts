@@ -1,13 +1,13 @@
 // packages/api/src/capability.ts —— 能力层**工厂 + Hook + 响应式存储**（G-32 B3 · 决策 #870 拆分后）
-//   createCapabilityBridge（平台桥装配）/ createCapabilityHooks（useXxx 面）/ createReactiveStorage。
-//   ★类型契约见 capability-types.ts（本文件 `export *` 转发，保持公共面不变）；平台桥见 capability-bridges.ts。
+//   createCapabilityBridge / createCapabilityHooks / createReactiveStorage。类型契约见 capability-types.ts（本文件转发）。
 import { detectRuntime } from '@proteus-vue/shared'
 import { createAuth } from './auth'
 import { mpBridgeExt, webBridgeExt } from './generated/bridge-ext'
 import { detectAppHost } from './capability-app'
 // ★★2026-10-19（决策 #1067）：App 端三组能力（生命周期 + 平台能力 + 设备域）统一装配
 import { createAppCapabilities } from './capability-app-device'
-import { createSubscriptionScope } from './capability-hooks-scope' // ★决策 #1071 订阅回收
+import { createSubscriptionScope } from './capability-hooks-scope' // ★#1071
+import { getSharedCapabilityBridge, registerBridgeFactory } from './capability-bridge-shared'
 import type { AuthStorage } from './auth'
 import { CapError, capErr, capOk, wrap } from './capability-types'
 import type { ARAPI, AdAPI, AlbumAPI, AppLifecycle, ArchiveOptions, AudioController, AuthState, BackgroundAPI, BatteryInfo, BeaconAPI, BiometricOptions, BluetoothAPI, CacheManagerHandle, CalendarAPI, CalendarEvent, CameraController, CanvasController, CapDeviceInfo, CapResult, CapabilityBridge, CapabilityProbe, CompatStorage, Contact, CookieJar, Coords, DataChannelHandle, DataChannelOptions, DeviceCapabilityAPI, DownloadOptions, DownloadResult, ElementQuery, FSAdapter, FetchConfig, FileSystemBridge, HostContext, IAPReceipt, IdleAPI, ImageEditAPI, IntersectionHandle, IntersectionOptions, KeyboardLifecycle, LivePusherController, LiveRoomHandle, LiveRoomOptions, LocalServiceAPI, Logger, LoginResult, MapController, MediaAccess, MediaProcessingAPI, MediaQueryObserver, MessageSubscription, MiniProgramAPI, NFCAPI, NavigationGuardAPI, NetworkType, OrientationInfo, PageLifecycle, PaymentConfig, PaymentReceipt, PerformanceAPI, PermissionState, PosterAPI, PreloadAPI, PrivacyAPI, ProgressCallback, RecorderController, ScreenCaptureAPI, ScreenInfo, SensorKind, SensorSample, SensorStream, ShareOptions, ShippingAddress, SocketTaskHandle, TCPSocketConnectOptions, TCPSocketHandle, TrackAPI, TranslationAPI, UDPSocketHandle, UpdateManagerAPI, UploadOptions, UploadResult, VideoController, WeRunData, WebAssemblyAPI, WebSocketConnection, WifiAPI, WindowAPI, WorkerHandle, WxLike } from './capability-types'
@@ -28,6 +28,8 @@ export function createCapabilityBridge(): CapabilityBridge {
   if (detectRuntime() === 'mp' && g.wx) return { ...wxBridge(g.wx), ...mpBridgeExt(g.wx, CapError), ...appCaps }
   return { ...webBridge(globalThis), ...webBridgeExt(globalThis, CapError), ...appCaps }
 }
+
+registerBridgeFactory(createCapabilityBridge) // ★#1072 模块加载即登记（ESM: import 先执行）
 
 // —— useXxx Hook 层（G-32.4：Promise<Result<T>>，无回调，无全局对象） ——
 
@@ -224,12 +226,11 @@ export interface CapabilityHooks {
   useWebAssembly(): CapResult<WebAssemblyAPI>
   /** 能力探测面（降级查询） */
   probe(): Promise<CapabilityProbe>
-  /** ★决策 #1071：解除本实例登记的全部订阅（页面卸载时调用；幂等）。 */
-  dispose(): void
+  dispose(): void // ★#1071：解除本实例登记的全部订阅（幂等）
 }
 
-/** ★createCapabilityHooks：能力 Hook 统一实例（bridge 注入可单测） */
-export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilityBridge()): CapabilityHooks {
+export { getSharedCapabilityBridge, resetSharedCapabilityBridge } from './capability-bridge-shared' // ★#1072 共享桥（省 23.8KB/页）
+export function createCapabilityHooks(bridge: CapabilityBridge = getSharedCapabilityBridge()): CapabilityHooks {
   // ★统一 handle 型 hook 契约：桥构造句柄失败（缺平台 API / 抛错）→ 返回 Err（不 uncaught、不半残句柄）
   const handleResult = <T,>(make: () => T): CapResult<T> => {
     try {
@@ -238,8 +239,7 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
       return capErr<T>(e instanceof CapError ? e.code : 'cap.failed', e instanceof Error ? e.message : String(e))
     }
   }
-
-  const scope = createSubscriptionScope() // ★#1071
+  const scope = createSubscriptionScope() // ★#1071 订阅回收袋
 
   // ★传感器流局部状态（useSensorStream 用；订阅经桥 readSensor 轮询——无推送桥的诚实降级）
   const listeners: Array<(s: SensorSample) => void> = []

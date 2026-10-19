@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 import { utf8Decode, utf8Encode } from '@proteus-vue/shared'
+import { resetSharedCapabilityBridge, getSharedCapabilityBridge, hasSharedCapabilityBridge } from '../packages/api/src/capability-bridge-shared'
 import { createCapabilityHooks } from '../packages/api/src/capability'
 import { getHostLifecycleBus } from '../packages/api/src/capability-app'
 import {
@@ -70,7 +71,10 @@ const EVENT_TYPES = ['visibilitychange', 'resize', 'load', 'scroll', 'beforeunlo
 
 describe('① 事件源幂等（页面数 ↑ 不得让监听器 ↑）', () => {
   let win: ReturnType<typeof installFakeWindow>
-  beforeEach(() => { win = installFakeWindow() })
+  beforeEach(() => {
+    resetSharedCapabilityBridge() // ★共享桥是模块级单例（决策 #1072）：每个用例换桩后必须重置
+    win = installFakeWindow()
+  })
   afterEach(() => { win.restore() })
 
   it('100 个页面各建一次 Hooks ⇒ window 监听器仍只有**一套**（5 个）', () => {
@@ -101,7 +105,10 @@ describe('① 事件源幂等（页面数 ↑ 不得让监听器 ↑）', () => 
 
 describe('② 订阅自动回收（dispose）', () => {
   let win: ReturnType<typeof installFakeWindow>
-  beforeEach(() => { win = installFakeWindow() })
+  beforeEach(() => {
+    resetSharedCapabilityBridge()
+    win = installFakeWindow()
+  })
   afterEach(() => { win.restore() })
 
   it('页面卸载时 dispose ⇒ 订阅数回到卸载前（不随访问页数增长）', () => {
@@ -233,5 +240,47 @@ describe('⑤ 宿主记账有界（超级应用长跑不得单调涨内存）', 
     const src = fs.readFileSync(SWIFT, 'utf8')
     expect(src).toMatch(/callLogMax\s*=\s*\d+/)
     expect(src).toMatch(/callLog\.removeFirst\(callLog\.count\s*-\s*Self\.callLogMax\)/)
+  })
+})
+
+describe('⑥ 共享桥单例（每页不再各建一份 23.8KB 的桥）', () => {
+  let win: ReturnType<typeof installFakeWindow>
+  beforeEach(() => {
+    resetSharedCapabilityBridge()
+    win = installFakeWindow()
+  })
+  afterEach(() => { win.restore() })
+
+  it('createCapabilityHooks() 的默认桥**就是**共享桥（不新建）', () => {
+    // ★判据：调前共享桥不存在；调一次 Hooks 后共享桥**被建出来**。
+    //   若默认参数退回 createCapabilityBridge()，共享桥会一直是 null ⇒ 本断言直接抓到。
+    expect(hasSharedCapabilityBridge()).toBe(false)
+    createCapabilityHooks()
+    expect(hasSharedCapabilityBridge()).toBe(true)
+    const a = getSharedCapabilityBridge<object>()
+    for (let i = 0; i < 100; i++) createCapabilityHooks()
+    expect(getSharedCapabilityBridge<object>()).toBe(a) // 100 次调用后仍是同一份
+  })
+
+  it('reset 后重建（测试隔离语义）', () => {
+    const a = getSharedCapabilityBridge<object>()
+    resetSharedCapabilityBridge()
+    expect(hasSharedCapabilityBridge()).toBe(false)
+    const b = getSharedCapabilityBridge<object>()
+    expect(b).not.toBe(a)
+  })
+
+  it('多个 Hooks 共享同一桥，但**订阅各自独立**（scope 每页一份）', () => {
+    const bus = getHostLifecycleBus()
+    const before = bus.subscriberCount
+    const h1 = createCapabilityHooks()
+    const h2 = createCapabilityHooks()
+    h1.usePageLifecycle().onShow(() => {})
+    h2.usePageLifecycle().onShow(() => {})
+    expect(bus.subscriberCount).toBe(before + 2)
+    h1.dispose()
+    expect(bus.subscriberCount, 'dispose 只解自己的订阅').toBe(before + 1)
+    h2.dispose()
+    expect(bus.subscriberCount).toBe(before)
   })
 })

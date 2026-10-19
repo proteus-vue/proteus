@@ -6746,3 +6746,39 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 【诚实边界】① 探针在 Node 环境跑真实源码，**非真机**；② 事件放大在浏览器里的真实表现取决于浏览器如何派发
   多监听器（本次按规范语义逐监听器调用验证）；③ 55KB/页 是 Web 路径实测（含 hooks 闭包 + 订阅），App 路径的
   每页实例成本未单独测；④ 本轮**未改业务侧用法**（示例/showcase 仍每页新建）——修复的是"放大"与"泄漏"，不是"实例数"。
+
+1072. **★★★能力桥共享单例：每页少付 23.5KB（54.3 → 30.9 KB，−43%）· 决策**（2026-10-19 · 承接 #1071 的"未做完"项）：
+【问题（#1071 明确留下的）】#1071 修掉了"放大"与"泄漏"，但明确登记「业务侧仍每页 `createCapabilityHooks()`，
+55KB/页 实例开销仍在」。本轮量化拆开看：
+  · `createCapabilityBridge()` **23.8 KB/个**（73 个方法闭包 + 平台探测）
+  · `createCapabilityHooks()` **30.7 KB/个**（95 个 API 方法闭包 + 订阅回收袋）
+  · 合计 **54.3 KB/页**；500 页 **26.5 MB**
+  而 `createCapabilityHooks()` 的默认参数是 `createCapabilityBridge()` ⇒ **每访问一页就白建一份桥**。
+【为什么桥可以共享（安全性论证）】桥是**无状态**的：所有方法只读平台全局 + 转发到宿主/总线。
+  · 生命周期订阅由 **Hooks 实例的 scope** 管理（每页独立，见 `capability-hooks-scope.ts`）——实测"多 Hooks 共享一桥、
+    dispose 只解自己订阅"成立；
+  · 事件源安装已**幂等**（#1071 按事件源身份去重）⇒ 共享不会多挂监听器；
+  · 桥内部无"页面/实例"概念 ⇒ 多页共用不串台。
+【实现】新增 `capability-bridge-shared.ts`：惰性单例 + `getSharedCapabilityBridge()` / `resetSharedCapabilityBridge()`
+  / `hasSharedCapabilityBridge()`；`createCapabilityHooks` 默认参数改为 `getSharedCapabilityBridge()`。
+  · **依赖方向**：`capability.ts` → 共享模块（要取桥）；若反向 import 就成了 ESM 环。⇒ 共享模块只存**构造器槽位**，
+    由 `capability.ts` 在模块顶层 `registerBridgeFactory(createCapabilityBridge)` 登记。ESM 保证 import 先于模块体
+    执行 ⇒ 首次取桥必成功；未登记则**抛错**（不静默返回 undefined——那会让所有能力变成"桥缺失"的假降级）。
+  · 主入口导出 `getSharedCapabilityBridge` / `resetSharedCapabilityBridge` / `hasSharedCapabilityBridge`（后者仅测试/诊断）。
+【实测收益】500 页实例（`--expose-gc` 前后对照）：
+  · 共享桥：**15.07 MB**（30.9 KB/页）
+  · 每页建桥：**26.52 MB**（54.3 KB/页）
+  · ⇒ **每页省 23.5 KB（−43%）**；500 页省 11.4 MB。
+【判据】`capability-scale` 新增 3 条（共 **16/16**）：
+  ① `createCapabilityHooks()` 的默认桥**就是**共享桥——判据是「调前 `hasSharedCapabilityBridge()===false`，
+     调一次 Hooks 后为 true」（若默认参数退回新建桥，共享桥永远 null ⇒ 直接抓到）；
+  ② reset 后重建（测试隔离语义）；
+  ③ 多个 Hooks 共享同一桥、但**订阅各自独立**（dispose 只解自己的）。
+  **破坏性验证**：把默认参数改回 `createCapabilityBridge()` ⇒ ① 当场红；恢复 ⇒ 16/16 绿。
+  既有能力测试 **224/224** 无回归；`check:file-size`（capability.ts 压回 1093 基线，新逻辑全在独立 lib）/
+  `no-json-wire` / `capability-golden` / `script-compile` / `vue-tsc` 全绿；
+  **构建产物端到端**：`packages/api/dist/index.js` 含 `registerBridgeFactory` / `createSubscriptionScope`，
+  真实 dist 上验证「两次 Hooks ⇒ 共享桥只建一份 + dispose 可用」。
+【诚实边界】① 共享的是**桥**，Hooks 对象仍每页 30.7 KB（它持有该页的订阅回收袋，语义上必须独立）——
+  本决策省的是 43% 而非全部；② 探针在 Node 跑真实源码（非真机）；③ `resetSharedCapabilityBridge()` 是
+  **测试专用**，生产调用会让后续页面拿到新桥（旧 Hooks 仍持旧桥，功能正常但不共享）。

@@ -13,6 +13,7 @@ export type { PlatformAPI, RouterAPI, StorageAPI, UIAPI } from './types'
 export { createCapabilityHooks, createCapabilityBridge, createReactiveStorage, capOk, capErr, CapError } from './capability'
 // ★决策 #1071：能力实例的订阅回收接线（注入式，零 vue 依赖）
 export { createSubscriptionScope, installCapabilityDisposeHook } from './capability-hooks-scope'
+export { getSharedCapabilityBridge, resetSharedCapabilityBridge, hasSharedCapabilityBridge } from './capability-bridge-shared'
 // ★T-app-fetch（决策 #1064）：能力通道的**诊断读数**（真机判据读它们证明「走字节腿 / 超时形态」）
 export { lastInvokeWire, hostCallTimerMode } from './capability-invoke'
 // ★★应用与生命周期能力开放（App 宿主腿，2026-09-30）：总线 + 三能力 + 虚拟栈页面事件翻译器
