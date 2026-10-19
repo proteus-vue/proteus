@@ -1,7 +1,7 @@
 {
   "version": 1,
   "spec": "docs/ai-development-spec.md",
-  "updated_at": "2026-10-18",
+  "updated_at": "2026-10-19",
   "schema": {
     "说明": "Proteus 多 AI 协作开发 · 任务板（协调单一事实源）。规范全文见 docs/ai-development-spec.md 第 4 节。目标是让「谁在做 / 边界在哪 / 做完没 / 对应哪条决策」可机器核对，而不是靠记忆与口头协调。",
     "字段": {
@@ -269,6 +269,31 @@
         "T-app-bridge-refs"
       ],
       "note": "【done · 决策 #895】承接 T-app-bridge-refs 的独立验证发现（异会话 AST 复算 refs 时顺带抓出）。★根因：gen-content.mjs 的 extractFnKeys 只扫 `function wxBridge`/`function webBridge` 的**函数体**，而运行时桥 = **两源并集**（capability.ts:31-32：`{...wxBridge, ...mpBridgeExt, ...appCaps}` / `{...webBridge, ...webBridgeExt, ...appCaps}`）⇒ 声明式桥成员（generated/bridge-ext.ts）漏抽 ⇒ keep-screen-on(C83)/document-preview(C84) 的 Web+MP × zh/en **8 格**错标 ⚠️（真值 ✅）。★修：① 原语收一份 `ts-source-scan.mjs::returnObjectMembers`（app-bridge-keys 改用它 84→69 行）；② 新增第三份契约模块 `lib/bridge-keys.mjs`（手写∪声明式 + 与 GENERATED_BRIDGE_COUNT 交叉校验 + 硬失败）；③ 删 extractFnKeys（2815→2812）。★零漂移：锚定式与旧行口径在 89/71 上逐名一致 ⇒ 落页**精确 4 页**各 2 行。★验证：6 门禁绿（check:content/bridge-ext/en-drift/doc-links/ai-tasks/script-compile）+ 三份契约测试 20/20 + 破坏性 2 条 + 异会话 TS-AST 独立复算（168 页零不一致、零谎报、零误降级）。★独立验证抓出的两处盲区本单**当场收紧**：① 测试「逐名一致」实为单向子集 ⇒ 改双向锁；② GENERATED_BRIDGE_COUNT=0 时整段跳过解析 ⇒ 去掉短路（补两条测试）。★未顺手迁移：`extractBridgeBodies`（错误码提取）仍是旧行匹配口径（取值切片须回原文取，属另一契约）。★未推送/未发布：等用户批准。"
+    },
+    {
+      "id": "T-app-invoke-bytes-generic",
+      "title": "能力通道全面去 JSON：三端 invokeBytes 通用能力分发（同步能力也走 PINV/PRSP，不再只有 http.request）",
+      "type": "capability",
+      "status": "done",
+      "owner": "session:zcode-invoke-bytes-20261019",
+      "scope": [
+        "packages/api/src/capability-invoke.ts",
+        "packages/api/src/invoke-wire.ts",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/**",
+        "hosts/ios/ProteusHost/runtime/**",
+        "hosts/harmony/host-app/proteus_render/src/main/cpp/**",
+        "packages/cli/templates-host/prebuilt/harmony/**",
+        "scripts/check-no-json-wire.mjs",
+        "tests/capability-invoke-bytes.test.ts"
+      ],
+      "decision": 1066,
+      "verification": "npx vitest run tests/capability-invoke-bytes.test.ts && node scripts/check-no-json-wire.mjs && bash hosts/android/check-host-compile.sh && bash hosts/ios/check-selfdraw-compile.sh && bash scripts/check-harmony-host-compile.sh && node scripts/harmony-runtime-prebuilt.mjs --check",
+      "branch": null,
+      "related": [
+        "T-app-runtime-capabilities",
+        "T-app-fetch"
+      ],
+      "note": "【立项 2026-10-19 · 用户指令「能力通道也去 JSON 化」】现状取证：鸿蒙字节通道本身已在（#1063：ArkTS+C++ 编解码 + 五端 parity + 真机 HTTP 200/2443B），但三端 `invokeBytes` 的**分发**都只认 `http.request` —— 其余能力仍走 `proteusHost.invoke(method, JSON.stringify(args))` 的 JSON 腿（JS 侧只有 `invokeHostAsync` 探测字节，同步 `invokeHost` 恒 JSON）。本单把字节腿扩为**全能力通道**：① JS：同步能力也优先 `PINV`/`PRSP`，宿主不认（missing）则回落 JSON 且可查（`lastInvokeWire`）；② 三端宿主：`invokeBytes` 增加通用分发（帧 body = JSON 字节，复用既有 `invoke` 实现 ⇒ 能力语义只有一份）；③ 门禁 `check:no-json-wire` 增加三端通用分发判据（防静默退回 http-only）。★诚实边界：结构化小参数/结果仍以 JSON **字节**承载（#903 已登记：不值得为每种能力定义 TLV schema）；大载荷（HTTP 响应/文件）保持裸字节。\n\n【done · 决策 #1066（2026-10-19）】三端 `invokeBytes` 已扩为**通用能力分发**：JS 同步腿（`tryInvokeHostBytesSync`）+ 异步通用分流（`generic: !isHttp`）+ JSON 唯一回落（`invokeHostAsyncJson` + `BYTES_MISSING` 哨兵）；Android `invokeBytes → invokeGenericBytes → invokeCore`（记账/分发分离，防双记账）；iOS 两处 `dispatchInvokeBytes` 走 `HostRuntimeBridge.invokeGenericBytes`（复用含 `screen.*` 的完整分流）；鸿蒙 `setInvokeBytesGenericHandler` 钩子复用 `screenInvokeDispatch`。门禁 `check:no-json-wire` 新增第 ⑩ 节（三端通用分发 + 反向「不得再有『当前仅 http.request』」），4 条破坏性验证均能红。判据：字节腿 19/19 + 能力测试 87/87、parity 五端 24 向量、三端宿主编译、file-size/ai-tasks/script-compile/vue-tsc 全绿；AAR 重建 + 鸿蒙 prebuilt 同步。★诚实边界：通用能力的参数/结果仍为 JSON **字节**（#903 边界）；`screen.*` 显式不进本字节腿；**通用能力真机通路未逐项跑**（归 T-app-runtime-capabilities 逐项验收）。"
     },
     {
       "id": "T-app-runtime-capabilities",

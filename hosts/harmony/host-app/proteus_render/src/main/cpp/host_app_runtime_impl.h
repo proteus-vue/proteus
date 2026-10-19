@@ -157,8 +157,23 @@ static std::string screenInvokeDispatch(const std::string& method, const std::st
                  g_scMounts, g_scVisible, g_scDestroy, g_scContentTotal, (int)g_scHandle.size());
         return b;
     }
-    return "{\"ok\":false,\"reason\":\"未实现的 screen 方法\"}";
+    // ★诚实降级（与 Android 的 UnsupportedOperationException / iOS 的 `miss()` 同口径）：
+    //   "没有这个方法"是 `missing` 而不是 `failed` —— JS 桥据此给 `*.unsupported`（不冒充调用失败）。
+    return "{\"ok\":false,\"missing\":true,\"reason\":\"未实现的 screen/能力方法\"}";
 }
+
+/**
+ * ★★2026-10-19（能力通道全面去 JSON）：把**同一份**能力分发注册给字节腿（`invokeBytes` 的通用分支）。
+ *   · 各 TU 各持一份 `static`（本头被 `proteus_host.cpp` / `proteus_bench.cpp` 共同 include）⇒
+ *     静态初始化期各自注册自己的 `screenInvokeDispatch`，无跨 TU 链接耦合；
+ *   · `http_probe.h` 单独包含字节桥（不包含本头）⇒ 该 TU 钩子为空 ⇒ 通用方法回 `missing`
+ *     （探针只发 `http.request`，语义不变、不伪造成功）。
+ */
+namespace {
+struct InvokeBytesGenericRegistrar {
+    InvokeBytesGenericRegistrar() { setInvokeBytesGenericHandler(&screenInvokeDispatch); }
+} g_invokeBytesGenericRegistrar;
+} // namespace
 
 /** JSVM 回调：proteusHost.invoke(method, argsJson) → JSON 串 */
 static JSVM_Value InvokeCb(JSVM_Env env, JSVM_CallbackInfo info) {

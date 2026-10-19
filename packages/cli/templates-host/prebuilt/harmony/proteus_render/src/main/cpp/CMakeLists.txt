@@ -60,6 +60,32 @@ else()
   message(WARNING "proteus: 缺 libvulkan —— 鸿蒙玻璃将降级为半透明面（先装含 Vulkan 的 SDK）")
 endif()
 
+# ★T-app-fetch（2026-10-18）：能力通道 http.request 用 HMS RemoteCommunicationKit（librcp_c.so）。
+#   ★刻意**不链接**它（运行时 dlopen，缺库诚实降级——见 proteus_http.h 文件头），
+#     这里只把 HMS sysroot 的 **include** 路径接进来，让 `__has_include(<RemoteCommunicationKit/rcp.h>)` 成立。
+#   ★路径按 DevEco 布局探测（${CMAKE_CURRENT_SOURCE_DIR} 上溯到 hosts/harmony → 仓库根再不可达 SDK）
+#     ⇒ 用环境变量 `PROTEUS_HMS_SDK` 显式覆盖，缺省探测常见安装位；都找不到 ⇒ 不定义 PROTEUS_HAVE_RCP，
+#     HTTP 腿编译为"诚实的 unsupported"（不伪造能力位）。
+set(PROTEUS_HMS_INC "")
+if(DEFINED ENV{PROTEUS_HMS_SDK})
+  set(PROTEUS_HMS_INC "$ENV{PROTEUS_HMS_SDK}/native/sysroot/usr/include")
+else()
+  foreach(p "/Volumes/data1/work/office-applications/DevEco-Studio.app/Contents/sdk/default/hms"
+            "$ENV{HOME}/Applications/DevEco-Studio.app/Contents/sdk/default/hms"
+            "/Applications/DevEco-Studio.app/Contents/sdk/default/hms")
+    if(EXISTS "${p}/native/sysroot/usr/include/RemoteCommunicationKit/rcp.h")
+      set(PROTEUS_HMS_INC "${p}/native/sysroot/usr/include")
+      break()
+    endif()
+  endforeach()
+endif()
+if(PROTEUS_HMS_INC)
+  message(STATUS "proteus: HMS RCP 头已接线（${PROTEUS_HMS_INC}）——http.request 可用")
+  include_directories(${PROTEUS_HMS_INC})
+else()
+  message(WARNING "proteus: 未找到 HMS RCP 头 —— http.request 编译为诚实 unsupported（设 PROTEUS_HMS_SDK 可修）")
+endif()
+
 # ★★宿主桥模块（appScreen 桥 + 壳生命周期桥）——NAPI 模块名 `proteus_host`（import 'libproteus_host.so'）
 #   与 render 同属 HAR runtime（项目无关）；用内核建树/动画（Rust 核），经 render 的绘制通道上屏。
 add_library(proteus_host SHARED proteus_host.cpp)

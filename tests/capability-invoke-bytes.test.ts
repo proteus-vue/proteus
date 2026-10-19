@@ -12,6 +12,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { utf8Encode, utf8Decode } from '@proteus-vue/shared'
 import {
+  invokeHost,
   invokeHostAsync,
   installHostResolveBridge,
   pendingHostCallCount,
@@ -198,6 +199,94 @@ describe('④ 诊断（坏帧不静默）', () => {
     installBytesShell((frame) => okFrame(decodeInvokeFrame(frame).reqId, new Uint8Array(0)))
     const huge = 'x'.repeat(70000) // > 65535 ⇒ u16 长度前缀放不下
     await expect(invokeHostAsync('http.request', { url: `https://x/?q=${huge}` })).rejects.toThrow(/字符串过长/)
+    expect(pendingHostCallCount()).toBe(0)
+  })
+})
+
+/* ────────── ⑤ 全能力通道（2026-10-19：用户「能力通道也去 JSON 化」） ────────── */
+
+describe('⑤ 同步能力也走字节腿', () => {
+  it('宿主装字节桥 ⇒ invokeHost（同步）走 PINV，args 编为 JSON 字节，data 按 JSON 腿同规则取 .data', () => {
+    let seen: ReturnType<typeof decodeInvokeFrame> | null = null
+    installBytesShell((frame) => {
+      seen = decodeInvokeFrame(frame)
+      return okFrame((seen as unknown as { reqId: string }).reqId, utf8Encode('{"ok":true,"data":{"level":0.72,"charging":true}}'))
+    })
+    const r = invokeHost('battery.get', { probe: true })
+    expect(lastInvokeWire()).toBe('bytes')
+    expect(r).toEqual({ ok: true, data: { level: 0.72, charging: true } })
+    const f = seen as unknown as ReturnType<typeof decodeInvokeFrame>
+    expect(f.method).toBe('battery.get')
+    expect(f.meta.contentType).toBe('application/json')
+    expect(JSON.parse(utf8Decode(f.body ?? new Uint8Array(0)))).toEqual({ probe: true })
+  })
+
+  it('同步字节腿：宿主回 `{"ok":false,"missing":true}` 的**body** ⇒ 结果是 unsupported（不是回落）', () => {
+    installBytesShell((frame) => {
+      const rid = decodeInvokeFrame(frame).reqId
+      return encodeResolveFrame({
+        reqId: rid,
+        ok: true,
+        body: utf8Encode('{"ok":false,"missing":true,"reason":"unsupported: iOS 禁止动态模块加载"}'),
+      })
+    })
+    const r = invokeHost('extension.load', { id: 'x' })
+    expect(lastInvokeWire()).toBe('bytes') // ★没有回落：能力级 unsupported 不是通道级 missing
+    expect(r).toMatchObject({ ok: false, missing: true })
+    expect((r as { reason: string }).reason).toMatch(/unsupported/)
+  })
+
+  it('同步字节腿：**帧级** missing（旧壳只认 http.request）⇒ 回落 JSON 腿且可查', () => {
+    installBytesShell((frame) =>
+      encodeResolveFrame({ reqId: decodeInvokeFrame(frame).reqId, ok: false, missing: true, reason: '当前仅 http.request' }),
+    )
+    g[HOST_INVOKE_KEY] = () => '{"ok":true,"data":{"provider":"android"}}'
+    const r = invokeHost('host.context')
+    expect(lastInvokeWire()).toBe('json')
+    expect(r).toEqual({ ok: true, data: { provider: 'android' } })
+  })
+
+  it('同步字节腿：宿主抛错（老壳没有通用分发）⇒ 回落 JSON，不把通道故障当能力失败', () => {
+    installBytesShell(() => {
+      throw new Error('unsupported method')
+    })
+    g[HOST_INVOKE_KEY] = () => '{"ok":true,"data":42}'
+    const r = invokeHost('idle.request', { timeout: 5 })
+    expect(lastInvokeWire()).toBe('json')
+    expect(r).toEqual({ ok: true, data: 42 })
+  })
+})
+
+describe('⑥ 异步通用能力（非 http.request）', () => {
+  it('payload = JSON 字节（无 HTTP meta）；回程 body 按 JSON 腿规则取 .data', async () => {
+    let seen: ReturnType<typeof decodeInvokeFrame> | null = null
+    installBytesShell((frame) => {
+      seen = decodeInvokeFrame(frame)
+      return okFrame((seen as unknown as { reqId: string }).reqId, utf8Encode('{"ok":true,"data":{"online":true,"type":"wifi"}}'))
+    })
+    const r = await invokeHostAsync('network.get', {})
+    expect(lastInvokeWire()).toBe('bytes')
+    expect(r).toEqual({ online: true, type: 'wifi' })
+    const f = seen as unknown as ReturnType<typeof decodeInvokeFrame>
+    expect(f.meta.url).toBeUndefined()
+    expect(f.meta.contentType).toBe('application/json')
+  })
+
+  it('异步通用能力：帧级 missing + 有 JSON 腿 ⇒ 回落 JSON（lastInvokeWire 如实为 json）', async () => {
+    installBytesShell((frame) => encodeResolveFrame({ reqId: decodeInvokeFrame(frame).reqId, ok: false, missing: true }))
+    g[HOST_INVOKE_KEY] = (method: string) => {
+      // JSON 腿同步返回最终结果（不必回推）
+      return '{"ok":true,"data":{"method":"' + method + '"}}'
+    }
+    const r = await invokeHostAsync('device.get', {})
+    expect(lastInvokeWire()).toBe('json')
+    // JSON 腿既有语义：resolve `.data`（不是整个 {ok,data} 壳）
+    expect(r).toEqual({ method: 'device.get' })
+  })
+
+  it('异步通用能力：帧级 missing 且**无 JSON 腿** ⇒ reject unsupported（不谎报通道缺失）', async () => {
+    installBytesShell((frame) => encodeResolveFrame({ reqId: decodeInvokeFrame(frame).reqId, ok: false, missing: true }))
+    await expect(invokeHostAsync('device.get', {})).rejects.toThrow(/^unsupported: /)
     expect(pendingHostCallCount()).toBe(0)
   })
 })

@@ -90,6 +90,17 @@ public final class HostCapabilities {
      */
     public String invoke(String method, String argsJson) throws Exception {
         callLog.add(method); // ★真实宿主记账（判据读它证明"经壳执行"）
+        return invokeCore(method, argsJson);
+    }
+
+    /**
+     * 能力分发本体（**不记账**——记账由 {@link #invoke} / {@link #invokeBytes} 各自入口记一次）。
+     *
+     * 【为什么要拆出来（2026-10-19 · 能力通道全面去 JSON）】`invokeBytes` 的通用分发要复用本方法的能力语义，
+     *   而两条入口都各有自己的 `callLog.add` ⇒ 直接从 `invokeBytes` 调 `invoke` 会**双记账**
+     *   （`native.calls` 判据会把一次能力调用读成两次）。⇒ 记账与分发分离，能力实现只有一份。
+     */
+    private String invokeCore(String method, String argsJson) throws Exception {
         // ★`null` / `{}` / 空 都归一为空对象（桥侧传 JSON.stringify(undefined) === undefined→"null"——
         //   真机实测：直接 new JSONObject("null") 抛 "Value null … cannot be converted to JSONObject"）
         JSONObject args;
@@ -203,8 +214,13 @@ public final class HostCapabilities {
      * 【与 {@link #invoke} 的关系】**同一批方法名、同一套语义**（`missing` 分档 / `pending` 异步回推一致）；
      *   差别只在**载荷形态**。故本方法是一个**薄分发层**：解码帧 → 按 method 转发 → 编回程帧。
      *
-     * 【★诚实边界】`screen.*` 与其余能力族**当前仍只在 JSON 腿**（`invoke`）——本单是 `http.request` 首单；
-     *   其它方法从本入口进来一律回 `missing` 帧（**不伪造成功**），JS 侧会如实给 `*.unsupported`。
+     * 【★★2026-10-19 扩面（用户：「能力通道也去 JSON 化」）】**全能力通用分发**：
+     *   · `http.request` 走 {@link HttpCapability}（大载荷裸字节，专用通道）；
+     *   · 其余方法 ⇒ 帧 body 是 **JSON 字节**（`contentType: application/json`）⇒ 解成 `invoke()` 的
+     *     `argsJson` 交 {@link #invokeCore}（**能力语义只有一份**，不在字节腿另写一份实现）⇒
+     *     返回值（既有 `{"ok":…}` JSON 串）原样作回程 body。
+     *   ★为什么结构化小对象仍用 JSON **字节**：#903 已登记的边界——不值得为每种能力定义 TLV schema；
+     *     免掉的是**字符串转义 + 两次 UTF-8 + number[] 膨胀**，收益在大载荷（HTTP 响应/文件）与统一通道。
      *
      * @param frame `PINV` 帧字节（JS `Uint8Array` → JNI → `byte[]`）
      * @return `PRSP` 帧字节（同步回执；异步结果经 {@link QuickJsEngine#resolveHostBytes} 回推）
@@ -217,13 +233,12 @@ public final class HostCapabilities {
             method = f.method;
             reqId = f.reqId;
             callLog.add(method); // ★真实宿主记账（与 invoke 同口径）
-            switch (method) {
-                case "http.request":
-                    return HttpCapability.handle(f);
-                default:
-                    return InvokeWire.encodeResolve(InvokeWire.ResolveFrame.missingMethod(
-                            reqId, "二进制通道未实现的原生方法：" + method + "（当前仅 http.request）"));
-            }
+            if ("http.request".equals(method)) return HttpCapability.handle(f);
+            return invokeGenericBytes(f);
+        } catch (UnsupportedOperationException e) {
+            // ★"无此方法"不是失败：回 missing 帧 ⇒ JS 侧 `*.unsupported`（与 JSON 腿同口径）。
+            //   注意：本 catch 也兜住 invokeCore 内部的 unsupported（extension.load / mini-program.navigate）。
+            return InvokeWire.encodeResolve(InvokeWire.ResolveFrame.missingMethod(reqId, String.valueOf(e.getMessage())));
         } catch (Throwable t) {
             // ★解不出帧 ⇒ 拿不到 reqId 锚定回调；但本帧是**同步返回**的 ⇒ JS 侧 `invokeHostAsyncBytes`
             //   按**本次调用自己的 reqId** 结算（不依赖帧内 reqId）⇒ reason 能如实到达调用方，**不被静默丢弃**。
@@ -232,6 +247,35 @@ public final class HostCapabilities {
             return InvokeWire.encodeResolve(InvokeWire.ResolveFrame.err(
                     reqId, "invokeBytes 宿主侧失败：" + t));
         }
+    }
+
+    /**
+     * 通用能力（非 `http.request`）的字节腿分发：帧 body = JSON 字节 ⇒ 复用 {@link #invokeCore}。
+     * ★回程 body 是**既有 `invoke()` 的返回值原样**（`{"ok":true,"data":…}` / `{"ok":false,…}`），
+     *   JS 侧按与 JSON 腿相同的规则取 `.data`（`capability-invoke.ts::tryInvokeHostBytesSync`）。
+     *
+     * ★★"宿主无此方法"必须回**帧内 body 的 `missing:true`**，不能回**帧级** `missing`：
+     *   帧级 `missing` 是"字节腿不认识这个方法"的降级信号（JS 据此回落 JSON 腿）；
+     *   若把 `extension.load: 生产包不做动态加载` 这类**能力级 unsupported** 也标成帧级 missing，
+     *   JS 会再走一遍 JSON 腿（**双记账**，且判据读数被污染）。
+     */
+    private byte[] invokeGenericBytes(InvokeWire.InvokeFrame f) throws Exception {
+        String argsJson = f.body == null || f.body.length == 0
+                ? "{}"
+                : new String(f.body, java.nio.charset.StandardCharsets.UTF_8);
+        String out;
+        try {
+            out = invokeCore(f.method, argsJson);
+        } catch (UnsupportedOperationException e) {
+            JSONObject miss = new JSONObject();
+            miss.put("ok", false);
+            miss.put("reason", "unsupported: " + e.getMessage());
+            miss.put("missing", true);
+            out = miss.toString();
+        }
+        InvokeWire.ResolveFrame rf = InvokeWire.ResolveFrame.ok(f.reqId);
+        rf.body = out == null ? new byte[0] : out.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        return InvokeWire.encodeResolve(rf);
     }
 
     // ────────────────────────── C48 宿主上下文 ──────────────────────────

@@ -70,6 +70,18 @@ final class HostRuntimeBridge: NSObject, HostRuntimeExports {
         return capabilities.invoke(method, argsJson)
     }
 
+    /// ★能力通道字节腿的**通用分发**（2026-10-19 全能力通道去 JSON）：帧 body = JSON 字节 ⇒
+    ///   复用 {@link invoke} 的完整分流（`screen.*` + 能力族）⇒ 回 `PRSP` 帧。
+    /// 【为什么不直接调 `capabilities.invokeGenericBytes`】那会绕过 `screen.*` 的 M5 执行器分流；
+    ///   本方法让字节腿与 JSON 腿**走同一入口**，端能力语义只有一份。
+    func invokeGenericBytes(_ f: InvokeWire.InvokeFrame) -> [UInt8] {
+        let argsJson = f.body.isEmpty ? "{}" : (String(bytes: f.body, encoding: .utf8) ?? "{}")
+        let out = invoke(f.method, argsJson)
+        var rf = InvokeWire.ResolveFrame.makeOK(f.reqId)
+        rf.body = Array(out.utf8)
+        return (try? InvokeWire.encodeResolve(rf)) ?? []
+    }
+
     // ────────────────────────── ★S2「去 JSON」：能力二进制腿 ──────────────────────────
 
     /// 注入 `__proteusHostInvokeBytes`（JSC C API；JSExport 传不了 `Uint8Array`）。
@@ -89,20 +101,18 @@ final class HostRuntimeBridge: NSObject, HostRuntimeExports {
 
     /// 分发去程帧（与 SuperappRuntimeHost.dispatchInvokeBytes / Android HostCapabilities.invokeBytes 同一分发）。
     /// 返回 `nil` = 已受理、结果稍后 `pushResolve` 回推；返回帧 = 当场结算。
+    /// ★2026-10-19 扩面：`http.request` 之外的能力也走字节腿（通用分发 → `capabilities.invokeGenericBytes`）。
     private func dispatchInvokeBytes(_ frame: [UInt8]) -> [UInt8]? {
         do {
             let f = try InvokeWire.decodeInvoke(frame)
-            switch f.method {
-            case "http.request":
+            if f.method == "http.request" {
                 return try HttpCapability.handle(f) { [weak self] reply in
                     if self?.bytesBridge.pushResolve(reply) == false {
                         NSLog("[proteus] ✗ 二进制回推被丢弃（JS 侧未安装 __proteusHostResolveBytes）")
                     }
                 }
-            default:
-                return try InvokeWire.encodeResolve(
-                    .makeMissingMethod(f.reqId, "二进制通道未实现的原生方法：\(f.method)（当前仅 http.request）"))
             }
+            return invokeGenericBytes(f)
         } catch {
             return try? InvokeWire.encodeResolve(.makeErr("", "二进制帧处理失败：\(error)"))
         }

@@ -25,9 +25,28 @@
 #include "proteus_host_helpers.h"
 
 /**
+ * ★★2026-10-19（用户：「能力通道也去 JSON 化」）：**通用能力分发钩子**。
+ *
+ * 【为什么用函数指针而不是直接调 `screenInvokeDispatch`】后者是 `static`（各 TU 各一份），且定义在
+ *   `host_app_runtime_impl.h` **包含本头之后**；本头也被 `http_probe.h`（不含能力分发）单独包含
+ *   ⇒ 直接引用会编译/链接失败。钩子让"能力语义只有一份"（就是 JSON 腿那份 `screenInvokeDispatch`），
+ *   而字节腿只负责**载荷形态**。
+ * 【未注册时的语义】回 `missing` 帧（桥给 `*.unsupported`）——**不伪造成功**。
+ */
+typedef std::string (*ProteusGenericInvokeFn)(const std::string& method, const std::string& argsJson);
+static ProteusGenericInvokeFn g_proteusGenericInvoke = nullptr;
+
+/** 注册通用能力分发（由 `host_app_runtime_impl.h` 在 `screenInvokeDispatch` 定义后调用一次）。 */
+static inline void setInvokeBytesGenericHandler(ProteusGenericInvokeFn fn) {
+    g_proteusGenericInvoke = fn;
+}
+
+/**
  * JSVM 回调：`proteusHost.invokeBytes(frame: Uint8Array) → Uint8Array`（同步返回回程帧）。
  *
- * 【覆盖】当前只实现 `http.request`；其余方法回 `missing` 帧（桥据此给 `*.unsupported`，**不伪造成功**）。
+ * 【覆盖】`http.request` 走 `proteus_http`（大载荷裸字节）；其余能力走**通用分发**（已注册的
+ *   `screenInvokeDispatch` ⇒ 与 JSON 腿同一份能力语义；帧 body = JSON 字节）。
+ *   未注册 / 方法不存在 ⇒ `missing` 帧（桥据此给 `*.unsupported`，**不伪造成功**）。
  * 【坏帧】解不出帧 ⇒ 拿不到 reqId；JS 侧 `invokeHostAsyncBytes` 按**本次调用自己的 reqId** 结算
  *   （不依赖帧内 reqId）⇒ reason 仍能如实到达调用方（与 Android 同口径）。
  */
@@ -69,9 +88,22 @@ static JSVM_Value InvokeBytesCb(JSVM_Env env, JSVM_CallbackInfo info) {
                         f.reqId.c_str(), rf.ok ? 1 : 0, rf.status ? *rf.status : 0u, rf.body.size(),
                         f.url ? f.url.v.c_str() : "");
         } else {
-            OH_LOG_INFO(LOG_APP, "PROTEUS_INVOKE_BYTES_MISSING method=%{public}s", f.method.c_str());
-            outBytes = proteus::wire::encodeResolve(proteus::wire::ResolveFrame::missingMethod(
-                f.reqId, "二进制通道未实现的原生方法：" + f.method + "（当前仅 http.request）"));
+            // ★通用能力：帧 body = JSON 字节 ⇒ 交已注册的能力分发（与 JSON 腿**同一份**实现）⇒
+            //   返回值（既有 `{"ok":…}` JSON 串）原样作回程 body。
+            if (g_proteusGenericInvoke == nullptr) {
+                OH_LOG_INFO(LOG_APP, "PROTEUS_INVOKE_BYTES_MISSING method=%{public}s reason=no-handler", f.method.c_str());
+                outBytes = proteus::wire::encodeResolve(proteus::wire::ResolveFrame::missingMethod(
+                    f.reqId, "二进制通道未注册通用能力分发（该入口不支持：" + f.method + "）"));
+            } else {
+                std::string argsJson = f.body.empty() ? std::string("{}")
+                                                      : std::string(reinterpret_cast<const char*>(f.body.data()), f.body.size());
+                std::string out = g_proteusGenericInvoke(f.method, argsJson);
+                proteus::wire::ResolveFrame rf = proteus::wire::ResolveFrame::okOf(f.reqId);
+                rf.body.assign(out.begin(), out.end());
+                outBytes = proteus::wire::encodeResolve(rf);
+                OH_LOG_INFO(LOG_APP, "PROTEUS_INVOKE_BYTES_GENERIC method=%{public}s body=%{public}zu",
+                            f.method.c_str(), out.size());
+            }
         }
     }
 

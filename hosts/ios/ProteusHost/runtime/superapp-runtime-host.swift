@@ -244,23 +244,22 @@ final class SuperappRuntimeHost: NSObject, SuperappRuntimeExports {
     }
 
     /// 分发去程帧（与 Android `HostCapabilities.invokeBytes` 同一分发：`http.request` 走能力层，
-    ///   其余 ⇒ `missing` 帧 = JS 侧 `*.unsupported`）。
+    ///   其余能力走**通用字节分发**（帧 body = JSON 字节 ⇒ 复用 `caps.invoke` 的能力语义））。
     /// 返回 `nil` = 已受理、结果稍后 `pushResolve` 回推（异步能力）；返回帧 = 当场结算。
     private func dispatchInvokeBytes(_ frame: [UInt8]) -> [UInt8]? {
         do {
             let f = try InvokeWire.decodeInvoke(frame)
-            switch f.method {
-            case "http.request":
+            if f.method == "http.request" {
                 return try HttpCapability.handle(f) { [weak self] reply in
                     // ★回推失败（JS 侧未装 `__proteusHostResolveBytes`）⇒ 如实记日志，不静默
                     if self?.bytesBridge.pushResolve(reply) == false {
                         NSLog("[proteus] ✗ 二进制回推被丢弃（JS 侧未安装 __proteusHostResolveBytes）")
                     }
                 }
-            default:
-                return try InvokeWire.encodeResolve(
-                    .makeMissingMethod(f.reqId, "二进制通道未实现的原生方法：\(f.method)（当前仅 http.request）"))
             }
+            // ★通用能力：复用 `HostCapabilities` 的能力语义（`caps` 是 HostRuntimeBridge，其
+            //   `invoke` 已按 `screen.*` / 能力族分流——含 M5 执行器那条腿，与 JSON 腿完全同源）。
+            return caps.invokeGenericBytes(f)
         } catch {
             // 帧解不出 / 编码失败 ⇒ 回一帧错误。★回程是**同步返回**给本次调用方的：JS 侧按自己的
             //   reqId 结算（不依赖帧内 reqId），故这里 reqId 空缺不会导致"错误被静默丢弃"。

@@ -412,6 +412,99 @@ if (!fs.existsSync(HTTP_JAVA)) {
   }
 }
 
+/* ══════════ ★★2026-10-19 扩面：**全能力通道**（用户「能力通道也去 JSON 化」） ══════════
+ * 【解决什么】#903/#904/#1063 的字节腿只覆盖 `http.request`：其余能力仍走
+ *   `proteusHost.invoke(method, JSON.stringify(args))`。本次把字节腿扩为**通用分发**——
+ *   判据必须覆盖三端**通用分支**，否则以后有人把 `default:` 改回 `missing` 门禁仍然全绿。
+ * 【判据形态（与 ⑤⑥⑦ 同族）】
+ *   ① JS 通道层：同步 `invokeHost` 也要探测字节入口；异步腿必须有 generic 分支；
+ *   ② Android：`invokeBytes` 必须调用 `HttpCapability.handle` 之外的**通用分发**方法；
+ *   ③ iOS：两处 `dispatchInvokeBytes` 都必须有通用分发（不是只有 http.request 的 switch）；
+ *   ④ 鸿蒙：字节桥必须调用已注册的通用分发钩子（而不是直接回 missing）。
+ *   ★反向判据：三端都不得再出现"当前仅 http.request"的**默认拒绝**文案（那是旧形态的标志）。
+ */
+{
+  // ① JS 通道层
+  const js = fs.readFileSync(INVOKE_BRIDGE, 'utf-8')
+  const jsNeed = [
+    ['genericFramePayload', '通用能力的去程载荷（args ⇒ JSON 字节 + contentType）'],
+    ['tryInvokeHostBytesSync', '同步能力的字节腿（否则同步能力永远走 JSON）'],
+    ['invokeHostAsyncJson', '异步 JSON 回落腿（字节腿 missing 时的唯一合法回落目标）'],
+    ['BYTES_MISSING', '帧级 missing 的内部哨兵（能力级 unsupported 不得触发回落）'],
+  ]
+  const jsMissing = jsNeed.filter(([p]) => !hasExact(js, p))
+  if (jsMissing.length) {
+    for (const [p, why] of jsMissing) fail(`JS 通道层缺 \`${p}\`（${why}）`)
+  } else {
+    console.log('  ✓ JS 通道层：同步/异步两条腿都覆盖通用能力（genericFramePayload / tryInvokeHostBytesSync / JSON 回落）')
+  }
+  // ★同步 `invokeHost` 必须**真的**探测字节入口（只定义不调用 = 同步能力仍走 JSON）
+  const invokeHostBody = /export function invokeHost\([\s\S]*?\n\}/.exec(js)
+  if (!invokeHostBody || !hasExact(invokeHostBody[0], 'getHostInvokeBytes') || !hasExact(invokeHostBody[0], 'tryInvokeHostBytesSync')) {
+    fail('`invokeHost`（同步）未探测/使用字节腿（同步能力仍走 JSON 文本——本次要消灭的正是这条）')
+  }
+  // ★异步腿的通用分支：`settleFromFrame` 必须按 generic 分流（否则通用能力的回程 body 会被当 HTTP 响应体）
+  if (!/generic\s*:\s*!isHttp/.test(js)) {
+    fail('异步字节腿未按通用能力分流（`generic: !isHttp`）——通用能力的 JSON 回程会被误当 HTTP 响应体解释')
+  }
+
+  // ② Android：通用分发必须存在且被 invokeBytes 调用
+  {
+    const caps = fs.readFileSync(CAPS_JAVA, 'utf-8')
+    const fn = /public\s+byte\[\]\s+invokeBytes\s*\(\s*byte\[\][\s\S]*?\n\s{4}\}/.exec(caps)
+    if (!fn) {
+      fail('读不到 `HostCapabilities.invokeBytes(byte[])` 的实现体（门禁对账前提失效）')
+    } else if (!hasExact(fn[0], 'invokeGenericBytes')) {
+      fail('Android `invokeBytes` 未调用 `invokeGenericBytes`（字节腿仍只认 http.request ⇒ 其余能力静默回落 JSON）')
+    } else if (!hasExact(caps, 'invokeCore')) {
+      fail('Android 能力分发未拆出 `invokeCore`（两条入口各自记账 ⇒ `native.calls` 判据会读到双记账）')
+    } else {
+      console.log('  ✓ Android 宿主：`invokeBytes` 通用分发 + `invokeCore` 单一能力语义（无双记账）')
+    }
+  }
+
+  // ③ iOS：两处分发都必须有通用分支
+  //   ★判**调用形态**而不是裸 token：本仓已实测——注释里提一句 `invokeGenericBytes` 就能让判据绿，
+  //     而代码其实没调它（同 ⑥ C 桥的教训：「注释里的名字应算文档，不算证据」）。
+  {
+    const files = [SUPERAPP_SWIFT, path.join(IOS_RUNTIME, 'host-runtime-bridge.swift')]
+    const gaps = []
+    for (const f of files) {
+      if (!fs.existsSync(f)) { gaps.push(f); continue }
+      const body = /private\s+func\s+dispatchInvokeBytes\([\s\S]*?\n\s{4}\}/.exec(fs.readFileSync(f, 'utf-8'))
+      if (!body || !/invokeGenericBytes\s*\(/.test(body[0])) gaps.push(f)
+    }
+    if (gaps.length) {
+      for (const f of gaps) fail(`${path.relative(ROOT, f)} 的 \`dispatchInvokeBytes\` 未接通用分发（缺 \`invokeGenericBytes(\` **调用**）——该场景其余能力仍走 JSON 腿`)
+    } else {
+      console.log('  ✓ iOS 宿主：superapp + host-runtime 两处字节分发都接了通用能力（能力语义复用 `HostCapabilities.invoke`）')
+    }
+    // ★反向判据：iOS 不得再出现"仅 http.request"的默认拒绝分支
+    for (const f of files) {
+      if (fs.existsSync(f) && /当前仅 http\.request/.test(fs.readFileSync(f, 'utf-8'))) {
+        fail(`${path.relative(ROOT, f)} 仍保留"当前仅 http.request"的默认拒绝文案（字节腿未真正扩面）`)
+      }
+    }
+  }
+
+  // ④ 鸿蒙：字节桥必须调用通用分发钩子
+  {
+    const HB = path.join(ROOT, 'hosts/harmony/host-app/proteus_render/src/main/cpp/invoke_bytes_bridge.h')
+    const HR = path.join(ROOT, 'hosts/harmony/host-app/proteus_render/src/main/cpp/host_app_runtime_impl.h')
+    const hb = fs.readFileSync(HB, 'utf-8')
+    if (!hasExact(hb, 'setInvokeBytesGenericHandler') || !hasExact(hb, 'g_proteusGenericInvoke')) {
+      fail('鸿蒙 `invoke_bytes_bridge.h` 缺通用分发钩子（`setInvokeBytesGenericHandler` / `g_proteusGenericInvoke`）')
+    } else if (!hasExact(fs.readFileSync(HR, 'utf-8'), 'setInvokeBytesGenericHandler')) {
+      fail('鸿蒙 `host_app_runtime_impl.h` 未注册通用分发（钩子永不非空 ⇒ 除 http.request 外全部回 missing）')
+    } else {
+      console.log('  ✓ 鸿蒙宿主：字节桥经注册钩子复用 `screenInvokeDispatch`（能力语义一份，非另写副本）')
+    }
+    if (/当前仅 http\.request/.test(hb)) {
+      fail('鸿蒙 `invoke_bytes_bridge.h` 仍保留"当前仅 http.request"的默认拒绝文案（字节腿未真正扩面）')
+    }
+  }
+}
+
 if (failed) {
   console.error('\n✗ 跨语言数据通道出现 JSON 文本（S2 去 JSON 被回退）——见上')
   console.error('  正确做法：逐帧指令走 `sendOps`（字节直传）；能力调用走 `invokeBytes` / `resolveHostBytes`（`PINV`/`PRSP` 帧）')
