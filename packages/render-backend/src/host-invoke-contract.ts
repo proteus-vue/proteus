@@ -80,6 +80,10 @@ export const HOST_CAPABILITY_METHODS = [
   //   ★三端实现：Android `VaporRenderHost.elementRect` · iOS `SelfDrawBridge.elementRect` ·
   //     鸿蒙 `host_app_runtime_impl.h`（读 `g_elTree` = 上一帧内核树，一次性 VM 的必然形态）。
   'element.rect',
+  // ★★★决策 #1083：录屏/截屏状态（C71 `useScreenCapture`）——一次取全部状态。
+  //   ★回执里**缺字段 = 该端查不了**（桥给 unsupported，绝不伪造 false）：
+  //     Android 无公开录屏查询 · iOS 无全局 PiP 查询 · 鸿蒙无用户截屏事件。
+  'device.capture',
 ] as const
 
 /** **合法省略**（某端不实现但非漂移——由引擎/平台提供）。键 = 端名（`android`/`ios`/`harmony`）。 */

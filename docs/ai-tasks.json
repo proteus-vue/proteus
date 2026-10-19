@@ -1900,6 +1900,38 @@
         "T-app-runtime-capabilities"
       ],
       "note": "【done · 决策 #1082（2026-10-19）】承接 #1081「下一批扩 class/data-*」与用户「真正落地就需要和 web 的查询结构保持同步」。\n【支持面】#id/裸 id · .class · tag/* · 复合 · 后代 · > · 选择器列表（文档序）· [attr]/[attr=\"v\"] 均支持；兄弟 +/~ · 伪类 · 伪元素 · 属性运算符（~= ^= $= *= |=）明确 unsupported + 原因（不做近似匹配）。\n【四层】① 编译器 element-identity.ts（改名扩面）：静态 class→elementClasses、data-*→elementDataset（HTML dataset 命名）；动态 :class 对象形态与 :data-* 产精确诊断，:class 字面量按静态收；② 契约与实例化透传（0 行增长）；③ 索引重写为「记录表 + 解析 + 匹配 + 文档序 DFS」，parseSelector/selectorSupport/resolveElement 共用同一解析器；Vue 渲染链扩到 createElement/insert/patchProp；④ 能力层 ElementResolver.support 由可选改**必填**（缺省会让不支持形态静默退化成 not-found）。\n【真机】Android `.sa-item` → nodeId 11、`view.sa-item` 同节点、伪类 unsupported、#id 与 readRects 逐值一致；iOS `.sa-item` 与 `#mine-row-dark` 命中同一 nodeId 16、cross_check_ok=true。\n【真机抓出的单元测试盲区】`indexElementIds` 只传了 elementId（classes/dataset/tag 全丢）⇒ `#id` 查得到、`.class` 全 not-found，而单测（直接调 registerScreenElements）全绿。已补 screen-runtime 端到端用例。\n【顺带修两处既有腐化】① `pnpm check:content` 在 HEAD 上本来就是红的：#1080 加了 4 个传感器桥方法但没在 BRIDGE_TO_HOST 登记 ⇒ 生成器\"未登记即硬失败\"抛错（#1080 漏跑 check:content）；② Android 键盘推送判据仍指向 SuperappActivity，而 #1075 已把实现抽到 KeyboardWatcher ⇒ 误报\"壳未推\"，键盘页 Android 从 ✅ 掉回 🟡；改为实现+装配点两处。\n【诚实边界】① 兄弟/伪类/伪元素/属性运算符明确不支持；② 动态 :id/:class/:data-* 是运行期事实（编译期诊断），这类节点可能查不到；③ 鸿蒙几何腿**已真机闭环**（#1082 补测）：三个选择器命中同一 nodeId 16、element_rect={16,230,345×48vp}、伪类如实 unsupported；过程中抓出两个真缺陷（String(obj) 变 [object Object] 使报告非法 JSON；element.rect 在 hostAppRender 期间必然「尚未建树」⇒ 拆成「JS 解析 nodeId + 宿主建树后 appScreenNodeRect 取几何」）；④ useIntersection 仍未实现。"
+    },
+    {
+      "id": "T-app-screen-capture-domain",
+      "title": "设备域第 3 批：C71 录屏/截屏状态（useScreenCapture）三端落地 + 能力面诚实分档",
+      "type": "capability",
+      "status": "done",
+      "owner": "session:zcode-invoke-bytes-20261019",
+      "scope": [
+        "packages/api/src/capability-app-capture.ts",
+        "packages/api/src/capability-app-device.ts",
+        "packages/render-backend/src/host-invoke-contract.ts",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/CaptureCapability.java",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/HostCapabilities.java",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/shell/SuperappActivity.java",
+        "hosts/ios/ProteusHost/runtime/capture-capability.swift",
+        "hosts/ios/ProteusHost/runtime/host-capabilities.swift",
+        "hosts/ios/ProteusHost/shell/superapp-scene.swift",
+        "hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_capture.h",
+        "hosts/harmony/host-app/proteus_render/src/main/cpp/host_app_runtime_impl.h",
+        "hosts/harmony/host-app/entry/src/main/ets/runtime/CaptureSnapshot.ets",
+        "hosts/harmony/host-app/entry/src/main/ets/shell/Superapp.ets",
+        "tests/capability-app-capture.test.ts",
+        "docs/ai-tasks.json"
+      ],
+      "decision": 1083,
+      "verification": "npx vitest run tests/capability-app-capture.test.ts && node scripts/check-host-invoke-contract.mjs && bash hosts/android/check-host-compile.sh && bash hosts/ios/check-selfdraw-compile.sh && bash scripts/check-harmony-host-compile.sh && bash hosts/android/run-element-probe.sh && bash hosts/harmony/run-superapp.sh",
+      "branch": null,
+      "related": [
+        "T-app-runtime-capabilities",
+        "T-app-element-selector-web-parity"
+      ],
+      "note": "【done · 决策 #1083（2026-10-19）】设备域剩 4 项里选 C71——只有它三端都有真实 API，且核心是\"能不能说真话\"。\n【实测 API 面（先取证）】鸿蒙最全（display.isCaptured + captureStatusChange + PiPWindow.isPiPEnabled，@since 11/12，设备 API 26）；iOS 有 UIScreen.isCaptured(KVO) + 截屏通知、无全局 PiP；Android API34+ 有 ScreenCaptureCallback + isInPictureInPictureMode、无公开录屏查询。\n【分档铁律】逐方法独立分档，**缺字段 = 该端查不了 ⇒ unsupported，绝不伪造 false**（false 会让业务误判\"确认没在录屏\"）；不因一项缺而整能力降级。\n【三端真机】Android {channel:true,recording:\"unsupported\",pip:false} · iOS {channel:true,recording:\"off\",pip:\"unsupported\"} · 鸿蒙 {channel:true,recording:\"off\",pip:true}。\n【★★★抓出三个真缺陷】① isDeviceMethod 前缀把 device.capture 先截走（回\"未实现的设备方法\"，真机 raw 点名）；② proteus_capture.h 用文件级 static ⇒ 跨 TU 各一份 ⇒ \"采到了但读不到\"（日志实证 hasRec=1 而回执 false），改函数内静态（与 proteus_device.h::snapshot 同款）；③ hostAppRender 先于 refreshDeviceSnapshot ⇒ 首次查询读空快照，改渲染前先刷。另修探针装置自建 caps 实例未注入 provider。\n【判据】单测 11/11 + 破坏性 2 条（缺字段当 false ⇒ 1 红；推通道不校验类型 ⇒ 2 红）+ Android 判据脚本新增录屏断言 + file-size/契约/no-json-wire/iOS 源清单/两副本/check:content/check:ai-tasks/test:coupled/check:vapor-three-end/vue-tsc/三端编译全绿。\n【诚实边界】① PiP 三端语义**不同**（Android=本应用是否在 PiP / 鸿蒙=系统 PiP 是否启用 / iOS=查不了），同一 API 名不是同一个问题；② 鸿蒙读类是渲染时刻快照（延迟=一次渲染间隔），且无截屏事件；③ Android 截屏回调只覆盖本应用窗口；④ 未做 useCacheManager/useAR/useBeacon（后两者真机可判成本高：iBeacon 需硬件+定位权限，AR 需 VKSession）。"
     }
   ]
 }

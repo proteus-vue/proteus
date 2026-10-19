@@ -72,6 +72,21 @@ for k, want in (('not_found_probe', 'not-found'), ('pseudo_probe', 'unsupported'
         o = {}
     if not (o and o.get('ok') is False and want in str(o.get('error', ''))):
         fails.append(f'{k} 未如实分档（期望 {want}）：{v}')
+# ★#1083：录屏/截屏能力——三端**能查的字段不同**，判据必须验"真值 vs unsupported"分得开
+#   Android：无公开录屏查询 ⇒ recording 必须 unsupported（**不是 false**）；pip 应是真值
+try:
+    cp = json.loads(d.get('capture_probe') or '{}')
+except Exception:
+    cp = {}
+if not cp:
+    fails.append('capture_probe 缺失（能力探针没跑到）')
+else:
+    if cp.get('channel') is not True:
+        fails.append('壳推通道未装配（channel != true）：' + str(cp))
+    if cp.get('recording') != 'unsupported':
+        fails.append('Android 无公开录屏查询 ⇒ recording 必须是 unsupported（伪造 false 会误导业务）：' + str(cp))
+    if not isinstance(cp.get('pip'), bool):
+        fails.append('Android 有 isInPictureInPictureMode ⇒ pip 应是真值：' + str(cp))
 # ★#1082：class / 复合选择器必须**真的命中**（静态 class 已进产物）
 for k in ('class_probe', 'compound_probe'):
     v = d.get(k)

@@ -59,6 +59,9 @@ final class HostCapabilities: NSObject {
     ///   未接线 ⇒ `missing` 分档（`element.unsupported`，诚实不伪造）。
     var elementRectProvider: ((String) -> String)?
 
+    /// ★★★决策 #1083：录屏/截屏状态（C71）——平台观察者在独立文件（capture-capability.swift）
+    let capture = CaptureCapability()
+
     // ────────────────────────── 主入口（契约同 Android.invoke） ──────────────────────────
 
     /// 执行原生方法并返回 JSON 串。**同步**（与 G-39 的 JNI trampoline 同契约：壳内同步完成）。
@@ -95,6 +98,9 @@ final class HostCapabilities: NSObject {
             return miss("extension.load: iOS 禁止动态模块加载（App Store 政策；dlopen 第三方代码会被拒审）")
         case "mini-program.navigate":
             return miss("mini-program.navigate: iOS 无小程序概念（跨 App 跳转请用 URL Scheme / Universal Links）")
+        case "device.capture":
+            // ★★★决策 #1083：录屏/截屏状态（C71）——★缺字段 = 本端查不了（桥给 unsupported，不伪造 false）
+            return ok(capture.state())
         case "element.rect":
             // ★★★决策 #1081：元素几何（`useElement` → selector→nodeId → 内核矩形）。
             //   ★回执形状归一：几何源给的是裸几何；本层包成既有的 `{ok:true,data:…}` 契约。

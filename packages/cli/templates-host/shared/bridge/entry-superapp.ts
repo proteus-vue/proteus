@@ -28,6 +28,8 @@ import { resolveElement, elementRegistryStats, firstScreenElementId, selectorSup
 // ★与 entry-host-runtime.ts 同款：包内**相对路径**引用源（tsconfig.json 是 JSONC，加 paths 会撞校验；
 //   而相对路径让 bundler 与类型检查解析到同一份源，零配置改动）
 import { installElementResolver } from '../../../packages/api/src/capability-app-element'
+// ★★★决策 #1083：录屏/截屏能力探针（真机判据直接调真实桥，不经 capability.ts 全量入口）
+import { createAppCaptureCapabilities } from '../../../packages/api/src/capability-app-capture'
 import type { SuperappRuntime } from '@proteus-vue/render-backend'
 
 // ★★★（决策 #715）**必须引用裸标识符 `__DEV__`**——esbuild 的 `define` 只替换**裸标识符**，
@@ -545,6 +547,37 @@ export function appElementRect(argsJson: string): string {
 ;(globalThis as unknown as { __proteusSuperappElementRect?: (a: string) => string })
   .__proteusSuperappElementRect = (a: string) => appElementRect(a)
 
+/**
+ * ★★★决策 #1083：**录屏/截屏能力探针**（真机判据入口）。
+ *
+ * 【为什么两段（同步入口 + 异步填充）】宿主经 napi/JSExport 调全局函数时只认**同步返回**，
+ *   而 `useScreenCapture` 的方法返回 Promise ⇒ 入口立即回占位，结果填到
+ *   `__proteusCaptureProbeResult`，判据在**下一轮**读（宿主侧读报告时已就绪）。
+ * 【返回】recording/pip: 真值 | unsupported | failed（**unsupported 与 false 必须分得开**）·
+ *   channel: 壳推接收器是否装配 · raw: 宿主原始回执（诊断用，定位"桥没接"还是"宿主没实现"）。
+ */
+export function appCaptureProbe(): string {
+  const g = globalThis as Record<string, unknown>
+  const out: Record<string, unknown> = {}
+  try {
+    // ★先建能力（建的过程才装壳推通道）——再读 channel（首版顺序反了，恒 false）
+    const api = createAppCaptureCapabilities().getScreenCapture()
+    out['channel'] = typeof g['__proteusHostCapture'] === 'function'
+    // ★原始回执：直接问宿主，定位"字节腿没转 / 宿主没实现 / provider 未注入"
+    try { out['raw'] = typeof (g as any).proteusHost?.invoke === 'function' ? (g as any).proteusHost.invoke('device.capture', '{}') : 'no-invoke' } catch (e) { out['raw'] = 'throw: ' + String((e as Error)?.message ?? e) }
+    void Promise.all([api.getRecordingState(), api.isPictureInPictureActive()])
+      .then(([rec, pip]) => {
+        out['recording'] = rec.ok ? rec.data : (rec.error.code === 'screen-capture.unsupported' ? 'unsupported' : 'failed')
+        out['pip'] = pip.ok ? pip.data : (pip.error.code === 'screen-capture.unsupported' ? 'unsupported' : 'failed')
+        out['done'] = true
+        g['__proteusCaptureProbeResult'] = JSON.stringify(out)
+      })
+      .catch((e) => { out['done'] = true; out['error'] = String((e as Error)?.message ?? e); g['__proteusCaptureProbeResult'] = JSON.stringify(out) })
+  } catch (e) {
+    out['error'] = String((e as Error)?.message ?? e)
+  }
+  return JSON.stringify(out)   // 立即回（done 缺失 = 结果还在算）
+}
 /** 元素索引读数（判据：证明索引里真有条目，而不是"查询恒 not-found"）。 */
 ;(globalThis as unknown as { __proteusSuperappElementRegistry?: () => string })
   .__proteusSuperappElementRegistry = () => JSON.stringify(elementRegistryStats())
@@ -579,6 +612,10 @@ __HOSTAPP.__proteusHostAppAnimActive = (): string => {
 __HOSTAPP.__proteusHostAppTree = __HOSTAPP.__proteusSuperappTree
 // ★★★决策 #1081：元素查询（中性名——三端宿主/判据按此名调）
 __HOSTAPP.__proteusHostAppElementRect = __HOSTAPP.__proteusSuperappElementRect
+// ★★★决策 #1083：录屏/截屏能力探针（中性名——三端判据按此名调）
+;(globalThis as unknown as { __proteusSuperappCapture?: () => string })
+  .__proteusSuperappCapture = () => appCaptureProbe()
+__HOSTAPP.__proteusHostAppCapture = __HOSTAPP.__proteusSuperappCapture
 // ★#1082：仅解析（鸿蒙：宿主建树后自己取几何；三端 selector→nodeId 仍只有 JS 一份实现）
 ;(globalThis as unknown as { __proteusSuperappElementResolve?: (a: string) => string })
   .__proteusSuperappElementResolve = (a: string) => appElementResolve(a)

@@ -57,6 +57,14 @@ public final class ElementProbe {
             HostCapabilities caps = new HostCapabilities(activity);
             ScreenHost screenHost = new ScreenHost(root);
             HostBridge bridge = new HostBridge(caps, screenHost);
+            // ★#1083：探针装置有自己的 caps 实例 ⇒ 录屏/截屏 provider 必须同注入（否则全 unsupported）
+            CaptureCapability cap = new CaptureCapability(activity, p -> QuickJsEngine.eval(
+                    "__proteusHostCapture(" + org.json.JSONObject.quote(p.toString()) + ")"));
+            cap.installUserCapture();
+            caps.setCaptureProvider(() -> {
+                try { return cap.state().toString(); }
+                catch (Throwable t) { return "{\"error\":\"state 失败\"}"; }
+            });
             caps.setElementRectProvider(args -> ElementRectProbe.rect(
                     draw, dm.density, draw.view() != null ? draw.view().getContentScrollY() : 0, args));
             SuperappRuntimeHost rtHost = new SuperappRuntimeHost(draw, bridge);
@@ -146,6 +154,10 @@ public final class ElementProbe {
                 String mini = "{\"viewport\":{\"width\":390,\"height\":844},\"nodes\":[{\"id\":1,\"width\":390,\"height\":844,\"backgroundColor\":\"#ff0000\"}]}";
                 out.put("mini_mount_reply", draw.mount(mini));
             } catch (Throwable t2) { out.put("mini_mount_reply", "throw: " + t2); }
+            // ★★★决策 #1083：录屏/截屏能力探针（两段式：先调一次，再读异步结果）
+            out.put("capture_probe_call", evalStr("__proteusHostAppCapture()"));
+            try { QuickJsEngine.nativeRunPendingJobs(); } catch (Throwable ignored) { }
+            out.put("capture_probe", evalStr("String(globalThis.__proteusCaptureProbeResult ?? 'null')"));
             boolean ok = p.optBoolean("ok", false) && out.optBoolean("cross_check_ok", false);
             out.put("ok", ok);
         } catch (Throwable t) {

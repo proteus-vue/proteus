@@ -232,6 +232,18 @@ final class SuperappRuntimeHost: NSObject, SuperappRuntimeExports {
      *   顺序无关紧要（JS 侧是**调用时**探测），但与 `setObject` 相邻更易审。
      * 【零回归】未装本桥的端/场景仍走既有 JSON 腿（`invokeHostAsync` 的降级分支）——**不谎称全场景已去 JSON**。 */
     @discardableResult
+    /// ★★★决策 #1083：装录屏/截屏推送（用户截屏 / 录屏状态变化 → `__proteusHostCapture`）。
+    ///   ★为什么在这里：推送要 `JSContext`（`HostCapabilities` 没有它）；且必须在 `setObject` 之后。
+    func installCapturePush(on ctx: JSContext) {
+        caps.capabilities.capture.push = { (payload: [String: Any]) in
+            guard let data = try? JSONSerialization.data(withJSONObject: payload),
+                  let json = String(data: data, encoding: .utf8) else { return }
+            let expr = "typeof __proteusHostCapture==='function'?__proteusHostCapture(" + json + "):0"
+            _ = ctx.evaluateScript(expr)
+        }
+        caps.capabilities.capture.install()
+    }
+
     func installInvokeBytes(on ctx: JSContext) -> Bool {
         bytesBridge.handler = { [weak self] frame in self?.dispatchInvokeBytes(frame) }
         let ok = bytesBridge.install(on: ctx)

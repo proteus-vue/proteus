@@ -27,6 +27,8 @@ import { CapError as ProteusCapError } from './capability-types'
 import { createAppLifecycleCapabilities, createAppNativeCapabilities, getHostLifecycleBus } from './capability-app'
 // ★★★决策 #1081：App 端元素查询（`useElement` 选择器通路）——解析器由装配层注入
 import { createAppElementCapabilities } from './capability-app-element'
+// ★★★决策 #1083：录屏/截屏状态（C71）——三端能力面不同，逐方法诚实分档
+import { createAppCaptureCapabilities } from './capability-app-capture'
 import type {
   BatteryInfo,
   CapDeviceInfo,
@@ -220,6 +222,7 @@ export function createAppCapabilities<E extends Error = Error>(
     ...createAppNativeCapabilities(CapError),
     ...createAppDeviceCapabilities(CapError),
     ...createAppElementCapabilities(CapError),   // ★#1081 元素查询（createElementQuery/createIntersection）
+    ...createAppCaptureCapabilities(),   // ★#1083 录屏/截屏状态（getScreenCapture）
   }
 }
 

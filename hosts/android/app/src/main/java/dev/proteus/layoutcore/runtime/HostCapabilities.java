@@ -217,6 +217,15 @@ public final class HostCapabilities {
             default:
                 // ★★2026-10-19（决策 #1067）：「设备与系统」域 12 项（device.* / clipboard.*）。
                 //   放在 default 之前用前缀判定，避免 12 个 case 把本方法撑长；语义仍在本类统一分档。
+                // ★★★决策 #1083：录屏/截屏状态（C71）。
+                //   ★**必须在 isDeviceMethod 之前**：`device.` 前缀会把本方法先截给 DeviceCapability
+                //     ⇒ 那边回"未实现的设备方法"（真机首跑就踩到：raw = 未实现的设备方法：device.capture）。
+                //   ★字段缺失 = 本端查不了（桥给 unsupported，不伪造 false）
+                if ("device.capture".equals(method)) {
+                    CaptureProvider cp = captureProvider;
+                    if (cp == null) throw new UnsupportedOperationException("device.capture: 宿主未接线");
+                    return ok(new JSONObject(cp.stateJson()));
+                }
                 if (isDeviceMethod(method)) {
                     try {
                         return ok(device.invoke(method, args));
@@ -252,6 +261,17 @@ public final class HostCapabilities {
     public interface ElementRectProvider { String rect(String argsJson); }
     private volatile ElementRectProvider elementRectProvider;
     public void setElementRectProvider(ElementRectProvider p) { this.elementRectProvider = p; }
+    /**
+     * ★★★决策 #1083（`useScreenCapture` · C71）：**录屏/截屏状态**实现注入点。
+     *
+     * 【为什么是注入而不是本类直建】平台状态查询要 `Activity`（截屏回调要注册在它上面），
+     *   而本类是"能力分档层"、不持有视图生命周期。壳建好 `CaptureCapability` 后注入。
+     * 【缺省（未接线）】`device.capture` 抛 `UnsupportedOperationException` ⇒ JS 桥给 unsupported。
+     */
+    public interface CaptureProvider { String stateJson(); }
+    private volatile CaptureProvider captureProvider;
+    public void setCaptureProvider(CaptureProvider p) { this.captureProvider = p; }
+
 
     /** 设备域方法前缀（`device.*` + 剪贴板两方法——与 `APP_DEVICE_METHODS` 对齐）。 */
     private static boolean isDeviceMethod(String method) {

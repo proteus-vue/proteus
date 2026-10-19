@@ -75,6 +75,17 @@ export const ELEMENT_BRIDGE_TO_HOST = {
 }
 
 /**
+ * ★★★决策 #1083：**录屏 / 截屏状态**域（C71）。
+ *   `getScreenCapture` → 宿主 `device.capture`（三端都实现了；**各端能查的字段不同**）。
+ *   ★字段级诚实边界（方法级本表判 ✅）：Android 无公开录屏查询、iOS 无全局 PiP 查询、
+ *     鸿蒙无用户截屏事件——差异在能力页正文与桥的 unsupported 分档里如实体现。
+ */
+export const CAPTURE_BRIDGE_FACTORY = 'createAppCaptureCapabilities'
+export const CAPTURE_BRIDGE_TO_HOST = {
+  getScreenCapture: 'device.capture',
+}
+
+/**
  * 参与鸿蒙分档的**全部**桥源（新增域必须登记——否则该域在文档上永远 🟡）。
  * ★map 的值类型显式写 `Record<string, string | null>`：`null` = 该桥方法不由宿主方法回答
  *   （纯 JS 或壳推通道）。不标注的话两个 map 的字面量形状不同，数组元素会被推成联合类型，
@@ -84,6 +95,7 @@ export const ELEMENT_BRIDGE_TO_HOST = {
 export const HARMONY_BRIDGE_SOURCES = [
   { file: 'packages/api/src/capability-app-device.ts', factory: DEVICE_BRIDGE_FACTORY, map: BRIDGE_TO_HOST },
   { file: 'packages/api/src/capability-app-element.ts', factory: ELEMENT_BRIDGE_FACTORY, map: ELEMENT_BRIDGE_TO_HOST },
+  { file: 'packages/api/src/capability-app-capture.ts', factory: CAPTURE_BRIDGE_FACTORY, map: CAPTURE_BRIDGE_TO_HOST },
 ]
 
 /** 鸿蒙宿主里承载能力分发的源码（新增承载文件必须登记——否则该能力在文档上永远 🟡）。 */

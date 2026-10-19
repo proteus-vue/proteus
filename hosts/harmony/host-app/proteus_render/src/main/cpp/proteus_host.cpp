@@ -993,6 +993,13 @@ static napi_value SetDeviceSnapshot(napi_env env, napi_callback_info info) {
         json.resize(len);
     }
     proteus::device::snapshot() = json;
+    // ★#1083：录屏/截屏快照（ArkTS 采集 display.isCaptured / PiPWindow.isPiPEnabled）
+    {
+        double rec = -1, pip = -1;
+        jnum(json.c_str(), json.size(), "recording", &rec);
+        jnum(json.c_str(), json.size(), "pip", &pip);
+        proteus::capture::setCaptureSnapshot(rec >= 0, rec > 0.5, pip >= 0, pip > 0.5);
+    }
     napi_value out;
     char b[96];
     snprintf(b, sizeof(b), "{\"ok\":true,\"bytes\":%zu}", json.size());

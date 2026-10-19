@@ -24,6 +24,8 @@ export function elementFieldToJson(v: Object | undefined): string {
 
 /** 元素探针读数打包（壳侧一次取全，报告字段名与 Android/iOS 对齐）。 */
 export interface ElementProbeReadout {
+  /** ★#1083：录屏/截屏能力探针（两段式结果） */
+  capture: string;
   registry: string;
   probe: string;
   cls: string;
@@ -42,6 +44,7 @@ export function readElementProbes(rt: Record<string, Object>): ElementProbeReado
     cls: elementFieldToJson(rt['elementClass'] as Object | undefined),
     compound: elementFieldToJson(rt['elementCompound'] as Object | undefined),
     pseudo: elementFieldToJson(rt['elementPseudo'] as Object | undefined),
+    capture: elementFieldToJson(rt['captureProbe'] as Object | undefined),
   };
 }
 
@@ -49,7 +52,8 @@ export function readElementProbes(rt: Record<string, Object>): ElementProbeReado
 export function elementReportFragment(r: ElementProbeReadout): string {
   return ',"element_registry":' + r.registry + ',"element_probe":' + r.probe
     + ',"element_class":' + r.cls + ',"element_compound":' + r.compound
-    + ',"element_pseudo":' + r.pseudo;
+    + ',"element_pseudo":' + r.pseudo
+    + ',"capture_probe":' + r.capture;
 }
 
 /**

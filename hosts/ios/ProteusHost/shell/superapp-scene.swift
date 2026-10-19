@@ -90,6 +90,8 @@ final class SuperappScene: NSObject {
         //   ★装在这里（`setObject` 之后、bundle 执行之前）：JS 侧是**调用时**探测，但早装可让首屏
         //     首个 `useFetch` 就走字节腿（避免"首请求回落 JSON"的静默不一致）。
         rtHost.installInvokeBytes(on: ctx)
+        // ★★★决策 #1083：装录屏/截屏推送（用户截屏 / 录屏状态变化 → __proteusHostCapture）
+        rtHost.installCapturePush(on: ctx)
         // ★★★C14 键盘（决策 #1069）：装系统键盘通知 → 推 JS `__proteusHostKeyboard` + 刷新 env
         //   【为什么在这里装】本场景持有 JSContext（evalJs）与容器视图；且键盘是**每次弹收**都要推的
         //   持续事件，只能由壳装（JS 侧没有 UIKit 通知）。
@@ -623,6 +625,9 @@ final class SuperappScene: NSObject {
         // ★#1082：`.sa-item` 现在**受支持**（静态 class 已进产物）⇒ 应命中；伪类应 unsupported
         o["element_class_selector"] = evalJs?("__proteusHostAppElementRect('{\"selector\":\".sa-item\"}')") ?? "null"
         o["element_compound_selector"] = evalJs?("__proteusHostAppElementRect('{\"selector\":\"view.sa-item\"}')") ?? "null"
+        // ★★★决策 #1083：录屏/截屏能力探针（iOS：有 isCaptured、无全局 PiP、有截屏通知）
+        _ = evalJs?("__proteusHostAppCapture()")
+        o["capture_probe"] = evalJs?("String(globalThis.__proteusCaptureProbeResult ?? 'null')") ?? "null"
         o["element_pseudo_selector"] = evalJs?("__proteusHostAppElementRect('{\"selector\":\"view:hover\"}')") ?? "null"
         // 独立交叉核对（内核 readRects 里同一 nodeId 的矩形）
         if let pj = o["element_probe"] as? String, let pd = pj.data(using: .utf8),

@@ -26,6 +26,7 @@
 #include "proteus_host_helpers.h"
 #include "invoke_bytes_bridge.h"
 #include "proteus_device.h"
+#include "proteus_capture.h"
 #include <chrono>
 
 // ★本头被**两种 include 顺序**包含（调用方日志宏定义在 include 之后）⇒ 自带日志域常量，
@@ -151,6 +152,8 @@ static std::string screenInvokeDispatch(const std::string& method, const std::st
         return b;
     }
     // ★★★决策 #1081：元素几何（`useElement` → selector→nodeId → 内核矩形）
+    // ★★★决策 #1083：录屏/截屏状态（C71）——快照 + 事件队列（一次性 VM 的必然形态）
+    if (method == "device.capture") return proteus::capture::stateJson();
     if (method == "element.rect") return scElementRect(argsJson);
     if (method == "screen.rect" || method == "screen.shared") {
         return "{\"ok\":false,\"missing\":true,\"reason\":\"未实现（e4 诚实跳过）\"}";
@@ -840,6 +843,7 @@ static napi_value HostAppRender(napi_env env, napi_callback_info info) {
     std::string elClass = "null";
     std::string elCompound = "null";
     std::string elPseudo = "null";
+    std::string capProbe = "null";
     if (err.empty()) {
         jsvmEvalStr(jenv, "String(__proteusHostAppElementRegistry())", &elReg);
         // ★仅解析（不取几何）：本 VM 期间内核树尚未建 ⇒ element.rect 必回「尚未建树」（真机实证）
@@ -849,6 +853,19 @@ static napi_value HostAppRender(napi_env env, napi_callback_info info) {
         jsvmEvalStr(jenv, "String(__proteusHostAppElementResolve('{\"selector\":\".sa-item\"}'))", &elClass);
         jsvmEvalStr(jenv, "String(__proteusHostAppElementResolve('{\"selector\":\"view.sa-item\"}'))", &elCompound);
         jsvmEvalStr(jenv, "String(__proteusHostAppElementResolve('{\"selector\":\"view:hover\"}'))", &elPseudo);
+        // ★#1083：录屏/截屏能力探针（两段式：先调一次，泵微任务后续体已填结果，再读）
+        jsvmEvalStr(jenv, "String(__proteusHostAppCapture())", nullptr);
+        if (policyOk) OH_JSVM_PerformMicrotaskCheckpoint(vm);   // 泵一次（非盲等：本 VM 的微任务一次性排空）
+        jsvmEvalStr(jenv, "String(globalThis.__proteusCaptureProbeResult ?? 'null')", &capProbe);
+    }
+    // ★★★决策 #1083：把 ArkTS 缓存的事件在本 VM 内推给 JS（一次性 VM ⇒ 只能渲染时推）
+    if (err.empty()) {
+        int ev = proteus::capture::takeCaptureEvents();
+        if (ev & proteus::capture::EVT_RECORDING) {
+            std::string st = proteus::capture::stateJson();
+            std::string ex = "typeof __proteusHostCapture==='function'?__proteusHostCapture(" + st + "):0";
+            jsvmEvalStr(jenv, ex.c_str(), nullptr);
+        }
     }
     // ★★★dev 元素树（决策 #732）：优先取**运行期** `__proteusHostAppTree()`（= `currentContent()`，
     //   **带 `file`/`screen`** ⇒ 面板据节点 loc 拼 `file:line:col` → 跳编辑器）。比 mount 捕获树多 `file` 字段。
@@ -872,7 +889,8 @@ static napi_value HostAppRender(napi_env env, napi_callback_info info) {
         + ",\"elementProbe\":\"" + jsonEscape(elProbe.empty() ? std::string("null") : elProbe) + "\""
         + ",\"elementClass\":\"" + jsonEscape(elClass.empty() ? std::string("null") : elClass) + "\""
         + ",\"elementCompound\":\"" + jsonEscape(elCompound.empty() ? std::string("null") : elCompound) + "\""
-        + ",\"elementPseudo\":\"" + jsonEscape(elPseudo.empty() ? std::string("null") : elPseudo) + "\"";
+        + ",\"elementPseudo\":\"" + jsonEscape(elPseudo.empty() ? std::string("null") : elPseudo) + "\""
+        + ",\"captureProbe\":\"" + jsonEscape(capProbe.empty() ? std::string("null") : capProbe) + "\"";
     if (!g_devConsoleOut.empty()) out += ",\"console\":\"" + jsonEscape(g_devConsoleOut) + "\"";
     if (!err.empty()) out += ",\"error\":\"" + jsonEscape(err) + "\"";
     out += "}";

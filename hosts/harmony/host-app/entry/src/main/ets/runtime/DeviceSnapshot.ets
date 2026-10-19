@@ -24,6 +24,8 @@ import { connection } from '@kit.NetworkKit';
 import { vibrator, sensor } from '@kit.SensorServiceKit';
 import { media } from '@kit.MediaKit';
 import { setDeviceSnapshot, drainDeviceActions } from 'proteus_render';
+// ★★决策 #1083：录屏/画中画状态（C71）——快照随设备快照一起交给 C++
+import { readCaptureSnapshot, CaptureSnapshotData } from './CaptureSnapshot';
 
 /** 一次动作（C++ 侧 proteus_device.h 入队的形状） */
 interface DeviceAction {
@@ -98,6 +100,8 @@ export function refreshDeviceSnapshot(win: window.Window | undefined, keyboardHe
     const cmp = lastSensor('compass');
     if (cmp !== null) sensorFields['sensor_compass'] = cmp;
 
+    // ★#1083：录屏/画中画快照（query 失败 ⇒ 该项 -1，C++ 侧据此不写字段）
+    const capture: CaptureSnapshotData = readCaptureSnapshot();
     const payload: Record<string, Object> = {
       'screen': {
         'width': widthVp,
@@ -121,12 +125,16 @@ export function refreshDeviceSnapshot(win: window.Window | undefined, keyboardHe
       'keyboard': { 'height': keyboardHeightVp, 'visible': keyboardHeightVp > 0 } as Record<string, Object>,
       // ★HEVC：枚举里有该 MIME 即视为"编码格式受支持"（不是硬解能力证明——如实登记差异）
       'hevc': media.CodecMimeType.VIDEO_HEVC === 'video/hevc',
+      // ★#1083 录屏/画中画：`-1` = 本端查不了 ⇒ **不写该字段**（C++ 侧据此回 missing，不伪造 false；见下方条件赋值）
     };
     if (brightness >= 0) payload['brightness'] = brightness;
     for (const k of Object.keys(sensorFields)) {
       const v = sensorFields[k];
       if (v !== null) payload[k] = v;
     }
+    // ★#1083：条件写入（ArkTS 禁对象展开）——`-1` 表示本端查不了 ⇒ 不写字段
+    if (capture.recording >= 0) payload['recording'] = capture.recording;
+    if (capture.pip >= 0) payload['pip'] = capture.pip;
     setDeviceSnapshot(JSON.stringify(payload));
   } catch (e) {
     // 快照采集失败 ⇒ 不注入（JS 侧按 missing 如实 unsupported）；不阻断渲染

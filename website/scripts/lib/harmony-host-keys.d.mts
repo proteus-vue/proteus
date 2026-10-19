@@ -11,6 +11,10 @@ export const DEVICE_BRIDGE_FACTORY: string
 export const ELEMENT_BRIDGE_FACTORY: string
 export const ELEMENT_BRIDGE_TO_HOST: Record<string, string | null>
 
+/** 录屏 / 截屏状态域（#1083）的桥工厂名与方法映射 */
+export const CAPTURE_BRIDGE_FACTORY: string
+export const CAPTURE_BRIDGE_TO_HOST: Record<string, string | null>
+
 /** 参与鸿蒙分档的全部桥源（文件 + 工厂 + 该域的映射表） */
 export const HARMONY_BRIDGE_SOURCES: Array<{
   file: string

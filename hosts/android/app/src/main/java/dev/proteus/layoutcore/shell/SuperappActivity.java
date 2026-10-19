@@ -36,6 +36,8 @@ public class SuperappActivity extends android.app.Activity {
     private VaporRenderHost draw;
     private ScreenHost screenHost;
     private HostCapabilities caps;
+    /** ★★决策 #1083：录屏/截屏状态（C71）——用户截屏回调要注册在 Activity 上 */
+    private CaptureCapability capture;
 
     /** 平台逻辑尺寸（viewport）——与 StressSfcActivity 同口径（物理/density） */
     private float logicalW = 390f, logicalH = 844f;
@@ -141,6 +143,14 @@ public class SuperappActivity extends android.app.Activity {
         //   ★实现单列在 `runtime/ElementRectProbe`（VaporRenderHost 是存量巨型文件，只减不增）。
         caps.setElementRectProvider(args -> ElementRectProbe.rect(
                 draw, density, draw.view() != null ? draw.view().getContentScrollY() : 0, args));
+        // ★★决策 #1083：录屏/截屏状态——壳推 `__proteusHostCapture`（截屏发生 / 录屏状态变化）
+        capture = new CaptureCapability(this, p -> QuickJsEngine.eval(
+                "__proteusHostCapture(" + org.json.JSONObject.quote(p.toString()) + ")"));
+        capture.installUserCapture();   // API 34+ 才有；失败静默（桥按 unsupported 分档）
+        caps.setCaptureProvider(() -> {
+            try { return capture.state().toString(); }
+            catch (Throwable t) { return "{\"error\":\"" + String.valueOf(t.getMessage()).replace("\"", "'") + "\"}"; }
+        });
         draw.enableContentScrollRange();       // 内容装不下才滚（与 Web 页面语义一致）
         screenHost.setEnvResolver(draw::resolveEnvInSpec);   // ★屏切换通路的 env 解析（决策 #677）
 

@@ -46,6 +46,7 @@ HOST_SRCS=(
   # ★★键盘监听（决策 #1069）：系统键盘通知 → __proteusHostKeyboard
   "$HERE/ProteusHost/runtime/keyboard-watch.swift"
   "$HERE/ProteusHost/runtime/element-rect.swift"
+  "$HERE/ProteusHost/runtime/capture-capability.swift"
   "$HERE/ProteusHost/runtime/host-lifecycle-events.swift"
   "$HERE/ProteusHost/runtime/screen-host.swift"
   # ★★★S2「去 JSON」（决策 #903）：invoke 通道的**二进制线格式**（Swift 侧唯一编解码器）+ JSC 字节桥

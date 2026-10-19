@@ -7270,3 +7270,65 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
      ★教训：**"Vapor 三端共享同一份 JS 运行期"不等于"三端时序相同"**——鸿蒙一次性 VM 的
        "渲染 = 先 JS 后建树"与 Android/iOS 的"mount 即建树"是两个形态，判据必须按端形态写。
   ④ `useIntersection` 仍未实现（缺帧级几何变化事件源），本单未触及。
+
+1083. **★★★设备域第 3 批：C71 录屏/截屏状态三端落地（字段级诚实分档）+ 三个真缺陷 · 决策**（2026-10-19 · 承接 #1082 后的「设备域剩 useScreenCapture/useCacheManager/useAR/useBeacon」）:
+
+【为什么选 C71（先取证）】优先级表里剩四项都是 △；但只有录屏这一项**三端都有真实 API**，
+  且它的核心不是"调不通"而是"能不能说真话"——正好把"分档纪律"落到能力面。
+  **实测三端 API 面（这一步必须先做，不能凭印象）**：
+  · 鸿蒙（API 26 设备，SDK @since 11/12）：`display.isCaptured()` + `display.on('captureStatusChange')` +
+    `PiPWindow.isPiPEnabled()` —— **三端最全**；但**无**公开的"用户截屏"事件。
+  · iOS（26.5 SDK）：`UIScreen.isCaptured`（KVO 可观察，已 deprecated 但可用）+
+    `UIApplication.userDidTakeScreenshotNotification`；**无**全局 PiP 查询（只能查自己创建的控制器）。
+  · Android（SDK 34/37）：API 34+ 有 `Activity.registerScreenCaptureCallback`（本人窗口被截屏）+
+    `isInPictureInPictureMode()`；**无**公开的"正在被录屏"查询（`MediaProjectionManager` 只能发起授权）。
+
+【能力面（逐方法独立分档——**绝不伪造 false**）】
+  伪造 `false` 比 unsupported 危险：业务看到 `{ok:true,data:false}` 会以为"确认没在录屏"，
+  实际是"这个端根本查不了"。⇒ **缺字段 = 该端查不了 ⇒ `unsupported`**，且**不因一项缺而整能力降级**。
+  | 方法 | Android | iOS | 鸿蒙 |
+  |---|---|---|---|
+  | `getRecordingState` | ❌ unsupported | ✅ `isCaptured` | ✅ `isCaptured` |
+  | `onRecordingStateChange` | ❌ unsupported | ✅ KVO | ✅ `captureStatusChange` |
+  | `onUserCapture` | ✅ API34+ 回调 | ✅ 通知 | ❌ unsupported |
+  | `isPictureInPictureActive` | ✅ 本应用 PiP | ❌ unsupported | ✅ PiP 已启用 |
+
+【四层落地】
+  · **JS 桥** `api/src/capability-app-capture.ts`（新）：`getScreenCapture` 桥成员 + 推通道
+    `__proteusHostCapture`（`{recording?, userCapture?}`，幂等装配、非法载荷不派发、按订阅者隔离）。
+  · **Android** `runtime/CaptureCapability.java`（新）：`state()` **只写本端真能查的字段** +
+    `installUserCapture()`（API34+，幂等）；`HostCapabilities` 加 `device.capture` provider 注入。
+  · **iOS** `runtime/capture-capability.swift`（新）：`UIScreen.isCaptured` + KVO +
+    截屏通知；`pip` 字段**不写**（无全局查询）。
+  · **鸿蒙** `cpp/proteus_capture.h`（新）+ `runtime/CaptureSnapshot.ets`（新）：
+    快照 + 事件队列（一次性 VM 的必然形态）；`device.capture` 在 `isDeviceMethod` **之前**分派。
+
+【★★★真机抓出三个真缺陷（都是"构造上应该对"却实际不对）】
+  ① **分支顺序被前缀截走**：`isDeviceMethod()` 判 `device.` 前缀 ⇒ `device.capture` 先被转给
+     `DeviceCapability` ⇒ 回"未实现的设备方法"（真机 raw 回执点名）。修：本方法分派**必须在其之前**。
+     鸿蒙侧顺序本来就是对的（可对照）。
+  ② **跨 TU 的 `static` 各一份**：`proteus_capture.h` 用文件级 `static` 存快照 ⇒ `setDeviceSnapshot`
+     （proteus_host.cpp）写自己那份、`stateJson()` 读另一份 ⇒ **"采到了但读不到"**（日志实证
+     `hasRec=1` 而回执 `recordingSupported:false`）。修：与设备域 `proteus_device.h::snapshot()` 同款
+     —— **函数内静态**（`inline` 函数里的 static 跨 TU 唯一）。
+  ③ **快照晚于查询**：`hostAppRender`（内部回答 `device.capture`）在 `refreshDeviceSnapshot`
+     （写快照）**之前** ⇒ 首次查询读到空快照。修：渲染前先刷一次（幂等只读）。
+  ④ 附带修：探针装置 `ElementProbe` 自建 `HostCapabilities` 实例 ⇒ provider 必须在**该实例**上注入
+     （壳里接的是另一个实例——首跑 `pip` 也 unsupported 的真因）。
+
+【真机判据（三端齐）】
+  · Android：`{channel:true, recording:"unsupported", pip:false}` —— 正是"查不了 vs 真值"的正确形态。
+  · iOS：`{channel:true, recording:"off", pip:"unsupported"}`。
+  · 鸿蒙：`{channel:true, recording:"off", pip:true}`（`pip:true` = 系统 PiP 已启用）。
+  · `bash hosts/android/run-element-probe.sh` 新增录屏断言（`recording` 必须 unsupported、`pip` 必须真值）。
+  · 门禁：单测 **11/11** + **破坏性 2 条**（缺字段当 false ⇒ 1 红；推通道不校验类型 ⇒ 2 红）·
+    file-size · 契约（三端各 +1 覆盖）· no-json-wire · iOS 源清单 · 两副本同步 · `check:content` 幂等 ·
+    `check:ai-tasks` · `test:coupled` · `check:vapor-three-end` · vue-tsc · 三端编译全绿。
+
+【诚实边界（不粉饰为三端一致）】
+  ① **PiP 语义三端不同**：Android = "本应用是否在 PiP"；鸿蒙 = "系统 PiP 能力是否启用"；
+     iOS = 查不了。同一个 API 名在三端回答**不是同一个问题**——能力页与类型注释都如实标注。
+  ② 鸿蒙读类是**渲染时刻快照**（延迟上界 = 一次渲染间隔），非即时查询；截屏事件在本端**没有**。
+  ③ Android 的截屏回调只覆盖**本应用窗口**被截（不是整机截屏历史）。
+  ④ 本单未做 `useCacheManager` / `useAR` / `useBeacon`（后者需要 iBeacon 硬件与定位权限，
+     `useAR` 需要 VKSession，两端的"真机可判"成本高得多）。

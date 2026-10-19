@@ -2240,8 +2240,8 @@ export interface MediaProcessingAPI {
 
 /**
  * ★权威标尺缺口 C71：录屏 / 截屏（`useScreenCapture()`）。
- *   wx：`wx.getScreenRecordingState` / `onScreenRecordingStateChanged` / `onUserCaptureScreen`
- *   / `checkIsPictureInPictureActive`；web：无标准（可用 MediaDevices.getDisplayMedia 探测）→ Err 诚实降级。
+ *   wx：`getScreenRecordingState`/`onScreenRecordingStateChanged`/`onUserCaptureScreen`/`checkIsPictureInPictureActive`；
+ *   web：无标准 → Err 诚实降级。★App 三端**逐方法独立分档**（#1083）：查不了 ⇒ `unsupported`，**绝不伪造 `false`**。
  */
 export interface ScreenCaptureAPI {
   /** 查询当前系统录屏状态（on 录制中 / off 未录制） */

@@ -39,6 +39,8 @@ export const APP_BRIDGE_SOURCES = [
   { file: 'packages/api/src/capability-app-device.ts', functions: ['createAppDeviceCapabilities'] },
   // ★★★决策 #1081：元素查询域（`useElement` 的桥成员在独立文件——与设备域同因拆出）
   { file: 'packages/api/src/capability-app-element.ts', functions: ['createAppElementBridge'] },
+  // ★★★决策 #1083：录屏/截屏状态（C71）
+  { file: 'packages/api/src/capability-app-capture.ts', functions: ['createAppCaptureCapabilities'] },
 ]
 
 /**

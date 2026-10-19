@@ -105,7 +105,7 @@ struct Superapp {
   /** ★★★跨调用状态（2026-10-07 · 鸿蒙一次性 VM）：上次 hostAppRender 返回的 `snapshot`
    *   （`{屏名:{变量:值}}`）——每次新 VM 作 `state` 回灌，恢复 count 等实例态（否则点击计数不动）。 */
   private runtimeState: Record<string, Object> | null = null;
-  private elementProbes: ElementProbeReadout = { registry: 'null', probe: 'null', cls: 'null', compound: 'null', pseudo: 'null' }; private elementRectVp: string = 'null';   // ★#1081/#1082 元素读数 + 建树后补测几何
+  private elementProbes: ElementProbeReadout = { registry: 'null', probe: 'null', cls: 'null', compound: 'null', pseudo: 'null', capture: 'null' }; private elementRectVp: string = 'null';   // ★#1081/#1082 元素读数 + 建树后补测几何
   /** ★★决策 #1067：窗口引用（设备亮度/常亮/剪贴板动作要在窗口上执行） */
   private win: window.Window | undefined = undefined;
   /** 视口高/宽（vp；renderCurrent 处记录——与 contentH 同源）。 */
@@ -701,6 +701,7 @@ struct Superapp {
       Superapp.vpW = vpW;
       try {
         // ★remount=true（一次性 VM：必须无条件重挂——否则同屏短路 ⇒ 空树 ⇒ 白屏）
+        refreshDeviceSnapshot(this.win, this.keyboardHeightVp);   // ★#1083 必须先于 hostAppRender（后者回答 device.capture）
         const rtOut: string = hostAppRender(Superapp.rtArgsJson(page, this.bundle, this.filesDir, vpW, vpH, undefined, this.runtimeState, true, this.scrollOffset));
         const rt = JSON.parse(rtOut) as Record<string, Object>;
         const tree = rt['tree'] as Record<string, Object> | undefined;
@@ -773,8 +774,7 @@ struct Superapp {
   }
 
   private paintTree(page: string, nodes: string): void {
-    // ★★决策 #1067：渲染前刷新设备快照（JS 侧 device.* 读类能力的数据源）——失败不阻断渲染
-    refreshDeviceSnapshot(this.win, this.keyboardHeightVp);
+    refreshDeviceSnapshot(this.win, this.keyboardHeightVp);   // ★#1067 渲染前刷设备快照（device.* 读类数据源；失败不阻断）
     try {
       // ★★★决策 #897：tab 栏高亮的 current 以**实际渲染屏**为准。根因 = `applyState` 用**路由 current**；（boot 后恒为 index）写 chromeStateJson，而 `renderCurrent` 随后把 `this.current` 修正为真实屏
       //   （rt['current']）却**未回写 chrome** ⇒ 切屏后 tab 高亮恒停在「首页」（真机实测：drive 到 mine，
