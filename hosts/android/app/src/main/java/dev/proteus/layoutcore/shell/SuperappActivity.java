@@ -107,11 +107,15 @@ public class SuperappActivity extends android.app.Activity {
 
     // ────────────────────────── 启动 ──────────────────────────
 
+    /** ★#1098：保留运行期宿主引用——P0 归因读它的 mount/applyOps 宿主侧耗时。 */
+    private SuperappRuntimeHost rtHost;
+
     private void boot() {
         // ★★★每次新 Activity 启动前**重置引擎上下文**（用户 2026-10-08「安卓有时点开直接空白，杀后台重开正常」）：
         //   本桥 JS 上下文是**进程级 static**，旧 Activity 的脏全局态（路由/当前屏）会污染新实例的 boot ⇒ 空白。
         //   重置后 boot 在**全新上下文**里 eval bundle —— 与 iOS 的"每实例新 JSContext"对齐。
         QuickJsEngine.resetEngine();
+        JsTaskSampler.setEnabled(true);   // ★#1098：P0 长任务观测（真机基线从这条真实应用路径取）
         // ① 建宿主桥（能力 + 屏树）——屏树供 superapp 路由语义（screen.mount/stats/rect…）
         caps = new HostCapabilities(this);
         screenHost = new ScreenHost(root);
@@ -138,6 +142,7 @@ public class SuperappActivity extends android.app.Activity {
         root.addView(contentHost);
 
         draw = new VaporRenderHost(this, contentHost);
+        draw.setPaintSampling(false);   // ★#1098 P0：切屏热路径上关掉诊断像素采样（实测占 mount 62%，应用路径无人读）
         draw.setLengthScale(density);          // 逻辑单位 → 物理像素（唯一换算点，与 StressSfc 同）
         // ★★★决策 #1081：元素几何源接线（`useElement` 的宿主腿）——能力层只分档，几何来自渲染宿主。
         //   ★实现单列在 `runtime/ElementRectProbe`（VaporRenderHost 是存量巨型文件，只减不增）。
@@ -165,7 +170,8 @@ public class SuperappActivity extends android.app.Activity {
         if (bundle == null) { fail("缺 assets/bundle-superapp.js（先跑 node hosts/android/bridge/build-batch.mjs）"); return; }
         // ★★★B1：壳走**统一运行期**——宿主桥用 SuperappRuntimeHost（暴露 mount/applyOps/onGesture 原语给
         //   JS 共享运行期）；旧静态屏内容改由 JS 侧 __proteusSuperappRender 实例化。
-        QuickJsEngine.EvalResult load = QuickJsEngine.evalWithHost(bundle, new SuperappRuntimeHost(draw, new HostBridge(caps, screenHost)));
+        rtHost = new SuperappRuntimeHost(draw, new HostBridge(caps, screenHost));
+        QuickJsEngine.EvalResult load = QuickJsEngine.evalWithHost(bundle, rtHost);
         if (!load.ok) { fail("bundle eval 失败：" + load.error); return; }
         QuickJsEngine.EvalResult boot = QuickJsEngine.eval("__proteusSuperappBootJson()");
         QuickJsEngine.nativeRunPendingJobs();   // 泵 await 续体（路由异步）
@@ -510,6 +516,12 @@ public class SuperappActivity extends android.app.Activity {
             o.put("tabs", new org.json.JSONArray(tabNames));
             o.put("switch_log", switchLog);
             o.put("rendered_page", currentName(readState()));
+            // ★#1098：P0 长任务读数（与 iOS/Android heartbeat 同字段名 jsTasks）
+            try { o.put("jsTasks", new org.json.JSONObject(QuickJsEngine.perfStats())); } catch (Throwable jt) { }
+            // ★#1098 P0 归因：同一段 JS eval 里「JS 实例化」vs「宿主建树/出指令」各占多少
+            if (rtHost != null) { o.put("mount_host_ms", rtHost.lastMountMs); o.put("apply_ops_host_ms", rtHost.lastApplyOpsMs); }
+            // ★#1098 P0：宿主 mount 的内部三相位（度量 / 内核建树 / 出指令）——决定 P1 还是 P2
+            if (draw != null) { o.put("mount_measure_ms", draw.lastMeasureMs); o.put("mount_layout_ms", draw.lastLayoutMs); o.put("mount_emit_ms", draw.lastEmitMs); o.put("mount_sample_ms", draw.lastSampleMs); o.put("mount_wrap_ms", draw.lastWrapMs); o.put("mount_scroll_ms", draw.lastScrollMs); }
             if (draw != null && draw.view() != null) {
                 o.put("on_draw", draw.view().onDrawCount());
             }

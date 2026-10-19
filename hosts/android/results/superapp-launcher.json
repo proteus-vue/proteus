@@ -4,19 +4,41 @@
   "host_id": "android",
   "state": {
     "depth": 1,
-    "current": "index",
+    "current": "mine",
     "stack": [
-      "index"
+      "mine"
     ],
-    "tabs": [],
+    "tabs": [
+      "index",
+      "messages",
+      "mine"
+    ],
     "tabLabels": {
-      "border": "CSS 验收 · 边框",
-      "justify-self": "CSS 验收 · 网格自对齐",
-      "text": "CSS 验收 · 文本",
-      "word-break": "CSS 验收 · 断词"
+      "index": "Proteus 超级应用",
+      "messages": "消息",
+      "mine": "我的",
+      "verify": "验收控制台"
     },
+    "tabItems": [
+      {
+        "name": "index",
+        "label": "首页",
+        "glyph": "sym:house"
+      },
+      {
+        "name": "messages",
+        "label": "消息",
+        "glyph": "sym:message",
+        "badge": 3
+      },
+      {
+        "name": "mine",
+        "label": "我的",
+        "glyph": "sym:person"
+      }
+    ],
     "tabSpec": {
-      "height": 56,
+      "height": 52,
       "surface": "#ffffff",
       "line": "#dcdfe5",
       "brand": "#5b5bd6",
@@ -31,75 +53,120 @@
         "offsetY": 4,
         "padX": 4
       },
-      "icons": {
-        "index": "⌂",
-        "messages": "✉",
-        "mine": "☺"
+      "glass": {
+        "blur": 20,
+        "tint": "rgba(255, 255, 255, 0.15)",
+        "border": true,
+        "borderSide": "top"
       },
-      "labels": {
-        "index": "首页",
-        "messages": "消息",
-        "mine": "我的"
-      }
+      "contentHeight": 52
     },
     "screens": [
-      "animation",
-      "at-rules",
-      "background-position",
-      "background",
-      "border-style",
-      "border",
-      "box-model",
-      "effects",
-      "flex",
-      "font",
-      "grid-auto-flow",
-      "grid-auto",
-      "grid-template-areas",
-      "grid-tracks",
+      "glass-nav",
       "index",
-      "justify-self",
-      "line-clamp",
-      "math-functions",
-      "misc",
-      "outline",
-      "overflow-page",
-      "overflow",
-      "place-items",
-      "position-scroll",
-      "position",
-      "safe-area",
-      "text-shadow",
-      "text",
-      "units",
-      "vw-vh",
-      "word-break"
+      "messages",
+      "mine",
+      "verify"
     ]
   },
-  "tabs": [],
-  "switch_log": [],
-  "rendered_page": "index",
-  "on_draw": 3,
+  "tabs": [
+    "index",
+    "messages",
+    "mine"
+  ],
+  "switch_log": [
+    {
+      "tap": "index",
+      "current": "index",
+      "ok": true,
+      "via": "motion-root",
+      "motion_consumed": true
+    },
+    {
+      "tap": "messages",
+      "current": "messages",
+      "ok": true,
+      "via": "motion-root",
+      "motion_consumed": true
+    },
+    {
+      "tap": "mine",
+      "current": "mine",
+      "ok": true,
+      "via": "motion-root",
+      "motion_consumed": true
+    }
+  ],
+  "rendered_page": "mine",
+  "jsTasks": {
+    "enabled": true,
+    "thresholdMs": 50,
+    "total": 26,
+    "long": 3,
+    "maxMs": 79,
+    "avgMs": 12.5,
+    "recent": [
+      {
+        "label": "eval:\"use strict\";\n(() => {\n  \/\/ packages\/rou",
+        "ms": 52
+      },
+      {
+        "label": "eval:__proteusSuperappRender",
+        "ms": 65
+      },
+      {
+        "label": "eval:__proteusSuperappRender",
+        "ms": 79
+      }
+    ],
+    "recentP95Ms": 79,
+    "recentCount": 3
+  },
+  "mount_host_ms": 74,
+  "apply_ops_host_ms": 3,
+  "mount_measure_ms": 3.286719,
+  "mount_layout_ms": 3.278489,
+  "mount_emit_ms": 10.192395,
+  "mount_sample_ms": -1,
+  "mount_wrap_ms": 15.900677,
+  "mount_scroll_ms": 3.999584,
+  "on_draw": 4,
   "host_stats": {
     "ok": true,
     "data": {
-      "mount_calls": 0,
-      "visible_calls": 0,
-      "destroy_calls": 0,
+      "mount_calls": 4,
+      "visible_calls": 4,
+      "destroy_calls": 3,
       "anim_calls": 0,
       "anim_completed": 0,
       "anim_hook_missing": 0,
       "rect_calls": 0,
       "shared_calls": 0,
-      "content_node_total": 0,
-      "live_screens": 0,
+      "content_node_total": 269,
+      "live_screens": 1,
       "calls": [
         "screen.mount",
+        "screen.visible",
+        "screen.destroy",
+        "screen.mount",
+        "screen.visible",
+        "screen.destroy",
+        "screen.mount",
+        "screen.visible",
+        "screen.destroy",
+        "screen.mount",
+        "screen.visible",
         "screen.stats"
       ],
-      "screens": [],
-      "handle_count": 1
+      "screens": [
+        {
+          "screenId": "mine#4",
+          "visible": true,
+          "rootNodeId": 100
+        }
+      ],
+      "handle_count": 2
     }
   },
-  "png": "superapp-launcher.png"
+  "png_error": "IllegalArgumentException"
 }

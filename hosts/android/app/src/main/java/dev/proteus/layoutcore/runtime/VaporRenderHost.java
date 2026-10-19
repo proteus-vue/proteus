@@ -77,8 +77,9 @@ public final class VaporRenderHost {
     public int lastTextCount = -1;
     public int lastCmdCount = -1;
     public double lastLayoutMs = -1;
-    public double lastMeasureMs = -1;
+    public double lastMeasureMs = -1, lastEmitMs = -1, lastSampleMs = -1, lastWrapMs = -1, lastScrollMs = -1;   // ★#1098 P0
     public int lastPaintedSamples = -1;
+    private boolean paintSampling = true; public void setPaintSampling(boolean on) { paintSampling = on; }   // ★#1098 P0：诊断像素采样开关（实测占 mount 62%；应用壳关、探针默认开）
     public int lastPaintedColors = -1;
     /** 最近一次 `applyOps` 的读数（判据直接从回执读，这里留痕便于 logcat 诊断） */
     public int lastApplied = -1;
@@ -603,10 +604,10 @@ public final class VaporRenderHost {
             //   流程：首遍 create → readRects 得盒宽 → 按盒宽重测 wrap 文本 → 有变化则 destroy + 重建。
             //   ★诚实边界：`pre`（保留空白且**不**折行）在本渲染器按 wrap 近似（受盒宽折行）；
             //     该值在验收语料未使用——列为已知近似，后续按需精化。
-            {
+            { long tw = System.nanoTime();   // ★#1098 P0：第二遍测量 + 可能的整树重建
                 byte[] tmp = applyWrapRemeasure(vw, vh);
                 if (tmp != null) handle = RustLayout.create(new String(tmp, java.nio.charset.StandardCharsets.UTF_8));
-                if (handle <= 0) return err(out, "核心重建树失败（handle=0）").toString();
+                lastWrapMs = (System.nanoTime() - tw) / 1e6; if (handle <= 0) return err(out, "核心重建树失败（handle=0）").toString();
             }
             // ★★★U0 修复（2026-10-14）：把**密度**接进内核——运行期指令（applyOps）的长度值在 JS 侧
             //   编码、内核解码，宿主无介入点 ⇒ 动态几何停在逻辑 px（真机：胶囊到位应 711 物理，仅到 237）。
@@ -621,7 +622,6 @@ public final class VaporRenderHost {
             //     唯独"目标节点"恒空——查了三轮才定位到"少了这根线"。
             //   ★句柄每次重建都变（destroy→create）⇒ 每次建树后都要重新接。
             view.attachCore(handle);
-
             // ④ 节点级绘制状态统一注入（一次遍历；C2 描边/C1 裁剪/原点）→ 几何 → 指令 → 上屏
             injectAllNodeState();
             long te = System.nanoTime();
@@ -646,9 +646,8 @@ public final class VaporRenderHost {
             lastNodeCount = specs.size();
             lastTextCount = textCount;
             lastLayoutMs = layoutMs;
-            lastMeasureMs = measureMs;
-            lastPaintedSamples = sample(0);
-            lastPaintedColors = sample(1);
+            lastMeasureMs = measureMs; lastEmitMs = emitMs;   // ★#1098 P0
+            if (paintSampling) { long ts0 = System.nanoTime(); lastPaintedSamples = sample(0); lastPaintedColors = sample(1); lastSampleMs = (System.nanoTime() - ts0) / 1e6; }   // ★#1098 P0（关掉后三字段为 -1/0）
 
             // ★★内容滚动范围（2026-10-02 —— 用户实测「安卓示例页面可以一直上下滚动」的修复）：
             //   内容高 = **内核几何**的最大下沿（`RustLayout.readRects` 的 y+height 最大值——
@@ -659,7 +658,7 @@ public final class VaporRenderHost {
             //     既有 kernel-anim 等**探针/动画用例依赖"无界拖拽"**（M6b 押 scrollY>0 的
             //     大位移）——默认钳制会静默改变它们的读数（历史教训：改默认行为=改既有判据）。
             //     未开启 ⇒ verticalRangeSet 仍为 false ⇒ 与改前逐位一致。
-            if (contentScrollRangeEnabled) applyContentScrollRange(vh, out);
+            if (contentScrollRangeEnabled) { long tsc = System.nanoTime(); applyContentScrollRange(vh, out); lastScrollMs = (System.nanoTime() - tsc) / 1e6; }   // ★#1098 P0
 
             out.put("ok", true);
             out.put("nodes", specs.size());

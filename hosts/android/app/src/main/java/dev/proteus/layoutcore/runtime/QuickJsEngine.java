@@ -31,8 +31,8 @@ public final class QuickJsEngine {
             //   （由 scripts/setup-android-js-engine.sh 生成并打进 APK 的 lib/ 目录）
             System.loadLibrary("quickjs_jni");
             loaded = true;
-            // ★#1098：dev 构建启用 P0 长任务采样（release 零开销——采样只 read 时钟）
-            try { JsTaskSampler.setEnabled(ProteusBuildConfig.DEV); } catch (Throwable ignored) { /* 无构建配置时默认关 */ }
+            // ★#1098：采样的**开关归宿主装配层**（AppActivity / MainActivity 调 setEnabled）。
+            //   ★本类属 runtime AAR：编译时看不到宿主的 ProteusBuildConfig（实测：引用它 ⇒ AAR 与真机构建各自失败）。
         } catch (Throwable t) {
             loadError = t.getClass().getSimpleName() + ": " + t.getMessage();
         }

@@ -8199,3 +8199,70 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   ③ **未做真机读数**：本轮交付的是采样装置 + 编译通过 + 单测；真实基线需跑一轮真机。
   ④ **P1（scheduler 原语）未做**——建议等 P0 基线出来再定切片粒度，且动手前必须先解决
      "App 端无 \`setTimeout\`" 的让出机制（见上纠正）。
+
+1099. **★★P0 真机基线给出第一个硬结论：诊断代码跑在生产热路径上（占单次切屏 62%）· 决策**（2026-10-19 · 用户「好的，继续」承接 #1098 的"下一步"）:
+
+【取数（Android 真机，`run-superapp-launcher.sh` 桌面入口 drive，26 次 JS 同步段）】
+  · `JsTaskSampler` 首次真机读数：**total 26 / long 3 / max 104–114ms / avg 15.1ms**；
+    recent 全是 `eval:__proteusSuperappRender`（每次切 tab 一条）。
+  · ★但"有一条 100ms 长任务"**不能直接推出"要上 JS 时间片"**——先把这 100ms 拆开：
+    在 `SuperappRuntimeHost.mount` 量宿主侧总耗时，再在 `VaporRenderHost.mount` 量各相位。
+
+【拆分结果（同一轮、同一颗屏，单位 ms）】
+  | 相位 | 耗时 | 性质 |
+  |---|---|---|
+  | `sample()` 像素自检 | **63.4** | 整屏画进 Bitmap + 每 12px 网格取色（**诊断口径**） |
+  | `emitAll()` 出绘制指令 | 8.2 | 真渲染工作 |
+  | 内核建树 layout | 1.5 | 真渲染工作 |
+  | 文本度量 measure | 1.4 | 真渲染工作 |
+  | **JS 实例化**（eval 总 − 宿主 mount） | **~3** | 真业务工作 |
+
+  ⇒ **单次切屏的 62% 花在一个只为上报 `painted_samples` 存在的诊断采样上**，
+    而真实应用路径（App 壳切屏）**没有任何消费者**读它。
+
+【修法（不是"优化算法"，是"把诊断移出热路径"）】
+  · `VaporRenderHost` 加 `paintSampling` 开关（**默认 true**）：
+    `if (paintSampling) { … lastPaintedSamples = sample(0); lastPaintedColors = sample(1); }`
+  · `SuperappActivity`（框架参考壳）与 CLI 模板 `AppActivity`（真·生成的 App）在构造后
+    `draw.setPaintSampling(false)` —— 这两条就是生产热路径。
+  · **默认值必须是 true**：`painted_samples > 0` 是 `js-render` / `app-screen-content` 的**放行判据**
+    （`scripts/lib/app-composite-verdict.mjs`）——把默认改 false 等于偷性能换假绿。
+    探针不受影响，实测 `run-js-render.sh` 仍 `painted_samples=3640 / colors=57` ✅。
+
+【真机复测（3 轮，同一场景）】
+  | | 基线（开采样） | 修后 |
+  |---|---|---|
+  | 最长 JS 同步段 | 101–114ms | 61–79ms |
+  | long(>50ms) 条数 | 3–4 | 1–3 |
+  | `mount_host_ms` | 101ms | 37–74ms |
+  ⇒ 去掉的正是那 63ms；剩余抖动是宿主侧真实工作（emit 8–13 / wrap 6–16 / scroll 3）。
+
+【★对 P1 的影响（这是本轮最该记住的）】
+  调研文档的 P1 是「JS 执行原语（时间片/让出/取消）」。但这份基线说明：
+  **在 App 端，`eval` 里 JS 自己只占 ~3ms，屏蔽它毫无收益**——
+  长任务的 97% 发生在**宿主 native 的 mount 里**（JS 只是在等它返回）。
+  ⇒ **P1 的收益面被高估**；App 端的正确顺序是
+    ① 先把**诊断/调试件移出热路径**（本轮，已做）；
+    ② 再按 `mount_*_ms` 逐相位砍真渲染工作（emit / wrap 是下一个候选）；
+    ③ JS 时间片只对「业务自己在 JS 里跑长循环」有效——**当前证据里没有这种热点**。
+  ★这与 #1098 登记的"P1 动手前必须先解决 App 无 `setTimeout`"不冲突，而是**改优先级**：
+    没有 JS 长任务证据之前，不做 scheduler。
+
+【判据】`tests/perf-hot-path-budget.test.ts` **6/6**：
+  ① `paintSampling` 默认 true + setter 存在（存量探针不失效）；
+  ② 采样仍走 `sample(0)/sample(1)` 写同一对字段（语义未变）；
+  ③ ★**两个应用壳都必须 `setPaintSampling(false)`**（漏一处 = 每次切屏白烧 60ms）；
+  ④ mount 相位字段五件（measure/layout/wrap/emit/scroll）都在；
+  ⑤ 运行时宿主桥记录 `lastMountMs` / `lastApplyOpsMs`；
+  ⑥ 报告带出 6 个 `mount_*_ms` 字段（缺一项就无法归因）。
+  + 既有 `tests/thread-p0-sampler.test.ts` **12/12**（本轮扩到验收宿主 `hosts/ios`：
+    它此前没有采样器，只有模板有 ⇒ "有实现没证据"，本轮补齐并有判据守着）。
+  + 真机回归：`run-js-render.sh`（painted_samples 仍 3640）· `run-superapp.sh`（ok）·
+    `run-superapp-launcher.sh` ×3（全绿）。
+
+【诚实边界】
+  ① 相位耗时是**单屏末次读数**，不是分布——`mount_*_ms` 只回答"这一次花了多少"，回答不了 p95；
+  ② `wrap` 相位的 6–16ms 是"第二遍测量 + 可能的整树重建"，本轮**只测没改**；
+  ③ iOS 侧同样有像素自检（`superapp-scene` 的 `takeSnapshot` 走的是真截屏，不在 mount 内），
+    本轮**未在 iOS 上做同等拆分**——iOS 基线（30 次 / long 3 / max 92ms）仍待同口径归因；
+  ④ `sample()` 仍是给探针用的**唯一**"真的画出了像素"的证据（#S5 判据），不删、不改语义。

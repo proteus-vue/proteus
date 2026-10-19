@@ -31,6 +31,9 @@ const ANDROID_SAMPLER = 'hosts/android/app/src/main/java/dev/proteus/layoutcore/
 const IOS_SAMPLER = 'packages/cli/templates-host/ios/shell/JsTaskSampler.swift'
 const ANDROID_ENGINE = 'hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/QuickJsEngine.java'
 const ANDROID_APP = 'packages/cli/templates-host/android/src/dev/proteus/layoutcore/AppActivity.java'
+const ANDROID_ACCEPTANCE = 'hosts/android/app/src/main/java/dev/proteus/layoutcore/dev/MainActivity.java'
+const IOS_ACCEPT = 'hosts/ios/ProteusHost/runtime/js-task-sampler.swift'
+const IOS_ACCEPT_SCENE = 'hosts/ios/ProteusHost/shell/superapp-scene.swift'
 const IOS_APP = 'packages/cli/templates-host/ios/shell/ProteusApp.swift'
 
 describe('★#1098 ① 两端采样器口径一致', () => {
@@ -46,9 +49,12 @@ describe('★#1098 ① 两端采样器口径一致', () => {
   it('读数 JSON 字段名逐项一致（面板才能对比两端）', () => {
     const a = read(ANDROID_SAMPLER)
     const i = read(IOS_SAMPLER)
+    const ia = read(IOS_ACCEPT)
     for (const k of ['enabled', 'thresholdMs', 'total', 'long', 'maxMs', 'avgMs', 'recent', 'recentP95Ms', 'recentCount']) {
       expect(a.includes(`"${k}"`), `Android 缺字段 ${k}`).toBe(true)
-      expect(i.includes(`"${k}"`), `iOS 缺字段 ${k}`).toBe(true)
+      expect(i.includes(`"${k}"`), `iOS 模板缺字段 ${k}`).toBe(true)
+      // ★验收宿主（hosts/ios）也必须有同一份：真机证据全从这里出（#1094「做完了但没接上」同族）
+      expect(ia.includes(`"${k}"`), `iOS 验收宿主缺字段 ${k}`).toBe(true)
     }
   })
 })
@@ -83,7 +89,10 @@ describe('★#1098 ③ 埋点位置与启用条件', () => {
     // ★两处同步段都要计时（bundle 装载也是长任务候选）
     const hits = (e.match(/JsTaskSampler\.record\(JsTaskSampler\.labelOf\(source\), t0\)/g) || []).length
     expect(hits, 'eval 与 evalWithHost 都要埋点').toBe(2)
-    expect(e).toMatch(/JsTaskSampler\.setEnabled\(ProteusBuildConfig\.DEV\)/)
+    // ★采样开关**不在引擎里**：runtime AAR 编译时看不到宿主的 ProteusBuildConfig（实测引用它 ⇒ 构建失败）
+    //   ⇒ CLI 宿主按变体开、验收宿主显式开（两处都是"装配层"，引擎只管计时）
+    expect(read(ANDROID_APP)).toMatch(/JsTaskSampler\.setEnabled\(ProteusBuildConfig\.DEV\)/)
+    expect(read(ANDROID_ACCEPTANCE)).toMatch(/JsTaskSampler\.setEnabled\(true\)/)
   })
 
   it('Android 读数暴露为 perfStats / resetPerf', () => {
@@ -97,6 +106,13 @@ describe('★#1098 ③ 埋点位置与启用条件', () => {
     const bare = (app.match(/ctx\.evaluateScript\(/g) || []).length
     expect(bare, '仍有裸 evaluateScript 调用——那些 JS 段不会被采样').toBe(0)
     expect((app.match(/JsTaskSampler\.eval\(ctx,/g) || []).length).toBeGreaterThan(5)
+  })
+
+  it('★iOS 验收宿主的 superapp 场景不得残留裸 ctx.evaluateScript', () => {
+    const sc = read(IOS_ACCEPT_SCENE)
+    expect((sc.match(/ctx\.evaluateScript\(/g) || []).length, '裸调用 ⇒ 那段 JS 不计时').toBe(0)
+    expect(sc).toMatch(/JsTaskSampler\.setEnabled\(true\)/)
+    expect(sc).toMatch(/o\["jsTasks"\] = js/)
   })
 
   it('iOS 启用采样（dev 构建）', () => {

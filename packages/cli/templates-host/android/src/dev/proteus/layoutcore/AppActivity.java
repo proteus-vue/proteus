@@ -89,7 +89,7 @@ public final class AppActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
+        JsTaskSampler.setEnabled(ProteusBuildConfig.DEV);   // ★#1098 dev 开采样（开关归宿主层）
         // ★★★dev 变体（2026-10-08 实测根因）：首次拉 bundle 在 **onCreate（主线程）** 执行 HTTP →
         //   Android 抛 `NetworkOnMainThreadException`（被 httpGetText 的 catch 吞掉 ⇒ 静默回落内嵌 assets）。
         //   ⇒ dev 变体放开 StrictMode 线程策略（仅 dev；release 不触及——`if (DEV)` 编译期常量，
@@ -157,6 +157,7 @@ public final class AppActivity extends Activity {
         root.addView(contentHost);
 
         draw = new VaporRenderHost(this, contentHost);
+        draw.setPaintSampling(false);   // ★#1098 P0：诊断采样占 mount 62%
         draw.setLengthScale(density);
         draw.enableContentScrollRange();
         // ★屏切换通路的 env 解析器（决策 #677）：`ScreenHost.mount` 须把 `env:…` 解析成数值再喂内核。
@@ -507,11 +508,7 @@ public final class AppActivity extends Activity {
                 java.util.Iterator<String> it = f.keys();
                 while (it.hasNext()) { String k = it.next(); o.put(k, f.get(k)); }
             }
-            // ★#1098：P0 长任务观测（读最新快照——**不排空**：要的是累计分布，不是"本次事件"）
-            try {
-                JSONObject js = new JSONObject(QuickJsEngine.perfStats());
-                o.put("jsTasks", js);
-            } catch (Throwable ignored) { }
+            try { JSONObject js = new JSONObject(QuickJsEngine.perfStats()); o.put("jsTasks", js); } catch (Throwable ignored) { }   // ★#1098 P0
             return o.toString();
         } catch (Throwable t) { return base; }
     }

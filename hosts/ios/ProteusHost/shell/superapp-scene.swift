@@ -80,13 +80,14 @@ final class SuperappScene: NSObject {
 
     /// 入口：由 `runSelfdraw` 在自动场景（桌面点开 / --superapp）时调用。
     static func run(ctx: JSContext, bundleURL: URL, bridge: SelfDrawBridge, containerView: UIView) {
-        evalJs = { expr in ctx.evaluateScript(expr)?.toString() ?? "null" }
+        JsTaskSampler.setEnabled(true)   // ★#1098 P0 长任务观测（验收宿主：恒采）
+        evalJs = { expr in JsTaskSampler.eval(ctx, expr)?.toString() ?? "null" }
         bridgeRef = bridge
         container = containerView
 
         // ① 平台参数（TS 侧自报标识——三端同契约）
-        _ = ctx.evaluateScript("var __PROTEUS_HOST_ID__ = 'ios';")
-        _ = ctx.evaluateScript("var __PROTEUS_HOST_FRAME_DRIVER__ = 'CADisplayLink';")
+        _ = JsTaskSampler.eval(ctx, "var __PROTEUS_HOST_ID__ = 'ios';")
+        _ = JsTaskSampler.eval(ctx, "var __PROTEUS_HOST_FRAME_DRIVER__ = 'CADisplayLink';")
         // ★★★批次 48（用户：iOS 页面内容能一直拖着来回动）：**开启内容滚动范围钳制**——
         //   内容页语义 = 装不下才滚、最多滚到内容底（与 Web 一致）。此前只有 stress 场景开了它，
         //   superapp 没开 ⇒ `applyContentOffset` 无界拖拽（iOS 特有，Android 已 enable）。范围由
@@ -139,7 +140,7 @@ final class SuperappScene: NSObject {
             writeReport(["ok": false, "error": "bundle-superapp.js 未打包进 .app"])
             return
         }
-        _ = ctx.evaluateScript(saSrc, withSourceURL: saURL)
+        _ = JsTaskSampler.eval(ctx, saSrc, withSourceURL: saURL)
 
         // ⑤ boot — 路由栈装配 + 进入入口 tab（同步返回首屏读数）
         let boot = evalJs?("__proteusSuperappBootJson()") ?? "null"
@@ -618,6 +619,11 @@ final class SuperappScene: NSObject {
         //   `calls`/`fire_ticks` > 0 证明周期驱动真的在跑且真的写进了数据源；`anim_start_calls` 证明
         //   `v-animate`/`<Transition>` 走到了宿主动画入口（同 #793 判据纪律：看内核受理，不看截屏像素）。
         if let rt = rtHostRef { o["pump"] = rt.pumpStats() }
+        // ★#1098：P0 长任务读数（字段名与 Android/perf 面板一致）
+        if let jd = JsTaskSampler.statsJson().data(using: .utf8),
+           let js = (try? JSONSerialization.jsonObject(with: jd)) as? [String: Any] {
+            o["jsTasks"] = js
+        }
         // ★★★Dactyl 专项（本批）：三条交互反馈能力的**原生计数**（按下态/场跟手/伪元素动画）——
         //   判据读它证明"通路真的走过"（与 Android pressProbe/fieldProbe 同口径，不看截屏像素）。
         if let ip = evalJs?("proteusSelfDraw.interactionProbe()") { o["interaction_probe"] = ip }

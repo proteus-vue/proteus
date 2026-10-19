@@ -1186,11 +1186,8 @@ public class MainActivity extends Activity {
     private String superappRun() {
         org.json.JSONObject out = new org.json.JSONObject();
         try {
-            out.put("engine_available", QuickJsEngine.isAvailable());
-            if (!QuickJsEngine.isAvailable()) {
-                out.put("ok", false); out.put("error", "引擎未加载：" + QuickJsEngine.getLoadError());
-                return out.toString(2);
-            }
+            JsTaskSampler.setEnabled(true); out.put("engine_available", QuickJsEngine.isAvailable());   // ★#1098 整轮驱动前开采样
+            if (!QuickJsEngine.isAvailable()) { out.put("ok", false); out.put("error", "引擎未加载：" + QuickJsEngine.getLoadError()); return out.toString(2); }
             String bundle;
             try (java.io.InputStream is = getAssets().open("bundle-superapp.js")) {
                 java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
@@ -1227,6 +1224,7 @@ public class MainActivity extends Activity {
             try {
                 out.put("host_stats", sh.invoke("screen.stats", new org.json.JSONObject()));
             } catch (Throwable st) { out.put("host_stats_error", String.valueOf(st)); }
+            try { out.put("js_tasks_sampler", JsTaskSampler.statsJson()); } catch (Throwable jt) { out.put("js_tasks_sampler_error", String.valueOf(jt)); }   // ★#1098 P0 基线
             out.put("ok", true);
             return out.toString(2);
         } catch (Throwable t) {
@@ -1598,7 +1596,7 @@ public class MainActivity extends Activity {
     private String jsRenderRun() {
         org.json.JSONObject out = new org.json.JSONObject();
         try {
-            out.put("engine_available", QuickJsEngine.isAvailable());
+            JsTaskSampler.setEnabled(true); out.put("engine_available", QuickJsEngine.isAvailable());   // ★#1098 开采样
             if (!QuickJsEngine.isAvailable()) {
                 out.put("ok", false);
                 out.put("error", "引擎未加载：" + QuickJsEngine.getLoadError());
@@ -1715,6 +1713,7 @@ public class MainActivity extends Activity {
                     && host.lastNodeCount == r.optInt("nodes")
                     && host.lastError == null;   // ★宿主侧有错 ⇒ 就算 JS 侧读数全绿也不放行（静默失败防线）
             out.put("ok", ok);
+            try { out.put("js_tasks_sampler", JsTaskSampler.statsJson()); } catch (Throwable jt) { }   // ★#1098 P0 读数（200 帧真实渲染的长任务分布）
 
         } catch (Throwable t) {
             try {

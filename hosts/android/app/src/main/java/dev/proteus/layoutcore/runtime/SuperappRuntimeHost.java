@@ -20,6 +20,10 @@ import org.json.JSONObject;
 public final class SuperappRuntimeHost {
     private final VaporRenderHost draw;
     private final HostBridge caps;
+    /** ★#1098 P0 归因：`mount` 的宿主侧耗时（JS eval 总耗时 − 本值 ≈ JS 实例化）。 */
+    public long lastMountMs = -1;
+    /** ★#1098 P0 归因：`applyOps`（增量指令）的宿主侧最近耗时。 */
+    public long lastApplyOpsMs = -1;
 
     public SuperappRuntimeHost(VaporRenderHost draw, HostBridge caps) {
         this.draw = draw;
@@ -41,7 +45,9 @@ public final class SuperappRuntimeHost {
      */
     @SuppressWarnings("unused")
     public String mount(String treeJson) {
+        long t0 = System.nanoTime();
         String r = draw.mount(treeJson);
+        lastMountMs = (System.nanoTime() - t0) / 1_000_000;   // ★#1098 P0：宿主建树+几何+出指令
         pullPumpsDeferred();
         wireIntersectionTick();   // ★#1086 滚动 → 交叉观察重评估
         return r;
@@ -83,7 +89,10 @@ public final class SuperappRuntimeHost {
     /** 应用二进制指令流（`number[]` JSON）——增量更新。 */
     @SuppressWarnings("unused")
     public String applyOps(String opsJson) {
-        return draw.applyOps(opsJson);
+        long t0 = System.nanoTime();
+        String r = draw.applyOps(opsJson);
+        lastApplyOpsMs = (System.nanoTime() - t0) / 1_000_000;   // ★#1098 P0：增量指令的宿主侧耗时
+        return r;
     }
 
     /**

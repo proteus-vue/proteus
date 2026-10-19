@@ -11,7 +11,7 @@
   "element_pseudo_selector" : "{\"ok\":false,\"error\":\"unsupported\",\"reason\":\"伪类（`:hover` \/ `:nth-child` 等）未支持：App 端无 CSS 引擎语义\",\"selector\":\"view:hover\",\"screen\":\"mine\"}",
   "element_registry" : "{\"vue\":0,\"screens\":{\"index\":64,\"messages\":43,\"mine\":62}}",
   "host_id" : "ios",
-  "host_stats" : "{\"ok\":true,\"data\":{\"destroy_calls\":3,\"anim_completed\":0,\"shared_calls\":0,\"screens\":[{\"visible\":true,\"rootNodeId\":100,\"screenId\":\"mine#4\"}],\"live_screens\":1,\"anim_calls\":0,\"visible_calls\":4,\"content_node_total\":269,\"calls\":[\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.stats\"],\"anim_hook_missing\":0,\"rect_calls\":0,\"mount_calls\":4}}",
+  "host_stats" : "{\"ok\":true,\"data\":{\"live_screens\":1,\"visible_calls\":4,\"anim_calls\":0,\"shared_calls\":0,\"anim_completed\":0,\"anim_hook_missing\":0,\"rect_calls\":0,\"content_node_total\":269,\"calls\":[\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.stats\"],\"destroy_calls\":3,\"mount_calls\":4,\"screens\":[{\"screenId\":\"mine#4\",\"rootNodeId\":100,\"visible\":true}]}}",
   "interaction_probe" : "{\"press_styles\":5,\"press_applied\":0,\"press_anim_starts\":0,\"press_anim_stops\":0,\"field_specs\":0,\"field_ticks\":0,\"field_nodes_touched\":0,\"field_touched_now\":0,\"pseudo_parents\":0,\"last_field_ids\":[]}",
   "isect_after" : "[100]",
   "isect_after_hits" : "1",
@@ -21,6 +21,30 @@
   "isect_rect_probe" : "{\"ok\":true,\"selector\":\"#mine-row-dark\",\"nodeId\":16,\"source\":\"screen\",\"screen\":\"mine\",\"left\":16,\"top\":231,\"right\":374,\"bottom\":279,\"width\":358,\"height\":48,\"scrollY\":0}",
   "isect_register" : "{\"ok\":true}",
   "isect_retick" : "0",
+  "jsTasks" : {
+    "avgMs" : 9.2333333333333325,
+    "enabled" : true,
+    "long" : 3,
+    "maxMs" : 92,
+    "recent" : [
+      {
+        "label" : "eval:\"use strict\";\n(() => {\n  \/\/ packages\/rou",
+        "ms" : 55
+      },
+      {
+        "label" : "eval:__proteusSuperappRender",
+        "ms" : 63
+      },
+      {
+        "label" : "eval:__proteusSuperappRender",
+        "ms" : 92
+      }
+    ],
+    "recentCount" : 3,
+    "recentP95Ms" : 92,
+    "thresholdMs" : 50,
+    "total" : 30
+  },
   "kernel_rect" : {
     "clipH" : 48,
     "clipW" : 358,
@@ -44,7 +68,7 @@
     "running" : false
   },
   "rendered_page" : "mine",
-  "run_ts" : 1792403623.4910059,
+  "run_ts" : 1792405761.507551,
   "scroll_probe" : {
     "after_drag_down_100k" : 0,
     "after_drag_left_100k_x" : 0,
@@ -146,13 +170,8 @@
     "messages",
     "mine"
   ],
-  "transfer_dispatch" : "{\"phase\":\"started\",\"queued\":true}",
-  "transfer_dispatch_ok" : true,
-  "transfer_fs" : "{\"writeOk\":true,\"readOk\":true,\"same\":true}",
-  "transfer_fs_ok" : true,
-  "transfer_note" : "iOS 判据 = 宿主 fs 往返（同步）+ 派发通路；完整 4096B 往返由 Android 真机探针覆盖",
-  "transfer_ok" : true,
-  "transfer_url" : "http:\/\/192.168.1.124:8789",
+  "transfer_ok" : false,
+  "transfer_probe" : "skipped (PROTEUS_TRANSFER_PROBE_URL 未设置)",
   "ws_ok" : false,
   "ws_probe" : "skipped (PROTEUS_WS_PROBE_URL 未设置)"
 }
