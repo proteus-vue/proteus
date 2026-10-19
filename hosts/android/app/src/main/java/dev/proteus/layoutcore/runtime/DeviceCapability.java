@@ -75,6 +75,10 @@ public final class DeviceCapability {
             case "device.brightness.set": brightnessSet(args); return new JSONObject();
             case "device.keepScreenOn": keepScreenOn(args); return new JSONObject();
             case "device.hevc": return hevc();
+            // ★★决策 #1080：C5 传感器（订阅式 API ⇒ read = 订阅→首个采样→取消）
+            case "device.sensor.read": return sensorRead(args);
+            case "device.sensor.start": sensorStart(args); return new JSONObject();
+            case "device.sensor.stop": sensorStop(args); return new JSONObject();
             default:
                 throw new Unsupported("未实现的设备方法：" + method);
         }
@@ -244,6 +248,127 @@ public final class DeviceCapability {
             if (on) activity.getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
             else activity.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         });
+    }
+
+    // ────────────────────────── C5 传感器（决策 #1080） ──────────────────────────
+
+    /** 已注册的传感器监听（按 kind 复用：start/stop 幂等，多订阅共享一个系统监听） */
+    private final java.util.Map<String, android.hardware.SensorEventListener> sensorListeners =
+            new java.util.HashMap<>();
+    /** 最近一次采样（按 kind）——read 若已有新鲜读数直接返回 */
+    private final java.util.Map<String, JSONObject> sensorLast = new java.util.HashMap<>();
+
+    /** SensorKind → Android Sensor.TYPE_* */
+    private int sensorType(String kind) throws Exception {
+        switch (kind) {
+            case "accelerometer": return android.hardware.Sensor.TYPE_ACCELEROMETER;
+            case "gyroscope": return android.hardware.Sensor.TYPE_GYROSCOPE;
+            case "compass": return android.hardware.Sensor.TYPE_ORIENTATION;
+            default: throw new Unsupported("device.sensor: 未知传感器 " + kind);
+        }
+    }
+
+    /**
+     * 一次性读取 = 订阅 → 等首个采样（有界 2s）→ 取消订阅。
+     * ★为什么不能"纯读"：Android 传感器没有同步读取 API（SensorManager 只有订阅式）。
+     * ★有界：2s 内无采样（设备无该传感器/未校准）⇒ 如实抛 unsupported，不返回伪造值。
+     */
+    private JSONObject sensorRead(JSONObject args) throws Exception {
+        final String kind = args.optString("kind", "");
+        final int type = sensorType(kind);
+        final android.hardware.SensorManager sm =
+                (android.hardware.SensorManager) activity.getSystemService(Context.SENSOR_SERVICE);
+        if (sm == null) throw new Unsupported("device.sensor: 无 SensorManager");
+        final android.hardware.Sensor sensor = sm.getDefaultSensor(type);
+        if (sensor == null) throw new Unsupported("device.sensor: 本机无 " + kind + " 传感器");
+
+        final Object lock = new Object();
+        final JSONObject[] out = new JSONObject[1];
+        android.hardware.SensorEventListener l = new android.hardware.SensorEventListener() {
+            @Override public void onSensorChanged(android.hardware.SensorEvent e) {
+                synchronized (lock) {
+                    if (out[0] != null) return;   // 只取首个
+                    try {
+                        JSONObject d = new JSONObject();
+                        d.put("kind", kind);
+                        if (type == android.hardware.Sensor.TYPE_ORIENTATION) {
+                            d.put("heading", e.values[0]);
+                            d.put("x", e.values[1]);
+                            d.put("y", e.values[2]);
+                        } else {
+                            d.put("x", e.values[0]);
+                            d.put("y", e.values[1]);
+                            d.put("z", e.values[2]);
+                        }
+                        d.put("timestamp", e.timestamp / 1000000L);
+                        out[0] = d;
+                    } catch (Exception ignored) { }
+                    lock.notifyAll();
+                }
+            }
+            @Override public void onAccuracyChanged(android.hardware.Sensor s, int acc) { }
+        };
+        sm.registerListener(l, sensor, android.hardware.SensorManager.SENSOR_DELAY_NORMAL);
+        try {
+            synchronized (lock) {
+                long deadline = System.currentTimeMillis() + 2000;
+                while (out[0] == null) {
+                    long remain = deadline - System.currentTimeMillis();
+                    if (remain <= 0) break;
+                    lock.wait(remain);
+                }
+            }
+        } finally {
+            sm.unregisterListener(l);   // ★无论成败都取消（不泄漏监听器）
+        }
+        if (out[0] == null) {
+            throw new IllegalStateException("device.sensor.read: 2s 内无 " + kind + " 采样（设备无该传感器或被占用）");
+        }
+        sensorLast.put(kind, out[0]);
+        return out[0];
+    }
+
+    /** 开始持续采样（幂等；采样经 eval 推 JS 的 __proteusHostSensor）。 */
+    private void sensorStart(JSONObject args) throws Exception {
+        final String kind = args.optString("kind", "");
+        final int type = sensorType(kind);
+        if (sensorListeners.containsKey(kind)) return;   // 幂等
+        final android.hardware.SensorManager sm =
+                (android.hardware.SensorManager) activity.getSystemService(Context.SENSOR_SERVICE);
+        if (sm == null) throw new Unsupported("device.sensor: 无 SensorManager");
+        android.hardware.Sensor sensor = sm.getDefaultSensor(type);
+        if (sensor == null) throw new Unsupported("device.sensor: 本机无 " + kind + " 传感器");
+        android.hardware.SensorEventListener l = new android.hardware.SensorEventListener() {
+            @Override public void onSensorChanged(android.hardware.SensorEvent e) {
+                try {
+                    JSONObject d = new JSONObject();
+                    d.put("kind", kind);
+                    if (type == android.hardware.Sensor.TYPE_ORIENTATION) {
+                        d.put("heading", e.values[0]); d.put("x", e.values[1]); d.put("y", e.values[2]);
+                    } else {
+                        d.put("x", e.values[0]); d.put("y", e.values[1]); d.put("z", e.values[2]);
+                    }
+                    d.put("timestamp", e.timestamp / 1000000L);
+                    sensorLast.put(kind, d);
+                    // ★推 JS（主线程回调 ⇒ QuickJS 非线程安全，但 onSensorChanged 默认在注册线程的
+                    //   Looper 上——本类注册发生在 UI 线程 ⇒ 回调在主线程，直接 eval 合法）
+                    QuickJsEngine.eval("typeof __proteusHostSensor==='function'?__proteusHostSensor(" + d + "):'no-hook'");
+                } catch (Throwable ignored) { }
+            }
+            @Override public void onAccuracyChanged(android.hardware.Sensor s, int acc) { }
+        };
+        sm.registerListener(l, sensor, android.hardware.SensorManager.SENSOR_DELAY_GAME);
+        sensorListeners.put(kind, l);
+    }
+
+    /** 停止持续采样（幂等；不存在的 kind 静默成功）。 */
+    private void sensorStop(JSONObject args) {
+        String kind = args.optString("kind", "");
+        android.hardware.SensorEventListener l = sensorListeners.remove(kind);
+        if (l == null) return;
+        android.hardware.SensorManager sm =
+                (android.hardware.SensorManager) activity.getSystemService(Context.SENSOR_SERVICE);
+        if (sm != null) sm.unregisterListener(l);
     }
 
     // ────────────────────────── C81 HEVC ──────────────────────────

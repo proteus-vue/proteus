@@ -27,9 +27,21 @@ const { HOST_CAPABILITY_METHODS, HOST_SCREEN_METHODS, HOST_METHOD_OPTIONAL } = a
 const contract = new Set([...HOST_CAPABILITY_METHODS, ...HOST_SCREEN_METHODS])
 
 /** 从源码抽取 `case "xxx":`（Java/Swift）。 */
+/**
+ * 从源码抽取方法分派用的 `case "xxx"`。
+ *
+ * ★2026-10-19（决策 #1080）：初版**无条件收所有** `case "..."` ⇒ 设备实现里的业务 switch
+ *   （`switch (kind) { case "gyroscope": … }`）被当成"宿主方法名"，门禁误报"未知方法 gyroscope"。
+ *   ⇒ 按**方法名形态**过滤：必须是 `a.b`（含点，如 `device.sensor.read` / `screen.mount`）
+ *     或是**已登记的契约方法**。业务枚举值（无点、短词）一律排除——它们不是方法分派。
+ */
 function extractCases(file) {
   const out = []
-  for (const m of fs.readFileSync(path.join(ROOT, file), 'utf-8').matchAll(/case\s+"([^"]+)"/g)) out.push(m[1])
+  const contractNames = new Set([...HOST_CAPABILITY_METHODS, ...HOST_SCREEN_METHODS])
+  for (const m of fs.readFileSync(path.join(ROOT, file), 'utf-8').matchAll(/case\s+"([^"]+)"/g)) {
+    const name = m[1]
+    if (name.includes('.') || contractNames.has(name)) out.push(name)
+  }
   return out
 }
 /** 从源码抽取 `method == "xxx"`（C++）。 */

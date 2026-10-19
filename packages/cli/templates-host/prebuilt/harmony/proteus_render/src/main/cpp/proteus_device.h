@@ -126,6 +126,26 @@ inline std::string dispatch(const std::string& method, const std::string& argsJs
     std::string quoted = jsonEscape(text);
     return std::string("{\"ok\":true,\"data\":{\"text\":\"") + quoted + "\"}}";
   }
+  // ★★决策 #1080：C5 传感器（鸿蒙 sensor.on 是订阅式 ⇒ 走"快照 + 动作队列"形态）
+  if (method == "device.sensor.read") {
+    std::string kind;
+    jstr(argsJson.c_str(), argsJson.size(), "kind", &kind);
+    std::string obj = snapshotObj(("sensor_" + kind).c_str());
+    if (obj.empty()) {
+      return std::string("{\"ok\":false,\"missing\":true,\"reason\":\"device.sensor.read: 快照无 ") + kind +
+             " 读数（宿主未采集——鸿蒙订阅式 API，由 ArkTS 在渲染前采集）\"}";
+    }
+    return std::string("{\"ok\":true,\"data\":") + obj + "}";
+  }
+  if (method == "device.sensor.start" || method == "device.sensor.stop") {
+    std::string kind;
+    jstr(argsJson.c_str(), argsJson.size(), "kind", &kind);
+    std::string action = (method == "device.sensor.start") ? "sensor.start" : "sensor.stop";
+    int n = enqueue("{\"action\":\"" + action + "\",\"kind\":\"" + jsonEscape(kind) + "\"}");
+    char out[160];
+    snprintf(out, sizeof(out), "{\"ok\":true,\"data\":{\"accepted\":true,\"queued\":%d}}", n);
+    return out;
+  }
   if (method == "device.hevc") {
     bool supported = false;
     if (!snapshotBool("hevc", &supported)) {

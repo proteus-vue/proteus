@@ -21,13 +21,15 @@ import { display, window } from '@kit.ArkUI';
 //   connection ∈ NetworkKit；vibrator ∈ SensorServiceKit（不是 BasicServicesKit——首版写错，编译会红）。
 import { deviceInfo, batteryInfo, pasteboard, BusinessError } from '@kit.BasicServicesKit';
 import { connection } from '@kit.NetworkKit';
-import { vibrator } from '@kit.SensorServiceKit';
+import { vibrator, sensor } from '@kit.SensorServiceKit';
 import { media } from '@kit.MediaKit';
 import { setDeviceSnapshot, drainDeviceActions } from 'proteus_render';
 
 /** 一次动作（C++ 侧 proteus_device.h 入队的形状） */
 interface DeviceAction {
   action: string;
+  /** ★决策 #1080：传感器动作的 kind（sensor.start / sensor.stop） */
+  kind?: string;
   durationMs?: number;
   text?: string;
   value?: number;
@@ -85,6 +87,17 @@ export function refreshDeviceSnapshot(win: window.Window | undefined, keyboardHe
       brightness = -1;
     }
 
+    // ★★决策 #1080：C5 传感器读数（鸿蒙 sensor.on 是订阅式 ⇒ 由本文件的缓存提供；
+    //   未 start 过的 kind 不写字段 ⇒ C++ 侧如实回 missing）
+    // ★只在有读数时写字段（null 不写 ⇒ C++ 侧如实回 missing，不伪造 0）
+    const sensorFields: Record<string, Object> = {};
+    const acc = lastSensor('accelerometer');
+    if (acc !== null) sensorFields['sensor_accelerometer'] = acc;
+    const gyr = lastSensor('gyroscope');
+    if (gyr !== null) sensorFields['sensor_gyroscope'] = gyr;
+    const cmp = lastSensor('compass');
+    if (cmp !== null) sensorFields['sensor_compass'] = cmp;
+
     const payload: Record<string, Object> = {
       'screen': {
         'width': widthVp,
@@ -110,6 +123,10 @@ export function refreshDeviceSnapshot(win: window.Window | undefined, keyboardHe
       'hevc': media.CodecMimeType.VIDEO_HEVC === 'video/hevc',
     };
     if (brightness >= 0) payload['brightness'] = brightness;
+    for (const k of Object.keys(sensorFields)) {
+      const v = sensorFields[k];
+      if (v !== null) payload[k] = v;
+    }
     setDeviceSnapshot(JSON.stringify(payload));
   } catch (e) {
     // 快照采集失败 ⇒ 不注入（JS 侧按 missing 如实 unsupported）；不阻断渲染
@@ -160,6 +177,10 @@ export function runDeviceActions(win: window.Window | undefined): void {
           console.error('PROTEUS_BRIGHTNESS_SET_FAIL ' + JSON.stringify(err));
         });
       }
+    } else if (a.action === 'sensor.start') {
+      startSensor(a.kind ?? 'accelerometer');
+    } else if (a.action === 'sensor.stop') {
+      stopSensor(a.kind ?? 'accelerometer');
     } else if (a.action === 'keepScreenOn') {
       if (win !== undefined) {
         win.setWindowKeepScreenOn(a.on ?? true).catch((err: BusinessError) => {
@@ -168,4 +189,76 @@ export function runDeviceActions(win: window.Window | undefined): void {
       }
     }
   }
+}
+
+/* ══════════════════════ C5 传感器（决策 #1080） ══════════════════════ */
+
+/** 最近一次各 kind 的采样（sensor.on 回调写入；refreshDeviceSnapshot 读它进快照） */
+const sensorCache: Map<string, Record<string, Object>> = new Map();
+/** 正在监听的 kind（start 幂等 / stop 精确取消） */
+const sensorActive: Set<string> = new Set();
+
+/** SensorKind → 鸿蒙 SensorId */
+function harmonySensorId(kind: string): sensor.SensorId | null {
+  if (kind === 'accelerometer') return sensor.SensorId.ACCELEROMETER;
+  if (kind === 'gyroscope') return sensor.SensorId.GYROSCOPE;
+  // ★鸿蒙无"罗盘"传感器：ORIENTATION 给的是设备朝向（alpha/beta/gamma），
+  //   与 Web DeviceOrientation 同族；heading 语义用 alpha（绕 Z 轴，0-360）——如实标注差异
+  if (kind === 'compass') return sensor.SensorId.ORIENTATION;
+  return null;
+}
+
+/** 读缓存（无则 null ⇒ 调用方不写该字段 ⇒ C++ 侧如实 missing） */
+function lastSensor(kind: string): Record<string, Object> | null {
+  const v = sensorCache.get(kind);
+  return v === undefined ? null : v;
+}
+
+/**
+ * 开始监听（幂等）。
+ * ★★诚实边界（一次性 VM）：本 VM 随渲染销毁 ⇒ 监听在此刻注册的 VM 里可能随之失效；
+ *   本函数**尽力而为**（同进程的持久监听由 ArkTS 侧维持），缓存跨调用保留（模块级 Map）。
+ *   未采集到读数时 C++ 侧回 missing（不伪造）。
+ */
+function startSensor(kind: string): void {
+  if (sensorActive.has(kind)) return;
+  const id = harmonySensorId(kind);
+  if (id === null) { return; }
+  try {
+    // ★ArkTS 的 `sensor.on` 是**按 SensorId 逐类型重载**的（联合类型不匹配）⇒ 必须字面量分支。
+    // ★每类传感器有**各自的回调接口**（AccelerometerResponse / GyroscopeResponse /
+    //   OrientationResponse），不能共用一个宽类型形参——ArkTS 重载按精确类型匹配。
+    if (kind === 'accelerometer') {
+      sensor.on(sensor.SensorId.ACCELEROMETER, (data: sensor.AccelerometerResponse) => {
+        sensorCache.set(kind, { 'kind': kind, 'x': data.x, 'y': data.y, 'z': data.z, 'timestamp': Date.now() });
+      });
+    } else if (kind === 'gyroscope') {
+      sensor.on(sensor.SensorId.GYROSCOPE, (data: sensor.GyroscopeResponse) => {
+        sensorCache.set(kind, { 'kind': kind, 'x': data.x, 'y': data.y, 'z': data.z, 'timestamp': Date.now() });
+      });
+    } else {
+      sensor.on(sensor.SensorId.ORIENTATION, (data: sensor.OrientationResponse) => {
+        // ★alpha = 绕 Z 轴角度（0-360），与 Web DeviceOrientation.alpha 同族；
+        //   与 iOS 的 yaw 归一口径一致（如实标注：三端罗盘语义不完全相同）
+        sensorCache.set(kind, { 'kind': kind, 'heading': data.alpha, 'timestamp': Date.now() });
+      });
+    }
+    sensorActive.add(kind);
+  } catch (e) {
+    console.error('PROTEUS_SENSOR_START_FAIL ' + JSON.stringify(e));
+  }
+}
+
+/** 停止监听（幂等）。 */
+function stopSensor(kind: string): void {
+  if (!sensorActive.has(kind)) return;
+  const id = harmonySensorId(kind);
+  try {
+    if (kind === 'accelerometer') { sensor.off(sensor.SensorId.ACCELEROMETER); }
+    else if (kind === 'gyroscope') { sensor.off(sensor.SensorId.GYROSCOPE); }
+    else { sensor.off(sensor.SensorId.ORIENTATION); }
+  } catch (e) {
+    console.error('PROTEUS_SENSOR_STOP_FAIL ' + JSON.stringify(e));
+  }
+  sensorActive.delete(kind);
 }

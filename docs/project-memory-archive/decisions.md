@@ -7058,3 +7058,50 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 【判据】`hosts/android/run-keyboard-probe.sh exit=0`（报告落盘 + 四项断言）·
   `check-host-compile`（javac + C 桥 + JNI）绿 · `check:file-size` 绿（MainActivity 6618 < 基线 6619）·
   `no-json-wire` / `script-compile` / `check:no-blind-wait` 绿（**新增代码无轮询、无固定延时**）。
+
+1080. **★★★设备域第 2 批：C5 传感器三端落地（read/start/stop + 流订阅）+ 契约门禁误报修复 · 决策**（2026-10-19 · 承接 #1067 的「设备域剩 8 项」）：
+【本批范围 = C5 传感器（`useSensor` / `useSensorStream`）】选它的理由：优先级表里 `examples` 命中 **14 处**
+（设备域最高频）、三端都有明确平台 API、且 Hook 层**早已完整**（四个桥方法签名 + 流生命周期）——
+缺的只是 App 端桥实现。
+【四层落地】
+  · **JS 桥**（`capability-app-device.ts`）：`readSensor` / `startSensor` / `stopSensor` / `subscribeSensor`
+    + `APP_SENSOR_KEY = '__proteusHostSensor'` 壳推通道（与键盘通道同族：幂等 + try/defineProperty 回退）。
+    ★载荷归一：`kind` 必须是三个合法值之一（否则回 `bad-payload`，**不静默派发**）；缺字段容忍
+    （只保留能转成有限数的分量）；**订阅按 kind 分组**（加速度计事件不串到陀螺仪）。
+    ★**读数原样透传**（不做单位换算）——三端口径确实不同：Android `m/s²`（含重力）、iOS `g`、
+    鸿蒙按 `SensorId` 各自定义；桥不猜、不静默归一。
+  · **Android**（`DeviceCapability.java`）：`SensorManager` + `SensorEventListener`。
+    `read` = 订阅 → 条件变量等首采样（**2s 有界**）→ **finally 必 unregister**（不泄漏监听器）；
+    `start/stop` 幂等（按 kind 复用/移除同一个 listener），采样经 `eval` 推 `__proteusHostSensor`。
+    ★`compass` 用 `TYPE_ORIENTATION`（`values[0]` = 方位角）。
+  · **iOS**（`device-capability.swift`）：`CMMotionManager`（`accelerometer` / `gyro` / `deviceMotion`）。
+    `read` 用 `DispatchSemaphore` 等首采样（**2s 有界**，非轮询）→ **无条件 stop**；
+    `compass` 用 `deviceMotion.attitude.yaw` 归一为 `[0,360)`。
+    无 CoreMotion（模拟器）⇒ 如实 `Unsupported`，不伪造。
+  · **鸿蒙**（`proteus_device.h` + ArkTS `DeviceSnapshot.ets`）：沿用 #1067 的**快照 + 动作队列**形态 ——
+    读数由 ArkTS 的 `sensor.on` 回调写缓存、`refreshDeviceSnapshot` 带进快照；`start/stop` 入队由渲染后执行。
+    ★**ArkTS 两个编译期坑（都已修）**：① `sensor.on` 是**按 `SensorId` 逐类型重载**的（联合类型不匹配）
+    ⇒ 必须字面量分支；② 每类传感器有**各自的回调接口**（`AccelerometerResponse` /
+    `GyroscopeResponse` / `OrientationResponse`），不能共用宽类型形参。
+【★判据自身的一个真缺陷（本轮抓出）】`check:host-invoke-contract` 的 `extractCases` **无条件收所有**
+  `case "..."` ⇒ 把设备实现里的业务 switch（`switch (kind) { case "gyroscope": … }`）当成宿主方法名
+  ⇒ 误报"未知方法 gyroscope/compass/accelerometer"。修法：按**方法名形态**过滤（含 `.` 或是契约已有名）。
+  ★与 #1071「门禁覆盖面要跟着实现走」互补：**门禁的解析精度也要跟着代码形态走**——宽匹配会把
+    业务代码误当契约。修后覆盖率如实：android **32/34** · ios **28/34** · harmony **16/34**。
+【判据】
+  · 新增 `tests/capability-app-sensor.test.ts` **9/9**：三方法走字节腿 + 读数原样透传 ·
+    订阅**按 kind 隔离** · 取消订阅 · 非法 kind 回 `bad-payload` · 非对象载荷拒绝 · 缺字段容忍 ·
+    `missing ⇒ unsupported` / 真失败 ⇒ `failed`。
+  · **破坏性验证 2 条**：摘掉 kind 过滤 ⇒ 1 红；从契约删 `device.sensor.read` ⇒ 门禁报 3 处未知方法；均复原绿。
+  · 三端编译：Android javac · iOS `swiftc -typecheck` · **鸿蒙 ArkTS（hvigor BUILD SUCCESSFUL）** +
+    `check-harmony-host-compile`；`check:file-size` / `no-json-wire` / `host-invoke-contract` / `vue-tsc` 全绿。
+【诚实边界】
+  ① **真机未跑**——三端传感器读数、更新频率、坐标系差异都没有真机证据（本轮只到编译/单测）。
+  ② 鸿蒙是**快照形态**：`read` 拿到的是**上次渲染时刻**的采样（延迟上界 = 一次渲染间隔），
+     与 Android/iOS 的"现场读"语义不同（一次 VM 限制，同 #1077 键盘）。
+  ③ `compass` 三端语义不一：Android `TYPE_ORIENTATION`（已 deprecated 但可用）/ iOS `deviceMotion.yaw` /
+     鸿蒙 `OrientationResponse.alpha`——都是"绕 Z 轴方位"，但参考系与校准状态可能不同，**未做跨端一致性保证**。
+  ④ 传感器**功耗/频率**未做可配置（Android 用 `SENSOR_DELAY_GAME` / iOS 30Hz，写死）。
+【下一步】设备域剩 7 项：`useElement` / `useIntersection`（两者都依赖"选择器→节点 id"的映射，App 自绘树
+  没有选择器概念——**需先设计 id 映射方案**）· `useScreenCapture` / `useCacheManager` / `useAR` /
+  `useBeacon` · `useDeviceCapability`（已接 HEVC，可扩展更多探测位）。

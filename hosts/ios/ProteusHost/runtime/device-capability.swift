@@ -24,6 +24,7 @@
 
 import Foundation
 import UIKit
+import CoreMotion
 import VideoToolbox
 import Network
 
@@ -56,6 +57,10 @@ final class DeviceCapability {
         case "device.brightness.set": brightnessSet(args); return [:]
         case "device.keepScreenOn": keepScreenOn(args); return [:]
         case "device.hevc": return hevc()
+        // ★★决策 #1080：C5 传感器（CoreMotion 订阅式 ⇒ read = 订阅→首个采样→停）
+        case "device.sensor.read": return try sensorRead(args)
+        case "device.sensor.start": try sensorStart(args); return [:]
+        case "device.sensor.stop": sensorStop(args); return [:]
         default:
             throw Unsupported("未实现的设备方法：\(method)")
         }
@@ -211,6 +216,128 @@ final class DeviceCapability {
         } else {
             DispatchQueue.main.async { UIApplication.shared.isIdleTimerDisabled = on }
         }
+    }
+
+    // ────────────────────────── C5 传感器（决策 #1080） ──────────────────────────
+
+    /// 持续采样用的 motion 管理器（按 kind 复用）
+    private var motionManagers: [String: CMMotionManager] = [:]
+    /// 壳推传感器采样的 JS 求值出口（由 HostCapabilities 注入）
+    var evalJs: ((String) -> String)?
+
+    /// 一次性读取 = 订阅 → 等首个采样（有界 2s）→ 停。
+    /// ★iOS 传感器无同步读取（CoreMotion 全是 block/队列回调）⇒ 与 Android 同形态。
+    /// ★有界：2s 无采样（模拟器/无该传感器）⇒ 如实抛 unsupported，不伪造。
+    private func sensorRead(_ args: [String: Any]) throws -> [String: Any] {
+        let kind = (args["kind"] as? String) ?? ""
+        let mgr = CMMotionManager()
+        guard mgr.isDeviceMotionAvailable || mgr.isAccelerometerAvailable || mgr.isGyroAvailable else {
+            throw Unsupported("device.sensor: 本机无 CoreMotion（模拟器常见）")
+        }
+        let sem = DispatchSemaphore(value: 0)
+        let box = NSMutableDictionary()
+        let interval = 1.0 / 30.0
+
+        switch kind {
+        case "accelerometer":
+            guard mgr.isAccelerometerAvailable else { throw Unsupported("device.sensor: 无加速度计") }
+            mgr.accelerometerUpdateInterval = interval
+            mgr.startAccelerometerUpdates(to: .main) { data, _ in
+                guard let a = data?.acceleration, box["x"] == nil else { return }
+                box["x"] = a.x; box["y"] = a.y; box["z"] = a.z
+                box["timestamp"] = Date().timeIntervalSince1970 * 1000
+                sem.signal()
+            }
+        case "gyroscope":
+            guard mgr.isGyroAvailable else { throw Unsupported("device.sensor: 无陀螺仪") }
+            mgr.gyroUpdateInterval = interval
+            mgr.startGyroUpdates(to: .main) { data, _ in
+                guard let r = data?.rotationRate, box["x"] == nil else { return }
+                box["x"] = r.x; box["y"] = r.y; box["z"] = r.z
+                box["timestamp"] = Date().timeIntervalSince1970 * 1000
+                sem.signal()
+            }
+        case "compass":
+            // ★iOS 无独立"罗盘传感器"对象：用 deviceMotion 的 attitude（yaw = 航向）
+            guard mgr.isDeviceMotionAvailable else { throw Unsupported("device.sensor: 无 deviceMotion（罗盘不可用）") }
+            mgr.deviceMotionUpdateInterval = interval
+            mgr.startDeviceMotionUpdates(to: .main) { data, _ in
+                guard let att = data?.attitude, box["heading"] == nil else { return }
+                // yaw ∈ [-π, π] ⇒ 归一到 [0,360)
+                var deg = att.yaw * 180.0 / .pi
+                if deg < 0 { deg += 360 }
+                box["heading"] = deg
+                box["timestamp"] = Date().timeIntervalSince1970 * 1000
+                sem.signal()
+            }
+        default:
+            throw Unsupported("device.sensor: 未知传感器 (kind)")
+        }
+
+        _ = sem.wait(timeout: .now() + 2.0)   // ★有界预算（非轮询）
+        mgr.stopAccelerometerUpdates(); mgr.stopGyroUpdates(); mgr.stopDeviceMotionUpdates()
+        if box["heading"] == nil && box["x"] == nil {
+            throw Unsupported("device.sensor.read: 2s 内无 (kind) 采样（设备无该传感器或被占用）")
+        }
+        var out = box as? [String: Any] ?? [:]
+        out["kind"] = kind
+        return out
+    }
+
+    /// 开始持续采样（幂等；采样经 eval 推 JS 的 __proteusHostSensor）。
+    private func sensorStart(_ args: [String: Any]) throws {
+        let kind = (args["kind"] as? String) ?? ""
+        if motionManagers[kind] != nil { return }   // 幂等
+        let mgr = CMMotionManager()
+        let interval = 1.0 / 30.0
+        let push: (Double?, Double?, Double?, Double?) -> Void = { x, y, z, h in
+            var d: [String: Any] = ["kind": kind]
+            if let h { d["heading"] = h } else {
+                if let x { d["x"] = x }
+                if let y { d["y"] = y }
+                if let z { d["z"] = z }
+            }
+            d["timestamp"] = Date().timeIntervalSince1970 * 1000
+            if let data = try? JSONSerialization.data(withJSONObject: d, options: [.sortedKeys]),
+               let json = String(data: data, encoding: .utf8) {
+                _ = self.evalJs?("typeof __proteusHostSensor==='function'?__proteusHostSensor((json)):'no-hook'")
+            }
+        }
+        switch kind {
+        case "accelerometer":
+            guard mgr.isAccelerometerAvailable else { throw Unsupported("device.sensor: 无加速度计") }
+            mgr.accelerometerUpdateInterval = interval
+            mgr.startAccelerometerUpdates(to: .main) { data, _ in
+                guard let a = data?.acceleration else { return }
+                push(a.x, a.y, a.z, nil)
+            }
+        case "gyroscope":
+            guard mgr.isGyroAvailable else { throw Unsupported("device.sensor: 无陀螺仪") }
+            mgr.gyroUpdateInterval = interval
+            mgr.startGyroUpdates(to: .main) { data, _ in
+                guard let r = data?.rotationRate else { return }
+                push(r.x, r.y, r.z, nil)
+            }
+        case "compass":
+            guard mgr.isDeviceMotionAvailable else { throw Unsupported("device.sensor: 无 deviceMotion") }
+            mgr.deviceMotionUpdateInterval = interval
+            mgr.startDeviceMotionUpdates(to: .main) { data, _ in
+                guard let att = data?.attitude else { return }
+                var deg = att.yaw * 180.0 / .pi
+                if deg < 0 { deg += 360 }
+                push(nil, nil, nil, deg)
+            }
+        default:
+            throw Unsupported("device.sensor: 未知传感器 (kind)")
+        }
+        motionManagers[kind] = mgr
+    }
+
+    /// 停止持续采样（幂等）。
+    private func sensorStop(_ args: [String: Any]) {
+        let kind = (args["kind"] as? String) ?? ""
+        guard let mgr = motionManagers.removeValue(forKey: kind) else { return }
+        mgr.stopAccelerometerUpdates(); mgr.stopGyroUpdates(); mgr.stopDeviceMotionUpdates()
     }
 
     // ────────────────────────── C81 HEVC ──────────────────────────

@@ -37,6 +37,8 @@ import type {
   NetworkType,
   OrientationInfo,
   ScreenInfo,
+  SensorKind,
+  SensorSample,
 } from './capability-types'
 
 /** 宿主方法名（**契约**：三端宿主按这些名字实现；未实现 ⇒ 桥返回 unsupported） */
@@ -53,10 +55,16 @@ export const APP_DEVICE_METHODS = {
   brightnessSet: 'device.brightness.set',
   keepScreenOn: 'device.keepScreenOn',
   hevc: 'device.hevc',
+  // ★★2026-10-19（决策 #1080）：C5 传感器（App 端传感器 API 全是订阅式 ⇒ read 走异步回推）
+  sensorRead: 'device.sensor.read',
+  sensorStart: 'device.sensor.start',
+  sensorStop: 'device.sensor.stop',
 } as const
 
 /** 壳推键盘状态的全局键（`{ height, visible }`；与 `__proteusHostAppEvent` 同族"约定即接口"） */
 export const APP_KEYBOARD_KEY = '__proteusHostKeyboard'
+/** 壳推传感器采样的全局键（{ kind, x?, y?, z?, heading?, timestamp? }） */
+export const APP_SENSOR_KEY = '__proteusHostSensor'
 
 type R<T, E extends Error = Error> = { ok: true; data: T } | { ok: false; error: E }
 
@@ -95,6 +103,7 @@ export function createAppDeviceCapabilities<E extends Error = Error>(
   }
 
   installKeyboardChannel()
+  installSensorChannel()
 
   return {
     // ── C6 震动 ──
@@ -157,6 +166,25 @@ export function createAppDeviceCapabilities<E extends Error = Error>(
 
     // ── C60 媒体查询（**纯 JS**：基于宿主屏幕读数 + 方向/尺寸事件求值，无需额外原生 API） ──
     createMediaQuery: (): MediaQueryObserver => createMediaQueryObserver(CapError),
+
+    // ── C5 传感器（一次性读取 / 流订阅） ──
+    //   ★App 端传感器 API **全是订阅式**（Android SensorEventListener / iOS CMMotionManager /
+    //     鸿蒙 sensor.on）⇒ "读一次" = 订阅 → 等首个采样 → 取消订阅（宿主侧实现）。
+    //   ★诚实边界：三端的采样单位/坐标系不同（Android m/s² 含重力、iOS 用 g 为单位、
+    //     鸿蒙按 SensorId 各自定义）——本桥**原样透传**宿主读数，不做单位换算（不猜、不静默归一）。
+    readSensor: (kind: SensorKind) =>
+      callAsync<SensorSample>(APP_DEVICE_METHODS.sensorRead, { kind }, 'sensor'),
+    startSensor: (kind: SensorKind) =>
+      callAsync<void>(APP_DEVICE_METHODS.sensorStart, { kind }, 'sensor').then(() => undefined),
+    stopSensor: (kind: SensorKind) =>
+      callAsync<void>(APP_DEVICE_METHODS.sensorStop, { kind }, 'sensor').then(() => undefined),
+    subscribeSensor: (kind: SensorKind, cb: (sample: SensorSample) => void): (() => void) => {
+      const entry = { kind, cb }
+      sensorSubs.add(entry)
+      return () => {
+        sensorSubs.delete(entry)
+      }
+    },
 
     // ── C81 设备能力探测（HEVC 硬解） ──
     //   ★不用 callAsync 的泛型错误分支：Hook 契约的 error 类型是 **CapError**，而 callAsync 的
@@ -342,6 +370,71 @@ function createMediaQueryObserver<E extends Error>(
   }
 }
 
+/* ══════════════════════ 传感器通道（壳推 → 订阅者） ══════════════════════ */
+
+/** 传感器订阅者（按 kind 分组：同一个采样只分发给对应 kind 的订阅者） */
+const sensorSubs = new Set<{ kind: SensorKind; cb: (s: SensorSample) => void }>()
+let sensorInstalled = false
+
+/** 归一壳推载荷（容忍缺字段：三端读数形状不同，只保证 kind + 存在的分量） */
+function normalizeSensor(payload: unknown): SensorSample | null {
+  if (!payload || typeof payload !== 'object') return null
+  const p = payload as Record<string, unknown>
+  const kind = p.kind
+  if (kind !== 'accelerometer' && kind !== 'compass' && kind !== 'gyroscope') return null
+  const num = (v: unknown): number | undefined => {
+    const n = Number(v)
+    return Number.isFinite(n) ? n : undefined
+  }
+  return {
+    kind,
+    x: num(p.x),
+    y: num(p.y),
+    z: num(p.z),
+    heading: num(p.heading),
+    timestamp: num(p.timestamp),
+  }
+}
+
+/**
+ * 安装 `__proteusHostSensor`（幂等）。
+ * ★与键盘通道同一防御姿态：全局可能不可写 ⇒ try + defineProperty 回退，失败不阻断 bundle。
+ */
+function installSensorChannel(): void {
+  const existing = (globalThis as Record<string, unknown>)[APP_SENSOR_KEY]
+  if (sensorInstalled && typeof existing === 'function') return
+  sensorInstalled = true
+  const handler = (payload: unknown): string => {
+    const sample = normalizeSensor(payload)
+    if (!sample) return 'bad-payload'
+    for (const s of [...sensorSubs]) {
+      if (s.kind !== sample.kind) continue
+      try {
+        s.cb(sample)
+      } catch {
+        /* 单个订阅者抛错不影响其它订阅者 */
+      }
+    }
+    return 'ok'
+  }
+  const g = globalThis as Record<string, unknown>
+  try {
+    g[APP_SENSOR_KEY] = handler
+  } catch {
+    try {
+      Object.defineProperty(g, APP_SENSOR_KEY, { value: handler, writable: true, configurable: true })
+    } catch {
+      try {
+        ;(globalThis as { console?: { warn?: (m: string) => void } }).console?.warn?.(
+          `[proteus] ${APP_SENSOR_KEY} 装配失败（宿主全局不可写）——传感器流不可达`,
+        )
+      } catch {
+        /* 无 console */
+      }
+    }
+  }
+}
+
 // ★★★模块加载即自装键盘接收通道（决策 #1074）。
 //
 // 【为什么必须在这里装（真机探针抓出的真缺陷）】此前 `installKeyboardChannel()` 只在
@@ -356,6 +449,7 @@ function createMediaQueryObserver<E extends Error>(
 //   ★外层 try 兜底：装配失败绝不能中断 bundle 加载（与 app 事件源同款双保险）。
 try {
   installKeyboardChannel()
+  installSensorChannel()
 } catch {
   /* 装线失败不影响其余功能（通道缺失会有可观测后果：键盘高度恒 0） */
 }

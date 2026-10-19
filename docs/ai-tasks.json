@@ -1807,6 +1807,31 @@
         "T-app-keyboard-push"
       ],
       "note": "【done · 决策 #1077（2026-10-19）】用户重签后 BUILD SUCCESSFUL。三件套全绿：① HTTP 二进制腿 {bridge:invokeBytes,frameSource:arkts,status:200,bodyBytes:2443}（新签名版）；② superapp 回归 ok=True current=mine；③ **键盘推送 314vp→env=314→0vp**。★修掉三处装置缺陷：① EntryAbility 场景白名单逐个列举漏加 superapp-keyboard ⇒ 落 dev/Index（改**前缀匹配** startsWith(\"superapp\")，本仓已两次漏加）；② 探针场景提前 return 绕过了 window.getLastWindow（监听在那儿装）⇒ watch_installed=false ⇒ 自行取窗口；③ 收键盘不能用\"移焦到不存在 id\"⇒ inputMethod.stopInputSession()。★探针设计：自绘 superapp 无输入控件 ⇒ 单独渲染 TextInput + focusControl.requestFocus 走真实输入法栈；逻辑抽到 runtime/KeyboardProbe.ets（Superapp.ets 959 行防破 1000）；判据脚本条件等报告落盘。★诚实边界：一次性 VM ⇒ JS 侧当帧接收由渲染时注入覆盖（本探针证明系统事件 + env 通路），与 Android/iOS 即时推语义不同。★三端状态：iOS 336pt→0（#1074 含 JS 2 次推送）· 鸿蒙 314vp→0（本单）· **Android 仍缺**（#1075 blocked）。"
+    },
+    {
+      "id": "T-app-sensor-domain",
+      "title": "设备域第 2 批：C5 传感器三端落地（read/start/stop + 流订阅）+ 契约门禁误报修复",
+      "type": "capability",
+      "status": "done",
+      "owner": "session:zcode-invoke-bytes-20261019",
+      "scope": [
+        "packages/api/src/capability-app-device.ts",
+        "packages/render-backend/src/host-invoke-contract.ts",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/DeviceCapability.java",
+        "hosts/ios/ProteusHost/runtime/device-capability.swift",
+        "hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_device.h",
+        "hosts/harmony/host-app/entry/src/main/ets/runtime/DeviceSnapshot.ets",
+        "scripts/check-host-invoke-contract.mjs",
+        "tests/capability-app-sensor.test.ts"
+      ],
+      "decision": 1080,
+      "verification": "npx vitest run tests/capability-app-sensor.test.ts && node scripts/check-host-invoke-contract.mjs && bash hosts/android/check-host-compile.sh && bash hosts/ios/check-selfdraw-compile.sh && bash scripts/check-harmony-host-compile.sh",
+      "branch": null,
+      "related": [
+        "T-app-device-domain",
+        "T-capability-scale-hardening"
+      ],
+      "note": "【done · 决策 #1080（2026-10-19）】承接 #1067「设备域剩 8 项」，本批做 C5 传感器（useSensor/useSensorStream，examples 命中 14 处、设备域最高频；Hook 层早已完整，缺的只是 App 桥）。四层：JS 桥（4 个桥方法 + __proteusHostSensor 推通道，按 kind 分组、非法 kind 回 bad-payload、读数原样透传不做单位换算）；Android SensorManager（read=订阅→条件变量等首采样 2s 有界→finally unregister；start/stop 幂等）；iOS CMMotionManager（Semaphore 等首采样，无 CoreMotion 如实 unsupported；compass 用 yaw 归一 0-360）；鸿蒙沿用快照+动作队列（ArkTS sensor.on 回调写缓存）。★修判据真缺陷：check:host-invoke-contract 的 extractCases 无条件收所有 case \"...\" ⇒ 把业务 switch 的 case \"gyroscope\" 当成方法名 ⇒ 误报；改按方法名形态过滤（含 . 或是契约名），修后覆盖率 android 32/34 · ios 28/34 · harmony 16/34。★判据：新测试 9/9 + 破坏性 2 条（摘 kind 过滤 ⇒ 1 红；删契约 ⇒ 3 处未知方法）；三端编译（javac/swiftc/ArkTS BUILD SUCCESSFUL + C++）；file-size/no-json-wire/vue-tsc 全绿。★诚实边界：真机未跑；鸿蒙 read 是快照（延迟=一次渲染）；compass 三端语义不一；功耗/频率写死。"
     }
   ]
 }

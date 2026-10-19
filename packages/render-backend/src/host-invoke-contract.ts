@@ -68,6 +68,10 @@ export const HOST_CAPABILITY_METHODS = [
   'device.brightness.set',
   'device.keepScreenOn',
   'device.hevc',
+  // ★★2026-10-19（决策 #1080）：C5 传感器（App 端订阅式 API；read = 订阅→首采样→取消）
+  'device.sensor.read',
+  'device.sensor.start',
+  'device.sensor.stop',
 ] as const
 
 /** **合法省略**（某端不实现但非漂移——由引擎/平台提供）。键 = 端名（`android`/`ios`/`harmony`）。 */
