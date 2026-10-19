@@ -50,6 +50,9 @@ export {
   hostRtShellEvent,
   // ★T-app-fetch：真机 HTTP 通路判据（空 VM + 真实 invokeBytes + 真网络）
   hostHttpProbe,
+  // ★★设备与系统域（决策 #1067）：设备快照注入 + 动作队列 drain
+  setDeviceSnapshot,
+  drainDeviceActions,
   hostAppBoot,
   hostAppDrive,
   hostAppRender,

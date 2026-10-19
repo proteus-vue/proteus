@@ -54,6 +54,20 @@ export const HOST_CAPABILITY_METHODS = [
   //   ⇒ 宿主回收，渲染收尾带走（面板 Console·项目通道）。★当前仅鸿蒙 runtime 声明（一次性 VM 无法用
   //   `post` 反向通道；Android/iOS 走 `proteusHost.post`）——他端不实现 ⇒ 覆盖率如实报缺（非漂移）。
   'dev.console',
+  // ★★2026-10-19（决策 #1067）：能力对齐专项「设备与系统」域 12 项。
+  //   方法名契约与 `packages/api/src/capability-app-device.ts::APP_DEVICE_METHODS` 对齐（改一处必须改两处）。
+  'device.vibrate',
+  'device.network',
+  'clipboard.read',
+  'clipboard.write',
+  'device.screen',
+  'device.info',
+  'device.battery',
+  'device.orientation',
+  'device.brightness.get',
+  'device.brightness.set',
+  'device.keepScreenOn',
+  'device.hevc',
 ] as const
 
 /** **合法省略**（某端不实现但非漂移——由引擎/平台提供）。键 = 端名（`android`/`ios`/`harmony`）。 */

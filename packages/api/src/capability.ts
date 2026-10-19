@@ -4,7 +4,9 @@
 import { detectRuntime } from '@proteus-vue/shared'
 import { createAuth } from './auth'
 import { mpBridgeExt, webBridgeExt } from './generated/bridge-ext'
-import { createAppLifecycleCapabilities, createAppNativeCapabilities, detectAppHost, getHostLifecycleBus } from './capability-app'
+import { detectAppHost } from './capability-app'
+// ★★2026-10-19（决策 #1067）：App 端三组能力（生命周期 + 平台能力 + 设备域）统一装配
+import { createAppCapabilities } from './capability-app-device'
 import type { AuthStorage } from './auth'
 import { CapError, capErr, capOk, wrap } from './capability-types'
 import type { ARAPI, AdAPI, AlbumAPI, AppLifecycle, ArchiveOptions, AudioController, AuthState, BackgroundAPI, BatteryInfo, BeaconAPI, BiometricOptions, BluetoothAPI, CacheManagerHandle, CalendarAPI, CalendarEvent, CameraController, CanvasController, CapDeviceInfo, CapResult, CapabilityBridge, CapabilityProbe, CompatStorage, Contact, CookieJar, Coords, DataChannelHandle, DataChannelOptions, DeviceCapabilityAPI, DownloadOptions, DownloadResult, ElementQuery, FSAdapter, FetchConfig, FileSystemBridge, HostContext, IAPReceipt, IdleAPI, ImageEditAPI, IntersectionHandle, IntersectionOptions, KeyboardLifecycle, LivePusherController, LiveRoomHandle, LiveRoomOptions, LocalServiceAPI, Logger, LoginResult, MapController, MediaAccess, MediaProcessingAPI, MediaQueryObserver, MessageSubscription, MiniProgramAPI, NFCAPI, NavigationGuardAPI, NetworkType, OrientationInfo, PageLifecycle, PaymentConfig, PaymentReceipt, PerformanceAPI, PermissionState, PosterAPI, PreloadAPI, PrivacyAPI, ProgressCallback, RecorderController, ScreenCaptureAPI, ScreenInfo, SensorKind, SensorSample, SensorStream, ShareOptions, ShippingAddress, SocketTaskHandle, TCPSocketConnectOptions, TCPSocketHandle, TrackAPI, TranslationAPI, UDPSocketHandle, UpdateManagerAPI, UploadOptions, UploadResult, VideoController, WeRunData, WebAssemblyAPI, WebSocketConnection, WifiAPI, WindowAPI, WorkerHandle, WxLike } from './capability-types'
@@ -18,16 +20,10 @@ export function createCapabilityBridge(): CapabilityBridge {
   //   · 为什么必须显式判定：QuickJS/JSC **无 window 无 wx** ⇒ detectRuntime() 落 'web'，
   //     web 桥的 getAppLifecycle 依赖 visibilitychange（App 端不存在）⇒ 三个 Hook 形同虚设；
   //   · 合并顺序：**最后展开**（App 能力覆盖 wx/web 的同名缺省——App 宿主上是权威实现）；
-  //   · 诚实边界：当前只覆盖**生命周期**三能力（C23/C24/C25）——App 端其余能力
-  //     （屏幕/设备/电池/剪贴板…）仍走 web 桥的降级路径，App 化是后续批次（不冒充已完成）。
-  // ★★App 端：生命周期三能力（C23/C24/C25）+ **10 个平台能力**（壳转发实现）
-  //   —— 后者此前走 web 桥降级（App 端拿不到），现在由壳经 `__proteusHostInvoke` 提供。
-  const appCaps = detectAppHost()
-    ? {
-        ...createAppLifecycleCapabilities(getHostLifecycleBus(), CapError),
-        ...createAppNativeCapabilities(CapError),
-      }
-    : ({} as Record<string, never>)
+  //   · 诚实边界：App 端已接「应用与生命周期」+「设备与系统」两域；其余域（媒体/位置/支付…）
+  //     仍走 web 桥的降级路径——逐域铺开（不冒充已完成）。
+  // ★★App 端三组能力的装配收在 `capability-app-device.ts::createAppCapabilities`（决策 #1067）。
+  const appCaps = detectAppHost() ? createAppCapabilities(CapError) : ({} as Record<string, never>)
   if (detectRuntime() === 'mp' && g.wx) return { ...wxBridge(g.wx), ...mpBridgeExt(g.wx, CapError), ...appCaps }
   return { ...webBridge(globalThis), ...webBridgeExt(globalThis, CapError), ...appCaps }
 }

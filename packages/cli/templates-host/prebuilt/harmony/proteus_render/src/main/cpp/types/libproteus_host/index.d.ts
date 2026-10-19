@@ -21,6 +21,10 @@ export const appScreenFollowField: (json: string) => string;
 export const hostRtShellInstall: (json: string) => string;
 /** ★T-app-fetch 真机判据：空 VM + 真实 `invokeBytes` + 真网络（入参 {url}）→ JSON 回执 */
 export const hostHttpProbe: (json: string) => string;
+/** ★★设备与系统域（决策 #1067）：ArkTS 注入设备快照 → C++ 侧回答 device.* 读类能力 */
+export const setDeviceSnapshot: (json: string) => string;
+/** ★★设备与系统域（决策 #1067）：取走 C++ 入队的设备动作（渲染后执行） */
+export const drainDeviceActions: () => string;
 /** 真事件转发：__proteusHostShellLifecycle('pause'|'resume') + 泵 job + 读回 + 落盘 */
 export const hostRtShellEvent: (evt: string) => string;
 /** ★应用运行期·启动（一次性 VM）：eval bundle → boot（路由栈 + 进入入口 tab）；入参 {bundle,filesDir} */

@@ -49,6 +49,10 @@ final class HostCapabilities: NSObject {
         var terminated = false
     }
 
+    /// ★★2026-10-19（决策 #1067）：「设备与系统」域 12 项（真实 UIKit/Network/VideoToolbox，
+    ///   见 device-capability.swift）。
+    private lazy var device = DeviceCapability(hostView: nil)
+
     // ────────────────────────── 主入口（契约同 Android.invoke） ──────────────────────────
 
     /// 执行原生方法并返回 JSON 串。**同步**（与 G-39 的 JNI trampoline 同契约：壳内同步完成）。
@@ -88,6 +92,17 @@ final class HostCapabilities: NSObject {
             // ★形态与 Android 一致：返回**裸 JSON 数组**（诊断通道，非 {ok,data} 包装）
             return Self.jsonString(callLog)
         default:
+            // ★★2026-10-19（决策 #1067）：「设备与系统」域 12 项（device.* / clipboard.*）
+            if method.hasPrefix("device.") || method == "clipboard.read" || method == "clipboard.write" {
+                do {
+                    return ok(try device.invoke(method, args))
+                } catch let u as DeviceCapability.Unsupported {
+                    // ★"平台无此能力" ⇒ missing 分档（与 Android 的 UnsupportedOperationException 同义）
+                    return miss(u.message)
+                } catch {
+                    return fail("\(method) 失败：\(error)")
+                }
+            }
             return miss("未实现的原生方法：\(method)")
         }
     }

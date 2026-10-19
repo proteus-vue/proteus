@@ -25,6 +25,7 @@
 #pragma once
 #include "proteus_host_helpers.h"
 #include "invoke_bytes_bridge.h"
+#include "proteus_device.h"
 #include <chrono>
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -156,6 +157,10 @@ static std::string screenInvokeDispatch(const std::string& method, const std::st
         snprintf(b, sizeof(b), "{\"ok\":true,\"data\":{\"mount_calls\":%d,\"visible_calls\":%d,\"destroy_calls\":%d,\"content_node_total\":%d,\"live_screens\":%d}}",
                  g_scMounts, g_scVisible, g_scDestroy, g_scContentTotal, (int)g_scHandle.size());
         return b;
+    }
+    // ★★2026-10-19（决策 #1067）：「设备与系统」域 12 项（见 proteus_device.h 的"快照 + 动作队列"说明）
+    if (proteus::device::isDeviceMethod(method)) {
+        return proteus::device::dispatch(method, argsJson);
     }
     // ★诚实降级（与 Android 的 UnsupportedOperationException / iOS 的 `miss()` 同口径）：
     //   "没有这个方法"是 `missing` 而不是 `failed` —— JS 桥据此给 `*.unsupported`（不冒充调用失败）。

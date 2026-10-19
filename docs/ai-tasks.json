@@ -1543,6 +1543,36 @@
         "T-css-batch-b-tabular-nums"
       ],
       "note": "【已交付】三条长手（color/style/thickness）+ 简写按 CSS 四分量任意顺序解析（此前 underline red 整条被丢弃=静默失样式）。★三端差异真实：Android 原生装饰是布尔开关 ⇒ 新建 TextDecorationPainter 手绘五线型（仅自定义时接管）；iOS NSUnderlineStyle 选项集（wavy 不在枚举 ⇒ 实线近似）；鸿蒙 API 齐全含 WAVY；Skyline -thickness 具名边界。★顺带修 CSE 通路分叉（color 未进 COLOR_PROPS、thickness 未进长度归一）。★Android 真机六种线型逐项确认。"
+    },
+    {
+      "id": "T-app-device-domain",
+      "title": "App 三端「设备与系统」域 12 项落地：设备/屏幕/电量/方向/网络/亮度/震动/剪贴板/常亮/键盘/媒体查询/HEVC",
+      "type": "capability",
+      "status": "done",
+      "owner": "session:zcode-invoke-bytes-20261019",
+      "scope": [
+        "packages/api/src/capability-app-device.ts",
+        "packages/api/src/capability.ts",
+        "packages/render-backend/src/host-invoke-contract.ts",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/**",
+        "hosts/ios/ProteusHost/runtime/**",
+        "hosts/ios/check-selfdraw-compile.sh",
+        "hosts/ios/run-selfdraw.sh",
+        "hosts/ios/run-selfdraw-sim.sh",
+        "hosts/harmony/host-app/proteus_render/**",
+        "hosts/harmony/host-app/entry/src/main/ets/**",
+        "packages/cli/templates-host/prebuilt/**",
+        "scripts/check-host-invoke-contract.mjs",
+        "tests/capability-app-device.test.ts"
+      ],
+      "decision": 1067,
+      "verification": "npx vitest run tests/capability-app-device.test.ts && node scripts/check-host-invoke-contract.mjs && node scripts/check-no-json-wire.mjs && bash hosts/android/check-host-compile.sh && bash hosts/ios/check-selfdraw-compile.sh && bash scripts/check-harmony-host-compile.sh && node scripts/check-android-runtime-aar-fresh.mjs && node scripts/harmony-runtime-prebuilt.mjs --check",
+      "branch": null,
+      "related": [
+        "T-app-runtime-capabilities",
+        "T-app-invoke-bytes-generic"
+      ],
+      "note": "【done · 决策 #1067（2026-10-19）】能力对齐专项「设备与系统」域首批 12 项（用户指定先推该域）。★四层：① JS 新文件 `capability-app-device.ts`（12 项桥 + 键盘通道 + 纯 JS 媒体查询 + `createAppCapabilities` 统一装配；同步能力走 #1066 的字节腿）；② 契约 `HOST_CAPABILITY_METHODS` 登记 12 个方法名；③ Android `DeviceCapability.java` 真实 API（Vibrator/ConnectivityManager/ClipboardManager/MediaCodecList/BatteryManager/Settings 亮度/FLAG_KEEP_SCREEN_ON）；④ iOS `device-capability.swift`（UIImpactFeedbackGenerator/NWPathMonitor/UIPasteboard/UIScreen/UIDevice/VTIsHardwareDecodeSupported/isIdleTimerDisabled）；⑤ 鸿蒙「快照 + 动作队列」（`proteus_device.h` + ArkTS `DeviceSnapshot.ets`：渲染前注入快照、渲染后 drain 动作）。★关键取舍：`capability.ts` 是存量棘轮文件（1097 行）⇒ 装配收进 device 文件，capability.ts 反而 1097→1093。★`check:host-invoke-contract` 扩面到三端设备域**独立文件**（原只扫 HostCapabilities/host-capabilities ⇒ 真实覆盖被低报）；覆盖率 android 17→29、ios 13→25、harmony 1→13（分母 31）。★破坏性验证：鸿蒙 ArkTS 写错 API 名 ⇒ ArkTS Compiler Error（证明构建真的编译新文件，不是缓存复用）。★判据：设备桥单测 9/9 + 既有能力测试 96/96、三端编译、file-size/no-json-wire/ai-tasks/script-compile/vue-tsc 绿、AAR 重建 + prebuilt 同步。★诚实边界：**真机未跑**（12 项通路待真机判据）；鸿蒙动作类=已受理非已生效、亮度=窗口亮度、剪贴板=快照；iOS 震动=触觉反馈、网络=瞬时读数。"
     }
   ]
 }

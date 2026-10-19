@@ -23,6 +23,8 @@ import { attach, renderCommands, scrollRoot, clearRoot, appScreenCommands, appSc
 // ★T-app-fetch：ArkTS 侧编解码器（本端唯一实现）——真机判据用它**自己编码**一帧交给 C++，
 //   验的就是「ArkTS 编的字节 → C++ 解」这条真实跨语言契约（parity 门禁在本机验同一性质）。
 import { encodeInvoke, InvokeFrame } from '../runtime/InvokeWire';
+// ★★设备与系统域（决策 #1067）：渲染前注入设备快照、渲染后执行宿主动作队列
+import { refreshDeviceSnapshot, runDeviceActions } from '../runtime/DeviceSnapshot';
 
 const DOMAIN = 0x0002;
 const TAG = 'ProteusSuperapp';
@@ -98,6 +100,8 @@ struct Superapp {
   /** ★★★跨调用状态（2026-10-07 · 鸿蒙一次性 VM）：上次 hostAppRender 返回的 `snapshot`
    *   （`{屏名:{变量:值}}`）——每次新 VM 作 `state` 回灌，恢复 count 等实例态（否则点击计数不动）。 */
   private runtimeState: Record<string, Object> | null = null;
+  /** ★★决策 #1067：窗口引用（设备亮度/常亮/剪贴板动作要在窗口上执行） */
+  private win: window.Window | undefined = undefined;
   /** 视口高/宽（vp；renderCurrent 处记录——与 contentH 同源）。 */
   private static vpH: number = 844;
   private static vpW: number = 390;
@@ -128,6 +132,7 @@ struct Superapp {
       //   取到真值再覆盖（不同机型/横竖屏）。与 Web `--sa-safe-bottom` 同义。
       this.safeBottom = 16;
       window.getLastWindow(ctx).then((win: window.Window) => {
+        this.win = win;
         // ★★全端对齐批（2026-10-05 · css-conformance 独立复评抓出）：**隐藏系统状态栏**——
         //   与 Android `hide(statusBars())` / iOS 全屏同口径（Web 基准无系统栏）。
         //   此前状态栏图标（时钟等）叠印在页面标题上（复评 major：标题被遮挡），
@@ -709,6 +714,8 @@ struct Superapp {
    *   省掉一次 renderCurrent 的 hostAppRender boot（一次性 VM 每次 boot 要 eval 整包 ⇒ 卡顿）。
    *   视口取 Superapp.vpW/vpH（由 renderCurrent 设定）。 */
   private paintTree(page: string, nodes: string): void {
+    // ★★决策 #1067：渲染前刷新设备快照（JS 侧 device.* 读类能力的数据源）——失败不阻断渲染
+    refreshDeviceSnapshot(this.win);
     try {
       // ★★★决策 #897：tab 栏高亮的 current 以**实际渲染屏**为准。根因 = `applyState` 用**路由 current**
       //   （boot 后恒为 index）写 chromeStateJson，而 `renderCurrent` 随后把 `this.current` 修正为真实屏
@@ -754,6 +761,8 @@ struct Superapp {
       scrollRoot(this.scrollOffset);
       hilog.info(DOMAIN, TAG, 'SUPERAPP_SCROLL contentH=%{public}s viewport=%{public}s max=%{public}s offset=%{public}s',
         chVp.toFixed(1), Superapp.vpH.toFixed(1), this.maxScroll.toFixed(1), this.scrollOffset.toFixed(1));
+      // ★★决策 #1067：渲染后执行 JS 侧排队的设备动作（震动/亮度/常亮/剪贴板写）——逐条异步，失败只记日志
+      runDeviceActions(this.win);
     } catch (e) {
       hilog.error(DOMAIN, TAG, 'SUPERAPP_PAINT_ERROR %{public}s', JSON.stringify(e) ?? '');
     }

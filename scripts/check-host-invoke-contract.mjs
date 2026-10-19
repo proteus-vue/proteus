@@ -42,18 +42,31 @@ function extractMethodEq(file) {
 const ENDS = {
   android: {
     screen: extractCases('hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/ScreenHost.java'),
-    capability: extractCases('hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/HostCapabilities.java'),
+    // ★★2026-10-19（决策 #1067）：设备域 12 项在**独立文件**（HostCapabilities 用前缀判定转发，
+    //   不写 12 个 case）⇒ 覆盖率必须同时扫该文件，否则数字低报（"实现了但门禁看不见"）。
+    capability: [
+      ...extractCases('hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/HostCapabilities.java'),
+      ...extractCases('hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/DeviceCapability.java'),
+    ],
   },
   ios: {
     screen: extractCases('hosts/ios/ProteusHost/runtime/screen-host.swift'),
-    capability: extractCases('hosts/ios/ProteusHost/runtime/host-capabilities.swift'),
+    // ★同上：iOS 设备域在 device-capability.swift（host-capabilities 走前缀转发）
+    capability: [
+      ...extractCases('hosts/ios/ProteusHost/runtime/host-capabilities.swift'),
+      ...extractCases('hosts/ios/ProteusHost/runtime/device-capability.swift'),
+    ],
   },
   harmony: {
     // ★决策 #725：鸿蒙 `screen.*`（一处 `method == "..."` 分发）已按**中性名下沉**到 runtime HAR
     //   （`host_app_runtime_impl.h`，由 proteus_host.cpp 导出 hostAppBoot/Drive/Render）——壳不再依赖 dev。
     //   能力族鸿蒙仍未接线（覆盖率如实为 0），故 capability 从同一头抽（当前为空，如实报告）。
     screen: extractMethodEq('hosts/harmony/host-app/proteus_render/src/main/cpp/host_app_runtime_impl.h').filter((m) => m.startsWith('screen.')),
-    capability: extractMethodEq('hosts/harmony/host-app/proteus_render/src/main/cpp/host_app_runtime_impl.h').filter((m) => !m.startsWith('screen.')),
+    // ★★2026-10-19（决策 #1067）：设备域 12 项在 proteus_device.h（前缀判定转发）⇒ 一并抽取
+    capability: [
+      ...extractMethodEq('hosts/harmony/host-app/proteus_render/src/main/cpp/host_app_runtime_impl.h').filter((m) => !m.startsWith('screen.')),
+      ...extractMethodEq('hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_device.h'),
+    ],
   },
 }
 

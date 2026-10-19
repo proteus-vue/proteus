@@ -52,9 +52,12 @@ public final class HostCapabilities {
     private final AtomicInteger idleSeq = new AtomicInteger();
     /** C75 导航守卫：消息（空 = 未拦截）——由虚拟栈 pop 前查询 */
     private volatile String navGuardMessage = null;
+    /** ★★2026-10-19（决策 #1067）：「设备与系统」域 12 项（真实 Android API，见 DeviceCapability） */
+    private final DeviceCapability device;
 
     public HostCapabilities(Activity activity) {
         this.activity = activity;
+        this.device = new DeviceCapability(activity);
     }
 
     /** ★调用记账（**真实宿主自报**——判据据此证明"能力确实经宿主执行"，而非桥自造数据） */
@@ -200,8 +203,22 @@ public final class HostCapabilities {
                 // 诊断：返回宿主侧调用记录（判据证明"真实宿主被调用"）
                 return callsJson();
             default:
+                // ★★2026-10-19（决策 #1067）：「设备与系统」域 12 项（device.* / clipboard.*）。
+                //   放在 default 之前用前缀判定，避免 12 个 case 把本方法撑长；语义仍在本类统一分档。
+                if (isDeviceMethod(method)) {
+                    try {
+                        return ok(device.invoke(method, args));
+                    } catch (DeviceCapability.Unsupported e) {
+                        throw new UnsupportedOperationException(e.getMessage());
+                    }
+                }
                 throw new UnsupportedOperationException("未实现的原生方法：" + method);
         }
+    }
+
+    /** 设备域方法前缀（`device.*` + 剪贴板两方法——与 `APP_DEVICE_METHODS` 对齐）。 */
+    private static boolean isDeviceMethod(String method) {
+        return method.startsWith("device.") || "clipboard.read".equals(method) || "clipboard.write".equals(method);
     }
 
     /**

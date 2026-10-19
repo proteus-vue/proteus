@@ -972,6 +972,41 @@ static napi_value AppScreenContentHeight(napi_env env, napi_callback_info info) 
     napi_create_double(env, g_appContentHeightVp, &out);
     return out;
 }
+
+/* ══════════ ★★设备与系统域（决策 #1067）：快照注入 + 动作队列 drain ══════════
+ * 【为什么这两个必须是 napi 导出（而不是在 C++ 里直接调系统 API）】
+ *   设备读数的真源是 **ArkTS 的 @ohos.\* 模块**（display / batteryInfo / pasteboard / connection）；
+ *   动作（震动/亮度/常亮）是**异步 Promise**，不能在同步 napi 里 await（一次性 VM 会卡住/无接收方）。
+ *   ⇒ ArkTS 采集快照 `setDeviceSnapshot(json)`；动作由 C++ 入队，ArkTS 渲染后 `drainDeviceActions()`
+ *     取走执行。两边都是**毫秒级同步 napi**，端点语义如实（动作 = 已受理，不是已生效）。
+ */
+static napi_value SetDeviceSnapshot(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    std::string json;
+    if (argc >= 1) {
+        size_t len = 0;
+        napi_get_value_string_utf8(env, args[0], nullptr, 0, &len);
+        json.resize(len + 1);
+        napi_get_value_string_utf8(env, args[0], &json[0], len + 1, &len);
+        json.resize(len);
+    }
+    proteus::device::snapshot() = json;
+    napi_value out;
+    char b[96];
+    snprintf(b, sizeof(b), "{\"ok\":true,\"bytes\":%zu}", json.size());
+    napi_create_string_utf8(env, b, NAPI_AUTO_LENGTH, &out);
+    return out;
+}
+
+static napi_value DrainDeviceActions(napi_env env, napi_callback_info info) {
+    (void)info;
+    std::string out = proteus::device::drainActions();
+    napi_value r;
+    napi_create_string_utf8(env, out.c_str(), out.size(), &r);
+    return r;
+}
 /* ── NAPI 注册（模块名 `proteus_host`）── */
 EXTERN_C_START
 static napi_value HostBridgeInit(napi_env env, napi_value exports) {
@@ -1006,6 +1041,9 @@ static napi_value HostBridgeInit(napi_env env, napi_value exports) {
         {"hostAppAnimStats", nullptr, HostAppAnimStats, nullptr, nullptr, nullptr, napi_default, nullptr},
         // ★T-app-fetch：真机 HTTP 通路判据（空 VM + 真实 invokeBytes + 真网络）
         {"hostHttpProbe", nullptr, HostHttpProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
+        // ★★设备与系统域（决策 #1067）：ArkTS 注入设备快照 / 取走待执行动作
+        {"setDeviceSnapshot", nullptr, SetDeviceSnapshot, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"drainDeviceActions", nullptr, DrainDeviceActions, nullptr, nullptr, nullptr, napi_default, nullptr},
     };
     napi_define_properties(env, exports, sizeof(desc) / sizeof(desc[0]), desc);
     return exports;
