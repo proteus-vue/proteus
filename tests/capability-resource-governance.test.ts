@@ -35,6 +35,11 @@ import {
   wsConnectionCount,
 } from '../packages/api/src/capability-websocket'
 import { HOST_INVOKE_KEY } from '../packages/api/src/capability-invoke'
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
 function installFakeHost(handler: (method: string, args: unknown) => unknown) {
   const calls: Array<{ method: string; args: Record<string, unknown> }> = []
@@ -208,7 +213,78 @@ describe('★#1094 ④ 键盘 / 传感器订阅也登记（同类边界资源）
   })
 })
 
-describe('★#1094 ⑤ dispose 真释放 + 零回归', () => {
+describe('★#1094 ⑤ 录屏/截屏订阅也登记（宿主侧观察者）', () => {
+  it('onRecordingStateChange / onUserCapture 各登记一条；off 时同步销账', async () => {
+    const { createAppCaptureCapabilities } = await import('../packages/api/src/capability-app-capture')
+    const reg = createCapabilityResourceRegistry()
+    const cap = createAppCaptureCapabilities({ resources: reg, owner: 'screen:mine' })
+    const api = cap.getScreenCapture()
+    const off1 = api.onRecordingStateChange(() => {})
+    const off2 = api.onUserCapture(() => {})
+    expect(reg.countsByType()).toEqual({
+      'capture-recording-subscription': 1,
+      'capture-usercapture-subscription': 1,
+    })
+    off1()
+    off2()
+    expect(reg.size()).toBe(0)
+  })
+
+  it('releaseAll 能兜底退订（业务忘了 off）', async () => {
+    const { createAppCaptureCapabilities } = await import('../packages/api/src/capability-app-capture')
+    const reg = createCapabilityResourceRegistry()
+    const cap = createAppCaptureCapabilities({ resources: reg })
+    cap.getScreenCapture().onRecordingStateChange(() => {})
+    expect(reg.size()).toBe(1)
+    reg.releaseAll()
+    expect(reg.size()).toBe(0)
+  })
+})
+
+describe('★#1094 ⑥ superapp 链的页面离开钩子（onScreenLeave）', () => {
+  // ★不用真实 superapp runtime 做单测：构造一份完整的 ScreenRuntimeArtifact（模板/订阅表/
+  //   事件/handlers/数据）代价过高，而**那不是本决策要验的东西**——这里要确认的是
+  //   「钩子存在、在切屏时被调、同屏重渲不调、回调抛错不阻断导航」这四条**契约**。
+  //   ⇒ 静态判据（源码里位置正确的调用）+ 行为判据拆到真机探针（页面切换时看资源归零）。
+  const SRC = fs.readFileSync(
+    path.join(ROOT, 'packages/render-backend/src/superapp-runtime.ts'),
+    'utf8',
+  )
+
+  it('options 声明了 onScreenLeave(left, to)', () => {
+    expect(SRC).toMatch(/onScreenLeave\?:\s*\(left: string, to: string\) => void/)
+  })
+
+  it('调用点在「离开当前屏」之后、mount 之前（旧屏资源先释放）', () => {
+    const callIdx = SRC.indexOf('opts.onScreenLeave?.(cur, name)')
+    expect(callIdx, 'onScreenLeave 未被调用').toBeGreaterThan(-1)
+    const scrollIdx = SRC.indexOf('scrollByScreen.set(cur, opts.host.getScroll())')
+    const mountIdx = SRC.indexOf('const reply = opts.host.mount(JSON.stringify({ viewport: inst.content().viewport')
+    expect(scrollIdx).toBeGreaterThan(-1)
+    expect(mountIdx).toBeGreaterThan(-1)
+    // 顺序：记滚动 → 释放资源 → 挂新屏（先释放避免新旧并存）
+    expect(callIdx).toBeGreaterThan(scrollIdx)
+    expect(callIdx).toBeLessThan(mountIdx)
+  })
+
+  it('只在"真的换屏"时触发（同屏重渲 early-return 在调用点之前）', () => {
+    const sameScreenIdx = SRC.indexOf('if (name === cur) return true')
+    const callIdx = SRC.indexOf('opts.onScreenLeave?.(cur, name)')
+    expect(sameScreenIdx).toBeGreaterThan(-1)
+    expect(sameScreenIdx).toBeLessThan(callIdx)
+  })
+
+  it('回调抛错被 try/catch 吞成 note（不阻断导航）', () => {
+    // ★切片要从 try 之前取：try 包住的是"调用 onScreenLeave"整个语句
+    const callIdx = SRC.indexOf('opts.onScreenLeave?.')
+    const seg = SRC.slice(Math.max(0, callIdx - 200), callIdx + 400)
+    expect(seg).toContain('try {')
+    expect(seg).toContain('catch')
+    expect(seg).toContain('note(')
+  })
+})
+
+describe('★#1094 ⑦ dispose 真释放 + 零回归', () => {
   beforeEach(() => { resetWsConnections(); clearHost() })
   afterEach(() => { resetWsConnections(); clearHost() })
 

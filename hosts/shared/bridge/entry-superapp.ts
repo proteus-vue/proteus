@@ -20,6 +20,8 @@ import { resolveElement, resolveAllElements, elementRegistryStats, firstScreenEl
 // ★与 entry-host-runtime.ts 同款：包内**相对路径**引用源（tsconfig.json 是 JSONC，加 paths 会撞校验；
 //   而相对路径让 bundler 与类型检查解析到同一份源，零配置改动）
 import { installElementResolver } from '../../../packages/api/src/capability-app-element'
+import { createCapabilityHooks } from '../../../packages/api/src/capability'   // ★#1094 按屏能力实例
+import { createCapabilityResourceRegistry } from '../../../packages/api/src/capability-resources'   // ★#1094 边界资源账本
 // ★★★决策 #1086：交叉观察依赖注入（与 useElement 同一解析器 + 同一文档序）
 import { installIntersectionDeps, evaluateIntersections, createAppIntersection } from '../../../packages/api/src/capability-app-intersection'
 // ★★★决策 #1083：录屏/截屏能力探针（真机判据直接调真实桥，不经 capability.ts 全量入口）
@@ -47,6 +49,44 @@ function pushNote(n: string): void {
   arr.push(n)
   if (arr.length > 200) arr.shift()
 }
+
+/**
+ * ★★★决策 #1094：**按屏的能力实例 + 资源账本**（G-43 边界资源治理接进真实 superapp 链）。
+ *
+ * 【为什么按屏而不是全局】G-43.1「边界资源归属某个 Owner」——一个屏就是一个 Owner。
+ *   全局一个账本会让"离开 A 屏"释放掉 B 屏的资源。
+ * 【为什么在这里而不是容器】真实 superapp 走 `createSuperappRuntime` 这条链，
+ *   容器（StackContainer 等）**不在生产路径上**；把治理挂到容器上等于没接。
+ */
+const perScreenCaps = new Map<string, {
+  resources: ReturnType<typeof createCapabilityResourceRegistry>
+  dispose: () => void
+}>()
+
+/**
+ * 取（或创建）某屏的能力实例——同一屏重复取复用同一个（订阅不重复登记）。
+ *
+ * ★导出为 `__proteusScreenCaps(screen)`（见文件底部的中性名挂载）：
+ *   这是业务页面**按屏取能力实例**的入口。业务用 `useWebSocket()` 等 hook 时，
+ *   应当从它拿 hooks 实例（而不是全局单例），这样离开该屏时资源才会被释放。
+ *
+ * ★诚实边界：当前 superapp 的 5 个页面**尚未使用任何能力**（grep 零命中），
+ *   所以本函数在生产 bundle 里暂时没有调用者——它不伪装成"已经在治理"，
+ *   而是**提供了正确的接入点**；页面一旦开始用能力，按此入口取即可自动受治理。
+ *   （不存在"悄悄不生效"：`onScreenLeave` 对空表是安全的 no-op。）
+ */
+function capsForScreen(screen: string) {
+  const existing = perScreenCaps.get(screen)
+  if (existing) return existing
+  const resources = createCapabilityResourceRegistry({ owner: 'screen:' + screen })
+  const hooks = createCapabilityHooks(undefined as never, { resources, owner: 'screen:' + screen })
+  const entry = { resources, dispose: () => hooks.dispose() }
+  perScreenCaps.set(screen, entry)
+  return entry
+}
+
+;(globalThis as unknown as { __proteusScreenCaps?: (screen: string) => unknown })
+  .__proteusScreenCaps = (screen: string) => capsForScreen(screen)
 
 interface SuperappHost {
   /** 宿主 `proteusHost.invoke`（screen.* 端口；三端同形） */
@@ -290,6 +330,14 @@ interface SuperappRuntimeHostShape {
         // ★★★页面处理器 source map（决策 #712）：运行期 handler 出错 ⇒ 记入 notes（宿主 debug 读数可见）+
         //   走 `console.error`（dev 垫片转发面板 Console·项目通道 error 级）——不再静默吞掉。
         onNote: (n: string) => pushNote(n),
+        // ★★★决策 #1094：**页面离开 = 边界资源释放点**（G-43 接进真实 superapp 链）。
+        //   ★这是"谁来调 dispose()"的答案：不是靠容器（容器不在生产路径上），而是靠真实导航。
+        onScreenLeave: (left: string) => {
+          const entry = perScreenCaps.get(left)
+          if (!entry) return
+          perScreenCaps.delete(left)
+          try { entry.dispose() } catch (e) { pushNote('[screen-leave] dispose 异常：' + String((e as Error)?.message ?? e)) }
+        },
         onError: (e: string) => { pushNote(e); try { console.error(e) } catch { /* 无 console（非 dev）⇒ 仅 notes */ } },
         // ★★★CPU Profiler（决策 #715）：dev 构建开阶段耗时自采样（instantiate/flush/dispatch/handler）。
         //   `__DEV__` 由构建注入（dev bundle 为 true，release 为 false）⇒ release 零开销。

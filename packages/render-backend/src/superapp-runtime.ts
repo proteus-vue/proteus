@@ -65,6 +65,18 @@ export interface SuperappRuntimeOptions {
   seedData?: Record<string, Record<string, unknown>>
   /** 诊断（不静默） */
   onNote?: (note: string) => void
+  /**
+   * ★★★决策 #1094：**离开某屏时**的回调（页面卸载 = 该屏边界资源的释放点）。
+   *
+   * 【为什么必须有】G-43 的页面所有权上下文原本只挂在 G-42 容器上，而真实 superapp
+   *   走的是本文件的 `rt.instance(name)` 链——那条链此前**没有任何"页面离开"的钩子**
+   *   ⇒ 能力层的边界资源（WS 连接 / 宿主观察者 / 元素索引）没有释放时机。
+   *   应用层可在本回调里调 `createCapabilityHooks(...).dispose()`。
+   *
+   * @param left 离开的屏名（切走的那个）
+   * @param to   目标屏名
+   */
+  onScreenLeave?: (left: string, to: string) => void
   /** ★页面处理器运行期错误出口（决策 #712·source map）——转发给 `createScreenRuntime.onError`。 */
   onError?: (error: string) => void
   /** ★T3 `console.*` 出口——转发给 `createScreenRuntime.onLog`（dev 面板 Console）。 */
@@ -246,6 +258,14 @@ export function createSuperappRuntime(opts: SuperappRuntimeOptions): SuperappRun
       // 离开当前屏前：记住它的滚动进度（返回时恢复）
       if (cur && typeof opts.host.getScroll === 'function') {
         scrollByScreen.set(cur, opts.host.getScroll())
+      }
+      // ★★★#1094：**页面离开 = 边界资源释放点**（G-43）。放在 mount 之前：
+      //   让旧屏资源先释放，避免新屏挂载期间与旧屏资源并存（短暂双份）。
+      //   ★释放失败不阻断切屏——记 note，绝不让资源治理把导航搞挂。
+      if (cur) {
+        try { opts.onScreenLeave?.(cur, name) } catch (e) {
+          note(`[superapp-runtime] onScreenLeave 异常（${cur} → ${name}）：${String((e as Error)?.message ?? e)}`)
+        }
       }
       // 判断方向：目标在历史里且在当前之前 ⇒ **返回（pop）**；否则 ⇒ **前进（push）**。
       const existing = history.indexOf(name)

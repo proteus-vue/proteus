@@ -18,6 +18,7 @@
 //   与键盘/传感器同族"约定即接口"（App 端无 DOM 事件，只能壳推）。
 
 import { invokeHost } from './capability-invoke'
+import type { CapabilityResource, CapabilityResourceRegistry } from './capability-resources'   // ★#1094
 import { CapError as ProteusCapError } from './capability-types'
 import type { CapResult, ScreenCaptureAPI } from './capability-types'
 
@@ -126,7 +127,10 @@ function readHostState(): R<HostCaptureReply> {
  * ★每个方法独立分档：某个方法在某端不可用（宿主回执**缺该字段**）⇒ 该方法 `unsupported`，
  *   其余方法照常可用。**不**因一项缺而整能力降级（否则鸿蒙能查录屏却因无截屏事件整块不可用）。
  */
-export function createAppCaptureCapabilities() {
+export function createAppCaptureCapabilities(
+  // ★#1094：边界资源账本（G-43）——录屏/截屏订阅是宿主侧观察者（典型边界资源）
+  resOpts: { resources?: CapabilityResourceRegistry; owner?: string } = {},
+) {
   installCaptureChannel()
 
   const api: ScreenCaptureAPI = {
@@ -145,12 +149,38 @@ export function createAppCaptureCapabilities() {
     onRecordingStateChange: (cb: (state: 'on' | 'off') => void): (() => void) => {
       const entry = (s: 'on' | 'off'): void => cb(s)
       recordingSubs.add(entry)
-      return () => { recordingSubs.delete(entry) }
+      // ★#1094：登记为边界资源（宿主侧观察者，GC 管不到）
+      let res: CapabilityResource | null = null
+      if (resOpts.resources) {
+        res = resOpts.resources.register({
+          type: 'capture-recording-subscription',
+          owner: resOpts.owner,
+          sourceLocation: 'packages/api/src/capability-app-capture.ts',
+          release: () => { recordingSubs.delete(entry) },
+        })
+      }
+      return () => {
+        recordingSubs.delete(entry)
+        if (res) { res.release(); res = null }
+      }
     },
 
     onUserCapture: (cb: () => void): (() => void) => {
       userCaptureSubs.add(cb)
-      return () => { userCaptureSubs.delete(cb) }
+      // ★#1094：同上
+      let res: CapabilityResource | null = null
+      if (resOpts.resources) {
+        res = resOpts.resources.register({
+          type: 'capture-usercapture-subscription',
+          owner: resOpts.owner,
+          sourceLocation: 'packages/api/src/capability-app-capture.ts',
+          release: () => { userCaptureSubs.delete(cb) },
+        })
+      }
+      return () => {
+        userCaptureSubs.delete(cb)
+        if (res) { res.release(); res = null }
+      }
     },
 
     isPictureInPictureActive: (): Promise<CapResult<boolean>> =>

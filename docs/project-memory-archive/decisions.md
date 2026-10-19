@@ -7938,10 +7938,31 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   + 相关 5 个测试文件 **61/61**；`check:file-size` / `tsc --noEmit` / `check:content` /
     `check:en-drift` / `check:no-blind-wait` / `build-packages` 全绿。
 
-【诚实边界】
-  ① **只覆盖本轮登记的三类**（ws 连接 / 键盘订阅 / 传感器流）。
-     capture 订阅（`recordingSubs`/`userCaptureSubs`）与元素索引（`screenTrees`）**还没登记**——
-     它们同属边界资源，下一批补。**没登记的就管不到**，判据只保证"登记过的会被释放"。
+【第二批（同轮补完）：capture 订阅 + 真实 superapp 链的释放钩子】
+  · **capture 订阅登记**：`onRecordingStateChange` → `capture-recording-subscription`、
+    `onUserCapture` → `capture-usercapture-subscription`；显式 off 同步销账，`releaseAll` 兜底退订。
+  · **★★"谁来调 dispose()"的答案落地**：不是容器（容器**不在生产路径上**——只有 tests/ 用），
+    而是**真实导航**。在 `superapp-runtime.ts` 的 `mountScreen` 加 `onScreenLeave(left, to)` 钩子：
+      · 位置：**记滚动 → 释放旧屏资源 → 挂新屏**（先释放，避免新旧资源并存）；
+      · 只在**真的换屏**时触发（同屏重渲的 early-return 在其之前）；
+      · 回调抛错被 try/catch 吞成 note——**资源治理不能把导航搞挂**。
+  · superapp bundle 侧：`perScreenCaps`（每屏一个账本 + 一个能力实例），
+    `onScreenLeave` 里 `dispose()` 并移除该屏条目。
+    ★导出中性名 `__proteusScreenCaps(screen)`——业务页面按屏取能力实例的**入口**。
+
+【★诚实边界（必须说清，这是本轮最重要的一条）】
+  · 当前 superapp 的 5 个页面**尚未使用任何能力**（`grep useWebSocket/useSensorStream/useScreenCapture`
+    在 `superapp/pages/` 零命中）⇒ `perScreenCaps` 在生产 bundle 里**暂时没有调用者**。
+  · 所以本轮交付的是**正确的接入点 + 已验证的释放时序**，不是"生产已经在治理"。
+    不存在"悄悄不生效"：`onScreenLeave` 对空表是安全 no-op；页面一旦开始用能力，
+    从 `__proteusScreenCaps(screen)` 取 hooks 实例即自动受治理。
+  · 单测对 `onScreenLeave` 用**静态判据**（钩子声明 / 调用点位置 / 同屏 early-return 在前 /
+    异常被吞）而**不构造真实 runtime**——构造完整 `ScreenRuntimeArtifact`（模板/订阅表/
+    事件/handlers/数据）代价过高，且那不是本决策要验的契约。行为级验证应在真机做页面切换时看资源归零。
+
+【诚实边界（其余）】
+  ① 元素索引（`screenTrees`）**仍未登记**——它有 `clearScreenElements()`，但生产零调用；
+     接它需要先决定"索引归谁所有"（屏级还是页面级），留待下一批。
   ② 字节量对能力资源多为 0（socket/订阅器没有可靠内存读数）——**不编造数字**；
      配额治理仍以 G-46 资源池为准。
   ③ **真实 superapp 链（`superapp-runtime.ts`）仍未接页面销毁**——本轮补的是"能力实例自身

@@ -251,7 +251,7 @@ export function createAppCapabilities<E extends Error = Error>(
     ...createAppNativeCapabilities(CapError),
     ...createAppDeviceCapabilities(CapError, resOpts),
     ...createAppElementCapabilities(CapError),   // ★#1081 元素查询（createElementQuery/createIntersection）
-    ...createAppCaptureCapabilities(),   // ★#1083 录屏/截屏状态（getScreenCapture）
+    ...createAppCaptureCapabilities(resOpts),   // ★#1083 录屏/截屏状态（getScreenCapture）
     connectWebSocket: createAppWebSocket(resOpts),   // ★#1093 App 端 WebSocket（ws.open/send/close + 壳推事件流）
   }
 }
