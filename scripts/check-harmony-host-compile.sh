@@ -31,6 +31,28 @@ DEVECO="$(find_deveco)" || { echo "ℹ 未找到 DevEco Studio（无 OHOS 工具
 SDK="$DEVECO/sdk/default/openharmony/native"
 CLANG="$SDK/llvm/bin/clang"
 SYSROOT="$SDK/sysroot"
+
+# ★★★#1117（这道门禁自己的洞口）：此前只挂 OpenHarmony sysroot ⇒
+#   `__has_include(<RemoteCommunicationKit/rcp.h>)` **恒为 false** ⇒ `proteus_http.h` 的 RCP 分支
+#   **从来没被编译过**（改了也全绿——"门禁看着在，实际只覆盖了 unsupported 分支"）。
+#   HMS 头在 `sdk/default/hms/native/sysroot/usr/include`（不在 OpenHarmony sysroot 里）⇒ 显式挂上。
+#   找不到 ⇒ 仍可编（RCP 分支被裁掉），但**必须打印知道**，不静默当"已覆盖"。
+HMS_INC=""
+if [ -n "${PROTEUS_HMS_SDK:-}" ] && [ -f "${PROTEUS_HMS_SDK}/native/sysroot/usr/include/RemoteCommunicationKit/rcp.h" ]; then
+  HMS_INC="${PROTEUS_HMS_SDK}/native/sysroot/usr/include"
+else
+  for c in "${DEVECO}/sdk/default/hms" "$HOME/Applications/DevEco-Studio.app/Contents/sdk/default/hms" \
+           "/Applications/DevEco-Studio.app/Contents/sdk/default/hms"; do
+    if [ -f "${c}/native/sysroot/usr/include/RemoteCommunicationKit/rcp.h" ]; then HMS_INC="${c}/native/sysroot/usr/include"; break; fi
+  done
+fi
+HMS_FLAGS=()
+if [ -n "$HMS_INC" ]; then
+  HMS_FLAGS=(-I"$HMS_INC")
+  echo "    HMS RCP 头：${HMS_INC}（RCP 分支会被真正编译）"
+else
+  echo "  ⚠ 未找到 HMS RCP 头 ⇒ 本次只编译 unsupported 分支（proteus_http.h 的 RCP 代码**未被检查**）"
+fi
 [ -x "$CLANG" ] || { echo "ℹ 缺 OHOS clang（${CLANG}）——跳过"; exit 0; }
 ARCH_INC="$(ls "$SYSROOT/usr/include" 2>/dev/null | grep -iE 'aarch64|aarch' | head -1)"
 [ -n "$ARCH_INC" ] || ARCH_INC="aarch64-linux-ohos"
@@ -42,7 +64,7 @@ fail=0
 #   这里再单独编一个**最小 TU**，保证"头文件自身可独立编译"（它声明零依赖，应成立）。
 if printf '#include "invoke_wire.h"\nint main(){return 0;}\n' > /tmp/proteus_iw_probe.cpp \
    && "$CLANG" --target=aarch64-linux-ohos --sysroot="$SYSROOT" -fsyntax-only -std=c++17 \
-      -I"$SYSROOT/usr/include" -I"$SYSROOT/usr/include/$ARCH_INC" -I"$CPP_DIR" \
+      -I"$SYSROOT/usr/include" -I"$SYSROOT/usr/include/$ARCH_INC" -I"$CPP_DIR" "${HMS_FLAGS[@]+"${HMS_FLAGS[@]}"}" \
       /tmp/proteus_iw_probe.cpp 2>/tmp/harmony_cc_invoke_wire.log; then
   echo "  ✅ invoke_wire.h（独立 TU）"
 else
@@ -50,9 +72,24 @@ else
   grep -E "error:" /tmp/harmony_cc_invoke_wire.log | head -10
   fail=1
 fi
+# ★★★#1117 第二遍：**不带 HMS 头**再编一次（这是 CI / 外部用户的真实形态）。
+#   【为什么必须两遍（本仓刚踩过）】只看"带 HMS 全绿"会把"RCP 类型漏出条件编译块"这类错误放过去——
+#   带 HMS 时那些类型有定义、编得过；不带时整份编不过（`unknown type name 'Rcp_Session'`）。
+#   ⇒ `#if PROTEUS_HAVE_RCP` 的两条分支**都是发布形态**，两条都必须编。
 for f in proteus_host.cpp proteus_render.cpp glass_vk.cpp; do
-  if "$CLANG" --target=aarch64-linux-ohos --sysroot="$SYSROOT" -fsyntax-only \
+  if "$CLANG" --target=aarch64-linux-ohos --sysroot="$SYSROOT" -fsyntax-only -std=c++17 \
       -I"$SYSROOT/usr/include" -I"$SYSROOT/usr/include/$ARCH_INC" -I"$CPP_DIR" \
+      "$CPP_DIR/$f" 2>/tmp/harmony_cc_nohms_$f.log; then
+    echo "  ✅ ${f}（无 HMS · unsupported 分支）"
+  else
+    echo "  ✗ ${f}（无 HMS · unsupported 分支）"
+    grep -E "error:" /tmp/harmony_cc_nohms_$f.log | head -10
+    fail=1
+  fi
+done
+for f in proteus_host.cpp proteus_render.cpp glass_vk.cpp; do
+  if "$CLANG" --target=aarch64-linux-ohos --sysroot="$SYSROOT" -fsyntax-only -std=c++17 \
+      -I"$SYSROOT/usr/include" -I"$SYSROOT/usr/include/$ARCH_INC" -I"$CPP_DIR" "${HMS_FLAGS[@]+"${HMS_FLAGS[@]}"}" \
       "$CPP_DIR/$f" 2>/tmp/harmony_cc_$f.log; then
     echo "  ✅ $f"
   else

@@ -9395,3 +9395,96 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   ② 上限可配置（`AppRequestConfig.maxBodyBytes`）：业务对已知大响应显式声明；
   ③ 按真实载荷分布标定 32 MiB；
   ④ 三端对照：鸿蒙的 `http.request`（RCP）**尚未做同类上限**——按 #1113 的硬指标，它现在连 S2 都没有。
+
+
+1117. **★★★鸿蒙 `http.request` 补齐响应体上限（S2）：RCP 逐块回调 + `HMS_Rcp_CancelRequest`，真机 21/21 全绿 · 决策**（2026-10-20 · 承接 #1116 的"下一步④：鸿蒙尚未做同类上限"，用户「继续」）：
+
+【问题（#1116 明确挂账的）】
+  `proteus_http.h` 直接 `HMS_Rcp_FetchSync` 后 `out.body.assign(p, p + resp->body.length)`——
+  **零上限**。服务器回 500 MB 就吃掉 500 MB。按 #1113 硬指标，鸿蒙 fetch 连 S2 都没有。
+
+【先取证，再设计（不靠推断）】
+  · RCP 头在 `DevEco-Studio.app/Contents/sdk/default/hms/native/sysroot/usr/include/RemoteCommunicationKit/rcp.h`
+    （**不在** OpenHarmony sysroot 里——这是关键，见下面「门禁的洞口」）；
+  · 用例关键 API 三件：`Rcp_OnBinaryReceiveCallback`（逐块，`Rcp_Buffer*`）、
+    `HMS_Rcp_SetRequestOnBinaryDataRecvCallback`（@since 13）、`HMS_Rcp_CancelRequest`（@since 12）；
+  · **设备侧符号取证**（不只看头文件——头文件说"有"不等于设备库真的导出）：
+    把 `/system/lib64/ndk/librcp_c.so` 拉到本机、`nm -D` 查导出表 ⇒
+    `HMS_Rcp_CancelRequest` / `HMS_Rcp_SetRequestOnBinaryDataRecvCallback` **都在**（实测设备 API 26）。
+
+【实现（与 Android/iOS **同值 32 MiB**）】
+  · `MAX_BODY_BYTES = 32u * 1024u * 1024u`；
+  · `detail::RecvGate`（栈上，生命周期 = 一次 FetchSync）：逐块累计，`body.size() + n > limit` 即
+    **停止累积** + 调 `cancelFn(session, req)`；越线后其余块直接丢弃（**内存峰值锁在 limit 附近**）；
+  · **超限分支必须优先于 `errCode` 分支**：cancel 会把 errCode 变成 `1007900992`（Request is canceled），
+    若按 errCode 分支就会把「超限」误报成「网络取消」；
+  · **可选符号 + 诚实降级**：`HMS_Rcp_SetRequestOnBinaryDataRecvCallback` 自 API 13 才有 ⇒
+    旧设备缺符号时退化为「事后拒绝」（`respLen > MAX_BODY_BYTES`），并**如实计 `stats().tooLargeFallback`**；
+    ★同一句"三端已对齐"必须能回答**在哪个 API 版本上对齐**——否则旧设备是静默降档。
+
+【★★★本轮抓到的两个真缺陷（都不是"让测试变绿"能掩盖的）】
+  ① **编译门禁的洞口（结构性）**：`check:harmony-host-compile.sh` 只挂 OpenHarmony sysroot
+     ⇒ `__has_include(<RemoteCommunicationKit/rcp.h>)` **恒为 false** ⇒ RCP 分支**从来没被编译过**
+     （改了也全绿）。修法：挂 HMS include + **两种形态各编一遍**（带 HMS / 不带 HMS）。
+     ★为什么必须两遍：我第一版就把 `RecvGate`（用 `Rcp_*` 类型）写在了 `#if PROTEUS_HAVE_RCP` **外面**——
+     带 HMS 编得过、不带 HMS 整份编不过（`unknown type name 'Rcp_Session'`），而后者正是 CI/外部用户的形态。
+     破坏性验证：去掉守卫 ⇒ 门禁 exit 1（报的正是那 5 条 `unknown type name`）。
+  ② **`jsonEscape` 不转义控制字符**：`/huge` 回全 `0x07` ⇒ 探针 `preview` 原样塞入 ⇒
+     `http-probe.json` **不是合法 JSON** ⇒ 判据脚本 `JSON.parse` 抛错（看起来像探针失败，实为编码缺陷）。
+     修法：`c < 0x20` 转 `\u00XX`；预览额外把不可打印字节换成 `.`（人读摘要，不是读二进制）。
+     ★影响面不止探针：任何**二进制响应**（图片/压缩包/音视频）走这条回执都会踩到。
+
+【真机判据（`hosts/harmony/run-fetch-limit-probe.sh`，21 项全绿）】
+  · 装置：`hdc rport` 把设备 `127.0.0.1:8791` 转回本机（鸿蒙无 adb reverse），三用例
+    `declared`（40 MiB 带 content-length）/ `chunked`（40 MiB 不声明长度）/ `exact`（恰好 32 MiB）；
+  · 读数（真机回执）：
+    - declared：`chunks=2596` · `kept=33553547`（≤ 33554432）· `cancelCalled=true` · `cancelRc=0` · `seen=41943040`
+    - chunked ：`chunks=3236` · `kept=33554432` · `cancelCalled=true` · `cancelRc=0` · `seen=41943040`
+    - exact   ：`ok=true` · `status=200` · `bodyBytes=33554432` · `exceeded=false`（**边界是 `>` 不是 `>=`**）
+  · ★装置纪律（两条，都花了时间才定位）：
+    a) **每个用例前必须 `aa force-stop`**——`aa start` 对已运行的应用只前置、不重跑 `aboutToAppear`
+       ⇒ 第二个用例起**不会落新报告**，现象是"等待条件永远不可能满足"（干等 120s）；
+    b) **锁屏时 `aa start` 直接失败**（Error 10106102 "device screen is locked"）——
+       与 Android 验收"灭屏只渲染个位数帧"同族：**设备状态是判据前提，必须先查**（脚本已加唤醒 + 判据）。
+
+【★诚实边界（不冒充"网络层真中止"）】
+  · 判据能证明的是**内存上界**（`kept ≤ cap`）+ **cancel 受理**（`cancelRc=0`）；
+  · **不能**证明"cancel 之后网络上不再有字节到达"——本地回环太快，40 MiB 已**全部**到达回调
+    （`seen=41943040`）。要观测网络层止血需**限速链路**，属后续项；
+  · 对 S2 而言关键是"不 OOM"（已达标），但**别把"cancel 受理"讲成"省了带宽"**。
+
+【落地清单】
+  · `hosts/harmony/.../cpp/proteus_http.h`：上限 + RecvGate + 可选符号 + 超限优先 + 事后拒绝兜底；
+  · `hosts/harmony/.../cpp/http_probe.h`：回执带 `limit{gateInstalled,chunks,seen,exceeded,cancelCalled,cancelRc,kept,cap}`；
+  · `hosts/harmony/.../cpp/proteus_host_helpers.h`：`jsonEscape` 转义控制字符；
+  · `scripts/check-harmony-host-compile.sh`：挂 HMS include + 两形态编译（★这条比上限本身更值钱——
+    它把"门禁只覆盖了一半分支"这个**结构性假绿**关掉了）；
+  · `hosts/harmony/run-fetch-limit-probe.sh`（新）：rport + 三用例 + 21 项断言；
+  · prebuilt 副本同步（`harmony-runtime-prebuilt.mjs`）；
+  · `tests/fetch-body-limit.test.ts` 扩到 **15/15**：+鸿蒙同值同语义（**断言调用点，不是符号名**）、
+    +探针必须带读数、+编译门禁必须两形态、+`jsonEscape` 控制字符、+预览过滤。
+  · `docs/Proteus_原生能力接入方案.md` §1.0：fetch 现状由「无上限」改为「已修到 S2（三端）」
+    + 鸿蒙 API<13 的具名边界 + "S3 差的是背压与流式"。
+
+【★★破坏性验证（3 条，全部命中；第 2 条暴露了自己测试的漏洞）】
+  ① 越线后继续累积（删掉 `if (g->exceeded) return n;`）⇒ 红；
+  ② `gateInstalled = false`（声明了但不注册）⇒ **第一版仍全绿**——
+     因为我只断言了符号名 `HMS_Rcp_SetRequestOnBinaryDataRecvCallback`，而 **dlsym 行里也有这个名字**。
+     修法：改断言**调用点** `gateInstalled = (pSetOnBinaryRecv(req, ocb) == 0)` ⇒ 再测，红；
+     ★教训与 #1115 同源：**断言"名字存在"等于没断言**，要断言"真的被调用"；
+  ③ `cancelFn` 只引用不调用 ⇒ 红（同理，断言调用点 `g->cancelRc = g->cancelFn(...)`）。
+
+【门禁】
+  `check:harmony-host-compile`（两形态）· `check:harmony-runtime-prebuilt` · `check:file-size` ·
+  `check:no-blind-wait` · `check:safe-edit` · `check:no-json-wire` · `check:invoke-wire-parity` ·
+  `tests/fetch-body-limit.test.ts` 15/15 · `tests/capability-scale-audit.test.ts` 9/9 ·
+  `tests/perf-hot-path-budget.test.ts` 35/35 —— 全绿。
+  `capability-scale-audit` **独立**判 fetch = S2（上限 ✅ / 显式报错 ✅ / 并发 ✅ · 流式 ❌ / 背压 ❌）——
+  与真机判据一致，不是我自报。
+
+【下一步（fetch 到 S3，与 #1116 合并）】
+  ① **流式协议**：新增分块帧类型，宿主边读边推、JS 按块消费——**必须与 upload/download 流式化同批设计**
+    （三者共享"跨界只有整包通道"这个根因）；
+  ② 上限可配置（`AppRequestConfig.maxBodyBytes`）；
+  ③ 按真实载荷分布标定 32 MiB；
+  ④ （新增）鸿蒙"网络层止血"验证需限速链路——当前只能证明内存上界。

@@ -86,12 +86,23 @@ S1 的实现可以存在，但**不得在能力页标 ✅**——应如实标 �
 |---|---|---|
 | **upload / download**（C29/C30） | 两端宿主 **整文件读进内存**（`fs.readBytes`），**64 MiB 硬上限**，超出直接抛错并注明「分块读取属后续批次」 | ① 无流式/分块 ⇒ 大文件永远传不了；② 无背压；③ 无进度对应的内存上界 |
 | **websocket**（C27） | 连接表 `conns` 为**无界 Map** | ④ 无表项上界/淘汰；消息缓冲策略未定义 |
-| **fetch**（C26，2026-10-20 用户点名） | 两端宿主**整包响应进内存且无总上限**——Android `readAll(InputStream)` 用 `ByteArrayOutputStream` 一路 `write`（`READ_CHUNK=16KB` 只是**单次读的缓冲量**，不是总量）；iOS `session.dataTask(with:)` 把整个 body 一次读完。★唯一的 `MAX` 是 `capability-invoke.ts` 的 `PENDING_HOST_CALLS_MAX = 1024`，那是**挂起调用条数**（并发维度） | ① **无响应体上限**（服务器回 500MB 就吃掉 500MB）；② 无流式（不能边下边处理）；③ 无背压；④ **有**并发上界（这一项达标） |
+| **fetch**（C26 · **已修到 S2**，2026-10-20） | 三端宿主统一 **32 MiB 响应体上限**，超限回**专用错误码 `fetch.tooLarge`**：<br>· **Android**：`Content-Length` 预判闸 + 逐块累计闸（`readAll` 边读边判，超限抛 `BodyTooLargeException`）<br>· **iOS**：`URLSessionDataDelegate` 逐块回调，越线即 `cancel()`（真中止；原 `completionHandler` 版是"读完才算"）<br>· **鸿蒙**：`HMS_Rcp_SetRequestOnBinaryDataRecvCallback` 逐块累计，越线即 `HMS_Rcp_CancelRequest` | ① 上限 ✅；② 背压 ⚠️（见下）；③ 回收 ⚠️；④ 并发 ✅（`PENDING_HOST_CALLS_MAX=1024`） |
 
-> ⇒ 这三个能力即使 App 端标 ✅，**规模档只到 S1/S2**，不能宣称"承载超级应用规模"。
-> 本轮只**记录**，不改实现（属独立批次）。
+> ⇒ **fetch 已从「无上限」升到 S2**（2026-10-20，决策 #1115/#1117 · Android/iOS/鸿蒙三端真机验证）；
+> **websocket 与 upload/download 仍是 S1**（无流式、无背压、表项无界）——它们需要**同一批**流式协议改造
+> （三者共享同一根因：**跨界只有"整包"通道**），见 #1116 第 ② 项。
+
+> ★★**fetch 尚未到 S3，差的是"背压 + 流式"**（如实登记，不因为"S2 已达标"就停）：
+> 32 MiB 上限解决的是"单次别炸内存"，但**响应体仍是整包进内存**——一个 30 MiB 的 JSON
+> 依然要一次性驻留，且调用方在拿到完整结果前看不到任何数据。`S3` 要求的分块帧 + 按块消费
+> 属 #1116 的流式协议批次（与 upload/download 同批设计）。
+
+> ★**鸿蒙的诚实边界（API < 13）**：逐块回调符号 `HMS_Rcp_SetRequestOnBinaryDataRecvCallback` 自 API 13 起才有。
+> 旧设备缺该符号时**退化为"事后拒绝"**——判得准但内存峰值不有界（`stats.tooLargeFallback` 计数可见）。
+> 实测设备（OpenHarmony 7.0.0 / API 26）符号在位、真中止生效（`hosts/harmony/run-fetch-limit-probe.sh`）。
+> ★这条边界的教训：**同一句"三端已对齐"必须能回答"在哪个 API 版本上对齐"**——否则旧设备是静默降档。
 >
-> ★**fetch 这条尤其值得记**：它看起来"有并发控制（1024）"，很容易被当成"已经有规模治理"——
+> ★**fetch 这条尤其值得记**（修复前的取证，保留作标尺）：它看起来"有并发控制（1024）"，很容易被当成"已经有规模治理"——
 > 但**并发条数与单次载荷大小是两个维度**，前者管"同时几个请求"，后者管"一个响应用多少内存"。
 > 判据若把 `PENDING_*MAX` 当成"响应体上限"，就会得出"fetch 已达 S2"的**假绿**（本轮实际踩到并修正）。
 

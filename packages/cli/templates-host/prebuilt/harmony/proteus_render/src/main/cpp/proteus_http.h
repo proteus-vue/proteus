@@ -22,6 +22,13 @@
 //     无 ⇒ 整个实现编译为"未接线"（返回 unsupported），**不伪造成功**。
 //
 // 【★零 JSON】响应体**原样回字节**，由 JS 侧按 `responseType` 解释（`interpretBody`）——宿主不猜业务语义。
+//
+// 【★★★响应体上限（决策 #1117 · 与 Android/iOS **同值 32 MiB**）】
+//   ★为什么必须**逐块**判、并在越线时**中止**：`HMS_Rcp_FetchSync` 返回时整个响应体**已经进内存**——
+//     那时再看 `resp->body.length` 判超限，内存峰值早已越过上限（Android/iOS 修复前同形：判得准但不"有界"）。
+//   ⇒ 用 `HMS_Rcp_SetRequestOnBinaryDataRecvCallback` 逐块累计，越线即 `HMS_Rcp_CancelRequest`。
+//   ★诚实边界（API < 13 的旧设备）：该回调符号不存在 ⇒ 退化为"事后拒绝"（本文件如实计 `tooLargeFallback`），
+//     此时内存峰值**不有界**；设备实测（API 26）符号在位、真中止生效（见 hosts/harmony/run-fetch-limit-probe.sh）。
 // 【★G-46 会话共享】鸿蒙指定机制 = `WebCookieManager` + **Header 注入**。本单**未接**（如实登记）：
 //   RCP 的 session cookies 可读但跨请求持久化需要 ArkTS 侧 WebCookieManager 配合；
 //   本实现**不**读也不写 cookie 存储 ⇒ 登录态共享属 ResourcePool 子单（不谎称已实现）。
@@ -55,14 +62,93 @@ namespace http {
 
 /** 宿主记账（判据/报告读它：证明"请求真的发出去过"，而非桥自造结果）。 */
 struct Stats {
-  int calls = 0;      // 受理的 http.request 次数
-  int ok = 0;         // 成功往返次数（errCode==0 且拿到响应）
-  int failures = 0;   // 失败次数
-  int lastStatus = 0; // 最近一次 HTTP 状态码
+  int calls = 0;             // 受理的 http.request 次数
+  int ok = 0;                // 成功往返次数（errCode==0 且拿到响应）
+  int failures = 0;          // 失败次数
+  int lastStatus = 0;        // 最近一次 HTTP 状态码
+  int tooLarge = 0;          // 超限拒绝次数（#1117）
+  int tooLargeFallback = 0;  // 其中"只能事后拒绝"的次数（无逐块回调符号 · API < 13）
 };
 inline Stats& stats() {
   static Stats s;
   return s;
+}
+
+/** 响应体上限：与 Android `HttpCapability.MAX_BODY_BYTES` / iOS `HttpCapability.MAX_BODY_BYTES` **同值**。 */
+constexpr size_t MAX_BODY_BYTES = 32u * 1024u * 1024u;
+
+/** 最近一次请求的逐块闸读数（真机探针读它证明"逐块 + 真中止"，不是事后自报）。 */
+struct LastLimitDiag {
+  bool gateInstalled = false;   // 逐块回调是否注册成功（false ⇒ 只能事后拒绝）
+  int chunks = 0;               // 回调被调用的块数
+  unsigned long long seen = 0;  // 网络侧实际到达的字节（含越线后的丢弃）
+  bool exceeded = false;        // 是否越线
+  bool cancelCalled = false;    // 是否调用了 CancelRequest
+  unsigned int cancelRc = 0;    // CancelRequest 的返回码（0 = 成功受理）
+  size_t kept = 0;              // 越线前保留在内存里的字节数（≤ MAX_BODY_BYTES）
+};
+inline LastLimitDiag& lastLimitDiag() {
+  static LastLimitDiag d;
+  return d;
+}
+
+#if PROTEUS_HAVE_RCP
+namespace detail {
+
+/**
+ * 逐块接收闸的状态（栈上，生命周期 = 一次 `FetchSync`）。
+ * ★`body` 只在**未越线**时增长 ⇒ 内存峰值 ≤ MAX_BODY_BYTES + 单块大小。
+ */
+struct RecvGate {
+  std::vector<uint8_t> body;
+  size_t limit = 0;
+  bool exceeded = false;
+  bool cancelCalled = false;
+  unsigned int cancelRc = 0;
+  int chunks = 0;
+  unsigned long long seen = 0;
+  Rcp_Session* session = nullptr;
+  const Rcp_Request* req = nullptr;
+  unsigned int (*cancelFn)(Rcp_Session*, const Rcp_Request*) = nullptr;
+};
+
+/**
+ * `Rcp_OnBinaryReceiveCallbackFunc`：越线即停止累积并尽力中止传输。
+ * 返回值语义（HMS 头文件："the length of binary data"）= 本次已处理字节数；一律回 `n`，
+ * 让 RCP 认为数据已被消费（越线后丢弃但不阻塞内部泵），由 cancel 真正掐断。
+ */
+inline size_t recvGate(void* usr, Rcp_Buffer* buf) {
+  if (usr == nullptr) return 0;
+  RecvGate* g = static_cast<RecvGate*>(usr);
+  if (buf == nullptr || buf->buffer == nullptr || buf->length == 0) return 0;
+  const size_t n = static_cast<size_t>(buf->length);
+  g->chunks++;
+  g->seen += n;
+  if (g->exceeded) return n;  // 已越线：丢弃其余块（等 cancel 生效），内存不再增长
+  if (g->limit != 0 && g->body.size() + n > g->limit) {
+    g->exceeded = true;
+    // ★越线后**不再累积**：内存峰值锁在 limit + 本块之前。
+    if (!g->cancelCalled && g->cancelFn != nullptr && g->session != nullptr) {
+      g->cancelCalled = true;
+      g->cancelRc = g->cancelFn(g->session, g->req);
+    }
+    return n;
+  }
+  const uint8_t* p = reinterpret_cast<const uint8_t*>(buf->buffer);
+  g->body.insert(g->body.end(), p, p + n);
+  return n;
+}
+
+}  // namespace detail
+#endif  // PROTEUS_HAVE_RCP
+
+/** 超限错误（与 Android/iOS 的 `fetch.tooLarge` 同码同义）。 */
+inline std::string tooLargeReason(size_t seen) {
+  char buf[220];
+  snprintf(buf, sizeof(buf),
+           "fetch.tooLarge: 响应体超过 %zu MiB 上限（已中止读取；实际到达 %llu 字节）",
+           MAX_BODY_BYTES / (1024u * 1024u), static_cast<unsigned long long>(seen));
+  return buf;
 }
 
 /** `librcp_c.so` 的探测顺序（设备实测：`/system/lib64/ndk/librcp_c.so`；其余为本机/其它布局兜底）。 */
@@ -190,6 +276,12 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
   auto pDestroyHeaderEntries = reinterpret_cast<DestroyHeaderEntriesFn>(dlsym(lib, "HMS_Rcp_DestroyHeaderEntries"));
   auto pFetchSync = reinterpret_cast<FetchSyncFn>(dlsym(lib, "HMS_Rcp_FetchSync"));
   auto pCloseSession = reinterpret_cast<CloseSessionFn>(dlsym(lib, "HMS_Rcp_CloseSession"));
+  // ★#1117：逐块接收 + 中止（API 13+/12+）。**可选符号**：旧设备缺 ⇒ 退化为事后拒绝（见文件头诚实边界）。
+  using SetOnBinaryRecvFn = uint32_t (*)(Rcp_Request*, Rcp_OnBinaryReceiveCallback);
+  using CancelRequestFn = uint32_t (*)(Rcp_Session*, const Rcp_Request*);
+  auto pSetOnBinaryRecv =
+      reinterpret_cast<SetOnBinaryRecvFn>(dlsym(lib, "HMS_Rcp_SetRequestOnBinaryDataRecvCallback"));
+  auto pCancelRequest = reinterpret_cast<CancelRequestFn>(dlsym(lib, "HMS_Rcp_CancelRequest"));
 
   const bool symbolsOk = pCreateSession && pCreateRequest && pDestroyRequest && pCreateHeaders &&
                          pDestroyHeaders && pSetHeaderValue && pGetHeaderEntries && pFetchSync &&
@@ -252,11 +344,48 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
   cfg.transferConfiguration.timeout.transferMs = timeoutMs;
   req->configuration = &cfg;
 
-  // ③ 同步发请求（见文件头「为什么是同步」）
+  // ③ 逐块闸：越线即中止（#1117）
+  detail::RecvGate gate;
+  gate.limit = MAX_BODY_BYTES;
+  bool gateInstalled = false;
+  if (pSetOnBinaryRecv != nullptr) {
+    gate.session = session;
+    gate.req = req;
+    gate.cancelFn = pCancelRequest;
+    Rcp_OnBinaryReceiveCallback ocb{};
+    ocb.callback = &detail::recvGate;
+    ocb.usrObject = &gate;
+    gateInstalled = (pSetOnBinaryRecv(req, ocb) == 0);
+    if (!gateInstalled) {
+      fprintf(stderr, "[proteus-http] 逐块接收回调注册失败 ⇒ 退化为事后拒绝\n");
+    }
+  }
+
+  // ④ 同步发请求（见文件头「为什么是同步」）
   Rcp_Response* resp = pFetchSync(session, req, &errCode);
 
+  // ⑤ 记账（探针据此证明逐块 + 真中止）
+  {
+    LastLimitDiag& d = lastLimitDiag();
+    d.gateInstalled = gateInstalled;
+    d.chunks = gate.chunks;
+    d.seen = gate.seen;
+    d.exceeded = gate.exceeded;
+    d.cancelCalled = gate.cancelCalled;
+    d.cancelRc = gate.cancelRc;
+    d.kept = gate.body.size();
+  }
+
   proteus::wire::ResolveFrame out;
-  if (errCode != 0 || resp == nullptr) {
+  if (gate.exceeded) {
+    // ★超限优先：cancel 会把 errCode 变成"Request is canceled"(1007900992)，
+    //   若按 errCode 分支就会把"超限"误报成"网络取消"。
+    stats().failures++;
+    stats().tooLarge++;
+    out = proteus::wire::ResolveFrame::err(f.reqId, tooLargeReason(gate.seen));
+    if (resp != nullptr && resp->destroyResponse != nullptr) resp->destroyResponse(resp);
+    resp = nullptr;
+  } else if (errCode != 0 || resp == nullptr) {
     stats().failures++;
     out = proteus::wire::ResolveFrame::err(f.reqId, reasonOf(errCode));
   } else {
@@ -281,12 +410,28 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
       out.headers = std::move(nv);
     }
     // 响应体原样回字节（不解析）
-    if (resp->body.buffer != nullptr && resp->body.length > 0) {
-      const uint8_t* p = reinterpret_cast<const uint8_t*>(resp->body.buffer);
-      out.body.assign(p, p + resp->body.length);
+    // ★#1117：逐块闸生效时用它累计的 body（resp->body 可能是同一份数据的二次副本）；
+    //   闸未安装/未被调用时回落到 resp->body，并在此做**事后拒绝**（诚实边界：内存峰值不有界）。
+    if (gateInstalled && gate.chunks > 0) {
+      out.body = std::move(gate.body);
+    } else if (resp->body.buffer != nullptr && resp->body.length > 0) {
+      const size_t respLen = static_cast<size_t>(resp->body.length);
+      if (respLen > MAX_BODY_BYTES) {
+        stats().failures++;
+        stats().tooLarge++;
+        stats().tooLargeFallback++;
+        out = proteus::wire::ResolveFrame::err(f.reqId, tooLargeReason(respLen));
+        if (resp->destroyResponse != nullptr) resp->destroyResponse(resp);
+        resp = nullptr;
+      } else {
+        const uint8_t* p = reinterpret_cast<const uint8_t*>(resp->body.buffer);
+        out.body.assign(p, p + respLen);
+      }
     }
-    stats().ok++;
-    if (resp->destroyResponse != nullptr) resp->destroyResponse(resp);
+    if (out.ok) {
+      stats().ok++;
+      if (resp != nullptr && resp->destroyResponse != nullptr) resp->destroyResponse(resp);
+    }
   }
 
   // ④ 释放

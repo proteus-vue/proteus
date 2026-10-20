@@ -26,6 +26,8 @@
 extern "C" {
 uint64_t proteus_layout_create(const char* request_json);
 char* proteus_layout_rects(uint64_t handle);
+/// ★★★决策 #1081：单节点绝对矩形（内核 SSOT；`element.rect` 用）
+char* proteus_layout_node_rect(uint64_t handle, uint32_t node_id);
 /// ★★App 图标/SVG 渲染（2026-10-11）：导出有 svgPath 的节点（`{segs, d, strokeColor, strokeWidth, fill, ...}`）——
 ///   鸿蒙宿主据此画图标（填充）与描边路径。返回的 JSON 须 `proteus_layout_free_string` 释放。
 char* proteus_layout_svg_nodes(uint64_t handle);
@@ -256,14 +258,27 @@ static inline std::vector<std::string> splitJsonObjects(const std::string& json)
 
 static inline std::string jsonEscape(const std::string& s) {
     std::string r;
-    for (char c : s) {
+    r.reserve(s.size() + 8);
+    for (char ch : s) {
+        const unsigned char c = static_cast<unsigned char>(ch);
         switch (c) {
             case '"': r += "\\\""; break;
             case '\\': r += "\\\\"; break;
             case '\n': r += "\\n"; break;
             case '\t': r += "\\t"; break;
             case '\r': r += "\\r"; break;
-            default: r += c;
+            default:
+                // ★★控制字符（< 0x20）必须转义成 \u00XX：JSON 规范不允许字符串里出现裸控制字符。
+                //   真实踩到（#1117 真机判据）：/huge 端点回全 0x07 字节 ⇒ preview 原样塞入 ⇒
+                //   整份 http-probe.json **不是合法 JSON** ⇒ 判据脚本 JSON.parse 直接抛错，
+                //   看起来像"探针失败"，实际是编码缺陷。二进制响应（图片/压缩包/音视频）都会踩到。
+                if (c < 0x20) {
+                    char buf[8];
+                    snprintf(buf, sizeof(buf), "\\u%04x", static_cast<unsigned>(c));
+                    r += buf;
+                } else {
+                    r += ch;
+                }
         }
     }
     return r;

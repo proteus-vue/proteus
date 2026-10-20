@@ -12,6 +12,9 @@
 //   故本探针建一个**空 VM**，只注入 `invokeBytes`，eval 一段固定的转换脚本。
 //   ★诚实边界：这证明"桥 + 线格式 + 宿主 HTTP"三段真实；**不**证明 `useFetch` 的业务封装
 //     （那由 `tests/capability-app-fetch.test.ts` + `capability-invoke-bytes.test.ts` 覆盖）。
+//   ★★#1117：回执额外带 `limit`（逐块闸读数）——超限判据要看的是
+//     "回调真被逐块调用过 + cancelRequest 真被调用"，而不是只看最终错误码
+//     （只看错误码的话，"读完 64 MiB 再拒绝"与"读到 32 MiB 就掐断"完全同形）。
 #pragma once
 #include <string>
 #include <vector>
@@ -150,6 +153,23 @@ static napi_value HostHttpProbe(napi_env env, napi_callback_info info) {
     // ③ 解回程帧（真实状态码/载荷；不是宿主自报）
     std::string body = "{\"ok\":false";
     body += ",\"host\":\"harmony\",\"bridge\":\"invokeBytes\",\"url\":\"" + jsonEscape(url) + "\"";
+    // ★#1117：逐块闸读数。★必须拼在**两条回执路径**上——成功/失败分支会 `body = head` **整串覆盖**，
+    //   只在初始 body 拼一次的话，真正解码成功的那条路径上它会**静默消失**（本轮实测踩到：
+    //   超限回执里没有 limit 字段，判据只能看错误码 ⇒ 又退化成"分不出边读边掐 vs 读完再拒"）。
+    std::string limitJson;
+    {
+        const proteus::http::LastLimitDiag& d = proteus::http::lastLimitDiag();
+        char lb[320];
+        snprintf(lb, sizeof(lb),
+                 ",\"limit\":{\"gateInstalled\":%s,\"chunks\":%d,\"seen\":%llu,\"exceeded\":%s,"
+                 "\"cancelCalled\":%s,\"cancelRc\":%u,\"kept\":%zu,\"cap\":%zu}",
+                 d.gateInstalled ? "true" : "false", d.chunks,
+                 static_cast<unsigned long long>(d.seen), d.exceeded ? "true" : "false",
+                 d.cancelCalled ? "true" : "false", d.cancelRc, d.kept,
+                 proteus::http::MAX_BODY_BYTES);
+        limitJson = lb;
+    }
+    body += limitJson;
     if (!err.empty()) {
         body += ",\"error\":\"" + jsonEscape(err) + "\"}";
     } else if (hexOut == "NO_OUTPUT" || hexOut.empty()) {
@@ -161,8 +181,10 @@ static napi_value HostHttpProbe(napi_env env, napi_callback_info info) {
             if (!rf.body.empty()) {
                 size_t n = rf.body.size() < 120 ? rf.body.size() : 120;
                 for (size_t i = 0; i < n; i++) {
-                    char c = static_cast<char>(rf.body[i]);
-                    preview.push_back((c == '\n' || c == '\r' || c == '"') ? ' ' : c);
+                    // ★预览是"人可读摘要"⇒ 不可打印字符一律换成 '.'（二进制响应别把回执撑成乱码）。
+                    //   （JSON 合法性由 jsonEscape 兜住；这里只管可读性。）
+                    const unsigned char uc = static_cast<unsigned char>(rf.body[i]);
+                    preview.push_back((uc < 0x20 || uc >= 0x7f) ? '.' : static_cast<char>(uc));
                 }
             }
             char head[320];
@@ -173,6 +195,7 @@ static napi_value HostHttpProbe(napi_env env, napi_callback_info info) {
                      rf.status ? *rf.status : 0u, rf.body.size(),
                      rf.reason ? jsonEscape(*rf.reason).c_str() : "");
             body = head;
+            body += limitJson;   // ★同上：head 覆盖后必须重新拼
             body += ",\"preview\":\"" + jsonEscape(preview) + "\"}";
         } catch (const std::exception& e) {
             body += ",\"error\":\"" + jsonEscape(std::string("回程帧解码失败：") + e.what()) + "\"}";

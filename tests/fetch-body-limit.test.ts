@@ -25,6 +25,7 @@ const read = (p: string): string => fs.readFileSync(path.join(ROOT, p), 'utf8')
 
 const ANDROID = 'hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/HttpCapability.java'
 const IOS = 'hosts/ios/ProteusHost/runtime/http-capability.swift'
+const HARMONY = 'hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http.h'
 const APP = 'packages/api/src/capability-app.ts'
 
 /** 两端约定的响应体上限（MiB）——测试与源码双向校验 */
@@ -82,6 +83,65 @@ describe('★#1115 两端实现同值同语义（防"换端就成败不同"）',
     expect(s, 'iOS 缺 URLSessionDataDelegate 实现').toMatch(/URLSessionDataDelegate/)
     expect(s, 'iOS 缺逐块回调 didReceive').toMatch(/didReceive\s+data:\s*Data/)
     expect(s, 'iOS 超限未调用 cancel()（不是真中止）').toMatch(/tooLargeAt[\s\S]{0,200}cancel\(\)/)
+  })
+
+  it('★鸿蒙上限 = 32 MiB（与 Android/iOS **同值**），且用 RCP 逐块回调 + CancelRequest 真中止', () => {
+    const s = read(HARMONY)
+    // 同值：32u * 1024u * 1024u
+    expect(s, '鸿蒙缺 MAX_BODY_BYTES').toMatch(/MAX_BODY_BYTES\s*=\s*32u\s*\*\s*1024u\s*\*\s*1024u/)
+    // ★关键：必须挂 RCP 的逐块回调（FetchSync 返回时整包已在内存 ⇒ 只看 resp->body.length 等于事后拒绝）
+    // ★★注意断言的是**调用点**，不是符号名——符号在 dlsym 行里也可能出现，
+    //   只查符号名的话"声明了但不调用"照样绿（本轮破坏性验证实测：改成 gateInstalled=false 仍全绿）。
+    expect(s, '鸿蒙未接逐块接收回调（FetchSync 整包已进内存 ⇒ 上限不"有界"）').toMatch(
+      /HMS_Rcp_SetRequestOnBinaryDataRecvCallback/,
+    )
+    expect(s, '★逐块回调**声明了但没注册**（必须有真实调用点 gateInstalled = (pSetOnBinaryRecv(req, ocb) == 0)）').toMatch(
+      /gateInstalled\s*=\s*\(pSetOnBinaryRecv\(req,\s*ocb\)\s*==\s*0\)/,
+    )
+    expect(s, '鸿蒙未实现 Rcp_OnBinaryReceiveCallbackFunc 形态').toMatch(/Rcp_OnBinaryReceiveCallback/)
+    // 同上：断言**调用点**（cancelFn(...) 被真的调用），不是符号名
+    expect(s, '鸿蒙超限未调用 HMS_Rcp_CancelRequest（不是真中止）').toMatch(/HMS_Rcp_CancelRequest/)
+    expect(s, '★cancel 只有 dlsym 没有调用点（cancelFn 未被调用 ⇒ 读完再拒）').toMatch(
+      /g->cancelRc\s*=\s*g->cancelFn\(g->session,\s*g->req\)/,
+    )
+    // 越线后必须停止累积（否则"读了就停"只是文案）
+    expect(s, '越线后仍在累积（内存未锁住）').toMatch(/exceeded\) return n/)
+    // 超限优先于 errCode：cancel 会把 errCode 变成"已取消"，按 errCode 分支会把超限误报成网络取消
+    expect(s, '超限分支未优先于 errCode 分支（cancel 会让 errCode 变成"已取消" ⇒ 误报）').toMatch(
+      /if \(gate\.exceeded\)/,
+    )
+    // 诚实边界：旧设备缺符号时必须**如实计数**，不能装作有界
+    expect(s, '缺逐块符号的退化路径未记账').toMatch(/tooLargeFallback/)
+    expect(s, '退化路径未做事后拒绝').toMatch(/respLen > MAX_BODY_BYTES/)
+  })
+
+  it('★鸿蒙探针回执必须带逐块闸读数（错误码分不出"边读边掐"与"读完再拒"）', () => {
+    const s = read('hosts/harmony/host-app/proteus_render/src/main/cpp/http_probe.h')
+    expect(s, '探针未暴露 limit 读数').toMatch(/\\"limit\\":/)
+    expect(s, '探针未暴露 cancelCalled').toMatch(/cancelCalled/)
+    expect(s, '探针未暴露 chunks（无法证明逐块）').toMatch(/\\"chunks\\":/)
+  })
+
+  it('★jsonEscape 必须转义控制字符（二进制响应别把回执撑成非法 JSON）', () => {
+    // 真实踩到（#1117 真机判据）：/huge 回全 0x07 ⇒ preview 原样塞入 ⇒ http-probe.json
+    // 不是合法 JSON ⇒ 判据脚本 JSON.parse 抛错，看起来像"探针失败"，实为编码缺陷。
+    const s = read('hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_host_helpers.h')
+    expect(s, 'jsonEscape 缺控制字符分支').toMatch(/c\s*<\s*0x20/)
+    expect(s, 'jsonEscape 未输出 \\u00XX 转义').toMatch(/\\\\u%04x/)
+  })
+
+  it('★探针预览必须过滤不可打印字节（人是读摘要，不是读二进制）', () => {
+    const s = read('hosts/harmony/host-app/proteus_render/src/main/cpp/http_probe.h')
+    expect(s, '预览未过滤不可打印字符').toMatch(/uc\s*<\s*0x20\s*\|\|\s*uc\s*>=\s*0x7f/)
+  })
+
+  it('★鸿蒙编译门禁必须挂 HMS sysroot 且两种形态都编（RCP 分支此前从未被编译过）', () => {
+    const s = read('scripts/check-harmony-host-compile.sh')
+    expect(s, '门禁未挂 HMS include（RCP 分支被裁掉 ⇒ 改了也全绿）').toMatch(/HMS_INC=/)
+    expect(s, '门禁未把 HMS_FLAGS 传给 clang').toMatch(/HMS_FLAGS\[@\]/)
+    // 两种形态：带 HMS（RCP 真编）+ 不带 HMS（unsupported 分支也必须是发布形态）
+    const noHms = (s.match(/harmony_cc_nohms_/g) || []).length
+    expect(noHms, '门禁只编了一种形态（#if 另一分支坏了抓不到）').toBeGreaterThan(1)
   })
 
   it('★JS 侧把 `fetch.tooLarge` 映射成**专用错误码**（不能混进 fetch.failed）', () => {
