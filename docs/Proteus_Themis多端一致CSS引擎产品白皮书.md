@@ -149,7 +149,7 @@ E-CSS / W-CSS 两族诊断接入 **Web 构建链**：Profile 外写法在 Web �
 | **113** 用例 / **153** 项对拍 | ≡ 真 Chromium | 逐属性与浏览器计算样式一致（编译期硬门禁）；★计数来自测试夹具 `tests/fixtures/cse-parity-cases.ts`（非 JSON 产物） |
 | **≤0.5 dp** | 三端几何对拍 | 运行期硬门禁，容差逐字段，禁全局阈值 |
 | **O(1)** 动态样式 | 读次数 == 字段数 | profile 实测（Proxy 计次） |
-| **108** IR 字段 | 闭集·版本化 | semantic 83 + engine-only 25，三端 Applier 覆盖 83/83（并集 100%） |
+| **109** IR 字段 | 闭集·版本化 | semantic 83 + engine-only 26，三端 Applier 覆盖 83/83（并集 100%） |
 | **5/5** conformance | 同一 IR → 等价应用后状态 | App 几何 6 项 ≤0.5dp · Skyline 语义替身 · 降级登记 |
 | **逐字节** 双后端 | Node ⇄ Rust | IR Golden 真二进制对拍 + 破坏性验证 |
 | **117** 条存量 | 棘轮基线 | 全仓扫 lint 存量钉底（examples 25 · showcase 26 · css-conformance 25 · website 41），只减不增 |
