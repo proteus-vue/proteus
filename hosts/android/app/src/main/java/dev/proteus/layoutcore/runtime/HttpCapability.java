@@ -57,8 +57,24 @@ public final class HttpCapability {
 
     private HttpCapability() { }
 
-    /** 单次读取块（读响应体用）。 */
+    /** 单次读取块（读响应体用）。★注意：这是**单次读的缓冲量**，不是响应体总上限（见 {@link #MAX_BODY_BYTES}）。 */
     private static final int READ_CHUNK = 16 * 1024;
+
+    /**
+     * ★★★决策 #1115：**响应体硬上限**（32 MiB）。
+     *
+     * 【为什么必须有（#1114 的取证结论）】此前 `readAll(InputStream)` 是 `ByteArrayOutputStream`
+     *   一路 `write`，**没有任何总量上限**——服务器回 500 MB 就吃掉 500 MB（再经 `[UInt8]`/`number[]`
+     *   回推 JS，峰值 ×2~4）。超级应用规模下这是硬伤（大 JSON 列表 / 日志导出 / 图片直返）。
+     *
+     * 【为什么是 32 MiB】响应体是"一次进内存再跨界"的语义（现有帧协议是一问一答），
+     *   而仓里 `FileTransferCapability` 的文件读写上限是 64 MiB——**网络响应应当更保守**
+     *   （它还要再转一次数组）。取 32 MiB 使"合法但很大"的 JSON 仍可用，同时把内存峰值约束在可控区间。
+     *
+     * 【★与 READ_CHUNK 的区别（#1114 踩过的混淆）】`READ_CHUNK=16KB` 只决定"每次从流里读多少"，
+     *   与"总共能收多少"无关；把两者混为一谈会让判据以为"已经有上限了"。
+     */
+    static final long MAX_BODY_BYTES = 32L * 1024 * 1024;
 
     /**
      * 处理一次 `http.request`（去程帧已解码）。
@@ -83,6 +99,9 @@ public final class HttpCapability {
                 InvokeWire.ResolveFrame out;
                 try {
                     out = perform(f, url, method, timeoutMs);
+                } catch (BodyTooLargeException e) {
+                    // ★#1115：超限是**独立错误档**（桥据此给 `fetch.tooLarge`，不混进 fetch.failed）
+                    out = InvokeWire.ResolveFrame.err(f.reqId, e.getMessage());
                 } catch (SocketTimeoutException e) {
                     // ★G-39 错误模型：timeout 是独立一档（桥据此给 *.timeout，而不是笼统 failed）
                     out = InvokeWire.ResolveFrame.err(f.reqId, "timeout: " + e.getMessage());
@@ -155,6 +174,14 @@ public final class HttpCapability {
             storeCookies(url, rawSetCookie(fields));
 
             InputStream is = status >= 400 ? conn.getErrorStream() : conn.getInputStream();
+            // ★#1115 第一道闸：Content-Length 预判（有声明就直接拒，避免白读一遍再丢）
+            long declared = -1;
+            try {
+                declared = conn.getContentLengthLong();
+            } catch (Throwable ignored) { /* 未知长度（chunked）⇒ 交给读取时累计闸 */ }
+            if (declared > MAX_BODY_BYTES) {
+                throw new BodyTooLargeException(declared);
+            }
             byte[] respBody = is != null ? readAll(is) : new byte[0];
 
             InvokeWire.ResolveFrame rf = InvokeWire.ResolveFrame.ok(f.reqId);
@@ -243,14 +270,31 @@ public final class HttpCapability {
     }
 
     private static byte[] readAll(InputStream is) throws Exception {
+        // ★★★决策 #1115：**累计计数 + 超限中止**（不再无界 write）。
+        //   两道闸：① 有 Content-Length 时预判（避免白读）；② 读取过程中累计（防 chunked / 谎报长度）。
+        //   超限抛专用异常 ⇒ 上层映射为 `fetch.tooLarge`（**显式错误码**，不是笼统 failed，也不静默截断）。
         try {
             ByteArrayOutputStream bos = new ByteArrayOutputStream(Math.max(READ_CHUNK, 8192));
             byte[] buf = new byte[READ_CHUNK];
+            long total = 0;
             int n;
-            while ((n = is.read(buf)) > 0) bos.write(buf, 0, n);
+            while ((n = is.read(buf)) > 0) {
+                total += n;
+                if (total > MAX_BODY_BYTES) {
+                    throw new BodyTooLargeException(total);
+                }
+                bos.write(buf, 0, n);
+            }
             return bos.toByteArray();
         } finally {
             closeQuietly(is);
+        }
+    }
+
+    /** 响应体超限（映射为 `fetch.tooLarge`——独立一档，见 #1115）。 */
+    static final class BodyTooLargeException extends Exception {
+        BodyTooLargeException(long atLeast) {
+            super("fetch.tooLarge: 响应体超过上限 " + MAX_BODY_BYTES + "B（已读 " + atLeast + "B）");
         }
     }
 

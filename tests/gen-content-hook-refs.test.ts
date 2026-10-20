@@ -12,7 +12,7 @@ import { describe, it, expect } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { extractHookBridgeRefs, loadHookBridgeRefs, HOOK_FACTORY } from '../website/scripts/lib/hook-bridge-refs.mjs'
+import { extractHookBridgeRefs, loadHookBridgeRefs, HOOK_FACTORY, RUNTIME_INDIRECT_REFS } from '../website/scripts/lib/hook-bridge-refs.mjs'
 import { extractAppBridgeKeys, APP_BRIDGE_FACTORIES } from '../website/scripts/lib/app-bridge-keys.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -157,10 +157,12 @@ describe('hook → 桥方法引用抽取（生成器 ↔ 源码 显式契约 · 
     ).toEqual(['connectWebSocket'])
   })
 
-  it('★#1112：间接契约表必须与 runtime 实现同源（防"表写了一个不存在的方法名"）', async () => {
-    const mod = await import('../website/scripts/lib/hook-bridge-refs.mjs')
+  it('★#1112：间接契约表必须与 runtime 实现同源（防"表写了一个不存在的方法名"）', () => {
+    // ★用文件顶部的**静态 import**（动态 `await import()` 在 TS 下取不到具名导出类型，本轮踩到）
     const runtimeSrc = fs.readFileSync(path.join(API_SRC_DIR, 'capability-runtime.ts'), 'utf8')
-    for (const [rtMethod, bridgeNames] of Object.entries(mod.RUNTIME_INDIRECT_REFS)) {
+    const table = RUNTIME_INDIRECT_REFS as Record<string, string[]>
+    expect(Object.keys(table).length, 'RUNTIME_INDIRECT_REFS 为空（间接契约表没登记）').toBeGreaterThan(0)
+    for (const [rtMethod, bridgeNames] of Object.entries(table)) {
       // ① runtime 源里必须真有这个方法定义
       expect(runtimeSrc, `runtime 源里找不到 ${rtMethod}()`).toMatch(new RegExp(`\\b${rtMethod}\\s*[<(]`))
       // ② 它内部必须真的读 `bridge.<登记的方法名>`

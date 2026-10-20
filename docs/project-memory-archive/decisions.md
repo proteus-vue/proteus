@@ -9274,3 +9274,66 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   ② **流式**（真正解）：宿主边读边推（NDJSON / SSE / 分块回调），JS 侧按块消费；
      需要新的帧类型（现有 `http.request` 是"一问一答"语义）；
   ③ 与 upload/download 的流式化**同批做**——两者都卡在"宿主与 JS 之间只有整包通道"这个共同根因。
+
+1115. **★★★useFetch 按 S3 标准重整——先补齐 S2（两端 32 MiB 上限 + 双闸 + `fetch.tooLarge`），真机双闸全绿 · 决策**（2026-10-20 · 用户「现在重新按照最新标准优化完善 useFetch」）：
+
+【分期判断（S3 要求流式，但先把 S2 做扎实）】
+  按 #1113 的四档，fetch 原为 **S1**（整包进内存、无上限）。S3 需要"流式 + 背压"，那要动
+  **宿主与 JS 之间的帧协议**（现有 `http.request` 是"一问一答"语义），风险面远大于 S2。
+  ⇒ 本轮**先把 S2 做实**（上限 + 显式报错），S3 的流式协议另开批次。理由：
+    · S2 是本轮能在真机闭环验证的（已做到）；
+    · S3 要改协议，**没有 S2 作基线就无法判断流式改造是否回归**。
+
+【S2 落地（两端，同值同语义）】
+  · **上限 `MAX_BODY_BYTES = 32 MiB`**（两端逐字同值——换端成败不同比没有上限更糟）。
+    为什么是 32 而非 64：响应体要再转一次 `[UInt8]`/`number[]` 回推 JS（峰值 ×2~4），
+    网络响应应比文件读写（64 MiB）更保守。
+  · **Android 两道闸**：① `getContentLengthLong()` 预判（声明超限直接拒，一块不读）；
+    ② `readAll()` 内累计 `total > MAX`（防 chunked / 谎报长度）⇒ 抛 `BodyTooLargeException`。
+  · ★**iOS 从 completion 改为 delegate 驱动**（这是本轮最关键的一处）：
+    `dataTask(with:completionHandler:)` 回调时 **data 已全部进内存**，事后判上限是"洪水过后关闸"。
+    ⇒ 改用 `URLSessionDataDelegate`：逐块 `didReceive data` 累计，超限 `task.cancel()` ⇒ **真中止读取**。
+    · 每个 task 恰好回推一次（`didFinish` 先摘表再推，防重复）；
+    · 超限/网络错误/正常完成三种收尾都覆盖；
+    · **content-length 预判 + 逐块累计**两闸与 Android 对齐。
+  · **JS 侧 `fetch.tooLarge` 独立错误码**（不能混进 `fetch.failed`）：
+    业务必须能区分「网络失败（重试有用）」与「响应太大（重试无用）」。
+
+【判据 34/34（4 个文件）】
+  · `tests/fetch-body-limit.test.ts` **8 条**（新增）：
+    - 算法边界：恰好等于上限**放行**（`>` 不是 `>=`，差一字节最容易写错）· 超 1 字节拒 ·
+      多块累计在越线那一块**立刻停**（不是读完再判）
+    - 两端同值同语义：Android `MAX_BODY_BYTES = 32MiB` + `total > MAX` + 预判闸；
+      ★iOS 必须是 `URLSessionDataDelegate`（**禁止回到 completionHandler**）+ `didReceive` + `cancel()`
+    - JS 侧 `fetch.tooLarge` 前缀识别 + `CapError('fetch.tooLarge')`
+    - 装置：`/huge` 端点存在且 chunked 分支**省略 content-length**；
+      探针把"成功返回"判为失败（否则上限失效也不会红）
+  · **破坏性验证**：把 iOS 的 `URLSessionDataDelegate` 改成 `URLSessionDelegate` ⇒ 当场红。
+  · 另修体检工具**第五处假绿**：上限常量改成 `Long.MAX_VALUE`（事实上无界）时，判据仍判"有上限"
+    （名字里还有 MAX_BODY_BYTES）⇒ 现在**值必须是有限合理数**（排除 MAX_VALUE/Infinity）。
+    破坏性验证：两端都改 `Long.MAX_VALUE`/`Int.max` ⇒ 档位 S2→**S1**，还原回 S2。
+
+【★真机验证（Android 已闭环；这是"上限真的接上了"的唯一证据）】
+  · 新增 `hosts/android/dev/FetchLimitProbe.java` + `hosts/android/run-fetch-limit-probe.sh`；
+  · 服务端加 `/huge?size=N&chunked=0|1` 端点（默认带 content-length / chunked 省略）；
+  · 请求 **64 MiB**（两倍上限），**两道闸都返回 `fetch.tooLarge`**：
+    `✅ 探针已启动 · ✅ 声明长度闸 · ✅ chunked 累计闸 · ✅ 整体 ok`
+  · ★途中抓出**三处装置缺陷**（都不是框架缺陷，但不修就测不出东西）：
+    ① 探针**没有加载 bundle/boot** ⇒ 引擎是空的 ⇒ `no-hook`（TransferProbe 自己载入，我漏了）；
+    ② 探针函数**没挂到 globalThis** ⇒ 同样 `no-hook`；
+    ③ 参数走 `am broadcast --es` **进不了** `MainActivity.getIntent()`（那是**启动** intent）
+      ⇒ 必须 `am start --es/--ei`。★这三条都写进脚本注释，防下一个人重踩。
+
+【诚实边界】
+  ① **iOS 未做真机验证**（只过了 swiftc 类型检查 + 算法单测）——iOS 的 delegate 路径没有真机读数；
+  ② **S3 未做**：无流式、无背压（fetch 仍是"一问一答整包"语义）；本轮只到 S2；
+  ③ 32 MiB 是**本轮的判断值**，未按真实业务载荷分布标定；
+  ④ 超限判定在**读取时**生效，但 JS 侧仍需等宿主回推——超限错误的时延 ≈ 读到上限所需时间；
+  ⑤ `/huge` 端点是为判据造的，**不代表生产服务行为**（生产可能 gzip 压缩后远小于声明）。
+
+【下一步（fetch 到 S3）】
+  ① **iOS 真机跑同一探针**（需要把 FetchLimitProbe 的等价物接进 iOS 壳，或复用 superapp 的 env 注入）；
+  ② **流式协议**：新增分块帧类型（现有 `http.request` 一问一答），宿主边读边推、JS 按块消费；
+     ★必须与 upload/download 的流式化**同批设计**——三者共享"跨界只有整包通道"这个根因；
+  ③ 上限可配置（`AppRequestConfig.maxBodyBytes`）——业务对已知大响应的显式声明；
+  ④ 按业务真实载荷分布标定 32 MiB 这个值（现在是我拍的）。

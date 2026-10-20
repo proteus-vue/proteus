@@ -36,11 +36,13 @@ final class HttpCapability {
 
     /// 进程级单例会话（复用连接池；★`URLSessionConfiguration.default` ⇒ 与 app 其它请求共用
     ///   `HTTPCookieStorage.shared`，这正是 G-46 要的"同一份会话"）。
+    ///   ★#1115：**改用 delegate 驱动的会话**（而非 completion 的 `dataTask`）——
+    ///     原因见 `BodyLimitDelegate`：completion 回调时**数据已全部进内存**，事后拒绝等于没防住。
     private static let session: URLSession = {
         let cfg = URLSessionConfiguration.default
         cfg.httpShouldSetCookies = true
         cfg.httpCookieStorage = HTTPCookieStorage.shared
-        return URLSession(configuration: cfg)
+        return URLSession(configuration: cfg, delegate: BodyLimitDelegate.shared, delegateQueue: nil)
     }()
 
     /// 处理一条 `http.request` 去程帧。
@@ -65,29 +67,20 @@ final class HttpCapability {
         }
 
         let reqId = f.reqId
-        session.dataTask(with: req) { data, resp, err in
-            let frame: [UInt8]
-            do {
-                if let err {
-                    frame = try InvokeWire.encodeResolve(.makeErr(reqId, "http.request 失败：\(err.localizedDescription)"))
-                } else if let http = resp as? HTTPURLResponse {
-                    var r = InvokeWire.ResolveFrame.makeOK(reqId)
-                    r.status = UInt32(max(0, http.statusCode))
-                    r.headers = headerPairs(http)
-                    r.body = Array(data ?? Data())
-                    frame = try InvokeWire.encodeResolve(r)
-                } else {
-                    frame = try InvokeWire.encodeResolve(.makeErr(reqId, "http.request 失败：响应不是 HTTP 响应"))
-                }
-            } catch {
-                frame = (try? InvokeWire.encodeResolve(.makeErr(reqId, "http.request 回程帧编码失败：\(error)"))) ?? []
-            }
-            // ★回 JS 必须在**主线程**（G-39 线程纪律：禁止在网络线程直接调 JS）
-            DispatchQueue.main.async { push(frame) }
-        }.resume()
+        // ★★★决策 #1115：改用 **delegate 驱动**（`dataTask(with:)` 不带 completion）——
+        //   这样数据是**逐块**送到 `didReceive data`，超限时能 `cancel()` **真正中止读取**。
+        //   ★为什么不能沿用 completion：completion 回调时 `data` **已全部进内存**，
+        //     那时再判上限等于"洪水过后才关闸"（#1114 的取证结论就是这一点）。
+        let task = session.dataTask(with: req)
+        BodyLimitDelegate.shared.register(task, reqId: reqId, push: push)
+        task.resume()
 
         return try InvokeWire.encodeResolve(.makePending(reqId))
     }
+
+    /// 响应体硬上限（与 Android `HttpCapability.MAX_BODY_BYTES` **同值**——两端必须一致，
+    /// 否则"同一个请求换端就成败不同"，那是比没有上限更糟的不可预期）。
+    static let MAX_BODY_BYTES = 32 * 1024 * 1024
 
     /* ────────────────────────── 工具 ────────────────────────── */
 
@@ -110,6 +103,12 @@ final class HttpCapability {
 
     /// 响应头 ⇒ **有序**键值对（与 `InvokeWire.NameValues` 契约一致：顺序即编码顺序）。
     /// ★`allHeaderFields` 的键类型是 `AnyHashable`（可能是 NSString）⇒ 统一 `String(describing:)`。
+    /// ★#1115：由 `private` 放宽到 internal —— `BodyLimitDelegate` 在同一文件里也要用它
+    ///   （delegate 改了响应路径，但仍必须走**同一份**头拍平实现，否则两处排序/合并会分叉）。
+    static func headerPairsForDelegate(_ http: HTTPURLResponse) -> InvokeWire.NameValues {
+        headerPairs(http)
+    }
+
     private static func headerPairs(_ http: HTTPURLResponse) -> InvokeWire.NameValues {
         var out: InvokeWire.NameValues = []
         for (k, v) in http.allHeaderFields {
@@ -123,3 +122,95 @@ final class HttpCapability {
         return out
     }
 }
+
+/* ────────────────────────── ★#1115 响应体上限（delegate 驱动） ────────────────────────── */
+
+/// ★★★决策 #1115：**逐块接收 + 累计上限 + 真中止**。
+///
+/// 【为什么必须是 delegate（不能沿用 completion）】
+///   `dataTask(with:completionHandler:)` 在回调时 `data` **已全部进内存**——
+///   那时再判"是否超限"只是事后报警，内存早已吃掉（#1114 取证）。
+///   ⇒ 改用 `URLSessionDataDelegate`：数据**逐块**到达（`didReceive data`），
+///     累计超限就 `task.cancel()` ⇒ **真正中止读取**，内存到此为止。
+///
+/// 【三处状态都要收尾，否则会漏回推 / 泄漏】
+///   · 正常完成：`didCompleteWithError(nil)` ⇒ 用累积数据编 OK 帧
+///   · 超限中止：`cancel()` 会带一个 `NSURLErrorCancelled` 回来 ⇒ **用我们记下的原因**编错误帧
+///   · 网络错误：别的 error ⇒ 编错误帧
+///   ★每个 task 必须**恰好回推一次**（`finish` 里先摘表再推，防重复）。
+///
+/// 【诚实边界】本类是**单例**（`URLSession` 的 delegate 只能有一个）——
+///   所有请求共用它，状态按 `taskIdentifier` 分表。★并发安全靠
+///   `URLSession` 的 delegateQueue 串行调用（`delegateQueue: nil` ⇒ 系统给的串行队列）。
+final class BodyLimitDelegate: NSObject, URLSessionDataDelegate {
+    static let shared = BodyLimitDelegate()
+
+    private struct State {
+        let reqId: String
+        let push: ([UInt8]) -> Void
+        var body = Data()
+        /// 超限后置位：`didComplete` 时据此编 `fetch.tooLarge` 而不是普通取消
+        var tooLargeAt: Int?
+    }
+
+    /// ★key = taskIdentifier；只在该 task 的生命周期内存在
+    private var states: [Int: State] = [:]
+
+    /// 登记一个新 task（必须在 `resume()` **之前**调用——否则可能先收到数据、后登记，丢块）
+    func register(_ task: URLSessionDataTask, reqId: String, push: @escaping ([UInt8]) -> Void) {
+        states[task.taskIdentifier] = State(reqId: reqId, push: push)
+    }
+
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        guard var st = states[dataTask.taskIdentifier] else { return }
+        // ★第一道闸：Content-Length 声明就超限 ⇒ 立刻取消，不读一块数据
+        if st.body.isEmpty,
+           let expected = dataTask.response?.expectedContentLength,
+           expected > 0,
+           expected > Int64(HttpCapability.MAX_BODY_BYTES) {
+            st.tooLargeAt = st.body.count
+            states[dataTask.taskIdentifier] = st
+            dataTask.cancel()
+            return
+        }
+        // ★第二道闸：逐块累计（防 chunked / 谎报长度）
+        st.body.append(data)
+        if st.body.count > HttpCapability.MAX_BODY_BYTES {
+            st.tooLargeAt = st.body.count
+            states[dataTask.taskIdentifier] = st
+            dataTask.cancel()   // ⇒ 本 task 的读取到此为止（内存不再增长）
+            return
+        }
+        states[dataTask.taskIdentifier] = st
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        guard let st = states[task.taskIdentifier] else { return }
+        states.removeValue(forKey: task.taskIdentifier)   // ★先摘表 ⇒ 保证恰好回推一次
+        let reqId = st.reqId
+        let frame: [UInt8]
+        do {
+            if let at = st.tooLargeAt {
+                // ★超限 = 独立错误档（JS 侧映射 `fetch.tooLarge`），不与网络失败混同
+                frame = try InvokeWire.encodeResolve(.makeErr(reqId,
+                    "fetch.tooLarge: 响应体超过上限 \(HttpCapability.MAX_BODY_BYTES)B（已读 \(at)B）"))
+            } else if let error {
+                // ★我们自己 cancel 产生的错误被上面拦下；这里只剩真实网络错误
+                frame = try InvokeWire.encodeResolve(.makeErr(reqId, "http.request 失败：\(error.localizedDescription)"))
+            } else if let http = task.response as? HTTPURLResponse {
+                var r = InvokeWire.ResolveFrame.makeOK(reqId)
+                r.status = UInt32(max(0, http.statusCode))
+                r.headers = HttpCapability.headerPairsForDelegate(http)
+                r.body = [UInt8](st.body)
+                frame = try InvokeWire.encodeResolve(r)
+            } else {
+                frame = try InvokeWire.encodeResolve(.makeErr(reqId, "http.request 失败：响应不是 HTTP 响应"))
+            }
+        } catch {
+            frame = (try? InvokeWire.encodeResolve(.makeErr(reqId, "http.request 回程帧编码失败：\(error)"))) ?? []
+        }
+        // ★回 JS 必须在**主线程**（G-39 线程纪律：禁止在网络线程直接调 JS）
+        DispatchQueue.main.async { st.push(frame) }
+    }
+}
+

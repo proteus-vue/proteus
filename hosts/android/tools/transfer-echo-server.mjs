@@ -67,6 +67,33 @@ const server = http.createServer((req, res) => {
     console.error(`[transfer] download ${size}B`)
     return
   }
+  /**
+   * ★★★决策 #1115：**超大响应**端点——专门验证 `fetch.tooLarge`。
+   * `GET /huge?size=N&chunked=1`
+   *   · 默认带 `content-length` ⇒ 宿主走"**预判**"那道闸（见 Android `perform()`）
+   *   · `chunked=1` ⇒ **不声明长度**、分块写出 ⇒ 宿主走"**读取累计**"那道闸
+   * ★两道闸必须**各自**被验证——只测一个有洞：谎报/未知长度时预判失效。
+   * ★上限放宽到 256 MiB（本端点就是拿来超限的，不能被 /download 的 8 MiB 夹住）。
+   */
+  if (url.pathname === '/huge') {
+    const size = Math.min(Number(url.searchParams.get('size') ?? 64 * 1024 * 1024), 256 * 1024 * 1024)
+    const chunked = url.searchParams.get('chunked') === '1'
+    if (chunked) res.writeHead(200, { 'content-type': 'application/octet-stream' }) // 无 content-length
+    else res.writeHead(200, { 'content-type': 'application/octet-stream', 'content-length': String(size) })
+    const CH = 64 * 1024
+    let sent = 0
+    const pump = () => {
+      while (sent < size) {
+        const n = Math.min(CH, size - sent)
+        sent += n
+        if (!res.write(Buffer.alloc(n, 7))) { res.once('drain', pump); return }
+      }
+      res.end()
+      console.error(`[transfer] huge ${size}B chunked=${chunked}`)
+    }
+    pump()
+    return
+  }
   if (url.pathname === '/upload' && req.method === 'POST') {
     const ct = req.headers['content-type'] ?? ''
     const bm = /boundary=(.+)$/.exec(ct)

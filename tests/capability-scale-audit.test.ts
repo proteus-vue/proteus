@@ -67,22 +67,31 @@ describe('★#1113 规模承载体检 · 判据不能被骗', () => {
     ).toBe(false)
   })
 
-  it('★fetch 的"上限"必须是 ❌：响应体**没有任何大小限制**（唯一的 MAX 是挂起调用条数）', () => {
-    // ★#1114 第四处假绿：fetch 曾被判 `upperBound: true`，而命中的是
-    //   `capability-invoke.ts::PENDING_HOST_CALLS_MAX = 1024`——那是**挂起调用条数**上限（并发维度），
-    //   与"响应体能吞多大"毫无关系。真正的响应读取：
-    //     · Android `readAll(InputStream)` → `ByteArrayOutputStream` **无总上限**
-    //     · iOS `session.dataTask(with:)` → 整个 body 一次进内存
+  it('★fetch 现已达标 S2：上限 ✅ + 显式错误码 ✅（#1115 修复后；本测试同时守"不得回退到整包无界"）', () => {
+    // 【#1114 的取证】修复前：两端**整包响应进内存且无总上限**——
+    //   · Android `readAll` 用 `ByteArrayOutputStream` 一路 write（`READ_CHUNK=16KB` 只是单次缓冲量）
+    //   · iOS `session.dataTask(with:)` 整个 body 一次进内存
+    //   · 唯一的 `MAX` 是 `PENDING_HOST_CALLS_MAX = 1024`（**挂起调用条数**，属并发维度）
+    //   ⇒ 当时 `upperBound` 被判 true 是**假绿**（把并发计数当尺寸上限）。
+    //
+    // 【#1115 修复】两端都加：① `MAX_BODY_BYTES = 32 MiB`（同值）
+    //   ② 累计超限 ⇒ 中止 + 显式 `fetch.tooLarge`
+    //   （Android：Content-Length 预判 + 读取累计；iOS：delegate 逐块 + `cancel()` 真中止）
+    //   ⇒ 现在 `upperBound` 与 `explicitError` 都应为 true。
+    //
+    // ★本测试的反向保护：若有人把上限删了/把它改回"只看 PENDING_*MAX"，上面两条会重新变 false ⇒ 红。
     const { json } = runAudit(['--json', '--cap=fetch'])
-    const r = (json as Array<{ cap: string; upperBound: boolean; tableBound: boolean; tier: string }>)[0]
+    const r = (json as Array<{ cap: string; upperBound: boolean; explicitError: boolean; tableBound: boolean; tier: string }>)[0]
     expect(r.cap).toBe('fetch')
     expect(
       r.upperBound,
-      'fetch 被判"有上限"——但两端宿主都是整包进内存且无总上限；唯一的 MAX 是挂起调用条数（属并发维度）',
-    ).toBe(false)
-    // 并发维度反而应当是 ✅（PENDING_HOST_CALLS_MAX = 1024 确实存在）
+      'fetch 又没有尺寸上限了 —— 两端必须都有 MAX_BODY_BYTES（且不得把 PENDING_*MAX 当成尺寸上限）',
+    ).toBe(true)
+    expect(r.explicitError, '超限必须给显式错误码（fetch.tooLarge），不能静默截断').toBe(true)
+    // 并发维度仍应被识别（PENDING_HOST_CALLS_MAX 确实存在）
     expect(r.tableBound, 'fetch 的并发上界应被识别（PENDING_HOST_CALLS_MAX）').toBe(true)
-    expect(r.tier).toBe('S1')
+    // S2 达成（S3 仍需流式/背压/回收）
+    expect(r.tier).toBe('S2')
   })
 
   it('★"上限"常量必须按尺寸语义识别（`PENDING_*`/`COUNT` 类名字归并发，不算尺寸）', () => {

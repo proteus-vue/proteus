@@ -804,7 +804,7 @@ export function createAppNativeCapabilities<E extends Error = Error>(CapError: n
         })
         .catch((e: unknown) => {
           const msg = e instanceof Error ? e.message : String(e)
-          // ★`unsupported:` 前缀 ⇒ `fetch.unsupported`（与 wx 桥同码）；其余 ⇒ `fetch.failed`
+          if (/^fetch\.tooLarge:/.test(msg)) throw new CapError('fetch.tooLarge', msg.replace(/^fetch\.tooLarge:\s*/, ''))   // ★#1115 超限独立成码，不与 failed 混同
           throw new CapError(/^unsupported:/.test(msg) ? 'fetch.unsupported' : 'fetch.failed', msg.replace(/^unsupported:\s*/, ''))
         }),
   }

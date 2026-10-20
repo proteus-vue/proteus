@@ -70,12 +70,23 @@ const COUNT_WORD = /PENDING|COUNT|QUEUE|CONN|ITEMS|ENTRIES|CALLS|TASKS/i
 
 const SIGNALS = {
   // 上限：常量名必须表达"尺寸"，且不得是并发计数类名字
+  //   ★#1115 第五处修正：**值也必须是有限合理数**。实测把上限改成 `Long.MAX_VALUE`
+  //     （事实上无界）时判据仍判"有上限"（名字里还有 MAX_BODY_BYTES）⇒ 破坏性验证没变红。
+  //     ⇒ 单独用函数判（见 `hasFiniteSizeBound`），显式排除"无界"写法。
   upperBound: [
-    /\bMAX_[A-Z_]*(SIZE|BYTES|LEN|LENGTH|BODY|RESPONSE|CONTENT)[A-Z_]*\s*=\s*[\d_]+/i,
-    /\b(maxSize|maxBytes|maxBody|maxResponse|sizeLimit|byteLimit)\s*[:=]/i,
-    /\bMAX\s*=\s*\d+\s*\*\s*\d+\s*\*\s*\d+/, // 形如 64*1024*1024
+    /\bMAX_[A-Z_]*(SIZE|BYTES|LEN|LENGTH|BODY|RESPONSE|CONTENT)[A-Z_]*\s*=\s*[\d_]+\s*(?:\*\s*[\d_]+\s*)+;?/i,
+    /\b(maxSize|maxBytes|maxBody|maxResponse|sizeLimit|byteLimit)\s*[:=]\s*[\d_]+\s*(?:\*\s*[\d_]+\s*)*/i,
+    /\bMAX\s*=\s*[\d_]+\s*\*\s*[\d_]+\s*\*\s*[\d_]+/, // 形如 64*1024*1024
   ],
-  explicitError: [/throw[^\n]*(过大|too large|exceeds|超出)/i, /(过大|too large|exceeds)[^\n]*throw/i],
+  // 「显式报错」= 超限时抛出/返回**可识别的错误**（不是静默截断）。
+  //   ★#1115：除了中文"过大"，也要认**结构化错误码**（本项目实际用的是 `xxx.tooLarge` 一族）——
+  //     否则一个明明写了专用错误码的实现，会被判成"没有显式报错"（反向假红）。
+  explicitError: [
+    /throw[^\n]*(过大|too large|exceeds|超出)/i,
+    /(过大|too large|exceeds)[^\n]*throw/i,
+    /\b\w+\.tooLarge\b/,
+    /BodyTooLarge|TooLargeException|PayloadTooLarge/i,
+  ],
   // 「流式」= 真有"分块循环"或"分块 **API/常量**"，不是出现 stream/分块 这些词
   //   ★#1113 第三处修正：字符串字面量也要排除——实测命中来自错误消息
   //     `"fs.readBytes: 文件过大（)——分块读取属后续批次"`（**它在说"没有分块"**），
