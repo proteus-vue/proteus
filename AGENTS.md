@@ -16,6 +16,7 @@
    ```bash
    pnpm check:contract-index -- --for packages/api/src/invoke-wire.ts   # 该跑哪些门禁
    pnpm check:contract-index -- --unit tag:Redirect                     # 只读哪几段行号（=9% 读面）
+   pnpm check:contract-index -- --unit fetch-field:redirectManual       # 四层链各给 文件:行号（≈52 行）
    ```
    ★「最小可闭环单元」（#1139）：改一个线格式 tag，五端合计 2734 行，但**每端只动三处**
      （常量 / encode / decode）⇒ 探针直接给行号区段，**读 255 行（9%）就能改对**。

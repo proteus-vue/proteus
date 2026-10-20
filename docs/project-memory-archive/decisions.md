@@ -11123,3 +11123,71 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   ① 把 `--unit` 扩到第二类契约：**`--unit fetch-field:<Name>`**（四层白名单，正是 #1134 漏传的那条链）；
   ② 消化 #1137 暴露的 7 个 C++ 巨型文件（`proteus_render.cpp` 3701 / `host_app_runtime_impl.h` 1134）；
   ③ `.workbuddy/salvage` 5449 个未跟踪截图纳入治理（污染 `git status` 与 diff 基统计）。
+
+1140. **★★★`--unit fetch-field:<Name>`——把「四层白名单」也变成可定位单元（#1134 漏传形态现在 1 秒可见）· 决策**（2026-10-20 · 承接 #1139「下一步①」）：
+
+【要覆盖的契约（本仓最贵的一类静默失效）】
+  `useFetch` 的配置要穿过**四层显式白名单**才到宿主：
+    ① `FetchConfig`（门面类型）
+    ② `runFetch` 的桥参数
+    ③ **`appHttpRequest` 的 args** ← #1134 的 `redirectManual` 就漏在这层
+    ④ `splitFramePayload` 的 meta 归类
+  ★每层都不能 spread（未识别字段会被当业务体塞进请求 body）⇒ **逐层白名单必然漏**。
+  ★漏一层的表现：**功能静默失效**——底层做了、门面传了、中间吃掉，**不报错**。
+    #1134 真机读数：`manual_status=200`（宿主照旧跟随），而 Web 层 16/16 全绿。
+
+【落地：一条命令看全四层】
+  ```
+  $ pnpm check:contract-index -- --unit fetch-field:redirectManual
+    ✓ ① 门面类型（FetchConfig）      capability-fetch-types.ts:111  （读 L105-117）
+    ✓ ② 桥参数（runFetch）           capability-fetch.ts:67         （读 L61-73）
+    ✓ ③ App args（appHttpRequest）   capability-app-request.ts:43   （读 L37-49）
+    ✓ ④ 线格式归类（splitFramePayload）capability-invoke.ts:210     （读 L204-216）
+  ★必须跑：npx vitest run tests/fetch-wire-fields.test.ts
+  ★纪律：管线字段（retry/priority/maxRedirects/onRedirect/redirect）不下传 App 线格式
+  ```
+  **读面 ≈ 52 行**（每层"上下各扩 6 行"），覆盖 4 个文件。
+
+【★★探针必须认第④层的 4 种归类形态（否则假红）】
+  A `META_STR` 数组（`url` / `contentType` / `savePath`）
+  B `META_HEADERS` 数组（`headers` / `params`）
+  C `META_ENUM` 对象（`responseType`）
+  D 显式分支 `k === '<name>'`（`method` / `timeout` / `upload` / `redirectManual` …）
+  ★只认 A 会把 B/C/D 的字段全判成"漏"——这是"探针自己要先自证"的又一处。
+
+【★正当排除（不判缺失）】
+  `onChunk`（走 `invokeHostStream` 流式通道）/ `signal`（走参数通道）**不落 meta**
+  ⇒ 第④层标 `○` 而不是 `✗`。清单 SSOT = `NOT_IN_META_FIELDS`（与 `tests/fetch-wire-fields` 同源）。
+
+【判据（`tests/contract-units.test.ts` → 9/9）】
+  新增三条：
+  ⑥ 四层全命中（4 个 ✓ + 每层给 文件:行号 + 指向 `fetch-wire-fields.test.ts`）；
+  ⑦ `onChunk`/`signal` 在④层是**正当排除**（`○` 而非 `✗`，退出 0）；
+  ⑧ 不存在的字段 ⇒ **四层全报缺失 + 非 0 退出**（响亮失败，不打印半套位置后成功）。
+  ★**破坏性验证（复现 #1134 真实缺陷）**：删掉 `appHttpRequest` 里的 `redirectManual` 一行 ⇒
+    探针**精确指出「③ App args 未命中 ⇒ 该层吃掉这个字段」**，判据 ⑥ 红。
+    ★注意：探针只报第③层（另外三层仍 ✓）——这正是"漏哪层"要能 pinpoint 的意义。
+
+【三层结构完成（#1137 → #1138 → #1139 → #1140）】
+  | 层 | 命令 | 回答 |
+  |---|---|---|
+  | 导航 | `--for <path>` | 改了这文件要跑哪些门禁 |
+  | 定位·tag | `--unit tag:X` | 五端三处行号（9% 读面） |
+  | 定位·字段 | `--unit fetch-field:X` | 四层各一处行号（≈52 行） |
+  | 执行 | `test:coupled` 的 `gates` | 真跑，红即停 |
+
+【诚实边界】
+  ① 目前两类单元：**线格式 tag** 与 **useFetch 字段**；其它契约（如 Vapor 槽位、builder 注册表）
+     仍需靠索引的人工清单；
+  ② `fetch-field` 只查"字段是否出现"（位置级），**不判语义是否正确**（那由
+     `fetch-wire-fields.test.ts` 的 WIRE_FIELDS/PIPELINE_ONLY 断言管）；
+  ③ 行号是"上下各扩 6 行"，不是精确到行。
+
+【门禁】
+  `pnpm test` **6456 条全绿**（+3）· `check:contract-index` · script-compile · gates-sync
+  · file-size · doc-links · check:memory · check:decision-numbers
+
+【下一步】
+  ① 第三类单元：**`--unit vapor-slot:<Name>`**（Vapor 槽位/事件，三端 + 指纹，最复杂的一类）；
+  ② 消化 #1137 暴露的 7 个 C++ 巨型文件（`proteus_render.cpp` 3701 / `host_app_runtime_impl.h` 1134）；
+  ③ `.workbuddy/salvage` 5449 个未跟踪截图纳入治理。

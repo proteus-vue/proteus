@@ -92,3 +92,63 @@ export function endsFor(name) {
 
 /** 兼容性别名 */
 export const UNIT_TAGS = { ends: INVOKE_ENDS }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ★★★#1140：useFetch **四层字段链**的单元定义
+//
+// 【为什么这类契约最需要"给位置"】
+//   #1134 实测：redirectManual 前三层都加了，**唯独第③层（appHttpRequest 的 args）漏了**
+//   ⇒ 宿主永远收不到 ⇒ 真机读数 manual_status=200（仍跟随），而 Web 层 16/16 全绿。
+//   ★漏一层的表现是**功能静默失效**，不是报错 ⇒ 必须能一次看全四层。
+//
+// 【★第④层有 4 种归类形态（探针必须全认，否则误报"未归类"）】
+//   A META_STR 数组（url / contentType / savePath）
+//   B META_HEADERS 数组（headers / params）
+//   C META_ENUM 对象（responseType）
+//   D 显式分支 k === '<name>'（method / timeout / upload / redirectManual …）
+//  ★这是"探针自己要先自证"的又一处：只认 A 会把 B/C/D 的字段全判成"漏"。
+// ══════════════════════════════════════════════════════════════════════════════
+
+/** 四层定义（顺序即数据流方向；探针按此打印，漏哪层一眼看出）。 */
+export const FETCH_LAYERS = [
+  {
+    name: '① 门面类型（FetchConfig）',
+    file: 'packages/api/src/capability-fetch-types.ts',
+    re: (f) => new RegExp('^\\s+' + f + '\\??\\s*:', 'm'),
+  },
+  {
+    name: '② 桥参数（runFetch）',
+    file: 'packages/api/src/capability-fetch.ts',
+    re: (f) => new RegExp('^\\s+' + f + ':\\s*config\\?\\.' + f, 'm'),
+  },
+  {
+    name: '③ App args（appHttpRequest）',
+    file: 'packages/api/src/capability-app-request.ts',
+    re: (f) => new RegExp('\\b' + f + ':\\s*config\\.' + f + '\\b'),
+  },
+  {
+    name: '④ 线格式归类（splitFramePayload）',
+    file: 'packages/api/src/capability-invoke.ts',
+    re: (f) =>
+      new RegExp(
+        [
+          "META_STR\\s*=\\s*\\[[^\\]]*'" + f + "'",
+          "META_HEADERS\\s*=\\s*\\[[^\\]]*'" + f + "'",
+          'META_ENUM[\\s\\S]{0,200}\\b' + f + '\\s*:',
+          "k === '" + f + "'",
+        ].join('|'),
+      ),
+  },
+]
+
+/**
+ * **不进 meta 的线格式字段**：由别的通道承载，不落 `splitFramePayload`。
+ *   · `onChunk` → 走 `invokeHostStream`（流式通道，`meta.stream = true`）；
+ *   · `signal`  → 作为参数传给 `invokeHostAsync/invokeHostStream`，不进 meta。
+ * ★探针据此把"第④层为空"判成**正当**（而不是漏传）——否则会对这两个字段假红。
+ * ★与 `tests/fetch-wire-fields.test.ts` 的 `APP_LAYER_EXCLUDED` 同源（改一处必须改两处）。
+ */
+export const NOT_IN_META_FIELDS = new Set(['onChunk', 'signal'])
+
+/** 已知的**管线字段**：不该下传到 App 线格式（桥只跑一次请求）。 */
+export const PIPELINE_ONLY_FIELDS = new Set(['retry', 'priority', 'maxRedirects', 'onRedirect', 'redirect'])

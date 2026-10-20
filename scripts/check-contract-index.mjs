@@ -22,7 +22,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 // ★#1139：「最小可闭环单元」探针表（一条 tag → 五端三处定位）
-import { endsFor } from './lib/contract-units.mjs'
+import { endsFor, FETCH_LAYERS, NOT_IN_META_FIELDS } from './lib/contract-units.mjs'
 // ★#1139：`endsFor(name)` 按**方向**返回端点集（去程 TAG_* / 回程 RTAG_*）——
 //   首版只认 TAG_* ⇒ 查 StreamSeq/HttpStatus 时 encode/decode 全 `—`（探针自身缺陷）。
 
@@ -116,12 +116,51 @@ const missingTests = TEST_SCRIPTS.filter((t) => !text.includes(t) || !fs.existsS
 if (unitArg >= 0) {
   const spec = argv[unitArg + 1]
   if (!spec || !spec.includes(':')) {
-    console.error('✗ 用法：--unit tag:<Name>   （例：--unit tag:Redirect）')
+    console.error('✗ 用法：--unit tag:<Name> | fetch-field:<Name>   （例：--unit tag:Redirect / --unit fetch-field:redirectManual）')
     process.exit(2)
   }
   const [kind, name] = spec.split(':')
+  if (kind === 'fetch-field') {
+    // ★#1140：useFetch 四层字段链——#1134 的 redirectManual 就是漏在第③层
+    console.log(`═══ 最小可闭环单元：useFetch 字段 \`${name}\`（四层链）═══`)
+    let missing = 0
+    for (const layer of FETCH_LAYERS) {
+      const abs = path.join(ROOT, layer.file)
+      if (!fs.existsSync(abs)) {
+        console.error(`  ✗ ${layer.name}: 文件不存在 ${layer.file}`)
+        missing++
+        continue
+      }
+      const lines = fs.readFileSync(abs, "utf8").split("\n")
+      const re = layer.re(name)
+      let hit = 0
+      for (let i = 0; i < lines.length; i++) {
+        if (re.test(lines[i])) { hit = i + 1; break }
+      }
+      if (hit) {
+        console.log(`  ✓ ${layer.name}`)
+        console.log(`      ${layer.file}:${hit}  （读 L${Math.max(1, hit - 6)}-${hit + 6}）`)
+      } else if (NOT_IN_META_FIELDS.has(name) && layer.name.startsWith("④")) {
+        // 正当：该字段由别的通道承载（流式/参数），不落 meta
+        console.log(`  ○ ${layer.name} —— \`${name}\` 不落 meta（走流式/参数通道，正当）`)
+      } else {
+        console.error(`  ✗ ${layer.name}: 未命中 ⇒ **该层吃掉这个字段**（功能会静默失效）`)
+        missing++
+      }
+    }
+    console.log("")
+    if (missing) {
+      console.error(`✗ ${missing} 层缺失——补上后重跑；这是 #1134 「漏一层 = 静默失效」的形态`)
+      console.error("  定向判据：npx vitest run tests/fetch-wire-fields.test.ts")
+      process.exit(1)
+    }
+    console.log("★必须跑：npx vitest run tests/fetch-wire-fields.test.ts（断言四层齐全 + 管线字段不下传）")
+    console.log("★纪律：管线字段（retry/priority/maxRedirects/onRedirect/redirect）**不下传** App 线格式")
+    process.exit(0)
+  }
+
   if (kind !== 'tag') {
-    console.error(`✗ 未知单元类型：${kind}（目前支持：tag）`)
+    console.error(`✗ 未知单元类型：${kind}（支持：tag / fetch-field）`)
     process.exit(2)
   }
 

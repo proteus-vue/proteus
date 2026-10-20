@@ -94,6 +94,32 @@ describe('★#1139 最小可闭环单元探针', () => {
     expect(out).toContain('三处只命中 0 处')
   })
 
+  it('★★⑥ fetch-field：四层链全命中（redirectManual 是 #1134 漏传的那个）', () => {
+    const { code, out } = runUnit('fetch-field:redirectManual')
+    expect(code, `应成功：\n${out}`).toBe(0)
+    // 四层各一行 ✓
+    const hits = [...out.matchAll(/^  ✓ /gm)]
+    expect(hits.length, `应命中四层（实得 ${hits.length}）：\n${out}`).toBe(4)
+    // 每层都给了 文件:行号
+    expect([...out.matchAll(/\.ts:\d+/g)].length).toBeGreaterThanOrEqual(4)
+    expect(out).toContain('tests/fetch-wire-fields.test.ts')
+  })
+
+  it('★★⑦ fetch-field：不落 meta 的字段（onChunk/signal）在④层是**正当排除**，不判缺失', () => {
+    for (const f of ['onChunk', 'signal']) {
+      const { code, out } = runUnit(`fetch-field:${f}`)
+      expect(code, `${f} 应成功（④层正当排除）：\n${out}`).toBe(0)
+      expect(out, `${f} 的④层应标 ○ 而不是 ✗`).toContain(`\`${f}\` 不落 meta`)
+    }
+  })
+
+  it('★★⑧ fetch-field：不存在的字段 ⇒ 四层全报缺失 + 非 0 退出（响亮失败）', () => {
+    const { code, out } = runUnit('fetch-field:noSuchFieldZZZ')
+    expect(code, `应非 0：\n${out}`).not.toBe(0)
+    expect(out).toContain('该层吃掉这个字段')
+    expect(out).toContain('4 层缺失')
+  })
+
   it('⑤ 用法校验：缺参数 / 未知单元类型 ⇒ 退出 2', () => {
     expect(runUnit('').code).toBe(2)
     expect(runUnit('bogus:Foo').code).toBe(2)

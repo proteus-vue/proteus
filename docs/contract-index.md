@@ -56,9 +56,24 @@ pnpm check:contract-index -- --unit tag:Redirect
   ② **TS 用帕斯卡、四端用大写下划线**（`MetaTagInvoke.Redirect` vs `TAG_REDIRECT`）
      ⇒ 同一个工厂不能同时收两种形态，必须按端转换。
 
-★当前可查的单元：**线格式 tag**（去程 `Redirect`/`SavePath`/`UploadPath`/`Stream`，
+★当前可查的单元**两类**：
+
+**A. 线格式 tag**（去程 `Redirect`/`SavePath`/`UploadPath`/`Stream`，
 回程 `StreamSeq`/`HttpStatus`/`Reason`/`Missing`/`Pending`/`Headers`）。
-新增契约点（如再加 tag）只需在 `scripts/lib/contract-units.mjs` 加一行。
+
+**B. useFetch 字段（四层链）**（`redirectManual` / `savePath` / `onChunk` / `signal` / `method` …）：
+```bash
+pnpm check:contract-index -- --unit fetch-field:redirectManual
+# ⇒ ① 门面类型 ② 桥参数 ③ App args ④ 线格式归类 —— 四层各给 文件:行号（每层读 13 行 ≈ 52 行）
+```
+★**为什么这类最需要"给位置"**：#1134 实测 `redirectManual` 前三层都加了，**唯独第③层漏了**
+⇒ 宿主永远收不到 ⇒ 真机读数 `manual_status=200`（仍跟随），而 Web 层 16/16 全绿。
+**漏一层的表现是功能静默失效，不是报错。**
+
+★**探针的正当排除**：`onChunk`（走流式通道）/ `signal`（走参数通道）**不落 meta** ⇒
+第④层标 `○` 而不是 `✗`。清单 SSOT = `NOT_IN_META_FIELDS`（与 `tests/fetch-wire-fields` 同源）。
+
+新增契约点只需在 `scripts/lib/contract-units.mjs` 加一行（tag）或一条 layer 定义（字段链）。
 
 ## 1. 二进制线格式（invoke 通道）——五端逐字节等价
 
