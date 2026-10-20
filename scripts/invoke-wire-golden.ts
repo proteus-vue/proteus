@@ -190,6 +190,21 @@ addInvoke('invoke-other-method-name', {
   body: new TextEncoder().encode('{"width":390,"height":844}'),
 })
 
+// ⑨b ★#1118 流式请求：`stream: true` 必须写 tag 8（值 1）
+addInvoke('invoke-stream-true', {
+  method: 'http.request',
+  reqId: 'r-stream-1',
+  meta: { url: 'https://api.example.cn/v1/events', responseType: 'text', stream: true },
+})
+
+// ⑨c ★#1118 `stream: false` 与缺省**同为整包** ⇒ 都必须**不写** tag 8（往返后 tag 消失）
+//      ★这条是"判据配对"：只测 true 的话，把 false 也写成 tag 的实现会漏网。
+addInvoke('invoke-stream-false-no-tag', {
+  method: 'http.request',
+  reqId: 'r-stream-0',
+  meta: { url: 'https://api.example.cn/v1/events', stream: false },
+})
+
 /* ══════════════════ 回程向量 ══════════════════ */
 
 // ⑩ 受理回执（pending）—— 决定 JS 侧"保持挂起"的那一帧
@@ -234,6 +249,28 @@ addResolve('resolve-minimal', { reqId: 'r-min', ok: true })
   }
   addResolve('resolve-large-body-128k', { reqId: 'r-rbig', ok: true, status: 200, body: big })
 }
+
+// ⑰ ★#1118 流式数据块：`streamSeq` + `pending` + body（三者同帧 ⇒ 不结算）
+addResolve('resolve-stream-chunk', {
+  reqId: 'r-stream-1',
+  ok: true,
+  pending: true,
+  streamSeq: 0,
+  body: new TextEncoder().encode('data: {"n":1}\n\n'),
+})
+
+// ⑱ ★同一 reqId 的末块（seq 高、**无 pending**）= 最终帧（结算点）
+//    ★判据：有流式块与最终帧是**两种帧**；把末块也写成 pending 会让调用方永远挂着。
+addResolve('resolve-stream-final', {
+  reqId: 'r-stream-1',
+  ok: true,
+  status: 200,
+  headers: { 'Content-Type': 'text/event-stream' },
+  body: new TextEncoder().encode('data: [DONE]\n\n'),
+})
+
+// ⑲ 流式块 seq 为 0 且无 body（空块/心跳）——证"有 streamSeq 就是块"，不靠 body 非空推断
+addResolve('resolve-stream-empty-chunk', { reqId: 'r-stream-2', ok: true, pending: true, streamSeq: 0 })
 
 /* ══════════════════ 坏帧（两侧都必须**拒**，不许静默接受） ══════════════════ */
 

@@ -68,6 +68,34 @@ const server = http.createServer((req, res) => {
     return
   }
   /**
+   * ★★★#1118：**慢速流式**端点——验证 S3 的「边读边推 + 真背压」。
+   * `GET /stream?chunks=N&size=B&delayMs=D`
+   *   · 分 N 块、每块 B 字节、块间等 D 毫秒（`setTimeout`，不是忙等）
+   *   · **不声明 content-length**（chunked）⇒ 宿主只能边读边推，无法预分配
+   *   ★为什么需要 delayMs：本地回环太快，**不给消费侧制造压力就看不出背压**——
+   *     "队列从未满过"与"没有队列"在读数上完全同形（本仓 #1103 踩过"首遍读数冒充稳态"同族）。
+   *   ★响应是**可校验的确定序列**（第 i 块第 j 字节 = (i*31+j) & 0xff）⇒ 消费侧能逐字节验证
+   *     "没丢块、没乱序"（只统计块数会漏掉"内容错位"）。
+   */
+  if (url.pathname === '/stream') {
+    const chunks = Math.min(Number(url.searchParams.get('chunks') ?? 64), 4096)
+    const size = Math.min(Number(url.searchParams.get('size') ?? 16 * 1024), 1024 * 1024)
+    const delayMs = Math.min(Number(url.searchParams.get('delayMs') ?? 0), 500)
+    res.writeHead(200, { 'content-type': 'application/octet-stream' }) // ★无 content-length
+    let i = 0
+    const pump = () => {
+      if (i >= chunks) { res.end(); console.error(`[transfer] stream done chunks=${chunks} size=${size} delay=${delayMs}`); return }
+      const buf = Buffer.alloc(size)
+      for (let j = 0; j < size; j++) buf[j] = (i * 31 + j) & 0xff
+      i++
+      res.write(buf)
+      if (delayMs > 0) setTimeout(pump, delayMs)
+      else pump()
+    }
+    pump()
+    return
+  }
+  /**
    * ★★★决策 #1115：**超大响应**端点——专门验证 `fetch.tooLarge`。
    * `GET /huge?size=N&chunked=1`
    *   · 默认带 `content-length` ⇒ 宿主走"**预判**"那道闸（见 Android `perform()`）

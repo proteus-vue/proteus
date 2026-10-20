@@ -314,6 +314,10 @@ interface PendingHostCall {
   responseType: ResponseKind
   /** ★通用能力（非 `http.request`）：回程 body = 既有 `invoke()` 的 JSON 串（#2026-10-19）。 */
   generic: boolean
+  /** ★#1118：流式消费回调（声明了 `stream: true` 才有）。每块调一次，**不结算**。 */
+  onChunk?: (chunk: Uint8Array, seq: number) => void
+  /** ★#1118：已收到的最大块序号（-1 = 还没收到）；用于**丢帧检测**。由 `trackPending` 初始化。 */
+  lastStreamSeq?: number
 }
 
 /** 超时句柄（`clear()` 幂等；无引擎定时器时是 no-op）。 */
@@ -369,6 +373,8 @@ export function pendingHostCallEvictions(): number {
 }
 /** 插入并维护上限（所有 `pendingHostCalls.set` 都走这里） */
 function trackPending(reqId: string, p: PendingHostCall): void {
+  // ★#1118：流式序号从 -1 起（首块必须是 seq=0，否则按丢帧拒绝）
+  if (p.lastStreamSeq === undefined) p.lastStreamSeq = -1
   pendingHostCalls.set(reqId, p)
   while (pendingHostCalls.size > PENDING_HOST_CALLS_MAX) {
     const oldest = pendingHostCalls.keys().next()
@@ -463,6 +469,30 @@ function settleHostCallBytes(frame: Uint8Array): void {
   }
   const p = pendingHostCalls.get(f.reqId)
   if (!p) return
+  // ★★★#1118 流式块：带 `streamSeq` = 数据块（**不结算**，交消费方）。
+  //   ★为什么必须先判它再判 `pending`：宿主可能把块帧的 pending 省略（省略即 undefined），
+  //     若按 `pending === true` 才当块，这类帧会被**当成最终帧结算** ⇒ 流在中途被截断且不报错。
+  if (f.streamSeq !== undefined) {
+    // ★丢帧检测：seq 必须**连续递增**。跳跃 ⇒ 宿主队列丢过数据，必须报错而不是静默拼接
+    //   （超级应用里静默半截 JSON 比直接失败难查得多）。
+    const last = p.lastStreamSeq ?? -1
+    if (f.streamSeq !== last + 1) {
+      p.timer.clear()
+      pendingHostCalls.delete(f.reqId)
+      p.reject(new Error(`流式回推丢帧：期望 seq=${last + 1}，实得 ${f.streamSeq}`))
+      return
+    }
+    p.lastStreamSeq = f.streamSeq
+    try {
+      p.onChunk?.(f.body ?? new Uint8Array(0), f.streamSeq)
+    } catch (e) {
+      // 消费方回调抛错 ⇒ 终止本次流（否则后续块继续到达却没人消费，属泄漏）
+      p.timer.clear()
+      pendingHostCalls.delete(f.reqId)
+      p.reject(e instanceof Error ? e : new Error(String(e)))
+    }
+    return
+  }
   if (f.ok && f.pending === true) return
   p.timer.clear()
   pendingHostCalls.delete(f.reqId)
@@ -506,6 +536,121 @@ export function invokeHostAsync(method: string, args?: unknown, timeoutMs = 1500
   const bytesFn = getHostInvokeBytes()
   if (bytesFn) return invokeHostAsyncBytes(bytesFn, method, args, timeoutMs)
   return invokeHostAsyncJson(method, args, timeoutMs)
+}
+
+/**
+ * ★★★#1118 **流式**派发（宿主逐块回推，调用方按块消费）。
+ *
+ * 【它解决什么】S3 的"背压 + 流式"：一问一答整包通道下，一个 30 MiB 响应必须**整体驻留**
+ *   且调用方在拿到全部字节前看不到任何数据。流式让消费方**边到边处理**（如 NDJSON/SSE 逐行解析、
+ *   下载落盘），内存占用从"响应体大小"降到"块大小 × 队列深度"。
+ *
+ * 【★背压怎么形成（三端各自的真实机制，不粉饰为同一套）】
+ *   · **Android / iOS**：宿主在**另起读线程**里边读边推；推满有界队列后**阻塞读线程**
+ *     （不是无限堆积）⇒ 网络层自然减速（TCP 窗口）⇒ 生产被消费速度约束。
+ *     ★这是真背压：消费慢 ⇒ 队列满 ⇒ 读停 ⇒ 服务器发不动。
+ *   · **鸿蒙**：一次性 VM 形态下**没有回推接收方**（见 `proteus_http.h` 文件头）
+ *     ⇒ 本 API 在鸿蒙**回 `unsupported:`**（不假装支持）。
+ *
+ * 【★诚实边界】
+ *   ① `onChunk` 是**同步**调用（在宿主回推的 JS 线程上）⇒ 回调里做重活会阻塞后续块；
+ *      需要异步处理时请自行入队（本 API 不代管消费方队列）。
+ *   ② 块序号**必须连续**：跳跃即报错（宿主队列丢数据），不静默拼接。
+ *   ③ 流式请求**不受 32 MiB 整包上限约束**（上限本就是"整包驻留"的护栏），
+ *      但受 `timeoutMs` 与总块数（`MAX_STREAM_CHUNKS`）约束。
+ */
+export function invokeHostStream(
+  method: string,
+  args: unknown,
+  onChunk: (chunk: Uint8Array, seq: number) => void,
+  timeoutMs = 15000,
+): Promise<unknown> {
+  installHostResolveBridge()
+  const bytesFn = getHostInvokeBytes()
+  if (!bytesFn) {
+    return Promise.reject(new Error('unsupported: 流式通道要求宿主实现 invokeBytes（JSON 腿无回推帧）'))
+  }
+  _lastInvokeWire = 'bytes'
+  const reqId = nextReqId()
+  const isHttp = method === 'http.request'
+  const { meta, body } = isHttp ? splitFramePayload(args) : genericFramePayload(args)
+  if (meta.responseType === undefined) meta.responseType = isHttp ? 'text' : 'json'
+  // ★★关键：**由请求声明**流式（宿主据此改变回推形态；缺省仍是整包）
+  meta.stream = true
+  let frame: Uint8Array
+  try {
+    frame = encodeInvokeFrame({ method, reqId, meta, body })
+  } catch (e) {
+    return Promise.reject(e instanceof Error ? e : new Error(String(e)))
+  }
+  const settled = new Promise<unknown>((resolve, reject) => {
+    const timer: TimerHandle = armHostCallTimeout(timeoutMs, () => {
+      pendingHostCalls.delete(reqId)
+      reject(new Error(`原生流式调用超时（${method}，${timeoutMs}ms，已收 ${received} 块）`))
+    })
+    received = 0
+    trackPending(reqId, {
+      resolve,
+      reject,
+      timer,
+      responseType: meta.responseType as ResponseKind,
+      generic: !isHttp,
+      onChunk: (chunk, seq) => {
+        received++
+        if (received > MAX_STREAM_CHUNKS) {
+          timer.clear()
+          pendingHostCalls.delete(reqId)
+          reject(new Error(`流式块数超过上限 ${MAX_STREAM_CHUNKS}（疑似宿主未按 seq 收敛/服务端无限流）`))
+          return
+        }
+        onChunk(chunk, seq)
+      },
+    })
+    let out: Uint8Array | undefined
+    try {
+      out = bytesFn(frame)
+    } catch (e) {
+      pendingHostCalls.delete(reqId)
+      timer.clear()
+      reject(e instanceof Error ? e : new Error(String(e)))
+      return
+    }
+    if (out === undefined || out === null || !(out instanceof Uint8Array) || out.length === 0) return
+    let reply: ResolveFrame
+    try {
+      reply = decodeResolveFrame(out)
+    } catch (e) {
+      pendingHostCalls.delete(reqId)
+      timer.clear()
+      reject(e instanceof Error ? e : new Error(String(e)))
+      return
+    }
+    if (reply.streamSeq !== undefined) return // 同步壳也可能直接给块（罕见，但语义一致）
+    if (reply.ok && reply.pending === true) return
+    if (reply.missing === true) {
+      pendingHostCalls.delete(reqId)
+      timer.clear()
+      reject(new Error(`unsupported: ${reply.reason ?? `${method} 不支持流式`}`))
+      return
+    }
+    pendingHostCalls.delete(reqId)
+    timer.clear()
+    settleFromFrame({ resolve, reject, responseType: meta.responseType as ResponseKind, generic: !isHttp }, reply)
+  })
+  return settled
+}
+
+/**
+ * 流式块数上限（#1118）。
+ * 【为什么需要】`seq` 连续递增的校验能防"丢帧"，但**防不了"永不结束"**——
+ *   服务端无限流 / 宿主 seq 不推进都会让 Promise 永久挂起（只有 timeout 兜底）。
+ *   65536 块 × 典型 16 KiB ≈ 1 GiB 上限，足够真实场景（SSE/分块下载），又能兜住失控。
+ */
+const MAX_STREAM_CHUNKS = 65536
+/** 最近一次流式调用收到的块数（诊断/判据读数）。 */
+let received = 0
+export function lastStreamChunkCount(): number {
+  return received
 }
 
 /** JSON 腿（老壳 / 字节分发不认该方法时的回落——语义与 #902 完全一致）。 */
@@ -651,6 +796,10 @@ export interface AppRequestConfig {
   skipAuth?: boolean
   /** ★S2（#903）：响应体解释方式——`arraybuffer` 时 `data` 是**裸 `Uint8Array`**（不做文本解码） */
   responseType?: ResponseKind
+  /** ★★★#1118 流式消费（S3）：每块调一次。给了 ⇒ 分块回推（内存不随响应体增长）；不给 ⇒ 整包（受 32 MiB 上限）。
+   *  ★回调**同步**（宿主回推的 JS 线程上）——做重活会拖慢后续块，需异步请自行入队。
+   *  ★seq 必须连续（丢帧即 reject，不静默拼半截数据）；★鸿蒙无回推接收方 ⇒ `fetch.unsupported`。 */
+  onChunk?: (chunk: Uint8Array, seq: number) => void
 }
 
 /** 请求响应（对齐 `RequestResponse`） */

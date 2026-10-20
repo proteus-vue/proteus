@@ -10,6 +10,9 @@
 //   （`app-screen-content.generated.ts`，由 `proteus build --target ios|android|harmony`
 //   经 `gen-app-screen-content.mjs` 生成）——与 Web/小程序**同一棵路由树**。
 import { createAppNavigation } from '@proteus-vue/render-backend/app-navigation'
+import { appFetchLimitProbe, appStreamProbe } from './entry-superapp-probes'
+export { appFetchLimitProbe, appStreamProbe } from './entry-superapp-probes'
+
 import type { AppNavigation } from '@proteus-vue/render-backend/app-navigation'
 import { createRouter, type RouterInstance } from '@proteus-vue/router'
 import type { RouteRecord } from '@proteus-vue/router/types'
@@ -823,64 +826,6 @@ export function appTransferProbe(base: string): string {
   return JSON.stringify({ phase: 'started', queued: true })
 }
 
-/**
- * ★★★决策 #1115：**响应体上限探针**（宿主经中性名 `__proteusHostAppFetchLimitProbe` 调）。
- *
- * 【它证明什么】`fetch.tooLarge` 这条**规模闸**在真机上真的生效——
- *   请求 64 MiB 响应（两倍于两端 32 MiB 上限），必须拿到 `code === 'fetch.tooLarge'`；
- *   若"成功返回"⇒ 上限未生效；若拿到笼统 `fetch.failed` ⇒ 错误码没到位（业务无法区分可否重试）。
- *
- * 【两道闸各测一次】`chunked=0` 带 content-length（走**预判**闸）；
- *   `chunked=1` 不带长度分块写（走**读取累计**闸，且必须真中止）。
- *   ★只测一个有洞：未知/谎报长度时预判失效。
- *
- * 【为什么用 `.then` 链不用 async/await】bundle 无定时器宿主（#1093 实测），与 transfer 探针同款。
- */
-export function appFetchLimitProbe(base: string, sizeMiB = 64): string {
-  const g = globalThis as Record<string, unknown>
-  const out: Record<string, unknown> = { size_mib: sizeMiB }
-  g['__proteusHostFetchLimitProbeResult'] = ''
-  const bytes = sizeMiB * 1024 * 1024
-  const cases: Array<[string, string]> = [
-    ['declared', `${base}/huge?size=${bytes}&chunked=0`],
-    ['chunked', `${base}/huge?size=${bytes}&chunked=1`],
-  ]
-  // ★用 `createAppNativeCapabilities` 构造**真实桥**（与 hook 内部同一实现）——
-  //   `createCapabilityHooks(undefined as never, …)` 那条路径桥是 undefined（本文件按屏实例化如此），
-  //   拿它测等于测"没有桥"，不是测宿主上限。
-  const run = async (): Promise<void> => {
-    const mod = (await import('../../../packages/api/src/capability-app')) as unknown as {
-      createAppNativeCapabilities: (E: unknown) => { request: (c: Record<string, unknown>) => Promise<unknown> }
-    }
-    class ProbeError extends Error {
-      code: string
-      constructor(code: string, message: string) { super(message); this.code = code }
-    }
-    const appCaps = mod.createAppNativeCapabilities(ProbeError as never)
-    for (const [name, url] of cases) {
-      try {
-        await appCaps.request({ url, method: 'GET', timeout: 30000 })
-        // ★成功返回 = 上限没生效（这是失败信号，不是成功）
-        out[`${name}_too_large`] = false
-        out[`${name}_ok`] = false
-        out[`${name}_note`] = '上限未生效：请求成功返回'
-      } catch (e) {
-        const code = String((e as { code?: string })?.code ?? '')
-        out[`${name}_code`] = code
-        out[`${name}_too_large`] = code === 'fetch.tooLarge'
-        out[`${name}_ok`] = code === 'fetch.tooLarge'
-      }
-    }
-    out['ok'] = out['declared_ok'] === true && out['chunked_ok'] === true
-    g['__proteusHostFetchLimitProbeResult'] = JSON.stringify(out)
-  }
-  void run().catch((e: unknown) => {
-    out['error'] = String((e as Error)?.message ?? e)
-    out['ok'] = false
-    g['__proteusHostFetchLimitProbeResult'] = JSON.stringify(out)
-  })
-  return JSON.stringify({ phase: 'started', queued: true, cases: cases.map((c) => c[0]) })
-}
 
 /** 元素索引读数（判据：证明索引里真有条目，而不是"查询恒 not-found"）。 */
 /**
@@ -970,5 +915,9 @@ __HOSTAPP.__proteusHostAppElementRegistry = __HOSTAPP.__proteusSuperappElementRe
   .__proteusHostAppFetchLimitProbe = (b: string, m?: number) => appFetchLimitProbe(b, m)
 ;(globalThis as unknown as { __proteusHostAppWsProbeDrive?: () => string })
   .__proteusHostAppWsProbeDrive = () => appWsProbeDrive()
+// ★★★#1118：流式通道探针（宿主按中性名调；结果填 __proteusHostStreamProbeResult）
+;(globalThis as unknown as {
+  __proteusHostAppStreamProbe?: (b: string, c?: number, s?: number, d?: number, w?: number) => string
+}).__proteusHostAppStreamProbe = (b: string, c?: number, s?: number, d?: number, w?: number) => appStreamProbe(b, c, s, d, w)
 
 

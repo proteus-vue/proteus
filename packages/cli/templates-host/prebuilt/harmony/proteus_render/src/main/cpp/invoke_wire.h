@@ -59,6 +59,8 @@ constexpr uint8_t TAG_PARAMS = 4;
 constexpr uint8_t TAG_TIMEOUT_MS = 5;
 constexpr uint8_t TAG_RESPONSE_TYPE = 6;
 constexpr uint8_t TAG_CONTENT_TYPE = 7;
+/** ★#1118：请求分块回推（1 = 流式；缺省 = 整包） */
+constexpr uint8_t TAG_STREAM = 8;
 
 /* 回程 TLV tag（16 起；与去程段不重叠） */
 constexpr uint8_t RTAG_HTTP_STATUS = 16;
@@ -66,6 +68,8 @@ constexpr uint8_t RTAG_REASON = 17;
 constexpr uint8_t RTAG_MISSING = 18;
 constexpr uint8_t RTAG_PENDING = 19;
 constexpr uint8_t RTAG_HEADERS = 20;
+/** ★#1118：流式块序号（有本字段 = 本帧是数据块，不结算） */
+constexpr uint8_t RTAG_STREAM_SEQ = 21;
 
 /** 响应体解释方式（与 `RequestConfig.responseType` 同语义） */
 constexpr uint8_t RESPONSE_TEXT = 0;
@@ -105,6 +109,8 @@ struct InvokeFrame {
   /** 见 `RESPONSE_*`；`has=false` = 未指定。 */
   Opt<uint8_t> responseType;
   Opt<std::string> contentType;
+  /** ★#1118：`has=false` = 未指定（不写 TLV）——与 TS 侧 `meta.stream === true` 对齐 */
+  Opt<bool> stream;
   std::vector<uint8_t> body;
 
   int responseKind() const { return responseType ? static_cast<int>(*responseType) : RESPONSE_TEXT; }
@@ -120,6 +126,8 @@ struct ResolveFrame {
   Opt<bool> pending;
   Opt<uint32_t> status;
   Opt<NameValues> headers;
+  /** ★#1118：非空 ⇒ 本帧是流式数据块（不结算）；空且 !pending ⇒ 最终帧 */
+  Opt<uint32_t> streamSeq;
   std::vector<uint8_t> body;
 
   static ResolveFrame okOf(std::string reqId) {
@@ -278,6 +286,8 @@ inline std::vector<uint8_t> encodeInvokeMeta(const InvokeFrame& f) {
   if (f.timeoutMs) writeTlv(w, TAG_TIMEOUT_MS, [&](Writer& x) { x.u32(*f.timeoutMs); });
   if (f.responseType) writeTlv(w, TAG_RESPONSE_TYPE, [&](Writer& x) { x.u8(*f.responseType); });
   if (f.contentType) writeTlv(w, TAG_CONTENT_TYPE, [&](Writer& x) { x.str(*f.contentType); });
+  // ★#1118：只在**显式 true** 时写（与 TS `meta.stream === true` 逐字对齐）
+  if (f.stream && *f.stream) writeTlv(w, TAG_STREAM, [&](Writer& x) { x.u8(1u); });
   return w.take();
 }
 
@@ -313,6 +323,7 @@ inline void decodeInvokeMeta(const std::vector<uint8_t>& bytes, InvokeFrame& f) 
       case TAG_TIMEOUT_MS: f.timeoutMs = p.u32(); break;
       case TAG_RESPONSE_TYPE: f.responseType = p.u8(); break;
       case TAG_CONTENT_TYPE: f.contentType = p.str(); break;
+      case TAG_STREAM: f.stream = (p.u8() != 0); break;
       default: break;  // 未知 tag 跳过（版本演进）
     }
   }
@@ -361,6 +372,7 @@ inline std::vector<uint8_t> encodeResolveMeta(const ResolveFrame& f) {
   if (f.missing) writeTlv(w, RTAG_MISSING, [&](Writer& x) { x.u8(*f.missing ? 1u : 0u); });
   if (f.pending) writeTlv(w, RTAG_PENDING, [&](Writer& x) { x.u8(*f.pending ? 1u : 0u); });
   if (f.headers) writeTlv(w, RTAG_HEADERS, [&](Writer& x) { writeNameValues(x, *f.headers); });
+  if (f.streamSeq) writeTlv(w, RTAG_STREAM_SEQ, [&](Writer& x) { x.u32(*f.streamSeq); });
   return w.take();
 }
 
@@ -396,6 +408,7 @@ inline void decodeResolveMeta(const std::vector<uint8_t>& bytes, ResolveFrame& f
       case RTAG_MISSING: f.missing = (p.u8() != 0); break;
       case RTAG_PENDING: f.pending = (p.u8() != 0); break;
       case RTAG_HEADERS: f.headers = readNameValues(p); break;
+      case RTAG_STREAM_SEQ: f.streamSeq = p.u32(); break;
       default: break;
     }
   }

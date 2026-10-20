@@ -14,7 +14,7 @@
   "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/VaporRenderHost.java": 3069,
   "website/scripts/gen-content.mjs": 2299,
   "packages/compiler/src/template.ts": 2230,
-  "packages/api/src/capability-app.ts": 2093,
+  "packages/api/src/capability-app.ts": 2092,
   "website/scripts/gen-content-en.mjs": 2061,
   "tests/mp-transform.test.ts": 1967,
   "hosts/shared/bridge/showcase-ink.ts": 1960,

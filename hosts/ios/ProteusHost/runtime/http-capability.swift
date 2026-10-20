@@ -67,6 +67,13 @@ final class HttpCapability {
         }
 
         let reqId = f.reqId
+        // ★★★#1118：请求声明了流式 ⇒ 走「边读边推」路径（不整包进内存，也不受 32 MiB 上限约束）
+        if f.stream == true {
+            let task = session.dataTask(with: req)
+            BodyLimitDelegate.shared.registerStreaming(task, reqId: reqId, push: push)
+            task.resume()
+            return try InvokeWire.encodeResolve(.makePending(reqId))
+        }
         // ★★★决策 #1115：改用 **delegate 驱动**（`dataTask(with:)` 不带 completion）——
         //   这样数据是**逐块**送到 `didReceive data`，超限时能 `cancel()` **真正中止读取**。
         //   ★为什么不能沿用 completion：completion 回调时 `data` **已全部进内存**，
@@ -145,31 +152,148 @@ final class HttpCapability {
 final class BodyLimitDelegate: NSObject, URLSessionDataDelegate {
     static let shared = BodyLimitDelegate()
 
+    /// ★#1118：块大小 / 在途上限（与 Android `STREAM_CHUNK` / `STREAM_QUEUE_DEPTH` **同值**）。
+    static let STREAM_CHUNK = 16 * 1024
+    static let STREAM_QUEUE_DEPTH = 8
+
+    /// ★#1118：**最近一次流式的宿主记账**（真机判据读它区分"真背压"与"没测到"）。
+    struct StreamStats {
+        var chunks = 0
+        var bytes = 0
+        var maxQueued = 0
+        var backpressureWaits = 0
+        var backpressureMs = 0.0
+        var completed = false
+        var error: String?
+    }
+    private(set) static var lastStreamStats = StreamStats()
+    /// 供宿主壳读（判据出口）。
+    static func lastStatsSnapshot() -> [String: Any] {
+        var d: [String: Any] = [
+            "chunks": lastStreamStats.chunks,
+            "bytes": lastStreamStats.bytes,
+            "max_queued": lastStreamStats.maxQueued,
+            "backpressure_waits": lastStreamStats.backpressureWaits,
+            "backpressure_ms": Int(lastStreamStats.backpressureMs),
+            "completed": lastStreamStats.completed,
+        ]
+        if let e = lastStreamStats.error { d["error"] = e }
+        return d
+    }
+
+    /// ★#1118：流式许可的唯一持有者（引用类型——见 `State.gate` 的注释）。
+    final class StreamGate {
+        let sem: DispatchSemaphore
+        private let l = NSLock()
+        private var _waits = 0
+        private var _waitMs = 0.0
+        /// `true` = 本次拿到许可是**阻塞过**的（记账用）
+        func acquire() -> Bool {
+            let t0 = DispatchTime.now().uptimeNanoseconds
+            sem.wait()
+            let ns = DispatchTime.now().uptimeNanoseconds - t0
+            guard ns > 500_000 else { return false }
+            l.lock(); _waits += 1; _waitMs += Double(ns) / 1_000_000.0; l.unlock()
+            return true
+        }
+        func release() { sem.signal() }
+        func drain() -> (Int, Double) {
+            l.lock(); defer { l.unlock() }
+            return (_waits, _waitMs)
+        }
+        init(_ depth: Int) { sem = DispatchSemaphore(value: depth) }
+    }
+
     private struct State {
         let reqId: String
         let push: ([UInt8]) -> Void
         var body = Data()
         /// 超限后置位：`didComplete` 时据此编 `fetch.tooLarge` 而不是普通取消
         var tooLargeAt: Int?
+        /// ★#1118：`true` ⇒ 本 task 走**分块回推**（不累积 body、不受 32 MiB 上限）。
+        var streaming = false
+        var seq = 0
+        var bytes = 0
+        /// ★★★#1118 修复：许可必须是**引用类型**。
+        ///   `State` 是 struct（值语义）⇒ 若把 `DispatchSemaphore` 直接放在里面，
+        ///   每次 `states[id]` 读出都会**复制一份引用**、写回时又存另一份 —— 表面上"同一个"信号量，
+        ///   实际各线程拿到的是不同副本，`signal()` 加到了别处 ⇒ 许可计数失控，
+        ///   最终触发 Swift 运行时陷入（实测 `signal 5`，崩在 seq=32/33 跨线程处）。
+        ///   ⇒ 用 class 包一层：值拷贝的是**引用**，semaphore 始终唯一。
+        var gate: StreamGate
+        var status: Int32 = 0
+        var headers: InvokeWire.NameValues = []
     }
 
     /// ★key = taskIdentifier；只在该 task 的生命周期内存在
     private var states: [Int: State] = [:]
+    /// ★#1118：`states` 同时被 delegate 队列与主线程（归还许可时读）访问 ⇒ 必须加锁。
+    ///   原先只有 delegate 队列访问（串行）故无需锁；加了流式后主线程也会读，不锁就是数据竞争。
+    private let lock = NSLock()
 
     /// 登记一个新 task（必须在 `resume()` **之前**调用——否则可能先收到数据、后登记，丢块）
     func register(_ task: URLSessionDataTask, reqId: String, push: @escaping ([UInt8]) -> Void) {
-        states[task.taskIdentifier] = State(reqId: reqId, push: push)
+        states[task.taskIdentifier] = State(reqId: reqId, push: push, gate: StreamGate(BodyLimitDelegate.STREAM_QUEUE_DEPTH))
+    }
+
+    /// ★#1118：登记一个**流式** task（同样必须在 `resume()` 之前）。
+    ///   ★为什么复用本类而不是另建 `StreamDelegate`：`URLSession` 的 delegate 在**创建时固定**，
+    ///     另建一个类根本收不到回调（实测：服务端发完 256 块、宿主记账全 0、Promise 永不结算）。
+    func registerStreaming(_ task: URLSessionDataTask, reqId: String, push: @escaping ([UInt8]) -> Void) {
+        lock.lock(); defer { lock.unlock() }
+        BodyLimitDelegate.lastStreamStats = StreamStats()
+        var st = State(reqId: reqId, push: push, gate: StreamGate(BodyLimitDelegate.STREAM_QUEUE_DEPTH))
+        st.streaming = true
+        states[task.taskIdentifier] = st
     }
 
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
-        guard var st = states[dataTask.taskIdentifier] else { return }
+        lock.lock()
+        guard var st = states[dataTask.taskIdentifier] else { lock.unlock(); return }
+        lock.unlock()
+        // ★★★#1118：流式分支——**不累积 body**，逐块回推；越界判断交给 JS 消费侧。
+        if st.streaming {
+            if st.status == 0, let http = dataTask.response as? HTTPURLResponse {
+                st.status = Int32(max(0, http.statusCode))
+                st.headers = HttpCapability.headerPairsForDelegate(http)
+            }
+            let chunk = [UInt8](data)
+            guard !chunk.isEmpty else {
+                lock.lock(); states[dataTask.taskIdentifier] = st; lock.unlock()
+                return
+            }
+            // ★★背压点：拿不到许可就在这里阻塞（delegate 队列不再投递 ⇒ 网络层收敛）
+            //   ★记账在 gate 内部累计（避免多线程同时写 static 统计）
+            _ = st.gate.acquire()
+            let seq = st.seq
+            st.seq += 1
+            // ★#1118 修复：`st` 是**值拷贝** ⇒ 必须在**同一次写回**里带上 bytes，
+            //   否则收尾时从 states 读到的还是"没有 bytes"的旧值（实测：host bytes 恒 0）。
+            // ★不在这里写 static 统计：delegate 队列并发时多线程自增会丢计数 ⇒ 收尾一次性汇总。
+            st.bytes += chunk.count
+            lock.lock(); states[dataTask.taskIdentifier] = st; lock.unlock()
+            var rf = InvokeWire.ResolveFrame.makeOK(st.reqId)
+            rf.pending = true
+            rf.streamSeq = UInt32(seq)
+            rf.body = chunk
+            let frame = (try? InvokeWire.encodeResolve(rf)) ?? []
+            let tid = dataTask.taskIdentifier
+            // ★主线程回推（G-39）；推完才归还许可 ⇒ 在途上限真实约束"JS 已消化"的进度
+            DispatchQueue.main.async { [weak self] in
+                st.push(frame)
+                // ★用完**同一个** gate 引用归还（不重新查 states——那可能已经被收尾摘掉）
+                st.gate.release()
+                _ = self
+            }
+            return
+        }
         // ★第一道闸：Content-Length 声明就超限 ⇒ 立刻取消，不读一块数据
         if st.body.isEmpty,
            let expected = dataTask.response?.expectedContentLength,
            expected > 0,
            expected > Int64(HttpCapability.MAX_BODY_BYTES) {
             st.tooLargeAt = st.body.count
-            states[dataTask.taskIdentifier] = st
+            lock.lock(); states[dataTask.taskIdentifier] = st; lock.unlock()
             dataTask.cancel()
             return
         }
@@ -177,17 +301,41 @@ final class BodyLimitDelegate: NSObject, URLSessionDataDelegate {
         st.body.append(data)
         if st.body.count > HttpCapability.MAX_BODY_BYTES {
             st.tooLargeAt = st.body.count
-            states[dataTask.taskIdentifier] = st
+            lock.lock(); states[dataTask.taskIdentifier] = st; lock.unlock()
             dataTask.cancel()   // ⇒ 本 task 的读取到此为止（内存不再增长）
             return
         }
-        states[dataTask.taskIdentifier] = st
+        lock.lock(); states[dataTask.taskIdentifier] = st; lock.unlock()
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        guard let st = states[task.taskIdentifier] else { return }
-        states.removeValue(forKey: task.taskIdentifier)   // ★先摘表 ⇒ 保证恰好回推一次
+        lock.lock()
+        let st = states.removeValue(forKey: task.taskIdentifier)
+        lock.unlock()
+        guard let st else { return }   // ★先摘表 ⇒ 保证恰好回推一次
         let reqId = st.reqId
+        // ★★★#1118：流式收尾——最终帧（无 seq）带 status/headers，**不带 body**（块已逐块给过）
+        if st.streaming {
+            var frame: [UInt8]
+            if let e = error {
+                BodyLimitDelegate.lastStreamStats.error = e.localizedDescription
+                frame = (try? InvokeWire.encodeResolve(.makeErr(reqId, "http.request 失败：\(e.localizedDescription)"))) ?? []
+            } else {
+                var r = InvokeWire.ResolveFrame.makeOK(reqId)
+                r.status = UInt32(max(0, st.status))
+                r.headers = st.headers
+                r.body = []
+                frame = (try? InvokeWire.encodeResolve(r)) ?? []
+                BodyLimitDelegate.lastStreamStats.completed = true
+            }
+            let (waits, waitMs) = st.gate.drain()
+            BodyLimitDelegate.lastStreamStats.chunks = st.seq
+            BodyLimitDelegate.lastStreamStats.bytes = st.bytes
+            BodyLimitDelegate.lastStreamStats.backpressureWaits = waits
+            BodyLimitDelegate.lastStreamStats.backpressureMs = waitMs
+            DispatchQueue.main.async { st.push(frame) }
+            return
+        }
         let frame: [UInt8]
         do {
             if let at = st.tooLargeAt {
@@ -214,3 +362,7 @@ final class BodyLimitDelegate: NSObject, URLSessionDataDelegate {
     }
 }
 
+// ★本文件不再有独立的 StreamDelegate —— 原因见 `BodyLimitDelegate.registerStreaming` 的注释：
+//   `URLSession` 的 delegate 在**创建时固定**，另建一个 NSObject 子类**永远收不到回调**
+//   （实测：服务端发完 256 块 · 宿主记账全 0 · Promise 永不结算 · 120s 超时）。
+//   流式复用 `BodyLimitDelegate`（同一 session / 连接池 / cookie 存储）。

@@ -9488,3 +9488,140 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   ② 上限可配置（`AppRequestConfig.maxBodyBytes`）；
   ③ 按真实载荷分布标定 32 MiB；
   ④ （新增）鸿蒙"网络层止血"验证需限速链路——当前只能证明内存上界。
+
+1118. **★★★流式通道落地（S3 第一块拼图）：分块回推 + **真背压** —— 五端线格式扩 tag、JS 消费侧四道判据、Android 真机 10/10 全绿（背压实测阻塞 759 次/6815ms）· 决策**（2026-10-20 · 承接 #1117「下一步①：流式协议，必须与 upload/download 同批设计」，用户「继续」）：
+
+【问题（S2 已做完，为什么还要 S3）】
+  #1115/#1116/#1117 把 fetch 做到 S2（32 MiB 上限 + 超限显式报错）。但 **32 MiB 上限只解决"单次别炸内存"**，
+  响应体仍是**整包驻留**：一个 30 MiB 的 JSON 依然要一次性全进内存，且调用方在拿到完整结果前
+  **看不到任何数据**。S3 要求的是"边到边处理"（SSE 逐行、下载落盘）+ 背压。
+  ★三者（fetch / upload / download）共享**同一根因**：跨界只有"整包"通道 ⇒ 本单先建通道，
+  upload/download 接进同一套是下一步（同一份协议，不另造）。
+
+【线格式（向后兼容，五端逐字节等价）】
+  · 去程 `MetaTagInvoke.Stream = 8`（uint8，**只在显式 true 时写**）：
+    ★为什么由**请求**声明而不是让宿主猜——不声明 = 整包（受 32 MiB 上限），声明 = 分块回推。
+      行为差异必须由请求决定，否则同一份代码在不同宿主上语义不同。
+  · 回程 `MetaTagResolve.StreamSeq = 21`（uint32，从 0 递增）：**带此 tag = 数据块**（不结算）；
+    不带且 `pending !== true` = 最终帧（status/headers/错误在此）。
+    ★为什么用显式 tag 而不是"有 body 就是块"——空块（心跳）与空响应会含糊；
+      且序号让消费方能**检测丢帧**。
+  · 五端同步：TS（SSOT）/ Java / Swift / ArkTS / C++。`check:invoke-wire-parity` 向量 **24 → 29 条**
+    （+`invoke-stream-true` / +`invoke-stream-false-no-tag` / +`resolve-stream-chunk` /
+    +`resolve-stream-final` / +`resolve-stream-empty-chunk`），五端 29 条全过。
+    ★配对判据：**既测 true 也测 false**——只测 true 的话，"把 false 也写成 tag"的实现会漏网。
+
+【JS 消费侧（`invokeHostStream` + `AppRequestConfig.onChunk`）】
+  · `settleHostCallBytes` **先判 `streamSeq` 再判 `pending`**：
+    ★顺序很重要——宿主可能省略块帧的 `pending`，若按 `pending === true` 才当块，
+      这类帧会被**当成最终帧结算** ⇒ 流在中途静默截断且不报错。
+  · **丢帧检测**：seq 必须严格连续（首块必须是 0），跳跃 ⇒ reject
+    （"静默拼出半截 JSON"在超级应用里比直接失败难查得多）。
+  · **消费回调抛错 ⇒ 终止本次流**并清理 pending 表（否则后续块到达却没人消费 = 泄漏）。
+  · `MAX_STREAM_CHUNKS = 65536`：seq 校验能防丢帧，**防不了"永不结束"**——
+    服务端无限流/宿主 seq 不推进会让 Promise 永久挂起（只有 timeout 兜底）。
+
+【宿主侧：背压怎么实现（两端机制不同，效果同义）】
+  · **Android**：`ArrayBlockingQueue(STREAM_QUEUE_DEPTH=8)` + 读线程 `q.put(chunk)`（**阻塞**）。
+    队列满 ⇒ 读线程停 ⇒ 不再读 socket ⇒ TCP 窗口收敛 ⇒ 服务器发不动。
+  · **iOS**：`DispatchSemaphore(QUEUE_DEPTH=8)`，在 `didReceive` 里 `wait()`，
+    主线程推完才 `signal()` ⇒ delegate 队列不再投递 ⇒ 同理。
+  · 两端 `STREAM_CHUNK = 16 KiB` / `QUEUE_DEPTH = 8`（128 KiB 在途）**同值**。
+  · ★**流式路径不调用 `readAll`**（那会把整包攒进 `ByteArrayOutputStream`，与 S3 冲突）；
+    流式**不受 32 MiB 整包上限约束**（上限本就是"整包驻留"的护栏）。
+
+【★★★本轮抓到的三个真缺陷（都不是"让测试变绿"能掩盖的）】
+  ① **伪背压（最严重）**：第一版消费者 `push(rf)` 是异步 `Handler.post` ⇒ post 完立刻取下一块
+     ⇒ **队列永远不会满**，积压转移到**主线程无界消息队列** ⇒ "有界队列"形同虚设。
+     真机读数直接暴露：`max_queued=3` · `backpressure_waits=0`。
+     修法：`pushAndWait`（`CountDownLatch` 等主线程**真的执行完**才返回，5s 超时兜底）。
+     修后：`max_queued=8`（打满）· `backpressure_waits=**759**` · `backpressure_ms=6815`。
+     ★教训：**"有界队列"不等于"有背压"**——必须证明"生产真的被消费速度约束过"。
+  ② **判据把"服务端块数"当成"宿主块数"**：服务端发 256 块，宿主按 `read` 返回的真实长度推了 **768 块**
+     （TCP 分片）⇒ 判据判红，而**数据完全正确**。块边界是**传输细节，不是契约**。
+     修法：按**全局偏移**逐字节校验（服务端序列 = `((floor(k/size))*31 + (k%size)) & 0xff`）。
+     ★这是本仓第 N 次同族教训：*判据的能力边界决定结论的可信边界*（#1105 逐点差异冒充画质同源）。
+  ④ **iOS：新建的 `StreamDelegate` 永远收不到回调**（最隐蔽的一种"假实现"）：
+     `URLSession` 的 delegate 在**创建时固定**（`HttpCapability.session` 绑的是 `BodyLimitDelegate.shared`）⇒
+     另建一个 `NSObject, URLSessionDataDelegate` 子类**不会被任何 session 调用**。
+     现象：服务端发完 256 块 · 宿主记账全 0 · Promise 永不结算 · 120s 超时（看起来像"网络卡住"）。
+     修法：流式复用 `BodyLimitDelegate`（加 `registerStreaming` + `State.streaming` 分支），
+     ★顺带保住连接池与 cookie 共享（另建 session 会丢掉这两样）。
+  ⑤ **iOS：`DispatchSemaphore` 放进 struct ⇒ 值拷贝把它复制成多份**（崩溃根因）：
+     `State` 是 struct ⇒ 每次 `states[id]` 读出都复制一份引用、写回又存另一份 ⇒
+     各线程拿到不同副本、`signal()` 加到别处 ⇒ 许可失控 ⇒ **App 挂 signal 5（运行时陷入）**。
+     实测崩溃点：seq=32 与 seq=33 **运行在不同线程**（delegate 队列是并发队列，不是我原以为的串行）。
+     修法：`final class StreamGate` 持有 semaphore（值拷贝的是**引用**），读写都在锁内；
+     ★并把 static 统计改成"收尾时从本 task 的 State 一次性汇总"（并发自增会丢计数）。
+  ⑥ **iOS：`st.bytes += chunk.count` 之后没写回 states** ⇒ 收尾读到旧值 ⇒ 宿主记账 `bytes` 恒 0
+     （真机读数直接暴露：`chunks=109` 但 `bytes=0`）。修法：同一次写回里带上 bytes。
+
+  ③ **`push` 返回值改不动"回推是否生效"**：我一度想把 `push` 改成返回 boolean 让读线程停读，
+     后来意识到 `Handler.post` 是**异步**的 ⇒ 拿不到同步反馈 ⇒ 只能靠 JS 侧 timeout 兜底。
+     ★**不做假保证**：注释里写明"停读需要同步反馈，而那会破坏 G-39 线程纪律"。
+
+【真机判据（Android 10/10 全绿）】
+  `hosts/android/run-stream-probe.sh`：`/stream?chunks=256&size=16384&delayMs=3` + 消费侧 `slowMs=5`
+  · 块数 768（= JS 收块数 = 宿主推块数）· 字节 4194304（= 256×16384）· 错位 **0** · seq 连续
+  · 宿主 `max_queued=8`（打满）· `backpressure_waits=759` · `backpressure_ms=6815` · `completed=true`
+  · elapsed 7443ms（服务端限速 3ms×256 + 消费侧 5ms×768 的必然结果）
+【真机判据（iOS 11/11 全绿 · iPhone 12 · 局域网 192.168.1.124:8794）】
+  **逐块到达 99 块 · 字节 4194304 · 错位 0 · seq 连续 · 宿主 chunks/bytes 对齐 · completed=true**
+  **背压：delegate 队列阻塞 86 次共 890ms** · elapsed 1125ms
+  （★块数 99 < 服务端 256 是 TCP 分片，不是丢块——判据按全局偏移校验，不按块数）
+
+  ★**为什么消费侧要人工拖慢（`slowMs`）**：本地回环太快，不制造压力就看不出背压——
+    "队列从未满"与"没有队列"在读数上**完全同形**（与 #1103 "首遍读数冒充稳态"同族）。
+
+【诚实边界（不粉饰为"三端一致"）】
+  ① **鸿蒙不支持流式**：一次性 VM 形态下**没有回推接收方**（`proteus_http.h` 文件头已登记）⇒
+     `invokeHostStream` 在该端回 `unsupported:`，**不假装支持**；
+  ② **iOS 的背压有代价**：`BodyLimitDelegate`/`StreamDelegate` 是**全进程单例**，
+     阻塞 delegate 队列会**同时**阻塞本 session 其它请求的回调 ⇒ 消费极慢时拖慢并发请求
+     （要彻底解决需每请求独立 session，会失去连接池复用）。如实登记，不当作"已解决"；
+  ③ 判据证明"背压机制真的会触发"，**不**证明"特定网络下的吞吐曲线"（需限速链路 + 多轮统计）；
+  ④ upload/download 尚未接同一套协议（同根因，下一步）；
+  ⑤ **iOS 侧 `max_queued` 恒 0**：`Semaphore` 没有"当前占用"读数（不像 Android 的 `queue.size()`）⇒
+     该字段在 iOS 上无意义，判据不依赖它（只用 `backpressure_waits`）；
+  ⑥ **iOS delegate 队列是并发的**（不是我先假设的串行）⇒ 所有 `states` 读写必须持锁；
+     本轮已加锁，但"并发队列"这个事实本身值得记住（它让"值类型 + 跨线程"的组合特别危险）。
+
+【落地清单】
+  · 线格式五端：`packages/api/src/invoke-wire.ts` · `InvokeWire.java` · `InvokeWire.swift` ·
+    `hosts/harmony/.../InvokeWire.ts`（ArkTS）· `invoke_wire.h`（C++）
+  · 黄金向量：`scripts/invoke-wire-golden.ts`（+5 条）
+  · JS：`capability-invoke.ts`（`invokeHostStream` / 块分发 / 丢帧检测 / `MAX_STREAM_CHUNKS`）·
+    `capability-app.ts`（`request` 按 `onChunk` 分流 + re-export）· `AppRequestConfig.onChunk`
+  · 宿主：`HttpCapability.java`（`performStreaming` + `pushAndWait` + `StreamStats`）·
+    `http-capability.swift`（`StreamDelegate` + `Stats`）· `invoke_wire.h`
+  · 探针：`hosts/shared/bridge/entry-superapp.ts`（`appStreamProbe`，按**全局偏移**校验 + `slowMs`）
+  · 装置：`StreamProbe.java` + `MainActivity` 分发 + `run-stream-probe.sh`（Android/iOS）·
+    服务端 `/stream` 端点 · iOS 壳 `--stream-probe=` 分支 + `run-selfdraw.sh` 参数
+  · 判据：`tests/stream-channel.test.ts` **17/17**
+  · 任务板：`T-app-stream-channel`（in_progress，决策 #1118）
+
+【★破坏性验证（4 条，全部命中）】
+  ① 块帧不识别（`if (false)`）⇒ 4 条红；
+  ② 不校验 seq 连续性 ⇒ 3 条红；
+  ③ 去程不声明 `stream` ⇒ 1 条红（"整包路径被误标流式"那条的反向）；
+  ④ Java 不解析 Stream tag ⇒ parity 红（Java 轮掉一条向量）。
+  ⑤ 把 iOS 的 `final class StreamGate` 改名 ⇒ 第一版**仍全绿**（断言 `/final class StreamGate/`
+     连注释里的提及都能匹配）⇒ 改成断言**定义行**（`^    final class StreamGate \{$/m`）+ 真正持有
+     semaphore 的语句后，才红。
+
+  ★另有一条**没被抓住**并暴露了测试盲区：把 `Boolean.TRUE.equals(f.stream)` 改成 `f.stream != null`，
+  parity **仍全绿**——因为 parity 走"解 TS 字节 → 重编"，`stream=false` 解出来是 `null`，走不到那个分支。
+  ⇒ 该向量对"宿主自建帧"路径是盲的（已记录；要覆盖需补"宿主侧编码自检"，属后续项）。
+
+【门禁】
+  `check:invoke-wire-parity`（29 条五端）· `check:no-json-wire` · `check:file-size` ·
+  `check:no-blind-wait` · `check:safe-edit` · Android 宿主编译（javac/C/Rust JNI）·
+  iOS 类型检查（swiftc）· `tests/stream-channel.test.ts` 17/17 ·
+  `tests/invoke-wire.test.ts` 19/19 · `tests/capability-invoke-bytes.test.ts` 19/19 ·
+  `tests/fetch-body-limit.test.ts` 15/15 —— 全绿。
+
+【下一步（fetch 到 S3 收口）】
+  ① **upload/download 接同一套流式协议**（同根因；download 可直接复用 `/stream` 判据形态）；
+  ② 上限可配置（`AppRequestConfig.maxBytes`——流式下语义是"总字节上限"而非"整包上限"）；
+  ③ 鸿蒙：待 VM 形态支持可重入后补流式（当前明确 unsupported）；
+  ④ （新增）iOS 的"单 delegate 阻塞并发"代价：评估是否值得为流式单开 session。

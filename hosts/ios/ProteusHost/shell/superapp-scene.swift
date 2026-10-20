@@ -410,10 +410,6 @@ final class SuperappScene: NSObject {
                 }
             }
         }
-        if !Self.tapMode {
-            for (delay, step) in steps { DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: step) }
-            DispatchQueue.main.asyncAfter(deadline: .now() + max(finishAt, 0.2)) { finish() }
-        }
         // ★★★决策 #1115：C26 响应体上限探针（`--fetch-limit-probe=<base>[,sizeMiB]`）。
         //   【为什么必须异步收尾、不能像 ws 探针那样在主线程循环】
         //     `http.request` 的回推是 `DispatchQueue.main.async`（见 http-capability.swift）——
@@ -464,6 +460,63 @@ final class SuperappScene: NSObject {
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { poll() }
             }
+        }
+        // ★★★#1118：流式通道探针（S3）——`--stream-probe=<base>[,chunks,size,delayMs,slowMs]`
+        if let spArg = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--stream-probe=") }) {
+            Self.tapMode = true
+            let body = String(spArg.dropFirst("--stream-probe=".count))
+            let parts = body.split(separator: ",").map(String.init)
+            let base = parts.first ?? ""
+            let chunks = parts.count >= 2 ? (Int(parts[1]) ?? 256) : 256
+            let size = parts.count >= 3 ? (Int(parts[2]) ?? 16384) : 16384
+            let delayMs = parts.count >= 4 ? (Int(parts[3]) ?? 3) : 3
+            let slowMs = parts.count >= 5 ? (Int(parts[4]) ?? 5) : 5
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                _ = evalJs?("__proteusHostAppStreamProbe(\(jsonQuote(base)),\(chunks),\(size),\(delayMs),\(slowMs))")
+                let deadline = Date().addingTimeInterval(120)
+                var rounds = 0
+                var lastRaw = ""
+                // ★与 fetch-limit 探针同款：递归 asyncAfter（主线程循环会饿死回推）
+                func poll() {
+                    rounds += 1
+                    let raw = evalJs?("String(globalThis.__proteusHostStreamProbeResult || '')") ?? ""
+                    if raw.isEmpty || raw == "null" || raw == "undefined" {
+                        if Date() < deadline {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { poll() }
+                            return
+                        }
+                    } else {
+                        lastRaw = raw
+                    }
+                    var o = reportBody()
+                    o["stream_base"] = base
+                    o["stream_chunks"] = chunks
+                    o["stream_probe_rounds"] = rounds
+                    o["stream_probe"] = lastRaw.isEmpty ? "null" : lastRaw
+                    o["host_stream_stats"] = BodyLimitDelegate.lastStatsSnapshot()
+                    if let d = lastRaw.data(using: .utf8),
+                       let po = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] {
+                        o["stream_ok"] = (po["ok"] as? Bool) ?? false
+                    } else {
+                        o["stream_ok"] = false
+                        if lastRaw.isEmpty { o["stream_error"] = "探针超时（120s 内无结果）" }
+                    }
+                    takeSnapshot()
+                    switchLog.append(["stream": base, "chunks": chunks, "rounds": rounds, "ok": o["stream_ok"] ?? false, "via": "stream-probe"])
+                    writeReport(o)
+                    NSLog("[proteus] SUPERAPP_STREAM_REPORT_READY ok=%@ rounds=%d", String(describing: o["stream_ok"] ?? false), rounds)
+                    if ProcessInfo.processInfo.environment["PROTEUS_EXIT_AFTER_REPORT"] == "1" { exit(0) }
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { poll() }
+            }
+        }
+        // ★★★#1118（位置修正）：本判断必须放在**所有探针分支之后**——
+        //   此前它在 fetch-limit / stream-probe 分支之前 ⇒ 那两个分支设的 `tapMode = true` **赶不上**，
+        //   `--drive` 的 steps 会抢先 `finish()` 并 `exit(0)` ⇒ 探针根本没跑就退出（实测：报告里无探针字段）。
+        //   ★这是"分支顺序"型的静默失效：探针分支看着在、实际永远来不及生效。
+        if !Self.tapMode {
+            for (delay, step) in steps { DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: step) }
+            DispatchQueue.main.asyncAfter(deadline: .now() + max(finishAt, 0.2)) { finish() }
         }
         NSLog("[proteus] SUPERAPP_LAUNCHER_READY")
     }

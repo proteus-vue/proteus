@@ -80,6 +80,8 @@ enum InvokeWire {
     static let TAG_TIMEOUT_MS: UInt8 = 5
     static let TAG_RESPONSE_TYPE: UInt8 = 6
     static let TAG_CONTENT_TYPE: UInt8 = 7
+    /// ★#1118：请求分块回推（1 = 流式；nil = 整包）
+    static let TAG_STREAM: UInt8 = 8
 
     /* 回程 meta 的 TLV tag（★16 起留回程，两段不重叠） */
     static let RTAG_HTTP_STATUS: UInt8 = 16
@@ -87,6 +89,8 @@ enum InvokeWire {
     static let RTAG_MISSING: UInt8 = 18
     static let RTAG_PENDING: UInt8 = 19
     static let RTAG_HEADERS: UInt8 = 20
+    /// ★#1118：流式块序号（有本字段 = 本帧是数据块，不结算）
+    static let RTAG_STREAM_SEQ: UInt8 = 21
 
     /// 响应体解释方式（与 `RequestConfig.responseType` 同语义）
     static let RESPONSE_TEXT: UInt8 = 0
@@ -111,6 +115,8 @@ enum InvokeWire {
         /// 见 `RESPONSE_*`；`nil` = **未指定**（同上理由——TS 侧 `!== undefined` 才写 TLV）
         var responseType: UInt8?
         var contentType: String?
+        /// ★#1118：`nil` = 未指定（不写 TLV）——与 TS 侧 `meta.stream === true` 对齐
+        var stream: Bool?
         var body: [UInt8] = []
 
         /// 取值语义（缺省 = text）——宿主消费时用这个，不要直接读可选字段。
@@ -133,6 +139,8 @@ enum InvokeWire {
         /// HTTP 状态码（网络类回程）
         var status: UInt32?
         var headers: NameValues?
+        /// ★#1118：非 nil ⇒ 本帧是流式数据块（不结算）；nil 且 pending != true ⇒ 最终帧
+        var streamSeq: UInt32?
         var body: [UInt8] = []
 
         /// ★工厂名与 Java 的 `ok/err/missingMethod/pending` 对应（Swift 侧加 `make` 前缀以免与
@@ -294,6 +302,7 @@ enum InvokeWire {
             case TAG_TIMEOUT_MS: f.timeoutMs = try p.u32()
             case TAG_RESPONSE_TYPE: f.responseType = try p.u8()
             case TAG_CONTENT_TYPE: f.contentType = try p.str()
+            case TAG_STREAM: f.stream = try p.u8() != 0
             // ★未知 tag 跳过（版本演进：老解码头遇到新 tag 应忽略，而非报错）
             default: break
             }
@@ -314,6 +323,7 @@ enum InvokeWire {
             case RTAG_MISSING: f.missing = try p.u8() != 0
             case RTAG_PENDING: f.pending = try p.u8() != 0
             case RTAG_HEADERS: f.headers = try readNameValues(p)
+            case RTAG_STREAM_SEQ: f.streamSeq = try p.u32()
             default: break
             }
         }
@@ -329,6 +339,8 @@ enum InvokeWire {
         if let t = f.timeoutMs { try writeTlv(w, TAG_TIMEOUT_MS) { w.u32(t) } }
         if let rt = f.responseType { try writeTlv(w, TAG_RESPONSE_TYPE) { w.u8(rt) } }
         if let ct = f.contentType { try writeTlv(w, TAG_CONTENT_TYPE) { try w.str(ct) } }
+        // ★#1118：只在**显式 true** 时写（与 TS `meta.stream === true` 逐字对齐）
+        if f.stream == true { try writeTlv(w, TAG_STREAM) { w.u8(1) } }
         return w.done()
     }
 
@@ -339,6 +351,7 @@ enum InvokeWire {
         if let m = f.missing { try writeTlv(w, RTAG_MISSING) { w.u8(m ? 1 : 0) } }
         if let p = f.pending { try writeTlv(w, RTAG_PENDING) { w.u8(p ? 1 : 0) } }
         if let h = f.headers { try writeTlv(w, RTAG_HEADERS) { try writeNameValues(w, h) } }
+        if let sq = f.streamSeq { try writeTlv(w, RTAG_STREAM_SEQ) { w.u32(sq) } }
         return w.done()
     }
 

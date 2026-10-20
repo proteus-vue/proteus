@@ -71,6 +71,8 @@ public final class InvokeWire {
     public static final int TAG_TIMEOUT_MS = 5;
     public static final int TAG_RESPONSE_TYPE = 6;
     public static final int TAG_CONTENT_TYPE = 7;
+    /** ★#1118：请求分块回推（1 = 流式；缺省/null = 整包） */
+    public static final int TAG_STREAM = 8;
 
     /* 回程 meta 的 TLV tag（★16 起留回程，两段不重叠） */
     public static final int RTAG_HTTP_STATUS = 16;
@@ -78,6 +80,8 @@ public final class InvokeWire {
     public static final int RTAG_MISSING = 18;
     public static final int RTAG_PENDING = 19;
     public static final int RTAG_HEADERS = 20;
+    /** ★#1118：流式块序号（有本字段 = 本帧是数据块，不结算） */
+    public static final int RTAG_STREAM_SEQ = 21;
 
     /** 响应体解释方式（与 `RequestConfig.responseType` 同语义） */
     public static final int RESPONSE_TEXT = 0;
@@ -105,6 +109,8 @@ public final class InvokeWire {
         /** 见 RESPONSE_* 常量；`null` = **未指定**（同上理由——TS 侧 `!== undefined` 才写 TLV） */
         public Integer responseType;
         public String contentType;
+        /** ★#1118：`null` = 未指定（不写 TLV）——与 TS 侧 `meta.stream === true` 对齐 */
+        public Boolean stream;
         public byte[] body = EMPTY;
 
         /** 取值语义（缺省 = text）——宿主消费时用这个，不要直接读可空字段。 */
@@ -118,6 +124,8 @@ public final class InvokeWire {
     public static final class ResolveFrame {
         public String reqId = "";
         public boolean ok = true;
+        /** ★#1118：非 null ⇒ 本帧是流式数据块（不结算）；null 且 pending!=true ⇒ 最终帧 */
+        public Integer streamSeq;
         /** `ok=false` 时的原因 */
         public String reason;
         /** ★保留既有语义：壳未实现该方法（桥据此给 `*.unsupported`） */
@@ -296,7 +304,9 @@ public final class InvokeWire {
                 case TAG_HEADERS: f.headers = readNameValues(p); break;
                 case TAG_PARAMS: f.params = readNameValues(p); break;
                 case TAG_TIMEOUT_MS: f.timeoutMs = p.u32(); break;
-                case TAG_RESPONSE_TYPE: f.responseType = p.u8(); break;                case TAG_CONTENT_TYPE: f.contentType = p.str(); break;
+                case TAG_RESPONSE_TYPE: f.responseType = p.u8(); break;
+                case TAG_CONTENT_TYPE: f.contentType = p.str(); break;
+                case TAG_STREAM: f.stream = p.u8() != 0; break;
                 // ★未知 tag 跳过（版本演进：老解码头遇到新 tag 应忽略，而非报错）
                 default: break;
             }
@@ -317,6 +327,7 @@ public final class InvokeWire {
                 case RTAG_MISSING: f.missing = p.u8() != 0; break;
                 case RTAG_PENDING: f.pending = p.u8() != 0; break;
                 case RTAG_HEADERS: f.headers = readNameValues(p); break;
+                case RTAG_STREAM_SEQ: f.streamSeq = p.u32(); break;
                 default: break;
             }
         }
@@ -332,6 +343,8 @@ public final class InvokeWire {
         if (f.timeoutMs != null) writeTlv(w, TAG_TIMEOUT_MS, () -> w.u32(f.timeoutMs));
         if (f.responseType != null) writeTlv(w, TAG_RESPONSE_TYPE, () -> w.u8(f.responseType));
         if (f.contentType != null) writeTlv(w, TAG_CONTENT_TYPE, () -> w.str(f.contentType));
+        // ★#1118：只在**显式 true** 时写（与 TS `meta.stream === true` 逐字对齐；false/null 都不写）
+        if (Boolean.TRUE.equals(f.stream)) writeTlv(w, TAG_STREAM, () -> w.u8(1));
         return w.done();
     }
 
@@ -342,6 +355,7 @@ public final class InvokeWire {
         if (f.missing != null) writeTlv(w, RTAG_MISSING, () -> w.u8(f.missing ? 1 : 0));
         if (f.pending != null) writeTlv(w, RTAG_PENDING, () -> w.u8(f.pending ? 1 : 0));
         if (f.headers != null) writeTlv(w, RTAG_HEADERS, () -> writeNameValues(w, f.headers));
+        if (f.streamSeq != null) writeTlv(w, RTAG_STREAM_SEQ, () -> w.u32(f.streamSeq));
         return w.done();
     }
 

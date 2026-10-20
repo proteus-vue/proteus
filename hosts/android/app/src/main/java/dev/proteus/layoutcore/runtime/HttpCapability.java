@@ -94,6 +94,29 @@ public final class HttpCapability {
         final String method = f.httpMethod != null ? f.httpMethod : "GET";
         final int timeoutMs = f.timeoutOrDefault();
 
+        // ★★★#1118：请求声明了流式 ⇒ 走「边读边推」路径（不整包进内存，也不受 32 MiB 上限约束）
+        if (f.stream != null && f.stream) {
+            NET.execute(new Runnable() {
+                @Override public void run() {
+                    try {
+                        performStreaming(f, url, method, timeoutMs);
+                    } catch (StreamAborted e) {
+                        // 消费侧/队列侧主动中止：已推过的块就此为止，末帧如实报错
+                        push(InvokeWire.ResolveFrame.err(f.reqId, e.getMessage()));
+                    } catch (SocketTimeoutException e) {
+                        push(InvokeWire.ResolveFrame.err(f.reqId, "timeout: " + e.getMessage()));
+                    } catch (java.net.UnknownHostException e) {
+                        push(InvokeWire.ResolveFrame.err(f.reqId, "network.unreachable: " + e.getMessage()));
+                    } catch (java.net.ConnectException e) {
+                        push(InvokeWire.ResolveFrame.err(f.reqId, "network.unreachable: " + e.getMessage()));
+                    } catch (Throwable t) {
+                        push(InvokeWire.ResolveFrame.err(f.reqId, "http.failed: " + t));
+                    }
+                }
+            });
+            return InvokeWire.encodeResolve(InvokeWire.ResolveFrame.pending(f.reqId));
+        }
+
         NET.execute(new Runnable() {
             @Override public void run() {
                 InvokeWire.ResolveFrame out;
@@ -193,6 +216,166 @@ public final class HttpCapability {
             if (conn != null) conn.disconnect();
         }
     }
+
+    /* ══════════════════ ★★★#1118 流式（S3：边读边推 + 真背压） ══════════════════ */
+
+    /**
+     * 流式块大小。★与 {@link #READ_CHUNK} 分开：后者是"从流里读多少"，这里决定"回推给 JS 的粒度"。
+     * 取 16 KiB：与 READ_CHUNK 同量级 ⇒ 一次读一块、推一块，不额外攒批（攒批会加延迟）。
+     */
+    private static final int STREAM_CHUNK = 16 * 1024;
+
+    /**
+     * ★★★**背压的实现点**：待推队列的深度上限。
+     *
+     * 【为什么这是真背压，而不是"限流"】读线程从 socket 读到一块 ⇒ 放进队列 ⇒ 立刻回读下一块。
+     *   队列**满**时读线程在这里**阻塞**（{@link java.util.concurrent.ArrayBlockingQueue#put}）⇒
+     *   不再从 socket 读 ⇒ TCP 接收窗口耗尽 ⇒ 服务器发送被内核压住。
+     *   ⇒ **消费慢会真的让生产变慢**，而不是把内存越堆越多。
+     *
+     * 【为什么是 8】8 × 16 KiB = 128 KiB 在途。够吸收 JS 线程的抖动（一两帧的调度延迟），
+     *   又不至于让"消费停了"还继续吞几 MB。
+     */
+    private static final int STREAM_QUEUE_DEPTH = 8;
+
+    /** 流式被主动中止（消费侧抛错 / 队列等太久）——独立异常以便末帧给出准确原因。 */
+    static final class StreamAborted extends Exception {
+        StreamAborted(String msg) { super(msg); }
+    }
+
+    /** 流式通道记账（真机判据读它证明"边读边推 + 背压真的发生过"）。 */
+    static final class StreamStats {
+        volatile int chunks = 0;
+        volatile long bytes = 0;
+        volatile int maxQueued = 0;
+        /** 读线程因队列满而阻塞的累计次数（> 0 = 背压真的发生过） */
+        volatile int backpressureWaits = 0;
+        volatile long backpressureMs = 0;
+        volatile boolean completed = false;
+        volatile String error = null;
+    }
+
+    private static StreamStats lastStreamStats = new StreamStats();
+
+    /** 最近一次流式的记账（判据出口；每次流式开始时重置）。 */
+    public static StreamStats lastStreamStats() { return lastStreamStats; }
+
+    /**
+     * 边读边推：每块编成 `PRSP` 帧（带 `streamSeq`）推给 JS，最后推一帧无 seq 的最终帧。
+     *
+     * 【线程】本方法在**网络线程**上跑。`push` 内部切主线程（G-39 线程纪律）。
+     * 【★推的顺序保证】所有回推都经 {@link #push} 的 `Handler.post`（主线程单队列）⇒ 到达 JS 的
+     *   顺序 = 入队顺序。故 seq 0,1,2… 在 JS 侧必然连续（丢帧只可能来自宿主内部 bug）。
+     */
+    private static void performStreaming(InvokeWire.InvokeFrame f, String url, String method, int timeoutMs)
+            throws Exception {
+        final StreamStats stats = new StreamStats();
+        lastStreamStats = stats;
+        HttpURLConnection conn = null;
+        final java.util.concurrent.ArrayBlockingQueue<byte[]> q =
+                new java.util.concurrent.ArrayBlockingQueue<>(STREAM_QUEUE_DEPTH);
+
+        /** 消费者：从队列取块 → 编码 → 切主线程回推。★与读线程**并行** ⇒ 队列才是解耦点。 */
+        final Thread consumer = new Thread(new Runnable() {
+            @Override public void run() {
+                int seq = 0;
+                try {
+                    while (true) {
+                        byte[] chunk = q.take();
+                        if (chunk == SENTINEL) break;
+                        if (chunk.length == 0) continue;
+                        InvokeWire.ResolveFrame rf = InvokeWire.ResolveFrame.ok(f.reqId);
+                        rf.pending = true;      // ★块帧不结算
+                        rf.streamSeq = seq;     // ★有 seq = 数据块
+                        rf.body = chunk;
+                        // ★★★#1118：等主线程**真的把这个块交给 JS** 之后才取下一块 ⇒
+                        //   消费慢 ⇒ 队列满 ⇒ 读线程阻塞 ⇒ 真背压（否则积压跑到无界消息队列里）
+                        pushAndWait(rf);
+                        stats.chunks++;
+                        stats.bytes += chunk.length;
+                        seq++;
+                    }
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+        }, "proteus-http-stream-consumer");
+        consumer.start();
+
+        try {
+            conn = (HttpURLConnection) new URL(url).openConnection();
+            conn.setRequestMethod(method);
+            conn.setConnectTimeout(timeoutMs);
+            conn.setReadTimeout(timeoutMs);
+            conn.setInstanceFollowRedirects(true);
+            if (f.headers != null) {
+                for (Map.Entry<String, String> e : f.headers.entrySet()) {
+                    conn.setRequestProperty(e.getKey(), e.getValue());
+                }
+            }
+            String jarCookie = null;
+            try { jarCookie = CookieManager.getInstance().getCookie(url); } catch (Throwable t) {
+                Log.w(TAG, "读 CookieManager 失败（继续无 cookie 请求）：" + t);
+            }
+            if (jarCookie != null && !jarCookie.isEmpty() && !containsKeyIgnoreCase(f.headers, "cookie")) {
+                conn.setRequestProperty("Cookie", jarCookie);
+            }
+            byte[] reqBody = f.body != null ? f.body : new byte[0];
+            if (reqBody.length > 0) {
+                if (f.contentType != null && !containsKeyIgnoreCase(f.headers, "content-type")) {
+                    conn.setRequestProperty("Content-Type", f.contentType);
+                }
+                conn.setDoOutput(true);
+                conn.setFixedLengthStreamingMode(reqBody.length);
+                OutputStream os = conn.getOutputStream();
+                try { os.write(reqBody); os.flush(); } finally { closeQuietly(os); }
+            }
+
+            int status = conn.getResponseCode();
+            Map<String, List<String>> fields = conn.getHeaderFields();
+            LinkedHashMap<String, String> respHeaders = collectHeaders(fields);
+            storeCookies(url, rawSetCookie(fields));
+
+            InputStream is = status >= 400 ? conn.getErrorStream() : conn.getInputStream();
+            byte[] buf = new byte[STREAM_CHUNK];
+            int n;
+            if (is != null) {
+                while ((n = is.read(buf)) > 0) {
+                    byte[] chunk = new byte[n];
+                    System.arraycopy(buf, 0, chunk, 0, n);
+                    // ★★★背压点：队列满 ⇒ 这里**阻塞**（读线程停 ⇒ socket 不再被消费 ⇒ TCP 窗口收敛）
+                    long t0 = 0;
+                    if (q.remainingCapacity() == 0) { t0 = System.nanoTime(); stats.backpressureWaits++; }
+                    q.put(chunk);
+                    if (t0 != 0) stats.backpressureMs += (System.nanoTime() - t0) / 1_000_000L;
+                    int depth = q.size();
+                    if (depth > stats.maxQueued) stats.maxQueued = depth;
+                }
+                closeQuietly(is);
+            }
+
+            // 排空后收尾：送哨兵 → 等消费者推完所有块 → 再推最终帧（★顺序错了最终帧会插到块前面）
+            q.put(SENTINEL);
+            consumer.join();
+
+            InvokeWire.ResolveFrame fin = InvokeWire.ResolveFrame.ok(f.reqId);
+            fin.status = status;
+            fin.headers = respHeaders;
+            fin.body = new byte[0];   // ★最终帧不回 body（数据块已逐块给过）
+            stats.completed = true;
+            push(fin);
+        } catch (Throwable t) {
+            stats.error = String.valueOf(t);
+            try { q.put(SENTINEL); } catch (InterruptedException ignored) { }
+            try { consumer.join(1000); } catch (InterruptedException ignored) { }
+            throw t;
+        } finally {
+            if (conn != null) conn.disconnect();
+        }
+    }
+
+    /** 队列哨兵（长度 0 的私有标记；真实块不会是同一个对象引用）。 */
+    private static final byte[] SENTINEL = new byte[0];
 
     /* ────────────────────────── 小工具 ────────────────────────── */
 
@@ -302,8 +485,36 @@ public final class HttpCapability {
         try { if (c != null) c.close(); } catch (Throwable ignored) { }
     }
 
+    /**
+     * ★★★#1118：**投递并等待主线程处理完**（流式专用重载）——真背压的前提。
+     *
+     * 【为什么必须等】`push` 只是 `Handler.post`（异步）⇒ 若消费者 post 完立刻取下一块，
+     *   队列**永远不会满**，积压会转移到**主线程的无界消息队列**里 ⇒ "有界队列"形同虚设，
+     *   内存照样随响应体增长（实测：`max_queued=3`、`backpressure_waits=0`，队列从未满）。
+     *   ⇒ 消费者必须等"主线程真的执行完这次回推"才取下一块。
+     *
+     * 【超时兜底】主线程被长时间占用（如 JS 死循环）时不能让读线程永久阻塞 ⇒
+     *   `await(PUSH_ACK_TIMEOUT_MS)`；超时即放行（宁可少一次背压，也不能卡死网络线程）。
+     */
+    private static void pushAndWait(InvokeWire.ResolveFrame f) {
+        final java.util.concurrent.CountDownLatch ack = new java.util.concurrent.CountDownLatch(1);
+        pushCore(f, ack);
+        try {
+            ack.await(PUSH_ACK_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    /** 回推确认超时（主线程长期被占时的兜底；正常应在几十 ms 内）。 */
+    private static final long PUSH_ACK_TIMEOUT_MS = 5000;
+
     /** ★切**主线程**回推（线程纪律：Native → JS 必须回 JS 线程；见文件头）。 */
     private static void push(InvokeWire.ResolveFrame f) {
+        pushCore(f, null);
+    }
+
+    private static void pushCore(final InvokeWire.ResolveFrame f, final java.util.concurrent.CountDownLatch ack) {
         final byte[] bytes;
         try {
             bytes = InvokeWire.encodeResolve(f);
@@ -314,9 +525,14 @@ public final class HttpCapability {
         android.os.Handler h = new android.os.Handler(android.os.Looper.getMainLooper());
         h.post(new Runnable() {
             @Override public void run() {
-                String r = QuickJsEngine.resolveHostBytes(bytes);
-                if (r != null && r.startsWith("{\"ok\":false")) {
-                    Log.w(TAG, "回推未生效（JS 侧未挂 __proteusHostResolveBytes 或回调已超时）：" + r);
+                try {
+                    String r = QuickJsEngine.resolveHostBytes(bytes);
+                    if (r != null && r.startsWith("{\"ok\":false")) {
+                        Log.w(TAG, "回推未生效（JS 侧未挂 __proteusHostResolveBytes 或回调已超时）：" + r);
+                    }
+                } finally {
+                    // ★无论成败都放行等待方（否则一次异常会永久卡住读线程）
+                    if (ack != null) ack.countDown();
                 }
             }
         });

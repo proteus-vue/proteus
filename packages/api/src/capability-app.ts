@@ -27,7 +27,7 @@
 //   本模块只保留**能力语义**（哪些方法、返回什么形状）；通道层的公共面在此 re-export
 //   （历史导入点不变：宿主桥 entry-host-runtime.ts 读 `invokeHost`；能力测试读 `invokeHostAsync` 等）。
 
-import { invokeHost, invokeHostAsync } from './capability-invoke'
+import { invokeHost, invokeHostAsync, invokeHostStream } from './capability-invoke'
 import type { AppRequestConfig, AppRequestResponse } from './capability-invoke'
 import { onceWebEventSource, onceWxAppBridge } from './capability-lifecycle-once' // ★决策 #1071 幂等守卫
 export {
@@ -36,8 +36,7 @@ export {
   invokeHost,
   appNativeAvailable,
   invokeHostAsync,
-  installHostResolveBridge,
-  pendingHostCallCount,
+  invokeHostStream, installHostResolveBridge, pendingHostCallCount, lastStreamChunkCount,
   HOST_RESOLVE_KEY,
 } from './capability-invoke'
 export type { HostInvokeFn, AppRequestConfig, AppRequestResponse } from './capability-invoke'
@@ -792,12 +791,11 @@ export function createAppNativeCapabilities<E extends Error = Error>(CapError: n
      *   鸿蒙 Header 注入）——桥只传 url/params/headers，业务零感知。
      * 【诚实边界】壳未实现 `http.request` ⇒ `fetch.unsupported`（**不伪造成功**）；JS 兜底超时 = 业务 + 2s。
      */
-    request: (config: AppRequestConfig): Promise<AppRequestResponse<unknown>> =>
-      invokeHostAsync(
-        APP_NATIVE_METHODS.httpRequest,
-        { url: config.url, method: config.method, data: config.data, params: config.params, headers: config.headers, timeout: config.timeout },
-        (config.timeout ?? 15000) + 2000,
-      )
+    request: (config: AppRequestConfig): Promise<AppRequestResponse<unknown>> => {
+      const args = { url: config.url, method: config.method, data: config.data, params: config.params, headers: config.headers, timeout: config.timeout }
+      const budget = (config.timeout ?? 15000) + 2000
+      // ★#1118：有 `onChunk` ⇒ 流式（逐块回推，内存不随响应体增长）；否则整包（受 32 MiB 上限）
+      return (config.onChunk ? invokeHostStream(APP_NATIVE_METHODS.httpRequest, args, config.onChunk, budget) : invokeHostAsync(APP_NATIVE_METHODS.httpRequest, args, budget))
         .then((d) => {
           const r = (d ?? {}) as { data?: unknown; status?: number; headers?: Record<string, string> }
           return { data: r.data, status: Number(r.status ?? 0), headers: r.headers ?? {}, config }
@@ -806,7 +804,8 @@ export function createAppNativeCapabilities<E extends Error = Error>(CapError: n
           const msg = e instanceof Error ? e.message : String(e)
           if (/^fetch\.tooLarge:/.test(msg)) throw new CapError('fetch.tooLarge', msg.replace(/^fetch\.tooLarge:\s*/, ''))   // ★#1115 超限独立成码，不与 failed 混同
           throw new CapError(/^unsupported:/.test(msg) ? 'fetch.unsupported' : 'fetch.failed', msg.replace(/^unsupported:\s*/, ''))
-        }),
+        })
+    },
   }
 }
 

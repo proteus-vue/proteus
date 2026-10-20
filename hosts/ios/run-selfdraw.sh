@@ -24,6 +24,7 @@ set -euo pipefail
 # ★解析可用的 Xcode（devicectl/xcodebuild 只在完整 Xcode 里；本机 Xcode 在非默认位置）
 #   详见 hosts/ios/lib/xcode-env.sh —— 导出 DEVELOPER_DIR，免去每次手工指定。
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/xcode-env.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/src-snapshot.sh"
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
@@ -133,6 +134,8 @@ for a in "$@"; do
     --scroll=*) SCROLL_ARG="${a#--scroll=}" ;;
     # ★★★决策 #1115：C26 响应体上限探针——`--fetch-limit-probe=<base>[,sizeMiB]`
     --fetch-limit-probe=*) FETCH_LIMIT_ARG="${a#--fetch-limit-probe=}" ;;
+    # ★★★#1118：流式通道探针——`--stream-probe=<base>[,chunks,size,delayMs,slowMs]`
+    --stream-probe=*) STREAM_PROBE_ARG="${a#--stream-probe=}" ;;
     --native-mix) MODE="native-mix" ;;
     --vapor-ab) MODE="vapor-ab" ;;
     # ★★★Vapor 设备端链（2026-10-03 · 三端对齐）：与 Android/鸿蒙**同一份**判据（①–⑫）
@@ -209,6 +212,8 @@ PLATFORM_SRC="$(ls "$ROOT"/platform/ios/ProteusPlatform/*.swift 2>/dev/null | tr
 #   ⇒ 脚本仍打印成功路径，差点把旧二进制的读数当成新代码的证据）。
 #   ⇒ 判据 = **产物存在 + 本次编译 rc=0 + 日志里无 error:**（三者缺一即停）。
 COMPILE_LOG="$(mktemp)"
+# ★★★#1118：源码快照守卫（实现在 lib/src-snapshot.sh）
+snap_before "$HERE/ProteusHost"
 set +e
 xcrun --sdk iphoneos swiftc -O -target arm64-apple-ios15.0 \
   -framework UIKit -framework CoreText -framework JavaScriptCore -framework AVFoundation -parse-as-library \
@@ -221,9 +226,11 @@ xcrun --sdk iphoneos swiftc -O -target arm64-apple-ios15.0 \
   "$HERE/ProteusHost/dev/host-runtime-scene.swift" "$HERE/ProteusHost/dev/app-stack-scene.swift" "$HERE/ProteusHost/dev/showcase-scene.swift" "$HERE/ProteusHost/dev/glass-scene.swift" "$HERE/ProteusHost/shell/superapp-scene.swift" "$HERE/ProteusHost/shell/selfdraw-app.swift" "$ABI_LIB" "$LIB" > "$COMPILE_LOG" 2>&1
 COMPILE_RC=$?
 set -e
+snap_check "$HERE/ProteusHost" || exit 3
 grep -E "error:" "$COMPILE_LOG" | head -5 || true
 if [ "$COMPILE_RC" != "0" ] || [ ! -f "$APP/ProteusSelfDraw" ]; then
   echo "✗ Swift 编译失败（rc=${COMPILE_RC}, 产物存在=$([ -f "$APP/ProteusSelfDraw" ] && echo yes || echo no)）"
+  grep -q "was modified during the build" "$COMPILE_LOG" && echo "  ★直因：源码在编译期被改动（见上面的快照守卫）" || true
   echo "  完整日志：$COMPILE_LOG"
   exit 3
 fi
@@ -639,9 +646,10 @@ elif [ "$MODE" = "superapp" ]; then
   if [ -n "${SCROLL_ARG:-}" ]; then SA_ARGS+=("--scroll=$SCROLL_ARG"); fi
   # ★#1115：响应体上限探针（自动化验证 ⇒ 同样用 --console 阻塞到报告落盘自退）
   if [ -n "${FETCH_LIMIT_ARG:-}" ]; then SA_ARGS+=("--fetch-limit-probe=$FETCH_LIMIT_ARG"); fi
+  if [ -n "${STREAM_PROBE_ARG:-}" ]; then SA_ARGS+=("--stream-probe=$STREAM_PROBE_ARG"); fi
   # ★B1：`--drive` 或 `--tap` 都是**自动化验证**（落报告后自退）⇒ 用 `--console` 阻塞到退出；
   #   两者皆无 = 常驻给人看（App 不退 ⇒ 绝不能加 `--console`，见上注释）。
-  if [ "$DRIVE" = "1" ] || [ -n "$TAP" ] || [ -n "${PUMP:-}" ] || [ -n "${SCROLL_ARG:-}" ] || [ -n "${FETCH_LIMIT_ARG:-}" ]; then
+  if [ "$DRIVE" = "1" ] || [ -n "$TAP" ] || [ -n "${PUMP:-}" ] || [ -n "${SCROLL_ARG:-}" ] || [ -n "${FETCH_LIMIT_ARG:-}" ] || [ -n "${STREAM_PROBE_ARG:-}" ]; then
     xcrun devicectl device process launch --console --terminate-existing \
       --environment-variables "{\"PROTEUS_EXIT_AFTER_REPORT\":\"1\"${WS_PROBE_ENV}}" \
       --device "$UDID" "$BUNDLE_ID" "${SA_ARGS[@]}" > "$LAUNCH_LOG" 2>&1 || LAUNCH_RC=$?

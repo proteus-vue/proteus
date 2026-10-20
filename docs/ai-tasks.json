@@ -2118,6 +2118,29 @@
         "T-tv-focus-scroll-follow"
       ],
       "note": "【planned · 方案 05-batches.md B5（S2）】这是本方案的**差异化证据**：同一组矩形喂进纯函数，四端焦点序列必须逐项一致（sha256 指纹）。前置：tvOS 设备与签名成本**未评估**，需独立 spike。判据 P2 可进 CI（rects 可造假数据，不需真机）。破坏性：改任一端 crossWeight ⇒ 指纹不一致必红。★诚实边界：三端都还没接遥控输入，\"同一 rects → 同一序列\"目前是**待验证假设**，不是已证结论。"
+    },
+    {
+      "id": "T-app-stream-channel",
+      "title": "#1118 流式通道（S3：分块回推 + 真背压）——fetch 从 S2 升到 S3 的第一块拼图",
+      "type": "capability",
+      "status": "in_progress",
+      "owner": "zcode",
+      "scope": [
+        "packages/api/src/invoke-wire.ts",
+        "packages/api/src/capability-invoke.ts",
+        "packages/api/src/capability-app.ts",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/HttpCapability.java",
+        "hosts/ios/ProteusHost/runtime/http-capability.swift",
+        "hosts/shared/bridge/entry-superapp.ts",
+        "tests/stream-channel.test.ts"
+      ],
+      "decision": 1118,
+      "verification": "npx vitest run tests/stream-channel.test.ts && node scripts/check-invoke-wire-parity.mjs && bash hosts/android/check-host-compile.sh && bash hosts/ios/check-selfdraw-compile.sh && bash hosts/android/run-stream-probe.sh",
+      "branch": null,
+      "related": [
+        "T-app-fetch"
+      ],
+      "note": "S3 还剩 upload/download 流式化（同根因：跨界只有整包通道）。鸿蒙一次性 VM 无回推接收方 ⇒ 明确 unsupported，不假装支持。"
     }
   ]
 }

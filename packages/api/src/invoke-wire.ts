@@ -61,6 +61,14 @@ export const MetaTagInvoke = {
    * 缺省（无 tag）⇒ 宿主按**不透明字节**透传（网络类请求的原始 body 即为这种）。
    */
   ContentType: 7,
+  /**
+   * ★★★#1118 流式请求（uint8：1 = 请求**分块回推**，0/缺省 = 一问一答整包）。
+   * 【为什么需要这个 tag 而不是靠"回程是不是 pending"猜】
+   *   不声明流式的请求，宿主必须把整包放进**单个**回程帧（受 32 MiB 上限约束）；
+   *   声明了流式，宿主改为**逐块回推**（每帧一个 `StreamSeq`），最后一帧才结算。
+   *   ⇒ 宿主的行为差异必须由**请求**决定，不能由宿主自己猜（否则同一份代码在两端语义不同）。
+   */
+  Stream: 8,
 } as const
 
 /** 回程 meta 的 TLV tag（★16 起留给回程，两段不重叠 ⇒ 同一 tag 号在两侧含义稳定） */
@@ -70,6 +78,14 @@ export const MetaTagResolve = {
   Missing: 18,
   Pending: 19,
   Headers: 20,
+  /**
+   * ★★★#1118 流式块序号（uint32，从 0 递增）。
+   * 【语义】**带本 tag 的回程帧 = 数据块**（body 是该块字节；`pending` 同时为 true ⇒ 不结算）。
+   *   不带本 tag 且 `pending !== true` 的帧 = **最终帧**（status/headers/错误在此）。
+   * 【为什么用显式 tag 而不是"有 body 就是块"】空块（心跳）/空响应的区分会含糊；
+   *   且序号让消费方能**检测丢帧**（seq 跳跃 ⇒ 宿主队列丢了数据，必须报错而不是静默拼接）。
+   */
+  StreamSeq: 21,
 } as const
 
 /** 响应体解释方式（与 `RequestConfig.responseType` 同语义） */
@@ -93,6 +109,8 @@ export interface InvokeMeta {
   responseType?: ResponseKind
   /** 请求体 MIME（见 `MetaTagInvoke.ContentType`；缺省 = 不透明字节） */
   contentType?: string
+  /** ★#1118：要求宿主分块回推（见 `MetaTagInvoke.Stream`）；缺省 = 整包 */
+  stream?: boolean
 }
 
 export interface InvokeFrame {
@@ -119,6 +137,11 @@ export interface ResolveFrame {
   headers?: Record<string, string>
   /** 响应体（裸字节） */
   body?: Uint8Array
+  /**
+   * ★#1118：流式块序号。**有本字段 = 本帧是数据块**（不结算，交消费方的 onChunk）；
+   * 无本字段且 `pending !== true` = 最终帧（结算）。
+   */
+  streamSeq?: number
 }
 
 /* ────────────────────────── TLV 原语 ────────────────────────── */
@@ -173,6 +196,8 @@ function encodeInvokeMeta(meta: InvokeMeta): Uint8Array {
   if (responseType !== undefined) writeTlv(w, MetaTagInvoke.ResponseType, () => w.u8(RESPONSE_KIND_ID[responseType]))
   const contentType = meta.contentType
   if (contentType !== undefined) writeTlv(w, MetaTagInvoke.ContentType, () => w.str(contentType))
+  // ★#1118：只在**显式要求**时写（`false` 与缺省同为"整包"，不写 tag ⇒ 老宿主行为不变）
+  if (meta.stream === true) writeTlv(w, MetaTagInvoke.Stream, () => w.u8(1))
   return w.done()
 }
 
@@ -228,6 +253,9 @@ function decodeInvokeMeta(bytes: Uint8Array, into: InvokeMeta): void {
       case MetaTagInvoke.ContentType:
         into.contentType = p.str()
         break
+      case MetaTagInvoke.Stream:
+        into.stream = p.u8() !== 0
+        break
       // ★未知 tag 跳过（版本演进：老解码头遇到新 tag 应忽略，而非报错）
       default:
         break
@@ -274,6 +302,8 @@ function encodeResolveMeta(f: ResolveFrame): Uint8Array {
   if (pending !== undefined) writeTlv(w, MetaTagResolve.Pending, () => w.u8(pending ? 1 : 0))
   const headers = f.headers
   if (headers !== undefined) writeTlv(w, MetaTagResolve.Headers, () => writeNameValues(w, headers))
+  const streamSeq = f.streamSeq
+  if (streamSeq !== undefined) writeTlv(w, MetaTagResolve.StreamSeq, () => w.u32(streamSeq))
   return w.done()
 }
 
@@ -321,6 +351,9 @@ function decodeResolveMeta(bytes: Uint8Array, into: ResolveFrame): void {
         break
       case MetaTagResolve.Headers:
         into.headers = readNameValues(p)
+        break
+      case MetaTagResolve.StreamSeq:
+        into.streamSeq = p.u32()
         break
       default:
         break

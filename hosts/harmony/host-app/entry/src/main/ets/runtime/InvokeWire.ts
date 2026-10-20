@@ -45,6 +45,8 @@ export const TAG_PARAMS: number = 4
 export const TAG_TIMEOUT_MS: number = 5
 export const TAG_RESPONSE_TYPE: number = 6
 export const TAG_CONTENT_TYPE: number = 7
+/** ★#1118：请求分块回推（1 = 流式；undefined = 整包） */
+export const TAG_STREAM: number = 8
 
 /** 回程 TLV tag（16 起；与去程段不重叠） */
 export const RTAG_HTTP_STATUS: number = 16
@@ -52,6 +54,8 @@ export const RTAG_REASON: number = 17
 export const RTAG_MISSING: number = 18
 export const RTAG_PENDING: number = 19
 export const RTAG_HEADERS: number = 20
+/** ★#1118：流式块序号（有本字段 = 本帧是数据块，不结算） */
+export const RTAG_STREAM_SEQ: number = 21
 
 /** 响应体解释方式（与 `RequestConfig.responseType` 同语义） */
 export const RESPONSE_TEXT: number = 0
@@ -269,6 +273,8 @@ export class InvokeFrame {
   timeoutMs: number | undefined = undefined
   responseType: number | undefined = undefined
   contentType: string | undefined = undefined
+  /** ★#1118：`undefined` = 未指定（不写 TLV）——与 TS 侧 `meta.stream === true` 对齐 */
+  stream: boolean | undefined = undefined
   body: Uint8Array = EMPTY
 
   /** 取值语义（缺省 = text）。 */
@@ -291,6 +297,8 @@ export class ResolveFrame {
   pending: boolean | undefined = undefined
   status: number | undefined = undefined
   headers: Map<string, string> | undefined = undefined
+  /** ★#1118：非 undefined ⇒ 本帧是流式数据块（不结算） */
+  streamSeq: number | undefined = undefined
   body: Uint8Array = EMPTY
 
   static okFrame(reqId: string): ResolveFrame {
@@ -365,6 +373,8 @@ function encodeInvokeMeta(f: InvokeFrame): Uint8Array {
   if (f.timeoutMs !== undefined) writeTlv(w, TAG_TIMEOUT_MS, (x: Writer) => x.u32(f.timeoutMs as number))
   if (f.responseType !== undefined) writeTlv(w, TAG_RESPONSE_TYPE, (x: Writer) => x.u8(f.responseType as number))
   if (f.contentType !== undefined) writeTlv(w, TAG_CONTENT_TYPE, (x: Writer) => x.str(f.contentType as string))
+  // ★#1118：只在**显式 true** 时写（与 TS `meta.stream === true` 逐字对齐）
+  if (f.stream === true) writeTlv(w, TAG_STREAM, (x: Writer) => x.u8(1))
   return w.done()
 }
 
@@ -401,6 +411,7 @@ function decodeInvokeMeta(bytes: Uint8Array, into: InvokeFrame): void {
     else if (tag === TAG_TIMEOUT_MS) into.timeoutMs = p.u32()
     else if (tag === TAG_RESPONSE_TYPE) into.responseType = p.u8()
     else if (tag === TAG_CONTENT_TYPE) into.contentType = p.str()
+    else if (tag === TAG_STREAM) into.stream = p.u8() !== 0
     // 未知 tag 跳过（版本演进）
   }
 }
@@ -454,6 +465,7 @@ function encodeResolveMeta(f: ResolveFrame): Uint8Array {
   if (f.missing !== undefined) writeTlv(w, RTAG_MISSING, (x: Writer) => x.u8(f.missing === true ? 1 : 0))
   if (f.pending !== undefined) writeTlv(w, RTAG_PENDING, (x: Writer) => x.u8(f.pending === true ? 1 : 0))
   if (f.headers !== undefined) writeTlv(w, RTAG_HEADERS, (x: Writer) => writeNameValues(x, f.headers as Map<string, string>))
+  if (f.streamSeq !== undefined) writeTlv(w, RTAG_STREAM_SEQ, (x: Writer) => x.u32(f.streamSeq as number))
   return w.done()
 }
 
@@ -490,6 +502,7 @@ function decodeResolveMeta(bytes: Uint8Array, into: ResolveFrame): void {
     else if (tag === RTAG_MISSING) into.missing = p.u8() !== 0
     else if (tag === RTAG_PENDING) into.pending = p.u8() !== 0
     else if (tag === RTAG_HEADERS) into.headers = readNameValues(p)
+    else if (tag === RTAG_STREAM_SEQ) into.streamSeq = p.u32()
   }
 }
 
