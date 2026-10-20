@@ -61,6 +61,8 @@ constexpr uint8_t TAG_RESPONSE_TYPE = 6;
 constexpr uint8_t TAG_CONTENT_TYPE = 7;
 /** ★#1118：请求分块回推（1 = 流式；缺省 = 整包） */
 constexpr uint8_t TAG_STREAM = 8;
+/** ★#1119：落盘路径（宿主直写沙箱） */
+constexpr uint8_t TAG_SAVE_PATH = 9;
 
 /* 回程 TLV tag（16 起；与去程段不重叠） */
 constexpr uint8_t RTAG_HTTP_STATUS = 16;
@@ -111,6 +113,8 @@ struct InvokeFrame {
   Opt<std::string> contentType;
   /** ★#1118：`has=false` = 未指定（不写 TLV）——与 TS 侧 `meta.stream === true` 对齐 */
   Opt<bool> stream;
+  /** ★#1119：宿主把响应体直接写进该沙箱路径 */
+  Opt<std::string> savePath;
   std::vector<uint8_t> body;
 
   int responseKind() const { return responseType ? static_cast<int>(*responseType) : RESPONSE_TEXT; }
@@ -288,6 +292,7 @@ inline std::vector<uint8_t> encodeInvokeMeta(const InvokeFrame& f) {
   if (f.contentType) writeTlv(w, TAG_CONTENT_TYPE, [&](Writer& x) { x.str(*f.contentType); });
   // ★#1118：只在**显式 true** 时写（与 TS `meta.stream === true` 逐字对齐）
   if (f.stream && *f.stream) writeTlv(w, TAG_STREAM, [&](Writer& x) { x.u8(1u); });
+  if (f.savePath) writeTlv(w, TAG_SAVE_PATH, [&](Writer& x) { x.str(*f.savePath); });
   return w.take();
 }
 
@@ -324,6 +329,7 @@ inline void decodeInvokeMeta(const std::vector<uint8_t>& bytes, InvokeFrame& f) 
       case TAG_RESPONSE_TYPE: f.responseType = p.u8(); break;
       case TAG_CONTENT_TYPE: f.contentType = p.str(); break;
       case TAG_STREAM: f.stream = (p.u8() != 0); break;
+      case TAG_SAVE_PATH: f.savePath = p.str(); break;
       default: break;  // 未知 tag 跳过（版本演进）
     }
   }

@@ -9625,3 +9625,90 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   ② 上限可配置（`AppRequestConfig.maxBytes`——流式下语义是"总字节上限"而非"整包上限"）；
   ③ 鸿蒙：待 VM 形态支持可重入后补流式（当前明确 unsupported）；
   ④ （新增）iOS 的"单 delegate 阻塞并发"代价：评估是否值得为流式单开 session。
+
+1119. **★★★download 流式落盘（S3）：`savePath` meta + 宿主边收边写，Android 真机 9/9（峰值块 8192B 与 8 MiB 文件无关）· 决策**（2026-10-20 · 承接 #1118「下一步①：upload/download 接同一套协议」，用户「继续」）：
+
+【问题（#1118 收尾时明确挂账的）】
+  download 的原链路是「宿主收**整包** → 回推 JS → JS 再调 `fs.writeBytes` 写盘」
+  ⇒ **文件多大，JS 堆就吃多大**。8 MiB 已能观察到；视频/安装包级（数百 MB）直接 OOM。
+  这与 fetch 的 S2→S3 是同一个根因（跨界只有整包通道），但**修法不同**：
+  fetch 需要"把数据交给 JS"（所以做分块回推）；download **根本不需要 JS 看到字节**
+  （只要"落盘成功 + 路径 + 大小"）⇒ 最优解是**让 JS 完全不碰字节**。
+
+【线格式（向后兼容，五端逐字节等价）】
+  · 去程 `MetaTagInvoke.SavePath = 9`（string）：宿主据此把响应体**直接写进沙箱文件**。
+  · 与 `Stream`（#1118）**正交**：可同时用（边收边写 + 顺带回推块做进度），也可只用其一。
+    只用 `SavePath` 时宿主**不需要**回推 body（JS 只要 path/size/status）。
+  · 黄金向量 **29 → 31 条**（+`invoke-save-path` / +`invoke-save-path-stream`），五端全过。
+
+【为什么不做成"分块回推 + JS 自己拼文件"】
+  ★那等于把整包搬进 JS 堆再写回宿主——**绕了一圈只为回到原点**。
+  ★诚实判断：**"背压"只在"消费方可能慢于生产方"时才需要人工构造**。
+    download 的消费方是**本地磁盘写**，写不动时 `FileOutputStream.write` / `FileHandle.write`
+    自己会阻塞 ⇒ **天然背压**，不需要再套一层队列/信号量。
+    （对比 fetch 流式：消费方是 JS 线程，会被业务代码拖慢 ⇒ 必须有界队列。）
+
+【实现（两端同规则）】
+  · **Android** `performSaveToFile`：`BufferedOutputStream` + 16 KiB 缓冲，边读边写；
+    峰值内存 = 单个缓冲块，**与文件总大小无关**（真机实测 `peak_chunk_bytes=8192`）。
+  · **iOS** `registerSaving` + delegate 落盘分支：`FileHandle.write` 逐块写（同样不累积）。
+  · **路径校验复用同一份**：Android 走 `FileTransferCapability.resolve`（由 private 放宽到包内可见），
+    iOS 走 `HttpCapability.sandboxFile`（同规则：拒绝绝对路径 + 任何 `..` + 解析后必须在沙箱根下）。
+    ★**为什么不能各写一份**：沙箱校验一旦分叉，迟早有一边漏（与 #1115 上限同值同源纪律）。
+  · **落盘总上限 1 GiB**（两端同值 `MAX_SAVE_BYTES`）：防无限下载填满磁盘；
+    超限**删残包** + 显式 `fetch.tooLarge`（不静默留半截文件）。
+  · 失败/超限路径**都删残包**（不留"看起来下完了"的半截文件——那比失败更危险）。
+
+【真机判据（Android 9/9 · 两层）】
+  `hosts/android/run-save-probe.sh`（新）+ `SaveProbe.java`（照 StreamProbe 装置）：
+  · **8 MiB 验结构**：`JS 不碰字节（data 类型 string）` · `宿主记账 8388608B` ·
+    ★`peak_chunk_bytes=8192（与 8 MiB 无关）` · `边收边写 1025 块` · `completed=true`
+  · **1 MiB 验内容**：读回 `1048576B` · 抽样 512 处**错 0**
+  ★**为什么必须两层**（本轮踩到的判据自相矛盾）：第一版在 8 MiB 上"读回整份比对内容"——
+    `fs.readBytes` 返回 `number[]` ⇒ 8M 个 JS number（>64 MiB 堆）⇒ **直接 OOM**
+    （实测 `readback_error="out of memory"`）。
+    ★那是**判据自身矛盾**：用"整包读回"去验证"不整包"，结构上必然失败。
+    ⇒ 改成"小文件验内容 / 大文件验结构"，两者合起来才既证明**正确**又证明**不整包**。
+
+【★破坏性验证（3 条，全部命中；第 1 条又暴露了断言漏洞）】
+  ① Android `savePath` 分支改成 `if (false)` ⇒ **第一版仍全绿**——
+     因为我只断言了 `performSaveToFile` **符号存在**，没断言它被**调用**。
+     修法：断言分发调用点（`savePath != null … {0,400} performSaveToFile(f, url, method, timeoutMs)`）⇒ 再测红。
+     ★这是本仓第 **3** 次同族（#1118 的 `gateInstalled` / #1115 的 `stripComments`）：
+       **断言"名字存在"等于没断言，必须断言"真的被调用/真的被执行"**。
+  ② iOS 去掉 `..` 拒绝 ⇒ 红。
+  ③ JS 把 `if (wantPath)` 改成 `if (false)` ⇒ 2 条红（transfer 测试 + 落盘测试）。
+
+【诚实边界（不粉饰）】
+  ① **upload 未做流式**：真流式上传需要「宿主边读文件边发」（帧带路径 + 宿主侧拼 multipart），
+     是**新的协议面**而非复用现有通道；且 iOS 侧 `httpBody` 是整包、要改成流式上传需重做请求构造。
+     ⇒ 本轮**只做 download**（它能闭环且有真机证据），upload 如实留 S2 并登记。
+     ★这与 #1118「三者同批设计」的原计划有偏差——**偏差本身要登记**，不假装已收口。
+  ② **鸿蒙不支持** `savePath`（一次性 VM 无回推接收方）⇒ 该端 `unsupported`，不假装；
+  ③ 落盘上限 1 GiB 是**拍的**（未按真实业务分布标定）；
+  ④ 判据只测**顺序下载**（未测并发多文件 / 断点续传 / 磁盘满）；
+  ⑤ **未测"取消"**：JS 侧目前没有取消通道（`http.request` 无 abort），
+     中途取消会留下半截文件（已被 1 GiB 上限与失败删残包部分兜住，但不是真取消）。
+
+【落地清单】
+  · 线格式五端：`invoke-wire.ts` / `InvokeWire.java` / `InvokeWire.swift` / ArkTS / `invoke_wire.h`
+  · 黄金向量 +2（31 条）
+  · JS：`capability-invoke.ts`（`savePath` 进 `META_STR` + `AppRequestConfig.savePath`）·
+    `capability-transfer.ts`（`createAppDownload` 的 `path` 语义改走宿主直写，删掉 `writeToHost`/`toByteArray`）
+  · 宿主：`HttpCapability.performSaveToFile` + `SaveStats` + `setAppContext` 接线（在 `HostCapabilities` 构造里）·
+    `http-capability.swift` 的 `registerSaving` / `sandboxFile` / 落盘分支
+  · 探针：`appSaveProbe`（在 `entry-superapp-probes.ts`）· `SaveProbe.java` · `run-save-probe.sh`
+  · 判据：`tests/download-stream-save.test.ts` **12/12**（含"两端路径校验同规则"、"appContext 必须真被注入"）
+  · 任务板：`T-app-save-to-file`（done，决策 #1119）
+
+【门禁】
+  parity 31 条五端 · `check:file-size`（capability-app 2092 ≤ 基线）· `check:no-json-wire` ·
+  Android 宿主编译 · iOS 类型检查 · 鸿蒙 C++ 编译 · prebuilt 副本 ·
+  81/81 测试（download-stream-save 12 + transfer 15 + stream-channel 19 + fetch-limit 16 + invoke-wire 19）。
+
+【下一步（S3 真正收口）】
+  ① **upload 流式**：新协议面（帧带 `uploadPath` + 宿主侧流式 multipart）——
+     ★必须先设计"宿主如何在不整包进内存的前提下拼 multipart 边界"；
+  ② **取消通道**：`http.request` 目前无 abort ⇒ 用户中途取消会留半截文件（现在是部分兜住，不是解决）；
+  ③ 落盘上限按真实业务标定；
+  ④ 鸿蒙待 VM 支持可重入后补 `savePath` 与流式。

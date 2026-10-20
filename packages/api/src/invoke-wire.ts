@@ -69,7 +69,23 @@ export const MetaTagInvoke = {
    *   ⇒ 宿主的行为差异必须由**请求**决定，不能由宿主自己猜（否则同一份代码在两端语义不同）。
    */
   Stream: 8,
+  /**
+   * ★★★#1119 落盘路径（string）：让**宿主自己**把响应体写进沙箱文件。
+   *
+   * 【为什么需要（这是 download 到 S3 的关键）】
+   *   没有本 tag 时，download 的链路是「宿主收到整包 → 回推给 JS → JS 再调 `fs.writeBytes` 写盘」
+   *   ⇒ **文件多大，JS 堆就吃多大**（超级应用的视频/安装包会直接 OOM）。
+   *   有本 tag，宿主边收边写盘，**JS 侧完全不碰字节**——内存与文件大小解耦。
+   *
+   * 【与 `Stream` 的关系】两者可同时用（宿主边收边写 + 顺带回推块做进度），也可只用本 tag。
+   *   只用本 tag 时宿主**不需要**回推 body（JS 只要 path/size/status）。
+   *
+   * 【安全】路径语义与 `fs.writeBytes` **完全一致**（沙箱相对路径、拒绝绝对路径与 `..`）——
+   *   复用同一套 `resolve()` 校验，不在这里另写一份（两套校验 = 迟早分叉）。
+   */
+  SavePath: 9,
 } as const
+
 
 /** 回程 meta 的 TLV tag（★16 起留给回程，两段不重叠 ⇒ 同一 tag 号在两侧含义稳定） */
 export const MetaTagResolve = {
@@ -109,6 +125,11 @@ export interface InvokeMeta {
   responseType?: ResponseKind
   /** 请求体 MIME（见 `MetaTagInvoke.ContentType`；缺省 = 不透明字节） */
   contentType?: string
+  /**
+   * ★★★#1119：让宿主把响应体直接写进沙箱文件（见 `MetaTagInvoke.SavePath`）。
+   * 给出本字段 ⇒ 回程的 `data` 是**落盘路径**，不再有 body 字节。
+   */
+  savePath?: string
   /** ★#1118：要求宿主分块回推（见 `MetaTagInvoke.Stream`）；缺省 = 整包 */
   stream?: boolean
 }
@@ -198,6 +219,8 @@ function encodeInvokeMeta(meta: InvokeMeta): Uint8Array {
   if (contentType !== undefined) writeTlv(w, MetaTagInvoke.ContentType, () => w.str(contentType))
   // ★#1118：只在**显式要求**时写（`false` 与缺省同为"整包"，不写 tag ⇒ 老宿主行为不变）
   if (meta.stream === true) writeTlv(w, MetaTagInvoke.Stream, () => w.u8(1))
+  const savePath = meta.savePath
+  if (savePath !== undefined) writeTlv(w, MetaTagInvoke.SavePath, () => w.str(savePath))
   return w.done()
 }
 
@@ -255,6 +278,9 @@ function decodeInvokeMeta(bytes: Uint8Array, into: InvokeMeta): void {
         break
       case MetaTagInvoke.Stream:
         into.stream = p.u8() !== 0
+        break
+      case MetaTagInvoke.SavePath:
+        into.savePath = p.str()
         break
       // ★未知 tag 跳过（版本演进：老解码头遇到新 tag 应忽略，而非报错）
       default:

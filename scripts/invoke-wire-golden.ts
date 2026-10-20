@@ -197,6 +197,20 @@ addInvoke('invoke-stream-true', {
   meta: { url: 'https://api.example.cn/v1/events', responseType: 'text', stream: true },
 })
 
+// ⑨d ★#1119 落盘路径：宿主直写沙箱（download 到 S3 的关键——JS 完全不碰字节）
+addInvoke('invoke-save-path', {
+  method: 'http.request',
+  reqId: 'r-save-1',
+  meta: { url: 'https://api.example.cn/v1/pkg.apk', responseType: 'arraybuffer', savePath: 'download/pkg.apk' },
+})
+
+// ⑨e ★#1119 落盘 + 流式同帧（宿主边收边写 + 顺带回推块做进度）
+addInvoke('invoke-save-path-stream', {
+  method: 'http.request',
+  reqId: 'r-save-2',
+  meta: { url: 'https://api.example.cn/big.bin', savePath: 'download/big.bin', stream: true },
+})
+
 // ⑨c ★#1118 `stream: false` 与缺省**同为整包** ⇒ 都必须**不写** tag 8（往返后 tag 消失）
 //      ★这条是"判据配对"：只测 true 的话，把 false 也写成 tag 的实现会漏网。
 addInvoke('invoke-stream-false-no-tag', {

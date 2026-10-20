@@ -2140,7 +2140,29 @@
       "related": [
         "T-app-fetch"
       ],
-      "note": "S3 还剩 upload/download 流式化（同根因：跨界只有整包通道）。鸿蒙一次性 VM 无回推接收方 ⇒ 明确 unsupported，不假装支持。"
+      "note": "S3 已完成 fetch 流式/背压（#1118）+ download 流式落盘（#1119，savePath meta）。upload 真流式需新协议面（宿主边读文件边发 multipart）⇒ 仍 S2，已如实登记。鸿蒙一次性 VM 无回推接收方 ⇒ 明确 unsupported。"
+    },
+    {
+      "id": "T-app-save-to-file",
+      "title": "#1119 download 流式落盘（S3）：宿主边收边写，JS 完全不碰字节",
+      "type": "capability",
+      "status": "done",
+      "owner": "zcode",
+      "scope": [
+        "packages/api/src/invoke-wire.ts",
+        "packages/api/src/capability-invoke.ts",
+        "packages/api/src/capability-transfer.ts",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/HttpCapability.java",
+        "hosts/ios/ProteusHost/runtime/http-capability.swift",
+        "tests/download-stream-save.test.ts"
+      ],
+      "decision": 1119,
+      "verification": "npx vitest run tests/download-stream-save.test.ts && bash hosts/android/check-host-compile.sh && bash hosts/ios/check-selfdraw-compile.sh && node scripts/check-invoke-wire-parity.mjs && bash hosts/android/run-save-probe.sh",
+      "branch": null,
+      "related": [
+        "T-app-stream-channel"
+      ],
+      "note": "真机 9/9：JS 不碰字节 + peak_chunk_bytes=8192 与 8 MiB 文件无关 + 1 MiB 抽样内容校验错 0。upload 真流式未做（需新协议面），如实留 S2。"
     }
   ]
 }

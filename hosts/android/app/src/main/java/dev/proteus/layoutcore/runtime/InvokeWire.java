@@ -73,6 +73,8 @@ public final class InvokeWire {
     public static final int TAG_CONTENT_TYPE = 7;
     /** ★#1118：请求分块回推（1 = 流式；缺省/null = 整包） */
     public static final int TAG_STREAM = 8;
+    /** ★#1119：落盘路径（宿主直写沙箱，JS 不碰字节） */
+    public static final int TAG_SAVE_PATH = 9;
 
     /* 回程 meta 的 TLV tag（★16 起留回程，两段不重叠） */
     public static final int RTAG_HTTP_STATUS = 16;
@@ -111,6 +113,8 @@ public final class InvokeWire {
         public String contentType;
         /** ★#1118：`null` = 未指定（不写 TLV）——与 TS 侧 `meta.stream === true` 对齐 */
         public Boolean stream;
+        /** ★#1119：非 null ⇒ 宿主把响应体直接写进该沙箱路径 */
+        public String savePath;
         public byte[] body = EMPTY;
 
         /** 取值语义（缺省 = text）——宿主消费时用这个，不要直接读可空字段。 */
@@ -307,6 +311,7 @@ public final class InvokeWire {
                 case TAG_RESPONSE_TYPE: f.responseType = p.u8(); break;
                 case TAG_CONTENT_TYPE: f.contentType = p.str(); break;
                 case TAG_STREAM: f.stream = p.u8() != 0; break;
+                case TAG_SAVE_PATH: f.savePath = p.str(); break;
                 // ★未知 tag 跳过（版本演进：老解码头遇到新 tag 应忽略，而非报错）
                 default: break;
             }
@@ -345,6 +350,7 @@ public final class InvokeWire {
         if (f.contentType != null) writeTlv(w, TAG_CONTENT_TYPE, () -> w.str(f.contentType));
         // ★#1118：只在**显式 true** 时写（与 TS `meta.stream === true` 逐字对齐；false/null 都不写）
         if (Boolean.TRUE.equals(f.stream)) writeTlv(w, TAG_STREAM, () -> w.u8(1));
+        if (f.savePath != null) writeTlv(w, TAG_SAVE_PATH, () -> w.str(f.savePath));
         return w.done();
     }
 

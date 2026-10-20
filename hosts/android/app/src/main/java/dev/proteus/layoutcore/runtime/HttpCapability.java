@@ -94,6 +94,28 @@ public final class HttpCapability {
         final String method = f.httpMethod != null ? f.httpMethod : "GET";
         final int timeoutMs = f.timeoutOrDefault();
 
+        // ★★★#1119：声明了落盘路径 ⇒ 宿主**边收边写盘**（JS 不碰字节 ⇒ 内存与文件大小解耦）
+        if (f.savePath != null && !f.savePath.isEmpty()) {
+            NET.execute(new Runnable() {
+                @Override public void run() {
+                    InvokeWire.ResolveFrame out;
+                    try {
+                        out = performSaveToFile(f, url, method, timeoutMs);
+                    } catch (SocketTimeoutException e) {
+                        out = InvokeWire.ResolveFrame.err(f.reqId, "timeout: " + e.getMessage());
+                    } catch (java.net.UnknownHostException e) {
+                        out = InvokeWire.ResolveFrame.err(f.reqId, "network.unreachable: " + e.getMessage());
+                    } catch (java.net.ConnectException e) {
+                        out = InvokeWire.ResolveFrame.err(f.reqId, "network.unreachable: " + e.getMessage());
+                    } catch (Throwable t) {
+                        out = InvokeWire.ResolveFrame.err(f.reqId, "fetch.failed: " + t);
+                    }
+                    push(out);
+                }
+            });
+            return InvokeWire.encodeResolve(InvokeWire.ResolveFrame.pending(f.reqId));
+        }
+
         // ★★★#1118：请求声明了流式 ⇒ 走「边读边推」路径（不整包进内存，也不受 32 MiB 上限约束）
         if (f.stream != null && f.stream) {
             NET.execute(new Runnable() {
@@ -216,6 +238,156 @@ public final class HttpCapability {
             if (conn != null) conn.disconnect();
         }
     }
+
+    /* ══════════════════ ★★★#1119 download 流式落盘（S3） ══════════════════ */
+
+    /**
+     * 把响应体**边收边写**进沙箱文件（JS 侧完全不碰字节）。
+     *
+     * 【为什么这是 download 到 S3 的关键】原链路是「宿主收整包 → 回推 JS → JS 调 `fs.writeBytes` 写盘」
+     *   ⇒ **文件多大，JS 堆就吃多大**（视频/安装包直接 OOM）。本方法让内存只与**块大小**相关，
+     *   与文件总大小**无关**。
+     *
+     * 【★为什么不像流式那样用有界队列做背压】
+     *   这里的"消费方"是**本地文件系统的写**，不是 JS 线程。写盘不会因为 JS 忙而停，
+     *   磁盘写不动时 `FileOutputStream.write` 自己会阻塞 ⇒ 天然背压，不需要再加一层队列。
+     *   ★这是诚实区分：**背压只在"消费方可能慢于生产方"时才需要人工构造**。
+     *
+     * 【★内存上界】`STREAM_CHUNK`（16 KiB）= 单次读缓冲。除它之外没有累积结构。
+     *
+     * 【安全】路径校验走 `FileTransferCapability.resolve`（**同一份**沙箱规则，不另写）。
+     *
+     * 【超限】本路径**不受 32 MiB 整包上限约束**（那本是"整包驻留"的护栏）；
+     *   但保留一个**总字节上限** `MAX_SAVE_BYTES`（1 GiB）防止无限下载填满磁盘——
+     *   超限时删掉半截文件并给显式错误（不静默留残包）。
+     */
+    static final long MAX_SAVE_BYTES = 1024L * 1024 * 1024;
+
+    /** 落盘记账（真机判据读它证明"内存不随文件增长"）。 */
+    static final class SaveStats {
+        volatile long bytes = 0;
+        volatile int chunks = 0;
+        volatile int peakChunkBytes = 0;
+        volatile boolean completed = false;
+        volatile String path = null;
+        volatile String error = null;
+    }
+    private static SaveStats lastSaveStats = new SaveStats();
+    public static SaveStats lastSaveStats() { return lastSaveStats; }
+
+    private static InvokeWire.ResolveFrame performSaveToFile(
+            InvokeWire.InvokeFrame f, String url, String method, int timeoutMs) throws Exception {
+        final SaveStats stats = new SaveStats();
+        lastSaveStats = stats;
+        stats.path = f.savePath;
+        java.io.File out = null;
+        HttpURLConnection conn = null;
+        java.io.OutputStream os = null;
+        try {
+            android.content.Context ctx = appContext();
+            if (ctx == null) {
+                return InvokeWire.ResolveFrame.err(f.reqId, "fetch.failed: 宿主上下文不可用（无法解析沙箱路径）");
+            }
+            out = FileTransferCapability.resolve(ctx, f.savePath);
+            java.io.File parent = out.getParentFile();
+            if (parent != null && !parent.exists() && !parent.mkdirs()) {
+                return InvokeWire.ResolveFrame.err(f.reqId, "fetch.failed: 无法创建目录 " + parent);
+            }
+
+            conn = (HttpURLConnection) new URL(url).openConnection();
+            conn.setRequestMethod(method);
+            conn.setConnectTimeout(timeoutMs);
+            conn.setReadTimeout(timeoutMs);
+            conn.setInstanceFollowRedirects(true);
+            if (f.headers != null) {
+                for (Map.Entry<String, String> e : f.headers.entrySet()) {
+                    conn.setRequestProperty(e.getKey(), e.getValue());
+                }
+            }
+            String jarCookie = null;
+            try { jarCookie = CookieManager.getInstance().getCookie(url); } catch (Throwable t) {
+                Log.w(TAG, "读 CookieManager 失败（继续无 cookie 请求）：" + t);
+            }
+            if (jarCookie != null && !jarCookie.isEmpty() && !containsKeyIgnoreCase(f.headers, "cookie")) {
+                conn.setRequestProperty("Cookie", jarCookie);
+            }
+            byte[] reqBody = f.body != null ? f.body : new byte[0];
+            if (reqBody.length > 0) {
+                if (f.contentType != null && !containsKeyIgnoreCase(f.headers, "content-type")) {
+                    conn.setRequestProperty("Content-Type", f.contentType);
+                }
+                conn.setDoOutput(true);
+                conn.setFixedLengthStreamingMode(reqBody.length);
+                java.io.OutputStream ros = conn.getOutputStream();
+                try { ros.write(reqBody); ros.flush(); } finally { closeQuietly(ros); }
+            }
+
+            int status = conn.getResponseCode();
+            Map<String, List<String>> fields = conn.getHeaderFields();
+            LinkedHashMap<String, String> respHeaders = collectHeaders(fields);
+            storeCookies(url, rawSetCookie(fields));
+
+            InputStream is = status >= 400 ? conn.getErrorStream() : conn.getInputStream();
+            // ★边收边写：内存占用 = 单个缓冲块，与文件大小无关
+            os = new java.io.BufferedOutputStream(new java.io.FileOutputStream(out, false), STREAM_CHUNK);
+            byte[] buf = new byte[STREAM_CHUNK];
+            int n;
+            if (is != null) {
+                while ((n = is.read(buf)) > 0) {
+                    stats.bytes += n;
+                    stats.chunks++;
+                    if (n > stats.peakChunkBytes) stats.peakChunkBytes = n;
+                    if (stats.bytes > MAX_SAVE_BYTES) {
+                        throw new SaveTooLarge(stats.bytes);
+                    }
+                    os.write(buf, 0, n);
+                }
+                closeQuietly(is);
+            }
+            os.flush();
+            closeQuietly(os);
+            os = null;
+
+            InvokeWire.ResolveFrame rf = InvokeWire.ResolveFrame.ok(f.reqId);
+            rf.status = status;
+            rf.headers = respHeaders;
+            // ★回程 body = 一句可读摘要（JS 侧只需要 path/size；**不回字节**）
+            String summary = "{\"path\":" + org.json.JSONObject.quote(f.savePath)
+                    + ",\"size\":" + stats.bytes + ",\"chunks\":" + stats.chunks + "}";
+            rf.body = summary.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            stats.completed = true;
+            return rf;
+        } catch (SaveTooLarge e) {
+            stats.error = e.getMessage();
+            closeQuietly(os);
+            if (out != null) { // ★不静默留残包
+                try { if (out.exists() && !out.delete()) Log.w(TAG, "残包删除失败：" + out); } catch (Throwable ignored) { }
+            }
+            throw e;
+        } catch (Throwable t) {
+            stats.error = String.valueOf(t);
+            closeQuietly(os);
+            if (out != null) {
+                try { if (out.exists() && !out.delete()) Log.w(TAG, "残包删除失败：" + out); } catch (Throwable ignored) { }
+            }
+            throw t;
+        } finally {
+            closeQuietly(os);
+            if (conn != null) conn.disconnect();
+        }
+    }
+
+    /** 落盘总量超限（1 GiB）——独立异常以便给出准确原因并清残包。 */
+    static final class SaveTooLarge extends Exception {
+        SaveTooLarge(long atLeast) {
+            super("fetch.tooLarge: 落盘超过上限 " + MAX_SAVE_BYTES + "B（已收 " + atLeast + "B）");
+        }
+    }
+
+    /** 应用上下文（落盘要解析沙箱路径；由装配处注入一次）。 */
+    private static android.content.Context _appCtx = null;
+    static void setAppContext(android.content.Context c) { _appCtx = c == null ? null : c.getApplicationContext(); }
+    private static android.content.Context appContext() { return _appCtx; }
 
     /* ══════════════════ ★★★#1118 流式（S3：边读边推 + 真背压） ══════════════════ */
 

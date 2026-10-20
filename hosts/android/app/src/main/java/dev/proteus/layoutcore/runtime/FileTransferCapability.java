@@ -41,7 +41,11 @@ public final class FileTransferCapability {
      *
      * @throws IllegalArgumentException 路径非法（绝对路径 / 含 `..` / 空）
      */
-    private static File resolve(Context ctx, String path) {
+    /**
+     * ★#1119：由 private 放宽到 package-private —— `HttpCapability` 的落盘路径**必须复用本校验**。
+     *   ★为什么不能各写一份：沙箱校验（拒绝绝对路径 / `..`）一旦分叉，迟早有一边漏。
+     */
+    static File resolve(Context ctx, String path) {
         if (path == null || path.isEmpty()) throw new IllegalArgumentException("fs: path 为空");
         if (path.startsWith("/")) throw new IllegalArgumentException("fs: 只接受沙箱相对路径（收到绝对路径 " + path + "）");
         for (String seg : path.split("/")) {

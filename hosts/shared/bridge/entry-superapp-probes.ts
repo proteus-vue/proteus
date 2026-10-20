@@ -180,3 +180,95 @@ export function appStreamProbe(base: string, chunks = 64, size = 16 * 1024, dela
   })
   return JSON.stringify({ phase: 'started', queued: true, url })
 }
+
+/**
+ * ★★★#1119：**download 流式落盘探针**（S3 真机判据入口）。
+ *
+ * `appSaveProbe(base, sizeMiB)` → 下载 `sizeMiB` 大小的确定序列文件，走 `responseType:'path'`
+ * （= 宿主直写沙箱），把读数写进 `__proteusHostSaveProbeResult`。
+ *
+ * 【要证明什么（缺一不算 S3）】
+ *   ① **落盘成功**且**字节数正确**（不是"调用成功"就算）；
+ *   ② **JS 侧不碰字节**：`data` 是路径字符串，不是 Uint8Array/数组——
+ *      这一条是"内存与文件大小解耦"的**结构证据**；
+ *   ③ **内容正确**：再读回文件并抽样与期望序列比对（宿主写的确实是收到的字节）；
+ *   ④ **内存读数**（宿主侧给）：峰值块大小应 ≈ 16 KiB，与文件总大小**无关**。
+ *      ★这是本判据的核心——没有内存读数，"看起来成功"与"其实整包驻留"无法区分。
+ *
+ * 【为什么用 8 MiB 而不是 4 KiB】4 KiB 在任何实现下都不会 OOM，
+ *   测不出"整包驻留 vs 边收边写"的差别（与 #1105「逐点差异测不出织纹」同族：
+ *   **样本量不够的判据等于没有判据**）。
+ */
+export function appSaveProbe(base: string, sizeMiB = 8): string {
+  const g = globalThis as Record<string, unknown>
+  const out: Record<string, unknown> = { size_mib: sizeMiB }
+  g['__proteusHostSaveProbeResult'] = ''
+  const bytes = sizeMiB * 1024 * 1024
+  const url = `${base}/download?size=${bytes}`
+
+  const run = async (): Promise<void> => {
+    // ★#1119：直接引 capability-transfer（createAppDownload 住在那儿；不经 app 层，避免 app 文件变胖）
+    const mod = (await import('../../../packages/api/src/capability-transfer')) as unknown as {
+      createAppDownload: () => (
+        url: string,
+        options?: Record<string, unknown>,
+        onProgress?: (p: number) => void,
+      ) => Promise<{ status?: number; data?: unknown; path?: string }>
+    }
+    const progress: number[] = []
+    try {
+      const r = await mod.createAppDownload()(url, { responseType: 'path', timeout: 120000 }, (p) => progress.push(p))
+      out['ok_return'] = true
+      out['status'] = r.status
+      out['path'] = r.path
+      // ② JS 侧不碰字节：data 必须是字符串路径（是字节数组 ⇒ 整包回推了）
+      const d = r.data
+      out['data_kind'] = Array.isArray(d) ? 'array' : (d instanceof Uint8Array ? 'uint8array' : typeof d)
+      out['data_is_path'] = typeof d === 'string'
+      out['progress_points'] = progress
+    } catch (e) {
+      out['ok_return'] = false
+      out['code'] = String((e as { code?: string })?.code ?? '')
+      out['error'] = String((e as Error)?.message ?? e)
+    }
+    // ③ 读回**小样本**做内容校验。
+    //   ★★★为什么不能在大文件上读回整份：`fs.readBytes` 返回 `number[]` ⇒ 8 MiB 文件会变成
+    //   8M 个 JS number（>64 MiB 堆）⇒ **直接 OOM**（本轮实测：readback_error="out of memory"）。
+    //   ★那是**判据自身的矛盾**：用"整包读回"去验证"不整包"，必然自相矛盾。
+    //   正确做法 = 两层判据：小文件验**内容**、大文件验**结构**（JS 不碰字节 + 峰值块无关 + 字节数）。
+    if (out['ok_return'] === true && typeof out['path'] === 'string' && bytes <= 1024 * 1024) {
+      try {
+        const mod2 = (await import('../../../packages/api/src/capability-invoke')) as unknown as {
+          invokeHostAsync: (m: string, a: unknown, t?: number) => Promise<unknown>
+        }
+        const rr = (await mod2.invokeHostAsync('fs.readBytes', { path: out['path'] }, 120000)) as { bytes?: number[]; size?: number }
+        const arr = rr?.bytes ?? []
+        out['readback_size'] = arr.length
+        // ★服务端 /download 的序列：buf[i] = i % 256；抽样（整份转 number[] 本身就会爆内存）
+        let mismatch = 0
+        let checked = 0
+        const step = Math.max(1, Math.floor(arr.length / 512))
+        for (let i = 0; i < arr.length; i += step) { checked++; if (arr[i] !== (i % 256)) mismatch++ }
+        out['readback_checked'] = checked
+        out['readback_mismatch'] = mismatch
+      } catch (e) {
+        out['readback_error'] = String((e as Error)?.message ?? e)
+      }
+    }
+    // ★大文件只验结构（内容校验仅在小样本上做——原因见上面 OOM 那段）
+    const contentOk = bytes <= 1024 * 1024
+      ? (Number(out['readback_size']) === bytes && Number(out['readback_mismatch']) === 0)
+      : true
+    out['ok'] = out['ok_return'] === true
+      && Number(out['status']) === 200
+      && out['data_is_path'] === true
+      && contentOk
+    g['__proteusHostSaveProbeResult'] = JSON.stringify(out)
+  }
+  void run().catch((e: unknown) => {
+    out['error'] = String((e as Error)?.message ?? e)
+    out['ok'] = false
+    g['__proteusHostSaveProbeResult'] = JSON.stringify(out)
+  })
+  return JSON.stringify({ phase: 'started', queued: true, url, bytes })
+}

@@ -58,6 +58,10 @@ public final class HostCapabilities {
     public HostCapabilities(Activity activity) {
         this.activity = activity;
         this.device = new DeviceCapability(activity);
+        // ★#1119：把应用上下文交给 HttpCapability（落盘路径要解析沙箱）——
+        //   ★接线点选在这里，是因为**所有**装配路径都会 new HostCapabilities（壳/各探针），
+        //     漏一处的风险最小；漏了会表现为"落盘恒报上下文不可用"。
+        HttpCapability.setAppContext(activity);
         // ★#1097：mDNS 事件出口（切主线程推——QuickJsEngine 非线程安全，与 ws/capture 同款纪律）
         LocalServiceCapability.setPusher(payload -> new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
             try {

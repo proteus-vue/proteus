@@ -67,6 +67,17 @@ final class HttpCapability {
         }
 
         let reqId = f.reqId
+        // ★★★#1119：声明了落盘路径 ⇒ 宿主**边收边写盘**（JS 不碰字节 ⇒ 内存与文件大小解耦）
+        if let savePath = f.savePath, !savePath.isEmpty {
+            guard let target = sandboxFile(savePath) else {
+                return try InvokeWire.encodeResolve(.makeErr(reqId, "fetch.failed: 落盘路径非法（只接受沙箱相对路径）：\(savePath)"))
+            }
+            let task = session.dataTask(with: req)
+            BodyLimitDelegate.shared.registerSaving(task, reqId: reqId, push: push, target: target)
+            task.resume()
+            return try InvokeWire.encodeResolve(.makePending(reqId))
+        }
+
         // ★★★#1118：请求声明了流式 ⇒ 走「边读边推」路径（不整包进内存，也不受 32 MiB 上限约束）
         if f.stream == true {
             let task = session.dataTask(with: req)
@@ -83,6 +94,58 @@ final class HttpCapability {
         task.resume()
 
         return try InvokeWire.encodeResolve(.makePending(reqId))
+    }
+
+    /// ★#1119：把沙箱相对路径解析成文件 URL（与 Android `FileTransferCapability.resolve` **同规则**）。
+    ///
+    /// 【规则】只接受**沙箱相对路径**；拒绝绝对路径与任何 `..` 段（防目录穿越）。
+    ///   ★为什么两端必须同规则：否则同一个 `savePath` 在 Android 被拒、在 iOS 被接受 ⇒
+    ///     "换端就成败不同"，那是比拒绝更糟的不可预期（与 #1115 上限同值同源纪律）。
+    ///
+    /// 【落点】App 沙箱的 `Documents` 目录（与 `FileTransferCapability` 的 iOS 实现同一根）。
+    static func sandboxFile(_ path: String) -> URL? {
+        guard !path.isEmpty, !path.hasPrefix("/") else { return nil }
+        for seg in path.split(separator: "/") where seg == ".." { return nil }
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let url = docs.appendingPathComponent(path)
+        // ★双保险：解析后必须在沙箱根之下（符号链接/编码绕过）
+        let rootPath = docs.standardizedFileURL.path
+        guard url.standardizedFileURL.path.hasPrefix(rootPath) else { return nil }
+        return url
+    }
+
+    /// ★#1119：落盘总字节上限（1 GiB，与 Android `MAX_SAVE_BYTES` **同值**）——
+    ///   防无限下载填满磁盘；超限删残包并给 `fetch.tooLarge`。
+    static let MAX_SAVE_BYTES = 1024 * 1024 * 1024
+
+    /// ★#1119：最近一次落盘记账（真机判据读它证明"内存不随文件增长"）。
+    struct SaveStats { var bytes = 0; var path: String?; var completed = false; var error: String? }
+    /// ★不设 private(set)：`BodyLimitDelegate`（同文件另一类型）要写它；这是**诊断记账**，不做访问保护。
+    static var lastSaveStats = SaveStats()
+    static func resetSaveStats() { lastSaveStats = SaveStats() }
+    static func lastSaveStatsSnapshot() -> [String: Any] {
+        var d: [String: Any] = ["bytes": lastSaveStats.bytes, "completed": lastSaveStats.completed]
+        if let p = lastSaveStats.path { d["path"] = p }
+        if let e = lastSaveStats.error { d["error"] = e }
+        return d
+    }
+
+    /// JSON 字符串转义（只用于我们自己拼的摘要；不引 JSONEncoder 以免字段顺序漂移）。
+    static func jsonQuote(_ s: String) -> String {
+        var out = "\""
+        for ch in s.unicodeScalars {
+            switch ch {
+            case "\"": out += "\\\""
+            case "\\": out += "\\\\"
+            case "\n": out += "\\n"
+            case "\r": out += "\\r"
+            case "\t": out += "\\t"
+            default:
+                if ch.value < 0x20 { out += String(format: "\\u%04x", ch.value) }
+                else { out.unicodeScalars.append(ch) }
+            }
+        }
+        return out + "\""
     }
 
     /// 响应体硬上限（与 Android `HttpCapability.MAX_BODY_BYTES` **同值**——两端必须一致，
@@ -212,6 +275,13 @@ final class BodyLimitDelegate: NSObject, URLSessionDataDelegate {
         var tooLargeAt: Int?
         /// ★#1118：`true` ⇒ 本 task 走**分块回推**（不累积 body、不受 32 MiB 上限）。
         var streaming = false
+        /// ★#1119：非 nil ⇒ 边收边写该文件（不累积 body）
+        var saveTo: URL?
+        var savedBytes = 0
+        var savedHandle: FileHandle?
+        var savePath: String?
+        /// ★#1119：落盘失败原因（写盘失败 / 超限）
+        var saveError: String?
         var seq = 0
         var bytes = 0
         /// ★★★#1118 修复：许可必须是**引用类型**。
@@ -247,10 +317,52 @@ final class BodyLimitDelegate: NSObject, URLSessionDataDelegate {
         states[task.taskIdentifier] = st
     }
 
+    /// ★#1119：登记一个**落盘** task（边收边写文件，不累积 body）。
+    func registerSaving(_ task: URLSessionDataTask, reqId: String, push: @escaping ([UInt8]) -> Void, target: URL) {
+        lock.lock(); defer { lock.unlock() }
+        var st = State(reqId: reqId, push: push, gate: StreamGate(BodyLimitDelegate.STREAM_QUEUE_DEPTH))
+        st.saveTo = target
+        st.savePath = target.lastPathComponent
+        st.status = 0
+        states[task.taskIdentifier] = st
+    }
+
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
         lock.lock()
         guard var st = states[dataTask.taskIdentifier] else { lock.unlock(); return }
         lock.unlock()
+        // ★★★#1119：落盘分支——**边收边写**，内存只与块大小相关（与文件总大小无关）。
+        //   ★这里不需要人工背压：消费方是**本地磁盘写**，写不动时 write 自己会阻塞
+        //     （与流式回推 JS 不同——那才需要队列/信号量）。
+        if let target = st.saveTo {
+            if st.status == 0, let http = dataTask.response as? HTTPURLResponse {
+                st.status = Int32(max(0, http.statusCode))
+                st.headers = HttpCapability.headerPairsForDelegate(http)
+            }
+            if st.savedHandle == nil {
+                FileManager.default.createFile(atPath: target.path, contents: nil)
+                st.savedHandle = FileHandle(forWritingAtPath: target.path)
+                if st.savedHandle == nil {
+                    st.saveError = "无法打开落盘文件：\(target.lastPathComponent)"
+                    lock.lock(); states[dataTask.taskIdentifier] = st; lock.unlock()
+                    dataTask.cancel()
+                    return
+                }
+            }
+            st.savedBytes += data.count
+            if st.savedBytes > HttpCapability.MAX_SAVE_BYTES {
+                st.saveError = "fetch.tooLarge: 落盘超过上限 \(HttpCapability.MAX_SAVE_BYTES)B（已收 \(st.savedBytes)B）"
+                try? st.savedHandle?.close()
+                try? FileManager.default.removeItem(at: target)   // ★不静默留残包
+                st.saveTo = nil
+                lock.lock(); states[dataTask.taskIdentifier] = st; lock.unlock()
+                dataTask.cancel()
+                return
+            }
+            st.savedHandle?.write(data)
+            lock.lock(); states[dataTask.taskIdentifier] = st; lock.unlock()
+            return
+        }
         // ★★★#1118：流式分支——**不累积 body**，逐块回推；越界判断交给 JS 消费侧。
         if st.streaming {
             if st.status == 0, let http = dataTask.response as? HTTPURLResponse {
@@ -314,6 +426,33 @@ final class BodyLimitDelegate: NSObject, URLSessionDataDelegate {
         lock.unlock()
         guard let st else { return }   // ★先摘表 ⇒ 保证恰好回推一次
         let reqId = st.reqId
+        // ★★★#1119：落盘收尾——回 path/size 摘要（不回字节），并处理写文件失败/超限
+        if let target = st.saveTo {
+            try? st.savedHandle?.close()
+            let path = target.lastPathComponent
+            var frame: [UInt8]
+            if let se = st.saveError {
+                frame = (try? InvokeWire.encodeResolve(.makeErr(reqId, se))) ?? []
+            } else if let e = error {
+                try? FileManager.default.removeItem(at: target)
+                frame = (try? InvokeWire.encodeResolve(.makeErr(reqId, "fetch.failed: \(e.localizedDescription)"))) ?? []
+            } else {
+                var r = InvokeWire.ResolveFrame.makeOK(reqId)
+                r.status = UInt32(max(0, st.status))
+                r.headers = st.headers
+                let summary = "{\"path\":\(HttpCapability.jsonQuote(path)),\"size\":\(st.savedBytes)}"
+                r.body = Array(summary.utf8)
+                HttpCapability.lastSaveStats.completed = true
+                HttpCapability.lastSaveStats.bytes = st.savedBytes
+                HttpCapability.lastSaveStats.path = path
+                frame = (try? InvokeWire.encodeResolve(r)) ?? []
+            }
+            if !HttpCapability.lastSaveStats.completed {
+                HttpCapability.lastSaveStats.error = st.saveError ?? error?.localizedDescription
+            }
+            DispatchQueue.main.async { st.push(frame) }
+            return
+        }
         // ★★★#1118：流式收尾——最终帧（无 seq）带 status/headers，**不带 body**（块已逐块给过）
         if st.streaming {
             var frame: [UInt8]

@@ -159,7 +159,8 @@ const EMPTY_BYTES = new Uint8Array(0)
 const BYTES_MISSING = Symbol('proteus.invokeBytes.missing')
 
 /** 去程 meta 归类表：值是字符串的字段（url / contentType） */
-const META_STR = ['url', 'contentType']
+// ★#1119：`savePath` 与 url/contentType 同族（字符串 meta）——宿主据此把响应体直写沙箱
+const META_STR = ['url', 'contentType', 'savePath']
 /** 去程 meta 归类表：值是键值对的字段 */
 const META_HEADERS = ['headers', 'params']
 /** 去程 meta 归类表：枚举校验器（形态合法才折入 meta，否则按业务体处理） */
@@ -184,6 +185,7 @@ function splitFramePayload(args: unknown): { meta: InvokeMeta; body: Uint8Array 
     if (v === undefined) continue
     if (META_STR.includes(k) && typeof v === 'string') {
       if (k === 'url') meta.url = v
+      else if (k === 'savePath') meta.savePath = v
       else meta.contentType = v
     } else if (META_HEADERS.includes(k) && v !== null && typeof v === 'object') {
       const nv: Record<string, string> = {}
@@ -796,6 +798,15 @@ export interface AppRequestConfig {
   skipAuth?: boolean
   /** ★S2（#903）：响应体解释方式——`arraybuffer` 时 `data` 是**裸 `Uint8Array`**（不做文本解码） */
   responseType?: ResponseKind
+  /**
+   * ★★★#1119 **落盘路径**（S3）：让**宿主自己**把响应体写进沙箱文件。
+   *
+   * 【为什么需要】不设本字段时，download 是「宿主收整包 → 回推 JS → JS 调 fs.writeBytes 写盘」
+   *   ⇒ **文件多大 JS 堆就吃多大**。设了本字段，宿主边收边写，**JS 完全不碰字节**。
+   * ★路径语义与 `fs.writeBytes` 一致（沙箱相对路径，拒绝绝对路径与 `..`）。
+   * ★鸿蒙暂不支持（一次性 VM 无回推接收方）⇒ 该端 `unsupported`。
+   */
+  savePath?: string
   /** ★★★#1118 流式消费（S3）：每块调一次。给了 ⇒ 分块回推（内存不随响应体增长）；不给 ⇒ 整包（受 32 MiB 上限）。
    *  ★回调**同步**（宿主回推的 JS 线程上）——做重活会拖慢后续块，需异步请自行入队。
    *  ★seq 必须连续（丢帧即 reject，不静默拼半截数据）；★鸿蒙无回推接收方 ⇒ `fetch.unsupported`。 */

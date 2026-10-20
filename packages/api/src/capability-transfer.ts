@@ -45,10 +45,6 @@ function errOf(code: string, message: string): ProteusCapError {
   return e
 }
 
-/** 宿主字节方法两侧都要用：把 `Uint8Array` 转成宿主吃的 `number[]`（JSON 腿）。 */
-function toByteArray(bytes: Uint8Array): number[] {
-  return Array.from(bytes)
-}
 
 /** 从宿主回执取字节（`number[]` 或 base64 都接受——三端壳习惯不同）。 */
 function bytesFromReply(d: unknown): Uint8Array | null {
@@ -58,13 +54,11 @@ function bytesFromReply(d: unknown): Uint8Array | null {
   return null
 }
 
-/** 把字节写进宿主沙箱，返回宿主给的路径。 */
-async function writeToHost(path: string, bytes: Uint8Array): Promise<string> {
-  const r = await invokeHostAsync(APP_TRANSFER_METHODS.writeBytes, { path, bytes: toByteArray(bytes) }, 30000)
-  const d = (r ?? {}) as { path?: unknown; size?: unknown }
-  const out = typeof d.path === 'string' ? d.path : path
-  return out
-}
+/**
+ * ★#1119：`writeToHost` 已删除——download 的 `path` 语义改由**宿主直写沙箱**（`savePath` meta），
+ *   JS 侧不再"收整包 → 转字节 → 调 fs.writeBytes"（那条路让 JS 堆随文件大小增长）。
+ *   `fs.writeBytes` 仍保留（业务仍可能用它写小文件）。
+ */
 
 /** 从宿主沙箱读字节。 */
 async function readFromHost(path: string): Promise<Uint8Array> {
@@ -145,8 +139,31 @@ export function createAppDownload(): (url: string, options?: DownloadOptions, on
   return async (url, options = {}, onProgress) => {
     const wantPath = options.responseType === 'path' || options.responseType === undefined
     const wantJson = options.responseType === 'json'
-    const responseType = wantJson ? 'text' : wantPath || options.responseType === 'blob' ? 'arraybuffer' : 'text'
     onProgress?.(0)
+    // ★★★#1119（S3）：`path` 语义走**宿主直写沙箱**——JS 侧完全不碰字节，
+    //   内存占用与文件大小**解耦**。此前是「整包回推 JS → 再调 fs.writeBytes 写盘」
+    //   ⇒ 文件多大 JS 堆就吃多大（视频/安装包直接 OOM）。
+    if (wantPath) {
+      const target = `download/${Date.now()}-${filenameOf(url)}`
+      const d = await invokeHostAsync(
+        'http.request',
+        { url, method: 'GET', headers: options.headers, timeout: options.timeout, savePath: target },
+        (options.timeout ?? 15000) + 2000,
+      )
+      const r = (d ?? {}) as { data?: unknown; status?: number; headers?: Record<string, string> }
+      const status = Number(r.status ?? 0)
+      // ★宿主回的 `data` 是 `{path,size}` 摘要（也可能是字符串化的 JSON——两种都接）
+      let summary: { path?: unknown; size?: unknown } = {}
+      if (typeof r.data === 'string') {
+        try { summary = JSON.parse(r.data) as { path?: unknown; size?: unknown } } catch { /* 非 JSON ⇒ 用 target 兜底 */ }
+      } else if (r.data && typeof r.data === 'object') {
+        summary = r.data as { path?: unknown; size?: unknown }
+      }
+      const path = typeof summary.path === 'string' ? summary.path : (typeof (summary as { savePath?: unknown }).savePath === 'string' ? (summary as { savePath: string }).savePath : target)
+      onProgress?.(100)
+      return { status, data: path, path, progress: 100 }
+    }
+    const responseType = wantJson ? 'text' : options.responseType === 'blob' ? 'arraybuffer' : 'text'
     const d = await invokeHostAsync(
       'http.request',
       { url, method: 'GET', headers: options.headers, timeout: options.timeout, responseType },
@@ -159,13 +176,8 @@ export function createAppDownload(): (url: string, options?: DownloadOptions, on
     if (responseType === 'arraybuffer') {
       const bytes = data instanceof Uint8Array ? data : (Array.isArray(data) ? Uint8Array.from(data as number[]) : null)
       if (!bytes) throw errOf('download.failed', `http.request 未返回字节（收到 ${typeof data}）`)
-      if (wantPath) {
-        // ★默认落盘（与 wx 的 tempFilePath 语义对齐）
-        path = await writeToHost(`download/${Date.now()}-${filenameOf(url)}`, bytes)
-        data = path
-      } else {
-        data = bytes
-      }
+      // ★#1119：`path` 语义已在上面走"宿主直写"分支 ⇒ 这里只剩 `blob`（原样回字节）
+      data = bytes
     } else if (wantJson && typeof data === 'string') {
       try { data = JSON.parse(data) } catch { /* 非 JSON ⇒ 原样回文本（与 wx 一致：不猜） */ }
     }

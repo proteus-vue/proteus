@@ -47,6 +47,8 @@ export const TAG_RESPONSE_TYPE: number = 6
 export const TAG_CONTENT_TYPE: number = 7
 /** ★#1118：请求分块回推（1 = 流式；undefined = 整包） */
 export const TAG_STREAM: number = 8
+/** ★#1119：落盘路径（宿主直写沙箱） */
+export const TAG_SAVE_PATH: number = 9
 
 /** 回程 TLV tag（16 起；与去程段不重叠） */
 export const RTAG_HTTP_STATUS: number = 16
@@ -275,6 +277,8 @@ export class InvokeFrame {
   contentType: string | undefined = undefined
   /** ★#1118：`undefined` = 未指定（不写 TLV）——与 TS 侧 `meta.stream === true` 对齐 */
   stream: boolean | undefined = undefined
+  /** ★#1119：非 undefined ⇒ 宿主把响应体直接写进该沙箱路径 */
+  savePath: string | undefined = undefined
   body: Uint8Array = EMPTY
 
   /** 取值语义（缺省 = text）。 */
@@ -375,6 +379,7 @@ function encodeInvokeMeta(f: InvokeFrame): Uint8Array {
   if (f.contentType !== undefined) writeTlv(w, TAG_CONTENT_TYPE, (x: Writer) => x.str(f.contentType as string))
   // ★#1118：只在**显式 true** 时写（与 TS `meta.stream === true` 逐字对齐）
   if (f.stream === true) writeTlv(w, TAG_STREAM, (x: Writer) => x.u8(1))
+  if (f.savePath !== undefined) writeTlv(w, TAG_SAVE_PATH, (x: Writer) => x.str(f.savePath as string))
   return w.done()
 }
 
@@ -412,6 +417,7 @@ function decodeInvokeMeta(bytes: Uint8Array, into: InvokeFrame): void {
     else if (tag === TAG_RESPONSE_TYPE) into.responseType = p.u8()
     else if (tag === TAG_CONTENT_TYPE) into.contentType = p.str()
     else if (tag === TAG_STREAM) into.stream = p.u8() !== 0
+    else if (tag === TAG_SAVE_PATH) into.savePath = p.str()
     // 未知 tag 跳过（版本演进）
   }
 }

@@ -82,6 +82,8 @@ enum InvokeWire {
     static let TAG_CONTENT_TYPE: UInt8 = 7
     /// ★#1118：请求分块回推（1 = 流式；nil = 整包）
     static let TAG_STREAM: UInt8 = 8
+    /// ★#1119：落盘路径（宿主直写沙箱，JS 不碰字节）
+    static let TAG_SAVE_PATH: UInt8 = 9
 
     /* 回程 meta 的 TLV tag（★16 起留回程，两段不重叠） */
     static let RTAG_HTTP_STATUS: UInt8 = 16
@@ -117,6 +119,8 @@ enum InvokeWire {
         var contentType: String?
         /// ★#1118：`nil` = 未指定（不写 TLV）——与 TS 侧 `meta.stream === true` 对齐
         var stream: Bool?
+        /// ★#1119：非 nil ⇒ 宿主把响应体直接写进该沙箱路径
+        var savePath: String?
         var body: [UInt8] = []
 
         /// 取值语义（缺省 = text）——宿主消费时用这个，不要直接读可选字段。
@@ -303,6 +307,7 @@ enum InvokeWire {
             case TAG_RESPONSE_TYPE: f.responseType = try p.u8()
             case TAG_CONTENT_TYPE: f.contentType = try p.str()
             case TAG_STREAM: f.stream = try p.u8() != 0
+            case TAG_SAVE_PATH: f.savePath = try p.str()
             // ★未知 tag 跳过（版本演进：老解码头遇到新 tag 应忽略，而非报错）
             default: break
             }
@@ -341,6 +346,7 @@ enum InvokeWire {
         if let ct = f.contentType { try writeTlv(w, TAG_CONTENT_TYPE) { try w.str(ct) } }
         // ★#1118：只在**显式 true** 时写（与 TS `meta.stream === true` 逐字对齐）
         if f.stream == true { try writeTlv(w, TAG_STREAM) { w.u8(1) } }
+        if let sp = f.savePath { try writeTlv(w, TAG_SAVE_PATH) { try w.str(sp) } }
         return w.done()
     }
 

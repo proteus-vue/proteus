@@ -50,22 +50,33 @@ describe('★#1095 ① 下载：path 落盘 / text 原样 / 进度只有两端',
   beforeEach(() => { clearHost() })
   afterEach(() => { clearHost() })
 
-  it('缺省（path）⇒ 落盘并回 path；写盘参数是 { path, bytes[] }', async () => {
+  it('★#1119 缺省（path）⇒ 走**宿主直写**（savePath meta，JS 不碰字节）', async () => {
     const calls = installFakeHost((m) => {
-      if (m === 'http.request') return { status: 200, data: [1, 2, 3], headers: {} }
-      if (m === APP_TRANSFER_METHODS.writeBytes) return { path: 'download/x.bin', size: 3 }
+      // ★宿主直写路径下，http.request 回的是**摘要**（path/size），不再回字节
+      if (m === 'http.request') return { status: 200, data: { path: 'download/host-wrote.bin', size: 3 }, headers: {} }
       return undefined
     })
     const dl = createAppDownload()
     const r = await dl('https://example.com/a.bin')
     expect(r.status).toBe(200)
-    expect(r.path).toBe('download/x.bin')
+    expect(r.path).toBe('download/host-wrote.bin')
     expect(r.progress).toBe(100)
     const http = calls.find((c) => c.method === 'http.request')!
-    expect(http.args.responseType).toBe('arraybuffer')
-    const w = calls.find((c) => c.method === APP_TRANSFER_METHODS.writeBytes)!
-    expect(w.args.bytes).toEqual([1, 2, 3])
-    expect(typeof w.args.path).toBe('string')
+    // ★关键：必须带 savePath（否则又退回"整包回推 JS → JS 写盘"，内存随文件增长）
+    expect(http.args.savePath, '未声明 savePath ⇒ download 仍会整包进 JS 内存').toBeTruthy()
+    expect(typeof http.args.savePath).toBe('string')
+    // ★且不得再走 JS 侧写盘
+    expect(calls.some((c) => c.method === APP_TRANSFER_METHODS.writeBytes), '仍在 JS 侧写盘').toBe(false)
+    // ★不得再要求 arraybuffer（那意味着整包回推）
+    expect(http.args.responseType).toBeUndefined()
+  })
+
+  it('★#1119 宿主回字符串化摘要也能解析（三端回执形态不同）', async () => {
+    installFakeHost((m) => (m === 'http.request'
+      ? { status: 200, data: '{"path":"download/from-string.bin","size":9}' }
+      : undefined))
+    const r = await createAppDownload()('https://example.com/b.bin')
+    expect(r.path).toBe('download/from-string.bin')
   })
 
   it('responseType: text ⇒ 不落盘，data 是文本', async () => {

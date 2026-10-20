@@ -10,8 +10,8 @@
 //   （`app-screen-content.generated.ts`，由 `proteus build --target ios|android|harmony`
 //   经 `gen-app-screen-content.mjs` 生成）——与 Web/小程序**同一棵路由树**。
 import { createAppNavigation } from '@proteus-vue/render-backend/app-navigation'
-import { appFetchLimitProbe, appStreamProbe } from './entry-superapp-probes'
-export { appFetchLimitProbe, appStreamProbe } from './entry-superapp-probes'
+import { appFetchLimitProbe, appStreamProbe, appSaveProbe } from './entry-superapp-probes'
+export { appFetchLimitProbe, appStreamProbe, appSaveProbe } from './entry-superapp-probes'
 
 import type { AppNavigation } from '@proteus-vue/render-backend/app-navigation'
 import { createRouter, type RouterInstance } from '@proteus-vue/router'
@@ -827,6 +827,7 @@ export function appTransferProbe(base: string): string {
 }
 
 
+
 /** 元素索引读数（判据：证明索引里真有条目，而不是"查询恒 not-found"）。 */
 /**
  * ★★★决策 #1086：**交叉观察的几何变化 tick**（宿主调）。
@@ -910,6 +911,9 @@ __HOSTAPP.__proteusHostAppElementRegistry = __HOSTAPP.__proteusSuperappElementRe
   .__proteusHostAppWsProbe = (u: string) => appWsProbe(u)
 ;(globalThis as unknown as { __proteusHostAppTransferProbe?: (b: string) => string })
   .__proteusHostAppTransferProbe = (b: string) => appTransferProbe(b)
+// ★★★#1119：download 流式落盘探针（宿主按中性名调；结果填 __proteusHostSaveProbeResult）
+;(globalThis as unknown as { __proteusHostAppSaveProbe?: (b: string, m?: number) => string })
+  .__proteusHostAppSaveProbe = (b: string, m?: number) => appSaveProbe(b, m)
 // ★★★决策 #1115：响应体上限探针（宿主按中性名调；结果填 __proteusHostFetchLimitProbeResult）
 ;(globalThis as unknown as { __proteusHostAppFetchLimitProbe?: (b: string, m?: number) => string })
   .__proteusHostAppFetchLimitProbe = (b: string, m?: number) => appFetchLimitProbe(b, m)
