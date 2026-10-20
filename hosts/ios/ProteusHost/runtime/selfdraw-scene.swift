@@ -104,6 +104,7 @@ final class SelfDrawView: UIView {
 
     /// 清空当前层树
     func clearLayers() {
+        contentRevision &+= 1   // ★#1104：层树变了 ⇒ 任何缓存的 backdrop 立刻失效
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         for l in layerNodes { l.removeFromSuperlayer() }
@@ -544,6 +545,29 @@ final class SelfDrawView: UIView {
     ///   用来区分"某子段每遍都付"与"进程首次付一次"（#1102 的半径扫描每次进程只跑一遍，区分不了）。
     var glassPassHistory: [[String: Double]] = []
     static let glassHistoryCap = 16
+    /// ★★★#1104：**内容版本号**——任何会改变"屏上画出来的东西"的操作都要 `&+= 1`：
+    ///   清层（`clearLayers`）/ 层几何更新（`updateLayersIncremental`）/ 滚动（改变采样源）。
+    ///   用途：交互帧循环里 backdrop 捕获+模糊占每帧 3.4ms（65%），而交互期间只有 press 在变
+    ///   ⇒ 版本号没变就可**跳过重捕**、只跑按 press 出图的那一段。
+    ///   ★为什么用版本号而不是"内容哈希"：哈希每帧要遍历整棵层树（成本可能超过要省的）；
+    ///     版本号由**变更入口自己维护**，O(1)，且入口是可枚举的有限集合（本仓已有先例：
+    ///     资源账本、渲染脏标记）。★漏加一个入口 = 玻璃显示旧背景，这是本设计唯一的风险点，
+    ///     由判据 `#1104 内容变更入口都必须递增 contentRevision` 守着。
+    var contentRevision: UInt64 = 0
+    /* ★#1104：backdrop 缓存（键 + 图 + 命中读数） */
+    /// 缓存键：**覆盖全部影响结果的因素**——内容版本 + 裁剪矩形 + 捕获密度 + 模糊半径。
+    var backdropCacheKey: GlassBackdropKey?
+    /// 缓存的"已模糊 backdrop"（交互时只有 touch/press 在变 ⇒ 可整段复用）
+    var backdropCacheImage: CGImage?
+    /// 最近一次玻璃遍是否命中了 backdrop 缓存（判据用：命中率必须可观测，不能只靠"感觉快了"）
+    internal(set) var lastGlassBackdropCacheHit = false
+    /// ★#1104：backdrop 缓存开关（**默认开**）。用途：A/B 视觉对比——
+    ///   设 `PROTEUS_GLASS_BACKDROP_CACHE=0` 可关掉，用来证明"开缓存后的画面与不开逐像素一致"。
+    ///   ★为什么要这个开关：缓存是渲染语义改动，**性能变好但画面错了**是最坏的失败形态
+    ///     （不会崩、不会报错，只是玻璃里糊着旧内容）。没有 A/B 就没法排除这种可能。
+    static let glassBackdropCacheEnabled: Bool = {
+        (ProcessInfo.processInfo.environment["PROTEUS_GLASS_BACKDROP_CACHE"] ?? "1") != "0"
+    }()
     /// 玻璃模糊用的 `CIContext`——**进程内复用一份**。
     ///   此前每次玻璃遍新建（`CIContext(options: nil)`），而玻璃遍在交互时**每 vsync 调一次**
     ///   ⇒ 每帧都在付上下文初始化成本。CIContext 无渲染状态残留，复用不改变输出。
@@ -1999,7 +2023,8 @@ final class SelfDrawView: UIView {
         }
         // ★★★玻璃（决策 #833）：玻璃面**钉在屏上**，采样源随滚动变 ⇒ 滚动后重捕背景刷新玻璃面。
         //   ★决策 #873：**仅当偏移真变了才重渲**（钳制到边界时 offset 不变，避免每次手指移动白跑 ~10ms Metal）。
-        if !glassSpecByNodeId.isEmpty && contentOffset != before { applyGlassPass() }
+        //   ★#1104：滚动改变采样源 ⇒ 让 backdrop 缓存失效（`contentRevision` 内含滚动）
+        if !glassSpecByNodeId.isEmpty && contentOffset != before { contentRevision &+= 1; applyGlassPass() }
         return contentOffset
     }
 
@@ -2205,6 +2230,7 @@ final class SelfDrawView: UIView {
     ) -> Int {
         lastLayerTiming = [:]
         guard !changed.isEmpty else { return 0 }
+        contentRevision &+= 1   // ★#1104：层几何变了 ⇒ 缓存的 backdrop 失效
         // 逐节点检查是否都有对应的已有层；缺任何一个 ⇒ 退回全量（正确性优先）
         for c in changed where layersById[c.id] == nil { return -1 }
 
@@ -2410,6 +2436,10 @@ final class SelfDrawView: UIView {
                               scaleX: CGFloat, scaleY: CGFloat,
                               glowColor: UIColor?, glowRadius: CGFloat, zIndex: CGFloat) {
         guard let layer = layersById[nodeId] else { return }
+        // ★★★#1104：按压态改的是**层的外观**（底色/描边/缩放/发光）⇒ 它在玻璃背后时 backdrop 变了。
+        //   漏了这条，交互时缓存的背景图会把"按下前的样子"一直糊在玻璃里（静默错、且只在
+        //   "玻璃覆盖可按下节点"的组合下出现——正是那种最难发现的组合缺陷）。
+        contentRevision &+= 1
         if fbPressBackup[nodeId] == nil {
             fbPressBackup[nodeId] = (layer.backgroundColor, layer.borderColor, layer.zPosition, layer.shadowOpacity)
         }
@@ -2439,6 +2469,7 @@ final class SelfDrawView: UIView {
     /// 还原按下态（精确回备份值；与 Android clearPress 同语义）。
     func clearPressAppearance(nodeId: Int) {
         guard let layer = layersById[nodeId], let b = fbPressBackup[nodeId] else { return }
+        contentRevision &+= 1   // ★#1104：还原按压态同样改变层外观 ⇒ 缓存失效
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         layer.backgroundColor = b.bg

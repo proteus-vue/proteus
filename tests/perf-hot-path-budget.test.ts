@@ -313,3 +313,104 @@ describe('★#1103 玻璃遍历史环（区分首次预热 vs 每遍成本）', 
     expect(sc).toMatch(/max\(1, Int\(ProcessInfo\.processInfo\.environment\["PROTEUS_GLASS_SAMPLES"\] \?\? "1"\)/)
   })
 })
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * ★★★#1104：**交互路径**的玻璃成本探针
+ *
+ * 【为什么必须单独测】#1100–#1103 测的都是 mount/滚动时的**一次性**玻璃遍（稳态 5.3–7.8ms）。
+ *   玻璃真正的高频场景是交互：按下/拖动时 `interactionStep()` **每 vsync 重渲**。
+ *   真机实测 12 帧：**均值 5.24ms、标准差 0.073ms、极差 0.27ms**（极稳定，无尖峰）。
+ *   ⇒ 60Hz 占帧预算 31%；**120Hz 占 63%** —— 这才是玻璃的真实风险点。
+ *
+ * 【为什么探针不能复用 `--press=auto`】那条注入走 `driveTouchDown → onTouchDown`，
+ *   而 `interactionTouch(at:down:)` 只挂在**真实 UIKit 触摸回调**上 ⇒ 注入到不了玻璃交互，
+ *   样本会全是 0（"测了但没测到"的假绿）。探针必须直接驱动交互入口本身。
+ * ════════════════════════════════════════════════════════════════════════════ */
+describe('★#1104 玻璃交互路径探针', () => {
+  it('探针直接驱动交互入口（不走注入回调链——那条路到不了玻璃）', () => {
+    const g = read(IOS_GLASS)
+    expect(g).toMatch(/func glassInteractionProbe\(frames: Int = 12\)/)
+    // 必须走生产路径的两个入口，而不是自己再写一份重渲逻辑
+    expect(g).toMatch(/interactionTouch\(at: center, down: true\)/)
+    expect(g).toMatch(/interactionStep\(\)/)
+    expect(g).toMatch(/interactionRelease\(\)/)
+  })
+
+  it('★探针只在取证开关下跑（测量动作不得污染正常读数）', () => {
+    const sc = read(IOS_SUPERAPP_SCENE)
+    expect(sc).toMatch(/PROTEUS_GLASS_INTERACT/)
+    // 必须在 env 判定之内，不能无条件调用
+    const m = sc.match(/if ProcessInfo\.processInfo\.environment\["PROTEUS_GLASS_INTERACT"\] == "1" \{[\s\S]{0,200}glassInteractionProbe/)
+    expect(m, 'glassInteractionProbe 必须在 PROTEUS_GLASS_INTERACT 开关内调用').toBeTruthy()
+  })
+
+  it('探针返回逐帧明细（只有均值看不出抖动/尖峰）', () => {
+    const g = read(IOS_GLASS)
+    for (const k of ['"total_avg_ms"', '"total_max_ms"', '"history"', '"passes"', '"steps"']) {
+      expect(g.includes(k), `探针结果缺 ${k}`).toBe(true)
+    }
+  })
+
+  it('★没有交互玻璃时如实报 ok:false（不返回空数据冒充"零成本"）', () => {
+    const g = read(IOS_GLASS)
+    expect(g).toMatch(/没有交互玻璃（interactive=true）/)
+    expect(g).toMatch(/触点未命中交互玻璃/)
+  })
+})
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * ★★★#1104：**backdrop 缓存**（交互路径每帧 5.24ms → 1.75ms，省 67%）
+ *
+ * 【是什么】交互时每 vsync 重渲玻璃，但只有 touch/press uniform 在变，屏上内容几乎不动。
+ *   ⇒ 缓存"已捕获+已模糊的 backdrop"，内容未变时跳过 hide/raster/blur 三段，只跑 Metal 着色。
+ *   真机：12/12 帧命中，均值 **1.75ms**（缓存前 5.24ms），readback/raster 归零。
+ *
+ * 【为什么这段判据特别严】缓存是**渲染语义改动**：错了不会崩、不会报错，只是玻璃里糊着旧内容。
+ *   本组判据守三件事（缺一条都可能静默画错）：
+ *     ① 缓存键**覆盖全部影响输出的因素**（版本/裁剪/密度/半径）——少一项就是"拿旧图配新参数"；
+ *     ② 内容变更入口**都递增 contentRevision**——漏一个入口 ⇒ 玻璃显示旧背景；
+ *     ③ 有 A/B 开关（能关掉缓存复现原行为）——没有它就无法排除"变快是因为画错了"。
+ * ════════════════════════════════════════════════════════════════════════════ */
+describe('★#1104 backdrop 缓存（正确性优先）', () => {
+  it('缓存键覆盖全部影响输出的因素（revision + 裁剪 + 密度 + 半径）', () => {
+    const g = read(IOS_GLASS)
+    const m = g.match(/struct GlassBackdropKey: Equatable \{([\s\S]*?)\n\}/)
+    expect(m, '找不到 GlassBackdropKey').toBeTruthy()
+    for (const f of ['revision', 'cropX', 'cropY', 'cropW', 'cropH', 'pxPerPoint', 'radiusPx']) {
+      expect(m![1].includes(f), `缓存键缺 ${f}（会拿旧图配新参数）`).toBe(true)
+    }
+  })
+
+  it('★每个影响画面的入口都递增 contentRevision（漏一个 = 玻璃显示旧背景）', () => {
+    const s = read(IOS_SELFDRAW)
+    // 1) 清层  2) 层几何增量更新  3) 滚动  4) 按下态应用  5) 按下态还原
+    const EXPECT: Array<[string, RegExp]> = [
+      ['clearLayers', /func clearLayers\(\) \{\s*\n\s*contentRevision &\+=\s*1/],
+      ['updateLayersIncremental', /func updateLayersIncremental\([\s\S]{0,500}?contentRevision &\+=\s*1/],
+      ['滚动 applyContentOffset', /contentOffset != before \{ contentRevision &\+=\s*1; applyGlassPass\(\) \}/],
+      // 按压态两处：函数体里第一件事就得递增（中间可能夹插值注释，放宽到 900 字符）
+      ['applyPressAppearance', /func applyPressAppearance\([\s\S]{0,900}?contentRevision &\+=\s*1/],
+      ['clearPressAppearance', /func clearPressAppearance\([\s\S]{0,300}?contentRevision &\+=\s*1/],
+    ]
+    for (const [name, re] of EXPECT) {
+      expect(re.test(s), `${name} 未递增 contentRevision（背景缓存会过期）`).toBe(true)
+    }
+  })
+
+  it('★有 A/B 开关且默认开（没开关就无法排除"变快是因为画错了"）', () => {
+    const s = read(IOS_SELFDRAW)
+    expect(s).toMatch(/static let glassBackdropCacheEnabled/)
+    expect(s).toMatch(/PROTEUS_GLASS_BACKDROP_CACHE/)
+    // 默认必须是开（不设 ⇒ "1"）
+    expect(s).toMatch(/environment\["PROTEUS_GLASS_BACKDROP_CACHE"\] \?\? "1"/)
+    // 命中判断必须受开关控制
+    expect(read(IOS_GLASS)).toMatch(/Self\.glassBackdropCacheEnabled && backdropCacheKey == cacheKey/)
+  })
+
+  it('命中率可观测（写进每遍历史）——否则只能靠"感觉快了"', () => {
+    expect(read(IOS_GLASS)).toMatch(/"cache_hit": lastGlassBackdropCacheHit \? 1 : 0/)
+    // 探针也要回报命中数与开关状态
+    const g = read(IOS_GLASS)
+    expect(g).toMatch(/"cache_hits": cacheHits, "cache_enabled": Self\.glassBackdropCacheEnabled/)
+  })
+})

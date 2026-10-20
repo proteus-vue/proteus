@@ -10,6 +10,20 @@
 import UIKit
 import CoreImage
 
+/// ★#1104：backdrop 缓存的键——**必须覆盖所有影响输出的因素**。
+///   【为什么键要这么全】缓存的是"已模糊的背景图"。只要下面任一项变了，旧图就对不上新参数：
+///     · `revision`   —— 屏上内容变了（清层/几何更新/滚动）；用内容版本号而非哈希（O(1)，入口可枚举）
+///     · `crop*`      —— 捕获区域变了（玻璃盒大小/位置/pad 变了）
+///     · `pxPerPoint` —— 捕获密度变了（分辨率不同 ⇒ 图本身不同）
+///     · `radiusPx`   —— 模糊半径变了（半径进滤镜核 ⇒ 输出不同）
+///   ⇒ 少任何一项都可能"拿旧图配新参数"（静默错）。宁愿多失效几次，也不要错一次。
+struct GlassBackdropKey: Equatable {
+    let revision: UInt64
+    let cropX: Double, cropY: Double, cropW: Double, cropH: Double
+    let pxPerPoint: Double
+    let radiusPx: Double
+}
+
 extension SelfDrawView {
 
     /// ★★★玻璃遍：捕获"无玻璃面"的内容帧 → 对每个玻璃节点装玻璃面层。
@@ -68,61 +82,78 @@ extension SelfDrawView {
         let fmt = UIGraphicsImageRendererFormat()
         fmt.scale = capturePxPerPoint
         let renderer = UIGraphicsImageRenderer(size: cropRect.size, format: fmt)
-        // ★★★决策 #893（对齐 **iOS 液态玻璃基准** · 真机 App Store tab 栏取证）：**背景只取"玻璃背后"的内容**——
-        //   捕获前把**玻璃节点自身层（含其文本子层）临时隐藏** ⇒ backdrop 不含玻璃自身子树。
-        //   真 iOS `UIVisualEffectView` 语义：材质**只模糊背后**，`contentView` 里的内容**原样清晰**；
-        //   此前 `self.layer.render` 把玻璃节点自身子树也录进 backdrop ⇒ **自身文字被糊进材质**（8× 真机
-        //   取证：iOS 内文呈"均匀柔化"，偏离参照）。隐藏再捕获 = 从背景里精确剔除自身（CALayer.render 无跳过谓词）。
-        let glassNodeIds = Array(glassSpecByNodeId.keys)
-        var hiddenForCapture: [CALayer] = []
-        let tHide0 = CFAbsoluteTimeGetCurrent()
-        for id in glassNodeIds {
-            guard let l = layersById[id], !l.isHidden else { continue }
-            hiddenForCapture.append(l); l.isHidden = true
-        }
-        capHideMs = (CFAbsoluteTimeGetCurrent() - tHide0) * 1000
-        let tRaster0 = CFAbsoluteTimeGetCurrent()
-        let img = renderer.image { ctx in
-            ctx.cgContext.translateBy(x: -cropRect.minX, y: -cropRect.minY)
-            self.layer.render(in: ctx.cgContext)
-        }
-        rasterMs = (CFAbsoluteTimeGetCurrent() - tRaster0) * 1000
-        for l in hiddenForCapture { l.isHidden = false }   // 恢复（与 CATransaction 同帧，无闪）
-        guard let captured = img.cgImage else {
-            NSLog("[proteus-glass] backdrop 捕获失败——玻璃跳过")
-            return
-        }
-        // ★★★决策 #929：**轻霜**（对齐 iOS 逆向报告「表面磨砂 ~1-3px」；三端同法）——
-        //   对捕获的 backdrop 做一次**小半径高斯模糊**（内容柔化但可读；折射/镜像是主角、磨砂为配）。
-        //   放进宿主（而非 shader）：不破坏 check:glass-pixel-parity（shader 保持零采样）。
-        let backdrop: CGImage
-        let tBlur0 = CFAbsoluteTimeGetCurrent()
-        // ★★★#1102：blur 段再拆两半——**CIFilter 是惰性求值**：设参数 / 取 outputImage 只构图不干活，
-        //   真正的 GPU 渲染 + CPU 回读全在 `createCGImage` 里。两者分开计时，才能回答
-        //   "降半径能不能省"（省的是滤镜核 → 降半径有效；省的是回读 → 降半径白改）。
-        var blurBuildMs = 0.0, blurReadbackMs = 0.0
         let radiusPx = capturePxPerPoint * 1.5 * Self.glassBlurScale
         lastGlassBlurRadiusPx = Double(radiusPx)
-        if let blur = Self.sharedBlurFilter {
-            let ci = CIImage(cgImage: captured)
-            blur.setValue(ci, forKey: kCIInputImageKey)
-            blur.setValue(radiusPx, forKey: kCIInputRadiusKey)   // ≈2 逻辑px（与 Android BLUR_DOWN=4 同量级）
-            // ★★★#1101：**CIContext 复用**（此前每次玻璃遍 `CIContext(options: nil)` 新建一个）——
-            //   CIContext 持有 GPU/Metal 设备与命令队列，新建要付初始化成本；本方法在**每帧**都被调用
-            //   （玻璃交互时更是每 vsync 一次）⇒ 每帧白付一次。真机实测模糊段 10.6ms（玻璃遍的 57%）。
-            //   ★语义零变化：同一个 CIContext 可反复 createCGImage（它不持有渲染状态）。
-            let ctx = Self.sharedCIContext
-            let outImg = blur.outputImage
-            blurBuildMs = (CFAbsoluteTimeGetCurrent() - tBlur0) * 1000
-            let tRb0 = CFAbsoluteTimeGetCurrent()
-            if let out = outImg,
-               let cg = ctx.createCGImage(out, from: ci.extent) {
-                backdrop = cg
-            } else { backdrop = captured }
-            blurReadbackMs = (CFAbsoluteTimeGetCurrent() - tRb0) * 1000
-        } else { backdrop = captured }
-        blurMs = (CFAbsoluteTimeGetCurrent() - tBlur0) * 1000
-        lastGlassBlurBuildMs = blurBuildMs; lastGlassBlurReadbackMs = blurReadbackMs
+        // ★#1102：blur 段拆两半的读数（**CIFilter 惰性求值**：构图不干活，GPU 渲染+回读都在 createCGImage）
+        var blurBuildMs = 0.0, blurReadbackMs = 0.0
+        // ★★★#1104：**backdrop 缓存**——交互时每 vsync 重渲，但"屏上画的内容"几乎不变
+        //   （只有 touch/press uniform 在变）。捕获+模糊占每帧 3.4ms（65%），完全可以复用。
+        //   【缓存键必须覆盖全部影响结果的因素】内容版本号 + 裁剪矩形 + 捕获密度 + 模糊半径：
+        //     少任何一项都可能拿旧图配新参数（静默错）。键不全 ⇒ 直接不用缓存（正确性优先）。
+        //   【为什么只在内容未变时命中】内容/滚动一变 `contentRevision` 就变 ⇒ 自然失效；
+        //     不需要额外的"什么时候该清"逻辑（那种"记得清缓存"的写法本仓已判定不可靠）。
+        let cacheKey = GlassBackdropKey(revision: contentRevision,
+                                        cropX: Double(cropRect.minX), cropY: Double(cropRect.minY),
+                                        cropW: Double(cropRect.width), cropH: Double(cropRect.height),
+                                        pxPerPoint: Double(capturePxPerPoint), radiusPx: Double(radiusPx))
+        let cacheHit = Self.glassBackdropCacheEnabled && backdropCacheKey == cacheKey ? backdropCacheImage : nil
+        lastGlassBackdropCacheHit = cacheHit != nil
+        let captured: CGImage
+        if let cached = cacheHit {
+            captured = cached          // 命中 ⇒ 跳过 hide/raster/blur 三段
+        } else {
+            // ★★★决策 #893（对齐 **iOS 液态玻璃基准** · 真机 App Store tab 栏取证）：**背景只取"玻璃背后"的内容**——
+            //   捕获前把**玻璃节点自身层（含其文本子层）临时隐藏** ⇒ backdrop 不含玻璃自身子树。
+            //   真 iOS `UIVisualEffectView` 语义：材质**只模糊背后**，`contentView` 里的内容**原样清晰**；
+            //   此前 `self.layer.render` 把玻璃节点自身子树也录进 backdrop ⇒ **自身文字被糊进材质**（8× 真机
+            //   取证：iOS 内文呈"均匀柔化"，偏离参照）。隐藏再捕获 = 从背景里精确剔除自身（CALayer.render 无跳过谓词）。
+            let glassNodeIds = Array(glassSpecByNodeId.keys)
+            var hiddenForCapture: [CALayer] = []
+            let tHide0 = CFAbsoluteTimeGetCurrent()
+            for id in glassNodeIds {
+                guard let l = layersById[id], !l.isHidden else { continue }
+                hiddenForCapture.append(l); l.isHidden = true
+            }
+            capHideMs = (CFAbsoluteTimeGetCurrent() - tHide0) * 1000
+            let tRaster0 = CFAbsoluteTimeGetCurrent()
+            let img = renderer.image { ctx in
+                ctx.cgContext.translateBy(x: -cropRect.minX, y: -cropRect.minY)
+                self.layer.render(in: ctx.cgContext)
+            }
+            rasterMs = (CFAbsoluteTimeGetCurrent() - tRaster0) * 1000
+            for l in hiddenForCapture { l.isHidden = false }   // 恢复（与 CATransaction 同帧，无闪）
+            guard let raw = img.cgImage else {
+                NSLog("[proteus-glass] backdrop 捕获失败——玻璃跳过")
+                return
+            }
+            // ★★★决策 #929：**轻霜**（对齐 iOS 逆向报告「表面磨砂 ~1-3px」；三端同法）——
+            //   对捕获的 backdrop 做一次**小半径高斯模糊**（内容柔化但可读；折射/镜像是主角、磨砂为配）。
+            //   放进宿主（而非 shader）：不破坏 check:glass-pixel-parity（shader 保持零采样）。
+            let tBlur0 = CFAbsoluteTimeGetCurrent()
+            var outImg: CGImage = raw
+            if let blur = Self.sharedBlurFilter {
+                let ci = CIImage(cgImage: raw)
+                blur.setValue(ci, forKey: kCIInputImageKey)
+                blur.setValue(radiusPx, forKey: kCIInputRadiusKey)   // ≈2 逻辑px（与 Android BLUR_DOWN=4 同量级）
+                // ★★★#1101：**CIContext 复用**（此前每次玻璃遍 `CIContext(options: nil)` 新建一个）——
+                //   CIContext 持有 GPU/Metal 设备与命令队列，新建要付初始化成本；本方法在**每帧**都被调用
+                //   （玻璃交互时更是每 vsync 一次）⇒ 每帧白付一次。
+                //   ★语义零变化：同一个 CIContext 可反复 createCGImage（它不持有渲染状态）。
+                let ctx = Self.sharedCIContext
+                let filtered = blur.outputImage
+                blurBuildMs = (CFAbsoluteTimeGetCurrent() - tBlur0) * 1000
+                let tRb0 = CFAbsoluteTimeGetCurrent()
+                if let out = filtered, let cg = ctx.createCGImage(out, from: ci.extent) {
+                    outImg = cg
+                }
+                blurReadbackMs = (CFAbsoluteTimeGetCurrent() - tRb0) * 1000
+            }
+            blurMs = (CFAbsoluteTimeGetCurrent() - tBlur0) * 1000
+            lastGlassBlurBuildMs = blurBuildMs; lastGlassBlurReadbackMs = blurReadbackMs
+            captured = outImg
+            backdropCacheKey = cacheKey
+            backdropCacheImage = outImg
+        }
 
         // ③ 逐玻璃节点装玻璃面（★作为**节点层的子层**：与节点同变换空间 ⇒ 自动跟随，含 fixed 钉住）
         //   ★决策 #863：**批量渲染**——一次 `renderFaces`（共用 backdrop 纹理 + 一条命令缓冲 + 一次等待）。
@@ -154,7 +185,7 @@ extension SelfDrawView {
             touchPress.append((nodeTouch, nodePress))
         }
         let tMetal0 = CFAbsoluteTimeGetCurrent()
-        let faces = GlassMetalRenderer.shared.renderFaces(backdrop: backdrop, requests: reqs,
+        let faces = GlassMetalRenderer.shared.renderFaces(backdrop: captured, requests: reqs,
                                                           scale: glassOutScale, cropOrigin: cropRect.origin,
                                                           texPxPerPoint: capturePxPerPoint, touchPress: touchPress)
         metalMs = (CFAbsoluteTimeGetCurrent() - tMetal0) * 1000
@@ -193,6 +224,7 @@ extension SelfDrawView {
             "raster_ms": rasterMs, "metal_ms": metalMs, "hide_ms": capHideMs, "install_ms": installMs,
             "total_ms": lastGlassTotalMs, "radius_px": lastGlassBlurRadiusPx,
             "crop_px": lastGlassCropPx, "count": Double(order.count),
+            "cache_hit": lastGlassBackdropCacheHit ? 1 : 0,   // ★#1104：命中率必须可观测
         ]
         rec["seq"] = Double(glassPassHistory.count + 1)
         glassPassHistory.append(rec)
@@ -217,4 +249,53 @@ extension SelfDrawView {
     /// 已装玻璃面数（判据用：>0 证明材质真出图、非降级跳过）。
     var glassFaceCount: Int { glassFaceByNodeId.count }
 
+    /* ══════════ ★★★#1104：**交互路径玻璃成本探针** ══════════
+     * 【为什么单列】#1100–#1103 测的全是「mount / 滚动时的一次性玻璃遍」（稳态 5.3–7.8ms）。
+     *   而玻璃真正的高频场景是**交互**：按下/拖动时 `interactionStep()` **每 vsync 重渲一次**玻璃面
+     *   （`SelfDrawView.stepGlassInteract` 的 CADisplayLink）。⇒ 它是唯一可能"每帧都付 5ms+
+     *   导致掉帧"的路径，必须单独测。
+     *
+     * 【为什么不能用 `--press=auto` 测】该注入走 `driveTouchDown → onTouchDown` 回调链，
+     *   而 `interactionTouch(at:down:)` 只挂在**真实 UIKit 触摸回调**（touchesBegan/Moved）上
+     *   ⇒ 注入路径**到不了**玻璃交互，拿到的样本全是 0（"测了但没测到"，本仓最忌讳的假绿形态）。
+     *   ⇒ 本探针直接驱动玻璃交互入口本身，保证测的是**生产路径的那段代码**。
+     *
+     * 【测什么】命中最靠前的交互玻璃 → 起 press → 跑 N 帧 `interactionStep()` →
+     *   读 `glassPassHistory` 的增量。每帧一条读数 ⇒ 直接看"每 vsync 付多少"。 */
+    func glassInteractionProbe(frames: Int = 12) -> [String: Any] {
+        let ids = glassSpecByNodeId.filter { $0.value.interactive }.map { $0.key }
+        guard let targetId = ids.first, let nodeLayer = layersById[targetId] else {
+            return ["ok": false, "error": "没有交互玻璃（interactive=true）",
+                    "glass_nodes": glassSpecByNodeId.count]
+        }
+        let before = glassPassHistory.count
+        let box = nodeLayer.convert(nodeLayer.bounds, to: self.layer)
+        let center = CGPoint(x: box.midX, y: box.midY)
+        let hit = interactionTouch(at: center, down: true)
+        guard hit else {
+            return ["ok": false, "error": "触点未命中交互玻璃", "node_id": targetId,
+                    "box": [Double(box.minX), Double(box.minY), Double(box.width), Double(box.height)]]
+        }
+        // 逐帧推进（等价于 CADisplayLink 每 vsync 调一次 interactionStep 生产路径）
+        var steps = 0
+        while steps < frames && interactionStep() { steps += 1 }
+        // ★#1104：**先读读数、再松手**——读数取的是"按下保持态"的玻璃遍成本与命中率。
+        let after = glassPassHistory
+        let fresh = Array(after.dropFirst(before))
+        let totals = fresh.compactMap { $0["total_ms"] }
+        let cacheHits = fresh.filter { ($0["cache_hit"] ?? 0) > 0.5 }.count
+        // ★★★#1104（补证据缺口）：**停在"按住"状态下截一张图**——用来做"缓存命中帧"的像素 A/B。
+        //   此前 A/B 只截了松手后的图，那时 press 已归零、内容也可能重捕过 ⇒ 无法证明命中态的正确性。
+        //   文件由调用方（壳）在 A/B 脚本里改名区分（cache-on / cache-off 两个变体各存一份）。
+        let heldShot = snapshot(named: "glass-held-\(Self.glassBackdropCacheEnabled ? "cache-on" : "cache-off")")
+        interactionRelease()
+        return [
+            "ok": true, "node_id": targetId, "steps": steps, "passes": fresh.count,
+            "hit": hit, "cache_hits": cacheHits, "cache_enabled": Self.glassBackdropCacheEnabled,
+            "held_snapshot": heldShot ?? "",
+            "total_avg_ms": totals.isEmpty ? 0 : totals.reduce(0, +) / Double(totals.count),
+            "total_max_ms": totals.max() ?? 0,
+            "history": fresh,
+        ]
+    }
 }

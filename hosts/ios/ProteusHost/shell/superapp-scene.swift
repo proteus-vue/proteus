@@ -666,6 +666,12 @@ final class SuperappScene: NSObject {
             o["glass_phase"] = rt.glassPhaseStats()
             // ★#1103：逐次玻璃遍读数（同进程内多条）——区分"每遍都付"vs"首次预热"
             o["glass_history"] = rt.glassPassHistory()
+            // ★#1104：交互路径玻璃成本（每 vsync 重渲）——**只在取证开关下跑**：
+            //   探针本身会推进若干帧并触发多次玻璃遍，若每次组装报告都跑，会污染正常读数
+            //   （"测量动作改变被测对象"——本仓已因同类问题踩过）。
+            if ProcessInfo.processInfo.environment["PROTEUS_GLASS_INTERACT"] == "1" {
+                o["glass_interaction"] = rt.glassInteractionProbe(frames: 12)
+            }
         }
         // ★#1098：P0 长任务读数（字段名与 Android/perf 面板一致）
         if let jd = JsTaskSampler.statsJson().data(using: .utf8),

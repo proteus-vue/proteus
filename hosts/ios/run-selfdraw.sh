@@ -618,6 +618,14 @@ elif [ "$MODE" = "superapp" ]; then
   if [ -n "${PROTEUS_GLASS_SAMPLES:-}" ]; then
     WS_PROBE_ENV="${WS_PROBE_ENV},\"PROTEUS_GLASS_SAMPLES\":\"${PROTEUS_GLASS_SAMPLES}\""
   fi
+  # ★#1104：交互路径玻璃成本探针（取证用——每 vsync 重渲；不设 = 不跑，不影响正常读数）
+  if [ -n "${PROTEUS_GLASS_INTERACT:-}" ]; then
+    WS_PROBE_ENV="${WS_PROBE_ENV},\"PROTEUS_GLASS_INTERACT\":\"${PROTEUS_GLASS_INTERACT}\""
+  fi
+  # ★#1104：backdrop 缓存开关（A/B 视觉对比用；不设 = 1 开，设 0 = 关）
+  if [ -n "${PROTEUS_GLASS_BACKDROP_CACHE:-}" ]; then
+    WS_PROBE_ENV="${WS_PROBE_ENV},\"PROTEUS_GLASS_BACKDROP_CACHE\":\"${PROTEUS_GLASS_BACKDROP_CACHE}\""
+  fi
   if [ "$DRIVE" = "1" ]; then SA_ARGS+=(--drive); fi
   if [ -n "$TAP" ]; then SA_ARGS+=("--tap=$TAP"); fi
   if [ -n "${PUMP:-}" ]; then SA_ARGS+=("--pump=$PUMP"); fi

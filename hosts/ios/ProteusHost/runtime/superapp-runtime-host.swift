@@ -66,6 +66,11 @@ final class SuperappRuntimeHost: NSObject, SuperappRuntimeExports {
     func glassPhaseStats() -> [String: Double] { draw.glassPhaseStats() }
     /// ★#1103：逐次玻璃遍读数（同进程内多条样本）
     func glassPassHistory() -> [[String: Double]] { draw.glassPassHistorySnapshot() }
+    /// ★#1104：交互路径玻璃成本探针（每 vsync 重渲的实测）
+    func glassInteractionProbe(frames: Int) -> [String: Any] {
+        guard let v = draw.view else { return ["ok": false, "error": "view 未建立"] }
+        return v.glassInteractionProbe(frames: frames)
+    }
     /// 手势反向回调名（JS 侧注册）
     private var gestureCb: String?
     /// JSC 上下文（注册手势回调名后，宿主用它反向调 JS）
