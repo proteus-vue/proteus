@@ -105,6 +105,13 @@ const LOCAL_ONLY = {
   //   与 check:invoke-wire-parity 同族：纯本机 C++（clang++），零设备零 OHOS sysroot ⇒ CI 也可跑，
   //   但按该族先例（改宿主后本地跑一次即可）归开发机。
   'check:screen-mount-helpers': '鸿蒙 screen.mount 纯函数门禁（env 替换 + 合成根重映射，真跑 14 条用例 + runner 防漂移比对）——与 check:invoke-wire-parity 同族（开发机跑，零设备）',
+  // ★★★真机证据「入库即不得缺失」门禁（2026-10-20 · #1146）：从 package.json 的 check:* 命令
+  //   自动推导被引用的 hosts/*/results/*.json（当前 19 条），断言①存在 ②已入库。
+  //   背景：六条判据（app-stack / mount-layers / host-runtime / kernel-anim / platform-anim / embed-demo）
+  //   在产物缺失时一律 "return 0（诚实跳过）"——而那句假设（"真机产物开发机上没有属正常"）
+  //   在产物**全部入库**后已不成立：缺失只剩"被删/损坏"⇒ git rm 一下门禁就变绿。
+  //   ★需 git 工作树（判 tracked）⇒ 归开发机；CI 的 checkout 亦满足，但按本族先例归本地。
+  'check:evidence-tracked': '真机证据入库完整性门禁（19 条被 check:* 引用的产物：存在 + tracked）——与 check:app-screen-content 同族（开发机跑，需 git 工作树判 tracked）',
   // ★★★hosts 关注点分层门禁（2026-10-07 · 用户「宿主里项目信息与项目无关抽象混在一起」）：
   //   校验三端 runtime/shell/dev 三层齐备 + runtime 无反向依赖 + 无被跟踪产物。
   //   与 check:host-rounding / check:host-kernel-keys 同族：宿主侧门禁，开发机跑（CI 无宿主源码语境）。
