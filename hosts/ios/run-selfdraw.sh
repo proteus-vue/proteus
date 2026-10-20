@@ -201,15 +201,31 @@ rm -rf "$APP"; mkdir -p "$APP"
 # ★HA0.5：宿主依赖平台适配层（`platform/ios/`）⇒ 必须一起编译（与 check-selfdraw-compile.sh 同口径）
 PLATFORM_SRC="$(ls "$ROOT"/platform/ios/ProteusPlatform/*.swift 2>/dev/null | tr '\n' ' ')"
 [ -n "$PLATFORM_SRC" ] || { echo "✗ 找不到 platform/ios 平台适配源码（HA0.5 抽取后被删？）"; exit 3; }
+# ★★★#1100：编译结果**必须校验**——此前把 swiftc 输出 `| grep -E "error:" | head -5` 直接丢了退出码，
+#   于是「Swift 编译失败」会静默继续：旧的可执行文件（或根本没有）被拿去签名装机，
+#   真机上跑的是**上一版的宿主**（本轮实测：拆文件后漏登记一个源文件 ⇒ `cannot find X in scope`
+#   ⇒ 脚本仍打印成功路径，差点把旧二进制的读数当成新代码的证据）。
+#   ⇒ 判据 = **产物存在 + 本次编译 rc=0 + 日志里无 error:**（三者缺一即停）。
+COMPILE_LOG="$(mktemp)"
+set +e
 xcrun --sdk iphoneos swiftc -O -target arm64-apple-ios15.0 \
   -framework UIKit -framework CoreText -framework JavaScriptCore -framework AVFoundation -parse-as-library \
   -o "$APP/ProteusSelfDraw" $PLATFORM_SRC "$HERE/ProteusHost/runtime/selfdraw-scene.swift" \
   "$HERE/ProteusHost/runtime/host-runtime-bridge.swift" "$HERE/ProteusHost/runtime/interaction-feedback.swift" "$HERE/ProteusHost/runtime/superapp-runtime-host.swift" "$HERE/ProteusHost/runtime/proteus-host-controller.swift" "$HERE/ProteusHost/runtime/host-capabilities.swift" "$HERE/ProteusHost/runtime/device-capability.swift" "$HERE/ProteusHost/runtime/keyboard-watch.swift" "$HERE/ProteusHost/runtime/element-rect.swift" "$HERE/ProteusHost/runtime/capture-capability.swift" "$HERE/ProteusHost/runtime/websocket-capability.swift" "$HERE/ProteusHost/runtime/file-transfer-capability.swift" \
-  "$HERE/ProteusHost/runtime/local-service-capability.swift" "$HERE/ProteusHost/runtime/js-task-sampler.swift" \
+  "$HERE/ProteusHost/runtime/local-service-capability.swift" "$HERE/ProteusHost/runtime/js-task-sampler.swift" "$HERE/ProteusHost/runtime/host-tree-diff.swift" "$HERE/ProteusHost/runtime/host-abi.swift" \
   "$HERE/ProteusHost/runtime/InvokeWire.swift" "$HERE/ProteusHost/runtime/invoke-bytes-bridge.swift" "$HERE/ProteusHost/runtime/http-capability.swift" \
   "$HERE/ProteusHost/runtime/host-lifecycle-events.swift" "$HERE/ProteusHost/runtime/screen-host.swift" "$HERE/ProteusHost/runtime/tab-chrome.swift" \
   "$HERE/ProteusHost/runtime/glass-metal.swift" "$HERE/ProteusHost/runtime/generated-materials.swift" \
-  "$HERE/ProteusHost/dev/host-runtime-scene.swift" "$HERE/ProteusHost/dev/app-stack-scene.swift" "$HERE/ProteusHost/dev/showcase-scene.swift" "$HERE/ProteusHost/dev/glass-scene.swift" "$HERE/ProteusHost/shell/superapp-scene.swift" "$HERE/ProteusHost/shell/selfdraw-app.swift" "$ABI_LIB" "$LIB"
+  "$HERE/ProteusHost/dev/host-runtime-scene.swift" "$HERE/ProteusHost/dev/app-stack-scene.swift" "$HERE/ProteusHost/dev/showcase-scene.swift" "$HERE/ProteusHost/dev/glass-scene.swift" "$HERE/ProteusHost/shell/superapp-scene.swift" "$HERE/ProteusHost/shell/selfdraw-app.swift" "$ABI_LIB" "$LIB" > "$COMPILE_LOG" 2>&1
+COMPILE_RC=$?
+set -e
+grep -E "error:" "$COMPILE_LOG" | head -5 || true
+if [ "$COMPILE_RC" != "0" ] || [ ! -f "$APP/ProteusSelfDraw" ]; then
+  echo "✗ Swift 编译失败（rc=$COMPILE_RC，产物存在=$([ -f "$APP/ProteusSelfDraw" ] && echo yes || echo no)）"
+  echo "  完整日志：$COMPILE_LOG"
+  exit 3
+fi
+rm -f "$COMPILE_LOG"
 
 echo "==> ⑤ 组装 .app"
 # ★★两个 bundle **都装**（本仓实测踩到：只装当前模式那个 ⇒ 从桌面点开时

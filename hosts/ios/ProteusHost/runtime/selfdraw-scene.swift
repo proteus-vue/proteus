@@ -23,216 +23,9 @@ import JavaScriptCore
 import Darwin
 
 /* ────────────────────────── Rust C ABI ────────────────────────── */
-
-@_silgen_name("proteus_layout_create")
-func proteus_layout_create(_ requestJson: UnsafePointer<CChar>) -> UInt64
-
-@_silgen_name("proteus_layout_rects")
-func proteus_layout_rects(_ handle: UInt64) -> UnsafeMutablePointer<CChar>
-
-@_silgen_name("proteus_layout_destroy")
-func proteus_layout_destroy(_ handle: UInt64) -> Bool
-
-@_silgen_name("proteus_layout_version")
-func proteus_layout_version() -> UnsafeMutablePointer<CChar>
-
-@_silgen_name("proteus_layout_free_string")
-func proteus_layout_free_string(_ ptr: UnsafeMutablePointer<CChar>)
-
-@_silgen_name("proteus_layout_update")
-func proteus_layout_update(_ handle: UInt64, _ patchesJson: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
-
-/// ★★结构变更（插入/摘除子树）——「增删行」的增量路径（此前只能重发整棵树）
-@_silgen_name("proteus_layout_splice")
-func proteus_layout_splice(_ handle: UInt64, _ spliceJson: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
-
-/// ★★**命中测试**（核心算：target + 冒泡链 chain）——触摸派发的依据
-@_silgen_name("proteus_layout_hit_test")
-func proteus_layout_hit_test(_ handle: UInt64, _ x: Float, _ y: Float) -> UnsafeMutablePointer<CChar>
-
-/// ★★注入/更新文本度量（宿主度量后推入；不触发重排）
-@_silgen_name("proteus_layout_set_text_measures")
-func proteus_layout_set_text_measures(_ handle: UInt64, _ measuresJson: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
-/// ★Vapor IR V3：二进制指令流入口（字节指针 + 长度）
-@_silgen_name("proteus_layout_apply_ops")
-func proteus_layout_apply_ops(_ handle: UInt64, _ ptr: UnsafePointer<UInt8>, _ len: UInt32) -> UnsafeMutablePointer<CChar>
-
-// ★★RT2（2026-09-30）：指令驱动动画（曲线求值在 Rust 侧；宿主只负责"每帧推进 + 应用变换"）
-@_silgen_name("proteus_layout_anim_start")
-func proteus_layout_anim_start(_ handle: UInt64, _ json: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
-@_silgen_name("proteus_layout_anim_seek")
-func proteus_layout_anim_seek(_ handle: UInt64, _ json: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
-/// ★MA5：滚动驱动（位置 → 全部窗口动画；换算在内核）
-@_silgen_name("proteus_layout_anim_seek_scroll")
-func proteus_layout_anim_seek_scroll(_ handle: UInt64, _ json: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
-/// ★共享元素（跨元素飞行；几何原语——中心差 + 宽度比在内核）
-@_silgen_name("proteus_layout_bg_nodes")
-func proteus_layout_bg_nodes(_ handle: UInt64) -> UnsafeMutablePointer<CChar>
-/// ★★C1：带裁剪形状的节点清单（与 bg_nodes 同一取样纪律——id 动态分配，必须问内核）
-@_silgen_name("proteus_layout_clip_nodes")
-func proteus_layout_clip_nodes(_ handle: UInt64) -> UnsafeMutablePointer<CChar>
-/// ★★C2：带 SVG 路径的节点清单（描边动画的取样入口——同取样纪律）
-@_silgen_name("proteus_layout_svg_nodes")
-func proteus_layout_svg_nodes(_ handle: UInt64) -> UnsafeMutablePointer<CChar>
-/// ★★路径变形 v1：按当前因子**算好**的变形段列表（宿主零插值——见内核 `SvgPath::morphed`）
-@_silgen_name("proteus_layout_svg_morph_path")
-func proteus_layout_svg_morph_path(_ handle: UInt64, _ json: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
-/// ★★路径变形（**二进制版**——每帧路径：一次拷贝 + 定长字段，无 JSON 解析。
-///   真机读数：JSON 版把 moonGlow 幕 p95 抬到 2.57ms——见内核同函数的注释）
-@_silgen_name("proteus_layout_svg_morph_path_bin")
-func proteus_layout_svg_morph_path_bin(_ handle: UInt64, _ nodeId: UInt32, _ outLen: UnsafeMutablePointer<UInt32>) -> UnsafeMutablePointer<UInt8>
-@_silgen_name("proteus_layout_text_color_nodes")
-func proteus_layout_text_color_nodes(_ handle: UInt64) -> UnsafeMutablePointer<CChar>
-@_silgen_name("proteus_layout_text_policy")
-func proteus_layout_text_policy(_ handle: UInt64, _ nodeIdsJson: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
-@_silgen_name("proteus_layout_shared_element")
-func proteus_layout_shared_element(_ handle: UInt64, _ json: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
-@_silgen_name("proteus_layout_anim_commit_spec")
-func proteus_layout_anim_commit_spec(_ handle: UInt64, _ json: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
-@_silgen_name("proteus_layout_flip")
-func proteus_layout_flip(_ handle: UInt64, _ json: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
-@_silgen_name("proteus_layout_anim_stop")
-func proteus_layout_anim_stop(_ handle: UInt64, _ json: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
-// ★仍在动的动画条数（0 = 全部结束）——幕切换的权威判据（见内核 anim_active 注释）
-@_silgen_name("proteus_layout_anim_active")
-func proteus_layout_anim_active(_ handle: UInt64) -> UInt64
-/// ★★A3 播放控制（时间因子/暂停）
-@_silgen_name("proteus_layout_anim_control")
-func proteus_layout_anim_control(_ handle: UInt64, _ json: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
-@_silgen_name("proteus_layout_anim_tick_bin")
-func proteus_layout_anim_tick_bin(_ handle: UInt64, _ dtMs: Float, _ outLen: UnsafeMutablePointer<UInt32>) -> UnsafeMutablePointer<UInt8>?
-/// ★Vapor IR V4：**不带 rects 的 apply**（二进制通道场景——省掉 JSON 序列化与宿主解析）
-@_silgen_name("proteus_layout_apply_ops_norects")
-func proteus_layout_apply_ops_norects(_ handle: UInt64, _ ptr: UnsafePointer<UInt8>, _ len: UInt32) -> UnsafeMutablePointer<CChar>
-/// ★Vapor IR V4：变化集二进制返回（整流矩形）
-@_silgen_name("proteus_layout_rects_bin")
-func proteus_layout_rects_bin(_ handle: UInt64, _ outLen: UnsafeMutablePointer<UInt32>) -> UnsafeMutablePointer<UInt8>
-/// 释放上面返回值
-@_silgen_name("proteus_rects_free")
-func proteus_rects_free(_ ptr: UnsafeMutablePointer<UInt8>, _ len: UInt32)
-
-/* ★★★B4（决策 #834）：材质几何/曲线的**内核单源**查询——宿主不再各写一份公式 */
-/// 线性渐变端点（单位空间；CSS 规范式）——入参 `{"nodeId":N}` ⇒ `{ok,x0,y0,x1,y1,cx,cy,r}`
-@_silgen_name("proteus_layout_gradient_endpoints")
-func proteus_layout_gradient_endpoints(_ handle: UInt64, _ json: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
-/// 发光分层参数——入参 `{"nodeId":N,"intensity":0..1}` ⇒ `{ok,layers:[[boostPx,alpha],…]}`
-@_silgen_name("proteus_layout_glow_layers")
-func proteus_layout_glow_layers(_ handle: UInt64, _ json: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
-/// 遮罩揭示色标——入参 `{"nodeId":N}` ⇒ `{ok,kind,stops:[oA,aA,oB,aB]}`
-@_silgen_name("proteus_layout_mask_stops")
-func proteus_layout_mask_stops(_ handle: UInt64, _ json: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
-
-/* ★★列表复用池（§12.6）：核心给**决策**（哪些行该 acquire/release），宿主执行**动作** */
-
-@_silgen_name("proteus_recycle_create")
-func proteus_recycle_create(_ itemCount: UInt32, _ leadingRows: UInt32, _ followingRows: UInt32) -> UInt64
-
-@_silgen_name("proteus_recycle_update")
-func proteus_recycle_update(_ handle: UInt64, _ firstVisible: UInt32, _ lastVisible: UInt32) -> UnsafeMutablePointer<CChar>
-
-@_silgen_name("proteus_recycle_stats")
-func proteus_recycle_stats(_ handle: UInt64) -> UnsafeMutablePointer<CChar>
-
-@_silgen_name("proteus_recycle_destroy")
-func proteus_recycle_destroy(_ handle: UInt64)
-
-/* ══════════ ★★Host ABI v1（HA1：现有宿主接入抽象层）══════════ */
-
-/// ★**为什么宿主也要接 ABI（HA0.5 的收益兑现）**：宿主集成（Surface/生命周期/输入/调度/能力注册）
-///   改为经契约驱动 ⇒ **换宿主不用重写平台适配**；本文件用"双路对照"验证抽象正确性：
-///   同一棵树分别走 [直连 FFI] 与 [Host ABI]，几何必须**逐字节一致**（等价性判据，不是"看起来对"）。
-
-struct ProteusVersionInfo {
-    var abi_version: UInt32 = 0
-    var ir_version: UInt32 = 0
-    var ops_wire_version: UInt32 = 0
-    var min_shell_version: UInt32 = 0
-}
-
-struct ProteusTextInput {
-    var text: UnsafePointer<CChar>?
-    var node_id: UInt32
-    var style_key: UInt32
-    var font_size: Float
-    var font_weight: Int32
-    var font_family: UnsafePointer<CChar>?
-    var max_width: Float
-}
-
-struct ProteusTextMetrics {
-    var width: Float = 0
-    var height: Float = 0
-}
-
-/// ★★**回调签名必须用"ObjC 可表示类型"**（本仓实测的 Swift 限制）
-///
-/// 【为什么不是 `UnsafePointer<ProteusTextInput>?`】Swift 要求 `@convention(c)` 的参数类型
-///   **在 ObjC 里可表示**；而 `ProteusTextInput` 是含 `UnsafePointer<CChar>?` 的 Swift 结构体
-///   ⇒ 报 `is not representable in Objective-C`。
-/// 【正解】按 C ABI 的真实形态：结构体指针在 C 侧就是一个**地址** ⇒ 用 `UnsafeRawPointer?`
-///   接收，回调内 `assumingMemoryBound(to:)` 还原。★这不是"绕过类型系统"——
-///   C 侧本来就是这样传的（`const ProteusTextInput*`），Swift 的严格类型在**跨语言边界**上
-///   表达不出来，按底层宽度声明才忠实。
-typealias ProteusMeasureTextFn = @convention(c) (UnsafeRawPointer?, UnsafeMutableRawPointer?, UnsafeMutableRawPointer?) -> Int32
-typealias ProteusRequestFrameFn = @convention(c) (UnsafeMutableRawPointer?) -> Void
-
-/// ★★**为什么函数指针字段用 `UnsafeMutableRawPointer?`（而不是 `@convention(c)` Optional）**
-///
-/// 【本仓实测的 Swift 类型系统限制】`@convention(c)` 的函数**可选类型**放进结构体**字面量**时，
-///   编译器要求"上下文类型"但在混合 `nil` 时不稳（报 `'nil' requires a contextual type`）——
-///   连逐字段赋值也躲不掉（结构体初始化器本身要推全部字段）。
-/// 【正解】按 **C ABI 的真实形态**声明：C 的函数指针就是**指针宽度**的值 ⇒ 用
-///   `UnsafeMutableRawPointer?` 承载，传参时经 `unsafeBitCast` 还原成 `@convention(c)` 类型。
-///   ★这不是绕开类型检查：C 侧本来就是 `void*`-等价的可空函数指针，Swift 的严格类型在这层
-///     表达不出来 ⇒ 按底层形态声明才是**忠实**的。
-struct ProteusHostVTable {
-    var user_data: UnsafeMutableRawPointer?
-    var request_frame: UnsafeMutableRawPointer?
-    var measure_text: UnsafeMutableRawPointer?
-    var decode_image: UnsafeMutableRawPointer?
-    var native_view_create: UnsafeMutableRawPointer?
-    var native_view_update: UnsafeMutableRawPointer?
-    var native_view_destroy: UnsafeMutableRawPointer?
-}
-
-@_silgen_name("proteus_abi_version_info")
-func proteus_abi_version_info() -> ProteusVersionInfo
-@_silgen_name("proteus_check_versions")
-func proteus_check_versions(_ host: UnsafePointer<ProteusVersionInfo>?, _ hint: UnsafeMutablePointer<CChar>?, _ len: Int) -> Int32
-@_silgen_name("proteus_engine_create")
-func proteus_engine_create(_ host: UnsafePointer<ProteusHostVTable>?, _ ver: UnsafePointer<ProteusVersionInfo>?, _ hint: UnsafeMutablePointer<CChar>?, _ len: Int) -> UnsafeMutableRawPointer?
-@_silgen_name("proteus_engine_destroy")
-func proteus_engine_destroy(_ engine: UnsafeMutableRawPointer?) -> UnsafeMutableRawPointer?
-@_silgen_name("proteus_load_tree")
-func proteus_load_tree(_ engine: UnsafeMutableRawPointer?, _ treeJson: UnsafePointer<CChar>?) -> Int32
-@_silgen_name("proteus_submit_frame")
-func proteus_submit_frame(_ engine: UnsafeMutableRawPointer?, _ ops: UnsafePointer<UInt8>?, _ byteLen: Int) -> Int32
-@_silgen_name("proteus_frame")
-func proteus_frame(_ engine: UnsafeMutableRawPointer?, _ frameTimeNs: Int64) -> Int32
-@_silgen_name("proteus_frame_updates")
-func proteus_frame_updates(_ engine: UnsafeMutableRawPointer?, _ outLen: UnsafeMutablePointer<UInt32>?) -> UnsafePointer<UInt8>?
-@_silgen_name("proteus_rects")
-func proteus_rects(_ engine: UnsafeMutableRawPointer?, _ outLen: UnsafeMutablePointer<UInt32>?) -> UnsafePointer<UInt8>?
-@_silgen_name("proteus_stats_json")
-func proteus_stats_json(_ engine: UnsafeMutableRawPointer?) -> UnsafePointer<CChar>?
-@_silgen_name("proteus_dispatch_pointers")
-func proteus_dispatch_pointers(_ engine: UnsafeMutableRawPointer?, _ events: UnsafeRawPointer?, _ count: Int) -> Int64
-@_silgen_name("proteus_register_capability")
-func proteus_register_capability(_ engine: UnsafeMutableRawPointer?, _ name: UnsafePointer<CChar>?, _ fn: (@convention(c) (UnsafePointer<CChar>?, UnsafeMutablePointer<CChar>?, Int, UnsafeMutableRawPointer?) -> Int32)?, _ userData: UnsafeMutableRawPointer?) -> Int32
-@_silgen_name("proteus_has_capability")
-func proteus_has_capability(_ engine: UnsafeMutableRawPointer?, _ name: UnsafePointer<CChar>?) -> Int32
-@_silgen_name("proteus_call_capability")
-func proteus_call_capability(_ engine: UnsafeMutableRawPointer?, _ name: UnsafePointer<CChar>?, _ argJson: UnsafePointer<CChar>?, _ out: UnsafeMutablePointer<CChar>?, _ outLen: Int) -> Int32
-@_silgen_name("proteus_surface_changed")
-func proteus_surface_changed(_ engine: UnsafeMutableRawPointer?, _ surface: UnsafeMutableRawPointer?)
-@_silgen_name("proteus_lifecycle")
-func proteus_lifecycle(_ engine: UnsafeMutableRawPointer?, _ state: UInt32)
-@_silgen_name("proteus_anim_start")
-func proteus_anim_start(_ engine: UnsafeMutableRawPointer?, _ animsJson: UnsafePointer<CChar>?) -> Int32
-@_silgen_name("proteus_anim_stop")
-func proteus_anim_stop(_ engine: UnsafeMutableRawPointer?, _ json: UnsafePointer<CChar>?) -> Int32
-@_silgen_name("proteus_prewarm")
-func proteus_prewarm()
+// ★#1100：C ABI 声明（`@_silgen_name` 绑定 + 版本/VTable 结构体）已搬到 `host-abi.swift`
+//   ——同一 Swift 模块，调用点零改动。搬迁原因：本文件受 `check:file-size` 棘轮钉住（只减不增），
+//   而「ABI 绑定」与「自绘场景实现」本就是两个职责。
 
 func takeCString(_ ptr: UnsafeMutablePointer<CChar>) -> String {
     defer { proteus_layout_free_string(ptr) }
@@ -5275,6 +5068,54 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     ///   ★不用 `SelfDrawView.lastFrameMs`——那是 CADisplayLink 的**帧间隔**（≈16.67ms 预算，非成本），
     ///     且只在动画期非零；拿它当"耗时"会误导。
     var frameCostMs: Double { (lastTiming["host_total_ms"] ?? 0) }
+    /* ── ★★★#1100（承接 #1099）：mount 相位耗时——**与 Android `VaporRenderHost.last*Ms` 同字段语义** ──
+     *   #1099 在 Android 上把单次切屏拆开（发现诊断采样占 62%），但 iOS 只有总耗时（30 次 / long 3 /
+     *   max 92ms）**没有归因**。本组字段就是 iOS 的同口径归因入口：报告里逐字段发给 `superapp.json`。
+     *
+     *   ★语义差异（必须如实标注，不能假装两端一模一样）：
+     *     · `layout` = 内核建树（create）/ 增量更新（update）本身——**不含** rects 读取；
+     *     · `rects`  = 读内核几何 JSON + 解析（**iOS 特有**：全量路径每帧都要读，Android 只在
+     *                  开启滚动范围时读）；它馈入建层，故单列而不混进 layout；
+     *     · `wrap`   = 第二遍测量 + 可能的整树重建（两端同口径）；
+     *     · `emit`   = **建层阶段**（flat 收集 + CALayer 建/更新 + 玻璃遍）——iOS 没有 Android
+     *                  的 `emitAll` 指令流，层树就是它的"绘制产出"，故用同名对位；
+     *     · `sample` = **恒 -1**：iOS 的像素自检（`superapp-scene.takeSnapshot`）在 mount **之外**，
+     *                  mount 内没有采样 ⇒ 不伪造 0（0 会被读成"采样零耗时"）。
+     *   -1 = 本路径未发生（如增量路径无 wrap 第二遍 / 未开滚动范围）。 */
+    private(set) var lastMountMeasureMs = -1.0
+    private(set) var lastMountLayoutMs = -1.0
+    private(set) var lastMountRectsMs = -1.0
+    private(set) var lastMountWrapMs = -1.0
+    private(set) var lastMountEmitMs = -1.0
+    private(set) var lastMountScrollMs = -1.0
+    private(set) var lastMountSampleMs = -1.0
+    /* ★#1100 第二层：`emit`（建层 85.6ms 实测）内部三段——不拆就只能说"建层慢"，拆完才知道砍哪段 */
+    /// flat 收集：`styleOf` + **逐节点材质 FFI 查询**（gradient/glow/mask 各一次跨界调用）
+    private(set) var lastMountFlatMs = -1.0
+    /// CALayer 建树：`clearLayers` + `buildLayers`（同一 CATransaction）
+    private(set) var lastMountLayersMs = -1.0
+    /// 建后特效遍：sticky/fixed 落位 + CSS 动画启动 + SVG 描边 + **玻璃遍**
+    private(set) var lastMountPostMs = -1.0
+    /* ★#1100 第三层：`post`（实测 18.2ms）四个子项——混在一起就只能猜"大概是玻璃" */
+    private(set) var lastMountPinMs = -1.0
+    private(set) var lastMountAnimMs = -1.0
+    private(set) var lastMountSvgMs = -1.0
+    private(set) var lastMountGlassMs = -1.0
+    /// 判据读数（native 直读——报告用；不经 JS）
+    func mountPhaseStats() -> [String: Double] {
+        ["measure_ms": lastMountMeasureMs, "layout_ms": lastMountLayoutMs,
+         "rects_ms": lastMountRectsMs, "wrap_ms": lastMountWrapMs,
+         "emit_ms": lastMountEmitMs, "scroll_ms": lastMountScrollMs,
+         "sample_ms": lastMountSampleMs,
+         "flat_ms": lastMountFlatMs, "layers_ms": lastMountLayersMs, "post_ms": lastMountPostMs,
+         "pin_ms": lastMountPinMs, "anim_ms": lastMountAnimMs,
+         "svg_ms": lastMountSvgMs, "glass_ms": lastMountGlassMs]
+    }
+    /// ★#1100：**每次 mount 的相位读数**（最近 8 次，旧在前）——首屏与热态必须分开看：
+    ///   真机实测首屏 93ms / 热态 33ms，只报末次会让"切屏成本"被低估近 3 倍。
+    private var mountHistoryMs: [[String: Double]] = []
+    private static let mountHistoryCap = 8
+    func mountPhaseHistory() -> [[String: Double]] { mountHistoryMs }
     /// ★★上一次更新提交的几何快照（id → "x,y,w,h"）——用于**自检「几何真的变了吗」**
     ///
     /// 【为什么必须自检（本仓实测的第八个测量装置缺陷）】类B 基准树少了 `flexShrink: 0`，
@@ -5321,7 +5162,19 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         mountCalls += 1
         // ★force=全量重建（决策 #704）：`mount` 语义 = 建/重挂屏（非频繁更新——更新走 applyOps/updatePatches）
         //   ⇒ 恒全量重建，重置（remount）时按项目内容重配层、覆盖就地编辑。★增量 diff 只服务"更新"。
-        return render(treeJson: treeJson, phase: "mount", force: true)
+        //
+        // ★★★#1100：**每次 mount 都进历史环**——报告只留"末次读数"会骗人：
+        //   真机实测首屏 mount 93ms、热态切屏 ~33ms；只报末次 ⇒ 看的人以为切屏只要 33ms
+        //   （首屏那 93ms 被静默丢掉）。环长 8（一次 drive 4 屏够用，且不会无界增长）。
+        let tMount0 = CFAbsoluteTimeGetCurrent()
+        let out = render(treeJson: treeJson, phase: "mount", force: true)
+        var rec = mountPhaseStats()
+        rec["host_ms"] = (CFAbsoluteTimeGetCurrent() - tMount0) * 1000
+        mountHistoryMs.append(rec)
+        if mountHistoryMs.count > SelfDrawBridge.mountHistoryCap {
+            mountHistoryMs.removeFirst(mountHistoryMs.count - SelfDrawBridge.mountHistoryCap)
+        }
+        return out
     }
 
     func update(_ treeJson: String) -> String {
@@ -8271,6 +8124,11 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     private func render(treeJson: String, phase: String, force: Bool = false) -> String {
         guard let view = view else { return "{\"ok\":false,\"error\":\"view 未设置\"}" }
         let t0 = CFAbsoluteTimeGetCurrent()
+        // ★#1100：相位读数**每次渲染先复位**——未发生的相位保持 -1，绝不让上一屏的旧读数冒充本屏。
+        lastMountMeasureMs = -1; lastMountLayoutMs = -1; lastMountRectsMs = -1
+        lastMountWrapMs = -1; lastMountEmitMs = -1; lastMountScrollMs = -1
+        lastMountFlatMs = -1; lastMountLayersMs = -1; lastMountPostMs = -1
+        lastMountPinMs = -1; lastMountAnimMs = -1; lastMountSvgMs = -1; lastMountGlassMs = -1
 
         let tParse0 = CFAbsoluteTimeGetCurrent()
         guard let data = treeJson.data(using: .utf8),
@@ -8299,6 +8157,7 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             textMeasures["\(id)"] = ["width": Double(sz.width), "height": Double(sz.height), "baseline": Double(baseline)]
         }
         let measureMs = (CFAbsoluteTimeGetCurrent() - tMeasure0) * 1000
+        lastMountMeasureMs = measureMs   // ★#1100：与 Android `lastMeasureMs` 同口径
 
         // ── ② 组装核心请求（只保留核心认识的字段）──
         lastViewport = root["viewport"] as? [String: Any] ?? lastViewport   // ★就地编辑重渲染复用（决策 #706）
@@ -8399,6 +8258,9 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                     usedIncremental = true
                     changedCount = changed.count
                     updatedLayerCount = updatedLayers
+                    // ★#1100：增量路径的相位——layout = FFI update，emit = 层树更新（无建层全量）
+                    lastMountLayoutMs = updateMs
+                    lastMountEmitMs = layersMs
                     layoutMs = (CFAbsoluteTimeGetCurrent() - tLayout0) * 1000
                     // ★不再读全量 rects、不再重建层 —— 这就是省下来的部分
                     lastNodes = nodes
@@ -8455,23 +8317,34 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                 _ = proteus_layout_destroy(handle)
                 handle = 0
             }
+            // ★#1100：内核建树（create）单列计时——不与 wrap 第二遍 / rects 读取混在一起，
+            //   否则"布局慢"和"读几何慢"无法区分（Android `lastLayoutMs` 只包 create，同口径）。
+            let tCreate0 = CFAbsoluteTimeGetCurrent()
             let h = reqJson.withCString { proteus_layout_create($0) }
             handle = h
+            lastMountLayoutMs = (CFAbsoluteTimeGetCurrent() - tCreate0) * 1000
             guard h > 0 else {
                 return "{\"ok\":false,\"error\":\"proteus_layout_create 失败（节点数 \(nodes.count)）\"}"
             }
             // ★★全端对齐批（2026-10-05 · white-space 五端对齐）：**第二遍测量**——
             //   wrap 类文本在解析后的盒宽下折行 ⇒ 高度=多行高（首遍只有单行度量 ⇒ 盒高偏小）。
             //   流程：首遍 create → 读 rects 得盒宽 → 按盒宽重测 wrap 文本 → 有变化则 destroy+重建。
+            let tWrap0 = CFAbsoluteTimeGetCurrent()
             if let req2 = wrapRemeasure(handle: h, req: req, nodes: nodes) {
                 _ = proteus_layout_destroy(h)
                 handle = 0
+                let tRebuild0 = CFAbsoluteTimeGetCurrent()
                 handle = req2.withCString { proteus_layout_create($0) }
+                lastMountLayoutMs += (CFAbsoluteTimeGetCurrent() - tRebuild0) * 1000   // 重建也是布局成本
                 guard handle > 0 else {
                     return "{\"ok\":false,\"error\":\"核心重建树失败（wrap 第二遍测量后）\"}"
                 }
             }
+            lastMountWrapMs = (CFAbsoluteTimeGetCurrent() - tWrap0) * 1000
+            // ★#1100：rects 读取 + JSON 序列化**单列**（iOS 特有开销：全量路径每帧读全量几何）
+            let tRects0 = CFAbsoluteTimeGetCurrent()
             rectsJsonStr = takeCString(proteus_layout_rects(handle))
+            lastMountRectsMs = (CFAbsoluteTimeGetCurrent() - tRects0) * 1000
             layoutMs = (CFAbsoluteTimeGetCurrent() - tLayout0) * 1000
         }
         lastNodes = nodes
@@ -8489,6 +8362,11 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             return "{\"ok\":false,\"error\":\"几何解析失败\"}"
         }
         let tBuild0 = CFAbsoluteTimeGetCurrent()
+        // ★★★#1100 第二层拆分：建层阶段（实测 85.6ms = mount 的 92%）内部再分三段——
+        //   ① flat 收集（styleOf + **逐节点材质 FFI 查询**）② CALayer 建树 ③ 建后特效遍。
+        //   不拆就只能说"建层慢"，拆完才能决定砍哪一段（本仓纪律：没有归因就别谈优化）。
+        var flatMs = 0.0, layersMs = 0.0, postMs = 0.0
+        let tFlat0 = CFAbsoluteTimeGetCurrent()
         // ★★矩阵 #10：把**核心真源**透传给调用方（`native_hosts` 清单 + 全量 rects）——
         //   Swift 侧建原生 UIView 的 frame 要读**核心几何**（"位置由核心决定"），
         //   而此前回执里没有这两个字段（JS 侧 `renderNativeMix` 拿不到 ⇒ ok:false）。
@@ -8512,6 +8390,7 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         //   ★读数去向：范围设进视图后，由 `driveStress` 的 `scroll_probe`（`verticalRange`）如实报出
         //     —— 本处不再另存一份（同值两处存 = 迟早分叉）。
         if SelfDrawBridge.contentScrollRangeEnabled {
+            let tScroll0 = CFAbsoluteTimeGetCurrent()   // ★#1100：与 Android `lastScrollMs` 同口径
             var maxBottom: CGFloat = 0
             for (_, r) in rects {
                 let bottom = CGFloat(r["y"] ?? 0) + CGFloat(r["height"] ?? 0)
@@ -8524,6 +8403,7 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             let locked = (nodes.first?["overflowY"] as? String) == "hidden"
             if locked { range = 0 }
             view.setVerticalScrollRange(range)
+            lastMountScrollMs = (CFAbsoluteTimeGetCurrent() - tScroll0) * 1000
         }
         // 按树序拍平（父在前）——CALayer 树要求先建父
         var flat: [(id: Int, parentId: Int?, rect: CGRect, style: [String: Any])] = []
@@ -8580,9 +8460,18 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         //     外层 commit 时才**原子地**一次性提交"旧树→新树"，render server 不经过空树态。
         CATransaction.begin()
         CATransaction.setDisableActions(true)
+        flatMs = (CFAbsoluteTimeGetCurrent() - tFlat0) * 1000
+        let tLayers0 = CFAbsoluteTimeGetCurrent()
         view.clearLayers()
         view.buildLayers(flat: flat)
         CATransaction.commit()
+        layersMs = (CFAbsoluteTimeGetCurrent() - tLayers0) * 1000
+        let tPost0 = CFAbsoluteTimeGetCurrent()
+        // ★★★#1100 第三层：`post`（实测 18.2ms，占 emit 63%）里同时跑四件事——
+        //   sticky/fixed 落位 · CSS 动画启动 · SVG 描边补建 · **玻璃遍**。
+        //   四者混在一个数里就只能猜"大概是玻璃"（本仓纪律：不靠推断）。逐段计时。
+        var pinMs = 0.0, animMs = 0.0, svgMs = 0.0, glassMs = 0.0
+        let tPin0 = CFAbsoluteTimeGetCurrent()
         // ★★★批 A③：收集 position:sticky 节点（id → top 阈值）→ 视图按滚动吸附（建层后：层已就位）
         var stickyTops: [Int: CGFloat] = [:]
         for n in nodes {
@@ -8593,17 +8482,30 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         // ★★用户实测修复（2026-10-08）：建层后**立即按当前滚动偏移落位** sticky/fixed
         //   （否则重渲时它们停在内容坐标 ⇒ 与视口错位；offset=0 时即基位，零行为变化）。
         view.reapplyPinOffsets()
+        pinMs = (CFAbsoluteTimeGetCurrent() - tPin0) * 1000
+        let tAnim0 = CFAbsoluteTimeGetCurrent()
         // ★批次 42（动效 · 对齐 Web）：**CSS animation**（编译期折叠）——建层后启动（各节点 style["animation"] → anims → 内核 anim_start + 帧循环）
         cssAnimNodes = startCssAnimations(flat: flat)
+        animMs = (CFAbsoluteTimeGetCurrent() - tAnim0) * 1000
+        let tSvg0 = CFAbsoluteTimeGetCurrent()
         // ★★C2：全量挂载后，按**内核解析好的段列表**补建 SVG 描边子层（见 attachSvgStroke 注释）
         let svgJson = handle != 0 ? takeCString(proteus_layout_svg_nodes(handle)) : "{}"
         view.attachSvgStroke(fromKernelPaths: svgJson)
+        svgMs = (CFAbsoluteTimeGetCurrent() - tSvg0) * 1000
+        let tGlass0 = CFAbsoluteTimeGetCurrent()
         // ★★★玻璃遍（决策 #833）：内容帧就位后装玻璃面（采样"无玻璃内容帧"；须在全部绘制/落位之后）
         view.applyGlassPass()
+        glassMs = (CFAbsoluteTimeGetCurrent() - tGlass0) * 1000
+        postMs = (CFAbsoluteTimeGetCurrent() - tPost0) * 1000
         let buildMs = (CFAbsoluteTimeGetCurrent() - tBuild0) * 1000
+        // ★#1100：建层阶段 = iOS 的 "emit"（Android 出绘制指令流的对位；校准层树即本端的绘制产出）
+        lastMountEmitMs = buildMs
+        lastMountFlatMs = flatMs; lastMountLayersMs = layersMs; lastMountPostMs = postMs
+        lastMountPinMs = pinMs; lastMountAnimMs = animMs; lastMountSvgMs = svgMs; lastMountGlassMs = glassMs
         let totalMs = (CFAbsoluteTimeGetCurrent() - t0) * 1000
 
-        lastTiming = ["measure_ms": measureMs, "layout_ms": layoutMs, "build_layers_ms": buildMs, "host_total_ms": totalMs]
+        lastTiming = ["measure_ms": measureMs, "layout_ms": layoutMs, "build_layers_ms": buildMs, "host_total_ms": totalMs,
+                      "flat_ms": flatMs, "layers_ms": layersMs, "post_ms": postMs]   // ★#1100 建层内部分段
         lastNodeCount = flat.count
         lastTreeHash = String(format: "%08x", treeJson.hashValue)
 
@@ -8729,102 +8631,8 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
 }
 
 /* ────────────────────────── 工具 ────────────────────────── */
+// ★#1100：树 diff（`diffPatches`）、全量请求组装（`buildFullRequest`）与 JSON 小工具
+//   （`jsonString` / `jsonString2` / `jsonEscape`）已搬到 `host-tree-diff.swift`
+//   ——同一 Swift 模块，调用点零改动；搬迁原因见该文件头（文件大小棘轮，只减不增）。
 
-/// ★★树 diff：把「上一帧 → 本帧」的**样式变化**算成补丁数组（增量更新的输入）
-///
-/// 【为什么需要它（而不是把整树发过去）】`proteus_layout_update` 的入参是**补丁**，
-///   而宿主手上是两帧完整节点数组 —— 差异必须由宿主算（核心不知道上一帧是什么）。
-///
-/// 【返回 nil 的情形 = 退回全量重建】（正确性优先：宁可重建，也不要用错的前提算几何）
-///   · 节点**增删**（id 集合不同）—— 核心的 update 入口不处理结构变化
-///   · 某节点的文本变化 —— 度量需重新注入，而当前 update 入口不带度量表
-///
-/// 【只比布局字段】绘制属性（圆角/字号/文字色）**不影响几何** ⇒ 不进补丁，
-///   避免用「无关变化」触发重排（这是增量能否真正省下来的关键）。
-///   ★`backgroundColor` 的特殊性（2026-10-01）：它**也不进补丁**（底色变化不该触发重排），
-///   但**必须进全量请求**（它是内核颜色动画的 `bg_base`——见 `buildFullRequest` 注释）。
-///   两条要求不矛盾：补丁管"几何变更"，全量请求管"内核需要的样式事实"。
-/// 上一帧全量请求的字节数（诊断：证明增量路径确实没走整树序列化）
-private var lastFullRequestBytes = 0
-
-/// 组装**全量**核心请求（只在首帧 / 结构变更时调用——见调用点的成本说明）
-func buildFullRequest(nodes: [[String: Any]], textMeasures: [String: [String: Double]], root: [String: Any]) -> String {
-    var req: [String: Any] = ["viewport": root["viewport"] as? [String: Any] ?? ["width": 390, "height": 844],
-                             "nodes": nodes, "textMeasures": textMeasures]
-    if var ns = req["nodes"] as? [[String: Any]] {
-        for i in ns.indices {
-            // ★★`backgroundColor` / `color` **都不删**（2026-10-01）：两者都已是内核字段
-            //   （底色 / 文字色的基色）。与 `render(treeJson:)` 里的同类过滤**同源**——
-            //   两处都要放行，否则"首帧全量路径"与"结构变更后的全量路径"行为不同
-            //   （一有一无基色 ⇒ 颜色动画时灵时不灵）。
-            ns[i].removeValue(forKey: "fontSize")
-            ns[i].removeValue(forKey: "borderRadius")
-        }
-        req["nodes"] = ns
-    }
-    guard let d = try? JSONSerialization.data(withJSONObject: req),
-          let str = String(data: d, encoding: .utf8) else { return "{}" }
-    lastFullRequestBytes = str.count
-    return str
-}
-
-/// 树 diff：把「上一帧 → 本帧」的**样式变化**算成补丁数组（增量更新的输入）
-func diffPatches(from prev: [[String: Any]], to next: [[String: Any]]) -> [[String: Any]]? {
-    if prev.isEmpty { return nil }
-    if prev.count != next.count { return nil }                 // 结构变化 → 全量
-    let prevById = Dictionary(uniqueKeysWithValues: prev.compactMap { n -> (Int, [String: Any])? in
-        guard let id = n["id"] as? Int else { return nil }
-        return (id, n)
-    })
-    // ★只比这些**布局字段**（其余字段改了对几何没有影响）
-    let layoutKeys = ["width", "height", "flexGrow", "flexShrink", "flexBasis", "gap"]
-    var patches: [[String: Any]] = []
-    for n in next {
-        guard let id = n["id"] as? Int, let p = prevById[id] else { return nil }  // 新节点 → 全量
-        // 文本变了 → 度量要重算，当前 update 入口不支持 → 全量
-        let pt = p["text"] as? String
-        let nt = n["text"] as? String
-        if pt != nt { return nil }
-        var style: [String: Any] = [:]
-        for k in layoutKeys {
-            let a = p[k] as? Double
-            let b = n[k] as? Double
-            if a != b { style[k] = b ?? NSNull() }             // NSNull = 显式置空（回 auto）
-        }
-        // margin/padding：对象比较（浅比足够——字段固定四边）
-        for k in ["margin", "padding"] {
-            let a = p[k] as? [String: Double]
-            let b = n[k] as? [String: Double]
-            if !edgesEqual(a, b) { style[k] = b ?? [:] }
-        }
-        if !style.isEmpty { patches.append(["id": id, "style": style]) }
-    }
-    return patches
-}
-
-private func edgesEqual(_ a: [String: Double]?, _ b: [String: Double]?) -> Bool {
-    let la = a ?? [:], lb = b ?? [:]
-    for k in ["top", "right", "bottom", "left"] {
-        if (la[k] ?? 0) != (lb[k] ?? 0) { return false }
-    }
-    return true
-}
-
-/// 供 `jsonString` 之外的调用点使用（同实现；命名区分以免与既有重载混淆）
-func jsonString2(_ o: Any) -> String {
-    guard let d = try? JSONSerialization.data(withJSONObject: o),
-          let s = String(data: d, encoding: .utf8) else { return "[]" }
-    return s
-}
-
-func jsonString(_ o: [String: Any]) -> String {
-    guard let d = try? JSONSerialization.data(withJSONObject: o),
-          let s = String(data: d, encoding: .utf8) else { return "{}" }
-    return s
-}
-
-func jsonEscape(_ s: String) -> String {
-    let escaped = s.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
-    return "\"\(escaped)\""
-}
 

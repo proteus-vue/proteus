@@ -70,3 +70,114 @@ describe('★#1099 mount 相位耗时是可比读数（P1/P2 切片的依据）'
     }
   })
 })
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * ★★★#1100（2026-10-20）：**iOS 同口径相位拆分**——#1099 只归因了 Android。
+ *
+ * 【为什么必须两端同字段名（#1098 已立过的纪律，这里再守一次）】
+ *   iOS 侧此前只有总耗时（30 次 / long 3 / max 92ms），**答不了"那 92ms 花在哪"**；
+ *   而两端若各起字段名，读一次就要人肉对照 —— 读数不可比，等于没有基线。
+ *
+ * 【语义差异必须如实标注，不能假装两端一模一样】
+ *   · `emit`(Android 出绘制指令流) ↔ `emit`(iOS 建 CALayer 树)：对位关系，不是同一个实现；
+ *   · `rects`：iOS 特有（全量路径每帧读全量几何 JSON），Android 只在开滚动范围时读；
+ *   · `sample`：iOS **恒 -1**——像素自检在 mount 之外，mount 内没有采样。
+ *     ★这条最容易被"顺手填 0"毁掉：0 会被读成"采样耗时为零"，而真实情况是"没采样"。
+ * ════════════════════════════════════════════════════════════════════════════ */
+const IOS_SELFDRAW = 'hosts/ios/ProteusHost/runtime/selfdraw-scene.swift'
+const IOS_RUNTIME_HOST = 'hosts/ios/ProteusHost/runtime/superapp-runtime-host.swift'
+const IOS_SUPERAPP_SCENE = 'hosts/ios/ProteusHost/shell/superapp-scene.swift'
+
+describe('★#1100 iOS mount 相位与 Android 同口径', () => {
+  it('iOS 也拆出 measure / layout / wrap / emit / scroll 五项（+ iOS 特有的 rects）', () => {
+    const s = read(IOS_SELFDRAW)
+    // ★只查"字段存在"会漏掉"有字段没埋点"（本判据首版踩过：删掉埋点仍绿）。
+    //   ★也不能只数赋值次数——`render()` 开头有一条 `= -1` 复位，它会让"删掉埋点"照样凑够数。
+    //   正确判据：**排除复位与声明后**，每个字段至少还有一处真实埋点（赋值为某个耗时变量）。
+    for (const field of ['lastMountMeasureMs', 'lastMountLayoutMs', 'lastMountWrapMs',
+                         'lastMountEmitMs', 'lastMountScrollMs', 'lastMountRectsMs',
+                         // ★第二层：emit 内部三段（真机实测 emit = mount 的 92%）
+                         'lastMountFlatMs', 'lastMountLayersMs', 'lastMountPostMs',
+                         // ★第三层：post 内部四项（实测 post 占 emit 63%）
+                         'lastMountPinMs', 'lastMountAnimMs', 'lastMountSvgMs', 'lastMountGlassMs']) {
+      const all = s.match(new RegExp(`${field}\\s*=\\s*[^\\n]*`, 'g')) ?? []
+      const real = all.filter((line) => !/=\s*-1(\.0)?\s*$/.test(line.trim()))
+      expect(real.length, `${field} 只有声明/复位、没有真实埋点（删掉埋点这条必须红）`).toBeGreaterThanOrEqual(1)
+    }
+  })
+
+  it('相位读数每次渲染先复位（否则上一屏旧读数冒充本屏——#710 恒定读数同族）', () => {
+    const s = read(IOS_SELFDRAW)
+    // render() 开头必须把本组字段清成 -1
+    expect(s).toMatch(/private func render\(treeJson[\s\S]{0,400}lastMountMeasureMs = -1; lastMountLayoutMs = -1; lastMountRectsMs = -1/)
+  })
+
+  it('layout 只包内核建树/create（不含 rects 读取，与 Android lastLayoutMs 同义）', () => {
+    const s = read(IOS_SELFDRAW)
+    expect(s).toMatch(/let tCreate0 = CFAbsoluteTimeGetCurrent\(\)[\s\S]{0,200}proteus_layout_create/)
+    expect(s).toMatch(/proteus_layout_create\(\$0\)[\s\S]{0,300}lastMountLayoutMs = /)
+  })
+
+  it('rects 读取单列计时（iOS 特有开销，不得混进 layout 掩盖归因）', () => {
+    const s = read(IOS_SELFDRAW)
+    expect(s).toMatch(/let tRects0 = CFAbsoluteTimeGetCurrent\(\)[\s\S]{0,200}proteus_layout_rects/)
+    expect(s).toMatch(/proteus_layout_rects\(handle\)\)[\s\S]{0,200}lastMountRectsMs = /)
+  })
+
+  it('★sample 在 iOS 恒 -1（mount 内没有像素采样，不得伪造 0）', () => {
+    const s = read(IOS_SELFDRAW)
+    expect(s).toMatch(/private\(set\) var lastMountSampleMs = -1\.0/)
+    const statFn = s.match(/func mountPhaseStats\(\)[\s\S]{0,600}?\n    \}/)
+    expect(statFn, '未找到 mountPhaseStats').toBeTruthy()
+    expect(statFn![0]).toMatch(/"sample_ms": lastMountSampleMs/)
+    // ★全文件只允许**声明处**那一次赋值（= -1.0）。任何后续赋值都意味着"往里填了数"——
+    //   0 会被读成"采样耗时为零"，而真实情况是"没采样"（诚实边界不得涂改）。
+    const assigns = s.match(/lastMountSampleMs\s*=/g) ?? []
+    expect(assigns.length, 'lastMountSampleMs 被额外赋值（应恒为 -1）').toBe(1)
+    expect(s).toMatch(/lastMountSampleMs = -1\.0/)
+  })
+
+  it('运行期宿主桥记录 mount / applyOps 宿主侧总耗时（与 Android 同名）', () => {
+    const s = read(IOS_RUNTIME_HOST)
+    expect(s).toMatch(/private\(set\) var lastMountMs = -1\.0/)
+    expect(s).toMatch(/private\(set\) var lastApplyOpsMs = -1\.0/)
+    expect(s).toMatch(/let t0 = CFAbsoluteTimeGetCurrent\(\)[\s\S]{0,200}lastMountMs = /)
+    expect(s).toMatch(/lastApplyOpsMs = \(CFAbsoluteTimeGetCurrent\(\) - t0\)/)
+  })
+
+  it('★iOS 报告带出与 Android 同名的相位字段（缺一项就无法跨端对照）', () => {
+    const sc = read(IOS_SUPERAPP_SCENE)
+    for (const k of ['mount_host_ms', 'apply_ops_host_ms', 'mount_measure_ms', 'mount_layout_ms',
+                     'mount_wrap_ms', 'mount_emit_ms', 'mount_scroll_ms']) {
+      expect(sc.includes(k), `iOS 报告缺 ${k}`).toBe(true)
+    }
+    // iOS 特有项如实另列
+    for (const k of ['mount_rects_ms', 'mount_sample_ms']) {
+      expect(sc.includes(k), `iOS 报告缺 ${k}`).toBe(true)
+    }
+    // ★第二层：emit 内部三段（缺一项就答不了"建层那 85ms 花在哪"）
+    for (const k of ['mount_flat_ms', 'mount_layers_ms', 'mount_post_ms']) {
+      expect(sc.includes(k), `iOS 报告缺 ${k}`).toBe(true)
+    }
+    // ★第三层：post 内部四项
+    for (const k of ['mount_pin_ms', 'mount_anim_ms', 'mount_svg_ms', 'mount_glass_ms']) {
+      expect(sc.includes(k), `iOS 报告缺 ${k}`).toBe(true)
+    }
+  })
+
+  it('★每次 mount 进历史环（只报末次会把首屏 93ms 丢掉，切屏成本被低估 3 倍）', () => {
+    const s = read(IOS_SELFDRAW)
+    expect(s).toMatch(/private var mountHistoryMs: \[\[String: Double\]\] = \[\]/)
+    expect(s).toMatch(/private static let mountHistoryCap = 8/)
+    // 环必须有上限（无界增长 = 内存泄漏，本仓已踩过）
+    expect(s).toMatch(/mountHistoryMs\.removeFirst\(mountHistoryMs\.count - SelfDrawBridge\.mountHistoryCap\)/)
+    // mount() 里必须真的记录（不是只有字段）——先定位**实现**（协议声明行不带 `{`），再在同一函数体内找 append
+    const mountDecl = /func mount\(_ treeJson: String\) -> String \{/g
+    const decls = [...s.matchAll(mountDecl)]
+    expect(decls.length, '找不到 mount() 实现（只有协议声明不算）').toBeGreaterThan(0)
+    const mountStart = decls[decls.length - 1].index!
+    const mountBody = s.slice(mountStart, s.indexOf('func update(_ treeJson: String) {', mountStart))
+    expect(mountBody).toMatch(/mountHistoryMs\.append\(rec\)/)
+    expect(read(IOS_SUPERAPP_SCENE)).toMatch(/o\["mount_history"\]/)
+  })
+})

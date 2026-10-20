@@ -8266,3 +8266,79 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   ③ iOS 侧同样有像素自检（`superapp-scene` 的 `takeSnapshot` 走的是真截屏，不在 mount 内），
     本轮**未在 iOS 上做同等拆分**——iOS 基线（30 次 / long 3 / max 92ms）仍待同口径归因；
   ④ `sample()` 仍是给探针用的**唯一**"真的画出了像素"的证据（#S5 判据），不删、不改语义。
+
+1100. **★★★iOS mount 同口径相位拆分：玻璃遍占带玻璃屏切屏的 59%（21.1/35.7ms）· 诊断采样结论在 iOS 不成立 · 决策**（2026-10-20 · 承接 #1099 的"下一步①：iOS 同口径相位拆分"）:
+
+【做了什么】给 iOS 宿主补齐与 Android `VaporRenderHost.last*Ms` **同字段语义**的 mount 相位读数，
+  并往下拆了两层（#1099 的 Android 只拆到"五相位"，本轮证明 iOS 的大头在更深处）：
+    · 第一层（与 Android 对齐）：`measure / layout / wrap / emit / scroll` + `mount_host_ms / apply_ops_host_ms`；
+    · iOS 特有项如实另列：`rects`（全量读内核几何 JSON，Android 只在开滚动范围时读）、
+      `sample` **恒 -1**（iOS 的像素自检在 mount 之外，mount 内没有采样——不伪造 0）；
+    · 第二层（emit 内部）：`flat`（styleOf + 逐节点材质 FFI）/ `layers`（CALayer 建树）/ `post`（建后特效遍）；
+    · 第三层（post 内部）：`pin`（sticky/fixed 落位）/ `anim`（CSS 动画启动）/ `svg`（描边）/ `glass`（玻璃遍）。
+
+【真机读数（iPhone 12 · `run-selfdraw.sh --superapp --drive` · 3 轮取代表值）】
+  | 轮次 | host | measure | layout | wrap | emit | layers | post | **glass** |
+  |---|---|---|---|---|---|---|---|---|
+  | 冷（首屏） | 93.0 | 4.14 | 0.28 | 1.04 | **85.6** | — | — | — |
+  | 热 ① 无玻璃 | 14.5 | 1.78 | 0.17 | 0.94 | 10.2 | 9.80 | 0.09 | **0.00** |
+  | 热 ② **有玻璃** | 35.7 | 2.45 | 0.26 | 1.03 | 29.9 | 7.26 | 22.2 | **21.1** |
+  ⇒ **带玻璃的屏：玻璃遍 21.1ms = mount 的 59%、emit 的 71%**；
+    无玻璃的屏玻璃遍恒 0（`guard !glassSpecByNodeId.isEmpty` 早退，零开销）。
+  ⇒ 与 Android 的结论**不同**（Android 62% 是诊断像素采样）；iOS 上没有那个采样热点，
+    真正的成本是**玻璃背景捕获**（整屏区域栅格化 + 降采样上传）。
+
+【★这轮最该记住的（方法论）】
+  1. **"同口径"不等于"同结论"**：#1099 的 62% 诊断采样是 Android 特有形态；照搬到 iOS 会去优化一个
+     根本不存在的开销。⇒ 相位字段必须两端同名（可比），但**结论必须各自用真机数重新推翻/确认**。
+  2. **只报"末次读数"会骗人**：报告原本只留最后一次 mount ⇒ 首屏 93ms 被丢掉、只剩热态 33ms，
+     切屏成本被低估近 3 倍。⇒ 本轮加 `mount_history`（逐次相位，环长 8，有上限），
+     让"首屏 / 无玻璃屏 / 有玻璃屏"三类样本在一轮里同时可见。
+  3. **归因要往下拆到能动手为止**：只说"emit 85ms/30ms"仍然不知道砍谁；
+     拆到 `glass=21.1ms` 才知道下一个动作是优化玻璃背景捕获（而不是布局或文本度量）。
+
+【同一轮修掉的装置缺陷（比埋点更值得记）】
+  · ★`run-selfdraw.sh` 的 swiftc 调用**曾把输出管道给 `grep error:`**，退出码被管道吞掉 ⇒
+    **Swift 编译失败仍会继续走签名/装机**（本轮实测：拆文件漏登记一个源文件 ⇒ `cannot find X in scope`
+    ⇒ 脚本照常打印成功路径，真机上跑的是**上一版二进制**——差点把旧读数当新代码证据）。
+    修法：编译输出落临时日志 + 判 `rc` + 判产物存在，三者缺一即 `exit 3`。
+  · ★`safe-edit --replace` 把替换串里的 `\n` 当**字面量**写入（生成 `...js-task-sampler.swift"\n  # …`），
+    且 `\\` 会破坏续行符 ⇒ 后面所有源文件静默不进编译。教训：**用 safe-edit 改带续行的 shell 脚本后，
+    必须 `bash -n` + 抽查实际行内容**，不能只看 diff 的"命中 1 处"。
+
+【文件大小棘轮（`check:file-size` 存量只减不增）】
+  `selfdraw-scene.swift` 8831 → **8639** 行。为给新增埋点腾行额，按职责拆出两个自包含文件：
+  · `host-abi.swift`（221 行）：Rust C ABI 的 `@_silgen_name` 声明 + 版本/VTable 结构体；
+  · `host-tree-diff.swift`（约 130 行）：树 diff / 全量请求组装 / JSON 序列化小工具。
+  ⇒ 两处均**机械搬迁、零行为变化**；新文件必须同时登记进 `check-selfdraw-compile.sh`、
+  `run-selfdraw.sh`、`run-selfdraw-sim.sh` 三处源码清单（写死清单是 G-39 的坑，缺一处 = 静默不编译）。
+
+【判据】`tests/perf-hot-path-budget.test.ts` **14/14**（原 6 条 + 本轮 8 条）：
+  ① iOS 六相位字段存在（点名到 `lastMountXxxMs`）；
+  ② ★**排除声明与 `= -1` 复位后，每个字段至少一处真实埋点**——本条是**修正过的**：
+     首版只判"字段存在"、二版只数"赋值次数"，都被"删掉埋点"骗过（复位行凑数）⇒
+     现按"非 -1 赋值"过滤，破坏性验证（删 measure 埋点）**当场红并点名**；
+  ③ `layout` 只包 `proteus_layout_create`（不含 rects 读取，与 Android 同义）、`rects` 单列计时；
+  ④ `sample` 恒 -1（全文件只允许声明处一次赋值）；
+  ⑤ iOS 运行期宿主桥 `lastMountMs` / `lastApplyOpsMs`（与 Android 同名同语义）；
+  ⑥ 报告带出 8 个跨端同名字段 + `rects/sample` + `flat/layers/post` + `pin/anim/svg/glass`；
+  ⑦ `mount_history` 环存在、**有上限**、`mount()` 函数体内真的 append（用实现体切片断言，避开协议声明行）；
+  + 既有 `tests/thread-p0-sampler.test.ts` 12/12 · 宿主静态门禁 6 项全绿
+    （ios-export-wiring / ios-style-keys / glass-capability / svg-path-shape / scroll-fling / anim-record-bytes）。
+  + 真机：`--superapp --drive` 3 轮全绿（4 屏切换、截图、报告落盘）。
+
+【诚实边界】
+  ① `mount_history` 只有 3 条（drive 切 3 次）；首屏那条的 `layers/post/glass` 是 -1
+     （那次走的是另一条分支的首次测量，字段未填）——**只用于"冷 vs 热"对比，不用来算分布**；
+  ② 相位仍是**单次读数**，不是分布（p95 需多轮样本聚合，本轮未做）；
+  ③ 玻璃遍 21.1ms **只测量、未优化**——它是下一轮的候选（降分辨率/缓存背景/局部捕获），
+     本轮不动行为（避免"为性能改渲染语义"那类风险）；
+  ④ 未在 Android/鸿蒙做等价的"玻璃遍"子相位拆分 ⇒ 三端玻璃成本**暂不可比**；
+  ⑤ iOS 的 `sample_ms` 恒 -1 是**如实标注**，不是"没有诊断开销"——它的截图 (`takeSnapshot`) 在 mount 之外，
+     成本未被本轮任何字段覆盖。
+
+【下一步】
+  ① 优化 iOS 玻璃遍（21.1ms）：先把"背景捕获 / 纹理上传 / 着色器装配"再拆一次，再决定降采样还是缓存；
+  ② Android/鸿蒙补玻璃子相位，做三端玻璃成本对照；
+  ③ 多轮样本聚合出 p95（当前只有单次读数）；
+  ④ 补首屏那条 mount 的 layers/post/glass 字段（走的是未埋点的分支）。

@@ -1,4 +1,5 @@
 {
+  "apply_ops_host_ms" : 1.2000799179077148,
   "capture_probe" : "{\"channel\":true,\"raw\":\"{\\\"data\\\":{\\\"pipSupported\\\":false,\\\"recording\\\":false,\\\"recordingSupported\\\":true,\\\"userCaptureSupported\\\":true},\\\"ok\\\":true}\",\"recording\":\"off\",\"pip\":\"unsupported\",\"done\":true}",
   "cross_check_ok" : true,
   "dactyl_metrics" : "{\"end\":\"ios\",\"samples\":[],\"sampled\":0,\"dropped\":0}",
@@ -11,7 +12,7 @@
   "element_pseudo_selector" : "{\"ok\":false,\"error\":\"unsupported\",\"reason\":\"伪类（`:hover` \/ `:nth-child` 等）未支持：App 端无 CSS 引擎语义\",\"selector\":\"view:hover\",\"screen\":\"mine\"}",
   "element_registry" : "{\"vue\":0,\"screens\":{\"index\":64,\"messages\":43,\"mine\":62}}",
   "host_id" : "ios",
-  "host_stats" : "{\"ok\":true,\"data\":{\"live_screens\":1,\"visible_calls\":4,\"anim_calls\":0,\"shared_calls\":0,\"anim_completed\":0,\"anim_hook_missing\":0,\"rect_calls\":0,\"content_node_total\":269,\"calls\":[\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.stats\"],\"destroy_calls\":3,\"mount_calls\":4,\"screens\":[{\"screenId\":\"mine#4\",\"rootNodeId\":100,\"visible\":true}]}}",
+  "host_stats" : "{\"ok\":true,\"data\":{\"visible_calls\":4,\"content_node_total\":269,\"shared_calls\":0,\"live_screens\":1,\"destroy_calls\":3,\"anim_completed\":0,\"calls\":[\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.destroy\",\"screen.mount\",\"screen.visible\",\"screen.stats\"],\"screens\":[{\"screenId\":\"mine#4\",\"visible\":true,\"rootNodeId\":100}],\"rect_calls\":0,\"anim_calls\":0,\"mount_calls\":4,\"anim_hook_missing\":0}}",
   "interaction_probe" : "{\"press_styles\":5,\"press_applied\":0,\"press_anim_starts\":0,\"press_anim_stops\":0,\"field_specs\":0,\"field_ticks\":0,\"field_nodes_touched\":0,\"field_touched_now\":0,\"pseudo_parents\":0,\"last_field_ids\":[]}",
   "isect_after" : "[100]",
   "isect_after_hits" : "1",
@@ -22,26 +23,15 @@
   "isect_register" : "{\"ok\":true}",
   "isect_retick" : "0",
   "jsTasks" : {
-    "avgMs" : 9.2333333333333325,
+    "avgMs" : 4.2999999999999998,
     "enabled" : true,
-    "long" : 3,
-    "maxMs" : 92,
+    "long" : 0,
+    "maxMs" : 37,
     "recent" : [
-      {
-        "label" : "eval:\"use strict\";\n(() => {\n  \/\/ packages\/rou",
-        "ms" : 55
-      },
-      {
-        "label" : "eval:__proteusSuperappRender",
-        "ms" : 63
-      },
-      {
-        "label" : "eval:__proteusSuperappRender",
-        "ms" : 92
-      }
+
     ],
-    "recentCount" : 3,
-    "recentP95Ms" : 92,
+    "recentCount" : 0,
+    "recentP95Ms" : 0,
     "thresholdMs" : 50,
     "total" : 30
   },
@@ -55,6 +45,74 @@
     "x" : 16,
     "y" : 231
   },
+  "mount_anim_ms" : 0.038027763366699219,
+  "mount_emit_ms" : 29.916048049926758,
+  "mount_flat_ms" : 0.44703483581542969,
+  "mount_glass_ms" : 21.136045455932617,
+  "mount_history" : [
+    {
+      "anim_ms" : 0.054001808166503906,
+      "emit_ms" : 12.097001075744629,
+      "flat_ms" : 0.49996376037597656,
+      "glass_ms" : 0,
+      "host_ms" : 29.673933982849121,
+      "layers_ms" : 11.468052864074707,
+      "layout_ms" : 0.25200843811035156,
+      "measure_ms" : 9.34600830078125,
+      "pin_ms" : 0.018000602722167969,
+      "post_ms" : 0.12898445129394531,
+      "rects_ms" : 0.14197826385498047,
+      "sample_ms" : -1,
+      "scroll_ms" : 0.0050067901611328125,
+      "svg_ms" : 0.056982040405273438,
+      "wrap_ms" : 5.9570074081420898
+    },
+    {
+      "anim_ms" : 0.041961669921875,
+      "emit_ms" : 10.205984115600586,
+      "flat_ms" : 0.31900405883789062,
+      "glass_ms" : 0.00095367431640625,
+      "host_ms" : 14.449000358581543,
+      "layers_ms" : 9.7970962524414062,
+      "layout_ms" : 0.17297267913818359,
+      "measure_ms" : 1.7780065536499023,
+      "pin_ms" : 0.0059604644775390625,
+      "post_ms" : 0.089883804321289062,
+      "rects_ms" : 0.092029571533203125,
+      "sample_ms" : -1,
+      "scroll_ms" : 0.0029802322387695312,
+      "svg_ms" : 0.04100799560546875,
+      "wrap_ms" : 0.94497203826904297
+    },
+    {
+      "anim_ms" : 0.038027763366699219,
+      "emit_ms" : 29.916048049926758,
+      "flat_ms" : 0.44703483581542969,
+      "glass_ms" : 21.136045455932617,
+      "host_ms" : 35.652995109558105,
+      "layers_ms" : 7.2590112686157227,
+      "layout_ms" : 0.26392936706542969,
+      "measure_ms" : 2.4520158767700195,
+      "pin_ms" : 0.0040531158447265625,
+      "post_ms" : 22.209048271179199,
+      "rects_ms" : 0.1220703125,
+      "sample_ms" : -1,
+      "scroll_ms" : 0.0039339065551757812,
+      "svg_ms" : 1.0309219360351562,
+      "wrap_ms" : 1.0319948196411133
+    }
+  ],
+  "mount_host_ms" : 35.661101341247559,
+  "mount_layers_ms" : 7.2590112686157227,
+  "mount_layout_ms" : 0.26392936706542969,
+  "mount_measure_ms" : 2.4520158767700195,
+  "mount_pin_ms" : 0.0040531158447265625,
+  "mount_post_ms" : 22.209048271179199,
+  "mount_rects_ms" : 0.1220703125,
+  "mount_sample_ms" : -1,
+  "mount_scroll_ms" : 0.0039339065551757812,
+  "mount_svg_ms" : 1.0309219360351562,
+  "mount_wrap_ms" : 1.0319948196411133,
   "ok" : true,
   "pump" : {
     "anim_start_calls" : 0,
@@ -68,7 +126,7 @@
     "running" : false
   },
   "rendered_page" : "mine",
-  "run_ts" : 1792405761.507551,
+  "run_ts" : 1792456724.842315,
   "scroll_probe" : {
     "after_drag_down_100k" : 0,
     "after_drag_left_100k_x" : 0,

@@ -52,6 +52,16 @@ import QuartzCore
 final class SuperappRuntimeHost: NSObject, SuperappRuntimeExports {
     private let draw: SelfDrawBridge
     private let caps: HostRuntimeBridge
+    /// ★#1100（承接 #1099）：`mount` 的宿主侧耗时（ms）——与 Android `SuperappRuntimeHost.lastMountMs`
+    ///   同字段同语义。JS eval 总耗时 − 本值 ≈ JS 实例化 ⇒ 这才是判断"该不该做 JS 时间片"的依据。
+    ///   -1 = 尚未 mount。
+    private(set) var lastMountMs = -1.0
+    /// ★#1100：`applyOps`（增量指令）的宿主侧最近耗时（ms）——与 Android `lastApplyOpsMs` 同口径。
+    private(set) var lastApplyOpsMs = -1.0
+    /// ★#1100：P0 相位归因读数（转给报告；见 `SelfDrawBridge.mountPhaseStats`）
+    func mountPhaseStats() -> [String: Double] { draw.mountPhaseStats() }
+    /// ★#1100：每次 mount 的相位历史（首屏 vs 热态必须分开看）
+    func mountPhaseHistory() -> [[String: Double]] { draw.mountPhaseHistory() }
     /// 手势反向回调名（JS 侧注册）
     private var gestureCb: String?
     /// JSC 上下文（注册手势回调名后，宿主用它反向调 JS）
@@ -68,7 +78,9 @@ final class SuperappRuntimeHost: NSObject, SuperappRuntimeExports {
     /* ── 运行期四原语 ── */
 
     func mount(_ treeJson: String) -> String {
+        let t0 = CFAbsoluteTimeGetCurrent()
         let r = draw.mount(treeJson)
+        lastMountMs = (CFAbsoluteTimeGetCurrent() - t0) * 1000   // ★#1100：宿主建树+几何+建层
         // ★★★v-pump：挂载成功后**异步**抽该屏泵频率（起/停周期驱动）。
         //   【为什么异步】mount 由 JS→native 调用进来（运行期正处在 eval 栈上）；在栈内再 eval
         //   `__proteusHostAppPumpHz()` 是**嵌套 eval 重入**——排到下一 runloop 再读，零重入
@@ -76,7 +88,12 @@ final class SuperappRuntimeHost: NSObject, SuperappRuntimeExports {
         DispatchQueue.main.async { [weak self] in self?.pullPumps() }
         return r
     }
-    func applyOps(_ opsBytesJson: String) -> String { draw.applyOps(opsBytesJson) }
+    func applyOps(_ opsBytesJson: String) -> String {
+        let t0 = CFAbsoluteTimeGetCurrent()
+        let r = draw.applyOps(opsBytesJson)
+        lastApplyOpsMs = (CFAbsoluteTimeGetCurrent() - t0) * 1000   // ★#1100
+        return r
+    }
     func updatePatches(_ patchesJson: String) -> String { draw.updatePatches(patchesJson) }
     func readRects() -> String { draw.readRects() }
     func onGesture(_ cbName: String) { gestureCb = cbName }

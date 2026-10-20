@@ -619,6 +619,35 @@ final class SuperappScene: NSObject {
         //   `calls`/`fire_ticks` > 0 证明周期驱动真的在跑且真的写进了数据源；`anim_start_calls` 证明
         //   `v-animate`/`<Transition>` 走到了宿主动画入口（同 #793 判据纪律：看内核受理，不看截屏像素）。
         if let rt = rtHostRef { o["pump"] = rt.pumpStats() }
+        // ★★★#1100（承接 #1099）：mount 相位归因——**字段名与 Android `SuperappActivity` 逐项对齐**，
+        //   否则两端读数不可比（#1098 已立过这条纪律：两端 9 个字段名逐项一致）。
+        //   iOS 特有项（`mount_rects_ms` / `mount_sample_ms`）如实另列：
+        //     · `rects` = 读取+解析内核全量几何（Android 只在开滚动范围时读）；
+        //     · `sample` = **恒 -1**（iOS 的像素自检在 mount 之外，mount 内无采样 ⇒ 不伪造 0）。
+        //   -1 = 本路径未发生（增量路径无 wrap / 未开滚动范围）。
+        if let rt = rtHostRef {
+            o["mount_host_ms"] = rt.lastMountMs
+            o["apply_ops_host_ms"] = rt.lastApplyOpsMs
+            let ph = rt.mountPhaseStats()
+            o["mount_measure_ms"] = ph["measure_ms"] ?? -1
+            o["mount_layout_ms"] = ph["layout_ms"] ?? -1
+            o["mount_wrap_ms"] = ph["wrap_ms"] ?? -1
+            o["mount_emit_ms"] = ph["emit_ms"] ?? -1
+            o["mount_scroll_ms"] = ph["scroll_ms"] ?? -1
+            o["mount_rects_ms"] = ph["rects_ms"] ?? -1
+            o["mount_sample_ms"] = ph["sample_ms"] ?? -1
+            // ★#1100 第二层：emit（建层）内部三段——真机首轮实测 emit=85.6ms/93ms，必须拆开才知道砍哪段
+            o["mount_flat_ms"] = ph["flat_ms"] ?? -1
+            o["mount_layers_ms"] = ph["layers_ms"] ?? -1
+            o["mount_post_ms"] = ph["post_ms"] ?? -1
+            // ★#1100 第三层：post 的四个子项（sticky 落位 / CSS 动画 / SVG 描边 / 玻璃遍）
+            o["mount_pin_ms"] = ph["pin_ms"] ?? -1
+            o["mount_anim_ms"] = ph["anim_ms"] ?? -1
+            o["mount_svg_ms"] = ph["svg_ms"] ?? -1
+            o["mount_glass_ms"] = ph["glass_ms"] ?? -1
+            // ★#1100：逐次 mount 的相位历史（首屏 93ms vs 热态 33ms —— 只报末次会把切屏成本低估 3 倍）
+            o["mount_history"] = rt.mountPhaseHistory()
+        }
         // ★#1098：P0 长任务读数（字段名与 Android/perf 面板一致）
         if let jd = JsTaskSampler.statsJson().data(using: .utf8),
            let js = (try? JSONSerialization.jsonObject(with: jd)) as? [String: Any] {
