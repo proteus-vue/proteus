@@ -11059,3 +11059,67 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   ① 索引每节加「**最小可闭环单元**」＝改这处最少要读哪 3 个文件（用户原话「下次会话能不能只读 3 个文件就改对」的直接落地）；
   ② 消化 #1137 暴露的 7 个 C++ 巨型文件（`proteus_render.cpp` 3701 行 / `host_app_runtime_impl.h` 1134 行）；
   ③ 把 `.workbuddy/salvage` 的未跟踪截图纳入治理（5449 个文件会污染 `git status` 与 diff 基统计）。
+
+1139. **★★★「最小可闭环单元」探针——把「只读 3 个文件就改对」量化到 9% 读面 · 决策**（2026-10-20 · 承接 #1138「下一步①」）：
+
+【要回答的具体问题（用户原话）】
+  「每加一块，都要先问：**下次会话能不能只读 3 个文件就改对？**」
+
+【实测答案：能，而且可以量化】
+  改一个线格式 tag，五端编解码器合计 **2734 行**（518 + 566 + 568 + 587 + 495）；
+  但每端**真正要动的只有三处**（常量定义 / encode / decode）。
+  ⇒ 探针给出精确行号区段后，**最小读面约 255 行 = 9%**。
+  ★结论：认知负载的瓶颈**不是代码总量，而是"不知道那三处在哪"**。
+
+【落地：`check:contract-index -- --unit tag:<Name>`】
+  ```
+  $ pnpm check:contract-index -- --unit tag:Redirect
+    · TS（SSOT）    packages/api/src/invoke-wire.ts
+        常量 123 · encode 312 · decode 377  （读 L115-131 / L304-320 / L369-385）
+    · Java（Android）… 常量 81 · encode 406 · decode 364 …
+    · Swift（iOS）  … 常量 90 · encode 401 · decode 359 …
+    · ArkTS（鸿蒙） … 常量 55 · encode 429 · decode 469 …
+    · C++（鸿蒙宿主）… 常量 69 · encode 343 · decode 382 …
+  ★最小读面：约 255 行（而非整文件 2734 行）
+  ★必须跑：pnpm check:invoke-wire-parity
+  ★纪律：新 tag 的向量必须成对（true 写 tag / false 不写 tag）
+  ```
+  探针表 SSOT：`scripts/lib/contract-units.mjs`（新增契约点只加一行，不在五个脚本里各写一遍）。
+
+【★★探针自己的两个坑（都是实测抓出来的，判据守着）】
+  ① **去程/回程命名不同**：去程 `TAG_*` / `MetaTagInvoke.*`，回程 `RTAG_*` / `MetaTagResolve.*`。
+     首版只认去程 ⇒ 查 `StreamSeq` / `HttpStatus` 时 **encode/decode 全是 `—`**（三处只命中一处）。
+     ★这类缺陷**比不查更糟**：AI 会照着"只有常量位置"的半套行号去读，然后漏改 encode/decode。
+  ② **TS 用帕斯卡、四端用大写下划线**（`MetaTagInvoke.Redirect` vs `TAG_REDIRECT`）
+     ⇒ 同一个正则工厂不能同时收两种形态，必须**按端转换**（`end.key(name)`）。
+  ★两个坑合起来的教训（第 11 次同族）：**"给位置"的判据必须以"位置是否完备"为判据**——
+    只验"有输出"会放过"输出了一半"。
+
+【判据（`tests/contract-units.test.ts` 6/6）】
+  ① `snake()` 转换（Redirect→REDIRECT / SavePath→SAVE_PATH / StreamSeq→STREAM_SEQ）；
+  ② 去程/回程端点集前缀正确 + 回程清单含 StreamSeq/HttpStatus；
+  ③ **去程 tag 五端三处全命中** + 读面 < 20%（量化承诺）；
+  ④ **回程 tag 同样五端三处全命中**（★首版在此假绿）；
+  ⑤ **不存在的 tag 必须响亮失败**（三处命中 0 ⇒ 非 0 退出，不打印一堆 `—` 后成功）；
+  ⑥ 用法校验（缺参数 / 未知单元类型 ⇒ 退出 2）。
+  ★破坏性验证 2 条全命中：回程前缀改回 `TAG_` ⇒ ④ 红；TS 也套 `snake()` ⇒ ③④ 双红。
+
+【接线】
+  · 索引 `docs/contract-index.md` 新增「★ 最小可闭环单元」节（含探针用法与两个坑）；
+  · `AGENTS.md` 启动清单第 2 条补 `--unit` 用法与 9% 读面的量化说明；
+  · 与 #1137（索引）/ #1138（gates 真跑）构成三层：**查要跑什么 → 知道只读哪几段 → 自动跑门禁**。
+
+【诚实边界】
+  ① 目前只有**线格式 tag** 一类单元；其它契约（如"给 FetchConfig 加字段"）仍靠索引的 4 层清单人工对照；
+  ② 行号区段是"上下各扩 8 行"（够看清上下文而不通读），**不是精确到行**——相邻逻辑仍可能越界；
+  ③ 探针依赖**命名规律**（`TAG_*`/`RTAG_*`/`MetaTagInvoke.*`/`MetaTagResolve.*`）⇒ 若某端改命名风格，
+     探针会以"三处只命中 0 处"**响亮失败**（而不是给出错的位置）——这是有意的设计取舍。
+
+【门禁】
+  `pnpm test` **6453 条全绿**（+6）· `check:contract-index` · `check:script-compile` · gates-sync
+  · file-size · doc-links · check:memory · check:decision-numbers
+
+【下一步（继续降认知负载）】
+  ① 把 `--unit` 扩到第二类契约：**`--unit fetch-field:<Name>`**（四层白名单，正是 #1134 漏传的那条链）；
+  ② 消化 #1137 暴露的 7 个 C++ 巨型文件（`proteus_render.cpp` 3701 / `host_app_runtime_impl.h` 1134）；
+  ③ `.workbuddy/salvage` 5449 个未跟踪截图纳入治理（污染 `git status` 与 diff 基统计）。

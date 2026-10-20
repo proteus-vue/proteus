@@ -14,8 +14,12 @@
    新会话要逐个打开才能拼出来（#1134 加一个线格式 tag 改了 **42 个文件**，其中两条要求
    是**事后**才被门禁抓到的）。用法：
    ```bash
-   pnpm check:contract-index -- --for packages/api/src/invoke-wire.ts   # 直接告诉你该跑什么
+   pnpm check:contract-index -- --for packages/api/src/invoke-wire.ts   # 该跑哪些门禁
+   pnpm check:contract-index -- --unit tag:Redirect                     # 只读哪几段行号（=9% 读面）
    ```
+   ★「最小可闭环单元」（#1139）：改一个线格式 tag，五端合计 2734 行，但**每端只动三处**
+     （常量 / encode / decode）⇒ 探针直接给行号区段，**读 255 行（9%）就能改对**。
+     这正是"下次会话能不能只读 3 个文件就改对"的量化答案。
    ★索引本身有门禁（`check:contract-index`）：路径必须存在 + **每条跨端门禁都必须在表内**
      （白名单制）——因为**索引过期比没有索引更糟**（AI 会以为"查过了就没问题"）。
 3. **读 `PROJECT_MEMORY.md`**（薄入口，~100 行）——先读顶部「当前状态速览」（只留最近 3 条，新会话以此为准），

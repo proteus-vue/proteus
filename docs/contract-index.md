@@ -36,6 +36,30 @@ sed -n '/^## /,/^## /p' docs/contract-index.md | head -60
 
 ---
 
+## ★ 最小可闭环单元（决策 #1139）——「只读 3 段就改对」
+
+**这是整套索引的目的**：用户原话「下次会话能不能**只读 3 个文件就改对**？」
+
+实测答案：**能**。改一个线格式 tag，五端编解码器合计 **2734 行**，但每端真正要动的
+只有**三处**（常量 / encode / decode）；探针能直接给出行号区段：
+
+```bash
+pnpm check:contract-index -- --unit tag:Redirect
+# ⇒ 五端各打印「常量 123 · encode 312 · decode 377（读 L115-131 / L304-320 / L369-385）」
+#   ★最小读面：约 255 行（而非整文件 2734 行）= 9%
+#   ★必须跑：pnpm check:invoke-wire-parity
+```
+
+★**探针自己的两个坑（都已修，判据 `tests/contract-units.test.ts` 守着）**：
+  ① **去程/回程命名不同**：去程 `TAG_*` / `MetaTagInvoke.*`，回程 `RTAG_*` / `MetaTagResolve.*`
+     ——首版只认去程 ⇒ 查 `StreamSeq`/`HttpStatus` 时 encode/decode 全空（**误导人漏读，比不查更糟**）；
+  ② **TS 用帕斯卡、四端用大写下划线**（`MetaTagInvoke.Redirect` vs `TAG_REDIRECT`）
+     ⇒ 同一个工厂不能同时收两种形态，必须按端转换。
+
+★当前可查的单元：**线格式 tag**（去程 `Redirect`/`SavePath`/`UploadPath`/`Stream`，
+回程 `StreamSeq`/`HttpStatus`/`Reason`/`Missing`/`Pending`/`Headers`）。
+新增契约点（如再加 tag）只需在 `scripts/lib/contract-units.mjs` 加一行。
+
 ## 1. 二进制线格式（invoke 通道）——五端逐字节等价
 
 **触发**：改了 `meta` TLV tag / 帧布局 / 版本号 / 任一端编解码器。

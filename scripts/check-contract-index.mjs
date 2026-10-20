@@ -21,6 +21,10 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+// ★#1139：「最小可闭环单元」探针表（一条 tag → 五端三处定位）
+import { endsFor } from './lib/contract-units.mjs'
+// ★#1139：`endsFor(name)` 按**方向**返回端点集（去程 TAG_* / 回程 RTAG_*）——
+//   首版只认 TAG_* ⇒ 查 StreamSeq/HttpStatus 时 encode/decode 全 `—`（探针自身缺陷）。
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const INDEX = path.join(ROOT, 'docs', 'contract-index.md')
@@ -58,6 +62,7 @@ const TEST_SCRIPTS = [
 
 const argv = process.argv.slice(2)
 const forArg = argv.indexOf('--for')
+const unitArg = argv.indexOf('--unit')
 
 if (!fs.existsSync(INDEX)) {
   console.error(`✗ 索引不存在：${INDEX}`)
@@ -101,6 +106,69 @@ const referenced = pathsIn(text)
 const concrete = referenced.filter(isConcretePath)
 const missingPaths = concrete.filter((p) => !fs.existsSync(path.join(ROOT, p)))
 const missingTests = TEST_SCRIPTS.filter((t) => !text.includes(t) || !fs.existsSync(path.join(ROOT, t)))
+
+// ── --unit：给定契约点 ⇒ 打印"改它要读哪几个文件的哪几段"（最小可闭环单元）──
+//
+// ★#1139：这是"下次会话能不能只读 3 个文件就改对"的直接落地。
+//   实测：改一个线格式 tag，五端编解码器各 500~590 行（合计 2734 行），
+//   但每端**真正要动的只有三处**（常量 / encode / decode），合计约 50 行。
+//   瓶颈不是代码总量，而是**不知道那三处在哪** ⇒ 本模式把定位机器化。
+if (unitArg >= 0) {
+  const spec = argv[unitArg + 1]
+  if (!spec || !spec.includes(':')) {
+    console.error('✗ 用法：--unit tag:<Name>   （例：--unit tag:Redirect）')
+    process.exit(2)
+  }
+  const [kind, name] = spec.split(':')
+  if (kind !== 'tag') {
+    console.error(`✗ 未知单元类型：${kind}（目前支持：tag）`)
+    process.exit(2)
+  }
+
+  console.log(`═══ 最小可闭环单元：线格式 tag \`${name}\` ═══`)
+  let totalLines = 0
+  let missing = 0
+  for (const end of endsFor(name)) {
+    const abs = path.join(ROOT, end.file)
+    if (!fs.existsSync(abs)) {
+      console.error(`  ✗ ${end.name}: 文件不存在 ${end.file}`)
+      missing++
+      continue
+    }
+    const lines = fs.readFileSync(abs, "utf8").split("\n")
+    const find = (re) => {
+      for (let i = 0; i < lines.length; i++) if (re.test(lines[i])) return i + 1
+      return 0
+    }
+    // ★按端转换常量名：TS 用帕斯卡（MetaTagInvoke.Redirect），四端用大写下划线（TAG_REDIRECT）
+    const key = end.key(name)
+    const c = find(end.constRe(key))
+    const e = find(end.encodeRe(key))
+    const d = find(end.decodeRe(key))
+    const hits = [c, e, d].filter((x) => x > 0)
+    if (hits.length < 2) {
+      console.error(`  ✗ ${end.name}: 三处只命中 ${hits.length} 处（该端未实现 \`${name}\`？或查错方向）`)
+      console.error(`      ★去程 tag 用 \`tag:<Name>\`（TAG_*）；若它是回程 tag，应已在 RESOLVE_TAG_NAMES 里`)
+      missing++
+      continue
+    }
+    // 只读区段：每处上下各扩 8 行（够看清上下文而不通读整文件）
+    const ranges = hits.map((n) => `L${Math.max(1, n - 8)}-${n + 8}`)
+    totalLines += hits.length * 17
+    console.log(`  · ${end.name}`)
+    console.log(`      ${end.file}`)
+    console.log(`      常量 ${c || "—"} · encode ${e || "—"} · decode ${d || "—"}  （读 ${ranges.join(" / ")}）`)
+  }
+  console.log("")
+  if (missing) {
+    console.error(`✗ ${missing} 端缺该 tag（半同步状态——按各端提示补齐后重跑）`)
+    process.exit(1)
+  }
+  console.log(`★最小读面：约 ${totalLines} 行（而非整文件 2734 行）`)
+  console.log("★必须跑：`pnpm check:invoke-wire-parity`（五端逐字节对拍，36 条向量）")
+  console.log("★纪律：新 tag 的向量必须**成对**（true 写 tag / false 不写 tag），否则漏网实现")
+  process.exit(0)
+}
 
 // ── --for：给定改动路径 ⇒ 打印命中的契约节 ────────────────────────────────────
 if (forArg >= 0) {
