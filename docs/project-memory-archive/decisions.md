@@ -10396,3 +10396,98 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   ① 描述准确性（语义层）——目前完全无判据，需要另一类方法（人工/LLM 抽查）；
   ② 真浏览器（`test:e2e:web`）/ 真容器（`test:e2e:mp`）层仍未验（#1127 遗留）；
   ③ 英文文档类型引用段（#1124 遗留）· 内容缩水阈值标定（#1125 遗留）。
+
+1130. **★★★真浏览器 + MP 真容器双层 e2e（#1122 边界② / #1127 下一步①② 收口）——真容器抓出「MP 腿丢弃 `params`」真缺陷 · 决策**（2026-10-20 · 承接 #1127「下一步①②」）：
+
+【这单要收的是什么】
+  #1127 的诚实边界写着两条：「Web 跑的是 Node 22 WHATWG fetch，**不是真浏览器**（CORS/混合内容/缓存/Service Worker 未覆盖）」
+  ·「MP 用**假 wx** 复刻文档契约，真容器（登录态/白名单/并发上限/真网络）未覆盖」。
+  ⇒ 本单把这两层都补上。
+
+【Web：真浏览器（Chromium / Playwright）· 7/7】
+  夹具 `tests/browser-fixture/entry-fetch.ts` 用 **esbuild 打包真实 `webBridge`**（不是仿造），
+  暴露 `window.__proteusFetchProbe`，走的正是 `useFetch` 门面。判据 `tests/fetch-web-browser.test.ts`：
+    ① 同源正常路径（data/status/headers）
+    ② `responseType:'arraybuffer'` 裸字节
+    ③ **CORS 真约束**：跨源且无 `access-control-allow-origin` ⇒ `fetch.failed`
+    ④ **CORS 允许对照**：同一请求加 `*` ⇒ 通过（证明 ③ 拦的是 CORS，不是别的）
+    ⑤ **真 AbortSignal** ⇒ `fetch.aborted`
+    ⑥ **真 timeout** ⇒ `fetch.timeout`（客户端 1200ms、服务端 3000ms）
+    ⑦ **真 ReadableStream** 流式（seq 连续、总字节正确）
+  ★③④ 是这层唯一的理由：**Node 的 fetch 不做 CORS**，只有真浏览器能验。
+  ★破坏性验证 2 条：CORS 全放行 ⇒ ③ 红；去 timeout ⇒ ⑥ 红。
+  入口：`pnpm test:e2e:fetch-browser`。
+
+【MP：真容器（微信开发者工具 Skyline 模拟器）· 5/5】
+  判据 `tests/e2e-mp-fetch-leg.test.ts`，探针走**页面实例上的 `cap.useFetch`**（门面，不是直接调 `wx.request`）。
+  前置两件事（都在报错里给可执行命令，不静默跳过）：
+    ① 微信开发者工具已装；
+    ② 项目**已在工具里打开**——`automation_*` 靠 projectpath 找 runtimeid，
+       没打开过会报 `cant find runtimeid by projectpath` ⇒ `wechatide -c zed open_project_window --project <showcase/dist/mp-weixin>`。
+       （用例**不自动打开**：会弹窗干扰用户当前会话；前置缺失时报错带命令。）
+  覆盖：
+    ① 正常路径：`status` / `headers` 真的透传到门面（此前被丢弃）
+    ② ★**`params` 真的拼进 URL**（本机 HTTP 服务回显 query）
+    ③ `responseType:'arraybuffer'` 回来的是**真裸字节**（`[object ArrayBuffer]`，4 字节逐字节比对）
+    ④ 真容器 `timeout` **确实生效**：服务端 3000ms、客户端 1200ms ⇒ **1208ms 中断**，
+       `errMsg = "request:fail timeout"` ⇒ 证明我们 `/timeout/i` 的判定**真的能命中**（假 wx 里的 errMsg 是我编的）
+    ⑤ 四个 S3 语义（savePath/onChunk/upload/signal）在真容器里明确 `fetch.unsupported`
+  入口：`pnpm test:e2e:fetch-mp`。
+
+【★★★真容器抓出的真缺陷：MP 腿整段丢弃 `params`】
+  `mpRequest` 把 `config.url` 原样交给 `wx.request`，**从没用过 `config.params`**——
+  而 Web 腿用了 `encodedUrl`。⇒ `useFetch(url, { params })` 在 MP 端**静默无效**（服务端收到的 query 是空的）。
+  ★**为什么假 wx 判据没抓到（关键教训）**：`tests/fetch-mp-leg-live.test.ts` 把 `ctx.encodedUrl`
+    桩成了**恒等函数** `(url) => url` ⇒ 判据**绕开了被测行为**，于是"有没有调用它"永远测不出来。
+    ⇒ 这是"判据把被测行为桩掉了"的典型：**稳定装置不等于正确装置**。
+  ★修法（两件事，缺一不可）：
+    ① **语义收敛**：把 `params→query` 的拼接抽成 `encodedFetchUrl()` **导出到 fetch 腿模块**，
+       `FetchLegCtx.encodedUrl` 改成**可选**（缺省就用它）⇒ 两条腿不可能再分叉；
+    ② **判据改成用真实现**：`ctx` 不再传 `encodedUrl`，期望值直接 `encodedFetchUrl(...)`（不手写字符串，
+       避免再造一份会分叉的副本）；新增 3 条（拼串/已有 `?` 合并用 `&`/`undefined` 键跳过）。
+  ★破坏性验证：
+    · 真容器：把打包产物里的 `url:qt(e)(r.url,r.params)` 改回 `url:r.url` ⇒ **只有 ② 红、其余 4 条绿**（判据精准）；
+    · 假 wx：把实现改回 `url: config.url` ⇒ **3 条红、11 条绿**。
+
+【★测试装置的第三个坑：服务必须独立进程】
+  首版把 HTTP 服务起在**测试进程内**，结果：正常路径用例在 `automation_evaluate` 里挂到 tool 超时（退出码 1），
+  而 timeout/unsupported 用例反而"通过"——**假绿**。
+  根因：`packages/test-core/src/driver/wxide.ts` 用 `spawnSync` 调 wechatide ⇒ **阻塞 Node 事件循环**
+  ⇒ 同进程的服务端根本不会 accept/respond。
+  ⇒ 服务移到 `tests/fixtures/mp-fetch-probe-server.mjs`（子进程），父进程**读 stdout 的 `READY <port>`**
+    （「让被测对象主动上报」形态，零轮询、零盲等）。
+  ★另一处准备期噪声：IDE 刚打开/正在重编译时 automator 会回「cant find runtimeid」或
+    「timeout waiting for automator response」——那是**准备期**不是前置缺失 ⇒ 加**有界就绪探测**
+    （`currentPage` 作探针，上限 6 次；每次调用本身有 tool 侧超时，不是盲等）。
+
+【顺带修掉 #1124/#1125/#1129 遗留的类型检查红】
+  那三单新增的 `website/scripts/lib/{type-refs,content-shrink,ts-ifaces,demo-page-type-ssot}.mjs`
+  **都没配 `.d.mts` 声明**（本仓既有约定：`ts-source-scan.d.mts` 等 4 个都有）
+  ⇒ 根 `npx vue-tsc --noEmit` 从那时起一直是红的（TS7016）。本轮补齐四个声明文件后转绿。
+  ★同族教训：**新增 `.mjs` 被 TS 导入时必须同批补声明**，否则"门禁绿"只是没人跑那一条。
+
+【诚实边界】
+  ① 真浏览器只覆盖 Chromium（未跑 Firefox/WebKit）；MP 只覆盖 Skyline 模拟器（未上真机）；
+  ② MP 不测并发上限（wx.request 默认 10）与真网络时延分布；`json`/`blob` 在小程序侧映射为 text 未单测；
+     取消在 MP 是 unsupported（由 ⑤ 覆盖），不测 `RequestTask.abort` 这条另一条路；
+  ③ 就绪探测的"6 次"是拍的（每次 tool 调用自带 60s 超时，6 次上限防止真前置缺失时无限重试）；
+  ④ 真容器用例**不进 `verify` 主链**（要 IDE + 已打开项目），按需 `test:e2e:fetch-mp`。
+
+【落地】
+  `packages/api/src/capability-fetch-legs.ts`（导出 `encodedFetchUrl` · `ctx.encodedUrl` 可选 · 两条腿共用）
+  · 新 `tests/browser-fixture/entry-fetch.ts` + `tests/fetch-web-browser.test.ts`（7/7）
+  · 新 `tests/fixtures/mp-fetch-probe-server.mjs` + 重写 `tests/e2e-mp-fetch-leg.test.ts`（5/5）
+  · `tests/fetch-mp-leg-live.test.ts`（去桩 + 3 条 params 用例，14/14）
+  · 4 个 `.d.mts` · `package.json`（`test:e2e:fetch-browser` / `test:e2e:fetch-mp`）
+  · 两处类型小修（`entry-fetch.ts` 的 timer 类型 · `demo-page-api-parity.test.ts` 的 `names` 类型）
+
+【门禁】
+  `npx vue-tsc --noEmit` **绿**（此前 TS7016 一批）· file-size · script-compile · no-blind-wait · gates-sync
+  · `gen-capability-demo --check` OK（27 页）· `gen-content --check` OK（84 页）· docs-stats · eslint
+  · 145/145 定向测试 · 真容器 5/5 · 真浏览器 7/7。
+
+【下一步】
+  ① 描述准确性（语义层）——仍无判据（#1129 下一步①）；
+  ② MP 真机（非模拟器）跑同一判据；真浏览器补 Firefox/WebKit；
+  ③ 英文文档类型引用段（#1124 遗留）· 内容缩水阈值标定（#1125 遗留）；
+  ④ 鸿蒙 S3 缺口（一次性 VM 无回推接收方，需先改宿主形态）。

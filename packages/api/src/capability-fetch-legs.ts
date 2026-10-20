@@ -18,11 +18,34 @@
 
 import type { RequestConfig, RequestResponse } from '@proteus-vue/types/api-types'
 
+/**
+ * `params` → query 拼接（**两条腿共用这一份**）。
+ *
+ * ★★★#1130 真容器抓出的教训：此前这份逻辑只活在 `capability-bridges.ts` 的私有
+ *   `encodedUrl` 里、由 Web 腿使用，**MP 腿整段丢弃了 `params`**（useFetch 传参在 MP 静默无效）。
+ *   ⇒ 归属移到 fetch 腿模块并导出：① 两条腿不可能再分叉；② 判据能 import **真实现**
+ *     而不是复制一份（假 wx 测试曾把 ctx.encodedUrl 桩成恒等函数 ⇒ 这个缺陷测不出来）。
+ */
+export function encodedFetchUrl(url: string, params?: Record<string, unknown>): string {
+  if (!params) return url
+  const qs = Object.keys(params)
+    .filter((k) => params[k] !== undefined)
+    .map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(String(params[k]))}`)
+    .join('&')
+  if (!qs) return url
+  return url + (url.includes('?') ? '&' : '?') + qs
+}
+
 /** 错误构造器（由调用方注入 —— `capability-bridges.ts` 有自己的 CapError）。 */
 export interface FetchLegCtx {
   CapError: new (code: string, message: string, cause?: unknown) => Error
-  /** query 拼接到 URL（与既有 `encodedUrl` 同义） */
-  encodedUrl: (url: string, params?: Record<string, unknown>) => string
+  /** query 拼接到 URL；**缺省用 `encodedFetchUrl`**（想替换才传——两条腿必须同一份语义） */
+  encodedUrl?: (url: string, params?: Record<string, unknown>) => string
+}
+
+/** 取本条腿要用的 URL 拼接器（注入优先，缺省共用实现）。 */
+function urlJoiner(ctx: FetchLegCtx): (url: string, params?: Record<string, unknown>) => string {
+  return ctx.encodedUrl ?? encodedFetchUrl
 }
 
 /** Web 腿依赖的最小全局面。 */
@@ -44,7 +67,7 @@ export function webRequest(ctx: FetchLegCtx, g: WebGlobals, config: RequestConfi
     if (config.upload) {
       throw new ctx.CapError('fetch.unsupported', 'upload 是 App 沙箱流式上传语义——Web 请用 FormData + fetch')
     }
-    const url = ctx.encodedUrl(config.url, config.params)
+    const url = urlJoiner(ctx)(config.url, config.params)
     // ★取消：原生 AbortSignal 直接用（Web 本来就有，不需要 App 那套自实现）
     const ctl = typeof g.AbortController === 'function' ? new g.AbortController() : null
     if (ctl && config.signal) {
@@ -102,14 +125,16 @@ export function webRequest(ctx: FetchLegCtx, g: WebGlobals, config: RequestConfi
     }
 
     // ★流式：ReadableStream 逐块推给 onChunk（**拉取式**节奏，与 App 的回推式不同）
-    if (config.onChunk && resp.body && typeof resp.body.getReader === 'function') {
+    //   ★取局部常量再判：闭包内 TS 会丢掉对 `config.onChunk` 的窄化（TS2722）。
+    const onChunk = config.onChunk
+    if (onChunk && resp.body && typeof resp.body.getReader === 'function') {
       const reader = resp.body.getReader()
       let seq = 0
       await abortAware(async () => {
         for (;;) {
           const { done, value } = await reader.read()
           if (done) break
-          if (value && value.length) config.onChunk(value instanceof Uint8Array ? value : new Uint8Array(value), seq++)
+          if (value && value.length) onChunk(value instanceof Uint8Array ? value : new Uint8Array(value), seq++)
         }
       })
       // ★流式模式下 `data` 为空（字节已逐块给过；要聚合请自己在 onChunk 里做）
@@ -162,7 +187,10 @@ export function mpRequest(
       return reject(new ctx.CapError('fetch.unsupported', '取消是 App/Web 语义——wx.request 返回的 RequestTask 才有 abort'))
     }
     wx.request({
-      url: config.url,
+      // ★★★#1130 真容器抓出：`params` 此前**整段丢弃**（只有 Web 腿用了 `encodedUrl`）——
+      //   useFetch 传 `{ params }` 在 MP 端静默无效（服务端收到的 query 是空的）。
+      //   假 wx 测不出来（它不复原 URL 语义），真容器回显 query 才暴露。
+      url: urlJoiner(ctx)(config.url, config.params),
       method: config.method,
       data: config.data,
       header: config.headers,

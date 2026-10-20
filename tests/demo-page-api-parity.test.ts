@@ -61,7 +61,7 @@ describe('★#1128 demo 页 API 表必须覆盖 FetchConfig 的全部字段', ()
       // 行内 `config.X / Y / Z` 拆分：取所有 `config.` 之后到分隔符之间的标识符
       for (const line of apiLines) {
         const seg = line.slice(line.indexOf('config.'))
-        const names = seg.match(/\b[A-Za-z_]\w*\b/g) ?? []
+        const names: string[] = seg.match(/\b[A-Za-z_]\w*\b/g) ?? []
         if (names.includes(f)) return false
       }
       return true

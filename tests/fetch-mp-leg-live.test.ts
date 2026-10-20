@@ -19,9 +19,15 @@
 //   ② `success` ⇒ data/status/headers 正确映射；
 //   ③ `fail` 里的 `timeout` ⇒ **独立错误码** `fetch.timeout`（不是笼统 failed）；
 //   ④ `fail` 其他 ⇒ `fetch.failed`；
-//   ⑤ **四个 S3 语义明确 unsupported**（savePath/onChunk/upload/signal）——不静默忽略。
+//   ⑤ **四个 S3 语义明确 unsupported**（savePath/onChunk/upload/signal）——不静默忽略；
+//   ⑥ `params` 真的拼进 URL。
+//
+// 【★★#1130 教训：判据把被测行为桩掉了】本文件原先把 `ctx.encodedUrl` 桩成**恒等函数**
+//   （`(url) => url`），于是 `params` 是否真的拼进 URL **永远测不出来**——而真实的 MP 腿当时
+//   压根没调用它（`params` 整段丢弃），缺陷在假 wx 判据下完全隐形，最后是**真容器回显 query**
+//   抓出来的。⇒ 现在 ctx **不传** encodedUrl（缺省用 `encodedFetchUrl` 真实现），并显式断言拼串结果。
 import { describe, it, expect } from 'vitest'
-import { mpRequest } from '../packages/api/src/capability-fetch-legs'
+import { mpRequest, encodedFetchUrl } from '../packages/api/src/capability-fetch-legs'
 
 class TestCapError extends Error {
   code: string
@@ -32,9 +38,12 @@ class TestCapError extends Error {
   }
 }
 
+/**
+ * ★★#1130：**不桩 `encodedUrl`**——缺省就走模块里的 `encodedFetchUrl` 真实现。
+ *   把位置相关行为桩成恒等，等于让判据绕开被测代码（本文件历史上就因此漏掉了 MP 腿丢 params）。
+ */
 const ctx = {
   CapError: TestCapError as unknown as new (code: string, message: string, cause?: unknown) => Error,
-  encodedUrl: (url: string) => url,
 }
 
 interface WxCall { opts: Record<string, unknown> }
@@ -92,6 +101,29 @@ describe('★#1127 MP 腿真运行 · 参数真的传给 wx.request', () => {
     const { wx, calls } = wxStub({ ok: true, data: { ok: 1 } })
     await mpRequest(ctx, wx, { url: 'https://x.cn/a', responseType: 'json' })
     expect(calls[0].opts.responseType).toBe('text')
+  })
+
+  it('★★params 真的拼进 URL（#1130 真容器抓出的缺陷：MP 腿曾整段丢弃）', async () => {
+    const { wx, calls } = wxStub({ ok: true, data: 'x' })
+    await mpRequest(ctx, wx, { url: 'https://x.cn/a', params: { a: '1', b: '两个' } })
+    // 期望 = 模块导出的真实现算出的串（不是手写字符串——避免又造一份会分叉的副本）
+    expect(calls[0].opts.url, '★params 未拼进 URL').toBe(encodedFetchUrl('https://x.cn/a', { a: '1', b: '两个' }))
+    expect(String(calls[0].opts.url)).toContain('a=1')
+    expect(String(calls[0].opts.url)).toContain('b=%E4%B8%A4%E4%B8%AA')
+  })
+
+  it('params 与已有 query 合并用 &（不产生 ? ?）', async () => {
+    const { wx, calls } = wxStub({ ok: true, data: 'x' })
+    await mpRequest(ctx, wx, { url: 'https://x.cn/a?z=0', params: { a: 1 } })
+    const u = String(calls[0].opts.url)
+    expect(u).toBe('https://x.cn/a?z=0&a=1')
+    expect(u.split('?').length - 1, '★只该有一个 ?').toBe(1)
+  })
+
+  it('params 值为 undefined 的键被跳过（不发 undefined 文本）', async () => {
+    const { wx, calls } = wxStub({ ok: true, data: 'x' })
+    await mpRequest(ctx, wx, { url: 'https://x.cn/a', params: { a: 1, skip: undefined } })
+    expect(String(calls[0].opts.url)).toBe('https://x.cn/a?a=1')
   })
 })
 
