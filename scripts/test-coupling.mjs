@@ -53,6 +53,75 @@ const valOf = (f) => {
  * ★表不追求完备（见头注"诚实边界"）：命中越准越好；未命中的内核改动走宽面提示，不静默。
  */
 const COUPLING = [
+  // ══════════════════════════════════════════════════════════════════════════
+  // ★★★#1138：跨端契约条目（gates = 真跑，失败即红；cmds = 只提示）
+  //   它们共同性质：改一处必须同步 N 端 —— 漏同步不报错，而是静默不一致。
+  //   映射表原有 29 条里一条都没有（改 invoke-wire.ts 不会提示跑 parity 门禁）。
+  //   ★与 docs/contract-index.md（#1137）同集：索引给人读，本表给工具跑。
+  // ══════════════════════════════════════════════════════════════════════════
+  {
+    // ① 二进制线格式五端（#903 / #1134：加一个 tag 改了 42 个文件）
+    match:
+      /packages\/api\/src\/invoke-wire\.ts$|InvokeWire\.(java|swift|ts)$|hosts\/harmony\/host-app\/proteus_render\/src\/main\/cpp\/invoke_wire\.h$|scripts\/invoke-wire-golden\.ts$/,
+    gates: ['pnpm check:invoke-wire-parity'],
+    tests: ['tests/invoke-wire.test.ts'],
+    why: '线格式五端 SSOT（TS⇄Java⇄Swift⇄ArkTS⇄C++）：任一端 tag/端序/长度前缀不一致 ⇒ 宿主解错帧 ⇒ 能力静默失效',
+  },
+  {
+    // ② 宿主 Invoke 方法契约（screen.* 三端一致 + 能力族 ⊆ 契约）
+    match: /host-invoke-contract\.ts$|layoutcore\/runtime\/|ProteusHost\/runtime\/|host_app_runtime_impl\.h$/,
+    gates: ['pnpm check:host-invoke-contract'],
+    why: '宿主方法 ⊆ 契约 + screen.* 三端一致 + 覆盖率如实报缺（#1121/#1122 的 http.cancel 就是「实现了但没登记」被这条抓出）',
+  },
+  {
+    // ③ Vapor 三端同步（编译器 + 槽位运行时 + 桥 + 夹具）
+    match: /packages\/compiler\/src\/vapor\/|packages\/slot-runtime\/|entry-vapor\.ts$|gen-vapor-fixture\.mjs$/,
+    gates: ['pnpm check:vapor-three-end', 'pnpm check:vapor-capability'],
+    why: 'Vapor 能力在平台无关共享包 ⇒ 只跑一端时另一端是推断不是证据（三端证据齐 + 17 项指纹一致）',
+  },
+  {
+    // ④ 桥源真源 ⇄ CLI 随包副本
+    match: /^hosts\/shared\/bridge\//,
+    gates: ['pnpm check:bridge-sync'],
+    why: '改了真源没同步副本 ⇒ 框架测试走真源、外部用户走副本 ⇒ 外部用户跑旧逻辑（#666 初衷被击穿）',
+  },
+  {
+    // ⑤ 鸿蒙 runtime prebuilt 副本
+    match: /^hosts\/harmony\/host-app\/proteus_render\//,
+    gates: ['pnpm check:harmony-runtime-prebuilt'],
+    why: '真源改了没同步 prebuilt ⇒ 外部用户拿到旧运行时 ⇒ 宿主不认识新 tag ⇒ 该能力在鸿蒙端静默失效（#1134 实证）',
+  },
+  {
+    // ⑥ 布局 golden 单一来源
+    match: /^packages\/layout-core-rust\/(src|tests\/golden)\//,
+    gates: ['pnpm check:cross-end-golden'],
+    why: 'iOS 从 canonical 读、Android 从 assets 静态副本读 ⇒ 不同步会让两端判据对着不同基准跑',
+  },
+  {
+    // ⑦ 动画颜色 golden
+    match: /^packages\/animation\/src\//,
+    gates: ['pnpm check:anim-color-golden'],
+    why: '颜色/插值跨端一致（改 animation 源须重生成 golden）',
+  },
+  {
+    // ⑧ useFetch 四层字段链（漏一层 ⇒ 功能静默失效）
+    match: /packages\/api\/src\/capability-(fetch|app-request|invoke)\.ts$|capability-fetch-(types|pipeline|redirect)\.ts$/,
+    gates: ['pnpm check:invoke-wire-parity'],
+    tests: ['tests/fetch-wire-fields.test.ts', 'tests/fetch-redirect.test.ts', 'tests/fetch-deadline.test.ts', 'tests/fetch-pipeline.test.ts'],
+    why: '要穿四层白名单（FetchConfig → runFetch → appHttpRequest → splitFramePayload）：漏一层功能静默失效（#1134 redirectManual 漏在第③层，真机才抓到）',
+  },
+  {
+    // ⑨ 文档生成器源集合（拆文件后源集合找不到 ⇒ 整段文档消失）
+    match: /^packages\/api\/src\//,
+    gates: ['pnpm check:content'],
+    why: '生成器按文件集合扫源码：拆/改名后找不到 ⇒ 参数表/返回值表整段消失（#1123 实证 fetch.md 被删 38 行）',
+  },
+  {
+    // ⑩ 文档数字与源码同源
+    match: /^docs\/|^website\/content\/|^website\/scripts\//,
+    gates: ['pnpm check:docs-stats'],
+    why: '文档权威数字与源码实际值同源（包数/原语数/规则数/组件数）——数字过时会静默上线',
+  },
   // ★★★G-61 B1（2026-10-05）：**CSE 编译期 CSS 引擎**（L-A 唯一实现——收集/长手展开/索引/
   //   右→左匹配/五级层叠/继承/计算值/IR 映射）。全模块统一配对：
   //   · cse-core：内核单测（34 条——逐级层叠/长手竞争/继承/计算值/IR 映射/trace）
@@ -307,7 +376,11 @@ const WIDE_PACKAGES = [
 // ── ① 表自检（防表腐化：文件改名/写错后工具静默失效——本仓"门禁自身要门禁"同款）──
 const tableErrors = []
 for (const entry of COUPLING) {
-  for (const t of entry.tests) {
+  // ★#1138：跨端契约条目只有 gates（无 tests）——但**两者至少要有一个**，否则该条等于空转
+  if (!entry.tests?.length && !entry.gates?.length) {
+    tableErrors.push(`${entry.match} → 既无 tests 也无 gates（空条目）`)
+  }
+  for (const t of entry.tests ?? []) {
     if (!fs.existsSync(path.join(ROOT, t))) tableErrors.push(`${entry.match} → ${t}（文件不存在）`)
   }
 }
@@ -367,7 +440,8 @@ if (has('--explain')) {
   for (const e of COUPLING) {
     console.log(`\n${e.match}`)
     console.log(`  为什么：${e.why}`)
-    for (const t of e.tests) console.log(`  · ${t}`)
+    if (e.gates) for (const g of e.gates) console.log(`  ★门禁（真跑）: ${g}`)
+    for (const t of e.tests ?? []) console.log(`  · ${t}`)
     if (e.cmds) for (const c of e.cmds) console.log(`  $ ${c}`)
   }
   process.exit(0)
@@ -406,6 +480,8 @@ if (changed.size === 0) {
 // ── ③ 映射：命中精化条目 → 配套测试；未命中内核包 → 记宽面提示 ──
 const picked = new Map() // test 文件 → Set<来源说明>
 const cmds = new Set()
+// ★#1138：跨端契约门禁（**真跑**，失败即红）——与 cmds（只提示）区分
+const gates = new Set()
 const wideHits = new Map() // 包 → 改动文件[]
 const kernelChanged = []
 for (const f of changed) {
@@ -413,11 +489,12 @@ for (const f of changed) {
   for (const entry of COUPLING) {
     if (!entry.match.test(f)) continue
     hit = true
-    for (const t of entry.tests) {
+    for (const t of entry.tests ?? []) {
       if (!picked.has(t)) picked.set(t, new Set())
       picked.get(t).add(f)
     }
     if (entry.cmds) for (const c of entry.cmds) cmds.add(c)
+    if (entry.gates) for (const g of entry.gates) gates.add(g)
   }
   for (const w of WIDE_PACKAGES) {
     if (!f.startsWith(w.pkg)) continue
@@ -454,8 +531,12 @@ if (testFiles.length === 0) {
 console.log(`\n[test:coupled] 将跑 ${testFiles.length} 个配套测试文件：`)
 for (const t of testFiles) console.log(`  · ${t}   ← ${[...picked.get(t)].join(', ')}`)
 if (cmds.size) {
-  console.log('\n[test:coupled] 另有同源工件命令（规则注册表类改动建议顺跑）：')
+  console.log('\n[test:coupled] 另有同源工件命令（建议顺跑，本次**不执行**）：')
   for (const c of cmds) console.log(`  $ ${c}`)
+}
+if (gates.size) {
+  console.log('\n[test:coupled] ★跨端契约门禁（本轮改动命中，**下面会真跑**）：')
+  for (const g of gates) console.log(`  $ ${g}`)
 }
 
 if (has('--list')) {
@@ -477,7 +558,25 @@ if (has('--wide')) {
 }
 console.log('')
 const t0 = Date.now()
-const r = spawnSync('npx', ['vitest', 'run', ...[...runSet].sort()], { cwd: ROOT, stdio: 'inherit' })
+// ★#1138：**跨端契约门禁先跑**——它们是"改一处必须同步 N 端"的唯一判据。
+if (gates.size && !has('--list')) {
+  for (const g of [...gates].sort()) {
+    console.log(`\n[test:coupled] ▶ ${g}`)
+    // ★不能用 `bash -lc`：登录 shell 会加载用户 profile，把 PATH 重置成系统 Node（18），
+    //   而本仓门禁要求 Node ≥22（corepack 在 18 上 `URL.canParse is not a function` 直接崩）。
+    //   ⇒ `bash -c`（不加载 profile）+ 显式继承当前 env。
+    const gr = spawnSync('bash', ['-c', g], { cwd: ROOT, stdio: 'inherit', env: process.env })
+    if (gr.status !== 0) {
+      console.error(`\n[test:coupled] ✗ 跨端契约门禁红：${g}`)
+      console.error('  ★这多半是"改了源、没同步另一端/副本/向量"——按该门禁提示修，不要跳过。')
+      process.exit(gr.status ?? 1)
+    }
+  }
+  console.log(`\n[test:coupled] ✅ ${gates.size} 条跨端契约门禁全绿`)
+}
+const r = runSet.size
+  ? spawnSync('npx', ['vitest', 'run', ...[...runSet].sort()], { cwd: ROOT, stdio: 'inherit' })
+  : { status: 0 }
 const secs = ((Date.now() - t0) / 1000).toFixed(1)
 if (r.status === 0) {
   console.log(`\n[test:coupled] ✅ 配套断言全绿（${secs}s）——内核改动与断言已同步`)

@@ -187,6 +187,19 @@ pnpm check:vapor-three-end              # 证据齐 + 同一判据三端全过 +
 
 ---
 
+## 附 2：这些节与 `test:coupled` 的 `gates` 同集（决策 #1138）
+
+`scripts/test-coupling.mjs` 的 `COUPLING` 里有 **`gates`** 字段（**真跑 + 失败即红**）：
+改到本节列的文件时，`pnpm test:coupled` 会**自动**跑对应门禁（约 20 秒），不需要你去查。
+
+```bash
+pnpm test:coupled -- --list   # 先看会跑哪几条门禁
+pnpm test:coupled             # 真跑（门禁 + 配套测试）
+```
+
+★**本索引与本表必须同集**：索引给人/AI 读（含触发条件与后果），`gates` 给工具跑。
+若某条门禁只在索引里、不在 `gates` 里 ⇒ 工具不会自动跑（只能靠人记得查索引）。
+
 ## 附：本索引的判据
 
 `pnpm check:contract-index` 机器校验：

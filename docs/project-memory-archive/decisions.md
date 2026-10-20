@@ -10992,3 +10992,70 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   ② 消化本轮暴露的 7 个 C++ 巨型文件（最大的 `host_app_runtime_impl.h` 1134 行、`proteus_render.cpp` 3701 行）；
   ③ 索引里每节可加"**最小可闭环单元**"（改这一处最少要读哪 3 个文件）——正是用户那句
      「下次会话能不能只读 3 个文件就改对」的直接落地。
+
+1138. **★★★`test:coupled` 扩展到跨端契约（`gates` 真跑）——把「改一处必须同步 N 端」从"靠记"变成"自动跑" · 决策**（2026-10-20 · 承接 #1137「下一步①」）：
+
+【要解决的具体缺陷】
+  `scripts/test-coupling.mjs` 的 `COUPLING` 表原有 **29 条映射**，覆盖编译器内核 ↔ 配套测试。
+  但**跨端契约一条都没有**——改 `packages/api/src/invoke-wire.ts` 时，工具**不会**提示跑
+  `pnpm check:invoke-wire-parity`（五端逐字节等价的唯一判据）。
+  ★"最需要定向提示的地方恰好空白"：跨端契约的漏同步后果**不是报错，而是静默不一致**。
+
+【实证代价（#1134 加一个线格式 tag）】
+  改动面 **42 个文件**；其中**两条要求**是**事后**才被门禁抓到的：
+    · 鸿蒙 `prebuilt` 副本漏同步（外部用户拿旧运行时 ⇒ 该能力在鸿蒙静默失效）；
+    · iOS 真机探针登记漏三处（现象是"报告永远是旧的"，连跑两轮空转）。
+  两条都**不是当场发现的**——这正是「单会话不能闭环」的具体形态。
+
+【落地：两种条目语义，必须分清】
+  | 字段 | 语义 | 用在哪 |
+  |---|---|---|
+  | `cmds` | 同源工件命令，**只打印建议，不执行** | 生成器类（`check:stats` / `gen-reference`） |
+  | `gates` | **跨端契约门禁，真跑且失败即红** | 漏跑等于零覆盖 ⇒ 不能只提示 |
+  ★判定口径（写进文件头）：**改动一处即要求"同步 N 端"的门禁，必须进 `gates`**。
+
+【新增 10 条契约条目（映射表 29 → 39，其中 11 条带 gates）】
+  ① 五端线格式（`invoke-wire.ts` / `InvokeWire.{java,swift,ts}` / `invoke_wire.h` / golden）
+     → `check:invoke-wire-parity`
+  ② 宿主 Invoke 方法契约（契约 SSOT / 三端 runtime 目录）→ `check:host-invoke-contract`
+  ③ Vapor 三端 → `check:vapor-three-end` + `check:vapor-capability`
+  ④ 桥源真源⇄副本（`hosts/shared/bridge/**`）→ `check:bridge-sync`
+  ⑤ 鸿蒙 prebuilt（`hosts/harmony/.../proteus_render/**`）→ `check:harmony-runtime-prebuilt`
+  ⑥ 布局 golden（`layout-core-rust/{src,tests/golden}`）→ `check:cross-end-golden`
+  ⑦ 动画颜色 golden（`animation/src`）→ `check:anim-color-golden`
+  ⑧ useFetch 四层字段链 → `check:invoke-wire-parity` + 4 个定向判据（含 #1134 的 redirectManual 教训）
+  ⑨ 文档生成器源集合（`packages/api/src/**`）→ `check:content`（#1123 实证：fetch.md 被删 38 行）
+  ⑩ 文档数字同源（`docs/**` / `website/**`）→ `check:docs-stats`
+
+【机制改动（4 处，都是"让漏跑不可能"）】
+  · **①** `gates` 声明 + 收集（与 `cmds` 平行，语义不同）；
+  · **②** **空集判定含 gates**（原来只看 `testFiles`/`cmds` ⇒ 只有 gates 时会被误判"无需跑"）；
+  · **③** **gates 先跑、再跑 vitest**：门禁红立即退出（不让 vitest 的输出把门禁红淹没）；
+  · **④** 表自检加一条：**每条 entry 必须 `tests` 或 `gates` 至少有一个**（空条目等于空转）。
+  ★另修一个环境坑：门禁用 `bash -c`（**不是 `-lc`**）——登录 shell 会加载 profile 把 PATH
+    重置成系统 Node 18，而本仓门禁要求 Node ≥22（corepack 在 18 上 `URL.canParse is not a function` 直接崩）。
+
+【验证】
+  · `--explain`：映射表 **39 条**，其中 **11 条**打印 `★门禁（真跑）`；
+  · **用 #1134 那次提交真跑**（`--since 5f6dbfee~1`）：
+    自动列出 **6 条**跨端门禁（`docs-stats` / `host-invoke-contract` / `invoke-wire-parity` /
+    `harmony-runtime-prebuilt` / `bridge-sync` / `content`）+ **7 个**配套测试；
+    全绿 **22.7s**（142 条测试）；
+  · **破坏性验证**：改鸿蒙真源但不跑 prebuilt 同步 ⇒ `test:coupled` 当场红并指名
+    `pnpm check:harmony-runtime-prebuilt` ——**正是 #1134 那个真实缺陷形态**，现在 20 秒内拦住。
+
+【诚实边界】
+  ① `gates` 只覆盖"跨端一致性"类门禁；单端内部的门禁（如 `check:android-host-compile`）仍在 `cmds`
+     里（提示不执行）——因为那些不是"改一处必须同步 N 端"；
+  ② `test:coupled` 的 diff 基默认是 `origin/main`，**未跟踪文件也算改动**（本机 `.workbuddy/salvage`
+     有 5449 个未跟踪截图 ⇒ 报告会显示"改动 5451 个文件"，但不会误命中契约条目）；
+  ③ 真跑 gates 会把 `test:coupled` 从 ~10s 拉长到 ~20-25s（换来的是"漏同步当场可见"）。
+
+【门禁】
+  `pnpm test` **6447 条全绿** · `check:contract-index`（索引与 gates 同集说明已补）
+  · `check:script-compile` · `check:gates-sync` · AGENTS.md 新增该节纪律。
+
+【下一步（继续降认知负载）】
+  ① 索引每节加「**最小可闭环单元**」＝改这处最少要读哪 3 个文件（用户原话「下次会话能不能只读 3 个文件就改对」的直接落地）；
+  ② 消化 #1137 暴露的 7 个 C++ 巨型文件（`proteus_render.cpp` 3701 行 / `host_app_runtime_impl.h` 1134 行）；
+  ③ 把 `.workbuddy/salvage` 的未跟踪截图纳入治理（5449 个文件会污染 `git status` 与 diff 基统计）。
