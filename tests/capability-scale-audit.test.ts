@@ -67,6 +67,33 @@ describe('★#1113 规模承载体检 · 判据不能被骗', () => {
     ).toBe(false)
   })
 
+  it('★fetch 的"上限"必须是 ❌：响应体**没有任何大小限制**（唯一的 MAX 是挂起调用条数）', () => {
+    // ★#1114 第四处假绿：fetch 曾被判 `upperBound: true`，而命中的是
+    //   `capability-invoke.ts::PENDING_HOST_CALLS_MAX = 1024`——那是**挂起调用条数**上限（并发维度），
+    //   与"响应体能吞多大"毫无关系。真正的响应读取：
+    //     · Android `readAll(InputStream)` → `ByteArrayOutputStream` **无总上限**
+    //     · iOS `session.dataTask(with:)` → 整个 body 一次进内存
+    const { json } = runAudit(['--json', '--cap=fetch'])
+    const r = (json as Array<{ cap: string; upperBound: boolean; tableBound: boolean; tier: string }>)[0]
+    expect(r.cap).toBe('fetch')
+    expect(
+      r.upperBound,
+      'fetch 被判"有上限"——但两端宿主都是整包进内存且无总上限；唯一的 MAX 是挂起调用条数（属并发维度）',
+    ).toBe(false)
+    // 并发维度反而应当是 ✅（PENDING_HOST_CALLS_MAX = 1024 确实存在）
+    expect(r.tableBound, 'fetch 的并发上界应被识别（PENDING_HOST_CALLS_MAX）').toBe(true)
+    expect(r.tier).toBe('S1')
+  })
+
+  it('★"上限"常量必须按尺寸语义识别（`PENDING_*`/`COUNT` 类名字归并发，不算尺寸）', () => {
+    const s = read(AUDIT)
+    expect(s, '缺 SIZE_WORD / COUNT_WORD 的区分').toMatch(/SIZE_WORD/)
+    expect(s).toMatch(/COUNT_WORD/)
+    // 挂起调用条数必须归到 tableBound，而不是 upperBound
+    const tb = s.slice(s.indexOf('tableBound:'), s.indexOf('tableBound:') + 300)
+    expect(tb, 'tableBound 未收录 PENDING_*MAX（并发维度）').toMatch(/PENDING_\[A-Z_\]\*MAX/)
+  })
+
   it('★upload/download 的档位必须是 S2 且**未达 S3**（有 64MiB 上限但无背压/并发上界）', () => {
     const { json } = runAudit(['--json', '--cap=upload,download'])
     const rows = json as Array<{ cap: string; tier: string }>

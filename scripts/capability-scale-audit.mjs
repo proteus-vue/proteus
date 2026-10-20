@@ -55,9 +55,26 @@ const CAP_SOURCES = {
  *  ★#1113 第一版判据太宽（`stream|chunk|offset` 命中注释与局部变量 ⇒ 几乎全部 ✅），
  *    实测 `transfer` 里 `stream` 只出现 1 次（还是注释）、`offset` 是读文件的局部变量。
  *    ⇒ 收紧为**成对/带数量**的形态：必须有"分块循环"、"队列 + 上限"、"丢弃计数"这类**组合**，
- *      而不是单个关键词。宁可漏判（显示更保守的档位）也不要假绿——与 #1111 同一纪律。 */
+ *      而不是单个关键词。宁可漏判（显示更保守的档位）也不要假绿——与 #1111 同一纪律。
+ *
+ *  ★#1114 第四处修正：**"上限"必须对号入座**。
+ *    实测 fetch 被判 `upperBound:true`，命中的是 `capability-invoke.ts` 的
+ *    `PENDING_HOST_CALLS_MAX = 1024`——那是**挂起调用条数**上限（并发维度），
+ *    与"响应体能吞多大"**毫无关系**（真正的响应读取在两端宿主：Android `readAll` **无总上限**、
+ *    iOS `dataTask` 一次性进内存）。
+ *    ⇒ 判据要求上限常量**名里带 size/bytes/length 语义**，或与 body 读取在同一文件内。
+ *      `` PENDING/COUNT/QUEUE `` 一类名字归到**并发**维度，不算"上限"。
+ */
+const SIZE_WORD = /size|bytes|len|length|body|response|payload|content|MB|MiB|KB/i
+const COUNT_WORD = /PENDING|COUNT|QUEUE|CONN|ITEMS|ENTRIES|CALLS|TASKS/i
+
 const SIGNALS = {
-  upperBound: [/MAX\s*=\s*\d+\s*\*\s*\d+/, /MAX\s*=\s*\d{4,}/, /MAX_SIZE|MAX_BYTES|MAX_LEN|maxSize|maxBytes/i],
+  // 上限：常量名必须表达"尺寸"，且不得是并发计数类名字
+  upperBound: [
+    /\bMAX_[A-Z_]*(SIZE|BYTES|LEN|LENGTH|BODY|RESPONSE|CONTENT)[A-Z_]*\s*=\s*[\d_]+/i,
+    /\b(maxSize|maxBytes|maxBody|maxResponse|sizeLimit|byteLimit)\s*[:=]/i,
+    /\bMAX\s*=\s*\d+\s*\*\s*\d+\s*\*\s*\d+/, // 形如 64*1024*1024
+  ],
   explicitError: [/throw[^\n]*(过大|too large|exceeds|超出)/i, /(过大|too large|exceeds)[^\n]*throw/i],
   // 「流式」= 真有"分块循环"或"分块 **API/常量**"，不是出现 stream/分块 这些词
   //   ★#1113 第三处修正：字符串字面量也要排除——实测命中来自错误消息
@@ -70,8 +87,13 @@ const SIGNALS = {
   // 「背压」= 队列**且有上界/丢弃策略**；单个 queue 或 buffer 不算
   backpressure: [/(maxQueue|queueLimit|MAX_QUEUE|QUEUE_CAP|dropCount|dropped\w*)\s*[=:]/i, /(丢弃|drop)[^\n]{0,40}(计数|count|统计)/i],
   resourceLedger: [/registry\.register\(|resources\.register\(|\.register\(\{[\s\S]{0,120}?type:/],
-  // 「并发上界」= 表项上限常量或淘汰逻辑
-  tableBound: [/MAX_CONN|MAX_ITEMS|MAX_ENTRIES|maxConnections|maxEntries|evict|LRU/i],
+  // 「并发上界」= 表项/挂起数上限常量或淘汰逻辑（这是 COUNT_WORD 的归属）
+  tableBound: [/\b(MAX_CONN|MAX_ITEMS|MAX_ENTRIES|PENDING_[A-Z_]*MAX|MAX_[A-Z_]*CALLS|maxConnections|maxEntries|pendingMax|evict|LRU)/i],
+}
+
+/** 该上限常量是否表达"尺寸"而非"条数"（用于给 `upperBound` 复核） */
+export function isSizeBound(name) {
+  return SIZE_WORD.test(name) && !COUNT_WORD.test(name)
 }
 
 /**

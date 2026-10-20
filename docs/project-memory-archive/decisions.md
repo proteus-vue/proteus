@@ -9217,3 +9217,60 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   ② **websocket 连接表加上界/淘汰**（百连接场景）；
   ③ 把 `CAP_SOURCES` 扩到全部 84 个能力（现在只有 10 个）——否则体检覆盖率本身是短板；
   ④ 能力页的「兼容进度」表**增列规模档**（S1/S2/S3），让"✅"不再等于"能上量"。
+
+1114. **★★fetch 确认未达标（S1）：两端整包响应进内存且无总上限——并修掉体检工具的第四处假绿（把"挂起调用条数"当成"响应体上限"） · 决策**（2026-10-20 · 用户「还有之前做的 fetch 好像也没达标」）：
+
+【用户判断正确，取证如下】
+  `useFetch` 只是转发到 `bridge.request`（`capability.ts:265`），真实实现两端都在宿主：
+  · **Android** `HttpCapability.readAll(InputStream)`：`ByteArrayOutputStream` 一路 `write`，
+    **没有任何总量上限**。★注意 `READ_CHUNK = 16 * 1024` 是**单次读的缓冲量**，不是总上限——
+    这两个概念极易混淆。
+  · **iOS** `http-capability.swift`：`session.dataTask(with:)` 的 completion 里
+    `r.body = Array(data ?? Data())` ⇒ **整个响应体一次进内存**，同样无上限。
+  ⇒ 现在再转成 `[UInt8]`/`number[]` 回推 JS，**峰值内存 ≈ 响应体 × 2~4**（原始 data + 数组 + 帧）。
+  ⇒ 服务器回 500 MB，就会吃掉 500 MB 以上；这在超级应用规模下（图片/JSON 列表/日志导出）是**硬伤**。
+
+【★第四处假绿（本轮最该记的）】
+  我上一轮的体检工具把 fetch 判成 `upperBound: true`，命中的是
+  `capability-invoke.ts::PENDING_HOST_CALLS_MAX = 1024`——那是**挂起调用条数上限**（并发维度），
+  与"响应体能吞多大"**毫无关系**。
+  ⇒ **并发条数 ≠ 单次载荷大小**：前者管"同时几个请求"，后者管"一个响应用多少内存"。
+    判据把名字里带 MAX 的都当成"上限"，就会得出"fetch 已达 S2"的**假绿**。
+  ⇒ 修法：上限常量必须**按语义归类**——
+    · `SIZE_WORD`（size/bytes/len/body/response/payload/content/MB…）⇒ 才算**尺寸上限**；
+    · `COUNT_WORD`（PENDING/COUNT/QUEUE/CONN/ITEMS/ENTRIES/CALLS/TASKS…）⇒ 归**并发上界**。
+    并要求 `isSizeBound(name) = SIZE_WORD && !COUNT_WORD`。
+  修正后 fetch 的体检：**上限 ❌ · 流式 ❌ · 背压 ❌ · 并发上界 ✅ ⇒ 档位 S1**（诚实了）。
+
+【这是体检工具的第 4 次假绿，均同一族】
+  #1113 内已记三次：关键词太宽 / 读了注释 / 读了字符串字面量；
+  本轮是第四次：**常量按名字瞎归类**（把并发计数的 MAX 当尺寸上限）。
+  ⇒ 共性：**判据每次都"看到了一个像证据的符号"，但没验证它属于要判的那个维度**。
+  ★这与 #1105（逐点差异冒充画质）/ #1111（注释里的历史写法）同族：
+    **判据的能力边界决定结论的可信边界**。
+
+【落地】
+  · `scripts/capability-scale-audit.mjs`：新增 `SIZE_WORD`/`COUNT_WORD` + `isSizeBound()`；
+    `upperBound` 只认尺寸语义；`tableBound` 收录 `PENDING_*MAX` 等计数类上限。
+  · `docs/Proteus_原生能力接入方案.md` §1.0 反例表**新增 fetch 一行**，并写明
+    「并发条数与单次载荷大小是两个维度」这条教训（防止后来人重犯）。
+  · `tests/capability-scale-audit.test.ts` **9/9**（+2）：
+    ★fetch 的 `upperBound` 必须 `false`、`tableBound` 必须 `true`、档位 `S1`；
+    ★`tableBound` 判据必须收录 `PENDING_*MAX`。
+  · 分类逻辑单独验证 6 个用例（`PENDING_HOST_CALLS_MAX`/`MAX_BODY_SIZE`/`MAX_RESPONSE_BYTES`/
+    `MAX_CONN`/`transferMaxBytes`/`READ_CHUNK`）**全部分类正确**。
+  + `check:docs-stats` / `check:file-size` / `check:content` 绿。
+
+【诚实边界】
+  ① fetch 的 S1 判定来自**静态结构**——未做真机压测（例如让服务端回 100 MB 看内存曲线）；
+  ② 「响应体无上限」是**当前实现**的事实，不代表设计意图（可能被认为"业务自己控制"）——
+     但按 §1.0 的硬指标，**没有显式上限就是 S1**，不接受"设计上可以让业务自己控制"；
+  ③ 本轮**未改 fetch 实现**（流式/上限属独立批次，且要动两端宿主 + 二进制帧协议）；
+  ④ 同类"名字像但维度不同"的假绿可能还有——体检工具的能力边界仍是**结构痕迹**，不是语义理解。
+
+【下一步（fetch 若要达 S3）】
+  ① **响应体上限**（最小改动）：两端读取时累计计数，超限**中止并返回显式错误码**
+     （例如 `fetch.tooLarge`），而不是先吃满内存再失败；
+  ② **流式**（真正解）：宿主边读边推（NDJSON / SSE / 分块回调），JS 侧按块消费；
+     需要新的帧类型（现有 `http.request` 是"一问一答"语义）；
+  ③ 与 upload/download 的流式化**同批做**——两者都卡在"宿主与 JS 之间只有整包通道"这个共同根因。
