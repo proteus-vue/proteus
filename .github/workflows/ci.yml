@@ -88,6 +88,9 @@ jobs:
       - name: ESLint 基线（★决策 #868：面状坏味道基线——error 类存量已 suppressions 锁定，只报新增）
         run: pnpm run lint
 
+      - name: 跨端契约索引自检（★#1137：AI 改一处要知道跑哪些门禁——索引过期比没有索引更糟）
+        run: node scripts/check-contract-index.mjs
+
       - name: 仓库卫生门禁（★#1136：构建产物不得被跟踪——本轮就因 `target/` vs `target-qjs/` 漏了 186MB）
         run: node scripts/check-repo-hygiene.mjs
 

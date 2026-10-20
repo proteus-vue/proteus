@@ -33,7 +33,11 @@ const BASELINE = baseArg >= 0 && argv[baseArg + 1] ? path.resolve(argv[baseArg +
 
 const CAP = 1000
 const ROOTS = ['packages', 'hosts', 'scripts', 'tests', 'examples', 'showcase', 'superapp', 'website']
-const EXT = ['.ts', '.tsx', '.vue', '.rs', '.java', '.kt', '.swift', '.ets', '.mjs', '.cjs', '.py', '.sh']
+// ★★#1137：补 .h / .cpp —— 此前完全漏掉（鸿蒙 C++ 宿主整个在棘轮外）。
+//   实测：host_app_runtime_impl.h 1134 行、proteus_render.cpp 3701 行等 7 个 >=1000 行文件
+//   从未被这份门禁看过（门禁报 51 个越线，实际源码面是 58 个）。
+//   ★与 #1136「忽略规则写错后缀 ⇒ 静默失效」同族：判据的覆盖面必须跟着真实文件类型走。
+const EXT = ['.ts', '.tsx', '.vue', '.rs', '.java', '.kt', '.swift', '.ets', '.mjs', '.cjs', '.py', '.sh', '.h', '.cpp', '.hpp', '.cc']
 const SKIP_SEG = /(^|\/)(node_modules|dist|build|\.proteus|generated|\.tools|assets|rawfile|__snapshots__)(\/|$)/
 const SKIP_NAME = /(\.generated\.|\.min\.|bundle-.*\.js$|\.d\.ts$)/
 
