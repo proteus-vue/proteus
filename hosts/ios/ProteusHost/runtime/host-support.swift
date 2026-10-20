@@ -12,6 +12,32 @@ import UIKit
 import CoreText
 import Darwin
 
+/* ────────────────────────── 颜色解析 ────────────────────────── */
+
+/// CSS 颜色串 → UIColor（`#RGB` / `#RRGGBB` / `#RRGGBBAA`）。
+/// ★#1102：从 `selfdraw-scene.swift` 机械搬迁（顶层纯函数，无状态依赖）。
+func parseHexColor(_ s: String) -> UIColor? {
+    var hex = s.trimmingCharacters(in: .whitespaces)
+    if hex.hasPrefix("#") { hex.removeFirst() }
+    guard let v = UInt32(hex, radix: 16) else { return nil }
+    if hex.count == 3 {
+        // #RGB：各通道重复一位（#f0a → #ff00aa，alpha = FF）——与内核/Web 同
+        let r = (v >> 8) & 0xF, g = (v >> 4) & 0xF, b = v & 0xF
+        return UIColor(red: CGFloat(r * 17) / 255, green: CGFloat(g * 17) / 255,
+                       blue: CGFloat(b * 17) / 255, alpha: 1)
+    }
+    if hex.count == 8 {
+        // ★CSS4 序 #RRGGBBAA（低 8 位 = alpha）——与内核/Web 同源
+        return UIColor(red: CGFloat((v >> 24) & 0xFF) / 255, green: CGFloat((v >> 16) & 0xFF) / 255,
+                       blue: CGFloat((v >> 8) & 0xFF) / 255, alpha: CGFloat(v & 0xFF) / 255)
+    }
+    if hex.count == 6 {
+        return UIColor(red: CGFloat((v >> 16) & 0xFF) / 255, green: CGFloat((v >> 8) & 0xFF) / 255,
+                       blue: CGFloat(v & 0xFF) / 255, alpha: 1)
+    }
+    return nil
+}
+
 /// C 字符串 → Swift String（读后**立即释放**内核分配的串——所有权在这里闭环）
 func takeCString(_ ptr: UnsafeMutablePointer<CChar>) -> String {
     defer { proteus_layout_free_string(ptr) }

@@ -25,6 +25,11 @@ const HERE = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(HERE, '..')
 const TS_FILE = path.join(ROOT, 'hosts/ios/bridge/entry-selfdraw.ts')
 const SWIFT_FILE = path.join(ROOT, 'hosts/ios/ProteusHost/runtime/selfdraw-scene.swift')
+// ★★★#1102：`SelfDrawExports` 协议已拆到独立文件（纯声明，文件大小棘轮）。⇒ **协议方法从这里读**，
+//   实现仍从 `selfdraw-scene.swift` 读。★这条正是本仓反复踩的「门禁覆盖面必须跟着形态走」：
+//   迁移只改了一个文件的位置，门禁就整条失效（本轮实测 `check:ios-export-wiring` 当场抛
+//   "未找到 @objc protocol SelfDrawExports"）。⇒ 位置变更必须同步门禁，否则等于这条线没人守。
+const SWIFT_PROTO_FILE = path.join(ROOT, 'hosts/ios/ProteusHost/runtime/host-exports-protocol.swift')
 // ★★第二条腿（2026-09-30 续，iOS 对齐轮）：**宿主运行时桥**也是一对（JS↔JSExport），
 //   同受"接线不靠记忆"纪律管——本轮加 `invoke` 若漏进协议，现象同样是运行时 TypeError
 //   且被 catch 吞成静默（与自绘桥同类形态）。⇒ 第二对：
@@ -108,8 +113,9 @@ function main() {
   // ① 自绘桥（原覆盖）
   const ts = fs.readFileSync(TS_FILE, 'utf-8')
   const swift = fs.readFileSync(SWIFT_FILE, 'utf-8')
-  errs.push(...checkPair('自绘桥', jsMethods(ts), protoMethods(swift), bridgeMethods(swift),
-    'hosts/ios/ProteusHost/runtime/selfdraw-scene.swift', 'SelfDrawExports'))
+  const swiftProto = fs.readFileSync(SWIFT_PROTO_FILE, 'utf-8')
+  errs.push(...checkPair('自绘桥', jsMethods(ts), protoMethods(swiftProto), bridgeMethods(swift),
+    'hosts/ios/ProteusHost/runtime/host-exports-protocol.swift（协议）+ selfdraw-scene.swift（实现）', 'SelfDrawExports'))
   // ② 宿主运行时桥（2026-09-30 续）
   const hrTs = fs.readFileSync(HR_TS_FILE, 'utf-8')
   const hrSwift = fs.readFileSync(HR_SWIFT_FILE, 'utf-8')

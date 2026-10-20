@@ -60,6 +60,8 @@ HOST_SRCS=(
   "$HERE/ProteusHost/runtime/host-abi.swift"
   # ★★★#1101：顶层基础设施（takeCString/physFootprintMB/诊断计数/ProteusTextLayer，拆出）
   "$HERE/ProteusHost/runtime/host-support.swift"
+  # ★★★#1102：JSExport 协议声明（纯声明，拆出）
+  "$HERE/ProteusHost/runtime/host-exports-protocol.swift"
   # ★★★S2「去 JSON」（决策 #903）：invoke 通道的**二进制线格式**（Swift 侧唯一编解码器）+ JSC 字节桥
   #   + `http.request` 真实实现。三者被 superapp-runtime-host.swift 引用 ⇒ 必须进清单
   #   （否则本脚本报 "cannot find InvokeWire in scope"——正是 G-39 该抓的"文件没进编译"形态）。

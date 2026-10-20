@@ -247,6 +247,18 @@ describe('★#1101 iOS 玻璃遍子相位', () => {
     const ctor = codeLines.join('\n').match(/CIContext\(options:/g) ?? []
     expect(ctor.length, 'CIContext 被多次构造（应复用一份 sharedCIContext）').toBe(1)
     expect(s).toMatch(/private static let sharedCIContext = CIContext\(options: nil\)/)
-    expect(s).toMatch(/let ctx = SelfDrawView\.sharedCIContext/)
+    // 守「用的是那份共享实例」，不守具体前缀（`Self.` / `SelfDrawView.` 都算对）
+    expect(s).toMatch(/let ctx = (Self|SelfDrawView)\.sharedCIContext/)
+  })
+
+  it('★CIFilter 必须复用（半径扫描证据：半径 0 时构图仍 4.58ms = 与半径无关的固定开销）', () => {
+    const s = read(IOS_SELFDRAW)
+    const codeLines = s.split('\n').filter((l) => !/^\s*(\/\/|\/\*|\*)/.test(l))
+    const code = codeLines.join('\n')
+    // 只允许声明处构造一次；玻璃遍里不得再 CIFilter(name:)
+    const ctor = code.match(/CIFilter\(name:/g) ?? []
+    expect(ctor.length, 'CIFilter 被多次构造（应复用一份 sharedBlurFilter）').toBe(1)
+    expect(code).toMatch(/private static let sharedBlurFilter = CIFilter\(name: "CIGaussianBlur"\)/)
+    expect(code).toMatch(/if let blur = (Self|SelfDrawView)\.sharedBlurFilter/)
   })
 })
