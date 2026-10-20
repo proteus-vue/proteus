@@ -57,7 +57,11 @@ const need = [
   //   任一端漏 ⇒ 该端静默为 0（"看起来对、其实差"，本门禁创立时的原始教训）。
   ['packages/built-in-components/src/style.css', '--pf-hairline', 'Web 基础样式未定义 --pf-hairline'],
   ['packages/fluid/src/env-vars.ts', '--pf-hairline', 'MP 读数未提供 --pf-hairline'],
-  ['hosts/android/app/src/main/java/dev/proteus/layoutcore/shell/SuperappActivity.java', '"--pf-hairline"', 'Android 未采集 --pf-hairline'],
+  // ★★#1130 修：采集实现已按 #1081 下沉到 `runtime/EnvVars`（壳只调 `EnvVars.collect`）
+  //   ⇒ 本判据**指向真实现文件**。★此前指向壳 `SuperappActivity.java`，重构后该文件再没有这个字面量
+  //   ⇒ 门禁一直红（不是"Android 真的没采"，而是**门禁的数据源路径过期**）。
+  //   ★同族：判据文件路径必须跟着实现搬迁走——否则"实现了却判红"和"没实现却判绿"一样糟。
+  ['hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/EnvVars.java', '"--pf-hairline"', 'Android 未采集 --pf-hairline'],
   ['hosts/ios/ProteusHost/runtime/selfdraw-scene.swift', '--pf-hairline', 'iOS 未采集 --pf-hairline'],
   ['hosts/harmony/host-app/entry/src/main/ets/shell/Superapp.ets', '--pf-hairline', '鸿蒙未采集 --pf-hairline'],
   ['packages/fluid/src/env-vars.ts', 'readEnvVars', 'MP 运行期读数未提供'],

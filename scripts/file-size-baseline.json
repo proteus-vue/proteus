@@ -7,7 +7,7 @@
   "packages/compiler/src/vapor/template.ts": 4651,
   "packages/layout-core-rust/src/anim.rs": 4560,
   "packages/api/src/capability-bridges.ts": 3955,
-  "packages/api/src/capability-types.ts": 3835,
+  "packages/api/src/capability-types.ts": 3833,
   "hosts/android/bridge/entry-vapor.ts": 3713,
   "hosts/ios/bridge/entry-bench.ts": 3651,
   "scripts/gen-component-demo-pages.mjs": 3592,

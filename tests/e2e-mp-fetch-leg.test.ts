@@ -151,7 +151,12 @@ describe.skipIf(!ENABLED)('★#1130 MP 真容器 · useFetch 门面行为', () =
       await driver.reLaunch('/subpackages/capabilities/pages/fetch')
       await driver.waitFor(800)
     } catch (e) {
-      throw new Error(`[e2e-mp] 进入 fetch 页失败：${e instanceof Error ? e.message : String(e)}`, { cause: e })
+      // ★不用 `new Error(msg, { cause })`：那第二个参数是 ES2022 的 ErrorOptions，而本仓 tsconfig 的
+      //   lib 是 ES2020（类型上只接受 0-1 个参数）。改用手工挂 cause——语义相同，且满足 lint 的
+      //   `preserve-caught-error`（原始错误不丢）。
+      const err = new Error(`[e2e-mp] 进入 fetch 页失败：${e instanceof Error ? e.message : String(e)}`)
+      ;(err as { cause?: unknown }).cause = e
+      throw err
     }
   }, 180_000)
 

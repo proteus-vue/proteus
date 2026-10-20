@@ -50,6 +50,13 @@ export const HOST_CAPABILITY_METHODS = [
   // ★★C26 网络请求（App 腿 · S2/#903）：`http.request` 经二进制帧（`PINV`/`PRSP`）派发，
   //   宿主实现 = HttpCapability（Android 已接 / iOS 已接 / 鸿蒙未做——门禁按覆盖率如实报缺）。
   'http.request',
+  // ★★#1121 取消通道：页面 abort ⇒ 桥发 `http.cancel {reqId}`，宿主按 reqId 掐断在飞请求。
+  //   ★此前宿主两侧（Android `HttpCapability.cancel` / iOS `http-cancel`）都已实现并真机验过，
+  //     但**没登记进契约** ⇒ `check:host-invoke-contract` 报「未知方法」（门禁看不见已做的能力）。
+  //   ★同族形态：契约是 SSOT，宿主实现新方法必须同批登记，否则覆盖率数字低报且门禁判红。
+  'http.cancel',
+  // ★★#1122 取消通道的可观测面：宿主自报 cancel 命中/未命中（判据用，"取消真的打到宿主"）
+  'http.cancelStats',
   // ★★C29/C30 上传/下载的文件腿（#1095）：沙箱二进制读写（宿主拒绝绝对路径与 '..'）
   'fs.writeBytes',
   'fs.readBytes',

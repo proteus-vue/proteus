@@ -51,9 +51,12 @@ const round1 = (v: number): number => Math.round(v * 10) / 10
  *   ★诚实边界：`Date.now()` 的毫秒分辨率会把"微秒级 handler"记成 0ms——**不影响找热点**
  *   （热点本就是 ms 级），但别把 0 读成"绝对没花时间"。
  */
-export function createRuntimeProfiler(): RuntimeProfiler {
+export function createRuntimeProfiler(opts: { now?: () => number } = {}): RuntimeProfiler {
   const perf = (globalThis as { performance?: { now?: () => number } }).performance
-  const now = perf && typeof perf.now === 'function' ? () => perf.now!() : () => Date.now()
+  // ★★★#1130：`now` 可注入——判据要断言"按累计耗时降序"，用真实毫秒计时在**并行负载**下
+  //   两个 1~2ms 的标签会互换顺序（实测：全量跑红，单跑连绿 3 次）。
+  //   ★这是"判据依赖不可控外部条件"的同族：时间类断言必须能把时间变成**输入**。
+  const now = opts.now ?? (perf && typeof perf.now === 'function' ? () => perf.now!() : () => Date.now())
   const acc = new Map<string, { count: number; totalMs: number; maxMs: number; loc?: { line: number; column: number } }>()
   return {
     time(label, fn, loc) {

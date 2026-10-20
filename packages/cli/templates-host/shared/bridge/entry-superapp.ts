@@ -18,6 +18,9 @@
 //   （`app-screen-content.generated.ts`，由 `proteus build --target ios|android|harmony`
 //   经 `gen-app-screen-content.mjs` 生成）——与 Web/小程序**同一棵路由树**。
 import { createAppNavigation } from '@proteus-vue/render-backend/app-navigation'
+import { appFetchLimitProbe, appStreamProbe, appSaveProbe, appUploadProbe, appCancelProbe, appUseFetchProbe } from './entry-superapp-probes'
+export { appFetchLimitProbe, appStreamProbe, appSaveProbe, appUploadProbe, appCancelProbe, appUseFetchProbe } from './entry-superapp-probes'
+
 import type { AppNavigation } from '@proteus-vue/render-backend/app-navigation'
 import { createRouter, type RouterInstance } from '@proteus-vue/router'
 import type { RouteRecord } from '@proteus-vue/router/types'
@@ -831,6 +834,8 @@ export function appTransferProbe(base: string): string {
   return JSON.stringify({ phase: 'started', queued: true })
 }
 
+
+
 /** 元素索引读数（判据：证明索引里真有条目，而不是"查询恒 not-found"）。 */
 /**
  * ★★★决策 #1086：**交叉观察的几何变化 tick**（宿主调）。
@@ -914,7 +919,28 @@ __HOSTAPP.__proteusHostAppElementRegistry = __HOSTAPP.__proteusSuperappElementRe
   .__proteusHostAppWsProbe = (u: string) => appWsProbe(u)
 ;(globalThis as unknown as { __proteusHostAppTransferProbe?: (b: string) => string })
   .__proteusHostAppTransferProbe = (b: string) => appTransferProbe(b)
+// ★★★#1119：download 流式落盘探针（宿主按中性名调；结果填 __proteusHostSaveProbeResult）
+;(globalThis as unknown as { __proteusHostAppSaveProbe?: (b: string, m?: number) => string })
+  .__proteusHostAppSaveProbe = (b: string, m?: number) => appSaveProbe(b, m)
+// ★★★#1120：流式上传探针（宿主按中性名调；结果填 __proteusHostUploadProbeResult）
+;(globalThis as unknown as { __proteusHostAppUploadProbe?: (b: string, m?: number) => string })
+  .__proteusHostAppUploadProbe = (b: string, m?: number) => appUploadProbe(b, m)
+// ★★★#1121：取消通道探针（宿主按中性名调；结果填 __proteusHostCancelProbeResult）
+;(globalThis as unknown as {
+  __proteusHostAppCancelProbe?: (b: string, c?: number, s?: number, d?: number) => string
+}).__proteusHostAppCancelProbe = (b: string, c?: number, s?: number, d?: number) => appCancelProbe(b, c, s, d)
+// ★★★#1122：**走 useFetch 门面**的探针（验证门面真的透传 S3 字段）
+;(globalThis as unknown as {
+  __proteusHostAppUseFetchProbe?: (b: string, c?: number, s?: number, d?: number) => string
+}).__proteusHostAppUseFetchProbe = (b: string, c?: number, s?: number, d?: number) => appUseFetchProbe(b, c, s, d)
+// ★★★决策 #1115：响应体上限探针（宿主按中性名调；结果填 __proteusHostFetchLimitProbeResult）
+;(globalThis as unknown as { __proteusHostAppFetchLimitProbe?: (b: string, m?: number) => string })
+  .__proteusHostAppFetchLimitProbe = (b: string, m?: number) => appFetchLimitProbe(b, m)
 ;(globalThis as unknown as { __proteusHostAppWsProbeDrive?: () => string })
   .__proteusHostAppWsProbeDrive = () => appWsProbeDrive()
+// ★★★#1118：流式通道探针（宿主按中性名调；结果填 __proteusHostStreamProbeResult）
+;(globalThis as unknown as {
+  __proteusHostAppStreamProbe?: (b: string, c?: number, s?: number, d?: number, w?: number) => string
+}).__proteusHostAppStreamProbe = (b: string, c?: number, s?: number, d?: number, w?: number) => appStreamProbe(b, c, s, d, w)
 
 

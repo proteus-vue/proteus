@@ -567,8 +567,8 @@ export const HELP_GROUPS: HelpGroup[] = [
       },
       {
         usage: 'proteus doctor [dir] [--json] [--report <path>] [--strict] [--only <groups>] [--skip <groups>] [--target <端>] [--deep] [--verbose] [--list] [--no-parallel]',
-        desc: '★★环境/工程/端就绪度体检（M5 · #686）：一次性回答「这台机器能不能编译/打包/调试到 N 个端」\n      分组：env 环境 · toolchain 工具链 · deps 依赖 · project 工程 · hosts 端就绪（投影聚合）· ports 端口 · devices 设备（慢）· gates 门禁\n      --json 机器可读（含完整取证）· --report 落盘 · --strict warn 也失败 · --deep 启慢检查 · --verbose 逐项取证 · --list 只列目录\n      ★只诊断不修改（Apollo 硬约束）——每项给可复制修复命令；error → exit 1（warn 不阻断）',
-        descEn: '★★Environment/project/endpoint readiness check (M5 · #686): answers "can this machine compile/package/debug to N ends" at once\n      Groups: env · toolchain · deps · project · hosts (projection) · ports · devices (slow) · gates\n      --json machine-readable (full evidence) · --report to file · --strict warn fails too · --deep enable slow · --verbose per-item evidence · --list only list\n      ★Diagnose only, never modify (Apollo hard constraint) — each item gives a copyable fix command; error → exit 1 (warn does not block)',
+        desc: '★★环境/工程/端就绪度体检（M5 · #686）：一次性回答「这台机器能不能编译/打包/调试到 N 个端」\n      分组：env 环境 · toolchain 工具链 · deps 依赖 · project 工程 · hosts 端就绪（投影聚合）· ports 端口 · devices 设备（慢）· gates 门禁\n      --json 机器可读（含完整取证）· --report 落盘 · --strict warn 也失败 · --deep 启慢检查 · --verbose 逐项取证 · --list 只列目录\n      ★只诊断不修改（诊断器硬约束）——每项给可复制修复命令；error → exit 1（warn 不阻断）',
+        descEn: '★★Environment/project/endpoint readiness check (M5 · #686): answers "can this machine compile/package/debug to N ends" at once\n      Groups: env · toolchain · deps · project · hosts (projection) · ports · devices (slow) · gates\n      --json machine-readable (full evidence) · --report to file · --strict warn fails too · --deep enable slow · --verbose per-item evidence · --list only list\n      ★Diagnose only, never modify (diagnostic-only hard constraint) — each item gives a copyable fix command; error → exit 1 (warn does not block)',
       },
       {
         usage: 'proteus health [dir]',

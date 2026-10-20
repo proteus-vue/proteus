@@ -3827,8 +3827,6 @@ export interface WxVKSessionLike {
 }
 
 
-export const wrap = <T>(p: Promise<T>): Promise<CapResult<T>> =>
-  p.then(
-    (data) => capOk(data),
-    (e) => capErr<T>(e instanceof CapError ? e.code : 'cap.failed', e instanceof Error ? e.message : String(e), e),
-  )
+// ★#1130：`wrap` 已按职责拆到 `capability-wrap.ts`（本文件是纯类型契约；实现搬走以守住
+//   `check:file-size` 棘轮）。此处**转出**，既有 `from './capability-types'` 的 import 零改动。
+export { wrap } from './capability-wrap'

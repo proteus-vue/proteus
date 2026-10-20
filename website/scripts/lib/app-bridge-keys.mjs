@@ -127,7 +127,19 @@ export function loadAppBridgeKeysFrom(root, sources = APP_BRIDGE_SOURCES) {
   for (const src of sources) {
     const abs = root.endsWith('/') ? root + src.file : root + '/' + src.file
     const one = loadAppBridgeKeys(abs, src.functions)
-    perSource[src.file] = { perFn: one.perFn, count: one.keys.size }
+    // ★★★#1130 修：**同一文件可被登记多次**（不同工厂函数——如 `capability-app-device.ts` 同时贡献
+    //   `createAppDeviceCapabilities` 与装配层的 `createAppCapabilities`）。此前直接赋值
+    //   `perSource[file] = ...` ⇒ 后一条**覆盖**前一条 ⇒ 计数只剩 9（实际 14），判据报"设备域没抽全"，
+    //   而抽取器其实是对的。⇒ 同一文件必须**合并**（perFn 合并 + count 取**键并集**大小）。
+    //   ★注意：并集必须是**桥方法名**（one.keys），不是 perFn 的函数名。
+    const prev = perSource[src.file]
+    const acc = prev ? new Set(prev.keys) : new Set()
+    for (const k of one.keys) acc.add(k)
+    perSource[src.file] = {
+      perFn: { ...(prev?.perFn ?? {}), ...one.perFn },
+      count: acc.size,
+      keys: acc,
+    }
     for (const k of one.keys) keys.add(k)
   }
   for (const [k, v] of Object.entries(APP_BRIDGE_EXTRA_MEMBERS)) {

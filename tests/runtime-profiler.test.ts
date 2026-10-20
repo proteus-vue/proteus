@@ -6,10 +6,16 @@
 //
 // 【为什么单列】它是 CPU Profiler 的数据底座——若累加/drain 有 bug，面板上的排行就是错的
 //   （而"错排行"比"没排行"更危险：会指错优化方向）。
+//
+// 【★★#1130：时间类判据必须把时间变成**输入**】
+//   原 ② 用 `busy(2)` / `busy(8)` / `busy(1)` 的真实毫秒计时断言降序，而 `flush`(2ms) 与
+//   `relink`(1ms) 只差 1ms ⇒ **全量并行负载下两者会互换**（实测：全量红、单跑连绿 3 次）。
+//   ⇒ `createRuntimeProfiler({ now })` 支持注入时钟，② 用**确定性步进**断言顺序与数值。
+//   其余用例仍走真实计时（它们不断言精确顺序，真实时钟更接近生产形态）。
 import { describe, it, expect } from 'vitest'
 import { createRuntimeProfiler, NULL_PROFILER } from '@proteus-vue/render-backend'
 
-/** 忙等 n 毫秒（确定性耗时——不依赖 sleep/定时器） */
+/** 忙等 n 毫秒（不依赖定时器；★只用于**不断言精确顺序**的用例——要断顺序请注入时钟） */
 function busy(ms: number): number {
   const t0 = Date.now()
   let x = 0
@@ -31,13 +37,27 @@ describe('★运行期阶段耗时自采样（决策 #715）', () => {
     expect(e!.maxMs).toBeGreaterThanOrEqual(1)   // 5ms 那次应成为 max
   })
 
-  it('② drain 排空 + 按累计耗时降序', () => {
-    const p = createRuntimeProfiler()
-    p.time('flush', () => busy(2))
-    p.time('dispatch', () => busy(8))
-    p.time('relink', () => busy(1))
+  it('② drain 排空 + 按累计耗时降序（注入时钟：顺序是确定的）', () => {
+    // ★每次 time() 调 now() 两次（进/出）⇒ 用"步进时钟"精确给出每次耗时。
+    //   flush=2ms · dispatch=8ms · relink=1ms ⇒ 顺序必须是 dispatch > flush > relink。
+    let t = 0
+    const steps = [2, 8, 1]
+    let i = 0
+    const now = (): number => {
+      // 偶数次调用 = 进入（返回当前 t）；奇数次 = 退出（t += 本段耗时）
+      const entering = i % 2 === 0
+      if (entering) { i++; return t }
+      t += steps[Math.floor(i / 2)]!
+      i++
+      return t
+    }
+    const p = createRuntimeProfiler({ now })
+    p.time('flush', () => undefined)
+    p.time('dispatch', () => undefined)
+    p.time('relink', () => undefined)
     const out = p.drain()
     expect(out.map((e) => e.label)).toEqual(['dispatch', 'flush', 'relink'])
+    expect(out.map((e) => e.totalMs)).toEqual([8, 2, 1])
     // 排空式：再取为空
     expect(p.drain()).toHaveLength(0)
   })
