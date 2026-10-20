@@ -131,6 +131,8 @@ for a in "$@"; do
     #   → 截图 → 落报告自退（fixed/sticky 滚动锚定证据；与 Android `--es screen`/`--es scroll` 同语义）
     --screen=*) SCREEN_ARG="${a#--screen=}" ;;
     --scroll=*) SCROLL_ARG="${a#--scroll=}" ;;
+    # ★★★决策 #1115：C26 响应体上限探针——`--fetch-limit-probe=<base>[,sizeMiB]`
+    --fetch-limit-probe=*) FETCH_LIMIT_ARG="${a#--fetch-limit-probe=}" ;;
     --native-mix) MODE="native-mix" ;;
     --vapor-ab) MODE="vapor-ab" ;;
     # ★★★Vapor 设备端链（2026-10-03 · 三端对齐）：与 Android/鸿蒙**同一份**判据（①–⑫）
@@ -635,9 +637,11 @@ elif [ "$MODE" = "superapp" ]; then
   if [ -n "${PUMP:-}" ]; then SA_ARGS+=("--pump=$PUMP"); fi
   if [ -n "${SCREEN_ARG:-}" ]; then SA_ARGS+=("--screen=$SCREEN_ARG"); fi
   if [ -n "${SCROLL_ARG:-}" ]; then SA_ARGS+=("--scroll=$SCROLL_ARG"); fi
+  # ★#1115：响应体上限探针（自动化验证 ⇒ 同样用 --console 阻塞到报告落盘自退）
+  if [ -n "${FETCH_LIMIT_ARG:-}" ]; then SA_ARGS+=("--fetch-limit-probe=$FETCH_LIMIT_ARG"); fi
   # ★B1：`--drive` 或 `--tap` 都是**自动化验证**（落报告后自退）⇒ 用 `--console` 阻塞到退出；
   #   两者皆无 = 常驻给人看（App 不退 ⇒ 绝不能加 `--console`，见上注释）。
-  if [ "$DRIVE" = "1" ] || [ -n "$TAP" ] || [ -n "${PUMP:-}" ] || [ -n "${SCROLL_ARG:-}" ]; then
+  if [ "$DRIVE" = "1" ] || [ -n "$TAP" ] || [ -n "${PUMP:-}" ] || [ -n "${SCROLL_ARG:-}" ] || [ -n "${FETCH_LIMIT_ARG:-}" ]; then
     xcrun devicectl device process launch --console --terminate-existing \
       --environment-variables "{\"PROTEUS_EXIT_AFTER_REPORT\":\"1\"${WS_PROBE_ENV}}" \
       --device "$UDID" "$BUNDLE_ID" "${SA_ARGS[@]}" > "$LAUNCH_LOG" 2>&1 || LAUNCH_RC=$?

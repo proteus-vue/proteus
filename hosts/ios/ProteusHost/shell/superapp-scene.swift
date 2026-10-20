@@ -414,6 +414,57 @@ final class SuperappScene: NSObject {
             for (delay, step) in steps { DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: step) }
             DispatchQueue.main.asyncAfter(deadline: .now() + max(finishAt, 0.2)) { finish() }
         }
+        // ★★★决策 #1115：C26 响应体上限探针（`--fetch-limit-probe=<base>[,sizeMiB]`）。
+        //   【为什么必须异步收尾、不能像 ws 探针那样在主线程循环】
+        //     `http.request` 的回推是 `DispatchQueue.main.async`（见 http-capability.swift）——
+        //     `reportBody()` 若在主线程里 `while + usleep` 等结果，回推永远排不上 ⇒ **死锁**
+        //     （Android `TransferProbe` 已因同一坑改过一次，见其注释）。
+        //   ⇒ 本分支：发起探针后**返回占位**，用 `asyncAfter` 链（确定性事件，不是盲等）
+        //     周期性读结果，拿到就落报告并自退。★有界：deadline 60s，超时如实报"装置超时"。
+        if let fpArg = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--fetch-limit-probe=") }) {
+            Self.tapMode = true
+            let body = String(fpArg.dropFirst("--fetch-limit-probe=".count))
+            let parts = body.split(separator: ",").map(String.init)
+            let base = parts.first ?? ""
+            let sizeMiB = parts.count >= 2 ? (Double(parts[1]) ?? 64) : 64
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                _ = evalJs?("__proteusHostAppFetchLimitProbe(\(jsonQuote(base)),\(sizeMiB))")
+                let deadline = Date().addingTimeInterval(60)
+                var rounds = 0
+                var lastRaw = ""
+                // ★用递归 asyncAfter 而不是主线程循环：每轮让主 runloop 转起来，回推才能送达
+                func poll() {
+                    rounds += 1
+                    let raw = evalJs?("String(globalThis.__proteusHostFetchLimitProbeResult || '')") ?? ""
+                    if raw.isEmpty || raw == "null" || raw == "undefined" {
+                        if Date() < deadline {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { poll() }
+                            return
+                        }
+                    } else {
+                        lastRaw = raw
+                    }
+                    var o = reportBody()
+                    o["fetch_limit_base"] = base
+                    o["fetch_limit_size_mib"] = sizeMiB
+                    o["fetch_limit_probe_rounds"] = rounds
+                    o["fetch_limit_probe"] = lastRaw.isEmpty ? "null" : lastRaw
+                    if let d = lastRaw.data(using: .utf8),
+                       let po = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] {
+                        o["fetch_limit_ok"] = (po["ok"] as? Bool) ?? false
+                    } else {
+                        o["fetch_limit_ok"] = false
+                        if lastRaw.isEmpty { o["fetch_limit_error"] = "探针超时（60s 内无结果）" }
+                    }
+                    takeSnapshot()
+                    switchLog.append(["fetch_limit": base, "size_mib": sizeMiB, "rounds": rounds, "ok": o["fetch_limit_ok"] ?? false, "via": "fetch-limit-probe"])
+                    writeReport(o)
+                    NSLog("[proteus] SUPERAPP_FETCH_LIMIT_REPORT_READY ok=%@ rounds=%d", String(describing: o["fetch_limit_ok"] ?? false), rounds)
+                    if ProcessInfo.processInfo.environment["PROTEUS_EXIT_AFTER_REPORT"] == "1" { exit(0) }
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { poll() }
+            }
+        }
         NSLog("[proteus] SUPERAPP_LAUNCHER_READY")
     }
 

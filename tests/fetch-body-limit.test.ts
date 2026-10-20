@@ -104,5 +104,28 @@ describe('★#1115 探针装置（真机判据的入口存在）', () => {
     expect(s, '缺 appFetchLimitProbe 导出').toMatch(/export function appFetchLimitProbe/)
     expect(s, '探针未把"成功返回"判为失败（那样上限失效也不会红）').toMatch(/上限未生效/)
     expect(s, '探针未按 code === fetch.tooLarge 判定').toMatch(/code\s*===\s*'fetch\.tooLarge'/)
+    expect(s, '★探针函数必须挂到 globalThis（否则宿主 eval 到 no-hook）').toMatch(
+      /__proteusHostAppFetchLimitProbe\s*=\s*\(b: string/,
+    )
+  })
+
+  it('★Android 探针必须**自己载入 bundle/boot**（否则 eval 到空引擎 ⇒ no-hook）', () => {
+    const s = read('hosts/android/app/src/main/java/dev/proteus/layoutcore/dev/FetchLimitProbe.java')
+    expect(s, 'Android 探针未载入 bundle-superapp.js').toMatch(/readAsset\(activity,\s*"bundle-superapp\.js"\)/)
+    expect(s, 'Android 探针未 boot').toMatch(/__proteusSuperappBootJson\(\)/)
+    expect(s, 'Android 探针未构造真实宿主栈').toMatch(/new SuperappRuntimeHost\(/)
+  })
+
+  it('★iOS 壳的探针分支必须**异步收尾**（主线程循环会饿死 http 回推 ⇒ 死锁）', () => {
+    const s = read('hosts/ios/ProteusHost/shell/superapp-scene.swift')
+    expect(s, 'iOS 壳缺 --fetch-limit-probe 分支').toMatch(/hasPrefix\("--fetch-limit-probe="\)/)
+    // ★判据看的是"用 asyncAfter 递归推进"，而不是 while + usleep（ws 探针那种会死锁）
+    const start = s.indexOf('hasPrefix("--fetch-limit-probe=")')
+    const seg = s.slice(start, start + 3000)
+    expect(seg, 'iOS 探针分支未用 asyncAfter 链推进').toMatch(/DispatchQueue\.main\.asyncAfter/)
+    expect(
+      seg,
+      '★iOS 探针分支出现 usleep/while 轮询——主线程阻塞会饿死 DispatchQueue.main.async 的回推（死锁）',
+    ).not.toMatch(/usleep/)
   })
 })

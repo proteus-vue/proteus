@@ -9337,3 +9337,61 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
      ★必须与 upload/download 的流式化**同批设计**——三者共享"跨界只有整包通道"这个根因；
   ③ 上限可配置（`AppRequestConfig.maxBodyBytes`）——业务对已知大响应的显式声明；
   ④ 按业务真实载荷分布标定 32 MiB 这个值（现在是我拍的）。
+
+1116. **★★补齐上轮缺口：**iOS 真机也跑通响应体上限双闸**（两端口径一致），并锁住"iOS 必须异步收尾" · 决策**（2026-10-20 · 承接 #1115 的"诚实边界①：iOS 未做真机验证"）：
+
+【上轮遗留的是什么】
+  #1115 把 fetch 从 S1 提到 S2，但**只有 Android 有真机读数**；iOS 的 delegate 逐块接收路径
+  仅过了 swiftc 类型检查 + 算法单测。⇒ 那正是本仓最忌讳的"有实现没证据"。
+  本轮补的就是这条证据。
+
+【★补之前先想清楚一个陷阱（iOS 独有的死锁）】
+  iOS 的 `http.request` 回推是 `DispatchQueue.main.async`（见 `http-capability.swift`）——
+  而 `reportBody()` 本来就是在**主线程**同步跑的。若照 ws 探针那样在主线程里
+  `while + usleep` 等结果 ⇒ **回推永远排不上 ⇒ 死锁**（Android `TransferProbe` 已因同一坑改过一次）。
+  ⇒ iOS 壳的 `--fetch-limit-probe=` 分支用 **递归 `asyncAfter` 链**推进（每轮让主 runloop 转起来），
+    而不是主线程循环。★这不是"盲等"：`asyncAfter` 是确定性事件回调，且**有 deadline（60s）**，
+    `check:no-blind-wait` 亦通过（它拦的是固定 `sleep`/无退出条件轮询）。
+
+【真机结果（iPhone 12 · 局域网 192.168.1.124:8792）】
+  ```
+  ✓ 探针已执行（有 rounds 读数）
+  ✓ ★声明长度闸：fetch.tooLarge
+  ✓ ★chunked 累计闸：fetch.tooLarge
+  ✓ 整体 fetch_limit_ok
+  读数：{"rounds":14,"size_mib":64,
+         "probe":{"declared_code":"fetch.tooLarge","chunked_code":"fetch.tooLarge","ok":true}}
+  ✅ iOS 响应体上限真机生效（两道闸都返回 fetch.tooLarge）
+  ```
+  ⇒ **两端（Android #1115 / iOS 本轮）都实测：64 MiB 响应（两倍上限）在两道闸上都返回 `fetch.tooLarge`。**
+    即：iOS 的 `URLSessionDataDelegate` 逐块累计 + `task.cancel()` **确实在生产路径上生效**，
+    不是"写了没接上"。
+
+【落地】
+  · `hosts/ios/ProteusHost/shell/superapp-scene.swift`：新增 `--fetch-limit-probe=<base>[,sizeMiB]` 分支
+    （0.4s 起探针 → asyncAfter 链读结果 → 落报告 → `PROTEUS_EXIT_AFTER_REPORT` 自退）；
+  · `hosts/ios/run-selfdraw.sh`：参数解析 + 把它并入"自动化验证 ⇒ 加 `--console`"的判据；
+  · `hosts/ios/run-fetch-limit-probe.sh`（新）：起本地服务（绑 0.0.0.0，iOS 无 adb reverse ⇒ 走局域网 IP）
+    → 跑探针 → 判定四件（有 rounds / 声明闸 / chunked 闸 / 整体）。
+  · `tests/fetch-body-limit.test.ts` 扩到 **10/10**（+2）：
+    ★JS 探针**必须挂 globalThis**（否则宿主 eval 到 `no-hook`——上轮 Android 踩过）；
+    ★Android 探针**必须自己载入 bundle 并 boot**（空引擎同样 `no-hook`）；
+    ★**iOS 探针分支必须是 asyncAfter 链、不得出现 `usleep`**（死锁防线）。
+  · **破坏性验证**：把 iOS 分支的 asyncAfter 推进改成 `usleep(200_000); poll()`
+    ⇒ 当场红，报错直指「主线程阻塞会饿死 DispatchQueue.main.async 的回推（死锁）」。
+  + iOS 编译检查 · `check:file-size` · `check:script-compile` · `check:codenames` ·
+    `check:no-blind-wait` 全绿。
+
+【诚实边界】
+  ① 只验了**上限闸**（S2 的一部分）——**流式/背压仍未做**，fetch 仍"一问一答整包"语义（S3 未达）；
+  ② 真机走**局域网 HTTP**（非 HTTPS）——上限逻辑与 TLS 无关，但"生产 HTTPS 下的行为"未单独验；
+  ③ `/huge` 是判据专用端点（64 MiB 明文），**不代表生产载荷形态**（生产多为 gzip/JSON）；
+  ④ 32 MiB 这个值仍未按真实业务分布标定（我拍的）；
+  ⑤ iOS 探针用 `asyncAfter 0.2s` 轮询读结果（14 轮 ≈ 2.8s）——这是**装置节奏**，不是框架时延。
+
+【下一步（fetch 到 S3）】
+  ① **流式协议**：新增分块帧类型（现有 `http.request` 一问一答），宿主边读边推、JS 按块消费；
+     ★必须与 **upload/download 流式化同批设计**——三者共享"跨界只有整包通道"这个根因；
+  ② 上限可配置（`AppRequestConfig.maxBodyBytes`）：业务对已知大响应显式声明；
+  ③ 按真实载荷分布标定 32 MiB；
+  ④ 三端对照：鸿蒙的 `http.request`（RCP）**尚未做同类上限**——按 #1113 的硬指标，它现在连 S2 都没有。
