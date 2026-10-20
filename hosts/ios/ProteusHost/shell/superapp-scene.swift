@@ -40,7 +40,8 @@ private final class SwipeBackTarget: NSObject {
 }
 
 final class SuperappScene: NSObject {
-    private static var evalJs: ((String) -> String)?
+    // ★#1121：由 private 放宽到 internal —— `SuperappProbes`（同 target 另一文件）要用它起探针。
+    static var evalJs: ((String) -> String)?
     private static var reportDir: URL { FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0] }
     /** ★保留右滑返回手势 target（weak 语义 ⇒ 必须强引用，否则被回收后手势不触发）。 */
     private static var swipeBackTarget: SwipeBackTarget?
@@ -73,7 +74,7 @@ final class SuperappScene: NSObject {
     private static var chrome = ProteusTabChrome()
     /** ★★★逐屏截图：全部屏名（boot 回包 / registry.screens 的键——验收项目无 tab 时用）。 */
     private static var allScreenNames: [String] = []
-    private static var switchLog: [[String: Any]] = []
+    static var switchLog: [[String: Any]] = []
     private static var driveLog: [[String: Any]] = []
     /// ★B1 判据（2026-10-07）：`--tap=x,y` 注入模式（走注入链后落报告自退，不走 drive 时间链）
     private static var tapMode = false
@@ -410,157 +411,42 @@ final class SuperappScene: NSObject {
                 }
             }
         }
-        // ★★★决策 #1115：C26 响应体上限探针（`--fetch-limit-probe=<base>[,sizeMiB]`）。
-        //   【为什么必须异步收尾、不能像 ws 探针那样在主线程循环】
-        //     `http.request` 的回推是 `DispatchQueue.main.async`（见 http-capability.swift）——
-        //     `reportBody()` 若在主线程里 `while + usleep` 等结果，回推永远排不上 ⇒ **死锁**
-        //     （Android `TransferProbe` 已因同一坑改过一次，见其注释）。
-        //   ⇒ 本分支：发起探针后**返回占位**，用 `asyncAfter` 链（确定性事件，不是盲等）
-        //     周期性读结果，拿到就落报告并自退。★有界：deadline 60s，超时如实报"装置超时"。
-        if let fpArg = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--fetch-limit-probe=") }) {
+        // ★★★#1121：四个探针分支**结构完全相同**（都是"起探针 → asyncAfter 链读结果 → 落报告 → 自退"），
+        //   此前复制了 4 份、把本文件顶过 1000 行。⇒ 抽成 `runHostProbe` 一个通用 runner。
+        //   ★这是**同一模式的 4 份复制**，不是"为过门禁而拆"——每加一个探针就得再抄 40 行本来就是缺陷。
+        if let (cfg, parts) = SuperappProbes.firstArg() {
             Self.tapMode = true
-            let body = String(fpArg.dropFirst("--fetch-limit-probe=".count))
-            let parts = body.split(separator: ",").map(String.init)
-            let base = parts.first ?? ""
-            let sizeMiB = parts.count >= 2 ? (Double(parts[1]) ?? 64) : 64
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                _ = evalJs?("__proteusHostAppFetchLimitProbe(\(jsonQuote(base)),\(sizeMiB))")
-                let deadline = Date().addingTimeInterval(60)
-                var rounds = 0
-                var lastRaw = ""
-                // ★用递归 asyncAfter 而不是主线程循环：每轮让主 runloop 转起来，回推才能送达
-                func poll() {
-                    rounds += 1
-                    let raw = evalJs?("String(globalThis.__proteusHostFetchLimitProbeResult || '')") ?? ""
-                    if raw.isEmpty || raw == "null" || raw == "undefined" {
-                        if Date() < deadline {
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { poll() }
-                            return
-                        }
-                    } else {
-                        lastRaw = raw
-                    }
-                    var o = reportBody()
-                    o["fetch_limit_base"] = base
-                    o["fetch_limit_size_mib"] = sizeMiB
-                    o["fetch_limit_probe_rounds"] = rounds
-                    o["fetch_limit_probe"] = lastRaw.isEmpty ? "null" : lastRaw
-                    if let d = lastRaw.data(using: .utf8),
-                       let po = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] {
-                        o["fetch_limit_ok"] = (po["ok"] as? Bool) ?? false
-                    } else {
-                        o["fetch_limit_ok"] = false
-                        if lastRaw.isEmpty { o["fetch_limit_error"] = "探针超时（60s 内无结果）" }
-                    }
-                    takeSnapshot()
-                    switchLog.append(["fetch_limit": base, "size_mib": sizeMiB, "rounds": rounds, "ok": o["fetch_limit_ok"] ?? false, "via": "fetch-limit-probe"])
-                    writeReport(o)
-                    NSLog("[proteus] SUPERAPP_FETCH_LIMIT_REPORT_READY ok=%@ rounds=%d", String(describing: o["fetch_limit_ok"] ?? false), rounds)
-                    if ProcessInfo.processInfo.environment["PROTEUS_EXIT_AFTER_REPORT"] == "1" { exit(0) }
-                }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { poll() }
-            }
-        }
-        // ★★★#1118：流式通道探针（S3）——`--stream-probe=<base>[,chunks,size,delayMs,slowMs]`
-        if let spArg = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--stream-probe=") }) {
             Self.tapMode = true
-            let body = String(spArg.dropFirst("--stream-probe=".count))
-            let parts = body.split(separator: ",").map(String.init)
             let base = parts.first ?? ""
-            let chunks = parts.count >= 2 ? (Int(parts[1]) ?? 256) : 256
-            let size = parts.count >= 3 ? (Int(parts[2]) ?? 16384) : 16384
-            let delayMs = parts.count >= 4 ? (Int(parts[3]) ?? 3) : 3
-            let slowMs = parts.count >= 5 ? (Int(parts[4]) ?? 5) : 5
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                _ = evalJs?("__proteusHostAppStreamProbe(\(jsonQuote(base)),\(chunks),\(size),\(delayMs),\(slowMs))")
-                let deadline = Date().addingTimeInterval(120)
-                var rounds = 0
-                var lastRaw = ""
-                // ★与 fetch-limit 探针同款：递归 asyncAfter（主线程循环会饿死回推）
-                func poll() {
-                    rounds += 1
-                    let raw = evalJs?("String(globalThis.__proteusHostStreamProbeResult || '')") ?? ""
-                    if raw.isEmpty || raw == "null" || raw == "undefined" {
-                        if Date() < deadline {
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { poll() }
-                            return
-                        }
-                    } else {
-                        lastRaw = raw
-                    }
-                    var o = reportBody()
-                    o["stream_base"] = base
-                    o["stream_chunks"] = chunks
-                    o["stream_probe_rounds"] = rounds
-                    o["stream_probe"] = lastRaw.isEmpty ? "null" : lastRaw
-                    o["host_stream_stats"] = BodyLimitDelegate.lastStatsSnapshot()
-                    if let d = lastRaw.data(using: .utf8),
-                       let po = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] {
-                        o["stream_ok"] = (po["ok"] as? Bool) ?? false
-                    } else {
-                        o["stream_ok"] = false
-                        if lastRaw.isEmpty { o["stream_error"] = "探针超时（120s 内无结果）" }
-                    }
-                    takeSnapshot()
-                    switchLog.append(["stream": base, "chunks": chunks, "rounds": rounds, "ok": o["stream_ok"] ?? false, "via": "stream-probe"])
-                    writeReport(o)
-                    NSLog("[proteus] SUPERAPP_STREAM_REPORT_READY ok=%@ rounds=%d", String(describing: o["stream_ok"] ?? false), rounds)
-                    if ProcessInfo.processInfo.environment["PROTEUS_EXIT_AFTER_REPORT"] == "1" { exit(0) }
-                }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { poll() }
+            // ★各探针的额外参数（顺序与 JS 侧函数签名一致）
+            let extra: String
+            switch cfg.argPrefix {
+            case "--fetch-limit-probe=":
+                extra = String(parts.count >= 2 ? (Double(parts[1]) ?? 64) : 64)
+            case "--stream-probe=":
+                let chunks = parts.count >= 2 ? (Int(parts[1]) ?? 256) : 256
+                let size = parts.count >= 3 ? (Int(parts[2]) ?? 16384) : 16384
+                let delayMs = parts.count >= 4 ? (Int(parts[3]) ?? 3) : 3
+                let slowMs = parts.count >= 5 ? (Int(parts[4]) ?? 5) : 5
+                extra = "\(chunks),\(size),\(delayMs),\(slowMs)"
+            case "--upload-probe=":
+                extra = String(parts.count >= 2 ? (Int(parts[1]) ?? 8) : 8)
+            case "--cancel-probe=":
+                let chunks = parts.count >= 2 ? (Int(parts[1]) ?? 128) : 128
+                let size = parts.count >= 3 ? (Int(parts[2]) ?? 16384) : 16384
+                let delayMs = parts.count >= 4 ? (Int(parts[3]) ?? 20) : 20
+                extra = "\(chunks),\(size),\(delayMs)"
+            default:
+                extra = ""
             }
+            SuperappProbes.run(cfg, base: base, argsForKick: extra)
         }
-        // ★★★#1118（位置修正）：本判断必须放在**所有探针分支之后**——
-        //   此前它在 fetch-limit / stream-probe 分支之前 ⇒ 那两个分支设的 `tapMode = true` **赶不上**，
-        //   `--drive` 的 steps 会抢先 `finish()` 并 `exit(0)` ⇒ 探针根本没跑就退出（实测：报告里无探针字段）。
-        //   ★这是"分支顺序"型的静默失效：探针分支看着在、实际永远来不及生效。
+        // ★★★#1118（位置修正，勿动）：本判断必须放在**所有探针分支之后**——
+        //   此前它在探针分支之前 ⇒ 探针设的 `tapMode = true` 赶不上，`--drive` 会抢先 `finish()` 并 `exit`。
+        //   ★#1121 抽取探针时**误删了本段**（`steps`/`finishAt` 变成未使用告警）⇒ 已补回。
         if !Self.tapMode {
             for (delay, step) in steps { DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: step) }
             DispatchQueue.main.asyncAfter(deadline: .now() + max(finishAt, 0.2)) { finish() }
-        }
-        // ★★★#1120：流式上传探针（S3）——`--upload-probe=<base>[,sizeMiB]`
-        if let upArg = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--upload-probe=") }) {
-            Self.tapMode = true
-            let body = String(upArg.dropFirst("--upload-probe=".count))
-            let parts = body.split(separator: ",").map(String.init)
-            let base = parts.first ?? ""
-            let sizeMiB = parts.count >= 2 ? (Int(parts[1]) ?? 8) : 8
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                _ = evalJs?("__proteusHostAppUploadProbe(\(jsonQuote(base)),\(sizeMiB))")
-                let deadline = Date().addingTimeInterval(240)
-                var rounds = 0
-                var lastRaw = ""
-                func poll() {
-                    rounds += 1
-                    let raw = evalJs?("String(globalThis.__proteusHostUploadProbeResult || '')") ?? ""
-                    if raw.isEmpty || raw == "null" || raw == "undefined" {
-                        if Date() < deadline {
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { poll() }
-                            return
-                        }
-                    } else {
-                        lastRaw = raw
-                    }
-                    var o = reportBody()
-                    o["upload_base"] = base
-                    o["upload_size_mib"] = sizeMiB
-                    o["upload_probe_rounds"] = rounds
-                    o["upload_probe"] = lastRaw.isEmpty ? "null" : lastRaw
-                    if let d = lastRaw.data(using: .utf8),
-                       let po = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] {
-                        o["upload_ok"] = (po["ok"] as? Bool) ?? false
-                    } else {
-                        o["upload_ok"] = false
-                        if lastRaw.isEmpty { o["upload_error"] = "探针超时（240s 内无结果）" }
-                    }
-                    takeSnapshot()
-                    switchLog.append(["upload": base, "size_mib": sizeMiB, "rounds": rounds, "ok": o["upload_ok"] ?? false, "via": "upload-probe"])
-                    writeReport(o)
-                    NSLog("[proteus] SUPERAPP_UPLOAD_REPORT_READY ok=%@ rounds=%d", String(describing: o["upload_ok"] ?? false), rounds)
-                    if ProcessInfo.processInfo.environment["PROTEUS_EXIT_AFTER_REPORT"] == "1" { exit(0) }
-                }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { poll() }
-            }
         }
         NSLog("[proteus] SUPERAPP_LAUNCHER_READY")
     }
@@ -713,7 +599,7 @@ final class SuperappScene: NSObject {
         }
     }
 
-    private static func jsonQuote(_ s: String) -> String {
+    static func jsonQuote(_ s: String) -> String {
         "\"" + s.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") + "\""
     }
 
@@ -732,7 +618,7 @@ final class SuperappScene: NSObject {
     }
 
     /// 把**整个窗口**渲染成 PNG 落 Documents（含自绘内容 + 原生 Tab 栏）——真机视觉证据。
-    private static func takeSnapshot() {
+    static func takeSnapshot() {
         guard let win = container?.window ?? container else { return }
         let bounds = win.bounds
         guard bounds.width > 0, bounds.height > 0 else { return }
@@ -774,7 +660,7 @@ final class SuperappScene: NSObject {
         return out
     }
 
-    private static func reportBody() -> [String: Any] {
+    static func reportBody() -> [String: Any] {
         var o: [String: Any] = ["ok": true, "host_id": "ios", "tabs": tabNames, "switch_log": switchLog,
                                 "scroll_probe": scrollProbe(),
                                 "run_ts": Date().timeIntervalSince1970]
@@ -975,7 +861,7 @@ final class SuperappScene: NSObject {
         return o
     }
 
-    private static func writeReport(_ body: [String: Any]) {
+    static func writeReport(_ body: [String: Any]) {
         if let d = try? JSONSerialization.data(withJSONObject: body, options: [.prettyPrinted, .sortedKeys]) {
             try? d.write(to: reportDir.appendingPathComponent("superapp.json"))
         }

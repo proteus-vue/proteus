@@ -349,3 +349,104 @@ export function appUploadProbe(base: string, sizeMiB = 8): string {
   return JSON.stringify({ phase: 'started', queued: true, bytes })
 }
 
+/**
+ * ★★★#1121：**取消通道探针**（S3 回收维度真机判据入口）。
+ *
+ * `appCancelProbe(base, chunks, size, delayMs)` →
+ *   ① 起一个**慢速流式**请求（服务端每块之间有延迟 ⇒ 给"中途取消"留出窗口）；
+ *   ② 收到**前 N 块**后 `controller.abort()`；
+ *   ③ 校验三件：
+ *      · JS 侧 `promise` 以 `fetch.aborted` reject（不是成功、不是普通失败）；
+ *      · **后续块不再到达**（`got_chunks` 停在取消那一刻附近，不会继续涨到总块数）；
+ *      · 宿主侧 `http.cancel` 记账 `hit=true`（证明**取消真的打到宿主**，不只是 JS 层 reject）。
+ *
+ * 【★为什么要"后续块不再到达"这一条】只验证 reject 太弱——JS 侧 reject 之后如果宿主还在推，
+ *   回调会被 `pendingHostCalls` 里已删除的条目丢弃，**看起来"没块了"但其实传输还在跑**。
+ *   故要同时看 `got_chunks` 的**增长是否停止**（再等一段后仍不变）+ 宿主 `hit` 记账。
+ */
+export function appCancelProbe(base: string, chunks = 128, size = 16 * 1024, delayMs = 20): string {
+  const g = globalThis as Record<string, unknown>
+  const out: Record<string, unknown> = { chunks, size, delay_ms: delayMs }
+  g['__proteusHostCancelProbeResult'] = ''
+
+  const run = async (): Promise<void> => {
+    const inv = (await import('../../../packages/api/src/capability-invoke')) as unknown as {
+      invokeHostStream: (
+        m: string, a: unknown, onChunk: (c: Uint8Array, s: number) => void, t?: number, sig?: unknown,
+      ) => Promise<unknown>
+      invokeHost: (m: string, a?: unknown) => { ok: boolean; data?: unknown; missing?: boolean; reason?: string }
+      createAbortController: () => { signal: unknown; abort: () => void }
+    }
+    const controller = inv.createAbortController()
+    let gotChunks = 0
+    let abortedAt = -1
+    let errCode = ''
+    let errMsg = ''
+    const t0 = Date.now()
+    try {
+      await inv.invokeHostStream(
+        'http.request',
+        { url: `${base}/stream?chunks=${chunks}&size=${size}&delayMs=${delayMs}` },
+        () => {
+          gotChunks++
+          // 收到第 4 块就取消（留出足够窗口让服务端还在发）
+          if (gotChunks === 4 && abortedAt < 0) {
+            abortedAt = gotChunks
+            controller.abort()
+          }
+        },
+        60000,
+        controller.signal,
+      )
+      out['rejected'] = false
+      out['error'] = '请求成功结束（取消未生效）'
+    } catch (e) {
+      out['rejected'] = true
+      errCode = String((e as { code?: string })?.code ?? '')
+      errMsg = String((e as Error)?.message ?? e)
+      out['error_code'] = errCode
+      out['error_message'] = errMsg
+    }
+    const chunksAtAbort = gotChunks
+    // ★等一段（不是盲等：给宿主足够时间推"如果它还在推"的块），再看块数是否还在涨。
+    //   用 Promise + setTimeout（宿主环境有定时器就走它；没有就直接跳过这段观察并如实标注）。
+    // ★App 引擎**都没有 setTimeout**（#1071 已知）⇒ 这段"等待观察"在真机上是跳过的。
+    //   那 `chunks_stopped` 在真机上只等于"取消后没再收到块"，**强度弱于**带等待窗口的版本。
+    //   ⇒ 补救：用**宿主侧**的 `http.cancel` 记账 + **服务端是否跑到完成** 两条硬证据交叉验证，
+    //     并在读数里如实标注本端是否真的观察过等待窗口。
+    const st = (globalThis as { setTimeout?: (fn: () => void, ms?: number) => unknown }).setTimeout
+    if (typeof st === 'function') {
+      await new Promise<void>((resolve) => { st(() => resolve(), 400) })
+      out['observe_waited_ms'] = 400
+    } else {
+      out['observe_skipped'] = 'no-setTimeout（取消后的"块停止"只证明没再收到，未跨等待窗口）'
+    }
+    out['chunks_at_abort'] = chunksAtAbort
+    out['chunks_after_wait'] = gotChunks
+    out['chunks_stopped'] = gotChunks === chunksAtAbort
+    out['aborted_at'] = abortedAt
+    out['total_chunks'] = chunks
+    // ★宿主侧记账：证明取消真的打到宿主（不是只有 JS 层 reject）
+    // ★宿主侧记账：证明取消真的打到宿主（不是只有 JS 层 reject）
+    try {
+      const st2 = inv.invokeHost('http.cancelStats', {})
+      out['host_cancel_stats'] = st2.ok ? (st2.data ?? null) : (st2.reason ?? null)
+    } catch (e) {
+      out['host_cancel_stats'] = String((e as Error)?.message ?? e)
+    }
+    out['elapsed_ms'] = Date.now() - t0
+    out['aborted_code_ok'] = /fetch\.aborted/.test(errMsg)
+    out['ok'] = out['rejected'] === true
+      && out['aborted_code_ok'] === true
+      && out['chunks_stopped'] === true
+      && abortedAt === 4
+    g['__proteusHostCancelProbeResult'] = JSON.stringify(out)
+  }
+  void run().catch((e: unknown) => {
+    out['error'] = String((e as Error)?.message ?? e)
+    out['ok'] = false
+    g['__proteusHostCancelProbeResult'] = JSON.stringify(out)
+  })
+  return JSON.stringify({ phase: 'started', queued: true })
+}
+

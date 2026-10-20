@@ -132,12 +132,10 @@ for a in "$@"; do
     #   → 截图 → 落报告自退（fixed/sticky 滚动锚定证据；与 Android `--es screen`/`--es scroll` 同语义）
     --screen=*) SCREEN_ARG="${a#--screen=}" ;;
     --scroll=*) SCROLL_ARG="${a#--scroll=}" ;;
-    # ★★★决策 #1115：C26 响应体上限探针——`--fetch-limit-probe=<base>[,sizeMiB]`
-    --fetch-limit-probe=*) FETCH_LIMIT_ARG="${a#--fetch-limit-probe=}" ;;
-    # ★★★#1118：流式通道探针——`--stream-probe=<base>[,chunks,size,delayMs,slowMs]`
-    --stream-probe=*) STREAM_PROBE_ARG="${a#--stream-probe=}" ;;
-    # ★★★#1120：流式上传探针——`--upload-probe=<base>[,sizeMiB]`
-    --upload-probe=*) UPLOAD_PROBE_ARG="${a#--upload-probe=}" ;;
+    # ★★★探针参数（#1115 响应体上限 / #1118 流式 / #1120 上传 / #1121 取消）——同一模式，统一解析
+    --fetch-limit-probe=*|--stream-probe=*|--upload-probe=*|--cancel-probe=*)
+      PN="${a#--}"; PN="${PN%%=*}"; PV="${a##*=}"
+      case "$PN" in fetch-limit-probe) FETCH_LIMIT_ARG="$PV" ;; stream-probe) STREAM_PROBE_ARG="$PV" ;; upload-probe) UPLOAD_PROBE_ARG="$PV" ;; cancel-probe) CANCEL_PROBE_ARG="$PV" ;; esac ;;
     --native-mix) MODE="native-mix" ;;
     --vapor-ab) MODE="vapor-ab" ;;
     # ★★★Vapor 设备端链（2026-10-03 · 三端对齐）：与 Android/鸿蒙**同一份**判据（①–⑫）
@@ -225,7 +223,7 @@ xcrun --sdk iphoneos swiftc -O -target arm64-apple-ios15.0 \
   "$HERE/ProteusHost/runtime/InvokeWire.swift" "$HERE/ProteusHost/runtime/invoke-bytes-bridge.swift" "$HERE/ProteusHost/runtime/http-capability.swift" \
   "$HERE/ProteusHost/runtime/host-lifecycle-events.swift" "$HERE/ProteusHost/runtime/screen-host.swift" "$HERE/ProteusHost/runtime/tab-chrome.swift" \
   "$HERE/ProteusHost/runtime/glass-metal.swift" "$HERE/ProteusHost/runtime/generated-materials.swift" \
-  "$HERE/ProteusHost/dev/host-runtime-scene.swift" "$HERE/ProteusHost/dev/app-stack-scene.swift" "$HERE/ProteusHost/dev/showcase-scene.swift" "$HERE/ProteusHost/dev/glass-scene.swift" "$HERE/ProteusHost/shell/superapp-scene.swift" "$HERE/ProteusHost/shell/selfdraw-app.swift" "$ABI_LIB" "$LIB" > "$COMPILE_LOG" 2>&1
+  "$HERE/ProteusHost/dev/host-runtime-scene.swift" "$HERE/ProteusHost/dev/app-stack-scene.swift" "$HERE/ProteusHost/dev/showcase-scene.swift" "$HERE/ProteusHost/dev/glass-scene.swift" "$HERE/ProteusHost/shell/superapp-scene.swift" "$HERE/ProteusHost/shell/superapp-probes.swift" "$HERE/ProteusHost/shell/selfdraw-app.swift" "$ABI_LIB" "$LIB" > "$COMPILE_LOG" 2>&1
 COMPILE_RC=$?
 set -e
 snap_check "$HERE/ProteusHost" || exit 3
@@ -647,12 +645,14 @@ elif [ "$MODE" = "superapp" ]; then
   if [ -n "${SCREEN_ARG:-}" ]; then SA_ARGS+=("--screen=$SCREEN_ARG"); fi
   if [ -n "${SCROLL_ARG:-}" ]; then SA_ARGS+=("--scroll=$SCROLL_ARG"); fi
   # ★#1115：响应体上限探针（自动化验证 ⇒ 同样用 --console 阻塞到报告落盘自退）
-  if [ -n "${FETCH_LIMIT_ARG:-}" ]; then SA_ARGS+=("--fetch-limit-probe=$FETCH_LIMIT_ARG"); fi
-  if [ -n "${STREAM_PROBE_ARG:-}" ]; then SA_ARGS+=("--stream-probe=$STREAM_PROBE_ARG"); fi
-  if [ -n "${UPLOAD_PROBE_ARG:-}" ]; then SA_ARGS+=("--upload-probe=$UPLOAD_PROBE_ARG"); fi
+  # ★探针参数转发（同一模式，统一处理）
+  for pv in FETCH_LIMIT_ARG:fetch-limit-probe STREAM_PROBE_ARG:stream-probe UPLOAD_PROBE_ARG:upload-probe CANCEL_PROBE_ARG:cancel-probe; do
+    v="${pv%%:*}"; [ -n "${!v:-}" ] && SA_ARGS+=("--${pv#*:}=${!v}")
+  done
+  ANY_PROBE="${FETCH_LIMIT_ARG:-}${STREAM_PROBE_ARG:-}${UPLOAD_PROBE_ARG:-}${CANCEL_PROBE_ARG:-}"
   # ★B1：`--drive` 或 `--tap` 都是**自动化验证**（落报告后自退）⇒ 用 `--console` 阻塞到退出；
   #   两者皆无 = 常驻给人看（App 不退 ⇒ 绝不能加 `--console`，见上注释）。
-  if [ "$DRIVE" = "1" ] || [ -n "$TAP" ] || [ -n "${PUMP:-}" ] || [ -n "${SCROLL_ARG:-}" ] || [ -n "${FETCH_LIMIT_ARG:-}" ] || [ -n "${STREAM_PROBE_ARG:-}" ] || [ -n "${UPLOAD_PROBE_ARG:-}" ]; then
+  if [ "$DRIVE" = "1" ] || [ -n "$TAP" ] || [ -n "${PUMP:-}" ] || [ -n "${SCROLL_ARG:-}" ] || [ -n "$ANY_PROBE" ]; then
     xcrun devicectl device process launch --console --terminate-existing \
       --environment-variables "{\"PROTEUS_EXIT_AFTER_REPORT\":\"1\"${WS_PROBE_ENV}}" \
       --device "$UDID" "$BUNDLE_ID" "${SA_ARGS[@]}" > "$LAUNCH_LOG" 2>&1 || LAUNCH_RC=$?

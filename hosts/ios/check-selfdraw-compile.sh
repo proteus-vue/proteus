@@ -76,6 +76,8 @@ HOST_SRCS=(
   # ★★★玻璃夹具（决策 #833）：手写树 + 玻璃遍 + 截图——同上，新文件必须进清单
   "$HERE/ProteusHost/dev/glass-scene.swift"
   "$HERE/ProteusHost/shell/superapp-scene.swift"
+  # ★#1121：探针 runner（从 superapp-scene 抽出；新文件必须进检查清单）
+  "$HERE/ProteusHost/shell/superapp-probes.swift"
   "$HERE/ProteusHost/shell/selfdraw-app.swift"
 )
 for f in "${HOST_SRCS[@]}"; do

@@ -2140,7 +2140,7 @@
       "related": [
         "T-app-fetch"
       ],
-      "note": "S3 已完成 fetch 流式/背压（#1118）+ download 流式落盘（#1119，savePath meta）。upload 真流式需新协议面（宿主边读文件边发 multipart）⇒ 仍 S2，已如实登记。鸿蒙一次性 VM 无回推接收方 ⇒ 明确 unsupported。"
+      "note": "S3 四项必答已齐（上限/背压/回收/并发）：#1118 流式+背压 · #1119 download · #1120 upload · #1121 取消通道。★鸿蒙三项均 unsupported（VM 形态限制）⇒ 严格说是\"两端的 S3\"。"
     },
     {
       "id": "T-app-save-to-file",
@@ -2162,7 +2162,7 @@
       "related": [
         "T-app-stream-channel"
       ],
-      "note": "S3 已完成 download（#1119）+ upload（#1120）流式落盘/上传。★三者共同的未解决项：取消通道（http.request 无 abort）⇒ \"中途取消\"这个回收维度未闭环。"
+      "note": "S3 四项必答已齐（上限/背压/回收/并发）：#1118 流式+背压 · #1119 download · #1120 upload · #1121 取消通道。★鸿蒙三项均 unsupported（VM 形态限制）⇒ 严格说是\"两端的 S3\"。"
     },
     {
       "id": "T-app-upload-stream",
@@ -2183,7 +2183,28 @@
       "related": [
         "T-app-save-to-file"
       ],
-      "note": "iOS 自定义 InputStream 连试 4 轮全败（抽象成员/请求发出但服务端收不到）⇒ 换\"拼临时文件 + uploadTask(fromFile:)\"：内存仍有界，代价是多一次磁盘写（如实登记）。"
+      "note": "S3 四项必答已齐（上限/背压/回收/并发）：#1118 流式+背压 · #1119 download · #1120 upload · #1121 取消通道。★鸿蒙三项均 unsupported（VM 形态限制）⇒ 严格说是\"两端的 S3\"。"
+    },
+    {
+      "id": "T-app-fetch-cancel",
+      "title": "#1121 取消通道（S3 回收维度）：http.cancel + 自实现 AbortController，双真机全绿",
+      "type": "capability",
+      "status": "done",
+      "owner": "zcode",
+      "scope": [
+        "packages/api/src/capability-invoke.ts",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/HttpCapability.java",
+        "hosts/ios/ProteusHost/runtime/http-capability.swift",
+        "tests/fetch-cancel.test.ts"
+      ],
+      "decision": 1121,
+      "verification": "npx vitest run tests/fetch-cancel.test.ts && bash hosts/android/run-cancel-probe.sh && bash hosts/ios/run-cancel-probe.sh",
+      "branch": null,
+      "related": [
+        "T-app-upload-stream",
+        "T-app-save-to-file"
+      ],
+      "note": "四条请求路径（整包/流式/落盘/上传）全部注册；判据钉住\"注册点必须=4\"。★iOS 判据强度弱半档（无 setTimeout ⇒ 无等待窗口），靠宿主记账交叉验证。"
     }
   ]
 }

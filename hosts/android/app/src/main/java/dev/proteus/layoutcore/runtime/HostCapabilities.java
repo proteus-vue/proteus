@@ -179,6 +179,15 @@ public final class HostCapabilities {
                 return ok(FileTransferCapability.readBytes(activity, args));
             case "fs.remove":
                 return ok(FileTransferCapability.remove(activity, args));
+            // ── #1121 取消通道（S3 回收维度）：按 reqId 中止在途 http.request ──
+            case "http.cancel":
+                return ok(HttpCapability.cancel(args));
+            case "http.cancelStats": {
+                HttpCapability.CancelStats cs = HttpCapability.cancelStats();
+                JSONObject o = new JSONObject();
+                o.put("calls", cs.calls); o.put("hits", cs.hits); o.put("misses", cs.misses);
+                return ok(o);
+            }
             // ── C27 WebSocket（#1093：RFC 6455 客户端，见 WebSocketCapability）──
             //   ★三个方法都**受理即返**；连接结果与消息经壳推 `__proteusHostWs` 到达 JS。
             case "ws.open":

@@ -9808,3 +9808,92 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   · upload：S3（本单，Android 边读边发 / iOS 内存有界 + 官方 fromFile，真机证实）；
   · ★三者共同的**未解决项**：**取消通道**（`http.request` 无 abort）⇒
     "中途取消"这个 S3 的回收维度仍未闭环，不能宣称"三项全 S3"。
+
+1121. **★★★取消通道落地（S3 回收维度收口）：`http.cancel` + JS 自实现 AbortController · **双真机全绿**（Android/iOS 各 7/7）· 决策**（2026-10-20 · 承接 #1120「共同未解决项：取消通道」）：
+
+【问题（#1119/#1120 都如实挂账的）】
+  `http.request` **没有 abort 通道** ⇒ 用户中途取消只能"JS 侧不管了"，
+  而**后台传输仍在跑、内存仍在涨**（流式/大文件下尤其明显）。
+  ⇒ S3 要求的"资源回收"维度**从未闭环**，所以此前不敢宣称"三项全 S3"。
+
+【实现（未加新线格式 tag —— 复用既有通用能力分发）】
+  · **`http.cancel` 能力方法**：帧 body = `{reqId}`，走既有 `invokeBytes` 通用分发
+    （与 `fs.readBytes` 同一套），**不需要新 TLV tag**。
+    ★为什么不做成 tag：取消是**独立的能力调用**（有自己的一次往返），不是"请求的附加属性"；
+      做成 tag 意味着"取消帧要复用请求帧结构"，反而要在帧里塞两种语义。
+  · **JS 侧 `createAbortController()`**：App 三端引擎**都没有** `AbortController`/`AbortSignal`
+    （与本仓既有的"无 setTimeout / 无 TextEncoder"同族）⇒ 提供最小实现
+    （`aborted` + 单消费者 `onabort`）。
+  · `attachAbort`：`abort()` 时 ① 尽力发 `http.cancel` ② 立即 reject（`fetch.aborted`）③ 清 pending 表。
+    ★**顺序很重要**：先通知宿主（让它尽快停），再 reject——反过来的话宿主可能已经开始新一波读。
+  · **`AppRequestConfig.signal`**：`useFetch` 业务侧可直接传。
+  · 两端宿主：
+    - **Android** `ConcurrentHashMap<reqId, AtomicReference<HttpURLConnection>>`，
+      `cancel()` → `conn.disconnect()`（强制关 socket ⇒ 阻塞的 read 抛异常 ⇒ 读线程退出）；
+    - **iOS** `[String: URLSessionTask]`（持锁），`cancel()` → `task.cancel()`
+      （触发 delegate 的 `didCompleteWithError`）。
+    ★**四条请求路径都注册**（整包 / 流式 / 落盘 / 上传）——少一条就有一种请求取消不了，
+      判据把"注册点数必须 = 4"钉住了。
+
+【真机判据（双端各 7/7）】
+  慢速流（`delayMs=20`，给取消留窗口）+ 收到**第 4 块**时 abort：
+  · Android：`fetch.aborted: 请求已取消（app-async-1）` · `chunks_at_abort=4` · `chunks_after_wait=4` ·
+    ★`host_cancel_stats={"calls":1,"hits":1,"misses":0}` · elapsed **3619ms**
+  · iOS：同款读数 · elapsed **102ms**
+  ★**判据为什么要三条**（缺一条都不算取消可用）：
+    ① 只验"reject"太弱——JS 侧 reject 之后如果宿主还在推，块会被已删的 pending 条目丢弃，
+       **看起来"没块了"但其实传输还在跑**；
+    ② 故要 `chunks_stopped` + ③ 宿主 `hits>0`（证明取消真的打到宿主）。
+
+【★诚实边界（判据强度差异，必须写出来）】
+  · **App 引擎都没有 `setTimeout`** ⇒ 探针里那段"取消后再等 400ms 看块数是否还涨"在**真机上是跳过的**
+    （`observe_skipped: 'no-setTimeout'`）。
+    ⇒ iOS 的 `chunks_stopped` 只等于"取消那一刻后没再收到块"，**强度弱于**带等待窗口的版本。
+    ★补救：用**宿主 `hits` 记账** + **服务端日志里没有 stream 完成记录** 两条硬证据交叉验证。
+    读数里如实标注 `observe_skipped`，不让人误以为两端等价。
+  · **鸿蒙不支持**（一次性 VM 无回推接收方，且其 `http.request` 是同步阻塞调用）⇒ `unsupported`。
+  · **取消是"尽力而为"**：宿主不支持 `http.cancel`（老壳）时 JS 侧仍会 reject，但**后台传输不会停**——
+    这是能力位差异，已在能力页登记。
+
+【★★抽取重构时差点造成的两处静默失效（值得单独记）】
+  为过 `check:file-size`（`superapp-scene.swift` 1031 行），把 4 个探针分支抽成 `SuperappProbes` runner。
+  抽取脚本用"锚点 + 切片删除"，删掉 199 行时**连带吞掉了**：
+  ① 上一个分支（`--pump`）的收尾 `}` ⇒ 括号失衡（编译才报"expected }"）；
+  ② `if !Self.tapMode { ... steps ... finish() }` 整段 ⇒ **`--drive` 的逐屏导航静默消失**
+     （只有"`steps` 从未被使用"的 warning 暴露它）。
+  ★教训：**结构抽取后必须查"被删段相邻的收尾/后续逻辑"，不能只看切片边界**；
+    且**warning 也可能是真缺陷信号**（`steps` 未使用 = 功能没了，不是"可以忽略的告警"）。
+  ★另一处：`run-selfdraw.sh` 与 `check-selfdraw-compile.sh` 是**两份源码清单**，
+    我加了新文件到后者、漏了前者 ⇒ 静态检查绿、真机构建红。
+    ⇒ `check:ios-source-lists`（两份清单同集）**当场抓到**——这条门禁正是为这种漏洞设的。
+
+【★破坏性验证（3 条，全部命中）】
+  ① `attachAbort` 里不发 `http.cancel`（只 reject）⇒ 2 条红（"必须发 cancel 帧" + "流式取消未通知宿主"）；
+  ② Android 少注册一条请求路径 ⇒ 红（"只有 3 个请求路径注册了取消（应有 4 个）"）；
+  ③ iOS `t.cancel()` 改成注释 ⇒ 红。
+  ★这次的断言从设计起就查**调用点**（不查符号名）——吸取前四次教训（#1115/#1118/#1119/#1120）。
+
+【落地清单】
+  · JS：`capability-invoke.ts`（`createAbortController` / `attachAbort` / `invokeHostAsync`+`invokeHostStream` 的 `signal` 参数 /
+    `AppRequestConfig.signal`）· `capability-app.ts`（`request` 透传 signal）
+  · Android：`HttpCapability` 在途表 + `cancel` + `CancelStats` · `HostCapabilities` 的 `http.cancel` / `http.cancelStats`
+  · iOS：`HttpCapability` 在途表 + `cancel` + `cancelStats` + 四处 `registerInflight`/`unregisterInflight` ·
+    `host-capabilities.swift` 的 `http.cancel` / `http.cancelStats`
+  · 探针：`appCancelProbe` · `CancelProbe.java` · `run-cancel-probe.sh`（双端）
+  · **重构**：`superapp-scene.swift` 1031 → 869 行（探针抽到 `superapp-probes.swift` 143 行）·
+    `run-selfdraw.sh` 1001 → 997 行（探针参数解析去重）
+  · 判据：`tests/fetch-cancel.test.ts` **12/12**
+  · 任务板：`T-app-fetch-cancel`（done）
+
+【门禁】
+  parity 33 条五端 · file-size · ios-source-lists · no-blind-wait · no-json-wire · safe-edit ·
+  Android 编译 · iOS 类型检查 · 鸿蒙 C++ 编译 · prebuilt · 12/12 + 相关 61/61。
+
+【★S3 收口结论（终于可以给出）】
+  · **fetch**：S2 + 流式 + 背压（#1118）+ **取消**（本单）⇒ 四项必答**齐**（上限/背压/回收/并发）；
+  · **download**：S3（#1119）+ 取消（本单，落盘路径也在四条注册里）；
+  · **upload**：S3（#1120）+ 取消（本单）。
+  ⇒ 三者**都到 S3**。
+  ★但仍要如实标的两条：
+  ① **iOS 的取消判据强度弱半档**（无 setTimeout ⇒ 无等待窗口，靠宿主记账交叉验证）；
+  ② **鸿蒙三项全部 `unsupported`**（VM 形态限制），所以严格说这是"**两端的 S3**"。

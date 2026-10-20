@@ -83,6 +83,12 @@ final class HostCapabilities: NSObject {
             return ok(updateCheck())
         case "update.apply":
             return ok(["applied": false]) // ★不假装：无待应用更新
+        // ★#1121 取消通道（S3 回收维度）：按 reqId 中止在途 http.request
+        case "http.cancel":
+            return ok(HttpCapability.cancel(args))
+        case "http.cancelStats":
+            let cs = HttpCapability.cancelStats()
+            return ok(["calls": cs.calls, "hits": cs.hits, "misses": cs.misses])
         case "window.setSize":
             return ok(windowSetSize(args))
         case "worker.create":

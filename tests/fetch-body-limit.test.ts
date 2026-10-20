@@ -182,28 +182,33 @@ describe('★#1115 探针装置（真机判据的入口存在）', () => {
   it('★探针分支必须排在 `if !tapMode` 收尾判断**之前**（否则 --drive 抢先 exit，探针永远不跑）', () => {
     // 真实踩到（#1118 iOS 首跑）：`if !Self.tapMode { ... finish() }` 在探针分支**之前**执行，
     //   探针设的 tapMode 赶不上 ⇒ --drive 的 steps 先写报告并 exit(0) ⇒ 报告里没有探针字段。
-    //   ★这是"分支顺序"型静默失效：探针代码看着在、实际永远来不及生效。
+    //   ★#1121 抽取后：探针入口统一是 `SuperappProbes.firstArg()`（配置表在 superapp-probes.swift）。
     const s = read('hosts/ios/ProteusHost/shell/superapp-scene.swift')
     const guardAt = s.indexOf('if !Self.tapMode {')
-    const fetchAt = s.indexOf('hasPrefix("--fetch-limit-probe=")')
-    const streamAt = s.indexOf('hasPrefix("--stream-probe=")')
+    const probeAt = s.indexOf('SuperappProbes.firstArg()')
     expect(guardAt, '找不到 tapMode 收尾判断').toBeGreaterThan(0)
-    expect(fetchAt, '找不到 fetch-limit 分支').toBeGreaterThan(0)
-    expect(streamAt, '找不到 stream 分支').toBeGreaterThan(0)
-    expect(guardAt, '★tapMode 收尾判断排在了 fetch-limit 分支**之前** ⇒ --drive 会抢跑').toBeGreaterThan(fetchAt)
-    expect(guardAt, '★tapMode 收尾判断排在了 stream 分支**之前** ⇒ --drive 会抢跑').toBeGreaterThan(streamAt)
+    expect(probeAt, '找不到探针入口（SuperappProbes.firstArg）').toBeGreaterThan(0)
+    expect(guardAt, '★tapMode 收尾判断排在了探针入口**之前** ⇒ --drive 会抢跑').toBeGreaterThan(probeAt)
   })
 
-  it('★iOS 壳的探针分支必须**异步收尾**（主线程循环会饿死 http 回推 ⇒ 死锁）', () => {
-    const s = read('hosts/ios/ProteusHost/shell/superapp-scene.swift')
-    expect(s, 'iOS 壳缺 --fetch-limit-probe 分支').toMatch(/hasPrefix\("--fetch-limit-probe="\)/)
-    // ★判据看的是"用 asyncAfter 递归推进"，而不是 while + usleep（ws 探针那种会死锁）
-    const start = s.indexOf('hasPrefix("--fetch-limit-probe=")')
-    const seg = s.slice(start, start + 3000)
-    expect(seg, 'iOS 探针分支未用 asyncAfter 链推进').toMatch(/DispatchQueue\.main\.asyncAfter/)
+  it('★iOS 探针 runner 必须**异步收尾**（主线程循环会饿死 http 回推 ⇒ 死锁）', () => {
+    // 探针 runner 已抽到 superapp-probes.swift（#1121）。判据同前：
+    //   看"用 asyncAfter 递归推进"，而不是 while + usleep（ws 探针那种会死锁）。
+    const s = read('hosts/ios/ProteusHost/shell/superapp-probes.swift')
+    expect(s, '找不到探针 runner').toMatch(/static func run\(_ cfg: ProbeConfig/)
+    expect(s, '★探针 runner 未用 asyncAfter 链推进').toMatch(/DispatchQueue\.main\.asyncAfter/)
+    // ★只查**代码行**（注释里保留着"不能像 ws 探针那样 while+usleep"的说明，那是文档）
+    const code = s.split('\n').filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n')
     expect(
-      seg,
-      '★iOS 探针分支出现 usleep/while 轮询——主线程阻塞会饿死 DispatchQueue.main.async 的回推（死锁）',
+      code,
+      '★探针 runner 出现 usleep——主线程阻塞会饿死 DispatchQueue.main.async 的回推（死锁）',
     ).not.toMatch(/usleep/)
+  })
+
+  it('★四个探针都必须登记在 ProbeConfig 表里（新增探针不用再抄 40 行）', () => {
+    const s = read('hosts/ios/ProteusHost/shell/superapp-probes.swift')
+    for (const p of ['--fetch-limit-probe=', '--stream-probe=', '--upload-probe=', '--cancel-probe=']) {
+      expect(s.includes(p), `ProbeConfig 缺 ${p}`).toBe(true)
+    }
   })
 })

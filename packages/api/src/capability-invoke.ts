@@ -308,6 +308,46 @@ function tryInvokeHostBytesSync(
   return { ok: true, data: parsed?.data ?? parsed }
 }
 
+/**
+ * ★★★#1121：**最小 AbortController**（App 三端 JS 引擎都**没有** `AbortController`）。
+ *
+ * 【为什么自己实现】QuickJS / JSC 精简版 / JSVM 都不带 `AbortController`/`AbortSignal`
+ *   （与本仓既有的"无 setTimeout / 无 TextEncoder"同族，#1071 已为此降级过一次）。
+ *   ⇒ 提供一个**只满足取消需求**的最小实现（不做 `reason` / `throwIfAborted` / 事件冒泡）。
+ *
+ * 【★诚实边界】`abort()` 之后 `signal.aborted` 恒为 true；**单个消费者**（只支持一个 onabort
+ *   回调，不支持 addEventListener 多订阅）——够 `useFetch` 用，超出范围请自行包一层。
+ */
+export interface AbortSignalLike {
+  readonly aborted: boolean
+  /** 取消时触发（单消费者） */
+  onabort?: () => void
+}
+
+export interface AbortControllerLike {
+  readonly signal: AbortSignalLike
+  abort(): void
+}
+
+export function createAbortController(): AbortControllerLike {
+  let aborted = false
+  const signal: AbortSignalLike = {
+    get aborted(): boolean {
+      return aborted
+    },
+    onabort: undefined,
+  }
+  return {
+    signal,
+    abort(): void {
+      if (aborted) return
+      aborted = true
+      const cb = signal.onabort
+      if (typeof cb === 'function') cb()
+    },
+  }
+}
+
 /* ══════════════════ 异步通道（两条腿共用 pending 表） ══════════════════ */
 
 /** 待决调用（`resolve/reject` 由 Promise 构造器给出；`responseType` 决定结算时如何解释 body） */
@@ -323,6 +363,8 @@ interface PendingHostCall {
   onChunk?: (chunk: Uint8Array, seq: number) => void
   /** ★#1118：已收到的最大块序号（-1 = 还没收到）；用于**丢帧检测**。由 `trackPending` 初始化。 */
   lastStreamSeq?: number
+  /** ★#1121：取消后用这个 reqId 通知宿主中止 */
+  signal?: AbortSignalLike
 }
 
 /** 超时句柄（`clear()` 幂等；无引擎定时器时是 no-op）。 */
@@ -372,6 +414,54 @@ let hostCallSeq = 0
  */
 const PENDING_HOST_CALLS_MAX = 1024
 /** 被容量淘汰的累计次数（诊断读数——供门禁/真机判据观察宿主是否在丢回推） */
+/**
+ * ★★★#1121：挂上取消钩子。`abort()` 时：
+ *   ① 立刻 reject（调用方不必等宿主回执——宿主可能已经没响应）；
+ *   ② 清 pending 表（防泄漏）；
+ *   ③ **尽力**通知宿主中止（`http.cancel`）——宿主不支持就静默（不因为取消失败而改报别的错）。
+ *
+ * 【★为什么要发 `http.cancel` 而不是只 reject JS 侧】
+ *   只 reject 不改宿主：网络传输仍在跑、内存仍在涨（流式下尤其明显）⇒ 变成"用户以为取消了，
+ *   其实后台还在下载"。⇒ 必须让宿主真的停。
+ *
+ * 【★诚实边界】宿主不支持 `http.cancel`（老壳 / 鸿蒙）时：JS 侧照常 reject，
+ *   但**后端传输不会停**——这是能力位差异，不是本函数能兜住的（已在能力页登记）。
+ */
+function attachAbort(
+  signal: AbortSignalLike | undefined,
+  reqId: string,
+  fn: HostInvokeBytesFn,
+  timer: TimerHandle,
+  reject: (e: Error) => void,
+): void {
+  if (!signal) return
+  const doAbort = (): void => {
+    if (!pendingHostCalls.has(reqId)) return   // 已结算 ⇒ 取消无意义
+    pendingHostCalls.delete(reqId)
+    timer.clear()
+    // ③ 尽力通知宿主（同步帧；失败不抛——取消是"尽力而为"，不该产生二次错误）
+    try {
+      const cancelFrame = encodeInvokeFrame({
+        method: 'http.cancel',
+        reqId: `${reqId}#cancel`,
+        meta: { contentType: 'application/json' },
+        body: utf8Encode(JSON.stringify({ reqId })),
+      })
+      fn(cancelFrame)
+    } catch {
+      /* 宿主不支持取消：如实不处理（JS 侧已 reject） */
+    }
+    // ① 立即 reject（**在通知宿主之后**——先通知能让宿主尽快停，减少白跑）
+    reject(new Error(`fetch.aborted: 请求已取消（${reqId}）`))
+    // ★② pending 已删；timer 已清
+  }
+  if (signal.aborted) {
+    doAbort()
+    return
+  }
+  signal.onabort = doAbort
+}
+
 let pendingEvictions = 0
 export function pendingHostCallEvictions(): number {
   return pendingEvictions
@@ -536,10 +626,15 @@ export function pendingHostCallCount(): number {
  * @returns resolve：二进制腿 = `{data,status,headers}`；JSON 腿 = 壳回推的 `data`（**既有语义不变**）
  *          reject：失败 / 超时 / 通道缺失
  */
-export function invokeHostAsync(method: string, args?: unknown, timeoutMs = 15000): Promise<unknown> {
+export function invokeHostAsync(
+  method: string,
+  args?: unknown,
+  timeoutMs = 15000,
+  opts?: { signal?: AbortSignalLike },
+): Promise<unknown> {
   installHostResolveBridge()
   const bytesFn = getHostInvokeBytes()
-  if (bytesFn) return invokeHostAsyncBytes(bytesFn, method, args, timeoutMs)
+  if (bytesFn) return invokeHostAsyncBytes(bytesFn, method, args, timeoutMs, opts?.signal)
   return invokeHostAsyncJson(method, args, timeoutMs)
 }
 
@@ -569,6 +664,7 @@ export function invokeHostStream(
   args: unknown,
   onChunk: (chunk: Uint8Array, seq: number) => void,
   timeoutMs = 15000,
+  signal?: AbortSignalLike,
 ): Promise<unknown> {
   installHostResolveBridge()
   const bytesFn = getHostInvokeBytes()
@@ -600,6 +696,7 @@ export function invokeHostStream(
       timer,
       responseType: meta.responseType as ResponseKind,
       generic: !isHttp,
+      signal,
       onChunk: (chunk, seq) => {
         received++
         if (received > MAX_STREAM_CHUNKS) {
@@ -611,6 +708,8 @@ export function invokeHostStream(
         onChunk(chunk, seq)
       },
     })
+    // ★#1121：流式同样可取消（尤其重要——流式可能跑很久）
+    attachAbort(signal, reqId, bytesFn, timer, reject)
     let out: Uint8Array | undefined
     try {
       out = bytesFn(frame)
@@ -713,6 +812,7 @@ function invokeHostAsyncBytes(
   method: string,
   args: unknown,
   timeoutMs: number,
+  signal?: AbortSignalLike,
 ): Promise<unknown> {
   _lastInvokeWire = 'bytes'
   const reqId = nextReqId()
@@ -734,7 +834,9 @@ function invokeHostAsyncBytes(
       pendingHostCalls.delete(reqId)
       reject(new Error(`原生异步调用超时（${method}，${timeoutMs}ms）`))
     })
-    trackPending(reqId, { resolve, reject, timer, responseType, generic: !isHttp })
+    trackPending(reqId, { resolve, reject, timer, responseType, generic: !isHttp, signal })
+    // ★#1121：取消通道（宿主按 reqId 中止；JS 侧立即 reject，不等宿主回执）
+    attachAbort(signal, reqId, fn, timer, reject)
     let out: Uint8Array | undefined
     try {
       out = fn(frame)
@@ -826,6 +928,13 @@ export interface AppRequestConfig {
    *  ★回调**同步**（宿主回推的 JS 线程上）——做重活会拖慢后续块，需异步请自行入队。
    *  ★seq 必须连续（丢帧即 reject，不静默拼半截数据）；★鸿蒙无回推接收方 ⇒ `fetch.unsupported`。 */
   onChunk?: (chunk: Uint8Array, seq: number) => void
+  /**
+   * ★★★#1121 **取消**（S3 回收维度）：取消时 JS 侧立即 reject（`fetch.aborted`），
+   * 并**尽力**通知宿主中止传输（`http.cancel`）。
+   * ★App 引擎没有 `AbortController` ⇒ 用 `createAbortController()`（本模块导出）。
+   * ★诚实边界：宿主未实现 `http.cancel` 时 JS 侧仍会 reject，但**后台传输不会停**。
+   */
+  signal?: AbortSignalLike
 }
 
 /** 请求响应（对齐 `RequestResponse`） */

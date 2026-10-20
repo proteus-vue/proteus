@@ -76,6 +76,77 @@ public final class HttpCapability {
      */
     static final long MAX_BODY_BYTES = 32L * 1024 * 1024;
 
+    /* ══════════════════ ★★★#1121 取消通道（S3 回收维度） ══════════════════ */
+
+    /**
+     * **在途请求表**（reqId → 连接）。取消时按 reqId 找到连接并 `disconnect()`。
+     *
+     * 【★为什么必须让宿主真停，而不是"JS 侧 reject 就算了"】
+     *   只 reject 不改宿主 ⇒ 网络传输仍在跑、内存仍在涨（流式下尤其明显）⇒
+     *   变成"用户以为取消了，其实后台还在下载"。⇒ 取消必须打到宿主。
+     *
+     * 【★并发安全】`ConcurrentHashMap`：网络线程注册/注销、主线程（JS 调用）取消，
+     *   两侧都可能并发访问。
+     */
+    private static final java.util.concurrent.ConcurrentHashMap<String,
+            java.util.concurrent.atomic.AtomicReference<HttpURLConnection>> INFLIGHT =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    private static void registerRequest(String reqId, HttpURLConnection conn) {
+        if (reqId == null || reqId.isEmpty()) return;
+        INFLIGHT.put(reqId, new java.util.concurrent.atomic.AtomicReference<>(conn));
+    }
+
+    private static void unregisterRequest(String reqId) {
+        if (reqId == null || reqId.isEmpty()) return;
+        INFLIGHT.remove(reqId);
+    }
+
+    /** 取消记账（判据读它证明"取消真的打到宿主"）。 */
+    static final class CancelStats {
+        volatile int calls = 0;
+        volatile int hits = 0;      // 找到在途请求的次数
+        volatile int misses = 0;    // 未找到（已结算/不存在）
+    }
+    private static final CancelStats CANCEL_STATS = new CancelStats();
+    public static CancelStats cancelStats() { return CANCEL_STATS; }
+
+    /**
+     * `http.cancel`：按 reqId 中止在途请求。
+     *
+     * @return `{ok:true, hit:bool}`——`hit=false` 表示该请求已结算或不存在（**不是错误**：
+     *   取消与完成天然有竞态，如实告诉调用方"没找到"即可）
+     */
+    public static org.json.JSONObject cancel(org.json.JSONObject args) {
+        CANCEL_STATS.calls++;
+        String reqId = args == null ? null : args.optString("reqId", "");
+        org.json.JSONObject out = new org.json.JSONObject();
+        if (reqId == null || reqId.isEmpty()) {
+            CANCEL_STATS.misses++;
+            try { out.put("hit", false); } catch (Throwable ignored) { }
+            return out;
+        }
+        java.util.concurrent.atomic.AtomicReference<HttpURLConnection> ref = INFLIGHT.remove(reqId);
+        if (ref == null) {
+            CANCEL_STATS.misses++;
+            try { out.put("hit", false); } catch (Throwable ignored) { }
+            return out;
+        }
+        CANCEL_STATS.hits++;
+        HttpURLConnection conn = ref.get();
+        if (conn != null) {
+            try {
+                // ★`disconnect()` 会强制关闭底层 socket ⇒ 正在阻塞的 read 抛异常 ⇒ 读线程退出
+                conn.disconnect();
+                Log.i(TAG, "http.cancel 已中止 reqId=" + reqId);
+            } catch (Throwable t) {
+                Log.w(TAG, "http.cancel disconnect 失败（reqId=" + reqId + "）：" + t);
+            }
+        }
+        try { out.put("hit", true); } catch (Throwable ignored) { }
+        return out;
+    }
+
     /**
      * 处理一次 `http.request`（去程帧已解码）。
      *
@@ -195,6 +266,7 @@ public final class HttpCapability {
         HttpURLConnection conn = null;
         try {
             conn = (HttpURLConnection) new URL(url).openConnection();
+            registerRequest(f.reqId, conn);   // ★#1121：可取消
             conn.setRequestMethod(method);
             conn.setConnectTimeout(timeoutMs);
             conn.setReadTimeout(timeoutMs);
@@ -259,6 +331,7 @@ public final class HttpCapability {
             rf.body = respBody;
             return rf;
         } finally {
+            unregisterRequest(f.reqId);
             if (conn != null) conn.disconnect();
         }
     }
@@ -316,6 +389,7 @@ public final class HttpCapability {
         HttpURLConnection conn = null;
         try {
             conn = (HttpURLConnection) new URL(url).openConnection();
+            registerRequest(f.reqId, conn);   // ★#1121：可取消
             conn.setRequestMethod(method);
             conn.setConnectTimeout(timeoutMs);
             conn.setReadTimeout(timeoutMs);
@@ -383,6 +457,7 @@ public final class HttpCapability {
             stats.completed = true;
             return rf;
         } finally {
+            unregisterRequest(f.reqId);
             if (conn != null) conn.disconnect();
         }
     }
@@ -488,6 +563,7 @@ public final class HttpCapability {
             }
 
             conn = (HttpURLConnection) new URL(url).openConnection();
+            registerRequest(f.reqId, conn);   // ★#1121：可取消
             conn.setRequestMethod(method);
             conn.setConnectTimeout(timeoutMs);
             conn.setReadTimeout(timeoutMs);
@@ -566,6 +642,7 @@ public final class HttpCapability {
             throw t;
         } finally {
             closeQuietly(os);
+            unregisterRequest(f.reqId);
             if (conn != null) conn.disconnect();
         }
     }
@@ -669,6 +746,7 @@ public final class HttpCapability {
 
         try {
             conn = (HttpURLConnection) new URL(url).openConnection();
+            registerRequest(f.reqId, conn);   // ★#1121：可取消
             conn.setRequestMethod(method);
             conn.setConnectTimeout(timeoutMs);
             conn.setReadTimeout(timeoutMs);
@@ -735,6 +813,7 @@ public final class HttpCapability {
             try { consumer.join(1000); } catch (InterruptedException ignored) { }
             throw t;
         } finally {
+            unregisterRequest(f.reqId);
             if (conn != null) conn.disconnect();
         }
     }

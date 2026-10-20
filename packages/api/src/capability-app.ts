@@ -794,7 +794,8 @@ export function createAppNativeCapabilities<E extends Error = Error>(CapError: n
       const args = { url: config.url, method: config.method, data: config.data, params: config.params, headers: config.headers, timeout: config.timeout }
       const budget = (config.timeout ?? 15000) + 2000
       // ★#1118：有 `onChunk` ⇒ 流式（逐块回推，内存不随响应体增长）；否则整包（受 32 MiB 上限）
-      return (config.onChunk ? invokeHostStream(APP_NATIVE_METHODS.httpRequest, args, config.onChunk, budget) : invokeHostAsync(APP_NATIVE_METHODS.httpRequest, args, budget))
+      // ★#1121：整包腿带 signal（流式腿的取消见 invokeHostStream 的 signal 参数）
+      return (config.onChunk ? invokeHostStream(APP_NATIVE_METHODS.httpRequest, args, config.onChunk, budget, config.signal) : invokeHostAsync(APP_NATIVE_METHODS.httpRequest, args, budget, { signal: config.signal }))
         .then((d) => {
           const r = (d ?? {}) as { data?: unknown; status?: number; headers?: Record<string, string> }
           return { data: r.data, status: Number(r.status ?? 0), headers: r.headers ?? {}, config }

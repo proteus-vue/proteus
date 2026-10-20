@@ -89,6 +89,7 @@ final class HttpCapability {
             }
             NSLog("[proteus] UPLOAD_PACKED total=%lld file=%@", packed.bytes, up.path)
             let task = session.uploadTask(with: req, fromFile: packed.url)
+            registerInflight(reqId, task)   // ★#1121：可取消
             BodyLimitDelegate.shared.registerUpload(task, reqId: reqId, push: push, tempFile: packed.url)
             task.resume()
             return try InvokeWire.encodeResolve(.makePending(reqId))
@@ -100,6 +101,7 @@ final class HttpCapability {
                 return try InvokeWire.encodeResolve(.makeErr(reqId, "fetch.failed: 落盘路径非法（只接受沙箱相对路径）：\(savePath)"))
             }
             let task = session.dataTask(with: req)
+            registerInflight(reqId, task)   // ★#1121：可取消
             BodyLimitDelegate.shared.registerSaving(task, reqId: reqId, push: push, target: target)
             task.resume()
             return try InvokeWire.encodeResolve(.makePending(reqId))
@@ -108,6 +110,7 @@ final class HttpCapability {
         // ★★★#1118：请求声明了流式 ⇒ 走「边读边推」路径（不整包进内存，也不受 32 MiB 上限约束）
         if f.stream == true {
             let task = session.dataTask(with: req)
+            registerInflight(reqId, task)   // ★#1121：可取消
             BodyLimitDelegate.shared.registerStreaming(task, reqId: reqId, push: push)
             task.resume()
             return try InvokeWire.encodeResolve(.makePending(reqId))
@@ -117,6 +120,7 @@ final class HttpCapability {
         //   ★为什么不能沿用 completion：completion 回调时 `data` **已全部进内存**，
         //     那时再判上限等于"洪水过后才关闸"（#1114 的取证结论就是这一点）。
         let task = session.dataTask(with: req)
+        registerInflight(reqId, task)   // ★#1121：可取消
         BodyLimitDelegate.shared.register(task, reqId: reqId, push: push)
         task.resume()
 
@@ -249,6 +253,54 @@ final class HttpCapability {
     /// 响应体硬上限（与 Android `HttpCapability.MAX_BODY_BYTES` **同值**——两端必须一致，
     /// 否则"同一个请求换端就成败不同"，那是比没有上限更糟的不可预期）。
     static let MAX_BODY_BYTES = 32 * 1024 * 1024
+
+    /* ══════════════════ ★★★#1121 取消通道（S3 回收维度） ══════════════════ */
+
+    /// **在途请求表**（reqId → URLSessionTask）。取消时按 reqId 找到 task 并 `cancel()`。
+    ///
+    /// 【★为什么必须让宿主真停】只 reject JS 侧不改宿主 ⇒ 传输仍在跑、内存仍在涨 ⇒
+    ///   "用户以为取消了，其实后台还在下载"。
+    ///
+    /// 【★并发安全】`URLSession` 回调在并发队列、取消从主线程（JS 调用）进来 ⇒ 必须持锁。
+    private static let inflightLock = NSLock()
+    private static var inflight: [String: URLSessionTask] = [:]
+
+    static func registerInflight(_ reqId: String, _ task: URLSessionTask) {
+        inflightLock.lock(); defer { inflightLock.unlock() }
+        inflight[reqId] = task
+    }
+
+    static func unregisterInflight(_ reqId: String) {
+        inflightLock.lock(); defer { inflightLock.unlock() }
+        inflight.removeValue(forKey: reqId)
+    }
+
+    /// 取消记账（判据读它证明"取消真的打到宿主"）。
+    struct CancelStats { var calls = 0; var hits = 0; var misses = 0 }
+    /// 不设 private(set)：`HostRuntimeBridge`（同 target 另一文件）要读它做判据出口。
+    static var cancelStatsValue = CancelStats()
+    static func cancelStats() -> CancelStats { cancelStatsValue }
+
+    /// `http.cancel`：按 reqId 中止在途请求。
+    /// - Returns: `["hit": Bool]`——`hit=false` = 该请求已结算或不存在（**不是错误**，取消与完成天然有竞态）
+    static func cancel(_ args: [String: Any]) -> [String: Any] {
+        cancelStatsValue.calls += 1
+        guard let reqId = args["reqId"] as? String, !reqId.isEmpty else {
+            cancelStatsValue.misses += 1
+            return ["hit": false]
+        }
+        inflightLock.lock()
+        let task = inflight.removeValue(forKey: reqId)
+        inflightLock.unlock()
+        guard let t = task else {
+            cancelStatsValue.misses += 1
+            return ["hit": false]
+        }
+        cancelStatsValue.hits += 1
+        t.cancel()   // ★`cancel()` 会触发 delegate 的 didCompleteWithError ⇒ 读线程/流式推终止
+        NSLog("[proteus] http.cancel 已中止 reqId=%@", reqId)
+        return ["hit": true]
+    }
 
     /* ────────────────────────── 工具 ────────────────────────── */
 
@@ -545,6 +597,8 @@ final class BodyLimitDelegate: NSObject, URLSessionDataDelegate {
         lock.unlock()
         guard let st else { return }   // ★先摘表 ⇒ 保证恰好回推一次
         let reqId = st.reqId
+        // ★#1121：请求已结算 ⇒ 从在途表摘掉（取消与完成天然有竞态，这里只是清理）
+        HttpCapability.unregisterInflight(reqId)
         // ★#1120：上传用的 multipart 临时文件，无论成败都删（不留在沙箱里占空间）
         if let tmp = st.uploadTemp { try? FileManager.default.removeItem(at: tmp) }
         // ★★★#1119：落盘收尾——回 path/size 摘要（不回字节），并处理写文件失败/超限
