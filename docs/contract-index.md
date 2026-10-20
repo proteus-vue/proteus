@@ -75,6 +75,21 @@ pnpm check:contract-index -- --unit fetch-field:redirectManual
 
 新增契约点只需在 `scripts/lib/contract-units.mjs` 加一行（tag）或一条 layer 定义（字段链）。
 
+**C. Vapor 槽位**（三端 + 17 项指纹，**最复杂的一类**）：
+```bash
+pnpm check:contract-index -- --unit vapor-slot
+# ⇒ 五层（编译期×2 / 运行时 / 桥 / 夹具）+ 每层的行号区段（巨型文件必给）
+#   + 三端证据是否在 + 三端重跑入口 + 必须跑的门禁 + 会被比对的指纹项
+```
+★**这一类不能一条命令闭环**：三端要真机/模拟器（USB / hdc / devicectl），CI 跑不了。
+探针会**显式打印这句话**，防止 AI 以为"跑完命令就算完事"。
+★**巨型文件必须给区段**（否则"5 层"会退化成通读 1 万行）：
+  · `packages/compiler/src/vapor/template.ts`（4651 行）只看 `L3670-3694 / L3747-3771`；
+  · `hosts/android/bridge/entry-vapor.ts`（3713 行）只看 `L315-339 / L320-344`。
+★**探针自己的缺陷（实测抓出）**：首版只在 `anchors` 存在时才检查区段是否命中
+⇒ **删掉 anchors 后静默通过**（探针 exit 0、判据全绿）。现在"行数 >1000 却没有 anchors ⇒ 直接判红"。
+★**三端证据的纪律**：必须**同一轮**跑出——陈旧证据冒充新证据是本仓实测过的形态。
+
 ## 1. 二进制线格式（invoke 通道）——五端逐字节等价
 
 **触发**：改了 `meta` TLV tag / 帧布局 / 版本号 / 任一端编解码器。

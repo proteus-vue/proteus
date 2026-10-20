@@ -22,7 +22,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 // ★#1139：「最小可闭环单元」探针表（一条 tag → 五端三处定位）
-import { endsFor, FETCH_LAYERS, NOT_IN_META_FIELDS } from './lib/contract-units.mjs'
+import { endsFor, FETCH_LAYERS, NOT_IN_META_FIELDS, VAPOR_SLOT_LAYERS, VAPOR_THREE_ENDS, VAPOR_SLOT_GATES, VAPOR_SLOT_FINGERPRINT_HINT } from './lib/contract-units.mjs'
 // ★#1139：`endsFor(name)` 按**方向**返回端点集（去程 TAG_* / 回程 RTAG_*）——
 //   首版只认 TAG_* ⇒ 查 StreamSeq/HttpStatus 时 encode/decode 全 `—`（探针自身缺陷）。
 
@@ -107,6 +107,9 @@ const concrete = referenced.filter(isConcretePath)
 const missingPaths = concrete.filter((p) => !fs.existsSync(path.join(ROOT, p)))
 const missingTests = TEST_SCRIPTS.filter((t) => !text.includes(t) || !fs.existsSync(path.join(ROOT, t)))
 
+/** 超过这个行数就算"巨型文件"，必须有区段锚点（否则读面失控）。 */
+const LARGE_FILE_LINES = 1000
+
 // ── --unit：给定契约点 ⇒ 打印"改它要读哪几个文件的哪几段"（最小可闭环单元）──
 //
 // ★#1139：这是"下次会话能不能只读 3 个文件就改对"的直接落地。
@@ -115,11 +118,19 @@ const missingTests = TEST_SCRIPTS.filter((t) => !text.includes(t) || !fs.existsS
 //   瓶颈不是代码总量，而是**不知道那三处在哪** ⇒ 本模式把定位机器化。
 if (unitArg >= 0) {
   const spec = argv[unitArg + 1]
-  if (!spec || !spec.includes(':')) {
-    console.error('✗ 用法：--unit tag:<Name> | fetch-field:<Name>   （例：--unit tag:Redirect / --unit fetch-field:redirectManual）')
+  // ★#1141：`vapor-slot` 是**无参数**单元（它没有"哪个槽位"这一层——整类一起看）
+  if (!spec) {
+    console.error('✗ 用法：--unit tag:<Name> | fetch-field:<Name> | vapor-slot')
     process.exit(2)
   }
-  const [kind, name] = spec.split(':')
+  const colonAt = spec.indexOf(':')
+  const kind = colonAt >= 0 ? spec.slice(0, colonAt) : spec
+  const name = colonAt >= 0 ? spec.slice(colonAt + 1) : ''
+  // tag / fetch-field 需要名字；vapor-slot 不需要
+  if (colonAt < 0 && kind !== 'vapor-slot') {
+    console.error(`✗ 单元 \`${kind}\` 需要参数（例：--unit ${kind}:<Name>）`)
+    process.exit(2)
+  }
   if (kind === 'fetch-field') {
     // ★#1140：useFetch 四层字段链——#1134 的 redirectManual 就是漏在第③层
     console.log(`═══ 最小可闭环单元：useFetch 字段 \`${name}\`（四层链）═══`)
@@ -156,6 +167,74 @@ if (unitArg >= 0) {
     }
     console.log("★必须跑：npx vitest run tests/fetch-wire-fields.test.ts（断言四层齐全 + 管线字段不下传）")
     console.log("★纪律：管线字段（retry/priority/maxRedirects/onRedirect/redirect）**不下传** App 线格式")
+    process.exit(0)
+  }
+
+  if (kind === 'vapor-slot') {
+    // ★#1141：Vapor 槽位——三类单元里最复杂（三端 + 17 项指纹）
+    console.log('═══ 最小可闭环单元：Vapor 槽位（三端 + 17 项指纹）═══')
+    console.log('  ★这一类**不能一条命令闭环**：三端要真机/模拟器（CI 跑不了）')
+    console.log('')
+    let bad = 0
+    console.log('【① 要改的层（按数据流顺序）】')
+    for (const layer of VAPOR_SLOT_LAYERS) {
+      const abs = path.join(ROOT, layer.file)
+      if (!fs.existsSync(abs)) {
+        console.error(`  ✗ ${layer.name}: 文件不存在 ${layer.file}`)
+        bad++
+        continue
+      }
+      const lines = fs.readFileSync(abs, "utf8").split("\n")
+      console.log(`  ✓ ${layer.name}`)
+      console.log(`      ${layer.file}（${lines.length} 行）`)
+      // ★巨型文件必须给区段：否则"5 层"会退化成读 1 万行（那就失去意义了）
+      // ★★#1141 实测缺陷：首版只在 anchors 存在时检查是否命中 ⇒ **删掉 anchors 后静默通过**
+      //   （探针 exit 0、判据全绿）。⇒ 现在：**行数超阈值却没有 anchors ⇒ 直接判红**。
+      if (!layer.anchors?.length && lines.length > LARGE_FILE_LINES) {
+        console.error(`      ✗ ${layer.file} 有 ${lines.length} 行却未定义区段锚点（须给 anchors）`)
+        bad++
+      }
+      if (layer.anchors?.length) {
+        const hits = []
+        for (const re of layer.anchors) {
+          for (let i = 0; i < lines.length; i++) {
+            if (re.test(lines[i])) { hits.push(i + 1); break }
+          }
+        }
+        if (hits.length) {
+          const ranges = hits.map((n) => `L${Math.max(1, n - 12)}-${n + 12}`)
+          console.log(`      ★只需读 ${ranges.join(" / ")}（锚点 ${hits.join(", ")}）`)
+        } else {
+          console.error(`      ✗ 区段锚点未命中（源码形态变了？）——该层可能已重构`)
+          bad++
+        }
+      }
+      console.log(`      ${layer.note}`)
+    }
+    console.log("")
+    console.log('【② 三端必须重跑并提交证据（CI 复算判据）】')
+    for (const e of VAPOR_THREE_ENDS) {
+      const abs = path.join(ROOT, e.evidence)
+      const ok = fs.existsSync(abs)
+      console.log(`  ${ok ? "✓" : "✗"} ${e.end.padEnd(8)} ${e.evidence}`)
+      console.log(`      $ ${e.run}`)
+      if (!ok) {
+        console.error(`      ✗ 证据缺失 ⇒ 该端未重跑（★陈旧证据会冒充新证据）`)
+        bad++
+      }
+    }
+    console.log("")
+    console.log('【③ 必须跑的门禁】')
+    for (const g of VAPOR_SLOT_GATES) console.log(`  $ ${g}`)
+    console.log("")
+    console.log('【④ 会被比对出的指纹项（改槽位最可能影响这些）】')
+    for (const f of VAPOR_SLOT_FINGERPRINT_HINT) console.log(`  · ${f}`)
+    console.log("")
+    if (bad) {
+      console.error(`✗ ${bad} 处不完整——补齐后重跑`)
+      process.exit(1)
+    }
+    console.log('★纪律：三端证据必须**同一轮**跑出（陈旧证据冒充新证据是本仓实测过的形态）')
     process.exit(0)
   }
 

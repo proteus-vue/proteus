@@ -120,6 +120,39 @@ describe('★#1139 最小可闭环单元探针', () => {
     expect(out).toContain('4 层缺失')
   })
 
+  it('★★⑨ vapor-slot：五层齐 + 巨型文件给区段 + 三端证据在 + 指纹项非空', () => {
+    const { code, out } = runUnit('vapor-slot')
+    expect(code, `应成功：\n${out}`).toBe(0)
+    const layers = [...out.matchAll(/^  ✓ /gm)]
+    expect(layers.length, `应命中五层（实得 ${layers.length}）`).toBeGreaterThanOrEqual(5)
+    // ★巨型文件必须给区段（否则「5 层」会退化成读 1 万行）
+    // ★★每一个巨型文件都必须**各自**给区段——首版断言太宽（只要求"整体出现过 L 区段"），
+    //   去掉 template.ts 的锚点后仍绿（因为 entry-vapor.ts 还给了区段）⇒ 假绿。
+    //   收紧口径：按"文件行 → 其后 300 字符内必须有区段"逐文件核对。
+    for (const f of ['template.ts', 'entry-vapor.ts']) {
+      const at = out.indexOf(`${f}（`)
+      expect(at, `应出现 ${f}（N 行）`).toBeGreaterThan(-1)
+      const seg = out.slice(at, at + 400)
+      expect(seg, `★${f} 必须给行号区段（巨型文件不给区段 = 退化成通读）`).toMatch(/只需读 L\d+-\d+/)
+    }
+    expect(out, 'entry-vapor.ts 应给行号区段').toMatch(/entry-vapor\.ts（\d+ 行）[\s\S]{0,200}只需读 L\d+-\d+/)
+    for (const end of ['android', 'harmony', 'ios']) expect(out).toContain(end)
+    expect(out).toContain('run-vapor.sh')
+    expect(out).toContain('--vapor')
+    expect(out).toContain('check:vapor-three-end')
+    expect(out).toContain('check:vapor-capability')
+    expect(out).toContain('slot_probe.texts')
+    // ★必须明说「不能一条命令闭环」（否则 AI 会以为跑完命令就算完事）
+    expect(out, '必须显式告知需要三端真机').toContain('不能一条命令闭环')
+  })
+
+  it('★⑩ vapor-slot 不需要参数（与 tag/fetch-field 不同）', () => {
+    expect(runUnit('vapor-slot').code).toBe(0)
+    // 而缺少参数的有参单元必须拒绝服务
+    expect(runUnit('tag').code).toBe(2)
+    expect(runUnit('fetch-field').code).toBe(2)
+  })
+
   it('⑤ 用法校验：缺参数 / 未知单元类型 ⇒ 退出 2', () => {
     expect(runUnit('').code).toBe(2)
     expect(runUnit('bogus:Foo').code).toBe(2)

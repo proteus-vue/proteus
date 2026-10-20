@@ -152,3 +152,85 @@ export const NOT_IN_META_FIELDS = new Set(['onChunk', 'signal'])
 
 /** 已知的**管线字段**：不该下传到 App 线格式（桥只跑一次请求）。 */
 export const PIPELINE_ONLY_FIELDS = new Set(['retry', 'priority', 'maxRedirects', 'onRedirect', 'redirect'])
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ★★★#1141：**Vapor 槽位**的单元定义（三类里最复杂的一类：三端 + 17 项指纹）
+//
+// 【为什么这类必须单独建单元（不能靠"读索引"记住）】
+//   普通契约是"改一处同步 N 个**文件**"；Vapor 是"改一处 ⇒ 三端**重跑并提交证据** ⇒ 指纹 17 项逐值一致"。
+//   它的失败形态最隐蔽：**只跑一端时，另一端是"推断"不是"证据"**——
+//   代码看起来对、单端判据全绿，而三端行为已经分叉（因为 Vapor 能力在**平台无关共享包**里，
+//   任一端跑的都是同一份 JS，却由各自宿主驱动 ⇒ 只有三端都跑才证明"共享代码在各宿主上都成立"）。
+//
+// 【改一个槽位特性要碰的四层（实测 2026-10-20）】
+//   ① 编译期：`packages/compiler/src/vapor/slot-scope.ts`（作用域分析与样式）+
+//      `template.ts`（折叠/发射）——契约来源；
+//   ② 运行时：`packages/slot-runtime/src/dispatch.ts`（分发/填充）；
+//   ③ 桥：`hosts/android/bridge/entry-vapor.ts`（三端共用的 Vapor 入口）；
+//   ④ 夹具 + 三端产物：`hosts/android/gen-vapor-fixture.mjs` → 三端 `results/vapor.json`。
+//
+// 【★为什么"三端重跑"不能自动化成一条命令】
+//   三端要**真机/模拟器**（USB 设备 / hdc / iOS devicectl）⇒ CI 跑不了，
+//   只能各端先跑再入库，CI 复算判据 + 比对指纹。所以本单元给的是**清单 + 门禁**，不是"一条命令搞定"。
+// ══════════════════════════════════════════════════════════════════════════════
+
+/** Vapor 槽位单元的层定义（顺序即数据流；每层给"改这里要动什么"）。 */
+export const VAPOR_SLOT_LAYERS = [
+  {
+    name: '① 编译期 · 作用域槽位',
+    file: 'packages/compiler/src/vapor/slot-scope.ts',
+    note: '作用域分析 + 内容样式；改这里 ⇒ 三端产物都会变 ⇒ 必须重跑',
+  },
+  {
+    name: '① 编译期 · 模板折叠/发射',
+    file: 'packages/compiler/src/vapor/template.ts',
+    note: '槽位在模板面的折叠与发射（本文件 4651 行，**只需看 slot 区段**）',
+    // ★巨型文件必须给区段锚点，否则"5 层"会退化成读 1 万行（那就失去意义了）
+    anchors: [/vSlotScopeOf/, /parseSlotScope\(/],
+  },
+  {
+    name: '② 运行时 · 分发/填充',
+    file: 'packages/slot-runtime/src/dispatch.ts',
+    note: '纯 JS 共享代码——三端跑的是**同一份**，任一端不同即"没重跑"',
+  },
+  {
+    name: '③ 桥 · Vapor 入口（三端共用）',
+    file: 'hosts/android/bridge/entry-vapor.ts',
+    note: '三端共用入口（3713 行）；改它 ⇒ 三端 bundle 都要重建。**只需看 slot 探针区段**',
+    anchors: [/插槽分发探针/, /slot_probe:/],
+  },
+  {
+    name: '④ 夹具',
+    file: 'hosts/android/gen-vapor-fixture.mjs',
+    note: '夹具变更会改变三端产物 ⇒ 指纹全变（不是缺陷，是"必须三端重跑"）',
+    anchors: [/slot/i],
+  },
+]
+
+/** 三端证据与重跑入口（CI 复算；本机需真机/模拟器）。 */
+export const VAPOR_THREE_ENDS = [
+  { end: 'android', evidence: 'hosts/android/results/vapor.json', run: 'bash hosts/android/run-vapor.sh' },
+  { end: 'harmony', evidence: 'hosts/harmony/results/vapor.json', run: 'bash hosts/harmony/run-vapor.sh' },
+  { end: 'ios', evidence: 'hosts/ios/results/vapor.json', run: 'bash hosts/ios/run-selfdraw.sh --vapor' },
+]
+
+/** 必须跑的门禁（CI 可跑：复算判据 + 比对 17 项指纹）。 */
+export const VAPOR_SLOT_GATES = ['pnpm check:vapor-three-end', 'pnpm check:vapor-capability']
+
+/**
+ * **17 项指纹字段**（与 `scripts/check-vapor-three-end.mjs` 的 SCALAR_FIELDS 派生组同源的**摘要**）。
+ * ★这里只列"改槽位时最可能被影响的"，完整清单以门禁脚本为准（避免两处清单分叉）。
+ */
+export const VAPOR_SLOT_FINGERPRINT_HINT = [
+  'slot_probe.texts（内容文本集）',
+  'slot_probe.fills（填充记录 name:filled）',
+  'slot_probe.markers_left（标记残留数）',
+  'scoped_probe.texts（作用域插槽内容）',
+  'scoped_probe.anchor_width_field / rect（作用域样式内核真值）',
+  'scoped_probe.destr_text / destr_width_*（解构形态）',
+  'emit_probe.emits / parent_source_after / geom_*（子→父链路）',
+  'tpl_nodes / sub_l1 / sub_l0（模板面）',
+  'inst_* / updates_run / ops_bytes（实例化与增量）',
+  'ev_bindings / ev_handlers / ev_modifiers（事件绑定）',
+  'component_mounts / component_nodes（组件面）',
+]

@@ -11191,3 +11191,67 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   ① 第三类单元：**`--unit vapor-slot:<Name>`**（Vapor 槽位/事件，三端 + 指纹，最复杂的一类）；
   ② 消化 #1137 暴露的 7 个 C++ 巨型文件（`proteus_render.cpp` 3701 / `host_app_runtime_impl.h` 1134）；
   ③ `.workbuddy/salvage` 5449 个未跟踪截图纳入治理。
+
+1141. **★★★`--unit vapor-slot`——第三类单元（三端 + 17 项指纹，也是最难"一条命令闭环"的一类）· 决策**（2026-10-20 · 承接 #1140「下一步」）：
+
+【为什么这类必须单独建单元（不能靠索引的人工清单）】
+  普通契约是"改一处同步 N 个**文件**"；Vapor 是"改一处 ⇒ **三端重跑并提交证据** ⇒ 指纹逐值一致"。
+  失败形态最隐蔽：**只跑一端时，另一端是"推断"不是"证据"**——
+  Vapor 能力在**平台无关共享包**里，三端跑的是同一份 JS，却由各自宿主驱动
+  ⇒ **只有三端都跑**才证明"共享代码在各宿主上都成立"。
+
+【改一个槽位特性要碰的五层（实测）】
+  | 层 | 文件 | 行数 |
+  |---|---|---|
+  | ① 编译期 · 作用域槽位 | `packages/compiler/src/vapor/slot-scope.ts` | 103 |
+  | ① 编译期 · 模板折叠/发射 | `packages/compiler/src/vapor/template.ts` | **4651** |
+  | ② 运行时 · 分发/填充 | `packages/slot-runtime/src/dispatch.ts` | 185 |
+  | ③ 桥 · Vapor 入口（三端共用） | `hosts/android/bridge/entry-vapor.ts` | **3713** |
+  | ④ 夹具 | `hosts/android/gen-vapor-fixture.mjs` | **1171** |
+  ★**巨型文件必须给区段锚点**，否则"5 层"会退化成通读 1 万行：
+    · `template.ts` 只看 `L3670-3694 / L3747-3771`（锚点 `vSlotScopeOf` / `parseSlotScope(`）
+    · `entry-vapor.ts` 只看 `L315-339 / L320-344`（锚点「插槽分发探针」/ `slot_probe:`）
+    · `gen-vapor-fixture.mjs` 只看 `L1-22`
+  ⇒ 实际读面：103 + 49 + 185 + 49 + 22 ≈ **408 行**（vs 9823 行 = **4%**）。
+
+【探针输出（四段）】
+  ① 五层 + 每层行号区段；② 三端证据是否在 + 各自重跑入口；③ 必须跑的门禁；④ 会被比对的指纹项。
+  ★并**显式打印**「这一类不能一条命令闭环：三端要真机/模拟器（CI 跑不了）」——
+    防止 AI 以为"跑完命令就算完事"。
+
+【★★★探针自己的缺陷（本轮实测抓出，第 12 次同族）】
+  首版只在 `layer.anchors?.length` 为真时才检查"区段是否命中"
+  ⇒ **删掉 `anchors` 后静默通过**（探针 exit 0、11 条判据全绿）。
+  ⇒ 根因：**"必须有"和"给了就要对"是两条判据，我只写了后者**。
+  ⇒ 修法：新增 `LARGE_FILE_LINES = 1000` —— **行数 >1000 却没有 anchors ⇒ 直接判红**。
+  ★这条修复立刻暴露了一个既有疏漏：`gen-vapor-fixture.mjs`（1171 行）**本来就没锚点**（已补）。
+
+【判据（`tests/contract-units.test.ts` → 11/11，新增 2 条）】
+  ⑨ 五层齐 + **每个巨型文件各自**给区段（首版断言太宽：只要求"整体出现过 L 区段"⇒ 去掉 template 锚点仍绿）+ 三端证据在 + 门禁名 + 指纹项 + **必须明说"不能一条命令闭环"**；
+  ⑩ `vapor-slot` 不需参数，而 `tag`/`fetch-field` 缺参数必须 exit 2。
+  ★**破坏性验证 2 条全命中**：① 去掉 `template.ts` 的 anchors ⇒ 2 红；② 锚点写成不存在的正则（模拟源码重构）⇒ 2 红。
+  ★★过程中还抓到我自己的**假验证**：第一次 `cp` 的备份是加夹具锚点**之前**的版本 ⇒ "还原"后仍 2 failed，
+    误以为修复无效。⇒ **备份必须紧邻修改前拍**（同族：装置本身也要可验证）。
+
+【三类单元现已齐备】
+  | 单元 | 命令 | 读面 |
+  |---|---|---|
+  | 线格式 tag | `--unit tag:X` | 255 行（9%） |
+  | useFetch 字段 | `--unit fetch-field:X` | ≈52 行 |
+  | Vapor 槽位 | `--unit vapor-slot` | ≈408 行（4%） |
+
+【诚实边界】
+  ① `vapor-slot` 是**类级**单元（不区分"哪个槽位特性"）——因为三端重跑成本高，按类看更实用；
+  ② 三端证据只检查**是否存在**（不校验新鲜度——那由 `check:vapor-three-end` 的 `run_ts` 判据管）；
+  ③ 指纹项是**摘要提示**（完整 17 项以 `scripts/check-vapor-three-end.mjs` 的 SCALAR_FIELDS 为准，
+     避免两处清单分叉）。
+
+【门禁】
+  `pnpm test` **6458 条全绿**（+2）· `check:contract-index`（并抓到索引里两个裸文件名，已修）
+  · script-compile · gates-sync · file-size · doc-links · check:memory · check:decision-numbers
+
+【下一步（三类单元已齐，回到"扩展能力"）】
+  ① 消化 7 个 C++ 巨型文件（`proteus_render.cpp` 3701 / `host_app_runtime_impl.h` 1134）——它们刚被
+     `file-size` 补上视野，是当前最大的"通读成本"来源；
+  ② `.workbuddy/salvage` 5449 个未跟踪截图纳入治理（污染 `git status` 与 diff 基统计）；
+  ③ 继续 #1133 矩阵的 P2（条件请求缓存）。
