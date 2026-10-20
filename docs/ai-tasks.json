@@ -2245,7 +2245,7 @@
       "related": [
         "T-app-usefetch-surface"
       ],
-      "note": "★下一步：给生成器加\"内容缩水\"门禁（记录各能力页关键区块行数，骤降即红）——本轮 5 个缺陷的共同形态都是\"文档静默退化而无人发现\"。"
+      "note": "已完成四道文档门禁：DRIFT（改了没重生成）· COLLAPSED（表格塌陷）· DANGLING_TYPES（类型无说明，72 页修复）· SHRUNK（结构性缩水，#1125）。"
     },
     {
       "id": "T-doc-type-refs",
@@ -2265,6 +2265,27 @@
         "T-doc-generator-drift"
       ],
       "note": "根因：原收集只扫方法签名，漏了参数类型/参数对象属性类型/返回值类型。加检查后暴露 66 页有未解释类型；修复后 71 页净增 1174 行。★仍待：生成器\"内容缩水\"门禁（#1123 下一步）。"
+    },
+    {
+      "id": "T-doc-content-shrink",
+      "title": "#1125 文档内容缩水门禁：按页记结构性规模（表格/小节/代码块/正文），变小即红",
+      "type": "docs",
+      "status": "done",
+      "owner": "zcode",
+      "scope": [
+        "website/scripts/lib/content-shrink.mjs",
+        "website/scripts/gen-content.mjs",
+        "website/content/.content-size-baseline.json",
+        "tests/doc-content-shrink.test.ts"
+      ],
+      "decision": 1125,
+      "verification": "npx vitest run tests/doc-content-shrink.test.ts && cd website && npx tsx scripts/gen-content.mjs --check",
+      "branch": null,
+      "related": [
+        "T-doc-type-refs",
+        "T-doc-generator-drift"
+      ],
+      "note": "只判结构不判语义（\"长表换长文\"不在覆盖内）· 阈值（绝对2/相对10%）是拍的 · 基线只增不减 ⇒ 确需变短须人工删基线条目。"
     }
   ]
 }

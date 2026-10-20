@@ -12,7 +12,7 @@
   "hosts/ios/bridge/entry-bench.ts": 3651,
   "scripts/gen-component-demo-pages.mjs": 3592,
   "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/VaporRenderHost.java": 3069,
-  "website/scripts/gen-content.mjs": 2349,
+  "website/scripts/gen-content.mjs": 2391,
   "packages/compiler/src/template.ts": 2230,
   "packages/api/src/capability-app.ts": 2079,
   "website/scripts/gen-content-en.mjs": 2061,

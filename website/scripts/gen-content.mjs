@@ -9,6 +9,8 @@ import fs from 'node:fs'
 import { extractErrorCodes } from './lib/error-codes.mjs'
 // ★#1124：类型引用收集 + 悬空引用检查（用户点名 UploadSpec/AbortSignalLike 无说明）
 import { collectPageTypeRefs, findUnexplainedTypes } from './lib/type-refs.mjs'
+// ★#1125：内容缩水门禁（记录各页结构性规模，变小即红）
+import { measureDoc, judgeShrink, mergeBaseline } from './lib/content-shrink.mjs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { COMP_EN, DOMAIN_EN, MP_STATUS_EN, ENDS_EN, END_NOTE_EN, COMP_LEGEND_EN, SHARED_EN, OVERVIEW_EN, CAP_SHARED_EN, CAP_USAGE_EN, CAP_ARGS_EN, CAP_DATA_HINTS_EN, CAP_METHODS_EN, CAP_EN, CAP_CAT_EN, CAP_OVERVIEW_EN, LIFECYCLE_EVENT_EN, LIFECYCLE_EVENT_NOTE_EN, LIFECYCLE_SRC_EN } from './gen-content-en.mjs'
@@ -48,6 +50,20 @@ const drifts = []
 const collapsed = []
 
 /**
+ * ★★★#1125：**内容缩水基线**（path → 结构性规模）。
+ *   ★为什么需要：`check:content` 只能比"文档与当前生成器是否一致"——生成器自己退化时它照样说一致。
+ *     #1123/#1124 挖出的 7 个缺陷**共同形态都是"文档静默变少"**（参数表整段消失 / 属性表空 / 类型段缺）。
+ *   ★基线**自动增长**（只写变大值）：手维护 162 页基线必然腐化（本仓"表腐化后静默失效"的教训）。
+ */
+const SHRINK_BASELINE = path.join(ROOT, 'website', 'content', '.content-size-baseline.json')
+const shrinkHits = []
+let baseline = {}
+try {
+  baseline = JSON.parse(fs.readFileSync(SHRINK_BASELINE, 'utf8'))
+} catch { baseline = {} }
+let baselineDirty = false
+
+/**
  * ★★排版自检（2026-09-30 用户反馈「这块儿排版是不是乱了？」——把这类生成器回归变成机器判据）
  *
  * 【反面形态（本轮截图实测）】多行 JSDoc 被 `.join(' ')` 压成**单行** ⇒ 源码里的 Markdown 表格
@@ -73,9 +89,22 @@ function assertNoCollapsedTable(relPath, content) {
   if (offenders.length) collapsed.push(`${relPath}:${offenders.join(',')}`)
 }
 
-/** 写产物（--check 时改为比对；记录漂移文件） */
+/** 写产物（--check 时改为比对；记录漂移文件；★#1125 顺带做内容缩水检查） */
 function writeDoc(p, content) {
   assertNoCollapsedTable(path.relative(ROOT, p), content)
+  if (p.endsWith('.md')) {
+    // ★#1125：与基线比结构性规模——变小即记一笔（判红在收尾统一做）
+    const rel = path.relative(ROOT, p)
+    const now = measureDoc(content)
+    const prev = baseline[rel]
+    if (prev) {
+      const j = judgeShrink(prev, now)
+      if (j.shrunk) shrinkHits.push(`${rel}：${j.detail}`)
+    }
+    // 基线只增不减（缩水时保留旧值 ⇒ 不把缺陷写成新基线）
+    const merged = mergeBaseline(prev, now)
+    if (JSON.stringify(merged) !== JSON.stringify(prev)) { baseline[rel] = merged; baselineDirty = true }
+  }
   if (check) {
     const cur = fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : ''
     if (cur !== content) drifts.push(path.relative(ROOT, p))
@@ -2328,6 +2357,19 @@ const nComp = genComponents(ir, ends)
 const nCap = genCapabilities(ir, ends)
 const nCompEn = await genComponentsEn(ir, ends)
 const nCapEn = await genCapabilitiesEn(ir, ends)
+
+// ★★★#1125：内容缩水判红（**独立于生成器逻辑**的防线——生成器自己退化时 check 也能拦住）
+if (check && shrinkHits.length) {
+  console.error(`SHRUNK: ${shrinkHits.length} 个页面的结构性内容比基线少（参数表/属性表/小节被吃掉？）：`)
+  for (const h of shrinkHits.slice(0, 20)) console.error(`  - ${h}`)
+  if (shrinkHits.length > 20) console.error(`  … 另 ${shrinkHits.length - 20} 处`)
+  console.error('  修法：看该页对应的生成逻辑是否漏渲染；确属"内容本来就该少"时，删掉基线里该条目即可（人工确认后）')
+  process.exit(1)
+}
+if (!check && baselineDirty) {
+  fs.mkdirSync(path.dirname(SHRINK_BASELINE), { recursive: true })
+  fs.writeFileSync(SHRINK_BASELINE, JSON.stringify(baseline, null, 2) + '\n')
+}
 
 if (collapsed.length) {
   console.error(`COLLAPSED: ${collapsed.length} 个生成页出现「表格塌成段落」形态（多行 JSDoc 被压平？）：`)
