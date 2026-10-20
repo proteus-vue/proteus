@@ -76,6 +76,9 @@ jobs:
       - name: 多 AI 协作任务板门禁（★本规范：认领/边界/追溯/防撞车自洽——docs/ai-development-spec.md 第 6 节）
         run: node scripts/check-ai-tasks.mjs --check
 
+      - name: 万神殿命名对外纪律门禁（★决策 #1110：排除名单名字/未登记的未定名代号不得进对外面——Morpheus 撞名事故的机器兜底）
+        run: node scripts/check-codenames.mjs
+
       - name: 文件大小门禁（★决策 #872：严禁大文件巨型化——新文件硬上限 1000 行 + 存量棘轮只减不增）
         run: node scripts/check-file-size.mjs
 
