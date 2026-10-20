@@ -119,6 +119,26 @@ hosts/ios/results/paint-hint-*.log
 #   网页交付物是 website/public/morpheus-showcase.mp4（3MB，见 hosts/ios/make-showcase-video.sh）
 hosts/ios/results/showcase.mp4
 
+# ══════════════════════════════════════════════════════════════════════════
+# ★★★构建/调试产物目录（#1136：此前 **186 MB + 26 MB 漏网入库**，clone 体积被撑大）
+#
+# 【根因（★忽略规则与目录名不匹配 ⇒ 静默失效）】
+#   `spike/.gitignore` 写的是 `target/`，而实际 Cargo 目标目录叫 `target-qjs/`
+#   （构建时用 `CARGO_TARGET_DIR=spike/target-qjs`）⇒ **规则从未命中** ⇒
+#   576 个 .rlib/.rmeta/二进制（186 MB）全被跟踪。
+#   ★这是"忽略规则要认真实目录名"的实例：写成 `target/` 看起来对、实际一个都没拦。
+#
+# 【为什么放在**根** .gitignore 而不是子目录】子目录规则容易被后续 `CARGO_TARGET_DIR`
+#   改名再次失配；放在根 + 用 `**/` 通配，改名也能覆盖。
+#
+# ⚠ 注意与"有意入库"的产物区分（这些**保留**）：
+#   · `packages/cli/templates-host/prebuilt/**` —— CLI 随包发布的预编译运行时（产品要的）
+#   · `hosts/{android,ios,harmony}/results/**` —— 真机判据证据（项目纪律要求入库）
+spike/target-qjs/
+**/target-qjs/
+# CDP 调试截图（website/cdp-*.mjs 的**产出**，151 张 PNG / 26 MB；无任何消费方）
+.cdp-shots/
+
 # Python 字节码缓存（脚本自测产生；不入库）
 __pycache__/
 
