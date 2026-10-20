@@ -27,26 +27,7 @@ import Darwin
 //   ——同一 Swift 模块，调用点零改动。搬迁原因：本文件受 `check:file-size` 棘轮钉住（只减不增），
 //   而「ABI 绑定」与「自绘场景实现」本就是两个职责。
 
-func takeCString(_ ptr: UnsafeMutablePointer<CChar>) -> String {
-    defer { proteus_layout_free_string(ptr) }
-    return String(cString: ptr)
-}
-
-/// 当前进程的**实际内存占用**（MB）
-///
-/// ★用 `phys_footprint`：这是 iOS 上最贴近「真实占用」的口径（含 dirty + compressed），
-///   也是系统 OOM 杀进程时看的那个数。加压测试要给出「内存天花板」，不能用估算值。
-func physFootprintMB() -> Double {
-    var info = task_vm_info_data_t()
-    var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<integer_t>.size)
-    let kr = withUnsafeMutablePointer(to: &info) {
-        $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
-            task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count)
-        }
-    }
-    guard kr == KERN_SUCCESS else { return -1 }
-    return Double(info.phys_footprint) / 1024.0 / 1024.0
-}
+// ★#1101：`takeCString` / `physFootprintMB` 已搬到 `host-support.swift`（顶层声明，同模块）。
 
 /* ────────────────────────── JS ↔ 宿主 协议 ────────────────────────── */
 
@@ -324,50 +305,7 @@ func physFootprintMB() -> Double {
 
 /* ────────────────────────── 宿主（自绘） ────────────────────────── */
 
-/// bench 完成标志（由 JS 链尾的 `done()` 置位；宿主据此收尾）
-enum BenchDone { static var flag = false }
-
-/// ★★C2 诊断计数（文件级全局——见 `SelfDrawView` 里"为什么不用类内 static"的注释）
-enum SvgDiag {
-    static var attachStats = 0
-    static var skipNoId = 0
-    static var skipNoLayer = 0
-    static var skipNoSegs = 0
-    static var built = 0
-}
-
-/// 启动白屏诊断读数（**runtime 自持**）——壳在 viewDidLoad 填充，发动机在 bench 报告里读出。
-/// ★第三刀解耦：原先它挂在壳的视图控制器上，导致 runtime 反向引用 shell；现移入 runtime 自持。
-enum ProteusLaunchDiag {
-    static var data: [String: Any] = [:]
-}
-
-/// ★★★行高修复（2026-10-08 · 用户抓出「iOS 行高比其他端矮」）：CATextLayer 对**多行文本**完全忽略段落
-///   的 `minimumLineHeight/maximumLineHeight`（实测：显式 `\n`、CTParagraphStyle 都不行，恒用字体自然行高）
-///   ⇒ 声明 `line-height` 的多行文本行距偏小（与 Web/Android/鸿蒙不一致）。
-///   修：声明行高的多行文本改用本子类——`draw(in:)` 用 CoreText `CTFrameDraw` 渲染（**遵守** NSPS 行高，
-///   本机实测 pitch 精确 = 声明值）；其余情形仍走 CATextLayer 原生路径（零行为变化）。
-final class ProteusTextLayer: CATextLayer {
-    /// true ⇒ 用 CoreText 绘制（`string` 须为 NSAttributedString）；false ⇒ 原生 CATextLayer 绘制。
-    var useCoreText = false
-    var obliqueShear: CGFloat = 0   // ★#1057 合成斜切（`.obliqueness` 是 AppKit、`withMatrix` 被 CGFont 丢）
-
-    override func draw(in ctx: CGContext) {
-        guard useCoreText, let attributed = string as? NSAttributedString else { super.draw(in: ctx); return }
-        let framesetter = CTFramesetterCreateWithAttributedString(attributed)
-        let path = CGPath(rect: CGRect(origin: .zero, size: bounds.size), transform: nil)
-        let frame = CTFramesetterCreateFrame(framesetter, CFRangeMake(0, 0), path, nil)
-        ctx.saveGState()
-        ctx.textMatrix = .identity
-        // ★★CALayer 的 `draw(in:)` 上下文是 **y 向下**（CA 坐标系）⇒ CoreText（y 向上）必须翻转，
-        //   否则文本上下颠倒（真机实测：A/B/C 三段全镜像——独立 CGContext 上恰好相反，不能照搬）。
-        ctx.translateBy(x: 0, y: bounds.height)
-        ctx.scaleBy(x: 1, y: -1)
-        if obliqueShear != 0 { ctx.concatenate(CGAffineTransform(a: 1, b: 0, c: obliqueShear, d: 1, tx: 0, ty: 0)) }   // ★#1057 合成斜切
-        CTFrameDraw(frame, ctx)
-        ctx.restoreGState()
-    }
-}
+// ★#1101：`BenchDone` / `SvgDiag` / `ProteusLaunchDiag` / `ProteusTextLayer` 已搬到 `host-support.swift`。
 
 final class SelfDrawView: UIView {
 
@@ -875,6 +813,11 @@ final class SelfDrawView: UIView {
     ///   （越滚越糊/越白）。⇒ 每帧先 `removeFromSuperlayer` 全部玻璃面，再捕获、再装。
     func applyGlassPass() {
         guard !glassSpecByNodeId.isEmpty else { return }
+        // ★★★#1101：玻璃遍子相位（#1100 实测 21.1ms = 带玻璃屏 mount 的 59%）——内部五段逐段计时，
+        //   混成一个数就只能猜"大概是 Metal"（本仓纪律：不靠推断）。
+        //     hide 隐藏玻璃自身层 / raster 栅格化 cropRect / blur CIGaussianBlur /
+        //     metal renderFaces（纹理上传+编码+提交+等待+读回） / install 建面并挂层
+        var capHideMs = 0.0, rasterMs = 0.0, blurMs = 0.0, metalMs = 0.0, installMs = 0.0
         let size = bounds.size
         guard size.width > 0, size.height > 0 else { return }
         let scale = UIScreen.main.scale
@@ -920,14 +863,18 @@ final class SelfDrawView: UIView {
         //   取证：iOS 内文呈"均匀柔化"，偏离参照）。隐藏再捕获 = 从背景里精确剔除自身（CALayer.render 无跳过谓词）。
         let glassNodeIds = Array(glassSpecByNodeId.keys)
         var hiddenForCapture: [CALayer] = []
+        let tHide0 = CFAbsoluteTimeGetCurrent()
         for id in glassNodeIds {
             guard let l = layersById[id], !l.isHidden else { continue }
             hiddenForCapture.append(l); l.isHidden = true
         }
+        capHideMs = (CFAbsoluteTimeGetCurrent() - tHide0) * 1000
+        let tRaster0 = CFAbsoluteTimeGetCurrent()
         let img = renderer.image { ctx in
             ctx.cgContext.translateBy(x: -cropRect.minX, y: -cropRect.minY)
             self.layer.render(in: ctx.cgContext)
         }
+        rasterMs = (CFAbsoluteTimeGetCurrent() - tRaster0) * 1000
         for l in hiddenForCapture { l.isHidden = false }   // 恢复（与 CATransaction 同帧，无闪）
         guard let captured = img.cgImage else {
             NSLog("[proteus-glass] backdrop 捕获失败——玻璃跳过")
@@ -937,16 +884,22 @@ final class SelfDrawView: UIView {
         //   对捕获的 backdrop 做一次**小半径高斯模糊**（内容柔化但可读；折射/镜像是主角、磨砂为配）。
         //   放进宿主（而非 shader）：不破坏 check:glass-pixel-parity（shader 保持零采样）。
         let backdrop: CGImage
+        let tBlur0 = CFAbsoluteTimeGetCurrent()
         if let blur = CIFilter(name: "CIGaussianBlur") {
             let ci = CIImage(cgImage: captured)
             blur.setValue(ci, forKey: kCIInputImageKey)
             blur.setValue(capturePxPerPoint * 1.5, forKey: kCIInputRadiusKey)   // ≈2 逻辑px（与 Android BLUR_DOWN=4 同量级）
-            let ctx = CIContext(options: nil)
+            // ★★★#1101：**CIContext 复用**（此前每次玻璃遍 `CIContext(options: nil)` 新建一个）——
+            //   CIContext 持有 GPU/Metal 设备与命令队列，新建要付初始化成本；本方法在**每帧**都被调用
+            //   （玻璃交互时更是每 vsync 一次）⇒ 每帧白付一次。真机实测模糊段 10.6ms（玻璃遍的 57%）。
+            //   ★语义零变化：同一个 CIContext 可反复 createCGImage（它不持有渲染状态）。
+            let ctx = SelfDrawView.sharedCIContext
             if let out = blur.outputImage,
                let cg = ctx.createCGImage(out, from: ci.extent) {
                 backdrop = cg
             } else { backdrop = captured }
         } else { backdrop = captured }
+        blurMs = (CFAbsoluteTimeGetCurrent() - tBlur0) * 1000
 
         // ③ 逐玻璃节点装玻璃面（★作为**节点层的子层**：与节点同变换空间 ⇒ 自动跟随，含 fixed 钉住）
         //   ★决策 #863：**批量渲染**——一次 `renderFaces`（共用 backdrop 纹理 + 一条命令缓冲 + 一次等待）。
@@ -977,9 +930,12 @@ final class SelfDrawView: UIView {
             reqs.append((rb, spec))
             touchPress.append((nodeTouch, nodePress))
         }
+        let tMetal0 = CFAbsoluteTimeGetCurrent()
         let faces = GlassMetalRenderer.shared.renderFaces(backdrop: backdrop, requests: reqs,
                                                           scale: glassOutScale, cropOrigin: cropRect.origin,
                                                           texPxPerPoint: capturePxPerPoint, touchPress: touchPress)
+        metalMs = (CFAbsoluteTimeGetCurrent() - tMetal0) * 1000
+        let tInstall0 = CFAbsoluteTimeGetCurrent()
         for (i, id) in order.enumerated() {
             guard i < faces.count, let face = faces[i], let nodeLayer = layersById[id] else { continue }
             let spec = glassSpecByNodeId[id]!
@@ -998,6 +954,33 @@ final class SelfDrawView: UIView {
             nodeLayer.addSublayer(fl)
             glassFaceByNodeId[id] = fl
         }
+        installMs = (CFAbsoluteTimeGetCurrent() - tInstall0) * 1000
+        // ★#1101：子相位读数写回（每次玻璃遍都覆盖；报告读它做下一刀决策）
+        lastGlassHideMs = capHideMs; lastGlassRasterMs = rasterMs; lastGlassBlurMs = blurMs
+        lastGlassMetalMs = metalMs; lastGlassInstallMs = installMs
+        lastGlassTotalMs = capHideMs + rasterMs + blurMs + metalMs + installMs
+        lastGlassCropPx = Double(cropRect.width * capturePxPerPoint) * Double(cropRect.height * capturePxPerPoint)
+        lastGlassCount = order.count
+    }
+
+    /* ★#1101：玻璃遍子相位读数（-1 = 本轮未发生；0 = 该子段真的耗时为零/无玻璃早退） */
+    private(set) var lastGlassHideMs = -1.0     /// 隐藏玻璃自身层（避免把自己糊进 backdrop）
+    private(set) var lastGlassRasterMs = -1.0   /// `self.layer.render` 栅格化 cropRect（CPU 软件绘制）
+    private(set) var lastGlassBlurMs = -1.0     /// CIGaussianBlur（含**每次新建 CIContext**）
+    private(set) var lastGlassMetalMs = -1.0    /// renderFaces：纹理上传 + 编码 + 提交 + 等待 + 逐块读回
+    private(set) var lastGlassInstallMs = -1.0  /// 建 CALayer 面并挂到节点层
+    private(set) var lastGlassTotalMs = -1.0
+    private(set) var lastGlassCropPx = 0.0      /// 捕获像素数（裁剪面积 × 捕获密度）——解释栅格/模糊成本
+    private(set) var lastGlassCount = 0
+    /// ★#1101：玻璃模糊用的 `CIContext`——**进程内复用一份**。
+    ///   此前每次玻璃遍新建（`CIContext(options: nil)`），而玻璃遍在交互时**每 vsync 调一次**
+    ///   ⇒ 每帧都在付上下文初始化成本。CIContext 无渲染状态残留，复用不改变输出。
+    private static let sharedCIContext = CIContext(options: nil)
+    /// 判据读数（native 直读——报告用）
+    func glassPhaseStats() -> [String: Double] {
+        ["hide_ms": lastGlassHideMs, "raster_ms": lastGlassRasterMs, "blur_ms": lastGlassBlurMs,
+         "metal_ms": lastGlassMetalMs, "install_ms": lastGlassInstallMs, "total_ms": lastGlassTotalMs,
+         "crop_px": lastGlassCropPx, "glass_count": Double(lastGlassCount)]
     }
 
     /// 玻璃节点数（判据用：证明"玻璃遍真的接管了节点"）。
@@ -5116,6 +5099,8 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     private var mountHistoryMs: [[String: Double]] = []
     private static let mountHistoryCap = 8
     func mountPhaseHistory() -> [[String: Double]] { mountHistoryMs }
+    /// ★#1101：玻璃遍子相位（转给视图——玻璃遍是视图职责，读数不在 Bridge 上另存）
+    func glassPhaseStats() -> [String: Double] { view?.glassPhaseStats() ?? [:] }
     /// ★★上一次更新提交的几何快照（id → "x,y,w,h"）——用于**自检「几何真的变了吗」**
     ///
     /// 【为什么必须自检（本仓实测的第八个测量装置缺陷）】类B 基准树少了 `flexShrink: 0`，
@@ -5170,6 +5155,9 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         let out = render(treeJson: treeJson, phase: "mount", force: true)
         var rec = mountPhaseStats()
         rec["host_ms"] = (CFAbsoluteTimeGetCurrent() - tMount0) * 1000
+        // ★#1101：玻璃子相位随每次 mount 记录（-1 = 该屏无玻璃 / 未发生）
+        //   ★读数在 `SelfDrawView` 上（玻璃遍是视图职责）——经 `view` 取，不在 Bridge 上另存一份。
+        if let v = view { for (k, val) in v.glassPhaseStats() { rec["glass_" + k] = val } }
         mountHistoryMs.append(rec)
         if mountHistoryMs.count > SelfDrawBridge.mountHistoryCap {
             mountHistoryMs.removeFirst(mountHistoryMs.count - SelfDrawBridge.mountHistoryCap)

@@ -647,6 +647,8 @@ final class SuperappScene: NSObject {
             o["mount_glass_ms"] = ph["glass_ms"] ?? -1
             // ★#1100：逐次 mount 的相位历史（首屏 93ms vs 热态 33ms —— 只报末次会把切屏成本低估 3 倍）
             o["mount_history"] = rt.mountPhaseHistory()
+            // ★#1101：玻璃遍子相位（hide/raster/blur/metal/install + 捕获像素数 + 玻璃块数）
+            o["glass_phase"] = rt.glassPhaseStats()
         }
         // ★#1098：P0 长任务读数（字段名与 Android/perf 面板一致）
         if let jd = JsTaskSampler.statsJson().data(using: .utf8),

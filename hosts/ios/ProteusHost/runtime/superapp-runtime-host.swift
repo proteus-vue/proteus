@@ -62,6 +62,8 @@ final class SuperappRuntimeHost: NSObject, SuperappRuntimeExports {
     func mountPhaseStats() -> [String: Double] { draw.mountPhaseStats() }
     /// ★#1100：每次 mount 的相位历史（首屏 vs 热态必须分开看）
     func mountPhaseHistory() -> [[String: Double]] { draw.mountPhaseHistory() }
+    /// ★#1101：玻璃遍子相位（末次）
+    func glassPhaseStats() -> [String: Double] { draw.glassPhaseStats() }
     /// 手势反向回调名（JS 侧注册）
     private var gestureCb: String?
     /// JSC 上下文（注册手势回调名后，宿主用它反向调 JS）

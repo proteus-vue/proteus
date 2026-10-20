@@ -181,3 +181,72 @@ describe('★#1100 iOS mount 相位与 Android 同口径', () => {
     expect(read(IOS_SUPERAPP_SCENE)).toMatch(/o\["mount_history"\]/)
   })
 })
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * ★★★#1101：**玻璃遍子相位**——#1100 把 iOS 切屏拆到 glass=21.1ms（带玻璃屏的 59%），
+ *   但"玻璃遍慢"本身不能动手：它内部有隐藏/栅格化/模糊/Metal/装面五段，成本完全不同源。
+ *   本组判据守两件事：
+ *     ① 五段**都在**且**都有真实埋点**（不是只加了字段）；
+ *     ② 早退语义没被破坏——无玻璃时必须**零开销早退**（否则每个屏都白烧一次子相位）。
+ * ════════════════════════════════════════════════════════════════════════════ */
+describe('★#1101 iOS 玻璃遍子相位', () => {
+  it('拆出 hide / raster / blur / metal / install 五段（+ 总量 / 捕获像素 / 玻璃块数）', () => {
+    const s = read(IOS_SELFDRAW)
+    for (const f of ['lastGlassHideMs', 'lastGlassRasterMs', 'lastGlassBlurMs',
+                     'lastGlassMetalMs', 'lastGlassInstallMs', 'lastGlassTotalMs']) {
+      expect(s.includes(f), `缺玻璃子相位字段 ${f}`).toBe(true)
+    }
+    // 捕获像素数必须可读——否则"栅格慢"无法归因到面积（裁剪撑大是最常见原因）
+    expect(s).toMatch(/lastGlassCropPx/)
+    expect(s).toMatch(/lastGlassCount/)
+  })
+
+  it('★每段都有真实计时（不是只声明字段——删掉计时表达式必须红）', () => {
+    const s = read(IOS_SELFDRAW)
+    // ★关键：真实埋点是局部 `xxxMs = (CFAbsoluteTimeGetCurrent() - tXxx0) * 1000`，
+    //   而不是末尾那次 `lastGlassXxxMs = xxxMs`。只查后者会被"删掉计时仍绿"骗过（本轮实测）。
+    const SEGS: Array<[string, string]> = [
+      ['hide', 'capHideMs'],
+      ['raster', 'rasterMs'],
+      ['blur', 'blurMs'],
+      ['metal', 'metalMs'],
+      ['install', 'installMs'],
+    ]
+    for (const [phase, local] of SEGS) {
+      const re = new RegExp(`${local}\\s*=\\s*\\(CFAbsoluteTimeGetCurrent\\(\\)\\s*-\\s*t\\w+0\\)\\s*\\*\\s*1000`)
+      expect(re.test(s), `玻璃 ${phase} 段没有计时表达式（只有字段声明不算埋点）`).toBe(true)
+    }
+    // 五段必须被写回读数（否则界面上取不到）
+    for (const f of ['lastGlassHideMs', 'lastGlassRasterMs', 'lastGlassBlurMs',
+                     'lastGlassMetalMs', 'lastGlassInstallMs']) {
+      expect(s).toMatch(new RegExp(`${f} = `))
+    }
+  })
+
+  it('★无玻璃时仍零开销早退（子相位不得给每个屏都加一次全流程）', () => {
+    const s = read(IOS_SELFDRAW)
+    const fn = s.slice(s.indexOf('func applyGlassPass()'))
+    const head = fn.slice(0, fn.indexOf('let size = bounds.size'))
+    expect(head, 'applyGlassPass 首行必须是"无玻璃直接 return"').toMatch(/guard !glassSpecByNodeId\.isEmpty else \{ return \}/)
+    // 早退必须在计时开始**之前**（否则"无玻璃"也会记一堆 0，读数无法区分"没玻璃"与"玻璃零成本"）
+    expect(head.indexOf('guard !glassSpecByNodeId.isEmpty')).toBeLessThan(head.length)
+    expect(head).not.toMatch(/CFAbsoluteTimeGetCurrent/)
+  })
+
+  it('报告带出玻璃子相位（mount_history 逐次 + glass_phase 末次）', () => {
+    const s = read(IOS_SELFDRAW)
+    expect(s).toMatch(/for \(k, val\) in v\.glassPhaseStats\(\) \{ rec\["glass_" \+ k\] = val \}/)
+    expect(read(IOS_SUPERAPP_SCENE)).toMatch(/o\["glass_phase"\]/)
+  })
+
+  it('★CIContext 必须复用（每帧新建 = 每帧付一次上下文初始化；真机模糊段 10.6ms）', () => {
+    const s = read(IOS_SELFDRAW)
+    // 只允许**声明处**一次构造；`applyGlassPass` 内不得再 `CIContext(options:)` 新建
+    //   ★排除注释行（注释里会提到 `CIContext(options: nil)` 这个写法——按代码行判才准）
+    const codeLines = s.split('\n').filter((l) => !/^\s*(\/\/|\/\*|\*)/.test(l))
+    const ctor = codeLines.join('\n').match(/CIContext\(options:/g) ?? []
+    expect(ctor.length, 'CIContext 被多次构造（应复用一份 sharedCIContext）').toBe(1)
+    expect(s).toMatch(/private static let sharedCIContext = CIContext\(options: nil\)/)
+    expect(s).toMatch(/let ctx = SelfDrawView\.sharedCIContext/)
+  })
+})

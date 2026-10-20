@@ -8342,3 +8342,71 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   ② Android/鸿蒙补玻璃子相位，做三端玻璃成本对照；
   ③ 多轮样本聚合出 p95（当前只有单次读数）；
   ④ 补首屏那条 mount 的 layers/post/glass 字段（走的是未埋点的分支）。
+
+1101. **★★iOS 玻璃遍五段拆分：模糊 10.6ms（57%）+ 栅格化 4.35ms（24%），Metal 只 3.5ms；CIContext 复用只省 5.4%（诚实标注为小幅）· 决策**（2026-10-20 · 承接 #1100 的"下一步①：把玻璃遍再拆一次"）:
+
+【做了什么】把 iOS `applyGlassPass`（#1100 实测 21.1ms = 带玻璃屏 mount 的 59%）拆成五段：
+  `hide`（隐藏玻璃自身层，避免把自己糊进 backdrop）/ `raster`（`self.layer.render` 软件栅格化 cropRect）/
+  `blur`（CIGaussianBlur）/ `metal`（renderFaces：纹理上传+编码+提交+等待+逐块读回）/
+  `install`（建 CALayer 面并挂层）。另记录 `crop_px`（捕获像素数）与 `glass_count`——
+  否则"栅格/模糊慢"无法归因到**面积**（裁剪框被 pad 撑大是最常见原因）。
+
+【真机读数（iPhone 12 · `--superapp --drive` · 同一有玻璃屏）】
+  | 子段 | 首次测量 | CIContext 复用后 | 占玻璃遍 |
+  |---|---|---|---|
+  | **blur**（CIGaussianBlur） | **10.62** | **9.60** | **57% → 55%** |
+  | **raster**（layer.render） | 4.35 | 4.21 | 24% |
+  | metal（纹理+编码+提交+读回） | 3.48 | 3.64 | 19% |
+  | hide（隐藏自身层） | 0.002 | 0.002 | ≈0 |
+  | install（建面挂层） | 0.016 | 0.016 | ≈0 |
+  | **合计** | **18.46** | **17.47** | — |
+  捕获面积：`crop_px = 113220`（逻辑面积 × 半分辨率捕获密度 1.5）。
+
+【★结论（最该记住的）】
+  1. **玻璃遍的大头是"抓背景图 + 模糊这张图"，不是 GPU 着色**。Metal 只占 19%——
+     想优化玻璃必须先砍 **backdrop 捕获与模糊**，优化 shader 是找错靶子。
+  2. **`hide` / `install` 都是噪声级（≈0.002/0.016ms）**：本仓历史上担心的"隐藏自身层"开销
+     根本不存在；把它们拆出来正是为了**排除**这类猜测（负结论也是结论）。
+  3. **CIContext 复用只省 5.4%**（blur 10.62→9.60ms，总量 18.46→17.47ms）：这是"每帧新建
+     CIContext"能省的全部。★我原本预期它会是大头（上下文初始化通常很贵），**实测推翻了预期**——
+     主要成本在 **CIGaussianBlur 本身 + CGImage 回读**。改动保留（零风险、语义不变），
+     但**不claim它是优化**：噪声水平 4.6%（metal 段反而 +4.6%，属抖动），所以只能算"小幅且方向正确"。
+
+【本次踩的装置坑（都要记）】
+  · ★`run-selfdraw.sh` 里 `rc=$COMPILE_RC，产物...`——**变量名与全角逗号粘连** ⇒ bash 把
+    `COMPILE_RC，` 当变量名 ⇒ `set -u` 下 `unbound variable`。★`bash -n` **抓不到**这类错
+    （语法合法，是运行时展开），只有真跑才炸。修法：`${COMPILE_RC}` 花括号界定。
+  · ★破坏性验证**与真机构建并发**改了同一个 `.swift` 文件 ⇒ swiftc 报
+    `input file was modified during the build`。⇒ 与「一条命令内不并行两件写同一产物」同源：
+    **验证脚本与构建不能并发**。
+
+【文件大小棘轮】
+  `selfdraw-scene.swift` 8639 → **8627** 行（新增玻璃子相位埋点后仍净减）。
+  为腾行额拆出 `host-support.swift`：`takeCString` / `physFootprintMB` / `BenchDone` /
+  `SvgDiag` / `ProteusLaunchDiag` / `ProteusTextLayer`——全是**顶层声明**，
+  不依赖 `SelfDrawView` 私有状态 ⇒ 搬迁无需改访问级别、零行为变化，已登记三处源码清单。
+
+【判据】`tests/perf-hot-path-budget.test.ts` **19/19**（本轮 +5）：
+  ① 五段字段齐（hide/raster/blur/metal/install）+ `crop_px` / `glass_count` 可读；
+  ② ★**每段都有真实计时表达式**（`xxxMs = (CFAbsoluteTimeGetCurrent() - tXxx0) * 1000`）——
+     只查 `lastGlassXxxMs` 会被"删掉计时但保留写回"骗过（本轮实测踩到，破坏性验证当场红）；
+  ③ ★**无玻璃时零开销早退**：`guard !glassSpecByNodeId.isEmpty else { return }` 必须在
+     **任何计时之前**（否则"没玻璃"也记一堆 0，读数分不清"没玻璃"与"玻璃零成本"）；
+  ④ 报告带出（`mount_history` 里逐次 `glass_*` + `glass_phase` 末次）；
+  ⑤ ★**CIContext 只允许构造一次**（排除注释行后计代码行数），防回潮到"每帧新建"。
+  + 宿主静态门禁 6 项全绿 · `check:no-blind-wait` / `check:file-size` / `check:gates-sync` 绿 ·
+  真机 2 轮全绿（优化前后各一轮）。
+
+【诚实边界】
+  ① 单次样本，**未做多轮 p95**——blur 10.62→9.60 的差值里含抖动（metal 段同期 +4.6%）；
+  ② `crop_px=113220` 只回答"捕获多大"，**没拆"捕获耗时 ∝ 面积"的斜率**；
+  ③ 未优化任何一段——本轮交付**归因 + 一个零风险小改**（CIContext 复用）；
+  ④ Android/鸿蒙仍未做等价子相位 ⇒ **三端玻璃成本仍不可比**；
+  ⑤ 玻璃交互路径（每 vsync 重渲）的成本未单独测——本次是 mount 路径的一次性玻璃遍。
+
+【下一步（按实测优先级）】
+  ① **blur 10.6ms 是最大单项**：候选 = 降 blur 半径 / 用 Metal 或 vImage 替代 CIGaussianBlur /
+     复用上一帧 backdrop（内容没变就不重捕）；先量"blur 半径 vs 耗时"的斜率再选；
+  ② **raster 4.35ms**：候选 = 进一步降采样（现在半分辨率）/ 只捕玻璃并集内"真正会被采样"的区域；
+  ③ Metal 3.5ms 是最小的，**最后再动**（先别去优化 shader）；
+  ④ 三端补同样子相位再做横向对照。
