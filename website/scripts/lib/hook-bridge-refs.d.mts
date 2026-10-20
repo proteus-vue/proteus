@@ -5,6 +5,13 @@
 /** hooks 工厂函数名（`capability.ts`）——契约常量；改源码工厂名须同步此表 */
 export const HOOK_FACTORY: string
 
+/**
+ * ★#1112：**runtime 间接引用契约**——hook 经 runtime 方法转手引桥时（如
+ * `useWebSocket → res.connectWs(bridge,…)`），此表声明「runtime 方法 → 它内部真正读取的桥方法名」。
+ * 抽取时据此**展开**，否则该 hook 的 refs 为空 ⇒ 对外会谎报「能力桥未接线」。
+ */
+export const RUNTIME_INDIRECT_REFS: Record<string, string[]>
+
 /** 抽取结果 */
 export interface HookRefExtract {
   /** `refs[hookName]` = 该 hook 取值片段内引用的桥方法名（去重、保持首次出现顺序） */
