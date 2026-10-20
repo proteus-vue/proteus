@@ -53,6 +53,38 @@ collect(path.join(ROOT, 'packages/components'), files) // ★语义组件库（2
  *   ★顺带补上了一个真实覆盖盲区：**这些生成器此前从未被任何门禁编译过**
  *     （check:script-compile 只编译 .vue 产物；generator 只有跑构建时才被执行）。
  */
+/**
+ * ★★#1136：**`scripts/*.mjs` 语法检查**（此前完全没覆盖）。
+ *
+ * 【为什么必须（本轮实测踩到）】新增 `scripts/check-repo-hygiene.mjs` 时，我在 `.mjs` 里写了
+ *   TypeScript 类型注解（`function f(): string[]` / `const x: Foo[] = []`）——
+ *   **`node --check` 之外的任何静态扫描都发现不了**，只在真正 `node xxx.mjs` 执行时才 SyntaxError。
+ *   而门禁脚本"执行时崩"的后果是**门禁静默失效**（比红更糟）。
+ *   ⇒ 所有 `scripts/*.mjs`（含子目录）一律过 `node --check`。
+ */
+function checkScriptsSyntax() {
+  const targets = []
+  const walk = (dir) => {
+    if (!fs.existsSync(dir)) return
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name)
+      if (e.isDirectory()) walk(p)
+      else if (e.name.endsWith('.mjs')) targets.push(p)
+    }
+  }
+  walk(path.join(ROOT, 'scripts'))
+  const bad = []
+  for (const file of targets) {
+    try {
+      execFileSync(process.execPath, ['--check', file], { stdio: 'pipe' })
+    } catch (e) {
+      const msg = String(e.stderr ?? e.message ?? '').split('\n').slice(0, 4).join(' ').slice(0, 300)
+      bad.push(`${path.relative(ROOT, file)} 语法检查失败：${msg}`)
+    }
+  }
+  return { bad, total: targets.length }
+}
+
 function checkGeneratorSyntax() {
   const targets = []
   for (const d of ['android', 'ios', 'harmony']) {
@@ -138,6 +170,14 @@ for (const f of files.sort()) {
 }
 fs.rmSync(path.join(ROOT, 'node_modules', '.cache', 'proteus-check'), { recursive: true, force: true })
 
+// ★★#1136：`scripts/*.mjs` 语法检查（新增门禁脚本"执行时才崩" = 门禁静默失效）
+const scriptsSyntax = checkScriptsSyntax()
+if (scriptsSyntax.bad.length) {
+  console.error('[script-compile] ❌ scripts/*.mjs 语法检查失败（常见根因：在 .mjs 里写了 TS 类型注解）:')
+  for (const x of scriptsSyntax.bad.slice(0, 15)) console.error(`  - ${x}`)
+  process.exit(1)
+}
+
 // ★生成器模板串护栏（见 checkGeneratorTemplateGuards 头注；本仓踩过五次）
 const tplViolations = checkGeneratorSyntax()
 if (tplViolations.length) {
@@ -152,4 +192,4 @@ if (failures.length) {
   for (const x of failures.slice(0, 15)) console.error(`  - ${x}`)
   process.exit(1)
 }
-console.log(`[script-compile] ✅ 全量 script 编译通过（含生成器语法护栏：node --check 全过）`)
+console.log(`[script-compile] ✅ 全量 script 编译通过（含生成器语法护栏 + scripts/*.mjs 语法：${scriptsSyntax.total} 个文件 node --check 全过）`)

@@ -10858,3 +10858,58 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   ① **P2 条件请求缓存**（`If-None-Match`/`If-Modified-Since` + `Cache-Control`；App 三端不会自动做 304）；
   ② **P1 HTTPDNS / HTTP/2 / 连接池 / pinning**（需 Android 引 OkHttp，独立大单）；
   ③ 超时分级（宿主层，与 P1 同批）。
+
+1136. **★★仓库体积治理：修掉忽略规则根因 + 卫生门禁 + 历史重写 runbook（重写待决）· 决策**（2026-10-20 · 用户指出「190MB 生成物 + 209MB 二进制被 git 跟踪，clone 体积偏大」）：
+
+【取证（比报告更严重）】
+  `git count-objects -vH`：**.git 实际 1.2 GB**（size 242 MiB + size-pack 526 MiB + 松散对象）。
+  历史 blob 按路径（去重后）：
+    · `spike/target-qjs/` **157 MB** ← 垃圾（576 个 .rlib/.rmeta/二进制）
+    · `.cdp-shots/` **25 MB** ← 垃圾（151 张 CDP 调试截图）
+    · `prebuilt` 的 `*.a`/`*.aar` **574 MB** ← **产品交付物**（`.aar` 改过 138 次、`.a` 11 次）
+    · `hosts/*/results/**` **55 MB** ← **有意入库**（真机判据证据）
+  ★用户说的"209MB 二进制"是**清理前 + 含历史版本**的口径；当前被跟踪的构建二进制只剩 33.9 MB。
+
+【★★★根因（比"忘了写 .gitignore"更值得记）】
+  `spike/.gitignore` 里明确写着「★DCP-1 spike 的构建产物（勿入库）」，规则是 `target/`；
+  而实际 Cargo 目标目录叫 **`target-qjs/`**（`CARGO_TARGET_DIR=spike/target-qjs`）
+  ⇒ **规则从未命中**。★**意图对、规则错** ⇒ 静默漏了 576 个文件。
+  这是「忽略规则也需要判据」的实例：写错一个后缀，后果零提示。
+
+【本轮做了什么（安全部分）】
+  ① 修 `.gitignore`（放**根**目录，用 `**/target-qjs/` 通配——子目录规则容易被下次改名再次失配），
+     并写**反向清单**：`prebuilt/**`（CLI 随包运行时）与 `hosts/*/results/**`（真机证据）
+     是**有意入库**的，避免后来者"以为都是垃圾"一刀切。
+  ② `git rm -r --cached spike/target-qjs .cdp-shots`（727 文件，**磁盘文件全保留**，已逐一核对 727/727）。
+  ③ 新门禁 `check:repo-hygiene`（`scripts/check-repo-hygiene.mjs`）：
+     按**形态**判（`target(-*)/`、`*.rlib/.rmeta/.o/.pyc`、`.cdp-shots/`、`node_modules/`、顶层 `dist|build`），
+     配 **6 条具名豁免（每条写理由）**；接 CI + verify 链（check:gates-sync 覆盖 99→100）。
+     ★破坏验证：`git add -f` 一个 `target-qjs` 文件 ⇒ 门禁红并精确报出该文件与原因；还原后绿。
+  ④ **顺带补了个门禁盲区**：`check-script-compile` 此前只扫 `.vue` 与 hosts 的 `gen-*.mjs`，
+     **`scripts/*.mjs` 完全没覆盖**——而我这轮就在 `.mjs` 里写了 TS 类型注解
+     （`function f(): string[]`），只在**真正执行时**才 SyntaxError ⇒ **门禁脚本崩 = 门禁静默失效**。
+     ⇒ 加 `checkScriptsSyntax()`（157 个文件 node --check），破坏验证：临时造一个带 TS 注解的 .mjs ⇒ 红。
+  ⑤ 新 `docs/repo-size-runbook.md`：体积账 + A/B/C 三方案 + 步骤 + 代价。
+
+【★★关键取证：`.aar` 的差异是真实代码改动（这决定了方案选择）】
+  取相邻两版（`3df9464b` vs `a61be4f5`）解包逐文件比对：
+  `AndroidManifest.xml` / `R.txt` / `jni/` **完全一致**，只有 `classes.jar` 里 7 个 class 不同，
+  且正是那两个决策改的文件（`DeviceCapability` #1080 / `KeyboardProbe`·`KeyboardWatcher` #1069）。
+  ⇒ 历史里 138 个 `.aar` **不是"同一内容的重复副本"**，去重救不了；LFS 会原样存 222 MB（`.a` 351 MB）。
+  ⇒ **真正的根治是"不提交构建产物"**（CI/发布时产出），但那会改变"外部用户只装 npm 包即可用"的现状
+     （#666 的初衷）⇒ **属产品决策，不是仓库卫生问题**。
+
+【★诚实边界：clone 体积**此刻还没变小**】
+  `git rm --cached` 只让**后续提交**不含这些文件；**历史 blob 一个都没少** ⇒ `.git` 仍是 1.2 GB。
+  要真瘦下来必须**重写历史**（`git filter-repo`）+ 强推，而那会**改写全部 commit sha**
+  （所有克隆失效、PR 引用失效、他人分支分叉）⇒ **不可逆且对外，必须用户决定**，本轮不做。
+  ★已把三方案（只清垃圾 ~182MB / 加 LFS 共 ~756MB / 不动）连同步骤与代价写进 runbook。
+
+【门禁】
+  `check:repo-hygiene`（新，CI + verify 接线）· `check-script-compile` 扩到 scripts/*.mjs（157 个）
+  · `pnpm test` **6447 条全绿** · check:gates-sync（CI 覆盖 100）· check:doc-links · check:docs-stats
+  · file-size · `check:harmony-runtime-prebuilt`（顺带修了 #1134 漏同步的 prebuilt 副本）
+
+【下一步（需用户决策）】
+  ① **历史重写 A/B/C** —— 见 `docs/repo-size-runbook.md` §3（推荐先只清垃圾，LFS 需评估配额）；
+  ② 若倾向"不提交构建产物"（根治 574MB）：需先答"外部用户只装 CLI 如何拿到预编译运行时"。

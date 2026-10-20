@@ -88,6 +88,9 @@ jobs:
       - name: ESLint 基线（★决策 #868：面状坏味道基线——error 类存量已 suppressions 锁定，只报新增）
         run: pnpm run lint
 
+      - name: 仓库卫生门禁（★#1136：构建产物不得被跟踪——本轮就因 `target/` vs `target-qjs/` 漏了 186MB）
+        run: node scripts/check-repo-hygiene.mjs
+
       - name: 逐帧通道去 JSON 门禁（★S2/#769：指令字节必须走 applyOpsBytes 字节直传，禁 number[] JSON——防静默回退）
         run: node scripts/check-no-json-wire.mjs
 
