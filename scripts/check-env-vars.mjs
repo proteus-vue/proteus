@@ -86,7 +86,11 @@ const needMountPath = [
   // Android：屏切换通路（`ScreenHost`）建节点前必须解析（`envResolver.resolve` 是 mount 循环内的调用）
   ['hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/ScreenHost.java', 'envResolver.resolve(', 'Android 屏切换通路（ScreenHost）未调用 env 解析（#677 复发）'],
   // 鸿蒙：屏内容 → 内核树的唯一出口（`AppScreenCommands`）建树前必须替换 token
-  ['hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_host.cpp', 'substituteEnvTokens(nodes, envTable)', '鸿蒙屏内容入口（AppScreenCommands）未替换 env token'],
+  // ★★#1143：抽取入参解析段后调用点变量名变为 `in.nodes`（原 `nodes`）——
+  //   **判据跟实现**（语义不变：仍是「屏内容入口必须替换 env token」）。
+  //   ★为什么允许改这条字面量：该判据的意图是「入口真的调了替换」，不是「变量必须叫 nodes」；
+  //     而 #1143 把解析段抽成 `parseScreenCommandsInput` 后，替换发生在解析函数内（更早、更内聚）。
+  ['hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_host.cpp', 'substituteEnvTokens(in.nodes, envTable)', '鸿蒙屏内容入口（AppScreenCommands）未替换 env token'],
 ]
 for (const [f, marker, why] of needMountPath) {
   const p = path.join(ROOT, f)

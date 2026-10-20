@@ -1711,6 +1711,45 @@ static inline void affApply(const Aff& M, double x, double y, double* ox, double
     *ox = M.a * x + M.c * y + M.tx; *oy = M.b * x + M.d * y + M.ty;
 }
 
+/**
+ * ★★★#1143 从 `renderCommandsImpl` 抽出的**预扫描段**（原 L1747-1768，22 行）。
+ *
+ * 【它做什么】收集每个节点的**自身绝对仿射** `ownAbs` 与父关系 `parentOf`、是否有变换 `hasTf`
+ *   —— 供主构建循环把祖先链变换合成进子节点矩阵（宿主扁平建树不级联）。
+ *
+ * 【为什么单独成函数（决策 #1143）】它在 `renderCommandsImpl`（834 行）里是**完全内聚**的一段：
+ *   只读 `items`（JSON 切片）、只写三个 map，与后续建树/绘制零耦合。
+ *   抽出后主函数少 22 行，且这段可被独立阅读 —— 读它不需要看 830 行其他代码。
+ *
+ * ★行为等价（真机判据）：`bash hosts/harmony/run-host-app.sh` 的 RenderNode 直绘判据
+ *   （host_nodes / host_cmds / inst_* 指纹）在拆分前后必须完全一致。
+ */
+static void precomputeTransforms(
+    const std::vector<std::string>& items,
+    std::map<int, Aff>& ownAbs,
+    std::map<int, int>& parentOf,
+    std::map<int, bool>& hasTf) {
+    for (const auto& it : items) {
+        double id = -1, pid = -1, x = 0, y = 0, w = 0, h = 0;
+        if (!jsonNumber(it, "id", &id)) continue;
+        jsonNumber(it, "parentId", &pid);
+        if (!jsonNumber(it, "x", &x) || !jsonNumber(it, "w", &w)) continue;
+        jsonNumber(it, "y", &y); jsonNumber(it, "h", &h);
+        double tx = 0, ty = 0, sc = 1, rot = 0, toX = 0.5, toY = 0.5;
+        jsonNumber(it, "tx", &tx); jsonNumber(it, "ty", &ty);
+        jsonNumber(it, "scale", &sc); jsonNumber(it, "rotate", &rot);
+        jsonNumber(it, "toX", &toX); jsonNumber(it, "toY", &toY);
+        bool tf = (tx != 0 || ty != 0 || sc != 1 || rot != 0);
+        hasTf[(int)id] = tf;
+        parentOf[(int)id] = (int)pid;
+        // 自身绝对仿射 A(p) = Q + RS(p−Q) + T（Q = 绝对枢轴）
+        double rad = rot * 3.14159265358979323846 / 180.0, co = std::cos(rad), si = std::sin(rad);
+        double a = sc * co, b = sc * si, c = -sc * si, d = sc * co;
+        double Qx = x + toX * w, Qy = y + toY * h;
+        ownAbs[(int)id] = Aff{ a, b, c, d, Qx - (a * Qx + c * Qy) + tx, Qy - (b * Qx + d * Qy) + ty };
+    }
+}
+
 static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
     if (jsonCStr == nullptr || g_content == nullptr || g_rootNode == nullptr) return -1;
     std::string json = jsonCStr;
@@ -1744,28 +1783,9 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
         }
     }
 
-    // ★★★预扫描（CSS 父 transform 级联，2026-10-08）：收集每个节点的**自身绝对仿射**与父关系
-    //   —— 供 build 循环把祖先链变换合成进子节点矩阵（宿主扁平建树不级联）。
+    // ★★★#1143：预扫描抽出为独立函数（原此处 22 行内联）
     std::map<int, Aff> ownAbs; std::map<int, int> parentOf; std::map<int, bool> hasTf;
-    for (const auto& it : items) {
-        double id = -1, pid = -1, x = 0, y = 0, w = 0, h = 0;
-        if (!jsonNumber(it, "id", &id)) continue;
-        jsonNumber(it, "parentId", &pid);
-        if (!jsonNumber(it, "x", &x) || !jsonNumber(it, "w", &w)) continue;
-        jsonNumber(it, "y", &y); jsonNumber(it, "h", &h);
-        double tx = 0, ty = 0, sc = 1, rot = 0, toX = 0.5, toY = 0.5;
-        jsonNumber(it, "tx", &tx); jsonNumber(it, "ty", &ty);
-        jsonNumber(it, "scale", &sc); jsonNumber(it, "rotate", &rot);
-        jsonNumber(it, "toX", &toX); jsonNumber(it, "toY", &toY);
-        bool tf = (tx != 0 || ty != 0 || sc != 1 || rot != 0);
-        hasTf[(int)id] = tf;
-        parentOf[(int)id] = (int)pid;
-        // 自身绝对仿射 A(p) = Q + RS(p−Q) + T（Q = 绝对枢轴）
-        double rad = rot * 3.14159265358979323846 / 180.0, co = std::cos(rad), si = std::sin(rad);
-        double a = sc * co, b = sc * si, c = -sc * si, d = sc * co;
-        double Qx = x + toX * w, Qy = y + toY * h;
-        ownAbs[(int)id] = Aff{ a, b, c, d, Qx - (a * Qx + c * Qy) + tx, Qy - (b * Qx + d * Qy) + ty };
-    }
+    precomputeTransforms(items, ownAbs, parentOf, hasTf);
     int32_t built = 0;
     int32_t textCount = 0;
     // ★决策 #842：自绘通道 —— 新建/复用一个 SelfDrawSpec（元素入其 nodes；收尾挂到根 RenderNode 画布）

@@ -85,7 +85,14 @@ if [ -n "$READY_LINE" ]; then
   #   ★走 hilog 主动上报 + 条件等待（零盲等）
   RENDER_LINE=""
   if bash "$WAIT_SH" --cmd "bash '$HERE/hdc.sh' shell 'hilog -x | grep -q PROTEUS_RENDER_DONE'" --timeout 15 --interval 2; then
-    RENDER_LINE="$(HDC shell "hilog -x | grep PROTEUS_RENDER_DONE | tail -1" 2>/dev/null | head -1)"
+    # ★★★#1143：**不取 tail -1**——一次启动会打多条 RENDER_DONE（多探针场景：47/2/44/73/12…），
+    #   `tail -1` 的取值取决于"哪个场景最后跑"，会让**拆分前后对比**看起来像回归
+    #   （实测：同一份代码连跑三次得到 44 / 12 / 4，全是不同场景的真实读数）。
+    #   ⇒ 取**主场景**（nodes 最大者）作为"建树规模"的代表，并保留全部读数供对照。
+    RENDER_ALL="$(HDC shell "hilog -x | grep PROTEUS_RENDER_DONE" 2>/dev/null | grep -oE 'nodes=[0-9]+ parsed=[0-9]+ texts=[0-9]+' | sort -t= -k2 -n -r | uniq)"
+    RENDER_LINE="$(printf '%s\n' "$RENDER_ALL" | head -1)"
+    echo "    各场景读数（按 nodes 降序，共 $(printf '%s\n' "$RENDER_ALL" | grep -c . ) 种）："
+    printf '%s\n' "$RENDER_ALL" | sed 's/^/      /'
   fi
   RENDER_NODES="$(printf '%s' "$RENDER_LINE" | grep -oE 'nodes=[0-9]+' | head -1 | cut -d= -f2)"
   echo

@@ -105,7 +105,8 @@ describe('★内置环境变量门禁（含"通路必须调用解析器"判据 �
   it('④ 删掉鸿蒙屏内容入口的替换调用 ⇒ 红', () => {
     const dir = buildFixture()
     try {
-      stripInFixture(dir, 'hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_host.cpp', 'substituteEnvTokens(nodes, envTable)')
+      // ★#1143：抽取入参解析段后变量名变 `in.nodes`（与 check-env-vars.mjs 的判据同步）
+      stripInFixture(dir, 'hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_host.cpp', 'substituteEnvTokens(in.nodes, envTable)')
       const r = runGate(dir)
       expect(r.ok, '删掉鸿蒙入口替换调用应判红').toBe(false)
       expect(r.out).toMatch(/鸿蒙屏内容入口/)

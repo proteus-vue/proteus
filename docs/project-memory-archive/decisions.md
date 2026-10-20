@@ -11330,3 +11330,65 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   ① **有 hdc 设备时**：用 `outline:code --fn renderCommandsImpl` 定位 → 拆成 3~4 个内聚函数 → 三端重跑；
   ② `.workbuddy/salvage` 5449 个未跟踪截图纳入治理；
   ③ 回到 #1133 矩阵 P2（条件请求缓存）。
+
+1143. **★★★鸿蒙 C++ 巨型函数真拆分（834→815 / 562→540）+ 修掉「判据 tail -1」导致的前后对比失真 · 决策**（2026-10-20 · 承接 #1142，**用户纠正：「鸿蒙设备一直在线的啊，你是不是又找错了？」**）：
+
+【★先认错（这是本轮最重要的部分）】
+  #1142 我写下「本机 `hdc not found` ⇒ 无设备 ⇒ 不动行为」——**只跑了 `which hdc` 就下结论**。
+  用户当场纠正后取证：`bash hosts/harmony/hdc.sh check` 显示
+  **`69F9K26126005311  USB  Connected`** · hdc **3.2.0d** · 密钥 3072 位正确 · 设备 KLE-AL00U / API 26。
+  ★**这是 AGENTS.md 里点名的那条反复踩的坑**：「下否定结论前先跑一条取证命令；多候选环境按**能力完备度**排序」——
+    而仓内 `hosts/harmony/hdc.sh` 头注明写着「**hdc 不在 PATH，在 DevEco Studio 内**」。
+  ★代价：白写了一轮"因无设备所以不做"的决策（#1142），并推迟了真正该做的事。
+
+【本轮做的拆分（2 处，均为完全内聚段）】
+  | 抽出 | 原位置 | 行数 | 结果 |
+  |---|---|---|---|
+  | `precomputeTransforms(items, ownAbs, parentOf, hasTf)` | `renderCommandsImpl` 内联 | 22 行 | 834 → **815** |
+  | `struct ScreenCommandsInput` + `parseScreenCommandsInput(env, info)` | `AppScreenCommands` 内联 | 26 行 | 562 → **540** |
+  ★两段共同特征：**只读入参、只写局部容器/结构体**，与后续建树绘制零耦合。
+  ★`ScreenCommandsInput` 抽出后调用点保留同名局部别名（`std::string nodes = in.nodes, ...`），
+    **后续 500 行零改动**——最小侵入，是"行为等价"最强的结构性保证。
+
+【★★★真机行为等价验证（这是拆分能做的唯一依据）】
+  · 判据：`bash hosts/harmony/run-host-app.sh` 的 RenderNode 直绘读数。
+  · **第一版验证方法是错的**：脚本取 `hilog -x | grep PROTEUS_RENDER_DONE | tail -1`，
+    而**一次启动会打多条**（多探针场景：47×14 / 44 / 73 / 12 / 7 / 4 / 3 / 2 …）
+    ⇒ `tail -1` 的取值取决于"哪个场景最后跑"。
+    实测同一份代码连跑三次得到 **44 / 12 / 4** —— 全是真实读数，但**看起来像回归**。
+  · 修法（改判据，不改实现）：取**全部场景读数的分布**（`sort -t= -k2 -n -r | uniq`），
+    主值取 nodes 最大者，并把全部读数打印出来供对照。
+  · **最终验证**：`hilog -r` 清日志 → 单次启动 → 取 12 组读数分布；
+    拆分前 vs 拆分后 **`diff` 完全一致**（逐项相同）⇒ 行为等价**有证据**，不是"看起来没变"。
+
+【顺带暴露的两个既有问题（如实登记，不在本轮修）】
+  ① **`app-stack-executor` 退化**：设备落盘 `{"exec_content_nodes":0,...,"fatal":"Error: [screen-host] screen.mount 失败：screen.mount: create 失败"}`。
+     ★**已用 `git stash` 复验：拆掉我的改动、重建、重跑，读数同样为 0** ⇒ **与拆分无关**，
+     是既有问题（入库版本是 `exec_content_nodes=114`，说明某次提交后坏了）。
+     已把该结果文件还原到入库版本，并在 `decision` 里登记为待查项。
+  ② **文件行数反增**：`proteus_render.cpp` 3701→3721、`proteus_host.cpp` 1068→1090
+     —— 因为抽出的函数带大段"为什么这么抽"的注释。**净收益在单函数**（-19 / -22 行），
+     文件行数增加是**注释换认知**，判据（file-size 棘轮）已按新值降钉。
+
+【门禁改动（判据跟实现，语义不变）】
+  · `check-env-vars.mjs` 的鸿蒙判据字面量 `substituteEnvTokens(nodes, envTable)` → `(in.nodes, envTable)`
+    —— 该判据的**意图**是「屏内容入口真的调了 env 替换」，不是「变量必须叫 nodes」；
+    抽出后替换发生在 `parseScreenCommandsInput` 内（更早、更内聚），语义等价。
+  · `tests/env-vars-gate.test.ts` 的夹具同步（否则"删掉调用 ⇒ 应红"那条用例找不到锚点）。
+
+【诚实边界】
+  ① 拆分只做了**两处最内聚的**（合计 -41 行）；`renderCommandsImpl` 仍是 **815 行**——
+     其内部是 688 行**长流水线**（依赖 10+ 局部状态：`g_sdSpec`/`built`/`textCount`/多个 map），
+     ★**不该硬抽**（抽出来要传十几个参数，可读性反而更差）；
+  ② 真正的进一步拆分需要**重构数据流**（把局部状态收进一个 struct），那是一次更大的行为改动，
+     要有独立的判据设计（本轮不做）；
+  ③ `prebuilt` 副本已同步（`check:harmony-runtime-prebuilt` 逐字节一致）。
+
+【门禁】
+  `pnpm test` **6463 条全绿** · `check:harmony-host-compile`（两形态编译）· `check:harmony-runtime-prebuilt`
+  · 真机：`run-host-app.sh` 全绿 + **12 组读数分布逐项一致** · file-size（基线降钉）· gates-sync
+
+【下一步】
+  ① 查 `app-stack-executor` 的 `screen.mount: create 失败`（既有问题，有设备可查了）；
+  ② `renderCommandsImpl` 若要继续拆，先设计"局部状态 struct"再动；
+  ③ `.workbuddy/salvage` 5449 个未跟踪截图治理。

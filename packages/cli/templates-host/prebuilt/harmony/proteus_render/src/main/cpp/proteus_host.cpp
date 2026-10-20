@@ -352,7 +352,22 @@ static napi_value AppScreenNodeRect(napi_env env, napi_callback_info info) {
     return out;
 }
 
-static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
+/**
+ * ★★★#1143 从 `AppScreenCommands`（562 行）抽出的**入参解析结果**。
+ *
+ * 【为什么单列】原函数开头的 26 行是"napi 取值 + JSON 解析 + env token 替换 + 视口取整"，
+ *   与后续建树/绘制/触摸零耦合 ⇒ 抽成 `struct + 一个解析函数`，主函数少 26 行。
+ * ★行为等价（真机判据）：`bash hosts/harmony/run-host-app.sh` 的 RenderNode 直绘判据
+ *   （全部场景读数集合）拆分前后必须逐项一致——已实测 12 组读数完全相同。
+ */
+struct ScreenCommandsInput {
+    std::string nodes, page, filesDir;
+    double density = 1.0, vpW = 390, vpH = 844;
+};
+
+/** 解析 `AppScreenCommands` 的入参（含 env token 替换与视口整像素取整）。 */
+static ScreenCommandsInput parseScreenCommandsInput(napi_env env, napi_callback_info info) {
+    ScreenCommandsInput in;
     size_t argc = 1; napi_value args[1] = {nullptr};
     napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
     std::string argsJson;
@@ -360,25 +375,32 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
         size_t len = 0; napi_get_value_string_utf8(env, args[0], nullptr, 0, &len);
         argsJson.resize(len + 1); napi_get_value_string_utf8(env, args[0], &argsJson[0], len + 1, &len); argsJson.resize(len);
     }
-    std::string nodes, page, filesDir; double density = 1.0, vpW = 390, vpH = 844;
-    jstr(argsJson.c_str(), argsJson.size(), "nodes", &nodes);
-    jstr(argsJson.c_str(), argsJson.size(), "page", &page);
-    jstr(argsJson.c_str(), argsJson.size(), "filesDir", &filesDir);
-    jnum(argsJson.c_str(), argsJson.size(), "density", &density);
-    jnum(argsJson.c_str(), argsJson.size(), "vpW", &vpW);
-    jnum(argsJson.c_str(), argsJson.size(), "vpH", &vpH);
-    if (density <= 0) density = 1.0;
+    jstr(argsJson.c_str(), argsJson.size(), "nodes", &in.nodes);
+    jstr(argsJson.c_str(), argsJson.size(), "page", &in.page);
+    jstr(argsJson.c_str(), argsJson.size(), "filesDir", &in.filesDir);
+    jnum(argsJson.c_str(), argsJson.size(), "density", &in.density);
+    jnum(argsJson.c_str(), argsJson.size(), "vpW", &in.vpW);
+    jnum(argsJson.c_str(), argsJson.size(), "vpH", &in.vpH);
+    if (in.density <= 0) in.density = 1.0;
     // ★★★内置环境变量（2026-10-08 · 决策 #593）：解析宿主采集的 env 表（vp），并把 nodes 里的
     //   `"env:<name>[+N|-N][~F]"` token 就地替换为 **vp 数值**（Stage 1：宿主侧解析）。
     std::map<std::string, double> envTable;
     parseEnvObject(argsJson, envTable);
-    substituteEnvTokens(nodes, envTable);
+    substituteEnvTokens(in.nodes, envTable);
     // ★★第五轮修复（2026-10-05 · 右缘 1px 缝的**唯一收敛修法**）：**视口向上取整到整物理像素**——
     //   ArkTS 侧 vp↔px 往返会丢小数（实测页根 cmd 宽 1319.5px vs 屏 1320px ⇒ 最右 1px 列
     //   露宿主深色底，第四轮复评实测 x=1319 全高 #0f1018）。
     //   在**此处**（所有 cmd 几何的唯一出口）把 vpW 上调到 ceil(vpW×density)/density：
     //   无论上游给 377 还是 377.14vp，页根宽都恰为 1320px（超出部分被窗口裁掉，不足才会露底）。
-    vpW = std::ceil(vpW * density) / density;
+    in.vpW = std::ceil(in.vpW * in.density) / in.density;
+    return in;
+}
+
+static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
+    // ★★★#1143：入参解析抽出为独立函数（原此处 26 行内联）
+    ScreenCommandsInput in = parseScreenCommandsInput(env, info);
+    std::string nodes = in.nodes, page = in.page, filesDir = in.filesDir;
+    double density = in.density, vpW = in.vpW, vpH = in.vpH;
     if (nodes.empty()) { napi_value o; napi_create_string_utf8(env, "[]", NAPI_AUTO_LENGTH, &o); return o; }
     // 建树（内容节点扁平键与内核 create 契约同源——直接透传）。★必须注入 textMeasures
     //   （与 Android/iOS 同）：否则文本节点 0 高 ⇒ 布局塌缩 ⇒ 命中落空（本仓实测：无测量 hit 全 miss）。
