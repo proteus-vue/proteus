@@ -37,8 +37,31 @@ export const HOOK_FACTORY = 'createCapabilityHooks'
 const FALLBACK_RECEIVER = 'bridge'
 
 /**
+ * ★★★决策 #1112：**runtime 间接引用契约**——hook 不直接碰 `bridge.*`，而是经 runtime 方法转手。
+ *
+ * 【为什么需要（2026-10-20 实测的对外谎报）】
+ *   `useWebSocket: (url, protocols) => wrap(res.connectWs(bridge, url, protocols))`
+ *   ——取值片段里**没有** `bridge.connectWebSocket`，真正的桥引用藏在
+ *   `capability-runtime.ts::makeCapabilityRuntime().connectWs()` 内部。
+ *   ⇒ 解析器抽到 `refs = []` ⇒ App 列判定条件 `refs.length && …` 不成立
+ *     ⇒ **官网把已落地的 websocket 标成「能力桥未接线 🟡」**（宿主腿 #1093 早已实现且编译通过）。
+ *     **这是对外谎报**（与 #881 `useMiniProgram` refs 恒空同型）。
+ *
+ * 【本表是"显式契约"而不是"猜"】每个条目必须写清「runtime 方法 → 它内部真正读取的桥方法名」+ 锚点。
+ *   ★新增此类间接调用时**必须在此登记**，否则该能力各端列会如实显示 🟡/⚠️（宁可显示未接线，
+ *     也不要显示假绿——但登记了才是对的）。
+ *   ★与 `APP_BRIDGE_EXTRA_MEMBERS`（桥工厂闭包）是**两类不同的间接**：那张表解决"桥成员在工厂闭包里"，
+ *     本表解决"hook 根本不直接引用桥，而是调 runtime 方法"。
+ */
+export const RUNTIME_INDIRECT_REFS = {
+  /** `useWebSocket` → `res.connectWs(bridge, …)` → `bridge.connectWebSocket`
+   *  锚点：`packages/api/src/capability-runtime.ts` 的 `connectWs()`（读 `bridge.connectWebSocket`） */
+  connectWs: ['connectWebSocket'],
+}
+
+/**
  * 抽取：源码 → `{ refs, hookCount, receiver, duplicates, misses }`。**纯函数**（可单测），不抛错。
- * `refs[hookName]` = 该 hook 取值片段内引用的桥方法名（去重、保持首次出现顺序）。
+ * `refs[hookName]` = 该 hook 取值片段内引用的桥方法名（去重、保持首次出现顺序，**含 runtime 间接展开**）。
  */
 export function extractHookBridgeRefs(src, factory = HOOK_FACTORY) {
   const masked = maskNonCode(src)
@@ -63,9 +86,24 @@ export function extractHookBridgeRefs(src, factory = HOOK_FACTORY) {
   const refs = {}
   const duplicates = []
   let total = 0
+  // ★#1112：runtime 间接（`res.connectWs(...)` 之类）。receiver 名同样从形参/局部推断不可靠
+  //   ⇒ 用**宽匹配** `<ident>.<runtimeMethod>(`，再经显式表展开成真实桥方法名。
+  //   为什么宽匹配安全：`RUNTIME_INDIRECT_REFS` 只登记了少数**明确**的 runtime 方法名，
+  //   误收一个同名调用的概率极低；且收错的表现是"多一个 ref"⇒ 该能力反而更可能被判 ⚠️，
+  //   不会制造假绿（假绿面已被 `refs.length && refs.every(...)` 与 shell/verified 判定守住）。
+  const indirectKeys = Object.keys(RUNTIME_INDIRECT_REFS)
+  const reIndirect = indirectKeys.length
+    ? new RegExp(`\\b[A-Za-z_$][\\w$]*\\.(${indirectKeys.map((k) => k.replace(/[$]/g, '\\$&')).join('|')})\\b`, 'g')
+    : null
   for (const e of entries) {
     if (e.name in refs) duplicates.push(e.name)
     const hits = [...e.value.matchAll(reRef)].map((x) => x[1])
+    // 展开 runtime 间接引用
+    if (reIndirect) {
+      for (const m of e.value.matchAll(reIndirect)) {
+        for (const bridged of RUNTIME_INDIRECT_REFS[m[1]] ?? []) hits.push(bridged)
+      }
+    }
     refs[e.name] = [...new Set(hits)]
     total += refs[e.name].length
   }

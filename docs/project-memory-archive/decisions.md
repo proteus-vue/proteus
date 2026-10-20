@@ -9066,3 +9066,78 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 【下一步】① 造**强高频内容**的玻璃实拍样本（玻璃压在文字/棋盘/细网格上），用本判据在 div=2/3 上对比；
   ② 若 1.50x 实测干净，再考虑 div=3（省 25%）；否则维持 1:1 并转向"减少捕获面积/隔帧重捕"；
   ③ 考虑把三端旋钮统一表述为「有效放大倍率」，避免下一个"数字看起来像"的口径错误。
+
+1112. **★★★转入能力端主线：修掉一处「已落地却对外谎报未接线」（useWebSocket 经 runtime 间接）+ 产出源码级缺口清单 · 决策**（2026-10-20 · 用户「可以在合适的时机转入能力端实现主线；内存有明确的治理实现就差不多了」）：
+
+【为什么现在转（玻璃线的自然断点）】
+  #1111 已裁决「那 25% 不拿」（div=3 会把 iOS 推向 1.50x 放大，而 2.00x 已被肉眼否决），
+  且解锁条件变成「需要强高频内容的实拍样本」——那是取证工作，不是主线推进。
+  ⇒ 玻璃线收在一个**有明确结论**的位置，转能力端是对的。
+
+【★先踩住一个差点犯的错：不要读 `primitives.ts` 的 `status`】
+  本轮一开始想用 `PRIMITIVE_CATALOG` 的 `status: 'planned'` 当缺口清单，数出 26 条"待实现"。
+  **然后发现本仓早就把这个陷阱写进了文档**（`docs/generated/capability-priority.md` §0）：
+  「★**不要**把 catalog 的 `status` 读成「已实现/未实现」：**对能力项它是类别标记**
+   （`planned` = 纯 Hook 无 C-IR 节点）」。首版曾展示该字段 ⇒ 把 useStorage/useNetwork
+  等**日常在用**的能力读成"待实现"，属**误导**。
+  ⇒ 差一点第三次踩同一个坑。改用**源码事实**（下面的清单）。
+
+【缺陷 1（真缺陷，且是"对外谎报"）：`useWebSocket` 被判「能力桥未接线」】
+  · 现象：官网 `capabilities/websocket.md` 的 iOS/Android 都是 🟡「能力桥未接线」，
+    但宿主腿 **#1093 早已实现并编译通过**（`connectWebSocket` 在 `capability-app.ts` 桥工厂里）。
+  · 根因：`useWebSocket: (url, protocols) => wrap(res.connectWs(bridge, url, protocols))`
+    ——取值片段里**没有** `bridge.connectWebSocket`，真正的桥引用藏在
+    `capability-runtime.ts::connectWs()` 内部 ⇒ 解析器抽到 `refs = []`
+    ⇒ App 列判定条件 `refs.length && …` 不成立 ⇒ 判 🟡。
+  · ★与 #881（`useMiniProgram` refs 恒空）**同型第三次**：**生成器用文本解析源码 = 隐式契约；
+    源码写法一变，契约就静默断裂，而表现是"对外谎报"而非报错。**
+  · 修法：在 `hook-bridge-refs.mjs` 新增 `RUNTIME_INDIRECT_REFS`（**显式契约表**）——
+    「runtime 方法 → 它内部真正读取的桥方法名」，抽取时**展开**；
+    并加判据**校验该表与 runtime 实现同源**（runtime 源里必须真有该方法 + 真读那个 `bridge.*`），
+    防"表写了一个不存在的方法名"（那种表会变成第二份谎言）。
+  · 效果：websocket 的 iOS/Android **🟡 → ✅**；iOS/Android 覆盖率 **40% → 42%**；
+    总览「网络与通信」**5/11 → 6/11**。鸿蒙仍 🟡（宿主壳未接线，**不顺手谎报**）。
+
+【★落地 2：能力端真实缺口清单（`scripts/capability-app-gap.mjs`）】
+  口径 = **源码事实**：hook 引用哪些桥方法 → 这些方法在 App 桥工厂是否存在。
+    · hook **95** 个 · App 桥 **46** 个方法
+    · ✅ 可接线 **38** · ❌ 真缺口 **55** · ⚠️ 无桥依赖/待核 **1**（`dispose`，资源管理非能力）
+  **按"一个桥方法影响多少 hook"排序**（排期优先看这个）：
+    `getStorage`(2: useStorage/useAuth) · `login`(2: useLogin/useAuth) ·
+    `addCalendarEvent`(2: useCalendar/useCalendarAPI) · 以及 `getLocation` / `share` /
+    `getPermission` / `openDocument` / `makePhoneCall` / `requestPayment` / `scanQR` /
+    `track` / `log` / `getFileSystem` / `subscribeMessage` / `chooseContact` /
+    `compressFile` / `addShortcut` / `getBluetooth` / `getNfc` … 各 1（完整表由工具输出）
+  · ★**排除 `probe`**：它是"逐项探测 bridge 是否就绪"的**自检钩子**，会把每个缺失都算一遍
+    ⇒ 混进清单会**虚增影响面**（实测每个方法 +1）。去掉它不是为了"数据好看"，
+    而是去掉一个**语义不同的消费者**。
+  · ★**该工具与官网能力页共用同一个抽取器** ⇒ 页面状态与排期清单**不会分叉**
+    （这是 #1089「同一事实写两遍」纪律的直接应用）。
+
+【判据】`tests/gen-content-hook-refs.test.ts` 扩到 **10/10**（+3）：
+  · ★`useWebSocket` 的 refs **必须**等于 `['connectWebSocket']`（旧解析器给 `[]`）；
+  · ★`RUNTIME_INDIRECT_REFS` **与 runtime 实现同源校验**：runtime 源里确有该方法定义、
+    且其内部真的读 `bridge.<登记名>`；
+  · ★修复落页：websocket 的 iOS/Android 为 ✅、**鸿蒙为 🟡**（防顺手谎报）。
+  + **破坏性验证**：删掉 `connectWs: ['connectWebSocket']` ⇒ 当场红，
+    报错直指「useWebSocket 的 refs 为空/不含 connectWebSocket ⇒ runtime 间接未被展开（对外会谎报未接线）」。
+  + `check:content`（78 组件 / 84 能力页与源一致）· `check:en-drift` · `check:doc-links` ·
+    `check:file-size` · `check:codenames` · `check:script-compile` 全绿。
+
+【诚实边界】
+  ① 本轮**只修了一处谎报**（websocket），**没有实现任何新能力**——55 个真缺口原样留着，
+     它们是接下来能力端主线的排期输入；
+  ② 「桥方法存在」≠「行为正确」：方法体可能是纯空壳（MP/Web 侧另有 `bridge-impl-reality` 守，
+     App 侧无同等空壳检查）⇒ 这 38 个"可接线"里仍可能有空壳；
+  ③ 缺口清单**未覆盖鸿蒙**（另有 `harmony-host-keys.mjs` 一套登记）；
+  ④ `RUNTIME_INDIRECT_REFS` 是**人工登记表**：新增"hook 经 runtime 间接调桥"的写法时必须补登记，
+     否则又会出现新的谎报（判据只能校验已登记项的自洽，不能发现未登记项）；
+  ⑤ 缺口数量（55）**不等于**工作量——很多能力一个桥方法就能覆盖，也有的一缺就是一整族。
+
+【下一步（能力端主线，按影响面排序）】
+  ① 先补**基础能力**：`getStorage` / `getLocation` / `share` / `getPermission` ——
+     这四个是业务最常用、且各自影响多个 hook 或整类场景；
+  ② 再做**账号与支付**：`login` / `requestPayment`（涉及安全边界，需单独评审）；
+  ③ 每补一个能力，**同时**补：App 桥方法 + 能力页重生成 + 真机判据（`check:host-runtime` 族）；
+  ④ 顺手给 App 侧补一个"空壳检查"（对齐 MP/Web 的 `bridge-impl-reality`），
+     避免 38 个"可接线"里藏空壳。

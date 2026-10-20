@@ -147,6 +147,38 @@ describe('hook → 桥方法引用抽取（生成器 ↔ 源码 显式契约 · 
     expect(auth).toContain('`login.failed`')
   })
 
+  it('★#1112：runtime 间接引用（`res.connectWs(bridge,…)`）必须展开成真实桥方法名', () => {
+    const r = extractHookBridgeRefs(API_JOINED, HOOK_FACTORY)
+    // 直接锁定：useWebSocket 的取值片段里**没有** `bridge.connectWebSocket`（它走 res.connectWs），
+    // 旧解析器因此抽到 [] ⇒ 官网把已落地的 websocket 标成「能力桥未接线」（对外谎报）。
+    expect(
+      r.refs.useWebSocket,
+      'useWebSocket 的 refs 为空/不含 connectWebSocket ⇒ runtime 间接未被展开（对外会谎报未接线）',
+    ).toEqual(['connectWebSocket'])
+  })
+
+  it('★#1112：间接契约表必须与 runtime 实现同源（防"表写了一个不存在的方法名"）', async () => {
+    const mod = await import('../website/scripts/lib/hook-bridge-refs.mjs')
+    const runtimeSrc = fs.readFileSync(path.join(API_SRC_DIR, 'capability-runtime.ts'), 'utf8')
+    for (const [rtMethod, bridgeNames] of Object.entries(mod.RUNTIME_INDIRECT_REFS)) {
+      // ① runtime 源里必须真有这个方法定义
+      expect(runtimeSrc, `runtime 源里找不到 ${rtMethod}()`).toMatch(new RegExp(`\\b${rtMethod}\\s*[<(]`))
+      // ② 它内部必须真的读 `bridge.<登记的方法名>`
+      for (const b of bridgeNames) {
+        expect(runtimeSrc, `runtime 里 ${rtMethod} 未读 bridge.${b}`).toContain(`bridge.${b}`)
+      }
+    }
+  })
+
+  it('★#1112 修复落页：websocket 的 iOS/Android 转 ✅（鸿蒙仍 🟡，宿主壳未接线）', () => {
+    const t = fs.readFileSync(path.join(CAP_DIR, 'websocket.md'), 'utf8')
+    const i = t.indexOf('## 兼容进度')
+    const s = t.slice(i, i + 1500)
+    expect(s, 'websocket 的 iOS 原生应为 ✅').toMatch(/\|\s*iOS 原生\s*\|\s*✅/)
+    expect(s, 'websocket 的 Android 原生应为 ✅').toMatch(/\|\s*Android 原生\s*\|\s*✅/)
+    expect(s, 'websocket 的鸿蒙应为 🟡（不得顺手谎报）').toMatch(/\|\s*鸿蒙\s*\|\s*🟡/)
+  })
+
   it('共用原语未回归：App 桥抽取仍为 11 + 3（与 #884 同源；11 = 原 10 + #903 的 request）', () => {
     const { perFn, misses } = extractAppBridgeKeys(fs.readFileSync(path.join(API_SRC_DIR, 'capability-app.ts'), 'utf8'))
     expect(misses).toEqual([])
