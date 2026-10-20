@@ -290,6 +290,7 @@ BLE 特征值（wx.BLECharacteristic 子集）
 | code | Doc |
 |---|---|
 | `bluetooth.unsupported` | Bridge does not provide getBluetooth (useBluetooth unavailable) |
+| `bluetooth.unavailable` | — |
 
 > Platform unsupported → the `*.unsupported` family; business branches on `code`, no try/catch needed.
 

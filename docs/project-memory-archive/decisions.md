@@ -9973,3 +9973,74 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   ③ `FetchConfig` 的 `baseURL` / `retry` / `retryDelay` / `skipAuth` 仍只在 `RequestConfig` 里
      （`useFetch` 未开放——它们属于 API 层的拦截器/重试体系，不是单次请求能力）；
   ④ 按 #1113 硬指标继续体检其它能力（文件/媒体/socket）。
+
+1123. **★★官网文档滞后修复：useFetch 能力页只写了"最基本功能"——生成器 5 个缺陷让文档系统性丢失实现细节 · 决策**（2026-10-20 · 用户「官网文档是没同步更新吗？useFetch 还是最基本的功能」）：
+
+【问题（用户判断正确）】
+  `useFetch` 底层已做到 S3（#1118–#1122），但官网 `capabilities/fetch.md` 仍停在**最初版本**：
+  参数表只有 5 个字段（新加的 `responseType`/`savePath`/`onChunk`/`upload`/`signal` 全没有）、
+  返回值写 `Promise<CapResult<T>>` 且 `data` 类型为空、错误码只有 1 条（实际 5 条）。
+
+【★根因不是"忘了同步"，而是**生成器有 5 个缺陷**（文档是生成物，不是手写）】
+  ① **拆文件的连带伤害**：生成器的源集合是硬编码的 3 个文件，我把 `FetchConfig` 等抽到
+     `capability-fetch-types.ts` 等新文件后，接口解析**找不到它们** ⇒ 参数表整段消失
+     （实测：重跑生成器后 fetch.md 被**删掉 38 行**）。
+  ② **函数型属性被当方法跳过**：规则 `if (/\(/.test(t)) continue` 把
+     `onChunk?: (chunk, seq) => void` 整行跳过 ⇒ **所有能力的回调型字段都不出现在官网**（不止 fetch）。
+  ③ **结果类型名写死 `CapResult`**：我把返回改成 `FetchResult<T>` 后，`hookShape` 匹配不到
+     ⇒ 返回值表 `data` 类型变**空**。
+  ④ **多出字段不渲染**：`FetchResult` 比 `CapResult` 多 `status`/`headers`，但生成器只写
+     ok/data/error 三行 ⇒ 业务不知道能拿到状态码。
+  ⑤ **错误码提取规则过窄**：只认 `CapError('字面量','字面量')`；而我用了
+     `ctx.CapError(...)`、三元表达式里的码、以及 `err.code = 'fetch.aborted'` 形态
+     ⇒ 4 条码全部漏掉。
+  ★**共性**：文档是**从源码文本扫描**生成的，所以任何"代码形态变了"都会让文档**静默退化**——
+    而没有一个门禁会发现"内容变少了"（`check:content` 只比"是否与当前生成器一致"）。
+
+【★★放宽规则时的两个连带伤害（都是本轮实测抓到的，值得单列）】
+  · 我把码字符集从 `[\w.]+` 放宽时误写成 `[\w.]+`（漏了连字符）⇒ **52 个能力页的错误码表整体消失**
+    （净删 326 行）。是 `git diff --stat` 上"52 files changed / 367 deletions"这个**异常数字**暴露的。
+  · 说明文字若取"参数里第一个字符串"，会抓到**另一个分支的码**当说明
+    （`fetch.timeout` 的说明被写成 `fetch.aborted`）⇒ 改为只取**码字面量之后**的。
+  ★教训：**放宽提取规则时，必须核对"影响面是变大还是变小"**——
+    我的本意是"多收几条码"，实际先做成了"少收一大批"。
+
+【★"拆文件"的连带义务（本轮第二次踩）】
+  `capability.ts` 的 `useFetch` 改成 `runFetch<T>(bridge, …)` 委托后，
+  **`bridge.request` 这个字面引用消失** ⇒ 文档的"端接线探测"（扫 `bridge.<method>`）判定
+  fetch **未实现**，总览里 iOS/Android 从 6/11 掉到 5/11。
+  ⇒ 修法：`useFetch` 保留 `bridge.request ? runFetch(...) : 快速失败` 的显式引用
+    （语义上也更对：无桥不该白建 Promise）。
+  ★这已是本轮**第二次**"抽走实现 ⇒ 下游文本扫描失效"（第一次是 #1122 的 bundle 重建判定）。
+
+【落地】
+  · `gen-content.mjs`：源集合扩到 8 个文件（含本轮拆出的 4 个 + 通道层）；函数型属性识别改为
+    `^\w+\s*\(` 才算方法；结果类型名改为 `\w*Result` 家族；多出字段从 `<名>Ok` 接口取；错误码放宽。
+  · `lib/error-codes.mjs`（新）：错误码提取抽成纯函数（含已知码语义兜底表）。
+  · 重新生成的产物：
+    - `capabilities/fetch.md`：**参数表 10 个字段**（含 onChunk 的回调类型）· 返回值
+      `Promise<FetchResult<T>>` + `data` 类型 `T` + **status/headers 两行** · **错误码 4 条**（含含义）
+    - `en/capabilities/fetch.md`：同步（英文说明列暂为 `—`，属设计上的诚实降级——`PROPS_EN` 未登记）
+    - `bluetooth.md` / `permission.md`：各**多出 1 条**错误码（放宽规则的正向收益）
+  · `capability.ts` 的 `useFetch` 保留 `bridge.request` 显式引用（文档探测依赖）。
+
+【验证】
+  · `gen-content.mjs --check`：**CHECK OK**（84 个能力页与源一致）
+  · `00-capabilities-overview.md` **零改动**（说明端接线统计已恢复正确——这是"没搞坏"的硬证据）
+  · 76/76 相关测试（含 `useFetch-contract` 13/13、`gen-content-hook-refs` 10/10）
+  · `check:docs-stats` / `check:safe-edit` / `check:file-size` 全绿
+
+【诚实边界】
+  ① **英文页字段说明是 `—`**（`PROPS_EN` 未登记新字段）——按"缺字段宁可不写也不混排中文"的既有原则，
+     这是**如实降级**而非缺陷；
+  ② 英文页参数表头显示为 `Param,Type,Required,Doc` 是**既有缺陷**（HEAD 上就有），本轮未修；
+  ③ 生成器是**文本扫描**而非真 TS 解析（字符串里含花括号/正则时不可靠）——已写进 `lib/error-codes.mjs` 头注；
+  ④ `gen-content.mjs` 本轮**净增 35 行**（2299→2334），已显式重生成基线；其余 4 个文件行数**全部下降**
+     （bridges 3990→3955 · types 3845→3835 · app 2092→2079 · capability 1092→1091）。
+
+【下一步】
+  ① **补 `PROPS_EN`**（英文页字段说明）——需人工翻译 5 个字段；
+  ② 修英文页表格头 `Param,Type,Required,Doc`（既有缺陷）；
+  ③ ★**给生成器加"内容缩水"门禁**：记录每个能力页的关键区块行数，骤降即红——
+    这才能兜住"代码形态变了 ⇒ 文档静默退化"这一类（本轮 5 个缺陷的共同形态）；
+  ④ 其它能力页也应过一遍（`onChunk` 那条修复对**所有**回调型字段生效，收益面覆盖 84 页）。

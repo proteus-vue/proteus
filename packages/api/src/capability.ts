@@ -266,7 +266,9 @@ export function createCapabilityHooks(
     useShare: (options) => wrap(bridge.share(options)),
     // ★★★#1122：**门面开口**——实现抽到 `capability-fetch.ts`（本文件 1092 行超棘轮）；
     //   此前只透传 6 字段、且只回 `data` ⇒ S3 能力业务够不着、status/headers 被丢弃。
-    useFetch: <T>(url: string, config?: FetchConfig): Promise<FetchResult<T>> => runFetch<T>(bridge, url, config),
+    // ★#1122：`bridge.request` 显式出现（文档探测靠它判该端是否接线）
+    useFetch: <T>(url: string, config?: FetchConfig): Promise<FetchResult<T>> =>
+      bridge.request ? runFetch<T>(bridge, url, config) : Promise.resolve(capErr<T>('fetch.unsupported', '桥未提供 request（useFetch 不可用）') as FetchResult<T>),
     usePermission: (name) =>
       wrap(
         (() => {

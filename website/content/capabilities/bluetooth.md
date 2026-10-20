@@ -324,6 +324,7 @@ BLE 特征值（wx.BLECharacteristic 子集）
 | code | 说明 |
 |---|---|
 | `bluetooth.unsupported` | 桥未提供 getBluetooth（useBluetooth 不可用） |
+| `bluetooth.unavailable` |  |
 
 > 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。
 

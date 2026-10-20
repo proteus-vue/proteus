@@ -48,6 +48,7 @@ Param,Type,Required,Doc
 | code | Doc |
 |---|---|
 | `permission.unsupported` | Bridge does not provide getPermission (usePermission unavailable) |
+| `permission.failed` | — |
 
 > Platform unsupported → the `*.unsupported` family; business branches on `code`, no try/catch needed.
 

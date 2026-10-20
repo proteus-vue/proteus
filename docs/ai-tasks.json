@@ -2227,6 +2227,25 @@
         "T-app-upload-stream"
       ],
       "note": "四类缺口：5 字段没进 FetchConfig / status+headers 被丢 / Web+MP 腿没用平台能力 / 零条走门面测试。★iOS 与 Web/MP 的实际运行未验（只有静态判据），如实登记。"
+    },
+    {
+      "id": "T-doc-generator-drift",
+      "title": "#1123 官网文档滞后：生成器 5 个缺陷让 useFetch 页只写\"最基本功能\"",
+      "type": "docs",
+      "status": "done",
+      "owner": "zcode",
+      "scope": [
+        "website/scripts/gen-content.mjs",
+        "website/scripts/lib/error-codes.mjs",
+        "website/content/capabilities/fetch.md"
+      ],
+      "decision": 1123,
+      "verification": "cd website && npx tsx scripts/gen-content.mjs --check && node scripts/check-docs-stats.mjs",
+      "branch": null,
+      "related": [
+        "T-app-usefetch-surface"
+      ],
+      "note": "★下一步：给生成器加\"内容缩水\"门禁（记录各能力页关键区块行数，骤降即红）——本轮 5 个缺陷的共同形态都是\"文档静默退化而无人发现\"。"
     }
   ]
 }

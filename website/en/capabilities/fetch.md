@@ -17,7 +17,7 @@ order: 1
 ## Signature
 
 ```ts
-useFetch<T = unknown>(url: string, config?: FetchConfig): Promise<CapResult<T>>
+useFetch<T = unknown>(url: string, config?: FetchConfig): Promise<FetchResult<T>>
 ```
 
 ## Parameters
@@ -36,6 +36,11 @@ Param,Type,Required,Doc
 | `params` | `Record<string, unknown>` | No | URL query parameters (appended to the query string) |
 | `headers` | `Record<string, string>` | No | Custom request headers |
 | `timeout` | `number` | No | Timeout in ms (timeout → Err) |
+| `responseType` | `'text' \| 'json' \| 'arraybuffer'` | No | — |
+| `savePath` | `string` | No | — |
+| `onChunk` | `(chunk: Uint8Array, seq: number) => void` | No | — |
+| `upload` | `UploadSpec` | No | — |
+| `signal` | `AbortSignalLike` | No | — |
 
 ## Returns
 
@@ -52,6 +57,8 @@ Param,Type,Required,Doc
 | code | Doc |
 |---|---|
 | `fetch.unsupported` | The bridge does not provide request (useFetch unavailable) |
+| `fetch.aborted` | — |
+| `fetch.timeout` | — |
 | `fetch.failed` | — |
 
 > Platform unsupported → the `*.unsupported` family; business branches on `code`, no try/catch needed.

@@ -12,12 +12,12 @@ order: 1
 
 > 技术标识：能力原语 C26 · `capability.fetch` · 返回 `Promise<T>` · **Hook 已实现**（各端支持情况见下方兼容进度表）
 
-★G-32 B3 续：通信/权限/存储（缺桥 → Err 非抛异常——G-32.3 降级语义）
+★#1122：`bridge.request` 显式出现（文档探测靠它判该端是否接线）
 
 ## 签名
 
 ```ts
-useFetch<T = unknown>(url: string, config?: FetchConfig): Promise<CapResult<T>>
+useFetch<T = unknown>(url: string, config?: FetchConfig): Promise<FetchResult<T>>
 ```
 
 ## 参数
@@ -25,7 +25,7 @@ useFetch<T = unknown>(url: string, config?: FetchConfig): Promise<CapResult<T>>
 | 参数 | 类型 | 必填 | 说明 |
 |---|---|---|---|
 | `url` | `string` | 是 | 目标 URL（HTTPS） |
-| `config` | `FetchConfig` | 否 | useFetch 配置（对齐 RequestConfig 高频字段） |
+| `config` | `FetchConfig` | 否 | useFetch 配置。★#1122：S3 能力（流式/落盘/上传/取消）此前底层做完但**门面没开口**——现已全部开放。 |
 
 #### `config` 的属性
 
@@ -36,23 +36,32 @@ useFetch<T = unknown>(url: string, config?: FetchConfig): Promise<CapResult<T>>
 | `params` | `Record<string, unknown>` | 否 | URL 查询参数（拼接到 query string） |
 | `headers` | `Record<string, string>` | 否 | 自定义请求头 |
 | `timeout` | `number` | 否 | 超时（ms；超时 → Err） |
+| `responseType` | `'text' \| 'json' \| 'arraybuffer'` | 否 | ★#1122 响应体解释方式（`arraybuffer` ⇒ `data` 是裸字节）。端差异：wx 给 `ArrayBuffer`。 |
+| `savePath` | `string` | 否 | ★#1122 落盘路径（仅 App）：宿主**直接写沙箱文件**，`data` 回路径，内存与文件大小无关。Web/MP ⇒ unsupported。 |
+| `onChunk` | `(chunk: Uint8Array, seq: number) => void` | 否 | ★#1122 流式消费：每块回调一次，内存不随响应体增长。**回调同步**（宿主回推的 JS 线程上）。 App 逐块回推；Web 用 ReadableStream（节奏不同）；**MP 不支持** ⇒ unsupported。 |
+| `upload` | `UploadSpec` | 否 | ★#1122 流式上传（仅 App）：宿主自读文件、自拼 multipart、边读边发。Web/MP 用各自上传 API ⇒ unsupported。 |
+| `signal` | `AbortSignalLike` | 否 | ★#1122 取消：`abort()` ⇒ 立即 `fetch.aborted`，并尽力通知宿主中止传输。 App 用 `createAbortController()`（引擎无原生 AbortController）；Web 用原生 `AbortSignal`；**MP 不支持**。 |
 
 ## 返回值
 
-`Promise<CapResult<T>>`——铁律：无回调、无 try/catch 义务，`res.ok` 分支处理：
+`Promise<FetchResult<T>>`——铁律：无回调、无 try/catch 义务，`res.ok` 分支处理：
 
 | 属性 | 类型 | 说明 |
 |---|---|---|
 | `ok` | `boolean` | 成功 `true` / 失败 `false` |
 | `data` | `T` | 成功载荷——泛型，由响应内容推导（如 JSON 自动反序列化） |
 | `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
+| `status` | `number` | ★此前被 `useFetch` 丢弃 ⇒ 业务无法区分 404/500 |
+| `headers` | `Record<string, string>` | — |
 
 ## 错误码
 
 | code | 说明 |
 |---|---|
-| `fetch.unsupported` | 桥未提供 request（useFetch 不可用） |
-| `fetch.failed` | wx.request 失败 |
+| `fetch.unsupported` | fetch 不支持（Node<18/SSR） |
+| `fetch.aborted` | 请求已取消（signal.abort()） |
+| `fetch.timeout` | 请求超时（未在 timeout 内完成） |
+| `fetch.failed` | 请求失败（网络/解析/其他） |
 
 > 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。
 

@@ -48,6 +48,7 @@ usePermission(name: string): Promise<CapResult<PermissionState>>
 | code | 说明 |
 |---|---|
 | `permission.unsupported` | 桥未提供 getPermission（usePermission 不可用） |
+| `permission.failed` |  |
 
 > 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。
 

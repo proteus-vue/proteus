@@ -6,6 +6,7 @@
 //      + 签名/返回类型（packages/api/src/capability.ts CapabilityHooks 接口 JSDoc）
 //   幂等：重复运行输出一致（无时间戳）。用法：node website/scripts/gen-content.mjs
 import fs from 'node:fs'
+import { extractErrorCodes } from './lib/error-codes.mjs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { COMP_EN, DOMAIN_EN, MP_STATUS_EN, ENDS_EN, END_NOTE_EN, COMP_LEGEND_EN, SHARED_EN, OVERVIEW_EN, CAP_SHARED_EN, CAP_USAGE_EN, CAP_ARGS_EN, CAP_DATA_HINTS_EN, CAP_METHODS_EN, CAP_EN, CAP_CAT_EN, CAP_OVERVIEW_EN, LIFECYCLE_EVENT_EN, LIFECYCLE_EVENT_NOTE_EN, LIFECYCLE_SRC_EN } from './gen-content-en.mjs'
@@ -250,6 +251,14 @@ function compatSection(rows, footer) {
 // ★#406 颗粒度批：TS 接口解析（能力页参数/返回值属性表的 SSOT——capability.ts 内 60+ 接口属性带 JSDoc）
 //   提取 export interface X { ... } 的逐属性：名称/类型/可选(?)/前置 JSDoc 首行
 //   ★#490 补方法成员：句柄型接口（CookieJar/BackgroundAPI/FSAdapter…）的结构本体是方法——属性通道排除 '): ' 行，这里成对补齐
+// ★#1122：**TS 接口解析**（从 `gen-content.mjs` 抽出——该文件 2326 行超棘轮）。
+//
+// 【它做什么】把 `packages/api/src/*.ts` 里的 `export interface X { ... }` 解析成
+//   `{X: {props:[], methods:[], doc}}`，供能力页渲染**参数表 / 返回值属性表 / 类型引用**。
+//   ★SSOT = 源码里的 JSDoc——文档的字段说明不手写，全从接口注释来。
+//
+// 【诚实边界】这是**文本扫描**而非真 TS 解析：靠花括号配对 + 行级规则，
+//   因此对"字符串里含花括号/正则"等形态不严谨。本仓用它是因为生成器不能引入 TS 编译器的重依赖。
 function extractInterfaces(src) {
   const out = {}
   // ★官网漏修（2026-09-11）：原正则只认 `export interface X {` —— 漏三类 → 官网方法表缺失：
@@ -315,8 +324,12 @@ function extractInterfaces(src) {
           pdoc = (pdoc ? pdoc + ' ' : '') + t.replace(/^\/\*\*/, '').replace(/\*\/$/, '').replace(/^\*\s?/, '').trim()
           continue
         }
-        // 方法行（含 `(` 或 `):` 形态）→ 跳过且清零文档缓冲
-        if (/\(/.test(t)) { pdoc = ''; continue }
+        // 方法行（`name(...): T` 形态）→ 跳过且清零文档缓冲
+        // ★★★#1122：**函数类型的属性行不能跳**——`onChunk?: (chunk, seq) => void` 也是 `name?: type`，
+        //   只是 type 里带 `(`。旧规则见 `(` 就跳过 ⇒ 官网能力页**静默丢掉所有回调型字段**
+        //   （本轮实测：useFetch 的 onChunk 在生成的参数表里完全消失）。
+        //   ⇒ 判据改成"**在 `:` 之前**出现 `(` 才算方法"。
+        if (/^\w+\s*\(/.test(t)) { pdoc = ''; continue }
         // 属性行：类型可含嵌套对象/泛型（内部含 `;`）——取整行，再剥尾分号与行尾 // 注释
         // 剥行尾 // 注释（引号内的 // 罕见——capability.ts 接口属性注释均在行尾且无 // 字符串）
         const commentM = t.match(/^([\s\S]*?)\s*\/\/(.*)$/)
@@ -616,9 +629,15 @@ function renderMethodDetails(lines, methods, opts) {
 function hookShape(sigLine, ifaces) {
   const retM = sigLine.match(/\)\s*:\s*([^\n]+)$/)
   const retType = retM ? retM[1].trim() : ''
-  const retT = sigLine.match(/CapResult<([^<>]+(?:<[^<>]+>)?)>/)
+  // ★★★#1122：结果是 `Result` 家族的**任意命名**（`CapResult<T>` / `FetchResult<T>` …），
+  //   不再写死 `CapResult`——否则换名字的能力页会**静默退化成"data 类型为空"**
+  //   （本轮实测：useFetch 改成 FetchResult<T> 后，官网返回值表变成 `| data |  |`）。
+  const retT = sigLine.match(/(?:\w*Result)<([^<>]+(?:<[^<>]+>)?)>/)
   const dataT = retT ? retT[1].trim() : ''
-  const voidRet = /CapResult<void>/.test(sigLine)
+  const voidRet = /(?:\w*Result)<void>/.test(sigLine)
+  // ★返回是否 Promise（`FetchResult` 与 `CapResult` 同族，都按数据型渲染）
+  const isResultFamily = /(?:\w*Result)</.test(sigLine)
+  void isResultFamily
   const handleT = !/^Promise</.test(retType) && /^[A-Z]\w*$/.test(retType) ? retType : ''
   const dataElemT = dataT.endsWith('[]') ? dataT.slice(0, -2) : dataT
   const dataIface = dataElemT ? ifaces[dataElemT] : undefined
@@ -626,17 +645,7 @@ function hookShape(sigLine, ifaces) {
   return { retType, dataT, voidRet, handleT, dataElemT, dataIface, handleIface }
 }
 
-// 从实现体提取 CapError('code', 'msg') 错误码（能力页错误码表 SSOT）
-function extractErrorCodes(body) {
-  const out = []
-  if (typeof body !== 'string') return out
-  // ★颗粒度对齐 A：消息引号放宽（单/双/反引号模板串）——原只认单引号 → file-system.* 等模板串消息的 code 全丢。
-  for (const m of body.matchAll(/CapError\(\s*'([^']+)'\s*,\s*(?:'([^']*)'|"([^"]*)"|`([^`]*)`)/g)) {
-    const code = m[1]
-    if (!out.some((e) => e.code === code)) out.push({ code, message: m[2] ?? m[3] ?? m[4] ?? '' })
-  }
-  return out
-}
+void extractErrorCodes
 
 // 桥方法实现体切片（wxBridge/webBridge 内 methodName: ... 到同级下一方法）——错误码提取用
 function extractBridgeBodies(apiSrc, fnName) {
@@ -1168,7 +1177,18 @@ function emitComponentIndex(byDomain, total, DOMAIN_ORDER) {
 // ★#481 数据准备抽共享（zh 路径行为不变——同一函数输出必须与重构前逐字节一致）：zh 与 EN pass 同源
 function capContext(ir) {
   const caps = ir.PRIMITIVE_CATALOG.filter((p) => p.kind === 'capability')
-  let apiSrc = ['capability-types.ts', 'capability.ts', 'capability-bridges.ts'].map((f) => fs.readFileSync(path.join(ROOT, 'packages', 'api', 'src', f), 'utf8')).join('\n') // ★#876 三文件拼接（#870 拆分）；types 在前——下游 bridgeIface=slice(CapabilityBridge,CapabilityHooks) 靠此序
+  // ★★★#1122：**新抽出的文件也必须进源集合**——否则接口解析找不到它们，
+  //   能力页会静默退化成"没有参数表/返回值表"（本轮实测：fetch.md 被生成器**删掉 38 行**）。
+  //   ★这是"拆文件"的连带义务：拆分不只是移动代码，还要同步所有**靠文本扫描**的下游。
+  const API_SRC_FILES = [
+    'capability-types.ts', 'capability.ts', 'capability-bridges.ts',
+    // #1122 抽出（网络能力专属）：类型 / 门面实现 / 两端腿 / App 腿
+    'capability-fetch-types.ts', 'capability-fetch.ts', 'capability-fetch-legs.ts', 'capability-app-request.ts',
+    // ★#1122：**通道层也有 fetch.* 错误码**（取消 `fetch.aborted` / 超时 `fetch.timeout` 在
+    //   `capability-invoke.ts` 里抛）⇒ 错误码表的「全文件扫描」必须覆盖它，否则官网只列出 1 条。
+    'capability-invoke.ts',
+  ]
+  let apiSrc = API_SRC_FILES.map((f) => fs.readFileSync(path.join(ROOT, 'packages', 'api', 'src', f), 'utf8')).join('\n') // ★#876 三文件拼接（#870 拆分）；types 在前——下游 bridgeIface=slice(CapabilityBridge,CapabilityHooks) 靠此序
   // ★★类型别名解析（2026-09-30）：句柄类型已**收口**到 `capability-app.ts`（单一事实源），
   //   `capability.ts` 里只剩 `export type AppLifecycle = AppLifecycleHandle` 这类别名 ⇒
   //   只解析本文件会**抽不到方法列表**（页面会显示旧方法集——用户实测"搜不到新事件"即此形态）。
@@ -1379,7 +1399,10 @@ function genCapabilities(ir, ends) {
       lines.push(`返回 \`${handleT}\`（同步句柄——无 Promise、无 await，结构见下）。`)
       lines.push('')
     } else {
-      lines.push('`Promise<CapResult<T>>`——铁律：无回调、无 try/catch 义务，`res.ok` 分支处理：')
+      // ★#1122：用**实际签名里的结果类型名**（CapResult / FetchResult …）——
+      //   写死 CapResult 会让换了类型名的能力页文案与签名自相矛盾。
+      const resultName = (sigLine.match(/(\w*Result)</) ?? [, 'CapResult'])[1]
+      lines.push(`\`Promise<${resultName}<T>>\`——铁律：无回调、无 try/catch 义务，\`res.ok\` 分支处理：`)
       lines.push('')
       lines.push('| 属性 | 类型 | 说明 |')
       lines.push('|---|---|---|')
@@ -1391,6 +1414,18 @@ function genCapabilities(ir, ends) {
         : `成功载荷${di?.props.length ? '（结构见下）' : di?.methods.length ? '（方法结构见下）' : ''}`
       lines.push(`| \`data\` | \`${dataT}\` | ${dataNote} |`)
       lines.push('| `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |')
+      // ★#1122：结果类型若**比 Result<T> 多字段**（如 `FetchResult<T>` 还带 status/headers），
+      //   必须把额外字段列出来——否则官网只写 ok/data/error，业务不知道能拿到状态码。
+      //   来源：`<结果名>` 拆联合后取 `ok:true` 那一支的接口（`<名>Ok`）。
+      // 命名约定：`FetchResult` → 成功支 `FetchOk`；`CapResult` → 无对应接口（基类形态）
+      const baseName = resultName.replace(/Result$/, '')
+      const okIface = ifaces[`${baseName}Ok`] ?? ifaces[`${resultName}Ok`] ?? ifaces[resultName]
+      if (okIface?.props?.length) {
+        for (const pr of okIface.props) {
+          if (['ok', 'data'].includes(pr.name)) continue
+          lines.push(`| \`${pr.name}\` | \`${escMd(pr.type)}\` | ${oneline(pr.doc) || '—'} |`)
+        }
+      }
       lines.push('')
     }
     // ★TOC 优化（2026-09-11）：方法/属性/类型引用提升为 h2 段，条目为 h3——右侧目录可直观看到有哪些方法
