@@ -111,7 +111,7 @@ proteus doctor [dir] [--json] [--report <path>] [--strict] [--only <groups>] [--
 ★★环境/工程/端就绪度体检（M5 · #686）：一次性回答「这台机器能不能编译/打包/调试到 N 个端」
       分组：env 环境 · toolchain 工具链 · deps 依赖 · project 工程 · hosts 端就绪（投影聚合）· ports 端口 · devices 设备（慢）· gates 门禁
       --json 机器可读（含完整取证）· --report 落盘 · --strict warn 也失败 · --deep 启慢检查 · --verbose 逐项取证 · --list 只列目录
-      ★只诊断不修改（Apollo 硬约束）——每项给可复制修复命令；error → exit 1（warn 不阻断）
+      ★只诊断不修改（诊断器硬约束）——每项给可复制修复命令；error → exit 1（warn 不阻断）
 
 ### `proteus health`
 

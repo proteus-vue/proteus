@@ -50,6 +50,7 @@
 | L3 组件 | `packages/components/p-formfactor/index.vue:396/422/448`：`keydown → navigateFocus → focus()` | 改为消费原语（保持 Web 行为不变） |
 | L3 能力 | `element.rect`（Android `HostCapabilities:267` / iOS `element-rect.swift` / 鸿蒙 `measureElementRect`）**三端已有** | 作为焦点候选的几何来源 |
 | L4 宿主 | `hosts/**` **零按键入口**（`onKeyDown`/`dispatchKeyEvent`/`KEYCODE_DPAD` grep = 0） | 新增输入归一（§4） |
+| **官网** | **`website/content/system/10-focus-navigation.md` 已完整公开** `navigateFocus` 的算法（方向筛选 / 主距离+交叉轴加权 / 同线优先 / 确定性 tie-break / clamp 不循环）与 9 例单测 | ★**不能重复描述、不能互相矛盾**：本方案 B2 做的是「把它从组件配套抬成原语」+ 补 `ensureVisible`；**官网已有内容视为对外契约**，B2 落地后须同步更新该页（新增 `ensureVisible` 与 focusId 视觉出口），避免"官网说已有、方案说要做"的观感冲突 |
 | 通道 | `__proteusHostAppEvent` 推送通道已存在（`entry-host-runtime.ts:548`） | **复用，不新造** |
 
 ⇒ **本方案 = G-25 的「执行级子计划」**，登记在 G-25 行内，**不占新 G 号**（与 `proteus-end-alignment-plan` 之于 G-31 同例）。

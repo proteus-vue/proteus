@@ -111,7 +111,7 @@ proteus doctor [dir] [--json] [--report <path>] [--strict] [--only <groups>] [--
 ★★Environment/project/endpoint readiness check (M5 · #686): answers "can this machine compile/package/debug to N ends" at once
       Groups: env · toolchain · deps · project · hosts (projection) · ports · devices (slow) · gates
       --json machine-readable (full evidence) · --report to file · --strict warn fails too · --deep enable slow · --verbose per-item evidence · --list only list
-      ★Diagnose only, never modify (Apollo hard constraint) — each item gives a copyable fix command; error → exit 1 (warn does not block)
+      ★Diagnose only, never modify (diagnoser hard constraint) — each item gives a copyable fix command; error → exit 1 (warn does not block)
 
 ### `proteus health`
 
