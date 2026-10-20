@@ -8885,3 +8885,46 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 【下一步】① 若要真正转正，需做正式商标检索（建议按"上线优先级"排序：Kairos → Themis → Aether）；
   ② 官网剩余 3 处代号：定"补检索转正"还是"改生成器回退职能描述"；
   ③ 万神殿公开页在 Kairos 转正后更新表格（只加行、不改结构）。
+
+1109. **★★改名收尾修两处构建红：dist 陈旧守卫 + 基线键字典序错位（都是 #1108 的遗漏） · 决策**（2026-10-20 · 用户贴出 `website build` 编译报错截图）：
+
+【用户看到的现象】
+  `website/src/components/anim/KairosHud.vue` 触发 `[E-CSS-002] 使用 L3 特性而未 opt-in：backdrop-filter: blur(...)` 共 8 条，
+  标为 `[proteus-cse-lint/error]` ⇒ 网站构建中断。文件名是**改名后的** KairosHud ⇒ 看上去像"改名的锅"。
+
+【根因（两层，都不是"改名改坏了代码"）】
+  · **根因 1：dist 陈旧守卫触发**。`pnpm --filter website build` 走 `packages/cli/dist/index.js`，
+    而 #1108 只改了 `packages/*/src`（117 文件含 animation/compiler/api/render-backend/router），
+    **没有重跑 `node scripts/build-packages.mjs`** ⇒ 守卫主动拦下：
+      「dist 陈旧：animation, api, compiler, render-backend, router —— 你改的源码没进产物」
+    ★守卫是**对的**：它防的正是"改了源码却用旧 dist 构建"（#663 的静默陷阱）。
+    但它在本次表现为"构建失败"，很容易被误读成改名的副作用。
+  · **根因 2：baseline 键的**字典序**错位**。#1108 用 `safe-edit` 把
+    `website/cse-lint-baseline.json` 里的 `MorpheusHud.vue` **原地字符串替换**成 `KairosHud.vue` ⇒
+    键被插在 `MobileStage.vue` **之后**；而生成器按 `localeCompare` **字典序**排序
+    ⇒ 正确位置应在 `MobileStage` **之前**（`Kairos` < `Mobile`）。
+    后果：内容集合相同、**仅顺序不同** ⇒ `check:cse-lint-baseline` 报
+    「新增 0 条 / 已修 0 条」却仍判红（diff 在键序上，不在键集上）。
+    ⇒ **插件运行时按 key 查找（顺序无关，所以构建能过基线放行），但门禁按**整文件字符串**比对（顺序敏感）**
+      ⇒ 两个消费者对同一个文件有不同假设，这是"同一 SSOT 两套判据"的典型分裂。
+
+【修法】
+  · `node scripts/build-packages.mjs`（built 6 · failed 0）；
+  · `node scripts/gen-cse-lint-baseline.mjs` **重生成**（而非手工调序）——
+    让生成器决定顺序，避免"我按我认为的顺序改"再错一次。
+  · 验证：`check:cse-lint-baseline` 四项目全绿（examples 25 / showcase 26 / website 41 / css-conformance 25）。
+
+【★教训（两条，都是可复用的）】
+  · **改 `packages/*/src` 后必须重建 dist 才算完**——否则 `website/examples` 这类**走 CLI dist** 的
+    消费者会用旧代码构建；本仓有守卫会挡，但**守卫报的是"构建失败"不是"请重建"**，看日志要读到那行
+    陈旧提示才知道该怎么办。
+  · ★**凡是"生成器按固定顺序输出、而门禁比对整文件"的工件，绝不能用字符串替换去改键**
+    （基线、快照、golden、生成文档都属此类）。**正确姿势：改源 → 重跑生成器**。
+    本轮若先跑 `gen-cse-lint-baseline` 而不是 `safe-edit --replace`，根因 2 根本不会发生。
+
+【诚实边界】
+  ① 用户报错截图里**只体现根因 1**（cse-lint 报错）；根因 2 是我修完根因 1、跑门禁才发现的
+     ⇒ **"构建过了"不等于"门禁过了"**，两者判据不同（构建只看插件运行时；门禁比整文件）；
+  ② 本机默认 Node 是 **v18.16.1**，而本仓要求 ≥22：`website build` 在 Node 18 下会以
+     `require() of ES Module packages/docs/dist/vite.js` 失败（与本改名无关）⇒ 验证一律用 **v22.22.0**；
+  ③ 未跑全量 `pnpm verify`（按纪律只跑定向门禁）；真机/小程序链未涉及。
